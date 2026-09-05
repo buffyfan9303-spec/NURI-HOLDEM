@@ -6,7 +6,8 @@
 //  ② 빠르게 튕기면(180px/120ms ≈ 1500px/s) 거리가 임계(120px) 미만이어도 **운동량 투영**이 닫는다.
 //     — 예전 구현은 거리 120px 또는 속도 0.6px/ms 의 단순 임계였다. 투영은 '가려던 곳' 으로 판단한다.
 // 왜 Playwright 인가: 브라우저 페인(MCP)에서는 터치 이벤트를 실제로 발생시킬 수 없다.
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './_fixtures';
+import type { Page } from '@playwright/test';
 import { dismissOverlays, stabilizeBackstack } from './_session';
 
 async function swipe(page: Page, x: number, y: number, dist: number, ms: number) {

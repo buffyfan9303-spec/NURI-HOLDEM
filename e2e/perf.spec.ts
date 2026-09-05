@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './_fixtures';
+import type { Page } from '@playwright/test';
 
 // [DS] MO-1 — 성능 회귀 게이트: CPU 4× 스로틀 + 375×812(갤럭시 A17 ≈ Pixel 5 + 2× → 4×는 안전 마진).
 // 첫 도입은 '기록 + 느슨한 상한'(현 상태 회귀 방지) — MO-2~9 진행하며 임계를 조인다(§20.6).

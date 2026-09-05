@@ -10,7 +10,7 @@
 //
 // 자격증명은 환경변수로만 주입(레포에 절대 커밋 금지): E2E_EMAIL, E2E_PASSWORD.
 // ⚠ 반드시 전용 테스트 계정/매장으로 돌릴 것 — 실 운영 매장 금지. 여기서는 변이를 하지 않는다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { loginAs, dismissOverlays, stabilizeBackstack } from './_session';
 
 const EMAIL = process.env.E2E_EMAIL;

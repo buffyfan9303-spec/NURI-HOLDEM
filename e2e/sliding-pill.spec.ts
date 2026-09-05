@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays } from './_session';
 // FLIP 공용 유틸(SlidingPill) 게이트 — framer layoutId 대체가 픽셀 단위로 정확한지.
 // 크래시는 스모크가 잡지만 '알약이 엉뚱한 자리에 있는' 시각 결함은 좌표로만 보인다.

@@ -8,7 +8,7 @@
 //   · 컬러 폰트 수록 여부 — 칠해진 픽셀의 '서로 다른 색 수'. 컬러 이모지 폰트에서 온 글리프는
 //     수백 가지 색을 쓰고, 단색 기호 폰트에서 온 글리프는 1가지다. 후자는 OS 마다 그 폰트가
 //     있고 없고가 갈려 두부 위험이 크다(🂠 U+1F0A0 가 정확히 그래서 걷혔다).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { SUIT_CP, SHOP_MARK_CP } from '../src/lib/emojiPolicy';
 
 const CP = (s: ReadonlySet<number>) => [...s];

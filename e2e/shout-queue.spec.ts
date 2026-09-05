@@ -17,7 +17,8 @@
 //      여기가 이번 회귀 감지의 핵심이다: 예전 화면은 대기열을 전부 펼쳐 볼 수 있었다.
 //   ⑥ 방송 중인 외침이 하나도 없으면 **기본 안내 문구가 20초 격자로 롤링**한다(빈 자리 금지).
 //   ⑦ 유일한 예외인 '내 차례'는 순번·시각만 말하고 **내 외침 내용은 싣지 않는다**(미리 송출 금지).
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect } from './_fixtures';
+import type { Page, Route } from '@playwright/test';
 import { loginAs, stabilizeBackstack, dismissOverlays, type E2ESession } from './_session';
 
 const EMAIL = process.env.E2E_EMAIL;

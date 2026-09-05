@@ -15,8 +15,8 @@
 //     (PK 가 (venue_id, game_seq) 라 seq 만 갈라 두면 완전히 격리된다.)
 //
 // 실행: npx playwright test e2e/clock-catchup.spec.ts
-import { test, expect } from '@playwright/test';
-import { loginAs, restAs, type E2ESession } from './_session';
+import { test, expect } from './_fixtures';
+import { loginAs, restAs, type E2ESession, WRITES_ALLOWED } from './_session';
 
 const EMAIL = process.env.E2E_EMAIL;
 const PASSWORD = process.env.E2E_PASSWORD;
@@ -63,7 +63,7 @@ async function seedStaleClock(session: E2ESession): Promise<string> {
 }
 
 test.describe('TV 디스플레이 — 낡은 클락 행에서도 실효 레벨을 보여준다', () => {
-  test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 미설정 — 픽스처를 심을 수 없다');
+  test.skip(!EMAIL || !PASSWORD || !WRITES_ALLOWED, 'E2E_EMAIL/E2E_PASSWORD 미설정 또는 운영 프로젝트(쓰기 차단) — 픽스처를 심을 수 없다');
 
   let session: E2ESession;
 

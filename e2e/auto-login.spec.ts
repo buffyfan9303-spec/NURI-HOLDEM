@@ -9,7 +9,8 @@
 //
 // ⚠ 이 스펙만 UI 로그인을 거친다(auth-smoke 와 같은 이유로 나머지는 세션 주입을 쓴다).
 //   체크박스의 효과는 '로그인 요청을 보내기 전 플래그'라서 세션 주입으로는 잴 수 없기 때문이다.
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './_fixtures';
+import type { Page } from '@playwright/test';
 import { dismissOverlays, stabilizeBackstack, SUPABASE_URL } from './_session';
 
 const EMAIL = process.env.E2E_EMAIL;

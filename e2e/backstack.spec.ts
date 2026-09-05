@@ -23,7 +23,7 @@
 //   ① 열면 history 항목이 늘어난다(안 늘면 뒤로가기로 못 닫는다 → 아래 겹이 닫혀 홈으로 튄다)
 //   ② 여닫기를 반복해도 정상상태가 같다(죽은 항목이 쌓이면 뒤로가기가 헛돈다 = 먹통)
 //   ③ 뒤로가기 한 번이 그 오버레이만 닫고 열기 전 화면으로 되돌린다
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack } from './_session';
 import { installNavProbe, currentScreen } from './_navprobe';
 

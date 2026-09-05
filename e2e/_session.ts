@@ -17,6 +17,10 @@ export const ANON_KEY = process.env.E2E_SUPABASE_ANON_KEY ?? 'sb_publishable_5H0
 
 /** 프로젝트 ref — 스토리지 키(sb-<ref>-auth-token)를 만드는 데 쓴다 */
 const projectRef = new URL(SUPABASE_URL).hostname.split('.')[0];
+/** 운영 프로젝트 ref — E2E 는 여기에 **절대 쓰지 않는다**(e2e/_fixtures.ts 와 같은 규칙) */
+export const PROD_REF = 'idsxiqspecrucvfvtgbw';
+/** 쓰기 허용 = 격리 프로젝트 + 명시 플래그. 운영 ref 면 플래그가 있어도 false. */
+export const WRITES_ALLOWED = process.env.E2E_ALLOW_WRITES === '1' && projectRef !== PROD_REF;
 
 export interface E2ESession { access_token: string; refresh_token: string; expires_at: number; user: unknown }
 
@@ -66,6 +70,10 @@ export async function restAs(
   path: string,
   init: { method?: string; body?: unknown; prefer?: string } = {},
 ): Promise<unknown> {
+  const method = (init.method ?? 'GET').toUpperCase();
+  if (method !== 'GET' && !WRITES_ALLOWED) {
+    throw new Error(`E2E 쓰기 차단: ${method} ${path} — 운영 프로젝트(${projectRef})에는 E2E 가 쓰지 않는다. 격리 프로젝트를 E2E_SUPABASE_URL 로 주고 E2E_ALLOW_WRITES=1 일 때만 허용`);
+  }
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     method: init.method ?? 'GET',
     headers: {

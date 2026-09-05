@@ -9,7 +9,7 @@
 // 진짜 뷰포트 변경이 필요하다. 실제로 브라우저 뷰포트 에뮬레이션 중에는 matchMedia 의 change 도
 // resize 도 발화하지 않는 환경이 있었다(2026-08-28 실측) — 그런 환경에서는 이 결함이 안 보인다.
 // Playwright 의 setViewportSize 는 실제로 이벤트를 발생시키므로 여기서만 정직하게 잡힌다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 

@@ -4,7 +4,7 @@
 // 위에 런처가 그대로 남았다(중간 도구를 누르면 열린 곳을 찾아 스크롤해야 했다).
 // 이제 도구는 앱의 다른 상세 화면과 같은 전체화면 페이지(Modal page)다 — 그 계약을 잰다.
 // 데이터 게이트: 레인지·푸시폴드가 실데이터(콤보 가중 %)를 렌더하는지까지.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays, loginAs } from './_session';
 
 // GTO 도구 실행은 로그인 회원 전용이 됐다(오너 지시 2026-08-27) — 이 스펙은 로그인 후 계약을 잰다.

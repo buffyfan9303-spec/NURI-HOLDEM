@@ -8,7 +8,8 @@
 //
 // 왜 Playwright 인가: 브라우저 페인(MCP)에서는 터치 이벤트를 실제로 발생시킬 수 없고
 // document.hidden 이 항상 true 라 트랜지션·모션 계열 검증이 성립하지 않는다.
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './_fixtures';
+import type { Page } from '@playwright/test';
 import { stabilizeBackstack, dismissOverlays, loginAs } from './_session';
 
 const EMAIL = process.env.E2E_EMAIL;

@@ -13,8 +13,8 @@
 // 환경변수: E2E_EMAIL / E2E_PASSWORD (테스트 업주 계정), E2E_WATCHDOG_VENUE(선택)
 //
 // 실행: npx playwright test e2e/clock-watchdog.spec.ts
-import { test, expect } from '@playwright/test';
-import { loginAs, dismissOverlays, restAs, type E2ESession } from './_session';
+import { test, expect } from './_fixtures';
+import { loginAs, dismissOverlays, restAs, type E2ESession, WRITES_ALLOWED } from './_session';
 
 const EMAIL = process.env.E2E_EMAIL;
 const PASSWORD = process.env.E2E_PASSWORD;
@@ -69,7 +69,7 @@ async function stopClock(session: E2ESession, venueId: string) {
 }
 
 test.describe('운영자 워치독 — 클락 화면을 안 보고 있어도 전진한다', () => {
-  test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 미설정');
+  test.skip(!EMAIL || !PASSWORD || !WRITES_ALLOWED, 'E2E_EMAIL/E2E_PASSWORD 미설정 또는 운영 프로젝트(쓰기 차단)');
   // 레벨이 여러 번 넘어가길 기다려야 해서 기본 30초로는 부족하다
   test.setTimeout(120_000);
 

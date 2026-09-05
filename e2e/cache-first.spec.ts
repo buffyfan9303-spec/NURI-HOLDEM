@@ -3,7 +3,7 @@
 // 1차 방문: 네트워크로 데이터를 받고 스냅샷이 localStorage 에 남는다.
 // 2차 방문(새로고침): 스냅샷이 있으므로 schedulesLoaded 가 처음부터 true —
 //   React 가 마운트되는 순간부터 스켈레톤(aria-busy) 없이 콘텐츠가 그려져야 한다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack } from './_session';
 
 const SNAP_KEY = 'nuri:snap:schedules:v1';
