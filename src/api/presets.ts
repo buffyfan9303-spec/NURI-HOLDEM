@@ -9,6 +9,8 @@ import type { ClockLevel } from './clock';
 // ⚠ 금액 신규 필드는 전부 원(KRW) 정규형 + 이름에 단위(…Won) 명시. 표시 환산은 어댑터에서만.
 
 /** 포스터 전용(9) — 날짜는 이벤트별이라 제외, 시각(HH:MM)은 반복 게임 특성상 포함 */
+import type { Promotion } from './schedules';
+
 export interface PresetPosterData {
   startTime?: string;        // 시작 시각 'HH:MM'
   regCloseTime?: string;     // 레지마감 원문('NLV HH:MM')
@@ -17,7 +19,7 @@ export interface PresetPosterData {
   paymentMethods?: string[]; // 결제 수단
   partners?: string[];       // 파트너/시드권
   prizes?: string[];         // 시드권/좌석 상품 라벨(포스터 prizes 필드)
-  events?: { badge?: string; title: string }[]; // 이벤트/프로모션
+  events?: Promotion[];  // 이벤트/프로모션 — 할인액(discountWon)·자동 레벨(level)까지 그대로 이어 나른다(2026-09-06)
   posterUrl?: string;        // 포스터 이미지(재사용)
 }
 
