@@ -38,6 +38,7 @@ import {
 import { listVenueCheckins } from '../../api/checkins';
 import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
+import { followToggle, followMergeFetch, type FollowView } from '../../lib/venueFollow';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import VenueReviews from './VenueReviews';
 import { PhoneActionButton, KakaoActionButton, KakaoChatRow, ContactRows } from './ContactActions';
@@ -106,6 +107,9 @@ export default function VenuePage({
     getVenueRatings().then((m) => { if (alive) setRating(m[venue.id] ?? null); }).catch(() => {});
     return () => { alive = false; };
   }, [venue?.id]);
+
+  // 팔로우 — 헤더 버튼과 3-스탯 행 '팔로워 N' 이 같은 상태를 본다(F07).
+  const follow = useVenueFollow(venue?.id, venue?.followerCount ?? 0);
 
   // Tier1 요약·Tier3 게이트용 내 활동(연속 출석·이 매장 방문 횟수) — 로그인 시 1회
   const [myAct, setMyAct] = useState<{ streak: number; visits: number } | null>(null);
@@ -286,7 +290,7 @@ export default function VenuePage({
         )}
         {/* Phase 10: 팔로우·공유를 헤더로 — 히어로는 '지금 필요한 행동' 4개만 남긴다 */}
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          <FollowButton venueId={venue.id} followerCount={venue.followerCount} compact />
+          <FollowButton following={follow.following} count={follow.count} busy={follow.busy} onToggle={follow.toggle} compact />
           {/* 공유 글리프는 손으로 그린 인라인 SVG(stroke 1.9)였다 — 옆 아이콘(stroke 2)과 굵기가
               갈려 '아이콘이 섞여 보이는' 원인이었다. 레지스트리 share 로 통일(ICON-2). */}
           <button type="button" onClick={shareVenue} aria-label="매장 링크 공유"
@@ -368,7 +372,7 @@ export default function VenuePage({
               세로만 줄어든다 — 그 19px 이 아래 Tier1 행동 행을 하단 탭바 위로 끌어올리는 데 쓰인다. */}
           <div className="mt-2.5 grid grid-cols-3 divide-x divide-border-subtle rounded-aura border card-aura py-2">
             {([
-              { icon: 'users' as const, value: (venue.followerCount ?? 0).toLocaleString(), label: '팔로워' },
+              { icon: 'users' as const, value: follow.count.toLocaleString(), label: '팔로워' },
               { icon: 'star' as const, value: rating && rating.count > 0 ? `${rating.avg.toFixed(1)} (${rating.count})` : '—', label: '방문 후기' },
               { icon: 'trophy' as const, value: String(todayPosters.length), label: '오늘 대회' },
             ]).map((s) => (
@@ -1239,37 +1243,59 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
   );
 }
 
-function FollowButton({ venueId, followerCount, compact }: { venueId: string; followerCount?: number; compact?: boolean }) {
+/**
+ * 매장 팔로우 상태 한 곳 — 헤더 버튼과 3-스탯 행이 이 하나를 공유한다.
+ * 로그아웃·계정 변경·매장 변경은 모두 '처음부터 다시 판정' 이다. 예전엔 `if (!user) return` 이라
+ * 매장 페이지가 열린 채 로그아웃하면 버튼이 '팔로잉' 으로 굳었다.
+ */
+function useVenueFollow(venueId: string | undefined, baseCount: number) {
   const { user } = useAuth();
   const toast = useToast();
-  const [following, setFollowing] = useState(false);
+  const [view, setView] = useState<FollowView>({ following: false, count: baseCount });
   const [busy, setBusy] = useState(false);
+  // 요청 일련번호(AvailabilityField.reqIdRef 와 같은 조리법) — 토글·재판정 때마다 올려
+  // 그 전에 나간 GET 의 늦은 응답을 무효화한다.
+  const seqRef = useRef(0);
 
   useEffect(() => {
-    if (!user) return;
-    let active = true;
-    getMyFollowedVenueIds().then((ids) => { if (active) setFollowing(ids.includes(venueId)); }).catch(() => {});
-    return () => { active = false; };
-  }, [user, venueId]);
+    const issued = ++seqRef.current;
+    // 서버 값(props)이 정본 — 매장·계정이 바뀌면 표시 수도 서버 값으로 되돌린다.
+    setView({ following: false, count: baseCount });
+    if (!user || !venueId) return;
+    getMyFollowedVenueIds()
+      .then((ids) => setView((v) => followMergeFetch(v, issued, seqRef.current, ids.includes(venueId))))
+      .catch(() => { /* 표시 실패는 조용히 — 버튼은 '팔로우' 기본값으로 남는다 */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, venueId, baseCount]);
 
-  const toggle = async () => {
-    if (!user) return toast.show('로그인이 필요합니다', 'error');
-    const next = !following;
-    setFollowing(next); setBusy(true);
+  const toggle = useCallback(async () => {
+    if (!venueId) return;
+    if (!user) { toast.show('로그인이 필요합니다', 'error'); return; }
+    if (busy) return;
+    const before = view;
+    const next = !before.following;
+    seqRef.current += 1;              // 비행 중인 초기 GET 이 이 토글을 덮지 못하게
+    setView(followToggle(before, next));
+    setBusy(true);
     try {
       if (next) await followVenue(venueId); else await unfollowVenue(venueId);
       toast.show(next ? '팔로우 완료. 새 대회 포스터가 올라오면 알려드려요' : '팔로우를 해제했습니다', next ? 'success' : 'info');
     } catch (e) {
-      setFollowing(!next);
+      setView(before);                // 실패 원복 — 버튼과 팔로워 수를 함께 되돌린다
       toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
     } finally { setBusy(false); }
-  };
+  }, [venueId, user, busy, view, toast]);
 
-  const count = followerCount ?? 0;
+  return { following: view.following, count: view.count, busy, toggle };
+}
+
+function FollowButton({ following, count, busy, onToggle, compact }: {
+  following: boolean; count: number; busy: boolean; onToggle: () => void; compact?: boolean;
+}) {
   return (
     <button
       type="button"
-      onClick={toggle}
+      onClick={onToggle}
       disabled={busy}
       aria-pressed={following}
       aria-label={following ? '팔로우 해제' : '매장 팔로우'}
