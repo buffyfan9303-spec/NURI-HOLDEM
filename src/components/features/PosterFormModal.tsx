@@ -768,10 +768,11 @@ function PromotionEditor({ items, onChange, buyIn }: {
   // 프리셋도 각자 유형을 갖는다. 손으로 쓴 배지·내용(예: '50%')은 자동값과 다르므로 아래 규칙이 보존한다.
   const PRESETS: Promotion[] = [
     { discountType: 'firstVisit', badge: '50%', title: '첫 방문 50% 할인' }, // 비율 할인은 금액이 고정되지 않아 할인액 없이 문구로만
-    // ⚠ 할인액 칸은 '깎는 금액'이다. 포스터에 흔한 '1LV 바인 5만'(= 5만에 참가) 관례와 뜻이 반대라
-    //   프리셋 문구에 '할인'을 넣어 두 뜻이 섞이지 않게 한다. 금액은 자동 문구가 다시 채운다.
+    // 포스터의 '1LV 바인 5만' 은 **1레벨에 5만원 할인**이라는 뜻이다(오너 확인 2026-09-06) —
+    //   할인액 칸의 의미와 같다. 문구에 '할인'을 붙이는 것은 뜻을 바꾸는 게 아니라,
+    //   제목 줄만 따로 공유될 때 '참가비가 5만'으로 읽히지 않게 못 박는 것이다.
     { discountType: 'level',      badge: '5만', title: '1LV 바인 5만 할인', discountWon: 50_000, level: 1 },
-    { discountType: 'firstBuyin', badge: '3만', title: '첫 바인 3만 할인', discountWon: 30_000 },
+    { discountType: 'firstBuyin', badge: '7만', title: '첫 바인 7만 할인', discountWon: 70_000 },
     { discountType: 'advance',    badge: '얼리칩', title: '사전예약 얼리칩' },
     { discountType: 'custom',     badge: 'NEW', title: '신규 이벤트' },
     { discountType: 'custom',     badge: '할인', title: '할인 이벤트' },

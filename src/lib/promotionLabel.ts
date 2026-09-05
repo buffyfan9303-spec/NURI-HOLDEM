@@ -117,8 +117,9 @@ const TYPE_LEDGER: Record<DiscountType, string | null> = {
 /** 포스터 상세에 보이는 한 줄. 금액이 있으면 문구에 넣는다(§28 — 참가비 할인액은 상품 가격 정보라 표시 대상). */
 function titleOf(type: DiscountType, amount: string | null, level: number): string | null {
   switch (type) {
-    // ⚠ 금액이 있어도 '할인'을 빼지 않는다. '첫 바인 5만'은 참가비 8만 대회에서
-    //   '첫 바인은 5만'(실제로는 5만을 깎아 3만)으로 읽힌다 — 제목 줄만 공유되면 가격 오표기다.
+    // ⚠ 금액이 있어도 '할인'을 빼지 않는다. 숫자는 **깎는 금액**이다(오너 확인 2026-09-06:
+    //   포스터의 '1LV 바인 5만' = 1레벨에 5만원 할인). '첫 바인 5만'처럼 적으면 제목 줄만
+    //   따로 공유됐을 때 '첫 바인 참가비가 5만'으로 읽힌다 — 한 글자로 그 오해를 막는다.
     case 'level':      return level > 0 ? `${level}LV 바인 ${amount ? `${amount} ` : ''}할인` : `레벨 ${amount ? `${amount} ` : ''}할인`;
     case 'firstBuyin': return `첫 바인 ${amount ? `${amount} ` : ''}할인`;
     case 'firstVisit': return `첫 방문 ${amount ? `${amount} ` : ''}할인`;
