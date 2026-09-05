@@ -443,7 +443,9 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
         // 오너 승인(2026-09-03): px-3 → px-2 — 360px 실측 바 326px 에 6탭(px-2.5 는 344px 로 딜러가 잘렸다 → px-2 ≈ 318px).
         // 44px 탭 타깃(#15): overflow-x-auto 레일이라 .hit/.tap-y-44 의 확장은 세로 오버플로가 된다 →
         // 카테고리 칩 레일과 같은 조리법 — 버튼은 h-11 투명 히트박스, 안쪽 span 이 34px 시각 칩.
-        // data-pill-active 는 span 에 둔다(SlidingPill 이 그 박스를 재므로 알약은 그대로 34px).
+        // data-pill-active 는 span 에 둔다(SlidingPill 이 그 박스를 재다).
+        // 알약은 40px — 트레이(44px) 안에서 위아래 2px 만 남기는 비율이 오너 지시 레이아웃(2026-09-06 이미지)이다.
+        // 34px 은 위아래 5px 씩 빈 공간을 만들어 '테두리 공백이 크다'는 지적을 다시 불렀다.
         // 버튼에 relative 를 두지 않는다 — span 의 offsetParent 가 레일이어야 offsetLeft/Top 이 맞는다.
         'flex-[1_0_auto] inline-flex h-11 items-center t-tab whitespace-nowrap',
         'transition-colors',
@@ -455,7 +457,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
       {/* 활성 배경은 부모의 공용 SlidingPill 이 미끄러지며 그린다 — 탭별 개별 팝인 제거 */}
       <span
         data-pill-active={active || undefined}
-        className="relative inline-flex h-[34px] w-full items-center justify-center px-2 rounded-[6px]"
+        className="relative inline-flex h-10 w-full items-center justify-center px-2 rounded-[6px]"
       >
         {label}
       </span>

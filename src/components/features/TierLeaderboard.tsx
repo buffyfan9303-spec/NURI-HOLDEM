@@ -809,7 +809,7 @@ export default function TierLeaderboard() {
             <button key={b} type="button" onClick={() => goBoard(b)}
               className={['shrink-0 inline-flex h-11 items-center t-tab transition-colors',
                 board === b ? 'text-ink-primary font-bold' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
-              <span data-pill-active={board === b || undefined} className="relative inline-flex h-[34px] items-center px-2 lg:px-3 rounded-[6px]">{BOARD_LABEL[b]}</span>
+              <span data-pill-active={board === b || undefined} className="relative inline-flex h-10 items-center px-2 lg:px-3 rounded-[6px]">{BOARD_LABEL[b]}</span>
             </button>
           ))}
         </div>
