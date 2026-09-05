@@ -28,9 +28,10 @@ import type { Html5Qrcode } from 'html5-qrcode'; // 타입만(런타임 번들 �
 import {
   listMyVouchers,
   redeemMyVoucher, redeemMyVoucherByQr, redeemMyVoucherByPhone,
-  findUserByPhone,
+  findUserByPhone, isHeldVoucher,
   type Voucher, type TransferTarget,
 } from '../../api/vouchers';
+import { useBackClose } from '../../lib/backstack';
 
 // venueName 이 nullable 인 이유: 매장명을 **모르는 상태**와 '기타 매장'이라는 이름을 구분해야
 // 머리글이 '기타 매장 매장이용권' 같은 가짜 매장명을 만들어 내지 않는다(voucherGroupLabel 참조).
@@ -87,7 +88,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
 
   // 만료일 지난 이용권은 status 가 active 여도 사용 불가(서버 가드) — 지갑에서도 제외한다.
   const nowMs = Date.now();
-  const active = vouchers.filter((v) => v.status === 'active' && (!v.expiresAt || new Date(v.expiresAt).getTime() > nowMs));
+  const active = vouchers.filter((v) => isHeldVoucher(v, nowMs));
   // 이용권 사용 내역(Phase 15-1 '모든 차감은 즉시 이 리스트에') — used 상태를 시간 역순으로.
   const usedHistory = vouchers
     .filter((v) => v.status === 'used' && v.usedAt)
@@ -249,6 +250,8 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
 }
 
 function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => void; onDone: (used: { title: string; venueName: string | null; remain: number }) => void }) {
+  // 손제작 시트도 겹을 등록해야 뒤로가기가 이 시트만 닫는다 — 없으면 부모 Modal/대시보드가 통째로 닫힌다(점검 #7)
+  useBackClose(true, onClose);
   const toast = useToast();
   const [mode, setMode] = useState<'menu' | 'qr' | 'phone'>('menu');
   const [phone, setPhone] = useState('');
@@ -293,10 +296,10 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 overscroll-contain bg-black/70" />
-      <div className="relative w-full max-w-md space-y-3 rounded-t-dialog border border-border-default bg-surface-mid p-4 animate-sheet-up sm:rounded-dialog">
+      <div className="relative w-full max-w-md space-y-3 rounded-t-dialog border border-border-default bg-surface-mid p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-sheet-up sm:rounded-dialog sm:pb-4">
         <div className="flex items-center justify-between gap-2">
           <p className="min-w-0 break-keep text-sm font-bold text-ink-primary [overflow-wrap:anywhere]">{voucherLineLabel(stack.title, stack.venueName)}</p>
-          <button type="button" onClick={onClose} aria-label="닫기" className="shrink-0 text-ink-muted"><Icon name="close" size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="닫기" className="hit shrink-0 text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
         {mode === 'menu' && (<>
           <p className="text-2xs text-ink-muted">발급 매장(<b className="text-ink-secondary">{stack.venueName ?? '확인 중'}</b>)에서만 사용됩니다. 방법을 선택하세요.</p>
