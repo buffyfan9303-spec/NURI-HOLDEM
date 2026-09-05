@@ -7,6 +7,7 @@ import {
   getReservationCounts, getCustomerActivity, type Reservation, type CustomerActivity,
 } from '../../api/reservations';
 import { getPosterOpsSummaries, getScheduleLedgers, type PosterOpsSummary, type ScheduleLedgerItem } from '../../api/ledger';
+import { ledgerGameLabel, type LedgerLinkTarget } from '../../lib/ledgerLink';
 import { listVenueCheckins } from '../../api/checkins';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
@@ -33,7 +34,8 @@ interface MyPostersTabProps {
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   /** '장부' 버튼 — 연결 장부가 있으면 그 날짜(existingDate)로, 없으면 새 등록(프리필) */
-  onOpenLedger?: (s: Schedule, existingDate: string | null) => void;
+  /** 연결 장부 열기 — 대상은 (날짜, 게임). null = 이 포스터로 새 장부. */
+  onOpenLedger?: (s: Schedule, existing: LedgerLinkTarget | null) => void;
   /** '순위 미입력' 뱃지 클릭 — 해당 날짜의 순위 입력 화면으로 */
   onGotoRanking?: (date: string) => void;
 }
@@ -112,7 +114,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
                   onEdit={() => onEdit(p.id)} onDelete={() => onDelete(p.id)}
                   ops={ops[p.id] ?? null}
                   resCount={resCounts[p.id] ?? 0}
-                  onLedgerAt={onOpenLedger ? (d) => onOpenLedger(p, d) : undefined}
+                  onLedgerAt={onOpenLedger ? (t) => onOpenLedger(p, t) : undefined}
                   onRanking={onGotoRanking}
                   gameDates={myPosters.filter((q) => q.title.trim() === p.title.trim()).map((q) => ({ id: q.id, date: isoOf(q) })).sort((a, b) => a.date.localeCompare(b.date))} />
               ))}
@@ -144,7 +146,7 @@ function PendingApprovalView() {
 function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUserIds, onEdit, onDelete, ops, resCount, onLedgerAt, onRanking, gameDates }: {
   schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>; visitedNames?: Set<string>; visitedUserIds?: Set<string>;
   onEdit: () => void; onDelete: () => void;
-  ops?: PosterOpsSummary | null; resCount?: number; onLedgerAt?: (date: string | null) => void; onRanking?: (date: string) => void;
+  ops?: PosterOpsSummary | null; resCount?: number; onLedgerAt?: (target: LedgerLinkTarget | null) => void; onRanking?: (date: string) => void;
   gameDates?: { id: string; date: string }[]; // 같은 제목(같은 게임)의 날짜별 스케줄 — 예약을 날짜별로 전환
 }) {
   const ledgerDate = ops?.date ?? null;
@@ -363,9 +365,10 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
           ) : (
             <>
               {ledgers.map((l) => (
-                <button key={l.date} type="button" onClick={() => onLedgerAt(l.date)}
+                <button key={`${l.date}#${l.gameSeq}`} type="button" onClick={() => onLedgerAt({ date: l.date, gameSeq: l.gameSeq })}
                   className="w-full flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2 text-left active:opacity-80">
                   <span className="text-xs font-bold text-ink-primary tabular-nums">{l.date}</span>
+                  <span className="shrink-0 rounded-chip bg-surface-high px-1.5 py-0.5 text-2xs font-semibold text-ink-secondary">{ledgerGameLabel(l.gameSeq)}</span>
                   <span className="flex-1 min-w-0 text-2xs text-ink-secondary truncate">{l.title || schedule.title}</span>
                   <span className={['text-2xs font-bold shrink-0', l.closed ? 'text-ink-muted' : 'text-emerald-400'].join(' ')}>{l.closed ? '마감' : '진행중'}</span>
                 </button>
