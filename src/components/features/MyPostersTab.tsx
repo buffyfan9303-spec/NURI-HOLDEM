@@ -480,8 +480,12 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
               <Cell label="방문" value={`${act.visits}회`} />
               <Cell label="머니인" value={`${act.moneyIn}회`} />
               <Cell label="예약" value={`${act.reservations}회`} />
-              <Cell label="누적금액" value={`${act.amount.toLocaleString()}`} gold />
+              {/* '누적금액'만으론 실제 받은 돈인지 평가액인지 알 수 없다 — 통계 '완납 매출'과 같은 기준임을 라벨로 못박는다 */}
+              <Cell label="완납 누적" value={`${act.amount.toLocaleString()}`} gold />
               <Cell label="객단가" value={act.buyins ? `${Math.round(act.amount / act.buyins).toLocaleString()}` : '-'} />
+              <Cell label="미수" value={`${act.unpaid.toLocaleString()}`} />
+              <Cell label="회수 이용권" value={`${Math.round(act.ticket * 10) / 10}T`} />
+              <Cell label="가게지원" value={`${act.support}회`} />
             </div>
           )}
         </div>
