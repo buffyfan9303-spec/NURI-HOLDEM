@@ -29,11 +29,12 @@ import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·�
 import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, type TransferTarget } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
 import { type LedgerLinkTarget } from '../../lib/ledgerLink';
+import { rankingEventOf } from '../../lib/rankingGame'; // 게임 이름(순위 event) 규칙 — F02
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import SlidingPill from '../atoms/SlidingPill';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { getLedgerBuyins, getLedgerSession, kstToday, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
+import { getLedgerBuyins, kstToday, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 import { onColorInkClass } from '../../lib/color';
@@ -283,9 +284,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     setClockSeed(d); setClockSeedGame(g); goStep('clock');
   }, [goStep]);
   const onOpenStatsCb = useCallback(() => setSection('stats'), []);
-  const onGotoRankingFromPosters = useCallback((date: string) => {
+  const onGotoRankingFromPosters = useCallback((date: string, event?: string) => {
     setGameSel(null); // 포스터가 지정한 날짜가 우선 — 칩 픽 신호가 마운트 시 오늘로 덮지 않게
-    setRankingDraft({ date, names: [] }); goStep('ranking');
+    // 날짜만 넘기면 사이드 장부의 '순위 미입력'도 메인 칩에 착지했다(F02) — 그 장부의 게임 이름까지 넘긴다
+    setRankingDraft({ date, names: [], event: event ?? '' }); goStep('ranking');
   }, [goStep]);
   const onOpenLedgerFromPosters = useCallback((s: Schedule, existing: LedgerLinkTarget | null) => {
     const schedDate = new Date(s.date).toLocaleDateString('en-CA');
@@ -904,8 +906,10 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   useEffect(() => {
     Promise.all([
       getSchedules().then((all: Schedule[]) => all.filter((sc) => sc.venueId === venueId && new Date(sc.date).toLocaleDateString('en-CA') === date)).catch(() => [] as Schedule[]),
-      getLedgerSession(venueId, date).then((ls) => (ls.title ? ls.title.trim() : '')).catch(() => ''),
-    ]).then(([posters, ledgerTitle]) => {
+      // 그날 **모든** 게임(메인+사이드) — 메인 장부 하나만 읽으면 사이드 장부 게임이 칩에 안 떠서
+      // 사이드 순위가 '기타'로 밀리거나 메인 칸에 섞여 저장됐다(F02)
+      getLedgerGames(venueId, date).catch(() => [] as LedgerGame[]),
+    ]).then(([posters, ledgerGames]) => {
       const opts: GameOpt[] = [];
       // 포스터 1장 = 메인 게임(제목) + 사이드 게임 여러 개(sideEvents[])
       for (const sc of posters) {
@@ -916,8 +920,11 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
           if (n) opts.push({ name: n, kind: 'side' });
         }
       }
-      // 포스터엔 없고 장부만 있는 게임
-      if (ledgerTitle && !opts.some((o) => o.name === ledgerTitle)) opts.push({ name: ledgerTitle, kind: 'ledger' });
+      // 포스터엔 없고 장부만 있는 게임(사이드는 제목이 없으면 '사이드N' — 저장·판정과 같은 이름)
+      for (const g of ledgerGames) {
+        const n = rankingEventOf({ gameSeq: g.gameSeq, title: g.title });
+        if (n && !opts.some((o) => o.name === n)) opts.push({ name: n, kind: 'ledger' });
+      }
       // 이름 중복 제거(먼저 등록된 분류 우선: main > side > ledger)
       const seen = new Set<string>();
       setDayGames(opts.filter((o) => (seen.has(o.name) ? false : (seen.add(o.name), true))));

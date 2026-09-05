@@ -37,8 +37,8 @@ interface MyPostersTabProps {
   /** '장부' 버튼 — 연결 장부가 있으면 그 날짜(existingDate)로, 없으면 새 등록(프리필) */
   /** 연결 장부 열기 — 대상은 (날짜, 게임). null = 이 포스터로 새 장부. */
   onOpenLedger?: (s: Schedule, existing: LedgerLinkTarget | null) => void;
-  /** '순위 미입력' 뱃지 클릭 — 해당 날짜의 순위 입력 화면으로 */
-  onGotoRanking?: (date: string) => void;
+  /** '순위 미입력' 뱃지 클릭 — 그 장부의 (날짜, 게임) 순위 입력 화면으로. event=게임 이름(메인 장부 title 또는 '사이드N') */
+  onGotoRanking?: (date: string, event?: string) => void;
   /** 이 판이 실제로 보이는가('내 매장' 탭 + 게임관리 → 게임 스텝). keep-alive(display:none) 로
    *  숨은 동안은 구독을 끊고, 다시 보일 때 한 번 재검증한다(StoreDashboard 와 같은 배선). */
   active?: boolean;
@@ -158,7 +158,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
   schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>;
   onEdit: () => void; onDelete: () => void;
   ops?: PosterOpsSummary | null; resCounts: Record<string, number>; checkinNonce?: number;
-  onLedgerAt?: (target: LedgerLinkTarget | null) => void; onRanking?: (date: string) => void;
+  onLedgerAt?: (target: LedgerLinkTarget | null) => void; onRanking?: (date: string, event?: string) => void;
   gameDates?: { id: string; date: string }[]; // 같은 제목(같은 게임)의 날짜별 스케줄 — 예약을 날짜별로 전환
 }) {
   const resCount = resCounts[schedule.id] ?? 0;
@@ -315,8 +315,8 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
             </button>
           )}
           {ops?.closed && !ops.hasRankings && onRanking && (
-            <button type="button" onClick={() => onRanking(ops.date)}
-              title="장부는 마감됐는데 순위가 아직 없어요. 입력하면 랭킹·아카이브에 바로 반영됩니다"
+            <button type="button" onClick={() => onRanking(ops.date, ops.rankingEvent)}
+              title={`${ledgerGameLabel(ops.gameSeq)} 장부는 마감됐는데 순위가 아직 없어요. 입력하면 랭킹·아카이브에 바로 반영됩니다`}
               className="rounded-badge border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-2xs font-bold text-amber-400 active:opacity-80">
               순위 미입력
             </button>
@@ -375,9 +375,9 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
       {/* 모바일 전용 하단 액션 바 — 가로 균등(아래로 쌓이지 않게). 순위 미입력은 풀폭 경고로 위에 */}
       <div className="sm:hidden border-t border-border-subtle">
         {ops?.closed && !ops.hasRankings && onRanking && (
-          <button type="button" onClick={() => onRanking(ops.date)}
+          <button type="button" onClick={() => onRanking(ops.date, ops.rankingEvent)}
             className="flex w-full items-center justify-center gap-1 border-b border-border-subtle bg-amber-500/10 py-2 text-2xs font-bold text-amber-400 active:opacity-80">
-            <Icon name="alert" size={12} className="shrink-0" />순위 미입력 — 지금 입력하기
+            <Icon name="alert" size={12} className="shrink-0" />{ledgerGameLabel(ops.gameSeq)} 순위 미입력 — 지금 입력하기
           </button>
         )}
         <div className="flex items-stretch divide-x divide-border-subtle">

@@ -6,7 +6,7 @@ import type { Schedule } from '../../api/schedules';
 import { listStaleOpenSessions,
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
-  getLastClosedRound, type LastClosedRound,
+  getLastClosedRound, MAIN_GAME_SEQ, type LastClosedRound, type PosterOpsSummary,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest,
 } from '../../api/ledger';
 import { useToast } from '../atoms/Toast';
@@ -14,6 +14,8 @@ import { getClockState, getVenueClocks, subscribeClock, type ClockState } from '
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { aiGenerate } from '../../api/ai';
 import { getVenueRankings } from '../../api/rankings';
+import { hasRankingForGame } from '../../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
+import { ledgerGameLabel } from '../../lib/ledgerLink';
 import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import RegularsModal from './RegularsModal';
@@ -130,10 +132,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   };
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [voucherPrefill, setVoucherPrefill] = useState(''); // 단골 행 '이용권 보내기' 프리필
-  const [hasRankToday, setHasRankToday] = useState<boolean | null>(null); // 지금 할 일 카드(순위 입력 유도)
+  // 오늘 저장된 순위 event 이름들(null=아직 모름/실패). 완료 판정은 (날짜, 게임) 단위라 목록을 그대로 들고 있는다 — F02
+  const [rankEventsToday, setRankEventsToday] = useState<string[] | null>(null);
   const [funnel, setFunnel] = useState<WeeklyFunnel | null>(null); // 주간 흐름(조회→예약→방문) — '퍼널' 용어는 UI 에서 금지(오너: 일반인 모름)
   const [staleOpen, setStaleOpen] = useState<{ sessionDate: string; gameSeq: number; title: string | null }[]>([]); // 미마감 지난 장부
-  const [pendingRanks, setPendingRanks] = useState<{ date: string }[]>([]); // 마감됐는데 순위 미입력인 지난 대회(밀린 것)
+  // 마감됐는데 순위 미입력인 지난 대회(밀린 것) — 같은 날 게임이 둘이면 어느 게임인지 라벨로 구분한다(F02)
+  const [pendingRanks, setPendingRanks] = useState<PosterOpsSummary[]>([]);
   // 다가오는 생일 단골(7일 내) — CRM 생일 필드 기반
   const [bdays, setBdays] = useState<{ name: string; birthday: string; dday: number }[]>([]);
   useEffect(() => {
@@ -212,7 +216,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       getStaffWages(venueId).then(setWages).catch(() => {}),
       getLedgerRange(venueId, d14[0], d14[13]).then(setRange).catch(() => {}),
       getVenueRegulars(venueId).then(setRegulars).catch(() => {}),
-      getVenueRankings(venueId, d).then(({ entries }) => setHasRankToday(entries.length > 0)).catch(() => {}),
+      getVenueRankings(venueId, d).then(({ entries }) => setRankEventsToday(entries.map((e) => e.eventName ?? ''))).catch(() => {}),
       getVenueWeeklyFunnel(venueId).then(setFunnel).catch(() => {}),
       listStaleOpenSessions(venueId).then(setStaleOpen).catch(() => {}),
       getPosterOpsSummaries(venueId).then((sums) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date)))).catch(() => {}),
@@ -220,6 +224,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     ]).then(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, d]);
+
+  // 오늘 장부(메인)의 순위 입력 여부 — 날짜 Set 으로 보면 사이드만 저장돼도 메인이 '완료'로 뭉쳤다(F02).
+  const hasRankToday = useMemo(
+    () => (rankEventsToday === null ? null : hasRankingForGame({ gameSeq: session?.gameSeq ?? MAIN_GAME_SEQ, title: session?.title }, rankEventsToday)),
+    [rankEventsToday, session?.gameSeq, session?.title],
+  );
 
   useEffect(() => { setLoading(true); reload(); }, [reload]);
   // 숨김(다른 섹션·다른 탭 keep-alive) 동안 구독이 꺼져 있어 이벤트를 놓친다 —
@@ -955,7 +965,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           <Icon name="trophy" size={20} className="shrink-0 text-gold-300" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-ink-primary">순위 미입력 대회 {pendingRanks.length}개</p>
-            <p className="mt-1 truncate text-2xs text-ink-muted">{pendingRanks.slice(0, 4).map((p) => p.date.slice(5).replace('-', '/')).join(', ')}{pendingRanks.length > 4 ? ' 외' : ''} — 마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
+            <p className="mt-1 truncate text-2xs text-ink-muted">{pendingRanks.slice(0, 4).map((p) => `${p.date.slice(5).replace('-', '/')}${p.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(p.gameSeq)}` : ''}`).join(', ')}{pendingRanks.length > 4 ? ' 외' : ''} — 마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
           </div>
           <span className="shrink-0 rounded-input bg-gold-400 px-3 py-2 text-xs font-bold text-ink-inverse">순위 입력</span>
         </button>

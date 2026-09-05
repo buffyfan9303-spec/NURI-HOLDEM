@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Rea
 import { useToast } from '../atoms/Toast';
 import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
+import { hasRankingForGame, rankingEventOf } from '../../lib/rankingGame'; // 순위 완료·이동 대상은 (날짜, 게임) — F02
 import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
@@ -210,7 +211,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
   // 게임관리 '장부' 바로가기: 연결 장부로 즉시 이동, 없으면 포스터 정보를 시작 설정에 프리필
   // (ref에 대상 날짜를 묶어 — 세션 fetch 타이밍에 이전 날짜 화면이 잠깐 보여도 오적용/유실 없음)
-  const seedFillRef = useRef<{ date: string; fill: Partial<LedgerSession> } | null>(null);
+  // movedTo: 그 날짜 메인 칸이 남의 장부로 차 있어 빈 게임으로 한 번 옮겼다는 표시(무한 이동 방지)
+  const seedFillRef = useRef<{ date: string; fill: Partial<LedgerSession>; movedTo?: number } | null>(null);
   useEffect(() => {
     if (!seed) return;
     if (seed.isNew) {
@@ -380,33 +382,48 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   // 실패는 '빈 장부'가 아니다 — loadError 가 있으면 세팅 폼으로 넘어가지 않는다.
   const showSetup = !loadError && !session.openedAt && !closed && buyins.length === 0 && players.length === 0;
 
-  // 마감 후 다음 액션 바 — 그날 순위가 이미 입력됐는지(미입력이면 입력 유도 강조)
+  // 마감 후 다음 액션 바 — **이 게임**의 순위가 이미 입력됐는지(미입력이면 입력 유도 강조).
+  // 날짜만 보면 같은 날 메인만 저장해도 사이드가 '입력됨 ✓' 로 뭉쳐 입력 버튼이 사라진다(F02).
   const [hasRank, setHasRank] = useState<boolean | null>(null);
   useEffect(() => {
     if (!closed) { setHasRank(null); return; }
     let on = true;
     getVenueRankings(venueId, date)
-      .then(({ entries }) => { if (on) setHasRank(entries.length > 0); })
+      .then(({ entries }) => { if (on) setHasRank(hasRankingForGame({ gameSeq, title: session.title }, entries.map((e) => e.eventName))); })
       .catch(() => { if (on) setHasRank(null); });
     return () => { on = false; };
-  }, [closed, venueId, date]);
+  }, [closed, venueId, date, gameSeq, session.title]);
 
   // 다음 게임 바로 작성: 설정 화면일 때 직전 세션 단가/게임명/딜러를 미리 불러옴
   // 게임관리에서 포스터 프리필(seedFill)로 들어왔으면 그게 우선(해당 날짜에서 1회 소비)
   useEffect(() => {
     if (loading) return; // 세션 fetch 중엔 이전 날짜 잔상 기준 판단 금지
+    const sf = seedFillRef.current;
     if (!showSetup) {
       setPrefill(null);
-      // 그 날짜에 이미 장부가 있으면 포스터 프리필은 폐기(기존 장부 = 그날의 게임)
-      if (seedFillRef.current?.date === date) seedFillRef.current = null;
+      if (sf?.date === date) {
+        // 그 (날짜, 게임) 칸이 이미 차 있다. 같은 포스터의 장부면 그게 곧 그 게임이니 그대로 열고 프리필만 폐기한다.
+        if (session.scheduleId && session.scheduleId === sf.fill.scheduleId) { seedFillRef.current = null; return; }
+        // 여기가 '+ 이 포스터로 새 장부' 가 **다른 포스터의 장부 위에** 조용히 착지하던 자리다(F01-b).
+        // 기존 장부는 절대 덮지 않고, 그날의 다음 빈 게임(사이드)으로 옮겨 새 장부를 연다 — 어디로 갔는지 알린다.
+        if (sf.movedTo == null) {
+          const next = Math.max(MAIN_GAME_SEQ + 1, games.reduce((m, g) => Math.max(m, g.gameSeq), 0) + 1);
+          seedFillRef.current = { ...sf, movedTo: next };
+          setGameSeq(next); setSelected(null);
+          toast.show(`${date} ${gLabel(gameSeq)} 자리에는 이미 다른 장부(${session.title || '제목 없음'})가 있어 ${gLabel(next)} 장부로 새로 엽니다`, 'info');
+          return;
+        }
+        seedFillRef.current = null; // 옮긴 자리까지 차 있으면(동시 개설) 프리필만 폐기 — 남의 장부를 건드리지 않는다
+      }
       return;
     }
-    if (seedFillRef.current?.date === date) {
-      setPrefill(seedFillRef.current.fill);
+    if (sf?.date === date) {
+      setPrefill(sf.fill);
       seedFillRef.current = null;
       return;
     }
     getLastLedgerSettings(venueId, date).then(setPrefill).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, showSetup, venueId, date, gameSeq]);
 
   // PL3: 마지막 '마감된' 회차 — '지난 게임 그대로 열기' 1탭 재료(세션 전체 + 마감 때 캡처한 클락 설정)
@@ -1085,7 +1102,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               onClick={() => {
                 const rosterNames = players.map((p) => p.name);
                 const extra = [...new Set(buyins.map((b) => b.playerName))].filter((n) => !rosterNames.includes(n));
-                onMakeRankingDraft(date, [...rosterNames, ...extra], session.title || ''); // 명단 없어도 날짜는 맞춰 이동
+                // 명단이 없어도 (날짜, 게임)은 맞춰 이동 — 사이드는 제목이 비어도 '사이드N' 으로 그 게임에 착지한다
+                onMakeRankingDraft(date, [...rosterNames, ...extra], rankingEventOf({ gameSeq, title: session.title }));
               }}
               className={hasRank === false
                 ? 'btn-primary px-3 py-1.5 text-xs'

@@ -1,6 +1,7 @@
 // src/api/ledger.ts — NURI POS 장부 시스템 API
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { TICKET_WON } from '../lib/units';
+import { hasRankingForGame, rankingEventOf } from '../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
 import { currentUser } from './_session';
 import type { ClockConfig as ClockConfigT } from './clock'; // 타입 전용 — 런타임 순환 없음
 
@@ -598,17 +599,23 @@ export async function notifyLedgerOpen(venueId: string, title: string, operatorI
 /** 게임관리 운영 현황판 — 연결 장부의 바인 수·매출(만)·마감·순위입력 여부(scheduleId 키). */
 export interface PosterOpsSummary {
   date: string;
+  /** 이 요약이 대표하는 장부의 게임(1=메인, 2+=사이드). 한 포스터에 같은 날 장부가 둘이면 어느 것인지 이 값이 정한다. */
+  gameSeq: number;
+  /** 그 장부의 게임 이름(순위 event 이름과 대조·이동에 쓰는 값). */
+  rankingEvent: string;
   closed: boolean;
   buyinCount: number;
   revenueMan: number;   // 실수금 합(만원 환산) — 통계와 동일한 buyinFinance 규칙(DB 금액은 원 단위)
-  hasRankings: boolean; // 그 날짜에 순위 입력이 1건이라도 있는지
+  hasRankings: boolean; // 그 **게임**의 순위가 입력됐는지(F02 — 날짜 Set 으로 뭉치면 사이드가 거짓 ✓ 가 된다)
 }
 export async function getPosterOpsSummaries(venueId: string): Promise<Record<string, PosterOpsSummary>> {
   if (IS_MOCK) return {};
   const { data: ss } = await supabase.from('ledger_sessions')
-    .select('schedule_id, session_date, game_seq, closed, buyin_amount, card_amount, discounts')
+    // title 은 순위 event 이름과 대조하는 유일한 키다(venue_rankings 에 game_seq 가 없다 — rankingGame.ts)
+    .select('schedule_id, session_date, game_seq, title, closed, buyin_amount, card_amount, discounts')
     .eq('venue_id', venueId).not('schedule_id', 'is', null)
-    .order('session_date', { ascending: false }).limit(100);
+    // 같은 포스터에 장부가 여럿이면 '최신 날짜의 메인' 이 대표 — game_seq 정렬이 없으면 어느 장부가 뽑힐지 비결정이었다
+    .order('session_date', { ascending: false }).order('game_seq', { ascending: true }).limit(100);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sessions = (ss ?? []) as any[];
   if (!sessions.length) return {};
@@ -617,9 +624,14 @@ export async function getPosterOpsSummaries(venueId: string): Promise<Record<str
   const dates = [...new Set(sessions.map((s) => s.session_date as string))];
   const [bRes, rRes] = await Promise.all([
     supabase.from('ledger_buyins').select('*').eq('venue_id', venueId).in('session_date', dates),
-    supabase.from('venue_rankings').select('ranking_date').eq('venue_id', venueId).in('ranking_date', dates),
+    supabase.from('venue_rankings').select('ranking_date, event_name').eq('venue_id', venueId).in('ranking_date', dates),
   ]);
-  const rankedDates = new Set(((rRes.data ?? []) as { ranking_date: string }[]).map((r) => r.ranking_date));
+  // 날짜 → 그 날 저장된 event 이름들. 게임 판정은 rankingGame.hasRankingForGame 이 한다(날짜 Set 금지 — F02).
+  const rankedEvents = new Map<string, string[]>();
+  for (const r of (rRes.data ?? []) as { ranking_date: string; event_name: string | null }[]) {
+    const arr = rankedEvents.get(r.ranking_date);
+    if (arr) arr.push(r.event_name ?? ''); else rankedEvents.set(r.ranking_date, [r.event_name ?? '']);
+  }
   // (날짜,게임)별 바인 집계(매출은 그 게임 단가 기준 buyinFinance)
   const agg = new Map<string, { cnt: number; rev: number }>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -636,12 +648,14 @@ export async function getPosterOpsSummaries(venueId: string): Promise<Record<str
   }
   const out: Record<string, PosterOpsSummary> = {};
   for (const s of sessions) {
-    if (out[s.schedule_id]) continue; // 최신 장부 우선
-    const a = agg.get(gkey(s.session_date as string, s.game_seq ?? MAIN_GAME_SEQ)) ?? { cnt: 0, rev: 0 };
+    if (out[s.schedule_id]) continue; // 최신 날짜의 메인 장부가 대표(위 정렬)
+    const seq = (s.game_seq ?? MAIN_GAME_SEQ) as number;
+    const game = { gameSeq: seq, title: (s.title ?? null) as string | null };
+    const a = agg.get(gkey(s.session_date as string, seq)) ?? { cnt: 0, rev: 0 };
     out[s.schedule_id] = {
-      date: s.session_date, closed: !!s.closed,
+      date: s.session_date, gameSeq: seq, rankingEvent: rankingEventOf(game), closed: !!s.closed,
       buyinCount: a.cnt, revenueMan: Math.round(a.rev / WON_PER_MAN),
-      hasRankings: rankedDates.has(s.session_date),
+      hasRankings: hasRankingForGame(game, rankedEvents.get(s.session_date as string) ?? []),
     };
   }
   return out;
