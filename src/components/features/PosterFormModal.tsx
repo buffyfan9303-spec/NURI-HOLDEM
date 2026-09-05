@@ -6,7 +6,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { uploadPoster } from '../../lib/storage';
 import { filterContent } from '../../lib/content-filter';
 import type { Schedule, Promotion } from '../../api/schedules';
-import { DISCOUNT_TYPES, discountTexts, retypePromotion, type DiscountType } from '../../lib/promotionLabel';
+import { DISCOUNT_TYPES, retypePromotion, type DiscountType } from '../../lib/promotionLabel';
+import { ledgerLabelOf } from '../../lib/posterDiscounts';
 import { wonToMan, manToWon } from '../../lib/units';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import { generateBlinds } from '../../api/clock';
@@ -790,7 +791,8 @@ function PromotionEditor({ items, onChange, buyIn }: {
           {items.map((p, i) => {
             const won = p.discountWon ?? 0;
             const over = won > 0 && buyIn > 0 && won > buyIn;
-            const ledgerLabel = discountTexts(p).ledger;
+            // 미리보기·실제 삽입이 같은 말을 하도록 한 함수에서 뽑는다(유형 라벨 vs 업주가 쓴 문구 우선순위 포함).
+            const ledgerLabel = won > 0 ? ledgerLabelOf(p) : null;
             return (
               <li key={i} className="space-y-1 rounded-input border border-border-subtle bg-surface-low p-1.5">
                 <div className="flex items-center gap-1.5">
