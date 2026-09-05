@@ -245,8 +245,11 @@ export default function ScheduleDetailModal({
         <div className="flex min-w-0 flex-col">
           {/* 제목 영역 */}
           <div className="px-3.5 pt-3.5 pb-2">
+            {/* 화면에서 제일 큰 글자라 절단이 제일 눈에 띈다 — 이 파일이 이미 프로모션·주소·매장명에
+                쓰고 있는 break-keep(어절 단위) + [overflow-wrap:anywhere](초장문 토큰만 예외) 짝을
+                제목에도 맞춘다. 360px 에서 대회명이 음절 중간에서 갈리던 문제. */}
             <h1 className={[
-              'text-xl font-bold leading-tight',
+              'text-xl font-bold leading-tight break-keep [overflow-wrap:anywhere]',
               schedule.isPremium ? 'text-accent-300' : 'text-ink-primary',
             ].join(' ')}>
               {schedule.title}
@@ -313,7 +316,12 @@ export default function ScheduleDetailModal({
       {/* ── 탭바 (메인 / 블라인드 / 프라이즈 / 매장정보 / Q&A) — sticky 상단 고정. PC는 우측에 닫기 통합 ──
           활성 표시는 밑줄(SlidingPill underline) — UnderlineTabs 와 동일 문법을 인라인으로 쓴다.
           왜 공용 UnderlineTabs 를 안 쓰나: label 이 string 이라 Q&A 의 개수·안읽음 배지를 붙일 수 없다. */}
-      <div data-sched-tabbar="" role="tablist" className="relative grid grid-cols-5 border-b border-border-subtle sticky top-0 bg-surface-base z-10 lg:pr-[4.25rem]">
+      {/* ⚠ pr-[3.25rem](모바일) — 위쪽 모바일 닫기 버튼은 `fixed top-[12px+safe] right-3` 의 36px 원이라
+          **뷰포트에 붙어 있다**. 이 탭바는 sticky top-0 이고 스크롤 컨테이너의 top 이 곧 safe-top 이라,
+          조금만 스크롤하면 탭바(높이 40px 남짓)의 12~48px 구간에 닫기 버튼이 그대로 겹쳐 앉는다 —
+          5번째 칸(Q&A)의 탭 영역 대부분이 닫기 버튼에 먹혔다(360px 기준 x=312~348 ⊂ Q&A 칸 288~360).
+          PC 에서 같은 이유로 이미 lg:pr-[4.25rem] 을 두고 있다 — 모바일에도 같은 해법(48px 버튼 자리 + 4px). */}
+      <div data-sched-tabbar="" role="tablist" className="relative grid grid-cols-5 border-b border-border-subtle sticky top-0 bg-surface-base z-10 pr-[3.25rem] lg:pr-[4.25rem]">
         <SlidingPill activeKey={tab} underline className="rounded-full bg-accent-300" />
         {/* PC 닫기 — 정보 영역 우상단(항상 보이는 sticky 탭바, 손 닿는 위치) */}
         <button
@@ -361,8 +369,12 @@ export default function ScheduleDetailModal({
         })}
       </div>
 
-      {/* ── 본문 — 탭 5개가 같은 패딩 컨테이너를 공유(탭 전환에 좌우 여백이 흔들리지 않게) ── */}
-      <div data-sched-panel="" className="px-3.5 pt-3 pb-5 space-y-3">
+      {/* ── 본문 — 탭 5개가 같은 패딩 컨테이너를 공유(탭 전환에 좌우 여백이 흔들리지 않게) ──
+          pb 에 safe-area: Modal 의 page 변형은 `fixed inset-0` 이고 위쪽만 pt-[env(safe-area-inset-top)]
+          을 갖는다. 아래는 뷰포트 바닥에 딱 붙어서, 홈 인디케이터(iOS 34px)가 맨 끝 요소를 덮었다 —
+          '꾹 눌러 예약 취소'/Q&A 입력처럼 마지막에 오는 조작이 손가락에 안 잡혔다.
+          ClockRemote 본문과 같은 문법(pb = 기존 여백 + env(safe-area-inset-bottom)). */}
+      <div data-sched-panel="" className="px-3.5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] space-y-3">
 
       {/* ══════ 메인 — 지금 상태 · 참가 행동 · 게임 정보 ══════════════════════ */}
       {tab === 'main' && (<>
