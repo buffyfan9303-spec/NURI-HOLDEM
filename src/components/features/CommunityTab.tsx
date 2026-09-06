@@ -152,13 +152,20 @@ function CommunityTab({
     // VT 콜백(flushSync) 안의 scrollTo 는 강제 동기 레이아웃을 한 번 더 유발한다.
     needScrollRef.current = (secScrollRef.current.get(s) ?? 0) !== curY;
     lastCommunitySection = s;
-    setShownSec(s);
-    if (visitedSecs.has(s)) {
+    if (visitedSecs.has(s) && s !== activeSecRef.current) {
       // 서브섹션 전환 동안만 서브탭 바를 root 스냅샷에서 제외(자기 이름의 스냅샷 — index.css 마커 참조).
       // 상시 name 이면 메인 탭 전환(커뮤니티→홈)에서 old-only 스냅샷이 전환 내내 얼어붙는 잔상을 실측했다.
       // 마커의 켜고 끄기는 goSubTab 이 전환 수명에 맞춰 한다(고정 타이머 금지 — 느린 기기에서 도중에 풀린다).
-      goSubTab('community-sec', SEC_ORDER, activeSecRef.current, s, () => setSectionState(s));
+      // ⚠ 알약 하이라이트(shownSec)도 **전환 안에서** 커밋한다 (2026-09-07 실측).
+      //   밖에서 먼저 부르면 React 가 그것을 먼저 flush 해, VT 가 '옛 스냅샷'을 뜨는 시점에
+      //   알약이 이미 새 자리에 있다 → 그룹이 B→B 를 보간해 전혀 움직이지 않는다.
+      //   (subtab-motion.spec 실측: 키프레임 matrix(…,89,71) → matrix(…,89,71) 로 동일했다.)
+      //   전환 안에서 커밋하면 옛=A · 새=B 가 되어 VT 가 알약을 제 손으로 미끄러뜨린다.
+      goSubTab('community-sec', SEC_ORDER, activeSecRef.current, s, () => { setShownSec(s); setSectionState(s); });
     } else {
+      // 미방문 섹션(첫 진입)은 VT 를 타지 않는다 — 가릴 스냅샷이 없으니 알약은 즉시 하이라이트하고
+      // 컨텐츠만 트랜지션으로 넘긴다(장터 lazy 청크에서도 이전 화면이 유지된다).
+      setShownSec(s);
       startSecTransition(() => setSectionState(s));
     }
   }, [visitedSecs]);
