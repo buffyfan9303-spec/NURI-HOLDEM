@@ -124,6 +124,26 @@
       radial-gradient(min(600px, 150vw) min(600px, 150vw) at 88% 10%, rgb(var(--bloom-1) / var(--aura-a2)) 0%, rgb(var(--bloom-1) / calc(var(--aura-a2) * .55)) 30%, rgb(var(--bloom-1) / calc(var(--aura-a2) * .2)) 60%, transparent 100%),
       radial-gradient(min(420px, 110vw) min(420px, 110vw) at 50% 96%, rgb(var(--bloom-3) / var(--aura-a3)) 0%, rgb(var(--bloom-3) / calc(var(--aura-a3) * .55)) 30%, rgb(var(--bloom-3) / calc(var(--aura-a3) * .2)) 60%, transparent 100%);
   }
+  /* .subbar-aura — 페이지 위에 얹히는 **sticky 서브탭 바**의 바탕.
+     오너 리포트(2026-09-07): "커뮤니티 하위 메뉴 탭은 주변 테두리와 백그라운드가 검게 처리돼 있어
+     다른 카테고리들과 괴리감이 든다."
+     원인: 아우라 블룸 두 겹(.aura-bg 의 바이올렛 88% 10% · body::before 의 인디고 10% 0%)이 가장 진한 곳이
+     정확히 화면 상단이고, 서브탭 바가 그 위를 **불투명 surface-base(#06080F)**로 덮는다. 실측 결과
+     바 = rgb(6,8,15) · 바로 아래 지면 ≈ rgb(27,21,52) 로, 검은 띠와 보라 지면 사이에 하드 경계가 생긴다.
+     (배경을 안 칠하는 다른 바들 — GTO 레인 칩·장터 카테고리 등 — 은 블룸 위에 그대로 떠서 이 문제가 없다.)
+     처방: 불투명은 유지하되(스크롤 콘텐츠가 비치면 안 된다 — 2026-09-04 헤더 결정과 같은 이유)
+     블룸이 그 자리에 칠할 색만큼 미리 섞는다. 섞는 양은 아우라 알파 토큰(--aura-a2, 다크 .16 · 라이트 .10)을
+     그대로 써서 테마가 바뀌어도 따라온다. 위치에 의존하지 않으므로 어느 화면의 바에도 그대로 쓴다.
+     ⚠ 유리(backdrop-filter)로 풀지 않는다 — 헤더에서 이미 "콘텐츠가 비친다"고 되돌린 길이다(.glass-chrome 주석). */
+  .subbar-aura {
+    background-color: rgb(var(--surface-base)); /* color-mix 미지원 폴백 = 종전 동작 */
+    background-color: color-mix(in srgb,
+      rgb(var(--surface-base)) calc(100% - var(--aura-a2) * 100%),
+      rgb(var(--bloom-1)) calc(var(--aura-a2) * 100%));
+  }
+  /* sticky 로 올라올 때 위쪽 틈을 덮는 ::before 도 같은 색이어야 한다(호출측이 위치·크기만 준다). */
+  .subbar-aura::before { background-color: inherit; }
+
   .card-aura {
     /* v4 'Vibrant Depth'(aura-ui.com): 불투명 카드 + **거의 안 보이는** 헤어라인(white 5%) + 겹친 부드러운 그림자(Aura UI shadow-lg)
        + 상단 1px 하이라이트. v3 의 7% 테두리·반투명은 '선이 도드라지는' 조잡함의 원인이었다. */
