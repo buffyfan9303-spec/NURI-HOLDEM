@@ -27,7 +27,7 @@ import { stripVenuePrefix, voucherGroupLabel, voucherLineLabel } from '../../lib
 import type { Html5Qrcode } from 'html5-qrcode'; // 타입만(런타임 번들 제외) — 실제 라이브러리는 스캐너 열 때 동적 로드
 import {
   listMyVouchers,
-  redeemMyVoucher, redeemMyVoucherByQr, redeemMyVoucherByPhone,
+  redeemMyVoucherByQr, redeemMyVoucherByPhone,
   findUserByPhone, isHeldVoucher,
   type Voucher, type TransferTarget,
 } from '../../api/vouchers';
@@ -258,12 +258,6 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
   const [busy, setBusy] = useState(false);
   const vid = stack.ids[0];
 
-  const doDirect = async () => {
-    if (!window.confirm(`'${stack.venueName ?? '발급 매장'}'에서 이용권을 사용(전송)할까요? 되돌릴 수 없습니다.`)) return;
-    setBusy(true);
-    try { await redeemMyVoucher(vid); onDone({ title: stack.title, venueName: stack.venueName, remain: stack.ids.length - 1 }); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '사용 실패', 'error'); setBusy(false); }
-  };
   const doQr = async (text: string) => {
     const venueId = parseVenueId(text);
     if (!venueId) { toast.show('매장 QR이 아닙니다', 'error'); setMode('menu'); return; }
@@ -302,9 +296,16 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
           <button type="button" onClick={onClose} aria-label="닫기" className="hit shrink-0 text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
         {mode === 'menu' && (<>
-          <p className="text-2xs text-ink-muted">발급 매장(<b className="text-ink-secondary">{stack.venueName ?? '확인 중'}</b>)에서만 사용됩니다. 방법을 선택하세요.</p>
-          <button type="button" disabled={busy} onClick={doDirect} className="btn-primary inline-flex w-full items-center justify-center gap-1.5 text-sm disabled:opacity-50"><Icon name="check-circle" size={16} /> 이 매장으로 바로 전송(사용)</button>
-          <button type="button" onClick={() => setMode('qr')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="qr" size={16} /> 매장 QR 스캔해서 사용</button>
+          {/* ⚠ '이 매장으로 바로 전송(사용)' 버튼을 내렸다(오너 승인 2026-09-07).
+              그 경로(redeem_my_voucher)는 **매장 증빙이 한 줄도 없었다** — 형제 함수 by_qr 은 매장 id 를,
+              by_phone 은 업주 전화번호를 강제하는데 그것만 아무 검증이 없어서, 집에서 눌러도 사용 처리가 됐다.
+              그리고 사용 처리는 트리거(_voucher_used_checkin)가 출석 행을 만들고 그 출석이 이벤트 참여권을 낳는다 —
+              경품이 이용권이라 **당첨자가 집에서 참여권을 자가증식**할 수 있었다.
+              남은 두 경로는 둘 다 현장 증빙이 있다: 벽에 붙은 매장 QR, 또는 업주가 알려 주는 전화번호.
+              서버에서도 같은 커밋으로 redeem_my_voucher 실행 권한을 회수했다(20260907d) — UI 만 내리면
+              콘솔에서 그대로 부를 수 있으므로 둘을 함께 막아야 한다. */}
+          <p className="text-2xs text-ink-muted">발급 매장(<b className="text-ink-secondary">{stack.venueName ?? '확인 중'}</b>)에서만 사용됩니다. <b className="text-ink-secondary">매장에서</b> 아래 방법 중 하나로 사용해 주세요.</p>
+          <button type="button" onClick={() => setMode('qr')} className="btn-primary inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="qr" size={16} /> 매장 QR 스캔해서 사용</button>
           <button type="button" onClick={() => setMode('phone')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="phone" size={16} /> 매장 업주 전화번호로 전송</button>
         </>)}
         {mode === 'qr' && (
