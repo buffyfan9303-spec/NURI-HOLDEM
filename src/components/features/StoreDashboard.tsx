@@ -631,9 +631,18 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </button>
       ))}
 
-      {/* 🔴 라이브 운영 현황 — 진행 클락 + 대기 바인요청을 한 카드에. 운영 중일 때만 노출(상황 인지형 커맨드센터) */}
+      {/* 🔴 라이브 운영 현황 — 진행 클락 + 대기 바인요청을 한 카드에. 운영 중일 때만 노출(상황 인지형 커맨드센터)
+          아우라 v6.5 '화면당 글로우 1곳'의 **이 탭 주인공**(오너 결정 2026-09-07).
+          자격 근거: 조건(liveWidget)이 문자 그대로 '지금 진행 중'이라 상시 배경이 되지 않는다 —
+          CalendarPanel.tsx:243 이 캘린더를 뺀 바로 그 기준을 통과한다. 대시보드의 다른 카드는 전부
+          '지난 것·집계·안내'인데 이 카드만 실시간(1초 틱)이라 업주의 손이 실제로 가는 자리다.
+          · 테두리는 절반으로(accent-400/40 → /20): 링 헤어라인이 테두리를 대신한다. 안 줄이면 3중선이 된다
+            (LiveGamesTab.tsx:494 hero 와 같은 조리법).
+          · box-shadow 는 자기 overflow-hidden 에 잘리지 않고, .ring-aura::before 는 inset:0 이라 범위 안이다.
+          · 이 카드가 뜨는 동안 아래 '지금 할 일' CTA 는 보라 후광을 내려놓는다(그 카드 주석 참조) —
+            안 그러면 같은 화면에 바이올렛 후광이 둘이 되어 '어느 쪽이 지금인가'가 사라진다. */}
       {!loading && liveWidget && (
-        <section className="overflow-hidden rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.07] to-transparent">
+        <section className="overflow-hidden rounded-card border border-accent-400/20 ring-aura ring-aura-glow bg-gradient-to-br from-accent-300/[0.07] to-transparent">
           <div className="flex items-center justify-between gap-2 border-b border-border-subtle px-3 py-2">
             <span className="flex items-center gap-2 text-sm font-bold text-ink-primary">
               <span className="relative flex h-2 w-2" aria-hidden>
@@ -954,8 +963,16 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               <p className="text-sm font-bold text-ink-primary">{todo.title}</p>
               <p className="mt-1 t-desc break-keep text-ink-muted">{todo.desc}</p>
             </div>
+            {/* 라이브 운영 현황 카드가 글로우를 쓰는 동안(liveWidget)에는 이 CTA 가 **보라 후광을 내려놓는다**.
+                btn-primary 의 그림자는 index.css:620 의 violet-500 이라, 그대로 두면 같은 화면에 같은 색
+                후광이 둘이 되어 '지금 볼 곳'이 사라진다 — v3 가 조잡했던 정확한 메커니즘이고,
+                ToolsPanel.tsx 가 GTO 히어로 옆에 btn-primary 를 두지 않는 이유와 같다(아우라 v6.5 화면당 1곳).
+                단 'warn'(지난 장부 미마감·순위 누락)은 놓치면 하류가 통째로 멈추는 급한 알림이라
+                골드 채움은 그대로 두고 **그림자만** 뺀다 — 위계를 낮추지 않으면서 색 경쟁만 없앤다. */}
             <button type="button" onClick={todo.onClick}
-              className={todo.tone === 'warn' ? 'btn-primary shrink-0 px-4 py-2 text-xs !bg-none !bg-gold-400 !text-ink-inverse hover:!bg-gold-500' : 'btn-primary shrink-0 px-4 py-2 text-xs'}>
+              className={todo.tone === 'warn'
+                ? `btn-primary shrink-0 px-4 py-2 text-xs !bg-none !bg-gold-400 !text-ink-inverse hover:!bg-gold-500${liveWidget ? ' !shadow-none' : ''}`
+                : liveWidget ? 'btn-ghost shrink-0 px-4 py-2 text-xs' : 'btn-primary shrink-0 px-4 py-2 text-xs'}>
               {todo.cta}
             </button>
           </div>
