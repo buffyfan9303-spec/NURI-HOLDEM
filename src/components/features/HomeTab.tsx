@@ -208,24 +208,27 @@ export default function HomeTab({
           제목 · 내 참여권 · 남은 카드. 숫자가 없으면 그냥 광고가 되고, 아무도 안 누른다. */}
       {event && event.status === 'live' && !(event.startsAt && new Date(event.startsAt) > new Date()) && event.cards.some((c) => !c.opened) && (
         <div className="px-page-x pt-4">
+          {/* ⚠ 아우라 규약(v6): 면은 **공용 card-aura**(불투명 + white 5% 헤어라인)로 통일한다.
+              예전엔 이 배너만 border-accent-400/40 + 보라 그라데이션이라 홈에서 **혼자 다른 문법**이었다
+              (오너 2026-09-06 "아우라 UI 가 제대로 안 된 것 같다"). v6 는 '네온·강한 테두리·큰 글로우 금지'다.
+              강조는 이미 있는 장치로만 낸다 — tile-grad 아이콘과 EVENT 칩, 그리고 숫자 색. */}
           <button type="button" onClick={onEvent}
-            className="group relative flex w-full items-center gap-3 overflow-hidden rounded-aura border border-accent-400/40 bg-gradient-to-br from-accent-500/20 via-surface-high to-surface-high px-3 py-3 text-left transition-transform active:scale-[0.99]">
-            <span aria-hidden className="pointer-events-none absolute -right-7 -top-9 h-24 w-24 rounded-full bg-accent-400/25 blur-2xl" />
-            <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
-              <Icon name="gift" size={19} />
+            className="flex w-full items-center gap-2.5 rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:bg-surface-high/50 active:scale-[0.995]">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
+              <Icon name="gift" size={18} />
             </span>
-            <span className="relative min-w-0 flex-1">
+            <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5">
-                <span className="shrink-0 rounded-chip bg-accent-300/25 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-accent-200">EVENT</span>
+                <span className="shrink-0 rounded-chip bg-accent-300/20 px-1.5 py-px text-[10px] font-bold tracking-wide text-accent-200">EVENT</span>
                 <span className="truncate text-sm font-bold text-ink-primary">{event.title}</span>
               </span>
-              <span className="mt-1 block text-2xs tabular-nums text-ink-muted">
+              <span className="mt-0.5 block truncate text-2xs tabular-nums text-ink-muted">
                 {event.myTickets > 0
                   ? <>참여권 <b className="text-accent-200">{event.myTickets}장</b> · 남은 카드 {event.cards.filter((c) => !c.opened).length}장</>
                   : <>매장 출석하면 참여권 1장 · 남은 카드 {event.cards.filter((c) => !c.opened).length}장</>}
               </span>
             </span>
-            <Icon name="chevron-right" size={15} className="relative shrink-0 text-ink-muted" />
+            <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
           </button>
         </div>
       )}

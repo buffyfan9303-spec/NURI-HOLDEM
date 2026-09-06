@@ -468,19 +468,20 @@ export default function ToolsPanel() {
           그 틈으로 뒤 헤더(프로필 등급 링)가 비쳤다(오너 리포트 2026-08-27). contents 는 박스를
           만들지 않아 margin 이 무효가 되고, 다이얼로그는 space-y 의 직계 자식에서 벗어난다. */}
       <div className="contents">
-      <Modal open={!!activeTool} onClose={close} variant="page" title={activeTool?.name} maxWidth="2xl">
+      {/* 공유는 **창에 딸린 동작**이라 제목줄(닫기 옆)에 둔다 — 본문 위 전용 행에 두면
+          내용과 상관없는 버튼이 위에 홀로 떠 보인다(오너 2026-09-06 스크린샷). */}
+      <Modal open={!!activeTool} onClose={close} variant="page" title={activeTool?.name} maxWidth="2xl"
+        headerAction={active ? (
+          <button type="button" onClick={() => share(active)}
+            aria-label={`${activeTool?.name ?? '도구'} 링크 공유`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-input px-2.5 text-2xs font-semibold text-ink-secondary transition-colors hover:bg-surface-high hover:text-ink-primary">
+            <Icon name="share" size={15} aria-hidden />
+            <span className="hidden sm:inline">공유</span>
+          </button>
+        ) : undefined}>
         {/* onClick 은 앵커 클릭 위임 전용 — 이 div 자체는 인터랙티브가 아니다.
             앵커는 키보드 Enter 도 click 으로 오므로 별도 키 핸들러가 필요 없다. */}
         <div className="px-page-x py-3 pb-8" onClick={swapToolOnLinkClick}>
-          {/* 공유 — 이 도구 딥링크(#tool=key)를 시스템 공유 시트/클립보드로. 커뮤니티 유입 동선. */}
-          <div className="mb-2 flex justify-end">
-            <button type="button" onClick={() => active && share(active)}
-              aria-label={`${activeTool?.name ?? '도구'} 링크 공유`}
-              className="inline-flex h-8 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary">
-              <Icon name="share" size={14} aria-hidden />
-              공유
-            </button>
-          </div>
           <Suspense fallback={<div className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
             {/* #tool= 딥링크로 비로그인 진입해도 게이트가 유지되게 실행 지점에서 한 번 더 확인 */}
             {active ? (user ? renderTool(active) : (
