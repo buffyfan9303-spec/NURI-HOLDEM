@@ -186,16 +186,23 @@ function Hero({ board, left, total, user, onLogin }: {
         <span>매장 <b className="text-ink-secondary">출석 QR</b>을 찍을 때마다 참여권 1장. 참여권 1장으로 카드 한 장을 골라 찢어요.</span>
       </p>
 
-      {!user && (
+      {!user && left > 0 && (
         <button type="button" onClick={onLogin} className="btn-primary relative mt-3 min-h-[44px] w-full text-sm">
           로그인하고 참여하기
         </button>
       )}
-      {user && board.myTickets === 0 && (
+      {/* 종료 조건은 시각이 아니라 **재고**다(오너 2026-09-06: "100장이 소진될 때까지").
+          다 떨어졌으면 참여권 안내보다 '끝났다'가 먼저다 — 안 말하면 손님이 계속 열 카드를 찾는다. */}
+      {left === 0 ? (
+        <p className="relative mt-3 flex items-start gap-1.5 rounded-input border border-border-default bg-surface-high px-3 py-2 text-2xs font-semibold leading-relaxed text-ink-secondary">
+          <Icon name="check-circle" size={13} className="mt-px shrink-0 text-emerald-400" />
+          <span>카드 {total}장이 모두 열렸어요 — 이벤트가 끝났습니다. 다음 이벤트를 기다려 주세요.</span>
+        </p>
+      ) : user && board.myTickets === 0 ? (
         <p className="relative mt-3 rounded-input border border-border-default bg-surface-high px-3 py-2 text-2xs text-ink-secondary">
           참여권이 없어요 — 매장에서 <b className="text-ink-primary">출석 QR</b>을 찍으면 1장이 바로 쌓여요.
         </p>
-      )}
+      ) : null}
     </section>
   );
 }

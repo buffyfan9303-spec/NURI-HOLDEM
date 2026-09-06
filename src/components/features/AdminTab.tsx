@@ -228,7 +228,7 @@ function RankVerifyAdminCard() {
   };
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— <b className="text-ink-secondary">대회(토너먼트) 입상만 승인</b>합니다. 일반 펍 정기 게임 증빙은 <b className="text-ink-secondary">반려</b>하세요 · 승인/거절 시 신분증 즉시 삭제 · 승인분은 100만원당 1점으로 국내 순위 합산</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— <b className="text-ink-secondary">대회(토너먼트) 입상만 승인</b>합니다. 일반 펍 정기 게임 증빙은 <b className="text-ink-secondary">반려</b>하세요 · 승인/거절 시 신분증 즉시 삭제 · 승인분은 100만원(100T)당 1점으로 국내 순위 합산</span></p>
       {/* 실패를 '대기 중인 신청이 없습니다'로 단언하면 인증 요청이 조용히 묻힌다 — 실패 분기가 먼저 온다 */}
       {err != null ? <LoadErrorCard error={err} what="순위 인증 신청" onRetry={reload} compact />
         : list.length === 0 ? <p className="py-2 text-center text-2xs text-ink-muted">대기 중인 신청이 없습니다.</p> : (

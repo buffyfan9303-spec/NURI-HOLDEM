@@ -203,9 +203,10 @@ export default function HomeTab({
       {/* 이벤트 — 일정 **위**(오너 2026-09-06). '이어서 학습' 칸을 대체한다.
           ⚠ 시작 전(starts_at 미래)인 이벤트는 홈에 광고하지 않는다 — 눌러도 참여가 안 되는 칸은
              '고장난 버튼'으로 읽힌다. 예약해 둔 캠페인을 미리 켜 두고 점검할 수 있는 여지이기도 하다.
+          ⚠ 카드가 다 떨어진 이벤트도 같은 이유로 내린다 — 종료 조건이 시각이 아니라 재고다.
           그 칸이 한 줄짜리 텍스트 버튼이었다면 이건 '지금 참여할 수 있는가'가 한눈에 보여야 한다:
           제목 · 내 참여권 · 남은 카드. 숫자가 없으면 그냥 광고가 되고, 아무도 안 누른다. */}
-      {event && event.status === 'live' && !(event.startsAt && new Date(event.startsAt) > new Date()) && (
+      {event && event.status === 'live' && !(event.startsAt && new Date(event.startsAt) > new Date()) && event.cards.some((c) => !c.opened) && (
         <div className="px-page-x pt-4">
           <button type="button" onClick={onEvent}
             className="group relative flex w-full items-center gap-3 overflow-hidden rounded-aura border border-accent-400/40 bg-gradient-to-br from-accent-500/20 via-surface-high to-surface-high px-3 py-3 text-left transition-transform active:scale-[0.99]">

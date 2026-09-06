@@ -15,24 +15,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
-import { listVenueVouchers, subscribeVenueVouchers, isHeldVoucher, type Voucher } from '../../api/vouchers';
+import { listVenueVouchers, subscribeVenueVouchers, type Voucher } from '../../api/vouchers';
+import { toFeedRows, summarizeFor } from '../../lib/voucherFeed';
 
 const POLL_MS = 30_000;
-
-type Kind = 'issued' | 'used';
-interface Row { key: string; kind: Kind; at: string; name: string; title: string; revoked: boolean; expired: boolean }
-
-/** 이용권 목록 → 시간순 사건 목록. 한 장이 발급·사용 두 줄이 될 수 있다. */
-function toRows(vs: Voucher[], now: number): Row[] {
-  const out: Row[] = [];
-  for (const v of vs) {
-    const name = v.holderName?.trim() || '이름 없음';
-    const expired = !!v.expiresAt && new Date(v.expiresAt).getTime() <= now && v.status === 'active' && !v.usedAt;
-    out.push({ key: `${v.id}:i`, kind: 'issued', at: v.createdAt, name, title: v.title, revoked: v.status === 'revoked', expired });
-    if (v.usedAt) out.push({ key: `${v.id}:u`, kind: 'used', at: v.usedAt, name, title: v.title, revoked: false, expired: false });
-  }
-  return out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
-}
 
 const hhmm = (iso: string) => {
   const d = new Date(iso);
@@ -75,7 +61,7 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
   }, [venueId, active, load]);
 
   const now = Date.now();
-  const rows = useMemo(() => (vs ? toRows(vs, now) : []), [vs, now]);
+  const rows = useMemo(() => (vs ? toFeedRows(vs, now) : []), [vs, now]);
   const query = q.trim().toLowerCase();
   const shown = useMemo(
     () => (query ? rows.filter((r) => r.name.toLowerCase().includes(query) || r.title.toLowerCase().includes(query)) : rows),
@@ -83,15 +69,7 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
   );
 
   // 검색어가 있으면 '그 사람에게 보냈는지'를 한 줄로 먼저 답한다 — 그게 이 검색의 목적이다.
-  const hit = useMemo(() => {
-    if (!query || !vs) return null;
-    const mine = vs.filter((v) => (v.holderName ?? '').toLowerCase().includes(query));
-    return {
-      issued: mine.length,
-      used: mine.filter((v) => !!v.usedAt).length,
-      held: mine.filter((v) => isHeldVoucher(v, now) && !v.usedAt).length,
-    };
-  }, [query, vs, now]);
+  const hit = useMemo(() => (vs ? summarizeFor(vs, q, now) : null), [vs, q, now]);
 
   return (
     <aside className="flex h-full min-h-0 flex-col rounded-aura border card-aura" aria-label="매장이용권 실시간 내역">
