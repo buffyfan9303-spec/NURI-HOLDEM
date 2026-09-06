@@ -22,17 +22,34 @@ interface QrScanModalProps {
    *  (헤더의 출석 스캔처럼 매장이 미리 정해지지 않은 진입점용). */
   venueId?: string;
   venueName?: string;
-  /** 체크인 QR 이 확인됐을 때만 호출 — 부모가 체크인 RPC 를 실행한다(스캔 전 체크인 발생 금지).
-   *  인자는 **스캔된 매장 id** 다: venueId 를 생략한 호출부는 이 값으로 어디에 체크인할지 정한다. */
-  onMatch: (scannedVenueId: string) => void;
+  /** QR 이 확인됐을 때만 호출 — 부모가 RPC 를 실행한다(스캔 전 체크인·요청 발생 금지).
+   *  첫 인자는 **스캔된 매장 id**: venueId 를 생략한 호출부는 이 값으로 대상을 정한다.
+   *  둘째 인자로 무엇을 스캔했는지(체크인/바인·게임번호)를 준다 — 체크인만 쓰는 호출부는 무시하면 된다. */
+  onMatch: (scannedVenueId: string, hit: QrHit) => void;
+  /** 'both' 면 바인 요청 QR 도 받는다. 기본은 체크인 전용 —
+   *  매장 페이지의 '출석' 버튼처럼 대상이 정해진 진입점에서 엉뚱한 QR 을 삼키지 않게. */
+  accept?: 'checkin' | 'both';
 }
 
-/** 스캔 원문에서 체크인 대상 매장 id 추출 — 인쇄 QR 은 `${origin}/?checkin=<venueId>` 형식(checkinUrl). */
-function checkinIdOf(raw: string): string | null {
-  try { return new URL(raw.trim()).searchParams.get('checkin'); } catch { return null; }
+/** 스캔 결과 — 매장에 비치되는 인쇄 QR 두 종류를 같은 규칙으로 읽는다.
+ *  체크인 `${origin}/?checkin=<venueId>` (checkinUrl) · 바인 요청 `${origin}/?buyin=<venueId>&game=<n>` (buyinRequestUrl).
+ *  손님은 테이블에 붙은 QR 을 그냥 비출 뿐 '지금 무엇을 하는지' 먼저 고르지 않는다 —
+ *  고르게 만들면 잘못 고를 길만 하나 생긴다. 의도는 QR 자신이 들고 있다. */
+export interface QrHit { kind: 'checkin' | 'buyin'; venueId: string; gameSeq: number | null }
+function parseQr(raw: string): QrHit | null {
+  let sp: URLSearchParams;
+  try { sp = new URL(raw.trim()).searchParams; } catch { return null; }
+  const c = sp.get('checkin');
+  if (c) return { kind: 'checkin', venueId: c, gameSeq: null };
+  const b = sp.get('buyin');
+  if (b) {
+    const g = parseInt(sp.get('game') ?? '', 10);
+    return { kind: 'buyin', venueId: b, gameSeq: Number.isFinite(g) && g > 0 ? g : null };
+  }
+  return null;
 }
 
-export default function QrScanModal({ open, onClose, venueId, venueName, onMatch }: QrScanModalProps) {
+export default function QrScanModal({ open, onClose, venueId, venueName, onMatch, accept = 'checkin' }: QrScanModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [phase, setPhase] = useState<Phase>('starting');
   const [warn, setWarn] = useState<string | null>(null);
@@ -85,11 +102,14 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
             const codes = await detector.detect(video);
             const raw = codes[0]?.rawValue;
             if (!raw || !alive || matched) return;
-            const scanned = checkinIdOf(raw);
+            const hit = parseQr(raw);
+            const usable = hit && (accept === 'both' || hit.kind === 'checkin');
             // venueId 를 안 준 호출부는 아무 매장 QR 이나 받는다(어느 매장인지는 인자로 넘긴다)
-            if (scanned && (!venueId || scanned === venueId)) { matched = true; onMatchRef.current(scanned); return; }
-            // 남의 매장 QR·무관한 QR — 체크인하지 않고 계속 스캔(같은 문자열 setState 는 재렌더 없음)
-            setWarn(scanned ? '이 매장의 QR이 아닙니다' : '체크인 QR이 아니에요. 매장에 비치된 체크인 QR을 비춰 주세요');
+            if (usable && hit && (!venueId || hit.venueId === venueId)) { matched = true; onMatchRef.current(hit.venueId, hit); return; }
+            // 남의 매장 QR·무관한 QR — 아무것도 실행하지 않고 계속 스캔(같은 문자열 setState 는 재렌더 없음)
+            setWarn(usable ? '이 매장의 QR이 아닙니다'
+              : accept === 'both' ? '매장 QR이 아니에요. 테이블·카운터에 비치된 출석 또는 바인 요청 QR을 비춰 주세요'
+              : '체크인 QR이 아니에요. 매장에 비치된 체크인 QR을 비춰 주세요');
           } catch { /* 프레임 미준비 등 일시 실패 — 다음 틱에 재시도 */ }
         }, 350);
       })
@@ -101,14 +121,14 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
       stream?.getTracks().forEach((t) => t.stop());
       if (attachedVideo) attachedVideo.srcObject = null;
     };
-  }, [open, venueId]);
+  }, [open, venueId, accept]);
 
   // ⚠ 포털 필수(2026-08-28 스윕): 이 모달은 VenuePage 오버레이(fixed z-40) **안에서** 렌더된다.
   // 부모가 z-40 스태킹 컨텍스트를 만들므로 Modal의 z-[60]은 그 안에서만 유효했고,
   // 루트의 하단 탭바(z-50)가 시트 하단 안내 문구를 덮었다(390px 실측 — 겹침).
   // body 로 포털해 루트 컨텍스트의 z-[60]으로 올린다(다른 루트 모달과 동일한 층).
   return createPortal(
-    <Modal open={open} onClose={onClose} title="QR 체크인" maxWidth="sm" variant="sheet">
+    <Modal open={open} onClose={onClose} title={accept === 'both' ? 'QR 스캔' : 'QR 체크인'} maxWidth="sm" variant="sheet">
       <div className="space-y-3 p-4 pb-6">
         {(phase === 'unsupported' || phase === 'denied') ? (
           <div className="flex flex-col items-center gap-3 rounded-card border border-border-subtle bg-surface-low px-4 py-8 text-center">
@@ -134,7 +154,7 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
               )}
             </div>
             <p className="text-center text-2xs text-ink-muted">
-              {venueName ?? '매장'}에 비치된 <b className="text-ink-secondary">체크인 QR</b>을 프레임 안에 비춰 주세요.
+              {venueName ?? '매장'}에 비치된 <b className="text-ink-secondary">{accept === 'both' ? '출석 또는 바인 요청 QR' : '체크인 QR'}</b>을 프레임 안에 비춰 주세요.
             </p>
             {warn && (
               <p role="alert" className="flex items-center justify-center gap-1.5 rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-xs font-bold text-danger-light">

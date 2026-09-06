@@ -16,7 +16,7 @@
 import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
-import QrScanModal from './QrScanModal';
+import QrScanModal, { type QrHit } from './QrScanModal';
 import VoucherWallet from './VoucherWallet';
 import { listMyVouchers, isHeldVoucher } from '../../api/vouchers';
 import { useIdentityEnabled } from '../../lib/identityFlag';
@@ -24,9 +24,12 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { checkIn, getMyCheckinStreak } from '../../api/checkins';
 
-export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }: {
+export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, onBuyin }: {
   open: boolean;
   onClose: () => void;
+  /** 바인 요청 QR 을 읽었을 때 — 게임 선택·요청 전송은 App 의 딥링크(?buyin=) 경로와 **같은 함수**가 한다.
+   *  여기서 따로 구현하면 게임이 여러 개인 매장의 선택 모달이 두 벌이 된다. */
+  onBuyin?: (venueId: string, gameSeq: number | null) => void;
   /** 체크인한 매장으로 — 사슬 끝에서 막다른 길을 만들지 않는다 */
   onVenue?: (venueId: string) => void;
   /** 내 정보로 — 본인인증(보안 탭)·프로필 설정처럼 시트 밖에서 해야 하는 일의 출구 */
@@ -37,9 +40,12 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }:
   const [scanOpen, setScanOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  /** 스캔된 매장으로 체크인 — 매장이 미리 정해지지 않은 진입점이라 스캔 결과가 대상이다 */
-  const onScanned = async (venueId: string) => {
+  /** 스캔된 QR 로 실행 — 매장이 미리 정해지지 않은 진입점이라 스캔 결과가 대상이자 의도다.
+   *  손님에게 '출석/바인' 을 먼저 고르게 하지 않는다: 테이블의 QR 이 이미 무엇인지 말하고 있고,
+   *  먼저 고르게 하면 잘못 고를 길만 하나 늘어난다. */
+  const onScanned = async (venueId: string, hit?: QrHit) => {
     setScanOpen(false);
+    if (hit?.kind === 'buyin') { onClose(); onBuyin?.(venueId, hit.gameSeq); return; }
     if (busy) return;
     setBusy(true);
     try {
@@ -62,24 +68,38 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }:
             이 파일만 빠뜨려 카드가 시트 모서리에 붙어 있었다(2026-09-05 검증). */}
         <div className="space-y-3 p-4">
 
-          {/* ── 출석 QR — 이 시트에만 있는 기능 ── */}
+          {/* ── QR — 이 시트에만 있는 기능(오너 2026-09-06: 출석과 바인 둘 다).
+              매장이 정해지지 않은 상태에서 스캔할 수 있는 경로가 여기뿐이다. ── */}
           <section className="rounded-aura border card-aura p-3">
             <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-cyan" aria-hidden>
                 <Icon name="qr" size={14} />
               </span>
               <div className="flex min-w-0 flex-1 items-baseline gap-x-2">
-                <h3 className="text-sm font-bold text-ink-primary">출석 QR</h3>
-                <span className="text-2xs text-ink-secondary">매장 비치 QR 스캔</span>
+                <h3 className="text-sm font-bold text-ink-primary">QR</h3>
+                <span className="text-2xs text-ink-secondary">출석 · 바인 요청</span>
               </div>
             </div>
-            <p className="mt-2 text-2xs leading-relaxed text-ink-muted">
-              매장에 비치된 체크인 QR을 비추면 출석이 기록됩니다. 하루 한 번이면 충분해요.
-            </p>
+            {/* 무엇을 하는지는 QR 이 정한다 — 손님이 먼저 고르지 않는다. 그래서 버튼은 하나이고,
+                대신 이 QR 로 무엇이 되는지를 두 줄로 못박아 둔다. */}
+            <ul className="mt-2 space-y-1.5">
+              <li className="flex items-start gap-2">
+                <Icon name="check-circle" size={13} className="mt-px shrink-0 text-emerald-400" />
+                <p className="text-2xs leading-relaxed text-ink-muted">
+                  <b className="text-ink-secondary">출석</b> — 매장 비치 체크인 QR. 하루 한 번이면 충분해요.
+                </p>
+              </li>
+              <li className="flex items-start gap-2">
+                <Icon name="chip" size={13} className="mt-px shrink-0 text-accent-300" />
+                <p className="text-2xs leading-relaxed text-ink-muted">
+                  <b className="text-ink-secondary">바인 요청</b> — 테이블 비치 QR. 운영자가 승인하면 오늘 장부 명단에 등록됩니다.
+                </p>
+              </li>
+            </ul>
             <button type="button" disabled={busy}
               onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있어요', 'error'); return; } setScanOpen(true); }}
-              className="btn-primary mt-2 min-h-[44px] w-full text-sm disabled:opacity-50">
-              {busy ? '체크인 중…' : 'QR 스캔해서 출석'}
+              className="btn-primary mt-2.5 min-h-[44px] w-full text-sm disabled:opacity-50">
+              {busy ? '체크인 중…' : 'QR 스캔하기'}
             </button>
           </section>
 
@@ -99,8 +119,8 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }:
         </div>
       </Modal>
 
-      {/* 매장을 미리 정하지 않는다 — 스캔된 QR 이 대상 매장을 알려준다 */}
-      <QrScanModal open={scanOpen} onClose={() => setScanOpen(false)} onMatch={onScanned} />
+      {/* 매장을 미리 정하지 않는다 — 스캔된 QR 이 대상 매장과 할 일을 함께 알려준다 */}
+      <QrScanModal open={scanOpen} onClose={() => setScanOpen(false)} onMatch={onScanned} accept="both" />
     </>
   );
 }
@@ -141,7 +161,7 @@ function VenueVoucherCounts({ onVenue }: { onVenue?: (venueId: string) => void }
         </span>
         <div className="flex min-w-0 flex-1 items-baseline gap-x-2">
           <h3 className="text-sm font-bold text-ink-primary">자주 가는 매장 이용권</h3>
-          <span className="text-2xs text-ink-secondary">보유 장수 많은 순</span>
+          <span className="text-2xs text-ink-secondary">보유 많은 순</span>
         </div>
       </div>
       {rows === null ? (

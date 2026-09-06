@@ -1070,6 +1070,20 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  /** 바인(참가) 요청 시작 — 게임이 여럿이면 선택 모달, 하나(또는 지정)면 바로 전송.
+   *  ?buyin= 딥링크와 이용권 시트의 QR 스캔이 **같은 함수**를 쓴다(선택 모달이 두 벌이 되지 않게). */
+  const startBuyinRequest = useCallback((venueId: string, gameSeq: number | null) => {
+    const submit = (g: number | null) => ledgerMod().then((m) => m.requestBuyin(venueId, g))
+      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요. 운영자 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
+      .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'));
+    if (gameSeq != null && gameSeq > 0) { submit(gameSeq); return; } // 테이블별 QR — 게임이 이미 정해져 있다
+    (async () => {
+      const games = await ledgerMod().then((m) => m.venueTodayGames(venueId)).catch(() => [] as { gameSeq: number; title: string }[]);
+      if (games.length > 1) { setBuyinPick({ venueId, games }); return; }
+      submit(games[0]?.gameSeq ?? null);
+    })();
+  }, [toast]);
+
   // ── QR 자가 바인요청 (?buyin=<venueId>) — 로그인 회원만, 운영자 승인 대기 ──
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
@@ -1080,16 +1094,8 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.delete('buyin'); url.searchParams.delete('game');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    const submitDirect = (g: number | null) => ledgerMod().then((m) => m.requestBuyin(bv, g))
-      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요. 운영자 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
-      .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'));
     const gNum = gm ? parseInt(gm, 10) : NaN;
-    if (Number.isFinite(gNum) && gNum > 0) { submitDirect(gNum); return; } // 게임 지정 QR → 바로 요청
-    (async () => {
-      const games = await ledgerMod().then((m) => m.venueTodayGames(bv)).catch(() => [] as { gameSeq: number; title: string }[]);
-      if (games.length > 1) { setBuyinPick({ venueId: bv, games }); return; } // 게임 여러 개면 선택 모달
-      submitDirect(games[0]?.gameSeq ?? null);
-    })();
+    startBuyinRequest(bv, Number.isFinite(gNum) && gNum > 0 ? gNum : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -3225,6 +3231,7 @@ export default function App() {
             onClose={() => setVoucherSheetOpen(false)}
             onVenue={handleVenueClick}
             onOpenWallet={() => openMeCb('dashboard')}
+            onBuyin={startBuyinRequest}
           />
         </Suspense>
       )}

@@ -48,6 +48,16 @@ const DOW_RANGE_OPTS: { id: DowRange; label: string }[] = [
 
 function StatsView({ venueId }: { venueId: string }) {
   const toast = useToast();
+  // ⚠ 기간은 값이 **둘**이다(오너 제보 2026-09-06: "당일·일주일·한 달을 옮기면 스크롤이 깜빡이며 내려갔다 올라간다").
+  //   tabPeriod = 방금 누른 탭(하이라이트는 즉시 — 응답이 늦으면 그게 더 큰 결함) /
+  //   period    = **지금 화면에 그려져 있는 데이터의** 기간.
+  //   하나로 두면 클릭 순간 '새 기간의 뼈대 + 옛 기간의 숫자'라는 어디에도 없는 상태가 한 번 그려지고,
+  //   ~300ms 뒤 새 데이터로 또 한 번 그려진다. 당일→일주일 기준으로 레이아웃이 두 번 튄다:
+  //     ① '바인 제외 · 손님 유형별' 카드가 즉시 사라짐(약 72px 위로)
+  //     ② 데이터 도착 후 '일자별 추세'가 나타남(약 250px 아래로)
+  //   그 두 번 사이의 짧은 구간이 사용자 눈에는 '깜빡이며 내려갔다 올라감'으로 보인다.
+  //   데이터와 기간을 **같은 커밋에서** 바꾸면 튐은 한 번으로 줄고, 그 한 번은 사용자가 기다린 결과다.
+  const [tabPeriod, setTabPeriod] = useState<Period>('day');
   const [period, setPeriod] = useState<Period>('day');
   const [date, setDate] = useState(todayStr);
   const [dowRange, setDowRange] = useState<DowRange>('all'); // 요일별 분석 기간
@@ -67,18 +77,19 @@ function StatsView({ venueId }: { venueId: string }) {
   const [liveTick, setLiveTick] = useState(0); // 장부 실시간 변경 반영(당일 통계)
 
   const range = useMemo<{ from: string; to: string }>(() => {
+    // 무엇을 **가져올지**는 방금 누른 탭이 정한다(period 는 이미 그려진 것의 기간이라 한 박자 늦다)
     const t = todayStr();
-    if (period === 'day')   return { from: date, to: date };
-    if (period === 'week') return { from: shift(t, -6), to: t };
-    if (period === 'ai') return { from: shift(t, -(aiDays - 1)), to: t };
-    if (period === 'month') return { from: t.slice(0, 7) + '-01', to: t };
-    if (period === 'dow') {
+    if (tabPeriod === 'day')   return { from: date, to: date };
+    if (tabPeriod === 'week') return { from: shift(t, -6), to: t };
+    if (tabPeriod === 'ai') return { from: shift(t, -(aiDays - 1)), to: t };
+    if (tabPeriod === 'month') return { from: t.slice(0, 7) + '-01', to: t };
+    if (tabPeriod === 'dow') {
       if (dowRange === 'week')  return { from: shift(t, -6), to: t };
       if (dowRange === 'month') return { from: t.slice(0, 7) + '-01', to: t };
       return { from: '2000-01-01', to: t };
     }
     return { from: '2000-01-01', to: t }; // all
-  }, [period, date, dowRange, aiDays]);
+  }, [tabPeriod, date, dowRange, aiDays]);
 
   const hasLoaded = useRef(false);
   useEffect(() => {
@@ -86,20 +97,21 @@ function StatsView({ venueId }: { venueId: string }) {
     if (!hasLoaded.current) setLoading(true);
     Promise.all([
       getLedgerRange(venueId, range.from, range.to),
-      period === 'day' ? getLedgerPlayers(venueId, date) : Promise.resolve([] as LedgerPlayer[]),
-    ]).then(([r, p]) => { setSessions(r.sessions); setBuyins(r.buyins); setPlayers(p); setLoadError(null); })
+      tabPeriod === 'day' ? getLedgerPlayers(venueId, date) : Promise.resolve([] as LedgerPlayer[]),
+      // 데이터와 기간을 한 커밋에 — 이 순서가 위 주석의 '두 번 튐'을 한 번으로 만든다.
+    ]).then(([r, p]) => { setSessions(r.sessions); setBuyins(r.buyins); setPlayers(p); setPeriod(tabPeriod); setLoadError(null); })
       .catch((e) => setLoadError(e))
       .finally(() => { setLoading(false); hasLoaded.current = true; });
-  }, [venueId, range.from, range.to, period, date, aiTick, liveTick]);
+  }, [venueId, range.from, range.to, tabPeriod, date, aiTick, liveTick]);
 
   // 바인 요청 운영지표(기간) — 요청수·승인율·평균 대기(분)
   useEffect(() => { getBuyinRequestStats(venueId, range.from, range.to).then(setReqStats).catch(() => setReqStats(null)); }, [venueId, range.from, range.to, liveTick, aiTick]);
 
   // '당일' 통계를 보는 중 장부(바이인 등) 변경 시 실시간 갱신
   useEffect(() => {
-    if (period !== 'day') return;
+    if (tabPeriod !== 'day') return;
     return subscribeLedger(venueId, () => setLiveTick((t) => t + 1));
-  }, [venueId, period]);
+  }, [venueId, tabPeriod]);
 
   // 멀티게임: 바인↔세션 페어링은 (날짜+게임) 키로(사이드 단가 정확). 날짜 합산은 sessionsByDate.
   const sessionByKey = useMemo(() => {
@@ -255,8 +267,9 @@ function StatsView({ venueId }: { venueId: string }) {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-bold text-accent-300">통계</h3>
         <div className="flex items-center gap-1.5">
-          {period === 'day' && <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value || todayStr())} className="input text-xs py-1 w-auto" />}
-          {period !== 'ai' && (
+          {/* 이 둘은 데이터가 아니라 **조작**이다 — 방금 누른 탭을 따라간다(range·CSV 가 tabPeriod 기준) */}
+          {tabPeriod === 'day' && <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value || todayStr())} className="input text-xs py-1 w-auto" />}
+          {tabPeriod !== 'ai' && (
             <button type="button" onClick={exportCsv}
               className="inline-flex items-center gap-1 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs font-bold text-ink-secondary hover:text-accent-300 hover:border-accent-400/40 transition-colors">
               <Icon name="download" size={13} /> CSV
@@ -269,9 +282,9 @@ function StatsView({ venueId }: { venueId: string }) {
             {/* AI 기간은 그라데이션이라 알약을 공용으로 못 쓴다 — 일반 기간에만 슬라이드 */}
             <SlidingPill activeKey={period} className="rounded-[6px] pill-active" />
         {PERIODS.map((p) => {
-          const on = period === p.id;
+          const on = tabPeriod === p.id; // 하이라이트는 즉시 — 데이터를 기다리지 않는다
           return (
-            <button key={p.id} type="button" data-pill-active={(on && !p.ai) || undefined} onClick={() => setPeriod(p.id)}
+            <button key={p.id} type="button" data-pill-active={(on && !p.ai) || undefined} onClick={() => setTabPeriod(p.id)}
               className={['relative flex-1 min-w-[3.6rem] py-1.5 t-tab rounded-[6px] whitespace-nowrap transition-colors duration-[var(--dur-fast)] focus:outline-none',
                 on ? 'font-bold text-white' : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
               {/* AI 기간(그라데이션)은 자기 배경을 직접 칠한다 — 공용 알약은 숨김 */}
@@ -288,7 +301,9 @@ function StatsView({ venueId }: { venueId: string }) {
         <div className="space-y-2" aria-busy="true">
           <div className="grid grid-cols-3 gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[5.25rem]" />)}</div>
           <div className="grid grid-cols-3 gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[5.25rem]" />)}</div>
-          <div className="grid grid-cols-4 gap-1.5">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[3.1rem]" />)}</div>
+          {/* 3.1rem(52.7px) 은 hint 없는 타일 기준이라 실제 첫 줄(객단가 hint 포함 71px)보다 18px 짧았다 —
+              데이터가 들어오는 순간 그만큼 아래가 밀렸다. 880px 실측값으로 맞춘다. */}
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[4.2rem]" />)}</div>
         </div>
       ) : period === 'ai' ? (
         <div className="space-y-2">
@@ -351,7 +366,7 @@ function StatsView({ venueId }: { venueId: string }) {
           </div>
 
           {/* 보조 지표 */}
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {period === 'day'
               ? <Mini label="엔트리 비율" value={m.fillRatio !== null ? `${m.fillRatio}%` : '-'} />
               : <Mini label="영업일수" value={`${m.dayCount}일`} />}
@@ -367,7 +382,7 @@ function StatsView({ venueId }: { venueId: string }) {
 
           {reqStats && reqStats.total > 0 && (
             <Section icon="users" title="바인 요청 현황" suffix="· 손님 QR 요청">
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                 <Mini label="요청" value={`${reqStats.total}`} />
                 <Mini label="승인" value={`${reqStats.approved}`} tone="emerald" />
                 <Mini label="승인율" value={`${reqStats.approveRate}%`} tone="accent" />
@@ -453,7 +468,7 @@ function StatsView({ venueId }: { venueId: string }) {
 
           {clockAgg && (
             <Section icon="clock" title="클락 최종 (보정 포함)" suffix="· 운영자 클락 집계">
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                 <Mini label="엔트리" value={`${clockAgg.entries}`} tone="accent" />
                 <Mini label="생존" value={`${clockAgg.alive}`} tone="emerald" />
                 <Mini label="아웃" value={`${clockAgg.eliminations}`} />
@@ -466,7 +481,7 @@ function StatsView({ venueId }: { venueId: string }) {
           )}
 
           <Section icon="card" title="결제 수단별 바인 수">
-            <div className="grid grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
               {(['ticket', 'cash', 'transfer', 'card', 'support'] as PaymentMethod[]).map((k) => (
                 <Mini key={k} label={METHOD_LABEL[k]} value={`${m.byMethod[k]}`} />
               ))}
@@ -475,7 +490,7 @@ function StatsView({ venueId }: { venueId: string }) {
 
           {period === 'day' && (m.visitor.new + m.visitor.regular + m.visitor.staff + m.visitor.other) > 0 && (
             <Section icon="usercheck" title="방문 유형" suffix="(명단 기준)">
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                 {(['new', 'regular', 'staff', 'other'] as VisitorType[]).map((k) => (
                   <Mini key={k} label={VISITOR_LABEL[k]} value={`${m.visitor[k]}`} />
                 ))}
@@ -688,13 +703,16 @@ function StatIcon({ name, className = '' }: { name: IconName; className?: string
 function StatCard({ label, value, sub, icon, danger, emerald, gold }: { label: string; value: string; sub?: string; icon: IconName; danger?: boolean; emerald?: boolean; gold?: boolean }) {
   const c = danger ? 'text-danger-light' : emerald ? 'text-emerald-400' : gold ? 'text-accent-300' : 'text-ink-primary';
   return (
-    <div className="rounded-aura border card-aura p-2.5 flex flex-col min-h-[5.25rem]">
+    <div className="flex min-h-[5.25rem] flex-col rounded-aura border card-aura p-2.5">
       <div className="flex items-start justify-between gap-1">
-        <p className="text-xs font-medium text-ink-secondary leading-tight">{label}</p>
-        <StatIcon name={icon} className="text-ink-muted shrink-0" />
+        <p className="text-xs font-medium leading-tight text-ink-secondary">{label}</p>
+        <StatIcon name={icon} className="shrink-0 text-ink-muted" />
       </div>
-      <p className={['mt-auto pt-2 text-lg font-extrabold tabular-nums leading-none', c].join(' ')}>{value}</p>
-      {sub && <p className="text-[11px] text-ink-muted mt-1 leading-tight tabular-nums">{sub}</p>}
+      <p className={['mt-auto pt-2 text-lg font-extrabold leading-none tabular-nums', c].join(' ')}>{value}</p>
+      {/* ⚠ 보조 줄은 내용이 없어도 **자리를 비워 둔다**. 없애면 그 카드만 값이 한 줄 아래로 내려앉아
+          같은 행에서 숫자 밑변이 서로 어긋난다(2026-09-06 오너 스크린샷: '46.5' 혼자 낮았다).
+          같은 행에 보조 줄을 가진 카드가 하나라도 있으면 행 높이는 어차피 그 카드가 정하므로 공짜다. */}
+      <p className="mt-1 text-[11px] leading-tight tabular-nums text-ink-muted">{sub || '\u00A0'}</p>
     </div>
   );
 }
@@ -706,11 +724,17 @@ type MiniTone = 'default' | 'emerald' | 'accent' | 'amber';
 const MINI_TONE: Record<MiniTone, string> = {
   default: 'text-ink-primary', emerald: 'text-emerald-400', accent: 'text-accent-300', amber: 'text-amber-300',
 };
+// ⚠ 정렬 규격(2026-09-06 오너 지시 "전부 레이아웃이 엉망 — 어떤건 위로 치우치고 어떤건 중앙이고 어떤건 3줄"):
+//  ① **왼쪽 정렬**. 중앙정렬이면 '2일' 과 '1,875,000원' 의 시작점이 타일마다 달라 같은 폭끼리도 세로로 안 맞는다
+//     (바로 아래 '게임별 구분' 타일이 이미 같은 이유로 좌측 정렬이다 — 두 규격이 한 화면에 있었다).
+//  ② **라벨이 위, 값이 아래**. 종전엔 값이 위·라벨이 아래라 바로 위 StatCard(라벨 위)와 읽는 순서가 거꾸로였다.
+//  ③ 값의 y 는 라벨 한 줄 높이로 고정 — hint 유무로 3줄이 되어도 **값 밑변은 행 전체가 같다**.
 function Mini({ label, value, hint, tone = 'default' }: { label: string; value: string; hint?: string; tone?: MiniTone }) {
   return (
-    <div className="rounded-input bg-surface-high border border-border-default py-2 px-1 text-center" title={hint}>
-      <p className={['text-base font-bold tabular-nums leading-none', MINI_TONE[tone]].join(' ')}>{value}</p>
-      <p className="text-[11px] text-ink-muted mt-1 leading-tight">{label}{hint ? <span className="block text-[10px] text-ink-muted/70">{hint}</span> : null}</p>
+    <div className="rounded-input border border-border-default bg-surface-high px-2 py-2">
+      <p className="truncate text-[11px] leading-tight text-ink-muted" title={label}>{label}</p>
+      <p className={['mt-1 text-base font-bold leading-none tabular-nums', MINI_TONE[tone]].join(' ')}>{value}</p>
+      {hint && <p className="mt-1 text-[10px] leading-tight text-ink-muted/70">{hint}</p>}
     </div>
   );
 }

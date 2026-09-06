@@ -1,5 +1,6 @@
 import { memo, useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, useTransition, startTransition, type ReactNode } from 'react';
 import { goSubTab } from '../../lib/subTabTransition';
+import { centerInRail } from '../../lib/railScroll';
 import { promptLogin } from '../../lib/requireLogin';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
@@ -206,8 +207,8 @@ function CommunityTab({
   // 서브탭 바(가로 스크롤) — 외부 지정(딥링크·대시보드 바로가기)으로 바뀐 활성 탭이 화면 밖이면 보이게 끌어온다
   const secBarRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    secBarRef.current?.querySelector<HTMLElement>('[data-pill-active]')
-      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // ⚠ scrollIntoView 금지 — 조상 스크롤러를 전부 훑어 **문서(세로)까지** 끌어당긴다(railScroll 주석).
+    centerInRail(secBarRef.current?.querySelector<HTMLElement>('[data-pill-active]'), secBarRef.current);
   }, [shownSec]);
 
   // ── 유휴 프리마운트 (2026-08-28) ─────────────────────────────────────────────

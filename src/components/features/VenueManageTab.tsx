@@ -39,6 +39,7 @@ import { getLedgerBuyins, kstToday, getPendingBuyinRequests, subscribeBuyinReque
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 import { onColorInkClass } from '../../lib/color';
+import { centerInRail } from '../../lib/railScroll';
 
 // 'league' 는 §12-A-1 오너 결정으로 제거(LEAGUE-FREEZE 의 클라이언트 절반 — 코드는 동결, 진입 경로만 0)
 // IA2: 포스터·장부·클락·순위 4개 최상위 문(門)이 'game' 섹션의 4단계 스텝으로 통합 —
@@ -74,11 +75,7 @@ function SettingsTabBar({ tabs, active, onPick }: {
   const ref = useRef<HTMLDivElement>(null);
   const [edge, setEdge] = useState<'none' | 'left' | 'right' | 'both'>('none');
   useEffect(() => {
-    const el = ref.current;
-    const t = el?.querySelector<HTMLElement>(`[data-tab-id="${active}"]`);
-    if (!el || !t) return;
-    const left = t.offsetLeft - (el.clientWidth - t.offsetWidth) / 2;
-    el.scrollTo({ left: Math.max(0, left), behavior: 'auto' });
+    centerInRail(ref.current?.querySelector<HTMLElement>(`[data-tab-id="${active}"]`), ref.current);
   }, [active]);
   useEffect(() => {
     const el = ref.current;
@@ -640,23 +637,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 canPosters={canPosters} onPick={onPickGame} onNewGame={onCreatePoster}
                 venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} />
             )}
-            {/* IA2 게임 진행 4단계 스테퍼 — 섹션을 떠나지 않고 작업판만 교체(포스터→장부→클락→순위) */}
+            {/* IA2 게임 진행 스테퍼 — 섹션을 떠나지 않고 작업판만 교체(포스터→장부→클락→순위→정산).
+                ⚠ '정산' 이 빠져 있어서, 대시보드의 5단계 파이프라인에서 '장부' 를 눌러 들어오면
+                   마지막 한 칸이 통째로 사라졌다(오너 2026-09-06). 정산은 별도 판이 아니라 **장부의 마감**이라
+                   탭(role=tab)이 아니라 '장부 하단으로 데려가는 이동'으로 둔다 — 판이 아닌 것을 판인 척하지 않는다. */}
             {renderSection === 'game' && !dItem?.locked && (
-              <div role="tablist" aria-label="게임 진행 단계"
-                className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
-                <SlidingPill activeKey={renderGameStep} className="rounded-[6px] pill-active" />
-                {GAME_STEPS.filter((st) => (st.id === 'posters' ? canPosters : ledgerOk)).map((st, i) => {
-                  const on = renderGameStep === st.id;
-                  return (
-                    <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
-                      onClick={() => gotoSection(st.id)}
-                      className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none',
-                        on ? 'font-bold text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                      <span className="relative">{i + 1}. {st.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <GameStepBar steps={GAME_STEPS.filter((st) => (st.id === 'posters' ? canPosters : ledgerOk))}
+                active={renderGameStep} onPick={gotoSection} showSettle={ledgerOk}
+                onSettle={() => { gotoSection('ledger'); setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 60); }} />
             )}
             {/* IA3c 매장 설정 하위탭 — 프리셋·페이지·POS·이용권·위험구역(권한별 노출) */}
             {renderSection === 'settings' && !dItem?.locked && (
@@ -926,15 +914,53 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
   );
 });
 
+/**
+ * 게임 진행 스테퍼 — 포스터·장부·클락·순위(판) + 정산(장부 하단으로 이동).
+ * 활성 칩은 레일 가운데로 끌어온다(가로만 — centerInRail 주석 참조).
+ */
+function GameStepBar({ steps, active, onPick, showSettle, onSettle }: {
+  steps: readonly { id: GameStep; label: string }[];
+  active: GameStep; onPick: (s: GameStep) => void; showSettle: boolean; onSettle: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    centerInRail(ref.current?.querySelector<HTMLElement>('[data-pill-active]'), ref.current);
+  }, [active]);
+  const chip = (on: boolean) => ['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none',
+    on ? 'font-bold text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ');
+  return (
+    <div ref={ref} role="tablist" aria-label="게임 진행 단계"
+      className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
+      <SlidingPill containerRef={ref} activeKey={active} className="rounded-[6px] pill-active" />
+      {steps.map((st, i) => {
+        const on = active === st.id;
+        return (
+          <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
+            onClick={() => onPick(st.id)} className={chip(on)}>
+            <span className="relative">{i + 1}. {st.label}</span>
+          </button>
+        );
+      })}
+      {showSettle && (
+        <button type="button" onClick={onSettle} className={chip(false)} title="장부 하단의 정산·마감으로 이동합니다">
+          <span className="relative">{steps.length + 1}. 정산</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 function SectionBtn({ active, onClick, icon, children, locked }: {
   active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode; locked?: boolean;
 }) {
-  // 모바일: 가로 스크롤 칩 바 — 선택된 칩이 항상 화면 안에 오도록 부드럽게 센터링
+  // 모바일: 가로 스크롤 칩 바 — 선택된 칩이 항상 화면 안에 오도록 부드럽게 센터링.
+  // ⚠ 예전엔 scrollIntoView({behavior:'smooth', inline:'center'}) 였다. 그 API 는 가로만 부탁해도
+  //   조상 스크롤러를 전부 맞추느라 **페이지를 세로로 끌어당기고**, smooth 라 그 움직임이 눈에 보였다
+  //   ('메뉴를 누르면 화면이 내려갔다 올라온다' — 오너 2026-09-06). 바로 위 SettingsTabBar 가 같은
+  //   이유로 이미 scrollLeft 직접 계산이었는데 여기만 빠져 있었다. 이제 둘 다 railScroll 하나를 쓴다.
   const ref = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
-    if (active && ref.current && window.innerWidth < 1024) {
-      ref.current.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    }
+    if (active && window.innerWidth < 1024) centerInRail(ref.current, null, 'smooth');
   }, [active]);
   return (
     <button type="button" onClick={onClick} ref={ref}
