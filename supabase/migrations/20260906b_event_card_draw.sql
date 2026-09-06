@@ -284,8 +284,8 @@ begin
 
   insert into public.event_campaigns(slug, venue_id, issued_by, title, subtitle, status,
                                      ticket_venue_id, voucher_title)
-  values ('card-open-2026-09', v_venue, v_admin, '카드 오픈 이벤트',
-          '출석할 때마다 참여권 1장 · 카드를 찢어 확인하세요', 'draft',
+  values ('card-open-2026-09', v_venue, v_admin, '오픈 기념 이벤트',
+          '매장 출석할 때마다 참여권 1장 · 카드를 찢어 확인하세요', 'draft',
           null,                       -- 모든 매장 출석에 참여권 지급
           '로티아레나 매장이용권')
   returning id into v_cid;

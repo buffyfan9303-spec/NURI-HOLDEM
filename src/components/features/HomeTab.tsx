@@ -222,7 +222,7 @@ export default function HomeTab({
               <span className="mt-1 block text-2xs tabular-nums text-ink-muted">
                 {event.myTickets > 0
                   ? <>참여권 <b className="text-accent-200">{event.myTickets}장</b> · 남은 카드 {event.cards.filter((c) => !c.opened).length}장</>
-                  : <>출석하면 참여권 1장 · 남은 카드 {event.cards.filter((c) => !c.opened).length}장</>}
+                  : <>매장 출석하면 참여권 1장 · 남은 카드 {event.cards.filter((c) => !c.opened).length}장</>}
               </span>
             </span>
             <Icon name="chevron-right" size={15} className="relative shrink-0 text-ink-muted" />
