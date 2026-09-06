@@ -15,6 +15,10 @@ interface BarcodeDetectorLike { detect(src: HTMLVideoElement): Promise<DetectedB
 type BarcodeDetectorCtor = new (opts?: { formats?: string[] }) => BarcodeDetectorLike;
 
 type Phase = 'starting' | 'scanning' | 'unsupported' | 'denied';
+/** 어느 리더로 읽는가. native=BarcodeDetector(크롬 계열) / lib=html5-qrcode(사파리·iOS 폴백) */
+type Engine = 'native' | 'lib';
+/** html5-qrcode 가 <video> 를 심을 자리. 이용권 스캐너(nuri-qr-reader)와 겹치면 안 된다 — 동시에 열릴 수 있다. */
+const LIB_HOST = 'nuri-qr-scan';
 
 interface QrScanModalProps {
   open: boolean;
@@ -35,6 +39,7 @@ interface QrScanModalProps {
 export default function QrScanModal({ open, onClose, venueId, venueName, onMatch, accept = 'checkin' }: QrScanModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [phase, setPhase] = useState<Phase>('starting');
+  const [engine, setEngine] = useState<Engine>('native');
   const [warn, setWarn] = useState<string | null>(null);
 
   // 부모가 인라인 콜백을 넘겨도(참조가 매 렌더 바뀌어도) 카메라를 재기동하지 않도록 ref 로 고정
@@ -48,15 +53,59 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
 
     // 미지원(사파리 구버전 등) → 기기 카메라 앱 안내 폴백. 카메라 앱으로 스캔하면
     // ?checkin= 딥링크가 열리며 App.tsx 의 기존 자동 체크인이 처리한다.
+    if (!navigator.mediaDevices?.getUserMedia) { setPhase('unsupported'); return; }
     const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
-    if (!Detector || !navigator.mediaDevices?.getUserMedia) { setPhase('unsupported'); return; }
-    let detector: BarcodeDetectorLike;
-    try { detector = new Detector({ formats: ['qr_code'] }); }
-    catch { setPhase('unsupported'); return; }
+    let detector: BarcodeDetectorLike | null = null;
+    if (Detector) { try { detector = new Detector({ formats: ['qr_code'] }); } catch { detector = null; } }
 
     let alive = true;
     let matched = false; // 첫 매치 이후 중복 onMatch(→중복 체크인 RPC) 방지
     let stream: MediaStream | null = null;
+
+    // 스캔 원문 → 실행/안내. 두 엔진이 **같은 판정**을 쓰도록 한 곳에 둔다.
+    const handleRaw = (raw: string): boolean => {
+      const hit = parseQr(raw);
+      const actionable = !!hit && ACTIONABLE.includes(hit.kind) && (accept === 'both' || hit.kind === 'checkin');
+      if (actionable && hit?.venueId && (!venueId || hit.venueId === venueId)) { onMatchRef.current(hit.venueId, hit); return true; }
+      setWarn(actionable ? '이 매장의 QR이 아닙니다'
+        : hit && elsewhereMsg(hit.kind) ? elsewhereMsg(hit.kind)!
+        : hit?.kind === 'buyin' ? '바인 요청 QR이에요. 출석은 매장 비치 체크인 QR을 비춰 주세요'
+        : accept === 'both' ? '매장 QR이 아니에요. 테이블·카운터에 비치된 출석 또는 바인 요청 QR을 비춰 주세요'
+        : '체크인 QR이 아니에요. 매장에 비치된 체크인 QR을 비춰 주세요');
+      return false;
+    };
+
+    // ⚠ BarcodeDetector 는 **크롬 계열 전용**이다. 사파리(=iOS 의 모든 브라우저, 카톡·네이버 인앱 포함)에는
+    //   없어서, 예전에는 아이폰 손님이 앱 안에서 QR 을 아예 못 찍고 '지원하지 않아요' 카드만 봤다
+    //   (2026-09-06 QR 감사). 이용권 스캐너(VoucherWallet)는 이미 html5-qrcode 를 동적 로드해 iOS 에서도
+    //   되고 있었다 — 같은 라이브러리가 이미 의존성에 있으므로 여기서도 같은 폴백을 태운다.
+    if (!detector) {
+      setEngine('lib');
+      let lib: { stop: () => Promise<void>; clear: () => void } | null = null;
+      (async () => {
+        try {
+          const { Html5Qrcode } = await import('html5-qrcode');
+          if (!alive) return;
+          // Modal 이 한 프레임 뒤에 본문을 붙이므로 host 가 생길 때까지 기다린다.
+          for (let i = 0; i < 30 && alive && !document.getElementById(LIB_HOST); i++) {
+            await new Promise((r) => requestAnimationFrame(r));
+          }
+          if (!alive || !document.getElementById(LIB_HOST)) return;
+          const inst = new Html5Qrcode(LIB_HOST);
+          lib = inst;
+          await inst.start({ facingMode: 'environment' }, { fps: 10, qrbox: 220 },
+            (text) => { if (!matched && alive && handleRaw(text)) { matched = true; } },
+            () => { /* 프레임마다 오는 '못 찾음' — 무시 */ });
+          if (alive) setPhase('scanning');
+        } catch { if (alive) setPhase('denied'); }
+      })();
+      return () => {
+        alive = false;
+        const l = lib; lib = null;
+        if (l) { l.stop().then(() => l.clear()).catch(() => {}); }
+      };
+    }
+
     let attachedVideo: HTMLVideoElement | null = null; // cleanup 에서 ref.current 대신 사용(스냅샷)
     let timer = 0;
 
@@ -82,20 +131,11 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
           const video = videoRef.current;
           if (!alive || matched || !video || video.readyState < 2) return;
           try {
-            const codes = await detector.detect(video);
+            const codes = await detector!.detect(video);
             const raw = codes[0]?.rawValue;
             if (!raw || !alive || matched) return;
-            const hit = parseQr(raw);
-            const actionable = !!hit && ACTIONABLE.includes(hit.kind) && (accept === 'both' || hit.kind === 'checkin');
             // venueId 를 안 준 호출부는 아무 매장 QR 이나 받는다(어느 매장인지는 인자로 넘긴다)
-            if (actionable && hit?.venueId && (!venueId || hit.venueId === venueId)) { matched = true; onMatchRef.current(hit.venueId, hit); return; }
-            // 실행하지 않고 계속 스캔한다. 다만 **왜 안 되는지**는 종류별로 다르게 말한다 —
-            // '아니에요' 한 마디로 끝내면 옆 QR 을 비춘 손님이 막다른 길에 선다(같은 문자열 setState 는 재렌더 없음).
-            setWarn(actionable ? '이 매장의 QR이 아닙니다'
-              : hit && elsewhereMsg(hit.kind) ? elsewhereMsg(hit.kind)!
-              : hit?.kind === 'buyin' ? '바인 요청 QR이에요. 출석은 매장 비치 체크인 QR을 비춰 주세요'
-              : accept === 'both' ? '매장 QR이 아니에요. 테이블·카운터에 비치된 출석 또는 바인 요청 QR을 비춰 주세요'
-              : '체크인 QR이 아니에요. 매장에 비치된 체크인 QR을 비춰 주세요');
+            if (handleRaw(raw)) { matched = true; return; }
           } catch { /* 프레임 미준비 등 일시 실패 — 다음 틱에 재시도 */ }
         }, 350);
       })
@@ -123,7 +163,8 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
               {phase === 'denied' ? '카메라를 사용할 수 없어요' : '이 브라우저는 카메라 스캔을 지원하지 않아요'}
             </p>
             <p className="text-2xs leading-relaxed text-ink-muted">
-              기기 카메라 앱으로 {venueName ?? '매장'}에 비치된 매장 QR을 스캔해 주세요 — 링크가 열리면 자동으로 체크인됩니다.
+              기기 카메라 앱으로 {venueName ?? '매장'}에 비치된 QR을 스캔해 주세요 — 링크가 열리면
+              {accept === 'both' ? ' 출석 또는 참가(바인) 요청이 이어집니다.' : ' 자동으로 체크인됩니다.'}
               {phase === 'denied' && <><br />또는 브라우저 설정에서 카메라 권한을 허용한 뒤 다시 시도해 주세요.</>}
             </p>
           </div>
@@ -131,7 +172,9 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
           <>
             {/* aspect-square 로 공간 예약 — 카메라가 늦게 떠도 레이아웃이 밀리지 않는다(CLS 원칙) */}
             <div className="relative aspect-square overflow-hidden rounded-card border border-border-subtle bg-black">
-              <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" />
+              {engine === 'lib'
+                ? <div id={LIB_HOST} className="absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover" />
+                : <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" />}
               <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <div className="h-3/5 w-3/5 rounded-2xl border-2 border-white/70" />
               </div>

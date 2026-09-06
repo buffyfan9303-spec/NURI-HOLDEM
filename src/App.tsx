@@ -93,6 +93,7 @@ import { getPostById,
 } from './api/community';
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
 import { enablePush, isPushSubscribed, pushSupported } from './api/push';
+import { rememberQrIntent, takeQrIntent } from './lib/pendingQrIntent';
 import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral } from './api/referrals';
 import LevelUpWatcher from './components/features/LevelUpCelebration';
 import BusinessFooter from './components/features/BusinessFooter';
@@ -146,6 +147,8 @@ const CalendarPanelLazy = lazyWithReload(() => import('./components/features/Cal
 const CalendarPanelM  = memo(CalendarPanelLazy);
 const VenueManageTabM = memo(VenueManageTab); // 내 매장 keep-alive 전환에 필수 — 숨김 상태에서 App 재렌더에 끌려가지 않게
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
+// 이벤트는 **별도 페이지**다(오너 2026-09-06) — 탭도 게시판도 아니고, 열 때만 내려받는다.
+const EventPage = lazyWithReload(() => import('./components/features/EventPage'));
 import type { MeTab } from './components/features/CustomerDashboardPage'; // 타입만(런타임 0)
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
 const ClockRemote    = lazyWithReload(() => import('./components/features/clock/ClockRemote'));
@@ -771,6 +774,7 @@ export default function App() {
   // 알림 딥링크 → 내 매장 탭의 특정 섹션(예: 📒 장부 시작 → 장부)
   const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
+  const [eventOpen, setEventOpen] = useState(false); // 이벤트 별도 페이지
   const [myBuyinReqs, setMyBuyinReqs] = useState<MyBuyinRequest[]>([]); // 손님 본인 오늘 바인요청(상태 배너)
   const [updateReady, setUpdateReady] = useState(false); // 새 버전(SW) 감지 → 새로고침 배너
   const [pushNudge, setPushNudge] = useState(false); // 운영자 푸시 권한 온보딩 배너(설치형·1회)
@@ -1047,7 +1051,18 @@ export default function App() {
   useEffect(() => {
     const cv = new URLSearchParams(window.location.search).get('checkin');
     if (!cv) return;
-    if (!user) { setAuthOpen(true); return; }
+    // ⚠ **세션이 복원되기 전에 판단하지 않는다.** 부팅 첫 커밋의 user 는 항상 null 이라
+    //   (AuthContext 가 프로필을 네트워크로 받아온다) 이 가드가 없으면 **이미 로그인한 손님**이
+    //   매장 QR 을 폰 카메라로 찍을 때마다 로그인 창이 먼저 뜬다. 게다가 그 창을 닫는 코드가 없어
+    //   잠시 뒤 체크인이 성공해도 손님은 '로그인 폼 위에 뜬 체크인 완료 토스트'를 본다(2026-09-06 감사).
+    if (authLoading) return;
+    if (!user) {
+      // 카카오·구글 로그인은 페이지를 떠났다 돌아오는데 그때 ?checkin= 이 사라진다 —
+      // 하려던 일을 적어 두고(30분 수명), 로그인 후 아래 '보류된 QR' effect 가 이어서 처리한다.
+      rememberQrIntent({ kind: 'checkin', venueId: cv, gameSeq: null });
+      setAuthOpen(true);
+      return;
+    }
     checkIn(cv)
       .then(async ({ name, points, streak: served }) => {
         // 점수·연속일은 서버(check_in, 20260905k)가 단일 출처 — 같은 날 두 번째 체크인은 points 0 이라 '+N점' 을 붙이지 않는다.
@@ -1068,7 +1083,7 @@ export default function App() {
     // user '객체 참조'가 아닌 id 기준 — 로그인 직후 프로필 갱신으로 참조만 바뀌어도
     // effect가 재실행되어 체크인 RPC가 중복 호출되던 문제 방지
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
   /** 바인(참가) 요청 시작 — 게임이 여럿이면 선택 모달, 하나(또는 지정)면 바로 전송.
    *  ?buyin= 딥링크와 이용권 시트의 QR 스캔이 **같은 함수**를 쓴다(선택 모달이 두 벌이 되지 않게). */
@@ -1089,15 +1104,43 @@ export default function App() {
     const sp = new URLSearchParams(window.location.search);
     const bv = sp.get('buyin');
     if (!bv) return;
-    if (!user) { setAuthOpen(true); return; }
-    const gm = sp.get('game'); // 테이블별 QR — 지정 게임(game_seq)
+    if (authLoading) return;              // ①과 같은 이유 — 세션 복원 전 판단 금지
+    const gmRaw = sp.get('game');
+    const gRaw = gmRaw ? parseInt(gmRaw, 10) : NaN;
+    if (!user) {
+      rememberQrIntent({ kind: 'buyin', venueId: bv, gameSeq: Number.isFinite(gRaw) && gRaw > 0 ? gRaw : null });
+      setAuthOpen(true);
+      return;
+    }
     const url = new URL(window.location.href);
     url.searchParams.delete('buyin'); url.searchParams.delete('game');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    const gNum = gm ? parseInt(gm, 10) : NaN;
-    startBuyinRequest(bv, Number.isFinite(gNum) && gNum > 0 ? gNum : null);
+    startBuyinRequest(bv, Number.isFinite(gRaw) && gRaw > 0 ? gRaw : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, authLoading]);
+
+  // ── 보류된 QR 의도 — 로그인 왕복(카카오·구글)에서 쿼리가 사라진 뒤 이어서 처리 ──────
+  // URL 에 파라미터가 남아 있으면 위 두 effect 가 이미 처리하므로 여기서는 건드리지 않는다.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get('checkin') || sp.get('buyin')) return;
+    const it = takeQrIntent();           // 읽으면서 지운다 — 두 번 소비되면 출석이 두 번 찍힌다
+    if (!it) return;
+    if (it.kind === 'checkin') {
+      checkIn(it.venueId)
+        .then(async ({ name, points, streak: served }) => {
+          const streak = served ?? await getMyCheckinStreak().catch(() => 0);
+          await refreshProfile().catch(() => {});
+          toast.show(`${name || '매장'} 체크인 완료!${points > 0 ? ` 출석 도장 +${points}점` : ''}${streak >= 2 ? ` · ${streak}일 연속` : ''}`, 'success');
+          setOpenVenueId(it.venueId);
+        })
+        .catch((e) => toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'));
+    } else {
+      startBuyinRequest(it.venueId, it.gameSeq);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]);
 
   // 손님: 오늘 내가 보낸 바인 요청 상태(배너) — 로그인 시 로드 + 창 포커스 시 갱신(운영자 승인 반영)
   useEffect(() => {
@@ -1125,9 +1168,11 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.delete('signup');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    // deps 가 [] 이던 시절에는 이 `!user` 가 **언제나 참**이었다(첫 커밋의 user 는 항상 null) —
+    // 이미 가입한 단골이 카운터의 가입 QR 을 찍으면 가입 폼이 떴다(2026-09-06 감사).
     if (!user) { setAuthMode('signup-user'); setAuthOpen(true); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user?.id, authLoading]);
 
   // ── 친구 초대 (?ref=<추천코드>) — 코드 기억 + 비로그인 시 가입 유도 ──
   useEffect(() => {
@@ -2113,6 +2158,7 @@ export default function App() {
   // 참가(바인) 게임 선택 시트는 지금까지 뒤로가기 겹이 아예 없었다 — 이 화면에서 누른
   // 뒤로가기는 시트가 아니라 그 아래 탭을 닫아 홈으로 튀었다(순수 이득 케이스).
   useBackClose(buyinPick !== null, () => setBuyinPick(null), ADOPT);
+  useBackClose(eventOpen, () => setEventOpen(false));
 
   // 로고 클릭 → 홈(메인)으로 + 모든 모달/패널 닫기 (오너 지시 2026-08-27: 일정탐색 아님)
   const handleHome = useCallback(() => {
@@ -2538,7 +2584,7 @@ export default function App() {
   // 순수 입력 폼(글쓰기·공지작성 등)·소형 확인 다이얼로그는 내비가 아니라 제외 — 문서끝 숨김 계약 유지.
   const fullOverlayOpen = voucherWalletOpen || supportOpen || globalSearchOpen
     || openVenueId !== null || openSchedule !== null || openPost !== null || openListing !== null
-    || openNotice !== null || displayTarget !== null || legalDoc !== null || gtoInit !== null;
+    || openNotice !== null || displayTarget !== null || legalDoc !== null || gtoInit !== null || eventOpen;
   // 전면 오버레이가 떠 있는 동안 상시 크롬의 VT 스냅샷 이름을 끈다(index.css `html:not([data-overlay])`).
   // 이름이 붙은 크롬은 top layer 의 ::view-transition-group 으로 그려져, top layer 가 아닌
   // 오버레이(fixed z-[60]) **위**에 얹힌다 — PC '내 정보' 겹침의 원인.
@@ -2752,6 +2798,7 @@ export default function App() {
             onVenue={handleVenueClick}
             onExplore={() => changeTab('browse')}
             onLive={() => changeTab('live')}
+            onEvent={() => setEventOpen(true)}
             onRotiCommunity={() => {
               // 캐러셀 로티아레나 배너 → 매장 커뮤니티 페이지(이름 매칭 — id 하드코딩 회피).
               // 매장 목록 도착 전/이름 변경 시엔 커뮤니티 탭으로 폴백.
@@ -3233,6 +3280,12 @@ export default function App() {
             onOpenWallet={() => openMeCb('dashboard')}
             onBuyin={startBuyinRequest}
           />
+        </Suspense>
+      )}
+
+      {eventOpen && (
+        <Suspense fallback={<OverlayFallback />}>
+          <EventPage open onClose={() => setEventOpen(false)} onLogin={() => { setEventOpen(false); setAuthOpen(true); }} />
         </Suspense>
       )}
 
