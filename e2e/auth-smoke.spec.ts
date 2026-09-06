@@ -95,7 +95,15 @@ test.describe('인증 스모크', () => {
     test.setTimeout(90_000);
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
+    // ⚠ 쓰기 차단 가드(_fixtures)가 막은 요청은 콘솔에 ERR_BLOCKED_BY_CLIENT 로 남는다 —
+    //   그건 **이 하네스가 일부러 만든 것**이지 앱 결함이 아니다(운영 DB 를 지키는 장치).
+    //   진짜 쓰기(claim_daily_login_point 등)는 계속 막혀야 하므로 가드를 풀지 않고 소음만 거른다.
+    page.on('console', (m) => {
+      if (m.type() !== 'error') return;
+      const t = m.text();
+      if (t.includes('ERR_BLOCKED_BY_CLIENT')) return;
+      errors.push(`console: ${t}`);
+    });
 
     await loginAs(page, EMAIL!, PASSWORD!);
     await page.goto('/');

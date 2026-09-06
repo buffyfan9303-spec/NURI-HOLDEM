@@ -1,0 +1,162 @@
+import { test, expect } from './_fixtures';
+import { loginAs } from './_session';
+
+// 오너에게 보낸 전후 비교 이미지가 **실제 앱에서도 그런지** 재는 스펙(오너 지시 2026-09-06 "제대로 됐나 확인").
+//
+// 왜 따로 만드나: 그 이미지들은 같은 마크업을 실제 CSS 로 렌더한 '하네스' 였다.
+// 하네스가 맞는 것과 앱이 맞는 것은 다른 명제다 — 컴포넌트가 그 사이에 바뀌었거나,
+// 부모의 폭·패딩·다른 규칙이 끼어들면 하네스만 맞고 앱은 틀릴 수 있다. 여기서 그 간극을 없앤다.
+//
+// 로그인 화면이라 자격증명이 없으면 통째로 건너뛴다(다른 로그인 스펙과 같은 규약).
+const EMAIL = process.env.E2E_EMAIL;
+const PASSWORD = process.env.E2E_PASSWORD;
+
+test.describe('오너 지적 레이아웃 — 실제 앱 실측', () => {
+  test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 없음 — 로그인 화면은 잴 수 없다');
+
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, EMAIL!, PASSWORD!);
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('C·D — 대시보드: 진행 단계 동그라미 여백 · 연결선 정렬 · 헤더 날짜 위치', async ({ page }) => {
+    const store = page.getByRole('button', { name: /^내 매장/ });
+    test.skip(await store.count() === 0, '이 계정에는 내 매장 탭이 없다');
+    await store.first().click();
+    await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
+
+    const stepper = page.locator('section[aria-label="오늘 진행 단계"]');
+    await expect(stepper).toBeVisible({ timeout: 20_000 });
+
+    const m = await stepper.evaluate((sec) => {
+      const btn = sec.querySelector('button')!;
+      const dot = sec.querySelector('button span span span, button [class*="rounded-full"]')!;
+      const b = btn.getBoundingClientRect(), d = dot.getBoundingClientRect();
+      // 연결선 = 동그라미와 같은 줄 안의 absolute h-px
+      const line = sec.querySelector('button span.relative span.absolute');
+      const l = line?.getBoundingClientRect();
+      return {
+        칸높이: Math.round(b.height),
+        동그라미_천장: Math.round(d.top - b.top),
+        연결선_동그라미중심차: l ? Math.round((l.top + l.height / 2) - (d.top + d.height / 2)) : null,
+      };
+    });
+    console.log('[C 진행 단계]', JSON.stringify(m));
+    // 오너 지적: "동그라미가 네모칸에 거의 붙어있어" — 붙어 있던 값이 2px 였다.
+    expect(m.동그라미_천장, '동그라미가 칸 천장에 붙어 있다').toBeGreaterThanOrEqual(5);
+    expect(m.칸높이, '간소화 목표(약 56px)보다 다시 커졌다').toBeLessThanOrEqual(62);
+    if (m.연결선_동그라미중심차 !== null) {
+      expect(Math.abs(m.연결선_동그라미중심차), '연결선이 동그라미 중심에서 벗어났다').toBeLessThanOrEqual(1);
+    }
+
+    // D — 스티키 헤더의 날짜가 매장명 옆에 붙어 있나(예전엔 619px 떨어져 있었다)
+    // ⚠ '.truncate' 만으로는 페이지 제목('내 매장')이 잡힌다 — 매장명은 text-base·font-bold 다.
+    //   날짜는 그 형제 span(text-2xs·tabular-nums). 둘 다 실제로 그려진 것만 잰다(left>0).
+    const gap = await page.evaluate(() => {
+      const name = [...document.querySelectorAll('[data-tab="my-store"] span.truncate.text-base')]
+        .find((e) => e.getBoundingClientRect().width > 0);
+      if (!name) return null;
+      const date = [...(name.parentElement?.querySelectorAll('span') ?? [])]
+        .find((s) => /\d{2}\.\d{2}/.test(s.textContent || '') && s.getBoundingClientRect().width > 0);
+      if (!date) return null;
+      return Math.round(date.getBoundingClientRect().left - name.getBoundingClientRect().right);
+    });
+    console.log('[D 헤더 날짜] 매장명→날짜 거리(px):', gap);
+    expect(gap, '헤더의 매장명·날짜를 못 찾았다 — 셀렉터가 화면과 어긋났다').not.toBeNull();
+    expect(gap!, '날짜가 아직 오른쪽 끝에 홀로 떨어져 있다(예전 619px)').toBeLessThan(60);
+    expect(gap!, '날짜가 매장명과 겹친다').toBeGreaterThanOrEqual(0);
+  });
+
+  test('A·B — 매출·손님: StatCard 숫자 밑변 · Mini 숫자 시작점', async ({ page }) => {
+    const store = page.getByRole('button', { name: /^내 매장/ });
+    test.skip(await store.count() === 0, '이 계정에는 내 매장 탭이 없다');
+    await store.first().click();
+    await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
+
+    // 대시보드의 '최근 7일 추세 · 통계·AI →' 카드가 통계 화면으로 가는 실제 진입점이다
+    // (섹션 버튼은 접힌 메뉴 안이라 폭 0 — 실측으로 확인).
+    const stats = page.getByRole('button', { name: /통계·AI/ }).first();
+    test.skip(await stats.count() === 0, '통계 진입점을 못 찾았다');
+    await stats.click();
+    // 통계 패널의 표식
+    const panel = page.getByText('총 엔트리').first();
+    await expect(panel).toBeVisible({ timeout: 25_000 });
+
+    const m = await page.evaluate(() => {
+      const sp = (a: number[]) => (a.length ? Math.round(Math.max(...a) - Math.min(...a)) : -1);
+      const txtRect = (el: Element) => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect(); };
+
+      // StatCard 한 행 = '총 엔트리 / 할인 엔트리 / 총 할인액'
+      const head = [...document.querySelectorAll('p')].find((p) => p.textContent?.trim() === '총 엔트리');
+      const row = head?.closest('.grid');
+      const statVals = row ? [...row.querySelectorAll(':scope > div > p.text-lg')].map((e) => Math.round(e.getBoundingClientRect().bottom)) : [];
+
+      // Mini 한 행 — text-base 값
+      const miniRow = [...document.querySelectorAll('.grid')].find((g) =>
+        g.querySelectorAll(':scope > div > p.text-base').length >= 3);
+      const miniLefts = miniRow
+        ? [...miniRow.querySelectorAll(':scope > div')].map((tile) => {
+            const v = tile.querySelector('p.text-base');
+            return v ? Math.round(txtRect(v).left - tile.getBoundingClientRect().left) : NaN;
+          }).filter((n) => !Number.isNaN(n))
+        : [];
+
+      return { statCount: statVals.length, statBottomSpread: sp(statVals), miniCount: miniLefts.length, miniLeftSpread: sp(miniLefts), miniLefts };
+    });
+    console.log('[A StatCard]', JSON.stringify({ n: m.statCount, 밑변어긋남: m.statBottomSpread }));
+    console.log('[B Mini]', JSON.stringify({ n: m.miniCount, 시작점어긋남: m.miniLeftSpread, lefts: m.miniLefts }));
+
+    if (m.statCount >= 2) expect(m.statBottomSpread, 'StatCard 숫자 밑변이 어긋난다(하네스에선 18→0 이었다)').toBe(0);
+    if (m.miniCount >= 2) expect(m.miniLeftSpread, 'Mini 숫자 시작점이 어긋난다(하네스에선 34→0 이었다)').toBe(0);
+  });
+
+  test('캘린더 — 내가 적는 기록: 날짜·메모 오른쪽 변 일치 · 컨트롤 높이 통일', async ({ page }) => {
+    // ⚠ 매장 계정에는 하단 '캘린더' 탭이 없다(5번째 칸이 '내 매장'). 대신 **내 매장 안의 '내 캘린더' 섹션**이
+    //   같은 CalendarPanel 을 쓴다(VenueManageTab.tsx:165 — 중복 구현 금지). 그래서 판이 아니라 그 섹션에서 잰다.
+    const store = page.getByRole('button', { name: /^내 매장/ });
+    test.skip(await store.count() === 0, '이 계정에는 내 매장 탭이 없다');
+    await store.first().click();
+    await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
+
+    // ⚠ 섹션 버튼('내 캘린더' 등)은 접힌 메뉴 안에 있어 폭이 0이다 — 먼저 그 메뉴를 열어야 한다.
+    //   (실측으로 알아냈다: 보이는 건 '대시보드 메뉴' 하나뿐이고 나머지는 전부 w=0이었다.)
+    await page.evaluate(() => {
+      const menu = [...document.querySelectorAll('[data-tab="my-store"] button')]
+        .find((b) => /메뉴/.test(b.textContent || '') && b.getBoundingClientRect().width > 0);
+      (menu as HTMLButtonElement | undefined)?.click();
+    });
+    const calChip = page.getByRole('button', { name: '내 캘린더' }).first();
+    await expect(calChip, '내 매장 안에 "내 캘린더" 섹션이 없다').toBeVisible({ timeout: 20_000 });
+    await calChip.click();
+
+    const dateInput = page.locator('[data-tab="my-store"] input[type="date"][aria-label="날짜"]');
+    await expect(dateInput, '내가 적는 기록 카드가 안 뜬다').toBeVisible({ timeout: 20_000 });
+
+    const m = await page.evaluate(() => {
+      const root = '[data-tab="my-store"] ';
+      const d = document.querySelector(root + 'input[type="date"][aria-label="날짜"]') as HTMLElement;
+      const memo = document.querySelector(root + 'input[aria-label="메모"], ' + root + 'input[aria-label="일정 내용"]') as HTMLElement;
+      if (!d || !memo) return null;
+      const dr = d.getBoundingClientRect(), mr = memo.getBoundingClientRect();
+      const amt = document.querySelector(root + 'input[aria-label="금액"]') as HTMLElement | null;
+      const minus = [...document.querySelectorAll(root + 'button')]
+        .find((b) => b.getAttribute('aria-label') === '마이너스로 기록');
+      return {
+        오른쪽변_차이: Math.round(Math.abs(dr.right - mr.right)),
+        날짜높이: Math.round(dr.height), 메모높이: Math.round(mr.height),
+        // 6칸 그리드의 목적 — 윗줄 금액칸과 아랫줄 마지막 버튼의 오른쪽 변도 같아야 한다
+        금액_마이너스_오른쪽차: amt && minus
+          ? Math.round(Math.abs(amt.getBoundingClientRect().right - minus.getBoundingClientRect().right)) : null,
+      };
+    });
+    console.log('[캘린더 기록 카드]', JSON.stringify(m));
+    expect(m, '기록 카드를 못 찾았다').not.toBeNull();
+    expect(m!.오른쪽변_차이, '날짜칸과 메모칸의 오른쪽 변이 어긋난다(하네스에선 11→0 이었다)').toBeLessThanOrEqual(1);
+    expect(Math.abs(m!.날짜높이 - m!.메모높이), '컨트롤 높이가 줄마다 다르다').toBeLessThanOrEqual(1);
+    expect(m!.날짜높이, '터치 타깃 44px 미만').toBeGreaterThanOrEqual(43);
+    if (m!.금액_마이너스_오른쪽차 !== null) {
+      expect(m!.금액_마이너스_오른쪽차, '두 줄의 오른쪽 끝이 안 맞는다').toBeLessThanOrEqual(1);
+    }
+  });
+});

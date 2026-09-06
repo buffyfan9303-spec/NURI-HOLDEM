@@ -356,8 +356,8 @@ function StatsView({ venueId }: { venueId: string }) {
           {/* 주요 지표 — 아이콘 카드 */}
           <div className="grid grid-cols-3 gap-2">
             <StatCard label="총 엔트리" value={m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} icon="users" />
-            <StatCard label="할인 엔트리" value={`${m.discountCnt}건`} sub={`전체 바인 중 ${m.discountRatio.toFixed(1)}%`} icon="down" />
-            <StatCard label="총 할인액" value={`${m.discountWon.toLocaleString()} 원`} sub={m.discountWon > 0 ? `할인 없었다면 ${(m.revenue + m.discountWon).toLocaleString()}원` : '적용된 할인 없음'} icon="percent" gold />
+            <StatCard label="할인 엔트리" value={`${m.discountCnt}건`} sub={`바인 중 ${m.discountRatio.toFixed(1)}%`} icon="down" />
+            <StatCard label="총 할인액" value={`${m.discountWon.toLocaleString()} 원`} sub={m.discountWon > 0 ? `할인 전 ${wonToMan(m.revenue + m.discountWon)}만원` : '할인 없음'} icon="percent" gold />
           </div>
           <div className="grid grid-cols-3 gap-2">
             <StatCard label="완납 매출액" value={`${m.revenue.toLocaleString()} 원`} icon="wallet" emerald />
@@ -709,10 +709,11 @@ function StatCard({ label, value, sub, icon, danger, emerald, gold }: { label: s
         <StatIcon name={icon} className="shrink-0 text-ink-muted" />
       </div>
       <p className={['mt-auto pt-2 text-lg font-extrabold leading-none tabular-nums', c].join(' ')}>{value}</p>
-      {/* ⚠ 보조 줄은 내용이 없어도 **자리를 비워 둔다**. 없애면 그 카드만 값이 한 줄 아래로 내려앉아
-          같은 행에서 숫자 밑변이 서로 어긋난다(2026-09-06 오너 스크린샷: '46.5' 혼자 낮았다).
-          같은 행에 보조 줄을 가진 카드가 하나라도 있으면 행 높이는 어차피 그 카드가 정하므로 공짜다. */}
-      <p className="mt-1 text-[11px] leading-tight tabular-nums text-ink-muted">{sub || '\u00A0'}</p>
+      {/* ⚠ 보조 줄은 **반드시 한 줄**이어야 한다. 자리만 예약하고 줄 수를 안 묶으면, 실제 폭
+          (412px 3칸 = 카드 111px)에서 '전체 바인 중 0.0%' 가 두 줄로 접혀 그 카드만 값이 14px 올라간다
+          — 로그인 화면 실측에서 잡았다(2026-09-06). 넓은 하네스에서는 안 접혀 안 보이던 결함이다.
+          긴 문구는 호출부에서 짧게 쓴다 — truncate 는 잘림 방지 안전망이지 해법이 아니다. */}
+      <p className="mt-1 truncate text-[11px] leading-tight tabular-nums text-ink-muted" title={sub || undefined}>{sub || '\u00A0'}</p>
     </div>
   );
 }

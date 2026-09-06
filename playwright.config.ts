@@ -1,4 +1,20 @@
 import { defineConfig, devices } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+// ⚠ 로그인 스펙(인증 스모크·오너 레이아웃 실측)은 E2E_EMAIL/E2E_PASSWORD 가 있을 때만 돈다.
+//   그런데 값은 .env.local 에 있는데 이 설정이 그걸 안 읽어서, **자격증명이 있는데도 24개가 조용히
+//   skip 되고 있었다**(auth-smoke 머리말: "이 파일은 한 번도 실행된 적이 없었다"). 실측으로 확인:
+//   env 를 손으로 넣어 돌리자 그때서야 StatCard 정렬 회귀와 404 RPC 가 드러났다.
+//   → 여기서 채운다. **이미 있는 값은 덮지 않는다**(CI 의 시크릿이 항상 이긴다).
+//   dotenv 를 새로 들이지 않는 이유: 이 몇 줄이면 되고, 의존성은 적을수록 좋다.
+try {
+  for (const line of readFileSync('.env.local', 'utf-8').split('\n')) {
+    const m = /^\s*(E2E_[A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
+    if (!m) continue;
+    const v = m[2].trim().replace(/^['"]|['"]$/g, '');
+    if (v && !process.env[m[1]]) process.env[m[1]] = v;
+  }
+} catch { /* .env.local 이 없으면 그대로 — 그 환경에서는 로그인 스펙이 skip 된다 */ }
 
 // NURI HOLDEM E2E 스모크 — 배포 전 회귀 게이트.
 //  실행: `npm run test:e2e` (헤드리스) / `npm run test:e2e:ui` (UI 모드)

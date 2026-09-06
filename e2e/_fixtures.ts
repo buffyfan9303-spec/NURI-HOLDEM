@@ -27,6 +27,10 @@ export const READ_ONLY_RPCS = new Set([
   'venue_today_games', 'venue_announce_status', 'client_error_rate_ok', 'is_nickname_available', 'is_email_available', 'is_name_available', 'my_referral_stats',
   // 이벤트 보드 — 읽기 전용(select 만). DB 에서도 STABLE 로 선언했다(20260906b).
   'event_board',
+  // 2026-09-06 자격증명이 붙으면서 드러난 누락 — 로그인 화면에서만 불리는 읽기 RPC 들이다.
+  //   can_view_vouchers · venue_weekly_funnel 은 DB 에서 STABLE 로 선언돼 있고,
+  //   my_visited_venues 는 VOLATILE 표시만 안 됐을 뿐 본문이 순수 select 다(실측 확인).
+  'can_view_vouchers', 'venue_weekly_funnel', 'my_visited_venues',
 ]);
 
 const SUPABASE_API = /^https:\/\/([a-z0-9]+)\.supabase\.co\/(rest|auth|storage|functions)\/v1\/(.*)$/;
