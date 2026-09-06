@@ -170,13 +170,15 @@ const rowToPost = (r: any): CommunityPost => ({
   pinnedAt:    r.pinned_at ?? null,
 });
 
-/** 내가 쓴 글 — 개인 허브('내 대시보드')용. 목록 50건 제한과 무관하게 본인 글만 조회 */
-export async function getPostsByUser(userId: string, limit = 20): Promise<CommunityPost[]> {
-  if (IS_MOCK) return [];
-  const res = await supabase.from('community_posts').select('*').eq('user_id', userId)
+/** 내가 쓴 글 — 개인 허브('내 대시보드')용. 목록 50건 제한과 무관하게 본인 글만 조회.
+ *  total = 같은 쿼리에 얹은 count(exact) — 목록은 limit 만큼, 스탯 숫자는 상한 없이(점검 #26, 왕복 1회 유지). */
+export async function getPostsByUser(userId: string, limit = 20): Promise<{ posts: CommunityPost[]; total: number }> {
+  if (IS_MOCK) return { posts: [], total: 0 };
+  const res = await supabase.from('community_posts').select('*', { count: 'exact' }).eq('user_id', userId)
     .order('created_at', { ascending: false }).limit(limit);
-  if (res.error) return [];
-  return (res.data ?? []).map(rowToPost);
+  if (res.error) return { posts: [], total: 0 };
+  const posts = (res.data ?? []).map(rowToPost);
+  return { posts, total: res.count ?? posts.length };
 }
 
 /** 단건 게시글 — 공유 딥링크·알림 링크가 목록(최근 50건) 밖의 글을 가리킬 때 사용 */
@@ -189,6 +191,15 @@ export async function getPostById(postId: string): Promise<CommunityPost | null>
   if (res.error || !res.data) return null;
   const liked = await supabase.from('post_likes').select('post_id').eq('post_id', postId).limit(1);
   return { ...rowToPost(res.data), liked: (liked.data ?? []).length > 0 };
+}
+
+/** 숨김(blinded) 글의 열람 차단 판정 — 서버 RLS(20260905m posts_select)와 같은 식: 작성자·운영자만 본다.
+ *  상세(PostDetailModal)가 딥링크·알림·피드 세 진입점을 이 한 곳으로 덮는다. */
+export function isPostHidden(
+  post: Pick<CommunityPost, 'blinded' | 'userId'>,
+  user: { id: string; role: UserRole } | null | undefined,
+): boolean {
+  return !!post.blinded && user?.role !== 'admin' && user?.id !== post.userId;
 }
 
 /** 운영자: 게시글 블라인드(신고 누적 숨김) 해제/설정 */
@@ -1478,6 +1489,21 @@ export interface ShoutRules {
   ttlHours: number;
 }
 export interface PointBalance { total: number; spent: number; available: number }
+/** 상점 구매 가능 판정 — 잔액을 아직 모르면(미도착·조회 실패) '부족'과 같게 잠근다.
+ *  null 을 통과시키면 버튼이 열리고 서버 spend 가 '점수 부족'으로 거절한다(2026-09-05 점검 #19). */
+export function lacksPoints(balance: PointBalance | null, price: number): boolean {
+  return balance === null || balance.available < price;
+}
+
+/** 상점 구매 버튼 라벨 — **비활성 이유를 라벨이 말하게** 한다.
+ *  잔액을 아직 모르면(미도착·조회 실패) 버튼은 잠기는데 라벨이 'N점 소장'이면
+ *  손님은 이유를 모른 채 앞이 막힌다(2026-09-06 리뷰). getMyPointBalance 는 실패를 null 로
+ *  접어 resolve 하므로 '미도착'과 '실패'는 화면상 같은 상태다 — 둘 다 '잔액 확인 중'. */
+export function buyLabel(balance: PointBalance | null, price: number, verb: string): string {
+  if (balance === null) return '잔액 확인 중';
+  if (balance.available < price) return `${price.toLocaleString()}점 부족`;
+  return verb ? `${price.toLocaleString()}점 ${verb}` : `${price.toLocaleString()}점`;
+}
 
 /** 외치기 규칙(가격·쿨다운·길이 한도) — 서버가 단일 출처, 클라이언트는 표시만 한다 */
 export async function getShoutRules(): Promise<ShoutRules> {

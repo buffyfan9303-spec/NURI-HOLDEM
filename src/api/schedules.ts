@@ -1,5 +1,8 @@
 ﻿// src/api/schedules.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
+import type { DiscountType } from '../lib/promotionLabel';
+
+export type { DiscountType };
 
 /** 일정(포스터/게임) 변경 실시간 구독 — 다른 기기/사용자의 등록·수정·삭제를 자동 반영 */
 export function subscribeSchedules(onChange: () => void): () => void {
@@ -16,7 +19,14 @@ export interface SeatVoucher  { label: string; count: number; }
 export interface BuyInInfo    { amount: number; rebuy?: number; rebuyLimit?: number; addon?: number; addonStack?: number; startStack?: number; rebuyStack?: number; gameType?: string; }
 export interface SideEvent    { name: string; startBefore: string; buyIn?: number; note?: string; }
 export interface RankingPrize { rank: string; amount: number; unit?: string; }
-export interface Promotion    { badge?: string; title: string; detail?: string; }
+/** 포스터의 이벤트·프로모션 한 줄.
+ *  `discountWon` 이 있으면 **참가비 할인 이벤트**로, 장부가 그대로 가져다 쓸 수 있다(오너 지시 2026-09-06).
+ *  · discountWon — 할인액(원). 0/undefined = 그냥 안내 문구(종전 동작 그대로).
+ *  · level       — 자동 적용 기준 레벨(N레벨까지). 0/undefined = 수기 선택 전용.
+ *  · discountType — 할인유형(오너 지시 2026-09-06). 고르면 태그·내용·장부 라벨을 lib/promotionLabel 이 만든다.
+ *                   undefined = 유형 개념이 없던 기존 데이터 → 'custom' 과 같게 다뤄 자동 생성 없음(하위호환).
+ *  세 값은 장부의 DiscountPreset{label, amount, level} 과 1:1 로 대응한다(src/api/ledger.ts). */
+export interface Promotion    { badge?: string; title: string; detail?: string; discountWon?: number; level?: number; discountType?: DiscountType; }
 
 export interface Schedule {
   id: string; title: string; venueId: string; pubName: string; region: string; address?: string;
@@ -110,14 +120,18 @@ export async function getSchedules(): Promise<Schedule[]> {
 }
 
 // ── 단건 조회 ─────────────────────────────────────────────────────────────────
+// 알림·내 예약이 가리키는 대회가 메모리 목록에 없을 때 쓴다(권한은 목록과 같은 RLS 를 그대로 탄다 —
+// schedules_select: approved OR 본인 포스터 OR admin. 즉 목록보다 넓게 노출될 수 없다).
+// ⚠ null 은 '없음/볼 권한 없음' 만 뜻한다. 조회 **실패**(오프라인·5xx)는 throw 로 드러낸다 —
+//   실패를 null 로 뭉개면 살아 있는 포스터가 '내려간 포스터' 로 안내된다(F09).
 export async function getScheduleById(id: string): Promise<Schedule | null> {
   if (IS_MOCK) {
     const { MOCK_SCHEDULES } = await import('../mock/data');
     return MOCK_SCHEDULES.find((s) => s.id === id) ?? null;
   }
-  const { data, error } = await supabase.from('schedules').select('*').eq('id', id).single();
-  if (error) return null;
-  return rowToSchedule(data);
+  const { data, error } = await supabase.from('schedules').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? rowToSchedule(data) : null;
 }
 
 // ── 업주: 포스터 등록 ─────────────────────────────────────────────────────────

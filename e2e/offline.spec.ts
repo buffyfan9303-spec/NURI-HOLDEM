@@ -1,6 +1,6 @@
 // Phase 17-5 게이트 — 기내모드 왕복: 오프라인 배너 표시 → 캐시 화면 유지 → 재연결 자동 복구.
 // 홀덤펍은 지하 매장이 많다 — 네트워크 단절이 일상 운영 조건이라는 전제의 검증.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays } from './_session';
 
 test('🔴 기내모드 왕복 — 배너 표시·화면 유지·재연결 시 배너 소멸', async ({ page, context }) => {

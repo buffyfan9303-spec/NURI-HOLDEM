@@ -2,7 +2,8 @@
 // '내 정보' 통합 페이지(오너 지시 2026-09-03) — [대시보드 · 프로필 · 설정 · 보안] 4탭.
 //   대시보드 = 이 파일 본문, 프로필/설정/보안 = ProfilePanels(구 ProfileModal) 패널 그대로.
 //   진입점은 헤더 아바타 메뉴('내 정보')·모바일 탭바 5칸·/wallet 딥링크·본인인증 배너(보안 탭) 뿐이다.
-// 내 매장이용권(매장별) + 매장 이용내역(방문·머니인·금액). 매장이용권은 금전적 가치 없음.
+// 내 매장이용권(매장별) + 매장 이용내역(방문·참가(바인)·참가비). 매장이용권은 금전적 가치 없음.
+//   '방문' = QR 체크인(매장별 KST 날짜 distinct), '참가' = 장부 바인 — 둘 다 머니인(입상)과 다른 단위다(점검 #6·#8).
 // 사용(회수) = 발급 매장 QR 스캔 또는 그 매장 업주 전화번호로만. 유저 간 전송 불가.
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
@@ -12,11 +13,15 @@ import Icon from '../atoms/Icon';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 import { SectionHead as Head, SectionTile as Tile } from '../atoms/SectionHeader'; // 섹션 머리글·타일 정본(지갑과 공유)
 import EmptyState from '../atoms/EmptyState';
+import LoadErrorCard from '../atoms/LoadErrorCard';
+import { msgOf } from '../../lib/dbError';
+import { SkeletonList } from '../atoms/Skeleton';
 import { goSubTab } from '../../lib/subTabTransition';
 import type { LegalDoc } from './LegalDocsModal';
 import { myVisitedVenues, myPlayHistory, type VisitedVenue, type PlayHistory } from '../../api/vouchers';
 import { wonToMan } from '../../api/ledger';
-import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
+import { getMyReservations, getMyVisitStats, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
+import { useBackClose } from '../../lib/backstack';
 import { getPostsByUser, type CommunityPost } from '../../api/community';
 import { getMyRankingHistory, getGlobalRankingTotals, placementPoints, type MyRankingRow } from '../../api/rankings';
 import { shareRecordCard, shareRecordCardKakao } from '../../lib/recordCard';
@@ -57,11 +62,14 @@ const ME_TABS: { key: MeTab; label: string }[] = [
   { key: 'security',  label: '보안' },
 ];
 
-export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenPost, onOpenMarket, onOpenRanking, initialTab = 'dashboard', onOpenLegal, onOpenSupport }: {
+export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenSchedule, onOpenPost, onOpenMarket, onOpenRanking, initialTab = 'dashboard', onOpenLegal, onOpenSupport, onReservationChange }: {
   open: boolean; onClose: () => void;
   /** 미읽음 알림 미리보기(상위 3개) — 프로필 메뉴까지 안 가도 되게 */
   unread?: { id: string; title: string; message: string; createdAt: string }[];
   onOpenNotification?: (id: string) => void;
+  /** 예약 행 → 그 대회 상세(F09). App 이 이 페이지를 닫고 상세를 연 뒤, 닫으면 여기로 되돌린다 —
+   *  대시보드(z-60)가 page 모달(z-55)을 덮으므로 z-index 가 아니라 오버레이 상태로 푼다. */
+  onOpenSchedule?: (scheduleId: string, venueId?: string | null) => void;
   /** '내 것' 허브 — 흩어져 있던 내 글·내 거래·프로필을 이 화면에서 잇는다 */
   onOpenPost?: (p: CommunityPost) => void;
   onOpenMarket?: () => void;
@@ -72,6 +80,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   /** 프로필 탭 하단 약관·고객센터(구 ProfileModal props 그대로) */
   onOpenLegal?: (d: LegalDoc) => void;
   onOpenSupport?: () => void;
+  /** 여기서 예약을 취소했다 — App 이 홈 '오늘 예약한 대회'·카드 '예약 N'·캘린더를 다시 읽는다(F06).
+   *  상세 모달(ReserveBox)과 같은 신호를 쓰므로 어느 경로로 취소해도 숫자가 갈리지 않는다. */
+  onReservationChange?: () => void;
 }) {
   const { user } = useAuth();
   const toast = useToast();
@@ -88,9 +99,17 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   // 첫 프레임에 loading 이 false 면 방문·예약·입상 세 섹션이 동시에 "아직 없습니다"로 떨어진다
   // — reload() 안의 setLoading(true) 는 useEffect 라 페인트 뒤에 돈다(2026-09-05 전수 조사).
   const [loading, setLoading] = useState(true);
+  // 섹션별 조회 실패 — 이 세 줄이 없던 동안 실패는 전부 '아직 없습니다'(빈 상태)로 보였다.
+  // 방문 기록이 있는데도 '기록 없음'이 뜨면 사용자는 매장이 자기 방문을 안 찍었다고 오해한다.
+  const [usageErr, setUsageErr] = useState<unknown>(null);  // 매장 이용·참가 내역
+  const [resvErr, setResvErr] = useState<unknown>(null);    // 대회 참가(예약) 내역
+  const [ranksErr, setRanksErr] = useState<unknown>(null);  // 내 입상 기록
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
   const [achOpen, setAchOpen] = useState(false); // 내 업적 접기/펼치기 — 기본 닫힘
   const [myPosts, setMyPosts] = useState<CommunityPost[]>([]); // 내가 쓴 글 — 그동안 찾을 화면 자체가 없었다
+  const [myPostTotal, setMyPostTotal] = useState(0); // 내 글 총수 — 목록 limit(20)과 무관한 count(점검 #26)
+  // null = 아직 한 번도 성공한 적 없음(미조회·실패). 0 으로 두면 조회 실패가 '방문 0회' 라는 단정으로 보인다(F08).
+  const [visitStats, setVisitStats] = useState<{ visits: number; upcoming: number; total: number } | null>(null); // 헤더 '방문' — 프로필 탭과 같은 함수·같은 단위(점검 #8)
   const recordsRef = useRef<HTMLElement | null>(null); // '내 전적' 버튼 → 기존 입상 기록 섹션 앵커 스크롤
   // 4탭 상태 — 페이지가 소유(ProfilePanels 는 controlled). 열릴 때마다 initialTab 으로 리셋(keep-alive 재열림 포함).
   const [tab, setTab] = useState<MeTab>(initialTab);
@@ -99,29 +118,47 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const goTab = useCallback((v: MeTab) => goSubTab('profile-tab', ME_TAB_ORDER, tab, v, () => setTab(v)), [tab]);
 
   useEffect(() => {
-    if (!open || !user) { setMyPosts([]); return; }
-    getPostsByUser(user.id).then(setMyPosts).catch(() => {});
+    if (!open || !user) { setMyPosts([]); setMyPostTotal(0); return; }
+    getPostsByUser(user.id).then(({ posts, total }) => { setMyPosts(posts); setMyPostTotal(total); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, user?.id]);
 
+  // 왜 allSettled 인가(2026-09-05): 여기는 서로 다른 7개 조회다. Promise.all + 바깥 catch(()=>{})
+  // 였을 때는 하나만 실패해도 **성공한 나머지까지 버려지고** 실패가 통째로 삼켜져,
+  // 세 섹션이 동시에 '아직 없습니다'로 떨어졌다 — 실패를 빈 결과로 위장하는 바로 그 패턴이다.
+  // 이제 성공한 섹션은 그리고, 실패한 섹션만 이유와 재시도(LoadErrorCard)를 보여준다.
   const reload = () => {
     setLoading(true);
-    Promise.all([
+    Promise.allSettled([
       myVisitedVenues(), myPlayHistory(),
-      getMyReservations().catch(() => [] as MyReservationRow[]),
-      user?.nickname ? getMyRankingHistory(user.nickname, 200).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
-      user?.nickname ? getMyReferralStats().catch(() => ({ invited: 0, rewarded: 0 })) : Promise.resolve({ invited: 0, rewarded: 0 }),
-      user?.nickname ? getMyChampionships(user.nickname).catch(() => 0) : Promise.resolve(0),
-      user?.nickname ? getGlobalRankingTotals('all').catch(() => []) : Promise.resolve([]),
+      getMyReservations(),
+      getMyVisitStats(),
+      user?.nickname ? getMyRankingHistory(user.nickname, 200) : Promise.resolve([] as MyRankingRow[]),
+      user?.nickname ? getMyReferralStats() : Promise.resolve({ invited: 0, rewarded: 0 }),
+      user?.nickname ? getMyChampionships(user.nickname) : Promise.resolve(0),
+      user?.nickname ? getGlobalRankingTotals('all') : Promise.resolve([]),
     ])
-      .then(([vi, pl, rv, rk, rs, ch, gt]) => {
-        setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); setRefStats(rs); setChampionships(ch);
+      .then(([vi, pl, rv, vs, rk, rs, ch, gt]) => {
+        // 성공한 것만 덮어쓴다 — 실패해도 직전에 받아 둔 값은 그대로 둔다(오프라인에서 내역이 사라지지 않게).
+        if (vi.status === 'fulfilled') setVisits(vi.value);
+        if (pl.status === 'fulfilled') setPlays(pl.value);
+        // 이용 내역 섹션은 방문+참가 두 조회를 합쳐 그린다 — 둘 중 하나만 깨져도 숫자가 틀리므로 실패로 본다
+        setUsageErr(vi.status === 'rejected' ? vi.reason : pl.status === 'rejected' ? pl.reason : null);
+        if (rv.status === 'fulfilled') setResv(rv.value);
+        setResvErr(rv.status === 'rejected' ? rv.reason : null);
+        if (vs.status === 'fulfilled') setVisitStats(vs.value);
+        if (rk.status === 'fulfilled') setRanks(rk.value);
+        setRanksErr(rk.status === 'rejected' ? rk.reason : null);
+        if (rs.status === 'fulfilled') setRefStats(rs.value);
+        if (ch.status === 'fulfilled') setChampionships(ch.value);
         // 전국 상위 N% — 대회 입상 횟수 기준(랭킹 허브 '머니인' 보드와 같은 careerCompare 정렬, 서버가 이미 정렬). 상금 무관.
+        // 실패하면 백분위 자체를 숨긴다(null) — 0%·100% 같은 그럴듯한 거짓 숫자를 만들지 않는다.
+        const totals = gt.status === 'fulfilled' ? gt.value : [];
         const nick = user?.nickname?.trim().toLowerCase();
-        const idx = nick ? gt.findIndex((t) => t.nickname.trim().toLowerCase() === nick) : -1;
-        setPercentile(idx >= 0 ? Math.max(1, Math.round(((idx + 1) / gt.length) * 100)) : null);
+        const idx = nick ? totals.findIndex((t) => t.nickname.trim().toLowerCase() === nick) : -1;
+        setPercentile(idx >= 0 ? Math.max(1, Math.round(((idx + 1) / totals.length) * 100)) : null);
       })
-      .catch(() => {}).finally(() => setLoading(false));
+      .finally(() => setLoading(false));
   };
   // 왜 user?.id 의존성: 비로그인 랜딩에서 이메일 로그인(AuthModal이 이 페이지 위에 뜸) 성공 시
   // open 은 그대로 true 라 [open]만으로는 재조회가 없다 — user 확정 순간 대시보드 데이터를 채운다.
@@ -142,26 +179,28 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   // 숨김 중 로그인이 확정되면(user 등장) 갈래 전환은 자연 리렌더로 처리된다.
   if (!user) return <LoginLanding onClose={onClose} hidden={hidden} />;
 
-  const usageMap = new Map<string, { name: string; visits: number; moneyin: number; amount: number; lastAt: string | null }>();
-  for (const x of visits) usageMap.set(x.venueId, { name: x.venueName ?? '매장', visits: x.visits, moneyin: 0, amount: 0, lastAt: null });
+  const usageMap = new Map<string, { name: string; visits: number; buyins: number; amount: number; lastAt: string | null }>();
+  for (const x of visits) usageMap.set(x.venueId, { name: x.venueName ?? '매장', visits: x.visits, buyins: 0, amount: 0, lastAt: null });
   for (const p of plays) {
-    const e = usageMap.get(p.venueId) ?? { name: p.venueName ?? '매장', visits: 0, moneyin: 0, amount: 0, lastAt: null };
-    e.moneyin = p.moneyinCount; e.amount = p.totalAmount; e.lastAt = p.lastAt;
+    const e = usageMap.get(p.venueId) ?? { name: p.venueName ?? '매장', visits: 0, buyins: 0, amount: 0, lastAt: null };
+    e.buyins = p.buyinCount; e.amount = p.totalAmount; e.lastAt = p.lastAt;
     usageMap.set(p.venueId, e);
   }
-  const usage = [...usageMap.values()].sort((a, b) => (b.moneyin + b.visits) - (a.moneyin + a.visits));
-  // 하이라이트 — 총 머니인/누적액 + 최다 머니인(횟수) 매장 + 최다 머니인(금액) 매장
-  const totalVisits = visits.reduce((s, v) => s + v.visits, 0); // 스탯 3열용 — 이미 내려온 방문 데이터 재사용(새 fetch 0)
-  const totalMoneyin = plays.reduce((s, p) => s + p.moneyinCount, 0);
+  const usage = [...usageMap.values()].sort((a, b) => (b.buyins + b.visits) - (a.buyins + a.visits));
+  // 입상(머니인) 횟수 — 이미 내려온 ranks 를 매장 이름으로 센다(표시 전용 — usage 는 venueId, ranks 는 매장명뿐이라 이름 조인).
+  const rankCountByVenue = new Map<string, number>();
+  for (const r of ranks) rankCountByVenue.set(r.venueName, (rankCountByVenue.get(r.venueName) ?? 0) + 1);
+  // 하이라이트 — 총 참가(바인)/누적 참가비 + 최다 참가(횟수) 매장 + 최다 참가비 매장. 참가비는 상품 가격 정보라 표시 유지(§28).
+  const totalBuyins = plays.reduce((s, p) => s + p.buyinCount, 0);
   const totalSpent = plays.reduce((s, p) => s + p.totalAmount, 0);
-  const topMoneyin = [...usage].filter((u) => u.moneyin > 0).sort((a, b) => b.moneyin - a.moneyin)[0] ?? null;
+  const topBuyins = [...usage].filter((u) => u.buyins > 0).sort((a, b) => b.buyins - a.buyins)[0] ?? null;
   const topAmount = [...usage].filter((u) => u.amount > 0).sort((a, b) => b.amount - a.amount)[0] ?? null;
   const fmtDate = (iso: string | null) => { if (!iso) return ''; const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]" style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 px-page-x">
-        <button type="button" onClick={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
+        <button type="button" onClick={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
           <Icon name="back" size={20} />
         </button>
         <h1 className="text-lg font-bold text-ink-primary">내 정보</h1>
@@ -174,11 +213,12 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
       <div className="flex-1 overflow-y-auto">
         {/* 본문 — 탭 전환의 방향성 푸시 대상(탭바는 제자리 고정) */}
         <div data-profile-panel="">
-        {tab !== 'dashboard' ? (
-          <div className="mx-auto w-full max-w-md">
-            <ProfilePanels open={open} tab={tab} onTabChange={goTab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
-          </div>
-        ) : (
+        {/* 프로필·설정·보안 패널은 keep-alive(hidden 토글) — 설정 탭에서 편집 중(닉네임·크롭 사진) 대시보드를 다녀와도
+            입력이 남는다(점검 #18). 상태는 ProfilePanels 본체에 있어 대시보드 표시 중엔 'profile' 로 접어 두기만 한다. */}
+        <div hidden={tab === 'dashboard'} className="mx-auto w-full max-w-md">
+          <ProfilePanels open={open} tab={tab === 'dashboard' ? 'profile' : tab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
+        </div>
+        {tab === 'dashboard' && (
         <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-section">
           {/* 통합 프로필 아이덴티티 헤더(오너 지시 2026-08-27) — ProfileModal '프로필' 탭과 같은 정본.
               커버 밴드(등급색 틴트) + 오버랩 아바타(등급 링) + 닉네임·등급·칭호·인증 + 등급 진행바. */}
@@ -192,8 +232,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               verified={idOn && user.verified}
               stats={[
                 { label: '활동점수', value: (user.activityPoints ?? 0).toLocaleString() },
-                { label: '내 글', value: String(myPosts.length) },
-                { label: '방문', value: `${totalVisits}회` },
+                { label: '내 글', value: String(myPostTotal) },
+                { label: '방문', value: visitStats ? `${visitStats.visits}회` : '—' },
               ]}
               actions={
                 <div className="grid w-full grid-cols-2 gap-2">
@@ -322,7 +362,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {/* 내가 쓴 글 — 커뮤니티에 흩어진 내 글을 다시 찾을 유일한 화면 */}
           {myPosts.length > 0 && onOpenPost && (
             <section className="rounded-aura border card-aura p-3">
-              <Head icon="edit" tone="fuchsia" title="내가 쓴 글" count={myPosts.length} />
+              <Head icon="edit" tone="fuchsia" title="내가 쓴 글" count={myPostTotal} />
               <ul className="mt-2 space-y-1">
                 {myPosts.slice(0, 5).map((mp) => (
                   <li key={mp.id}>
@@ -350,7 +390,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             </div>
           )}
 
-          {/* 하이라이트 요약 — 방문·머니인·최다 머니인 매장/금액
+          {/* 하이라이트 요약 — 방문 매장·참가(바인)·누적 참가비·최다 참가 매장/참가비 매장
               ⚠ '보유 이용권' 통합 스탯 제거(오너 지시 #4, 2026-08-29):
                  이용권은 **매장마다 개별 매장이용권**만 존재한다. 매장을 가로질러 합산한 'N장'은
                  그 전제와 어긋나는 수치다(어느 매장에서 쓸 수 있는 N장인지 답이 없다).
@@ -359,13 +399,13 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             <section className="space-y-2">
               <div className="grid grid-cols-3 gap-2">
                 <Stat label="방문 매장" value={`${usage.length}곳`} />
-                <Stat label="총 머니인" value={`${totalMoneyin}회`} />
-                <Stat label="누적 머니인액" value={totalSpent ? wonToMan(totalSpent) + '만' : '-'} accent />
+                <Stat label="참가(바인)" value={`${totalBuyins}회`} />
+                <Stat label="누적 참가비" value={totalSpent ? wonToMan(totalSpent) + '만' : '-'} accent />
               </div>
-              {(topMoneyin || topAmount) && (
+              {(topBuyins || topAmount) && (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {topMoneyin && <HiCard title="최다 머니인 매장" name={topMoneyin.name} detail={`머니인 ${topMoneyin.moneyin}회 · 누적 ${topMoneyin.amount ? wonToMan(topMoneyin.amount) + '만' : '-'}`} />}
-                  {topAmount && <HiCard title="최다 머니인 금액" name={topAmount.name} detail={`${wonToMan(topAmount.amount)}만 · ${topAmount.moneyin}회`} />}
+                  {topBuyins && <HiCard title="최다 참가 매장" name={topBuyins.name} detail={`참가 ${topBuyins.buyins}회 · 누적 참가비 ${topBuyins.amount ? wonToMan(topBuyins.amount) + '만' : '-'}`} />}
+                  {topAmount && <HiCard title="최다 참가비 매장" name={topAmount.name} detail={`${wonToMan(topAmount.amount)}만 · 참가 ${topAmount.buyins}회`} />}
                 </div>
               )}
             </section>
@@ -381,8 +421,12 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
           <section className="space-y-2">
             <Head icon="store" tone="cyan" title="매장 이용·참가 내역" count={usage.length} unit="곳" />
-            {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
-              : usage.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="store" />} title="방문·머니인 기록이 아직 없습니다." /></div>
+            {/* 확인 중 → 실패 → 빈 상태 → 목록. 스켈레톤 행 높이(h-14=56px)는 아래 실제 행과 맞춘다
+                (border 2 + py-2 16 + text-sm 20 + mt-1 4 + text-2xs 15 = 57px) — 한 줄짜리
+                "불러오는 중…"(63px)에서 목록(3행 180px)으로 바뀌며 아래 섹션이 통째로 밀리던 것을 없앤다. */}
+            {loading ? <SkeletonList rows={3} rowClassName="h-14" />
+              : usageErr != null ? <LoadErrorCard error={usageErr} what="매장 이용 내역" onRetry={reload} compact />
+              : usage.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="store" />} title="방문·참가 기록이 아직 없습니다." /></div>
                 : <ul className="space-y-1.5">{usage.map((u, i) => (
                   <li key={i} className="rounded-input border border-border-subtle bg-surface-low px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
@@ -391,8 +435,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-muted">
                       <span>방문 <b className="text-ink-secondary tabular-nums">{u.visits}</b>회</span>
-                      <span>머니인 <b className="text-ink-secondary tabular-nums">{u.moneyin}</b>회</span>
-                      <span>누적 <b className="text-accent-300 tabular-nums">{u.amount ? wonToMan(u.amount) + '만' : '-'}</b></span>
+                      <span>참가 <b className="text-ink-secondary tabular-nums">{u.buyins}</b>회</span>
+                      <span>입상 <b className="text-ink-secondary tabular-nums">{rankCountByVenue.get(u.name) ?? 0}</b>회</span>
+                      <span>참가비 <b className="text-accent-300 tabular-nums">{u.amount ? wonToMan(u.amount) + '만' : '-'}</b></span>
                     </div>
                   </li>
                 ))}</ul>}
@@ -400,8 +445,12 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
           {/* 대회 참가(예약) 내역 — 내가 예약했던 대회들 */}
           <section className="space-y-2">
-            <Head icon="calendar-check" tone="indigo" title="대회 참가 내역" count={resv.length} unit="건" desc="참가 예약 기준" />
-            {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+            <Head icon="calendar-check" tone="indigo" title="대회 참가 내역" count={resvErr !== null && resv.length === 0 ? undefined : resv.length} unit="건" desc="참가 예약 기준" />
+            {/* ⚠ 여기서 실패를 '예약 없음'으로 보여주면 손님이 이미 잡아 둔 자리를 다시 예약하거나,
+                예약이 사라진 줄 알고 매장에 전화한다 — 실패는 실패로 말하고 재시도를 준다.
+                단 직전에 받아 둔 목록이 있으면 지우지 않는다(오프라인에서 내역이 사라지지 않게). */}
+            {loading ? <SkeletonList rows={3} rowClassName="h-14" />
+              : resvErr !== null && resv.length === 0 ? <LoadErrorCard error={resvErr} what="대회 참가 내역" onRetry={reload} compact />
               : resv.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="calendar-check" />} title="아직 참가 예약한 대회가 없습니다." /></div>
                 : <ul className="space-y-1.5">{resv.slice(0, 15).map((r) => {
                   const upcoming = r.date >= new Date().toLocaleDateString('en-CA');
@@ -409,29 +458,36 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                   <SwipeCancelRow
                     key={`${r.scheduleId}-${r.reservedAt}`}
                     cancelable={upcoming}
+                    // [F09-b] 예약한 그 대회로(scheduleId 로만 — 제목·날짜 매칭 금지).
+                    //   목록에 없으면 App 이 단건 조회로 확인하고, 그래도 없으면 매장 페이지로 잇는다.
+                    onOpen={onOpenSchedule ? () => onOpenSchedule(r.scheduleId, r.venueId) : undefined}
+                    openLabel={`${r.title} 상세 보기`}
                     onCancel={async () => {
                       try {
                         await cancelMyReservation(r.scheduleId);
                         toast.show('예약을 취소했습니다', 'success');
                         setResv((prev) => prev.filter((x) => x.scheduleId !== r.scheduleId));
+                        onReservationChange?.(); // 홈·카드 '예약 N'·캘린더도 같은 사실을 보게 한다(F06)
                       } catch (e) {
-                        toast.show(e instanceof Error ? e.message : '예약 취소 실패', 'error');
+                        toast.show(msgOf(e, '예약 취소 실패'), 'error');
                       }
                     }}
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    {/* 행 본문이 <button> 안에 들어가므로(상세 이동) 블록 요소 대신 span 으로 짠다 —
+                        <div>/<p> 를 버튼에 넣으면 HTML 로 유효하지 않다. 보이는 모양은 그대로. */}
+                    <span className="flex items-center justify-between gap-2">
                       {/* ⚠ '예정' 은 지난 예약과 다가올 예약을 가르는 **유일한 표시**인데
                           대회명이 길면 그것부터 사라졌다(우측 날짜는 shrink-0 라 살아남았다). */}
-                      <p className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-semibold text-ink-primary">
+                      <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-semibold text-ink-primary">
                         <span className="min-w-0 truncate">{r.title}</span>
                         {upcoming && <span className="shrink-0 rounded-badge bg-emerald-400/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-400">예정</span>}
-                      </p>
+                      </span>
                       <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{r.date}{r.startTime ? ` ${r.startTime.slice(0, 5)}` : ''}</span>
-                    </div>
-                    <p className="mt-0.5 flex flex-wrap gap-x-3 text-2xs text-ink-muted">
+                    </span>
+                    <span className="mt-0.5 flex flex-wrap gap-x-3 text-2xs text-ink-muted">
                       {r.venueName && <span>{r.venueName}</span>}
                       <span>예약명 <b className="text-ink-secondary">{r.displayName}</b></span>
-                    </p>
+                    </span>
                   </SwipeCancelRow>
                   );
                 })}</ul>}
@@ -443,7 +499,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {/* 내 입상 기록 — 매장 순위 등록에서 내 닉네임이 잡힌 이력. '내 전적' 버튼의 앵커. */}
           <section ref={recordsRef} className="scroll-mt-4 space-y-2">
             <Head icon="trophy" tone="violet" title="내 입상 기록" count={ranks.length} unit="회" desc="매장 순위 등록 기준" />
-            {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+            {loading ? <SkeletonList rows={3} rowClassName="h-14" />
+              : ranksErr != null ? <LoadErrorCard error={ranksErr} what="입상 기록" onRetry={reload} compact />
               : !user?.nickname ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">아이디 설정하기</button>} /></div>
               : ranks.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장에서 순위가 등록되면 자동으로 표시됩니다." /></div>
                 : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
@@ -501,7 +558,7 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]" style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
-        <button type="button" onClick={onClose} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
+        <button type="button" onClick={onClose} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
           <Icon name="back" size={20} />
         </button>
         {/* 우상단 칩 — 로그인 없이도 눌러볼 게 하나는 있어야 한다(가벼운 재미 → 도구 탭 유입) */}
@@ -620,7 +677,12 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
 }
 
 /** 예약 행 스와이프 취소 — 모바일은 왼쪽으로 밀고, PC는 호버로 취소 버튼 노출. */
-function SwipeCancelRow({ cancelable, onCancel, children }: { cancelable: boolean; onCancel: () => void; children: React.ReactNode }) {
+function SwipeCancelRow({ cancelable, onCancel, onOpen, openLabel, children }: {
+  cancelable: boolean; onCancel: () => void;
+  /** 행 본문 탭 → 상세로. 없으면 예전처럼 읽기 전용 행이다. */
+  onOpen?: () => void; openLabel?: string;
+  children: React.ReactNode;
+}) {
   const [dx, setDx] = useState(0);
   const [busy, setBusy] = useState(false);
   const start = useRef<{ x: number; y: number; dx: number } | null>(null);
@@ -667,7 +729,15 @@ function SwipeCancelRow({ cancelable, onCancel, children }: { cancelable: boolea
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {children}
+        {onOpen ? (
+          // 스와이프로 취소 버튼이 열려 있는 동안의 탭은 '닫기'다 — 밀어 놓고 누른 손가락이
+          // 엉뚱하게 상세를 열지 않게(취소하려던 행이 화면 밖으로 사라지는 사고 방지).
+          <button type="button" aria-label={openLabel}
+            onClick={() => { if (dx !== 0) { setDx(0); return; } onOpen(); }}
+            className="block w-full text-left">
+            {children}
+          </button>
+        ) : children}
       </div>
     </li>
   );
@@ -806,17 +876,20 @@ function HiCard({ title, name, detail }: { title: string; name: string; detail: 
 
 /** 레벨 도감 — 전체 12레벨·칭호·필요 점수 + 현재 레벨 강조 + 점수 올리는 법. */
 function LevelGuideModal({ points, onClose }: { points: number; onClose: () => void }) {
+  useBackClose(true, onClose); // 손제작 시트도 뒤로가기 겹 등록 — 안 하면 뒤로가기가 '내 정보' 전체를 닫고 keep-alive 로 도감이 열린 채 남는다(점검 #7)
   const idOn = useIdentityEnabled(); // 못 받는 보상을 '받는다'고 적어 두지 않기 위해
   const tiers = allTiers();
   const cur = tierOf(points);
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/70" />
-      <div className="relative max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-dialog border border-border-default bg-surface-mid p-4 animate-slide-up sm:rounded-dialog">
+      {/* 루트는 flex 열 + 본문만 스크롤 → 헤더·× 고정(점검 #27). 하단은 홈 인디케이터 safe-area 를 더해 마지막 항목이 안 가린다(#14). */}
+      <div className="relative flex max-h-[85vh] w-full max-w-md flex-col rounded-t-dialog border border-border-default bg-surface-mid p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-slide-up sm:rounded-dialog sm:pb-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="medal" size={15} /> 레벨 도감</p>
-          <button type="button" onClick={onClose} aria-label="닫기" className="text-ink-muted"><Icon name="close" size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="닫기" className="hit text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
         <p className="mb-3 text-2xs leading-relaxed text-ink-muted">활동점수가 쌓이면 레벨이 오릅니다. 지금은 <b className="text-accent-300">Lv {cur.level} · {cur.title}</b>.</p>
         <ul className="space-y-1.5">
           {tiers.map((t) => {
@@ -844,6 +917,7 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
           · 접속 +1 · 글쓰기 +3 · 댓글 +1<br />
           · 친구 초대(본인인증) +500 · 추천 가입 +300{!idOn && <span className="text-ink-muted">본인인증 준비 중이라 잠시 중단</span>}<br />
           · 시즌 1·2·3위 +1,000 / +500 / +300
+        </div>
         </div>
       </div>
     </div>

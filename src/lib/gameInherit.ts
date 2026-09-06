@@ -80,7 +80,8 @@ export function presetFromSchedule(sc: Schedule): GamePresetData {
       paymentMethods: sc.paymentMethods?.length ? sc.paymentMethods : undefined,
       partners: sc.partners?.length ? sc.partners : undefined,
       prizes: sc.seats?.length ? sc.seats.map((x) => `${x.label} ${x.count}석`) : undefined,
-      events: sc.promotions?.length ? sc.promotions.map((p) => ({ badge: p.badge, title: p.title })) : undefined,
+      // 할인액·자동 레벨까지 통째로 — 예전에 {badge,title} 로 좁혀 프리셋을 거치면 할인이 사라졌다.
+      events: sc.promotions?.length ? sc.promotions.map((p) => ({ ...p })) : undefined,
       posterUrl: sc.posterUrl || undefined,
     }),
     clock: dropEmpty({ regCloseLevel: sc.structure?.lateRegLevels || undefined }),
@@ -165,7 +166,7 @@ export function applyToPoster(d: GamePresetData): Partial<PosterFormData> {
   if (ns.paymentMethods?.length) p.paymentMethods = ns.paymentMethods;
   if (ns.partners?.length) p.partners = ns.partners;
   if (ns.prizes?.length) p.prizes = ns.prizes;
-  if (ns.events?.length) p.events = ns.events.map((e) => ({ badge: e.badge, title: e.title }));
+  if (ns.events?.length) p.events = ns.events.map((e) => ({ ...e }));
   if (ns.posterUrl) p.posterUrl = ns.posterUrl;
   return p;
 }

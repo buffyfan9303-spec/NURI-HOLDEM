@@ -43,6 +43,7 @@ import type { ComponentType, ReactElement, SVGProps } from 'react';
 import { StarIcon as StarSolid, HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import {
   X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Plus, Minus, Check,
+  Maximize2, Minimize2, Gavel,
   CheckCircle2, Trash2, Pencil, Star, Heart, AlertTriangle, Info, Lock, Smartphone, User, Users, Bell,
   QrCode, Calendar, Clock, Settings, Share2, Filter, Image, Download, ExternalLink, Menu,
   Home, RefreshCw, Copy, Send, MessageCircle, Mail, Eye, Bookmark, Flame, Target, Wallet, Gift,
@@ -67,6 +68,7 @@ import {
 export type IconName =
   | 'close' | 'back' | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'chevron-up'
   | 'search' | 'plus' | 'minus' | 'check' | 'check-circle'
+  | 'maximize' | 'minimize' | 'gavel'
   | 'trash' | 'edit' | 'star' | 'star-fill' | 'heart' | 'heart-fill'
   | 'alert' | 'info' | 'lock' | 'smartphone' | 'user' | 'users' | 'bell'
   | 'qr' | 'calendar' | 'clock' | 'settings' | 'share' | 'filter'
@@ -130,6 +132,8 @@ const PATHS: Partial<Record<IconName, ReactElement>> = {
 const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
   close: X, back: ChevronLeft, 'chevron-left': ChevronLeft, 'chevron-right': ChevronRight,
   'chevron-down': ChevronDown, 'chevron-up': ChevronUp, search: Search, plus: Plus, minus: Minus,
+  maximize: Maximize2, minimize: Minimize2,   // 장부 전체화면 토글
+  gavel: Gavel,                               // 2024 TDA 규칙(토너먼트 판정)
   check: Check, 'check-circle': CheckCircle2, trash: Trash2, edit: Pencil, star: Star,
   heart: Heart, alert: AlertTriangle, info: Info, lock: Lock, smartphone: Smartphone, user: User, users: Users,
   bell: Bell, qr: QrCode, calendar: Calendar, clock: Clock, settings: Settings, share: Share2,

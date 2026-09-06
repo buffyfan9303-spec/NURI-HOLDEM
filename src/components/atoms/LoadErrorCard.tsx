@@ -9,7 +9,12 @@
 // 그래서 이 카드가 지켜야 할 것은 두 가지다:
 //   ① 이건 '없음'이 아니라 '못 불러옴'이라고 분명히 말한다.
 //   ② 다시 시도할 수단을 반드시 준다 — 현장에서 네트워크 순단은 흔하고, 대부분 재시도로 풀린다.
-import { msgOf } from '../../lib/dbError';
+//
+// 2026-09-05(U4): 세 번째 갈래로 '권한 없음'을 더 갈랐다. 서버가 42501/403 을 준 경우는
+//   '못 불러옴'과 원인도 처방도 다르다 — 직원이 자기 조작을 의심하며 같은 버튼을 반복해서
+//   누르는 대신, 업주에게 권한을 요청하면 된다는 것을 문구가 말해 준다.
+//   재시도 버튼은 남긴다: 세션 복원 전에 날아간 요청도 42501 로 떨어지고, 그때는 재시도가 답이다.
+import { msgOf, isDenied } from '../../lib/dbError';
 
 export default function LoadErrorCard({ error, onRetry, what = '정보', compact = false }: {
   error?: unknown;
@@ -20,6 +25,7 @@ export default function LoadErrorCard({ error, onRetry, what = '정보', compact
   compact?: boolean;
 }) {
   const detail = msgOf(error, '');
+  const denied = isDenied(error);
   return (
     <div
       role="alert"
@@ -35,11 +41,13 @@ export default function LoadErrorCard({ error, onRetry, what = '정보', compact
         <circle cx="12" cy="17" r="0.6" fill="currentColor" />
       </svg>
       <p className={['font-semibold text-danger-light', compact ? 'text-xs' : 'text-sm'].join(' ')}>
-        {what}을(를) 불러오지 못했습니다
+        {denied ? `${what} 열람 권한이 없습니다` : `${what}을(를) 불러오지 못했습니다`}
       </p>
       {/* 서버가 준 이유가 있으면 그대로 — '저장 실패' 한 문장으로 뭉개면 원인 추적이 끊긴다 */}
       {detail && <p className="text-2xs leading-relaxed text-ink-secondary">{detail}</p>}
-      <p className="text-2xs text-ink-muted">아직 등록된 내용이 없는 것과는 다릅니다.</p>
+      <p className="text-2xs text-ink-muted">
+        {denied ? '내용이 없는 것이 아니라, 이 계정에 열람 권한이 없습니다.' : '아직 등록된 내용이 없는 것과는 다릅니다.'}
+      </p>
       {onRetry && (
         <button type="button" onClick={onRetry}
           className="mt-1 rounded-input border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-bold text-danger-light active:scale-95 transition">

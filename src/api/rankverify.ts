@@ -98,7 +98,7 @@ export interface DomesticRow {
 export async function getDomesticRankings(limit = 30): Promise<DomesticRow[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('get_domestic_rankings', { p_limit: limit });
-  if (error) return [];
+  if (error) throw error; // 실패를 '0건'으로 위장하면 화면이 '아직 없어요'로 굳는다(2026-09-05 점검 #20)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
     nickname: r.nickname, points: Number(r.points ?? 0), totalWon: Number(r.total_won ?? 0),

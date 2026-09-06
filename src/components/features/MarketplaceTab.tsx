@@ -10,6 +10,7 @@ import { MessagesModal, MyListingsModal, MyLikesModal } from './MyMarketModal';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
 import NoticeSection from './NoticeSection';
@@ -62,13 +63,15 @@ interface MarketplaceTabProps {
   onListingsChanged?: () => void;
   /** 최초 목록 로딩 중 — 빈 화면 깜빡임 대신 스켈레톤 표시 */
   loading?: boolean;
+  /** 목록 조회 실패 — null 이 아니면 '글이 없습니다'(빈 상태) 대신 이유와 재시도를 보여준다 */
+  error?: unknown;
 }
 
 type SortBy = 'recent' | 'popular';
 
 function MarketplaceTab({
   listings, notices, onSelect, onSelectNotice, onCreate,
-  canWriteNotice = false, onWriteNotice, onListingsChanged, loading = false,
+  canWriteNotice = false, onWriteNotice, onListingsChanged, loading = false, error = null,
 }: MarketplaceTabProps) {
   const showSkel = useSkeletonGate(loading && listings.length === 0); // MO-6C: 200ms 내 도착하면 스켈레톤 생략
   const { user } = useAuth();
@@ -233,6 +236,10 @@ function MarketplaceTab({
             </div>
           ))}
         </div>
+      ) : error != null && listings.length === 0 ? (
+        // 실패가 빈 상태보다 먼저다 — 뒤에 두면 조회 실패가 '글이 없습니다'로 위장되고,
+        // 판매자는 자기 글이 지워진 줄 안다. 목록이 이미 있으면(스냅샷) 그건 계속 보여준다.
+        <LoadErrorCard error={error} what="장터 목록" onRetry={onListingsChanged} />
       ) : visible.length === 0 ? (
         <div className="rounded-aura border card-aura">
           <EmptyState icon={<Icon name="package" />} title="조건에 맞는 글이 없습니다" />

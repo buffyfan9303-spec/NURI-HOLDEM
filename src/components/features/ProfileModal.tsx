@@ -21,6 +21,7 @@ import {
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../api/push';
 import AvatarCropper from './AvatarCropper';
 import ActivityBadges from '../atoms/ActivityBadges';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import Icon from '../atoms/Icon';
 import TierBadge, { tierProgress, tierCss, tierVividVar } from '../atoms/TierBadge';
 import TitleChip from '../atoms/TitleChip';
@@ -39,7 +40,6 @@ interface ProfilePanelsProps {
   onOpenSupport?: () => void;
   /** 현재 패널 — 탭 상태는 페이지(CustomerDashboardPage)가 소유한다 */
   tab: ProfileTab;
-  onTabChange: (t: ProfileTab) => void;
 }
 
 export type ProfileTab = 'profile' | 'settings' | 'security';
@@ -67,13 +67,20 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSupport, tab, onTabChange }: ProfilePanelsProps) {
+export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSupport, tab }: ProfilePanelsProps) {
   const { user, updateProfile, refreshProfile } = useAuth();
   const toast = useToast();
   // 본인인증·매장이용권 킬스위치(2026-08-29) — 꺼져 있으면 인증 진입부와 '이용권' 프레이밍을 모두 내린다.
   const idOn = useIdentityEnabled();
   const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 });
-  useEffect(() => { if (open) getMyVisitStats().then(setVisitStats).catch(() => {}); }, [open]);
+  // 조회 실패를 {0,0,0} 으로 두면 방문 뱃지가 전부 '미획득'으로 보인다 — 획득한 뱃지를 뺏는 셈이라
+  // 실패는 뱃지 자리에 재시도 카드로 드러낸다(F08).
+  const [visitErr, setVisitErr] = useState<unknown>(null);
+  const loadVisitStats = useCallback(() => {
+    setVisitErr(null);
+    getMyVisitStats().then((v) => { setVisitStats(v); setVisitErr(null); }).catch((e) => setVisitErr(e));
+  }, []);
+  useEffect(() => { if (open) loadVisitStats(); }, [open, loadVisitStats]);
 
   // ── 랭킹 공개 설정(오너 #14) ────────────────────────────────────────────
   // 두 항목은 서로 다른 것을 가린다 — 합치지 않는다:
@@ -158,16 +165,17 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
 
     // 진행 중이던 비밀번호 변경 OTP 복원
     //  (메일 앱을 다녀오며 모바일에서 페이지가 리로드돼도 코드 입력 화면으로 복귀)
+    //  탭 이동은 여기서 하지 않는다 — 리로드 복귀는 App.tsx 가 security 로 열어 주고,
+    //  여기서 탭을 덮으면 5분 동안 프로필·설정 탭 진입이 매번 보안 탭으로 튕긴다.
     const pending = sessionStorage.getItem('nh_pw_otp');
     const fresh = pending && Date.now() - Number(pending) < 5 * 60 * 1000;
     if (fresh) {
-      onTabChange('security');
       setCodeSent(true);
     } else {
       sessionStorage.removeItem('nh_pw_otp');
       setCodeSent(false);
     }
-  }, [open, user, onTabChange]);
+  }, [open, user]);
 
   // ── 비밀번호 변경 = 이메일 인증 OTP (useCallback은 early return 전에 선언) ──
   // 1) 새 비밀번호 입력 후 가입 이메일로 인증코드 발송
@@ -294,7 +302,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
       await updateProfile({
         name:        name.trim(),
         avatarColor: selectedColor,
-        avatarUrl:   avatarFile ? avatarUrl : (avatarPreview || undefined),
+        avatarUrl:   avatarFile ? avatarUrl : (avatarPreview || null), // '' = 사진 제거 → null 로 실어야 패치에 남는다
       });
 
       toast.show('프로필이 저장되었습니다', 'success');
@@ -326,7 +334,9 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
           />
 
           {/* 내 활동 · 뱃지 진열장 */}
-          <ActivityBadges points={user?.activityPoints ?? 0} visits={visitStats.visits} upcoming={visitStats.upcoming} />
+          {visitErr !== null
+            ? <LoadErrorCard error={visitErr} onRetry={loadVisitStats} what="내 활동 기록" compact />
+            : <ActivityBadges points={user?.activityPoints ?? 0} visits={visitStats.visits} upcoming={visitStats.upcoming} />}
           {/* 계정 정보 (읽기 전용) — 2xs 라벨 위 / 값 카드 아래 고정 높이 행 */}
           <div className="space-y-3">
             <div>

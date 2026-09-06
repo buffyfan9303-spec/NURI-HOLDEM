@@ -3,7 +3,7 @@
 // 구성: 시간대 인사 → 지금 등록 가능(라이브 실측) → 포스터 캐러셀 → 오늘·내일 일정(P2).
 // 검색·날짜·필터(탐색 장치)는 이 화면에 없다 — '전체 일정 ›'로 탐색 화면(구 일정 탭)에 위임.
 // GTO(도구) 탭은 그대로 유지 — 탭에서 밀려난 것은 화면이 아니라 '탐색 장치'다.
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Icon from '../atoms/Icon';
 import PosterCarousel from './PosterCarousel';
 import type { HomeBanner } from '../../api/homeBanners';
@@ -12,7 +12,7 @@ import type { Schedule } from '../../api/schedules';
 import type { RegInfo } from '../../lib/regStatus';
 import { compareByStartThenBoost } from '../../lib/scheduleSort';
 import { scheduleStatus } from '../../lib/scheduleStatus';
-import { useTrainerProgress } from '../../lib/trainerProgress';
+import { getEventBoard, type EventBoard } from '../../api/events';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -25,7 +25,7 @@ const openNowSeen = () => { try { return localStorage.getItem(OPENNOW_SEEN) === 
 // 헤드라인의 라이브/일정 문구가 '지금'의 맥락은 이미 담고 있어 정보 손실이 없다.
 
 export default function HomeTab({
-  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, banners = [],
+  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, onEvent, banners = [], bannersConfigured = false,
 }: {
   schedules: Schedule[];
   loaded: boolean;
@@ -34,8 +34,10 @@ export default function HomeTab({
   /** 클락 응답 도착 여부 — 도착 전 '지금 등록 가능' 자리 예약 판단 */
   clocksLoaded: boolean;
   onTools: () => void;
-  /** 관리자 등록 홈 배너(home_banners) — 비면 PosterCarousel 이 기존 하드코딩으로 폴백 */
+  /** 관리자 등록 홈 배너(home_banners) 중 지금 게재 중인 것 */
   banners?: HomeBanner[];
+  /** 표에 행이 하나라도 있는가 — 하드코딩 폴백은 '아직 등록 전'일 때만(관리자가 전부 숨기면 비운다) */
+  bannersConfigured?: boolean;
   /** 캐러셀 로티아레나 배너 → 로티아레나 매장 커뮤니티 페이지 */
   onRotiCommunity: () => void;
   regInfoBySchedule: ReadonlyMap<string, RegInfo>;
@@ -43,6 +45,8 @@ export default function HomeTab({
   onVenue: (venueId: string) => void;
   onExplore: () => void;
   onLive: () => void;
+  /** 이벤트 **별도 페이지**로 (오너 2026-09-06: 게시판 안에 넣지 말 것) */
+  onEvent: () => void;
 }) {
   const now = new Date();
   const today = now.toLocaleDateString('en-CA');
@@ -70,8 +74,10 @@ export default function HomeTab({
   );
 
   // 학습 이어가기 — 로컬 트레이너 진행(신규 fetch 0). 학습 이력이 있는 기기만 노출.
-  const trainer = useTrainerProgress();
-  const showTrainer = trainer.xp > 0 || trainer.today > 0 || trainer.streak > 0;
+  // 이벤트 — 진행 중(live)일 때만 칸이 생긴다. draft·종료면 null 이라 홈에 아무 자리도 차지하지 않는다.
+  // 홈 첫 페인트를 막지 않게 **비차단**으로 받아 온다(실패는 조용히 무시 — 이벤트는 부가 기능이다).
+  const [event, setEvent] = useState<EventBoard | null>(null);
+  useEffect(() => { let ok = true; getEventBoard().then((b) => { if (ok) setEvent(b); }).catch(() => {}); return () => { ok = false; }; }, []);
 
   const fmtLeft = (ms: number) => {
     const m = Math.floor(ms / 60_000);
@@ -171,6 +177,7 @@ export default function HomeTab({
         schedules={schedules}
         onSelect={onSelect}
         banners={banners}
+        bannersConfigured={bannersConfigured}
         onBannerUrl={(url) => {
           // 관리자가 넣은 링크. 외부는 새 탭(noopener — opener 를 통한 탭내빙 차단),
           // 내부 경로는 같은 탭. javascript: 같은 스킴은 애초에 열지 않는다.
@@ -192,6 +199,36 @@ export default function HomeTab({
           if (a === 'tools') onTools(); else if (a === 'explore') onExplore(); else onRotiCommunity();
         }}
       />
+
+      {/* 이벤트 — 일정 **위**(오너 2026-09-06). '이어서 학습' 칸을 대체한다.
+          ⚠ 시작 전(starts_at 미래)인 이벤트는 홈에 광고하지 않는다 — 눌러도 참여가 안 되는 칸은
+             '고장난 버튼'으로 읽힌다. 예약해 둔 캠페인을 미리 켜 두고 점검할 수 있는 여지이기도 하다.
+          ⚠ 카드가 다 떨어진 이벤트도 같은 이유로 내린다 — 종료 조건이 시각이 아니라 재고다.
+          그 칸이 한 줄짜리 텍스트 버튼이었다면 이건 '지금 참여할 수 있는가'가 한눈에 보여야 한다:
+          제목 · 내 참여권 · 남은 카드. 숫자가 없으면 그냥 광고가 되고, 아무도 안 누른다. */}
+      {event && event.status === 'live' && !(event.startsAt && new Date(event.startsAt) > new Date()) && event.cards.some((c) => !c.opened) && (
+        <div className="px-page-x pt-4">
+          <button type="button" onClick={onEvent}
+            className="group relative flex w-full items-center gap-3 overflow-hidden rounded-aura border border-accent-400/40 bg-gradient-to-br from-accent-500/20 via-surface-high to-surface-high px-3 py-3 text-left transition-transform active:scale-[0.99]">
+            <span aria-hidden className="pointer-events-none absolute -right-7 -top-9 h-24 w-24 rounded-full bg-accent-400/25 blur-2xl" />
+            <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
+              <Icon name="gift" size={19} />
+            </span>
+            <span className="relative min-w-0 flex-1">
+              <span className="flex items-center gap-1.5">
+                <span className="shrink-0 rounded-chip bg-accent-300/25 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-accent-200">EVENT</span>
+                <span className="truncate text-sm font-bold text-ink-primary">{event.title}</span>
+              </span>
+              <span className="mt-1 block text-2xs tabular-nums text-ink-muted">
+                {event.myTickets > 0
+                  ? <>참여권 <b className="text-accent-200">{event.myTickets}장</b> · 남은 카드 {event.cards.filter((c) => !c.opened).length}장</>
+                  : <>매장 출석하면 참여권 1장 · 남은 카드 {event.cards.filter((c) => !c.opened).length}장</>}
+              </span>
+            </span>
+            <Icon name="chevron-right" size={15} className="relative shrink-0 text-ink-muted" />
+          </button>
+        </div>
+      )}
 
       {/* 오늘·내일 일정 */}
       <section className="px-page-x pt-4">
@@ -236,24 +273,7 @@ export default function HomeTab({
         )}
       </section>
 
-      {/* 학습 이어가기 — 트레이너 이력 있는 기기만(도구 탭 리텐션 루프의 홈 노출) */}
-      {showTrainer && (
-        <div className="px-page-x pt-3">
-          <button type="button" onClick={onTools}
-            className="flex w-full items-center gap-2.5 rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:bg-surface-high/60">
-            <span className="text-gold-300"><Icon name="target" size={16} /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-ink-primary">
-                {trainer.goalMet ? '오늘 목표 달성. 한 문제 더?' : `이어서 학습 · 오늘 ${trainer.today}/${trainer.goal}`}
-              </span>
-              <span className="block text-2xs tabular-nums text-ink-muted">
-                {trainer.streak > 0 ? `${trainer.streak}일 연속 · ` : ''}XP {trainer.xp.toLocaleString()}
-              </span>
-            </span>
-            <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
-          </button>
-        </div>
-      )}
+      {/* '이어서 학습' 칸은 오너 지시(2026-09-06)로 제거 — 그 자리는 일정 위 이벤트 칸이 대신한다. */}
 
       {/* 커뮤니티 인기글 1행은 오너 지시(2026-08-27)로 제거 — 홈은 일정·포스터에 집중 */}
 

@@ -29,7 +29,7 @@ import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
 import VerifyGateSheet from './components/features/VerifyGateSheet';
 import { NoticeRow } from './components/features/NoticeSection';
-import { getActiveHomeBanners, type HomeBanner } from './api/homeBanners';
+import { getActiveHomeBanners, type HomeBannerFeed } from './api/homeBanners';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
@@ -77,21 +77,23 @@ import { compareByStartThenBoost } from './lib/scheduleSort';
 import { readSnap, writeSnap } from './lib/snapshot';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
+import { commitSchedules } from './lib/scheduleCommit';
 import { scheduleStatus } from './lib/scheduleStatus';
+import { resolveScheduleLink } from './lib/scheduleLink';
 import LoadErrorCard from './components/atoms/LoadErrorCard';
 import { SpringButton } from './components/atoms/StatefulActionButton';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import { bumpScheduleView,
-  getSchedules, createSchedule, updateSchedule, deleteSchedule, subscribeSchedules,
+  getSchedules, getScheduleById, createSchedule, updateSchedule, deleteSchedule, subscribeSchedules,
 } from './api/schedules';
 import { getPostById,
   getVenues, getComments, getPosts, addComment, addPost, togglePostLike, deletePost, subscribePosts, subscribeComments,
   updateVenueDescription, updateVenueImage, updateVenueImages, deleteComment, logActivity,
-  getMyFollowedVenueIds,
 } from './api/community';
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
 import { enablePush, isPushSubscribed, pushSupported } from './api/push';
+import { rememberQrIntent, takeQrIntent } from './lib/pendingQrIntent';
 import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral } from './api/referrals';
 import LevelUpWatcher from './components/features/LevelUpCelebration';
 import BusinessFooter from './components/features/BusinessFooter';
@@ -145,6 +147,8 @@ const CalendarPanelLazy = lazyWithReload(() => import('./components/features/Cal
 const CalendarPanelM  = memo(CalendarPanelLazy);
 const VenueManageTabM = memo(VenueManageTab); // 내 매장 keep-alive 전환에 필수 — 숨김 상태에서 App 재렌더에 끌려가지 않게
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
+// 이벤트는 **별도 페이지**다(오너 2026-09-06) — 탭도 게시판도 아니고, 열 때만 내려받는다.
+const EventPage = lazyWithReload(() => import('./components/features/EventPage'));
 import type { MeTab } from './components/features/CustomerDashboardPage'; // 타입만(런타임 0)
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
 const ClockRemote    = lazyWithReload(() => import('./components/features/clock/ClockRemote'));
@@ -752,7 +756,7 @@ function PendingApprovalBanner() {
 
 // 데스크탑(lg+) 여부 — 일정탐색 2-pane 분기용
 export default function App() {
-  const { user, isAdmin, isOwner, loading: authLoading } = useAuth();
+  const { user, isAdmin, isOwner, loading: authLoading, refreshProfile } = useAuth();
   const toast = useToast();
 
   // UI 상태
@@ -770,6 +774,7 @@ export default function App() {
   // 알림 딥링크 → 내 매장 탭의 특정 섹션(예: 📒 장부 시작 → 장부)
   const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
+  const [eventOpen, setEventOpen] = useState(false); // 이벤트 별도 페이지
   const [myBuyinReqs, setMyBuyinReqs] = useState<MyBuyinRequest[]>([]); // 손님 본인 오늘 바인요청(상태 배너)
   const [updateReady, setUpdateReady] = useState(false); // 새 버전(SW) 감지 → 새로고침 배너
   const [pushNudge, setPushNudge] = useState(false); // 운영자 푸시 권한 온보딩 배너(설치형·1회)
@@ -1018,8 +1023,6 @@ export default function App() {
     bumpScheduleView(sid).catch(() => {});
   }, [openSchedule?.id]);
   const [displayTarget, setDisplayTarget] = useState<{ venueId: string; gameSeq: number } | null>(null); // 관전/대형 디스플레이
-  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set()); // 팔로우한 매장 id
-  const [followedOnly, setFollowedOnly] = useState(false); // 일정탐색: 팔로우 매장 포스터만
   // 📍 가까운 순(Phase 14 보류 해제 — venues.lat/lng 신설): 위치 1회 요청, 거부 시 지역 필터 안내.
   const [nearSort, setNearSort] = useState(false);
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
@@ -1048,16 +1051,26 @@ export default function App() {
   useEffect(() => {
     const cv = new URLSearchParams(window.location.search).get('checkin');
     if (!cv) return;
-    if (!user) { setAuthOpen(true); return; }
+    // ⚠ **세션이 복원되기 전에 판단하지 않는다.** 부팅 첫 커밋의 user 는 항상 null 이라
+    //   (AuthContext 가 프로필을 네트워크로 받아온다) 이 가드가 없으면 **이미 로그인한 손님**이
+    //   매장 QR 을 폰 카메라로 찍을 때마다 로그인 창이 먼저 뜬다. 게다가 그 창을 닫는 코드가 없어
+    //   잠시 뒤 체크인이 성공해도 손님은 '로그인 폼 위에 뜬 체크인 완료 토스트'를 본다(2026-09-06 감사).
+    if (authLoading) return;
+    if (!user) {
+      // 카카오·구글 로그인은 페이지를 떠났다 돌아오는데 그때 ?checkin= 이 사라진다 —
+      // 하려던 일을 적어 두고(30분 수명), 로그인 후 아래 '보류된 QR' effect 가 이어서 처리한다.
+      rememberQrIntent({ kind: 'checkin', venueId: cv, gameSeq: null });
+      setAuthOpen(true);
+      return;
+    }
     checkIn(cv)
-      .then(async (name) => {
-        const streak = await getMyCheckinStreak().catch(() => 0);
-        const bonus = streak > 0 && streak % 7 === 0 ? ` · 7일 연속 보너스 +10점!` : '';
+      .then(async ({ name, points, streak: served }) => {
+        // 점수·연속일은 서버(check_in, 20260905k)가 단일 출처 — 같은 날 두 번째 체크인은 points 0 이라 '+N점' 을 붙이지 않는다.
+        const streak = served ?? await getMyCheckinStreak().catch(() => 0);
+        // 프로필 점수·랭킹 내 순위·레벨업 축하가 재로그인 없이 따라오도록
+        await refreshProfile().catch(() => {});
         const fire = streak >= 2 ? ` · ${streak}일 연속` : '';
-        // 🎁 오픈 이벤트(~2026-08-03): 출석 도장 2배 — 서버(check_in)와 동일한 KST 날짜 게이트
-        const kstToday = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
-        const eventOn = kstToday >= '2026-07-20' && kstToday <= '2026-08-03';
-        toast.show(`${name || '매장'} 체크인 완료! 출석 도장 +${eventOn ? '6점 (오픈 이벤트 2배!)' : '3점'}${fire}${bonus}`, 'success');
+        toast.show(`${name || '매장'} 체크인 완료!${points > 0 ? ` 출석 도장 +${points}점` : ''}${fire}`, 'success');
         // 매장 QR 스캔은 '그 매장에 와 있다'는 뜻 — 홈이 아니라 그 매장 페이지(오늘 대회·내 활동)에 착지
         setOpenVenueId(cv);
       })
@@ -1070,30 +1083,64 @@ export default function App() {
     // user '객체 참조'가 아닌 id 기준 — 로그인 직후 프로필 갱신으로 참조만 바뀌어도
     // effect가 재실행되어 체크인 RPC가 중복 호출되던 문제 방지
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
+
+  /** 바인(참가) 요청 시작 — 게임이 여럿이면 선택 모달, 하나(또는 지정)면 바로 전송.
+   *  ?buyin= 딥링크와 이용권 시트의 QR 스캔이 **같은 함수**를 쓴다(선택 모달이 두 벌이 되지 않게). */
+  const startBuyinRequest = useCallback((venueId: string, gameSeq: number | null) => {
+    const submit = (g: number | null) => ledgerMod().then((m) => m.requestBuyin(venueId, g))
+      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요. 운영자 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
+      .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'));
+    if (gameSeq != null && gameSeq > 0) { submit(gameSeq); return; } // 테이블별 QR — 게임이 이미 정해져 있다
+    (async () => {
+      const games = await ledgerMod().then((m) => m.venueTodayGames(venueId)).catch(() => [] as { gameSeq: number; title: string }[]);
+      if (games.length > 1) { setBuyinPick({ venueId, games }); return; }
+      submit(games[0]?.gameSeq ?? null);
+    })();
+  }, [toast]);
 
   // ── QR 자가 바인요청 (?buyin=<venueId>) — 로그인 회원만, 운영자 승인 대기 ──
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const bv = sp.get('buyin');
     if (!bv) return;
-    if (!user) { setAuthOpen(true); return; }
-    const gm = sp.get('game'); // 테이블별 QR — 지정 게임(game_seq)
+    if (authLoading) return;              // ①과 같은 이유 — 세션 복원 전 판단 금지
+    const gmRaw = sp.get('game');
+    const gRaw = gmRaw ? parseInt(gmRaw, 10) : NaN;
+    if (!user) {
+      rememberQrIntent({ kind: 'buyin', venueId: bv, gameSeq: Number.isFinite(gRaw) && gRaw > 0 ? gRaw : null });
+      setAuthOpen(true);
+      return;
+    }
     const url = new URL(window.location.href);
     url.searchParams.delete('buyin'); url.searchParams.delete('game');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    const submitDirect = (g: number | null) => ledgerMod().then((m) => m.requestBuyin(bv, g))
-      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요. 운영자 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
-      .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'));
-    const gNum = gm ? parseInt(gm, 10) : NaN;
-    if (Number.isFinite(gNum) && gNum > 0) { submitDirect(gNum); return; } // 게임 지정 QR → 바로 요청
-    (async () => {
-      const games = await ledgerMod().then((m) => m.venueTodayGames(bv)).catch(() => [] as { gameSeq: number; title: string }[]);
-      if (games.length > 1) { setBuyinPick({ venueId: bv, games }); return; } // 게임 여러 개면 선택 모달
-      submitDirect(games[0]?.gameSeq ?? null);
-    })();
+    startBuyinRequest(bv, Number.isFinite(gRaw) && gRaw > 0 ? gRaw : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, authLoading]);
+
+  // ── 보류된 QR 의도 — 로그인 왕복(카카오·구글)에서 쿼리가 사라진 뒤 이어서 처리 ──────
+  // URL 에 파라미터가 남아 있으면 위 두 effect 가 이미 처리하므로 여기서는 건드리지 않는다.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get('checkin') || sp.get('buyin')) return;
+    const it = takeQrIntent();           // 읽으면서 지운다 — 두 번 소비되면 출석이 두 번 찍힌다
+    if (!it) return;
+    if (it.kind === 'checkin') {
+      checkIn(it.venueId)
+        .then(async ({ name, points, streak: served }) => {
+          const streak = served ?? await getMyCheckinStreak().catch(() => 0);
+          await refreshProfile().catch(() => {});
+          toast.show(`${name || '매장'} 체크인 완료!${points > 0 ? ` 출석 도장 +${points}점` : ''}${streak >= 2 ? ` · ${streak}일 연속` : ''}`, 'success');
+          setOpenVenueId(it.venueId);
+        })
+        .catch((e) => toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'));
+    } else {
+      startBuyinRequest(it.venueId, it.gameSeq);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]);
 
   // 손님: 오늘 내가 보낸 바인 요청 상태(배너) — 로그인 시 로드 + 창 포커스 시 갱신(운영자 승인 반영)
   useEffect(() => {
@@ -1114,6 +1161,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // ── 이벤트 딥링크 (?event=1) — 매장이 공유하거나 QR 로 찍어 바로 들어오는 경로.
+  //    홈 카드는 시작 전 이벤트를 광고하지 않으므로, 예약해 둔 캠페인을 미리 열어 보는 통로이기도 하다.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (!sp.get('event')) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('event');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    setEventOpen(true);
+  }, []);
+
   // ── QR 회원가입 (?signup=1) — 매장 QR 옆 가입 QR 스캔 시 회원가입 모달 바로 열기 ──
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
@@ -1121,9 +1179,11 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.delete('signup');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    // deps 가 [] 이던 시절에는 이 `!user` 가 **언제나 참**이었다(첫 커밋의 user 는 항상 null) —
+    // 이미 가입한 단골이 카운터의 가입 QR 을 찍으면 가입 폼이 떴다(2026-09-06 감사).
     if (!user) { setAuthMode('signup-user'); setAuthOpen(true); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user?.id, authLoading]);
 
   // ── 친구 초대 (?ref=<추천코드>) — 코드 기억 + 비로그인 시 가입 유도 ──
   useEffect(() => {
@@ -1267,6 +1327,13 @@ export default function App() {
     // visitedTabs 는 안정 Set 인스턴스 — 참조 불변
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedulesLoaded, isOwner, isAdmin, user?.role]);
+  // 예약이 바뀌었다는 신호 하나(F06) — 값이 아니라 '다시 읽어라'만 나른다.
+  // 왜 카운터인가: 예약/취소는 상세 모달(ReserveBox)과 '내 정보'(스와이프 취소) 두 곳에서 일어나는데
+  // 그 결과를 보는 곳은 App 이 들고 있는 셋(홈 '오늘 예약한 대회' · 카드 '예약 N' · 캘린더 탭)이다.
+  // 새 전역 store·이벤트 버스 대신 myStoreHomeNonce 와 같은 조리법(카운터 1 + 콜백 prop)으로 잇는다.
+  // ⚠ 숫자는 낙관 증감이 아니라 서버 재조회로만 바꾼다 — 실패해도 화면 숫자가 서버와 갈리지 않는다.
+  const [resVersion, setResVersion] = useState(0);
+  const bumpResVersion = useCallback(() => setResVersion((v) => v + 1), []);
   // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회.
   // ⚠ [schedules] 배열 의존이면 스냅샷→네트워크 교체(내용 동일)에도 재조회·리렌더가 났다 —
   //   id 집합 문자열 키로 좁혀 '같은 대회 목록'이면 건너뛴다(PastTournaments pastKey 패턴).
@@ -1277,7 +1344,8 @@ export default function App() {
   useEffect(() => {
     if (!resIdsKey) { setBrowseResCounts({}); return; }
     getReservationCounts(resIdsKey.split('|')).then(setBrowseResCounts).catch(() => {});
-  }, [resIdsKey]);
+    // resVersion: 내가 예약/취소한 직후 '예약 N'·'마감 임박'이 낡은 채 남지 않게 한 번 더 읽는다
+  }, [resIdsKey, resVersion]);
   const [venues,        setVenues]        = useState<Venue[]>(() => readSnap<Venue[]>('venues') ?? []);
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
   const [comments,      setComments]      = useState<Comment[]>([]);
@@ -1285,8 +1353,12 @@ export default function App() {
   // 쪽지 미읽음 — Realtime 금지(연결 예산): 90s 폴링 + 패널 열 때(NotificationPanel 이 콜백으로 갱신)
   const [unreadMsgs,    setUnreadMsgs]    = useState(0);
   const [posts,         setPosts]         = useState<CommunityPost[]>(() => readSnap<CommunityPost[]>('posts') ?? []);
+  const [postsErr,      setPostsErr]      = useState<unknown>(null);
   const [listings,      setListings]      = useState<MarketplaceListing[]>(() => readSnap<MarketplaceListing[]>('listings') ?? []);
   const [marketLoaded,  setMarketLoaded]  = useState(() => readSnap<MarketplaceListing[]>('listings') != null); // 장터 첫 로딩 여부 — 스냅샷 있으면 스켈레톤 생략
+  // 장터 조회 실패 — 이게 없던 동안 실패는 '조건에 맞는 글이 없습니다'(빈 상태)로 보였다.
+  // LoadErrorCard 주석이 기록한 그 사고(등록이 100% 실패하는데 '매물이 없네'로 보임)의 목록 쪽 잔재다.
+  const [marketError,   setMarketError]   = useState<unknown>(null);
   const [notices,       setNotices]       = useState<MarketplaceNotice[]>(() => readSnap<MarketplaceNotice[]>('notices') ?? []);
   // MO-7B: 공지 스냅샷조차 없는 최초 방문에서 섹션이 늦게 끼어들며 목록을 밀지 않도록,
   // 응답 전에는 섹션 셸(헤더만)을 자리에 둔다. 스냅샷이 있으면 이미 확정 상태.
@@ -1379,19 +1451,37 @@ export default function App() {
   // keep-alive 탭들의 memo 를 깨지 않게. 동일 참조 반환 시 React 는 리렌더 자체를 생략한다.
   // (목록이 작아 stringify 비용은 수 ms — memo 파손 비용보다 훨씬 싸다)
   const sameJson = (a: unknown, b: unknown) => { try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; } };
+
+  // 포스터 삭제 유예 큐 — schedules 삭제는 예약(schedule_reservations)과 문의(comments)를
+  // FK CASCADE 로 물리 삭제한다(ledger_sessions 만 SET NULL 로 살아남는다).
+  // 지운 뒤 되살릴 방법이 없으므로 '5초 동안 서버로 안 보내기'가 유일한 실행취소다.
+  // ⚠ 선언 위치가 아래 재조회 헬퍼보다 위여야 한다 — 유예 중인 id 를 재조회 커밋에서 걸러야 하기 때문.
+  const posterDeleteQ = useMemo(() => createUndoQueue(5000), []);
+  // 일정 커밋 순서 가드(F11) — 이 ref 가 '가장 마지막에 발행된 요청' 번호다.
+  // 기존 관행 그대로(AvailabilityField reqIdRef · NuriPosLedger reloadSeq): 발행 시 ++, 커밋 전 비교.
+  // 커밋 지점이 둘(아래 reloadSchedules · 부팅 allSettled)이라 판정은 commitSchedules 하나로 모았다.
+  const schedReqRef = useRef(0);
   const reloadSchedules = useCallback(() => {
+    const my = ++schedReqRef.current;
     getSchedules()
       .then((v) => {
-        setSchedules((prev) => (sameJson(prev, v) ? prev : v)); setSchedulesError(null);
-        writeSnap('schedules', v); // 다음 방문의 '즉시 콘텐츠' — realtime 재조회도 이 길을 지나므로 자동 최신화
         // 서드파티(GA·AdSense) 게이트 해제 — **네트워크 응답** 이 왔다는 신호.
         // ⚠ schedulesLoaded 에 걸면 안 된다: 캐시 복원이 그 플래그를 부팅 즉시 켜므로
         //   광고가 재검증 요청과 대역폭을 다시 다투게 된다(이 게이트를 만든 이유가 무색해짐).
+        // 늦게 온 응답이라 커밋을 버리더라도 '응답은 왔다'는 사실은 그대로다 → 가드 밖.
         window.dispatchEvent(new Event('nuri:first-data-requested'));
+        const next = commitSchedules(v, my, schedReqRef.current, posterDeleteQ.keys());
+        if (!next) return; // 더 새 요청이 이미 나갔다 — 구값으로 화면도 스냅샷도 되돌리지 않는다
+        setSchedules((prev) => (sameJson(prev, next) ? prev : next)); setSchedulesError(null);
+        writeSnap('schedules', next); // 다음 방문의 '즉시 콘텐츠' — realtime 재조회도 이 길을 지나므로 자동 최신화
       })
-      .catch((e) => setSchedulesError(e))
+      // 오류는 가드 안 — 늦게 실패한 구요청이 새 성공의 '오류 없음'을 덮으면
+      // 멀쩡한 목록 위(정확히는 목록이 0건일 때) LoadErrorCard 가 뜬다.
+      .catch((e) => { if (my === schedReqRef.current) setSchedulesError(e); })
+      // 반면 '로딩 끝' 은 가드하지 않는다 — 최신 요청이 영영 안 끝나면 스켈레톤이 갇힌다.
+      // 어느 응답이든 한 번 왔으면 스켈레톤은 걷고, 화면은 스냅샷/직전 성공값을 보여준다(기존 동작).
       .finally(() => setSchedulesLoaded(true));
-  }, []);
+  }, [posterDeleteQ]);
   // 당겨서 새로고침(유튜브·당근) — 최상단에서 아래로 56px+ 당기면 갱신
   // [DS] MO-4: 드래그 값은 React 상태 밖(§20.5 #2) — 예전엔 touchmove 마다 setPtr 로
   // App 전체가 프레임당 리렌더됐고, in-flow height 인디케이터가 리스트 전체를 매 프레임 밀었다.
@@ -1451,12 +1541,14 @@ export default function App() {
     } else ptrSettle(-52, '0');
   };
   const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); }).catch(() => {}); }, []);  
-  const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); writeSnap('posts', v); }).catch(() => {}); }, []);
+  // 조회 실패를 [] 로 두면 게시판이 '첫 게시글을 남겨보세요'(빈 상태)로 위장한다 — 실패는 상태로 올린다.
+  //  직전에 성공한 목록은 지우지 않는다(오프라인에서 읽던 글이 사라지지 않게).
+  const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); setPostsErr(null); writeSnap('posts', v); }).catch((e) => setPostsErr(e)); }, []);
   const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
   const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); writeSnap('notices', v); setNoticesLoaded(true); }).catch(() => {}); }, []);
   // 홈 상단 배너(home_banners) — 관리자가 등록한 것만. 비면 PosterCarousel 이 기존 하드코딩으로 폴백한다.
   // 스냅샷 캐시를 쓰는 이유: 첫 화면 최상단이라 늦게 도착하면 캐러셀이 통째로 밀린다(CLS).
-  const [homeBanners, setHomeBanners] = useState<HomeBanner[]>(() => readSnap<HomeBanner[]>('home-banners') ?? []);
+  const [homeBanners, setHomeBanners] = useState<HomeBannerFeed>(() => readSnap<HomeBannerFeed>('home-banners') ?? { banners: [], configured: false });
   const reloadHomeBanners = useCallback(() => {
     getActiveHomeBanners().then((v) => { setHomeBanners(v); writeSnap('home-banners', v); }).catch(() => {});
   }, []);
@@ -1469,19 +1561,25 @@ export default function App() {
     // 실측(2026-08-17 끊김 심층분석): 부팅 5초간 App 풀 리렌더가 ~17회였다 — setState 가
     // 각자 다른 마이크로태스크에서 발화한 탓. React 18 자동 배칭은 '같은 콜백 안'만 묶으므로,
     // 세 응답을 allSettled 로 모아 **한 콜백에서 일괄 반영**한다(3렌더→1렌더).
+    // 부팅 조회도 reloadSchedules 와 같은 번호표를 뽑는다 — 둘은 같은 state·같은 스냅샷을 쓰므로
+    // 한쪽만 가드하면 '늦게 온 부팅 응답이 복귀 재조회 결과를 덮는' 경로가 그대로 남는다(F11).
+    const my = ++schedReqRef.current;
     Promise.allSettled([getSchedules(), getVenues(), getNotices()]).then(([sr, vr, nr]) => {
       if (sr.status === 'fulfilled') {
-        setSchedules((prev) => (sameJson(prev, sr.value) ? prev : sr.value));
-        setSchedulesError(null);
-        writeSnap('schedules', sr.value);
-        window.dispatchEvent(new Event('nuri:first-data-requested')); // 광고 게이트(응답 후)
-      } else setSchedulesError(sr.reason);
-      setSchedulesLoaded(true);
+        window.dispatchEvent(new Event('nuri:first-data-requested')); // 광고 게이트(응답 후 — 커밋 여부와 무관)
+        const next = commitSchedules(sr.value, my, schedReqRef.current, posterDeleteQ.keys());
+        if (next) {
+          setSchedules((prev) => (sameJson(prev, next) ? prev : next));
+          setSchedulesError(null);
+          writeSnap('schedules', next);
+        }
+      } else if (my === schedReqRef.current) setSchedulesError(sr.reason);
+      setSchedulesLoaded(true); // 스켈레톤은 가드하지 않는다(reloadSchedules 의 finally 와 같은 이유)
       if (vr.status === 'fulfilled') { setVenues((prev) => (sameJson(prev, vr.value) ? prev : vr.value)); writeSnap('venues', vr.value); }
       if (nr.status === 'fulfilled') { setNotices(nr.value); writeSnap('notices', nr.value); setNoticesLoaded(true); }
     });
-     
-  }, []);
+    // posterDeleteQ 는 useMemo([]) 안정 참조 — 의존성에 넣어도 부팅 1회 그대로다
+  }, [posterDeleteQ]);
   // (서드파티 게이트 신호는 reloadSchedules 의 네트워크 성공 콜백에서 발사 — 위 주석 참고.
   //  schedulesLoaded 기반이었으나 캐시 복원이 그 플래그를 즉시 켜게 되면서 이전했다.)
 
@@ -1506,9 +1604,11 @@ export default function App() {
     // 5개 응답을 한 콜백에서 일괄 반영(5렌더→1렌더) — 부팅 리렌더 폭풍 계측의 직접 조치
     Promise.allSettled([getPosts(), getComments({}), getListings(), getVenueRatings(), clockMod().then((m) => m.getRunningClocks())])
       .then(([pr, cr, lr, rr, kr]) => {
-        if (pr.status === 'fulfilled') { setPosts(pr.value); writeSnap('posts', pr.value); }
+        if (pr.status === 'fulfilled') { setPosts(pr.value); setPostsErr(null); writeSnap('posts', pr.value); }
+        else setPostsErr(pr.reason);
         if (cr.status === 'fulfilled') setComments(cr.value);
         if (lr.status === 'fulfilled') { setListings(lr.value); writeSnap('listings', lr.value); }
+        setMarketError(lr.status === 'rejected' ? lr.reason : null);
         setMarketLoaded(true);
         if (rr.status === 'fulfilled') setVenueRatings(rr.value);
         if (kr.status === 'fulfilled') { setLiveCount(kr.value.length); setLiveClocks(kr.value); }
@@ -1641,7 +1741,8 @@ export default function App() {
       case 'community':
         reloadPosts(); reloadComments();
         // 장터는 커뮤니티 서브탭 — 복귀 갱신도 함께(은퇴한 market 탭의 케이스 흡수)
-        getListings().then((l) => { setListings(l); setMarketLoaded(true); writeSnap('listings', l); }).catch(() => setMarketLoaded(true));
+        getListings().then((l) => { setListings(l); setMarketError(null); setMarketLoaded(true); writeSnap('listings', l); })
+          .catch((e) => { setMarketError(e); setMarketLoaded(true); });
         break;
       case 'admin':
         reloadSchedules(); reloadVenues();
@@ -1739,12 +1840,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, activeTab, authLoading]);
 
-  // 팔로우한 매장 id 로드(로그인 시)
-  useEffect(() => {
-    if (!user) { setFollowedIds(new Set()); setFollowedOnly(false); return; }
-    getMyFollowedVenueIds().then((ids) => setFollowedIds(new Set(ids))).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  // ⚠ '팔로우 매장만' 필터가 2026-08-27(f2e1d0b) 에 화면에서 빠진 뒤로, App 이 들고 있던
+  //   팔로우 목록(followedIds)은 소비자가 0 이었다 — 로그인할 때마다 쓰지 않는 조회를 한 번 더 하고 있었다.
+  //   오너 결정(2026-09-06)으로 필터를 걷어내면서 이 로드도 함께 제거한다.
+  //   매장 페이지의 팔로우 버튼은 자기 상태를 스스로 관리한다(src/lib/venueFollow.ts).
 
   const visibleSchedules = useMemo(() => {
     const list = schedules.filter((s) => s.approved);
@@ -1771,8 +1870,7 @@ export default function App() {
       const matchGr = !searchState.grade || s.grade === searchState.grade; // 등급 축(Phase 14)
       // 예산 축(UX-2) — 바이인 상한(원). 금액 미입력(0)은 통과(무료·미정 대회를 숨기지 않는다)
       const matchB = !searchState.budget || (s.buyIn?.amount ?? 0) <= searchState.budget;
-      const matchFollow = !followedOnly || (!!s.venueId && followedIds.has(s.venueId));
-      return matchQ && matchD && matchR && matchF && matchG && matchC && matchGr && matchB && matchFollow;
+      return matchQ && matchD && matchR && matchF && matchG && matchC && matchGr && matchB;
     })
       // 정렬이 아예 없어서 '업주가 정한 진열 순서'로 나왔다 — 손님은 '지금 갈 수 있는 게 뭐지'를
       // 시간순으로 훑을 수가 없었다. 1차 키는 날짜+시각, 부스트는 동시각 tie-break(scheduleSort.ts).
@@ -1788,7 +1886,7 @@ export default function App() {
         }
         return compareByStartThenBoost(a, b);
       });
-  }, [schedules, searchState, followedOnly, followedIds, nearSort, myPos, venueById]);
+  }, [schedules, searchState, nearSort, myPos, venueById]);
   // 날짜 슬라이더 점 표시용 — 승인된 대회가 있는 날짜 집합(헛탭 방지)
   const eventDates = useMemo(() => new Set(schedules.filter((sc) => sc.approved).map((sc) => sc.date)), [schedules]);
   // 📍 가까운 순일 때 카드에 실제 거리를 보여준다 — 정렬만 하고 숫자를 감추면 체감·검증 불가
@@ -1805,12 +1903,20 @@ export default function App() {
     .map((r) => ({ venueId: r.venueId, venueName: r.venueName, gameSeq: r.gameSeq })), [myBuyinReqs]);
   // 🎫 오늘 예약한 대회 — 대회 당일 홈에서 '내 예약'이 안 보이던 격차(예약→방문 전환 지원)
   const [myTodayRes, setMyTodayRes] = useState<MyReservationRow[]>([]);
-  useEffect(() => {
-    if (!user) { setMyTodayRes([]); return; }
+  // 조회 실패를 빈 목록으로 두면 대회 당일 홈에서 '내 예약'이 통째로 사라진다 —
+  // 사용자는 예약이 취소된 줄 알고 다시 예약한다. 실패는 한 줄로 드러내고 재시도를 준다(F08).
+  const [myTodayResErr, setMyTodayResErr] = useState<unknown>(null);
+  const loadMyTodayRes = useCallback(() => {
+    if (!user) { setMyTodayRes([]); setMyTodayResErr(null); return; }
+    setMyTodayResErr(null);
     const today = new Date().toLocaleDateString('en-CA');
-    getMyReservations(30).then((list) => setMyTodayRes(list.filter((r) => r.date === today))).catch(() => {});
+    getMyReservations(30)
+      .then((list) => { setMyTodayRes(list.filter((r) => r.date === today)); setMyTodayResErr(null); })
+      .catch((e) => setMyTodayResErr(e)); // 직전 성공 목록은 지우지 않는다
+    // resVersion: 상세 모달·'내 정보' 어느 쪽에서 예약/취소해도 홈 '오늘 예약한 대회'가 따라온다(F06)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, resVersion]);
+  useEffect(() => { loadMyTodayRes(); }, [loadMyTodayRes]);
 
   // ── 핸들러 ─────────────────────────────────────────────────────────────
 
@@ -1970,7 +2076,8 @@ export default function App() {
   // 뒤로가기로 풀스크린 디스플레이 닫기 — App 레벨(초기 null→effect 세팅)이라 StrictMode 더블인보크 레이스 회피
   useBackClose(displayTarget !== null, closeDisplay);
   // 뒤로가기로 내 정보(지갑) 페이지 닫기 — 동일하게 App 레벨 게이트
-  useBackClose(voucherWalletOpen, () => setVoucherWalletOpen(false));
+  //  X 버튼(CustomerDashboardPage)과 같은 결과 — 비밀번호 OTP 대기 마커도 함께 내린다
+  useBackClose(voucherWalletOpen, () => { sessionStorage.removeItem('nh_pw_otp'); setVoucherWalletOpen(false); });
 
   // [DS] MO-8B: 포스터 모핑 — '지금 열리는' 카드 1장에만 view-transition-name 을 부여한다.
   // 이름이 문서에 2개 이상이면 전환이 통째로 취소되므로, 열림 중에는 카드가 이름을 잃고
@@ -1985,13 +2092,55 @@ export default function App() {
       () => startTabTransition(() => setOpenSchedule(s)),
     );
   }, []);
+  // [F09] '내 정보'(예약 내역·알림 미리보기)에서 연 상세는 닫을 때 **내 정보로 돌아온다**.
+  //   대시보드(z-60)가 page 모달(z-55)을 덮으므로 여는 쪽이 먼저 대시보드를 닫아야 한다 —
+  //   z-index 를 올리는 대신 기존 '한 겹씩' 오버레이 계약을 그대로 두고, 이 ref 로 출발지만 기억한다.
+  //   (예전엔 닫으면 홈으로 떨어졌다.)
+  const meReturnRef = useRef(false);
   const closeSchedule = useCallback(() => {
+    const backToMe = meReturnRef.current;
+    meReturnRef.current = false;
+    const commit = () => { setOpenSchedule(null); if (backToMe) setVoucherWalletOpen(true); };
     withViewTransition(
-      () => flushSync(() => setOpenSchedule(null)), // new 쪽: 카드가 이름을 되찾아 역모핑
-      () => setOpenSchedule(null),
+      () => flushSync(commit), // new 쪽: 카드가 이름을 되찾아 역모핑
+      commit,
     );
     window.setTimeout(() => setVtPosterId(null), 350); // 역모핑 종료 후 이름 해제(전환 중 제거 금지)
   }, []);
+  // 상세가 closeSchedule 을 거치지 않고 닫히는 길이 여럿이다(상세 안 매장 이름 탭 → handleVenueClick,
+  // 로고 → handleHome, 포스터 삭제). 그때 복귀 표시가 남아 있으면 **다음에 연 아무 상세**를 닫을 때
+  // 엉뚱하게 '내 정보' 가 열린다 — 상세가 닫히는 모든 길에서 한 곳으로 지운다.
+  useEffect(() => { if (openSchedule === null) meReturnRef.current = false; }, [openSchedule]);
+
+  // [F09] scheduleId 하나로 '정확히 그 대회' 를 연다 — 알림·홈 오늘예약·내 정보 예약 행·캘린더 공용.
+  //   목록(schedules)은 browse/live/my-store/admin 탭에서만 갱신되므로, 다른 탭에 머문 사용자에게
+  //   살아 있는 포스터가 목록에 없을 수 있다. 없다고 '내려간 포스터' 로 단정하지 않고
+  //   권한을 지키는 단건 조회(getScheduleById, RLS 는 목록과 동일)로 한 번 더 확인한다.
+  //   조리법은 이미 쓰고 있는 /posts/:id 폴백과 같다.
+  const openScheduleById = useCallback((id: string, opts?: { returnToMe?: boolean; fallbackVenueId?: string | null }) => {
+    const show = (s: Schedule) => {
+      if (opts?.returnToMe) { meReturnRef.current = true; setVoucherWalletOpen(false); }
+      handleScheduleSelect(s);
+    };
+    const t = resolveScheduleLink(schedules, id);
+    if (t.kind === 'open') { show(t.schedule); return; }
+    if (t.kind === 'unavailable') { toast.show('대회 정보를 확인할 수 없습니다', 'info'); return; }
+    getScheduleById(t.id).then((fetched) => {
+      const r = resolveScheduleLink(schedules, t.id, fetched);
+      if (r.kind === 'open') { show(r.schedule); return; }
+      // 내려갔거나 아직 승인 전(= 볼 권한 없음). 매장이라도 알면 그쪽으로 잇는다(막다른 길 금지).
+      if (opts?.fallbackVenueId) {
+        setVoucherWalletOpen(false); // 매장 페이지(z-40)는 대시보드(z-60) 아래라 먼저 비켜준다
+        toast.show('대회 정보를 확인할 수 없어 매장 페이지로 이동합니다', 'info');
+        handleVenueClick(opts.fallbackVenueId);
+        return;
+      }
+      toast.show('대회 정보를 확인할 수 없습니다. 종료되었거나 내려갔을 수 있어요', 'info');
+    }).catch(() => {
+      // 조회 '실패' 를 '없음' 으로 위장하지 않는다 — 사용자는 다시 눌러 재시도할 수 있다.
+      toast.show('대회 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요', 'error');
+    });
+  }, [schedules, handleScheduleSelect, handleVenueClick, toast]);
 
   // ── 오버레이 '자리 예약'(뒤로가기 겹) ────────────────────────────────────
   // 오너 지적: "페이지에 들어갔다가 나오면 갑자기 홈으로 가버린다."
@@ -2020,6 +2169,7 @@ export default function App() {
   // 참가(바인) 게임 선택 시트는 지금까지 뒤로가기 겹이 아예 없었다 — 이 화면에서 누른
   // 뒤로가기는 시트가 아니라 그 아래 탭을 닫아 홈으로 튀었다(순수 이득 케이스).
   useBackClose(buyinPick !== null, () => setBuyinPick(null), ADOPT);
+  useBackClose(eventOpen, () => setEventOpen(false));
 
   // 로고 클릭 → 홈(메인)으로 + 모든 모달/패널 닫기 (오너 지시 2026-08-27: 일정탐색 아님)
   const handleHome = useCallback(() => {
@@ -2046,17 +2196,12 @@ export default function App() {
   }, []);
 
   // 알림 클릭 → 해당 페이지로 이동
-  const handleNavigateNotification = useCallback((n: AppNotification) => {
+  const handleNavigateNotification = useCallback((n: AppNotification, opts?: { returnToMe?: boolean }) => {
     setNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, read: true } : x));
     const link = n.link ?? '';
-    // /schedules/:id
+    // /schedules/:id — 목록에 없으면 단건 조회로 한 번 더 확인한다(F09: '내려간 포스터' 단정 금지)
     const sm = link.match(/^\/schedules\/(.+)$/);
-    if (sm) {
-      const sched = schedules.find((s) => s.id === sm[1]);
-      if (sched) setOpenSchedule(sched);
-      else toast.show('종료되었거나 내려간 포스터예요', 'info'); // 조용한 무반응 방지
-      return;
-    }
+    if (sm) { openScheduleById(sm[1], opts); return; }
     // /community/:venueId
     const cm = link.match(/^\/community\/(.+)$/);
     if (cm) { setOpenVenueId(cm[1]); return; }
@@ -2106,7 +2251,7 @@ export default function App() {
     if (link === '/') { changeTab('home'); return; }
     toast.show(n.title, 'info');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedules, isAdmin, toast]);
+  }, [openScheduleById, isAdmin, toast]);
 
   const handleSubmitVenueComment = useCallback(
     (venueId: string, content: string, parentId?: string) => {
@@ -2280,10 +2425,6 @@ export default function App() {
       .catch(() => { toast.show('저장에 실패했습니다', 'error'); reloadVenues(); });
   }, [toast, reloadVenues]);
 
-  // 포스터 삭제 유예 큐 — schedules 삭제는 예약(schedule_reservations)과 문의(comments)를
-  // FK CASCADE 로 물리 삭제한다(ledger_sessions 만 SET NULL 로 살아남는다).
-  // 지운 뒤 되살릴 방법이 없으므로 '5초 동안 서버로 안 보내기'가 유일한 실행취소다.
-  const posterDeleteQ = useMemo(() => createUndoQueue(5000), []);
   const handleDeletePoster = useCallback((id: string) => {
     const target = schedules.find((s) => s.id === id);
     setSchedules((prev) => prev.filter((s) => s.id !== id));
@@ -2454,7 +2595,7 @@ export default function App() {
   // 순수 입력 폼(글쓰기·공지작성 등)·소형 확인 다이얼로그는 내비가 아니라 제외 — 문서끝 숨김 계약 유지.
   const fullOverlayOpen = voucherWalletOpen || supportOpen || globalSearchOpen
     || openVenueId !== null || openSchedule !== null || openPost !== null || openListing !== null
-    || openNotice !== null || displayTarget !== null || legalDoc !== null || gtoInit !== null;
+    || openNotice !== null || displayTarget !== null || legalDoc !== null || gtoInit !== null || eventOpen;
   // 전면 오버레이가 떠 있는 동안 상시 크롬의 VT 스냅샷 이름을 끈다(index.css `html:not([data-overlay])`).
   // 이름이 붙은 크롬은 top layer 의 ::view-transition-group 으로 그려져, top layer 가 아닌
   // 오버레이(fixed z-[60]) **위**에 얹힌다 — PC '내 정보' 겹침의 원인.
@@ -2494,12 +2635,17 @@ export default function App() {
     setPostFormOpen(true);
   }, []);
   const handleMarketCreate = useCallback(() => { if (ensureVerified(userRefForGate.current, '중고장터 등록')) setMarketFormOpen(true); }, []);
-  const handleListingsChanged = useCallback(() => { getListings().then(setListings).catch(() => {}); }, []);
+  // 목록 재조회 정본 — 등록·상태변경 후 갱신과 실패 카드의 '다시 시도'가 같은 함수를 쓴다(껍데기 버튼 방지).
+  const handleListingsChanged = useCallback(() => {
+    getListings().then((l) => { setListings(l); setMarketError(null); writeSnap('listings', l); })
+      .catch((e) => setMarketError(e))
+      .finally(() => setMarketLoaded(true));
+  }, []);
   const marketSlot = useMemo(() => (
-    <MarketplaceTab listings={listings} loading={!marketLoaded} notices={marketNotices}
+    <MarketplaceTab listings={listings} loading={!marketLoaded} error={marketError} notices={marketNotices}
       onSelect={setOpenListing} onSelectNotice={setOpenNotice} onCreate={handleMarketCreate}
       canWriteNotice={isAdmin} onWriteNotice={handleWriteNotice} onListingsChanged={handleListingsChanged} />
-  ), [listings, marketLoaded, marketNotices, isAdmin, handleMarketCreate, handleWriteNotice, handleListingsChanged]);
+  ), [listings, marketLoaded, marketError, marketNotices, isAdmin, handleMarketCreate, handleWriteNotice, handleListingsChanged]);
 
   // ── 렌더 ──────────────────────────────────────────────────────────────
 
@@ -2580,11 +2726,18 @@ export default function App() {
             unread={notifications.filter((n) => !n.read)}
             onOpenNotification={(id) => {
               const n = notifications.find((x) => x.id === id);
-              setVoucherWalletOpen(false);
-              if (n) { handleMarkRead([n.id]); handleNavigateNotification(n); }
+              if (!n) { setVoucherWalletOpen(false); return; }
+              handleMarkRead([n.id]);
+              // [F09-c] 포스터 상세로 가는 알림은 openScheduleById 가 대시보드 개폐까지 맡는다 —
+              //   못 열면 '내 정보' 에 그대로 남고, 열었다가 닫으면 홈이 아니라 '내 정보' 로 돌아온다.
+              if (!/^\/schedules\//.test(n.link ?? '')) setVoucherWalletOpen(false);
+              handleNavigateNotification(n, { returnToMe: true });
             }}
+            // [F09-b] 예약 행 → 그 대회 상세(scheduleId 로만). 닫으면 다시 '내 정보' 로.
+            onOpenSchedule={(sid, vid) => openScheduleById(sid, { returnToMe: true, fallbackVenueId: vid })}
             onOpenPost={(pp) => { setVoucherWalletOpen(false); changeTab('community'); setOpenPost(pp); }}
             initialTab={meTab}
+            onReservationChange={bumpResVersion}
             onOpenLegal={(d) => setLegalDoc(d)}
             onOpenSupport={() => setSupportOpen(true)}
             onOpenMarket={() => {
@@ -2625,7 +2778,10 @@ export default function App() {
       <LevelUpWatcher points={user?.activityPoints} />
 
       <PendingApprovalBanner />
-      <InstallBanner />
+      {/* [F10] 설치 안내는 전면(페이지성) 오버레이 위에 남지 않는다 — 상세 본문·CTA·내 정보·매장을 가렸다.
+          z-index 를 올리는 대신 하단 탭바와 **같은 오버레이 상태**를 쓴다(fullOverlayOpen).
+          언마운트해도 안전한 이유: beforeinstallprompt 참조를 모듈 스코프에서 잡아 둔다(InstallBanner.tsx). */}
+      {!fullOverlayOpen && <InstallBanner />}
       <TierCelebration />
 
       <TabBar tabs={pcTabs} active={activeTab} onChange={changeTab} />
@@ -2647,11 +2803,13 @@ export default function App() {
             liveCount={liveClocks.length}
             regInfoBySchedule={regInfoBySchedule}
             onTools={() => changeTab('tools')}
-            banners={homeBanners}
+            banners={homeBanners.banners}
+            bannersConfigured={homeBanners.configured}
             onSelect={handleScheduleSelect}
             onVenue={handleVenueClick}
             onExplore={() => changeTab('browse')}
             onLive={() => changeTab('live')}
+            onEvent={() => setEventOpen(true)}
             onRotiCommunity={() => {
               // 캐러셀 로티아레나 배너 → 매장 커뮤니티 페이지(이름 매칭 — id 하드코딩 회피).
               // 매장 목록 도착 전/이름 변경 시엔 커뮤니티 탭으로 폴백.
@@ -2816,7 +2974,7 @@ export default function App() {
                 ) : schedulesError && schedules.length === 0 ? (
                   <LoadErrorCard error={schedulesError} what="대회 목록"
                     onRetry={() => { setSchedulesLoaded(false); reloadSchedules(); }} />
-                ) : visibleSchedules.length === 0 && !hasActiveSearchFilter && !followedOnly ? (
+                ) : visibleSchedules.length === 0 && !hasActiveSearchFilter ? (
                   // P0-2(오너 진단): 0건 빈 일러스트가 화면 중앙을 차지하던 것 → 슬림 안내 1줄 +
                   // '지금 진행 중' 콘텐츠 승격. 아래 지난 대회·공지가 그 자리로 올라온다.
                   <div className="space-y-2">
@@ -2849,9 +3007,7 @@ export default function App() {
                       searchState.competitionOnly && '대회',
                       searchState.budget != null && `예산 ${searchState.budget / 10000}만↓`,
                     ].filter(Boolean).join(' · ')}
-                    followedOnly={followedOnly}
                     onClearFilters={() => searchBarRef.current?.clearAll()}
-                    onClearFollow={() => setFollowedOnly(false)}
                     upcoming={schedules.filter((s) => s.approved && scheduleStatus(s.date, s.startTime) !== 'ended').length}
                   />
                 ) : viewMode === 'table' ? (
@@ -2906,15 +3062,19 @@ export default function App() {
                     결과가 오기 전에는 자리를 만들지 않고, 오면 목록 아래에 붙인다 — 상단 스택 불변.
                     (알림함·마이에서도 같은 정보에 접근 가능해 기능 손실 없음) */}
           {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 */}
+                {myTodayResErr !== null && myTodayRes.length === 0 && (
+                  <div className="pt-3">
+                    <LoadErrorCard error={myTodayResErr} onRetry={loadMyTodayRes} what="오늘 예약한 대회" compact />
+                  </div>
+                )}
                 {myTodayRes.length > 0 && (
                   <div className="animate-fade-in overflow-hidden pt-3 space-y-1.5">
                     <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-secondary"><Icon name="cards" size={13} /> 오늘 예약한 대회</p>
                     {myTodayRes.map((r) => {
-                      const sc = schedules.find((x) => x.id === r.scheduleId);
                       return (
                         <button key={r.scheduleId} type="button"
-                          // 일정이 목록에서 사라졌으면(매장 삭제 등) 무반응 대신 안내 — 무반응 클릭 금지
-                          onClick={() => { if (sc) setOpenSchedule(sc); else toast.show('대회 정보를 찾을 수 없습니다. 매장에서 일정이 변경됐을 수 있어요', 'info'); }}
+                          // [F09] 목록에 없으면 단건 조회 → 그래도 없으면 매장 페이지로. 무반응 클릭 금지.
+                          onClick={() => openScheduleById(r.scheduleId, { fallbackVenueId: r.venueId })}
                           className="w-full flex items-center gap-2.5 rounded-aura border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
                           <span className="shrink-0 text-accent-300" aria-hidden><Icon name="cards" size={18} /></span>
                           <span className="min-w-0 flex-1">
@@ -2997,6 +3157,8 @@ export default function App() {
         <main data-tab="community" className="tab-pane px-page-x pb-section" style={activeTab !== 'community' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="community">
           <CommunityTabM
+            postsErr={postsErr}
+            onRetryPosts={reloadPosts}
             // keep-alive 로 숨어 있는 동안에는 뒤로가기 겹을 들지 않게 한다 —
             // 숨은 탭이 겹을 들고 있으면 사용자의 뒤로가기가 화면 변화 없이 소진된다(먹통).
             active={activeTab === 'community' || activeTab === 'market'}
@@ -3035,7 +3197,7 @@ export default function App() {
       {!hasStoreTabs && (activeTab === 'calendar' || visitedTabs.has('calendar')) && (
         <main data-tab="calendar" className="tab-pane" style={activeTab !== 'calendar' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="calendar">
-            <CalendarPanelM schedules={schedules} onSelect={handleScheduleSelect} onVenue={handleVenueClick} onLogin={() => setAuthOpen(true)} active={activeTab === 'calendar'} />
+            <CalendarPanelM schedules={schedules} onSelect={handleScheduleSelect} onOpenSchedule={openScheduleById} onVenue={handleVenueClick} onLogin={() => setAuthOpen(true)} active={activeTab === 'calendar'} resVersion={resVersion} />
           </ErrorBoundary>
         </main>
       )}
@@ -3127,7 +3289,14 @@ export default function App() {
             onClose={() => setVoucherSheetOpen(false)}
             onVenue={handleVenueClick}
             onOpenWallet={() => openMeCb('dashboard')}
+            onBuyin={startBuyinRequest}
           />
+        </Suspense>
+      )}
+
+      {eventOpen && (
+        <Suspense fallback={<OverlayFallback />}>
+          <EventPage open onClose={() => setEventOpen(false)} onLogin={() => { setEventOpen(false); setAuthOpen(true); }} />
         </Suspense>
       )}
 
@@ -3149,6 +3318,7 @@ export default function App() {
         }
         onDeleteComment={handleDeleteComment}
         onDeletePoster={handleDeletePoster}
+        onReservationChange={bumpResVersion}
       />
       )}
 
@@ -3539,11 +3709,9 @@ function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table
 // 예전엔 '검색 결과가 없습니다' 한 줄로 끝나 다음에 누를 것이 하나도 없었다 —
 // 사용자는 자기가 잘못 검색한 줄 알거나 '대회가 없는 서비스'로 오해하고 나간다.
 // 그래서 ① 왜 비었는지(필터 때문인지 진짜 없는 건지)를 구분해 말하고 ② 반드시 다음 행동을 하나 준다.
-function EmptyState({ filtered, followedOnly, onClearFilters, onClearFollow, upcoming, filterSummary }: {
+function EmptyState({ filtered, onClearFilters, upcoming, filterSummary }: {
   filtered: boolean;          // 검색어·날짜·지역 등 조건이 걸려 있는가
-  followedOnly: boolean;
   onClearFilters: () => void;
-  onClearFollow: () => void;
   upcoming: number;           // 조건을 풀면 보일 예정 대회 수
   /** 현재 걸린 조건 요약 — '무엇 때문에 0건인지'를 보여줘야 사용자가 하나만 풀 수 있다 */
   filterSummary?: string;
@@ -3557,12 +3725,7 @@ function EmptyState({ filtered, followedOnly, onClearFilters, onClearFollow, upc
         <line x1="16" y1="22" x2="28" y2="22" />
         <line x1="22" y1="16" x2="22" y2="28" />
       </svg>
-      {followedOnly ? (
-        <>
-          <p className="text-sm">팔로우한 매장의 예정 대회가 없어요</p>
-          <button type="button" onClick={onClearFollow} className="btn-primary px-4 py-2 text-xs">전체 매장 보기</button>
-        </>
-      ) : filtered ? (
+      {filtered ? (
         <>
           <p className="text-sm">조건에 맞는 대회가 없어요</p>
           {filterSummary && <p className="max-w-xs text-center text-2xs text-ink-muted">걸린 조건: <b className="text-ink-secondary">{filterSummary}</b>검색바에서 하나만 풀어도 달라져요</p>}

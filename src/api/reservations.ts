@@ -1,6 +1,8 @@
 // src/api/reservations.ts — 포스터(게임) 예약 + 단골 고객 활동내역 CRM
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
+import { countVisitDays } from './checkins';
+import { customerLedgerTotals, rowToBuyin, MAIN_GAME_SEQ } from './ledger';
 
 /** 예약 변경 실시간 구독 — 신규/취소 예약을 게임관리에 자동 반영.
  *  ⚡ 트래픽 대비: scheduleIds 를 주면 그 포스터들의 예약만 수신한다(서버 필터).
@@ -27,11 +29,15 @@ export interface Reservation { id: string; scheduleId: string; userId: string; d
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToRes = (r: any): Reservation => ({ id: r.id, scheduleId: r.schedule_id, userId: r.user_id, displayName: r.display_name, createdAt: r.created_at });
 
+// ⚠ 실패(401/403/500/오프라인)를 null 로 돌려주지 않는다 — null 은 '조회했고 예약이 없다'는 뜻이라,
+//   이미 예약한 손님에게 '예약하기'를 다시 내밀고 누르면 '이미 등록된 닉네임입니다'가 났다(F08).
+//   비로그인은 실패가 아니므로 그대로 null. 형제 getReservations 와 같은 throw 관행.
 export async function getMyReservation(scheduleId: string): Promise<Reservation | null> {
   if (IS_MOCK) return null;
   const user = await currentUser();
   if (!user) return null;
-  const { data } = await supabase.from('schedule_reservations').select('*').eq('schedule_id', scheduleId).eq('user_id', user.id).maybeSingle();
+  const { data, error } = await supabase.from('schedule_reservations').select('*').eq('schedule_id', scheduleId).eq('user_id', user.id).maybeSingle();
+  if (error) throw error;
   return data ? rowToRes(data) : null;
 }
 
@@ -59,7 +65,9 @@ export async function getOwnerReservations(scheduleId: string): Promise<OwnerRes
 //   명단은 계속 감추고, 인원 수만 주는 공개 RPC로 집계한다.
 export async function getReservationCounts(scheduleIds: string[]): Promise<Record<string, number>> {
   if (IS_MOCK || scheduleIds.length === 0) return {};
-  const { data } = await supabase.rpc('schedule_reservation_counts', { p_ids: scheduleIds });
+  const { data, error } = await supabase.rpc('schedule_reservation_counts', { p_ids: scheduleIds });
+  // 실패를 {} 로 돌려주면 탐색 카드의 '예약 N명'이 0 으로, 마감임박 뱃지는 통째로 사라진다(F08).
+  if (error) throw error;
   const m: Record<string, number> = {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (data ?? []).forEach((r: any) => { m[r.schedule_id] = r.cnt ?? 0; });
@@ -73,12 +81,16 @@ export async function createReservation(scheduleId: string, displayName: string)
   if (error) throw new Error(error.message);
 }
 
+// .select('id') 를 붙이는 이유는 형제 deleteReservation 과 같다 — RLS 나 '이미 지워진 예약'에 걸리면
+// Supabase 는 error 없이 0행을 반환한다. 그대로 두면 호출자가 '예약을 취소했습니다'를 띄우고
+// 화면에서 지우지만 서버에는 예약이 그대로 남는다(F06-b). 세션 없음도 성공이 아니다.
 export async function cancelMyReservation(scheduleId: string): Promise<void> {
   if (IS_MOCK) return;
   const user = await currentUser();
-  if (!user) return;
-  const { error } = await supabase.from('schedule_reservations').delete().eq('schedule_id', scheduleId).eq('user_id', user.id);
+  if (!user) throw new Error('로그인이 필요합니다');
+  const { data, error } = await supabase.from('schedule_reservations').delete().eq('schedule_id', scheduleId).eq('user_id', user.id).select('id');
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error('취소할 예약을 찾지 못했습니다. 화면을 새로 불러와 확인해 주세요');
 }
 
 /** 업주: 예약 삭제 / 이름 수정 */
@@ -96,26 +108,30 @@ export async function updateReservationName(id: string, name: string): Promise<v
   if (error) throw error;
 }
 
-/** 내 활동 통계 — 예약 후 매장 방문(지난 일정) / 예정 / 전체 횟수. 프로필 뱃지·점수용. */
+/** 내 활동 통계 — 방문(QR 체크인, 매장별 KST 날짜 distinct) / 예정 예약 / 예약 전체 건수. 프로필 뱃지·점수용.
+ *  '방문' = public.checkins 만(오너 결정 2026-09-05, 점검 #8) — 예약은 노쇼가 섞여 방문이 아니다(20260829g 정의).
+ *  my_visited_venues(20260905l)·getMyBadgeStats 와 같은 단위라 대시보드 헤더·프로필 탭·뱃지 임계가 한 숫자다. */
 export async function getMyVisitStats(): Promise<{ visits: number; upcoming: number; total: number }> {
   const empty = { visits: 0, upcoming: 0, total: 0 };
   if (IS_MOCK) return empty;
   const user = await currentUser();
   if (!user) return empty;
-  // schedule_reservations → schedules(date) 조인. 지난 날짜 예약 = 방문으로 집계.
-  const { data, error } = await supabase
-    .from('schedule_reservations')
-    .select('schedule_id, schedules!inner(date)')
-    .eq('user_id', user.id);
-  if (error || !data) return empty;
+  // 예약(schedule_reservations → schedules.date)은 '예정' 만 센다. 체크인은 RLS checkins_select(본인 행)로 직접 읽는다.
+  const [rv, ck] = await Promise.all([
+    supabase.from('schedule_reservations').select('schedule_id, schedules!inner(date)').eq('user_id', user.id),
+    supabase.from('checkins').select('venue_id, created_at').eq('user_id', user.id),
+  ]);
+  // 실패를 {0,0,0} 으로 돌려주면 프로필 방문 뱃지가 전부 '미획득'으로 떨어진다(F08). 둘 다 정본이라 어느 쪽이 깨져도 실패다.
+  if (rv.error) throw rv.error;
+  if (ck.error) throw ck.error;
+  const rvRows = (rv.data ?? []) as unknown as { schedules?: { date?: string } }[];
   const today = new Date().toLocaleDateString('en-CA');
-  let visits = 0, upcoming = 0;
-  for (const r of data as unknown as { schedules?: { date?: string } }[]) {
+  let upcoming = 0;
+  for (const r of rvRows) {
     const d = r.schedules?.date;
-    if (!d) continue;
-    if (d < today) visits++; else upcoming++;
+    if (d && d >= today) upcoming++;
   }
-  return { visits, upcoming, total: data.length };
+  return { visits: countVisitDays((ck.data ?? []) as { venue_id: string; created_at: string }[]), upcoming, total: rvRows.length };
 }
 
 /** 이 매장의 예약자 이름별 누적 예약 횟수(단골 판별: 5회+) */
@@ -152,14 +168,26 @@ export async function getVenueRegulars(venueId: string): Promise<VenueRegular[]>
     .sort((a, b) => (b.buyins - a.buyins) || (b.visits - a.visits));
 }
 
-/** 단골 고객 활동내역 — 이름 매칭. 바이인/방문/금액(장부) + 머니인(랭킹) + 예약. */
-export interface CustomerActivity { name: string; buyins: number; visits: number; amount: number; moneyIn: number; reservations: number; }
+/** 단골 고객 활동내역 — 이름 매칭. 바이인/방문/금액(장부) + 머니인(랭킹) + 예약.
+ *  금액은 장부·통계·CSV 와 같은 정본(customerLedgerTotals → buyinFinance)으로만 계산한다.
+ *  amount(실수납)·unpaid(미수)·ticket(회수 이용권 T)·support(가게지원 건수)는 서로 다른 의미다. */
+export interface CustomerActivity {
+  name: string; buyins: number; visits: number;
+  /** 실제 수납된 참가비 누적(원) — 통계 '완납 매출' 과 같은 기준. 미수·이용권·가게지원은 빠져 있다. */
+  amount: number;
+  unpaid: number; ticket: number; support: number;
+  moneyIn: number; reservations: number;
+}
 export async function getCustomerActivity(venueId: string, name: string): Promise<CustomerActivity> {
-  const base: CustomerActivity = { name, buyins: 0, visits: 0, amount: 0, moneyIn: 0, reservations: 0 };
+  const base: CustomerActivity = { name, buyins: 0, visits: 0, amount: 0, unpaid: 0, ticket: 0, support: 0, moneyIn: 0, reservations: 0 };
   if (IS_MOCK) return base;
   const [{ data: bs }, { data: sess }, { data: rk }, resCounts] = await Promise.all([
-    supabase.from('ledger_buyins').select('session_date, game_seq, payment_method, is_unpaid, is_split, cash_amount, card_amount, transfer_amount, unpaid_amount, discount_index').eq('venue_id', venueId).eq('player_name', name),
-    supabase.from('ledger_sessions').select('session_date, game_seq, buyin_amount').eq('venue_id', venueId),
+    // buyinFinance 가 보는 필드 전부 — 분납 분해·티켓 T·미수액·할인 프리셋 index·기록 시점 스냅샷(cash/card/transfer)·buyin_at.
+    supabase.from('ledger_buyins')
+      .select('id, venue_id, session_date, game_seq, player_name, entry_no, payment_method, is_unpaid, is_split, cash_amount, card_amount, transfer_amount, ticket_count, unpaid_amount, discount_index, buyin_at')
+      .eq('venue_id', venueId).eq('player_name', name),
+    // 현금단가만으론 부족하다 — 카드단가(card_amount)·할인 프리셋(discounts)까지 있어야 통계·CSV 와 같은 값이 나온다.
+    supabase.from('ledger_sessions').select('session_date, game_seq, buyin_amount, card_amount, discounts').eq('venue_id', venueId),
     // 머니인(입상) — venue_rankings에는 name 컬럼이 없음: 닉네임/실명 둘 다 매칭
     supabase.from('venue_rankings').select('id, nickname, real_name').eq('venue_id', venueId),
     getVenueReserverCounts(venueId),
@@ -169,45 +197,54 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (r: any) => String(r.nickname ?? '').trim().toLowerCase() === nameKey || String(r.real_name ?? '').trim().toLowerCase() === nameKey,
   ).length;
-  const unit = new Map<string, number>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (sess ?? []).forEach((s: any) => unit.set(s.session_date + '#' + (s.game_seq ?? 1), s.buyin_amount ?? 0));
+  const rows = (bs ?? []) as any[];
   const dates = new Set<string>();
-  let amount = 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (bs ?? []).forEach((b: any) => {
-    dates.add(b.session_date);
-    if (b.is_split) amount += (b.cash_amount ?? 0) + (b.card_amount ?? 0) + (b.transfer_amount ?? 0);
-    else if (b.payment_method !== 'support' && b.payment_method !== 'ticket' && !b.is_unpaid) amount += unit.get(b.session_date + '#' + (b.game_seq ?? 1)) ?? 0;
-  });
+  rows.forEach((b) => dates.add(b.session_date));
+  const fin = customerLedgerTotals(
+    rows.map(rowToBuyin),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((sess ?? []) as any[]).map((s) => ({
+      sessionDate: s.session_date, gameSeq: s.game_seq ?? MAIN_GAME_SEQ,
+      buyinAmount: s.buyin_amount ?? 0, cardAmount: s.card_amount ?? null,
+      discounts: Array.isArray(s.discounts) ? s.discounts : [],
+    })),
+  );
   return {
     name,
-    buyins: (bs ?? []).length,
+    buyins: rows.length,
     visits: dates.size,
-    amount,
+    amount: fin.paid,
+    unpaid: fin.unpaid,
+    ticket: fin.ticket,
+    support: fin.support,
     moneyIn: moneyInCnt,
     reservations: resCounts[name] ?? 0,
   };
 }
 
 // ── 내 대회 참가(예약) 이력 — 개인 대시보드 ───────────────────────────────────
-export interface MyReservationRow { scheduleId: string; title: string; date: string; startTime: string | null; venueName: string | null; displayName: string; reservedAt: string }
+// venueId: 대회가 목록에 없거나 내려갔을 때 '매장 페이지'로라도 잇기 위한 폴백 키(F09).
+//   이름·날짜 매칭이 아니라 schedules.venue_id 원본을 그대로 실어 온다. 매장 미연결 포스터는 null.
+export interface MyReservationRow { scheduleId: string; title: string; date: string; startTime: string | null; venueId: string | null; venueName: string | null; displayName: string; reservedAt: string }
 export async function getMyReservations(limit = 30): Promise<MyReservationRow[]> {
   if (IS_MOCK) return [];
   const user = await currentUser();
   if (!user) return [];
   const { data, error } = await supabase
     .from('schedule_reservations')
-    .select('schedule_id, display_name, created_at, schedules(title, date, start_time, venues(name))')
+    .select('schedule_id, display_name, created_at, schedules(title, date, start_time, venue_id, venues(name))')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (error) return [];
+  // 실패를 [] 로 돌려주면 캘린더·내 정보·홈이 '예약 없음'으로 위장한다(F08).
+  if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
     scheduleId: r.schedule_id, displayName: r.display_name, reservedAt: r.created_at,
     title: r.schedules?.title ?? '(대회)', date: r.schedules?.date ?? '',
-    startTime: r.schedules?.start_time ?? null, venueName: r.schedules?.venues?.name ?? null,
+    startTime: r.schedules?.start_time ?? null,
+    venueId: r.schedules?.venue_id ?? null, venueName: r.schedules?.venues?.name ?? null,
   }));
 }
 

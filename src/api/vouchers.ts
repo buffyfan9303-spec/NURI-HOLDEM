@@ -30,6 +30,13 @@ export interface Voucher {
   /** 발급 근거(2026-09-05 정책) — 2026-09-05 이전 발급분은 null */
   issueReason: VoucherReason | null;
 }
+/**
+ * '보유 중' 판정의 단일 정본 — 지갑(VoucherWallet)과 시트의 매장별 장수(MyVoucherSheet)가 같이 쓴다.
+ * 회수(revoke)는 used_at 을 건드리지 않고 status='revoked' 만 세팅하고, 만료는 status 가 active 인 채
+ * expires_at 만 지난다 — usedAt 만 걸러 세면 둘 다 '보유'로 부풀려진다(2026-09-05 점검 #9).
+ */
+export const isHeldVoucher = (v: Pick<Voucher, 'status' | 'expiresAt'>, now = Date.now()): boolean =>
+  v.status === 'active' && (!v.expiresAt || new Date(v.expiresAt).getTime() > now);
 /** 발급 근거(사유) — 서버 issue_voucher 가 같은 목록으로 검증한다. 순위·시상 사유는 목록에 없고 서버가 거절한다. */
 export type VoucherReason = 'welcome' | 'visit' | 'event' | 'service' | 'other';
 export const VOUCHER_REASONS: { value: VoucherReason; label: string; hint: string }[] = [
@@ -42,7 +49,8 @@ export const VOUCHER_REASONS: { value: VoucherReason; label: string; hint: strin
 export const voucherReasonLabel = (r: string | null | undefined): string => VOUCHER_REASONS.find((x) => x.value === r)?.label ?? '';
 export interface VoucherUsage { usedVenueId: string | null; venueName: string | null; usedCount: number }
 export interface VisitedVenue { venueId: string; venueName: string | null; visits: number }
-export interface PlayHistory { venueId: string; venueName: string | null; moneyinCount: number; totalAmount: number; lastAt: string | null }
+/** 매장별 참가(바인) 이력 — buyinCount = 장부 바인 횟수, totalAmount = 낸 참가비 합. 머니인(입상)이 아니다(점검 #6). */
+export interface PlayHistory { venueId: string; venueName: string | null; buyinCount: number; totalAmount: number; lastAt: string | null }
 export interface TransferTarget { id: string; display: string; verified?: boolean }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -257,9 +265,13 @@ export async function voucherUsageByVenue(venueId: string): Promise<VoucherUsage
   return (data ?? []).map((r: any) => ({ usedVenueId: r.used_venue_id ?? null, venueName: r.venue_name ?? null, usedCount: Number(r.used_count) || 0 }));
 }
 
+// ⚠ error 를 버리지 않는다(2026-09-05): `const { data } = ...` 로 받으면 RLS 거부·네트워크 끊김이
+//   전부 빈 배열이 되어 '내 정보'가 '방문 기록이 아직 없습니다'로 보였다 — 실패의 빈 결과 위장.
+//   호출부 3곳(App '이어서 하기' · VenuePage · CustomerDashboardPage)은 모두 이미 실패를 받는다.
 export async function myVisitedVenues(): Promise<VisitedVenue[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.rpc('my_visited_venues');
+  const { data, error } = await supabase.rpc('my_visited_venues');
+  if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venue_name ?? null, visits: Number(r.visits) || 0 }));
 }
@@ -322,12 +334,15 @@ export async function iCanViewVouchers(venueId: string): Promise<boolean> {
   return data === true;
 }
 
-/** 내 매장 이용내역(머니인 횟수·금액) — 장부 바인을 실명/닉네임 일치로 집계. */
+/** 내 매장 이용내역(바인 횟수·참가비) — 장부 바인을 실명/닉네임 일치로 집계.
+ *  와이어 컬럼 moneyin_count 는 서버(my_play_history)가 그 이름으로 돌려주는 **바인 횟수**다 — 라이브 함수에 저장소 밖 가드가 있어
+ *  SQL 은 손대지 않고 클라 매핑에서만 buyinCount 로 바로잡는다. */
 export async function myPlayHistory(): Promise<PlayHistory[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.rpc('my_play_history');
+  const { data, error } = await supabase.rpc('my_play_history');
+  if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venue_name ?? null, moneyinCount: Number(r.moneyin_count) || 0, totalAmount: Number(r.total_amount) || 0, lastAt: r.last_at ?? null }));
+  return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venue_name ?? null, buyinCount: Number(r.moneyin_count) || 0, totalAmount: Number(r.total_amount) || 0, lastAt: r.last_at ?? null }));
 }
 
 // ── 발급 한도(쿼터) — 운영진 승인 충전 + 충전(구매) 요청 ─────────────────────

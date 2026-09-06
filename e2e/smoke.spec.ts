@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 // 공개(비로그인·비변이) 회귀 스모크 — 배포 전 게이트.
 // 실데이터/목 모드 어느 쪽이든 통과해야 한다(데이터 내용이 아니라 "크래시 없이 렌더"를 검증).

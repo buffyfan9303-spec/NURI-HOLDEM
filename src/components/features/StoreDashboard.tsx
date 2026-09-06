@@ -6,7 +6,7 @@ import type { Schedule } from '../../api/schedules';
 import { listStaleOpenSessions,
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
-  getLastClosedRound, type LastClosedRound,
+  getLastClosedRound, MAIN_GAME_SEQ, type LastClosedRound, type PosterOpsSummary,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest,
 } from '../../api/ledger';
 import { useToast } from '../atoms/Toast';
@@ -14,6 +14,8 @@ import { getClockState, getVenueClocks, subscribeClock, type ClockState } from '
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { aiGenerate } from '../../api/ai';
 import { getVenueRankings } from '../../api/rankings';
+import { hasRankingForGame } from '../../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
+import { ledgerGameLabel } from '../../lib/ledgerLink';
 import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import RegularsModal from './RegularsModal';
@@ -130,10 +132,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   };
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [voucherPrefill, setVoucherPrefill] = useState(''); // 단골 행 '이용권 보내기' 프리필
-  const [hasRankToday, setHasRankToday] = useState<boolean | null>(null); // 지금 할 일 카드(순위 입력 유도)
+  // 오늘 저장된 순위 event 이름들(null=아직 모름/실패). 완료 판정은 (날짜, 게임) 단위라 목록을 그대로 들고 있는다 — F02
+  const [rankEventsToday, setRankEventsToday] = useState<string[] | null>(null);
   const [funnel, setFunnel] = useState<WeeklyFunnel | null>(null); // 주간 흐름(조회→예약→방문) — '퍼널' 용어는 UI 에서 금지(오너: 일반인 모름)
   const [staleOpen, setStaleOpen] = useState<{ sessionDate: string; gameSeq: number; title: string | null }[]>([]); // 미마감 지난 장부
-  const [pendingRanks, setPendingRanks] = useState<{ date: string }[]>([]); // 마감됐는데 순위 미입력인 지난 대회(밀린 것)
+  // 마감됐는데 순위 미입력인 지난 대회(밀린 것) — 같은 날 게임이 둘이면 어느 게임인지 라벨로 구분한다(F02)
+  const [pendingRanks, setPendingRanks] = useState<PosterOpsSummary[]>([]);
   // 다가오는 생일 단골(7일 내) — CRM 생일 필드 기반
   const [bdays, setBdays] = useState<{ name: string; birthday: string; dday: number }[]>([]);
   useEffect(() => {
@@ -212,7 +216,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       getStaffWages(venueId).then(setWages).catch(() => {}),
       getLedgerRange(venueId, d14[0], d14[13]).then(setRange).catch(() => {}),
       getVenueRegulars(venueId).then(setRegulars).catch(() => {}),
-      getVenueRankings(venueId, d).then(({ entries }) => setHasRankToday(entries.length > 0)).catch(() => {}),
+      getVenueRankings(venueId, d).then(({ entries }) => setRankEventsToday(entries.map((e) => e.eventName ?? ''))).catch(() => {}),
       getVenueWeeklyFunnel(venueId).then(setFunnel).catch(() => {}),
       listStaleOpenSessions(venueId).then(setStaleOpen).catch(() => {}),
       getPosterOpsSummaries(venueId).then((sums) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date)))).catch(() => {}),
@@ -220,6 +224,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     ]).then(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, d]);
+
+  // 오늘 장부(메인)의 순위 입력 여부 — 날짜 Set 으로 보면 사이드만 저장돼도 메인이 '완료'로 뭉쳤다(F02).
+  const hasRankToday = useMemo(
+    () => (rankEventsToday === null ? null : hasRankingForGame({ gameSeq: session?.gameSeq ?? MAIN_GAME_SEQ, title: session?.title }, rankEventsToday)),
+    [rankEventsToday, session?.gameSeq, session?.title],
+  );
 
   useEffect(() => { setLoading(true); reload(); }, [reload]);
   // 숨김(다른 섹션·다른 탭 keep-alive) 동안 구독이 꺼져 있어 이벤트를 놓친다 —
@@ -546,16 +556,21 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 날짜는 11.7px 회색이라 '오늘 무슨 요일 장부를 보는 중인지'가 안 읽혔다.
              ③ 아우라 문법 편입 — 주변이 전부 card-aura 인데 이 줄만 아무 처리가 없어 떠 보였다.
                 타일(tile-grad)은 Head 패턴 그대로. 글로우는 쓰지 않는다(화면당 1곳 규칙 — 대시보드는 KPI 밴드가 주인공). */}
-        <div className="flex items-center justify-between gap-2">
+        {/* 한 덩어리로 왼쪽 정렬 — justify-between 이면 넓은 화면에서 날짜만 수백 px 떨어진
+            오른쪽 끝에 홀로 남는다(2026-09-06 오너 스크린샷). 이 줄은 "지금 어디" 표지판이라
+            매장 · 날짜 · 상태가 서로 붙어 있어야 한 호흡에 읽힌다. */}
+        <div className="flex items-center gap-2">
           <span className="flex min-w-0 items-center gap-2">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
               <Icon name="store" size={13} />
             </span>
             <span className="truncate text-base font-bold leading-none text-ink-primary">{venueName}</span>
-            {/* 모바일: 날짜는 매장명 **옆**에 붙는다. 예전엔 우측 끝 블록이라 좁은 폭에서 '로티아레나 ……… 09.05 금' 처럼
-                양끝으로 찢어져 이상했다(오너 2026-09-05). PC 는 아래 우측 블록 그대로(밀도·한 줄 원칙). */}
-            <span className="shrink-0 text-2xs tabular-nums text-ink-muted lg:hidden">
-              · {d.slice(5).replace('-', '.')} <span className={['font-semibold', todayDow === 0 ? 'text-danger-light' : todayDow === 6 ? 'text-accent-200' : 'text-ink-secondary'].join(' ')}>{DOW[todayDow]}</span>
+            {/* 날짜는 매장명 **옆**. 우측 끝 블록으로 두면 좁은 폭에선 '로티아레나 ……… 09.05 금' 으로 찢어지고
+                (오너 2026-09-05), 넓은 폭에선 날짜만 오른쪽 끝에 홀로 떨어져 더 크게 치우친다(오너 2026-09-06).
+                두 폭 모두 '이름 바로 옆' 하나가 답이라 분기를 없애고 한 요소로 합쳤다 — '오늘'만 좁은 폭에서 접는다. */}
+            <span className="shrink-0 text-2xs tabular-nums text-ink-muted">
+              · <span className="hidden font-semibold text-ink-secondary sm:inline">오늘 </span>
+              {d.slice(5).replace('-', '.')} <span className={['font-semibold', todayDow === 0 ? 'text-danger-light' : todayDow === 6 ? 'text-accent-200' : 'text-ink-secondary'].join(' ')}>{DOW[todayDow]}</span>
             </span>
             {liveWidget && (
               /* 상태는 '글자'가 아니라 '칩' — 스티키에 상시 떠 있으므로 형태로도 구분돼야 스캔된다 */
@@ -567,15 +582,6 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 라이브
               </span>
             )}
-          </span>
-          {/* 날짜 — 2xs 회색에서 xs 로. '오늘'을 앞에 붙여 '내가 지금 오늘 장부를 보는 중'이 한눈에 들어오게.
-              tabular-nums 는 유지(날짜가 바뀌어도 폭이 안 흔들린다). */}
-          <span className="hidden shrink-0 items-baseline gap-1.5 text-xs lg:flex">
-            <span className="font-semibold text-ink-secondary">오늘</span>
-            <span className="tabular-nums text-ink-muted">{d.slice(5).replace('-', '.')}</span>
-            <span className={['font-semibold', todayDow === 0 ? 'text-danger-light' : todayDow === 6 ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>
-              {DOW[todayDow]}
-            </span>
           </span>
         </div>
       </div>
@@ -864,28 +870,36 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         const curIdx = steps.findIndex((x) => !x.done);
         return (
           <section className="rounded-card border border-border-subtle bg-surface-low p-2.5" aria-label="오늘 진행 단계">
-            <ol className="flex items-center gap-1">
+            {/* ⚠ 두 가지가 어긋나 있었다(2026-09-06 오너 스크린샷).
+                 ① 칸 높이(44px)가 내용(동그라미 21 + 라벨 14 ≈ 37)과 거의 같아 동그라미가 칸 천장에 붙었다.
+                 ② 연결선이 li 의 **세로 중앙**에 있어 동그라미도 라벨도 아닌 그 사이 허공을 이었다.
+                연결선을 동그라미와 **같은 줄** 안으로 넣으면 좌우 이웃의 중심을 정확히 잇는다(계산값 없이 left/right-1/2).
+                gap 을 없앤 것도 그래서다 — 칸 사이가 벌어지면 선이 그 틈에서 끊긴다. */}
+            <ol className="flex items-stretch">
               {steps.map((st, i) => {
                 const current = i === curIdx;
+                const lineCls = (done: boolean) => ['absolute h-px', done ? 'bg-emerald-400/40' : 'bg-border-subtle'].join(' ');
                 return (
-                  <li key={st.key} className="flex min-w-0 flex-1 items-center gap-1">
+                  <li key={st.key} className="flex min-w-0 flex-1">
                     <button type="button" onClick={st.go}
                       aria-current={current ? 'step' : undefined}
-                      className={['flex min-h-[44px] w-full flex-col items-center justify-center gap-0.5 rounded-input px-1 transition-colors',
+                      className={['flex min-h-[44px] w-full flex-col items-center gap-1 rounded-input px-1 py-1.5 transition-colors',
                         current ? 'chip-aura' : 'hover:bg-surface-high/50'].join(' ')}>
-                      <span className={['flex h-5 w-5 items-center justify-center rounded-full text-2xs font-bold',
-                        st.done ? 'bg-emerald-400/20 text-emerald-400'
-                          : current ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
-                        {st.done ? <Icon name="check" size={11} /> : i + 1}
+                      <span className="relative flex w-full items-center justify-center">
+                        {/* mr/ml-3(12.75px) = 동그라미 반지름(10.6px) + 여유 2px */}
+                        {i > 0 && <span aria-hidden className={[lineCls(steps[i - 1].done), 'left-0 right-1/2 mr-3'].join(' ')} />}
+                        {i < steps.length - 1 && <span aria-hidden className={[lineCls(st.done), 'left-1/2 right-0 ml-3'].join(' ')} />}
+                        <span className={['relative flex h-5 w-5 items-center justify-center rounded-full text-2xs font-bold',
+                          st.done ? 'bg-emerald-400/20 text-emerald-400'
+                            : current ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
+                          {st.done ? <Icon name="check" size={11} /> : i + 1}
+                        </span>
                       </span>
-                      <span className={['truncate text-2xs font-semibold',
+                      <span className={['w-full truncate text-center text-2xs font-semibold',
                         st.done ? 'text-ink-secondary' : current ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>
                         {st.label}
                       </span>
                     </button>
-                    {i < steps.length - 1 && (
-                      <span aria-hidden className={['h-px w-2 shrink-0', st.done ? 'bg-emerald-400/40' : 'bg-border-subtle'].join(' ')} />
-                    )}
                   </li>
                 );
               })}
@@ -955,7 +969,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           <Icon name="trophy" size={20} className="shrink-0 text-gold-300" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-ink-primary">순위 미입력 대회 {pendingRanks.length}개</p>
-            <p className="mt-1 truncate text-2xs text-ink-muted">{pendingRanks.slice(0, 4).map((p) => p.date.slice(5).replace('-', '/')).join(', ')}{pendingRanks.length > 4 ? ' 외' : ''} — 마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
+            <p className="mt-1 truncate text-2xs text-ink-muted">{pendingRanks.slice(0, 4).map((p) => `${p.date.slice(5).replace('-', '/')}${p.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(p.gameSeq)}` : ''}`).join(', ')}{pendingRanks.length > 4 ? ' 외' : ''} — 마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
           </div>
           <span className="shrink-0 rounded-input bg-gold-400 px-3 py-2 text-xs font-bold text-ink-inverse">순위 입력</span>
         </button>

@@ -82,8 +82,8 @@ async function uploadToStorage(
   const { error } = await supabase.storage.from(bucket).upload(path, blob, {
     contentType: 'image/webp',
     upsert: true,
-    // 💰 Egress 절감(무료 한도 5GB/월 유지의 핵심) — 이미지 경로는 타임스탬프/고정 파일명이라
-    //    내용이 바뀌면 경로도 바뀐다(아바타는 upsert지만 브라우저가 갱신해도 무방한 수준).
+    // 💰 Egress 절감(무료 한도 5GB/월 유지의 핵심) — 이미지 경로는 타임스탬프 파일명이라
+    //    내용이 바뀌면 경로도 바뀐다(아바타는 고정 경로 upsert 라 uploadAvatar 가 ?v= 쿼리로 캐시 키를 바꾼다).
     //    기본값(1시간) 대신 1년 캐시로 두면 재방문·재조회 시 CDN/브라우저가 처리해 전송량이 거의 0이 된다.
     cacheControl: '31536000',
   });
@@ -104,8 +104,10 @@ export async function uploadPoster(ownerId: string, file: File): Promise<string>
 // ── 아바타 업로드 (256×256 정방형) ──────────────────────────────────────────
 export async function uploadAvatar(userId: string, file: File): Promise<string> {
   const blob = await resizeImage(file, 256, 256, 0.90);
-  const path = `${userId}/avatar.webp`;
-  return uploadToStorage(BUCKET_AVATARS, path, blob);
+  const url  = await uploadToStorage(BUCKET_AVATARS, `${userId}/avatar.webp`, blob);
+  // 고정 경로 upsert + 1년 캐시 → 두 번째 사진부터 URL 이 같아 브라우저·CDN 이 옛 사진을 계속 냈다.
+  // 쿼리로 캐시 키를 바꾼다(공개 객체 서빙은 미지정 파라미터를 무시 · thumbUrl 은 '?' 유무를 처리한다).
+  return `${url}?v=${Date.now()}`;
 }
 
 // ── 마켓플레이스 이미지 업로드 (최대 5장) ───────────────────────────────────

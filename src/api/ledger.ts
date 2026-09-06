@@ -1,6 +1,7 @@
 // src/api/ledger.ts — NURI POS 장부 시스템 API
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { TICKET_WON } from '../lib/units';
+import { hasRankingForGame, rankingEventOf } from '../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
 import { currentUser } from './_session';
 import type { ClockConfig as ClockConfigT } from './clock'; // 타입 전용 — 런타임 순환 없음
 
@@ -361,8 +362,44 @@ export function ledgerLossSummary(
   return { buyins: buyins.length, people: names.size, revenue, unpaid };
 }
 
+/** 손님 1명의 장부 금액 — CRM(단골 관리·예약자 고객정보)이 쓰는 합산. */
+export interface CustomerLedgerTotals {
+  /** 실제 수납된 참가비(원). 통계 '완납 매출' · CSV '완납매출(원)' 과 같은 수. */
+  paid: number;
+  /** 아직 안 받은 참가비(원). paid 와 합치지 않는다. */
+  unpaid: number;
+  /** 회수한 이용권(T 단위, 1T = 1만원). CSV '회수티켓' 과 같은 수. */
+  ticket: number;
+  /** 가게지원 건수 — 현금이 오가지 않은 참가. */
+  support: number;
+}
+
+/** CRM 고객 금액 합산 — 장부·통계·CSV 와 **같은 정본**(buyinFinance)으로 계산한다.
+ *  왜 별도 함수인가: 예전 CRM(getCustomerActivity)은 '현재 세션 현금단가 × 건수'로 다시 합산해
+ *  카드단가·할인 프리셋·기록 시점 수납 스냅샷을 통째로 무시했다. 그래서 같은 손님·같은 기간인데도
+ *  단골 관리의 '누적'과 통계의 '완납 매출'·CSV가 갈렸다(2026-09-05 감사 F04).
+ *  세션 짝짓기 키는 통계 패널과 동일한 `날짜#게임`이고, 짝이 없을 때의 빈 세션도 통계 패널과 같게 둔다
+ *  (LedgerStatsPanel 의 fin() 과 한 글자도 다르면 두 화면이 또 갈린다).
+ *  ⚠ 실수납·미수·이용권·가게지원은 의미가 다르므로 하나로 합치지 않는다 — 화면이 각각 표시한다. */
+export function customerLedgerTotals(
+  buyins: LedgerBuyin[],
+  sessions: Pick<LedgerSession, 'sessionDate' | 'gameSeq' | 'buyinAmount' | 'cardAmount' | 'discounts'>[],
+): CustomerLedgerTotals {
+  const byKey = new Map(sessions.map((s) => [`${s.sessionDate}#${s.gameSeq}`, s]));
+  const t: CustomerLedgerTotals = { paid: 0, unpaid: 0, ticket: 0, support: 0 };
+  for (const b of buyins) {
+    const f = buyinFinance(b, byKey.get(`${b.sessionDate}#${b.gameSeq}`) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
+    t.paid += f.paid;
+    t.unpaid += f.unpaid;
+    t.ticket += f.ticketPaid;
+    t.support += f.support;
+  }
+  return t;
+}
+
+/** ledger_buyins 행 → LedgerBuyin. CRM(reservations.ts)도 같은 변환을 써야 금액이 갈리지 않아 export 한다. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const rowToBuyin = (r: any): LedgerBuyin => ({
+export const rowToBuyin = (r: any): LedgerBuyin => ({
   id: r.id, venueId: r.venue_id, sessionDate: r.session_date, gameSeq: r.game_seq ?? MAIN_GAME_SEQ,
   playerName: r.player_name, entryNo: r.entry_no,
   paymentMethod: r.payment_method as PaymentMethod, isUnpaid: !!r.is_unpaid,
@@ -562,17 +599,23 @@ export async function notifyLedgerOpen(venueId: string, title: string, operatorI
 /** 게임관리 운영 현황판 — 연결 장부의 바인 수·매출(만)·마감·순위입력 여부(scheduleId 키). */
 export interface PosterOpsSummary {
   date: string;
+  /** 이 요약이 대표하는 장부의 게임(1=메인, 2+=사이드). 한 포스터에 같은 날 장부가 둘이면 어느 것인지 이 값이 정한다. */
+  gameSeq: number;
+  /** 그 장부의 게임 이름(순위 event 이름과 대조·이동에 쓰는 값). */
+  rankingEvent: string;
   closed: boolean;
   buyinCount: number;
   revenueMan: number;   // 실수금 합(만원 환산) — 통계와 동일한 buyinFinance 규칙(DB 금액은 원 단위)
-  hasRankings: boolean; // 그 날짜에 순위 입력이 1건이라도 있는지
+  hasRankings: boolean; // 그 **게임**의 순위가 입력됐는지(F02 — 날짜 Set 으로 뭉치면 사이드가 거짓 ✓ 가 된다)
 }
 export async function getPosterOpsSummaries(venueId: string): Promise<Record<string, PosterOpsSummary>> {
   if (IS_MOCK) return {};
   const { data: ss } = await supabase.from('ledger_sessions')
-    .select('schedule_id, session_date, game_seq, closed, buyin_amount, card_amount, discounts')
+    // title 은 순위 event 이름과 대조하는 유일한 키다(venue_rankings 에 game_seq 가 없다 — rankingGame.ts)
+    .select('schedule_id, session_date, game_seq, title, closed, buyin_amount, card_amount, discounts')
     .eq('venue_id', venueId).not('schedule_id', 'is', null)
-    .order('session_date', { ascending: false }).limit(100);
+    // 같은 포스터에 장부가 여럿이면 '최신 날짜의 메인' 이 대표 — game_seq 정렬이 없으면 어느 장부가 뽑힐지 비결정이었다
+    .order('session_date', { ascending: false }).order('game_seq', { ascending: true }).limit(100);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sessions = (ss ?? []) as any[];
   if (!sessions.length) return {};
@@ -581,9 +624,14 @@ export async function getPosterOpsSummaries(venueId: string): Promise<Record<str
   const dates = [...new Set(sessions.map((s) => s.session_date as string))];
   const [bRes, rRes] = await Promise.all([
     supabase.from('ledger_buyins').select('*').eq('venue_id', venueId).in('session_date', dates),
-    supabase.from('venue_rankings').select('ranking_date').eq('venue_id', venueId).in('ranking_date', dates),
+    supabase.from('venue_rankings').select('ranking_date, event_name').eq('venue_id', venueId).in('ranking_date', dates),
   ]);
-  const rankedDates = new Set(((rRes.data ?? []) as { ranking_date: string }[]).map((r) => r.ranking_date));
+  // 날짜 → 그 날 저장된 event 이름들. 게임 판정은 rankingGame.hasRankingForGame 이 한다(날짜 Set 금지 — F02).
+  const rankedEvents = new Map<string, string[]>();
+  for (const r of (rRes.data ?? []) as { ranking_date: string; event_name: string | null }[]) {
+    const arr = rankedEvents.get(r.ranking_date);
+    if (arr) arr.push(r.event_name ?? ''); else rankedEvents.set(r.ranking_date, [r.event_name ?? '']);
+  }
   // (날짜,게임)별 바인 집계(매출은 그 게임 단가 기준 buyinFinance)
   const agg = new Map<string, { cnt: number; rev: number }>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -600,12 +648,14 @@ export async function getPosterOpsSummaries(venueId: string): Promise<Record<str
   }
   const out: Record<string, PosterOpsSummary> = {};
   for (const s of sessions) {
-    if (out[s.schedule_id]) continue; // 최신 장부 우선
-    const a = agg.get(gkey(s.session_date as string, s.game_seq ?? MAIN_GAME_SEQ)) ?? { cnt: 0, rev: 0 };
+    if (out[s.schedule_id]) continue; // 최신 날짜의 메인 장부가 대표(위 정렬)
+    const seq = (s.game_seq ?? MAIN_GAME_SEQ) as number;
+    const game = { gameSeq: seq, title: (s.title ?? null) as string | null };
+    const a = agg.get(gkey(s.session_date as string, seq)) ?? { cnt: 0, rev: 0 };
     out[s.schedule_id] = {
-      date: s.session_date, closed: !!s.closed,
+      date: s.session_date, gameSeq: seq, rankingEvent: rankingEventOf(game), closed: !!s.closed,
       buyinCount: a.cnt, revenueMan: Math.round(a.rev / WON_PER_MAN),
-      hasRankings: rankedDates.has(s.session_date),
+      hasRankings: hasRankingForGame(game, rankedEvents.get(s.session_date as string) ?? []),
     };
   }
   return out;
@@ -1033,18 +1083,20 @@ export async function venueTodayGames(venueId: string): Promise<{ gameSeq: numbe
   return (data ?? []).map((r: any) => ({ gameSeq: r.game_seq, title: r.title }));
 }
 export interface MyBuyinRequest { id: string; venueId: string; venueName: string; status: 'pending' | 'approved' | 'rejected'; requestedGameSeq: number | null; gameSeq: number | null; rejectReason: string | null; }
-/** 손님: 오늘 내가 보낸 바인 요청(매장명·상태) — 홈 배너용(RLS 본인 select). */
+/** get_my_buyin_requests_current 반환 행 → 화면 모델. venue_name 은 매장이 RLS 밖(승인 취소)이면 null. */
+export function toMyBuyinRequest(r: { id: string; venue_id: string; status: MyBuyinRequest['status']; requested_game_seq?: number | null; game_seq?: number | null; resolve_note?: string | null; venue_name?: string | null }): MyBuyinRequest {
+  return { id: r.id, venueId: r.venue_id, venueName: r.venue_name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null, gameSeq: r.game_seq ?? null, rejectReason: r.resolve_note ?? null };
+}
+/** 손님: 지금 진행 중인 장부(영업일)에 내가 보낸 바인 요청(매장명·상태) — 홈 배너·라이브 '내 토너'용.
+ *  날짜 규칙은 서버(20260905j)가 정한다: 어제 장부가 미마감이면 어제 행도 보이고, 마감되면 사라진다.
+ *  로컬 '오늘' .eq 는 자정 넘긴 요청을 놓쳤고, [오늘, 어제] .in 은 끝난 요청을 종일 보여준다 — 둘 다 금지. */
 export async function getMyBuyinRequestsToday(): Promise<MyBuyinRequest[]> {
   if (IS_MOCK) return [];
   const u = await currentUser();
   if (!u) return [];
-  const today = new Date().toLocaleDateString('en-CA');
-  const { data, error } = await supabase.from('ledger_buyin_requests')
-    .select('id, venue_id, status, requested_game_seq, game_seq, resolve_note, venues(name)')
-    .eq('user_id', u.id).eq('session_date', today).order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('get_my_buyin_requests_current');
   if (error) return [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, venueName: r.venues?.name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null, gameSeq: r.game_seq ?? null, rejectReason: r.resolve_note ?? null }));
+  return (data ?? []).map(toMyBuyinRequest);
 }
 /** 운영자: 그날 대기중(pending) 바인 요청 목록. */
 export async function getPendingBuyinRequests(venueId: string, date: string): Promise<BuyinRequest[]> {

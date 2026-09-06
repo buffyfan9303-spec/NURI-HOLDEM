@@ -480,7 +480,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
             문법은 앱에 이미 있는 선례를 따른다: ListingDetailModal 의 하단 고정 CTA
             (sticky bottom-0 / border-t / 불투명 bg-surface-mid). backdrop-filter 는 쓰지 않는다 —
             상시 노출 요소의 blur 는 스크롤 중 페인트 폭탄이다(모션 헌법 §20.4-3·5). */}
-        <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border-default bg-surface-mid px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border-default bg-surface-mid px-4 py-3">
           <button type="button" onClick={onClose} className="btn-ghost flex-1">취소</button>
           <button type="submit" disabled={saving} className="btn-primary flex-1 disabled:opacity-60">
             {saving ? '등록 중…' : '게시하기'}

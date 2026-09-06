@@ -8,7 +8,8 @@
 //   ① ::view-transition-old/new(<패널>) 이 vt-panel-* 키프레임으로 실제 애니메이트되고
 //   ② ::view-transition-old/new(root) 와 탭바 스냅샷은 애니메이트되지 **않는지**(제자리 고정)
 // 를 확인한다. ②가 깨지면 헤더·히어로까지 통째로 밀리는 예전 회귀다.
-import { test, expect, type Page, type Locator } from '@playwright/test';
+import { test, expect } from './_fixtures';
+import { type Page, type Locator } from '@playwright/test';
 import { stabilizeBackstack, dismissOverlays, loginAs } from './_session';
 
 const EMAIL = process.env.E2E_EMAIL;

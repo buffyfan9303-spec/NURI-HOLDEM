@@ -9,6 +9,7 @@ import { useDrillPlan } from './tools/drillPlan';
 import { useAuth } from '../../contexts/AuthContext';
 import { promptLogin } from '../../lib/requireLogin';
 import { goSubTab } from '../../lib/subTabTransition';
+import TdaRulesTool from './gto/TdaRulesTool';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
 import ChipDistributor from './tools/ChipDistributor';
@@ -35,7 +36,7 @@ import type { HandReviewInit } from './gto/HandReviewTool';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 
-type ToolKey = 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'wrongnote' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal';
+type ToolKey = 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'wrongnote' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal' | 'tda';
 /** 5레인 IA — 차트 / 트레이닝 / 분석 / 계산기 / 매장운영.
  *  오너 피드백(2026-09-02): "차트를 보고 싶은데 문제가 나온다" — 예전엔 '학습' 한 레인에 차트와 퀴즈가 섞여
  *  첫 카드가 '오늘의 드릴'(퀴즈)이었다. 보는 것(차트)과 푸는 것(트레이닝)을 레인으로 갈라 차트를 맨 앞에 둔다. */
@@ -47,6 +48,7 @@ type ToolCat = 'chart' | 'learn' | 'analyze' | 'calc' | 'ops';
 const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?: string; icon: IconName }[] = [
   // ── 학습 — 차트·트레이너 ──
   { key: 'drill', cat: 'learn', name: '오늘의 드릴', desc: '약한 부분만 하루 5문제', keywords: '약점 기반 하루 5문제', icon: 'target' },
+  { key: 'tda', cat: 'chart', name: '2024 TDA 규칙', desc: '상황 물으면 규칙 찾아줌', keywords: '토너먼트 디렉터 규칙 TDA 2024 한글 판정 플로어 딜러 카드 노출 올인 페널티 룰북', icon: 'gavel' },
   { key: 'range', cat: 'chart', name: '프리플랍 레인지 차트', desc: '포지션별 시작 핸드 기준표', keywords: '9인·6맥스 포지션별 오픈·3벳·수비·vs 3벳', icon: 'grid-3x3' },
   { key: 'pushfold', cat: 'chart', name: '푸시 · 폴드 차트', desc: '칩 적을 때 올인 기준표', keywords: '자체 Nash · 셔브·콜 레인지', icon: 'arrow-up-from-line' },
   { key: 'trainer', cat: 'learn', name: '프리플랍 트레이너', desc: '오픈과 올인 판단 연습', keywords: '오픈·셔브 맞히기, 오답 노트', icon: 'dumbbell' },
@@ -100,6 +102,7 @@ const QUIZ_KEYS = new Set<ToolKey>(['drill', 'range', 'pushfold', 'trainer', 'po
 
 function renderTool(k: ToolKey): ReactNode {
   switch (k) {
+    case 'tda': return <TdaRulesTool />;
     // '결과 먼저': 빈 폼 대신 직전 입력(스냅샷) 또는 대표 데모 핸드(AKs vs QQ)로 진입 즉시 결과.
     case 'gto': {
       const saved = readSnap<DeepGtoInit>('tool:gto');

@@ -7,7 +7,7 @@
 //  · 끌어내려 닫으면 setDragY(0) 이 먼저 돌아 원위치로 튀어오르며 사라졌다.
 //
 // 모션은 눈으로 보는 것이라 자동화가 어렵지만, '규칙이 걸려 있는가'는 계산된 스타일로 잴 수 있다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { stabilizeBackstack } from './_session';
 
 test.describe('모션 — 시트가 아래에서 올라오고 손끝을 따라온다', () => {

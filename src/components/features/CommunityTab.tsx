@@ -1,11 +1,12 @@
 import { memo, useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, useTransition, startTransition, type ReactNode } from 'react';
 import { goSubTab } from '../../lib/subTabTransition';
+import { centerInRail } from '../../lib/railScroll';
 import { promptLogin } from '../../lib/requireLogin';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import { getEquippedMarks, getNickColors, isBumped } from '../../api/community';
 import { getAppSetting, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../api/settings';
-import { pinnedFirst } from '../../lib/pinnedFirst';
+import { hotFirst, pinnedFirst } from '../../lib/pinnedFirst';
 import TitleChip from '../atoms/TitleChip';
 import MarqueeText from '../atoms/MarqueeText';
 import { tierCss } from '../atoms/TierBadge';
@@ -26,6 +27,7 @@ import TierLeaderboard from './TierLeaderboard';
 import CommunityShoutBar from './CommunityShoutBar';
 import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { filterContent } from '../../lib/content-filter';
 import { parseAttachments } from '../../lib/hand';
 import { MiniCard } from '../atoms/HandCards';
@@ -47,6 +49,9 @@ interface CommunityTabProps {
   venues: Venue[];
   comments: Comment[];
   posts: CommunityPost[];
+  /** 게시글 조회 실패 — 있으면 빈 상태 대신 오류·재시도를 보인다 */
+  postsErr?: unknown;
+  onRetryPosts?: () => void;
   /** 운영자 공지 (전역 피드 최상단에 핀 고정) */
   notices?: MarketplaceNotice[];
   isAdmin?: boolean;
@@ -99,7 +104,7 @@ const DealerCommunityM     = memo(DealerCommunity);
 const OwnerCommunityM      = memo(OwnerCommunity);
 
 function CommunityTab({
-  venues, comments, posts: rawPosts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
+  venues, comments, posts: rawPosts, postsErr = null, onRetryPosts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
   active = true,
 }: CommunityTabProps) {
@@ -202,8 +207,8 @@ function CommunityTab({
   // 서브탭 바(가로 스크롤) — 외부 지정(딥링크·대시보드 바로가기)으로 바뀐 활성 탭이 화면 밖이면 보이게 끌어온다
   const secBarRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    secBarRef.current?.querySelector<HTMLElement>('[data-pill-active]')
-      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // ⚠ scrollIntoView 금지 — 조상 스크롤러를 전부 훑어 **문서(세로)까지** 끌어당긴다(railScroll 주석).
+    centerInRail(secBarRef.current?.querySelector<HTMLElement>('[data-pill-active]'), secBarRef.current);
   }, [shownSec]);
 
   // ── 유휴 프리마운트 (2026-08-28) ─────────────────────────────────────────────
@@ -297,7 +302,7 @@ function CommunityTab({
           data-community-secbar: 서브섹션 View Transition(root 스냅샷)에서 제외 — 헤더·하단 탭바와 같은
           '상시 크롬'이라 전환 블러/슬라이드에 딸려 움직이면 안 된다(index.css VT 예외 블록 참조) */}
       <div data-community-secbar="" className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-subtle pt-2 pb-2 lg:pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
-        <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5">
+        <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high px-0.5">
           {/* 활성 탭 뒤 글로우(오너 지시 2026-09-05) — pill-active = --grad-cta 채움 + 18px 블룸.
                 ⚠ 블룸을 다 보이려고 세로 여백을 키우지 않는다(2026-09-05 실측): overflow 는 **패딩 박스**에서
                   자르므로 여백 4.25px 이면 18px 중 4.25px 만 더 보인다 — 원래 2px 과 눈에 띄는 차이가 없는데
@@ -353,6 +358,8 @@ function CommunityTab({
           <div className="min-w-0 lg:w-[24rem] lg:shrink-0 xl:w-[30rem]">
             <FeedSectionM
               posts={boardPosts}
+              postsErr={postsErr}
+              onRetryPosts={onRetryPosts}
               onOpenWrite={openWriteFree}
               onLike={onLikePost}
               onSelectPost={isDesktop ? setBoardSelected : onSelectPost}
@@ -431,20 +438,30 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
     <button
       type="button"
       onClick={onClick}
-      data-pill-active={active || undefined}
       className={[
         // flex-[1_0_auto]: 자리가 남으면 균등 분배, 좁으면 내용 폭(일정한 px-2)을 지키고 바가 가로 스크롤
         // §T1: 서브탭 라벨 = t-tab(12.75/600). 활성은 아래 font-bold 가 덮는다.
         // 오너 승인(2026-09-03): px-3 → px-2 — 360px 실측 바 326px 에 6탭(px-2.5 는 344px 로 딜러가 잘렸다 → px-2 ≈ 318px).
-        'relative flex-[1_0_auto] px-2 py-2 t-tab rounded-[6px] whitespace-nowrap',
+        // 44px 탭 타깃(#15): overflow-x-auto 레일이라 .hit/.tap-y-44 의 확장은 세로 오버플로가 된다 →
+        // 카테고리 칩 레일과 같은 조리법 — 버튼은 h-11 투명 히트박스, 안쪽 span 이 34px 시각 칩.
+        // data-pill-active 는 span 에 둔다(SlidingPill 이 그 박스를 재다).
+        // 알약은 40px — 트레이(44px) 안에서 위아래 2px 만 남기는 비율이 오너 지시 레이아웃(2026-09-06 이미지)이다.
+        // 34px 은 위아래 5px 씩 빈 공간을 만들어 '테두리 공백이 크다'는 지적을 다시 불렀다.
+        // 버튼에 relative 를 두지 않는다 — span 의 offsetParent 가 레일이어야 offsetLeft/Top 이 맞는다.
+        'flex-[1_0_auto] inline-flex h-11 items-center t-tab whitespace-nowrap',
         'transition-colors',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
         // 채움 알약(--grad-cta) 위에서는 흰 글자여야 읽힌다 — ink-primary 는 라이트에서 약 2.4:1
-                active ? 'text-white font-bold' : 'text-ink-secondary hover:text-ink-primary',
+        active ? 'text-white font-bold' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >
       {/* 활성 배경은 부모의 공용 SlidingPill 이 미끄러지며 그린다 — 탭별 개별 팝인 제거 */}
-      <span className="relative">{label}</span>
+      <span
+        data-pill-active={active || undefined}
+        className="relative inline-flex h-10 w-full items-center justify-center px-2 rounded-[6px]"
+      >
+        {label}
+      </span>
     </button>
   );
 }
@@ -452,12 +469,15 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
 // ── 전역 피드 ────────────────────────────────────────────────────────────────
 
 function FeedSection({
-  posts, onOpenWrite, onLike, onSelectPost,
+  posts, postsErr = null, onRetryPosts, onOpenWrite, onLike, onSelectPost,
   selectedId,
   placeholder = '나누고 싶은 이야기를 적어보세요…', emptyText = '첫 게시글을 남겨보세요',
   enableCategory = false,
 }: {
   posts: CommunityPost[];
+  /** 목록 조회 실패(있으면 빈 상태 대신 오류·재시도를 보인다 — 실패를 '글 없음'으로 위장하지 않는다) */
+  postsErr?: unknown;
+  onRetryPosts?: () => void;
   onOpenWrite: () => void;
   onLike: (id: string) => void;
   onSelectPost: (p: CommunityPost) => void;
@@ -540,7 +560,9 @@ function FeedSection({
   }, [posts, q, cat, enableCategory, order]);
 
   const pinHot = enableCategory && cat === 'all' && !q.trim() && order === 'new' && hotPosts.length > 0;
-  const listSource = pinHot ? filtered.filter((p) => !hotIds.has(p.id)) : filtered;
+  // HOT 은 별도 블록이 아니라 **한 목록** 안에 선다(#10, 오너 결정 2026-09-05): 광고(컨테이너 첫 행) → 고정 → HOT → 끌올 → 최신.
+  // 예전엔 HOT 블록이 목록 컨테이너 밖에 먼저 그려져 '광고 맨 위'·'고정 맨 위' 규칙이 둘 다 깨졌다.
+  const listSource = pinHot ? hotFirst(filtered, hotPosts) : filtered;
   const shown = listSource.slice(0, visible);
 
   return (
@@ -655,37 +677,19 @@ function FeedSection({
         </div>
       )}
 
-      {/* HOT — 최근 6시간 최다 조회 글 (게시판 기본 화면).
-          피드(카드) 모드는 카드 스택 그대로 — HOT 배지가 이미 카드 안에 있어 이중 테두리를 만들지 않는다 */}
-      {pinHot && (
-        view === 'compact' ? (
-          <div className="rounded-aura border border-danger/30 bg-danger/[0.04] overflow-hidden">
-            <ul>
-              {hotPosts.map((p) => (
-                <PostRow key={p.id} post={p} hot selected={p.id === selectedId} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} onClick={() => onSelectPost(p)} />
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {hotPosts.map((p) => (
-              <PostCard key={p.id} post={p} hot selected={p.id === selectedId} mark={authorMarks[p.userId] ?? ''} nickToken={authorColors[p.userId]} titlePts={titleOf(p.userId)} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
-            ))}
-          </ul>
-        )
-      )}
-
-      {/* 포스트 목록 — 게시판 형태 (조밀하게 많이 보이게) */}
-      {posts.length === 0 ? (
+      {/* 포스트 목록 — 게시판 형태 (조밀하게 많이 보이게). HOT 은 목록 안에서 hot 배지로 식별(별도 블록 없음) */}
+      {listSource.length === 0 ? (
         <>
-          <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title={emptyText} /></div>
-          {/* 글이 없어도 광고 칸은 산다 — 게재 미리보기 겸. 광고는 언제나 **맨 위**(오너 2026-09-05). */}
-          {ads[0] && <div className="rounded-aura border card-aura overflow-hidden"><AdRow ad={ads[0]} /></div>}
-        </>
-      ) : listSource.length === 0 ? (
-        <>
-          {ads[0] && <div className="rounded-aura border card-aura overflow-hidden"><AdRow ad={ads[0]} /></div>}
-          <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title={pinHot ? '다른 글이 없습니다' : '검색 결과가 없습니다'} /></div>
+          {/* 글이 없어도 광고 칸은 산다 — 게재 미리보기 겸. 광고는 언제나 **맨 위**(오너 2026-09-05).
+              AdRow 는 <li> 라 <ul> 로 감싼다(#25). */}
+          {ads[0] && <ul className="rounded-aura border card-aura overflow-hidden"><AdRow ad={ads[0]} /></ul>}
+          {/* 조회 실패 / 아직 글 없음 / 검색 결과 없음 — 셋은 서로 다른 상태다. 실패를 '글 없음'으로 적으면
+              손님은 게시판이 비었다고 믿고 떠난다(문서 §5 '빈 결과·조회 실패를 구분'). */}
+          {postsErr != null && posts.length === 0 ? (
+            <LoadErrorCard error={postsErr} what="게시글" onRetry={onRetryPosts} />
+          ) : (
+            <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title={posts.length === 0 ? emptyText : '검색 결과가 없습니다'} /></div>
+          )}
         </>
       ) : view === 'compact' ? (
         <>
@@ -699,7 +703,7 @@ function FeedSection({
                 const showAd = i % adsEvery === adsEvery - 1 && !!ad; // 글 N개마다 다음 광고 한 칸(관리자 설정)
                 return (
                   <Fragment key={p.id}>
-                    <PostRow post={p} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
+                    <PostRow post={p} hot={pinHot && hotIds.has(p.id)} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
                     {showAd && <AdRow ad={ad} />}
                   </Fragment>
                 );
@@ -721,7 +725,7 @@ function FeedSection({
               const showAd = i % adsEvery === adsEvery - 1 && !!ad;
               return (
                 <Fragment key={p.id}>
-                  <PostCard post={p} mark={authorMarks[p.userId] ?? ''} nickToken={authorColors[p.userId]} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
+                  <PostCard post={p} hot={pinHot && hotIds.has(p.id)} mark={authorMarks[p.userId] ?? ''} nickToken={authorColors[p.userId]} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
                   {showAd && <AdRow ad={ad} card />}
                 </Fragment>
               );
@@ -931,9 +935,10 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
             {/* 카테고리 pill — CATEGORY_TINTS 고정 팔레트 */}
             <span className={['mt-px shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>{catLabel}</span>
           </div>
-          {/* 제목 — 한 줄 목록(PostRow)과 같은 15px 위계. 카드에서 제일 먼저 읽히는 줄 */}
+          {/* 제목 — 한 줄 목록(PostRow)과 같은 15px 위계. 카드에서 제일 먼저 읽히는 줄.
+              PostRow 와 같은 전광판 규칙(fdc8550 ④, #24): 넘칠 때만 흐르고 짧은 제목은 정적 truncate 그대로 */}
           {post.title && (
-            <p className="mt-1 truncate text-sm font-bold leading-tight text-ink-primary">{post.title}</p>
+            <MarqueeText text={post.title} className="mt-1 text-sm font-bold leading-tight text-ink-primary" />
           )}
           {/* 본문 발췌 — 2줄 클램프 */}
           {/* §T1: 13px 은 사다리 밖 — 본문 미리보기 = t-desc(12.75/19.13). */}
@@ -1002,7 +1007,7 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
               aria-pressed={!!post.liked}
               aria-label={`좋아요 ${post.likeCount}`}
               onClick={(e) => { e.stopPropagation(); onLike(); }}
-              className={`inline-flex items-center gap-1 transition-colors ${post.liked ? 'text-danger-light' : 'hover:text-danger-light'}`}
+              className={`hit inline-flex items-center gap-1 transition-colors ${post.liked ? 'text-danger-light' : 'hover:text-danger-light'}`}
             >
               <Icon name={post.liked ? 'heart-fill' : 'heart'} size={13} strokeWidth={1.6} className="shrink-0" />
               <span className="tabular-nums">{post.likeCount}</span>
@@ -1530,9 +1535,12 @@ function LiveWallSection() {
                     <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">운영자</span>
                   )}
                   <span className="text-ink-muted ml-auto shrink-0">{relativeTime(m.createdAt)}</span>
+                  {/* ⚠ 삭제 버튼에 `hit`(::after 44px 확장)을 쓰면 안 된다 — 확장된 히트박스가 **본문 첫 줄 위를 덮어**
+                      본문을 읽으려 탭한 손가락이 확인 없이 삭제를 실행한다(되돌리기 없음). 실제 박스를 키우고
+                      음수 마진으로 행 높이를 되돌린다: 마진박스 16px = 이름행 높이라 스켈레톤 계약(위 h-4+18px)이 유지된다. */}
                   {canDelete(m) && (
                     <button type="button" onClick={() => remove(m)} aria-label="삭제"
-                      className="shrink-0 text-ink-muted hover:text-danger-light leading-none">
+                      className="-my-3.5 -mr-1 flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light">
                       <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
                     </button>
                   )}

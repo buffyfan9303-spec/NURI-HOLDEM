@@ -1607,6 +1607,51 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
 
+/* ── 이벤트: 카드 찢기 · 개봉 연출 ────────────────────────────────────────────
+   §20.4 화이트리스트 준수 — transform·opacity 와 clip-path(리빌 한정)만 움직인다.
+   전부 **1회성**이다(무한 루프 없음 — 전정계 부담 0). 새 이징·duration 토큰을 만들지 않는다.
+
+   찢김은 **같은 카드 뒷면 두 장**을 서로 다른 clip-path 로 잘라 겹쳐 두고 각자 반대로 밀어내는 것이다
+   (한 장을 쪼개는 CSS 는 없다). 톱니 좌표가 두 조각에서 정확히 맞물려야 '찢어진 종이'로 보인다 —
+   왼쪽의 오른쪽 변과 오른쪽의 왼쪽 변은 **같은 점 목록**이다. 한쪽만 고치면 틈이나 겹침이 생긴다. */
+.tear-l { clip-path: polygon(0 0, 52% 0, 47% 12%, 54% 26%, 46% 39%, 53% 53%, 45% 67%, 52% 81%, 47% 92%, 51% 100%, 0 100%); }
+.tear-r { clip-path: polygon(52% 0, 100% 0, 100% 100%, 51% 100%, 47% 92%, 52% 81%, 45% 67%, 53% 53%, 46% 39%, 54% 26%, 47% 12%); }
+@keyframes card-tear-l { to { transform: translate3d(-68%, 10%, 0) rotate(-16deg); opacity: 0; } }
+@keyframes card-tear-r { to { transform: translate3d(68%, 10%, 0) rotate(16deg); opacity: 0; } }
+@keyframes card-prize-in { from { opacity: 0; transform: scale(0.8); } 60% { opacity: 1; transform: scale(1.04); } to { opacity: 1; transform: none; } }
+/* 찢기 직전의 '버티는' 미세 진동 — 손이 닿았다는 신호. 짧고 작게. */
+@keyframes card-strain { 25% { transform: translate3d(-2px,0,0) rotate(-0.6deg); } 75% { transform: translate3d(2px,0,0) rotate(0.6deg); } }
+/* 당첨 순간 뒤에서 퍼지는 빛 — 한 번만 커졌다 사라진다(회전 루프를 쓰지 않는 이유는 위 주석). */
+@keyframes prize-burst { from { opacity: 0.85; transform: scale(0.35); } to { opacity: 0; transform: scale(2.1); } }
+/* 등급 배지 튀어오름 — 결과의 주인공 하나에만. */
+@keyframes prize-pop { from { opacity: 0; transform: scale(0.5) translateY(6px); } 65% { transform: scale(1.08) translateY(0); } to { opacity: 1; transform: none; } }
+/* 조각(파편) — 찢은 종이가 흩어지는 느낌. 각 조각의 방향은 인라인 CSS 변수로 준다. */
+@keyframes shred-fly { to { opacity: 0; transform: translate3d(var(--sx), var(--sy), 0) rotate(var(--sr)); } }
+/* 포일 광택 — 카드 표면을 한 번 훑고 지나간다(호버·프레스에서만, 상시 아님). */
+@keyframes foil-sweep { from { transform: translateX(-120%) skewX(-18deg); } to { transform: translateX(220%) skewX(-18deg); } }
+
+.anim-tear-l { animation: card-tear-l var(--dur-panel) var(--ease) both; }
+.anim-tear-r { animation: card-tear-r var(--dur-panel) var(--ease) both; }
+.anim-prize  { animation: card-prize-in var(--dur-panel) var(--ease-out-ui) both; }
+.anim-strain { animation: card-strain var(--dur-base) var(--ease-out-ui) both; }
+.anim-burst  { animation: prize-burst var(--dur-panel) var(--ease-out-ui) both; }
+.anim-pop    { animation: prize-pop var(--dur-panel) var(--ease-out-ui) both; }
+.anim-shred  { animation: shred-fly var(--dur-panel) var(--ease) both; }
+.foil::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.28), transparent);
+  width: 45%; transform: translateX(-120%) skewX(-18deg); opacity: 0;
+}
+.foil:hover::after, .foil:active::after { opacity: 1; animation: foil-sweep var(--dur-panel) var(--ease-out-ui) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* '없음'이 아니라 '짧은 페이드' — 무엇이 나왔는지는 여전히 이해돼야 한다(§20.4 #7). */
+  .anim-tear-l, .anim-tear-r, .anim-shred { animation: none; opacity: 0; }
+  .anim-prize, .anim-pop { animation: card-prize-in var(--dur-fast) linear both; transform: none; }
+  .anim-burst, .anim-strain { animation: none; opacity: 0; }
+  .foil:hover::after, .foil:active::after { animation: none; opacity: 0; }
+}
+
 /* ── 바이올렛 룩 v2 공용 유틸(오너 레퍼런스 전면화) — 전부 정적 페인트, 애니 0 ──
    .pill-active: 내비·세그먼트의 '활성 알약' 정본(OUTFLAME 필 내비 문법) —
    그라데이션 필 + 액센트 글로우. SlidingPill/활성 탭 배경 클래스로 사용.

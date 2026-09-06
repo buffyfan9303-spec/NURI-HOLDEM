@@ -10,7 +10,7 @@
 //
 // 자격증명은 환경변수로만 주입(레포에 절대 커밋 금지): E2E_EMAIL, E2E_PASSWORD.
 // ⚠ 반드시 전용 테스트 계정/매장으로 돌릴 것 — 실 운영 매장 금지. 여기서는 변이를 하지 않는다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { loginAs, dismissOverlays, stabilizeBackstack } from './_session';
 
 const EMAIL = process.env.E2E_EMAIL;
@@ -95,7 +95,15 @@ test.describe('인증 스모크', () => {
     test.setTimeout(90_000);
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
+    // ⚠ 쓰기 차단 가드(_fixtures)가 막은 요청은 콘솔에 ERR_BLOCKED_BY_CLIENT 로 남는다 —
+    //   그건 **이 하네스가 일부러 만든 것**이지 앱 결함이 아니다(운영 DB 를 지키는 장치).
+    //   진짜 쓰기(claim_daily_login_point 등)는 계속 막혀야 하므로 가드를 풀지 않고 소음만 거른다.
+    page.on('console', (m) => {
+      if (m.type() !== 'error') return;
+      const t = m.text();
+      if (t.includes('ERR_BLOCKED_BY_CLIENT')) return;
+      errors.push(`console: ${t}`);
+    });
 
     await loginAs(page, EMAIL!, PASSWORD!);
     await page.goto('/');

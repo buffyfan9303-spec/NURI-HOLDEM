@@ -12,7 +12,7 @@
 //   간헐 실패를 방치하면 사람들이 재실행으로 넘기기 시작하고, 그러면 진짜 회귀도 같이 넘어간다.
 //   그렇다고 skip 으로 꺼두면 '조용히 안 도는 테스트' 가 된다 — 그래서 끄지 않고 **분리**했다.
 //   나머지 정적·결정적 검사(<head> 확인, 손님에게 업주 청크 금지)는 기본 스위트에 그대로 남는다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { dismissOverlays } from './_session';
 
 test.describe('부팅 예산 — 첫 화면과 경쟁하는 것이 없어야 한다', () => {

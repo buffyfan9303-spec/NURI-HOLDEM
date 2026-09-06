@@ -1,15 +1,40 @@
 // src/api/checkins.ts — QR 체크인. 기록은 check_in RPC로만(로그인 회원·4시간 중복 방지).
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
+import { kstToday } from './ledger';
 
 export interface Checkin { id: string; venueId: string; userId: string; displayName: string | null; createdAt: string }
 
-/** 체크인 실행. 성공 시 매장명 반환. */
-export async function checkIn(venueId: string): Promise<string> {
-  if (IS_MOCK) return '데모 매장';
+/** 방문 일수 — 매장별 KST 날짜 distinct. 서버 my_visited_venues(20260905l)·ranking_top_venues(20260829g)와 같은 단위라
+ *  프로필 '방문 N회'·업적 뱃지·대시보드 매장별 방문이 한 숫자로 맞는다.
+ *  같은 날 같은 매장 재스캔(4시간 중복 방지 후 2회째) = 1방문, 같은 날 다른 매장 = 각각 1방문. */
+export function countVisitDays(rows: { venue_id: string; created_at: string }[]): number {
+  return new Set(rows.map((r) => `${r.venue_id}|${kstToday(Date.parse(r.created_at))}`)).size;
+}
+
+/** 체크인 결과. points = 이번에 실제 부여된 점수(같은 날 두 번째부터 0), streak = 갱신된 연속일(구형 서버면 null). */
+export interface CheckInResult { name: string; points: number; streak: number | null }
+
+/** 서버 반환 정규화 — 20260905k 부터 jsonb {name, points, streak}. 구형 check_in(text) 은 매장명만 돌려주므로
+ *  옛 클라 문구와 같게 +3 으로 본다(배포 순서상 클라가 먼저 나간다). */
+export function normalizeCheckInResult(data: unknown): CheckInResult {
+  if (data && typeof data === 'object') {
+    const o = data as Record<string, unknown>;
+    return {
+      name: typeof o.name === 'string' ? o.name : '',
+      points: Number(o.points) || 0,
+      streak: o.streak == null ? null : (Number(o.streak) || 0),
+    };
+  }
+  return { name: typeof data === 'string' ? data : '', points: 3, streak: null };
+}
+
+/** 체크인 실행. 성공 시 매장명·부여 점수·연속일 반환. */
+export async function checkIn(venueId: string): Promise<CheckInResult> {
+  if (IS_MOCK) return { name: '데모 매장', points: 3, streak: null };
   const { data, error } = await supabase.rpc('check_in', { p_venue_id: venueId });
   if (error) throw new Error(error.message);
-  return (data as string) ?? '';
+  return normalizeCheckInResult(data);
 }
 
 export async function listVenueCheckins(venueId: string, sinceIso: string): Promise<Checkin[]> {

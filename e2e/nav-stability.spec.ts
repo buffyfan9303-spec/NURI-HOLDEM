@@ -15,7 +15,7 @@
 //
 // ⚠ 클릭은 Playwright 의 actionability 재시도(locator.click)를 쓰지 않고 raw mouse.click 을 쓴다.
 //   재시도는 '먹통' 을 자동으로 기다려 주기 때문에 — 즉 이 스펙이 잡아야 할 바로 그 증상을 지워버린다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack } from './_session';
 import { installNavProbe, aimProbeAtTab, resetProbe, readProbe, currentScreen } from './_navprobe';
 

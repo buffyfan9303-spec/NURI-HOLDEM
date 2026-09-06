@@ -8,7 +8,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierColor, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS, tierCss, ACE_VAR } from '../atoms/TierBadge';
 import {
-  getActivityLeaderboard, getMyPointBalance, getShoutRules,
+  getActivityLeaderboard, getMyPointBalance, buyLabel, lacksPoints, getShoutRules,
   getShopSkus, getMyOwnedMarks, buyMark, SHOUT_SLOT_SECONDS, CHEER_DAILY_CAP, BUMP_SLOTS,
   getMyCosmetics, buyCosmetic, setEquippedCosmetic, getNickColors,
   getBuyableSeasonBadges, getMySeasonBadges, buySeasonBadge, buyNicknameReset,
@@ -24,6 +24,7 @@ import { getGlobalRankingTotals, CAREER_PERIOD_LABEL, type GlobalRankingTotal, t
 import { onColorInkClass } from '../../lib/color';
 import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import Icon from '../atoms/Icon';
 import CountUp from '../atoms/CountUp';
 import SlidingPill from '../atoms/SlidingPill';
@@ -147,14 +148,25 @@ function RowSkeleton({ rows }: { rows: number }) {
   );
 }
 
-/** 활동 순위 첫 로드 — 포디움(2-1-3) + 목록 자리 예약 */
-function ActivityBoardSkeleton() {
+/** 활동 순위 첫 로드 — 포디움(2-1-3) + 목록 자리 예약.
+ *  reserveMyRow: '내 순위' 1행은 로그인·비운영자에게만 그려지므로 예약도 같은 조건(비로그인·운영자는 −40px 점프였다).
+ *  포디움은 px 상수 대신 실제 카드와 같은 골격(p-2.5 · 아이콘 17/22 · 아바타 h-8/h-10 · 이름 · 점수)으로 rem 을 따라간다. */
+function ActivityBoardSkeleton({ reserveMyRow }: { reserveMyRow: boolean }) {
   return (
     <div aria-busy="true">
-      <div className="mb-1.5 h-9 rounded-input border border-accent-400/40 bg-accent-300/[0.08]" aria-hidden />
+      {reserveMyRow && (
+        <div className="mb-1.5 rounded-input border border-accent-400/40 bg-accent-300/[0.08] px-3 py-2" aria-hidden>
+          <span className="block h-5" />
+        </div>
+      )}
       <div className="mb-2 grid grid-cols-3 items-end gap-1.5" aria-hidden>
-        {[104, 124, 104].map((h, i) => (
-          <div key={i} className="skeleton rounded-card" style={{ height: h }} />
+        {[false, true, false].map((big, i) => (
+          <div key={i} className="rounded-aura border border-transparent p-2.5">
+            <span className={['skeleton mx-auto block', big ? 'h-[22px] w-[22px]' : 'h-[17px] w-[17px]'].join(' ')} />
+            <span className={['skeleton mx-auto mt-1 block rounded-full', big ? 'h-10 w-10' : 'h-8 w-8'].join(' ')} />
+            <span className={['skeleton mt-1 block', big ? 'h-5' : 'h-4'].join(' ')} />
+            <span className="skeleton block h-[0.9375rem]" />
+          </div>
         ))}
       </div>
       <RowSkeleton rows={lastActivityRowCount} />
@@ -180,14 +192,14 @@ function CareerBoard({ myNick, nickStyle, markPrefix }: {
 }) {
   const [period, setPeriod] = useState<CareerPeriod>('all');
   const [rows, setRows] = useState<GlobalRankingTotal[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [loadErr, setLoadErr] = useState<unknown>(null); // 실패는 '0건'과 다른 상태 — 굳지 않게 rows 는 null 로 둔다
   const [tick, setTick] = useState(0); // 실패 후 '다시' — 같은 기간이라도 재조회
   useEffect(() => {
     let alive = true;
-    setRows(null); setFailed(false);
+    setRows(null); setLoadErr(null);
     getGlobalRankingTotals(period)
       .then((r) => { if (alive) setRows(r); })
-      .catch(() => { if (alive) { setRows([]); setFailed(true); } });
+      .catch((e) => { if (alive) setLoadErr(e ?? new Error('불러오기 실패')); });
     return () => { alive = false; };
   }, [period, tick]);
   const key = (myNick ?? '').trim().toLowerCase();
@@ -207,11 +219,10 @@ function CareerBoard({ myNick, nickStyle, markPrefix }: {
           </button>
         ))}
       </div>
-      {rows === null ? (
+      {loadErr != null ? (
+        <LoadErrorCard error={loadErr} what="대회 입상 경력" onRetry={() => setTick((t) => t + 1)} />
+      ) : rows === null ? (
         <RowSkeleton rows={8} />
-      ) : failed ? (
-        <EmptyState title="경력을 불러오지 못했어요" hint="잠시 후 다시 열어 주세요" icon={<Icon name="alert" />}
-          action={<button type="button" onClick={() => setTick((t) => t + 1)} className="btn-ghost px-3 py-1.5 text-xs">다시 불러오기</button>} />
       ) : rows.length === 0 ? (
         <EmptyState
           title={period === 'all' ? '아직 집계된 대회 입상이 없어요' : '이 기간의 대회 입상이 없어요'}
@@ -365,6 +376,9 @@ export default function TierLeaderboard() {
     : '';
   const reloadBalance = useRef(() => { getMyPointBalance().then(setBalance).catch(() => {}); }).current;
   const [domestic, setDomestic] = useState<DomesticRow[] | null>(null);
+  // 조회 실패는 '0건'이 아니다 — 실패로 그리고 다시 시도할 길을 준다(#20). null 이면 정상.
+  const [domesticErr, setDomesticErr] = useState<unknown>(null);
+  const [missionsErr, setMissionsErr] = useState<unknown>(null);
   const [myVerifs, setMyVerifs] = useState<RankVerification[] | null>(null);
   // 오너 #11(2026-08-30): 대회 구분 선택 제거 — 순위 인증은 '대회'만 받는다.
   //   일반 펍(정기 게임)은 인증 대상이 아니고, 서버 RLS 도 event_kind='official' 만 통과시킨다.
@@ -406,7 +420,11 @@ export default function TierLeaderboard() {
       });
       setVForm({ event: '', amount: '', overseas: false }); setVProof(null); setVIdCard(null);
       setMyVerifs(null); myRankVerifications().then(setMyVerifs).catch(() => {});
-    } catch { /* 실패 시 입력 유지 */ }
+      toast.show('인증 요청을 접수했어요. 운영자 확인 후 국내 순위에 합산됩니다', 'success');
+    } catch (e) {
+      // 실패 시 입력은 유지 — 던지는 쪽(rankverify·storage)이 한국어 메시지를 주므로 그대로 보여 준다
+      toast.show(e instanceof Error && e.message ? e.message : '인증 요청에 실패했습니다. 다시 시도해 주세요', 'error');
+    }
     finally { setVBusy(false); }
   };
   // 마크 영구 소장 구매 — 차감·소장·장착이 서버 한 트랜잭션이라 여기서는 결과만 반영한다.
@@ -522,15 +540,17 @@ export default function TierLeaderboard() {
     if (board === 'badges' && badgeStats === null && user) {
       getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {});
     }
-    if ((board === 'missions' || board === 'activity') && missions === null && user) {
+    if ((board === 'missions' || board === 'activity') && missions === null && missionsErr == null && user) {
       // 고정 3종 + 운영자 커스텀 미션 병합 → 병합 목록 기준으로 진행도 조회
       getActiveMissions()
         .then((defs) => { setMissionDefs(defs); return getMissionProgress(user.nickname ?? null, defs); })
         .then(setMissions)
-        .catch(() => setMissions([]));
+        .catch((e) => setMissionsErr(e ?? new Error('불러오기 실패')));
     }
     if (board === 'hall' && hall === null) getHallOfFame().then(setHall).catch(() => setHall({ label: '', rows: [], source: 'auto' }));
-    if (board === 'domestic' && domestic === null) getDomesticRankings(30).then(setDomestic).catch(() => setDomestic([]));
+    if (board === 'domestic' && domestic === null && domesticErr == null) {
+      getDomesticRankings(30).then(setDomestic).catch((e) => setDomesticErr(e ?? new Error('불러오기 실패')));
+    }
     if (board === 'verify' && myVerifs === null && user) myRankVerifications().then(setMyVerifs).catch(() => setMyVerifs([]));
     if (board === 'shop' && equippedMark === undefined && user) {
       getMyEquippedMark().then((k) => setEquippedMark(k)).catch(() => setEquippedMark(null));
@@ -548,8 +568,9 @@ export default function TierLeaderboard() {
       getBuyableSeasonBadges().then(setSeasonBuyable).catch(() => setSeasonBuyable([]));
       getMySeasonBadges().then(setSeasonOwned).catch(() => setSeasonOwned([]));
     }
+    // 오류 상태가 null 로 돌아오면(다시 시도) 같은 분기가 다시 돈다 — 그래서 의존성에 넣는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, user?.id]);
+  }, [board, user?.id, missionsErr, domesticErr]);
   const handleClaim = async (key: string) => {
     setClaiming(key);
     try {
@@ -599,6 +620,8 @@ export default function TierLeaderboard() {
   }, [rows, user]);
   // A(에이스) = K(14,000점) 달성 + 전체 상위 10위 이내(상대평가)
   const myIsAce = !isAdmin && isAceRank(user?.activityPoints ?? 0, myRank);
+  // 닉네임만 있는 보드(국내 순위)용 본인 키 — 행의 nickname 은 submitVerify 가 user.nickname ?? user.name 으로 넣으므로 같은 폴백.
+  const myNickKey = (user?.nickname ?? user?.name ?? '').trim().toLowerCase() || null;
 
   // 프로필 카드 미리보기 — 저장 버튼이 만드는 것과 **같은 그림**을 같은 함수로 굽는다.
   // (미리보기와 결과가 다르면 그건 미리보기가 아니라 다른 그림이다.)
@@ -618,6 +641,7 @@ export default function TierLeaderboard() {
   // 주간 미션 블록 — '활동 순위' 보드 하단에 함께 표시(미션 보드 병합)
   const missionsBlock = (
           !user ? <p className="py-6 text-center t-desc text-ink-muted">로그인하면 주간 미션에 참여할 수 있습니다</p>
+          : missionsErr != null ? <LoadErrorCard error={missionsErr} what="주간 미션" onRetry={() => setMissionsErr(null)} compact />
           : missions === null ? (
             // 미션 카드와 같은 높이(74px)로 자리 예약 — 도착 시 아래가 밀리지 않는다
             <ul className="space-y-1.5" aria-busy="true">
@@ -774,15 +798,18 @@ export default function TierLeaderboard() {
 
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
-        <div data-rank-tabbar className="relative flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
+        <div data-rank-tabbar className="relative flex items-center gap-1 bg-surface-high rounded-input px-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
           {/* 오너 지시(2026-08-28): 구 pill(그라데이션 배경) 제거 — 커뮤니티 서브탭과 같은
               밑줄(underline) 문법. 활성은 미끄러지는 2px 밑줄 + 잉크색·굵기. */}
+          {/* 44px 터치 타깃(#15): overflow-x 레일이라 .hit/.tap-y-44 의 바깥 확장은 세로 오버플로가 된다 —
+              버튼은 h-11 투명 히트박스, 안쪽 span 이 34px 시각 칩. SlidingPill 은 [data-pill-active] 박스를 재므로
+              마커를 span 에 두고 버튼에서 relative 를 뺀다(span 의 offsetParent = 레일). */}
           <SlidingPill activeKey={board} underline className="rounded-full bg-accent-300" />
           {RANK_TABS.map((b) => (
-            <button key={b} type="button" data-pill-active={board === b || undefined} onClick={() => goBoard(b)}
-              className={['relative shrink-0 px-2 lg:px-3 py-2 t-tab rounded-[6px] transition-colors',
+            <button key={b} type="button" onClick={() => goBoard(b)}
+              className={['shrink-0 inline-flex h-11 items-center t-tab transition-colors',
                 board === b ? 'text-ink-primary font-bold' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
-              <span className="relative">{BOARD_LABEL[b]}</span>
+              <span data-pill-active={board === b || undefined} className="relative inline-flex h-10 items-center px-2 lg:px-3 rounded-[6px]">{BOARD_LABEL[b]}</span>
             </button>
           ))}
         </div>
@@ -811,7 +838,8 @@ export default function TierLeaderboard() {
             </div>
           )
         ) : board === 'domestic' ? (
-          domestic === null ? <RowSkeleton rows={6} />
+          domesticErr != null ? <LoadErrorCard error={domesticErr} what="국내 순위" onRetry={() => setDomesticErr(null)} />
+          : domestic === null ? <RowSkeleton rows={6} />
           : domestic.length === 0 ? (
             <EmptyState
               title="아직 인증된 입상이 없어요"
@@ -822,21 +850,29 @@ export default function TierLeaderboard() {
           )
           : (
             <ul className="space-y-1">
-              {domestic.map((r, i) => (
-                <li key={r.nickname} className="flex items-center gap-2.5 rounded-input bg-surface-high px-3 py-2">
+              {domestic.map((r, i) => {
+                // 행에 user id 가 없어 닉네임(소문자·공백 제거)으로 본인을 찾는다 — 서버 순위 함수와 같은 lower(nickname) 규칙(#21)
+                const isMe = !!myNickKey && r.nickname.trim().toLowerCase() === myNickKey;
+                return (
+                <li key={r.nickname} className={['flex items-center gap-2.5 rounded-input px-3 py-2', isMe ? 'border border-accent-400/40 bg-accent-300/[0.08]' : 'bg-surface-high'].join(' ')}>
                   <span className="w-6 shrink-0 text-center text-sm font-extrabold tabular-nums text-accent-300">{i + 1}</span>
                   {/* ⚠ 부모에 truncate(nowrap+overflow+ellipsis)를 걸고 자식을 block 으로 두면
                       통계 줄은 **말줄임표조차 없이 하드 클립**된다 — ellipsis 는 부모의 인라인 콘텐츠에만
-                      적용되기 때문이다. 누적 금액이 커질수록 먼저 사라졌다. 줄마다 각자 줄인다. */}
+                      적용되기 때문이다. 줄마다 각자 줄인다. */}
                   <span className="flex min-w-0 flex-1 flex-col text-sm font-semibold text-ink-primary">
-                    <span className="truncate">{r.nickname}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="min-w-0 truncate">{r.nickname}</span>
+                      {isMe && <span className="shrink-0 text-2xs font-bold text-accent-300">나</span>}
+                    </span>
+                    {/* 누적 금액은 표시하지 않는다(§28 · 오너 2026-09-05) — 점수는 서버가 계산한 값 그대로 */}
                     <span className="truncate text-2xs font-normal text-ink-muted tabular-nums">
-                      대회 {r.wins}회{r.overseas > 0 ? ` · 해외 ${r.overseas}회` : ''} · 누적 {(r.totalWon / 10000).toLocaleString()}만
+                      대회 {r.wins}회{r.overseas > 0 ? ` · 해외 ${r.overseas}회` : ''}
                     </span>
                   </span>
                   <span className="shrink-0 text-sm font-extrabold tabular-nums text-emerald-300">{r.points.toLocaleString()}점</span>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )
         ) : board === 'verify' ? (
@@ -910,8 +946,9 @@ export default function TierLeaderboard() {
                   <span className="ml-1 text-2xs text-ink-muted">누적 {(user.activityPoints ?? 0).toLocaleString()}점 · 등급 기준</span>
                 </span>
                 <span className="text-right">
+                  {/* 잔액 미도착·실패면 '—'. 누적 점수로 대신 채우면 실제보다 크게 보여 서버가 '점수 부족'으로 거절한다(#19) */}
                   <span className="block text-sm font-extrabold tabular-nums text-accent-300">
-                    {balance ? balance.available.toLocaleString() : (user.activityPoints ?? 0).toLocaleString()}점
+                    {balance ? `${balance.available.toLocaleString()}점` : '—'}
                   </span>
                   <span className="block text-2xs text-ink-muted">사용 가능</span>
                 </span>
@@ -952,7 +989,7 @@ export default function TierLeaderboard() {
                     const own = ownedBy.get(mk.key);
                     const on = equippedMark === mk.key;
                     const price = markSku?.price ?? 0;
-                    const poor = !own && balance !== null && balance.available < price;
+                    const poor = !own && lacksPoints(balance, price);
                     return (
                       <div key={mk.key}
                         className={['card-sink rounded-card border p-2.5 text-center transition-colors',
@@ -979,7 +1016,7 @@ export default function TierLeaderboard() {
                             className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                             {buying === mk.key ? '구매 중…'
                               : !markSku ? '판매 준비 중'
-                                : poor ? `${price.toLocaleString()}점 부족` : `${price.toLocaleString()}점 소장`}
+                                : buyLabel(balance, price, '소장')}
                           </button>
                         )}
                       </div>
@@ -1055,7 +1092,7 @@ export default function TierLeaderboard() {
                     {frameList.map((c) => {
                       const own = cosmeticBy.get(c.key);
                       const on = own?.equipped === true;
-                      const poor = !own && balance !== null && balance.available < frameSku.price;
+                      const poor = !own && lacksPoints(balance, frameSku.price);
                       return (
                         <div key={c.key}
                           className={['card-sink rounded-card border p-2.5 text-center transition-colors',
@@ -1075,7 +1112,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleBuyCosmetic(c)}
                               className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                               {buying === c.key ? '구매 중…'
-                                : poor ? `${frameSku.price.toLocaleString()}점 부족` : `${frameSku.price.toLocaleString()}점 소장`}
+                                : buyLabel(balance, frameSku.price, '소장')}
                             </button>
                           )}
                         </div>
@@ -1105,7 +1142,7 @@ export default function TierLeaderboard() {
                     {nickList.map((c) => {
                       const own = cosmeticBy.get(c.key);
                       const on = own?.equipped === true;
-                      const poor = !own && balance !== null && balance.available < nickSku.price;
+                      const poor = !own && lacksPoints(balance, nickSku.price);
                       const v = nickColorVar(c.token);
                       return (
                         <div key={c.key}
@@ -1130,7 +1167,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleBuyCosmetic(c)}
                               className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                               {buying === c.key ? '구매 중…'
-                                : poor ? `${nickSku.price.toLocaleString()}점 부족` : `${nickSku.price.toLocaleString()}점 소장`}
+                                : buyLabel(balance, nickSku.price, '소장')}
                             </button>
                           )}
                         </div>
@@ -1178,7 +1215,7 @@ export default function TierLeaderboard() {
                   ) : (
                     <ul className="mt-2 space-y-1.5">
                       {seasonBuyable.map((b) => {
-                        const poor = balance !== null && balance.available < seasonSku.price;
+                        const poor = lacksPoints(balance, seasonSku.price);
                         return (
                           <li key={b.seasonId} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-float px-3 py-2">
                             <span className="min-w-0 flex-1">
@@ -1189,7 +1226,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleBuySeasonBadge(b)}
                               className="shrink-0 rounded-input border border-accent-400/40 px-2.5 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
                               {buying === b.seasonId ? '구매 중…'
-                                : poor ? `${seasonSku.price.toLocaleString()}점 부족` : `${seasonSku.price.toLocaleString()}점 받기`}
+                                : buyLabel(balance, seasonSku.price, '받기')}
                             </button>
                           </li>
                         );
@@ -1215,12 +1252,11 @@ export default function TierLeaderboard() {
                     </span>
                   </span>
                   {nickLocked ? (
-                    <button type="button" disabled={nickResetBusy || (balance !== null && balance.available < nickChangeSku.price)}
+                    <button type="button" disabled={nickResetBusy || lacksPoints(balance, nickChangeSku.price)}
                       onClick={handleBuyNickReset}
                       className="shrink-0 rounded-input border border-accent-400/40 px-2.5 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
                       {nickResetBusy ? '적용 중…'
-                        : balance !== null && balance.available < nickChangeSku.price
-                          ? `${nickChangeSku.price.toLocaleString()}점 부족` : `${nickChangeSku.price.toLocaleString()}점`}
+                        : buyLabel(balance, nickChangeSku.price, '')}
                     </button>
                   ) : (
                     <span className="shrink-0 rounded-badge bg-surface-float px-2 py-1 text-2xs font-bold text-ink-muted">필요 없음</span>
@@ -1360,7 +1396,7 @@ export default function TierLeaderboard() {
         ) : board === 'moneyin' ? (
           <CareerBoard myNick={user?.nickname ?? null} nickStyle={nickStyle} markPrefix={markPrefix} />
         ) : loading ? (
-          <ActivityBoardSkeleton />
+          <ActivityBoardSkeleton reserveMyRow={!!user && !isAdmin} />
         ) : rows.length === 0 ? (
           <EmptyState title="아직 랭킹이 없어요" hint="접속·글쓰기·댓글로 활동 점수를 모으면 이 자리에 이름이 올라갑니다" />
         ) : (

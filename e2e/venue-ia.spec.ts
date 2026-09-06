@@ -3,7 +3,7 @@
 // 문서 검증 기준: ① 첫 뷰포트 인터랙티브 요소 ≤ 6 (콘텐츠 레벨 — 내비게이션인
 // 뒤로가기·탭바는 제외하고 센다) ② 비로그인 사용자에게 단골 전용 UI(내 활동)가
 // display:none 이 아니라 **DOM 미렌더**일 것.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays, SUPABASE_URL, ANON_KEY } from './_session';
 
 /** 공개 **매장** 하나를 익명 REST 로 가져온다(테스트가 데이터에 결혼하지 않게).

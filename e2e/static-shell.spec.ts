@@ -3,7 +3,7 @@
 // 검증 1: JS 를 끄고 들어가도 헤더·스켈레톤·탭바가 보인다(문서의 Slow 4G+JS비활성 기준).
 // 검증 2: React 마운트 후 셸이 정확히 교체된다 — 헤더가 2개면 셸이 잔류한 것.
 // 검증 3: 셸의 뼈대 클래스가 React 렌더와 동일하다(픽셀 일치의 구조적 근거).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 test.describe('정적 앱 셸 — 첫 페인트', () => {
   test('🔴 JS 없이도 헤더·스켈레톤·탭바가 그려진다', async ({ browser }) => {

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 // W1-5 TB2 — 탭바 자동숨김 재작성 머지 게이트(§15.2 #5: 실기기는 오너 QA, 여기선 3케이스).
 // 구 리스너의 4가지 고장(느린 끌기 무판정 · 문서끝 감지 부재 · 가짜 음수 dy · 탭 복원 거대 dy) 회귀 가드.

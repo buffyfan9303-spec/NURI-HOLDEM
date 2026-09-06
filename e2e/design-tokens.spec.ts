@@ -7,7 +7,7 @@
 // 실행: npx playwright test e2e/design-tokens.spec.ts
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { dismissOverlays } from './_session';
 
 /** rgb(…) → 상대휘도 (WCAG) */

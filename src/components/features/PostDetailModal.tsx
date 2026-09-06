@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { useToast } from '../atoms/Toast';
 import type { CommunityPost, ReactionType, Comment } from '../../api/community';
-import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded, getComments, addComment, deleteComment, sendCheer, bumpPost, getCheerState, getShopSkus, isBumped, BUMP_SLOTS } from '../../api/community';
+import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded, getComments, addComment, deleteComment, sendCheer, bumpPost, getCheerState, getShopSkus, isBumped, isPostHidden, BUMP_SLOTS } from '../../api/community';
 import CommentThread from './CommentThread';
 import ReportModal from './ReportModal';
 import { parseAttachments } from '../../lib/hand';
@@ -142,7 +142,7 @@ export default function PostDetailModal({
     openedAtRef.current = performance.now();
     let active = true;
     getMyReaction(post.id).then((r) => { if (active) setMyReaction(r); }).catch(() => {});
-    incrementPostView(post.id).catch(() => {});
+    if (!isPostHidden(post, user)) incrementPostView(post.id).catch(() => {});  // 숨김 글은 집계하지 않는다
     // 댓글 실제 조회 — 이전에는 로컬 state에만 쌓여 새로고침 시 사라졌다(저장 안 됨).
     setReplies(null);
     getComments({ postId: post.id })
@@ -316,6 +316,10 @@ export default function PostDetailModal({
     }
   };
 
+  // 숨김 글 열람 차단 — 서버 RLS(20260905m)가 타인에게는 행을 안 주지만, 목록 캐시로 들고 있던 글이
+  // 숨김된 뒤 열리는 경우를 위해 클라도 한 곳에서 막는다(딥링크·알림·피드 세 진입점 공통).
+  const hidden = isPostHidden(post, user);
+
   return (
     <>
     <Modal open={open} onClose={onClose} title="게시글" maxWidth="lg" variant="sheet" inline={inline}>
@@ -334,6 +338,7 @@ export default function PostDetailModal({
             2026-08-30 순서 반전: 카테고리·조회수를 제목 **위** 오버라인으로 올린다.
             예전엔 18px 제목 바로 밑에 11px 색 알약이 붙어 둘이 같은 층으로 읽혔다 —
             게시판(어디) → 제목(무엇) 순서가 목록에서 들어온 사람의 실제 독해 순서다. */}
+        {!hidden && (
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className={['inline-flex shrink-0 items-center rounded-badge px-1.5 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>
@@ -352,6 +357,7 @@ export default function PostDetailModal({
             <h3 className="text-xl sm:text-2xl font-bold text-ink-primary leading-tight tracking-tight break-words">{post.title}</h3>
           )}
         </div>
+        )}
 
         {/* ── 작성자 정보 ─────────────────────────────────── */}
         {/* border-subtle(다크 1.11:1 · 라이트 1.23:1)은 비텍스트 3:1 기준에서 사실상 안 보이는 선이었다
@@ -359,6 +365,7 @@ export default function PostDetailModal({
             2026-08-30: 공유는 아래 반응 줄로 내렸다(같은 '이 글 메뉴' 가족이고,
             헤더 우측 4버튼이 폭을 먹어 이름+칩이 3줄로 접히던 원인이었다).
             여기 남는 신고·차단·삭제는 '가끔 쓰는 관리 동작'이라 한 덩어리로 묶어 우측에 둔다. */}
+        {!hidden && (
         <header className="mt-3 flex items-center gap-2.5 border-b border-border-default pb-3">
           {/* 2026-08-30: 여기 있던 `!object-contain` 땜질을 제거했다 — Avatar 의 기본값이 contain 이 됐다.
               (근거 실측은 유지: 이 글 작성자 아바타가 256×151 로고인데 object-cover 가 가로 59% 만 남겨
@@ -430,8 +437,9 @@ export default function PostDetailModal({
             )}
           </div>
         </header>
+        )}
 
-        {/* 신고 누적 자동 숨김 안내(운영자·작성자만 이 글에 접근) */}
+        {/* 신고 누적 자동 숨김 안내 — 배너는 blinded 면 항상(운영자에겐 해제 버튼), 아래 본문·사진·댓글은 hidden 이면 미렌더 */}
         {post.blinded && (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-card border border-danger/40 bg-danger/[0.06] px-3 py-2">
             <span className="inline-flex items-center gap-1 text-2xs font-bold text-danger"><Icon name="ban" size={12} className="shrink-0" />신고 누적으로 숨김 처리된 게시글입니다</span>
@@ -447,7 +455,7 @@ export default function PostDetailModal({
         )}
 
         {/* ── 본문 ───────────────────────────────────────── */}
-        {(() => {
+        {!hidden && (() => {
           const { text, hand, replay } = parseAttachments(post.content);
           return (
             <div className="mt-4 space-y-3">
@@ -501,7 +509,7 @@ export default function PostDetailModal({
         })()}
 
         {/* ── 어태치먼트(핸드 결과·투표) — 본문 아래. 로딩 중엔 미표시(스켈레톤 금지). */}
-        {attachment && (
+        {!hidden && attachment && (
           <div className="mt-3">
             <PostAttachments key={post.id} attachment={attachment} onVote={handleVote} />
           </div>
@@ -520,6 +528,7 @@ export default function PostDetailModal({
 
             숫자: tabular-nums + min-w-[1.5ch] — 0→1 토글이나 8↔9 교체에서 알약 폭이
             흔들리지 않는다(두 자리까지 폭 고정, 세 자리부터만 늘어난다). */}
+        {!hidden && (
         <div className="mt-4 flex items-start gap-2">
           {/* 알약 셋만 자기들끼리 접히는 그룹 — 공유는 바깥에 두어 폭이 어떻게 변해도
               항상 첫 줄 오른쪽에 고정된다. 한 통에 넣으면 좋아요가 4자리(1,284)가 되는 순간
@@ -565,6 +574,7 @@ export default function PostDetailModal({
             공유
           </button>
         </div>
+        )}
 
         {/* ── 응원(칩 던지기) ───────────────────────────────────────────────
             반응 알약(좋아요·추천·비추천) 옆에 끼워 넣지 않는다. 저 셋은 공짜고 이건 **유료**다 —
@@ -572,6 +582,7 @@ export default function PostDetailModal({
             네 알약이 이미 한 줄을 넘겼던 것도 같은 자리의 문제였다).
             그래서 자기 줄에 두고, 값을 **버튼 라벨에 박아** 누르기 전에 가격을 읽게 한다
             (상점의 '800점 소장' 버튼과 같은 규약 — 값은 서버 shop_skus.cheer 가 출처다). */}
+        {!hidden && (
         <div className="mt-2 flex items-center gap-2 rounded-input border border-border-default bg-surface-high px-3 py-2 dark:bg-surface-low">
           <Icon name="chip-stack" size={16} strokeWidth={1.8} className="shrink-0 text-accent-300" />
           <span className="min-w-0 flex-1 text-2xs leading-tight text-ink-secondary">
@@ -594,6 +605,7 @@ export default function PostDetailModal({
             </button>
           )}
         </div>
+        )}
 
         {/* ── 끌올 — 작성자 본인에게만. 남의 글에서는 아예 그리지 않는다(살 수 없는 버튼은 소음이다). */}
         {user?.id === post.userId && (
@@ -624,6 +636,7 @@ export default function PostDetailModal({
         {/* 댓글은 '이 글' 이 아니라 그 다음 층이라 유일하게 가로줄로 끊는다.
             예전엔 본문 위(header)·반응 위 두 군데에 줄이 있어, 짧은 글에서는 거의 빈 띠를
             선 두 개가 감싼 꼴이었다. 경계는 진짜 층이 바뀌는 여기 하나면 충분하다. */}
+        {!hidden && (
         <section className="reveal mt-4 space-y-2 border-t border-border-default pt-4">
           {/* 댓글 수는 화면에 실제로 불러온 목록(replies)만 신뢰한다.
               post.commentCount 는 DB 트리거가 같은 값을 넣어주는 컬럼이라 더하면 2배가 된다.
@@ -646,6 +659,7 @@ export default function PostDetailModal({
             cheerBusy={cheerBusy}
           />
         </section>
+        )}
       </article>
     </Modal>
     {/* Modal 밖에 두는 이유: 데스크톱 2-pane 은 Modal 이 inline 패널(overflow-hidden 카드)로 렌더돼

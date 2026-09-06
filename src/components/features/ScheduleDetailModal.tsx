@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useCallback, useRef, useState, useEffect, useMemo, type ReactNode } from 'react';
 import Modal from '../atoms/Modal';
 import MarqueeText from '../atoms/MarqueeText';
 import Icon, { type IconName } from '../atoms/Icon';
@@ -19,6 +19,7 @@ import {
   generateBlinds, getVenueClocks, subscribeClock, effectiveLevel,
   type ClockState, type ClockLevel,
 } from '../../api/clock';
+import { promotionView } from '../../lib/promotionLabel';
 import { promptLogin, openPostForm, ensureVerified } from '../../lib/requireLogin';
 import { googleCalendarUrl, icsDataUrl, isIOS } from '../../lib/calendar';
 import { enablePush, pushSupported } from '../../api/push';
@@ -26,6 +27,7 @@ import QRCode from 'qrcode';
 import { requestBuyin, buyinRequestUrl, kstToday } from '../../api/ledger';
 import SlidingPill from '../atoms/SlidingPill';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import { msgOf } from '../../lib/dbError';
 import { goSubTab } from '../../lib/subTabTransition';
 
 interface ScheduleDetailModalProps {
@@ -40,6 +42,9 @@ interface ScheduleDetailModalProps {
   onDeleteComment?: (commentId: string) => void;
   /** 관리자 마스터 삭제(포스터) */
   onDeletePoster?: (id: string) => void;
+  /** 내 예약/취소가 성공했다 — App 이 홈 '오늘 예약한 대회'·카드 '예약 N'·캘린더를 다시 읽는다(F06).
+   *  값을 나르지 않는 신호다. 실패하면 호출하지 않으므로 화면 숫자가 서버보다 앞서가지 않는다. */
+  onReservationChange?: () => void;
   /** 데스크탑 2-pane 우측 패널로 인라인 렌더 */
   inline?: boolean;
   /** UX-1: 라이브 클락 실측 레지 상태 — '매장에 확인해 주세요'를 실제 답으로 교체 */
@@ -100,7 +105,7 @@ function Head({ icon, tile = '', children }: { icon: IconName; tile?: string; ch
 }
 
 export default function ScheduleDetailModal({
-  schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline, regInfo,
+  schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline, regInfo, onReservationChange,
 }: ScheduleDetailModalProps) {
   const [tab, setTab] = useState<Tab>('main');
   const [lightbox, setLightbox] = useState(false);
@@ -120,6 +125,13 @@ export default function ScheduleDetailModal({
 
   const d = new Date(schedule.date);
   const dow = DAYS_KO[d.getDay()];
+  // 프로모션 표시 요소(lib/promotionLabel) — 할인액이 있으면 금액이 배지 자리를 갖고, 없으면 종전 배지 그대로.
+  // 목록 전체를 한 번 훑어 (a) 배지 열을 그릴지 (b) 할인이 하나라도 있는지를 먼저 정한다:
+  // 할인이 없는 기존 포스터는 종전 액센트 톤을 그대로 유지해야 지금보다 밋밋해지지 않는다.
+  const promos = schedule.promotions ?? [];
+  const promoViews = promos.map(promotionView);
+  const promoHasPill = promoViews.some((v) => v.pill);
+  const promoHasDiscount = promoViews.some((v) => v.isDiscount);
   const qnaComments = comments.filter((c) => c.scheduleId === schedule.id);
   // 끝난 대회에 '예약하기'가 살아 있으면 손님은 참가된 줄 알고 업주 명단엔 유령 예약이 남는다
   const status = scheduleStatus(schedule.date, schedule.startTime);
@@ -245,8 +257,11 @@ export default function ScheduleDetailModal({
         <div className="flex min-w-0 flex-col">
           {/* 제목 영역 */}
           <div className="px-3.5 pt-3.5 pb-2">
+            {/* 화면에서 제일 큰 글자라 절단이 제일 눈에 띈다 — 이 파일이 이미 프로모션·주소·매장명에
+                쓰고 있는 break-keep(어절 단위) + [overflow-wrap:anywhere](초장문 토큰만 예외) 짝을
+                제목에도 맞춘다. 360px 에서 대회명이 음절 중간에서 갈리던 문제. */}
             <h1 className={[
-              'text-xl font-bold leading-tight',
+              'text-xl font-bold leading-tight break-keep [overflow-wrap:anywhere]',
               schedule.isPremium ? 'text-accent-300' : 'text-ink-primary',
             ].join(' ')}>
               {schedule.title}
@@ -313,7 +328,12 @@ export default function ScheduleDetailModal({
       {/* ── 탭바 (메인 / 블라인드 / 프라이즈 / 매장정보 / Q&A) — sticky 상단 고정. PC는 우측에 닫기 통합 ──
           활성 표시는 밑줄(SlidingPill underline) — UnderlineTabs 와 동일 문법을 인라인으로 쓴다.
           왜 공용 UnderlineTabs 를 안 쓰나: label 이 string 이라 Q&A 의 개수·안읽음 배지를 붙일 수 없다. */}
-      <div data-sched-tabbar="" role="tablist" className="relative grid grid-cols-5 border-b border-border-subtle sticky top-0 bg-surface-base z-10 lg:pr-[4.25rem]">
+      {/* ⚠ pr-[3.25rem](모바일) — 위쪽 모바일 닫기 버튼은 `fixed top-[12px+safe] right-3` 의 36px 원이라
+          **뷰포트에 붙어 있다**. 이 탭바는 sticky top-0 이고 스크롤 컨테이너의 top 이 곧 safe-top 이라,
+          조금만 스크롤하면 탭바(높이 40px 남짓)의 12~48px 구간에 닫기 버튼이 그대로 겹쳐 앉는다 —
+          5번째 칸(Q&A)의 탭 영역 대부분이 닫기 버튼에 먹혔다(360px 기준 x=312~348 ⊂ Q&A 칸 288~360).
+          PC 에서 같은 이유로 이미 lg:pr-[4.25rem] 을 두고 있다 — 모바일에도 같은 해법(48px 버튼 자리 + 4px). */}
+      <div data-sched-tabbar="" role="tablist" className="relative grid grid-cols-5 border-b border-border-subtle sticky top-0 bg-surface-base z-10 pr-[3.25rem] lg:pr-[4.25rem]">
         <SlidingPill activeKey={tab} underline className="rounded-full bg-accent-300" />
         {/* PC 닫기 — 정보 영역 우상단(항상 보이는 sticky 탭바, 손 닿는 위치) */}
         <button
@@ -361,8 +381,12 @@ export default function ScheduleDetailModal({
         })}
       </div>
 
-      {/* ── 본문 — 탭 5개가 같은 패딩 컨테이너를 공유(탭 전환에 좌우 여백이 흔들리지 않게) ── */}
-      <div data-sched-panel="" className="px-3.5 pt-3 pb-5 space-y-3">
+      {/* ── 본문 — 탭 5개가 같은 패딩 컨테이너를 공유(탭 전환에 좌우 여백이 흔들리지 않게) ──
+          pb 에 safe-area: Modal 의 page 변형은 `fixed inset-0` 이고 위쪽만 pt-[env(safe-area-inset-top)]
+          을 갖는다. 아래는 뷰포트 바닥에 딱 붙어서, 홈 인디케이터(iOS 34px)가 맨 끝 요소를 덮었다 —
+          '꾹 눌러 예약 취소'/Q&A 입력처럼 마지막에 오는 조작이 손가락에 안 잡혔다.
+          ClockRemote 본문과 같은 문법(pb = 기존 여백 + env(safe-area-inset-bottom)). */}
+      <div data-sched-panel="" className="px-3.5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] space-y-3">
 
       {/* ══════ 메인 — 지금 상태 · 참가 행동 · 게임 정보 ══════════════════════ */}
       {tab === 'main' && (<>
@@ -412,7 +436,8 @@ export default function ScheduleDetailModal({
         {/* status 를 계산해 넘기지 않고 date/startTime 을 넘긴다 — 모달을 열어둔 채 종료 시각을
             넘길 수 있어, 클릭 시점에 다시 판정해야 하기 때문 */}
         <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId}
-          date={schedule.date} startTime={schedule.startTime} sched={schedule} regInfo={regInfo} />
+          date={schedule.date} startTime={schedule.startTime} sched={schedule} regInfo={regInfo}
+          onReservationChange={onReservationChange} />
 
         {/* 현장 바인(참가) 요청 — 대회 당일에만 연다. 요청이 '오늘' 장부로 들어가기 때문(위 kToday 주석)
             지난 대회에선 안내조차 띄우지 않는다 — 할 수 있는 게 없어 소음일 뿐이라. */}
@@ -455,30 +480,51 @@ export default function ScheduleDetailModal({
         </section>
 
         {/* 프로모션 */}
-        {schedule.promotions && schedule.promotions.length > 0 && (
+        {promos.length > 0 && (
           <section>
             <Head icon="gift" tile="-fuchsia">프로모션 / 얼리칩</Head>
-            <ul className="space-y-1.5">
-              {/* 긴 detail(예: 사전예약 얼리칩 조건)이 shrink-0 한 줄 강제로 행 밖으로 삐져나가던
-                  오버플로 수정 — 배지·제목 한 줄 + 설명은 아래 전체 폭 줄바꿈 스택으로. */}
-              {schedule.promotions.map((p, i) => (
-                <li
-                  key={i}
-                  className="px-3 py-2 rounded-input border border-accent-400/30 bg-accent-300/[0.04]"
-                >
-                  <div className="flex items-center gap-2">
-                    {p.badge && (
-                      <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-badge bg-accent-300 text-white text-2xs font-bold leading-none">
-                        {p.badge}
+            {/* 배지를 고정폭 열로 묶어 **제목 시작선을 카드마다 같게** 맞춘다 — 예전에는 배지 폭이
+                내용 폭이라 '첫방문'과 '1LV' 사이에서 제목이 들쭉날쭉했고 세로로 훑을 때 눈이 튀었다.
+                할인액이 있는 줄만 금액을 채운 알약으로 올려 '얼마 싸지는가'가 제일 먼저 읽히고,
+                나머지 배지는 한 단계 낮춘 톤으로 내려 할인과 경쟁하지 않게 한다(오너 지적 2026-09-06).
+                긴 detail(예: 사전예약 얼리칩 조건)은 잘라 숨기지 않고 제목 아래 전체 폭 줄바꿈 줄로
+                푼다 — shrink-0 한 줄 강제로 행 밖에 삐져나가던 예전 오버플로를 다시 만들지 않는다. */}
+            <ul className="space-y-1">
+              {promos.map((p, i) => {
+                const v = promoViews[i];
+                return (
+                  <li
+                    key={i}
+                    className={`flex items-start gap-2.5 px-3 py-2 rounded-input border ${
+                      v.isDiscount ? 'border-accent-400/50 bg-accent-300/[0.08]'
+                        : promoHasDiscount ? 'border-border-subtle bg-surface-high'
+                          : 'border-accent-400/30 bg-accent-300/[0.04]'
+                    }`}
+                  >
+                    {promoHasPill && (
+                      <span className="w-[4.75rem] shrink-0">
+                        {v.pill && (
+                          <span
+                            className={`block px-1 py-0.5 rounded-badge text-center text-2xs font-bold leading-tight break-keep [overflow-wrap:anywhere] ${
+                              v.isDiscount ? 'bg-accent-300 text-white tabular-nums'
+                                : promoHasDiscount ? 'border border-border-default bg-surface-float text-ink-secondary'
+                                  : 'bg-accent-300 text-white'
+                            }`}
+                          >
+                            {v.pill}
+                          </span>
+                        )}
                       </span>
                     )}
-                    <span className="min-w-0 flex-1 whitespace-normal break-keep [overflow-wrap:anywhere] text-sm text-ink-primary font-semibold">{p.title}</span>
-                  </div>
-                  {p.detail && (
-                    <p className="mt-1 min-w-0 whitespace-normal break-keep [overflow-wrap:anywhere] text-2xs leading-relaxed text-ink-muted">{p.detail}</p>
-                  )}
-                </li>
-              ))}
+                    <span className="min-w-0 flex-1">
+                      <span className="block whitespace-normal break-keep [overflow-wrap:anywhere] text-sm leading-snug text-ink-primary font-semibold">{p.title}</span>
+                      {v.sub && (
+                        <span className="mt-0.5 block whitespace-normal break-keep [overflow-wrap:anywhere] text-2xs leading-snug text-ink-muted">{v.sub}</span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
@@ -972,7 +1018,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
   );
 }
 
-function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regInfo }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string; sched: Schedule; regInfo?: RegInfo }) {
+function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regInfo, onReservationChange }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string; sched: Schedule; regInfo?: RegInfo; onReservationChange?: () => void }) {
   const { user } = useAuth();
   const toast = useToast();
   // undefined = 아직 조회 안 함 · null = 조회했고 예약 없음.
@@ -980,6 +1026,9 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
   // 새로 마운트된다) 누르면 '이미 등록된 닉네임입니다' 에러가 난다 — 사용자 잘못이 아닌데
   // 사용자 탓으로 돌리는 형태다(2026-09-05 전수 조사).
   const [mine, setMine] = useState<Reservation | null | undefined>(undefined);
+  // 세 번째 상태 — 조회 '실패'. undefined(미조회)·null(예약 없음) 어느 쪽으로도 접지 않는다.
+  // API 가 오류를 null 로 삼키던 시절엔 실패가 곧 '예약하기' 재노출이었다(F08).
+  const [mineErr, setMineErr] = useState<unknown>(null);
   // 컴팩트 재구성(오너 지시 2026-08-27) — 예약 UI 는 기본 접힘. 한 줄 요약 + '더보기'로 펼친다.
   // CTA('예약하기')는 접힘 행 우측에 항상 노출 — 누르면 펼쳐져 닉네임 입력부터 이어진다.
   const [expanded, setExpanded] = useState(false);
@@ -1008,11 +1057,18 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
       .then(setResList)
       .catch((e) => { setResErr(e); setResList(undefined); });
   };
+  const loadMine = useCallback(() => {
+    if (!user) { setMineErr(null); setMine(null); return; }
+    setMineErr(null);
+    getMyReservation(scheduleId)
+      .then((r) => { setMine(r); setMineErr(null); })
+      // 직전에 성공한 값은 지우지 않는다 — 순단 때문에 '예약 완료'가 사라지면 중복 예약을 부른다.
+      .catch((e) => setMineErr(e));
+  }, [scheduleId, user]);
   useEffect(() => {
     setName(user?.nickname || user?.name || '');
-    if (user) getMyReservation(scheduleId).then(setMine).catch(() => {});
-    else setMine(null);
-  }, [scheduleId, user]);
+    loadMine();
+  }, [scheduleId, user, loadMine]);
   useEffect(() => { loadRes(); }, [scheduleId, isManager]); // eslint-disable-line react-hooks/exhaustive-deps
   // 업주 요약 한 줄 — 모르는 동안에는 숫자를 말하지 않는다.
   const resSummary = resErr !== null ? '예약 인원을 불러오지 못했어요'
@@ -1026,8 +1082,10 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
     try {
       await cancelMyReservation(scheduleId); setMine(null); toast.show('예약을 취소했습니다', 'info');
       loadRes();
+      onReservationChange?.(); // 홈·카드 '예약 N'·캘린더까지 같은 사실을 보게 한다(F06)
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '처리 실패', 'error');
+      toast.show(msgOf(e, '예약 취소 실패'), 'error');
+      loadMine(); // 0행 삭제(이미 취소됨)일 수 있다 — 화면을 서버 상태로 되돌린다
     }
     finally { setBusy(false); }
   };
@@ -1055,6 +1113,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
     setMine({ id: '', scheduleId, userId: user.id, displayName: n, createdAt: new Date().toISOString() });
     setJustReserved(true); // 성공 패널이 다음 행동(캘린더·알림)까지 안내 — 토스트 대체
     loadRes();
+    onReservationChange?.(); // 서버 저장이 이미 성공한 뒤다 — 여기서 실패해도 '예약 실패'가 아니다(F06)
   };
   // D-day — 대회는 보통 며칠 뒤라, 잊지 않게 하는 장치(캘린더·알림)와 함께 보여준다
   const ddayNum = Math.round((new Date(date + 'T00:00:00').getTime() - new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00').getTime()) / 86400000);
@@ -1085,7 +1144,8 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           className="flex min-w-0 flex-1 items-center gap-2 text-left">
           <span className="shrink-0 text-sm font-bold text-accent-300">참가 예약</span>
           <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">
-            {mine === undefined ? ' ' : mine ? `예약자: ${mine.displayName}` : isManager ? resSummary : '미리 자리 잡아두기'}
+            {mineErr !== null && mine === undefined ? '예약 정보를 불러오지 못했어요'
+              : mine === undefined ? ' ' : mine ? `예약자: ${mine.displayName}` : isManager ? resSummary : '미리 자리 잡아두기'}
           </span>
           {mine && <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">예약 완료</span>}
           {mine === null && ended && <span className="shrink-0 text-2xs font-bold text-ink-muted bg-surface-high border border-border-default px-2 py-0.5 rounded-badge">종료</span>}
@@ -1174,7 +1234,9 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           ⚠ 미조회(undefined) 구간에는 **같은 높이의 자리만 예약**한다. 예전엔 곧바로 예약하기 버튼을
              그려서, 이미 예약한 사람이 그걸 누르고 '이미 등록된 닉네임입니다' 에러를 맞았다.
              CLAUDE.md — CLS 는 진입 애니가 아니라 공간 예약으로 해결한다. */}
-      {mine === undefined ? (
+      {mineErr !== null && mine === undefined ? (
+        <LoadErrorCard error={mineErr} onRetry={loadMine} what="내 예약 정보" compact />
+      ) : mine === undefined ? (
         <div className="skeleton h-[46px] w-full rounded-input" aria-busy="true" />
       ) : mine ? (
         <HoldToConfirmButton onConfirm={act} disabled={busy} holdingLabel="취소하는 중…"
@@ -1192,7 +1254,8 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
         </div>
       )}
       <p className="text-2xs text-ink-muted">
-        {mine ? `예약자: ${mine.displayName}`
+        {mineErr !== null && mine === undefined ? '예약 여부를 확인하지 못했습니다. 다시 시도해 주세요.'
+          : mine ? `예약자: ${mine.displayName}`
           : ended ? '이미 끝난 대회라 예약이 닫혔습니다. 다음 대회 일정을 확인해 주세요.'
           : status === 'live' ? (
               // UX-1: 클락 실측이 있으면 '매장에 확인해 주세요' 대신 실제 답을 준다(서버는 답을 알고 있었다)
@@ -1227,11 +1290,14 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
                       <div className="min-w-0">
                         <p className="flex items-center gap-1 truncate text-xs font-semibold text-ink-primary">
                           <span className="truncate">{r.realName ? `${r.realName}(${r.nickname ?? '-'})` : (r.nickname ?? '비회원')}</span>
-                          {/* 예약→방문 전환 표시 — 당일 체크인 있으면 ✓, 종료 후에도 없으면 노쇼 */}
+                          {/* 예약→방문 전환 표시. 종료 후 체크인 기록이 없으면 '방문 확인 안 됨' —
+                              **'노쇼' 로 단정하지 않는다**(오너 결정 2026-09-06): 체크인을 운영하지 않는 매장에서는
+                              실제로 온 손님까지 전원 노쇼로 보였다. 우리가 아는 것은 '기록이 없다'까지다. */}
                           {r.visited
                             ? <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1 py-0.5 text-2xs font-bold leading-none text-emerald-400">방문 완료</span>
                             : ended
-                              ? <span className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1 py-0.5 text-2xs font-bold leading-none text-ink-muted">노쇼</span>
+                              ? <span title="이 대회 당일 이 매장의 체크인 기록이 없습니다. 체크인(QR)을 운영하지 않는 날이면 방문 여부를 알 수 없습니다."
+                                  className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1 py-0.5 text-2xs font-bold leading-none text-ink-muted">방문 확인 안 됨</span>
                               : null}
                         </p>
                         <p className="truncate text-2xs text-ink-muted">예약명: {r.displayName}</p>

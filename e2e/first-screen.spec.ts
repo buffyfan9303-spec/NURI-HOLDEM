@@ -3,7 +3,7 @@
 // 라이브에서 실제로 이랬다: 승인된 일정 5건이 전부 과거인데 날짜·종료 필터가 없어서,
 // 첫 화면이 '종료' 카드 5장이었고 그중 두 달 전 대회가 TOP 에서 '🔥 마감 임박' 배지를 달고 있었다.
 // 처음 온 사람은 '여긴 대회가 안 열리는 앱'이라고 판단하고 나간다 — 런칭 첫날의 모습이 앱의 최악 상태였다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { dismissOverlays } from './_session';
 
 test.describe('첫 화면 — 앱을 막 켠 사람이 보는 것', () => {
