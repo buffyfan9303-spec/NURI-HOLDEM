@@ -229,14 +229,13 @@ export async function redeemMyVoucherByPhone(voucherId: string, phone: string): 
   if (error) throw new Error(error.message);
   return (data as string) ?? '';
 }
-// 회수(사용): '전송' 한 번에 발급 매장으로 바로(보유자 본인). 매장명 반환.
-export async function redeemMyVoucher(voucherId: string): Promise<string> {
-  if (IS_MOCK) return '';
-  assertVoucherOn();
-  const { data, error } = await supabase.rpc('redeem_my_voucher', { p_voucher_id: voucherId });
-  if (error) throw new Error(error.message);
-  return (data as string) ?? '';
-}
+// ⚠ 무증빙 사용 경로(redeem_my_voucher)는 **폐지**됐다 (오너 승인 2026-09-07, 마이그레이션 20260907d).
+//   그 RPC 는 보유자·상태·만료만 보고 **매장을 전혀 검증하지 않아** 집에서도 사용 처리가 됐다
+//   (형제 함수 _by_qr 은 매장 id 를, _by_phone 은 업주 전화번호를 강제한다).
+//   사용 처리는 트리거 _voucher_used_checkin 이 출석 행을 만들고 그 출석이 이벤트 참여권을 낳으므로,
+//   경품이 매장이용권인 지금 **당첨자가 집에서 참여권을 자가증식**할 수 있었다.
+//   서버에서 authenticated 실행 권한을 회수했고 클라이언트 함수도 지웠다 — 남기면 다시 배선된다.
+//   손님 경로는 redeemMyVoucherByQr(위) · redeemMyVoucherByPhone(위) 둘뿐이고 둘 다 현장 증빙이 있다.
 
 async function rawFindUserForTransfer(nickname: string): Promise<TransferTarget[]> {
   if (IS_MOCK) return [];
