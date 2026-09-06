@@ -129,77 +129,87 @@ export default function EventPage({ open, onClose, onLogin }: {
 }
 
 // ── 히어로 ────────────────────────────────────────────────────────────────────
+// ⚠ 이 판의 주인공은 **카드판**이다. 히어로는 안내일 뿐인데 예전엔 844px 화면에서 460px 를 먹어
+//   카드가 접혔다(오너 2026-09-06: "칸이 너무 커서 UI/UX 를 해친다"). 그래서 규칙을 셋 둔다:
+//    ① 히어로는 화면의 1/4 을 넘기지 않는다 — 첫 화면에 카드가 보여야 '고른다'가 성립한다.
+//    ② 같은 말을 두 번 하지 않는다(부제와 안내문이 둘 다 '출석하면 참여권 1장'이었다 — 안내문을 지웠다).
+//    ③ CTA·안내는 **필요할 때만** 자리를 차지한다(로그인 전 / 참여권 0 / 소진).
+//
+// 아우라 규약(CLAUDE.md v6·v6.5) 위반 둘도 여기서 걷는다:
+//    · ring-aura-glow 는 '화면당 최대 1곳, 주인공 면에만'이고 **모달·시트에는 금지**다.
+//      이 페이지는 전면 시트다 — 글로우를 뺀다(주인공이 없는 화면은 0곳이 정답).
+//    · 경품 칸의 **강한 색 테두리**도 v6 가 명시적으로 금지한다("네온·강한 테두리·큰 글로우 금지").
+//      색은 점과 숫자에만 남기고 면은 공용 헤어라인으로 통일한다.
 function Hero({ board, left, total, user, onLogin }: {
   board: EventBoard; left: number; total: number; user: boolean; onLogin: () => void;
 }) {
   const done = total - left;
+  const soldOut = left === 0;
   return (
-    <section className="ring-aura-glow relative overflow-hidden rounded-aura border card-aura p-4">
-      <div aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-accent-400/20 blur-3xl" />
-      <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-10 h-36 w-36 rounded-full bg-fuchsia-500/10 blur-3xl" />
+    <section className="relative overflow-hidden rounded-aura border card-aura p-3">
+      {/* 블룸 한 겹만 — 정적 radial(§20.4 #6). 두 겹이면 작은 카드에서 탁해진다. */}
+      <div aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-accent-400/15 blur-2xl" />
 
-      <div className="relative flex items-start gap-3">
-        <span aria-hidden className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-input tile-grad">
-          <Icon name="gift" size={20} />
+      <div className="relative flex items-center gap-2.5">
+        <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input tile-grad">
+          <Icon name="gift" size={17} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-2xs font-bold uppercase tracking-[0.14em] text-accent-300">EVENT</p>
-          <h2 className="mt-0.5 text-xl font-bold leading-tight text-ink-primary break-keep">{board.title}</h2>
-          {board.subtitle && <p className="mt-1 text-xs leading-relaxed text-ink-secondary break-keep">{board.subtitle}</p>}
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent-300">EVENT</p>
+          <h2 className="truncate text-base font-bold leading-tight text-ink-primary">{board.title}</h2>
         </div>
+        <span className="shrink-0 text-right">
+          <span className="block text-lg font-extrabold leading-none tabular-nums text-accent-200">{left}</span>
+          <span className="block text-[10px] text-ink-muted">장 남음</span>
+        </span>
       </div>
 
+      {board.subtitle && (
+        <p className="relative mt-2 truncate text-2xs text-ink-secondary" title={board.subtitle}>{board.subtitle}</p>
+      )}
+
       {/* 진행 막대 — 자기완결 소형 진행바는 §20.4 예외로 width 전환이 허용된다 */}
-      <div className="relative mt-3">
-        <div className="flex items-baseline justify-between text-2xs">
-          <span className="font-semibold text-ink-secondary">남은 카드 <b className="tabular-nums text-accent-200">{left}</b>장</span>
-          <span className="tabular-nums text-ink-muted">{done} / {total} 개봉</span>
-        </div>
-        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-high">
+      <div className="relative mt-2 flex items-center gap-2">
+        <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-high">
           <div className="h-full rounded-full bg-gradient-to-r from-accent-400 to-fuchsia-500 transition-[width] duration-[var(--dur-panel)]"
             style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
         </div>
+        <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{done}/{total} 개봉</span>
       </div>
 
-      {/* 경품 — 등급별로 색이 다르고, 남은 수량이 큰 숫자다(무엇이 남았는지가 참여 동기다) */}
-      <div className="relative mt-3 grid grid-cols-4 gap-1.5">
+      {/* 경품 — 색은 점과 숫자에만. 면은 공용 헤어라인으로(강한 색 테두리 금지 · v6). */}
+      <div className="relative mt-2.5 grid grid-cols-4 gap-1.5">
         {[1, 2, 3, 4].map((t) => {
           const m = TIER_META[t];
           const l = board.remainByTier?.[String(t)] ?? 0;
           const v = board.voucherByTier?.[String(t)] ?? 0;
           return (
-            <div key={t} className={['relative overflow-hidden rounded-input border px-2 py-2', m.ring, m.bg].join(' ')}>
-              <span aria-hidden className={['absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full', m.dot].join(' ')} />
-              <p className={['text-2xs font-bold', m.text].join(' ')}>{m.label}</p>
-              {/* 숫자와 단위를 한 덩어리로 — 따로 두면 '1' 과 '장 남음' 이 줄바꿈으로 갈린다(실측) */}
-              <p className="mt-1 whitespace-nowrap text-lg font-extrabold leading-none tabular-nums text-ink-primary">
-                {l}<span className="ml-0.5 text-[10px] font-semibold text-ink-muted">장 남음</span>
+            <div key={t} className="rounded-input border border-border-subtle bg-surface-high/60 px-2 py-1.5">
+              <p className={['flex items-center gap-1 text-[10px] font-bold', m.text].join(' ')}>
+                <span aria-hidden className={['h-1.5 w-1.5 shrink-0 rounded-full', m.dot].join(' ')} />
+                {m.label}
               </p>
-              <p className="mt-1 text-[10px] leading-tight text-ink-muted">이용권 {v}장</p>
+              <p className="mt-0.5 whitespace-nowrap text-base font-extrabold leading-none tabular-nums text-ink-primary">
+                {l}<span className="ml-0.5 text-[10px] font-semibold text-ink-muted">장</span>
+              </p>
+              <p className="truncate text-[10px] leading-tight text-ink-muted">이용권 {v}장</p>
             </div>
           );
         })}
       </div>
 
-      <p className="relative mt-3 flex items-start gap-1.5 text-2xs leading-relaxed text-ink-muted">
-        <Icon name="info" size={12} className="mt-px shrink-0" />
-        <span>매장 <b className="text-ink-secondary">출석 QR</b>을 찍을 때마다 참여권 1장. 참여권 1장으로 카드 한 장을 골라 찢어요.</span>
-      </p>
-
-      {!user && left > 0 && (
-        <button type="button" onClick={onLogin} className="btn-primary relative mt-3 min-h-[44px] w-full text-sm">
+      {/* 안내·CTA 는 **필요할 때만** 자리를 차지한다. 평소에는 카드판이 바로 이어진다. */}
+      {soldOut ? (
+        <p className="relative mt-2.5 flex items-start gap-1.5 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs font-semibold leading-relaxed text-ink-secondary">
+          <Icon name="check-circle" size={12} className="mt-px shrink-0 text-emerald-400" />
+          <span>카드 {total}장이 모두 열렸어요 — 이벤트가 끝났습니다.</span>
+        </p>
+      ) : !user ? (
+        <button type="button" onClick={onLogin} className="btn-primary relative mt-2.5 min-h-[42px] w-full text-sm">
           로그인하고 참여하기
         </button>
-      )}
-      {/* 종료 조건은 시각이 아니라 **재고**다(오너 2026-09-06: "100장이 소진될 때까지").
-          다 떨어졌으면 참여권 안내보다 '끝났다'가 먼저다 — 안 말하면 손님이 계속 열 카드를 찾는다. */}
-      {left === 0 ? (
-        <p className="relative mt-3 flex items-start gap-1.5 rounded-input border border-border-default bg-surface-high px-3 py-2 text-2xs font-semibold leading-relaxed text-ink-secondary">
-          <Icon name="check-circle" size={13} className="mt-px shrink-0 text-emerald-400" />
-          <span>카드 {total}장이 모두 열렸어요 — 이벤트가 끝났습니다. 다음 이벤트를 기다려 주세요.</span>
-        </p>
-      ) : user && board.myTickets === 0 ? (
-        <p className="relative mt-3 rounded-input border border-border-default bg-surface-high px-3 py-2 text-2xs text-ink-secondary">
+      ) : board.myTickets === 0 ? (
+        <p className="relative mt-2.5 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs leading-relaxed text-ink-secondary">
           참여권이 없어요 — 매장에서 <b className="text-ink-primary">출석 QR</b>을 찍으면 1장이 바로 쌓여요.
         </p>
       ) : null}

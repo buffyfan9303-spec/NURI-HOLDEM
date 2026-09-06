@@ -9,6 +9,9 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
+  /** 제목줄 오른쪽(닫기 앞)에 놓을 액션. 공유처럼 **창에 딸린 동작**의 자리다 —
+   *  본문 위에 전용 행으로 두면 내용과 무관한 버튼이 홀로 떠 보인다(오너 2026-09-06). */
+  headerAction?: ReactNode;
   /** sheet: 하단 시트 / center: 센터 / page: 전체화면 불투명 페이지(뒤 비침 없음) */
   variant?: 'center' | 'sheet' | 'page';
   children: ReactNode;
@@ -44,7 +47,7 @@ const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
 };
 
 export default function Modal({
-  open, onClose, title, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
+  open, onClose, title, headerAction, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
   dragToClose = false,
 }: ModalProps) {
   // page 는 기존 동작 유지(항상 켜짐), sheet 는 opt-in.
@@ -232,10 +235,13 @@ export default function Modal({
       <div className="flex max-h-[calc(100vh-5rem)] flex-col overflow-hidden rounded-card border border-border-default bg-surface-mid">
         {title && (
           <header className="flex shrink-0 items-center justify-between border-b border-border-strong px-4 py-3">
-            <h2 className="text-base font-bold tracking-tight text-ink-primary">{title}</h2>
-            <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
-              <Icon name="close" size={14} />
-            </button>
+            <h2 className="min-w-0 flex-1 truncate text-base font-bold tracking-tight text-ink-primary">{title}</h2>
+            <div className="flex shrink-0 items-center gap-1">
+              {headerAction}
+              <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
+                <Icon name="close" size={14} />
+              </button>
+            </div>
           </header>
         )}
         <div className="flex-1 overflow-y-auto"><div className={['mx-auto w-full', MAX_W[maxWidth]].join(' ')}>{children}</div></div>
@@ -266,11 +272,14 @@ export default function Modal({
         <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
         {title && (
           <header className="shrink-0 flex items-center justify-between px-4 h-header-h border-b border-border-strong bg-surface-base">
-            <h2 id="modal-title" className="text-base font-bold tracking-tight text-ink-primary">{title}</h2>
-            <button type="button" onClick={onClose} aria-label="닫기"
-              className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
-              <Icon name="close" size={18} />
-            </button>
+            <h2 id="modal-title" className="min-w-0 flex-1 truncate text-base font-bold tracking-tight text-ink-primary">{title}</h2>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {headerAction}
+              <button type="button" onClick={onClose} aria-label="닫기"
+                className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
+                <Icon name="close" size={18} />
+              </button>
+            </div>
           </header>
         )}
         <div className="flex-1 overflow-y-auto overscroll-contain">

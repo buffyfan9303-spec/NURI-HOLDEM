@@ -111,6 +111,34 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측', () => {
     if (m.miniCount >= 2) expect(m.miniLeftSpread, 'Mini 숫자 시작점이 어긋난다(하네스에선 34→0 이었다)').toBe(0);
   });
 
+  test('GTO 도구 — 공유 버튼이 제목줄에 있다(본문 위에 홀로 떠 있지 않다)', async ({ page }) => {
+    await page.getByRole('navigation', { name: '하단 내비게이션' }).getByRole('button', { name: 'GTO', exact: true }).click();
+    const card = page.getByRole('button', { name: /프리플랍 레인지 차트/ }).first();
+    await expect(card).toBeVisible({ timeout: 20_000 });
+    await card.click();
+
+    const share = page.getByRole('button', { name: /링크 공유/ });
+    await expect(share, '공유 버튼이 없다').toBeVisible({ timeout: 20_000 });
+
+    const m = await page.evaluate(() => {
+      const btn = [...document.querySelectorAll('button')].find((b) => /링크 공유/.test(b.getAttribute('aria-label') || ''));
+      if (!btn) return null;
+      const hdr = btn.closest('header');
+      const title = document.getElementById('modal-title');
+      return {
+        헤더안에있나: !!hdr,
+        // 제목과 같은 줄인가(세로 중심이 12px 안)
+        제목과같은줄: title ? Math.abs(
+          (btn.getBoundingClientRect().top + btn.getBoundingClientRect().height / 2) -
+          (title.getBoundingClientRect().top + title.getBoundingClientRect().height / 2)) : 999,
+      };
+    });
+    console.log('[공유 버튼]', JSON.stringify(m));
+    expect(m, '공유 버튼을 못 찾았다').not.toBeNull();
+    expect(m!.헤더안에있나, '공유가 아직 본문에 있다 — 제목줄로 올라가야 한다').toBe(true);
+    expect(m!.제목과같은줄, '공유가 제목과 다른 줄에 있다').toBeLessThanOrEqual(12);
+  });
+
   test('캘린더 — 내가 적는 기록: 날짜·메모 오른쪽 변 일치 · 컨트롤 높이 통일', async ({ page }) => {
     // ⚠ 매장 계정에는 하단 '캘린더' 탭이 없다(5번째 칸이 '내 매장'). 대신 **내 매장 안의 '내 캘린더' 섹션**이
     //   같은 CalendarPanel 을 쓴다(VenueManageTab.tsx:165 — 중복 구현 금지). 그래서 판이 아니라 그 섹션에서 잰다.
