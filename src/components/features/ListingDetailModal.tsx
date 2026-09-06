@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import type { ListingStatus, MarketplaceListing, ListingLikeState } from '../../api/marketplace';
-import { updateListingStatus, getListingLikeState, toggleListingLike, nextLikeState } from '../../api/marketplace';
+import { updateListingStatus, getListingLikeState, toggleListingLike, nextLikeState, incrementListingView } from '../../api/marketplace';
 import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime } from './MarketplaceTab';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
@@ -41,6 +41,9 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
     if (!open || !listing) return;
     let alive = true;
     getListingLikeState(listing.id).then((s) => { if (alive) setLike(s); }).catch(() => {});
+    // 조회수 — 서버가 하루 1회로 거르므로 여는 김에 같이 올린다(새 effect 불필요, open&&listing 가드 공유).
+    // 실패는 무시: 조회수 때문에 상세가 안 열리면 안 된다.
+    incrementListingView(listing.id).catch(() => {});
     return () => { alive = false; };
   }, [open, listing]);
 

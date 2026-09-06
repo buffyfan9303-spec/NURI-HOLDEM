@@ -234,3 +234,11 @@ export async function updateNotice(
   }).eq('id', id);
   if (error) throw error;
 }
+
+/** 매물 조회수 +1 — 서버가 (매물, 열람자, KST 날짜) 원장으로 중복을 거른다(increment_listing_view, 20260907e).
+ *  실패는 조용히 무시한다: 조회수는 부가 정보이고, 이것 때문에 상세가 안 열리면 안 된다.
+ *  (커뮤니티 incrementPostView 와 같은 조리법 — 장터만 이 경로가 아예 없어서 모든 매물이 영구히 '조회 0' 이었다.) */
+export async function incrementListingView(listingId: string): Promise<void> {
+  if (IS_MOCK) return;
+  await supabase.rpc('increment_listing_view', { p_id: listingId });
+}
