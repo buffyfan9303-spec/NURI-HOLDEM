@@ -75,9 +75,33 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+// 알림 링크 → 앱이 **부팅 시 실제로 소비하는** 형태로 옮긴다 (2026-09-07).
+//
+// 왜 필요한가: notifications.link 는 '/schedules/<id>' 같은 경로형인데, 그건 앱 안에서
+// handleNavigateNotification(App.tsx:2212)이 클라이언트 라우팅으로 처리하는 형태다.
+// 푸시 클릭은 그 경로로 **하드 내비게이션**을 하는데, 이 앱은 라우터가 없어 그런 경로가 없다 —
+// 라이브 실측: https://nuriholdem.com/schedules/<uuid> → Vercel `404: NOT_FOUND`.
+// 즉 예약 리마인더·새 포스터 알림을 탭하면 앱에 들어가지도 못하고, 이미 열려 있던 앱까지 404로 끌려간다.
+// (vercel.json 에 SPA 폴백을 함께 넣어 하드 404 자체를 없앴지만, 그것만으로는 홈에 떨어질 뿐이라
+//  여기서 앱이 아는 부팅 딥링크로 바꿔 줘야 원래 보여주려던 것이 열린다.)
+function toAppLink(raw) {
+  const u = String(raw || '/');
+  if (/^https?:\/\//.test(u)) return u;                 // 외부 링크는 그대로
+  var m = u.match(/^\/schedules\/([^/?#]+)/);           // 대회 상세 → App.tsx:1951 이 ?s= 를 소비
+  if (m) return '/?s=' + m[1];
+  // 매장 커뮤니티 → 매장 페이지. 전체 UUID 이므로 ?venue= 다 — ?v= 는 8자리 단축코드·슬러그용이다(App.tsx:1965).
+  m = u.match(/^\/community\/([^/?#]+)/);
+  if (m) return '/?venue=' + m[1];
+  if (u === '/admin') return '/?tab=admin';             // 탭형은 ?tab= 이 유일한 부팅 경로(App.tsx:791)
+  if (u.indexOf('/my-store') === 0) return '/?tab=my-store';
+  if (u.indexOf('/guide/') === 0) return u;             // 정적 파일 — 그대로 연다
+  if (u.charAt(0) === '?' || u.charAt(0) === '#') return '/' + u;
+  return u;
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || '/';
+  const target = toAppLink(event.notification.data && event.notification.data.url);
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const client of list) {

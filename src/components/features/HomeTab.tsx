@@ -3,7 +3,7 @@
 // 구성: 시간대 인사 → 지금 등록 가능(라이브 실측) → 포스터 캐러셀 → 오늘·내일 일정(P2).
 // 검색·날짜·필터(탐색 장치)는 이 화면에 없다 — '전체 일정 ›'로 탐색 화면(구 일정 탭)에 위임.
 // GTO(도구) 탭은 그대로 유지 — 탭에서 밀려난 것은 화면이 아니라 '탐색 장치'다.
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '../atoms/Icon';
 import PosterCarousel from './PosterCarousel';
 import type { HomeBanner } from '../../api/homeBanners';
@@ -77,7 +77,23 @@ export default function HomeTab({
   // 이벤트 — 진행 중(live)일 때만 칸이 생긴다. draft·종료면 null 이라 홈에 아무 자리도 차지하지 않는다.
   // 홈 첫 페인트를 막지 않게 **비차단**으로 받아 온다(실패는 조용히 무시 — 이벤트는 부가 기능이다).
   const [event, setEvent] = useState<EventBoard | null>(null);
-  useEffect(() => { let ok = true; getEventBoard().then((b) => { if (ok) setEvent(b); }).catch(() => {}); return () => { ok = false; }; }, []);
+  // ⚠ 마운트 1회만 받으면 배너가 세션 내내 낡는다(2026-09-07 감사). 홈 탭은 언마운트되지 않으므로
+  //   (App 의 visitedTabs + display 토글) 앱을 완전히 껐다 켜기 전까지 그 숫자가 영원히 안 바뀐다:
+  //    · 매장 QR 로 출석해 참여권을 받아도 배너는 계속 '매장 출석하면 참여권 1장'
+  //    · 카드 100장이 다 열려 이벤트가 끝나도 배너는 살아 있는 이벤트인 척한다
+  //      (배너 게이트가 event.cards.some(c => !c.opened) 라 낡은 스냅샷을 본다)
+  //   그래서 ① 체크인 성공 신호(nuri:event-board-refresh) ② 화면으로 돌아올 때 다시 받는다. 실패는 조용히 무시(이벤트는 부가 기능이고 홈 첫 페인트를 막지 않는다).
+  const loadEventBoard = useCallback(() => { getEventBoard().then(setEvent).catch(() => {}); }, []);
+  useEffect(() => {
+    loadEventBoard();
+    const onVis = () => { if (document.visibilityState === 'visible') loadEventBoard(); };
+    window.addEventListener('nuri:event-board-refresh', loadEventBoard);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('nuri:event-board-refresh', loadEventBoard);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [loadEventBoard]);
 
   const fmtLeft = (ms: number) => {
     const m = Math.floor(ms / 60_000);

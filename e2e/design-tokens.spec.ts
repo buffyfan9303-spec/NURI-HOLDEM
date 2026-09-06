@@ -504,3 +504,46 @@ test.describe('아우라 토큰 — 존재 + 텍스트 대비', () => {
     });
   }
 });
+
+// ── 아우라 v6.5 '글로우는 화면당 최대 1곳' — 문서가 아니라 렌더로 강제한다 ────────────────
+//
+// 왜: 이 규칙은 CLAUDE.md 와 컴포넌트 주석에만 있었다. 그래서 2026-09-07 조사에서
+//   "커뮤니티·캘린더·내 매장은 글로우 0곳"이라는 문서상 전제가 실제와 어긋나 있었다는 게 드러났다
+//   (서브탭 활성 알약의 18px 블룸 · 선택 날짜 칩의 shadow-glow · btn-primary 의 violet 그림자).
+//   규칙을 세는 주체가 사람이면 이런 어긋남은 반드시 다시 생긴다.
+//
+// 무엇을 세나: **눈에 보이는** .ring-aura-glow(카드 후광) 개수. 최상위 탭은 언마운트되지 않고
+//   display 토글로 살아 있으므로(App.tsx visitedTabs) 숨은 것까지 세면 거짓 실패가 난다 —
+//   offsetParent 와 실제 박스 크기로 '지금 화면에 있는 것'만 센다.
+//
+// 이 게이트가 막는 회귀: 새 화면에 무심코 글로우를 하나 더 얹어 '지금 볼 곳'이 둘이 되는 것
+//   (v3 가 조잡했던 정확한 메커니즘 — CLAUDE.md 아우라 v6.5).
+test.describe('아우라 v6.5 — 글로우는 화면당 최대 1곳', () => {
+  // 비로그인으로 열리는 탭만. '내 매장'은 업주 계정이 필요해 여기서 재지 않는다(별도 수동 확인).
+  const TABS = ['홈', '라이브', '커뮤니티', 'GTO', '캘린더'];
+
+  for (const label of TABS) {
+    test(`'${label}' 탭에 보이는 카드 후광이 1개를 넘지 않는다`, async ({ page }) => {
+      await page.goto('/');
+      await dismissOverlays(page);
+      const tab = page.locator('nav').getByRole('button', { name: label, exact: true }).first();
+      if (!(await tab.count())) test.skip(true, `'${label}' 탭이 이 계정/화면에 없다`);
+      await tab.click();
+      await page.waitForTimeout(1200); // 전환 + 첫 조회가 끝난 뒤에 센다
+
+      const found = await page.evaluate(() => {
+        const out: string[] = [];
+        for (const el of document.querySelectorAll<HTMLElement>('.ring-aura-glow, .ring-aura-glow-vivid')) {
+          const r = el.getBoundingClientRect();
+          if (el.offsetParent === null || r.width === 0 || r.height === 0) continue; // 숨은 탭(keep-alive)
+          out.push((el.textContent || '').trim().slice(0, 40) || el.className.slice(0, 60));
+        }
+        return out;
+      });
+
+      expect(found.length, `'${label}' 탭에 카드 후광이 ${found.length}곳 보인다 — 화면당 1곳이 상한이다.
+어느 면이 이 화면의 주인공인지 하나만 고르고 나머지는 .ring-aura 까지만 쓰라(CLAUDE.md 아우라 v6.5).
+보이는 것들: ${JSON.stringify(found)}`).toBeLessThanOrEqual(1);
+    });
+  }
+});

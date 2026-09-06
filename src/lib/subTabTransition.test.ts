@@ -97,3 +97,56 @@ describe('하위 탭 전환 · 스코프와 CSS 규칙의 1:1', () => {
     }
   });
 });
+
+// ── 알약(SlidingPill) 이 스냅샷에 갇히지 않는가 ─────────────────────────────
+//
+// 왜 이 게이트가 필요한가: 탭바에 view-transition-name 을 주면 그 탭바는 전환 동안 **정지 이미지**로
+// 대체된다. 알약은 그 이미지 안에 인쇄돼 있으므로, 살아 있는 DOM 에서 아무리 미끄러져도 사용자는
+// 못 본다 — 전환이 끝나는 순간 새 위치에 '툭' 나타난다(오너 리포트 2026-09-07: "누르면 나중에 움직여").
+// 2026-09-04 에 venue-tab 에서 이걸 실측하고 알약에 자기 이름을 줘 고쳤는데, 그 뒤 추가된 스코프
+// 13개에는 그 한 줄이 빠진 채 복사됐다. 사람이 매번 기억할 일이 아니라 여기서 강제한다.
+//
+// 규칙: 탭바에 이름을 주는 스코프는 **알약 규칙을 갖거나, 아래 목록에 이유와 함께 등록되거나** 둘 중 하나다.
+describe('하위 탭 전환 · 알약이 탭바 스냅샷에 갇히지 않는다', () => {
+  /** 탭바 안에 미끄러지는 지시자(SlidingPill·SegmentedTabs·UnderlineTabs)가 없는 스코프.
+   *  = 활성 표시가 정적이라 가려질 이동 자체가 없다. 2026-09-07 마크업 전수 확인. */
+  const NO_PILL: Record<string, string> = {
+    'admin-sec': '관리자 8섹션 내비 — 지시자 없음(정적 버튼)',
+    'usermgmt-sec': '회원관리 섹션 — 지시자 없음',
+    'tools-lane': 'GTO 레인 바 — 지시자 없음',
+    'market-cat': '장터 카테고리 — 지시자 없음',
+    'live-sort': '실시간 정렬 — 지시자 없음',
+    'dealer-kind': '딜러 종류 — 지시자 없음',
+    'profile-tab': '내 정보 탭 — 지시자 없음',
+  };
+
+  /** 탭바든 본문이든 view-transition-name 을 부여하는 스코프 전부.
+   *  (스코프마다 규칙이 여럿이라 '어느 엘리먼트냐'를 특정하려 들면 패널을 집는다 — 스코프만 본다.) */
+  const named = new Set(
+    [...CSS.matchAll(/html\[data-vt-scope='([a-z0-9-]+)'\][^\n]*view-transition-name/g)].map((m) => m[1]),
+  );
+
+  it('탭바에 이름을 주는 스코프를 실제로 여럿 찾았다(정규식이 죽으면 조용히 통과하는 것을 막는다)', () => {
+    expect(named.size).toBeGreaterThanOrEqual(12);
+  });
+
+  it.each([...named].sort())("'%s' 는 알약 규칙이 있거나 예외 목록에 등록돼 있다", (scope) => {
+    const hasPill = CSS.split('\n').some(
+      (l) => l.includes(`data-vt-scope='${scope}'`) && l.includes('[data-sliding-pill]'),
+    );
+    if (hasPill) return;
+    expect(
+      NO_PILL[scope],
+      `${scope}: 탭바가 스냅샷으로 대체되는데 알약 규칙이 없다. 탭바 안에 ` +
+        `SlidingPill/SegmentedTabs/UnderlineTabs 가 있으면 그 탭바 규칙 바로 아래에 ` +
+        `\`html[data-vt-scope='${scope}'] [<탭바속성>] [data-sliding-pill] { view-transition-name: …-pill; }\` ` +
+        `를 추가하고, 없으면 NO_PILL 에 이유와 함께 등록하라.`,
+    ).toBeTruthy();
+  });
+
+  it('알약 이름이 서로 겹치지 않는다 — 같은 이름이 둘이면 전환이 통째로 실패한다', () => {
+    const names = [...CSS.matchAll(/\[data-sliding-pill\]\s*\{\s*view-transition-name:\s*([a-z0-9-]+)/g)].map((m) => m[1]);
+    expect(names.length, '알약 규칙이 하나도 없다 — 셀렉터가 바뀌었는지 확인하라').toBeGreaterThanOrEqual(8);
+    expect(new Set(names).size, `알약 이름 중복: ${names.join(',')}`).toBe(names.length);
+  });
+});

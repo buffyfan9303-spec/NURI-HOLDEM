@@ -351,10 +351,15 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
       toast.show('로그인되었습니다', 'success');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '';
+      // 제재(탈퇴·정지) 계정은 사유를 그대로 보여준다 — 자격증명 오류로 뭉개면 회원은 비밀번호만
+      // 반복해서 다시 치게 되고, 왜 못 들어가는지 끝내 알 수 없다(AuthContext.sanctionMessage).
+      const sanctioned = err instanceof Error && err.name === 'SanctionError';
       setError(
-        /confirm|verified|not confirmed/i.test(msg)
-          ? '이메일 인증이 필요합니다. 받은 편지함의 인증 메일을 확인해 주세요.'
-          : '이메일 또는 비밀번호를 확인해 주세요.',
+        sanctioned
+          ? msg
+          : /confirm|verified|not confirmed/i.test(msg)
+            ? '이메일 인증이 필요합니다. 받은 편지함의 인증 메일을 확인해 주세요.'
+            : '이메일 또는 비밀번호를 확인해 주세요.',
       );
       throw err; // 버튼을 idle로 복귀시켜 재시도 가능하게
     }

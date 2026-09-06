@@ -26,7 +26,13 @@ initErrorLog();
 // 외부 실시간 오류 알림(Sentry) — VITE_SENTRY_DSN 설정 시에만 활성화(미설정 시 무동작)
 initMonitoring();
 // [DS] MO-1 모션 계측 — LoAF·CLS·INP 후보를 관리자 errorLog 로(순수 PerformanceObserver, 번들 +0)
-initMotionTelemetry();
+//
+// ⚠ 상시 켜 두지 않는다(2026-09-07 감사). 이 계측은 errorLog 와 **같은 전송 예산**을 쓴다
+//   (세션 20건 · DB 쪽 client_error_rate_ok 로 1분 15건). 그런데 CLS 값은 매번 달라 DEDUP 에 걸리지도 않아서,
+//   홈·커뮤니티를 스크롤만 해도 예산이 [perf:*] 로 먼저 소진된다 → **그 뒤에 터진 진짜 런타임 오류가
+//   서버에 남지 않는다.** 운영 client_errors 10,344건 중 최빈값이 '[perf:cls] …' 인 게 그 증거다.
+//   계측 도구는 그대로 살려 두고 필요할 때만 켠다: 개발 중이거나 `?perf` 를 붙여 연 경우.
+if (import.meta.env.DEV || new URLSearchParams(location.search).has('perf')) initMotionTelemetry();
 
 // 서비스워커 등록 — 설치형 PWA/Play Store(TWA) 요건 + 앱 셸(해시 자산) 캐싱으로 재방문 즉시 로드 + 웹푸시.
 // (기존엔 푸시 켤 때만 등록됐으나, 설치 가능·빠른 재방문을 위해 로드 시 항상 등록)

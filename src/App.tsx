@@ -93,7 +93,7 @@ import { getPostById,
 } from './api/community';
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
 import { enablePush, isPushSubscribed, pushSupported } from './api/push';
-import { rememberQrIntent, takeQrIntent } from './lib/pendingQrIntent';
+import { rememberQrIntent, takeQrIntent, clearQrIntent } from './lib/pendingQrIntent';
 import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral } from './api/referrals';
 import LevelUpWatcher from './components/features/LevelUpCelebration';
 import BusinessFooter from './components/features/BusinessFooter';
@@ -1063,12 +1063,19 @@ export default function App() {
       setAuthOpen(true);
       return;
     }
+    // 여기서 직접 처리하기로 정했으므로 보류 의도를 **지금** 버린다(2026-09-07).
+    // URL 정리는 아래 .finally 에서 비동기로 일어나므로, 그것에 기대면 아래 '보류된 QR' effect 가
+    // '아직 파라미터 있음'으로 보고 그냥 돌아가 의도가 남는다 → 30분 내 재실행에서 중복 체크인.
+    clearQrIntent();
     checkIn(cv)
       .then(async ({ name, points, streak: served }) => {
         // 점수·연속일은 서버(check_in, 20260905k)가 단일 출처 — 같은 날 두 번째 체크인은 points 0 이라 '+N점' 을 붙이지 않는다.
         const streak = served ?? await getMyCheckinStreak().catch(() => 0);
         // 프로필 점수·랭킹 내 순위·레벨업 축하가 재로그인 없이 따라오도록
         await refreshProfile().catch(() => {});
+        // 출석 = 이벤트 참여권 1장. 홈 배너가 그 숫자를 들고 있으므로 갱신 신호를 쏜다
+        // (홈 탭은 언마운트되지 않아 마운트 1회 조회로는 영원히 낡는다 — HomeTab.tsx 주석).
+        window.dispatchEvent(new Event('nuri:event-board-refresh'));
         const fire = streak >= 2 ? ` · ${streak}일 연속` : '';
         toast.show(`${name || '매장'} 체크인 완료!${points > 0 ? ` 출석 도장 +${points}점` : ''}${fire}`, 'success');
         // 매장 QR 스캔은 '그 매장에 와 있다'는 뜻 — 홈이 아니라 그 매장 페이지(오늘 대회·내 활동)에 착지
@@ -1112,6 +1119,9 @@ export default function App() {
       setAuthOpen(true);
       return;
     }
+    // 이쪽은 URL 을 **동기로** 지운다 — 그러면 같은 커밋의 '보류된 QR' effect 가 '파라미터 없음'으로 보고
+    // 의도를 소비해 요청이 두 번 나간다. 지우기 전에 의도부터 버린다(2026-09-07).
+    clearQrIntent();
     const url = new URL(window.location.href);
     url.searchParams.delete('buyin'); url.searchParams.delete('game');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
@@ -1132,6 +1142,9 @@ export default function App() {
         .then(async ({ name, points, streak: served }) => {
           const streak = served ?? await getMyCheckinStreak().catch(() => 0);
           await refreshProfile().catch(() => {});
+        // 출석 = 이벤트 참여권 1장. 홈 배너가 그 숫자를 들고 있으므로 갱신 신호를 쏜다
+        // (홈 탭은 언마운트되지 않아 마운트 1회 조회로는 영원히 낡는다 — HomeTab.tsx 주석).
+        window.dispatchEvent(new Event('nuri:event-board-refresh'));
           toast.show(`${name || '매장'} 체크인 완료!${points > 0 ? ` 출석 도장 +${points}점` : ''}${streak >= 2 ? ` · ${streak}일 연속` : ''}`, 'success');
           setOpenVenueId(it.venueId);
         })

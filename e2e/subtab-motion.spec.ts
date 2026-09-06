@@ -202,3 +202,83 @@ ${joined}`).toEqual([]);
     }
   });
 });
+
+// ── 알약(SlidingPill)이 탭바 스냅샷에 갇히지 않는다 (오너 리포트 2026-09-07) ──────────
+//
+// 증상: "이 메뉴탭이 누르면 나중에 움직여 제대로 안 움직인다"(커뮤니티 서브탭 홀덤펍·게시판·…).
+//
+// 두 겹의 원인이 있었고 둘 다 여기서 잰다.
+//   ① 탭바에 view-transition-name 이 붙으면 탭바는 **정지 이미지**로 대체된다. 알약은 그 이미지
+//      안에 인쇄돼 있어 살아 있는 DOM 에서 아무리 미끄러져도 안 보인다 → 알약에 자기 이름을 줘야
+//      VT 가 알약만 따로 보간한다(index.css community-pill).
+//   ② 그런데 이름만 줘서는 부족하다. SlidingPill 의 FLIP 은 '이전 위치에서 시작하는 CSS 트랜지션'
+//      이라, VT 가 새 스냅샷을 뜨는 순간(경과 0) 알약은 아직 **이전 위치**다 → VT 가 A→A 를 보간해
+//      결국 안 움직인다. 그래서 전환 중에는 최종 위치로 즉시 가게 했다(SlidingPill + isViewTransitionActive).
+//
+// 그래서 '그룹이 생겼다'로 끝내지 않고 **키프레임의 transform 이 실제로 달라지는지**까지 본다.
+// A→A 로 보간되면 시작·끝 transform 이 같아서 이 단언이 깨진다 — ②의 회귀를 정확히 잡는 지점이다.
+//
+// 커뮤니티 서브탭은 비로그인으로도 보이므로 자격 증명 없이 돈다.
+test.describe('하위 탭 — 알약이 탭바 스냅샷에 갇히지 않는다', () => {
+  test('🔴 커뮤니티 서브탭: 알약이 자기 그룹으로 분리돼 옛→새 위치로 보간된다', async ({ page }) => {
+    await stabilizeBackstack(page);
+    await page.goto('/');
+    const community = page.locator('nav').getByRole('button', { name: '커뮤니티', exact: true }).first();
+    await expect(community).toBeVisible({ timeout: 20_000 });
+    await dismissOverlays(page);
+    await community.click();
+
+    const bar = page.locator('[data-community-secbar]');
+    await expect(bar).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(900); // 앞선 전환·초기 로드가 끝난 뒤에 잰다
+
+    // 같은 이름이 둘이면 캡처가 통째로 실패한다 — 규칙을 넣기 전 반드시 성립해야 하는 전제.
+    expect(await bar.locator('[data-sliding-pill]').count(),
+      '탭바 안 알약이 1개가 아니다 — view-transition-name 이 겹쳐 전환이 통째로 실패한다').toBe(1);
+
+    // 전환 한복판에서 알약 그룹의 UA 애니메이션 키프레임을 낚아챈다.
+    const pillKeyframes = page.evaluate(() => new Promise<string[] | null>((resolve) => {
+      const t0 = performance.now();
+      const tick = () => {
+        for (const a of document.getAnimations()) {
+          const eff = a.effect as KeyframeEffect | null;
+          const pe = eff?.pseudoElement ?? '';
+          if (pe.includes('view-transition-group(community-pill)')) {
+            resolve(eff!.getKeyframes().map((k) => String((k as Record<string, unknown>).transform ?? '')));
+            return;
+          }
+        }
+        if (performance.now() - t0 < 1500) requestAnimationFrame(tick);
+        else resolve(null);
+      };
+      requestAnimationFrame(tick);
+    }));
+
+    await startSampler(page);
+    await page.getByRole('button', { name: '게시판', exact: true }).first().click();
+    const kf = await pillKeyframes;
+    const samples = await collect(page);
+    const joined = samples.join('\n');
+
+    // ① 알약이 자기 그룹으로 분리됐다 — 없으면 탭바 스냅샷 안에 갇혀 있다는 뜻(index.css 규칙 누락).
+    expect(kf, `알약이 자기 view-transition 그룹을 못 받았다 — 탭바 스냅샷에 갇힌다.
+index.css 의 html[data-vt-scope='community-sec'] [data-community-secbar] [data-sliding-pill] 규칙을 확인하라.
+실측 의사요소:
+${joined}`).not.toBeNull();
+
+    // ② 그 그룹이 **실제로 자리를 옮긴다** — 시작과 끝 transform 이 같으면 A→A 보간이다(안 움직인다).
+    const uniq = [...new Set((kf ?? []).filter((s) => s && s !== 'none'))];
+    expect(uniq.length, `알약 그룹의 transform 이 처음부터 끝까지 같다 — 제자리에서 보간됐다는 뜻이다.
+SlidingPill 이 전환 중에도 CSS 트랜지션을 걸면(이전 위치에서 시작) VT 가 이전 위치를 새 스냅샷으로 잡아 이렇게 된다.
+키프레임: ${JSON.stringify(kf)}
+실측 의사요소:
+${joined}`).toBeGreaterThanOrEqual(2);
+
+    // ③ 탭바 자신은 여전히 정지 — 손가락이 짚은 바가 흔들리면 안 된다(기존 계약 유지).
+    expect(samples.filter((x) =>
+      (x.startsWith('::view-transition-old(community-secbar) :: ') || x.startsWith('::view-transition-new(community-secbar) :: '))
+      && !x.endsWith(':: ')), `탭바가 애니메이트됐다 — 제자리에 고정돼야 한다
+실측:
+${joined}`).toEqual([]);
+  });
+});

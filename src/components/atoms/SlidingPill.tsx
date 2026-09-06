@@ -22,6 +22,7 @@
 // · 리사이즈·폰트 로드로 배치가 변하면 재측정(ResizeObserver)
 // · 대상이 없으면(활성 없음) 조용히 숨김 — 렌더 트리를 어지럽히지 않는다
 import { useLayoutEffect, useRef, useState } from 'react';
+import { isViewTransitionActive } from '../../lib/viewTransition';
 
 interface Props {
   /** 버튼들의 공통 부모(position:relative 필수). 생략하면 이 스팬의 부모를 자동 사용 —
@@ -62,8 +63,15 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       // (예전엔 width/height 가 트랜지션에 포함돼 매 프레임 레이아웃+페인트였다)
       pill.style.width = `${r.w}px`;
       pill.style.height = `${r.h}px`;
-      if (first || !prev) {
-        // 첫 배치·리사이즈 보정은 전환 없이 — 어디선가 미끄러져 들어오는 유령 모션 방지
+      if (first || !prev || isViewTransitionActive()) {
+        // 첫 배치·리사이즈 보정은 전환 없이 — 어디선가 미끄러져 들어오는 유령 모션 방지.
+        //
+        // View Transition 이 도는 중에도 전환 없이 간다(2026-09-07). 이유: VT 는 update 콜백
+        // 직후의 **렌더된 값**으로 새 스냅샷을 뜨는데, 여기서 CSS 트랜지션을 걸면 그 순간 경과가
+        // 0이라 아직 '이전 위치'다 → VT 가 A→A 를 보간해 알약이 전혀 안 움직이고, 전환이 끝나는
+        // 순간 최종 위치로 툭 튄다(오너 리포트: "누르면 나중에 움직여"). 최종 위치로 즉시 가면
+        // VT 가 옛 스냅샷(A)과 새 스냅샷(B)을 제 손으로 보간한다 — 미끄러짐의 주체가 바뀔 뿐
+        // 사용자가 보는 결과는 같다. VT 를 안 타는 경로(폴백·모션축소)에선 아래 FLIP 그대로.
         pill.style.transition = 'none';
         pill.style.transform = `translate(${r.x}px, ${r.y}px)`;
         return;

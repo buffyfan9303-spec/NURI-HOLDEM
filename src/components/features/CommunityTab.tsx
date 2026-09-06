@@ -152,13 +152,20 @@ function CommunityTab({
     // VT 콜백(flushSync) 안의 scrollTo 는 강제 동기 레이아웃을 한 번 더 유발한다.
     needScrollRef.current = (secScrollRef.current.get(s) ?? 0) !== curY;
     lastCommunitySection = s;
-    setShownSec(s);
-    if (visitedSecs.has(s)) {
+    if (visitedSecs.has(s) && s !== activeSecRef.current) {
       // 서브섹션 전환 동안만 서브탭 바를 root 스냅샷에서 제외(자기 이름의 스냅샷 — index.css 마커 참조).
       // 상시 name 이면 메인 탭 전환(커뮤니티→홈)에서 old-only 스냅샷이 전환 내내 얼어붙는 잔상을 실측했다.
       // 마커의 켜고 끄기는 goSubTab 이 전환 수명에 맞춰 한다(고정 타이머 금지 — 느린 기기에서 도중에 풀린다).
-      goSubTab('community-sec', SEC_ORDER, activeSecRef.current, s, () => setSectionState(s));
+      // ⚠ 알약 하이라이트(shownSec)도 **전환 안에서** 커밋한다 (2026-09-07 실측).
+      //   밖에서 먼저 부르면 React 가 그것을 먼저 flush 해, VT 가 '옛 스냅샷'을 뜨는 시점에
+      //   알약이 이미 새 자리에 있다 → 그룹이 B→B 를 보간해 전혀 움직이지 않는다.
+      //   (subtab-motion.spec 실측: 키프레임 matrix(…,89,71) → matrix(…,89,71) 로 동일했다.)
+      //   전환 안에서 커밋하면 옛=A · 새=B 가 되어 VT 가 알약을 제 손으로 미끄러뜨린다.
+      goSubTab('community-sec', SEC_ORDER, activeSecRef.current, s, () => { setShownSec(s); setSectionState(s); });
     } else {
+      // 미방문 섹션(첫 진입)은 VT 를 타지 않는다 — 가릴 스냅샷이 없으니 알약은 즉시 하이라이트하고
+      // 컨텐츠만 트랜지션으로 넘긴다(장터 lazy 청크에서도 이전 화면이 유지된다).
+      setShownSec(s);
       startSecTransition(() => setSectionState(s));
     }
   }, [visitedSecs]);
@@ -301,8 +308,12 @@ function CommunityTab({
       {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정.
           data-community-secbar: 서브섹션 View Transition(root 스냅샷)에서 제외 — 헤더·하단 탭바와 같은
           '상시 크롬'이라 전환 블러/슬라이드에 딸려 움직이면 안 된다(index.css VT 예외 블록 참조) */}
-      <div data-community-secbar="" className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-subtle pt-2 pb-2 lg:pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
-        <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high px-0.5">
+      <div data-community-secbar="" className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x subbar-aura border-b border-border-subtle pt-2 pb-2 lg:pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4">
+        {/* ⚠ 트랙(bg-surface-high) 없이 배경 위에 그대로 띄운다(오너 2회 지적, 2026-09-07).
+            세그먼트 트랙이 있으면 그 자체가 '네모칸'으로 읽힌다 — 띠 색을 지면에 맞춰도 박스는 남는다.
+            활성 표시는 미끄러지는 알약(pill-active)이 이미 하고 있어 트랙 없이도 어느 탭인지 분명하고,
+            같은 앱의 GTO 레인 칩·커뮤니티 그룹 칩이 이미 트랙 없이 배경 위에 떠 있다(그쪽이 '붙어 보인다'는 기준). */}
+        <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none px-0.5">
           {/* 활성 탭 뒤 글로우(오너 지시 2026-09-05) — pill-active = --grad-cta 채움 + 18px 블룸.
                 ⚠ 블룸을 다 보이려고 세로 여백을 키우지 않는다(2026-09-05 실측): overflow 는 **패딩 박스**에서
                   자르므로 여백 4.25px 이면 18px 중 4.25px 만 더 보인다 — 원래 2px 과 눈에 띄는 차이가 없는데

@@ -301,7 +301,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   }, [reload, reloadSession, loadPending]);
   // (C1) 낙관적 업데이트 — 승인 즉시 대기열에서 제거하고 백그라운드 동기화. 실패 시 loadPending 으로 서버 기준 복원.
   const gLabel = (seq: number) => (seq === MAIN_GAME_SEQ ? '메인' : `사이드${seq - 1}`);
-  const openSeqs = games.map((g) => g.gameSeq); // 그날 실제로 열려 있는 게임
+  // 그날 실제로 **받을 수 있는** 게임 — 마감된 세션은 뺀다(2026-09-07).
+  // ⚠ 예전엔 games 전부를 '열림'으로 셌다. getLedgerGames 는 마감 여부와 무관하게 그날 모든 세션을 주므로
+  //   (api/ledger.ts:519 가 closed 를 함께 읽는다) '메인 진행 중 + 사이드1 마감' 상태에서 사이드1 요청이
+  //   승인 대상으로 잡혔고, 서버 approve_buyin_request 가 '마감된 장부입니다'로 전부 튕겼다.
+  //   여기서 걸러 두면 그 요청들은 아래 plan.skipped 로 빠져 목록에 남는다(단건 승인 확인 다이얼로그도 함께 고쳐진다).
+  const openSeqs = games.filter((g) => !g.closed).map((g) => g.gameSeq);
   // 이 요청이 들어갈 게임 — 손님이 고른 게임이 우선, 미지정만 현재 보고 있는 게임.
   // 왜: 카드에 '원함: 사이드1'까지 띄워 놓고 현재 게임 명단에 넣으면 명단이 조용히 틀어지고,
   //     원복은 한 명씩 삭제 + (바인까지 찍혔으면) 취소 비밀번호가 필요하다.
@@ -341,13 +346,22 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     if (!flat.length) { toast.show('요청한 게임이 아직 열리지 않았습니다. 게임을 먼저 여세요', 'error'); return; }
     // 확인은 게임이 섞였을 때만 — 접수대에서 반복되는 조작이라 같은 게임뿐이면 그냥 승인한다.
     if (plan.mixed && !window.confirm(`${plan.groups.map((g) => `${gLabel(g.gameSeq)} ${g.items.length}명`).join(' / ')}으로 나눠 승인합니다.\n계속할까요?`)) return;
-    const n = flat.length;
-    setPendingReqs(plan.skipped); // 낙관: 승인 대상만 비우고 '게임 미개설' 보류 건은 목록에 남긴다
-    Promise.all(flat.map((x) => approveBuyinRequest(x.id, x.seq, false, 'cash', undefined, defaultDiscIdx()).catch(() => null)))
-      .then(() => {
+    setPendingReqs(plan.skipped); // 낙관: 승인 대상만 비우고 보류 건은 목록에 남긴다
+    // ⚠ 실패를 세어 **사실대로** 알린다(2026-09-07). 예전엔 개별 실패를 .catch(() => null) 로 삼키고
+    //   시도 건수(flat.length)를 그대로 'N건 승인' 성공 토스트로 띄웠다 — 서버가 전부 거절해도
+    //   접수대는 '승인됨'을 보고 손님은 명단에 없다. 단건 승인(위)은 실패를 알리는데 일괄만 예외였다.
+    //   allSettled 라 개별 실패가 나머지를 죽이지 않는 성질은 그대로다.
+    Promise.allSettled(flat.map((x) => approveBuyinRequest(x.id, x.seq, false, 'cash', undefined, defaultDiscIdx())))
+      .then((rs) => {
+        const ok = rs.filter((r) => r.status === 'fulfilled').length;
+        const ng = rs.length - ok;
         const spread = plan.groups.map((g) => `${gLabel(g.gameSeq)} ${g.items.length}`).join(' · ');
-        toast.show(`${n}건 승인. ${spread}${plan.skipped.length ?` · ${plan.skipped.length}건 보류(게임 미개설)` : ''}`, 'success');
-        loadPending();
+        const held = plan.skipped.length ? ` · ${plan.skipped.length}건 보류(게임이 열려 있지 않음)` : '';
+        toast.show(
+          ng ? `${ok}건 승인 · ${ng}건 실패 — 실패분은 목록에 그대로 남습니다` : `${ok}건 승인. ${spread}${held}`,
+          ng ? 'error' : 'success',
+        );
+        loadPending(); // 서버 기준으로 대기열을 다시 채운다 — 실패분이 여기서 되돌아온다
       });
   };
 
@@ -384,10 +398,20 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     setClock((cur) => {
       if (!cur) return cur;
       const next = { ...cur, ...patch };
-      saveClockState(next).catch(() => toast.show('클락 제어 실패. 네트워크를 확인하세요', 'error'));
+      // ⚠ liveStats 도 함께 재계산해 저장한다(2026-09-07). 예전엔 { ...cur, ...patch } 를 그대로 넘겨
+      //   liveStats 가 **낡은 스냅샷 그대로** 다시 쓰였다 — [✕ 아웃 처리]·[얼리 ±] 를 눌러도
+      //   생존·얼리 숫자가 움직이지 않고(아웃 카운터만 올라감), 그 낡은 값이 api/clock.ts:379 를 통해
+      //   TV 송출·라이브보드·업주 대시보드까지 그대로 퍼졌다.
+      //   조리법은 ClockRemote.persist(clock/ClockRemote.tsx:73)·마감 스냅샷(아래 handleClose)과 동일하다.
+      const derived = deriveClockCounts(buyins, {
+        earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin,
+        tournamentStart: session.tournamentStart, openedAt: session.openedAt,
+      });
+      saveClockState({ ...next, liveStats: { ...computeLiveStats(next, derived, next.config), buyInAmount: session.buyinAmount ?? null } })
+        .catch(() => toast.show('클락 제어 실패. 네트워크를 확인하세요', 'error'));
       return next;
     });
-  }, [toast]);
+  }, [toast, buyins, session]);
 
   const closed = session.closed;
   const regClosed = session.regClosed;
@@ -965,9 +989,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
           {(() => {
-            // 생존 상시 표시 — 클락 연동 시 실집계(alive), 미연동/집계전이면 추정(엔트리−아웃)
+            // 생존 상시 표시 — 클락 연동 시 실집계(alive), 미연동/집계전이면 추정(인원−아웃)
+            // ⚠ 추정치의 기준은 '엔트리'가 아니라 **인원**이다(2026-09-07). stats.entries 는 리바인을 포함한
+            //   총 바인 수라, 6명이 리바인을 돌린 판에서 '생존(추정) 41' 같은 숫자가 나왔다. 클락이 붙는
+            //   순간 실집계(alive=인원 기준)로 바뀌면서 같은 타일이 41 → 6 으로 튀는 것도 같은 원인이다.
+            //   인원 정의는 아래 마감 대조 줄(new Set(buyins.map(b => b.playerName)).size)과 같은 것을 쓴다.
             const live = clockLinked && clock?.liveStats ? clock.liveStats.alive : null;
-            const est = Math.max(0, Math.round(stats.entries) - (clockLinked && clock ? (clock.eliminations ?? 0) : 0));
+            const heads = new Set(buyins.map((b) => b.playerName)).size;
+            const est = Math.max(0, heads - (clockLinked && clock ? (clock.eliminations ?? 0) : 0));
             const alive = live != null ? live : est;
             return <Metric label={live != null ? '생존' : '생존(추정)'} value={`${alive}`} />;
           })()}

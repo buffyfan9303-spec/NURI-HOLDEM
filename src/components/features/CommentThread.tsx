@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { Comment } from '../../api/community';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBlocks } from '../../contexts/BlockContext';
 import { promptLogin } from '../../lib/requireLogin';
 import Avatar from '../atoms/Avatar';
 import Icon from '../atoms/Icon';
@@ -239,6 +240,7 @@ export default function CommentThread({
   cheers, myCheers, onCheer, cheerPrice = null, cheerBusy = false,
 }: CommentThreadProps) {
   const { user } = useAuth();
+  const { isBlocked } = useBlocks();
   const [content, setContent] = useState('');
   // 작성자 장착 마크(상점) — 댓글 userId 일괄 조회
   const [marks, setMarks] = useState<Record<string, string>>({});
@@ -257,7 +259,18 @@ export default function CommentThread({
   const canDelete = (c: Comment) => moderator || user?.role === 'admin' || user?.id === c.userId;
 
   // 읽기시점 재그룹 — 루트별 전체 하위 트리 평탄 수집(3레벨+ 유실 0, 검증 #05)
-  const threads = useMemo(() => groupThreads(comments), [comments]);
+  //
+  // ⚠ 차단(block)을 여기서 함께 거른다(2026-09-07 감사). 종전엔 차단이 **글·매물에만** 걸려 있어
+  //   (isBlocked 호출부가 App.tsx·CommunityTab·MarketplaceTab 3곳뿐이었다) 차단한 사람의 글은
+  //   사라지는데 **그 사람의 댓글·대댓글은 계속 보였다.** 손님 입장에서는 차단이 안 먹는 것으로 읽히고,
+  //   그 다음에 취할 수 있는 수가 없다. 이 컴포넌트가 글 상세·매장 Q&A·요강 댓글의 공통 통로라
+  //   여기 한 곳만 거르면 호출부를 손댈 필요가 없다.
+  //   ⚠ 본인 댓글은 절대 숨기지 않는다 — isBlocked 가 어떤 이유로 참이 되어도 내가 쓴 말이 사라지면
+  //     '글이 안 써졌다'로 오해한다.
+  const threads = useMemo(
+    () => groupThreads(comments.filter((c) => c.userId === user?.id || !isBlocked(c.userId))),
+    [comments, isBlocked, user?.id],
+  );
 
   // 응원 배선 — onCheer 가 없으면 undefined 라 버튼이 통째로 사라진다(종전 화면 그대로).
   const cheer = onCheer

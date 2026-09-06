@@ -63,14 +63,27 @@ function ensurePointerPassthrough() {
 let active: VTTransition | null = null;
 let activeTimer = 0;
 
+/** 전환이 도는 동안 참. startViewTransition 호출 직전에 켜고 finished/취소에서 끈다.
+ *
+ *  왜 밖에서 이걸 알아야 하나 — FLIP 인디케이터(SlidingPill)가 '이전 위치에서 시작하는
+ *  CSS 트랜지션'을 거는데, VT 는 update 콜백 직후의 **렌더된 값**으로 새 스냅샷을 뜬다.
+ *  그 순간 트랜지션은 경과 0이라 아직 이전 위치다 → VT 가 A→A 를 보간해 알약이 전혀
+ *  움직이지 않고, 전환이 끝나는 순간 최종 위치로 툭 튄다(오너 리포트 2026-09-07
+ *  "누르면 나중에 움직여"). 전환 중에는 인디케이터가 **최종 위치로 즉시** 가야
+ *  VT 가 A→B 를 제대로 보간한다 — 미끄러짐의 주체가 CSS 트랜지션이 아니라 VT 가 된다. */
+let capturing = false;
+export function isViewTransitionActive(): boolean { return capturing; }
+
 function endActive() {
   if (active) { try { active.skipTransition?.(); } catch { /* 이미 끝난 전환 */ } active = null; }
+  capturing = false;
   if (activeTimer) { clearTimeout(activeTimer); activeTimer = 0; }
 }
 
 function release(t: VTTransition) {
   if (active !== t) return;
   active = null;
+  capturing = false;
   if (activeTimer) { clearTimeout(activeTimer); activeTimer = 0; }
 }
 
@@ -166,13 +179,16 @@ export function withViewTransition(update: () => void, fallback?: () => void, di
     const clearScope = () => {
       if (scope && seq === scopeSeq && document.documentElement.dataset.vtScope === scope) delete document.documentElement.dataset.vtScope;
     };
+    // 콜백(update)은 비동기로 불린다 — 그 안에서 도는 FLIP 인디케이터가 이 플래그를 보고
+    // 트랜지션 없이 최종 위치로 간다. 그래야 VT 의 새 스냅샷이 '진짜 새 위치'가 된다.
+    capturing = true;
     const t = d.startViewTransition.call(document, update);
-    if (!t) { clearScope(); return; }
+    if (!t) { capturing = false; clearScope(); return; }
     {
       active = t;
       // 상한 — 애니메이션이 어떤 이유로든 안 끝나도 스냅샷이 화면에 눌러앉지 않게 한다.
       activeTimer = window.setTimeout(() => {
-        if (active === t) { try { t.skipTransition?.(); } catch { /* 무시 */ } active = null; }
+        if (active === t) { try { t.skipTransition?.(); } catch { /* 무시 */ } active = null; capturing = false; }
         activeTimer = 0;
       }, MAX_TRANSITION_MS);
       // 전환 자체의 취소(연타로 다음 전환이 이번 것을 대체, 탭 백그라운드 전환 등)는 정상 동작 —

@@ -207,11 +207,18 @@ export default function NotificationPanel({
   // ── 알림(기존 계약 그대로) ─────────────────────────────────────────────────
   // 패널이 열릴 때 unread ID를 스냅샷으로 보존 (닫을 때 읽음 처리용)
   const unreadOnOpenRef = useRef<string[]>([]);
+  // ⚠ 스냅샷은 **알림 탭을 실제로 본 순간**에만 채운다(2026-09-07 감사).
+  //   예전엔 `if (open)` 만 봐서, 이 패널의 기본 화면이 '쪽지'(:70 mode 초기값 'messages')인데도
+  //   열자마자 안 읽은 알림 전부를 찍어 두고 닫을 때 서버에 read=true 로 커밋했다.
+  //   → 배지를 보고 눌렀다가 쪽지만 보고 닫은 유저는 **알림 내용을 한 번도 못 본 채 배지만 잃는다.**
+  //   닫는 경로가 바깥 클릭·dim·뒤로가기 전부 handleClose 하나로 모여 우회로도 없었다.
+  //   이제 쪽지 탭만 보고 닫으면 ref 가 비어 아무것도 처리되지 않고, 알림 탭에 들어갔다 닫으면
+  //   기존 '닫을 때 일괄 읽음' 계약이 그대로 유지된다.
   useEffect(() => {
-    if (open) {
+    if (open && mode === 'notifs') {
       unreadOnOpenRef.current = notifications.filter((n) => !n.read).map((n) => n.id);
     }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 패널 닫힐 때 읽음 일괄 처리 (열려 있을 때는 읽음 상태 유지 → "안읽음" 탭 정상 동작)
   const handleClose = useCallback(() => {

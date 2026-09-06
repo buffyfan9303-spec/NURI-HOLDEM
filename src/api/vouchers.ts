@@ -330,7 +330,10 @@ export function voucherHolderLabel(row: { realName?: string | null; nickname?: s
 // 현재 사용자가 이 매장 이용권 내역을 볼 수 있는지(업주 또는 권한 부여 직원)
 export async function iCanViewVouchers(venueId: string): Promise<boolean> {
   if (IS_MOCK) return false;
-  const { data } = await supabase.rpc('can_view_vouchers', { p_venue_id: venueId });
+  // error 를 구조분해에서 빼면 실패가 '권한 없음'이 된다 — 같은 Promise.all 의 형제들과 함께
+  // 호출부의 재시도 카드를 죽였다(ledger.ts 의 canAccessLedger 주석 참조).
+  const { data, error } = await supabase.rpc('can_view_vouchers', { p_venue_id: venueId });
+  if (error) throw error;
   return data === true;
 }
 
