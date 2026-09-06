@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
+import { parseQr, ACTIONABLE, elsewhereMsg, type QrHit } from '../../lib/qrPayload';
 
 // BarcodeDetector 는 아직 lib.dom 타입에 없다(크롬·안드로이드 웹뷰 지원, 사파리 구버전 미지원)
 interface DetectedBarcode { rawValue: string }
@@ -29,24 +30,6 @@ interface QrScanModalProps {
   /** 'both' 면 바인 요청 QR 도 받는다. 기본은 체크인 전용 —
    *  매장 페이지의 '출석' 버튼처럼 대상이 정해진 진입점에서 엉뚱한 QR 을 삼키지 않게. */
   accept?: 'checkin' | 'both';
-}
-
-/** 스캔 결과 — 매장에 비치되는 인쇄 QR 두 종류를 같은 규칙으로 읽는다.
- *  체크인 `${origin}/?checkin=<venueId>` (checkinUrl) · 바인 요청 `${origin}/?buyin=<venueId>&game=<n>` (buyinRequestUrl).
- *  손님은 테이블에 붙은 QR 을 그냥 비출 뿐 '지금 무엇을 하는지' 먼저 고르지 않는다 —
- *  고르게 만들면 잘못 고를 길만 하나 생긴다. 의도는 QR 자신이 들고 있다. */
-export interface QrHit { kind: 'checkin' | 'buyin'; venueId: string; gameSeq: number | null }
-function parseQr(raw: string): QrHit | null {
-  let sp: URLSearchParams;
-  try { sp = new URL(raw.trim()).searchParams; } catch { return null; }
-  const c = sp.get('checkin');
-  if (c) return { kind: 'checkin', venueId: c, gameSeq: null };
-  const b = sp.get('buyin');
-  if (b) {
-    const g = parseInt(sp.get('game') ?? '', 10);
-    return { kind: 'buyin', venueId: b, gameSeq: Number.isFinite(g) && g > 0 ? g : null };
-  }
-  return null;
 }
 
 export default function QrScanModal({ open, onClose, venueId, venueName, onMatch, accept = 'checkin' }: QrScanModalProps) {
@@ -103,11 +86,14 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
             const raw = codes[0]?.rawValue;
             if (!raw || !alive || matched) return;
             const hit = parseQr(raw);
-            const usable = hit && (accept === 'both' || hit.kind === 'checkin');
+            const actionable = !!hit && ACTIONABLE.includes(hit.kind) && (accept === 'both' || hit.kind === 'checkin');
             // venueId 를 안 준 호출부는 아무 매장 QR 이나 받는다(어느 매장인지는 인자로 넘긴다)
-            if (usable && hit && (!venueId || hit.venueId === venueId)) { matched = true; onMatchRef.current(hit.venueId, hit); return; }
-            // 남의 매장 QR·무관한 QR — 아무것도 실행하지 않고 계속 스캔(같은 문자열 setState 는 재렌더 없음)
-            setWarn(usable ? '이 매장의 QR이 아닙니다'
+            if (actionable && hit?.venueId && (!venueId || hit.venueId === venueId)) { matched = true; onMatchRef.current(hit.venueId, hit); return; }
+            // 실행하지 않고 계속 스캔한다. 다만 **왜 안 되는지**는 종류별로 다르게 말한다 —
+            // '아니에요' 한 마디로 끝내면 옆 QR 을 비춘 손님이 막다른 길에 선다(같은 문자열 setState 는 재렌더 없음).
+            setWarn(actionable ? '이 매장의 QR이 아닙니다'
+              : hit && elsewhereMsg(hit.kind) ? elsewhereMsg(hit.kind)!
+              : hit?.kind === 'buyin' ? '바인 요청 QR이에요. 출석은 매장 비치 체크인 QR을 비춰 주세요'
               : accept === 'both' ? '매장 QR이 아니에요. 테이블·카운터에 비치된 출석 또는 바인 요청 QR을 비춰 주세요'
               : '체크인 QR이 아니에요. 매장에 비치된 체크인 QR을 비춰 주세요');
           } catch { /* 프레임 미준비 등 일시 실패 — 다음 틱에 재시도 */ }

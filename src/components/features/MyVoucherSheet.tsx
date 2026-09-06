@@ -16,7 +16,8 @@
 import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
-import QrScanModal, { type QrHit } from './QrScanModal';
+import QrScanModal from './QrScanModal';
+import { type QrHit } from '../../lib/qrPayload';
 import VoucherWallet from './VoucherWallet';
 import { listMyVouchers, isHeldVoucher } from '../../api/vouchers';
 import { useIdentityEnabled } from '../../lib/identityFlag';

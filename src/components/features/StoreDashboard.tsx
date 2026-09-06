@@ -883,16 +883,16 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                   <li key={st.key} className="flex min-w-0 flex-1">
                     <button type="button" onClick={st.go}
                       aria-current={current ? 'step' : undefined}
-                      className={['flex min-h-[44px] w-full flex-col items-center gap-1.5 rounded-input px-1 py-2 transition-colors',
+                      className={['flex min-h-[44px] w-full flex-col items-center gap-1 rounded-input px-1 py-1.5 transition-colors',
                         current ? 'chip-aura' : 'hover:bg-surface-high/50'].join(' ')}>
                       <span className="relative flex w-full items-center justify-center">
-                        {/* mr/ml-3.5(14.9px) = 동그라미 반지름(12.75px) + 여유 2px */}
-                        {i > 0 && <span aria-hidden className={[lineCls(steps[i - 1].done), 'left-0 right-1/2 mr-3.5'].join(' ')} />}
-                        {i < steps.length - 1 && <span aria-hidden className={[lineCls(st.done), 'left-1/2 right-0 ml-3.5'].join(' ')} />}
-                        <span className={['relative flex h-6 w-6 items-center justify-center rounded-full text-2xs font-bold',
+                        {/* mr/ml-3(12.75px) = 동그라미 반지름(10.6px) + 여유 2px */}
+                        {i > 0 && <span aria-hidden className={[lineCls(steps[i - 1].done), 'left-0 right-1/2 mr-3'].join(' ')} />}
+                        {i < steps.length - 1 && <span aria-hidden className={[lineCls(st.done), 'left-1/2 right-0 ml-3'].join(' ')} />}
+                        <span className={['relative flex h-5 w-5 items-center justify-center rounded-full text-2xs font-bold',
                           st.done ? 'bg-emerald-400/20 text-emerald-400'
                             : current ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
-                          {st.done ? <Icon name="check" size={12} /> : i + 1}
+                          {st.done ? <Icon name="check" size={11} /> : i + 1}
                         </span>
                       </span>
                       <span className={['w-full truncate text-center text-2xs font-semibold',
