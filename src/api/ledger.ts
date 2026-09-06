@@ -478,16 +478,20 @@ const emptySession = (venueId: string, date: string, gameSeq = MAIN_GAME_SEQ): L
 });
 
 // ── 권한 ──────────────────────────────────────────────────────────────────────
+// ⚠ 조회 실패를 '권한 없음'으로 뭉개지 않는다(2026-09-07 감사). 예전엔 `if (error) return false;` 라
+//    네트워크 순단이 곧 '권한이 없습니다' 화면이 됐고, 그 때문에 호출부(VenueManageTab)가 준비해 둔
+//    재시도 카드(LoadErrorCard '매장 권한')가 **한 번도 뜰 수 없는 죽은 UI** 였다.
+//    실패는 실패로 올린다 — 호출부의 .catch 가 재시도 카드를 띄운다(api/clock.ts:345 와 같은 규약).
 export async function canAccessLedger(venueId: string): Promise<boolean> {
   if (IS_MOCK) return false;
   const { data, error } = await supabase.rpc('can_access_ledger', { p_venue_id: venueId });
-  if (error) return false;
+  if (error) throw error;
   return !!data;
 }
 export async function canManagePos(venueId: string): Promise<boolean> {
   if (IS_MOCK) return false;
   const { data, error } = await supabase.rpc('can_manage_pos', { p_venue_id: venueId });
-  if (error) return false;
+  if (error) throw error;
   return !!data;
 }
 

@@ -93,19 +93,35 @@ function StatsView({ venueId }: { venueId: string }) {
 
   const hasLoaded = useRef(false);
   useEffect(() => {
+    // ⚠ 늦게 도착한 이전 기간 응답이 최신 결과를 덮지 않게 한다(2026-09-07 감사).
+    //   기간 탭에 디바운스·disabled 가 없어 연타가 가능한데, '총괄'(from 2000-01-01)은 느리고 '당일'은 빠르다 →
+    //   총괄 → 당일 순으로 누르면 느린 총괄 응답이 나중에 도착해 **당일 탭 아래 전체 누적 매출·미수**가 그려졌다.
+    //   그러면 알약(period)과 굵은 글씨(tabPeriod)까지 서로 다른 탭을 가리키고, 다음 클릭 전까지 자가 복구도 없다.
+    //   React 가 다음 실행 전에 반드시 이전 cleanup 을 돌리므로 이 플래그 자체가 세대 가드다.
+    //   catch 도 함께 막는다 — 늦게 온 실패가 최신 성공 위에 오류 카드를 띄우는 반대 방향 사고가 남는다.
+    let alive = true;
     // 첫 진입만 로딩 표시 — period 전환 시엔 이전 데이터를 유지하며 부드럽게 갱신(스크롤 점프 방지)
     if (!hasLoaded.current) setLoading(true);
     Promise.all([
       getLedgerRange(venueId, range.from, range.to),
       tabPeriod === 'day' ? getLedgerPlayers(venueId, date) : Promise.resolve([] as LedgerPlayer[]),
       // 데이터와 기간을 한 커밋에 — 이 순서가 위 주석의 '두 번 튐'을 한 번으로 만든다.
-    ]).then(([r, p]) => { setSessions(r.sessions); setBuyins(r.buyins); setPlayers(p); setPeriod(tabPeriod); setLoadError(null); })
-      .catch((e) => setLoadError(e))
-      .finally(() => { setLoading(false); hasLoaded.current = true; });
+    ]).then(([r, p]) => { if (!alive) return; setSessions(r.sessions); setBuyins(r.buyins); setPlayers(p); setPeriod(tabPeriod); setLoadError(null); })
+      .catch((e) => { if (alive) setLoadError(e); })
+      .finally(() => { hasLoaded.current = true; if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, [venueId, range.from, range.to, tabPeriod, date, aiTick, liveTick]);
 
   // 바인 요청 운영지표(기간) — 요청수·승인율·평균 대기(분)
-  useEffect(() => { getBuyinRequestStats(venueId, range.from, range.to).then(setReqStats).catch(() => setReqStats(null)); }, [venueId, range.from, range.to, liveTick, aiTick]);
+  // 위와 같은 이유로 cleanup 가드를 둔다 — 이쪽은 tabPeriod 를 안 보고 range 만 보므로,
+  // 늦게 온 이전 기간의 요청수·승인율이 최신 값을 덮는 형태로 같은 사고가 난다.
+  useEffect(() => {
+    let alive = true;
+    getBuyinRequestStats(venueId, range.from, range.to)
+      .then((s) => { if (alive) setReqStats(s); })
+      .catch(() => { if (alive) setReqStats(null); });
+    return () => { alive = false; };
+  }, [venueId, range.from, range.to, liveTick, aiTick]);
 
   // '당일' 통계를 보는 중 장부(바이인 등) 변경 시 실시간 갱신
   useEffect(() => {

@@ -10,7 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
-import { listVenueVouchers, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, VOUCHER_REASONS, voucherReasonLabel, type VoucherReason } from '../../api/vouchers';
+import { listVenueVouchers, isHeldVoucher, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, VOUCHER_REASONS, voucherReasonLabel, type VoucherReason } from '../../api/vouchers';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 import { voucherGroupLabel, stripVenuePrefix } from '../../lib/voucherLabel'; // 손님 지갑 표기 규칙(오너 지시 #19)과 같은 함수로 미리보기
 
@@ -235,7 +235,10 @@ ${cards}
     }
     setBusy(false);
   };
-  const active = list.filter((v) => v.status === 'active');
+  // ⚠ 만료를 함께 본다(2026-09-07). 예전엔 status === 'active' 만 봐서, 기한이 지난 이용권을
+  //   업주 화면은 '보유'로 세고 손님 지갑(VoucherWallet.tsx:91 isHeldVoucher)은 0장으로 세었다 —
+  //   같은 이용권을 두 사람이 다른 숫자로 보면 그 자리에서 다툼이 된다. 지갑과 **같은 술어**를 쓴다.
+  const active = list.filter((v) => isHeldVoucher(v));
   // 보유자별 상세 — 활성/사용 분리(개별 나열 대신). 사용내역은 날짜·시간 포함.
   const holders = useMemo(() => {
     const m = new Map<string, { key: string; name: string; isStore: boolean; active: Voucher[]; used: Voucher[] }>();
@@ -243,7 +246,7 @@ ${cards}
       if (v.status === 'revoked' || v.status === 'expired') continue;
       const key = v.holderUserId ?? (v.holderName ? `n:${v.holderName}` : '__store__');
       const g = m.get(key) ?? { key, name: v.holderName ?? '매장 보관', isStore: !v.holderUserId && !v.holderName, active: [], used: [] };
-      if (v.status === 'used') g.used.push(v); else g.active.push(v);
+      if (v.status === 'used') g.used.push(v); else if (isHeldVoucher(v)) g.active.push(v); // 만료분은 어느 쪽도 아니다
       m.set(key, g);
     }
     return [...m.values()].filter((g) => g.active.length + g.used.length > 0)

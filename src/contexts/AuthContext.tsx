@@ -47,16 +47,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   // 프로필을 세팅하고, 하루 1회 접속 활동 점수(+1)를 적립해 점수를 반영한다.
-  const applyProfileWithDailyPoint = useCallback((profile: User | null) => {
+  // 제재 상태면 **왜 못 들어가는지**를 문장으로 돌려준다(2026-09-07). 아니면 null.
+  // 예전엔 조용히 signOut 만 해서, 회원은 '로그인되었습니다' 토스트를 본 뒤 그냥 로그아웃됐다 —
+  // 비밀번호가 틀린 줄 알고 재시도만 반복하게 되고, 문의도 못 한다.
+  const sanctionMessage = (p: User): string | null => {
+    if (p.status === 'withdrawn') return '탈퇴한 계정입니다. 재가입은 고객센터로 문의해 주세요.';
+    if (p.status === 'banned') return '이용이 영구 제한된 계정입니다. 고객센터로 문의해 주세요.';
+    if (p.status === 'suspended') {
+      const until = p.suspendedUntil ? new Date(p.suspendedUntil) : null;
+      return until && !Number.isNaN(until.getTime())
+        ? `이용이 일시 정지된 계정입니다. ${until.toLocaleDateString()}까지 로그인할 수 없어요. 문의는 고객센터로 부탁드립니다.`
+        : '이용이 정지된 계정입니다. 고객센터로 문의해 주세요.';
+    }
+    return null;
+  };
+
+  const applyProfileWithDailyPoint = useCallback((profile: User | null): string | null => {
     // 탈퇴·영구정지·임시정지 계정은 로그인 차단 — 세션을 즉시 종료하고 진입 거부.
     // (서버도 제재 계정의 글·후기·매물 작성을 트리거로 막지만, 클라에서도 즉시 로그아웃해 오해 없게 한다.)
-    if (profile && (profile.status === 'withdrawn' || profile.status === 'banned' || profile.status === 'suspended')) {
+    const sanction = profile ? sanctionMessage(profile) : null;
+    if (sanction) {
       apiSignOut().catch(() => {});
       setUser(null);
-      return;
+      return sanction;   // 로그인 경로가 이 문장을 그대로 사용자에게 보여준다
     }
     setUser((prev) => keepIfSame(prev, profile));
-    if (!profile) return;
+    if (!profile) return null;
     claimDailyLoginPoint()
       .then((pts) => {
         if (typeof pts === 'number') {
@@ -64,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {});
+    return null; // 제재 없음 — 로그인 경로가 그대로 진행한다
   }, []);
 
   // ── 초기화: 세션 복원 + 변경 구독 ────────────────────────────────────────────
@@ -93,7 +110,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── 로그인 / 로그아웃 ────────────────────────────────────────────────────────
   const login = useCallback(async (email: string, password: string, keepSignedIn?: boolean) => {
     const u = await signIn(email, password, keepSignedIn);
-    applyProfileWithDailyPoint(u);
+    // 제재 계정이면 여기서 던진다 — AuthModal 의 catch 가 사유를 그대로 보여주고 성공 토스트도 뜨지 않는다.
+    const sanction = applyProfileWithDailyPoint(u);
+    if (sanction) {
+      // name 으로 표식을 남긴다 — AuthModal 의 catch 가 자격증명 오류로 뭉개지 않고 이 문장을 그대로 보여준다.
+      const e = new Error(sanction); e.name = 'SanctionError'; throw e;
+    }
   }, [applyProfileWithDailyPoint]);
 
   const logout = useCallback(async () => {

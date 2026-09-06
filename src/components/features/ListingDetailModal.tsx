@@ -198,7 +198,13 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
         {/* 통계 — '댓글'은 뺐다. 장터 문의는 1:1 채팅으로 대체돼 comment_count 가 영원히 0 이라
             숫자를 보여주면 '문의가 하나도 없는 매물'로 오독된다. grid 도 2칸으로 맞춘다. */}
         <div className="grid grid-cols-2 gap-2 text-center text-2xs text-ink-muted">
-          <Stat label="조회" value={listing.viewCount} />
+          {/* ⚠ 조회수를 올리는 코드가 앱 어디에도 없다(2026-09-07 감사) — 커뮤니티 글(increment_post_view)·
+              일정(increment_schedule_view)에는 있는데 장터만 빠졌다. 그래서 값이 항상 0 이고,
+              '조회 0'을 그대로 보여주면 "아무도 안 봤다"는 거짓 정보가 된다. 서버 RPC 를 새로 만들기
+              전까지는 값이 있을 때만 보여준다 — 같은 파일이 comment_count 를 뺀 것과 같은 판단이다.
+              (정렬 칩 '조회수순'은 그대로 둔다 — 있던 기능을 지우지 않는다는 규약. 다만 값이 다 0이라
+               지금은 최신순과 같은 결과를 낸다. RPC 추가는 승인 대기 목록에 있다.) */}
+          {listing.viewCount > 0 && <Stat label="조회" value={listing.viewCount} />}
           <Stat label="찜"   value={like.likeCount} />
         </div>
 
