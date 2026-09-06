@@ -928,7 +928,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         if (caps.ledger && staleOpen.length > 0) {
           // 미마감 = 순위→시즌→머니인킹→전적 하류 전체 정지. 실제 라이브에서 두 달치가 쌓여 있었다.
           const list = staleOpen.slice(0, 3).map((x) => x.sessionDate.slice(5)).join(' · ');
-          todo = { icon: 'alert', title: `지난 장부 ${staleOpen.length}건이 미마감이에요`, desc: `${list} · 마감해야 순위·시즌·전적에 반영되고 정산이 확정됩니다.`, cta:'장부에서 마감하기', onClick: () => onGoto('ledger'), tone: 'warn' };
+          // ⚠ 문구를 사실에 맞춘다(2026-09-07). 종전 "마감해야 순위·시즌·전적에 반영되고" 는 거짓이었다 —
+          //   운영 DB 실측: save_venue_rankings·current_season_standings·global_ranking_totals 어느 것도
+          //   ledger_sessions·closed 를 참조하지 않고, ledger_sessions 의 트리거는 마감 권한 가드 하나뿐이다.
+          //   마감이 실제로 하는 일은 '그날 장부를 읽기전용으로 잠그는 것'이고(해제는 업주만),
+          //   순위는 마감이 아니라 **순위 입력**으로 들어간다. 다만 순위 입력 넛지가 closed 를 전제로 뜨므로
+          //   (아래 분기) 마감이 그 흐름의 관문인 것은 맞다 — 그 관계만 정확히 말한다.
+          todo = { icon: 'alert', title: `지난 장부 ${staleOpen.length}건이 미마감이에요`, desc: `${list} · 마감하면 그날 장부가 읽기전용으로 잠기고(해제는 업주만), 이어서 순위 입력 안내가 떠 시즌·전적으로 연결됩니다.`, cta:'장부에서 마감하기', onClick: () => onGoto('ledger'), tone: 'warn' };
         } else if (caps.ledger && session?.closed && hasRankToday === false) {
           todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요. 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto('ranking'), tone: 'warn' };
         } else if (caps.ledger && started && !session?.closed) {

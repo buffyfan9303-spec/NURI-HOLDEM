@@ -384,10 +384,20 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     setClock((cur) => {
       if (!cur) return cur;
       const next = { ...cur, ...patch };
-      saveClockState(next).catch(() => toast.show('클락 제어 실패. 네트워크를 확인하세요', 'error'));
+      // ⚠ liveStats 도 함께 재계산해 저장한다(2026-09-07). 예전엔 { ...cur, ...patch } 를 그대로 넘겨
+      //   liveStats 가 **낡은 스냅샷 그대로** 다시 쓰였다 — [✕ 아웃 처리]·[얼리 ±] 를 눌러도
+      //   생존·얼리 숫자가 움직이지 않고(아웃 카운터만 올라감), 그 낡은 값이 api/clock.ts:379 를 통해
+      //   TV 송출·라이브보드·업주 대시보드까지 그대로 퍼졌다.
+      //   조리법은 ClockRemote.persist(clock/ClockRemote.tsx:73)·마감 스냅샷(아래 handleClose)과 동일하다.
+      const derived = deriveClockCounts(buyins, {
+        earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin,
+        tournamentStart: session.tournamentStart, openedAt: session.openedAt,
+      });
+      saveClockState({ ...next, liveStats: { ...computeLiveStats(next, derived, next.config), buyInAmount: session.buyinAmount ?? null } })
+        .catch(() => toast.show('클락 제어 실패. 네트워크를 확인하세요', 'error'));
       return next;
     });
-  }, [toast]);
+  }, [toast, buyins, session]);
 
   const closed = session.closed;
   const regClosed = session.regClosed;
@@ -965,9 +975,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
           {(() => {
-            // 생존 상시 표시 — 클락 연동 시 실집계(alive), 미연동/집계전이면 추정(엔트리−아웃)
+            // 생존 상시 표시 — 클락 연동 시 실집계(alive), 미연동/집계전이면 추정(인원−아웃)
+            // ⚠ 추정치의 기준은 '엔트리'가 아니라 **인원**이다(2026-09-07). stats.entries 는 리바인을 포함한
+            //   총 바인 수라, 6명이 리바인을 돌린 판에서 '생존(추정) 41' 같은 숫자가 나왔다. 클락이 붙는
+            //   순간 실집계(alive=인원 기준)로 바뀌면서 같은 타일이 41 → 6 으로 튀는 것도 같은 원인이다.
+            //   인원 정의는 아래 마감 대조 줄(new Set(buyins.map(b => b.playerName)).size)과 같은 것을 쓴다.
             const live = clockLinked && clock?.liveStats ? clock.liveStats.alive : null;
-            const est = Math.max(0, Math.round(stats.entries) - (clockLinked && clock ? (clock.eliminations ?? 0) : 0));
+            const heads = new Set(buyins.map((b) => b.playerName)).size;
+            const est = Math.max(0, heads - (clockLinked && clock ? (clock.eliminations ?? 0) : 0));
             const alive = live != null ? live : est;
             return <Metric label={live != null ? '생존' : '생존(추정)'} value={`${alive}`} />;
           })()}

@@ -789,8 +789,17 @@ export async function setRegistrationClosed(venueId: string, date: string, close
 /** 장부 정산 마감 — 읽기전용 스냅샷 + 마감 메모. PL3: 스냅샷에 gameSnapshot(클락 설정) 동봉 가능. */
 export async function closeLedgerSession(venueId: string, date: string, memo: string, gameSeq = MAIN_GAME_SEQ, clockSnapshot?: LedgerCloseSnapshot | null): Promise<void> {
   if (IS_MOCK) return;
+  const patch: Record<string, unknown> = {
+    closed: true, closed_at: new Date().toISOString(), close_memo: memo || null, updated_at: new Date().toISOString(),
+  };
+  // ⚠ 스냅샷이 없으면 **키를 아예 넣지 않는다**(2026-09-07). 예전엔 `clock_snapshot: clockSnapshot ?? null`
+  //   이라 호출측이 못 잡았을 때 기존 스냅샷이 null 로 지워졌다. 그런데 못 잡는 경우가 예외가 아니라
+  //   **정상 운영 순서**다 — 호출측 가드가 `clock && clock.sessionDate === date`(NuriPosLedger.tsx:645)라
+  //   ① 클락을 먼저 종료하고 정산 마감하면 ② 마감 해제 후 재마감하면, 회차 스냅샷이 통째로 사라졌다.
+  //   그 스냅샷은 '지난 게임 그대로 열기'(PL3)가 블라인드·얼리·프라이즈를 복원하는 유일한 캡처다.
+  if (clockSnapshot) patch.clock_snapshot = clockSnapshot;
   const { error } = await supabase.from('ledger_sessions')
-    .update({ closed: true, closed_at: new Date().toISOString(), close_memo: memo || null, clock_snapshot: clockSnapshot ?? null, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq);
   if (error) throw error;
 }
@@ -876,7 +885,12 @@ export async function removeLedgerPlayer(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** 미마감 지난 장부 — 마감을 안 하면 순위→시즌→전적 하류 전체가 막힌다(대시보드 넛지용) */
+/** 미마감 지난 장부 — 대시보드 넛지용.
+ *  ⚠ 정정(2026-09-07): "마감을 안 하면 순위→시즌→전적 하류가 막힌다"고 적혀 있었으나 **서버는 그렇지 않다**.
+ *  실측: save_venue_rankings·current_season_standings·global_ranking_totals 어느 것도 ledger_sessions·closed 를
+ *  참조하지 않고, ledger_sessions 트리거는 마감 권한 가드(trg_guard_ledger_session_update) 하나뿐이다.
+ *  막히는 것은 **화면 흐름**이다 — 순위 입력 넛지가 session.closed 를 전제로 뜨므로(StoreDashboard 의 todo 분기),
+ *  마감을 안 하면 업주가 순위 입력을 안내받지 못해 결과적으로 하류가 빈다. 원인을 서버가 아니라 UI 로 읽어야 한다. */
 export async function listStaleOpenSessions(venueId: string): Promise<{ sessionDate: string; gameSeq: number; title: string | null }[]> {
   if (IS_MOCK) return [];
   const { data } = await supabase.from('ledger_sessions')

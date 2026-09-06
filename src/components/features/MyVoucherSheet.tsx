@@ -54,6 +54,8 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
       const streak = served ?? await getMyCheckinStreak().catch(() => 0);
       // 프로필 점수·랭킹 내 순위가 재로그인 없이 따라오도록
       await refreshProfile().catch(() => {});
+      // 출석 = 이벤트 참여권 1장 — 홈 배너가 들고 있는 숫자를 갱신시킨다(App.tsx 딥링크 경로와 동일 신호).
+      window.dispatchEvent(new Event('nuri:event-board-refresh'));
       toast.show(`${name || '매장'} 출석 완료${streak >= 2 ? ` · ${streak}일 연속` : ''}`, 'success');
       onClose();
       onVenue?.(venueId);

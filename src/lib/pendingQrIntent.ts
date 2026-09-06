@@ -24,6 +24,20 @@ export function rememberQrIntent(i: QrIntent): void {
   try { localStorage.setItem(KEY, JSON.stringify({ ...i, at: Date.now() })); } catch { /* ignore */ }
 }
 
+/** 처리하기로 **결정한 순간** 버린다 — URL 파라미터(`?checkin=`·`?buyin=`)를 직접 처리하는 쪽에서 부른다.
+ *
+ *  왜 필요한가(2026-09-07): 예전엔 '보류 의도'를 소비할지 말지를 **URL 에 파라미터가 남아 있는지**로 판단했다.
+ *  그런데 두 effect 가 URL 을 지우는 시점이 서로 달라 양쪽으로 어긋났다 —
+ *   · 체크인은 RPC 응답 뒤 `.finally` 에서 **비동기로** 지운다 → 뒤따르는 보류 effect 가 '아직 파라미터 있음'으로
+ *     보고 그냥 돌아가, 의도가 localStorage 에 남는다. 30분(TTL) 안에 앱을 다시 열면 그게 소비돼 check_in 이
+ *     한 번 더 불리고, 서버의 4시간 중복 방지에 걸려 앱을 켜자마자 빨간 토스트가 뜬다(30분 < 4시간이라 확정).
+ *   · 바인은 호출 **전에 동기로** 지운다 → 보류 effect 가 '파라미터 없음'으로 보고 같은 커밋에서 의도를 소비해
+ *     요청을 두 번 보낸다. 서버 유니크 인덱스가 두 번째를 막지만 그 raw 메시지가 그대로 토스트로 나간다.
+ *  → 조율 신호를 URL 이 아니라 저장소 자신으로 옮긴다. 처리하기로 정한 쪽이 즉시 지우면 순서와 무관하게 안전하다. */
+export function clearQrIntent(): void {
+  try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+}
+
 /** 읽고 **지운다** — 한 번만 쓰인다(두 번 소비되면 출석이 두 번 찍힌다). 만료된 것은 조용히 버린다. */
 export function takeQrIntent(): QrIntent | null {
   let raw: string | null;
