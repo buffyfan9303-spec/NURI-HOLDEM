@@ -131,7 +131,7 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $function$
-declare v_c record; v_cards jsonb; v_tickets int := 0; v_left jsonb;
+declare v_c record; v_cards jsonb; v_tickets int := 0; v_left jsonb; v_total jsonb; v_vc jsonb;
 begin
   select * into v_c from public.event_campaigns where slug = p_slug and status <> 'draft';
   if v_c is null then return null; end if;
@@ -147,11 +147,20 @@ begin
     into v_cards
     from public.event_cards where campaign_id = v_c.id;
 
-  -- 남은 등급별 장수 — 총량은 공개해도 어느 자리인지는 드러나지 않는다(사전 고지용).
+  -- 등급별 장수 — **처음 몇 장이었고 몇 장 남았는가**. 둘 다 공개해도 어느 자리인지는 드러나지 않는다.
+  -- 확률 공개(최하단 표)의 근거값이라 서버가 준다 — 화면이 상수로 들고 있으면 실제와 어긋날 수 있다.
   select coalesce(jsonb_object_agg(t::text, n), '{}'::jsonb) into v_left from (
     select tier as t, count(*) as n from public.event_cards
      where campaign_id = v_c.id and tier is not null and opened_at is null group by tier
   ) s;
+  select coalesce(jsonb_object_agg(t, n), '{}'::jsonb) into v_total from (
+    select coalesce(tier::text, 'none') as t, count(*) as n, max(voucher_count) as vc
+      from public.event_cards where campaign_id = v_c.id group by tier
+  ) s2;
+  select coalesce(jsonb_object_agg(t, vc), '{}'::jsonb) into v_vc from (
+    select coalesce(tier::text, 'none') as t, max(voucher_count) as vc
+      from public.event_cards where campaign_id = v_c.id group by tier
+  ) s3;
 
   if auth.uid() is not null then
     select count(*) into v_tickets from public.event_tickets
@@ -162,9 +171,13 @@ begin
     'slug', v_c.slug, 'title', v_c.title, 'subtitle', v_c.subtitle, 'status', v_c.status,
     'venueId', v_c.venue_id, 'startsAt', v_c.starts_at, 'endsAt', v_c.ends_at,
     'voucherTitle', v_c.voucher_title,
-    'cards', v_cards, 'myTickets', v_tickets, 'remainByTier', v_left);
+    'cards', v_cards, 'myTickets', v_tickets,
+    'remainByTier', v_left, 'totalByTier', v_total, 'voucherByTier', v_vc);
 end $function$;
 
+-- select 만 하므로 STABLE. 서버가 스스로 '읽기'임을 말하게 한다 —
+-- E2E 쓰기 차단 가드가 pg_proc.provolatile 로 읽기/쓰기를 가르기 때문에 이 선언이 곧 통행증이다.
+alter function public.event_board(text) stable;
 revoke all on function public.event_board(text) from public;
 grant execute on function public.event_board(text) to anon, authenticated;
 

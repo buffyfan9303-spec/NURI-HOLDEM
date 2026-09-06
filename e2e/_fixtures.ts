@@ -25,6 +25,8 @@ export const READ_ONLY_RPCS = new Set([
   'get_public_profiles', 'ranking_top_venues',
   // VOLATILE 이지만 정의를 읽어 select 만 함을 확인(2026-09-05): 오늘 게임·공지 상태·오류율·가용성 검사·추천 통계
   'venue_today_games', 'venue_announce_status', 'client_error_rate_ok', 'is_nickname_available', 'is_email_available', 'is_name_available', 'my_referral_stats',
+  // 이벤트 보드 — 읽기 전용(select 만). DB 에서도 STABLE 로 선언했다(20260906b).
+  'event_board',
 ]);
 
 const SUPABASE_API = /^https:\/\/([a-z0-9]+)\.supabase\.co\/(rest|auth|storage|functions)\/v1\/(.*)$/;

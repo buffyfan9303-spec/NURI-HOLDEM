@@ -39,6 +39,7 @@ import { getLedgerBuyins, kstToday, getPendingBuyinRequests, subscribeBuyinReque
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 import { onColorInkClass } from '../../lib/color';
+import LedgerWorkspace from './LedgerWorkspace';
 import { centerInRail } from '../../lib/railScroll';
 
 // 'league' 는 §12-A-1 오너 결정으로 제거(LEAGUE-FREEZE 의 클라이언트 절반 — 코드는 동결, 진입 경로만 0)
@@ -141,6 +142,7 @@ const normalizeDeepSection = (raw: string): Section | GameStep | SettingsTab | n
 // (active 게이팅은 내부 작업만 멈출 뿐 재렌더 자체는 못 막아서 이 한 겹이 빠져 있었음.)
 const StoreDashboardM = memo(StoreDashboard);
 const NuriPosLedgerM = memo(NuriPosLedger);
+const LedgerWorkspaceM = memo(LedgerWorkspace);
 const StoreToolsPanelM = memo(StoreToolsPanel);
 const LedgerStatsPanelM = memo(LedgerStatsPanel);
 const TournamentClockM = memo(TournamentClock);
@@ -696,11 +698,17 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {/* venueName: 장부 엑셀 내보내기의 머리글·파일명에 찍히는 값. 안 넘겨서 마감 파일이
                     전부 'NURI POS_…' 로 나갔다 — 매장이 여럿인 운영자가 파일만 보고 구분할 수 없었다.
                     비면 컴포넌트 기본값('NURI POS')이 그대로라 회귀 없음. */}
-                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedgerM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'} seed={ledgerSeed}
-                  followGame={ledgerFollow}
-                  onMakeRankingDraft={onMakeRankingDraft}
-                  onOpenClock={onOpenClockFromLedger}
-                  onOpenStats={manageOk ? onOpenStatsCb : undefined} />)}
+                {/* 장부는 '작업대'로 감싼다 — 전체화면 토글과 우측 이용권 실시간 레일이 거기 산다(오너 2026-09-06).
+                    장부 컴포넌트 자체는 손대지 않는다(2800줄에 조건 분기를 더 심지 않으려고). */}
+                {visited.includes('ledger') && ledgerOk && box('ledger', (
+                  <LedgerWorkspaceM venueId={venueId} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'}>
+                    <NuriPosLedgerM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'} seed={ledgerSeed}
+                      followGame={ledgerFollow}
+                      onMakeRankingDraft={onMakeRankingDraft}
+                      onOpenClock={onOpenClockFromLedger}
+                      onOpenStats={manageOk ? onOpenStatsCb : undefined} />
+                  </LedgerWorkspaceM>
+                ))}
                 {visited.includes('stats') && manageOk && box('stats', <LedgerStatsPanelM venueId={venueId} />)}
                 {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} gameSel={gameSel} />)}
                 {/* IA3c '매장 페이지' 탭 = 구 매장꾸미기 + 구 매장랭킹(시즌·랭킹보드) 병합 — 같은

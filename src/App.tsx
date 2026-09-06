@@ -1161,6 +1161,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // ── 이벤트 딥링크 (?event=1) — 매장이 공유하거나 QR 로 찍어 바로 들어오는 경로.
+  //    홈 카드는 시작 전 이벤트를 광고하지 않으므로, 예약해 둔 캠페인을 미리 열어 보는 통로이기도 하다.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (!sp.get('event')) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('event');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    setEventOpen(true);
+  }, []);
+
   // ── QR 회원가입 (?signup=1) — 매장 QR 옆 가입 QR 스캔 시 회원가입 모달 바로 열기 ──
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
