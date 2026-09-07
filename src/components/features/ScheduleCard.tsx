@@ -352,14 +352,19 @@ function ListCard({
         </h3>
 
         {/* 3행 — REG 배지(데이터 있을 때만) + 메타 + 별점·거리·예약.
-            메타(flex-1 truncate)가 먼저 줄어들고 숫자 사실은 끝까지 남는다. */}
-        <div className="mt-1 flex items-center gap-1.5 overflow-hidden text-2xs leading-none text-ink-muted">
+            ⚠ 예전엔 overflow-hidden + 메타 truncate 였다. 그러면 폭이 모자랄 때 포맷·등급·게임종류가
+              **없어진다** — 가로 스크롤도 안 생기니 유저는 그 정보가 없는 대회로 오해한다.
+              실측(2026-09-08, 375px): 3행 148px 중 REG 배지가 82px 를 먹어 메타는 69px 가 필요한데
+              59px 만 남았다(약 14% 잘림). 잘림이 심각하지 않은 축이라 **우측 스크롤**로 바꾼다
+              (오너 지시: "심각하지는 않다면 이를 우측으로 스크롤되는 방식으로 전환").
+              전부 shrink-0 + nowrap 이라 각자 제 폭을 지키고, 넘치면 이 줄만 옆으로 밀린다. */}
+        <div className="mt-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none text-2xs leading-none text-ink-muted">
           {reg && (
             <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 font-bold leading-none text-ink-muted">
               {reg}
             </span>
           )}
-          <span className="min-w-0 flex-1 truncate">{meta || '—'}</span>
+          <span className="shrink-0 whitespace-nowrap">{meta || '—'}</span>
           {rating && rating.count > 0 && (
             <span className="shrink-0 tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
               ★{rating.avg.toFixed(1)}

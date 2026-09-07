@@ -17,7 +17,16 @@ import { getEventBoard, type EventBoard } from '../../api/events';
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 const OPENNOW_SEEN = 'nuri:opennow-seen';
-const openNowSeen = () => { try { return localStorage.getItem(OPENNOW_SEEN) === '1'; } catch { return false; } };
+/** 지난 방문에 '지금 등록 가능'이 **몇 줄**이었나(0~4). 예전엔 '1'/'0' 만 저장해 한 줄만 예약했고,
+ *  실제로 서너 줄이 오면 그 차이만큼 아래가 통째로 밀렸다. 옛 값('1')도 한 줄로 읽어 하위호환. */
+const openNowSeenCount = () => {
+  try {
+    const v = localStorage.getItem(OPENNOW_SEEN);
+    if (!v || v === '0') return 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(Math.max(n, 1), 4) : 1; // '1'(옛 값) → 1줄
+  } catch { return 0; }
+};
 
 // 이벤트 배너도 같은 문제를 갖고 있었다(2026-09-07 실측, CPU 4× · 375×812):
 //   event_board 응답이 마운트 뒤에 도착하면서 `오늘·내일 일정` 위에 칸이 새로 생겨
@@ -120,7 +129,7 @@ export default function HomeTab({
     return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`;
   };
   if (clocksLoaded) {
-    try { localStorage.setItem(OPENNOW_SEEN, openNow.length > 0 ? '1' : '0'); } catch { /* noop */ }
+    try { localStorage.setItem(OPENNOW_SEEN, String(Math.min(openNow.length, 4))); } catch { /* noop */ }
   }
 
   return (
@@ -131,7 +140,11 @@ export default function HomeTab({
       {/* 오너 지시(2026-08-28): 첫 줄(날짜·인사)은 NURI MIND 로, 헤드라인은 GTO 진입을 품는다 —
           유저 핵심 콘텐츠가 GTO 라는 판단. 라이브가 있으면 '지금'이 먼저이므로 그 문구를 유지하고
           GTO 유도는 아래 보조 줄이 맡는다(정보 위계 보존). */}
-      <div className="px-page-x pt-3">
+      {/* min-h: 라이브 유무로 히어로가 136 ↔ 98px 을 오가며 아래 전체를 38px 당겼다(실측 2026-09-08).
+          콜드 진입은 clocksLoaded=false 라 **큰 쪽(136)** 이 먼저 그려지고, 클락이 도착하며 줄어든다.
+          큰 쪽에 바닥을 대면 그 흔한 경로에서 아무것도 안 움직인다(라이브 분기만 여백이 조금 남는다).
+          더 넓은 폭에서 줄이 늘면 자연 높이가 이기므로 min- 이면 충분하다. */}
+      <div className="min-h-[136px] px-page-x pt-3">
         <a
           href="https://www.nurimind.co.kr" target="_blank" rel="noopener"
           className="inline-flex items-center gap-1 py-1 -my-1 text-2xs text-ink-muted transition-colors hover:text-accent-200"
@@ -167,10 +180,22 @@ export default function HomeTab({
 
       {/* 지금 등록 가능 — 라이브 실측이 열려 있을 때만. 지난 방문에 열린 대회가 있던
           기기는 클락 도착 '전'까지 자리를 예약해 삽입 밀림을 없앤다(도착하면 즉시 확정). */}
-      {!clocksLoaded && openNowSeen() && openNow.length === 0 && (
+      {!clocksLoaded && openNowSeenCount() > 0 && openNow.length === 0 && (
         <section className="px-page-x pt-4" aria-hidden>
           <div className="skeleton mb-1.5 h-[22px] w-36" />
-          <div className="skeleton h-[60px] rounded-aura" />
+          {/* 실제 목록과 **같은 박스 모델**로 그 줄 수만큼 예약한다 — 높이를 숫자로 베끼지 않는다.
+              (아래 실제 행: rounded-aura border card-aura / divide-y / px-3 py-2.5 / 9px 바 + 2줄) */}
+          <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
+            {Array.from({ length: openNowSeenCount() }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+                <span className="skeleton h-9 w-0.5 shrink-0 rounded-full" />
+                <span className="min-w-0 flex-1">
+                  <span className="skeleton block h-[20px] w-2/3 rounded" />
+                  <span className="skeleton mt-0.5 block h-[16px] w-1/2 rounded" />
+                </span>
+              </div>
+            ))}
+          </div>
         </section>
       )}
       {openNow.length > 0 && (
@@ -293,7 +318,10 @@ export default function HomeTab({
         {!loaded ? (
           <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura" aria-busy="true">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+              /* min-h: 실제 카드 행과 같은 높이를 예약한다. 예전엔 스켈레톤 행이 98px 인데
+                 실제가 116px 라 4행이면 최대 72px 가 아래로 밀렸다(실측 2026-09-08).
+                 숫자를 여기 박지 않고 --card-h-list 를 쓴다 — 카드가 바뀌면 그 토큰만 고친다. */
+              <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-2.5">
                 <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="skeleton h-3.5 w-1/3" />

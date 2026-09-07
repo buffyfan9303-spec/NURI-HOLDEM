@@ -1233,7 +1233,10 @@ html.light .text-pink-300 { color: #BE185D; }
    들어오는 카드가 크고(164×371 + 포스터 디코드) 그 렌더가 스크롤 프레임 안으로 미뤄진다.
    PC 는 4~5열이라 건너뛰는 카드가 수십 장이어서 이득이 압도한다(1415ms → 956ms, -32%).
    목록(list) 모드는 행이 얇아 그 역전이 없어 전 폭 적용(모바일 2551 → 1353ms, -47%). */
-:root { --card-h-list: 95px; }
+/* 실측 2026-09-08(375x812, 목킹 데이터로 실제 카드 렌더): 목록 카드 행 103~116px.
+   95px 는 21px 낡은 값이었다 — contain-intrinsic-size 가 실제보다 작으면 스크롤이 점프한다.
+   같은 토큰을 홈의 일정 스켈레톤도 쓴다(값 복사 금지 — 한 곳만 고치면 둘 다 따라온다). */
+:root { --card-h-list: 116px; }
 @media (min-width: 640px) { :root { --card-h-list: 81px; } }
 .cv-card-list { content-visibility: auto; contain-intrinsic-size: auto var(--card-h-list); }
 @media (min-width: 1024px) {
