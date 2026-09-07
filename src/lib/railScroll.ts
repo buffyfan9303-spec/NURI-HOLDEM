@@ -34,6 +34,15 @@ export function centerInRail(
   if (max <= 0) return; // 넘치지 않으면 움직일 이유가 없다
   const er = el.getBoundingClientRect();
   const rr = r.getBoundingClientRect();
+  // ⚠ 이미 온전히 보이면 **움직이지 않는다**. 보이는 것을 굳이 가운데로 끌어오면 그 스크롤이
+  //   탭 전환(View Transition) 한복판에 일어난다 — 바 스냅샷은 정지(animation:none)라 옛 위치를
+  //   보여주는데 알약은 새 스크롤 기준 좌표로 날아가, 출발점이 화면 밖으로 밀린다.
+  //   실측(2026-09-08, 280px 커뮤니티 서브탭): 레일이 73px 스크롤돼 이전 탭이 왼쪽 밖으로 나가고,
+  //   누른 직후 프레임에 대상 탭의 글자도 알약도 없었다 — 오너 리포트 "알약이 따라 움직이지 않고
+  //   홀덤펍으로 넘어갔다가 다시 그쪽으로 이동돼"가 정확히 이것이다.
+  //   가장자리에 딱 붙은 칩은 '반쯤 잘린 것처럼' 보이므로 pad 만큼은 여유를 요구한다.
+  const pad = 12;
+  if (er.left >= rr.left + pad && er.right <= rr.right - pad) return;
   const to = Math.max(0, Math.min(max, r.scrollLeft + (er.left - rr.left) - (rr.width - er.width) / 2));
   if (Math.abs(r.scrollLeft - to) < 1) return; // 이미 제자리 — 불필요한 스크롤 이벤트를 만들지 않는다
   r.scrollTo({ left: to, behavior });

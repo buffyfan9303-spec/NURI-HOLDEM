@@ -1,4 +1,4 @@
-import { memo, useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, useTransition, startTransition, type ReactNode } from 'react';
+import { memo, useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, useTransition, startTransition, type ReactNode, type CSSProperties } from 'react';
 import { goSubTab } from '../../lib/subTabTransition';
 import { centerInRail } from '../../lib/railScroll';
 import { promptLogin } from '../../lib/requireLogin';
@@ -313,7 +313,11 @@ function CommunityTab({
             세그먼트 트랙이 있으면 그 자체가 '네모칸'으로 읽힌다 — 띠 색을 지면에 맞춰도 박스는 남는다.
             활성 표시는 미끄러지는 알약(pill-active)이 이미 하고 있어 트랙 없이도 어느 탭인지 분명하고,
             같은 앱의 GTO 레인 칩·커뮤니티 그룹 칩이 이미 트랙 없이 배경 위에 떠 있다(그쪽이 '붙어 보인다'는 기준). */}
-        <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none px-0.5">
+        {/* --tab-cols = **일반 유저에게 보이는 탭 수**(매장 제외). 칸 폭의 기준이 된다 —
+            업주에게 매장이 하나 더 붙어도 앞 칸들이 줄지 않고, 매장만 오른쪽 밖으로 밀려나
+            스크롤해야 보인다(오너 2026-09-08). 장터는 슬롯 유무로 빠질 수 있어 숫자를 박지 않는다. */}
+        <div ref={secBarRef} style={{ '--tab-cols': 5 + (marketSlot ? 1 : 0) } as CSSProperties}
+          className="relative flex items-center gap-1 overflow-x-auto scrollbar-none px-0.5">
           {/* 활성 탭 뒤 글로우(오너 지시 2026-09-05) — pill-active = --grad-cta 채움 + 18px 블룸.
                 ⚠ 블룸을 다 보이려고 세로 여백을 키우지 않는다(2026-09-05 실측): overflow 는 **패딩 박스**에서
                   자르므로 여백 4.25px 이면 18px 중 4.25px 만 더 보인다 — 원래 2px 과 눈에 띄는 차이가 없는데
@@ -459,7 +463,18 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
         // 알약은 40px — 트레이(44px) 안에서 위아래 2px 만 남기는 비율이 오너 지시 레이아웃(2026-09-06 이미지)이다.
         // 34px 은 위아래 5px 씩 빈 공간을 만들어 '테두리 공백이 크다'는 지적을 다시 불렀다.
         // 버튼에 relative 를 두지 않는다 — span 의 offsetParent 가 레일이어야 offsetLeft/Top 이 맞는다.
-        'flex-[1_0_auto] inline-flex h-11 items-center t-tab whitespace-nowrap',
+        // flex-none + min-w: 칸 폭이 **탭 개수에 흔들리지 않는다**.
+        //   예전 flex-[1_0_auto] 는 남는 공간이 있을 때만 늘어나, 업주에게 매장이 붙어 내용이 넘치는
+        //   순간 전부 내용 폭으로 되돌아갔다(실측 375: 59 → 55). 업주만 다른 레이아웃을 보게 된다.
+        //   min-w 를 --tab-cols(= 일반 유저 탭 수)로 나눈 몫으로 박으면 일반 유저는 정확히 꽉 차고,
+        //   업주는 앞 칸이 그대로인 채 매장만 오른쪽 밖으로 온전히 밀려난다.
+        //   gap-1(0.25rem)이 칸 사이 (n-1)개 들어가므로 그만큼 빼고 나눈다.
+        //   ⚠ **모바일 한정**이다. PC(lg+)는 폭이 넉넉해 매장까지 다 들어가므로 예전대로 늘려 채운다 —
+        //     같은 규칙을 PC 에 걸면 1440 에서 칸이 200px 가 돼 7탭이 넘치고, 넓은 화면에서
+        //     굳이 가로 스크롤을 만들게 된다(커뮤니티는 유저 화면이라 모바일이 기준이지만,
+        //     업주가 PC 로 볼 때 멀쩡하던 것을 깨뜨릴 이유는 없다).
+        'flex-none inline-flex h-11 items-center justify-center t-tab whitespace-nowrap',
+        'min-w-[calc((100%-(var(--tab-cols)-1)*0.25rem)/var(--tab-cols))] lg:min-w-0 lg:flex-[1_0_auto]',
         'transition-colors',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
         // 채움 알약(--grad-cta) 위에서는 흰 글자여야 읽힌다 — ink-primary 는 라이트에서 약 2.4:1
@@ -469,7 +484,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
       {/* 활성 배경은 부모의 공용 SlidingPill 이 미끄러지며 그린다 — 탭별 개별 팝인 제거 */}
       <span
         data-pill-active={active || undefined}
-        className="relative inline-flex h-10 w-full items-center justify-center px-2 rounded-[6px]"
+        className="relative inline-flex h-10 w-full items-center justify-center px-1 rounded-[6px]"
       >
         {label}
       </span>
