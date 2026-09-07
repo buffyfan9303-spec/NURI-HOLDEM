@@ -90,7 +90,7 @@ jobs:
         with:
           fetch-depth: 0   # gitleaks 가 이력을 본다
       - name: gitleaks (이력)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-node@v7
