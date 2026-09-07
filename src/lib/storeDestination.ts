@@ -38,6 +38,14 @@ export interface StoreDest {
 /** 대시보드가 부르는 이동 함수. 문자열 = 문맥 없는 기존 이동. */
 export type StoreGoto = (dest: string | StoreDest) => void;
 
+/**
+ * 단계별 완료 여부 + 그 단계로 가는 목적지.
+ * 대시보드가 계산해 상위(단계 알약 바)로 올린다 — 예전엔 대시보드 안의 숫자 스트립이 직접
+ * 들고 있던 값이다. 클로저(`go: () => …`)가 아니라 **데이터**로 올리는 이유: 클로저는 부모가
+ * 들여다볼 수도, 비교할 수도 없어서 위로 올릴 물건이 아니다(매 렌더 새로 만들어진다).
+ */
+export type StoreStepMap = Readonly<Record<string, { done: boolean; dest: string | StoreDest }>>;
+
 export function toDest(d: string | StoreDest): StoreDest {
   return typeof d === 'string' ? { section: d } : d;
 }

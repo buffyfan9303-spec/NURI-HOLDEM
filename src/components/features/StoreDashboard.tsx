@@ -16,7 +16,7 @@ import { aiGenerate } from '../../api/ai';
 import { getVenueRankings } from '../../api/rankings';
 import { hasRankingForGame } from '../../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
 import { ledgerGameLabel } from '../../lib/ledgerLink';
-import type { StoreGoto } from '../../lib/storeDestination'; // 이동 목적지 계약(날짜·게임·event·정산)
+import type { StoreGoto, StoreStepMap } from '../../lib/storeDestination'; // 이동 목적지 계약(날짜·게임·event·정산)
 import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import RegularsModal from './RegularsModal';
@@ -79,13 +79,15 @@ interface Props {
   caps: DashCaps;
   /** 현재 보이는 탭일 때만 true — 숨김 상태에서 라이브 1초 틱을 멈춰 백그라운드 리렌더 방지. */
   active?: boolean;
+  /** 오늘 5단계의 완료·목적지를 상위 단계 알약 바로 올린다(대시보드 안 숫자 스트립의 후계). */
+  onProgress?: (steps: StoreStepMap | null) => void;
 }
 
 /**
  * 매장 대시보드 — 오늘 장부·클락·예약·출근 + 최근 7일 추세·객단가 + 미수 알림 + 인건비·손님유형을 실시간 요약.
  * 모든 카드는 해당 운영 화면으로 바로가기. 직원은 부여된 권한(caps)의 카드만 노출 — 권한 없는 화면으로의 dead-end 방지.
  */
-export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePoster, caps, active = true }: Props) {
+export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePoster, caps, active = true, onProgress }: Props) {
   const toast = useToast();
   const d = localToday();
   const days = last7();
@@ -307,6 +309,27 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   // 요청 게임의 바인 금액(결제 팝오버 표시) — 해당 게임 클락 liveStats 우선, 없으면 메인 세션
   const buyinAmountFor = (gameSeq: number | null) => venueClocks.find((c) => c.gameSeq === (gameSeq ?? 1))?.liveStats?.buyInAmount ?? session?.buyinAmount ?? null;
   const liveWidget = caps.ledger && (clockActive || activeClocks.length > 0 || pendingReqs.length > 0); // 진행 클락(메인/사이드) 또는 대기 요청
+  /* 오늘 파이프라인 5단계(포스터 → 장부 → 클락 → 순위 → 정산).
+     예전엔 이 값으로 대시보드 안에 숫자 스트립을 그렸다. 지금은 **위의 알약 탭바 하나**가 그 역할을
+     겸한다(오너 2026-09-08: "두 개를 2번으로 통일해서 한 페이지에서 왔다갔다") — 같은 파이프라인을
+     두 벌의 UI 로 그리면 어느 쪽이 진짜인지 알 수 없고, 실제로 그게 "눌렀는데 다른 데로 간다"였다.
+     판정값은 전부 이미 로드된 것을 재사용 — 새 쿼리 0건. */
+  const stepInfo = useMemo<StoreStepMap | null>(() => {
+    if (loading || loadErr || !caps.ledger) return null;
+    const closed = !!session?.closed;
+    const seq = session?.gameSeq;
+    return {
+      posters: { done: schedules.some((x) => x.venueId === venueId && x.date === d && x.approved), dest: 'posters' },
+      // 장부는 기본이 목록 모드다 — 시작 전이면 날짜를 싣지 않아 목록에서 고르게 두고,
+      // 시작했으면 그날 보드로 바로 들어간다.
+      ledger: { done: started, dest: { section: 'ledger', date: started ? d : undefined, gameSeq: seq } },
+      clock: { done: clockActive || closed, dest: { section: 'clock', gameSeq: seq } },
+      ranking: { done: hasRankToday === true, dest: { section: 'ranking', date: d, gameSeq: seq, title: session?.title } },
+      // 정산은 별도 화면이 아니라 **장부의 마감**이다 — 미수가 남아 있으면 아직 끝난 게 아니다.
+      settle: { done: closed && fin.unpaid === 0, dest: { section: 'ledger', date: d, gameSeq: seq, settle: true } },
+    };
+  }, [loading, loadErr, caps.ledger, session, started, clockActive, hasRankToday, fin.unpaid, schedules, venueId, d]);
+  useEffect(() => { onProgress?.(stepInfo); }, [stepInfo, onProgress]);
   // 위젯에서 보는 게임이 비활성이면 첫 활성 게임으로 자동 전환
   useEffect(() => {
     if (activeClocks.length > 0 && !activeClocks.some((c) => c.gameSeq === widgetGame)) setWidgetGame(activeClocks[0].gameSeq);
@@ -881,76 +904,6 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </section>
       )}
-
-      {/* 오늘 진행 단계 — 파이프라인을 **눈에 보이게** 한다(포스터 → 장부 → 클락 → 순위 → 정산).
-          '지금 할 일'이 다음 한 걸음을 말한다면, 이 줄은 전체 사슬에서 지금 어디인지를 말한다.
-          판정값은 전부 이미 있는 것을 재사용 — 새 쿼리 0건. 글로우 없음(주인공은 아래 KPI 밴드). */}
-      {!loading && !loadErr && caps.ledger && (() => {
-        const todayPoster = schedules.some((x) => x.venueId === venueId && x.date === d && x.approved);
-        const closed = !!session?.closed;
-        const steps: { key: string; label: string; done: boolean; go: () => void }[] = [
-          // 오늘 파이프라인은 '지금 보고 있는 게임'을 그대로 데려간다 — 사이드 장부를 보다가
-          // 클락·순위를 누르면 메인으로 튀던 것이 이 줄의 증상이었다.
-          { key: 'posters', label: '포스터', done: todayPoster, go: () => onGoto('posters') },
-          { key: 'ledger',  label: '장부',   done: started,     go: () => onGoto({ section: 'ledger', date: started ? d : undefined, gameSeq: session?.gameSeq }) },
-          { key: 'clock',   label: '클락',   done: clockActive || closed, go: () => onGoto({ section: 'clock', gameSeq: session?.gameSeq }) },
-          { key: 'ranking', label: '순위',   done: hasRankToday === true, go: () => onGoto({ section: 'ranking', date: d, gameSeq: session?.gameSeq, title: session?.title }) },
-          // 정산은 별도 화면이 아니라 장부의 마감이다 — 미수가 남아 있으면 아직 끝난 게 아니다.
-          // ⚠ 날짜를 반드시 실어 보낸다. 장부는 기본이 **목록 모드**(useState<'list'|'board'>('list'))라
-          //   시드 없이 보내면 '게임별 장부 검색' 목록에 떨어진다 — 정산은 안 보이고 다른 화면으로 넘어간 것처럼 된다.
-          //   시드가 붙어야 seed 효과가 setMode('board') 로 그날 보드를 열고, 그제서야 정산바가 존재한다.
-          { key: 'settle',  label: '정산',   done: closed && fin.unpaid === 0, go: () => onGoto({ section: 'ledger', date: d, gameSeq: session?.gameSeq, settle: true }) },
-        ];
-        const curIdx = steps.findIndex((x) => !x.done);
-        return (
-          <section className="rounded-card border border-border-subtle bg-surface-low p-2.5" aria-label="오늘 진행 단계">
-            {/* 머리줄 — 이 스트립이 **탭바가 아니라 상태 요약**임을 말한다.
-                제목 없이 번호 5칸만 있으면 아래 '게임 진행'의 탭바와 같은 것으로 읽혀서, 눌렀을 때
-                판이 그 자리에서 바뀔 거라 기대하게 된다(오너 2026-09-07). 실제로는 작업 화면으로 이동한다.
-                역할을 글자로 못박고, 몇 단계가 끝났는지를 함께 보여 '진행률'로 읽히게 한다. */}
-            <p className="mb-1.5 flex items-baseline justify-between gap-2 text-2xs">
-              <span className="font-semibold text-ink-secondary">오늘 진행</span>
-              <span className="tabular-nums text-ink-muted">
-                <b className="font-bold text-ink-secondary">{steps.filter((s) => s.done).length}</b>/{steps.length} 완료 · 누르면 그 단계로
-              </span>
-            </p>
-            {/* ⚠ 두 가지가 어긋나 있었다(2026-09-06 오너 스크린샷).
-                 ① 칸 높이(44px)가 내용(동그라미 21 + 라벨 14 ≈ 37)과 거의 같아 동그라미가 칸 천장에 붙었다.
-                 ② 연결선이 li 의 **세로 중앙**에 있어 동그라미도 라벨도 아닌 그 사이 허공을 이었다.
-                연결선을 동그라미와 **같은 줄** 안으로 넣으면 좌우 이웃의 중심을 정확히 잇는다(계산값 없이 left/right-1/2).
-                gap 을 없앤 것도 그래서다 — 칸 사이가 벌어지면 선이 그 틈에서 끊긴다. */}
-            <ol className="flex items-stretch">
-              {steps.map((st, i) => {
-                const current = i === curIdx;
-                const lineCls = (done: boolean) => ['absolute h-px', done ? 'bg-emerald-400/40' : 'bg-border-subtle'].join(' ');
-                return (
-                  <li key={st.key} className="flex min-w-0 flex-1">
-                    <button type="button" onClick={st.go}
-                      aria-current={current ? 'step' : undefined}
-                      className={['flex min-h-[44px] w-full flex-col items-center gap-1 rounded-input px-1 py-1.5 transition-colors',
-                        current ? 'chip-aura' : 'hover:bg-surface-high/50'].join(' ')}>
-                      <span className="relative flex w-full items-center justify-center">
-                        {/* mr/ml-3(12.75px) = 동그라미 반지름(10.6px) + 여유 2px */}
-                        {i > 0 && <span aria-hidden className={[lineCls(steps[i - 1].done), 'left-0 right-1/2 mr-3'].join(' ')} />}
-                        {i < steps.length - 1 && <span aria-hidden className={[lineCls(st.done), 'left-1/2 right-0 ml-3'].join(' ')} />}
-                        <span className={['relative flex h-5 w-5 items-center justify-center rounded-full text-2xs font-bold',
-                          st.done ? 'bg-emerald-400/20 text-emerald-400'
-                            : current ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
-                          {st.done ? <Icon name="check" size={11} /> : i + 1}
-                        </span>
-                      </span>
-                      <span className={['w-full truncate text-center text-2xs font-semibold',
-                        st.done ? 'text-ink-secondary' : current ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>
-                        {st.label}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-        );
-      })()}
 
       {/* 지금 할 일 — 시간대·운영 상태 인지형 다음 행동 카드(대시보드 = 행동 안내판) */}
       {(() => {

@@ -20,35 +20,28 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  test('C·D — 대시보드: 진행 단계 동그라미 여백 · 연결선 정렬 · 헤더 날짜 위치', async ({ page }) => {
+  test('C·D — 대시보드: 단계 바 노출·크기 · 헤더 날짜 위치', async ({ page }) => {
     const store = page.getByRole('button', { name: /^내 매장/ });
     test.skip(await store.count() === 0, '이 계정에는 내 매장 탭이 없다');
     await store.first().click();
     await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
 
-    const stepper = page.locator('section[aria-label="오늘 진행 단계"]');
-    await expect(stepper).toBeVisible({ timeout: 20_000 });
+    // C — 진행 단계. 예전엔 대시보드 안의 숫자 스트립이었고, 오너 지적은 "동그라미가 칸에 붙었다"였다.
+    //   2026-09-08 에 그 스트립을 없애고 게임 진행의 알약 바 하나로 합쳤다(한 페이지에서 왕복).
+    //   그래서 여기서 재는 것도 바뀐다: 같은 지적의 알맹이는 **대시보드에서도 단계가 보이는가**와
+    //   **손가락이 닿는 크기인가** 두 가지다. 기하(동그라미·연결선)는 잴 대상 자체가 사라졌다.
+    const bar = page.locator('[aria-label="매장 단계 이동"]');
+    await expect(bar, '대시보드에 단계 바가 없다 — 합친 뒤 대시보드에서 사라지면 통일이 아니라 삭제다').toBeVisible({ timeout: 20_000 });
 
-    const m = await stepper.evaluate((sec) => {
-      const btn = sec.querySelector('button')!;
-      const dot = sec.querySelector('button span span span, button [class*="rounded-full"]')!;
-      const b = btn.getBoundingClientRect(), d = dot.getBoundingClientRect();
-      // 연결선 = 동그라미와 같은 줄 안의 absolute h-px
-      const line = sec.querySelector('button span.relative span.absolute');
-      const l = line?.getBoundingClientRect();
-      return {
-        칸높이: Math.round(b.height),
-        동그라미_천장: Math.round(d.top - b.top),
-        연결선_동그라미중심차: l ? Math.round((l.top + l.height / 2) - (d.top + d.height / 2)) : null,
-      };
-    });
-    console.log('[C 진행 단계]', JSON.stringify(m));
-    // 오너 지적: "동그라미가 네모칸에 거의 붙어있어" — 붙어 있던 값이 2px 였다.
-    expect(m.동그라미_천장, '동그라미가 칸 천장에 붙어 있다').toBeGreaterThanOrEqual(5);
-    expect(m.칸높이, '간소화 목표(약 56px)보다 다시 커졌다').toBeLessThanOrEqual(62);
-    if (m.연결선_동그라미중심차 !== null) {
-      expect(Math.abs(m.연결선_동그라미중심차), '연결선이 동그라미 중심에서 벗어났다').toBeLessThanOrEqual(1);
-    }
+    const m = await bar.evaluate((el) => ({
+      넘침: el.scrollWidth - el.clientWidth,
+      칸높이: Math.round(el.querySelector('[role=tab]')!.getBoundingClientRect().height),
+      요약있음: [...el.querySelectorAll('[role=tab]')].some((b) => b.textContent?.trim() === '요약'),
+    }));
+    console.log('[C 단계 바]', JSON.stringify(m));
+    expect(m.요약있음, '돌아오는 길(요약)이 바에 없다 — 그러면 왕복이 안 된다').toBe(true);
+    expect(m.넘침, '단계 바가 넘쳐 마지막 단계가 잘린다').toBeLessThanOrEqual(0);
+    expect(m.칸높이, '알약이 손가락에 비해 얇다').toBeGreaterThanOrEqual(32);
 
     // D — 스티키 헤더의 날짜가 매장명 옆에 붙어 있나(예전엔 619px 떨어져 있었다)
     // ⚠ '.truncate' 만으로는 페이지 제목('내 매장')이 잡힌다 — 매장명은 text-base·font-bold 다.

@@ -14,7 +14,7 @@ import { getLedgerRange } from '../../api/ledger';
 import { uploadPoster } from '../../lib/storage';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
-import { resolveDest, type StoreDest } from '../../lib/storeDestination'; // 이동 목적지 → 시드 패치(순수)
+import { type StoreStepMap,resolveDest, type StoreDest } from '../../lib/storeDestination'; // 이동 목적지 → 시드 패치(순수)
 import StoreToolsPanel from './StoreToolsPanel';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import TournamentClock from './clock/TournamentClock';
@@ -232,6 +232,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // '정산' 이동 신호(논스). 스크롤이 아니라 신호다 — 장부의 정산바는 position:fixed 라 이미 화면에 있고,
   // 필요한 건 "그 바의 마감 버튼을 지목해 주는 것"이다. 판이 붙은 뒤 장부가 알아서 포커스·강조한다.
   const [settleSignal, setSettleSignal] = useState(0);
+  // 오늘 5단계의 완료·목적지 — 대시보드가 계산해 올려 준다(숫자 스트립을 알약 바로 합치면서).
+  const [stepInfo, setStepInfo] = useState<StoreStepMap | null>(null);
   const gameSelN = useRef(0);
   const [visited, setVisited] = useState<PaneId[]>([]); // 방문 판(섹션/게임스텝, 최근순) — 마운트 유지(깜빡임 제거), 상한 초과 시 가장 오래된 판 정리(메모리 가드)
 
@@ -661,32 +663,50 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 </div>
               </div>
             )}
-            {/* IA2 잔여 — 게임 선택 칩 바(원문: '상단에 게임 선택 칩 바, 아래에 4단계 스테퍼').
-                U1: 그 위에 스텝 공통 문맥 줄(매장 › 날짜 › 게임)이 항상 붙는다 — 칩 줄만 멀티게임 날에 나온다.
-                위치는 스테퍼·섹션 헤더보다 위 = 작업 영역의 첫 줄. 읽는 순서가 '대상 → 단계 → 작업'이 된다. */}
-            {renderSection === 'game' && !dItem?.locked && (
-              <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
-                canPosters={canPosters} onPick={onPickGame} onNewGame={onCreatePoster}
-                venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} />
-            )}
             {/* IA2 게임 진행 스테퍼 — 섹션을 떠나지 않고 작업판만 교체(포스터→장부→클락→순위→정산).
                 ⚠ '정산' 이 빠져 있어서, 대시보드의 5단계 파이프라인에서 '장부' 를 눌러 들어오면
                    마지막 한 칸이 통째로 사라졌다(오너 2026-09-06). 정산은 별도 판이 아니라 **장부의 마감**이라
                    탭(role=tab)이 아니라 '장부 하단으로 데려가는 이동'으로 둔다 — 판이 아닌 것을 판인 척하지 않는다. */}
-            {renderSection === 'game' && !dItem?.locked && (
+            {/* 이 바는 **대시보드에서도** 뜬다. 같은 바가 같은 자리에 계속 있어야 단계를 눌렀을 때
+                "다른 페이지로 갔다"가 아니라 "이 페이지에서 판만 바뀌었다"로 읽힌다 — 예전엔 대시보드에
+                숫자 스트립, 게임 진행에 알약 바, 이렇게 **두 벌**이라 스트립을 누르면 알약 바가 있는
+                다른 화면으로 넘어가 거기서 또 눌러야 했다(오너 2026-09-07·09-08). 맨 앞 '요약'이 돌아오는 길. */}
+            {(renderSection === 'game' || renderSection === 'dashboard') && !dItem?.locked && (
               <GameStepBar steps={GAME_STEPS.filter((st) => (st.id === 'posters' ? canPosters : ledgerOk))}
-                active={renderGameStep}
+                onHome={() => gotoSection('dashboard')} progress={stepInfo}
+                active={renderSection === 'dashboard' ? 'dashboard' : renderGameStep}
                 /* '2. 장부' 는 파이프라인의 한 단계다 — **오늘(또는 지금 보고 있는) 장부 보드**를 뜻한다.
                    bare gotoSection 은 시드를 지워 장부가 목록(검색) 모드로 열렸고, 그래서 단계를 눌렀는데
                    "장부 탭으로 간 게 아니다"가 됐다(오너 2026-09-07). 목록이 필요하면 보드 상단
                    DateBar 의 뒤로가기로 언제든 돌아갈 수 있다(모든 보드 화면에 있다). */
-                onPick={(st) => (st === 'ledger'
-                  ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame })
-                  : gotoSection(st))}
+                onPick={(st) => {
+                  /* 대시보드에서 눌렀다면 예전 '오늘 진행' 스트립을 누른 것과 같아야 한다 —
+                     그 목적지(오늘 날짜·지금 게임·순위 이벤트)를 그대로 쓴다. 게임 진행 안에서는
+                     지금 보고 있는 장부/게임 문맥이 이미 있으니 종전 경로가 맞다. */
+                  const fromDash = renderSection === 'dashboard' ? stepInfo?.[st]?.dest : undefined;
+                  if (fromDash) return onGotoStore(fromDash);
+                  return st === 'ledger'
+                    ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame })
+                    : gotoSection(st);
+                }}
                 showSettle={ledgerOk}
                 /* 정산은 '장부의 마감'이라 그 장부 보드가 열려 있어야 한다. 날짜 없이 보내면 장부가
                    목록 모드로 떨어져 정산이 아예 안 보인다 — 지금 보고 있는 장부(없으면 오늘)를 실어 보낸다. */
-                onSettle={() => onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame, settle: true })} />
+                onSettle={() => onGotoStore(
+                  (renderSection === 'dashboard' ? stepInfo?.settle?.dest : undefined)
+                  ?? { section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame, settle: true })} />
+            )}
+            {/* IA2 잔여 — 게임 선택 칩 바(원문: '상단에 게임 선택 칩 바, 아래에 4단계 스테퍼').
+                U1: 그 위에 스텝 공통 문맥 줄(매장 › 날짜 › 게임)이 항상 붙는다 — 칩 줄만 멀티게임 날에 나온다.
+                ⚠ 2026-09-08 에 순서를 뒤집었다. 예전엔 이 줄이 스테퍼보다 **위**여서 '대상 → 단계 → 작업'이었는데,
+                  단계 바가 대시보드에서도 뜨게 되면서(한 바로 통일) 이 줄이 없는 대시보드와 있는 게임 화면 사이에
+                  바가 29px 위아래로 튀었다(실측 top 239 ↔ 268). 같은 바가 같은 자리에 있어야 '판만 바뀌었다'로
+                  읽히므로 **단계 바를 맨 위 고정**으로 올리고 이 줄을 그 아래로 내렸다.
+                  읽는 순서는 '단계(어디로) → 대상(무엇을) → 작업'이 된다 — 내비게이션이 문맥보다 위인 통상 배치다. */}
+            {renderSection === 'game' && !dItem?.locked && (
+              <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
+                canPosters={canPosters} onPick={onPickGame} onNewGame={onCreatePoster}
+                venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} />
             )}
             {/* IA3c 매장 설정 하위탭 — 프리셋·페이지·POS·이용권·위험구역(권한별 노출) */}
             {renderSection === 'settings' && !dItem?.locked && (
@@ -723,7 +743,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               };
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
-                  <StoreDashboardM venueId={venueId} schedules={schedules} onGoto={onGotoStore} onCreatePoster={onCreatePoster}
+                  <StoreDashboardM venueId={venueId} schedules={schedules} onGoto={onGotoStore} onCreatePoster={onCreatePoster} onProgress={setStepInfo}
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />
                   {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
@@ -967,9 +987,15 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
  * 게임 진행 스테퍼 — 포스터·장부·클락·순위(판) + 정산(장부 하단으로 이동).
  * 활성 칩은 레일 가운데로 끌어온다(가로만 — centerInRail 주석 참조).
  */
-function GameStepBar({ steps, active, onPick, showSettle, onSettle }: {
+function GameStepBar({ steps, active, onPick, showSettle, onSettle, onHome, progress }: {
   steps: readonly { id: GameStep; label: string }[];
-  active: GameStep; onPick: (s: GameStep) => void; showSettle: boolean; onSettle: () => void;
+  /** 'dashboard' = 요약 알약이 활성(= 대시보드를 보는 중). */
+  active: GameStep | 'dashboard';
+  onPick: (s: GameStep) => void; showSettle: boolean; onSettle: () => void;
+  /** 맨 앞 '요약' 알약 — 대시보드로. 이게 있어야 **이 바 안에서** 왕복이 된다. */
+  onHome: () => void;
+  /** 단계별 완료 여부(대시보드가 계산해 준다). 없으면 번호만 나온다 — 로딩 중엔 조용히. */
+  progress?: StoreStepMap | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -979,24 +1005,46 @@ function GameStepBar({ steps, active, onPick, showSettle, onSettle }: {
   //   예전엔 shrink-0 + px-3 이라 375 에서 '5. 정산'이 잘려 스크롤해야 보였다 — 5단계 파이프라인인데
   //   마지막 단계가 안 보이면 그 단계가 있는 줄도 모른다(오너 2026-09-07).
   // sm+: 종전대로 내용 폭(가로 여유가 있으니 굳이 늘리지 않는다).
-  const chip = (on: boolean) => ['relative inline-flex h-9 min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-tab leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none sm:flex-none sm:basis-auto sm:px-3',
-    on ? 'font-bold text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ');
+  // 글자는 t-tab 이 아니라 **t-desc**(대시보드의 12px 정본 행간 19.13)를 쓴다. 둘 다 0.75rem 인데
+  //   행간만 다르고(t-tab 1rem), 이 바가 대시보드에도 뜨는 순간 같은 크기에 행간이 둘이 된다
+  //   — 눈으로는 2px 라 안 보이지만 문단 호흡이 어긋난다(store-rhythm 스펙이 잡는다).
+  //   알약은 h-9 고정이라 행간을 올려도 높이는 그대로다(19 < 36). 굵기는 t-desc 가 400 이라 직접 명시.
+  const chip = (on: boolean) => ['relative inline-flex h-9 min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:flex-none sm:basis-auto sm:px-3',
+    on ? 'font-bold text-white' : 'font-semibold text-ink-muted hover:text-ink-secondary'].join(' ');
   return (
-    <div ref={ref} role="tablist" aria-label="게임 진행 단계"
+    <div ref={ref} role="tablist" aria-label="매장 단계 이동"
       className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
       <SlidingPill containerRef={ref} activeKey={active} className="rounded-[6px] pill-active" />
+      {/* 요약(대시보드) — 번호가 없는 유일한 칸이라 '단계가 아니라 돌아가는 곳'으로 읽힌다.
+          내용 폭(flex-none)이라 좁다: 6칸이 375 에 들어가는 건 이 칸이 40px 대이기 때문. */}
+      <button type="button" role="tab" aria-selected={active === 'dashboard'} data-pill-active={active === 'dashboard' || undefined}
+        onClick={onHome} title="매장 대시보드(요약)"
+        className={[chip(active === 'dashboard'), '!flex-none !basis-auto !px-2 sm:!px-3'].join(' ')}>
+        <span className="relative">요약</span>
+      </button>
       {steps.map((st, i) => {
         const on = active === st.id;
         return (
           <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
             onClick={() => onPick(st.id)} className={chip(on)}>
-            <span className="relative">{i + 1}. {st.label}</span>
+            {/* 완료 표시는 **번호 자리를 대신한다** — 칸을 넓히지 않고 상태를 얹는다(옛 숫자 스트립의 ✓ 승계). */}
+            <span className="relative inline-flex items-center gap-px">
+              {progress?.[st.id]?.done
+                ? <Icon name="check" size={12} className="shrink-0 text-emerald-400" />
+                : <span className={on ? undefined : 'text-ink-muted/70'}>{i + 1}.</span>}
+              {st.label}
+            </span>
           </button>
         );
       })}
       {showSettle && (
         <button type="button" onClick={onSettle} className={chip(false)} title="장부 하단의 정산·마감으로 이동합니다">
-          <span className="relative">{steps.length + 1}. 정산</span>
+          <span className="relative inline-flex items-center gap-px">
+            {progress?.settle?.done
+              ? <Icon name="check" size={12} className="shrink-0 text-emerald-400" />
+              : <span className="text-ink-muted/70">{steps.length + 1}.</span>}
+            정산
+          </span>
         </button>
       )}
     </div>
