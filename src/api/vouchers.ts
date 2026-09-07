@@ -221,6 +221,16 @@ export async function redeemMyVoucherByQr(voucherId: string, venueId: string): P
   if (error) throw new Error(error.message);
   return (data as string) ?? '';
 }
+/** 일괄 사용(매장 QR) — 한 번 스캔하고 N장을 같은 매장에 쓴다(오너 2026-09-08 "몇 장을 보낼 것인지").
+ *  서버에 묶음 RPC 가 없어 순차로 돈다. 부분 성공을 **부분 성공이라고** 돌려주는 게 중요하다 —
+ *  3장 중 1장이 만료돼 실패했는데 '3장 사용'이라고 말하면 그게 장부에서 다툼이 된다. */
+export const redeemMyVouchersByQr = (ids: string[], venueId: string): Promise<BulkResult> =>
+  bulk(ids, async (id) => { await redeemMyVoucherByQr(id, venueId); });
+
+/** 일괄 사용(업주 전화번호) — QR 없이 보내는 유일한 경로. 무증빙 경로는 폐지됐다(아래 주석). */
+export const redeemMyVouchersByPhone = (ids: string[], phone: string): Promise<BulkResult> =>
+  bulk(ids, async (id) => { await redeemMyVoucherByPhone(id, phone); });
+
 // 회수(사용): 발급 매장 업주 전화번호로만.
 export async function redeemMyVoucherByPhone(voucherId: string, phone: string): Promise<string> {
   if (IS_MOCK) return '';

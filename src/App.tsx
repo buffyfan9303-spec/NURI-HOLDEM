@@ -2688,7 +2688,13 @@ export default function App() {
         onNavigateNotification={handleNavigateNotification}
         onHome={handleHome}
         onOpenMe={openMeCb}
-        onOpenVoucher={() => setVoucherSheetOpen(true)}
+        /* startTransition + 아래 Suspense 선마운트 — 둘이 **함께**여야 첫 클릭에 열린다.
+           경계만 밖으로 빼고 평범한 setState 로 켜면, 자식이 서스펜드하는 순간 리액트가 폴백(null)을
+           커밋하고 그 폴백을 최소 ~300ms 붙잡는다. 실측 2026-09-08: 청크는 +52ms 에 도착했는데
+           시트는 24프레임(~400ms) 뒤에 떴다 — 기다린 게 아니라 스로틀에 걸려 있던 것이다.
+           트랜지션이면 폴백을 아예 커밋하지 않고 이전 화면을 유지한 채 준비되면 바꾼다.
+           이벤트 페이지(onEvent)가 같은 조합으로 이미 고쳐져 있다. */
+        onOpenVoucher={() => startTransition(() => setVoucherSheetOpen(true))}
         suppressed={openVenueId !== null}
       />
 
@@ -3302,8 +3308,13 @@ export default function App() {
 
       {/* 이용권 · 출석 시트 — **루트**에서 렌더한다. 헤더(sticky z-50) 안에서 그리면
           Modal 의 fixed z-[60] 이 헤더 스태킹 컨텍스트에 갇혀 하단 탭바에 덮인다(실측). */}
-      {voucherSheetOpen && (
-        <Suspense fallback={null}>
+      {/* Suspense 는 조건 **밖**이다 — 아래 EventPage 와 같은 이유이고, 같은 증상이 실제로 났다:
+          오너 2026-09-08 "티켓 아이콘 처음 누르면 안 가지고 두 번 눌러야 이동이 돼".
+          경계가 그 업데이트에서 처음 마운트되면 리액트는 폴백을 반드시 커밋하고 최소 ~300ms 유지한다.
+          여기 폴백은 null 이라 **아무 일도 안 일어난 것처럼** 보였다(스피너조차 없다). 두 번째 클릭에서는
+          청크가 이미 있어 곧바로 열린다 — 그게 '두 번 눌러야' 의 정체다. 경계를 미리 마운트해 둔다. */}
+      <Suspense fallback={null}>
+        {voucherSheetOpen && (
           <MyVoucherSheet
             open
             onClose={() => setVoucherSheetOpen(false)}
@@ -3311,8 +3322,8 @@ export default function App() {
             onOpenWallet={() => openMeCb('dashboard')}
             onBuyin={startBuyinRequest}
           />
-        </Suspense>
-      )}
+        )}
+      </Suspense>
 
       {/* ⚠ Suspense 를 조건 **밖**에 둔다. 경계가 그 업데이트에서 **처음 마운트되면** 리액트는
           트랜지션이어도 폴백을 반드시 커밋하고, 한 번 커밋한 폴백은 최소 ~300ms 유지한다
