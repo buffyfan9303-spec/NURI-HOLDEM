@@ -457,6 +457,18 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     settleDone.current = settleSignal;
     pointAtSettle();
   }, [settleSignal, active, pointAtSettle]);
+  // 신호를 받았는데 끝내 마감 버튼이 없으면 **말해 준다**. 조용히 아무 일도 안 하면
+  // 사용자에게는 '정산을 눌렀는데 정산으로 안 간다'가 된다(오너 2026-09-07).
+  // 오늘 장부가 아예 없을 때가 대부분이라 다음 행동까지 함께 안내한다.
+  useEffect(() => {
+    if (!settleSignal || !active) return;
+    const t = setTimeout(() => {
+      if (!settlePending.current) return;
+      settlePending.current = false;
+      toast.show(closed ? '이미 마감된 장부입니다' : '마감할 장부가 없습니다. 먼저 장부를 시작해 주세요', 'info');
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [settleSignal, active, closed, toast]);
   const regClosed = session.regClosed;
   // 실패는 '빈 장부'가 아니다 — loadError 가 있으면 세팅 폼으로 넘어가지 않는다.
   const showSetup = !loadError && !session.openedAt && !closed && buyins.length === 0 && players.length === 0;

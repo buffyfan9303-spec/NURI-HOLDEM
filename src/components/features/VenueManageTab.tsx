@@ -321,8 +321,20 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   }, [goStep]);
   // 뒤로가기 3단(§13-C): ①게임 스텝(직전 스텝 1회) → ②섹션(대시보드) → ③탭 이탈
   useBackClose(!!section && section !== 'dashboard', () => gotoSection('dashboard'));
-  // 하단 탭 '내 매장' 을 누를 때마다(재탭 포함) 대시보드로 — 0 은 초기값이라 건너뛴다
-  useEffect(() => { if (homeNonce > 0) gotoSection('dashboard'); }, [homeNonce, gotoSection]);
+  // 하단 탭 '내 매장' 을 누를 때마다(재탭 포함) 대시보드로 — 0 은 초기값이라 건너뛴다.
+  //
+  // ⚠ deps 에 gotoSection 을 두면 **탭을 누르지 않았는데도** 대시보드로 튄다(오너 2026-09-07:
+  //   "2번 장부를 누르면 장부 탭이 아니라 오늘 진행으로 넘어간다").
+  //   gotoSection ← firstSettingsTab ← canSettingsTab ← idOn(이용권 킬스위치)인데 idOn 은 **비동기로 도착**한다.
+  //   사용자가 장부·클락으로 옮긴 뒤 그 값이 오면 함수 정체성이 바뀌고 이 효과가 다시 돌아 화면을 되돌린다.
+  //   느린 회선일수록 창이 넓어져 재현이 쉽다(빠른 회선에서는 클릭 전에 이미 해제돼 안 보인다 — 그래서 놓쳤다).
+  //   실제로 논스가 **바뀐 경우에만** 돌게 하고, 함수는 ref 로 최신을 읽는다.
+  const gotoRef = useRef(gotoSection);
+  useEffect(() => { gotoRef.current = gotoSection; });
+  const homeDone = useRef(0);
+  useEffect(() => {
+    if (homeNonce > 0 && homeNonce !== homeDone.current) { homeDone.current = homeNonce; gotoRef.current('dashboard'); }
+  }, [homeNonce]);
   useBackClose(section === 'game' && stepHist.length > 0, () => {
     setStepHist((h) => {
       const prev = h[h.length - 1];
@@ -663,7 +675,15 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                    탭(role=tab)이 아니라 '장부 하단으로 데려가는 이동'으로 둔다 — 판이 아닌 것을 판인 척하지 않는다. */}
             {renderSection === 'game' && !dItem?.locked && (
               <GameStepBar steps={GAME_STEPS.filter((st) => (st.id === 'posters' ? canPosters : ledgerOk))}
-                active={renderGameStep} onPick={gotoSection} showSettle={ledgerOk}
+                active={renderGameStep}
+                /* '2. 장부' 는 파이프라인의 한 단계다 — **오늘(또는 지금 보고 있는) 장부 보드**를 뜻한다.
+                   bare gotoSection 은 시드를 지워 장부가 목록(검색) 모드로 열렸고, 그래서 단계를 눌렀는데
+                   "장부 탭으로 간 게 아니다"가 됐다(오너 2026-09-07). 목록이 필요하면 보드 상단
+                   DateBar 의 뒤로가기로 언제든 돌아갈 수 있다(모든 보드 화면에 있다). */
+                onPick={(st) => (st === 'ledger'
+                  ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame })
+                  : gotoSection(st))}
+                showSettle={ledgerOk}
                 /* 정산은 '장부의 마감'이라 그 장부 보드가 열려 있어야 한다. 날짜 없이 보내면 장부가
                    목록 모드로 떨어져 정산이 아예 안 보인다 — 지금 보고 있는 장부(없으면 오늘)를 실어 보낸다. */
                 onSettle={() => onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame, settle: true })} />
@@ -766,7 +786,7 @@ const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
   calendar: '내 예약·찜·바이인·머니인 기록과 직접 적는 뱅크롤',
   posters: '게임(포스터)별 예약 관리. 게임을 누르면 예약 리스트가 펼쳐집니다',
   presets: '게임 내용·듀레이션을 템플릿으로 저장 · 포스터/장부 없이 만들고 수정',
-  ledger: '게임(세션)별 장부. 날짜·게임명으로 검색해 열람·수정하세요',
+  ledger: '오늘 장부로 바로 들어갑니다 · 다른 날짜는 상단 뒤로가기에서 목록으로',
   stats: '기간별 매출·엔트리·요일 분석',
   ranking: '대회 순위 등록. 닉네임이 일치하는 회원에게 점수가 자동 반영됩니다',
   clock: '토너먼트 타이머. 장부 연동 시 엔트리·생존이 자동 반영됩니다',
