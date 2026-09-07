@@ -14,7 +14,8 @@
 //   그 셋은 로컬 실측(응답 목킹 + 프로덕션 빌드)으로 검증했고 수치는 커밋 메시지에 남겼다:
 //     스켈레톤 98 → 116(실제와 일치) · --card-h-list 95 → 116 · 카드 3행 메타 59 → 69px(전폭)
 //   목킹 행이 e2e 에서 렌더되지 않는 원인을 찾으면 그때 다시 붙인다.
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './_fixtures';
+import { type Page } from '@playwright/test';
 
 const VENUE_ID = '11111111-1111-4111-8111-111111111111';
 const iso = (d: Date) => d.toISOString().slice(0, 10);

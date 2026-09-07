@@ -6,7 +6,8 @@
 // 잠그는 것: 이 열 안의 **잎 텍스트가 제 부모보다 넓지 않은가**(scrollWidth > clientWidth = 잘림).
 // 값을 6/6 · 87/213 · 100/120 세 가지로 갈아끼워 전부 확인한다 — 한 값만 재면 두 자리에서 통과하고
 // 세 자리에서 깨지는 지금의 결함을 그대로 놓친다.
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './_fixtures';
+import { type Page } from '@playwright/test';
 
 const VENUE_ID = '11111111-1111-4111-8111-111111111111';
 const iso = (d: Date) => d.toISOString().slice(0, 10);

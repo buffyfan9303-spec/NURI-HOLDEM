@@ -10,7 +10,7 @@
 // 잠그는 것: 한 번의 클릭 뒤 시트가 뜨는가, 그리고 그때까지 몇 프레임이 흘렀는가.
 // 세션은 **가짜**를 심는다 — 헤더 버튼은 user 유무만 보므로 토큰이 유효할 필요가 없다.
 // 시트 안의 조회는 401 로 비어도 상관없다(여기서 재는 것은 '열리는가'다).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 const KEY = 'sb-idsxiqspecrucvfvtgbw-auth-token';
 const UID = '00000000-0000-4000-8000-000000000001';

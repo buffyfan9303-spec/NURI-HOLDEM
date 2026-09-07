@@ -8,7 +8,7 @@
 //
 // 세션·매장·장부는 전부 목킹한다(운영 DB 를 건드리지 않는다). 금액 계산 자체는
 // src/lib/ledgerSettlement.test.ts 가 단위로 못 박고, 여기서는 '화면에 닿는가'만 본다.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 const KEY = 'sb-idsxiqspecrucvfvtgbw-auth-token';
 const UID = '00000000-0000-4000-8000-0000000000ff';

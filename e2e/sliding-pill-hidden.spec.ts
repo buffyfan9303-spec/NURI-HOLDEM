@@ -11,7 +11,8 @@
 // 고침: 화면에 없는 동안에는 재지 않고 잠시 숨긴다. 다시 보이면 ResizeObserver 가 깨워 제자리에 놓는다.
 //   그래서 이 스펙은 '언제 제자리로 오는가'가 아니라 **보이는 동안 늘 제자리인가**를 잠근다 —
 //   한 프레임이라도 보이면서 어긋나면 사용자는 그것을 본다.
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './_fixtures';
+import { type Page } from '@playwright/test';
 
 type Frame = { t: number; x: number | null; 자리: string | null; 활성: string | null; op: string | null };
 
