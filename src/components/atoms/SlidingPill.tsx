@@ -50,6 +50,20 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
     const measure = () => {
       const target = container.querySelector<HTMLElement>('[data-pill-active]');
       if (!target) { pill.style.opacity = '0'; prevRect.current = null; return; }
+      // ⚠ 화면에 없는 동안(display:none)에는 재지 않는다.
+      //   최상위 탭은 언마운트하지 않고 display 로만 껐다 켜는데(App.tsx keep-alive), 꺼져 있는 사이에도
+      //   activeKey 는 바뀔 수 있다 — 예: 대시보드의 '내 장터 거래' 바로가기가 쏘는
+      //   nuri:community-section 이벤트. 그때 offsetParent 가 null 이라 offsetLeft/offsetWidth 가
+      //   전부 0 으로 나오고, 알약이 레일 **맨 왼쪽**에 박힌다. 다시 켜지면 활성 탭은 장터인데
+      //   알약만 홀덤펍 자리에 남아 있는 화면이 된다(오너 리포트 2026-09-08 · 실측 복귀 후 87ms 지점).
+      //   틀린 자리를 보여주느니 잠시 숨긴다. 다시 보이면 ResizeObserver 가 깨워 제자리에 놓는다
+      //   (firstRef=true 라 미끄러지지 않고 즉시 — 어디선가 날아오는 유령 모션 방지).
+      //   prevRect 는 건드리지 않는다 — 0 짜리 가짜 위치를 '이전 위치'로 기억하면 다음 FLIP 이 거기서 출발한다.
+      if (target.offsetParent === null || target.offsetWidth === 0) {
+        pill.style.opacity = '0';
+        firstRef.current = true;
+        return;
+      }
       const first = firstRef.current;
       firstRef.current = false;
       const r = underline
