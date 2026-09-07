@@ -9,6 +9,7 @@
 // 세션·매장·장부는 전부 목킹한다(운영 DB 를 건드리지 않는다). 금액 계산 자체는
 // src/lib/ledgerSettlement.test.ts 가 단위로 못 박고, 여기서는 '화면에 닿는가'만 본다.
 import { test, expect } from './_fixtures';
+import { type Page } from '@playwright/test';
 
 const KEY = 'sb-idsxiqspecrucvfvtgbw-auth-token';
 const UID = '00000000-0000-4000-8000-0000000000ff';
@@ -54,8 +55,7 @@ const playerRow = (i: number, name: string, visitor: string) => ({
   venue_id: VENUE, session_date: DAY, game_seq: 1, name, visitor_type: visitor, note: null, sort_order: i,
 });
 
-test('🔴 정산 단계 — 장부가 아니라 정산 판이 열리고 그날 숫자를 말한다', async ({ page }) => {
-  test.setTimeout(90_000);
+async function openSettle(page: Page) {
   await page.setViewportSize({ width: 1280, height: 900 }); // 매장 운영은 PC 99%(CLAUDE.md)
   await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* 차단 환경 */ } },
     [KEY, JSON.stringify(FAKE)] as [string, string]);
@@ -93,6 +93,11 @@ test('🔴 정산 단계 — 장부가 아니라 정산 판이 열리고 그날 
   await expect(settle, '단계 바에 정산 탭이 없다').toBeVisible({ timeout: 15_000 });
   await settle.click();
   await page.waitForTimeout(2500);
+}
+
+test('🔴 정산 단계 — 장부가 아니라 정산 판이 열리고 그날 숫자를 말한다', async ({ page }) => {
+  test.setTimeout(90_000);
+  await openSettle(page);
 
   // 정산 판인가 — 장부에는 없고 정산 판에만 있는 문구
   await expect(page.getByRole('heading', { name: '기준 엔트리 대비' })).toBeVisible({ timeout: 10_000 });
@@ -114,4 +119,21 @@ test('🔴 정산 단계 — 장부가 아니라 정산 판이 열리고 그날 
   expect(kpis['완납 매출']).toBe('30만');
   expect(kpis['미수금']).toBe('10만');
   expect(kpis['참여 인원']).toBe('3명');
+});
+
+// ── 기기 시간대가 KST 보다 뒤일 때 ──────────────────────────────────────────
+// 장부·서버는 전부 **KST**(kstToday · ledger_business_date) 기준인데, StoreDashboard 의 오늘은
+// localToday() = **브라우저 로컬 TZ** 다. 그래서 정산 단계가 대시보드 날짜를 그대로 쓰면
+// 한국 자정~오전 9시를 UTC 로 보는 기기·해외·시계 오설정에서 **하루 전 장부**를 연다.
+// 실제로 CI(UTC 러너)에서 정산 판이 '이 날짜에 연 장부가 없습니다' 로 떠 이 스펙이 깨졌다.
+test.describe('기기 시간대가 KST 보다 뒤여도', () => {
+  test.use({ timezoneId: 'Pacific/Honolulu' }); // UTC-10 — 로컬 오늘이 KST 오늘보다 하루 뒤진다
+  test('🔴 정산 판은 장부(KST) 기준 날짜를 연다', async ({ page }) => {
+    test.setTimeout(90_000);
+    await openSettle(page);
+    const shown = await page.getByLabel('정산할 날짜').inputValue();
+    console.log('[정산일]', shown, '· KST 오늘', DAY);
+    expect(shown, '기기 시간대를 따라가 하루 전 장부를 열었다').toBe(DAY);
+    await expect(page.getByRole('heading', { name: '기준 엔트리 대비' })).toBeVisible({ timeout: 10_000 });
+  });
 });

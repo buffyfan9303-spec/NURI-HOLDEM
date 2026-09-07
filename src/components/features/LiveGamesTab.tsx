@@ -381,7 +381,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
         <div className="flex min-h-[4.25rem] items-stretch gap-2">
           {/* ── 좌: 필드 현황(생존/엔트리 · 평균 스택) — 세로 중앙 ── */}
           {hasPlayers && (
-            <div data-live-players className="flex w-[3.2rem] min-w-0 shrink-0 flex-col items-center justify-center overflow-hidden">
+            <div data-live-players className="flex shrink-0 flex-col items-center justify-center">
               {/* 생존 / 엔트리 — 두 줄(오너 2026-09-08 "100/120 이런식이면 크기도 문제").
                   한 줄 '87/213' 은 이 열(54px)에 57px 로 들어가 양옆이 잘렸다. 글자 크기를 자릿수마다
                   깎는 방법은 네 자리(1000/1200)에서 다시 깨져 사다리가 끝나지 않는다 — 줄을 나누면
@@ -394,8 +394,11 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
                 <span aria-hidden>/</span><span className="sr-only">, 엔트리 </span>{entries}
               </p>
               {/* 아우라 마이크로 라벨(실제 데이터 라벨에만) — 시안 'RECOVERY SCORE' 문법: 틸·대문자·자간. 라틴 라벨이라 자간이 산다.
-                  ⚠ t-micro 기본(11px·0.1em)으로는 'PLAYERS' 가 57px 라 이 열(54px)을 넘어 양옆이 잘렸다 —
-                    실측 2026-09-08. 열을 넓히면 그만큼 중앙(블라인드)이 좁아지므로 라벨 쪽을 10px 로 줄인다. */}
+                  ⚠ 이 라벨이 열의 폭을 정한다. 예전엔 열이 54px 고정이라 라벨(11px·0.1em → 57px)이 양옆으로
+                    잘렸고(오너 2026-09-08 보고), 라벨을 10px 로 줄여 51px 로 맞췄었다. 그런데 그 51 은
+                    **내 기기 폰트의 숫자**였다 — 같은 코드가 CI(리눅스)에서는 60px 로 나와 그대로 잘렸다.
+                    그래서 폭을 고정하지 않고 내용이 정하게 바꿨다(위 div). 10px 는 그대로 두는데,
+                    이제는 '안 잘리게 하려고' 가 아니라 숫자보다 라벨이 작아야 위계가 맞아서다. */}
               <p className="t-micro mt-1.5 text-[0.625rem] leading-none">PLAYERS</p>
               {/* 평균 스택 — 기존 카드의 값. 같은 '필드 통계'라 이 열에 붙이면 폭·높이 추가 비용이 0이다 */}
               {ls && ls.avgStack > 0 && <p className="mt-1 max-w-full truncate text-2xs leading-none tabular-nums text-ink-muted">평균 {stackShort(ls.avgStack)}</p>}

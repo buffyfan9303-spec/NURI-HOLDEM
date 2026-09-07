@@ -491,7 +491,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // IA2: 포스터·장부·클락·순위 = '게임 진행' 한 문(門)의 4단계 스텝(권한 없으면 잠금 노출 유지)
   available.push({ id: 'game', label: '게임 진행', group: '오늘', locked: !ledgerOk && !canPosters });
   // 오너 지시(2026-09-04): 매장 보유자에게는 하단 탭 캘린더를 주지 않고 여기 넣는다.
-  // 업주도 플레이어라 자기 예약·바이인·머니인·뱅크롤을 본다 — 매장 장부(매출·손님)와는 다른 축이다.
+  // 업주도 플레이어라 자기 예약·찜·수기 뱅크롤을 본다 — 매장 장부(매출·손님)와는 다른 축이다.
   available.push({ id: 'calendar', label: '내 캘린더', group: '오늘' });
   if (manageOk) available.push({ id: 'stats',  label: '매출·손님', group: '분석' });
   // ATT-FIX: '내 출퇴근 기록'이 장부 권한(ledgerOk)에 묶여 있어 장부 권한 없는 직원이
@@ -692,12 +692,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                      지금 보고 있는 장부/게임 문맥이 이미 있으니 종전 경로가 맞다. */
                   const fromDash = renderSection === 'dashboard' ? stepInfo?.[st]?.dest : undefined;
                   /* 정산은 **날짜가 있어야 성립**한다 — 대시보드 목적지가 장부로 가라고 해도
-                     그 날짜만 취해 정산 판으로 연다(예전엔 이 목적지가 통째로 장부였다). */
-                  if (st === 'settle') {
-                    const dashDate = fromDash && typeof fromDash !== 'string' ? fromDash.date : undefined;
-                    setSettleDate(dashDate ?? ledgerSeed?.date ?? kstToday());
-                    return gotoSection('settle');
-                  }
+                     정산 판으로 연다(예전엔 이 목적지가 통째로 장부였다).
+                     ⚠ 날짜는 대시보드가 주는 값을 쓰지 않고 **장부와 같은 기준(KST)** 으로 정한다.
+                       StoreDashboard 의 d 는 localToday() = 브라우저 로컬 TZ 라, 서버·장부가 쓰는
+                       KST 와 어긋나는 시간대(한국 자정~오전 9시를 UTC 로 보는 기기, 해외, 시계 오설정)에서
+                       **하루 전 장부**를 연다. 실제로 CI(UTC) 에서 그 증상이 났다 — 정산 판이
+                       '이 날짜에 연 장부가 없습니다' 로 떴다.
+                       지금 보고 있는 장부(ledgerSeed)가 있으면 그것이 우선이다. */
+                  if (st === 'settle') { setSettleDate(ledgerSeed?.date ?? kstToday()); return gotoSection('settle'); }
                   if (fromDash) return onGotoStore(fromDash);
                   return st === 'ledger'
                     ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame })
@@ -816,7 +818,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
   dashboard: '매장 운영 현황을 한눈에 · 오늘 장부·클락·추세·단골',
   game: '포스터 → 장부 → 클락 → 순위, 게임 하나를 단계로 진행합니다',
-  calendar: '내 예약·찜·바이인·머니인 기록과 직접 적는 뱅크롤',
+  calendar: '내 예약·찜·직접 적는 일정과 뱅크롤·ROI',
   posters: '게임(포스터)별 예약 관리. 게임을 누르면 예약 리스트가 펼쳐집니다',
   presets: '게임 내용·듀레이션을 템플릿으로 저장 · 포스터/장부 없이 만들고 수정',
   ledger: '오늘 장부로 바로 들어갑니다 · 다른 날짜는 상단 뒤로가기에서 목록으로',
