@@ -2816,7 +2816,6 @@ export default function App() {
             schedules={schedules}
             loaded={schedulesLoaded}
             clocksLoaded={clocksLoaded}
-            liveCount={liveClocks.length}
             regInfoBySchedule={regInfoBySchedule}
             onTools={() => changeTab('tools')}
             banners={homeBanners.banners}

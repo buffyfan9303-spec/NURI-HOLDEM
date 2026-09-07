@@ -46,12 +46,11 @@ const eventBannerVisible = (b: EventBoard | null): b is EventBoard =>
 // 헤드라인의 라이브/일정 문구가 '지금'의 맥락은 이미 담고 있어 정보 손실이 없다.
 
 export default function HomeTab({
-  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, onEvent, banners = [], bannersConfigured = false,
+  schedules, loaded, clocksLoaded, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, onEvent, banners = [], bannersConfigured = false,
 }: {
   schedules: Schedule[];
   loaded: boolean;
   /** 지금 클락이 돌아가는 게임 수(라이브 실측) */
-  liveCount: number;
   /** 클락 응답 도착 여부 — 도착 전 '지금 등록 가능' 자리 예약 판단 */
   clocksLoaded: boolean;
   onTools: () => void;
@@ -138,13 +137,15 @@ export default function HomeTab({
           hero-aurora(딥 플럼 오로라 워시)·text-grad-violet(헤드라인 그라데이션)은
           어워드 레퍼런스 브랜드 모멘트 — 홈 히어로 1곳 한정(과용 금지). */}
       {/* 오너 지시(2026-08-28): 첫 줄(날짜·인사)은 NURI MIND 로, 헤드라인은 GTO 진입을 품는다 —
-          유저 핵심 콘텐츠가 GTO 라는 판단. 라이브가 있으면 '지금'이 먼저이므로 그 문구를 유지하고
-          GTO 유도는 아래 보조 줄이 맡는다(정보 위계 보존). */}
-      {/* min-h: 라이브 유무로 히어로가 136 ↔ 98px 을 오가며 아래 전체를 38px 당겼다(실측 2026-09-08).
-          콜드 진입은 clocksLoaded=false 라 **큰 쪽(136)** 이 먼저 그려지고, 클락이 도착하며 줄어든다.
-          큰 쪽에 바닥을 대면 그 흔한 경로에서 아무것도 안 움직인다(라이브 분기만 여백이 조금 남는다).
-          더 넓은 폭에서 줄이 늘면 자연 높이가 이기므로 min- 이면 충분하다. */}
-      <div className="min-h-[136px] px-page-x pt-3">
+          유저 핵심 콘텐츠가 GTO 라는 판단.
+          2026-09-08 오너: "몇 개의 게임이 진행중이라고 하는 것보다 GTO를 강조하는 문구를 고정으로".
+          → 헤드라인은 **언제나** GTO 문구다. 라이브 수로 갈라지던 분기를 없앤다.
+          부수 효과 둘이 같이 풀린다:
+            · 라이브 분기(98px)에 min-h(136px)를 대느라 'GTO 도구로 준비하기' 아래 38px 이
+              빈칸으로 남던 것 — 오너가 지적한 그 빈칸이다. 분기가 하나면 바닥을 댈 이유가 없다.
+            · 콜드 진입 136 → 클락 도착 98 로 아래가 통째로 튀던 CLS 도 원인째 사라진다.
+          라이브 정보는 사라지지 않는다 — 바로 아래 '지금 등록 가능' 섹션과 탭바 라이브 배지가 말한다. */}
+      <div className="px-page-x pt-3">
         <a
           href="https://www.nurimind.co.kr" target="_blank" rel="noopener"
           className="inline-flex items-center gap-1 py-1 -my-1 text-2xs text-ink-muted transition-colors hover:text-accent-200"
@@ -154,28 +155,17 @@ export default function HomeTab({
           {now.getMonth() + 1}/{now.getDate()}({DAYS_KO[now.getDay()]}) · 오늘의 운을 점쳐보세요{' '}
           <span className="font-semibold text-accent-300">· NURI MIND ›</span>
         </a>
-        {liveCount > 0 ? (
+        {/* 오너 지시(2026-09-02 v6.4): 카드 프레임 없이 **글자만** — 아우라 링·카드는 아래 배너가 맡는다(한 화면에 프레임 하나).
+            클릭 어포던스는 부제 끝 화살표 + press 로만. */}
+        <button type="button" onClick={onTools} className="mt-1 block w-full text-left transition-opacity active:opacity-80">
+          {/* v6 aura-ui.com 문법: 헤드라인은 흰색, 핵심 구절 하나만 채도 높은 그라데이션 */}
           <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink-primary">
-            지금 <span className="tabular-nums stat-emerald">{liveCount}</span>개 게임 <span className="text-grad-violet text-grad-glow">진행 중</span>
+            오늘 한 판, <span className="text-grad-violet text-grad-glow mr-[0.15em]">GTO</span>로 준비하세요
           </h2>
-        ) : (
-          // 오너 지시(2026-09-02 v6.4): 카드 프레임 없이 **글자만** — 아우라 링·카드는 아래 배너가 맡는다(한 화면에 프레임 하나).
-          // 클릭 어포던스는 부제 끝 화살표(라이브 분기의 'GTO 도구로 준비하기 ›' 와 같은 문법) + press 로만.
-          <button type="button" onClick={onTools} className="mt-1 block w-full text-left transition-opacity active:opacity-80">
-            {/* v6 aura-ui.com 문법: 헤드라인은 흰색, 핵심 구절 하나만 채도 높은 그라데이션 */}
-            <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink-primary">
-              오늘 한 판, <span className="text-grad-violet text-grad-glow mr-[0.15em]">GTO</span>로 준비하세요
-            </h2>
-            <span className="mt-1.5 inline-flex items-center gap-0.5 text-2xs font-semibold text-accent-200">
-              차트 · 계산기 · 트레이너 열기 <Icon name="chevron-right" size={12} aria-hidden />
-            </span>
-          </button>
-        )}
-        {liveCount > 0 && (
-          <button type="button" onClick={onTools} className="mt-0.5 inline-flex items-center gap-1 py-1 -my-1 text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
-            GTO 도구로 준비하기 ›
-          </button>
-        )}
+          <span className="mt-1.5 inline-flex items-center gap-0.5 text-2xs font-semibold text-accent-200">
+            차트 · 계산기 · 트레이너 열기 <Icon name="chevron-right" size={12} aria-hidden />
+          </span>
+        </button>
       </div>
 
       {/* 지금 등록 가능 — 라이브 실측이 열려 있을 때만. 지난 방문에 열린 대회가 있던
