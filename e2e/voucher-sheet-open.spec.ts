@@ -90,18 +90,22 @@ test('🔴 티켓 아이콘 — 한 번의 클릭으로 이용권·출석 시트
 //  ② 장수를 고를 수 있고, 확인 화면이 그 장수를 그대로 말한다.
 //  ③ 체크박스를 켜기 전에는 보내기 버튼이 **비활성**이다(더블체크).
 const VENUE_A = '11111111-1111-4111-8111-11111111aaaa';
+/** ⚠ 만료일을 일부러 뒤섞는다. listMyVouchers 는 **발급 최신순**으로 오므로, 화면이 그 순서를
+ *  그대로 쓰면 만료 임박분이 남아 소멸한다. 여기서는 i=0 이 가장 최근 발급이고 만료는 가장 늦다. */
+const EXP = [null, '2026-12-31', '2026-09-30', null, '2026-09-20'] as (string | null)[];
 const voucherRow = (i: number) => ({
   id: `bbbbbbbb-0000-4000-8000-${String(i).padStart(12, '0')}`,
   venue_id: VENUE_A, venue: { name: '누리홀덤 강남점' }, used_venue: null,
   issued_by: VENUE_A, holder_user_id: FAKE.user.id, holder_name: 'E2E',
   title: '웰컴 이용권', status: 'active', used_venue_id: null, used_at: null,
-  created_at: new Date().toISOString(), expires_at: null, issue_reason: 'welcome',
+  created_at: new Date(Date.now() - i * 60_000).toISOString(),
+  expires_at: EXP[i] ? `${EXP[i]}T23:59:59Z` : null, issue_reason: 'welcome',
 });
 
 test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전엔 못 보낸다', async ({ page }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* 차단 환경 */ } },
+  await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); localStorage.setItem('nuri:identity-gate', 'on'); } catch { /* 차단 환경 */ } },
     [KEY, JSON.stringify(FAKE)] as [string, string]);
   const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
   await page.route(/\/auth\/v1\/user/, (r) => r.fulfill(json(FAKE.user)));
@@ -110,6 +114,7 @@ test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전�
     activity_points: 0, created_at: FAKE.user.created_at,
   })));
   await page.route(/\/auth\/v1\/token/, (r) => r.fulfill(json(FAKE)));
+  await page.route(/\/rest\/v1\/app_settings\?.*identity_voucher_enabled/, (r) => r.fulfill(json({ value: 'on' })));
   await page.route(/\/rest\/v1\/store_vouchers/, (r) => r.fulfill(json([0, 1, 2, 3, 4].map(voucherRow))));
   await page.goto('/');
   await page.waitForLoadState('networkidle');
@@ -132,7 +137,16 @@ test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전�
   await sheet.getByRole('button', { name: '3장', exact: true }).click();
   await expect(sheet.getByLabel('보낼 장수')).toHaveValue('3');
   await sheet.getByRole('button', { name: '다음' }).click();
-  await sheet.getByLabel('업주 전화번호').fill('010-1234-5678');
+  const phone = sheet.getByLabel('업주 전화번호');
+  await phone.click();
+  await page.keyboard.type('010-1234-5678');
+  // 클릭한 곳에 포커스가 남아 있어야 한다 — 뒤쪽 Modal 의 포커스 가드가 되잡으면 여기서 잡힌다.
+  const focused = await page.evaluate(() => {
+    const a = document.activeElement as HTMLElement | null;
+    return { label: a?.getAttribute('aria-label') ?? a?.textContent?.trim().slice(0, 12) ?? '', tag: a?.tagName ?? '' };
+  });
+  console.log('[타이핑 후 포커스]', JSON.stringify(focused));
+  await expect(phone, '입력칸을 눌러 쳤는데 값이 안 들어간다(포커스를 뺏기는 중)').toHaveValue('010-1234-5678');
   await sheet.getByRole('button', { name: '받는 곳 확인' }).click();
 
   // ③ 더블체크 — 체크 전에는 못 보낸다
@@ -143,4 +157,18 @@ test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전�
   await expect(sheet, '보낸 뒤 남는 장수를 말해야 한다').toContainText('2장');
   await sheet.locator('input[type="checkbox"]').check();
   await expect(send).toBeEnabled();
+
+  // ── 어느 장이 나가는가 — **만료 임박순**이어야 한다 ──────────────────────
+  // 앞에서부터 잘라 쓰므로 이 순서가 곧 손님 자산의 운명이다. 최신 발급분부터 나가면
+  // 만료 임박한 장이 남아 그대로 소멸한다(한 방향으로만 손해).
+  const sent: string[] = [];
+  await page.route(/\/rest\/v1\/rpc\/redeem_my_voucher_by_phone/, async (r) => {
+    try { sent.push(JSON.parse(r.request().postData() || '{}').p_voucher_id); } catch { /* 무시 */ }
+    await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify('누리홀덤 강남점') });
+  });
+  await send.click();
+  await page.waitForTimeout(1500);
+  console.log('[보낸 이용권 순서]', JSON.stringify(sent.map((id) => id.slice(-2))));
+  // 만료: i=4(09-20) → i=2(09-30) → i=1(12-31) → i=0,3(무기한)
+  expect(sent.map((id) => id.slice(-2)), '만료 임박순이 아니라 발급 최신순으로 나갔다').toEqual(['04', '02', '01']);
 });

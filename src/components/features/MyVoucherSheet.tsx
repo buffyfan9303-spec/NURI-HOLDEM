@@ -56,10 +56,17 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
   }, [user?.id]);
   useEffect(() => { if (open) reloadHeld(); }, [open, reloadHeld]);
 
-  /** 매장별 보유 묶음 — 많은 순. '보유한 매장의 이용권만' 이라는 규칙의 단일 출처다. */
+  /** 매장별 보유 묶음 — 많은 순. '보유한 매장의 이용권만' 이라는 규칙의 단일 출처다.
+   *  ⚠ 묶음 안은 **만료 임박순**으로 세운다. 보내기는 앞에서부터 잘라 쓰므로(ids.slice(0, count))
+   *    이 순서가 곧 '어느 장이 먼저 나가는가'다. listMyVouchers 는 발급 최신순으로 오는데 그대로 쓰면
+   *    최신 장이 먼저 나가고 **만료 임박한 장이 남아 그대로 소멸한다** — 손님 자산이 한 방향으로만
+   *    사라진다(자리 1개 = 참가비 1회분). 서버(redeem_my_voucher_by_qr/_by_phone)는 넘긴 id 를 그대로
+   *    쓸 뿐 먼저 쓸 장을 골라 주지 않으므로 고르는 책임은 여기에 있다.
+   *    같은 자산을 다루는 VoucherWallet 도 같은 이유로 만료 오름차순을 명시한다. 무기한은 맨 뒤. */
   const byVenue = useMemo(() => {
+    const at = (v: Voucher) => (v.expiresAt ? new Date(v.expiresAt).getTime() : Infinity);
     const m = new Map<string, { venueId: string; name: string; ids: string[] }>();
-    for (const v of held ?? []) {
+    for (const v of [...(held ?? [])].sort((a, b) => at(a) - at(b))) {
       const cur = m.get(v.venueId) ?? { venueId: v.venueId, name: v.venueName ?? '매장', ids: [] };
       cur.ids.push(v.id); m.set(v.venueId, cur);
     }
@@ -189,21 +196,31 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
             onVenue={onVenue && ((venueId) => { onClose(); onVenue(venueId); })}
           />
 
+          {/* ⚠ 보내기 시트는 반드시 **Modal 안쪽**에 그린다(형제로 내보내면 안 된다).
+              Modal 은 열려 있는 동안 document 에 focusin 리스너를 걸고, 포커스가 자기 밖으로
+              나가면 자기 첫 포커스 대상으로 되잡는다(Modal.tsx onFocusIn). 이 시트를 </Modal> 밖에
+              두면 **부모 Modal 이 계속 open** 이라(여기서 onClose 를 부르지 않는다) 그 가드가 살아 있고,
+              전화번호 입력칸을 눌러도 포커스가 즉시 헤더 '닫기' 로 끌려가 한 글자도 안 들어간다.
+              실측 2026-09-08: 클릭 후 activeElement = BUTTON[aria-label=닫기] · 11자 입력 후 value=""
+              → 수동 보내기 경로가 완주 불가였다.
+              바로 위 VoucherWallet 의 사용 시트도 같은 방식(손으로 짠 fixed 오버레이)인데 Modal
+              **자식**이라 멀쩡하다 — 그 구조에 맞춘다. */}
+          {plan && (
+            <SendVouchersSheet
+              plan={plan}
+              onCancel={() => setPlan(null)}
+              /** 이용권 없이 요청만 — 바인 QR 경로에서만 나온다(수동에는 '요청' 개념이 없다) */
+              onPlainBuyin={() => { const p = plan; setPlan(null); onClose(); onBuyin?.(p.venueId, p.gameSeq); }}
+              onDone={(msg) => { setPlan(null); reloadHeld(); toast.show(msg, 'success'); onClose(); }}
+            />
+          )}
+
         </div>
       </Modal>
 
       {/* 매장을 미리 정하지 않는다 — 스캔된 QR 이 대상 매장과 할 일을 함께 알려준다 */}
       <QrScanModal open={scanOpen} onClose={() => setScanOpen(false)} onMatch={onScanned} accept="both" />
 
-      {plan && (
-        <SendVouchersSheet
-          plan={plan}
-          onCancel={() => setPlan(null)}
-          /** 이용권 없이 요청만 — 바인 QR 경로에서만 나온다(수동에는 '요청' 개념이 없다) */
-          onPlainBuyin={() => { const p = plan; setPlan(null); onClose(); onBuyin?.(p.venueId, p.gameSeq); }}
-          onDone={(msg) => { setPlan(null); reloadHeld(); toast.show(msg, 'success'); onClose(); }}
-        />
-      )}
     </>
   );
 }
