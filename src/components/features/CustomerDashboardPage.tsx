@@ -210,7 +210,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
         <UnderlineTabs items={ME_TABS} value={tab} onChange={goTab} />
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      {/* pb-[env(safe-area-inset-bottom)]: 아이폰 홈 인디케이터 띠만큼 바닥을 비워 둔다.
+          예전엔 상단만 예약해 마지막 요소(저장·탈퇴)가 그 띠 안으로 들어갔다 —
+          탈퇴는 되돌릴 수 없는 조작이라 '눌리지 않는' 것보다 '잘못 눌리는' 쪽이 더 나쁘다. */}
+      <div className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
         {/* 본문 — 탭 전환의 방향성 푸시 대상(탭바는 제자리 고정) */}
         <div data-profile-panel="">
         {/* 프로필·설정·보안 패널은 keep-alive(hidden 토글) — 설정 탭에서 편집 중(닉네임·크롭 사진) 대시보드를 다녀와도

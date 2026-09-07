@@ -112,12 +112,14 @@ export default function ImageLightbox({ src, alt, onClose }: Props) {
     >
       <button
         type="button" onClick={onClose} aria-label="닫기"
-        className="absolute top-3 right-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur hover:bg-white/20 active:opacity-80"
+        /* top-[calc(...)]: 노치·상태바 아래로 내린다. 사진을 열었을 때 **닫을 방법**이
+           상태바에 가리면 빠져나갈 길이 없다(전체화면이라 뒤 크롬도 안 보인다). */
+        className="absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur hover:bg-white/20 active:opacity-80"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M18 6L6 18M6 6l12 12" /></svg>
       </button>
       {/* 터치 전용 조작 힌트 — PC(휠줌)에서는 불필요해 숨김 */}
-      <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-2xs text-white/80 backdrop-blur lg:hidden">
+      <p className="pointer-events-none absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-2xs text-white/80 backdrop-blur lg:hidden">
         두 손가락으로 확대 · 두 번 탭하면 줌
       </p>
       <img

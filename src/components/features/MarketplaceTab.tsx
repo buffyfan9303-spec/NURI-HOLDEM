@@ -209,7 +209,9 @@ function MarketplaceTab({
               onChange={(e) => setIncludeSold(e.target.checked)}
               className="accent-accent-300 mr-1 align-middle"
             />
-            <label htmlFor="includeSold" className="cursor-pointer">거래완료 포함</label>
+            {/* label 을 히트영역으로 쓴다 — 네이티브 체크박스는 16px 라 글자를 정확히 찍어야 켜졌다.
+                py-1.5 + tap-y-44 로 글자 줄 전체가 눌리는 면이 된다. */}
+            <label htmlFor="includeSold" className="tap-y-44 inline-block cursor-pointer py-1.5">거래완료 포함</label>
           </span>
         </div>
         <span className="text-ink-muted tabular-nums">총 {visible.length}건</span>
@@ -319,7 +321,10 @@ function SortPill({ active, onClick, label }: { active: boolean; onClick: () => 
       type="button"
       onClick={onClick}
       className={[
-        'px-2 py-0.5 rounded-badge transition-colors',
+        // tap-y-44: 세로만 넓힌다(::before inset -6px 0). 이 행은 가로 스크롤 레일이 아니라
+        //   flex justify-between 이라 세로 오버플로가 안 생기고, 좌우로는 안 번져 이웃 칩을 안 훔친다.
+        //   py-1.5 로 실제 높이도 20 → 26px 올려 AA(24) 를 넘긴다.
+        'tap-y-44 px-2 py-1.5 rounded-badge transition-colors',
         active ? 'text-accent-300 font-bold' : 'text-ink-muted hover:text-ink-secondary',
       ].join(' ')}
     >

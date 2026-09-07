@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { SectionHead as Head } from '../atoms/SectionHeader';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -65,6 +66,10 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
   // 떨어져 "보유한 매장이용권이 없습니다"(사실과 다름)를 그린 뒤 목록이 도착하며 아래가 밀린다
   // — CLAUDE.md 의 '주르륵 밀림 = CLS' 금지에 걸린다(2026-09-05 검증에서 잡힘).
   const [loading, setLoading] = useState(() => Boolean(user?.id));
+  // ⚠ 실패를 따로 든다. 예전엔 `.catch(() => {})` 가 에러를 삼켜 vouchers 가 빈 배열로 남았고,
+  //   화면은 "보유한 매장이용권이 없습니다"를 그렸다 — 매장에서 돈 주고 산 이용권이 사라진 것처럼 보인다.
+  //   LoadErrorCard 주석이 경고하는 '없음과 못 불러옴을 가른다'가 정확히 이 자리다.
+  const [err, setErr] = useState<unknown>(null);
   const [redeem, setRedeem] = useState<Stack | null>(null);
   // 차감 성공 전면 확인 화면(Phase 15-1) — 3초 자동 닫힘.
   const [redeemDone, setRedeemDone] = useState<{ title: string; venueName: string | null; remain: number } | null>(null);
@@ -72,9 +77,12 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
   const uid = user?.id ?? null;
   const load = useCallback(() => {
     // 킬스위치 OFF — 지갑을 안 그리므로 조회도 하지 않는다(무료 egress 예산). 레코드는 그대로 남아 있다.
-    if (!uid || !idOn) { setVouchers([]); return; }
+    if (!uid || !idOn) { setVouchers([]); setErr(null); return; }
     setLoading(true);
-    listMyVouchers().then(setVouchers).catch(() => {}).finally(() => setLoading(false));
+    listMyVouchers()
+      .then((v) => { setVouchers(v); setErr(null); })
+      .catch(setErr)
+      .finally(() => setLoading(false));
   }, [uid, idOn]);
   useEffect(() => { load(); }, [load]);
 
@@ -150,6 +158,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
               {[0, 1].map((i) => <div key={i} className="skeleton h-[104px] rounded-aura" />)}
             </div>
           )
+          : err ? <LoadErrorCard error={err} what="이용권" onRetry={load} compact />
           : venueGroups.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="ticket" />} title="보유한 매장이용권이 없습니다." /></div>
             : <div className="space-y-3">{venueGroups.map((g) => {
               // 머리글이 '{매장명} 매장이용권'을 통째로 말한다(오너 지시 #19).

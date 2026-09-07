@@ -282,7 +282,8 @@ export default function Modal({
             </div>
           </header>
         )}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        {/* 상단만 예약하고 하단을 비워 두면 마지막 요소가 홈 인디케이터 띠에 먹힌다(전면 변형 공통). */}
+        <div className="flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
           <div className={['mx-auto w-full', MAX_W[maxWidth]].join(' ')}>{children}</div>
         </div>
       </div>
