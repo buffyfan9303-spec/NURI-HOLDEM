@@ -17,6 +17,7 @@ import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
 import { type StoreStepMap,resolveDest, type StoreDest } from '../../lib/storeDestination'; // 이동 목적지 → 시드 패치(순수)
 import StoreToolsPanel from './StoreToolsPanel';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
+import LedgerSettlementPanel from './LedgerSettlementPanel';
 import TournamentClock from './clock/TournamentClock';
 import AnnouncePanel from './AnnouncePanel';
 import SeasonPanel from './SeasonPanel';
@@ -48,7 +49,7 @@ import { centerInRail } from '../../lib/railScroll';
 // 순차 운영 제품은 객체형이 아니라 워크플로형 내비여야 한다(§13-C). 자식 컴포넌트 props 무변경.
 // IA3c: 프리셋·매장랭킹·매장꾸미기·이용권·POS설정 5개 문(門)이 '매장 설정' 하위탭으로 통합
 type Section = 'dashboard' | 'game' | 'calendar' | 'stats' | 'staff' | 'attendance' | 'settings';
-type GameStep = 'posters' | 'ledger' | 'clock' | 'ranking';
+type GameStep = 'posters' | 'ledger' | 'clock' | 'ranking' | 'settle';
 type SettingsTab = 'page' | 'presets' | 'pos' | 'voucher' | 'optools' | 'danger';
 /** keep-alive box()·visited 의 단위 — 섹션 / 게임 스텝 / 설정 하위탭 */
 type PaneId = Exclude<Section, 'game' | 'settings'> | GameStep | SettingsTab;
@@ -57,6 +58,9 @@ const GAME_STEPS: readonly { id: GameStep; label: string }[] = [
   //   같은 1단계가 화면에 따라 다른 이름으로 불렸다(오너 2026-09-07 "일관성이 떨어져").
   { id: 'posters', label: '포스터' }, { id: 'ledger', label: '장부' },
   { id: 'clock', label: '클락' }, { id: 'ranking', label: '순위' },
+  // 5단계 '정산' — 2026-09-08 에 **판으로 승격**됐다. 예전엔 여기 없이 장부 하단으로 보내는
+  // 별도 칩이었는데, 그러면 5단계 중 하나만 갈 곳이 다른 화면이라 "왜 장부로 가지?"가 됐다.
+  { id: 'settle', label: '정산' },
 ];
 const isGameStep = (s: string): s is GameStep => GAME_STEPS.some((g) => g.id === s);
 const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
@@ -148,6 +152,7 @@ const NuriPosLedgerM = memo(NuriPosLedger);
 const LedgerWorkspaceM = memo(LedgerWorkspace);
 const StoreToolsPanelM = memo(StoreToolsPanel);
 const LedgerStatsPanelM = memo(LedgerStatsPanel);
+const LedgerSettlementPanelM = memo(LedgerSettlementPanel);
 const TournamentClockM = memo(TournamentClock);
 const MyPostersTabM = memo(MyPostersTab);
 const PresetManagerM = memo(PresetManager);
@@ -232,6 +237,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // '정산' 이동 신호(논스). 스크롤이 아니라 신호다 — 장부의 정산바는 position:fixed 라 이미 화면에 있고,
   // 필요한 건 "그 바의 마감 버튼을 지목해 주는 것"이다. 판이 붙은 뒤 장부가 알아서 포커스·강조한다.
   const [settleSignal, setSettleSignal] = useState(0);
+  /** 정산 판이 볼 날짜 — 단계 바가 지금 보고 있는 장부(없으면 오늘)를 실어 준다. */
+  const [settleDate, setSettleDate] = useState<string | null>(null);
   // 오늘 5단계의 완료·목적지 — 대시보드가 계산해 올려 준다(숫자 스트립을 알약 바로 합치면서).
   const [stepInfo, setStepInfo] = useState<StoreStepMap | null>(null);
   const gameSelN = useRef(0);
@@ -684,17 +691,18 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                      그 목적지(오늘 날짜·지금 게임·순위 이벤트)를 그대로 쓴다. 게임 진행 안에서는
                      지금 보고 있는 장부/게임 문맥이 이미 있으니 종전 경로가 맞다. */
                   const fromDash = renderSection === 'dashboard' ? stepInfo?.[st]?.dest : undefined;
+                  /* 정산은 **날짜가 있어야 성립**한다 — 대시보드 목적지가 장부로 가라고 해도
+                     그 날짜만 취해 정산 판으로 연다(예전엔 이 목적지가 통째로 장부였다). */
+                  if (st === 'settle') {
+                    const dashDate = fromDash && typeof fromDash !== 'string' ? fromDash.date : undefined;
+                    setSettleDate(dashDate ?? ledgerSeed?.date ?? kstToday());
+                    return gotoSection('settle');
+                  }
                   if (fromDash) return onGotoStore(fromDash);
                   return st === 'ledger'
                     ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame })
                     : gotoSection(st);
-                }}
-                showSettle={ledgerOk}
-                /* 정산은 '장부의 마감'이라 그 장부 보드가 열려 있어야 한다. 날짜 없이 보내면 장부가
-                   목록 모드로 떨어져 정산이 아예 안 보인다 — 지금 보고 있는 장부(없으면 오늘)를 실어 보낸다. */
-                onSettle={() => onGotoStore(
-                  (renderSection === 'dashboard' ? stepInfo?.settle?.dest : undefined)
-                  ?? { section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame, settle: true })} />
+                }} />
             )}
             {/* IA2 잔여 — 게임 선택 칩 바(원문: '상단에 게임 선택 칩 바, 아래에 4단계 스테퍼').
                 U1: 그 위에 스텝 공통 문맥 줄(매장 › 날짜 › 게임)이 항상 붙는다 — 칩 줄만 멀티게임 날에 나온다.
@@ -771,6 +779,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   </LedgerWorkspaceM>
                 ))}
                 {visited.includes('stats') && manageOk && box('stats', <LedgerStatsPanelM venueId={venueId} />)}
+                {/* 5단계 정산 — 그날 하루의 결산(게임 전부 합산 + 게임별 내역). 장부 하단 정산바는
+                    '이 게임 하나를 닫는' 도구로 그대로 남는다. */}
+                {visited.includes('settle') && ledgerOk && box('settle',
+                  <LedgerSettlementPanelM venueId={venueId} date={settleDate}
+                    active={tabActive && renderSection === 'game' && renderGameStep === 'settle'} />)}
                 {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} gameSel={gameSel} />)}
                 {/* IA3c '매장 페이지' 탭 = 구 매장꾸미기 + 구 매장랭킹(시즌·랭킹보드) 병합 — 같은
                     venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
@@ -820,6 +833,7 @@ const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
   pos: 'POS 취소 비밀번호 · 매장 알림 수신 · 공동 사장님 관리',
   optools: '토너먼트 세팅 계산기 · 칩 분배·구조·블라인드·상금·종료시간 (GTO 탭에서 이관)',
   danger: '매장 영구 삭제. 복구할 수 없습니다. 신중하게.',
+  settle: '그날 하루 결산 — 매출·미수·손님 구성·순위·기준 엔트리 대비',
 };
 
 // 섹션 아이콘(라인 스타일 통일: 16px, stroke 1.8)
@@ -834,6 +848,8 @@ const SECTION_ICON: Record<Section | GameStep | SettingsTab, ReactNode> = {
   presets: ic(<><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h4" /></>),
   ledger: ic(<><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /></>),
   stats: ic(<><line x1="6" y1="20" x2="6" y2="14" /><line x1="12" y1="20" x2="12" y2="9" /><line x1="18" y1="20" x2="18" y2="4" /></>),
+  // 정산 = 계산기. 장부(공책)·통계(막대)와 한눈에 구분되는 형태여야 단계 바에서 헷갈리지 않는다.
+  settle: ic(<><rect x="4" y="2" width="16" height="20" rx="2" /><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h4M8 19h.01M12 19h.01" /></>),
   ranking: ic(<><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.7V18M14 14.7V18" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>),
   clock: ic(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
   attendance: ic(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>),
@@ -984,14 +1000,15 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
 });
 
 /**
- * 게임 진행 스테퍼 — 포스터·장부·클락·순위(판) + 정산(장부 하단으로 이동).
+ * 게임 진행 스테퍼 — 포스터·장부·클락·순위·정산. 다섯 칸 전부 **판**이다
+ * (2026-09-08 이전에는 정산만 판이 아니라 장부로 보내는 이동이었다).
  * 활성 칩은 레일 가운데로 끌어온다(가로만 — centerInRail 주석 참조).
  */
-function GameStepBar({ steps, active, onPick, showSettle, onSettle, onHome, progress }: {
+function GameStepBar({ steps, active, onPick, onHome, progress }: {
   steps: readonly { id: GameStep; label: string }[];
   /** 'dashboard' = 요약 알약이 활성(= 대시보드를 보는 중). */
   active: GameStep | 'dashboard';
-  onPick: (s: GameStep) => void; showSettle: boolean; onSettle: () => void;
+  onPick: (s: GameStep) => void;
   /** 맨 앞 '요약' 알약 — 대시보드로. 이게 있어야 **이 바 안에서** 왕복이 된다. */
   onHome: () => void;
   /** 단계별 완료 여부(대시보드가 계산해 준다). 없으면 번호만 나온다 — 로딩 중엔 조용히. */
@@ -1037,16 +1054,6 @@ function GameStepBar({ steps, active, onPick, showSettle, onSettle, onHome, prog
           </button>
         );
       })}
-      {showSettle && (
-        <button type="button" onClick={onSettle} className={chip(false)} title="장부 하단의 정산·마감으로 이동합니다">
-          <span className="relative inline-flex items-center gap-px">
-            {progress?.settle?.done
-              ? <Icon name="check" size={12} className="shrink-0 text-emerald-400" />
-              : <span className="text-ink-muted/70">{steps.length + 1}.</span>}
-            정산
-          </span>
-        </button>
-      )}
     </div>
   );
 }

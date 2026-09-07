@@ -1340,7 +1340,15 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           // 휠 = 순수 세로 스크롤(가로 변환 제거 — 대각선 이동 방지). PC는 10바인 한 화면이라 가로 휠 불필요.
           // overscroll-contain 금지: 표에 스크롤할 내용이 없을 때 표 위에서 페이지 스크롤까지 막아버린다.
           // 표 안 스크롤이 끝나면 페이지로 이어지는 건 브라우저 표준 동작으로 둔다.
-          className="overflow-auto max-h-[70vh] [-webkit-overflow-scrolling:touch] rounded-card border border-border-default bg-surface-low [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
+          // isolate: 표 안의 sticky z-index 를 **표 안에 가둔다**.
+          //   머리행 모서리 셀은 행 sticky·열 sticky 를 둘 다 이기려고 z-40 인데, overflow:auto 는
+          //   스크롤 컨테이너를 만들 뿐 **쌓임 맥락을 만들지 않는다**. 그래서 그 40 이 페이지 최상위에서
+          //   정산바(fixed z-30)와 직접 겨뤄, 표가 바 높이를 지날 때 'No·플레이어·총바인·미수'만
+          //   바를 뚫고 앞으로 나왔다(오너 2026-09-08 "배경 무시하고 맨 앞으로"). 1바인~비고는 z-30 이라
+          //   DOM 후순위인 바에 덮여 멀쩡했다 — 오너가 짚은 네 칸이 정확히 z-40 인 칸들이다.
+          //   isolation 은 z-index 를 하나도 안 건드리고 표 안의 상대 순서를 그대로 보존한다.
+          //   실측(격리 유무 대조, elementFromPoint): 없음 → TH 가 위 / isolate → 정산바가 위.
+          className="isolate overflow-auto max-h-[70vh] [-webkit-overflow-scrolling:touch] rounded-card border border-border-default bg-surface-low [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
         >
           {/* w-max: 칸을 압축하지 않고 고정폭 유지 → 모바일에서 가로 스크롤. min-w-full: 데스크톱은 꽉 채움 */}
           <table className="border-separate border-spacing-0 text-center w-max min-w-full">
