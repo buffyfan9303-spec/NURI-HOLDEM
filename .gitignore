@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Firecrawl CLI 로컬 캐시·산출물(스크랩 결과·다운로드). 저장소에 들어갈 것이 아니다.
+.firecrawl/
+
 # Environment (keep .env.example, ignore real secrets)
 .env
 .env.*
