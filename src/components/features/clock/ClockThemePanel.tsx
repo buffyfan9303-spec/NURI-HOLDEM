@@ -16,6 +16,69 @@ import {
 } from './clockTheme';
 import { uploadClockBg, deleteClockBg } from './clockBgImage';
 
+/**
+ * ClockMiniFace — TV 송출 화면의 축소판. 프리뷰와 프리셋 버튼 **두 곳**이 같은 것을 쓴다.
+ *
+ * 왜 컴포넌트로 뽑나: 예전엔 프리뷰가 '레벨/블라인드/타이머/생존' 텍스트 나열이었고 프리셋 버튼은
+ * 배경색 위 '12:34' 한 줄이었다. 둘 다 실제 화면과 닮지 않아서, 고르고 나서야 결과를 알 수 있었다.
+ * 두 자리가 같은 축소판을 쓰면 중복이 실제로 줄고(3벌 → 1벌) 프리셋 비교가 색이 아니라 **화면**으로 된다.
+ *
+ * 크기는 루트 font-size 하나로 조절한다 — 안쪽 치수가 전부 em 이라 같은 마크업이 두 크기에서 그대로 산다.
+ * (프리뷰 전용 렌더러를 따로 만들지 않는다 — 이건 ClockDisplay 의 구조를 그대로 축소한 것이다.)
+ */
+function ClockMiniFace({ vars, accent, em, className }: {
+  vars: React.CSSProperties; accent: string; em: number; className?: string;
+}) {
+  const RAIL = 16; // TV 는 24칸 — 축소판에서는 셀 수 있는 만큼만
+  const filled = 6;
+  return (
+    <div className={`relative flex aspect-[16/9] flex-col overflow-hidden text-white ${className ?? ''}`}
+      style={{ ...vars, fontSize: `${em}px`, background: 'var(--clk-bg)' }} aria-hidden>
+      {/* 상단 — LEVEL · 상태 */}
+      <div className="flex shrink-0 items-center gap-[0.4em] px-[0.7em] pt-[0.5em]">
+        <span className="h-[0.3em] w-[0.3em] rounded-full bg-emerald-400" />
+        <span className="truncate text-[0.5em] font-bold" style={{ color: 'var(--clk-ink-soft)' }}>NURI</span>
+        <span className="ml-auto rounded-full px-[0.5em] py-[0.1em] text-[0.42em] font-extrabold tracking-wider"
+          style={{ color: accent, background: `color-mix(in srgb, ${accent} 16%, transparent)` }}>LEVEL 5</span>
+        <span className="rounded-full px-[0.45em] py-[0.1em] text-[0.42em] font-extrabold tracking-wider"
+          style={{ color: '#6ee7b7', background: 'rgba(110,231,183,0.14)' }}>RUNNING</span>
+      </div>
+
+      {/* 히어로 — 타이머 + 컬러별 아우라(강조색을 그대로 쓴 radial bloom 한 겹) + 진행률 레일 */}
+      <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center">
+        <span className="pointer-events-none absolute left-1/2 top-1/2 h-[3.4em] w-[6em] -translate-x-1/2 -translate-y-1/2"
+          style={{ background: `radial-gradient(closest-side, color-mix(in srgb, ${accent} 22%, transparent), transparent)` }} />
+        <span className="relative text-[1.75em] font-black leading-none tabular-nums" style={{ color: 'var(--clk-timer)' }}>12:34</span>
+        <span className="relative mt-[0.35em] flex w-[70%] gap-[0.08em]">
+          {Array.from({ length: RAIL }, (_, i) => (
+            <span key={i} className="h-[0.16em] flex-1 rounded-[0.05em]"
+              style={{ background: i < filled ? accent : 'rgba(255,255,255,0.08)' }} />
+          ))}
+        </span>
+      </div>
+
+      {/* CURRENT | NEXT */}
+      <div className="grid shrink-0 grid-cols-2 gap-[0.3em] px-[0.6em]">
+        <div className="rounded-[0.3em] bg-white/[0.05] py-[0.25em] text-center">
+          <p className="text-[0.36em] font-bold tracking-[0.2em]" style={{ color: 'var(--clk-ink-soft)' }}>CURRENT</p>
+          <p className="text-[0.62em] font-extrabold leading-tight tabular-nums" style={{ color: accent }}>500/1,000</p>
+        </div>
+        <div className="rounded-[0.3em] bg-white/[0.025] py-[0.25em] text-center">
+          <p className="text-[0.36em] font-bold tracking-[0.2em]" style={{ color: 'var(--clk-ink-dim)' }}>NEXT</p>
+          <p className="text-[0.55em] font-extrabold leading-tight tabular-nums text-white/70">1,000/2,000</p>
+        </div>
+      </div>
+
+      {/* 하단 metrics rail */}
+      <div className="flex shrink-0 items-baseline gap-[0.8em] border-t border-white/[0.07] px-[0.7em] py-[0.3em]">
+        <span className="text-[0.38em]" style={{ color: 'var(--clk-ink-dim)' }}>생존 <b className="text-[1.3em] text-white">18</b>/42</span>
+        <span className="text-[0.38em]" style={{ color: 'var(--clk-ink-dim)' }}>평균 <b className="text-[1.3em] text-white">84,000</b></span>
+        <span className="ml-auto text-[0.38em] font-bold" style={{ color: 'var(--clk-prize, #F5C451)' }}>550</span>
+      </div>
+    </div>
+  );
+}
+
 export default function ClockThemePanel({ venueId }: { venueId: string }) {
   const toast = useToast();
   const [theme, setTheme] = useState<ClockTheme | null>(null);
@@ -116,13 +179,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
 
       {/* 실제 합성 미리보기 — 배경 이미지 + 가독 보호 오버레이 + 강조색을 송출 화면과 같은 순서로 겹친다 */}
       <div className="overflow-hidden rounded-input border border-border-subtle" aria-label="클락 화면 미리보기">
-        <div className="flex aspect-[16/9] max-h-40 flex-col items-center justify-center text-white"
-          style={{ ...previewVars, background: 'var(--clk-bg)' }}>
-          <p className="text-[10px] font-bold uppercase tracking-[0.3em]" style={{ color: 'var(--clk-ink-soft)' }}>LEVEL 5</p>
-          <p className="text-lg font-extrabold leading-none tabular-nums">1,000 / 2,000</p>
-          <p className="text-3xl font-extrabold leading-none tabular-nums" style={{ color: 'var(--clk-timer)' }}>12:34</p>
-          <p className="mt-1 text-[10px]" style={{ color: 'var(--clk-ink-dim)' }}>생존 / 엔트리 · 18 / 42</p>
-        </div>
+        <ClockMiniFace vars={previewVars} accent={curAccent} em={44} />
       </div>
 
       {/* 배경 이미지 — 업로드 / 교체 / 제거 */}
@@ -157,8 +214,12 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
               aria-pressed={active}
               className={['rounded-input border p-1.5 text-left transition-colors disabled:opacity-50',
                 active ? 'border-accent-300' : 'border-border-default hover:border-accent-400/40'].join(' ')}>
-              <span className="flex h-12 items-center justify-center rounded-input" style={{ background: p.bg }}>
-                <span className="text-sm font-extrabold tabular-nums" style={{ color: active && cur ? curAccent : p.accent }}>12:34</span>
+              {/* 프리셋 버튼도 같은 축소판 — 배경색만 바뀌는 것이 아니라 타이머·accent·surface 대비가 실제로 보인다.
+                  강조색은 '지금 고른 색'이 아니라 **그 프리셋의 색**으로 그려야 프리셋 간 비교가 성립한다
+                  (활성 프리셋만 업주가 고른 색을 반영한다). */}
+              <span className="block overflow-hidden rounded-input">
+                <ClockMiniFace vars={clockThemeVars(makeClockTheme(p.id, active ? curAccentSel : undefined, null))}
+                  accent={active && curAccentSel ? curAccentSel : p.accent} em={22} />
               </span>
               <span className={['mt-1 block text-2xs font-semibold', active ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{p.label}</span>
             </button>

@@ -27,21 +27,7 @@ let content = ti.content ?? ti.new_string ?? '';
 if (Array.isArray(ti.edits)) content += '\n' + ti.edits.map((e) => e?.new_string ?? '').join('\n');
 if (!content) process.exit(0);
 
-// ── 참고 노트(차단 아님) — 도입은 자유, 단 아래 함정을 알고 쓸 것 ──────────────
-const notes = [
-  {
-    re: /from\s+['"](framer-motion|motion\/react|motion)['"]/,
-    msg: 'framer-motion/motion 도입 — 이제 허용됩니다. 참고: 과거 layoutId 슬라이딩 인디케이터 13곳을 SlidingPill 자체 FLIP으로 대체한 이력이 있습니다. 중복 구현이 되지 않게 SlidingPill과 역할을 정리하세요.',
-  },
-  {
-    re: /from\s+['"](lucide-react|react-icons(\/[^'"]*)?|@heroicons\/[^'"]+|phosphor-react|@phosphor-icons\/[^'"]+|@tabler\/icons[^'"]*)['"]/,
-    msg: '아이콘 라이브러리 도입 — 이제 허용됩니다. 참고: Icon.tsx PATHS가 기존 단일 소스라 혼용하면 스트로크 두께·사이즈가 갈립니다. 이관 계획을 세우고 쓰세요(Lucide 유래 path는 ISC 고지 필요).',
-  },
-  {
-    re: /@import\s+['"]tailwindcss['"]|from\s+['"]@tailwindcss\/(vite|postcss)['"]/,
-    msg: 'Tailwind v4 문법 — 이제 허용됩니다. 참고: tailwind.config.js의 surface 스케일(rgb(var(--surface-*)/<alpha>))·accent-300 커스텀 디자인 시스템을 v4 @theme로 온전히 이관해야 색이 깨지지 않습니다.',
-  },
-];
+const notes = []; // 2026-09-07 라이브러리 훈수 제거 — 도입은 전적으로 자유다.
 
 // ── 진짜 위험(기존 오류 재발 방지) — 제약 해제와 무관하게 계속 알림 ───────────
 const hazards = [

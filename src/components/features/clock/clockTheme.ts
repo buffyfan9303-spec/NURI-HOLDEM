@@ -70,11 +70,22 @@ export const CLOCK_DEFAULTS = {
 export const CLOCK_BG_BUCKET = 'clock_bg';
 /** 스크림 통과 후 허용하는 배경 최대 상대휘도(WCAG relative luminance) */
 export const CLOCK_BG_LUM_CAP = 0.0233;
-/** 렌더 스크림의 중앙 밴드 투과율 — 아래 CLOCK_BG_SCRIM 의 rgba(0,0,0,.42) 와 한 쌍(같이 고쳐야 한다) */
+/** 렌더 스크림의 중앙 밴드 투과율 — 아래 세로 스크림의 rgba(0,0,0,.42) 와 한 쌍(같이 고쳐야 한다).
+ *
+ *  ⚠ 2026-09-07 에 좌우 비네트와 타이머 보호막을 **덧댔지만 이 값은 그대로 둔다.**
+ *  덧댄 층은 언제나 더 어둡게만 만들므로 실제 투과율은 0.58보다 낮다 — 업로드 시 밝기 검사가
+ *  실제보다 보수적으로(= 더 엄격하게) 판정한다. 값을 낮추면 통과하던 사진이 반려되기 시작한다. */
 export const CLOCK_BG_SCRIM_MID = 0.58;
-/** 렌더 스크림 — 중앙 0.42, 상·하단은 헤더/스탯 스트립이 앉으므로 더 강하게(상단 실측 0.0150) */
-export const CLOCK_BG_SCRIM =
-  'linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.42) 20%, rgba(0,0,0,.42) 80%, rgba(0,0,0,.58) 100%)';
+/** 렌더 스크림 3층 — 위에서부터 ①타이머 보호 ②좌우 비네트 ③세로 그라데이션.
+ *  ① 화면 중앙 타원: 배경이 밝든 어둡든 대형 타이머 뒤를 항상 눌러 준다(가장 중요한 글자를 보호).
+ *  ② 좌우 끝: 사진의 잡다한 가장자리를 죽여 시선을 가운데로 모은다. 하단 metrics rail 도 함께 안정된다.
+ *  ③ 기존 세로 층: 상·하단은 헤더/레일이 앉으므로 더 강하게(상단 실측 0.0150).
+ *  blur·애니메이션·will-change 없음 — 상시 표출 TV 라 1회 페인트 후 정적이어야 한다. */
+export const CLOCK_BG_SCRIM = [
+  'radial-gradient(ellipse 62% 46% at 50% 44%, rgba(0,0,0,.38) 0%, rgba(0,0,0,.16) 55%, transparent 78%)',
+  'linear-gradient(90deg, rgba(0,0,0,.48) 0%, transparent 20%, transparent 80%, rgba(0,0,0,.48) 100%)',
+  'linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.42) 20%, rgba(0,0,0,.42) 80%, rgba(0,0,0,.58) 100%)',
+].join(', ');
 /** 배경 이미지가 있을 때만 올리는 보조 라벨 2단 — 위 실측표의 근거값 */
 export const CLOCK_BG_INK = { dim: 'rgba(255,255,255,0.62)', soft: 'rgba(255,255,255,0.66)' } as const;
 /** 업로드 규격 — 최대 변, 목표 용량 */

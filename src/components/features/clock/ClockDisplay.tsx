@@ -168,35 +168,45 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   return (
     <div ref={rootRef} className="fixed inset-0 z-[80] flex flex-col text-white select-none"
       style={{ ...clkVars, background: 'var(--clk-bg, #06080F)' }}>
-      {/* ── 상단: 매장·게임 / 레지 마감 · 휴식까지 / 컨트롤(게임 전환·풀스크린·닫기) ── */}
-      <header className="flex shrink-0 items-center gap-[1.5vmin] px-[3vmin] pt-[2vmin] pb-[1vmin]">
-        <span className={`h-[1.2vmin] w-[1.2vmin] shrink-0 rounded-full ${g?.running ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} aria-hidden />
-        <p className="min-w-0 truncate text-[2.8vmin] font-extrabold tracking-tight" style={{ maxWidth: '46vw' }}>
-          {venueName || '홀덤 라이브'}
-          {(g?.title || g?.config?.title) && <span className="ml-[1.2vmin] font-medium" style={SOFT}>{g?.title || g?.config?.title}</span>}
-        </p>
-        {games.length > 1 && (
-          <div className="ml-[1vmin] flex shrink-0 items-center gap-1">
-            {games.map((c) => (
-              <button key={c.gameSeq} type="button" onClick={() => { setSel(c.gameSeq); setAuto(false); }}
-                style={c.gameSeq === g?.gameSeq ? { background: 'color-mix(in srgb, var(--clk-accent, #818CF8) 24%, transparent)', borderColor: 'color-mix(in srgb, var(--clk-accent, #818CF8) 55%, transparent)' } : undefined}
-                className={['rounded-[1vmin] border px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors',
-                  c.gameSeq === g?.gameSeq ? 'text-white' : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/15'].join(' ')}>
-                {gameLabel(c)}{!c.running && <Icon name="pause" aria-label="일시정지" className="ml-[0.6vmin] inline-block h-[1.7vmin] w-[1.7vmin] align-[-0.15em]" />}
+      {/* ── 상태 바 — 좌: 매장·대회명 / 중앙: LEVEL + 진행 상태 / 우: 지금 더 중요한 시각 하나 + 컨트롤 ──
+          높이를 고정한다(h-[8vmin]). 대회명이 길어도 두 번째 줄을 만들지 않고 말줄임 —
+          예전엔 이 줄이 자라면 아래 타이머가 통째로 밀렸다. */}
+      {/* 3열 그리드 — 가운데 칸이 화면 정중앙이다. flex + ml-auto 로 하면 제목 길이에 따라
+          가운데가 좌우로 흔들린다(실측: 알약이 우측으로 밀려 있었다). */}
+      <header className="grid h-[8vmin] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-[1.5vmin] px-[3vmin]">
+        <div className="flex min-w-0 items-center gap-[1.5vmin]">
+          <span className={`h-[1.2vmin] w-[1.2vmin] shrink-0 rounded-full ${g?.running ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden />
+          <p className="min-w-0 truncate text-[2.6vmin] font-extrabold tracking-tight">
+            {venueName || '홀덤 라이브'}
+            {(g?.title || g?.config?.title) && <span className="ml-[1.2vmin] font-medium" style={SOFT}>{g?.title || g?.config?.title}</span>}
+          </p>
+        </div>
+
+        {/* 중앙 — LEVEL 과 상태만 알약. 나머지 정보는 알약으로 만들지 않는다. */}
+        <div className="flex justify-center">{g && <StatusPills g={g} />}</div>
+
+        <div className="flex shrink-0 items-center justify-end gap-[1.6vmin]">
+          {games.length > 1 && (
+            <div className="flex shrink-0 items-center gap-1">
+              {games.map((c) => (
+                <button key={c.gameSeq} type="button" onClick={() => { setSel(c.gameSeq); setAuto(false); }}
+                  style={c.gameSeq === g?.gameSeq ? { background: 'color-mix(in srgb, var(--clk-accent, #818CF8) 24%, transparent)', borderColor: 'color-mix(in srgb, var(--clk-accent, #818CF8) 55%, transparent)' } : undefined}
+                  className={['rounded-[1vmin] border px-[1.4vmin] py-[0.5vmin] text-[1.7vmin] font-bold transition-colors',
+                    c.gameSeq === g?.gameSeq ? 'text-white' : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/15'].join(' ')}>
+                  {gameLabel(c)}{!c.running && <Icon name="pause" aria-label="일시정지" className="ml-[0.6vmin] inline-block h-[1.6vmin] w-[1.6vmin] align-[-0.15em]" />}
+                </button>
+              ))}
+              <button type="button" onClick={() => setAuto((v) => !v)} title="멀티게임 자동 순환"
+                className={['rounded-[1vmin] px-[1.4vmin] py-[0.5vmin] text-[1.7vmin] font-bold transition-colors', auto ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 text-white/50'].join(' ')}>
+                <Icon name="refresh" className="mr-[0.5vmin] inline-block h-[1.6vmin] w-[1.6vmin] align-[-0.15em]" />{auto ? '자동' : '수동'}
               </button>
-            ))}
-            <button type="button" onClick={() => setAuto((v) => !v)} title="멀티게임 자동 순환"
-              className={['rounded-[1vmin] px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors', auto ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 text-white/50'].join(' ')}>
-              <Icon name="refresh" className="mr-[0.6vmin] inline-block h-[1.7vmin] w-[1.7vmin] align-[-0.15em]" />{auto ? '자동' : '수동'}
-            </button>
-          </div>
-        )}
-        <div className="ml-auto flex shrink-0 items-center gap-[2.4vmin]">
+            </div>
+          )}
           {g && <HeaderTimes g={g} regLevel={regLevel} />}
           <button type="button" onClick={toggleFs} title="전체화면" aria-label="전체화면"
-            className="rounded-[1vmin] bg-white/10 px-[1.6vmin] py-[0.8vmin] text-[1.8vmin] font-bold text-white/80 hover:bg-white/20">{fs ? '⤢ 해제' : '⛶ 전체화면'}</button>
+            className="rounded-[1vmin] bg-white/10 px-[1.4vmin] py-[0.7vmin] text-[1.7vmin] font-bold text-white/80 hover:bg-white/20">{fs ? '⤢ 해제' : '⛶ 전체화면'}</button>
           <button type="button" onClick={onClose} title="닫기" aria-label="닫기"
-            className="rounded-[1vmin] bg-white/10 px-[1.6vmin] py-[0.8vmin] text-[1.8vmin] font-bold text-white/80 hover:bg-white/20">✕</button>
+            className="rounded-[1vmin] bg-white/10 px-[1.4vmin] py-[0.7vmin] text-[1.7vmin] font-bold text-white/80 hover:bg-white/20">✕</button>
         </div>
       </header>
 
@@ -209,61 +219,53 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
         </div>
       ) : (
         <>
-          {/* ── 본문: 프라이즈(있을 때만) · 타이머 · 스탯 — 프라이즈가 없으면 열이 접히고 중앙이 넓어진다 ── */}
-          <div className={['grid min-h-0 flex-1 grid-cols-1 gap-[2vmin] px-[3vmin]', prizes.length > 0 ? 'md:grid-cols-[1fr_2.1fr_1fr]' : 'md:grid-cols-[2.1fr_1fr]'].join(' ')}>
+          {/* ── 히어로 — 타이머 + 진행률 레일. 이 행이 화면 시각 무게의 절반이다.
+              ⚠ 자리 고정의 핵심: 히어로는 남는 공간을 전부 갖고(flex-1) 그 안에서 **중앙 정렬**이며,
+                 아래 블라인드 행은 **고정 높이**다. 그래서 ANTE 유무·일시정지 여부가 바뀌어도
+                 타이머의 y 가 움직이지 않는다(실측: 예전엔 일시정지 -30px · ANTE 없음 +24px). */}
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-[3vmin]">
+            <CenterPanel g={g} />
+          </div>
+
+          {/* ── 블라인드 행(고정 높이) — CURRENT | NEXT 좌우 대칭. 굵은 테두리 대신 여백과 미세한 surface 차이. ── */}
+          <div className="h-[22vmin] shrink-0 px-[3vmin]">
+            <BlindsRow g={g} />
+          </div>
+
+          {/* ── 하단 metrics rail — 각 항목을 독립 카드로 만들지 않는다. 값은 밝게, 라벨은 작고 흐리게.
+              정보가 없는 항목은 빈 칸을 남기지 않고 빠진다(나머지가 자연스럽게 넓어진다). ── */}
+          <div className="flex h-[10vmin] shrink-0 items-center gap-[3vmin] border-t border-white/[0.07] px-[3vmin]">
+            <Metric label="생존 / 엔트리" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
+            <Metric label="평균 스택" value={ls?.avgStack ? ls.avgStack.toLocaleString() : '—'} sub={ls?.avgStack && curBB > 0 ? `${Math.round(ls.avgStack / curBB)} BB` : undefined} />
+            <Metric label="총 칩" value={ls?.totalStack ? ls.totalStack.toLocaleString() : '—'} />
+            {showRebuy && <Metric label="리바이 · 애드온" value={String(ls?.rebuys ?? 0)} sub={`· ${ls?.addons ?? 0}`} />}
+            {buyIn > 0 && <Metric label="바이인" value={buyIn.toLocaleString()} />}
             {prizes.length > 0 && (
-              <div className="hidden min-h-0 flex-col justify-center md:flex">
-                <p className={`${LABEL} mb-[1.2vmin] text-[1.7vmin]`} style={SOFT}>프라이즈</p>
-                <ul className="space-y-[0.4vmin]">
-                  {prizes.slice(0, 12).map((p, i) => (
-                    <li key={i} className={`flex items-baseline justify-between gap-[1.6vmin] leading-tight ${i === 0 ? 'text-[2.6vmin]' : 'text-[2.1vmin]'}`}>
-                      <span className="shrink-0 font-semibold tabular-nums" style={DIM}>{/^\d+$/.test(p.place) ? `${p.place}위` : p.place}</span>
-                      <span className="font-extrabold tabular-nums" style={{ color: 'var(--clk-prize, #F5C451)' }}>{p.amount.toLocaleString()}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-[1vmin] flex items-baseline justify-between border-t border-white/10 pt-[0.8vmin]">
-                  <span className={`${LABEL} text-[1.6vmin]`} style={SOFT}>총 프라이즈</span>
-                  <span className="text-[2.8vmin] font-black tabular-nums" style={{ color: 'var(--clk-prize, #F5C451)' }}>{totalPrize.toLocaleString()}</span>
-                </div>
-              </div>
+              <Metric label="총 프라이즈" value={totalPrize.toLocaleString()}
+                sub={prizes[0] ? `1위 ${prizes[0].amount.toLocaleString()}` : undefined} prize />
             )}
 
-            {/* 중앙 — 초당 틱은 CenterPanel 안에 격리 */}
-            <CenterPanel g={g} />
-
-            {/* 우: 생존/엔트리 · 평균 스택 · 총 칩 · 리바이/애드온 · 바이인 */}
-            <div className="hidden min-h-0 flex-col justify-center gap-[1.6vmin] md:flex">
-              <StatRow label="생존 / 엔트리" big value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} />
-              <StatRow label="평균 스택" value={ls?.avgStack ? ls.avgStack.toLocaleString() : '—'} sub={ls?.avgStack && curBB > 0 ? `${Math.round(ls.avgStack / curBB)} BB` : undefined} />
-              <StatRow label="총 칩" value={ls?.totalStack ? ls.totalStack.toLocaleString() : '—'} />
-              {showRebuy && <StatRow label="리바이 · 애드온" value={String(ls?.rebuys ?? 0)} sub={`· ${ls?.addons ?? 0}`} />}
-              {buyIn > 0 && <StatRow label="바이인" value={buyIn.toLocaleString()} />}
-            </div>
-
-            {/* 모바일 폭(세로 폰으로 관전) — 우측 열·상단 시각이 숨으니 핵심 4개만 아래에 */}
-            <div className="grid shrink-0 grid-cols-2 gap-[1.2vmin] border-t border-white/[0.06] py-[1.4vmin] md:hidden">
-              <MiniStat label="생존 / 엔트리" value={hasCounts ? `${ls?.alive ?? 0} / ${ls?.entries ?? 0}` : '—'} />
-              <MiniStat label="평균 스택" value={ls?.avgStack ? `${ls.avgStack.toLocaleString()}${curBB > 0 ? ` · ${Math.round(ls.avgStack / curBB)} BB` : ''}` : '—'} />
-              <HeaderTimes g={g} regLevel={regLevel} compact />
+            {/* 우측 보조 — 스폰서와 QR. 스폰서가 타이머보다 강해지지 않게 최대 높이를 묶는다. */}
+            <div className="ml-auto flex shrink-0 items-center gap-[2vmin]">
+              {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain opacity-80" style={{ maxHeight: '6vmin' }} />}
+              {qr && (
+                <div className="flex items-center gap-[1vmin]">
+                  <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[0.6vmin] bg-white" style={{ width: 'clamp(36px, 5.4vmin, 84px)', height: 'auto' }} />
+                  <div className="hidden lg:block">
+                    <p className={`${LABEL} text-[1.2vmin]`} style={SOFT}>바인 QR</p>
+                    <p className="text-[1.3vmin] leading-snug" style={DIM}>찍으면 {gameLabel(g)} 바인 요청</p>
+                  </div>
+                </div>
+              )}
+              <p className="hidden shrink-0 text-[1.2vmin] font-extrabold uppercase tracking-[0.18em] xl:block" style={DIM}>
+                Powered by <span style={{ color: 'var(--clk-accent, #818CF8)' }}>NURI HOLDEM</span>
+              </p>
             </div>
           </div>
 
-          {/* ── 하단: 바인 QR(작게) · 스폰서 · Powered by ── */}
-          <div className="flex shrink-0 items-center justify-between gap-[2vmin] border-t border-white/[0.06] px-[3vmin] pb-[1.6vmin] pt-[1.2vmin]">
-            {qr ? (
-              <div className="flex min-w-0 items-center gap-[1.2vmin]">
-                <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[0.6vmin] bg-white" style={{ width: 'clamp(44px, 7vmin, 110px)', height: 'auto' }} />
-                <div className="min-w-0">
-                  <p className={`${LABEL} text-[1.4vmin]`} style={SOFT}>바인 QR</p>
-                  <p className="mt-[0.3vmin] text-[1.5vmin] leading-snug" style={DIM}>휴대폰으로 찍으면 {gameLabel(g)} 바인을 요청합니다</p>
-                </div>
-              </div>
-            ) : <span />}
-            {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain" style={{ maxHeight: '7vh' }} />}
-            <p className="shrink-0 text-[1.3vmin] font-extrabold uppercase tracking-[0.18em]" style={DIM}>
-              Powered by <span style={{ color: 'var(--clk-accent, #818CF8)' }}>NURI HOLDEM</span>
-            </p>
+          {/* 모바일 폭(세로 폰 관전) — 우측 보조가 숨으니 레지·휴식만 아래에 한 줄 */}
+          <div className="grid shrink-0 grid-cols-2 gap-[1.2vmin] border-t border-white/[0.06] px-[3vmin] py-[1.4vmin] md:hidden">
+            <HeaderTimes g={g} regLevel={regLevel} compact />
           </div>
         </>
       )}
@@ -272,9 +274,44 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
 }
 
 /**
- * HeaderTimes — 레지 마감 · 휴식까지. 초당 틱은 여기 안에만(부모 리렌더 0).
- * 마감 레벨 미설정(null)은 행 자체를 숨긴다 — 예전엔 null 을 '마감'으로 보여줘 정반대였다.
- * compact = 모바일 폭 하단 미니 스탯 칸에 들어가는 형태.
+ * StatusPills — LEVEL 과 진행 상태만. 상태 바에서 알약을 쓰는 유일한 곳이다.
+ * 초당 갱신이 필요 없다(레벨·running 은 g 가 바뀔 때만 변한다) — 부모 리렌더에 얹혀간다.
+ * ⚠ '일시정지'를 여기에 둔 이유: 예전엔 타이머 **아래**에 붙어서, 일시정지 상태가 되면
+ *    중앙 블록이 길어지고 세로 중앙 정렬 때문에 타이머가 30px 위로 올라갔다(실측).
+ */
+function StatusPills({ g }: { g: ClockState }) {
+  const lvls = g.config?.levels ?? [];
+  const eff = effectiveLevel(g);
+  const lv = lvls[eff.index];
+  const isBreak = lv?.kind === 'break';
+  const state = isBreak ? 'BREAK' : g.running ? 'RUNNING' : 'PAUSED';
+  const tone = isBreak
+    ? { color: '#7dd3fc', bg: 'rgba(125,211,252,0.14)', bd: 'rgba(125,211,252,0.45)' }
+    : g.running
+      ? { color: '#6ee7b7', bg: 'rgba(110,231,183,0.12)', bd: 'rgba(110,231,183,0.40)' }
+      : { color: '#fbbf24', bg: 'rgba(251,191,36,0.14)', bd: 'rgba(251,191,36,0.45)' };
+  return (
+    <div className="flex shrink-0 items-center gap-[1.2vmin]">
+      <span data-testid="clk-level" className="rounded-full border px-[2.2vmin] py-[0.6vmin] text-[2.1vmin] font-extrabold tracking-[0.14em]"
+        style={{
+          color: 'var(--clk-accent, #818CF8)',
+          borderColor: 'color-mix(in srgb, var(--clk-accent, #818CF8) 55%, transparent)',
+          background: 'color-mix(in srgb, var(--clk-accent, #818CF8) 14%, transparent)',
+        }}>
+        {isBreak ? '휴식' : `레벨 ${levelNumberAt(lvls, eff.index)}`}
+      </span>
+      <span className="rounded-full border px-[1.8vmin] py-[0.6vmin] text-[1.8vmin] font-extrabold tracking-[0.16em]"
+        style={{ color: tone.color, background: tone.bg, borderColor: tone.bd }}>
+        {state === 'PAUSED' ? '일시정지' : state}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * HeaderTimes — 레지 마감 · 휴식까지 중 **지금 더 중요한 하나**만 상태 바 우측에 둔다.
+ * (둘 다 띄우면 상태 바가 정보 나열이 된다 — 우선순위: 등록 마감이 남아 있으면 그것, 아니면 다음 휴식.)
+ * 초당 틱은 여기 안에만(부모 리렌더 0). compact = 모바일 폭 하단 한 줄.
  */
 function HeaderTimes({ g, regLevel, compact }: { g: ClockState; regLevel: number; compact?: boolean }) {
   const [, setTick] = useState(0);
@@ -291,106 +328,146 @@ function HeaderTimes({ g, regLevel, compact }: { g: ClockState; regLevel: number
       </>
     );
   }
-  if (regText === null && brk === null) return null;
+  // 등록 마감이 아직 남아 있으면 그게 더 급하다. 마감됐거나 없으면 다음 휴식을 보여준다.
+  const show: { label: string; text: string; urgent: boolean } | null =
+    regText !== null && reg !== 0 ? { label: '등록 마감', text: regText, urgent: false }
+      : brk !== null ? { label: '다음 휴식', text: hms(brk), urgent: false }
+        : regText !== null ? { label: '등록', text: regText, urgent: true }
+          : null;
+  if (!show) return null;
   return (
-    <div className="hidden items-baseline gap-[2.4vmin] text-right md:flex">
-      {regText !== null && (
-        <p>
-          <span className={`${LABEL} block text-[1.4vmin]`} style={DIM}>레지 마감</span>
-          <span className={`text-[2.2vmin] font-extrabold tabular-nums ${reg === 0 ? 'text-rose-400' : 'text-white'}`}>{regText}</span>
-        </p>
-      )}
-      {brk !== null && (
-        <p>
-          <span className={`${LABEL} block text-[1.4vmin]`} style={DIM}>휴식까지</span>
-          <span className="text-[2.2vmin] font-extrabold tabular-nums text-rose-400">{hms(brk)}</span>
-        </p>
-      )}
-    </div>
+    <p className="hidden shrink-0 text-right md:block">
+      <span className={`${LABEL} block text-[1.3vmin]`} style={DIM}>{show.label}</span>
+      <span className={`text-[2.1vmin] font-extrabold tabular-nums ${show.urgent ? 'text-rose-400' : 'text-white'}`}>{show.text}</span>
+    </p>
   );
 }
 
+/** 진행률 레일 세그먼트 수 — 전광판 느낌을 내되 TV 거리에서 셀 수 있는 정도. */
+const RAIL_SEGMENTS = 24;
+
 /**
- * CenterPanel — 레벨 · 대형 타이머 · 블라인드 · ANTE · 다음 블라인드.
- * 초당 setInterval 틱을 이 컴포넌트 안에 가둔다(1분 방치 → 타이머 노드 외 리렌더 0회). memo: g 참조가 같으면 건너뛴다.
- * data-testid clk-level / clk-timer 는 e2e(clock-catchup) 앵커 — 라벨 문구를 바꿔도 이 id 는 유지한다.
+ * CenterPanel — 대형 타이머 + 진행률 레일. 초당 setInterval 틱을 이 안에 가둔다
+ * (1분 방치 → 타이머 노드 외 리렌더 0회). memo: g 참조가 같으면 건너뛴다.
+ * data-testid clk-timer 는 e2e 앵커 — 문구를 바꿔도 이 id 는 유지한다.
  */
 const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
   const [, setTick] = useState(0);
   useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
   const lvls = g.config?.levels ?? [];
   const eff = effectiveLevel(g);
-  const curIdx = eff.index;
-  const lv = lvls[curIdx];
-  const levelNo = levelNumberAt(lvls, curIdx);
+  const lv = lvls[eff.index];
   const isBreak = lv?.kind === 'break';
-  const remaining = eff.remainingMs;
+  const remaining = Math.max(0, eff.remainingMs);
   const urgent = !!g.running && remaining <= 60_000 && !isBreak;
-  const next = (() => { for (let i = curIdx + 1; i < lvls.length; i++) if (lvls[i].kind === 'level') return lvls[i]; return null; })();
+  const totalMs = Math.max(1, (lv?.minutes ?? 0) * 60_000);
+  const donePct = Math.min(1, Math.max(0, 1 - remaining / totalMs));
+  const filled = Math.round(donePct * RAIL_SEGMENTS);
+  const timerColor = urgent ? 'var(--clk-timer-urgent, #fb7185)' : isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-timer, #FFFFFF)';
+
   return (
-    <div className="flex min-h-0 flex-col items-center justify-center text-center">
-      {/* 레벨 알약 — 테마 accent 테두리·틴트 */}
-      <p data-testid="clk-level" className="rounded-full border px-[3vmin] py-[0.9vmin] text-[2.6vmin] font-extrabold tracking-[0.18em]"
-        style={{
-          color: 'var(--clk-accent, #818CF8)',
-          borderColor: 'color-mix(in srgb, var(--clk-accent, #818CF8) 55%, transparent)',
-          background: 'color-mix(in srgb, var(--clk-accent, #818CF8) 14%, transparent)',
-        }}>
-        {isBreak ? '휴식' : `레벨 ${levelNo}`}
+    <div className="relative flex w-full flex-col items-center">
+      {/* 타이머 뒤 아주 약한 radial bloom **한 겹**. 글자 자체에 네온 외곽선을 두르지 않는다. */}
+      <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[46vmin] w-[76vmin] -translate-x-1/2 -translate-y-1/2"
+        style={{ background: 'radial-gradient(closest-side, color-mix(in srgb, var(--clk-accent, #818CF8) 16%, transparent), transparent)' }} />
+
+      <p data-testid="clk-timer" className="font-black leading-none tabular-nums"
+        style={{ fontSize: 'clamp(84px, 26vmin, 400px)', letterSpacing: '0.005em', color: timerColor }}>
+        {mmss(remaining)}
       </p>
-      {/* 타이머 — 순백 · 긴급 rose · 브레이크 sky 는 테마가 못 덮는 잠금 */}
-      <p data-testid="clk-timer" className={`mt-[1.2vmin] font-black leading-none tabular-nums ${urgent ? 'animate-pulse' : ''}`}
-        style={{
-          fontSize: 'clamp(84px, 27vmin, 420px)', letterSpacing: '-0.02em',
-          color: urgent ? 'var(--clk-timer-urgent, #fb7185)' : isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-timer, #FFFFFF)',
-          textShadow: '0 0 4vmin color-mix(in srgb, var(--clk-accent, #818CF8) 28%, transparent)',
-        }}>
-        {mmss(Math.max(0, remaining))}
-      </p>
-      {isBreak ? (
-        <>
-          <p className="mt-[1vmin] font-extrabold leading-none text-sky-300" style={{ fontSize: 'clamp(28px, 7vmin, 120px)' }}>{lv?.label || '휴식 시간'}</p>
-          {next && (
-            <p className="mt-[1.4vmin] font-semibold tabular-nums" style={{ fontSize: 'clamp(14px, 2.6vmin, 44px)', ...SOFT }}>
-              다음 <b className="font-extrabold text-white/85">{next.sb.toLocaleString()} / {next.bb.toLocaleString()}</b>{next.ante > 0 ? ` · ANTE ${next.ante.toLocaleString()}` : ''}
-            </p>
-          )}
-        </>
-      ) : (
-        <>
-          <p className="mt-[1.4vmin] font-extrabold leading-none tabular-nums" style={{ fontSize: 'clamp(30px, 8.5vmin, 150px)', color: 'var(--clk-accent, #818CF8)' }}>
-            {lv ? <>{lv.sb.toLocaleString()}<span className="text-white/25"> / </span>{lv.bb.toLocaleString()}</> : '-'}
-          </p>
-          {lv && lv.ante > 0 && (
-            <p className="mt-[1.2vmin] flex items-baseline gap-[1.2vmin] leading-none">
-              <span className="text-[2.2vmin] font-bold uppercase tracking-[0.18em]" style={DIM}>Ante</span>
-              <span className="font-extrabold tabular-nums text-white" style={{ fontSize: 'clamp(20px, 4.4vmin, 80px)' }}>{lv.ante.toLocaleString()}</span>
-            </p>
-          )}
-          {next && (
-            <p className="mt-[1.8vmin] font-semibold tabular-nums" style={{ fontSize: 'clamp(13px, 2.4vmin, 40px)', ...SOFT }}>
-              다음 <b className="font-extrabold text-white/85">{next.sb.toLocaleString()} / {next.bb.toLocaleString()}</b>{next.ante > 0 ? ` · ANTE ${next.ante.toLocaleString()}` : ''}
-            </p>
-          )}
-        </>
-      )}
-      {!g.running && (
-        <p className="mt-[1.6vmin] flex items-center justify-center gap-[0.8vmin] text-[2.6vmin] font-bold text-amber-400">
-          <Icon name="pause" className="h-[2.6vmin] w-[2.6vmin]" aria-hidden />일시정지
-        </p>
-      )}
+
+      {/* 진행률 레일 — 지나간 구간 accent, 남은 구간 흰색 7%. 마지막 60초엔 danger.
+          width 애니메이션이 아니라 세그먼트의 **색만** 바뀐다(레이아웃 0). reduced-motion 에서도 동일하다. */}
+      <div className="mt-[2.4vmin] flex w-[72vmin] max-w-full gap-[0.5vmin]" role="progressbar"
+        aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(donePct * 100)} aria-label="현재 레벨 진행률">
+        {Array.from({ length: RAIL_SEGMENTS }, (_, i) => (
+          <span key={i} className="h-[1.1vmin] flex-1 rounded-[0.3vmin]"
+            style={{
+              background: i < filled
+                ? (urgent ? 'var(--clk-timer-urgent, #fb7185)' : isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-accent, #818CF8)')
+                : 'rgba(255,255,255,0.07)',
+            }} />
+        ))}
+      </div>
     </div>
   );
 });
 
-function StatRow({ label, value, sub, big }: { label: string; value: string; sub?: string; big?: boolean }) {
+/**
+ * BlindsRow — CURRENT | NEXT 좌우 대칭. CURRENT 는 밝고 크게, NEXT 는 한 단계 어둡고 작게.
+ * 굵은 테두리로 나누지 않고 **여백과 미세한 surface 차이**로 구분한다.
+ * 이 행은 부모가 고정 높이를 주고 여기서 세로 중앙 정렬한다 — ANTE 유무가 위 타이머를 밀지 않는다.
+ * 브레이크 중에는 CURRENT 자리에 BREAK 를, NEXT 자리에 다음 레벨을 둔다.
+ */
+const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
+  const lvls = g.config?.levels ?? [];
+  const eff = effectiveLevel(g);
+  const lv = lvls[eff.index];
+  const isBreak = lv?.kind === 'break';
+  const next = (() => { for (let i = eff.index + 1; i < lvls.length; i++) if (lvls[i].kind === 'level') return lvls[i]; return null; })();
+  const num = (n: number) => n.toLocaleString();
   return (
-    <div className="flex items-baseline justify-between gap-[1.4vmin] border-b border-white/[0.08] pb-[1.1vmin]">
-      <span className={`${LABEL} text-[1.7vmin]`} style={SOFT}>{label}</span>
-      <span className="flex items-baseline gap-[0.7vmin]">
-        <span className="font-extrabold tabular-nums leading-none text-white" style={{ fontSize: big ? 'clamp(28px, 6vmin, 96px)' : 'clamp(18px, 3.2vmin, 52px)' }}>{value}</span>
-        {sub && <span className="text-[2vmin] font-semibold tabular-nums" style={DIM}>{sub}</span>}
-      </span>
+    <div className="grid h-full grid-cols-2 items-center gap-[2vmin]">
+      {/* CURRENT */}
+      <div className="flex h-full flex-col items-center justify-center rounded-[1.6vmin] bg-white/[0.04] px-[2vmin]">
+        <p className={`${LABEL} text-[1.5vmin]`} style={SOFT}>{isBreak ? 'BREAK' : 'CURRENT'}</p>
+        {isBreak ? (
+          <p className="mt-[0.8vmin] font-extrabold leading-none" style={{ fontSize: 'clamp(24px, 6.4vmin, 108px)', color: 'var(--clk-timer-break, #7dd3fc)' }}>
+            {lv?.label || '휴식 시간'}
+          </p>
+        ) : (
+          <>
+            {/* whitespace-nowrap: 자릿수가 커져도 줄바꿈되지 않는다. '/' 는 숫자보다 작게. */}
+            <p className="mt-[0.6vmin] whitespace-nowrap font-extrabold leading-none tabular-nums"
+              style={{ fontSize: 'clamp(26px, 7.2vmin, 128px)', color: 'var(--clk-accent, #818CF8)' }}>
+              {lv ? <>{num(lv.sb)}<span className="mx-[0.6vmin] align-middle text-[0.5em] text-white/30">/</span>{num(lv.bb)}</> : '-'}
+            </p>
+            {/* ANTE 가 없으면 이 줄 자체를 그리지 않는다(빈 행을 남기지 않는다).
+                행 높이는 부모가 고정하므로 이 줄의 유무가 타이머를 밀지 않는다. */}
+            {lv && lv.ante > 0 && (
+              <p className="mt-[0.8vmin] flex items-baseline gap-[1vmin] leading-none">
+                <span className="text-[1.7vmin] font-bold uppercase tracking-[0.18em]" style={DIM}>Ante</span>
+                <span className="font-extrabold tabular-nums text-white" style={{ fontSize: 'clamp(16px, 3.4vmin, 60px)' }}>{num(lv.ante)}</span>
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* NEXT — 한 단계 어둡고 작게 */}
+      <div className="flex h-full flex-col items-center justify-center rounded-[1.6vmin] bg-white/[0.02] px-[2vmin]">
+        <p className={`${LABEL} text-[1.5vmin]`} style={DIM}>NEXT</p>
+        {next ? (
+          <>
+            <p className="mt-[0.6vmin] whitespace-nowrap font-extrabold leading-none tabular-nums text-white/75"
+              style={{ fontSize: 'clamp(20px, 5.4vmin, 96px)' }}>
+              {num(next.sb)}<span className="mx-[0.6vmin] align-middle text-[0.5em] text-white/25">/</span>{num(next.bb)}
+            </p>
+            {next.ante > 0 && (
+              <p className="mt-[0.8vmin] flex items-baseline gap-[1vmin] leading-none">
+                <span className="text-[1.7vmin] font-bold uppercase tracking-[0.18em]" style={DIM}>Ante</span>
+                <span className="font-extrabold tabular-nums text-white/70" style={{ fontSize: 'clamp(14px, 2.8vmin, 48px)' }}>{num(next.ante)}</span>
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="mt-[0.6vmin] text-[2.4vmin] font-bold" style={DIM}>마지막 레벨</p>
+        )}
+      </div>
+    </div>
+  );
+});
+
+/** 하단 레일의 한 칸 — 값은 밝게, 라벨은 작고 흐리게. 독립 카드로 만들지 않는다. */
+function Metric({ label, value, sub, lead, prize }: { label: string; value: string; sub?: string; lead?: boolean; prize?: boolean }) {
+  return (
+    <div className="min-w-0 shrink-0">
+      <p className={`${LABEL} text-[1.3vmin]`} style={SOFT}>{label}</p>
+      <p className="mt-[0.2vmin] flex items-baseline gap-[0.6vmin] leading-none">
+        <span className="font-extrabold tabular-nums"
+          style={{ fontSize: lead ? 'clamp(20px, 4.2vmin, 68px)' : 'clamp(16px, 3vmin, 48px)', color: prize ? 'var(--clk-prize, #F5C451)' : '#FFFFFF' }}>{value}</span>
+        {sub && <span className="text-[1.7vmin] font-semibold tabular-nums" style={DIM}>{sub}</span>}
+      </p>
     </div>
   );
 }

@@ -19,6 +19,18 @@ const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 const OPENNOW_SEEN = 'nuri:opennow-seen';
 const openNowSeen = () => { try { return localStorage.getItem(OPENNOW_SEEN) === '1'; } catch { return false; } };
 
+// 이벤트 배너도 같은 문제를 갖고 있었다(2026-09-07 실측, CPU 4× · 375×812):
+//   event_board 응답이 마운트 뒤에 도착하면서 `오늘·내일 일정` 위에 칸이 새로 생겨
+//   일정과 푸터가 **+83px 아래로 밀렸다**(940ms, CLS 기여 0.049). 이벤트를 없애면 드리프트 0 · CLS 0.105→0.056.
+// 그래서 '지금 등록 가능'(아래 openNowSeen)과 같은 방식으로 지난 방문의 사실을 기억해 자리를 예약한다.
+// 높이는 숫자로 찍지 않는다 — 실제 배너와 **같은 박스 모델**(pt-4 + card-aura px-3 py-2.5 + h-10 아이콘)로
+// 만들어 높이가 계산되게 한다. 값을 베끼면 배너가 바뀌는 순간 다시 틀린 높이가 된다.
+const EVENT_SEEN = 'nuri:event-banner-seen';
+const eventSeen = () => { try { return localStorage.getItem(EVENT_SEEN) === '1'; } catch { return false; } };
+/** 배너를 실제로 그리는 조건 — 자리 예약과 본체가 같은 판정을 쓰게 한 곳에 둔다. */
+const eventBannerVisible = (b: EventBoard | null): b is EventBoard =>
+  !!b && b.status === 'live' && !(b.startsAt && new Date(b.startsAt) > new Date()) && b.cards.some((c) => !c.opened);
+
 
 // 시간대 인사 카피(greeting)는 2026-08-29 제거됐다 — 그 줄이 NURI MIND 링크인데
 // "좋은 아침이에요"는 눌러야 할 이유를 주지 않아서, 유도 문구로 대체했다(오너 지시).
@@ -83,7 +95,15 @@ export default function HomeTab({
   //    · 카드 100장이 다 열려 이벤트가 끝나도 배너는 살아 있는 이벤트인 척한다
   //      (배너 게이트가 event.cards.some(c => !c.opened) 라 낡은 스냅샷을 본다)
   //   그래서 ① 체크인 성공 신호(nuri:event-board-refresh) ② 화면으로 돌아올 때 다시 받는다. 실패는 조용히 무시(이벤트는 부가 기능이고 홈 첫 페인트를 막지 않는다).
-  const loadEventBoard = useCallback(() => { getEventBoard().then(setEvent).catch(() => {}); }, []);
+  const [eventLoaded, setEventLoaded] = useState(false); // null 이 '미도착'과 '이벤트 없음' 둘 다라 따로 구분한다
+  const loadEventBoard = useCallback(() => {
+    getEventBoard().then((b) => {
+      setEvent(b);
+      setEventLoaded(true);
+      // 다음 콜드 진입에서 자리를 예약할지 판단할 근거 — 배너가 실제로 보이는 조건과 같은 판정을 저장한다.
+      try { localStorage.setItem(EVENT_SEEN, eventBannerVisible(b) ? '1' : '0'); } catch { /* noop */ }
+    }).catch(() => { setEventLoaded(true); }); // 실패도 '도착'이다 — 아니면 예약 칸이 영원히 남는다
+  }, []);
   useEffect(() => {
     loadEventBoard();
     const onVis = () => { if (document.visibilityState === 'visible') loadEventBoard(); };
@@ -222,7 +242,20 @@ export default function HomeTab({
           ⚠ 카드가 다 떨어진 이벤트도 같은 이유로 내린다 — 종료 조건이 시각이 아니라 재고다.
           그 칸이 한 줄짜리 텍스트 버튼이었다면 이건 '지금 참여할 수 있는가'가 한눈에 보여야 한다:
           제목 · 내 참여권 · 남은 카드. 숫자가 없으면 그냥 광고가 되고, 아무도 안 누른다. */}
-      {event && event.status === 'live' && !(event.startsAt && new Date(event.startsAt) > new Date()) && event.cards.some((c) => !c.opened) && (
+      {/* 자리 예약 — 지난 방문에 배너가 있던 기기만, 응답 도착 '전'까지. 도착하면 즉시 확정된다.
+          실제 배너와 같은 클래스로 만들어 높이가 같게 한다(값 복사 금지 — 배너가 바뀌면 같이 따라온다). */}
+      {!eventLoaded && eventSeen() && (
+        <div className="px-page-x pt-4" aria-hidden>
+          <div className="flex w-full items-center gap-2.5 rounded-aura border card-aura px-3 py-2.5">
+            <span className="skeleton h-10 w-10 shrink-0 rounded-input" />
+            <span className="min-w-0 flex-1">
+              <span className="skeleton block h-[18px] w-2/5 rounded" />
+              <span className="skeleton mt-0.5 block h-[15px] w-3/5 rounded" />
+            </span>
+          </div>
+        </div>
+      )}
+      {eventBannerVisible(event) && (
         <div className="px-page-x pt-4">
           {/* ⚠ 아우라 규약(v6): 면은 **공용 card-aura**(불투명 + white 5% 헤어라인)로 통일한다.
               예전엔 이 배너만 border-accent-400/40 + 보라 그라데이션이라 홈에서 **혼자 다른 문법**이었다

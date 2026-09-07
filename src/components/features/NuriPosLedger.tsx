@@ -92,7 +92,7 @@ export interface LedgerSeed {
   gtd?: boolean;
 }
 
-export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, onOpenStats, seed, followGame, active = true }: {
+export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, onOpenStats, seed, followGame, settleSignal = 0, active = true }: {
   venueId: string; canManage: boolean; venueName?: string; active?: boolean;
   onMakeRankingDraft?: (date: string, names: string[], eventName?: string) => void;
   onOpenClock?: (date: string, gameSeq: number) => void;
@@ -102,6 +102,13 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   seed?: LedgerSeed | null;
   /** IA2 게임 칩 바 픽 신호 — 오늘 장부의 해당 게임으로 보드 전환(n=논스, 같은 게임 재픽도 반영) */
   followGame?: { seq: number; n: number } | null;
+  /**
+   * '정산으로' 신호(논스). 스크롤 지시가 아니다 — 정산바는 position:fixed 라 이미 화면에 있다.
+   * 예전엔 `window.scrollTo({ top: document.body.scrollHeight })` 로 문서 맨 아래를 추측해 내려갔는데,
+   * 정산바는 뷰포트에 붙어 있어서 그 스크롤은 정산과 아무 관계가 없었다(내용만 끝으로 밀려남).
+   * 필요한 것은 "어느 버튼을 누르라는 것인지 지목"이고, 그래서 포커스 + 짧은 강조만 한다.
+   */
+  settleSignal?: number;
 }) {
   const toast = useToast();
   const { user, isAdmin } = useAuth();
@@ -414,6 +421,42 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   }, [toast, buyins, session]);
 
   const closed = session.closed;
+
+  // ── '정산으로' 신호 처리 ─────────────────────────────────────────────────────
+  // 정산바는 fixed 라 '이동'할 대상이 아니다. 대신 마감 버튼을 **지목**한다: 키보드 포커스 + 짧은 링.
+  // 신호가 올 때 버튼이 아직 없을 수 있다(다른 날짜 장부를 여는 중). 그래서 처리한 논스를 기억해 두고
+  // 버튼이 그려진 렌더에서 한 번만 처리한다 — 고정 지연(setTimeout 60ms) 같은 추측을 쓰지 않는다.
+  const settleEl = useRef<HTMLButtonElement | null>(null);
+  const settlePending = useRef(false); // 신호는 왔는데 버튼이 아직 없다
+  const settleDone = useRef(0);
+  const [settleHot, setSettleHot] = useState(false);
+  const focusSettle = useCallback((el: HTMLButtonElement) => {
+    el.focus({ preventScroll: true }); // preventScroll: 포커스가 페이지를 끌지 않게
+    setSettleHot(true);
+  }, []);
+  /**
+   * 콜백 ref — 버튼이 **실제로 DOM 에 붙는 순간**을 잡는다.
+   * ⚠ 예전엔 effect 의 deps(date·closed·gameSeq)로 '이쯤이면 그려졌겠지'를 추측했다. 그런데 정산 이동은
+   *   장부를 목록→보드로 바꾸며 들어오므로, 신호가 올 때 버튼이 없고 그 뒤로 저 deps 가 더는 바뀌지 않는다
+   *   → 재시도가 영영 안 왔다(E2E: 버튼은 있는데 focus 가 'inactive'). 마운트 시점을 직접 받는 게 맞다.
+   */
+  const settleBtnRef = useCallback((el: HTMLButtonElement | null) => {
+    settleEl.current = el;
+    if (el && settlePending.current) { settlePending.current = false; focusSettle(el); }
+  }, [focusSettle]);
+  /** 정산 마감 버튼을 지목한다. 없으면 '대기'로 남겨 두고, 붙는 순간 위 콜백 ref 가 이어받는다. */
+  const pointAtSettle = useCallback(() => {
+    const el = settleEl.current;
+    if (!el) { settlePending.current = true; return false; }
+    focusSettle(el);
+    return true;
+  }, [focusSettle]);
+  useEffect(() => { if (!settleHot) return; const t = setTimeout(() => setSettleHot(false), 1400); return () => clearTimeout(t); }, [settleHot]);
+  useEffect(() => {
+    if (!settleSignal || settleSignal === settleDone.current || !active) return;
+    settleDone.current = settleSignal;
+    pointAtSettle();
+  }, [settleSignal, active, pointAtSettle]);
   const regClosed = session.regClosed;
   // 실패는 '빈 장부'가 아니다 — loadError 가 있으면 세팅 폼으로 넘어가지 않는다.
   const showSetup = !loadError && !session.openedAt && !closed && buyins.length === 0 && players.length === 0;
@@ -981,10 +1024,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">세션 정보 수정</button>}
       </div>
 
-      {/* 게임 요약 띠 — 현재 게임 핵심 지표 상단 고정(스크롤해도 보임, 모바일 라이브 운영용) */}
+      {/* 게임 요약 띠 — 현재 게임 핵심 지표 상단 고정(스크롤해도 보임, 모바일 라이브 운영용).
+          탭하면 정산바의 '정산 마감' 을 지목한다(정산바는 fixed 라 이미 화면에 있다 — 스크롤이 아니다). */}
       {!closed && (
-        <div role="button" tabIndex={0} title="탭하면 하단 정산/마감으로 이동"
-          onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
+        <div role="button" tabIndex={0} title="탭하면 정산 마감 버튼으로"
+          onClick={pointAtSettle}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pointAtSettle(); } }}
           className="sticky top-header-h z-10 grid grid-cols-4 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur cursor-pointer">
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
@@ -1436,7 +1481,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                     regClosed ? 'border-danger/40 text-danger-light bg-danger/10' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
                   {regClosed ? '레지 열기' : '레지 마감'}
                 </button>
-                <button type="button" onClick={() => setCloseOpen(true)} className="btn-primary text-2xs px-2 py-1">정산 마감</button>
+                <button ref={settleBtnRef} type="button" onClick={() => setCloseOpen(true)} data-testid="ledger-settle"
+                  className={`btn-primary text-2xs px-2 py-1${settleHot ? ' ring-2 ring-gold-300 ring-offset-2 ring-offset-surface-mid' : ''}`}>정산 마감</button>
               </div>
             ) : <span className="text-2xs text-accent-300 text-center font-bold px-3 py-1">마감됨</span>}
           </div>
@@ -1826,7 +1872,8 @@ function DateBar({ date, setDate, onBack }: { date: string; setDate: (d: string)
       {onBack && (
         <button type="button" onClick={onBack} className="btn-ghost text-xs px-2 shrink-0" aria-label="목록으로">← 목록</button>
       )}
-      <input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input flex-1 text-sm" />
+      {/* data-testid: '어느 날짜 장부에 착지했는가' 를 재는 유일한 안정 지점(clk-timer 와 같은 규약). */}
+      <input data-testid="ledger-date" aria-label="장부 날짜" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input flex-1 text-sm" />
       {date !== today() && <button type="button" onClick={() => setDate(today())} className="btn-ghost text-xs px-3 shrink-0">오늘</button>}
     </div>
   );

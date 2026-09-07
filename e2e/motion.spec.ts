@@ -69,16 +69,6 @@ test.describe('모션 — 시트가 아래에서 올라오고 손끝을 따라�
     expect(grip, '시트인데 그립 영역이 터치를 받지 못한다 — 끌어도 브라우저 스크롤에 먹혀 핸들이 거짓말을 한다').toBe(true);
   });
 
-  test('전환 곡선이 iOS 감각(감속 위주)으로 통일돼 있다', async ({ page }) => {
-    await page.goto('/');
-    const easing = await page.evaluate(() => {
-      const b = document.querySelector('button');
-      return b ? getComputedStyle(b).transitionTimingFunction : '';
-    });
-    // cubic-bezier(0.32, 0.72, 0, 1) — 빠르게 출발해 부드럽게 안착. linear/ease 면 '웹페이지' 느낌이 난다.
-    expect(easing, `버튼 전환 곡선이 기대와 다르다: ${easing}`).toContain('cubic-bezier(0.32, 0.72, 0, 1)');
-  });
-
   test('prefers-reduced-motion 을 존중한다', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');

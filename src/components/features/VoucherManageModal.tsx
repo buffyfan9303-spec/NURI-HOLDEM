@@ -138,7 +138,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     return [...seen.entries()].sort((a, b) => b[1].at.localeCompare(a[1].at)).slice(0, 6)
       .map(([id, x]) => ({ id, display: x.display, verified: true }));
   }, [list, profileMap]);
-  // 단골 TOP '이용권 보내기' 진입 — 받는 사람을 자동 입력·검색(1명 매치면 즉시 선택)
+  // '고객·단골' 의 이용권 보내기 진입(대시보드 카드 · 고객 목록 모달 둘 다) — 받는 사람 자동 입력·검색(1명 매치면 즉시 선택)
   useEffect(() => {
     const q = (prefillReceiver ?? '').trim();
     if (!q) return;

@@ -380,7 +380,25 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
 
   // 250ms 틱(부드러운 카운트다운) — 화면에 보일 때만. 숨김(다른 섹션) 시 멈춰 백그라운드 끊김 방지(재진입 시 endsAt로 즉시 복원)
   // (A1) 일시정지(running=false) 중엔 카운트다운이 멈춰 있으므로 틱 불필요 → 재렌더 폭주 차단. 재개 시 effect 재가동.
-  useEffect(() => { if (!active || !state.running) return; const id = setInterval(() => setTick((t) => t + 1), 250); return () => clearInterval(id); }, [active, state.running]);
+  // 250ms 로 '보되', 리렌더는 **표시되는 초가 바뀔 때만** 한다.
+  //
+  // 왜 이렇게: 이 인터벌은 값을 쓰지 않는 순수 리렌더 트리거였고(setTick 의 t 를 아무도 안 읽는다),
+  //   그래서 ClockLive 전체(프라이즈·스탯·콘솔 포함)가 초당 4회 다시 그려졌다. 화면에서 바뀌는 건 mm:ss 뿐인데.
+  //   실측(1440×900, 20초 유휴): style 127회 · layout 60회 · script 67ms.
+  // 왜 인터벌 자체를 1초로 늦추지 않았나: 250ms 로 봐야 초 경계를 250ms 안에 잡는다.
+  //   같은 값을 setState 하면 React 가 렌더를 건너뛰므로(bailout), 폴링은 촘촘하고 렌더는 초당 1회가 된다.
+  //   카운트다운 비프(secsLeft)·브레이크 경고는 초 경계에 반응하므로 타이밍이 나빠지지 않는다
+  //   (레벨 전진 워치독은 애초에 별도 1초 인터벌이다 — 아래 advanceRef 참조).
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; });
+  useEffect(() => {
+    if (!active || !state.running) return;
+    const id = setInterval(() => {
+      const sec = Math.ceil(Math.max(0, computeRemaining(stateRef.current)) / 1000);
+      setTick((prev) => (prev === sec ? prev : sec)); // 같은 초면 리렌더 없음
+    }, 250);
+    return () => clearInterval(id);
+  }, [active, state.running]);
 
   // 집계(파생) — persist보다 위에서 계산해 liveStats를 저장에 첨부(라이브 보드 반영).
   const cfg = state.config;
@@ -676,6 +694,76 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     persist({ currentIndex: 0, remainingMs: firstMin, endsAt: null, running: false, eliminations: 0, adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0 });
   };
 
+
+  /**
+   * 조작 콘솔 — 위계대로: ①시작/정지 ②레벨 ③시간 ④현재 상태(엔트리·생존·리바이) ⑤종료·초기화.
+   *
+   * ⚠ 예전엔 이 전부가 한 줄 wrap 이었고 **END·초기화가 START 바로 옆**이었다. 되돌릴 수 없는 조작이
+   *   가장 많이 누르는 버튼과 이웃해 있으면 언젠가 눌린다. 위험군은 맨 아래로 내리고 선을 그어 분리한다.
+   *   확인 절차(handleEnd 의 입상 순위 모달)와 되돌리기(levelUndo)는 그대로 보존한다.
+   *
+   * 컴포넌트가 아니라 **JSX 상수**다 — 컴포넌트로 빼면 렌더마다 새 타입이 되어 입력 포커스가 날아가고,
+   * 프롭으로 빼면 adj·setLevel·adjustTime 등 12개를 배선해야 한다(클로저 그대로 쓰는 편이 작다).
+   */
+  const consoleUI = (
+    <div className={['shrink-0 border-white/5 bg-black/30 px-2 py-2', fs ? 'border-t' : 'rounded-card border'].join(' ')}>
+      {/* ① 주 조작 — 가장 크고, 항상 첫 화면에 */}
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={toggleRun}
+          className={['inline-flex flex-1 items-center justify-center gap-1.5 rounded-input px-4 py-3 text-sm font-bold transition-colors',
+            state.running ? 'bg-amber-500/90 text-ink-inverse hover:bg-amber-500' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>
+          <Icon name={state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{state.running ? '일시정지' : '시작'}
+        </button>
+        <Stepper label="Level" size="lg"
+          plusDisabled={state.currentIndex >= cfg.levels.length - 1} minusDisabled={state.currentIndex <= 0}
+          onPlus={() => setLevel(1)} onMinus={() => setLevel(-1)} />
+        {levelUndo && (
+          <button type="button" onClick={undoLevel} title="방금 레벨 이동을 취소하고 남은 시간까지 되돌립니다(TV 포함)"
+            className="inline-flex h-10 shrink-0 items-center gap-1 self-end rounded-input border border-amber-400/60 bg-amber-400/15 px-3 text-2xs font-extrabold text-amber-200 hover:bg-amber-400/25"><Icon name="undo" size={13} className="shrink-0" />되돌리기</button>
+        )}
+      </div>
+
+      {/* ② 시간 보정 */}
+      <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2">
+        <Stepper label="Min" onPlus={() => adjustTime(60_000)} onMinus={() => adjustTime(-60_000)} />
+        <Stepper label="Sec" onPlus={() => adjustTime(1_000)} onMinus={() => adjustTime(-1_000)} />
+      </div>
+
+      {/* ③ 현재 상태 입력 — 엔트리·생존·리바이·얼리·애드온 */}
+      <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-white/[0.06] pt-2">
+        <Stepper label="Entries" onPlus={() => adj('adjEntries', 1)} onMinus={() => adj('adjEntries', -1)} />
+        <Stepper label="Player" onPlus={() => adjPlayer(1)} onMinus={() => adjPlayer(-1)} />
+        <Stepper label="Rebuy" onPlus={() => adj('adjRebuys', 1)} onMinus={() => adj('adjRebuys', -1)} />
+        <Stepper label="Early" onPlus={() => adj('adjEarlies', 1)} onMinus={() => adj('adjEarlies', -1)} />
+        <Stepper label="Addon" onPlus={() => adj('adjAddons', 1)} onMinus={() => adj('adjAddons', -1)} />
+      </div>
+
+      {/* ④ 소리 */}
+      <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-white/[0.06] pt-2">
+        <VolCtl value={volume} onChange={setVolume} onToggleMute={toggleMute} />
+        <button type="button" onClick={() => playChime('level')} title="알림음 미리듣기" aria-label="알림음 미리듣기"
+          className="grid h-7 w-7 shrink-0 place-items-center self-end rounded-input border border-border-default bg-white/10 text-white/60 hover:bg-white/15 hover:text-[#8B94E8]"><Icon name="volume" size={14} /></button>
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-[9px] text-white/45">10초틱</span>
+          <button type="button" onClick={() => setTickStyle((t) => t === 'beep' ? 'soft' : t === 'soft' ? 'off' : 'beep')}
+            title="마지막 10초 카운트다운 틱 음색 · 비프/부드러움/끔(끔=레벨업음만)"
+            className="h-7 rounded-input border border-border-default bg-white/10 px-2 text-2xs font-bold text-white/60 hover:bg-white/15 hover:text-[#8B94E8]">
+            {tickStyle === 'beep' ? '비프' : tickStyle === 'soft' ? '부드러움' : '끔'}
+          </button>
+        </div>
+      </div>
+
+      {/* ⑤ 위험군 — 주 버튼에서 떼어 맨 아래. 되돌릴 수 없는 것과 매번 누르는 것을 이웃시키지 않는다. */}
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.06] pt-2">
+        <button type="button" onClick={resetClock}
+          className="rounded-input border border-border-default bg-white/10 px-3 py-2 text-2xs font-bold text-white/55 hover:bg-white/15 hover:text-amber-300">↺ 초기화</button>
+        {fs
+          ? <button type="button" onClick={toggleFs} className="rounded-input border border-border-default bg-white/10 px-4 py-2 text-2xs font-bold text-white/60 hover:bg-white/15">⤡ 해제</button>
+          : <button type="button" onClick={handleEnd} className="rounded-input border border-border-default bg-white/10 px-4 py-2 text-2xs font-bold text-white/55 hover:bg-white/15 hover:text-danger-light">토너 종료</button>}
+      </div>
+    </div>
+  );
+
   return (
     <div ref={wrapRef} data-scroll-lock className={fs ? 'fixed inset-0 z-[70] bg-[#06080c] flex items-center justify-center overflow-hidden' : ''}>
       {/* 풀스크린은 16:9 고정 박스(레터박스) + container-type:size — cqw/cqh로 모든 모니터(16:9·21:9·세로) 동일 비율 */}
@@ -731,6 +819,9 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         </Modal>
       )}
 
+      {/* 좌 60% 미리보기 / 우 40% 콘솔 — 1366·1440 에서 시작·레벨 조작이 첫 화면에 들어온다.
+          전체화면일 때는 `contents` 라 이 래퍼가 레이아웃에 존재하지 않는다(TV 구조 무변경). */}
+      <div className={fs ? 'contents' : 'grid gap-2 xl:grid-cols-[minmax(0,1.55fr)_minmax(330px,1fr)] xl:items-start'}>
       {/* 디스플레이 */}
       <div className={['overflow-hidden border border-white/[0.08] text-white shadow-[0_10px_50px_rgba(0,0,0,0.45)]',
         fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'rounded-card'].join(' ')}
@@ -844,47 +935,11 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             </p>
           </div>
         </div>
-        {/* 하단 컨트롤(운영자) */}
-        {canManage && (
-          <div className="shrink-0 border-t border-white/5 bg-black/30 px-2 py-2">
-            <div className="flex flex-wrap items-end justify-center gap-x-3 gap-y-2">
-              <VolCtl value={volume} onChange={setVolume} onToggleMute={toggleMute} />
-              <button type="button" onClick={() => playChime('level')} title="알림음 미리듣기"
-                aria-label="알림음 미리듣기"
-                className="self-end grid place-items-center w-7 h-7 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-[#8B94E8]"><Icon name="volume" size={14} /></button>
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-[9px] text-white/45">10초틱</span>
-                <button type="button" onClick={() => setTickStyle((t) => t === 'beep' ? 'soft' : t === 'soft' ? 'off' : 'beep')} title="마지막 10초 카운트다운 틱 음색 · 비프/부드러움/끔(끔=레벨업음만)"
-                  className="h-7 px-2 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-2xs font-bold text-white/60 hover:text-[#8B94E8]">
-                  {tickStyle === 'beep' ? '비프' : tickStyle === 'soft' ? '부드러움' : '끔'}
-                </button>
-              </div>
-              <Stepper label="Entries" onPlus={() => adj('adjEntries', 1)} onMinus={() => adj('adjEntries', -1)} />
-              <Stepper label="Player" onPlus={() => adjPlayer(1)} onMinus={() => adjPlayer(-1)} />
-              <Stepper label="Rebuy" onPlus={() => adj('adjRebuys', 1)} onMinus={() => adj('adjRebuys', -1)} />
-              <Stepper label="Early" onPlus={() => adj('adjEarlies', 1)} onMinus={() => adj('adjEarlies', -1)} />
-              <Stepper label="Addon" onPlus={() => adj('adjAddons', 1)} onMinus={() => adj('adjAddons', -1)} />
-              <Stepper label="Level" size="lg"
-                plusDisabled={state.currentIndex >= cfg.levels.length - 1} minusDisabled={state.currentIndex <= 0}
-                onPlus={() => setLevel(1)} onMinus={() => setLevel(-1)} />
-              {levelUndo && (
-                <button type="button" onClick={undoLevel} title="방금 레벨 이동을 취소하고 남은 시간까지 되돌립니다(TV 포함)"
-                  className="self-end inline-flex items-center gap-1 h-10 px-3 rounded-input border border-amber-400/60 bg-amber-400/15 text-2xs font-extrabold text-amber-200 hover:bg-amber-400/25"><Icon name="undo" size={13} className="shrink-0" />레벨 되돌리기</button>
-              )}
-              <Stepper label="Min" onPlus={() => adjustTime(60_000)} onMinus={() => adjustTime(-60_000)} />
-              <Stepper label="Sec" onPlus={() => adjustTime(1_000)} onMinus={() => adjustTime(-1_000)} />
-              <button type="button" onClick={toggleRun}
-                className={['inline-flex items-center gap-1.5 px-4 py-2 rounded-input text-xs font-bold transition-colors',
-                  state.running ? 'bg-amber-500/90 text-ink-inverse hover:bg-amber-500' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>
-                <Icon name={state.running ? 'pause' : 'play'} size={14} className="shrink-0" />{state.running ? 'STOP' : 'START'}
-              </button>
-              <button type="button" onClick={resetClock} className="px-3 py-2 rounded-input text-xs font-bold bg-white/10 hover:bg-white/15 text-white/60 border border-border-default hover:text-amber-300">↺ 초기화</button>
-              {fs
-                ? <button type="button" onClick={toggleFs} className="px-4 py-2 rounded-input text-xs font-bold bg-white/10 hover:bg-white/15 text-white/60 border border-border-default">⤡ 해제</button>
-                : <button type="button" onClick={handleEnd} className="px-4 py-2 rounded-input text-xs font-bold bg-white/10 hover:bg-white/15 text-white/60 border border-border-default hover:text-danger-light">END</button>}
-            </div>
-          </div>
-        )}
+        {/* 전체화면(TV 송출)에서는 컨트롤을 화면 안에 둔다 — 그 창이 곧 조작 창이다 */}
+        {canManage && fs && consoleUI}
+      </div>
+      {/* 우측 콘솔(비전체화면) — 화면이 좁으면 그리드가 1열이 되어 아래로 흐른다 */}
+      {canManage && !fs && consoleUI}
       </div>
 
       {!fs && state.sessionDate && (

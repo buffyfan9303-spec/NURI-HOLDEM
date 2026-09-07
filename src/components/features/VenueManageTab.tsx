@@ -14,6 +14,7 @@ import { getLedgerRange } from '../../api/ledger';
 import { uploadPoster } from '../../lib/storage';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
+import { resolveDest, type StoreDest } from '../../lib/storeDestination'; // 이동 목적지 → 시드 패치(순수)
 import StoreToolsPanel from './StoreToolsPanel';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import TournamentClock from './clock/TournamentClock';
@@ -52,7 +53,9 @@ type SettingsTab = 'page' | 'presets' | 'pos' | 'voucher' | 'optools' | 'danger'
 /** keep-alive box()·visited 의 단위 — 섹션 / 게임 스텝 / 설정 하위탭 */
 type PaneId = Exclude<Section, 'game' | 'settings'> | GameStep | SettingsTab;
 const GAME_STEPS: readonly { id: GameStep; label: string }[] = [
-  { id: 'posters', label: '포스터·예약' }, { id: 'ledger', label: '장부' },
+  // ⚠ 라벨은 대시보드 '오늘 진행' 스트립과 **같은 이름**이어야 한다. 예전엔 여기만 '포스터·예약' 이라
+  //   같은 1단계가 화면에 따라 다른 이름으로 불렸다(오너 2026-09-07 "일관성이 떨어져").
+  { id: 'posters', label: '포스터' }, { id: 'ledger', label: '장부' },
   { id: 'clock', label: '클락' }, { id: 'ranking', label: '순위' },
 ];
 const isGameStep = (s: string): s is GameStep => GAME_STEPS.some((g) => g.id === s);
@@ -226,6 +229,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 클락은 seedGameSeq 배선으로 즉시 따라오고, 순위(이벤트명 기반)엔 아래 픽 신호만 얹는다.
   const [gameSel, setGameSel] = useState<GameSel | null>(null);
   const [ledgerFollow, setLedgerFollow] = useState<{ seq: number; n: number } | null>(null); // 칩 픽 → 장부 보드 추종
+  // '정산' 이동 신호(논스). 스크롤이 아니라 신호다 — 장부의 정산바는 position:fixed 라 이미 화면에 있고,
+  // 필요한 건 "그 바의 마감 버튼을 지목해 주는 것"이다. 판이 붙은 뒤 장부가 알아서 포커스·강조한다.
+  const [settleSignal, setSettleSignal] = useState(0);
   const gameSelN = useRef(0);
   const [visited, setVisited] = useState<PaneId[]>([]); // 방문 판(섹션/게임스텝, 최근순) — 마운트 유지(깜빡임 제거), 상한 초과 시 가장 오래된 판 정리(메모리 가드)
 
@@ -264,11 +270,23 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // caps.voucher = '대시보드에 이용권 카드/단골 이용권 보내기를 그릴까' — 킬스위치가 그대로 반영된다.
   const caps = useMemo(() => ({ ledger: ledgerOk, manage: manageOk, voucher: idOn && (manageOk || voucherView), posters: canPosters, staff: canStaff }),
     [ledgerOk, manageOk, voucherView, canPosters, canStaff, idOn]);
-  const onGotoStore = useCallback((s: string) => {
-    // StoreDashboard·라이브바가 보내는 문자열 id — LINK-MAP 정규화로 구 id(page·venueRank·settings 등)도 흡수
-    const t = normalizeDeepSection(s);
-    gotoSection(t ?? 'dashboard');
-  }, [gotoSection]);
+  const onGotoStore = useCallback((d: string | StoreDest) => {
+    // StoreDashboard·라이브바가 보내는 id — LINK-MAP 정규화로 구 id(page·venueRank·settings 등)도 흡수.
+    // 객체로 오면 날짜·게임·event·정산 문맥을 **기존 시드 상태에 그대로** 앉힌다(라우터 신설 0).
+    const { section, seeds } = resolveDest(d);
+    const t = normalizeDeepSection(section);
+    if (seeds.clockSeed !== undefined) setClockSeed(seeds.clockSeed);
+    if (seeds.clockSeedGame !== undefined) setClockSeedGame(seeds.clockSeedGame);
+    if (seeds.rankingDraft) { setGameSel(null); setRankingDraft(seeds.rankingDraft); } // 지정 대회가 칩 픽보다 우선
+    if (seeds.ledgerSeed) {
+      // 시드를 붙였으면 keepLedgerSeed — goStep 의 기본 동작이 '일반 진입'이라 시드를 지운다.
+      setLedgerSeed(seeds.ledgerSeed);
+      goStep('ledger', { keepLedgerSeed: true });
+    } else {
+      gotoSection(t ?? 'dashboard');
+    }
+    if (seeds.settle) setSettleSignal((n) => n + 1);
+  }, [gotoSection, goStep]);
   // 크로스 섹션 텔레포트였던 핸들러들이 IA2 로 '게임 섹션 내부 스텝 전환'으로 강등(§13-C)
   const onMakeRankingDraft = useCallback((d: string, names: string[], ev?: string) => {
     setGameSel(null); // 명단 초안(draft)이 우선 — 칩 픽 신호가 마운트 시 이벤트를 덮지 않게
@@ -646,7 +664,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {renderSection === 'game' && !dItem?.locked && (
               <GameStepBar steps={GAME_STEPS.filter((st) => (st.id === 'posters' ? canPosters : ledgerOk))}
                 active={renderGameStep} onPick={gotoSection} showSettle={ledgerOk}
-                onSettle={() => { gotoSection('ledger'); setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 60); }} />
+                /* 정산은 '장부의 마감'이라 그 장부 보드가 열려 있어야 한다. 날짜 없이 보내면 장부가
+                   목록 모드로 떨어져 정산이 아예 안 보인다 — 지금 보고 있는 장부(없으면 오늘)를 실어 보낸다. */
+                onSettle={() => onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame, settle: true })} />
             )}
             {/* IA3c 매장 설정 하위탭 — 프리셋·페이지·POS·이용권·위험구역(권한별 노출) */}
             {renderSection === 'settings' && !dItem?.locked && (
@@ -704,6 +724,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <LedgerWorkspaceM venueId={venueId} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'}>
                     <NuriPosLedgerM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'} seed={ledgerSeed}
                       followGame={ledgerFollow}
+                      settleSignal={settleSignal}
                       onMakeRankingDraft={onMakeRankingDraft}
                       onOpenClock={onOpenClockFromLedger}
                       onOpenStats={manageOk ? onOpenStatsCb : undefined} />
@@ -934,7 +955,11 @@ function GameStepBar({ steps, active, onPick, showSettle, onSettle }: {
   useEffect(() => {
     centerInRail(ref.current?.querySelector<HTMLElement>('[data-pill-active]'), ref.current);
   }, [active]);
-  const chip = (on: boolean) => ['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none',
+  // 모바일: 5칸이 폭을 나눠 가져 **전부 한 화면에** 들어온다(flex-1 basis-0).
+  //   예전엔 shrink-0 + px-3 이라 375 에서 '5. 정산'이 잘려 스크롤해야 보였다 — 5단계 파이프라인인데
+  //   마지막 단계가 안 보이면 그 단계가 있는 줄도 모른다(오너 2026-09-07).
+  // sm+: 종전대로 내용 폭(가로 여유가 있으니 굳이 늘리지 않는다).
+  const chip = (on: boolean) => ['relative inline-flex h-9 min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-tab leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none sm:flex-none sm:basis-auto sm:px-3',
     on ? 'font-bold text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ');
   return (
     <div ref={ref} role="tablist" aria-label="게임 진행 단계"

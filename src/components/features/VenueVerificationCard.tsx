@@ -39,7 +39,9 @@ export default function VenueVerificationCard() {
   return (
     <div className="space-y-1 rounded-card border border-border-default bg-surface-low p-3">
       <span className="inline-block rounded-badge bg-surface-float px-2 py-0.5 text-2xs font-bold text-ink-secondary">비인증 매장</span>
-      <p className="text-xs leading-relaxed text-ink-secondary">
+      {/* 12.75px 설명문의 행간 정본은 t-desc(19.13 = 1.5배) 하나다 — leading-relaxed 는 20.72 라
+          같은 크기 설명문이 두 리듬으로 갈렸다(SectionHeader 가 이미 같은 이유로 t-desc 로 통일돼 있다). */}
+      <p className="t-desc break-keep text-ink-secondary">
         인증받으면 포스터 즉시 게시 · 목록 상단 우선 노출. (운영자 검토 후 부여)
       </p>
     </div>

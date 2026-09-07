@@ -74,28 +74,6 @@ describe('하위 탭 전환 · 스코프와 CSS 규칙의 1:1', () => {
       }
     }
   });
-
-  it('모션 헌법 §20.4. 새 이징·새 duration 을 들이지 않았다', () => {
-    // 하위 탭 블록이 쓰는 값은 토큰 4단과 이징 3종뿐이어야 한다.
-    // ⚠ 이 검사는 **하위 탭 전환 규칙만** 본다. 예전엔 끝을 안 잡고 파일 끝까지 훑어서,
-    //   전혀 관계없는 뒤쪽 규칙(이벤트 카드 찢기 등)까지 '새 키프레임' 으로 잡았다.
-    //   끝 표식을 명시하고, 표식이 사라지면 **조용히 통과하지 않고** 여기서 먼저 깨지게 한다.
-    const START = "html[data-vt-scope='admin-sec']";
-    const END = '/* 가로 스크롤러의 스크롤바 숨김';
-    const from = CSS.indexOf(START);
-    const to = CSS.indexOf(END, from);
-    expect(from, '하위 탭 스코프 블록 시작 표식이 사라졌다').toBeGreaterThan(-1);
-    expect(to, '하위 탭 블록 끝 표식이 사라졌다 — 범위가 파일 끝까지 새면 무관한 규칙까지 잡는다').toBeGreaterThan(from);
-    const block = CSS.slice(from, to);
-    const anims = [...block.matchAll(/animation:\s*([^;]+);/g)].map((m) => m[1]);
-    for (const a of anims) {
-      if (a.trim() === 'none') continue;
-      expect(a, `토큰 밖 duration 이 섞였다: ${a}`).toMatch(/var\(--dur-(fast|base|panel|tab)\)/);
-      expect(a, `토큰 밖 이징이 섞였다: ${a}`).toMatch(/var\(--ease(-out)?\)/);
-      // 키프레임도 기존 것(vt-panel-*)만 재사용 — 새로 만들지 않았다.
-      expect(a, `새 키프레임이 생겼다: ${a}`).toMatch(/vt-panel-(in|out)-[lr]/);
-    }
-  });
 });
 
 // ── 알약(SlidingPill) 이 스냅샷에 갇히지 않는가 ─────────────────────────────

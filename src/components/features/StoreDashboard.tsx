@@ -16,6 +16,7 @@ import { aiGenerate } from '../../api/ai';
 import { getVenueRankings } from '../../api/rankings';
 import { hasRankingForGame } from '../../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
 import { ledgerGameLabel } from '../../lib/ledgerLink';
+import type { StoreGoto } from '../../lib/storeDestination'; // 이동 목적지 계약(날짜·게임·event·정산)
 import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import RegularsModal from './RegularsModal';
@@ -71,7 +72,8 @@ export interface DashCaps { ledger: boolean; manage: boolean; voucher: boolean; 
 interface Props {
   venueId: string;
   schedules: Schedule[];
-  onGoto: (section: string) => void;
+  /** 이동. 문자열이면 예전대로 '지금 화면'을, 객체면 날짜·게임·event·정산 문맥까지 데려간다. */
+  onGoto: StoreGoto;
   onCreatePoster: () => void;
   /** 직원 권한에 따라 카드/바로가기 노출 게이팅(업주·운영자는 전부 true). */
   caps: DashCaps;
@@ -438,7 +440,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   for (const s of range.sessions) { if (days.includes(s.sessionDate)) weekVoucher += s.voucherIssued ?? 0; }
   const todayVoucher = session?.voucherIssued ?? 0;
 
-  // ── 단골 TOP(바인·방문 횟수 기준, 관계자[직원] 제외) ──
+  // ── 고객·단골 상위(바인·방문 횟수 기준, 관계자[직원] 제외) ──
   const staffNames = new Set(wages.map((w) => w.name.trim()));
   const topRegulars = regulars.filter((r) => !staffNames.has(r.name.trim())).slice(0, 5);
 
@@ -510,7 +512,10 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 
   return (
     <div className="space-y-3">
-      <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]} />
+      {/* 고객·단골(CRM). 이용권 보내기는 권한이 있을 때만 넘긴다 — 없으면 버튼 자체가 그려지지 않는다.
+          모달을 겹치지 않고 교체한다: 시트 위 시트는 뒤로가기 스택이 꼬이고 반투명이 두 겹 쌓인다. */}
+      <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]}
+        onSendVoucher={caps.voucher ? (name) => { setRegOpen(false); setVoucherPrefill(name); setVoucherOpen(true); } : undefined} />
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
       <VoucherManageModal open={voucherOpen} onClose={() => { setVoucherOpen(false); setVoucherPrefill(''); }} venueId={venueId} prefillReceiver={voucherPrefill} />
       <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} />
@@ -520,35 +525,50 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* ⚠ 375 에서 라벨이 '운영 가이'로 잘려 있었다 — 버튼 3개가 shrink-0 이라 라벨 폭이 먼저 죽는다.
           한 줄에 못 담으면 버튼 줄이 아래로 내려가게(flex-wrap) 바꿔 글자가 잘리지 않게 한다.
           PC(1280·1440)는 폭이 남아 예전과 똑같이 한 줄이다. */}
+      {/* 레이아웃 (오너 2026-09-07 "줄간격이랑 정돈"):
+          · 종전엔 제목과 버튼 묶음이 한 줄에서 justify-between 이었고, 375 에서 버튼 줄이 아래로 내려가면
+            ml-auto 가 그 줄을 오른쪽으로 밀어 **왼쪽에 큰 빈칸**이 생겼다(들쭉날쭉해 보이는 주범).
+          · 닫기 ✕ 는 액션 버튼들과 같은 줄에서 경쟁했다 — 성격이 다른 버튼이라 제목 줄 오른쪽으로 올린다.
+          · order 로 순서만 바꿔 마크업은 하나로 둔다(버튼을 두 벌 그리지 않는다).
+            모바일: 제목 ─ ✕ / 버튼 3개가 다음 줄을 꽉 채움(flex-1 로 등간격)
+            sm+   : 제목 ─ 버튼 3개 ─ ✕ 한 줄(종전과 동일) */}
       {!guideHidden && (
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
-        <span className="flex min-w-0 items-center gap-2 text-xs text-ink-secondary">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
+        <span className="order-1 flex min-w-0 flex-1 items-center gap-2 text-xs text-ink-secondary">
           <Icon name="bookmark" size={13} className="shrink-0 text-ink-muted" />
           <b className="text-ink-primary">운영 가이드</b><span className="hidden sm:inline">포스터→장부→클락→순위→정산 한눈에</span>
         </span>
-        <span className="ml-auto flex shrink-0 items-center gap-2">
+        <button type="button" onClick={dismissGuide} aria-label="가이드 배너 닫기"
+          className="order-2 grid h-9 w-9 shrink-0 place-items-center rounded-input text-ink-muted transition-colors hover:bg-surface-float/60 hover:text-ink-primary sm:order-3">
+          <Icon name="close" size={14} strokeWidth={2.4} />
+        </button>
+        {/* min-h-9(36px): 종전 py-1 은 26px 라 손가락 표적이 작았다. sm+ 에서는 내용 폭 그대로. */}
+        <span className="order-3 flex w-full shrink-0 items-center gap-2 sm:order-2 sm:w-auto">
           <button type="button" onClick={() => window.open('/guide/manual.html', '_blank', 'noopener')}
-            className="rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-1 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
+            className="min-h-9 flex-1 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 sm:flex-none">
             사용설명서
           </button>
           <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
-            className="rounded-input border border-border-default px-3 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
+            className="min-h-9 flex-1 rounded-input border border-border-default px-3 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary sm:flex-none">
             슬라이드
           </button>
           <a href="/guide/owner.pdf" download="NURI-HOLDEM-업주가이드.pdf"
-            className="rounded-input border border-border-default px-3 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
+            className="grid min-h-9 flex-1 place-items-center rounded-input border border-border-default px-3 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary sm:flex-none">
             PDF
           </a>
-          <button type="button" onClick={dismissGuide} aria-label="가이드 배너 닫기"
-            className="px-1 py-1 text-ink-muted hover:text-ink-primary transition-colors">
-            <Icon name="close" size={14} strokeWidth={2.4} />
-          </button>
         </span>
       </div>
       )}
 
       {/* ② 스티키 상단 바 — 매장명 + 라이브 인디케이터 + 날짜. 컬럼 스코프 sticky(--stack-top 아래) */}
-      <div className="sticky top-[calc(var(--stack-top,6.0625rem)-1px)] z-20 -mb-1 border-b border-border-subtle bg-surface-base py-2 before:pointer-events-none before:absolute before:inset-x-0 before:-top-3 before:h-3 before:bg-surface-base">
+      {/* 모바일: 배경 없음 — 글자와 하단 헤어라인만(오너 2026-09-07 "덮혀있는 검은 색 부분 전체 제거").
+            이 바가 배경을 갖고 있던 유일한 이유는 sticky 라 스크롤 내용이 비치면 안 돼서였다.
+            폰에서는 상단 앱 헤더가 이미 '내 매장'을 계속 말해 주므로 이 줄까지 붙들어 둘 이유가 없다
+            → sticky 를 풀면 배경이 필요 없어지고, 요청대로 '글자 + 줄 하나'만 남는다.
+            (bg-surface-base 는 평평한 #06080F 라 아우라 블룸이 깔린 주변 위에서 검은 상자로 떴고,
+             블룸을 섞은 subbar-aura 로 바꿔 보니 이번엔 보라 띠가 돼 더 도드라졌다 — 실측 확인.)
+          PC(lg+): 종전 그대로 sticky + 불투명 배경 — 업주는 밀도가 우선이라 표지판을 붙들어 둔다. */}
+      <div className="border-b border-border-subtle py-2 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)-1px)] lg:z-20 lg:-mb-1 lg:bg-surface-base lg:before:pointer-events-none lg:before:absolute lg:before:inset-x-0 lg:before:-top-3 lg:before:h-3 lg:before:bg-surface-base">
         {/* 이 줄은 파이프라인의 '지금 어디' 표지판이다 — 매장 · 진행 여부 · 날짜.
             2026-09-04 오너 지시로 다듬음. 원칙 3가지:
              ① **한 줄 유지** — 스티키라 높이를 늘리면 PC 대시보드의 세로를 영구히 먹는다(업주는 밀도 우선).
@@ -869,16 +889,31 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         const todayPoster = schedules.some((x) => x.venueId === venueId && x.date === d && x.approved);
         const closed = !!session?.closed;
         const steps: { key: string; label: string; done: boolean; go: () => void }[] = [
+          // 오늘 파이프라인은 '지금 보고 있는 게임'을 그대로 데려간다 — 사이드 장부를 보다가
+          // 클락·순위를 누르면 메인으로 튀던 것이 이 줄의 증상이었다.
           { key: 'posters', label: '포스터', done: todayPoster, go: () => onGoto('posters') },
-          { key: 'ledger',  label: '장부',   done: started,     go: () => onGoto('ledger') },
-          { key: 'clock',   label: '클락',   done: clockActive || closed, go: () => onGoto('clock') },
-          { key: 'ranking', label: '순위',   done: hasRankToday === true, go: () => onGoto('ranking') },
+          { key: 'ledger',  label: '장부',   done: started,     go: () => onGoto({ section: 'ledger', date: started ? d : undefined, gameSeq: session?.gameSeq }) },
+          { key: 'clock',   label: '클락',   done: clockActive || closed, go: () => onGoto({ section: 'clock', gameSeq: session?.gameSeq }) },
+          { key: 'ranking', label: '순위',   done: hasRankToday === true, go: () => onGoto({ section: 'ranking', date: d, gameSeq: session?.gameSeq, title: session?.title }) },
           // 정산은 별도 화면이 아니라 장부의 마감이다 — 미수가 남아 있으면 아직 끝난 게 아니다.
-          { key: 'settle',  label: '정산',   done: closed && fin.unpaid === 0, go: () => onGoto('ledger') },
+          // ⚠ 날짜를 반드시 실어 보낸다. 장부는 기본이 **목록 모드**(useState<'list'|'board'>('list'))라
+          //   시드 없이 보내면 '게임별 장부 검색' 목록에 떨어진다 — 정산은 안 보이고 다른 화면으로 넘어간 것처럼 된다.
+          //   시드가 붙어야 seed 효과가 setMode('board') 로 그날 보드를 열고, 그제서야 정산바가 존재한다.
+          { key: 'settle',  label: '정산',   done: closed && fin.unpaid === 0, go: () => onGoto({ section: 'ledger', date: d, gameSeq: session?.gameSeq, settle: true }) },
         ];
         const curIdx = steps.findIndex((x) => !x.done);
         return (
           <section className="rounded-card border border-border-subtle bg-surface-low p-2.5" aria-label="오늘 진행 단계">
+            {/* 머리줄 — 이 스트립이 **탭바가 아니라 상태 요약**임을 말한다.
+                제목 없이 번호 5칸만 있으면 아래 '게임 진행'의 탭바와 같은 것으로 읽혀서, 눌렀을 때
+                판이 그 자리에서 바뀔 거라 기대하게 된다(오너 2026-09-07). 실제로는 작업 화면으로 이동한다.
+                역할을 글자로 못박고, 몇 단계가 끝났는지를 함께 보여 '진행률'로 읽히게 한다. */}
+            <p className="mb-1.5 flex items-baseline justify-between gap-2 text-2xs">
+              <span className="font-semibold text-ink-secondary">오늘 진행</span>
+              <span className="tabular-nums text-ink-muted">
+                <b className="font-bold text-ink-secondary">{steps.filter((s) => s.done).length}</b>/{steps.length} 완료 · 누르면 그 단계로
+              </span>
+            </p>
             {/* ⚠ 두 가지가 어긋나 있었다(2026-09-06 오너 스크린샷).
                  ① 칸 높이(44px)가 내용(동그라미 21 + 라벨 14 ≈ 37)과 거의 같아 동그라미가 칸 천장에 붙었다.
                  ② 연결선이 li 의 **세로 중앙**에 있어 동그라미도 라벨도 아닌 그 사이 허공을 이었다.
@@ -934,9 +969,14 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           //   마감이 실제로 하는 일은 '그날 장부를 읽기전용으로 잠그는 것'이고(해제는 업주만),
           //   순위는 마감이 아니라 **순위 입력**으로 들어간다. 다만 순위 입력 넛지가 closed 를 전제로 뜨므로
           //   (아래 분기) 마감이 그 흐름의 관문인 것은 맞다 — 그 관계만 정확히 말한다.
-          todo = { icon: 'alert', title: `지난 장부 ${staleOpen.length}건이 미마감이에요`, desc: `${list} · 마감하면 그날 장부가 읽기전용으로 잠기고(해제는 업주만), 이어서 순위 입력 안내가 떠 시즌·전적으로 연결됩니다.`, cta:'장부에서 마감하기', onClick: () => onGoto('ledger'), tone: 'warn' };
+          // ⚠ 예전엔 onGoto('ledger') 라 **오늘** 장부가 열렸다 — 미마감 장부는 정의상 지난 날짜다.
+          //   가장 오래된 것부터 그 날짜·그 게임으로 정확히 연다(여러 건이면 아래 목록에서 개별 선택).
+          const first = staleOpen[0];
+          todo = { icon: 'alert', title: `지난 장부 ${staleOpen.length}건이 미마감이에요`, // 카피는 짧게 — 이 문구가 길어서 폰(375px)에서 카드가 6줄까지 자랐다(오너 스크린샷 2026-09-07).
+          //   '읽기전용 잠금(해제는 업주만)' 같은 세부는 마감 화면이 그 자리에서 다시 말해 준다.
+          desc: `${list} · 마감하면 장부가 잠기고 순위 입력으로 이어집니다.`, cta:'마감하기', onClick: () => onGoto({ section: 'ledger', date: first.sessionDate, gameSeq: first.gameSeq, settle: true }), tone: 'warn' };
         } else if (caps.ledger && session?.closed && hasRankToday === false) {
-          todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요. 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto('ranking'), tone: 'warn' };
+          todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요. 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto({ section: 'ranking', date: d, gameSeq: session?.gameSeq, title: session?.title }), tone: 'warn' };
         } else if (caps.ledger && started && !session?.closed) {
           todo = clockActive
             ? { icon: 'cards', title: `게임 진행 중 · 엔트리 ${Math.round(fin.entry)}`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: () => onGoto('ledger'), tone: 'gold' }
@@ -975,7 +1015,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 ToolsPanel.tsx 가 GTO 히어로 옆에 btn-primary 를 두지 않는 이유와 같다(아우라 v6.5 화면당 1곳).
                 단 'warn'(지난 장부 미마감·순위 누락)은 놓치면 하류가 통째로 멈추는 급한 알림이라
                 골드 채움은 그대로 두고 **그림자만** 뺀다 — 위계를 낮추지 않으면서 색 경쟁만 없앤다. */}
-            <button type="button" onClick={todo.onClick}
+            <button type="button" onClick={todo.onClick} data-testid="todo-cta"
               className={todo.tone === 'warn'
                 ? `btn-primary shrink-0 px-4 py-2 text-xs !bg-none !bg-gold-400 !text-ink-inverse hover:!bg-gold-500${liveWidget ? ' !shadow-none' : ''}`
                 : liveWidget ? 'btn-ghost shrink-0 px-4 py-2 text-xs' : 'btn-primary shrink-0 px-4 py-2 text-xs'}>
@@ -985,18 +1025,53 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         );
       })()}
 
-      {/* 밀린 순위 미입력 대회 — 마감했지만 순위가 비어 있는 지난 대회(오늘 외) */}
-      {caps.ledger && pendingRanks.length > 0 && (
-        <button type="button" onClick={() => onGoto('ranking')}
-          className="flex w-full items-center gap-3 rounded-card border border-gold-400/40 bg-gold-400/[0.06] p-3 text-left transition-colors hover:bg-gold-400/[0.1]">
-          <Icon name="trophy" size={20} className="shrink-0 text-gold-300" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-ink-primary">순위 미입력 대회 {pendingRanks.length}개</p>
-            <p className="mt-1 truncate text-2xs text-ink-muted">{pendingRanks.slice(0, 4).map((p) => `${p.date.slice(5).replace('-', '/')}${p.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(p.gameSeq)}` : ''}`).join(', ')}{pendingRanks.length > 4 ? ' 외' : ''} — 마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
-          </div>
-          <span className="shrink-0 rounded-input bg-gold-400 px-3 py-2 text-xs font-bold text-ink-inverse">순위 입력</span>
-        </button>
-      )}
+      {/* 밀린 순위 미입력 대회 — 마감했지만 순위가 비어 있는 지난 대회(오늘 외)
+          ⚠ 예전엔 카드 전체가 onGoto('ranking') 하나였다. 4개가 밀려 있어도 **오늘 메인 칩**이 열려서,
+             목록에 적힌 '08/30 사이드1' 을 보고 눌렀는데 전혀 다른 대회가 열렸다(2026-09-07 추적).
+             한 건이면 바로 그 대회로, 여러 건이면 각 행이 자기 대회를 연다 — 대상은 서버가 준
+             (date, gameSeq, rankingEvent) 그대로 쓴다(같은 규칙을 클라에서 다시 유도하지 않는다). */}
+      {caps.ledger && pendingRanks.length > 0 && (() => {
+        const go = (p: typeof pendingRanks[number]) => onGoto({ section: 'ranking', date: p.date, gameSeq: p.gameSeq, event: p.rankingEvent });
+        const labelOf = (p: typeof pendingRanks[number]) =>
+          `${p.date.slice(5).replace('-', '/')}${p.gameSeq > MAIN_GAME_SEQ ? ` ${ledgerGameLabel(p.gameSeq)}` : ''}${p.rankingEvent ? ` · ${p.rankingEvent}` : ''}`;
+        if (pendingRanks.length === 1) {
+          const p = pendingRanks[0];
+          return (
+            <button type="button" onClick={() => go(p)}
+              className="flex w-full items-center gap-3 rounded-card border border-gold-400/40 bg-gold-400/[0.06] p-3 text-left transition-colors hover:bg-gold-400/[0.1]">
+              <Icon name="trophy" size={20} className="shrink-0 text-gold-300" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-ink-primary">순위 미입력 · {labelOf(p)}</p>
+                <p className="mt-1 truncate text-2xs text-ink-muted">마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
+              </div>
+              <span className="shrink-0 rounded-input bg-gold-400 px-3 py-2 text-xs font-bold text-ink-inverse">순위 입력</span>
+            </button>
+          );
+        }
+        const shown = pendingRanks.slice(0, 4);
+        return (
+          <section className="rounded-card border border-gold-400/40 bg-gold-400/[0.06] p-3" aria-label="순위 미입력 대회">
+            <p className="flex items-center gap-2 text-sm font-bold text-ink-primary">
+              <Icon name="trophy" size={18} className="shrink-0 text-gold-300" />순위 미입력 대회 {pendingRanks.length}개
+            </p>
+            <p className="mt-1 text-2xs text-ink-muted">마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
+            <ul className="mt-2 space-y-1">
+              {shown.map((p) => (
+                <li key={`${p.date}#${p.gameSeq}`}>
+                  <button type="button" onClick={() => go(p)}
+                    className="flex w-full items-center gap-2 rounded-input border border-gold-400/25 bg-surface-low/60 px-2.5 py-2 text-left transition-colors hover:bg-surface-low">
+                    <span className="min-w-0 flex-1 truncate text-2xs font-semibold text-ink-secondary">{labelOf(p)}</span>
+                    <span className="shrink-0 text-2xs font-bold text-gold-300">순위 입력 →</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {pendingRanks.length > shown.length && (
+              <p className="mt-1.5 text-2xs text-ink-muted">외 {pendingRanks.length - shown.length}건 — 순위 화면에서 날짜를 골라 이어서 입력할 수 있어요.</p>
+            )}
+          </section>
+        );
+      })()}
 
       {/* 미수·리스크 알림 (장부 권한) */}
       {caps.ledger && started && fin.unpaid > 0 && (
@@ -1121,8 +1196,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
 
-        {/* 단골 TOP(바인·방문 횟수 · 직원 제외) */}
-        <DashCard show={caps.ledger} title="단골 TOP" onClick={() => setRegOpen(true)}
+        {/* 고객·단골(바인·방문 횟수 · 직원 제외).
+            ⚠ 이름을 '단골 TOP' 에서 바꾼 이유: 이 카드가 여는 것은 TOP 5 가 아니라 **매장 전체 고객 목록**이다.
+               '유저' 같은 모호한 이름을 새로 만들지 않는다 — 직원은 '직원 관리', 고객은 '고객·단골',
+               이용권 대상은 이용권 화면의 '받는 손님' 으로 역할이 갈린다. */}
+        <DashCard show={caps.ledger} title="고객·단골" onClick={() => setRegOpen(true)}
           badge={<span className="text-2xs font-bold text-ink-muted">전체 보기 →</span>}>
           {loading ? <Skeleton /> : topRegulars.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">장부 바인 데이터가 아직 없습니다.</p>
@@ -1133,14 +1211,14 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                   <span className={`w-4 shrink-0 text-center text-2xs font-bold tabular-nums ${i === 0 ? 'text-gold-300' : 'text-ink-muted'}`}>{i + 1}</span>
                   <span className="flex-1 min-w-0 truncate text-ink-secondary">{r.name}</span>
                   <span className="shrink-0 tabular-nums text-ink-muted">바인 <b className="text-ink-secondary">{r.buyins}</b> · 방문 <b className="text-ink-secondary">{r.visits}</b>{r.buyins >= 5 && <span className="ml-1 font-bold text-ink-secondary">단골</span>}</span>
-                  {/* CRM 행동 버튼 — 단골에게 바로 이용권 발급(받는 사람 자동 입력) */}
+                  {/* CRM 행동 버튼 — 고객에게 바로 매장이용권 발급(받는 사람 자동 입력).
+                      DashCard 의 children 은 헤더 <button> 밖이라 진짜 <button> 을 쓸 수 있다 —
+                      span[role=button] 은 Space 키가 안 먹고 폼 의미도 없어서 흉내에 그친다. */}
                   {caps.voucher && (
-                    <span
-                      role="button" tabIndex={0} title={`${r.name}님에게 이용권 보내기`}
-                      onClick={(e) => { e.stopPropagation(); setVoucherPrefill(r.name); setVoucherOpen(true); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setVoucherPrefill(r.name); setVoucherOpen(true); } }}
-                      className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-1.5 py-0.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/20 active:opacity-80"
-                    ><Icon name="gift" size={11} />보내기</span>
+                    <button type="button" title={`${r.name}님에게 매장이용권 보내기`}
+                      onClick={() => { setVoucherPrefill(r.name); setVoucherOpen(true); }}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-1.5 py-0.5 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 active:opacity-80"
+                    ><Icon name="gift" size={11} className="shrink-0" />보내기</button>
                   )}
                 </li>
               ))}
@@ -1193,11 +1271,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
 
-        {/* 🎂 생일 단골(7일 내) — 단골 TOP의 고객정보에서 생일 등록 시 자동 표시 */}
+        {/* 🎂 생일 단골(7일 내) — 고객·단골의 고객정보에서 생일 등록 시 자동 표시 */}
         <DashCard show={moreOpen && caps.manage} title="생일 단골" onClick={() => setRegOpen(true)}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">7일 내 {bdays.length}명</span>}>
           {bdays.length === 0 ? (
-            <p className="t-desc break-keep py-3 text-center text-ink-muted">7일 내 생일인 단골이 없습니다.<br />생일은 단골 TOP → 고객정보에서 등록해요.</p>
+            <p className="t-desc break-keep py-3 text-center text-ink-muted">7일 내 생일인 단골이 없습니다.<br />생일은 고객·단골 → 고객정보에서 등록해요.</p>
           ) : (
             <ul className="space-y-1">
               {bdays.slice(0, 5).map((b) => (
@@ -1209,7 +1287,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                   </span>
                 </li>
               ))}
-              <li className="pt-0.5 text-2xs text-ink-muted">축하 쿠폰은 단골 TOP → 고객정보 → 쿠폰 발급으로 보내세요.</li>
+              <li className="pt-0.5 text-2xs text-ink-muted">축하 쿠폰은 고객·단골 → 고객정보 → 쿠폰 발급으로 보내세요.</li>
             </ul>
           )}
         </DashCard>

@@ -11,7 +11,16 @@ import LoadErrorCard from '../atoms/LoadErrorCard';
 import { SkeletonList } from '../atoms/Skeleton';
 import { useToast } from '../atoms/Toast';
 
-export default function RegularsModal({ open, onClose, venueId, exclude = [] }: { open: boolean; onClose: () => void; venueId: string; exclude?: string[] }) {
+export default function RegularsModal({ open, onClose, venueId, exclude = [], onSendVoucher }: {
+  open: boolean; onClose: () => void; venueId: string; exclude?: string[];
+  /**
+   * '매장이용권 보내기' — **넘어오면 권한이 있다는 뜻**이다(호출부가 caps.voucher 로 게이트한다).
+   * 왜 여기 필요한가: 이용권 보내기가 대시보드 '고객·단골' 카드의 **TOP 5 행에만** 있었다.
+   * 6위 이하 고객에게 보내려면 이름을 외워 이용권 화면에서 직접 검색하는 수밖에 없었다 —
+   * 정작 전체 고객 목록은 이 모달이 들고 있는데. 쿠폰과는 다른 기능이라 합치지 않는다.
+   */
+  onSendVoucher?: (name: string) => void;
+}) {
   const [list, setList] = useState<VenueRegular[] | null>(null);
   // 조회 실패를 빈 목록으로 위장하면 사장님이 '아직 손님이 없네'로 읽는다 — 실패는 실패로 말하고 재시도를 준다.
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -59,7 +68,7 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [] }: 
               <span className="w-4 shrink-0" aria-hidden />
             </div>
             <ul className="space-y-1.5">
-              {rows.map(({ r, rank }) => <RegularRow key={r.name} idx={rank} r={r} venueId={venueId} />)}
+              {rows.map(({ r, rank }) => <RegularRow key={r.name} idx={rank} r={r} venueId={venueId} onSendVoucher={onSendVoucher} />)}
             </ul>
           </>
         )}
@@ -72,7 +81,7 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [] }: 
   );
 }
 
-function RegularRow({ idx, r, venueId }: { idx: number; r: VenueRegular; venueId: string }) {
+function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueRegular; venueId: string; onSendVoucher?: (name: string) => void }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [act, setAct] = useState<CustomerActivity | null>(null);
@@ -134,17 +143,28 @@ function RegularRow({ idx, r, venueId }: { idx: number; r: VenueRegular; venueId
   };
   return (
     <li className="rounded-input border border-border-subtle bg-surface-low">
-      <button type="button" onClick={toggle} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2 text-left">
-        <span className={`w-5 shrink-0 text-center text-2xs font-bold tabular-nums ${idx === 1 ? 'text-accent-300' : 'text-ink-muted'}`}>{idx}</span>
-        {/* 긴 닉네임이 숫자 열을 밀지 않게 truncate — 대신 title 로 전체 이름을 볼 수 있게 남긴다. */}
-        <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <span className="min-w-0 truncate text-sm font-semibold text-ink-primary" title={r.name}>{r.name}</span>
-          {r.buyins >= 5 && <span className="shrink-0 text-2xs font-bold text-accent-300">단골</span>}
-        </span>
-        <span className="w-11 shrink-0 text-right text-2xs tabular-nums text-ink-secondary">{r.buyins}</span>
-        <span className="w-11 shrink-0 text-right text-2xs tabular-nums text-ink-secondary">{r.visits}</span>
-        <Icon name={open ? 'chevron-up' : 'chevron-down'} size={14} className="w-4 shrink-0 text-ink-muted" />
-      </button>
+      {/* 펼침 토글과 '이용권 보내기'는 **형제**다 — 버튼 안에 버튼을 넣으면 유효하지 않은 마크업이고
+          키보드로 안쪽 버튼에 닿지 못한다. 열 폭(바인/방문)은 위 열 머리와 계속 같은 값을 쓴다. */}
+      <div className="flex items-center">
+        <button type="button" onClick={toggle} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left">
+          <span className={`w-5 shrink-0 text-center text-2xs font-bold tabular-nums ${idx === 1 ? 'text-accent-300' : 'text-ink-muted'}`}>{idx}</span>
+          {/* 긴 닉네임이 숫자 열을 밀지 않게 truncate — 대신 title 로 전체 이름을 볼 수 있게 남긴다. */}
+          <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+            <span className="min-w-0 truncate text-sm font-semibold text-ink-primary" title={r.name}>{r.name}</span>
+            {r.buyins >= 5 && <span className="shrink-0 text-2xs font-bold text-accent-300">단골</span>}
+          </span>
+          <span className="w-11 shrink-0 text-right text-2xs tabular-nums text-ink-secondary">{r.buyins}</span>
+          <span className="w-11 shrink-0 text-right text-2xs tabular-nums text-ink-secondary">{r.visits}</span>
+          <Icon name={open ? 'chevron-up' : 'chevron-down'} size={14} className="w-4 shrink-0 text-ink-muted" />
+        </button>
+        {onSendVoucher && (
+          // 터치 영역 40px 확보(min-h-10) — 라벨은 아이콘만이 아니라 글자도 남긴다(색·아이콘만으로 뜻을 전하지 않는다).
+          <button type="button" onClick={() => onSendVoucher(r.name)} title={`${r.name}님에게 매장이용권 보내기`}
+            className="mr-2 inline-flex min-h-10 shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-2 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
+            <Icon name="gift" size={11} className="shrink-0" />이용권
+          </button>
+        )}
+      </div>
       {open && (
         <div className="border-t border-border-subtle px-3 py-2">
           {actError ? (
