@@ -31,6 +31,33 @@ function usedScopes(): Set<string> {
   return scopes;
 }
 
+describe('하위 탭 전환 · 알약과 활성 라벨의 스냅샷 순서', () => {
+  // 오너 2026-09-08: "메뉴탭 클릭할 때마다 ... 글자가 안보이는 에러가 너무 명확하고 심각해".
+  //
+  // 평소에는 라벨 span 의 position:relative 가 절대배치 알약 **위**로 글자를 올린다.
+  // 그런데 알약에 view-transition-name 을 주는 순간 그 z 순서가 무의미해진다 —
+  // VT 레이어 순서는 z-index 가 아니라 **캡처 순서**를 따르고, 알약(바의 자손)이 바 스냅샷 위에
+  // 깔려 활성 글자를 통째로 덮는다. 실측(1440x900, 프로덕션 빌드): 클릭 후 ~90ms 화면에
+  // 보라 알약만 있고 글자가 없었다. 대조 실험으로 확정 — 알약 이름만 빼면 같은 프레임에 글자가 보인다.
+  //
+  // 고침은 라벨에도 이름을 주는 것. DOM 에서 SlidingPill 이 버튼들보다 앞이라 라벨 그룹이 알약 그룹보다
+  // 뒤에 캡처돼 위에 얹히고, 박스가 같아 함께 미끄러진다(알약은 움직이고 글자는 보인다).
+  // 이 게이트가 없으면 새 탭바를 만들 때마다 같은 결함이 조용히 따라 들어온다.
+  const pills = [...CSS.matchAll(
+    /html\[data-vt-scope='([a-z0-9-]+)'\] \[(data-[a-z0-9-]+)\] \[data-sliding-pill\] \{ view-transition-name: ([a-z0-9-]+)-pill; \}/g)];
+
+  it('알약에 이름을 준 바가 여럿이다(전수 적용의 최소 증거)', () => {
+    expect(pills.length).toBeGreaterThanOrEqual(9);
+  });
+
+  it.each(pills.map((m) => [m[1], m[2], m[3]] as const))(
+    "'%s' — 알약에 이름을 줬으면 활성 라벨에도 준다", (scope, bar, base) => {
+      const rule = `html[data-vt-scope='${scope}'] [${bar}] [data-pill-active] { view-transition-name: ${base}-label; }`;
+      expect(CSS, `${scope}: 알약(${base}-pill)만 이름이 있고 라벨(${base}-label)이 없다 — `
+        + '전환 중 활성 글자가 알약 스냅샷에 덮여 사라진다').toContain(rule);
+    });
+});
+
 describe('하위 탭 전환 · 스코프와 CSS 규칙의 1:1', () => {
   const scopes = [...usedScopes()].sort();
 
