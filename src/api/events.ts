@@ -78,11 +78,23 @@ export function oddsRows(b: EventBoard): OddsRow[] {
 }
 
 /** 보드 조회 — 비로그인도 볼 수 있다(참여권만 0). 이벤트가 없으면 null. */
+/* 마지막으로 받은 보드 — 이벤트 화면이 **빈 화면 없이** 즉시 그리기 위한 씨앗이다.
+   홈 배너가 이미 같은 보드를 받아 두므로 새 요청이 아니라 '이미 있는 것의 재사용'이다.
+   ⚠ myTickets 는 **사용자별** 값이다. 로그인/로그아웃 뒤에도 들고 있으면 다음 사람 화면에
+     이전 사람의 참여권 숫자가 한 프레임 스친다 — 그래서 auth 가 바뀌면 버린다.
+     TOKEN_REFRESHED 는 같은 사람이라 남긴다(주기적으로 오므로 버리면 씨앗이 늘 없다).
+   ⚠ 씨앗은 '즉시 그릴 첫 화면'일 뿐이고, 화면은 열리자마자 항상 다시 받아 갱신한다
+     (그 사이 다른 사람이 카드를 열었을 수 있다 — 낡은 채로 두면 헛클릭이 된다). */
+let lastBoard: EventBoard | null = null;
+export const cachedEventBoard = (): EventBoard | null => lastBoard;
+supabase.auth.onAuthStateChange((e) => { if (e !== 'TOKEN_REFRESHED') lastBoard = null; });
+
 export async function getEventBoard(slug: string = CARD_EVENT_SLUG): Promise<EventBoard | null> {
   if (IS_MOCK) return null;
   const { data, error } = await supabase.rpc('event_board', { p_slug: slug });
   if (error) throw new Error(error.message);
-  return (data as EventBoard | null) ?? null;
+  lastBoard = (data as EventBoard | null) ?? null;
+  return lastBoard;
 }
 
 /** 카드 열기 — 참여권 1장을 쓰고 그 자리를 확정한다. 실패는 그대로 던진다(카드는 닫힌 채 남는다). */

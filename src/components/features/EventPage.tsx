@@ -15,8 +15,7 @@ import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
-import {
-  getEventBoard, openEventCard, oddsRows, TIER_META,
+import { cachedEventBoard,getEventBoard, openEventCard, oddsRows, TIER_META,
   type EventBoard, type EventCard, type OpenResult,
 } from '../../api/events';
 
@@ -29,8 +28,12 @@ export default function EventPage({ open, onClose, onLogin }: {
 }) {
   const { user } = useAuth();
   const toast = useToast();
-  const [board, setBoard] = useState<EventBoard | null>(null);
-  const [loading, setLoading] = useState(true);
+  /* 홈 배너가 이미 받아 둔 보드로 **첫 프레임부터 내용을 그린다**.
+     이게 없으면 열자마자 헤더만 뜬 빈 몸통이 15~80ms 보였다(실측 2026-09-08) — 그 한 번의
+     교체가 남아 있던 마지막 깜빡임이었다. 씨앗이 없으면(첫 방문·로그인 직후) 종전대로 로딩부터. */
+  const seed = useRef(cachedEventBoard()).current;
+  const [board, setBoard] = useState<EventBoard | null>(seed);
+  const [loading, setLoading] = useState(!seed);
   const [err, setErr] = useState<unknown>(null);
   const [pick, setPick] = useState<EventCard | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
@@ -42,7 +45,18 @@ export default function EventPage({ open, onClose, onLogin }: {
     getEventBoard().then(setBoard).catch(setErr).finally(() => setLoading(false));
   }, []);
   // 열릴 때마다 새로 — 그 사이 다른 사람이 카드를 열었을 수 있다(내 화면만 옛 상태면 헛클릭이 된다)
-  useEffect(() => { if (open) { setLoading(true); load(); } }, [open, load]);
+  useEffect(() => { if (open) { setLoading(!cachedEventBoard()); load(); } }, [open, load]);
+
+  /* 스켈레톤은 **느릴 때만** 보여준다.
+     실측(2026-09-08): 보드 응답이 40~70ms 라 스켈레톤이 2~5프레임 떴다 사라졌다. 그 두세 프레임이
+     '깜빡임'의 정체였다 — 높이 812의 회색 40칸이 1867의 컬러 100칸으로 바뀌니, 뇌는 '뭔가 스쳤다'로 읽는다.
+     70ms 짜리 대기에 로딩 표시를 다는 것은 안내가 아니라 잡음이다. 느린 망에서는 그대로 뜬다. */
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!loading) { setSlow(false); return; }
+    const t = window.setTimeout(() => setSlow(true), 200);
+    return () => window.clearTimeout(t);
+  }, [loading]);
 
   const tearTimer = useRef(0);
   useEffect(() => () => { if (tearTimer.current) window.clearTimeout(tearTimer.current); }, []);
@@ -74,6 +88,19 @@ export default function EventPage({ open, onClose, onLogin }: {
   const canPlay = !!user && (board?.myTickets ?? 0) > 0;
 
   return (
+    /* ⚠ 진입 애니메이션을 **일부러 걸지 않는다**(2026-09-08 실측 후 되돌림).
+       교차 검증이 "이벤트만 진입 전환이 0 — VenuePage 는 animate-slide-up, CustomerDashboardPage 는
+       withViewTransition 으로 여는데 여기만 하드 컷"이라고 짚었고, 그 지적 자체는 맞다.
+       그런데 걸어 보고 쟀더니 **더 나빠졌다**(375×812, 프로덕션 빌드, long-animation-frame):
+           없음        긴 프레임 없음 ~ 51ms
+           slide-up   134ms   (blur(3px)→0)
+           fade-in    112~157ms (opacity 만)
+       블러가 원인이 아니다 — 어느 쪽이든 **포일 카드 100장짜리 격자를 통째로 합성 레이어로 올려**
+       한 프레임에 래스터화해야 한다(블로킹 0 = 스크립트가 아니라 페인트). 200ms 짜리 전환의 첫
+       프레임이 150ms 면 그건 전환이 아니라 끊김이다. 하드 컷 쪽이 낫다.
+       VenuePage 에 같은 클래스가 멀쩡한 건 거기 100장이 없어서다 — 같은 클래스라고 같은 비용이 아니다.
+       ▶ 다시 넣고 싶다면: 격자를 content-visibility 로 잘라 첫 페인트 면적을 줄인 **뒤에** 재고,
+         반드시 위 수치와 같은 자로 다시 재라. 재지 않고 넣으면 이 실측을 되돌리는 것이다. */
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-surface-base" role="dialog" aria-modal="true" aria-label="이벤트">
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-surface-base/95 px-page-x py-2.5 backdrop-blur">
         <button type="button" onClick={onClose} aria-label="닫기"
@@ -89,14 +116,16 @@ export default function EventPage({ open, onClose, onLogin }: {
         )}
       </header>
 
-      {loading ? (
+      {loading ? (slow && (
         <div className="px-page-x py-4" aria-busy="true">
           <div className="skeleton h-32 rounded-aura" />
-          <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-10">
-            {Array.from({ length: 40 }).map((_, i) => <div key={i} className="skeleton aspect-square rounded-input" />)}
+          {/* 칸 수는 본문과 같은 100 — 40칸이면 스켈레톤이 본문보다 10줄 짧아서, 교체 순간 격자가
+              통째로 늘어난다. 같은 격자가 색만 채워져야 '기다렸다'가 되지 '바뀌었다'가 안 된다. */}
+          <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-10 lg:grid-cols-12">
+            {Array.from({ length: 100 }).map((_, i) => <div key={i} className="skeleton aspect-square rounded-input" />)}
           </div>
         </div>
-      ) : err ? (
+      )) : err ? (
         <div className="px-page-x py-4"><LoadErrorCard error={err} what="이벤트" onRetry={() => { setLoading(true); load(); }} /></div>
       ) : !board ? (
         <div className="px-page-x py-16 text-center">
@@ -306,7 +335,7 @@ function TearSheet({ card, phase, result, busy, voucherTitle, onOpen, onClose }:
                 phase === 'result' ? 'anim-prize' : 'opacity-0'].join(' ')}>
                 {won && m ? (
                   <>
-                    <span className={['anim-pop text-4xl font-extrabold leading-none', m.text].join(' ')}>{m.label}</span>
+                    <span className={['anim-prize-pop text-4xl font-extrabold leading-none', m.text].join(' ')}>{m.label}</span>
                     <span className="mt-2 px-3 text-xs font-bold text-ink-primary break-keep">{voucherTitle}</span>
                     <span className={['mt-1 text-3xl font-extrabold leading-none tabular-nums', m.text].join(' ')}>{result!.voucherCount}<span className="ml-0.5 text-sm">장</span></span>
                     <span className="mt-2 flex items-center gap-1 text-2xs text-ink-muted"><Icon name="check-circle" size={11} className="shrink-0" />지갑에 바로 들어갔어요</span>

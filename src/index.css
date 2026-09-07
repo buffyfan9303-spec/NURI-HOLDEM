@@ -1666,7 +1666,10 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
 .anim-prize  { animation: card-prize-in var(--dur-panel) var(--ease-out-ui) both; }
 .anim-strain { animation: card-strain var(--dur-base) var(--ease-out-ui) both; }
 .anim-burst  { animation: prize-burst var(--dur-panel) var(--ease-out-ui) both; }
-.anim-pop    { animation: prize-pop var(--dur-panel) var(--ease-out-ui) both; }
+/* ⚠ 이름을 .anim-pop 으로 두면 위(1167행)의 공용 .anim-pop(nuri-pop)을 **전역으로** 덮는다.
+   실제로 그렇게 돼 있어서 이벤트와 무관한 StatefulActionButton(성공 체크)·IntegratedSearchBar(강조 알약)가
+   조용히 prize-pop 을 쓰고 있었다(2026-09-08 교차 검증에서 발견). 이벤트 전용은 제 이름을 갖는다. */
+.anim-prize-pop { animation: prize-pop var(--dur-panel) var(--ease-out-ui) both; }
 .anim-shred  { animation: shred-fly var(--dur-panel) var(--ease) both; }
 .foil::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -1678,7 +1681,7 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
 @media (prefers-reduced-motion: reduce) {
   /* '없음'이 아니라 '짧은 페이드' — 무엇이 나왔는지는 여전히 이해돼야 한다(§20.4 #7). */
   .anim-tear-l, .anim-tear-r, .anim-shred { animation: none; opacity: 0; }
-  .anim-prize, .anim-pop { animation: card-prize-in var(--dur-fast) linear both; transform: none; }
+  .anim-prize, .anim-prize-pop { animation: card-prize-in var(--dur-fast) linear both; transform: none; }
   .anim-burst, .anim-strain { animation: none; opacity: 0; }
   .foil:hover::after, .foil:active::after { animation: none; opacity: 0; }
 }

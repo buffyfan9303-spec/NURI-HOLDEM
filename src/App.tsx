@@ -1311,6 +1311,9 @@ export default function App() {
         import('./components/features/GlobalSearchModal'),
         import('./components/features/PostDetailModal'),
         import('./components/features/ListingDetailModal'),
+        // 이벤트 화면 — 홈 배너에서 바로 들어가는 길인데 목록에 빠져 있었다. 클릭 순간 청크를 받느라
+        //   Suspense 폴백(불투명 스피너)이 **299ms** 떴다(실측 2026-09-08). gzip 5.2KB 라 idle 에 데워도 싸다.
+        import('./components/features/EventPage'),
         // 역할 전용 청크 — 해당 역할일 때만(손님에게 업주 스위트를 내려보내지 않는다)
         // 직원(venue_staff)도 내 매장 탭을 쓰므로 업주와 같은 게이트에 포함
         ...((isOwner || isAdmin || user?.role === 'venue_staff') ? [import('./components/features/VenueManageTab')] : []),
@@ -2822,7 +2825,12 @@ export default function App() {
             onVenue={handleVenueClick}
             onExplore={() => changeTab('browse')}
             onLive={() => changeTab('live')}
-            onEvent={() => setEventOpen(true)}
+            /* startTransition: 청크가 아직이면 **이전 화면을 유지**한다 — 위 commitTab 의 첫 방문 처리와 같은 이유다.
+               이게 없으면 Suspense 가 폴백(불투명 스피너)을 커밋하고, 리액트는 한 번 띄운 폴백을
+               **최소 ~300ms 유지**한다(폴백이 번쩍이는 걸 막으려는 스로틀). 그래서 청크를 미리 받아 둬도
+               1회차에 283ms 빈 화면이 그대로 남았다(실측 2026-09-08: 그 구간에 긴 프레임 0 · 네트워크 0 —
+               계산도 대기도 아닌 순수 스로틀이었다). 트랜지션이면 폴백 자체를 건너뛴다. */
+            onEvent={() => startTransition(() => setEventOpen(true))}
             onRotiCommunity={() => {
               // 캐러셀 로티아레나 배너 → 매장 커뮤니티 페이지(이름 매칭 — id 하드코딩 회피).
               // 매장 목록 도착 전/이름 변경 시엔 커뮤니티 탭으로 폴백.
@@ -3307,11 +3315,17 @@ export default function App() {
         </Suspense>
       )}
 
-      {eventOpen && (
-        <Suspense fallback={<OverlayFallback />}>
+      {/* ⚠ Suspense 를 조건 **밖**에 둔다. 경계가 그 업데이트에서 **처음 마운트되면** 리액트는
+          트랜지션이어도 폴백을 반드시 커밋하고, 한 번 커밋한 폴백은 최소 ~300ms 유지한다
+          (폴백이 번쩍이는 걸 막으려는 스로틀). 그래서 청크를 미리 받아 두고 startTransition 을 걸어도
+          1회차에 283ms 빈 화면이 그대로 남았다 — 실측(2026-09-08) 그 구간에 긴 프레임 0 · 네트워크 0,
+          계산도 대기도 아닌 순수 스로틀이었다. 경계를 미리 마운트해 두면 트랜지션이 홈을 유지한 채
+          준비될 때까지 기다린다. 같은 구조를 위 CustomerDashboardPage 가 이미 쓰고 있다. */}
+      <Suspense fallback={null}>
+        {eventOpen && (
           <EventPage open onClose={() => setEventOpen(false)} onLogin={() => { setEventOpen(false); setAuthOpen(true); }} />
-        </Suspense>
-      )}
+        )}
+      </Suspense>
 
       {authOpen && (
         <AuthModal key={authMode} open onClose={() => { setAuthOpen(false); setAuthMode('login'); }} initialMode={authMode} />
