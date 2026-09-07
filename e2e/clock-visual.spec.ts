@@ -33,7 +33,7 @@ const NO_ANTE: Level[] = [
 function config(title: string, levels: Level[]) {
   return {
     title, startStack: 50_000, rebuyStack: 70_000, addonStack: 0, isAddon: false,
-    earlyBonus: 5_000, doubleEarlyBonus: 10_000, regCloseLevel: 16, maxLevel: 26,
+    earlyBonus: 5_000, doubleEarlyBonus: 10_000, regCloseLevel: 3, maxLevel: 26, // 3: 이 픽스처(레벨 4개)에서 실제로 도달 가능 — 등록 마감 행을 덮는다
     earlyDoubleLevel: 2, earlySingleLevel: 5, earlyDoubleMin: 40, earlySingleMin: 100,
     mysteryBounty: 0, prizes: [{ place: '1st', amount: 400 }, { place: '2nd', amount: 150 }], levels,
   };

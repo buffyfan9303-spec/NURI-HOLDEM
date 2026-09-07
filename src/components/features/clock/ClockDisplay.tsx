@@ -5,10 +5,19 @@
 // 읽기전용(컨트롤 없음) — 운영은 운영자 클락 화면·휴대폰 리모컨(?remote=)에서. 화면 항상 켜둠(Wake Lock, 베스트에포트).
 //
 // 2026-09-02 v3 'NURI 아우라'(오너 승인 — APIS 화면 복제 대신 손님이 TV 를 올려다보는 이유부터 다시 잡았다):
-//   상단  매장·게임 / 레지 마감 · 휴식까지
-//   본문  좌 프라이즈(순위별 금액 + 총 프라이즈, 없으면 열이 접힘) · 중앙 레벨/타이머/블라인드/ANTE/다음 블라인드 · 우 생존·평균 스택·총 칩·리바이·바이인
+//   상단  매장·대회명 / LEVEL·상태 알약 / 총 진행 시간
+//   본문  좌 프라이즈(총액 + 순위별, 없으면 열이 접힘) · 중앙 타이머 히어로 + 진행률 레일 + CURRENT|NEXT · 우 지표 세로 레일
 //   하단  바인 QR(작게) · 스폰서 · Powered by
-//   뺀 것: RUNNING TIME(손님에게 쓸모 없음 — 오퍼레이터 화면에만) · 탈락 티커 · 영문 대문자 라벨(ANTE 만 관례대로 영문 — 오너 지시).
+//   뺀 것: 탈락 티커 · 영문 대문자 라벨(ANTE·CURRENT·NEXT 만 관례대로 영문 — 오너 지시).
+//
+// 2026-09-07 v2(오너 지시 — 레퍼런스 '루나 1200 GTD'·'KK X ROYCE' 를 모티베이션으로):
+//   · 프라이즈를 독립 열로 되살렸다. v1 에서 하단 레일 한 칸으로 접었는데, 대회 보드에서
+//     "얼마가 걸렸나"는 타이머 다음으로 자주 보는 값이라 요약하면 안 되는 정보였다.
+//   · 지표를 가로 레일 → 세로 레일(라벨 위/숫자 아래). 가로로 눌러 담으면 먼 거리에서 숫자만 남는다.
+//   · **RUNNING TIME 복원**(오너 지시). 예전에 '손님에게 쓸모 없다'고 뺐던 값인데, 레퍼런스 두 종이
+//     모두 상단에 크게 두고 있고 손님도 "몇 시간째인지"를 본다는 판단. 새 컬럼 없이 레벨 구조에서 계산한다.
+//   · 등록 마감·다음 휴식이 상태 바에서 자리를 다투던 것(하나만 보였다)을 지표 레일로 내려 둘 다 보이게.
+//   · 외부 제품의 장식(마블 텍스처·육각 프레임·이모지)은 가져오지 않았다 — 구조만 번역했다.
 //   색: 타이머 순백 · 레벨/블라인드 = 테마 accent(기본 인디고) · 골드는 프라이즈 금액에만(--clk-prize 잠금).
 import { memo, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
@@ -43,6 +52,23 @@ function msToRegClose(s: ClockState, index: number, remaining: number): number |
   for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'level') { num++; if (num >= target) return acc; } acc += lv[i].minutes * 60_000; }
   return null;
 }
+/**
+ * 총 진행 시간 — 지난 레벨들의 길이 합 + 현재 레벨에서 지나간 시간.
+ *
+ * 왜 이렇게 구하나: clock_states 에 '시작 시각' 필드가 없다. 그런데 레퍼런스(루나 1200 GTD)의
+ * TOTAL TIME 이 보여주는 값은 **클락이 돈 시간**이지 벽시계 경과가 아니다 — 일시정지·중단을 빼야
+ * 맞는 숫자다. 레벨 구조에서 계산하면 정확히 그 값이 나오고, 새 컬럼도 마이그레이션도 필요 없다.
+ * (브레이크도 대회 시간의 일부라 함께 센다 — 레퍼런스와 같은 정의.)
+ */
+function elapsedMs(s: ClockState, index: number, remaining: number): number {
+  const lv = s.config?.levels ?? [];
+  let acc = 0;
+  for (let i = 0; i < index && i < lv.length; i++) acc += (lv[i].minutes ?? 0) * 60_000;
+  const cur = lv[index];
+  if (cur) acc += Math.max(0, (cur.minutes ?? 0) * 60_000 - remaining);
+  return acc;
+}
+
 const gameLabel = (g: ClockState) => (g.gameSeq > 1 ? `사이드${g.gameSeq - 1}` : '메인');
 
 /** 한국어 라벨 — 흐린 흰색·자간 살짝. 영문 대문자 관례는 ANTE 하나만(오너 지시) */
@@ -202,7 +228,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
               </button>
             </div>
           )}
-          {g && <HeaderTimes g={g} regLevel={regLevel} />}
+          {g && <RunningTime g={g} />}
           <button type="button" onClick={toggleFs} title="전체화면" aria-label="전체화면"
             className="rounded-[1vmin] bg-white/10 px-[1.4vmin] py-[0.7vmin] text-[1.7vmin] font-bold text-white/80 hover:bg-white/20">{fs ? '⤢ 해제' : '⛶ 전체화면'}</button>
           <button type="button" onClick={onClose} title="닫기" aria-label="닫기"
@@ -219,45 +245,78 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
         </div>
       ) : (
         <>
-          {/* ── 히어로 — 타이머 + 진행률 레일. 이 행이 화면 시각 무게의 절반이다.
-              ⚠ 자리 고정의 핵심: 히어로는 남는 공간을 전부 갖고(flex-1) 그 안에서 **중앙 정렬**이며,
-                 아래 블라인드 행은 **고정 높이**다. 그래서 ANTE 유무·일시정지 여부가 바뀌어도
-                 타이머의 y 가 움직이지 않는다(실측: 예전엔 일시정지 -30px · ANTE 없음 +24px). */}
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-[3vmin]">
-            <CenterPanel g={g} />
+          {/* ── 본문 3열: 프라이즈 | 타이머 히어로 | 지표 ─────────────────────────────
+              레퍼런스 두 종(루나 1200 GTD · KK X ROYCE)이 공통으로 쓰는 골격이다. 둘 다
+              **프라이즈를 독립 열**로 크게 두고 **지표를 세로 레일**로 세운다 — 대회 보드에서
+              "얼마가 걸렸나"와 "지금 몇 명 남았나"는 타이머 다음으로 자주 보는 값이라
+              가로 한 줄에 눌러 담으면 10m 거리에서 안 읽힌다.
+              ⚠ 레이아웃 안정 계약: 중앙 열만 hero(flex-1) + 블라인드(고정 높이) 구조를 갖는다.
+                 좌우 열은 각자 세로 중앙 정렬이라 프라이즈 줄 수·지표 개수가 달라져도
+                 타이머 y 를 밀지 않는다(clock-visual.spec 이 6개 상태에서 y 동일을 강제). */}
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-[2vmin] px-[3vmin] md:grid-cols-[minmax(0,1fr)_minmax(0,2.5fr)_minmax(0,1fr)]">
+
+            {/* 좌 — 프라이즈. 없으면 열 자체를 그리지 않는다(빈 칸을 남기지 않는다). */}
+            {prizes.length > 0 ? (
+              <aside className="hidden min-h-0 flex-col justify-center md:flex">
+                <p className={`${LABEL} text-[1.5vmin]`} style={SOFT}>총 프라이즈</p>
+                <p className="mt-[0.3vmin] font-black leading-none tabular-nums"
+                  style={{ fontSize: 'clamp(22px, 4.6vmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
+                  {totalPrize.toLocaleString()}
+                </p>
+                <ul className="mt-[1.4vmin] space-y-[0.45vmin] border-t border-white/[0.08] pt-[1.2vmin]">
+                  {prizes.slice(0, 12).map((p, i) => (
+                    <li key={i} className="flex items-baseline justify-between gap-[1.2vmin] leading-tight">
+                      <span className="shrink-0 font-bold tabular-nums" style={{ fontSize: i === 0 ? '2.2vmin' : '1.9vmin', ...DIM }}>
+                        {/^\d+$/.test(p.place) ? `${p.place}등` : p.place}
+                      </span>
+                      <span className="font-extrabold tabular-nums"
+                        style={{ fontSize: i === 0 ? '2.5vmin' : '2.1vmin', color: 'var(--clk-prize, #F5C451)' }}>
+                        {p.amount.toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            ) : <span className="hidden md:block" />}
+
+            {/* 중앙 — 타이머 히어로 + 블라인드. **스택 전체를 중앙 정렬**한다.
+                예전엔 히어로가 flex-1 로 남는 공간을 다 먹어서 타이머와 CURRENT/NEXT 사이에
+                죽은 띠가 생겼다(레퍼런스는 둘이 한 덩어리로 붙어 있다).
+                ⚠ 그래도 계약은 유지된다: 블라인드 행이 **고정 높이(22vmin)** 라 ANTE 유무와 무관하게
+                   스택 총높이가 상수다 → 통째로 중앙 정렬해도 타이머 y 가 움직이지 않는다. */}
+            <div className="flex min-h-0 flex-col items-center justify-center gap-[2.5vmin]">
+              <CenterPanel g={g} />
+              <div className="h-[22vmin] w-full shrink-0">
+                <BlindsRow g={g} />
+              </div>
+            </div>
+
+            {/* 우 — 지표 세로 레일. 라벨 작게 위, 숫자 크게 아래(레퍼런스 공통 문법). */}
+            <aside className="hidden min-h-0 flex-col justify-center gap-[1.5vmin] md:flex">
+              <Rail label="생존 / 엔트리" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
+              {showRebuy && <Rail label="리바이 · 애드온" value={String(ls?.rebuys ?? 0)} sub={`· ${ls?.addons ?? 0}`} />}
+              <Rail label="총 칩" value={ls?.totalStack ? ls.totalStack.toLocaleString() : '—'} />
+              <Rail label="평균 스택" value={ls?.avgStack ? ls.avgStack.toLocaleString() : '—'} sub={ls?.avgStack && curBB > 0 ? `${Math.round(ls.avgStack / curBB)} BB` : undefined} />
+              {buyIn > 0 && <Rail label="바이인" value={buyIn.toLocaleString()} />}
+              {/* 초당 갱신이 필요한 두 줄은 별도 컴포넌트에 가둔다 — 여기서 틱을 돌리면 화면 전체가 매초 다시 그려진다 */}
+              <TimeRails g={g} regLevel={regLevel} />
+            </aside>
           </div>
 
-          {/* ── 블라인드 행(고정 높이) — CURRENT | NEXT 좌우 대칭. 굵은 테두리 대신 여백과 미세한 surface 차이. ── */}
-          <div className="h-[22vmin] shrink-0 px-[3vmin]">
-            <BlindsRow g={g} />
-          </div>
-
-          {/* ── 하단 metrics rail — 각 항목을 독립 카드로 만들지 않는다. 값은 밝게, 라벨은 작고 흐리게.
-              정보가 없는 항목은 빈 칸을 남기지 않고 빠진다(나머지가 자연스럽게 넓어진다). ── */}
-          <div className="flex h-[10vmin] shrink-0 items-center gap-[3vmin] border-t border-white/[0.07] px-[3vmin]">
-            <Metric label="생존 / 엔트리" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
-            <Metric label="평균 스택" value={ls?.avgStack ? ls.avgStack.toLocaleString() : '—'} sub={ls?.avgStack && curBB > 0 ? `${Math.round(ls.avgStack / curBB)} BB` : undefined} />
-            <Metric label="총 칩" value={ls?.totalStack ? ls.totalStack.toLocaleString() : '—'} />
-            {showRebuy && <Metric label="리바이 · 애드온" value={String(ls?.rebuys ?? 0)} sub={`· ${ls?.addons ?? 0}`} />}
-            {buyIn > 0 && <Metric label="바이인" value={buyIn.toLocaleString()} />}
-            {prizes.length > 0 && (
-              <Metric label="총 프라이즈" value={totalPrize.toLocaleString()}
-                sub={prizes[0] ? `1위 ${prizes[0].amount.toLocaleString()}` : undefined} prize />
-            )}
-
-            {/* 우측 보조 — 스폰서와 QR. 스폰서가 타이머보다 강해지지 않게 최대 높이를 묶는다. */}
-            <div className="ml-auto flex shrink-0 items-center gap-[2vmin]">
-              {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain opacity-80" style={{ maxHeight: '6vmin' }} />}
-              {qr && (
-                <div className="flex items-center gap-[1vmin]">
-                  <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[0.6vmin] bg-white" style={{ width: 'clamp(36px, 5.4vmin, 84px)', height: 'auto' }} />
-                  <div className="hidden lg:block">
-                    <p className={`${LABEL} text-[1.2vmin]`} style={SOFT}>바인 QR</p>
-                    <p className="text-[1.3vmin] leading-snug" style={DIM}>찍으면 {gameLabel(g)} 바인 요청</p>
-                  </div>
+          {/* ── 하단 — QR · 스폰서 · Powered by. 지표가 우측 열로 올라가서 이 줄은 보조만 남는다. ── */}
+          <div className="flex h-[8vmin] shrink-0 items-center gap-[2vmin] border-t border-white/[0.07] px-[3vmin]">
+            {qr ? (
+              <div className="flex min-w-0 items-center gap-[1vmin]">
+                <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[0.6vmin] bg-white" style={{ width: 'clamp(34px, 5vmin, 78px)', height: 'auto' }} />
+                <div className="min-w-0">
+                  <p className={`${LABEL} text-[1.2vmin]`} style={SOFT}>바인 QR</p>
+                  <p className="text-[1.3vmin] leading-snug" style={DIM}>찍으면 {gameLabel(g)} 바인 요청</p>
                 </div>
-              )}
-              <p className="hidden shrink-0 text-[1.2vmin] font-extrabold uppercase tracking-[0.18em] xl:block" style={DIM}>
+              </div>
+            ) : <span />}
+            <div className="ml-auto flex shrink-0 items-center gap-[2vmin]">
+              {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain opacity-80" style={{ maxHeight: '5.5vmin' }} />}
+              <p className="shrink-0 text-[1.2vmin] font-extrabold uppercase tracking-[0.18em]" style={DIM}>
                 Powered by <span style={{ color: 'var(--clk-accent, #818CF8)' }}>NURI HOLDEM</span>
               </p>
             </div>
@@ -305,6 +364,45 @@ function StatusPills({ g }: { g: ClockState }) {
         {state === 'PAUSED' ? '일시정지' : state}
       </span>
     </div>
+  );
+}
+
+/**
+ * RunningTime — 총 진행 시간. 상태 바 우측(레퍼런스 두 종 모두 이 자리에 둔다).
+ * 초당 틱은 이 컴포넌트 안에만 — 부모(화면 전체) 리렌더 0.
+ */
+function RunningTime({ g }: { g: ClockState }) {
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  const eff = effectiveLevel(g);
+  const run = elapsedMs(g, eff.index, eff.remainingMs);
+  return (
+    <p className="hidden shrink-0 text-right md:block">
+      <span className={`${LABEL} block text-[1.3vmin]`} style={DIM}>총 진행</span>
+      <span className="text-[2.1vmin] font-extrabold tabular-nums text-white">{hms(run)}</span>
+    </p>
+  );
+}
+
+/**
+ * TimeRails — 등록 마감 · 다음 휴식. 지표 열의 마지막 두 줄.
+ * ⚠ 예전엔 이 둘이 상태 바에서 자리를 다퉈 **하나만** 보였다(둘 다 띄우면 상태 바가 정보 나열이 된다).
+ *   지표 레일로 내리면 둘 다 자기 자리를 갖는다 — 등록 마감은 레벨 번호까지 함께(레퍼런스 REG CLOSE Lv16 문법).
+ * 초당 틱은 여기 안에만.
+ */
+function TimeRails({ g, regLevel }: { g: ClockState; regLevel: number }) {
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  const eff = effectiveLevel(g);
+  const reg = regLevel > 0 ? msToRegClose(g, eff.index, eff.remainingMs) : null;
+  const brk = msToNextBreak(g, eff.index, eff.remainingMs);
+  return (
+    <>
+      {reg !== null && (
+        <Rail label="등록 마감" value={reg === 0 ? '마감' : hms(reg)} sub={reg === 0 ? undefined : `Lv ${regLevel}`} danger={reg === 0} />
+      )}
+      {brk !== null && <Rail label="다음 휴식" value={hms(brk)} />}
+    </>
   );
 }
 
@@ -458,15 +556,20 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
   );
 });
 
-/** 하단 레일의 한 칸 — 값은 밝게, 라벨은 작고 흐리게. 독립 카드로 만들지 않는다. */
-function Metric({ label, value, sub, lead, prize }: { label: string; value: string; sub?: string; lead?: boolean; prize?: boolean }) {
+/**
+ * Rail — 우측 지표 열의 한 칸. 라벨(작고 흐리게) 위 / 숫자(밝게) 아래.
+ * 레퍼런스 두 종이 공통으로 쓰는 문법이다 — 가로로 눌러 담으면 라벨과 숫자가 같은 줄에서 경쟁해
+ * 먼 거리에서 숫자만 남고 무엇의 숫자인지가 사라진다.
+ */
+function Rail({ label, value, sub, lead, danger }: { label: string; value: string; sub?: string; lead?: boolean; danger?: boolean }) {
   return (
-    <div className="min-w-0 shrink-0">
-      <p className={`${LABEL} text-[1.3vmin]`} style={SOFT}>{label}</p>
+    <div className="min-w-0 border-b border-white/[0.07] pb-[1.1vmin] last:border-b-0">
+      <p className={`${LABEL} text-[1.5vmin]`} style={SOFT}>{label}</p>
       <p className="mt-[0.2vmin] flex items-baseline gap-[0.6vmin] leading-none">
         <span className="font-extrabold tabular-nums"
-          style={{ fontSize: lead ? 'clamp(20px, 4.2vmin, 68px)' : 'clamp(16px, 3vmin, 48px)', color: prize ? 'var(--clk-prize, #F5C451)' : '#FFFFFF' }}>{value}</span>
-        {sub && <span className="text-[1.7vmin] font-semibold tabular-nums" style={DIM}>{sub}</span>}
+          style={{ fontSize: lead ? 'clamp(24px, 5.4vmin, 92px)' : 'clamp(18px, 3.6vmin, 60px)',
+                   color: danger ? 'var(--clk-timer-urgent, #fb7185)' : '#FFFFFF' }}>{value}</span>
+        {sub && <span className="text-[1.9vmin] font-semibold tabular-nums" style={DIM}>{sub}</span>}
       </p>
     </div>
   );
