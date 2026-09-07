@@ -132,10 +132,20 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-bold text-ink-primary">
                     {r.name}
-                    {r.revoked && <span className="ml-1.5 rounded-chip bg-danger/15 px-1.5 py-0.5 text-[10px] font-semibold text-danger-light">회수</span>}
-                    {r.expired && <span className="ml-1.5 rounded-chip bg-surface-float px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">만료</span>}
+                    {/* 장수를 이름 바로 옆에 — 이 줄에서 제일 먼저 확인하는 사실이 '몇 장'이다.
+                        1장이면 숫자를 붙이지 않는다(대부분이 1장이라 숫자가 소음이 된다). */}
+                    {r.count > 1 && <span className="ml-1 tabular-nums text-accent-300">{r.count}장</span>}
+                    {r.revoked
+                      ? <span className="ml-1.5 rounded-chip bg-danger/15 px-1.5 py-0.5 text-[10px] font-semibold text-danger-light">회수</span>
+                      /* 일부만 회수된 묶음 — '회수' 라고만 하면 전량 회수로 읽힌다. 숫자로 말한다. */
+                      : r.revokedCount > 0 && <span className="ml-1.5 rounded-chip bg-danger/15 px-1.5 py-0.5 text-[10px] font-semibold text-danger-light">{r.revokedCount}장 회수</span>}
+                    {r.expired
+                      ? <span className="ml-1.5 rounded-chip bg-surface-float px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">만료</span>
+                      : r.expiredCount > 0 && <span className="ml-1.5 rounded-chip bg-surface-float px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">{r.expiredCount}장 만료</span>}
                   </p>
-                  <p className="truncate text-[10px] text-ink-muted">{r.title}</p>
+                  <p className="truncate text-[10px] text-ink-muted">
+                    {r.kind === 'issued' ? '전송' : '사용'} · {r.title}
+                  </p>
                 </div>
                 <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{hhmm(r.at)}</span>
               </li>

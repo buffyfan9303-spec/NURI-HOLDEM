@@ -1154,7 +1154,11 @@ const ADMIN_ORDER = ADMIN_SECTIONS.map((a) => a.id);
 
 function AdminNavBtn({ active, onClick, icon, badge, children }: { active: boolean; onClick: () => void; icon: ReactNode; badge?: number; children: ReactNode }) {
   return (
-    <button type="button" onClick={onClick}
+    /* data-admin-active: 전환 동안 이 버튼만 스냅샷 밖으로 들어올려 옛 자리 → 새 자리로 미끄러지게 한다
+       (index.css admin-active). 바 스냅샷이 animation:none 으로 얼어 있어서, 이게 없으면 전환 내내
+       **옛 메뉴가 켜진 채**로 남아 첫 클릭이 안 먹은 것처럼 보인다(오너 2026-09-08 "이중클릭돼").
+       커뮤니티 서브탭에서 같은 방법으로 확인한 조리법이다. */
+    <button type="button" onClick={onClick} data-admin-active={active || undefined}
       className={['flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[6px] px-3 py-2 text-xs font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:justify-start',
         active ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       <span className="shrink-0" aria-hidden>{icon}</span>

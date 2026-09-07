@@ -10,6 +10,61 @@ const v = (o: Partial<Voucher> & { id: string; createdAt: string }): Voucher => 
   usedAt: null, expiresAt: null, issueReason: 'event', ...o,
 });
 
+describe('한 번에 보낸 묶음', () => {
+  // 오너 2026-09-08: "1T 단위가 아니라 한번에 보낸 갯수를 정의해서".
+  // DB 는 1장당 한 행이라 20장을 보내면 20줄이 흘렀다 — 오히려 누가 몇 장 받았는지가 안 보였다.
+  // issue_voucher 는 N장을 한 RPC 로 넣으므로 그 행들은 created_at 이 같다. 그걸 근거로 묶는다.
+  const batch = (n: number, o: Partial<Voucher> = {}) =>
+    Array.from({ length: n }, (_, i) => v({ id: 'b' + i, createdAt: '2026-09-06T01:00:00Z', ...o }));
+
+  it('같은 사람·같은 제목·같은 시각이면 한 줄로 묶이고 장수를 센다', () => {
+    const rows = toFeedRows(batch(10), NOW);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].count).toBe(10);
+    expect(rows[0].name).toBe('홍길동');
+  });
+
+  it('1장이면 count 가 1 이다 — 예전 동작과 같다', () => {
+    const rows = toFeedRows(batch(1), NOW);
+    expect(rows[0].count).toBe(1);
+  });
+
+  it('🔴 시각이 1초라도 다르면 다른 전송이다 — 반올림해 합치면 장부가 거짓말을 한다', () => {
+    const rows = toFeedRows([
+      ...batch(3),
+      ...Array.from({ length: 2 }, (_, i) => v({ id: 'x' + i, createdAt: '2026-09-06T01:00:01Z' })),
+    ], NOW);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.count).sort()).toEqual([2, 3]);
+  });
+
+  it('받는 사람이 다르면 안 묶인다 — 동명이인은 userId 로 가른다', () => {
+    const rows = toFeedRows([
+      v({ id: 'p', createdAt: '2026-09-06T01:00:00Z', holderUserId: 'u1', holderName: '김철수' }),
+      v({ id: 'q', createdAt: '2026-09-06T01:00:00Z', holderUserId: 'u2', holderName: '김철수' }),
+    ], NOW);
+    expect(rows).toHaveLength(2);
+  });
+
+  it('전량 회수면 회수 배지, 일부만 회수면 장수로 말한다', () => {
+    const all = toFeedRows(batch(4, { status: 'revoked' }), NOW)[0];
+    expect(all.revoked).toBe(true);
+    expect(all.revokedCount).toBe(4);
+
+    const some = toFeedRows([...batch(3), v({ id: 'r', createdAt: '2026-09-06T01:00:00Z', status: 'revoked' })], NOW)[0];
+    expect(some.count).toBe(4);
+    expect(some.revokedCount).toBe(1);
+    expect(some.revoked, '일부 회수를 전량 회수로 표시하면 안 된다').toBe(false);
+  });
+
+  it('사용도 묶인다 — 같은 시각에 여러 장을 쓰면 한 줄', () => {
+    const rows = toFeedRows(batch(5, { usedAt: '2026-09-06T05:00:00Z' }), NOW);
+    const used = rows.find((r) => r.kind === 'used')!;
+    expect(used.count).toBe(5);
+    expect(rows.find((r) => r.kind === 'issued')!.count).toBe(5);
+  });
+});
+
 describe('사건 목록', () => {
   it('한 장이 발급·사용 **두 줄**이 된다 — 두 사건의 시각이 다르기 때문', () => {
     const rows = toFeedRows([v({ id: 'a', createdAt: '2026-09-06T01:00:00Z', usedAt: '2026-09-06T02:00:00Z' })], NOW);

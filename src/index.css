@@ -1237,6 +1237,15 @@ html.light .text-pink-300 { color: #BE185D; }
    95px 는 21px 낡은 값이었다 — contain-intrinsic-size 가 실제보다 작으면 스크롤이 점프한다.
    같은 토큰을 홈의 일정 스켈레톤도 쓴다(값 복사 금지 — 한 곳만 고치면 둘 다 따라온다). */
 :root { --card-h-list: 116px; }
+
+/* 전체화면 장부의 정산바 경계 — 바는 position:fixed 라 뷰포트 기준인데, 전체화면 호스트가
+   inset-0 이라 그 둘이 같다. 그래서 좌우만 장부 칸에 맞추면 정확히 겹친다.
+   ⚠ 값의 출처: LedgerWorkspace 의 전체화면 칸은 px-3(0.75rem) 여백이고 우측 레일은 w-[20rem]
+     + border-l(1px), 그 레일은 md 이상에서만 보인다. 그 셋이 바뀌면 여기도 같이 고친다. */
+[data-ledger-fullscreen] { --ledger-bar-left: 0.75rem; --ledger-bar-right: 0.75rem; --ledger-bar-max: none; }
+@media (min-width: 768px) {
+  [data-ledger-fullscreen] { --ledger-bar-right: calc(20rem + 1px + 0.75rem); }
+}
 @media (min-width: 640px) { :root { --card-h-list: 81px; } }
 .cv-card-list { content-visibility: auto; contain-intrinsic-size: auto var(--card-h-list); }
 @media (min-width: 1024px) {
@@ -1497,6 +1506,11 @@ html[data-vt-scope='rank-tab'][data-vt-dir='back']::view-transition-new(rank-pan
 /* 관리자 8섹션 내비 */
 html[data-vt-scope='admin-sec'] [data-admin-secbar] { view-transition-name: admin-secbar; }
 html[data-vt-scope='admin-sec'] [data-admin-secpanel] { view-transition-name: admin-secpanel; }
+/* 활성 메뉴 버튼도 자기 이름을 갖는다 — 바 스냅샷이 animation:none 으로 얼어 있어서, 이게 없으면
+   전환 내내 **옛 메뉴가 켜진 채**로 남고 첫 클릭이 안 먹은 것처럼 보인다(오너 2026-09-08).
+   이름이 있으면 VT 가 옛 자리 → 새 자리를 보간해 강조가 실제로 미끄러진다.
+   커뮤니티 서브탭의 community-pill/community-label 과 같은 조리법. */
+html[data-vt-scope='admin-sec'] [data-admin-secbar] [data-admin-active] { view-transition-name: admin-active; }
 html[data-vt-scope='admin-sec']::view-transition-old(root),
 html[data-vt-scope='admin-sec']::view-transition-new(root) { animation: none; }
 /* 운영자 매장 장부/통계 2탭 */

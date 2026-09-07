@@ -62,7 +62,10 @@ export default function LedgerWorkspace({ venueId, active, children }: {
 
   if (full) {
     return (
-      <div ref={hostRef} className="fixed inset-0 z-[70] flex flex-col bg-surface-base">
+      /* data-ledger-fullscreen: 정산바(NuriPosLedger, position:fixed)가 화면이 아니라
+         **이 안의 장부 칸**에 맞도록 좌우 경계를 넘긴다. 값은 index.css 에 있다 —
+         레일 폭(20rem)과 칸 여백(px-3)이 바뀌면 그 한 곳만 고치면 된다. */
+      <div ref={hostRef} data-ledger-fullscreen className="fixed inset-0 z-[70] flex flex-col bg-surface-base">
         <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
           <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">장부 · 전체화면</span>
           <span className="hidden text-2xs text-ink-muted sm:inline">Esc 로 나가기</span>

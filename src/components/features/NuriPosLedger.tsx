@@ -1466,7 +1466,10 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
       {/* 정산 바 (고정) */}
       {/* 정산바 오프셋 = --tabbar-safe − 0.75rem (탭바에 딱 붙이는 의도적 파생값, TB1a) */}
-      <div className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-0 right-0 z-30 mx-auto max-w-6xl bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
+      {/* 좌우 경계를 변수로 뽑는다 — 기본값은 예전 그대로(0/0 · max-w-6xl)라 일반 화면은 변화 없다.
+          전체화면(LedgerWorkspace)에서는 그 변수를 **장부 칸** 기준으로 덮어 바가 칸에 맞는다.
+          예전엔 뷰포트 기준 1152px 중앙이라 전체화면에서 좌우가 어긋났다(오너 2026-09-08 "길이가 안맞아"). */}
+      <div className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-[var(--ledger-bar-left,0px)] right-[var(--ledger-bar-right,0px)] z-30 mx-auto max-w-[var(--ledger-bar-max,72rem)] bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
         {/* 정산 제외 — 오너 지시: "관계자·신규처럼 빼고 정산", "티켓·현금·카드도 뺄 수 있게".
             정산바 **안** 최상단에 둔다. 바는 bottom 고정이라 펼치면 위로 자라 숫자를 가리지 않는다. */}
         <SettleFilter
