@@ -1160,7 +1160,11 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
                       <span className="text-xs font-semibold text-ink-primary truncate">{j.group.name}</span>
                       {j.status === 'pending' && <span className="text-2xs text-ink-muted">대기</span>}
                     </button>
-                    <button type="button" onClick={() => leave(j)} className="shrink-0 text-2xs text-ink-muted hover:text-danger-light">탈퇴</button>
+                    {/* 글자만 있어 히트영역이 23x16 이었다. 빗나가면 왼쪽 '그룹 열기'가 눌려 화면이 바뀐다 —
+                        오탭의 대가가 큰 자리다. 세로는 tap-y-44, 가로는 실제 패딩으로 넓힌다
+                        (.hit 는 왼쪽 버튼과 겹친다). */}
+                    <button type="button" onClick={() => leave(j)}
+                      className="tap-y-44 shrink-0 -my-1 px-2 py-1 text-2xs text-ink-muted hover:text-danger-light">탈퇴</button>
                   </li>
                 ))}
               </ul>

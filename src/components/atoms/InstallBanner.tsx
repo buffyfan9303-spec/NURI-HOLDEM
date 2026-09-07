@@ -61,7 +61,9 @@ export default function InstallBanner() {
           <p className="truncate text-2xs text-ink-muted">앱처럼 더 빠르게 이용하세요</p>
         </div>
         <button type="button" onClick={install} className="btn-primary shrink-0 px-3 py-1.5 text-xs">설치</button>
-        <button type="button" onClick={dismiss} aria-label="닫기" className="shrink-0 px-1 text-ink-muted hover:text-ink-primary">
+        {/* 34x34 + 세로 보탬(tap-y-44). ⚠ .hit 는 금지 — 44x44 가 왼쪽 '설치' 버튼 위로 번져
+            설치를 누르려다 배너가 닫힌다. 가로는 실제 패딩으로만 넓힌다. */}
+        <button type="button" onClick={dismiss} aria-label="닫기" className="tap-y-44 shrink-0 -mr-1 p-2.5 text-ink-muted hover:text-ink-primary">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
         </button>
       </div>

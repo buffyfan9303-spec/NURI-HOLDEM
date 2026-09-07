@@ -50,7 +50,10 @@ export default function LoadErrorCard({ error, onRetry, what = '정보', compact
       </p>
       {onRetry && (
         <button type="button" onClick={onRetry}
-          className="mt-1 rounded-input border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-bold text-danger-light active:scale-95 transition">
+          /* hit: 44x44 투명 확장. 이 카드는 flex-col 이고 주변에 다른 누를 것이 없어
+             이웃 탭을 가로챌 위험이 없다(부모에 overflow-hidden 도 없다).
+             실패 화면에서 빠져나오는 **유일한** 수단이라 31.75px 로 둘 수 없다. */
+          className="hit mt-1 rounded-input border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-bold text-danger-light active:scale-95 transition">
           다시 시도
         </button>
       )}

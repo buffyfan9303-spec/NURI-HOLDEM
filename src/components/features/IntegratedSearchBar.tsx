@@ -559,13 +559,16 @@ export default IntegratedSearchBar;
 
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded-badge bg-surface-float border border-border-default text-2xs text-ink-secondary">
+    <span className="inline-flex items-center gap-0.5 h-6 px-1.5 rounded-badge bg-surface-float border border-border-default text-2xs text-ink-secondary">
       {label}
       <button
         type="button"
         onClick={onRemove}
         aria-label={`${label} 필터 제거`}
-        className="text-ink-muted hover:text-ink-primary transition-colors focus:outline-none"
+        /* × 자체는 8px 글리프지만 히트영역은 24x24 로 넓힌다(WCAG 2.5.8 AA).
+           ⚠ .hit(44x44 중앙 확장)은 여기서 금지 — 칩 사이 간격이 gap-1.5(6px)라 이웃 칩의
+             × 와 히트박스가 겹쳐 **엉뚱한 필터가 지워진다**. 칩 높이(h-6=24)에 딱 맞춘다. */
+        className="-mr-1 p-2 text-ink-muted hover:text-ink-primary transition-colors focus:outline-none"
       >
         <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
           <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
