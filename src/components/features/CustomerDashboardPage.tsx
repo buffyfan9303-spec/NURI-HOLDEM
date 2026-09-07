@@ -636,7 +636,7 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
               </span>
               <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
             </button>
-            <a href="mailto:buffyfan9303@gmail.com?subject=NURI%20HOLDEM%20문의"
+            <a href="mailto:ace@nuriholdem.com?subject=NURI%20HOLDEM%20문의"
               className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-high transition-colors">
               <Icon name="comment" size={17} className="shrink-0 text-ink-secondary" />
               <span className="min-w-0 flex-1">
@@ -646,7 +646,7 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
               <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
             </a>
             {/* 광고 문의 — 고객센터와 같은 메일 채널, 제목 프리셋으로 분류(1:1 문의 모달은 로그인 전용이라 비로그인 랜딩엔 mailto) */}
-            <a href="mailto:buffyfan9303@gmail.com?subject=%5B광고%20문의%5D%20NURI%20HOLDEM"
+            <a href="mailto:ace@nuriholdem.com?subject=%5B광고%20문의%5D%20NURI%20HOLDEM"
               className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-high transition-colors">
               <Icon name="mail" size={17} className="shrink-0 text-ink-secondary" />
               <span className="min-w-0 flex-1">

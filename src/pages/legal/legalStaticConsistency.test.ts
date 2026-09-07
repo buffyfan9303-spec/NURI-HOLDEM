@@ -66,13 +66,13 @@ describe('공개 약관 정적 발행 (LEGAL-2)', () => {
     expect(src, '철회 방법').toContain('수신 동의 철회 방법');
     expect(src, '철회 채널(이메일 수신거부)').toContain('수신거부');
     expect(src, '야간 전송 제한(정보통신망법 §50③)').toContain('오후 9시');
-    expect(src, '문의 창구').toContain('buffyfan9303@gmail.com');
+    expect(src, '문의 창구').toContain('ace@nuriholdem.com');
   });
 
   it('사업자정보가 공개 페이지 4종에서도 TSX 와 동일값이다', () => {
     // gen-legal 은 LegalNotice 렌더 결과에서 값을 뽑아 쓴다 — 손으로 옮겨 적은 사본이 생기면 여기서 깨진다.
     const notice = read('src/pages/legal/LegalNotice.tsx');
-    for (const v of ['엔에이치홀딩스', '525-20-02937', '김윤혜', 'buffyfan9303@gmail.com', '010-7508-7689']) {
+    for (const v of ['엔에이치홀딩스', '525-20-02937', '김윤혜', 'ace@nuriholdem.com', '010-7508-7689']) {
       expect(notice, `LegalNotice 원문에 ${v} 없음`).toContain(v);
       for (const slug of SLUGS) expect(html(slug), `${slug} 푸터에 ${v} 없음`).toContain(v);
     }

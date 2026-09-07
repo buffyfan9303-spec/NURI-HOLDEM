@@ -98,7 +98,7 @@ function BoostContactCard() {
       <p className="text-xs text-ink-muted">업주가 내 매장 → '포스터 상단 고정' 카드에서 보게 될 메일·전화입니다. 비워두면 "준비 중"으로 표시됩니다.</p>
       <div className="grid gap-1.5 sm:grid-cols-2">
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={80}
-          placeholder="문의 이메일 (예: boost@nuriholdem.com)" className="input w-full text-sm" />
+          placeholder="문의 이메일 (예: ace@nuriholdem.com)" className="input w-full text-sm" />
         <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={20}
           placeholder="문의 전화번호 (예: 010-1234-5678)" className="input w-full text-sm" />
       </div>

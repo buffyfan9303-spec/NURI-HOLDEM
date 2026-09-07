@@ -50,7 +50,8 @@ Deno.serve(async (req) => {
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
     return json({ error: 'VAPID 키가 설정되지 않았습니다 (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY secret 등록 필요)' }, 503);
   }
-  webpush.setVapidDetails('mailto:admin@nuriholdem.com', VAPID_PUBLIC, VAPID_PRIVATE);
+  // VAPID 연락처 — 푸시 서비스(FCM 등)가 문제가 생겼을 때 연락하는 주소다. 실제로 받는 메일함이어야 한다.
+  webpush.setVapidDetails('mailto:ace@nuriholdem.com', VAPID_PUBLIC, VAPID_PRIVATE);
 
   let payloadIn: any = {};
   try { payloadIn = await req.json(); } catch { return json({ error: 'invalid json' }, 400); }

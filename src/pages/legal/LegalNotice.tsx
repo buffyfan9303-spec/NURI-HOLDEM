@@ -242,7 +242,7 @@ export default function LegalNotice() {
         </p>
         <div className="p-3 rounded-input bg-surface-high border border-border-default space-y-1.5">
           <p><span className="text-ink-primary font-medium">운영팀 이메일:</span>{' '}
-            <span className="text-accent-300">buffyfan9303@gmail.com</span></p>
+            <span className="text-accent-300">ace@nuriholdem.com</span></p>
           <p><span className="text-ink-primary font-medium">게임물관리위원회 신고:</span>{' '}
             <span className="text-ink-muted">1488 (평일 09:00–18:00)</span></p>
           <p><span className="text-ink-primary font-medium">도박문제 상담(한국도박문제예방치유원):</span>{' '}
@@ -284,7 +284,7 @@ export default function LegalNotice() {
             ['사업장 소재지', '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호(주공아파트)'],
             ['업태 / 종목', '정보통신업 / 컴퓨터 프로그래밍 서비스업, 포털 및 기타 인터넷 정보 매개 서비스업'],
             ['유선번호', '010-7508-7689'],
-            ['고객센터', 'buffyfan9303@gmail.com'],
+            ['고객센터', 'ace@nuriholdem.com'],
           ].map(([k, v], i) => (
             <p key={i} className="flex gap-2">
               <span className="w-24 shrink-0 text-ink-muted">{k}</span>

@@ -200,7 +200,7 @@ export default function PrivacyPolicy() {
           </table>
         </div>
         <p className="text-2xs text-ink-muted">
-          정보주체는 개인정보의 국외 이전을 거부할 수 있습니다(문의: buffyfan9303@gmail.com).
+          정보주체는 개인정보의 국외 이전을 거부할 수 있습니다(문의: ace@nuriholdem.com).
           다만 거부 시 오류 자동 보고·AI 판정·이메일 소식 등 해당 기능의 이용이 제한될 수 있습니다.
         </p>
       </Article>
@@ -212,7 +212,7 @@ export default function PrivacyPolicy() {
         </p>
         <InfoBox>
           <p><span className="text-ink-secondary">책임자 성명/직책:</span> 김윤혜 (대표)</p>
-          <p><span className="text-ink-secondary">연락처(이메일):</span> buffyfan9303@gmail.com</p>
+          <p><span className="text-ink-secondary">연락처(이메일):</span> ace@nuriholdem.com</p>
           <p className="mt-1.5 text-2xs">
             개인정보 침해 신고는 개인정보보호위원회(privacy.go.kr) 또는 한국인터넷진흥원(118)으로 문의하실 수 있습니다.
           </p>

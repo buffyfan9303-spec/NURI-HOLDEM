@@ -19,7 +19,7 @@ describe('법적 텍스트 정합 (LEGAL-1)', () => {
       expect(src).toContain('엔에이치홀딩스');
       expect(src).toContain('525-20-02937');
       expect(src).toContain('김윤혜');
-      expect(src).toContain('buffyfan9303@gmail.com');
+      expect(src).toContain('ace@nuriholdem.com');
     }
   });
 

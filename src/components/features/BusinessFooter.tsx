@@ -17,7 +17,7 @@ export const BIZ_REQUIRED: [string, string][] = [
   ['전화번호', '010-7508-7689'],
 ];
 const BIZ_EXTRA: [string, string][] = [
-  ['고객센터', 'buffyfan9303@gmail.com'],
+  ['고객센터', 'ace@nuriholdem.com'],
   // 전자상거래법 §10 표시사항 — 호스팅 서비스 제공자
   ['호스팅 제공자', 'Vercel Inc.'],
 ];

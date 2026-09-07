@@ -9,7 +9,7 @@ import { LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVer
 
 const SERVICE = 'NURI HOLDEM';
 const COMPANY = '엔에이치홀딩스';
-const EMAIL = 'buffyfan9303@gmail.com';
+const EMAIL = 'ace@nuriholdem.com';
 const PHONE = '010-7508-7689';
 
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {

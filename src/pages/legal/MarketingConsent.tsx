@@ -110,7 +110,7 @@ export default function MarketingConsent() {
           '이메일: 수신한 메일 하단의 수신거부(구독 해지) 링크를 누르시면 즉시 발송 대상에서 제외됩니다.',
           '푸시 알림: 서비스 내 알림 설정에서 알림을 끄거나, 브라우저·기기의 알림 권한을 차단하시면 발송이 중단됩니다.',
           <>
-            일괄 철회: 고객센터 이메일(<span className="text-accent-300">buffyfan9303@gmail.com</span>)로
+            일괄 철회: 고객센터 이메일(<span className="text-accent-300">ace@nuriholdem.com</span>)로
             철회 의사를 보내주시면 본인 확인 후 지체 없이 처리하고 결과를 회신합니다.
           </>,
         ]} />
@@ -156,7 +156,7 @@ export default function MarketingConsent() {
       <Article n={10} title="문의">
         <p>
           광고성 정보 수신과 관련한 문의·정정·삭제 요청은 개인정보 보호책임자
-          김윤혜(대표) / <span className="text-accent-300">buffyfan9303@gmail.com</span> 으로 접수해 주시기 바랍니다.
+          김윤혜(대표) / <span className="text-accent-300">ace@nuriholdem.com</span> 으로 접수해 주시기 바랍니다.
           개인정보의 처리 전반에 관한 사항은 개인정보처리방침을 따릅니다.
         </p>
       </Article>

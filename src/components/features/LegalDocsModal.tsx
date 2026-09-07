@@ -34,8 +34,8 @@ const BIZ = {
   bizNo: '525-20-02937',
   addr: '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호(주공아파트)',
   phone: '010-7508-7689',
-  contact: 'buffyfan9303@gmail.com',
-  email: 'buffyfan9303@gmail.com',
+  contact: 'ace@nuriholdem.com',
+  email: 'ace@nuriholdem.com',
   privacyOfficer: '김윤혜(대표)',
   /** 이번 개정 대상 문서(이용약관·개인정보처리방침)의 시행일. */
   effective: LEGAL_EFFECTIVE_ISO,
