@@ -122,3 +122,8 @@ DB 를 바꿀 때는 `nuri-migration` 스킬을 먼저 부른다(라이브 DB �
   `contain-intrinsic-size` 가 실제 행 높이와 다르면 스크롤이 점프한다.
 - **SlidingPill** — `src/components/atoms/SlidingPill.tsx` 의 자체 FLIP 인디케이터가 13곳에 쓰인다.
   다른 방식(framer-motion `layoutId` 등)을 도입해도 되지만, 같은 인디케이터가 두 방식으로 구현되면 그 자체가 버그다.
+- **`offsetLeft` 는 transform 이 걸린 조상에서 끊긴다(Chromium).** 전역 프레스 물리 `button:active { transform: scale(.97) }`
+  + 0.2s 복귀 전환 동안 방금 누른 버튼이 자식의 `offsetParent` 가 되어 `offsetLeft` 가 0 이 된다 — 알약이 첫 칸으로
+  가던 근본 원인(2026-09-10, 3일간 4번 고쳐도 재발). 레이아웃 좌표는 `offsetParent` 사슬을 레일까지 더해 구한다.
+  **Playwright 의 click/tap 은 누름이 0ms 라 이 부류를 절대 재현하지 못한다** — 실제 손가락 조건은 CDP
+  `Input.dispatchTouchEvent` 로 touchStart→(100ms+)→touchEnd 를 보내야 한다(`e2e/pill-press.spec.ts`).

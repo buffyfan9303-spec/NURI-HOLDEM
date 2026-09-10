@@ -66,9 +66,33 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       }
       const first = firstRef.current;
       firstRef.current = false;
+      // ⚠ target.offsetLeft 를 그대로 쓰면 안 된다 — **이것이 '알약이 첫 칸으로 간다'의 근본 원인이었다**
+      //   (2026-09-10 실기기 재보고 · 터치+CPU×4 계측으로 확정).
+      //   Chromium 은 transform 이 걸린 조상을 offsetParent 로 삼는다. 전역 프레스 물리(index.css
+      //   `button:active { transform: scale(.97) }` + 0.2s 복귀 전환)가 방금 누른 탭 버튼에 걸려 있는 동안
+      //   span 의 offsetParent 가 레일이 아니라 **버튼**이 되어 offsetLeft 가 0 → 알약이 레일 맨 왼쪽으로 간다.
+      //   실측: 탭 뒤 +60~500ms 내내 offsetParent=BUTTON · offsetLeft=0 · dx=128/191/317px, 600ms verify
+      //   타이머가 되돌릴 때까지 첫 칸에 머문다. VT 경로에선 그 틀린 값이 '새 스냅샷'이 되어 전환 자체가
+      //   알약을 첫 칸으로 미끄러뜨린다(오너 스크린샷 2 = 그 중간 프레임). 09-07 전엔 바 스냅샷이 정지라
+      //   이 우회가 가려졌고 600ms 뒤 제자리로 가는 것만 보였다("누르면 나중에 움직여") — 같은 뿌리다.
+      //   Playwright 의 click/tap 은 누름이 0ms 라 :active 가 렌더되기 전에 끝나 26가지 시나리오에서
+      //   한 번도 재현되지 않았다. 실제 손가락은 누르고 있는 시간이 있다.
+      //   offsetLeft/offsetTop 은 레이아웃 값이라 transform 의 영향을 받지 않는다 — 조상 사슬을 레일까지
+      //   더하면 offsetParent 가 누구든 답이 같다. getBoundingClientRect 는 안 된다(scale 이 그대로 섞인다).
+      const layoutPos = (el: HTMLElement) => {
+        let x = 0, y = 0;
+        let n: HTMLElement | null = el;
+        while (n && n !== container && n !== document.body) {
+          x += n.offsetLeft; y += n.offsetTop;
+          n = n.offsetParent as HTMLElement | null;
+        }
+        // 사슬이 레일에 닿지 않으면(레일이 positioned 가 아닌 사용처) 예전 계산으로 — 동작 보존
+        return n === container ? { x, y } : { x: el.offsetLeft, y: el.offsetTop };
+      };
+      const p = layoutPos(target);
       const r = underline
-        ? { x: target.offsetLeft + 8, y: target.offsetTop + target.offsetHeight - 2, w: Math.max(0, target.offsetWidth - 16), h: 2 }
-        : { x: target.offsetLeft, y: target.offsetTop, w: target.offsetWidth, h: target.offsetHeight };
+        ? { x: p.x + 8, y: p.y + target.offsetHeight - 2, w: Math.max(0, target.offsetWidth - 16), h: 2 }
+        : { x: p.x, y: p.y, w: target.offsetWidth, h: target.offsetHeight };
       const prev = prevRect.current;
       prevRect.current = r;
       pill.style.opacity = '1';
@@ -129,6 +153,9 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
     //     뒤처져 최대 443px 어긋남). 그려진 rect 와 타깃 rect 를 직접 대조하면 그 착시가 없다.
     const verify = () => {
       if (!alive) return;
+      // 미끄러지는 **도중**에는 검사하지 않는다(타이머 경로 포함). 전환 중의 rect 는 당연히 목표와 다르고,
+      // 그걸 '어긋남'으로 보면 measure 가 firstRef=true 로 즉시 이동시켜 슬라이드를 죽인다 — 뒤 타이머가 다시 본다.
+      if (pill.getAnimations().some((a) => a.playState === 'running')) return;
       const t = container.querySelector<HTMLElement>('[data-pill-active]');
       if (!t) return;
       const tr = t.getBoundingClientRect();
@@ -145,8 +172,9 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
     // ── 자기교정 그물 (2026-09-10, 오너 재보고) ─────────────────────────────────
     // 오너가 실제 화면에서 다시 목격했다: 활성 라벨은 '장터'인데 알약은 레일 맨 왼쪽에 있었다.
     // 재현 시나리오 26가지(섹션 6종 전환·탭 왕복·숨은 채 섹션 변경·회전·새로고침·뒤로가기,
-    // 360/412px)를 다 돌려도 어긋남 0건이었다 — 즉 **원인을 특정하지 못한 드문 경로**가 남아 있다.
-    // 원인을 못 짚었으니 증상이 '남아 있을 수 없게' 만든다. 아래 셋이 그물이다.
+    // 360/412px)를 다 돌려도 어긋남 0건이었다. 진짜 원인은 그 뒤 '누르고 있다 떼는' 터치 계측으로
+    // 잡았다(위 measure 의 layoutPos 주석 · e2e/pill-press.spec.ts). 이 그물은 그 수정과 별개로
+    // 남긴다 — 알약이 어떤 이유로든 어긋나면 늦어도 몇 초 안에 제자리로 돌아오게 하는 방어선이다.
     //
     //  ⓐ MutationObserver — 지금까지의 재측정 트리거는 activeKey(리액트 리렌더)·크기 변화·타이머
     //     셋뿐이라, **DOM 이 바뀌었는데 크기는 안 변한 경우**를 놓친다. 예: 탭 목록에 '장터'가
@@ -163,14 +191,7 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
     let raf = 0;
     const scheduleVerify = () => {
       if (!alive || raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        // ⚠ 미끄러지는 **도중**에는 검사하지 않는다. 전환 중의 rect 는 당연히 목표와 다르고,
-        //   그걸 '어긋남'으로 보면 measure 가 firstRef=true 로 즉시 이동시켜 슬라이드를 죽인다
-        //   (알약이 영영 안 미끄러지고 툭툭 튄다 — subtab-motion 이 잡는 회귀).
-        if (pill.getAnimations().some((a) => a.playState === 'running')) return;
-        verify();
-      });
+      raf = requestAnimationFrame(() => { raf = 0; verify(); }); // 슬라이드 중 건너뛰기는 verify 가 한다
     };
     const mo = new MutationObserver((records) => {
       // ⚠ 알약 자신의 style 변경은 무시한다 — measure 가 방금 쓴 값이라, 되먹임 고리가 된다.
