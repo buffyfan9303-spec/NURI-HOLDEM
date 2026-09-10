@@ -144,5 +144,7 @@ Deno.serve(async (req) => {
     if (text) return json({ text, model });
     lastStatus = 502; lastDetail = 'empty response';
   }
-  return json({ error: 'gemini_error', status: lastStatus, detail: lastDetail }, 502);
+  // 상류 오류 본문·예외 원문은 서버 로그에만 — 응답은 고정 코드(보안 표준 §6). 앱은 어차피 규칙 요약으로 폴백한다.
+  console.error('[gto-explain] 상류 오류', lastStatus, lastDetail);
+  return json({ error: 'gemini_error', status: lastStatus }, 502);
 });

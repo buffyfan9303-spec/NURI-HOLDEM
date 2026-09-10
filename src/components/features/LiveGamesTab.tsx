@@ -9,6 +9,7 @@ import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockSta
 import { matchClockSchedule as matchSchedule, msToRegClose } from '../../lib/regStatus';
 import { EmptyState } from '../atoms/Skeleton';
 import Icon from '../atoms/Icon';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { goSubTab } from '../../lib/subTabTransition';
 import { writeSnap } from '../../lib/snapshot';
@@ -96,7 +97,10 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   const [geo, setGeo] = useState<[number, number] | null>(null); // 손님 위치(거리순 정렬, 위치 권한 시)
   // 실패로 목록을 비우면 순간 끊김 한 번에 '진행 중인 대회 없음'이 된다 —
   // 손님 화면에서 그건 사실이 아닌 정보라, 이미 받은 것이 있으면 그대로 유지한다.
-  const load = () => getRunningClocks().then(setGames).catch(() => setGames((cur) => cur ?? []));
+  // 첫 로드부터 실패하면(games 가 아직 null) 빈 상태로 위장하지 않고 LoadErrorCard 로 '못 불러옴'을 말한다 —
+  // api/clock.ts 가 일부러 throw 하는 것을 여기서 `[]` 로 되받으면 '대회 일정 보기' 유도까지 붙은 거짓 화면이 된다(STATE-01).
+  const [loadErr, setLoadErr] = useState<unknown>(null);
+  const load = () => getRunningClocks().then((g) => { setGames(g); setLoadErr(null); }).catch((e) => setLoadErr(e));
   // 폴링·1초 틱은 라이브 탭이 보일 때만 — 숨김 시 멈춰 백그라운드 끊김 방지(재진입 시 즉시 갱신). 실시간 구독은 이벤트 기반이라 상시 유지.
   useEffect(() => { if (!active) return; load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [active]);
   useEffect(() => subscribeRunningClocks(load), []); // 실시간: 레벨 전환·통계 즉시 반영
@@ -199,9 +203,13 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         {/* 진행 게임 목록 — 정렬 전환의 본문(방향성 푸시 대상). 위 헤더·정렬 바는 제자리. */}
         <div data-live-panel="">
         {games === null ? (
-          showSkel ? (
+          loadErr != null ? (
+            <LoadErrorCard error={loadErr} what="진행 중인 게임" onRetry={load} />
+          ) : (
             // [DS] MO-6: LiveCard 3열 골격 복제 — 같은 패딩·같은 min-h(3.5rem)라 도착해도 높이가 안 변한다(CLS 0).
-            <div className="space-y-card-gap" aria-hidden aria-busy="true">
+            // 게이트(200ms) 동안에도 자리는 예약한다(MO-B) — null 을 그리면 늦게 끼어든 스켈레톤이 아래(오늘 곧 시작·푸터)를 민다.
+            //   showSkel 은 pulse 노출만 정한다: invisible = 높이는 그대로, 시머만 숨김(e2e/skeleton-no-shift.spec.ts).
+            <div className={['space-y-card-gap', showSkel ? '' : 'invisible'].join(' ')} aria-hidden aria-busy="true">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="rounded-aura border card-aura px-3.5 py-2.5">
                   <div className="flex min-h-[4.25rem] items-stretch gap-2">
@@ -225,7 +233,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                 </div>
               ))}
             </div>
-          ) : null
+          )
         ) : games.length === 0 ? (
           <EmptyState
             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5" /><path d="M9 2h6" /></svg>}

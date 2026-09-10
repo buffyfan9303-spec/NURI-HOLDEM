@@ -5,7 +5,8 @@ import { defineConfig } from 'vitest/config';
 // "Playwright Test did not expect test.describe() to be called here" 로 실패).
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // api/ 의 Vercel 함수는 순수 JS 라 tsc 밖이다 — 테스트만 여기서 집는다(health 엔드포인트 계약).
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'api/**/*.test.js'],
     exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
     environment: 'node',
   },

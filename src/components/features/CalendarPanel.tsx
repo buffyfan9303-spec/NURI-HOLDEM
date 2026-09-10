@@ -26,6 +26,7 @@ import {
   type BankrollEntry,
 } from '../../api/calendar';
 import type { Schedule } from '../../api/schedules';
+import { investedOf, isMemoEntry, filterRoiRows, roiStats, roiNotice, ROI_MIN_EVENTS } from '../../lib/roi';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 const ymd = (d: Date) => d.toLocaleDateString('en-CA');
@@ -76,18 +77,21 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   const [bankroll, setBankroll] = useState<BankrollEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [err, setErr] = useState<unknown>(null);
+  /** 셋 중 **뱅크롤 조회만** 실패했는가 — 문구와 LED 를 정확히 말하기 위해 따로 둔다(2026-09-10).
+   *  err 은 '셋 중 하나라도' 라서, 이걸로 뭉뚱그리면 일정만 실패했을 때 '뱅크롤을 못 불러왔다'는 거짓말이 된다. */
+  const [bankrollErr, setBankrollErr] = useState<unknown>(null);
 
   const uid = user?.id ?? null;
   const reload = useCallback(async () => {
-    if (!uid) { setLoaded(true); setErr(null); return; }
-    setErr(null);
+    if (!uid) { setLoaded(true); setErr(null); setBankrollErr(null); return; }
+    setErr(null); setBankrollErr(null);
     const r = await Promise.allSettled([
       getMyLikedScheduleIds(), getMyReservations(200), getMyBankroll(300),
     ]);
     const [l, rv, w] = r;
     if (l.status === 'fulfilled') setLikes(l.value);
     if (rv.status === 'fulfilled') setReservations(rv.value);
-    if (w.status === 'fulfilled') setBankroll(w.value);
+    if (w.status === 'fulfilled') setBankroll(w.value); else setBankrollErr(w.reason);
     // 하나라도 실패하면 드러낸다 — 조회 실패를 '기록 없음'으로 보여주면 유저가 영원히 원인을 모른다.
     const failed = r.find((x) => x.status === 'rejected');
     if (failed && failed.status === 'rejected') setErr(failed.reason);
@@ -100,7 +104,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     if (loadedForRef.current === uid) return;
     loadedForRef.current = uid;
     setLikes(new Set()); setReservations([]); setBankroll([]);
-    setLoaded(false); setErr(null);
+    setLoaded(false); setErr(null); setBankrollErr(null);
   }, [uid]);
 
   // ② 탭이 '보이게 될 때' 읽는다. 숨어 있는 동안은 왕복을 만들지 않고,
@@ -137,7 +141,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
       detail: [r.venueName, r.startTime?.slice(0, 5)].filter(Boolean).join(' · '),
     }));
     // 한 테이블(bankroll_entries)이 둘을 겸한다 — 금액이 있으면 뱅크롤, 0 이면 기타 스케줄(메모만).
-    bankroll.forEach((e) => push(e.entryDate, e.amount === 0
+    bankroll.forEach((e) => push(e.entryDate, isMemoEntry(e)
       ? { kind: 'memo', title: e.memo, detail: '' }
       : { kind: 'bankroll', title: e.amount > 0 ? `+${won(e.amount)}` : won(e.amount), detail: e.memo, amount: e.amount }));
     return m;
@@ -229,15 +233,29 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
         </button>
       </div>
 
-      {err != null && <LoadErrorCard error={err} what="내 기록" onRetry={() => { setLoaded(false); void reload(); }} compact />}
+      {/* 2026-09-10 문구 정정 — '내 기록을(를) 불러오지 못했습니다' 는 무엇이 실패했는지 말하지 않고
+          '을(를)' 이 그대로 노출됐다. 제목·보조를 이 화면만 덮는다(공용 템플릿은 그대로). */}
+      {err != null && (
+        <LoadErrorCard
+          error={err}
+          what={bankrollErr != null ? '뱅크롤 데이터' : '캘린더 정보'}
+          title={bankrollErr != null ? '뱅크롤 데이터를 불러오지 못했습니다' : '캘린더 정보를 불러오지 못했습니다'}
+          hint="로그인이 만료되었거나 데이터를 불러오는 중 문제가 발생했습니다."
+          onRetry={() => { setLoaded(false); void reload(); }}
+          compact
+        />
+      )}
 
       {/* 이번 달 요약 — 전부 '내가 한 것'이다(예약·찜·내가 적은 뱅크롤).
           매장 장부에서 끌어오는 값은 없다(오너 지시 2026-09-04).
           sub 줄은 값이 없어도 자리를 지킨다(조건부로 넣으면 월을 옮길 때마다 아래가 15px 밀린다 = CLS). */}
+      {/* 2026-09-10 — '내 기록'은 무엇의 기록인지 말하지 않았다. '순손익'으로 바꾸되
+          아래 카드의 '전체 누계 순손익'과 같은 낱말이 되므로 **sub 줄에 범위를 적는다**(§6 '범위가 문구로 구분됨').
+          sub 는 이미 자리를 지키는 줄이라 높이 변화 0. */}
       <div className="grid grid-cols-3 gap-1.5">
-        <Stat label="예약" value={`${summary.reserveCount}건`} sub=" " tone="cyan" />
-        <Stat label="찜" value={`${summary.likeCount}개`} sub=" " tone="gold" />
-        <Stat label="내 기록" value={`${summary.bankrollSum >= 0 ? '+' : ''}${won(summary.bankrollSum)}`} sub=" " tone={summary.bankrollSum >= 0 ? 'emerald' : 'danger'} />
+        <Stat testId="sum-reserve" label="예약" value={`${summary.reserveCount}건`} sub="이번 달" tone="cyan" />
+        <Stat testId="sum-like" label="찜" value={`${summary.likeCount}개`} sub="이번 달" tone="gold" />
+        <Stat testId="sum-net" label="순손익" value={`${summary.bankrollSum >= 0 ? '+' : ''}${won(summary.bankrollSum)}`} sub="이번 달" tone={summary.bankrollSum >= 0 ? 'emerald' : 'danger'} />
       </div>
 
       {/* 월 그리드 — 이 화면의 주인공 면이라 아우라 헤어라인(.ring-aura)을 준다.
@@ -373,7 +391,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
         </section>
       )}
 
-      <BankrollCard date={picked} rows={bankroll} onChanged={reload} onPickDate={setPicked} toast={toast} />
+      <BankrollCard date={picked} monthPrefix={monthPrefix} rows={bankroll} loaded={loaded} failed={bankrollErr != null} onChanged={reload} onPickDate={setPicked} toast={toast} />
 
       {/* 찜한 다가올 게임 — 캘린더 밖에서도 한눈에. 헤더 수와 목록은 같은 배열에서 나온다. */}
       {likedUpcoming.length > 0 && (
@@ -405,13 +423,27 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   );
 }
 
-function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone: 'cyan' | 'gold' | 'emerald' | 'danger' }) {
+function Stat({ label, value, sub, tone, testId, dense }: {
+  label: string; value: string; sub?: string; tone: 'cyan' | 'gold' | 'emerald' | 'danger' | 'muted';
+  /** data-stat — 라벨 문자열 대신 e2e 가 잡는 안정 키(CLAUDE.md: 라벨을 바꾸면 같은 커밋에서 testid 로 교체) */
+  testId?: string;
+  /** 보조 지표 — 테두리를 빼고 한 단 작게. 같은 카드 안에서 '전부 같은 무게'로 보이던 것을 가른다(§6 시각 위계) */
+  dense?: boolean;
+}) {
   // stat-* 토큰은 라이트 오버라이드를 갖고 있다. cyan·gold 는 없어서 라이트 흰 카드 위 1.45:1 이었다 —
   // index.css 에 stat-cyan·stat-gold 를 추가하고 여기서 그것만 쓴다(하드 팔레트 금지).
-  const cls = tone === 'cyan' ? 'stat-cyan' : tone === 'gold' ? 'stat-gold' : tone === 'emerald' ? 'stat-emerald' : 'text-danger-deep dark:text-danger-light';
+  const cls = tone === 'cyan' ? 'stat-cyan' : tone === 'gold' ? 'stat-gold' : tone === 'emerald' ? 'stat-emerald'
+    : tone === 'muted' ? 'text-ink-secondary' : 'text-danger-deep dark:text-danger-light';
   return (
-    <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center">
-      <p className={`text-base font-extrabold leading-none tabular-nums ${cls}`}>{value}</p>
+    <div data-stat={testId}
+      /* dense 틴트는 /50 이 아니라 /25 다 — 다크에서 surface-high 는 더 **밝은** 면이라
+         /50 위의 text-ink-muted 가 4.49:1 로 AA(4.5)를 아슬하게 못 넘겼다(2026-09-10 실측).
+         라이트는 어느 쪽이든 5.0 이상이라 다크 기준으로 맞춘다. */
+      className={dense
+        ? 'rounded-input bg-surface-high/25 p-2 text-center'
+        : 'rounded-input border border-border-subtle bg-surface-low p-2 text-center'}>
+      {/* 360px 3칸(칸 ~100px)에서 '-150,000' 같은 8자 값이 두 줄로 꺾였다(2026-09-10 캡처) — 숫자는 절대 꺾지 않고 긴 값만 한 단 줄인다 */}
+      <p className={`${dense ? (value.length > 7 ? 'text-xs' : 'text-sm') : (value.length > 7 ? 'text-sm' : 'text-base')} whitespace-nowrap font-extrabold leading-none tabular-nums ${cls}`}>{value}</p>
       <p className="mt-1 text-2xs text-ink-muted">{label}</p>
       {/* 값이 없어도 자리를 지킨다 — 조건부 렌더는 월 이동마다 아래를 15px 밀어 올린다 */}
       <p className="text-2xs tabular-nums text-ink-muted">{sub ?? ' '}</p>
@@ -421,10 +453,17 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub?:
 
 /** 수기 뱅크롤 — 자동 집계가 못 잡는 현금 게임·타 매장 결과를 유저가 직접 +/- 로 적는다. */
 /** 내가 적는 기록 — 뱅크롤(금액)과 일정(메모) 두 가지를 한 카드에서, 모드를 갈라 받는다.
- *  저장은 둘 다 bankroll_entries 한 테이블로 간다(금액 0 = 일정). DB 제약: amount<>0 or memo<>''. */
-function BankrollCard({ date, rows, onChanged, onPickDate, toast }: {
+ *  저장은 둘 다 bankroll_entries 한 테이블로 간다(금액 0 = 일정). DB 제약: amount<>0 or buy_in>0 or memo<>''(20260909b).
+ *  개인 ROI(참가비·매장·게임)는 선택 입력 — 개인 비공개 기록이라 랭킹·비교로 잇지 않는다(src/lib/roi.ts). */
+function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPickDate, toast }: {
   date: string;
+  /** 위 달력이 보고 있는 달(YYYY-MM) — ROI '이번 달' 범위의 단일 출처 */
+  monthPrefix: string;
   rows: BankrollEntry[];
+  /** 조회가 끝났는가. false 면 rows=[] 가 '0원'이 아니라 '아직 모름'이다 — 히어로에 '—' 를 그리고 Aura 를 끈다. */
+  loaded: boolean;
+  /** 조회가 실패했는가. 실패도 '0원'으로 위장하지 않는다(§6, LoadErrorCard 와 같은 원칙). */
+  failed: boolean;
   onChanged: () => void;
   /** 날짜 입력이 달력 선택을 그대로 움직인다 — 두 값을 따로 두면 저장한 날과 보이는 날이 어긋난다 */
   onPickDate: (d: string) => void;
@@ -435,6 +474,24 @@ function BankrollCard({ date, rows, onChanged, onPickDate, toast }: {
   const [amount, setAmount] = useState('');
   const [memo, setMemo] = useState('');
   const [busy, setBusy] = useState(false);
+  // 개인 ROI 입력(선택) — 비우면 0/'' 로 저장돼 옛 행과 같다
+  const [buyIn, setBuyIn] = useState('');
+  const [rebuy, setRebuy] = useState('');
+  const [addon, setAddon] = useState('');
+  const [venueName, setVenueName] = useState('');
+  const [gameName, setGameName] = useState('');
+  // ROI 범위 — 이번 달/전체 · 매장 · 게임(문자열 일치)
+  const [period, setPeriod] = useState<'month' | 'all'>('month');
+  const [venue, setVenue] = useState('');
+  const [game, setGame] = useState('');
+  const venues = useMemo(() => [...new Set(rows.map((r) => r.venueName).filter(Boolean))].sort(), [rows]);
+  const games = useMemo(() => [...new Set(rows.map((r) => r.gameName).filter(Boolean))].sort(), [rows]);
+  const stats = useMemo(() => roiStats(filterRoiRows(rows, {
+    monthPrefix: period === 'month' ? monthPrefix : undefined, venue: venue || undefined, game: game || undefined,
+  })), [rows, period, monthPrefix, venue, game]);
+  const showRoi = stats.events >= ROI_MIN_EVENTS;
+  const notice = roiNotice(stats);
+  const trendMax = Math.max(1, ...stats.months.map((m) => Math.abs(m.net)));
   const dayRows = rows.filter((r) => r.entryDate === date);
 
   // 손익 — 불러온 범위 전체 기준. 합계 하나면 '얼마 넣고 얼마 벌었는지'가 안 보인다(오너 지시).
@@ -443,20 +500,42 @@ function BankrollCard({ date, rows, onChanged, onPickDate, toast }: {
   const minus = money.filter((r) => r.amount < 0).reduce((a, r) => a + r.amount, 0); // 음수
   const net = plus + minus;
 
+  // ── 전체 누계 히어로의 상태 (2026-09-10) ──────────────────────────────────
+  // '기록 없음'과 '정확히 0'을 가른다 — 0원으로 오해시키지 않는다(§6).
+  // 뱅크롤 기록 = 금액이 있거나(±) 참가비를 적은 행. 메모만 있는 '일정'은 뱅크롤이 아니다.
+  const hasBankroll = rows.some((r) => r.amount !== 0 || investedOf(r) > 0);
+  const heroReady = loaded && !failed && hasBankroll;
+  // Aura 는 '실제 상태를 말할 때만' 켠다: 로딩·오류·기록 없음은 전부 끈다(§6·§12).
+  const heroVariant = net > 0 ? 'emerald' : net < 0 ? 'rose' : 'violet';
+  const netText = heroReady ? `${net >= 0 ? '+' : ''}${won(net)}` : '—';
+  const heroNote = failed ? '불러오지 못했어요'
+    : !loaded ? '불러오는 중이에요'
+    : !hasBankroll ? '아직 기록이 없어요'
+    : null;
+
   const save = async (sign: 1 | -1 | 0) => {
-    const n = Math.trunc(Number(amount.replace(/[^0-9]/g, '')));
+    const num = (s: string) => Math.trunc(Number(s.replace(/[^0-9]/g, '')) || 0);
+    const n = num(amount);
+    // 개인 ROI 입력 — 일정 모드에서는 싣지 않는다(일정은 참가가 아니다)
+    const extra = sign === 0
+      ? { buyIn: 0, rebuy: 0, addon: 0, venueName: '', gameName: '' }
+      : { buyIn: num(buyIn), rebuy: num(rebuy), addon: num(addon), venueName: venueName.trim(), gameName: gameName.trim() };
+    const invested = investedOf(extra);
     if (sign === 0) {
       if (!memo.trim()) { toast.show('내용을 입력해 주세요', 'error'); return; }
     } else {
-      if (!n) { toast.show('금액을 입력해 주세요', 'error'); return; }
+      // 금액 0 이어도 참가비가 있으면 본전 기록이다
+      if (!n && !invested) { toast.show('금액을 입력해 주세요', 'error'); return; }
       // 상한을 클라이언트에서 막는다 — 넘기면 서버가 영문 Postgres 오류를 그대로 토스트에 뱉는다
-      if (n > BANKROLL_MAX) { toast.show(`한 번에 ${won(BANKROLL_MAX)}원까지 기록할 수 있어요`, 'error'); return; }
+      if (n > BANKROLL_MAX || invested > BANKROLL_MAX) { toast.show(`한 번에 ${won(BANKROLL_MAX)}원까지 기록할 수 있어요`, 'error'); return; }
     }
     setBusy(true);
     try {
-      await addBankrollEntry({ entryDate: date, amount: sign === 0 ? 0 : n * sign, memo });
-      setAmount(''); setMemo('');
-      toast.show(sign === 0 ? '일정을 적었어요' : sign > 0 ? '플러스로 기록했어요' : '마이너스로 기록했어요', 'success');
+      const { degraded } = await addBankrollEntry({ entryDate: date, amount: sign === 0 ? 0 : n * sign, memo, ...extra });
+      setAmount(''); setMemo(''); setBuyIn(''); setRebuy(''); setAddon(''); setVenueName(''); setGameName('');
+      // 마이그레이션 전 서버 — 참가비 등이 저장되지 않았다는 사실을 숨기지 않는다
+      if (degraded) toast.show('서버 업데이트 중입니다 — 금액·메모만 먼저 기록됩니다', 'info');
+      else toast.show(sign === 0 ? '일정을 적었어요' : sign > 0 ? '플러스로 기록했어요' : '마이너스로 기록했어요', 'success');
       onChanged();
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '기록 실패', 'error');
@@ -472,7 +551,7 @@ function BankrollCard({ date, rows, onChanged, onPickDate, toast }: {
 
   // 트레이 안에 반반 — 활성만 상자였을 때는 왼쪽만 컨트롤처럼 보이고 오른쪽은 떠 있는 글자로 읽혔다.
   const tabCls = (on: boolean) => [
-    'min-h-[40px] flex-1 rounded-[6px] px-3 text-xs font-bold transition-colors',
+    'min-h-[44px] flex-1 rounded-[6px] px-3 text-xs font-bold transition-colors',
     on ? 'chip-aura' : 'text-ink-muted hover:text-ink-secondary',
   ].join(' ');
 
@@ -482,32 +561,95 @@ function BankrollCard({ date, rows, onChanged, onPickDate, toast }: {
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-cyan" aria-hidden>
           <Icon name="notebook" size={14} />
         </span>
-        <div className="flex min-w-0 flex-1 items-baseline gap-x-2">
-          <h3 className="text-sm font-bold text-ink-primary">내가 적는 기록</h3>
-          <span className="text-2xs text-ink-secondary">뱅크롤 · 일정</span>
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* 2026-09-10 — '내가 적는 기록'은 기능을 말하지 않는다. 제목/부제를 맞바꾼다. */}
+          <h3 className="text-sm font-bold leading-tight text-ink-primary">뱅크롤 · 일정</h3>
+          <span className="text-2xs leading-tight text-ink-secondary">손익을 기록하고 개인 일정을 관리해요</span>
         </div>
       </div>
 
-      {/* 손익 3칸 — 수입/지출/손익. 지출은 이미 음수라 부호를 또 붙이지 않는다. */}
-      <div className="mt-2 grid grid-cols-3 gap-1.5">
-        <div className="rounded-input bg-surface-high/60 px-2 py-1.5 text-center">
-          <p className="text-2xs text-ink-muted">수입</p>
-          <p className="text-sm font-extrabold tabular-nums stat-emerald">+{won(plus)}</p>
-        </div>
-        <div className="rounded-input bg-surface-high/60 px-2 py-1.5 text-center">
-          <p className="text-2xs text-ink-muted">지출</p>
-          <p className="text-sm font-extrabold tabular-nums text-danger-deep dark:text-danger-light">{won(minus)}</p>
-        </div>
-        <div className="rounded-input bg-surface-high/60 px-2 py-1.5 text-center">
-          <p className="text-2xs text-ink-muted">손익</p>
-          <p className={['text-sm font-extrabold tabular-nums', net >= 0 ? 'stat-emerald' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
-            {net >= 0 ? '+' : ''}{won(net)}
-          </p>
-        </div>
+      {/* ── 전체 누계 ────────────────────────────────────────────────────────────
+          범위: 불러온 행 전체(필터 무시). 아래 '선택 기간 분석'과 **모집단이 다르다** —
+          그래서 두 구획을 제목으로 갈라 놓는다(§6). 순손익 하나를 주 지표로 키우고
+          수익·손실은 그 아래 한 줄로 내린다: 예전 3칸은 셋 다 같은 무게라 무엇이 결론인지 없었다.
+          LED 는 여기 한 곳뿐이다(§6 뱅크롤 Aura) — 카드 전체를 칠하지 않는다. */}
+      <p className="mt-2 text-2xs font-bold text-ink-muted">전체 누계</p>
+      <div
+        data-aura={heroReady ? '' : undefined}
+        data-aura-level={heroReady ? 'hero' : undefined}
+        data-aura-variant={heroReady ? heroVariant : undefined}
+        className="mt-1 rounded-input border border-border-subtle bg-surface-low px-3 py-2.5"
+      >
+        <p className="text-2xs text-ink-muted">순손익</p>
+        <p className={[
+          netText.length > 9 ? 'text-lg' : 'text-[22px]',
+          'whitespace-nowrap font-extrabold leading-none tabular-nums',
+          !heroReady ? 'text-ink-muted' : net > 0 ? 'stat-emerald' : net < 0 ? 'text-danger-deep dark:text-danger-light' : 'text-ink-primary',
+        ].join(' ')}>{netText}</p>
+        {/* 한 줄로 자리를 항상 지킨다 — 조건부로 빼면 도착할 때 아래가 밀린다(CLS) */}
+        {/* 줄은 접히되 **숫자는 안 꺾인다** — 200% 확대에서 nowrap 이면 카드 밖으로 넘쳐 가로 스크롤이 생겼다(2026-09-10 실측). */}
+        <p className="mt-1.5 text-2xs tabular-nums text-ink-secondary">
+          {heroNote ?? (<><span className="whitespace-nowrap">수익 <b className="stat-emerald">+{won(plus)}</b></span> · <span className="whitespace-nowrap">손실 <b className="text-danger-deep dark:text-danger-light">{won(minus)}</b></span></>)}
+        </p>
       </div>
+
+      {/* ── 선택 기간 분석 ──────────────────────────────────────────────────────
+          필터가 바로 이 구획의 지표만 움직인다는 것을 붙여 놓아 보인다(§6).
+          참가비가 적힌 행만 센다(분모 없는 행이 분자에 섞이면 ROI 가 거짓이 된다 — src/lib/roi.ts).
+          개인 비공개 기록이라 랭킹·비교로 잇지 않는다. */}
+      <p className="mt-3 text-2xs font-bold text-ink-muted">선택 기간 분석</p>
+      <div className="mt-1 grid grid-cols-3 gap-1.5" role="group" aria-label="ROI 범위">
+        <select value={period} onChange={(e) => setPeriod(e.target.value as 'month' | 'all')} aria-label="ROI 기간"
+          className="input min-h-[44px] min-w-0 px-1 text-[11px]">
+          <option value="month">{monthPrefix.replace('-', '.')}</option>
+          <option value="all">전체 기간</option>
+        </select>
+        <select value={venue} onChange={(e) => setVenue(e.target.value)} aria-label="ROI 매장" className="input min-h-[44px] min-w-0 px-1 text-[11px]">
+          <option value="">매장 전체</option>
+          {venues.map((v) => <option key={v} value={v}>{v}</option>)}
+        </select>
+        <select value={game} onChange={(e) => setGame(e.target.value)} aria-label="ROI 게임" className="input min-h-[44px] min-w-0 px-1 text-[11px]">
+          <option value="">게임 전체</option>
+          {games.map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
+      </div>
+      {/* 핵심 3 — 순손익·ROI·ITM. '무엇을 보고 판단하는가'가 이 줄이다.
+          ⚠ 라벨을 바꿨으므로(참가→참가 횟수, 결과→총 회수액, 순결과→순손익) e2e 셀렉터를
+            같은 커밋에서 data-stat 으로 교체했다(CLAUDE.md: 라벨 결합 셀렉터는 느슨하게 풀지 않는다). */}
+      <div className="mt-1.5 grid grid-cols-3 gap-1.5" data-testid="roi-stats">
+        <Stat testId="net" label="순손익" value={`${stats.net >= 0 ? '+' : ''}${won(stats.net)}`} sub=" " tone={stats.net >= 0 ? 'emerald' : 'danger'} />
+        {/* 3건 미만이면 % 대신 — : 한두 판의 % 는 사람을 속인다(아래 안내가 이유를 말한다) */}
+        <Stat testId="roi" label="ROI" value={showRoi && stats.roi != null ? `${stats.roi.toFixed(1)}%` : '—'} sub=" " tone={(stats.roi ?? 0) >= 0 ? 'emerald' : 'danger'} />
+        <Stat testId="itm" label="ITM" value={showRoi && stats.itm != null ? `${Math.round(stats.itm)}%` : '—'} sub=" " tone="cyan" />
+      </div>
+      {/* 보조 3 — 위 셋을 설명하는 재료. 테두리를 빼고 한 단 작게 해서 무게를 내린다(§6 위계). */}
+      <div className="mt-1 grid grid-cols-3 gap-1.5" data-testid="roi-stats-sub">
+        <Stat dense testId="events" label="참가 횟수" value={`${stats.events}회`} sub={`입상 ${stats.moneyIn}회`} tone="muted" />
+        <Stat dense testId="invested" label="총 참가비" value={won(stats.invested)} sub={stats.avgBuyIn != null ? `평균 ${won(Math.round(stats.avgBuyIn))}` : ' '} tone="muted" />
+        <Stat dense testId="result" label="총 회수액" value={won(stats.resultSum)} sub={stats.bestResult != null ? `최고 ${won(stats.bestResult)}` : ' '} tone="muted" />
+      </div>
+      {notice && <p className="mt-1 text-center text-2xs text-ink-secondary" data-testid="roi-notice">{notice}</p>}
+      {/* 월별 추세 — 전체 기간일 때만(한 달 범위에선 막대 하나라 추세가 아니다). 차트 라이브러리 없이 폭 % 막대. */}
+      {period === 'all' && stats.months.length > 0 && (
+        <ul className="mt-1.5 space-y-0.5" aria-label="월별 순결과 추세" data-testid="roi-trend">
+          {stats.months.slice(-12).map((m) => (
+            <li key={m.month} className="flex items-center gap-1.5 text-2xs tabular-nums">
+              <span className="w-12 shrink-0 text-ink-muted">{m.month.replace('-', '.')}</span>
+              <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-high/60" aria-hidden>
+                <span className={['block h-2 rounded-full', m.net >= 0 ? 'bg-emerald-400/70' : 'bg-danger/60'].join(' ')}
+                  style={{ width: `${Math.round((Math.abs(m.net) / trendMax) * 100)}%` }} />
+              </span>
+              <span className={['w-20 shrink-0 text-right font-semibold', m.net >= 0 ? 'stat-emerald' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
+                {m.net >= 0 ? '+' : ''}{won(m.net)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {/* 무엇을 적는 중인지 먼저 고른다 — 예전엔 한 줄에 5개가 섞여 모드가 안 보였다 */}
-      <div className="mt-2 flex gap-0.5 rounded-input bg-surface-high/60 p-0.5" role="tablist" aria-label="기록 종류">
+      <p className="mt-3 text-2xs font-bold text-ink-muted">기록 추가</p>
+      <div className="mt-1 flex gap-0.5 rounded-input bg-surface-high/60 p-0.5" role="tablist" aria-label="기록 종류">
         <button type="button" role="tab" aria-selected={mode === 'bankroll'}
           onClick={() => setMode('bankroll')} className={tabCls(mode === 'bankroll')}>뱅크롤</button>
         <button type="button" role="tab" aria-selected={mode === 'memo'}
@@ -532,6 +674,46 @@ function BankrollCard({ date, rows, onChanged, onPickDate, toast }: {
           <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="numeric"
             placeholder="금액" aria-label="금액" className="input col-span-2 min-h-[44px] min-w-0 text-sm tabular-nums" />
         )}
+        {mode === 'bankroll' && (
+          /* 개인 ROI 입력(선택) — 접어 둔다: +/- 만 적는 사람에게 칸 5개는 소음이다. 같은 6칸 그리드라 오른쪽 변이 맞는다. */
+          <details className="col-span-6 rounded-input bg-surface-high/40 px-2 py-1.5" data-testid="roi-inputs">
+            <summary className="cursor-pointer select-none text-2xs font-semibold text-ink-secondary">참가비 · 매장 · 게임 적기 (선택)</summary>
+            <p className="mt-1 text-2xs leading-relaxed text-ink-muted">금액은 참가비를 뺀 순결과로 적어요. 참가비를 적으면 ROI·ITM 이 계산돼요.</p>
+            {/* 라벨을 눈에 보이게 단다(2026-09-10 §6) — placeholder 는 입력을 시작하는 순간 사라져서
+                '이 칸이 뭐였지'를 만든다. <label> 이 그리드 칸을 잡고 input 은 그 안에서 100% 를 쓴다.
+                aria-label 은 그대로 둔다 — e2e 가 getByLabel 로 잡는 계약이다. */}
+            <div className="mt-1.5 grid grid-cols-6 gap-1.5">
+              <label className="col-span-2 min-w-0">
+                <span className="mb-0.5 block text-2xs text-ink-muted">참가비</span>
+                <input value={buyIn} onChange={(e) => setBuyIn(e.target.value)} inputMode="numeric" placeholder="0" aria-label="참가비"
+                  className="input min-h-[44px] w-full min-w-0 text-sm tabular-nums" />
+              </label>
+              <label className="col-span-2 min-w-0">
+                <span className="mb-0.5 block text-2xs text-ink-muted">재진입</span>
+                <input value={rebuy} onChange={(e) => setRebuy(e.target.value)} inputMode="numeric" placeholder="0" aria-label="재진입"
+                  className="input min-h-[44px] w-full min-w-0 text-sm tabular-nums" />
+              </label>
+              <label className="col-span-2 min-w-0">
+                <span className="mb-0.5 block text-2xs text-ink-muted">애드온</span>
+                <input value={addon} onChange={(e) => setAddon(e.target.value)} inputMode="numeric" placeholder="0" aria-label="애드온"
+                  className="input min-h-[44px] w-full min-w-0 text-sm tabular-nums" />
+              </label>
+              <label className="col-span-3 min-w-0">
+                <span className="mb-0.5 block text-2xs text-ink-muted">매장</span>
+                <input value={venueName} onChange={(e) => setVenueName(e.target.value)} maxLength={40} list="roi-venue-names" placeholder="예: 누리홀덤 강남" aria-label="매장 이름"
+                  className="input min-h-[44px] w-full min-w-0 text-sm" />
+              </label>
+              <label className="col-span-3 min-w-0">
+                <span className="mb-0.5 block text-2xs text-ink-muted">게임</span>
+                <input value={gameName} onChange={(e) => setGameName(e.target.value)} maxLength={40} list="roi-game-names" placeholder="예: 데일리" aria-label="게임 이름"
+                  className="input min-h-[44px] w-full min-w-0 text-sm" />
+              </label>
+              {/* 필터는 문자열 일치라 같은 이름으로 적어야 잡힌다 — 예전에 적은 이름을 제안한다 */}
+              <datalist id="roi-venue-names">{venues.map((v) => <option key={v} value={v} />)}</datalist>
+              <datalist id="roi-game-names">{games.map((g) => <option key={g} value={g} />)}</datalist>
+            </div>
+          </details>
+        )}
 
         <input value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={40}
           placeholder={mode === 'bankroll' ? '메모(선택)' : '일정 내용'}
@@ -553,13 +735,15 @@ function BankrollCard({ date, rows, onChanged, onPickDate, toast }: {
           {dayRows.map((r) => (
             <li key={r.id} className="flex min-h-[var(--row-h-sm)] items-center gap-2 rounded-input px-2">
               {/* 금액 0 = 일정 — '+0' 을 그리면 돈 기록으로 오해된다 */}
-              {r.amount === 0 ? (
+              {isMemoEntry(r) ? (
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{r.memo}</span>
               ) : (<>
                 <span className={['shrink-0 text-sm font-bold tabular-nums', r.amount > 0 ? 'stat-emerald' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
                   {r.amount > 0 ? '+' : ''}{won(r.amount)}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">{r.memo}</span>
+                <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">
+                  {[r.venueName, r.gameName, investedOf(r) > 0 ? `참가비 ${won(investedOf(r))}` : '', r.memo].filter(Boolean).join(' · ')}
+                </span>
               </>)}
               <button type="button" onClick={() => remove(r.id)} disabled={busy}
                 aria-label="기록 삭제" className="hit shrink-0 p-2 text-ink-muted hover:text-danger-light disabled:opacity-40">

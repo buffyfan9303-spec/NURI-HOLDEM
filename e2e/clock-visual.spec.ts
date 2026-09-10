@@ -138,6 +138,53 @@ test.describe('클락 TV — 상태별 캡처와 레이아웃 계약', () => {
       expect(over, `${name}: 가로로 ${over}px 넘친다`).toBeLessThanOrEqual(0);
     });
   }
+
+  // ── 블랙 마블 골드 프리셋(2026-09-10) ──────────────────────────────────────
+  // 테마는 venues.page_config.clockTheme 에서 온다 — 그 조회(GET venues?select=page_config)만 갈아끼운다(쓰기 0).
+  // 지키는 것: 프리셋이 실제로 화면에 칠해지고, 그 위에서 타이머·레벨·블라인드가 보이며,
+  //           긴 한국어 대회명 + 프라이즈 12줄(표시 상한)이 잘리거나 겹치지 않는다.
+  test('black-marble-gold — 1920x1080 타이머·레벨·블라인드 렌더 + 프라이즈 12줄 잘림 없음', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const body = row({ title: '제8회 누리홀덤 마스터스 파이널 데이2 · 20억 개런티 메인이벤트', endsInMs: 9 * 60_000 });
+    body.config.prizes = [50_000_000, 30_000_000, 18_000_000, 12_000_000, 8_000_000, 6_000_000, 4_500_000, 3_500_000, 2_800_000, 2_200_000, 1_800_000, 1_500_000]
+      .map((amount, i) => ({ place: String(i + 1), amount }));
+    await serveClock(page, body);
+    await page.route(/\/rest\/v1\/venues\?[^ ]*select=page_config/, (r) => r.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ page_config: { clockTheme: { version: 1, palette: { preset: 'black-marble-gold' }, background: { kind: 'gradient', preset: 'black-marble-gold' } } } }),
+    }));
+    await page.goto(`/?display=${VENUE}&g=1&auto=0`);
+    const timer = page.getByTestId('clk-timer');
+    await expect(timer).toBeVisible({ timeout: 20_000 });
+
+    // 프리셋이 칠해졌는가 — 루트의 --clk-bg 가 마블 금 결(rgb 214,178,76)을 담고 있어야 한다(기본 아우라에는 없는 색).
+    const root = timer.locator('xpath=ancestor::*[contains(@style, "--clk-bg")][1]');
+    await expect.poll(() => root.evaluate((el) => getComputedStyle(el).backgroundImage.includes('214, 178, 76')), { timeout: 10_000 })
+      .toBe(true);
+    await expect(page.getByTestId('clk-level')).toBeVisible();
+    await expect(page.getByText('CURRENT', { exact: true })).toBeVisible();
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `test-results/clock-shots/${PHASE}-theme-black-marble-gold.png` });
+
+    // 프라이즈 열 — 12줄 전부 열 안·화면 안에 있고 열 자체가 스크롤을 만들지 않는다. 총액도 가로로 잘리지 않는다.
+    const aside = page.locator('aside', { hasText: '총 프라이즈' });
+    await expect(aside.locator('li')).toHaveCount(12);
+    const fit = await aside.evaluate((el) => {
+      const a = el.getBoundingClientRect();
+      const items = Array.from(el.querySelectorAll('li')).map((li) => li.getBoundingClientRect());
+      const total = el.querySelector('p + p') as HTMLElement | null;
+      return {
+        overflowY: el.scrollHeight - el.clientHeight,
+        outside: items.filter((r) => r.top < a.top - 1 || r.bottom > a.bottom + 1 || r.bottom > innerHeight).length,
+        overlap: items.slice(1).filter((r, i) => r.top < items[i].bottom - 1).length,
+        totalClipped: total ? total.scrollWidth - total.clientWidth : 0,
+      };
+    });
+    expect(fit.overflowY, `프라이즈 열이 ${fit.overflowY}px 넘쳐 스크롤이 생겼다`).toBeLessThanOrEqual(0);
+    expect(fit.outside, `프라이즈 ${fit.outside}줄이 열 밖·화면 밖으로 나갔다`).toBe(0);
+    expect(fit.overlap, `프라이즈 ${fit.overlap}줄이 윗줄과 겹친다`).toBe(0);
+    expect(fit.totalClipped, `총 프라이즈 금액이 ${fit.totalClipped}px 잘린다`).toBeLessThanOrEqual(0);
+  });
 });
 
 // ── 테마 패널 미리보기 ────────────────────────────────────────────────────────
@@ -265,5 +312,26 @@ test.describe('운영자 화면 — 유휴 렌더', () => {
     await page.waitForTimeout(20_000); // 손대지 않는다 — 순수 유휴
     const b = await read();
     console.log(`[clock-idle] 20초 유휴 — script ${((b.script - a.script) * 1000).toFixed(0)}ms · task ${((b.task - a.task) * 1000).toFixed(0)}ms · style ${b.style - a.style}회 · layout ${b.layout - a.layout}회`);
+  });
+});
+
+// ── 휴대폰 리모컨 — 닫기 버튼 히트영역(TOUCH-01) ───────────────────────────────
+// 플로어에서 폰으로 누르는 화면이다. 닫기 버튼은 시각 40px 그대로 두고 `hit` 토큰(::after 44px)으로 실효 영역만 넓혔다.
+// 로그인 없이도 리모컨 셸(로그인 안내)이 뜨므로 자격증명·매장이 필요 없다 — 가짜 venue id 로 연다.
+test.describe('휴대폰 리모컨', () => {
+  test('닫기 버튼 실효 히트영역이 44px 이상이다 (375x812)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/?remote=00000000-0000-4000-8000-00000000c10c&g=1');
+    const close = page.locator('header', { hasText: '클락 리모컨' }).getByRole('button', { name: '닫기' });
+    await expect(close).toBeVisible({ timeout: 20_000 });
+    // live-card-fit.spec 의 의사요소 합산 조리법 — 여기서는 ::after 가 max(100%,44px) 로 버튼을 덮는다.
+    const hit = await close.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const a = getComputedStyle(el, '::after');
+      return { w: Math.max(r.width, parseFloat(a.width) || 0), h: Math.max(r.height, parseFloat(a.height) || 0) };
+    });
+    console.log('[리모컨 닫기 히트영역]', JSON.stringify(hit));
+    expect(hit.w).toBeGreaterThanOrEqual(44);
+    expect(hit.h).toBeGreaterThanOrEqual(44);
   });
 });

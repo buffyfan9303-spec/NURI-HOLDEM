@@ -11,7 +11,9 @@ import type { ChatThread } from '../../api/chat';
 import { getListingThreads } from '../../api/chat';
 import ChatPane from './chat/ChatPane';
 import Icon from '../atoms/Icon';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { onColorInkClass } from '../../lib/color';
+import { promptLogin } from '../../lib/requireLogin';
 
 interface ListingDetailModalProps {
   /** 본인 매물 상태 변경 직후 — 목록·열린 매물 동기화(팔린 물건이 '판매중'으로 남는 헛문의 방지) */
@@ -51,7 +53,9 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
 
   // 찜 토글 — 낙관적 반영 후 서버 권위값으로 확정, 실패하면 원복.
   const onToggleLike = async () => {
-    if (!user) { toast.show('로그인 후 찜할 수 있습니다', 'info'); return; }
+    // 비로그인: 토스트만 띄우면 손님이 헤더까지 가서 로그인하고 매물을 다시 찾아야 한다 — 댓글·예약과 같이 로그인 모달로 유도.
+    // 매물 상세(openListing)는 App 상태라 로그인 모달이 닫힌 뒤에도 그대로 남는다 = 원래 흐름으로 복귀.
+    if (!user) { toast.show('로그인 후 찜할 수 있습니다', 'info'); promptLogin(); return; }
     if (likeBusy) return; // 연타 시 두 요청이 엇갈려 하트와 카운트가 반대로 굳는 걸 막는다
     setLikeBusy(true);
     const prev = like;
@@ -314,24 +318,30 @@ function SellerChatModal({
   const isSeller = !!user && user.id === listing.sellerId;
   const [buyerId, setBuyerId]   = useState<string | null>(null);
   const [threads, setThreads]   = useState<ChatThread[]>([]);
+  // 받은 문의 조회 실패를 '아직 받은 문의가 없습니다'로 위장하지 않는다(판매자가 문의를 놓친다)
+  const [tErr, setTErr]         = useState<unknown>(null);
+  const [tReload, setTReload]   = useState(0);
 
   // 열릴 때 초기화: 구매자는 본인 스레드, 판매자는 받은 문의 목록
   useEffect(() => {
     if (!open || !user) return;
     if (isSeller) {
-      setBuyerId(null);
-      getListingThreads(listing.id).then(setThreads).catch(() => {});
+      setBuyerId(null); setTErr(null);
+      getListingThreads(listing.id).then(setThreads).catch(setTErr);
     } else {
       setBuyerId(user.id);
     }
-  }, [open, user, isSeller, listing.id]);
+  }, [open, user, isSeller, listing.id, tReload]);
 
   if (!user) {
     return (
       <Modal open={open} onClose={onClose} title="로그인 필요" maxWidth="sm" variant="center">
         <div className="p-4 space-y-3 text-center">
           <p className="text-sm text-ink-secondary">채팅은 로그인 후 이용 가능합니다.</p>
-          <button type="button" onClick={onClose} className="btn-primary w-full">닫기</button>
+          {/* 이 모달(center, z-60)을 먼저 닫아야 뒤이어 뜨는 로그인 모달(같은 z-60, DOM 앞)이 가려지지 않는다.
+              매물 상세는 App 상태(openListing)라 로그인 뒤에도 남아 있다 — 손님은 로그인만 하고 원래 자리로 돌아온다. */}
+          <button type="button" onClick={() => { onClose(); promptLogin(); }} className="btn-primary w-full">로그인</button>
+          <button type="button" onClick={onClose} className="btn-ghost w-full text-sm">닫기</button>
         </div>
       </Modal>
     );
@@ -390,7 +400,9 @@ function SellerChatModal({
       {showThreadList ? (
         /* 판매자: 받은 문의 목록 */
         <div className="px-2 py-2 max-h-[55vh] min-h-[160px] overflow-y-auto">
-          {threads.length === 0 ? (
+          {tErr ? (
+            <LoadErrorCard error={tErr} what="받은 문의" onRetry={() => setTReload((k) => k + 1)} compact />
+          ) : threads.length === 0 ? (
             <p className="text-center py-12 text-sm text-ink-muted">아직 받은 문의가 없습니다</p>
           ) : (
             <ul className="space-y-0.5">
@@ -416,7 +428,8 @@ function SellerChatModal({
         </div>
       ) : buyerId ? (
         <div className="flex flex-col h-[52vh]">
-          <ChatPane listingId={listing.id} buyerId={buyerId} meId={user.id}
+          {/* key: 판매자가 문의 스레드를 갈아탈 때 인스턴스를 새로 만든다 — 이전 구매자와의 대화·전송 결과가 새 구매자 화면에 남지 않는다 */}
+          <ChatPane key={`${listing.id}|${buyerId}`} listingId={listing.id} buyerId={buyerId} meId={user.id}
             emptyHint={isSeller ? '구매자에게 답장을 보내보세요' : '판매자에게 첫 메시지를 보내보세요'} />
         </div>
       ) : null}

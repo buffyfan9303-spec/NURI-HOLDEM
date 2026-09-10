@@ -112,6 +112,10 @@ export function clearAuthStorage(): void {
       doomed.forEach((k) => s.removeItem(k));
     } catch { /* noop */ }
   }
+  // 비밀번호 변경 OTP 대기 마커(ProfileModal 'nh_pw_otp')도 여기서 — 키에 사용자 식별이 없어
+  // 로그아웃 뒤 5분 안에 다른 계정이 같은 탭에서 로그인하면 그 계정의 보안 탭이 이전 계정의 코드 입력 단계로 열렸다.
+  // signOut 의 finally 가 이 함수를 지나므로 모든 로그아웃 경로(헤더 메뉴·제재 자동 로그아웃·탈퇴)가 함께 정리된다.
+  try { safeSession()?.removeItem('nh_pw_otp'); } catch { /* noop */ }
   memory.clear();
 }
 

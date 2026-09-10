@@ -41,7 +41,6 @@ import ThemeToggle from './components/atoms/ThemeToggle';
 import { useTheme } from './contexts/ThemeContext';
 import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationButton';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
-import TierCelebration from './components/features/TierCelebration';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
 import { promptLogin, REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, ensureVerified } from './lib/requireLogin';
@@ -434,7 +433,10 @@ const AppHeader = memo(function AppHeader({
         </div>
       </div>
 
-      {/* 쪽지+알림 패널 — viewport 기준 fixed 위치 */}
+      {/* 쪽지+알림 패널 — viewport 기준 fixed 위치.
+          계정 경계는 NotificationPanel 안의 [uid] 리셋 이펙트 + threadsSeq 세대 가드가 지킨다(같은 인스턴스).
+          ⚠ 여기 key=계정 을 붙이면 안 된다 — 재마운트되면 A 인스턴스가 세대 가드가 돌기 전에 죽고, 죽은 인스턴스의
+          listMyThreads 응답이 onUnreadMessagesChange(부모 콜백은 살아 있다)로 B 의 배지에 A 의 미읽음 수를 싣는다. */}
       <NotificationPanel
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
@@ -1363,6 +1365,9 @@ export default function App() {
     // resVersion: 내가 예약/취소한 직후 '예약 N'·'마감 임박'이 낡은 채 남지 않게 한 번 더 읽는다
   }, [resIdsKey, resVersion]);
   const [venues,        setVenues]        = useState<Venue[]>(() => readSnap<Venue[]>('venues') ?? []);
+  // 네트워크 매장 목록이 한 번이라도 도착했는가 — ?v= 딥링크의 '없는 매장' 판정은 이 뒤에만 한다
+  // (부팅 직후 venues 는 localStorage 스냅샷이라, 스냅샷 이후 문을 연 매장의 링크를 '없음'으로 튕기면 안 된다).
+  const [venuesLoaded, setVenuesLoaded] = useState(false);
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
   const [comments,      setComments]      = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -1556,7 +1561,7 @@ export default function App() {
       }, 900);
     } else ptrSettle(-52, '0');
   };
-  const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); }).catch(() => {}); }, []);  
+  const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); setVenuesLoaded(true); }).catch(() => {}); }, []);
   // 조회 실패를 [] 로 두면 게시판이 '첫 게시글을 남겨보세요'(빈 상태)로 위장한다 — 실패는 상태로 올린다.
   //  직전에 성공한 목록은 지우지 않는다(오프라인에서 읽던 글이 사라지지 않게).
   const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); setPostsErr(null); writeSnap('posts', v); }).catch((e) => setPostsErr(e)); }, []);
@@ -1591,7 +1596,7 @@ export default function App() {
         }
       } else if (my === schedReqRef.current) setSchedulesError(sr.reason);
       setSchedulesLoaded(true); // 스켈레톤은 가드하지 않는다(reloadSchedules 의 finally 와 같은 이유)
-      if (vr.status === 'fulfilled') { setVenues((prev) => (sameJson(prev, vr.value) ? prev : vr.value)); writeSnap('venues', vr.value); }
+      if (vr.status === 'fulfilled') { setVenues((prev) => (sameJson(prev, vr.value) ? prev : vr.value)); writeSnap('venues', vr.value); setVenuesLoaded(true); }
       if (nr.status === 'fulfilled') { setNotices(nr.value); writeSnap('notices', nr.value); setNoticesLoaded(true); }
     });
     // posterDeleteQ 는 useMemo([]) 안정 참조 — 의존성에 넣어도 부팅 1회 그대로다
@@ -1719,8 +1724,12 @@ export default function App() {
 
   // 로그인 사용자: 내 알림 로드
   useEffect(() => {
-    if (user) getMyNotifications().then(setNotifications).catch(() => {});
+    // alive 가드: A 세션으로 나간 조회가 로그아웃→B 로그인 뒤에 도착하면 B 의 목록(배지·패널·내 정보 미리보기)을
+    // A 의 알림 50건으로 덮었다. 계정 전환은 이 이펙트만 다시 돌리므로 여기가 그 레이스의 정본이다.
+    let alive = true;
+    if (user) getMyNotifications().then((ns) => { if (alive) setNotifications(ns); }).catch(() => {});
     else setNotifications([]);
+    return () => { alive = false; };
     // ⚠ [user] 객체 의존이면 일일 출석점수 반영(setUser 참조 교체)에도 재실행돼 fetch·리렌더가 2배였다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -1729,10 +1738,12 @@ export default function App() {
   // 패널을 열면 NotificationPanel 이 스레드 로드로 즉시 재계산해 콜백으로 덮어쓴다.
   useEffect(() => {
     if (!user) { setUnreadMsgs(0); return; }
-    const load = () => myUnreadMessageCount().then(setUnreadMsgs).catch(() => {});
+    // alive 가드: A 세션으로 나간 카운트가 로그아웃→B 로그인 뒤 도착하면 B 의 배지에 A 의 수가 실린다(다음 폴링까지).
+    let alive = true;
+    const load = () => myUnreadMessageCount().then((n) => { if (alive) setUnreadMsgs(n); }).catch(() => {});
     load();
     const t = setInterval(load, 90_000);
-    return () => clearInterval(t);
+    return () => { alive = false; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -1947,24 +1958,6 @@ export default function App() {
     }));
   }, []);
 
-  // 딥링크: ?s=<scheduleId> — 대회 공유 링크로 들어오면 해당 포스터 상세 자동 오픈
-  const schedDeepLinked = useRef(false);
-  useEffect(() => {
-    if (schedDeepLinked.current || schedules.length === 0) return;
-    const sid = new URLSearchParams(window.location.search).get('s');
-    if (!sid) { schedDeepLinked.current = true; return; }
-    const target = schedules.find((x) => x.id === sid);
-    if (target) {
-      setOpenSchedule(target);
-      schedDeepLinked.current = true;
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('s');
-        window.history.replaceState(null, '', url.pathname + url.search + url.hash);
-      } catch { /* ignore */ }
-    }
-  }, [schedules]);
-
   // 딥링크: ?v=<8자리코드>(단축) 또는 ?venue=<전체id>(구버전 호환) 진입 시 매장 페이지 자동 오픈
   const deepLinked = useRef(false);
   useEffect(() => {
@@ -1972,6 +1965,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const full = params.get('venue');
     const short = params.get('v');
+    if (!full && !short) return;
     const target = full
       ? venues.find((v) => v.id === full)
       : short
@@ -1979,19 +1973,21 @@ export default function App() {
         ? venues.find((v) => v.slug && v.slug.toLowerCase() === short.toLowerCase())
           ?? venues.find((v) => v.id.startsWith(short))
         : null;
-    if (target) {
-      setOpenVenueId(target.id);
-      deepLinked.current = true;
-      // URL 에서 v/venue 파라미터 제거 → 매장을 닫고 앱을 둘러보다 새로고침해도
-      // 다시 그 매장 페이지로 돌아가지 않도록 한다(공유 링크 1회성 진입).
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('v');
-        url.searchParams.delete('venue');
-        window.history.replaceState(null, '', url.pathname + url.search + url.hash);
-      } catch { /* ignore */ }
-    }
-  }, [venues]);
+    // 스냅샷에 없어도 네트워크 목록이 아직이면 판정을 미룬다 — 로드가 끝나면 venuesLoaded 가 바뀌어 다시 돈다.
+    if (!target && !venuesLoaded) return;
+    deepLinked.current = true;
+    if (target) setOpenVenueId(target.id);
+    // 목록에 없으면(문 닫음·주소 변경) 조용히 홈을 띄우지 않는다 — /s/<코드>(?vnf=) 와 같은 안내.
+    else toast.show('그 주소의 매장을 찾을 수 없어요. 링크가 바뀌었거나 문을 닫았을 수 있습니다', 'error');
+    // URL 에서 v/venue 파라미터 제거 → 매장을 닫고 앱을 둘러보다 새로고침해도
+    // 다시 그 매장 페이지로 돌아가지 않도록 한다(공유 링크 1회성 진입).
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('v');
+      url.searchParams.delete('venue');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    } catch { /* ignore */ }
+  }, [venues, venuesLoaded, toast]);
 
   // ── 소셜 로그인 실패 안내 (2026-08-30) ──────────────────────────────────────
   // 오너: "카카오 로그인이 왜 안되는지, 구글도 마찬가지"
@@ -2014,14 +2010,16 @@ export default function App() {
       const code = q.get('error_code') ?? h.get('error_code') ?? '';
       const err = q.get('error') ?? h.get('error') ?? '';
       const desc = q.get('error_description') ?? h.get('error_description') ?? '';
+
+      // (PKCE ?code= 교환 실패 처리는 두지 않는다 — 이 앱의 supabase-js 는 기본 implicit flow 라 OAuth 복귀가
+      //  #access_token= 으로 오고 ?code= 교환 자체가 일어나지 않는다. 2026-09-10 실측 뒤 걷어냄.)
       if (!err && !code) return;
       oauthErrShown.current = true;
 
       // 자주 나오는 원인은 사람 말로 바꾸고, 모르는 건 원문을 그대로 보여 준다(추측 금지).
       const raw = decodeURIComponent(desc).replace(/\+/g, ' ');
       const known =
-        /KOE205|consent|동의/i.test(raw) ? '카카오 동의항목 설정이 필요합니다(관리자 확인 필요)'
-        : /access_denied/i.test(err) ? '로그인이 취소되었거나 앱이 아직 승인되지 않았습니다'
+        /access_denied/i.test(err) ? '로그인이 취소되었거나 앱이 아직 승인되지 않았습니다'
         : /bad_oauth_state|state/i.test(code) ? '로그인 세션이 만료됐어요. 다시 시도해 주세요'
         : /redirect|uri/i.test(raw) ? '로그인 주소 설정이 맞지 않습니다(관리자 확인 필요)'
         : '';
@@ -2157,6 +2155,24 @@ export default function App() {
       toast.show('대회 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요', 'error');
     });
   }, [schedules, handleScheduleSelect, handleVenueClick, toast]);
+
+  // 딥링크: ?s=<scheduleId> — 대회 공유 링크로 들어오면 해당 포스터 상세 자동 오픈.
+  //   목록에 없으면(삭제·승인 전·RLS) openScheduleById 가 단건 조회→'확인할 수 없어요' 토스트까지 맡는다.
+  //   예전엔 else 분기가 없어 조용히 홈이 떴고 ?s= 도 안 지워져 새로고침마다 반복됐다(?post=·/s/<코드> 는 이미 폴백이 있었다).
+  //   ⚠ openScheduleById 선언 아래여야 한다 — 의존성 배열이 렌더 중에 평가되므로 위에 두면 TDZ 다.
+  const schedDeepLinked = useRef(false);
+  useEffect(() => {
+    if (schedDeepLinked.current || schedules.length === 0) return;
+    schedDeepLinked.current = true;
+    const sid = new URLSearchParams(window.location.search).get('s');
+    if (!sid) return;
+    openScheduleById(sid);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('s');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    } catch { /* ignore */ }
+  }, [schedules, openScheduleById]);
 
   // ── 오버레이 '자리 예약'(뒤로가기 겹) ────────────────────────────────────
   // 오너 지적: "페이지에 들어갔다가 나오면 갑자기 홈으로 가버린다."
@@ -2735,10 +2751,12 @@ export default function App() {
       {/* 첫 진입 온보딩(#29)은 오너 지시(2026-08-28)로 삭제. 마지막 남은 소비처였던
           'nuri:persona' 기반 초기 탭 결정도 2026-09-04 오너 지시로 제거됐다(진입은 항상 홈). */}
 
-      {/* keep-alive — 한 번 열리면 마운트 유지(자식이 display 토글), 재열림·닫힘은 VT 스냅샷 뒤 display 커밋만 */}
+      {/* keep-alive — 한 번 열리면 마운트 유지(자식이 display 토글), 재열림·닫힘은 VT 스냅샷 뒤 display 커밋만.
+          key=계정: keep-alive 라 방문·업적·초대·우승 수치가 계정을 넘어 살았고(공용 PC 로그아웃→다른 손님 로그인),
+          이전 계정으로 나간 늦은 응답이 새 계정 값을 덮었다. 계정이 바뀌면 새 인스턴스 — 늦은 응답은 언마운트에 떨어진다. */}
       {(voucherWalletOpen || meEverOpenedRef.current) && (
         <Suspense fallback={voucherWalletOpen ? <OverlayFallback /> : null}>
-          <CustomerDashboardPage open={voucherWalletOpen}
+          <CustomerDashboardPage key={user?.id ?? 'anon'} open={voucherWalletOpen}
             onClose={() => withViewTransition(
               // 닫힐 때는 커밋 콜백 안에서 마커를 내린다 — new 스냅샷에 이름 붙은 크롬이 들어가야
               // 헤더·GNB 가 root 애니(블러·슬라이드)에 딸려가지 않는다('상시 크롬은 흔들리지 않는다' 계약).
@@ -2796,15 +2814,15 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* 전역 레벨업 감지 + 축하 — 점수 변동 즉시(대시보드 밖에서도) */}
-      <LevelUpWatcher points={user?.activityPoints} />
+      {/* 전역 레벨업 감지 + 축하 — 점수 변동 즉시(대시보드 밖에서도). 승급 감지는 이 한 곳뿐이다
+          (TierCelebration 과 2겹으로 뜨던 것을 통합). key=계정: 로그아웃 뒤 다른 계정이 이전 축하를 물려받지 않게. */}
+      <LevelUpWatcher key={user?.id ?? 'anon'} />
 
       <PendingApprovalBanner />
       {/* [F10] 설치 안내는 전면(페이지성) 오버레이 위에 남지 않는다 — 상세 본문·CTA·내 정보·매장을 가렸다.
           z-index 를 올리는 대신 하단 탭바와 **같은 오버레이 상태**를 쓴다(fullOverlayOpen).
           언마운트해도 안전한 이유: beforeinstallprompt 참조를 모듈 스코프에서 잡아 둔다(InstallBanner.tsx). */}
       {!fullOverlayOpen && <InstallBanner />}
-      <TierCelebration />
 
       <TabBar tabs={pcTabs} active={activeTab} onChange={changeTab} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
@@ -3094,13 +3112,23 @@ export default function App() {
                   </div>
                 )}
                 {myTodayRes.length > 0 && (
-                  <div className="animate-fade-in overflow-hidden pt-3 space-y-1.5">
+                  /* overflow-hidden 제거(2026-09-10): 아래 카드의 Aura LED(box-shadow)가 여기서 잘렸다.
+                     이 래퍼가 감쌀 넘침은 없다 — 자식은 <p> 와 버튼뿐이고 animate-fade-in 은 opacity 만 만진다. */
+                  <div className="animate-fade-in pt-3 space-y-1.5">
                     <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-secondary"><Icon name="cards" size={13} /> 오늘 예약한 대회</p>
                     {myTodayRes.map((r) => {
                       return (
                         <button key={r.scheduleId} type="button"
                           // [F09] 목록에 없으면 단건 조회 → 그래도 없으면 매장 페이지로. 무반응 클릭 금지.
                           onClick={() => openScheduleById(r.scheduleId, { fallbackVenueId: r.venueId })}
+                          /* Aura LED(2026-09-10 §8-C) — 예약이 **정확히 1건**일 때만. 여러 건이면
+                             '왜 첫 줄만 빛나나'가 되고, 전부 칠하면 반복 목록이 된다(§9 반복 Aura 0).
+                             0건이면 이 블록 자체가 렌더되지 않고, 오류·로딩도 위 분기에서 갈린다.
+                             PosterCarousel 글로우와는 같은 뷰포트가 될 수 없다 — 그쪽은 home pane,
+                             여기는 browse pane 이고 둘은 display 로 배타 표시된다. */
+                          data-aura={myTodayRes.length === 1 ? '' : undefined}
+                          data-aura-level={myTodayRes.length === 1 ? 'hero' : undefined}
+                          data-aura-variant={myTodayRes.length === 1 ? 'violet' : undefined}
                           className="w-full flex items-center gap-2.5 rounded-aura border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
                           <span className="shrink-0 text-accent-300" aria-hidden><Icon name="cards" size={18} /></span>
                           <span className="min-w-0 flex-1">
@@ -3364,10 +3392,12 @@ export default function App() {
         const isGroup = !!ov?.kind && ov.kind !== 'venue';
         return (
           <Suspense fallback={<OverlayFallback />}>
+            {/* key=대상: 그룹/매장이 바뀌면 재마운트 — 이전 대상의 늦은 멤버십·게시글·전송 응답이 새 대상에 붙지 않는다 */}
             {isGroup ? (
-              <GroupPage open group={ov} onClose={() => setOpenVenueId(null)} />
+              <GroupPage key={openVenueId} open group={ov} onClose={() => setOpenVenueId(null)} />
             ) : (
               <VenuePage
+                key={openVenueId}
                 open
                 venue={ov}
                 onClose={() => setOpenVenueId(null)}

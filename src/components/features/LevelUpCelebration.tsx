@@ -1,11 +1,17 @@
 // src/components/features/LevelUpCelebration.tsx
 // 레벨업 축하 연출(전역) — 활동점수가 임계를 넘어 레벨이 오르면 어디서든 컨페티+레벨카드.
 //   LevelUpWatcher 를 App 루트에 마운트하면 user.activityPoints 변동 즉시 감지(대시보드 진입 불필요).
-//   localStorage 'nuri:level-seen' 로 1회만, 같은 레벨 중복 방지.
+//   승급 감지는 **여기 한 곳**이다 — TierCelebration(f4a1b7c)과 이 파일(519c8af)이 같은 임계표를
+//   각자 보던 동안 승급 한 번에 z-90 다이얼로그가 두 겹 떠서 두 번 닫아야 했다(2026-09-09 통합).
 import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useBackClose } from '../../lib/backstack';
 import TierBadge, { tierOf, tierCss } from '../atoms/TierBadge';
 
-const SEEN_KEY = 'nuri:level-seen';
+/** 마지막으로 본 등급(rank) — **계정별** 키. 전역 키('nuri:level-seen')였을 때는 같은 기기에서
+ *  다른 계정으로 로그인하면 이전 계정의 레벨과 비교해 가짜 LEVEL UP 이 떴다.
+ *  키 이름은 TierCelebration 이 쓰던 것을 그대로 물려받아 배포 전후로 추적이 끊기지 않는다. */
+const SEEN_KEY = (uid: string) => `nuri:tier-rank:${uid}`;
 
 /** 컨페티 — 캔버스 색종이 낙하(의존성 없음, 약 3.5초 후 정지). */
 function Confetti() {
@@ -41,10 +47,16 @@ function Confetti() {
 /** 레벨업 축하 모달 — 컨페티 + 새 레벨/칭호 카드. */
 export function LevelUpCelebration({ points, onClose }: { points: number; onClose: () => void }) {
   const t = tierOf(points);
+  // 뒤로가기가 이 축하만 닫는다 — 등록이 없던 동안 Android 뒤로가기는 아래 겹(열려 있던 시트)을 닫거나
+  // 사이트를 이탈했고 축하는 그대로 남았다. ESC 는 backstack 의 전역 처리에 맡긴다(개별 리스너 없음).
+  useBackClose(true, onClose);
+  // OS '동작 줄이기' — index.css 의 reduced-motion 블록은 CSS 애니메이션만 끄고 캔버스 rAF 에는 닿지 않으므로
+  // 캔버스를 아예 마운트하지 않는다('깜빡임 0' 계약).
+  const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center" role="dialog" aria-label="레벨 업">
+    <div className="fixed inset-0 z-[90] flex items-center justify-center" role="dialog" aria-modal="true" aria-label="레벨 업">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/80" />
-      <Confetti />
+      {!reduced && <Confetti />}
       <div className="relative mx-4 max-w-xs rounded-dialog border border-accent-400/40 bg-surface-mid p-6 text-center animate-slide-up">
         <p className="text-2xs font-extrabold uppercase tracking-[0.3em] text-accent-300">LEVEL UP</p>
         <div className="my-3 flex justify-center"><TierBadge points={points} size={56} /></div>
@@ -57,17 +69,26 @@ export function LevelUpCelebration({ points, onClose }: { points: number; onClos
   );
 }
 
-/** 전역 레벨업 감지 + 축하 — App 루트에 마운트. points 변동 시 마지막 본 레벨보다 오르면 1회 축하. */
-export default function LevelUpWatcher({ points }: { points: number | null | undefined }) {
-  const [shown, setShown] = useState<number | null>(null);
+/** 전역 레벨업 감지 + 축하 — App 루트에 `key={user.id}` 로 마운트(계정이 바뀌면 열린 축하도 함께 버린다).
+ *  점수 변동 시 마지막 본 등급보다 오르면 1회 축하. 운영자는 제외, 승급 햅틱 포함(TierCelebration 에서 물려받음). */
+export default function LevelUpWatcher() {
+  const { user } = useAuth();
+  const [shown, setShown] = useState<number | null>(null); // 승급 순간의 점수(카드에 그 값을 고정)
+  const uid = user?.id;
+  const pts = user?.activityPoints;
+  const admin = user?.role === 'admin';
   useEffect(() => {
-    if (points == null) return;
-    const lvl = tierOf(points).level;
-    let seen: number | null = null;
-    try { const s = localStorage.getItem(SEEN_KEY); seen = s ? parseInt(s, 10) : null; } catch { /* ignore */ }
-    if (seen != null && lvl > seen) setShown(lvl);
-    try { localStorage.setItem(SEEN_KEY, String(lvl)); } catch { /* ignore */ }
-  }, [points]);
-  if (shown == null || points == null) return null;
-  return <LevelUpCelebration points={points} onClose={() => setShown(null)} />;
+    if (!uid || admin || pts == null) return;
+    const rank = tierOf(pts).rank;
+    try {
+      const prev = Number(localStorage.getItem(SEEN_KEY(uid)) ?? '-1');
+      if (prev >= 0 && rank > prev) {
+        setShown(pts);
+        navigator.vibrate?.([20, 60, 20, 60, 40]); // 승급 햅틱 팡파레
+      }
+      localStorage.setItem(SEEN_KEY(uid), String(rank));
+    } catch { /* storage 미지원 무시 */ }
+  }, [uid, admin, pts]);
+  if (shown == null || !uid) return null;
+  return <LevelUpCelebration points={shown} onClose={() => setShown(null)} />;
 }

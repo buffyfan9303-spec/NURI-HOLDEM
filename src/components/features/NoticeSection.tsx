@@ -11,7 +11,6 @@
 //   색 텍스트를 쓰지 않으므로 라이트/다크 대비 문제가 구조적으로 생기지 않는다.
 //   글로우(.ring-aura-glow)는 쓰지 않는다 — 반복 카드이고, 화면당 1곳 규칙의 주인공이 아니다.
 import Icon, { type IconName } from '../atoms/Icon';
-import MarqueeText from '../atoms/MarqueeText';
 import type { MarketplaceNotice, NoticeType } from '../../api/marketplace';
 import { relativeTime } from '../../lib/relativeTime';
 
@@ -49,8 +48,14 @@ export function NoticeBadge({ type }: { type: NoticeType }) {
 
 
 /**
- * 공지 한 줄 — 높이 44px(--row-h-sm)로 게시글 행과 리듬을 맞춘다.
- * 오너 지시(2026-08-27) 유지: 목록은 **제목만** 한 줄, 본문·작성자는 눌러서 상세에서.
+ * 공지 한 행 — 최소 높이 44px(--row-h-sm)로 게시글 행과 리듬을 맞춘다.
+ * 오너 지시(2026-08-27) 유지: 목록은 **제목만**, 본문·작성자는 눌러서 상세에서.
+ *
+ * 2026-09-09 오너 스크린샷: 긴 제목이 전광판(MarqueeText)으로 흐르다 앞이 잘린 채 찍혔다
+ *   ("URI HOLDEM 정식 오픈 —" · "OLDEM 커뮤니티 이용 안내"). 흐르는 글은 어느 순간을 봐도
+ *   앞이나 뒤가 없다 — 공지는 '무엇에 대한 공지'가 첫 글자에서 읽혀야 한다.
+ *   → 정적 행. 모바일은 2줄 clamp, PC(lg+)는 1줄 말줄임. 전체 제목은 상세 화면과
+ *   접근성 이름(aria-label)·title 툴팁에 있다.
  */
 export function NoticeRow({ notice, onSelect, reserveMarker }: {
   notice: MarketplaceNotice;
@@ -63,22 +68,27 @@ export function NoticeRow({ notice, onSelect, reserveMarker }: {
   // 찍어 왼쪽에 점 기둥만 생기고 알려주는 건 0이었다(오너 지시 2026-09-05 "점 제외").
   // → pinned 는 마커 없음. 예외형(이벤트·주의)만 타일. 섞인 목록에서만 24px 를 비워 시작선을 맞춘다.
   // 375px 실측: 점+gap 을 걷어내 제목 칸이 223px → 257px(가장 긴 공지 가시율 59% → 68%).
+  const when = relativeTime(notice.createdAt, { dateAfterDays: 7 });
   const body = (
     <>
       {notice.type === 'pinned'
         ? (reserveMarker ? <span className="h-6 w-6 shrink-0" aria-hidden /> : null)
         : <NoticeTile type={notice.type} />}
-      {/* 잘라내지 않고 흘린다 — 공지 제목은 14~38자라 잘리면 '무엇에 대한 공지'인지가 사라진다.
-          MarqueeText 는 넘칠 때만 애니메이션을 붙이므로 짧은 공지는 지금과 똑같이 정적이다. */}
-      <MarqueeText text={notice.title} className="min-w-0 flex-1 text-sm font-semibold text-ink-primary" />
-      <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{relativeTime(notice.createdAt, { dateAfterDays: 7 })}</span>
+      {/* 정적 제목 — 모바일 2줄 clamp · lg+ 1줄 말줄임. 애니메이션·translate 없음.
+          title 은 PC 에서 말줄임된 제목을 호버로 확인하는 길이다(모바일은 누르면 상세). */}
+      <span title={notice.title}
+        className="min-w-0 flex-1 break-words text-sm font-semibold text-ink-primary line-clamp-2 lg:line-clamp-1">
+        {notice.title}
+      </span>
+      <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{when}</span>
     </>
   );
   const cls = 'flex w-full min-h-[var(--row-h-sm)] items-center gap-2.5 rounded-input px-2.5 py-2 text-left transition-colors';
   return (
     <li>
       {onSelect ? (
-        <button type="button" onClick={() => onSelect(notice)}
+        // aria-label: 시각적으로 잘린 제목과 무관하게 접근성 이름은 항상 전체 제목 + 시각이다.
+        <button type="button" onClick={() => onSelect(notice)} aria-label={`${notice.title} · ${when}`}
           className={`${cls} hover:bg-surface-high/50 focus-visible:bg-surface-high/50 focus:outline-none`}>
           {body}
         </button>

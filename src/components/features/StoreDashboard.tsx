@@ -6,7 +6,7 @@ import type { Schedule } from '../../api/schedules';
 import { listStaleOpenSessions,
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
-  getLastClosedRound, MAIN_GAME_SEQ, type LastClosedRound, type PosterOpsSummary,
+  getLastClosedRound, MAIN_GAME_SEQ, kstToday, type LastClosedRound, type PosterOpsSummary,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest,
 } from '../../api/ledger';
 import { useToast } from '../atoms/Toast';
@@ -29,20 +29,17 @@ import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShif
 import { getUpcomingBirthdays } from '../../api/crm';
 import { relativeTime } from '../../lib/relativeTime';
 
-const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
+// '오늘'·'최근 N일'은 전부 **KST** — 장부·서버(ledger_business_date · kstToday)와 같은 달력이어야 한다.
+// 예전엔 브라우저 로컬 TZ(toLocaleDateString)라, KST 보다 뒤진 기기(해외 로밍·시계 오설정·UTC 러너)에서
+// 한국 자정~오전 9시 사이엔 **어제** 장부를 '오늘'로 읽어 '미시작' 배지와 [장부 시작하기]가 떴다.
+// 정산 단계만 VenueManageTab 에서 kstToday 로 우회하고 있었다 — 근원을 한 곳으로 맞춘다.
+const localToday = kstToday;
+const kstDaysAgo = (n: number) => kstToday(Date.now() - n * 86_400_000);
+const lastN = (n: number) => Array.from({ length: n }, (_, i) => kstDaysAgo(n - 1 - i));
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-const last7 = () => Array.from({ length: 7 }, (_, i) => {
-  const dt = new Date(); dt.setDate(dt.getDate() - (6 - i));
-  return dt.toLocaleDateString('en-CA');
-});
-const last14 = () => Array.from({ length: 14 }, (_, i) => {
-  const dt = new Date(); dt.setDate(dt.getDate() - (13 - i));
-  return dt.toLocaleDateString('en-CA');
-});
-const last28 = () => Array.from({ length: 28 }, (_, i) => {
-  const dt = new Date(); dt.setDate(dt.getDate() - (27 - i));
-  return dt.toLocaleDateString('en-CA');
-});
+const last7 = () => lastN(7);
+const last14 = () => lastN(14);
+const last28 = () => lastN(28);
 const monthRange = () => {
   const n = new Date();
   return {
@@ -204,6 +201,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       getLedgerSession(venueId, d).then(setSession),
       getLedgerBuyins(venueId, d).then(setBuyins),
       getLedgerPlayers(venueId, d).then(setPlayers),
+      // '지금 할 일' 1·2순위의 근거도 core 다 — 이 둘이 실패를 []로 위장하면 두 달치 미마감이 쌓여 있어도
+      // 카드는 '오늘 운영 완료'를 말하고 '순위 미입력' 카드가 사라진다. 실패는 아래 LoadErrorCard + 재시도로.
+      // ⚠ src/api/ledger.ts 의 두 함수가 { error } 를 버리고 [] 를 돌려주는 동안은 여기까지 오지 않는다 —
+      //   그쪽이 throw 하도록 바뀌면 이 자리가 그 실패를 받는다(같은 계약: getLedgerSession).
+      listStaleOpenSessions(venueId).then(setStaleOpen),
+      getPosterOpsSummaries(venueId).then((sums) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date)))),
       // 장부 권한이 없는 직원은 애초에 이 3종을 볼 수 없다(RLS 거절이 정상) — 그 거절을
       // 장애로 띄우면 포스터·출근 안내까지 같이 사라진다. 실패 분기는 장부를 보는 사람에게만.
     ]).then(() => setLoadErr(null), (e) => setLoadErr(caps.ledger ? e : null));
@@ -222,8 +225,6 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       getVenueRegulars(venueId).then(setRegulars).catch(() => {}),
       getVenueRankings(venueId, d).then(({ entries }) => setRankEventsToday(entries.map((e) => e.eventName ?? ''))).catch(() => {}),
       getVenueWeeklyFunnel(venueId).then(setFunnel).catch(() => {}),
-      listStaleOpenSessions(venueId).then(setStaleOpen).catch(() => {}),
-      getPosterOpsSummaries(venueId).then((sums) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date)))).catch(() => {}),
       ids.length ? getReservationCounts(ids).then(setResCounts).catch(() => {}) : Promise.resolve(),
     ]).then(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -330,6 +331,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     };
   }, [loading, loadErr, caps.ledger, session, started, clockActive, hasRankToday, fin.unpaid, schedules, venueId, d]);
   useEffect(() => { onProgress?.(stepInfo); }, [stepInfo, onProgress]);
+  // '오늘 장부'를 뜻하는 이동(KPI 밴드·장부 보기·미수금·바인 요청 전체 관리·빠른 작업 장부)은 전부 이 하나로.
+  // bare 'ledger' 는 resolveDest 규약상 시드를 만들지 않아 goStep 이 ledgerSeed 를 지우고, 장부 판이 처음이면
+  // 목록(검색) 모드로 열려 사장님이 오늘 날짜·게임을 다시 골라야 했다(단계 바 '장부'는 2026-09-07 에 같은
+  // 이유로 고쳐졌는데 대시보드 카드는 그대로였다). stepInfo.ledger.dest 가 이미 { 오늘, 지금 게임 } 을 든다 —
+  // 시작 전(date 없음)이면 예전대로 목록 모드다(그때는 고를 대상이 아직 없다).
+  const gotoTodayLedger = () => onGoto(stepInfo?.ledger.dest ?? 'ledger');
   // 위젯에서 보는 게임이 비활성이면 첫 활성 게임으로 자동 전환
   useEffect(() => {
     if (activeClocks.length > 0 && !activeClocks.some((c) => c.gameSeq === widgetGame)) setWidgetGame(activeClocks[0].gameSeq);
@@ -635,7 +642,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
            (카드 안 '다시 시도' 버튼이 button 중첩이 되지 않게 밴드 자체를 대체한다) */
         <LoadErrorCard error={loadErr} what="오늘 장부" onRetry={() => { setLoading(true); reload(); }} />
       ) : (
-        <button type="button" onClick={() => onGoto('ledger')}
+        <button type="button" onClick={gotoTodayLedger}
           className="section-alt block w-full rounded-card p-3 text-left transition-colors hover:border-border-default">{/* v6.3 KPI 밴드(레퍼런스 교차 밴드) — 대시보드 1곳 한정 */}
           <span className="flex items-center gap-2">
             <span className="text-2xs font-bold text-ink-muted">오늘 장부</span>
@@ -742,7 +749,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${pendingReqs.length > 0 ? 'bg-danger/15 text-danger-light' : 'bg-surface-float text-ink-muted'}`}>{pendingReqs.length}건</span>
               </div>
               {pendingReqs.length === 0 ? (
-                <button type="button" onClick={() => onGoto('ledger')} className="flex-1 py-3 text-center text-2xs text-ink-muted hover:text-ink-secondary">대기중인 요청이 없습니다.</button>
+                <button type="button" onClick={gotoTodayLedger} className="flex-1 py-3 text-center text-2xs text-ink-muted hover:text-ink-secondary">대기중인 요청이 없습니다.</button>
               ) : (
                 <>
                   <ul className="mt-2 space-y-1">
@@ -806,7 +813,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                       </li>
                     ))}
                   </ul>
-                  <button type="button" onClick={() => onGoto('ledger')} className="mt-auto pt-2 text-left text-2xs font-bold text-accent-300 hover:text-accent-200">{pendingReqs.length > 3 ? `외 ${pendingReqs.length - 3}건 · ` : ''}장부에서 전체 관리 →</button>
+                  <button type="button" onClick={gotoTodayLedger} className="mt-auto pt-2 text-left text-2xs font-bold text-accent-300 hover:text-accent-200">{pendingReqs.length > 3 ? `외 ${pendingReqs.length - 3}건 · ` : ''}장부에서 전체 관리 →</button>
                 </>
               )}
             </div>
@@ -932,7 +939,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요. 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto({ section: 'ranking', date: d, gameSeq: session?.gameSeq, title: session?.title }), tone: 'warn' };
         } else if (caps.ledger && started && !session?.closed) {
           todo = clockActive
-            ? { icon: 'cards', title: `게임 진행 중 · 엔트리 ${Math.round(fin.entry)}`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: () => onGoto('ledger'), tone: 'gold' }
+            ? { icon: 'cards', title: `게임 진행 중 · 엔트리 ${Math.round(fin.entry)}`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
             : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `엔트리 ${Math.round(fin.entry)} · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
         } else if (caps.ledger && !started && todayPoster) {
           todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto('ledger'), tone: 'gold' };
@@ -1028,7 +1035,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 
       {/* 미수·리스크 알림 (장부 권한) */}
       {caps.ledger && started && fin.unpaid > 0 && (
-        <button type="button" onClick={() => onGoto('ledger')}
+        <button type="button" onClick={gotoTodayLedger} data-testid="unpaid-cta"
           className="flex w-full items-center gap-2 rounded-card border border-danger/40 bg-danger/[0.08] p-3 text-left hover:bg-danger/[0.12] transition-colors">
           <Icon name="alert" size={18} className="shrink-0 text-danger-light" />
           <span className="text-xs text-danger-light">오늘 <b className="tabular-nums">{wonToMan(fin.unpaid)}만원</b> 미수금이 있습니다. 장부에서 확인하세요.</span>
@@ -1040,7 +1047,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         <div className="grid grid-cols-4 gap-3">
           {caps.posters && <QuickAction label="새 게임" tone="violet" onClick={onCreatePoster}
             icon={<><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>} />}
-          {caps.ledger && <QuickAction label="장부" tone="indigo" onClick={() => onGoto('ledger')}
+          {caps.ledger && <QuickAction label="장부" tone="indigo" onClick={gotoTodayLedger}
             icon={<><path d="M4 4h12a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" /></>} />}
           {caps.ledger && <QuickAction label="클락" tone="cyan" onClick={() => onGoto('clock')}
             icon={<><circle cx="12" cy="13" r="7" /><path d="M12 10v3l2 2" /><line x1="9" y1="2" x2="15" y2="2" /></>} />}

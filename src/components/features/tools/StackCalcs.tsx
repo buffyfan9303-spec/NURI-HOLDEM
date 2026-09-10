@@ -142,13 +142,14 @@ export function VarianceCalc() {
   const lossProb = sigma > 0 ? cdf(-mean / sigma) : (mean < 0 ? 1 : 0);
   const fmt = (v: number) => `${v >= 0 ? '+' : ''}${Math.round(v).toLocaleString()}bb`;
   return (
-    <CalcCard title="변동성 시뮬레이터" desc="승률·표준편차로 예상 수익 범위와 손실 확률(근사)">
+    <CalcCard title="변동성 시뮬레이터" desc="승률·표준편차로 예상 결과 범위와 손실 확률(근사)">
       <div className="grid grid-cols-2 gap-2">
         <Field label="승률 (bb/100)"><NumIn value={wr} onChange={setWr} /></Field>
         <Field label="표준편차 (bb/100)"><NumIn value={sd} onChange={setSd} /></Field>
       </div>
       <Field label="핸드 수"><NumIn value={hands} onChange={setHands} suffix="핸드" /></Field>
-      <Result label="기대 수익" value={fmt(mean)} accent />
+      {/* 라벨에 환금 프레이밍 어휘를 쓰지 않는다 — 같은 도구군 규약(src/lib/icm.ts, §28). 값은 bb 다. */}
+      <Result label="기대값" value={fmt(mean)} accent />
       <div className="grid grid-cols-2 gap-2">
         <Result label="68% 구간 (±1σ)" value={`${fmt(mean - sigma)} ~ ${fmt(mean + sigma)}`} />
         <Result label="손실 확률" value={`${Math.round(lossProb * 100)}%`} bad={lossProb > 0.4} />

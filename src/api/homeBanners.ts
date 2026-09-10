@@ -3,6 +3,14 @@
 // 파이프라인 위치: **노출**(사슬 첫 칸). 종전엔 PosterCarousel.tsx 소스에 배너가 하드코딩돼 있어
 // 한 장 바꾸려면 배포가 필요했다 — 여기가 그걸 운영 가능하게 만든다.
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { getAppSetting } from './settings';
+
+/** app_settings 킬스위치 — 'off' 면 코드에 박힌 기본 배너(PosterCarousel POSTER_SLIDES)를 **어느 역할에게도** 띄우지 않는다.
+ *  왜 스위치인가: 20260904g 이후 비관리자에게는 RLS 가 '게재 중인 행'만 돌려주므로, 클라이언트는
+ *  '아직 등록 전'과 '관리자가 전부 껐음'을 구분할 수 없다(관리자만 전량이 보인다). 그 구분을 역할별
+ *  행 수로 흉내 내면 손님 홈에는 기본 배너가 되살아나고 관리자 화면에는 안 떠 '내 화면과 손님 화면이
+ *  다르다'가 된다. 구분은 서버(app_settings, 전원 공개 읽기)가 한 값으로 말한다 — tabbar_autohide_v2 와 같은 패턴. */
+export const HOME_BANNER_FALLBACK_KEY = 'home_banner_fallback';
 
 export interface HomeBanner {
   id: string;
@@ -41,27 +49,32 @@ const today = () => new Date().toLocaleDateString('en-CA');
 export interface HomeBannerFeed {
   /** 지금 게재 중인 배너(순서대로) */
   banners: HomeBanner[];
-  /** 표에 행이 하나라도 있는가. **'아직 등록 전'과 '관리자가 전부 숨김'을 가르는 값**이다 —
-   *  둘을 같은 빈 배열로 뭉개면 관리자가 배너를 모두 끈 순간 코드에 박힌 기본 배너가 되살아나
-   *  '지웠는데 그대로 있다'가 된다(운영 불가). 조회는 한 번 그대로다(이미 전체 행을 읽고 있었다). */
+  /** 기본 배너(코드 내장)를 쓰지 말아야 하는가 — PosterCarousel 은 `banners.length === 0 && !configured` 일 때만 폴백한다.
+   *  ⚠ 판정은 **역할과 무관하게 같은 값**이어야 한다. 예전엔 '표에 행이 있는가(rows.length)'였는데,
+   *  RLS 축소(20260904g) 뒤 비관리자에게 rows 는 곧 '게재 중'이라 관리자가 전부 끈 순간 손님 홈에만
+   *  기본 배너가 되살아났다(관리자 화면은 빈 캐러셀 — 서로 다른 화면). 지금은
+   *  게재 중인 배너가 있거나, 킬스위치(HOME_BANNER_FALLBACK_KEY='off')가 켜져 있으면 true. */
   configured: boolean;
+}
+
+/** 조회 결과 → 노출 목록·폴백 판정. 순수 함수(테스트는 여기만 본다). */
+export function homeBannerFeed(rows: HomeBanner[], t: string, fallbackOff: boolean): HomeBannerFeed {
+  const banners = rows.filter((b) =>
+    b.active && b.imageUrl.trim()
+    && (!b.startsAt || b.startsAt <= t)
+    && (!b.endsAt || b.endsAt >= t));
+  return { banners, configured: banners.length > 0 || fallbackOff };
 }
 
 export async function getActiveHomeBanners(): Promise<HomeBannerFeed> {
   if (IS_MOCK) return { banners: [], configured: false };
-  const t = today();
-  const { data, error } = await supabase
-    .from('home_banners').select('*')
-    .order('sort_order').order('created_at');
+  const [{ data, error }, fallback] = await Promise.all([
+    supabase.from('home_banners').select('*').order('sort_order').order('created_at'),
+    // 스위치 조회 실패는 '스위치 없음'과 같게 — 배너 조회만이 이 함수의 성패다.
+    getAppSetting(HOME_BANNER_FALLBACK_KEY).catch(() => null),
+  ]);
   if (error) throw error;   // 조회 실패를 '등록 전'으로 오인해 기본 배너를 띄우지 않는다
-  const rows = (data ?? []).map(rowToBanner);
-  return {
-    banners: rows.filter((b) =>
-      b.active && b.imageUrl.trim()
-      && (!b.startsAt || b.startsAt <= t)
-      && (!b.endsAt || b.endsAt >= t)),
-    configured: rows.length > 0,
-  };
+  return homeBannerFeed((data ?? []).map(rowToBanner), today(), fallback === 'off');
 }
 
 /** 관리자: 전체 목록(꺼진 것·만료된 것 포함). */

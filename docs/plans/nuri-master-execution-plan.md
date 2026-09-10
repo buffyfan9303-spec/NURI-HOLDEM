@@ -803,7 +803,7 @@ grant execute on function public.lifecycle_email_candidates(text) to service_rol
 
 ### 확정 결정 (카드보다 우선)
 - **③ 반응 리네이밍 + 점수** — 억까/나이스런 → UI 라벨 **`리스펙`(멋진 플레이·goodrun)·`토닥`(위로·badbeat)** + 기존 `좋아요`. DB badbeat/goodrun 컬럼 유지(라벨만 교체). **반응 1개 = 작성자 +1점**(1인 1반응/게시물 유니크, 섀도우밴·레이트리밋 가드, 자기 게시물 제외). PostDetailModal '등급 점수 미반영' 문구 제거. 앵커: reactToPost 흐름·community.ts·활동점수(logActivity)·get_activity_leaderboard.
-- **④ 프로필 성과 = T 단위** — 금액(원) 직접 표시 금지, **1T=10만원 '기록 단위'**로 누적 성과 + **입상 횟수** 병기(Hendon Mob식 커리어 기록). 시드지갑 요약(보유 N장·T)을 프로필에 노출(진입 링크만 아님). **지갑/환전/출금/정산 UI 절대 없음 + '비환전·기록·금전 지급 아님' 라벨** = §28 안전선. cross-cutting #3 갱신: totalAmount/prize를 원이 아니라 **T로 표시**(저장은 유지 가능, 표시·프레임만 T·비환전). 앵커: ProfileModal·FEAT-1(myPlayHistory)·FEAT-3(머니리스트)·vouchers.
+- **④ 프로필 성과 = T 단위** — 금액(원) 직접 표시 금지, **1T=10만원 '기록 단위'**(→ 당시 규칙. 2026-09-05 오너 재결정으로 **1T=1만원**으로 폐기 — `20260905f_ticket_unit_1man.sql` · `rankings.ts` TICKET_MAN · `units.ts` TICKET_WON. 머니인 1점 임계 100만원 = 100T)로 누적 성과 + **입상 횟수** 병기(Hendon Mob식 커리어 기록). 시드지갑 요약(보유 N장·T)을 프로필에 노출(진입 링크만 아님). **지갑/환전/출금/정산 UI 절대 없음 + '비환전·기록·금전 지급 아님' 라벨** = §28 안전선. cross-cutting #3 갱신: totalAmount/prize를 원이 아니라 **T로 표시**(저장은 유지 가능, 표시·프레임만 T·비환전). 앵커: ProfileModal·FEAT-1(myPlayHistory)·FEAT-3(머니리스트)·vouchers.
 - **⑤ 클락 개인화 진입점** — VenueCustomizePanel 외에 **①클락 러닝 시작 전 설정 화면 ②러닝 중 '수정' 버튼**에서 clockTheme를 연다(직관성). surfaces[0] 클락 카드 approach에 진입점 2개 추가. 앵커: TournamentClock(운영 컨트롤)·ClockDisplay·clockTheme(page_config).
 - **⑥ GTO 탭 통합** — 커뮤니티 진입 아님. **기존 tools 탭 → 'GTO' 탭으로 재편**, 매장 운영 도구(ChipDistributor 칩분배·StructureSim 구조시뮬·BlindBuilder 블라인드생성·상금분배·종료시간)를 **my-store(VenueManageTab)로 이전**. 고아 GtoDeepWidget 삭제. GTO 탭 = 학습·분석·계산기 3레인. 앵커: ToolsPanel.tsx·App.tsx TabId('tools'→라벨 GTO)·VenueManageTab(도구 이관 대상).
 

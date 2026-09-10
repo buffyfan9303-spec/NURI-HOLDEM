@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
 import { markAllNotificationsRead, markNotificationsRead } from '../../api/notifications';
 import type { AppNotification, NotificationType } from '../../api/notifications';
@@ -92,18 +93,37 @@ export default function NotificationPanel({
     onUnreadMessagesChange?.(ts.reduce((s, t) => s + t.unread, 0));
   }, [onUnreadMessagesChange]);
 
+  // ── 계정 경계(2026-09-10) ──
+  // 이 패널은 AppHeader 에 항상 마운트라 App 의 [user?.id] 리셋(알림 배열)이 여기 쪽지 state 에는 닿지 않았다.
+  // A 가 패널을 열고 로그아웃 → 같은 탭에서 B 가 로그인해 열면 B 의 응답이 올 때까지 A 의 대화 상대·마지막 쪽지가
+  // B 에게 보였고, B 의 조회가 실패하면 '보던 목록은 그대로 둔다' 정책이 A 의 목록을 영구히 남겼다(공용 PC 실제 동선).
+  const { user } = useAuth();
+  const uid = user?.id ?? null;
+  // 스레드 조회 세대 — 가장 최근 호출만 화면에 닿는다. 계정이 바뀌면 세대를 올려 비행 중인 이전 계정 응답을 전부 버린다.
+  const threadsSeq = useRef(0);
+  // 지금 열려 있는 상대 — 늦은 스레드 응답·전송 결과가 다른 상대의 대화에 붙지 않게 응답 시점에 비교한다(ChatPane onReadRef 조리법).
+  const activeOtherRef = useRef(activeOther);
+  useEffect(() => { activeOtherRef.current = activeOther; });
+  useEffect(() => {
+    threadsSeq.current++;
+    setThreads([]); setThreadsErr(null); setThreadsLoading(true);
+    setMsgView('list'); setActiveOther(null); setMsgs([]); setMsgsErr(null); setDraft('');
+  }, [uid]);
+
   const reloadThreads = useCallback(() => {
+    const seq = ++threadsSeq.current;
     setThreadsLoading(true);
     listMyThreads()
-      .then((ts) => { setThreads(ts); setThreadsErr(null); reportUnread(ts); })
-      .catch((e) => setThreadsErr(e))
-      .finally(() => setThreadsLoading(false));
+      .then((ts) => { if (seq !== threadsSeq.current) return; setThreads(ts); setThreadsErr(null); reportUnread(ts); })
+      .catch((e) => { if (seq === threadsSeq.current) setThreadsErr(e); })
+      .finally(() => { if (seq === threadsSeq.current) setThreadsLoading(false); });
   }, [reportUnread]);
 
-  // 패널 열릴 때(그리고 쪽지 모드로 전환할 때) 스레드 갱신 — 뱃지의 쪽지 몫도 이때 재계산
+  // 패널 열릴 때(그리고 쪽지 모드로 전환할 때) 스레드 갱신 — 뱃지의 쪽지 몫도 이때 재계산.
+  // uid 도 본다: 로그인 랜딩 위에서 로그인이 확정되는 경우처럼 열린 채 계정이 바뀌면 새 계정으로 다시 읽는다.
   useEffect(() => {
     if (open && mode === 'messages') reloadThreads();
-  }, [open, mode, reloadThreads]);
+  }, [open, mode, reloadThreads, uid]);
 
   // 패널이 닫히면 내부 화면을 목록으로 되돌린다(다음 열림이 항상 같은 곳에서 시작)
   useEffect(() => {
@@ -113,10 +133,13 @@ export default function NotificationPanel({
   // 대화 본문 조회 정본 — 처음 열 때와 실패 카드의 '다시 시도'가 같은 함수를 쓴다(껍데기 버튼 방지).
   const loadThread = useCallback((otherId: string) => {
     setMsgsLoading(true);
+    // 응답이 왔을 때 '지금도 이 상대인가' — A1(느림)을 열고 뒤로가기 → A2(빠름)를 연 뒤 A1 응답이 도착하면
+    // 헤더는 A2 인데 본문이 A1 과의 대화로 덮였다. 재시도 버튼도 이 함수를 거치므로 함께 보호된다.
+    const still = () => activeOtherRef.current?.id === otherId;
     listThread(otherId)
-      .then((ms) => { setMsgs(ms); setMsgsErr(null); })
-      .catch((e) => setMsgsErr(e))
-      .finally(() => setMsgsLoading(false));
+      .then((ms) => { if (still()) { setMsgs(ms); setMsgsErr(null); } })
+      .catch((e) => { if (still()) setMsgsErr(e); })
+      .finally(() => { if (still()) setMsgsLoading(false); });
   }, []);
 
   // ── 스레드 열기: 쪽지 로드 + 읽음 스탬프 + 로컬 미읽음 0 ──
@@ -149,7 +172,11 @@ export default function NotificationPanel({
     setSending(true);
     try {
       const sent = await sendMessage(activeOther.id, body);
-      setDraft('');
+      // 보낸 본문이 아직 입력칸에 그대로면 비운다 — 전송 중 다른 상대에게 새로 쓴 글은 지우지 않는다.
+      setDraft((d) => (d.trim() === body ? '' : d));
+      // 전송 중 뒤로가기→다른 상대를 열었으면 결과를 그 화면에 붙이지 않는다(서버엔 정상 저장 — 그 상대를 다시 열면 보인다).
+      // 예전엔 방금 보낸 쪽지가 엉뚱한 상대의 대화에 나타나 '잘못 보냈다'고 믿게 했다. recipientId 는 messages.ts 가 돌려준다.
+      if (activeOtherRef.current?.id !== sent.recipientId) return;
       setMsgs((prev) => [...prev, sent]);
       setThreads((prev) => {
         const rest = prev.filter((t) => t.otherId !== activeOther.id);

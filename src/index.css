@@ -209,6 +209,40 @@
     border-color: rgb(255 255 255 / 0.04);
   }
   html.light .card-aura-sub { background-color: rgb(var(--surface-high)); border-color: rgb(var(--border-subtle)); }
+
+  /* ── Aura LED 백라이트 (2026-09-10, 오너 지시) ────────────────────────────────
+     "중요한 상태 **뒤에서** LED 조명이 번지는" 백라이트. 카드 앞의 그림자가 아니다.
+     구현이 box-shadow 인 이유(::before 장식 레이어를 쓰지 않은 이유):
+       ① outer box-shadow 는 **요소 배경보다 먼저** 칠해진다 = 정의상 '카드 뒤에서 새어 나오는 빛'.
+       ② 호스트 자신의 overflow(StoreLiveBar 의 overflow-x-auto)에 잘리지 않는다.
+          inset 음수 ::before 는 그 자리에서 통째로 잘린다.
+       ③ 레이아웃 0 · DOM 0 · 합성 레이어 0 · pointer-events 0 — §11 시각 안정성과 §14 성능 기준을
+          구조적으로 만족한다(장식 노드가 없으니 aria-hidden 도 필요 없다).
+       ④ 곡률을 자동으로 따라간다(border-radius 를 다시 쓰지 않는다).
+     ⚠ 호스트가 이미 box-shadow 를 갖고 있으면 **교체**된다(index.css:728-731 의 GTO 카드 사례).
+        그래서 이 속성은 box-shadow 가 없는 호스트에만 붙인다 — 현재 네 곳 모두 그렇다.
+     ⚠ @layer base 에 둔다: Tailwind utilities(shadow-*)가 이겨야 하는 방향이 맞다.
+     단계는 둘뿐이다(§7). hero = 카드 뒤 면광, micro = 활성 컨트롤. micro 는 hero 와 경쟁하지 않는다. */
+  [data-aura] {
+    /* 기본값 = violet. variant 가 덮는다. */
+    --aura-led-rgb: 139 92 246;
+    box-shadow: 0 0 var(--aura-led-blur) rgb(var(--aura-led-rgb) / var(--aura-led-a));
+  }
+  [data-aura-level='hero']  { --aura-led-blur: 34px; --aura-led-a: 0.19; }  /* §7 확산 24~48px · 다크 0.16~0.22 */
+  [data-aura-level='micro'] { --aura-led-blur: 12px; --aura-led-a: 0.16; }  /* §7 확산 8~16px */
+  [data-aura-variant='violet']  { --aura-led-rgb: 139  92 246; }
+  [data-aura-variant='cyan']    { --aura-led-rgb:  34 211 238; }
+  [data-aura-variant='emerald'] { --aura-led-rgb:  52 211 153; }
+  [data-aura-variant='amber']   { --aura-led-rgb: 251 191  36; }
+  [data-aura-variant='rose']    { --aura-led-rgb: 251 113 133; }
+  /* 라이트: 밝은 지면에서는 블룸이 '뿌연 얼룩'으로 읽힌다 — 확산을 줄이고 알파를 내려 가장자리 쪽에 남긴다(§7). */
+  html.light [data-aura-level='hero']  { --aura-led-blur: 22px; --aura-led-a: 0.09; }  /* §7 라이트 0.06~0.10 */
+  html.light [data-aura-level='micro'] { --aura-led-blur: 10px; --aura-led-a: 0.08; }
+  /* 접근성 — 이 저장소에 prefers-contrast·forced-colors 대응이 0건이었다. 장식광은 셋 다에서 끈다.
+     (prefers-reduced-motion 은 손댈 것이 없다: 이 레이어에 애니메이션이 처음부터 없다.) */
+  @media (prefers-reduced-transparency: reduce) { [data-aura] { box-shadow: none; } }
+  @media (prefers-contrast: more)               { [data-aura] { box-shadow: none; } }
+  @media (forced-colors: active)                { [data-aura] { box-shadow: none; } }
   /* 네온 링/게이지 — 진행 스트로크에만(정적 필터, 애니메이트하지 않는다 §4) */
   .ring-glow { filter: drop-shadow(0 0 6px rgb(var(--aura-300) / 0.8)); }
   html.light .ring-glow { filter: none; }
@@ -1748,6 +1782,30 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
 html.light .pill-active {
   box-shadow: 0 0 14px rgb(99 102 241 / 0.14), inset 0 1px 0 rgb(255 255 255 / 0.35);
 }
+/* 커뮤니티 서브탭 **한정** micro LED (2026-09-10, 오너 지시 §5.7).
+   전역 .pill-active(34곳)는 손대지 않는다 — 하단 탭바·GTO 레인·순위 탭이 같은 클래스를 쓴다.
+   여기만 18px/0.28 → 12px/0.22 로 낮춘다: 알약이 32px 로 얇아지면서 같은 블룸이
+   글자 주변 보라 안개로 읽혔다(§5.7 '텍스트 주변까지 번지면 강도를 낮춤').
+   토큰 이름은 [data-aura] 와 같은 것을 쓴다 — 같은 LED 시스템의 micro 단계다. */
+[data-community-secbar] [data-sliding-pill].pill-active {
+  --aura-led-rgb: 129 140 248;
+  --aura-led-blur: 12px;
+  --aura-led-a: 0.22;
+  box-shadow: 0 0 var(--aura-led-blur) rgb(var(--aura-led-rgb) / var(--aura-led-a)), inset 0 1px 0 rgb(255 255 255 / 0.14);
+}
+html.light [data-community-secbar] [data-sliding-pill].pill-active {
+  --aura-led-blur: 10px;
+  --aura-led-a: 0.12;
+  box-shadow: 0 0 var(--aura-led-blur) rgb(99 102 241 / var(--aura-led-a)), inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+@media (prefers-reduced-transparency: reduce) { [data-community-secbar] [data-sliding-pill].pill-active { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14); } }
+@media (prefers-contrast: more)               { [data-community-secbar] [data-sliding-pill].pill-active { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14); } }
+@media (forced-colors: active)                { [data-community-secbar] [data-sliding-pill].pill-active { box-shadow: none; } }
+/* 키보드 포커스 링이 레일에 잘리던 것(2026-09-10 실측 — 변경 전에도 같았다).
+   레일은 overflow-x:auto 라 세로도 auto 로 계산되고(CSS 규칙: 한 축이 visible 이 아니면 다른 축의 visible 은 auto 가 된다),
+   버튼 높이 = 레일 높이라 바깥으로 2px+2px 나가는 outline 이 위아래 모두 0px 여유에서 통째로 잘렸다.
+   여백을 늘리면 바가 다시 두꺼워지므로 **링을 안쪽으로** 그린다 — 44px 버튼 안, 32px 알약 바깥 자리라 잘 보인다. */
+[data-community-secbar] button:focus-visible { outline-offset: -2px; }
 /* ⚠ .card-elev 적용 티어 규칙(2026-08-28 실측으로 확정 — 어기면 AA 가 깨진다):
    **bg-surface-base / bg-surface-low(또는 그 위 액센트 틴트)에만** 붙인다. bg-surface-high 금지.
    근거: ink-muted 는 surface-high 위에서 이미 다크 4.53:1 · 라이트 4.69:1 로 헤드룸이 사실상 0이다.

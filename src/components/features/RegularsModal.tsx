@@ -74,7 +74,7 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [], on
         )}
         <div className="space-y-0.5 text-2xs leading-relaxed text-ink-muted">
           <p>장부 바인 기록 기준 · 직원(관계자) 제외 · 5회 이상 ‘단골’</p>
-          <p>완납 누적은 실제 수납된 참가비입니다(미수·이용권·가게지원 제외) · 통계·CSV와 같은 기준</p>
+          <p>완납 누적은 실제 수납된 참가비입니다(미수·이용권·가게지원 제외) · 통계와 같은 기준</p>
         </div>
       </div>
     </Modal>

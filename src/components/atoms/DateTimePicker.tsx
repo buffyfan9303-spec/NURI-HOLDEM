@@ -57,25 +57,32 @@ export default function DateTimePicker({
 
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => (open ? setOpen(false) : openPicker())}
-        className="w-full flex items-center justify-between gap-2 input text-sm text-left">
-        <span className={cur ? 'text-ink-primary font-semibold' : 'text-ink-muted'}>{cur ? fmt(cur) : placeholder}</span>
-        <span className="flex items-center gap-1.5 shrink-0">
-          {cur && <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onChange(null); }} className="text-ink-muted hover:text-danger-light text-xs">✕</span>}
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-ink-muted" aria-hidden><rect x="3" y="4" width="18" height="17" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="16" y1="2" x2="16" y2="6" /></svg>
-        </span>
-      </button>
+      {/* 선택 해제는 트리거 **형제** 버튼(ToolsPanel 별 버튼과 같은 문법). 예전엔 button 안의 span role=button 이라
+          중첩 인터랙티브(스크린리더가 하나만 노출)였고, onKeyDown 이 없어 Tab 으로 닿아도 Enter/Space 가 안 먹었다(A11Y-01). */}
+      <div className="flex items-center gap-1">
+        <button type="button" onClick={() => (open ? setOpen(false) : openPicker())}
+          className="min-w-0 flex-1 flex items-center justify-between gap-2 input text-sm text-left">
+          <span className={cur ? 'text-ink-primary font-semibold' : 'text-ink-muted'}>{cur ? fmt(cur) : placeholder}</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-ink-muted" aria-hidden><rect x="3" y="4" width="18" height="17" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="16" y1="2" x2="16" y2="6" /></svg>
+        </button>
+        {cur && (
+          // 실제 44px — `hit` 의 ::after 확장분은 옆 트리거의 달력 아이콘 자리를 덮어 '달력 탭이 값 해제' 가 될 수 있다.
+          <button type="button" aria-label="선택 해제" onClick={() => onChange(null)}
+            className="h-11 w-11 shrink-0 rounded-input text-xs text-ink-muted hover:bg-surface-high hover:text-danger-light">✕</button>
+        )}
+      </div>
 
       {open && (
         <div className="absolute z-50 mt-1 left-0 right-0 rounded-card border border-border-default bg-surface-float shadow-dialog p-3 space-y-2.5">
           {/* 날짜 */}
           <div>
             <div className="flex items-center justify-between gap-2">
-              <button type="button" onClick={() => setYmd((d) => shiftDate(d, -1))} className="w-8 h-8 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
+              {/* hit: 시각은 32px 그대로, 손가락 영역만 44px(모바일 라이브 운영 경로) */}
+              <button type="button" aria-label="하루 전" onClick={() => setYmd((d) => shiftDate(d, -1))} className="hit w-8 h-8 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
               <div className="flex-1 text-center">
                 <p className="text-sm font-bold text-accent-300 tabular-nums">{(() => { const d = new Date(`${ymd}T00:00:00`); return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} (${WDAY[d.getDay()]})`; })()}</p>
               </div>
-              <button type="button" onClick={() => setYmd((d) => shiftDate(d, 1))} className="w-8 h-8 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
+              <button type="button" aria-label="하루 뒤" onClick={() => setYmd((d) => shiftDate(d, 1))} className="hit w-8 h-8 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
             </div>
             <div className="flex items-center justify-center gap-1.5 mt-1.5">
               <button type="button" onClick={() => setYmd(toLocalDate(new Date()))} className="text-2xs px-2 py-1 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">오늘</button>

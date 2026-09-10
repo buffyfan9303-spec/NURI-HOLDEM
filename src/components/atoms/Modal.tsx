@@ -46,31 +46,29 @@ const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
   '6xl': 'max-w-6xl',
 };
 
+/** 지금 열려 있는(비-inline) 모달의 콘텐츠 요소 — 마지막이 맨 위. 포커스 되잡기·첫 포커스는 맨 위 모달만 한다. */
+const openModals: HTMLElement[] = [];
+
 export default function Modal({
   open, onClose, title, headerAction, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
   dragToClose = false,
 }: ModalProps) {
   // page 는 기존 동작 유지(항상 켜짐), sheet 는 opt-in.
   const bodyDrag = variant === 'page' || (variant === 'sheet' && dragToClose);
-  // ESC 키로 닫기 + 바디 스크롤 잠금
+  // 바디 스크롤 잠금
   // 드래그로 닫혔으면 닫힘 키프레임을 다시 돌리지 않는다(이미 화면 밖 — 되감아 올라왔다 다시 내려가는 이중 퇴장 방지)
   const [dragClosed, setDragClosed] = useState(false);
   useEffect(() => { if (open) setDragClosed(false); }, [open]);
   useEffect(() => {
     if (!open || inline) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
     lockScroll(); // 뷰포트 스크롤러는 html — body만 잠그면 무효(scrollLock 유틸이 둘 다 처리)
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      unlockScroll();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, onClose]);
+    return () => { unlockScroll(); };
+  }, [open, inline]);
 
-  // 뒤로가기(브라우저/모바일 back) → 페이지 이탈 대신 "이 모달만" 닫기.
-  // 중앙 back-stack 매니저가 중첩/충돌/이중 pop 을 모두 처리한다.
-  useBackClose(open && !inline, onClose);
+  // 뒤로가기(브라우저/모바일 back)·ESC → 페이지 이탈 대신 "이 모달만" 닫기.
+  // 중앙 back-stack 매니저가 중첩/충돌/이중 pop 을 모두 처리한다. ESC 도 같은 스택이 최상단 한 겹만 닫는다 —
+  // 여기서 window keydown 을 따로 들으면 겹친 모달(포스터 상세 위 글쓰기)이 ESC 한 번에 전부 닫힌다(MODAL-01).
+  useBackClose(open && !inline, onClose, { escape: true });
 
   // 열기/닫기 애니메이션: 닫힐 때 잠깐 더 렌더링하여 시트가 아래로 슬라이드되며 사라지게 한다.
   const [render, setRender] = useState(open);
@@ -84,6 +82,7 @@ export default function Modal({
 
   // 접근성: 모달 내부 포커스 트랩 + 열릴 때 첫 포커스(키보드 내비)
   const contentRef = useRef<HTMLDivElement>(null);
+  // (openModals 는 모듈 스코프 — 아래 포커스 효과 참조)
   // ── Apple 시트 제스처 (모션 헌법 v2 §3 · apple-design 스킬 §2~§6, 2026-09-02) ──────────────────
   // 손가락 1:1 추종 → 손 뗀 **속도를 이어받고** → **운동량을 투영**해 착지점을 정하고 → **언제든 잡아 되돌린다**.
   // 예전(터치 이벤트 + React 상태 + CSS 트랜지션)은 ① 이동마다 리렌더 ② 손을 뗀 속도가 버려져
@@ -181,7 +180,10 @@ export default function Modal({
     ? { onTouchStart: onSheetStart, onTouchMove: onSheetMove, onTouchEnd: onSheetEnd, onTouchCancel: onSheetCancel }
     : {};
   useEffect(() => {
-    if (!open || inline) return;
+    // ⚠ render 를 같이 본다 — 마운트된 채 닫혀 있다가 열리는 모달(약관 시트 등)은 open 이 true 가 되는 커밋에
+    //   콘텐츠가 아직 없다(render 는 위 효과가 다음 커밋에 올린다). open 만 보면 el 이 null 이라 조용히 빠져
+    //   첫 포커스·트랩·복원이 전부 죽었다(2026-09-10 e2e 실측). render 가 오르는 커밋에서 다시 돈다.
+    if (!open || inline || !render) return;
     const el = contentRef.current;
     if (!el) return;
 
@@ -193,7 +195,12 @@ export default function Modal({
     const focusables = () => Array.from(
       el.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'),
     ).filter((n) => n.offsetParent !== null);
-    const t = window.setTimeout(() => { (focusables()[0] ?? el).focus(); }, 50);
+    // 열린 모달 스택 — 포커스를 되잡는 것은 **맨 위** 모달 하나뿐이다.
+    // 부모 Modal 위에 자식 Modal(글쓰기 시트·약관 시트)이 뜨면 자식 DOM 은 부모 el 밖이라, 부모가 "밖으로 샜다"고
+    // 보고 자식의 포커스를 매번 빼앗았다(자식 첫 포커스·Tab·Space 전부 부모 닫기 버튼으로 끌려감 — 2026-09-10 e2e 실측).
+    openModals.push(el);
+    const isTop = () => openModals[openModals.length - 1] === el;
+    const t = window.setTimeout(() => { if (isTop()) (focusables()[0] ?? el).focus(); }, 50);
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
       const f = focusables();
@@ -211,6 +218,7 @@ export default function Modal({
     const onFocusIn = (e: FocusEvent) => {
       const target = e.target as Node | null;
       if (!target || el.contains(target)) return;
+      if (!isTop()) return; // 위에 다른 모달이 열려 있으면 그쪽 포커스다 — 뺏지 않는다
       (focusables()[0] ?? el).focus();
     };
     document.addEventListener('focusin', onFocusIn);
@@ -219,6 +227,8 @@ export default function Modal({
       window.clearTimeout(t);
       el.removeEventListener('keydown', onKey);
       document.removeEventListener('focusin', onFocusIn);
+      const i = openModals.lastIndexOf(el);
+      if (i >= 0) openModals.splice(i, 1);
       // 아직 화면에 붙어 있는 요소일 때만 되돌린다(그 사이 언마운트됐으면 건드리지 않는다).
       if (opener && document.contains(opener)) {
         // 되돌리는 순간의 focusin 이 위 가드에 걸리지 않도록 리스너 해제 뒤에 실행한다.
@@ -226,7 +236,7 @@ export default function Modal({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, render]);
 
   // 인라인 패널(2-pane 우측) — 오버레이/딤/백버튼 없이 콘텐츠만 카드로.
   if (inline) {

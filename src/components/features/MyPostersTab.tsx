@@ -9,7 +9,6 @@ import {
 import { getPosterOpsSummaries, getScheduleLedgers, subscribeLedger, type PosterOpsSummary, type ScheduleLedgerItem } from '../../api/ledger';
 import { ledgerGameLabel, type LedgerLinkTarget } from '../../lib/ledgerLink';
 import { subscribeCheckins } from '../../api/checkins';
-import { toCsv, downloadCsv } from '../../lib/csv';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import EmptyState from '../atoms/EmptyState';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
@@ -18,16 +17,6 @@ import { createUndoQueue } from '../../lib/undoableDelete';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { isVisited, createReqGuard } from '../../lib/ownerReservations';
-
-// 예약 명단 CSV 내보내기 (엑셀 한글 호환)
-function exportReservationsCsv(schedule: Schedule, reservations: OwnerReservation[]) {
-  const csv = toCsv(
-    ['번호', '예약자', '예약시각'],
-    reservations.map((r, i) => [i + 1, r.displayName, new Date(r.createdAt).toLocaleString('ko-KR')]),
-  );
-  const d = new Date(schedule.date);
-  downloadCsv(`${schedule.title}_${d.getMonth() + 1}월${d.getDate()}일_예약명단`, csv);
-}
 
 interface MyPostersTabProps {
   schedules: Schedule[];
@@ -231,7 +220,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
   }, [reqGuard, schedule.venueId]);
   const toggle = () => { const next = !open; setOpen(next); if (next && reservations === null) loadRes(resSchedId); };
   // 예약 수(실시간 구독)가 바뀌면 펼쳐 둔 명단도 다시 읽는다 — 칩 '예약 4'와 명단 '3명'이 어긋나면
-  // CSV·삭제 확인창이 그 낡은 수를 근거로 쓴다. ⚠ 길이 비교로 하지 않는다: 5초 유예 중인 삭제가
+  // 삭제 확인창이 그 낡은 수를 근거로 쓴다. ⚠ 길이 비교로 하지 않는다: 5초 유예 중인 삭제가
   // 곧바로 되살아난다(낙관 제거 ≠ 서버 반영). '보고 있는 날짜의 수가 실제로 바뀐 뒤'에만 읽는다.
   const listRev = `${resCounts[resSchedId] ?? 0}#${checkinNonce ?? 0}`;
   const seenRevRef = useRef({ sid: resSchedId, rev: listRev });
@@ -452,10 +441,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
             <p className="text-2xs text-ink-muted text-center py-2">아직 예약자가 없습니다.</p>
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <p className="text-2xs text-ink-muted">예약 {reservations.length}명</p>
-                <button type="button" onClick={() => exportReservationsCsv(schedule, reservations)} className="btn-ghost text-2xs px-2 text-accent-300">CSV 내보내기</button>
-              </div>
+              <p className="text-2xs text-ink-muted">예약 {reservations.length}명</p>
               {reservations.map((r, i) => (
                 <ReservationItem key={r.id || i} idx={i + 1} res={r} venueId={venueId}
                   visited={isVisited(r)}

@@ -1567,13 +1567,11 @@ const ADMINPOS_ORDER = ['stats', 'ledger'] as const;
 function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venueName: string; onClose: () => void }) {
   const [tab, setTab] = useState<'stats' | 'ledger'>('stats');
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     lockScroll(); // 뷰포트 스크롤러는 html — 공용 유틸로 배경 스크롤 잠금
-    window.addEventListener('keydown', onKey);
-    return () => { unlockScroll(); window.removeEventListener('keydown', onKey); };
-  }, [onClose]);
-  // 뒤로가기 → 운영자 장부 뷰 닫기
-  useBackClose(true, onClose);
+    return () => { unlockScroll(); };
+  }, []);
+  // 뒤로가기·ESC → 운영자 장부 뷰 닫기. ESC 를 여기서 직접 들으면 이 위의 장부 오버레이와 함께 닫힌다(MODAL-01).
+  useBackClose(true, onClose, { escape: true });
 
   return (
     <div data-scroll-lock className="fixed inset-0 z-[60] bg-surface-base overflow-y-auto transform-gpu animate-fade-in">

@@ -1,5 +1,5 @@
 // src/components/features/clock/ClockThemePanel.tsx
-// 클락 화면(TV 송출) 테마 — 프리셋 6종 · 강조색 10종 · 매장 배경 이미지 업로드.
+// 클락 화면(TV 송출) 테마 — 프리셋 9종 · 강조색 10종 · 매장 배경 이미지 업로드.
 //
 // 위치: 「내 매장 → 게임 진행 → 3. 클락 → 클락 설정」. 예전엔 '매장 설정 > 매장 페이지'에 있었는데,
 // 그건 손님용 매장 페이지를 꾸미는 문(門)이라 **클락을 세팅하는 사람이 지나가지 않는 자리**였다.
@@ -202,7 +202,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
         </p>
       </div>
 
-      {/* 프리셋 6종 — 미리보기 사각형(배경 = 실제 CSS 값, 프리셋 상수라 인라인 hex 허용) */}
+      {/* 프리셋 9종 — 미리보기 사각형(배경 = 실제 CSS 값, 프리셋 상수라 인라인 hex 허용) */}
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
         {CLOCK_THEME_PRESETS.map((p) => {
           const on = p.id === curPresetId && !!cur;

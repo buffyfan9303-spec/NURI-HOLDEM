@@ -3,13 +3,16 @@
 //  - 인앱 수집/관리자 화면 표시는 errorLog.ts가 담당(이미 동작 중).
 //  - 이 모듈은 외부 실시간 알림(Sentry)을 담당하며, VITE_SENTRY_DSN 환경변수가 있을 때만 활성화.
 //
-// ▶ 활성화 방법(런칭 시):
-//   1) `npm i @sentry/react`
-//   2) 아래 동적 import 블록의 주석을 해제
-//   3) Vercel(또는 .env)에 VITE_SENTRY_DSN = <Sentry 프로젝트 DSN> 설정
-//   재배포하면 자동으로 외부 알림이 켜집니다. (DSN이 없으면 아무 일도 하지 않음 — 빌드/런타임 안전)
+// ▶ 활성화: Vercel(또는 .env)에 VITE_SENTRY_DSN = <Sentry 프로젝트 DSN> 만 설정하고 재배포한다.
+//   패키지(@sentry/react)·initMonitoring() 호출(main.tsx)은 이미 갖춰져 있다 — 설치·주석 해제 불필요.
+//   (DSN이 없으면 아무 일도 하지 않음 — 빌드/런타임 안전)
+//   릴리스 식별자는 VITE_SENTRY_RELEASE(수동) 또는 Vercel 시스템 env 자동 노출(VITE_VERCEL_GIT_COMMIT_SHA)로 들어온다.
 
 const DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+// 배포 단위 식별자 — 없으면 Sentry 가 오류를 릴리스별로 묶지 못하고(회귀 감지·'다음 릴리스에서 해결' 불가),
+// 나중에 소스맵을 올려도 맞출 키가 없다. DSN 처럼 env 로만 넣는다(vite define 없음).
+// 빈 문자열도 '미지정' 으로 — Vercel 이 비워서 내려주는 경우가 있어 ?? 대신 || 를 쓴다.
+const RELEASE = (import.meta.env.VITE_SENTRY_RELEASE || import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA || undefined) as string | undefined;
 
 // ── [DS] MO-1 — 모션 계측(라이브러리 0줄) ─────────────────────────────────────
 // 코드베이스에 PerformanceObserver 가 0개였다 — 지금까지의 모션 최적화가 전부 눈대중.
@@ -64,6 +67,7 @@ export function initMonitoring(): void {
   import('@sentry/react').then((Sentry) => {
     Sentry.init({
       dsn: DSN,
+      release: RELEASE,
       environment: import.meta.env.MODE,
       tracesSampleRate: 0.1,        // 성능 트레이스 10% 샘플
       replaysSessionSampleRate: 0,  // 세션 리플레이 미사용(비용/프라이버시)

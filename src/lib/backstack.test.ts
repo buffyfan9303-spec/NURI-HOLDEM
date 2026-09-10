@@ -21,6 +21,7 @@ function makeFakeWindow() {
   let overshoot = 0;
   let throttled = false;
   const popHandlers: (() => void)[] = [];
+  const keyHandlers: ((e: unknown) => void)[] = [];
 
   const history = {
     get state() { return entries[index]; },
@@ -51,8 +52,13 @@ function makeFakeWindow() {
   };
   return {
     history,
-    addEventListener(type: string, h: () => void) { if (type === 'popstate') popHandlers.push(h); },
+    addEventListener(type: string, h: (e: unknown) => void) {
+      if (type === 'popstate') popHandlers.push(h as () => void);
+      if (type === 'keydown') keyHandlers.push(h);
+    },
     removeEventListener() { /* 이 테스트에서는 해제하지 않는다 */ },
+    /** 사용자가 ESC 를 한 번 누른다 — 앱의 window keydown 리스너에 그대로 전달된다 */
+    __esc() { keyHandlers.forEach((h) => h({ key: 'Escape', defaultPrevented: false, isComposing: false })); },
     get __index() { return index; },
     /** 루트보다 더 뒤로 되감으려 한 칸 수 — 0 이 아니면 사용자는 사이트 밖으로 나간다. */
     get __overshoot() { return overshoot; },
@@ -280,5 +286,87 @@ describe('backstack · history 칸 회계(사이트 이탈 방지)', () => {
 
     expect(win.__overshoot, '12겹을 정리하면서 앱 진입 지점을 넘어 되감았다').toBe(0);
     expect(win.__index).toBe(0);
+  });
+});
+
+// ── 2026-09-10 · ESC 는 뒤로가기와 같은 규칙(MODAL-01) ────────────────────────────
+// 예전엔 Modal·라이트박스·매장 페이지·장부 오버레이가 저마다 window 에 ESC 리스너를 달아,
+// 겹쳐 열린 상태(포스터 상세 위 글쓰기 시트)에서 ESC 한 번에 **전부** 닫혔다.
+// 이제 리스너는 backstack 하나뿐이고 최상단 살아 있는 한 겹만 닫는다 — 단 escape 로 등록한 겹만.
+describe('backstack · ESC 는 최상단 한 겹만(escape 등록 겹만)', () => {
+  it('🔴 겹친 두 모달에서 ESC 한 번은 위 겹만 닫는다', async () => {
+    const { pushLayer } = await freshBackstack();
+    const closeOuter = vi.fn();
+    const closeInner = vi.fn();
+    pushLayer(closeOuter, { escape: true }); // 포스터 상세(page Modal)
+    pushLayer(closeInner, { escape: true }); // 그 위 글쓰기 시트
+
+    win.__esc();
+    expect(closeInner, 'ESC 로 최상단이 안 닫혔다').toHaveBeenCalledTimes(1);
+    expect(closeOuter, 'ESC 한 번에 두 겹이 한꺼번에 닫혔다 — 개별 ESC 리스너 시절의 그 버그').not.toHaveBeenCalled();
+  });
+
+  it('🔴 최상단이 escape 아닌 겹(탭 이력·섹션 상태)이면 ESC 는 아무것도 닫지 않는다', async () => {
+    // 실제 경로: 내 매장 → 장부 섹션(useBackClose 로 등록, ESC 대상 아님)에서 ESC 를 눌렀는데
+    // 대시보드로 튀면 안 된다. 그 아래에 있는 모달까지 대신 닫아서도 안 된다(LIFO 를 건너뛰면 뒤로가기와 어긋난다).
+    const { pushLayer } = await freshBackstack();
+    const closeModal = vi.fn();
+    const closeTrail = vi.fn();
+    pushLayer(closeModal, { escape: true });
+    pushLayer(closeTrail); // escape 기본값 false — 탭 이력이 직접 pushLayer 하는 형태와 같다
+
+    win.__esc();
+    expect(closeTrail, '탭 이력·섹션 겹이 ESC 로 닫혔다(화면이 튄다)').not.toHaveBeenCalled();
+    expect(closeModal, 'escape 아닌 최상단을 건너뛰고 아래 겹을 닫았다').not.toHaveBeenCalled();
+  });
+
+  it('예약(adoptable) 칸은 ESC 대상이다(오버레이 취소) — 입양한 자식의 규칙을 따르고, 자식이 떠나면 예약자 규칙으로 돌아간다', async () => {
+    // 실제 경로: App 이 openSchedule 을 커밋하며 자리를 예약(청크 로딩 중, 화면 아직 없음) → lazy 청크가 마운트되며 Modal 이 입양.
+    // 예약 칸을 ESC 대상에서 빼면(2026-09-10 이전 계약) 아래 '자식 이펙트가 먼저' 케이스에서 ESC 가 통째로 죽는다.
+    const { pushLayer } = await freshBackstack();
+    const ownerClose = vi.fn();
+    const childClose = vi.fn();
+    pushLayer(ownerClose, { adoptable: true });
+
+    win.__esc();
+    expect(ownerClose, '청크 로딩 중 ESC 는 열림 상태를 취소해야 한다(예약 칸 = 오버레이)').toHaveBeenCalledTimes(1);
+
+    const disposeChild = pushLayer(childClose, { escape: true });
+    win.__esc();
+    expect(childClose, '입양한 Modal 이 ESC 로 안 닫혔다').toHaveBeenCalledTimes(1);
+    expect(ownerClose, '입양된 뒤엔 자식 close 만 불려야 한다').toHaveBeenCalledTimes(1);
+
+    disposeChild(); // 자식 언마운트 — 칸은 예약자에게 돌아간다(예약자 규칙 = ESC 대상)
+    win.__esc();
+    expect(ownerClose, '자식이 떠난 뒤 예약자 칸이 ESC 대상으로 돌아오지 않았다').toHaveBeenCalledTimes(2);
+  });
+
+  it('🔴 자식 이펙트가 부모보다 먼저 돌아(청크가 이미 로드된 두 번째 열기) 자식 겹 위에 예약 칸이 얹혀도 ESC 가 닫는다', async () => {
+    // React 규칙: 같은 커밋에서 자식 useEffect 가 부모보다 먼저 실행된다. 청크가 로드돼 있으면 Modal(자식)이 먼저
+    // 자기 겹을 밀고, 그 위에 App(부모)의 예약 칸이 올라온다. 예약 칸이 ESC 대상이 아니면 최상단이 예약 칸이라
+    // ESC 가 아무것도 닫지 않는다 — 포스터 상세·매장 페이지·로그인 등 예약형 오버레이 13종 전부에서 ESC 가 죽던 회귀.
+    const { pushLayer } = await freshBackstack();
+    const ownerClose = vi.fn();
+    const childClose = vi.fn();
+    pushLayer(childClose, { escape: true });      // 자식(Modal) 먼저
+    pushLayer(ownerClose, { adoptable: true });   // 그 위에 App 의 예약 칸
+
+    win.__esc();
+    expect(ownerClose, '최상단 예약 칸이 ESC 를 받아 열림 상태를 취소해야 한다').toHaveBeenCalledTimes(1);
+    expect(childClose, 'ESC 한 번에 두 겹이 닫히면 안 된다').not.toHaveBeenCalled();
+  });
+
+  it('ESC 로 닫은 겹의 dispose 가 history 를 한 칸만 되돌린다(균형)', async () => {
+    const { pushLayer } = await freshBackstack();
+    const start = win.__index;
+    let dispose: () => void = () => {};
+    // 실제 Modal 처럼 close → 상태 닫힘 → 언마운트 → dispose 순서
+    dispose = pushLayer(() => dispose(), { escape: true });
+    expect(win.__index).toBe(start + 1);
+
+    win.__esc();
+    await flush();
+    expect(win.__index, 'ESC 로 닫았는데 history 가 제자리로 안 왔다').toBe(start);
+    expect(win.__overshoot).toBe(0);
   });
 });

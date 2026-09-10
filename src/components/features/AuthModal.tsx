@@ -2,13 +2,12 @@
 import { useState, useRef, useId } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
-import { useBackClose } from '../../lib/backstack';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import StatefulActionButton from '../atoms/StatefulActionButton';
 import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox';
 import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
-import { loginWithKakao, signInWithGoogle,
+import { signInWithGoogle,
   signUpUser, signUpOwner, checkNicknameAvailable, checkNameAvailable, checkEmailAvailable, EMAIL_RE,
   requestPasswordReset, verifyPasswordResetOtp, setNewPassword,
 } from '../../api/auth';
@@ -63,64 +62,41 @@ function useConsent() {
   return { c, allRequired, allChecked, set, toggleAll };
 }
 
-// ── 약관 시트 오버레이 (z-[60] > 모달 z-50) ──────────────────────────────────
+// ── 약관 시트 (Modal 원자 위에) ───────────────────────────────────────────────
+// 예전엔 자체 dialog 셸(딤 버튼+헤더+닫기)이었다 — role=dialog aria-modal 만 선언하고 포커스를 안으로 옮기지 않아
+// Tab 이 뒤쪽 가입 폼으로 샜고, 닫아도 '보기' 버튼으로 돌아오지 않았다(MODAL-03). Modal 원자로 감싸면 첫 포커스·
+// 트랩·복원·뒤로가기가 그대로 따라온다(자체 useBackClose 는 Modal 이 안에서 하므로 지웠다).
 
 function LegalSheet({ doc, onClose }: { doc: LegalDoc | null; onClose: () => void }) {
-  useBackClose(!!doc, onClose);
-  if (!doc) return null;
+  // 닫힘 애니메이션(200ms) 동안 doc 은 이미 null 이라 제목·본문이 먼저 비어 버린다 — 마지막 문서를 붙들어 둔다
+  // (prop 이 바뀔 때 상태를 맞추는 React 공식 패턴: 렌더 중 조건부 setState).
+  const [shown, setShown] = useState<LegalDoc | null>(doc);
+  if (doc && doc !== shown) setShown(doc);
+  const title = shown ? LEGAL_TITLES[shown] : undefined;
+  // ponytail: Modal 원자가 제목 id 를 'modal-title' 로 고정해, 이 시트처럼 **모달 안의 모달**로 뜨면 aria-labelledby 가
+  //   문서상 첫 h2(부모 '일반 회원가입')로 풀려 스크린리더가 엉뚱한 이름을 읽는다. 원자가 useId 로 바뀌면 이 콜백은 지운다.
+  //   콜백 ref 인 이유: Modal 은 open 뒤 한 렌더 늦게 dialog 를 그리므로 effect 는 그 시점을 못 본다.
+  const nameDialog = (el: HTMLDivElement | null) => {
+    const dlg = el?.closest<HTMLElement>('[role="dialog"]');
+    if (!dlg || !title) return;
+    dlg.removeAttribute('aria-labelledby');
+    dlg.setAttribute('aria-label', title);
+  };
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center animate-fade-in"
-      role="dialog"
-      aria-modal="true"
-      aria-label={LEGAL_TITLES[doc]}
-    >
-      {/* 배경 dim */}
-      <button
-        type="button"
-        aria-label="닫기"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default" // Modal 원자와 동일 딤 토큰
-      />
-
-      {/* 시트 본문 */}
-      <div className={[
-        'relative w-full max-w-lg bg-surface-mid shadow-dialog animate-sheet-up', // Modal 원자와 동일 모션(8px 넛지 slide-up 은 시트 규격 위반)
-        'rounded-t-dialog sm:rounded-dialog',
-        'flex flex-col',
-      ].join(' ')}
-        style={{ maxHeight: '88vh' }}
-      >
-        {/* (그립 핸들 제거 — 드래그 핸들러가 없는 장식 핸들은 '끌어서 닫힘' 기대만 만든다) */}
-        {/* 헤더 */}
-        <header className="flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0">
-          <h2 className="text-base font-bold text-ink-primary">{LEGAL_TITLES[doc]}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="닫기"
-            className="w-11 h-11 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
-          >
-            <Icon name="close" size={14} />
-          </button>
-        </header>
-
-        {/* 스크롤 콘텐츠 */}
-        <div className="flex-1 overflow-y-auto">
-          {doc === 'terms'         && <TermsOfService />}
-          {doc === 'privacy'       && <PrivacyPolicy />}
-          {doc === 'anti-gambling' && <LegalNotice />}
-          {doc === 'marketing'     && <MarketingConsent />}
-        </div>
-
-        {/* 하단 닫기 버튼 */}
-        <div className="shrink-0 px-4 py-3 border-t border-border-subtle">
-          <button type="button" onClick={onClose} className="btn-primary w-full">
-            확인했습니다
-          </button>
-        </div>
+    <Modal open={!!doc} onClose={onClose} title={title} maxWidth="lg" variant="sheet">
+      <div ref={nameDialog}>
+        {shown === 'terms'         && <TermsOfService />}
+        {shown === 'privacy'       && <PrivacyPolicy />}
+        {shown === 'anti-gambling' && <LegalNotice />}
+        {shown === 'marketing'     && <MarketingConsent />}
       </div>
-    </div>
+      {/* 하단 닫기 버튼 — Modal 본문이 스크롤러라 sticky 로 바닥에 붙인다 */}
+      <div className="sticky bottom-0 border-t border-border-subtle bg-surface-mid px-4 py-3">
+        <button type="button" onClick={onClose} className="btn-primary w-full">
+          확인했습니다
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -135,16 +111,20 @@ interface ConsentSectionProps {
   onView: (doc: LegalDoc) => void;
 }
 
-function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectionProps) {
-  const CheckRow = ({
-    checked, onChange, required, label, doc,
-  }: {
-    checked: boolean;
-    onChange: (v: boolean) => void;
-    required?: boolean;
-    label: string;
-    doc?: LegalDoc;
-  }) => (
+// ⚠ 모듈 스코프에 둔다 — 예전엔 ConsentSection **안에서** 정의해 렌더마다 새 컴포넌트 타입이 됐고, 부모가 리렌더될 때마다
+//   (약관 시트 열기·체크 하나 토글) 행 전체가 언마운트·재마운트됐다. 그래서 '보기' 로 연 시트를 닫아도 돌아갈 노드가
+//   이미 없어 포커스 복원이 죽었고(2026-09-10 e2e 실측), 체크박스를 조작하는 중에도 포커스가 튀었다.
+function CheckRow({
+  checked, onChange, required, label, doc, onView,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  required?: boolean;
+  label: string;
+  doc?: LegalDoc;
+  onView: (doc: LegalDoc) => void;
+}) {
+  return (
     <div className="flex items-start gap-2">
       <input
         type="checkbox"
@@ -177,7 +157,9 @@ function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectio
       </div>
     </div>
   );
+}
 
+function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectionProps) {
   return (
     <div className="space-y-2 pt-1 border-t border-border-subtle">
       {/* 전체 동의 */}
@@ -206,29 +188,29 @@ function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectio
 
       {/* 구분선 */}
       <div className="pl-1 space-y-2">
-        <CheckRow
+        <CheckRow onView={onView}
           checked={c.age19} onChange={(v) => set('age19', v)}
           required label="본인은 만 19세 이상 성인입니다. (청소년보호법)"
         />
-        <CheckRow
+        <CheckRow onView={onView}
           checked={c.terms} onChange={(v) => set('terms', v)}
           required label="서비스 이용약관에 동의합니다." doc="terms"
         />
-        <CheckRow
+        <CheckRow onView={onView}
           checked={c.privacy} onChange={(v) => set('privacy', v)}
           required label="개인정보 수집·이용에 동의합니다. (개인정보보호법 §15)" doc="privacy"
         />
-        <CheckRow
+        <CheckRow onView={onView}
           checked={c.antiGambling} onChange={(v) => set('antiGambling', v)}
           required label="불법 환전·사행성 행위 금지 서약에 동의합니다. (게임산업법)" doc="anti-gambling"
         />
-        <CheckRow
+        <CheckRow onView={onView}
           checked={c.marketing} onChange={(v) => set('marketing', v)}
           label="마케팅 정보 수신에 동의합니다. (이벤트·할인·푸시알림)" doc="marketing"
         />
         {/* 오너 #12 — 순위표에 '자주 가는 매장'을 붙이려면 이동·방문 패턴 공개 동의가 필요하다.
             동의하지 않아도 순위·닉네임은 그대로 집계·표시된다(랭킹에서 빼면 순위가 왜곡된다). */}
-        <CheckRow
+        <CheckRow onView={onView}
           checked={c.publicRanking} onChange={(v) => set('publicRanking', v)}
           label="랭킹 프로필 공개에 동의합니다. (순위표에 닉네임·자주 가는 매장 표시 · 미동의 시 매장은 표시하지 않습니다)"
           doc="privacy"
@@ -289,20 +271,10 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
 // ── 로그인 폼 ─────────────────────────────────────────────────────────────────
 
 function SocialLoginButtons({ onError, keepSignedIn }: { onError: (msg: string) => void; keepSignedIn: boolean }) {
-  // 진행 중인 소셜만 로딩 표기 + 두 버튼 동시 비활성(중복 리다이렉트 방지)
-  const [busy, setBusy] = useState<'kakao' | 'google' | null>(null);
+  // 진행 중이면 비활성(중복 리다이렉트 방지). 소셜은 Google 하나 — 카카오 로그인은 2026-09-10 오너 지시로 삭제.
+  const [busy, setBusy] = useState<'google' | null>(null);
   return (
     <div className="space-y-1.5">
-      <button type="button" disabled={busy !== null}
-        onClick={() => { setBusy('kakao'); loginWithKakao(keepSignedIn).catch((e) => { onError(e instanceof Error ? e.message : '카카오 로그인 실패'); setBusy(null); }); }}
-        className="flex h-12 w-full items-center justify-center gap-2 rounded-input bg-[#FEE500] text-sm font-bold text-black/85 transition active:scale-[0.99] disabled:opacity-60">
-        {/* 카카오 심볼(말풍선) — 공식 버튼 규격 색상 */}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="#000000" aria-hidden>
-          <path d="M12 3C6.48 3 2 6.58 2 11c0 2.84 1.86 5.33 4.66 6.74-.15.52-.96 3.32-.99 3.54 0 0-.02.17.09.23.11.06.24.01.24.01.32-.04 3.66-2.4 4.24-2.81.57.08 1.16.13 1.76.13 5.52 0 10-3.58 10-8s-4.48-8-10-8Z" />
-        </svg>
-        {busy === 'kakao' ? '카카오로 이동 중…' : '카카오로 3초 만에 시작하기'}
-      </button>
-
       <button type="button" disabled={busy !== null}
         onClick={() => { setBusy('google'); signInWithGoogle(keepSignedIn).catch((e) => { onError(e instanceof Error ? e.message : '구글 로그인 실패'); setBusy(null); }); }}
         className="flex h-12 w-full items-center justify-center gap-2 rounded-input border border-border-default bg-white text-sm font-bold text-[#1f1f1f] transition active:scale-[0.99] disabled:opacity-60">

@@ -220,11 +220,13 @@ function MarketplaceTab({
       {/* ── 매물 목록: 게시판(리스트) 전용 ─────────────────────────
           data-market-panel: 카테고리·정렬 전환의 본문(방향성 푸시 대상). 위 바들은 제자리. */}
       <div data-market-panel="">
-      {loading && listings.length === 0 && !showSkel ? null : loading && listings.length === 0 ? (
+      {loading && listings.length === 0 ? (
         // [DS] MO-6 스켈레톤 — 실제 ListingRow 골격 복제(배지행+제목+모바일 메타행, --row-h-md 계약).
         // BoardHeader 를 스켈레톤에도 그대로 렌더 — 전엔 데이터 도착 때 데스크톱 헤더 행이
         // 나중에 끼어들어 목록 전체가 한 번 더 밀렸다.
-        <div className="rounded-aura border card-aura overflow-hidden" aria-hidden>
+        // 게이트(200ms) 동안에도 자리는 예약한다(MO-B) — null 을 그리면 늦게 끼어든 스켈레톤이 아래(더보기·푸터)를 민다.
+        //   showSkel 은 pulse 노출만 정한다: invisible = 높이는 그대로, 시머만 숨김(e2e/skeleton-no-shift.spec.ts).
+        <div className={['rounded-aura border card-aura overflow-hidden', showSkel ? '' : 'invisible'].join(' ')} aria-hidden>
           <BoardHeader />
           {Array.from({ length: 7 }).map((_, i) => (
             <div key={i} className="grid min-h-[var(--row-h-md)] grid-cols-[1fr_auto] items-center gap-2 border-b border-border-subtle px-3 py-2.5 last:border-b-0 sm:grid-cols-[3rem_1fr_5rem_6rem_5rem_5rem]">
@@ -273,12 +275,14 @@ function MarketplaceTab({
         </button>
       )}
 
-      <MyListingsModal open={myListOpen} onClose={() => setMyListOpen(false)}
+      {/* key=계정 — 세 모달은 항상 마운트라 계정을 바꿔도 안의 state(대화 목록·판매글·찜·열린 스레드)가 살아남는다.
+          계정이 바뀌면 재마운트해 A 의 목록이 B 에게 남지 않게 한다(P0-06 (a) — 모달 안 alive 가드와 한 쌍). */}
+      <MyListingsModal key={`my-listings:${user?.id ?? 'anon'}`} open={myListOpen} onClose={() => setMyListOpen(false)}
         onOpenListing={(l) => { setMyListOpen(false); onSelect(l); }}
         onChanged={onListingsChanged} />
-      <MyLikesModal open={likesOpen} onClose={() => setLikesOpen(false)}
+      <MyLikesModal key={`my-likes:${user?.id ?? 'anon'}`} open={likesOpen} onClose={() => setLikesOpen(false)}
         onOpenListing={(l) => { setLikesOpen(false); onSelect(l); }} />
-      <MessagesModal open={msgOpen} onClose={() => setMsgOpen(false)} />
+      <MessagesModal key={`messages:${user?.id ?? 'anon'}`} open={msgOpen} onClose={() => setMsgOpen(false)} />
     </div>
   );
 }

@@ -101,6 +101,33 @@ test.describe('내 매장 — 이동 안정성', () => {
     expect(spread, `왕복 중 단계 바가 ${spread}px 움직였다 — 문맥 줄이 다시 바 위로 올라갔는지 보라`).toBeLessThanOrEqual(4);
   });
 
+  // F03(2026-09-10 감사): 내 매장 섹션 겹(useBackClose)이 tabActive 로 게이트되지 않았다. 이 탭은 keep-alive 라
+  //   섹션에 들어간 뒤 하단 '홈'을 눌러도 숨은 내 매장이 겹을 계속 들고 있었고, 홈에서 뒤로가기를 누르면
+  //   보이지 않는 곳에서 gotoSection('dashboard') 만 돌고 화면은 그대로 — 두 번이 통째로 죽었다.
+  //   (nav-stability J-1 과 같은 기전. 커뮤니티 탭은 `active &&` 로 고쳐져 있었고 내 매장만 빠져 있었다.)
+  test('🔴 섹션에 들어간 뒤 홈 탭을 누르면 숨은 내 매장이 뒤로가기 겹을 들고 있지 않다', async ({ page }) => {
+    test.setTimeout(90_000);
+    test.skip(!(await openStore(page)), '내 매장 없음');
+    // 겹이 하나라도 남아 있으면 history 현재 항목에 __layer 토큰이 찍힌다(backstack.spec · nav-stability J-1 과 같은 단언).
+    const layerOf = () => page.evaluate(() => {
+      const st = history.state as { __layer?: number } | null;
+      return st && typeof st.__layer === 'number' ? st.__layer : 0;
+    });
+    const clock = page.locator(TAB).filter({ hasText: '클락' });
+    await clock.first().waitFor({ timeout: 20_000 });
+    await clock.first().click();
+    await page.waitForTimeout(1500);
+    // 전제: 섹션 겹이 실제로 올라가 있다 — 0 이면 아래 단언이 공허하다.
+    expect(await layerOf(), '클락 섹션이 뒤로가기 겹을 등록하지 않았다 — 전제부터 어긋남').not.toBe(0);
+
+    await page.getByRole('navigation', { name: '하단 내비게이션' }).getByRole('button', { name: '홈', exact: true }).click();
+    await expect(page.locator('[data-tab="home"]')).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(600); // dead-tail 정리(go(-k))가 반영될 시간 — backstack.spec 과 같은 대기
+    // ⚠ 뒤로가기를 실제로 누르면 정상일 때 앱을 벗어나 페이지가 닫힌다 — 토큰으로 본다.
+    expect(await layerOf(), '보이지도 않는 내 매장이 뒤로가기 겹을 들고 있다 — 홈에서 뒤로가기 2회가 화면 변화 없이 죽는다')
+      .toBe(0);
+  });
+
   test('375 에서 알약이 전부 한 화면에 들어온다(요약 + 5단계)', async ({ page }) => {
     test.setTimeout(90_000);
     test.skip(!(await openStore(page)), '내 매장 없음');

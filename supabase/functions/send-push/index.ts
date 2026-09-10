@@ -76,7 +76,8 @@ Deno.serve(async (req) => {
     .from('push_subscriptions')
     .select('endpoint, p256dh, auth')
     .in('user_id', userIds);
-  if (error) return json({ error: error.message }, 500);
+  // DB 오류 원문은 서버 로그에만 — 응답은 고정 문구(보안 표준 §6).
+  if (error) { console.error('[send-push] push_subscriptions', error); return json({ error: '구독 조회 실패' }, 500); }
 
   const message = JSON.stringify({ title: title ?? 'NHoldem', body: body ?? '', url: url ?? '/', tag });
   let sent = 0;

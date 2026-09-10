@@ -3,7 +3,6 @@ import { getVenueCustomerStats, paymentLabel, type CustomerStat } from '../../ap
 import { getCustomerAliases, linkCustomerAlias, unlinkCustomerAlias } from '../../api/crm';
 import { findUserForTransfer, type TransferTarget } from '../../api/vouchers';
 import { useToast } from '../atoms/Toast';
-import { toCsv, downloadCsv } from '../../lib/csv';
 import SlidingPill from '../atoms/SlidingPill';
 import Icon from '../atoms/Icon';
 import { goSubTab } from '../../lib/subTabTransition';
@@ -15,7 +14,7 @@ const RANGE_ORDER: Range[] = ['all', '7', '30', '90'];
 /**
  * 고객 분석 — 방문 손님 전체 리스트(장부 기준).
  * 바인 횟수 · 방문 · 머니인(입상) · 머니인 비율 · 미수 · 최다 결제수단 · 주 방문 시간대 · 최근 방문.
- * 기간(전체/7/30/90일) + 이름 검색 + CSV.
+ * 기간(전체/7/30/90일) + 이름 검색. 파일 반출(CSV)은 오너 지시(2026-09-09)로 뺐다 — 화면 안에서만 본다.
  */
 export default function CustomerAnalytics({ venueId }: { venueId: string }) {
   const [range, setRange] = useState<Range>('all');
@@ -74,14 +73,6 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
     return arr;
   }, [rows, query, sort]);
 
-  const exportCsv = () => {
-    const csv = toCsv(
-      ['이름', '바인', '방문', '머니인', '머니인비율(%)', '미수횟수', '최다결제', '주방문시간', '최근방문'],
-      filtered.map((r) => [r.name, r.buyins, r.visits, r.moneyIn, r.rate ?? '', r.unpaidCount, paymentLabel(r.topPayment), r.peakHour !== null ? `${r.peakHour}시` : '', r.lastVisit ?? '']),
-    );
-    downloadCsv(`고객분석_${range === 'all' ? '전체' : `최근${range}일`}`, csv);
-  };
-
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2.5">
       <div className="flex flex-wrap items-center gap-2">
@@ -89,7 +80,6 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
           <h3 className="text-sm font-bold text-ink-primary">고객 분석</h3>
           <p className="text-2xs text-ink-muted">방문했던 손님 전체 — 장부 기준 행동 통계 ({rows.length}명)</p>
         </div>
-        <button type="button" onClick={exportCsv} className="btn-ghost shrink-0 px-2 text-2xs text-accent-300">CSV</button>
       </div>
 
       {/* 기간 + 검색 + 정렬 */}

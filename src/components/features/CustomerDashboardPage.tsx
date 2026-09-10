@@ -5,7 +5,7 @@
 // 내 매장이용권(매장별) + 매장 이용내역(방문·참가(바인)·참가비). 매장이용권은 금전적 가치 없음.
 //   '방문' = QR 체크인(매장별 KST 날짜 distinct), '참가' = 장부 바인 — 둘 다 머니인(입상)과 다른 단위다(점검 #6·#8).
 // 사용(회수) = 발급 매장 QR 스캔 또는 그 매장 업주 전화번호로만. 유저 간 전송 불가.
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { useAuth } from '../../contexts/AuthContext';
@@ -32,7 +32,7 @@ import QRCode from 'qrcode';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
 import TierBadge, { tierOf, tierProgress, allTiers, tierCss } from '../atoms/TierBadge';
 import ProfilePanels, { ProfileIdentityHeader, type ProfileTab } from './ProfileModal'; // 프로필·설정·보안 패널 + 아이덴티티 헤더 정본(중복 정의 0)
-import { loginWithKakao, signInWithGoogle } from '../../api/auth'; // 비로그인 랜딩 — AuthModal 과 같은 OAuth 시작 함수 재사용
+import { signInWithGoogle } from '../../api/auth'; // 비로그인 랜딩 — AuthModal 과 같은 OAuth 시작 함수 재사용(소셜은 Google 하나)
 import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox'; // 자동 로그인 — AuthModal 로그인 탭과 같은 원자·같은 플래그
 import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
 import { promptLogin } from '../../lib/requireLogin'; // 이메일 로그인 — App 이 듣고 AuthModal(z-[60], DOM 후순위)을 위로 띄운다
@@ -117,9 +117,25 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   // 하위 탭 전환 = 방향성 푸시(data-profile-tabbar 제자리 · data-profile-panel 만 밀림) — 커뮤니티·GTO 와 같은 조리법
   const goTab = useCallback((v: MeTab) => goSubTab('profile-tab', ME_TAB_ORDER, tab, v, () => setTab(v)), [tab]);
 
+  // ── 계정 경계(2026-09-10) ──
+  // 이 페이지는 keep-alive(언마운트 없음)라 user 가 A→null→B 로 바뀌어도 per-user state 가 그대로 남았고,
+  // A 세션으로 나간 8개 조회가 B 의 응답보다 늦게 오면 A 의 값으로 덮어썼다(allSettled 의 '실패해도 직전 값 유지'는
+  // 계정 경계를 몰라 B 의 조회가 한 번이라도 실패하면 A 의 방문 수가 영구히 남았다). 공용 PC 카운터에서
+  // 로그아웃→다른 손님 로그인은 이 서비스의 실제 동선이다.
+  // reloadSeq = '가장 최근 reload 만 화면에 닿는다'. 계정이 바뀌면 세대를 올려 비행 중인 응답을 전부 버리고 상태를 비운다.
+  const reloadSeq = useRef(0);
+  useEffect(() => {
+    reloadSeq.current++;
+    setVisits([]); setPlays([]); setResv([]); setRanks([]); setRefStats({ invited: 0, rewarded: 0 });
+    setPercentile(null); setChampionships(0); setBadgeStats(null); setVisitStats(null);
+    setUsageErr(null); setResvErr(null); setRanksErr(null);
+  }, [user?.id]);
+
   useEffect(() => {
     if (!open || !user) { setMyPosts([]); setMyPostTotal(0); return; }
-    getPostsByUser(user.id).then(({ posts, total }) => { setMyPosts(posts); setMyPostTotal(total); }).catch(() => {});
+    let alive = true; // 닫히거나 계정이 바뀐 뒤 도착한 응답은 버린다
+    getPostsByUser(user.id).then(({ posts, total }) => { if (!alive) return; setMyPosts(posts); setMyPostTotal(total); }).catch(() => {});
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, user?.id]);
 
@@ -128,6 +144,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   // 세 섹션이 동시에 '아직 없습니다'로 떨어졌다 — 실패를 빈 결과로 위장하는 바로 그 패턴이다.
   // 이제 성공한 섹션은 그리고, 실패한 섹션만 이유와 재시도(LoadErrorCard)를 보여준다.
   const reload = () => {
+    const seq = ++reloadSeq.current;
     setLoading(true);
     Promise.allSettled([
       myVisitedVenues(), myPlayHistory(),
@@ -139,6 +156,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
       user?.nickname ? getGlobalRankingTotals('all') : Promise.resolve([]),
     ])
       .then(([vi, pl, rv, vs, rk, rs, ch, gt]) => {
+        if (seq !== reloadSeq.current) return; // 늦게 온 이전 세대(다른 계정·이전 호출) 응답 — 버린다
         // 성공한 것만 덮어쓴다 — 실패해도 직전에 받아 둔 값은 그대로 둔다(오프라인에서 내역이 사라지지 않게).
         if (vi.status === 'fulfilled') setVisits(vi.value);
         if (pl.status === 'fulfilled') setPlays(pl.value);
@@ -158,13 +176,18 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
         const idx = nick ? totals.findIndex((t) => t.nickname.trim().toLowerCase() === nick) : -1;
         setPercentile(idx >= 0 ? Math.max(1, Math.round(((idx + 1) / totals.length) * 100)) : null);
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (seq === reloadSeq.current) setLoading(false); });
   };
   // 왜 user?.id 의존성: 비로그인 랜딩에서 이메일 로그인(AuthModal이 이 페이지 위에 뜸) 성공 시
   // open 은 그대로 true 라 [open]만으로는 재조회가 없다 — user 확정 순간 대시보드 데이터를 채운다.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (open && user) reload(); }, [open, user?.id, idOn]);
-  useEffect(() => { if (open && user) getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {}); }, [open, user]);
+  useEffect(() => {
+    if (!open || !user) return;
+    let alive = true; // 닫히거나 계정이 바뀐 뒤 도착한 응답은 버린다 — '내 업적'은 loading 게이트 없이 즉시 그려진다
+    getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then((s) => { if (alive) setBadgeStats(s); }).catch(() => {});
+    return () => { alive = false; };
+  }, [open, user]);
 
   // keep-alive(메인 탭과 같은 조리법) — 한 번 열린 뒤에는 언마운트하지 않고 display 토글만.
   // 재열림이 '풀 마운트 + 데이터 상태 재구축' 대신 display 복원이 되어, GTO 같은 무거운 탭 위에서
@@ -534,7 +557,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden?: boolean }) {
   const toast = useToast();
   // 진행 중인 소셜만 로딩 표기 + 두 버튼 동시 비활성(중복 리다이렉트 방지) — AuthModal 과 동일 패턴
-  const [busy, setBusy] = useState<'kakao' | 'google' | null>(null);
+  const [busy, setBusy] = useState<'google' | null>(null);
   // 자동 로그인 — 이 랜딩은 소셜(리다이렉트)뿐이라 '제출 시 저장'이 불가능하다.
   // 체크를 만지는 즉시 플래그에 쓰고, OAuth 시작 함수에도 같은 값을 넘긴다(둘 다 같은 결과, 순서 무관).
   const [keepSignedIn, setKeep] = useState(() => isKeepSignedIn());
@@ -597,15 +620,7 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
           {/* 소셜 로그인 — AuthModal SocialLoginButtons 와 동일한 동작·스타일(같은 OAuth 함수 직접 호출) */}
           <div className="space-y-1.5">
             <AutoLoginCheckbox checked={keepSignedIn} onChange={changeKeep} disabled={busy !== null} />
-            <button type="button" disabled={busy !== null}
-              onClick={() => { setBusy('kakao'); loginWithKakao(keepSignedIn).catch((e) => { toast.show(e instanceof Error ? e.message : '카카오 로그인 실패', 'error'); setBusy(null); }); }}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-input bg-[#FEE500] text-sm font-bold text-black/85 transition active:scale-[0.99] disabled:opacity-60">
-              {/* 카카오 심볼(말풍선) — 공식 버튼 규격 색상 */}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#000000" aria-hidden>
-                <path d="M12 3C6.48 3 2 6.58 2 11c0 2.84 1.86 5.33 4.66 6.74-.15.52-.96 3.32-.99 3.54 0 0-.02.17.09.23.11.06.24.01.24.01.32-.04 3.66-2.4 4.24-2.81.57.08 1.16.13 1.76.13 5.52 0 10-3.58 10-8s-4.48-8-10-8Z" />
-              </svg>
-              {busy === 'kakao' ? '카카오로 이동 중…' : '카카오로 3초 만에 시작하기'}
-            </button>
+            {/* 소셜은 Google 하나 — 카카오 로그인은 2026-09-10 오너 지시로 삭제(AuthModal 과 동일) */}
             <button type="button" disabled={busy !== null}
               onClick={() => { setBusy('google'); signInWithGoogle(keepSignedIn).catch((e) => { toast.show(e instanceof Error ? e.message : '구글 로그인 실패', 'error'); setBusy(null); }); }}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-input border border-border-default bg-white text-sm font-bold text-[#1f1f1f] transition active:scale-[0.99] disabled:opacity-60">
@@ -656,7 +671,7 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
               <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
             </a>
             {/* 매장 회원가입 — AuthModal 업주 가입 탭으로 직행(가입 후 운영자 승인제) */}
-            <button type="button" onClick={() => setOwnerSignupOpen(true)}
+            <button type="button" onClick={() => startTransition(() => setOwnerSignupOpen(true))}
               className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-high transition-colors">
               <Icon name="felt-table" size={17} className="shrink-0 text-ink-secondary" />
               <span className="min-w-0 flex-1">
@@ -669,12 +684,15 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
         </div>
       </div>
 
-      {/* 업주 가입 모달 — z-[60] 동순위지만 DOM 후순위(이 랜딩 내부)라 위에 뜬다. 이메일 로그인(promptLogin)과 같은 문법 */}
-      {ownerSignupOpen && (
-        <Suspense fallback={null}>
+      {/* 업주 가입 모달 — z-[60] 동순위지만 DOM 후순위(이 랜딩 내부)라 위에 뜬다. 이메일 로그인(promptLogin)과 같은 문법.
+          ⚠ Suspense 를 조건 **밖**에 둔다(App EventPage 와 같은 구조). 경계가 그 업데이트에서 처음 마운트되면 리액트는
+          폴백(null)을 반드시 커밋하고 ~300ms 붙잡아 '눌렀는데 안 열린다 → 두 번 누른다'가 됐다(voucher-sheet-open 스펙 실측과
+          같은 유형). 위 버튼의 startTransition 과 **함께**여야 첫 클릭에 뜬다 — 청크는 App warm() 이 이미 데워 둔다. */}
+      <Suspense fallback={null}>
+        {ownerSignupOpen && (
           <AuthModalLazy open onClose={() => setOwnerSignupOpen(false)} initialMode="signup-owner" />
-        </Suspense>
-      )}
+        )}
+      </Suspense>
     </div>
   );
 }
@@ -879,7 +897,7 @@ function HiCard({ title, name, detail }: { title: string; name: string; detail: 
 
 /** 레벨 도감 — 전체 12레벨·칭호·필요 점수 + 현재 레벨 강조 + 점수 올리는 법. */
 function LevelGuideModal({ points, onClose }: { points: number; onClose: () => void }) {
-  useBackClose(true, onClose); // 손제작 시트도 뒤로가기 겹 등록 — 안 하면 뒤로가기가 '내 정보' 전체를 닫고 keep-alive 로 도감이 열린 채 남는다(점검 #7)
+  useBackClose(true, onClose, { escape: true }); // 손제작 시트도 뒤로가기 겹 등록(ESC 도 같은 겹) — 안 하면 뒤로가기가 '내 정보' 전체를 닫고 keep-alive 로 도감이 열린 채 남는다(점검 #7)
   const idOn = useIdentityEnabled(); // 못 받는 보상을 '받는다'고 적어 두지 않기 위해
   const tiers = allTiers();
   const cur = tierOf(points);

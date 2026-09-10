@@ -4,6 +4,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import { useToast } from '../../atoms/Toast';
+import LoadErrorCard from '../../atoms/LoadErrorCard';
 import type { ChatMessage } from '../../../api/chat';
 import { getThreadMessages, sendChatMessage, subscribeThread, subscribeThreadReads, markThreadRead, getThreadReads } from '../../../api/chat';
 
@@ -23,6 +24,9 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
   const toast = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  // 조회 실패는 '첫 메시지를 보내보세요'로 위장하지 않는다(LoadErrorCard 계약). reloadKey 는 재시도 손잡이.
+  const [loadErr, setLoadErr] = useState<unknown>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [coReadAt, setCoReadAt] = useState(0); // 상대가 마지막으로 읽은 시각(ms)
@@ -49,6 +53,9 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
   //   최신 콜백은 ref 로 들고, 이펙트는 스레드가 바뀔 때만 돌게 한다.
   const onReadRef = useRef(onRead);
   useEffect(() => { onReadRef.current = onRead; });
+  // 지금 보고 있는 스레드 — 전송 await 가 끝났을 때 다른 스레드로 넘어가 있으면 결과를 버리기 위한 최신값 ref
+  const threadRef = useRef(`${listingId}|${buyerId}`);
+  threadRef.current = `${listingId}|${buyerId}`;
 
   // 이 스레드를 내가 읽음 처리(열람 시 + 새 메시지 도착 시) + 상대 읽음 실시간 구독.
   // listing_message_reads 는 Realtime 퍼블리케이션에 포함(2026-08 서버 적용) — upsert 즉시 반영된다.
@@ -90,17 +97,20 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
   useEffect(() => {
     if (!buyerId) { setMessages([]); return; }
     let active = true;
+    // 스레드가 바뀌면 **즉시** 비운다 — loading 으로만 가리면 새 스레드 조회가 실패했을 때
+    // 직전 상대와의 대화 전문이 새 상대 이름 아래 그대로 남는다(판매자가 A 의 흥정을 B 화면에서 보는 사고).
+    setMessages([]); setLoadErr(null);
     setLoading(true);
     getThreadMessages(listingId, buyerId)
       .then((ms) => { if (active) setMessages(ms); })
-      .catch(() => {})
+      .catch((e) => { if (active) setLoadErr(e); })
       .finally(() => { if (active) setLoading(false); });
     const unsub = subscribeThread(listingId, buyerId, (m) => {
       setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
       if (m.senderId !== meId) markThreadRead(listingId, buyerId).catch(() => {}); // 보는 중이면 읽음
     });
     return () => { active = false; unsub(); };
-  }, [listingId, buyerId, meId]);
+  }, [listingId, buyerId, meId, reloadKey]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const el = scrollRef.current;
@@ -151,6 +161,8 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
     stickToBottomRef.current = true; // 내 전송 직후는 항상 하단(구독 경로로 먼저 도착해도 동일)
     try {
       const m = await sendChatMessage(listingId, buyerId, text);
+      // 보내는 동안 다른 스레드로 넘어갔으면 그 스레드 목록에 내 메시지를 붙이지 않는다(서버 응답의 listing|buyer 로 검증)
+      if (`${m.listingId}|${m.buyerId}` !== threadRef.current) return;
       setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
       refreshReads();
     } catch (err) {
@@ -176,6 +188,8 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
           className="flex flex-col gap-1.5 px-4 py-4 flex-1 min-h-0 overflow-y-auto bg-surface-base/40">
           {loading ? (
             <p className="m-auto text-2xs text-ink-muted">불러오는 중…</p>
+          ) : loadErr ? (
+            <div className="m-auto w-full"><LoadErrorCard error={loadErr} what="대화" onRetry={() => setReloadKey((k) => k + 1)} compact /></div>
           ) : messages.length === 0 ? (
             <p className="m-auto text-center text-xs text-ink-muted leading-relaxed">{emptyHint ?? '첫 메시지를 보내보세요'}</p>
           ) : messages.map((m, i) => {

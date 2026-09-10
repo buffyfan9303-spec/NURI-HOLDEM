@@ -25,6 +25,7 @@ import {
 import { uploadVenueImages } from '../../lib/storage';
 import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { PhoneActionButton, KakaoActionButton, PhoneRow } from './ContactActions';
 
 import { goSubTab } from '../../lib/subTabTransition';
@@ -64,14 +65,23 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
 
   useEffect(() => {
     if (!open || !group) return;
-    setMembership(null); setMembers([]); setTab('chat'); setProfile(null); setProfileEditing(false); setJoinPolicy(null);
-    getVenueNotices(group.id).then(setNotices).catch(() => {});
-    if (user) getMyMembership(group.id).then(setMembership).catch(() => {});
+    // alive: 그룹 A 의 느린 멤버십·공지 응답이 그룹 B 로 바뀐 뒤 도착하면 버린다 — A 의 운영진 판정이
+    // B 에 적용돼 멤버 전용 탭·'멤버 관리'가 열리던 레이스(GroupRanking 이 이미 쓰는 같은 가드).
+    let alive = true;
+    setMembership(null); setMembers([]); setNotices([]); setTab('chat'); setProfile(null); setProfileEditing(false); setJoinPolicy(null);
+    getVenueNotices(group.id).then((n) => { if (alive) setNotices(n); }).catch(() => {});
+    if (user) getMyMembership(group.id).then((m) => { if (alive) setMembership(m); }).catch(() => {});
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, group?.id, user?.id]);
 
   // 멤버/매니저면 멤버 목록 로드(매니저는 승인 대기 포함)
-  useEffect(() => { if (isMember) reloadMembers(); }, [isMember, group?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!isMember || !group) return;
+    let alive = true;
+    getGroupMembers(group.id).then((ms) => { if (alive) setMembers(ms); }).catch(() => {});
+    return () => { alive = false; };
+  }, [isMember, group?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open || !group) return null;
 
@@ -358,9 +368,11 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                   value={tab} onChange={(v) => goSubTab('group-tab', GROUP_TAB_ORDER, tab, v, () => setTab(v))} />
               </div>
               <div data-group-panel="" className="px-page-x py-3 min-h-[40vh]">
-                {tab === 'chat' ? <GroupChat groupId={group.id} canManage={isManager} />
-                  : tab === 'board' ? <GroupBoard groupId={group.id} canManage={isManager} />
-                  : <GroupRanking groupId={group.id} />}
+                {/* key: 그룹이 바뀌면 세 패널을 새로 만든다 — 이전 그룹의 게시글·채팅 목록과 전송 중이던 메시지의
+                    후속 setState 가 새 그룹에 붙지 않는다(언마운트된 인스턴스의 setState 는 버려진다). */}
+                {tab === 'chat' ? <GroupChat key={group.id} groupId={group.id} canManage={isManager} />
+                  : tab === 'board' ? <GroupBoard key={group.id} groupId={group.id} canManage={isManager} />
+                  : <GroupRanking key={group.id} groupId={group.id} />}
               </div>
             </>
           )}
@@ -377,16 +389,20 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
   // null = 아직 안 불러옴. 같은 파일 GroupRanking 이 이미 이 문법을 쓴다 — 채팅·게시판만 빠져 있어
   // 대화가 쌓인 그룹에서도 열 때마다 '첫 메시지를 남겨보세요'가 먼저 떴다(2026-09-05 전수 조사).
   const [messages, setMessages] = useState<GroupMessage[] | null>(null);
+  // 조회 실패 — null 로 두면 '불러오는 중…'이 영원히 남는다. 실패는 실패라고 말하고 다시 시도할 길을 준다.
+  const [err, setErr] = useState<unknown>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
-    getGroupMessages(groupId, 80).then((m) => { if (active) setMessages(m.reverse()); }).catch(() => {});
+    setMessages(null); setErr(null);
+    getGroupMessages(groupId, 80).then((m) => { if (active) setMessages(m.reverse()); }).catch((e) => { if (active) setErr(e); });
     const unsub = subscribeGroupMessages(groupId, (m) => setMessages((prev) => ((prev ?? []).some((x) => x.id === m.id) ? prev : [...(prev ?? []), m])));
     return () => { active = false; unsub(); };
-  }, [groupId]);
+  }, [groupId, reloadKey]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [messages?.length]);
 
   const send = async (e: React.FormEvent) => {
@@ -405,7 +421,8 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
   return (
     <div className="space-y-2">
       <ul className="space-y-1.5 max-h-[55vh] overflow-y-auto">
-        {messages === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p> : messages.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">첫 메시지를 남겨보세요</p> : messages.map((m) => (
+        {err ? <LoadErrorCard error={err} what="채팅" onRetry={() => setReloadKey((k) => k + 1)} compact />
+          : messages === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p> : messages.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">첫 메시지를 남겨보세요</p> : messages.map((m) => (
           <li key={m.id} className="flex items-start gap-2">
             <Avatar name={m.userName} color={m.userColor} size={24} className="mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -436,13 +453,14 @@ function GroupBoard({ groupId, canManage }: { groupId: string; canManage: boolea
   const toast = useToast();
   // 채팅과 같은 이유로 미로드를 가른다
   const [posts, setPosts] = useState<GroupPost[] | null>(null);
+  const [err, setErr] = useState<unknown>(null); // 채팅과 같은 이유 — 실패를 무한 로딩으로 두지 않는다
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
 
-  const reload = () => getGroupPosts(groupId).then(setPosts).catch(() => {});
-  useEffect(() => { reload(); }, [groupId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const reload = () => { setErr(null); return getGroupPosts(groupId).then(setPosts).catch(setErr); };
+  useEffect(() => { setPosts(null); reload(); }, [groupId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -472,7 +490,8 @@ function GroupBoard({ groupId, canManage }: { groupId: string; canManage: boolea
           <div className="flex justify-end"><button type="submit" disabled={sending || !content.trim()} className="btn-primary px-4 disabled:opacity-60">등록</button></div>
         </form>
       )}
-      {posts === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p> : posts.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">첫 글을 남겨보세요</p> : (
+      {err ? <LoadErrorCard error={err} what="게시판" onRetry={reload} compact />
+        : posts === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p> : posts.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">첫 글을 남겨보세요</p> : (
         <ul className="space-y-2">
           {posts.map((p) => (
             <li key={p.id} className="rounded-card border border-border-subtle bg-surface-low p-3">
@@ -555,18 +574,21 @@ function GroupProfileForm({ groupId, initial, onSaved, onCancel }: {
 function GroupRanking({ groupId }: { groupId: string }) {
   const [rows, setRows] = useState<GroupRankRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<unknown>(null); // 실패를 '아직 활동 기록이 없어요'로 위장하지 않는다
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    setLoading(true); setErr(null);
     getGroupActivityRanking(groupId)
       .then((r) => { if (alive) setRows(r); })
-      .catch(() => { if (alive) setRows([]); })
+      .catch((e) => { if (alive) setErr(e); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [groupId]);
+  }, [groupId, reloadKey]);
 
   if (loading) return <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>;
+  if (err) return <LoadErrorCard error={err} what="활동 순위" onRetry={() => setReloadKey((k) => k + 1)} compact />;
   if (rows.length === 0) {
     return <EmptyState title="아직 활동 기록이 없어요" hint="채팅과 게시판에 글이 쌓이면 활동 순위가 자동으로 집계됩니다." />;
   }

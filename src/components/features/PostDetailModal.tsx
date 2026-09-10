@@ -20,6 +20,7 @@ import TitleChip from '../atoms/TitleChip';
 import { useTitlePoints } from '../../lib/useTitles';
 import Avatar from '../atoms/Avatar';
 import Icon from '../atoms/Icon';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import ImageLightbox from '../atoms/ImageLightbox';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import PostAttachments from './PostAttachments';
@@ -107,6 +108,9 @@ export default function PostDetailModal({
   // 하나로 겸하면 글을 열 때마다(그리고 PC 2단에서 글을 갈아탈 때마다) '댓글 0 · 첫 댓글을
   // 남겨보세요'가 먼저 뜨고, 목록이 도착하며 아래가 밀린다(2026-09-05 전수 조사).
   const [replies, setReplies] = useState<Comment[] | null>(null);
+  // 댓글 조회 실패 — 배지엔 댓글 N 인데 본문은 0개면 '댓글이 삭제됐나'로 읽힌다. 실패는 실패라고 말한다(LoadErrorCard).
+  const [cErr, setCErr] = useState<unknown>(null);
+  const [cReload, setCReload] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
   const toast = useToast();
   const [myReaction, setMyReaction] = useState<ReactionType | null>(null);
@@ -143,8 +147,16 @@ export default function PostDetailModal({
     let active = true;
     getMyReaction(post.id).then((r) => { if (active) setMyReaction(r); }).catch(() => {});
     if (!isPostHidden(post, user)) incrementPostView(post.id).catch(() => {});  // 숨김 글은 집계하지 않는다
-    // 댓글 실제 조회 — 이전에는 로컬 state에만 쌓여 새로고침 시 사라졌다(저장 안 됨).
-    setReplies(null);
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, post?.id]);
+
+  // 댓글 조회 — 반응·조회수와 이펙트를 가른 이유: 재시도(cReload)가 조회수를 다시 올리면 안 된다.
+  // 이전에는 로컬 state에만 쌓여 새로고침 시 사라졌다(저장 안 됨).
+  useEffect(() => {
+    if (!open || !post) return;
+    let active = true;
+    setReplies(null); setCErr(null);
     getComments({ postId: post.id })
       .then((cs) => {
         if (!active) return;
@@ -158,10 +170,10 @@ export default function PostDetailModal({
         setCMine(st.mine);
         setCheered(st.mine.has(post.id));
       })
-      .catch(() => { /* 조회 실패 시 빈 목록 유지 */ });
+      .catch((e) => { if (active) setCErr(e); });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, post?.id]);
+  }, [open, post?.id, cReload]);
 
   // 가격표(서버 단일 출처) — 응원·끌올 버튼 라벨이 여기서 나온다. 열릴 때 1회.
   useEffect(() => {
@@ -341,6 +353,14 @@ export default function PostDetailModal({
         {!hidden && (
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {/* 고정·끌올 — 목록(CommunityTab PostRow)과 같은 배지. 목록에서 '왜 위에 있는지' 보고 들어온 사람이
+                상세에서 그 상태를 잃지 않게 한다(끌올은 작성자 전용 행에만 있어 남에게는 사라졌다). */}
+            {post.pinnedAt && (
+              <span className="shrink-0 rounded-badge bg-gold-400/15 px-1 text-2xs font-extrabold leading-none text-gold-400">고정</span>
+            )}
+            {isBumped(post) && (
+              <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">끌올</span>
+            )}
             <span className={['inline-flex shrink-0 items-center rounded-badge px-1.5 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>
               {postCategoryLabel(post.category)}
             </span>
@@ -643,6 +663,8 @@ export default function PostDetailModal({
               (트리거 도입 전에는 항상 0이라 0+n 으로 우연히 맞아 보였을 뿐이다.
                App.tsx 가 posts 갱신마다 openPost 를 덮어쓰므로 리얼타임 갱신 때 반드시 드러난다.) */}
           <h3 className="text-sm font-bold text-ink-primary">댓글 <span className="tabular-nums text-ink-secondary">{replies?.length ?? ''}</span></h3>
+          {/* 실패 카드는 스레드 **위에** 얹는다 — 작성 폼은 남겨 둔다(기능 보존). replies 가 null 로 남아 빈 문구도 안 뜬다. */}
+          {cErr != null && <LoadErrorCard error={cErr} what="댓글" onRetry={() => setCReload((k) => k + 1)} compact />}
           <CommentThread
             comments={replies ?? []}
             onSubmit={handleSubmitComment}

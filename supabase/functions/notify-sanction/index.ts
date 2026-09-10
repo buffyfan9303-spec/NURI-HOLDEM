@@ -91,10 +91,12 @@ Deno.serve(async (req) => {
       headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from, to: profile.email, subject, html: shell(inner) }),
     });
-    if (!r.ok) return json({ sent: false, error: `Resend 오류: ${await r.text()}` }, 502);
+    // 상류·예외 원문은 서버 로그에만 — 응답은 고정 문구(보안 표준 §6). 5xx 는 어차피 클라(auth.ts)에서 catch 로 떨어진다.
+    if (!r.ok) { console.error('[notify-sanction] Resend', r.status, await r.text()); return json({ sent: false, error: 'Resend 오류' }, 502); }
     return json({ sent: true }, 200);
   } catch (e) {
-    return json({ error: String(e) }, 500);
+    console.error('[notify-sanction]', e);
+    return json({ error: '서버 오류' }, 500);
   }
 });
 

@@ -196,6 +196,13 @@ function colorIconStyle(tier?: ShoutTier | null, color?: ShoutColor | null): CSS
   const v = shoutVar(tier, color);
   return v ? { color: tierCss(v) } : undefined;
 }
+/** Aura LED 색(2026-09-10 §8-A) — 새 팔레트를 만들지 않고 이 외침이 이미 쓰는 토큰을 그대로 뒤로 보낸다.
+ *  --tier-*-vivid 는 'R G B' 삼원색이라 index.css 의 --aura-led-rgb 에 그대로 꽂힌다.
+ *  색이 없는 등급이면 undefined → data-aura-variant="violet" 기본값이 남는다. */
+function ledVarStyle(tier?: ShoutTier | null, color?: ShoutColor | null): CSSProperties | undefined {
+  const v = shoutVar(tier, color);
+  return v ? ({ '--aura-led-rgb': `var(${v})` } as CSSProperties) : undefined;
+}
 
 const ms = (iso: string): number => new Date(iso).getTime();
 
@@ -675,11 +682,19 @@ export default function CommunityShoutBar({ className }: { className?: string })
           옆으로 흘린다. 예전 주석은 '마퀴 금지'라고 못 박아 뒀었는데, 그때 막으려던 것은 '문구가
           제멋대로 슬라이드로 갈리는 캐러셀'이었다. 지금 것은 넘치는 한 줄에만 붙는 transform 전용
           루프(모션 헌법 §20.4 #1 무한 루프 예외)라 레이아웃을 건드리지 않고, 안 넘치면 아예 안 붙는다. */}
+      {/* Aura LED(2026-09-10 §8-A) — **실제 방송이 걸려 있을 때만** 뒤에서 밝힌다.
+          빈 자리·만료·로딩은 Aura 0: 이 컴포넌트는 오류를 빈 배열로 삼키므로(api/community.ts)
+          idle 에 빛을 주면 서버가 죽은 상태를 '강조'하게 된다.
+          색은 이 외침이 이미 쓰는 등급/선택 색 토큰 그대로(새 팔레트 없음).
+          레이아웃 영향 0 — box-shadow 라 래퍼의 min-h-[3.5625rem] 계약을 건드리지 않는다. */}
       <div
         data-testid={drawShout ? 'shout-live' : 'shout-idle'}
+        data-aura={drawShout ? '' : undefined}
+        data-aura-level={drawShout ? 'hero' : undefined}
+        data-aura-variant={drawShout ? 'violet' : undefined}
         className={['rounded-aura border px-3 py-2.5',
           skin ? skin.box : 'card-aura'].join(' ')}
-        style={drawShout ? colorBoxStyle(drawShout.tier, drawShout.color) : undefined}
+        style={drawShout ? { ...colorBoxStyle(drawShout.tier, drawShout.color), ...ledVarStyle(drawShout.tier, drawShout.color) } : undefined}
       >
         <div className="flex items-center gap-2">
           <Icon name="megaphone" size={16}

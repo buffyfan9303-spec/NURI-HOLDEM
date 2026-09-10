@@ -115,8 +115,10 @@ test('perf① 홈 콜드 진입 — CLS·롱프레임 기록 + 상한', async ({
   const p = await readPerf(page);
   console.log(`[perf-baseline] browse-cold CLS=${p.cls.toFixed(3)} longFrames=${p.longFrames}`);
   reportShifts('home-cold', p);
-  expect(p.cls, 'browse 콜드 CLS').toBeLessThan(0.35);
-  expect(p.longFrames, 'browse 콜드 롱프레임').toBeLessThan(40);
+  // 상한 = 실측 + 작은 여유(2026-09-10, 프로덕션 빌드·Pixel 7·5회 연속: CLS 0.190 / 롱프레임 1 — 목킹 픽스처라 결정적).
+  //   예전 0.35/40 은 실측의 2배/40배라 회귀를 못 잡았다. CLS 는 +0.06(≈30%), 롱프레임은 CI 러너 편차를 감안해 8.
+  expect(p.cls, 'browse 콜드 CLS').toBeLessThan(0.25);
+  expect(p.longFrames, 'browse 콜드 롱프레임').toBeLessThan(8);
 });
 
 test('perf② browse→live 탭 전환 — 전환 구간 롱프레임 상한', async ({ page }) => {
@@ -136,7 +138,8 @@ test('perf② browse→live 탭 전환 — 전환 구간 롱프레임 상한', a
   const delta = after.longFrames - before.longFrames;
   console.log(`[perf-baseline] tab-switch longFrames delta=${delta}`);
   reportShifts('tab-switch', after, 2);
-  expect(delta, '탭 전환 왕복 롱프레임').toBeLessThan(15);
+  // 실측 0(5회 연속, 2026-09-10) — 예전 15 는 회귀 한 번에 롱프레임 열 개가 생겨도 통과했다. CI 편차용 여유 6.
+  expect(delta, '탭 전환 왕복 롱프레임').toBeLessThan(6);
 });
 
 test('perf③ 커뮤니티 스크롤 — 스크롤 구간 CLS·롱프레임 상한', async ({ page }) => {
@@ -154,8 +157,9 @@ test('perf③ 커뮤니티 스크롤 — 스크롤 구간 CLS·롱프레임 상�
   const lfDelta = after.longFrames - before.longFrames;
   console.log(`[perf-baseline] community-scroll CLS delta=${clsDelta.toFixed(3)} longFrames delta=${lfDelta}`);
   reportShifts('community-scroll', after, 3);
-  expect(clsDelta, '커뮤니티 스크롤 CLS').toBeLessThan(0.15);
-  expect(lfDelta, '커뮤니티 스크롤 롱프레임').toBeLessThan(20);
+  // 실측 CLS 0.015 / 롱프레임 0(5회 연속, 2026-09-10). 예전 0.15/20 은 실측의 10배/무한대. 여유: CLS 0.05(3배), 롱프레임 8.
+  expect(clsDelta, '커뮤니티 스크롤 CLS').toBeLessThan(0.05);
+  expect(lfDelta, '커뮤니티 스크롤 롱프레임').toBeLessThan(8);
 });
 
 // ── 홈 삽입 밀림 게이트 ────────────────────────────────────────────────────────

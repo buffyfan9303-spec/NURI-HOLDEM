@@ -13,8 +13,11 @@ interface Props {
 const MIN = 1, MAX = 5;
 
 export default function ImageLightbox({ src, alt, onClose }: Props) {
-  useBackClose(true, onClose);
+  // 뒤로가기·ESC → 라이트박스만 닫기. ESC 를 여기서 직접 들으면 아래 포스터 상세까지 같이 닫힌다(MODAL-01).
+  useBackClose(true, onClose, { escape: true });
   const imgRef = useRef<HTMLImageElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const g = useRef({
     scale: 1, tx: 0, ty: 0,
     pointers: new Map<number, { x: number; y: number }>(),
@@ -39,12 +42,26 @@ export default function ImageLightbox({ src, alt, onClose }: Props) {
   };
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
     // 배경 스크롤 잠금 — 뷰포트 스크롤러는 html(공용 유틸이 ref-count로 중첩까지 처리)
     lockScroll();
-    return () => { window.removeEventListener('keydown', onKey); unlockScroll(); };
-  }, [onClose]);
+    // 포커스 계약(Modal.tsx 와 동일): 열릴 때 안으로, 닫힐 때 연 버튼으로. 없으면 키보드 포커스가
+    // z-100 오버레이 **아래** '포스터 확대 보기' 버튼에 남아 Tab 이 가려진 상세 페이지를 순회했다(MODAL-02).
+    // 포커스 가능 요소가 닫기 하나뿐이라 트랩은 focusin 되잡기 한 줄이면 충분하다.
+    const opener = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const onFocusIn = (e: FocusEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) closeRef.current?.focus();
+    };
+    document.addEventListener('focusin', onFocusIn);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      unlockScroll();
+      // 리스너 해제 뒤에 되돌린다 — 되돌리는 focusin 이 위 가드에 걸리지 않게.
+      if (opener && document.contains(opener)) {
+        try { opener.focus({ preventScroll: true }); } catch { /* 포커스 불가 요소 무시 */ }
+      }
+    };
+  }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
     const s = g.current;
@@ -102,6 +119,7 @@ export default function ImageLightbox({ src, alt, onClose }: Props) {
 
   return (
     <div
+      ref={rootRef}
       // data-scroll-lock: 스크롤 잠금 소유자 표식(scrollLock.ts 의 sweep 이 미아 잠금을 골라낸다)
       data-scroll-lock
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 animate-fade-in"
@@ -109,12 +127,16 @@ export default function ImageLightbox({ src, alt, onClose }: Props) {
       onWheel={onWheel}
       // 배경 탭 닫기 — 이미지 제스처(포인터 캡처)와 충돌하지 않게 배경 자신을 탭했을 때만
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      // 포커스 가능 요소가 닫기 하나뿐 — Tab/Shift+Tab 은 제자리(브라우저 UI 로 빠져나가면 focusin 이 안 와 되잡지 못한다)
+      onKeyDown={(e) => { if (e.key === 'Tab') { e.preventDefault(); closeRef.current?.focus(); } }}
     >
       <button
+        ref={closeRef}
         type="button" onClick={onClose} aria-label="닫기"
         /* top-[calc(...)]: 노치·상태바 아래로 내린다. 사진을 열었을 때 **닫을 방법**이
-           상태바에 가리면 빠져나갈 길이 없다(전체화면이라 뒤 크롬도 안 보인다). */
-        className="absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur hover:bg-white/20 active:opacity-80"
+           상태바에 가리면 빠져나갈 길이 없다(전체화면이라 뒤 크롬도 안 보인다).
+           h-11 w-11: 44px 터치 표준. `hit` 토큰은 position:relative 라 이 absolute 배치를 깨뜨려 실제 크기를 키운다. */
+        className="absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur hover:bg-white/20 active:opacity-80"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M18 6L6 18M6 6l12 12" /></svg>
       </button>

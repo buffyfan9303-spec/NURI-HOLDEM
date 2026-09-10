@@ -980,7 +980,7 @@ function WithdrawAccountSection() {
   //   그러면 사용자는 이용권·작성 글을 잃는다는 사실을 모른 채 되돌릴 수 없는 탈퇴를 진행한다.
   //   실패는 값으로 남겨 확인창이 '모른다'고 말하게 한다(MyPostersTab 삭제 확인창과 같은 원칙).
   const [sumFailed, setSumFailed] = useState(false);
-  // 소셜(카카오) 계정은 비밀번호가 없다 — 재인증을 '영구 삭제' 타이핑 확인으로 폴백
+  // 소셜(Google) 계정은 비밀번호가 없다 — 재인증을 '영구 삭제' 타이핑 확인으로 폴백
   const [social, setSocial] = useState(false);
 
   const loadSummary = () => {
@@ -1051,7 +1051,7 @@ function WithdrawAccountSection() {
           ) : null}
           <label className="block">
             <span className="mb-1 block text-2xs font-semibold text-ink-secondary">
-              {social ? "본인 확인 · '영구 삭제' 를 입력하세요 (카카오 계정은 비밀번호가 없어요)" : '본인 확인. 현재 비밀번호를 입력하세요'}
+              {social ? "본인 확인 · '영구 삭제' 를 입력하세요 (소셜 계정은 비밀번호가 없어요)" : '본인 확인. 현재 비밀번호를 입력하세요'}
             </span>
             <input type={social ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
               autoComplete={social ? 'off' : 'current-password'} placeholder={social ? '영구 삭제' : '현재 비밀번호'}

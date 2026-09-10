@@ -37,8 +37,8 @@ export default function AvatarCropper({
   const stateRef = useRef({ offset, zoom });
   stateRef.current = { offset, zoom };
 
-  // 뒤로가기 → 크롭 편집기 닫기
-  useBackClose(true, onCancel);
+  // 뒤로가기·ESC → 크롭 편집기만 닫기(escape 가 없으면 ESC 가 부모 '내 정보' Modal 을 대신 닫는다 — MODAL-01)
+  useBackClose(true, onCancel, { escape: true });
 
   useEffect(() => {
     const url = URL.createObjectURL(file);
@@ -153,10 +153,11 @@ export default function AvatarCropper({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true">
+    // aria-labelledby: 이름 없는 dialog 는 '대화상자' 로만 읽힌다(MODAL-03). 초기 포커스는 아래 '적용' autoFocus.
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-labelledby="avatar-cropper-title">
       <div className="w-full max-w-xs bg-surface-mid rounded-dialog overflow-hidden shadow-dialog">
         <div className="px-4 py-3 border-b border-border-subtle">
-          <h3 className="text-sm font-semibold text-ink-primary">사진 편집</h3>
+          <h3 id="avatar-cropper-title" className="text-sm font-semibold text-ink-primary">사진 편집</h3>
           <p className="text-2xs text-ink-muted mt-0.5">드래그로 위치, 두 손가락(핀치)·휠·슬라이더로 확대를 조절하세요</p>
         </div>
 
@@ -209,7 +210,8 @@ export default function AvatarCropper({
 
         <div className="flex gap-2 px-4 py-3 border-t border-border-subtle">
           <button type="button" onClick={onCancel} className="btn-ghost flex-1">취소</button>
-          <button type="button" onClick={apply} className="btn-primary flex-1">적용</button>
+          {/* autoFocus: 열리자마자 포커스가 안으로 — 안 옮기면 뒤쪽 프로필 폼 필드에 남아 Tab 이 배경을 돈다 */}
+          <button type="button" onClick={apply} autoFocus className="btn-primary flex-1">적용</button>
         </div>
       </div>
     </div>

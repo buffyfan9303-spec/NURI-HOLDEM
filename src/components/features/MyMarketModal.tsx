@@ -13,6 +13,7 @@ import { relativeTime, STATUS_MAP } from './MarketplaceTab';
 import ChatPane from './chat/ChatPane';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import Icon from '../atoms/Icon';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { onColorInkClass } from '../../lib/color';
 
 function Thumb({ src, size = 'w-12 h-12' }: { src: string | null; size?: string }) {
@@ -43,13 +44,21 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
   const { user } = useAuth();
   const [threads, setThreads] = useState<InboxThread[]>([]);
   const [loading, setLoading] = useState(true);
+  // 조회 실패를 '아직 대화가 없습니다'로 위장하지 않는다 — 판매자가 문의를 놓친다(LoadErrorCard 계약). reloadKey = 재시도.
+  const [err, setErr] = useState<unknown>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [active, setActive] = useState<InboxThread | null>(null);
 
   useEffect(() => {
     if (!open || !user) return;
-    setActive(null); setLoading(true);
-    getMyChatThreads().then(setThreads).catch(() => {}).finally(() => setLoading(false));
-  }, [open, user]);
+    let alive = true; // 계정 전환·닫기 뒤에 도착한 늦은 응답은 버린다(A 의 대화 목록이 B 에게 그려지던 레이스)
+    setActive(null); setErr(null); setLoading(true);
+    getMyChatThreads()
+      .then((t) => { if (alive) setThreads(t); })
+      .catch((e) => { if (alive) setErr(e); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [open, user, reloadKey]);
 
   if (!user) return <LoginRequired open={open} onClose={onClose} />;
 
@@ -68,7 +77,8 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
           <p className="text-sm font-bold text-ink-primary truncate">{active ? active.counterpartyName : '메시지'}</p>
           {active && <p className="text-2xs text-ink-muted truncate">{active.role === 'seller' ? '구매 문의' : '판매자'} · {active.listingTitle}</p>}
         </div>
-        <button type="button" onClick={onClose} aria-label="닫기" className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
+        {/* hit: 32px 시각 크기는 그대로, 터치 영역만 44px(모바일 99% 화면) */}
+        <button type="button" onClick={onClose} aria-label="닫기" className="hit w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
         </button>
       </div>
@@ -83,7 +93,8 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
               <p className="text-2xs font-bold text-accent-300 tabular-nums">{active.listingPrice.toLocaleString()}</p>
             </div>
           </div>
-          <ChatPane listingId={active.listingId} buyerId={active.buyerId} meId={user.id}
+          {/* key: 스레드가 바뀌면 인스턴스를 새로 만든다 — 전송 중이던 이전 스레드의 후속 setState 가 새 상대 목록에 붙지 않는다 */}
+          <ChatPane key={`${active.listingId}|${active.buyerId}`} listingId={active.listingId} buyerId={active.buyerId} meId={user.id}
             emptyHint={active.role === 'seller' ? '구매자에게 답장을 보내보세요' : '판매자에게 메시지를 보내보세요'}
             onRead={() => getMyChatThreads().then(setThreads).catch(() => {})} />
         </div>
@@ -91,6 +102,8 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
         <div className="max-h-[62vh] min-h-[200px] overflow-y-auto p-2">
           {loading ? (
             <p className="text-center py-14 text-sm text-ink-muted">불러오는 중…</p>
+          ) : err ? (
+            <LoadErrorCard error={err} what="대화 목록" onRetry={() => setReloadKey((k) => k + 1)} compact />
           ) : threads.length === 0 ? (
             <div className="text-center py-14 text-ink-muted">
               <p className="text-sm">아직 대화가 없습니다</p>
@@ -142,9 +155,19 @@ export function MyListingsModal({ open, onClose, onOpenListing, onChanged }: {
   const toast = useToast();
   const [items, setItems] = useState<MarketplaceListing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<unknown>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const reload = () => getMyListings().then(setItems).catch(() => {}).finally(() => setLoading(false));
-  useEffect(() => { if (open && user) { setLoading(true); reload(); } }, [open, user]);
+  useEffect(() => {
+    if (!open || !user) return;
+    let alive = true; // 계정 전환·닫기 뒤 늦은 응답 폐기(메시지함과 같은 이유)
+    setErr(null); setLoading(true);
+    getMyListings()
+      .then((v) => { if (alive) setItems(v); })
+      .catch((e) => { if (alive) setErr(e); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [open, user, reloadKey]);
 
   if (!user) return <LoginRequired open={open} onClose={onClose} />;
 
@@ -163,7 +186,7 @@ export function MyListingsModal({ open, onClose, onOpenListing, onChanged }: {
     <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet" dragToClose>
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <p className="flex-1 text-sm font-bold text-ink-primary">내 판매목록 {items.length > 0 && <span className="text-ink-muted font-normal">({items.length})</span>}</p>
-        <button type="button" onClick={onClose} aria-label="닫기" className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
+        <button type="button" onClick={onClose} aria-label="닫기" className="hit w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
         </button>
       </div>
@@ -171,6 +194,8 @@ export function MyListingsModal({ open, onClose, onOpenListing, onChanged }: {
       <div className="max-h-[64vh] min-h-[200px] overflow-y-auto p-2 space-y-2">
         {loading ? (
           <p className="text-center py-14 text-sm text-ink-muted">불러오는 중…</p>
+        ) : err ? (
+          <LoadErrorCard error={err} what="판매글" onRetry={() => setReloadKey((k) => k + 1)} compact />
         ) : items.length === 0 ? (
           <div className="text-center py-14 text-ink-muted">
             <p className="text-sm">등록한 판매글이 없습니다</p>
@@ -215,12 +240,19 @@ export function MyLikesModal({ open, onClose, onOpenListing }: {
   const { user } = useAuth();
   const [items, setItems] = useState<MarketplaceListing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<unknown>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!open || !user) return;
-    setLoading(true);
-    getMyLikedListings().then(setItems).catch(() => {}).finally(() => setLoading(false));
-  }, [open, user]);
+    let alive = true;
+    setErr(null); setLoading(true);
+    getMyLikedListings()
+      .then((v) => { if (alive) setItems(v); })
+      .catch((e) => { if (alive) setErr(e); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [open, user, reloadKey]);
 
   if (!user) return <LoginRequired open={open} onClose={onClose} />;
 
@@ -228,7 +260,7 @@ export function MyLikesModal({ open, onClose, onOpenListing }: {
     <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet" dragToClose>
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <p className="flex-1 text-sm font-bold text-ink-primary">찜한 매물 {items.length > 0 && <span className="text-ink-muted font-normal">({items.length})</span>}</p>
-        <button type="button" onClick={onClose} aria-label="닫기" className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
+        <button type="button" onClick={onClose} aria-label="닫기" className="hit w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
         </button>
       </div>
@@ -236,6 +268,8 @@ export function MyLikesModal({ open, onClose, onOpenListing }: {
       <div className="max-h-[64vh] min-h-[200px] overflow-y-auto p-2 space-y-2">
         {loading ? (
           <p className="text-center py-14 text-sm text-ink-muted">불러오는 중…</p>
+        ) : err ? (
+          <LoadErrorCard error={err} what="찜한 매물" onRetry={() => setReloadKey((k) => k + 1)} compact />
         ) : items.length === 0 ? (
           <div className="text-center py-14 text-ink-muted">
             <p className="text-sm">찜한 매물이 없습니다</p>

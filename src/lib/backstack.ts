@@ -14,6 +14,15 @@
 //
 // 모든 오버레이는 useBackClose(open, onClose) 훅만 쓰면 된다.
 //
+// ── 2026-09-10 ESC 도 같은 규칙(MODAL-01) ──────────────────────────────────────
+// 예전엔 Modal·라이트박스·매장 페이지·장부 오버레이가 저마다 window keydown 에 ESC 리스너를
+// 달았다. 겹쳐 열리면(포스터 상세 위 글쓰기, 상세 위 포스터 확대) ESC 한 번에 리스너가 전부
+// 실행돼 **겹이 통째로 닫혔다** — 뒤로가기가 예전에 겪던 바로 그 결함이다.
+// 이제 ESC 리스너는 여기 하나뿐이고, 뒤로가기와 똑같이 **최상단 살아 있는 한 겹만** 닫는다.
+// 겹은 `{ escape: true }` 로 등록했을 때만 ESC 의 대상이다 — 탭 이력·섹션 상태처럼 '뒤로가기로는
+// 되짚지만 ESC 로 튀면 안 되는' 겹(장부 화면에서 ESC 를 눌렀는데 대시보드로 가면 안 된다)이 있어
+// 기본값은 false 다. 오버레이 컴포넌트가 ESC 를 직접 듣지 말 것.
+//
 // ── 2026-08-28 근치(오너 지적: "뒤로가기를 누르기 무서워") ────────────────────
 // 오너가 겪은 두 증상은 같은 뿌리에서 나온다: **history 항목과 레이어가 1:1 이 아니었다.**
 //
@@ -52,6 +61,10 @@ interface Layer {
   ownerClose: CloseFn;
   /** false = 닫혔지만 history 칸이 아직 남아 있는 '죽은 꼬리' */
   live: boolean;
+  /** ESC 키의 대상인가(최상단일 때만). 입양되면 자식의 값으로 바뀐다 */
+  escape: boolean;
+  /** 예약자(App)의 원래 escape — 자식이 언마운트하면 여기로 되돌린다 */
+  ownerEscape: boolean;
   /**
    * 이 레이어가 **실제 history 칸을 차지하고 있는가**.
    *
@@ -118,10 +131,25 @@ function scheduleBalance() {
   });
 }
 
+/** ESC = 뒤로가기와 같은 규칙: 최상단 살아 있는 겹 하나만, 그것이 escape 등록일 때만. */
+function handleEscape(e: KeyboardEvent) {
+  if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
+  // 브라우저 전체화면(클락 TV 송출 등)에서 ESC 는 전체화면 해제의 몫이다 — 그 뒤의 겹을 닫지 않는다.
+  if (typeof document !== 'undefined' && document.fullscreenElement) return;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const top = entries[i];
+    if (!top.live) continue;
+    // 최상단이 ESC 대상이 아니면(탭 이력·섹션 상태) 그 아래를 뒤지지 않는다 — LIFO 를 건너뛰면 뒤로가기와 어긋난다.
+    if (top.escape) { try { top.close(); } catch { /* 닫기 콜백 오류는 무시 */ } }
+    return;
+  }
+}
+
 function init() {
   if (initialized || typeof window === 'undefined') return;
   initialized = true;
   window.addEventListener('popstate', handlePop);
+  window.addEventListener('keydown', handleEscape);
 
   // ⓑ __layer 토큰 보존 — 딥링크 정리(`replaceState({}, '', url)`)가 현재 항목의 토큰을
   //   지우면 위치가 루트로 오인되어 다음 뒤로가기가 열린 겹을 전부 닫는다('홈으로 튐').
@@ -173,6 +201,11 @@ export interface PushLayerOptions {
    * pushLayer 가 이 칸을 물려받아(입양) history 항목이 두 개로 불어나지 않는다.
    */
   adoptable?: boolean;
+  /**
+   * true = ESC 키로도 닫힌다(최상단 겹일 때만). 오버레이(모달·시트·라이트박스)는 켠다.
+   * 탭 이력·섹션 상태처럼 '뒤로가기로 되짚지만 ESC 로 튀면 안 되는' 겹은 기본값(false)으로 둔다.
+   */
+  escape?: boolean;
 }
 
 /**
@@ -188,18 +221,24 @@ export function pushLayer(close: CloseFn, opts?: PushLayerOptions): () => void {
   if (!opts?.adoptable && top && top.live && top.adoptable && !top.adoptedBy) {
     top.adoptedBy = close;
     top.close = close;
+    top.escape = !!opts?.escape; // 예약 칸은 ESC 대상이 아니었다(아직 화면이 없다) — 마운트한 자식의 규칙을 따른다
     let reverted = false;
     return () => {
       if (reverted) return;
       reverted = true;
-      if (top.adoptedBy === close) { top.adoptedBy = null; top.close = top.ownerClose; }
+      if (top.adoptedBy === close) { top.adoptedBy = null; top.close = top.ownerClose; top.escape = top.ownerEscape; }
     };
   }
 
   const id = ++seq;
+  // 예약 칸(adoptable)은 기본으로 ESC 대상이다. App 이 예약하는 상태는 전부 오버레이(포스터 상세·매장 페이지·로그인·글쓰기…)라
+  // 청크 로딩 중이거나, **자식 이펙트가 부모보다 먼저 돌아**(React 규칙 — 청크가 이미 로드된 두 번째 열기) 자식이 먼저
+  // 자기 겹을 밀고 그 위에 예약 칸이 얹힌 경우에도 ESC 가 '취소' 로 정확히 닫혀야 한다. 예약 칸이 escape=false 면
+  // 최상단이 예약 칸이라 ESC 가 아무것도 안 하는 회귀가 생긴다(2026-09-10 리뷰에서 실측).
+  const esc = !!opts?.escape || !!opts?.adoptable;
   const layer: Layer = {
     id, close, adoptable: !!opts?.adoptable, adoptedBy: null, ownerClose: close,
-    live: true, hasSlot: false,
+    live: true, hasSlot: false, escape: esc, ownerEscape: esc,
   };
   pushEntry(layer);
 
@@ -220,16 +259,18 @@ export function pushLayer(close: CloseFn, opts?: PushLayerOptions): () => void {
  *
  * @param opts.adoptable App 이 소유한 오버레이 상태에서 쓴다 — lazy 컴포넌트가 마운트되면
  *        그 컴포넌트의 useBackClose 가 이 칸을 물려받는다(항목 중복 없음).
+ * @param opts.escape 오버레이(모달·시트)는 true — ESC 가 최상단 한 겹만 닫는다. 개별 ESC 리스너를 달지 말 것.
  */
 export function useBackClose(open: boolean, onClose: CloseFn, opts?: PushLayerOptions): void {
   const ref = useRef(onClose);
   ref.current = onClose;
   const adoptable = !!opts?.adoptable;
+  const escape = !!opts?.escape;
   useEffect(() => {
     if (!open) return;
-    const dispose = pushLayer(() => ref.current(), adoptable ? { adoptable: true } : undefined);
+    const dispose = pushLayer(() => ref.current(), { adoptable, escape });
     return dispose;
-  }, [open, adoptable]);
+  }, [open, adoptable, escape]);
 }
 
 /** 테스트 전용 — 현재 살아 있는 레이어 수(항목 수가 아니라 '열린 겹'). */

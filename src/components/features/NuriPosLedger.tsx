@@ -4,7 +4,8 @@ import { useIsDesktop } from '../../lib/responsive';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // NURI POS 장부 — 표(table) 형태. 장부 입장 시 세션 설정(담당직원·게임·단가·이벤트·딜러) → 보드.
 // 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 티켓·지원은 미수 불가. 미수=붉은색.
-// 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모. 엑셀 내보내기.
+// 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모.
+// (엑셀 내보내기는 2026-09-09 오너 지시로 제거 — 외부 반출 기능 삭제.)
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import DateTimePicker from '../atoms/DateTimePicker';
@@ -27,14 +28,13 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
 } from '../../api/ledger';
 import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
-import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
 import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
-import { useBackClose } from '../../lib/backstack';
+import Modal from '../atoms/Modal';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
 import { discountsFromPromotions, ledgerLabelOf } from '../../lib/posterDiscounts';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -92,7 +92,8 @@ export interface LedgerSeed {
   gtd?: boolean;
 }
 
-export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, onOpenStats, seed, followGame, settleSignal = 0, active = true }: {
+// venueName 은 엑셀 파일명에만 쓰였다(내보내기 제거로 미사용). 호출자(VenueManageTab·AdminTab)가 아직 넘기므로 타입만 남긴다.
+export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, seed, followGame, settleSignal = 0, active = true }: {
   venueId: string; canManage: boolean; venueName?: string; active?: boolean;
   onMakeRankingDraft?: (date: string, names: string[], eventName?: string) => void;
   onOpenClock?: (date: string, gameSeq: number) => void;
@@ -1495,8 +1496,6 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             <Metric label="미수금" value={`${wonToMan(stats.unpaid)}만`} tone="danger" />
           </div>
           <div className="flex flex-col gap-1 shrink-0">
-            <button type="button" onClick={() => exportLedgerXls({ venueName, session, players, buyins })}
-              className="btn-ghost text-2xs px-3 py-1">엑셀</button>
             {!closed ? (
               <div className="flex gap-1">
                 <button type="button" onClick={handleRegClose}
@@ -2498,7 +2497,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           {mode === 'open' ? '장부 시작' : '저장'}
         </button>
       </div>
-      {cash <= 0 && <p className="text-2xs text-danger-light">현금단가를 입력하세요.</p>}
+      {/* role=alert: 저장 버튼이 왜 잠겼는지 보조기술에도 들리게(FORM-01) */}
+      {cash <= 0 && <p role="alert" className="text-2xs text-danger-light">현금단가를 입력하세요.</p>}
     </div>
   );
 }
@@ -2516,27 +2516,13 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 // ── 오버레이(모달 셸) ─────────────────────────────────────────────────────────
+// Modal 원자로 셸만 교체(MODAL-03): 손으로 짠 셸은 aria-modal 만 선언하고 포커스 이동·트랩·복원·ESC 겹 판정이
+// 없었다. 원자가 뒤로가기·ESC(최상단 한 겹)·포커스·스크롤 잠금·44px 닫기를 전부 준다.
 function Overlay({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  // 뒤로가기 → 이 오버레이만 닫기 (중앙 back-stack)
-  useBackClose(true, onClose);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
-      <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default" />
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-md mx-4 max-h-[88vh] overflow-y-auto rounded-dialog bg-surface-mid shadow-dialog animate-slide-up">
-        <header className="sticky top-0 z-10 px-4 py-3 border-b border-border-subtle bg-surface-mid flex items-center justify-between">
-          <h2 className="text-sm font-bold text-ink-primary">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="닫기" className="-mr-1 h-10 w-10 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
-            <Icon name="close" size={14} />
-          </button>
-        </header>
-        <div className="p-4">{children}</div>
-      </div>
-    </div>
+    <Modal open onClose={onClose} title={title} variant="center" maxWidth="md">
+      <div className="p-4">{children}</div>
+    </Modal>
   );
 }
 
@@ -2603,26 +2589,9 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
   const canSaveSplit = splitTotal > 0 || tkt > 0;
   const submitSplit = () => onPickSplit({ cashAmount: cash, cardAmount: card, transferAmount: transfer, ticketCount: tkt, unpaidAmount: unpaidAmt, discountIndex: discIdx });
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  // 뒤로가기 → 결제 모달만 닫기 (중앙 back-stack)
-  useBackClose(true, onClose);
-
+  // 셸은 Modal 원자(MODAL-03) — 뒤로가기·ESC(최상단 한 겹)·포커스 트랩·복원을 원자가 준다. 개별 ESC 리스너 금지.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
-      <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default" />
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-sm mx-4 max-h-[85vh] overflow-y-auto rounded-dialog bg-surface-mid shadow-dialog animate-slide-up">
-        <header className="sticky top-0 z-10 bg-surface-mid px-4 py-3 border-b border-border-subtle flex items-center justify-between">
-          <h2 className="text-sm font-bold text-ink-primary">{cell.playerName} · {cell.entryNo}바인</h2>
-          <button type="button" onClick={onClose} aria-label="닫기" className="-mr-1 h-10 w-10 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
-            <Icon name="close" size={14} />
-          </button>
-        </header>
-
+    <Modal open onClose={onClose} title={`${cell.playerName} · ${cell.entryNo}바인`} variant="center" maxWidth="sm">
         <div className="p-3 space-y-2">
           {/* 상태 요약 — '지금 무엇이 적용된 상태인가'를 먼저 보여준다.
               #22: 예전엔 얼리·할인 배지가 버튼 사이에 흩어져 있어, 8개 버튼 중 하나를 누르는 순간
@@ -2839,8 +2808,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

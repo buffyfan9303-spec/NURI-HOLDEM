@@ -407,20 +407,21 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                     const cards = t === 'hero' ? hero : t === 'villain' ? villain : board;
                     const label = t === 'hero' ? '내 핸드' : t === 'villain' ? '상대 핸드' : '보드';
                     return (
+                      // 타일 자체는 인터랙티브가 아니다(클릭 위임만) — 예전엔 div role=button 안에 카드 제거 <button> 이
+                      // 중첩돼 보조기술이 안쪽 버튼을 가렸고, Space 가 preventDefault 없이 시트를 스크롤시켰다(A11Y-02).
+                      // 키보드 경로는 아래 라벨 <button>(aria-pressed) 하나로 — ToolsPanel 의 '형제 버튼' 문법.
                       <div
                         key={t}
-                        role="button"
-                        tabIndex={0}
                         onClick={() => setHandTarget(t)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setHandTarget(t); }}
                         className={[
                           // 패널이 불투명 surface-high 가 되면서 타일도 surface-high 면 면 차이가 0이 된다
                           // → 타일은 한 단 내려(surface-mid) '패널 위에 파인 칸'으로 읽히게 한다.
-                          'rounded-input border p-2 cursor-pointer transition-colors focus:outline-none',
+                          'rounded-input border p-2 cursor-pointer transition-colors',
                           handTarget === t ? 'border-accent-400 bg-accent-300/10' : 'border-border-default bg-surface-mid',
                         ].join(' ')}
                       >
-                        <span className="block text-xs text-ink-muted mb-1">{label}</span>
+                        <button type="button" aria-pressed={handTarget === t} onClick={() => setHandTarget(t)}
+                          className="block text-xs text-ink-muted mb-1">{label}</button>
                         <div className="flex flex-wrap gap-1 min-h-[1.75rem] items-center">
                           {cards.length === 0 ? (
                             <span className="text-xs text-ink-muted">카드 선택</span>

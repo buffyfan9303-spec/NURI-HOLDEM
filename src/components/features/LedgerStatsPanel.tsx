@@ -7,7 +7,6 @@ import {
   wonToMan, buyinFinance, discountAmountOf, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
   posHasPassword, setPosCancelPassword, subscribeLedger,
 } from '../../api/ledger';
-import { toCsv, downloadCsv } from '../../lib/csv';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { Skeleton } from '../atoms/Skeleton';
@@ -47,7 +46,6 @@ const DOW_RANGE_OPTS: { id: DowRange; label: string }[] = [
 ];
 
 function StatsView({ venueId }: { venueId: string }) {
-  const toast = useToast();
   // ⚠ 기간은 값이 **둘**이다(오너 제보 2026-09-06: "당일·일주일·한 달을 옮기면 스크롤이 깜빡이며 내려갔다 올라간다").
   //   tabPeriod = 방금 누른 탭(하이라이트는 즉시 — 응답이 늦으면 그게 더 큰 결함) /
   //   period    = **지금 화면에 그려져 있는 데이터의** 기간.
@@ -236,36 +234,6 @@ function StatsView({ venueId }: { venueId: string }) {
     return games > 0 ? { games, entries, alive, eliminations, rebuys, earlies, addons } : null;
   }, [sessions]);
 
-  // CSV 내보내기 — 요일별이면 요일 요약, 그 외 기간은 일별 요약(엑셀 한글 호환).
-  const exportCsv = () => {
-    if (period === 'dow') {
-      const rows = [0, 1, 2, 3, 4, 5, 6].map((w) => {
-        const e = m.dow[w];
-        if (!e) return [DOW[w], 0, 0, 0, 0, 0, 0];
-        const fill = e.target ? Math.round((e.entries / e.target) * 100) : '';
-        return [DOW[w], e.dates.size, Math.round(e.entries * 10) / 10, e.target, fill === '' ? '' : `${fill}%`, Math.round(e.revenue), Math.round(e.unpaid)];
-      });
-      downloadCsv(`요일별통계_${range.from}_${range.to}`, toCsv(['요일', '영업일수', '엔트리', '기준엔트리', '달성률', '완납매출(원)', '미수(원)'], rows));
-      toast.show('요일별 통계 CSV를 내보냈습니다', 'success');
-      return;
-    }
-    const sorted = [...sessions].sort((a, b) => (a.sessionDate === b.sessionDate ? a.gameSeq - b.gameSeq : a.sessionDate < b.sessionDate ? -1 : 1));
-    if (!sorted.length) { toast.show('내보낼 데이터가 없습니다', 'info'); return; }
-    const rows = sorted.map((s) => {
-      let entry = 0, paid = 0, unpaid = 0, ticket = 0; const ps = new Set<string>();
-      for (const b of buyins) {
-        if (b.sessionDate !== s.sessionDate || b.gameSeq !== s.gameSeq) continue;
-        const f = buyinFinance(b, s);
-        entry += f.entry; paid += f.paid; unpaid += f.unpaid; ticket += f.ticketPaid;
-        ps.add(b.playerName);
-      }
-      const gl = s.gameSeq > 1 ? `사이드${s.gameSeq - 1}` : '메인';
-      return [s.sessionDate, DOW[new Date(s.sessionDate + 'T00:00:00').getDay()], gl, s.targetEntries ?? '', Math.round(entry * 10) / 10, Math.round(paid), Math.round(unpaid), ticket, s.voucherIssued ?? 0, ps.size];
-    });
-    downloadCsv(`장부통계_${range.from}_${range.to}`, toCsv(['날짜', '요일', '게임', '기준엔트리', '엔트리', '완납매출(원)', '미수(원)', '회수티켓', '발행이용권', '플레이어수'], rows));
-    toast.show('통계 CSV를 내보냈습니다', 'success');
-  };
-
   // 불러오기 실패 — 숫자를 0으로 보여주면 사장님이 '오늘 매출 0'으로 오판한다.
   // 빈 통계와 실패는 완전히 다른 상태라, 실패는 실패로 말하고 다시 시도할 수단을 준다.
   if (loadError) {
@@ -283,14 +251,9 @@ function StatsView({ venueId }: { venueId: string }) {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-bold text-accent-300">통계</h3>
         <div className="flex items-center gap-1.5">
-          {/* 이 둘은 데이터가 아니라 **조작**이다 — 방금 누른 탭을 따라간다(range·CSV 가 tabPeriod 기준) */}
+          {/* 날짜 입력은 데이터가 아니라 **조작**이다 — 방금 누른 탭을 따라간다(range 가 tabPeriod 기준).
+              파일 반출(CSV) 버튼은 오너 지시(2026-09-09)로 뺐다 — 통계는 화면 안에서만 본다. */}
           {tabPeriod === 'day' && <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value || todayStr())} className="input text-xs py-1 w-auto" />}
-          {tabPeriod !== 'ai' && (
-            <button type="button" onClick={exportCsv}
-              className="inline-flex items-center gap-1 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs font-bold text-ink-secondary hover:text-accent-300 hover:border-accent-400/40 transition-colors">
-              <Icon name="download" size={13} /> CSV
-            </button>
-          )}
         </div>
       </div>
 

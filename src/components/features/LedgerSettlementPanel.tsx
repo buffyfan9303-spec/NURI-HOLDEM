@@ -75,8 +75,9 @@ export default function LedgerSettlementPanel({ venueId, date, active = true }: 
         )}
       </div>
 
+      {/* role=alert: 조회 실패를 보조기술에도 알린다(FORM-01) — AuthModal·LoadErrorCard 와 같은 계약 */}
       {err && (
-        <p className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2.5 text-xs text-danger-light">{err}</p>
+        <p role="alert" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2.5 text-xs text-danger-light">{err}</p>
       )}
       {!err && !r && (
         <div className="space-y-3" aria-busy="true">

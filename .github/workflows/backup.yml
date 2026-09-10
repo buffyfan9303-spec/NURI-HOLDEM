@@ -1,7 +1,14 @@
 name: DB Backup to R2
 
 # OBS-1 — 무료 Supabase는 자동 백업·PITR이 없다. 야간 pg_dump → Cloudflare R2(S3 호환).
-# 라이브 DB는 읽기(dump)만. SUPABASE_DB_URL 미설정이면 실패가 아니라 우아하게 스킵.
+# 라이브 DB는 읽기(dump)만.
+#
+# ⚠ 2026-09-09 — "필수 secret 없으면 우아하게 스킵"을 폐기했다.
+#   2026-08-24 이후 매일 03:00 KST 에 초록불이 켜졌지만 **실제 백업은 0건**이었다.
+#   SUPABASE_DB_URL 이 한 번도 설정되지 않아 첫 단계에서 SKIP=1 을 세우고 나머지를 전부 건너뛰었고,
+#   워크플로는 그것을 success 로 보고했다(실행 34276700212 로그: `DB_URL:` 빈 값 → "백업 스킵").
+#   백업이 없는 상태를 초록으로 위장하는 것이 가장 위험한 실패 모드라, 이제 누락은 **실패**다.
+#   값은 어떤 경우에도 로그에 남기지 않는다 — 이름만 말한다.
 on:
   schedule:
     - cron: '0 18 * * *'   # 18:00 UTC = 03:00 KST 매일
@@ -18,17 +25,27 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Guard — SUPABASE_DB_URL 필요(없으면 스킵, 실패 아님)
+      - name: Guard — 필수 secret 확인(하나라도 없으면 실패)
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          if [ -z "$DB_URL" ]; then
-            echo "::notice::SUPABASE_DB_URL 미설정 — 백업 스킵. 오너가 'gh secret set SUPABASE_DB_URL'(세션 풀러 5432) 후 활성화됩니다."
-            echo "SKIP=1" >> "$GITHUB_ENV"
+          missing=""
+          [ -z "$DB_URL" ]              && missing="$missing SUPABASE_DB_URL"
+          [ -z "$R2_ACCESS_KEY_ID" ]    && missing="$missing R2_ACCESS_KEY_ID"
+          [ -z "$R2_SECRET_ACCESS_KEY" ] && missing="$missing R2_SECRET_ACCESS_KEY"
+          [ -z "$R2_ENDPOINT" ]         && missing="$missing R2_ENDPOINT"
+          [ -z "$R2_BUCKET" ]           && missing="$missing R2_BUCKET"
+          if [ -n "$missing" ]; then
+            echo "::error::백업 실행 불가 — 필수 secret 누락:$missing. 오너가 'gh secret set <이름>' 으로 설정해야 한다(SUPABASE_DB_URL 은 세션 풀러 5432 URL). 값은 여기 출력하지 않는다."
+            exit 1
           fi
+          echo "필수 secret 5개 확인 완료(이름만 검사)"
 
       - name: PostgreSQL 17 client 설치
-        if: env.SKIP != '1'
         run: |
           sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
@@ -36,7 +53,6 @@ jobs:
           sudo apt-get install -y -qq postgresql-client-17
 
       - name: pg_dump → gzip
-        if: env.SKIP != '1'
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
@@ -47,7 +63,6 @@ jobs:
           ls -lh "nuri-$STAMP.dump.gz"
 
       - name: R2 업로드(S3) — 버킷 없으면 생성
-        if: env.SKIP != '1'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -59,11 +74,28 @@ jobs:
           aws s3api head-bucket --bucket "$BUCKET" --endpoint-url "$ENDPOINT" 2>/dev/null \
             || aws s3api create-bucket --bucket "$BUCKET" --endpoint-url "$ENDPOINT"
           aws s3 cp "$FILE" "s3://$BUCKET/db/$FILE" --endpoint-url "$ENDPOINT"
-          echo "::notice::백업 업로드 완료 — s3://$BUCKET/db/$FILE"
 
-      # (선택) 하트비트 — OBS-2에서 Healthchecks.io URL을 secret으로 넣으면 활성
+      # 업로드 명령이 0 을 돌려줘도 객체가 실제로 있는지 다시 읽는다 — "성공" 은 R2 에 객체가 존재한다는 뜻이어야 한다.
+      - name: R2 객체 존재·크기 검증
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          SIZE="$(aws s3api head-object --bucket "$BUCKET" --key "db/$FILE" --endpoint-url "$ENDPOINT" --query ContentLength --output text)"
+          LOCAL="$(stat -c %s "$FILE")"
+          echo "R2 객체 크기: $SIZE bytes / 로컬: $LOCAL bytes"
+          if [ -z "$SIZE" ] || [ "$SIZE" != "$LOCAL" ] || [ "$SIZE" -le 0 ]; then
+            echo "::error::업로드된 객체 크기가 로컬 덤프와 다르거나 0 — 백업 실패로 처리"
+            exit 1
+          fi
+          echo "::notice::백업 업로드 완료 — s3://$BUCKET/db/$FILE ($SIZE bytes)"
+
+      # (선택) 하트비트 — Healthchecks.io URL을 secret으로 넣으면 활성. 성공했을 때만 친다(실패는 알림으로 드러나야 한다).
       - name: Heartbeat ping(선택)
-        if: env.SKIP != '1' && success()
+        if: success()
         env:
           HC_URL: ${{ secrets.HEALTHCHECK_BACKUP_URL }}
         run: |

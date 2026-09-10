@@ -118,8 +118,11 @@ Deno.serve(async (req: Request) => {
       // 404(모델 없음)·400은 다음 모델 폴백, 그 외(401 키 오류 등)는 즉시 반환
       if (r.status !== 404 && r.status !== 400) break;
     }
-    return json({ error: 'Gemini 오류', detail: lastErr }, 502);
+    // 상류 오류 본문(모델 체인·상태)·예외 원문은 서버 로그에만 — 응답은 고정 문구(보안 표준 §6).
+    console.error('[gemini] 상류 오류', lastErr);
+    return json({ error: 'Gemini 오류' }, 502);
   } catch (e) {
-    return json({ error: String(e) }, 500);
+    console.error('[gemini]', e);
+    return json({ error: '서버 오류' }, 500);
   }
 });

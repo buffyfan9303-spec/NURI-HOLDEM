@@ -308,7 +308,12 @@ function CommunityTab({
       {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정.
           data-community-secbar: 서브섹션 View Transition(root 스냅샷)에서 제외 — 헤더·하단 탭바와 같은
           '상시 크롬'이라 전환 블러/슬라이드에 딸려 움직이면 안 된다(index.css VT 예외 블록 참조) */}
-      <div data-community-secbar="" className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x subbar-aura border-b border-border-subtle pt-2 pb-2 lg:pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4">
+      {/* 2026-09-10 오너 지시(이미지 1) — 바가 두껍고 활성 알약이 '큰 사각 카드'로 읽혔다.
+          실측 전: 바 64.75px = pt-2(8.5) + 버튼 h-11(46.75) + pb-2(8.5) + 테두리(1).
+          실측 후: 바 53.5px  = pt-1(4.25) + 버튼 h-[44px] + pb-1(4.25) + 테두리(1).
+          히트 영역은 44px 를 그대로 지킨다(WCAG 2.5.5) — 줄인 것은 트레이 여백과 **시각 알약**뿐이다.
+          ⚠ 2026-09-06 의 '알약 40px / 트레이 44px' 지시를 이 지시가 대체한다(같은 오너, 더 최신). */}
+      <div data-community-secbar="" className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x subbar-aura border-b border-border-subtle pt-1 pb-1 lg:pt-1 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4">
         {/* ⚠ 트랙(bg-surface-high) 없이 배경 위에 그대로 띄운다(오너 2회 지적, 2026-09-07).
             세그먼트 트랙이 있으면 그 자체가 '네모칸'으로 읽힌다 — 띠 색을 지면에 맞춰도 박스는 남는다.
             활성 표시는 미끄러지는 알약(pill-active)이 이미 하고 있어 트랙 없이도 어느 탭인지 분명하고,
@@ -316,16 +321,24 @@ function CommunityTab({
         {/* --tab-cols = **일반 유저에게 보이는 탭 수**(매장 제외). 칸 폭의 기준이 된다 —
             업주에게 매장이 하나 더 붙어도 앞 칸들이 줄지 않고, 매장만 오른쪽 밖으로 밀려나
             스크롤해야 보인다(오너 2026-09-08). 장터는 슬롯 유무로 빠질 수 있어 숫자를 박지 않는다. */}
+        {/* PC 레일 폭 상한(2026-09-10) — 1366/1920 실측에서 칸 하나가 187~200px 로 벌어져
+            여섯 메뉴가 화면 끝까지 흩어졌다. max-w-3xl 로 묶어 가운데 정렬하면 칸이 ~128px 로
+            고르게 선다. 모바일은 --tab-cols 계산 그대로(상한이 걸리지 않는다).
+            ⚠ 래퍼를 새로 씌우지 않는다 — e2e/sliding-pill-hidden 이 '홀덤펍' 버튼의
+              parentElement 를 레일로 잡는다(이 div 여야 한다). */}
         <div ref={secBarRef} style={{ '--tab-cols': 5 + (marketSlot ? 1 : 0) } as CSSProperties}
-          className="relative flex items-center gap-1 overflow-x-auto scrollbar-none px-0.5">
-          {/* 활성 탭 뒤 글로우(오너 지시 2026-09-05) — pill-active = --grad-cta 채움 + 18px 블룸.
+          className="relative flex items-center gap-1 overflow-x-auto scrollbar-none px-0.5 lg:mx-auto lg:max-w-3xl">
+          {/* 활성 탭 뒤 글로우(오너 지시 2026-09-05, 2026-09-10 micro 로 조정)
+                — pill-active = --grad-cta 채움 + LED 블룸. 블룸 세기는 index.css 의
+                  [data-community-secbar] [data-sliding-pill].pill-active 가 **이 바에만** 12px/0.22 로 낮춘다
+                  (전역 .pill-active 는 34곳이 공유하므로 건드리지 않는다).
                 ⚠ 블룸을 다 보이려고 세로 여백을 키우지 않는다(2026-09-05 실측): overflow 는 **패딩 박스**에서
                   자르므로 여백 4.25px 이면 18px 중 4.25px 만 더 보인다 — 원래 2px 과 눈에 띄는 차이가 없는데
                   트레이만 두꺼워져 '테두리 공백이 크다'는 지적을 받았다. 채움(--grad-cta)이 활성 표시의 본체이고
                   블룸은 그 가장자리를 부드럽게 하는 역할이라, 잘려도 목적은 달성된다.
                 하단 메인 탭바와 같은 문법이고, 활성 탭은 정의상 1개라 '글로우는 화면당 1곳' 규칙과 충돌하지 않는다.
                 (ring-aura-glow 는 쓰지 않는다 — 카드 후광이고 이 화면엔 이미 유료광고 카드의 강조가 있다) */}
-            <SlidingPill containerRef={secBarRef} activeKey={shownSec} className="rounded-[6px] pill-active" />
+            <SlidingPill containerRef={secBarRef} activeKey={shownSec} className="rounded-[9px] pill-active" />
           <SectionTab active={shownSec === 'venues'} label="홀덤펍" onClick={() => setSection('venues')} />
           <SectionTab active={shownSec === 'board'}  label="게시판" onClick={() => setSection('board')} />
           <SectionTab active={shownSec === 'live'}   label="실시간" onClick={() => setSection('live')} />
@@ -458,10 +471,13 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
         // §T1: 서브탭 라벨 = t-tab(12.75/600). 활성은 아래 font-bold 가 덮는다.
         // 오너 승인(2026-09-03): px-3 → px-2 — 360px 실측 바 326px 에 6탭(px-2.5 는 344px 로 딜러가 잘렸다 → px-2 ≈ 318px).
         // 44px 탭 타깃(#15): overflow-x-auto 레일이라 .hit/.tap-y-44 의 확장은 세로 오버플로가 된다 →
-        // 카테고리 칩 레일과 같은 조리법 — 버튼은 h-11 투명 히트박스, 안쪽 span 이 34px 시각 칩.
-        // data-pill-active 는 span 에 둔다(SlidingPill 이 그 박스를 재다).
-        // 알약은 40px — 트레이(44px) 안에서 위아래 2px 만 남기는 비율이 오너 지시 레이아웃(2026-09-06 이미지)이다.
-        // 34px 은 위아래 5px 씩 빈 공간을 만들어 '테두리 공백이 크다'는 지적을 다시 불렀다.
+        // 카테고리 칩 레일과 같은 조리법 — 버튼은 h-[44px] 투명 히트박스, 안쪽 span 이 시각 알약.
+        // data-pill-active 는 span 에 둔다(SlidingPill 이 그 박스를 잰다).
+        // 알약 32px(모바일)/36px(PC) — 2026-09-10 오너 지시(이미지 1: '활성 pill 이 큰 사각 카드처럼 보임').
+        //   히트박스를 46.75 → 44 로 줄여 트레이의 남는 여백을 흡수했다(알약 위아래 6px).
+        //   ⚠ rem 이 아니라 px 로 박는다 — 이 앱은 html { font-size: 17px } 이라 h-8 이 34px 이 된다.
+        //   이 지시가 2026-09-06 의 '알약 40px' 을 대체한다. 그때 지적이던 '테두리 공백'은
+        //   트레이 자체(pt-2 → pt-1)를 줄여서 푼다 — 알약을 키워서 푸는 것이 아니다.
         // 버튼에 relative 를 두지 않는다 — span 의 offsetParent 가 레일이어야 offsetLeft/Top 이 맞는다.
         // flex-none + min-w: 칸 폭이 **탭 개수에 흔들리지 않는다**.
         //   예전 flex-[1_0_auto] 는 남는 공간이 있을 때만 늘어나, 업주에게 매장이 붙어 내용이 넘치는
@@ -473,7 +489,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
         //     같은 규칙을 PC 에 걸면 1440 에서 칸이 200px 가 돼 7탭이 넘치고, 넓은 화면에서
         //     굳이 가로 스크롤을 만들게 된다(커뮤니티는 유저 화면이라 모바일이 기준이지만,
         //     업주가 PC 로 볼 때 멀쩡하던 것을 깨뜨릴 이유는 없다).
-        'flex-none inline-flex h-11 items-center justify-center t-tab whitespace-nowrap',
+        'flex-none inline-flex h-[44px] items-center justify-center t-tab whitespace-nowrap',
         'min-w-[calc((100%-(var(--tab-cols)-1)*0.25rem)/var(--tab-cols))] lg:min-w-0 lg:flex-[1_0_auto]',
         'transition-colors',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
@@ -484,7 +500,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
       {/* 활성 배경은 부모의 공용 SlidingPill 이 미끄러지며 그린다 — 탭별 개별 팝인 제거 */}
       <span
         data-pill-active={active || undefined}
-        className="relative inline-flex h-10 w-full items-center justify-center px-1 rounded-[6px]"
+        className="relative inline-flex h-[32px] lg:h-[36px] w-full items-center justify-center px-1 rounded-[9px]"
       >
         {label}
       </span>
@@ -1534,9 +1550,11 @@ function LiveWallSection() {
         </div>
       )}
 
-      {loading && !showSkel ? null : loading ? (
-        // 스켈레톤 — 텍스트 깜빡임 대신 피드 행 형태의 시머 로더
-        <ul className="space-y-1" aria-hidden>
+      {loading ? (
+        // 스켈레톤 — 텍스트 깜빡임 대신 피드 행 형태의 시머 로더.
+        // 게이트(200ms) 동안에도 자리는 예약한다(MO-B) — null 을 그리면 늦게 끼어든 스켈레톤이 아래(푸터)를 민다.
+        //   showSkel 은 pulse 노출만 정한다: invisible = 높이는 그대로, 시머만 숨김(e2e/skeleton-no-shift.spec.ts).
+        <ul className={['space-y-1', showSkel ? '' : 'invisible'].join(' ')} aria-hidden>
           {Array.from({ length: 6 }).map((_, i) => (
             <li key={i} className="flex items-start gap-2 px-2.5 py-1.5 rounded-input border card-aura">
               <div className="skeleton h-6 w-6 shrink-0 rounded-full" />

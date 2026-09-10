@@ -2,7 +2,7 @@
 // GTO 핸드 분석 — 인라인 패널. 도구 탭에서 다른 계산기와 동일한 카드형 UI로 표시된다.
 // 공유 링크(#gto=) 진입 시에는 GtoDeepModal 이 이 패널을 모달로 감싸 재사용한다.
 import { useEffect, useState } from 'react';
-import { useBackClose } from '../../../lib/backstack';
+import Modal from '../../atoms/Modal';
 import { useToast } from '../../atoms/Toast';
 import CardGridPicker, { SUIT_COLOR, SUIT_LABEL } from './CardGridPicker';
 import { CalcCard } from '../tools/calcUi';
@@ -187,21 +187,12 @@ function DeepActionSheet({
     return () => { alive = false; };
   }, [open, hero, villain, board]);
 
-  useBackClose(open, onClose);
-
   if (!open) return null;
+  // 셸은 Modal 원자(MODAL-03) — 손으로 짠 시트는 aria-modal 만 선언하고 포커스 이동·트랩·복원이 없었고,
+  // ESC 도 안 들어서 도구 전체화면(page Modal)이 대신 닫혔다. 원자가 뒤로가기·ESC(최상단 한 겹)·44px 닫기까지 준다.
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center" role="dialog" aria-modal="true" aria-label="AI 액션 해설">
-      <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative flex max-h-[75vh] w-full max-w-md flex-col rounded-t-dialog bg-surface-mid shadow-dialog animate-slide-up">
-        <div className="flex justify-center pt-2 pb-1"><div className="h-1 w-10 rounded-full bg-border-strong" /></div>
-        <header className="flex items-center justify-between border-b border-border-subtle px-4 py-2">
-          <h3 className="text-sm font-bold text-accent-300">AI 액션 해설</h3>
-          <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
-          </button>
-        </header>
-        <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+    <Modal open onClose={onClose} title="AI 액션 해설" variant="sheet" maxWidth="md">
+        <div className="space-y-2 px-4 py-3">
           {!rows ? (
             <p className="py-6 text-center text-2xs text-ink-muted">Hero / Villain 카드를 모두 입력하세요.</p>
           ) : (
@@ -242,8 +233,7 @@ function DeepActionSheet({
           )}
           <p className="pt-1 text-2xs text-ink-muted">학습용 참고 설명입니다. 실제 솔버 값과 차이가 있을 수 있습니다.</p>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

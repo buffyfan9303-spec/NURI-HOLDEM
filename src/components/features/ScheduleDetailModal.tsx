@@ -21,7 +21,6 @@ import {
 } from '../../api/clock';
 import { promotionView } from '../../lib/promotionLabel';
 import { promptLogin, openPostForm, ensureVerified } from '../../lib/requireLogin';
-import { googleCalendarUrl, icsDataUrl, isIOS } from '../../lib/calendar';
 import { enablePush, pushSupported } from '../../api/push';
 import QRCode from 'qrcode';
 import { requestBuyin, buyinRequestUrl, kstToday } from '../../api/ledger';
@@ -911,7 +910,9 @@ function StatRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ── 캘린더 등록 · 공유 링크 줄 ────────────────────────────────────────────────
+// ── 찜 · 공유 링크 줄 ────────────────────────────────────────────────────────
+// 구글 캘린더·단건 .ics '기기 캘린더' 버튼은 오너 지시(2026-09-09, 외부 반출 기능 제거)로 뺐다.
+// 공유 링크(앱으로 되돌아오는 주소)와 찜(앱 내 캘린더)은 반출이 아니라 유지한다.
 function CalendarShareRow({ schedule }: { schedule: Schedule }) {
   const toast = useToast();
   const { user } = useAuth();
@@ -939,7 +940,7 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
   };
 
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-2 gap-2">
       {/* 찜 = 앱 내 캘린더에 담기. 파이프라인상 '예약' 앞 단계(관심 표시)라 예약 CTA 와 나란히 두지 않는다. */}
       <button type="button" onClick={toggleLike} disabled={likeBusy} aria-pressed={liked}
         className={['flex items-center justify-center gap-1.5 rounded-input border py-2 text-xs font-bold transition-colors disabled:opacity-60',
@@ -947,23 +948,6 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
           // 그 테두리를 덮어 라이트와 모양이 갈리고, hover 때 없던 인디고 선이 튀어나온다(3fd2c47 과 같은 계열).
           liked ? 'chip-aura' : 'border-border-default bg-surface-high text-ink-secondary hover:border-accent-400/50 hover:text-accent-300'].join(' ')}>
         <Icon name={liked ? 'heart-fill' : 'heart'} size={14} className="shrink-0" />{liked ? '찜함' : '찜'}
-      </button>
-      {/* 구글 캘린더 바로 등록 — 다운로드 없이 새 창에서 '저장'만 누르면 끝 */}
-      <button type="button"
-        onClick={() => {
-          const ev = { title: schedule.title, date: schedule.date, startTime: schedule.startTime, venueName: schedule.pubName, address: schedule.address };
-          // iOS 기본 캘린더 사용자는 구글 URL 로는 등록이 안 된다(Phase 14) — .ics 는 네이티브로 열린다.
-          if (isIOS()) {
-            const a = document.createElement('a');
-            a.href = icsDataUrl(ev);
-            a.download = `${schedule.title.slice(0, 30)}.ics`;
-            document.body.appendChild(a); a.click(); a.remove();
-          } else {
-            window.open(googleCalendarUrl(ev), '_blank', 'noopener');
-          }
-        }}
-        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2 text-xs font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
-        <Icon name="calendar" size={14} className="shrink-0" />기기 캘린더
       </button>
       {/* 공유 링크 복사 — 이 대회로 바로 열리는 주소 */}
       <button type="button"
@@ -1111,24 +1095,14 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
     if (!user) return;
     const n = (name.trim() || user.name || '예약자');
     setMine({ id: '', scheduleId, userId: user.id, displayName: n, createdAt: new Date().toISOString() });
-    setJustReserved(true); // 성공 패널이 다음 행동(캘린더·알림)까지 안내 — 토스트 대체
+    setJustReserved(true); // 성공 패널이 다음 행동(1시간 전 알림)까지 안내 — 토스트 대체
     loadRes();
     onReservationChange?.(); // 서버 저장이 이미 성공한 뒤다 — 여기서 실패해도 '예약 실패'가 아니다(F06)
   };
-  // D-day — 대회는 보통 며칠 뒤라, 잊지 않게 하는 장치(캘린더·알림)와 함께 보여준다
+  // D-day — 대회는 보통 며칠 뒤라, 잊지 않게 하는 장치(1시간 전 알림)와 함께 보여준다.
+  // '캘린더에 추가'(구글 캘린더·.ics)는 오너 지시(2026-09-09, 외부 반출 제거)로 뺐다 — 알림만 남는다.
   const ddayNum = Math.round((new Date(date + 'T00:00:00').getTime() - new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00').getTime()) / 86400000);
   const ddayLabel = ddayNum <= 0 ? '오늘' : ddayNum === 1 ? '내일' : `D-${ddayNum}`;
-  const addToCalendar = () => {
-    const ev = { title: sched.title, date: sched.date, startTime: sched.startTime, venueName: sched.pubName, address: sched.address };
-    if (isIOS()) {
-      const a = document.createElement('a');
-      a.href = icsDataUrl(ev);
-      a.download = `${sched.title.slice(0, 30)}.ics`;
-      document.body.appendChild(a); a.click(); a.remove();
-    } else {
-      window.open(googleCalendarUrl(ev), '_blank', 'noopener');
-    }
-  };
   const enableReminderPush = async () => {
     try { await enablePush(); setPushOn(true); toast.show('알림을 켰습니다. 시작 1시간 전에 알려드려요', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '알림 설정 실패', 'error'); }
@@ -1176,16 +1150,12 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
       {mine === null && !ended && (
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="닉네임 또는 실명" maxLength={30} className="input w-full text-sm" />
       )}
-      {/* 예약 성공 패널 — 완료 순간에 다음 행동을 제안(캘린더 등록·1시간 전 알림). 서버
+      {/* 예약 성공 패널 — 완료 순간에 다음 행동을 제안(1시간 전 알림). 서버
           리마인더는 이미 예약자 전원에게 발송되므로, 여기의 '알림 받기'는 푸시 구독만 켠다. */}
       {justReserved && mine && (
         <div className="animate-fade-in space-y-2 rounded-input border border-emerald-500/40 bg-emerald-500/[0.07] p-3">
           <p className="flex items-center gap-1.5 text-sm font-bold text-emerald-400"><Icon name="check-circle" size={15} className="shrink-0" />예약 완료 · {ddayLabel} {startTime?.slice(0, 5)} 시작</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={addToCalendar}
-              className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2.5 text-2xs font-bold text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 transition-colors">
-              <Icon name="calendar" size={13} className="shrink-0" />캘린더에 추가
-            </button>
+          <div className="grid gap-2">
             {pushSupported() ? (
               <button type="button" onClick={enableReminderPush} disabled={pushOn}
                 className={['flex items-center justify-center gap-1.5 rounded-input border py-2.5 text-2xs font-bold transition-colors',

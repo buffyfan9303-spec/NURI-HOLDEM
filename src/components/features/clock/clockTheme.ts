@@ -4,7 +4,7 @@
 // 절대 넣지 않는다(초당 hot-write 라 테마가 드리프트한다).
 //
 // 원칙:
-// · 프리셋 6종 전부 다크 · 대비 잠금 — 임의 커스텀 색 입력 없음(스와치 선택만).
+// · 프리셋 9종 전부 다크 · 대비 잠금 — 임의 커스텀 색 입력 없음(스와치 선택만).
 // · 모든 CSS 변수의 기본값 = ClockDisplay 현행 하드코딩 값과 1:1.
 //   테마 미설정·로드 실패 시 픽셀 변화 0.
 // · 타이머 긴급(rose-400)·브레이크(sky-300) 상태색은 프리셋이 덮지 못한다 — 송출 안전 신호 잠금.
@@ -34,6 +34,37 @@ export const AURA_GOLD_BG =
 export const AURA_BG =
   'radial-gradient(60vmax 40vmax at 8% -5%, rgba(88,80,236,.22) 0%, transparent 62%), ' +
   'radial-gradient(50vmax 34vmax at 100% 105%, rgba(6,182,212,.12) 0%, transparent 62%), #06080F';
+
+/** 블랙 마블 골드(2026-09-10 오너 지시 — 레퍼런스 '구리 KK 토너먼트' 보드의 검정 대리석 + 금 결).
+ *  외부 자산 0 · 애니 0 — 전부 CSS 레이어(위→아래):
+ *   ① 중앙 보호막: 타이머·레벨·블라인드 뒤의 결을 눌러 **시간이 가장 먼저 읽히게** 한다(배경 사진 스크림과 같은 원리).
+ *   ② 금 결 8가닥: 화면을 가로지르는 직선은 두지 않는다 — 각 가닥을 position/size 로 **짧은 구간**에 가두고
+ *      굵은 본줄 옆에 가는 가지줄을 붙여 갈라진 결처럼 보이게 한다(심 0.3% + 번짐 1%, 최대 알파 .26).
+ *   ③ 헤더 아래·푸터 위 금 헤어라인(8%·92% — 상단바·하단바 높이 8vmin 과 같은 자리).
+ *   ④ 대리석 구름(회색 radial 4겹) + 결 주변 금빛 안개 2겹 + 하단 온기 1겹 ⑤ 순흑에 가까운 바탕.
+ *  레퍼런스의 육각 프레임·이모지·Sponsored 는 가져오지 않는다 — 질감과 위계만 번역한다.
+ *  ⚠ 마지막 레이어에만 색을 둔다(background 단축 속성 규칙 — clockThemeVars 가 사진 아래에 이 값을 그대로 잇는다). */
+export const BLACK_MARBLE_GOLD_BG = [
+  'radial-gradient(56% 50% at 50% 50%, rgba(0,0,0,.64) 0%, rgba(0,0,0,.32) 52%, transparent 78%)',
+  'linear-gradient(116deg, transparent 49%, rgba(214,178,76,.05) 49.5%, rgba(238,206,118,.26) 49.85%, rgba(238,206,118,.26) 50.15%, rgba(214,178,76,.05) 50.5%, transparent 51%) 0% 0% / 44% 58% no-repeat',
+  'linear-gradient(74deg, transparent 49.2%, rgba(214,178,76,.04) 49.6%, rgba(238,206,118,.18) 49.9%, rgba(238,206,118,.18) 50.1%, rgba(214,178,76,.04) 50.4%, transparent 50.8%) 20% 30% / 18% 22% no-repeat',
+  'linear-gradient(58deg, transparent 49.1%, rgba(214,178,76,.05) 49.55%, rgba(238,206,118,.22) 49.85%, rgba(238,206,118,.22) 50.15%, rgba(214,178,76,.05) 50.45%, transparent 50.9%) 100% 0% / 38% 46% no-repeat',
+  'linear-gradient(128deg, transparent 49.2%, rgba(214,178,76,.04) 49.6%, rgba(238,206,118,.16) 49.9%, rgba(238,206,118,.16) 50.1%, rgba(214,178,76,.04) 50.4%, transparent 50.8%) 96% 8% / 16% 20% no-repeat',
+  'linear-gradient(152deg, transparent 49.1%, rgba(214,178,76,.05) 49.55%, rgba(238,206,118,.20) 49.85%, rgba(238,206,118,.20) 50.15%, rgba(214,178,76,.05) 50.45%, transparent 50.9%) 0% 100% / 52% 42% no-repeat',
+  'linear-gradient(104deg, transparent 49%, rgba(214,178,76,.05) 49.5%, rgba(238,206,118,.24) 49.85%, rgba(238,206,118,.24) 50.15%, rgba(214,178,76,.05) 50.5%, transparent 51%) 100% 100% / 46% 50% no-repeat',
+  'linear-gradient(40deg, transparent 49.2%, rgba(214,178,76,.04) 49.6%, rgba(238,206,118,.16) 49.9%, rgba(238,206,118,.16) 50.1%, rgba(214,178,76,.04) 50.4%, transparent 50.8%) 88% 92% / 20% 18% no-repeat',
+  'linear-gradient(28deg, transparent 49.4%, rgba(238,206,118,.12) 49.9%, rgba(238,206,118,.12) 50.1%, transparent 50.6%) 34% 0% / 26% 30% no-repeat',
+  'linear-gradient(90deg, transparent 0%, rgba(214,178,76,.42) 14%, rgba(214,178,76,.42) 86%, transparent 100%) 50% 8% / 100% 1px no-repeat',
+  'linear-gradient(90deg, transparent 0%, rgba(214,178,76,.42) 14%, rgba(214,178,76,.42) 86%, transparent 100%) 50% 92% / 100% 1px no-repeat',
+  'radial-gradient(30% 24% at 22% 30%, rgba(214,178,76,.06) 0%, transparent 70%)',
+  'radial-gradient(26% 24% at 78% 74%, rgba(214,178,76,.05) 0%, transparent 70%)',
+  'radial-gradient(62% 48% at 16% 26%, rgba(255,255,255,.06) 0%, transparent 70%)',
+  'radial-gradient(48% 62% at 86% 64%, rgba(255,255,255,.055) 0%, transparent 70%)',
+  'radial-gradient(40% 34% at 58% 8%, rgba(255,255,255,.045) 0%, transparent 70%)',
+  'radial-gradient(36% 30% at 40% 90%, rgba(255,255,255,.04) 0%, transparent 70%)',
+  'radial-gradient(120% 40% at 50% 108%, rgba(96,72,22,.28) 0%, transparent 62%)',
+  '#080706',
+].join(', ');
 
 /** 기본 룩 — 변수 기본값의 단일 출처. 2026-09-02 딥 인디고 → 아우라 골드 → **아우라(인디고)**(오너 승인).
  *  ⚠ 기존 매장 테마(DB 저장값)는 프리셋 id 로 대조되므로 그대로 유효 — 바뀌는 것은 '테마 없음' 매장의 기본 룩뿐이다. */
@@ -104,7 +135,8 @@ export interface ClockThemePreset {
   timer?: string;
 }
 
-// 8종 — 전부 다크. aura(인디고)가 기본(2026-09-02 오너 승인), aura-gold(APIS풍)·deep-indigo(구 기본)는 프리셋으로 남긴다.
+// 9종 — 전부 다크. aura(인디고)가 기본(2026-09-02 오너 승인), aura-gold(APIS풍)·deep-indigo(구 기본)는 프리셋으로 남긴다.
+// 새 프리셋은 여기 한 줄이면 관리자 패널 미리보기·저장·TV 송출에 전부 붙는다(id 는 DB 왕복 키 — 바꾸지 않는다).
 export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
   { id: 'aura', label: '아우라(기본)', kind: 'gradient', bg: AURA_BG, accent: CLOCK_DEFAULTS.accent, timer: CLOCK_DEFAULTS.timer },
   { id: 'aura-gold', label: '아우라 골드', kind: 'gradient', bg: AURA_GOLD_BG, accent: '#E0A94E', timer: '#FFFFFF' },
@@ -131,6 +163,8 @@ export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
     bg: 'radial-gradient(120% 90% at 50% 18%, #171204 0%, #0C0A05 62%, #060503 100%)',
     accent: '#FCD535',
   },
+  // 검정 대리석 + 절제된 금 결. 타이머는 순백, 레벨·블라인드는 샴페인 골드(스와치 검증색 — #080706 위 약 9.5:1).
+  { id: 'black-marble-gold', label: '블랙 마블 골드', kind: 'gradient', bg: BLACK_MARBLE_GOLD_BG, accent: '#E0A94E', timer: '#FFFFFF' },
 ];
 
 export const DEFAULT_CLOCK_PRESET_ID = 'aura';
@@ -175,30 +209,42 @@ export function isAllowedClockBgUrl(v: unknown): v is string {
   return !/["'()\\\s]/.test(v) && !v.includes('..');
 }
 
-/** 프리셋 id(+선택 accent·배경 이미지)로 저장용 테마 객체 생성 — 허용 목록 밖 값은 버린다 */
+/** 프리셋 id 의 **모양**만 잠근다(소문자·숫자·하이픈, 40자). id 는 CSS 에 주입되지 않고 find 키·DB 왕복 값으로만 쓰이지만,
+ *  page_config 는 업주가 쓰는 자유 JSON 이라 임의 문자열이 그대로 저장·전파되는 것은 막는다. */
+const isPresetId = (v: unknown): v is string => typeof v === 'string' && /^[a-z0-9-]{1,40}$/.test(v);
+
+/** 프리셋 id(+선택 accent·배경 이미지)로 저장용 테마 객체 생성 — 허용 목록 밖 값은 버린다.
+ *
+ *  ⚠ 이 번들이 모르는 프리셋 id 는 **보존**한다(기본 프리셋으로 바꿔치기하지 않는다).
+ *  왜: 새 프리셋을 배포하는 창에서 매장 TV·다른 운영자 세션은 며칠째 열린 옛 번들이다. 예전엔 미지 id 를 만나면
+ *  테마 전체를 버려 업주가 올린 배경 사진·강조색까지 사라졌고, 옛 관리자 패널은 다음 클릭에 DB 를 기본 프리셋으로
+ *  덮어써 새 테마를 조용히 되돌렸다. id 를 그대로 왕복시키면 룩만 기본으로 그리고(clockThemeVars 의 `p?.`) 데이터는 산다. */
 export function makeClockTheme(presetId: string, accent?: string, image?: string | null): ClockTheme {
-  const p = clockPresetById(presetId) ?? CLOCK_THEME_PRESETS[0];
+  const p = clockPresetById(presetId);
+  const id = p?.id ?? (isPresetId(presetId) ? presetId : CLOCK_THEME_PRESETS[0].id);
+  const kind = p?.kind ?? 'gradient';
   const t: ClockTheme = {
     version: 1,
-    palette: { preset: p.id },
-    background: { kind: p.kind, preset: p.id },
+    palette: { preset: id },
+    background: { kind, preset: id },
   };
-  if (isAllowedAccent(accent)) t.palette = { preset: p.id, accent };
-  if (isAllowedClockBgUrl(image)) t.background = { kind: p.kind, preset: p.id, image };
+  if (isAllowedAccent(accent)) t.palette = { preset: id, accent };
+  if (isAllowedClockBgUrl(image)) t.background = { kind, preset: id, image };
   return t;
 }
 
-/** DB 에서 온 미지의 값 검증 — 버전·프리셋·accent·배경 URL 전부 허용 목록 대조. 불합격 = null(기본 룩) */
+/** DB 에서 온 미지의 값 검증 — 버전·프리셋 id 모양·accent·배경 URL 전부 대조. 불합격 = null(기본 룩).
+ *  프리셋 id 는 목록 대조가 아니라 모양 검사다 — 이 번들이 모르는 새 프리셋도 통과시켜 사진·강조색을 지킨다(위 makeClockTheme). */
 export function sanitizeClockTheme(raw: unknown): ClockTheme | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Partial<ClockTheme>;
   if (r.version !== 1) return null;
-  const p = clockPresetById(r.background?.preset ?? r.palette?.preset);
-  if (!p) return null;
+  const pid = r.background?.preset ?? r.palette?.preset;
+  if (!isPresetId(pid)) return null;
   const accent = r.palette?.accent;
   const image = r.background?.image;
   return makeClockTheme(
-    p.id,
+    pid,
     isAllowedAccent(accent) ? accent : undefined,
     isAllowedClockBgUrl(image) ? image : null,
   );

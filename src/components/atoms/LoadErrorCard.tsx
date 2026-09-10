@@ -16,13 +16,18 @@
 //   재시도 버튼은 남긴다: 세션 복원 전에 날아간 요청도 42501 로 떨어지고, 그때는 재시도가 답이다.
 import { msgOf, isDenied } from '../../lib/dbError';
 
-export default function LoadErrorCard({ error, onRetry, what = '정보', compact = false }: {
+export default function LoadErrorCard({ error, onRetry, what = '정보', compact = false, title, hint }: {
   error?: unknown;
   onRetry?: () => void;
   /** 무엇을 못 불러왔는지(예: '장부', '클락', '대회 목록') — 화면마다 다르게 */
   what?: string;
   /** 좁은 영역(위젯 등)에 넣을 때 */
   compact?: boolean;
+  /** 제목을 통째로 대신 쓴다. `${what}을(를) …` 템플릿이 어색한 낱말('뱅크롤 데이터')에만.
+   *  ⚠ 넘기지 않으면 종전과 100% 같다 — 이 파일을 쓰는 48곳은 영향 없음(2026-09-10). */
+  title?: string;
+  /** 보조 한 줄을 대신 쓴다(기본: '아직 등록된 내용이 없는 것과는 다릅니다.'). */
+  hint?: string;
 }) {
   const detail = msgOf(error, '');
   const denied = isDenied(error);
@@ -41,12 +46,12 @@ export default function LoadErrorCard({ error, onRetry, what = '정보', compact
         <circle cx="12" cy="17" r="0.6" fill="currentColor" />
       </svg>
       <p className={['font-semibold text-danger-light', compact ? 'text-xs' : 'text-sm'].join(' ')}>
-        {denied ? `${what} 열람 권한이 없습니다` : `${what}을(를) 불러오지 못했습니다`}
+        {denied ? `${what} 열람 권한이 없습니다` : (title ?? `${what}을(를) 불러오지 못했습니다`)}
       </p>
       {/* 서버가 준 이유가 있으면 그대로 — '저장 실패' 한 문장으로 뭉개면 원인 추적이 끊긴다 */}
       {detail && <p className="text-2xs leading-relaxed text-ink-secondary">{detail}</p>}
       <p className="text-2xs text-ink-muted">
-        {denied ? '내용이 없는 것이 아니라, 이 계정에 열람 권한이 없습니다.' : '아직 등록된 내용이 없는 것과는 다릅니다.'}
+        {denied ? '내용이 없는 것이 아니라, 이 계정에 열람 권한이 없습니다.' : (hint ?? '아직 등록된 내용이 없는 것과는 다릅니다.')}
       </p>
       {onRetry && (
         <button type="button" onClick={onRetry}

@@ -309,8 +309,12 @@ export async function setStaffTitle(staffId: string, title: string): Promise<voi
 // 초대받은 회원: 내 대기중 초대 / 수락·거절
 export async function getMyStaffInvites(): Promise<StaffInvite[]> {
   if (IS_MOCK) return [];
+  // 키에 uid 를 넣는다(getMyProfile 'my-profile:'+uid 와 같은 모양, P0-09) — 비행 중 로그아웃→다른 계정 로그인이 겹치면
+  // 새 계정이 이전 계정의 초대 목록 프라미스를 그대로 받았다. currentUser 는 로컬 세션 읽기라 왕복이 없다.
+  const me = await currentUser();
+  if (!me) return [];
   // 부팅 중 user 참조가 갈릴 때마다 배너가 재조회해 실측 ×4 로 나갔다 — 비행 중이면 합류(lib/inflight)
-  return dedupe('staff-invites', async () => {
+  return dedupe('staff-invites:' + me.id, async () => {
     const { data, error } = await supabase.rpc('get_my_staff_invites');
     if (error) throw error;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -543,7 +547,9 @@ export async function signInWithGoogle(keepSignedIn?: boolean): Promise<void> {
   if (typeof keepSignedIn === 'boolean') setKeepSignedIn(keepSignedIn);
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin },
+    // prompt=select_account — 브라우저에 Google 계정이 하나만 살아 있으면 Google 은 계정 선택 화면 없이 그 계정으로
+    // 즉시 돌려보낸다. 앱에서 로그아웃한 뒤 '다른 Google 계정으로' 들어올 길이 앱 안에 없었다(AUTH-03).
+    options: { redirectTo: window.location.origin, queryParams: { prompt: 'select_account' } },
   });
   if (error) throw error;
 }
@@ -615,18 +621,5 @@ async function rawSearchMembersForRanking(q: string): Promise<{ nickname: string
  *  이용권 검색과 동일하게 동일 q 중복 호출을 in-flight+20s LRU 로 흡수(키=trim+소문자, ILIKE라 대소문자·공백 무관). */
 export const searchMembersForRanking = makeSearchCache(rawSearchMembersForRanking, (s) => s.trim().toLowerCase());
 
-/** 카카오 로그인 — Supabase OAuth(kakao). 리다이렉트 후 detectSessionInUrl 이 세션을 잡고
- *  onAuthStateChange → 프로필 로드로 이어진다. 신규 유저 프로필은 handle_new_user 트리거가 생성. */
-export async function loginWithKakao(keepSignedIn?: boolean): Promise<void> {
-  if (IS_MOCK) throw new Error('환경 설정 후 이용할 수 있습니다');
-  if (typeof keepSignedIn === 'boolean') setKeepSignedIn(keepSignedIn);
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'kakao',
-    options: { redirectTo: window.location.origin },
-  });
-  if (error) {
-    throw new Error(/provider is not enabled|unsupported provider/i.test(error.message)
-      ? '카카오 로그인 준비 중입니다. 잠시 후 다시 시도해 주세요'
-      : error.message);
-  }
-}
+// 카카오 로그인(loginWithKakao · VITE_KAKAO_LOGIN 스위치)은 2026-09-10 오너 지시로 삭제했다 — 제공자 성공 이력 0건.
+// 소셜 로그인은 Google 하나다. 되살리려면 git 이력(2026-09-10 이전)의 loginWithKakao 를 가져온다.

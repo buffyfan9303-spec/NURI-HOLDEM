@@ -48,8 +48,9 @@ Deno.serve(async (req: Request) => {
       headers: { Authorization: `PortOne ${PORTONE}` },
     });
     if (!pres.ok) {
-      const t = await pres.text();
-      return json({ error: '본인인증 조회 실패', detail: t.slice(0, 300) }, 502);
+      // 상류·DB·예외 원문은 서버 로그에만 — 응답에 실으면 로그인 유저 누구나 내부 문구를 탐색할 수 있다(보안 표준 §6).
+      console.error('[verify-identity] PortOne 조회 실패', pres.status, (await pres.text()).slice(0, 300));
+      return json({ error: '본인인증 조회 실패' }, 502);
     }
     const iv = await pres.json();
     if (iv?.status !== 'VERIFIED') return json({ error: '본인인증이 완료되지 않았습니다.' }, 400);
@@ -77,7 +78,7 @@ Deno.serve(async (req: Request) => {
       // 같은 사용자의 재시도는 멱등 통과, 타인이 탈취해 재사용하면 code=reused 로 거절.
       p_idv: idv,
     });
-    if (cErr) return json({ error: '저장 실패', detail: cErr.message }, 500);
+    if (cErr) { console.error('[verify-identity] verify_identity_commit', cErr); return json({ error: '저장 실패' }, 500); }
     if (!commit?.ok) {
       if (commit?.code === 'dup') return json({ error: '이미 가입된 명의입니다.' }, 409);
       if (commit?.code === 'reused') return json({ error: '이미 사용된 인증입니다. 본인인증을 다시 진행해 주세요.' }, 409);
@@ -85,6 +86,7 @@ Deno.serve(async (req: Request) => {
     }
     return json({ ok: true, name: vc.name ?? null });
   } catch (e) {
-    return json({ error: String(e) }, 500);
+    console.error('[verify-identity]', e);
+    return json({ error: '서버 오류' }, 500);
   }
 });

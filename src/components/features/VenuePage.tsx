@@ -168,18 +168,9 @@ export default function VenuePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, venue?.id]);
 
-  // 브라우저/모바일 뒤로가기 → 매장 페이지만 닫기 (중앙 back-stack 매니저가 중첩/충돌 처리)
-  useBackClose(!!open && !!venue, onClose);
-
-  // ESC 닫기
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  // 브라우저/모바일 뒤로가기·ESC → 매장 페이지만 닫기 (중앙 back-stack 매니저가 중첩/충돌 처리)
+  // ESC 를 여기서 직접 들으면 매장 위에 뜬 포스터 상세·QR 시트까지 한 번에 닫힌다(MODAL-01).
+  useBackClose(!!open && !!venue, onClose, { escape: true });
 
   // 승인(approved)된 포스터만 매장 페이지에 노출 — 미승인은 「내 포스터」에서만 관리.
   const venueSchedules = useMemo(

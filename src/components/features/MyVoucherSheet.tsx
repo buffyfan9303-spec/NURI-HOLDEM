@@ -300,7 +300,8 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
   onPlainBuyin: () => void;
 }) {
   const toast = useToast();
-  useBackClose(true, onCancel);
+  // escape: ESC 가 이 시트만 닫는다 — 예전엔 부모 Modal(이용권·출석)의 ESC 리스너가 시트째 통째로 닫았다(MODAL-01).
+  useBackClose(true, onCancel, { escape: true });
   const max = plan.ids.length;
   const [count, setCount] = useState(1);
   const [step, setStep] = useState<'count' | 'phone' | 'confirm'>('count');
@@ -341,7 +342,8 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center">
       <button type="button" aria-label="닫기" onClick={onCancel} className="absolute inset-0 overscroll-contain bg-black/70" />
-      <div role="dialog" aria-label="이용권 보내기"
+      {/* aria-modal: 스크린리더가 뒤의 이용권 지갑을 같은 화면으로 읽지 않게(MODAL-03). 포커스 되잡기는 부모 Modal 이 한다(위 주석). */}
+      <div role="dialog" aria-modal="true" aria-label="이용권 보내기"
         className="relative w-full max-w-md space-y-3 rounded-t-dialog border border-border-default bg-surface-mid p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-sheet-up sm:rounded-dialog sm:pb-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">

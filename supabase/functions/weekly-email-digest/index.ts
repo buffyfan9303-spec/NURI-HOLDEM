@@ -35,7 +35,8 @@ Deno.serve(async (req: Request) => {
 
   const { data: secrets, error: sErr } = await admin
     .from('secret_settings').select('key,value').in('key', ['RESEND_API_KEY', 'RESEND_FROM']);
-  if (sErr) return json({ error: 'secrets: ' + sErr.message }, 500);
+  // DB 오류 원문은 서버 로그에만 — 응답은 고정 문구(보안 표준 §6).
+  if (sErr) { console.error('[weekly-email-digest] secret_settings', sErr); return json({ error: 'secrets 조회 실패' }, 500); }
   const apiKey = secrets?.find((s) => s.key === 'RESEND_API_KEY')?.value;
   const from = secrets?.find((s) => s.key === 'RESEND_FROM')?.value ?? 'NURI HOLDEM <noreply@nuriholdem.com>';
   if (!apiKey) return json({ error: 'RESEND_API_KEY not set' }, 500);
@@ -64,7 +65,7 @@ Deno.serve(async (req: Request) => {
 
   // 정기 발송 — 대상 집계는 SQL(서비스 롤 전용 RPC)로
   const { data: rows, error } = await admin.rpc('weekly_email_digest_rows');
-  if (error) return json({ error: error.message }, 500);
+  if (error) { console.error('[weekly-email-digest] weekly_email_digest_rows', error); return json({ error: '대상 집계 실패' }, 500); }
   let sent = 0, failed = 0;
   for (const row of rows ?? []) {
     const r = await send(

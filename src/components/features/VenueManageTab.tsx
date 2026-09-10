@@ -329,7 +329,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     goStep('ledger', { keepLedgerSeed: true });
   }, [goStep]);
   // 뒤로가기 3단(§13-C): ①게임 스텝(직전 스텝 1회) → ②섹션(대시보드) → ③탭 이탈
-  useBackClose(!!section && section !== 'dashboard', () => gotoSection('dashboard'));
+  // ⚠ tabActive 게이트(CommunityTab 과 같은 수명): 이 탭은 keep-alive 라 홈으로 가도 언마운트되지 않는다.
+  //   게이트 없이는 숨은 내 매장이 섹션 겹을 계속 들고 있어, 홈에서 뒤로가기를 눌러도 보이지 않는 곳에서
+  //   gotoSection('dashboard') 만 돌고 화면은 그대로였다(홈→내 매장→클락→홈 뒤 뒤로가기 2회 무반응).
+  //   숨는 순간 겹을 내려놓으면 탭 트레일 겹과 함께 dead-tail 로 정리되고, 트레일 뒤로가기로 다시 보이면
+  //   open 이 false→true 로 바뀌어 같은 겹이 다시 등록된다.
+  useBackClose(tabActive && !!section && section !== 'dashboard', () => gotoSection('dashboard'));
   // 하단 탭 '내 매장' 을 누를 때마다(재탭 포함) 대시보드로 — 0 은 초기값이라 건너뛴다.
   //
   // ⚠ deps 에 gotoSection 을 두면 **탭을 누르지 않았는데도** 대시보드로 튄다(오너 2026-09-07:
@@ -344,7 +349,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   useEffect(() => {
     if (homeNonce > 0 && homeNonce !== homeDone.current) { homeDone.current = homeNonce; gotoRef.current('dashboard'); }
   }, [homeNonce]);
-  useBackClose(section === 'game' && stepHist.length > 0, () => {
+  useBackClose(tabActive && section === 'game' && stepHist.length > 0, () => {
     setStepHist((h) => {
       const prev = h[h.length - 1];
       if (prev) { gameStepRef.current = prev; setGameStep(prev); }
@@ -392,6 +397,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (!targetSection || !available.some((a) => a.id === targetSection)) {
       toast.show('요청한 메뉴를 찾을 수 없어 대시보드로 이동했어요', 'error');
       gotoSection('dashboard');
+    } else if (target === 'ledger') {
+      // '🙋 손님 바인 요청'·'📒 장부 시작' 알림(/my-store/ledger)은 **오늘 장부**를 가리킨다.
+      // bare gotoSection 은 시드를 지워 장부가 목록 모드로 열렸고, 폰 알림을 누른 사장님이 대기 중
+      // 바인 요청을 보려면 목록에서 오늘을 다시 골라야 했다. 단계 바 '장부'(아래 onPick)와 같은 식으로
+      // 오늘(KST — 장부·서버와 같은 달력) 보드에 앉힌다. 게임은 메인(알림은 게임을 싣지 않는다).
+      onGotoStore({ section: 'ledger', date: kstToday() });
     } else {
       gotoSection(target as Section | GameStep | SettingsTab);
     }
@@ -693,11 +704,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   const fromDash = renderSection === 'dashboard' ? stepInfo?.[st]?.dest : undefined;
                   /* 정산은 **날짜가 있어야 성립**한다 — 대시보드 목적지가 장부로 가라고 해도
                      정산 판으로 연다(예전엔 이 목적지가 통째로 장부였다).
-                     ⚠ 날짜는 대시보드가 주는 값을 쓰지 않고 **장부와 같은 기준(KST)** 으로 정한다.
-                       StoreDashboard 의 d 는 localToday() = 브라우저 로컬 TZ 라, 서버·장부가 쓰는
-                       KST 와 어긋나는 시간대(한국 자정~오전 9시를 UTC 로 보는 기기, 해외, 시계 오설정)에서
-                       **하루 전 장부**를 연다. 실제로 CI(UTC) 에서 그 증상이 났다 — 정산 판이
-                       '이 날짜에 연 장부가 없습니다' 로 떴다.
+                     ⚠ 날짜는 **장부와 같은 기준(KST)** 으로 정한다. 예전 StoreDashboard 의 d 는 브라우저
+                       로컬 TZ 라 KST 와 어긋나는 기기(한국 자정~오전 9시를 UTC 로 보는 기기, 해외, 시계 오설정)에서
+                       **하루 전 장부**를 열었고 실제로 CI(UTC) 에서 정산 판이 '이 날짜에 연 장부가 없습니다' 로 떴다.
+                       (대시보드도 이제 kstToday 를 쓴다 — 여기는 그 우회의 흔적이 아니라 같은 기준의 명시다.)
                        지금 보고 있는 장부(ledgerSeed)가 있으면 그것이 우선이다. */
                   if (st === 'settle') { setSettleDate(ledgerSeed?.date ?? kstToday()); return gotoSection('settle'); }
                   if (fromDash) return onGotoStore(fromDash);
@@ -896,7 +906,18 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
   const mmss = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const alive = main?.liveStats?.alive;
   return (
-    <div className="flex items-stretch gap-2 overflow-x-auto rounded-card border border-accent-400/30 bg-surface-low px-2 py-1 text-2xs">
+    /* Aura LED(2026-09-10 §8-B) — '지금 이 매장이 돌고 있다'는 상태를 뒤에서 밝힌다.
+       실행 중 emerald · 일시정지/바인 대기 amber · offline 은 위 `return null` 이라 DOM 자체가 없다(=Aura 0).
+       ⚠ 새 상태 변수를 만들지 않았다 — mainRunning 은 이미 점·글자색이 쓰던 판정 그대로다.
+       ⚠ box-shadow 방식이라 이 요소의 overflow-x-auto 에 잘리지 않는다(::before 였다면 통째로 잘린다).
+       StoreDashboard 의 기존 라이브 KPI 글로우와는 같은 화면에 뜰 수 없다 —
+       이 바는 renderSection !== 'dashboard' 게이트 안에만 있다(위 597행). */
+    <div
+      data-aura=""
+      data-aura-level="hero"
+      data-aura-variant={mainRunning ? 'emerald' : 'amber'}
+      className="flex items-stretch gap-2 overflow-x-auto rounded-card border border-accent-400/30 bg-surface-low px-2 py-1 text-2xs"
+    >
       {main && eff && (
         <button type="button" onClick={() => onGoto('clock')}
           className="flex shrink-0 items-center gap-2 rounded-input px-2 py-1 transition-colors hover:bg-surface-float">

@@ -134,7 +134,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               <Lbl label="비밀번호 다시 입력">
                 <input type="password" value={setupPw2} onChange={(e) => setSetupPw2(e.target.value)} autoComplete="new-password" className="input w-full text-sm" placeholder="한 번 더 입력" />
               </Lbl>
-              {err && <p className="text-2xs font-semibold text-danger">{err}</p>}
+              {err && <p role="alert" className="text-2xs font-semibold text-danger">{err}</p>}
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={close} className="btn-ghost flex-1 text-sm">취소</button>
                 <button type="button" onClick={doSetup} disabled={busy} className="flex-1 rounded-input bg-amber-500 py-2 text-sm font-bold text-black disabled:opacity-50">{busy ? '설정 중…' : '비밀번호 설정'}</button>
@@ -153,7 +153,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
                   <Lbl label="업주 실명">
                     <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} className="input w-full text-sm" placeholder="실명 입력" autoFocus />
                   </Lbl>
-                  {err && <p className="text-2xs font-semibold text-danger">{err}</p>}
+                  {err && <p role="alert" className="text-2xs font-semibold text-danger">{err}</p>}
                   <div className="flex gap-2 pt-1">
                     <button type="button" onClick={close} className="btn-ghost flex-1 text-sm">취소</button>
                     <button type="button" onClick={() => { if (!ownerName.trim()) { setErr('업주 실명을 입력하세요.'); return; } setErr(''); setStep(2); }} className="flex-1 rounded-input bg-danger py-2 text-sm font-bold text-white">다음</button>
@@ -169,7 +169,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
                   <Lbl label="킬스위치 비밀번호">
                     <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" className="input w-full text-sm" placeholder="비밀번호" autoFocus />
                   </Lbl>
-                  {err && <p className="text-2xs font-semibold text-danger">{err}</p>}
+                  {err && <p role="alert" className="text-2xs font-semibold text-danger">{err}</p>}
                   <div className="flex gap-2 pt-1">
                     <button type="button" onClick={() => { setErr(''); setStep(1); }} className="btn-ghost flex-1 text-sm">이전</button>
                     <button type="button" onClick={() => { if (!password) { setErr('비밀번호를 입력하세요.'); return; } setErr(''); setStep(3); }} className="flex-1 rounded-input bg-danger py-2 text-sm font-bold text-white">다음</button>
@@ -187,7 +187,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
                   <Lbl label={`확인을 위해 '${CONFIRM_PHRASE}'를 입력하세요`}>
                     <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} className="input w-full text-sm" placeholder={CONFIRM_PHRASE} autoFocus />
                   </Lbl>
-                  {err && <p className="text-2xs font-semibold text-danger">{err}</p>}
+                  {err && <p role="alert" className="text-2xs font-semibold text-danger">{err}</p>}
                   <div className="flex gap-2 pt-1">
                     <button type="button" onClick={() => { setErr(''); setStep(2); }} className="btn-ghost flex-1 text-sm">이전</button>
                     <button type="button" onClick={doKill} disabled={busy || confirmText.trim() !== CONFIRM_PHRASE}

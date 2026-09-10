@@ -103,8 +103,9 @@ export default function EventPage({ open, onClose, onLogin }: {
          반드시 위 수치와 같은 자로 다시 재라. 재지 않고 넣으면 이 실측을 되돌리는 것이다. */
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-surface-base" role="dialog" aria-modal="true" aria-label="이벤트">
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-surface-base/95 px-page-x py-2.5 backdrop-blur">
+        {/* hit: 시각 40px 그대로, 손가락 영역만 44px(TOUCH-01 — 유저 모바일 99% 화면) */}
         <button type="button" onClick={onClose} aria-label="닫기"
-          className="-ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-input text-ink-secondary transition-colors hover:bg-surface-high">
+          className="hit -ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-input text-ink-secondary transition-colors hover:bg-surface-high">
           <Icon name="chevron-left" size={20} />
         </button>
         <h1 className="min-w-0 flex-1 truncate text-base font-bold text-ink-primary">{board?.title ?? '이벤트'}</h1>

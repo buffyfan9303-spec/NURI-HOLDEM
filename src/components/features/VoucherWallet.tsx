@@ -260,7 +260,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
 
 function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => void; onDone: (used: { title: string; venueName: string | null; remain: number }) => void }) {
   // 손제작 시트도 겹을 등록해야 뒤로가기가 이 시트만 닫는다 — 없으면 부모 Modal/대시보드가 통째로 닫힌다(점검 #7)
-  useBackClose(true, onClose);
+  useBackClose(true, onClose, { escape: true }); // 시트는 ESC 대상 — 전역 ESC 는 backstack 최상단 한 겹만 닫는다(개별 리스너 금지)
   const toast = useToast();
   const [mode, setMode] = useState<'menu' | 'qr' | 'phone'>('menu');
   const [phone, setPhone] = useState('');
