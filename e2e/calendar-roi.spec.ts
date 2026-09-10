@@ -74,17 +74,22 @@ test('🔴 ROI 지표 — 이번 달 3건에서 참가·총 참가비·순결과
   // 2026-09-10: 라벨을 바꿨으므로(참가→참가 횟수 · 결과→총 회수액 · 순결과→순손익) 셀렉터를
   // data-stat 으로 교체했다 — CLAUDE.md 규약(라벨 결합 셀렉터는 같은 커밋에서 testid 로).
   // 칸 = [값, 라벨, 서브] p 셋. 값은 여전히 첫 p 다.
+  // 주지표 3칸(순손익·ROI·ITM)은 값이 칸의 첫 <p>, 보조 3값은 한 줄 요약 안의 <b> 다.
   const valueOf = (key: string) => pane.locator(`[data-stat="${key}"] > p:first-child`);
-  await expect(valueOf('events')).toHaveText('3회');
-  await expect(valueOf('invested')).toHaveText('350,000');
-  await expect(valueOf('result')).toHaveText('500,000');
+  const inlineOf = (key: string) => pane.locator(`[data-stat="${key}"]`);
+  await expect(inlineOf('events')).toHaveText('3회');
+  await expect(inlineOf('invested')).toHaveText('350,000');
+  await expect(inlineOf('result')).toHaveText('500,000');
   await expect(valueOf('net')).toHaveText('+150,000');
   await expect(valueOf('roi')).toHaveText('42.9%');
   await expect(valueOf('itm')).toHaveText('33%');
   // 새 라벨이 화면에 그대로 떠 있는지도 잠근다(§6 워딩 정본)
-  for (const label of ['순손익', 'ROI', 'ITM', '참가 횟수', '총 참가비', '총 회수액']) {
+  for (const label of ['순손익', 'ROI', 'ITM']) {
     await expect(pane.locator(`p:text-is("${label}")`).first(), `라벨 '${label}' 이 없다`).toBeVisible();
   }
+  // 보조 지표는 칸이 아니라 한 줄이다 — 2026-09-10 오너 지시(칸이 길어지고 320px 에서 꺾였다)
+  await expect(pane.getByText(/회 참가 · 참가비 .* · 회수/), '보조 지표 한 줄 요약이 없다').toBeVisible();
+  await expect(pane.getByTestId('roi-stats-sub'), '보조 3칸이 아직 남아 있다').toHaveCount(0);
   // 구획 제목이 '전체 누계'와 '선택 기간 분석'을 갈라 놓는다 — 같은 '순손익'이 두 범위로 뜨기 때문
   await expect(pane.locator('p:text-is("전체 누계")')).toBeVisible();
   await expect(pane.locator('p:text-is("선택 기간 분석")')).toBeVisible();
@@ -93,14 +98,14 @@ test('🔴 ROI 지표 — 이번 달 3건에서 참가·총 참가비·순결과
 
   // 매장 필터 — '홍대' 1건뿐이면 ROI 는 3건 미만이라 — 로 접고 이유를 말한다
   await pane.getByLabel('ROI 매장').selectOption({ value: '홍대' });
-  await expect(valueOf('events')).toHaveText('1회');
+  await expect(inlineOf('events')).toHaveText('1회');
   await expect(valueOf('roi')).toHaveText('—');
   await expect(pane.getByTestId('roi-notice')).toContainText('기록 3건부터');
   await pane.getByLabel('ROI 매장').selectOption({ value: '' });
 
   // 전체 기간 — 옛 행(참가비 없음)은 지표에 안 들어가고, 월별 추세 막대가 뜬다
   await pane.getByLabel('ROI 기간').selectOption({ value: 'all' });
-  await expect(valueOf('events')).toHaveText('3회');
+  await expect(inlineOf('events')).toHaveText('3회');
   await expect(valueOf('net')).toHaveText('+150,000');
   const trend = pane.getByTestId('roi-trend');
   await expect(trend).toBeVisible();

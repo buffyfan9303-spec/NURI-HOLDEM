@@ -423,27 +423,20 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   );
 }
 
-function Stat({ label, value, sub, tone, testId, dense }: {
-  label: string; value: string; sub?: string; tone: 'cyan' | 'gold' | 'emerald' | 'danger' | 'muted';
+function Stat({ label, value, sub, tone, testId }: {
+  label: string; value: string; sub?: string; tone: 'cyan' | 'gold' | 'emerald' | 'danger';
   /** data-stat — 라벨 문자열 대신 e2e 가 잡는 안정 키(CLAUDE.md: 라벨을 바꾸면 같은 커밋에서 testid 로 교체) */
   testId?: string;
-  /** 보조 지표 — 테두리를 빼고 한 단 작게. 같은 카드 안에서 '전부 같은 무게'로 보이던 것을 가른다(§6 시각 위계) */
-  dense?: boolean;
 }) {
   // stat-* 토큰은 라이트 오버라이드를 갖고 있다. cyan·gold 는 없어서 라이트 흰 카드 위 1.45:1 이었다 —
   // index.css 에 stat-cyan·stat-gold 를 추가하고 여기서 그것만 쓴다(하드 팔레트 금지).
   const cls = tone === 'cyan' ? 'stat-cyan' : tone === 'gold' ? 'stat-gold' : tone === 'emerald' ? 'stat-emerald'
-    : tone === 'muted' ? 'text-ink-secondary' : 'text-danger-deep dark:text-danger-light';
+    : 'text-danger-deep dark:text-danger-light';
   return (
-    <div data-stat={testId}
-      /* dense 틴트는 /50 이 아니라 /25 다 — 다크에서 surface-high 는 더 **밝은** 면이라
-         /50 위의 text-ink-muted 가 4.49:1 로 AA(4.5)를 아슬하게 못 넘겼다(2026-09-10 실측).
-         라이트는 어느 쪽이든 5.0 이상이라 다크 기준으로 맞춘다. */
-      className={dense
-        ? 'rounded-input bg-surface-high/25 p-2 text-center'
-        : 'rounded-input border border-border-subtle bg-surface-low p-2 text-center'}>
+    // p-2 → p-1.5: 320px 에서 '+250,000' 이 칸을 3px 넘겨 잘렸다(2026-09-10 실측). 좌우 4.2px 를 되찾고 칸 높이도 4px 줄어든다.
+    <div data-stat={testId} className="rounded-input border border-border-subtle bg-surface-low p-1.5 text-center">
       {/* 360px 3칸(칸 ~100px)에서 '-150,000' 같은 8자 값이 두 줄로 꺾였다(2026-09-10 캡처) — 숫자는 절대 꺾지 않고 긴 값만 한 단 줄인다 */}
-      <p className={`${dense ? (value.length > 7 ? 'text-xs' : 'text-sm') : (value.length > 7 ? 'text-sm' : 'text-base')} whitespace-nowrap font-extrabold leading-none tabular-nums ${cls}`}>{value}</p>
+      <p className={`${value.length > 7 ? 'text-sm' : 'text-base'} whitespace-nowrap font-extrabold leading-none tabular-nums ${cls}`}>{value}</p>
       <p className="mt-1 text-2xs text-ink-muted">{label}</p>
       {/* 값이 없어도 자리를 지킨다 — 조건부 렌더는 월 이동마다 아래를 15px 밀어 올린다 */}
       <p className="text-2xs tabular-nums text-ink-muted">{sub ?? ' '}</p>
@@ -600,16 +593,20 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
       <p className="mt-3 text-2xs font-bold text-ink-muted">선택 기간 분석</p>
       <div className="mt-1 grid grid-cols-3 gap-1.5" role="group" aria-label="ROI 범위">
         <select value={period} onChange={(e) => setPeriod(e.target.value as 'month' | 'all')} aria-label="ROI 기간"
-          className="input min-h-[44px] min-w-0 px-1 text-[11px]">
+          className="input min-h-[44px] min-w-0 px-0.5 text-[11px]">
           <option value="month">{monthPrefix.replace('-', '.')}</option>
-          <option value="all">전체 기간</option>
+          <option value="all">전체</option>
         </select>
-        <select value={venue} onChange={(e) => setVenue(e.target.value)} aria-label="ROI 매장" className="input min-h-[44px] min-w-0 px-1 text-[11px]">
-          <option value="">매장 전체</option>
+        {/* 기본 옵션은 '매장 전체'(4자)가 아니라 '매장'(2자)이다 — 2026-09-10 실측:
+            320px 에서 칸 안쪽 71.5px 에 '매장 전체' 글자가 69.6px 이라 여유 1.9px 밖에 없어
+            네이티브 드롭다운 화살표가 글자를 덮었다. 2자면 여유가 20px 로 벌어진다.
+            고르면 매장명이 그대로 뜨므로 '무엇을 거르는 칸인지'는 기본 상태 라벨이 말해 준다. */}
+        <select value={venue} onChange={(e) => setVenue(e.target.value)} aria-label="ROI 매장" className="input min-h-[44px] min-w-0 px-0.5 text-[11px]">
+          <option value="">매장</option>
           {venues.map((v) => <option key={v} value={v}>{v}</option>)}
         </select>
-        <select value={game} onChange={(e) => setGame(e.target.value)} aria-label="ROI 게임" className="input min-h-[44px] min-w-0 px-1 text-[11px]">
-          <option value="">게임 전체</option>
+        <select value={game} onChange={(e) => setGame(e.target.value)} aria-label="ROI 게임" className="input min-h-[44px] min-w-0 px-0.5 text-[11px]">
+          <option value="">게임</option>
           {games.map((g) => <option key={g} value={g}>{g}</option>)}
         </select>
       </div>
@@ -622,12 +619,17 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
         <Stat testId="roi" label="ROI" value={showRoi && stats.roi != null ? `${stats.roi.toFixed(1)}%` : '—'} sub=" " tone={(stats.roi ?? 0) >= 0 ? 'emerald' : 'danger'} />
         <Stat testId="itm" label="ITM" value={showRoi && stats.itm != null ? `${Math.round(stats.itm)}%` : '—'} sub=" " tone="cyan" />
       </div>
-      {/* 보조 3 — 위 셋을 설명하는 재료. 테두리를 빼고 한 단 작게 해서 무게를 내린다(§6 위계). */}
-      <div className="mt-1 grid grid-cols-3 gap-1.5" data-testid="roi-stats-sub">
-        <Stat dense testId="events" label="참가 횟수" value={`${stats.events}회`} sub={`입상 ${stats.moneyIn}회`} tone="muted" />
-        <Stat dense testId="invested" label="총 참가비" value={won(stats.invested)} sub={stats.avgBuyIn != null ? `평균 ${won(Math.round(stats.avgBuyIn))}` : ' '} tone="muted" />
-        <Stat dense testId="result" label="총 회수액" value={won(stats.resultSum)} sub={stats.bestResult != null ? `최고 ${won(stats.bestResult)}` : ' '} tone="muted" />
-      </div>
+      {/* 보조 지표는 칸이 아니라 **한 줄**이다(2026-09-10 오너 지시).
+          3칸 + 부가설명(입상·평균·최고)은 320px 에서 두 줄로 꺾여 83.9px 를 먹었다 — 주지표행(56.2px)보다 컸다.
+          위 셋을 설명하는 재료일 뿐이라 무게를 한 줄까지 내린다: 83.9 → 15.9px.
+          숫자만 nowrap 이라 좁은 폭에서는 낱말 사이에서 접히고 금액은 안 꺾인다. */}
+      <p className="mt-1.5 text-center text-2xs tabular-nums text-ink-secondary">
+        <span className="whitespace-nowrap"><b data-stat="events" className="font-bold text-ink-primary">{stats.events}회</b> 참가</span>
+        {' · '}
+        <span className="whitespace-nowrap">참가비 <b data-stat="invested" className="font-bold text-ink-primary">{won(stats.invested)}</b></span>
+        {' · '}
+        <span className="whitespace-nowrap">회수 <b data-stat="result" className="font-bold text-ink-primary">{won(stats.resultSum)}</b></span>
+      </p>
       {notice && <p className="mt-1 text-center text-2xs text-ink-secondary" data-testid="roi-notice">{notice}</p>}
       {/* 월별 추세 — 전체 기간일 때만(한 달 범위에선 막대 하나라 추세가 아니다). 차트 라이브러리 없이 폭 % 막대. */}
       {period === 'all' && stats.months.length > 0 && (
