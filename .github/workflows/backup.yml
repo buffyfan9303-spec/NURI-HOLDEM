@@ -59,6 +59,12 @@ jobs:
           case "$URL" in
             *:6543/*) echo "::warning::포트 6543(트랜잭션 풀러)이다 — pg_dump 가 실패할 수 있다. 세션 풀러 5432 를 권장한다." ;;
           esac
+          # R2 엔드포인트 모양 검사(실행 34474586540: 덤프는 됐는데 업로드가 "SSL handshake failure" 로 죽었다 —
+          # 호스트가 계정ID.r2.cloudflarestorage.com 이 아니면 Cloudflare 가 TLS 단계에서 끊는다. 값은 출력하지 않는다).
+          case "$R2_ENDPOINT" in
+            https://[0-9a-f]*.r2.cloudflarestorage.com|https://[0-9a-f]*.r2.cloudflarestorage.com/|https://[0-9a-f]*.*.r2.cloudflarestorage.com|https://[0-9a-f]*.*.r2.cloudflarestorage.com/) : ;;
+            *) echo "::warning::R2_ENDPOINT 가 https://<계정ID>.r2.cloudflarestorage.com 모양이 아니다(버킷 이름·경로·r2.dev 공개 주소가 섞였을 수 있다). 업로드 단계에서 R2_ACCOUNT_ID 로 만든 주소를 먼저 쓴다." ;;
+          esac
           echo "필수 secret 5개 확인 완료(이름만 검사) · 접속 문자열 모양 확인 완료"
 
       - name: PostgreSQL 17 client 설치
@@ -116,12 +122,19 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
           ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
           # ubuntu 러너엔 aws-cli v2 기본 설치. R2는 S3 호환.
-          aws s3api head-bucket --bucket "$BUCKET" --endpoint-url "$ENDPOINT" 2>/dev/null \
-            || aws s3api create-bucket --bucket "$BUCKET" --endpoint-url "$ENDPOINT"
-          aws s3 cp "$FILE" "s3://$BUCKET/db/$FILE" --endpoint-url "$ENDPOINT"
+          # 엔드포인트는 계정 ID 로 만든 정본(https://<id>.r2.cloudflarestorage.com)을 먼저 쓴다 —
+          # 실행 34474586540 에서 R2_ENDPOINT 값으로는 TLS 핸드셰이크가 실패했다(값은 출력하지 않는다).
+          EP="$ENDPOINT"
+          if [ -n "$ACCOUNT_ID" ]; then EP="https://$ACCOUNT_ID.r2.cloudflarestorage.com"; fi
+          echo "R2 엔드포인트 출처: $([ -n "$ACCOUNT_ID" ] && echo R2_ACCOUNT_ID || echo R2_ENDPOINT)"
+          echo "EP=$EP" >> "$GITHUB_ENV"
+          aws s3api head-bucket --bucket "$BUCKET" --endpoint-url "$EP" 2>/dev/null \
+            || aws s3api create-bucket --bucket "$BUCKET" --endpoint-url "$EP"
+          aws s3 cp "$FILE" "s3://$BUCKET/db/$FILE" --endpoint-url "$EP"
 
       # 업로드 명령이 0 을 돌려줘도 객체가 실제로 있는지 다시 읽는다 — "성공" 은 R2 에 객체가 존재한다는 뜻이어야 한다.
       - name: R2 객체 존재·크기 검증
@@ -132,7 +145,7 @@ jobs:
           ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          SIZE="$(aws s3api head-object --bucket "$BUCKET" --key "db/$FILE" --endpoint-url "$ENDPOINT" --query ContentLength --output text)"
+          SIZE="$(aws s3api head-object --bucket "$BUCKET" --key "db/$FILE" --endpoint-url "${EP:-$ENDPOINT}" --query ContentLength --output text)"
           LOCAL="$(stat -c %s "$FILE")"
           echo "R2 객체 크기: $SIZE bytes / 로컬: $LOCAL bytes"
           if [ -z "$SIZE" ] || [ "$SIZE" != "$LOCAL" ] || [ "$SIZE" -le 0 ]; then
