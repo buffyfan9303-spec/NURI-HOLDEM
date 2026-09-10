@@ -137,9 +137,26 @@ jobs:
           # ubuntu 러너엔 aws-cli v2 기본 설치. R2는 S3 호환.
           # 엔드포인트는 계정 ID 로 만든 정본(https://<id>.r2.cloudflarestorage.com)을 먼저 쓴다 —
           # 실행 34474586540 에서 R2_ENDPOINT 값으로는 TLS 핸드셰이크가 실패했다(값은 출력하지 않는다).
-          EP="$ENDPOINT"
-          if [ -n "$ACCOUNT_ID" ]; then EP="https://$ACCOUNT_ID.r2.cloudflarestorage.com"; fi
-          echo "R2 엔드포인트 출처: $([ -n "$ACCOUNT_ID" ] && echo R2_ACCOUNT_ID || echo R2_ENDPOINT)"
+          # 실행 34476031752: 값 5개의 모양이 전부 정상인데도 TLS 핸드셰이크가 실패했다. 남은 가능성은
+          # 버킷의 관할(jurisdiction)이 EU 라 호스트가 <id>.eu.r2.cloudflarestorage.com 이거나, 계정에 R2 가
+          # 활성화되지 않아 그 호스트가 아직 발급되지 않은 경우다. 후보를 순서대로 두드려 TLS 가 통하는 첫 호스트를 쓴다.
+          # (403/404 는 TLS 는 통했다는 뜻이라 후보로 인정한다 — 버킷은 아래에서 만든다)
+          CANDS="$ENDPOINT"
+          if [ -n "$ACCOUNT_ID" ]; then CANDS="https://$ACCOUNT_ID.r2.cloudflarestorage.com https://$ACCOUNT_ID.eu.r2.cloudflarestorage.com $ENDPOINT"; fi
+          EP=""
+          for C in $CANDS; do
+            [ -z "$C" ] && continue
+            H="$(printf '%s' "$C" | sed -E 's#^https?://([^/]+).*#\1#' | sed -E 's/^[0-9a-f]{32}/<id>/')"
+            OUT="$(aws s3api head-bucket --bucket "$BUCKET" --endpoint-url "$C" 2>&1 || true)"
+            case "$OUT" in
+              *SSL*|*handshake*|*"Could not connect"*) echo "TLS/연결 실패: $H — 다음 후보"; continue ;;
+            esac
+            EP="$C"; echo "R2 엔드포인트 확정: $H"; break
+          done
+          if [ -z "$EP" ]; then
+            echo "::error::어느 R2 호스트로도 TLS 가 통하지 않았다(계정ID 정본·eu 관할·R2_ENDPOINT). Cloudflare 대시보드에서 R2 활성화 여부와 버킷 Settings → S3 API 주소를 확인해야 한다. 값은 출력하지 않는다."
+            exit 1
+          fi
           echo "EP=$EP" >> "$GITHUB_ENV"
           aws s3api head-bucket --bucket "$BUCKET" --endpoint-url "$EP" 2>/dev/null \
             || aws s3api create-bucket --bucket "$BUCKET" --endpoint-url "$EP"
