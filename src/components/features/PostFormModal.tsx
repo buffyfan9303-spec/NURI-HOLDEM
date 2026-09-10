@@ -27,7 +27,8 @@ import {
   type HandDraft, type PollDraft,
 } from './PostComposerExtras';
 import { saveHand, savePoll } from '../../api/postAttachments';
-import { supabase, IS_MOCK } from '../../lib/supabase';
+// supabase 클라이언트는 더 이상 쓰지 않는다 — 글 id 재조회(findCreatedPostId)가 사라졌다. IS_MOCK 만 남는다.
+import { IS_MOCK } from '../../lib/supabase';
 import Icon from '../atoms/Icon';
 
 export interface PostFormData {
@@ -40,7 +41,8 @@ export interface PostFormData {
 interface PostFormModalProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (data: PostFormData) => Promise<void> | void;
+  /** 저장된 글을 돌려주면 첨부를 그 id 에 곧바로 붙인다(재조회 없음). void 를 돌려주면 첨부는 건너뛴다. */
+  onSubmit: (data: PostFormData) => Promise<{ id: string } | void> | { id: string } | void;
   /** 열릴 때 기본 선택 카테고리 ('홀덤 공부' 탭 진입 시 'study') */
   defaultCategory?: PostCategory;
   /** 열릴 때 본문 프리필(공유 타깃 — 다른 앱에서 공유받은 텍스트/링크) */
@@ -61,25 +63,6 @@ const CATEGORY_OPTIONS: { id: PostCategory; label: string }[] = [
 
 const MAX_IMAGES = 4;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
-
-/**
- * 방금 등록한 글의 id 복구 — onSubmit(App.handleCreatePost)이 id 를 돌려주지 않아
- * (시그니처가 Promise<void>, App.tsx 는 이 카드의 수정 범위 밖) 저장 직후 본인 글을 재조회한다.
- * 1차: user_id + content 정확 일치 최신 1건(경합에도 안전) → 2차 폴백: 본인 최신 1건.
- */
-async function findCreatedPostId(userId: string, content: string): Promise<string | null> {
-  const exact = await supabase
-    .from('community_posts').select('id')
-    .eq('user_id', userId).eq('content', content)
-    .order('created_at', { ascending: false }).limit(1).maybeSingle();
-  if (!exact.error && exact.data?.id) return exact.data.id as string;
-  const latest = await supabase
-    .from('community_posts').select('id')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false }).limit(1).maybeSingle();
-  if (!latest.error && latest.data?.id) return latest.data.id as string;
-  return null;
-}
 
 export default function PostFormModal({ open, onClose, onSubmit, defaultCategory, defaultContent, defaultReplay }: PostFormModalProps) {
   const { user } = useAuth();
@@ -226,7 +209,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
         const hand: HandSel | null = (hero.length > 0 || villain.length > 0) ? { hero, villain } : null;
         encoded = encodeHand(body, hand);
       }
-      await onSubmit({ category, title: title.trim(), content: encoded, images });
+      const created = await onSubmit({ category, title: title.trim(), content: encoded, images });
 
       // 어태치먼트 저장 — 판정은 normalize 가 단일 소스(빈 입력 → null → 저장 안 함).
       // 여기서부터의 실패는 '글 등록 성공'을 뒤집지 않는다(부분 실패 토스트로만 안내).
@@ -234,13 +217,18 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
       const poll = normalizePoll(pollDraft);
       let extrasFailed = false;
       if ((hand !== null || poll !== null) && !IS_MOCK) {
-        try {
-          const postId = await findCreatedPostId(user.id, encoded);
-          if (!postId) throw new Error('생성된 글 id 를 찾지 못했습니다');
-          await saveHand(postId, hand);
-          await savePoll(postId, poll);
-        } catch {
+        // onSubmit 이 저장된 글을 돌려준다(App.handleCreatePost). 재조회하지 않는다 —
+        // 같은 본문의 글이 둘이면 엉뚱한 글에 첨부가 붙던 구조였다.
+        const postId = created && typeof created === 'object' ? created.id : null;
+        if (!postId) {
           extrasFailed = true;
+        } else {
+          try {
+            await saveHand(postId, hand);
+            await savePoll(postId, poll);
+          } catch {
+            extrasFailed = true;
+          }
         }
       }
 

@@ -21,8 +21,14 @@ describe('ToolsPanel 도구 아이콘', () => {
     expect(new Set(toolIcons).size).toBe(toolCount);
   });
   it('모든 도구·레인 아이콘이 Icon 아톰에 등록된 이름이다', () => {
-    const laneIcons = [...src.slice(src.indexOf('const LANES:'), src.indexOf('export const STORE_TOOL_KEYS')).matchAll(/icon: '([a-z0-9-]+)'/g)].map((m) => m[1]);
-    expect(laneIcons).toHaveLength(4);
+    // 2026-09-11 IA 개편으로 레인이 4 → 5 가 됐다. 숫자는 **갱신**하되 없애지는 않는다:
+    //   >= 로 풀면 레인이 하나 사라져도 조용히 통과한다(그건 게이트를 끄는 것이다).
+    //   레인 수가 또 바뀌면 그건 의도된 결정이니 이 줄도 같이 고치면 된다.
+    const laneBlock = src.slice(src.indexOf('const LANES:'), src.indexOf('export const STORE_TOOL_KEYS'));
+    const laneIcons = [...laneBlock.matchAll(/icon: '([a-z0-9-]+)'/g)].map((m) => m[1]);
+    const laneCount = (laneBlock.match(/\{ id: '/g) ?? []).length;
+    expect(laneCount, '레인 수가 바뀌었다 — 의도한 것이면 이 숫자를 고쳐라').toBe(5);
+    expect(laneIcons, '아이콘이 없는 레인이 있다').toHaveLength(laneCount);
     for (const n of [...toolIcons, ...laneIcons]) expect(knownNames.has(n), n).toBe(true);
   });
 });

@@ -24,6 +24,7 @@ import LoadErrorCard from '../atoms/LoadErrorCard';
 import ImageLightbox from '../atoms/ImageLightbox';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import PostAttachments from './PostAttachments';
+import SpotPostCard from './community/SpotPostCard';
 import { fetchAttachment, castPollVote, subscribePollResults } from '../../api/postAttachments';
 // 카테고리 라벨·pill 색은 src/lib/postCategory.ts 가 단일 출처 — 색표를 이 파일로 복사하지 않는다
 // (복사하면 목록 뱃지와 상세 뱃지가 언젠가 다른 색이 된다).
@@ -527,6 +528,10 @@ export default function PostDetailModal({
             </div>
           );
         })()}
+
+        {/* ── 게시판에 올라온 NURI SPOT — 투표(어태치먼트)보다 **위**.
+            상황을 먼저 보여주고 그 다음에 고르게 한다. 스팟 글이 아니면 스스로 null 을 낸다. */}
+        {!hidden && <SpotPostCard postId={post.id} isAuthor={user?.id === post.userId} />}
 
         {/* ── 어태치먼트(핸드 결과·투표) — 본문 아래. 로딩 중엔 미표시(스켈레톤 금지). */}
         {!hidden && attachment && (

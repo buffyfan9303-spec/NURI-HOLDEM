@@ -33,46 +33,78 @@ import { RANGE_SCENARIOS } from '../../lib/ranges.data';
 import { clearSnap, readSnap } from '../../lib/snapshot';
 import type { DeepGtoInit } from './gto/useDeepGto';
 import type { HandReviewInit } from './gto/HandReviewTool';
+import type { SpotReview } from '../../lib/spot';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
+// NURI SPOT — 구조화 스팟·분석 엔진·리포트를 물고 있어 도구 중 가장 무겁다. 열 때 받는다.
+const NuriSpotPanel = lazyWithReload(() => import('./gto/NuriSpotPanel'));
 
-type ToolKey = 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'wrongnote' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal' | 'tda';
-/** 5레인 IA — 차트 / 트레이닝 / 분석 / 계산기 / 매장운영.
- *  오너 피드백(2026-09-02): "차트를 보고 싶은데 문제가 나온다" — 예전엔 '학습' 한 레인에 차트와 퀴즈가 섞여
- *  첫 카드가 '오늘의 드릴'(퀴즈)이었다. 보는 것(차트)과 푸는 것(트레이닝)을 레인으로 갈라 차트를 맨 앞에 둔다. */
-type ToolCat = 'chart' | 'learn' | 'analyze' | 'calc' | 'ops';
+/**
+ * NURI SPOT 진입 초기값 — 직전 스팟이 있으면 그것, 없으면 **기존 두 도구의 스냅샷에서 카드를 물려받는다**.
+ * 'GTO 핸드 분석'에서 카드를 고르다 스팟으로 넘어온 사람이 처음부터 다시 찍지 않게 하는 다리다.
+ * (tool:spot 은 NuriSpotPanel 이 스스로 읽으므로 여기서는 **없을 때의 씨앗**만 만든다.)
+ */
+function spotInitFromSnapshots(): { spot?: Partial<SpotReview> } | undefined {
+  if (readSnap<SpotReview>('tool:spot')) return undefined;      // 자기 스냅샷이 이긴다
+  const g = readSnap<DeepGtoInit>('tool:gto');
+  const r = readSnap<HandReviewInit>('tool:replay');
+  const ids = (cs: { rank: string; suit: string }[] | undefined) => (cs ?? []).map((c) => `${c.rank}${c.suit}`);
+  const hero = ids(g?.hero).length ? ids(g?.hero) : ids(r?.hero as { rank: string; suit: string }[] | undefined);
+  const villain = ids(g?.villain).length ? ids(g?.villain) : ids(r?.villain as { rank: string; suit: string }[] | undefined);
+  const board = ids(g?.board).length ? ids(g?.board) : ids(r?.board as { rank: string; suit: string }[] | undefined);
+  if (hero.length === 0 && board.length === 0) return undefined;
+  return { spot: { hero, villain, board } };
+}
+
+type ToolKey = 'spot' | 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'wrongnote' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal' | 'tda';
+/** 실사용 흐름 5갈래 IA (2026-09-11 오너 지시).
+ *  종전 4레인(차트/트레이닝/분석/계산기)은 '도구의 종류'로 나눈 것이라, 하나의 목적(예: 한 판 복기)을
+ *  이루려면 레인 세 개를 오가야 했다. 이제 **무엇을 하러 왔는가**로 가른다:
+ *    explore  전략 탐색   — 스팟을 정하고 레인지·빈도를 본다
+ *    train    트레이너     — 풀고 틀리고 복습한다
+ *    review   핸드 리뷰    — 지난 판을 되짚는다(에퀴티·아웃츠·팟오즈·SPR·콤보가 여기 모인다)
+ *    tourney  토너먼트 랩  — ICM·딜·M존
+ *    rules    규칙·수학    — TDA 규칙과 포커 수학 보조
+ *  ops(매장 운영 5종)·money(뱅크롤 2종)는 GTO 탭 밖으로 이관됐다 — 카탈로그에서만 숨기고
+ *  TOOLS/renderTool 에는 남겨 #tool= 딥링크·공유 하위호환을 지킨다(ops 이관 때와 같은 조리법). */
+type ToolCat = 'explore' | 'train' | 'review' | 'tourney' | 'rules' | 'ops' | 'money';
 
 /** desc = 카드 한 줄(≤13자 완결형 명사구, 2026-09-03 개고) · keywords = 개고 전 설명(검색 재현율 보존용, 화면엔 안 그림)
  *  icon = lucide 팩 이름(2026-09-03 오너 "아이콘팩에서 최대한 잘 맞는 걸로" — 손그림 SVG 26개를 Icon 아톰으로 통일).
  *  ⚠ 26개 도구는 서로 다른 아이콘이어야 한다 — ToolsPanel.icons.test.ts 가 게이트. */
 const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?: string; icon: IconName }[] = [
   // ── 학습 — 차트·트레이너 ──
-  { key: 'drill', cat: 'learn', name: '오늘의 드릴', desc: '약한 부분만 하루 5문제', keywords: '약점 기반 하루 5문제', icon: 'target' },
-  { key: 'tda', cat: 'chart', name: '2024 TDA 규칙', desc: '상황 물으면 규칙 찾아줌', keywords: '토너먼트 디렉터 규칙 TDA 2024 한글 판정 플로어 딜러 카드 노출 올인 페널티 룰북', icon: 'gavel' },
-  { key: 'range', cat: 'chart', name: '프리플랍 레인지 차트', desc: '포지션별 시작 핸드 기준표', keywords: '9인·6맥스 포지션별 오픈·3벳·수비·vs 3벳', icon: 'grid-3x3' },
-  { key: 'pushfold', cat: 'chart', name: '푸시 · 폴드 차트', desc: '칩 적을 때 올인 기준표', keywords: '자체 Nash · 셔브·콜 레인지', icon: 'arrow-up-from-line' },
-  { key: 'trainer', cat: 'learn', name: '프리플랍 트레이너', desc: '오픈과 올인 판단 연습', keywords: '오픈·셔브 맞히기, 오답 노트', icon: 'dumbbell' },
-  { key: 'postflop', cat: 'learn', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈와 해설', keywords: '실전 상황 퀴즈·해설', icon: 'brain' },
+  { key: 'drill', cat: 'train', name: '오늘의 드릴', desc: '약한 부분만 하루 5문제', keywords: '약점 기반 하루 5문제', icon: 'target' },
+  { key: 'tda', cat: 'rules', name: '2024 TDA 규칙', desc: '상황 물으면 규칙 찾아줌', keywords: '토너먼트 디렉터 규칙 TDA 2024 한글 판정 플로어 딜러 카드 노출 올인 페널티 룰북', icon: 'gavel' },
+  { key: 'range', cat: 'explore', name: '프리플랍 레인지 차트', desc: '포지션별 시작 핸드 기준표', keywords: '9인·6맥스 포지션별 오픈·3벳·수비·vs 3벳', icon: 'grid-3x3' },
+  { key: 'pushfold', cat: 'explore', name: '푸시 · 폴드 차트', desc: '칩 적을 때 올인 기준표', keywords: '자체 Nash · 셔브·콜 레인지', icon: 'arrow-up-from-line' },
+  { key: 'trainer', cat: 'train', name: '프리플랍 트레이너', desc: '오픈과 올인 판단 연습', keywords: '오픈·셔브 맞히기, 오답 노트', icon: 'dumbbell' },
+  { key: 'postflop', cat: 'train', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈와 해설', keywords: '실전 상황 퀴즈·해설', icon: 'brain' },
   // 오답 노트(2026-09-03, GKR-2 잔여분) — 두 트레이너의 오답 큐를 목록으로. 아이콘 = lucide book-x
-  { key: 'wrongnote', cat: 'learn', name: '오답 노트', desc: '틀린 핸드 모아 다시 풀기', keywords: '오답 목록 · 차트에서 보기 · 다시 풀기', icon: 'book-x' },
-  { key: 'aggro', cat: 'chart', name: '어그레션 차트', desc: '포지션별 공격 권장 빈도', keywords: '포지션별 권장 빈도', icon: 'swords' },
-  { key: 'glossary', cat: 'learn', name: '홀덤 용어사전', desc: '74개 용어 검색과 뜻풀이', keywords: '용어 74개 · 한글 설명·검색', icon: 'book-a' },
+  { key: 'wrongnote', cat: 'train', name: '오답 노트', desc: '틀린 핸드 모아 다시 풀기', keywords: '오답 목록 · 차트에서 보기 · 다시 풀기', icon: 'book-x' },
+  { key: 'aggro', cat: 'explore', name: '어그레션 차트', desc: '포지션별 공격 권장 빈도', keywords: '포지션별 권장 빈도', icon: 'swords' },
+  { key: 'glossary', cat: 'rules', name: '홀덤 용어사전', desc: '74개 용어 검색과 뜻풀이', keywords: '용어 74개 · 한글 설명·검색', icon: 'book-a' },
   // ── 분석 — 핸드·레인지 에퀴티 ──
-  { key: 'replay', cat: 'analyze', name: '핸드 리플레이어', desc: '지난 판 복기와 승률 흐름', keywords: '그 핸드 복기 · 승률 추이·아웃', icon: 'clapperboard' },
-  { key: 'gto', cat: 'analyze', name: 'GTO 핸드 분석', desc: '내 패 승률과 최선의 선택', keywords: '프리/포스트플랍 승률·전략', icon: 'scan-search' },
-  { key: 'rvr', cat: 'analyze', name: '레인지 vs 레인지', desc: '양쪽 패 범위의 승률 비교', keywords: '레인지 간 에퀴티 매트릭스', icon: 'git-compare' },
+  // NURI SPOT — 카드·포지션·스택·액션을 **하나의 구조화된 스팟**으로 받아 분석·저장·토론까지 잇는다.
+  //   ⚠ 6번째 레인을 만들지 않고 'review'(핸드 리뷰)에 넣는다 — 레인이 6개가 되면
+  //     e2e/gto-tab-verify.spec.ts 의 '섹션 정확히 5개'·'칩 6개' 계약이 깨진다.
+  //     대신 카탈로그 위에 대표 카드(SpotHeroCard)를 따로 세워 우선순위를 준다.
+  { key: 'spot', cat: 'review', name: '누리 스팟', desc: '핸드 분석 · 리플레이 · 토론', keywords: 'NURI SPOT 스팟 복기 구조화 분석 저장 토론 공유 액션 타임라인', icon: 'spade' },
+  { key: 'replay', cat: 'review', name: '핸드 리플레이어', desc: '지난 판 복기와 승률 흐름', keywords: '그 핸드 복기 · 승률 추이·아웃', icon: 'clapperboard' },
+  { key: 'gto', cat: 'review', name: 'GTO 핸드 분석', desc: '내 패 승률과 참고 액션', keywords: '프리/포스트플랍 승률·휴리스틱 참고 액션', icon: 'scan-search' },
+  { key: 'rvr', cat: 'explore', name: '레인지 vs 레인지', desc: '양쪽 패 범위의 승률 비교', keywords: '레인지 간 에퀴티 매트릭스', icon: 'git-compare' },
   // ── 계산기 — 수치 판단 ──
-  { key: 'pot', cat: 'calc', name: '팟 오즈 계산기', desc: '콜에 필요한 최소 승률', keywords: '콜에 필요한 승률 계산', icon: 'percent' },
-  { key: 'outs', cat: 'calc', name: '아웃츠 / 확률', desc: '카드만 넣으면 완성될 확률', keywords: '카드만 넣으면 아웃 자동 계산', icon: 'dice' },
-  { key: 'mdf', cat: 'calc', name: 'MDF · 블러프 계산기', desc: '벳 크기별 최소 방어 비율', keywords: '수비 빈도·블러프 비율', icon: 'shield-check' },
-  { key: 'icm', cat: 'calc', name: 'ICM 계산기', desc: '지금 내 칩의 상금 가치', keywords: '토너먼트 기대 상금', icon: 'trophy' },
-  { key: 'deal', cat: 'calc', name: '딜 계산기', desc: '남은 사람끼리 상금 분배', keywords: 'ICM 딜 vs 칩찹 분배 비교', icon: 'handshake' },
-  { key: 'spr', cat: 'calc', name: 'SPR 계산기', desc: '팟 대비 내 칩 비율', keywords: '스택 대 팟 비율', icon: 'scale' },
-  { key: 'ev', cat: 'calc', name: 'EV 계산기', desc: '이 선택의 장기 기대값', keywords: '기대값 손익 판단', icon: 'sigma' },
-  { key: 'combo', cat: 'calc', name: '콤보 계산기', desc: '그 패가 나올 경우의 수', keywords: '핸드·레인지 콤보 수', icon: 'layers' },
-  { key: 'mzone', cat: 'calc', name: 'M존 계산기', desc: '내 칩으로 버틸 바퀴 수', keywords: '토너 생존 압박 지수', icon: 'gauge' },
-  { key: 'bankroll', cat: 'calc', name: '뱅크롤 관리', desc: '게임별 권장 참가비 배수', keywords: '바인 대비 자금 권장선', icon: 'piggy-bank' },
-  { key: 'variance', cat: 'calc', name: '분산 시뮬', desc: '운 나쁠 때 잃을 폭 예측', keywords: 'ROI·표본 → 파산 확률', icon: 'trending-up-down' },
+  { key: 'pot', cat: 'review', name: '팟 오즈 계산기', desc: '콜에 필요한 최소 승률', keywords: '콜에 필요한 승률 계산', icon: 'percent' },
+  { key: 'outs', cat: 'review', name: '아웃츠 / 확률', desc: '카드만 넣으면 완성될 확률', keywords: '카드만 넣으면 아웃 자동 계산', icon: 'dice' },
+  { key: 'mdf', cat: 'rules', name: 'MDF · 블러프 계산기', desc: '벳 크기별 최소 방어 비율', keywords: '수비 빈도·블러프 비율', icon: 'shield-check' },
+  { key: 'icm', cat: 'tourney', name: 'ICM 계산기', desc: '지금 내 칩의 상금 가치', keywords: '토너먼트 기대 상금', icon: 'trophy' },
+  { key: 'deal', cat: 'tourney', name: '딜 계산기', desc: '남은 사람끼리 상금 분배', keywords: 'ICM 딜 vs 칩찹 분배 비교', icon: 'handshake' },
+  { key: 'spr', cat: 'review', name: 'SPR 계산기', desc: '팟 대비 내 칩 비율', keywords: '스택 대 팟 비율', icon: 'scale' },
+  { key: 'ev', cat: 'rules', name: 'EV 계산기', desc: '이 선택의 장기 기대값', keywords: '기대값 손익 판단', icon: 'sigma' },
+  { key: 'combo', cat: 'review', name: '콤보 계산기', desc: '그 패가 나올 경우의 수', keywords: '핸드·레인지 콤보 수', icon: 'layers' },
+  { key: 'mzone', cat: 'tourney', name: 'M존 계산기', desc: '내 칩으로 버틸 바퀴 수', keywords: '토너 생존 압박 지수', icon: 'gauge' },
+  { key: 'bankroll', cat: 'money', name: '뱅크롤 관리', desc: '게임별 권장 참가비 배수', keywords: '바인 대비 자금 권장선', icon: 'piggy-bank' },
+  { key: 'variance', cat: 'money', name: '분산 시뮬', desc: '운 나쁠 때 잃을 폭 예측', keywords: 'ROI·표본 → 파산 확률', icon: 'trending-up-down' },
   // ── 매장 운영 ──
   { key: 'chip', cat: 'ops', name: '칩 분배기', desc: '1인 스택 구성과 총 칩 수', keywords: '스택 구성·총 칩 수', icon: 'coins' },
   { key: 'sim', cat: 'ops', name: '구조 시뮬', desc: '레벨별 평균 스택 깊이', keywords: '총 칩·평균 스택 깊이', icon: 'chart' },
@@ -86,14 +118,19 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
  *  카탈로그에서만 숨기고 TOOLS/renderTool 에는 남겨 #tool= 딥링크·공유 하위호환을 지킨다.
  *  icon = 섹션 소제목 앞 글리프(즐겨찾기 헤더의 star-fill 과 같은 문법) — 도구 아이콘과 겹치지 않는 이름. */
 const LANES: { id: ToolCat; label: string; desc: string; icon: IconName }[] = [
-  { id: 'chart', label: '차트', desc: '보고 외우는 표준 레인지', icon: 'table' },
-  { id: 'learn', label: '트레이닝', desc: '퀴즈로 맞히고 오답 노트', icon: 'graduation-cap' },
-  { id: 'analyze', label: '분석', desc: '핸드·레인지 에퀴티 실계산', icon: 'microscope' },
-  { id: 'calc', label: '계산기', desc: '실전 수치 판단', icon: 'calculator' },
+  { id: 'explore', label: '전략 탐색', desc: '스팟을 정하고 레인지·빈도를 본다', icon: 'table' },
+  { id: 'train',   label: '트레이너',   desc: '풀고 · 틀리고 · 오답 노트로 복습', icon: 'graduation-cap' },
+  { id: 'review',  label: '핸드 리뷰',  desc: '지난 판 되짚기 — 에퀴티·아웃츠·팟오즈·SPR', icon: 'microscope' },
+  { id: 'tourney', label: '토너먼트 랩', desc: 'ICM · 딜 · M존', icon: 'trophy' },
+  { id: 'rules',   label: '규칙 · 수학', desc: 'TDA 규칙과 포커 수학 보조', icon: 'gavel' },
 ];
 // eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유(§7 ⑥b)
 export const STORE_TOOL_KEYS = ['chip', 'sim', 'blindgen', 'payout', 'endtime'] as const;
-const STORE_SET = new Set<ToolKey>(STORE_TOOL_KEYS);
+/** 캘린더 뱅크롤로 이관(2026-09-11 오너 지시) — 자금 관리는 '전략 학습'이 아니라 '내 기록' 쪽 일이다.
+ *  ops 와 같은 조리법: 카탈로그·검색에서만 숨기고 renderTool·#tool= 딥링크는 그대로 산다. */
+// eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유
+export const CALENDAR_TOOL_KEYS = ['bankroll', 'variance'] as const;
+const STORE_SET = new Set<ToolKey>([...STORE_TOOL_KEYS, ...CALENDAR_TOOL_KEYS]);
 /** 레인 칩 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. 화면에 놓인 차례 그대로. */
 const LANE_ORDER = ['all', ...LANES.map((l) => l.id)] as (ToolCat | 'all')[];
 
@@ -103,6 +140,9 @@ const QUIZ_KEYS = new Set<ToolKey>(['drill', 'range', 'pushfold', 'trainer', 'po
 function renderTool(k: ToolKey): ReactNode {
   switch (k) {
     case 'tda': return <TdaRulesTool />;
+    // NURI SPOT — 직전 입력(tool:spot)이 있으면 그것으로, 없으면 기존 두 도구의 스냅샷에서 카드를 물려받는다.
+    //   그래야 '핸드 분석에서 카드 고르다 스팟으로 넘어온' 사용자가 처음부터 다시 안 찍는다.
+    case 'spot': return <NuriSpotPanel init={spotInitFromSnapshots()} />;
     // '결과 먼저': 빈 폼 대신 직전 입력(스냅샷) 또는 대표 데모 핸드(AKs vs QQ)로 진입 즉시 결과.
     case 'gto': {
       const saved = readSnap<DeepGtoInit>('tool:gto');
@@ -154,6 +194,14 @@ export type StoreToolKey = (typeof STORE_TOOL_KEYS)[number];
 export const getStoreTools = () => TOOLS.filter((t) => STORE_SET.has(t.key)) as { key: StoreToolKey; name: string; desc: string; icon: IconName }[];
 // eslint-disable-next-line react-refresh/only-export-components
 export const renderStoreTool = (k: StoreToolKey): ReactNode => renderTool(k);
+
+/** 캘린더 뱅크롤 이관분(2026-09-11) — StoreToolsPanel 과 같은 조리법. 레지스트리·렌더러를 재사용해 중복 정의 0. */
+export type CalendarToolKey = (typeof CALENDAR_TOOL_KEYS)[number];
+const CAL_SET = new Set<ToolKey>(CALENDAR_TOOL_KEYS);
+// eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유
+export const getCalendarTools = () => TOOLS.filter((t) => CAL_SET.has(t.key)) as { key: CalendarToolKey; name: string; desc: string; icon: IconName }[];
+// eslint-disable-next-line react-refresh/only-export-components -- 이관 렌더러 공유
+export const renderCalendarTool = (k: CalendarToolKey): ReactNode => renderTool(k);
 
 /** 도구 모음 — 4레인(학습/분석/계산기/매장운영) 카탈로그 + 카드형 런처.
  *  누르면 "그 카드 행 아래 인라인"이 아니라 **전체화면 페이지**로 연다.
@@ -396,6 +444,9 @@ export default function ToolsPanel() {
         </span>
       </button>
 
+      {/* NURI SPOT — GTO 홈의 대표 진입점. 검색·레인 칩보다 위, 그러나 낮게. */}
+      {!hits && <SpotHeroCard onOpen={open} />}
+
       {/* 도구 검색 */}
       <div className="relative">
         <Icon name="search" size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden />
@@ -404,9 +455,13 @@ export default function ToolsPanel() {
           className="input w-full text-sm" aria-label="도구 검색" />
       </div>
 
-      {/* 레인 필터 칩 — 보이는 높이 32px, 탭 타깃 44px(::before 로 위아래 6px 확장 · 가로는 gap 6px 라 확장하지 않음), aria-pressed 토글 */}
+      {/* 레인 필터 칩 — 보이는 높이 34px, 탭 타깃 46px(`.tap-y-44::before { inset:-6px 0 }` 로 위아래 6px 확장), aria-pressed 토글.
+          ⚠ gap-y 가 gap-x 보다 큰 이유(2026-09-11 실측): 갈래가 5개로 늘어 이 바가 360·375px 에서 **두 줄로 접힌다**.
+            gap-1.5(6.375px)는 위아래 줄의 6px 확장이 서로 겹치는 폭이라, 겹친 쪽은 나중 요소가 히트를 가져가
+            실효 터치 높이가 39px 로 줄었다(elementFromPoint 실측: '전체'·'트레이너' 39px).
+            gap-y-3(12.75px) > 6+6 이면 두 줄 모두 46px 을 온전히 가진다. 가로는 겹칠 확장이 없어 1.5 그대로. */}
       {!hits && (
-        <div data-tools-lanebar="" className="flex flex-wrap gap-1.5" role="group" aria-label="도구 분류 필터">
+        <div data-tools-lanebar="" className="flex flex-wrap gap-x-1.5 gap-y-3" role="group" aria-label="도구 분류 필터">
           {([{ id: 'all' as const, label: '전체' }, ...LANES]).map((l) => {
             const on = lane === l.id;
             return (
@@ -443,7 +498,7 @@ export default function ToolsPanel() {
           ? <p className="py-8 text-center text-2xs text-ink-muted">'{q.trim()}' 에 맞는 도구가 없습니다</p>
           : grid(hits)
       ) : (
-        // 4레인 — 비접이 소제목 섹션(필터 칩이 보이는 레인을 고른다)
+        // 5갈래 흐름 — 비접이 소제목 섹션(필터 칩이 보이는 갈래를 고른다)
         LANES.filter((l) => lane === 'all' || lane === l.id).map((l) => {
           const items = TOOLS.filter((t) => t.cat === l.id);
           return (
@@ -502,6 +557,49 @@ export default function ToolsPanel() {
 type TileTone = 'violet' | 'indigo' | 'fuchsia' | 'cyan';
 /** 레인 → 타일 색(v6.3): 차트 violet · 트레이닝 fuchsia · 분석 cyan · 계산기 indigo (emerald 는 라이브 신호색이라 제외) */
 const LANE_TONE: Record<string, TileTone> = { chart: 'violet', learn: 'fuchsia', analyze: 'cyan', calc: 'indigo', ops: 'indigo' };
+/**
+ * NURI SPOT 대표 카드 — GTO 홈의 첫 블록.
+ *
+ * 왜 카드 하나를 따로 세우나: 'spot' 은 카탈로그 안에서는 28개 중 하나로 보인다. 그런데 이건
+ * 도구가 아니라 **흐름**이다(분석 → 저장 → 토론). 그래서 카탈로그 위에 한 번 더 세운다.
+ * 대신 **높이를 낮게 유지**한다 — 모바일 첫 화면에서 이 카드 아래로 검색창·레인 칩·차트/트레이너가
+ * 바로 이어져야 한다(오너 지시 2: 첫 화면에서 새 스팟 분석·차트·트레이너 셋을 다 알아볼 수 있을 것).
+ */
+function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
+  return (
+    <section
+      data-testid="spot-hero"
+      className="relative rounded-card border border-accent-400/30 bg-surface-mid p-3"
+      // 히어로에만 강한 LED. 아래 도구 카드들은 이 빛을 반복하지 않는다(광량 단계).
+      style={{ boxShadow: '0 0 28px rgb(139 92 246 / 0.26), 0 0 52px rgb(34 211 238 / 0.10)' }}
+      aria-label="NURI SPOT"
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12"
+          style={{ background: 'radial-gradient(120% 120% at 50% 0%, #242B48 0%, #141930 58%, #0A0D1B 100%)' }} aria-hidden>
+          <img src="/brand/nuri-holdem-symbol.svg" alt="" width={20} height={20} draggable={false} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-extrabold tracking-tight text-ink-primary">NURI SPOT</p>
+          <p className="truncate text-2xs text-ink-muted">핸드 분석 · 리플레이 · 토론</p>
+        </div>
+        <span className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted"
+          title="프리플랍은 자체 차트·Nash 데이터와 일치할 때만 기준 빈도를 보여주고, 포스트플랍은 에퀴티·팟오즈만 계산합니다.">
+          프리플랍 차트 · 수학
+        </span>
+      </div>
+      <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+        <button type="button" onClick={() => onOpen('spot')} className="btn-primary min-h-[44px] text-xs">
+          새 스팟 분석
+        </button>
+        <button type="button" onClick={() => onOpen('spot')} className="btn-ghost min-h-[44px] text-xs">
+          내 스팟
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function ToolCard({ name, desc, icon, onClick, fav, onToggleFav, testId, tone = 'violet' }: {
   name: string; desc: string; icon: IconName; onClick: () => void; testId?: string; tone?: TileTone;
   fav?: boolean; onToggleFav?: () => void;
