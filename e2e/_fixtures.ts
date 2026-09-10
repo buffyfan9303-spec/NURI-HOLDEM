@@ -31,6 +31,8 @@ export const READ_ONLY_RPCS = new Set([
   //   can_view_vouchers · venue_weekly_funnel 은 DB 에서 STABLE 로 선언돼 있고,
   //   my_visited_venues 는 VOLATILE 표시만 안 됐을 뿐 본문이 순수 select 다(실측 확인).
   'can_view_vouchers', 'venue_weekly_funnel', 'my_visited_venues',
+  // 2026-09-10 순위표 실명 서버 마스킹(20260910b) — 순위 읽기 3곳이 테이블 select 대신 이 STABLE RPC 를 탄다.
+  'venue_rankings_public',
 ]);
 
 const SUPABASE_API = /^https:\/\/([a-z0-9]+)\.supabase\.co\/(rest|auth|storage|functions)\/v1\/(.*)$/;

@@ -88,10 +88,17 @@ export async function getVenueRealNameOptIns(venueId: string): Promise<Set<strin
   return new Set(await cachedVenueRealNameOptIns(venueId));
 }
 
-/** 순위 행에서 실제로 쓰는 컬럼만. `*` 를 쓰면 컬럼이 늘 때마다 조용히 함께 나간다.
- *  ⚠ real_name 은 **동의한 사람만** 화면에 뜬다(rankDisplay). 지금은 서버가 전원 것을 내려보내고
- *  클라이언트가 가리는 구조라, 서버 쪽 마스킹은 supabase/migrations/20260910a_… 로 따로 남겼다(미적용). */
-const RANK_COLS = 'position, nickname, real_name, prize, event_name';
+/** 순위 읽기는 전부 서버 RPC venue_rankings_public 을 탄다(2026-09-10, supabase/migrations/20260910b).
+ *  ⚠ real_name 은 **서버가** 가린다 — 매장 관리자·운영자이거나 본인이 실명 표시를 고른 닉네임에만 실리고
+ *  나머지는 null 로 온다. 예전엔 테이블을 직접 select 해 전원 실명을 받아 클라이언트(rankDisplay)가 가렸는데,
+ *  anon 키 하나로 전원 실명을 긁을 수 있는 구조였다. 테이블의 real_name 컬럼 권한은 배포 뒤 회수한다(같은 파일 B).
+ *  rankDisplay 의 클라이언트 규칙은 그대로 둔다 — 서버와 같은 규칙이라 결과가 같고, 이중 안전망이다. */
+type RankRow = { id: string; venue_id: string; ranking_date: string; position: number; nickname: string; real_name: string | null; prize: string | null; event_name: string | null };
+async function fetchRankingsPublic(venueIds: string[], dates?: string[]): Promise<RankRow[]> {
+  const { data, error } = await supabase.rpc('venue_rankings_public', { p_venue_ids: venueIds, p_dates: dates ?? null });
+  if (error) throw error;
+  return (data ?? []) as RankRow[];
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToEntry(r: any): RankingEntry {
@@ -114,13 +121,8 @@ export async function getVenueRankings(
   if (IS_MOCK) return { date: null, entries: [] };
   const d = date ?? (await getLatestRankingDate(venueId));
   if (!d) return { date: null, entries: [] };
-  // 명시 컬럼 — `*` 는 나중에 컬럼이 늘면 그대로 다 나간다(보안 표준 §6 '공개 RPC 는 select * 금지').
-  const { data, error } = await supabase
-    .from('venue_rankings').select(RANK_COLS)
-    .eq('venue_id', venueId).eq('ranking_date', d)
-    .order('position', { ascending: true });
-  if (error) throw error;
-  return { date: d, entries: (data ?? []).map(rowToEntry) };
+  const rows = await fetchRankingsPublic([venueId], [d]); // 서버 정렬: venue, date, position
+  return { date: d, entries: rows.map(rowToEntry) };
 }
 
 /**
@@ -139,14 +141,9 @@ export async function getRankingsBulk(
   const venueIds = [...new Set(pairs.map((p) => p.venueId))];
   const dates = [...new Set(pairs.map((p) => p.date))];
   // 교차곱이라 요청한 조합보다 넓게 잡힐 수 있다 — 아래에서 요청한 쌍만 남긴다.
-  const { data, error } = await supabase
-    .from('venue_rankings').select(`venue_id, ranking_date, ${RANK_COLS}`)
-    .in('venue_id', venueIds).in('ranking_date', dates)
-    .order('position', { ascending: true });
-  if (error) throw error;
+  const rows = await fetchRankingsPublic(venueIds, dates);
   const want = new Set(pairs.map((p) => `${p.venueId}|${p.date}`));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const r of (data ?? []) as any[]) {
+  for (const r of rows) {
     const key = `${r.venue_id}|${r.ranking_date}`;
     if (!want.has(key)) continue;
     (out[key] ??= []).push(rowToEntry(r));
@@ -213,13 +210,9 @@ export function formatPrize(prize: string | null | undefined, cfg?: Pick<VenuePa
 
 export async function getVenueRankingTotals(venueId: string, cfg?: VenuePageConfig | null): Promise<RankingTotal[]> {
   if (IS_MOCK) return [];
-  const { data, error } = await supabase
-    .from('venue_rankings').select('nickname, real_name, position, ranking_date')
-    .eq('venue_id', venueId);
-  if (error) throw error;
+  const rows = await fetchRankingsPublic([venueId]); // 날짜 전체
   const map = new Map<string, RankingTotal & { _lastDate: string }>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const r of (data ?? []) as any[]) {
+  for (const r of rows) {
     const nick = String(r.nickname ?? '').trim();
     if (!nick) continue;
     const key = nick.toLowerCase();

@@ -188,8 +188,9 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
       .eq('venue_id', venueId).eq('player_name', name),
     // 현금단가만으론 부족하다 — 카드단가(card_amount)·할인 프리셋(discounts)까지 있어야 통계·CSV 와 같은 값이 나온다.
     supabase.from('ledger_sessions').select('session_date, game_seq, buyin_amount, card_amount, discounts').eq('venue_id', venueId),
-    // 머니인(입상) — venue_rankings에는 name 컬럼이 없음: 닉네임/실명 둘 다 매칭
-    supabase.from('venue_rankings').select('id, nickname, real_name').eq('venue_id', venueId),
+    // 머니인(입상) — venue_rankings에는 name 컬럼이 없음: 닉네임/실명 둘 다 매칭.
+    // 서버 RPC 를 탄다(20260910b): 매장 관리자에겐 실명이 그대로 오고, 테이블의 real_name 직접 select 는 권한이 회수된다.
+    supabase.rpc('venue_rankings_public', { p_venue_ids: [venueId], p_dates: null }),
     getVenueReserverCounts(venueId),
   ]);
   const nameKey = name.trim().toLowerCase();
@@ -274,7 +275,7 @@ export async function getVenueCustomerStats(venueId: string, from?: string, to?:
   if (to) q = q.lte('session_date', to);
   const [{ data: bs }, { data: rk }] = await Promise.all([
     q,
-    supabase.from('venue_rankings').select('nickname, real_name, ranking_date').eq('venue_id', venueId),
+    supabase.rpc('venue_rankings_public', { p_venue_ids: [venueId], p_dates: null }), // 서버 RPC(20260910b) — 관리자에겐 실명 그대로
   ]);
   // 랭킹(머니인) 카운트 — 닉네임/실명 어느 쪽이든 매칭되도록 둘 다 키로 적재
   const moneyIn = new Map<string, number>();
