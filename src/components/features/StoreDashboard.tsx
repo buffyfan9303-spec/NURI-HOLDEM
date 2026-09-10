@@ -96,6 +96,10 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [wHeads, setWHeads] = useState<number | null>(null); // 위젯 사이드 게임 장부 **인원**(생존 폴백용)
   const [dowStats, setDowStats] = useState<{ avg: number | null; weeks: { label: string; entries: number }[] }>({ avg: null, weeks: [] }); // 같은 요일 4주(평균+주차별)
   const [dowOpen, setDowOpen] = useState(false); // 요일 추세 드릴다운(주차 막대) 펼침
+  /** 마지막으로 데이터가 도착한 시각 — 운영자가 '지금 보는 숫자가 언제 것인지' 알아야 새로고침을 판단한다.
+   *  라이브 구독이 붙어 있어도 구독은 숨김(다른 탭) 동안 꺼지므로 이 표시가 곧 신뢰도다. */
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [pendingReqs, setPendingReqs] = useState<BuyinRequest[]>([]); // 라이브 위젯: 대기중 바인 요청
   const [reqBusy, setReqBusy] = useState<string | null>(null); // 인라인 승인/거절 진행 중 요청 id
   const [payFor, setPayFor] = useState<string | null>(null); // 인라인 승인 결제수단 팝오버(✓ 길게 누르기)
@@ -221,7 +225,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       getVenueRankings(venueId, d).then(({ entries }) => setRankEventsToday(entries.map((e) => e.eventName ?? ''))).catch(() => {}),
       getVenueWeeklyFunnel(venueId).then(setFunnel).catch(() => {}),
       ids.length ? getReservationCounts(ids).then(setResCounts).catch(() => {}) : Promise.resolve(),
-    ]).then(() => setLoading(false));
+    ]).then(() => { setLoading(false); setRefreshedAt(new Date()); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, d]);
 
@@ -249,7 +253,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     [schedules, venueId, d],
   );
   useEffect(() => { if (active) return subscribeReservations(reload, upcomingIds); }, [reload, upcomingIds, active]);
-  useEffect(() => subscribeStaffSchedule(venueId, reload), [venueId, reload]);
+  // 이 줄만 active 게이트가 빠져 있어 숨은 탭에서도 채널을 물고 reload 를 돌렸다(다른 4개와 규칙을 맞춘다).
+  useEffect(() => { if (active) return subscribeStaffSchedule(venueId, reload); }, [venueId, reload, active]);
 
   // ── 오늘 장부 집계 ──
   // fin.entry 는 **금액 엔트리**(소수), cnt 는 **횟수·인원**. 라벨과 반드시 짝을 맞춘다(오너 규칙 2026-09-11).
@@ -448,17 +453,35 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   // ── 전주 대비(직전 7일) ──
   const prevDays = d14.slice(0, 7);
   const prevSet = new Set(prevDays);
-  let prevEntry = 0, prevPaid = 0;
+  // ⚠ 이번 주(weekEntry)는 **바이인 횟수**(위 perDay 의 entry += 1)다. 전주도 같은 척도로 세야 한다 —
+  //   여기만 금액 엔트리(f.entry)를 쓰면 할인·티켓이 있는 주에 전주가 실제보다 작게 잡혀 증감률이 부풀려진다.
+  //   (2026-09-11 오전에 이번 주만 횟수로 바꾸면서 이 줄이 남아 척도가 갈렸다.)
+  let prevBuyins = 0, prevPaid = 0;
   for (const b of range.buyins) {
     if (!prevSet.has(b.sessionDate)) continue;
     const s = sessByGame.get(`${b.sessionDate}#${b.gameSeq}`);
     if (!s) continue;
-    const f = buyinFinance(b, s);
-    prevEntry += f.entry; prevPaid += f.paid;
+    prevBuyins += 1; prevPaid += buyinFinance(b, s).paid;
   }
-  prevEntry = Math.round(prevEntry);
-  const entryDelta = prevEntry > 0 ? Math.round(((weekEntry - prevEntry) / prevEntry) * 100) : null;
+  const entryDelta = prevBuyins > 0 ? Math.round(((weekEntry - prevBuyins) / prevBuyins) * 100) : null;
   const paidDelta = prevPaid > 0 ? Math.round(((weekPaid - prevPaid) / prevPaid) * 100) : null;
+
+  // ── 오늘 게임별 운영 표(§5 다섯 번째 행) ─────────────────────────────────────
+  //   새 조회를 만들지 않는다 — range 는 이미 14일치 전 게임을 담고 있고, venueClocks 도 이미 있다.
+  //   ⚠ 집계는 반드시 정본 함수로: 횟수·인원은 ledgerCounts, 금액은 buyinFinance.
+  //     표시용으로 여기서 합산식을 새로 만들면 장부·정산과 숫자가 갈린다(오너 규칙 2026-09-11).
+  const todayGames = useMemo(() => {
+    const rows = range.sessions.filter((x) => x.sessionDate === d).sort((a, b) => a.gameSeq - b.gameSeq);
+    return rows.map((sx) => {
+      const bs = range.buyins.filter((b) => b.sessionDate === d && b.gameSeq === sx.gameSeq);
+      const c = ledgerCounts(bs);
+      let value = 0, unpaid = 0;
+      for (const b of bs) { const f = buyinFinance(b, sx); value += f.value; unpaid += f.unpaid; }
+      const ck = venueClocks.find((x) => x.gameSeq === sx.gameSeq) ?? null;
+      const ckLive = !!ck && (ck.running || ck.currentIndex > 0 || ck.endsAt != null);
+      return { sx, c, value, unpaid, ck, ckLive };
+    });
+  }, [range, d, venueClocks]);
 
   // ── 매장이용권(회수 티켓) 최근 7일 ──
   let weekTicket = 0;
@@ -608,6 +631,19 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               </span>
             )}
           </span>
+          {/* 2026-09-11 PC 개편: '마지막 갱신 + 새로고침'. 이 줄은 스티키라 높이를 늘리면 안 되므로
+              같은 줄 오른쪽 끝에 붙인다(ml-auto). 시각은 PC 에서만 — 360px 에선 매장명이 먼저다. */}
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            <span className="hidden text-2xs tabular-nums text-ink-muted lg:inline">
+              {refreshedAt ? `${String(refreshedAt.getHours()).padStart(2, '0')}:${String(refreshedAt.getMinutes()).padStart(2, '0')} 기준` : '불러오는 중'}
+            </span>
+            <button type="button" title="새로고침" aria-label="대시보드 새로고침"
+              disabled={refreshing || loading}
+              onClick={() => { setRefreshing(true); void Promise.resolve(reload()).finally(() => setRefreshing(false)); }}
+              className="grid h-8 w-8 place-items-center rounded-input text-ink-muted transition-colors hover:bg-surface-float/60 hover:text-ink-primary disabled:opacity-40">
+              <Icon name="refresh" size={13} className={refreshing ? 'animate-spin' : undefined} />
+            </button>
+          </span>
         </div>
       </div>
 
@@ -626,7 +662,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           {loading ? <div className="mt-2"><Skeleton /></div> : !started ? (
             <p className="mt-2 text-sm text-ink-muted">오늘 장부가 아직 시작되지 않았습니다.</p>
           ) : (
-            <span className="mt-2 flex flex-wrap items-end gap-x-5 gap-y-3">
+            /* 2026-09-11 PC 개편: flex-wrap 이면 1360px 에서 숫자 넷이 왼쪽 700px 에 몰리고 오른쪽이 통째로 빈다.
+               고정 4열 그리드로 폭을 실제로 쓴다. 모바일은 2×2 — 360px 에서도 숫자와 단위가 겹치지 않는다. */
+            <span className="mt-2 grid grid-cols-2 items-end gap-x-5 gap-y-3 lg:grid-cols-4">
               <span className="block">
                 <span className="block text-2xs text-ink-muted">완납 매출</span>
                 <span className="mt-1 block text-3xl font-extrabold leading-none tabular-nums text-gold-300">
@@ -1036,7 +1074,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 
       {/* 카드 사이 간격을 8.5 → 12.75 로. 카드도 최상위 블록과 같은 위계인데
           블록 사이만 12.75, 카드 사이는 8.5 로 갈려 있었다(1440 실측) — 한 값으로 맞춘다. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {/* 2026-09-11 PC 개편: xl(1360px)에서 3열. 2열로 두면 카드 하나가 660px 까지 늘어나
+          '한 카드 = 한 질문' 인 내용(숫자 2~3개)에 비해 빈 폭이 남고 세로만 길어진다. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {/* 오늘 장부 카드는 ③ KPI 헤드라인으로 격상(내용 동일 — 총 바이인·완납 매출·미수금·회수 이용권) */}
         {/* 클락 — 라이브 위젯이 클락을 표시 중(clockActive)이면 중복 방지 위해 숨김 */}
         <DashCard show={moreOpen && caps.ledger && !clockActive} title="토너먼트 클락" onClick={() => onGoto('clock')}
@@ -1095,11 +1135,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         {/* 전주 대비(주간 비교) */}
         <DashCard show={moreOpen && caps.manage} title="전주 대비" onClick={() => onGoto('stats')}
           badge={<span className="text-2xs font-bold text-ink-muted">주간 비교</span>}>
-          {loading ? <Skeleton /> : (weekEntry === 0 && prevEntry === 0) ? (
+          {loading ? <Skeleton /> : (weekEntry === 0 && prevBuyins === 0) ? (
             <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>
           ) : (
             <div className="space-y-2 py-0.5">
-              <CompareRow label="바이인" now={weekEntry} prev={prevEntry} delta={entryDelta} />
+              <CompareRow label="바이인" now={weekEntry} prev={prevBuyins} delta={entryDelta} />
               <CompareRow label="매출" now={weekPaid} prev={prevPaid} delta={paidDelta} won />
             </div>
           )}
@@ -1238,6 +1278,73 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
       </div>
+
+      {/* ── 오늘 게임·세션 운영 표(§5 다섯 번째 행 · 전체 폭) ──────────────────────
+          PC 는 상세를 카드 나열보다 표로 본다 — 게임이 여럿이면 카드로는 대소 비교가 안 된다.
+          모바일에서는 중요도가 낮은 열(첫 바인·리바인·클락)을 숨기고 표 자체가 내부 스크롤한다.
+          ⚠ 페이지 전체 가로 스크롤이 생기지 않게 스크롤은 이 컨테이너 안에서만(overflow-x-auto + min-w). */}
+      {caps.ledger && todayGames.length > 0 && (
+        <section className="rounded-aura border card-aura p-3" aria-labelledby="today-games-h">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p id="today-games-h" className="flex items-center gap-1.5 text-sm font-bold text-ink-primary">
+              <Icon name="layers" size={14} className="shrink-0 text-ink-muted" />오늘 게임
+              <span className="text-2xs font-normal text-ink-muted">· {todayGames.length}개</span>
+            </p>
+            <span className="text-2xs text-ink-muted">머니인 가치 = 게임에 투입된 총 가치(현금·카드·이체·이용권)</span>
+          </div>
+          <div className="overflow-x-auto scrollbar-none">
+            <table className="w-full min-w-[34rem] text-left text-xs">
+              <thead>
+                <tr className="border-b border-border-subtle text-2xs text-ink-muted">
+                  <th scope="col" className="py-1.5 pr-2 font-semibold">게임</th>
+                  <th scope="col" className="py-1.5 px-2 font-semibold">상태</th>
+                  <th scope="col" className="py-1.5 px-2 text-right font-semibold">플레이어</th>
+                  <th scope="col" className="hidden py-1.5 px-2 text-right font-semibold sm:table-cell">첫 바인</th>
+                  <th scope="col" className="hidden py-1.5 px-2 text-right font-semibold sm:table-cell">리바인</th>
+                  <th scope="col" className="py-1.5 px-2 text-right font-semibold">머니인 가치</th>
+                  <th scope="col" className="py-1.5 px-2 text-right font-semibold">미수</th>
+                  <th scope="col" className="hidden py-1.5 px-2 font-semibold lg:table-cell">클락</th>
+                  <th scope="col" className="py-1.5 pl-2 text-right font-semibold">작업</th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {todayGames.map(({ sx, c, value, unpaid, ck, ckLive }) => {
+                  const label = sx.gameSeq === MAIN_GAME_SEQ ? (sx.title || '메인') : (sx.title || `사이드 ${sx.gameSeq - 1}`);
+                  // 상태는 색만으로 구분하지 않는다 — 라벨을 항상 함께 쓴다(§6 접근성).
+                  const st = sx.closed ? { t: '마감', c: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30' }
+                    : sx.regClosed ? { t: '레지 마감', c: 'text-amber-500 bg-amber-400/10 border-amber-400/30' }
+                    : { t: '진행중', c: 'text-accent-300 bg-accent-300/10 border-accent-400/30' };
+                  return (
+                    <tr key={sx.gameSeq} className="border-b border-border-subtle/60 last:border-0 transition-colors hover:bg-surface-float/40">
+                      <th scope="row" className="max-w-[9rem] truncate py-2 pr-2 text-left font-semibold text-ink-primary">{label}</th>
+                      <td className="py-2 px-2">
+                        <span className={['inline-flex w-[4.4rem] justify-center rounded-badge border px-1.5 py-0.5 text-2xs font-bold', st.c].join(' ')}>{st.t}</span>
+                      </td>
+                      <td className="py-2 px-2 text-right text-ink-secondary">{c.players}</td>
+                      <td className="hidden py-2 px-2 text-right text-ink-secondary sm:table-cell">{c.firstBuyins}</td>
+                      <td className="hidden py-2 px-2 text-right text-ink-secondary sm:table-cell">{c.rebuys}</td>
+                      <td className="py-2 px-2 text-right font-bold text-gold-300">{wonToMan(value)}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">만</span></td>
+                      <td className={['py-2 px-2 text-right', unpaid > 0 ? 'font-bold text-danger-light' : 'text-ink-muted'].join(' ')}>{wonToMan(unpaid)}</td>
+                      <td className="hidden py-2 px-2 lg:table-cell">
+                        {ckLive
+                          ? <span className="inline-flex items-center gap-1 text-2xs font-bold text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />{ck?.running ? '진행' : '일시정지'}</span>
+                          : <span className="text-2xs text-ink-muted">미실행</span>}
+                      </td>
+                      <td className="py-2 pl-2 text-right">
+                        <button type="button"
+                          onClick={() => onGoto({ section: 'ledger', date: d, gameSeq: sx.gameSeq })}
+                          className="rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-300">
+                          장부
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* 더 보기 토글(IA3a) — 클락·전주 대비·직원·이용권·생일·손님 유형은 접힌 상태가 기본 */}
       <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen}
