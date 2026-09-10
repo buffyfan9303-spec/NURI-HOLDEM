@@ -2,7 +2,13 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 import { countVisitDays } from './checkins';
-import { customerLedgerTotals, rowToBuyin, MAIN_GAME_SEQ } from './ledger';
+/**
+ * 장부(업주용) 모듈을 **첫 화면 임계 경로에서 뺀다** — App.tsx 의 ledgerMod() 와 같은 조리법.
+ * App.tsx 가 이 파일을 정적 import 하므로(getReservationCounts·getMyReservations), 여기서 ledger 를
+ * 정적 import 하면 장부 API 전체(7.1KB gz)가 비로그인 모바일 손님의 첫 화면에 실린다(2026-09-11 실측).
+ * 실제로 쓰는 곳은 아래 getCustomerActivity(업주 전용 CRM) 한 곳뿐이라 그 자리에서 받아오면 된다.
+ */
+const ledgerMod = () => import('./ledger');
 
 /** 예약 변경 실시간 구독 — 신규/취소 예약을 게임관리에 자동 반영.
  *  ⚡ 트래픽 대비: scheduleIds 를 주면 그 포스터들의 예약만 수신한다(서버 필터).
@@ -181,13 +187,20 @@ export interface CustomerActivity {
 export async function getCustomerActivity(venueId: string, name: string): Promise<CustomerActivity> {
   const base: CustomerActivity = { name, buyins: 0, visits: 0, amount: 0, unpaid: 0, ticket: 0, support: 0, moneyIn: 0, reservations: 0 };
   if (IS_MOCK) return base;
-  const [{ data: bs }, { data: sess }, { data: rk }, resCounts] = await Promise.all([
+  // 금액 정본(buyinFinance 계열)은 여기서 처음 필요해진다 — 다른 조회와 함께 병렬로 받는다.
+  const ledger = ledgerMod();
+  // 1000행 절단 방지(F05) — 아래 ledger_sessions 조회는 **기간 필터가 아예 없다**(매장 전 영업일).
+  // 하루 2게임 3년이면 2천 행이라 1000에서 잘리고, 잘려나간 날짜의 바인은 단가를 못 찾아
+  // customerLedgerTotals 의 결제액·미수가 조용히 작아진다 — 에러도 뜨지 않는다.
+  const { fetchAllPaged } = await ledger;
+  const [{ data: bs }, sess, { data: rk }, resCounts] = await Promise.all([
     // buyinFinance 가 보는 필드 전부 — 분납 분해·티켓 T·미수액·할인 프리셋 index·기록 시점 스냅샷(cash/card/transfer)·buyin_at.
     supabase.from('ledger_buyins')
       .select('id, venue_id, session_date, game_seq, player_name, entry_no, payment_method, is_unpaid, is_split, cash_amount, card_amount, transfer_amount, ticket_count, unpaid_amount, discount_index, buyin_at')
       .eq('venue_id', venueId).eq('player_name', name),
     // 현금단가만으론 부족하다 — 카드단가(card_amount)·할인 프리셋(discounts)까지 있어야 통계·CSV 와 같은 값이 나온다.
-    supabase.from('ledger_sessions').select('session_date, game_seq, buyin_amount, card_amount, discounts').eq('venue_id', venueId),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchAllPaged<any>(() => supabase.from('ledger_sessions').select('session_date, game_seq, buyin_amount, card_amount, discounts').eq('venue_id', venueId).order('session_date').order('game_seq')),
     // 머니인(입상) — venue_rankings에는 name 컬럼이 없음: 닉네임/실명 둘 다 매칭.
     // 서버 RPC 를 탄다(20260910b): 매장 관리자에겐 실명이 그대로 오고, 테이블의 real_name 직접 select 는 권한이 회수된다.
     supabase.rpc('venue_rankings_public', { p_venue_ids: [venueId], p_dates: null }),
@@ -202,6 +215,7 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
   const rows = (bs ?? []) as any[];
   const dates = new Set<string>();
   rows.forEach((b) => dates.add(b.session_date));
+  const { customerLedgerTotals, rowToBuyin, MAIN_GAME_SEQ } = await ledger;
   const fin = customerLedgerTotals(
     rows.map(rowToBuyin),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -268,13 +282,23 @@ export function paymentLabel(code: string | null): string { return code ? (PAY_L
 
 export async function getVenueCustomerStats(venueId: string, from?: string, to?: string): Promise<CustomerStat[]> {
   if (IS_MOCK) return [];
-  let q = supabase.from('ledger_buyins')
-    .select('player_name, session_date, payment_method, is_unpaid, is_split, buyin_at')
-    .eq('venue_id', venueId);
-  if (from) q = q.gte('session_date', from);
-  if (to) q = q.lte('session_date', to);
-  const [{ data: bs }, { data: rk }] = await Promise.all([
-    q,
+  // 1000행 절단 방지(F05) — 여기서 잘리면 단골의 바인 횟수·방문일수가 조용히 작게 나온다.
+  // CustomerAnalytics 의 '전체' 기간은 from 을 안 넘기므로 매장 전 이력이 대상이다.
+  // 장부 모듈은 위 ledgerMod() 규칙대로 첫 화면 번들에 싣지 않고 이 자리에서 받는다.
+  // ⚠ 남은 절단: 아래 venue_rankings_public RPC(p_dates=null, setof)도 max_rows 대상이라
+  //    순위가 1000행을 넘는 매장은 '머니인'·'비율' 열이 여전히 작게 나올 수 있다.
+  const { fetchAllPaged } = await ledgerMod();
+  const build = () => {
+    let q = supabase.from('ledger_buyins')
+      .select('player_name, session_date, payment_method, is_unpaid, is_split, buyin_at')
+      .eq('venue_id', venueId);
+    if (from) q = q.gte('session_date', from);
+    if (to) q = q.lte('session_date', to);
+    return q.order('id'); // 페이지 경계 안정화(select 에 없어도 정렬 가능)
+  };
+  const [bs, { data: rk }] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchAllPaged<any>(build),
     supabase.rpc('venue_rankings_public', { p_venue_ids: [venueId], p_dates: null }), // 서버 RPC(20260910b) — 관리자에겐 실명 그대로
   ]);
   // 랭킹(머니인) 카운트 — 닉네임/실명 어느 쪽이든 매칭되도록 둘 다 키로 적재

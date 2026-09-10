@@ -602,6 +602,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // "티켓/현금/카드 등도 뺄 수 있게" → 축이 둘인 하나의 필터로 일반화한다.
   // 키 형식: `visitor:<유형>` · `method:<결제수단>`. 기본은 아무것도 제외하지 않음(전부 포함).
   const [exKeys, setExKeys] = useState<Set<string>>(() => new Set());
+  // 게임·날짜를 옮기면 제외를 푼다 — 저장되지 않는 임시 필터라 따라가면 다른 장부의 숫자가 말없이 걸러지고,
+  // 그 게임에서 한 적 없는 제외가 마감 메모에 자동으로 적힌다. 할인 프리셋(discPick)·라운드 프리셋과 같은 이유다.
+  useEffect(() => { setExKeys(new Set()); }, [date, gameSeq]);
 
   // 방문자 유형은 플레이어에 붙어 있다 — 바인에는 없으므로 이름으로 잇는다.
   const visitorByName = useMemo(
@@ -629,13 +632,16 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
 
   /** 마감 메모에 자동으로 적힐 제외 요약 — 무엇을 빼고 정산했는지가 기록에 남아야 감사가 된다. */
   const exNote = useMemo(() => {
-    if (exKeys.size === 0) return '';
+    // 켜져만 있고 실제로 빠진 행이 없으면 아무 말도 하지 않는다 — 0건짜리 필터가 켜져 있어도
+    // 마감 메모·토스트에 '정산 제외: 티켓'이 박혔고, 마감 모달의 제외 배너(removed.count > 0)는
+    // 뜨지 않아 같은 마감이 두 가지 말을 했다. 조건을 그 배너와 같은 것으로 맞춘다.
+    if (exKeys.size === 0 || !buyins.some(isExcluded)) return '';
     const labels = [...exKeys].map((k) => {
       const [kind, val] = k.split(':');
       return kind === 'visitor' ? visitorLabel(val) : (METHOD_LABEL[val as PaymentMethod] ?? val);
     });
     return `정산 제외: ${labels.join('·')}`;
-  }, [exKeys]);
+  }, [exKeys, buyins, isExcluded]);
 
   const stats = useMemo(() => {
     // 전체(기록)와 제외 적용(정산 기준)을 한 번에 센다 — 목록을 두 번 훑지 않는다.
@@ -1161,6 +1167,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
           </div>
           {/* 마감 요약 — 토스트 2.4초로 스치던 핵심 수치를 그 자리에 상시(인원차는 정산 누수 경보) */}
           <p className="text-2xs tabular-nums text-ink-secondary">
+            {/* 이 숫자가 무엇을 뺀 결과인지 밝힌다 — 제외는 저장되지 않는 임시 필터라, 화면을 새로 열면
+                같은 마감 메모('정산 제외: 관계자') 옆에 제외 전 숫자가 선다. 조건은 마감 모달의 제외 배너와 같다. */}
+            {stats.removed.count > 0 ? <span className="text-danger-light">제외 적용 · </span>
+              : session.closeMemo?.includes('정산 제외') ? <span className="text-ink-muted">제외 전 전체 기록 · </span> : null}
             바인 <b className="text-ink-primary">{stats.totalBuyins}</b> · 매출 <b className="text-ink-primary">{wonToMan(stats.revenue)}만</b>
             {stats.unpaid > 0 ? <> · 미수 <b className="text-danger-light">{wonToMan(stats.unpaid)}만</b></> : ' · 미수 없음'}
             {session.clockSnapshot && (() => {
@@ -1381,7 +1391,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                         {first ? (
                           <button type="button" disabled={!r.player || closed} onClick={() => r.player && setEditPlayer(r.player)} className="w-full text-left disabled:cursor-default">
                             <div className="flex items-center gap-1">
-                              <span className="text-xs font-bold text-ink-primary truncate max-w-[5rem]" title={r.name}>{r.name}</span>
+                              <span className="text-xs font-bold text-ink-primary truncate" title={r.name}>{r.name}</span>
                               <span className="text-[10px] text-ink-muted shrink-0">{cnt}회</span>
                             </div>
                             <div className="flex items-center gap-1 mt-0.5">

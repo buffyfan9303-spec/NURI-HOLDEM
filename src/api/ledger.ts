@@ -1034,19 +1034,46 @@ export async function getLedgerBuyins(venueId: string, date = today(), gameSeq =
   return (data ?? []).map(rowToBuyin);
 }
 
+/** PostgREST max_rows(=1000, supabase/config.toml:18) 페이지네이션 — 기간 조회 공용.
+ *  limit 이 없으면 1000행에서 **에러도 경고도 없이** 잘린다. 아래 getLedgerRange 주석이 말하는
+ *  "'0원'과 '못 불러옴'이 같아 보인다"보다 절단이 더 나쁘다 — 그럴듯하게 작은 매출이 나온다.
+ *  통계 '총괄' 탭은 from=2000-01-01 이라 활성 매장이면 확정적으로 넘는다.
+ *  ⚠ build() 에는 **고유 정렬**을 반드시 넣는다. 정렬이 없으면 페이지 경계에서 행이 겹치거나 샌다.
+ *  ⚠ 페이지 크기는 max_rows 와 같아야 한다 — 그래야 '1000 미만 = 마지막 페이지' 판정이 성립한다.
+ *  ⚠ build() 는 매 페이지마다 **새 빌더**를 만들어야 한다. PostgREST 빌더는 1회용이다. */
+const LEDGER_PAGE = 1000;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchAllPaged<T>(build: () => any): Promise<T[]> {
+  const out: T[] = [];
+  for (let p = 0; p < 200; p++) {
+    const { data, error } = await build().range(p * LEDGER_PAGE, p * LEDGER_PAGE + LEDGER_PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < LEDGER_PAGE) return out;
+  }
+  // 20만 행 초과 — 조용한 절단(=틀린 매출)보다 드러나는 실패가 낫다.
+  throw new Error('기간이 너무 넓어 장부를 다 불러오지 못했습니다. 기간을 좁혀 주세요.');
+}
+
 /** 기간 통계용 — 날짜 범위의 세션 + 바인 일괄 조회 */
 export async function getLedgerRange(venueId: string, from: string, to: string): Promise<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }> {
   if (IS_MOCK) return { sessions: [], buyins: [] };
-  const [sRes, bRes] = await Promise.all([
-    supabase.from('ledger_sessions').select('*').eq('venue_id', venueId).gte('session_date', from).lte('session_date', to),
-    supabase.from('ledger_buyins').select('*').eq('venue_id', venueId).gte('session_date', from).lte('session_date', to),
-  ]);
   // 통계는 '0원'과 '못 불러옴'이 시각적으로 같아서 특히 위험하다 — 매출이 0으로 보이면 사장님이 오판한다.
-  if (sRes.error) throw sRes.error;
-  if (bRes.error) throw bRes.error;
+  // 그래서 error 를 삼키지 않고(fetchAllPaged 가 throw), 1000행 절단도 페이지네이션으로 없앤다.
+  const [sRows, bRows] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchAllPaged<any>(() => supabase.from('ledger_sessions').select('*')
+      .eq('venue_id', venueId).gte('session_date', from).lte('session_date', to)
+      .order('session_date').order('game_seq')),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchAllPaged<any>(() => supabase.from('ledger_buyins').select('*')
+      .eq('venue_id', venueId).gte('session_date', from).lte('session_date', to)
+      .order('id')),
+  ]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sessions = (sRes.data ?? []).map((d: any) => rowToSession(venueId, d.session_date, d));
-  const buyins = (bRes.data ?? []).map(rowToBuyin);
+  const sessions = sRows.map((d: any) => rowToSession(venueId, d.session_date, d));
+  const buyins = bRows.map(rowToBuyin);
   return { sessions, buyins };
 }
 
@@ -1267,9 +1294,13 @@ export interface BuyinReqStats { total: number; approved: number; rejected: numb
 export async function getBuyinRequestStats(venueId: string, from: string, to: string): Promise<BuyinReqStats> {
   const empty: BuyinReqStats = { total: 0, approved: 0, rejected: 0, pending: 0, approveRate: 0, avgWaitMin: null };
   if (IS_MOCK) return empty;
-  const { data, error } = await supabase.from('ledger_buyin_requests')
-    .select('status, created_at, resolved_at').eq('venue_id', venueId).gte('session_date', from).lte('session_date', to);
-  if (error || !data) return empty;
+  // 1000행 절단 방지(F05) — 잘리면 요청수·승인율·평균대기가 조용히 틀린다.
+  // 실패 시 empty 반환은 기존 동작 그대로(호출부 LedgerStatsPanel 은 null 로 접는다).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = await fetchAllPaged<any>(() => supabase.from('ledger_buyin_requests')
+    .select('status, created_at, resolved_at').eq('venue_id', venueId)
+    .gte('session_date', from).lte('session_date', to).order('id')).catch(() => null);
+  if (!data) return empty;
   let approved = 0, rejected = 0, pending = 0, waitSum = 0, waitN = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const r of data as any[]) {

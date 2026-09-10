@@ -56,3 +56,62 @@ export function hasRankingForGame(game: RankingGame, savedEventNames: Iterable<s
   if (saved.size === 0) return false;
   return rankingEventCandidates(game).some((c) => saved.has(c));
 }
+
+/** 이 게임의 순위로 **이미 저장된 행 수** — hasRankingForGame 과 같은 후보 집합으로 센다(교체 경고용). */
+export function countRankingsForGame(game: RankingGame, savedEventNames: Iterable<string | null | undefined>): number {
+  const cands = new Set(rankingEventCandidates(game));
+  let n = 0;
+  for (const e of savedEventNames) if (cands.has(normalizeEventName(e))) n++;
+  return n;
+}
+
+/**
+ * 장부 명단의 '실명(닉네임)' 합성 표기 → 순위 칸 {닉네임, 실명}.
+ *
+ * 왜 한 곳에 두나(2026-09-11): 장부(NuriPosLedger pickRegistered)는 가입자를 고르면 `실명(닉네임)` 으로 적는다.
+ * 그 문자열을 통째로 닉네임 칸에 넣으면 ① 회원 대조가 전부 '비회원'이 되어 그 선수의 전적·뱃지에 한 건도 안 붙고,
+ * ② 공개 순위표는 닉네임 칸을 마스킹하지 않으므로 **실명이 그대로 노출**된다(2026-09-10 서버 마스킹 우회).
+ * 순위 화면(VenueManageTab.addFromLedger·자동완성 '장부' 칩)은 이 분리를 이미 하고 있었고 클락 END 저장만 빠져 있었다 —
+ * 같은 규칙을 세 곳이 각자 들고 있으면 또 한 곳만 고쳐지므로 여기로 모은다.
+ *  · 괄호가 없으면 통째로 닉네임이다(비회원 자유 입력).
+ *  · 경계는 **첫 여는 괄호**다(순위 화면의 기존 규칙 그대로). 서버 accrue_voucher 는 마지막 괄호로 가르므로
+ *    중첩 괄호 이름에서만 둘이 갈린다 — 실제 데이터에 없는 경우라 여기서 통일하지 않는다.
+ *  · 장부는 닉네임이 없는 회원을 '실명()' 로 적는다 → 닉네임 '' · 실명만 채운다. 실명을 닉네임 칸에 넣지 않는다
+ *    (공개 순위표는 닉네임 칸을 가리지 않는다). 호출부가 빈 닉네임을 거절해야 한다.
+ */
+export function splitLedgerName(raw: string): { nickname: string; realName: string } {
+  const s = raw.trim();
+  const m = s.match(/^(.+?)\((.*)\)$/);
+  return { nickname: (m ? m[2] : s).trim(), realName: (m ? m[1] : '').trim() };
+}
+
+/**
+ * 클락 입상 순위 입력칸 → 저장 엔트리. 이름을 분리하고 **비어 있는 줄만** 버린다.
+ * 닉네임이 빈 엔트리('실명()')는 남겨 둔다 — 여기서 조용히 버리면 뒤 등수가 한 칸씩 당겨진다.
+ * 호출부(클락 END)가 등수를 짚어 거절한다.
+ */
+export function finishEntriesFromRows(rows: { name: string }[]): { nickname: string; realName: string }[] {
+  return rows.filter((r) => r.name.trim()).map((r) => splitLedgerName(r.name));
+}
+
+/**
+ * 클락 END 저장의 **대회 이름과 교체 경고 수치**.
+ *
+ * 서버 save_venue_rankings 는 (날짜, event_name) **한 이름만** 지우고 넣는다. 그런데 메인 게임은 ''(기본 칩)와
+ * 장부 제목 둘 다 정상값이라(파일 머리말), 경고는 둘을 세면서 저장은 한 이름만 지우면
+ * "교체됩니다" 가 거짓이 되고 두 벌이 남는다(2026-09-11 리뷰). 그래서 저장 이름을 **이미 행이 있는 후보**로 맞춘다:
+ *   rankingEventOf(game) 에 행이 있으면 그것 → 없고 다른 후보에 행이 있으면 그 후보 → 아무 데도 없으면 rankingEventOf(game).
+ * leftover = 다른 후보 이름으로 남는 행 수(서버가 안 지움). 0 이 아니면 경고문에 적어 사실대로 말한다.
+ */
+export function rankingSaveTarget(
+  game: RankingGame, savedEventNames: Iterable<string | null | undefined>,
+): { eventName: string; replaces: number; leftover: number } {
+  const counts = new Map<string, number>();
+  for (const e of savedEventNames) { const k = normalizeEventName(e); counts.set(k, (counts.get(k) ?? 0) + 1); }
+  const has = (n: string) => (counts.get(n) ?? 0) > 0;
+  const preferred = rankingEventOf(game);
+  const eventName = has(preferred) ? preferred : (rankingEventCandidates(game).find(has) ?? preferred);
+  const replaces = counts.get(eventName) ?? 0;
+  const leftover = rankingEventCandidates(game).filter((c) => c !== eventName).reduce((n, c) => n + (counts.get(c) ?? 0), 0);
+  return { eventName, replaces, leftover };
+}

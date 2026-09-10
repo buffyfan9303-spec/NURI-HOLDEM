@@ -1,7 +1,9 @@
 // src/api/checkins.ts — QR 체크인. 기록은 check_in RPC로만(로그인 회원·4시간 중복 방지).
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
-import { kstToday } from './ledger';
+// ⚠ './ledger' 에서 가져오면 안 된다 — checkins 는 App.tsx 가 정적 import 하므로 장부 API 전체(7.1KB gz)가
+//    비로그인 손님의 첫 화면 임계 경로에 실린다(2026-09-11 실측). 같은 함수의 원본을 직접 쓴다.
+import { kstToday } from '../lib/kst';
 
 export interface Checkin { id: string; venueId: string; userId: string; displayName: string | null; createdAt: string }
 

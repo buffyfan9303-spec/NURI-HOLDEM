@@ -25,6 +25,7 @@ import { listGamePresets, saveGamePreset, type GamePreset } from '../../../api/p
 import { applyToClock, presetFromClockConfig } from '../../../lib/gameInherit';
 import PresetPicker from '../PresetPicker';
 import { saveVenueRankings, getVenueRankings } from '../../../api/rankings';
+import { rankingSaveTarget, finishEntriesFromRows } from '../../../lib/rankingGame';
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
@@ -490,16 +491,38 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   };
   const saveFinishRanks = async () => {
     if (!state.sessionDate || !finishRows) return;
-    const entries = finishRows.filter((r) => r.name.trim()).map((r) => ({ nickname: r.name.trim(), realName: '' }));
-    if (!entries.length) { toast.show('최소 1명의 입상자를 입력하세요', 'error'); return; }
+    // 장부 자동완성이 주는 이름은 '실명(닉네임)' 합성 표기다 — 통째로 닉네임 칸에 넣으면 그 선수 계정에
+    // 한 건도 안 붙고, 공개 순위표가 닉네임 칸을 가리지 않아 실명이 그대로 노출됐다(2026-09-11 점검).
+    // 순위 화면과 같은 분리 규칙(splitLedgerName)을 쓴다.
+    // 등수는 줄 번호다 — 채워진 줄 **앞에** 빈 줄이 있으면 뒤 등수가 조용히 당겨지므로 저장하지 않는다(순위 화면과 같은 태도).
+    // 뒤쪽 빈 줄은 안 쓴 칸이라 그냥 버린다.
+    const lastFilled = finishRows.reduce((last, r, i) => (r.name.trim() ? i : last), -1);
+    if (lastFilled < 0) { toast.show('최소 1명의 입상자를 입력하세요', 'error'); return; }
+    const gap = finishRows.findIndex((r, i) => i < lastFilled && !r.name.trim());
+    if (gap >= 0) { toast.show(`${gap + 1}위가 비어 있습니다 — 채우거나 아래 줄을 지우세요`, 'error'); return; }
+    const entries = finishEntriesFromRows(finishRows);
+    // '실명()'(닉네임 없는 회원)은 닉네임이 비어 저장할 수 없다 — 실명을 닉네임 칸에 넣으면 공개 순위표에 그대로 노출된다.
+    const noNick = entries.findIndex((e) => !e.nickname);
+    if (noNick >= 0) { toast.show(`${noNick + 1}위 이름을 확인하세요 — 닉네임이 없는 회원은 순위 화면에서 회원 검색으로 넣어 주세요`, 'error'); return; }
     setFinishBusy(true);
     try {
-      // 같은 (날짜, 이벤트)에 이미 저장된 순위가 있으면 통째 교체됨을 알린다 — 무음 대체 방지
-      const evName = (cfg.title || '').trim();
+      // 대회 이름은 클락 제목(cfg.title)이 아니라 **연결된 장부의 제목**으로 만든다.
+      // 장부·대시보드의 '순위 미입력' 판정(hasRankingForGame)이 장부 제목을 보므로, 클락 제목으로 저장하면
+      // 저장했는데도 '미입력'으로 남아 업주가 한 번 더 입력 → 같은 대회가 두 이름으로 두 벌 등재됐다.
+      // 조회 실패는 그대로 던진다 — 틀린 이름으로 조용히 저장하는 것이 바로 그 사고다.
+      const session = await getLedgerSession(state.venueId, state.sessionDate, state.gameSeq);
+      const game = { gameSeq: state.gameSeq, title: session.title };
+      // 서버는 (날짜, event_name) 한 이름만 지우고 넣는다. 메인은 ''·제목 둘 다 정상값이라, 이미 행이 있는 이름으로
+      // 저장해야 아래 "교체됩니다" 가 사실이 된다. 다른 이름으로 남는 행이 있으면 그것도 그대로 말한다.
       const prevRanks = await getVenueRankings(state.venueId, state.sessionDate).catch(() => ({ date: null, entries: [] }));
-      const clash = prevRanks.entries.filter((pe) => (pe.eventName ?? '') === evName).length;
-      if (clash > 0 && !window.confirm(`'${evName || '메인'}' 이벤트에 이미 저장된 순위 ${clash}명이 있습니다.\n저장하면 기존 순위가 이 결과로 교체됩니다(과거 상금 기록은 그대로 남습니다). 계속할까요?`)) {
-        setFinishBusy(false); return;
+      const { eventName: evName, replaces, leftover } = rankingSaveTarget(game, prevRanks.entries.map((pe) => pe.eventName));
+      if (replaces + leftover > 0) {
+        const msg = [
+          replaces > 0 ? `'${evName || '메인'}' 이벤트에 이미 저장된 순위 ${replaces}명이 있습니다.\n저장하면 기존 순위가 이 결과로 교체됩니다(과거 상금 기록은 그대로 남습니다).` : '',
+          leftover > 0 ? `같은 게임이 다른 이름('${evName ? '메인(기본)' : session.title}')으로 저장된 ${leftover}명은 교체되지 않고 남습니다 — 순위 화면에서 정리하세요.` : '',
+          '계속할까요?',
+        ].filter(Boolean).join('\n');
+        if (!window.confirm(msg)) { setFinishBusy(false); return; }
       }
       await saveVenueRankings(state.venueId, state.sessionDate, entries, evName);
       toast.show(`입상 ${entries.length}명 순위 저장 완료. 매장 순위·시즌에 반영됩니다`, 'success');

@@ -27,8 +27,19 @@ describe('normalizeCheckInResult', () => {
 describe('toMyBuyinRequest', () => {
   it('RPC 행 → 화면 모델, 매장명 없으면 폴백', () => {
     expect(toMyBuyinRequest({ id: 'r1', venue_id: 'v1', status: 'approved', requested_game_seq: 2, game_seq: 1, resolve_note: null, venue_name: '누리 홀덤' }))
-      .toEqual({ id: 'r1', venueId: 'v1', venueName: '누리 홀덤', status: 'approved', requestedGameSeq: 2, gameSeq: 1, rejectReason: null });
+      .toEqual({ id: 'r1', venueId: 'v1', venueName: '누리 홀덤', status: 'approved', requestedGameSeq: 2, gameSeq: 1, rejectReason: null, usedVoucher: false });
     expect(toMyBuyinRequest({ id: 'r2', venue_id: 'v2', status: 'rejected', resolve_note: '마감', venue_name: null }))
-      .toEqual({ id: 'r2', venueId: 'v2', venueName: '매장', status: 'rejected', requestedGameSeq: null, gameSeq: null, rejectReason: '마감' });
+      .toEqual({ id: 'r2', venueId: 'v2', venueName: '매장', status: 'rejected', requestedGameSeq: null, gameSeq: null, rejectReason: '마감', usedVoucher: false });
+  });
+
+  // used_voucher 는 20260911c 가 추가한 칸이다. 화면은 이 값이 true 일 때만
+  // "이용권은 지갑으로 돌아갔어요" 를 말한다 — 마이그레이션 적용 전 서버는 이 칸을 안 주므로
+  // 그때 true 로 새면 **일어나지 않은 일을 말하게 된다**. 그래서 엄격히 true 만 true 다.
+  it('이용권 요청 표시는 서버가 true 라고 말할 때만 true', () => {
+    const base = { id: 'r3', venue_id: 'v3', status: 'pending' as const, venue_name: '누리' };
+    expect(toMyBuyinRequest({ ...base, used_voucher: true }).usedVoucher).toBe(true);
+    expect(toMyBuyinRequest({ ...base, used_voucher: false }).usedVoucher).toBe(false);
+    expect(toMyBuyinRequest({ ...base, used_voucher: null }).usedVoucher).toBe(false);
+    expect(toMyBuyinRequest(base).usedVoucher, '마이그레이션 적용 전(칸 없음)에는 말하지 않는다').toBe(false);
   });
 });

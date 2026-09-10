@@ -77,6 +77,23 @@ test.describe('부팅 예산 — 첫 화면과 경쟁하는 것이 없어야 한
       .toEqual([]);
   });
 
+  // ⚠ 위 테스트로는 이 회귀가 안 잡힌다 — 그쪽은 '6초 안에 한 번이라도 받았는가' 를 보는데,
+  //   idle 예열(App.tsx warm)이 ToolsPanel 등을 통해 장부 청크를 **정상적으로** 받아 가기 때문이다.
+  //   문제는 '언제 받았나' 가 아니라 **index.html 이 첫 페인트에 미리 받으라고 시켰나**(modulepreload)다.
+  //   2026-09-11 실측: src/api/checkins.ts 가 날짜 헬퍼 하나(kstToday) 때문에 장부 API 를 정적 import 해서
+  //   1215줄 모듈(7.1KB gz)이 비로그인 모바일 손님의 임계 경로에 실려 있었다(예산 여유 0%).
+  //   App.tsx 는 같은 이유로 이미 dynamic import 를 쓰고 있었는데 checkins·reservations 경유로 되돌아온 것이다.
+  //   정적 검사라 타이밍에 흔들리지 않는다.
+  test('🔴 업주 전용 모듈이 첫 화면 임계 경로(modulepreload)에 없다', async ({ page }) => {
+    const html = await (await page.request.get('/')).text();
+    const preloads = [...html.matchAll(/<link\b[^>]*rel="modulepreload"[^>]*href="\/assets\/([^"]+)"/g)].map((m) => m[1]);
+    expect(preloads.length, 'modulepreload 를 하나도 못 읽었다 — 정규식이 빌드 산출물과 어긋났다').toBeGreaterThan(0);
+
+    const OWNER = /^(ledger|NuriPosLedger|VenueManageTab|LedgerStatsPanel|LedgerSettlementPanel|StaffPayroll|VoucherManage|clock|TournamentClock)-/;
+    const leaked = preloads.filter((f) => OWNER.test(f));
+    expect(leaked, `업주 전용 모듈이 손님의 첫 화면에 실렸다:\n${leaked.join('\n')}`).toEqual([]);
+  });
+
   test('첫 화면 데이터 요청이 프리페치보다 먼저 나간다 @boot', async ({ page }) => {
     // ⚠ 처음엔 Date.now() 로 두 요청의 시각을 재서 비교했다. 단독 실행에서는 통과하는데
     //   전체 스위트를 워커 6개로 돌리면 간헐 실패했다 — 재는 쪽(테스트 프로세스)이 부하를 받아

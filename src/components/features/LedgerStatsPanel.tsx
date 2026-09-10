@@ -745,67 +745,130 @@ function Section({ icon, title, suffix, children }: { icon: IconName; title: str
   );
 }
 
-// ── AI 주간 리포트(데이터 기반 인사이트) ───────────────────────────────────────
+// ── 운영 리포트(결정론적 로컬 계산) ──────────────────────────────────────────
+//
+// ⚠ 외부 AI 를 부르지 않는다. `src/api/aiSurface.test.ts` 가 이 계약을 소스 수준에서 잠근다.
+//
+// 2026-09-11 정리(오너 지시) — 예전 규칙에는 네 가지 문제가 있었다:
+//   ① 표본 가드가 `total === 0` 뿐이라 **바인 1건에도 "○요일이 가장 부진합니다"** 를 단정했다.
+//   ② 비용 데이터가 없는데 "마진 하락의 원인" 이라고 말했다 — 장부에 상금·인건비·임대료가 없다.
+//   ③ "상위 바인 유저 ○○ 님에게 티켓을 리워드로" — 근거 없는 일률 권고에 **고객 실명까지** 리포트에 실었다.
+//   ④ "새틀라이트·하이롤러 같은 사이드를 추가" — 데이터 없이 특정 대회 형식을 추천했다.
+//
+// 그래서 규칙마다 셋을 강제한다:
+//   · 최소 표본 — 못 넘기면 문장을 만들지 않고 '판단할 데이터가 부족합니다'
+//   · 비교 기준 — 무엇 대비인지 문장 안에 적는다
+//   · 근거 수치 — 제안마다 basis 를 함께 돌려 화면이 '왜 이 제안인지'를 보여준다
+
+/** 어떤 진단이든 이 아래면 문장을 만들지 않는다.
+ *  근거: 바인 10건이면 1건이 비율을 10%p 흔든다 — 그 이하에서 '비중이 높다/낮다'는 말은 잡음이다.
+ *  영업 3일은 요일 비교에 필요한 최소 관측점(아래 MIN_DOW_REPEAT)과 짝을 이루는 하한이다. */
+const MIN_BUYINS = 10;
+const MIN_DAYS = 3;
+/** 요일 비교는 각 요일이 최소 2번은 돌아야 한 번의 이상치가 결론이 되지 않는다. */
+const MIN_DOW_REPEAT = 2;
+
+/** 실행 제안 — 문장과 **그 근거 수치**를 항상 같이 낸다(근거 없이 뜨는 제안을 만들지 않기 위해). */
+export interface OpsAction { text: string; basis: string }
+
+export interface OpsReportResult {
+  /** 기간에 바인 기록이 아예 없다 */
+  empty: boolean;
+  /** 기록은 있지만 최소 표본에 못 미쳐 **진단을 만들지 않았다** */
+  lowSample: boolean;
+  /** 데이터 신뢰도 — 화면이 그대로 보여준다(§리포트 9. 데이터 신뢰도) */
+  coverage: { days: number; buyins: number; players: number; dowReady: boolean };
+  sales: string; risk: string; weekday: string;
+  actions: OpsAction[];
+}
+
 interface StatsAgg {
   total: number; entries: number; revenue: number; unpaid: number; players: number; ticket: number;
-  cardRatio: number; unpaidRatio: number; discountRatio: number; discountCnt: number;
+  cardRatio: number; unpaidRatio: number; discountRatio: number; discountCnt: number; discSum: number;
   ranking: [string, number][];
   mainBuyins: number; mainRev: number; sideBuyins: number; sideRev: number; sideGameCount: number;
   dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string>; sideE: number; sideRev: number }>;
 }
 
-function buildOpsReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; risk: string; weekday: string; actions: string[] } {
-  if (m.total === 0) return { empty: true, sales: '', risk: '', weekday: '', actions: [] };
+function buildOpsReport(m: StatsAgg, days = 7): OpsReportResult {
   const man = (won: number) => wonToMan(won);
-  const periodLabel = days <= 7 ? '이번 주' : `최근 ${days}일`;
-  const dows = Object.entries(m.dow).map(([w, d]) => ({ w: Number(w), avg: d.dates.size ? d.entries / d.dates.size : 0, rev: d.dates.size ? d.revenue / d.dates.size : 0, sideAvg: d.dates.size ? d.sideE / d.dates.size : 0 }));
+  const periodLabel = days <= 7 ? '최근 7일' : `최근 ${days}일`;
+  // 영업일 = 실제로 바인이 있었던 날. days 는 '조회 창'이라 휴무일까지 센다 — 표본은 영업일로 재야 한다.
+  const openDays = new Set<string>();
+  for (const d of Object.values(m.dow)) for (const dt of d.dates) openDays.add(dt);
+  const coverageBase = { days: openDays.size, buyins: m.total, players: m.players };
+
+  if (m.total === 0) {
+    return { empty: true, lowSample: false, coverage: { ...coverageBase, dowReady: false },
+             sales: '', risk: '', weekday: '', actions: [] };
+  }
+
+  // 요일 비교 자격 — **각 요일이 2회 이상 돌아간** 요일만 비교 대상이다.
+  const dows = Object.entries(m.dow)
+    .map(([w, d]) => ({ w: Number(w), n: d.dates.size, avg: d.dates.size ? d.buyins / d.dates.size : 0, rev: d.dates.size ? d.revenue / d.dates.size : 0 }))
+    .filter((d) => d.n >= MIN_DOW_REPEAT);
+  const dowReady = dows.length >= 2;
+  const coverage = { ...coverageBase, dowReady };
+
+  if (m.total < MIN_BUYINS || openDays.size < MIN_DAYS) {
+    return {
+      empty: false, lowSample: true, coverage,
+      sales: `${periodLabel} 바인 ${m.total}회 · 영업 ${openDays.size}일 · 플레이어 ${m.players}명이 기록됐습니다.`,
+      risk: '', weekday: '',
+      actions: [],
+    };
+  }
+
   dows.sort((a, b) => b.avg - a.avg);
   const best = dows[0];
   const worst = dows.length ? dows[dows.length - 1] : null;
   const meanAvg = dows.length ? dows.reduce((s, d) => s + d.avg, 0) / dows.length : 0;
-  const weak = dows.filter((d) => d.avg < meanAvg).sort((a, b) => a.avg - b.avg).slice(0, 2).map((d) => DOW[d.w]);
-  const top = m.ranking.slice(0, 2).map(([n]) => n);
 
-  // 사이드 게임 매출 기여도 — 메인 대비 사이드 매출 비중 진단
+  // ── 매출·참여 — 판단이 아니라 **사실과 비교 기준**만 적는다(비용 데이터가 없어 수익·마진은 말하지 않는다) ──
   const totalRev = m.mainRev + m.sideRev;
   const sideShare = totalRev > 0 ? (m.sideRev / totalRev) * 100 : 0;
   const sideLine = m.sideGameCount > 0
-    ? ` 또한 사이드 게임 ${m.sideGameCount}종이 전체 매출의 약 ${Math.round(sideShare)}%(${man(m.sideRev)}만 원·${m.sideBuyins.toFixed(0)}회)를 책임집니다. ${sideShare >= 30 ? '사이드가 핵심 매출원이니 라인업을 더 늘려보세요' : sideShare >= 10 ? '사이드가 메인 매출을 잘 보완하고 있습니다' : '사이드 비중이 낮아 시간대·홍보를 조정할 여지가 있습니다'}.`
-    : ' 아직 사이드 게임 기록이 없습니다. 새틀라이트·하이롤러 같은 사이드를 1~2종 추가하면 객단가를 끌어올릴 수 있습니다.';
+    ? ` 사이드 게임 ${m.sideGameCount}종이 완납 매출의 ${Math.round(sideShare)}%(${man(m.sideRev)}만 원 · ${m.sideBuyins}회)를 차지합니다.`
+    : ' 이 기간에 사이드 게임 기록은 없습니다.';
+  const sales =
+    `${periodLabel} 완납 매출 ${man(m.revenue)}만 원 · 바이인 ${m.total}회 · 플레이어 ${m.players}명(영업 ${openDays.size}일).` +
+    ` 결제수단 중 카드 비중은 ${Math.round(m.cardRatio)}%입니다(완납 매출 대비).` + sideLine;
 
-  // 요일별 진단(안좋은 날)
-  let weekday: string;
-  if (dows.length <= 1) {
-    weekday = '아직 요일별 비교에 충분한 데이터가 없습니다. 며칠 더 운영되면 요일 패턴(약한 요일)을 진단해 드립니다.';
-  } else {
-    const sideDays = dows.filter((d) => d.sideAvg > 0).sort((a, b) => b.sideAvg - a.sideAvg);
-    const sidePat = sideDays.length ? ` 사이드 게임은 ${DOW[sideDays[0].w]}요일에 가장 활발합니다(평균 ${sideDays[0].sideAvg.toFixed(1)}회). 그날 사이드 라인업을 강화해 보세요.` : '';
-    weekday = `${DOW[worst!.w]}요일이 가장 부진합니다. 평균 ${worst!.avg.toFixed(1)}회 · 매출 ${man(worst!.rev)}만 원.` +
-      `반대로 ${DOW[best.w]}요일이 가장 활발(평균 ${best.avg.toFixed(1)}회)합니다. ` +
-      `${weak.length ? weak.join('·') + '요일' : DOW[worst!.w] + '요일'}에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 약한 요일을 끌어올리세요.` + sidePat;
+  // ── 위험 — 미수·할인은 **금액과 비교 기준**을 붙여 사실로만 적는다 ──
+  //   ⚠ '마진·이익'이라고 부르지 않는다. 장부에 상금·인건비·임대료가 없어 계산할 수 없다.
+  const risk =
+    `미수금 ${man(m.unpaid)}만 원(완납 매출 대비 ${Math.round(m.unpaidRatio)}%).` +
+    ` 할인 바인 ${m.discountCnt}건(전체 바인의 ${m.discountRatio.toFixed(1)}%) · 깎아 준 금액 ${man(m.discSum)}만 원.` +
+    ` 상금·인건비·임대료는 장부에 없어 손익은 계산하지 않습니다.`;
+
+  // ── 요일 — 비교 자격을 못 갖추면 단정하지 않는다 ──
+  const weekday = dowReady && worst
+    ? `${DOW[worst.w]}요일이 일평균 ${worst.avg.toFixed(1)}회로 가장 낮고, ${DOW[best.w]}요일이 ${best.avg.toFixed(1)}회로 가장 높습니다` +
+      ` (비교 대상: ${MIN_DOW_REPEAT}회 이상 운영된 ${dows.length}개 요일 · 전체 평균 ${meanAvg.toFixed(1)}회).`
+    : `요일을 비교하려면 각 요일이 ${MIN_DOW_REPEAT}번 이상 운영돼야 합니다. 지금은 조건을 만족하는 요일이 ${dows.length}개라 판단할 데이터가 부족합니다.`;
+
+  // ── 실행 제안 — 근거가 있는 것만. 없으면 만들지 않는다 ──
+  const actions: OpsAction[] = [];
+  if (dowReady && worst && best && worst.avg * 1.5 <= best.avg) {
+    actions.push({
+      text: `${DOW[worst.w]}요일 집객을 먼저 보세요 — 가장 높은 ${DOW[best.w]}요일과 일평균 차이가 큽니다.`,
+      basis: `${DOW[worst.w]} 일평균 ${worst.avg.toFixed(1)}회 vs ${DOW[best.w]} ${best.avg.toFixed(1)}회 · ${periodLabel} · 각 요일 ${MIN_DOW_REPEAT}회 이상 운영분만 비교`,
+    });
+  }
+  if (m.unpaid > 0) {
+    actions.push({
+      text: '미수금 회수 계획을 세우세요 — 다음 방문 때 정산을 유도할 수 있습니다.',
+      basis: `미수 ${man(m.unpaid)}만 원 · 완납 매출 ${man(m.revenue)}만 원 대비 ${Math.round(m.unpaidRatio)}% · ${periodLabel}`,
+    });
+  }
+  if (m.sideGameCount > 0 && sideShare >= 30) {
+    actions.push({
+      text: `사이드 게임이 매출의 큰 몫을 맡고 있습니다 — 시작 시간대를 고정 편성하면 재방문 동선이 만들어집니다.`,
+      basis: `사이드 ${m.sideGameCount}종 · 완납 매출의 ${Math.round(sideShare)}%(${man(m.sideRev)}만 원) · ${periodLabel}`,
+    });
   }
 
-  const sales =
-    `${best ? `${periodLabel} ${DOW[best.w]}요일(${best.avg.toFixed(1)}회)의 성과가 가장 두드러집니다. ` : ''}` +
-    `전체 매출 ${man(m.revenue)}만 원 중 카드 결제 비율이 ${Math.round(m.cardRatio)}%로 ` +
-    `${m.cardRatio >= 60 ? '높아 결제 편의성이 잘 확보되어' : '적정 수준으로 유지되어'} 있습니다. ` +
-    `${m.players}명의 플레이어가 참여했습니다.` + sideLine;
-
-  const risk =
-    `현재 미수금이 ${man(m.unpaid)}만 원(완납 매출 대비 약 ${Math.round(m.unpaidRatio)}%)으로 ` +
-    `${m.unpaidRatio >= 25 ? '주의가 필요한 수치입니다' : '비교적 안정적입니다'}. ` +
-    `또한 할인 바인이 전체의 ${m.discountRatio.toFixed(1)}%(${m.discountCnt}건) 발생하여 ` +
-    `${m.discountRatio >= 10 ? '마진 하락의 원인이 되고 있으니 참가자 확보 전략이 필요합니다' : '마진에 큰 영향은 없습니다'}.`;
-
-  const actions: string[] = [];
-  if (weak.length) actions.push(`매출이 저조한 ${weak.join('·')} 요일에 '얼리버드 칩업' 이벤트를 커뮤니티에 공지해보세요.`);
-  if (top.length) actions.push(`상위 바인 유저인 ${top.join(', ')} 님에게 회수된 티켓(${m.ticket}장) 중 일부를 리워드로 제공하여 VIP 이탈을 방지하세요.`);
-  if (m.unpaidRatio >= 25) actions.push(`미수금 ${man(m.unpaid)}만 원 회수를 위해 다음 방문 시 정산을 유도하세요.`);
-  if (m.sideGameCount > 0 && sideShare >= 30) actions.push(`사이드 매출 비중이 ${Math.round(sideShare)}%로 높습니다. 인기 사이드(${m.sideGameCount}종)의 시작 시간대를 고정 편성해 단골의 재방문 동선을 만드세요.`);
-  else if (m.sideGameCount === 0 && m.total >= 10) actions.push('메인 외 사이드 게임(예: 새틀라이트·하이롤러)을 추가해 체류시간과 객단가를 높여보세요.');
-  if (!actions.length) actions.push('현재 운영 지표가 안정적입니다. 단골 고객 대상 리워드로 재방문을 유도해보세요.');
-
-  return { empty: false, sales, risk, weekday, actions };
+  return { empty: false, lowSample: false, coverage, sales, risk, weekday, actions };
 }
 
 function OpsReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onRefresh: () => void }) {
@@ -826,11 +889,16 @@ h1{font-size:22px;font-weight:900}.sub{color:#777;font-size:12px;margin:4px 0 20
 .c .t{font-weight:800;font-size:14px;margin-bottom:6px;color:#6d28d9}.c .b{font-size:13px;line-height:1.7;color:#333;white-space:pre-line}
 @media print{body{padding:16px}}
 </style></head><body>
-<h1>NURI 운영 리포트</h1><div class="sub">최근 ${days}일 누적 데이터 기반 인사이트 · nuriholdem.com</div>
-${card('매출 및 바이인 분석', rpt.sales)}
-${card('리스크 & 누수 체크', rpt.risk)}
-${card('요일별 진단', rpt.weekday)}
-${card('운영 액션 플랜', rpt.actions.map((a) => '• ' + a).join('\n'))}
+<h1>NURI 운영 리포트</h1><div class="sub">최근 ${days}일 집계 · 개인정보 없는 집계 데이터 · nuriholdem.com</div>
+${card('데이터 신뢰도', `집계 기간 ${days}일 중 영업 ${rpt.coverage.days}일 · 바인 ${rpt.coverage.buyins}회 · 플레이어 ${rpt.coverage.players}명`
+  + (rpt.lowSample ? ` — 최소 표본(바인 ${MIN_BUYINS}회 · 영업 ${MIN_DAYS}일)에 못 미쳐 진단을 생성하지 않았습니다.` : '')
+  + (rpt.coverage.dowReady ? '' : ` 요일 비교는 각 요일 ${MIN_DOW_REPEAT}회 이상 운영이 필요합니다.`))}
+${card('매출 및 바이인', rpt.sales)}
+${rpt.risk ? card('미수 · 할인', rpt.risk) : ''}
+${rpt.weekday ? card('요일 비교', rpt.weekday) : ''}
+${rpt.actions.length
+  ? card('실행 제안', rpt.actions.map((a) => `• ${a.text}\n  근거: ${a.basis}`).join('\n'))
+  : card('실행 제안', '근거가 충분한 제안이 없습니다. 데이터가 더 쌓이면 표시됩니다.')}
 <script>window.onload=function(){setTimeout(function(){window.print();},250);};</script>
 </body></html>`);
     w.document.close();
@@ -839,47 +907,74 @@ ${card('운영 액션 플랜', rpt.actions.map((a) => '• ' + a).join('\n'))}
     <div className="rounded-card border border-violet-500/40 bg-gradient-to-br from-violet-500/[0.12] to-indigo-500/[0.04] p-3 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h4 className="flex items-center gap-1.5 text-sm font-bold text-violet-200"><Icon name="sparkles" size={14} className="shrink-0" />NURI 운영 리포트</h4>
-          <p className="text-2xs text-ink-muted mt-0.5">최근 {days}일간의 누적 데이터를 기반으로 분석된 비즈니스 인사이트입니다.</p>
+          <h4 className="flex items-center gap-1.5 text-sm font-bold text-violet-200"><Icon name="chart" size={14} className="shrink-0" />NURI 운영 리포트</h4>
+          {/* '인사이트' 라고 부르지 않는다 — 이건 장부 집계이고, 근거 없는 추천을 만들지 않는 것이 이 리포트의 계약이다. */}
+          <p className="text-2xs text-ink-muted mt-0.5">최근 {days}일 장부를 집계했습니다. 제안에는 근거 수치를 함께 표시합니다.</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {!rpt.empty && <button type="button" onClick={exportReport} className="inline-flex items-center gap-1 text-2xs font-semibold text-ink-secondary bg-surface-high border border-border-default rounded-input px-2.5 py-1.5 hover:text-ink-primary transition-colors"><Icon name="printer" size={12} className="shrink-0" />저장</button>}
           <button type="button" onClick={onRefresh}
             className="inline-flex items-center gap-1 text-2xs font-semibold text-violet-200 bg-violet-500/15 border border-violet-500/40 rounded-input px-2.5 py-1.5 hover:bg-violet-500/25 transition-colors">
-            <Icon name="sparkles" size={12} className="shrink-0" />새로고침
+            <Icon name="refresh" size={12} className="shrink-0" />새로고침
           </button>
         </div>
       </div>
+      {/* ── 데이터 신뢰도 — 무엇을 근거로 말하는지 먼저 밝힌다. 표본이 모자라면 여기서 그렇다고 말한다. ── */}
+      <p className="rounded-input border border-border-subtle bg-surface-low/60 px-2.5 py-1.5 text-2xs text-ink-muted break-keep">
+        <Icon name="info" size={11} className="mr-1 inline-block align-[-1px] shrink-0" />
+        집계 {days}일 중 <b className="text-ink-secondary tabular-nums">영업 {rpt.coverage.days}일</b> ·
+        바인 <b className="text-ink-secondary tabular-nums">{rpt.coverage.buyins}회</b> ·
+        플레이어 <b className="text-ink-secondary tabular-nums">{rpt.coverage.players}명</b>
+        {!rpt.coverage.dowReady && <> · 요일 비교는 각 요일 {MIN_DOW_REPEAT}회 이상 운영이 필요합니다</>}
+      </p>
       {rpt.empty ? (
-        <p className="text-center py-8 text-2xs text-ink-muted">최근 {days}일간 데이터가 부족합니다.<br />장부를 작성하면 통계가 표시됩니다.</p>
+        <p className="text-center py-8 text-2xs text-ink-muted">이 기간에 바인 기록이 없습니다.<br />장부를 작성하면 집계가 표시됩니다.</p>
+      ) : rpt.lowSample ? (
+        /* 표본 부족 — 가짜 진단을 만들지 않는다. 무엇이 얼마나 더 필요한지만 말한다. */
+        <div className="rounded-input border border-amber-400/30 bg-amber-400/[0.06] p-3">
+          <p className="flex items-center gap-1.5 text-xs font-bold text-amber-300"><Icon name="alert" size={13} className="shrink-0" />판단할 데이터가 부족합니다</p>
+          <p className="mt-1 text-2xs text-ink-secondary leading-relaxed break-keep">{rpt.sales}</p>
+          <p className="mt-1.5 text-2xs text-ink-muted break-keep">
+            진단을 만들려면 <b className="text-ink-secondary">바인 {MIN_BUYINS}회 · 영업 {MIN_DAYS}일</b> 이상이 필요합니다.
+            그 아래에서는 한두 건이 비율을 통째로 흔들어 결론이 뒤집힙니다.
+          </p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <ReportCard tone="emerald" title="매출 및 바이인 분석" body={rpt.sales} />
-          <ReportCard tone="rose" title="리스크 & 누수 체크" body={rpt.risk} />
-          <ReportCard tone="sky" title="요일별 진단 (안좋은 날)" body={rpt.weekday} />
-          <ReportCard tone="amber" title="운영 액션 플랜" bullets={rpt.actions} />
+          <ReportCard tone="emerald" title="매출 및 바이인" body={rpt.sales} />
+          <ReportCard tone="rose" title="미수 · 할인" body={rpt.risk} />
+          <ReportCard tone="sky" title="요일 비교" body={rpt.weekday} />
+          <ReportCard tone="amber" title="실행 제안" actions={rpt.actions} />
         </div>
       )}
     </div>
   );
 }
 
-function ReportCard({ tone, title, body, bullets }: { tone: 'emerald' | 'rose' | 'amber' | 'sky'; title: string; body?: string; bullets?: string[] }) {
+function ReportCard({ tone, title, body, actions }: { tone: 'emerald' | 'rose' | 'amber' | 'sky'; title: string; body?: string; actions?: OpsAction[] }) {
   const head = tone === 'emerald' ? 'text-emerald-300' : tone === 'rose' ? 'text-rose-300' : tone === 'sky' ? 'text-sky-300' : 'text-amber-300';
   const mark = tone === 'emerald' ? 'trending-up' : tone === 'rose' ? 'alert' : tone === 'sky' ? 'calendar' : 'lightbulb';
   return (
     <div className="rounded-input bg-surface-low/80 border border-border-default p-3">
       <p className={['flex items-center gap-1.5 text-xs font-bold mb-1.5', head].join(' ')}><Icon name={mark} size={13} className="shrink-0" />{title}</p>
       {body && <p className="text-2xs text-ink-secondary leading-relaxed">{body}</p>}
-      {bullets && (
-        <ul className="space-y-1.5">
-          {bullets.map((b, i) => (
+      {actions && (actions.length === 0 ? (
+        /* 근거가 약하면 제안 대신 그 사실을 적는다 — 빈 칸을 메우려고 일반론을 만들지 않는다. */
+        <p className="text-2xs text-ink-muted leading-relaxed break-keep">근거가 충분한 제안이 없습니다. 데이터가 더 쌓이면 표시됩니다.</p>
+      ) : (
+        <ul className="space-y-2">
+          {actions.map((a, i) => (
             <li key={i} className="flex gap-1.5 text-2xs text-ink-secondary leading-relaxed">
-              <span className="text-amber-400 shrink-0">•</span><span>{b}</span>
+              <span className="text-amber-400 shrink-0" aria-hidden>•</span>
+              <span className="min-w-0 break-keep">
+                {a.text}
+                {/* '왜 이 제안이 나왔는지'를 항상 확인할 수 있게 — 근거 없는 제안은 애초에 만들지 않는다 */}
+                <span className="mt-0.5 block text-ink-muted">근거: {a.basis}</span>
+              </span>
             </li>
           ))}
         </ul>
-      )}
+      ))}
     </div>
   );
 }

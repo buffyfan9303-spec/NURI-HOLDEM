@@ -10,7 +10,7 @@
 //   999,999 → 0 · 1,000,000 → 1 · 1,999,999 → 1 · 2,000,000 → 2
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { MONEYIN_UNIT_WON } from './rankverify';
 import { parsePrizeMan, TICKET_MAN } from './rankings';
 import { TICKET_WON, manToWon, rankingPrizeWon } from '../lib/units';
@@ -82,5 +82,36 @@ describe('서버 moneyin_points 본문 — 클라 상수와 같은 임계', () =
     }
     expect(last, 'moneyin_points COMMENT 를 찾을 수 없다').toBeTruthy();
     expect(last!.text, `${last!.file}: 설명이 100T 환산이 아니다`).toContain('100만원(100T)당 1점');
+  });
+});
+
+// ── 화면의 T 표시는 TICKET_WON 으로만 만든다 ──
+// TICKET_WON(1T 의 가치, 오너 결정)과 WON_PER_MAN(만원 표시 환산)은 지금 둘 다 10,000 이라
+// 어느 쪽으로 나눠도 화면 숫자가 같다. 그래서 틀린 자리가 아무 테스트도 깨지 않는다 —
+// 실제로 정산판·장부 셀 두 곳이 만원 상수로 T 를 찍고 있었다(050bfb8 에서 교정).
+// 값이 아니라 의미가 다르므로 산식이 아니라 '어느 상수를 쓰는지'를 소스로 잠근다
+// (noExternalExport.test.ts·emojiPolicy.test.ts 와 같은 소스 스캔 방식).
+const SRC_DIR = join(process.cwd(), 'src');
+function srcFiles(dir: string, out: string[] = []): string[] {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) srcFiles(p, out);
+    else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) out.push(p);
+  }
+  return out;
+}
+
+describe('T 표시는 TICKET_WON 으로만 만든다', () => {
+  it('T 단위를 찍는 줄이 만원 상수·10000 리터럴로 나누지 않는다', () => {
+    const bad: string[] = [];
+    for (const p of srcFiles(SRC_DIR)) {
+      readFileSync(p, 'utf8').split('\n').forEach((line, i) => {
+        // 템플릿 리터럴이 T 단위를 찍는 줄에서 만원 상수나 생 10000 을 쓰면 티켓 환산이 뒤섞인 것
+        if (/\}\s*T(?![A-Za-z0-9_])/.test(line) && /\bWON_PER_MAN\b|\b10_?000\b/.test(line)) {
+          bad.push(`${p.slice(SRC_DIR.length + 1).split(sep).join('/')}:${i + 1}`);
+        }
+      });
+    }
+    expect(bad, 'T 환산은 lib/units 의 TICKET_WON 으로만 한다(1T = 1만원)').toEqual([]);
   });
 });

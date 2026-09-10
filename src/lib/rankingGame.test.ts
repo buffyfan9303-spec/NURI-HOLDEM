@@ -89,3 +89,95 @@ describe('(날짜, 게임) 키 조립 — 장부 정본 키와 같은 표기', (
     expect(ledgerGameLabel(3)).toBe('사이드2');
   });
 });
+
+// ── 클락 END 순위 저장이 쓰는 헬퍼 (2026-09-11 점검) ─────────────────────────────
+// 장부 자동완성 이름 '실명(닉네임)' 을 통째로 닉네임 칸에 넣던 것을 여기서 분리한다.
+// 순위 화면(VenueManageTab)과 클락(TournamentClock)이 같은 함수를 쓰므로 한 곳만 고쳐지는 일이 다시 없다.
+import { splitLedgerName, finishEntriesFromRows, countRankingsForGame, rankingSaveTarget } from './rankingGame';
+
+describe('splitLedgerName — 장부 합성 표기 분리', () => {
+  it("'실명(닉네임)' 은 닉네임·실명으로 갈린다", () => {
+    expect(splitLedgerName('홍길동(길동)')).toEqual({ nickname: '길동', realName: '홍길동' });
+  });
+  it('괄호가 없으면 통째로 닉네임이다(비회원 자유 입력)', () => {
+    expect(splitLedgerName('홍길동')).toEqual({ nickname: '홍길동', realName: '' });
+  });
+  it('앞뒤 공백을 걷는다', () => {
+    expect(splitLedgerName('  홍길동 ( 길동 ) ')).toEqual({ nickname: '길동', realName: '홍길동' });
+  });
+  it('빈 문자열은 빈 닉네임이다', () => {
+    expect(splitLedgerName('   ')).toEqual({ nickname: '', realName: '' });
+  });
+  it('중첩 괄호는 첫 여는 괄호에서 가른다 — 순위 화면(addFromLedger)의 기존 규칙과 동일(회귀 0)', () => {
+    expect(splitLedgerName('김(철)수(nick)')).toEqual({ nickname: '철)수(nick', realName: '김' });
+  });
+  it("장부가 닉네임 없는 회원을 적는 '실명()' 은 닉네임을 비우고 실명만 채운다 — 실명을 닉네임 칸에 넣지 않는다", () => {
+    expect(splitLedgerName('홍길동()')).toEqual({ nickname: '', realName: '홍길동' });
+  });
+});
+
+describe('finishEntriesFromRows — 입상 순위 입력칸 → 저장 엔트리', () => {
+  it('빈 줄은 버리고 이름은 분리한다', () => {
+    expect(finishEntriesFromRows([{ name: '홍길동(길동)' }, { name: '  ' }, { name: '박민수' }]))
+      .toEqual([{ nickname: '길동', realName: '홍길동' }, { nickname: '박민수', realName: '' }]);
+  });
+  it('실명은 절대 닉네임 칸으로 새지 않는다(공개 순위표 마스킹 우회 방지)', () => {
+    for (const e of finishEntriesFromRows([{ name: '홍길동(길동)' }, { name: '이영희(영희)' }])) {
+      expect(e.nickname).not.toContain('(');
+      expect(e.nickname).not.toMatch(/홍길동|이영희/);
+    }
+  });
+});
+
+describe('countRankingsForGame — 교체 경고는 hasRankingForGame 과 같은 판정으로 센다', () => {
+  it('메인은 빈 이름과 제목 둘 다 같은 게임으로 센다', () => {
+    expect(countRankingsForGame(MAIN, ['', MAIN.title, MAIN.title, '다른 대회'])).toBe(3);
+  });
+  it('사이드는 제 제목만 센다', () => {
+    expect(countRankingsForGame(SIDE, ['', SIDE.title, MAIN.title])).toBe(1);
+  });
+  it('41자 제목도 서버 정규화(40자)와 같은 기준으로 맞춘다 — 이름 비교를 따로 하면 경고가 죽는다', () => {
+    const long = { gameSeq: 1, title: 'x'.repeat(41) };
+    expect(countRankingsForGame(long, ['x'.repeat(40)])).toBe(1);
+  });
+  it('저장된 것이 없으면 0', () => {
+    expect(countRankingsForGame(MAIN, [])).toBe(0);
+  });
+});
+
+describe('finishEntriesFromRows — 닉네임이 빈 엔트리를 조용히 버리지 않는다', () => {
+  it("'실명()' 줄은 남겨서 호출부가 등수를 짚어 거절할 수 있게 한다(버리면 뒤 등수가 당겨진다)", () => {
+    expect(finishEntriesFromRows([{ name: '홍길동(길동)' }, { name: '이영희()' }, { name: '박민수' }]))
+      .toEqual([{ nickname: '길동', realName: '홍길동' }, { nickname: '', realName: '이영희' }, { nickname: '박민수', realName: '' }]);
+  });
+});
+
+// 서버 save_venue_rankings 는 (날짜, event_name) 한 이름만 지우고 넣는다 — 경고가 센 수와 서버가 지우는 수가 같아야 한다.
+describe('rankingSaveTarget — 이미 행이 있는 이름으로 저장해 "교체됩니다" 를 사실로 만든다', () => {
+  it('아무 행도 없으면 rankingEventOf 그대로, 교체 0·잔여 0', () => {
+    expect(rankingSaveTarget(MAIN, [])).toEqual({ eventName: MAIN.title, replaces: 0, leftover: 0 });
+    expect(rankingSaveTarget(SIDE, [])).toEqual({ eventName: SIDE.title, replaces: 0, leftover: 0 });
+  });
+  it("메인의 기존 행이 기본 칩('')에만 있으면 '' 로 저장해 실제로 교체한다", () => {
+    expect(rankingSaveTarget(MAIN, ['', '', '다른 대회'])).toEqual({ eventName: '', replaces: 2, leftover: 0 });
+  });
+  it('메인의 기존 행이 제목에 있으면 제목으로 저장한다', () => {
+    expect(rankingSaveTarget(MAIN, [MAIN.title, MAIN.title])).toEqual({ eventName: MAIN.title, replaces: 2, leftover: 0 });
+  });
+  it("''·제목 양쪽에 있으면 제목을 우선하고, '' 쪽 잔여를 정직하게 센다", () => {
+    expect(rankingSaveTarget(MAIN, ['', MAIN.title, MAIN.title])).toEqual({ eventName: MAIN.title, replaces: 2, leftover: 1 });
+  });
+  it("사이드는 '' 를 후보로 보지 않는다 — '' 행이 있어도 잔여로 세지 않는다", () => {
+    expect(rankingSaveTarget(SIDE, ['', SIDE.title])).toEqual({ eventName: SIDE.title, replaces: 1, leftover: 0 });
+  });
+  it('41자 제목은 서버 정규화(40자)와 같은 키로 맞춘다', () => {
+    const long = { gameSeq: 1, title: 'x'.repeat(41) };
+    expect(rankingSaveTarget(long, ['x'.repeat(40)])).toEqual({ eventName: 'x'.repeat(40), replaces: 1, leftover: 0 });
+  });
+  it('저장 이름은 언제나 hasRankingForGame 이 인정하는 후보 안에 있다', () => {
+    for (const saved of [[], [''], [MAIN.title], ['', MAIN.title]]) {
+      const { eventName } = rankingSaveTarget(MAIN, saved);
+      expect(rankingEventCandidates(MAIN)).toContain(eventName);
+    }
+  });
+});

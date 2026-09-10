@@ -11,6 +11,7 @@ import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPoint
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, createMyVenue, getMyVenue, getVenueStaff, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
+import { splitLedgerName } from '../../lib/rankingGame';
 import { uploadPoster } from '../../lib/storage';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
@@ -560,7 +561,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   }
 
   return (
-    <div className="space-y-3 mx-auto w-full max-w-5xl">
+    // 매장 운영주는 PC 99%(AGENTS.md 플랫폼) — 1280px 이상에서 1088px 에 가둬 두면 장부 표와
+    // 대시보드 12컬럼이 접혀 정보 밀도가 죽는다. xl 부터 7xl(80rem × 17px = **1360px**)로 연다.
+    //   ⚠ 루트 폰트가 17px 이라 Tailwind rem 유틸은 전부 6.25% 크다(5xl=1088 · 6xl=1224 · 7xl=1360).
+    //   앱 셸(App.tsx)도 my-store 일 때만 같은 폭으로 열어야 실제로 넓어진다 — 셸이 6xl 이면 여기서만 키워도 잘린다.
+    <div className="space-y-3 mx-auto w-full max-w-5xl xl:max-w-7xl">
       {/* 운영자: 전 매장 접근 — 관리할 매장 선택 */}
       {isAdmin && (
         <div className="space-y-2 rounded-card border border-accent-400/40 bg-accent-300/[0.06] p-3">
@@ -1375,9 +1380,12 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     }, 280);
   };
   const pickSuggestion = (i: number, kind: 'ledger' | 'guest' | 'member', nickname: string, member?: RankMember) => {
-    const nick = nickname.trim();
+    // '장부' 칩은 장부 명단 그대로라 '실명(닉네임)' 합성 표기다 — addFromLedger·클락 END 와 같은 규칙으로 가른다.
+    // (2026-09-11 리뷰: 이 세 번째 진입로만 분리를 안 해 실명이 닉네임 칸으로 들어갔다.)
+    const split = kind === 'ledger' ? splitLedgerName(nickname) : null;
+    const nick = split ? split.nickname : nickname.trim();
     setRows((r) => r.map((row, idx) => (idx === i
-      ? { ...row, nickname: nick, realName: member?.realName ?? row.realName }
+      ? { ...row, nickname: nick, realName: split ? (split.realName || row.realName) : (member?.realName ?? row.realName) }
       : row)));
     // 회원/비회원은 여기서 확정된다 — 그래야 동명이인이어도 '이 사람'에게만 전송된다.
     if (kind === 'member' && member) setPickedMap((p) => ({ ...p, [nickKey(nick)]: member }));
@@ -1389,11 +1397,9 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   // 장부 명단 → 순위에 추가: 빈 칸 있으면 채우고, 없으면 새 줄. 이미 있으면 무시
   const addFromLedger = (name: string) => {
     // 장부는 '실명(닉네임)' 합성 표기를 쓴다 — 그대로 닉네임 칸에 넣으면 회원 대조가
-    // 전부 '비회원'으로 판정된다. 경계에서 분리해 각 칸에 넣는다.
-    const raw = name.trim(); if (!raw) return;
-    const m = raw.match(/^(.+?)\((.+)\)$/);
-    const nick = (m ? m[2] : raw).trim();
-    const real = (m ? m[1] : '').trim();
+    // 전부 '비회원'으로 판정된다. 분리 규칙은 lib/rankingGame.splitLedgerName 한 곳 — 클락 END 저장도 같은 것을 쓴다
+    // (여기만 고쳐져 있고 클락은 빠져 있던 것이 2026-09-11 점검에서 드러났다).
+    const { nickname: nick, realName: real } = splitLedgerName(name);
     if (!nick) return;
     setRows((r) => {
       if (r.some((row) => row.nickname.trim() === nick)) return r;

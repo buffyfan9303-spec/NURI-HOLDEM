@@ -3,7 +3,6 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 import { resizeImage } from '../lib/storage';
-import { aiInspectImages } from './ai';
 
 /**
  * 대회 구분 — 'official'=대회(토너먼트, 해외 포함) / 'pub'=일반 펍(정기 게임).
@@ -82,8 +81,9 @@ export async function myRankVerifications(): Promise<RankVerification[]> {
   if (IS_MOCK) return [];
   const u = await currentUser();
   if (!u) return [];
-  const { data } = await supabase.from('rank_verifications').select('*')
+  const { data, error } = await supabase.from('rank_verifications').select('*')
     .eq('user_id', u.id).order('created_at', { ascending: false }).limit(10);
+  if (error) throw new Error(error.message);   // 내 신청 이력도 '없음' 으로 위장하지 않는다
   return (data ?? []).map(mapRow);
 }
 
@@ -108,8 +108,12 @@ export async function getDomesticRankings(limit = 30): Promise<DomesticRow[]> {
 
 /** (운영자) 대기 목록 */
 export async function adminListRankVerifications(): Promise<RankVerification[]> {
-  const { data } = await supabase.from('rank_verifications').select('*')
+  // ⚠ error 를 반드시 받는다(2026-09-11). 예전엔 구조분해조차 하지 않아 RLS 거부·세션 만료·네트워크
+  //   실패가 전부 빈 배열이 됐고, 화면은 호출부 주석이 금지한 그 문장("대기 중인 신청이 없습니다")을
+  //   단언했다. 이 큐는 신분증까지 올려 제출한 요청이라 묻히면 회원이 재제출할 방법이 없다.
+  const { data, error } = await supabase.from('rank_verifications').select('*')
     .eq('status', 'pending').order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
   return (data ?? []).map(mapRow);
 }
 
@@ -146,28 +150,7 @@ export async function adminDecideRankVerification(
   if (v.idCardPath) await supabase.storage.from('verifications').remove([v.idCardPath]).catch(() => {});
 }
 
-/** (운영자) 증빙 이미지 AI 진위 검사 — 참고 소견(최종 판단은 운영자). 신분증은 개인정보라 검사에서 제외. */
-export async function aiInspectVerification(v: RankVerification): Promise<string> {
-  if (!v.proofPath) throw new Error('증빙 이미지가 없습니다');
-  const url = await signedVerifyUrl(v.proofPath);
-  const blob = await (await fetch(url)).blob();
-  const dataUrl: string = await new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result));
-    fr.onerror = () => reject(new Error('이미지 읽기 실패'));
-    fr.readAsDataURL(blob);
-  });
-  const prompt = [
-    `포커 토너먼트 입상(머니인) 증빙 이미지를 검사해 주세요.`,
-    `신청 내용 · 닉네임: ${v.nickname} / 대회: ${v.eventName} / 신고 상금: ${(v.amountWon / 10000).toLocaleString()}만원`,
-    `신고 구분: ${EVENT_KIND_LABEL[v.eventKind]}${v.isOverseas ? ' · 해외' : ' · 국내'}`,
-    '',
-    '다음을 분석:',
-    '1) 이미지에 보이는 대회명·금액·이름이 신청 내용과 일치하는지',
-    '2) 합성/편집 흔적(글꼴 불일치, 경계 부자연, 해상도 차이, 그림자/조명 모순)',
-    '3) 일반적인 입상 증빙(트로피·시상 화면·정산표·공식 포스팅)으로 보이는지',
-    '',
-    '형식: 첫 줄에 결론. [의심 신호 없음] / [주의 필요] / [위조 의심] 중 하나. 이어서 근거 3~5줄(각 줄 "- "로 시작). 한국어, 평문.',
-  ].join('\n');
-  return aiInspectImages(prompt, [dataUrl], '너는 이미지 포렌식 보조 분석가다. 과신하지 말고 보이는 근거만 말한다. 최종 판단은 운영자가 한다.');
-}
+// (2026-09-11) 증빙 이미지 AI 진위 검사 제거 — 증빙 사진을 외부 모델로 보내던 경로였다.
+// 대신 운영자가 눈으로 대조하는 수동 체크리스트를 쓴다(AdminTab RankVerifyChecklist).
+// 유지되는 것: 비공개 버킷 · 300초 서명 URL · 수동 승인/반려 · 관리자 메모 · 심사 후 신분증 삭제.
+// 자동 위조 판정·자동 승인은 만들지 않는다(오판의 책임을 사람이 진다).
