@@ -201,6 +201,12 @@ for (const c of HOME_CASES) {
     await page.goto('/');
     await expect(page.getByText('오늘·내일 일정').first()).toBeVisible();
     await page.waitForTimeout(3500);
+    // '이벤트 있음' 케이스는 진행 중인 이벤트가 실제로 있어야 성립한다(2026-09-10 런칭 정리로 오픈 이벤트가 삭제됐다).
+    //   없으면 seen=1 로 예약한 칸이 '이벤트 없음' 응답에 접히는 게 정상 동작이라, 이 게이트의 전제가 아니다.
+    if (c.route === delayEvent) {
+      const hasEvent = await page.locator('button').filter({ hasText: /오픈 기념|카드 오픈|이벤트/ }).count();
+      test.skip(hasEvent === 0, '진행 중인 이벤트가 없다 — 이벤트 있음 케이스는 잴 수 없다');
+    }
     const p = await readPerf(page);
     const drift = scheduleDrift(p);
     console.log(`[perf-home] ${c.label} CLS=${p.cls.toFixed(3)} 일정드리프트=${drift}px longFrames=${p.longFrames}`);

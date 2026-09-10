@@ -2848,7 +2848,6 @@ export default function App() {
             regInfoBySchedule={regInfoBySchedule}
             onTools={() => changeTab('tools')}
             banners={homeBanners.banners}
-            bannersConfigured={homeBanners.configured}
             onSelect={handleScheduleSelect}
             onVenue={handleVenueClick}
             onExplore={() => changeTab('browse')}
@@ -2859,12 +2858,6 @@ export default function App() {
                1회차에 283ms 빈 화면이 그대로 남았다(실측 2026-09-08: 그 구간에 긴 프레임 0 · 네트워크 0 —
                계산도 대기도 아닌 순수 스로틀이었다). 트랜지션이면 폴백 자체를 건너뛴다. */
             onEvent={() => startTransition(() => setEventOpen(true))}
-            onRotiCommunity={() => {
-              // 캐러셀 로티아레나 배너 → 매장 커뮤니티 페이지(이름 매칭 — id 하드코딩 회피).
-              // 매장 목록 도착 전/이름 변경 시엔 커뮤니티 탭으로 폴백.
-              const roti = venues.find((v) => v.name.replace(/\s+/g, '').includes('로티아레나'));
-              if (roti) handleVenueClick(roti.id); else changeTab('community');
-            }}
           />
         </main>
       )}

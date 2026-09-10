@@ -56,19 +56,11 @@ const EASE = (() => {
  *  화면폭 이동에는 부족 — §20.4 예외가 아니라 '거리에 맞춘 스크롤 트윈'으로 오너 승인 범위(사유 보고). */
 const STEP_MS = 420;
 
-export type BannerAction = 'roti-community' | 'tools' | 'explore' | 'nurimind';
+export type BannerAction = 'tools' | 'explore' | 'nurimind';
 
-/** 오너 게시 고정 포스터 슬라이드(래스터 — 사진성 콘텐츠라 이미지 유지) */
-const POSTER_SLIDES: { src: string; alt: string; action: BannerAction; title: string; sub: string }[] = [
-  {
-    src: '/banners/poster-roti-0827.webp', alt: '로티 단독 1000만 GTD 대회',
-    action: 'roti-community', title: '로티 단독 1000만 GTD', sub: '8/27(목) 17:00 · 로티아레나',
-  },
-  {
-    src: '/banners/poster-masters-8th.webp', alt: '8th 홀덤 마스터스 20억 GTD',
-    action: 'roti-community', title: '8th 홀덤 마스터스 20억 GTD', sub: '8/3–10/5 · 야자수 서울센터',
-  },
-];
+// 하드코딩 포스터(로티 단독 1000만 GTD · 8th 홀덤 마스터스)와 로티아레나 브랜드 슬라이드는 2026-09-10 런칭 정리로
+// 제거했다(오너 지시 "포스터 배너 로티 및 wpl 다 지워"). 고정 포스터 자리는 **관리자 등록 배너(home_banners)만** 쓴다 —
+// 비어 있으면 브랜드 슬라이드 3장 + 일정 포스터로만 돈다. 폴백 포스터를 다시 넣지 않는다(지웠는데 되살아나는 것이 사고다).
 
 /** 브랜드 배너 — DOM 렌더(오너 리포트 2026-08-27: PC에서 래스터 글자가 뭉개짐 →
  *  텍스트는 실텍스트로 그려 어떤 배율·DPR에서도 선명하게. 배경은 CSS 그라데이션 + 수트 글리프).
@@ -80,12 +72,6 @@ const BRAND_SLIDES: {
   bg: string; glyph?: string; glyphColor?: string; logo?: string;
   title: string; sub: string; titleColor: string; subColor: string;
 }[] = [
-  {
-    key: 'roti', action: 'roti-community', alt: '로티아레나 매장 커뮤니티 바로가기',
-    bg: 'radial-gradient(120% 160% at 0% 50%, #17130a 0%, #050506 62%)',
-    logo: '/banners/roti-arena-logo.webp',
-    title: '로티아레나', sub: '매장 커뮤니티 ›', titleColor: '#E8D6A0', subColor: '#C4B58A',
-  },
   /* gto·mind·nuri 배경 — 어워드 레퍼런스(DatawizzAI) 오로라 문법(2026-08-27): 딥 그라운드 위
      저채도 바이올렛 빔 + 슬라이드 고유 힌트(gto 블루 · mind 마젠타 · nuri 는 골드가 주인공이라
      배경만 딥 플럼). 정적 CSS 그라데이션 — 애니메이션 없음. 대비 실측(피크 최악 겹침 기준):
@@ -121,20 +107,15 @@ type Slide = {
   brand?: (typeof BRAND_SLIDES)[number];
 };
 
-export default function PosterCarousel({ schedules, onSelect, onBanner, banners = [], bannersConfigured = false, onBannerUrl }: {
+export default function PosterCarousel({ schedules, onSelect, onBanner, banners = [], onBannerUrl }: {
   schedules: Schedule[];
   onSelect: (s: Schedule) => void;
   onBanner: (action: BannerAction) => void;
-  /** 관리자 등록 배너(home_banners) 중 **지금 게재 중인 것**. 하드코딩 POSTER_SLIDES 를 대체한다. */
+  /** 관리자 등록 배너(home_banners) 중 **지금 게재 중인 것**. 비어 있으면 고정 포스터 자리는 없다(폴백 없음). */
   banners?: HomeBanner[];
-  /** home_banners 에 행이 하나라도 있는가. 하드코딩 폴백은 **아직 한 줄도 등록되지 않았을 때만** 쓴다 —
-   *  관리자가 전부 끄거나 기간을 넘긴 상태(configured=true, banners=[])에서 기본 배너가 되살아나면
-   *  '관리 화면에서 내렸는데 홈에 그대로 있다'가 되어 운영이 불가능해진다. */
-  bannersConfigured?: boolean;
   onBannerUrl?: (url: string) => void;
 }) {
-  const useFallback = banners.length === 0 && !bannersConfigured;
-  const staticCount = (useFallback ? POSTER_SLIDES.length : banners.length) + BRAND_SLIDES.length;
+  const staticCount = banners.length + BRAND_SLIDES.length;
   const slides = useMemo<Slide[]>(() => {
     const today = new Date().toLocaleDateString('en-CA');
     // 같은 포스터의 연속 회차(기간제 게임)는 첫 회차 1장만 — 마퀴에 동일 카드 도배 방지
@@ -155,23 +136,17 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
           onClick: () => onSelect(s),
         };
       });
-    // 관리자 배너가 있으면 그것이 곧 고정 포스터 자리다(하드코딩 대체).
-    const posters: Slide[] = useFallback
-      ? POSTER_SLIDES.map((b, i): Slide => ({
-        key: `p:${i}`, src: b.src, alt: b.alt, title: b.title, sub: b.sub,
-        onClick: () => onBanner(b.action),
-      }))
-      : banners.map((b): Slide => ({
-        key: `db:${b.id}`, src: b.imageUrl, alt: b.title || '배너', title: b.title, sub: b.subtitle,
-        onClick: () => { if (b.linkUrl) onBannerUrl?.(b.linkUrl); },
-      }));
+    // 관리자 배너가 곧 고정 포스터 자리다 — 등록 순서(sort_order) 그대로 앞에 선다. 없으면 이 자리는 비어 있다.
+    const posters: Slide[] = banners.map((b): Slide => ({
+      key: `db:${b.id}`, src: b.imageUrl, alt: b.title || '배너', title: b.title, sub: b.subtitle,
+      onClick: () => { if (b.linkUrl) onBannerUrl?.(b.linkUrl); },
+    }));
     const brands = BRAND_SLIDES.map((b): Slide => ({
       key: `b:${b.key}`, alt: b.alt, brand: b, onClick: () => onBanner(b.action),
     }));
-    // 포스터 → 브랜드 순으로 섞어 배치(포스터 2 · 브랜드 4 · 일정 포스터)
-    // 배너(관리자 또는 하드코딩) → 브랜드 → 일정 포스터. 관리자 배너는 등록 순서(sort_order) 그대로 앞에 선다.
+    // 관리자 배너 → 브랜드(3) → 일정 포스터. 브랜드만으로도 3장이라 루프 전제(3장 이상)는 유지된다.
     return [...posters, ...brands, ...dyn];
-  }, [schedules, onSelect, onBanner, banners, useFallback, onBannerUrl]);
+  }, [schedules, onSelect, onBanner, banners, onBannerUrl]);
 
   // 고정 슬라이드만으로도 3장 이상 — 항상 루프(2배 복제 + scrollLeft ±half 랩).
   // ⚠ 풀폭 전환으로 세트 안 w-page-x 스페이서는 제거 — 카드 폭 = clientWidth 라 세트 폭이

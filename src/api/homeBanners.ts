@@ -49,7 +49,8 @@ const today = () => new Date().toLocaleDateString('en-CA');
 export interface HomeBannerFeed {
   /** 지금 게재 중인 배너(순서대로) */
   banners: HomeBanner[];
-  /** 기본 배너(코드 내장)를 쓰지 말아야 하는가 — PosterCarousel 은 `banners.length === 0 && !configured` 일 때만 폴백한다.
+  /** (기록) 예전엔 코드 내장 기본 배너의 폴백 여부였다. 2026-09-10 하드코딩 포스터를 제거해 PosterCarousel 은 더 이상 이 값을 읽지 않는다 —
+   *  관리 화면 표시용으로만 남긴다.
    *  ⚠ 판정은 **역할과 무관하게 같은 값**이어야 한다. 예전엔 '표에 행이 있는가(rows.length)'였는데,
    *  RLS 축소(20260904g) 뒤 비관리자에게 rows 는 곧 '게재 중'이라 관리자가 전부 끈 순간 손님 홈에만
    *  기본 배너가 되살아났다(관리자 화면은 빈 캐러셀 — 서로 다른 화면). 지금은

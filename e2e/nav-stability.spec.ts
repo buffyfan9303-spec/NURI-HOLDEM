@@ -171,7 +171,9 @@ test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도
   // 그래도 표에 남긴다 — 이때 **홈으로 튀지만 않으면** 된다(오버레이 유지 또는 원래 화면).
   const overlays: { id: string; name: string; open: (p: import('@playwright/test').Page) => Promise<void> }[] = [
     { id: 'auth', name: '로그인 모달', open: async (p) => { await p.locator('button[aria-label="로그인"]').first().click(); } },
-    { id: 'poster', name: '포스터 상세', open: async (p) => { await p.locator('[data-tab="home"] button:has-text("1000만 GTD")').first().click(); } },
+    // 홈 일정 목록의 첫 카드(ScheduleCard ListCard = article.cv-card-list). 예전엔 하드코딩 포스터('1000만 GTD')를
+    // 눌렀는데 2026-09-10 런칭 정리로 그 포스터·일정이 사라졌다 — 일정이 0건이면 아래에서 skip 한다.
+    { id: 'poster', name: '포스터 상세', open: async (p) => { await p.locator('[data-tab="home"] article.cv-card-list').first().click(); } },
   ];
 
   for (const ov of overlays) {
@@ -183,6 +185,10 @@ test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도
         // 포스터·매장 오버레이는 홈 화면 카드에서만 열 수 있다 → 홈으로 돌아가 연다
         const needHome = ov.id === 'poster' || ov.id === 'venue';
         if (needHome) { await tap(page, pts, 'home'); await page.waitForTimeout(700); }
+        if (ov.id === 'poster') {
+          const cards = await page.locator('[data-tab="home"] article.cv-card-list').count();
+          test.skip(cards === 0, '홈에 일정 카드가 없다(운영 일정 0건) — 포스터 상세를 열 수 없어 잴 것이 없다');
+        }
         const baseline = await currentScreen(page);
         await resetProbe(page);
         // 뒤로가기 겹의 현재 깊이 — 오버레이가 '커밋'됐는지 판정하는 유일한 사실이다(backstack.ts __layer).
