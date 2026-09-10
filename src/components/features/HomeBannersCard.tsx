@@ -10,7 +10,9 @@ import { useCallback, useEffect, useState } from 'react';
 import Icon from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { uploadPoster } from '../../lib/storage';
+import { kstToday } from '../../lib/kst';
 import {
   getAllHomeBanners, saveHomeBanner, deleteHomeBanner, reorderHomeBanners,
   purgeExpiredHomeBanners, type HomeBanner,
@@ -21,17 +23,31 @@ const EMPTY: Omit<HomeBanner, 'id'> = {
   startsAt: null, endsAt: null, active: true,
 };
 
-export default function HomeBannersCard() {
+export default function HomeBannersCard({ onChanged }: { onChanged?: () => void }) {
   const toast = useToast();
   const { user } = useAuth();
-  const [rows, setRows] = useState<HomeBanner[]>([]);
+  // ⚠ 초기값이 null 인 이유(2026-09-11 2차): [] 로 두면 **응답을 기다리는 동안** 빈 상태 문구가
+  //   단정적으로 뜬다 — 오너가 리포트한 "등록된 배너가 없습니다" 화면과 글자 하나 다르지 않다.
+  //   supabase 클라이언트에는 타임아웃이 없어(src/lib/supabase.ts) 요청이 매달리면 catch 도 안 돌고
+  //   그 거짓 문구가 재시도 버튼도 없이 계속 서 있는다. 형제 카드(ShoutsAdminCard, AdminTab.tsx:605)와
+  //   같이 '아직 못 받음 / 실패 / 없음 / 있음' 네 갈래로 가른다.
+  const [rows, setRows] = useState<HomeBanner[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [draft, setDraft] = useState<Omit<HomeBanner, 'id'> & { id?: string }>({ ...EMPTY });
   const [uploading, setUploading] = useState(false);
-  const today = new Date().toLocaleDateString('en-CA');
+  // 게재중/예정/만료 뱃지의 기준일. 기기 로컬 날짜가 아니라 KST 여야 서버 RLS(20260911e) 판정과 같아진다 —
+  // 갈리면 관리자 화면엔 '게재중'인데 손님 홈엔 안 뜨는 상태가 하루 9시간 생긴다.
+  const today = kstToday();
 
-  const reload = useCallback(() => { getAllHomeBanners().then(setRows).catch(() => {}); }, []);
+  const [loadErr, setLoadErr] = useState<unknown>(null);
+  const reload = useCallback(() => {
+    setLoadErr(null);
+    getAllHomeBanners().then(setRows).catch(setLoadErr);   // 재조회 중에는 이전 목록을 유지한다(깜빡임 방지)
+  }, []);
   useEffect(() => { reload(); }, [reload]);
+  /** 등록·수정·삭제·순서변경이 끝나면 홈 캐러셀도 같이 갱신한다(공지 패널과 같은 배선).
+   *  이게 없으면 저장은 됐는데 홈은 부팅 때 받은 목록을 그대로 들고 있어 '안 나온다' 로 읽힌다. */
+  const changed = useCallback(() => { reload(); onChanged?.(); }, [reload, onChanged]);
 
   // 노출 판정은 getActiveHomeBanners 와 **같은 조건**이어야 한다 —
   // 관리 화면 배지가 실제 노출과 어긋나면 오너가 화면을 못 믿게 된다.
@@ -62,7 +78,7 @@ export default function HomeBannersCard() {
       await saveHomeBanner(draft);
       toast.show(draft.id ? '배너를 수정했습니다' : '배너를 등록했습니다', 'success');
       setDraft({ ...EMPTY });
-      reload();
+      changed();
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
     } finally { setBusy(null); }
@@ -70,7 +86,7 @@ export default function HomeBannersCard() {
 
   const toggle = async (b: HomeBanner) => {
     setBusy(b.id);
-    try { await saveHomeBanner({ ...b, active: !b.active }); reload(); }
+    try { await saveHomeBanner({ ...b, active: !b.active }); changed(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
     finally { setBusy(null); }
   };
@@ -78,12 +94,16 @@ export default function HomeBannersCard() {
   const remove = async (b: HomeBanner) => {
     if (!window.confirm(`'${b.title || '제목 없음'}' 배너를 삭제할까요?`)) return;
     setBusy(b.id);
-    try { await deleteHomeBanner(b.id); toast.show('삭제했습니다', 'success'); reload(); }
+    try { await deleteHomeBanner(b.id); toast.show('삭제했습니다', 'success'); changed(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
     finally { setBusy(null); }
   };
 
+  /** 렌더용 — 삼항 분기 안에서는 TS 가 rows 의 null 을 좁히지 못한다(빌드 tsc -b 가 잡는다) */
+  const list = rows ?? [];
+
   const move = async (i: number, dir: -1 | 1) => {
+    if (!rows) return;                   // 목록을 아직 못 받았으면 순서 조작 자체가 없다(버튼도 안 그려진다)
     const j = i + dir;
     if (j < 0 || j >= rows.length) return;
     const next = [...rows];
@@ -95,9 +115,9 @@ export default function HomeBannersCard() {
       // ⚠ 성공해도 반드시 다시 읽는다. 서버는 sort_order 를 0..n 으로 다시 매기는데 로컬 rows 의
       //   sortOrder 는 옛 값 그대로라, 이어서 '수정 저장'·'켜기/끄기' 를 누르면 그 옛 값이 payload 에
       //   실려 방금 바꾼 순서가 되돌아간다(2026-09-04 리뷰 지적).
-      reload();
+      changed();
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '순서 변경 실패', 'error'); reload(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '순서 변경 실패', 'error'); changed(); }
     finally { setBusy(null); }
   };
 
@@ -107,7 +127,7 @@ export default function HomeBannersCard() {
     try {
       const n = await purgeExpiredHomeBanners();
       toast.show(n > 0 ? `${n}건을 정리했습니다` : '정리할 배너가 없습니다', 'success');
-      reload();
+      changed();
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '정리 실패', 'error');
     } finally { setBusy(null); }
@@ -165,22 +185,33 @@ export default function HomeBannersCard() {
       </div>
 
       {/* 목록 */}
-      {rows.length === 0 ? (
+      {rows === null && !loadErr ? (
+        /* 아직 응답 전 — 여기서 '없습니다' 라고 단정하면 그게 오너가 본 화면이 된다 */
+        <ul className="space-y-1.5" aria-busy="true">{[0, 1, 2].map((i) => <li key={i} className="skeleton h-11 rounded-input" />)}</ul>
+      ) : loadErr ? (
+        <LoadErrorCard error={loadErr} onRetry={reload} what="배너 목록" compact
+          hint="등록된 배너가 없는 것과는 다릅니다 — 목록을 못 읽었습니다." />
+      ) : list.length === 0 ? (
+        /* ⚠ 문구는 PosterCarousel 의 실제 동작과 일치해야 한다(2026-09-11 교정).
+           예전 문구는 두 가지를 잘못 말했다: ① '내장 기본 배너가 대신 표시된다' — 하드코딩 포스터 폴백은
+           2026-09-10 에 삭제됐고 지금 도는 것은 브랜드 슬라이드 3장이다. ② '이 목록이 홈 캐러셀을 대신한다'
+           — PosterCarousel.tsx:153 은 `[...posters, ...brands, ...dyn]` 이라 **앞에 붙을 뿐** 대체하지 않는다.
+           오너가 이 문구를 믿으면 등록 후에도 브랜드 슬라이드가 남는 것을 '연동 실패' 로 읽는다. */
         <p className="py-4 text-center text-xs leading-relaxed text-ink-muted">
           등록된 배너가 없습니다.<br />
-          <span className="text-ink-secondary">비어 있는 동안에는 앱에 내장된 기본 배너가 대신 표시됩니다</span> —
-          여기에 한 장이라도 등록하면 그때부터 이 목록이 홈 캐러셀을 대신합니다.
+          지금 홈 캐러셀에는 <span className="text-ink-secondary">브랜드 슬라이드 3장과 예정 대회 포스터</span>가 돕니다 —
+          여기에 등록하면 그 <b className="text-ink-secondary">맨 앞에</b> 추가됩니다(브랜드 슬라이드는 그대로 남습니다).
         </p>
       ) : (
         <ul className="space-y-1.5">
-          {rows.map((b, i) => {
+          {list.map((b, i) => {
             const st = statusOf(b);
             return (
               <li key={b.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5">
                 <span className="flex shrink-0 gap-0.5">
                   <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || busy !== null} aria-label="위로 이동"
                     className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 disabled:opacity-25">▲</button>
-                  <button type="button" onClick={() => move(i, 1)} disabled={i === rows.length - 1 || busy !== null} aria-label="아래로 이동"
+                  <button type="button" onClick={() => move(i, 1)} disabled={i === list.length - 1 || busy !== null} aria-label="아래로 이동"
                     className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 disabled:opacity-25">▼</button>
                 </span>
                 {b.imageUrl

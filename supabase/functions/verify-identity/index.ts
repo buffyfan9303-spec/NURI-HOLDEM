@@ -11,11 +11,19 @@ const corsHeaders = {
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
+/** 지금의 **한국 달력 날짜**. UTC 접근자(getUTC*)로 읽으면 KST 연·월·일이 나온다.
+ *  (weekly-report/index.ts 의 kstNow 와 같은 관용구 — 엣지 런타임 TZ 는 UTC 다.) */
+function kstNow(): Date { return new Date(Date.now() + 9 * 3600_000); }
+
 function ageFrom(birth: string | null | undefined): number | null {
   if (!birth) return null;
   const b = new Date(birth);
   if (isNaN(b.getTime())) return null;
-  const now = new Date();
+  // ⚠ 반드시 KST 로 센다. 서버 TZ 는 UTC 라 그냥 new Date() 를 쓰면 한국시간 00:00~08:59 동안
+  //   '어제'를 오늘로 보고 age-- 가 한 번 더 돈다 — **생일 당일 새벽에 본인인증한 만 19세가 18세로
+  //   판정돼 403 으로 거절**됐다(2026-09-11 점검). 한국 서비스의 만 나이는 한국 달력으로 세는 게 맞다.
+  //   방향도 확인: KST 날짜 ≥ UTC 날짜라 이 수정은 나이를 **낮추지 않는다** — 미성년이 통과할 길은 생기지 않는다.
+  const now = kstNow();
   let age = now.getUTCFullYear() - b.getUTCFullYear();
   const m = now.getUTCMonth() - b.getUTCMonth();
   if (m < 0 || (m === 0 && now.getUTCDate() < b.getUTCDate())) age--;

@@ -3,6 +3,7 @@
 // 파이프라인 위치: **노출**(사슬 첫 칸). 종전엔 PosterCarousel.tsx 소스에 배너가 하드코딩돼 있어
 // 한 장 바꾸려면 배포가 필요했다 — 여기가 그걸 운영 가능하게 만든다.
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { kstToday } from '../lib/kst';
 import { getAppSetting } from './settings';
 
 /** app_settings 킬스위치 — 'off' 면 코드에 박힌 기본 배너(PosterCarousel POSTER_SLIDES)를 **어느 역할에게도** 띄우지 않는다.
@@ -37,8 +38,11 @@ const rowToBanner = (r: any): HomeBanner => ({
   active: r.active ?? true,
 });
 
-/** 오늘 기준 KST 날짜('YYYY-MM-DD') — 만료 판정은 서버 시각이 아니라 사용자 달력 기준이어야 자연스럽다. */
-const today = () => new Date().toLocaleDateString('en-CA');
+/** 오늘 기준 KST 날짜('YYYY-MM-DD').
+ *  ⚠ 기기 로컬 날짜(toLocaleDateString)를 쓰지 않는다 — 서버 RLS(home_banners_read_public)가
+ *  (now() at time zone 'Asia/Seoul')::date 로 판정하므로(20260911e) 기준이 갈리면 화면과 서버가 따로 논다.
+ *  방어가 2겹이라 좁은 쪽이 이긴다: 서버가 안 준 행은 여기서 되살릴 수 없다. 정의는 src/lib/kst.ts 하나뿐. */
+const today = kstToday;
 
 /**
  * 게재 중인 배너만 순서대로.
@@ -78,12 +82,19 @@ export async function getActiveHomeBanners(): Promise<HomeBannerFeed> {
   return homeBannerFeed((data ?? []).map(rowToBanner), today(), fallback === 'off');
 }
 
-/** 관리자: 전체 목록(꺼진 것·만료된 것 포함). */
+/** 관리자: 전체 목록(꺼진 것·만료된 것 포함).
+ *
+ *  ⚠ error 를 삼키지 않는다(2026-09-11). 예전엔 error 를 버리고 `data ?? []` 를 돌려줘서
+ *    세션 만료·네트워크 실패·PostgREST 스키마 캐시 미갱신이 전부 **빈 배열**로 도착했고,
+ *    관리 화면은 그걸 "등록된 배너가 없습니다" 로만 말했다. '아직 안 만들었다' 와
+ *    '못 읽었다' 가 같은 화면이면 오너는 연동이 끊긴 줄로 읽는다(오너 리포트 2026-09-11).
+ *    형제 관리 카드(외치기·광고 슬롯)는 이미 실패를 화면에 올린다 — 배너도 같은 규격으로. */
 export async function getAllHomeBanners(): Promise<HomeBanner[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('home_banners').select('*')
     .order('sort_order').order('created_at');
+  if (error) throw error;
   return (data ?? []).map(rowToBanner);
 }
 

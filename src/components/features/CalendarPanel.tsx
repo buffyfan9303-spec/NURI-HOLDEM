@@ -17,6 +17,7 @@
 //   ③ 실패를 '기록 없음'으로 위장하지 않는다 — LoadErrorCard 로 드러내고 재시도를 준다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon, { type IconName } from '../atoms/Icon';
+import CalendarToolsPanel from './CalendarToolsPanel';
 import { useToast } from '../atoms/Toast';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { useAuth } from '../../contexts/AuthContext';
@@ -27,6 +28,7 @@ import {
 } from '../../api/calendar';
 import type { Schedule } from '../../api/schedules';
 import { investedOf, isMemoEntry, filterRoiRows, roiStats, roiNotice, ROI_MIN_EVENTS } from '../../lib/roi';
+import { kstToday } from '../../lib/kst';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 const ymd = (d: Date) => d.toLocaleDateString('en-CA');
@@ -68,7 +70,10 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
 }) {
   const { user } = useAuth();
   const toast = useToast();
-  const today = ymd(new Date());
+  // 오늘은 **KST** 로 잡는다 — 예약·뱅크롤 저장은 서버 KST 기준이라, 기기 로컬 날짜를 쓰면
+  // 해외·시계 오설정 기기에서 기본 선택일이 하루 어긋난다(src/lib/kst.ts 가 경고하는 그 부류).
+  // 아래 ymd(d) 는 그대로 둔다 — 달력 격자는 로컬 Date 로 만들어지므로 같은 규칙으로 키를 찍어야 한다.
+  const today = kstToday();
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
   const [picked, setPicked] = useState<string>(today);
 
@@ -392,6 +397,16 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
       )}
 
       <BankrollCard date={picked} monthPrefix={monthPrefix} rows={bankroll} loaded={loaded} failed={bankrollErr != null} onChanged={reload} onPickDate={setPicked} toast={toast} />
+
+      {/* 자금 도구 — 2026-09-11 오너 지시로 GTO 탭에서 여기로 이관.
+          내 참가비·순손익을 보는 바로 그 자리에서 권장 뱅크롤·분산을 확인하게 된다. */}
+      <section className="rounded-aura border card-aura p-3">
+        <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink-primary">
+          <Icon name="piggy-bank" size={15} className="shrink-0 text-accent-300" aria-hidden />자금 도구
+          <span className="text-xs font-normal text-ink-muted">권장 참가비 배수 · 분산 예측</span>
+        </p>
+        <CalendarToolsPanel />
+      </section>
 
       {/* 찜한 다가올 게임 — 캘린더 밖에서도 한눈에. 헤더 수와 목록은 같은 배열에서 나온다. */}
       {likedUpcoming.length > 0 && (
