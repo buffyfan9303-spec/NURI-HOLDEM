@@ -196,6 +196,38 @@ async function bulk(ids: string[], fn: (id: string) => Promise<void>): Promise<B
   return { ok, failed: ids.length - ok, reasons };
 }
 /**
+ * 서버 오류 문구를 **손님에게 보여도 되는 한 줄**로 바꾼다.
+ *
+ * 왜 필요한가: PostgREST 는 DB 원문을 그대로 실어 보낸다. 유니크 위반이면
+ *   `duplicate key value violates unique constraint "buyin_requests_pending_uidx"` 처럼
+ *   영문에 **내부 인덱스 이름**까지 실린 문장이 손님 화면 토스트에 그대로 뜬다.
+ *   CLAUDE.md 보안 표준 §6(에러 메시지에 내부 식별자·SQL 을 노출하지 않는다)에 정면으로 걸린다.
+ *
+ * 한글이 들어 있으면 그대로 통과시킨다 — 그건 우리가 RAISE EXCEPTION 으로 쓴 문구라 그 자체가 정본이다
+ * (예: '유효기간이 지난 이용권입니다 (만료 2026-09-01)').
+ *
+ * ⚠ 업주 경로(revokeVouchers·deleteVouchers)에는 걸지 않는다. 그쪽은 "실패 사유를 그대로 들고 나와야
+ *   사장님이 다음 행동을 정할 수 있다"가 이 파일의 설계이고, 사장님은 원문을 봐야 문의를 넣을 수 있다.
+ *   손님 경로(redeemMyVouchersBy*)에만 건다.
+ */
+export function voucherErrorText(raw: string): string {
+  const m = (raw ?? '').trim();
+  if (!m) return '처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+  if (/[가-힣]/.test(m)) return m;
+  if (/duplicate key|unique constraint|already exists/i.test(m))
+    return '같은 날 같은 매장에 이미 신청이 있어요. 접수대에서 처리된 뒤 다시 보내 주세요.';
+  if (/permission denied|row-level security|not authorized|jwt/i.test(m))
+    return '권한을 확인하지 못했어요. 다시 로그인한 뒤 시도해 주세요.';
+  if (/foreign key|not present in table/i.test(m))
+    return '대상 매장을 찾지 못했어요. QR 을 다시 스캔해 주세요.';
+  if (/timeout|network|fetch|connection/i.test(m))
+    return '통신이 불안정해요. 잠시 뒤 다시 시도해 주세요.';
+  return '처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+}
+/** 손님 화면으로 나가는 BulkResult 의 사유만 사람 말로 바꾼다(장수는 그대로). */
+const humanize = (r: BulkResult): BulkResult => ({ ...r, reasons: r.reasons.map(voucherErrorText) });
+
+/**
  * 일괄 회수 — 서버 RPC 한 번. 손님에게 가는 '회수되었습니다' 알림도 한 통으로 묶인다.
  * (단건 루프로 돌리면 3장 회수에 알림이 3건 갔다 — 2026-08-29 브라우저 관통 실측)
  * RPC 미배포 DB(구버전)에서는 단건 루프로 폴백한다 — saveVenueRankings 와 같은 방식.
@@ -225,11 +257,11 @@ export async function redeemMyVoucherByQr(voucherId: string, venueId: string): P
  *  서버에 묶음 RPC 가 없어 순차로 돈다. 부분 성공을 **부분 성공이라고** 돌려주는 게 중요하다 —
  *  3장 중 1장이 만료돼 실패했는데 '3장 사용'이라고 말하면 그게 장부에서 다툼이 된다. */
 export const redeemMyVouchersByQr = (ids: string[], venueId: string): Promise<BulkResult> =>
-  bulk(ids, async (id) => { await redeemMyVoucherByQr(id, venueId); });
+  bulk(ids, async (id) => { await redeemMyVoucherByQr(id, venueId); }).then(humanize);
 
 /** 일괄 사용(업주 전화번호) — QR 없이 보내는 유일한 경로. 무증빙 경로는 폐지됐다(아래 주석). */
 export const redeemMyVouchersByPhone = (ids: string[], phone: string): Promise<BulkResult> =>
-  bulk(ids, async (id) => { await redeemMyVoucherByPhone(id, phone); });
+  bulk(ids, async (id) => { await redeemMyVoucherByPhone(id, phone); }).then(humanize);
 
 // 회수(사용): 발급 매장 업주 전화번호로만.
 export async function redeemMyVoucherByPhone(voucherId: string, phone: string): Promise<string> {
@@ -389,7 +421,8 @@ export async function myVoucherCreditRequests(venueId: string): Promise<VoucherC
 export async function adminListVoucherCreditRequests(): Promise<AdminCreditRequest[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('admin_list_voucher_credit_requests');
-  if (error) return [];
+  // 실패를 [] 로 위장하면 충전 요청 카드가 사라져 매장 한도 요청이 조용히 묻힌다(2026-09-11).
+  if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, venueName: r.venue_name ?? '(매장)', amount: r.amount, note: r.note ?? null, requester: r.requester ?? '', createdAt: r.created_at }));
 }

@@ -211,7 +211,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
               onCancel={() => setPlan(null)}
               /** 이용권 없이 요청만 — 바인 QR 경로에서만 나온다(수동에는 '요청' 개념이 없다) */
               onPlainBuyin={() => { const p = plan; setPlan(null); onClose(); onBuyin?.(p.venueId, p.gameSeq); }}
-              onDone={(msg) => { setPlan(null); reloadHeld(); toast.show(msg, 'success'); onClose(); }}
+              onDone={(msg, ok) => { setPlan(null); reloadHeld(); toast.show(msg, ok ? 'success' : 'error'); onClose(); }}
             />
           )}
 
@@ -286,7 +286,8 @@ function VenueVoucherCounts({ rows: all, onVenue }: {
  *
  * 더블체크를 '버튼 두 번'으로 하지 않는다 — 확인 화면에서 버튼만 하나 더 누르는 건 손가락이
  * 이미 그 자리에 있어서 그냥 눌린다. **체크박스로 장수를 다시 인정**하게 만든 뒤에야 보내기가 열린다.
- * (이용권은 되돌릴 수 없다: 사용 처리가 장부 요청을 만들고 그 요청을 업주가 승인한다.)
+ * (사용 처리가 장부 요청을 만들고 업주가 승인하면 확정된다. 승인 전 취소·거절·자동 마감이면
+ *  서버가 이용권을 지갑으로 되돌린다 — 20260911b·c. 그래서 아래 확인 문구는 단정하지 않는다.)
  *
  * 경로 둘 다 **현장 증빙이 있다**:
  *   · via='qr'    — 방금 그 매장의 바인 QR 을 찍었다(스캔 결과가 곧 매장 id).
@@ -296,7 +297,8 @@ function VenueVoucherCounts({ rows: all, onVenue }: {
 function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
   plan: { venueId: string; venueName: string; ids: string[]; via: 'qr' | 'phone'; gameSeq: number | null };
   onCancel: () => void;
-  onDone: (message: string) => void;
+  /** 두 번째 인자는 '전량 성공인가'. 부분 실패를 초록 토스트로 띄우지 않으려고 색을 호출부가 정한다. */
+  onDone: (message: string, ok: boolean) => void;
   onPlainBuyin: () => void;
 }) {
   const toast = useToast();
@@ -334,9 +336,15 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
     setBusy(false);
     // 부분 성공을 전량 성공으로 말하지 않는다 — 그 한 문장이 장부에서 다툼이 된다.
     if (r.ok === 0) { toast.show(r.reasons[0] || '보내지 못했어요', 'error'); return; }
-    onDone(r.failed > 0
-      ? `${plan.venueName} ${r.ok}장 전송 · ${r.failed}장 실패(${r.reasons[0] ?? '사유 미상'})`
-      : `${plan.venueName} ${r.ok}장 전송 완료`);
+    // ⚠ 부분 실패는 **초록 토스트로 띄우지 않는다.** 종전엔 문구만 '…N장 실패(…)' 로 바꾸고
+    //   색은 늘 success 였다 — 같은 날 같은 매장에 2장을 보내면 두 번째가 대기중 유니크 인덱스에
+    //   걸려 정확히 이 경로로 떨어지는데, 손님 화면엔 초록 성공으로 떴다(2026-09-11 점검).
+    onDone(
+      r.failed > 0
+        ? `${plan.venueName} ${r.ok}장 전송 · ${r.failed}장 실패(${r.reasons[0] ?? '사유 미상'})`
+        : `${plan.venueName} ${r.ok}장 전송 완료`,
+      r.failed === 0,
+    );
   };
 
   return (
@@ -421,7 +429,11 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
                 <dd className="text-sm font-bold tabular-nums text-ink-secondary">{max - count}장</dd>
               </div>
             </dl>
-            <p className="text-2xs leading-relaxed text-ink-muted">보낸 이용권은 <b className="text-ink-secondary">되돌릴 수 없습니다.</b> 매장 장부에 사용 요청으로 올라가고 운영자가 승인합니다.</p>
+            {/* ⚠ 예전엔 '되돌릴 수 없다'고 단정했다 — 20260911b·c 이후로 거짓이다.
+                승인 전 취소·매장 거절·자동 마감이면 서버가 이용권을 지갑으로 되돌린다.
+                홈 배너는 이미 '이용권은 지갑으로 돌아갔어요'(App.tsx:3183) 라고 말한다 — 두 화면이 어긋나면 안 된다.
+                더블체크 체크박스는 그대로 둔다: 경고는 '못 돌린다'가 아니라 '승인되면 확정된다'로 한다. */}
+            <p className="text-2xs leading-relaxed text-ink-muted">보낸 이용권은 매장 장부에 사용 요청으로 올라가고, 운영자가 <b className="text-ink-secondary">승인하면 확정됩니다.</b> 승인 전에 취소하거나 매장이 거절하면 지갑으로 돌아옵니다.</p>
             {/* 더블체크 — 버튼을 한 번 더 누르는 건 확인이 아니다. 장수를 다시 인정하게 만든다. */}
             <label className="flex cursor-pointer items-start gap-2 rounded-input border border-border-default px-3 py-2.5">
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[rgb(var(--accent-400))]" />
