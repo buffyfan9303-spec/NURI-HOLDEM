@@ -2167,7 +2167,10 @@ export default function App() {
   //   ⚠ openScheduleById 선언 아래여야 한다 — 의존성 배열이 렌더 중에 평가되므로 위에 두면 TDZ 다.
   const schedDeepLinked = useRef(false);
   useEffect(() => {
-    if (schedDeepLinked.current || schedules.length === 0) return;
+    // ⚠ `schedules.length === 0` 로 기다리면 안 된다(2026-09-10 CI 실측: 런칭 정리로 운영 일정이 0건이 되자
+    //   ?s=<없는 대회> 가 영영 소비되지 않아 안내 토스트도 없고 파라미터도 안 지워졌다 — deeplink-notfound 스펙).
+    //   '목록이 도착했는가'(schedulesLoaded)가 기준이다. 목록에 없으면 openScheduleById 가 단건 조회로 확인한다.
+    if (schedDeepLinked.current || !schedulesLoaded) return;
     schedDeepLinked.current = true;
     const sid = new URLSearchParams(window.location.search).get('s');
     if (!sid) return;
@@ -2177,7 +2180,7 @@ export default function App() {
       url.searchParams.delete('s');
       window.history.replaceState(null, '', url.pathname + url.search + url.hash);
     } catch { /* ignore */ }
-  }, [schedules, openScheduleById]);
+  }, [schedulesLoaded, openScheduleById]);
 
   // ── 오버레이 '자리 예약'(뒤로가기 겹) ────────────────────────────────────
   // 오너 지적: "페이지에 들어갔다가 나오면 갑자기 홈으로 가버린다."
