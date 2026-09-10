@@ -1,12 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 // NURI HOLDEM — 매장 주간 리포트(월요일 아침 cron이 호출).
-// 지난주 엔트리·매출·신규 손님 + 요일별 분포를 집계해 Gemini 한 줄 조언과 함께 업주에게 알림.
-// Gemini 실패 시 규칙 기반 조언(최저 요일)으로 폴백 — 알림은 반드시 나간다.
+// 지난주 엔트리·매출·신규 손님 + 요일별 분포를 집계해 규칙 기반 한 줄 조언과 함께 업주에게 알림.
+// (2026-09-11) 조언은 전부 로컬 규칙이다 — 외부 모델 호출 0.
 // ⚠️ 운영 메모(2026-06-23 감사): 현재 weekly-venue-reports cron 은 SQL 함수
 //    public.send_weekly_venue_reports() 를 호출하며 이 엣지함수는 호출하지 않음(미사용).
-//    Gemini 조언을 쓰려면 cron 을 net.http_post 로 이 함수에 연결하거나, 아니면 이 함수를 폐기할 것.
-// 2026-09-02 보안: 미사용인데도 공개 anon 키로 호출 가능했다(전 업주 알림 + Gemini 과금 트리거).
+//    이 함수를 쓰려면 cron 을 net.http_post 로 연결하거나, 아니면 폐기할 것.
+// 2026-09-02 보안: 미사용인데도 공개 anon 키로 호출 가능했다(전 업주 알림 트리거).
 //    크론 공유 시크릿(x-nuri-cron-secret = Vault push_shared_secret)이 없으면 401 — 연결할 때 cron 함수가 헤더를 동봉하면 된다.
 
 const SB = Deno.env.get('SUPABASE_URL')!;
@@ -41,37 +41,10 @@ function timingSafeEq(a: string, b: string): boolean {
   return diff === 0;
 }
 
-// ⚠ gemini-1.5-flash 는 은퇴했다(2026-08-29 실측: ListModels 39개 중 부재).
-//   이 함수는 실패를 조용히 삼키므로(`if (!r.ok) return null`) 주간 조언이 말없이 빠져 있었다.
-//   체인으로 시도하고, 마지막 -latest 별칭은 구글이 늘 살아 있는 모델을 가리키므로
-//   앞의 둘이 은퇴해도 이 기능은 스스로 살아남는다(같은 사고 재발 방지).
-const ADVICE_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
-
-async function geminiAdvice(stats: string): Promise<string | null> {
-  const key = Deno.env.get('GEMINI_API_KEY');
-  if (!key) return null;
-  for (const model of ADVICE_MODELS) {
-   try {
-    const generationConfig: Record<string, unknown> = { temperature: 0.7, maxOutputTokens: 100 };
-    // 2.5 계열은 사고 토큰이 출력 한도(100)를 통째로 먹어 빈 응답이 된다 — 반드시 끈다.
-    // (2.0 에 이 필드를 보내면 400 이라 계열 판정이 필요하다 — gemini 함수 v4 의 교훈)
-    if (model.startsWith('gemini-2.5')) generationConfig.thinkingConfig = { thinkingBudget: 0 };
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: stats }] }],
-        systemInstruction: { parts: [{ text: '너는 홀덤펍 운영 컨설턴트다. 주간 데이터를 보고 사장님에게 실행 가능한 조언을 정확히 한 문장(45자 이내, 존댓말, 이모지 없이)으로만 답한다. 예: "화요일이 약해요 — 화요일 프리롤 이벤트를 추천합니다."' }] },
-        generationConfig,
-      }),
-    });
-    if (!r.ok) continue;                  // 은퇴 모델(404)·설정 거부(400) → 다음 후보
-    const data = await r.json();
-    const text = (data?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p?.text ?? '').join('').trim();
-    if (text) return text.replace(/\n/g, ' ').slice(0, 80);
-   } catch { /* 네트워크 일시 오류 — 다음 후보로 */ }
-  }
-  return null;
-}
+// (2026-09-11) Gemini 한 줄 조언 제거 — 매장명·엔트리·매출·신규 손님 수를 외부 모델로 보내던 경로였다.
+//   원래도 실패하면 아래 규칙 기반 조언으로 폴백하는 '덤' 구조였고, 크론은 이 함수가 아니라
+//   SQL 함수 send_weekly_venue_reports() 를 부르므로 실사용 경로도 아니었다.
+//   유지되는 것: 크론 공유 시크릿 게이트 · 주간 집계(엔트리·매출·신규 손님·요일 분포) · 알림 발송.
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('POST only', { status: 405 });
@@ -128,9 +101,9 @@ Deno.serve(async (req: Request) => {
     const worst = entries[entries.length - 1];
     const best = entries[0];
 
-    const statsPrompt = `매장: ${v.name}\n지난주(${s0.slice(5)}~${s1.slice(5)}) 엔트리 ${buyins.length}건, 매출 ${Math.round(sales / 10000)}만원, 신규 손님 ${newCnt}명\n요일별 엔트리: ${dowStr}`;
-    let advice = await geminiAdvice(statsPrompt);
-    if (!advice && worst) {
+    // 조언은 집계에서 규칙으로 뽑는다(외부 모델 없음).
+    let advice: string | null = null;
+    if (worst) {
       advice = entries.length > 1 && worst[1] < best[1]
         ? `${worst[0]}요일이 약했어요(${worst[1]}건) — ${worst[0]}요일 이벤트로 끌어올려 보세요.`
         : `이번 주도 꾸준했어요 — 단골 재방문 이벤트를 추천합니다.`;

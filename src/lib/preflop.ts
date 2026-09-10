@@ -1,6 +1,14 @@
 // src/lib/preflop.ts
-// 프리플랍 참고 레인지 공용 로직 — 스타팅핸드 가이드 + 프리플랍 트레이너 공유.
-// 169핸드를 Chen 공식으로 점수화→순위→포지션별 상위 % 기준 액션. (정밀 솔버 아님, 참고용.)
+// 프리플랍 **간이 참고** — 169핸드를 Chen 공식으로 점수화→순위→포지션별 상위 % 기준 액션.
+//
+// ⚠ 2026-09-11 격하(오너 지시). 이 파일은 더 이상 화면의 전략 소스가 아니다.
+//   앱의 프리플랍 전략 단일 소스는 src/lib/ranges.data.ts(자체 제작 학습 차트)다.
+//   Chen 근사는 그 차트와 **정면으로 충돌했다** — 6맥스 LJ 오픈 100bb 에서 차트는 77·ATo 를 100% 오픈,
+//   Chen 은 폴드라고 했다. 같은 앱이 같은 상황에 반대로 답하면 둘 다 못 믿게 되므로,
+//   유일한 소비처였던 HandGtoModal 을 차트로 옮겼다.
+//   지금 남은 소비처는 표시 헬퍼뿐이다: cardsToLabel · labelToCards · RANK_PCT(핸드 강도 순위).
+//   전략 함수(action·openPct·POSITIONS·STACKS·SCENARIOS)는 하위호환으로 남기되 **GTO·솔버·최적 표현을 쓰지 않는다**.
+//   evLossBb 는 제거했다 — 실제 action EV 없이 EV 손실을 숫자로 내놓는 것은 근거 없는 정밀함이다.
 
 export const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'] as const;
 export const VAL: Record<string, number> = { A: 14, K: 13, Q: 12, J: 11, T: 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2 };
@@ -93,17 +101,9 @@ export function openPct(pos: Pos, size: TableSize, act: PreAction, bb: StackBB =
   return Math.max(0.01, Math.min(0.9, base * (size === '9' ? 0.78 : 1) * (act === '3bet' ? 0.42 : 1) * stackMul(bb, act) * scenarioMul(scenario)));
 }
 
-/** 잘못된 프리플랍 결정의 근사 EV 손실(bb/100, 참고용). 경계에서 멀수록 명백한 실수 → 손실 큼. */
-export function evLossBb(label: string, pct: number, chose: 'open' | 'fold'): number {
-  const p = RANK_PCT.get(label) ?? 1;
-  const a = action(label, pct);
-  if (a === 'mix') return 0;
-  // raise가 정답인데 fold = (pct−p)에 비례 / fold가 정답인데 raise = (p−pct)에 비례
-  const wrong = (a === 'raise' && chose === 'fold') || (a === 'fold' && chose === 'open');
-  if (!wrong) return 0;
-  const dist = a === 'raise' ? (pct - p) : (p - pct); // 0~1
-  return Math.max(0.3, Math.round(dist * 60 * 10) / 10); // ~최대 수십 bb/100, 소수 1자리
-}
+// (2026-09-11) evLossBb 제거 — 실제 action EV 가 없는데 'EV 손실 N bb/100' 을 숫자로 내놓으면
+//   근거 없는 정밀함이 된다(오너 지시: 실제 action EV 가 없다면 EV loss 를 표시하지 마라).
+//   소비처는 이미 0곳이었다.
 
 export function action(label: string, pct: number): 'raise' | 'mix' | 'fold' {
   const p = RANK_PCT.get(label) ?? 1;

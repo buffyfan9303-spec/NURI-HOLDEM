@@ -6,16 +6,20 @@
 // ⚠ 이 기능의 유일한 위험은 **없는 조항을 지어내는 것**이다. 규칙 번호를 틀리게 말하는 순간
 //   딜러는 손님 앞에서 잘못된 판정을 하게 된다. 그래서 구조를 이렇게 잡았다:
 //     ① 먼저 **로컬 검색**으로 관련 규칙을 고른다(tdaSearch — 화면 없이 테스트됨).
-//     ② 그 발췌만 AI 에 근거로 넘긴다. 전체 규칙을 넘기지 않는다(비용·환각 둘 다 커진다).
+//     ② 그 규칙의 **키만** 서버에 넘긴다. 서버(tda-assist)가 canonical 원문을 직접 조립한다.
+//        (2026-09-11 변경: 종전엔 클라이언트가 규칙 본문을 프롬프트에 담아 보냈다 — 그 구조에서는
+//         클라이언트가 프롬프트에 무엇이든 실을 수 있어 사실상 범용 AI 프록시였다.)
 //     ③ 검색 결과가 없으면 **AI 를 아예 부르지 않는다**. 근거 없는 답이 가장 위험하다.
 //     ④ AI 가 실패하거나 꺼져 있어도 **찾은 규칙 원문은 그대로 보여 준다** — 그것만으로도 쓸모가 있다.
 //   그래서 AI 답변 아래에는 언제나 근거 원문이 함께 펼쳐진다. 사람이 대조할 수 있어야 한다.
+//
+// 이 도구는 이 앱에 남은 **유일한 외부 생성형 AI 기능**이다(오너 지시 2026-09-11).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import { Skeleton } from '../../atoms/Skeleton';
 import { useAuth } from '../../../contexts/AuthContext';
-import { aiGenerate } from '../../../api/ai';
-import { searchTda, toContext, TDA_SYSTEM, type Scored } from '../../../lib/tdaSearch';
+import { askTdaAssist, TDA_QUESTION_MAX } from '../../../api/tdaAssist';
+import { searchTda, tdaRuleKey, type Scored } from '../../../lib/tdaSearch';
 import type { TdaRule } from '../../../data/tdaRules';
 
 const EXAMPLES = [
@@ -57,10 +61,8 @@ export default function TdaRulesTool() {
     if (!user) { setAiErr('AI 답변은 로그인 후 이용할 수 있어요. 아래 규칙 원문은 그대로 보실 수 있습니다.'); return; }
     setBusy(true);
     try {
-      const out = await aiGenerate(
-        `상황: ${t}\n\n아래는 관련 있는 TDA 2024 규칙 발췌다. 이것만 근거로 답하라.\n\n${toContext(found)}`,
-        TDA_SYSTEM,
-      );
+      // 서버에는 **키만** 간다 — 원문 조립은 tda-assist 가 자기 rules.json 으로 한다.
+      const out = await askTdaAssist(t, found.map(({ rule }) => tdaRuleKey(rule)));
       setAnswer(out);
     } catch (e) {
       // AI 가 실패해도 규칙은 아래에 그대로 있다 — '아무것도 못 얻는 실패'로 끝내지 않는다.
@@ -93,7 +95,7 @@ export default function TdaRulesTool() {
         </div>
 
         <form className="mt-2.5 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); ask(q); }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)}
+          <input value={q} onChange={(e) => setQ(e.target.value)} maxLength={TDA_QUESTION_MAX}
             placeholder="예) 딜러가 카드를 쏟았어요" aria-label="규칙 질문"
             className="input min-h-[44px] min-w-0 flex-1 text-sm" />
           <button type="submit" disabled={busy || q.trim().length < 2}
@@ -126,6 +128,11 @@ export default function TdaRulesTool() {
                 <Icon name="sparkles" size={11} className="shrink-0" />AI 안내
               </p>
               <p className="whitespace-pre-wrap text-xs leading-relaxed text-ink-primary break-keep">{answer}</p>
+              {/* 이 한 줄은 지우지 말 것 — 모델 요약을 판정으로 읽으면 딜러가 손님 앞에서 틀린다.
+                  아래 '근거 규칙' 원문이 언제나 함께 펼쳐지는 것과 짝이다. */}
+              <p className="mt-1.5 text-[10px] leading-relaxed text-ink-muted">
+                AI 참고 요약입니다 — 아래 근거 규칙 원문을 함께 확인하세요. <b className="text-ink-secondary">최종 판정은 현장 플로어(토너먼트 디렉터)에게 있습니다.</b>
+              </p>
             </div>
           )}
           {aiErr && (

@@ -103,9 +103,10 @@ async function openStats(page: Page) {
   // '내 매장'은 폭에 따라 role 이 바뀐다 — 보이는 버튼으로 찾는다.
   await page.locator('button:visible').filter({ hasText: '내 매장' }).first().click({ timeout: 15_000 });
   await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
-  // 대시보드의 '최근 7일 추세 · 통계·AI →' 카드가 통계로 가는 실제 진입점(owner-layout-verify 와 같은 경로).
+  // 대시보드의 '최근 7일 추세' 카드가 통계로 가는 실제 진입점(owner-layout-verify 와 같은 경로).
   // 섹션 나비는 접힌 메뉴 안이라 폭 0 일 수 있어 카드를 먼저, 없으면 나비의 '매출·손님'.
-  const entry = page.getByRole('button', { name: /통계·AI/ }).or(page.locator('button:visible').filter({ hasText: '매출·손님' }));
+  // 셀렉터는 배지 문구가 아니라 data-testid 다 — 2026-09-11 문구가 '통계·AI'→'통계·운영 분석' 으로 바뀌었다.
+  const entry = page.locator('button:has([data-testid="dash-stats-link"])').or(page.locator('button:visible').filter({ hasText: '매출·손님' }));
   await entry.first().click({ timeout: 20_000 });
 }
 

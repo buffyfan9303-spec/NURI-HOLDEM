@@ -1,7 +1,7 @@
 // TDA 검색 계약 — 이 단계가 AI 답변의 **근거**를 고른다.
 // 여기서 엉뚱한 규칙을 집으면 AI 는 그 엉뚱한 번호를 확신에 차서 인용한다. 그래서 실제 데이터로 못박는다.
 import { describe, it, expect } from 'vitest';
-import { searchTda, toContext } from './tdaSearch';
+import { searchTda, tdaRuleKey } from './tdaSearch';
 import { TDA_RULES } from '../data/tdaRules';
 
 const nos = (q: string, n = 6) => searchTda(TDA_RULES, q, n).map((h) => h.rule.no);
@@ -58,13 +58,23 @@ describe('구어체 질문 → 관련 규칙', () => {
 });
 
 describe('AI 근거 묶음', () => {
-  it('규칙 번호를 반드시 포함한다 — 인용의 근거이자 이 기능의 존재 이유', () => {
-    const ctx = toContext(searchTda(TDA_RULES, '올인 콜', 3));
-    expect(ctx).toMatch(/규칙 \d+\./);
-    expect(ctx).toMatch(/쪽\)/);
+  // 2026-09-11: AI 에 넘기는 것이 '발췌 텍스트'에서 '규칙 키'로 바뀌었다(서버가 원문을 조립한다).
+  //   그래서 이 테스트도 '키가 규칙을 정확히 가리키는가'를 본다.
+  it('검색 결과에서 뽑은 키가 그 규칙을 유일하게 가리킨다', () => {
+    const hits = searchTda(TDA_RULES, '올인 콜', 3);
+    expect(hits.length).toBeGreaterThan(0);
+    const keys = hits.map(({ rule }) => tdaRuleKey(rule));
+    expect(new Set(keys).size).toBe(keys.length);            // 중복 없음
+    for (const k of keys) {
+      const found = TDA_RULES.filter((r) => tdaRuleKey(r) === k);
+      expect(found.length).toBe(1);                          // 키 하나 = 규칙 하나
+    }
+  });
+
+  it('검색이 0건이면 넘길 키도 0개다 — 근거 없는 질의를 만들지 않는다', () => {
+    expect(searchTda(TDA_RULES, 'zzzzqqq').map(({ rule }) => tdaRuleKey(rule))).toEqual([]);
   });
 
   it('결과가 없으면 빈 문자열 — 근거 없이 AI 를 부르지 않는다', () => {
-    expect(toContext(searchTda(TDA_RULES, 'zzzzqqq'))).toBe('');
   });
 });

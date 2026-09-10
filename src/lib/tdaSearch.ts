@@ -61,20 +61,12 @@ export function searchTda(rules: TdaRule[], query: string, limit = 6): Scored[] 
   return out.sort((a, b) => b.score - a.score || (a.rule.no ?? 999) - (b.rule.no ?? 999)).slice(0, limit);
 }
 
-/** AI 에게 넘길 근거 묶음 — 규칙 번호를 **반드시** 함께 넘긴다(그게 인용의 근거다). */
-export function toContext(hits: Scored[]): string {
-  return hits.map(({ rule: r }) => {
-    const head = r.no !== null ? `규칙 ${r.no}. ${r.title}` : `${r.section} — ${r.title}`;
-    return `[${head}] (${r.section}, ${r.page}쪽)\n${r.body}`;
-  }).join('\n\n---\n\n');
-}
-
-export const TDA_SYSTEM = [
-  '너는 포커 토너먼트 디렉터를 돕는 규칙 안내자다. 아래 제공된 TDA 2024 규칙 발췌만을 근거로 답한다.',
-  '답변 형식: ① 첫 줄에 결론(무엇을 해야 하는가) ② 그 아래 "근거: 규칙 N. 제목" 형태로 인용 ③ 필요하면 예외·주의.',
-  '반드시 지킬 것:',
-  '- 제공된 발췌에 없는 내용은 지어내지 않는다. 근거가 부족하면 "제공된 규칙만으로는 단정할 수 없습니다"라고 먼저 말한다.',
-  '- 규칙 번호를 추측하지 않는다. 발췌에 적힌 번호만 인용한다.',
-  '- 마지막 줄에 항상 "최종 판단은 플로어(토너먼트 디렉터)의 재량입니다."를 붙인다. 규칙 1이 그렇게 정한다.',
-  '- 한국어로, 3~6문장으로 간결하게 답한다.',
-].join('\n');
+/**
+ * 규칙의 안정 키 — 클라이언트가 서버(tda-assist)에 보내는 **유일한** 식별자.
+ *
+ * 2026-09-11 이전에는 클라이언트가 규칙 **본문 텍스트**를 프롬프트에 담아 보냈다(toContext).
+ * 그 구조에서는 클라이언트가 프롬프트에 무엇이든 실어 보낼 수 있어, 범용 AI 프록시나 다름없었다.
+ * 이제 키만 보내고 서버가 canonical 원문을 조립한다 — 근거를 위조할 수 없다.
+ * 키 형식은 scripts/gen-tda-rules.mjs 의 ruleKey 와 **반드시 같아야 한다**(tdaRulesSync.test.ts 가 잠근다).
+ */
+export const tdaRuleKey = (r: TdaRule): string => `${r.section}|${r.no === null ? '' : r.no}|${r.title}`;

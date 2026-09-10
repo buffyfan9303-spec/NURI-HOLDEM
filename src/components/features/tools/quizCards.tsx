@@ -4,73 +4,15 @@
 // 왜 모았나(2026-08-29): 드릴이 두 트레이너의 문항을 섞어 내야 하는데, 표시 JSX 를 복사하면
 //   같은 화면이 두 벌이 되어 한쪽만 고쳐지는 사고가 난다. 마크업·클래스는 기존 트레이너에서
 //   **그대로 옮겼다**(디자인 변경 0).
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import Icon from '../../atoms/Icon';
-import { explainQuizMiss, type QuizExplainInput } from '../gto/gto.explain';
 import { isScenarioCorrect, type Action, type Scenario } from './postflop.data';
 import { FOLD, foldFreq, verdictOf, type Quiz } from '../../../lib/preflopQuiz';
 
 const suitColor = (s: string) => (s.includes('♥') || s.includes('♦') ? 'text-red-400' : 'text-ink-primary');
 
-/* ──────────────────────────────────────────────────────────────────────────
-   AI 심화 해설 — 오답일 때만, 그리고 버튼을 눌렀을 때만 호출한다(자동 호출 금지).
-   실패해도 위의 규칙 기반 해설은 그대로 남는다 — AI 는 덤이지 화면의 전제가 아니다.
-   CLS: 이 블록은 '다음 문제' 버튼 **아래**에 둔다. 눌러서 로딩으로 바뀌는 순간의 변화는
-        입력 직후(500ms)라 CLS 로 잡히지 않고, 로딩 상자에 본문 높이(4.5rem)를 미리 잡아 두어
-        **텍스트가 도착해도 문제·버튼이 밀리지 않는다.**
-   ────────────────────────────────────────────────────────────────────────── */
-type AiState = { s: 'idle' } | { s: 'load' } | { s: 'done'; text: string } | { s: 'err' };
-
-export function AiExplainBlock({ input }: { input: QuizExplainInput }) {
-  const [st, setSt] = useState<AiState>({ s: 'idle' });
-
-  const run = () => {
-    setSt({ s: 'load' });
-    explainQuizMiss(input)
-      .then((text) => setSt({ s: 'done', text }))
-      .catch(() => setSt({ s: 'err' }));
-  };
-
-  if (st.s === 'idle') {
-    return (
-      <button type="button" onClick={run}
-        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/10 text-2xs font-bold text-accent-200 transition-colors hover:bg-accent-300/20">
-        <Icon name="sparkles" size={13} className="shrink-0" aria-hidden />
-        AI 심화 해설 보기 — 핸드 구조·보드 읽기
-      </button>
-    );
-  }
-
-  return (
-    <div className="min-h-[4.5rem] rounded-input border border-accent-400/25 bg-accent-300/[0.04] p-2.5">
-      <p className="mb-1.5 inline-flex items-center gap-1 text-2xs font-bold text-accent-200">
-        <Icon name="sparkles" size={12} className="shrink-0" aria-hidden />AI 심화 해설
-      </p>
-      {st.s === 'load' && (
-        <div className="space-y-1.5" aria-label="AI 해설 불러오는 중">
-          <div className="h-3 w-full animate-pulse rounded bg-surface-high" />
-          <div className="h-3 w-11/12 animate-pulse rounded bg-surface-high" />
-          <div className="h-3 w-8/12 animate-pulse rounded bg-surface-high" />
-        </div>
-      )}
-      {st.s === 'done' && (
-        <>
-          <p className="whitespace-pre-line text-2xs leading-relaxed text-ink-secondary">{st.text}</p>
-          <p className="mt-1.5 text-2xs text-ink-muted">AI 가 생성한 학습 참고용 설명입니다. 위 해설이 기준입니다.</p>
-        </>
-      )}
-      {st.s === 'err' && (
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-2xs text-ink-muted">AI 해설을 불러오지 못했습니다. 위 해설을 참고하세요.</p>
-          <button type="button" onClick={run}
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-input border border-border-default bg-surface-high px-2 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
-            <Icon name="refresh" size={11} className="shrink-0" aria-hidden />다시 시도
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+/* (2026-09-11) AI 심화 해설 제거 — 오답 문항의 핸드·보드를 외부 모델로 보내던 경로였다.
+   각 문항의 규칙 기반 해설(explain/verdict)은 그대로 남는다. 그게 원래 이 화면의 본체다. */
 
 /* ──────────────────────────────────────────────────────────────────────────
    포스트플랍 시나리오 카드 — 상황 / 선택지 / 해설. 채점은 postflop.data 의 isScenarioCorrect 단일 소스.
@@ -152,7 +94,6 @@ export function ScenarioQuizCard({ sc, picked, onPick, badge, banner, footer }: 
           </div>
           {footer}
           {/* 오답일 때만 AI 해설 진입점을 연다(비용 관리) */}
-          {!ok && <AiExplainBlock input={{ kind: 'postflop', id: sc.id, hand: sc.hand, board: sc.board }} />}
         </div>
       )}
     </>
@@ -172,14 +113,6 @@ export function PreflopQuizCard({ quiz, result, onAnswer, banner, footer }: {
   footer?: ReactNode;
 }) {
   const fold = foldFreq(quiz);
-  // AI 해설 문맥 — 엣지 함수 프롬프트의 raise/call/fold 축으로 접는다(3벳·4벳·오픈·올인 = raise)
-  const callFreq = quiz.acts.find((a) => a.label === '콜')?.freq ?? 0;
-  const explainInput: QuizExplainInput = {
-    kind: 'preflop', id: quiz.key, hand: quiz.hand, posLabel: quiz.posLabel, stackBb: quiz.stackBb,
-    scenarioLabel: `${quiz.posLabel} · ${quiz.situ}`,
-    villain: quiz.vs ? { position: quiz.vs.label, sizingBb: quiz.vs.bb } : undefined,
-    frequency: { raise: Math.max(0, 1 - fold - callFreq), call: callFreq, fold },
-  };
 
   return (
     <>
@@ -234,7 +167,6 @@ export function PreflopQuizCard({ quiz, result, onAnswer, banner, footer }: {
           </div>
           {footer}
           {/* 오답일 때만 AI 해설 진입점을 연다(비용 관리) */}
-          {!result.correct && <AiExplainBlock input={explainInput} />}
         </div>
       )}
     </>

@@ -3,7 +3,11 @@
 // 학술 표준 알고리즘(Brown 1951 fictitious play; Miltersen&Sørensen 2007 잼/폴드 준최적 근거)으로 직접 산출한 자체 데이터다.
 // 값: 핸드별 셔브/콜 빈도를 0~8로 양자화(8=100%). k = 내 뒤에 남은 인원(1=SB, 2=BTN, ... 8=9맥스 UTG).
 // BB콜은 전 k(1~8), SB콜은 k>=2 에 존재(k=1 은 SB 가 셔버 본인).
-// ⚠ 생성 스크립트: scratchpad equity-matrix.mjs + nash-solve.mjs (2026-08-20). 손으로 수정 금지 — 재생성할 것.
+// ⚠ 생성 스크립트가 **저장소에 없다**(2026-09-11 확인): 주석이 가리키던 equity-matrix.mjs · nash-solve.mjs 는
+//   scratchpad 에만 있었고 지금은 남아 있지 않다. 게다가 에퀴티가 몬테카를로(4만회/쌍)라 시드 없이는
+//   같은 값이 다시 나오지 않는다 → **재현 불가**. 그래서 이 데이터를 임의로 다시 만들지 않는다.
+//   화면에도 '기존 자체 생성 데이터 · 생성기 재현 필요'로 표시한다(PushFoldChart 하단).
+//   손으로 수정하지 말 것 — 고치려면 생성기부터 복원해야 한다.
 
 export const NASH_STACKS = [2,3,4,5,6,7,8,9,10,12,15,20] as const;
 export const NASH_KS = [1,2,3,4,5,6,7,8] as const;

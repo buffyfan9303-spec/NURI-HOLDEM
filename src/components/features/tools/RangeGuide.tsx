@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CalcCard } from './calcUi';
 import RangeMatrix13, { type MatrixAction } from './RangeMatrix13';
+import SourceBadge from './SourceBadge';
 import { ACTION_COLORS } from '../../../lib/ranges.data';
 import { buildFreq, rangeComboPct } from '../../../lib/ranges';
 import { RANGE_GROUPS, RANGE_SCENARIOS, type RangeScenario, type TablePos } from '../../../lib/ranges.data';
@@ -123,6 +124,8 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
       </div>
       <p className="text-2xs text-ink-muted">{scen.desc}</p>
 
+      {/* 출처는 결과 **바로 옆**에 붙인다 — 하단 ※ 고지는 스크롤 밖이라 읽히지 않았다(2026-09-11). */}
+      <div className="flex justify-center"><SourceBadge kind="chart" note="100bb" /></div>
       <RangeMatrix13 actions={actions} initialSel={highlight} />
 
       {scen.note && (

@@ -6,6 +6,7 @@ import Modal from '../../atoms/Modal';
 import { useToast } from '../../atoms/Toast';
 import CardGridPicker, { SUIT_COLOR, SUIT_LABEL } from './CardGridPicker';
 import { CalcCard } from '../tools/calcUi';
+import SourceBadge from '../tools/SourceBadge';
 import { ACTION_COLORS, ACTION_TEXT_COLORS } from '../../../lib/ranges.data';
 import { EQUITY_BANDS, EQUITY_BAND_TEXT } from './equityBands';
 import { writeSnap } from '../../../lib/snapshot';
@@ -13,7 +14,6 @@ import { useDeepGto, type CardTarget, type DeepGtoInit } from './useDeepGto';
 import { canonicalizeHand } from './useGtoCalculator';
 import { equityAsync } from './equityClient';
 import { encodeSpot } from './gtoShare';
-import { explainDeepSpot } from './gto.explain';
 import type { Card, ActionFrequency } from './gto.types';
 
 function comboIdOf(cards: readonly (Card | null)[]): string | null {
@@ -145,16 +145,8 @@ function DeepActionSheet({
   // → 워커 비동기로 전환(열리는 프레임이 더는 멈추지 않는다). 결과·표시는 동일.
   type ActionRow = { key: string; eq: number | null; rec: (eq: number) => { label: string; color: string; textColor: string; note: string } };
   const [rows, setRows] = useState<ActionRow[] | null>(null);
-  // 상태마다 독립 멤버로 쪼갠다 — 세 상태를 한 객체에 뭉치면 판별 유니온이 성립하지 않아
-  // 마지막 분기에서도 TS 가 'done' 으로 확정하지 못한다(text 접근이 컴파일 에러).
-  type AiState =
-    | { status: 'idle' }
-    | { status: 'loading' }
-    | { status: 'failed' }
-    | { status: 'done'; text: string };
-  const [aiState, setAiState] = useState<AiState>({ status: 'idle' });
   useEffect(() => {
-    if (!open) { setRows(null); setAiState({ status: 'idle' }); return; }
+    if (!open) { setRows(null); return; }
     const h = hero.filter((c): c is Card => c !== null);
     const v = villain.filter((c): c is Card => c !== null);
     if (h.length < 2 || v.length < 2) { setRows(null); return; }
@@ -172,17 +164,8 @@ function DeepActionSheet({
         { key: '턴 액션',             eq: e4, rec: postRec },
         { key: '리버 액션',           eq: e5, rec: postRec },
       ]);
-      // ── 실제 AI 해설(Gemini) — 위 표는 규칙 계산이고, 여기서만 모델이 돈다 ──
-      // 이 시트 이름이 'AI 액션 해설' 인데 정작 AI 가 없었다(2026-08-29 오너 지적).
-      // 승률 계산이 끝난 뒤에 붙여 보낸다 — 모델이 숫자를 알아야 '왜' 를 말할 수 있다.
-      // 실패해도 위 표는 그대로 남는다(AI 는 덤이지 화면의 전제가 아니다).
-      setAiState({ status: 'loading' });
-      explainDeepSpot({
-        heroCards: h, villainCards: v, board: b,
-        equities: { pre: e0, flop: e3, turn: e4, river: e5 },
-      })
-        .then((text) => { if (alive) setAiState({ status: 'done', text }); })
-        .catch(() => { if (alive) setAiState({ status: 'failed' }); });
+      // (2026-09-11) AI 해설 제거 — 이 시트는 이 앱에서 **버튼 없이 자동으로** 외부 모델을 부르던 자리였다.
+      //   남는 것은 위 표(에퀴티 기반 규칙 계산)뿐이고, 그건 원래 이 화면의 본체였다.
     });
     return () => { alive = false; };
   }, [open, hero, villain, board]);
@@ -191,7 +174,7 @@ function DeepActionSheet({
   // 셸은 Modal 원자(MODAL-03) — 손으로 짠 시트는 aria-modal 만 선언하고 포커스 이동·트랩·복원이 없었고,
   // ESC 도 안 들어서 도구 전체화면(page Modal)이 대신 닫혔다. 원자가 뒤로가기·ESC(최상단 한 겹)·44px 닫기까지 준다.
   return (
-    <Modal open onClose={onClose} title="AI 액션 해설" variant="sheet" maxWidth="md">
+    <Modal open onClose={onClose} title="스트리트별 권장 액션" variant="sheet" maxWidth="md">
         <div className="space-y-2 px-4 py-3">
           {!rows ? (
             <p className="py-6 text-center text-2xs text-ink-muted">Hero / Villain 카드를 모두 입력하세요.</p>
@@ -215,23 +198,7 @@ function DeepActionSheet({
               );
             })
           )}
-          {/* AI 해설 — 위 표(규칙 계산)와 역할이 다르다: 표는 '무엇을', 이건 '왜'.
-              높이를 애니메이트하지 않는다(모션 헌법). 로딩 자리를 미리 잡아 도착해도 표가 밀리지 않게. */}
-          {rows && aiState.status !== 'idle' && (
-            <div className="rounded-input border border-border-default bg-surface-low p-3">
-              <p className="text-2xs font-bold text-accent-200">AI 해설</p>
-              {aiState.status === 'loading' ? (
-                <p className="mt-1 min-h-[3.75rem] text-xs leading-relaxed text-ink-muted">해설을 불러오는 중…</p>
-              ) : aiState.status === 'failed' ? (
-                <p className="mt-1 min-h-[3.75rem] text-xs leading-relaxed text-ink-muted">
-                  지금은 해설을 불러오지 못했어요 — 위 권장 액션은 그대로 사용할 수 있습니다.
-                </p>
-              ) : (
-                <p className="mt-1 min-h-[3.75rem] text-xs leading-relaxed text-ink-secondary">{aiState.text}</p>
-              )}
-            </div>
-          )}
-          <p className="pt-1 text-2xs text-ink-muted">학습용 참고 설명입니다. 실제 솔버 값과 차이가 있을 수 있습니다.</p>
+          <p className="pt-1 text-2xs text-ink-muted">에퀴티 임계값으로 뽑은 <b>휴리스틱 참고</b>입니다 — 솔버 계산이 아니고 EV 손실도 계산하지 않습니다.</p>
         </div>
     </Modal>
   );
@@ -388,7 +355,8 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
           <div>
             <p className="mb-1 text-2xs font-semibold text-ink-secondary">참고 액션 가이드</p>
             <MixBar action={deep.normalizedAction} />
-            <p className="mt-1.5 text-2xs text-ink-muted">※ 에퀴티·팟오즈 기반 근사(솔버 아님). 실제 GTO 솔버 값과 다를 수 있습니다.</p>
+            <div className="mt-1.5 flex"><SourceBadge kind="heuristic" /></div>
+            <p className="mt-1 text-2xs text-ink-muted">※ 에퀴티·팟오즈 기반 근사(솔버 아님). 실제 GTO 솔버 값과 다를 수 있습니다.</p>
           </div>
 
           {deep.equity && !deep.calculating && (() => {
@@ -430,12 +398,12 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
             </div>
           )}
 
-          {/* AI 해설·공유는 특정 핸드(hand) 모드 전용 — 공유 해시가 hand 조합만 인코딩 */}
+          {/* 액션 시트·공유는 특정 핸드(hand) 모드 전용 — 공유 해시가 hand 조합만 인코딩 */}
           {!rangeMode && (
           <div className="flex gap-2">
             <button type="button" onClick={() => setSheetOpen(true)} className="btn-ghost inline-flex flex-1 items-center justify-center gap-2 py-2.5">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z" /></svg>
-              AI 해설
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 3v18h18" /><path d="m7 14 4-4 3 3 5-6" /></svg>
+              스트리트별 액션
             </button>
             <button type="button" onClick={shareSpot} aria-label="공유 링크 생성" className="btn-ghost inline-flex items-center justify-center gap-1.5 px-4 py-2.5">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

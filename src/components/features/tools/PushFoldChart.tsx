@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CalcCard } from './calcUi';
 import RangeMatrix13, { type MatrixAction } from './RangeMatrix13';
+import SourceBadge from './SourceBadge';
 import { ACTION_COLORS } from '../../../lib/ranges.data';
 import { freqFromArray } from '../../../lib/ranges';
 import { HAND_ORDER, NASH_STACKS, nashRange } from '../../../lib/nash.data';
@@ -119,11 +120,14 @@ export default function PushFoldChart({ initialK, initialStack, initialAnte, ini
             : `${pos.label}의 ${stack}bb 올인에 SB가 콜하는 균형 레인지. 뒤에 BB가 남아 BB 콜보다 타이트하다.`}
       </p>
 
+      {/* 자체 산출 Nash 다 — 상용 솔버 표가 아니라는 것이 결과 옆에서 바로 보여야 한다. */}
+      <div className="flex justify-center"><SourceBadge kind="nash" note="first-in · 단일 콜러 근사" /></div>
       <RangeMatrix13 actions={actions} initialSel={highlight} />
 
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
         ※ 자체 계산 Nash 균형(fictitious play, 첫 진입 올인·단일 콜러 모델) — 몬테카를로 에퀴티 4만회/쌍 기반.
         부분 채움 셀은 혼합 전략(그 빈도만큼만 올인). 앤티는 BB 앤티 1bb 기준.
+        <br />기존 자체 생성 데이터 · <b>생성기 재현 필요</b>(생성 스크립트가 저장소에 없어 같은 값을 다시 만들 수 없습니다).
       </p>
     </CalcCard>
   );

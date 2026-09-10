@@ -6,7 +6,7 @@ import { rangeVsRangeAsync } from '../gto/equityClient';
 import { expandFreqToCombos, scenarioActionCombos } from '../gto/useDeepGto';
 import Term from './Term';
 
-/* GTO 위자드형 보조 도구 3종 — MDF/블러프 계산기 · 어그레션 빈도 차트 · 레인지 vs 레인지 에퀴티(실계산) */
+/* 보조 도구 3종 — MDF/블러프 계산기 · 어그레션 빈도 차트 · 레인지 vs 레인지 에퀴티(몬테카를로) */
 
 const fmtPct = (x: number) => `${Math.round(x * 10) / 10}%`;
 
@@ -57,7 +57,7 @@ export function MdfCalc() {
         <Result label="콜에 필요한 승률" value={fmtPct(callEq)} desc="이 승률보다 핸드 에퀴티가 높으면 수학적으로 콜이 이득입니다." />
         <Result label="내 벳의 적정 블러프 비율" value={fmtPct(bluffRatio)} desc={`리버 기준 밸류 ${fmtPct(100 - bluffRatio)} : 블러프 ${fmtPct(bluffRatio)}로 섞으면 상대가 콜/폴드 어느 쪽도 착취 못 해요.`} />
       </div>
-      <p className="text-2xs text-ink-muted">{'※ 이론('}<Term name="GTO">GTO</Term>{') 기준 수치입니다. 상대가 과도하게 폴드/콜하면 그에 맞춰 블러프를 늘리거나 줄이세요.'}</p>
+      <p className="text-2xs text-ink-muted">{'※ 벳 크기에서 바로 나오는 산술값입니다(솔버 출력이 아닙니다). 상대가 과도하게 폴드/콜하면 그에 맞춰 블러프를 늘리거나 줄이세요.'}</p>
       {/* 중복 인지 제거 — '콜에 필요한 승률'은 팟 오즈 계산기와 같은 개념(딥링크, 계산 로직 불변) */}
       <a href="#tool=pot" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
         '콜에 필요한 승률'을 실제 팟·콜 금액으로 — 팟 오즈 계산기 →
@@ -67,7 +67,8 @@ export function MdfCalc() {
 }
 
 // ── 어그레션 빈도 차트 ────────────────────────────────────────────────────────
-// 6맥스 100bb 기준 권장 프리플랍 빈도(근사) — 출처: 일반적 GTO 솔버 결과 요약
+// 6맥스 100bb 기준 권장 프리플랍 빈도(근사) — 사람이 정리한 통설 요약값이다.
+// 특정 솔버의 출력이 아니다(그 표를 복제하지 않았다). 화면에도 '자체 제작 학습 차트'로 표시한다.
 const AGGRO_ROWS: { pos: string; open: number; threeBet: number; coldCall: number; foldTo3bet: number }[] = [
   { pos: 'UTG', open: 17, threeBet: 3.5, coldCall: 4, foldTo3bet: 55 },
   { pos: 'MP',  open: 21, threeBet: 4.5, coldCall: 5, foldTo3bet: 53 },
@@ -267,7 +268,7 @@ export function RangeMatrix() {
           </tbody>
         </table>
       </div>
-      <p className="text-2xs text-ink-muted">※ 몬테카를로 실계산(쌍마다 {MATRIX_ITER.toLocaleString()}회, ±1%p 오차). 레인지가 넓을수록 보드 의존도가 커집니다.</p>
+      <p className="text-2xs text-ink-muted">※ 몬테카를로 추정(쌍마다 {MATRIX_ITER.toLocaleString()}회, ±1%p 오차). 레인지가 넓을수록 보드 의존도가 커집니다.</p>
       {/* 중복 인지 제거 — 특정 핸드 vs 레인지는 GTO 핸드 분석으로(딥링크) */}
       <a href="#tool=gto" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
         특정 핸드 vs 레인지는 「GTO 핸드 분석」에서 →
