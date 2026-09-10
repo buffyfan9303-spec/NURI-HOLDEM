@@ -35,9 +35,18 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
           URL="${DB_URL:-$DB_URL_ALT}"
+          # R2 값의 '모양'만 진단한다(값은 절대 출력하지 않는다) — 실행 34475100193 까지 세 번 연속
+          # "SSL handshake failure" 였고, 그 원인은 십중팔구 계정 ID 가 아닌 값(토큰 ID·액세스 키·r2.dev 주소)이
+          # R2_ACCOUNT_ID/R2_ENDPOINT 에 들어간 것이다. 오너가 대시보드에서 어느 값을 다시 넣어야 하는지 여기서 드러난다.
+          shape() { printf '%s' "$1" | grep -Eq "$2" && echo "OK" || echo "다름"; }
+          echo "R2_ACCOUNT_ID: 길이 ${#R2_ACCOUNT_ID} · 32자리 16진수 모양=$(shape "$R2_ACCOUNT_ID" '^[0-9a-f]{32}$')  (Cloudflare 대시보드 R2 → 우측 'Account ID')"
+          echo "R2_ENDPOINT: 길이 ${#R2_ENDPOINT} · https://<32hex>.r2.cloudflarestorage.com 모양=$(shape "$R2_ENDPOINT" '^https://[0-9a-f]{32}(\.[a-z]+)?\.r2\.cloudflarestorage\.com/?$')"
+          echo "R2_BUCKET: 길이 ${#R2_BUCKET} · 소문자·숫자·하이픈만=$(shape "$R2_BUCKET" '^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$')"
+          echo "R2_ACCESS_KEY_ID: 길이 ${#R2_ACCESS_KEY_ID} (32) · R2_SECRET_ACCESS_KEY: 길이 ${#R2_SECRET_ACCESS_KEY} (64)"
           missing=""
           [ -z "$URL" ]                 && missing="$missing SUPABASE_DB_URL(또는 SUPABASE_URI)"
           [ -z "$R2_ACCESS_KEY_ID" ]    && missing="$missing R2_ACCESS_KEY_ID"
