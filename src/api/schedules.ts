@@ -4,12 +4,35 @@ import type { DiscountType } from '../lib/promotionLabel';
 
 export type { DiscountType };
 
-/** 일정(포스터/게임) 변경 실시간 구독 — 다른 기기/사용자의 등록·수정·삭제를 자동 반영 */
+/** 조회수만 바뀐 갱신을 걸러내기 위한 행 지문(뷰카운트 제외). 모듈 수명 = 탭 수명. */
+const rowSig = new Map<string, string>();
+
+/** 일정(포스터/게임) 변경 실시간 구독 — 다른 기기/사용자의 등록·수정·삭제를 자동 반영.
+ *
+ * ⚠ 팬아웃 증폭 차단(2026-09-10 용량 점검, 동접 100 기준 BLOCKER):
+ *   포스터 상세를 한 번 열 때마다 bump_schedule_view 가 schedules 행을 UPDATE 한다.
+ *   schedules 는 realtime 퍼블리케이션에 있으므로 그 UPDATE 가 **구독 중인 모든 접속자**에게
+ *   방송되고, 예전엔 그때마다 전원이 schedules 를 통째로 다시 받았다.
+ *   동접 100에서 초당 몇 번의 조회만으로 '전원 전량 재조회' 루프가 돌아 egress 가 폭주한다.
+ *   → 들어온 행에서 view_count 를 뺀 지문이 이전과 같으면 **다시 받지 않는다**.
+ *     (처음 보는 포스터는 한 번은 받는다 — 안전한 쪽으로 틀린다. 그 뒤 같은 포스터의 조회수
+ *      증가는 전부 무료다. 진짜 수정·등록·삭제는 지문이 달라지므로 반드시 통과한다.)
+ */
 export function subscribeSchedules(onChange: () => void): () => void {
   if (IS_MOCK) return () => {};
   const ch = supabase
     .channel(`schedules_all_${Math.random().toString(36).slice(2)}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => onChange())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, (payload) => {
+      const n = payload.new as Record<string, unknown> | null;
+      if (payload.eventType === 'UPDATE' && n && typeof n.id === 'string') {
+        const rest: Record<string, unknown> = { ...n };
+        delete rest.view_count;
+        const sig = JSON.stringify(rest);
+        if (rowSig.get(n.id) === sig) return; // 조회수만 올랐다 — 목록은 그대로다
+        rowSig.set(n.id, sig);
+      }
+      onChange();
+    })
     .subscribe();
   return () => { supabase.removeChannel(ch); };
 }
@@ -108,11 +131,17 @@ export async function getSchedules(): Promise<Schedule[]> {
     const { MOCK_SCHEDULES } = await import('../mock/data');
     return MOCK_SCHEDULES;
   }
+  // ⚠ 잘림 순서 고정 + 상한(2026-09-10 용량 점검): 예전엔 limit 이 없어 PostgREST max_rows=1000 에
+  //   걸리는 순간 **날짜와 무관하게 display_order 순으로** 조용히 잘렸다 — 오늘 열리는 대회가
+  //   목록에서 사라질 수 있는 모양이고 에러도 안 난다.
+  //   날짜 내림차순 + 800(상한 1000보다 낮게)이면 잘려도 **가장 오래된 것부터** 잘린다.
+  //   기간 필터는 걸지 않는다 — '지난 대회' 아카이브가 이 같은 목록을 쓰므로 기능이 사라진다.
+  //   표시 순서는 아래 클라이언트 정렬(부스트 → display_order)이 그대로 결정한다.
   const { data, error } = await supabase
     .from('schedules')
     .select('*')
-    .order('is_premium', { ascending: false })
-    .order('display_order');
+    .order('date', { ascending: false })
+    .limit(800);
   if (error) throw error;
   // 부스트(premium_until)는 DB 정렬에 안 잡히므로 매핑 후 한 번 더 정렬
   return (data ?? []).map(rowToSchedule)

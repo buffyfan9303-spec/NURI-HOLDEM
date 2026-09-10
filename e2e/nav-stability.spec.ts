@@ -185,7 +185,25 @@ test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도
         if (needHome) { await tap(page, pts, 'home'); await page.waitForTimeout(700); }
         const baseline = await currentScreen(page);
         await resetProbe(page);
+        // 뒤로가기 겹의 현재 깊이 — 오버레이가 '커밋'됐는지 판정하는 유일한 사실이다(backstack.ts __layer).
+        const baseLayer = await page.evaluate(() => {
+          const st = history.state as { __layer?: number } | null;
+          return st && typeof st.__layer === 'number' ? st.__layer : 0;
+        });
         await ov.open(page);
+        // ⚠ delay 를 '커밋까지 걸리는 시간'으로 대신 쓰면 안 된다(2026-09-10 CI 2회 연속 실패).
+        //   GitHub 러너는 로컬보다 느려 150ms 안에 pushState 가 끝나지 않는다 → 150ms 케이스가
+        //   0ms 케이스와 같아져 '아직 뒤로 갈 대상이 없는데 back' 이 되고, 한 겹 아래로 내려가
+        //   열기 전 화면이 아닌 곳에 도착한다. 이건 제품 결함이 아니라 계측 오류다.
+        //   그래서 delay>0 은 **커밋을 관측한 뒤** 그만큼 더 기다린다 — 잠그려는 계약
+        //   ('커밋된 뒤 back 은 정확히 열기 전 화면')은 그대로 두고 경주만 없앤다.
+        //   delay===0 은 의도적으로 커밋 이전을 노리는 케이스라 기다리지 않는다.
+        if (delay > 0) {
+          await page.waitForFunction((b) => {
+            const st = history.state as { __layer?: number } | null;
+            return !!st && typeof st.__layer === 'number' && st.__layer > b;
+          }, baseLayer, { timeout: 5000 }).catch(() => { /* 겹을 안 쌓는 오버레이면 아래 delay 로만 간다 */ });
+        }
         await page.waitForTimeout(delay);
         await back(page);
         await page.waitForTimeout(300);

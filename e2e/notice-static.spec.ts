@@ -40,7 +40,15 @@ async function openBoardNotices(page: Page): Promise<Locator> {
   await page.getByRole('tab', { name: '게시판', exact: true }).or(page.getByRole('button', { name: '게시판', exact: true })).first().click();
   const sec = page.locator('section').filter({ has: page.getByRole('heading', { name: '공지사항' }) }).first();
   await expect(sec, '게시판 위 공지 섹션이 없다').toBeVisible({ timeout: 15_000 });
-  await expect(sec.getByRole('listitem')).toHaveCount(3);
+  // 2026-09-10 오너 지시: 공지 칸이 화면을 먹는다 → **기본은 가장 중요한 1건만**.
+  // 중요도는 주의 > 이벤트 > 공지, 같은 유형이면 최신순이라 이 픽스처의 첫 행은 '주의' 다.
+  await expect(sec.getByRole('listitem'), '기본 상태에서 공지가 1건만 보여야 한다').toHaveCount(1);
+  await expect(sec.getByRole('listitem').first(), '가장 중요한 1건(주의)이 아니다').toContainText('중고장터 거래 안내');
+  // 나머지는 삭제가 아니라 접힘 — 한 번 눌러 전부 볼 수 있어야 한다(기능 보존).
+  const more = sec.getByRole('button', { name: /나머지 \d+건 더 보기/ });
+  await expect(more, '접힌 공지를 펼칠 길이 없다').toBeVisible();
+  await more.click();
+  await expect(sec.getByRole('listitem'), '펼쳤는데 전부 보이지 않는다').toHaveCount(3);
   return sec;
 }
 
@@ -71,23 +79,23 @@ test('🔴 공지 행(모바일) — 흐르지 않고 2줄 안에서 끝나며 a
   await expect(sec.locator('.marquee-loop')).toHaveCount(0);
   expect(await transformAnims(sec), '공지 섹션에 transform 애니메이션이 남아 있다').toBe(0);
 
-  // ② 2줄 clamp — 긴 제목은 실제로 줄바꿈되고(1줄보다 높고) 2줄을 넘지 않는다
+  // ② **한 줄** 말줄임 — 모바일에서도 1줄을 넘지 않는다(2026-09-10 오너 지시).
+  //    예전 2줄 clamp 는 긴 제목마다 행을 두 배로 만들어 공지 칸이 화면을 먹었다.
   const m = await measure(sec);
   console.log('[공지 제목 실측 · 모바일]', JSON.stringify(m));
   expect(m.transform).toBe('none');
-  expect(m.clamp).toBe('2');
-  expect(m.h, '긴 제목이 줄바꿈되지 않았다(clamp 가 안 걸림)').toBeGreaterThan(m.lh + 1);
-  expect(m.h, '제목이 2줄을 넘는다').toBeLessThanOrEqual(m.lh * 2 + 1);
+  expect(m.clamp, '모바일도 1줄이어야 한다').toBe('1');
+  expect(m.h, '제목이 한 줄을 넘는다').toBeLessThanOrEqual(m.lh + 1);
   expect(m.overflowX, '제목이 가로로 넘친다').toBeLessThanOrEqual(1);
   expect(m.startInset, '제목 첫 글자가 행 왼쪽 밖으로 밀렸다').toBeGreaterThanOrEqual(0);
-  // 행 높이 = 2줄 + 상하 패딩(py-2 = 16px) 이내
-  expect(m.rowH, '행이 2줄 clamp 높이를 넘는다').toBeLessThanOrEqual(m.lh * 2 + 16 + 2);
+  // 행 높이 = 1줄 + 상하 패딩(py-2 = 16px) 이내 ─ 다만 터치 타깃 44px(--row-h-sm)는 지킨다
+  expect(m.rowH, '행이 한 줄 높이를 넘는다').toBeLessThanOrEqual(Math.max(44, m.lh + 16) + 2);
 
   // ③ 접근성 이름 — 시각적으로 잘려도 이름은 전체 제목
-  const btn = sec.getByRole('listitem').first().getByRole('button');
+  const btn = sec.getByRole('listitem').filter({ hasText: '정식 오픈' }).getByRole('button');
   expect(await btn.getAttribute('aria-label'), 'aria-label 에 전체 제목이 없다').toContain(LONG);
-  // 유형 타일(주의)은 그대로 — 정렬 요소가 사라지지 않았다
-  await expect(sec.getByRole('listitem').nth(2).locator('.tile-grad')).toHaveCount(1);
+  // 유형 타일(주의)은 그대로 — 중요도 정렬이라 이제 **첫 행**이다. 정렬 요소가 사라지지 않았다.
+  await expect(sec.getByRole('listitem').first().locator('.tile-grad')).toHaveCount(1);
 });
 
 test('🔴 공지 행(PC lg+) — 1줄 말줄임 · 애니메이션 0개 · 전체 제목은 aria-label', async ({ page }) => {
@@ -101,12 +109,11 @@ test('🔴 공지 행(PC lg+) — 1줄 말줄임 · 애니메이션 0개 · 전�
   const m = await measure(sec);
   console.log('[공지 제목 실측 · PC]', JSON.stringify(m));
   expect(m.transform).toBe('none');
-  expect(m.clamp).toBe('1');
   expect(m.h, 'PC 에서 제목이 1줄을 넘는다').toBeLessThanOrEqual(m.lh + 1);
   expect(m.overflowX).toBeLessThanOrEqual(1);
   expect(m.startInset).toBeGreaterThanOrEqual(0);
 
-  const btn = sec.getByRole('listitem').first().getByRole('button');
+  const btn = sec.getByRole('listitem').filter({ hasText: '정식 오픈' }).getByRole('button');
   expect(await btn.getAttribute('aria-label')).toContain(LONG);
   // 호버 툴팁(title)에도 전체 제목 — PC 에서 말줄임된 뒷부분을 읽는 길
   await expect(sec.getByText(LONG, { exact: true })).toHaveAttribute('title', LONG);

@@ -175,7 +175,19 @@ export function withViewTransition(update: () => void, fallback?: () => void, di
     if (dir) document.documentElement.dataset.vtDir = dir;
     else delete document.documentElement.dataset.vtDir;
     const seq = ++scopeSeq;
+    // ⚠ scope 가 없을 때 **이전 마커를 지운다** — 바로 위 dir 과 같은 규칙이다.
+    //   2026-09-10 오너 리포트("어느 메뉴를 눌러도 알약이 첫 칸으로 간다")의 근본 원인이 이 한 줄이었다.
+    //   App.tsx 의 '내 장터 거래'·'랭킹 상점' 바로가기는 한 틱에 전환을 **두 번** 연다:
+    //     ① nuri:community-section 이벤트 → goSubTab → withViewTransition(scope='community-sec')  seq=1
+    //     ② changeTab('community')       → commitTab → withViewTransition(scope=undefined)        seq=2
+    //   ①의 정리(clearScope)는 `seq === scopeSeq` 를 보는데 그때 scopeSeq 는 이미 2라 **아무것도 지우지 않고**,
+    //   ②는 scope 가 없어 덮지도 않았다 → html[data-vt-scope='community-sec'] 가 영구히 눌러앉는다.
+    //   그러면 index.css 의 view-transition-name(community-secbar/pill/label)이 **상시** 붙고,
+    //   같은 파일 주석이 실측으로 경고한 그대로 '전환 내내 얼어붙은 old 스냅샷'이 남는다.
+    //   게다가 ::view-transition-old(community-secbar) 는 animation:none 이라 페이드조차 없이 불투명하다
+    //   — 활성 라벨은 새 값인데 알약만 옛 자리에 선명히 남는 그 화면이 이것이다.
     if (scope) document.documentElement.dataset.vtScope = scope;
+    else delete document.documentElement.dataset.vtScope;
     const clearScope = () => {
       if (scope && seq === scopeSeq && document.documentElement.dataset.vtScope === scope) delete document.documentElement.dataset.vtScope;
     };

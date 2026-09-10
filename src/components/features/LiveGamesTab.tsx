@@ -103,7 +103,10 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   const load = () => getRunningClocks().then((g) => { setGames(g); setLoadErr(null); }).catch((e) => setLoadErr(e));
   // 폴링·1초 틱은 라이브 탭이 보일 때만 — 숨김 시 멈춰 백그라운드 끊김 방지(재진입 시 즉시 갱신). 실시간 구독은 이벤트 기반이라 상시 유지.
   useEffect(() => { if (!active) return; load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [active]);
-  useEffect(() => subscribeRunningClocks(load), []); // 실시간: 레벨 전환·통계 즉시 반영
+  // 실시간 구독도 **보일 때만** — 라이브 탭은 유휴 시점에 숨긴 채 프리마운트되므로 상시 구독하면
+  // 라이브를 한 번도 안 본 사용자까지 clock_states 채널을 연다(2026-09-10 용량 점검).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!active) return; return subscribeRunningClocks(load); }, [active]); // 레벨 전환·통계 즉시 반영
 
   // ♥ 즐겨찾기(매장 팔로우) — APIS 카드의 하트 자리. 표시 전용이라 1회 조회로 충분하고,
   // 비로그인은 빈 배열이라 그냥 아무 카드에도 하트가 안 붙는다(에러 표면 없음).

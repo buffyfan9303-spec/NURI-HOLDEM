@@ -141,7 +141,56 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
     };
     const timers = [150, 600, 1500].map((ms) => window.setTimeout(verify, ms));
     document.fonts?.ready.then(() => requestAnimationFrame(verify));
-    return () => { alive = false; ro.disconnect(); timers.forEach(clearTimeout); };
+
+    // ── 자기교정 그물 (2026-09-10, 오너 재보고) ─────────────────────────────────
+    // 오너가 실제 화면에서 다시 목격했다: 활성 라벨은 '장터'인데 알약은 레일 맨 왼쪽에 있었다.
+    // 재현 시나리오 26가지(섹션 6종 전환·탭 왕복·숨은 채 섹션 변경·회전·새로고침·뒤로가기,
+    // 360/412px)를 다 돌려도 어긋남 0건이었다 — 즉 **원인을 특정하지 못한 드문 경로**가 남아 있다.
+    // 원인을 못 짚었으니 증상이 '남아 있을 수 없게' 만든다. 아래 셋이 그물이다.
+    //
+    //  ⓐ MutationObserver — 지금까지의 재측정 트리거는 activeKey(리액트 리렌더)·크기 변화·타이머
+    //     셋뿐이라, **DOM 이 바뀌었는데 크기는 안 변한 경우**를 놓친다. 예: 탭 목록에 '장터'가
+    //     뒤늦게 끼어들어 data-pill-active 가 다른 노드로 옮겨가는 경우, View Transition 이
+    //     스냅샷을 붙였다 떼며 클래스·스타일을 갈아 끼우는 경우.
+    //     data-pill-active 의 이동 자체가 곧 알약이 가야 할 곳의 변화다.
+    //  ⓑ 탭이 다시 보일 때 — 이 앱은 최상위 탭을 언마운트하지 않고 display 로만 끈다.
+    //     숨은 동안의 측정은 전부 0 이라 알약을 숨겨 두는데, 다시 보일 때 RO 가 늘 깨어나 준다는
+    //     보장이 없다(크기가 그대로일 수 있다). visibilitychange·pageshow 에서도 확인한다.
+    //  ⓒ 타이머를 3초·5초까지 늘린다 — 1.5초 뒤에 도착하는 비동기 슬롯(장터·매장 권한)이 있다.
+    //
+    // 비용: verify() 는 getBoundingClientRect 2회로 시작해 **어긋났을 때만** measure 한다.
+    //       rAF 로 묶어 한 프레임에 한 번만 돈다.
+    let raf = 0;
+    const scheduleVerify = () => {
+      if (!alive || raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        // ⚠ 미끄러지는 **도중**에는 검사하지 않는다. 전환 중의 rect 는 당연히 목표와 다르고,
+        //   그걸 '어긋남'으로 보면 measure 가 firstRef=true 로 즉시 이동시켜 슬라이드를 죽인다
+        //   (알약이 영영 안 미끄러지고 툭툭 튄다 — subtab-motion 이 잡는 회귀).
+        if (pill.getAnimations().some((a) => a.playState === 'running')) return;
+        verify();
+      });
+    };
+    const mo = new MutationObserver((records) => {
+      // ⚠ 알약 자신의 style 변경은 무시한다 — measure 가 방금 쓴 값이라, 되먹임 고리가 된다.
+      if (records.every((r) => r.target === pill)) return;
+      scheduleVerify();
+    });
+    mo.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-pill-active', 'class', 'style'] });
+    const onWake = () => { if (document.visibilityState === 'visible') scheduleVerify(); };
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('pageshow', onWake);
+    const lateTimers = [3000, 5000].map((ms) => window.setTimeout(verify, ms));
+
+    return () => {
+      alive = false;
+      ro.disconnect(); mo.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+      document.removeEventListener('visibilitychange', onWake);
+      window.removeEventListener('pageshow', onWake);
+      [...timers, ...lateTimers].forEach(clearTimeout);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey, underline]);
 

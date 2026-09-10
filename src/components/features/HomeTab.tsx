@@ -16,6 +16,16 @@ import { getEventBoard, type EventBoard } from '../../api/events';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
+const UPCOMING_SEEN = 'nuri:upcoming-seen';
+/** 지난 방문에 '오늘·내일 일정'이 **몇 줄**이었나(1~8). 스켈레톤을 4행 고정으로 그리면 실제가 8행일 때
+ *  데이터 도착 순간 4행 × --card-h-list 만큼 아래가 통째로 밀린다(2026-09-10 용량·모션 점검에서
+ *  '툭'의 최대 단일 원인으로 지목). 첫 방문 기본값은 종전과 같은 4. openNow 와 같은 조리법이다. */
+const upcomingSeenCount = () => {
+  try {
+    const n = Number(localStorage.getItem(UPCOMING_SEEN));
+    return Number.isFinite(n) && n > 0 ? Math.min(Math.max(n, 1), 8) : 4;
+  } catch { return 4; }
+};
 const OPENNOW_SEEN = 'nuri:opennow-seen';
 /** 지난 방문에 '지금 등록 가능'이 **몇 줄**이었나(0~4). 예전엔 '1'/'0' 만 저장해 한 줄만 예약했고,
  *  실제로 서너 줄이 오면 그 차이만큼 아래가 통째로 밀렸다. 옛 값('1')도 한 줄로 읽어 하위호환. */
@@ -129,6 +139,11 @@ export default function HomeTab({
   };
   if (clocksLoaded) {
     try { localStorage.setItem(OPENNOW_SEEN, String(Math.min(openNow.length, 4))); } catch { /* noop */ }
+  }
+  // 다음 방문의 스켈레톤 행 수 — 같은 기기는 대개 비슷한 줄 수를 본다.
+  // 이 한 줄이 없으면 위 upcomingSeenCount() 가 영원히 기본값 4 를 돌려준다.
+  if (loaded) {
+    try { localStorage.setItem(UPCOMING_SEEN, String(Math.min(Math.max(upcoming.length, 1), 8))); } catch { /* noop */ }
   }
 
   return (
@@ -307,7 +322,7 @@ export default function HomeTab({
         </header>
         {!loaded ? (
           <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura" aria-busy="true">
-            {Array.from({ length: 4 }).map((_, i) => (
+            {Array.from({ length: upcomingSeenCount() }).map((_, i) => (
               /* min-h: 실제 카드 행과 같은 높이를 예약한다. 예전엔 스켈레톤 행이 98px 인데
                  실제가 116px 라 4행이면 최대 72px 가 아래로 밀렸다(실측 2026-09-08).
                  숫자를 여기 박지 않고 --card-h-list 를 쓴다 — 카드가 바뀌면 그 토큰만 고친다. */

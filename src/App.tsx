@@ -1585,7 +1585,13 @@ export default function App() {
     // 부팅 조회도 reloadSchedules 와 같은 번호표를 뽑는다 — 둘은 같은 state·같은 스냅샷을 쓰므로
     // 한쪽만 가드하면 '늦게 온 부팅 응답이 복귀 재조회 결과를 덮는' 경로가 그대로 남는다(F11).
     const my = ++schedReqRef.current;
-    Promise.allSettled([getSchedules(), getVenues(), getNotices()]).then(([sr, vr, nr]) => {
+    // ⚡ 클락(getRunningClocks)을 **첫 배치**로 올린다(2026-09-10 모션 점검).
+    //   예전엔 loadDeferred(window.load + requestIdleCallback timeout 4000) 안에 있어서,
+    //   '지금 등록 가능' 섹션이 수 초 뒤 **목록 위**에 삽입되며 오늘·내일 일정과 푸터를 통째로 내렸다
+    //   — '주르륵'의 마지막 계단. 화면 상단 배치를 결정하는 신호는 첫 배치에 있어야 한다.
+    Promise.allSettled([getSchedules(), getVenues(), getNotices(), clockMod().then((m) => m.getRunningClocks())]).then(([sr, vr, nr, kr]) => {
+      if (kr.status === 'fulfilled') { setLiveCount(kr.value.length); setLiveClocks(kr.value); }
+      setClocksLoaded(true);
       if (sr.status === 'fulfilled') {
         window.dispatchEvent(new Event('nuri:first-data-requested')); // 광고 게이트(응답 후 — 커밋 여부와 무관)
         const next = commitSchedules(sr.value, my, schedReqRef.current, posterDeleteQ.keys());
@@ -1623,8 +1629,8 @@ export default function App() {
     if (deferredLoadedRef.current) return;
     deferredLoadedRef.current = true;
     // 5개 응답을 한 콜백에서 일괄 반영(5렌더→1렌더) — 부팅 리렌더 폭풍 계측의 직접 조치
-    Promise.allSettled([getPosts(), getComments({}), getListings(), getVenueRatings(), clockMod().then((m) => m.getRunningClocks())])
-      .then(([pr, cr, lr, rr, kr]) => {
+    Promise.allSettled([getPosts(), getComments({}), getListings(), getVenueRatings()])
+      .then(([pr, cr, lr, rr]) => {
         if (pr.status === 'fulfilled') { setPosts(pr.value); setPostsErr(null); writeSnap('posts', pr.value); }
         else setPostsErr(pr.reason);
         if (cr.status === 'fulfilled') setComments(cr.value);
@@ -1632,8 +1638,7 @@ export default function App() {
         setMarketError(lr.status === 'rejected' ? lr.reason : null);
         setMarketLoaded(true);
         if (rr.status === 'fulfilled') setVenueRatings(rr.value);
-        if (kr.status === 'fulfilled') { setLiveCount(kr.value.length); setLiveClocks(kr.value); }
-        setClocksLoaded(true);
+        // 클락은 첫 배치로 옮겼다(위 부팅 조회) — 여기서 다시 받지 않는다.
       });
      
   }, []);

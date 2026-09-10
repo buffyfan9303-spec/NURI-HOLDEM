@@ -1,3 +1,4 @@
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 // src/api/rankings.ts — 매장 일일 손님 순위
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
@@ -87,6 +88,11 @@ export async function getVenueRealNameOptIns(venueId: string): Promise<Set<strin
   return new Set(await cachedVenueRealNameOptIns(venueId));
 }
 
+/** 순위 행에서 실제로 쓰는 컬럼만. `*` 를 쓰면 컬럼이 늘 때마다 조용히 함께 나간다.
+ *  ⚠ real_name 은 **동의한 사람만** 화면에 뜬다(rankDisplay). 지금은 서버가 전원 것을 내려보내고
+ *  클라이언트가 가리는 구조라, 서버 쪽 마스킹은 supabase/migrations/20260910a_… 로 따로 남겼다(미적용). */
+const RANK_COLS = 'position, nickname, real_name, prize, event_name';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToEntry(r: any): RankingEntry {
   return { position: r.position, nickname: r.nickname, realName: r.real_name ?? '', prize: r.prize ?? undefined, eventName: r.event_name ?? '' };
@@ -108,8 +114,9 @@ export async function getVenueRankings(
   if (IS_MOCK) return { date: null, entries: [] };
   const d = date ?? (await getLatestRankingDate(venueId));
   if (!d) return { date: null, entries: [] };
+  // 명시 컬럼 — `*` 는 나중에 컬럼이 늘면 그대로 다 나간다(보안 표준 §6 '공개 RPC 는 select * 금지').
   const { data, error } = await supabase
-    .from('venue_rankings').select('*')
+    .from('venue_rankings').select(RANK_COLS)
     .eq('venue_id', venueId).eq('ranking_date', d)
     .order('position', { ascending: true });
   if (error) throw error;
@@ -133,7 +140,7 @@ export async function getRankingsBulk(
   const dates = [...new Set(pairs.map((p) => p.date))];
   // 교차곱이라 요청한 조합보다 넓게 잡힐 수 있다 — 아래에서 요청한 쌍만 남긴다.
   const { data, error } = await supabase
-    .from('venue_rankings').select('*')
+    .from('venue_rankings').select(`venue_id, ranking_date, ${RANK_COLS}`)
     .in('venue_id', venueIds).in('ranking_date', dates)
     .order('position', { ascending: true });
   if (error) throw error;

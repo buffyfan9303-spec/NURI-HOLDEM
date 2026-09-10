@@ -21,7 +21,6 @@ import NoticeSection from './NoticeSection';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { useBackClose } from '../../lib/backstack';
-import OwnerCommunity from './OwnerCommunity';
 import DealerCommunity from './DealerCommunity';
 import TierLeaderboard from './TierLeaderboard';
 import CommunityShoutBar from './CommunityShoutBar';
@@ -75,14 +74,17 @@ interface CommunityTabProps {
   active?: boolean;
 }
 
-// 커뮤니티 섹션 — 홀덤펍 / 게시판 / 실시간 / 랭킹 / 장터 / 딜러 / 매장(owner, 구 '업주' 라벨) (사용 빈도순 진열)
+// 커뮤니티 섹션 — 홀덤펍 / 게시판 / 실시간 / 랭킹 / 장터 / 딜러 (사용 빈도순 진열)
+// 2026-09-10 오너 지시: 업주 전용 커뮤니티('매장') **전량 폐기**. 업주에게만 7번째 탭이 붙어
+//   --tab-cols(=5+장터) 계산과 어긋나 레일이 넘쳤고, 그 상태에서 알약이 첫 칸으로 튀었다.
+//   이제 최대 6칸이라 계산과 정확히 맞는다. 서버 데이터·API(getOwnerPosts 등)는 남겨 둔다.
 // (홀덤 공부는 게시판으로 통합, 도구는 메인 탭으로 분리)
-type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'owner' | 'market';
+type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'market';
 // 다른 메인 탭(중고장터 등)으로 갔다 돌아와도 커뮤니티 섹션이 유지되도록 모듈 레벨에 기억
 let lastCommunitySection: Section = 'venues';
 // 서브탭 진열 순서 — View Transition 방향성(오른쪽 탭 = forward) 판정용.
-// market/owner 는 조건부 노출이지만 indexOf 상대 비교라 정적 전체 배열로 충분하다.
-const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer', 'owner'];
+// market 은 조건부 노출이지만 indexOf 상대 비교라 정적 전체 배열로 충분하다.
+const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer'];
 
 // 게시판 카테고리 필터 — 라벨·색표는 src/lib/postCategory.ts 가 단일 출처.
 // (글보기 상세에도 같은 뱃지를 넣어야 해서 모듈로 뺐다 — 복사해 두면 언젠가 한쪽만 바뀐다)
@@ -101,7 +103,6 @@ const VenuesSectionM       = memo(VenuesSection);
 const MyCommunitiesActionM = memo(MyCommunitiesAction);
 const TierLeaderboardM     = memo(TierLeaderboard);
 const DealerCommunityM     = memo(DealerCommunity);
-const OwnerCommunityM      = memo(OwnerCommunity);
 
 function CommunityTab({
   venues, comments, posts: rawPosts, postsErr = null, onRetryPosts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
@@ -203,11 +204,9 @@ function CommunityTab({
 
   // (2026-08-27 오너 지시) 본문 좌우 스와이프 섹션 전환 제거 — 칩 가로 스크롤·상세 화면 넘김과
   // 충돌해 의도치 않은 섹션 이동을 만들었다. 서브탭 전환은 탭 바 클릭만.
-  const { user } = useAuth();
   // 데스크탑 게시판 2-pane: 좌측 목록 + 우측 인라인 상세. 모바일은 기존 오버레이 모달(onSelectPost) 사용.
   const isDesktop = useIsDesktop();
   const [boardSelected, setBoardSelected] = useState<CommunityPost | null>(null);
-  const canOwnerCommunity = isAdmin || (user?.role === 'venue_owner' && user?.venueVerified === true);
   // 인라인 화살표면 FeedSectionM 의 memo 가 서브탭 전환마다 깨진다 — 참조 고정
   const openWriteFree = useCallback(() => onOpenWrite('free'), [onOpenWrite]);
 
@@ -241,7 +240,7 @@ function CommunityTab({
       else window.setTimeout(cb, 600);
     };
     // 진열 순서 = 사용자가 다음에 누를 확률 순서. 조건부 섹션은 노출될 때만 태운다.
-    const seq = SEC_ORDER.filter((s) => (s === 'market' ? hasMarket : s === 'owner' ? canOwnerCommunity : true));
+    const seq = SEC_ORDER.filter((s) => (s === 'market' ? hasMarket : true));
     const mountNext = () => {
       if (cancelled) return;
       const s = seq.find((x) => !visitedSecs.has(x));
@@ -266,7 +265,7 @@ function CommunityTab({
     return () => { cancelled = true; io.disconnect(); };
     // visitedSecs 는 안정 Set 인스턴스(useState 초기화) — 참조 불변
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasMarket, canOwnerCommunity]);
+  }, [hasMarket]);
 
   // 매장 정렬: 1) 유료광고(isPaidAd) → 2) 팔로워수 내림차순
   const sortedVenues = useMemo(() => {
@@ -345,9 +344,6 @@ function CommunityTab({
           <SectionTab active={shownSec === 'rank'}   label="랭킹"   onClick={() => setSection('rank')} />
           {marketSlot && <SectionTab active={shownSec === 'market'} label="장터" onClick={() => setSection('market')} />}
           <SectionTab active={shownSec === 'dealer'} label="딜러"   onClick={() => setSection('dealer')} />
-          {canOwnerCommunity && (
-            <SectionTab active={shownSec === 'owner'} label="매장" onClick={() => setSection('owner')} />
-          )}
         </div>
       </div>
 
@@ -363,7 +359,7 @@ function CommunityTab({
       <div className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
       {(visitedSecs.has('live') || section === 'live') && (
         <div data-sec="live" style={{ display: section === 'live' ? undefined : 'none' }}>
-          <LiveWallSectionM />
+          <LiveWallSectionM visible={section === 'live'} />
         </div>
       )}
 
@@ -444,11 +440,6 @@ function CommunityTab({
         </div>
       )}
 
-      {canOwnerCommunity && (visitedSecs.has('owner') || section === 'owner') && (
-        <div data-sec="owner" style={{ display: section === 'owner' ? undefined : 'none' }}>
-          <OwnerCommunityM />
-        </div>
-      )}
       {!!marketSlot && (visitedSecs.has('market') || section === 'market') && (
         <div data-sec="market" style={{ display: section === 'market' ? undefined : 'none' }}>
           {marketSlot}
@@ -1469,7 +1460,10 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
 // ── 실시간 댓글 (한 줄 라이브 월) ──────────────────────────────────────────────
 // 제목 없이 짧게(최대 140자) 올리는 실시간 보드. Supabase Realtime 구독으로 즉시 수신.
-function LiveWallSection() {
+// visible: 이 섹션이 실제로 화면에 떠 있는가. 커뮤니티 탭은 유휴 시점에 **숨긴 채** 프리마운트되므로
+//   그냥 마운트에 구독하면 라이브를 한 번도 안 본 사용자까지 live_wall 채널을 연다
+//   (2026-09-10 용량 점검: 동접 100 기준 실시간 채널이 그만큼 통째로 늘어난다).
+function LiveWallSection({ visible }: { visible: boolean }) {
   const { user } = useAuth();
   const toast = useToast();
   const [messages, setMessages] = useState<LiveMessage[]>([]);
@@ -1485,12 +1479,13 @@ function LiveWallSection() {
       .catch(() => { /* 조회 실패 시 빈 목록 유지 */ })
       .finally(() => { if (active) setLoading(false); });
     // 실시간 수신 — 새 메시지 prepend(id 중복 방지) + 타인 삭제 전파(#19)
-    const unsub = subscribeLiveWall(
+    // 실시간 채널은 **보일 때만** 연다 — 조회 1회는 프리마운트에서 해 두어 재방문이 즉시 뜬다.
+    const unsub = visible ? subscribeLiveWall(
       (msg) => setMessages((prev) => (prev.some((x) => x.id === msg.id) ? prev : [msg, ...prev])),
       (id) => setMessages((prev) => prev.filter((x) => x.id !== id)),
-    );
-    return () => { active = false; unsub(); };
-  }, []);
+    ) : null;
+    return () => { active = false; unsub?.(); };
+  }, [visible]);
 
   const canDelete = (m: LiveMessage) => !!user && (user.id === m.userId || user.role === 'admin');
   const remove = async (m: LiveMessage) => {

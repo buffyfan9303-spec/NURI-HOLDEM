@@ -10,6 +10,7 @@
 // 아우라 v6 문법: 톤은 **타일 그라데이션**이 지고 글자는 ink 토큰을 쓴다(CustomerDashboardPage 의 Head/Tile 패턴).
 //   색 텍스트를 쓰지 않으므로 라이트/다크 대비 문제가 구조적으로 생기지 않는다.
 //   글로우(.ring-aura-glow)는 쓰지 않는다 — 반복 카드이고, 화면당 1곳 규칙의 주인공이 아니다.
+import { useMemo, useState } from 'react';
 import Icon, { type IconName } from '../atoms/Icon';
 import type { MarketplaceNotice, NoticeType } from '../../api/marketplace';
 import { relativeTime } from '../../lib/relativeTime';
@@ -74,10 +75,13 @@ export function NoticeRow({ notice, onSelect, reserveMarker }: {
       {notice.type === 'pinned'
         ? (reserveMarker ? <span className="h-6 w-6 shrink-0" aria-hidden /> : null)
         : <NoticeTile type={notice.type} />}
-      {/* 정적 제목 — 모바일 2줄 clamp · lg+ 1줄 말줄임. 애니메이션·translate 없음.
-          title 은 PC 에서 말줄임된 제목을 호버로 확인하는 길이다(모바일은 누르면 상세). */}
+      {/* 정적 제목 — **어디서나 한 줄** 말줄임(2026-09-10 오너: "공지사항이 한 줄 이상 되지 않게").
+          예전 모바일 2줄 clamp 는 긴 제목마다 행이 두 배가 돼 3건이면 공지 칸이 화면을 먹었다.
+          전체 제목은 접근성 이름(aria-label)·title 툴팁·상세 화면에 그대로 있다. 애니메이션·translate 없음. */}
+      {/* truncate(nowrap) 가 아니라 line-clamp-1 이다 — 보이는 결과는 같지만 nowrap 은 scrollWidth 를
+          한 줄 전체 길이로 부풀려 '제목이 가로로 넘치는가' 가드를 무의미하게 만든다(2026-09-10 실측 652px). */}
       <span title={notice.title}
-        className="min-w-0 flex-1 break-words text-sm font-semibold text-ink-primary line-clamp-2 lg:line-clamp-1">
+        className="min-w-0 flex-1 break-words text-sm font-semibold text-ink-primary line-clamp-1">
         {notice.title}
       </span>
       <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{when}</span>
@@ -113,7 +117,18 @@ export default function NoticeSection({
   limit?: number;
   emptyText?: string;
 }) {
-  const rows = limit ? notices.slice(0, limit) : notices;
+  // 2026-09-10 오너 지시: 공지 칸이 화면을 먹는다 — **가장 중요한 1건만** 펼쳐 두고 나머지는 접는다.
+  //   기능·데이터는 그대로다(접힌 것은 한 번 눌러 전부 볼 수 있다 — 삭제가 아니라 접기).
+  //   중요도 = 주의 > 이벤트 > 공지, 같은 유형이면 최신순. 서버 정렬을 바꾸지 않고 여기서만 고른다.
+  const [open, setOpen] = useState(false);
+  const PRIORITY: Record<NoticeType, number> = { caution: 0, event: 1, pinned: 2 };
+  const ranked = useMemo(
+    () => [...notices].sort((a, b) =>
+      (PRIORITY[a.type] - PRIORITY[b.type]) || (b.createdAt < a.createdAt ? -1 : b.createdAt > a.createdAt ? 1 : 0)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [notices],
+  );
+  const rows = limit ? ranked.slice(0, limit) : ranked;
   // 타일이 하나라도 섞여 있을 때만 pinned 행이 자리를 비운다(전부 pinned 면 왼쪽 여백 0).
   const reserveMarker = rows.some((r) => r.type !== 'pinned');
   return (
@@ -139,11 +154,25 @@ export default function NoticeSection({
         )}
       </div>
       {rows.length === 0 ? (
-        <p className="py-6 text-center text-2xs text-ink-muted">{emptyText}</p>
+        <p className="py-4 text-center text-2xs text-ink-muted">{emptyText}</p>
       ) : (
-        <ul className="mt-1 space-y-0.5">
-          {rows.map((n) => <NoticeRow key={n.id} notice={n} onSelect={onSelect} reserveMarker={reserveMarker} />)}
-        </ul>
+        <>
+          <ul className="mt-1 space-y-0.5">
+            {(open ? rows : rows.slice(0, 1)).map((n) => (
+              <NoticeRow key={n.id} notice={n} onSelect={onSelect} reserveMarker={reserveMarker} />
+            ))}
+          </ul>
+          {rows.length > 1 && (
+            <button type="button" onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              className="mt-0.5 flex w-full items-center justify-center gap-1 rounded-input py-1.5 text-2xs font-semibold text-ink-secondary transition-colors hover:bg-surface-high/50">
+              {/* ⚠ 회전(transform) 대신 아이콘을 바꾼다 — 이 섹션은 'transform 애니메이션 0개'가
+                  계약이다(e2e/notice-static: 전광판 재발 방지). 회전 트랜지션도 그 계수에 잡힌다. */}
+              {open ? '접기' : `나머지 ${rows.length - 1}건 더 보기`}
+              <Icon name={open ? 'chevron-up' : 'chevron-down'} size={12} />
+            </button>
+          )}
+        </>
       )}
     </section>
   );
