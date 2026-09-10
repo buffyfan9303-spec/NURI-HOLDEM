@@ -228,6 +228,135 @@ interface AuthModalProps {
   initialMode?: Mode;
 }
 
+// ── Aura 스페이드 오브젝트 ────────────────────────────────────────────────────
+// 레퍼런스(어두운 몰입형 로그인)의 원형 행성 자리에 놓는 브랜드 오브젝트.
+// 행성을 복제하지 않고 NURI 정본 심벌(골드 스페이드)을 어두운 유리 구 안에 앉힌다.
+//
+// 왜 이미지 파일이나 Canvas 를 새로 만들지 않는가: 심벌 SVG 가 이미 골드 그라데이션까지 든 정본이고,
+//   구의 입체감은 전부 radial-gradient 3겹 + box-shadow 로 표현된다. 장식 때문에 에셋을 늘리면
+//   첫 화면 임계 경로 예산(여유 0%)을 더 깎는다.
+//
+// 입체감의 조리법(2026-09-11 재작업) — 평평한 원이 되지 않으려면 네 가지가 동시에 있어야 한다.
+//   ① 광원 하나를 정한다(좌상단 32%/26%) — 하이라이트가 중앙에 있으면 구가 아니라 원반이 된다.
+//   ② 아래쪽 오클루전 — inset 그림자로 바닥을 눌러야 부피가 생긴다.
+//   ③ 상단 스펙큘러 1px — 유리의 젖은 가장자리. 이게 없으면 '칠한 원' 으로 읽힌다.
+//   ④ 접지 그림자 + 바깥 블룸 — 구가 지면 위에 떠 있어야 한다.
+// 원 안쪽은 테마와 무관하게 어둡게 고정한다 — 골드는 어두운 지면에서만 제 색이 나고,
+// 이 오브젝트는 브랜드 마크라 라이트 테마에서도 같은 모습이어야 한다.
+function AuraSpade({ size }: { size: number }) {
+  return (
+    <div
+      data-testid="auth-spade"
+      className="relative grid shrink-0 place-items-center rounded-full"
+      style={{
+        width: size, height: size,
+        background: [
+          // ① 좌상단 광원
+          'radial-gradient(circle at 32% 26%, rgb(196 181 253 / 0.42) 0%, rgb(109 92 190 / 0.24) 24%, transparent 56%)',
+          // 아래에서 올라오는 시안 반사광 — 보라 일변도를 깨고 Aura 3색을 완성한다
+          'radial-gradient(circle at 50% 116%, rgb(34 211 238 / 0.34) 0%, transparent 52%)',
+          // 구 본체
+          'radial-gradient(120% 120% at 50% 4%, #2B2450 0%, #16192F 52%, #06080F 100%)',
+        ].join(', '),
+        boxShadow: [
+          'inset 0 1.5px 0 rgb(255 255 255 / 0.30)',      // ③ 상단 스펙큘러
+          `inset 0 ${-size * 0.13}px ${size * 0.2}px rgb(0 0 0 / 0.55)`, // ② 하단 오클루전
+          `inset 0 0 ${size * 0.26}px rgb(232 201 124 / 0.13)`,          // 골드 내부광
+          '0 0 0 1px rgb(255 255 255 / 0.10)',                            // 하이라이트 링
+          `0 ${size * 0.09}px ${size * 0.3}px rgb(0 0 0 / 0.55)`,          // ④ 접지 그림자
+          `0 0 ${size * 0.40}px rgb(139 92 246 / 0.44)`,                   // violet
+          `0 0 ${size * 0.80}px rgb(99 102 241 / 0.26)`,                   // indigo
+          `0 0 ${size * 1.25}px rgb(34 211 238 / 0.15)`,                   // cyan
+        ].join(', '),
+      }}
+    >
+      <img
+        src="/brand/nuri-holdem-symbol.svg" alt=""
+        width={Math.round(size * 0.46)} height={Math.round(size * 0.46)}
+        style={{
+          width: Math.round(size * 0.46), height: Math.round(size * 0.46),
+          filter: `drop-shadow(0 0 ${Math.round(size * 0.1)}px rgb(232 201 124 / 0.45))`,
+        }}
+        draggable={false}
+      />
+    </div>
+  );
+}
+
+/** 모드별 제목·설명 — 레퍼런스처럼 '한 화면에 한 가지 목적'만 말한다. */
+const MODE_INTRO: Record<Mode, { title: string; desc: string }> = {
+  'login':        { title: '다시 만나 반가워요',   desc: '누리홀덤의 일정과 커뮤니티를 계속 이용하세요.' },
+  'signup-user':  { title: '누리홀덤 시작하기',     desc: '일정·커뮤니티·GTO를 한 계정으로 이용하세요.' },
+  'signup-owner': { title: '매장 운영 시작하기',    desc: '포스터·예약·장부·이용권을 한곳에서 관리하세요.' },
+  'forgot':       { title: '비밀번호를 잊으셨나요?', desc: '가입한 이메일로 인증번호를 보내드릴게요.' },
+};
+
+/** 오브젝트 + 제목 + 설명. 가입은 폼이 길어 오브젝트와 여백을 줄인다. */
+function ModeIntro({ mode }: { mode: Mode }) {
+  const compact = mode === 'signup-user' || mode === 'signup-owner';
+  const { title, desc } = MODE_INTRO[mode];
+  return (
+    <div className={['flex flex-col items-center', compact ? 'gap-3 pb-4 pt-1' : 'gap-5 pb-7 pt-3'].join(' ')}>
+      <AuraSpade size={compact ? 56 : 104} />
+      <div className="text-center">
+        <h3 className={[
+          compact ? 'text-lg' : 'text-2xl',
+          'font-extrabold leading-tight tracking-[-0.02em] text-ink-primary break-keep',
+        ].join(' ')}>
+          {title}
+        </h3>
+        <p className="mx-auto mt-1.5 max-w-[19rem] text-xs leading-relaxed text-ink-muted break-keep">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
+/** 화면 하단 모드 전환 한 줄 — 레퍼런스의 "Don't have an account? Sign up" 자리. */
+function ModeSwitch({ question, action, onClick }: { question: string; action: string; onClick: () => void }) {
+  return (
+    <p className="pt-2 text-center text-xs text-ink-muted">
+      {question}{' '}
+      <button type="button" onClick={onClick}
+        className="ml-0.5 inline-flex min-h-[44px] items-center font-bold text-accent-200 transition-colors hover:text-accent-100">
+        {action}
+      </button>
+    </p>
+  );
+}
+
+/** 가입 유형 세그먼트 — 예전 상단 3분할 탭을 대신한다(로그인 화면에는 나오지 않는다). */
+function SignupSegment({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
+  const items: { m: Mode; label: string }[] = [
+    { m: 'signup-user',  label: '일반 회원' },
+    { m: 'signup-owner', label: '매장 업주' },
+  ];
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-1 rounded-input border border-white/[0.06] bg-surface-base/70 p-1"
+      role="group" aria-label="가입 유형">
+      {items.map(({ m, label }) => {
+        const on = mode === m;
+        return (
+          <button key={m} type="button" aria-pressed={on} onClick={() => onChange(m)}
+            className={['min-h-[40px] rounded-[10px] text-xs font-bold transition-colors',
+              on ? 'btn-primary !min-h-[40px] !px-0 !shadow-none' : 'text-ink-muted hover:text-ink-primary'].join(' ')}>
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 인증 폼 입력의 공통 보정 — 시트보다 **어둡게** 눌러 넣는다.
+ *  기본 .input 은 bg-surface-high(#1B243C)라 시트(#151C30)보다 밝아 블록이 튀어나와 보였다.
+ *  레퍼런스처럼 입력이 뒤로 물러나야 제목과 CTA 가 앞으로 온다. */
+// ⚠ focus:!ring-0 — .input 기본은 border 변경 + ring-1 을 함께 준다. 라운드가 커진 이 필드에서는
+//   두 선이 어긋나 이중 테두리로 보였다. 링을 끄고 바깥 글로우 한 겹으로 대신한다(대비는 유지).
+const FIELD_CLS = [
+  'min-h-[50px] rounded-[14px] border-white/[0.07] bg-surface-base/60 text-[15px]',
+  'focus:border-accent-300 focus:!ring-0 focus:shadow-[0_0_0_3px_rgb(88_80_236_/_0.20)]',
+].join(' ');
+
 export default function AuthModal({ open, onClose, initialMode = 'login' }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
 
@@ -239,30 +368,46 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
   //    그 사이 여백에서 시작하면 닫힌다 — 긴 폼일수록 그 여백이 넓다.)
   const canDragClose = mode === 'login' || mode === 'forgot';
 
-  return (
-    <Modal open={open} onClose={onClose} title={MODE_LABEL[mode]} maxWidth="md" dragToClose={canDragClose}>
-      {/* 탭 */}
-      <div className="grid grid-cols-3 border-b border-border-subtle">
-        {(['login', 'signup-user', 'signup-owner'] as Mode[]).map((m) => (
-          <button
-            key={m} type="button" onClick={() => setMode(m)}
-            className={[
-              'py-3 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px',
-              mode === m
-                ? 'border-accent-300 text-accent-300'
-                : 'border-transparent text-ink-muted hover:text-ink-secondary',
-            ].join(' ')}
-          >
-            {m === 'login' ? '로그인' : m === 'signup-user' ? '일반 가입' : '업주 가입'}
-          </button>
-        ))}
-      </div>
+  // ⚠ 상단 3분할 탭(로그인/일반 가입/업주 가입)은 2026-09-11 오너 지시로 제거했다.
+  //   한 화면에 세 목적이 동시에 서 있으면 무엇을 하러 온 화면인지 흐려진다 — 모드 전환은
+  //   각 화면 하단의 한 줄로 내리고, 가입 유형만 가입 화면 안에서 세그먼트로 고른다.
+  //   mode 상태와 인증 로직은 그대로다(새 라우터·전역 상태 0).
+  //
+  // ⚠ Modal 에 title 을 넘기지 않는다(2026-09-11 2차). 헤더 바(제목 + 구분선 + X)가 시트 상단을
+  //   가로로 잘라 '몰입형 인증 화면' 이 아니라 '설정 창' 으로 읽혔다. 대신
+  //     · 접근성 이름은 아래 nameDialog 가 dialog 의 aria-label 로 직접 심는다(LegalSheet 와 같은 조리법)
+  //     · 닫기 버튼은 이 안에서 원형 고스트로 그린다(이름 '닫기' 유지 — dismissOverlays·기존 계약 그대로)
+  //   Modal.tsx 는 손대지 않는다(공지 스크롤 수정이 진행 중인 파일).
+  const nameDialog = (el: HTMLDivElement | null) => {
+    const dlg = el?.closest<HTMLElement>('[role="dialog"]');
+    if (dlg) dlg.setAttribute('aria-label', MODE_LABEL[mode]);
+  };
 
-      <div className="p-4">
-        {mode === 'login'        && <LoginForm onClose={onClose} onForgot={() => setMode('forgot')} />}
-        {mode === 'signup-user'  && <SignupUserForm  onDone={() => setMode('login')} />}
-        {mode === 'signup-owner' && <SignupOwnerForm onDone={() => setMode('login')} />}
-        {mode === 'forgot'       && <ForgotPasswordForm onBack={() => setMode('login')} />}
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet" dragToClose={canDragClose}>
+      {/* key={mode} — 모드가 바뀌면 다시 마운트돼 nameDialog 가 새 이름을 심는다(콜백 ref 는 마운트 때만 돈다) */}
+      <div key={mode} ref={nameDialog} className="relative">
+        {/* 앰비언트 — 오브의 빛이 시트 상단을 물들인다. 정적 2겹, 본문 뒤로만 깔린다. */}
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[19rem]"
+          style={{
+            background: [
+              'radial-gradient(52% 62% at 50% 8%, rgb(139 92 246 / 0.20) 0%, transparent 70%)',
+              'radial-gradient(38% 44% at 72% 30%, rgb(34 211 238 / 0.10) 0%, transparent 72%)',
+            ].join(', '),
+          }}
+        />
+        <button type="button" onClick={onClose} aria-label="닫기"
+          className="absolute right-2 top-0 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-ink-muted backdrop-blur-sm transition-colors hover:bg-white/[0.09] hover:text-ink-primary">
+          <Icon name="close" size={17} />
+        </button>
+
+        <div className="relative px-5 pb-8 pt-4">
+          <ModeIntro mode={mode} />
+          {mode === 'login'        && <LoginForm onClose={onClose} onForgot={() => setMode('forgot')} onSignup={() => setMode('signup-user')} />}
+          {mode === 'signup-user'  && <SignupUserForm  mode={mode} onMode={setMode} onDone={() => setMode('login')} />}
+          {mode === 'signup-owner' && <SignupOwnerForm mode={mode} onMode={setMode} onDone={() => setMode('login')} />}
+          {mode === 'forgot'       && <ForgotPasswordForm onBack={() => setMode('login')} />}
+        </div>
       </div>
     </Modal>
   );
@@ -272,12 +417,19 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
 
 function SocialLoginButtons({ onError, keepSignedIn }: { onError: (msg: string) => void; keepSignedIn: boolean }) {
   // 진행 중이면 비활성(중복 리다이렉트 방지). 소셜은 Google 하나 — 카카오 로그인은 2026-09-10 오너 지시로 삭제.
+  //   레퍼런스에 Apple 이 있지만 추가하지 않는다: 이 서비스의 소셜 정책은 Google 단일이다.
   const [busy, setBusy] = useState<'google' | null>(null);
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
+      {/* 구분선이 CTA 와 소셜 사이에 온다 — 이메일 로그인이 1급, 소셜은 대안이라는 위계 */}
+      <div className="flex items-center gap-3 pt-1" aria-hidden>
+        <span className="h-px flex-1 bg-white/[0.07]" />
+        <span className="text-2xs tracking-wide text-ink-muted">또는</span>
+        <span className="h-px flex-1 bg-white/[0.07]" />
+      </div>
       <button type="button" disabled={busy !== null}
         onClick={() => { setBusy('google'); signInWithGoogle(keepSignedIn).catch((e) => { onError(e instanceof Error ? e.message : '구글 로그인 실패'); setBusy(null); }); }}
-        className="flex h-12 w-full items-center justify-center gap-2 rounded-input border border-border-default bg-white text-sm font-bold text-[#1f1f1f] transition active:scale-[0.99] disabled:opacity-60">
+        className="flex h-[46px] w-full items-center justify-center gap-2.5 rounded-[14px] border border-white/20 bg-white text-sm font-bold text-[#1f1f1f] transition active:scale-[0.99] disabled:opacity-60">
         {/* 구글 공식 4색 G 로고(브랜드 가이드 규격) */}
         <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
           <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -288,19 +440,60 @@ function SocialLoginButtons({ onError, keepSignedIn }: { onError: (msg: string) 
         {busy === 'google' ? 'Google로 이동 중…' : 'Google로 계속하기'}
       </button>
 
-      <p className="text-center text-2xs leading-relaxed text-ink-muted">
-        가입 시 <b className="text-ink-secondary">이용약관·개인정보처리방침</b>에 동의하게 됩니다
+      <p className="px-2 text-center text-2xs leading-relaxed text-ink-muted/80">
+        가입 시 <b className="text-ink-muted">이용약관·개인정보처리방침</b>에 동의하게 됩니다
       </p>
-      <div className="flex items-center gap-2 py-0.5" aria-hidden>
-        <span className="h-px flex-1 bg-border-subtle" />
-        <span className="text-2xs text-ink-muted">또는 이메일로</span>
-        <span className="h-px flex-1 bg-border-subtle" />
+    </div>
+  );
+}
+
+// ── 비밀번호 입력 + 보기/숨기기 ───────────────────────────────────────────────
+// 왜 필요한가: 모바일 키보드로 8자 이상 대소문자·숫자·기호를 치는데 화면이 전부 점이면
+//   오타를 찾을 길이 없다. 토글해도 값·포커스·autocomplete 는 그대로 유지된다(type 만 바뀐다).
+function PasswordField({
+  label, value, onChange, autoComplete, placeholder, required, minLength, testId,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  autoComplete: string;
+  placeholder?: string;
+  required?: boolean;
+  minLength?: number;
+  testId?: string;
+}) {
+  const id = useId();
+  const [shown, setShown] = useState(false);
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1.5 block text-2xs font-semibold tracking-wide text-ink-muted">
+        {label}{required && <span className="ml-0.5 text-accent-200/70">*</span>}
+      </label>
+      <div className="relative">
+        <input
+          id={id} type={shown ? 'text' : 'password'} value={value} required={required}
+          autoComplete={autoComplete} placeholder={placeholder} minLength={minLength}
+          data-testid={testId}
+          onChange={(e) => onChange(e.target.value)}
+          className={`input ${FIELD_CLS} pr-12`}
+        />
+        {/* 44×44 터치 영역 — 46px 입력 안에서 오른쪽 끝을 차지한다(값 위로 겹치지 않게 pr-12) */}
+        <button
+          type="button" tabIndex={-1}
+          data-testid={testId ? `${testId}-reveal` : undefined}
+          aria-label={shown ? '비밀번호 숨기기' : '비밀번호 보기'}
+          aria-pressed={shown}
+          onClick={() => setShown((v) => !v)}
+          className="absolute right-0 top-1/2 flex h-[44px] w-[44px] -translate-y-1/2 items-center justify-center rounded-input text-ink-muted transition-colors hover:text-ink-primary"
+        >
+          <Icon name={shown ? 'eye-off' : 'eye'} size={16} />
+        </button>
       </div>
     </div>
   );
 }
 
-function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () => void }) {
+function LoginForm({ onClose, onForgot, onSignup }: { onClose: () => void; onForgot: () => void; onSignup: () => void }) {
   const { login } = useAuth();
   const toast = useToast();
   const [email,    setEmail]    = useState('');
@@ -338,27 +531,32 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
   };
 
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <SocialLoginButtons onError={(m) => setError(m)} keepSignedIn={keepSignedIn} />
-      <Field label="이메일" type="email" required autoComplete="email"
+    // 순서(2026-09-11): 이메일 → 비밀번호 → 유지·찾기 → 1급 CTA → 또는 → Google.
+    //   예전엔 Google 이 맨 위였는데, 그러면 화면의 첫 동작이 '외부로 나가기' 가 된다.
+    <form onSubmit={submit} className="space-y-3.5">
+      <Field label="이메일" type="email" required autoComplete="email" className={FIELD_CLS}
         value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-      <Field label="비밀번호" type="password" required autoComplete="current-password"
-        value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+      <PasswordField label="비밀번호" required autoComplete="current-password" testId="login-password"
+        value={password} onChange={setPassword} placeholder="••••••••" />
 
-      <AutoLoginCheckbox checked={keepSignedIn} onChange={changeKeep} />
-
-      <div className="text-right -mt-1">
-        <button type="button" onClick={onForgot} className="text-2xs text-ink-muted hover:text-accent-300 transition-colors">
+      {/* 유지 · 찾기 한 행 — 레퍼런스의 "Remember me / Forgot Password?" 자리 */}
+      <div className="flex items-center justify-between gap-3 pt-0.5">
+        <AutoLoginCheckbox checked={keepSignedIn} onChange={changeKeep} compact />
+        <button type="button" onClick={onForgot}
+          className="min-h-[44px] shrink-0 text-xs text-ink-muted transition-colors hover:text-accent-200">
           비밀번호를 잊으셨나요?
         </button>
       </div>
 
       {error && <p className="text-xs text-danger animate-fade-in" role="alert">{error}</p>}
 
-      <div className="flex justify-center">
-        <StatefulActionButton ref={btnRef} label="로그인" successLabel="환영합니다!"
-          disabled={!email.trim() || !password} onAction={doLogin} onDone={onClose} className="w-full" />
-      </div>
+      {/* 화면에서 가장 밝은 것 — btn-primary 의 보라 그라데이션 위에 블룸을 한 겹 더 얹는다 */}
+      <StatefulActionButton ref={btnRef} label="로그인" successLabel="환영합니다!"
+        disabled={!email.trim() || !password} onAction={doLogin} onDone={onClose}
+        className="w-full !min-h-[52px] !rounded-[14px] shadow-[0_10px_30px_-8px_rgb(88_80_236_/_0.65)] disabled:!shadow-none" />
+
+      <SocialLoginButtons onError={(m) => setError(m)} keepSignedIn={keepSignedIn} />
+      <ModeSwitch question="계정이 없으신가요?" action="회원가입" onClick={onSignup} />
       {/* 폼 엔터 제출용(화면 비표시) */}
       <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
     </form>
@@ -407,13 +605,12 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   if (step === 'email') {
     return (
       <form onSubmit={sendCode} className="space-y-3">
-        <p className="text-xs text-ink-secondary leading-relaxed">가입하신 이메일로 인증번호를 보내드립니다.</p>
-        <Field label="이메일" type="email" required autoComplete="email"
+        <Field label="이메일" type="email" required autoComplete="email" className={FIELD_CLS}
           value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-        <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-60">
+        <button type="submit" disabled={loading} className="btn-primary !min-h-[52px] !rounded-[14px] w-full shadow-[0_10px_30px_-8px_rgb(88_80_236_/_0.65)] disabled:!shadow-none disabled:opacity-60">
           {loading ? '발송 중…' : '인증번호 받기'}
         </button>
-        <button type="button" onClick={onBack} className="w-full text-2xs text-ink-muted hover:text-accent-300 transition-colors">
+        <button type="button" onClick={onBack} className="min-h-[44px] w-full text-xs text-ink-muted transition-colors hover:text-accent-200">
           로그인으로 돌아가기
         </button>
       </form>
@@ -435,12 +632,12 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         />
       </div>
       <div>
-        <Field label="새 비밀번호" type="password" required autoComplete="new-password" minLength={8}
-          value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder={PASSWORD_PLACEHOLDER} />
+        <PasswordField label="새 비밀번호" required autoComplete="new-password" minLength={8}
+          value={newPw} onChange={setNewPw} placeholder={PASSWORD_PLACEHOLDER} />
         <PasswordHint value={newPw} />
       </div>
-      <Field label="새 비밀번호 확인" type="password" required autoComplete="new-password"
-        value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="새 비밀번호 재입력" />
+      <PasswordField label="새 비밀번호 확인" required autoComplete="new-password"
+        value={confirmPw} onChange={setConfirmPw} placeholder="새 비밀번호 재입력" />
       <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-60">
         {loading ? '재설정 중…' : '비밀번호 재설정'}
       </button>
@@ -454,7 +651,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
 
 // ── 일반 회원가입 ─────────────────────────────────────────────────────────────
 
-function SignupUserForm({ onDone }: { onDone: () => void }) {
+function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode) => void; onDone: () => void }) {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const nameChk = useNameCheck();
@@ -500,15 +697,16 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
 
   return (
     <>
+      <SignupSegment mode={mode} onChange={onMode} />
       <form onSubmit={submit} className="space-y-3">
         <NameField value={nameChk.value} status={nameChk.status} onChange={nameChk.setValue} />
         <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
         <EmailField value={mail.value} status={mail.status} onChange={mail.setValue} />
         <div>
-          <Field label="비밀번호"     type="password" autoComplete="new-password" placeholder={PASSWORD_PLACEHOLDER} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
+          <PasswordField label="비밀번호" autoComplete="new-password" placeholder={PASSWORD_PLACEHOLDER} required value={password} onChange={setPassword} minLength={8} />
           <PasswordHint value={password} />
         </div>
-        <Field label="비밀번호 확인"  type="password" autoComplete="new-password" placeholder="••••••••"        required value={confirm}  onChange={(e) => setConfirm(e.target.value)} />
+        <PasswordField label="비밀번호 확인" autoComplete="new-password" placeholder="••••••••" required value={confirm} onChange={setConfirm} />
 
         <p className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
           <Icon name="lock" size={12} className="mr-1 inline-block align-[-1px] shrink-0" />가입 후 첫 로그인 시 <b className="text-ink-secondary">휴대폰 본인인증</b>이 필요합니다 (1인 1계정·안전거래).
@@ -530,6 +728,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
         >
           {loading ? '처리 중…' : '가입하기'}
         </button>
+        <ModeSwitch question="이미 계정이 있으신가요?" action="로그인" onClick={onDone} />
       </form>
 
       <LegalSheet doc={legalDoc} onClose={() => setLegalDoc(null)} />
@@ -539,7 +738,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
 
 // ── 매장 업주 가입 ─────────────────────────────────────────────────────────────
 
-function SignupOwnerForm({ onDone }: { onDone: () => void }) {
+function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode) => void; onDone: () => void }) {
   const toast = useToast();
   const [loading,   setLoading]   = useState(false);
   const nameChk = useNameCheck();
@@ -587,6 +786,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
 
   return (
     <>
+      <SignupSegment mode={mode} onChange={onMode} />
       <form onSubmit={submit} className="space-y-3">
         {/* 안내 배너 */}
         <div className="flex items-start gap-2 p-3 rounded-input bg-accent-300/10 border border-accent-400/30">
@@ -606,7 +806,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
             <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
             <EmailField value={mail.value} status={mail.status} onChange={mail.setValue} />
             <div>
-              <Field label="비밀번호" type="password" autoComplete="new-password" placeholder={PASSWORD_PLACEHOLDER} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
+              <PasswordField label="비밀번호" autoComplete="new-password" placeholder={PASSWORD_PLACEHOLDER} required value={password} onChange={setPassword} minLength={8} />
               <PasswordHint value={password} />
             </div>
           </div>
@@ -641,6 +841,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
         >
           {loading ? '처리 중…' : '업주 가입 신청'}
         </button>
+        <ModeSwitch question="이미 계정이 있으신가요?" action="로그인" onClick={onDone} />
       </form>
 
       <LegalSheet doc={legalDoc} onClose={() => setLegalDoc(null)} />
@@ -661,13 +862,15 @@ type FieldProps = Omit<React.ComponentProps<typeof AvailabilityField>, 'label' |
 const useNameCheck     = () => useAvailabilityCheck(checkNameAvailable, isValidDisplayName);
 const useNicknameCheck = () => useAvailabilityCheck(checkNicknameAvailable, isValidNick);
 
+// 인증 화면의 세 중복검사 필드는 비밀번호 칸과 **같은 규격**을 쓴다 — 한쪽만 밝으면 폼이 층져 보인다.
 function NameField(props: FieldProps) {
-  return <AvailabilityField label="닉네임" placeholder="2~20자 (랭킹·글에 표시)" maxLength={20} invalidText="2~20자로 입력해 주세요" {...props} />;
+  return <AvailabilityField label="닉네임" placeholder="2~20자 (랭킹·글에 표시)" maxLength={20} invalidText="2~20자로 입력해 주세요"
+    inputClassName={FIELD_CLS} quietLabel {...props} />;
 }
 function NicknameField(props: FieldProps) {
   return (
     <AvailabilityField label="받는 아이디" noun="아이디" subLabel="(이용권 수령·전적 연결용)" placeholder="2~16자 (한글/영문/숫자)" maxLength={16}
-      invalidText="2~16자 한글·영문·숫자·_- 만 가능" {...props} />
+      invalidText="2~16자 한글·영문·숫자·_- 만 가능" inputClassName={FIELD_CLS} quietLabel {...props} />
   );
 }
 
@@ -679,7 +882,8 @@ const useEmailCheck = () => useAvailabilityCheck(checkEmailAvailable, isValidEma
 function EmailField(props: FieldProps) {
   return (
     <AvailabilityField label="이메일" type="email" autoComplete="email" testId="signup-email" placeholder="you@example.com" maxLength={254}
-      invalidText="이메일 형식을 확인해 주세요" takenText="이미 가입된 이메일입니다 — 로그인하거나 비밀번호 찾기를 이용해 주세요" {...props} />
+      invalidText="이메일 형식을 확인해 주세요" takenText="이미 가입된 이메일입니다 — 로그인하거나 비밀번호 찾기를 이용해 주세요"
+      inputClassName={FIELD_CLS} quietLabel {...props} />
   );
 }
 
@@ -695,15 +899,16 @@ function PasswordHint({ value }: { value: string }) {
 
 // ── 폼 필드 헬퍼 ──────────────────────────────────────────────────────────────
 
-function Field({ label, ...rest }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+function Field({ label, className, ...rest }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   const autoId = useId();
   const id = rest.id ?? autoId; // 라벨-입력 연결(스크린리더·라벨탭 접근성)
   return (
     <div>
-      <label htmlFor={id} className="block text-xs font-medium text-ink-secondary mb-1">
-        {label}{rest.required && <span className="text-danger ml-0.5">*</span>}
+      <label htmlFor={id} className="mb-1.5 block text-2xs font-semibold tracking-wide text-ink-muted">
+        {label}{rest.required && <span className="ml-0.5 text-accent-200/70">*</span>}
       </label>
-      <input {...rest} id={id} className="input" />
+      {/* className 은 .input 을 덮지 않고 **더한다**(높이 상향 같은 화면별 보정용) */}
+      <input {...rest} id={id} className={['input', className].filter(Boolean).join(' ')} />
     </div>
   );
 }

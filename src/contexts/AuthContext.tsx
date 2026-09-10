@@ -87,9 +87,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (IS_MOCK) { setLoading(false); return; }
 
-    getMyProfile().then((profile) => {
-      applyProfileWithDailyPoint(profile);
-    }).catch(() => { /* 드문 초기화 실패 — 비로그인 상태로 진행 */ }).finally(() => setLoading(false));
+    // 부팅 프로필 조회 - 실패하면 한 번만 다시 시도한다(2026-09-11).
+    //   왜: 세션은 저장소에 있는데 첫 요청이 깨지면 화면만 비로그인이 되고, 사용자는 그걸
+    //   '자동 로그인이 안 됐다' 로 읽는다. 두 번째도 실패하면 조용히 비로그인으로 둔다 -
+    //   여기서 user 를 null 로 덮지는 않는다(getMyProfile 이 이제 실패를 던지므로 catch 로 온다).
+    const bootProfile = (retry: boolean) => {
+      getMyProfile()
+        .then((profile) => { applyProfileWithDailyPoint(profile); setLoading(false); })
+        .catch(() => {
+          if (retry) { window.setTimeout(() => bootProfile(false), 1200); return; }
+          setLoading(false);
+        });
+    };
+    bootProfile(true);
 
     // ⚠️ onAuthStateChange 콜백 내부에서 supabase를 await하면 GoTrue 락 데드락 →
     //    로그인이 "로그인 중..."에서 무한 대기. 콜백은 동기로만 두고

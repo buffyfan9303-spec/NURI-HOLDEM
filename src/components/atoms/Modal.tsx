@@ -113,6 +113,49 @@ export default function Modal({
     return false;
   };
   const resetGesture = () => { sheetStart.current = null; dragFrom.current = null; samples.current = []; dragging.current = false; };
+
+  // ── 배경 딤은 시트와 **같은 제스처가 함께 몬다** (2026-09-11 오너 리포트) ─────────────────
+  // 예전엔 딤이 시트와 완전히 분리돼 bg-black/80 으로 고정돼 있었다. 그래서
+  //   ① 시트를 손으로 끌어 내리는 300ms 동안 뒤 화면은 계속 새까맣고,
+  //   ② 시트가 화면 밖으로 나간 뒤에도 스프링이 정착할 때까지 **검은 딤만 남는 구간**이 생겼다.
+  // 실측(412×915): ②가 200ms. 오너가 본 "잠깐 뜨는 검은 화면"이 그 구간이다.
+  // 시트가 내려간 만큼 딤을 걷으면 두 구간 모두 '뒤 화면이 서서히 돌아오는' 정상적인 시트가 된다.
+  const backdropRef = useRef<HTMLElement | null>(null);
+  const dimSpan = useRef(1);   // translateY 가 이만큼이면 시트가 화면에서 완전히 사라진다(제스처 시작 때 1회 측정)
+  /** 시트 위치(px)에 맞춰 딤을 즉시 갱신. 딤이 없는 변형(page)에서는 아무것도 하지 않는다. */
+  const setDim = (y: number) => {
+    const bd = backdropRef.current;
+    if (bd) bd.style.opacity = String(Math.max(0, Math.min(1, 1 - Math.max(0, y) / dimSpan.current)));
+  };
+  /** 딤에 남은 애니를 걷어내고 **보이는 값**을 인라인으로 확정한다. 반환값 = 그 보이는 값. */
+  const takeOverDim = (): string => {
+    const bd = backdropRef.current;
+    if (!bd) return '1';
+    const shown = getComputedStyle(bd).opacity;   // 취소 전에 읽어야 '남은 애니가 붙들고 있는 값' 을 얻는다
+    for (const a of bd.getAnimations()) a.cancel();
+    bd.style.opacity = shown === '1' ? '' : shown;
+    return shown;
+  };
+  /**
+   * 딤을 to(0=완전히 걷힘 / 1=원래대로)로 옮긴다. 시트 스프링과 같은 시간을 쓴다.
+   *
+   * ⚠ springTo(src/lib/spring.ts:105)와 **같은 조리법을 반드시 따른다**:
+   *   ① 보이는 값에서 이어받고 ② 남은 애니를 취소하고 ③ 끝나면 인라인으로 확정한 뒤 애니를 지운다.
+   *   fill:'forwards' 애니를 살려 두면 캐스케이드에서 **애니메이션 오리진이 인라인 스타일을 이겨**,
+   *   그 뒤 setDim 이 매 프레임 쓰는 opacity 가 화면에 한 번도 반영되지 않는다.
+   *   실측(2026-09-11): 한 번 되돌아온 뒤의 두 번째 드래그에서 인라인 0.03 인데 화면은 1.0 —
+   *   시트만 바닥으로 내려가고 뒤는 새까맣다. 오너 스크린샷과 같은 그림이라 이 버그의 재발 경로다.
+   */
+  const animateDim = (to: number, duration: number) => {
+    const bd = backdropRef.current;
+    if (!bd) return;
+    const from = takeOverDim();
+    const settle = () => { bd.style.opacity = to === 1 ? '' : String(to); };
+    if (Math.abs(Number(from) - to) < 0.01) { settle(); return; }
+    const anim = bd.animate([{ opacity: from }, { opacity: String(to) }],
+      { duration, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: 'forwards' });
+    anim.addEventListener('finish', () => { settle(); anim.cancel(); }, { once: true });
+  };
   // ⚠ 왜 Pointer Events 가 아니라 Touch Events 인가(2026-09-02 실측): 본문 스크롤러 위에서 손가락을 끌면 Chrome 은
   //   스크롤 제스처로 판정하는 순간 pointercancel 을 보내 포인터 스트림을 끊는다(맨 위에서 아래로 끌어도).
   //   그립(touch-none)에서는 됐지만 본문에서는 시트가 0.85px 만 움직였다(drag-close.spec). 터치 이벤트는 네이티브
@@ -128,7 +171,16 @@ export default function Modal({
     // 되돌아가는 중이면 **보이는 값**에서 이어받는다 — 목표값에서 시작하면 튄다(Apple §3 중단 가능성의 핵심)
     startOffset.current = presentationY(el);
     for (const a of el.getAnimations()) a.cancel(); // 진입 키프레임·되돌림 스프링 모두 취소(취소된 CSS 애니는 재시작하지 않는다)
+    takeOverDim();                                 // 딤도 같이 이어받는다 — 남은 애니가 있으면 setDim 이 화면에 안 먹는다
+    // ⚠ 불변식: **여기서 인라인 transform 을 쓰는 순간, 이 제스처의 모든 종료 경로가 0 으로 되돌릴 책임을 진다.**
+    //   진입 키프레임(animate-sheet-up 0.26s)이 도는 중에 손이 닿으면 startOffset 이 수백 px 이 되는데,
+    //   예전엔 ① onSheetMove 의 '위로=스크롤 양보' 분기 ② onSheetEnd 의 '드래그 아님' 분기가
+    //   되돌리지 않고 return 해서 시트가 그 자리에 **영구히 굳었다**(오너 리포트 2026-09-11:
+    //   긴 공지를 열자마자 훑으면 시트가 화면 밖으로 밀리고 검은 딤만 남음 — 실측 translateY 805px).
+    //   그 뒤로는 본문이 스크롤된 상태라 onSheetStart 의 anyScrolled 가드에 걸려 다시 잡을 수도 없었다.
     if (startOffset.current) el.style.transform = `translateY(${startOffset.current}px)`;
+    // 딤 이동 폭 = '지금 상단'에서 뷰포트 바닥까지 + 이미 내려와 있던 만큼. 제스처당 레이아웃 읽기 1회.
+    dimSpan.current = Math.max(1, window.innerHeight - (el.getBoundingClientRect().top - startOffset.current));
     dragFrom.current = t;
     sheetStart.current = e.touches[0].clientY;
     samples.current = [{ t: e.timeStamp, y: startOffset.current }];
@@ -141,7 +193,9 @@ export default function Modal({
     const dy = e.touches[0].clientY - sheetStart.current;
     if (!dragging.current) {
       if (Math.abs(dy) < 8) return;                                   // 히스테리시스 — 탭과 드래그를 가른다(Apple §10)
-      if (dy < 0 && anyScrolled(dragFrom.current)) { resetGesture(); return; } // 위로 = 스크롤에 양보
+      // 위로 = 스크롤에 양보. ⚠ 여기서 resetGesture() 만 부르면 **onSheetStart 가 얼려 둔 인라인
+      //   transform 이 그대로 남는다**(아래 onSheetStart 주석 참고) — 제자리 복귀까지 하는 취소를 쓴다.
+      if (dy < 0 && anyScrolled(dragFrom.current)) { onSheetCancel(); return; }
       dragging.current = true;
     }
     if (anyScrolled(dragFrom.current)) { onSheetCancel(); return; }   // 브라우저 스크롤이 이겼다 — 시트를 놓는다
@@ -149,6 +203,7 @@ export default function Modal({
     // 1:1 추종 — 손가락에 정확히 붙어야 '내가 쥐고 있다'는 감각이 난다. 위로는 고무줄(Apple §9): 딱 멈추면 '얼었다' 고 읽힌다.
     const shown = y < 0 ? rubberband(y, el.offsetHeight || window.innerHeight) : y;
     el.style.transform = `translateY(${shown}px)`;
+    setDim(shown);                                                    // 딤은 시트를 따라간다(분리하면 검은 화면이 남는다)
     samples.current.push({ t: e.timeStamp, y });
     if (samples.current.length > 8) samples.current.shift();
   };
@@ -158,22 +213,39 @@ export default function Modal({
     const wasDragging = dragging.current;
     const v = releaseVelocity(samples.current);   // px/s — 아래가 양
     resetGesture();
-    if (!el || !wasDragging) return;
+    if (!el) return;
+    // 드래그로 확정되지 않고 끝난 손짓(탭·8px 미만)도 **제자리로 되돌린다**.
+    // onSheetStart 는 진행 중인 애니메이션을 취소하며 그 순간의 위치를 인라인 transform 으로 고정하는데,
+    // 여기서 그냥 return 하면 시트가 그 위치에 굳는다(2026-09-11 재현: 진입 애니 중 탭 → 805px 에서 정지).
+    if (!wasDragging) { animateDim(1, 300); if (presentationY(el) !== 0) void springTo(el, 0, { damping: 1, response: 0.3 }); return; }
     const y = presentationY(el);
     // 투영(Apple §6): 이 속도로 놓으면 어디까지 미끄러지나 → 그 착지점으로 판단한다. 놓은 위치가 아니라 **가려던 곳**.
     const landing = y + project(v);
     if (v > 600 || (v >= 0 && landing > 120)) {
       // 끌던 방향 그대로, 손 뗀 속도 그대로 화면 밖으로 — 감쇠 1.0(바운스 없음). 이음매가 없어야 '던졌다' 가 된다.
+      //
+      // ⚠ 목표는 window.innerHeight 가 아니라 **시트가 화면에서 사라지는 데 실제로 필요한 거리**다.
+      //   시트는 화면 아래에 붙어 있어(flex-end) 자기 키(88vh ≈ 805px)만큼만 내려가면 이미 안 보인다.
+      //   그런데 예전엔 innerHeight(915px)를 목표로 뒀다. 스프링 duration 은 거리와 무관하게 늘 330ms 라
+      //   (spring.ts: settle = ln(1000)/(zeta·w0), response 로만 정해진다), 남는 110px 은
+      //   **보이지도 않는 구간을 애니메이트하는 시간**이 된다.
+      //   실측(2026-09-11, 412×915): 시트는 652ms 에 이미 화면 밖인데 스프링은 852ms 에야 정착해
+      //   onClose 가 그때 불렸다 — 그 200ms 동안 화면에는 검은 딤만 남았다(오너 리포트: "잠깐 검은 화면").
+      //   목표를 실제 필요 거리로 바꾸면 '사라지는 순간 = 정착하는 순간' 이 되어 그 구간이 사라진다.
       setDragClosed(true);
-      void springTo(el, window.innerHeight, { damping: 1, response: 0.3, velocity: Math.max(v, 300) }).then(onClose);
+      const gone = y + (window.innerHeight - el.getBoundingClientRect().top) + 8; // +8: 그림자·안티에일리어싱 여유
+      animateDim(0, 260);   // 시트가 나가는 동안 딤도 걷힌다 — 스프링 꼬리(정착 대기)에 검은 화면이 남지 않게
+      void springTo(el, gone, { damping: 1, response: 0.3, velocity: Math.max(v, 300) }).then(onClose);
       return;
     }
     // 제자리 — 운동량이 실린 손짓(플릭 되돌림)일 때만 살짝 바운스(Apple §4: 던진 것만 튄다)
+    animateDim(1, 350);
     void springTo(el, 0, { damping: Math.abs(v) > 400 ? 0.8 : 1, response: 0.35, velocity: v });
   };
   const onSheetCancel = () => {
     const el = contentRef.current;
     resetGesture();
+    animateDim(1, 300);
     if (el && presentationY(el) !== 0) void springTo(el, 0, { damping: 1, response: 0.3 });
   };
   const dragHandlers = bodyDrag
@@ -320,10 +392,11 @@ export default function Modal({
           tabIndex={-1}
           aria-hidden
           onClick={onClose}
+          ref={(n) => { backdropRef.current = n; }}
           className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default"
         />
       ) : (
-        <div aria-hidden className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+        <div aria-hidden ref={(n) => { backdropRef.current = n; }} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
       )}
       {/* 본문 */}
       <div

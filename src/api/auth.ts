@@ -350,7 +350,15 @@ export async function getMyProfile(): Promise<User | null> {
   // 부팅 경로가 둘(초기 조회 + onAuthStateChange)이라 profiles·venues 가 각각 ×2 로 나갔다.
   // 겹치는 동안에만 합류 — 응답이 오면 키를 버리므로 이후 refreshProfile 은 그대로 새로 조회된다.
   return dedupe('my-profile:' + user.id, async () => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    // ⚠ error 를 반드시 구분한다(2026-09-11). PostgREST 클라이언트는 네트워크 실패·5xx·RLS 거부에도
+    //   **reject 하지 않고** { data: null, error } 로 resolve 한다. 예전엔 error 를 안 받아서
+    //   '조회 실패' 와 '그런 회원이 없음' 이 똑같이 null 이 됐고, AuthContext 는 그 null 을 보고
+    //   setUser(null) 을 했다 — **세션 토큰은 localStorage 에 멀쩡히 있는데 화면만 비로그인**이 된다.
+    //   오너·사용자 눈에는 정확히 '자동 로그인이 안 됐다' 로 보이고, 새로고침 전까지 회복 경로가 없었다
+    //   (지하 매장 LTE·앱 복귀 직후처럼 첫 요청이 잘 깨지는 환경에서 난다).
+    //   던지면 호출부의 catch 가 **기존 user 를 그대로 유지**한다(덮어쓰지 않는다).
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if (error) throw error;
     if (!data) return null;
     const u = rowToUser(data);
     if (u.role === 'venue_owner') {

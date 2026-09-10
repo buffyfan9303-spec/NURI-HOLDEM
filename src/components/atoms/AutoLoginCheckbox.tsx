@@ -17,22 +17,48 @@ interface Props {
   onChange: (v: boolean) => void;
   /** 로그인 진행 중 등 조작을 막아야 할 때 */
   disabled?: boolean;
+  /**
+   * 한 줄 배치(2026-09-11) — 로그인 화면에서 '비밀번호를 잊으셨나요?' 와 같은 행에 설 때.
+   * 카드 테두리와 두 줄 설명을 접고 체크박스 + 라벨만 남긴다. **위험 고지는 지우지 않고**
+   * title 로 옮겨, 마우스·스크린리더에서 그대로 읽히게 한다(공용 PC 경고는 법적 고지가 아니라
+   * 계정 안전 안내지만, 이 서비스에서 유일한 경고라 없애지 않는다).
+   */
+  compact?: boolean;
 }
 
-export default function AutoLoginCheckbox({ checked, onChange, disabled }: Props) {
+const WARN = '이 브라우저에서 다음부터 자동으로 로그인됩니다. 공용 PC에서는 꼭 해제하세요.';
+
+export default function AutoLoginCheckbox({ checked, onChange, disabled, compact }: Props) {
   const id = useId();
+  const box = (
+    <input
+      id={id}
+      type="checkbox"
+      checked={checked}
+      disabled={disabled}
+      data-testid="auto-login"
+      onChange={(e) => onChange(e.target.checked)}
+      className="accent-accent-300 shrink-0 disabled:opacity-50"
+    />
+  );
+
+  if (compact) {
+    return (
+      <div className="flex min-h-[44px] min-w-0 items-center gap-2" title={WARN}>
+        {box}
+        <label htmlFor={id} className="min-w-0 cursor-pointer select-none truncate text-xs font-semibold text-ink-primary">
+          자동 로그인
+        </label>
+        {/* 자물쇠 아이콘은 한 줄 모드에서 라벨 옆에 홀로 떠 보였다 — 경고는 title·sr-only 로만 남긴다 */}
+        <span className="sr-only">{WARN}</span>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-2">
       <div className="flex items-center gap-2">
-        <input
-          id={id}
-          type="checkbox"
-          checked={checked}
-          disabled={disabled}
-          data-testid="auto-login"
-          onChange={(e) => onChange(e.target.checked)}
-          className="accent-accent-300 shrink-0 disabled:opacity-50"
-        />
+        {box}
         <label
           htmlFor={id}
           className="flex-1 cursor-pointer select-none text-xs font-semibold text-ink-primary"

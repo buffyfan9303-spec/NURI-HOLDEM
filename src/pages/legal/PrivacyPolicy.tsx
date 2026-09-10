@@ -190,7 +190,9 @@ export default function PrivacyPolicy() {
                 ['Cloudflare, Inc.', '미국·글로벌 엣지', '접속 IP·요청 정보', 'API·이미지 전송구간 프록시/캐싱(CDN)', '전송 처리 중 일시 처리', '서비스 접속 시 네트워크 경유'],
                 ['Functional Software, Inc. (Sentry)', '미국', '오류 스택·브라우저 정보·IP', '오류 모니터링·품질 개선', '벤더 보존주기(약 90일) 후 자동 파기', '오류 발생 시 API 전송'],
                 ['Plus Five Five, Inc. (Resend)', '미국', '이메일 주소·닉네임', '주간 소식 이메일 발송(수신 동의자 한정)', '발송 처리 후 벤더 정책에 따른 단기 보관', '발송 시 API 전송'],
-                ['Google LLC (Gemini·Analytics)', '미국', '순위 인증 이미지, 핸드 분석 텍스트, 매장 주간 운영 요약, 이용 통계', 'AI 자동 판정·요약 생성, 이용 통계', '처리 즉시 완료(모델 입력 별도 저장 없음)', '해당 기능 실행 시 API 전송'],
+                // 2026-09-11: 외부 생성형 AI 를 TDA 규칙 질의 하나로 줄이면서 실제 전송 항목이 바뀌었다.
+                // 더는 보내지 않는 것: 순위 인증 이미지 · 핸드 분석 텍스트 · 매장 주간 운영 요약(단골 이름 포함).
+                ['Google LLC (Gemini·Analytics)', '미국', 'TDA 규칙 질문 텍스트, 이용 통계', 'TDA 규칙 안내 요약 생성, 이용 통계', '처리 즉시 완료(모델 입력 별도 저장 없음)', '해당 기능 실행 시 API 전송'],
               ] as string[][]).map((row, i) => (
                 <tr key={i} className="border-b border-border-subtle align-top">
                   {row.map((cell, j) => <td key={j} className="py-1.5 pr-2">{cell}</td>)}
@@ -201,7 +203,7 @@ export default function PrivacyPolicy() {
         </div>
         <p className="text-2xs text-ink-muted">
           정보주체는 개인정보의 국외 이전을 거부할 수 있습니다(문의: ace@nuriholdem.com).
-          다만 거부 시 오류 자동 보고·AI 판정·이메일 소식 등 해당 기능의 이용이 제한될 수 있습니다.
+          다만 거부 시 오류 자동 보고·TDA 규칙 안내·이메일 소식 등 해당 기능의 이용이 제한될 수 있습니다.
         </p>
       </Article>
 

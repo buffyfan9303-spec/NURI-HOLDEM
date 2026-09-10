@@ -65,17 +65,23 @@ export function availabilityHint(status: AvailStatus, noun: string, invalidText:
 
 export default function AvailabilityField({
   value, status, onChange, label, noun = label, subLabel, placeholder, maxLength, invalidText, takenText,
-  type = 'text', autoComplete, testId,
+  type = 'text', autoComplete, testId, inputClassName, quietLabel,
 }: {
   value: string; status: AvailStatus; onChange: (v: string) => void;
   label: string; noun?: string; subLabel?: string; placeholder?: string; maxLength?: number; invalidText: string; takenText?: string;
   type?: 'text' | 'email'; autoComplete?: string; testId?: string;
+  /** 화면별 입력 보정(높이·라운드·배경). 넘기지 않으면 종전과 100% 같다. */
+  inputClassName?: string;
+  /** 라벨을 작고 조용하게 — 인증 화면처럼 라벨이 주인공이 아닌 곳. 기본은 종전 그대로. */
+  quietLabel?: boolean;
 }) {
   const h = availabilityHint(status, noun, invalidText, takenText);
   return (
     <div>
-      <label className="block text-xs font-medium text-ink-secondary mb-1">
-        {label} <span className="text-danger">*</span>
+      <label className={quietLabel
+        ? 'mb-1.5 block text-2xs font-semibold tracking-wide text-ink-muted'
+        : 'block text-xs font-medium text-ink-secondary mb-1'}>
+        {label} <span className={quietLabel ? 'text-accent-200/70' : 'text-danger'}>*</span>
         {subLabel && <span className="ml-1 text-2xs font-normal text-ink-muted">{subLabel}</span>}
       </label>
       <input
@@ -88,10 +94,10 @@ export default function AvailabilityField({
         maxLength={maxLength}
         required
         className={[
-          'input',
-          status === 'taken' || status === 'invalid' ? 'border-danger/50' :
-          status === 'available' ? 'border-emerald-500/50' : '',
-        ].join(' ')}
+          'input', inputClassName ?? '',
+          status === 'taken' || status === 'invalid' ? '!border-danger/60' :
+          status === 'available' ? '!border-emerald-500/60' : '',
+        ].filter(Boolean).join(' ')}
       />
       {h && <p className={`mt-1 text-2xs ${h.cls}`} aria-live="polite">{h.text}</p>}
     </div>

@@ -31,8 +31,12 @@ test('🔴 로그인 창 — 소셜 CTA 는 Google 하나고 카카오 버튼은
 
 test('🔴 약관 시트 — 열리면 포커스가 안으로 들어오고 Tab 이 밖으로 새지 않으며 닫으면 보기 버튼으로 돌아온다(MODAL-03)', async ({ page }) => {
   const dialog = await openLogin(page);
-  await dialog.getByRole('button', { name: '일반 가입' }).click();
-  const view = dialog.getByRole('button', { name: '보기' }).first(); // 서비스 이용약관
+  // 2026-09-11: 상단 3분할 탭 제거 — 로그인 화면 하단 '회원가입' 으로 들어가면 일반 회원이 기본이다.
+  await dialog.getByRole('button', { name: '회원가입', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: '일반 회원' }), '가입 유형 세그먼트가 없다').toHaveAttribute('aria-pressed', 'true');
+  // ⚠ exact 필수 — 2026-09-11 에 붙은 비밀번호 보기 토글(aria-label="비밀번호 보기")이
+  //   부분일치로 함께 잡힌다. 느슨하게 두면 약관 시트 대신 비밀번호를 토글하고 지나간다.
+  const view = dialog.getByRole('button', { name: '보기', exact: true }).first(); // 서비스 이용약관
   await view.click();
 
   const sheet = page.getByRole('dialog', { name: '서비스 이용약관' });
