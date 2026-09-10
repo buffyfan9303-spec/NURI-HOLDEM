@@ -74,7 +74,34 @@ jobs:
           DB_URL_ALT: ${{ secrets.SUPABASE_URI }}
         run: |
           STAMP="$(date -u +%Y%m%d-%H%M)"
-          pg_dump --format=custom --no-owner --no-privileges "${DB_URL:-$DB_URL_ALT}" -f "nuri-$STAMP.dump"
+          URL="${DB_URL:-$DB_URL_ALT}"
+          # ⚠ 2026-09-10 실측(실행 34473708702): 오너가 넣은 접속 문자열은 **직접 접속 호스트**
+          #   (db.<ref>.supabase.co)였고, 그 호스트는 IPv6 전용이라 GitHub 러너(IPv4)에서
+          #   "Network is unreachable" 로 첫 실제 백업이 실패했다 — 즉 지금까지 성공한 백업은 0건이다.
+          #   secret 값을 바꾸는 건 오너 몫이지만, 워크플로가 스스로 세션 풀러(IPv4·5432)로 바꿔 시도하면
+          #   값을 손대지 않고도 백업이 된다. 풀러 계정은 `postgres.<ref>`, 비밀번호는 같다.
+          #   풀러 클러스터(aws-0/aws-1)는 대시보드에서만 보이므로 둘 다 시도해 붙는 쪽을 쓴다.
+          #   값(비밀번호)은 어떤 경우에도 출력하지 않는다 — 호스트 이름만 남긴다.
+          if printf '%s' "$URL" | grep -qE '@db\.[a-z0-9]+\.supabase\.co(:[0-9]+)?/'; then
+            REF="$(printf '%s' "$URL" | sed -E 's#.*@db\.([a-z0-9]+)\.supabase\.co.*#\1#')"
+            CRED="$(printf '%s' "$URL" | sed -E 's#^postgres(ql)?://([^@]*)@.*#\2#')"
+            PASS="${CRED#*:}"
+            DBPATH="$(printf '%s' "$URL" | sed -E 's#.*@db\.[a-z0-9]+\.supabase\.co(:[0-9]+)?/##')"
+            CANDIDATES="$URL postgresql://postgres.$REF:$PASS@aws-0-ap-northeast-2.pooler.supabase.com:5432/$DBPATH postgresql://postgres.$REF:$PASS@aws-1-ap-northeast-2.pooler.supabase.com:5432/$DBPATH"
+          else
+            CANDIDATES="$URL"
+          fi
+          USE=""
+          for C in $CANDIDATES; do
+            HOST="$(printf '%s' "$C" | sed -E 's#^[^@]*@([^:/]+).*#\1#')"
+            if psql "$C" -Atc 'select 1' >/dev/null 2>&1; then USE="$C"; echo "접속 확인: $HOST"; break; fi
+            echo "접속 실패: $HOST — 다음 후보"
+          done
+          if [ -z "$USE" ]; then
+            echo "::error::어느 호스트로도 DB 에 붙지 못했다(직접 접속·세션 풀러 aws-0/aws-1). 오너가 대시보드 Connect → Session pooler URI 로 secret 을 갱신해야 한다. 값은 출력하지 않는다."
+            exit 1
+          fi
+          pg_dump --format=custom --no-owner --no-privileges "$USE" -f "nuri-$STAMP.dump"
           gzip "nuri-$STAMP.dump"
           echo "FILE=nuri-$STAMP.dump.gz" >> "$GITHUB_ENV"
           ls -lh "nuri-$STAMP.dump.gz"
