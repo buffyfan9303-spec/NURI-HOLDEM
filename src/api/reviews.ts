@@ -1,7 +1,6 @@
 // src/api/reviews.ts — 매장 후기·별점. 읽기 공개 / 작성은 해당 매장 체크인 인증자만(RLS 강제).
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
-import { aiGenerate } from './ai';
 import { dedupe } from '../lib/inflight';
 
 export interface VenueReview {
@@ -35,13 +34,8 @@ export async function replyToReview(reviewId: string, reply: string): Promise<vo
   if (error) throw new Error(error.message);
 }
 
-/** AI 답글 초안 — 후기 별점·본문으로 정중한 점주 답글 생성(운영자 검토 후 등록). */
-export async function aiDraftReviewReply(r: VenueReview): Promise<string> {
-  return aiGenerate(
-    `[매장 후기] 별점: ${r.rating}/5\n작성자: ${r.nickname}\n내용: ${r.content || '(내용 없음)'}`,
-    '너는 홀덤펍 점주다. 위 후기에 대한 답글 초안을 정중한 존댓말 2~3문장으로 작성하라. 호평이면 감사+재방문 유도, 불만(낮은 별점)이면 사과+개선 약속. 과장·환전/사행성 표현 금지. 답글 본문만 출력.',
-  );
-}
+// (2026-09-11) AI 답글 초안 제거 — 후기 본문·작성자 닉네임을 외부 모델로 보내던 유일한 경로였다.
+// 업주 답글은 위 replyToReview 로 직접 작성한다. 권한은 종전대로 reply_to_review RPC 가 강제한다.
 
 /** 매장 후기 목록(최신순). */
 export async function getVenueReviews(venueId: string): Promise<VenueReview[]> {

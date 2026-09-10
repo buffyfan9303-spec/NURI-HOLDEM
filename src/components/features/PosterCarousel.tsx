@@ -100,7 +100,8 @@ const BRAND_SLIDES: {
 
 type Slide = {
   key: string; alt: string;
-  onClick: () => void;
+  /** 없으면 클릭 목적지가 없는 슬라이드다 — 버튼이 아니라 그림으로 그린다(죽은 버튼 금지). */
+  onClick?: () => void;
   /* 래스터 슬라이드(포스터) */
   src?: string; title?: string; sub?: string;
   /* DOM 브랜드 슬라이드 */
@@ -137,9 +138,13 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
         };
       });
     // 관리자 배너가 곧 고정 포스터 자리다 — 등록 순서(sort_order) 그대로 앞에 선다. 없으면 이 자리는 비어 있다.
+    // ⚠ 링크 없는 배너는 **누를 수 없어야 한다**(2026-09-11).
+    //   종전엔 링크 유무와 무관하게 <button> 이라 손 모양 커서·hover·press 반응이 다 나는데
+    //   눌러도 아무 일이 없었다 — 사용자에게는 '고장난 버튼' 이다. 관리 화면에서 링크는 '선택' 이라
+    //   실제로 빈 배너가 등록될 수 있다. 목적지가 없으면 배너는 그냥 '보는 것' 으로 둔다.
     const posters: Slide[] = banners.map((b): Slide => ({
       key: `db:${b.id}`, src: b.imageUrl, alt: b.title || '배너', title: b.title, sub: b.subtitle,
-      onClick: () => { if (b.linkUrl) onBannerUrl?.(b.linkUrl); },
+      onClick: b.linkUrl ? () => onBannerUrl?.(b.linkUrl) : undefined,
     }));
     const brands = BRAND_SLIDES.map((b): Slide => ({
       key: `b:${b.key}`, alt: b.alt, brand: b, onClick: () => onBanner(b.action),
@@ -157,17 +162,18 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
   const card = (s: Slide, i: number, dup: boolean) => {
     // 복제 세트는 보조기기·탭 순회에서 숨김
     const b = s.brand;
+    // 목적지가 없으면 <div> 로 그린다 — 커서·hover·포커스가 '누를 수 있다'고 거짓말하지 않게.
+    const Tag = (s.onClick ? 'button' : 'div') as 'button' | 'div';
     return (
-      <button
+      <Tag
         key={`${s.key}:${dup ? 'd' : 'o'}`}
-        type="button"
-        onClick={s.onClick}
+        {...(s.onClick ? { type: 'button' as const, onClick: s.onClick } : {})}
         aria-hidden={dup || undefined}
         tabIndex={dup ? -1 : undefined}
         aria-label={dup ? undefined : s.alt}
         // 오너 지시(2026-08-27 4차): 풀폭 1장 — w-full(=스크롤러 clientWidth) × aspect 960/448.
         // 풀블리드 배너라 rounded 는 카드가 아니라 lg 캡 상태의 뷰포트에만(모바일은 모서리 없음).
-        className="relative aspect-[960/448] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left"
+        className={['relative aspect-[960/448] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left', s.onClick ? '' : 'cursor-default'].join(' ')}
         style={b ? { background: b.bg } : undefined}
       >
         {b ? (
@@ -216,7 +222,7 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
             )}
           </>
         )}
-      </button>
+      </Tag>
     );
   };
 

@@ -1,10 +1,18 @@
 // src/api/settings.ts — 전역 앱 설정(app_settings). 읽기는 공개, 쓰기는 운영자(set_app_setting RPC).
 import { supabase, IS_MOCK } from '../lib/supabase';
 
-/** 전역 설정 값 조회(공개). 없으면 null. */
+/**
+ * 전역 설정 값 조회(공개). **없으면 null, 못 읽으면 throw.**
+ *
+ * ⚠ 2026-09-11: 예전엔 error 를 통째로 버려 '설정 안 됨' 과 '조회 실패' 가 똑같이 null 이었다.
+ *   그 탓에 부스트 문의 연락처 카드가 조회 실패 시 빈 폼으로 서고, 운영자가 한 칸만 채워 저장하면
+ *   **이미 저장돼 있던 다른 값이 빈 문자열로 덮였다**(업주의 문의 경로가 통째로 끊긴다).
+ *   호출부 12곳은 전부 이미 .catch 를 갖고 있어, 던져도 각자 기본값을 유지한다.
+ */
 export async function getAppSetting(key: string): Promise<string | null> {
   if (IS_MOCK) return null;
-  const { data } = await supabase.from('app_settings').select('value').eq('key', key).maybeSingle();
+  const { data, error } = await supabase.from('app_settings').select('value').eq('key', key).maybeSingle();
+  if (error) throw new Error(error.message);
   return (data?.value as string) ?? null;
 }
 

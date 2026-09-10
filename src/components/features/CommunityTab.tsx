@@ -3,14 +3,11 @@ import { goSubTab } from '../../lib/subTabTransition';
 import { centerInRail } from '../../lib/railScroll';
 import { promptLogin } from '../../lib/requireLogin';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
-import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
+import { getActivePromotedPosts, type PromotedPost } from '../../api/ads';
 import { getEquippedMarks, getNickColors, isBumped } from '../../api/community';
 import { getAppSetting, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../api/settings';
 import { hotFirst, pinnedFirst } from '../../lib/pinnedFirst';
-import TitleChip from '../atoms/TitleChip';
-import MarqueeText from '../atoms/MarqueeText';
-import { tierCss } from '../atoms/TierBadge';
-import { nickColorVar } from '../../lib/cosmetics';
+import { PostRow, PostCard } from './community/PostRowCard';
 import { useTitlePoints } from '../../lib/useTitles';
 import { getVenueRatings, type VenueRating } from '../../api/reviews';
 import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind, JoinedGroup } from '../../api/community';
@@ -28,8 +25,6 @@ import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { filterContent } from '../../lib/content-filter';
-import { parseAttachments } from '../../lib/hand';
-import { MiniCard } from '../atoms/HandCards';
 import Avatar from '../atoms/Avatar';
 import Icon from '../atoms/Icon';
 import VenueThumb from '../atoms/VenueThumb';
@@ -37,8 +32,7 @@ import Modal from '../atoms/Modal';
 import PostDetailModal from './PostDetailModal';
 import SlidingPill from '../atoms/SlidingPill';
 import { useIsDesktop } from '../../lib/responsive';
-import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
-import { BOARD_FILTER_CATEGORIES, categoryPillClass } from '../../lib/postCategory';
+import { BOARD_FILTER_CATEGORIES } from '../../lib/postCategory';
 import { relativeTime } from '../../lib/relativeTime';
 import { markProgrammaticScroll } from '../../lib/useScrollY';
 
@@ -534,8 +528,11 @@ function FeedSection({
   const [view, setView] = useState<'compact' | 'feed'>(() =>
     (typeof localStorage !== 'undefined' && localStorage.getItem('nuri:board-view') === 'compact') ? 'compact' : 'feed');
   const switchView = (v: 'compact' | 'feed') => { setView(v); try { localStorage.setItem('nuri:board-view', v); } catch { /* noop */ } };
-  // 커뮤니티 광고 5칸 — 게시판(enableCategory)에서만, 글 4개마다 한 칸씩 삽입
-  const [ads, setAds] = useState<CommunityAd[]>([]);
+  // 커뮤니티 광고 5칸 — 게시판(enableCategory)에서만, 글 N개마다 한 칸씩 삽입.
+  // 2026-09-11: 광고 = **승격된 진짜 게시글**. 아래에서 PostRow/PostCard 를 그대로 쓴다.
+  const [ads, setAds] = useState<PromotedPost[]>([]);
+  // 조회 실패와 '광고 0개'는 다른 상태다 — 실패했다고 일반 피드까지 죽이지는 않는다(광고만 빠진다).
+  const [adsErr, setAdsErr] = useState<unknown>(null);
   // 광고 빈도 '글 N개마다 1줄' — app_settings community_ads_every(관리자 → 노출 관리). 실패·없음 = 4
   const [adsEvery, setAdsEvery] = useState(COMMUNITY_ADS_EVERY_DEFAULT);
   // 작성자 장착 마크(상점) — posts의 userId 일괄 조회(닉네임 옆 이모지)
@@ -551,11 +548,20 @@ function FeedSection({
   }, [posts]);
   // 작성자 칭호(활동점수) — posts의 userId 일괄 조회(닉네임 옆 칭호)
   const titleOf = useTitlePoints(posts.map((p) => p.userId));
+  // 광고 목록·빈도 — 관리자가 바꾸면 `nuri:ads-changed` 로 다시 받는다(AdSlotsAdmin 이 쏜다).
+  //   이 탭은 최상위라 언마운트되지 않으므로(App.tsx display 토글) 신호 없이는 부팅 때 받은 값을 계속 쓴다.
+  const loadAds = useCallback(() => {
+    getActivePromotedPosts()
+      .then(({ ads: a, error }) => { setAds(a); setAdsErr(error); })
+      .catch((e) => { setAds([]); setAdsErr(e); });
+    getAppSetting(COMMUNITY_ADS_EVERY_KEY).then((v) => setAdsEvery(parseAdsEvery(v))).catch(() => {});
+  }, []);
   useEffect(() => {
     if (!enableCategory) return;
-    getActiveCommunityAds().then(setAds).catch(() => {});
-    getAppSetting(COMMUNITY_ADS_EVERY_KEY).then((v) => setAdsEvery(parseAdsEvery(v))).catch(() => {});
-  }, [enableCategory]);
+    loadAds();
+    window.addEventListener('nuri:ads-changed', loadAds);
+    return () => window.removeEventListener('nuri:ads-changed', loadAds);
+  }, [enableCategory, loadAds]);
 
   // HOT: 최근 6시간 내 조회수 상위 2개 (검색·카테고리 미적용 상태에서만 핀 고정)
   const hotPosts = useMemo(() => {
@@ -592,10 +598,18 @@ function FeedSection({
     ]);
   }, [posts, q, cat, enableCategory, order]);
 
+  // 광고로 승격된 글이 일반 목록에도 있으면 같은 글이 두 번 보인다 — post.id 기준으로 목록에서 뺀다.
+  //   (원본 게시글 데이터는 건드리지 않는다. 여기서 '이 화면의 목록'만 걸러 낸다.)
+  const adPostIds = useMemo(() => new Set(ads.map((a) => a.post.id)), [ads]);
+
   const pinHot = enableCategory && cat === 'all' && !q.trim() && order === 'new' && hotPosts.length > 0;
   // HOT 은 별도 블록이 아니라 **한 목록** 안에 선다(#10, 오너 결정 2026-09-05): 광고(컨테이너 첫 행) → 고정 → HOT → 끌올 → 최신.
   // 예전엔 HOT 블록이 목록 컨테이너 밖에 먼저 그려져 '광고 맨 위'·'고정 맨 위' 규칙이 둘 다 깨졌다.
-  const listSource = pinHot ? hotFirst(filtered, hotPosts) : filtered;
+  const listSourceRaw = pinHot ? hotFirst(filtered, hotPosts) : filtered;
+  const listSource = useMemo(
+    () => (adPostIds.size ? listSourceRaw.filter((p) => !adPostIds.has(p.id)) : listSourceRaw),
+    [listSourceRaw, adPostIds],
+  );
   const shown = listSource.slice(0, visible);
 
   return (
@@ -710,12 +724,28 @@ function FeedSection({
         </div>
       )}
 
+      {/* 광고 조회 실패는 **운영자에게만** 알린다.
+          · 일반 손님에겐 아무 의미가 없고(할 수 있는 게 없다), 피드는 광고 없이 정상 동작한다.
+          · 그렇다고 조용히 삼키면 운영자는 '게재했는데 왜 안 보이지'를 영원히 모른다 —
+            종전 구현(.catch(() => {}))이 정확히 그 상태였다. 실패와 '광고 0개'를 여기서 가른다. */}
+      {enableCategory && adsErr != null && user?.role === 'admin' && (
+        <p className="rounded-input border border-amber-500/40 bg-amber-500/[0.06] px-2.5 py-1.5 text-2xs text-amber-200">
+          광고를 불러오지 못했습니다 — 게시글 목록은 정상입니다. 관리자 → 노출 관리 → 광고에서 확인해 주세요.
+        </p>
+      )}
+
       {/* 포스트 목록 — 게시판 형태 (조밀하게 많이 보이게). HOT 은 목록 안에서 hot 배지로 식별(별도 블록 없음) */}
       {listSource.length === 0 ? (
         <>
-          {/* 글이 없어도 광고 칸은 산다 — 게재 미리보기 겸. 광고는 언제나 **맨 위**(오너 2026-09-05).
-              AdRow 는 <li> 라 <ul> 로 감싼다(#25). */}
-          {ads[0] && <ul className="rounded-aura border card-aura overflow-hidden"><AdRow ad={ads[0]} /></ul>}
+          {/* 글이 없어도 광고 칸은 산다 — 광고는 언제나 **맨 위**(오너 2026-09-05).
+              PostRow 는 <li> 라 <ul> 로 감싼다(#25). */}
+          {ads[0] && (
+            <ul className="rounded-aura border card-aura overflow-hidden">
+              <PostRow post={ads[0].post} promoted adSlot={ads[0].slot} mark={authorMarks[ads[0].post.userId] ?? ''}
+                titlePts={titleOf(ads[0].post.userId)} selected={ads[0].post.id === selectedId}
+                onClick={() => onSelectPost(ads[0].post)} />
+            </ul>
+          )}
           {/* 조회 실패 / 아직 글 없음 / 검색 결과 없음 — 셋은 서로 다른 상태다. 실패를 '글 없음'으로 적으면
               손님은 게시판이 비었다고 믿고 떠난다(문서 §5 '빈 결과·조회 실패를 구분'). */}
           {postsErr != null && posts.length === 0 ? (
@@ -729,15 +759,24 @@ function FeedSection({
           <div className="rounded-aura border card-aura overflow-hidden">
             <ul>
               {/* 첫 광고는 언제나 **맨 위**(오너 2026-09-05 "AD 가 중간에 가 있다"). 예전엔 N번째 글 뒤에 첫 광고가
-                  들어가 글이 적으면 리스트 끝에, 많으면 중간에 떴다. 이후 광고는 N개마다 다음 칸(ads[1], ads[2]…). */}
-              {ads[0] && <AdRow ad={ads[0]} />}
+                  들어가 글이 적으면 리스트 끝에, 많으면 중간에 떴다. 이후 광고는 N개마다 다음 칸(ads[1], ads[2]…).
+                  ⚠ 광고도 **같은 PostRow** 다 — 배지 하나만 다르다. 클릭·키보드·상세 진입이 전부 일반 글과 같은 경로다. */}
+              {ads[0] && (
+                <PostRow post={ads[0].post} promoted adSlot={ads[0].slot} mark={authorMarks[ads[0].post.userId] ?? ''}
+                  titlePts={titleOf(ads[0].post.userId)} selected={ads[0].post.id === selectedId}
+                  onClick={() => onSelectPost(ads[0].post)} />
+              )}
               {shown.map((p, i) => {
                 const ad = ads[Math.floor(i / adsEvery) + 1];
                 const showAd = i % adsEvery === adsEvery - 1 && !!ad; // 글 N개마다 다음 광고 한 칸(관리자 설정)
                 return (
                   <Fragment key={p.id}>
                     <PostRow post={p} hot={pinHot && hotIds.has(p.id)} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
-                    {showAd && <AdRow ad={ad} />}
+                    {showAd && (
+                      <PostRow post={ad.post} promoted adSlot={ad.slot} mark={authorMarks[ad.post.userId] ?? ''}
+                        titlePts={titleOf(ad.post.userId)} selected={ad.post.id === selectedId}
+                        onClick={() => onSelectPost(ad.post)} />
+                    )}
                   </Fragment>
                 );
               })}
@@ -751,15 +790,25 @@ function FeedSection({
         <>
           {/* 피드(카드) 모드 — 오너 레퍼런스: 독립 라운드 카드 스택, 광고도 같은 카드 문법 */}
           <ul className="space-y-2">
-            {/* 첫 광고는 언제나 맨 위 — 컴팩트 목록과 같은 규칙 */}
-            {ads[0] && <AdRow ad={ads[0]} card />}
+            {/* 첫 광고는 언제나 맨 위 — 컴팩트 목록과 같은 규칙. 광고도 **같은 PostCard** 다. */}
+            {ads[0] && (
+              <PostCard post={ads[0].post} promoted adSlot={ads[0].slot} mark={authorMarks[ads[0].post.userId] ?? ''}
+                nickToken={authorColors[ads[0].post.userId]} titlePts={titleOf(ads[0].post.userId)}
+                selected={ads[0].post.id === selectedId}
+                onLike={() => onLike(ads[0].post.id)} onClick={() => onSelectPost(ads[0].post)} />
+            )}
             {shown.map((p, i) => {
               const ad = ads[Math.floor(i / adsEvery) + 1];
               const showAd = i % adsEvery === adsEvery - 1 && !!ad;
               return (
                 <Fragment key={p.id}>
                   <PostCard post={p} hot={pinHot && hotIds.has(p.id)} mark={authorMarks[p.userId] ?? ''} nickToken={authorColors[p.userId]} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
-                  {showAd && <AdRow ad={ad} card />}
+                  {showAd && (
+                    <PostCard post={ad.post} promoted adSlot={ad.slot} mark={authorMarks[ad.post.userId] ?? ''}
+                      nickToken={authorColors[ad.post.userId]} titlePts={titleOf(ad.post.userId)}
+                      selected={ad.post.id === selectedId}
+                      onLike={() => onLike(ad.post.id)} onClick={() => onSelectPost(ad.post)} />
+                  )}
                 </Fragment>
               );
             })}
@@ -791,290 +840,14 @@ function InfiniteSentinel({ onMore, remain }: { onMore: () => void; remain: numb
   );
 }
 
-// 커뮤니티 광고 행 — 한 줄 리스트 사이 [AD] 행(운영자가 관리자 설정 → 게시물 관리에서 게재)
-function AdRow({ ad, card = false }: { ad: CommunityAd; card?: boolean }) {
-  const href = ad.linkUrl && /^https?:\/\//.test(ad.linkUrl) ? ad.linkUrl : ad.linkUrl ? `https://${ad.linkUrl}` : '';
-  const inner = (
-    <>
-      <span className="shrink-0 rounded-badge bg-accent-300 px-1 py-0.5 text-2xs font-extrabold leading-none text-white">AD</span>
-      <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">{ad.title}</span>
-      {ad.advertiser && <span className="shrink-0 text-xs text-ink-muted">{ad.advertiser}</span>}
-    </>
-  );
-  // card: 피드(카드 스택) 모드 — 행 구분선 대신 글 카드와 같은 라운드 카드 문법(보더+card-elev 동일)
-  const cls = card
-    ? 'flex items-center gap-2 rounded-aura border card-aura px-3 py-2 transition-colors hover:bg-accent-300/10'
-    : 'flex items-center gap-2 border-b border-border-subtle bg-accent-300/[0.04] px-3 py-2 transition-colors last:border-b-0 hover:bg-accent-300/10';
-  return (
-    <li>
-      {href
-        ? <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>{inner}</a>
-        : <div className={cls}>{inner}</div>}
-    </li>
-  );
-}
+// (2026-09-11) AdRow 폐기 — 광고는 이제 게시글이다. 전용 컴포넌트를 두지 않는다.
+//   그게 '클릭 안 되는 AD', '피드에서 혼자 이질적인 AD' 의 근본 원인이었다.
+//   광고 렌더는 PostRow/PostCard 의 promoted prop 하나로 끝난다(아래).
 
 // 에펨코리아식 한 줄 행 — 제목 크게(타이포 위계), 메타는 작고 연하게. 바이낸스 표 밀도(py-2).
 // (A4) 피드 행 memo — 데이터 props만 비교(인라인 onClick/onLike 무시, 같은 post엔 동작 동일). 긴 피드에서 변경된 행만 재렌더.
-type PostRowData = { post: CommunityPost; selected?: boolean; mark?: string; titlePts?: number; hot?: boolean };
-const samePostProps = (a: PostRowData, b: PostRowData) =>
-  a.post === b.post && a.selected === b.selected && a.mark === b.mark && a.titlePts === b.titlePts && a.hot === b.hot;
-
-const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
-  // 화면 밖 행은 브라우저가 렌더를 통째로 건너뛴다(content-visibility) — cv-row-* 는 index.css
-  const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
-  const { replay, hand } = parseAttachments(post.content);
-  // 한 줄 행(에펨식)은 행 높이가 곧 목록 밀도라 썸네일을 넣으면 표가 무너진다 → image 아이콘 배지로만 알린다.
-  const imgCount = post.images?.length ?? 0;
-  return (
-    <li
-      onClick={onClick}
-      // 공지 행과 같은 키보드 접근 패턴 — Enter/Space로도 열리게
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      aria-current={selected || undefined}
-      className={[
-        'cv-row-sm min-h-[var(--row-h-sm)] flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 focus:outline-none focus-visible:bg-surface-high/60',
-        selected ? 'bg-accent-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
-      ].join(' ')}
-    >
-      {/* 끌올(100점)은 카테고리 자리를 뺏지 않는다 — 앞에 한 칸을 더 쓴다.
-          돈을 낸 표시를 지우면 '올라가긴 했는데 왜 위에 있는지'가 안 보이고, 카테고리를 지우면
-          있던 정보가 사라진다(둘 다 남긴다). */}
-      {post.pinnedAt && (
-        <span className="shrink-0 rounded-badge bg-gold-400/15 px-1 text-2xs font-extrabold leading-none text-gold-400">고정</span>
-      )}
-      {isBumped(post) && (
-        <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">끌올</span>
-      )}
-      {hot
-        ? <span className="shrink-0 rounded-badge bg-danger/15 px-1 text-2xs font-extrabold leading-none tracking-wide text-danger-light">HOT</span>
-        : <span className={['shrink-0 rounded-badge px-1 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>{catLabel}</span>}
-      {/* 제목**만** 전광판으로 흘린다(오너 지시 2026-09-05). 배지는 고정이다 —
-          예전엔 이 칸 전체가 truncate 라 제목이 길면 뒤의 [댓글수]·사진수·응원까지 같이 잘렸다.
-          그건 '훑어보는 정보'라 흘러가거나 잘리면 목록의 기능 자체가 사라진다.
-          MarqueeText 는 **넘칠 때만** 애니메이션을 붙이므로 짧은 제목은 지금과 똑같이 정적이다. */}
-      <span className="flex min-w-0 flex-1 items-center">
-        {/* NEW 도트(Phase 14, pokergosu 리스트 밀도) — 24시간 이내 글 */}
-        {Date.now() - new Date(post.createdAt).getTime() < 24 * 3600_000 && (
-          <span aria-label="새 글" className="mr-1 h-1.5 w-1.5 shrink-0 rounded-full bg-danger" />
-        )}
-        <MarqueeText text={post.title || post.content.slice(0, 40)}
-          className="min-w-0 flex-1 text-sm font-bold leading-tight text-ink-primary" />
-        {(replay || hand) && (
-          <span className="ml-1 shrink-0 text-accent-300" aria-label={replay ? '리플레이 첨부' : '핸드 첨부'}>
-            <Icon name={replay ? 'cards' : 'spade'} size={12} className="inline align-[-2px]" />
-          </span>
-        )}
-        {imgCount > 0 && (
-          <span className="ml-1 shrink-0 text-2xs tabular-nums text-ink-muted" aria-label={`사진 ${imgCount}장`}>
-            <Icon name="image" size={12} className="inline align-[-2px]" />{imgCount > 1 ? imgCount : ''}
-          </span>
-        )}
-        {post.commentCount > 0 && <span className="ml-1 shrink-0 text-xs font-bold tabular-nums text-accent-300">[{post.commentCount}]</span>}
-        {(post.cheerCount ?? 0) > 0 && (
-          <span className="ml-1 shrink-0 text-2xs font-bold tabular-nums text-accent-200" aria-label={`응원 ${post.cheerCount}`}>
-            <Icon name="chip-stack" size={11} className="inline align-[-1px]" />{post.cheerCount}
-          </span>
-        )}
-      </span>
-      {/* max-w+truncate: 작성자가 shrink-0 무제한이면 좁은 2-pane 목록·긴 닉네임에서
-          flex-1 제목이 0px까지 뭉개진다 — 닉네임이 대신 말줄임(제목 우선, 에펨식 위계) */}
-      <span className="shrink-0 max-w-[7rem] truncate text-xs text-ink-muted">{mark}{post.userName}</span>
-      <TitleChip points={titlePts} />
-      <span className="hidden shrink-0 text-xs tabular-nums text-ink-muted sm:inline">{relativeTime(post.createdAt)}</span>
-      {(post.viewCount ?? 0) > 0 && (
-        <span className="shrink-0 inline-flex w-10 items-center justify-end gap-0.5 text-xs tabular-nums text-ink-muted" aria-label={`조회 ${post.viewCount}`}>
-          <Icon name="eye" size={11} className="shrink-0" />{post.viewCount}
-        </span>
-      )}
-    </li>
-  );
-}, samePostProps);
-
-const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', nickToken, titlePts }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; /** 작성자가 장착한 닉네임 색의 등급 토큰명(--tier-<token>) */ nickToken?: string | null; titlePts?: number }) {
-  // Nightingale 카드 문법(§20.1) — 헤더(이름/시간 2줄 스택)·제목·본문 2줄 클램프·미디어·반응 푸터 순서 고정.
-  // 미디어는 첫 장만 44px 썸네일(88px=레티나 2x 요청)로, 2장 이상은 장수 배지 — 목록에서 원본을 내려받지 않는다.
-  const imgs = post.images ?? [];
-  const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
-  // 핸드/리플레이 첨부 파싱(검증 #12) — 기존 lib/hand 파서 재사용, 실패 시 조용히 원문 표시로 폴백
-  let att: ReturnType<typeof parseAttachments>;
-  try { att = parseAttachments(post.content); }
-  catch { att = { text: post.content, hand: null, replay: null }; }
-  return (
-    <li
-      onClick={onClick}
-      // 공지 행과 같은 키보드 접근 패턴 — Enter/Space로도 열리게
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      aria-current={selected || undefined}
-      // 오너 레퍼런스(2026-08-27): 피드는 독립 라운드 카드 스택 — 행 구분선 대신 카드 보더.
-      // 오너 리포트(2026-08-28) '밋밋한 단색 배경에 경계선도 없이' →
-      // 앵커 카드(ScheduleCard)의 정본 카드 문법을 그대로 가져온다:
-      //   card-elev(정적 수직 광원+상단 하이라이트) + border-border-default + shadow-card(헤어라인 링) + bg-surface-low.
-      // 실측(다크, surface-base 대비): border-subtle 1.29:1 → border-default 2.06:1, hover strong 3.37:1.
-      // card-elev 는 background-image 라 hover 의 background-color 변화와 충돌하지 않는다.
-      className={[
-        // v2 아우라 카드(2026-09-02): card-elev+단색 → card-aura(반투명 면·6% 헤어라인·상단 하이라이트). 선택 상태는 바이올렛 틴트가 덮는다.
-        'cv-row-lg min-h-[var(--row-h-lg)] card-aura py-2.5 px-3 rounded-aura border cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300/60',
-        selected
-          ? 'border-accent-300/60 bg-accent-300/[0.07]'
-          : 'hover:border-border-strong hover:bg-surface-high/50 active:bg-surface-high',
-      ].join(' ')}
-    >
-      <div className="flex items-start gap-2">
-        <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={24} className="mt-0.5" />
-        <div className="flex-1 min-w-0">
-          {/* 헤더 — 이름(bold) 위 / 시간·칭호 아래 2줄 스택: 이름 길이와 무관하게 줄수(=높이)가 고정된다 */}
-          <div className="flex items-start gap-1.5">
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-1 text-2xs leading-4">
-                {post.pinnedAt && (
-                  <span className="shrink-0 inline-flex items-center rounded-badge bg-gold-400/15 px-1 font-extrabold leading-none text-gold-400">고정</span>
-                )}
-                {isBumped(post) && (
-                  <span className="shrink-0 inline-flex items-center rounded-badge bg-accent-300/15 px-1 font-extrabold leading-none text-accent-200">끌올</span>
-                )}
-                {hot && (
-                  <span className="shrink-0 inline-flex items-center font-extrabold text-danger-light bg-danger/15 px-1 rounded-badge leading-none tracking-wide">HOT</span>
-                )}
-                {/* 닉네임 색(상점 600점) — 텍스트용 --tier-* 를 쓴다. 장식용 -vivid 가 아니다:
-                    닉네임은 '읽는 글자'라 라이트·다크 양쪽에서 4.5:1 을 지켜야 하고, 그 계약이
-                    e2e/design-tokens.spec.ts '닉네임 색' 항목으로 잠겨 있다. */}
-                <span className="min-w-0 truncate font-bold text-ink-primary"
-                      style={nickColorVar(nickToken) ? { color: tierCss(nickColorVar(nickToken)!) } : undefined}>
-                  {mark}{post.userName}
-                </span>
-              </p>
-              <p className="flex items-center gap-1 text-2xs leading-4 text-ink-muted">
-                <span className="shrink-0 tabular-nums">{relativeTime(post.createdAt)}</span>
-                <TitleChip points={titlePts} />
-                {post.userRole === 'venue_owner' && <span className="shrink-0">· 매장</span>}
-                {post.userRole === 'admin' && <span className="shrink-0">· 운영자</span>}
-              </p>
-            </div>
-            {/* 카테고리 pill — CATEGORY_TINTS 고정 팔레트 */}
-            <span className={['mt-px shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>{catLabel}</span>
-          </div>
-          {/* 제목 — 한 줄 목록(PostRow)과 같은 15px 위계. 카드에서 제일 먼저 읽히는 줄.
-              PostRow 와 같은 전광판 규칙(fdc8550 ④, #24): 넘칠 때만 흐르고 짧은 제목은 정적 truncate 그대로 */}
-          {post.title && (
-            <MarqueeText text={post.title} className="mt-1 text-sm font-bold leading-tight text-ink-primary" />
-          )}
-          {/* 본문 발췌 — 2줄 클램프 */}
-          {/* §T1: 13px 은 사다리 밖 — 본문 미리보기 = t-desc(12.75/19.13). */}
-          <p className="t-desc text-ink-secondary line-clamp-2 mt-1 break-words">
-            {(att.hand || att.replay) && (
-              <span className="mr-1 inline-flex items-center gap-0.5 rounded-badge bg-accent-300/15 px-1 align-middle font-bold leading-none text-accent-300">
-                <Icon name={att.replay ? 'cards' : 'spade'} size={10} className="shrink-0" />
-                {att.replay ? '리플레이' : '핸드'}
-              </span>
-            )}
-            {att.text || (att.replay ? '핸드 리플레이를 공유했습니다' : att.hand ? '핸드를 공유했습니다' : '')}
-          </p>
-          {/* 컴팩트 핸드 프리뷰(검증 #12) — 히어로 카드 최대 2장(+리플레이 보드 소형) 절제된 1행.
-              기존 MiniCard 아톰 + parseAttachments 재사용, 새 파서/스키마 없음. 카드가 없으면 렌더 생략(=기존 표시). */}
-          {(() => {
-            if (!att.hand && !att.replay) return null;
-            const hero = (att.replay?.hero ?? att.hand?.hero ?? []).filter(Boolean).slice(0, 2);
-            const villain = (att.replay?.villain ?? att.hand?.villain ?? []).filter(Boolean).slice(0, 2);
-            const shown = hero.length > 0 ? hero : villain; // 히어로 미기입 핸드는 상대 핸드로 폴백
-            const board = (att.replay?.board ?? []).filter(Boolean).slice(0, 5);
-            if (shown.length === 0 && board.length === 0) return null;
-            // 오너 레퍼런스: 첨부는 카드 안의 라운드 패널로 감싼다(투표 위젯 문법)
-            return (
-              <span className="mt-1.5 inline-flex items-center gap-1 rounded-input border border-border-subtle bg-surface-high/60 px-2 py-1.5">
-                {shown.map((cd) => <MiniCard key={cd} id={cd} />)}
-                {board.length > 0 && (
-                  <>
-                    <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-border-default" />
-                    <span className="flex origin-left scale-90 gap-0.5">
-                      {board.map((cd) => <MiniCard key={cd} id={cd} />)}
-                    </span>
-                  </>
-                )}
-              </span>
-            );
-          })()}
-          {/* 미디어 — 사진 첨부 글을 목록에서 바로 구분하려는 것 — 지금까진 첨부해도 목록에 아무 표시가 없어 '안 올라갔다'고 오해했다.
-              88px 썸네일(=44px 레티나 2x)만 받아 목록에서 원본(최대 1200px)을 내려받지 않는다. */}
-          {imgs.length > 0 && (
-            // 오너 레퍼런스: 첨부는 카드 안의 라운드 패널로 감싼다(핸드 프리뷰와 같은 문법).
-            // 최대 3장까지 나란히, 4장 이상은 마지막 칸에 +N — 목록에서 원본은 절대 내려받지 않는다.
-            <div className="mt-1.5 flex w-fit max-w-full gap-1 rounded-input border border-border-subtle bg-surface-high/60 p-1">
-              {imgs.slice(0, 3).map((src, i) => (
-                <div key={`${src}-${i}`} className="relative h-12 w-12 shrink-0 overflow-hidden rounded-[6px] bg-surface-float">
-                  <img src={thumbUrl(src, 96)} srcSet={thumbSrcSet(src, 96)}
-                    alt="" width={48} height={48} loading="lazy" decoding="async" className="h-full w-full object-cover" />
-                  {i === 2 && imgs.length > 3 && (
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-2xs font-bold text-white">+{imgs.length - 3}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {/* 반응 푸터 — 조회 → 좋아요 → 댓글, 그리고 추천/비추천(상세와 같은 축).
-              좋아요만 인터랙티브(목록에서 바로 누를 수 있는 유일한 액션),
-              추천/비추천은 카운트 표시 전용 — 실제 투표는 상세에서(중복 투표 UX 단일화). */}
-          <div className="mt-2 flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border-subtle pt-1.5 text-2xs text-ink-muted">
-            {(post.viewCount ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-1" aria-label={`조회 ${post.viewCount}`}>
-                <Icon name="eye" size={13} strokeWidth={1.6} className="shrink-0" />
-                <span className="tabular-nums">{post.viewCount}</span>
-              </span>
-            )}
-            <button
-              type="button"
-              aria-pressed={!!post.liked}
-              aria-label={`좋아요 ${post.likeCount}`}
-              onClick={(e) => { e.stopPropagation(); onLike(); }}
-              className={`hit inline-flex items-center gap-1 transition-colors ${post.liked ? 'text-danger-light' : 'hover:text-danger-light'}`}
-            >
-              <Icon name={post.liked ? 'heart-fill' : 'heart'} size={13} strokeWidth={1.6} className="shrink-0" />
-              <span className="tabular-nums">{post.likeCount}</span>
-            </button>
-            <span className="inline-flex items-center gap-1" aria-label={`댓글 ${post.commentCount}`}>
-              <Icon name="comment" size={13} strokeWidth={1.6} className="shrink-0" />
-              <span className="tabular-nums">{post.commentCount}</span>
-            </span>
-            {/* 응원(30점) — 0이면 그리지 않는다. 유료 신호라 '받은 글'에서만 눈에 띄어야 의미가 산다. */}
-            {(post.cheerCount ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-1 text-accent-200" aria-label={`응원 ${post.cheerCount}`}>
-                <Icon name="chip-stack" size={13} strokeWidth={1.6} className="shrink-0" />
-                <span className="tabular-nums font-bold">{post.cheerCount}</span>
-              </span>
-            )}
-            {((post.goodrunCount ?? 0) > 0 || (post.badbeatCount ?? 0) > 0) && (
-              <span className="inline-flex items-center gap-2.5">
-                <span aria-hidden className="h-3 w-px bg-border-default" />
-                <span className="inline-flex items-center gap-0.5 text-emerald-400" aria-label={`추천 ${post.goodrunCount ?? 0}`}>
-                  <Icon name="chevron-up" size={13} strokeWidth={2.2} className="shrink-0" />
-                  <span className="tabular-nums font-bold">{post.goodrunCount ?? 0}</span>
-                </span>
-                <span className="inline-flex items-center gap-0.5" aria-label={`비추천 ${post.badbeatCount ?? 0}`}>
-                  <Icon name="chevron-down" size={13} strokeWidth={2.2} className="shrink-0" />
-                  <span className="tabular-nums">{post.badbeatCount ?? 0}</span>
-                </span>
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </li>
-  );
-}, samePostProps);
+// PostRow · PostCard 는 공용 모듈로 옮겼다(2026-09-11) — 관리자 광고 미리보기가 같은 컴포넌트를 쓴다.
+//   src/components/features/community/PostRowCard.tsx
 
 // ── 매장 커뮤니티 섹션 ───────────────────────────────────────────────────────
 

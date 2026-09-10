@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useToast } from '../atoms/Toast';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import type { User, UserStatus } from '../../api/auth';
 import { adminSetNickname, adminSetShadowban } from '../../api/auth';
 import {
@@ -34,6 +35,9 @@ interface UserManagementTabProps {
   posts: ModPost[];
   onUpdateUser: (id: string, patch: Partial<User>) => void;
   onDeletePost: (id: string) => void;
+  /** 회원 목록 조회 실패 — 넘어오면 '없음' 대신 실패를 그린다(2026-09-11). */
+  usersErr?: unknown;
+  onRetryUsers?: () => void;
 }
 
 type RoleFilter   = 'all' | 'user' | 'venue_owner' | 'admin';
@@ -52,7 +56,7 @@ const STATUS_LABEL: Record<UserStatus, { label: string; cls: string }> = {
 
 
 export default function UserManagementTab({
-  users, posts, onUpdateUser, onDeletePost,
+  users, posts, onUpdateUser, onDeletePost, usersErr, onRetryUsers,
 }: UserManagementTabProps) {
   const [section, setSection]       = useState<'users' | 'posts'>('users');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
@@ -64,7 +68,14 @@ export default function UserManagementTab({
       if (roleFilter !== 'all' && u.role !== roleFilter) return false;
       const status = u.status ?? 'active';
       if (statusFilter !== 'all' && status !== statusFilter) return false;
-      if (query && !u.name.includes(query) && !u.email.includes(query)) return false;
+      // ⚠ 닉네임(u.nickname)도 반드시 본다(2026-09-11). 외치기 관리·순위 승인·신고 큐·게시물 노출은
+      //   전부 회원을 **닉네임**으로 보여준다. 거기서 본 이름을 여기 검색창에 넣으면 '없습니다' 가 떴다 —
+      //   제재하려는 그 회원을 못 찾는다. 대소문자·좌우 공백도 무시한다.
+      if (query) {
+        const q = query.trim().toLowerCase();
+        const hay = [u.name, u.email, u.nickname ?? ''].map((v) => (v ?? '').toLowerCase());
+        if (q && !hay.some((v) => v.includes(q))) return false;
+      }
       return true;
     });
   }, [users, roleFilter, statusFilter, query]);
@@ -120,8 +131,11 @@ export default function UserManagementTab({
             <FilterPill active={statusFilter === 'banned'}    onClick={() => setStatusF('banned')}    label="영구" />
           </div>
 
-          {/* 회원 리스트 */}
-          {filtered.length === 0 ? (
+          {/* 회원 리스트 — 조회 실패를 '없음' 으로 위장하지 않는다(2026-09-11) */}
+          {usersErr != null ? (
+            <LoadErrorCard error={usersErr} what="회원 목록" onRetry={onRetryUsers} compact
+              hint="조건에 맞는 회원이 없는 것과는 다릅니다 — 목록을 못 읽었습니다." />
+          ) : filtered.length === 0 ? (
             <p className="py-8 text-center text-xs text-ink-muted">조건에 맞는 회원이 없습니다</p>
           ) : (
             <ul className="space-y-1.5">

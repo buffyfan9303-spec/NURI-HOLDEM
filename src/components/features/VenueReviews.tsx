@@ -1,6 +1,6 @@
 // 매장 후기·별점 — 소개 탭 하단. 체크인 인증자만 작성(서버 RLS), 매장당 1인 1후기(수정형).
 import { useEffect, useMemo, useState } from 'react';
-import { getVenueReviews, canReviewVenue, saveVenueReview, deleteVenueReview, replyToReview, aiDraftReviewReply, type VenueReview } from '../../api/reviews';
+import { getVenueReviews, canReviewVenue, saveVenueReview, deleteVenueReview, replyToReview, type VenueReview } from '../../api/reviews';
 import { useToast } from '../atoms/Toast';
 import Icon from '../atoms/Icon';
 
@@ -55,7 +55,6 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
   const [replyDraft, setReplyDraft] = useState<Record<string, string>>({});
   const [replyOpen, setReplyOpen] = useState<string | null>(null);
   const [replyBusy, setReplyBusy] = useState<string | null>(null);
-  const [aiBusy, setAiBusy] = useState<string | null>(null);
   const doReply = async (r: VenueReview) => {
     setReplyBusy(r.id);
     try {
@@ -66,13 +65,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
     } catch (e) { toast.show(e instanceof Error ? e.message : '답글 실패', 'error'); }
     finally { setReplyBusy(null); }
   };
-  const doAiDraft = async (r: VenueReview) => {
-    setAiBusy(r.id);
-    try { setReplyDraft((d) => ({ ...d, [r.id]: '' })); const t = await aiDraftReviewReply(r); setReplyDraft((d) => ({ ...d, [r.id]: t })); }
-    catch (e) { toast.show(e instanceof Error ? e.message : 'AI 초안 실패', 'error'); }
-    finally { setAiBusy(null); }
-  };
-
+  // (2026-09-11) AI 답글 초안 제거 — 후기 본문을 외부 모델로 보내던 경로였다. 답글은 직접 쓴다.
   useEffect(() => {
     let on = true;
     getVenueReviews(venueId).then((r) => { if (on) setReviews(r); }).catch(() => { if (on) setReviews([]); });
@@ -195,7 +188,6 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
                       rows={2} maxLength={300} placeholder="답글…" className="input w-full resize-none text-sm" />
                     <div className="flex items-center gap-1.5">
                       <button type="button" onClick={() => doReply(r)} disabled={replyBusy === r.id} className="btn-primary px-3 py-1 text-2xs disabled:opacity-50">{replyBusy === r.id ? '등록 중…' : '답글 등록'}</button>
-                      <button type="button" onClick={() => doAiDraft(r)} disabled={aiBusy === r.id} className="rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1 text-2xs font-bold text-accent-300 disabled:opacity-50">{aiBusy === r.id ? '생성 중…' : <span className="inline-flex items-center gap-1"><Icon name="sparkles" size={11} className="shrink-0" />AI 초안</span>}</button>
                       <button type="button" onClick={() => setReplyOpen(null)} className="text-2xs text-ink-muted">취소</button>
                     </div>
                   </div>

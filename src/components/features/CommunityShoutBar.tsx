@@ -646,6 +646,23 @@ export default function CommunityShoutBar({ className }: { className?: string })
     return () => clearInterval(t);
   }, [remaining.length, load]);
 
+  // 방송 중에도 **20초 격자가 바뀔 때마다 한 번** 다시 읽는다(2026-09-11 점검).
+  //  왜 필요한가: 위 인터벌은 대기열이 빈 동안에만 돈다. 그래서 운영자가 문제되는 외침을 '내리기' 해도,
+  //  그 순간 커뮤니티를 열어 두고 있던 사용자에게는 자기 차례가 오면 그대로 20초 방송됐다 —
+  //  사후 통제가 필요한 바로 그 사람들에게만 실패하고 있었다(관리 화면엔 '내려짐' 배지가 즉시 붙는다).
+  //  인터벌이 아니라 **경계 이벤트**라 요청량은 '방송된 항목당 1회' 로 묶인다(대기열이 길어도 안 늘어난다).
+  //  숨은 탭·display:none 은 위 인터벌과 같은 가드로 건너뛴다.
+  const lastAiredRef = useRef<string | null>(null);
+  const onAirId = onAir?.id ?? null;
+  useEffect(() => {
+    if (onAirId === null || onAirId === lastAiredRef.current) return;
+    const first = lastAiredRef.current === null;
+    lastAiredRef.current = onAirId;
+    if (first) return;                    // 마운트 직후 첫 방송은 방금 받은 목록이라 다시 읽을 필요가 없다
+    if (document.hidden || rootRef.current?.offsetParent == null) return;
+    load();
+  }, [onAirId, load]);
+
   // ── 크로스페이드 ──────────────────────────────────────────────────────────
   // 지금 나가야 할 것(slotKey)과 지금 그려져 있는 것(shownKey)을 분리한다.
   //  ⚠ 종전에는 shownKey 를 두고도 본문은 항상 최신 것을 그렸다 — 즉 **새 내용을 흐리게 했다가 다시

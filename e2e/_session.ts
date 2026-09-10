@@ -156,3 +156,53 @@ export async function dismissOverlays(page: Page): Promise<void> {
     await page.waitForTimeout(600);
   }
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+/**
+ * **네트워크 없이** 로그인 상태를 만든다 — 2026-09-11 검증용.
+ *
+ * 왜 필요한가: GTO 도구·관리자 광고 지정 화면은 로그인 뒤에만 그려진다(ToolsPanel.tsx:507).
+ *   그런데 이 저장소의 E2E 계정은 폐기됐고(`loginAs` 는 401), 운영 DB 에 계정을 만드는 것은 금지다.
+ *   `currentUser()` 가 **로컬 세션 읽기**(src/api/_session.ts)라서, 저장소에 세션을 심고
+ *   프로필 조회 한 건만 page.route 로 갈아 끼우면 화면이 로그인 상태로 뜬다 — 서버에는 아무것도 안 간다.
+ *
+ * ⚠ 이 토큰은 서버가 거부한다(서명이 없다). 즉 **화면 렌더 검증 전용**이고
+ *   RLS·권한을 확인하는 용도로는 절대 쓸 수 없다 — 그건 서버가 판정하는 영역이다.
+ */
+export async function stubLogin(page: Page, over: Record<string, unknown> = {}): Promise<string> {
+  const uid = (over.id as string) ?? '00000000-0000-4000-8000-0000000000f1';
+  const key = `sb-${projectRef}-auth-token`;
+  // 서명 없는 3-파트 JWT — supabase-js 는 저장소 세션을 파싱만 하고 검증은 서버에 맡긴다.
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const exp = 4102444800; // 2100-01-01 — 만료 임박 갱신 경로를 타지 않게 멀리 둔다
+  const token = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: uid, role: 'authenticated', exp })}.stub`;
+
+  await page.addInitScript(([k, v]) => {
+    try {
+      window.localStorage.setItem('nuri:keep-signed-in', '1');   // 어댑터를 localStorage 로 고정
+      window.localStorage.setItem(k as string, v as string);
+    } catch { /* 스토리지 차단 환경 */ }
+  }, [key, JSON.stringify({
+    access_token: token, refresh_token: 'stub-refresh', token_type: 'bearer',
+    expires_in: 3600 * 24 * 365, expires_at: exp,
+    user: { id: uid, aud: 'authenticated', role: 'authenticated', email: 'verify@example.test' },
+  })] as [string, string]);
+
+  const profile = {
+    id: uid, email: 'verify@example.test', name: '검증계정', nickname: '검증계정',
+    role: 'user', approved: true, venue_id: null, avatar_color: '#8B5CF6', avatar_url: null,
+    status: 'active', suspended_until: null, sanction_reason: null,
+    // ⚠ 현재 약관 버전(src/lib/legalVersion.ts LEGAL_VERSION)으로 둔다 — null 이면 재동의 게이트가
+    //   모든 화면 위에 뜨고, 그걸 걷어내는 dismissOverlays 가 검사하려던 딥링크 모달까지 함께 닫는다.
+    agreed_to_terms: true, agreed_to_marketing: false, consented_legal_version: 2,
+    joined_at: '2026-01-01T00:00:00Z', last_seen_at: null, name_changed_at: null,
+    activity_points: 10, badges: [], staff_title: null, ci_hash: null, verified_at: null, real_name: null,
+    ...over,
+  };
+  await page.route(/\/rest\/v1\/profiles\?/, (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(profile) }));
+  // 일일 점수 RPC 는 쓰기라 _fixtures 가 끊는다 — 끊긴 요청 로그를 남기지 않게 여기서 받아 준다.
+  await page.route(/\/rest\/v1\/rpc\/claim_daily_login_point/, (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: '10' }));
+  return uid;
+}

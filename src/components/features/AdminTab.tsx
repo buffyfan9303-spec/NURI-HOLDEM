@@ -22,9 +22,9 @@ import {
 } from '../../lib/hallOfFame';
 import { useToast } from '../atoms/Toast';
 import { supabase } from '../../lib/supabase';
-import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../api/settings';
+import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
 import { getAdminPlatformStats, getFreePlanUsage, type PlatformStats, type PlanUsageRow } from '../../api/adminStats';
-import { getAllCommunityAds, saveCommunityAd, type CommunityAd } from '../../api/ads';
+import AdSlotsAdmin from './community/AdSlotsAdmin';
 import HomeBannersCard from './HomeBannersCard';
 import {
   MISSIONS, adminListCustomMissions, adminSaveCustomMission, adminDeleteCustomMission,
@@ -37,9 +37,8 @@ import { REGION_CHIPS } from './IntegratedSearchBar';
 import SectionHeader from '../atoms/SectionHeader';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
-import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, EVENT_KIND_LABEL, type RankVerification, aiInspectVerification } from '../../api/rankverify';
+import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, EVENT_KIND_LABEL, type RankVerification } from '../../api/rankverify';
 import { getAllInquiries, answerInquiry, subscribeInquiries, type SupportInquiry } from '../../api/support';
-import { aiGenerate } from '../../api/ai';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 
@@ -60,6 +59,12 @@ interface AdminTabProps {
   onReloadVenues?: () => void;
   /** 공지 순서·삭제 후 App 의 notices 새로고침 */
   onReloadNotices?: () => void;
+  /** 배너 등록·수정·삭제·순서변경 후 App 의 홈 캐러셀 배너 새로고침.
+   *  없으면 저장은 되는데 같은 세션의 홈은 부팅 때 받은 목록을 계속 들고 있다(공지와 같은 배선). */
+  onReloadBanners?: () => void;
+  /** 회원 목록 조회 실패 + 재시도 — '회원 0명' 위장을 막는다(2026-09-11). */
+  usersErr?: unknown;
+  onRetryUsers?: () => void;
 }
 
 type AdminShout = Shout & { hidden: boolean };
@@ -76,11 +81,20 @@ function BoostContactCard() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    getAppSetting(BOOST_CONTACT_EMAIL_KEY).then((v) => setEmail(v ?? '')).catch(() => {});
-    getAppSetting(BOOST_CONTACT_PHONE_KEY).then((v) => setPhone(v ?? '')).catch(() => {});
+  // ⚠ 저장은 두 키를 **함께** 덮어쓴다. 그래서 '지금 화면의 값이 서버에서 읽어 온 값인가' 를 알아야 한다.
+  //   조회가 실패한 채로 저장하면 못 읽은 쪽이 빈 문자열로 덮여, 업주의 '포스터 상단 고정' 문의 경로가
+  //   통째로 끊긴다(2026-09-11 점검). 못 읽었으면 저장을 막고 이유를 보여 준다.
+  const [loadErr, setLoadErr] = useState<unknown>(null);
+  const [loaded, setLoaded] = useState(false);
+  const load = useCallback(() => {
+    setLoadErr(null); setLoaded(false);
+    Promise.all([getAppSetting(BOOST_CONTACT_EMAIL_KEY), getAppSetting(BOOST_CONTACT_PHONE_KEY)])
+      .then(([e, p]) => { setEmail(e ?? ''); setPhone(p ?? ''); setLoaded(true); })
+      .catch(setLoadErr);
   }, []);
+  useEffect(() => { load(); }, [load]);
   const save = async () => {
+    if (!loaded) return;   // 못 읽은 값을 덮어쓰지 않는다(버튼도 비활성이지만 이중 가드)
     setSaving(true);
     try {
       await setAppSetting(BOOST_CONTACT_EMAIL_KEY, email.trim());
@@ -96,14 +110,18 @@ function BoostContactCard() {
     <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3 space-y-2">
       <p className="flex items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="zap" size={15} className="shrink-0" />부스트 문의 연락처</p>
       <p className="text-xs text-ink-muted">업주가 내 매장 → '포스터 상단 고정' 카드에서 보게 될 메일·전화입니다. 비워두면 "준비 중"으로 표시됩니다.</p>
+      {loadErr != null && (
+        <LoadErrorCard error={loadErr} what="문의 연락처" onRetry={load} compact
+          hint="지금 저장하면 이미 등록된 값이 빈 값으로 덮입니다 — 다시 불러온 뒤 수정해 주세요." />
+      )}
       <div className="grid gap-1.5 sm:grid-cols-2">
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={80}
           placeholder="문의 이메일 (예: ace@nuriholdem.com)" className="input w-full text-sm" />
         <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={20}
           placeholder="문의 전화번호 (예: 010-1234-5678)" className="input w-full text-sm" />
       </div>
-      <button type="button" onClick={save} disabled={saving} className="btn-primary px-4 py-2 text-sm disabled:opacity-60">
-        {saving ? '저장 중…' : '저장'}
+      <button type="button" onClick={save} disabled={saving || !loaded} className="btn-primary px-4 py-2 text-sm disabled:opacity-60">
+        {saving ? '저장 중…' : !loaded ? '불러오는 중…' : '저장'}
       </button>
     </section>
   );
@@ -190,25 +208,34 @@ function VoucherQuotaAdminCard() {
   );
 }
 
+// 순위 인증 수동 대조 항목 — AI 검사를 대체한다(2026-09-11 오너 지시).
+// 자동 판정 대신 '무엇을 봐야 하는가'를 화면에 적어 둔다. 체크는 승인을 막지 않는 메모다.
+const VERIFY_CHECKS: { key: string; label: string }[] = [
+  { key: 'event', label: '증빙 속 대회명이 신청한 대회명과 같은가' },
+  { key: 'nick', label: '증빙 속 이름·닉네임이 신청자와 이어지는가' },
+  { key: 'amount', label: '증빙 속 금액이 신고 상금과 같은가' },
+  { key: 'official', label: '공식 출처인가(주최 측 시상 화면·정산표·공식 게시물)' },
+  { key: 'edit', label: '편집 흔적이 없는가(글꼴 불일치·경계 부자연·해상도 차이)' },
+];
+
 function RankVerifyAdminCard() {
   const toast = useToast();
   const [list, setList] = useState<RankVerification[]>([]);
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  // AI 검사 소견(신청 id별) — 참고용, 최종 판단은 운영자
-  const [aiNotes, setAiNotes] = useState<Record<string, string>>({});
-  const [aiBusy, setAiBusy] = useState<string | null>(null);
+  // 수동 대조 체크리스트(신청 id별) — 승인 전 운영자가 눈으로 확인한 항목의 메모.
+  // (2026-09-11) 종전의 'AI 검사 소견'을 대체한다. 자동 위조 판정·자동 승인은 만들지 않는다 —
+  //   오판의 책임은 사람이 져야 하고, 모델 소견은 그 책임을 흐리기만 했다.
+  const [checks, setChecks] = useState<Record<string, Set<string>>>({});
+  const [openCheck, setOpenCheck] = useState<string | null>(null);
   // 오너 #11(2026-08-30): 대회 구분 선택을 없앴다. 승인 = '대회로 확정', 대회가 아니면 반려다.
   //   예전엔 '일반 펍으로 승인'(기록만 남기고 순위 제외)이라는 제3의 결말이 있었는데,
   //   그 결말이 존재하는 한 일반 펍은 여전히 순위 인증 절차 안에 있는 셈이었다.
-  const inspect = async (v: RankVerification) => {
-    setAiBusy(v.id);
-    try {
-      const note = await aiInspectVerification(v);
-      setAiNotes((m) => ({ ...m, [v.id]: note }));
-    } catch (e) { toast.show(e instanceof Error ? e.message : 'AI 검사 실패', 'error'); }
-    setAiBusy(null);
-  };
+  const toggleCheck = (id: string, key: string) => setChecks((m) => {
+    const next = new Set(m[id] ?? []);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return { ...m, [id]: next };
+  });
   const reload = () => { adminListRankVerifications().then((r) => { setErr(null); setList(r); }).catch((e) => { setErr(e); setList([]); }); };
   useEffect(() => { reload(); }, []);
   const view = async (path?: string | null) => {
@@ -248,16 +275,29 @@ function RankVerifyAdminCard() {
                 )}
               </span>
               <button type="button" onClick={() => view(v.proofPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">증빙</button>
-              <button type="button" disabled={aiBusy === v.id} onClick={() => inspect(v)} className="rounded-input border border-sky-500/40 bg-sky-500/10 px-2 py-1 font-bold text-sky-300 disabled:opacity-50">{aiBusy === v.id ? '검사 중…' : <span className="inline-flex items-center gap-1"><Icon name="sparkles" size={12} className="shrink-0" />AI 검사</span>}</button>
+              <button type="button" aria-expanded={openCheck === v.id} onClick={() => setOpenCheck(openCheck === v.id ? null : v.id)}
+                className="rounded-input border border-sky-500/40 bg-sky-500/10 px-2 py-1 font-bold text-sky-300">
+                <span className="inline-flex items-center gap-1"><Icon name="shield-check" size={12} className="shrink-0" />대조 {(checks[v.id]?.size ?? 0)}/{VERIFY_CHECKS.length}</span>
+              </button>
               <button type="button" onClick={() => view(v.idCardPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">신분증</button>
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, true)} className="btn-primary px-2.5 py-1 text-2xs disabled:opacity-50">승인</button>
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, false)} className="rounded-input border border-danger/40 px-2.5 py-1 font-bold text-danger-light hover:bg-danger/10 disabled:opacity-50">반려</button>
-              {aiNotes[v.id] && (
-                <div className={['w-full rounded-input border p-2 text-[11px] leading-relaxed whitespace-pre-wrap',
-                  aiNotes[v.id].includes('[위조 의심]') ? 'border-danger/40 bg-danger/[0.06] text-danger-light'
-                  : aiNotes[v.id].includes('[주의 필요]') ? 'border-amber-500/40 bg-amber-500/[0.06] text-amber-200'
-                  : 'border-emerald-500/30 bg-emerald-500/[0.05] text-ink-secondary'].join(' ')}>
-                  <b className="text-ink-primary">AI 소견(참고)</b> · 최종 판단은 운영자{'\n'}{aiNotes[v.id]}
+              {openCheck === v.id && (
+                <div className="w-full rounded-input border border-sky-500/30 bg-sky-500/[0.05] p-2">
+                  <p className="text-[11px] font-bold text-ink-primary">승인 전 눈으로 대조할 것</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {VERIFY_CHECKS.map((c) => (
+                      <li key={c.key}>
+                        <label className="flex min-h-[28px] items-center gap-1.5 text-[11px] leading-snug text-ink-secondary">
+                          <input type="checkbox" checked={checks[v.id]?.has(c.key) ?? false}
+                            onChange={() => toggleCheck(v.id, c.key)}
+                            className="h-3.5 w-3.5 shrink-0 accent-[rgb(var(--accent-300))]" />
+                          <span className="min-w-0">{c.label}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-[10px] text-ink-muted">체크는 운영자의 메모다 — 승인 버튼을 막지 않는다. 최종 판단은 운영자에게 있다.</p>
                 </div>
               )}
             </li>
@@ -268,135 +308,7 @@ function RankVerifyAdminCard() {
   );
 }
 
-// ── 커뮤니티 광고 5칸(운영자) — 게시판 한 줄 리스트 사이 [AD] 행 게재 관리 ───────
-function CommunityAdsCard() {
-  const toast = useToast();
-  const [ads, setAds] = useState<CommunityAd[]>([]);
-  const [savingSlot, setSavingSlot] = useState<number | null>(null);
-  useEffect(() => { getAllCommunityAds().then(setAds).catch(() => {}); }, []);
-  const patch = (slot: number, p: Partial<CommunityAd>) =>
-    setAds((arr) => arr.map((a) => (a.slot === slot ? { ...a, ...p } : a)));
-  const save = async (ad: CommunityAd) => {
-    setSavingSlot(ad.slot);
-    try {
-      await saveCommunityAd(ad);
-      toast.show(`광고 ${ad.slot}번 칸을 저장했습니다${ad.title.trim() ? '' : ' (비워서 게재 중단)'}`, 'success');
-    } catch (e) {
-      toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
-    } finally {
-      setSavingSlot(null);
-    }
-  };
-  // 순서 변경 — 인접 슬롯과 '내용'을 교환(슬롯 자리 1~5는 고정, 안에 든 광고만 위/아래로)
-  const move = async (slot: number, dir: -1 | 1) => {
-    const sorted = [...ads].sort((a, b) => a.slot - b.slot);
-    const i = sorted.findIndex((a) => a.slot === slot);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= sorted.length) return;
-    const a = sorted[i], b = sorted[j];
-    const aNew: CommunityAd = { ...b, slot: a.slot };
-    const bNew: CommunityAd = { ...a, slot: b.slot };
-    setSavingSlot(a.slot);
-    try {
-      await Promise.all([saveCommunityAd(aNew), saveCommunityAd(bNew)]);
-      setAds((arr) => arr.map((x) => (x.slot === aNew.slot ? aNew : x.slot === bNew.slot ? bNew : x)));
-      toast.show('광고 순서를 바꿨습니다', 'success');
-    } catch (e) {
-      toast.show(e instanceof Error ? e.message : '순서 변경 실패', 'error');
-    } finally { setSavingSlot(null); }
-  };
-  // 노출 토글 — 내용은 그대로 두고 active 만 뒤집어 즉시 저장
-  const toggleActive = async (ad: CommunityAd) => {
-    const next = { ...ad, active: !ad.active };
-    patch(ad.slot, { active: next.active });
-    setSavingSlot(ad.slot);
-    try {
-      await saveCommunityAd(next);
-      toast.show(next.active ? `광고 ${ad.slot}번 칸을 켰습니다` : `광고 ${ad.slot}번 칸을 껐습니다 (내용은 유지)`, 'success');
-    } catch (e) {
-      patch(ad.slot, { active: ad.active });
-      toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
-    } finally { setSavingSlot(null); }
-  };
-  // 게시판 광고 빈도(글 N개마다 1줄) — app_settings community_ads_every
-  const [every, setEvery] = useState(COMMUNITY_ADS_EVERY_DEFAULT);
-  const [savingEvery, setSavingEvery] = useState(false);
-  useEffect(() => { getAppSetting(COMMUNITY_ADS_EVERY_KEY).then((v) => setEvery(parseAdsEvery(v))).catch(() => {}); }, []);
-  const saveEvery = async () => {
-    const n = parseAdsEvery(String(every));
-    setEvery(n);
-    setSavingEvery(true);
-    try {
-      await setAppSetting(COMMUNITY_ADS_EVERY_KEY, String(n));
-      toast.show(`게시판 글 ${n}개마다 광고 1줄로 저장했습니다`, 'success');
-    } catch (e) {
-      toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
-    } finally { setSavingEvery(false); }
-  };
-  const today = new Date().toLocaleDateString('en-CA');
-  // 상태 배지 — 노출 조건(getActiveCommunityAds)과 같은 판정: 켜짐 AND 제목 AND 미만료
-  const statusOf = (ad: CommunityAd): { label: string; on: boolean } => {
-    if (!ad.title.trim()) return { label: '비어있음', on: false };
-    if (ad.expiresAt && ad.expiresAt < today) return { label: '만료', on: false };
-    if (!ad.active) return { label: '꺼짐', on: false };
-    return { label: '게재중', on: true };
-  };
-  return (
-    <section className="rounded-aura border card-aura p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />커뮤니티 광고 5칸 <span className="text-xs font-normal text-ink-muted">게시판 글 N개마다 [AD] 한 줄. ▲▼로 순서 변경 · '노출' 로 켜고 끔 · 제목 비우면 게재 중단</span></p>
-      <div className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5 text-xs">
-        <label htmlFor="ads-every" className="text-ink-secondary">게시판 글</label>
-        <input id="ads-every" type="number" inputMode="numeric" min={2} max={10} value={every}
-          onChange={(e) => setEvery(Number(e.target.value) || COMMUNITY_ADS_EVERY_DEFAULT)}
-          className="input w-16 text-sm tabular-nums" />
-        <span className="text-ink-secondary">개마다 광고 1줄 (2~10)</span>
-        <button type="button" onClick={saveEvery} disabled={savingEvery} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
-      </div>
-      <ul className="space-y-1.5">
-        {ads.map((ad, i) => {
-          const st = statusOf(ad);
-          return (
-            <li key={ad.slot} className="space-y-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="flex shrink-0 gap-0.5">
-                  <button type="button" onClick={() => move(ad.slot, -1)} disabled={i === 0 || savingSlot !== null} aria-label="위로 이동"
-                    className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▲</button>
-                  <button type="button" onClick={() => move(ad.slot, 1)} disabled={i === ads.length - 1 || savingSlot !== null} aria-label="아래로 이동"
-                    className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▼</button>
-                </span>
-                <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold', st.on ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>{ad.slot}번 {st.label}</span>
-                <button type="button" aria-pressed={ad.active} onClick={() => toggleActive(ad)} disabled={savingSlot === ad.slot}
-                  className={['min-h-8 rounded-input border px-2.5 text-xs font-bold transition-colors disabled:opacity-60',
-                    ad.active ? 'border-accent-400/50 bg-accent-300/15 text-accent-200' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}>
-                  노출 {ad.active ? '켜짐' : '꺼짐'}
-                </button>
-              </div>
-              <div className="grid gap-1.5 sm:grid-cols-2">
-                <input value={ad.title} onChange={(e) => patch(ad.slot, { title: e.target.value })} maxLength={40}
-                  placeholder="광고 문구" className="input w-full min-w-0 text-sm sm:col-span-2" />
-                <input value={ad.linkUrl} onChange={(e) => patch(ad.slot, { linkUrl: e.target.value })} maxLength={200}
-                  placeholder="링크(선택)" className="input w-full min-w-0 text-sm" />
-                <input value={ad.advertiser} onChange={(e) => patch(ad.slot, { advertiser: e.target.value })} maxLength={20}
-                  placeholder="광고주" className="input w-full min-w-0 text-sm" />
-                <input type="date" value={ad.expiresAt ?? ''} onChange={(e) => patch(ad.slot, { expiresAt: e.target.value || null })}
-                  className="input w-full min-w-0 text-sm" title="만료일(지나면 자동 내림)" />
-                <div className="flex gap-1.5">
-                  <button type="button" onClick={() => save(ad)} disabled={savingSlot === ad.slot}
-                    className="btn-primary flex-1 px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
-                  <button type="button" disabled={savingSlot === ad.slot || !ad.title}
-                    onClick={() => { const empty = { ...ad, title: '', linkUrl: '', advertiser: '', expiresAt: null }; patch(ad.slot, empty); void save(empty); }}
-                    className="px-2.5 py-1.5 rounded-input border border-danger/40 text-xs font-bold text-danger-light hover:bg-danger/10 transition-colors disabled:opacity-40">삭제</button>
-                </div>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-      <p className="text-xs text-ink-muted">가격 운영 예: 3일 10만 / 7일 20만. 만료일만 맞춰 입력하면 끝나는 날 자동으로 내려갑니다.</p>
-    </section>
-  );
-}
-
+// 커뮤니티 광고 5칸 관리는 './community/AdSlotsAdmin' 로 옮겼다(2026-09-11 게시글 승격 방식).
 // ── 주간 미션 관리(운영자) — 고정 3종 외 커스텀 미션 추가·수정·중단 ─────────────
 const GOAL_TYPE_OPTIONS: { value: MissionGoalType; label: string }[] = [
   { value: 'checkin', label: '매장 체크인 N회' },
@@ -852,7 +764,12 @@ function NoticesAdminPanel({ onChanged }: { onChanged?: () => void }) {
   const toast = useToast();
   const [rows, setRows] = useState<MarketplaceNotice[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = useCallback(() => { getNotices().then(setRows).catch(() => setRows([])); }, []);
+  // 실패를 [] 로 뭉개면 '등록된 공지가 없습니다' 로 위장된다 — 오너가 배너에서 리포트한 그 증상이다(2026-09-11).
+  const [err, setErr] = useState<unknown>(null);
+  const load = useCallback(() => {
+    setErr(null);
+    getNotices().then(setRows).catch((e) => { setErr(e); setRows([]); });
+  }, []);
   useEffect(() => { load(); }, [load]);
   // ▲▼ — 화면 순서대로 0..-(n-1) 을 다시 매긴다(기본값 0 끼리는 교환해도 순서가 안 바뀌므로 재번호가 필요).
   // 맨 위 = 0 이라 새 공지(기본값 0)가 맨 위와 동률 → created_at desc 로 위에 선다. 양수로 매기면 새 공지가 맨 아래로 간다.
@@ -887,18 +804,20 @@ function NoticesAdminPanel({ onChanged }: { onChanged?: () => void }) {
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />공지 노출 순서 <span className="text-xs font-normal text-ink-muted">▲▼로 순서 변경. 작성·수정은 커뮤니티 탭의 공지 쓰기에서</span></p>
-      {rows === null ? (
+      {rows === null && err == null ? (
         <ul className="space-y-1">{[0, 1].map((i) => <li key={i} className="skeleton h-9 rounded-input" />)}</ul>
-      ) : rows.length === 0 ? (
+      ) : err != null ? (
+        <LoadErrorCard error={err} what="공지 목록" onRetry={load} compact />
+      ) : (rows ?? []).length === 0 ? (
         <p className="py-3 text-center text-xs text-ink-muted">등록된 공지가 없습니다</p>
       ) : (
         <ul className="space-y-1">
-          {rows.map((n, i) => (
+          {(rows ?? []).map((n, i) => (
             <li key={n.id} className="flex items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
               <span className="flex shrink-0 gap-0.5">
                 <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || busy} aria-label="위로 이동"
                   className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▲</button>
-                <button type="button" onClick={() => move(i, 1)} disabled={i === rows.length - 1 || busy} aria-label="아래로 이동"
+                <button type="button" onClick={() => move(i, 1)} disabled={i === (rows ?? []).length - 1 || busy} aria-label="아래로 이동"
                   className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▼</button>
               </span>
               <span className="min-w-0 flex-1">
@@ -922,20 +841,8 @@ function SupportInquiriesPanel() {
   const [err, setErr] = useState<unknown>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
-  const [aiBusy, setAiBusy] = useState<string | null>(null);
   const [onlyOpen, setOnlyOpen] = useState(true);
-  // #24 AI 답변 초안 — 문의 내용으로 정중한 답변 초안을 생성해 드래프트에 채움(운영자 검토 후 수정/등록).
-  const aiDraft = async (q: SupportInquiry) => {
-    setAiBusy(q.id);
-    try {
-      const text = await aiGenerate(
-        `[1:1 문의] 카테고리: ${q.category}\n제목: ${q.title}\n내용: ${q.content}`,
-        '너는 홀덤 플랫폼 고객지원 담당자다. 위 문의에 대한 답변 초안을 정중한 존댓말 3~5문장으로 작성하라. 불만/신고면 사과+해결 약속, 단순 문의면 명확한 안내. 환전·사행성 조장 표현 금지. 답변 본문만 출력.',
-      );
-      setDrafts((d) => ({ ...d, [q.id]: text }));
-    } catch (e) { toast.show(e instanceof Error ? e.message : 'AI 초안 생성 실패', 'error'); }
-    finally { setAiBusy(null); }
-  };
+  // (2026-09-11) AI 답변 초안 제거 — 문의 제목·본문을 외부 모델로 보내던 경로였다. 답변은 직접 쓴다.
 
   const load = useCallback(() => { getAllInquiries().then((r) => { setErr(null); setRows(r); }).catch((e) => { setErr(e); setRows([]); }); }, []);
   useEffect(() => { load(); return subscribeInquiries(load); }, [load]); // #14 신규 문의/답변 실시간 반영
@@ -984,7 +891,6 @@ function SupportInquiriesPanel() {
                   rows={2} placeholder={q.status === 'answered' ? '답변 수정…' : '답변 작성…'} className="input w-full resize-none text-sm" />
                 <div className="flex items-center gap-1.5">
                   <button type="button" onClick={() => send(q.id)} disabled={busy === q.id} className="btn-primary px-3 py-1.5 text-2xs disabled:opacity-50">{busy === q.id ? '등록 중…' : q.status === 'answered' ? '답변 수정' : '답변 등록'}</button>
-                  <button type="button" onClick={() => aiDraft(q)} disabled={aiBusy === q.id} className="rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1.5 text-2xs font-bold text-accent-300 disabled:opacity-50">{aiBusy === q.id ? '생성 중…' : <span className="inline-flex items-center gap-1"><Icon name="sparkles" size={12} className="shrink-0" />AI 초안</span>}</button>
                 </div>
               </div>
             </li>
@@ -1000,11 +906,16 @@ function ErrorLogPanel() {
   const [rows, setRows] = useState<ClientErrorRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
+  // ⚠ error 를 반드시 받는다(2026-09-11). 예전엔 구조분해조차 하지 않아 RLS 거부·세션 만료·네트워크
+  //   실패가 전부 빈 배열이 됐고, 화면은 "수집된 오류가 없습니다. 깨끗합니다" 라고 **안심시켰다**.
+  //   실유저 크래시가 쌓이는 중에도 운영자는 정상으로 읽는다 — 감시 화면에서 가장 위험한 거짓말이다.
+  const [err, setErr] = useState<unknown>(null);
 
   const reload = useCallback(async () => {
-    setLoading(true);
-    const { data } = await supabase.from('client_errors')
+    setLoading(true); setErr(null);
+    const { data, error } = await supabase.from('client_errors')
       .select('*').order('created_at', { ascending: false }).limit(50);
+    if (error) { setErr(error); setRows([]); setLoading(false); return; }
     setRows((data ?? []) as ClientErrorRow[]);
     setLoading(false);
   }, []);
@@ -1032,6 +943,9 @@ function ErrorLogPanel() {
       </div>
       {loading ? (
         <p className="py-6 text-center text-sm text-ink-muted">불러오는 중…</p>
+      ) : err != null ? (
+        <LoadErrorCard error={err} what="오류 로그" onRetry={reload} compact
+          hint="오류가 없는 것과는 다릅니다 — 목록을 못 읽었습니다." />
       ) : rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-ink-muted">수집된 오류가 없습니다. 깨끗합니다</p>
       ) : (
@@ -1240,7 +1154,7 @@ function PlanUsageCard() {
 }
 
 export default function AdminTab({
-  schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues, onReloadNotices,
+  schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues, onReloadNotices, onReloadBanners, usersErr, onRetryUsers,
 }: AdminTabProps) {
   const [section, setSection] = useState<Section>('analytics');
   // 뒤로가기 — 비기본 섹션에선 먼저 기본(운영분석)으로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
@@ -1309,8 +1223,8 @@ export default function AdminTab({
                 <SubPill active={exposureTarget === 'posts'} onClick={() => setExposureTarget('posts')}>게시물</SubPill>
                 <SubPill active={exposureTarget === 'notices'} onClick={() => setExposureTarget('notices')}>공지</SubPill>
               </div>
-              {exposureTarget === 'banners' && <HomeBannersCard />}
-              {exposureTarget === 'ads' && <CommunityAdsCard />}
+              {exposureTarget === 'banners' && <HomeBannersCard onChanged={onReloadBanners} />}
+              {exposureTarget === 'ads' && <AdSlotsAdmin posts={posts} />}
               {exposureTarget === 'shouts' && <ShoutsAdminCard />}
               {exposureTarget === 'posts' && <PostsAdminPanel posts={posts} />}
               {exposureTarget === 'notices' && <NoticesAdminPanel onChanged={onReloadNotices} />}
@@ -1322,6 +1236,8 @@ export default function AdminTab({
               posts={posts.map((p) => ({ id: p.id, userName: p.userName, content: p.content, createdAt: p.createdAt, category: p.category }))}
               onUpdateUser={onUpdateUser}
               onDeletePost={onDeletePost}
+              usersErr={usersErr}
+              onRetryUsers={onRetryUsers}
             />
           )}
           {section === 'reports' && <ReportQueue />}

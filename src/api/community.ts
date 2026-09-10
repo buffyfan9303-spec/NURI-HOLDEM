@@ -151,8 +151,10 @@ const rowToComment = (r: any): Comment => ({
   content: r.content, createdAt: r.created_at, edited: r.edited,
 });
 
+/** 게시글 행 → CommunityPost. 광고(승격 게시글) 경로도 **이 매핑 하나**를 쓴다 —
+ *  매핑이 두 벌이면 한쪽만 고쳐져 광고 카드만 필드가 비는 사고가 난다(src/api/ads.ts). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const rowToPost = (r: any): CommunityPost => ({
+export const rowToPost = (r: any): CommunityPost => ({
   id: r.id, userId: r.user_id, userName: r.user_name,
   userRole: r.user_role, userColor: r.user_color, userAvatar: r.user_avatar ?? undefined,
   content: r.content, createdAt: r.created_at,
@@ -1401,7 +1403,9 @@ export interface OwnerRequest { venueId: string; venueName: string; userId: stri
 export async function adminListVenueOwnerRequests(): Promise<OwnerRequest[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('admin_list_venue_owner_requests');
-  if (error) return [];
+  // 조회 실패를 [] 로 돌려주면 호출 카드가 `err == null && reqs.length === 0` 에 걸려 **통째로 사라진다**.
+  // 그 카드의 주석이 막으려던 바로 그 일이다 — 운영자는 대기열이 있다는 것조차 모른 채 요청을 묻는다.
+  if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venue_name ?? '(매장)', userId: r.user_id, nickname: r.nickname ?? '', name: r.name ?? '', invitedBy: r.invited_by ?? '', createdAt: r.created_at }));
 }

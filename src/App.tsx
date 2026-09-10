@@ -1385,6 +1385,14 @@ export default function App() {
   // 응답 전에는 섹션 셸(헤더만)을 자리에 둔다. 스냅샷이 있으면 이미 확정 상태.
   const [noticesLoaded, setNoticesLoaded] = useState<boolean>(() => readSnap<MarketplaceNotice[]>('notices') != null);
   const [users,         setUsers]         = useState<User[]>([]);
+  // 회원 목록 조회 실패 — 예전엔 세 곳 모두 삼켜서 '회원 0명' 으로 위장됐다(2026-09-11 점검).
+  //   그러면 회원 관리가 '조건에 맞는 회원이 없습니다' 를 단언하고 승인대기·정지 요약도 0 이 되며,
+  //   '홀덤펍 생성 + 업주 임명' 의 후보 드롭다운까지 빈 채로 뜬다. 실패는 화면에 올린다.
+  const [usersErr,      setUsersErr]      = useState<unknown>(null);
+  const loadUsers = useCallback(() => {
+    setUsersErr(null);
+    listAllUsers().then(setUsers).catch(setUsersErr);
+  }, []);
   const [openListing, setOpenListing]      = useState<MarketplaceListing | null>(null);
   const [openNotice, setOpenNotice]        = useState<MarketplaceNotice | null>(null);
   /** 포스터 폼 — null: 닫힘 / undefined: 신규 / Schedule: 수정 */
@@ -1778,7 +1786,7 @@ export default function App() {
         break;
       case 'admin':
         reloadSchedules(); reloadVenues();
-        if (isAdmin) listAllUsers().then(setUsers).catch(() => {});
+        if (isAdmin) loadUsers();
         break;
       default:
         break;
@@ -1813,8 +1821,8 @@ export default function App() {
 
   // 관리자: 회원 목록 로드
   useEffect(() => {
-    if (isAdmin) listAllUsers().then(setUsers).catch(() => {});
-    else setUsers([]);
+    if (isAdmin) loadUsers();
+    else { setUsers([]); setUsersErr(null); }
   }, [isAdmin]);
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
@@ -2336,6 +2344,10 @@ export default function App() {
       images: data.images.length > 0 ? data.images : undefined,
     });
     setPosts((prev) => [saved, ...prev]);
+    // ⚠ 저장된 글을 **돌려준다**. 예전엔 Promise<void> 라 addPost 가 준 id 를 여기서 버렸고,
+    //   그래서 PostFormModal 이 첨부를 붙이려고 본문 문자열로 DB 를 재조회했다(findCreatedPostId).
+    //   같은 본문의 글이 둘이면 엉뚱한 글에 첨부가 붙을 수 있는 구조였다.
+    return saved;
   }, [user]);
 
   // 중고장터 글쓰기 모달 제출 — createListing 연동 (Stage 2)
@@ -2380,11 +2392,11 @@ export default function App() {
     setUsers((prev) => prev.map((u) => u.id === id ? { ...u, ...patch } : u));
     if (patch.approved !== undefined) {
       // 실패 시 낙관적 패치를 서버 상태로 재동기화 — 승인 실패가 '승인됨'으로 남는 불일치 방지
-      approveOwner(id, patch.approved).catch(() => { toast.show('승인 처리에 실패했습니다', 'error'); listAllUsers().then(setUsers).catch(() => {}); });
+      approveOwner(id, patch.approved).catch(() => { toast.show('승인 처리에 실패했습니다', 'error'); loadUsers(); });
     }
     if (patch.status !== undefined) {
       updateUserStatus(id, patch.status, patch.suspendedUntil, patch.sanctionReason)
-        .catch(() => { toast.show('상태 변경에 실패했습니다', 'error'); listAllUsers().then(setUsers).catch(() => {}); });
+        .catch(() => { toast.show('상태 변경에 실패했습니다', 'error'); loadUsers(); });
     }
   }, [toast]);
 
@@ -2691,7 +2703,9 @@ export default function App() {
 
   return (
     // 모바일: 폭 그대로(full). 데스크톱: 중앙 정렬 + 최대폭으로 무한 확장 방지 + 프레임.
-    <div className="relative z-[1] min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
+    // 내 매장만 xl 부터 7xl(1360px)로 연다 — 운영주는 PC 99% 이고 장부 표·대시보드 12컬럼이 1224px 에선 접힌다.
+    //   다른 탭은 6xl(1224px) 그대로다: 유저 화면은 모바일 99% 라 더 넓히면 한 줄이 길어져 읽기만 나빠진다.
+    <div className={`relative z-[1] min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle${activeTab === 'my-store' ? ' xl:max-w-7xl' : ''}`}>
       {/* 아우라 후광(정적) — body 배경 위, 콘텐츠(z-1) 아래. 이 래퍼의 bg-surface-base 를 걷어낸 이유: 불투명이면 후광이 안 보인다 */}
       <div aria-hidden className="aura-bg" />
       {/* 오프라인 배너(Phase 17-5) — 토스트(z-100)와 층 분리, 헤더 위 상시 고정 */}
@@ -3154,14 +3168,29 @@ export default function App() {
                         <span className={['shrink-0', r.status === 'approved' ? 'text-emerald-400' : r.status === 'rejected' ? 'text-ink-muted' : 'text-sky-400'].join(' ')} aria-hidden><Icon name={r.status === 'approved' ? 'check-circle' : r.status === 'rejected' ? 'close' : 'clock'} size={15} /></span>
                         {/* ⚠ 매장명과 상태를 한 truncate 에 넣으면 매장명이 길 때 이 행의 **존재 이유**인
                             상태(참가 승인 / 거절 사유 / 대기중)가 먼저 사라진다. 매장명만 줄이고 상태는 지킨다. */}
-                        <span className="flex min-w-0 flex-1 items-center gap-1 text-ink-secondary">
-                          <b className="min-w-0 truncate text-ink-primary">{r.venueName}</b>
-                          <span className="shrink-0">
-                            {(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? `· ${n === 1 ? '메인' : '사이드' + (n - 1)} ` : ''; })()}
-                            {r.status === 'approved' ? '참가 승인 · 입장하세요' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` · ${r.rejectReason}` :''}` : '바인 요청 대기중'}
+                        <span className="flex min-w-0 flex-1 flex-col text-ink-secondary">
+                          <span className="flex min-w-0 items-center gap-1">
+                            <b className="min-w-0 truncate text-ink-primary">{r.venueName}</b>
+                            <span className="shrink-0">
+                              {(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? `· ${n === 1 ? '메인' : '사이드' + (n - 1)} ` : ''; })()}
+                              {r.status === 'approved' ? '참가 승인 · 입장하세요' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` · ${r.rejectReason}` : ''}` : '바인 요청 대기중'}
+                            </span>
                           </span>
+                          {/* ⚠ 이 문장을 위 줄에 붙이면 안 된다 — 위 줄은 매장명만 줄이고 상태는 지키는 구조라
+                              문장을 늘리면 좁은 화면에서 '거절 사유'가 먼저 밀려난다(위 주석). 아래 줄로 뺀다.
+                              거절되면 서버가 이용권을 지갑으로 되돌린다(20260911b) — 손님에게 그 사실만 말한다. */}
+                          {r.status === 'rejected' && r.usedVoucher && (
+                            <span className="text-2xs text-ink-muted">이용권은 지갑으로 돌아갔어요</span>
+                          )}
                         </span>
-                        {r.status === 'pending' && <button type="button" onClick={() => ledgerMod().then((m) => m.cancelBuyinRequest(r.id).then(() => m.getMyBuyinRequestsToday().then(setMyBuyinReqs))).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
+                        {/* 성공을 말하지 않으면 손님은 '눌렸나?' 를 모른다. 특히 **이용권으로 보낸 요청**은
+                            취소가 곧 이용권 소멸처럼 읽혀 왔다 — 실제로는 지갑으로 돌아온다(20260911c).
+                            usedVoucher 가 아닐 때는 그 문장을 아예 안 붙인다(추측을 말하지 않는다). */}
+                        {r.status === 'pending' && <button type="button" onClick={() => ledgerMod()
+                          .then((m) => m.cancelBuyinRequest(r.id)
+                            .then(() => m.getMyBuyinRequestsToday().then(setMyBuyinReqs))
+                            .then(() => toast.show(r.usedVoucher ? '요청을 취소했어요 · 이용권은 지갑으로 돌아갔습니다' : '요청을 취소했어요', 'success')))
+                          .catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
                       </div>
                     ))}
                   </div>
@@ -3292,8 +3321,11 @@ export default function App() {
             onRejectSchedule={handleRejectSchedule}
             onUpdateUser={handleUpdateUser}
             onDeletePost={handleDeletePost}
-            onReloadVenues={() => { reloadVenues(); if (isAdmin) listAllUsers().then(setUsers).catch(() => {}); }}
+            onReloadVenues={() => { reloadVenues(); if (isAdmin) loadUsers(); }}
             onReloadNotices={reloadNotices}
+            onReloadBanners={reloadHomeBanners}
+            usersErr={usersErr}
+            onRetryUsers={loadUsers}
           />
           </ErrorBoundary>
         </main>
