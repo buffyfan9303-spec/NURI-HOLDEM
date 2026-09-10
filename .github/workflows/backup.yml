@@ -101,7 +101,11 @@ jobs:
             echo "::error::어느 호스트로도 DB 에 붙지 못했다(직접 접속·세션 풀러 aws-0/aws-1). 오너가 대시보드 Connect → Session pooler URI 로 secret 을 갱신해야 한다. 값은 출력하지 않는다."
             exit 1
           fi
-          pg_dump --format=custom --no-owner --no-privileges "$USE" -f "nuri-$STAMP.dump"
+          # ⚠ 버전을 못 박는다(실행 34474120866): 러너에 이미 있던 pg_dump 16 이 PATH 를 잡아
+          #   "server version mismatch"(서버 17.6) 로 실패했다. 위에서 설치한 17 바이너리를 직접 부른다.
+          PGDUMP=/usr/lib/postgresql/17/bin/pg_dump
+          "$PGDUMP" --version
+          "$PGDUMP" --format=custom --no-owner --no-privileges "$USE" -f "nuri-$STAMP.dump"
           gzip "nuri-$STAMP.dump"
           echo "FILE=nuri-$STAMP.dump.gz" >> "$GITHUB_ENV"
           ls -lh "nuri-$STAMP.dump.gz"
