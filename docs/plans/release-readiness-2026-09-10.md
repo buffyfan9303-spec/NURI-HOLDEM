@@ -24,8 +24,9 @@
 **못 하는 것**: secret 값 등록(값을 모름·다루지 않음) · Vercel 대시보드 설정(Deployment Checks · 환경변수 · 시스템 env 노출 — MCP 에 쓰기 도구 없음) · 외부 모니터 계정 · Play Console.
 
 1. **[P0] DB 백업이 0건이다.** `.github/workflows/backup.yml` 이 2026-08-24 이후 매일 03:00 KST 에 초록불이었지만, `SUPABASE_DB_URL` 이 한 번도 설정되지 않아 첫 단계에서 스킵하고 success 로 보고했다(실행 34276700212 로그 `DB_URL:` 빈 값). 이번 변경으로 **누락 시 실패**하도록 바꿨으므로, 오늘 밤부터는 빨간불이 뜬다.
-   - `gh secret set SUPABASE_DB_URL` — Supabase 대시보드 → Project Settings → Database → Connection string → **Session pooler(5432)** URL. (6543 트랜잭션 풀러는 pg_dump 가 실패한다.)
-   - 이미 있는 것: `R2_ACCESS_KEY_ID` `R2_SECRET_ACCESS_KEY` `R2_ENDPOINT` `R2_BUCKET` (2026-08-24 등록). (선택) `HEALTHCHECK_BACKUP_URL`.
+   - 접속 문자열 secret 이름은 **`SUPABASE_DB_URL` 또는 `SUPABASE_URI` 둘 다** 받는다(2026-09-10 수정). 오너는 `SUPABASE_URI` 로 등록해 두었는데 워크플로가 `SUPABASE_DB_URL` 만 보고 있어 등록해도 계속 스킵됐다. 값은 Supabase 대시보드 → **Connect → Direct → Session pooler(5432) URI**. (6543 트랜잭션 풀러는 pg_dump 가 실패한다 — 경고를 띄운다.)
+   - 가드가 `postgres://` 로 시작하지 않으면 실패시킨다 — 프로젝트 API 주소(`https://xxx.supabase.co`)를 붙여 넣는 실수를 첫 단계에서 잡는다.
+   - 이미 있는 것: `R2_ACCESS_KEY_ID` `R2_SECRET_ACCESS_KEY` `R2_ENDPOINT` `R2_BUCKET` `R2_ACCOUNT_ID` (2026-08-24 등록) · `SUPABASE_URI`. (선택) `HEALTHCHECK_BACKUP_URL`.
    - 그다음 순서: ① Actions → "DB Backup to R2" → Run workflow(수동) ② 로그의 "R2 객체 크기: N bytes / 로컬: N bytes" 확인 ③ Cloudflare R2 콘솔에서 `db/nuri-<날짜>.dump.gz` 객체 확인 ④ **격리된 일회용 DB**(새 Supabase 프로젝트 또는 로컬 Postgres 17)에 `pg_restore --no-owner --no-privileges -d <disposable>` 로 복구 드릴 — 운영 DB 에는 절대 restore 하지 않는다.
    - Storage 객체(포스터·장터·아바타·커뮤니티 이미지·클락 배경·본인인증 신분증 임시)는 pg_dump 에 담기지 않는다. 최소안: 주 1회 `supabase storage` CLI 또는 service_role 키로 버킷 6종을 R2 에 증분 복사하는 스크립트 — service_role 키를 GitHub Secrets 에 둘지 **오너 결정**이 먼저다(둘 때까지 미착수).
 

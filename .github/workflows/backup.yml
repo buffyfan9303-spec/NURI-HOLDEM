@@ -27,23 +27,39 @@ jobs:
     steps:
       - name: Guard — 필수 secret 확인(하나라도 없으면 실패)
         env:
+          # 접속 문자열 secret 이름은 둘 다 받는다 — 오너가 SUPABASE_URI 로 등록해 두었는데
+          # 워크플로가 SUPABASE_DB_URL 만 보고 있어 등록해도 계속 스킵되던 것을 2026-09-10 에 잡았다.
+          # 우선순위: SUPABASE_DB_URL > SUPABASE_URI. 값은 어디에도 출력하지 않는다.
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DB_URL_ALT: ${{ secrets.SUPABASE_URI }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
+          URL="${DB_URL:-$DB_URL_ALT}"
           missing=""
-          [ -z "$DB_URL" ]              && missing="$missing SUPABASE_DB_URL"
+          [ -z "$URL" ]                 && missing="$missing SUPABASE_DB_URL(또는 SUPABASE_URI)"
           [ -z "$R2_ACCESS_KEY_ID" ]    && missing="$missing R2_ACCESS_KEY_ID"
           [ -z "$R2_SECRET_ACCESS_KEY" ] && missing="$missing R2_SECRET_ACCESS_KEY"
           [ -z "$R2_ENDPOINT" ]         && missing="$missing R2_ENDPOINT"
           [ -z "$R2_BUCKET" ]           && missing="$missing R2_BUCKET"
           if [ -n "$missing" ]; then
-            echo "::error::백업 실행 불가 — 필수 secret 누락:$missing. 오너가 'gh secret set <이름>' 으로 설정해야 한다(SUPABASE_DB_URL 은 세션 풀러 5432 URL). 값은 여기 출력하지 않는다."
+            echo "::error::백업 실행 불가 — 필수 secret 누락:$missing. 오너가 'gh secret set <이름>' 으로 설정해야 한다(접속 문자열은 세션 풀러 5432 URL). 값은 여기 출력하지 않는다."
             exit 1
           fi
-          echo "필수 secret 5개 확인 완료(이름만 검사)"
+          # 모양 검사 — 프로젝트 API 주소(https://xxx.supabase.co)를 붙여 넣는 실수를 여기서 잡는다.
+          # 값 자체는 출력하지 않고 접두사만 본다.
+          case "$URL" in
+            postgres://*|postgresql://*) : ;;
+            *)
+              echo "::error::접속 문자열이 postgres:// 로 시작하지 않는다 — Supabase 대시보드 Connect → Direct 탭의 **Session pooler(5432) URI** 를 넣어야 한다(프로젝트 API 주소가 아니다). 값은 출력하지 않는다."
+              exit 1 ;;
+          esac
+          case "$URL" in
+            *:6543/*) echo "::warning::포트 6543(트랜잭션 풀러)이다 — pg_dump 가 실패할 수 있다. 세션 풀러 5432 를 권장한다." ;;
+          esac
+          echo "필수 secret 5개 확인 완료(이름만 검사) · 접속 문자열 모양 확인 완료"
 
       - name: PostgreSQL 17 client 설치
         run: |
@@ -55,9 +71,10 @@ jobs:
       - name: pg_dump → gzip
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DB_URL_ALT: ${{ secrets.SUPABASE_URI }}
         run: |
           STAMP="$(date -u +%Y%m%d-%H%M)"
-          pg_dump --format=custom --no-owner --no-privileges "$DB_URL" -f "nuri-$STAMP.dump"
+          pg_dump --format=custom --no-owner --no-privileges "${DB_URL:-$DB_URL_ALT}" -f "nuri-$STAMP.dump"
           gzip "nuri-$STAMP.dump"
           echo "FILE=nuri-$STAMP.dump.gz" >> "$GITHUB_ENV"
           ls -lh "nuri-$STAMP.dump.gz"
