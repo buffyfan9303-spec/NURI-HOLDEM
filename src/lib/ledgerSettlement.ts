@@ -17,7 +17,7 @@
 //   기준 매출 = 기준 엔트리 × 현금 단가,  차액 = 완납 매출 − 기준 매출.
 // 이걸 순이익이라 부르지 않는다 — 없는 비용을 아는 척하면 그 숫자로 오판한다.
 import {
-  buyinFinance, discountSummary, isBuyinExcluded, ZERO_TENDER,
+  buyinFinance, discountSummary, isBuyinExcluded, ledgerCounts, ZERO_TENDER,
   type LedgerBuyin, type LedgerPlayer, type LedgerSession, type Tender, type DiscountSummary,
 } from '../api/ledger';
 
@@ -48,17 +48,34 @@ export interface GameSettlement {
   gameSeq: number;
   title: string;
   closed: boolean;
-  /** 완납 매출 = 현금+카드+이체 */
+  /** 완납 매출 = **현금성 수납**(현금 + 카드 + 이체). 이용권·매장지원·미수는 여기 없다.
+   *  '수납 완료 가치' 는 revenue + ticketWon 이다 — 이용권은 바인 가치는 같지만 현금성 매출이 아니다. */
   revenue: number;
   unpaid: number;
-  /** 회수 티켓(원 환산) */
+  /** 회수 이용권(원 환산). 1T = 1만원 — 바인 가치는 현금과 같지만 **현금성 수납과는 별도 항목**이다. */
   ticketWon: number;
-  /** 가게지원(원) */
+  /** 가게지원 **건수**(원이 아니다). 지원 금액은 tender.support 에 있다. */
   support: number;
-  /** 총바인 가치 = 정가 − 할인 */
+  /** 총 정상가(원) — 할인 전 */
+  gross: number;
+  /** 할인 합계(원) */
+  disc: number;
+  /** 할인 적용 후 총 바인 가치(원) = gross − disc = 수납완료 + 미수 + 매장지원 */
   value: number;
-  /** 실효 엔트리(할인·분납 반영) */
+  /**
+   * **엔트리 — 금액 기준 기여도의 합.** 소수가 될 수 있다(오너 규칙 2026-09-11).
+   * 10만 게임에 5만 할인 손님 1명 = **0.5 엔트리**. `기준 엔트리(GTD 목표)` 대비 달성률의 분자가 이 값이다.
+   * 항등식: `entries × 세션 현금단가 === value`(정상 기록 기준).
+   * ⚠ 횟수가 아니다 — 횟수는 {@link GameSettlement.buyinCount} 다.
+   */
   entries: number;
+  /** 고유 플레이어 수 */
+  players: number;
+  /** 그 게임에서 처음 앉은 횟수(= 그 게임의 고유 플레이어 수). ledgerCounts 가 센다. */
+  firstBuyins: number;
+  /** 리바인 횟수 = buyinCount − firstBuyins */
+  rebuys: number;
+  /** **총 바이인 횟수** — 정산에 들어간 유효 기록 수. 언제나 정수. 할인·결제수단·미수와 무관. */
   buyinCount: number;
   tender: Tender;
   discount: DiscountSummary;
@@ -66,7 +83,8 @@ export interface GameSettlement {
   targetEntries: number;
   /** 기준 매출 = 기준 엔트리 × 현금 단가. targetEntries 가 0 이면 0. */
   targetRevenue: number;
-  /** 정산에서 빠진 것 — 무엇이 빠졌는지 밝히지 않으면 합계가 거짓말이 된다 */
+  /** 정산에서 빠진 것 — 무엇이 빠졌는지 밝히지 않으면 합계가 거짓말이 된다.
+   *  count 는 **횟수**, entries 는 **금액 엔트리**(소수 가능)다. */
   removed: { count: number; entries: number; value: number; revenue: number };
 }
 
@@ -92,7 +110,8 @@ export interface SettlementReport {
 }
 
 const zeroGame = (): Omit<GameSettlement, 'gameSeq' | 'title' | 'closed'> => ({
-  revenue: 0, unpaid: 0, ticketWon: 0, support: 0, value: 0, entries: 0, buyinCount: 0,
+  revenue: 0, unpaid: 0, ticketWon: 0, support: 0, gross: 0, disc: 0, value: 0,
+  entries: 0, players: 0, firstBuyins: 0, rebuys: 0, buyinCount: 0,
   tender: { ...ZERO_TENDER },
   discount: { count: 0, total: 0, cashTotal: 0, entryLoss: 0 },
   targetEntries: 0, targetRevenue: 0,
@@ -126,6 +145,9 @@ export function settlementReport(
   const byName = new Map<string, SettlePlayer>();
   const games: GameSettlement[] = [];
   const total = zeroGame();
+  /** 하루 전체에서 정산에 남은 바인 — total.players 는 게임별 합이 아니라 **하루 단위 고유 인원**이다
+   *  (한 사람이 메인·사이드 둘 다 치면 게임별로는 1+1 이지만 하루로는 1명이다). */
+  const keptAll: LedgerBuyin[] = [];
 
   for (const s of daySessions) {
     const ex = excludedBy(s.gameSeq);
@@ -146,12 +168,15 @@ export function settlementReport(
         continue;
       }
       kept.push(b);
+      keptAll.push(b);
       g.buyinCount += 1;
-      g.entries += f.entry;
+      g.entries += f.entry;      // 금액 엔트리(소수 가능) — 횟수는 바로 위 buyinCount 가 센다
       g.revenue += f.paid;
       g.unpaid += f.unpaid;
       g.ticketWon += f.tender.ticket;
       g.support += f.support;
+      g.gross += f.gross;
+      g.disc += f.disc;
       g.value += f.value;
       g.tender.cash += f.tender.cash; g.tender.card += f.tender.card; g.tender.transfer += f.tender.transfer;
       g.tender.ticket += f.tender.ticket; g.tender.support += f.tender.support; g.tender.unpaid += f.tender.unpaid;
@@ -164,19 +189,28 @@ export function settlementReport(
       byName.set(b.playerName, cur);
     }
     g.discount = discountSummary(kept, s);
+    // 이 리포트 안의 횟수는 전부 ledgerCounts 로만 센다.
+    // ⚠ 클락(deriveClockCounts)은 같은 함수를 쓰지만 **수기 보정(adjEntries)·정산 제외 미적용** 때문에
+    //   숫자가 다를 수 있다. 그건 정의 차이지 버그가 아니다.
+    const cnt = ledgerCounts(kept);
+    g.players = cnt.players; g.firstBuyins = cnt.firstBuyins; g.rebuys = cnt.rebuys;
     games.push(g);
 
     total.revenue += g.revenue; total.unpaid += g.unpaid; total.ticketWon += g.ticketWon;
     total.support += g.support; total.value += g.value; total.entries += g.entries;
+    total.gross += g.gross; total.disc += g.disc;
+    total.firstBuyins += g.firstBuyins; total.rebuys += g.rebuys;
     total.buyinCount += g.buyinCount;
     total.targetEntries += g.targetEntries; total.targetRevenue += g.targetRevenue;
     total.tender.cash += g.tender.cash; total.tender.card += g.tender.card; total.tender.transfer += g.tender.transfer;
     total.tender.ticket += g.tender.ticket; total.tender.support += g.tender.support; total.tender.unpaid += g.tender.unpaid;
     total.discount.count += g.discount.count; total.discount.total += g.discount.total;
-    total.discount.cashTotal += g.discount.cashTotal; total.discount.entryLoss += g.discount.entryLoss;
+    total.discount.cashTotal += g.discount.cashTotal;
     total.removed.count += g.removed.count; total.removed.entries += g.removed.entries;
     total.removed.value += g.removed.value; total.removed.revenue += g.removed.revenue;
   }
+
+  total.players = ledgerCounts(keptAll).players;
 
   // 명단에만 있고 바인이 없는 손님도 '온 사람'이다 — 인원에는 넣되 금액은 0 이다.
   for (const p of dayPlayers) {

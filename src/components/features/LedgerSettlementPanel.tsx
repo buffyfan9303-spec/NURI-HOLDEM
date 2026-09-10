@@ -16,12 +16,17 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import Icon, { type IconName } from '../atoms/Icon';
 import { EmptyState } from '../atoms/Skeleton';
 import {
-  getLedgerRange, getLedgerPlayers, kstToday, visitorLabel, wonToMan, WON_PER_MAN,
+  getLedgerRange, getLedgerPlayers, kstToday, visitorLabel, wonToMan,
   type LedgerBuyin, type LedgerPlayer, type LedgerSession,
 } from '../../api/ledger';
+// T 환산은 반드시 TICKET_WON 을 쓴다 — 만원 환산 상수(WON_PER_MAN)와 값이 같다고 섞어 쓰면
+// 둘 중 하나가 바뀌는 순간 T 표시가 조용히 틀어진다(1T = 1만원 정책은 units.ts 가 단일 소스).
+import { TICKET_WON } from '../../lib/units';
 import { settlementReport, type SettlePlayer, type SettlementReport } from '../../lib/ledgerSettlement';
 
 const man = (won: number) => `${wonToMan(won)}만`;
+/** 엔트리 표시 — 금액 기준이라 소수가 나온다(5만 할인 = 0.5). 정수면 정수로 보인다. */
+const ent = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
 
 export default function LedgerSettlementPanel({ venueId, date, active = true }: {
   venueId: string;
@@ -102,6 +107,7 @@ function Report({ r }: { r: SettlementReport }) {
   const t = r.total;
   // 기준 대비 — 기준 엔트리가 없으면 아무 말도 하지 않는다(0 대비 퍼센트는 의미가 없다).
   const hasTarget = t.targetEntries > 0;
+  // 달성률의 분자는 **금액 엔트리**다(횟수가 아니다) — 기준 엔트리가 GTD 목표라 반값 손님은 0.5 명분만 채운다.
   const entryRate = hasTarget ? Math.round((t.entries / t.targetEntries) * 100) : 0;
   const gapWon = t.revenue - t.targetRevenue;
 
@@ -111,19 +117,20 @@ function Report({ r }: { r: SettlementReport }) {
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Kpi label="완납 매출" value={man(t.revenue)} tone="emerald" hint="현금 + 카드 + 이체" />
         <Kpi label="미수금" value={man(t.unpaid)} tone={t.unpaid > 0 ? 'danger' : 'muted'} hint="아직 못 받은 참가비" />
-        <Kpi label="총 엔트리" value={t.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} tone="accent"
-          hint={`바인 ${t.buyinCount}건 · 할인 반영`} />
+        <Kpi label="총 바이인" value={`${t.buyinCount.toLocaleString()}회`} tone="accent"
+          hint={`첫 바인 ${t.firstBuyins} · 리바인 ${t.rebuys} · 엔트리 ${ent(t.entries)}`} />
         <Kpi label="참여 인원" value={`${r.people}명`} tone="accent"
           hint={`신규 ${r.newPeople} · 기존 ${r.regularPeople}`} />
       </div>
 
       {/* ── ② 기준 엔트리 대비 ── */}
       <Card title="기준 엔트리 대비" icon="target"
-        note="상금·인건비·임대료는 장부에 없습니다. 여기 '차액'은 순이익이 아니라 기준 매출과의 차이입니다.">
+        note="엔트리는 금액 기준입니다 — 10만 게임에 5만 할인 손님은 바이인 1회지만 엔트리는 0.5입니다. 상금·인건비·임대료는 장부에 없어, 여기 '차액'은 순이익이 아니라 기준 매출과의 차이입니다.">
         {hasTarget ? (
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Line label="기준 엔트리" value={`${t.targetEntries.toLocaleString()}`} sub={`달성 ${entryRate}%`}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Line label="엔트리" value={ent(t.entries)} sub={`달성 ${entryRate}% · 바이인 ${t.buyinCount}회`}
               tone={entryRate >= 100 ? 'emerald' : entryRate >= 80 ? 'amber' : 'danger'} />
+            <Line label="기준 엔트리" value={`${t.targetEntries.toLocaleString()}`} sub="세션에 설정한 GTD 목표" />
             <Line label="기준 매출" value={man(t.targetRevenue)} sub="기준 엔트리 × 현금 단가" />
             <Line label="기준 대비 차액" value={`${gapWon >= 0 ? '+' : '−'}${man(Math.abs(gapWon))}`}
               sub={gapWon >= 0 ? '기준을 넘었습니다' : '기준에 못 미쳤습니다'}
@@ -135,25 +142,36 @@ function Report({ r }: { r: SettlementReport }) {
       </Card>
 
       {/* ── ③ 수단 분해(대차표) ── */}
-      <Card title="받은 방법" icon="wallet" note="총바인 가치 = 정가 − 할인 = 아래 합계. 행마다 성립하므로 합계도 성립합니다.">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <Card title="받은 방법" icon="wallet"
+        note="총 정상가 − 할인 = 수납 완료 + 미수 + 매장지원. 행마다 성립하므로 합계도 성립합니다.">
+        {/* 2026-09-11: 매장지원·미수를 수납과 **같은 줄에 두지 않는다** — 지원은 매장이 부담한 것이고
+            미수는 아직 못 받은 돈이라, 현금·카드·이체·이용권과 같은 위계로 서면 수납액처럼 읽힌다. */}
+        <p className="mb-1.5 text-2xs font-semibold text-ink-secondary">수납 완료</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Tile label="현금" value={man(t.tender.cash)} />
           <Tile label="카드" value={man(t.tender.card)} />
           <Tile label="이체" value={man(t.tender.transfer)} />
-          <Tile label="이용권(티켓)" value={man(t.tender.ticket)} sub={`${Math.round(t.tender.ticket / WON_PER_MAN)}T`} />
-          <Tile label="가게지원" value={man(t.tender.support)} />
-          <Tile label="미수" value={man(t.tender.unpaid)} tone={t.tender.unpaid > 0 ? 'danger' : undefined} />
+          <Tile label="매장이용권" value={man(t.tender.ticket)} sub={`${Math.round(t.tender.ticket / TICKET_WON)}T · 1T = 1만원`} />
+        </div>
+        <p className="mb-1.5 mt-3 text-2xs font-semibold text-ink-secondary">수납이 아닌 것</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Tile label="미수금" value={man(t.tender.unpaid)} tone={t.tender.unpaid > 0 ? 'danger' : undefined} />
+          <Tile label="매장지원" value={man(t.tender.support)} sub={t.support > 0 ? `${t.support}건 · 매장 부담` : undefined} />
         </div>
         <dl className="mt-3 grid gap-2 border-t border-border-subtle pt-3 sm:grid-cols-3">
-          <Row label="총바인 가치" value={man(t.value)} />
+          <Row label="총 정상가" value={man(t.gross)} />
           <Row label="할인" value={`${t.discount.count}건 · ${man(t.discount.total)}`}
             sub={t.discount.cashTotal > 0 ? `덜 받은 현금 ${man(t.discount.cashTotal)}` : undefined} />
-          <Row label="할인이 없었다면 매출" value={man(t.revenue + t.discount.cashTotal)} />
+          <Row label="적용 후 금액" value={man(t.value)} />
+          <Row label="수납 완료" value={man(t.revenue + t.ticketWon)}
+            sub={`현금성 ${man(t.revenue)} + 이용권 ${man(t.ticketWon)}`} />
+          <Row label="현금성 수납" value={man(t.revenue)} sub="현금 + 카드 + 이체" />
+          <Row label="할인이 없었다면 현금성 매출" value={man(t.revenue + t.discount.cashTotal)} />
         </dl>
         {t.removed.count > 0 && (
           <p className="mt-3 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2 text-2xs text-ink-secondary">
             정산에서 제외된 행 <b className="tabular-nums">{t.removed.count}건</b>
-            {' '}(엔트리 {t.removed.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} · 매출 {man(t.removed.revenue)})은 위 합계에 들어 있지 않습니다.
+            {' '}(바인 {t.removed.count}회 · 엔트리 {ent(t.removed.entries)} · 매출 {man(t.removed.revenue)})은 위 합계에 들어 있지 않습니다.
           </p>
         )}
       </Card>
@@ -187,12 +205,13 @@ function Report({ r }: { r: SettlementReport }) {
 
       {/* ── ⑥ 게임별 내역 ── */}
       {r.games.length > 1 && (
-        <Card title="게임별 내역" icon="layers" note="합계만 보면 어느 게임이 기준에 못 미쳤는지 알 수 없습니다.">
+        <Card title="게임별 내역" icon="layers" note="'바이인'은 앉은 횟수, '엔트리'는 금액 기준입니다. 합계만 보면 어느 게임이 기준에 못 미쳤는지 알 수 없습니다.">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[36rem] text-left text-xs">
               <thead>
                 <tr className="border-b border-border-subtle text-2xs text-ink-muted">
                   <th className="py-1.5 pr-2 font-semibold">게임</th>
+                  <th className="py-1.5 px-2 text-right font-semibold">바이인</th>
                   <th className="py-1.5 px-2 text-right font-semibold">엔트리</th>
                   <th className="py-1.5 px-2 text-right font-semibold">기준</th>
                   <th className="py-1.5 px-2 text-right font-semibold">완납 매출</th>
@@ -204,7 +223,8 @@ function Report({ r }: { r: SettlementReport }) {
                 {r.games.map((g) => (
                   <tr key={g.gameSeq} className="border-b border-border-subtle/60 last:border-0">
                     <td className="py-2 pr-2 font-semibold text-ink-primary">{g.title}</td>
-                    <td className="py-2 px-2 text-right text-ink-secondary">{g.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-ink-secondary">{g.buyinCount.toLocaleString()}회</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-ink-secondary">{ent(g.entries)}</td>
                     <td className="py-2 px-2 text-right text-ink-muted">{g.targetEntries > 0 ? g.targetEntries : '—'}</td>
                     <td className="py-2 px-2 text-right font-bold text-emerald-700 dark:text-emerald-300">{man(g.revenue)}</td>
                     <td className={`py-2 px-2 text-right ${g.unpaid > 0 ? 'font-bold text-danger-light' : 'text-ink-muted'}`}>{man(g.unpaid)}</td>

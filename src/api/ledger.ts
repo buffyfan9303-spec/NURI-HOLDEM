@@ -104,14 +104,13 @@ export interface LedgerPlayer {
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜(YYYY-MM-DD) — UTC 자정 넘김 방지
 /**
- * KST(Asia/Seoul) 기준 오늘 — YYYY-MM-DD.
- * 왜 today() 를 안 쓰나: 위 today() 는 브라우저 로컬 TZ 라 해외·시계 오설정 기기에서 하루가 어긋난다.
- * 서버 RPC(request_buyin·check_in)는 (now() at time zone 'Asia/Seoul')::date 로 날짜를 정하므로,
- * '오늘만 가능한' 게이트는 서버와 같은 기준으로 판단해야 화면과 서버가 따로 놀지 않는다.
- * now 인자는 테스트에서 자정 경계(15:00Z)를 고정하려고 열어둔 것.
+ * KST(Asia/Seoul) 기준 오늘 — YYYY-MM-DD. 정의는 src/lib/kst.ts 에 있다.
+ * ⚠ 여기서 다시 내보내는 이유는 기존 호출부(장부·정산·대시보드 등)를 그대로 두기 위해서다.
+ *   **가벼운 모듈에서는 이것을 쓰지 말고 `lib/kst` 를 직접 import 하라** — 이 파일을 참조하는 순간
+ *   장부 API 전체(7.1KB gz)가 그 모듈의 청크에 딸려 온다(2026-09-11: checkins 경유로 첫 화면에 실려 있었다).
  */
-export const kstToday = (now: number = Date.now()): string =>
-  new Date(now + 9 * 3600_000).toISOString().slice(0, 10);
+export { kstToday } from '../lib/kst';
+import { kstToday } from '../lib/kst';
 
 export const WON_PER_MAN = 10000;
 /** 원 → 만원 표시 문자열 (예: 310000 → "31", 77000 → "7.7") */
@@ -129,103 +128,199 @@ export interface Tender { cash: number; card: number; transfer: number; ticket: 
 export const ZERO_TENDER: Tender = { cash: 0, card: 0, transfer: 0, ticket: 0, support: 0, unpaid: 0 };
 
 export interface BuyinFinance {
-  paid: number; unpaid: number; entry: number;
-  /** 회수 티켓(T 단위, 1T = 1만원). 비분납 'ticket' 행은 (단가−할인)/1만, 분납은 ticketCount 그대로. */
+  paid: number; unpaid: number;
+  /**
+   * **엔트리 — 금액 기준 기여도** = 이 기록의 실질 가치 ÷ 세션 정가. **소수가 될 수 있다.**
+   *
+   * 오너 규칙(2026-09-11): "10만 바이인 게임에 1레벨 5만원 할인 … 정산에는 0.5엔트리가 올라가야한다."
+   *   · 10만 게임 정가 결제 → 1     · 5만 할인 → 0.5     · 3만 할인 → 0.7
+   *   · 분납 14만(초과 입력) → 1.4  — 자르지 않는다. 오입력이 숫자로 드러나야 한다(splitMismatch 도 잡는다).
+   *   · 정가 미설정(0원 게임) → 1   — 나눌 정가가 없으면 한 자리로 센다.
+   *
+   * ⚠ **이것은 바이인 횟수가 아니다.** 횟수는 {@link ledgerCounts} 의 `totalBuyins` 다(언제나 정수).
+   *   두 수는 서로 다른 질문에 답하고, 화면에서 **절대 섞으면 안 된다**:
+   *     · 엔트리(이 값)  → "프라이즈풀에 몇 명분이 들어왔나" — 기준 엔트리(GTD 목표) 대비 달성률의 분자
+   *     · 바이인 횟수    → "몇 번 앉았나" — 장부 기록 수, 결제수단·할인·미수와 무관
+   *   10만 게임에 5만 할인 손님 1명 = **바이인 1회 · 엔트리 0.5**. 둘 다 맞는 말이다.
+   *
+   * (2026-09-11 오전에 이 값을 '항상 1'로 바꿨다가 같은 날 오너 지시로 되돌렸다 —
+   *  당시 없앤 것은 소수 엔트리가 아니라 **소수로 표시되던 '바이인 횟수'** 였어야 했다.
+   *  그 횟수는 이제 ledgerCounts 가 따로 센다.)
+   */
+  entry: number;
+  /** 회수 티켓(T 단위, 1T = 1만원 = TICKET_WON). value 를 TICKET_WON 으로 나눈 값. */
   ticketPaid: number; ticketUnpaid: number;
+  /** 가게지원 **건수**(0 또는 1) — 금액이 아니다. 지원 금액은 tender.support 에 있다. */
   support: number;
-  /** 정가(원) — 이 바인이 할인 전에 얼마짜리였나. 비분납은 단가(카드는 카드단가), 분납은 value+disc. */
+  /**
+   * 정상가(원) — 이 바인이 할인 전에 얼마짜리였나. **gross − disc === value 가 항상 성립한다.**
+   *
+   * 값은 `value + disc` 로 복원한다. 왜 세션 단가를 그대로 쓰지 않는가:
+   *   기록 시점 스냅샷(실제 받은 금액)이 정본이라, 나중에 세션 단가를 고쳐도 과거 기록은 그대로여야 한다.
+   *   세션 단가를 정가로 쓰면 그 순간 대차 항등식이 깨진다.
+   * **올바르게 기록된 행에서는 gross === 세션 buyinAmount 다** — 기록 경로(nonSplitSnapshot)와
+   * 분납 검증(splitMismatch)이 `buyinAmount − 할인` 을 강제하기 때문이다.
+   * 결제수단은 정가를 바꾸지 않는다(2026-09-11): 카드라고 더 비싼 바인이 되지 않는다.
+   */
   gross: number;
-  /** 이 행에 적용된 할인액(원). gross − disc === value. */
+  /** 이 행에 적용된 할인액(원). 0 ≤ disc ≤ gross 로 잘린다(음수 가치 방지). */
   disc: number;
-  /** 수납 분해. cash+card+transfer+ticket+support+unpaid === value. 정산 대차표가 이걸 합산한다. */
+  /** 수납 분해. **cash+card+transfer+ticket+support+unpaid === value** 가 항상 성립한다. */
   tender: Tender;
-  /** 이 바인의 **가치**(원) — '총바인' 열이 쓴다. 매출(paid)과 다른 개념이다.
-   *  매출은 '실제 받은 현금'이라 티켓·지원이 0인 게 맞지만, 총바인은 '만들어진 바인의 가치'다.
-   *  대부분 value/단가 === entry 지만 **예외가 둘** 있다(2026-09-05 감사에서 정정):
-   *   ① 카드단가 ≠ 현금단가 인 모든 카드 행 — value 는 실수령(카드단가 기준)이고
-   *      entry 는 좌석 가치(현금단가 기준)라 애초에 다른 척도다. 카드 11만/현금 10만이면 1.1.
-   *   ② 레거시 스냅샷 현금 행 — 실제 받은 금액을 존중하고 entry 는 세션 단가로 계산된다. */
+  /**
+   * 할인 적용금액(원) = 이 바인의 실질 가치. 정상 기록이면 `gross − disc` 와 같다.
+   * 구현상으로는 **tender 의 합**이다 — 기록 시점 스냅샷을 존중하기 위해서다.
+   * (스냅샷: 2026-08-18 이후 기록은 실제 받은 net 금액이 amounts 칸에 저장돼 있고,
+   *  나중에 세션 단가·할인 프리셋을 고쳐도 과거 기록이 소급 변형되지 않는다.)
+   */
   value: number;
 }
 
-/** 바인 1건의 매출/미수/엔트리(할인 반영). 엔트리 = (단가 - 할인)/단가. */
+/** 정상가(원) — 세션 현금 단가가 그 바인의 정가다. 결제수단과 무관. */
+export function grossOf(s: { buyinAmount: number }): number {
+  return Math.max(0, Math.round(s.buyinAmount || 0));
+}
+
+/** 이 행에 실제로 적용되는 할인액(원). 정상가를 넘지 못한다 — 과거 데이터에 비정상 프리셋이 있어도
+ *  음수 가치를 만들지 않는다. **데이터를 고치지는 않는다**(읽는 쪽에서만 방어). */
+export function discountOf(b: { discountIndex: number }, s: { buyinAmount: number; discounts?: DiscountPreset[] }): number {
+  return Math.min(grossOf(s), Math.max(0, Math.round(discountAmountOf(s, b.discountIndex))));
+}
+
+/**
+ * 바인 1건의 횟수·금액·수납 분해. **이 앱의 유일한 장부 금액 계산 정본이다.**
+ *
+ * 규칙(2026-09-11 오너 지시로 정리):
+ *   · 엔트리 entry = value / gross — **금액 기준이라 소수가 된다**(5만 할인 = 0.5). 아래 {@link BuyinFinance.entry} 참고.
+ *   · 횟수는 이 함수가 세지 않는다 — {@link ledgerCounts} 가 센다(언제나 정수).
+ *   · 정상가 gross = 세션 buyinAmount (결제수단 무관)
+ *   · 할인   disc  = 프리셋 금액, 0..gross 로 클램프
+ *   · 가치   value = Σtender (정상 기록이면 gross − disc 와 같다)
+ *   · 매장지원은 수납이 아니다 — tender.support 로 분리되고 cash/card/transfer/ticket 합계에 들어가지 않는다
+ *   · 미수는 횟수·받을금액에 포함, 수납완료에는 제외 — tender.unpaid 로 분리
+ */
 export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] }): BuyinFinance {
-  const entryUnit = s.buyinAmount;
-  const z: BuyinFinance = { paid: 0, unpaid: 0, entry: 0, ticketPaid: 0, ticketUnpaid: 0, support: 0, value: 0,
-                            gross: 0, disc: 0, tender: { ...ZERO_TENDER } };
+  const gross = grossOf(s);
+  const disc = discountOf(b, s);
+  /** 할인 적용금액 — 세션 기준. 스냅샷이 없는 경로(지원·티켓·레거시)가 쓴다. */
+  const net = Math.max(0, gross - disc);
+  const z: BuyinFinance = { paid: 0, unpaid: 0, entry: 1, ticketPaid: 0, ticketUnpaid: 0, support: 0,
+                            value: 0, gross, disc, tender: { ...ZERO_TENDER } };
+  /** 대차 항등식을 언제나 성립시키는 마감 — gross − disc === value === Σtender.
+   *  **엔트리도 여기서 한 번에 낸다** — 모든 분기가 반드시 이 길목을 지나므로 분기마다 따로 셀 필요가 없다.
+   *  분모는 seal 이 덮어쓴 `f.gross` 가 아니라 **세션 정가**(위 gross)다. 그래야 분납 초과 입력(14만)이
+   *  1.4 로 드러난다 — f.gross 를 쓰면 value+disc 라서 언제나 1 이 되어 오입력이 숨는다. */
+  const seal = (f: BuyinFinance): BuyinFinance =>
+    ({ ...f, gross: f.value + f.disc, entry: gross > 0 ? f.value / gross : 1 });
+
   if (b.isSplit) {
-    // 분납 = 결제수단 쪼개기(예: 카드 4만 + 티켓 1장). 실제 받은 현금성 금액이 매출, 미수는 별도 입력값.
-    // 할인 이벤트가 걸리면 그만큼 덜 받으므로 할인분은 애초에 입력 금액에 포함되지 않는다.
-    // ⚠ 과거의 discountLevel(레벨 수 숫자)은 계산 어디에도 반영되지 않는 죽은 값이었다.
-    //   할인은 discountIndex(할인 프리셋)로 일원화한다 — 분납도 동일.
-    // ⚠ 티켓(이용권)은 현금 매출이 아니지만 '참가'는 했으므로 엔트리에 포함해야 한다.
-    //   과거엔 ticketCount가 엔트리·티켓 집계에서 통째로 빠져, 티켓만으로 참가한 손님이
-    //   '회수 티켓 1장인데 엔트리 0'으로 잡히는 모순이 있었다(빠른입력 티켓은 엔트리 1).
-    //   비분납 티켓 결제와 동일하게 1장 = 바인 1회(엔트리 1)로 환산한다.
-    const paid = b.cashAmount + b.cardAmount + b.transferAmount;
-    // ⚠ ticketCount 는 **T 단위**다(1T = 1만원, 오너 결정 2026-09-05). DB 컬럼명(ticket_count)은 그대로 두고
-    //   의미만 바꿨다 — 운영 DB 분납 행 0 이라 소급 없음. 10만 자리를 티켓으로 다 내면 10T,
-    //   5만만 티켓이면 5T + 현금 5만. 예전 '1장 = 단가' 는 이렇게 나눌 수 없어서 폐기했다.
-    //   분납은 현금·카드 칸에 이미 할인이 빠진 실수령액이 들어오므로 여기서 할인을 또 빼지 않는다.
+    // 분납 = 결제수단 쪼개기(예: 카드 4만 + 이용권 5T + 현금 1만). 입력 금액에는 할인이 이미 빠져 있다.
+    // ⚠ ticketCount 는 **T 단위**다(1T = 1만원 = TICKET_WON, 오너 결정 2026-09-05).
+    //   DB 컬럼명(ticket_count)은 그대로 두고 의미만 바꿨다 — 운영 DB 분납 행 0 이라 소급 없음.
+    // ⚠ 각 수단 합계가 할인 적용금액과 일치해야 한다 — 입력 시점 검증은 splitMismatch() 가 맡는다.
+    //   여기서는 **기록된 값을 진실로 존중**한다(읽는 쪽이 데이터를 고치면 장부가 아니게 된다).
+    const cashy = b.cashAmount + b.cardAmount + b.transferAmount;
     const ticketWon = b.ticketCount * TICKET_WON;
-    const total = paid + b.unpaidAmount + ticketWon;
-    const isTicketUnpaid = b.unpaidAmount > 0 && paid === 0 && b.ticketCount > 0;
-    // 분납의 할인은 입력 금액에 이미 빠져 있다(위 주석). 정가는 그래서 total + disc 로 복원한다.
-    const splitDisc = discountAmountOf(s, b.discountIndex);
-    return {
+    const value = cashy + b.unpaidAmount + ticketWon;
+    // 티켓만으로 참가했는데 미수인 경우 — 회수 티켓을 '받은 것'으로 세면 안 된다.
+    const isTicketUnpaid = b.unpaidAmount > 0 && cashy === 0 && b.ticketCount > 0;
+    return seal({
       ...z,
-      paid,
+      paid: cashy,
       unpaid: b.unpaidAmount,
-      entry: entryUnit > 0 ? total / entryUnit : (total > 0 ? 1 : 0),
       ticketPaid: isTicketUnpaid ? 0 : b.ticketCount,
       ticketUnpaid: isTicketUnpaid ? b.ticketCount : 0,
-      value: total, // 현금성 + 미수 + 티켓 환산 — 분납은 total 이 곧 가치다
-      gross: total + splitDisc,
-      disc: splitDisc,
+      value,
       tender: { cash: b.cashAmount, card: b.cardAmount, transfer: b.transferAmount,
                 ticket: ticketWon, support: 0, unpaid: b.unpaidAmount },
-    };
+    });
   }
-  const disc = (s.discounts && b.discountIndex > 0 && s.discounts[b.discountIndex - 1]) ? s.discounts[b.discountIndex - 1].amount : 0;
-  const entry = entryUnit > 0 ? Math.max(0, entryUnit - disc) / entryUnit : 1;
-  // 가게지원 = 매장이 참가비를 대신 부담. 할인 이벤트가 걸려 있으면 매장이 그만큼 덜 부담하므로
-  // 가치도 단가−할인이다(entry 와 정확히 같은 비율 — value/단가 === entry).
+
+  // 가게지원 = 매장이 참가비를 대신 부담. **고객이 낸 돈은 0원**이고 수납액에도 들어가지 않는다.
+  //   바인 횟수는 1회, 지원액은 tender.support 로 분리해 정산이 따로 보여준다.
   if (b.paymentMethod === 'support') {
-    const v = Math.max(0, entryUnit - disc);
-    return { ...z, entry, support: 1, value: v, gross: entryUnit, disc, tender: { ...ZERO_TENDER, support: v } };
+    return seal({ ...z, support: 1, value: net, tender: { ...ZERO_TENDER, support: net } });
   }
-  // 티켓 1장 = 바인 1회. 가치는 **단가 전액이 기본**이되, 할인이 입력돼 있으면 그만큼 뺀다.
-  //   (오너 정정 2026-09-05: "할인이 걸리면 할인은 따로 입력할 테니까,
-  //    티켓이라고 무조건 10으로 입력하면 안 되지.")
-  //   즉 '1T = 단가' 는 할인이 없을 때의 이야기다. 할인은 운영자가 따로 넣는 값이라 그대로 반영한다.
-  //   ⚠ 이전 결함은 '할인'이 아니라 **가치가 통째로 0원**이던 것이었다(총바인 열이 0만으로 찍힘).
-  //     그 수정은 value 로 유지되고, 여기서 되돌리는 것은 할인 무시뿐이다.
-  //   가게지원과 같은 규칙이 된다 — 둘 다 '현금은 안 받았지만 자리는 찼다'.
+
+  // 매장이용권 — 현금은 안 받았지만 자리는 찼다. 가치는 현금·카드·이체와 **똑같다**(1T = 1만원).
+  //   현금성 수납과는 별도 항목으로 표시한다(정산 대차표의 ticket 칸).
   if (b.paymentMethod === 'ticket') {
-    const v = Math.max(0, entryUnit - disc);
-    const t = v / TICKET_WON; // 자리 1개를 T 로 — 10만 게임 10T, 5만 할인이면 5T
-    return { ...z, entry, ticketPaid: b.isUnpaid ? 0 : t, ticketUnpaid: b.isUnpaid ? t : 0,
-             value: v, gross: entryUnit, disc, tender: { ...ZERO_TENDER, ticket: v } };
+    const t = net / TICKET_WON; // 10만 게임 = 10T · 5만 할인이면 5T
+    return seal({ ...z, ticketPaid: b.isUnpaid ? 0 : t, ticketUnpaid: b.isUnpaid ? t : 0,
+                  value: net, tender: { ...ZERO_TENDER, ticket: net } });
   }
-  // 스냅샷 우선(2026-08-18 전환): 기록 시점 net 금액이 amounts 칸에 저장돼 있으면 그 값이 정본 —
-  // 이후 세션 단가·할인을 고쳐도 과거 기록이 소급 변형되지 않는다(실제 받은 현금 = 장부).
+
+  // 현금·카드·이체 — 스냅샷 우선(2026-08-18 전환): 기록 시점 net 금액이 amounts 칸에 저장돼 있으면 그 값이 정본.
   // ⚠ '스냅샷이 있는가'는 **금액이 아니라 기록 시각**으로 판정한다.
   //   예전 `stored > 0` 은 '저장된 0원'(전액 할인·무료 이벤트)과 '미저장 레거시'를 구분하지 못해,
   //   무료 손님 행이 나중에 할인 프리셋을 고치는 순간 10만 매출로 되살아났다(2026-09-05 감사).
-  //   전환일 이후 기록은 nonSplitSnapshot 이 반드시 금액을 썼으므로 0 도 진짜 0 이다.
   //   운영 DB 실측: 전환 이전 행 0건 — legacy 분기는 오늘 데이터에서 한 번도 타지 않는다.
+  // ⚠ 카드단가(cardUnit)를 여기서 쓰지 않는다(2026-09-11) — 결제수단이 바인 가치를 바꾸면
+  //   같은 자리가 카드 손님에게만 1.1 개로 세어진다. 카드 수수료는 회계 항목이지 바인 가치가 아니다.
   const stored = b.cashAmount + b.cardAmount + b.transferAmount;
-  const payUnit = b.paymentMethod === 'card' ? cardUnit(s) : s.buyinAmount;
   const legacy = stored === 0 && b.buyinAt < SNAPSHOT_SINCE;
-  const effPay = legacy ? Math.max(0, payUnit - disc) : stored;
+  const value = legacy ? net : stored;
   const t: Tender = { ...ZERO_TENDER };
-  if (b.isUnpaid) t.unpaid = effPay;
-  else if (b.paymentMethod === 'card') t.card = effPay;
-  else if (b.paymentMethod === 'transfer') t.transfer = effPay;
-  else t.cash = effPay;
-  return b.isUnpaid
-    ? { ...z, entry, unpaid: effPay, value: effPay, gross: payUnit, disc, tender: t }
-    : { ...z, entry, paid: effPay, value: effPay, gross: payUnit, disc, tender: t };
+  if (b.isUnpaid) t.unpaid = value;
+  else if (b.paymentMethod === 'card') t.card = value;
+  else if (b.paymentMethod === 'transfer') t.transfer = value;
+  else t.cash = value;
+  return seal(b.isUnpaid
+    ? { ...z, unpaid: value, value, tender: t }
+    : { ...z, paid: value, value, tender: t });
+}
+
+/**
+ * 분납 입력 검증 — 각 수단 합계가 **할인 적용금액과 일치**해야 저장할 수 있다.
+ * 어긋난 금액(원)을 돌려준다(0 = 정상, 양수 = 초과, 음수 = 부족).
+ * 저장 전에 호출해 사람이 읽을 수 있는 오류를 띄우는 용도다 — 계산에서 값을 고치지는 않는다.
+ */
+export function splitMismatch(
+  input: { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountIndex: number },
+  s: { buyinAmount: number; discounts?: DiscountPreset[] },
+): number {
+  const expected = Math.max(0, grossOf(s) - discountOf(input, s));
+  const got = input.cashAmount + input.cardAmount + input.transferAmount
+            + input.ticketCount * TICKET_WON + input.unpaidAmount;
+  return got - expected;
+}
+
+/**
+ * 세션 하나의 횟수 집계 — **플레이어·첫 바이인·리바인·총 바이인을 한 곳에서 센다.**
+ * 정산(ledgerSettlement)과 클락(clock.deriveClockCounts)이 이 함수를 쓴다.
+ * 장부 보드·통계 패널·대시보드는 아직 각자 세고 있다 — 옮길 때 이 함수로 모은다.
+ *
+ *  · 플레이어 수 = 고유 플레이어 수(이름 기준. 앞뒤 공백만 정리 — 새 식별 체계를 만들지 않는다)
+ *  · 첫 바이인   = (날짜·게임·이름) 조합의 개수 — 한 사람이 그 게임에서 처음 앉은 횟수
+ *  · 리바인      = 총 바이인 − 첫 바이인
+ *  · 총 바이인   = 기록 수
+ * 할인·결제수단·미수는 이 수에 영향을 주지 않는다.
+ *
+ * ⚠ entryNo 를 쓰지 않는 이유(2026-09-11) — cancel_ledger_buyin 은 행을 **hard delete** 하고
+ *   남은 행의 entry_no 를 다시 매기지 않는다. 1·2·3 중 1번을 취소하면 2·3 만 남아
+ *   'entryNo === 1 이 첫 바인' 규칙이 그 손님을 **첫 바인 0 · 리바인 2** 로 센다.
+ *   클락은 이 rebuys 로 총 칩(entries×시작스택 + rebuys×리바인스택)을 계산하므로
+ *   TV 화면의 평균 스택까지 틀어진다. 사람 단위로 세면 번호에 구멍이 나도 옳다.
+ *   (DB 를 바꾸지 않고 고칠 수 있어 migration 을 만들지 않았다.)
+ *
+ * 키에 날짜·게임을 넣는 이유: 여러 날/여러 게임이 섞인 목록에서도 '그 게임의 첫 바인'을 세야 한다.
+ *   같은 손님이 메인과 사이드에 각각 앉으면 첫 바인 2 · 리바인 0 이고, 사람 수는 1 이다.
+ */
+export interface LedgerCounts { players: number; firstBuyins: number; rebuys: number; totalBuyins: number }
+export function ledgerCounts(buyins: readonly LedgerBuyin[]): LedgerCounts {
+  const names = new Set<string>();
+  const seats = new Set<string>();
+  for (const b of buyins) {
+    const n = (b.playerName ?? '').trim();
+    if (n) names.add(n);
+    // ⚠ 구분자는 이름에 절대 못 들어가는 문자여야 한다(`김철수|1` 같은 이름이 다른 자리와 충돌하지 않게).
+    //   NUL 을 **소스에 날바이트로** 넣으면 git 이 이 파일을 바이너리로 판정해 diff·리뷰·공백검사가 전부 죽는다
+    //   (2026-09-11 실측: ledger.ts 가 그 상태였다). 값은 같고 소스만 ASCII 이스케이프로 쓴다.
+    seats.add(`${b.sessionDate}\u0000${b.gameSeq}\u0000${n}`);
+  }
+  const totalBuyins = buyins.length;
+  const firstBuyins = Math.min(seats.size, totalBuyins);
+  return { players: names.size, firstBuyins, rebuys: totalBuyins - firstBuyins, totalBuyins };
 }
 
 /** 비분납 현금/카드/이체가 net 금액 스냅샷을 amounts 칸에 쓰기 시작한 날(2026-08-18 전환). */
@@ -239,9 +334,11 @@ export function nonSplitSnapshot(method: PaymentMethod, discountIndex: number,
 ): { cash_amount: number; card_amount: number; transfer_amount: number } {
   const z = { cash_amount: 0, card_amount: 0, transfer_amount: 0 };
   if (method !== 'cash' && method !== 'card' && method !== 'transfer') return z;
-  const disc = discountAmountOf(s, discountIndex);
-  const unit = method === 'card' ? cardUnit(s) : s.buyinAmount;
-  const eff = Math.max(0, unit - disc);
+  // 2026-09-11: 결제수단이 바인 가치를 바꾸지 않는다 — 카드도 현금 단가로 기록한다.
+  //   예전엔 카드만 cardUnit(카드단가)로 기록해, 같은 자리가 카드 손님에게만 더 비싼 바인이 됐다.
+  //   카드 수수료는 회계 항목이지 바인의 정가가 아니다(cardUnit 자체는 다른 용도로 남겨 둔다).
+  const disc = discountOf({ discountIndex }, s);
+  const eff = Math.max(0, grossOf(s) - disc);
   if (method === 'cash') return { ...z, cash_amount: eff };
   if (method === 'card') return { ...z, card_amount: eff };
   return { ...z, transfer_amount: eff };
@@ -271,9 +368,10 @@ export function autoDiscountIndex(discounts: DiscountPreset[] | undefined, level
 }
 
 /** 금일 할인 집계(#20) — 마감정산에 '할인 엔트리 수 · 총 할인액'을 띄우기 위한 단일 소스.
- *  count  = 할인이 걸린 바인(=할인 엔트리) 건수
+ *  count  = 할인이 걸린 바인 건수
  *  total  = 그 할인액의 합(원)
- *  entryLoss = 할인으로 깎인 엔트리 환산량(10만 게임 5만 할인 = 0.5)
+ *  ⚠ entryLoss(할인으로 깎인 엔트리 환산량)는 2026-09-11 에 삭제했다 — 할인은 금액에서만 차감하고
+ *    바이인 횟수는 언제나 1이다. '엔트리 차감' 이라는 개념 자체가 없어졌다.
  *  ⚠ 분납도 discountIndex 로 일원화돼 있어 동일하게 잡힌다(2026-07 '레벨 할인' 사건의 교훈). */
 export interface DiscountSummary {
   /** 할인이 적용된 바인 건수 */
@@ -283,7 +381,12 @@ export interface DiscountSummary {
   /** 그중 **실제로 덜 받은 현금**(원). 티켓·가게지원은 받을 현금이 0원이라 제외된다.
    *  '할인이 없었다면 매출은 얼마였나'는 반드시 이 값을 써야 한다. */
   cashTotal: number;
-  /** 실제 엔트리 차감 합 — 추정식이 아니라 buyinFinance 의 entry 에서 뽑는다. */
+  /**
+   * **할인으로 깎인 엔트리 환산량** — 10만 게임 5만 할인 1건이면 0.5 (오너 규칙 2026-09-11).
+   * 추정식이 아니라 buyinFinance 의 entry 에서 뽑는다 — 액면가로 도는 경로(분납 티켓)에서
+   * `할인액 ÷ 단가` 추정과 실제가 어긋났던 적이 있다(2026-09-05 실측: 추정 1 vs 실제 0.5).
+   * ⚠ **바이인 횟수는 깎이지 않는다.** 할인 바인도 언제나 1회다 — 깎이는 것은 엔트리뿐이다.
+   */
   entryLoss: number;
 }
 /**
@@ -334,8 +437,6 @@ export function discountSummary(
     //   예전엔 total 하나로 뭉뚱그려, 마감 모달의 "할인이 없었다면 완납 매출은 …"이
     //   티켓 할인까지 더해 과대 계상했다(2026-09-05 실측).
     if (b.isSplit || (b.paymentMethod !== 'ticket' && b.paymentMethod !== 'support')) cashTotal += amt;
-    // ⚠ 엔트리 차감은 **실제 계산에서 뽑는다.** 예전의 `총할인액/단가` 추정식은
-    //   액면가로 도는 경로(분납 티켓)에서 어긋났다 — 실측: entryLoss 1 vs 실제 차감 0.5.
     entryLoss += Math.max(0, 1 - buyinFinance(b, sf).entry);
   }
   return { count, total, cashTotal, entryLoss };
@@ -416,9 +517,17 @@ export function earlyTypeOf(
   b: LedgerBuyin,
   s: { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null },
 ): EarlyType {
-  // 얼리는 첫 바이인(entryNo=1)에만. 2번째부터는 리바인 — 얼리 아님(리바인 스택).
-  if (b.entryNo !== 1) return 'none';
+  // 2026-09-11: **수기 확정이 게이트보다 먼저다.** 예전엔 entryNo 검사가 위에 있어,
+  //   운영자가 2바인 셀에서 '더블얼리'를 눌러 저장까지 되고 토스트도 떴는데 판정은 'none' 이라
+  //   같은 모달 안에서 버튼과 배지가 서로 다른 말을 했다(클락 얼리에도 반영되지 않았다).
+  //   수기 확정은 자동판정뿐 아니라 자격 게이트도 이긴다 — 운영자가 눈으로 보고 누른 값이다.
   if (b.earlyOverride === 'double' || b.earlyOverride === 'single' || b.earlyOverride === 'none') return b.earlyOverride;
+  // 자동 판정은 첫 바이인(entryNo=1)에만. 2번째부터는 리바인 — 얼리 아님(리바인 스택).
+  // ponytail: 첫 바인 판정을 entryNo 로 한다. cancel_ledger_buyin 이 entry_no 를 재부여하지 않아
+  //   첫 바인이 취소되면 자동 판정이 안 된다(ledgerCounts 는 좌석키로 이미 넘겼다).
+  //   이 경우 운영자가 위 수기 확정으로 지정하면 되고, 그 경로가 이제 실제로 동작한다.
+  //   목록 전체를 받는 시그니처로 옮기려면 earlyTypeOf 호출부 전부(셀·클락)를 함께 바꿔야 한다.
+  if (b.entryNo !== 1) return 'none';
   const dMin = s.earlyDoubleMin ?? 0, sMin = s.earlySingleMin ?? 0;
   const start = s.tournamentStart || s.openedAt;
   if (!start || (dMin <= 0 && sMin <= 0)) return 'none';
@@ -1100,10 +1209,14 @@ export async function venueTodayGames(venueId: string): Promise<{ gameSeq: numbe
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ gameSeq: r.game_seq, title: r.title }));
 }
-export interface MyBuyinRequest { id: string; venueId: string; venueName: string; status: 'pending' | 'approved' | 'rejected'; requestedGameSeq: number | null; gameSeq: number | null; rejectReason: string | null; }
+export interface MyBuyinRequest { id: string; venueId: string; venueName: string; status: 'pending' | 'approved' | 'rejected'; requestedGameSeq: number | null; gameSeq: number | null; rejectReason: string | null;
+  /** 이용권으로 보낸 요청인가(20260911c). 취소·거절 때 "이용권이 지갑으로 돌아갔다"를 **사실일 때만** 말하려고 쓴다.
+   *  마이그레이션 적용 전 서버는 이 칸을 안 주므로 false — 그때는 그 문장을 아예 안 보여준다(거짓말 대신 침묵). */
+  usedVoucher: boolean;
+}
 /** get_my_buyin_requests_current 반환 행 → 화면 모델. venue_name 은 매장이 RLS 밖(승인 취소)이면 null. */
-export function toMyBuyinRequest(r: { id: string; venue_id: string; status: MyBuyinRequest['status']; requested_game_seq?: number | null; game_seq?: number | null; resolve_note?: string | null; venue_name?: string | null }): MyBuyinRequest {
-  return { id: r.id, venueId: r.venue_id, venueName: r.venue_name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null, gameSeq: r.game_seq ?? null, rejectReason: r.resolve_note ?? null };
+export function toMyBuyinRequest(r: { id: string; venue_id: string; status: MyBuyinRequest['status']; requested_game_seq?: number | null; game_seq?: number | null; resolve_note?: string | null; venue_name?: string | null; used_voucher?: boolean | null }): MyBuyinRequest {
+  return { id: r.id, venueId: r.venue_id, venueName: r.venue_name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null, gameSeq: r.game_seq ?? null, rejectReason: r.resolve_note ?? null, usedVoucher: r.used_voucher === true };
 }
 /** 손님: 지금 진행 중인 장부(영업일)에 내가 보낸 바인 요청(매장명·상태) — 홈 배너·라이브 '내 토너'용.
  *  날짜 규칙은 서버(20260905j)가 정한다: 어제 장부가 미마감이면 어제 행도 보이고, 마감되면 사라진다.

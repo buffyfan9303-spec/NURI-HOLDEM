@@ -9,7 +9,7 @@
 //   ① buyinFinance 가 분납 티켓을 엔트리·티켓에 포함하는가
 //   ② (날짜+게임) 페어링과 (날짜만) 페어링의 결과가 다르다는 사실을 못 박아, 날짜-only 회귀를 막는다
 import { describe, it, expect } from 'vitest';
-import { buyinFinance, ledgerLossSummary, type LedgerBuyin, type LedgerSession } from '../api/ledger';
+import { buyinFinance, ledgerCounts, ledgerLossSummary, type LedgerBuyin, type LedgerSession } from '../api/ledger';
 
 function buyin(over: Partial<LedgerBuyin> = {}): LedgerBuyin {
   return {
@@ -59,15 +59,24 @@ describe('분납 티켓 · 엔트리·티켓 집계 (critical 회귀 방지)', (
     expect(split.ticketPaid).toBe(quick.ticketPaid);
   });
 
-  it('카드 4만 + 티켓 1장 = 매출 4만 · 엔트리 1.4 (현금성 4만 + 티켓 10만 상당)', () => {
-    const f = buyinFinance(buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 10 }), S);
+  it('카드 4만 + 이용권 10T = 가치 14만 · 바이인 1회 · 엔트리 1.4', () => {
+    // 한 기록은 언제나 **바이인 1회**다. 다만 **엔트리**는 금액 기준이라 단가를 넘으면 1을 넘는다 —
+    // 10만 게임에 14만이 들어온 것이므로 1.4 가 맞고, 이 초과가 오입력 신호가 된다(splitMismatch 도 잡는다).
+    const b = buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 10 });
+    const f = buyinFinance(b, S);
     expect(f.paid).toBe(40_000);
+    expect(ledgerCounts([b]).totalBuyins).toBe(1);
     expect(f.entry).toBeCloseTo(1.4, 10);
+    expect(f.value).toBe(140_000);
     expect(f.ticketPaid).toBe(10);
   });
 
-  it('티켓 2장 = 엔트리 2', () => {
-    expect(buyinFinance(buyin({ isSplit: true, ticketCount: 20 }), S).entry).toBe(2);
+  it('이용권 20T 한 건 = 바이인 1회 · 엔트리 2', () => {
+    const b = buyin({ isSplit: true, ticketCount: 20 });
+    const f = buyinFinance(b, S);
+    expect(ledgerCounts([b]).totalBuyins).toBe(1);   // 자리는 하나
+    expect(f.entry).toBe(2);                          // 20만원어치가 들어왔으니 엔트리는 2
+    expect(f.value).toBe(200_000);   // 20T = 20만원 (1T = 1만원)
   });
 
   it('티켓 + 미수만 있으면 미수 티켓으로 분류(회수 아님)', () => {
@@ -149,12 +158,13 @@ describe('화면 간 합계 일치. 장부·통계·엑셀이 같은 규칙을 �
     }), { paid: 0, unpaid: 0, entry: 0, ticket: 0 });
   }
 
-  it('매출 19만 · 미수 10만 · 회수 티켓 2장 · 엔트리 4.9', () => {
+  it('매출 19만 · 미수 10만 · 회수 이용권 20T · 바이인 5회', () => {
     const t = agg();
     expect(t.paid).toBe(190_000);   // 10만 + 5만 + 0 + 4만 + 0
     expect(t.unpaid).toBe(100_000);
-    expect(t.ticket).toBe(20);       // 빠른입력 티켓 1 + 분납 티켓 1
-    expect(t.entry).toBeCloseTo(4.9, 10); // 1 + 0.5 + 1 + 1.4 + 1
+    expect(t.ticket).toBe(20);       // 빠른입력 10T + 분납 10T
+    expect(ledgerCounts(rows).totalBuyins).toBe(5);   // 횟수 — 5건 = 5회
+    expect(t.entry).toBeCloseTo(4.9, 10);            // 엔트리 — 1 + 0.5 + 1 + 1.4 + 1
   });
 
   it('티켓은 매출에 포함되지 않는다(현금성 매출과 구분)', () => {

@@ -109,7 +109,7 @@ test('🔴 정산 단계 — 장부가 아니라 정산 판이 열리고 그날 
     const out: Record<string, string> = {};
     for (const el of document.querySelectorAll('section p')) {
       const label = el.textContent?.trim() ?? '';
-      if (['완납 매출', '미수금', '총 엔트리', '참여 인원'].includes(label)) {
+      if (['완납 매출', '미수금', '총 바이인', '참여 인원'].includes(label)) {
         out[label] = el.nextElementSibling?.textContent?.trim() ?? '';
       }
     }

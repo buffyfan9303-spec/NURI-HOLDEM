@@ -1407,17 +1407,22 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                             : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
                           const topLabel = c.isSplit ? '분납' : `${METHOD_SHORT[c.paymentMethod]}${c.isUnpaid ? '·미' : ''}`;
                           const et = earlyTypeOf(c, session);
-                          const frac = buyinFinance(c, session).entry; // 할인 반영 엔트리(예: 10만 게임 5만 할인 = 0.5)
+                          // 오너 예시 셀(더블얼리 + 5만 할인)은 **둘 다** 말해야 한다.
+                          //   예전엔 `얼리 : 할인 : 시각` 3항 배타라 얼리가 이기고 할인이 영영 안 보였다.
+                          //   셀 높이가 h-12 라 둘째 줄 하나에 ' · ' 로 합쳐 쓴다. 셋 다 없으면 시각.
+                          const fin = buyinFinance(c, session);
+                          const sub = [
+                            et !== 'none' ? (et === 'double' ? '더블얼리' : '얼리') : null,
+                            fin.disc > 0 ? `−${wonToMan(fin.disc)}만` : null,
+                          ].filter(Boolean).join(' · ');
                           return (
                             <td key={e} className={cls}>
                               <button type="button" disabled={closed}
                                 onClick={() => !closed && setSelected({ playerName: r.name, entryNo: e, buyin: c })}
                                 className={['w-full h-full rounded-input border-2 flex flex-col items-center justify-center leading-none', tone, closed ? 'cursor-default' : 'cell-hover'].join(' ')}>
                                 <span className="text-[11px] font-extrabold">{topLabel}{c.discountIndex > 0 ? '*' : ''}</span>
-                                {et !== 'none'
-                                  ? <span className="text-[10px] font-bold text-amber-300 leading-none">{et === 'double' ? '더블얼리' : '얼리'}</span>
-                                  : frac < 0.999
-                                  ? <span className="text-[10px] font-bold text-accent-200 leading-none mt-0.5">{frac.toLocaleString(undefined, { maximumFractionDigits: 2 })}엔트리</span>
+                                {sub
+                                  ? <span className={['text-[10px] font-bold leading-none mt-0.5', et !== 'none' ? 'text-amber-300' : 'text-accent-200'].join(' ')}>{sub}</span>
                                   : <span className="text-[10px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>}
                               </button>
                             </td>
@@ -1512,7 +1517,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         {(stats.support > 0 || stats.ticketUnpaid > 0 || stats.discount.count > 0) && (
           <p className="text-2xs text-center mt-0.5">
             {/* '−N만'은 **덜 받은 현금**이다 → cashTotal. 깎아 준 총액은 마감 모달에서 따로 본다. */}
-            {stats.discount.count > 0 && <span className="text-accent-300">할인 {stats.discount.count}건 · 엔트리 −{stats.discount.entryLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })} · 현금 −{wonToMan(stats.discount.cashTotal)}만</span>}
+            {stats.discount.count > 0 && <span className="text-accent-300">할인 {stats.discount.count}건 · −{wonToMan(stats.discount.total)}만 · 현금 −{wonToMan(stats.discount.cashTotal)}만</span>}
             {stats.discount.count > 0 && (stats.ticketUnpaid > 0 || stats.support > 0) && <span className="text-ink-muted"> · </span>}
             {stats.ticketUnpaid > 0 && <span className="text-danger-light">티켓 미수 {stats.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T</span>}
             {stats.ticketUnpaid > 0 && stats.support > 0 && <span className="text-ink-muted"> · </span>}
@@ -2381,7 +2386,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <button type="button" onClick={addDisc} className="w-full rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">+ 할인 추가</button>
           )}
           <p className="text-2xs leading-relaxed text-ink-muted">
-            할인액만큼 차감해 엔트리를 비례 계산 — 예) 10만 게임에 5만 할인 = <b className="text-accent-300">0.5 엔트리</b>.<br />
+            할인은 <b className="text-accent-300">금액에서만</b> 차감합니다 — 예) 10만 게임에 5만 할인 = 적용금액 5만원 · 바이인 <b className="text-accent-300">1회</b> · 엔트리 <b className="text-accent-300">0.5</b>.<br />
             {badDisc >= 0 && (
               <b className="block text-danger-light">
                 할인{badDisc + 1}이 단가({wonToMan(minUnit)}만{card > 0 && card !== cash ? ' · 현금·카드 중 낮은 쪽' : ''})보다 큽니다 —
@@ -2618,7 +2623,12 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               <p className="mt-1 text-2xs text-ink-muted">
                 받을 금액 — 현금 <b className="tabular-nums text-ink-primary">{wonToMan(dueOf('cash') ?? 0)}만</b>
                 {cardUnit(session) !== session.buyinAmount && <> · 카드 <b className="tabular-nums text-ink-primary">{wonToMan(dueOf('card') ?? 0)}만</b></>}
-                {discIdx > 0 && <span className="text-accent-300"> · 이 바인 {(Math.max(0, session.buyinAmount - discWon) / session.buyinAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })} 엔트리</span>}
+                {/* 바이인 횟수(1회)와 엔트리(금액 기준·소수 가능)를 **둘 다** 밝힌다 — 오너 규칙 2026-09-11. */}
+                {discIdx > 0 && (() => {
+                  const applied = Math.max(0, session.buyinAmount - discWon);
+                  const ent = session.buyinAmount > 0 ? applied / session.buyinAmount : 1;
+                  return <span className="text-accent-300"> · 바이인 1회 · 엔트리 {ent.toLocaleString(undefined, { maximumFractionDigits: 2 })} · 적용금액 {wonToMan(applied)}만원</span>;
+                })()}
               </p>
             )}
           </div>
@@ -2669,7 +2679,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                         </span>
                       : (autoDiscIdx > 0 && !cell.buyin)
                         ? <>{autoFromLevel ? '자동 적용' : '기본값'}({discs[autoDiscIdx - 1]?.label || `할인${autoDiscIdx}`})을 직접 바꿨습니다.</>
-                        : '할인액만큼 차감해 엔트리를 비례 계산합니다.'}
+                        : '할인액만큼 금액에서만 차감합니다 — 바이인은 1회, 엔트리는 그 비율만큼 줄어듭니다.'}
                   </p>
                 </div>
               )}
@@ -2716,8 +2726,9 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                           : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'].join(' ')}>
                       <span className="block leading-tight">{m.label} {unpaidMode ? '미수' : '완납'}</span>
                       <span className="block text-2xs font-semibold opacity-70 tabular-nums">
-                        {/* 티켓은 자리 1개 = (단가−할인)/1만 T — 10만 게임 10T, 5만 할인이면 5T */}
-                        {due === null ? `${Math.max(0, session.buyinAmount - discWon) / WON_PER_MAN}T` : `${wonToMan(due)}만`}{discIdx > 0 ? ' ·할인' : ''}
+                        {/* 티켓은 자리 1개 = (단가−할인)/1만 T — 10만 게임 10T, 5만 할인이면 5T.
+                            ⚠ TICKET_WON 을 쓴다 — 만원 환산 상수(WON_PER_MAN)와 값이 같다고 섞으면 T 표시가 조용히 틀어진다. */}
+                        {due === null ? `${Math.max(0, session.buyinAmount - discWon) / TICKET_WON}T` : `${wonToMan(due)}만`}{discIdx > 0 ? ' ·할인' : ''}
                       </span>
                     </button>
                   );
@@ -2925,10 +2936,13 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
             <p className="py-1 text-center text-2xs text-ink-muted">적용된 할인이 없습니다</p>
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-2">
-                <SummaryStat label="할인 엔트리" value={`${stats.discount.count}건`} />
+              {/* 할인은 **바이인 횟수는 그대로 두고 엔트리만** 깎는다 — 그 깎인 양이 '엔트리 차감' 이다(오너 규칙 2026-09-11).
+                  '할인 바인 N건'(횟수)과 '엔트리 차감'(금액 기준)을 나란히 두어야 둘이 다른 수임이 보인다. */}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <SummaryStat label="할인 바인" value={`${stats.discount.count}건`} />
+                <SummaryStat label="엔트리 차감" value={`−${stats.discount.entryLoss.toLocaleString(undefined, { maximumFractionDigits: 1 })}`} tone="danger" />
                 <SummaryStat label="총 할인액" value={`${wonToMan(stats.discount.total)}만원`} tone="danger" />
-                <SummaryStat label="엔트리 차감" value={`−${stats.discount.entryLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
+                <SummaryStat label="적용 후 금액" value={`${wonToMan(Math.max(0, stats.gross - stats.discount.total))}만원`} />
               </div>
               <p className="mt-1.5 text-2xs text-ink-muted">
                 {/* ⚠ cashTotal 이다(total 아님) — 티켓·가게지원은 할인해도 받을 현금이 0원이라

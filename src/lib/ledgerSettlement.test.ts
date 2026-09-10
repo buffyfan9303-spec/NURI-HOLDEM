@@ -164,10 +164,18 @@ describe('기준 엔트리 대비', () => {
     expect(r.total.targetRevenue).toBe(0);
   });
 
-  it('할인은 엔트리를 깎는다 — 기준 대비가 그만큼 낮아진다', () => {
+  // 오너 예시(2026-09-11): 10만 게임 · 1레벨 5만 할인 → **바이인 1회 · 엔트리 0.5**.
+  it('할인은 금액만 깎는다 — 바이인 1회 · 엔트리 0.5 (오너 예시)', () => {
     const r = settlementReport(DATE, [session()],
       [buyin({ playerName: '가', discountIndex: 1 })], [player('가', 'new')]);
-    expect(r.total.entries).toBeCloseTo(0.5, 5); // 10만 중 5만 할인 = 0.5 엔트리
+    expect(r.total.buyinCount).toBe(1);   // 횟수 — 할인과 무관
+    expect(r.total.entries).toBe(0.5);    // 엔트리 — 금액 기준
+    expect(r.total.firstBuyins).toBe(1);
+    expect(r.total.rebuys).toBe(0);
+    expect(r.total.players).toBe(1);
+    expect(r.total.gross).toBe(100_000);  // 정상가
+    expect(r.total.disc).toBe(50_000);    // 할인
+    expect(r.total.value).toBe(50_000);   // 적용 후 금액
     expect(r.total.discount.count).toBe(1);
     expect(r.total.discount.cashTotal).toBe(50_000);
   });

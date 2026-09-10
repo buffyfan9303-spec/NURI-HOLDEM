@@ -13,7 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   autoDiscountIndex, discountSummary, earlyTypeOf, buyinFinance,
-  type DiscountPreset, type LedgerBuyin,
+  type DiscountPreset, type LedgerBuyin, ledgerCounts,
 } from './ledger';
 import {
   levelNoAtMinutes, currentLevelNo, earlyTypeAtLevel, earlyUnitChips, earlyUnitsOf, earlyUnitTotal,
@@ -225,21 +225,28 @@ describe('autoDiscountIndex · 포스터/장부에 적힌 레벨 할인의 자�
   });
 });
 
-describe('discountSummary · 마감정산의 할인 엔트리 · 총 할인액', () => {
+describe('discountSummary · 마감정산의 할인 바인 건수 · 총 할인액', () => {
   const S = { buyinAmount: 100_000, cardAmount: null, discounts: [
     { label: '1레벨', amount: 50_000, level: 1 },
     { label: '2레벨', amount: 30_000, level: 2 },
   ] };
-  it('오너 예시 · 5만 할인 1건이 들어가면 할인 엔트리 1 · 총 할인 5만', () => {
-    const r = discountSummary([buyin({ discountIndex: 1 }), buyin({ playerName: 'q' })], S);
-    expect(r).toEqual({ count: 1, total: 50_000, cashTotal: 50_000, entryLoss: 0.5 });
+  // 실제 기록 경로(nonSplitSnapshot)는 금액 칸에 net 을 써 넣는다. 픽스처가 0 으로 두면
+  // 2026-08-18 스냅샷 전환 이후 규칙상 **전액 무료 행**이 되어 엔트리가 0 이 된다 —
+  // 그러면 entryLoss 를 재는 이 블록이 실제와 다른 것을 잰다. 그래서 여기서만 금액을 채운다.
+  const rec = (over: Partial<LedgerBuyin> = {}) => {
+    const b = buyin(over);
+    const disc = b.discountIndex > 0 ? (S.discounts[b.discountIndex - 1]?.amount ?? 0) : 0;
+    return { ...b, cashAmount: Math.max(0, S.buyinAmount - disc) };
+  };
+  it('오너 예시 · 5만 할인 1건이 들어가면 할인 바인 1건 · 총 할인 5만 · 엔트리 0.5 차감', () => {
+    const r = discountSummary([rec({ discountIndex: 1 }), rec({ playerName: 'q' })], S);
+    expect(r).toEqual({ count: 1, total: 50_000, cashTotal: 50_000, entryLoss: 0.5 });  // 10만 게임 5만 할인 = 엔트리 0.5 차감
   });
   it('여러 건 합산 · 5만 + 5만 + 3만 = 13만 / 3건', () => {
     const r = discountSummary(
       [buyin({ discountIndex: 1 }), buyin({ discountIndex: 1 }), buyin({ discountIndex: 2 })], S);
     expect(r.count).toBe(3);
     expect(r.total).toBe(130_000);
-    expect(r.entryLoss).toBeCloseTo(1.3, 10);
   });
   it('분납 바인의 할인도 동일하게 잡힌다(2026-07 누락 사건 회귀 방지)', () => {
     const split = buyin({ isSplit: true, cashAmount: 50_000, discountIndex: 1 });
@@ -251,12 +258,16 @@ describe('discountSummary · 마감정산의 할인 엔트리 · 총 할인액',
     expect(discountSummary([buyin()], S)).toEqual({ count: 0, total: 0, cashTotal: 0, entryLoss: 0 });
   });
   it('단가 0(미설정)이어도 터지지 않는다', () => {
-    expect(discountSummary([buyin({ discountIndex: 1 })], { buyinAmount: 0, discounts: S.discounts }).entryLoss).toBe(0);
+    // 단가가 0 이면 정상가도 0 이라 할인이 걸릴 자리가 없다(0..gross 로 잘린다).
+    expect(discountSummary([buyin({ discountIndex: 1 })], { buyinAmount: 0, discounts: S.discounts }))
+      .toEqual({ count: 1, total: 50_000, cashTotal: 50_000, entryLoss: 0 });  // 단가 0 → 나눌 정가가 없어 엔트리 차감 0
+    expect(buyinFinance(buyin({ discountIndex: 1 }), { buyinAmount: 0, cardAmount: null, discounts: S.discounts }).disc).toBe(0);
   });
-  it('할인 엔트리 합계는 buyinFinance 의 엔트리 계산과 정합한다', () => {
-    const bs = [buyin({ discountIndex: 1 }), buyin({ playerName: 'q' })];
+  // 오너 규칙(2026-09-11): 할인은 **횟수는 그대로 두고 엔트리만** 깎는다. 두 수를 함께 못박는다.
+  it('할인이 걸려도 바이인 횟수는 줄지 않는다 — 2건이면 2회 · 엔트리는 1.5', () => {
+    const bs = [rec({ discountIndex: 1 }), rec({ playerName: 'q' })];
+    expect(ledgerCounts(bs).totalBuyins).toBe(2);   // 횟수 — 할인과 무관
     const entries = bs.reduce((n, b) => n + buyinFinance(b, S).entry, 0);
-    // 할인 없을 때 2엔트리에서 discountSummary.entryLoss(0.5)만큼 깎인 값
-    expect(entries).toBeCloseTo(2 - discountSummary(bs, S).entryLoss, 10);
+    expect(entries).toBe(1.5);                      // 엔트리 — 5만 할인이 0.5 를 깎는다
   });
 });

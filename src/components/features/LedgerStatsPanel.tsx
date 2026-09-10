@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
-  wonToMan, buyinFinance, discountAmountOf, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
+  wonToMan, buyinFinance, discountAmountOf, ledgerCounts, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
   posHasPassword, setPosCancelPassword, subscribeLedger,
 } from '../../api/ledger';
 import Icon from '../atoms/Icon';
@@ -26,7 +26,7 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 type Period = 'day' | 'week' | 'month' | 'all' | 'dow' | 'ai';
 const PERIODS: { id: Period; label: string; ai?: boolean }[] = [
   { id: 'day', label: '당일' }, { id: 'week', label: '일주일' }, { id: 'month', label: '한 달' }, { id: 'all', label: '총괄' }, { id: 'dow', label: '요일별' },
-  { id: 'ai', label: 'AI 분석', ai: true },
+  { id: 'ai', label: '운영 분석', ai: true },
 ];
 
 export default function LedgerStatsPanel({ venueId }: { venueId: string }) {
@@ -67,8 +67,8 @@ function StatsView({ venueId }: { venueId: string }) {
   const [loading, setLoading] = useState(true);
   // 통계는 '0원'과 '못 불러옴'이 시각적으로 같아서 특히 위험하다 — 매출이 0으로 보이면 사장님이 오판한다.
   const [loadError, setLoadError] = useState<unknown>(null);
-  const [aiTick, setAiTick] = useState(0); // AI 리포트 새로고침
-  const [aiDays, setAiDays] = useState(7); // AI 리포트 분석 기간(일) — 7/30/90
+  const [reportTick, setReportTick] = useState(0); // 운영 리포트 새로고침
+  const [reportDays, setReportDays] = useState(7); // 운영 리포트 분석 기간(일) — 7/30/90
   const [trendMetric, setTrendMetric] = useState<'revenue' | 'entries' | 'players'>('revenue'); // 추세 그래프 지표
   const [trendDetail, setTrendDetail] = useState<string | null>(null); // 추세 막대 클릭 → 그날 상세
   const [reqStats, setReqStats] = useState<BuyinReqStats | null>(null); // 바인 요청 운영지표
@@ -79,7 +79,7 @@ function StatsView({ venueId }: { venueId: string }) {
     const t = todayStr();
     if (tabPeriod === 'day')   return { from: date, to: date };
     if (tabPeriod === 'week') return { from: shift(t, -6), to: t };
-    if (tabPeriod === 'ai') return { from: shift(t, -(aiDays - 1)), to: t };
+    if (tabPeriod === 'ai') return { from: shift(t, -(reportDays - 1)), to: t };
     if (tabPeriod === 'month') return { from: t.slice(0, 7) + '-01', to: t };
     if (tabPeriod === 'dow') {
       if (dowRange === 'week')  return { from: shift(t, -6), to: t };
@@ -87,7 +87,7 @@ function StatsView({ venueId }: { venueId: string }) {
       return { from: '2000-01-01', to: t };
     }
     return { from: '2000-01-01', to: t }; // all
-  }, [tabPeriod, date, dowRange, aiDays]);
+  }, [tabPeriod, date, dowRange, reportDays]);
 
   const hasLoaded = useRef(false);
   useEffect(() => {
@@ -108,7 +108,7 @@ function StatsView({ venueId }: { venueId: string }) {
       .catch((e) => { if (alive) setLoadError(e); })
       .finally(() => { hasLoaded.current = true; if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [venueId, range.from, range.to, tabPeriod, date, aiTick, liveTick]);
+  }, [venueId, range.from, range.to, tabPeriod, date, reportTick, liveTick]);
 
   // 바인 요청 운영지표(기간) — 요청수·승인율·평균 대기(분)
   // 위와 같은 이유로 cleanup 가드를 둔다 — 이쪽은 tabPeriod 를 안 보고 range 만 보므로,
@@ -119,7 +119,7 @@ function StatsView({ venueId }: { venueId: string }) {
       .then((s) => { if (alive) setReqStats(s); })
       .catch(() => { if (alive) setReqStats(null); });
     return () => { alive = false; };
-  }, [venueId, range.from, range.to, liveTick, aiTick]);
+  }, [venueId, range.from, range.to, liveTick, reportTick]);
 
   // '당일' 통계를 보는 중 장부(바이인 등) 변경 시 실시간 갱신
   useEffect(() => {
@@ -153,9 +153,12 @@ function StatsView({ venueId }: { venueId: string }) {
   const m = useMemo(() => {
     const src = (period === 'day' && excludeTypes.size > 0) ? buyins.filter((b) => !excludeTypes.has(playerType.get(b.playerName) ?? 'none')) : buyins;
     const fin = (b: LedgerBuyin) => buyinFinance(b, sessionByKey.get(bkey(b)) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
-    let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, underEntries = 0, discountCnt = 0, discountWon = 0;
-    let mainEntries = 0, mainRev = 0, sideEntries = 0, sideRev = 0; const sideGames = new Set<string>();
-    const revByDate: Record<string, { mainRev: number; sideRev: number; mainE: number; sideE: number; players: Set<string> }> = {}; // 일자별 추세(매출·엔트리·인원)
+    // 2026-09-11: underEntries('1 미만 엔트리' 건수)를 없앴다 — 바인은 언제나 1회라 1 미만이 나올 수 없다.
+    let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, discountCnt = 0, discountWon = 0;
+    let grossSum = 0, discSum = 0;
+    // ⚠ mainBuyins/sideBuyins 는 **횟수**, entries 는 **금액 엔트리**(소수). 화면 라벨과 반드시 짝을 맞춘다.
+    let mainBuyins = 0, mainRev = 0, sideBuyins = 0, sideRev = 0; const sideGames = new Set<string>();
+    const revByDate: Record<string, { mainRev: number; sideRev: number; mainB: number; sideB: number; players: Set<string> }> = {}; // 일자별 추세(매출·바이인 횟수·인원)
     const byMethod: Record<PaymentMethod, number> = { ticket: 0, cash: 0, transfer: 0, card: 0, support: 0 };
     const byPlayer: Record<string, number> = {};
     const playerSet = new Set<string>();
@@ -165,12 +168,12 @@ function StatsView({ venueId }: { venueId: string }) {
     for (const b of src) {
       const f = fin(b);
       revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
-      if (b.gameSeq > 1) { sideEntries += f.entry; sideRev += f.paid; sideGames.add(bkey(b)); }
-      else { mainEntries += f.entry; mainRev += f.paid; }
-      const rd = revByDate[b.sessionDate] ?? (revByDate[b.sessionDate] = { mainRev: 0, sideRev: 0, mainE: 0, sideE: 0, players: new Set<string>() });
-      if (b.gameSeq > 1) { rd.sideRev += f.paid; rd.sideE += f.entry; } else { rd.mainRev += f.paid; rd.mainE += f.entry; }
+      if (b.gameSeq > 1) { sideBuyins += 1; sideRev += f.paid; sideGames.add(bkey(b)); }
+      else { mainBuyins += 1; mainRev += f.paid; }
+      const rd = revByDate[b.sessionDate] ?? (revByDate[b.sessionDate] = { mainRev: 0, sideRev: 0, mainB: 0, sideB: 0, players: new Set<string>() });
+      if (b.gameSeq > 1) { rd.sideRev += f.paid; rd.sideB += 1; } else { rd.mainRev += f.paid; rd.mainB += 1; }
       rd.players.add(b.playerName);
-      if (f.entry > 0 && f.entry < 1) underEntries++; // 참고용
+      grossSum += f.gross; discSum += f.disc;
       // 할인 이벤트가 적용된 바인(분납 포함 — discountIndex로 일원화).
       // #20: 건수만으론 '얼마를 덜 받았나'를 못 본다 — 그 회차 세션의 프리셋 금액으로 합계도 함께 쌓는다.
       if (b.discountIndex > 0) {
@@ -187,7 +190,7 @@ function StatsView({ venueId }: { venueId: string }) {
       if (!dow[w].dates.has(b.sessionDate)) dow[w].target += (sessionsByDate.get(b.sessionDate) ?? []).reduce((a, s) => a + (s.targetEntries ?? 0), 0); // 날짜별(전 게임) 기준엔트리 1회만 합산
       dow[w].entries += f.entry; dow[w].revenue += f.paid; dow[w].unpaid += f.unpaid;
       dow[w].buyins++; dow[w].dates.add(b.sessionDate); dow[w].players.add(b.playerName);
-      if (b.gameSeq > 1) { dow[w].sideE += f.entry; dow[w].sideRev += f.paid; }
+      if (b.gameSeq > 1) { dow[w].sideE += 1; dow[w].sideRev += f.paid; }
     }
     const target = period === 'day' ? (sessionsByDate.get(date) ?? []).reduce((a, s) => a + (s.targetEntries ?? 0), 0) : 0;
     const visitor: Record<VisitorType, number> = { new: 0, regular: 0, staff: 0, other: 0 };
@@ -197,23 +200,27 @@ function StatsView({ venueId }: { venueId: string }) {
       else visitor.other++;
     }
     const dayCount = dates.size;
+    // 첫 바인·리바인은 장부·정산·클락과 같은 함수로 센다 — 여기서 따로 세면 규칙이 갈린다.
+    const cnt = ledgerCounts(src);
     const cashLike = byMethod.cash + byMethod.transfer + byMethod.card;
     // 객단가 — 미수 포함(받을 돈까지). 관계자 제외는 자동으로 하지 않음(필요하면 위 '바인 제외 관계자' 필터로).
     const grossPerPlayer = playerSet.size ? (revenue + unpaid) / playerSet.size : 0;
-    const grossPerEntry = entries > 0 ? (revenue + unpaid) / entries : 0;
+    // 객단가는 **횟수**로 나눈다. 엔트리로 나누면 revenue ≈ entries × 단가 라서 언제나 단가가 나오는 죽은 지표가 된다.
+    const grossPerEntry = cnt.totalBuyins > 0 ? (revenue + unpaid) / cnt.totalBuyins : 0;
     return {
-      total: src.length, entries, underEntries, players: playerSet.size, revenue, unpaid, support, ticket, ticketUnpaid,
+      total: src.length, entries, buyinCount: cnt.totalBuyins, firstBuyins: cnt.firstBuyins, rebuys: cnt.rebuys, grossSum, discSum, players: playerSet.size, revenue, unpaid, support, ticket, ticketUnpaid,
       unpaid_cnt: src.filter((b) => fin(b).unpaid > 0).length,
       byMethod, ranking: Object.entries(byPlayer).sort((a, b) => b[1] - a[1]),
       unpaidRanking: Object.entries(unpaidByPlayer).sort((a, b) => b[1] - a[1]),
+      // 기준 엔트리(GTD 목표) 대비는 **금액 엔트리**가 분자다 — 반값 손님은 목표를 0.5 명분만 채운다.
       target, fillRatio: target ? Math.round((entries / target) * 100) : null,
-      perPlayer: playerSet.size ? entries / playerSet.size : 0,
+      perPlayer: playerSet.size ? cnt.totalBuyins / playerSet.size : 0,
       arpGuest: grossPerPlayer, // 1인당 (완납+미수)
-      arpEntry: grossPerEntry,  // 엔트리당 (완납+미수)
-      mainEntries, mainRev, sideEntries, sideRev, sideGameCount: sideGames.size,
-      trend: Object.entries(revByDate).map(([d, v]) => ({ date: d, mainRev: v.mainRev, sideRev: v.sideRev, mainE: v.mainE, sideE: v.sideE, players: v.players.size })).sort((a, b) => (a.date < b.date ? -1 : 1)),
+      arpEntry: grossPerEntry,  // 바이인 1회당 (완납+미수)
+      mainBuyins, mainRev, sideBuyins, sideRev, sideGameCount: sideGames.size,
+      trend: Object.entries(revByDate).map(([d, v]) => ({ date: d, mainRev: v.mainRev, sideRev: v.sideRev, mainB: v.mainB, sideB: v.sideB, players: v.players.size })).sort((a, b) => (a.date < b.date ? -1 : 1)),
       dayCount, visitor, dow,
-      avgEntryPerDay: dayCount ? entries / dayCount : 0,
+      avgBuyinPerDay: dayCount ? cnt.totalBuyins / dayCount : 0,
       avgRevenuePerDay: dayCount ? revenue / dayCount : 0,
       discountCnt, discountWon, discountRatio: src.length > 0 ? (discountCnt / src.length) * 100 : 0, // 전체 바인 중 할인 적용 비율
       cardRatio: cashLike > 0 ? (byMethod.card / cashLike) * 100 : 0,   // 현금성 결제 중 카드 비중
@@ -288,8 +295,8 @@ function StatsView({ venueId }: { venueId: string }) {
         <div className="space-y-2">
           <SegmentedTabs grow className="flex w-full"
             items={[{ key: '7', label: '최근 7일' }, { key: '30', label: '30일' }, { key: '90', label: '90일' }]}
-            value={String(aiDays)} onChange={(k) => setAiDays(Number(k))} />
-          <AiReport m={m} days={aiDays} onRefresh={() => setAiTick((t) => t + 1)} />
+            value={String(reportDays)} onChange={(k) => setReportDays(Number(k))} />
+          <OpsReport m={m} days={reportDays} onRefresh={() => setReportTick((t) => t + 1)} />
         </div>
       ) : period === 'dow' ? (
         <div className="space-y-2">
@@ -333,10 +340,13 @@ function StatsView({ venueId }: { venueId: string }) {
           )}
 
           {/* 주요 지표 — 아이콘 카드 */}
+          {/* 2026-09-11: '총 엔트리' 는 소수가 될 수 없다 — 첫 바인·리바인으로 나눠 뜻을 분명히 한다.
+              '할인 전 매출' 은 결제수단을 보지 않는 discountWon 을 더해 이용권·지원 할인까지 얹혔었다 →
+              정상가 합계(grossSum)를 그대로 쓴다. */}
           <div className="grid grid-cols-3 gap-2">
-            <StatCard label="총 엔트리" value={m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} icon="users" />
-            <StatCard label="할인 엔트리" value={`${m.discountCnt}건`} sub={`바인 중 ${m.discountRatio.toFixed(1)}%`} icon="down" />
-            <StatCard label="총 할인액" value={`${m.discountWon.toLocaleString()} 원`} sub={m.discountWon > 0 ? `할인 전 ${wonToMan(m.revenue + m.discountWon)}만원` : '할인 없음'} icon="percent" gold />
+            <StatCard label="총 바이인" value={`${m.buyinCount.toLocaleString()}회`} sub={`첫 ${m.firstBuyins} · 리바인 ${m.rebuys}`} icon="users" />
+            <StatCard label="할인 바인" value={`${m.discountCnt}건`} sub={`바인 중 ${m.discountRatio.toFixed(1)}%`} icon="down" />
+            <StatCard label="총 할인액" value={`${m.discountWon.toLocaleString()} 원`} sub={m.grossSum > 0 ? `정상가 ${wonToMan(m.grossSum)}만원` : '할인 없음'} icon="percent" gold />
           </div>
           <div className="grid grid-cols-3 gap-2">
             <StatCard label="완납 매출액" value={`${m.revenue.toLocaleString()} 원`} icon="wallet" emerald />
@@ -347,13 +357,13 @@ function StatsView({ venueId }: { venueId: string }) {
           {/* 보조 지표 */}
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {period === 'day'
-              ? <Mini label="엔트리 비율" value={m.fillRatio !== null ? `${m.fillRatio}%` : '-'} />
+              ? <Mini label="기준 달성률" value={m.fillRatio !== null ? `${m.fillRatio}%` : '-'} />
               : <Mini label="영업일수" value={`${m.dayCount}일`} />}
-            {period !== 'day' && <Mini label="일평균 엔트리" value={m.avgEntryPerDay.toFixed(1)} />}
+            {period !== 'day' && <Mini label="일평균 바이인" value={m.avgBuyinPerDay.toFixed(1)} />}
             <Mini label="플레이어" value={`${m.players}명`} />
-            <Mini label="엔트리/인" value={m.perPlayer ? m.perPlayer.toFixed(1) : '0'} />
+            <Mini label="바이인/인" value={m.perPlayer ? m.perPlayer.toFixed(1) : '0'} />
             <Mini label="객단가/인" value={`${wonToMan(Math.round(m.arpGuest))}만`} hint="미수 포함" />
-            <Mini label="객단가/엔트리" value={`${wonToMan(Math.round(m.arpEntry))}만`} hint="미수 포함" />
+            <Mini label="객단가/바이인" value={`${wonToMan(Math.round(m.arpEntry))}만`} hint="미수 포함" />
             {period === 'day'
               ? <Mini label="가게지원" value={`${m.support}건`} />
               : <Mini label="일평균 매출" value={`${m.avgRevenuePerDay.toLocaleString(undefined, { maximumFractionDigits: 0 })}원`} hint="완납 기준" />}
@@ -378,12 +388,12 @@ function StatsView({ venueId }: { venueId: string }) {
                     한눈에 대소를 못 읽는다. 좌측 정렬이라야 같은 폭 타일끼리 값의 시작점이 세로로 맞는다. */}
                 <div className="rounded-input bg-surface-high border border-border-default px-2.5 py-2">
                   <p className="text-2xs text-ink-muted">메인</p>
-                  <p className="text-sm font-bold text-ink-primary tabular-nums">{m.mainEntries.toLocaleString(undefined, { maximumFractionDigits: 1 })} 엔트리</p>
+                  <p className="text-sm font-bold text-ink-primary tabular-nums">{m.mainBuyins.toLocaleString()}회</p>
                   <p className="text-2xs text-emerald-400 tabular-nums">완납 {wonToMan(m.mainRev)}만</p>
                 </div>
                 <div className="rounded-input bg-accent-300/[0.06] border border-accent-400/30 px-2.5 py-2">
                   <p className="text-2xs text-accent-300">사이드 · {m.sideGameCount}게임</p>
-                  <p className="text-sm font-bold text-ink-primary tabular-nums">{m.sideEntries.toLocaleString(undefined, { maximumFractionDigits: 1 })} 엔트리</p>
+                  <p className="text-sm font-bold text-ink-primary tabular-nums">{m.sideBuyins.toLocaleString()}회</p>
                   <p className="text-2xs text-emerald-400 tabular-nums">완납 {wonToMan(m.sideRev)}만</p>
                 </div>
               </div>
@@ -392,18 +402,18 @@ function StatsView({ venueId }: { venueId: string }) {
 
           {period !== 'day' && m.trend.length >= 2 && (() => {
             const stacked = trendMetric !== 'players';
-            const totals = m.trend.map((d) => trendMetric === 'revenue' ? d.mainRev + d.sideRev : trendMetric === 'entries' ? d.mainE + d.sideE : d.players);
+            const totals = m.trend.map((d) => trendMetric === 'revenue' ? d.mainRev + d.sideRev : trendMetric === 'entries' ? d.mainB + d.sideB : d.players);
             const max = Math.max(1, ...totals);
             const fmt = (n: number) => trendMetric === 'revenue' ? `${wonToMan(n)}만` : trendMetric === 'entries' ? n.toFixed(n % 1 ? 1 : 0) : `${n}명`;
             return (
-              <Section icon="wallet" title="일자별 추세" suffix={trendMetric === 'revenue' ? '· 매출' : trendMetric === 'entries' ? '· 엔트리' : '· 인원'}>
+              <Section icon="wallet" title="일자별 추세" suffix={trendMetric === 'revenue' ? '· 매출' : trendMetric === 'entries' ? '· 바이인' : '· 인원'}>
                 <SegmentedTabs grow className="flex w-full mb-2"
-                  items={[{ key: 'revenue', label: '매출' }, { key: 'entries', label: '엔트리' }, { key: 'players', label: '인원' }]}
+                  items={[{ key: 'revenue', label: '매출' }, { key: 'entries', label: '바이인' }, { key: 'players', label: '인원' }]}
                   value={trendMetric} onChange={(k) => setTrendMetric(k as 'revenue' | 'entries' | 'players')} />
                 <div className="flex items-end gap-1 overflow-x-auto pb-1">
                   {m.trend.map((d, i) => {
                     const total = totals[i];
-                    const side = trendMetric === 'revenue' ? d.sideRev : trendMetric === 'entries' ? d.sideE : 0;
+                    const side = trendMetric === 'revenue' ? d.sideRev : trendMetric === 'entries' ? d.sideB : 0;
                     const barPx = total > 0 ? Math.round((total / max) * 88) + 4 : 2;
                     const sidePx = stacked && total > 0 ? Math.round((side / total) * barPx) : 0;
                     return (
@@ -434,7 +444,7 @@ function StatsView({ venueId }: { venueId: string }) {
                     <div className="mt-2 rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2.5">
                       <p className="text-2xs font-bold text-accent-300 mb-1.5">{d.date} 상세</p>
                       <div className="grid grid-cols-3 gap-1.5 text-center">
-                        <div><p className="text-2xs text-ink-muted">엔트리</p><p className="text-sm font-bold text-ink-primary tabular-nums">{f1(d.mainE + d.sideE)}</p><p className="text-[10px] text-ink-muted">메인 {f1(d.mainE)} · 사이드 {f1(d.sideE)}</p></div>
+                        <div><p className="text-2xs text-ink-muted">바이인</p><p className="text-sm font-bold text-ink-primary tabular-nums">{f1(d.mainB + d.sideB)}</p><p className="text-[10px] text-ink-muted">메인 {f1(d.mainB)} · 사이드 {f1(d.sideB)}</p></div>
                         <div><p className="text-2xs text-ink-muted">매출</p><p className="text-sm font-bold text-emerald-400 tabular-nums">{wonToMan(d.mainRev + d.sideRev)}만</p><p className="text-[10px] text-ink-muted">메인 {wonToMan(d.mainRev)} · 사이드 {wonToMan(d.sideRev)}</p></div>
                         <div><p className="text-2xs text-ink-muted">인원</p><p className="text-sm font-bold text-ink-primary tabular-nums">{d.players}명</p></div>
                       </div>
@@ -454,7 +464,7 @@ function StatsView({ venueId }: { venueId: string }) {
                 <Mini label="얼리(칩단위)" value={`${clockAgg.earlies}`} tone="amber" />
               </div>
               <p className="text-2xs text-ink-muted mt-1.5 leading-relaxed">
-                마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 엔트리({m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})는 바인 기록 기준</b>이라 다를 수 있어요. 통계·정산은 장부 기준, 이 값은 운영 참고용입니다. 얼리는 <b className="text-ink-secondary">기준칩 배수 합</b>(더블얼리 1명 = 2)이며, 2026-08-30 이전 마감분은 인원 수로 기록돼 있어 그대로 표시됩니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
+                마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 바이인({m.entries.toLocaleString()}회)은 바인 기록 기준</b>이라 다를 수 있어요. 통계·정산은 장부 기준, 이 값은 운영 참고용입니다. 얼리는 <b className="text-ink-secondary">기준칩 배수 합</b>(더블얼리 1명 = 2)이며, 2026-08-30 이전 마감분은 인원 수로 기록돼 있어 그대로 표시됩니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
               </p>
             </Section>
           )}
@@ -529,15 +539,18 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
   const rows: DowRow[] = [1, 2, 3, 4, 5, 6, 0].map((w) => {
     const d = dow[w];
     const days = d ? d.dates.size : 0;
-    const entries = d?.entries ?? 0;
+    const entries = d?.entries ?? 0;   // 금액 엔트리 — fill 전용
+    const buyins = d?.buyins ?? 0;     // 횟수 — 그 외 전부
     const revenue = d?.revenue ?? 0;
     const target = d?.target ?? 0;
     return {
-      w, days, entries, revenue, unpaid: d?.unpaid ?? 0, buyins: d?.buyins ?? 0, players: d ? d.players.size : 0,
+      w, days, entries, revenue, unpaid: d?.unpaid ?? 0, buyins, players: d ? d.players.size : 0,
+      // fill(기준 달성률)만 금액 엔트리로 잰다 — 기준 엔트리가 GTD 목표라서다.
+      // 나머지(일평균·객단가)는 횟수 기준. 매출 ÷ 금액엔트리 는 언제나 단가가 나와 아무 정보가 없다.
       target, fill: target > 0 ? (entries / target) * 100 : null,
-      avgEntry: days ? entries / days : 0,
+      avgEntry: days ? buyins / days : 0,
       avgRevenue: days ? revenue / days : 0,
-      perEntry: entries ? revenue / entries : 0,
+      perEntry: buyins ? revenue / buyins : 0,
     };
   });
   const active = rows.filter((r) => r.days > 0);
@@ -550,7 +563,8 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
   const maxAvgEntry = Math.max(...rows.map((r) => r.avgEntry), 0.1);
   const maxAvgRev   = Math.max(...rows.map((r) => r.avgRevenue), 1);
   const totalDays    = rows.reduce((s, r) => s + r.days, 0);
-  const totalEntries = rows.reduce((s, r) => s + r.entries, 0);
+  const totalBuyins  = rows.reduce((s, r) => s + r.buyins, 0);
+  const totalEntries = rows.reduce((s, r) => s + r.entries, 0);  // 달성률 분자
   const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
   const totalTarget  = rows.reduce((s, r) => s + r.target, 0);
   const overallFill  = totalTarget > 0 ? Math.round((totalEntries / totalTarget) * 100) : null;
@@ -565,24 +579,24 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Mini label="기준 달성률" value={overallFill !== null ? `${overallFill}%` : '기준 미설정'} />
         <Mini label="영업일" value={`${totalDays}일`} />
-        <Mini label="총 엔트리" value={totalEntries.toLocaleString(undefined, { maximumFractionDigits: 0 })} />
+        <Mini label="총 바이인" value={`${totalBuyins.toLocaleString()}회`} />
         <Mini label="총 매출(만)" value={wonToMan(totalRevenue)} hint="완납 기준" />
       </div>
 
       {/* 최고 / 최저 요일 하이라이트 */}
       <div className="grid grid-cols-2 gap-2">
         <DowHilite tone="emerald" cap="가장 활발한 요일" w={best.w}
-          a={`일평균 ${best.avgEntry.toFixed(1)} 엔트리`} b={`${wonToMan(best.avgRevenue)}만/일 · 완납 객단가 ${wonToMan(best.perEntry)}만`} />
+          a={`일평균 ${best.avgEntry.toFixed(1)}회`} b={`${wonToMan(best.avgRevenue)}만/일 · 완납 객단가 ${wonToMan(best.perEntry)}만`} />
         <DowHilite tone="rose" cap="가장 부진한 요일" w={worst.w}
-          a={`일평균 ${worst.avgEntry.toFixed(1)} 엔트리`} b={multi ? `${wonToMan(worst.avgRevenue)}만/일 · 완납 객단가 ${wonToMan(worst.perEntry)}만` : '비교할 다른 요일 데이터 필요'} />
+          a={`일평균 ${worst.avgEntry.toFixed(1)}회`} b={multi ? `${wonToMan(worst.avgRevenue)}만/일 · 완납 객단가 ${wonToMan(worst.perEntry)}만` : '비교할 다른 요일 데이터 필요'} />
       </div>
 
       {/* 막대 차트 — 엔트리/매출 토글 */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <p className="text-2xs font-semibold text-ink-secondary">요일별 {metric === 'fill' ? '기준 엔트리 달성률' : metric === 'entry' ? '일평균 엔트리' : '일평균 매출'}</p>
+          <p className="text-2xs font-semibold text-ink-secondary">요일별 {metric === 'fill' ? '기준 엔트리 달성률' : metric === 'entry' ? '일평균 바이인' : '일평균 매출'}</p>
           <div className="flex gap-0.5 bg-surface-high rounded-input p-0.5">
-            {([['fill', '달성률'], ['entry', '엔트리'], ['revenue', '매출']] as const).map(([k, lbl]) => (
+            {([['fill', '달성률'], ['entry', '바이인'], ['revenue', '매출']] as const).map(([k, lbl]) => (
               <button key={k} type="button" onClick={() => setMetric(k)}
                 className={['px-2 py-0.5 text-2xs font-bold rounded-[5px] transition-colors',
                   metric === k ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{lbl}</button>
@@ -621,7 +635,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
           <thead><tr className="text-2xs text-ink-muted">
             <th scope="col" className="py-1 pl-1 font-normal">요일</th>
             <th scope="col" className="py-1 pr-1 text-right font-normal">영업일</th>
-            <th scope="col" className="py-1 pr-1 text-right font-normal"><span className="block">일평균</span>엔트리</th>
+            <th scope="col" className="py-1 pr-1 text-right font-normal"><span className="block">일평균</span>바이인</th>
             <th scope="col" className="py-1 pr-1 text-right font-normal"><span className="block">일평균</span>매출(만)</th>
             <th scope="col" className="py-1 pr-1 text-right font-normal"><span className="block">완납 객단가</span>(만)</th>
           </tr></thead>
@@ -632,7 +646,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
                 <td className="pr-1 text-right text-ink-secondary tabular-nums">{r.days || '-'}</td>
                 <td className={['pr-1 text-right tabular-nums font-bold', r.w === best.w && multi ? 'text-emerald-400' : r.w === worst.w && multi ? 'text-rose-400' : 'text-ink-primary'].join(' ')}>{r.days ? r.avgEntry.toFixed(1) : '-'}</td>
                 <td className="pr-1 text-right text-ink-secondary tabular-nums">{r.days ? wonToMan(r.avgRevenue) : '-'}</td>
-                <td className="pr-1 text-right text-ink-secondary tabular-nums">{r.entries ? wonToMan(r.perEntry) : '-'}</td>
+                <td className="pr-1 text-right text-ink-secondary tabular-nums">{r.buyins ? wonToMan(r.perEntry) : '-'}</td>
               </tr>
             ))}
           </tbody>
@@ -642,7 +656,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
       {/* 인사이트 */}
       <p className="text-[11px] text-ink-secondary bg-surface-low/70 border border-border-default rounded-input p-2.5 leading-relaxed">
         <Icon name="lightbulb" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0 text-accent-300" />{multi
-          ? <>{DOW[worst.w]}요일이 일평균 <b className="text-rose-300">{worst.avgEntry.toFixed(1)}</b> 엔트리로 가장 저조합니다(전체 평균 {meanAvg.toFixed(1)}). 반대로 <b className="text-emerald-300">{DOW[best.w]}</b>요일이 {best.avgEntry.toFixed(1)}로 가장 활발합니다. {DOW[worst.w]}요일에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 보세요.</>
+          ? <>{DOW[worst.w]}요일이 일평균 <b className="text-rose-300">{worst.avgEntry.toFixed(1)}</b>회로 가장 저조합니다(전체 평균 {meanAvg.toFixed(1)}). 반대로 <b className="text-emerald-300">{DOW[best.w]}</b>요일이 {best.avgEntry.toFixed(1)}로 가장 활발합니다. {DOW[worst.w]}요일에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 보세요.</>
           : <>아직 한 요일({DOW[best.w]})만 집계됐습니다. 다른 요일도 운영되면 요일 간 비교·약한 요일 진단을 표시합니다.</>}
       </p>
     </div>
@@ -736,11 +750,11 @@ interface StatsAgg {
   total: number; entries: number; revenue: number; unpaid: number; players: number; ticket: number;
   cardRatio: number; unpaidRatio: number; discountRatio: number; discountCnt: number;
   ranking: [string, number][];
-  mainEntries: number; mainRev: number; sideEntries: number; sideRev: number; sideGameCount: number;
+  mainBuyins: number; mainRev: number; sideBuyins: number; sideRev: number; sideGameCount: number;
   dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string>; sideE: number; sideRev: number }>;
 }
 
-function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; risk: string; weekday: string; actions: string[] } {
+function buildOpsReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; risk: string; weekday: string; actions: string[] } {
   if (m.total === 0) return { empty: true, sales: '', risk: '', weekday: '', actions: [] };
   const man = (won: number) => wonToMan(won);
   const periodLabel = days <= 7 ? '이번 주' : `최근 ${days}일`;
@@ -756,7 +770,7 @@ function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; 
   const totalRev = m.mainRev + m.sideRev;
   const sideShare = totalRev > 0 ? (m.sideRev / totalRev) * 100 : 0;
   const sideLine = m.sideGameCount > 0
-    ? ` 또한 사이드 게임 ${m.sideGameCount}종이 전체 매출의 약 ${Math.round(sideShare)}%(${man(m.sideRev)}만 원·${m.sideEntries.toFixed(0)} 엔트리)를 책임집니다. ${sideShare >= 30 ? '사이드가 핵심 매출원이니 라인업을 더 늘려보세요' : sideShare >= 10 ? '사이드가 메인 매출을 잘 보완하고 있습니다' : '사이드 비중이 낮아 시간대·홍보를 조정할 여지가 있습니다'}.`
+    ? ` 또한 사이드 게임 ${m.sideGameCount}종이 전체 매출의 약 ${Math.round(sideShare)}%(${man(m.sideRev)}만 원·${m.sideBuyins.toFixed(0)}회)를 책임집니다. ${sideShare >= 30 ? '사이드가 핵심 매출원이니 라인업을 더 늘려보세요' : sideShare >= 10 ? '사이드가 메인 매출을 잘 보완하고 있습니다' : '사이드 비중이 낮아 시간대·홍보를 조정할 여지가 있습니다'}.`
     : ' 아직 사이드 게임 기록이 없습니다. 새틀라이트·하이롤러 같은 사이드를 1~2종 추가하면 객단가를 끌어올릴 수 있습니다.';
 
   // 요일별 진단(안좋은 날)
@@ -765,14 +779,14 @@ function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; 
     weekday = '아직 요일별 비교에 충분한 데이터가 없습니다. 며칠 더 운영되면 요일 패턴(약한 요일)을 진단해 드립니다.';
   } else {
     const sideDays = dows.filter((d) => d.sideAvg > 0).sort((a, b) => b.sideAvg - a.sideAvg);
-    const sidePat = sideDays.length ? ` 사이드 게임은 ${DOW[sideDays[0].w]}요일에 가장 활발합니다(평균 ${sideDays[0].sideAvg.toFixed(1)} 엔트리). 그날 사이드 라인업을 강화해 보세요.` : '';
-    weekday = `${DOW[worst!.w]}요일이 가장 부진합니다. 평균 ${worst!.avg.toFixed(1)} 엔트리 · 매출 ${man(worst!.rev)}만 원.` +
-      `반대로 ${DOW[best.w]}요일이 가장 활발(평균 ${best.avg.toFixed(1)} 엔트리)합니다. ` +
+    const sidePat = sideDays.length ? ` 사이드 게임은 ${DOW[sideDays[0].w]}요일에 가장 활발합니다(평균 ${sideDays[0].sideAvg.toFixed(1)}회). 그날 사이드 라인업을 강화해 보세요.` : '';
+    weekday = `${DOW[worst!.w]}요일이 가장 부진합니다. 평균 ${worst!.avg.toFixed(1)}회 · 매출 ${man(worst!.rev)}만 원.` +
+      `반대로 ${DOW[best.w]}요일이 가장 활발(평균 ${best.avg.toFixed(1)}회)합니다. ` +
       `${weak.length ? weak.join('·') + '요일' : DOW[worst!.w] + '요일'}에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 약한 요일을 끌어올리세요.` + sidePat;
   }
 
   const sales =
-    `${best ? `${periodLabel} ${DOW[best.w]}요일(${best.avg.toFixed(1)} 엔트리)의 성과가 가장 두드러집니다. ` : ''}` +
+    `${best ? `${periodLabel} ${DOW[best.w]}요일(${best.avg.toFixed(1)}회)의 성과가 가장 두드러집니다. ` : ''}` +
     `전체 매출 ${man(m.revenue)}만 원 중 카드 결제 비율이 ${Math.round(m.cardRatio)}%로 ` +
     `${m.cardRatio >= 60 ? '높아 결제 편의성이 잘 확보되어' : '적정 수준으로 유지되어'} 있습니다. ` +
     `${m.players}명의 플레이어가 참여했습니다.` + sideLine;
@@ -794,8 +808,8 @@ function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; 
   return { empty: false, sales, risk, weekday, actions };
 }
 
-function AiReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onRefresh: () => void }) {
-  const rpt = useMemo(() => buildAiReport(m, days), [m, days]);
+function OpsReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onRefresh: () => void }) {
+  const rpt = useMemo(() => buildOpsReport(m, days), [m, days]);
   // 리포트 인쇄/PDF 저장 — 새 창에 렌더 후 인쇄(브라우저 'PDF로 저장'). 별도 의존성 없이 지류 양식과 동일 패턴.
   const exportReport = () => {
     if (rpt.empty) return;
@@ -804,7 +818,7 @@ function AiReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onRe
     // 플레이어명 등 운영자 자유입력이 리포트 본문에 섞이므로 HTML 이스케이프(인쇄창 인젝션 방지).
     const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const card = (t: string, b: string) => `<div class="c"><div class="t">${esc(t)}</div><div class="b">${esc(b)}</div></div>`;
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>NURI AI 주간 리포트</title><style>
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>NURI 운영 리포트</title><style>
 *{box-sizing:border-box;margin:0;font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif}
 body{padding:32px;color:#1a1a1a;max-width:720px;margin:0 auto}
 h1{font-size:22px;font-weight:900}.sub{color:#777;font-size:12px;margin:4px 0 20px}
@@ -812,11 +826,11 @@ h1{font-size:22px;font-weight:900}.sub{color:#777;font-size:12px;margin:4px 0 20
 .c .t{font-weight:800;font-size:14px;margin-bottom:6px;color:#6d28d9}.c .b{font-size:13px;line-height:1.7;color:#333;white-space:pre-line}
 @media print{body{padding:16px}}
 </style></head><body>
-<h1>NURI AI 주간 리포트</h1><div class="sub">최근 ${days}일 누적 데이터 기반 인사이트 · nuriholdem.com</div>
-${card('매출 및 엔트리 분석', rpt.sales)}
+<h1>NURI 운영 리포트</h1><div class="sub">최근 ${days}일 누적 데이터 기반 인사이트 · nuriholdem.com</div>
+${card('매출 및 바이인 분석', rpt.sales)}
 ${card('리스크 & 누수 체크', rpt.risk)}
 ${card('요일별 진단', rpt.weekday)}
-${card('AI 운영 액션 플랜', rpt.actions.map((a) => '• ' + a).join('\n'))}
+${card('운영 액션 플랜', rpt.actions.map((a) => '• ' + a).join('\n'))}
 <script>window.onload=function(){setTimeout(function(){window.print();},250);};</script>
 </body></html>`);
     w.document.close();
@@ -825,7 +839,7 @@ ${card('AI 운영 액션 플랜', rpt.actions.map((a) => '• ' + a).join('\n'))
     <div className="rounded-card border border-violet-500/40 bg-gradient-to-br from-violet-500/[0.12] to-indigo-500/[0.04] p-3 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h4 className="flex items-center gap-1.5 text-sm font-bold text-violet-200"><Icon name="sparkles" size={14} className="shrink-0" />NURI AI 주간 리포트</h4>
+          <h4 className="flex items-center gap-1.5 text-sm font-bold text-violet-200"><Icon name="sparkles" size={14} className="shrink-0" />NURI 운영 리포트</h4>
           <p className="text-2xs text-ink-muted mt-0.5">최근 {days}일간의 누적 데이터를 기반으로 분석된 비즈니스 인사이트입니다.</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -840,10 +854,10 @@ ${card('AI 운영 액션 플랜', rpt.actions.map((a) => '• ' + a).join('\n'))
         <p className="text-center py-8 text-2xs text-ink-muted">최근 {days}일간 데이터가 부족합니다.<br />장부를 작성하면 통계가 표시됩니다.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <ReportCard tone="emerald" title="매출 및 엔트리 분석" body={rpt.sales} />
+          <ReportCard tone="emerald" title="매출 및 바이인 분석" body={rpt.sales} />
           <ReportCard tone="rose" title="리스크 & 누수 체크" body={rpt.risk} />
           <ReportCard tone="sky" title="요일별 진단 (안좋은 날)" body={rpt.weekday} />
-          <ReportCard tone="amber" title="AI 운영 액션 플랜" bullets={rpt.actions} />
+          <ReportCard tone="amber" title="운영 액션 플랜" bullets={rpt.actions} />
         </div>
       )}
     </div>

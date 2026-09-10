@@ -7,12 +7,10 @@ import { listStaleOpenSessions,
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
   getLastClosedRound, MAIN_GAME_SEQ, kstToday, type LastClosedRound, type PosterOpsSummary,
-  type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest,
-} from '../../api/ledger';
+  type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, ledgerCounts,} from '../../api/ledger';
 import { useToast } from '../atoms/Toast';
 import { getClockState, getVenueClocks, subscribeClock, type ClockState } from '../../api/clock';
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
-import { aiGenerate } from '../../api/ai';
 import { getVenueRankings } from '../../api/rankings';
 import { hasRankingForGame } from '../../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
 import { ledgerGameLabel } from '../../lib/ledgerLink';
@@ -95,7 +93,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [clock, setClock] = useState<ClockState | null>(null);
   const [venueClocks, setVenueClocks] = useState<ClockState[]>([]); // 위젯 멀티게임 — 매장 전체 게임 클락(메인+사이드)
   const [widgetGame, setWidgetGame] = useState(1); // 위젯에서 보고 있는 게임(game_seq)
-  const [wEntries, setWEntries] = useState<number | null>(null); // 위젯 사이드 게임 장부 엔트리(생존 정밀화용)
+  const [wHeads, setWHeads] = useState<number | null>(null); // 위젯 사이드 게임 장부 **인원**(생존 폴백용)
   const [dowStats, setDowStats] = useState<{ avg: number | null; weeks: { label: string; entries: number }[] }>({ avg: null, weeks: [] }); // 같은 요일 4주(평균+주차별)
   const [dowOpen, setDowOpen] = useState(false); // 요일 추세 드릴다운(주차 막대) 펼침
   const [pendingReqs, setPendingReqs] = useState<BuyinRequest[]>([]); // 라이브 위젯: 대기중 바인 요청
@@ -113,9 +111,6 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [range, setRange] = useState<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }>({ sessions: [], buyins: [] });
   const [regulars, setRegulars] = useState<VenueRegular[]>([]);
-  const [aiSummary, setAiSummary] = useState('');
-  const [aiBusy, setAiBusy] = useState(false);
-  const [aiErr, setAiErr] = useState('');
   const [regOpen, setRegOpen] = useState(false);
   const [dealerOpen, setDealerOpen] = useState(false);
   const [checkinOpen, setCheckinOpen] = useState(false);
@@ -164,7 +159,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           const s = byGame.get(`${b.sessionDate}#${b.gameSeq}`);
           if (!s) continue;
           has = true;
-          e += buyinFinance(b, s).entry;
+          e += 1;   // 요일 비교는 **바이인 횟수** 기준
         }
         if (!has) continue;
         weeks.push({ label: day.slice(5).replace('-', '/'), entries: Math.round(e) });
@@ -257,6 +252,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   useEffect(() => subscribeStaffSchedule(venueId, reload), [venueId, reload]);
 
   // ── 오늘 장부 집계 ──
+  // fin.entry 는 **금액 엔트리**(소수), cnt 는 **횟수·인원**. 라벨과 반드시 짝을 맞춘다(오너 규칙 2026-09-11).
+  const cnt = ledgerCounts(buyins);
   const fin = buyins.reduce(
     (a, b) => {
       if (!session) return a;
@@ -302,10 +299,14 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const clockRemainMs = wActive && wClock
     ? (wClock.running && wClock.endsAt ? Math.max(0, new Date(wClock.endsAt).getTime() - Date.now()) : Math.max(0, wClock.remainingMs))
     : 0;
-  // 생존: 클락 liveStats(게임별 장부 합산) 우선 → 없으면 게임 장부 엔트리(메인=fin, 사이드=wEntries) + 보정 − 탈락
-  const wEntriesEff = widgetGame === 1 ? Math.round(fin.entry) : wEntries;
+  // 생존: 클락 liveStats 우선 → 없으면 **인원 − 탈락**.
+  // ⚠ 폴백의 기준은 금액 엔트리도 바이인 횟수도 아니라 **사람 수**다(2026-09-07 장부에서 고친 것과 같은 결함).
+  //   예전엔 엔트리 합 + adjRebuys 를 썼다 — 리바인은 새 사람이 아니라서 6명이 리바인을 돌린 판에
+  //   '생존 41' 이 나왔고, 클락이 붙는 순간 실집계로 6 이 되며 같은 타일이 튀었다.
+  //   clock.ts computeLiveStats 도 alive = entries(인원) − eliminations 로 정의한다 — 정의를 맞춘다.
+  const wHeadsEff = widgetGame === 1 ? cnt.players : wHeads;
   const survivors = wClock
-    ? (wClock.liveStats?.alive ?? Math.max(0, (wEntriesEff ?? 0) + wClock.adjEntries + wClock.adjRebuys - wClock.eliminations))
+    ? (wClock.liveStats?.alive ?? Math.max(0, (wHeadsEff ?? 0) + wClock.adjEntries - wClock.eliminations))
     : 0;
   // 요청 게임의 바인 금액(결제 팝오버 표시) — 해당 게임 클락 liveStats 우선, 없으면 메인 세션
   const buyinAmountFor = (gameSeq: number | null) => venueClocks.find((c) => c.gameSeq === (gameSeq ?? 1))?.liveStats?.buyInAmount ?? session?.buyinAmount ?? null;
@@ -344,11 +345,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   }, [venueClocks]);
   // 위젯 사이드 게임 생존 정밀화 — 선택 게임이 사이드면 그 게임 장부 엔트리 합산(메인은 fin 사용, liveStats 없을 때 폴백)
   useEffect(() => {
-    if (widgetGame === 1) { setWEntries(null); return; }
+    if (widgetGame === 1) { setWHeads(null); return; }
     let alive = true;
-    Promise.all([getLedgerBuyins(venueId, d, widgetGame), getLedgerSession(venueId, d, widgetGame)])
-      .then(([bs, s]) => { if (!alive) return; let e = 0; for (const b of bs) e += buyinFinance(b, s).entry; setWEntries(Math.round(e)); })
-      .catch(() => { if (alive) setWEntries(null); });
+    // 생존 폴백에 쓰이므로 **인원**을 센다(엔트리 합이 아니다 — 위 survivors 주석 참고).
+    getLedgerBuyins(venueId, d, widgetGame)
+      .then((bs) => { if (alive) setWHeads(ledgerCounts(bs).players); })
+      .catch(() => { if (alive) setWHeads(null); });
     return () => { alive = false; };
   }, [venueId, d, widgetGame]);
   // 라이브 + 보이는 탭일 때만 1초 갱신(카운트다운·"분 전") — 숨김/평상시엔 멈춰 백그라운드 리렌더 방지
@@ -426,7 +428,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       const s = sessByGame.get(`${b.sessionDate}#${b.gameSeq}`);
       if (!s) continue;
       const f = buyinFinance(b, s);
-      entry += f.entry; paid += f.paid;
+      entry += 1; paid += f.paid;   // entry 는 여기서 **횟수**다(막대·객단가용)
     }
     return { day, dow: DOW[new Date(day + 'T00:00:00').getDay()], entry: Math.round(entry), paid };
   });
@@ -434,12 +436,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const weekPaid = perDay.reduce((a, x) => a + x.paid, 0);
   const maxEntry = Math.max(1, ...perDay.map((x) => x.entry));
   const bestDay = perDay.reduce((a, x) => (x.entry > a.entry ? x : a), perDay[0]);
-  const avgSpend = weekEntry > 0 ? Math.round(weekPaid / weekEntry) : 0; // 객단가(원/엔트리)
+  // 객단가는 **횟수**로 나눈다 — 금액 엔트리로 나누면 매출 ≈ 엔트리 × 단가 라서 언제나 단가가 나온다.
+  const avgSpend = weekEntry > 0 ? Math.round(weekPaid / weekEntry) : 0; // 원 / 바이인 1회
 
   // ── 위젯 미니 추세: 오늘 엔트리 vs 같은 요일 평소(최근 4주 동일 요일 평균 — dowStats 별도 로드) ──
   const todayDow = new Date(d + 'T00:00:00').getDay();
   const sameDowAvg = dowStats.avg;
-  const todayEntries = Math.round(fin.entry);
+  const todayEntries = cnt.totalBuyins;   // 같은 요일 비교 — 횟수 기준(위 weeks 와 같은 척도)
   const dowDelta = sameDowAvg && sameDowAvg > 0 ? Math.round(((todayEntries - sameDowAvg) / sameDowAvg) * 100) : null;
 
   // ── 전주 대비(직전 7일) ──
@@ -474,39 +477,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const staffNames = new Set(wages.map((w) => w.name.trim()));
   const topRegulars = regulars.filter((r) => !staffNames.has(r.name.trim())).slice(0, 5);
 
-  // ── AI 주간 조언 — 주 단위 캐시. 월요 리포트(규칙 조언)와 짝: AI 실패 시 알림의 규칙 조언이 폴백 ──
-  const aiWeekKey = (() => {
-    const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    return `nuri:ai-weekly:${venueId}:${d.toLocaleDateString('en-CA')}`;
-  })();
-  // ── AI 운영 요약 (Gemini 엣지 함수) ──
-  const runAi = async () => {
-    setAiBusy(true); setAiErr(''); setAiSummary('');
-    try {
-      const days7 = perDay.map((x) => `${x.dow} ${x.entry}엔트리/${wonToMan(x.paid)}만`).join(', ');
-      const prompt = [
-        `다음은 홀덤펍 운영 데이터다. 사장이 보기 좋게 한국어로 3~4문장 운영 요약과, 다음 주에 바로 실천할 조언 1~2개(약한 요일에 이벤트 제안 등 구체적으로)를 해줘. 과장·이모지 금지, 마크다운(별표·제목) 없이 평문으로, 숫자 근거 포함.`,
-        `오늘(${mr.label}): 엔트리 ${Math.round(fin.entry)}, 완납 ${wonToMan(fin.paid)}만, 미수 ${wonToMan(fin.unpaid)}만.`,
-        `최근7일: 합계 ${weekEntry}엔트리/${wonToMan(weekPaid)}만, 평균객단가 ${wonToMan(avgSpend)}만, 일별[${days7}].`,
-        `전주대비: 엔트리 ${entryDelta == null ? 'N/A' : entryDelta + '%'}, 매출 ${paidDelta == null ? 'N/A' : paidDelta + '%'}.`,
-        topRegulars.length ? `단골TOP: ${topRegulars.map((r) => `${r.name}(바인${r.buyins}/방문${r.visits})`).join(', ')}.` : '',
-      ].filter(Boolean).join('\n');
-      const text = await aiGenerate(prompt, '너는 홀덤펍 운영 컨설턴트다. 간결하고 실용적으로 답한다.');
-      setAiSummary(text);
-      try { localStorage.setItem(aiWeekKey, text); } catch { /* quota */ }
-    } catch (e) {
-      setAiErr(e instanceof Error ? e.message : 'AI 요약 실패');
-    } finally { setAiBusy(false); }
-  };
-  // 이번 주 캐시 복원, 없으면 월·화 첫 진입 시 자동 생성(주 1회)
-  useEffect(() => {
-    if (!caps.manage || loading) return;
-    const cached = (() => { try { return localStorage.getItem(aiWeekKey); } catch { return null; } })();
-    if (cached) { setAiSummary(cached); return; }
-    const dow = new Date().getDay();
-    if ((dow === 1 || dow === 2) && weekEntry > 0) void runAi();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caps.manage, loading, aiWeekKey]);
+  // (2026-09-11) AI 운영 요약 제거 — 이 화면이 이 앱에서 **자동으로** 외부 모델을 부르던 유일한 자리였고,
+  //   프롬프트에 단골 손님 실명 5명(이름·바인 수·방문 수)이 그대로 실렸다. 매장 운영 데이터와 고객명을
+  //   외부로 보내지 않는다. 같이 사라진 것: nuri:ai-weekly:* 로컬 캐시, 월·화 첫 진입 자동 생성.
+  //   운영 분석이 필요하면 '통계' 화면의 운영 리포트(LedgerStatsPanel.buildOpsReport)를 쓴다 —
+  //   그쪽은 처음부터 외부 호출 없이 로컬 집계로만 문장을 만든다.
 
   // ── 직원 인건비(이번 달) ──
   const wageMap: Record<string, number> = Object.fromEntries(wages.map((w) => [w.name, w.hourlyWage]));
@@ -659,9 +634,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 </span>
               </span>
               <span className="block">
-                <span className="block text-2xs text-ink-muted">총 엔트리</span>
+                <span className="block text-2xs text-ink-muted">총 바이인</span>
                 <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-indigo">
-                  <CountUp value={Math.round(fin.entry)} /><span className="ml-1 text-sm font-semibold text-ink-muted">엔트리</span>
+                  <CountUp value={cnt.totalBuyins} /><span className="ml-1 text-sm font-semibold text-ink-muted">회</span>
+                  {/* 엔트리는 금액 기준이라 소수가 된다 — CountUp 은 정수 애니라 옆에 그대로 적는다. */}
+                  <span className="ml-1.5 text-2xs font-semibold text-ink-muted">엔트리 {fin.entry.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
                 </span>
               </span>
               <span className="block">
@@ -671,9 +648,10 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 </span>
               </span>
               <span className="block">
-                <span className="block text-2xs text-ink-muted">회수 티켓</span>
+                <span className="block text-2xs text-ink-muted">회수 이용권</span>
+                {/* 2026-09-11: '장' 은 통계·정산의 'T' 와 같은 수를 다른 이름으로 불러 헷갈렸다 — 단위를 T 로 통일. */}
                 <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-fuchsia">
-                  {fin.ticket}<span className="ml-1 text-sm font-semibold text-ink-muted">장</span>
+                  {fin.ticket}<span className="ml-1 text-sm font-semibold text-ink-muted">T</span>
                 </span>
               </span>
             </span>
@@ -834,7 +812,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 const max = Math.max(1, ...bars.map((b) => b.entries));
                 return (
                   <div className="px-3 pb-3">
-                    <p className="mb-2 text-2xs text-ink-muted">최근 {DOW[todayDow]}요일 엔트리 추이</p>
+                    <p className="mb-2 text-2xs text-ink-muted">최근 {DOW[todayDow]}요일 바이인 추이</p>
                     {/* 막대 트랙(h-16) + 4주 평균 점선 오버레이 */}
                     <div className="relative h-16">
                       {sameDowAvg != null && sameDowAvg > 0 && (
@@ -939,8 +917,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요. 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto({ section: 'ranking', date: d, gameSeq: session?.gameSeq, title: session?.title }), tone: 'warn' };
         } else if (caps.ledger && started && !session?.closed) {
           todo = clockActive
-            ? { icon: 'cards', title: `게임 진행 중 · 엔트리 ${Math.round(fin.entry)}`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
-            : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `엔트리 ${Math.round(fin.entry)} · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
+            ? { icon: 'cards', title: `게임 진행 중 · 바이인 ${cnt.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
+            : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `바이인 ${cnt.totalBuyins}회 · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
         } else if (caps.ledger && !started && todayPoster) {
           todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto('ledger'), tone: 'gold' };
         } else if (caps.ledger && !started && !todayPoster && lastRound) {
@@ -1059,7 +1037,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* 카드 사이 간격을 8.5 → 12.75 로. 카드도 최상위 블록과 같은 위계인데
           블록 사이만 12.75, 카드 사이는 8.5 로 갈려 있었다(1440 실측) — 한 값으로 맞춘다. */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {/* 오늘 장부 카드는 ③ KPI 헤드라인으로 격상(내용 동일 — 총 엔트리·완납 매출·미수금·회수 티켓) */}
+        {/* 오늘 장부 카드는 ③ KPI 헤드라인으로 격상(내용 동일 — 총 바이인·완납 매출·미수금·회수 이용권) */}
         {/* 클락 — 라이브 위젯이 클락을 표시 중(clockActive)이면 중복 방지 위해 숨김 */}
         <DashCard show={moreOpen && caps.ledger && !clockActive} title="토너먼트 클락" onClick={() => onGoto('clock')}
           badge={clockActive
@@ -1081,7 +1059,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               </div>
               <div className="text-right">
                 <p className="text-2xs text-ink-muted">남은 인원</p>
-                <p className="text-lg font-bold text-ink-primary tabular-nums">{Math.max(0, Math.round(fin.entry) + clock!.adjEntries + clock!.adjRebuys - clock!.eliminations)}</p>
+                <p className="text-lg font-bold text-ink-primary tabular-nums">{Math.max(0, cnt.players + clock!.adjEntries - clock!.eliminations)}</p>
               </div>
             </div>
           )}
@@ -1089,7 +1067,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 
         {/* 최근 7일 추세 + 객단가 */}
         <DashCard show={caps.manage} title="최근 7일 추세" onClick={() => onGoto('stats')}
-          badge={<span className="text-2xs font-bold text-ink-muted">통계·AI →</span>}>
+          badge={<span data-testid="dash-stats-link" className="text-2xs font-bold text-ink-muted">통계·운영 분석 →</span>}>
           {loading ? <Skeleton /> : weekEntry === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">최근 7일 장부 데이터가 없습니다.</p>
           ) : (
@@ -1097,30 +1075,18 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               <div className="mb-2 flex h-14 items-end justify-between gap-1">
                 {perDay.map((x) => (
                   <div key={x.day} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-                    <div className="w-full max-w-[18px] rounded-sm bg-accent-300/80" style={{ height: `${Math.max(4, (x.entry / maxEntry) * 100)}%` }} title={`${x.dow} ${x.entry}엔트리`} />
+                    <div className="w-full max-w-[18px] rounded-sm bg-accent-300/80" style={{ height: `${Math.max(4, (x.entry / maxEntry) * 100)}%` }} title={`${x.dow} ${x.entry}회`} />
                     <span className={`text-2xs ${x.day === d ? 'text-ink-primary font-bold' : 'text-ink-muted'}`}>{x.dow}</span>
                   </div>
                 ))}
               </div>
               <div className="flex items-center justify-between border-t border-border-subtle pt-2 text-2xs">
                 <span className="text-ink-muted">7일 합계</span>
-                <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{weekEntry}</b>엔트리 · <b className="text-gold-300">{wonToMan(weekPaid)}</b>만</span>
+                <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{weekEntry}</b>회 · <b className="text-gold-300">{wonToMan(weekPaid)}</b>만</span>
               </div>
               <div className="mt-1 flex items-center justify-between text-2xs">
                 <span className="text-ink-muted">평균 객단가</span>
-                <span className="text-ink-secondary tabular-nums"><b className="text-gold-300">{wonToMan(avgSpend)}</b>만 / 엔트리{bestDay.entry > 0 && <> · 활발 <b className="text-ink-primary">{bestDay.dow}</b></>}</span>
-              </div>
-              <div className="mt-2 border-t border-border-subtle pt-2">
-                {aiSummary ? (
-                  <p className="t-desc whitespace-pre-wrap break-keep text-ink-secondary">{aiSummary}</p>
-                ) : aiErr ? (
-                  <p className="t-desc break-keep text-danger-light">{aiErr}</p>
-                ) : null}
-                <button type="button" onClick={runAi} disabled={aiBusy}
-                  className="mt-2 inline-flex items-center gap-1 text-2xs font-bold text-accent-300 hover:text-accent-200 disabled:opacity-50">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z" /></svg>
-                  {aiBusy ? 'AI 분석 중…' : aiSummary ? 'AI 다시 요약' : 'AI 운영 요약 생성'}
-                </button>
+                <span className="text-ink-secondary tabular-nums"><b className="text-gold-300">{wonToMan(avgSpend)}</b>만 / 바이인{bestDay.entry > 0 && <> · 활발 <b className="text-ink-primary">{bestDay.dow}</b></>}</span>
               </div>
             </>
           )}
@@ -1133,7 +1099,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>
           ) : (
             <div className="space-y-2 py-0.5">
-              <CompareRow label="엔트리" now={weekEntry} prev={prevEntry} delta={entryDelta} />
+              <CompareRow label="바이인" now={weekEntry} prev={prevEntry} delta={entryDelta} />
               <CompareRow label="매출" now={weekPaid} prev={prevPaid} delta={paidDelta} won />
             </div>
           )}

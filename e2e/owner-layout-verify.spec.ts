@@ -67,21 +67,23 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측', () => {
     await store.first().click();
     await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
 
-    // 대시보드의 '최근 7일 추세 · 통계·AI →' 카드가 통계 화면으로 가는 실제 진입점이다
+    // 대시보드의 '최근 7일 추세' 카드가 통계 화면으로 가는 실제 진입점이다
     // (섹션 버튼은 접힌 메뉴 안이라 폭 0 — 실측으로 확인).
-    const stats = page.getByRole('button', { name: /통계·AI/ }).first();
+    // ⚠ 셀렉터를 배지 문구에 묶지 않는다: 여기는 폴백 없는 .first() + test.skip 이라
+    //   문구가 바뀌면 **실패가 아니라 조용한 skip** 으로 게이트가 무력화된다(2026-09-11 실제로 그럴 뻔했다).
+    const stats = page.locator('button:has([data-testid="dash-stats-link"])').first();
     test.skip(await stats.count() === 0, '통계 진입점을 못 찾았다');
     await stats.click();
     // 통계 패널의 표식
-    const panel = page.getByText('총 엔트리').first();
+    const panel = page.getByText('총 바이인').first();
     await expect(panel).toBeVisible({ timeout: 25_000 });
 
     const m = await page.evaluate(() => {
       const sp = (a: number[]) => (a.length ? Math.round(Math.max(...a) - Math.min(...a)) : -1);
       const txtRect = (el: Element) => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect(); };
 
-      // StatCard 한 행 = '총 엔트리 / 할인 엔트리 / 총 할인액'
-      const head = [...document.querySelectorAll('p')].find((p) => p.textContent?.trim() === '총 엔트리');
+      // StatCard 한 행 = '총 바이인 / 할인 바인 / 총 할인액'
+      const head = [...document.querySelectorAll('p')].find((p) => p.textContent?.trim() === '총 바이인');
       const row = head?.closest('.grid');
       const statVals = row ? [...row.querySelectorAll(':scope > div > p.text-lg')].map((e) => Math.round(e.getBoundingClientRect().bottom)) : [];
 

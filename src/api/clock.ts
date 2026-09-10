@@ -1,6 +1,6 @@
 // src/api/clock.ts — 토너먼트 클락(블라인드 타이머) API
 import { supabase, IS_MOCK } from '../lib/supabase';
-import { earlyTypeOf, type EarlyType, type LedgerBuyin } from './ledger';
+import { earlyTypeOf, ledgerCounts, type EarlyType, type LedgerBuyin } from './ledger';
 
 /** 얼리 판정에 필요한 세션 정보 */
 export interface EarlyWindow { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null }
@@ -405,20 +405,27 @@ export function subscribeRunningClocks(onChange: () => void): () => void {
 }
 
 // ── 장부 → 클락 카운트 자동 산출 ────────────────────────────────────────────────
+/**
+ * ⚠ 여기서 `entries` 는 **고유 플레이어 수**다(총 바이인 수가 아니다).
+ *   클락 화면이 부르는 이름을 그대로 둔 것이라 헷갈리기 쉽다 — 총 바이인은 totalBuyins 다.
+ *   `rebuys` 는 entryNo > 1 인 기록 수, `totalBuyins` 는 기록 수 전체.
+ */
 export interface DerivedCounts { entries: number; rebuys: number; earlies: number; doubleEarlies: number; totalBuyins: number; }
 
-/** 장부 바인 기록에서 엔트리/리바인/얼리 자동 집계. 얼리는 세션 스타트·구간(또는 바인 수기지정)으로 판정. */
+/** 장부 바인 기록에서 플레이어/리바인/얼리 자동 집계. 얼리는 세션 스타트·구간(또는 바인 수기지정)으로 판정.
+ *
+ *  횟수(플레이어·리바인·총 바이인)는 **장부와 같은 함수**(ledgerCounts)를 쓴다(2026-09-11) —
+ *  각자 세면 이름 공백 처리 하나만 달라도 클락과 장부가 다른 수를 말하게 된다.
+ *  할인·결제수단은 이 수에 영향을 주지 않는다. */
 export function deriveClockCounts(buyins: LedgerBuyin[], early: EarlyWindow): DerivedCounts {
-  const players = new Set<string>();
-  let rebuys = 0, earlies = 0, doubleEarlies = 0;
+  const c = ledgerCounts(buyins);
+  let earlies = 0, doubleEarlies = 0;
   for (const b of buyins) {
-    players.add(b.playerName);
-    if (b.entryNo > 1) rebuys++;
     const et = earlyTypeOf(b, early);
     if (et === 'double') { earlies++; doubleEarlies++; }
     else if (et === 'single') earlies++;
   }
-  return { entries: players.size, rebuys, earlies, doubleEarlies, totalBuyins: buyins.length };
+  return { entries: c.players, rebuys: c.rebuys, earlies, doubleEarlies, totalBuyins: c.totalBuyins };
 }
 
 // ── 얼리 '카운트' 산정(#21) ────────────────────────────────────────────────────
@@ -464,9 +471,14 @@ export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: Cl
   const addons = st.adjAddons;
   const alive = Math.max(0, entries - st.eliminations);
   const dEarly = derived.doubleEarlies;
-  const sEarly = Math.max(0, (derived.earlies - derived.doubleEarlies) + st.adjEarlies);
+  const sEarly = Math.max(0, derived.earlies - derived.doubleEarlies);   // 인원만
+  // ⚠ adjEarlies 는 **카운트 단위** 보정이지 사람 수가 아니다(위 earlies 줄과 같은 척도).
+  //   예전엔 이것을 sEarly(인원)에 섞어 넣고 earlyBonus 를 곱했다 — 기준 단위와 1얼리 보너스가
+  //   같은 기본 설정(5,000 / 10,000)에서만 우연히 맞고, 1얼리를 안 쓰는 게임(earlyBonus=0,
+  //   더블만 10,000)에서는 보정 칩이 통째로 0 이 되어 사라졌다. 단위 → 칩으로 환산해 따로 더한다.
+  const adjChips = st.adjEarlies * (earlyUnitChips(cfg) || cfg.earlyBonus);
   const totalStack = entries * cfg.startStack + rebuys * cfg.rebuyStack + addons * cfg.addonStack
-    + dEarly * cfg.doubleEarlyBonus + sEarly * cfg.earlyBonus;
+    + dEarly * cfg.doubleEarlyBonus + sEarly * cfg.earlyBonus + adjChips;
   const avgStack = alive > 0 ? Math.round(totalStack / alive) : 0;
   return { entries, rebuys, earlies, addons, alive, eliminations: st.eliminations, totalStack, avgStack };
 }
