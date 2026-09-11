@@ -1495,8 +1495,12 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         />
         <div className="flex items-center gap-2">
           <div className="grid grid-cols-4 gap-2 flex-1 text-center">
-            <Metric label={exKeys.size > 0 ? '총 엔트리(제외 적용)' : '총 엔트리'}
-              value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
+            {/* 2026-09-11: 이 줄은 상시 떠 있는 기준선이다. 엔트리(금액 기준·소수)만 세워 두면
+                '3명 앉았는데 2.5' 가 인원으로 오독된다 — 마감 모달·대시보드처럼 **횟수를 주로**,
+                엔트리를 보조로 같이 적는다(오너 규칙: 바이인 횟수 ≠ 엔트리). */}
+            <Metric label={exKeys.size > 0 ? '총 바이인(제외 적용)' : '총 바이인'}
+              value={`${stats.totalBuyins.toLocaleString()}회`}
+              sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}`} />
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
             {/* 1T = 1만원이라 'NT' 와 'X만' 은 같은 수 — 한 번만 적는다. 미수 티켓은 아래 줄이 따로 보여준다. */}
             <Metric label="티켓" value={`${stats.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} />
@@ -1936,12 +1940,14 @@ function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd }: {
   );
 }
 
-function Metric({ label, value, tone }: { label: string; value: string; tone?: 'emerald' | 'danger' }) {
+function Metric({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: 'emerald' | 'danger' }) {
   const c = tone === 'emerald' ? 'text-emerald-400' : tone === 'danger' ? 'text-danger-light' : 'text-ink-primary';
   return (
     <div>
       <p className="text-2xs text-ink-muted leading-none">{label}</p>
       <p className={['text-sm font-bold tabular-nums leading-tight mt-0.5', c].join(' ')}>{value}</p>
+      {/* 보조 수 — 같은 칸에서 '횟수 vs 엔트리' 처럼 **다른 척도**를 나란히 세울 때만 쓴다 */}
+      {sub && <p className="text-2xs tabular-nums leading-none text-ink-muted mt-0.5">{sub}</p>}
     </div>
   );
 }

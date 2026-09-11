@@ -928,6 +928,16 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </section>
       )}
 
+      {/* ── §5 첫 번째 행 — 왼쪽 8: 지금 해야 할 일 · 오른쪽 4: 주의가 필요한 항목 ──────────
+          PC 는 '지금 뭘 하지'와 '뭐가 위험하지'를 **동시에** 봐야 한다. 세로로 쌓으면 위험 항목이
+          접힌 화면 아래로 내려가 스크롤해야 보인다. 모바일은 그대로 1열(순서: 할 일 → 위험).
+          ⚠ 두 열은 내용이 없으면 `empty:hidden` 으로 접힌다 — 안 접으면 빈 칸이 grid 자리를 먹어
+            오른쪽이 비었을 때 왼쪽 카드가 8/12 폭에 갇힌 채 옆이 허전해 보인다.
+          ponytail: 둘 다 비면(할 일 없음 + 위험 없음) 부모 space-y 의 간격 한 칸이 남는다.
+            '오늘 운영이 전부 끝난' 드문 상태라 그대로 둔다 — 없애려면 두 IIFE 의 null 조건을
+            바깥으로 끌어내야 하고, 그 리팩터가 이 12.75px 보다 위험하다. */}
+      <div className="space-y-3 xl:grid xl:grid-cols-12 xl:items-start xl:gap-4 xl:space-y-0">
+      <div className="space-y-3 empty:hidden xl:col-span-8">
       {/* 지금 할 일 — 시간대·운영 상태 인지형 다음 행동 카드(대시보드 = 행동 안내판) */}
       {(() => {
         // ⚠ 이 카드의 모든 분기가 session/started 를 근거로 삼는다. 못 불러왔으면 침묵한다 —
@@ -1001,6 +1011,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         );
       })()}
 
+      </div>
+      <div className="space-y-3 empty:hidden xl:col-span-4">
       {/* 밀린 순위 미입력 대회 — 마감했지만 순위가 비어 있는 지난 대회(오늘 외)
           ⚠ 예전엔 카드 전체가 onGoto('ranking') 하나였다. 4개가 밀려 있어도 **오늘 메인 칩**이 열려서,
              목록에 적힌 '08/30 사이드1' 을 보고 눌렀는데 전혀 다른 대회가 열렸다(2026-09-07 추적).
@@ -1057,6 +1069,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           <span className="text-xs text-danger-light">오늘 <b className="tabular-nums">{wonToMan(fin.unpaid)}만원</b> 미수금이 있습니다. 장부에서 확인하세요.</span>
         </button>
       )}
+
+      </div>
+      </div>
 
       {/* 빠른 작업 — 권한 있는 항목만 */}
       {(caps.posters || caps.ledger) && (
