@@ -257,9 +257,32 @@ test.describe('하위 탭 — 알약이 탭바 스냅샷에 갇히지 않는다'
       requestAnimationFrame(tick);
     }));
 
+    // 전환 한복판의 라벨 스냅샷 상태 — ④가 '이름이 통째로 빠진' 경우에도 통과해 버리는 것을 막는다.
+    //   ④는 '라벨 그룹이 애니메이트되지 않는다' 인데, 이름이 아예 없으면 그룹도 없어서 역시 0건이다
+    //   (= 글자가 알약에 덮이던 3552ae4 의 원래 결함을 통과시킨다). 그래서 존재까지 같이 잰다.
+    const labelPaint = page.evaluate(() => new Promise<Record<string, string> | null>((resolve) => {
+      const t0 = performance.now();
+      const cs = (pe: string) => getComputedStyle(document.documentElement, pe);
+      const tick = () => {
+        const g = cs('::view-transition-group(community-label)');
+        if (g.width && g.width !== 'auto') {
+          resolve({
+            groupWidth: g.width,
+            oldOpacity: cs('::view-transition-old(community-label)').opacity,
+            newOpacity: cs('::view-transition-new(community-label)').opacity,
+          });
+          return;
+        }
+        if (performance.now() - t0 < 1500) requestAnimationFrame(tick);
+        else resolve(null);
+      };
+      requestAnimationFrame(tick);
+    }));
+
     await startSampler(page);
     await page.getByRole('button', { name: '게시판', exact: true }).first().click();
     const kf = await pillKeyframes;
+    const paint = await labelPaint;
     const samples = await collect(page);
     const joined = samples.join('\n');
 
@@ -296,5 +319,13 @@ ${joined}`).toEqual([]);
 index.css 의 ::view-transition-group(community-label) { animation: none } 를 확인하라.
 실측:
 ${joined}`).toEqual([]);
+
+    // ⑤ 그런데 라벨은 **자기 스냅샷으로 존재해야** 한다 — ④만으로는 이름을 통째로 지운 경우도 통과한다
+    //    (그러면 라벨이 바 스냅샷에 들어가 알약에 덮인다 = 3552ae4 의 원래 결함이 그대로 재발).
+    //    old 를 감추고 new 만 불투명하게 두는 것이 '옛 글자·새 글자 교차 페이드로 뭉개짐'을 막는 지점이다.
+    expect(paint, `전환 중 community-label 스냅샷이 없다 — 이름이 빠졌다는 뜻이고, 그러면 활성 글자가 알약에 덮인다.
+index.css 의 [data-pill-active] { view-transition-name: community-label } 를 확인하라.`).not.toBeNull();
+    expect(paint?.oldOpacity, `옛 글자가 안 감춰졌다 — 새 자리에 두 단어가 겹쳐 뭉갠다. 실측: ${JSON.stringify(paint)}`).toBe('0');
+    expect(paint?.newOpacity, `새 글자가 불투명하지 않다 — 전환 동안 글자가 흐려진다. 실측: ${JSON.stringify(paint)}`).toBe('1');
   });
 });
