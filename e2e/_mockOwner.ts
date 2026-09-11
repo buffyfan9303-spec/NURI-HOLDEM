@@ -120,6 +120,13 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
   //   그동안 드러나지 않았을 뿐이다(2026-09-12 적대적 검토에서 발견).
   await page.route(/\/rest\/v1\/ledger_players\?/, restGet([]));
   await page.route(/\/rest\/v1\/venue_rankings\?/, restGet([]));
+  // 순위 판이 타는 STABLE RPC. 없으면 운영 서버에서 401 을 받고 화면이 삼켜
+  //   '데이터 없음' 과 '인증 실패' 가 구별되지 않는다.
+  await page.route(/\/rest\/v1\/rpc\/venue_rankings_public/, (r) => r.fulfill(json([])));
+  // ⚠ StoreLiveBar 는 `진행 중 클락 없음 && 대기 바인 0` 일 때만 null 이다(VenueManageTab).
+  //   그 바는 단계 바보다 **위**에 있어서, 값이 우연히 0 이면 '바 위치 고정' 불변식이
+  //   우연 위에 서게 된다. 명시로 0 을 준다.
+  await page.route(/\/rest\/v1\/ledger_buyin_requests\?/, restGet([]));
   await page.route(/\/rest\/v1\/game_presets\?/, restGet([]));
   // 클락 상태는 **항상** 라우트한다 — clock 을 안 준 스펙에서도.
   //   안 걸어 두면 그 조회만 운영 서버로 나가 가짜 토큰이 401 을 받고,
