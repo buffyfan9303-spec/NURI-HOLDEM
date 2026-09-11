@@ -473,7 +473,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     }
     setPermsLoaded(false);
     setPermsError(null);
-    Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId), canManageVenueStaff(venueId)])
+    // ⚠ 직원 관리 권한은 **보조** 판정이다 — 메뉴 하나를 가릴 뿐인데, Promise.all 에 그냥 넣으면
+    //   이 RPC 한 번의 실패가 배치 전체를 거절시켜 **장부·정산·이용권까지 통째로** 닫힌다
+    //   (permsError → setSection(null)). 2026-09-11 에 4번째로 넣으면서 실제로 그렇게 됐고,
+    //   CI 의 목킹 스펙 5개가 그 결합을 잡아냈다. 여기서 fail-closed(false) 로 받아 메뉴만 숨긴다 —
+    //   서버 RLS(can_manage_venue_staff)가 어차피 한 겹 더 막으므로 열릴 위험은 없다.
+    const staffCap = () => canManageVenueStaff(venueId).catch(() => false);
+    Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId), staffCap()])
       .then(([l, m, vv, st]) => {
         if (!alive) return;
         setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st);
@@ -488,7 +494,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   useEffect(() => {
     if (!venueId || isAdmin) return;
     const recheck = () => {
-      Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId), canManageVenueStaff(venueId)])
+      Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId),
+                   canManageVenueStaff(venueId).catch(() => false)])   // 보조 판정 — 위와 같은 이유로 격리
         .then(([l, m, vv, st]) => { setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); })
         .catch(() => { /* keep current */ });
     };
