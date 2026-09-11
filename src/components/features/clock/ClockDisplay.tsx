@@ -271,11 +271,16 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
               ⚠ 레이아웃 안정 계약: 중앙 열만 hero(flex-1) + 블라인드(고정 높이) 구조를 갖는다.
                  좌우 열은 각자 세로 중앙 정렬이라 프라이즈 줄 수·지표 개수가 달라져도
                  타이머 y 를 밀지 않는다(clock-visual.spec 이 6개 상태에서 y 동일을 강제). */}
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-[2vmin] px-[3vmin] md:grid-cols-[minmax(0,1fr)_minmax(0,2.5fr)_minmax(0,1fr)]">
+          {/* 2026-09-11: 좌/중/우 3열 조건을 `md:`(폭) → `md:landscape:`(넓고 **가로**)로 바꿨다.
+              세로 TV(1080×1920) 는 폭이 1080 이라 md 를 넘겨 3열이 됐는데, 글자 크기는 vmin(= 짧은 변 = 폭 1080)
+              기준이라 중앙 열(2.5/4.5 ≈ 600px)을 가로로 뚫고 나갔다 — 실측: 타이머가 우측 지표를 덮고
+              CURRENT 와 NEXT 가 서로 겹쳤다. 세로에서는 원래 있던 1열 경로로 떨어뜨리는 것이 맞다.
+              (가로 기기는 전부 그대로다 — 1024×768·911×505·21:9·3440 모두 landscape 라 조건을 통과한다.) */}
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-[2vmin] px-[3vmin] md:landscape:grid-cols-[minmax(0,1fr)_minmax(0,2.5fr)_minmax(0,1fr)]">
 
             {/* 좌 — 프라이즈. 없으면 열 자체를 그리지 않는다(빈 칸을 남기지 않는다). */}
             {prizes.length > 0 ? (
-              <aside className="hidden min-h-0 flex-col justify-center md:flex">
+              <aside className="hidden min-h-0 flex-col justify-center md:landscape:flex">
                 <p className={`${LABEL} text-[1.5vmin]`} style={SOFT}>총 프라이즈</p>
                 <p className="mt-[0.3vmin] font-black leading-none tabular-nums"
                   style={{ fontSize: 'clamp(22px, 4.6vmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
@@ -295,7 +300,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                   ))}
                 </ul>
               </aside>
-            ) : <span className="hidden md:block" />}
+            ) : <span className="hidden md:landscape:block" />}
 
             {/* 중앙 — 타이머 히어로 + 블라인드. **스택 전체를 중앙 정렬**한다.
                 예전엔 히어로가 flex-1 로 남는 공간을 다 먹어서 타이머와 CURRENT/NEXT 사이에
@@ -314,8 +319,9 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                   · 좁은 폭(모바일 관전)에서는 숨긴다: 프레임이 글자를 침범하는 것보다 없는 편이 낫다. */}
               {/* 치수는 실측으로 맞췄다(1920×1080 캡처): inset-y-2% 로 열 전체를 덮었더니
                   프레임 안 위아래에 각각 170px 씩 죽은 띠가 생겼다 — 프레임이 내용을 감싸는 게 아니라
-                  내용이 프레임 안에서 떠 보였다. 타이머 위 ~70px · 블라인드 아래 ~40px 여백이 되게 조인다. */}
-              <span aria-hidden className="pointer-events-none absolute inset-x-[7%] bottom-[8%] top-[14%] hidden md:block">
+                  내용이 프레임 안에서 떠 보였다. 위아래 비대칭인 이유: 블라인드 행이 h-[22vmin] **고정**이라
+                  그 안에서 내용이 중앙 정렬되면서 아래쪽에만 빈 띠가 더 남는다 — 그래서 bottom 을 더 올린다. */}
+              <span aria-hidden className="pointer-events-none absolute inset-x-[7%] bottom-[14%] top-[13%] hidden md:landscape:block">
                 <span className="absolute inset-0 rounded-[8vmin] border-2"
                   style={{ borderColor: 'var(--clk-frame, rgba(129,140,248,.65))' }} />
                 <span className="absolute inset-[1.1vmin] rounded-[7vmin] border"
@@ -331,7 +337,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
             </div>
 
             {/* 우 — 지표 세로 레일. 라벨 작게 위, 숫자 크게 아래(레퍼런스 공통 문법). */}
-            <aside className="hidden min-h-0 flex-col justify-center gap-[1.5vmin] md:flex">
+            <aside className="hidden min-h-0 flex-col justify-center gap-[1.5vmin] md:landscape:flex">
               <Rail label="생존 / 엔트리" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
               {showRebuy && <Rail label="리바이 · 애드온" value={String(ls?.rebuys ?? 0)} sub={`· ${ls?.addons ?? 0}`} />}
               {buyIn > 0 && <Rail label="바이인" value={buyIn.toLocaleString()} />}
@@ -360,14 +366,15 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
             <BottomMetrics g={g} curBB={curBB} />
             <div className="flex shrink-0 items-center gap-[2vmin]">
               {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain opacity-80" style={{ maxHeight: '5.5vmin' }} />}
-              <p className="shrink-0 text-[1.2vmin] font-extrabold uppercase tracking-[0.18em]" style={DIM}>
+              {/* 세로 화면에서는 접는다 — 장식이 총 칩·평균 스택의 폭을 뺏으면 숫자가 줄바꿈된다 */}
+              <p className="hidden shrink-0 text-[1.2vmin] font-extrabold uppercase tracking-[0.18em] landscape:block" style={DIM}>
                 Powered by <span style={{ color: 'var(--clk-accent, #818CF8)' }}>NURI HOLDEM</span>
               </p>
             </div>
           </div>
 
           {/* 모바일 폭(세로 폰 관전) — 우측 보조가 숨으니 레지·휴식만 아래에 한 줄 */}
-          <div className="grid shrink-0 grid-cols-2 gap-[1.2vmin] border-t border-white/[0.06] px-[3vmin] py-[1.4vmin] md:hidden">
+          <div className="grid shrink-0 grid-cols-2 gap-[1.2vmin] border-t border-white/[0.06] px-[3vmin] py-[1.4vmin] md:landscape:hidden">
             <HeaderTimes g={g} regLevel={regLevel} compact />
           </div>
         </>
@@ -470,17 +477,20 @@ function BottomMetrics({ g, curBB }: { g: ClockState; curBB: number }) {
   const brk = msToNextBreak(g, eff.index, eff.remainingMs);
   /** 값 없음(—)과 실제 0 을 구분한다 — 장부가 아직 안 붙은 클락에서 '총 칩 0' 은 거짓이다. */
   const num = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString());
+  // whitespace-nowrap + 낮춘 clamp: 세로 화면(1080×1920)에서 vmin 이 폭 기준이라 4.2vmin=45px 가 되고,
+  //   'QR + 3칸 + Powered by' 가 1080px 를 넘겨 **숫자가 두 줄로 쪼개졌다**(1,512,0 / 00 실측).
+  //   숫자는 어떤 폭에서도 한 줄이어야 한다 — 줄이 바뀌면 자릿수를 잘못 읽는다.
   const cell = (label: string, value: string, sub?: string, tone?: string) => (
     <div className="min-w-0 text-center">
       <p className={`${LABEL} text-[1.3vmin]`} style={SOFT}>{label}</p>
-      <p className="mt-[0.2vmin] leading-none">
-        <span className="font-extrabold tabular-nums" style={{ fontSize: 'clamp(20px, 4.2vmin, 70px)', color: tone ?? '#FFFFFF' }}>{value}</span>
+      <p className="mt-[0.2vmin] whitespace-nowrap leading-none">
+        <span className="font-extrabold tabular-nums" style={{ fontSize: 'clamp(18px, 3.4vmin, 70px)', color: tone ?? '#FFFFFF' }}>{value}</span>
         {sub && <span className="ml-[0.8vmin] text-[1.7vmin] font-semibold tabular-nums" style={DIM}>{sub}</span>}
       </p>
     </div>
   );
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-center gap-[4vmin]">
+    <div className="flex min-w-0 flex-1 items-center justify-center gap-[2.5vmin] landscape:gap-[4vmin]">
       {cell('총 칩', num(ls?.totalStack))}
       {cell('평균 스택', num(ls?.avgStack), ls?.avgStack && curBB > 0 ? `${Math.round(ls.avgStack / curBB)} BB` : undefined)}
       {/* 휴식이 없는 구성이면 칸을 만들지 않는다 — 빈 '—' 로 자리를 채우지 않는다 */}

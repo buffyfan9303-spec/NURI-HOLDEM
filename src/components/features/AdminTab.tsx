@@ -26,6 +26,7 @@ import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PH
 import { getAdminPlatformStats, getFreePlanUsage, type PlatformStats, type PlanUsageRow } from '../../api/adminStats';
 import AdSlotsAdmin from './community/AdSlotsAdmin';
 import HomeBannersCard from './HomeBannersCard';
+import SystemSwitchesCard from './SystemSwitchesCard';
 import {
   MISSIONS, adminListCustomMissions, adminSaveCustomMission, adminDeleteCustomMission,
   type CustomMissionRow, type MissionGoalType,
@@ -69,7 +70,7 @@ interface AdminTabProps {
 
 type AdminShout = Shout & { hidden: boolean };
 
-type Section = 'analytics' | 'pending' | 'reorder' | 'exposure' | 'users' | 'venues' | 'reports' | 'support' | 'errors';
+type Section = 'analytics' | 'pending' | 'reorder' | 'exposure' | 'switches' | 'users' | 'venues' | 'reports' | 'support' | 'errors';
 // 노출 순서 하위 항목: 포스터(요강) / 매장
 type ReorderTarget = 'posters' | 'venues';
 // 노출 관리 하위 항목(2026-09-03 오너): 광고 / 외치기 / 게시물 / 공지
@@ -1043,6 +1044,7 @@ const ADMIN_DESC: Record<Section, string> = {
   pending: '업주가 등록한 포스터 검수. 승인하면 일정 탐색에 노출됩니다',
   reorder: '노출 순서 · 부스트 · 주간 미션 관리',
   exposure: '커뮤니티 광고 노출·순서 · 외치기 대기열 · 게시물 고정·블라인드 · 공지 순서',
+  switches: '재배포 없이 켜고 끄는 기능 스위치 · 전 매장 공통 설정',
   users: '회원 검색 · 등급 · 제재 · 활동점수(구매 환불 · 지급)',
   venues: '매장 생성 · 인증 · 그룹 승인',
   reports: '신고 접수 처리',
@@ -1056,6 +1058,7 @@ const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'reorder', label: '게시물 관리', icon: aic(<><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></>) },
   // lucide eye 경로(Icon.tsx LUCIDE 와 같은 글리프)
   { id: 'exposure', label: '노출 관리', icon: aic(<><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></>) },
+  { id: 'switches', label: '기능 스위치', icon: aic(<><path d="M16 3H8a5 5 0 0 0 0 10h8a5 5 0 0 0 0-10Z" /><circle cx="16" cy="8" r="2" /><path d="M8 21h8a5 5 0 0 0 0-10H8a5 5 0 0 0 0 10Z" /><circle cx="8" cy="16" r="2" /></>) },
   { id: 'users', label: '회원 관리', icon: aic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>) },
   { id: 'venues', label: '매장', icon: aic(<><path d="M3 9.5 5 4h14l2 5.5" /><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5" /><path d="M9 21v-6h6v6" /></>) },
   { id: 'reports', label: '신고', icon: aic(<><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>) },
@@ -1230,6 +1233,7 @@ export default function AdminTab({
               {exposureTarget === 'notices' && <NoticesAdminPanel onChanged={onReloadNotices} />}
             </div>
           )}
+          {section === 'switches' && <SystemSwitchesCard />}
           {section === 'users' && (
             <UserManagementTab
               users={users}
