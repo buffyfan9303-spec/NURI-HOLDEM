@@ -1,7 +1,6 @@
 ﻿// src/api/auth.ts
 import { supabase, IS_MOCK, setKeepSignedIn, clearAuthStorage } from '../lib/supabase';
 import { currentUser } from './_session';
-import { makeSearchCache } from '../lib/searchCache';
 import { dedupe } from '../lib/inflight';
 import { LEGAL_VERSION } from '../lib/legalVersion';
 import { isValidDisplayName } from '../lib/displayName';
@@ -617,17 +616,12 @@ export async function setMyPublicRankingConsent(on: boolean | null): Promise<voi
   if (error) throw new Error(error.message);
 }
 
-async function rawSearchMembersForRanking(q: string): Promise<{ nickname: string; realName: string; verified: boolean }[]> {
-  const t = q.trim();
-  if (!t) return [];
-  const { data, error } = await supabase.rpc('search_members_for_ranking', { p_q: t });
-  if (error) return [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ nickname: r.nickname ?? '', realName: r.real_name ?? '', verified: r.verified === true }));
-}
-/** 순위 입력 자동완성 — 닉네임/실명 부분 일치(업주·운영자만 실명 반환, RPC 내부 게이트). verified=본인인증 보유 여부(미인증 선안내용).
- *  이용권 검색과 동일하게 동일 q 중복 호출을 in-flight+20s LRU 로 흡수(키=trim+소문자, ILIKE라 대소문자·공백 무관). */
-export const searchMembersForRanking = makeSearchCache(rawSearchMembersForRanking, (s) => s.trim().toLowerCase());
+// 순위 입력 자동완성용 전 회원 검색(searchMembersForRanking → RPC search_members_for_ranking)은 2026-09-11 에 지웠다.
+// 마지막 소비자였던 장부 손님 검색이 매장 범위 RPC(search_registered_players, 20260911h)로 옮겨가 사용처가 0이 됐고,
+// 범위 제한이 목적인 커밋에 '매장과 무관한 전 회원 실명 부분 일치' 헬퍼를 남겨 두면 그대로 되살아난다.
+// ⚠ 서버 RPC(search_members_for_ranking)는 아직 살아 있다 — 순위 화면이 쓰는 search_ranking_members ·
+//   resolve_ranking_members 와 함께 범위가 없다. 그쪽은 별건이라 이 커밋에서 닫지 않았다(완료 보고에 남김).
+// 되살리려면 git 이력(2026-09-11 이전)의 rawSearchMembersForRanking 을 가져온다.
 
 // 카카오 로그인(loginWithKakao · VITE_KAKAO_LOGIN 스위치)은 2026-09-10 오너 지시로 삭제했다 — 제공자 성공 이력 0건.
 // 소셜 로그인은 Google 하나다. 되살리려면 git 이력(2026-09-10 이전)의 loginWithKakao 를 가져온다.

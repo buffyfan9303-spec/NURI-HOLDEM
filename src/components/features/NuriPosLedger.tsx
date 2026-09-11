@@ -33,7 +33,7 @@ import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyTo
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
 import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
-import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
+import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
 import { discountsFromPromotions, ledgerLabelOf } from '../../lib/posterDiscounts';
@@ -359,7 +359,18 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     //   시도 건수(flat.length)를 그대로 'N건 승인' 성공 토스트로 띄웠다 — 서버가 전부 거절해도
     //   접수대는 '승인됨'을 보고 손님은 명단에 없다. 단건 승인(위)은 실패를 알리는데 일괄만 예외였다.
     //   allSettled 라 개별 실패가 나머지를 죽이지 않는 성질은 그대로다.
-    Promise.allSettled(flat.map((x) => approveBuyinRequest(x.id, x.seq, false, 'cash', undefined, defaultDiscIdx())))
+    // ⚠ 순차 승인 — 병렬로 보내면 안 된다(20260911g). 이용권 N장을 쓴 손님은 같은 player_name 으로
+    //   대기 행이 N개다. approve_buyin_request 는 max(entry_no)+1 을 읽고 넣고, ledger_players 는
+    //   not exists 로 넣어 겹치면 ledger_players_venue_date_game_name_key ·
+    //   ledger_buyins_venue_date_game_player_entry_key 가 터져 둘 중 하나가 실패한다.
+    (async () => {
+      const rs: { status: 'fulfilled' | 'rejected' }[] = [];
+      for (const x of flat) {
+        try { await approveBuyinRequest(x.id, x.seq, false, 'cash', undefined, defaultDiscIdx()); rs.push({ status: 'fulfilled' }); }
+        catch { rs.push({ status: 'rejected' }); }
+      }
+      return rs;
+    })()
       .then((rs) => {
         const ok = rs.filter((r) => r.status === 'fulfilled').length;
         const ng = rs.length - ok;
@@ -799,26 +810,17 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       toast.show(`${n} 추가됨. 이어서 입력하세요`, 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
-  // 가입자 검색(디바운스) — 순위입력과 동일 메커니즘: 매장 방문 가입자 + 전체 회원(닉네임/실명) 병합
-  const [memSuggest, setMemSuggest] = useState<{ nickname: string; realName: string }[]>([]);
+  // 가입자 검색(디바운스) — RPC 하나가 두 경우를 다 준다(20260911h):
+  //   이 매장 손님(체크인·CRM·예약)은 부분 일치 + 실명, 처음 오는 회원은 닉네임 정확 일치(실명 없음).
+  //   종전엔 여기에 search_members_for_ranking 을 병합했는데, 그건 매장과 무관한 전 회원 실명을
+  //   부분 일치로 긁어오는 경로라 걷어냈다. 회원이 아니면 아래 '입력값 그대로 등록'이 받는다.
   useEffect(() => {
-    if (!addOpen || newName.trim().length < 1) { setSuggest([]); setMemSuggest([]); return; }
+    if (!addOpen || newName.trim().length < 1) { setSuggest([]); return; }
     const t = window.setTimeout(() => {
       searchRegisteredPlayers(venueId, newName).then(setSuggest).catch(() => setSuggest([]));
-      searchMembersForRanking(newName).then(setMemSuggest).catch(() => setMemSuggest([]));
     }, 250);
     return () => window.clearTimeout(t);
   }, [newName, addOpen, venueId]);
-  // 전 회원 후보 — 방문 가입자에 이미 있는 닉네임은 제외(중복 표시 방지)
-  const memOnly = memSuggest.filter((m2) => !suggest.some((rp) => (rp.nickname ?? '').toLowerCase() === m2.nickname.toLowerCase())).slice(0, 6);
-  const pickMember = async (m2: { nickname: string; realName: string }) => {
-    const label = m2.realName ? `${m2.realName}(${m2.nickname})` : m2.nickname;
-    try {
-      await addLedgerPlayer({ venueId, sessionDate: date, gameSeq, name: label, visitorType: newType, sortOrder: players.length });
-      setNewName(''); setSuggest([]); setMemSuggest([]); setNewType('regular'); reload();
-      toast.show(`${label} 추가됨. 이어서 입력하세요`, 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
-  };
   // 가입자 선택 → 실명(닉네임)으로 장부 기록(강제 아님, 그냥 추가하면 입력값 그대로)
   const pickRegistered = async (rp: RegisteredPlayer) => {
     const label = rp.realName ? `${rp.realName}(${rp.nickname ?? ''})` : (rp.nickname ?? newName.trim());
@@ -1283,7 +1285,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               <input value={newName} onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 로 이름이 두 번 들어가던 문제 */ if (e.key === 'Enter') { e.preventDefault(); addPlayer(); } }}
                 placeholder="닉네임/이름 (입력 시 가입자 자동완성)" maxLength={20} className="input w-full text-sm" autoFocus />
-              {(suggest.length > 0 || memOnly.length > 0 || newName.trim()) && (
+              {(suggest.length > 0 || newName.trim()) && (
                 <ul className="max-h-52 space-y-1 overflow-y-auto rounded-input border border-accent-400/30 bg-surface-base/60 p-1">
                   {newName.trim() && (
                     <li>
@@ -1298,16 +1300,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                       <button type="button" onClick={() => pickRegistered(rp)} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
                         <span className="shrink-0 rounded-badge border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">✓회원</span>
                         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{rp.realName ? `${rp.realName}(${rp.nickname ?? '-'})` : (rp.nickname ?? '-')}</span>
-                        <span className="shrink-0 text-2xs text-ink-muted">방문 {rp.visits}회</span>
-                      </button>
-                    </li>
-                  ))}
-                  {memOnly.map((m2) => (
-                    <li key={`m-${m2.nickname}`}>
-                      <button type="button" onClick={() => pickMember(m2)} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
-                        <span className="shrink-0 rounded-badge border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">✓회원</span>
-                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{m2.realName ? `${m2.realName}(${m2.nickname})` : m2.nickname}</span>
-                        <span className="shrink-0 text-2xs text-ink-muted">첫 방문</span>
+                        <span className="shrink-0 text-2xs text-ink-muted">{rp.visits > 0 ? `방문 ${rp.visits}회` : '첫 방문'}</span>
                       </button>
                     </li>
                   ))}

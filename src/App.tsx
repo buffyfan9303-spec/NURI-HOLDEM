@@ -3173,7 +3173,7 @@ export default function App() {
                             <b className="min-w-0 truncate text-ink-primary">{r.venueName}</b>
                             <span className="shrink-0">
                               {(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? `· ${n === 1 ? '메인' : '사이드' + (n - 1)} ` : ''; })()}
-                              {r.status === 'approved' ? '참가 승인 · 입장하세요' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` · ${r.rejectReason}` : ''}` : '바인 요청 대기중'}
+                              {r.status === 'approved' ? '참가 승인 · 입장하세요' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` · ${r.rejectReason}` : ''}` : r.usedVoucher ? '이용권 · 바인 요청 대기중' : '바인 요청 대기중'}
                             </span>
                           </span>
                           {/* ⚠ 이 문장을 위 줄에 붙이면 안 된다 — 위 줄은 매장명만 줄이고 상태는 지키는 구조라
