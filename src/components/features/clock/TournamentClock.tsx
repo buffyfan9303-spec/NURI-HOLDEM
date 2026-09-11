@@ -701,6 +701,30 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   // 뒤로가기 → 전체화면만 해제(앱 이탈 방지)
   useBackClose(fs, () => { setFs(false); if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); });
 
+  /**
+   * 전체화면 최소 오버레이의 노출 — 마우스·키보드가 움직이면 보이고, 2.5초 잠잠하면 숨는다(§7).
+   * TV 송출 중에는 화면에 아무 버튼도 떠 있지 않아야 하지만, 운영자가 다가와 마우스를 흔들면
+   * 해제·음소거가 즉시 잡혀야 한다. 포커스 이동(키보드)도 같은 신호로 받아 키보드 접근성을 지킨다.
+   */
+  const [ctlOn, setCtlOn] = useState(true);
+  useEffect(() => {
+    if (!fs) { setCtlOn(true); return; }
+    let t = 0;
+    const wake = () => {
+      setCtlOn(true);
+      window.clearTimeout(t);
+      t = window.setTimeout(() => setCtlOn(false), 2500);
+    };
+    wake();
+    window.addEventListener('mousemove', wake, { passive: true });
+    window.addEventListener('keydown', wake);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('mousemove', wake);
+      window.removeEventListener('keydown', wake);
+    };
+  }, [fs]);
+
   const nextBreak = msToNextBreak(state, remaining);
   const regClose = msToRegClose(state, remaining);
   // AVG STACK 의 BB 환산(실물 클락 ②티티X망고·④J-BLUFF 채택 패턴) — 플레이어가 실제 판단에
@@ -791,15 +815,31 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
       <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.06] pt-2">
         <button type="button" onClick={resetClock}
           className="rounded-input border border-border-default bg-white/10 px-3 py-2 text-2xs font-bold text-white/55 hover:bg-white/15 hover:text-amber-300">↺ 초기화</button>
-        {fs
-          ? <button type="button" onClick={toggleFs} className="rounded-input border border-border-default bg-white/10 px-4 py-2 text-2xs font-bold text-white/60 hover:bg-white/15">⤡ 해제</button>
-          : <button type="button" onClick={handleEnd} className="rounded-input border border-border-default bg-white/10 px-4 py-2 text-2xs font-bold text-white/55 hover:bg-white/15 hover:text-danger-light">토너 종료</button>}
+        {/* 콘솔은 이제 `!fs` 일 때만 렌더된다(아래 사용처) — 여기 있던 `fs ? 해제 : 토너 종료` 삼항은
+            영영 두 번째 가지만 타는 죽은 분기가 됐다. 전체화면 해제는 모서리 오버레이로 옮겼다. */}
+        <button type="button" onClick={handleEnd} className="rounded-input border border-border-default bg-white/10 px-4 py-2 text-2xs font-bold text-white/55 hover:bg-white/15 hover:text-danger-light">토너 종료</button>
       </div>
     </div>
   );
 
   return (
     <div ref={wrapRef} data-scroll-lock className={fs ? 'fixed inset-0 z-[70] bg-[#06080c] flex items-center justify-center overflow-hidden' : ''}>
+      {/* 전체화면 최소 오버레이 — 해제·음소거만. 모서리에 두어 대회명·지표를 가리지 않고,
+          2.5초 잠잠하면 사라져 송출 화면에 아무 버튼도 남지 않는다. ESC 로도 해제된다(위 useBackClose). */}
+      {fs && (
+        <div data-testid="clk-fs-overlay"
+          className={['absolute bottom-[2vmin] right-[2vmin] z-10 flex items-center gap-[1vmin] transition-opacity duration-300',
+            ctlOn ? 'opacity-100' : 'opacity-0 pointer-events-none'].join(' ')}>
+          <button type="button" onClick={toggleMute} aria-label={volume > 0 ? '음소거' : '음소거 해제'}
+            className="grid h-[4vmin] min-h-[36px] w-[4vmin] min-w-[36px] place-items-center rounded-[1vmin] bg-black/50 text-white/75 backdrop-blur-sm transition-colors hover:bg-black/70 hover:text-white">
+            <Icon name={volume > 0 ? 'volume' : 'volume-off'} size={16} />
+          </button>
+          <button type="button" onClick={toggleFs} aria-label="전체화면 해제"
+            className="rounded-[1vmin] bg-black/50 px-[1.6vmin] py-[0.9vmin] text-[1.6vmin] font-bold text-white/75 backdrop-blur-sm transition-colors hover:bg-black/70 hover:text-white">
+            ⤡ 해제
+          </button>
+        </div>
+      )}
       {/* 풀스크린은 16:9 고정 박스(레터박스) + container-type:size — cqw/cqh로 모든 모니터(16:9·21:9·세로) 동일 비율 */}
       <div className={fs ? 'flex flex-col w-full aspect-[16/9] max-w-[177.78vh] max-h-screen [container-type:size]' : 'space-y-2'}>
       {/* 상단 바 */}
@@ -979,8 +1019,13 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             </p>
           </div>
         </div>
-        {/* 전체화면(TV 송출)에서는 컨트롤을 화면 안에 둔다 — 그 창이 곧 조작 창이다 */}
-        {canManage && fs && consoleUI}
+        {/* 🔴 2026-09-11 오너 지시로 뒤집은 결정 — 전체화면에는 **조작 콘솔을 넣지 않는다.**
+            예전 주석은 "전체화면에서는 컨트롤을 화면 안에 둔다 — 그 창이 곧 조작 창이다" 였고,
+            그래서 시작·Level±·Min/Sec±·엔트리 5종±·볼륨 슬라이더·초기화·해제가 화면 하단 약 30%를 먹었다.
+            전체화면은 설정 화면이 아니라 **매장 TV·빔프로젝터에 띄우는 읽기 전용 토너먼트 보드**다 —
+            손님이 보는 화면에 운영 버튼이 있으면 정보가 밀리고 오조작도 난다.
+            조작은 (a) 전체화면을 풀고 하는 운영자 화면 (b) 휴대폰 리모컨(ClockRemote) 두 경로가 이미 있다.
+            해제·음소거만 아래 최소 오버레이로 남긴다(§7). */}
       </div>
       {/* 우측 콘솔(비전체화면) — 화면이 좁으면 그리드가 1열이 되어 아래로 흐른다 */}
       {canManage && !fs && consoleUI}
