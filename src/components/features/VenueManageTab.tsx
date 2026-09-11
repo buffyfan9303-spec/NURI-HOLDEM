@@ -1385,7 +1385,9 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     const split = kind === 'ledger' ? splitLedgerName(nickname) : null;
     const nick = split ? split.nickname : nickname.trim();
     setRows((r) => r.map((row, idx) => (idx === i
-      ? { ...row, nickname: nick, realName: split ? (split.realName || row.realName) : (member?.realName ?? row.realName) }
+      // member.realName 은 내 매장 손님이 아니면 서버가 비워 보낸다(20260911j). toMember 가 null 을
+      // ''로 바꾸므로 `??` 는 그 빈 문자열을 값으로 보고 사장님이 방금 손으로 친 실명을 지운다 — `||` 로 받는다.
+      ? { ...row, nickname: nick, realName: split ? (split.realName || row.realName) : (member?.realName || row.realName) }
       : row)));
     // 회원/비회원은 여기서 확정된다 — 그래야 동명이인이어도 '이 사람'에게만 전송된다.
     if (kind === 'member' && member) setPickedMap((p) => ({ ...p, [nickKey(nick)]: member }));

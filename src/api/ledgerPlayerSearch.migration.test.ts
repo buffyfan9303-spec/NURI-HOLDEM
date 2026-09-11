@@ -12,6 +12,10 @@
 //   ② 비방문 회원 분기에 부분 일치나 실명을 다시 싣는 것
 //   ③ CREATE OR REPLACE 뒤 ACL 재선언을 빠뜨리는 것
 //   ④ 장부 화면이 전 회원 검색(search_members_for_ranking)을 다시 병합해 우회하는 것
+//
+// ⚠ 이 파일은 **20260911h 파일 텍스트**를 잠근다. 라이브 본문은 20260911j 가 범위 union 을
+//   공용 함수(_venue_customer_ids)로 옮겼다 — h 파일을 '고쳐서' 맞추지 마라(기존 마이그레이션 수정 금지).
+//   현재 형태의 가드는 rankingMemberSearch.migration.test.ts 에 있다.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

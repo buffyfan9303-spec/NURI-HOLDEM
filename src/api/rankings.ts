@@ -460,7 +460,8 @@ export async function getMyRankingHistory(nickname: string, limit = 30): Promise
 export interface RankMember {
   id: string;
   nickname: string;
-  /** 표시용 실명(업주·운영자에게만 반환) */
+  /** 표시용 실명 — **내 매장 손님(체크인·CRM·예약)일 때만** 서버가 싣는다(20260911j).
+   *  그 밖의 회원은 ''(빈 문자열)이다. 비어 있다고 실명이 없는 사람이 아니라 내 매장 기록이 없는 사람이라는 뜻이다. */
   realName: string;
   /** 본인인증(CI) 보유 — 매장이용권 지급 가능 조건과 동일한 판정 */
   verified: boolean;

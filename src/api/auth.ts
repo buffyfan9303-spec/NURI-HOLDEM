@@ -619,8 +619,8 @@ export async function setMyPublicRankingConsent(on: boolean | null): Promise<voi
 // 순위 입력 자동완성용 전 회원 검색(searchMembersForRanking → RPC search_members_for_ranking)은 2026-09-11 에 지웠다.
 // 마지막 소비자였던 장부 손님 검색이 매장 범위 RPC(search_registered_players, 20260911h)로 옮겨가 사용처가 0이 됐고,
 // 범위 제한이 목적인 커밋에 '매장과 무관한 전 회원 실명 부분 일치' 헬퍼를 남겨 두면 그대로 되살아난다.
-// ⚠ 서버 RPC(search_members_for_ranking)는 아직 살아 있다 — 순위 화면이 쓰는 search_ranking_members ·
-//   resolve_ranking_members 와 함께 범위가 없다. 그쪽은 별건이라 이 커밋에서 닫지 않았다(완료 보고에 남김).
+// 서버 RPC(search_members_for_ranking)도 20260911j 에서 드롭했다(호출부 0). 같은 마이그레이션이 search_ranking_members ·
+//   resolve_ranking_members 에 매장 범위를 걸었다 — 매장 무관 전 회원 검색을 되살리지 마라.
 // 되살리려면 git 이력(2026-09-11 이전)의 rawSearchMembersForRanking 을 가져온다.
 
 // 카카오 로그인(loginWithKakao · VITE_KAKAO_LOGIN 스위치)은 2026-09-10 오너 지시로 삭제했다 — 제공자 성공 이력 0건.
