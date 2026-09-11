@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { getStaffSchedule, getStaffWages, saveStaffWage, setMyShiftTime, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 import { getMyVenueStaff } from '../../api/auth';
+// 급여 시스템이 두 벌이다 — 직원(staff_schedule × staff_wage)과 딜러 로테이션(dealer_shifts).
+// 딜러는 시급이 **시프트 행에 직접** 붙어 있어 staff_wage 와 무관하다. 합계는 둘을 더해야 맞다.
+import { getDealerShifts, shiftHours, type DealerShift } from '../../api/dealerShifts';
 import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
 
@@ -55,7 +58,17 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
   const toast = useToast();
   const roster = useRoster(venueId);
   const [wages, setWages] = useState<Record<string, StaffWage>>({});
-  useEffect(() => { getStaffWages(venueId).then((ws) => { const m: Record<string, StaffWage> = {}; ws.forEach((w) => (m[w.name] = w)); setWages(m); }).catch(() => {}); }, [venueId]);
+  // ⚠ 조회 실패를 삼키면 **데이터가 사라진다**(표시 버그가 아니다).
+  //   wages 가 빈 채로 남으면 get(n) 이 모든 직원에게 hourlyWage:0 폴백을 돌려주고,
+  //   폼은 빈칸으로 그려진다. 여기서 「저장」을 누르면 saveStaffWage 가 **실제 시급을 0으로 덮어쓴다**.
+  //   읽지 못한 값을 읽기-수정-쓰기 하면 안 된다 — 실패 중에는 저장을 막는다(2026-09-11 감사).
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  useEffect(() => {
+    setLoadErr(null);
+    getStaffWages(venueId)
+      .then((ws) => { const m: Record<string, StaffWage> = {}; ws.forEach((w) => (m[w.name] = w)); setWages(m); })
+      .catch((e) => { setWages({}); setLoadErr(msgOf(e, '시급 설정을 불러오지 못했습니다')); });
+  }, [venueId]);
 
   const get = (n: string): StaffWage => wages[n] ?? { name: n, hourlyWage: 0, payday: 0, weeklyOff: '', memo: '' };
   const set = (n: string, patch: Partial<StaffWage>) => setWages((w) => ({ ...w, [n]: { ...get(n), ...patch } }));
@@ -65,13 +78,19 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
   return (
     <div className="space-y-2">
       <p className="text-2xs text-ink-muted">시급제 기준(기본급 없음). 직원별 시급·급여일·휴무 요일을 설정하세요.</p>
+      {loadErr && (
+        <p role="alert" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">
+          {loadErr} — 지금 저장하면 기존 시급이 0으로 덮어써지므로 저장을 막아 두었습니다. 새로고침 후 다시 시도하세요.
+        </p>
+      )}
       {roster.length === 0 ? <p className="text-2xs text-ink-muted text-center py-4">등록된 직원이 없습니다. 「출근 스케줄」에서 직원을 등록하세요.</p> : roster.map((n) => {
         const w = get(n); const offs = w.weeklyOff.split(',').filter(Boolean);
         return (
           <div key={n} className="rounded-input border border-border-subtle bg-surface-base p-2.5 space-y-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-bold text-ink-primary">{n}</span>
-              <button type="button" onClick={() => save(n)} className="btn-ghost text-2xs px-3 py-1.5">저장</button>
+              <button type="button" onClick={() => save(n)} disabled={!!loadErr}
+                className="btn-ghost px-3 py-1.5 text-2xs disabled:opacity-40">저장</button>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <label className="block"><span className="block text-2xs text-ink-muted mb-0.5">시급(원)</span>
@@ -100,13 +119,24 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
   const [month, setMonth] = useState(thisMonth);
   const [shifts, setShifts] = useState<StaffShift[]>([]);
   const [wages, setWages] = useState<Record<string, number>>({});
+  // ⚠ 시급 조회 **실패**를 '시급 0원'과 구분한다. 예전엔 catch(() => {}) 라, 조회가 죽으면
+  //   wages 가 빈 채로 남아 모든 급여가 0으로 계산되고 **'총 인건비 0원'이 정상 숫자처럼** 떴다
+  //   (2026-09-11 감사). 돈 화면에서 '못 불러옴'과 '정말 0원'이 같아 보이면 안 된다.
+  const [wageErr, setWageErr] = useState<string | null>(null);
+  const [dealers, setDealers] = useState<DealerShift[]>([]);
   const [from, to] = monthRange(month);
   useEffect(() => {
     const reload = () => getStaffSchedule(venueId, from, to).then(setShifts).catch(() => {});
     reload();
     return subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
   }, [venueId, from, to]);
-  useEffect(() => { getStaffWages(venueId).then((ws) => { const m: Record<string, number> = {}; ws.forEach((w) => (m[w.name] = w.hourlyWage)); setWages(m); }).catch(() => {}); }, [venueId]);
+  useEffect(() => { getDealerShifts(venueId, from, to).then(setDealers).catch(() => setDealers([])); }, [venueId, from, to]);
+  useEffect(() => {
+    setWageErr(null);
+    getStaffWages(venueId)
+      .then((ws) => { const m: Record<string, number> = {}; ws.forEach((w) => (m[w.name] = w.hourlyWage)); setWages(m); })
+      .catch((e) => { setWages({}); setWageErr(msgOf(e, '시급을 불러오지 못했습니다')); });
+  }, [venueId]);
 
   const rows = useMemo(() => {
     const byName = new Map<string, StaffShift[]>();
@@ -118,8 +148,24 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
       return { name, days, hrs, pay, avgIn: avgHm(list.map((x) => x.checkIn)), avgOut: avgHm(list.map((x) => x.checkOut)) };
     }).sort((a, b) => b.pay - a.pay);
   }, [shifts, wages]);
-  const totalPay = rows.reduce((s, r) => s + r.pay, 0);
-  const totalHrs = rows.reduce((s, r) => s + r.hrs, 0);
+  /** 시급이 등록되지 않은 직원 — 급여 0원으로 조용히 빠진다. 합계를 믿기 전에 이름을 봐야 한다. */
+  const noWage = useMemo(() => rows.filter((r) => r.hrs > 0 && wages[r.name] == null).map((r) => r.name), [rows, wages]);
+  /** 딜러 로테이션 급여 — DealerShiftsModal 과 **같은 식**(shiftHours × 행 시급)으로 센다. */
+  const dealerRows = useMemo(() => {
+    const m = new Map<string, { hrs: number; pay: number; days: number }>();
+    for (const d of dealers) {
+      const h = shiftHours(d.startTime, d.endTime);
+      const e = m.get(d.dealerName) ?? { hrs: 0, pay: 0, days: 0 };
+      e.hrs += h; e.pay += h * d.hourlyWage; e.days += 1;
+      m.set(d.dealerName, e);
+    }
+    return [...m.entries()].map(([name, v]) => ({ name, days: v.days, hrs: v.hrs, pay: Math.round(v.pay) }))
+      .sort((a, b) => b.pay - a.pay);
+  }, [dealers]);
+  const staffPay = rows.reduce((s, r) => s + r.pay, 0);
+  const dealerPay = dealerRows.reduce((s, r) => s + r.pay, 0);
+  const totalPay = staffPay + dealerPay;
+  const totalHrs = rows.reduce((s, r) => s + r.hrs, 0) + dealerRows.reduce((s, r) => s + r.hrs, 0);
   const avgIn = avgHm(shifts.map((s) => s.checkIn));
   const avgOut = avgHm(shifts.map((s) => s.checkOut));
 
@@ -133,13 +179,28 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-card border border-accent-400/40 bg-accent-300/[0.07] p-2.5 text-center">
           <p className="text-2xs text-ink-muted">총 인건비</p>
-          <p className="text-xl font-extrabold text-accent-200 tabular-nums">{totalPay.toLocaleString()}원</p>
+          {wageErr
+            ? <p className="text-base font-extrabold text-danger-light">—</p>
+            : <p className="text-xl font-extrabold text-accent-200 tabular-nums">{totalPay.toLocaleString()}원</p>}
+          {!wageErr && dealerPay > 0 && (
+            <p className="text-[11px] text-ink-muted tabular-nums">직원 {staffPay.toLocaleString()} · 딜러 {dealerPay.toLocaleString()}</p>
+          )}
         </div>
         <div className="rounded-card border border-border-subtle bg-surface-base p-2.5 text-center">
           <p className="text-2xs text-ink-muted">총 근무시간</p>
           <p className="text-xl font-extrabold text-ink-primary tabular-nums">{totalHrs.toFixed(1)}h</p>
         </div>
       </div>
+      {wageErr && (
+        <p role="alert" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">
+          {wageErr} — 급여 합계를 계산할 수 없습니다. 아래 표의 급여는 0원으로 보일 수 있습니다.
+        </p>
+      )}
+      {!wageErr && noWage.length > 0 && (
+        <p className="rounded-input border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-2xs text-amber-700 dark:text-amber-300">
+          시급이 없는 직원 {noWage.length}명({noWage.slice(0, 4).join(' · ')}{noWage.length > 4 ? ' 외' : ''}) — 급여가 0원으로 빠져 총 인건비가 실제보다 적습니다.
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-input border border-border-subtle bg-surface-base py-2 text-center"><p className="text-[11px] text-ink-muted">평균 출근</p><p className="text-base font-bold text-ink-primary tabular-nums">{avgIn}</p></div>
         <div className="rounded-input border border-border-subtle bg-surface-base py-2 text-center"><p className="text-[11px] text-ink-muted">평균 퇴근</p><p className="text-base font-bold text-ink-primary tabular-nums">{avgOut}</p></div>
@@ -167,7 +228,27 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
           </table>
         </div>
       )}
-      <p className="text-2xs text-ink-muted">급여 = 근무시간 × 시급(「인건비 관리」 설정). 시간은 출퇴근이 모두 기록된 날만 합산됩니다.</p>
+      {dealerRows.length > 0 && (
+        <div className="space-y-1 rounded-input border border-border-subtle bg-surface-low p-2">
+          <p className="text-[11px] font-bold text-ink-secondary">딜러 로테이션 (시급은 시프트마다 입력)</p>
+          <table className="w-full border-separate border-spacing-0">
+            <tbody>
+              {dealerRows.map((r) => (
+                <tr key={r.name} className="text-xs">
+                  <td className="py-1 pl-1 text-left font-bold text-ink-primary">{r.name}</td>
+                  <td className="text-right text-ink-secondary tabular-nums">{r.days}일</td>
+                  <td className="text-right text-ink-secondary tabular-nums">{r.hrs.toFixed(1)}h</td>
+                  <td className="pr-1 text-right font-bold text-accent-300 tabular-nums dark:text-accent-200">{r.pay.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-2xs text-ink-muted">
+        급여 = 근무시간 × 시급(「인건비 관리」 설정). 시간은 출퇴근이 모두 기록된 날만 합산됩니다.
+        딜러 로테이션은 시프트에 적은 시급으로 따로 계산해 <b className="text-ink-secondary">총 인건비에 함께</b> 넣습니다.
+      </p>
     </div>
   );
 }

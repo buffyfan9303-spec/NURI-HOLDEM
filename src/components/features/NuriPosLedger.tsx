@@ -15,6 +15,7 @@ import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
+  splitMismatch,
   
   discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary, ZERO_TENDER, type Tender,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
@@ -2603,7 +2604,18 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
   //   (바로 아래 canSaveSplit 이 tkt>0 만으로도 허용한다 — 합계가 0인데 저장되는 모순).
   //   buyinFinance 분납 분기(ledger.ts ticketWon)와 같은 식으로 단가 환산해 맞춘다.
   const splitTotal = cash + card + transfer + unpaidAmt + tkt * TICKET_WON;
-  const canSaveSplit = splitTotal > 0 || tkt > 0;
+  // 분납 합계가 **단가 − 할인** 과 맞는가. splitMismatch 는 정의·문서·테스트까지 있었는데
+  // **프로덕션 호출부가 0곳**이었다(2026-09-11 감사) — 검증 함수만 있고 게이트가 없었다.
+  // 그래서 10만 게임에 현금 4만 + 카드 4만을 넣어도 그대로 저장됐고, buyinFinance 가
+  // 그 8만을 value 로 받아 **엔트리 0.8** 로 셌다. 미수 칸은 0이라 사라진 2만은 흔적이 없다.
+  // 부족분을 남기고 싶으면 '미수' 칸에 적는 것이 정본 경로다 — 그래야 미수금 회수 목록에 오른다.
+  const mismatch = splitMismatch(
+    { cashAmount: cash, cardAmount: card, transferAmount: transfer, ticketCount: tkt, unpaidAmount: unpaidAmt, discountIndex: discIdx },
+    session,
+  );
+  /** 이 바인으로 받아야 할 금액(원) = 단가 − 할인. splitMismatch 의 기준값을 되돌려 얻는다. */
+  const splitDue = splitTotal - mismatch;
+  const canSaveSplit = (splitTotal > 0 || tkt > 0) && mismatch === 0;
   const submitSplit = () => onPickSplit({ cashAmount: cash, cardAmount: card, transferAmount: transfer, ticketCount: tkt, unpaidAmount: unpaidAmt, discountIndex: discIdx });
 
   // 셸은 Modal 원자(MODAL-03) — 뒤로가기·ESC(최상단 한 겹)·포커스 트랩·복원을 원자가 준다. 개별 ESC 리스너 금지.
@@ -2804,9 +2816,26 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                 </div>
               )}
               <p className="text-2xs text-ink-secondary text-right">
-                합계 <b className="tabular-nums">{wonToMan(splitTotal)}</b>만원
+                합계 <b className={`tabular-nums ${mismatch === 0 ? '' : 'text-danger-light'}`}>{wonToMan(splitTotal)}</b>만원
+                {' · 받을 금액 '}<b className="tabular-nums">{wonToMan(splitDue)}</b>만원
                 {discIdx > 0 && discs[discIdx - 1] ? ` · ${discs[discIdx - 1].label || '할인'} 적용(−${wonToMan(discs[discIdx - 1].amount)}만)` : ''}
               </p>
+              {/* 어긋난 금액을 **저장 전에** 사람이 읽는 문장으로 띄운다. 계산에서 몰래 고치지 않는다 —
+                  오입력이 숫자로 드러나야 접수대가 손님에게 맞는 금액을 부른다(ledger.ts splitMismatch 주석). */}
+              {mismatch !== 0 && (
+                <div role="alert" className="space-y-1.5 rounded-input border border-danger/40 bg-danger/10 px-2.5 py-2">
+                  <p className="text-2xs font-bold text-danger-light">
+                    {mismatch < 0 ? `${wonToMan(-mismatch)}만원 부족합니다` : `${wonToMan(mismatch)}만원 초과입니다`}
+                    {' — 합계가 받을 금액과 같아야 저장됩니다.'}
+                  </p>
+                  {mismatch < 0 && (
+                    <button type="button" onClick={() => setUnpaidAmt(unpaidAmt - mismatch)}
+                      className="h-9 w-full rounded-input border border-danger/40 text-2xs font-bold text-danger-light">
+                      부족분 {wonToMan(-mismatch)}만원을 미수로 잡기
+                    </button>
+                  )}
+                </div>
+              )}
               <button type="button" onClick={submitSplit} disabled={!canSaveSplit || busy} className="btn-primary w-full text-sm disabled:opacity-50">저장</button>
             </div>
           )}

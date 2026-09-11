@@ -19,6 +19,9 @@ import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import RegularsModal from './RegularsModal';
 import DealerShiftsModal from './DealerShiftsModal';
+// 딜러 급여는 dealer_shifts 에 **행마다 시급**이 붙어 있다(staff_wage 와 별개 시스템).
+// 합산하지 않으면 딜러를 로테이션으로만 굴리는 매장의 '총 인건비'가 통째로 0원이 된다.
+import { getDealerShifts, shiftHours, type DealerShift } from '../../api/dealerShifts';
 import VoucherManageModal from './VoucherManageModal';
 import CheckinModal from './CheckinModal';
 import Modal from '../atoms/Modal';
@@ -112,6 +115,10 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [shifts, setShifts] = useState<StaffShift[]>([]);
   const [monthShifts, setMonthShifts] = useState<StaffShift[]>([]);
   const [wages, setWages] = useState<StaffWage[]>([]);
+  // ⚠ 시급 조회 실패와 '시급 0원'은 다르다 — 예전엔 catch(() => {}) 라 조회가 죽으면
+  //   '총 인건비 0만원'이 금색 숫자로 정상처럼 떴다(2026-09-11 감사).
+  const [wageErr, setWageErr] = useState(false);
+  const [monthDealers, setMonthDealers] = useState<DealerShift[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [range, setRange] = useState<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }>({ sessions: [], buyins: [] });
   const [regulars, setRegulars] = useState<VenueRegular[]>([]);
@@ -219,7 +226,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       getPendingBuyinRequests(venueId, d).then(setPendingReqs).catch(() => {}),
       getStaffSchedule(venueId, d, d).then(setShifts).catch(() => {}),
       getStaffSchedule(venueId, mr.start, mr.end).then(setMonthShifts).catch(() => {}),
-      getStaffWages(venueId).then(setWages).catch(() => {}),
+      getStaffWages(venueId).then((w) => { setWages(w); setWageErr(false); }).catch(() => { setWages([]); setWageErr(true); }),
+      getDealerShifts(venueId, mr.start, mr.end).then(setMonthDealers).catch(() => setMonthDealers([])),
       getLedgerRange(venueId, d14[0], d14[13]).then(setRange).catch(() => {}),
       getVenueRegulars(venueId).then(setRegulars).catch(() => {}),
       getVenueRankings(venueId, d).then(({ entries }) => setRankEventsToday(entries.map((e) => e.eventName ?? ''))).catch(() => {}),
@@ -517,6 +525,15 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     laborHours += hrs;
     laborTotal += hrs * (wageMap[s.name] ?? 0);
   }
+  // 딜러 로테이션 — 같은 달, 같은 화면의 '총 인건비'에 더한다(StaffSettlement 와 같은 식).
+  let dealerPay = 0, dealerHours = 0;
+  for (const d of monthDealers) {
+    const hrs = shiftHours(d.startTime, d.endTime);
+    dealerHours += hrs;
+    dealerPay += hrs * d.hourlyWage;
+  }
+  laborTotal += dealerPay;
+  laborHours += dealerHours;
 
   // ── 손님 유형 비중(오늘 명단) ──
   const typeCount: Record<string, number> = {};
@@ -1229,9 +1246,16 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           {loading ? <Skeleton /> : laborHours === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">이번 달 출퇴근 기록이 없습니다.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-              <Stat label="총 인건비" value={wonToMan(laborTotal)} unit="만원" gold />
-              <Stat label="총 근무" value={`${Math.round(laborHours)}`} unit="시간" />
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                {/* 시급을 못 불러왔으면 숫자를 만들지 않는다 — '0만원'이 정상값처럼 읽힌다 */}
+                <Stat label="총 인건비" value={wageErr ? '—' : wonToMan(laborTotal)} unit={wageErr ? '' : '만원'} gold />
+                <Stat label="총 근무" value={`${Math.round(laborHours)}`} unit="시간" />
+              </div>
+              {wageErr && <p className="text-[11px] text-danger-light">시급을 불러오지 못해 금액을 계산할 수 없습니다.</p>}
+              {!wageErr && dealerPay > 0 && (
+                <p className="text-[11px] text-ink-muted tabular-nums">직원 {wonToMan(laborTotal - dealerPay)}만 · 딜러 {wonToMan(dealerPay)}만</p>
+              )}
             </div>
           )}
         </DashCard>
