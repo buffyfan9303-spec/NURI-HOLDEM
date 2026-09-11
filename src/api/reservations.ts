@@ -257,7 +257,7 @@ export async function getMyReservations(limit = 30): Promise<MyReservationRow[]>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
     scheduleId: r.schedule_id, displayName: r.display_name, reservedAt: r.created_at,
-    title: r.schedules?.title ?? '(대회)', date: r.schedules?.date ?? '',
+    title: r.schedules?.title ?? '(내려간 대회)', date: r.schedules?.date ?? '',
     startTime: r.schedules?.start_time ?? null,
     venueId: r.schedules?.venue_id ?? null, venueName: r.schedules?.venues?.name ?? null,
   }));

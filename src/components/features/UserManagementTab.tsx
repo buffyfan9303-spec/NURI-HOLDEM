@@ -248,7 +248,9 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
       toast.show(`${user.name} 영구 정지 · 안내 메일 발송`, 'error');
     } else {
       onUpdate(user.id, { status: 'withdrawn', suspendedUntil: undefined, sanctionReason: r });
-      toast.show(`${user.name} 강제 탈퇴 · 안내 메일 발송`, 'error');
+      // 아직 '발송했다' 고 단정하지 않는다 — 서버 실패는 App.handleUpdateUser 가 빨간 토스트로 띄우고
+      // 목록을 되돌린다. 성공 단정과 실패 토스트가 겹쳐 뜨면 운영자가 결과를 오판한다.
+      toast.show(`${user.name} 강제 탈퇴 처리 중… (개인정보 파기·재가입 제한)`, 'info');
     }
     close();
   };
@@ -383,7 +385,17 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
                 </>
               )}
               {(status === 'suspended' || status === 'banned' || status === 'withdrawn') && (
-                <ActionBtn onClick={restore} variant="success">제재 해제</ActionBtn>
+                <>
+                  <ActionBtn onClick={restore} variant="success">제재 해제</ActionBtn>
+                  {/* 제재·기탈퇴 계정이야말로 강제 탈퇴(개인정보 파기) 대상이다 —
+                      ① 예전엔 활성 회원에게만 버튼이 있어 정지·영구정지 계정은 정리할 방법이 없었고
+                      ② 옛 경로로 status 만 바뀐 기존 '탈퇴' 계정은 실명·전화·CI 와 로그인 세션이
+                         그대로 남아 있다. 20260911k RPC 가 멱등이라 그 행을 여기서 재처리할 수 있다. */}
+                  <ActionBtn onClick={() => setPending({ type: 'withdraw' })} variant="danger">강제 탈퇴</ActionBtn>
+                </>
+              )}
+              {status === 'withdrawn' && (
+                <p className="text-2xs text-ink-muted py-1 w-full">탈퇴 계정 — '제재 해제'는 상태만 되돌립니다. 이미 파기된 개인정보·로그인 수단은 복구되지 않습니다.</p>
               )}
             </div>
           )}

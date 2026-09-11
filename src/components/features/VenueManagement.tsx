@@ -1,6 +1,7 @@
 // src/components/features/VenueManagement.tsx
 // 관리자 '게시물 관리' > 매장 관리: 노출 순서(드래그) + 활성/비활성/정지/숨김 + 프리미엄(AD) + 인증(비인증/인증) + 삭제.
 import { useEffect, useState, useCallback } from 'react';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
@@ -35,6 +36,10 @@ export default function VenueManagement() {
   const toast = useToast();
   const { user } = useAuth();
   const [venues, setVenues]   = useState<Venue[]>([]);
+  // ⚠ 실패와 '0건' 을 가른다. 종전엔 catch 가 토스트만 띄우고 venues 를 [] 로 둬서,
+  //   토스트가 사라진 뒤에는 화면이 '매장이 없습니다' 라고 단언했다 — 운영자는 데이터가
+  //   날아간 줄 알고, 순서·인증·정지 조작이 왜 안 되는지 알 수 없었다(2026-09-11 점검).
+  const [err, setErr]         = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery]     = useState('');
 
@@ -44,15 +49,15 @@ export default function VenueManagement() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  useEffect(() => {
-    let active = true;
+  const load = useCallback(() => {
+    setLoading(true);
     getAllVenues()
-      .then((v) => { if (active) setVenues(v); })
-      .catch(() => { if (active) toast.show('매장 목록을 불러오지 못했습니다', 'error'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+      .then((v) => { setVenues(v); setErr(null); })
+      .catch((e) => { setErr(e); toast.show('매장 목록을 불러오지 못했습니다', 'error'); })
+      .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => { load(); }, [load]);
 
   const filtered = venues.filter((v) => !query || v.name.includes(query) || v.region.includes(query));
 
@@ -137,7 +142,9 @@ export default function VenueManagement() {
           왼쪽 <b className="text-ink-secondary">손잡이</b>를 꾹 눌러 <b className="text-ink-secondary">드래그</b>하면 노출 순서를 바꿀 수 있어요. (앞 번호 순서대로 노출 · 검색 중에는 순서 변경 불가)
         </p>
       )}
-      {filtered.length === 0 ? (
+      {err != null ? (
+        <LoadErrorCard error={err} what="매장 목록" onRetry={load} />
+      ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-xs text-ink-muted">매장이 없습니다</p>
       ) : query ? (
         // 검색 중: 순서 변경 없이 일반 목록

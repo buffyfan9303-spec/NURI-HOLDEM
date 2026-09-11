@@ -17,6 +17,9 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { rowToPost, type CommunityPost } from './community';
 
+/** community_ads_public 이 이 서버에 아직 없는가(20260911a 미적용). 세션 1회만 확인한다. */
+let rpcMissing = false;
+
 /** 게재 중인 광고 한 칸 = 슬롯 번호 + 그 자리에 승격된 **진짜 게시글**. */
 export interface PromotedPost { slot: number; post: CommunityPost }
 
@@ -39,8 +42,17 @@ export interface AdSlot {
  */
 export async function getActivePromotedPosts(): Promise<{ ads: PromotedPost[]; error: unknown }> {
   if (IS_MOCK) return { ads: [], error: null };
+  // ⚠ 마이그레이션(20260911a)이 아직 운영에 없으면 PostgREST 는 **404(PGRST202)** 를 준다.
+  //   앱이 먼저 배포되고 DB 가 나중에 적용되는 것이 이 저장소의 기본 순서라 그 창이 실제로 존재한다.
+  //   한 번 없다고 확인되면 그 세션 동안 다시 묻지 않는다 — 커뮤니티 탭에 들어갈 때마다 404 왕복을
+  //   반복하고 콘솔을 더럽힐 이유가 없다(같은 폴백을 revokeVouchers 가 이미 쓴다).
+  //   적용되면 새로고침 한 번으로 정상 복귀한다. 손님 화면은 그동안 '광고 없음' 으로 보인다(오류 아님).
+  if (rpcMissing) return { ads: [], error: null };
   const { data, error } = await supabase.rpc('community_ads_public');
-  if (error) return { ads: [], error };
+  if (error) {
+    if (error.code === 'PGRST202') { rpcMissing = true; return { ads: [], error: null }; }
+    return { ads: [], error };
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = (data ?? []) as any[];
   return {

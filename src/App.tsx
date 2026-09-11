@@ -82,9 +82,9 @@ import { resolveScheduleLink } from './lib/scheduleLink';
 import LoadErrorCard from './components/atoms/LoadErrorCard';
 import { SpringButton } from './components/atoms/StatefulActionButton';
 import { useAuth } from './contexts/AuthContext';
-import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
+import { listAllUsers, updateUserStatus, approveOwner, adminWithdrawUser } from './api/auth';
 import { bumpScheduleView,
-  getSchedules, getScheduleById, createSchedule, updateSchedule, deleteSchedule, subscribeSchedules,
+  getSchedules, getScheduleById, createSchedule, updateSchedule, deleteSchedule, rejectSchedule, subscribeSchedules,
 } from './api/schedules';
 import { getPostById,
   getVenues, getComments, getPosts, addComment, addPost, togglePostLike, deletePost, subscribePosts, subscribeComments,
@@ -2333,7 +2333,8 @@ export default function App() {
         content,
       })
         .then((saved) => setComments((prev) => [saved, ...prev]))
-        .catch(() => toast.show('댓글 등록에 실패했습니다', 'error'));
+        // 사유를 버리면 제재된 회원이 왜 막혔는지 모른 채 계속 재시도한다(PostDetailModal 과 같은 처리).
+        .catch((err) => toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error'));
     },
     [user, toast],
   );
@@ -2349,7 +2350,7 @@ export default function App() {
         content,
       })
         .then((saved) => setComments((prev) => [saved, ...prev]))
-        .catch(() => toast.show('댓글 등록에 실패했습니다', 'error'));
+        .catch((err) => toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error'));
     },
     [user, schedules, toast],
   );
@@ -2417,8 +2418,14 @@ export default function App() {
       approveOwner(id, patch.approved).catch(() => { toast.show('승인 처리에 실패했습니다', 'error'); loadUsers(); });
     }
     if (patch.status !== undefined) {
-      updateUserStatus(id, patch.status, patch.suspendedUntil, patch.sanctionReason)
-        .catch(() => { toast.show('상태 변경에 실패했습니다', 'error'); loadUsers(); });
+      // 강제 탈퇴만 전용 RPC 로 간다 — profiles 세 컬럼 PATCH 로는 개인정보 파기·세션 종료·
+      // 재가입 차단이 하나도 일어나지 않는다(20260911k). 호출부가 여럿이어도 이 한 곳이 갈림길이다.
+      const done = patch.status === 'withdrawn'
+        ? adminWithdrawUser(id, patch.sanctionReason ?? '')
+        : updateUserStatus(id, patch.status, patch.suspendedUntil, patch.sanctionReason);
+      // 실패는 반드시 보인다 — 서버 메시지를 그대로 띄우고(예: RPC 미적용·매장 대표) 목록을 서버와
+      // 재동기화해 낙관적으로 바뀐 '강제탈퇴' 배지를 원상 복구한다.
+      done.catch((e) => { toast.show(e instanceof Error ? e.message : '상태 변경에 실패했습니다', 'error'); loadUsers(); });
     }
   }, [toast]);
 
@@ -2552,9 +2559,25 @@ export default function App() {
   }, [toast, reloadSchedules]);
 
   const handleRejectSchedule = useCallback((id: string) => {
-    setSchedules((prev) => prev.filter((s) => s.id !== id));
-    deleteSchedule(id)
-      .then(() => toast.show('포스터가 반려되었습니다', 'info'))
+    // 사유는 업주 알림과 업주 화면에 그대로 전달된다 — 비우면 '왜 반려됐는지 모르는' 종전 상태로 되돌아간다.
+    // window.prompt 는 이 저장소의 기존 관행(AdminTab.tsx 순위 인증 반려 사유 · MyPostersTab 예약자 이름).
+    const reason = window.prompt('반려 사유를 입력하세요 (업주에게 그대로 전달됩니다)');
+    if (reason === null) return;
+    if (!reason.trim()) { toast.show('반려 사유를 입력해 주세요', 'error'); return; }
+    // 낙관 반영: 행을 지우지 않고 상태만 바꾼다 — 대기열(!approved && !rejectedAt)에서 즉시 빠진다.
+    setSchedules((prev) => prev.map((s) => (s.id === id
+      ? { ...s, approved: false, rejectedAt: new Date().toISOString(), rejectReason: reason.trim() }
+      : s)));
+    rejectSchedule(id, reason)
+      .then((mode) => {
+        if (mode === 'deleted') {
+          // 마이그레이션(20260911o) 전 서버 — 종전대로 삭제됐고 사유는 전달되지 않았다. 숨기지 않고 말한다.
+          toast.show('포스터가 반려(삭제)되었습니다 — 서버 업데이트 전이라 사유는 전달되지 않았습니다', 'info');
+          reloadSchedules();
+        } else {
+          toast.show('포스터가 반려되었습니다. 업주에게 사유가 전달됩니다', 'info');
+        }
+      })
       .catch(() => { toast.show('반려에 실패했습니다', 'error'); reloadSchedules(); });
   }, [toast, reloadSchedules]);
 

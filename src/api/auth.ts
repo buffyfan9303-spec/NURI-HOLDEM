@@ -370,14 +370,27 @@ export async function getMyProfile(): Promise<User | null> {
 }
 
 // ── 관리자: 전체 회원 목록 ────────────────────────────────────────────────────
+/** PostgREST max_rows 와 같은 값. 이보다 적게 잡으면 '잘림' 판정이 서버보다 먼저 떠 거짓 경고가 된다. */
+const USERS_PAGE = 1000;
+let lastUsersTruncated = false;
+/** 직전 listAllUsers() 가 상한에 닿았는가 — 닿았으면 화면이 '전체' 라고 말하면 안 된다. */
+export const usersTruncated = (): boolean => lastUsersTruncated;
 export async function listAllUsers(): Promise<User[]> {
   if (IS_MOCK) {
     const { MOCK_USERS } = await import('../mock/data');
     return MOCK_USERS;
   }
-  const { data, error } = await supabase.from('profiles').select('*').order('joined_at', { ascending: false });
+  // ⚠ limit 을 **명시**한다. 없으면 PostgREST 의 max_rows(supabase/config.toml = 1000)에 걸려
+  //   오류도 경고도 없이 잘린다 — joined_at 내림차순이라 **가장 먼저 가입한 회원부터** 사라지고,
+  //   그 구간이 바로 실제 업주들이다(업주 임명 드롭다운에서 조용히 증발한다).
+  //   같은 함정을 schedules.getSchedules 가 이미 겪고 고쳤다.
+  //   상한에 닿았는지는 usersTruncated() 로 호출부가 물을 수 있다 — 잘린 목록을 전부인 척하지 않는다.
+  const { data, error } = await supabase.from('profiles').select('*')
+    .order('joined_at', { ascending: false }).limit(USERS_PAGE);
   if (error) throw error;
-  return (data ?? []).map(rowToUser);
+  const rows = data ?? [];
+  lastUsersTruncated = rows.length >= USERS_PAGE;
+  return rows.map(rowToUser);
 }
 
 // ── 관리자: 회원 상태 변경 (+ 사유 기록 + 제재 시 자동 이메일) ────────────────
@@ -412,6 +425,46 @@ export async function updateUserStatus(
       console.warn('[sanction] notify email failed (function may be undeployed):', e);
     }
   }
+}
+
+// ── 관리자: 강제 탈퇴 ─────────────────────────────────────────────────────────
+// status 만 바꾸던 옛 경로(updateUserStatus)와 달리 개인정보 파기·세션 종료·재가입 차단까지
+// 서버 RPC 하나가 원자적으로 한다(20260911k).
+//
+// 순서가 이 함수의 전부다 — 거절 조건 선확인 → 안내 메일 → RPC.
+//  ① 메일을 RPC 뒤로 보내면 안 된다: RPC 가 profiles.email 을 익명화하고 나면
+//     notify-sanction 이 userId 로 조회한 주소가 withdrawn_…@deleted.invalid 가 되어 통지가 증발한다.
+//  ② 그렇다고 무조건 메일부터 보내면 안 된다: RPC 는 매장 대표·운영자 계정을 **거절**하므로,
+//     탈퇴되지도 않은 회원에게 '강제 탈퇴되었습니다 · 재가입이 제한됩니다' 라는 거짓 통지가 나간다.
+//     그래서 서버와 같은 거절 조건을 메일보다 먼저 확인한다(서버 가드는 그대로 남는다 — 여기는 통지용).
+// ⚠ RPC 가 아직 DB 에 없을 때(PGRST202)도 **실패로 던진다**. 조용히 옛 경로로 떨어지면
+//   '탈퇴시켰다고 믿는데 계정은 그대로' 가 된다 — 앱이 DB 보다 먼저 배포되는 이 저장소에서
+//   가장 위험한 실패 모드다.
+export async function adminWithdrawUser(userId: string, reason: string): Promise<void> {
+  if (IS_MOCK) return;
+  if (!reason.trim()) throw new Error('강제 탈퇴 사유를 입력해 주세요');
+
+  const { data: owned } = await supabase.from('venues').select('id').eq('owner_id', userId).limit(1);
+  if ((owned?.length ?? 0) > 0) throw new Error('매장 대표 계정입니다. 대표 이전 또는 매장 정리를 먼저 끝낸 뒤 다시 시도해 주세요');
+  const { data: target } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
+  if ((target as { role?: string } | null)?.role === 'admin') throw new Error('운영자 계정은 강제 탈퇴할 수 없습니다. 권한을 먼저 일반 회원으로 내려 주세요');
+
+  try {
+    const { data } = await supabase.functions.invoke('notify-sanction', {
+      body: { userId, status: 'withdrawn', reason, suspendedUntil: null },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (data && (data as any).sent === false) console.warn('[sanction] notify email NOT sent:', (data as any).error ?? 'RESEND_API_KEY 미설정 가능');
+  } catch (e) {
+    console.warn('[sanction] notify email failed (function may be undeployed):', e);
+  }
+
+  const { error } = await supabase.rpc('admin_withdraw_user', { p_user_id: userId, p_reason: reason });
+  if (!error) return;
+  const missing = error.code === 'PGRST202' || /Could not find the function/i.test(error.message ?? '');
+  throw new Error(missing
+    ? '강제 탈퇴 기능이 아직 서버(DB)에 적용되지 않았습니다. 계정은 그대로입니다 — 마이그레이션 20260911k 적용 후 다시 시도해 주세요.'
+    : error.message);
 }
 
 // ── 본인 비밀번호 확인(재인증) ────────────────────────────────────────────────

@@ -67,6 +67,11 @@ export interface Schedule {
   posterUrl?: string; posterColor?: string;
   displayOrder: number; isPremium: boolean; ownerId: string;
   unreadQnaCount: number; approved: boolean;
+  /** 반려 시각 — null/undefined = 반려된 적 없음. 관리자만 세울 수 있다(trg_prevent_self_approve, 20260911o).
+   *  마이그레이션 전 서버에서는 컬럼이 없어 항상 null 이다 — 화면은 종전과 똑같이 동작한다. */
+  rejectedAt?: string | null;
+  /** 반려 사유 원문 — 업주에게 그대로 보인다 */
+  rejectReason?: string | null;
   /** 포스터 상세 조회수(성과 지표) — 승인된 포스터만 집계 */
   viewCount?: number;
   /** 부스트 만료 시각 — 있고 미래면 isPremium과 동일하게 상단 고정 */
@@ -106,6 +111,9 @@ function rowToSchedule(r: any): Schedule {
     premiumUntil: r.premium_until ?? null,
     ownerId: r.owner_id, unreadQnaCount: r.unread_qna_count, approved: r.approved,
     viewCount: r.view_count ?? 0,
+    // 마이그레이션(20260911o) 전 서버에는 컬럼이 없다 → undefined → null = '반려된 적 없음'.
+    rejectedAt: r.rejected_at ?? null,
+    rejectReason: r.reject_reason ?? null,
   };
 }
 
@@ -233,6 +241,25 @@ export async function deleteSchedule(id: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('schedules').delete().eq('id', id);
   if (error) throw error;
+}
+
+// ── 관리자: 포스터 반려 — 삭제가 아니라 상태로 남긴다(20260911o) ─────────────
+// approved 도 함께 내린다: 대기열 기준이 approved 이고, 이미 승인된 포스터를 사유와 함께 내리는
+// 경우까지 한 문장으로 끝난다(BEFORE 트리거는 approved=true 인 행의 반려를 무효로 만든다).
+// rejected_at 을 세우면 trg_notify_schedule_rejected 가 업주에게 알림(+푸시)을 보낸다.
+// ⚠ CI 에 supabase db push 가 없어 **앱이 먼저, DB 가 나중** 배포된다. 그 창에서 컬럼이 없으면
+//   PGRST204(스키마 캐시)·42703(서버)이 나는데, 반려 자체가 막히면 관리자가 큐를 못 비운다 →
+//   종전 동작(하드 삭제)으로 폴백하고 'deleted' 를 돌려 호출측이 사실대로 안내하게 한다.
+export async function rejectSchedule(id: string, reason: string): Promise<'rejected' | 'deleted'> {
+  if (IS_MOCK) return 'rejected';
+  const now = new Date().toISOString();
+  const { error } = await supabase.from('schedules').update({
+    approved: false, rejected_at: now, reject_reason: reason.trim() || null, updated_at: now,
+  }).eq('id', id);
+  if (!error) return 'rejected';
+  if (error.code !== 'PGRST204' && error.code !== '42703') throw error;
+  await deleteSchedule(id);
+  return 'deleted';
 }
 
 // ── 관리자: 노출 순서 일괄 변경 ───────────────────────────────────────────────

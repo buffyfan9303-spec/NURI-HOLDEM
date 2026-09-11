@@ -267,11 +267,20 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 mb-0.5">
             {schedule.isPremium && <span className="rounded-badge bg-accent-300 px-1 py-0.5 text-2xs font-bold text-white leading-none">TOP</span>}
-            {!schedule.approved && <span className="rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">승인대기</span>}
+            {!schedule.approved && (schedule.rejectedAt
+              ? <span className="rounded-badge bg-rose-500/15 text-rose-400 border border-rose-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">반려</span>
+              : <span className="rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">승인대기</span>)}
             <span className="rounded-badge bg-surface-high text-ink-secondary border border-border-default px-1 py-0.5 text-2xs font-semibold leading-none">{schedule.format}</span>
           </div>
           <p className="text-sm font-medium text-ink-primary truncate">{schedule.title}</p>
           <p className="text-2xs text-ink-muted mt-0.5">{d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 바이인 {schedule.buyIn.amount.toLocaleString()}</p>
+          {/* 반려 사유 — 포스터가 사라지는 대신 여기 남는다. 다음 행동(수정→재제출)까지 같이 적는다. */}
+          {schedule.rejectedAt && (
+            <p className="mt-1 rounded-input border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-2xs leading-relaxed text-rose-400">
+              반려 사유: {schedule.rejectReason?.trim() || '사유가 기록되지 않았습니다'}
+              <br /><span className="text-ink-secondary">수정 후 저장하면 다시 승인 대기열로 올라갑니다.</span>
+            </p>
+          )}
           {/* 운영 현황 미니칩 — 예약·바인·매출(연결 장부 기준). 게임관리가 곧 운영 현황판 */}
           {(ops || resCount > 0 || (schedule.viewCount ?? 0) > 0) && (
             <span className="mt-1 flex flex-wrap items-center gap-1 text-2xs font-semibold tabular-nums">

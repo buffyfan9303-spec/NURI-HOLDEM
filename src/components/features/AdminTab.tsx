@@ -9,7 +9,7 @@ import type { Schedule } from '../../api/schedules';
 import type { User } from '../../api/auth';
 import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueStaff } from '../../api/community';
 import {
-  getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue,
+  getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue, getAllVenues,
   getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
   getPendingGroups, approveGroup, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest,
   adminListShouts, hideShout, adminShoutRefunds, adminRefundPurchase, adminShoutBump,
@@ -23,6 +23,7 @@ import {
 import { useToast } from '../atoms/Toast';
 import { supabase } from '../../lib/supabase';
 import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
+import { usersTruncated } from '../../api/auth';
 import { getAdminPlatformStats, getFreePlanUsage, type PlatformStats, type PlanUsageRow } from '../../api/adminStats';
 import AdSlotsAdmin from './community/AdSlotsAdmin';
 import HomeBannersCard from './HomeBannersCard';
@@ -1179,7 +1180,9 @@ export default function AdminTab({
   const [reorderTarget, setReorderTarget] = useState<ReorderTarget>('posters');
   const [exposureTarget, setExposureTarget] = useState<ExposureTarget>('banners');
 
-  const pending = schedules.filter((s) => !s.approved);
+  // 반려된 포스터는 대기열에서 뺀다 — 반려는 삭제가 아니라 상태다(20260911o).
+  // 마이그레이션 전 서버에서는 rejectedAt 이 전부 null 이라 종전(미승인=대기)과 똑같이 동작한다.
+  const pending = schedules.filter((s) => !s.approved && !s.rejectedAt);
 
   return (
     <div className="space-y-3 mx-auto w-full max-w-5xl">
@@ -1271,6 +1274,20 @@ export default function AdminTab({
 
 function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users: User[]; onCreated: () => void }) {
   const toast = useToast();
+  // ⚠ 목록은 App 이 준 venues(=getVenues, approved·active 만)가 아니라 **전량**을 직접 읽는다.
+  //   그러지 않으면 운영자가 어떤 매장을 '숨김'·'정지' 로 바꾸는 순간 그 매장이 이 목록에서 사라져
+  //   이름·업주·인증·직원·장부를 더 이상 고칠 수 없다 — 제재가 곧 관리 불능이 된다(2026-09-11 점검).
+  //   venues prop 은 아래 '업주 임명 후보' 계산에만 계속 쓴다.
+  const [all, setAll] = useState<Venue[] | null>(null);
+  const [allErr, setAllErr] = useState<unknown>(null);
+  const loadAll = useCallback(() => {
+    setAllErr(null);
+    getAllVenues().then(setAll).catch(setAllErr);
+  }, []);
+  useEffect(() => { loadAll(); }, [loadAll]);
+  /** 생성·수정 뒤에는 전량 목록과 App 의 목록을 함께 갱신한다. */
+  const changed = useCallback(() => { loadAll(); onCreated(); }, [loadAll, onCreated]);
+  const manageable = all ?? venues;   // 아직 못 받았으면 App 목록으로라도 그린다(빈 화면 방지)
   const [name, setName] = useState('');
   const [region, setRegion] = useState('');
   const [address, setAddress] = useState('');
@@ -1324,6 +1341,13 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
             ))}
           </select>
           <span className="block text-2xs text-ink-muted mt-1">임명 시 해당 회원이 업주(인증)로 전환되어 이 매장을 관리합니다.</span>
+          {/* 목록이 서버 상한(1000)에 닿았으면 '전체' 인 척하지 않는다 — joined_at 내림차순이라
+              잘리면 **가장 먼저 가입한 회원**, 즉 실제 업주들이 먼저 사라진다(2026-09-11 점검). */}
+          {usersTruncated() && (
+            <span className="mt-1 block text-2xs text-danger-light">
+              회원이 많아 목록이 최근 가입 1,000명까지만 보입니다 — 찾는 업주가 없으면 회원 관리에서 검색해 확인해 주세요.
+            </span>
+          )}
         </label>
         <div className="flex justify-end">
           <button type="button" onClick={submit} disabled={busy} className="btn-primary px-4 text-xs disabled:opacity-60">매장 생성</button>
@@ -1331,13 +1355,17 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
       </section>
 
       <section>
-        <h3 className="text-sm font-bold text-ink-primary mb-1.5">등록된 홀덤펍 ({venues.length}) · 매장별 관리</h3>
-        {venues.length === 0 ? (
+        <h3 className="text-sm font-bold text-ink-primary mb-1.5">등록된 홀덤펍 ({manageable.length}) · 매장별 관리
+          <span className="ml-1 text-2xs font-normal text-ink-muted">정지·숨김·미승인 포함</span>
+        </h3>
+        {allErr != null ? (
+          <LoadErrorCard error={allErr} what="매장 목록" onRetry={loadAll} compact />
+        ) : manageable.length === 0 ? (
           <p className="text-center py-6 text-2xs text-ink-muted">등록된 홀덤펍이 없습니다</p>
         ) : (
           <ul className="space-y-1.5">
-            {venues.map((v) => (
-              <VenueAdminRow key={v.id} venue={v} candidates={candidates} onChanged={onCreated} />
+            {manageable.map((v) => (
+              <VenueAdminRow key={v.id} venue={v} candidates={candidates} onChanged={changed} />
             ))}
           </ul>
         )}
@@ -1467,7 +1495,7 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
                 <option key={u.id} value={u.id}>{u.nickname ?? u.name} · {u.email}</option>
               ))}
             </select>
-            <span className="block text-2xs text-ink-muted mt-1">변경 시 새 업주가 인증 업주로 전환되어 이 매장을 관리합니다.</span>
+            <span className="block text-2xs text-ink-muted mt-1">변경 시 새 업주가 인증 업주로 전환되어 이 매장을 관리합니다. <b className="text-amber-400">이전 업주</b>는 이 매장에서 제외됩니다 — 사장님(공동 업주)·장부·이용권 권한이 함께 회수됩니다.</span>
           </label>
           <label className="block">
             <span className="block text-2xs text-ink-secondary mb-1">인증 상태</span>

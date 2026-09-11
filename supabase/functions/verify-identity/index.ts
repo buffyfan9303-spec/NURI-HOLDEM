@@ -90,6 +90,8 @@ Deno.serve(async (req: Request) => {
     if (!commit?.ok) {
       if (commit?.code === 'dup') return json({ error: '이미 가입된 명의입니다.' }, 409);
       if (commit?.code === 'reused') return json({ error: '이미 사용된 인증입니다. 본인인증을 다시 진행해 주세요.' }, 409);
+      // 20260911k — 제재성 탈퇴(영구정지·강제 탈퇴) 명의. 내부 사유는 노출하지 않는다.
+      if (commit?.code === 'tombstoned') return json({ error: '서비스 이용이 제한된 명의입니다. 고객센터로 문의해 주세요.' }, 403);
       return json({ error: '저장 실패', detail: commit?.code ?? 'unknown' }, 500);
     }
     return json({ ok: true, name: vc.name ?? null });

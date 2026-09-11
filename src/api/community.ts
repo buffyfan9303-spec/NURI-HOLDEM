@@ -369,7 +369,10 @@ export async function addComment(
     user_role:   payload.userRole,  is_owner: payload.isOwner,
     content:     payload.content,
   }).select().single();
-  if (error) throw error;
+  // 서버 게이트(제재 20260911n · 금칙어 · 5초 쿨다운)는 plpgsql raise 라 code='P0001' 로 온다 —
+  // 그 한국어 문장만 그대로 올린다. RLS 위반(42501) 등은 테이블·정책 이름이 섞여 나오므로
+  // 뭉갠다(보안표준 6: 에러에 내부 식별자 노출 금지). DB 미적용 상태에서도 동작은 종전과 같다.
+  if (error) throw new Error(error.code === 'P0001' ? error.message : '댓글 등록에 실패했습니다');
   return rowToComment(data);
 }
 
@@ -1303,7 +1306,11 @@ export async function getAdminStats(): Promise<AdminStats> {
     cnt('community_posts'),
     cnt('marketplace_listings'),
     cnt('schedules'),
-    cnt('schedules', (q) => q.eq('approved', false)),
+    // 반려된 포스터는 '승인대기' 가 아니다(20260911o) — 행이 더 이상 지워지지 않으므로
+    // 필터를 안 걸면 이 숫자가 영구히 부풀고 좌측 네비 배지(pending.length)와 갈라진다.
+    // ⚠ 마이그레이션 전 서버에서는 이 필터가 42703 을 내고 cnt 가 0 을 돌려준다(cnt 는 에러를 삼킨다).
+    //   타일 한 칸이 잠시 0 으로 보일 뿐 화면은 멀쩡하고, 실제 대기 건수는 '포스터 승인' 배지가 계속 맞다.
+    cnt('schedules', (q) => q.eq('approved', false).is('rejected_at', null)),
     cnt('profiles', (q) => q.gt('joined_at', since)),
   ]);
   return { users, owners, pendingOwners, suspended, posts, listings, schedules, pendingSchedules, signups7d };
