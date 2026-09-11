@@ -150,28 +150,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
           <div className="clk-cols min-h-0 flex-1 gap-[2cqmin] px-[3cqmin]">
 
             {/* 좌 — 프라이즈. 없으면 열 자체를 그리지 않는다(빈 칸을 남기지 않는다). */}
-            {prizes.length > 0 ? (
-              <aside data-testid="clk-prizes" className="clk-col min-h-0 flex-col justify-center">
-                <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>총 프라이즈</p>
-                <p className="mt-[0.3cqmin] font-black leading-none tabular-nums"
-                  style={{ fontSize: 'clamp(22px, 4.6cqmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
-                  {totalPrize.toLocaleString()}
-                </p>
-                <ul className="mt-[1.4cqmin] space-y-[0.45cqmin] border-t border-white/[0.08] pt-[1.2cqmin]">
-                  {prizes.slice(0, 12).map((p, i) => (
-                    <li key={i} className="flex items-baseline justify-between gap-[1.2cqmin] leading-tight">
-                      <span className="shrink-0 font-bold tabular-nums" style={{ fontSize: i === 0 ? '2.2cqmin' : '1.9cqmin', ...DIM }}>
-                        {/^\d+$/.test(p.place) ? `${p.place}등` : p.place}
-                      </span>
-                      <span className="font-extrabold tabular-nums"
-                        style={{ fontSize: i === 0 ? '2.5cqmin' : '2.1cqmin', color: 'var(--clk-prize, #F5C451)' }}>
-                        {p.amount.toLocaleString()}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </aside>
-            ) : <span className="clk-wide-land" />}
+            {prizes.length > 0 ? <PrizeColumn prizes={prizes} totalPrize={totalPrize} /> : <span className="clk-wide-land" />}
 
             {/* 중앙 — 타이머 히어로 + 블라인드. **스택 전체를 중앙 정렬**한다.
                 예전엔 히어로가 flex-1 로 남는 공간을 다 먹어서 타이머와 CURRENT/NEXT 사이에
@@ -258,6 +237,78 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
             <HeaderTimes g={g} regLevel={regLevel} compact />
           </div>
     </>
+  );
+}
+
+/** 한 장에 싣는 순위 수. 레퍼런스 보드(1/2 표기)가 쓰는 단위다. */
+const PRIZES_PER_PAGE = 15;
+/** 장 넘김 주기. 멀티게임 자동 순환(15초)보다 짧게 둬야 한 게임 안에서 두 장이 다 보인다. */
+const PRIZE_PAGE_MS = 10_000;
+
+/**
+ * PrizeColumn — 총 프라이즈 + 순위별 표. 15개를 넘으면 **자동으로 장을 넘긴다**(1/2).
+ *
+ * 왜 잘라내지 않고 넘기나: 종전에는 `prizes.slice(0, 12)` 라 13등부터는 TV 에 **영원히 안 나왔다**.
+ *   상금 구조를 22등까지 잡은 대회에서 참가자가 "내 등수는 얼마인가"를 확인할 방법이 화면에 없었다.
+ *   자르는 것은 '안 보이는 것'이고 넘기는 것은 '늦게 보이는 것'이라 정보 손실이 다르다.
+ *
+ * ⚠ 마지막 장을 **빈 줄로 채운다**(pad). 18개면 15 + 3 인데, 3줄짜리 장을 그대로 그리면
+ *   열 높이가 줄고 이 열은 세로 중앙 정렬이라 총액·표가 통째로 위아래로 튄다 —
+ *   상시 송출 TV 에서 10초마다 화면이 들썩이는 것은 결함이다. 빈 줄은 높이만 차지한다(aria-hidden).
+ *
+ * 초당 틱이 아니라 10초 인터벌이고, 장이 하나면 인터벌 자체를 걸지 않는다.
+ */
+function PrizeColumn({ prizes, totalPrize }: { prizes: { place: string; amount: number }[]; totalPrize: number }) {
+  const pages = Math.ceil(prizes.length / PRIZES_PER_PAGE);
+  const [page, setPage] = useState(0);
+  useEffect(() => {
+    if (pages <= 1) { setPage(0); return; }
+    const t = setInterval(() => setPage((p) => (p + 1) % pages), PRIZE_PAGE_MS);
+    return () => clearInterval(t);
+  }, [pages]);
+  // 표가 짧아져 장 수가 줄면 현재 장이 범위를 벗어난다 — 빈 화면 대신 첫 장으로.
+  const cur = Math.min(page, pages - 1);
+  const start = cur * PRIZES_PER_PAGE;
+  const rows = prizes.slice(start, start + PRIZES_PER_PAGE);
+  const padCount = pages > 1 ? PRIZES_PER_PAGE - rows.length : 0;
+
+  return (
+    <aside data-testid="clk-prizes" className="clk-col min-h-0 flex-col justify-center">
+      <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>총 프라이즈</p>
+      <p className="mt-[0.3cqmin] font-black leading-none tabular-nums"
+        style={{ fontSize: 'clamp(22px, 4.6cqmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
+        {totalPrize.toLocaleString()}
+      </p>
+      <ul className="mt-[1.4cqmin] space-y-[0.45cqmin] border-t border-white/[0.08] pt-[1.2cqmin]">
+        {rows.map((p, i) => {
+          // 1등만 한 단계 크게 — **전체 1등**이지 '이 장의 첫 줄'이 아니다(2장에서 16등이 커지면 거짓말이 된다).
+          const lead = start + i === 0;
+          return (
+            // min-h: 줄 높이를 **1등 줄 기준으로 고정**한다. 1등만 글자가 한 단계 큰데, 그 줄이
+            //   있는 장과 없는 장의 높이가 달라지면 세로 중앙 정렬 때문에 장이 바뀔 때마다
+            //   총액이 위아래로 튄다(실측 3.7px — 상시 송출 TV 에서 10초마다 들썩인다).
+            <li key={start + i} className="flex min-h-[3.2cqmin] items-baseline justify-between gap-[1.2cqmin] leading-tight">
+              <span className="shrink-0 font-bold tabular-nums" style={{ fontSize: lead ? '2.2cqmin' : '1.9cqmin', ...DIM }}>
+                {/^\d+$/.test(p.place) ? `${p.place}등` : p.place}
+              </span>
+              <span className="font-extrabold tabular-nums"
+                style={{ fontSize: lead ? '2.5cqmin' : '2.1cqmin', color: 'var(--clk-prize, #F5C451)' }}>
+                {p.amount.toLocaleString()}
+              </span>
+            </li>
+          );
+        })}
+        {/* 높이 지킴이 — 마지막 장이 짧아도 열 높이가 그대로다(위 ⚠ 참고) */}
+        {Array.from({ length: padCount }, (_, i) => (
+          <li key={`pad-${i}`} aria-hidden className="min-h-[3.2cqmin]" />
+        ))}
+      </ul>
+      {pages > 1 && (
+        <p data-testid="clk-prize-page" className="mt-[1cqmin] text-right text-[1.5cqmin] font-bold tabular-nums" style={DIM}>
+          {cur + 1} / {pages}
+        </p>
+      )}
+    </aside>
   );
 }
 

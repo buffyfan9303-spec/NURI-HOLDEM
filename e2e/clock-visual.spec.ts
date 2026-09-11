@@ -148,7 +148,8 @@ test.describe('클락 TV — 상태별 캡처와 레이아웃 계약', () => {
   // ── 블랙 마블 골드 프리셋(2026-09-10) ──────────────────────────────────────
   // 테마는 venues.page_config.clockTheme 에서 온다 — 그 조회(GET venues?select=page_config)만 갈아끼운다(쓰기 0).
   // 지키는 것: 프리셋이 실제로 화면에 칠해지고, 그 위에서 타이머·레벨·블라인드가 보이며,
-  //           긴 한국어 대회명 + 프라이즈 12줄(표시 상한)이 잘리거나 겹치지 않는다.
+  //           긴 한국어 대회명 + 프라이즈 12줄이 잘리거나 겹치지 않는다.
+  //           (한 장은 15줄이라 12개는 한 장에 다 들어간다 — 장 넘김은 아래 별도 스펙에서 본다.)
   test('black-marble-gold — 1920x1080 타이머·레벨·블라인드 렌더 + 프라이즈 12줄 잘림 없음', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     const body = row({ title: '제8회 누리홀덤 마스터스 파이널 데이2 · 20억 개런티 메인이벤트', endsInMs: 9 * 60_000 });
@@ -190,6 +191,72 @@ test.describe('클락 TV — 상태별 캡처와 레이아웃 계약', () => {
     expect(fit.outside, `프라이즈 ${fit.outside}줄이 열 밖·화면 밖으로 나갔다`).toBe(0);
     expect(fit.overlap, `프라이즈 ${fit.overlap}줄이 윗줄과 겹친다`).toBe(0);
     expect(fit.totalClipped, `총 프라이즈 금액이 ${fit.totalClipped}px 잘린다`).toBeLessThanOrEqual(0);
+  });
+});
+
+// ── 프라이즈 자동 장 넘김 ─────────────────────────────────────────────────────
+// 종전에는 `slice(0, 12)` 라 13등부터는 TV 에 **영원히 안 나왔다**. 상금 구조를 22등까지 잡은 대회에서
+// 참가자가 자기 등수의 금액을 확인할 방법이 화면에 없었다. 이제 15줄씩 장을 넘긴다(레퍼런스의 1/2 표기).
+//
+// 이 스펙이 잠그는 것 셋:
+//   ① 넘어간 등수가 실제로 나온다(16등이 2장에 보인다) — '잘림'과 '늦게 보임'의 차이
+//   ② 장이 바뀌어도 **열이 들썩이지 않는다** — 마지막 장이 짧으면 세로 중앙 정렬 때문에 총액이 튄다
+//   ③ 22줄짜리 표에서도 열이 넘치거나 겹치지 않는다
+test.describe('클락 TV — 프라이즈 장 넘김', () => {
+  const manyPrizes = (n: number) => Array.from({ length: n }, (_, i) => ({ place: String(i + 1), amount: (n - i) * 100_000 }));
+
+  test('15개를 넘으면 1/2 로 장을 넘긴다 — 넘어간 등수가 실제로 나온다', async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const body = row({ endsInMs: 9 * 60_000 });
+    body.config.prizes = manyPrizes(22);
+    await serveClock(page, body);
+    await page.goto(`/?display=${VENUE}&g=1&auto=0`);
+    await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
+
+    const aside = page.getByTestId('clk-prizes');
+    const indicator = page.getByTestId('clk-prize-page');
+    await expect(indicator, '22개인데 장 표시가 없다 — 13등 이후가 화면에 영원히 안 나온다').toHaveText('1 / 2');
+    // 1장: 1~15등. 빈 줄 패딩이 없으므로 li 는 정확히 15개.
+    await expect(aside.locator('li')).toHaveCount(15);
+    await expect(aside).toContainText('15등');
+    await expect(aside, '1장에 16등이 보인다 — 장 나눔이 안 됐다').not.toContainText('16등');
+
+    // ② 들썩임 — 장이 바뀌기 전후로 총액 줄의 y 가 같아야 한다.
+    const total = aside.locator('p').nth(1);
+    const before = (await total.boundingBox())!;
+    await expect(indicator).toHaveText('2 / 2', { timeout: 20_000 });   // 10초 주기
+    await expect(aside, '2장에 16등이 없다 — 넘어간 등수가 여전히 안 보인다').toContainText('16등');
+    await expect(aside).toContainText('22등');
+    const after = (await total.boundingBox())!;
+    expect(Math.abs(after.y - before.y), `장이 바뀌며 총액이 세로로 ${Math.round(after.y - before.y)}px 움직였다 — 10초마다 TV 가 들썩인다`)
+      .toBeLessThanOrEqual(2);
+
+    // ③ 22줄 구성에서도 열이 넘치거나 겹치지 않는다(1장 15줄 + 2장 7줄 + 빈 줄 8).
+    const fit = await aside.evaluate((el) => {
+      const a = el.getBoundingClientRect();
+      const items = Array.from(el.querySelectorAll('li')).map((li) => li.getBoundingClientRect());
+      return {
+        overflowY: el.scrollHeight - el.clientHeight,
+        outside: items.filter((r) => r.top < a.top - 1 || r.bottom > a.bottom + 1 || r.bottom > innerHeight).length,
+        overlap: items.slice(1).filter((r, i) => r.top < items[i].bottom - 1).length,
+      };
+    });
+    expect(fit.overflowY, `프라이즈 열이 ${fit.overflowY}px 넘쳤다`).toBeLessThanOrEqual(0);
+    expect(fit.outside, `프라이즈 ${fit.outside}줄이 열 밖으로 나갔다`).toBe(0);
+    expect(fit.overlap, `프라이즈 ${fit.overlap}줄이 윗줄과 겹친다`).toBe(0);
+    await page.screenshot({ path: `test-results/clock-shots/${PHASE}-prize-page2.png` });
+  });
+
+  test('15개 이하면 장 표시를 만들지 않는다', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const body = row({ endsInMs: 9 * 60_000 });
+    body.config.prizes = manyPrizes(15);
+    await serveClock(page, body);
+    await page.goto(`/?display=${VENUE}&g=1&auto=0`);
+    await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('clk-prizes').locator('li')).toHaveCount(15);
+    await expect(page.getByTestId('clk-prize-page'), '한 장뿐인데 1/1 을 그렸다').toHaveCount(0);
   });
 });
 
