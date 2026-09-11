@@ -12,7 +12,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = join(__dirname, '..', '..');
-const SQL = readFileSync(join(root, 'supabase', 'migrations', '20260911f_kst_date_defaults_and_season_window.sql'), 'utf-8');
+/** 줄끝 정규화 — Windows 체크아웃(core.autocrlf)에서는 이 파일이 CRLF 로 내려온다.
+ *  아래 단언은 개행으로 이어붙인 여러 줄을 통째로 찾으므로, 정규화하지 않으면
+ *  **리눅스 CI 는 초록인데 개발 머신에서만 16건이 빨개진다**. 빨간 게 일상이 되면 진짜 실패를 놓친다. */
+const lf = (s: string) => s.split('\r\n').join('\n');
+const SQL = lf(readFileSync(join(root, 'supabase', 'migrations', '20260911f_kst_date_defaults_and_season_window.sql'), 'utf-8'));
 const KST = "(now() at time zone 'Asia/Seoul')::date";
 
 // ⚠ 앵커는 **머리말 주석과 겹치지 않는 문구**로 잡는다. 머리말에도 '① date 컬럼 default' 가 있어서
@@ -114,7 +118,7 @@ describe('20260911f — 시즌 뱃지 기간 판정 3곳이 KST 다', () => {
 });
 
 describe('만 19세 게이트를 한국 달력으로 센다', () => {
-  const EDGE = readFileSync(join(root, 'supabase', 'functions', 'verify-identity', 'index.ts'), 'utf-8');
+  const EDGE = lf(readFileSync(join(root, 'supabase', 'functions', 'verify-identity', 'index.ts'), 'utf-8'));
 
   it('🔴 나이를 KST 로 센다 — 생일 당일 새벽에 만 19세가 18세로 거절되던 것', () => {
     expect(EDGE).toContain('function kstNow()');

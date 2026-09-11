@@ -13,11 +13,15 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const SQL = readFileSync(
+/** 줄끝 정규화 — Windows 체크아웃(core.autocrlf)에서는 이 파일이 CRLF 로 내려온다.
+ *  아래 단언은 개행으로 이어붙인 여러 줄을 통째로 찾으므로, 정규화하지 않으면
+ *  **리눅스 CI 는 초록인데 개발 머신에서만 빨개진다**. 빨간 게 일상이 되면 진짜 실패를 놓친다. */
+const lf = (s: string) => s.split('\r\n').join('\n');
+const SQL = lf(readFileSync(
   join(__dirname, '..', '..', 'supabase', 'migrations', '20260911n_sanction_gate_comments.sql'),
   'utf-8',
-);
-const API = readFileSync(join(__dirname, 'community.ts'), 'utf-8');
+));
+const API = lf(readFileSync(join(__dirname, 'community.ts'), 'utf-8'));
 
 /** 머리말 주석이 통과시켜 주는 착시를 막는다 — 첫 DDL 이후만 본다(20260911i 테스트와 같은 관행). */
 const DDL = SQL.slice(SQL.indexOf('drop trigger if exists trg_require_active_comment '));
