@@ -218,7 +218,13 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   const showRebuy = hasCounts && ((ls?.rebuys ?? 0) > 0 || (ls?.addons ?? 0) > 0 || !!g?.config?.isAddon);
 
   return (
-    <div ref={rootRef} className="fixed inset-0 z-[80] flex flex-col text-white select-none"
+    // ⚠ [container-type:size] 는 장식이 아니라 **레이아웃의 전제**다.
+    //   본문 3열·프라이즈 열·지표 레일은 전부 `.clk-*` 컨테이너 쿼리(src/index.css)로 켜지는데,
+    //   컨테이너 쿼리는 **container-type 이 걸린 조상이 하나도 없으면 영원히 거짓**이다 —
+    //   즉 이게 없으면 TV 는 조건이 참이 될 길이 없어 1열로 굳고 프라이즈·지표 열이 통째로 사라진다.
+    //   (2026-09-11 e008b02 가 md:landscape: → .clk-* 로 갈아타면서 TournamentClock 쪽만 확인하고
+    //    이쪽 루트를 빠뜨렸다. 뷰포트가 곧 스테이지라 cq 경계값은 종전 md:landscape: 와 같다.)
+    <div ref={rootRef} className="fixed inset-0 z-[80] flex flex-col text-white select-none [container-type:size]"
       style={{ ...clkVars, background: 'var(--clk-bg, #06080F)' }}>
       {/* ── 상태 바 — 좌: 매장·대회명 / 중앙: LEVEL + 진행 상태 / 우: 지금 더 중요한 시각 하나 + 컨트롤 ──
           높이를 고정한다(h-[8vmin]). 대회명이 길어도 두 번째 줄을 만들지 않고 말줄임 —
@@ -293,7 +299,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
 
             {/* 좌 — 프라이즈. 없으면 열 자체를 그리지 않는다(빈 칸을 남기지 않는다). */}
             {prizes.length > 0 ? (
-              <aside className="clk-col min-h-0 flex-col justify-center">
+              <aside data-testid="clk-prizes" className="clk-col min-h-0 flex-col justify-center">
                 <p className={`${LABEL} text-[1.5vmin]`} style={SOFT}>총 프라이즈</p>
                 <p className="mt-[0.3vmin] font-black leading-none tabular-nums"
                   style={{ fontSize: 'clamp(22px, 4.6vmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
@@ -359,7 +365,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
             </div>
 
             {/* 우 — 지표 세로 레일. 라벨 작게 위, 숫자 크게 아래(레퍼런스 공통 문법). */}
-            <aside className="clk-col min-h-0 flex-col justify-center gap-[1.5vmin]">
+            <aside data-testid="clk-rails" className="clk-col min-h-0 flex-col justify-center gap-[1.5vmin]">
               <Rail label="생존 / 엔트리" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
               {showRebuy && <Rail label="리바이 · 애드온" value={String(ls?.rebuys ?? 0)} sub={`· ${ls?.addons ?? 0}`} />}
               {buyIn > 0 && <Rail label="바이인" value={buyIn.toLocaleString()} />}

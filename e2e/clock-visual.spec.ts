@@ -9,9 +9,8 @@
 //   · 긴 대회명이 두 번째 줄을 만들어 타이머를 밀지 않는다
 //   · 숫자 자릿수가 바뀌어도 타이머 폭이 흔들리지 않는다(tabular-nums)
 import { test, expect } from './_fixtures';
-import type { Page } from '@playwright/test';
-
-const VENUE = process.env.E2E_CLOCK_VENUE;
+import { TV_VENUE as VENUE, serveClock } from './_clock';
+import { bootOwner, MOCK_VENUE, openMyStore } from './_mockOwner';
 
 type Level = { kind: 'level' | 'break'; sb: number; bb: number; ante: number; minutes: number; label?: string };
 
@@ -90,18 +89,12 @@ const VIEWS: [string, number, number][] = [
   ['21x9', 2560, 1080],
 ];
 
-/** clock_states 조회를 이 상태로 고정한다(쓰기 없음).
- *  ⚠ TV 화면은 getVenueClocks() 로 읽는다 — `.select('*').eq('venue_id',…)` 라 **배열**이다.
- *     단일 객체로 주면 supabase-js 가 조용히 빈 목록으로 읽어 '진행 중인 클락이 없습니다' 가 된다. */
-async function serveClock(page: Page, body: unknown): Promise<void> {
-  await page.route(/\/rest\/v1\/clock_states/, (r) =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([body]) }));
-}
-
 const PHASE = process.env.CLOCK_SHOT_PHASE ?? 'before';
 
 test.describe('클락 TV — 상태별 캡처와 레이아웃 계약', () => {
-  test.skip(!VENUE, 'E2E_CLOCK_VENUE 없음 — display 라우트를 열 수 없다');
+  // 2026-09-11: `E2E_CLOCK_VENUE 없음` skip 을 걷어냈다. TV 화면이 읽는 것은 셋뿐이고 전부 목킹이라
+  //   **실재하는 매장이 필요 없다**(e2e/_clock.ts). 그 skip 때문에 계정 은퇴 뒤로 28개가 조용히 꺼져 있었고,
+  //   그 사이 스테이지 루트의 container-type 누락(프라이즈 열·지표 레일 소실)이 들어갔다.
 
   for (const s of STATES) {
     test(`${s.key} (${s.note}) — 1920x1080 캡처 + 타이머 렌더`, async ({ page }) => {
@@ -202,31 +195,22 @@ test.describe('클락 TV — 상태별 캡처와 레이아웃 계약', () => {
 
 // ── 테마 패널 미리보기 ────────────────────────────────────────────────────────
 // 프리뷰와 프리셋 버튼이 같은 축소판(ClockMiniFace)을 쓰는지 눈으로 확인 + 캡처.
-// 업주 로그인이 필요하므로 자격증명이 없으면 skip 한다(숨기지 않는다).
+// 2026-09-11: 자격증명 skip 을 걷어내고 **목킹 업주**(e2e/_mockOwner.ts)로 연다 —
+//   은퇴한 E2E 계정을 되살리지 않고도(라이브에 가짜 업주·가짜 매장을 상주시키지 않고도) 같은 화면을 검사한다.
 test.describe('클락 테마 패널', () => {
-  const EMAIL = process.env.E2E_EMAIL;
-  const PASSWORD = process.env.E2E_PASSWORD;
-  test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 없음 — 내 매장은 로그인해야 열린다');
-
   test('미리보기가 TV 구조(타이머·레일·CURRENT/NEXT·metrics)를 그린다', async ({ page }) => {
-    const { loginAs } = await import('./_session');
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await loginAs(page, EMAIL!, PASSWORD!);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    const store = page.getByRole('tab', { name: /내 매장/ }).or(page.getByRole('button', { name: /^내 매장/ }));
-    test.skip(await store.count() === 0, '이 계정에는 내 매장 탭이 없다');
-    await store.first().click();
+    test.setTimeout(90_000);
+    await bootOwner(page, { viewport: { width: 1440, height: 900 } });
+    await openMyStore(page);
     await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
 
     const clock = page.getByRole('button', { name: '클락', exact: true }).first();
-    test.skip(await clock.count() === 0, '클락 메뉴가 없다');
+    await expect(clock).toBeVisible({ timeout: 20_000 });
     await clock.click();
     await page.waitForTimeout(2500);
 
     const preview = page.locator('[aria-label="클락 화면 미리보기"]');
-    test.skip(await preview.count() === 0, '클락 설정(테마 패널)이 이 화면에 없다');
-    await expect(preview).toBeVisible({ timeout: 15_000 });
+    await expect(preview, '클락 설정(테마 패널)의 미리보기가 없다').toBeVisible({ timeout: 20_000 });
     await preview.scrollIntoViewIfNeeded();
     await page.waitForTimeout(400);
     await page.screenshot({ path: `test-results/clock-shots/${PHASE}-theme-panel.png` });
@@ -238,46 +222,26 @@ test.describe('클락 테마 패널', () => {
 });
 
 // ── PC 운영자 화면(Director) ──────────────────────────────────────────────────
-// 왜 헤더로 분기하나: 같은 clock_states 를 TV 는 getVenueClocks(배열)로, 운영자 화면은
-//   getClockState(maybeSingle → 단일 객체)로 읽는다. maybeSingle 은 Accept 에
-//   `application/vnd.pgrst.object+json` 을 보내므로 그걸 보고 모양을 바꿔 준다.
-async function serveClockBoth(page: Page, body: unknown): Promise<void> {
-  await page.route(/\/rest\/v1\/clock_states/, (r) => {
-    const single = (r.request().headers()['accept'] ?? '').includes('pgrst.object');
-    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(single ? body : [body]) });
-  });
-}
+// 같은 clock_states 를 TV 는 getVenueClocks(배열)로, 운영자 화면은 getClockState(maybeSingle → 단일 객체)로
+// 읽는다. 그 헤더 분기는 이제 bootOwner({ clock }) 안에 있다(e2e/_mockOwner.ts) — 여기서 또 만들지 않는다.
 
 test.describe('PC 운영자 화면', () => {
-  const EMAIL = process.env.E2E_EMAIL;
-  const PASSWORD = process.env.E2E_PASSWORD;
-  test.skip(!EMAIL || !PASSWORD || !VENUE, 'E2E_EMAIL/E2E_PASSWORD/E2E_CLOCK_VENUE 없음');
-
   for (const [name, w, h] of [['1440x900', 1440, 900], ['1366x768', 1366, 768]] as [string, number, number][]) {
     test(`${name} — 시작·레벨 조작이 첫 화면 안에 보인다`, async ({ page }) => {
-      const { loginAs } = await import('./_session');
-      await page.setViewportSize({ width: w, height: h });
-      await serveClockBoth(page, STATES[0].body);
-      await loginAs(page, EMAIL!, PASSWORD!);
-      await page.goto('/');
-      await page.waitForLoadState('networkidle');
-
-      // ⚠ '내 매장' 은 폭에 따라 역할이 다르다 — 모바일 하단 내비는 button, PC 상단 GNB 는 role=tab.
-      //   button 으로만 찾으면 데스크톱 뷰포트에서 통째로 skip 된다(실제로 그렇게 조용히 건너뛰고 있었다).
-      const store = page.getByRole('tab', { name: /내 매장/ }).or(page.getByRole('button', { name: /^내 매장/ }));
-      test.skip(await store.count() === 0, '이 계정에는 내 매장 탭이 없다');
-      await store.first().click();
+      test.setTimeout(90_000);
+      await bootOwner(page, { viewport: { width: w, height: h }, clock: { ...STATES[0].body, venue_id: MOCK_VENUE } });
+      await openMyStore(page);
       await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
 
       const clock = page.getByRole('button', { name: '클락', exact: true }).first();
-      test.skip(await clock.count() === 0, '클락 메뉴가 없다');
+      await expect(clock).toBeVisible({ timeout: 20_000 });
       await clock.click();
       await page.waitForTimeout(3000);
 
       // 2026-09-11: 주 버튼 문구가 상태에 따라 4종(시작·일시정지·계속하기·다시 시작)이 되어
       //   텍스트 정규식으로는 못 잡는다. 정규식을 넓히면 다른 버튼까지 걸리므로 testid 로 고정한다.
       const start = page.getByTestId('clk-main-action');
-      test.skip(await start.count() === 0, '운영자 콘솔이 이 계정/화면에 없다 — 권한 또는 클락 미시작');
+      await expect(start, '운영자 콘솔의 주 버튼이 없다 — 권한 판정 또는 클락 진입이 깨졌다').toBeVisible({ timeout: 20_000 });
       await page.screenshot({ path: `test-results/clock-shots/${PHASE}-director-${name}.png` });
 
       // 첫 화면(스크롤 없이) 안에 있어야 한다 — 1366x768 에서도.
@@ -293,25 +257,14 @@ test.describe('PC 운영자 화면', () => {
 // ClockLive 는 250ms 인터벌로 setTick 을 올려 **컴포넌트 전체**를 초당 4회 다시 그렸다
 // (setTick 의 값은 쓰이지 않는다 — 순수 리렌더 트리거였다). 화면은 mm:ss 만 바뀌는데.
 test.describe('운영자 화면 — 유휴 렌더', () => {
-  const EMAIL = process.env.E2E_EMAIL;
-  const PASSWORD = process.env.E2E_PASSWORD;
-  test.skip(!EMAIL || !PASSWORD || !VENUE, '자격증명/매장 없음');
-
   test('20초 방치 — 스크립트 시간·레이아웃 횟수 기록', async ({ page }) => {
-    test.setTimeout(90_000);
-    const { loginAs } = await import('./_session');
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await serveClockBoth(page, STATES[0].body);
-    await loginAs(page, EMAIL!, PASSWORD!);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    const store = page.getByRole('tab', { name: /내 매장/ }).or(page.getByRole('button', { name: /^내 매장/ }));
-    test.skip(await store.count() === 0, '내 매장 없음');
-    await store.first().click();
+    test.setTimeout(120_000);
+    await bootOwner(page, { viewport: { width: 1440, height: 900 }, clock: { ...STATES[0].body, venue_id: MOCK_VENUE } });
+    await openMyStore(page);
     await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(2500);
     const clock = page.getByRole('button', { name: '클락', exact: true }).first();
-    test.skip(await clock.count() === 0, '클락 메뉴 없음');
+    await expect(clock).toBeVisible({ timeout: 20_000 });
     await clock.click();
     await page.waitForTimeout(4000);
 
