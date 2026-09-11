@@ -464,7 +464,7 @@ function StatsView({ venueId }: { venueId: string }) {
                 <Mini label="얼리(칩단위)" value={`${clockAgg.earlies}`} tone="amber" />
               </div>
               <p className="text-2xs text-ink-muted mt-1.5 leading-relaxed">
-                마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 바이인({m.entries.toLocaleString()}회)은 바인 기록 기준</b>이라 다를 수 있어요. 통계·정산은 장부 기준, 이 값은 운영 참고용입니다. 얼리는 <b className="text-ink-secondary">기준칩 배수 합</b>(더블얼리 1명 = 2)이며, 2026-08-30 이전 마감분은 인원 수로 기록돼 있어 그대로 표시됩니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
+                마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 바이인({m.buyinCount.toLocaleString()}회 · 엔트리 {m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})은 바인 기록 기준</b>이라 다를 수 있어요. 통계·정산은 장부 기준, 이 값은 운영 참고용입니다. 얼리는 <b className="text-ink-secondary">기준칩 배수 합</b>(더블얼리 1명 = 2)이며, 2026-08-30 이전 마감분은 인원 수로 기록돼 있어 그대로 표시됩니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
               </p>
             </Section>
           )}

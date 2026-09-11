@@ -16,7 +16,7 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
   
-  cardUnit, discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary, ZERO_TENDER, type Tender,
+  discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary, ZERO_TENDER, type Tender,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
@@ -2580,11 +2580,14 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
     { key: 'transfer', label: '이체' }, { key: 'ticket', label: '티켓' },
   ];
   const discWon = discountAmountOf(session, discIdx);
-  /** 그 수단으로 실제 받게 될 금액(원) — 티켓/지원은 현금 수납이 아니라 null */
+  /** 그 수단으로 실제 받게 될 금액(원) — 티켓/지원은 현금 수납이 아니라 null.
+   *  ⚠ 2026-09-11: 결제수단은 바인 가치를 바꾸지 않는다(오너 규칙) — 카드도 **현금 단가**다.
+   *    예전엔 여기만 cardUnit(카드단가)을 써서, 모달은 '카드 11만' 이라 안내하는데
+   *    실제 저장(nonSplitSnapshot)은 10만이었다. 안내와 기록이 갈리면 접수대가 손님에게 틀린 금액을 부른다.
+   *    카드단가 컬럼은 수수료 회계용으로 남겨 두되 이 화면은 쓰지 않는다. */
   const dueOf = (m: PaymentMethod): number | null => {
     if (m === 'ticket' || m === 'support') return null;
-    const unit = m === 'card' ? cardUnit(session) : session.buyinAmount;
-    return Math.max(0, unit - discWon);
+    return Math.max(0, session.buyinAmount - discWon);
   };
 
   // 분납/할인 상세
@@ -2630,8 +2633,9 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
             </div>
             {session.buyinAmount > 0 && (
               <p className="mt-1 text-2xs text-ink-muted">
-                받을 금액 — 현금 <b className="tabular-nums text-ink-primary">{wonToMan(dueOf('cash') ?? 0)}만</b>
-                {cardUnit(session) !== session.buyinAmount && <> · 카드 <b className="tabular-nums text-ink-primary">{wonToMan(dueOf('card') ?? 0)}만</b></>}
+                {/* 카드 줄을 따로 두지 않는다 — 이제 현금과 **같은 금액**이라 두 번 적으면 '다른 값'처럼 읽힌다. */}
+                받을 금액 <b className="tabular-nums text-ink-primary">{wonToMan(dueOf('cash') ?? 0)}만</b>
+                <span className="text-ink-muted"> (현금·카드·이체 동일)</span>
                 {/* 바이인 횟수(1회)와 엔트리(금액 기준·소수 가능)를 **둘 다** 밝힌다 — 오너 규칙 2026-09-11. */}
                 {discIdx > 0 && (() => {
                   const applied = Math.max(0, session.buyinAmount - discWon);
