@@ -100,6 +100,10 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     await expect(dlg.getByText(/게시판.*핸드 분석|핸드 분석.*모입니다/).first(),
       '토론이 게시판으로 간다는 안내가 없다').toBeVisible();
 
+    // 게시판 글을 늘리는 것이 목적이므로 **올리는 문**이 먼저 있어야 한다
+    await expect(dlg.getByRole('button', { name: '스팟 분석하고 올리기' }),
+      '게시판에 올리러 가는 문이 없다').toBeVisible();
+
     await dlg.getByRole('button', { name: '게시판에서 스팟 글 보기' }).click();
     // 실제로 커뮤니티 탭이 서야 한다(예전엔 리스너가 없어 아무 일도 안 났다)
     await expect(page.locator('main[data-tab="community"]'), '게시판으로 가지 않았다')

@@ -134,7 +134,7 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
       {tab === 'mine' && (
         <MySpotList onOpen={(s) => { setSpot(s); setTab('analyze'); }} />
       )}
-      {tab === 'talk' && <TalkTab />}
+      {tab === 'talk' && <TalkTab onAnalyze={() => setTab('analyze')} />}
     </div>
   );
 }
@@ -530,7 +530,7 @@ function gotoBoard() {
   });
 }
 
-function TalkTab() {
+function TalkTab({ onAnalyze }: { onAnalyze: () => void }) {
   return (
     <div className="rounded-card border border-border-default bg-surface-mid p-4 text-center">
       <Icon name="comment" size={22} className="mx-auto mb-2 text-ink-muted" aria-hidden />
@@ -539,9 +539,17 @@ function TalkTab() {
         토론은 여기서 따로 돌지 않고 <b className="text-ink-secondary">게시판 · 핸드 분석</b> 에 모입니다.
         올린 스팟은 다른 사람들이 먼저 폴드·콜·레이즈를 고르고, 그 분포를 본 뒤 분석을 열어 봅니다.
       </p>
-      <button type="button" onClick={gotoBoard} className="btn-ghost mt-3 min-h-[44px] px-4 text-xs">
-        게시판에서 스팟 글 보기
-      </button>
+      {/* 오너 지시: "게시판 글이 더 많을 수 있도록". 그래서 읽는 문만 두지 않고
+          **올리는 문**을 먼저 세운다 — 여기까지 온 사람이 곧 글감을 들고 있는 사람이다. */}
+      <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+        <button type="button" onClick={onAnalyze}
+          className="min-h-[44px] rounded-input border border-accent-400/40 bg-accent-300/10 px-4 text-xs font-bold text-accent-200">
+          스팟 분석하고 올리기
+        </button>
+        <button type="button" onClick={gotoBoard} className="btn-ghost min-h-[44px] px-4 text-xs">
+          게시판에서 스팟 글 보기
+        </button>
+      </div>
     </div>
   );
 }
