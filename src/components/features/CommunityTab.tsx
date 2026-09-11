@@ -6,7 +6,7 @@ import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { getActivePromotedPosts, type PromotedPost } from '../../api/ads';
 import { getEquippedMarks, getNickColors, isBumped } from '../../api/community';
 import { getAppSetting, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../api/settings';
-import { hotFirst, pinnedFirst } from '../../lib/pinnedFirst';
+import { hotFirst, pinnedFirst, usableAdCount } from '../../lib/pinnedFirst';
 import { PostRow, PostCard } from './community/PostRowCard';
 import { useTitlePoints } from '../../lib/useTitles';
 import { getVenueRatings, type VenueRating } from '../../api/reviews';
@@ -598,14 +598,27 @@ function FeedSection({
     ]);
   }, [posts, q, cat, enableCategory, order]);
 
-  // 광고로 승격된 글이 일반 목록에도 있으면 같은 글이 두 번 보인다 — post.id 기준으로 목록에서 뺀다.
-  //   (원본 게시글 데이터는 건드리지 않는다. 여기서 '이 화면의 목록'만 걸러 낸다.)
-  const adPostIds = useMemo(() => new Set(ads.map((a) => a.post.id)), [ads]);
-
   const pinHot = enableCategory && cat === 'all' && !q.trim() && order === 'new' && hotPosts.length > 0;
   // HOT 은 별도 블록이 아니라 **한 목록** 안에 선다(#10, 오너 결정 2026-09-05): 광고(컨테이너 첫 행) → 고정 → HOT → 끌올 → 최신.
   // 예전엔 HOT 블록이 목록 컨테이너 밖에 먼저 그려져 '광고 맨 위'·'고정 맨 위' 규칙이 둘 다 깨졌다.
   const listSourceRaw = pinHot ? hotFirst(filtered, hotPosts) : filtered;
+
+  // 실제로 **그려질 자리가 있는** 광고만 쓴다.
+  //   ads[0] 은 목록이 비어도 맨 위에 선다(오너 2026-09-05). 하지만 ads[k](k≥1)는 아래 map 의
+  //   `i % adsEvery === adsEvery - 1` 자리에만 서므로 비광고 글이 adsEvery*k 개 이상이어야 한다.
+  //   ⚠ 자리가 없는 광고까지 목록에서 빼면 그 글은 광고로도 목록으로도 안 나와 **화면에서 사라진다**
+  //     (2026-09-11 발견: 글 17개에 슬롯 5칸·adsEvery 4 면 1건 소실. 검색에서도 못 찾는다).
+  //   남는 광고는 승격을 포기하고 일반 글로 그냥 둔다 — 광고가 한 칸 덜 붙는 편이 글이 사라지는 것보다 낫다.
+  const usableAds = useMemo(() => {
+    const k = usableAdCount(ads.length, listSourceRaw.length, adsEvery);
+    return k === ads.length ? ads : ads.slice(0, k);
+  }, [ads, listSourceRaw, adsEvery]);
+
+  // 광고로 승격된 글이 일반 목록에도 있으면 같은 글이 두 번 보인다 — post.id 기준으로 목록에서 뺀다.
+  //   (원본 게시글 데이터는 건드리지 않는다. 여기서 '이 화면의 목록'만 걸러 낸다.)
+  //   **usableAds 기준**이어야 한다 — 그리지도 않을 광고를 빼면 위 주석의 소실이 난다.
+  const adPostIds = useMemo(() => new Set(usableAds.map((a) => a.post.id)), [usableAds]);
+
   const listSource = useMemo(
     () => (adPostIds.size ? listSourceRaw.filter((p) => !adPostIds.has(p.id)) : listSourceRaw),
     [listSourceRaw, adPostIds],
@@ -739,11 +752,11 @@ function FeedSection({
         <>
           {/* 글이 없어도 광고 칸은 산다 — 광고는 언제나 **맨 위**(오너 2026-09-05).
               PostRow 는 <li> 라 <ul> 로 감싼다(#25). */}
-          {ads[0] && (
+          {usableAds[0] && (
             <ul className="rounded-aura border card-aura overflow-hidden">
-              <PostRow post={ads[0].post} promoted adSlot={ads[0].slot} mark={authorMarks[ads[0].post.userId] ?? ''}
-                titlePts={titleOf(ads[0].post.userId)} selected={ads[0].post.id === selectedId}
-                onClick={() => onSelectPost(ads[0].post)} />
+              <PostRow post={usableAds[0].post} promoted adSlot={usableAds[0].slot} mark={authorMarks[usableAds[0].post.userId] ?? ''}
+                titlePts={titleOf(usableAds[0].post.userId)} selected={usableAds[0].post.id === selectedId}
+                onClick={() => onSelectPost(usableAds[0].post)} />
             </ul>
           )}
           {/* 조회 실패 / 아직 글 없음 / 검색 결과 없음 — 셋은 서로 다른 상태다. 실패를 '글 없음'으로 적으면
@@ -761,13 +774,13 @@ function FeedSection({
               {/* 첫 광고는 언제나 **맨 위**(오너 2026-09-05 "AD 가 중간에 가 있다"). 예전엔 N번째 글 뒤에 첫 광고가
                   들어가 글이 적으면 리스트 끝에, 많으면 중간에 떴다. 이후 광고는 N개마다 다음 칸(ads[1], ads[2]…).
                   ⚠ 광고도 **같은 PostRow** 다 — 배지 하나만 다르다. 클릭·키보드·상세 진입이 전부 일반 글과 같은 경로다. */}
-              {ads[0] && (
-                <PostRow post={ads[0].post} promoted adSlot={ads[0].slot} mark={authorMarks[ads[0].post.userId] ?? ''}
-                  titlePts={titleOf(ads[0].post.userId)} selected={ads[0].post.id === selectedId}
-                  onClick={() => onSelectPost(ads[0].post)} />
+              {usableAds[0] && (
+                <PostRow post={usableAds[0].post} promoted adSlot={usableAds[0].slot} mark={authorMarks[usableAds[0].post.userId] ?? ''}
+                  titlePts={titleOf(usableAds[0].post.userId)} selected={usableAds[0].post.id === selectedId}
+                  onClick={() => onSelectPost(usableAds[0].post)} />
               )}
               {shown.map((p, i) => {
-                const ad = ads[Math.floor(i / adsEvery) + 1];
+                const ad = usableAds[Math.floor(i / adsEvery) + 1];
                 const showAd = i % adsEvery === adsEvery - 1 && !!ad; // 글 N개마다 다음 광고 한 칸(관리자 설정)
                 return (
                   <Fragment key={p.id}>
@@ -791,14 +804,14 @@ function FeedSection({
           {/* 피드(카드) 모드 — 오너 레퍼런스: 독립 라운드 카드 스택, 광고도 같은 카드 문법 */}
           <ul className="space-y-2">
             {/* 첫 광고는 언제나 맨 위 — 컴팩트 목록과 같은 규칙. 광고도 **같은 PostCard** 다. */}
-            {ads[0] && (
-              <PostCard post={ads[0].post} promoted adSlot={ads[0].slot} mark={authorMarks[ads[0].post.userId] ?? ''}
-                nickToken={authorColors[ads[0].post.userId]} titlePts={titleOf(ads[0].post.userId)}
-                selected={ads[0].post.id === selectedId}
-                onLike={() => onLike(ads[0].post.id)} onClick={() => onSelectPost(ads[0].post)} />
+            {usableAds[0] && (
+              <PostCard post={usableAds[0].post} promoted adSlot={usableAds[0].slot} mark={authorMarks[usableAds[0].post.userId] ?? ''}
+                nickToken={authorColors[usableAds[0].post.userId]} titlePts={titleOf(usableAds[0].post.userId)}
+                selected={usableAds[0].post.id === selectedId}
+                onLike={() => onLike(usableAds[0].post.id)} onClick={() => onSelectPost(usableAds[0].post)} />
             )}
             {shown.map((p, i) => {
-              const ad = ads[Math.floor(i / adsEvery) + 1];
+              const ad = usableAds[Math.floor(i / adsEvery) + 1];
               const showAd = i % adsEvery === adsEvery - 1 && !!ad;
               return (
                 <Fragment key={p.id}>

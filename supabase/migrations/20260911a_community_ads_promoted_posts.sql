@@ -85,7 +85,11 @@ returns table(
   content text, created_at timestamptz,
   like_count int, comment_count int, view_count int,
   category text, title text, images text[],
-  cheer_count int, bumped_until timestamptz, bump_count int, pinned_at timestamptz
+  cheer_count int, bumped_until timestamptz, bump_count int, pinned_at timestamptz,
+  -- ⚠ 추천·비추천을 빠뜨리면 rowToPost 가 `?? 0` 으로 접어 **승격된 글만 항상 0** 이 된다.
+  --   PostRowCard 는 둘 다 0이면 그 줄을 통째로 감추므로, 일반 목록에서 보이던 '▲12 ▼3' 이
+  --   광고 자리에 선 순간 사라진다(2026-09-11 발견).
+  badbeat_count int, goodrun_count int
 )
 language sql stable security definer
 set search_path = public, pg_temp
@@ -96,7 +100,8 @@ as $$
     p.content, p.created_at,
     p.like_count, p.comment_count, coalesce(p.view_count, 0),
     p.category::text, p.title, p.images,
-    coalesce(p.cheer_count, 0), p.bumped_until, coalesce(p.bump_count, 0), p.pinned_at
+    coalesce(p.cheer_count, 0), p.bumped_until, coalesce(p.bump_count, 0), p.pinned_at,
+    coalesce(p.badbeat_count, 0), coalesce(p.goodrun_count, 0)
   from public.community_ads a
   join public.community_posts p on p.id = a.post_id
   where a.active

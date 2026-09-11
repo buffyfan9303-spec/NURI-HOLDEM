@@ -90,3 +90,42 @@ describe('20260911a — 광고 노출 조건은 서버가 판정한다', () => {
     }
   });
 });
+
+// ── 반환 컬럼 계약 ───────────────────────────────────────────────────────────
+// 왜 이걸 잠그나: 광고도 일반 피드와 **같은 rowToPost** 를 탄다(src/api/community.ts).
+//   그 매핑은 없는 컬럼을 `?? 0` / `?? null` 로 접으므로, RPC 가 한 칸 빠뜨려도 타입도 테스트도
+//   조용히 통과하고 **광고 카드만 값이 빈다**. 실제로 badbeat_count·goodrun_count 가 빠져
+//   승격된 글의 추천·비추천이 항상 0 이었고, PostRowCard 는 둘 다 0 이면 그 줄을 통째로 감춰
+//   일반 목록에서 보이던 '▲12 ▼3' 이 광고 자리에서 사라졌다(2026-09-11).
+const COMMUNITY = readFileSync(join(__dirname, 'community.ts'), 'utf-8');
+/** rowToPost 본문만 — 다른 매핑(댓글 등)이 읽는 컬럼까지 끌어오지 않는다. */
+const MAPPING = COMMUNITY.slice(
+  COMMUNITY.indexOf('export const rowToPost'),
+  COMMUNITY.indexOf('export async function getPostsByUser'),
+);
+/** returns table(...) 선언부에서 SQL 주석을 걷어 낸 것 — 주석에 적힌 이름이 통과시키면 안 된다. */
+const DECLARED = body
+  .slice(body.indexOf('returns table('), body.indexOf('language sql'))
+  .replace(/--[^\n]*/g, '');
+
+/** RPC 가 **일부러** 안 싣는 컬럼과 그 이유. 여기 없는 누락은 실패다. */
+const INTENTIONAL: Record<string, string> = {
+  blinded: '서버가 where 로 이미 거른다 — 블라인드 글은 애초에 안 온다(rowToPost 가 false 로 접는 것이 맞다)',
+};
+
+describe('20260911a — 광고 행은 일반 피드와 같은 모양이다', () => {
+  it('rowToPost 가 읽는 컬럼을 RPC 가 전부 싣는다', () => {
+    const read = [...new Set([...MAPPING.matchAll(/\br\.([a-z_]+)/g)].map((m) => m[1]))];
+    expect(read.length, 'rowToPost 본문을 못 잘랐다 — 슬라이스 기준 문자열을 확인하라').toBeGreaterThan(10);
+    const missing = read.filter((c) => !INTENTIONAL[c] && !new RegExp(`\\b${c}\\b`).test(DECLARED));
+    expect(missing, `RPC 가 안 싣는데 rowToPost 가 읽는다 → ?? 로 접혀 광고만 값이 빈다: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('추천·비추천이 실제로 실린다', () => {
+    // 위 계약이 일반적으로 막지만, 실제로 터졌던 두 칸은 이름으로 한 번 더 못박는다.
+    expect(DECLARED).toMatch(/\bbadbeat_count\b/);
+    expect(DECLARED).toMatch(/\bgoodrun_count\b/);
+    expect(body).toMatch(/coalesce\(p\.badbeat_count/);
+    expect(body).toMatch(/coalesce\(p\.goodrun_count/);
+  });
+});
