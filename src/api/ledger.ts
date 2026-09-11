@@ -603,6 +603,21 @@ export async function canManagePos(venueId: string): Promise<boolean> {
   if (error) throw error;
   return !!data;
 }
+/**
+ * 직원(구성원) 관리 권한 — 관리자 · 매장주 · 공동 사장(venue_owners approved).
+ *
+ * ⚠ 예전에 화면은 이걸 `profiles.role === 'venue_owner'` 로 **클라이언트에서** 판정했다.
+ *   add_venue_owner 는 profiles.role 을 바꾸지 않으므로(운영 DB 확인) 서버 판정과 영구히 갈렸다:
+ *     · role 은 venue_owner 인데 이 매장 주인이 아닌 사람 → 메뉴는 열리고 저장은 거부(dead-end)
+ *     · role 이 아닌 공동 사장 → 서버는 허용하는데 메뉴가 아예 안 보임
+ *   권한은 서버가 판정한다(CLAUDE.md 보안 §2) — 화면은 그 답을 받아 쓰기만 한다.
+ */
+export async function canManageVenueStaff(venueId: string): Promise<boolean> {
+  if (IS_MOCK) return false;
+  const { data, error } = await supabase.rpc('can_manage_venue_staff', { p_venue_id: venueId });
+  if (error) throw error;
+  return !!data;
+}
 
 // ── 세션(매장+날짜+게임) ───────────────────────────────────────────────────────
 export async function getLedgerSession(venueId: string, date = today(), gameSeq = MAIN_GAME_SEQ): Promise<LedgerSession> {

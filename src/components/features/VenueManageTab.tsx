@@ -8,7 +8,7 @@ import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle } from '../../api/auth';
 import { msgOf } from '../../lib/dbError';
 import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
-import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
+import { canAccessLedger, canManagePos, canManageVenueStaff, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, createMyVenue, getMyVenue, getVenueStaff, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
 import { splitLedgerName } from '../../lib/rankingGame';
@@ -191,7 +191,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const toast = useToast();
   const isOwner = user?.role === 'venue_owner';
   const isAdmin = user?.role === 'admin';
-  const canStaff = isOwner || isAdmin; // 직원 관리·POS 설정 접근
+  // staffOk 는 아래에서 **서버 판정**(can_manage_venue_staff)으로 받는다 — 여기서 role 로 정하지 않는다.
+  //   2026-09-11: role 기준이면 공동 사장(venue_owners)이 서버 허용인데도 메뉴가 안 보이고,
+  //   반대로 다른 매장 주인이 이 매장 메뉴를 열었다가 저장에서 거부되는 dead-end 가 났다.
   const canPosters = isOwner || isAdmin; // 포스터·예약 관리
   const [adminVenues, setAdminVenues] = useState<Venue[]>([]);
   const [adminVenueId, setAdminVenueId] = useState<string | null>(null);
@@ -215,6 +217,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   useEffect(() => { inGameRef.current = section === 'game'; }, [section]);
   const [navOpen, setNavOpen] = useState(false); // 모바일 메뉴 아코디언 펼침
   const [ledgerOk, setLedgerOk] = useState(false); // 장부 접근(업주/운영자/권한직원)
+  const [staffOk, setStaffOk] = useState(false);   // 직원 관리(업주/공동 사장/관리자) — 서버 판정
   const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
   const [voucherViewRaw, setVoucherView] = useState(false); // 매장이용권 내역 열람 '권한'(업주/권한직원)
   // 킬스위치(2026-08-29). 권한(voucherViewRaw)은 서버 판정 그대로 두고 **노출만** 덮는다 —
@@ -260,13 +263,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // IA3c 하위탭 노출 판정의 **단일 지점** — 탭 목록·딥링크 착지·판(pane) 렌더가 서로 갈리면
   // "탭 바에는 없는 탭이 열려 있는" 빈 화면이 된다. 실제로 두 조합이 그랬다:
   //  ① 이용권 킬스위치 OFF 인데 알림 딥링크가 voucher 를 지정 → 제목만 '이용권·QR' 인 백지
-  //  ② 이용권 열람 권한만 있는 직원(canStaff=false)이 '매장 설정' 첫 진입 → 기본값 'page' 가
+  //  ② 이용권 열람 권한만 있는 직원(staffOk=false)이 '매장 설정' 첫 진입 → 기본값 'page' 가
   //     권한 밖이라 백지. 볼 수 있는 탭이 하나 있는데도 아무것도 안 보인다.
   const canSettingsTab = useCallback((t: SettingsTab) => (
     t === 'voucher' ? (idOn && (manageOk || voucherView))
       : t === 'danger' ? (isOwner && !!venueId)
-        : canStaff
-  ), [idOn, manageOk, voucherView, isOwner, venueId, canStaff]);
+        : staffOk
+  ), [idOn, manageOk, voucherView, isOwner, venueId, staffOk]);
   const firstSettingsTab = useCallback((): SettingsTab => SETTINGS_TABS.find((t) => canSettingsTab(t.id))?.id ?? 'page', [canSettingsTab]);
   // 섹션 이동 공통 — 레거시 게임 스텝·설정 하위탭 id 도 수용(StoreDashboard·라이브바·딥링크)
   const gotoSection = useCallback((s: Section | GameStep | SettingsTab) => {
@@ -278,8 +281,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 
   // ── memo 섹션에 넘기는 핸들러/객체 prop 을 참조 고정(재렌더 건너뛰기 조건 충족) ──
   // caps.voucher = '대시보드에 이용권 카드/단골 이용권 보내기를 그릴까' — 킬스위치가 그대로 반영된다.
-  const caps = useMemo(() => ({ ledger: ledgerOk, manage: manageOk, voucher: idOn && (manageOk || voucherView), posters: canPosters, staff: canStaff }),
-    [ledgerOk, manageOk, voucherView, canPosters, canStaff, idOn]);
+  const caps = useMemo(() => ({ ledger: ledgerOk, manage: manageOk, voucher: idOn && (manageOk || voucherView), posters: canPosters, staff: staffOk }),
+    [ledgerOk, manageOk, voucherView, canPosters, staffOk, idOn]);
   const onGotoStore = useCallback((d: string | StoreDest) => {
     // StoreDashboard·라이브바가 보내는 id — LINK-MAP 정규화로 구 id(page·venueRank·settings 등)도 흡수.
     // 객체로 오면 날짜·게임·event·정산 문맥을 **기존 시드 상태에 그대로** 앉힌다(라우터 신설 0).
@@ -432,7 +435,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     return { insights: false, team: false };
   });
   useEffect(() => {
-    if (!venueId || !canStaff || isAdmin) return;
+    if (!venueId || !staffOk || isAdmin) return;
     let alive = true;
     const to = new Date().toLocaleDateString('en-CA');
     const from = new Date(Date.now() - 90 * 86_400_000).toLocaleDateString('en-CA');
@@ -445,7 +448,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       try { localStorage.setItem('nuri:nav-matured', JSON.stringify(next)); } catch { /* noop */ }
     });
     return () => { alive = false; };
-  }, [venueId, canStaff, isAdmin]);
+  }, [venueId, staffOk, isAdmin]);
 
   // 운영자: 전체 매장 목록 로드(선택용)
   useEffect(() => {
@@ -462,7 +465,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (!venueId) { setPermsLoaded(false); return; }
     let alive = true;
     if (isAdmin) {
-      setLedgerOk(true); setManageOk(true); setVoucherView(true);
+      setLedgerOk(true); setManageOk(true); setVoucherView(true); setStaffOk(true);
       setSection((s) => s ?? 'dashboard');
       setPermsError(null);
       setPermsLoaded(true);
@@ -470,10 +473,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     }
     setPermsLoaded(false);
     setPermsError(null);
-    Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId)])
-      .then(([l, m, vv]) => {
+    Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId), canManageVenueStaff(venueId)])
+      .then(([l, m, vv, st]) => {
         if (!alive) return;
-        setLedgerOk(l); setManageOk(m); setVoucherView(vv);
+        setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st);
         setSection((s) => s ?? 'dashboard');
       })
       .catch((e) => { if (alive) { setPermsError(e ?? new Error('권한 조회 실패')); setSection(null); } })
@@ -485,8 +488,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   useEffect(() => {
     if (!venueId || isAdmin) return;
     const recheck = () => {
-      Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId)])
-        .then(([l, m, vv]) => { setLedgerOk(l); setManageOk(m); setVoucherView(vv); })
+      Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId), canManageVenueStaff(venueId)])
+        .then(([l, m, vv, st]) => { setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); })
         .catch(() => { /* keep current */ });
     };
     window.addEventListener('focus', recheck);
@@ -509,9 +512,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // ATT-FIX: '내 출퇴근 기록'이 장부 권한(ledgerOk)에 묶여 있어 장부 권한 없는 직원이
   // 자기 출퇴근을 못 보던 오게이팅 — 이 탭에 들어온 소속 구성원이면 누구나
   available.push({ id: 'attendance', label: '출근 관리', group: '관리' });
-  if (canStaff) available.push({ id: 'staff', label: '직원 관리', group: '관리' });
+  if (staffOk) available.push({ id: 'staff', label: '직원 관리', group: '관리' });
   // IA3c: 프리셋·매장랭킹·매장꾸미기·이용권·POS 가 '매장 설정' 하위탭 5개로 통합
-  if (canStaff || voucherView) available.push({ id: 'settings', label: '매장 설정', group: '관리' });
+  if (staffOk || voucherView) available.push({ id: 'settings', label: '매장 설정', group: '관리' });
   // IA3d: nav 노출용 목록 — 성숙도 미달 항목 비노출(운영자·전체보기·직원 계정은 게이팅 없음).
   // 콘텐츠 접근(curItem·dItem·딥링크)은 available 기준 유지 — 숨김은 nav 표시만 줄인다.
   //
@@ -522,7 +525,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //   '쓰려면 반드시 거쳐야 하는 문' 을 잠그는 장치가 아니다.
   //   '매출·손님' 은 해금 조건(장부 마감 3회)이 **다른 문(게임 진행)에서** 만들어지므로 그대로 둔다.
   //   (matured.team 은 계산만 남는다 — 게이트를 되살릴 때 조건식이 이미 있게.)
-  const navItems = (isAdmin || navAll || !canStaff) ? available
+  const navItems = (isAdmin || navAll || !staffOk) ? available
     : available.filter((a) => (a.id === 'stats' ? matured.insights : true));
   const navHiddenCount = available.length - navItems.length;
   const curItem = available.find((a) => a.id === section);
@@ -639,7 +642,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                         </div>
                       );
                     })}
-                    {canStaff && !isAdmin && (navHiddenCount > 0 || navAll) && (
+                    {staffOk && !isAdmin && (navHiddenCount > 0 || navAll) && (
                       <button type="button" onClick={toggleNavAll}
                         className="w-full px-2 py-1 text-left text-2xs font-bold text-ink-muted transition-colors hover:text-ink-secondary">
                         {navAll ? '기본 메뉴만 보기' : `고급 기능 모두 보기 (+${navHiddenCount})`}
@@ -664,7 +667,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   );
                 })}
                 {/* IA3d: 성숙도로 숨긴 항목이 있으면 파워유저 탈출구 — 잠금 아이콘이 아니라 토글 */}
-                {canStaff && !isAdmin && (navHiddenCount > 0 || navAll) && (
+                {staffOk && !isAdmin && (navHiddenCount > 0 || navAll) && (
                   <button type="button" onClick={toggleNavAll}
                     className="px-3 py-1 text-left text-2xs font-bold text-ink-muted transition-colors hover:text-ink-secondary">
                     {navAll ? '기본 메뉴만 보기' : `고급 기능 모두 보기 (+${navHiddenCount})`}
@@ -811,7 +814,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 </>)}
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
                 {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
-                {visited.includes('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
+                {visited.includes('staff') && staffOk && box('staff', <StaffHub venueId={venueId} />)}
                 {visited.includes('pos') && canSettingsTab('pos') && box('pos', <PosSettingsPanelM venueId={venueId} />)}
                 {visited.includes('voucher') && canSettingsTab('voucher') && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
                 {/* §7 ⑥b: 운영 도구 5종 — GTO 탭에서 이관(레지스트리는 ToolsPanel 재사용) */}
