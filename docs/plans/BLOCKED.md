@@ -32,6 +32,45 @@
 | 17 | **순위 등수 점수를 활동 등급(비소비)에 계속 반영할지** — 2026-09-05 법적위험완화 v3 로 순위 저장이 활동점수(=상점 구매력)를 만들지 않게 됐다. 등급(2·3~AA)은 활동점수 기준이라 앞으로 입상해도 등급이 오르지 않는다 | 등급을 '성적'이 아닌 '활동'으로만 볼지, 등수 점수를 **비소비 별도 컬럼**으로 등급에만 더할지 | 반영 안 함(현행) | ⏳ 오너 |
 | 18 | **클락 TV 의 순위별 프라이즈 표시 유지** — 클락 프라이즈 표(cfg.prizes)는 §28 '상품 가격 정보'로 보고 남겼다(순위 저장으로는 흐르지 않음) | TV 송출 화면에 금액이 남는 것이 법률 검토상 괜찮은지 | 유지 | ⏳ 오너·법률 |
 | 19 | **이미 지급된 순위 유래 활동점수(라이브 12점 + 시상 7점) 회수 여부** — 지시서 '활동점수 잔액 보존' 원칙으로 회수하지 않았다 | 소급 회수가 필요하면 별도 결정 | 회수 안 함 | ⏳ 오너 |
+| 20 | **운영 DB 미적용 마이그레이션 12개 + 엣지 함수 2건** (2026-09-11 실측) — 코드는 main 에 배포됐는데 DB·함수가 안 따라갔다. 아래 '20번 상세' 참고 | 앱은 배포됐고 서버만 옛 상태라, 새 기능이 **조용히 죽어 있거나 404 를 찍는다**(auth-smoke e2e 가 실제로 404 로 실패 중) | **적용하지 않음(현행).** 라이브 DB 변경은 오너 승인 없이 실행 금지 — 확인 SQL 과 순서만 아래에 적어 둔다 | ⏳ 오너 |
+
+### 20번 상세 — 무엇이 안 올라갔나 (2026-09-11 `list_migrations`·`list_edge_functions` 실측)
+
+> ⚠ 2026-09-11 은 **두 세션이 d·e·f 접두사를 각각 써서 파일명이 겹친다**. letter 로 판단하지 말고 아래 표대로 본다.
+
+**이미 적용된 것**(참고 — 다시 돌리지 말 것): `20260911b`(→`voucher_restore_and_reject_guard`) ·
+`20260911c`(→`buyin_request_link_and_cancel_restore`) · `20260911d_buyin_value`(→`buyin_value_payment_method_neutral`) ·
+`20260911d_nuri_spot` · `20260911e_co_owner_can_manage_staff` · `20260911f_staff_schedule_update_scope`
+
+**미적용 12개** — 파일명 순서대로 돌리면 된다(서로 의존하지 않는다):
+
+| 파일 | 안 올라가서 지금 어떤 일이 나나 |
+|---|---|
+| `20260911a_community_ads_promoted_posts` | 🔴 **배포된 앱이 없는 RPC(`community_ads_public`)를 불러 커뮤니티 탭마다 404.** 손님 화면은 '광고 없음'으로 degrade 되지만, `auth-smoke` e2e 가 이 404 로 실패한다. §5(테이블 읽기 축소)는 **앱 배포 뒤** 별도 실행 — 파일 하단 주석 참고 |
+| `20260911e_home_banners_kst_window` | 배너 게재 창을 기기 시계로 판정 — 시계를 되돌리면 만료 배너가 계속 보인다 |
+| `20260911f_kst_date_defaults_and_season_window` | 날짜 기본값이 서버 KST 가 아니다 |
+| `20260911g_voucher_multi_use_pending_uniq` | 같은 이용권의 중복 대기 요청을 DB 가 막지 못한다 |
+| `20260911h_ledger_player_search_venue_scope` | 장부 플레이어 검색이 매장 경계를 서버에서 안 자른다 |
+| `20260911i_bulk_delete_voucher_restore` | 일괄 삭제 시 이용권이 복구되지 않는다 |
+| `20260911j_ranking_member_search_venue_scope` | 순위 회원 검색이 매장 경계를 서버에서 안 자른다 |
+| `20260911k_admin_withdraw_user` | 🔴 **강제 탈퇴가 개인정보·세션을 파기하지 않고, 재가입 차단도 돌지 않는다**(제재 안내 메일의 '재가입이 제한됩니다' 문장이 거짓인 상태) |
+| `20260911l_admin_update_venue_revoke_owner` | 업주를 교체해도 옛 업주가 장부·손님 명단을 계속 본다 |
+| `20260911m_suspended_venue_hides_schedules` | 매장을 정지시켜도 포스터·클락이 살아 있어 손님이 계속 예약한다 |
+| `20260911n_sanction_gate_comments` | 정지된 회원이 댓글로 계속 쓴다 |
+| `20260911o_schedule_reject_reason_and_notice` | 포스터 반려가 하드 삭제 — 업주에게 사유도 안 간다 |
+
+**엣지 함수 2건**
+- `tda-assist` — **미배포**. 앱의 TDA 규칙 질의가 없는 함수를 부른다(기능 사망).
+- `gemini` — 저장소는 410 거절 스텁인데 **배포된 것은 옛 범용 프록시**(마지막 배포 ~2026-09-02). 로그인한 아무 유저나 우리 키로 임의 프롬프트·이미지를 넣을 수 있다(일일 상한은 있음). 스텁을 배포하면 그 순간 닫힌다.
+- (`gto-explain` 은 ACTIVE — 오너가 남기기로 한 것이면 그대로)
+
+**적용 전 확인** — 이 세 줄로 지금 상태를 다시 잰다(읽기만 한다):
+```sql
+select proname from pg_proc where proname in ('community_ads_public','admin_withdraw_user');   -- 없으면 미적용
+select to_regclass('public.spot_reviews'), to_regclass('public.post_spots');                    -- NURI SPOT 표 존재 확인
+select version, name from supabase_migrations.schema_migrations order by version desc limit 10;
+```
+적용 뒤에는 `nuri-migration` 스킬 §5 대로 **어드바이저 보안 ERROR 0** 을 확인한다. `db push` 는 쓰지 않는다.
 
 ## 참고 — 이미 해소된 것
 - ✅ 모바일 점검 27건 착수(2026-09-05 오후 3, 오너 "착수" 지시) — 오너 상시 위임("너가 알아서 해")으로 AI 가 확정한 운영 규칙 3건. 이의가 있으면 한 줄로 되돌린다:
