@@ -17,6 +17,7 @@ import SegmentedTabs from '../../atoms/SegmentedTabs';
 import { useToast } from '../../atoms/Toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
+import { gotoBoard } from '../../../lib/spotNav';
 import HandBoardPicker from './HandBoardPicker';
 import { useHandBoard } from './useHandBoard';
 import { equityAsync } from './equityClient';
@@ -31,7 +32,7 @@ import { evaluateSpot, type SpotEvaluation } from '../../../lib/spotEvaluate';
 import SpotReport from './SpotReport';
 import MySpotList from './MySpotList';
 
-export type SpotTab = 'analyze' | 'mine' | 'talk';
+export type SpotTab = 'analyze' | 'mine';
 
 const SNAP_KEY = 'tool:spot';
 
@@ -134,7 +135,6 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
       {tab === 'mine' && (
         <MySpotList onOpen={(s) => { setSpot(s); setTab('analyze'); }} />
       )}
-      {tab === 'talk' && <TalkTab onAnalyze={() => setTab('analyze')} />}
     </div>
   );
 }
@@ -164,13 +164,19 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
           <h2 className="text-base font-extrabold tracking-tight text-ink-primary">NURI SPOT</h2>
           <p className="truncate text-2xs text-ink-muted">핸드 분석 · 리플레이 · 토론</p>
         </div>
+        {/* 토론 탭은 없앴다(오너 지시 2026-09-11: "스팟 토론은 게시판에서 하게 해야 돼").
+            대신 **가는 길**은 남긴다 — 탭을 지우면서 길까지 지우면 게시판으로 갈 방법이
+            공유 버튼 하나뿐이 되고, 아직 올릴 게 없는 사람은 토론을 구경할 수도 없다. */}
+        <button type="button" onClick={gotoBoard}
+          className="flex h-[44px] shrink-0 items-center gap-0.5 rounded-input px-2 text-2xs font-bold text-accent-200">
+          게시판 토론<Icon name="chevron-right" size={12} aria-hidden />
+        </button>
       </div>
       <div className="mt-2.5 overflow-x-auto">
         <SegmentedTabs
           items={[
             { key: 'analyze' as const, label: '분석' },
             { key: 'mine' as const, label: '내 스팟' },
-            { key: 'talk' as const, label: '스팟 토론' },
           ]}
           value={tab} onChange={onTab} grow
           // ⚠ .tap-y-44 는 **컨테이너**의 ::before 를 넓힐 뿐이라 버튼 자체의 히트 영역은 그대로다
@@ -506,50 +512,5 @@ function IssueList({ issues }: { issues: ReturnType<typeof validateSpot> }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-// ── 스팟 토론 탭 ─────────────────────────────────────────────────────────────
-//
-// 오너 지시(2026-09-11): "스팟 토론은 누리 스팟 말고 게시판으로 보내서 게시판을 활성화."
-// 그래서 이 탭은 **피드가 아니라 문**이다 — 글은 게시판 '핸드 분석' 카테고리에 쌓인다
-// (api/spots.ts 의 share_spot_post 가 p_category:'hand' 로 넣는다).
-//
-// ⚠ 이벤트 이름을 지어내지 마라. 앱이 듣는 것은 App.tsx 의 'nuri:goto-tab' 과
-//   CommunityTab 의 'nuri:community-section' 둘뿐이다. 예전 코드가 쏘던
-//   'nuri:open-tab' 은 **리스너가 없어 버튼이 죽어 있었다**(grep 으로 확인).
-function gotoBoard() {
-  // 도구 겹을 먼저 닫는다 — 안 닫으면 tools pane 이 display:none 으로 숨겨질 뿐
-  // 모달이 그대로 살아 있어, 도구 탭으로 돌아왔을 때 남은 겹이 튀어나온다.
-  if (window.location.hash.startsWith('#tool=')) history.back();
-  // 탭 전환은 겹이 닫힌 **다음 프레임**에. 같은 프레임에 쏘면 popstate 가 뒤늦게 도착해
-  // 방금 만든 탭 이력을 되감는다.
-  requestAnimationFrame(() => {
-    window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'community' }));
-    window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: 'board' }));
-  });
-}
-
-function TalkTab({ onAnalyze }: { onAnalyze: () => void }) {
-  return (
-    <div className="rounded-card border border-border-default bg-surface-mid p-4 text-center">
-      <Icon name="comment" size={22} className="mx-auto mb-2 text-ink-muted" aria-hidden />
-      <p className="text-sm font-bold text-ink-primary">스팟 토론은 게시판에서</p>
-      <p className="mx-auto mt-1 max-w-[24rem] text-2xs leading-relaxed text-ink-muted break-keep">
-        토론은 여기서 따로 돌지 않고 <b className="text-ink-secondary">게시판 · 핸드 분석</b> 에 모입니다.
-        올린 스팟은 다른 사람들이 먼저 폴드·콜·레이즈를 고르고, 그 분포를 본 뒤 분석을 열어 봅니다.
-      </p>
-      {/* 오너 지시: "게시판 글이 더 많을 수 있도록". 그래서 읽는 문만 두지 않고
-          **올리는 문**을 먼저 세운다 — 여기까지 온 사람이 곧 글감을 들고 있는 사람이다. */}
-      <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-        <button type="button" onClick={onAnalyze}
-          className="min-h-[44px] rounded-input border border-accent-400/40 bg-accent-300/10 px-4 text-xs font-bold text-accent-200">
-          스팟 분석하고 올리기
-        </button>
-        <button type="button" onClick={gotoBoard} className="btn-ghost min-h-[44px] px-4 text-xs">
-          게시판에서 스팟 글 보기
-        </button>
-      </div>
-    </div>
   );
 }

@@ -4,7 +4,7 @@
 // 그것만으로는 "빌드에는 들어갔는데 화면에는 안 뜬다"·"글자가 잘린다"를 못 잡는다.
 // 이 스펙은 프로덕션 번들을 띄워 다음을 확인한다:
 //   ① GTO 홈 첫 화면에서 **NURI SPOT · 차트 · 트레이너 셋이 함께** 읽힌다
-//   ② 스팟 화면이 열리고 분석·내 스팟·스팟 토론 세 축이 선다
+//   ② 스팟 화면이 열리고 분석·내 스팟 두 축이 선다(토론은 게시판 몫이라 도구에 없다)
 //   ③ 카드를 넣으면 등급 배지와 수치가 뜨고, **solver 를 자칭하지 않는다**
 //   ④ 액션 타임라인에 행이 쌓인다
 //   ⑤ 5개 뷰포트에서 가로 스크롤 0 · 터치 영역 44px
@@ -90,15 +90,29 @@ test.describe('GTO 홈 — NURI SPOT 이 대표로 선다', () => {
 test.describe('NURI SPOT — 분석 흐름', () => {
   test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 390, height: 844 }); });
 
-  test('🔴 세 축(분석 · 내 스팟 · 스팟 토론)이 서고 전환된다', async ({ page }) => {
+  test('🔴 두 축(분석 · 내 스팟)만 선다 — 토론 축은 도구에 없다', async ({ page }) => {
     const dlg = await openSpot(page);
-    for (const t of ['분석', '내 스팟', '스팟 토론']) {
+    for (const t of ['분석', '내 스팟']) {
       await expect(dlg.getByRole('tab', { name: t, exact: true }), `${t} 축이 없다`).toBeVisible();
     }
+    // 오너 지시(2026-09-11): "절대 저 탭에서 뭔가 대화를 하게 하면 안 되고
+    //   모든 대화는 커뮤니티 메뉴에서 해야 해." → 토론 축 자체가 없어야 한다.
+    await expect(dlg.getByRole('tab', { name: '스팟 토론', exact: true }),
+      '도구 안에 토론 축이 남아 있다').toHaveCount(0);
+    await expect(dlg.getByRole('tab'), '축은 둘뿐이어야 한다').toHaveCount(2);
+
     await dlg.getByRole('tab', { name: '내 스팟', exact: true }).click();
     await expect(dlg.getByText(/저장한 스팟이 없어요|로그인하면 스팟을/)).toBeVisible({ timeout: 10_000 });
-    await dlg.getByRole('tab', { name: '스팟 토론', exact: true }).click();
-    await expect(dlg.getByText('스팟 토론', { exact: true }).first()).toBeVisible();
+  });
+
+  test('🔴 도구 안에서는 대화를 할 수 없다 — 입력·댓글·투표가 전혀 없다', async ({ page }) => {
+    const dlg = await openSpot(page);
+    // 대화 UI 의 흔적이 하나라도 있으면 안 된다. 모든 대화는 커뮤니티에서만.
+    await expect(dlg.locator('textarea[placeholder*="댓글"]')).toHaveCount(0);
+    await expect(dlg.getByRole('button', { name: /^(등록|댓글 달기|답글)$/ })).toHaveCount(0);
+    await expect(dlg.getByPlaceholder(/댓글|답글|의견/)).toHaveCount(0);
+    // 게시판으로 **가는 길**은 남아 있어야 한다(길까지 없애면 토론을 구경할 수도 없다)
+    await expect(dlg.getByRole('button', { name: /게시판 토론/ }), '게시판으로 가는 길이 없다').toBeVisible();
   });
 
   test('🔴 카드를 넣으면 리포트가 등급과 수치를 보여준다 — solver 를 자칭하지 않는다', async ({ page }) => {

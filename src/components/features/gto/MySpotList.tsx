@@ -61,7 +61,7 @@ export default function MySpotList({ onOpen }: { onOpen: (s: SpotReview) => void
   if (rows.length === 0) {
     return (
       <Empty icon="bookmark" title="아직 저장한 스팟이 없어요"
-        desc="분석 탭에서 한 판을 입력하고 '내 스팟에 저장' 을 누르면 여기에 쌓입니다." />
+        desc="분석 탭에서 한 판을 입력하고 '내 스팟에 저장'을 누르면 여기에 쌓입니다." />
     );
   }
 

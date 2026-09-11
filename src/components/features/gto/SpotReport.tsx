@@ -19,6 +19,7 @@ import {
   type SpotEvaluation, type CoverageKind, type Verdict, type ActionMix,
 } from '../../../lib/spotEvaluate';
 import { saveMySpot, shareSpotPost } from '../../../api/spots';
+import { gotoBoardPost } from '../../../lib/spotNav';
 
 /** 등급별 색 — **색만으로 의미를 전하지 않는다.** 항상 라벨·아이콘과 함께 쓴다. */
 const COVERAGE_TONE: Record<CoverageKind, { ring: string; text: string; icon: 'microscope' | 'table' | 'scale' | 'sigma' | 'info' }> = {
@@ -74,8 +75,11 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
     if (!ensureLogin(user)) return;
     setBusy('share');
     try {
-      await shareSpotPost(spot, evaluation);
+      const postId = await shareSpotPost(spot, evaluation);
       toast.show('스팟 토론에 올렸습니다', 'success');
+      // 여기서 멈추면 사용자는 **자기 글을 끝내 보지 못한다** — 올라갔는지도 알 수 없다.
+      // 게시판으로 넘어가 방금 만든 글을 연다(오너 지시 2026-09-11).
+      gotoBoardPost(postId);
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '공유에 실패했습니다', 'error');
     } finally { setBusy(null); }

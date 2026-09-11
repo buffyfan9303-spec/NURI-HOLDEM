@@ -1258,6 +1258,18 @@ export default function App() {
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
   }, [pendingPostId]);
 
+  // 앱 안에서 글 상세를 여는 통로(스팟 공유 직후 등) — ?post= 딥링크와 **같은 경로**를 탄다.
+  // pendingPostId 는 URL 을 마운트 때 한 번만 읽으므로, 이미 떠 있는 앱에는 이 이벤트가 필요하다.
+  // 그 경로에는 목록에 없는 글을 단건 조회로 살리는 폴백이 있어 방금 만든 글도 열린다.
+  useEffect(() => {
+    const h = (e: Event) => {
+      const id = (e as CustomEvent).detail as string;
+      if (id) setPendingPostId(id);
+    };
+    window.addEventListener('nuri:open-post', h);
+    return () => window.removeEventListener('nuri:open-post', h);
+  }, []);
+
   // 탭 뒤로가기는 위의 '탭 이력(트레일)' 이 전담한다 — 이동마다 겹 하나씩, LIFO 로 되짚는다.
   //
   // 예전에 여기 있던 두 장치를 걷어냈다(둘 다 오너가 겪은 '먹통' 의 원인이었다):

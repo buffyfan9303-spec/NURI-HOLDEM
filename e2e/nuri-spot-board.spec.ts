@@ -2,7 +2,7 @@
 //
 // 오너: "스팟 토론은 누리 스팟 말고 게시판으로 보내서 게시판을 활성화."
 // 그래서 확인할 것은 셋이다:
-//   ① 도구의 '스팟 토론' 축이 진짜로 **게시판으로 데려간다**
+//   ① 도구에는 토론 축이 **없고**, 히어로의 '게시판 토론' 이 진짜로 게시판으로 데려간다
 //      (예전 코드는 'nuri:open-tab' 을 쐈는데 그 이름을 듣는 리스너가 앱에 없어 버튼이 죽어 있었다)
 //   ② 게시글 상세에 스팟 카드가 선다
 //   ③ 가려진 스팟은 **상대 카드가 화면 어디에도 없다** — 투표가 먼저인 이유가 성립한다
@@ -87,24 +87,16 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     await stabilizeBackstack(page);
   });
 
-  test('🔴 도구의 스팟 토론 축이 실제로 게시판으로 데려간다', async ({ page }) => {
+  test('🔴 도구에 토론 축이 없고, 게시판 토론 링크가 실제로 게시판으로 데려간다', async ({ page }) => {
     await installBoard(page);
     await page.goto('/?tab=tools');
     await dismissOverlays(page);
     await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 분석' }).click();
     const dlg = page.getByRole('dialog').first();
     await expect(dlg).toBeVisible({ timeout: 20_000 });
-    await dlg.getByRole('tab', { name: '스팟 토론', exact: true }).click();
-
-    // 도구 안에 피드를 만들지 않았다는 것 — 여기서 글 목록이 돌면 안 된다
-    await expect(dlg.getByText(/게시판.*핸드 분석|핸드 분석.*모입니다/).first(),
-      '토론이 게시판으로 간다는 안내가 없다').toBeVisible();
-
-    // 게시판 글을 늘리는 것이 목적이므로 **올리는 문**이 먼저 있어야 한다
-    await expect(dlg.getByRole('button', { name: '스팟 분석하고 올리기' }),
-      '게시판에 올리러 가는 문이 없다').toBeVisible();
-
-    await dlg.getByRole('button', { name: '게시판에서 스팟 글 보기' }).click();
+    // 토론 축은 아예 없다 — 대화는 전부 커뮤니티에서 한다(오너 지시).
+    await expect(dlg.getByRole('tab', { name: '스팟 토론', exact: true })).toHaveCount(0);
+    await dlg.getByRole('button', { name: /게시판 토론/ }).click();
     // 실제로 커뮤니티 탭이 서야 한다(예전엔 리스너가 없어 아무 일도 안 났다)
     await expect(page.locator('main[data-tab="community"]'), '게시판으로 가지 않았다')
       .toBeVisible({ timeout: 15_000 });
@@ -149,5 +141,38 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     const dlg = await openPost(page);
     await expect(dlg.getByText('이 자리에서 어떻게 하시겠어요?').first()).toBeVisible();
     await expect(dlg.locator('[data-spot-post]'), '스팟이 없는 글에 카드가 섰다').toHaveCount(0);
+  });
+  test('🔴 스팟을 공유하면 게시판으로 넘어가 방금 올린 글이 열린다', async ({ page }) => {
+    await installBoard(page);
+    // 공유 RPC 는 **가로채서** 새 글 id 만 돌려준다 — 운영 DB 에 쓰지 않는다.
+    let shared = 0;
+    await page.route(/\/rest\/v1\/rpc\/share_spot_post/, (r: Route) => {
+      shared += 1;
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(POST_ID) });
+    });
+    await page.goto('/?tab=tools');
+    await dismissOverlays(page);
+    await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 분석' }).click();
+    const dlg = page.getByRole('dialog').first();
+    await expect(dlg).toBeVisible({ timeout: 20_000 });
+    // 공유가 열리려면 막는 검증이 없어야 한다 — 카드 2장 + 액션(크기까지)
+    await dlg.locator('button[data-card="As"]').click();
+    await dlg.locator('button[data-card="Ks"]').click();
+    await dlg.getByRole('group', { name: '입력 단계' }).getByRole('button', { name: /내 선택/ }).click();
+    await dlg.getByRole('button', { name: '레이즈', exact: true }).first().click();
+    await dlg.getByRole('spinbutton').first().fill('3');
+    await page.waitForTimeout(600);
+
+    const shareBtn = dlg.getByRole('button', { name: '스팟 토론에 공유' });
+    await expect(shareBtn, '공유 버튼이 막혀 있다').toBeEnabled({ timeout: 10_000 });
+    await shareBtn.click();
+
+    expect(shared, '공유 RPC 가 호출되지 않았다').toBeGreaterThan(0);
+    // ① 게시판으로 넘어간다
+    await expect(page.locator('main[data-tab="community"]'), '공유 뒤 게시판으로 안 간다')
+      .toBeVisible({ timeout: 15_000 });
+    // ② 방금 올린 글이 열린다 — 토스트만 띄우고 끝나면 자기 글을 못 본다
+    await expect(page.locator('[data-spot-post]'), '방금 올린 글이 열리지 않는다')
+      .toBeVisible({ timeout: 20_000 });
   });
 });
