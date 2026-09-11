@@ -46,7 +46,8 @@ export default function DealerCommunity() {
 
   useEffect(() => {
     getNotices()
-      .then((all) => setNotices(all.filter((n) => n.board === 'dealer')))
+      // '전체(all)' 공지는 게시판·장터엔 나오는데 딜러에만 안 나왔다 — App 의 communityNotices·marketNotices 와 같은 식으로 맞춘다.
+      .then((all) => setNotices(all.filter((n) => !n.board || n.board === 'all' || n.board === 'dealer')))
       .catch(() => {});
   }, []);
 

@@ -1239,12 +1239,6 @@ export async function getMyVenue(): Promise<Venue | null> {
   const { data } = await supabase.from('venues').select('*').eq('owner_id', user.id).limit(1).maybeSingle();
   return data ? rowToVenue(data) : null;
 }
-// 업주: 본인 매장 인증 신청 (unverified -> pending)
-export async function requestVenueVerification(venueId: string): Promise<void> {
-  if (IS_MOCK) return;
-  const { error } = await supabase.from('venues').update({ verification_status: 'pending' }).eq('id', venueId);
-  if (error) throw error;
-}
 // 관리자: 인증 상태 변경
 export async function setVenueVerification(venueId: string, status: VenueVerificationStatus): Promise<void> {
   if (IS_MOCK) return;
@@ -1323,6 +1317,10 @@ export async function getUserActivity(userId: string, limit = 20): Promise<UserA
     supabase.from('comments').select('id, content, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(limit),
     supabase.from('marketplace_listings').select('id, title, created_at').eq('seller_id', userId).order('created_at', { ascending: false }).limit(limit),
   ]);
+  // ⚠ 조회 실패를 '활동 없음' 으로 위장하지 않는다 — PostgREST 는 RLS 거부·5xx·네트워크 오류를
+  //   전부 { data: null, error } 로 돌려준다. 던져야 호출부(UserManagementTab.toggleActivity)의 catch 가 산다.
+  const failed = [posts, comments, listings].find((r) => r.error);
+  if (failed?.error) throw failed.error;
   const items: UserActivityItem[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (posts.data ?? []).forEach((r: any) => items.push({ type: 'post', id: r.id, summary: r.title || r.content || '(내용 없음)', createdAt: r.created_at }));
@@ -1390,7 +1388,8 @@ export interface VenueOwner { userId: string; nickname: string; name: string; is
 export async function listVenueOwners(venueId: string): Promise<VenueOwner[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('list_venue_owners', { p_venue_id: venueId });
-  if (error) return [];
+  // 실패를 [] 로 돌려주면 '공동 사장 없음'으로 위장되고 대표 이전 버튼이 통째로 사라진다
+  if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ userId: r.user_id, nickname: r.nickname, name: r.name ?? '', isPrimary: !!r.is_primary, status: r.status ?? 'approved' }));
 }
@@ -1930,7 +1929,8 @@ export async function adminListGrants(userId: string, limit = 20): Promise<Point
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (error) return [];
+  // 실패를 '기록 없음' 으로 위장하지 않는다 — 호출부(PointsPanel.reload)의 catch 가 토스트를 띄운다.
+  if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
     id: Number(r.id), delta: Number(r.delta) || 0, reason: r.reason ?? '', createdAt: r.created_at,

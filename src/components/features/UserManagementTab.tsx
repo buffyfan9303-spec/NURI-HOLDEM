@@ -110,7 +110,7 @@ export default function UserManagementTab({
             type="search" enterKeyHint="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="이름·이메일로 검색"
+            placeholder="닉네임·이름·이메일로 검색"
             className="input"
           />
 
@@ -207,7 +207,9 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
     close();
   };
   const reject = () => {
-    onUpdate(user.id, { status: 'banned', approved: false });
+    // 사유를 안 실으면 sanction_reason 이 null 로 저장돼 목록 행의 '사유:' 줄이 사라지고,
+    // 회원이 받는 메일의 상세 사유는 폴백 '운영원칙 위반'(notify-sanction)으로 나간다.
+    onUpdate(user.id, { status: 'banned', approved: false, sanctionReason: '가입 심사 거절' });
     toast.show(`${user.name} 가입 거절`, 'error');
     close();
   };
@@ -217,7 +219,7 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
     if (v == null) return;
     const t = v.trim();
     if (t.length < 2) { toast.show('닉네임은 2자 이상이어야 합니다', 'error'); return; }
-    try { await adminSetNickname(user.id, t); toast.show('닉네임을 변경했습니다 (목록 새로고침 시 반영)', 'success'); close(); }
+    try { await adminSetNickname(user.id, t); onUpdate(user.id, { nickname: t }); toast.show('닉네임을 변경했습니다', 'success'); close(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
   };
   // 운영자: 섀도우밴 토글 — 오류 없이 콘텐츠는 그대로, 활동 랭킹에서만 조용히 제외/복귀.
@@ -646,8 +648,8 @@ function ActionBtn({
 // ── 게시글 관리 ────────────────────────────────────────────────────────────
 
 function PostModeration({
-  posts, onDelete,
-}: { posts: ModPost[]; onDelete: (id: string) => void }) {
+  posts, onDelete, postsErr,
+}: { posts: ModPost[]; onDelete: (id: string) => void; postsErr?: unknown }) {
   const toast = useToast();
   // 게시판(카테고리)별 필터 — 게시판별로 골라 삭제 가능
   const [cat, setCat] = useState<'all' | PostCategory>('all');
@@ -677,7 +679,11 @@ function PostModeration({
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {/* 조회 실패를 '0건' 으로 위장하지 않는다 — 회원 목록과 같은 배선(2026-09-11) */}
+      {postsErr != null ? (
+        <LoadErrorCard error={postsErr} what="게시글 목록" compact
+          hint="관리할 글이 없는 것과는 다릅니다 — 목록을 못 읽었습니다." />
+      ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-xs text-ink-muted">관리할 게시글이 없습니다</p>
       ) : (
         <ul className="space-y-1.5">

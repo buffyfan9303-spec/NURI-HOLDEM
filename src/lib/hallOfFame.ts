@@ -55,13 +55,15 @@ export interface HallOfFameRow {
 export async function getHallOfFame(): Promise<HallBoard> {
   const target = lastMonthPeriod();
   if (IS_MOCK) return { label: periodLabel(target), rows: [], source: 'auto' };
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('hall_of_fame')
     .select('id, period, rank, nickname, note, pts, wins')
     .lte('period', target)
     .order('period', { ascending: false })
     .order('rank', { ascending: true })
     .limit(9);
+  // 실패를 '수동 등록 없음'으로 뭉개면 운영자가 등록한 전당이 조용히 자동 집계로 바뀐다.
+  if (error) throw new Error(error.message);
   const rows = (data ?? []) as HallOfFameRow[];
   if (rows.length > 0) {
     const newest = rows[0].period;

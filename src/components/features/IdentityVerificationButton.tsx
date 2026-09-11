@@ -5,7 +5,7 @@ import PortOne from '@portone/browser-sdk/v2';
 import { verifyIdentity } from '../../api/identity';
 import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useToast } from '../atoms/Toast';
-import { identityEnabled, useIdentityEnabled } from '../../lib/identityFlag';
+import { useIdentityEnabled } from '../../lib/identityFlag';
 
 const STORE_ID = import.meta.env.VITE_PORTONE_STORE_ID as string | undefined;
 const CHANNEL_KEY = import.meta.env.VITE_PORTONE_CHANNEL_KEY as string | undefined;
@@ -58,8 +58,7 @@ consumeIdentityReturn();
  *   (스냅샷을 지역 상수로 뽑는 이유: export 초기화식에 함수 호출이 들어가면
  *    react-refresh/only-export-components 의 상수-export 예외에서 빠져 린트가 막는다.)
  */
-const IDENTITY_ON_AT_LOAD = identityEnabled();
-export const PORTONE_CONFIGURED = !!(STORE_ID && CHANNEL_KEY && IDENTITY_ON_AT_LOAD);
+export const PORTONE_CONFIGURED = !!(STORE_ID && CHANNEL_KEY);
 
 export default function IdentityVerificationButton({ onVerified, label = '휴대폰 본인인증', className }: {
   onVerified?: (name: string | null) => void;

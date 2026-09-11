@@ -58,6 +58,15 @@ function ensureStarted(): void {
   if (started || typeof window === 'undefined') return;
   started = true;
   refreshIdentityFlag().catch(() => {});
+  // 같은 기기의 다른 창 — 미러가 localStorage 라 storage 이벤트가 공짜로 온다(자기 탭에는 안 온다).
+  window.addEventListener('storage', (e) => {
+    if (e.key && e.key !== LS_KEY) return;
+    try { commit(localStorage.getItem(LS_KEY) === 'on'); } catch { /* 차단된 저장소 */ }
+  });
+  // 다른 기기 — 복귀할 때 서버를 다시 읽는다. 킬스위치는 초 단위일 필요가 없어 폴링을 두지 않는다.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void refreshIdentityFlag();
+  });
 }
 
 /**

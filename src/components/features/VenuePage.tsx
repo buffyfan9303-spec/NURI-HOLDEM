@@ -348,6 +348,12 @@ export default function VenuePage({
                   프리미엄
                 </span>
               )}
+              {venue.verificationStatus === 'verified' && (
+                <span className="inline-flex items-center gap-0.5 px-2 py-[3px] leading-none text-2xs font-bold rounded-badge border border-accent-400/50 bg-accent-300/15 text-accent-300">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
+                  인증
+                </span>
+              )}
             </div>
             <h2 className="text-xl font-bold text-ink-primary">{venue.name}</h2>
             {/* 주소·영업시간은 '갈까 말까'의 1차 판단 재료다 — muted(보조 톤)에서 secondary 로 올리고,

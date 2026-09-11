@@ -139,6 +139,12 @@ export async function adminDecideRankVerification(
   approve: boolean,
   opts?: { note?: string },
 ): Promise<void> {
+  // 순서가 중요하다 — 경로를 먼저 지우면 삭제 실패 시 이미지가 버킷에 남는데 찾아 지울 단서가 없다.
+  // storage.remove() 는 실패를 throw 하지 않고 { error } 로 돌려준다(예전 .catch(() => {}) 는 아무것도 잡지 못했다).
+  if (v.idCardPath) {
+    const { error: rmErr } = await supabase.storage.from('verifications').remove([v.idCardPath]);
+    if (rmErr) throw new Error('신분증 삭제에 실패했습니다(심사를 중단합니다): ' + rmErr.message);
+  }
   const { error } = await supabase.from('rank_verifications').update({
     status: approve ? 'approved' : 'rejected',
     admin_note: opts?.note ?? null,
@@ -147,7 +153,6 @@ export async function adminDecideRankVerification(
     id_card_path: null,
   }).eq('id', v.id);
   if (error) throw new Error(error.message);
-  if (v.idCardPath) await supabase.storage.from('verifications').remove([v.idCardPath]).catch(() => {});
 }
 
 // (2026-09-11) 증빙 이미지 AI 진위 검사 제거 — 증빙 사진을 외부 모델로 보내던 경로였다.

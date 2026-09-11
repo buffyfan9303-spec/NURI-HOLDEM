@@ -389,11 +389,13 @@ export async function updateUserStatus(
 ): Promise<void> {
   if (IS_MOCK) return;
 
+  // ⚠ .select().single() 로 받는다 — RLS 거부·대상 없음을 PostgREST 는 error 없이 **0행 200** 으로
+  //   돌려준다. 그러면 '영구 정지' 토스트만 남고 서버는 그대로이고, 실패 토스트조차 안 뜬다.
   const { error } = await supabase.from('profiles').update({
     status,
     suspended_until: suspendedUntil ?? null,
     sanction_reason: reason ?? null,
-  }).eq('id', userId);
+  }).eq('id', userId).select('id').single();
   if (error) throw error;
 
   // 제재(정지/영구정지/강제탈퇴) 시 사유 포함 공지 메일 자동 발송.

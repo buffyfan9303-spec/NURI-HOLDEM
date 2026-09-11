@@ -1581,7 +1581,8 @@ export default function App() {
       }, 900);
     } else ptrSettle(-52, '0');
   };
-  const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); setVenuesLoaded(true); }).catch(() => {}); }, []);
+  // 실패를 삼키면 '등록된 홀덤펍이 없습니다'·'결과가 없습니다'(빈 상태)로 위장된다 — 최소한 실패했다고 말한다
+  const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); setVenuesLoaded(true); }).catch(() => toast.show('매장 목록을 불러오지 못했습니다', 'error')); }, [toast]);
   // 조회 실패를 [] 로 두면 게시판이 '첫 게시글을 남겨보세요'(빈 상태)로 위장한다 — 실패는 상태로 올린다.
   //  직전에 성공한 목록은 지우지 않는다(오프라인에서 읽던 글이 사라지지 않게).
   const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); setPostsErr(null); writeSnap('posts', v); }).catch((e) => setPostsErr(e)); }, []);
@@ -1784,6 +1785,11 @@ export default function App() {
     // 알림은 탭과 무관하게 항상 — 뱃지 숫자가 틀리면 바로 눈에 띈다(가볍기도 하다)
     if (user) getMyNotifications().then(setNotifications).catch(() => {});
     switch (activeTab) {
+      case 'home':
+        // 홈 배너 — 홈 탭은 언마운트되지 않아(display 토글) 재조회가 없으면 부팅 때 받은 목록을
+        // 계속 쓴다. 게재창(starts_at·ends_at)도 그 시점의 KST 판정에 묶인다.
+        reloadHomeBanners();
+        break;
       case 'browse':
       case 'live':
       case 'my-store':
@@ -1791,7 +1797,11 @@ export default function App() {
         reloadSchedules(); reloadVenues(); reloadNotices();
         break;
       case 'community':
-        reloadPosts(); reloadComments();
+        // 공지는 게시판·장터 화면 맨 위에 걸리는데 이 분기에만 빠져 있었다 —
+        // 공지는 실시간 구독이 없어서(marketplace_notices), 운영자가 내린 공지가 여기 머무는 사용자에겐 계속 떠 있었다.
+        reloadPosts(); reloadComments(); reloadNotices();
+        // 광고 슬롯·빈도 — CommunityTab 이 이미 이 이벤트를 듣는다(AdSlotsAdmin 과 같은 배선 재사용).
+        window.dispatchEvent(new CustomEvent('nuri:ads-changed'));
         // 장터는 커뮤니티 서브탭 — 복귀 갱신도 함께(은퇴한 market 탭의 케이스 흡수)
         getListings().then((l) => { setListings(l); setMarketError(null); setMarketLoaded(true); writeSnap('listings', l); })
           .catch((e) => { setMarketError(e); setMarketLoaded(true); });
@@ -3337,6 +3347,8 @@ export default function App() {
             onReloadNotices={reloadNotices}
             onReloadBanners={reloadHomeBanners}
             usersErr={usersErr}
+            postsErr={postsErr}
+            onRetryPosts={reloadPosts}
             onRetryUsers={loadUsers}
           />
           </ErrorBoundary>

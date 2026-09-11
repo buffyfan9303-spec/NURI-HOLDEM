@@ -50,6 +50,16 @@ export async function getReports(scope: 'open' | 'all' = 'open'): Promise<Report
 
 export async function updateReportStatus(id: string, status: 'resolved' | 'dismissed'): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('reports').update({ status }).eq('id', id);
+  // PostgREST 는 RLS 가 막은 UPDATE 를 오류가 아니라 0행으로 돌려준다 — 반환 행으로 도달을 확인한다.
+  const { data, error } = await supabase.from('reports').update({ status }).eq('id', id)
+    .select('target_type, target_id');
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error('처리 권한이 없거나 이미 처리된 신고입니다');
+  // 서로 다른 신고자 3명이면 trg_auto_blind_reported_post 가 글을 이미 숨겼다(baseline auto_blind_reported_post).
+  // '기각'은 그 자동 블라인드까지 되돌려야 한다 — 안 그러면 무고 신고로 숨은 글이 영구히 숨은 채 남는다.
+  const t = data[0] as { target_type: string; target_id: string | null };
+  if (status === 'dismissed' && t.target_type === 'post' && t.target_id) {
+    const { error: unblind } = await supabase.rpc('admin_set_post_blinded', { p_post_id: t.target_id, p_blinded: false });
+    if (unblind) throw new Error('신고는 기각했지만 자동 블라인드 해제에 실패했습니다: ' + unblind.message);
+  }
 }

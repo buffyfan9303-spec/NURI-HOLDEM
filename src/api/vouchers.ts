@@ -135,7 +135,8 @@ export async function issueVoucher(venueId: string, input: { title: string; coun
 // 발급 승인(운영자) 여부 / 토글
 export async function isVoucherIssueApproved(venueId: string): Promise<boolean> {
   if (IS_MOCK) return false;
-  const { data } = await supabase.rpc('voucher_issue_approved', { p_venue_id: venueId });
+  const { data, error } = await supabase.rpc('voucher_issue_approved', { p_venue_id: venueId });
+  if (error) throw new Error(error.message); // 실패를 false 로 뭉개면 '승인된 매장'이 '미승인(✗)'으로 보인다
   return data === true;
 }
 export async function setVoucherIssueApproval(venueId: string, approved: boolean): Promise<void> {

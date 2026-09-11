@@ -278,7 +278,11 @@ function CommunityTab({
         if (av !== bv) return bv - av;
         // 2순위: isPaidAd (true가 먼저)
         if (a.venue.isPaidAd !== b.venue.isPaidAd) return a.venue.isPaidAd ? -1 : 1;
-        // 3순위: followerCount 내림차순
+        // 3순위: 관리자가 드래그로 정한 노출 순서(display_order) — 이걸 안 보면 관리자 드래그가 죽은 컨트롤이 된다
+        const ao = a.venue.displayOrder ?? Number.MAX_SAFE_INTEGER;
+        const bo = b.venue.displayOrder ?? Number.MAX_SAFE_INTEGER;
+        if (ao !== bo) return ao - bo;
+        // 4순위: followerCount 내림차순
         return (b.venue.followerCount ?? 0) - (a.venue.followerCount ?? 0);
       });
   }, [venues, comments, query]);

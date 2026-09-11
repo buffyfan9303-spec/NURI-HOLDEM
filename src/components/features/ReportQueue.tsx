@@ -1,6 +1,7 @@
 // src/components/features/ReportQueue.tsx — 관리자 신고 처리 큐
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useToast } from '../atoms/Toast';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { getReports, updateReportStatus } from '../../api/reports';
 import type { ReportEntry } from '../../api/reports';
 import { relativeTime } from '../../lib/relativeTime';
@@ -14,26 +15,29 @@ export default function ReportQueue() {
   const toast = useToast();
   const [reports, setReports] = useState<ReportEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<unknown>(null);
 
-  useEffect(() => {
-    let active = true;
+  // 실패를 토스트로만 알리면 몇 초 뒤 화면이 '신고 0건'으로 굳는다 — 다른 관리자 패널과 같이
+  // LoadErrorCard 로 '없음'과 '못 불러옴'을 가르고 재시도 수단을 남긴다.
+  const load = useCallback(() => {
+    setLoading(true);
     getReports('open')
-      .then((r) => { if (active) setReports(r); })
-      .catch(() => { if (active) toast.show('신고 목록을 불러오지 못했습니다', 'error'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .then((r) => { setErr(null); setReports(r); })
+      .catch((e) => setErr(e ?? new Error('신고 목록을 불러오지 못했습니다')))
+      .finally(() => setLoading(false));
   }, []);
+  useEffect(() => { load(); }, [load]);
 
   const act = async (id: string, status: 'resolved' | 'dismissed', label: string) => {
     try {
       await updateReportStatus(id, status);
       setReports((p) => p.filter((r) => r.id !== id));
       toast.show(`신고 ${label}`, 'info');
-    } catch { toast.show('처리에 실패했습니다', 'error'); }
+    } catch (e) { toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error'); }
   };
 
   if (loading) return <p className="py-8 text-center text-xs text-ink-muted">불러오는 중…</p>;
+  if (err != null) return <LoadErrorCard error={err} what="신고 목록" onRetry={load} />;
   if (reports.length === 0) return <p className="py-10 text-center text-xs text-ink-muted">접수된 신고가 없습니다</p>;
 
   return (

@@ -24,7 +24,7 @@ import QRCode from 'qrcode';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState, type ClockLevel } from '../../../api/clock';
 import { clockPhase, CLOCK_PHASE_TV } from '../../../lib/clockLevel';
 import { buyinRequestUrl } from '../../../api/ledger';
-import { getAppSetting, CLOCK_AD_KEY } from '../../../api/settings';
+import { getAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '../../../api/settings';
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, type ClockTheme } from './clockTheme';
@@ -111,6 +111,9 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   const [auto, setAuto] = useState(() => { try { return new URLSearchParams(window.location.search).get('auto') !== '0'; } catch { return true; } });
   const [qr, setQr] = useState<string | null>(null); // 참가(바인요청) QR
   const [sponsor, setSponsor] = useState<string | null>(null); // 스폰서 배너(app_settings 광고)
+  // 광고 **크기**도 전역 설정이다. 종전엔 이 화면이 크기를 아예 안 읽어, 관리자가 '크게' 로 바꿔도
+  //   TV 는 늘 같은 크기로 띄웠다 — 컨트롤은 있는데 닿는 곳이 없는 죽은 설정이었다(2026-09-11 점검).
+  const [adSize, setAdSize] = useState<'sm' | 'md' | 'lg'>('sm');   // 기본값 = 종전 하드코딩 크기
   const rootRef = useRef<HTMLDivElement>(null);
   const gamesRef = useRef<ClockState[]>([]);
 
@@ -129,7 +132,12 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   // 스폰서 배너 — 운영자가 광고를 등록·교체·삭제하면 이 창을 다시 열지 않아도 반영된다.
   //   예전엔 `[]` 로 마운트 1회만 읽어, 별도 창으로 띄운 TV 는 광고를 바꿔도 옛 이미지를 계속 걸고 있었다.
   useEffect(() => {
-    const load = () => { getAppSetting(CLOCK_AD_KEY).then(setSponsor).catch(() => { /* 직전 값 유지 */ }); };
+    const load = () => {
+      getAppSetting(CLOCK_AD_KEY).then(setSponsor).catch(() => { /* 직전 값 유지 */ });
+      getAppSetting(CLOCK_AD_SIZE_KEY)
+        .then((v) => { if (v === 'sm' || v === 'md' || v === 'lg') setAdSize(v); })
+        .catch(() => { /* 직전 값 유지 */ });
+    };
     load();
     const off = subscribeClockAd(load);
     // ⚠ subscribeClockAd 는 **같은 탭 CustomEvent 만** 받는다. 형제인 subscribeClockTheme 은
@@ -374,7 +382,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
             {/* 하단 중앙 — 칩 경제 3종. QR(좌)·스폰서(우) 사이의 빈 폭을 실제 정보로 채운다. */}
             <BottomMetrics g={g} curBB={curBB} />
             <div className="flex shrink-0 items-center gap-[2vmin]">
-              {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain opacity-80" style={{ maxHeight: '5.5vmin' }} />}
+              {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain opacity-80" style={{ maxHeight: adSize === 'lg' ? '9vmin' : adSize === 'md' ? '7.2vmin' : '5.5vmin' }} />}
               {/* 세로 화면에서는 접는다 — 장식이 총 칩·평균 스택의 폭을 뺏으면 숫자가 줄바꿈된다 */}
               <p className="hidden shrink-0 text-[1.2vmin] font-extrabold uppercase tracking-[0.18em] landscape:block" style={DIM}>
                 Powered by <span style={{ color: 'var(--clk-accent, #818CF8)' }}>NURI HOLDEM</span>

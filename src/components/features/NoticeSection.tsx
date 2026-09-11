@@ -124,7 +124,10 @@ export default function NoticeSection({
   const PRIORITY: Record<NoticeType, number> = { caution: 0, event: 1, pinned: 2 };
   const ranked = useMemo(
     () => [...notices].sort((a, b) =>
-      (PRIORITY[a.type] - PRIORITY[b.type]) || (b.createdAt < a.createdAt ? -1 : b.createdAt > a.createdAt ? 1 : 0)),
+      // 관리자 ▲▼(sort_order)가 1차 키. 이게 없으면 운영자가 정한 순서를 유형 우선순위가 덮어써서
+      // 관리자 화면과 손님 화면이 서로 다른 순서를 보여준다(접힘 상태에선 보이는 1건 자체가 달라진다).
+      ((b.sortOrder ?? 0) - (a.sortOrder ?? 0))
+      || (PRIORITY[a.type] - PRIORITY[b.type]) || (b.createdAt < a.createdAt ? -1 : b.createdAt > a.createdAt ? 1 : 0)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [notices],
   );

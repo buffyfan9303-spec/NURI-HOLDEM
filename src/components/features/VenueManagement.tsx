@@ -222,7 +222,8 @@ function RowContent({ venue: v, order, handlers, dragHandle }: {
         {v.isPaidAd && <span className="inline-flex items-center gap-0.5 text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300 text-white font-bold"><Icon name="star-fill" size={10} className="shrink-0" />프리미엄</span>}
         {v.verificationStatus === 'verified' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40 font-bold">인증</span>}
         {v.verificationStatus === 'pending' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">인증 심사중</span>}
-        {!v.approved && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">미승인</span>}
+        {(v.kind ?? 'venue') !== 'venue' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-surface-high text-ink-secondary border border-border-default font-semibold">그룹</span>}
+        {!v.approved && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">미승인 · 승인은 매장 섹션</span>}
         <span className="text-2xs text-ink-muted ml-auto truncate">{v.region}</span>
       </div>
       <div className="flex flex-wrap gap-1">

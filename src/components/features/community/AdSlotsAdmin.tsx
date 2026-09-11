@@ -16,6 +16,7 @@ import Modal from '../../atoms/Modal';
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { useToast } from '../../atoms/Toast';
 import { relativeTime } from '../../../lib/relativeTime';
+import { kstToday } from '../../../lib/kst';
 import { getAdSlots, saveAdSlot, swapAdSlots, type AdSlot } from '../../../api/ads';
 import { getAppSetting, setAppSetting, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../../api/settings';
 import type { CommunityPost } from '../../../api/community';
@@ -81,8 +82,11 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
   // 게시판 광고 빈도(글 N개마다 1칸) — app_settings community_ads_every
   const [every, setEvery] = useState(COMMUNITY_ADS_EVERY_DEFAULT);
   const [savingEvery, setSavingEvery] = useState(false);
-  useEffect(() => { getAppSetting(COMMUNITY_ADS_EVERY_KEY).then((v) => setEvery(parseAdsEvery(v))).catch(() => {}); }, []);
+  // 못 읽은 값 위에 저장하면 서버에 있던 6이 화면 기본값 4로 덮인다 — AdminTab 의 BoostContactCard 와 같은 가드.
+  const [everyLoaded, setEveryLoaded] = useState(false);
+  useEffect(() => { getAppSetting(COMMUNITY_ADS_EVERY_KEY).then((v) => { setEvery(parseAdsEvery(v)); setEveryLoaded(true); }).catch(() => {}); }, []);
   const saveEvery = async () => {
+    if (!everyLoaded) { toast.show('현재 빈도 설정을 읽지 못했습니다 — 새로고침 뒤 다시 시도해 주세요', 'error'); return; }
     const n = parseAdsEvery(String(every));
     setEvery(n); setSavingEvery(true);
     try {
@@ -94,7 +98,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
   };
 
   // 상태 배지 — 손님 화면의 노출 조건(community_ads_public RPC)과 **같은 판정**이어야 한다.
-  const today = new Date().toLocaleDateString('en-CA');
+  const today = kstToday();   // 서버 RPC 가 (now() at time zone 'Asia/Seoul')::date 로 판정한다 — 기준을 하나로
   const statusOf = (s: AdSlot): { label: string; tone: 'on' | 'warn' | 'off' } => {
     if (!s.postId) {
       // 옛 문구형 광고 — 내용은 보존돼 있지만 새 방식에서는 노출 경로가 없다.
@@ -136,7 +140,10 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
         </span>
       </div>
 
-      {loadErr != null ? <LoadErrorCard error={loadErr} what="광고 슬롯" onRetry={reload} compact /> : (
+      {loadErr != null ? <LoadErrorCard error={loadErr} what="광고 슬롯" onRetry={reload} compact /> : slots.length === 0 ? (
+        /* 아직 응답 전(또는 슬롯 행 0건) — 빈 <ul> 로 두면 카드가 통째로 비어 '광고 칸이 없다'로 읽힌다 */
+        <ul className="space-y-1.5" aria-busy="true">{[1, 2, 3, 4, 5].map((i) => <li key={i} className="skeleton h-11 rounded-input" />)}</ul>
+      ) : (
         <ul className="space-y-1.5">
           {slots.map((s, i) => {
             const st = statusOf(s);

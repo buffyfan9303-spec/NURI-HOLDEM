@@ -88,7 +88,11 @@ export async function saveAdSlot(s: AdSlot): Promise<void> {
 /**
  * 두 슬롯의 **내용을 맞바꾼다**(자리 1~5 는 고정, 안에 든 광고만 위/아래로).
  *
- * ⚠ 한 번의 upsert 로 두 행을 함께 보낸다. 종전엔 Promise.all 로 두 요청을 따로 보내
+ * ⚠ 요청은 **둘**이다 — 유니크 인덱스 탓에 한쪽 슬롯을 먼저 비운 뒤에야 두 행을 upsert 할 수 있다.
+ *   둘째가 실패하면 첫 슬롯이 '해제·꺼짐'으로 남아 그 광고는 손님 화면에서 내려간다(관리 화면은
+ *   move() 의 reload 로 그 상태를 드러낸다). 원자성은 클라이언트로 만들 수 없다 —
+ *   swap_community_ad_slots RPC 한 트랜잭션으로 옮겨야 한다(nuri-migration).
+ *   종전엔 Promise.all 로 두 요청을 따로 보내
  *   한쪽만 성공하면 같은 글이 두 슬롯에 남았다(그리고 UI 는 옛 순서를 계속 보여줬다).
  *   부분 유니크 인덱스(community_ads_active_post_uidx)가 그 상태를 이제 DB 에서도 거부한다.
  */

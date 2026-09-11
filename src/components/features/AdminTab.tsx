@@ -65,6 +65,9 @@ interface AdminTabProps {
   onReloadBanners?: () => void;
   /** 회원 목록 조회 실패 + 재시도 — '회원 0명' 위장을 막는다(2026-09-11). */
   usersErr?: unknown;
+  /** 글 목록 조회 실패 — 관리자 게시물 목록이 빈 상태로 위장하지 않게 App 이 내려 준다 */
+  postsErr?: unknown;
+  onRetryPosts?: () => void;
   onRetryUsers?: () => void;
 }
 
@@ -247,7 +250,9 @@ function RankVerifyAdminCard() {
   const decide = async (v: RankVerification, ok: boolean) => {
     setBusy(v.id);
     try {
-      await adminDecideRankVerification(v, ok);
+      // 반려는 사유 없이는 재신청만 부른다 — 신청자 화면(TierLeaderboard 내 인증 이력)에 그대로 보인다.
+      const note = ok ? undefined : (window.prompt('반려 사유 (신청자에게 그대로 보입니다)')?.trim() || undefined);
+      await adminDecideRankVerification(v, ok, { note });
       toast.show(ok ? '대회로 승인. 국내 순위에 합산됩니다' : '반려했습니다', 'success');
       reload();
     }
@@ -325,7 +330,8 @@ function MissionsAdminCard() {
   const [goal, setGoal] = useState(3);
   const [reward, setReward] = useState(30);
   const [editRow, setEditRow] = useState<CustomMissionRow | null>(null);
-  const reload = useCallback(() => { adminListCustomMissions().then(setRows).catch(() => {}); }, []);
+  // 조회 실패를 삼키면 '아직 안 만든 미션'과 구별되지 않아 같은 미션이 두 번 등록된다(custom_missions 에 title 유니크 없음).
+  const reload = useCallback(() => { adminListCustomMissions().then(setRows).catch((e) => toast.show(e instanceof Error ? `미션 목록을 불러오지 못했습니다: ${e.message}` : '미션 목록을 불러오지 못했습니다', 'error')); }, [toast]);
   useEffect(() => { reload(); }, [reload]);
 
   const resetForm = () => { setEditRow(null); setTitle(''); setGoalType('checkin'); setGoal(3); setReward(30); };
@@ -338,7 +344,8 @@ function MissionsAdminCard() {
       await adminSaveCustomMission(editRow
         ? { ...editRow, title, goal_type: goalType, goal, reward }
         : { title, goal_type: goalType, goal, reward });
-      toast.show(editRow ? '미션을 수정했습니다. 랭킹 보드에 바로 반영됩니다' : '미션을 추가했습니다. 랭킹 > 미션 보드에 바로 노출됩니다', 'success');
+      // 소비자(TierLeaderboard)는 보드 첫 진입 1회만 조회한다 — CustomEvent 를 쏴도 다른 기기에는 안 닿으므로 문구를 사실대로 둔다.
+      toast.show(editRow ? '미션을 수정했습니다. 이용자 화면은 다음 접속부터 반영됩니다' : '미션을 추가했습니다. 이용자 화면은 다음 접속부터 반영됩니다', 'success');
       resetForm(); reload();
     } catch (e) {
       toast.show(e instanceof Error ? e.message : (editRow ? '수정 실패' : '추가 실패'), 'error');
@@ -685,7 +692,12 @@ function ShoutsAdminCard() {
 }
 
 // ── 게시물 노출(운영자) — 최근 글 고정/블라인드. posts 는 App 의 최신 50건(+끌올·고정) ─────
-function PostsAdminPanel({ posts }: { posts: CommunityPost[] }) {
+function PostsAdminPanel({ posts, postsErr, onRetryPosts }: {
+  posts: CommunityPost[];
+  /** 글 목록 조회 실패 — 빈 목록과 구별해야 '해당 글이 없습니다' 가 거짓말이 되지 않는다 */
+  postsErr?: unknown;
+  onRetryPosts?: () => void;
+}) {
   const toast = useToast();
   const [cat, setCat] = useState<PostCategory | 'all'>('all');
   // 낙관 반영 — App 은 realtime(subscribePosts)으로 곧 따라오지만, 그 사이 버튼이 거짓말하지 않게 로컬로 덮는다
@@ -724,7 +736,9 @@ function PostsAdminPanel({ posts }: { posts: CommunityPost[] }) {
           </button>
         ))}
       </div>
-      {list.length === 0 ? (
+      {postsErr != null ? (
+        <LoadErrorCard error={postsErr} what="게시물 목록" onRetry={onRetryPosts} compact />
+      ) : list.length === 0 ? (
         <p className="py-3 text-center text-xs text-ink-muted">해당 글이 없습니다</p>
       ) : (
         <ul className="space-y-1">
@@ -1042,10 +1056,10 @@ const aic = (children: ReactNode) => (
 const ADMIN_DESC: Record<Section, string> = {
   analytics: '플랫폼 핵심 지표 · 회원·매장·대회·체크인·추천·푸시 한눈에',
   pending: '업주가 등록한 포스터 검수. 승인하면 일정 탐색에 노출됩니다',
-  reorder: '노출 순서 · 부스트 · 주간 미션 관리',
+  reorder: '포스터 노출 순서 · 부스트 연락처 · 공동 업주 승인 · 이용권 충전 요청 · 순위 인증 심사 · 주간 미션 · 명예의 전당',
   exposure: '커뮤니티 광고 노출·순서 · 외치기 대기열 · 게시물 고정·블라인드 · 공지 순서',
   switches: '재배포 없이 켜고 끄는 기능 스위치 · 전 매장 공통 설정',
-  users: '회원 검색 · 등급 · 제재 · 활동점수(구매 환불 · 지급)',
+  users: '회원 검색 · 제재 · 섀도우밴 · 아이디 변경 · 활동점수(구매 환불 · 지급)',
   venues: '매장 생성 · 인증 · 그룹 승인',
   reports: '신고 접수 처리',
   support: '고객센터 1:1 문의 답변',
@@ -1157,7 +1171,7 @@ function PlanUsageCard() {
 }
 
 export default function AdminTab({
-  schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues, onReloadNotices, onReloadBanners, usersErr, onRetryUsers,
+  schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues, onReloadNotices, onReloadBanners, usersErr, onRetryUsers, postsErr, onRetryPosts,
 }: AdminTabProps) {
   const [section, setSection] = useState<Section>('analytics');
   // 뒤로가기 — 비기본 섹션에선 먼저 기본(운영분석)으로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
@@ -1229,7 +1243,7 @@ export default function AdminTab({
               {exposureTarget === 'banners' && <HomeBannersCard onChanged={onReloadBanners} />}
               {exposureTarget === 'ads' && <AdSlotsAdmin posts={posts} />}
               {exposureTarget === 'shouts' && <ShoutsAdminCard />}
-              {exposureTarget === 'posts' && <PostsAdminPanel posts={posts} />}
+              {exposureTarget === 'posts' && <PostsAdminPanel posts={posts} postsErr={postsErr} onRetryPosts={onRetryPosts} />}
               {exposureTarget === 'notices' && <NoticesAdminPanel onChanged={onReloadNotices} />}
             </div>
           )}
@@ -1361,7 +1375,12 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
     try {
       await adminUpdateVenue({ venueId: venue.id, name, region, address, ownerId: ownerId || null });
       if (verif !== (venue.verificationStatus ?? 'unverified')) {
-        await setVenueVerification(venue.id, verif);
+        // 여기서 실패해도 위 수정은 이미 저장됐다 — 부분 성공을 '전부 실패'로 보고하지 않는다
+        try { await setVenueVerification(venue.id, verif); }
+        catch (e2) {
+          toast.show(`매장 정보는 저장했지만 인증 상태 변경에 실패했습니다: ${e2 instanceof Error ? e2.message : ''}`, 'error');
+          setOpen(false); onChanged(); return;
+        }
       }
       toast.show('매장 정보를 수정했습니다', 'success');
       setOpen(false);
@@ -1527,8 +1546,9 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    getVenueStaff(venueId).then(setStaff).catch(() => {}).finally(() => setLoading(false));
-  }, [venueId]);
+    // 실패를 삼키면 '등록된 직원이 없습니다'(빈 상태)로 위장돼 이미 있는 딜러를 다시 추가하게 만든다
+    getVenueStaff(venueId).then(setStaff).catch(() => toast.show('직원 목록을 불러오지 못했습니다', 'error')).finally(() => setLoading(false));
+  }, [venueId, toast]);
   useEffect(() => { load(); }, [load]);
 
   const add = async () => {

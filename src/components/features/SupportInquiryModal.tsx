@@ -16,7 +16,11 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
   const [content, setContent] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const load = () => getMyInquiries().then(setList).catch(() => setList([]));
+  const load = () => getMyInquiries().then(setList).catch((e) => {
+    // '문의 없음'과 '못 불러옴'은 다르다 — 조용히 빈 목록으로 두면 회원이 같은 문의를 다시 접수한다.
+    setList([]);
+    toast.show(e instanceof Error ? `문의 내역을 불러오지 못했습니다: ${e.message}` : '문의 내역을 불러오지 못했습니다', 'error');
+  });
   useEffect(() => { if (open) load(); }, [open]);
 
   const submit = async () => {

@@ -419,7 +419,10 @@ export default function TierLeaderboard() {
         isOverseas: vForm.overseas,
       });
       setVForm({ event: '', amount: '', overseas: false }); setVProof(null); setVIdCard(null);
-      setMyVerifs(null); myRankVerifications().then(setMyVerifs).catch(() => {});
+      // 실패를 삼키면 myVerifs 가 null 로 남아 렌더 게이트(myVerifs && length > 0)가 이력 블록을 통째로 지운다 —
+      // 방금 접수한 신청이 화면에서 사라져 회원이 신분증을 다시 올려 중복 신청한다.
+      setMyVerifs(null);
+      myRankVerifications().then(setMyVerifs).catch(() => { setMyVerifs([]); toast.show('신청 이력을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요', 'error'); });
       toast.show('인증 요청을 접수했어요. 운영자 확인 후 국내 순위에 합산됩니다', 'success');
     } catch (e) {
       // 실패 시 입력은 유지 — 던지는 쪽(rankverify·storage)이 한국어 메시지를 주므로 그대로 보여 준다
@@ -919,7 +922,7 @@ export default function TierLeaderboard() {
               {myVerifs && myVerifs.length > 0 && (
                 <ul className="space-y-1">
                   {myVerifs.map((v) => (
-                    <li key={v.id} className="flex items-center gap-2 rounded-input bg-surface-high px-3 py-2 text-2xs">
+                    <li key={v.id} className="flex flex-wrap items-center gap-2 rounded-input bg-surface-high px-3 py-2 text-2xs">
                       <span className={['shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
                         v.status === 'approved' ? 'bg-emerald-500/15 text-emerald-300' : v.status === 'rejected' ? 'bg-danger/15 text-danger-light' : 'bg-accent-300/15 text-accent-300'].join(' ')}>
                         {v.status === 'approved' ? '승인' : v.status === 'rejected' ? '반려' : '검토 중'}
@@ -929,6 +932,8 @@ export default function TierLeaderboard() {
                         <span className="ml-1 text-ink-muted">{EVENT_KIND_LABEL[v.eventKind]}{v.isOverseas ? '·해외' : ''}</span>
                       </span>
                       <span className="shrink-0 tabular-nums text-ink-primary">{(v.amountWon / 10000).toLocaleString()}만</span>
+                      {/* 반려 사유를 안 보여주면 신청자는 같은 증빙으로 신분증을 다시 올린다 */}
+                      {v.adminNote && <span className="w-full whitespace-pre-wrap text-2xs leading-relaxed text-danger-light">사유: {v.adminNote}</span>}
                     </li>
                   ))}
                 </ul>
@@ -1384,7 +1389,9 @@ export default function TierLeaderboard() {
                     {/* 운영자가 직접 등록한 행에는 한 줄 소개가 붙는다(#10) */}
                     {r.note
                       ? <p className="truncate text-2xs text-ink-secondary">{r.note}</p>
-                      : <p className="text-2xs text-ink-muted">{hall.label} 입상 점수 {r.pts}점{r.wins > 0 ? ` · 우승 ${r.wins}회` : ''}</p>}
+                      : r.pts > 0
+                        ? <p className="text-2xs text-ink-muted">{hall.label} 입상 점수 {r.pts}점{r.wins > 0 ? ` · 우승 ${r.wins}회` : ''}</p>
+                        : null}
                   </div>
                 </div>
               ))}

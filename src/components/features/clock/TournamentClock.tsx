@@ -30,7 +30,7 @@ import { rankingSaveTarget, finishEntriesFromRows } from '../../../lib/rankingGa
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
-import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, publishClockSignal, type ClockTheme } from './clockTheme';
+import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, publishClockSignal, type ClockTheme } from './clockTheme';
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import QRCode from 'qrcode';
@@ -336,8 +336,15 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   const [adSize, setAdSize] = useState<'sm' | 'md' | 'lg'>('sm'); // 운영자 조절(기본 작게)
   const [adBusy, setAdBusy] = useState(false);
   useEffect(() => {
-    getAppSetting(CLOCK_AD_KEY).then(setAdImg).catch(() => {});
-    getAppSetting(CLOCK_AD_SIZE_KEY).then((v) => { if (v === 'sm' || v === 'md' || v === 'lg') setAdSize(v); }).catch(() => {});
+    const loadAd = () => {
+      getAppSetting(CLOCK_AD_KEY).then(setAdImg).catch(() => {});
+      getAppSetting(CLOCK_AD_SIZE_KEY).then((v) => { if (v === 'sm' || v === 'md' || v === 'lg') setAdSize(v); }).catch(() => {});
+    };
+    loadAd();
+    // 같은 탭(관리자 → 기능 스위치)에서 바꾸면 즉시, 다른 창·기기는 30초 폴링 — ClockDisplay 와 같은 계약.
+    const off = subscribeClockAd(loadAd);
+    const t = setInterval(loadAd, 30_000);
+    return () => { off(); clearInterval(t); };
   }, []);
   const changeAdSize = async (s: 'sm' | 'md' | 'lg') => {
     const prev = adSize;

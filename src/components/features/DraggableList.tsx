@@ -20,7 +20,7 @@ import {
 import type { DraggableAttributes } from '@dnd-kit/core';
 import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { CSS } from '@dnd-kit/utilities';
-import { reorderSchedules, togglePremium, toggleCompetition, boostSchedule, type Schedule } from '../../api/schedules';
+import { reorderSchedules, togglePremium, toggleCompetition, boostSchedule, getSchedules, type Schedule } from '../../api/schedules';
 import Icon from '../atoms/Icon';
 
 // ── 상태 타입 ────────────────────────────────────────────────────────────────
@@ -306,7 +306,11 @@ export default function DraggableList({ initialItems }: DraggableListProps) {
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch {
-      setItems(previous);          // 롤백
+      // 행별 UPDATE 라 **일부만** 저장됐을 수 있다 — 로컬 스냅샷으로 되돌리면 화면이 DB 와 어긋난 채 굳는다.
+      // 서버를 다시 읽어 실제로 저장된 순서를 보여준다(못 읽으면 그때만 스냅샷으로).
+      getSchedules()
+        .then((all) => setItems(all.filter((s) => s.approved)))
+        .catch(() => setItems(previous));
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 3000);
     }
@@ -332,6 +336,7 @@ export default function DraggableList({ initialItems }: DraggableListProps) {
   // ── 부스트(N일 상단 고정 / 0 = 해제) ─────────────────────────────────────
   const handleBoost = useCallback(async (id: string, days: number) => {
     const until = days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
+    const before = items.find((i) => i.id === id); // 실패 시 되돌릴 '직전 값' — null 로 덮으면 살아 있던 부스트가 사라진다
     setItems((prev) =>
       prev.map((item) => item.id === id ? { ...item, premiumUntil: until, isPremium: item.isPremium || days > 0 } : item),
     );
@@ -339,10 +344,15 @@ export default function DraggableList({ initialItems }: DraggableListProps) {
       await boostSchedule(id, days);
     } catch {
       setItems((prev) =>
-        prev.map((item) => item.id === id ? { ...item, premiumUntil: null } : item),
+        prev.map((item) => item.id === id
+          ? { ...item, premiumUntil: before?.premiumUntil ?? null, isPremium: before?.isPremium ?? false }
+          : item),
       );
+      // 부스트는 유료 상품이다 — 조용히 되돌리면 '눌렀는데 안 된 것'을 아무도 모른다
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
     }
-  }, []);
+  }, [items]);
 
   // ── 대회 분류 토글 ───────────────────────────────────────────────────────
   const handleCompetitionToggle = useCallback(async (id: string, current: boolean) => {

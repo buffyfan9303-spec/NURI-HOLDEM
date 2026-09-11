@@ -73,6 +73,16 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
 
   const submit = async () => {
     if (!draft.imageUrl.trim()) { toast.show('배너 이미지를 올려 주세요', 'error'); return; }
+    // 스킴 없는 'www.example.com' 은 HomeTab 의 new URL(u, origin) 에서 **우리 오리진**으로 풀려
+    // location.assign('/www.example.com') 이 된다 — 손님은 광고주 사이트가 아니라 홈으로 튄다.
+    const link = draft.linkUrl.trim();
+    if (link && !/^(https?:\/\/|\/)/i.test(link)) {
+      toast.show('링크는 https:// 로 시작하거나, / 로 시작하는 앱 내부 경로여야 합니다', 'error'); return;
+    }
+    // 뒤집힌 게재창(종료 < 시작)은 저장은 되지만 영원히 안 뜬다 — 광고 슬롯은 DB check 제약으로 이미 막혀 있다.
+    if (draft.startsAt && draft.endsAt && draft.startsAt > draft.endsAt) {
+      toast.show('종료일이 시작일보다 빠릅니다', 'error'); return;
+    }
     setBusy('draft');
     try {
       await saveHomeBanner(draft);

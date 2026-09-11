@@ -46,7 +46,8 @@ export async function getMyInquiries(): Promise<SupportInquiry[]> {
   if (!me) return [];
   const { data, error } = await supabase.from('support_inquiries')
     .select('*').eq('user_id', me.id).order('created_at', { ascending: false });
-  if (error) return [];
+  // 실패를 빈 배열로 돌려주면 화면이 '접수한 문의가 없습니다'로 단언한다 — 운영자 답변이 통째로 사라져 보인다.
+  if (error) throw new Error(error.message);
   return (data ?? []).map(rowTo);
 }
 
