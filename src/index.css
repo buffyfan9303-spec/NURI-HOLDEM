@@ -1893,3 +1893,27 @@ nav[aria-label="하단 내비게이션"] > div:not([aria-hidden]) {
   background-origin: border-box;
   background-clip: padding-box, border-box;
 }
+
+/* ── 클락 스테이지(ClockStage) 레이아웃 전환 — 컨테이너 기준 ────────────────────
+   왜 미디어쿼리가 아니라 컨테이너쿼리인가: **같은 보드 한 벌**이 두 곳에서 산다.
+     (a) 매장 TV 전체화면(ClockDisplay — 뷰포트가 곧 스테이지)
+     (b) 운영자 화면 안의 16:9 미리보기·전체화면(TournamentClock — 박스가 스테이지)
+   뷰포트로 판정하면 둘이 어긋난다: 세로 태블릿에서는 가로 미리보기가 1열로 접히고,
+   세로 TV(1080×1920)에서는 폭 1080 만 보고 3열이 되어 vmin(=폭) 기준 타이머가
+   우측 지표를 뚫고 나갔다(2026-09-11 실측). 기준은 **스테이지 자신의 크기**여야 한다.
+   경계값 768px·landscape 는 종전 `md:landscape:` 와 같은 값이라 TV 렌더는 픽셀 동일.
+   전제: 스테이지 루트에 `container-type: size` 가 걸려 있다(두 호출처 모두 그렇다). */
+.clk-cols { display: grid; grid-template-columns: minmax(0, 1fr); }
+.clk-col { display: none; }        /* 좌/우 열 — 넓고 가로일 때만 */
+.clk-wide-land { display: none; }  /* 중앙 프레임 같은 장식 — 넓고 가로일 때만 */
+.clk-wide-only { display: none; }  /* 폭만 보는 것(총 진행 시간) */
+.clk-land-only { display: none; }  /* 가로만 보는 것(Powered by) */
+.clk-narrow-only { display: grid; }/* 1열로 접혔을 때만 나오는 보조 줄 */
+@container (min-width: 768px) { .clk-wide-only { display: block; } }
+@container (orientation: landscape) { .clk-land-only { display: block; } }
+@container (min-width: 768px) and (orientation: landscape) {
+  .clk-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 2.5fr) minmax(0, 1fr); }
+  .clk-col { display: flex; }
+  .clk-wide-land { display: block; }
+  .clk-narrow-only { display: none; }
+}

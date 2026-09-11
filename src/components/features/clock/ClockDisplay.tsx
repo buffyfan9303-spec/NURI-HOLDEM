@@ -279,16 +279,21 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
               ⚠ 레이아웃 안정 계약: 중앙 열만 hero(flex-1) + 블라인드(고정 높이) 구조를 갖는다.
                  좌우 열은 각자 세로 중앙 정렬이라 프라이즈 줄 수·지표 개수가 달라져도
                  타이머 y 를 밀지 않는다(clock-visual.spec 이 6개 상태에서 y 동일을 강제). */}
-          {/* 2026-09-11: 좌/중/우 3열 조건을 `md:`(폭) → `md:landscape:`(넓고 **가로**)로 바꿨다.
-              세로 TV(1080×1920) 는 폭이 1080 이라 md 를 넘겨 3열이 됐는데, 글자 크기는 vmin(= 짧은 변 = 폭 1080)
-              기준이라 중앙 열(2.5/4.5 ≈ 600px)을 가로로 뚫고 나갔다 — 실측: 타이머가 우측 지표를 덮고
-              CURRENT 와 NEXT 가 서로 겹쳤다. 세로에서는 원래 있던 1열 경로로 떨어뜨리는 것이 맞다.
-              (가로 기기는 전부 그대로다 — 1024×768·911×505·21:9·3440 모두 landscape 라 조건을 통과한다.) */}
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-[2vmin] px-[3vmin] md:landscape:grid-cols-[minmax(0,1fr)_minmax(0,2.5fr)_minmax(0,1fr)]">
+          {/* 2026-09-11: 좌/중/우 3열 조건이 `md:`(폭) → `md:landscape:`(넓고 **가로**) → **컨테이너 쿼리**로 왔다.
+              ① 폭만 보던 시절: 세로 TV(1080×1920) 는 폭이 1080 이라 md 를 넘겨 3열이 됐는데, 글자 크기는
+                 vmin(= 짧은 변 = 폭 1080) 기준이라 중앙 열(2.5/4.5 ≈ 600px)을 가로로 뚫고 나갔다 —
+                 실측: 타이머가 우측 지표를 덮고 CURRENT 와 NEXT 가 서로 겹쳤다.
+              ② `md:landscape:` 로 바꿔 그건 고쳤지만, 뷰포트 기준이라 **같은 보드 한 벌이 두 곳에서 산다**는
+                 사실과 어긋났다: 세로 태블릿에서 운영자 화면의 **16:9 미리보기**(가로 박스)가 뷰포트 orientation 만
+                 보고 1열로 접혔다. 판정 기준은 뷰포트가 아니라 **스테이지 자신의 크기**여야 한다.
+              ③ 그래서 `.clk-*`(src/index.css) 컨테이너 쿼리로 옮겼다. 경계값 768px·landscape 는 종전과 같은 값이라
+                 **TV 렌더는 픽셀 동일**하고, 미리보기만 자기 박스 기준으로 바르게 펼쳐진다.
+                 전제: 두 호출처 모두 스테이지 루트에 `[container-type:size]` 가 있다(TournamentClock). */}
+          <div className="clk-cols min-h-0 flex-1 gap-[2vmin] px-[3vmin]">
 
             {/* 좌 — 프라이즈. 없으면 열 자체를 그리지 않는다(빈 칸을 남기지 않는다). */}
             {prizes.length > 0 ? (
-              <aside className="hidden min-h-0 flex-col justify-center md:landscape:flex">
+              <aside className="clk-col min-h-0 flex-col justify-center">
                 <p className={`${LABEL} text-[1.5vmin]`} style={SOFT}>총 프라이즈</p>
                 <p className="mt-[0.3vmin] font-black leading-none tabular-nums"
                   style={{ fontSize: 'clamp(22px, 4.6vmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
@@ -308,7 +313,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                   ))}
                 </ul>
               </aside>
-            ) : <span className="hidden md:landscape:block" />}
+            ) : <span className="clk-wide-land" />}
 
             {/* 중앙 — 타이머 히어로 + 블라인드. **스택 전체를 중앙 정렬**한다.
                 예전엔 히어로가 flex-1 로 남는 공간을 다 먹어서 타이머와 CURRENT/NEXT 사이에
@@ -329,7 +334,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                   프레임 안 위아래에 각각 170px 씩 죽은 띠가 생겼다 — 프레임이 내용을 감싸는 게 아니라
                   내용이 프레임 안에서 떠 보였다. 위아래 비대칭인 이유: 블라인드 행이 h-[22vmin] **고정**이라
                   그 안에서 내용이 중앙 정렬되면서 아래쪽에만 빈 띠가 더 남는다 — 그래서 bottom 을 더 올린다. */}
-              <span aria-hidden className="pointer-events-none absolute inset-x-[7%] bottom-[14%] top-[13%] hidden md:landscape:block">
+              <span aria-hidden className="clk-wide-land pointer-events-none absolute inset-x-[7%] bottom-[14%] top-[13%]">
                 {/* 바깥 선 + **뒤로 번지는 LED**. box-shadow 두 겹이 전부다 —
                     밖으로 2.6vmin 번져 패널 뒤 광원이 벽을 비추는 느낌을 만들고(§15 2단계),
                     안으로 1.2vmin 은 테두리 안쪽을 살짝 채워 선이 납작해 보이지 않게 한다.
@@ -354,7 +359,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
             </div>
 
             {/* 우 — 지표 세로 레일. 라벨 작게 위, 숫자 크게 아래(레퍼런스 공통 문법). */}
-            <aside className="hidden min-h-0 flex-col justify-center gap-[1.5vmin] md:landscape:flex">
+            <aside className="clk-col min-h-0 flex-col justify-center gap-[1.5vmin]">
               <Rail label="생존 / 엔트리" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
               {showRebuy && <Rail label="리바이 · 애드온" value={String(ls?.rebuys ?? 0)} sub={`· ${ls?.addons ?? 0}`} />}
               {buyIn > 0 && <Rail label="바이인" value={buyIn.toLocaleString()} />}
@@ -391,7 +396,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
           </div>
 
           {/* 모바일 폭(세로 폰 관전) — 우측 보조가 숨으니 레지·휴식만 아래에 한 줄 */}
-          <div className="grid shrink-0 grid-cols-2 gap-[1.2vmin] border-t border-white/[0.06] px-[3vmin] py-[1.4vmin] md:landscape:hidden">
+          <div className="clk-narrow-only shrink-0 grid-cols-2 gap-[1.2vmin] border-t border-white/[0.06] px-[3vmin] py-[1.4vmin]">
             <HeaderTimes g={g} regLevel={regLevel} compact />
           </div>
         </>
