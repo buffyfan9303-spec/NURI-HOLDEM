@@ -1434,13 +1434,18 @@ function CompareRow({ label, now, prev, delta, won }: { label: string; now: numb
 // 아래를 낮추는 방향이라 대비는 오히려 오른다(ink-secondary 6.52→7.04 실측).
 function QuickAction({ label, icon, onClick, tone = 'violet' }: { label: string; icon: ReactNode; onClick: () => void; tone?: 'violet' | 'indigo' | 'fuchsia' | 'cyan' }) {
   return (
+    /* 2026-09-11 비율 조정(오너 지적: "4개밖에 없는데 칸이 너무 크고 아이콘은 작다").
+       원인은 높이가 아니라 **폭**이었다 — 1360px 에서 4열이면 한 칸이 ~325px 인데 세로 배치라
+       아이콘·글자가 가운데 한 줄로 서고 좌우 260px 이 통째로 빈다.
+       sm 부터 가로 배치로 바꿔 폭을 쓰게 하고(아이콘 왼쪽 · 글자 오른쪽), 타일도 9→10 으로 키운다.
+       360px 에서는 한 칸이 ~78px 라 가로가 안 들어가므로 세로 그대로 둔다. */
     <button type="button" onClick={onClick}
-      className="card-sink flex flex-col items-center justify-center gap-1 rounded-card border border-border-default bg-surface-high py-3 text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 transition-colors active:scale-[0.98]">
+      className="card-sink flex flex-col items-center justify-center gap-1 rounded-card border border-border-default bg-surface-high py-2.5 text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300 active:scale-[0.98] sm:flex-row sm:gap-2.5 sm:py-3.5">
       {/* v6.3 아이콘 그라데이션 타일(레퍼런스 #features) — 흰 아이콘, 레인 색 */}
-      <span className={`flex h-9 w-9 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
       </span>
-      <span className="text-2xs font-bold">{label}</span>
+      <span className="text-2xs font-bold sm:text-sm">{label}</span>
     </button>
   );
 }

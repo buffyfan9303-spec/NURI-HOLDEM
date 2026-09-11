@@ -51,9 +51,14 @@ const playerRow = (i: number, name: string, seq: number) => ({
   venue_id: VENUE, session_date: DAY, game_seq: seq, name, visitor_type: 'regular', note: null, sort_order: i,
 });
 
-async function openDashboard(page: Page) {
-  await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* 차단 환경 */ } },
-    [KEY, JSON.stringify(FAKE)] as [string, string]);
+async function openDashboard(page: Page, theme: 'dark' | 'light' = 'dark') {
+  await page.addInitScript(([k, v, t]) => {
+    try {
+      localStorage.setItem(k as string, v as string);
+      // ThemeContext: localStorage['nuri-theme']==='light' 일 때만 라이트. 기본은 다크다.
+      localStorage.setItem('nuri-theme', t as string);
+    } catch { /* 차단 환경 */ }
+  }, [KEY, JSON.stringify(FAKE), theme] as [string, string, string]);
   await page.route(/\/auth\/v1\/(user|token)/, (r) => r.fulfill(json(FAKE.user)));
   await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
     id: UID, name: '업주', nickname: '업주', role: 'venue_owner', approved: true, status: 'active',
@@ -199,4 +204,71 @@ test('🔴 KPI 숫자 넷이 360px 에서 서로 겹치지 않는다', async ({ 
     }
   }
   expect(overlaps, `KPI 라벨이 겹칩니다: ${overlaps.join(', ')}`).toEqual([]);
+});
+
+// ── 라이트 테마 ───────────────────────────────────────────────────────────────
+// AGENTS.md 참고 메모: "라이트 모드 대비는 순백이 아니라 **실제 지면(surface-base)** 으로 재라 —
+//   순백 기준으로 고른 색이 지면 위에서 AA 미달이었다." 그래서 여기서는 조상들을 거슬러 올라가며
+//   **실제로 칠해진 배경**을 찾아 대비를 계산한다(투명 배경을 흰색으로 가정하지 않는다).
+
+/** sRGB 상대 휘도 — WCAG 정의 그대로. */
+const LUMA = `(function (rgb) {
+  var f = rgb.map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2];
+})`;
+
+async function contrastOf(page: Page, selectorText: string): Promise<{ ratio: number; fg: string; bg: string }> {
+  return page.evaluate(({ txt, lumaSrc }) => {
+    const luma = eval(lumaSrc) as (rgb: number[]) => number;
+    const parse = (c: string): number[] | null => {
+      const m = /rgba?\(([^)]+)\)/.exec(c);
+      if (!m) return null;
+      const p = m[1].split(',').map((x) => parseFloat(x.trim()));
+      if (p.length >= 4 && p[3] === 0) return null;   // 완전 투명 = 칠해지지 않았다
+      return [p[0], p[1], p[2]];
+    };
+    const all = [...document.querySelectorAll('[data-tab="my-store"] *')] as HTMLElement[];
+    const el = all.find((n) => n.children.length === 0 && n.textContent?.trim() === txt);
+    if (!el) return { ratio: -1, fg: '', bg: '(요소 없음)' };
+    const fg = parse(getComputedStyle(el).color) ?? [0, 0, 0];
+    // 실제로 칠해진 조상을 찾는다 — 투명이면 계속 올라간다(순백 가정 금지)
+    let bg: number[] | null = null;
+    for (let n: HTMLElement | null = el; n; n = n.parentElement) {
+      bg = parse(getComputedStyle(n).backgroundColor);
+      if (bg) break;
+    }
+    if (!bg) bg = parse(getComputedStyle(document.body).backgroundColor) ?? [255, 255, 255];
+    const a = luma(fg), b = luma(bg);
+    const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    return { ratio, fg: `rgb(${fg.join(',')})`, bg: `rgb(${bg.join(',')})` };
+  }, { txt: selectorText, lumaSrc: LUMA });
+}
+
+test('🔴 라이트 테마 — 레이아웃이 무너지지 않고 본문 대비가 AA 를 넘는다', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openDashboard(page, 'light');
+
+  // 실제로 라이트로 전환됐는가 — 이걸 안 보면 다크를 두 번 검사하고 통과라고 착각한다.
+  await expect.poll(() => page.evaluate(() => document.documentElement.className),
+    { timeout: 15_000 }).toContain('light');
+
+  // 레이아웃 — 다크와 같은 계약(페이지 가로 스크롤 0)
+  for (const [w, h] of [[1280, 900], [390, 844]] as [number, number][]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(220);
+    expect(await pageOverflowPx(page), `라이트 ${w}px 에서 페이지가 가로로 넘칩니다`).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: `test-results/dash-light-${w}.png`, fullPage: true });
+  }
+
+  // 대비 — KPI 라벨은 작은 글씨(2xs)라 일반 텍스트 기준 4.5:1 을 적용한다.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.waitForTimeout(200);
+  const bad: string[] = [];
+  for (const t of ['완납 매출', '총 바이인', '미수금', '회수 이용권', '오늘 장부']) {
+    const c = await contrastOf(page, t);
+    if (c.ratio < 0) { bad.push(`'${t}' 를 찾지 못했다`); continue; }
+    if (c.ratio < 4.5) bad.push(`'${t}' 대비 ${c.ratio.toFixed(2)}:1 (글자 ${c.fg} / 지면 ${c.bg})`);
+  }
+  expect(bad, `라이트 테마 대비가 AA(4.5:1) 미달입니다:\n${bad.join('\n')}`).toEqual([]);
 });
