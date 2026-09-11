@@ -11,6 +11,7 @@ import {
   getClockState, saveClockState, subscribeClock, effectiveLevel, levelMovePatch, computeLiveStats, deriveClockCounts,
   type ClockState, type ClockLevel,
 } from '../../../api/clock';
+import { clockPhase, CLOCK_PHASE_LABEL } from '../../../lib/clockLevel';
 import { getLedgerBuyins, getLedgerSession, type LedgerBuyin, type LedgerSession } from '../../../api/ledger';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../atoms/Toast';
@@ -143,7 +144,8 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
         <p className="mt-2 text-lg font-extrabold tabular-nums text-aura-300">
           {isBreak ? '휴식' : lv ? `${lv.sb.toLocaleString()} / ${lv.bb.toLocaleString()}${lv.ante > 0 ? `  ·  ANTE ${lv.ante.toLocaleString()}` : ''}` : '-'}
         </p>
-        <p className="mt-1 text-xs text-ink-muted">{state.running ? '진행 중' : '일시정지'} · 생존 <b className="text-ink-primary tabular-nums">{stats.alive}</b> / 엔트리 <b className="text-ink-primary tabular-nums">{stats.entries}</b></p>
+        {/* 운영자·TV 와 같은 파생 — 예전엔 running 하나로 갈라 '시작 전'을 '일시정지'라 불렀다 */}
+        <p className="mt-1 text-xs text-ink-muted">{CLOCK_PHASE_LABEL[clockPhase(state)]} · 생존 <b className="text-ink-primary tabular-nums">{stats.alive}</b> / 엔트리 <b className="text-ink-primary tabular-nums">{stats.entries}</b></p>
         {readOnly && <p className="mt-2 rounded-chip bg-danger/10 px-2 py-1 text-2xs font-semibold text-danger-light">권한이 없어 보기만 가능해요</p>}
       </section>
 

@@ -45,3 +45,64 @@ export function effectiveLevel(s: ClockLevelInput, nowMs = Date.now()): ClockEff
   while (s.running && rem < 0 && idx < last) { idx++; rem += (lv[idx].minutes || 0) * 60_000; }
   return { index: idx, remainingMs: Math.max(0, rem), drifted: idx !== from };
 }
+
+// ── 클락 생애 상태(phase) — 화면 5곳이 각자 만들던 파생의 단일 출처 ──────────────
+//
+// 왜 필요한가 (2026-09-11 오너 보고 "시작 전 클락이 일시정지로 뜬다"):
+//   clock_states 에는 상태 필드가 `running boolean` **하나뿐**이다(started_at·status·phase 전부 없음).
+//   그래서 8개 파일 16곳이 각자 `running ? A : B` 삼항식을 썼고, 어휘가 5종으로 갈렸다 —
+//   같은 클락 하나를 운영자는 '일시정지', TV 는 'PAUSED', 대시보드는 '미실행', 리모컨은 '일시정지'로 불렀다.
+//
+//   결정적으로 [시작 준비](emptyClockState)가 쓰는 행과 '1레벨에서 일시정지'한 행이
+//   `running=false · endsAt=null · currentIndex=0` 으로 **같은 모양**이라, boolean 하나로는 원리적으로 못 가른다.
+//
+// 어떻게 가르나 — DB 컬럼을 추가하지 않고 파생한다(오너 지시: UI 문구 때문에 마이그레이션을 만들지 말 것):
+//   `emptyClockState`(와 [초기화])는 remainingMs 에 **1레벨 전체 길이를 정확히** 써 넣는다.
+//   반면 일시정지는 '지금까지 흐른 뒤 남은 시간'이라 반드시 그보다 **작다**(같은 ms 에 시작·정지해야 같아지는데,
+//   그 사이에 네트워크 왕복 두 번이 있어 실제로 불가능하다). 그래서 `remainingMs >= 1레벨 전체` 가 '아직 안 돌았다'의 증거다.
+//   이 판정은 등호가 아니라 부등호라, 운영자가 [시간 +] 로 늘려 둔 경우에도 '시작 전'으로 남는다(맞는 동작).
+export type ClockPhase = 'idle' | 'running' | 'break' | 'paused' | 'finished';
+
+/** phase 판정에 필요한 최소 형태 — ClockState 가 구조적으로 만족한다. */
+export interface ClockPhaseInput extends ClockLevelInput {
+  config?: { levels?: (LevelDuration & { kind?: 'level' | 'break' })[] } | null;
+}
+
+export function clockPhase(s: ClockPhaseInput, nowMs = Date.now()): ClockPhase {
+  const lv = s.config?.levels ?? [];
+  // 레벨이 없는 설정(아직 블라인드를 안 만든 클락)은 '끝났다'고 말할 근거가 없다.
+  if (lv.length === 0) return s.running ? 'running' : 'idle';
+
+  const last = lv.length - 1;
+  if (s.running) {
+    // 브레이크는 levels 배열의 원소다 — 흐른 시간만큼 전진시킨 **실효 레벨**로 봐야 맞다
+    // (endsAt 이 지났는데 아무도 전진을 못 쓴 행에서도 TV 가 옳게 말한다).
+    return lv[effectiveLevel(s, nowMs).index]?.kind === 'break' ? 'break' : 'running';
+  }
+
+  // ── 정지 상태 셋 가르기 ──
+  const firstMs = (lv[0]?.minutes ?? 0) * 60_000;
+  if (s.currentIndex <= 0 && !s.endsAt && firstMs > 0 && s.remainingMs >= firstMs) return 'idle';
+  if (s.remainingMs <= 0 && s.currentIndex >= last) return 'finished';
+  return 'paused';
+}
+
+/** 화면에 쓰는 상태 문구 — 5개 화면이 같은 말을 하도록 한 곳에 둔다. */
+export const CLOCK_PHASE_LABEL: Record<ClockPhase, string> = {
+  idle: '시작 전', running: '진행 중', break: '브레이크', paused: '일시정지', finished: '종료',
+};
+/** TV 송출용 영문 — 거리에서 읽히는 짧은 표기(기존 ClockDisplay 어휘 유지). */
+export const CLOCK_PHASE_TV: Record<ClockPhase, string> = {
+  idle: 'READY', running: 'RUNNING', break: 'BREAK', paused: 'PAUSED', finished: 'FINISHED',
+};
+/** 주 버튼 문구 — 지금 누르면 무엇이 되는가. */
+export const CLOCK_PHASE_ACTION: Record<ClockPhase, string> = {
+  idle: '시작', running: '일시정지', break: '일시정지', paused: '계속하기', finished: '다시 시작',
+};
+
+/**
+ * '이 클락이 살아 있는가' — 대시보드·라이브바가 카드를 띄울지 정하는 판정.
+ * 예전엔 `running || currentIndex > 0 || endsAt != null` 를 5곳이 복붙했는데,
+ * 그 식은 **1레벨에서 일시정지한 진행 중 대회를 '미실행'** 이라고 말했다(currentIndex 가 0이라서).
+ */
+export const clockIsLive = (s: ClockPhaseInput, nowMs = Date.now()): boolean => clockPhase(s, nowMs) !== 'idle';

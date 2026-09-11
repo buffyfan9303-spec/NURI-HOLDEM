@@ -233,6 +233,20 @@ export function makeClockTheme(presetId: string, accent?: string, image?: string
   return t;
 }
 
+/**
+ * 프리셋을 바꿀 때 저장할 테마 — **이전 테마의 커스텀 강조색은 버리고, 배경 이미지는 유지한다.**
+ *
+ * 규칙이 패널의 클릭 핸들러 안에 묻혀 있으면 테스트가 닿지 않는다(실제로 그래서 이월 결함이 살아남았다).
+ * 순수 함수 하나로 빼서 clockTheme.test.ts 가 직접 잠근다.
+ *
+ * 왜 accent 를 버리나: 프리셋은 '이 테마의 색 조합'을 통째로 고르는 행위다. 이전 테마에서 고른 보라를
+ * 금색 테마에 끌고 오면 그 테마를 고른 의미가 사라진다. 강조색이 필요하면 테마를 고른 **뒤** 스와치에서 정한다.
+ * 왜 배경 이미지는 남기나: 사진은 색이 아니라 매장이 올린 자산이라, 테마를 옮겨도 살아 있어야 한다.
+ */
+export function themeForPresetChange(presetId: string, prev: ClockTheme | null | undefined): ClockTheme {
+  return makeClockTheme(presetId, undefined, clockBgImageOf(prev));
+}
+
 /** DB 에서 온 미지의 값 검증 — 버전·프리셋 id 모양·accent·배경 URL 전부 대조. 불합격 = null(기본 룩).
  *  프리셋 id 는 목록 대조가 아니라 모양 검사다 — 이 번들이 모르는 새 프리셋도 통과시켜 사진·강조색을 지킨다(위 makeClockTheme). */
 export function sanitizeClockTheme(raw: unknown): ClockTheme | null {
@@ -272,8 +286,31 @@ export function clockThemeVars(theme: ClockTheme | null | undefined): Record<str
   const p = t ? clockPresetById(t.background?.preset ?? t.palette?.preset) : null;
   const customAccent = t?.palette?.accent && isAllowedAccent(t.palette.accent) ? t.palette.accent : null;
   const accent = customAccent ?? (p?.accent ?? CLOCK_DEFAULTS.accent);
-  // 타이머: 매장이 스와치를 골랐으면 그 색(구 동작), 아니면 프리셋 timer(아우라 골드=순백) → 없으면 accent
-  const timer = customAccent ?? (p ? (p.timer ?? p.accent) : CLOCK_DEFAULTS.timer);
+  /**
+   * 메인 타이머는 **언제나 순백**이다 — 프리셋도 강조색도 덮지 못한다(오너 지시 2026-09-11).
+   *
+   * ⚠ 예전 한 줄: `customAccent ?? (p ? (p.timer ?? p.accent) : CLOCK_DEFAULTS.timer)`.
+   *   결함이 둘 겹쳐 있었다.
+   *   ① `customAccent ??` — 강조색을 고르면 **타이머까지 그 색**이 됐다. 바이올렛을 고른 매장의
+   *      TV 는 27:59 가 보라색으로 떴다("테마를 클릭하면 타이머와 모든 숫자가 보라색").
+   *   ② `p.timer ?? p.accent` — `timer` 를 명시한 프리셋은 aura·aura-gold·black-marble-gold 셋뿐이라
+   *      **나머지 6종은 타이머 = 프리셋 accent** 였다(딥인디고 보라 · 펠트 초록 · 네온 시안 · 블랙골드 노랑).
+   *      테마 카드 3×3 이 통째로 색색의 타이머로 보이던 원인이 이것이다.
+   *
+   * 타이머는 '지금 몇 분 남았나'라는 **송출 화면의 제1 정보**라, 거리에서 최대 대비여야 하고
+   * 매장 취향으로 바뀌면 안 된다. urgent(rose)·break(sky)·prize(gold) 와 같은 등급의 잠금이다.
+   * 프리셋의 `timer` 필드는 남겨 둔다 — 미래에 오프화이트를 쓰고 싶은 프리셋이 생기면 그 자리다.
+   * (지금 9종 전부 흰색이거나 미지정이라 실제 산출값은 어느 경로든 #FFFFFF 다.)
+   */
+  const timer = p?.timer ?? CLOCK_DEFAULTS.timer;
+  /**
+   * 중앙 기하 프레임 — accent 계열이되 **타이머보다 약해야 한다**(§12: 프레임이 타이머보다 강해 보이면 실패).
+   * 바깥 선을 65%, 안쪽 선을 38% 로 두어 이중 선의 위계를 만든다. 두 값 다 accent 에서 파생하므로
+   * 프리셋을 바꾸면 프레임도 따라 바뀌고, 매장이 강조색을 고르면 프레임만 함께 움직인다(타이머는 불변).
+   * color-mix 는 이미 이 화면(ClockThemePanel)에서 쓰던 문법이라 새 의존성이 아니다.
+   */
+  const frame = `color-mix(in srgb, ${accent} 65%, transparent)`;
+  const frameSoft = `color-mix(in srgb, ${accent} 38%, transparent)`;
   const base = p?.bg ?? CLOCK_DEFAULTS.bg;
   const img = clockBgImageOf(t);
   // 배경 이미지: 스크림(맨 위) → 사진 → 프리셋 배경(맨 아래) 3층 합성.
@@ -281,11 +318,16 @@ export function clockThemeVars(theme: ClockTheme | null | undefined): Record<str
   // 애니메이션·filter·will-change 없음(상시 표출 TV — 1회 디코드 후 정적).
   return {
     '--clk-bg': img ? `${CLOCK_BG_SCRIM}, url("${img}") center/cover no-repeat, ${base}` : base,
-    '--clk-accent': accent,
-    '--clk-timer': timer,
-    '--clk-timer-urgent': CLOCK_DEFAULTS.timerUrgent, // 잠금
-    '--clk-prize': CLOCK_DEFAULTS.prize,              // 잠금 — 골드는 프라이즈 금액에만
-    '--clk-timer-break': CLOCK_DEFAULTS.timerBreak,   // 잠금
+    // ── 강조색이 바꿀 수 있는 것 ──────────────────────────────────────────────
+    '--clk-accent': accent,                           // 레벨·현재 블라인드·진행률
+    '--clk-frame': frame,                             // 중앙 기하 프레임 바깥 선
+    '--clk-frame-soft': frameSoft,                    // 프레임 안쪽 선·뒤 LED bloom
+    // ── 강조색이 못 바꾸는 것(송출 안전 신호 잠금) ─────────────────────────────
+    '--clk-timer': timer,                             // 잠금 — 메인 타이머는 언제나 순백
+    '--clk-timer-urgent': CLOCK_DEFAULTS.timerUrgent, // 잠금 — 1분 미만 긴급(rose)
+    '--clk-timer-break': CLOCK_DEFAULTS.timerBreak,   // 잠금 — 브레이크(sky)
+    '--clk-prize': CLOCK_DEFAULTS.prize,              // 잠금 — 골드는 프라이즈에만
+    '--clk-ink': CLOCK_DEFAULTS.timer,                // 잠금 — 일반 핵심 숫자(총칩·평균스택·ANTE)는 흰색
     '--clk-ink-dim': img ? CLOCK_BG_INK.dim : CLOCK_DEFAULTS.inkDim,
     '--clk-ink-soft': img ? CLOCK_BG_INK.soft : CLOCK_DEFAULTS.inkSoft,
   };

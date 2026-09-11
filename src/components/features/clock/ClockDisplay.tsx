@@ -22,6 +22,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState, type ClockLevel } from '../../../api/clock';
+import { clockPhase, CLOCK_PHASE_TV } from '../../../lib/clockLevel';
 import { buyinRequestUrl } from '../../../api/ledger';
 import { getAppSetting, CLOCK_AD_KEY } from '../../../api/settings';
 import { fetchVenuePageConfig } from '../../../api/rankings';
@@ -343,12 +344,18 @@ function StatusPills({ g }: { g: ClockState }) {
   const eff = effectiveLevel(g);
   const lv = lvls[eff.index];
   const isBreak = lv?.kind === 'break';
-  const state = isBreak ? 'BREAK' : g.running ? 'RUNNING' : 'PAUSED';
-  const tone = isBreak
+  // 2026-09-11: 운영자·리모컨과 **같은 파생**을 쓴다(lib/clockLevel.clockPhase).
+  //   예전엔 `g.running ? 'RUNNING' : 'PAUSED'` 라, 아직 시작 안 한 클락이 TV 에 'PAUSED'(일시정지)로 떴다.
+  //   이제 시작 전은 READY(중립 회색) — 진행(emerald)·브레이크(sky)·일시정지(amber)와 색으로도 갈린다.
+  const phase = clockPhase(g);
+  const state = CLOCK_PHASE_TV[phase];
+  const tone = phase === 'break'
     ? { color: '#7dd3fc', bg: 'rgba(125,211,252,0.14)', bd: 'rgba(125,211,252,0.45)' }
-    : g.running
+    : phase === 'running'
       ? { color: '#6ee7b7', bg: 'rgba(110,231,183,0.12)', bd: 'rgba(110,231,183,0.40)' }
-      : { color: '#fbbf24', bg: 'rgba(251,191,36,0.14)', bd: 'rgba(251,191,36,0.45)' };
+      : phase === 'paused'
+        ? { color: '#fbbf24', bg: 'rgba(251,191,36,0.14)', bd: 'rgba(251,191,36,0.45)' }
+        : { color: 'rgba(255,255,255,0.62)', bg: 'rgba(255,255,255,0.07)', bd: 'rgba(255,255,255,0.22)' };
   return (
     <div className="flex shrink-0 items-center gap-[1.2vmin]">
       <span data-testid="clk-level" className="rounded-full border px-[2.2vmin] py-[0.6vmin] text-[2.1vmin] font-extrabold tracking-[0.14em]"
@@ -361,7 +368,7 @@ function StatusPills({ g }: { g: ClockState }) {
       </span>
       <span className="rounded-full border px-[1.8vmin] py-[0.6vmin] text-[1.8vmin] font-extrabold tracking-[0.16em]"
         style={{ color: tone.color, background: tone.bg, borderColor: tone.bd }}>
-        {state === 'PAUSED' ? '일시정지' : state}
+        {state}
       </span>
     </div>
   );

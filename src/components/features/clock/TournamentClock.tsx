@@ -21,6 +21,7 @@ import {
   getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames, openLedgerSession,
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
+import { clockPhase, CLOCK_PHASE_LABEL, CLOCK_PHASE_ACTION } from '../../../lib/clockLevel';
 import { listGamePresets, saveGamePreset, type GamePreset } from '../../../api/presets';
 import { applyToClock, presetFromClockConfig } from '../../../lib/gameInherit';
 import PresetPicker from '../PresetPicker';
@@ -403,6 +404,14 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
 
   // 집계(파생) — persist보다 위에서 계산해 liveStats를 저장에 첨부(라이브 보드 반영).
   const cfg = state.config;
+  /**
+   * 생애 상태 — 운영자·TV·리모컨이 **같은 함수**를 쓴다(lib/clockLevel.clockPhase).
+   * 예전엔 이 화면이 `state.running` 하나로 갈라서, [시작 준비]한 새 클락이
+   * 버튼은 '시작'인데 타이머 배지는 '일시정지'라고 말하는 모순이 한 화면 안에 있었다.
+   * ⚠ 일부러 useMemo 를 걸지 않는다 — 위 setTick 이 1초마다 리렌더를 강제하므로 매 렌더에서 새로 읽어야
+   *   브레이크 진입·레벨 드리프트가 즉시 반영된다(메모하면 state 가 안 바뀐 동안 낡은 phase 가 굳는다).
+   */
+  const phase = clockPhase(state);
   const derived = useMemo(() => deriveClockCounts(buyins, {
     // 클락(레벨→분 파생)이 우선, 없으면 장부 세션값으로 폴백. 스타트 시각은 장부 기준.
     earlyDoubleMin: cfg.earlyDoubleMin || linkedSession?.earlyDoubleMin || 0,
@@ -732,10 +741,12 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     <div className={['shrink-0 border-white/5 bg-black/30 px-2 py-2', fs ? 'border-t' : 'rounded-card border'].join(' ')}>
       {/* ① 주 조작 — 가장 크고, 항상 첫 화면에 */}
       <div className="flex items-center gap-2">
-        <button type="button" onClick={toggleRun}
+        <button type="button" onClick={toggleRun} data-testid="clk-main-action"
           className={['inline-flex flex-1 items-center justify-center gap-1.5 rounded-input px-4 py-3 text-sm font-bold transition-colors',
             state.running ? 'bg-amber-500/90 text-ink-inverse hover:bg-amber-500' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>
-          <Icon name={state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{state.running ? '일시정지' : '시작'}
+          {/* 버튼 문구도 phase 에서 나온다 — '시작 전'은 [시작], 일시정지는 [계속하기], 종료는 [다시 시작].
+              예전엔 running 하나로 갈라 '시작 전'과 '일시정지'가 똑같이 [시작]이었고, 바로 위 배지는 '일시정지'라 모순이었다. */}
+          <Icon name={state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{CLOCK_PHASE_ACTION[phase]}
         </button>
         <Stepper label="Level" size="lg"
           plusDisabled={state.currentIndex >= cfg.levels.length - 1} minusDisabled={state.currentIndex <= 0}
@@ -924,7 +935,17 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
               </div>
             )}
             <p className={['mt-3 font-semibold text-white/55', fs ? 'text-[min(2.6cqw,3.1cqh)]' : 'text-xs sm:text-lg'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
-            {!state.running && <span className={['absolute rounded-badge bg-amber-400/15 font-bold text-amber-300', fs ? 'top-3 right-3 text-[min(2cqw,2.4cqh)] px-3 py-1' : 'top-2 right-2 text-[9px] sm:text-2xs px-2 py-0.5'].join(' ')}>일시정지</span>}
+            {/* 🔴 결함 1 의 그 자리 — 예전엔 `!state.running` 이면 무조건 '일시정지'라, 아직 시작도 안 한
+                클락이 노란 '일시정지' 배지를 달고 있었다(같은 화면의 버튼은 '시작'이었다).
+                이제 phase 가 '시작 전'과 '일시정지'와 '종료'를 갈라 각각 제 색으로 말한다.
+                진행 중(running·break)에는 배지를 띄우지 않는다 — 굳이 말할 필요가 없는 정상 상태다. */}
+            {phase !== 'running' && phase !== 'break' && (
+              <span data-testid="clk-phase-badge" className={[
+                'absolute rounded-badge font-bold',
+                phase === 'idle' ? 'bg-white/10 text-white/70' : phase === 'finished' ? 'bg-white/10 text-white/50' : 'bg-amber-400/15 text-amber-300',
+                fs ? 'top-3 right-3 text-[min(2cqw,2.4cqh)] px-3 py-1' : 'top-2 right-2 text-[9px] sm:text-2xs px-2 py-0.5',
+              ].join(' ')}>{CLOCK_PHASE_LABEL[phase]}</span>
+            )}
           </div>
 
           {/* 우: 스탯 — 생존/엔트리(히어로) → 리바이/얼리 → 애드온 → 레지 마감 → 휴식까지 */}

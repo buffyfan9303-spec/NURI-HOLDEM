@@ -12,7 +12,7 @@ import { useToast } from '../../atoms/Toast';
 import { getVenuePageConfig, setVenuePageConfig, type VenuePageConfig } from '../../../api/rankings';
 import {
   CLOCK_THEME_PRESETS, CLOCK_ACCENT_SWATCHES, DEFAULT_CLOCK_PRESET_ID,
-  clockPresetById, makeClockTheme, sanitizeClockTheme, clockThemeVars, clockBgImageOf, type ClockTheme,
+  clockPresetById, makeClockTheme, themeForPresetChange, sanitizeClockTheme, clockThemeVars, clockBgImageOf, type ClockTheme,
 } from './clockTheme';
 import { uploadClockBg, deleteClockBg } from './clockBgImage';
 
@@ -122,8 +122,19 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
     } finally { if (aliveRef.current) setBusy(false); }
   };
 
+  /**
+   * 프리셋 전환 — **이전 테마의 커스텀 강조색을 이월하지 않는다**(오너 지시 2026-09-11).
+   *
+   * ⚠ 예전엔 `makeClockTheme(id, curAccentSel, curImage)` 로 `curAccentSel` 을 그대로 넘겼다.
+   *   그래서 바이올렛을 골라 둔 매장이 '아우라 골드'를 눌러도 강조색은 보라로 남았고,
+   *   당시엔 타이머까지 강조색을 따라가서(clockTheme.ts 의 나머지 반쪽 결함) **금색 테마인데 보라 타이머**가 떴다.
+   *   테마 카드 3×3 에서 '아우라 골드'만 보라 타이머로 보이던 화면이 정확히 이 경로다.
+   *
+   * 새 프리셋은 그 프리셋의 기본 accent 로 시작한다 — 강조색을 원하면 아래 스와치에서 다시 고른다.
+   * 배경 이미지(curImage)는 유지한다: 사진은 '테마 색'이 아니라 매장이 올린 자산이라 테마를 옮겨도 살아야 한다.
+   */
   const pickPreset = async (id: string) => {
-    if (await persist(makeClockTheme(id, curAccentSel, curImage))) {
+    if (await persist(themeForPresetChange(id, cur))) {
       toast.show('클락 화면 테마를 저장했습니다. TV 송출에 바로 반영됩니다', 'success');
     }
   };
@@ -229,7 +240,10 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
 
       {/* accent 스와치 — 안전 색 10종에서만 선택(임의 색 입력 없음) */}
       <div>
-        <p className="mb-1 text-2xs font-semibold text-ink-secondary">강조색 <span className="font-normal text-ink-muted">(타이머·상금 숫자)</span></p>
+        {/* 2026-09-11: '(타이머·상금 숫자)' 는 **틀린 설명**이었다 — 실제로 그렇게 동작하던 시절의 문구가
+            남아 있었고, 그 동작 자체가 이번에 결함으로 판정돼 사라졌다. 강조색이 실제로 바꾸는 것만 적는다. */}
+        <p className="mb-1 text-2xs font-semibold text-ink-secondary">강조색 <span className="font-normal text-ink-muted">— 레벨·현재 블라인드·진행률·프레임</span></p>
+        <p className="mb-1.5 text-2xs text-ink-muted break-keep">타이머는 흰색, 긴급은 빨강, 브레이크는 하늘색, 프라이즈는 금색으로 유지됩니다.</p>
         <div className="flex flex-wrap gap-1.5">
           {CLOCK_ACCENT_SWATCHES.map((s) => {
             const on = s.value === curAccent;

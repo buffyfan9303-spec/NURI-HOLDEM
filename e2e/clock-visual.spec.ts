@@ -261,7 +261,9 @@ test.describe('PC 운영자 화면', () => {
       await clock.click();
       await page.waitForTimeout(3000);
 
-      const start = page.getByRole('button', { name: /^(시작|일시정지)$/ });
+      // 2026-09-11: 주 버튼 문구가 상태에 따라 4종(시작·일시정지·계속하기·다시 시작)이 되어
+      //   텍스트 정규식으로는 못 잡는다. 정규식을 넓히면 다른 버튼까지 걸리므로 testid 로 고정한다.
+      const start = page.getByTestId('clk-main-action');
       test.skip(await start.count() === 0, '운영자 콘솔이 이 계정/화면에 없다 — 권한 또는 클락 미시작');
       await page.screenshot({ path: `test-results/clock-shots/${PHASE}-director-${name}.png` });
 

@@ -5,7 +5,7 @@
 // (외부 호스트 요청 · CSS url("…") 문자열 탈출). 허용은 우리 스토리지의 clock_bg 경로 하나뿐이다.
 import { describe, it, expect } from 'vitest';
 import {
-  isAllowedClockBgUrl, sanitizeClockTheme, makeClockTheme, clockThemeVars, clockBgObjectPath, clockPresetById,
+  isAllowedClockBgUrl, sanitizeClockTheme, makeClockTheme, themeForPresetChange, clockThemeVars, clockBgObjectPath, clockPresetById,
   CLOCK_BG_BUCKET, CLOCK_DEFAULTS, CLOCK_BG_INK, DEFAULT_CLOCK_PRESET_ID, CLOCK_THEME_PRESETS, BLACK_MARBLE_GOLD_BG,
 } from './clockTheme';
 
@@ -135,5 +135,95 @@ describe('black-marble-gold 프리셋', () => {
       const v = clockThemeVars(makeClockTheme('black-marble-gold', undefined, ok))['--clk-bg'];
       expect(v.indexOf('url(')).toBeLessThan(v.indexOf(BLACK_MARBLE_GOLD_BG));
     }
+  });
+});
+
+// ── 색 역할 분리 계약 (오너 지시 2026-09-11) ─────────────────────────────────
+//
+// 재현했던 결함: 테마를 고르면 **타이머와 여러 숫자가 프리셋 색을 따라갔다**.
+//   원인 ① clockThemeVars 의 `customAccent ?? …` — 강조색이 --clk-timer 까지 덮었다.
+//   원인 ② `p.timer ?? p.accent` — timer 를 명시한 프리셋이 3개뿐이라 나머지 6종은 타이머 = accent.
+// 기존 11개 테스트는 이 동작을 **한 줄도 잠그지 않아** 결함이 그대로 살아남았다. 여기서 못박는다.
+describe('색 역할 분리 — 강조색이 덮을 수 있는 것과 없는 것', () => {
+  const VIOLET = '#A78BFA';   // 스와치의 바이올렛 — 오너가 보고한 '전부 보라색'의 그 색
+  const vars = (preset: string, accent?: string) => clockThemeVars(makeClockTheme(preset, accent, null));
+
+  it('1~3. 아우라 기본 · 아우라 골드 · 블랙 마블 골드 — 메인 타이머는 흰색', () => {
+    for (const id of ['aura', 'aura-gold', 'black-marble-gold']) {
+      expect(vars(id)['--clk-timer'], id).toBe('#FFFFFF');
+    }
+  });
+
+  it('🔴 프리셋 9종 **전부** 메인 타이머가 흰색 — timer 미지정 프리셋이 accent 로 새지 않는다', () => {
+    for (const p of CLOCK_THEME_PRESETS) {
+      expect(vars(p.id)['--clk-timer'], p.label).toBe('#FFFFFF');
+    }
+  });
+
+  it('4. custom violet accent 를 적용해도 --clk-timer 는 흰색', () => {
+    for (const p of CLOCK_THEME_PRESETS) {
+      expect(vars(p.id, VIOLET)['--clk-timer'], p.label).toBe('#FFFFFF');
+    }
+  });
+
+  it('5. custom accent 는 --clk-accent 와 프레임 역할만 바꾼다', () => {
+    const before = vars('aura-gold');
+    const after = vars('aura-gold', VIOLET);
+    expect(before['--clk-accent']).toBe('#E0A94E');      // 프리셋 기본(샴페인 골드)
+    expect(after['--clk-accent']).toBe(VIOLET);           // 강조색만 따라간다
+    expect(after['--clk-frame']).toContain(VIOLET);       // 프레임은 accent 파생이라 함께 움직인다
+    expect(after['--clk-frame-soft']).toContain(VIOLET);
+    // 나머지 역할은 전부 그대로
+    for (const k of ['--clk-timer', '--clk-prize', '--clk-timer-urgent', '--clk-timer-break', '--clk-ink', '--clk-bg']) {
+      expect(after[k], k).toBe(before[k]);
+    }
+  });
+
+  it('6~8. --clk-prize 는 금색 · urgent 는 rose · break 는 sky 로 잠긴다', () => {
+    for (const p of CLOCK_THEME_PRESETS) {
+      const v = vars(p.id, VIOLET);
+      expect(v['--clk-prize'], p.label).toBe(CLOCK_DEFAULTS.prize);
+      expect(v['--clk-timer-urgent'], p.label).toBe(CLOCK_DEFAULTS.timerUrgent);
+      expect(v['--clk-timer-break'], p.label).toBe(CLOCK_DEFAULTS.timerBreak);
+      expect(v['--clk-ink'], p.label).toBe('#FFFFFF');    // 일반 핵심 숫자
+    }
+  });
+
+  it('🔴 프리셋마다 --clk-accent 가 실제로 다르다 — 전부 보라로 보이면 실패', () => {
+    const accents = CLOCK_THEME_PRESETS.map((p) => vars(p.id)['--clk-accent']);
+    // 9종 중 중복이 있어도 좋지만(골드 계열 3종), 한 색으로 뭉치면 프리셋의 의미가 없다
+    expect(new Set(accents).size).toBeGreaterThanOrEqual(6);
+    expect(accents.filter((a) => a === '#A78BFA')).toHaveLength(0);  // 어떤 프리셋도 기본이 바이올렛이 아니다
+  });
+
+  it('12~13. 허용목록 밖 accent · 배경 URL 은 차단되고 기본값으로 떨어진다', () => {
+    const bad = clockThemeVars(makeClockTheme('aura', 'javascript:alert(1)', 'https://evil.example.com/x.png'));
+    expect(bad['--clk-accent']).toBe(CLOCK_DEFAULTS.accent);   // 스와치에 없는 값 → 프리셋 기본
+    expect(bad['--clk-bg']).not.toContain('evil.example.com'); // 외부 URL 은 배경에 들어가지 않는다
+    expect(bad['--clk-bg']).not.toContain('javascript:');
+  });
+});
+
+describe('프리셋 전환 — 이전 강조색은 버리고 배경 사진은 지킨다', () => {
+  it.runIf(!!BASE)('9~10. 새 프리셋을 고르면 이전 custom accent 가 사라지고 배경 이미지는 보존된다', () => {
+    // 바이올렛을 골라 둔 '아우라' 매장이 '아우라 골드'로 갈아탄다 — 오너가 보고한 그 경로
+    const prev = makeClockTheme('aura', '#A78BFA', ok);
+    expect(prev.palette?.accent).toBe('#A78BFA');
+
+    const next = themeForPresetChange('aura-gold', prev);
+    expect(next.palette?.preset).toBe('aura-gold');
+    expect(next.palette?.accent).toBeUndefined();          // 이월 없음
+    expect(next.background?.image).toBe(ok);               // 사진은 그대로
+
+    const v = clockThemeVars(next);
+    expect(v['--clk-accent']).toBe('#E0A94E');             // 아우라 골드의 기본 샴페인 골드
+    expect(v['--clk-accent']).not.toBe('#A78BFA');         // 보라가 따라오지 않는다
+    expect(v['--clk-timer']).toBe('#FFFFFF');              // 타이머는 어느 경로에서도 흰색
+  });
+
+  it('배경 사진이 없던 매장은 전환 후에도 없다(없는 것을 만들지 않는다)', () => {
+    const next = themeForPresetChange('carbon', makeClockTheme('neon-night', '#22D3EE', null));
+    expect(next.background?.image).toBeUndefined();
+    expect(next.palette?.accent).toBeUndefined();
   });
 });
