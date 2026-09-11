@@ -150,7 +150,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
           <div className="clk-cols min-h-0 flex-1 gap-[2cqmin] px-[3cqmin]">
 
             {/* 좌 — 프라이즈. 없으면 열 자체를 그리지 않는다(빈 칸을 남기지 않는다). */}
-            {prizes.length > 0 ? <PrizeColumn prizes={prizes} totalPrize={totalPrize} /> : <span className="clk-wide-land" />}
+            {prizes.length > 0 ? <PrizeColumn prizes={prizes} totalPrize={totalPrize} mysteryBounty={g.config?.mysteryBounty ?? 0} /> : <span className="clk-wide-land" />}
 
             {/* 중앙 — 타이머 히어로 + 블라인드. **스택 전체를 중앙 정렬**한다.
                 예전엔 히어로가 flex-1 로 남는 공간을 다 먹어서 타이머와 CURRENT/NEXT 사이에
@@ -258,7 +258,7 @@ const PRIZE_PAGE_MS = 10_000;
  *
  * 초당 틱이 아니라 10초 인터벌이고, 장이 하나면 인터벌 자체를 걸지 않는다.
  */
-function PrizeColumn({ prizes, totalPrize }: { prizes: { place: string; amount: number }[]; totalPrize: number }) {
+function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: { place: string; amount: number }[]; totalPrize: number; mysteryBounty: number }) {
   const pages = Math.ceil(prizes.length / PRIZES_PER_PAGE);
   const [page, setPage] = useState(0);
   useEffect(() => {
@@ -303,6 +303,16 @@ function PrizeColumn({ prizes, totalPrize }: { prizes: { place: string; amount: 
           <li key={`pad-${i}`} aria-hidden className="min-h-[3.2cqmin]" />
         ))}
       </ul>
+      {/* 미스터리 바운티 — 03cd8bb 에서 옮 보드가 사라지며 **함께 사라졌던** 값이다.
+          설정 입력란(TournamentClock)은 그대로 남아 있어서, 없으면 '써도 아무 데도 안 나오는 죽은 컨트롤' 이 된다. */}
+      {mysteryBounty > 0 && (
+        <div data-testid="clk-mystery" className="mt-[1.2cqmin] border-t border-white/[0.08] pt-[1cqmin]">
+          <p className={`${LABEL} text-[1.4cqmin]`} style={SOFT}>미스터리 바운티</p>
+          <p className="mt-[0.2cqmin] font-extrabold leading-none tabular-nums text-white" style={{ fontSize: 'clamp(16px, 2.6cqmin, 44px)' }}>
+            {mysteryBounty.toLocaleString()}
+          </p>
+        </div>
+      )}
       {pages > 1 && (
         <p data-testid="clk-prize-page" className="mt-[1cqmin] text-right text-[1.5cqmin] font-bold tabular-nums" style={DIM}>
           {cur + 1} / {pages}

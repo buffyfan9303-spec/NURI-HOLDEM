@@ -152,6 +152,36 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     QRCode.toDataURL(buyinRequestUrl(venueId, gSeq), { width: 360, margin: 1 }).then(setQr).catch(() => setQr(null));
   }, [venueId, gSeq]);
 
+  /** TV 전용 조작 — 게임 전환 · 전체화면 · 닫기.
+   *  🔴 보드(ClockStage) **밖**에 둔다. 03cd8bb 에서 머리말을 통째로 스테이지 안에 넣었는데
+   *  스테이지는 클락이 있을 때만 그려진다 — 그래서 '진행 중인 클락이 없습니다'·'불러오는 중' 화면에서
+   *  닫기(✕)와 전체화면이 통째로 사라졌다. 이 화면은 별도 창이 아니라 앱 위의 fixed 오버레이라,
+   *  보이는 탈출구가 없으면 ESC 를 아는 사람만 빠져나온다(접근성 기본). */
+  const tvControls = (
+    <>
+      {games.length > 1 && (
+        <div className="flex shrink-0 items-center gap-1">
+          {games.map((c) => (
+            <button key={c.gameSeq} type="button" onClick={() => { setSel(c.gameSeq); setAuto(false); }}
+              style={c.gameSeq === g?.gameSeq ? { background: 'color-mix(in srgb, var(--clk-accent, #818CF8) 24%, transparent)', borderColor: 'color-mix(in srgb, var(--clk-accent, #818CF8) 55%, transparent)' } : undefined}
+              className={['rounded-[1cqmin] border px-[1.4cqmin] py-[0.5cqmin] text-[1.7cqmin] font-bold transition-colors',
+                c.gameSeq === g?.gameSeq ? 'text-white' : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/15'].join(' ')}>
+              {gameLabel(c)}{!c.running && <Icon name="pause" aria-label="일시정지" className="ml-[0.6cqmin] inline-block h-[1.6cqmin] w-[1.6cqmin] align-[-0.15em]" />}
+            </button>
+          ))}
+          <button type="button" onClick={() => setAuto((v) => !v)} title="멀티게임 자동 순환"
+            className={['rounded-[1cqmin] px-[1.4cqmin] py-[0.5cqmin] text-[1.7cqmin] font-bold transition-colors', auto ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 text-white/50'].join(' ')}>
+            <Icon name="refresh" className="mr-[0.5cqmin] inline-block h-[1.6cqmin] w-[1.6cqmin] align-[-0.15em]" />{auto ? '자동' : '수동'}
+          </button>
+        </div>
+      )}
+      <button type="button" onClick={toggleFs} title="전체화면" aria-label="전체화면"
+        className="rounded-[1cqmin] bg-white/10 px-[1.4cqmin] py-[0.7cqmin] text-[1.7cqmin] font-bold text-white/80 hover:bg-white/20">{fs ? '⤢ 해제' : '⛶ 전체화면'}</button>
+      <button type="button" onClick={onClose} title="닫기" aria-label="닫기"
+        className="rounded-[1cqmin] bg-white/10 px-[1.4cqmin] py-[0.7cqmin] text-[1.7cqmin] font-bold text-white/80 hover:bg-white/20">✕</button>
+    </>
+  );
+
   return (
     // ⚠ [container-type:size] 는 장식이 아니라 **레이아웃의 전제**다.
     //   본문 3열·프라이즈 열·지표 레일은 전부 `.clk-*` 컨테이너 쿼리(src/index.css)로 켜지는데,
@@ -163,39 +193,21 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
       style={{ ...clkVars, background: 'var(--clk-bg, #06080F)' }}>
       {/* 보드는 ClockStage 한 벌 — 운영자 화면(TournamentClock)과 **같은 마크업**이다.
           여기서 하는 일은 데이터(구독·폴링·테마·QR·광고)와 TV 전용 조작(게임 전환·전체화면·닫기)뿐이다. */}
-      {clocks === null ? (
-        <div className="flex flex-1 items-center justify-center text-[3cqmin]" style={{ color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' }}>불러오는 중…</div>
-      ) : !g ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-[2cqmin] text-center">
-          <p className="text-[4cqmin] font-bold text-white/80">진행 중인 클락이 없습니다</p>
-          <p className="text-[2.4cqmin]" style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>운영자가 이 매장의 클락을 시작하면 자동으로 표시됩니다</p>
-        </div>
+      {clocks === null || !g ? (
+        <>
+          {/* 클락이 없어도 머리말은 그린다 — 위 tvControls 주석의 이유. */}
+          <header className="flex h-[8cqmin] shrink-0 items-center justify-end gap-[1.6cqmin] px-[3cqmin]">{tvControls}</header>
+          {clocks === null ? (
+            <div className="flex flex-1 items-center justify-center text-[3cqmin]" style={{ color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' }}>불러오는 중…</div>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-[2cqmin] text-center">
+              <p className="text-[4cqmin] font-bold text-white/80">진행 중인 클락이 없습니다</p>
+              <p className="text-[2.4cqmin]" style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>운영자가 이 매장의 클락을 시작하면 자동으로 표시됩니다</p>
+            </div>
+          )}
+        </>
       ) : (
-        <ClockStage g={g} venueName={venueName} qr={qr} sponsor={sponsor} adSize={adSize}
-          headerRight={
-            <>
-              {games.length > 1 && (
-                <div className="flex shrink-0 items-center gap-1">
-                  {games.map((c) => (
-                    <button key={c.gameSeq} type="button" onClick={() => { setSel(c.gameSeq); setAuto(false); }}
-                      style={c.gameSeq === g.gameSeq ? { background: 'color-mix(in srgb, var(--clk-accent, #818CF8) 24%, transparent)', borderColor: 'color-mix(in srgb, var(--clk-accent, #818CF8) 55%, transparent)' } : undefined}
-                      className={['rounded-[1cqmin] border px-[1.4cqmin] py-[0.5cqmin] text-[1.7cqmin] font-bold transition-colors',
-                        c.gameSeq === g.gameSeq ? 'text-white' : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/15'].join(' ')}>
-                      {gameLabel(c)}{!c.running && <Icon name="pause" aria-label="일시정지" className="ml-[0.6cqmin] inline-block h-[1.6cqmin] w-[1.6cqmin] align-[-0.15em]" />}
-                    </button>
-                  ))}
-                  <button type="button" onClick={() => setAuto((v) => !v)} title="멀티게임 자동 순환"
-                    className={['rounded-[1cqmin] px-[1.4cqmin] py-[0.5cqmin] text-[1.7cqmin] font-bold transition-colors', auto ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 text-white/50'].join(' ')}>
-                    <Icon name="refresh" className="mr-[0.5cqmin] inline-block h-[1.6cqmin] w-[1.6cqmin] align-[-0.15em]" />{auto ? '자동' : '수동'}
-                  </button>
-                </div>
-              )}
-              <button type="button" onClick={toggleFs} title="전체화면" aria-label="전체화면"
-                className="rounded-[1cqmin] bg-white/10 px-[1.4cqmin] py-[0.7cqmin] text-[1.7cqmin] font-bold text-white/80 hover:bg-white/20">{fs ? '⤢ 해제' : '⛶ 전체화면'}</button>
-              <button type="button" onClick={onClose} title="닫기" aria-label="닫기"
-                className="rounded-[1cqmin] bg-white/10 px-[1.4cqmin] py-[0.7cqmin] text-[1.7cqmin] font-bold text-white/80 hover:bg-white/20">✕</button>
-            </>
-          } />
+        <ClockStage g={g} venueName={venueName} qr={qr} sponsor={sponsor} adSize={adSize} headerRight={tvControls} />
       )}
     </div>
   );

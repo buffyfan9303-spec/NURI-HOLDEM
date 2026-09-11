@@ -790,11 +790,11 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
 
       {/* ③ 현재 상태 입력 — 엔트리·생존·리바이·얼리·애드온 */}
       <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-white/[0.06] pt-2">
-        <Stepper label="Entries" onPlus={() => adj('adjEntries', 1)} onMinus={() => adj('adjEntries', -1)} />
-        <Stepper label="Player" onPlus={() => adjPlayer(1)} onMinus={() => adjPlayer(-1)} />
-        <Stepper label="Rebuy" onPlus={() => adj('adjRebuys', 1)} onMinus={() => adj('adjRebuys', -1)} />
-        <Stepper label="Early" onPlus={() => adj('adjEarlies', 1)} onMinus={() => adj('adjEarlies', -1)} />
-        <Stepper label="Addon" onPlus={() => adj('adjAddons', 1)} onMinus={() => adj('adjAddons', -1)} />
+        <Stepper label="Entries" value={liveStats.entries} onPlus={() => adj('adjEntries', 1)} onMinus={() => adj('adjEntries', -1)} />
+        <Stepper label="Player" value={liveStats.alive} onPlus={() => adjPlayer(1)} onMinus={() => adjPlayer(-1)} />
+        <Stepper label="Rebuy" value={liveStats.rebuys} onPlus={() => adj('adjRebuys', 1)} onMinus={() => adj('adjRebuys', -1)} />
+        <Stepper label="Early" value={liveStats.earlies} onPlus={() => adj('adjEarlies', 1)} onMinus={() => adj('adjEarlies', -1)} />
+        <Stepper label="Addon" value={liveStats.addons} onPlus={() => adj('adjAddons', 1)} onMinus={() => adj('adjAddons', -1)} />
       </div>
 
       {/* ④ 소리 */}
@@ -970,14 +970,21 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
   );
 }
 
-function Stepper({ label, onPlus, onMinus, size = 'sm', plusDisabled, minusDisabled }: {
-  label: string; onPlus: () => void; onMinus: () => void;
+/** value: 현재 값을 라벨 옆에 같이 보인다.
+ *  왜 생겼나: 03cd8bb 가 운영자 보드를 ClockStage 한 벌로 합치면서 우측 Stat 열의
+ *  '리바이 / 얼리' 가 지워졌다. TV 레일에는 얼리가 원래 없었으므로 **운영자 화면에서만** 사라졌고,
+ *  그러면서 조작 버튼만 남아 '누르면 바뀌는데 얼마가 됐는지 볼 곳이 없는' 상태가 됐다.
+ *  TV 레이아웃 계약(타이머 y 고정)을 건드리지 않는 가장 작은 복원이다. */
+function Stepper({ label, value, onPlus, onMinus, size = 'sm', plusDisabled, minusDisabled }: {
+  label: string; value?: number; onPlus: () => void; onMinus: () => void;
   size?: 'sm' | 'lg'; plusDisabled?: boolean; minusDisabled?: boolean;
 }) {
   const box = size === 'lg' ? 'w-10 h-10 text-base' : 'w-7 h-7 text-sm';
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <span className="text-[9px] text-white/45">{label}</span>
+      <span className="text-[9px] text-white/45">
+        {label}{value !== undefined && <b className="ml-1 font-bold tabular-nums text-white/80">{value}</b>}
+      </span>
       <div className={size === 'lg' ? 'flex gap-1.5' : 'flex gap-0.5'}>
         <button type="button" onClick={onPlus} disabled={plusDisabled} className={`${box} rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-[#8B94E8] leading-none disabled:opacity-30`}>＋</button>
         <button type="button" onClick={onMinus} disabled={minusDisabled} className={`${box} rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-danger-light leading-none disabled:opacity-30`}>－</button>

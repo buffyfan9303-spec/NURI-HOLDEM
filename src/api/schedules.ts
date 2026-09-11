@@ -99,7 +99,12 @@ function rowToSchedule(r: any): Schedule {
     grade: r.grade ?? null,
     blinds: r.blinds ?? undefined,
     regCloseTime: r.reg_close_time,
-    buyIn: r.buy_in, seats: r.seats, structure: r.structure,
+    // ⚠ buy_in 은 `jsonb NOT NULL DEFAULT '{}'` 다(운영 DB 확인). null 은 못 오지만 **빈 객체**는 온다 —
+    //   그러면 buyIn.amount 가 undefined 라 `.amount.toLocaleString()` 호출부가 **렌더에서 터진다**
+    //   (MyPostersTab·AdminTab·DraggableList 등 4곳. 형제 호출부는 이미 `?.amount ?? 0` 로 막고 있었다).
+    //   한 곳씩 막지 않고 매퍼에서 형태를 보장한다 — 타입(BuyInInfo.amount: number)과 런타임을 일치시킨다.
+    buyIn: { ...(r.buy_in ?? {}), amount: Number(r.buy_in?.amount) || 0 },
+    seats: r.seats, structure: r.structure,
     description: r.description,
     sideEvents: r.side_events, rankingPrizes: r.ranking_prizes,
     partners: r.partners, promotions: r.promotions,

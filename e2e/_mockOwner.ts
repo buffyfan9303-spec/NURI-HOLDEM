@@ -113,6 +113,12 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
     return r.fulfill(json(isSingle(r) ? null : []));
   });
   await page.route(/\/rest\/v1\/ledger_buyins\?/, restGet([]));
+  // ⚠ ledger_players 는 '있으면 좋은' 조회가 아니라 **차단 조회**다.
+  //   getLedgerPlayers 는 실패를 삼키지 않고 throw 하는데(src/api/ledger.ts), 그게
+  //   StoreDashboard 의 core Promise.all 과 NuriPosLedger 첫 로더에 들어 있다 —
+  //   한 줄이 없으면 '내 매장' 첫 화면부터 LoadErrorCard 다. 아무도 대시보드를 단언하지 않아
+  //   그동안 드러나지 않았을 뿐이다(2026-09-12 적대적 검토에서 발견).
+  await page.route(/\/rest\/v1\/ledger_players\?/, restGet([]));
   await page.route(/\/rest\/v1\/venue_rankings\?/, restGet([]));
   await page.route(/\/rest\/v1\/game_presets\?/, restGet([]));
   // 클락 상태는 **항상** 라우트한다 — clock 을 안 준 스펙에서도.

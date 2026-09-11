@@ -36,6 +36,8 @@ test('클락 스테이지 — 3열 판정은 뷰포트가 아니라 스테이지
     for (const [name, w, h] of [
       ['미리보기16:9', 900, 506], ['가로TV', 1920, 1080], ['세로TV', 1080, 1920], ['작은미리보기', 600, 338],
       ['운영자미리보기', 560, 315], ['세로폰', 390, 844], ['정사각', 900, 880],
+      // 경계(5/4=1.25) 양쪽 — 이게 없으면 경계값을 4/3 으로 올리든 1.1 로 내리든 표가 전부 초록이다.
+      ['5대4TV', 1280, 1024], ['4대3TV', 1440, 1080],
     ] as [string, number, number][]) {
       const stage = document.createElement('div');
       stage.style.cssText = `width:${w}px;height:${h}px;container-type:size`;
@@ -74,6 +76,13 @@ test('클락 스테이지 — 3열 판정은 뷰포트가 아니라 스테이지
     .toMatchObject({ 열수: '3', 좌우열: 'flex' });
   expect(table['운영자미리보기'], `운영자 16:9 미리보기가 1열이다 — 프라이즈 열·지표 레일이 사라진다\n${dump}`)
     .toMatchObject({ 열수: '3', 좌우열: 'flex', 보조줄: 'none' });
+  // 🔴 경계 양쪽을 못박는다. 5:4(1.25)는 **펴고** 정사각(1.023)은 접는다 —
+  //   4/3(1.333)으로 올렸다가 5:4 모니터 전체화면 송출이 1열로 뒤집히는 회귀를 만들었다(되돌림).
+  expect(table['5대4TV'], `5:4 모니터가 1열이다 — 전체화면 송출에서 프라이즈 열·지표 레일이 사라진다\n${dump}`)
+    .toMatchObject({ 열수: '3', 좌우열: 'flex', 보조줄: 'none' });
+  expect(table['4대3TV'], `4:3 모니터가 1열이다\n${dump}`)
+    .toMatchObject({ 열수: '3', 좌우열: 'flex' });
+
   // 세로·정사각은 여전히 접힌다 — 여기서 3열을 펴면 중앙 열이 좁아 타이머가 좌우를 뚫는다.
   expect(table['세로폰'], `세로 폰 관전이 3열이다\n${dump}`)
     .toMatchObject({ 열수: '1', 좌우열: 'none', 보조줄: 'grid' });
@@ -129,4 +138,28 @@ test('클락 TV — 세로 스테이지(세로 TV)에서는 1열로 접힌다', 
   // 세로에서 3열이 되면 vmin(=폭) 기준 타이머가 우측 지표를 덮는다 — ①의 회귀.
   await expect(page.getByTestId('clk-prizes'), '세로 TV 가 3열이다 — 타이머가 지표를 덮는다').toBeHidden();
   await expect(page.getByTestId('clk-rails'), '세로 TV 가 3열이다').toBeHidden();
+});
+
+// ── ④ 클락이 없어도 **나가는 문**은 있어야 한다 ─────────────────────────────
+//
+// 03cd8bb 이 보드를 ClockStage 로 옮기며 머리말을 통째로 스테이지 안에 넣었다. 스테이지는
+// 클락이 있을 때만 그려지므로, '진행 중인 클락이 없습니다' 화면에서 닫기(✕)와 전체화면이
+// 통째로 사라졌다. 이 화면은 별도 창이 아니라 앱 위의 `fixed inset-0` 오버레이라,
+// 보이는 탈출구가 없으면 ESC 를 아는 사람만 빠져나온다 — 접근성 기본이고 라이브 화면이다.
+test('클락 TV — 진행 중인 클락이 없어도 닫기·전체화면이 남아 있다', async ({ page }) => {
+  await stabilizeBackstack(page);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  // 빈 목록 = '진행 중인 클락이 없습니다' 분기
+  await page.route(/\/rest\/v1\/clock_states/, (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(`/?display=${TV_VENUE}&g=1&auto=0`);
+  await expect(page.getByText('진행 중인 클락이 없습니다')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('button', { name: '닫기' }),
+    '클락이 없는 TV 화면에 닫기 버튼이 없다 — 전체화면 오버레이에서 빠져나갈 보이는 수단이 사라졌다')
+    .toBeVisible();
+  await expect(page.getByRole('button', { name: '전체화면' }),
+    '클락이 없는 TV 화면에 전체화면 버튼이 없다').toBeVisible();
+  // 실제로 닫히는지까지 — 버튼이 보이기만 하고 안 닫히면 탈출구가 아니다.
+  await page.getByRole('button', { name: '닫기' }).click();
+  await expect(page.getByText('진행 중인 클락이 없습니다'), 'X 를 눌러도 오버레이가 닫히지 않는다').toBeHidden();
 });

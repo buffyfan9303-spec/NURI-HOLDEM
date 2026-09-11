@@ -10,9 +10,14 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 const SRC = readFileSync(join(__dirname, 'TournamentClock.tsx'), 'utf-8');
 /** 주석은 이력을 적는 자리다 — 실제 코드만 본다. */
-const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const code = strip(SRC);
+/** 🔴 보드 본체는 2026-09-11(03cd8bb)에 ClockStage.tsx 로 나갔다.
+ *  아래 '크기 체계 한 벌' 게이트가 TournamentClock 만 보면 **재는 대상이 없어 늘 초록**이다
+ *  (리팩터 전 29곳이던 cqw/cqh 실사용이 0곳이 됐다). 두 파일을 함께 본다. */
+const stageCode = strip(readFileSync(join(__dirname, 'ClockStage.tsx'), 'utf-8'));
 
 describe('전체화면은 조작 콘솔을 렌더하지 않는다', () => {
   it('🔴 consoleUI 는 `!fs` 조건에서만 렌더된다', () => {
@@ -71,8 +76,21 @@ describe('운영자 미리보기는 TV 와 같은 얼굴을 쓴다', () => {
   });
 
   it('🔴 크기 체계가 한 벌이다 — `fs ? cq단위 : 고정px` 이중 관리가 남지 않았다', () => {
-    const dual = [...code.matchAll(/fs \? '[^']*(?:cqw|cqh)[^']*' : '[^']*'/g)];
+    // 단위 패턴을 cqw|cqh 에서 **cq 계열 전체**로 넓힌다 — 보드가 cqmin 으로 옮겨가며
+    // 옛 정규식은 새 단위를 한 글자도 못 본다(공허해진 두 번째 이유).
+    const dual = [...(code + stageCode).matchAll(/fs \? '[^']*cq[a-z]{1,3}[^']*' : '[^']*'/g)];
     expect(dual.map((m) => m[0]), '전체화면과 미리보기가 서로 다른 크기 체계를 쓴다').toEqual([]);
+  });
+
+  it('🔴 이 게이트가 재는 대상이 실제로 있다 — 보드가 cq 단위를 쓰고 있다', () => {
+    // 위 테스트는 '없음'을 재므로 대상이 0이면 영원히 초록이다. 대상의 존재를 따로 못박는다.
+    // 선행 \b 를 쓰면 안 된다 — `5cqmin` 처럼 **숫자 바로 뒤**에 붙어 경계가 생기지 않는다(0건이 나왔다).
+    const units = [...stageCode.matchAll(/cq(?:min|max|w|h|i|b)\b/g)].length;
+    expect(units, 'ClockStage 에 cq 단위가 하나도 없다 — 보드가 옮겨갔거나 단위 체계가 바뀌었다').toBeGreaterThan(20);
+  });
+
+  it('🔴 보드(ClockStage)는 전체화면 여부를 모른다 — 크기 체계가 하나라는 증거', () => {
+    expect(/\bfs\b/.test(stageCode), 'ClockStage 가 fs 를 안다 — 두 벌 크기 체계가 다시 들어왔다').toBe(false);
   });
 
   it('PC 에서 좌 미리보기 / 우 콘솔이 상단 정렬로 나란히 선다', () => {

@@ -11,12 +11,14 @@
 //   · schedules_select 를 함께 건드려 20260911m(미적용)과 충돌하는 것
 //   · 화면이 다시 role 로 판정하게 되돌아가는 것 · 목록이 다시 owner 기준으로 돌아가는 것
 //
-// ⚠ 왜 e2e 가 아니라 소스 단언인가
-//   목킹 업주(e2e/_mockOwner)로 '게임 진행 > 포스터' 판을 열면 그 판이 에러 경계로 떨어진다 —
-//   가짜 JWT 로는 realtime 구독(subscribeCheckins·subscribeLedger)이 붙지 못하고, 그 실패가
-//   effect 에서 나므로 경계가 판 전체를 대신 그린다. **내 변경과 무관한 목킹의 한계**다
-//   (owner 필터로 되돌려도 똑같이 떨어진다 — 실측 확인). 그래서 런타임 경로는 여기서 잠그지 못한다.
-//   나중에 목킹에 realtime 스텁을 붙이면 e2e 로 승격할 것. 앵커는 이미 심어 뒀다(data-testid="my-posters").
+// ⚠ 정정(2026-09-12) — 이 자리에 '포스터 판이 realtime 때문에 에러 경계로 떨어진다' 고 적었던 것은 **틀렸다**.
+//   실제 원인 둘: ① 픽스처의 `buy_in: ''` → MyPostersTab 의 `schedule.buyIn.amount` 무가드 역참조가
+//   렌더에서 TypeError(같은 커밋에서 매퍼를 고쳤다) ② e2e/_mockOwner 에 ledger_players 라우트가 없어
+//   대시보드 core 가 401 로 거절(같은 커밋에서 추가했다). realtime 구독은 `.subscribe()` 를 콜백 없이
+//   부르므로 join 이 거부돼도 **throw 하지 않는다** — 애초에 원인이 될 수 없었다.
+//   둘 다 고쳤으므로 이 계약은 e2e 로 승격할 수 있다(앵커 data-testid="my-posters" 는 이미 있다).
+//   지금 소스 단언으로 두는 이유는 하나뿐이다: 서버 쪽(RLS·판정 함수)은 운영 DB 쓰기가 막혀 있어
+//   실행으로 검증할 수 없고, 그 검증은 적용 시 마이그레이션 하단 DO 블록이 맡는다.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

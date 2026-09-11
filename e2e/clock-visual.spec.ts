@@ -309,6 +309,12 @@ test.describe('PC 운영자 화면', () => {
       //   텍스트 정규식으로는 못 잡는다. 정규식을 넓히면 다른 버튼까지 걸리므로 testid 로 고정한다.
       const start = page.getByTestId('clk-main-action');
       await expect(start, '운영자 콘솔의 주 버튼이 없다 — 권한 판정 또는 클락 진입이 깨졌다').toBeVisible({ timeout: 20_000 });
+
+      // 🔴 미리보기 = TV 축소판. TV 쪽(clock-stage-container)과 **같은 것**을 여기서도 잰다 —
+      //   보드를 한 벌로 합친 뒤에도 한쪽만 접히는 일이 실제로 있었다(컨테이너 쿼리 전제 누락).
+      await expect(page.getByTestId('clk-prizes'),
+        '미리보기에 프라이즈 열이 없다 — 스테이지 컨테이너 전제나 경계값이 깨졌다').toBeVisible();
+      await expect(page.getByTestId('clk-rails'), '미리보기에 지표 레일이 없다 — 같은 원인').toBeVisible();
       await page.screenshot({ path: `test-results/clock-shots/${PHASE}-director-${name}.png` });
 
       // 첫 화면(스크롤 없이) 안에 있어야 한다 — 1366x768 에서도.
