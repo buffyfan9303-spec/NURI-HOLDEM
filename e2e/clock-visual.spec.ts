@@ -60,6 +60,9 @@ function row(o: {
 
 /** 지시된 상태 9종(메인/사이드 포함). 배경 이미지 유무는 매장 테마라 별도. */
 const STATES: { key: string; note: string; body: ReturnType<typeof row> }[] = [
+  // 🔴 오너 보고 1번 — emptyClockState 가 쓰는 그 모양(running=false · endsAt=null · index=0 · 1레벨 만액).
+  //   예전에는 TV 가 이걸 'PAUSED(일시정지)' 라고 말했다. 지금은 READY(시작 전)여야 한다.
+  { key: 'idle', note: '시작 전(시작 준비)', body: row({ running: false, remainMs: 20 * 60_000, endsInMs: null }) },
   { key: 'running', note: '일반 진행', body: row({ endsInMs: 12 * 60_000 + 34_000 }) },
   { key: 'last60', note: '마지막 60초', body: row({ endsInMs: 47_000 }) },
   { key: 'paused', note: '일시정지', body: row({ running: false, remainMs: 8 * 60_000 + 12_000, endsInMs: null }) },
@@ -70,9 +73,19 @@ const STATES: { key: string; note: string; body: ReturnType<typeof row> }[] = [
   { key: 'side-game', note: '사이드 게임', body: row({ gameSeq: 2, title: '사이드 터보 30K', endsInMs: 9 * 60_000 }) },
 ];
 
+// 2026-09-11 오너 지시 해상도 전수 — 16:9 stage 가 어느 화면비에서도 찌그러지지 않는지.
+//   울트라와이드(21:9·3440)는 좌우 레터박스, 세로(1080x1920)는 상하 레터박스가 **정상**이다.
+//   모바일(390x844)은 md 미만이라 좌우 열이 접히고 1열로 흐른다 — 그 경로도 깨지지 않는지 본다.
 const VIEWS: [string, number, number][] = [
   ['1920x1080', 1920, 1080],
   ['1366x768', 1366, 768],
+  ['1440x900', 1440, 900],
+  ['1024x768', 1024, 768],
+  ['911x505', 911, 505],
+  ['2560x1440', 2560, 1440],
+  ['3440x1440', 3440, 1440],
+  ['1080x1920', 1080, 1920],
+  ['390x844', 390, 844],
   ['4x3', 1440, 1080],
   ['21x9', 2560, 1080],
 ];

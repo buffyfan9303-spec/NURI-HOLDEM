@@ -54,3 +54,6 @@ service-account*.json
 playstore/screenshots/
 playstore/screenshots-real/
 playstore/*.png
+
+# 클락 TV 시각 검증 캡처 — 로컬 확인용(42MB). e2e/clock-visual.spec.ts 로 언제든 재생성한다.
+docs/clock-shots/

@@ -322,8 +322,17 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                   내용이 프레임 안에서 떠 보였다. 위아래 비대칭인 이유: 블라인드 행이 h-[22vmin] **고정**이라
                   그 안에서 내용이 중앙 정렬되면서 아래쪽에만 빈 띠가 더 남는다 — 그래서 bottom 을 더 올린다. */}
               <span aria-hidden className="pointer-events-none absolute inset-x-[7%] bottom-[14%] top-[13%] hidden md:landscape:block">
+                {/* 바깥 선 + **뒤로 번지는 LED**. box-shadow 두 겹이 전부다 —
+                    밖으로 2.6vmin 번져 패널 뒤 광원이 벽을 비추는 느낌을 만들고(§15 2단계),
+                    안으로 1.2vmin 은 테두리 안쪽을 살짝 채워 선이 납작해 보이지 않게 한다.
+                    filter·blur 를 쓰지 않는다 — 상시 송출 TV 라 1회 페인트 후 정적이어야 한다
+                    (프로젝트 관례도 글로우는 box-shadow 로 만든다). 알파는 §15 상한 0.18 안. */}
                 <span className="absolute inset-0 rounded-[8vmin] border-2"
-                  style={{ borderColor: 'var(--clk-frame, rgba(129,140,248,.65))' }} />
+                  style={{
+                    borderColor: 'var(--clk-frame, rgba(129,140,248,.65))',
+                    boxShadow: '0 0 2.6vmin color-mix(in srgb, var(--clk-accent, #818CF8) 16%, transparent),'
+                             + ' inset 0 0 1.2vmin color-mix(in srgb, var(--clk-accent, #818CF8) 10%, transparent)',
+                  }} />
                 <span className="absolute inset-[1.1vmin] rounded-[7vmin] border"
                   style={{ borderColor: 'var(--clk-frame-soft, rgba(129,140,248,.38))' }} />
                 {/* 뒤쪽 LED bloom — 프레임 안쪽에만, 글자 뒤로는 번지지 않게 closest-side 로 가둔다 */}
