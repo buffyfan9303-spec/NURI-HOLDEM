@@ -467,7 +467,10 @@ export default function ToolsPanel() {
           {([{ id: 'all' as const, label: '전체' }, ...LANES]).map((l) => {
             const on = lane === l.id;
             return (
-              <button key={l.id} type="button" aria-pressed={on}
+              // data-lane: e2e 가 라벨 대신 이 값을 짚는다. 라벨은 오너 지시로 자주 바뀌는데
+              //   (예전 '계산기' → 지금 '규칙 · 수학') 셀렉터가 라벨에 묶여 있으면 이름만 바꿔도
+              //   게이트가 조용히 꺼진다 — subtab-motion 의 tools-lane 계측이 실제로 그렇게 죽어 있었다.
+              <button key={l.id} type="button" aria-pressed={on} data-lane={l.id}
                 onClick={() => { const next = on && l.id !== 'all' ? 'all' : l.id; goSubTab('tools-lane', LANE_ORDER, lane, next, () => setLane(next)); }}
                 className={['tap-y-44 inline-flex h-8 items-center rounded-badge border px-2.5 text-2xs font-semibold transition-colors',
                   on ? 'border-accent-300 bg-accent-300 text-white' : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>

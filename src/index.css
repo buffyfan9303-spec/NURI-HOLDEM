@@ -1523,6 +1523,35 @@ html[data-vt-scope='rank-tab'][data-vt-dir='back']::view-transition-new(rank-pan
 ::view-transition-old(community-secbar), ::view-transition-new(community-secbar),
 ::view-transition-old(venue-tabbar), ::view-transition-new(venue-tabbar) { animation: none; }
 
+/* ── 활성 라벨은 **제자리에 있어야 한다** (오너 리포트 2026-09-11) ────────────────
+   위 *-label 이름들은 전부 `[data-pill-active]` 에 붙는데, 그 선택자는 탭을 바꾸는 순간
+   **옛 버튼에서 새 버튼으로 옮겨간다**. VT 는 같은 이름의 old/new 를 한 요소로 보고 그 사이를
+   보간하므로, 라벨이 옛 자리에서 새 자리로 **끌려간다** — 오너가 본 "글자가 pill을 따라간다".
+   (3552ae4 가 '글자가 알약에 덮인다'를 고치며 이름을 붙였고, 덮임은 실제로 사라졌지만
+    이름이 움직이는 대상에 붙었다는 부작용이 남았다.)
+
+   이름을 빼면 안 된다 — 이름이 없으면 라벨이 바 스냅샷 안으로 들어가고, 알약 그룹이 그 위에
+   깔려 글자를 통째로 덮는다(3552ae4 의 원래 결함이 그대로 재발한다).
+   이름은 **알약 위로 올리려고** 붙인 것이지 미끄러뜨리려고 붙인 것이 아니다.
+   그래서 이름은 두고 그룹의 이동만 끈다: 라벨은 새 자리에 즉시 있고, 알약만 미끄러진다.
+   old 를 감추는 이유 — 그룹이 새 위치에 고정되므로 old 이미지(옛 글자)가 새 자리에 겹쳐
+   두 단어가 교차 페이드되며 뭉개진다. 새 스냅샷만 남기면 그 착시가 없다. */
+::view-transition-group(community-label), ::view-transition-group(venue-label),
+::view-transition-group(rank-label),      ::view-transition-group(adminpos-label),
+::view-transition-group(group-label),     ::view-transition-group(sched-label),
+::view-transition-group(notif-label),     ::view-transition-group(legal-label),
+::view-transition-group(crm-label) { animation: none; }
+::view-transition-old(community-label), ::view-transition-old(venue-label),
+::view-transition-old(rank-label),      ::view-transition-old(adminpos-label),
+::view-transition-old(group-label),     ::view-transition-old(sched-label),
+::view-transition-old(notif-label),     ::view-transition-old(legal-label),
+::view-transition-old(crm-label) { animation: none; opacity: 0; }
+::view-transition-new(community-label), ::view-transition-new(venue-label),
+::view-transition-new(rank-label),      ::view-transition-new(adminpos-label),
+::view-transition-new(group-label),     ::view-transition-new(sched-label),
+::view-transition-new(notif-label),     ::view-transition-new(legal-label),
+::view-transition-new(crm-label) { animation: none; opacity: 1; }
+
 /* ── 하위 탭 전수 적용(오너 #10, 2026-08-30) ─────────────────────────────────────
    "하위탭들 이동시 기존에 정해놨던 부드러운 모션을 빠짐없이."
    위 venue-tab · rank-tab 과 **같은 레시피**다 — 새 이징·새 duration·새 키프레임 0.

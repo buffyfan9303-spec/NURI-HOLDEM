@@ -112,7 +112,10 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     await page.locator('nav').getByRole('button', { name: 'GTO', exact: true }).first().click();
     const bar = page.locator('[data-tools-lanebar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
-    const samples = await probe(page, bar.getByRole('button', { name: '계산기', exact: true }));
+    // ⚠ 라벨이 아니라 data-lane 으로 짚는다 — 예전엔 '계산기' 라는 이름으로 짚었는데 레인 라벨이
+    //    '규칙 · 수학' 으로 바뀌면서 **이 계측이 조용히 죽어 있었다**(클릭 타임아웃으로만 드러났다).
+    //    CLAUDE.md 규약: 라벨에 묶인 셀렉터는 라벨을 바꾸는 커밋에서 data-* 로 갈아탄다.
+    const samples = await probe(page, bar.locator('[data-lane="rules"]'));
     expectPanelPush(samples, 'tools-lanepanel', 'tools-lanebar');
   });
 
@@ -278,6 +281,19 @@ ${joined}`).toBeGreaterThanOrEqual(2);
     expect(samples.filter((x) =>
       (x.startsWith('::view-transition-old(community-secbar) :: ') || x.startsWith('::view-transition-new(community-secbar) :: '))
       && !x.endsWith(':: ')), `탭바가 애니메이트됐다 — 제자리에 고정돼야 한다
+실측:
+${joined}`).toEqual([]);
+
+    // ④ **글자는 따라가지 않는다**(오너 리포트 2026-09-11: "탭을 이동하면 글자가 pill을 따라가").
+    //    community-label 은 [data-pill-active] 에 붙는데 그 선택자는 탭을 바꾸는 순간 옛 버튼에서
+    //    새 버튼으로 **옮겨간다**. VT 는 같은 이름의 old/new 를 한 요소로 보고 보간하므로, 이름만
+    //    주고 두면 활성 라벨이 옛 자리 → 새 자리로 끌려간다. 이름 자체는 있어야 한다(없으면 라벨이
+    //    바 스냅샷에 들어가 알약에 덮인다 — ①의 반대쪽 결함) → 이름은 두고 **이동만** 끈 것이
+    //    index.css 의 ::view-transition-group(community-label) { animation: none } 이다.
+    //    여기서 그룹 애니메이션이 되살아나면 그 규칙이 지워졌거나 뒤에서 덮인 것이다.
+    expect(samples.filter((x) => x.startsWith('::view-transition-group(community-label) :: ') && !x.endsWith(':: ')),
+      `활성 라벨 그룹이 애니메이트됐다 — 글자가 알약을 따라 미끄러진다(오너가 리포트한 그 증상).
+index.css 의 ::view-transition-group(community-label) { animation: none } 를 확인하라.
 실측:
 ${joined}`).toEqual([]);
   });
