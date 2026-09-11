@@ -1901,19 +1901,31 @@ nav[aria-label="하단 내비게이션"] > div:not([aria-hidden]) {
    뷰포트로 판정하면 둘이 어긋난다: 세로 태블릿에서는 가로 미리보기가 1열로 접히고,
    세로 TV(1080×1920)에서는 폭 1080 만 보고 3열이 되어 vmin(=폭) 기준 타이머가
    우측 지표를 뚫고 나갔다(2026-09-11 실측). 기준은 **스테이지 자신의 크기**여야 한다.
-   경계값 768px·landscape 는 종전 `md:landscape:` 와 같은 값이라 TV 렌더는 픽셀 동일.
-   전제: 스테이지 루트에 `container-type: size` 가 걸려 있다(두 호출처 모두 그렇다). */
+   전제: 스테이지 루트에 `container-type: size` 가 걸려 있다(두 호출처 모두 그렇다).
+
+   ⚠ 2026-09-11 물리적 단일화 이후 — 판정 기준을 `폭 768px + landscape` 에서 **가로세로비**로 바꿨다.
+     왜: 보드의 크기 단위가 전부 cqmin(스테이지의 짧은 변)이 되면서 **절대 픽셀이 의미를 잃었다.**
+     같은 보드가 1920×1080 에서든 600×338 에서든 비율이 완전히 동일하게 그려진다 —
+     달라지는 것은 '몇 px 인가' 뿐이고, 그건 3열이 들어가느냐와 무관하다.
+     그래도 768px 을 남겨 두면 **운영자 16:9 미리보기(1440 창에서 약 560px)가 1열로 접혀**
+     프라이즈 열과 지표 레일이 사라진다 — '미리보기 = TV 축소판' 이라는 약속이 깨지고,
+     운영자가 예전 보드에서 보던 정보를 잃는다(기능 소실).
+     3열이 실제로 안 들어가는 조건은 **세로·정사각에 가까운 스테이지**다 — 그게 가로세로비다.
+     4/3 을 경계로 둔다: 16:9·21:9·4:3 TV 와 16:9 미리보기는 전부 통과, 세로 TV·세로 폰은 접힌다. */
 .clk-cols { display: grid; grid-template-columns: minmax(0, 1fr); }
-.clk-col { display: none; }        /* 좌/우 열 — 넓고 가로일 때만 */
-.clk-wide-land { display: none; }  /* 중앙 프레임 같은 장식 — 넓고 가로일 때만 */
-.clk-wide-only { display: none; }  /* 폭만 보는 것(총 진행 시간) */
-.clk-land-only { display: none; }  /* 가로만 보는 것(Powered by) */
+.clk-col { display: none; }        /* 좌/우 열 — 가로 보드일 때만 */
+.clk-wide-land { display: none; }  /* 중앙 프레임 같은 장식 — 가로 보드일 때만 */
+.clk-wide-only { display: none; }  /* 가로 보드에서만 (총 진행 시간) */
+.clk-land-only { display: none; }  /* 가로 보드에서만 (Powered by) */
 .clk-narrow-only { display: grid; }/* 1열로 접혔을 때만 나오는 보조 줄 */
-@container (min-width: 768px) { .clk-wide-only { display: block; } }
-@container (orientation: landscape) { .clk-land-only { display: block; } }
-@container (min-width: 768px) and (orientation: landscape) {
+/* 하단 칩 경제 레일 — 가로 보드에서만 칸 사이를 넓힌다(종전 `landscape:gap-[4vmin]`).
+   세로에서 4cqmin 을 주면 'QR + 3칸 + Powered by' 가 폭을 넘겨 숫자가 두 줄로 쪼개진다. */
+@container (min-aspect-ratio: 4/3) {
   .clk-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 2.5fr) minmax(0, 1fr); }
   .clk-col { display: flex; }
   .clk-wide-land { display: block; }
+  .clk-wide-only { display: block; }
+  .clk-land-only { display: block; }
   .clk-narrow-only { display: none; }
+  .clk-metrics { gap: 4cqmin; }
 }

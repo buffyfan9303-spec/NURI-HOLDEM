@@ -3,7 +3,6 @@
 // 와홀덤/Roti 클락 구조를 따르되 NURI 테마로. 장부 연동 카운트 자동 산출 + 수기 보정.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../../atoms/Toast';
-import { WORDMARK_D, WORDMARK_VIEWBOX } from '../../atoms/wordmark';
 import { useBackClose } from '../../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../../lib/scrollLock';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -21,7 +20,7 @@ import {
   getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames, openLedgerSession,
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
-import { clockPhase, CLOCK_PHASE_LABEL, CLOCK_PHASE_ACTION } from '../../../lib/clockLevel';
+import { clockPhase, CLOCK_PHASE_ACTION } from '../../../lib/clockLevel';
 import { listGamePresets, saveGamePreset, type GamePreset } from '../../../api/presets';
 import { applyToClock, presetFromClockConfig } from '../../../lib/gameInherit';
 import PresetPicker from '../PresetPicker';
@@ -36,59 +35,23 @@ import { readSnap, writeSnap } from '../../../lib/snapshot';
 import QRCode from 'qrcode';
 import Icon from '../../atoms/Icon';
 import ClockThemePanel from './ClockThemePanel';
+import ClockStage from './ClockStage';
 
 const now = () => Date.now();
+/** 멀티클락 개요 카드의 mm:ss — 보드 포매터는 ClockStage 로 갔고 여기 남은 유일한 표시용 헬퍼다. */
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
-function mmss(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  return `${pad(s / 60)}:${pad(s % 60)}`;
-}
-function hms(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}`;
-}
 const computeRemaining = (s: ClockState): number =>
   s.running && s.endsAt ? new Date(s.endsAt).getTime() - now() : s.remainingMs;
 
 // 현재 인덱스부터 다음 브레이크까지 남은 ms(현재 레벨 잔여 + 중간 레벨 길이 합)
-function msToNextBreak(s: ClockState, remaining: number): number | null {
-  const lv = s.config.levels;
-  let acc = remaining;
-  for (let i = s.currentIndex + 1; i < lv.length; i++) {
-    if (lv[i].kind === 'break') return acc;
-    acc += lv[i].minutes * 60_000;
-  }
-  return null;
-}
-// 등록 마감 레벨 시작까지 남은 ms
-function msToRegClose(s: ClockState, remaining: number): number | null {
-  const lv = s.config.levels;
-  const target = s.config.regCloseLevel;
-  let acc = remaining, num = 0;
-  for (let i = 0; i <= s.currentIndex; i++) if (lv[i].kind === 'level') num++;
-  if (num >= target) return 0; // 이미 마감 레벨 이상
-  for (let i = s.currentIndex + 1; i < lv.length; i++) {
-    if (lv[i].kind === 'level') { num++; if (num >= target) return acc; }
-    acc += lv[i].minutes * 60_000;
-  }
-  return null;
-}
-// 레벨 번호(브레이크 제외) 계산
 function levelNumberAt(cfg: ClockConfig, index: number): number {
   let n = 0;
   for (let i = 0; i <= index && i < cfg.levels.length; i++) if (cfg.levels[i].kind === 'level') n++;
   return n;
 }
-function nextPlayableLabel(cfg: ClockConfig, index: number): string {
-  const lv = cfg.levels;
-  const nx = lv[index + 1];
-  if (!nx) return '마지막 레벨';
-  if (nx.kind === 'break') return `다음 · ${nx.label || '휴식'}`;
-  return `다음 레벨 ${levelNumberAt(cfg, index + 1)} · ${nx.sb.toLocaleString()} / ${nx.bb.toLocaleString()}${nx.ante > 0 ? ` · ANTE ${nx.ante.toLocaleString()}` : ''}`;
-}
 
 // ── 메인: 설정 ↔ 라이브 ─────────────────────────────────────────────────────────
-export default function TournamentClock({ venueId, canManage, seedSessionDate, seedGameSeq = 1, active = true }: { venueId: string; canManage: boolean; seedSessionDate?: string | null; seedGameSeq?: number; active?: boolean }) {
+export default function TournamentClock({ venueId, canManage, venueName, seedSessionDate, seedGameSeq = 1, active = true }: { venueId: string; canManage: boolean; venueName?: string; seedSessionDate?: string | null; seedGameSeq?: number; active?: boolean }) {
   const toast = useToast();
   const [state, setState] = useState<ClockState | null>(null);
   const [presets, setPresets] = useState<ClockPreset[]>([]);
@@ -237,6 +200,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
     <div className="space-y-2">
       <MultiClockOverview venueId={venueId} sessionDate={state.sessionDate} currentGameSeq={state.gameSeq} active={active} onSwitch={switchGame} onAddSide={addSide} onQuickStart={quickStart} />
       <ClockLive
+        venueName={venueName}
         state={state} canManage={canManage} active={active}
         onChange={(s) => setState(s)}
         onOpenSettings={() => setView('settings')}
@@ -313,8 +277,8 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
 }
 
 // ── 라이브 디스플레이 + 컨트롤 ──────────────────────────────────────────────────
-function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active = true }: {
-  state: ClockState; canManage: boolean;
+function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEnd, active = true }: {
+  state: ClockState; canManage: boolean; venueName?: string;
   onChange: (s: ClockState) => void; onOpenSettings: () => void; onEnd: () => void; active?: boolean;
 }) {
   const toast = useToast();
@@ -439,7 +403,6 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     openedAt: linkedSession?.openedAt ?? null,
   }), [buyins, linkedSession, cfg.earlyDoubleMin, cfg.earlySingleMin]);
   const liveStats = useMemo(() => computeLiveStats(state, derived, cfg), [state, derived, cfg]);
-  const { rebuys, earlies, addons, totalStack, avgStack, entries, alive } = liveStats;
 
   const persist = useCallback((patch: Partial<ClockState>) => {
     const next = { ...state, ...patch };
@@ -770,23 +733,16 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     };
   }, [fs]);
 
-  const nextBreak = msToNextBreak(state, remaining);
-  const regClose = msToRegClose(state, remaining);
-  // AVG STACK 의 BB 환산(실물 클락 ②티티X망고·④J-BLUFF 채택 패턴) — 플레이어가 실제 판단에
-  // 쓰는 값은 칩 수가 아니라 'BB 로 몇 개인가'다. 브레이크 중엔 직전 플레이 레벨의 BB 로.
-  const curBB = (() => {
-    for (let i = state.currentIndex; i >= 0; i--) {
-      const l = cfg.levels[i];
-      if (l && l.kind === 'level' && l.bb > 0) return l.bb;
-    }
-    return 0;
-  })();
-  const totalPrize = cfg.prizes.reduce((s, p) => s + (p.amount || 0), 0);
-  const isBreak = cur?.kind === 'break';
-  const levelNo = levelNumberAt(cfg, state.currentIndex);
 
   const title = (linkedSession?.title || cfg.title) || '토너먼트';
-  const urgent = remaining <= 60_000 && state.running && !isBreak;
+
+  /** ClockStage 에 넘기는 한 벌 — 저장 스냅샷이 아니라 **지금 파생값**을 얹는다.
+   *  TV 는 clock_states.live_stats(디바운스 저장된 스냅샷)를 읽지만 운영자 화면은
+   *  장부 변동을 즉시 봐야 한다 — 같은 보드에 다른 출처를 꽂는 것이 이 단일화의 요점이다. */
+  const stageState = useMemo(() => ({
+    ...state, title,
+    liveStats: { ...liveStats, buyInAmount: linkedSession?.buyinAmount ?? null },
+  }), [state, title, liveStats, linkedSession]);
 
   // 초기화 — 종료(END)와 달리 설정은 유지하고 레벨·시간·인원만 처음으로 되돌림
   const resetClock = () => {
@@ -953,122 +909,14 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         {/* 2026-09-02 v3 'NURI 아우라'(오너 승인) — TV(ClockDisplay)와 같은 정보 위계·색 체계. 라벨 한국어(ANTE 만 영문),
             골드는 프라이즈 금액에만, 레벨/블라인드 인디고, 타이머 순백. 조작부(아래 컨트롤 행)는 그대로. */}
 
-        {/* 전체 클락 공통 광고(운영자 등록) — 최상단 */}
-        {adImg && (
-          <div className="shrink-0 border-b border-white/[0.08] bg-black">
-            <img src={adImg} alt="광고" className={['mx-auto w-full object-contain',
-              adSize === 'sm' ? ('max-h-[7cqh]') : adSize === 'lg' ? ('max-h-[13cqh]') : ('max-h-[10cqh]')].join(' ')} />
-          </div>
-        )}
-
-        {/* 타이틀 바 */}
-        <div className="shrink-0 border-b border-white/[0.08] px-4 py-2 text-center">
-          <p className={['truncate font-extrabold tracking-tight text-white', 'text-[min(3.2cqw,3.8cqh)]'].join(' ')}>{title}</p>
-        </div>
-
-        {/* 본문 — 프라이즈(있을 때만) · 타이머 · 스탯 */}
-        <div className={['grid', cfg.prizes.length > 0 ? 'grid-cols-[minmax(76px,0.85fr)_2.6fr_minmax(90px,1fr)]' : 'grid-cols-[2.6fr_minmax(90px,1fr)]',
-          fs ? 'flex-1 min-h-0 overflow-hidden' : ''].join(' ')}>
-          {cfg.prizes.length > 0 && (
-            <div className="flex flex-col border-r border-white/[0.06] p-2 sm:p-3">
-              <p className={['mb-1 font-bold tracking-[0.08em] text-white/50', 'text-[min(1.5cqw,1.8cqh)]'].join(' ')}>프라이즈</p>
-              <ul className="space-y-0.5 overflow-hidden">
-                {cfg.prizes.map((p, i) => (
-                  <li key={i} className={['flex items-center justify-between gap-1', 'text-[min(1.8cqw,2.1cqh)]'].join(' ')}>
-                    <span className="truncate text-white/50">{/^\d+$/.test(p.place) ? `${p.place}위` : p.place}</span>
-                    <span className="font-bold tabular-nums text-[#F5C451]">{p.amount.toLocaleString()}</span>
-                  </li>
-                ))}
-              </ul>
-              {cfg.mysteryBounty > 0 && (
-                <div className="mt-2 border-t border-white/[0.08] pt-2">
-                  <p className={['font-bold tracking-[0.08em] text-white/50', 'text-[min(1.5cqw,1.8cqh)]'].join(' ')}>미스터리 바운티</p>
-                  <p className={['tabular-nums text-white', 'text-[min(1.9cqw,2.2cqh)]'].join(' ')}>{cfg.mysteryBounty.toLocaleString()}</p>
-                </div>
-              )}
-              <div className="mt-auto border-t border-white/[0.08] pt-2">
-                <p className={['font-bold tracking-[0.08em] text-white/50', 'text-[min(1.4cqw,1.7cqh)]'].join(' ')}>총 프라이즈</p>
-                <p className={['font-extrabold leading-tight tabular-nums text-[#F5C451]', 'text-[min(2.7cqw,3.1cqh)]'].join(' ')}>{totalPrize.toLocaleString()}</p>
-              </div>
-            </div>
-          )}
-
-          {/* 중앙: 타이머 */}
-          <div className={['relative flex flex-col items-center justify-center overflow-hidden text-center', fs ? 'py-2' : 'py-6 sm:py-10'].join(' ')}>
-            {/* 누리홀덤 로고 워터마크(투명) — 트레이드마크. 클락은 항상 다크라 흰 워드마크 사용 */}
-            <svg viewBox={WORDMARK_VIEWBOX} aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62cqh] select-none text-white opacity-[0.05]"><path fill="currentColor" d={WORDMARK_D} /></svg>
-            <p className={['relative mt-1 inline-block rounded-full border font-extrabold tracking-[0.18em]',
-              isBreak ? 'border-sky-300/40 bg-sky-300/10 text-sky-300' : 'border-[#818CF8]/55 bg-[#5850EC]/15 text-[#A5B4FC]',
-              'px-[2.4cqw] py-[0.5cqh] text-[min(2.6cqw,3.2cqh)]'].join(' ')}>
-              {isBreak ? (cur.label || '휴식') : `레벨 ${levelNo}`}
-            </p>
-            {isBreak && state.running && remaining <= 60_000 && (
-              <p className={['relative mt-1 font-bold text-amber-300 animate-pulse', 'text-[min(2.6cqw,3.1cqh)]'].join(' ')}>휴식 종료 1분 전</p>
-            )}
-            <p className={['my-1 font-extrabold leading-none tabular-nums drop-shadow-[0_3px_24px_rgba(88,80,236,0.35)] sm:my-2',
-              'text-[min(22cqw,32cqh)]',
-              urgent ? 'text-rose-400 animate-pulse' : isBreak ? 'text-sky-200' : 'text-white'].join(' ')}>
-              {mmss(Math.max(0, remaining))}
-            </p>
-            {!isBreak && (
-              <div className={['flex items-end justify-center', 'gap-[7cqw]'].join(' ')}>
-                <div>
-                  <p className={['font-bold tracking-[0.08em] text-white/50', 'text-[min(2cqw,2.4cqh)]'].join(' ')}>블라인드</p>
-                  <p className={['font-extrabold tabular-nums text-[#A5B4FC]', 'text-[min(4.8cqw,5.8cqh)]'].join(' ')}>{cur.sb.toLocaleString()}<span className="text-white/25"> / </span>{cur.bb.toLocaleString()}</p>
-                </div>
-                {cur.ante > 0 && (
-                  <div>
-                    <p className={['font-bold uppercase tracking-[0.18em] text-white/50', 'text-[min(2cqw,2.4cqh)]'].join(' ')}>Ante</p>
-                    <p className={['font-extrabold tabular-nums text-white', 'text-[min(4.8cqw,5.8cqh)]'].join(' ')}>{cur.ante.toLocaleString()}</p>
-                  </div>
-                )}
-              </div>
-            )}
-            <p className={['mt-3 font-semibold text-white/55', 'text-[min(2.6cqw,3.1cqh)]'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
-            {/* 🔴 결함 1 의 그 자리 — 예전엔 `!state.running` 이면 무조건 '일시정지'라, 아직 시작도 안 한
-                클락이 노란 '일시정지' 배지를 달고 있었다(같은 화면의 버튼은 '시작'이었다).
-                이제 phase 가 '시작 전'과 '일시정지'와 '종료'를 갈라 각각 제 색으로 말한다.
-                진행 중(running·break)에는 배지를 띄우지 않는다 — 굳이 말할 필요가 없는 정상 상태다. */}
-            {phase !== 'running' && phase !== 'break' && (
-              <span data-testid="clk-phase-badge" className={[
-                'absolute rounded-badge font-bold',
-                phase === 'idle' ? 'bg-white/10 text-white/70' : phase === 'finished' ? 'bg-white/10 text-white/50' : 'bg-amber-400/15 text-amber-300',
-                'top-3 right-3 text-[min(2cqw,2.4cqh)] px-3 py-1',
-              ].join(' ')}>{CLOCK_PHASE_LABEL[phase]}</span>
-            )}
-          </div>
-
-          {/* 우: 스탯 — 생존/엔트리(히어로) → 리바이/얼리 → 애드온 → 레지 마감 → 휴식까지 */}
-          <div className="flex flex-col justify-center gap-2 border-l border-white/[0.06] p-2 sm:gap-3 sm:p-3">
-            <Stat label="생존 / 엔트리" value={`${alive} / ${entries}`} hero />
-            <Stat label="리바이 / 얼리" value={`${rebuys} / ${earlies}`} />
-            {cfg.isAddon && <Stat label="애드온" value={`${addons}`} />}
-            {/* ⚠ null(마감 레벨 미설정)은 '—', 0 이 진짜 마감 — 예전엔 둘을 뒤집어 보여줬다 */}
-            <Stat label="레지 마감"
-              value={regClose === null ? '—' : regClose === 0 ? '마감' : `Lv ${cfg.regCloseLevel} · ${hms(regClose)}`}
-              tone={regClose === null ? 'muted' : 'rose'} />
-            <Stat label="휴식까지" value={nextBreak !== null ? hms(nextBreak) : '—'} tone="rose" />
-          </div>
-        </div>
-
-        {/* 칩 스탯 — 총 칩 / 평균 스택(BB 병기) */}
-        <div className="shrink-0 grid grid-cols-2 border-t border-white/[0.08]">
-          <div className="border-r border-white/[0.06] py-2 text-center sm:py-2.5">
-            <p className={['font-bold tracking-[0.08em] text-white/50', 'text-[min(1.9cqw,2.2cqh)]'].join(' ')}>총 칩</p>
-            <p className={['font-extrabold leading-tight tabular-nums text-white', 'text-[min(4.6cqw,5.6cqh)]'].join(' ')}>{totalStack.toLocaleString()}</p>
-          </div>
-          <div className="py-2 text-center sm:py-2.5">
-            <p className={['font-bold tracking-[0.08em] text-white/50', 'text-[min(1.9cqw,2.2cqh)]'].join(' ')}>평균 스택</p>
-            <p className={['font-extrabold leading-tight tabular-nums text-white', 'text-[min(4.6cqw,5.6cqh)]'].join(' ')}>
-              {avgStack.toLocaleString()}
-              {curBB > 0 && avgStack > 0 && (
-                <span className={['ml-1.5 font-bold text-white/55', 'text-[min(2.4cqw,2.9cqh)]'].join(' ')}>
-                  ({Math.round(avgStack / curBB)} BB)
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
+        {/* 보드는 ClockStage 한 벌 — 매장 TV(ClockDisplay)와 **같은 마크업**이다(2026-09-11 물리적 단일화).
+            예전엔 여기 별도 보드(작은 프라이즈 표 · 우측 Stat 열 · 하단 칩 스탯 2칸)가 따로 있었다.
+            같은 화면을 두 벌로 그리면 한쪽만 고쳐진 채 나간다 — 실제로 그렇게 나간 적이 있다.
+            운영자 화면이 보태는 것은 **데이터 출처**(장부 연동 파생)와 아래 조작 콘솔뿐이다.
+            · liveStats — 장부 바인에서 파생한 지금 값(TV 는 저장된 스냅샷을 읽는다)
+            · title     — 연동된 장부의 대회명이 우선
+            · sponsor   — 운영자가 등록한 전체 클락 공통 광고. TV 는 이걸 하단 스폰서 자리에 건다. */}
+        <ClockStage g={stageState} venueName={venueName} sponsor={adImg} adSize={adSize} />
         {/* 🔴 2026-09-11 오너 지시로 뒤집은 결정 — 전체화면에는 **조작 콘솔을 넣지 않는다.**
             예전 주석은 "전체화면에서는 컨트롤을 화면 안에 둔다 — 그 창이 곧 조작 창이다" 였고,
             그래서 시작·Level±·Min/Sec±·엔트리 5종±·볼륨 슬라이더·초기화·해제가 화면 하단 약 30%를 먹었다.
@@ -1122,25 +970,6 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   );
 }
 
-// fs prop 제거(2026-09-11): 미리보기도 container-type:size 를 갖게 되면서 크기 체계가 cq 한 벌로 합쳐졌다 —
-// 전체화면 여부로 글자 크기를 가를 이유가 사라졌다.
-function Stat({ label, value, tone, hero }: { label: string; value: string; tone?: 'muted' | 'rose'; hero?: boolean }) {
-  const c = tone === 'rose' ? 'text-rose-300' : tone === 'muted' ? 'text-white/60' : 'text-white';
-  return (
-    // 헤어라인 구분 — 첫 항목 제외하고 위쪽 미세 보더(스탯 패널 리듬 정리)
-    <div className="text-center [&:not(:first-child)]:border-t [&:not(:first-child)]:border-white/[0.06] [&:not(:first-child)]:pt-2 sm:[&:not(:first-child)]:pt-3">
-      <p className="text-white/45 tracking-[0.14em] uppercase leading-tight text-[min(1.5cqw,1.8cqh)]">{label}</p>
-      {/* hero: PLAYERS 전용 — 실물 4종 공통으로 스탯 열의 시각적 1순위(3m 가독) */}
-      <p className={['font-bold tabular-nums leading-tight mt-0.5',
-        hero ? ('text-[min(4.2cqw,5.1cqh)] font-extrabold')
-             : ('text-[min(2.7cqw,3.3cqh)]'), c].join(' ')}>{value}</p>
-    </div>
-  );
-}
-// size='lg' 는 레벨 스테퍼 전용. 왜 이것만 크게 하나:
-// 오조작 시 '남은 시간이 통째로 사라지는' 유일한 스테퍼인데 다른 보정 스테퍼와 똑같이 28px·2px 간격이라
-// ＋(다음 레벨)와 －(이전 레벨)를 손가락 하나로 헷갈려 누른다. 전체를 키우면 풀스크린 16:9 박스에서
-// 컨트롤 바가 shrink-0 라 타이머 영역이 깎이므로 여기만 40px·6px 로 분리한다.
 function Stepper({ label, onPlus, onMinus, size = 'sm', plusDisabled, minusDisabled }: {
   label: string; onPlus: () => void; onMinus: () => void;
   size?: 'sm' | 'lg'; plusDisabled?: boolean; minusDisabled?: boolean;

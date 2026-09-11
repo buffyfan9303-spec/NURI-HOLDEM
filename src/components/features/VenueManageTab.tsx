@@ -819,7 +819,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} /></div>}
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </>)}
-                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
+                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} venueName={venueName || undefined} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
                 {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
                 {visited.includes('staff') && staffOk && box('staff', <StaffHub venueId={venueId} />)}
                 {visited.includes('pos') && canSettingsTab('pos') && box('pos', <PosSettingsPanelM venueId={venueId} />)}

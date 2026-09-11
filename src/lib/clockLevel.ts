@@ -106,3 +106,6 @@ export const CLOCK_PHASE_ACTION: Record<ClockPhase, string> = {
  * 그 식은 **1레벨에서 일시정지한 진행 중 대회를 '미실행'** 이라고 말했다(currentIndex 가 0이라서).
  */
 export const clockIsLive = (s: ClockPhaseInput, nowMs = Date.now()): boolean => clockPhase(s, nowMs) !== 'idle';
+
+/** 게임 라벨 — 메인/사이드N. 클락 보드와 TV 게임 전환 버튼이 같은 문구를 써야 해서 여기 둔다. */
+export const gameLabel = (g: { gameSeq: number }) => (g.gameSeq > 1 ? `사이드${g.gameSeq - 1}` : '메인');
