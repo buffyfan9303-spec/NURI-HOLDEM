@@ -40,8 +40,14 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
   const [ops, setOps] = useState<Record<string, PosterOpsSummary>>({}); // scheduleId → 연결 장부 운영 요약
   const [dateFilter, setDateFilter] = useState<string>(''); // ''=전체 / iso=그 날짜 예약만 관리
 
-  const myPosters = schedules.filter((s) => s.ownerId === user?.id);
-  const venueId = user?.venueId || myPosters[0]?.venueId;
+  // 2026-09-11 — 목록 기준이 '내가 올린 것' 에서 **이 매장의 것** 으로 바뀌었다.
+  //   공동 사장(venue_owners)에게 포스터 관리를 열면서(20260911p), owner 기준으로 두면
+  //   공동 사장 화면에 목록이 **통째로 비어** 보인다 — 대표가 올린 포스터의 owner_id 는 대표다.
+  //   서버는 허용하는데 화면은 빈 칸인 상태, 20260911e 가 직원 목록에서 겪은 바로 그 모양이다.
+  //   ⚠ ownerId 절을 함께 남긴다: venue_id 가 NULL 인 옛 포스터(매장 없이 등록)는 매장 기준으로
+  //     잡히지 않는다. 둘을 OR 로 두면 대표에게 보이던 것이 하나도 사라지지 않는다.
+  const venueId = user?.venueId || schedules.find((s) => s.ownerId === user?.id)?.venueId;
+  const myPosters = schedules.filter((s) => s.ownerId === user?.id || (!!venueId && s.venueId === venueId));
 
   const [resCounts, setResCounts] = useState<Record<string, number>>({}); // scheduleId → 예약 수
   useEffect(() => {
@@ -80,7 +86,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
 
   // 제목·"+ 새 게임" 액션은 VenueManageTab의 공용 SectionHeader가 렌더(섹션 간 규격 통일)
   return (
-    <div className="space-y-3">
+    <div data-testid="my-posters" className="space-y-3">
       {myPosters.length === 0 ? (
         <EmptyState
           title="등록된 게임이 없습니다"

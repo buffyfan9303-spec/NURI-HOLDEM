@@ -14,7 +14,7 @@ import { PROD_REF, WRITES_ALLOWED } from './_session';
  *  + 정의를 직접 읽어 쓰기가 없음을 확인한 VOLATILE 3종(venue_today_games·venue_announce_status·client_error_rate_ok).
  *  새 읽기 RPC 를 추가할 때는 마이그레이션에 `stable` 을 선언하고 여기에도 한 줄 — 둘 다 없으면 E2E 에서 막힌다(의도된 실패). */
 export const READ_ONLY_RPCS = new Set([
-  'can_access_ledger', 'can_manage_pos', 'can_manage_venue', 'can_manage_venue_staff', 'current_season_standings',
+  'can_access_ledger', 'can_manage_pos', 'can_manage_venue', 'can_manage_venue_staff', 'can_manage_venue_schedules', 'current_season_standings',
   'get_activity_leaderboard', 'get_domestic_rankings', 'get_equipped_marks', 'get_my_staff_invites', 'get_my_venue_invites',
   'get_my_venue_staff', 'get_nick_colors', 'global_ranking_totals', 'is_account_active', 'is_ci_verified', 'is_group_manager',
   'is_group_member', 'is_league_participant', 'is_slug_available', 'is_verified_owner', 'kill_switch_is_set', 'ledger_is_closed',

@@ -305,3 +305,27 @@ export async function toggleCompetition(id: string, isCompetition: boolean): Pro
   }).eq('id', id);
   if (error) throw error;
 }
+
+// ── 포스터·예약 관리 권한 ─────────────────────────────────────────────────────
+/**
+ * 이 매장의 포스터·예약을 관리할 수 있는가 — 관리자 · 매장주 · 공동 사장(venue_owners approved).
+ *
+ * 왜 서버에 묻나: 화면이 `profiles.role === 'venue_owner'` 로 판정하면 서버와 영구히 갈린다.
+ *   add_venue_owner 는 profiles.role 을 바꾸지 않으므로(운영 DB 확인) 공동 사장은 role 이 'user' 인 채
+ *   "이 매장의 사장" 이 된다 — 메뉴가 아예 안 보이거나, 보이는데 저장에서 거부되는 dead-end 가 난다.
+ *   권한은 서버가 판정한다(CLAUDE.md 보안 §2). 20260911e 가 직원 관리에서 한 것과 같은 처리다.
+ *
+ * ⚠ RPC 가 아직 없으면(20260911p 미적용) **종전 규칙으로 떨어진다**. 여기서 false 를 돌려주면
+ *   적용 전까지 대표 업주의 포스터 메뉴가 통째로 사라진다 — 권한을 넓히려다 있던 기능을 없애는 꼴이다.
+ *   그래서 호출부가 폴백을 쥐고, 이 함수는 '모른다'를 null 로 알린다.
+ */
+export async function canManageVenueSchedules(venueId: string): Promise<boolean | null> {
+  if (IS_MOCK) return false;
+  const { data, error } = await supabase.rpc('can_manage_venue_schedules', { p_venue_id: venueId });
+  // 42883(함수 없음)·PGRST202(스키마 캐시에 없음) = 아직 미적용 → 판정 불가(null)
+  if (error) {
+    if (error.code === '42883' || error.code === 'PGRST202') return null;
+    throw error;
+  }
+  return !!data;
+}

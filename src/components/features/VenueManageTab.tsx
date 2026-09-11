@@ -37,7 +37,7 @@ import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import SlidingPill from '../atoms/SlidingPill';
-import { getSchedules, type Schedule } from '../../api/schedules';
+import { getSchedules, canManageVenueSchedules, type Schedule } from '../../api/schedules';
 import { getLedgerBuyins, kstToday, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
@@ -194,7 +194,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // staffOk 는 아래에서 **서버 판정**(can_manage_venue_staff)으로 받는다 — 여기서 role 로 정하지 않는다.
   //   2026-09-11: role 기준이면 공동 사장(venue_owners)이 서버 허용인데도 메뉴가 안 보이고,
   //   반대로 다른 매장 주인이 이 매장 메뉴를 열었다가 저장에서 거부되는 dead-end 가 났다.
-  const canPosters = isOwner || isAdmin; // 포스터·예약 관리
+  // 포스터·예약 관리 — **서버 판정**(can_manage_venue_schedules). 직원 관리(staffOk)와 같은 처리다.
+  //   role 로 정하면 공동 사장(venue_owners)이 서버 허용인데도 메뉴가 안 보인다(20260911p).
+  //   ⚠ 폴백은 종전 규칙이다 — 마이그레이션 적용 전에는 판정이 null 로 오는데, 그때 false 로 닫으면
+  //     권한을 넓히려다 대표 업주의 포스터 메뉴를 없애는 꼴이 된다.
+  const [scheduleOk, setScheduleOk] = useState<boolean | null>(null);
+  const canPosters = scheduleOk ?? (isOwner || isAdmin);
   const [adminVenues, setAdminVenues] = useState<Venue[]>([]);
   const [adminVenueId, setAdminVenueId] = useState<string | null>(null);
   // 운영자는 선택한 매장, 그 외는 본인 소속 매장
@@ -465,7 +470,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (!venueId) { setPermsLoaded(false); return; }
     let alive = true;
     if (isAdmin) {
-      setLedgerOk(true); setManageOk(true); setVoucherView(true); setStaffOk(true);
+      setLedgerOk(true); setManageOk(true); setVoucherView(true); setStaffOk(true); setScheduleOk(true);
       setSection((s) => s ?? 'dashboard');
       setPermsError(null);
       setPermsLoaded(true);
@@ -479,10 +484,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //   CI 의 목킹 스펙 5개가 그 결합을 잡아냈다. 여기서 fail-closed(false) 로 받아 메뉴만 숨긴다 —
     //   서버 RLS(can_manage_venue_staff)가 어차피 한 겹 더 막으므로 열릴 위험은 없다.
     const staffCap = () => canManageVenueStaff(venueId).catch(() => false);
-    Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId), staffCap()])
-      .then(([l, m, vv, st]) => {
+    // 포스터 판정도 **보조**다 — 배치에 그냥 넣으면 이 RPC 한 번의 실패가 장부·정산까지 닫는다.
+    //   실패는 null(모른다)로 받아 폴백이 종전 규칙을 쓰게 한다.
+    const schedCap = () => canManageVenueSchedules(venueId).catch(() => null);
+    Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId), staffCap(), schedCap()])
+      .then(([l, m, vv, st, sc]) => {
         if (!alive) return;
-        setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st);
+        setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); setScheduleOk(sc);
         setSection((s) => s ?? 'dashboard');
       })
       .catch((e) => { if (alive) { setPermsError(e ?? new Error('권한 조회 실패')); setSection(null); } })
@@ -495,8 +503,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (!venueId || isAdmin) return;
     const recheck = () => {
       Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId),
-                   canManageVenueStaff(venueId).catch(() => false)])   // 보조 판정 — 위와 같은 이유로 격리
-        .then(([l, m, vv, st]) => { setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); })
+                   canManageVenueStaff(venueId).catch(() => false),              // 보조 판정 — 위와 같은 이유로 격리
+                   canManageVenueSchedules(venueId).catch(() => null)])          // 같은 이유
+        .then(([l, m, vv, st, sc]) => { setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); setScheduleOk(sc); })
         .catch(() => { /* keep current */ });
     };
     window.addEventListener('focus', recheck);

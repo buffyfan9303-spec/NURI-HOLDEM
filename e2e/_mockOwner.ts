@@ -52,8 +52,10 @@ export interface MockOwnerOpts {
   pageConfig?: unknown;
   /** app_settings(key→value) — 클락 광고(CLOCK_AD_KEY) 등. */
   appSettings?: Record<string, string>;
+  /** profiles 응답 덮어쓰기 — 공동 사장(role='user' 인데 이 매장의 사장)을 흉내낼 때 쓴다. */
+  profile?: Record<string, unknown>;
   /** 권한 RPC 응답. 기본 전부 true(업주). */
-  perms?: Partial<Record<'can_access_ledger' | 'can_manage_pos' | 'can_view_vouchers' | 'can_manage_venue_staff', boolean>>;
+  perms?: Partial<Record<'can_access_ledger' | 'can_manage_pos' | 'can_view_vouchers' | 'can_manage_venue_staff' | 'can_manage_venue_schedules', boolean>>;
   /** 스펙별 추가 라우트 — bootOwner 의 기본 라우트보다 **먼저** 걸린다(나중에 건 route 가 이긴다). */
   extra?: (page: Page) => Promise<void>;
   /** 기본 true. false 면 goto 를 호출부가 직접 한다(딥링크 등). */
@@ -76,6 +78,7 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
   await page.route(/\/rest\/v1\/profiles\?/, restGet({
     id: MOCK_UID, name: '업주', nickname: '업주', role: 'venue_owner', approved: true, status: 'active',
     venue_id: MOCK_VENUE, activity_points: 0, created_at: FAKE_SESSION.user.created_at,
+    ...opts.profile,
   }));
   const venueRow = {
     id: MOCK_VENUE, name: MOCK_VENUE_NAME, region: '서울', address: '서울 강남구 1', owner_id: MOCK_UID,
@@ -88,8 +91,8 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
     if (r.request().method() !== 'GET') return r.fallback();
     return r.fulfill(json(isSingle(r) ? venueRow : [venueRow]));
   });
-  const perms = { can_access_ledger: true, can_manage_pos: true, can_view_vouchers: true, can_manage_venue_staff: true, ...opts.perms };
-  await page.route(/\/rest\/v1\/rpc\/(can_access_ledger|can_manage_pos|can_view_vouchers|can_manage_venue_staff)/, (r) => {
+  const perms = { can_access_ledger: true, can_manage_pos: true, can_view_vouchers: true, can_manage_venue_staff: true, can_manage_venue_schedules: true, ...opts.perms };
+  await page.route(/\/rest\/v1\/rpc\/(can_access_ledger|can_manage_pos|can_view_vouchers|can_manage_venue_staff|can_manage_venue_schedules)/, (r) => {
     const m = /rpc\/(\w+)/.exec(r.request().url());
     return r.fulfill(json(perms[(m?.[1] ?? '') as keyof typeof perms] ?? false));
   });
