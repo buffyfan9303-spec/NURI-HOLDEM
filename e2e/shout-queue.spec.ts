@@ -28,7 +28,18 @@ const PASSWORD = process.env.E2E_PASSWORD;
 // (2026-09-03 CI 1차 실패 → 재실행 통과). sheet-spring·subtab-motion 과 같은 CI 전용 재시도.
 test.describe.configure({ retries: process.env.CI ? 2 : 0 });
 
-const iso = (msFromNow: number) => new Date(Date.now() + msFromNow).toISOString();
+/** 픽스처 시계 — **첫 응답 때 한 번만** 고정하고 그 뒤로는 같은 기준점을 쓴다(mount 마다 리셋).
+ *
+ *  왜 요청마다 새로 만들면 안 되나(2026-09-11 실측 실패):
+ *    배너가 **20초 격자 경계마다 다시 읽게** 됐다(CommunityShoutBar — 운영자가 '내리기' 한 외침이
+ *    방송되던 것을 막는 변경). 그런데 응답을 요청 시각 기준으로 만들면 그 재조회가 '방송 중' 행의
+ *    창을 통째로 갱신한다 → 항상 -14초에 시작한 것으로 되돌아와 **영영 다음 차례로 넘어가지 않는다**.
+ *    ④(경계에서 자동 전환)가 바로 그 검증인데, 픽스처가 검증 대상을 지워 버리는 셈이었다.
+ *  그렇다고 상수로 박으면 부팅이 느린 러너에서 픽스처가 이미 만료된 채 도착해
+ *  '데이터가 없어서 0건' 으로 **가짜 통과**가 된다(원래 요청 시각 기준을 택한 이유).
+ *  → 첫 요청 시각을 기준점으로 잡으면 둘 다 피한다. */
+let clock0: number | null = null;
+const iso = (msFromNow: number) => new Date((clock0 ??= Date.now()) + msFromNow).toISOString();
 const json = (route: Route, body: unknown) =>
   route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
@@ -55,6 +66,7 @@ test.describe('외치기 — 20초 슬롯 대기열', () => {
   /** @param queue 대기열 응답을 갈아 끼운다(빈 배열 = 방송 중 0건). 생략하면 기본 4건 픽스처. */
   async function mount(page: Page, queue?: unknown[]) {
     sent = null;
+    clock0 = null;   // 테스트마다 새 기준점 — 첫 응답 때 고정된다(위 iso 주석)
     session = await loginAs(page, EMAIL!, PASSWORD!);
     const myId = (session.user as { id: string }).id;
     await stabilizeBackstack(page);
@@ -63,8 +75,8 @@ test.describe('외치기 — 20초 슬롯 대기열', () => {
     let bought = false;
 
     // ── 대기열 ────────────────────────────────────────────────────────────
-    // 시각은 **요청이 들어온 순간** 기준으로 만든다. 고정 타임스탬프를 쓰면 부팅이 느린 러너에서
-    // 픽스처가 이미 만료된 채 도착해 '데이터가 없어서 통과'하는 가짜 통과가 된다.
+    // 시각은 **첫 요청이 들어온 순간**에 한 번 고정된다(위 clock0). 상수면 느린 러너에서 이미
+    // 만료된 채 도착해 가짜 통과가 되고, 요청마다 새로 만들면 경계 재조회가 창을 갱신해 ④가 죽는다.
     await page.route('**/rest/v1/community_shouts*', async (route) => {
       fetches += 1;
       if (bought) {
