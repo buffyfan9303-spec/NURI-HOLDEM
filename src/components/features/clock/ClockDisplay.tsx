@@ -27,7 +27,7 @@ import { buyinRequestUrl } from '../../../api/ledger';
 import { getAppSetting, CLOCK_AD_KEY } from '../../../api/settings';
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
-import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, type ClockTheme } from './clockTheme';
+import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, type ClockTheme } from './clockTheme';
 import Icon from '../../atoms/Icon';
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
@@ -100,7 +100,10 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
         setClkVars(clockThemeVars(t));
       })
       .catch(() => { /* keep-last */ });
-    return () => { alive = false; };
+    // 운영자가 설정에서 테마를 바꾸면 **이 창을 다시 열지 않아도** 반영된다.
+    //   TV 는 보통 window.open 으로 띄운 별도 창이라, 여기가 없으면 업주는 바꾼 걸 확인할 방법이 없다.
+    const off = subscribeClockTheme(venueId, (t) => setClkVars(clockThemeVars(t)));
+    return () => { alive = false; off(); };
   }, [venueId]);
 
   const [fs, setFs] = useState(false);
@@ -123,7 +126,21 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { getAppSetting(CLOCK_AD_KEY).then(setSponsor).catch(() => {}); }, []);
+  // 스폰서 배너 — 운영자가 광고를 등록·교체·삭제하면 이 창을 다시 열지 않아도 반영된다.
+  //   예전엔 `[]` 로 마운트 1회만 읽어, 별도 창으로 띄운 TV 는 광고를 바꿔도 옛 이미지를 계속 걸고 있었다.
+  useEffect(() => {
+    const load = () => { getAppSetting(CLOCK_AD_KEY).then(setSponsor).catch(() => { /* 직전 값 유지 */ }); };
+    load();
+    const off = subscribeClockAd(load);
+    // ⚠ subscribeClockAd 는 **같은 탭 CustomEvent 만** 받는다. 형제인 subscribeClockTheme 은
+    //   storage 이벤트까지 듣지만(테마는 localStorage 에 있다) 광고는 app_settings(서버)라 붙을 게 없다.
+    //   그래서 관리자 화면(다른 기기·다른 창)에서 광고를 바꾸면 송출 중인 TV 에 닿지 않았다.
+    //   위 클락 상태 폴링과 같은 주기로 서버를 다시 읽어 최대 30초 안에 따라오게 한다.
+    const t = setInterval(load, 30_000);
+    const onVis = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { off(); clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
 
   // 화면 꺼짐 방지(Wake Lock) — 미지원 시 무시
   useEffect(() => {
@@ -285,7 +302,28 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                 죽은 띠가 생겼다(레퍼런스는 둘이 한 덩어리로 붙어 있다).
                 ⚠ 그래도 계약은 유지된다: 블라인드 행이 **고정 높이(22vmin)** 라 ANTE 유무와 무관하게
                    스택 총높이가 상수다 → 통째로 중앙 정렬해도 타이머 y 가 움직이지 않는다. */}
-            <div className="flex min-h-0 flex-col items-center justify-center gap-[2.5vmin]">
+            <div className="relative flex min-h-0 flex-col items-center justify-center gap-[2.5vmin]">
+              {/* ── NURI Aura Clock Frame — 타이머·블라인드를 감싸는 얇은 이중 기하 프레임 ──
+                  레퍼런스 보드의 육각 프레임을 그대로 베끼지 않고 Aura 문법으로 옮긴 것:
+                  세로로 긴 둥근 다각형 실루엣을 **테두리 2겹 + 뒤쪽 bloom 1겹**으로만 만든다.
+                  · 외부 SVG·이미지 0 · 애니메이션 0 — 상시 송출 TV 라 1회 페인트 후 정적이어야 한다.
+                  · 색은 --clk-frame/--clk-frame-soft(= accent 파생). 프리셋을 바꾸면 프레임도 따라간다.
+                  · **타이머보다 강해 보이면 실패다** — 그래서 바깥 65%·안쪽 38%·bloom 0.14 로 눌러 뒀다.
+                  · aria-hidden + pointer-events-none: 장식이라 스크린리더·클릭 대상이 아니다.
+                  · inset 으로만 그린다 — 부모가 overflow-hidden 이어도 잘리지 않는다.
+                  · 좁은 폭(모바일 관전)에서는 숨긴다: 프레임이 글자를 침범하는 것보다 없는 편이 낫다. */}
+              {/* 치수는 실측으로 맞췄다(1920×1080 캡처): inset-y-2% 로 열 전체를 덮었더니
+                  프레임 안 위아래에 각각 170px 씩 죽은 띠가 생겼다 — 프레임이 내용을 감싸는 게 아니라
+                  내용이 프레임 안에서 떠 보였다. 타이머 위 ~70px · 블라인드 아래 ~40px 여백이 되게 조인다. */}
+              <span aria-hidden className="pointer-events-none absolute inset-x-[7%] bottom-[8%] top-[14%] hidden md:block">
+                <span className="absolute inset-0 rounded-[8vmin] border-2"
+                  style={{ borderColor: 'var(--clk-frame, rgba(129,140,248,.65))' }} />
+                <span className="absolute inset-[1.1vmin] rounded-[7vmin] border"
+                  style={{ borderColor: 'var(--clk-frame-soft, rgba(129,140,248,.38))' }} />
+                {/* 뒤쪽 LED bloom — 프레임 안쪽에만, 글자 뒤로는 번지지 않게 closest-side 로 가둔다 */}
+                <span className="absolute inset-[3vmin] rounded-[6vmin] opacity-[0.14]"
+                  style={{ background: 'radial-gradient(closest-side, var(--clk-frame, #818CF8), transparent)' }} />
+              </span>
               <CenterPanel g={g} />
               <div className="h-[22vmin] w-full shrink-0">
                 <BlindsRow g={g} />
@@ -296,16 +334,19 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
             <aside className="hidden min-h-0 flex-col justify-center gap-[1.5vmin] md:flex">
               <Rail label="생존 / 엔트리" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
               {showRebuy && <Rail label="리바이 · 애드온" value={String(ls?.rebuys ?? 0)} sub={`· ${ls?.addons ?? 0}`} />}
-              <Rail label="총 칩" value={ls?.totalStack ? ls.totalStack.toLocaleString() : '—'} />
-              <Rail label="평균 스택" value={ls?.avgStack ? ls.avgStack.toLocaleString() : '—'} sub={ls?.avgStack && curBB > 0 ? `${Math.round(ls.avgStack / curBB)} BB` : undefined} />
               {buyIn > 0 && <Rail label="바이인" value={buyIn.toLocaleString()} />}
-              {/* 초당 갱신이 필요한 두 줄은 별도 컴포넌트에 가둔다 — 여기서 틱을 돌리면 화면 전체가 매초 다시 그려진다 */}
+              {/* 2026-09-11: 총 칩·평균 스택은 **하단 레일**로 내렸다(아래 BottomMetrics).
+                  우측 열에 7줄이 몰려 글자가 작아지는 동안 화면 하단 중앙이 통째로 비어 있었다 —
+                  레퍼런스 보드처럼 '칩 경제'는 아래 가로줄, '사람 수'는 오른쪽 세로줄로 나눈다. */}
+              {/* 초당 갱신이 필요한 줄은 별도 컴포넌트에 가둔다 — 여기서 틱을 돌리면 화면 전체가 매초 다시 그려진다 */}
               <TimeRails g={g} regLevel={regLevel} />
             </aside>
           </div>
 
           {/* ── 하단 — QR · 스폰서 · Powered by. 지표가 우측 열로 올라가서 이 줄은 보조만 남는다. ── */}
-          <div className="flex h-[8vmin] shrink-0 items-center gap-[2vmin] border-t border-white/[0.07] px-[3vmin]">
+          {/* 12vmin: 하단이 이제 보조가 아니라 **지표 레일**이다(총 칩·평균 스택·다음 휴식).
+              8vmin 이면 clamp 대형 숫자가 눌려 잘린다 — 실측 후 올린 값이다. */}
+          <div className="flex h-[12vmin] shrink-0 items-center gap-[2vmin] border-t border-white/[0.07] px-[3vmin]">
             {qr ? (
               <div className="flex min-w-0 items-center gap-[1vmin]">
                 <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[0.6vmin] bg-white" style={{ width: 'clamp(34px, 5vmin, 78px)', height: 'auto' }} />
@@ -315,7 +356,9 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                 </div>
               </div>
             ) : <span />}
-            <div className="ml-auto flex shrink-0 items-center gap-[2vmin]">
+            {/* 하단 중앙 — 칩 경제 3종. QR(좌)·스폰서(우) 사이의 빈 폭을 실제 정보로 채운다. */}
+            <BottomMetrics g={g} curBB={curBB} />
+            <div className="flex shrink-0 items-center gap-[2vmin]">
               {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain opacity-80" style={{ maxHeight: '5.5vmin' }} />}
               <p className="shrink-0 text-[1.2vmin] font-extrabold uppercase tracking-[0.18em]" style={DIM}>
                 Powered by <span style={{ color: 'var(--clk-accent, #818CF8)' }}>NURI HOLDEM</span>
@@ -402,14 +445,47 @@ function TimeRails({ g, regLevel }: { g: ClockState; regLevel: number }) {
   useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
   const eff = effectiveLevel(g);
   const reg = regLevel > 0 ? msToRegClose(g, eff.index, eff.remainingMs) : null;
-  const brk = msToNextBreak(g, eff.index, eff.remainingMs);
+  // 다음 휴식은 하단 레일(BottomMetrics)로 옮겼다 — 여기서는 등록 마감만 남는다.
   return (
     <>
       {reg !== null && (
         <Rail label="등록 마감" value={reg === 0 ? '마감' : hms(reg)} sub={reg === 0 ? undefined : `Lv ${regLevel}`} danger={reg === 0} />
       )}
-      {brk !== null && <Rail label="다음 휴식" value={hms(brk)} />}
     </>
+  );
+}
+
+/**
+ * BottomMetrics — 화면 하단 가로 지표 레일(총 칩 · 평균 스택 · 다음 휴식).
+ *
+ * 왜 아래인가: 이 셋은 '지금 이 판의 칩 경제'라 한 줄에 나란히 놓으면 비교가 된다.
+ * 우측 세로 레일에 같이 두면 7줄이 되어 글자가 작아지고, 정작 화면 하단은 QR·스폰서만 남아 비었다.
+ * 다음 휴식만 초당 갱신이라 이 컴포넌트에 틱을 가둔다 — 보드 전체를 매초 다시 그리지 않는다.
+ */
+function BottomMetrics({ g, curBB }: { g: ClockState; curBB: number }) {
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  const ls = g.liveStats;
+  const eff = effectiveLevel(g);
+  const brk = msToNextBreak(g, eff.index, eff.remainingMs);
+  /** 값 없음(—)과 실제 0 을 구분한다 — 장부가 아직 안 붙은 클락에서 '총 칩 0' 은 거짓이다. */
+  const num = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString());
+  const cell = (label: string, value: string, sub?: string, tone?: string) => (
+    <div className="min-w-0 text-center">
+      <p className={`${LABEL} text-[1.3vmin]`} style={SOFT}>{label}</p>
+      <p className="mt-[0.2vmin] leading-none">
+        <span className="font-extrabold tabular-nums" style={{ fontSize: 'clamp(20px, 4.2vmin, 70px)', color: tone ?? '#FFFFFF' }}>{value}</span>
+        {sub && <span className="ml-[0.8vmin] text-[1.7vmin] font-semibold tabular-nums" style={DIM}>{sub}</span>}
+      </p>
+    </div>
+  );
+  return (
+    <div className="flex min-w-0 flex-1 items-center justify-center gap-[4vmin]">
+      {cell('총 칩', num(ls?.totalStack))}
+      {cell('평균 스택', num(ls?.avgStack), ls?.avgStack && curBB > 0 ? `${Math.round(ls.avgStack / curBB)} BB` : undefined)}
+      {/* 휴식이 없는 구성이면 칸을 만들지 않는다 — 빈 '—' 로 자리를 채우지 않는다 */}
+      {brk !== null && cell('다음 휴식', hms(brk), undefined, 'var(--clk-timer-break, #7dd3fc)')}
+    </div>
   );
 }
 
@@ -514,7 +590,11 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
   return (
     <div className="grid h-full grid-cols-2 items-center gap-[2vmin]">
       {/* CURRENT */}
-      <div className="flex h-full flex-col items-center justify-center rounded-[1.6vmin] bg-white/[0.04] px-[2vmin]">
+      {/* 2026-09-11 오너 지적 — 카드 배경을 뺐다. 중앙 Aura 프레임(둥근 사각)이 들어오면서
+          이 박스의 모서리와 프레임 선이 겹쳐 '사각 안의 사각'이 됐다. 레퍼런스 보드도 블라인드를
+          맨 텍스트로 두고(§8 "불필요한 카드 박스가 없는 넓은 TV 레이아웃") 구분은 크기·색으로만 한다.
+          가운데 세로 헤어라인 하나로 CURRENT|NEXT 를 가른다 — 면이 아니라 선이라 프레임과 싸우지 않는다. */}
+      <div className="flex h-full flex-col items-center justify-center border-r border-white/[0.07] px-[2vmin]">
         <p className={`${LABEL} text-[1.5vmin]`} style={SOFT}>{isBreak ? 'BREAK' : 'CURRENT'}</p>
         {isBreak ? (
           <p className="mt-[0.8vmin] font-extrabold leading-none" style={{ fontSize: 'clamp(24px, 6.4vmin, 108px)', color: 'var(--clk-timer-break, #7dd3fc)' }}>
@@ -540,7 +620,7 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
       </div>
 
       {/* NEXT — 한 단계 어둡고 작게 */}
-      <div className="flex h-full flex-col items-center justify-center rounded-[1.6vmin] bg-white/[0.02] px-[2vmin]">
+      <div className="flex h-full flex-col items-center justify-center px-[2vmin]">
         <p className={`${LABEL} text-[1.5vmin]`} style={DIM}>NEXT</p>
         {next ? (
           <>

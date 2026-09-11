@@ -9,6 +9,8 @@
 //   테마 미설정·로드 실패 시 픽셀 변화 0.
 // · 타이머 긴급(rose-400)·브레이크(sky-300) 상태색은 프리셋이 덮지 못한다 — 송출 안전 신호 잠금.
 
+import { readSnap, writeSnap } from '../../../lib/snapshot';
+
 export interface ClockTheme {
   version: 1;
   palette?: { preset: string; accent?: string };
@@ -335,3 +337,68 @@ export function clockThemeVars(theme: ClockTheme | null | undefined): Record<str
 
 /** ClockDisplay 테마 스냅샷 키(lib/snapshot) — venue 별 keep-last 캐시 */
 export const clockThemeSnapKey = (venueId: string) => `clockTheme:${venueId}`;
+
+// ── 테마 전파 — 저장하면 **열려 있는 클락 화면이 새로고침 없이** 바뀐다 ────────────
+//
+// 오너 보고(2026-09-11): "테마가 실제로 선택해도 적용이 잘 안돼".
+// 원인: 패널은 DB(venues.page_config)에만 썼고, ClockDisplay·운영자 미리보기는
+//   page_config 를 **마운트 때 한 번만**(`[venueId]`) 읽었다. 그래서
+//     · 같은 탭: 설정에서 고르고 클락으로 돌아와도 이미 마운트된 화면은 옛 테마 그대로
+//     · 다른 창: TV 송출(window.open)은 아예 다시 열기 전까지 안 바뀜
+//     · 게다가 스냅샷(readSnap)도 갱신되지 않아, 새로 열어도 **옛 테마가 먼저 그려졌다**
+//   업주 입장에서는 '눌렀는데 아무 일도 안 일어난다'로 보인다.
+//
+// 해결: 저장 성공 시 스냅샷을 갱신하고 알린다. 구독은 두 경로다 —
+//   · 같은 탭: CustomEvent (localStorage 의 storage 이벤트는 **자기 탭에는 오지 않는다**)
+//   · 다른 창: storage 이벤트 (writeSnap 이 localStorage 라 공짜로 따라온다)
+export const CLOCK_THEME_EVENT = 'nuri:clock-theme';
+
+/** 이 신호가 덮는 설정 종류. 'ad' 는 전 매장 공통 스폰서 배너(app_settings). */
+export type ClockSignalKind = 'theme' | 'ad';
+
+/**
+ * 같은 부류의 결함이 광고에도 있었다 — TournamentClock 이 setAppSetting(CLOCK_AD_KEY) 로 저장해도
+ * ClockDisplay 는 `useEffect(..., [])` 로 마운트 때 한 번만 읽어서, TV(별도 창)는 광고를 바꿔도 그대로였다.
+ * 테마와 같은 신호를 쓴다 — 화면마다 다른 전파 장치를 만들 이유가 없다.
+ */
+export function publishClockSignal(kind: ClockSignalKind, venueId?: string): void {
+  try {
+    window.dispatchEvent(new CustomEvent(CLOCK_THEME_EVENT, { detail: { kind, venueId } }));
+  } catch { /* 이벤트 실패가 저장을 되돌리지는 않는다 */ }
+}
+
+/** 'ad' 신호만 듣는다(테마 저장에 광고를 다시 받아오지 않게). 반환값은 해제 함수. */
+export function subscribeClockAd(onChange: () => void): () => void {
+  const on = (e: Event) => {
+    if ((e as CustomEvent<{ kind?: ClockSignalKind }>).detail?.kind === 'ad') onChange();
+  };
+  window.addEventListener(CLOCK_THEME_EVENT, on);
+  return () => window.removeEventListener(CLOCK_THEME_EVENT, on);
+}
+
+/** 테마 저장 직후 호출. 스냅샷을 정본으로 갱신하고 열려 있는 화면에 알린다. */
+export function publishClockTheme(venueId: string, theme: ClockTheme | null): void {
+  writeSnap(clockThemeSnapKey(venueId), theme);
+  try {
+    window.dispatchEvent(new CustomEvent(CLOCK_THEME_EVENT, { detail: { kind: 'theme' as ClockSignalKind, venueId } }));
+  } catch { /* 이벤트 실패가 저장을 되돌리지는 않는다 */ }
+}
+
+/** 클락 화면이 구독한다 — 같은 탭·다른 창 양쪽. 반환값은 해제 함수. */
+export function subscribeClockTheme(venueId: string, onChange: (t: ClockTheme | null) => void): () => void {
+  const key = clockThemeSnapKey(venueId);
+  const reread = () => onChange(readSnap<ClockTheme | null>(key));
+  const onCustom = (e: Event) => {
+    const d = (e as CustomEvent<{ kind?: ClockSignalKind; venueId?: string }>).detail;
+    if (d?.kind === 'ad') return;                 // 광고 신호는 테마와 무관하다
+    if (!d || d.venueId === venueId) reread();    // 매장 지정이 없으면 보수적으로 다시 읽는다
+  };
+  // storage 이벤트의 key 는 writeSnap 의 접두사가 붙은 실제 키다 — 부분 일치로 본다.
+  const onStorage = (e: StorageEvent) => { if (!e.key || e.key.includes(key)) reread(); };
+  window.addEventListener(CLOCK_THEME_EVENT, onCustom);
+  window.addEventListener('storage', onStorage);
+  return () => {
+    window.removeEventListener(CLOCK_THEME_EVENT, onCustom);
+    window.removeEventListener('storage', onStorage);
+  };
+}

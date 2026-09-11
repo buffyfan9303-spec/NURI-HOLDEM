@@ -12,7 +12,8 @@ import { useToast } from '../../atoms/Toast';
 import { getVenuePageConfig, setVenuePageConfig, type VenuePageConfig } from '../../../api/rankings';
 import {
   CLOCK_THEME_PRESETS, CLOCK_ACCENT_SWATCHES, DEFAULT_CLOCK_PRESET_ID,
-  clockPresetById, makeClockTheme, themeForPresetChange, sanitizeClockTheme, clockThemeVars, clockBgImageOf, type ClockTheme,
+  clockPresetById, makeClockTheme, themeForPresetChange, sanitizeClockTheme, clockThemeVars, clockBgImageOf,
+  publishClockTheme, type ClockTheme,
 } from './clockTheme';
 import { uploadClockBg, deleteClockBg } from './clockBgImage';
 
@@ -113,6 +114,9 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
       const merged: VenuePageConfig = { ...latest };
       if (next) merged.clockTheme = next; else delete merged.clockTheme;
       await setVenuePageConfig(venueId, merged);
+      // 저장이 DB 에만 남으면 '눌렀는데 아무 일도 안 일어난다' 가 된다 —
+      // 열려 있는 TV·운영자 미리보기가 새로고침 없이 새 테마를 집게 알린다(같은 탭 + 다른 창).
+      publishClockTheme(venueId, next);
       if (aliveRef.current) setTheme(next);
       if (orphan) void deleteClockBg(orphan);
       return true;

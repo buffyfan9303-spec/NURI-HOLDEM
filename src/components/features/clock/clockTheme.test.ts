@@ -3,11 +3,13 @@
 // 이 검사가 필요한 이유: clockTheme 은 업주가 자유롭게 쓰는 JSON(venues.page_config) 안에 산다.
 // 값 검증이 한 겹이라도 빠지면 임의 외부 URL 이 매장 TV 배경으로 그대로 렌더된다
 // (외부 호스트 요청 · CSS url("…") 문자열 탈출). 허용은 우리 스토리지의 clock_bg 경로 하나뿐이다.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import {
   isAllowedClockBgUrl, sanitizeClockTheme, makeClockTheme, themeForPresetChange, clockThemeVars, clockBgObjectPath, clockPresetById,
+  publishClockTheme, subscribeClockTheme, subscribeClockAd, publishClockSignal, clockThemeSnapKey, type ClockTheme,
   CLOCK_BG_BUCKET, CLOCK_DEFAULTS, CLOCK_BG_INK, DEFAULT_CLOCK_PRESET_ID, CLOCK_THEME_PRESETS, BLACK_MARBLE_GOLD_BG,
 } from './clockTheme';
+import { readSnap } from '../../../lib/snapshot';
 
 const BASE = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, '');
 const ok = BASE ? `${BASE}/storage/v1/object/public/${CLOCK_BG_BUCKET}/venue-1/1700000000000.webp` : '';
@@ -225,5 +227,76 @@ describe('프리셋 전환 — 이전 강조색은 버리고 배경 사진은 �
     const next = themeForPresetChange('carbon', makeClockTheme('neon-night', '#22D3EE', null));
     expect(next.background?.image).toBeUndefined();
     expect(next.palette?.accent).toBeUndefined();
+  });
+});
+
+// ── 저장 → 전파 계약 (오너 보고 2026-09-11 "테마가 실제로 선택해도 적용이 잘 안돼") ──────
+//
+// 결함: 패널은 DB(page_config)에만 썼고, ClockDisplay·운영자 미리보기는 마운트 때 한 번만 읽었다.
+//   → 테마를 골라도 **열려 있는 화면은 그대로**. TV 는 보통 window.open 한 별도 창이라 더 티가 났다.
+//   같은 부류가 스폰서 광고(app_settings)에도 있었다 — 그쪽도 `useEffect(..., [])` 였다.
+describe('테마 저장은 열려 있는 화면에 전파된다', () => {
+  // vitest 환경이 'node' 라 window·localStorage 가 없다(jsdom 미설치 — 새 의존성을 들이지 않는다).
+  // 전파는 이벤트 + localStorage 두 축이므로 **그 둘만** 최소로 세운다. Node 24 는 EventTarget·CustomEvent 를 이미 갖고 있다.
+  beforeAll(() => {
+    const bus = new EventTarget();
+    const mem = new Map<string, string>();
+    vi.stubGlobal('window', {
+      addEventListener: bus.addEventListener.bind(bus),
+      removeEventListener: bus.removeEventListener.bind(bus),
+      dispatchEvent: bus.dispatchEvent.bind(bus),
+    });
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => { mem.set(k, v); },
+      removeItem: (k: string) => { mem.delete(k); },
+    });
+  });
+  afterAll(() => vi.unstubAllGlobals());
+
+  it('🔴 publish 하면 같은 매장 구독자가 새 테마를 받는다', () => {
+    const V = 'venue-1';
+    const got: (ClockTheme | null)[] = [];
+    const off = subscribeClockTheme(V, (t) => got.push(t));
+    publishClockTheme(V, makeClockTheme('black-marble-gold', undefined, null));
+    off();
+    expect(got, '구독자가 한 번도 불리지 않았다 — 저장해도 화면이 안 바뀐다').toHaveLength(1);
+    expect(got[0]?.palette?.preset).toBe('black-marble-gold');
+  });
+
+  it('publish 는 스냅샷도 갱신한다 — 다음에 새로 여는 화면이 옛 테마를 먼저 그리지 않는다', () => {
+    const V = 'venue-2';
+    publishClockTheme(V, makeClockTheme('neon-night', undefined, null));
+    const snap = readSnap<ClockTheme | null>(clockThemeSnapKey(V));
+    expect(snap?.palette?.preset).toBe('neon-night');
+  });
+
+  it('다른 매장의 저장에는 반응하지 않는다', () => {
+    let n = 0;
+    const off = subscribeClockTheme('venue-A', () => { n += 1; });
+    publishClockTheme('venue-B', makeClockTheme('carbon', undefined, null));
+    off();
+    expect(n).toBe(0);
+  });
+
+  it('구독 해제 후에는 더 이상 받지 않는다(리스너 누수 없음)', () => {
+    let n = 0;
+    const off = subscribeClockTheme('venue-3', () => { n += 1; });
+    off();
+    publishClockTheme('venue-3', makeClockTheme('aura', undefined, null));
+    expect(n).toBe(0);
+  });
+
+  it('🔴 광고 신호와 테마 신호가 서로 섞이지 않는다', () => {
+    let themeHits = 0, adHits = 0;
+    const offT = subscribeClockTheme('venue-4', () => { themeHits += 1; });
+    const offA = subscribeClockAd(() => { adHits += 1; });
+    publishClockSignal('ad');                                        // 광고만 바뀐 상황
+    expect(themeHits, '광고를 바꿨는데 테마를 다시 읽는다').toBe(0);
+    expect(adHits).toBe(1);
+    publishClockTheme('venue-4', makeClockTheme('aura-gold', undefined, null));  // 테마만
+    expect(adHits, '테마를 바꿨는데 광고를 다시 받아온다').toBe(1);
+    expect(themeHits).toBe(1);
+    offT(); offA();
   });
 });

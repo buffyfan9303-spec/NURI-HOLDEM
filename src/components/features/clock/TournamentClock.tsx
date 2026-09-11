@@ -30,7 +30,7 @@ import { rankingSaveTarget, finishEntriesFromRows } from '../../../lib/rankingGa
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
-import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, type ClockTheme } from './clockTheme';
+import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, publishClockSignal, type ClockTheme } from './clockTheme';
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import QRCode from 'qrcode';
@@ -340,19 +340,29 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     getAppSetting(CLOCK_AD_SIZE_KEY).then((v) => { if (v === 'sm' || v === 'md' || v === 'lg') setAdSize(v); }).catch(() => {});
   }, []);
   const changeAdSize = async (s: 'sm' | 'md' | 'lg') => {
-    setAdSize(s);
-    try { await setAppSetting(CLOCK_AD_SIZE_KEY, s); } catch { /* noop */ }
+    const prev = adSize;
+    setAdSize(s);   // 낙관적 — 실패하면 되돌린다
+    try {
+      await setAppSetting(CLOCK_AD_SIZE_KEY, s);
+      publishClockSignal('ad');
+    } catch (e) {
+      // ⚠ 종전엔 catch 가 비어 있었다. set_app_setting 은 my_role()='admin' 만 통과하므로
+      //   업주 계정에서는 **항상** 실패하는데 화면은 이미 바뀌어 저장된 것처럼 보였다
+      //   (새로고침하면 원래대로 — '바꿨는데 안 바뀐다' 의 정체, 2026-09-11 점검).
+      setAdSize(prev);
+      toast.show(e instanceof Error ? e.message : '크기를 저장하지 못했습니다 (운영자만 변경할 수 있어요)', 'error');
+    }
   };
   const uploadAd = async (file: File | null) => {
     if (!file || !user) return;
     setAdBusy(true);
-    try { const url = await uploadPoster(user.id, file); await setAppSetting(CLOCK_AD_KEY, url); setAdImg(url); toast.show('클락 광고를 등록했습니다(전체 클락 적용)', 'success'); }
+    try { const url = await uploadPoster(user.id, file); await setAppSetting(CLOCK_AD_KEY, url); setAdImg(url); publishClockSignal('ad'); toast.show('클락 광고를 등록했습니다(전체 클락 적용)', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '업로드 실패', 'error'); }
     finally { setAdBusy(false); }
   };
   const removeAd = async () => {
     if (!confirm('클락 광고를 삭제할까요?')) return;
-    try { await setAppSetting(CLOCK_AD_KEY, ''); setAdImg(null); toast.show('광고를 삭제했습니다', 'info'); }
+    try { await setAppSetting(CLOCK_AD_KEY, ''); setAdImg(null); publishClockSignal('ad'); toast.show('광고를 삭제했습니다', 'info'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
   };
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -729,7 +739,9 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         setClkVars(clockThemeVars(t));
       })
       .catch(() => { /* keep-last — 네트워크 블립에 기본 테마로 깜빡이지 않는다 */ });
-    return () => { alive = false; };
+    // 설정 패널에서 테마를 고르면 이 미리보기가 즉시 바뀐다(같은 탭이라 CustomEvent 경로).
+    const off = subscribeClockTheme(state.venueId, (t) => setClkVars(clockThemeVars(t)));
+    return () => { alive = false; off(); };
   }, [state.venueId]);
 
   const [ctlOn, setCtlOn] = useState(true);
