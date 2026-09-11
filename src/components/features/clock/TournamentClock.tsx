@@ -30,7 +30,9 @@ import { rankingSaveTarget, finishEntriesFromRows } from '../../../lib/rankingGa
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
-import { AURA_BG } from './clockTheme';
+import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, type ClockTheme } from './clockTheme';
+import { fetchVenuePageConfig } from '../../../api/rankings';
+import { readSnap, writeSnap } from '../../../lib/snapshot';
 import QRCode from 'qrcode';
 import Icon from '../../atoms/Icon';
 import ClockThemePanel from './ClockThemePanel';
@@ -706,6 +708,30 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
    * TV 송출 중에는 화면에 아무 버튼도 떠 있지 않아야 하지만, 운영자가 다가와 마우스를 흔들면
    * 해제·음소거가 즉시 잡혀야 한다. 포커스 이동(키보드)도 같은 신호로 받아 키보드 접근성을 지킨다.
    */
+  /**
+   * 🔴 운영자 미리보기가 매장 테마를 무시하던 것 — 이 화면은 `AURA_BG` 를 **하드코딩**하고 있었다.
+   * 그래서 블랙 마블 골드를 저장해 둔 매장도 운영자 화면만 기본 인디고로 떴고,
+   * "저장한 테마와 미리보기 디자인이 일치하지 않는다"는 보고가 나왔다.
+   * TV(ClockDisplay)와 **같은 경로**로 읽는다 — 캐시 퍼스트(readSnap) + 실패 시 keep-last.
+   * 같은 스냅샷 키를 쓰므로 TV 를 한 번 띄운 매장은 운영자 화면이 즉시 같은 룩으로 뜬다.
+   */
+  const [clkVars, setClkVars] = useState<Record<string, string>>(
+    () => clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(state.venueId))),
+  );
+  useEffect(() => {
+    let alive = true;
+    setClkVars(clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(state.venueId))));
+    fetchVenuePageConfig(state.venueId)
+      .then((c) => {
+        if (!alive) return;
+        const t = sanitizeClockTheme(c?.clockTheme);
+        writeSnap(clockThemeSnapKey(state.venueId), t);
+        setClkVars(clockThemeVars(t));
+      })
+      .catch(() => { /* keep-last — 네트워크 블립에 기본 테마로 깜빡이지 않는다 */ });
+    return () => { alive = false; };
+  }, [state.venueId]);
+
   const [ctlOn, setCtlOn] = useState(true);
   useEffect(() => {
     if (!fs) { setCtlOn(true); return; }
@@ -897,9 +923,14 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
           전체화면일 때는 `contents` 라 이 래퍼가 레이아웃에 존재하지 않는다(TV 구조 무변경). */}
       <div className={fs ? 'contents' : 'grid gap-2 xl:grid-cols-[minmax(0,1.55fr)_minmax(330px,1fr)] xl:items-start'}>
       {/* 디스플레이 */}
-      <div className={['overflow-hidden border border-white/[0.08] text-white shadow-[0_10px_50px_rgba(0,0,0,0.45)]',
-        fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'rounded-card'].join(' ')}
-        style={{ background: AURA_BG }}>
+      {/* 2026-09-11 — 미리보기도 **16:9 + container-type:size** 다.
+          예전엔 비전체화면에 비율 제약이 없어 내용 높이대로 흘렀고(폭이 좁으면 정사각형처럼 눌렸다),
+          글자 크기는 `fs ? cq단위 : 고정 Tailwind` 두 벌이라 미리보기와 TV 가 서로 닮지 않았다.
+          두 모드가 같은 컨테이너 계약을 가지면 아래 cqw/cqh 한 벌이 양쪽에서 그대로 산다 —
+          '운영자 미리보기 = TV 축소판'이 비로소 성립한다. */}
+      <div className={['overflow-hidden border border-white/[0.08] text-white shadow-[0_10px_50px_rgba(0,0,0,0.45)] [container-type:size]',
+        fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'flex flex-col rounded-card aspect-[16/9]'].join(' ')}
+        style={{ ...clkVars, background: 'var(--clk-bg, #06080F)' }}>
         {/* 2026-09-02 v3 'NURI 아우라'(오너 승인) — TV(ClockDisplay)와 같은 정보 위계·색 체계. 라벨 한국어(ANTE 만 영문),
             골드는 프라이즈 금액에만, 레벨/블라인드 인디고, 타이머 순백. 조작부(아래 컨트롤 행)는 그대로. */}
 
@@ -907,13 +938,13 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         {adImg && (
           <div className="shrink-0 border-b border-white/[0.08] bg-black">
             <img src={adImg} alt="광고" className={['mx-auto w-full object-contain',
-              adSize === 'sm' ? (fs ? 'max-h-[7cqh]' : 'max-h-16') : adSize === 'lg' ? (fs ? 'max-h-[13cqh]' : 'max-h-48') : (fs ? 'max-h-[10cqh]' : 'max-h-28')].join(' ')} />
+              adSize === 'sm' ? ('max-h-[7cqh]') : adSize === 'lg' ? ('max-h-[13cqh]') : ('max-h-[10cqh]')].join(' ')} />
           </div>
         )}
 
         {/* 타이틀 바 */}
         <div className="shrink-0 border-b border-white/[0.08] px-4 py-2 text-center">
-          <p className={['truncate font-extrabold tracking-tight text-white', fs ? 'text-[min(3.2cqw,3.8cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{title}</p>
+          <p className={['truncate font-extrabold tracking-tight text-white', 'text-[min(3.2cqw,3.8cqh)]'].join(' ')}>{title}</p>
         </div>
 
         {/* 본문 — 프라이즈(있을 때만) · 타이머 · 스탯 */}
@@ -921,10 +952,10 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
           fs ? 'flex-1 min-h-0 overflow-hidden' : ''].join(' ')}>
           {cfg.prizes.length > 0 && (
             <div className="flex flex-col border-r border-white/[0.06] p-2 sm:p-3">
-              <p className={['mb-1 font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>프라이즈</p>
+              <p className={['mb-1 font-bold tracking-[0.08em] text-white/50', 'text-[min(1.5cqw,1.8cqh)]'].join(' ')}>프라이즈</p>
               <ul className="space-y-0.5 overflow-hidden">
                 {cfg.prizes.map((p, i) => (
-                  <li key={i} className={['flex items-center justify-between gap-1', fs ? 'text-[min(1.8cqw,2.1cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>
+                  <li key={i} className={['flex items-center justify-between gap-1', 'text-[min(1.8cqw,2.1cqh)]'].join(' ')}>
                     <span className="truncate text-white/50">{/^\d+$/.test(p.place) ? `${p.place}위` : p.place}</span>
                     <span className="font-bold tabular-nums text-[#F5C451]">{p.amount.toLocaleString()}</span>
                   </li>
@@ -932,13 +963,13 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
               </ul>
               {cfg.mysteryBounty > 0 && (
                 <div className="mt-2 border-t border-white/[0.08] pt-2">
-                  <p className={['font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>미스터리 바운티</p>
-                  <p className={['tabular-nums text-white', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>{cfg.mysteryBounty.toLocaleString()}</p>
+                  <p className={['font-bold tracking-[0.08em] text-white/50', 'text-[min(1.5cqw,1.8cqh)]'].join(' ')}>미스터리 바운티</p>
+                  <p className={['tabular-nums text-white', 'text-[min(1.9cqw,2.2cqh)]'].join(' ')}>{cfg.mysteryBounty.toLocaleString()}</p>
                 </div>
               )}
               <div className="mt-auto border-t border-white/[0.08] pt-2">
-                <p className={['font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(1.4cqw,1.7cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>총 프라이즈</p>
-                <p className={['font-extrabold leading-tight tabular-nums text-[#F5C451]', fs ? 'text-[min(2.7cqw,3.1cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{totalPrize.toLocaleString()}</p>
+                <p className={['font-bold tracking-[0.08em] text-white/50', 'text-[min(1.4cqw,1.7cqh)]'].join(' ')}>총 프라이즈</p>
+                <p className={['font-extrabold leading-tight tabular-nums text-[#F5C451]', 'text-[min(2.7cqw,3.1cqh)]'].join(' ')}>{totalPrize.toLocaleString()}</p>
               </div>
             </div>
           )}
@@ -949,32 +980,32 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             <svg viewBox={WORDMARK_VIEWBOX} aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62cqh] select-none text-white opacity-[0.05]"><path fill="currentColor" d={WORDMARK_D} /></svg>
             <p className={['relative mt-1 inline-block rounded-full border font-extrabold tracking-[0.18em]',
               isBreak ? 'border-sky-300/40 bg-sky-300/10 text-sky-300' : 'border-[#818CF8]/55 bg-[#5850EC]/15 text-[#A5B4FC]',
-              fs ? 'px-[2.4cqw] py-[0.5cqh] text-[min(2.6cqw,3.2cqh)]' : 'px-3 py-0.5 text-xs sm:text-lg'].join(' ')}>
+              'px-[2.4cqw] py-[0.5cqh] text-[min(2.6cqw,3.2cqh)]'].join(' ')}>
               {isBreak ? (cur.label || '휴식') : `레벨 ${levelNo}`}
             </p>
             {isBreak && state.running && remaining <= 60_000 && (
-              <p className={['relative mt-1 font-bold text-amber-300 animate-pulse', fs ? 'text-[min(2.6cqw,3.1cqh)]' : 'text-xs sm:text-base'].join(' ')}>휴식 종료 1분 전</p>
+              <p className={['relative mt-1 font-bold text-amber-300 animate-pulse', 'text-[min(2.6cqw,3.1cqh)]'].join(' ')}>휴식 종료 1분 전</p>
             )}
             <p className={['my-1 font-extrabold leading-none tabular-nums drop-shadow-[0_3px_24px_rgba(88,80,236,0.35)] sm:my-2',
-              fs ? 'text-[min(22cqw,32cqh)]' : 'text-6xl sm:text-8xl',
+              'text-[min(22cqw,32cqh)]',
               urgent ? 'text-rose-400 animate-pulse' : isBreak ? 'text-sky-200' : 'text-white'].join(' ')}>
               {mmss(Math.max(0, remaining))}
             </p>
             {!isBreak && (
-              <div className={['flex items-end justify-center', fs ? 'gap-[7cqw]' : 'gap-8 sm:gap-16'].join(' ')}>
+              <div className={['flex items-end justify-center', 'gap-[7cqw]'].join(' ')}>
                 <div>
-                  <p className={['font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-2xs sm:text-sm'].join(' ')}>블라인드</p>
-                  <p className={['font-extrabold tabular-nums text-[#A5B4FC]', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.sb.toLocaleString()}<span className="text-white/25"> / </span>{cur.bb.toLocaleString()}</p>
+                  <p className={['font-bold tracking-[0.08em] text-white/50', 'text-[min(2cqw,2.4cqh)]'].join(' ')}>블라인드</p>
+                  <p className={['font-extrabold tabular-nums text-[#A5B4FC]', 'text-[min(4.8cqw,5.8cqh)]'].join(' ')}>{cur.sb.toLocaleString()}<span className="text-white/25"> / </span>{cur.bb.toLocaleString()}</p>
                 </div>
                 {cur.ante > 0 && (
                   <div>
-                    <p className={['font-bold uppercase tracking-[0.18em] text-white/50', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-2xs sm:text-sm'].join(' ')}>Ante</p>
-                    <p className={['font-extrabold tabular-nums text-white', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.ante.toLocaleString()}</p>
+                    <p className={['font-bold uppercase tracking-[0.18em] text-white/50', 'text-[min(2cqw,2.4cqh)]'].join(' ')}>Ante</p>
+                    <p className={['font-extrabold tabular-nums text-white', 'text-[min(4.8cqw,5.8cqh)]'].join(' ')}>{cur.ante.toLocaleString()}</p>
                   </div>
                 )}
               </div>
             )}
-            <p className={['mt-3 font-semibold text-white/55', fs ? 'text-[min(2.6cqw,3.1cqh)]' : 'text-xs sm:text-lg'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
+            <p className={['mt-3 font-semibold text-white/55', 'text-[min(2.6cqw,3.1cqh)]'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
             {/* 🔴 결함 1 의 그 자리 — 예전엔 `!state.running` 이면 무조건 '일시정지'라, 아직 시작도 안 한
                 클락이 노란 '일시정지' 배지를 달고 있었다(같은 화면의 버튼은 '시작'이었다).
                 이제 phase 가 '시작 전'과 '일시정지'와 '종료'를 갈라 각각 제 색으로 말한다.
@@ -983,36 +1014,36 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
               <span data-testid="clk-phase-badge" className={[
                 'absolute rounded-badge font-bold',
                 phase === 'idle' ? 'bg-white/10 text-white/70' : phase === 'finished' ? 'bg-white/10 text-white/50' : 'bg-amber-400/15 text-amber-300',
-                fs ? 'top-3 right-3 text-[min(2cqw,2.4cqh)] px-3 py-1' : 'top-2 right-2 text-[9px] sm:text-2xs px-2 py-0.5',
+                'top-3 right-3 text-[min(2cqw,2.4cqh)] px-3 py-1',
               ].join(' ')}>{CLOCK_PHASE_LABEL[phase]}</span>
             )}
           </div>
 
           {/* 우: 스탯 — 생존/엔트리(히어로) → 리바이/얼리 → 애드온 → 레지 마감 → 휴식까지 */}
           <div className="flex flex-col justify-center gap-2 border-l border-white/[0.06] p-2 sm:gap-3 sm:p-3">
-            <Stat fs={fs} label="생존 / 엔트리" value={`${alive} / ${entries}`} hero />
-            <Stat fs={fs} label="리바이 / 얼리" value={`${rebuys} / ${earlies}`} />
-            {cfg.isAddon && <Stat fs={fs} label="애드온" value={`${addons}`} />}
+            <Stat label="생존 / 엔트리" value={`${alive} / ${entries}`} hero />
+            <Stat label="리바이 / 얼리" value={`${rebuys} / ${earlies}`} />
+            {cfg.isAddon && <Stat label="애드온" value={`${addons}`} />}
             {/* ⚠ null(마감 레벨 미설정)은 '—', 0 이 진짜 마감 — 예전엔 둘을 뒤집어 보여줬다 */}
-            <Stat fs={fs} label="레지 마감"
+            <Stat label="레지 마감"
               value={regClose === null ? '—' : regClose === 0 ? '마감' : `Lv ${cfg.regCloseLevel} · ${hms(regClose)}`}
               tone={regClose === null ? 'muted' : 'rose'} />
-            <Stat fs={fs} label="휴식까지" value={nextBreak !== null ? hms(nextBreak) : '—'} tone="rose" />
+            <Stat label="휴식까지" value={nextBreak !== null ? hms(nextBreak) : '—'} tone="rose" />
           </div>
         </div>
 
         {/* 칩 스탯 — 총 칩 / 평균 스택(BB 병기) */}
         <div className="shrink-0 grid grid-cols-2 border-t border-white/[0.08]">
           <div className="border-r border-white/[0.06] py-2 text-center sm:py-2.5">
-            <p className={['font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>총 칩</p>
-            <p className={['font-extrabold leading-tight tabular-nums text-white', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>{totalStack.toLocaleString()}</p>
+            <p className={['font-bold tracking-[0.08em] text-white/50', 'text-[min(1.9cqw,2.2cqh)]'].join(' ')}>총 칩</p>
+            <p className={['font-extrabold leading-tight tabular-nums text-white', 'text-[min(4.6cqw,5.6cqh)]'].join(' ')}>{totalStack.toLocaleString()}</p>
           </div>
           <div className="py-2 text-center sm:py-2.5">
-            <p className={['font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>평균 스택</p>
-            <p className={['font-extrabold leading-tight tabular-nums text-white', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>
+            <p className={['font-bold tracking-[0.08em] text-white/50', 'text-[min(1.9cqw,2.2cqh)]'].join(' ')}>평균 스택</p>
+            <p className={['font-extrabold leading-tight tabular-nums text-white', 'text-[min(4.6cqw,5.6cqh)]'].join(' ')}>
               {avgStack.toLocaleString()}
               {curBB > 0 && avgStack > 0 && (
-                <span className={['ml-1.5 font-bold text-white/55', fs ? 'text-[min(2.4cqw,2.9cqh)]' : 'text-xs sm:text-base'].join(' ')}>
+                <span className={['ml-1.5 font-bold text-white/55', 'text-[min(2.4cqw,2.9cqh)]'].join(' ')}>
                   ({Math.round(avgStack / curBB)} BB)
                 </span>
               )}
@@ -1072,16 +1103,18 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   );
 }
 
-function Stat({ label, value, tone, fs, hero }: { label: string; value: string; tone?: 'muted' | 'rose'; fs?: boolean; hero?: boolean }) {
+// fs prop 제거(2026-09-11): 미리보기도 container-type:size 를 갖게 되면서 크기 체계가 cq 한 벌로 합쳐졌다 —
+// 전체화면 여부로 글자 크기를 가를 이유가 사라졌다.
+function Stat({ label, value, tone, hero }: { label: string; value: string; tone?: 'muted' | 'rose'; hero?: boolean }) {
   const c = tone === 'rose' ? 'text-rose-300' : tone === 'muted' ? 'text-white/60' : 'text-white';
   return (
     // 헤어라인 구분 — 첫 항목 제외하고 위쪽 미세 보더(스탯 패널 리듬 정리)
     <div className="text-center [&:not(:first-child)]:border-t [&:not(:first-child)]:border-white/[0.06] [&:not(:first-child)]:pt-2 sm:[&:not(:first-child)]:pt-3">
-      <p className={['text-white/45 tracking-[0.14em] uppercase leading-tight', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>{label}</p>
+      <p className="text-white/45 tracking-[0.14em] uppercase leading-tight text-[min(1.5cqw,1.8cqh)]">{label}</p>
       {/* hero: PLAYERS 전용 — 실물 4종 공통으로 스탯 열의 시각적 1순위(3m 가독) */}
       <p className={['font-bold tabular-nums leading-tight mt-0.5',
-        hero ? (fs ? 'text-[min(4.2cqw,5.1cqh)] font-extrabold' : 'text-lg sm:text-3xl font-extrabold')
-             : (fs ? 'text-[min(2.7cqw,3.3cqh)]' : 'text-sm sm:text-xl'), c].join(' ')}>{value}</p>
+        hero ? ('text-[min(4.2cqw,5.1cqh)] font-extrabold')
+             : ('text-[min(2.7cqw,3.3cqh)]'), c].join(' ')}>{value}</p>
     </div>
   );
 }
