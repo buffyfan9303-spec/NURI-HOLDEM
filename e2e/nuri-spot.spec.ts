@@ -193,6 +193,51 @@ test.describe('NURI SPOT — 단계 바', () => {
   });
 });
 
+test.describe('NURI SPOT — 비슷한 스팟 풀기', () => {
+  test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 412, height: 915 }); });
+
+  test('🔴 비슷한 스팟 풀기 — 참조한 그 표의 문제로 트레이너가 열린다', async ({ page }) => {
+    test.setTimeout(120_000);
+    await stubLogin(page); await stabilizeBackstack(page);
+    await page.goto('/?tab=tools');
+    await dismissOverlays(page);
+    await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 분석' }).click();
+    const dlg = page.getByRole('dialog').first();
+    await dlg.waitFor({ timeout: 20_000 });
+
+    // 기본 스팟(6맥스 100BB BTN 첫 진입) + AKs → RFI 차트에 걸린다
+    await dlg.locator('button[data-card="As"]').click();
+    await dlg.locator('button[data-card="Ks"]').click();
+    await page.waitForTimeout(900);
+
+    const cta = dlg.getByRole('button', { name: '비슷한 스팟 풀기' });
+    await expect(cta, '차트에 걸렸는데 연습 CTA 가 없다').toBeVisible({ timeout: 10_000 });
+    await page.screenshot({ path: 'docs/bugshots/spot-drill-cta.png' });
+
+    // 스냅샷에 그 표의 문제가 실린다(키는 nuri:snap:<name>:v1).
+    // ⚠ ToolsPanel 이 도구를 연 뒤 1회성 스냅샷을 지우므로 여기서 이미 비어 있을 수 있다 —
+    //   그래서 '있으면 형식을 검사' 하고, 결정적 증거는 아래 '그 핸드가 나오는가' 로 본다.
+    await cta.click();
+    const snap = await page.evaluate(() => {
+      try { return localStorage.getItem('nuri:snap:tool:trainer:v1'); } catch { return null; }
+    });
+    if (snap) expect(snap, '참조한 그 표의 키가 아니다').toMatch(/rfi\|rfi_[a-z0-9]+\|AKs/);
+
+    // 트레이너가 열리고 **그 핸드**가 나온다(랜덤 문제로 떨어지지 않았다)
+    const trainer = page.getByRole('dialog').first();
+    await expect(trainer.getByText('프리플랍 트레이너')).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: 'docs/bugshots/spot-drill-trainer.png' });
+    // ⚠ 카드는 랭크와 무늬가 **다른 요소**라 innerText 에서 A♥ 가 아니라 A + 줄바꿈 + ♥ 로 나온다.
+    //   스팟의 자리(BTN)와 상황(100bb 첫 진입)이 그대로 복원됐는지로 본다 — 랜덤이면 여기가 어긋난다.
+    const txt = await trainer.innerText();
+    expect(txt, '자리가 복원되지 않았다 — 무관한 문제다').toContain('BTN');
+    expect(txt, '상황이 복원되지 않았다').toContain('100bb · 첫 진입');
+    const ranks = (await trainer.locator('text=/^[AKQJT2-9]$/').allInnerTexts()).join('');
+    expect(ranks, `카드가 A·K 가 아니다: ${ranks}`).toMatch(/A.*K|K.*A/);
+  });
+});
+
 test.describe('NURI SPOT — 뷰포트 매트릭스', () => {
   for (const vp of VIEWPORTS) {
     test(`🔴 ${vp.name} — 가로 스크롤 0 · 터치 영역 44px`, async ({ page }) => {

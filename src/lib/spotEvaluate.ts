@@ -22,6 +22,7 @@
 // 그래서 이 파일은 exact_solver 를 반환하는 경로를 아예 갖지 않는다.
 // 나중에 검증된 데이터가 들어오면 evaluateSpot 안의 `lookupSolver` 자리 한 곳만 채우면 된다.
 import { RANGE_SCENARIOS } from './ranges.data';
+import { KEY_PREFIX, PUSH_POS, PUSH_STACKS, type Mode } from './preflopQuiz';
 import { buildFreq } from './ranges';
 import { nashRange, NASH_STACKS, HAND_ORDER } from './nash.data';
 import {
@@ -91,6 +92,8 @@ export type SpotEvaluation =
     heroFreq: number | null;
     /** normalized_reference 일 때 **무엇이 달랐는가**. 비어 있으면 정확 일치 */
     differences: string[];
+    /** 이 표를 그대로 푸는 트레이너 문제. 옛 글에는 없을 수 있다(optional) */
+    drill?: DrillLink;
   })
   | (Base & { kind: 'math_only'; })
   | (Base & { kind: 'unsupported'; reason: string; });
@@ -131,6 +134,18 @@ interface ChartHit {
   sourceLabel: string;
   mix: ActionMix;
   differences: string[];
+  /** 이 표를 그대로 연습할 수 있는 트레이너 문제. 대응 문제가 없으면 없음 */
+  drill?: DrillLink;
+}
+
+/**
+ * '이 표로 연습' 링크. **평가가 실제로 참조한 그 표**만 가리킨다 —
+ * 스팟 사이의 거리를 재는 수단이 이 저장소에 없으므로, 그 밖의 '비슷함'은 지어낸 것이 된다.
+ * key 는 preflopQuiz 의 문제 식별자 형식 그대로다('<접두>|<시나리오>|<핸드>').
+ */
+export interface DrillLink {
+  mode: Mode;
+  key: string;
 }
 
 /**
@@ -161,6 +176,7 @@ function lookupPreflopChart(s: SpotReview, combo: string): ChartHit | null {
       sourceLabel: `프리플랍 레인지 차트 · ${sc.label} 오픈`,
       mix: { raise, call: 0, fold: clamp01(1 - raise) },
       differences: diffs,
+      drill: { mode: 'rfi', key: `${KEY_PREFIX.rfi}|${sc.id}|${combo}` },
     };
   }
 
@@ -179,6 +195,7 @@ function lookupPreflopChart(s: SpotReview, combo: string): ChartHit | null {
       sourceLabel: `프리플랍 레인지 차트 · ${sc.label}`,
       mix: { raise, call, fold: clamp01(1 - raise - call) },
       differences: diffs,
+      drill: { mode: 'defend', key: `${KEY_PREFIX.defend}|${sc.id}|${combo}` },
     };
   }
 
@@ -216,6 +233,12 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
     // 올인은 레이즈 갈래로 표시한다 — 이 차트에 콜 갈래는 없다(첫 진입 셔브/폴드 두 갈래)
     mix: { raise: shove, call: 0, fold: clamp01(1 - shove) },
     differences: diffs,
+    // ⚠ 트레이너 푸시 문제는 PUSH_POS 자리만 낸다(k=7 = 9인 UTG+1 은 없다).
+    //   없는 자리로 키를 만들면 makeQuiz 가 **조용히 무관한 문제**를 낸다 — 그게 CTA 를
+    //   거짓말로 만드는 가장 현실적인 경로다. 있는 자리에만 링크를 싣는다.
+    ...(PUSH_POS.some((x) => x.k === k) && PUSH_STACKS.includes(stack)
+      ? { drill: { mode: 'push' as const, key: `${KEY_PREFIX.push}|${k}-${stack}|${combo}` } }
+      : {}),
   };
 }
 
@@ -312,6 +335,7 @@ export function evaluateSpot(s: SpotReview, options: EvaluateOptions = {}): Spot
       kind: exact ? 'chart_nash' : 'normalized_reference',
       sourceLabel: hit.sourceLabel,
       mix: hit.mix,
+      ...(hit.drill ? { drill: hit.drill } : {}),
       heroFreq,
       differences: hit.differences,
       verdict: verdictFromFreq(heroFreq, exact),

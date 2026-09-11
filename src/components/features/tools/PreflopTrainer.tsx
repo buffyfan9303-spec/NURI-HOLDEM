@@ -15,10 +15,14 @@ import { recordSrs } from '../../../lib/srs';
 import Icon from '../../atoms/Icon';
 import { PreflopQuizCard } from './quizCards';
 
-export default function PreflopTrainer() {
-  const [mode, setMode] = useState<Mode>('rfi');
+/** initial* 은 스팟 리포트의 '비슷한 스팟 풀기' 가 넘기는 시작 문제다(없으면 기존대로 rfi 랜덤).
+ *  ⚠ makeQuiz 는 키 복원에 실패해도 **조용히 다른 문제**를 낸다 — 키는 만든 쪽이 책임진다. */
+export default function PreflopTrainer(
+  { initialMode, initialKey }: { initialMode?: Mode; initialKey?: string } = {},
+) {
+  const [mode, setMode] = useState<Mode>(initialMode ?? 'rfi');
   const [stats, setStats] = useState<PreflopStats>(loadPreflopStats);
-  const [quiz, setQuiz] = useState<Quiz>(() => makeQuiz('rfi'));
+  const [quiz, setQuiz] = useState<Quiz>(() => makeQuiz(initialMode ?? 'rfi', initialKey));
   const [result, setResult] = useState<null | { correct: boolean }>(null);
   const prog = useTrainerProgress();            // 게이미피케이션 진행(로컬 공용 — 별도 키)
   const [celebrate, setCelebrate] = useState(false); // 목표 달성 순간 인라인 배너 1회

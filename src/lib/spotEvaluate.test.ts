@@ -276,3 +276,25 @@ describe('warn 은 분석을 막지 않는다', () => {
     expect(e.issues.some((i) => i.field === 'pot' && i.level === 'warn')).toBe(true);
   });
 });
+
+describe("비슷한 스팟 풀기 — 참조한 그 표만 가리킨다", () => {
+  it('RFI 차트에 걸리면 그 시나리오·그 핸드의 트레이너 키를 낸다', () => {
+    const e = evaluateSpot(base({ hero: ['As', 'Ks'] }));
+    expect(e.kind).toBe('chart_nash');
+    if (!('drill' in e) || !e.drill) throw new Error('drill 이 없다');
+    expect(e.drill.mode).toBe('rfi');
+    // '<접두>|<시나리오>|<핸드>' — makeQuiz 가 복원에 쓰는 그 형식
+    expect(e.drill.key).toMatch(/^rfi\|rfi_[a-z0-9]+\|AKs$/);
+  });
+
+  it('포스트플랍에는 연습 링크를 만들지 않는다 — 표가 없다', () => {
+    const e = evaluateSpot(base({ street: 'flop', board: ['2c', '7d', '9h'] }));
+    expect('drill' in e && e.drill).toBeFalsy();
+  });
+
+  it('범위 밖(math_only)에는 연습 링크가 없다', () => {
+    const e = evaluateSpot(base({ effectiveBb: 300 }));   // 정규화 밴드 밖
+    expect(e.kind).toBe('math_only');
+    expect('drill' in e).toBe(false);
+  });
+});

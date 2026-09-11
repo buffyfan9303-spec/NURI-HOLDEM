@@ -23,7 +23,8 @@ export const MODES: { id: Mode; label: string }[] = [
   { id: 'vs3bet', label: 'vs 3벳' }, { id: 'push', label: '푸시폴드' }, { id: 'call', label: '올인 콜' },
 ];
 /** 키 접두 — 기존 'rfi'·'push' 는 저장된 오답 큐·SRS 와의 호환을 위해 그대로 */
-const KEY_PREFIX: Record<Mode, string> = { rfi: 'rfi', threebet: '3b', defend: 'def', vs3bet: 'v3b', push: 'push', call: 'call' };
+// 스팟 리포트가 '이 표로 연습' 키를 만들 때 같은 접두를 써야 한다 — 사본을 만들지 않는다.
+export const KEY_PREFIX: Record<Mode, string> = { rfi: 'rfi', threebet: '3b', defend: 'def', vs3bet: 'v3b', push: 'push', call: 'call' };
 const CHART_GROUPS: Partial<Record<Mode, RangeScenario['group'][]>> = {
   rfi: ['rfi6', 'rfi9'], threebet: ['threebet'], defend: ['defend'], vs3bet: ['vs3bet'],
 };

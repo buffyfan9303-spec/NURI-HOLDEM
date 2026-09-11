@@ -31,6 +31,7 @@ import { RANGE_SCENARIOS } from '../../lib/ranges.data';
 
 // GTO 패널·핸드 리플레이어는 에퀴티 엔진을 포함해 무거우므로 지연 로드
 import { clearSnap, readSnap } from '../../lib/snapshot';
+import type { DrillLink } from '../../lib/spotEvaluate';
 import type { DeepGtoInit } from './gto/useDeepGto';
 import type { HandReviewInit } from './gto/HandReviewTool';
 import type { SpotReview } from '../../lib/spot';
@@ -163,7 +164,8 @@ function renderTool(k: ToolKey): ReactNode {
     // 오답 노트 '차트에서 보기' 는 tool:range / tool:pushfold 스냅샷으로 시나리오·셀을 넘긴다 — 1회성이라
     // 열린 뒤 이펙트가 지운다(tool:gto 와 달리 24h 동안 강조가 들러붙으면 안 된다). 아래 ToolsPanel 의 [active] 이펙트 참고.
     case 'range': { const j = readSnap<RangeJump>('tool:range'); return <RangeGuide initialScenId={j?.scenId} highlight={j?.hand} />; }
-    case 'trainer': return <PreflopTrainer />;
+    // 스팟 리포트의 '비슷한 스팟 풀기' 가 tool:trainer 로 그 표의 문제를 넘긴다(위 range·pushfold 와 같은 조리법).
+    case 'trainer': { const j = readSnap<DrillLink>('tool:trainer'); return <PreflopTrainer initialMode={j?.mode} initialKey={j?.key} />; }
     case 'postflop': return <PostflopTrainer />;
     case 'wrongnote': return <WrongNote />;
     case 'mdf': return <MdfCalc />;
@@ -269,7 +271,7 @@ export default function ToolsPanel() {
   // 차트 점프 파라미터는 1회성 — 렌더(useState 초기화)가 읽은 뒤 커밋 후에 지운다.
   // 렌더 중에 지우면 StrictMode 이중 렌더의 두 번째 호출이 null 을 읽는다.
   useEffect(() => {
-    if (active === 'range' || active === 'pushfold') clearSnap(`tool:${active}`);
+    if (active === 'range' || active === 'pushfold' || active === 'trainer') clearSnap(`tool:${active}`);
   }, [active]);
   // 도구 딥링크 공유 — 시스템 공유 시트(모바일) 또는 클립보드 복사(PC). #tool= 로 그 도구가 바로 열린다.
   const share = async (k: ToolKey) => {

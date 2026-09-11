@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   emptySpot, validateSpot, hasBlocker, canonicalSpotKey, heroComboId,
-  toJSON, fromJSON, encodeSpotCode, decodeSpotCode, readSpotHash,
+  toJSON, fromJSON,
   spotFromReplay, spotFromCards, potBb, positionsFor, isCardCode,
   type SpotReview,
 } from './spot';
@@ -201,27 +201,6 @@ describe('직렬화 round trip', () => {
   it('toJSON → fromJSON 이 값을 잃지 않는다', () => {
     const back = fromJSON(toJSON(full));
     expect(back).toEqual(full);
-  });
-
-  it('URL 코드 round trip', () => {
-    const back = decodeSpotCode(encodeSpotCode(full));
-    expect(back).toEqual(full);
-  });
-
-  it('한글 메모도 URL 코드를 통과한다', () => {
-    const s = base({ note: '턴에서 레이즈 맞고 고민했음 · 100만원' });
-    expect(decodeSpotCode(encodeSpotCode(s))?.note).toBe(s.note);
-  });
-
-  it('#spot= 해시를 읽는다', () => {
-    const code = encodeSpotCode(base());
-    expect(readSpotHash(`#spot=${code}`)).toBe(code);
-    expect(readSpotHash('#tool=gto')).toBeNull();
-  });
-
-  it('망가진 코드는 조용히 null — 화면을 깨뜨리지 않는다', () => {
-    expect(decodeSpotCode('!!!not-base64!!!')).toBeNull();
-    expect(decodeSpotCode('')).toBeNull();
   });
 
   it('모르는 필드는 버리고 빠진 필드는 기본값으로 채운다(구버전 내성)', () => {

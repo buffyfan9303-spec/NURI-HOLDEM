@@ -18,6 +18,7 @@ import {
   COVERAGE_LABEL, VERDICT_LABEL,
   type SpotEvaluation, type CoverageKind, type Verdict, type ActionMix,
 } from '../../../lib/spotEvaluate';
+import { writeSnap } from '../../../lib/snapshot';
 import { saveMySpot, shareSpotPost } from '../../../api/spots';
 import { gotoBoardPost } from '../../../lib/spotNav';
 
@@ -69,6 +70,14 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '저장에 실패했습니다', 'error');
     } finally { setBusy(null); }
+  };
+
+  // 트레이너로 넘길 때는 스냅샷에 실어 보낸다 — ToolsPanel 의 case 'trainer' 가 읽는다.
+  // 참조한 표의 **그 문제**를 그대로 낸다(makeQuiz 의 키 복원).
+  const onDrill = () => {
+    if (!('drill' in evaluation) || !evaluation.drill) return;
+    writeSnap('tool:trainer', evaluation.drill);
+    window.dispatchEvent(new CustomEvent('nuri:open-tool', { detail: 'trainer' }));
   };
 
   const onShare = async () => {
@@ -174,6 +183,19 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
       </div>
       {blocked && (
         <p className="mt-1.5 text-2xs text-ink-muted">입력을 고치면 저장·공유할 수 있어요. 적어 둔 내용은 그대로 있습니다.</p>
+      )}
+
+      {/* 비슷한 스팟 풀기 — **평가가 실제로 본 그 표**가 있을 때만 세운다.
+          이 저장소에는 스팟 사이의 거리를 재는 수단이 없다(canonicalSpotKey 는 같음/다름만 본다).
+          그러니 '비슷하다'고 부를 수 있는 정직한 대상은 참조한 표 하나뿐이고, 포스트플랍처럼
+          표가 없는 자리에는 **버튼을 만들지 않는다**(비활성 버튼은 '입력을 고치면 열린다'는
+          거짓 약속이 된다 — 여긴 고칠 입력이 없다).
+          ⚠ 위 2열 그리드에 넣지 않는다. 세 번째가 되면 한 칸이 혼자 남아 열이 깨진다. */}
+      {'drill' in evaluation && evaluation.drill && (
+        <button type="button" onClick={onDrill}
+          className="mt-1.5 flex min-h-[44px] w-full items-center justify-center gap-1 rounded-input border border-border-default text-xs font-bold text-ink-secondary">
+          <Icon name="target" size={13} aria-hidden />비슷한 스팟 풀기
+        </button>
       )}
     </section>
   );

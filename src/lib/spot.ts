@@ -390,41 +390,15 @@ export function fromJSON(raw: unknown): SpotReview | null {
   return s;
 }
 
-// ── URL 공유(#spot=) ──────────────────────────────────────────────────────────
-// base64url(JSON). 기존 #gto= 는 카드만 담아 짧았지만, 구조화된 스팟은 필드가 많아
-// 자체 문법을 새로 만들면 파서를 하나 더 유지해야 한다 — JSON 한 벌로 끝낸다.
-
-const b64urlEncode = (s: string): string => {
-  const bytes = new TextEncoder().encode(s);
-  let bin = '';
-  bytes.forEach((b) => { bin += String.fromCharCode(b); });
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-};
-
-const b64urlDecode = (s: string): string | null => {
-  try {
-    const pad = s.replace(/-/g, '+').replace(/_/g, '/');
-    const bin = atob(pad + '='.repeat((4 - (pad.length % 4)) % 4));
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  } catch { return null; }
-};
-
-export function encodeSpotCode(s: SpotReview): string {
-  return b64urlEncode(JSON.stringify(toJSON(s)));
-}
-
-export function decodeSpotCode(code: string): SpotReview | null {
-  const json = b64urlDecode(code ?? '');
-  if (!json) return null;
-  try { return fromJSON(JSON.parse(json)); } catch { return null; }
-}
-
-/** location.hash 에서 `#spot=` 코드 추출. 없으면 null. */
-export function readSpotHash(hash: string): string | null {
-  const m = (hash ?? '').match(/#spot=([^&]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
+// ── URL 공유는 두지 않는다 ────────────────────────────────────────────────────
+// 한때 encodeSpotCode/decodeSpotCode/readSpotHash(base64url JSON)가 있었다. 지웠다:
+//   · 상대 카드·결과가 URL 에 평문으로 실린다. base64 는 암호가 아니다 —
+//     서버가 hidden_* 컬럼 권한으로 가려 둔 스포일러(20260911d)를 링크 한 줄이 우회하고,
+//     그러면 '먼저 골라 보고 분포를 확인' 하는 투표가 통째로 무의미해진다.
+//   · 대표 스팟 1건이 943자(메모가 길면 2122자)라 메신저 공유에 현실적이지 않았다.
+//   · 배선된 적이 한 번도 없다(프로덕션 호출자 0). 같은 왕복은 게시판 공유가 닫는다:
+//     share_spot_post → `?post=<36자>` → SpotPostCard → '이 스팟 분석하기'.
+// 다시 만들 거라면 **가릴 것을 뺀 뒤** 인코딩하는 것부터 설계해라.
 
 // ── 기본값 · 레거시 어댑터 ────────────────────────────────────────────────────
 
