@@ -1,5 +1,6 @@
 // src/api/clock.ts — 토너먼트 클락(블라인드 타이머) API
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import { earlyTypeOf, ledgerCounts, type EarlyType, type LedgerBuyin } from './ledger';
 
 /** 얼리 판정에 필요한 세션 정보 */
@@ -46,6 +47,10 @@ export interface ClockLiveStats {
   entries: number; rebuys: number; earlies: number; addons: number;
   alive: number; eliminations: number; totalStack: number; avgStack: number;
   buyInAmount?: number | null; // 바인 금액(원) — 연동 장부 세션값. 라이브 보드 표시용(공개).
+  /** 클램프 전 얼리 카운트(장부 몫 + adjEarlies). 표시는 언제나 `earlies`(0 하한)를 쓴다.
+   *  리모컨 delta 합성(applyRemoteStatDelta)이 `Math.max(0, …)` 에서 잃어버린 정보를 되찾기 위한 기준값.
+   *  낡은 스냅샷에는 없을 수 있어 optional 이다(없으면 `earlies` 로 떨어진다 = 예전 동작). */
+  earliesRaw?: number;
 }
 
 export interface ClockState {
@@ -327,16 +332,14 @@ export async function saveClockPreset(venueId: string, name: string, config: Clo
     if ((count ?? 0) >= PRESET_LIMIT) throw new Error(`프리셋은 최대 ${PRESET_LIMIT}개까지 저장할 수 있습니다`);
   }
   const row = { venue_id: venueId, name: name.trim() || '무제목', config: config as unknown as object, updated_at: new Date().toISOString() };
-  const { error } = id
-    ? await supabase.from('clock_presets').update(row).eq('id', id)
-    : await supabase.from('clock_presets').insert(row);
+  if (id) { await mustAffect(supabase.from('clock_presets').update(row).eq('id', id)); return; }
+  const { error } = await supabase.from('clock_presets').insert(row);
   if (error) throw error;
 }
 
 export async function deleteClockPreset(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('clock_presets').delete().eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('clock_presets').delete().eq('id', id));
 }
 
 // ── 라이브 상태 ───────────────────────────────────────────────────────────────
@@ -382,9 +385,33 @@ export async function saveClockState(s: ClockState): Promise<void> {
   if (error) throw error;
 }
 
+/** 통계 전용 부분 업데이트 — `live_stats` 컬럼만 쓴다(제어 필드는 절대 건드리지 않는다).
+ *
+ *  왜 필요한가(C01, 2026-09-12 재현): 통계 재계산 effect(TournamentClock, 장부 변동 400ms 디바운스)는
+ *  자기 클로저의 낡은 `state` 를 들고 `setTimeout` 뒤에 saveClockState(전 행 upsert)를 불렀다.
+ *  그 400ms 사이 사람이 STOP 을 눌러 정본이 이미 바뀌어도, deps 가 derivedKey 뿐이라 타이머가
+ *  취소되지 않고 그대로 발사돼 낡은 running:true 로 방금 쓴 정지를 덮었다 — 두 writer가 역순으로 도착하면
+ *  나중에 도착한(하지만 더 먼저 계산된) 통계 write 가 이긴다.
+ *  이 함수는 `live_stats` 딱 하나만 UPDATE 하므로, 어떤 순서로 도착해도 `running`·`currentIndex`·
+ *  `endsAt`·`eliminations` 를 덮어쓸 수 없다 — 경합 자체가 성립하지 않는다. */
+export async function saveClockLiveStats(venueId: string, gameSeq: number, liveStats: ClockLiveStats | null): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('clock_states').update({
+    live_stats: (liveStats ?? null) as unknown as object,
+    updated_at: new Date().toISOString(),
+  }).eq('venue_id', venueId).eq('game_seq', gameSeq);
+  if (error) throw error;
+}
+
 export async function clearClockState(venueId: string, gameSeq = 1): Promise<void> {
   if (IS_MOCK) return;
-  await supabase.from('clock_states').delete().eq('venue_id', venueId).eq('game_seq', gameSeq);
+  // C07: error 를 버리면 403/500 이어도 호출부(TournamentClock.endClock)가 성공으로 알고
+  // '클락을 종료했습니다' 안내와 설정 화면 이동을 해 버린다 — 실제로는 서버에 그대로 남아 있다.
+  // 같은 이유로 RLS 거부(=error 없는 0행)도 성공이 아니다 — TV 에는 클락이 계속 돌고 있다.
+  await mustAffect(
+    supabase.from('clock_states').delete().eq('venue_id', venueId).eq('game_seq', gameSeq),
+    '종료할 클락을 찾지 못했습니다. 이미 종료됐거나 권한이 없습니다',
+  );
 }
 
 export function subscribeClock(venueId: string, onChange: () => void): () => void {
@@ -462,12 +489,30 @@ export function earlyUnitTotal(
   return dbl * earlyUnitsOf(cfg, 'double') + sgl * earlyUnitsOf(cfg, 'single');
 }
 
+/** 스냅샷에서 얼리의 '자동(장부 파생)' 몫만 되뽑는다 — 표시 '얼리 보정 · 자동 N ±M' 의 N.
+ *
+ *  ⚠ 왜 `earlies` 로는 안 되나(2026-09-13 재현): `liveStats.earlies` 는 `Math.max(0, …)` 로
+ *    **클램프된** 값이라(computeLiveStats) 보정을 되빼는 역산이 성립하지 않는다.
+ *    장부 자동 3 · adjEarlies −5 → earlies=0 이라 `0 − (−5) = 5` 가 나왔다(참값 3).
+ *    adjEarlies 를 음수로 크게 내리면 '자동'이 통째로 `|adjEarlies|` 로 고정됐다(자동 0 일 때도 5).
+ *    클램프 전 값(earliesRaw)에서 빼야 정확히 `earlyUnitTotal` 이 복원된다.
+ *  ⚠ `?? ls.earlies` 는 earliesRaw 가 없던 **낡은 스냅샷**용 폴백이다 — 그 경로에서는 구 동작과 같다
+ *    (applyRemoteStatDelta 의 같은 폴백과 동일한 취급). */
+export function earlyAutoOf(
+  ls: Pick<ClockLiveStats, 'earlies' | 'earliesRaw'> | null | undefined,
+  adjEarlies: number | null | undefined,
+): number {
+  return (ls?.earliesRaw ?? ls?.earlies ?? 0) - (adjEarlies ?? 0);
+}
+
 /** 라이브 통계 스냅샷 계산(클락 디스플레이 + 라이브 보드 공통). */
 export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: ClockConfig): ClockLiveStats {
   const entries = derived.entries + st.adjEntries;
   const rebuys = derived.rebuys + st.adjRebuys;
   // ⚠ 얼리는 인원이 아니라 기준칩 배수의 합(#21). 수기 보정은 그대로 '단위' 가산이다.
-  const earlies = Math.max(0, earlyUnitTotal(derived, cfg) + st.adjEarlies);
+  // 클램프 전 값을 함께 남긴다 — 리모컨이 이 스냅샷에 차분을 얹을 때 기준이 된다(아래 applyRemoteStatDelta).
+  const earliesRaw = earlyUnitTotal(derived, cfg) + st.adjEarlies;
+  const earlies = Math.max(0, earliesRaw);
   const addons = st.adjAddons;
   const alive = Math.max(0, entries - st.eliminations);
   const dEarly = derived.doubleEarlies;
@@ -480,5 +525,47 @@ export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: Cl
   const totalStack = entries * cfg.startStack + rebuys * cfg.rebuyStack + addons * cfg.addonStack
     + dEarly * cfg.doubleEarlyBonus + sEarly * cfg.earlyBonus + adjChips;
   const avgStack = alive > 0 ? Math.round(totalStack / alive) : 0;
-  return { entries, rebuys, earlies, addons, alive, eliminations: st.eliminations, totalStack, avgStack };
+  return { entries, rebuys, earlies, earliesRaw, addons, alive, eliminations: st.eliminations, totalStack, avgStack };
+}
+
+/** 리모컨 전용 — 정본 스냅샷에 '상태에서만 오는' 변화분(adj*·eliminations)만 얹는다.
+ *
+ *  왜 필요한가(2026-09-13 재현): C02 로 리모컨이 장부 연동 클락의 liveStats 를 아예 손대지 않게 했더니,
+ *  리모컨으로 누른 탈락·보정이 TV 보드에 **영원히** 반영되지 않았다. ClockDisplay 는 liveStats.alive 를
+ *  그대로 읽고(ClockDisplay.tsx: `g?.liveStats ?? ...` — 스냅샷이 있으면 폴백 계산을 쓰지 않는다),
+ *  남은 유일한 쓰기 경로인 TournamentClock 의 디바운스 effect 는 deps 가 derivedKey(장부 카운트+바인단가)
+ *  뿐이라 eliminations/adj* 변화로는 발사되지 않는다 — PC 를 열어 둬도 갱신되지 않고, 무인 운영이면
+ *  PC 자체가 없다(리모컨의 존재 이유가 무인 조작이다).
+ *
+ *  C02 를 어떻게 지키나: 장부 파생분(entries/rebuys/earlies 의 장부 몫·buyInAmount·totalStack 의 장부 몫)은
+ *  정본 값을 **그대로** 두고, prev→next 의 adj*·eliminations **차이만** computeLiveStats 와 같은 식으로
+ *  더한다. 차이만 쓰므로 리모컨이 진입 시 1회 읽은 낡은 buyins 는 결과에 전혀 들어가지 않는다.
+ *  canon 이 없으면(null) 아직 정본 스냅샷이 없는 것이므로 그대로 null — 없는 기준에 delta 를 얹지 않는다. */
+export function applyRemoteStatDelta(
+  canon: ClockLiveStats | null | undefined,
+  prev: Pick<ClockState, 'adjEntries' | 'adjRebuys' | 'adjEarlies' | 'adjAddons'>,
+  next: Pick<ClockState, 'adjEntries' | 'adjRebuys' | 'adjEarlies' | 'adjAddons' | 'eliminations'>,
+  cfg: ClockConfig,
+): ClockLiveStats | null {
+  if (!canon) return null;
+  const dEntries = next.adjEntries - prev.adjEntries;
+  const dRebuys = next.adjRebuys - prev.adjRebuys;
+  const dEarlies = next.adjEarlies - prev.adjEarlies;
+  const dAddons = next.adjAddons - prev.adjAddons;
+  const entries = canon.entries + dEntries;
+  const rebuys = canon.rebuys + dRebuys;
+  // ⚠ canon.earlies 는 **이미 클램프된** 값이라 여기에 차분을 얹으면 식이 갈린다(2026-09-13 재현):
+  //    장부 얼리 0 · adjEarlies −5 → −3 이면 canon.earlies=0, 차분 +2 → 2. 직접 계산은 max(0, 0−3)=0.
+  //    리모컨의 [얼리 −] 는 `Math.max(-9999, …)` 까지 내려가므로 실제로 도달한다.
+  //    그래서 클램프 전 값(earliesRaw)을 기준으로 삼는다. 없는 낡은 스냅샷은 예전 동작으로 떨어진다.
+  const earliesRaw = (canon.earliesRaw ?? canon.earlies) + dEarlies;
+  const earlies = Math.max(0, earliesRaw);
+  const addons = canon.addons + dAddons;
+  const eliminations = next.eliminations;
+  const alive = Math.max(0, entries - eliminations);
+  // ⚠ 얼리 보정의 칩 환산은 computeLiveStats 의 adjChips 와 같은 식이어야 한다(단위 → 칩).
+  const totalStack = canon.totalStack + dEntries * cfg.startStack + dRebuys * cfg.rebuyStack
+    + dAddons * cfg.addonStack + dEarlies * (earlyUnitChips(cfg) || cfg.earlyBonus);
+  const avgStack = alive > 0 ? Math.round(totalStack / alive) : 0;
+  return { ...canon, entries, rebuys, earlies, earliesRaw, addons, alive, eliminations, totalStack, avgStack };
 }

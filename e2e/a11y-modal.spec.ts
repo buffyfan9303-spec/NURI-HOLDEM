@@ -7,7 +7,8 @@
 //  ② MODAL-02: 포스터 확대 보기(ImageLightbox)를 키보드로 열면 포커스가 닫기 버튼으로 들어가고,
 //     Tab 이 바깥으로 새지 않으며, 닫으면 **연 버튼으로 복원**된다. 닫기 버튼은 44px(TOUCH-01).
 //  ③ A11Y-02: 글쓰기 핸드 슬롯에 '버튼 안 버튼' 중첩이 없고, Space 가 슬롯을 고르지 시트를 스크롤시키지 않는다.
-//  ④ TOUCH-01(조건부): 이벤트 페이지 닫기 버튼의 실효 히트영역 ≥ 44px — 진행 중 이벤트가 없으면 skip.
+//  ④ TOUCH-01: 이벤트 페이지 닫기 버튼의 실효 히트영역 ≥ 44px. (2026-09-12 §4 로 조건부가 아니게 됐다 —
+//     홈의 이벤트 진입 칸이 이벤트 상태와 무관하게 늘 있어서 언제나 잴 수 있다.)
 //
 // 운영 DB 에는 쓰지 않는다 — 세션·프로필·포스터는 page.route 로 만들고, 변이는 _fixtures 가드가 끊는다.
 // 세션은 **가짜**(voucher-sheet-open.spec 과 같은 3종 세트) — JWT 는 디코드 가능해야 supabase-js 가 버리지 않는다.
@@ -155,15 +156,19 @@ test('🔴 글쓰기 핸드 슬롯 — 버튼 안 버튼 중첩이 없고, Space
   expect(after.scrollTop, 'Space 가 시트 본문을 스크롤시켰다(preventDefault 없는 가짜 버튼)').toBe(scrollBefore);
 });
 
-// ── 이벤트 페이지 닫기 버튼 hit 영역(TOUCH-01) — 진행 중 이벤트가 없으면 배너가 없어 skip ──
+// ── 이벤트 페이지 닫기 버튼 hit 영역(TOUCH-01) ──
+// ⚠ 2026-09-12(§4): 셀렉터를 텍스트에서 data-testid 로 옮겼다. 두 가지가 같이 바뀌었기 때문이다 —
+//   ① 이제 홈의 이벤트 진입 칸은 **상태와 무관하게 늘 있다**(0개·실패·소진·비로그인). 그래서 skip 이 없어진다.
+//   ② PC GNB 에도 '이벤트' 버튼이 생겼는데, 그건 375px 에서 `hidden lg:flex` 로 안 보인다.
+//      `button:has-text(이벤트)` 의 **첫 매치가 그 숨은 버튼**이라 클릭이 영원히 대기했다(실측 실패).
 test('이벤트 페이지 닫기 버튼 — 실효 히트영역 44px', async ({ page }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 375, height: 812 });
   await stabilizeBackstack(page);
   await page.goto('/');
   await page.waitForLoadState('networkidle');
-  const banner = page.locator('button').filter({ hasText: /오픈 기념|카드 오픈|이벤트/ }).first();
-  test.skip(await banner.count() === 0, '진행 중인 이벤트가 없다(홈 배너 없음)');
+  const banner = page.getByTestId('home-event-banner').or(page.getByTestId('home-event-menu')).first();
+  await expect(banner, '홈에 이벤트 진입 칸이 없다 — 상시 진입 계약이 깨졌다').toBeVisible({ timeout: 15_000 });
   await banner.click();
   const close = page.locator('[role="dialog"][aria-label="이벤트"] button[aria-label="닫기"]');
   await expect(close).toBeVisible({ timeout: 15_000 });

@@ -55,6 +55,8 @@ interface MarketplaceTabProps {
   notices: MarketplaceNotice[];
   onSelect: (listing: MarketplaceListing) => void;
   onSelectNotice: (notice: MarketplaceNotice) => void;
+  /** N07: 공지 조회 실패 — '없음' 과 갈라 그린다(App 이 내려준다) */
+  noticesError?: unknown; onRetryNotices?: () => void;
   onCreate?: () => void;
   /** 관리자만 공지 작성 가능 */
   canWriteNotice?: boolean;
@@ -70,7 +72,7 @@ interface MarketplaceTabProps {
 type SortBy = 'recent' | 'popular';
 
 function MarketplaceTab({
-  listings, notices, onSelect, onSelectNotice, onCreate,
+  listings, notices, onSelect, onSelectNotice, noticesError = null, onRetryNotices, onCreate,
   canWriteNotice = false, onWriteNotice, onListingsChanged, loading = false, error = null,
 }: MarketplaceTabProps) {
   const showSkel = useSkeletonGate(loading && listings.length === 0); // MO-6C: 200ms 내 도착하면 스켈레톤 생략
@@ -113,12 +115,14 @@ function MarketplaceTab({
   return (
     <div className="space-y-3">
       {/* ── 공지 게시판 ────────────────────────────────────────────── */}
-      {(notices.length > 0 || canWriteNotice) && (
+      {(notices.length > 0 || canWriteNotice || noticesError != null) && (
         <NoticeBoard
           notices={notices}
           canWrite={canWriteNotice}
           onWrite={onWriteNotice}
           onSelect={onSelectNotice}
+          error={noticesError}
+          onRetry={onRetryNotices}
         />
       )}
 
@@ -290,15 +294,16 @@ function MarketplaceTab({
 // ── 공지 게시판 ──────────────────────────────────────────────────────────────
 
 function NoticeBoard({
-  notices, canWrite, onWrite, onSelect,
+  notices, canWrite, onWrite, onSelect, error = null, onRetry,
 }: {
   notices: MarketplaceNotice[];
   canWrite?: boolean;
   onWrite?: () => void;
   onSelect: (n: MarketplaceNotice) => void;
+  error?: unknown; onRetry?: () => void;
 }) {
   return (
-    <NoticeSection notices={notices} onSelect={onSelect} canWrite={canWrite} onWrite={onWrite} />
+    <NoticeSection notices={notices} onSelect={onSelect} canWrite={canWrite} onWrite={onWrite} error={error} onRetry={onRetry} />
   );
 }
 

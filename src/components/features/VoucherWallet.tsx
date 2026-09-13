@@ -16,7 +16,7 @@
 //   시트 안에서 쓰일 때 Modal 의 포커스 트랩이 '내용 바깥'의 포커스를 도로 뺏어가므로(전화번호 입력 불가),
 //   DOM 상 Modal 내용 안에 있어야 한다. fixed 는 조상에 transform 이 남지 않는 한 뷰포트 기준이고
 //   (spring.ts 가 복귀 시 인라인 transform 을 지운다), Modal 껍데기가 이미 z-[60] 이라 탭바 위로 올라간다.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -27,12 +27,13 @@ import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·�
 import { stripVenuePrefix, voucherGroupLabel, voucherLineLabel } from '../../lib/voucherLabel'; // "어느 매장이 준 것인가" 표기 규칙(오너 지시 #19)
 import type { Html5Qrcode } from 'html5-qrcode'; // 타입만(런타임 번들 제외) — 실제 라이브러리는 스캐너 열 때 동적 로드
 import {
-  listMyVouchers,
+  listMyVouchers, subscribeMyVouchers,
   redeemMyVoucherByQr, redeemMyVoucherByPhone,
   findUserByPhone, isHeldVoucher,
   type Voucher, type TransferTarget,
 } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
+import { isStaleResponse } from '../../lib/staleResponse';
 
 // venueName 이 nullable 인 이유: 매장명을 **모르는 상태**와 '기타 매장'이라는 이름을 구분해야
 // 머리글이 '기타 매장 매장이용권' 같은 가짜 매장명을 만들어 내지 않는다(voucherGroupLabel 참조).
@@ -70,20 +71,55 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
   //   화면은 "보유한 매장이용권이 없습니다"를 그렸다 — 매장에서 돈 주고 산 이용권이 사라진 것처럼 보인다.
   //   LoadErrorCard 주석이 경고하는 '없음과 못 불러옴을 가른다'가 정확히 이 자리다.
   const [err, setErr] = useState<unknown>(null);
+  // 한 번이라도 정상 응답을 받았는가(V04) — 첫 로드 실패는 전면 에러 카드,
+  // 이미 목록을 본 뒤의 재조회 실패는 '마지막 정상 결과'를 유지하고 배너만 얹는다.
+  // (예: 사용 직후 자동 새로고침이 순단으로 실패해도 방금 보던 장수가 사라지면 안 된다.)
+  const [everLoaded, setEverLoaded] = useState(false);
   const [redeem, setRedeem] = useState<Stack | null>(null);
-  // 차감 성공 전면 확인 화면(Phase 15-1) — 3초 자동 닫힘.
+  // 사용 요청 전송 확인 화면(Phase 15-1) — 3초 자동 닫힘.
+  // ⚠ V07(2026-09-12) — 이름을 '완료'가 아니라 '요청'으로 둔다. 소비 트리거(voucher_redeem_to_ledger_request)
+  //   는 서버 status 를 'used' 로 바꾸며 **승인 대기(pending) 바인 요청**을 만든다 — 운영자가 승인해야
+  //   진짜 확정이고, 거절·취소·자동마감이면 지갑으로 돌아온다(_restore_voucher). remain 은 반드시
+  //   재조회한 서버 정본에서 계산한다(화면이 들고 있던 배열 길이에서 그냥 1을 빼지 않는다).
   const [redeemDone, setRedeemDone] = useState<{ title: string; venueName: string | null; remain: number } | null>(null);
 
   const uid = user?.id ?? null;
-  const load = useCallback(() => {
+  // V05 — 늦게 도착한 응답이 계정이 바뀐 뒤의 화면을 덮지 않게(N01 과 같은 계약, staleResponse.ts).
+  // seq 는 새 load() 호출마다, owner(uid) 는 계정이 바뀔 때마다 갱신되고 둘 다 ref 라 응답이
+  // 도착하는 시점의 '지금'을 본다 — 클로저에 갇힌 값이 아니다.
+  const seqRef = useRef(0);
+  const ownerRef = useRef<string | null>(null);
+  // V07(2026-09-12) — Promise<Voucher[] | undefined> 를 반환한다. 사용 직후 '남은 장수'를 이 값으로
+  // 계산해야 서버 정본(진짜 잔량)을 쓴다 — 예전엔 화면이 들고 있던 배열 길이에서 그냥 1을 빼서
+  // 화면이 다른 곳에서 이미 갱신돼 있던 값과 어긋날 수 있었다(단일 status 로 두 업무 상태를 추론한 것과 같은 결).
+  const load = useCallback((): Promise<Voucher[] | undefined> => {
+    const owner = uid;
+    ownerRef.current = owner;
+    seqRef.current += 1;
+    const seq = seqRef.current;
+    const stale = () => isStaleResponse({ seq, owner }, { seq: seqRef.current, owner: ownerRef.current });
     // 킬스위치 OFF — 지갑을 안 그리므로 조회도 하지 않는다(무료 egress 예산). 레코드는 그대로 남아 있다.
-    if (!uid || !idOn) { setVouchers([]); setErr(null); return; }
+    if (!uid || !idOn) { setVouchers([]); setErr(null); setEverLoaded(false); return Promise.resolve(undefined); }
     setLoading(true);
-    listMyVouchers()
-      .then((v) => { setVouchers(v); setErr(null); })
-      .catch(setErr)
-      .finally(() => setLoading(false));
+    return listMyVouchers()
+      .then((v) => { if (stale()) return undefined; setVouchers(v); setErr(null); setEverLoaded(true); return v; })
+      .catch((e) => { if (stale()) return undefined; setErr(e); return undefined; }) // vouchers 는 건드리지 않는다 — 마지막 정상 결과 유지
+      .finally(() => { if (!stale()) setLoading(false); });
   }, [uid, idOn]);
+  // V07 — 내 이용권 realtime 구독. 사용 요청이 거절·취소·자동마감으로 지갑에 되돌아오는 것
+  // (서버 _restore_voucher: status 'used'→'active')을 재진입 없이 본다. 예전엔 마운트·계정전환
+  // 때만 조회해서 복원이 실제로는 즉시 일어나도 화면은 '사용됨'인 채로 한참 남아 있었다.
+  useEffect(() => {
+    if (!uid || !idOn) return;
+    return subscribeMyVouchers(load);
+  }, [uid, idOn, load]);
+  // 계정이 바뀌면 이전 계정의 데이터를 즉시 지운다(V04) — 아래 응답 격리(V05)와 별개로,
+  // 화면에 A 의 장수가 한 프레임이라도 B 로 남아 있으면 안 된다.
+  // 열려 있던 사용 시트(redeem/redeemDone)도 A 의 이용권 id 를 들고 있으므로 함께 닫는다.
+  useEffect(() => {
+    setVouchers([]); setErr(null); setEverLoaded(false);
+    setRedeem(null); setRedeemDone(null);
+  }, [uid]);
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
@@ -151,15 +187,24 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
             )}
           </div>
         )}
-        {loading ? (
+        {loading && !everLoaded ? (
             /* 실제 매장 카드와 같은 높이로 자리를 예약한다. 한 줄짜리 '불러오는 중…' 은
                목록이 도착하는 순간 아래를 밀어 올린다 — 이 지갑이 고치려던 그 CLS 다. */
             <div className="space-y-3" aria-busy="true">
               {[0, 1].map((i) => <div key={i} className="skeleton h-[104px] rounded-aura" />)}
             </div>
           )
-          : err ? <LoadErrorCard error={err} what="이용권" onRetry={load} compact />
-          : venueGroups.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="ticket" />} title="보유한 매장이용권이 없습니다." /></div>
+          : err && !everLoaded ? <LoadErrorCard error={err} what="이용권" onRetry={load} compact />
+          : <>
+            {/* V04 — 이미 목록을 한 번 본 뒤의 재조회 실패는 지금 있는 장수를 지우지 않는다.
+                LoadErrorCard 로 통째로 바꾸면 방금 보던(정상 조회된) 장수까지 사라진 것처럼 보인다. */}
+            {err && (
+              <div role="alert" className="mb-2 flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2">
+                <p className="text-2xs font-semibold text-ink-secondary">방금 목록을 새로 불러오지 못했어요. 아래는 마지막으로 확인된 내용입니다.</p>
+                <button type="button" onClick={load} className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-1 text-2xs font-bold text-ink-primary">다시 시도</button>
+              </div>
+            )}
+            {venueGroups.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="ticket" />} title="보유한 매장이용권이 없습니다." /></div>
             : <div className="space-y-3">{venueGroups.map((g) => {
               // 머리글이 '{매장명} 매장이용권'을 통째로 말한다(오너 지시 #19).
               // truncate 가 아니라 줄바꿈인 이유: 375px 에서 긴 매장명을 한 줄로 자르면
@@ -209,6 +254,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
                 </div>
               );
             })}</div>}
+          </>}
       </section>
 
       {/* 이용권 사용 내역(Phase 15-1) — '모든 차감은 즉시 이 리스트에 나타나야 한다'.
@@ -235,18 +281,29 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
           빠져서가 아니라 박스를 만들지 않는 요소에 마진이 적용되지 않기 때문이다(자식에 전파되지도 않는다). */}
       <div className="contents">
       {redeem && <RedeemSheet stack={redeem} onClose={() => setRedeem(null)}
-        onDone={(used) => { setRedeem(null); setRedeemDone(used); load(); }} />}
-      {/* 차감 성공 전면 확인(Phase 15-1) — 직원과 고객이 한 화면을 같이 확인하는 것이
-          실제 사용 장면이다. 큰 체크 + 수량 + 남은 잔량, 3초 뒤 자동 닫힘. */}
+        onDone={(used) => {
+          setRedeem(null);
+          // V07 — remain 은 재조회한 서버 정본에서 센다. load() 가 끝나기 전엔 아직 방금 요청을
+          // 만든 그 장이 vouchers 에 active 로 남아 있을 수 있어(리렌더 타이밍), 반드시 fresh 를 기다린다.
+          load().then((fresh) => {
+            const now = Date.now();
+            const remain = (fresh ?? vouchers).filter((x) => x.venueId === used.venueId && x.title === used.title && isHeldVoucher(x, now)).length;
+            setRedeemDone({ title: used.title, venueName: used.venueName, remain });
+          });
+        }} />}
+      {/* 사용 요청 전송 확인(Phase 15-1 후속, V07 수정) — 직원과 고객이 한 화면을 같이 확인하는 것이
+          실제 사용 장면이다. 큰 체크 + 수량 + 남은 잔량, 3초 뒤 자동 닫힘.
+          ⚠ '사용 완료'라고 단정하지 않는다 — 운영자 승인 전까지는 대기 상태고, 거절되면 지갑으로 돌아온다. */}
       {redeemDone && (
         <div role="status" className="fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 bg-emerald-600 px-6 text-white animate-fade-in"
           onClick={() => setRedeemDone(null)}>
           <svg width="88" height="88" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="12" cy="12" r="10" opacity="0.35" /><path d="M7 12.5l3.2 3.2L17 9" />
           </svg>
-          <p className="text-2xl font-extrabold">이용권 1장 사용 완료</p>
+          <p className="text-2xl font-extrabold">이용권 사용 요청 전송</p>
           <p className="text-sm font-semibold opacity-90">{voucherLineLabel(redeemDone.title, redeemDone.venueName)}</p>
           <p className="text-4xl font-extrabold tabular-nums">남은 이용권 {redeemDone.remain}장</p>
+          <p className="mt-1 text-xs font-semibold opacity-90">매장 승인 후 확정돼요 · 거절되면 지갑으로 돌아와요</p>
           <p className="mt-2 text-xs opacity-75">화면을 탭하면 닫힙니다</p>
         </div>
       )}
@@ -258,7 +315,10 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
   return compact ? <div className="space-y-3">{body}</div> : body;
 }
 
-function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => void; onDone: (used: { title: string; venueName: string | null; remain: number }) => void }) {
+function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => void;
+  /** V07 — remain 을 여기서 추측하지 않는다(단일 status 로 업무 상태·잔량을 억지 추론하지 않는다).
+   *  부모(VoucherWallet)가 load() 로 재조회한 서버 정본에서 remain 을 센다. */
+  onDone: (used: { title: string; venueName: string | null; venueId: string }) => void }) {
   // 손제작 시트도 겹을 등록해야 뒤로가기가 이 시트만 닫는다 — 없으면 부모 Modal/대시보드가 통째로 닫힌다(점검 #7)
   useBackClose(true, onClose, { escape: true }); // 시트는 ESC 대상 — 전역 ESC 는 backstack 최상단 한 겹만 닫는다(개별 리스너 금지)
   const toast = useToast();
@@ -271,7 +331,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
     const venueId = parseVenueId(text);
     if (!venueId) { toast.show('매장 QR이 아닙니다', 'error'); setMode('menu'); return; }
     setBusy(true);
-    try { await redeemMyVoucherByQr(vid, venueId); onDone({ title: stack.title, venueName: stack.venueName, remain: stack.ids.length - 1 }); }
+    try { await redeemMyVoucherByQr(vid, venueId); onDone({ title: stack.title, venueName: stack.venueName, venueId: stack.venueId }); }
     catch (e) { toast.show(e instanceof Error ? e.message : '사용 실패', 'error'); setBusy(false); setMode('menu'); }
   };
   // 전화번호 경로 2단계(Phase 15-2/S6): 번호만 치고 원탭 전송하면 오타 = 오전송이다.
@@ -292,7 +352,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
   };
   const doPhone = async () => {
     setBusy(true);
-    try { await redeemMyVoucherByPhone(vid, phone); onDone({ title: stack.title, venueName: stack.venueName, remain: stack.ids.length - 1 }); }
+    try { await redeemMyVoucherByPhone(vid, phone); onDone({ title: stack.title, venueName: stack.venueName, venueId: stack.venueId }); }
     catch (e) { toast.show(e instanceof Error ? e.message : '사용 실패', 'error'); setBusy(false); }
   };
 

@@ -5,6 +5,7 @@
 // 기존 함수(reservations.getMyReservations · rankings.getMyRankingHistory)를 그대로 쓴다 —
 // 같은 값을 두 번 만들지 않는다.
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { idempotentOff, mustAffect } from './_mustAffect';
 import { bankrollInsertPayload, insertWithRoiFallback, investedOf, type RoiRow } from '../lib/roi';
 
 // ── 찜한 게임 ────────────────────────────────────────────────────────────────
@@ -35,9 +36,11 @@ export async function toggleScheduleLike(scheduleId: string, on: boolean): Promi
       .upsert({ user_id: uid, schedule_id: scheduleId }, { onConflict: 'user_id,schedule_id' });
     if (error) throw new Error(error.message);
   } else {
-    const { error } = await supabase.from('schedule_likes').delete()
-      .eq('user_id', uid).eq('schedule_id', scheduleId);
-    if (error) throw new Error(error.message);
+    // 0행(이미 빠짐)은 **이미 그 상태**다 — 켜기의 upsert 와 대칭으로 성공으로 흡수한다(_mustAffect.ts idempotentOff).
+    // 예전엔 mustAffect 로 던져서 호출부가 setLiked(!next) 로 되돌렸고, 다른 탭에서 먼저 뺀 찜이 '찜함' 으로
+    // 되살아났다(서버엔 찜이 없다). 본인 행(user_id = uid)이라 0행은 부재이지 거부가 아니다. error 는 그대로 던진다.
+    await idempotentOff(supabase.from('schedule_likes').delete()
+      .eq('user_id', uid).eq('schedule_id', scheduleId));
   }
   return on;
 }
@@ -108,6 +111,5 @@ export async function addBankrollEntry(e: NewBankrollEntry): Promise<{ degraded:
 
 export async function deleteBankrollEntry(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('bankroll_entries').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  await mustAffect(supabase.from('bankroll_entries').delete().eq('id', id));
 }

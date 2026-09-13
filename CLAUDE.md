@@ -77,6 +77,21 @@ dev 서버는 포트 **5173**(`.claude/launch.json` 의 `holdem-dev`). E2E는 �
 `docs/plans/nuri-master-execution-plan.md` (§0~§16) · `BLOCKED.md`(오너 결정) · `backlog.md`(범위 밖).
 **§15가 §1~§14를 이깁니다.**
 
+## 실행 순서는 구현 책임자가 정한다 (오너 지시 2026-09-12)
+
+나열된 순서를 그대로 실행 순서로 쓰지 않습니다. 현재 코드·진행 상황·선행 조건·위험을 확인하고 **직접 결정**합니다.
+새 요청이 오면 **미완료 작업만** 재정렬하고, 끝낸 일을 처음부터 반복하지 않습니다.
+
+작업마다 `선행 조건 → 수정 담당 → 완료 증거 → 실패 시 복구` 를 정합니다.
+**완료 증거는 확인 가능한 것**(테스트 출력·스크린샷·서버 저장 결과)이어야 합니다 — "좋아 보임"·자기평가·문서 작성은 완료가 아닙니다.
+선행 조건이 미충족이면 **그에 종속된 작업만** 보류하고 독립 작업은 계속합니다.
+
+하지 않는 것: 데이터·권한 계약 확인 전 운영 참여/발급 활성화 · **사용 확인 전 삭제** · **검증 전 배포** ·
+사용자 변경 덮어쓰기. 정리·통합 뒤에는 **영향 범위를 다시 검증**합니다(정리 전 통과 결과를 재사용하지 않습니다).
+순서를 스스로 정하는 권한은 **작업 범위나 운영 권한의 확대가 아닙니다.** 계획에 머물지 말고 허용된 구현과 검증까지 갑니다.
+
+> 동시 편집·병렬 범위·기준선 확인 절차는 `AGENTS.md` 의 "동시 편집 금지"에 있습니다 — 여기서 되풀이하지 않습니다.
+
 ---
 
 ## 보안 코딩 표준 (유지: 필수 — 코드 생성 시 기본 반영)
@@ -90,7 +105,14 @@ dev 서버는 포트 **5173**(`.claude/launch.json` 의 `holdem-dev`). E2E는 �
    SECURITY DEFINER RPC 안의 `auth.uid()`·`my_role()` 검사로 강제한다. NULL-safe 비교(`IS DISTINCT FROM`) — `<>` 는 비로그인에서 가드가 열린다.
 3. **RPC 권한 기본값**: 변이(mutation) RPC 는 `revoke execute … from public, anon` + `grant … to authenticated, service_role`.
    `from anon` 만으로는 무효(PUBLIC 기본 GRANT). 트리거·크론·`_` 내부 함수는 anon·authenticated 모두 회수. 읽기 RPC 만 anon 허용.
-   SECURITY DEFINER 는 `set search_path = public, pg_temp` 고정. `CREATE OR REPLACE` 는 ACL 을 초기화하므로 REVOKE/GRANT 를 다시 쓴다.
+   SECURITY DEFINER 는 `set search_path = public, pg_temp` 고정.
+   ⚠ **2026-09-12 실측 정정**: 예전에 여기 "`CREATE OR REPLACE` 는 ACL 을 초기화한다" 고 적혀 있었는데 **사실과 반대**다.
+   격리 컨테이너(postgres:16) 실측 — 새로 만든 함수는 anon 실행 **가능**(PUBLIC 기본 GRANT) → REVOKE 후 불가 →
+   **`CREATE OR REPLACE` 뒤에도 그대로 불가(ACL 보존)** → **`DROP` 후 재생성하면 다시 가능(ACL 초기화)**.
+   즉 ACL 이 날아가는 것은 **`DROP` + 재생성**이고, 그때 REVOKE/GRANT 를 반드시 다시 쓴다(반환 타입 변경이 이 경우다).
+   `CREATE OR REPLACE` 에도 REVOKE/GRANT 를 같이 적어 두는 관행은 유지한다 — **새로 만들어지는 경우**에 필요하기 때문이다.
+   ⚠ 그리고 이 차이 때문에 **자가검사가 거짓 통과할 수 있다**: 이미 REVOKE 된 함수를 `CREATE OR REPLACE` 로 덮으면
+   파일에서 REVOKE 를 빼도 ACL 이 남아 검사를 통과한다. ACL 자가검사를 음성 대조할 때는 **`DROP` 후 적용**해야 한다.
 4. **엣지 함수는 첫 분기에서 호출자를 증명한다.** `verify_jwt=true` 는 anon 키 JWT 도 통과시키므로 게이트가 아니다:
    유저 기능은 `auth.getUser(token)`, 관리자 기능은 `profiles.role = 'admin'`, 크론·트리거는 Vault 공유 시크릿 헤더(타이밍 안전 비교).
    외부 API(Gemini·Resend)를 부르는 함수는 유저별 일일 상한(`consume_ai_quota`)이나 시크릿 게이트 없이 열지 않는다(과금 남용 = 보안 사고).

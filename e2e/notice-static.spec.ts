@@ -45,7 +45,8 @@ async function openBoardNotices(page: Page): Promise<Locator> {
   await expect(sec.getByRole('listitem'), '기본 상태에서 공지가 1건만 보여야 한다').toHaveCount(1);
   await expect(sec.getByRole('listitem').first(), '가장 중요한 1건(주의)이 아니다').toContainText('중고장터 거래 안내');
   // 나머지는 삭제가 아니라 접힘 — 한 번 눌러 전부 볼 수 있어야 한다(기능 보존).
-  const more = sec.getByRole('button', { name: /나머지 \d+건 더 보기/ });
+  // N07(2026-09-13): 섹션이 '접힌 한 줄 바' 가 되며 펼치기 버튼의 접근성 이름이 `공지 전체 N건 펼치기` 로 바뀌었다(e2e/notice-bar.spec.ts).
+  const more = sec.getByRole('button', { name: /공지 전체 \d+건 펼치기/ });
   await expect(more, '접힌 공지를 펼칠 길이 없다').toBeVisible();
   await more.click();
   await expect(sec.getByRole('listitem'), '펼쳤는데 전부 보이지 않는다').toHaveCount(3);

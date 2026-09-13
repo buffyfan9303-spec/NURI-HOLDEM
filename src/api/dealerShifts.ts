@@ -1,5 +1,6 @@
 // src/api/dealerShifts.ts — 딜러 시프트(로테이션) + 급여 명세. 관계자(can_manage_pos)만 접근.
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 
 export interface DealerShift {
   id: string; venueId: string; dealerName: string; shiftDate: string;
@@ -14,9 +15,13 @@ const row = (r: any): DealerShift => ({
 
 export async function getDealerShifts(venueId: string, from: string, to: string): Promise<DealerShift[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.from('dealer_shifts').select('*')
+  // ⚠ error 를 버리면 RLS 거부·네트워크 순단이 전부 '딜러 근무 0건' 으로 resolve 된다 — 정산 화면의 딜러 인건비가
+  //   조용히 0 이 되고 `dealerPay > 0` 가드 때문에 분해 줄까지 사라져 빠졌다는 힌트도 없었다(F6, 2026-09-13).
+  //   같은 파일의 addDealerShift·형제 getStaffSchedule 과 같이 던진다. 호출부는 dealerErr 로 받는다.
+  const { data, error } = await supabase.from('dealer_shifts').select('*')
     .eq('venue_id', venueId).gte('shift_date', from).lte('shift_date', to)
     .order('shift_date', { ascending: true });
+  if (error) throw error;
   return (data ?? []).map(row);
 }
 
@@ -32,7 +37,8 @@ export async function addDealerShift(input: { venueId: string; dealerName: strin
 
 export async function removeDealerShift(id: string): Promise<void> {
   if (IS_MOCK) return;
-  await supabase.from('dealer_shifts').delete().eq('id', id);
+  // 종전엔 error 조차 안 봤다 — 403 이든 RLS 0행이든 호출부가 reload 만 하고 넘어가 시프트가 되살아났다.
+  await mustAffect(supabase.from('dealer_shifts').delete().eq('id', id));
 }
 
 /** 'HH:MM' → 분. 종료<시작이면 익일로 +24h. 근무 시간(시간) 반환. */

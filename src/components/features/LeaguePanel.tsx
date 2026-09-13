@@ -289,7 +289,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
           <span key={m.id} className={['inline-flex items-center gap-1 rounded-badge px-2 py-0.5 text-2xs font-bold', STATUS_BADGE[m.status].cls].join(' ')}>
             {m.venueName ?? '매장'} · {STATUS_BADGE[m.status].label}
             {isOwner && canConfigure && m.status !== 'accepted' && (
-              <button type="button" onClick={async () => { await removeLeagueMember(m.id).catch(() => {}); onChanged(); }} aria-label="초대 취소" className="opacity-70 hover:opacity-100">×</button>
+              <button type="button" onClick={async () => { try { await removeLeagueMember(m.id); } catch (e) { toast.show(e instanceof Error ? e.message : '초대 취소 실패', 'error'); } onChanged(); }} aria-label="초대 취소" className="opacity-70 hover:opacity-100">×</button>
             )}
           </span>
         ))}
@@ -348,7 +348,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{e.name}</span>
               <span className={['shrink-0 text-xs font-bold tabular-nums', e.points >= 0 ? 'text-accent-300' : 'text-danger-light'].join(' ')}>{e.points >= 0 ? '+' : ''}{e.points}</span>
               {(e.venueId === venueId || isOwner) && (
-                <button type="button" onClick={async () => { await deleteLeagueEntry(e.id).catch(() => {}); reloadEntries(); }} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
+                <button type="button" onClick={async () => { try { await deleteLeagueEntry(e.id); } catch (err) { toast.show(err instanceof Error ? err.message : '삭제 실패', 'error'); } reloadEntries(); }} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
               )}
             </li>
           ))}

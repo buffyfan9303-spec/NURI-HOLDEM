@@ -191,6 +191,10 @@ export function RangeMatrix() {
       const [i, j] = key.split(':').map(Number);
       rangeVsRangeAsync(MATRIX_PRESETS[i].combos, MATRIX_PRESETS[j].combos, [], MATRIX_ITER).then((r) => {
         if (cancelled) return;
+        // ⚠ 계산 불가는 50% 가 아니다. 엔진은 유효한 조합이 없으면 `no_legal_combinations` 를 돌려주는데,
+        //   그때도 hero 는 0.5 다(호출부 하위 호환). `kind` 를 안 보면 **'반반'이라는 거짓 숫자**가 표에 박힌다.
+        //   지금 프리셋 조합에는 걸리는 것이 없지만, 프리셋이 바뀌면 조용히 회귀한다 — 여기서 막는다.
+        if (r.kind === 'no_legal_combinations') { step(); return; }
         eqCache.set(key, r.hero * 100);
         setTick((t) => t + 1);
         step();

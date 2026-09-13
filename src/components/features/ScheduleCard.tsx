@@ -3,6 +3,7 @@ import Icon from '../atoms/Icon';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import { scheduleStatus } from '../../lib/scheduleStatus';
 import type { RegInfo } from '../../lib/regStatus';
+import { regCloseLevelFromText } from '../../lib/regClose';
 import { fmtKm } from '../../lib/geo';
 import type { Schedule } from '../../api/schedules';
 import type { ViewMode } from '../atoms/ViewModeToggle';
@@ -20,15 +21,23 @@ function formatDate(dateStr: string, timeStr: string) {
   };
 }
 
-/** 프라이즈 금액 표시: 10,000,000 → "1000만", 100,000,000 → "1억" */
+/** 프라이즈 금액 표시 — **반올림하지 않는다**(2026-09-12 §6-1).
+ *  종전엔 `(n/10_000).toFixed(0)만` 이라 55,000원이 "6만"으로, 105,000,000원이 "1.1억"으로
+ *  **없는 금액**이 됐다. 지금은 단위로 정확히 떨어질 때만 억·만을 쓰고, 아니면 원 단위 전액을 적는다.
+ *    10,000,000 → "1,000만" · 100,000,000 → "1억" · 150,000,000 → "1억 5,000만" · 55,000 → "55,000" */
 // eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
 export function formatPrize(n: number): string {
-  if (n >= 100_000_000) {
-    const eok = n / 100_000_000;
-    return eok % 1 === 0 ? `${eok}억` : `${eok.toFixed(1)}억`;
-  }
-  if (n >= 10_000) return `${(n / 10_000).toFixed(0)}만`;
-  return n.toLocaleString();
+  if (!Number.isFinite(n) || n <= 0) return '-';
+  const eok = Math.floor(n / 100_000_000);
+  const rest = n - eok * 100_000_000;
+  const man = Math.floor(rest / 10_000);
+  const won = rest - man * 10_000;
+  // 만 단위로 떨어지지 않으면 축약 자체를 포기한다 — 축약하는 순간 반올림이 생기기 때문
+  if (won > 0) return n.toLocaleString();
+  const parts: string[] = [];
+  if (eok > 0) parts.push(`${eok.toLocaleString()}억`);
+  if (man > 0) parts.push(`${man.toLocaleString()}만`);
+  return parts.join(' ');
 }
 
 /** 카드/상세에 표시할 메인 상금 텍스트 — GTD: 금액, 엔트리: 프라이즈 % */
@@ -38,29 +47,38 @@ export function prizeMainText(s: { guaranteed: boolean; prizePool?: number; priz
   return s.prizePool ? formatPrize(s.prizePool) : '-';
 }
 
-/** 상금 데이터가 실제로 있는가 — 없으면 골드(강조)가 아니라 무채 '정보 없음'으로 내려간다. */
-function hasPrize(s: Schedule): boolean {
-  return !!s.prizePool || !!s.prizePercent;
+/** 참가비(바이인) 표시 정본 — 목록·그리드·표·상세가 같은 문자열을 쓴다.
+ *  미입력(0)은 가격 정보가 아니라 '정보 없음'이라 '—'. 금액은 원 단위 전액(반올림 없음). */
+// eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
+export function buyInText(amount: number | undefined): string {
+  return amount && amount > 0 ? `${amount.toLocaleString()}원` : '—';
 }
 
-/** 우측 열 부가(골드) 텍스트 — "1000만 GTD" / "50% 예상". 데이터 없으면 null. */
-function prizeSubText(s: Schedule): string | null {
-  if (!hasPrize(s)) return null;
-  return `${prizeMainText(s)} ${s.guaranteed ? 'GTD' : '예상'}`;
-}
-
-/** APIS 예정 카드의 REG 배지 — "REG ~ Lv14". 데이터가 있을 때만 렌더한다.
+/** 등록 마감(구 'REG') 표시 정본 — 쉬운 한국어(§9). 데이터가 있을 때만 문자열을 돌려준다.
  *  소스 우선순위: regCloseTime('16LV 00:12' 형식, PosterFormModal 이 레벨+시간을 합쳐 저장)
- *  → 시각만 있으면 'REG ~ 00:12' → 없으면 structure.lateRegLevels(클락/프리셋 경로). */
-function regLabel(s: Schedule): string | null {
+ *  → 시각만 있으면 '등록 마감 00:12' → 없으면 structure.lateRegLevels(클락/프리셋 경로).
+ *  ⚠ 이 순서가 곧 regClose.regCloseLevelOf 의 우선순위다(regCloseTime > lateRegLevels).
+ *    여기서만 '시각' 분기가 중간에 낀다 — 업주가 레벨 없이 시각만 쳤으면 그 시각을 그대로 보여 준다
+ *    (레벨 축으로 환산할 수 없다). 레벨 숫자가 필요한 소비처는 regCloseLevelOf 를 부른다. */
+// eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
+export function regCloseText(s: Pick<Schedule, 'regCloseTime' | 'structure'>): string | null {
   const rc = String(s.regCloseTime ?? '').trim();
-  const lv = rc.match(/(\d+)\s*LV/i);
-  if (lv) return `REG ~ Lv${lv[1]}`;
+  // 레벨 파싱은 lib/regClose 한 곳뿐이다 — 포스터→클락 상속(gameInherit)·블라인드 표와 같은 규칙을 쓴다.
+  const lv = regCloseLevelFromText(rc);
+  if (lv) return `등록 마감 ${lv}레벨`;
   const tm = rc.match(/(\d{1,2}:\d{2})/);
-  if (tm) return `REG ~ ${tm[1]}`;
+  if (tm) return `등록 마감 ${tm[1]}`;
   const n = s.structure?.lateRegLevels;
-  if (n != null && n > 0) return `REG ~ Lv${n}`;
+  if (n != null && n > 0) return `등록 마감 ${n}레벨`;
   return null;
+}
+
+/** 상금 표시 정본 — '상금 보장'(GTD)과 '예상 상금'(엔트리 비례)의 **의미를 섞지 않는다**.
+ *  데이터가 없으면 null 이다(0 이나 확정값처럼 적지 않는다). */
+// eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
+export function prizeText(s: Schedule): string | null {
+  if (!s.prizePool && !s.prizePercent) return null;
+  return `${s.guaranteed ? '상금 보장' : '예상 상금'} ${prizeMainText(s)}`;
 }
 
 // ── 서브: 포스터 영역 ───────────────────────────────────────────────────────
@@ -121,10 +139,14 @@ function PosterArea({
 // ── 서브: 매장 링크 ─────────────────────────────────────────────────────────
 
 function VenueLink({
-  pubName, region, onClick, regionShrinks = true,
+  pubName, region, onClick, regionShrinks = true, sizeCls = 'text-xs', wrap = false,
 }: { pubName: string; region: string; onClick?: (e: React.MouseEvent) => void;
   /** 폭 부족 시 지역이 먼저 줄어드는가. 목록 카드=true(매장명 우선), 그리드=false(기존 동작 유지) */
-  regionShrinks?: boolean }) {
+  regionShrinks?: boolean;
+  /** 글자 크기 — 목록 카드는 모바일에서 13.8px(0.8125rem)로 올린다(§6-1 매장·지역 13~14px). */
+  sizeCls?: string;
+  /** 폭이 모자랄 때 **줄바꿈**할 것인가(목록 카드=true). false 면 종전처럼 말줄임(그리드). */
+  wrap?: boolean }) {
   // 매장 미연결(직접입력 포스터, venueId 없음)이면 링크 문법(밑줄·hover)을 빼고 순수 텍스트로.
   // 무반응 클릭 금지 원칙 — ScheduleDetailModal의 venueId 게이트와 같은 문법(2026-08-28).
   // min-w-0(양쪽 변형): flex 아이템의 min-width:auto 가 truncate 를 무력화해 그리드 카드에서
@@ -134,11 +156,20 @@ function VenueLink({
   //    매장명은 1차 식별자이므로 마지막까지 지킨다. 그리드는 포스터가 식별을 대신하므로 기존 동작 유지.
   // flex-1(basis:0) — 지역의 '가상 크기'가 0 이라 남는 폭만 차지한다. shrink 비율(20 등)로 하면
   // 소수점 배분 때문에 매장명이 0.4px 모자라 말줄임표가 붙었다(실측) — basis 0 이면 결정적이다.
-  const regionCls = regionShrinks ? 'min-w-0 flex-1 truncate' : 'shrink-0';
+  // ⚠ 2026-09-12: 목록 카드는 **말줄임 대신 줄바꿈**이다(wrap=true).
+  //    3열을 유지하면 390px 에서도 내용 열은 ~153px 다 — '누리홀덤 부산 해운대 센텀시티점'(192px)은
+  //    어떤 배치로도 한 줄에 안 들어간다. 실측: client 153 / scroll 192, 지역은 4/68 로 **사실상 소멸**.
+  //    잘라 숨기는 대신 어절 단위로 접는다(긴 매장명은 비상 줄바꿈 허용). 카드가 그만큼 길어질 뿐이다.
+  //    그리드 카드는 포스터가 식별을 대신하고 별점이 같은 줄에 있어 기존 말줄임 동작을 유지한다.
+  const wrapCls = wrap ? 'flex-wrap' : '';
+  const nameCls = wrap
+    ? 'min-w-0 break-keep [overflow-wrap:anywhere] font-semibold text-ink-secondary'
+    : 'min-w-0 truncate font-semibold text-ink-secondary';
+  const regionCls = wrap ? 'min-w-0 break-keep' : (regionShrinks ? 'min-w-0 flex-1 truncate' : 'shrink-0');
   if (!onClick) {
     return (
-      <span className="inline-flex min-w-0 items-baseline gap-0.5 text-xs text-ink-muted max-w-full">
-        <span className="min-w-0 truncate font-semibold text-ink-secondary">{pubName}</span>
+      <span className={`inline-flex min-w-0 items-baseline gap-0.5 ${wrapCls} ${sizeCls} text-ink-muted max-w-full`}>
+        <span className={nameCls}>{pubName}</span>
         <span className="shrink-0 text-border-strong">·</span>
         <span className={regionCls}>{region}</span>
       </span>
@@ -148,9 +179,9 @@ function VenueLink({
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
-      className="group inline-flex min-w-0 items-baseline gap-0.5 text-xs text-ink-muted hover:text-accent-300 transition-colors max-w-full"
+      className={`group inline-flex min-w-0 items-baseline gap-0.5 ${wrapCls} ${sizeCls} text-ink-muted hover:text-accent-300 transition-colors max-w-full text-left`}
     >
-      <span className="min-w-0 truncate font-semibold text-ink-secondary underline decoration-dotted underline-offset-2 group-hover:text-accent-300">
+      <span className={`${nameCls} underline decoration-dotted underline-offset-2 group-hover:text-accent-300`}>
         {pubName}
       </span>
       <span className="shrink-0 text-border-strong">·</span>
@@ -186,33 +217,38 @@ function FavoriteButton({
 
 interface StatusBadge { text: string; cls: string; dot: boolean }
 
-/** 실측 레지 상태 → 배지 텍스트·톤. regInfo 없으면 기존 추정('LIVE') 유지. */
+/** 실측 레지 상태 → 배지 텍스트·톤. regInfo 없으면 기존 추정('진행 중') 유지.
+ *  §9 쉬운 한국어: 'LIVE' → '진행 중', '레지마감' → '등록 마감'. */
 function liveBadge(regInfo: RegInfo | undefined): { text: string; closed: boolean } {
-  if (regInfo && regInfo.msLeft === 0) return { text: '레지마감', closed: true };
-  if (regInfo && regInfo.msLeft !== null) return { text: '등록가능', closed: false };
-  return { text: 'LIVE', closed: false };
+  if (regInfo && regInfo.msLeft === 0) return { text: '등록 마감', closed: true };
+  if (regInfo && regInfo.msLeft !== null) return { text: '등록 가능', closed: false };
+  return { text: '진행 중', closed: false };
 }
 
-/** 배지 예산 = 행당 1개. 우선순위: 종료 > 실측 레지 > 마감 임박 > 예정.
+/** 배지 예산 = 행당 1개. 우선순위: 종료 > 실측 레지 > 예정.
  *  2단 톤 체계 — '지금 행동할 수 있는' 상태만 솔리드 채움(대비 실측 ≥4.99:1 양 테마),
- *  나머지(예정·종료·레지마감)는 무채 surface-high(§20.1 색 배지 무지개 금지). */
-function statusBadge(status: ReturnType<typeof scheduleStatus>, regInfo: RegInfo | undefined, reserveCount?: number): StatusBadge {
+ *  나머지(예정·종료·등록 마감)는 무채 surface-high(§20.1 색 배지 무지개 금지).
+ *
+ *  🔴 2026-09-12: **'마감 임박'을 지웠다.** 종전 조건은 `reserveCount >= 10` 하나뿐이었는데
+ *     Schedule 에는 정원(capacity)도 예약 마감 시각도 **없다** — 10명은 그냥 10명이지 '임박'의
+ *     근거가 아니다. 100석 대회의 예약 10명에도 붉은 '마감 임박'이 붙어 거짓 긴박감을 만들었다.
+ *     근거가 생기기 전까지는 사실만 쓴다: 메타 행의 '예약 10명'. */
+function statusBadge(status: ReturnType<typeof scheduleStatus>, regInfo: RegInfo | undefined): StatusBadge {
   if (status === 'ended') return { text: '종료', cls: 'bg-surface-high text-ink-muted', dot: false };
   if (status !== 'upcoming') {
     const b = liveBadge(regInfo);
-    if (b.closed) return { text: '레지마감', cls: 'bg-surface-high text-ink-muted', dot: false };
+    if (b.closed) return { text: '등록 마감', cls: 'bg-surface-high text-ink-muted', dot: false };
     // emerald-700/danger-dark: 흰 글자 실측 5.47 / 4.99 — emerald-600·danger 는 3.30 / 3.7 로 AA 미달이었다
-    return b.text === '등록가능'
-      ? { text: '등록가능', cls: 'bg-emerald-700 text-white', dot: true }
-      : { text: 'LIVE', cls: 'bg-danger-dark text-white', dot: true };
+    return b.text === '등록 가능'
+      ? { text: '등록 가능', cls: 'bg-emerald-700 text-white', dot: true }
+      : { text: '진행 중', cls: 'bg-danger-dark text-white', dot: true };
   }
-  if ((reserveCount ?? 0) >= 10) return { text: '마감 임박', cls: 'bg-danger-dark text-white', dot: true };
   return { text: '예정', cls: 'bg-surface-high text-ink-secondary', dot: true };
 }
 
 function StatusPill({ b }: { b: StatusBadge }) {
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1 rounded-badge px-1.5 py-0.5 text-2xs font-bold leading-none ${b.cls}`}>
+    <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-badge px-1.5 py-0.5 text-2xs font-bold leading-none ${b.cls}`}>
       {b.dot && <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />}
       {b.text}
     </span>
@@ -225,7 +261,8 @@ interface CardProps {
   schedule: Schedule;
   onVenueClick: (venueId: string) => void;
   onSelect: (schedule: Schedule) => void;
-  /** 예약자 수(있으면 FOMO 뱃지 — 10명 이상이면 '마감 임박') */
+  /** 예약자 수 — **사실 그대로** '예약 N명'으로만 쓴다.
+   *  정원·예약 마감 시각 데이터가 없으므로 이 숫자로 '마감 임박' 같은 판단을 만들지 않는다(2026-09-12). */
   reserveCount?: number;
   /** 매장 후기 별점(체크인 인증 후기 평균) — 있으면 매장명 옆 ⭐4.8(12) */
   rating?: { avg: number; count: number };
@@ -263,17 +300,21 @@ function ListCard({
   const d = formatDate(schedule.date, schedule.startTime);
   const status = scheduleStatus(schedule.date, schedule.startTime);
 
-  // [DS] APIS '예정' 카드 문법(오너 지시 2026-08-28) — 3열 고정 골격:
-  //   좌(w-20): [● 예정] / 날짜 / 큰 시각 / 캡션('시작' 또는 남은 시간)
-  //   중앙:     [매장로고] 매장명 · 지역 [♥] / 게임명(2줄) / [REG ~ Lv14] 메타·별점·거리·예약
-  //   우:       BUY-IN 라벨 / 금액 / 부가(GTD·예상, 골드)
-  // 이전 4행 스택(시간→제목→매장→가격)은 '얼마인지'가 마지막 줄 끝에 있어 가격 비교가 세로 스캔이었다.
-  // 3열로 나누면 시각·가격이 각각 고정 열에 고정폭으로 정렬돼 행 간 비교가 한 번의 세로 훑기로 끝난다.
+  // [DS] 2026-09-12 §6-1 — **좁은 화면에 3열을 강요하지 않는다.**
+  //   sm(640px) 이상: 종전 3열 골격 그대로(오너 지시 2026-08-28) —
+  //     좌(w-20) 상태·날짜·시각 / 중앙 제목·매장·메타 / 우 참가비·상금. 행 간 가격 비교가 세로 훑기 한 번.
+  //   sm 미만: flex-wrap + order 로 **같은 DOM 을 내용 중심 여러 행**으로 접는다.
+  //     1행(전체 폭 보조행) [예정] 9/12(토) 18:00 2시간 후 ……… 참가비 60,000원
+  //     2행 대회 제목(최대 2줄) / 3행 매장 · 지역 ♥ / 4행 등록 마감 · 상금 보장 / 5행 유형 · 별점 · 거리 · 예약
+  //     320px 에서 1행이 안 들어가면 wrap 이 참가비를 **자동으로 다음 줄**로 내린다(숨은 가로 스크롤 없음).
+  //   왜 DOM 을 안 나누나: 열리는 카드의 view-transition(vt-poster)·키보드 포커스 순서가 한 벌이어야 한다.
+  // 실측 근거(진단 P1-C): home 320 에서 매장명이 client 52 / scroll 205 — 25% 만 보였다.
+  //   중앙 열이 85px 짜리 시각 열과 안 줄어드는 가격 열 사이에 끼어 ~170px 밖에 못 받았기 때문이다.
   // 유지: §28(참가비·GTD 는 상품 가격 → 표시 유지) · 배지 예산 1개 · 빈 값은 '—'로 자리 보존.
-  const badge = statusBadge(status, regInfo, reserveCount);
+  const badge = statusBadge(status, regInfo);
   const soon = soonText(schedule, status);
-  const reg = regLabel(schedule);
-  const sub = prizeSubText(schedule);
+  const reg = regCloseText(schedule);
+  const sub = prizeText(schedule);
   const meta = [schedule.format, gradeLabel(schedule.grade), schedule.buyIn?.gameType].filter(Boolean).join(' · ');
 
   return (
@@ -300,31 +341,63 @@ function ListCard({
         //     M375    cv+transition 284ms / cv+transition 제거 234ms                  → 모바일도 -18%
         //   호버 하이라이트 자체는 그대로 둔다(즉시 반응). §20.4 #3 의 '색 트랜지션 ≤0.15s' 도
         //   '허용'이지 '권장'이 아니다 — 목록 행처럼 수십 개가 동시에 발화하는 자리엔 걸지 않는다.
-        'flex cursor-pointer items-start gap-1.5 px-3 py-2.5 hover:bg-surface-high/50 active:bg-surface-high',
+        'flex flex-wrap items-start gap-x-2 gap-y-1 cursor-pointer px-3 py-2.5 hover:bg-surface-high/50 active:bg-surface-high',
+        'min-[360px]:gap-x-1.5',
         // 프리미엄(TOP)은 행 틴트 + 제목 앞 마커로 차별(박스 글로우 제거 — 목록 결 유지)
         schedule.isPremium ? 'bg-accent-300/[0.05]' : '',
       ].join(' ')}
     >
-      {/* ── 좌: 상태 + 시각 열 — 오너 스케치에서 [● 예정] 은 18:00 위(같은 열)에 있다.
+      {/* ── 시각 블록 — 360px 이상은 좌측 고정 열(w-20), 359px 이하는 1행 왼쪽의 가로 묶음.
              '언제·지금 어떤 상태인가'를 한 덩어리로 묶으면 목록 세로 스캔이 한 번에 끝난다.
-             캡션은 24시간 이내면 '시작' 대신 남은 시간(§20.2 — 배지가 아니라 텍스트). ── */}
-      <div className="w-20 shrink-0">
+             캡션은 24시간 이내면 '시작' 대신 남은 시간(§20.2 — 배지가 아니라 텍스트).
+             ⚠ 좁은 화면 가로 묶음에서 min-w-0 을 빼면 안 된다 — '2시간 30분 후'가 참가비를 밀어낸다. */}
+      <div className="order-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 min-[360px]:order-none min-[360px]:block min-[360px]:w-20 min-[360px]:shrink-0">
         <StatusPill b={badge} />
-        <p className="mt-0.5 truncate text-2xs tabular-nums leading-none text-ink-muted">
+        <p className="shrink-0 text-2xs tabular-nums leading-tight text-ink-muted min-[360px]:mt-0.5 min-[360px]:truncate">
           {d.monthDay}({d.dow})
         </p>
-        <p className="mt-1 truncate text-xl font-extrabold tabular-nums leading-none tracking-tight text-ink-primary">
+        <p className="shrink-0 text-base font-extrabold tabular-nums leading-tight tracking-tight text-ink-primary min-[360px]:mt-1 min-[360px]:truncate min-[360px]:text-xl">
           {d.time || '—'}
         </p>
-        <p className={`mt-1 truncate text-2xs leading-none ${soon ? 'font-bold text-accent-200' : 'text-ink-muted'}`}>
+        <p className={`min-w-0 truncate text-2xs leading-tight min-[360px]:mt-1 ${soon ? 'font-bold text-accent-200' : 'text-ink-muted'}`}>
           {soon ?? '시작'}
         </p>
       </div>
 
-      {/* ── 중앙: 매장 / 게임명 / REG·메타 ──────────────────────────────────── */}
-      <div className="min-w-0 flex-1">
-        {/* 1행 — 매장 로고(포스터 썸네일) + 매장명 · 지역 + ♥ */}
-        <div className="flex items-center gap-1">
+      {/* ── 참가비 블록 — §28 참가비는 상품 가격 정보라 표시 유지.
+             359px 이하: 1행 오른쪽('참가비 60,000원' 한 줄, 자리가 없으면 wrap 으로 다음 줄).
+             360px 이상: 우측 고정 열(라벨/금액/상금 3단). 'BUY-IN' → '참가비'(§9 쉬운 한국어). */}
+      <div className="order-2 ml-auto flex min-w-0 flex-wrap items-baseline justify-end gap-x-1 text-right min-[360px]:order-3 min-[360px]:ml-0 min-[360px]:block min-[360px]:shrink-0 min-[360px]:pt-0.5">
+        <p className="text-2xs font-bold leading-tight text-ink-muted min-[360px]:tracking-wider">참가비</p>
+        <p className="text-sm font-extrabold tabular-nums leading-tight text-ink-primary min-[360px]:mt-1">
+          {buyInText(schedule.buyIn?.amount)}
+        </p>
+        {/* tabular-nums: 같은 열의 '상금 보장 1,000만'·'상금 보장 500만' 자릿수를 세로로 맞춘다.
+            359px 이하에서는 이 값이 아래 행 오른쪽으로 내려간다(min-[360px]:hidden 짝) — 1행은 참가비만. */}
+        <p className={`mt-1.5 hidden break-keep text-2xs font-bold tabular-nums leading-tight min-[360px]:block ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
+          {sub ?? '—'}
+        </p>
+      </div>
+
+      {/* ── 내용 블록: 제목 / 매장 / 등록 마감·상금 / 메타 ─────────────────── */}
+      {/* flex-[1_1_9rem] — **rem 기준 basis** 라 루트 글자 확대(200% = 17→34px)를 그대로 탄다.
+          360px 이상 평상시엔 153px 로 3열 안에 들어가고, 글자가 커지면 306px 이 필요해져 이 블록이
+          **스스로 다음 줄로 내려간다**(px 미디어쿼리는 글자 확대를 감지하지 못하므로 이 축이 필요하다). */}
+      <div className="order-3 w-full min-w-0 min-[360px]:order-2 min-[360px]:w-auto min-[360px]:flex-[1_1_9rem]">
+        {/* 제목 — 목록은 최대 2줄 요약, 전문은 상세에서 보인다.
+            break-keep: 브라우저 기본(word-break:normal)은 한글을 **음절 단위**로 아무 데서나 꺾는다.
+            360px 에서 중앙 열이 ~170px 밖에 안 돼 '나이트 토너먼트' 가 '나이트 토너'/'먼트' 로 갈렸다 —
+            대회명은 1차 식별자라 어절 단위(keep-all)로 접는다. [overflow-wrap:anywhere] 는
+            띄어쓰기 없는 초장문 토큰만 예외로 절단(Toast·VoucherWallet 과 같은 짝).
+            크기: 359px 이하 0.9375rem(루트17px=15.9px, '15~16px') / 360px 이상은 종전 text-sm 유지. */}
+        <h3 className="line-clamp-2 break-keep [overflow-wrap:anywhere] text-[0.9375rem] font-bold leading-snug tracking-tight text-ink-primary min-[360px]:text-sm">
+          {schedule.isPremium && <span className="mr-1 align-middle text-2xs font-extrabold text-accent-200">TOP</span>}
+          {schedule.title}
+        </h3>
+
+        {/* 매장 로고(포스터 썸네일) + 매장명 · 지역 + ♥ — 이제 **행 전체 폭**을 쓴다.
+            썸네일은 그대로 둔다: vt-poster(카드→모달 모핑)의 대상이라 숨기면 전환이 사라진다. */}
+        <div className="mt-1 flex items-center gap-1">
           <PosterArea
             posterUrl={schedule.posterUrl}
             posterColor={schedule.posterColor}
@@ -338,6 +411,8 @@ function ListCard({
           <VenueLink
             pubName={schedule.pubName}
             region={schedule.region}
+            sizeCls="text-[0.8125rem] min-[360px]:text-xs"
+            wrap
             onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
           />
           {onToggleFavorite && schedule.venueId && (
@@ -349,52 +424,34 @@ function ListCard({
           )}
         </div>
 
-        {/* 2행 — 게임명(최대 2줄)
-            break-keep: 브라우저 기본(word-break:normal)은 한글을 **음절 단위**로 아무 데서나 꺾는다.
-            360px 에서 중앙 열이 ~170px 밖에 안 돼 '나이트 토너먼트' 가 '나이트 토너'/'먼트' 로 갈렸다 —
-            대회명은 1차 식별자라 어절 단위(keep-all)로 접는다. [overflow-wrap:anywhere] 는
-            띄어쓰기 없는 초장문 토큰만 예외로 절단(Toast·VoucherWallet 과 같은 짝). */}
-        <h3 className="mt-1 line-clamp-2 break-keep [overflow-wrap:anywhere] text-sm font-bold leading-snug tracking-tight text-ink-primary">
-          {schedule.isPremium && <span className="mr-1 align-middle text-2xs font-extrabold text-accent-200">TOP</span>}
-          {schedule.title}
-        </h3>
+        {/* 등록 마감 + 상금 — 참가 판단의 두 값이라 **숨은 가로 스크롤에 넣지 않는다**(§6-1).
+            상금은 360px 이상에서 우측 참가비 열로 올라가므로 여기서는 좁은 폭 전용(min-[360px]:hidden). */}
+        {(reg || sub) && (
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs leading-tight min-[360px]:hidden">
+            <span className="font-semibold text-ink-secondary">{reg ?? ''}</span>
+            {sub && <span className="font-bold tabular-nums text-gold-300">{sub}</span>}
+          </div>
+        )}
 
-        {/* 3행 — REG 배지(데이터 있을 때만) + 메타 + 별점·거리·예약.
-            ⚠ 예전엔 overflow-hidden + 메타 truncate 였다. 그러면 폭이 모자랄 때 포맷·등급·게임종류가
-              **없어진다** — 가로 스크롤도 안 생기니 유저는 그 정보가 없는 대회로 오해한다.
-              실측(2026-09-08, 375px): 3행 148px 중 REG 배지가 82px 를 먹어 메타는 69px 가 필요한데
-              59px 만 남았다(약 14% 잘림). 잘림이 심각하지 않은 축이라 **우측 스크롤**로 바꾼다
-              (오너 지시: "심각하지는 않다면 이를 우측으로 스크롤되는 방식으로 전환").
-              전부 shrink-0 + nowrap 이라 각자 제 폭을 지키고, 넘치면 이 줄만 옆으로 밀린다. */}
-        <div className="mt-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none text-2xs leading-none text-ink-muted">
+        {/* 메타 — 유형·등급·게임종류 · 별점 · 거리 · 예약.
+            ⚠ 종전엔 `overflow-x-auto` 한 줄이라 등록 마감·유형이 **숨은 가로 스크롤** 안으로 사라졌다
+              (스크롤바도 없어 유저는 그 정보가 없는 대회로 오해한다). 지금은 줄바꿈으로 전부 보인다.
+            ⚠ '예약 N명'은 **사실**이다 — 정원·마감 시각 데이터가 없으므로 이걸로 '마감 임박'을 만들지 않는다. */}
+        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-tight text-ink-muted">
           {reg && (
-            <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 font-bold leading-none text-ink-muted">
+            <span className="hidden rounded-badge bg-surface-high px-1.5 py-0.5 font-bold leading-tight text-ink-muted min-[360px]:inline">
               {reg}
             </span>
           )}
-          <span className="shrink-0 whitespace-nowrap">{meta || '—'}</span>
+          <span className="break-keep">{meta || '—'}</span>
           {rating && rating.count > 0 && (
             <span className="shrink-0 tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
               ★{rating.avg.toFixed(1)}
             </span>
           )}
           {distanceKm != null && <span className="shrink-0 tabular-nums">{fmtKm(distanceKm)}</span>}
-          {(reserveCount ?? 0) > 0 && <span className="shrink-0 tabular-nums">예약 {reserveCount}</span>}
+          {(reserveCount ?? 0) > 0 && <span className="shrink-0 tabular-nums">예약 {reserveCount}명</span>}
         </div>
-      </div>
-
-      {/* ── 우: BUY-IN 열 — §28 참가비는 상품 가격 정보라 표시 유지 ────────── */}
-      <div className="shrink-0 pt-0.5 text-right">
-        <p className="text-2xs font-bold leading-none tracking-wider text-ink-muted">BUY-IN</p>
-        <p className="mt-1 text-sm font-extrabold tabular-nums leading-none text-ink-primary">
-          {schedule.buyIn.amount > 0 ? schedule.buyIn.amount.toLocaleString() : '—'}
-        </p>
-        {/* tabular-nums: 같은 열의 '1000만 GTD'·'500만 GTD' 자릿수를 세로로 맞춘다 —
-            바로 위 바이인 금액·그리드 카드의 같은 값은 이미 tabular-nums 인데 여기만 빠져 있어
-            행마다 GTD 글자 위치가 흔들렸다(§28: 참가비·GTD 는 상품 가격 정보라 표시 유지). */}
-        <p className={`mt-1.5 whitespace-nowrap text-2xs font-bold tabular-nums leading-none ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
-          {sub ?? '—'}
-        </p>
       </div>
     </article>
   );
@@ -404,9 +461,9 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
   const d = formatDate(schedule.date, schedule.startTime);
   const status = scheduleStatus(schedule.date, schedule.startTime);
   // 그리드는 포스터가 주인공이라 골격(포스터·TOP·상태·하단 날짜 오버레이)을 그대로 둔다.
-  // 하단 메타만 목록 카드와 같은 어휘로 정리 — BUY-IN 라벨 + 금액, 골드 부가(GTD), REG 배지.
-  const reg = regLabel(schedule);
-  const sub = prizeSubText(schedule);
+  // 하단 메타만 목록 카드와 같은 어휘로 정리 — '참가비' 라벨 + 금액, 골드 부가(상금 보장), 등록 마감 배지.
+  const reg = regCloseText(schedule);
+  const sub = prizeText(schedule);
   const meta = [schedule.format, schedule.duration, schedule.buyIn?.gameType].filter(Boolean).join(' · ');
 
   return (
@@ -464,7 +521,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
             <span className={[
               'shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold leading-none',
               status === 'ended' || liveBadge(regInfo).closed ? 'bg-black/70 text-white/80'
-                : liveBadge(regInfo).text === '등록가능' ? 'bg-emerald-700 text-white'
+                : liveBadge(regInfo).text === '등록 가능' ? 'bg-emerald-700 text-white'
                 : 'bg-danger-dark text-white',
             ].join(' ')}>
               {status === 'ended' ? '종료' : liveBadge(regInfo).text}
@@ -512,13 +569,13 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
 
         <div className="border-t border-border-subtle my-0.5" />
 
-        {/* BUY-IN 어휘 정합 — 라벨 + 금액(§28 표시 유지), 우측에 골드 부가(GTD·예상) */}
+        {/* 참가비 어휘 정합 — 라벨 + 금액(§28 표시 유지), 우측에 골드 부가(상금 보장·예상 상금) */}
         <div className="flex items-end justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-2xs font-bold leading-none tracking-wider text-ink-muted">BUY-IN</p>
+            <p className="text-2xs font-bold leading-none tracking-wider text-ink-muted">참가비</p>
             <p className="mt-1 truncate text-sm font-extrabold tabular-nums leading-none text-ink-primary">
-              {/* 바이인 미입력(0)은 가격 정보가 아니다 — 목록 카드(ListCard)와 같은 '—' 문법 */}
-              {schedule.buyIn.amount > 0 ? schedule.buyIn.amount.toLocaleString() : '—'}
+              {/* 참가비 미입력(0)은 '무료'가 아니라 정보 없음 — 목록 카드(ListCard)와 같은 '—' 문법 */}
+              {buyInText(schedule.buyIn?.amount)}
             </p>
           </div>
           <p className={`shrink-0 text-right text-2xs font-bold tabular-nums leading-none ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
@@ -534,7 +591,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
           )}
           <span className="min-w-0 flex-1 truncate">{meta || '—'}</span>
           {(reserveCount ?? 0) > 0 && (
-            <span className="shrink-0 font-bold tabular-nums text-accent-200">예약 {reserveCount}</span>
+            <span className="shrink-0 font-bold tabular-nums text-accent-200">예약 {reserveCount}명</span>
           )}
         </div>
       </div>

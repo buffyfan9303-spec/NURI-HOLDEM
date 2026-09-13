@@ -4,6 +4,7 @@
 // 같은 클락을 운영자('일시정지')·TV('PAUSED')·대시보드('미실행')가 다르게 불렀다.
 import { describe, it, expect } from 'vitest';
 import { clockPhase, clockIsLive, CLOCK_PHASE_LABEL, CLOCK_PHASE_ACTION, type ClockPhaseInput } from './clockLevel';
+import { emptyClockState, defaultClockConfig } from '../api/clock';
 
 const LEVELS = [
   { kind: 'level' as const, minutes: 20 },
@@ -87,6 +88,21 @@ describe('클락 상태 파생 — 다섯 상태가 실제로 갈린다', () => 
 
   it('레벨이 없는 설정은 "끝났다"고 말하지 않는다', () => {
     expect(clockPhase({ config: { levels: [] }, running: false, currentIndex: 0, endsAt: null, remainingMs: 0 }, NOW)).toBe('idle');
+  });
+
+  // F2(2026-09-13): 장부 시작 폼이 새 클락을 인라인 리터럴 `remainingMs: 0` 으로 만들고 있었다. 기존 테스트는
+  // 만액(20분) 케이스만 덮어 초록이었고, 0 이 'paused' 가 되는 것은 아무도 못 봤다 — 그 결과 시작도 안 한 대회가
+  // TV 에 PAUSED 로 뜨고 주 버튼이 '계속하기' 가 되어 누르면 endsAt=now 로 1레벨이 건너뛰었다.
+  it('🔴 levels 있음 · index 0 · remainingMs 0 은 "일시정지" 다 — 그래서 새 클락은 리터럴 0 으로 만들면 안 된다', () => {
+    const s = base({ running: false, endsAt: null, currentIndex: 0, remainingMs: 0 });
+    expect(clockPhase(s, NOW)).toBe('paused');
+    expect(CLOCK_PHASE_ACTION[clockPhase(s, NOW)]).toBe('계속하기');
+  });
+
+  it('🔴 emptyClockState(api/clock) 가 만든 새 클락은 같은 판정기에서 "시작 전" 이다 — 장부 시작 폼이 이걸 써야 한다', () => {
+    const s = emptyClockState('venue-1', { ...defaultClockConfig(), levels: LEVELS.map((l) => ({ ...l, sb: 100, bb: 200, ante: 200 })) }, 1);
+    expect(clockPhase(s, NOW)).toBe('idle');
+    expect(CLOCK_PHASE_ACTION[clockPhase(s, NOW)]).toBe('시작');
   });
 
   it('🔴 운영자·TV·리모컨이 같은 함수를 쓰므로 상태가 갈릴 수 없다', () => {

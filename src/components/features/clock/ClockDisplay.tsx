@@ -21,8 +21,11 @@
 //   색: 타이머 순백 · 레벨/블라인드 = 테마 accent(기본 인디고) · 골드는 프라이즈 금액에만(--clk-prize 잠금).
 import { memo, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState, type ClockLevel } from '../../../api/clock';
-import { clockPhase, CLOCK_PHASE_TV } from '../../../lib/clockLevel';
+import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../../api/clock';
+import { clockPhase, CLOCK_PHASE_TV, levelNumberAt, msToNextBreak } from '../../../lib/clockLevel';
+// msToRegClose 는 src/lib/regStatus.ts 하나뿐이다 — 이 파일에 복제본이 있어 F2(마감 레벨 미설정 = 판정 불가)가
+// 한 벌만 고쳐졌다(2026-09-13). regStatus.contract.test.ts 가 복제를 막는다.
+import { msToRegClose } from '../../../lib/regStatus';
 import { buyinRequestUrl } from '../../../api/ledger';
 import { getAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '../../../api/settings';
 import { fetchVenuePageConfig } from '../../../api/rankings';
@@ -34,25 +37,8 @@ const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
 const hms = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s >= 3600 ? `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}` : `${pad(s / 60)}:${pad(s % 60)}`; };
 
-function levelNumberAt(levels: ClockLevel[], index: number): number {
-  let n = 0;
-  for (let i = 0; i <= index && i < levels.length; i++) if (levels[i].kind === 'level') n++;
-  return n;
-}
-// index 를 받는 이유: DB 의 current_index 가 낡아 있을 수 있어 '실효 인덱스'로 계산해야 한다.
-function msToNextBreak(s: ClockState, index: number, remaining: number): number | null {
-  const lv = s.config?.levels ?? []; let acc = remaining;
-  for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'break') return acc; acc += lv[i].minutes * 60_000; }
-  return null;
-}
-function msToRegClose(s: ClockState, index: number, remaining: number): number | null {
-  const lv = s.config?.levels ?? []; const target = s.config?.regCloseLevel ?? 0;
-  let acc = remaining, num = 0;
-  for (let i = 0; i <= index; i++) if (lv[i]?.kind === 'level') num++;
-  if (num >= target) return 0;
-  for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'level') { num++; if (num >= target) return acc; } acc += lv[i].minutes * 60_000; }
-  return null;
-}
+// levelNumberAt · msToNextBreak 은 src/lib/clockLevel.ts 하나뿐이다 — 이 파일의 로컬 복제본이
+// msToRegClose 와 같은 부류(2026-09-13)라 통합했다.
 /**
  * 총 진행 시간 — 지난 레벨들의 길이 합 + 현재 레벨에서 지나간 시간.
  *

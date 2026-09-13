@@ -52,8 +52,19 @@ test('이벤트 딥링크 ?event=1 — 이벤트 **별도 페이지**가 열린�
   await expect(dlg).toBeVisible({ timeout: 15_000 });
   // 별도 페이지의 증거: 자기 헤더가 있고, 하단 탭바는 이 판에 속하지 않는다
   await expect(dlg.getByRole('button', { name: '닫기' })).toBeVisible();
-  // 파라미터는 소비 후 URL 에서 지워진다(뒤로가기·새로고침에서 다시 열리지 않게)
-  await expect(page).toHaveURL((u) => !u.searchParams.has('event'));
+  // ⚠ 계약 변경(2026-09-12 §4): 파라미터는 **열려 있는 동안 주소에 남는다.**
+  //   예전엔 `?tab=` 처럼 1회성으로 지웠는데, 그러면 이벤트 판에서 새로고침한 사람(모바일에서 흔하다)이
+  //   홈으로 떨어지고 매장이 돌린 링크가 '두 번째 열 때는 다른 곳'이 된다. 이벤트는 탭이 아니라 주소를 가진 화면이다.
+  //   옛 딥링크 `?event=1` 은 그대로 받아 캠페인 slug 로 승격한다(이미 뿌려진 QR·공유 링크 보존).
+  await expect(page).toHaveURL((u) => u.searchParams.get('event') === 'card-open-2026-09');
+});
+
+test('이벤트 새로고침 — 같은 판으로 돌아온다(홈으로 떨어지지 않는다)', async ({ page }) => {
+  await page.goto('/?event=1');
+  await expect(page.getByRole('dialog', { name: '이벤트' })).toBeVisible({ timeout: 15_000 });
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: '이벤트' }),
+    '새로고침했더니 이벤트 판이 사라졌다 — ?event 가 주소에 남지 않는다').toBeVisible({ timeout: 15_000 });
 });
 
 test('이벤트 페이지 — 확률 공개가 **최하단에** 있고 합이 100%다', async ({ page }) => {
@@ -89,6 +100,8 @@ test('이벤트 닫기 — 홈으로 돌아온다(빈 화면에 갇히지 않는
   await dlg.getByRole('button', { name: '닫기' }).click();
   await expect(dlg).toBeHidden();
   await expect(page.getByText('오늘·내일 일정').first()).toBeVisible();
+  // 닫으면 주소에서도 빠진다 — 남아 있으면 다음 새로고침에 혼자 다시 열린다
+  await expect(page).toHaveURL((u) => !u.searchParams.has('event'));
 });
 
 test('비로그인 QR 딥링크 — 로그인 게이트로 보내고, 하려던 일을 기억한다', async ({ page }) => {

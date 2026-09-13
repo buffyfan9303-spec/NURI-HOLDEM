@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Comment } from '../../api/community';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
@@ -14,7 +14,9 @@ import { relativeTime } from '../../lib/relativeTime';
 
 interface CommentThreadProps {
   comments: Comment[];
-  onSubmit: (content: string, parentId?: string) => void;
+  // N04(2026-09-12): Promise 계약 — 성공을 기다린 뒤에만 입력을 비운다.
+  // 실패하면 reject 해라(throw) — 그래야 이 컴포넌트가 원문을 지우지 않고 남긴다.
+  onSubmit: (content: string, parentId?: string) => Promise<void>;
   /** 관리자(또는 본인) 댓글 삭제 콜백 — 전달되지 않으면 삭제 버튼 미노출 */
   onDelete?: (commentId: string) => void;
   /** 이 영역(예: 본인 매장 커뮤니티)에서 모든 댓글을 관리(삭제)할 수 있는 권한자 — 업주 등 */
@@ -83,6 +85,36 @@ export function groupThreads(comments: Comment[]): ThreadGroup[] {
   });
 }
 
+// ── 제출 계약(N04, 2026-09-12) ───────────────────────────────────────────────
+// 재현한 버그: 댓글·답글 submit 이 onSubmit/onReply 를 fire-and-forget 으로 부른 뒤
+// 즉시 입력을 비웠다 → 오프라인·제재 게이트(P0001) 로 실패해도 토스트만 뜨고 원문은
+// 이미 사라져 되돌릴 수 없었다. 중복 제출 잠금도 없었다.
+// 수정: 성공을 기다린 뒤에만 비우고, pending 중 재진입은 즉시 막는다(pendingRef 는
+// React state 배칭과 무관하게 동기적으로 막혀야 해서 useState 가 아니라 ref 로 잰다).
+// 렌더러 없이(vitest environment: node) 이 계약만 따로 테스트하려고 뽑아낸 순수 함수.
+export type SubmitOutcome = 'skipped' | 'success' | 'error';
+
+// eslint-disable-next-line react-refresh/only-export-components -- 테스트가 순수 함수를 직접 검증(groupThreads 와 같은 관행)
+export async function guardedSubmit(
+  content: string,
+  pendingRef: { current: boolean },
+  onSubmit: (trimmed: string) => Promise<void>,
+  onSuccess: () => void,
+): Promise<SubmitOutcome> {
+  const trimmed = content.trim();
+  if (!trimmed || pendingRef.current) return 'skipped';
+  pendingRef.current = true;
+  try {
+    await onSubmit(trimmed);
+    onSuccess();
+    return 'success';
+  } catch {
+    return 'error'; // 원문은 호출부가 지우지 않은 채로 남는다
+  } finally {
+    pendingRef.current = false;
+  }
+}
+
 function CommentItem({ marks = {}, nickTokens = {}, titleOf,
   comment,
   mention,
@@ -113,7 +145,8 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
   replies: ThreadGroup['replies'];
   /** 이 댓글에 답글을 달 때 저장할 parentId — depth≥1 댓글은 루트 id 로 캡(쓰기시점 재부모화 아님, 새 글만) */
   composeParentId: string;
-  onReply: (parentId: string, content: string) => void;
+  /** N04: Promise 계약 — 성공을 기다린 뒤에만 답글 입력을 비운다(실패 시 throw). */
+  onReply: (parentId: string, content: string) => Promise<void>;
   onDelete?: (commentId: string) => void;
   /** (commentId) => 이 댓글을 삭제할 권한이 있는지 */
   canDelete: (comment: Comment) => boolean;
@@ -121,13 +154,22 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
 }) {
   const [showReplyBox, setShowReplyBox] = useState(false);
   const [replyContent, setReplyContent] = useState('');
+  const [replyPending, setReplyPending] = useState(false);
+  // 동기적 재진입 가드 — useState 는 배칭돼 두 번째 클릭이 첫 setPending(true) 커밋 전에
+  // 통과할 수 있다(2026-09-10 알약 버그와 같은 종류의 함정). ref 는 즉시 반영된다.
+  const replyPendingRef = useRef(false);
 
   const submitReply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyContent.trim()) return;
-    onReply(composeParentId, replyContent.trim());
-    setReplyContent('');
-    setShowReplyBox(false);
+    if (replyPendingRef.current) return; // 중복 제출 잠금
+    setReplyPending(true);
+    guardedSubmit(
+      replyContent,
+      replyPendingRef,
+      (trimmed) => onReply(composeParentId, trimmed),
+      () => { setReplyContent(''); setShowReplyBox(false); },
+    ).finally(() => setReplyPending(false));
+    // 실패 시 setReplyContent/setShowReplyBox 를 호출하지 않으므로 원문·parent·focus 가 그대로 남는다.
   };
 
   return (
@@ -216,7 +258,7 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
             placeholder={`@${comment.userName} 에게 답글…`}
             className="input flex-1"
           />
-          <button type="submit" className="btn-primary px-3 shrink-0">등록</button>
+          <button type="submit" className="btn-primary px-3 shrink-0" disabled={!replyContent.trim() || replyPending}>등록</button>
         </form>
       )}
 
@@ -242,6 +284,8 @@ export default function CommentThread({
   const { user } = useAuth();
   const { isBlocked } = useBlocks();
   const [content, setContent] = useState('');
+  const [pending, setPending] = useState(false);
+  const pendingRef = useRef(false); // 동기 재진입 가드 — CommentItem 의 replyPendingRef 와 같은 이유
   // 작성자 장착 마크(상점) — 댓글 userId 일괄 조회
   const [marks, setMarks] = useState<Record<string, string>>({});
   // 작성자 닉네임 색(상점 600점 · 20260830n) — 마크와 같은 결합 지점이라 같은 자리에서 함께 받는다.
@@ -280,9 +324,11 @@ export default function CommentThread({
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim()) return;
-    onSubmit(content.trim());
-    setContent('');
+    if (pendingRef.current) return; // 중복 제출 잠금
+    setPending(true);
+    guardedSubmit(content, pendingRef, (trimmed) => onSubmit(trimmed), () => setContent(''))
+      .finally(() => setPending(false));
+    // 실패하면 setContent('') 를 호출하지 않으므로 원문·focus 가 입력창에 그대로 남는다.
   };
 
   return (
@@ -298,7 +344,7 @@ export default function CommentThread({
             placeholder="댓글을 입력하세요…"
             className="input flex-1"
           />
-          <button type="submit" className="btn-primary px-4 shrink-0" disabled={!content.trim()}>
+          <button type="submit" className="btn-primary px-4 shrink-0" disabled={!content.trim() || pending}>
             등록
           </button>
         </form>

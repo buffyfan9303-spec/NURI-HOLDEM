@@ -5,6 +5,7 @@ import { useToast } from '../atoms/Toast';
 import { getDealerShifts, addDealerShift, removeDealerShift, shiftHours, type DealerShift } from '../../api/dealerShifts';
 import { wonToMan } from '../../api/ledger';
 import Icon from '../atoms/Icon';
+import { msgOf } from '../../lib/dbError';
 
 const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const monthRange = (key: string) => {
@@ -23,8 +24,16 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [wage, setWage] = useState(0);
+  // F6 후속(2026-09-13): getDealerShifts 가 실패를 던지게 되면서 옛 `.catch(() => {})` 가 실제로 실행되는 코드가 됐다 —
+  //   실패하면 목록이 갱신되지 않은 채 조용히 남는다. StaffPayroll 의 dealerErr 와 같은 관용구로 실패를 말한다.
+  const [loadErr, setLoadErr] = useState<string | null>(null);
 
-  const reload = (mk: string) => { const { start: s, end: e } = monthRange(mk); getDealerShifts(venueId, s, e).then(setList).catch(() => {}); };
+  const reload = (mk: string) => {
+    const { start: s, end: e } = monthRange(mk);
+    getDealerShifts(venueId, s, e)
+      .then((l) => { setList(l); setLoadErr(null); })
+      .catch((err) => setLoadErr(msgOf(err, '딜러 근무 기록을 불러오지 못했습니다')));
+  };
   useEffect(() => { if (open) { setMonth(monthKey); reload(monthKey); } }, [open, venueId, monthKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const shiftMonth = (delta: number) => { const [y, m] = month.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); const mk = ym(d); setMonth(mk); reload(mk); };
@@ -32,9 +41,10 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
   const add = async () => {
     if (!name.trim() || !date) return toast.show('딜러 이름과 날짜를 입력하세요', 'error');
     try { await addDealerShift({ venueId, dealerName: name, shiftDate: date, startTime: start, endTime: end, hourlyWage: wage }); setName(''); setStart(''); setEnd(''); setWage(0); reload(month); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
+    // ⚠ `e instanceof Error ? e.message` 를 쓰지 않는다 — PostgrestError 는 extends Error 라 'permission denied for table …' 원문이 그대로 토스트됐다(독립 검증 C).
+    catch (e) { toast.show(msgOf(e, '추가 실패'), 'error'); }
   };
-  const del = async (id: string) => { try { await removeDealerShift(id); reload(month); } catch { /* noop */ } };
+  const del = async (id: string) => { try { await removeDealerShift(id); reload(month); } catch (e) { toast.show(msgOf(e, '삭제 실패'), 'error'); } };
 
   // 급여 명세: 딜러별 시간·급여 합계
   const payroll = useMemo(() => {
@@ -77,7 +87,7 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
         </div>
 
         {/* 급여 명세 */}
-        {payroll.length > 0 && (
+        {!loadErr && payroll.length > 0 && (
           <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05] p-2.5">
             <p className="mb-1 text-2xs font-bold text-accent-300">이번 달 급여 명세 · 합계 {wonToMan(totalPay)}만원</p>
             <ul className="space-y-1">
@@ -92,7 +102,13 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
         )}
 
         {/* 시프트 목록 */}
-        {list.length === 0 ? (
+        {loadErr ? (
+          <div role="alert" className="flex flex-wrap items-center gap-2 rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">
+            <span className="min-w-0 flex-1">{loadErr} — 아래 목록은 이번 달 기록의 전부가 아닐 수 있습니다.</span>
+            <button type="button" onClick={() => reload(month)}
+              className="shrink-0 rounded-badge border border-danger/40 px-2.5 py-1 text-2xs font-bold text-danger-light hover:bg-danger/15 transition-colors">다시 시도</button>
+          </div>
+        ) : list.length === 0 ? (
           <p className="py-6 text-center text-2xs text-ink-muted">이번 달 등록된 시프트가 없습니다.</p>
         ) : (
           <ul className="space-y-1">

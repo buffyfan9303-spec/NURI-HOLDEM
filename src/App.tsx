@@ -2,6 +2,9 @@ import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, use
 import { flushSync } from 'react-dom';
 import { withViewTransition, type VTDirection } from './lib/viewTransition';
 import { getAppSetting } from './api/settings';
+// ⚠ `api/events` 가 아니라 `lib/eventSlug` 에서 받는다 — 둘은 같은 값이지만(그쪽이 재수출한다),
+//   api/events 를 정적으로 물면 TIER_META·oddsRows 까지 첫 화면 임계 경로로 딸려 온다(실측 2026-09-13).
+import { CARD_EVENT_SLUG, isEventSlug } from './lib/eventSlug';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import type { MyBuyinRequest } from './api/ledger';
@@ -60,6 +63,10 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY, isProgrammaticScroll } from './lib/useScrollY';
+import { nextHeaderShrunk } from './lib/headerShrink';
+// ⚠ lib/postNav 가 아니라 lib/postNavCtx 에서 받는다 — postNav 를 정적으로 물면 neighborsOf·appendPage(gz 2.1KB)까지
+//   첫 화면 임계 경로로 딸려 와 bundle:budget 257.1/256KB 초과(실측 2026-09-13). 위 api/events→lib/eventSlug 와 같은 함정.
+import { dropFromCtx, type PostNavCtx } from './lib/postNavCtx';
 import { useIsDesktop, useIsMdUp } from './lib/responsive';
 import { sweepScrollLocks } from './lib/scrollLock';
 import HomeTab from './components/features/HomeTab';
@@ -67,12 +74,18 @@ import { lazyWithReload } from './lib/lazyWithReload';
 import type { ClockState } from './api/clock';
 // 클락 모듈도 지연 로드한다 — api/clock 이 api/ledger 를 물고 있어, 정적으로 두면
 // **ledger 청크까지 첫 화면 임계 경로로 딸려 온다**(실측: index.html modulepreload 에 ledger 20.5KB).
-// getRunningClocks 는 지연 로드 구간과 탭 전환 핸들러에서만 쓰여 부팅 경로에 있을 이유가 없다.
+// ⚠ 이 주석은 2026-09-13 까지 "지연 로드 구간과 **탭 전환 핸들러**에서만 쓰인다" 라고 적혀 있었는데
+//   코드와 어긋난 낡은 설명이었다 — 탭 전환에는 클락 재조회가 아예 없었고(F5 의 원인), 실제 호출처는
+//   ① 부팅 첫 배치 ② 복귀 재조회(useVisibilityRefresh) 둘뿐이었다. 지금은 ③ 라이브 탭 진입이 더해졌다.
+//   어느 쪽이든 **정적 import 는 아니다**: 여기 있어야 할 이유가 없는 것은 ledger 청크 쪽이다.
 const clockMod = () => import('./api/clock');
+/** '보여 줄 글이 없다' 를 넘길 때 쓰는 **고정 참조** — `[]` 리터럴을 인라인으로 쓰면 매 렌더 새 배열이라
+ *  홈의 useMemo 가 매번 다시 돈다(§5-B ③ 이 잡은 것과 같은 부류). */
+const EMPTY_POSTS: CommunityPost[] = [];
 import { buildRegInfoMap } from './lib/regStatus';
 import { myVisitedVenues } from './api/vouchers';
 import { haversineKm } from './lib/geo';
-import { compareByStartThenBoost } from './lib/scheduleSort';
+import { compareByStartThenBoost, compareByDistanceThenStart } from './lib/scheduleSort';
 import { readSnap, writeSnap } from './lib/snapshot';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
@@ -93,6 +106,8 @@ import { getPostById,
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
 import { enablePush, isPushSubscribed, pushSupported } from './api/push';
 import { rememberQrIntent, takeQrIntent, clearQrIntent } from './lib/pendingQrIntent';
+import { setCurrentView, takeViewIntent } from './lib/pendingViewIntent';
+import { currentViewFor, restoreActionFor } from './lib/viewIntentRestore';
 import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral } from './api/referrals';
 import LevelUpWatcher from './components/features/LevelUpCelebration';
 import BusinessFooter from './components/features/BusinessFooter';
@@ -102,7 +117,7 @@ import type { LegalDoc } from './components/features/LegalDocsModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
 import { myUnreadMessageCount } from './api/messages';
 import { supabase } from './lib/supabase';
-import type { User } from './api/auth';
+import type { User, UserUpdateResult } from './api/auth';
 import type { Schedule } from './api/schedules';
 import type { Venue, Comment, CommunityPost, PostCategory } from './api/community';
 import type { AppNotification } from './api/notifications';
@@ -171,7 +186,13 @@ function OverlayFallback() {
 // ── 탭 정의 ──────────────────────────────────────────────────────────────────
 
 // P1(오너 승인 2026-08-27): 'home' 신설 — 기존 browse(일정 탐색)는 탭바에서 내려간 서브 화면.
-type TabId = 'home' | 'browse' | 'live' | 'community' | 'market' | 'tools' | 'calendar' | 'my-store' | 'admin';
+// 'event' 는 **최상위 탭이 아니다**(browse·market 과 같은 부류 — 내비에는 있지만 자기 pane 이 없다).
+//   이벤트는 전면 오버레이(EventPage)로 열리고, 여기 이름이 있는 이유는 하나뿐이다:
+//   PC GNB 가 `TabDef` 로만 그려져서 상시 진입 칸을 그리려면 id 가 필요하다.
+//   그래서 TAB_IDS(=실제 탭 목록)에는 넣지 않는다 — 넣으면 '마지막 탭 복원'이 pane 없는 탭으로 부팅한다.
+type TabId = 'home' | 'browse' | 'live' | 'community' | 'market' | 'tools' | 'calendar' | 'my-store' | 'admin' | 'event';
+/** 로그인 복귀 복원(N03)이 탭 id 를 검증할 때 쓰는 허용 목록 — 여기 없는 값으로는 탭을 바꾸지 않는다. */
+const TAB_IDS: readonly TabId[] = ['home', 'browse', 'live', 'community', 'market', 'tools', 'calendar', 'my-store', 'admin'];
 interface TabDef { id: TabId; label: string; }
 
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
@@ -212,7 +233,8 @@ const AppHeader = memo(function AppHeader({
   // 축소↔복원이 덜덜 떨린다 → 히스테리시스 밴드(내릴 때 56 넘어야 축소, 올릴 때 40 밑이어야 복원)
   const [shrunk, setShrunk] = useState(false);
   useScrollY(useCallback((y: number) => {
-    setShrunk((prev) => (prev ? y > 40 : y > 56));
+    // 판정은 lib/headerShrink 한 벌 — CommunityTab 의 섹션 스크롤 복원이 같은 판정으로 헤더 뒤집힘을 예측한다.
+    setShrunk((prev) => nextHeaderShrunk(prev, y));
   }, []));
 
   // 프로필 드롭다운: 바깥(다른 버튼 등)을 클릭/터치하면 자동으로 닫는다.
@@ -263,7 +285,13 @@ const AppHeader = memo(function AppHeader({
         <div className="lg:hidden flex min-w-0 items-center gap-2">
           <button type="button" onClick={onHome} aria-label="홈으로" className="press-spring flex shrink-0 items-center gap-1.5">
             <NuriMark uid="m" className="h-6 w-6 shrink-0" />
-            <NuriHoldemLogo className="!h-7" />
+            {/* ⚠ U01: 320px 에서는 워드마크를 접는다.
+                실측(2026-09-12) — 320 − 좌우 여백 17×2 − 우측 버튼 클러스터 137 = 149px 이 헤더 잔량인데,
+                로고 버튼이 `shrink-0` 이라 96.1px(마크 25.5 + 워드마크 64.2 + gap)을 먼저 가져가고
+                타이틀에 **34.9px** 만 남았다. 그래서 '커뮤니티' 가 `커…` 로 잘렸다(다크·라이트 모두).
+                워드마크만 접으면 잔량이 99px 가 되어 타이틀이 전부 산다 —
+                글자 크기나 히트영역을 줄이는 방법은 쓰지 않는다(접근성 규격을 깎는 것이라). */}
+            <NuriHoldemLogo className="!h-7 max-[359px]:hidden" />
           </button>
           <span className="h-4 w-px shrink-0 bg-border-default" aria-hidden />
           <span className="min-w-0 truncate text-base font-extrabold tracking-tight text-ink-primary" aria-current="page">
@@ -469,7 +497,7 @@ const tabIcon = (children: ReactNode) => (
  *   새 탭이 조용히 ?? '홈' 폴백으로 떨어진다 — 2026-09-04 캘린더 탭에서 실제로 그랬다.) */
 const TAB_LABEL: Record<TabId, string> = {
   home: '홈', browse: '일정 탐색', live: '라이브', community: '커뮤니티', market: '중고장터',
-  tools: 'GTO', calendar: '캘린더', 'my-store': '내 매장', admin: '관리자 설정',
+  tools: 'GTO', calendar: '캘린더', 'my-store': '내 매장', admin: '관리자 설정', event: '이벤트',
 };
 
 const TAB_ICON: Record<TabId, ReactNode> = {
@@ -482,6 +510,8 @@ const TAB_ICON: Record<TabId, ReactNode> = {
   calendar: tabIcon(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>),
   'my-store': tabIcon(<><path d="M3 9.5 5 4h14l2 5.5" /><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5" /><path d="M9 21v-6h6v6" /></>),
   admin: tabIcon(<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />),
+  // 선물 상자 — HomeTab 진입 칸의 Icon name="gift" 와 같은 그림(같은 곳으로 가는 두 문이 달라 보이지 않게)
+  event: tabIcon(<><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8" /><path d="M12 8v13" /><path d="M12 8a3 3 0 1 1 3-3 5 5 0 0 1-3 3Zm0 0a3 3 0 1 0-3-3 5 5 0 0 0 3 3Z" /></>),
 };
 
 const TabBar = memo(function TabBar({
@@ -546,7 +576,7 @@ const TabBar = memo(function TabBar({
 });
 
 // ── 모바일 하단 탭바(Riot Mobile 스타일) — 플로팅 알약 + 아이콘/라벨 + 프레스 스프링 ──
-const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, count, onOpenMe, overlayOpen, onSameTap }: {
+const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, count, onOpenMe, overlayOpen, onSameTap, suppressed = false }: {
   tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void;
   dot?: Partial<Record<TabId, boolean>>;
   /** 숫자 배지(예: 라이브 'N게임 진행중') — dot 보다 정보량이 높은 칸에만 */
@@ -557,6 +587,10 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   overlayOpen: boolean;
   /** 이미 활성인 탭을 다시 눌렀을 때 — 기본은 맨 위로 스크롤, '내 매장'은 대시보드 복귀에 쓴다 */
   onSameTap?: (t: TabId) => void;
+  /** 전면 오버레이(매장·그룹 상세) 위에서 **억제**한다 — 헤더(AppHeader)가 이미 쓰는 것과 같은 방식.
+   *  ⚠ U06: 예전엔 래퍼만 `pointer-events-none` 이라 **터치로는 못 누르는데 키보드로는 눌렸다.**
+   *  z-50 이라 오버레이(z-40) 위에 남아, Tab 순서에도 그대로 들어왔다. */
+  suppressed?: boolean;
 }) {
   // 5칸 고정: 일정/라이브/커뮤니티/장터 + (업주·직원·관리자=내 매장 | 일반=내 정보)
   // 관리자 설정·도구는 프로필 메뉴에서 진입(탭바는 핵심 동선만)
@@ -667,7 +701,9 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   ];
   // 장터 화면에선 '커뮤니티' 칸을 활성으로(장터 진입 경로가 커뮤니티)
   // 탐색 화면(browse)은 홈의 서브 화면 — 탭바에선 홈 칸을 활성으로
-  const mappedActive: TabId = active === 'market' ? 'community' : active === 'browse' ? 'home' : active;
+  // 이벤트도 같은 부류다(홈의 진입 칸에서 연다). **하단 5칸은 건드리지 않는다** — 여기서 접어 준다.
+  const mappedActive: TabId = active === 'market' ? 'community'
+    : active === 'browse' || active === 'event' ? 'home' : active;
   // 낙관적 활성 — 클릭 즉시 인디케이터가 미끄러지고, 실제 탭 커밋(transition) 후 동기화
   const [optimistic, setOptimistic] = useState<TabId | null>(null);
   useEffect(() => { setOptimistic(null); }, [active]);
@@ -679,8 +715,11 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   );
   return (
     <nav
+      // U06: 억제되면 보조기술·Tab 순서에서도 빠진다. 래퍼의 pointer-events 만으로는 키보드를 못 막는다.
+      aria-hidden={suppressed || undefined}
       className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none transition-transform duration-[var(--dur-panel)]',
-        hidden ? 'translate-y-[120%]' : 'translate-y-0'].join(' ')}
+        hidden ? 'translate-y-[120%]' : 'translate-y-0',
+        suppressed ? 'invisible pointer-events-none' : ''].join(' ')}
       style={{ paddingBottom: 'env(safe-area-inset-bottom)', transitionTimingFunction: 'var(--ease)' }}
       aria-label="하단 내비게이션"
     >
@@ -708,7 +747,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
               aria-label={tab && (count?.[tab] ?? 0) > 0 ? `${label}, 진행 중 ${count![tab]}게임` : label}
               className="press-spring flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
             >
-              {/* 아이콘 22px · 라벨 11px — 공백 줄이고 또렷하게 */}
+              {/* 아이콘 21px · 라벨 t-tab(12.75px) — 공백 줄이고 또렷하게 */}
               <span className={['relative flex h-7 w-12 items-center justify-center rounded-full [&_svg]:relative [&_svg]:h-[21px] [&_svg]:w-[21px] transition-colors duration-[var(--dur-fast)]',
                 on ? 'text-white animate-tab-bounce' : 'text-ink-secondary'].join(' ')}>
                 {/* 활성 알약(.pill-active 그라데이션 필 — OUTFLAME 필 내비 문법) — 각 칸이 자기 핀을 갖고
@@ -723,12 +762,24 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
                 {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-accent-300" aria-hidden />}
                 {tab && (count?.[tab] ?? 0) > 0 && (
                   <span aria-hidden
-                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-extrabold tabular-nums text-white ring-2 ring-surface-mid">
+                    // §T1 규칙 2: 사다리 밖 임의 px 금지. text-[9px] 는 절대 px 이라 html 17px·브라우저 확대를
+                    // 하나도 받지 않아 앱에서 가장 작은 글자였다 → 사다리 최소단 text-2xs(11.69px, rem).
+                    // 박스는 h-4/min-w-4(17px)에 px-1 이라 두 자리 이상이면 가로로 자란다(99+ 확인).
+                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-2xs font-extrabold leading-none tabular-nums text-white ring-2 ring-surface-mid">
                     {count![tab]}
                   </span>
                 )}
               </span>
-              <span className={['text-[11px] font-bold leading-none transition-colors duration-[var(--dur-fast)]',
+              {/* §T1 규칙 2: 사다리 밖 임의 px 금지. text-[11px] 는 절대 px 이라 html{font-size:17px}
+                  ("50대 이용자 가독성" 결정)도 브라우저 확대도 안 받고, 가장 작은 역할 토큰(11.69)보다도
+                  작았다 — 전 15화면에 그려지는 1차 내비인데. → 역할 토큰 t-tab(12.75/600/17, rem).
+                  ⚠ t-nav(14.88)는 320px 에서 '커뮤니티' 4글자가 칸(59.35px)을 넘겨 쓸 수 없다(실측). */}
+              {/* ⚠ 라벨이 rem 이 되면서 **글자만 200% 확대**(html 34px)에서 칸(390→69.1px)보다 넓어져
+                  옆 칸과 겹쳤다(실측: 겹침 2~3건). 절대 px 시절엔 확대가 아예 안 걸려 안 겪던 부작용이다.
+                  index.css:564 의 전역 `word-break: keep-all` 때문에 '커뮤니티'가 한 어절로 붙어 있어
+                  폭 제한만으로는 안 접힌다 → `max-w-full` + `break-all` 로 확대 때만 두 줄로 접는다.
+                  100% 에서는 320px 칸 59.3px > 최장 라벨 51px 이라 줄바꿈이 일어나지 않는다(실측). */}
+              <span className={['t-tab max-w-full break-all text-center transition-colors duration-[var(--dur-fast)]',
                 on ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>
                 {label}
               </span>
@@ -777,6 +828,14 @@ export default function App() {
   const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
   const [eventOpen, setEventOpen] = useState(false); // 이벤트 별도 페이지
+  /** 지금 보고 있는 캠페인. `?event=<slug>` 로 다른 캠페인이 올 수 있어 화면·조회·카드 열기가 모두 이 값을 탄다. */
+  const [eventSlug, setEventSlug] = useState<string>(CARD_EVENT_SLUG);
+  /** 이벤트 페이지 열기 — 진입점이 넷(홈 칸·PC GNB·딥링크·로그인 복귀)이라 한 곳에 모은다.
+   *  startTransition: 청크가 아직이면 **이전 화면을 유지**한다(폴백 스로틀 ~300ms 회피 — 아래 EventPage 주석). */
+  const openEvent = useCallback((slug?: string) => {
+    setEventSlug(isEventSlug(slug) ? slug : CARD_EVENT_SLUG);
+    startTransition(() => setEventOpen(true));
+  }, []);
   const [myBuyinReqs, setMyBuyinReqs] = useState<MyBuyinRequest[]>([]); // 손님 본인 오늘 바인요청(상태 배너)
   const [updateReady, setUpdateReady] = useState(false); // 새 버전(SW) 감지 → 새로고침 배너
   const [pushNudge, setPushNudge] = useState(false); // 운영자 푸시 권한 온보딩 배너(설치형·1회)
@@ -818,6 +877,12 @@ export default function App() {
   // '이전 메뉴 → 스피너 깜빡 → 새 메뉴' 3단 플래시를 없앤다(React 공식 패턴).
   const [, startTabTransition] = useTransition();
   const closeOverlaysRef = useRef<(() => void) | null>(null);
+  // F5(2026-09-13): 라이브 **탭 배지**(liveCount)와 라이브 **본문**(LiveGamesTab 의 자체 load+30초 폴링+구독)이
+  //   서로 다른 배열을 보고 있었다 — 배지 setter 는 부팅 1회와 복귀 재조회 둘뿐이라, 라이브 탭에 앉아 있으면
+  //   본문만 갱신되고 배지는 부팅값으로 얼어붙었다(심야 순차 마감 때 '배지 3 / 헤더 1'). 탭 진입에서 한 번 맞춘다.
+  //   ⚠ 구독·폴링을 App 으로 올리는 안은 채택하지 않는다 — subscribeRunningClocks 는 필터 없는 전역 구독이다.
+  //   ⚠ ref 인 이유: 실제 구현(refreshClocks)은 liveCount state 아래에 있어 changeTab 렌더 시점엔 TDZ 다.
+  const refreshClocksRef = useRef<(() => void) | null>(null);
   // 탭 전환은 즉시 스왑(인스타·유튜브 문법) — 컨텐츠 페이드·슬라이드는 큰 면적에서 '깜빡임'으로 인지돼 전부 제거.
   // 모션은 알약 인디케이터(layoutId)가 전담한다.
   // 탭별 스크롤 위치 — keep-alive 로 DOM 은 남지만 스크롤러가 window(html) 하나라
@@ -902,6 +967,9 @@ export default function App() {
     closeOverlaysRef.current?.();
     if (t === 'my-store') setMyStoreHomeNonce((v) => v + 1); // 다른 탭에서 넘어와도 대시보드부터
     if (t === 'home') clearTabTrail(); // 홈을 직접 누르면 이력의 뿌리로 — 쌓아 둔 겹을 정리
+    // F5: 라이브 진입 = 배지와 본문이 한 화면에 같이 서는 순간. 여기서 같은 조회로 배지를 맞춘다
+    // (본문도 자기 load 를 같은 시점에 쏜다 — 두 숫자의 출처가 같은 스냅샷이 된다).
+    if (t === 'live') refreshClocksRef.current?.();
     commitTab(t);
   }, [clearTabTrail, commitTab]);
   // 복원은 layout 단계에서 — 페인트 전에 위치를 잡아야 '맨 위가 번쩍했다가 내려가는' 깜빡임이 없다.
@@ -1176,16 +1244,58 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // ── 이벤트 딥링크 (?event=1) — 매장이 공유하거나 QR 로 찍어 바로 들어오는 경로.
+  // ── 이벤트 딥링크 (?event=<slug>) — 매장이 공유하거나 QR 로 찍어 바로 들어오는 경로.
   //    홈 카드는 시작 전 이벤트를 광고하지 않으므로, 예약해 둔 캠페인을 미리 열어 보는 통로이기도 하다.
+  //
+  // ⚠ 2026-09-12(§4) 계약 변경: 이 파라미터를 **지우지 않는다.**
+  //   예전엔 `?tab=` 처럼 1회성으로 소비했는데, 이벤트는 탭이 아니라 **주소를 가진 화면**이다.
+  //   지워 버리면 이벤트 판에서 새로고침한 사람(모바일에서 흔하다)이 홈으로 떨어지고,
+  //   매장이 카톡으로 돌린 링크가 '두 번째 열 때는 다른 곳'이 된다.
+  //   대신 아래 동기화 이펙트가 닫힐 때 지운다 — 열려 있는 동안만 주소에 남는다.
   useEffect(() => {
-    const sp = new URLSearchParams(window.location.search);
-    if (!sp.get('event')) return;
-    const url = new URL(window.location.href);
-    url.searchParams.delete('event');
-    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    setEventOpen(true);
+    const v = new URLSearchParams(window.location.search).get('event');
+    if (!v) return;
+    // '1'·'true' 는 캠페인이 하나뿐이던 시절의 딥링크다. 이미 뿌려진 QR·공유 링크라 그대로 받아 준다.
+    openEvent(v === '1' || v === 'true' ? CARD_EVENT_SLUG : v);
+  }, [openEvent]);
+
+  // 열려 있는 동안 주소에 남긴다 — 새로고침·공유가 **같은 대상**으로 간다.
+  //   replaceState 인 이유: 뒤로가기 겹은 useBackClose 가 따로 쌓는다(여기서 pushState 하면 겹이 두 개가 된다).
+  //   backstack 이 replaceState 를 감싸 __layer 토큰을 보존하므로 겹이 끊기지 않는다(backstack.ts ⓑ).
+  //   첫 커밋은 건너뛴다: 위 딥링크 이펙트가 `setEventOpen(true)` 를 트랜지션에 넣어 두는 사이
+  //   여기가 먼저 돌면 방금 들어온 `?event=` 를 스스로 지웠다가 다시 쓴다(불필요한 replaceState 왕복).
+  const eventUrlSyncedRef = useRef(false);
+  const syncEventParam = useCallback((open: boolean, slug: string) => {
+    try {
+      const url = new URL(window.location.href);
+      const cur = url.searchParams.get('event');
+      if (open) {
+        if (cur === slug) return;
+        url.searchParams.set('event', slug);
+      } else {
+        if (cur === null) return;
+        url.searchParams.delete('event');
+      }
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    } catch { /* noop */ }
   }, []);
+  useEffect(() => {
+    if (!eventUrlSyncedRef.current) { eventUrlSyncedRef.current = true; if (!eventOpen) return; }
+    syncEventParam(eventOpen, eventSlug);
+  }, [eventOpen, eventSlug, syncEventParam]);
+
+  // ⚠ 상태만 보고 맞추면 **뒤로가기에서 한 번 어긋난다.** replaceState 는 '지금 항목'의 주소만 바꾸는데,
+  //   뒤로가기는 그 항목을 떠나 **예전 항목의 주소를 되살린다** — 겹이 닫혀 판은 사라졌는데 주소엔
+  //   ?event 가 되돌아와 있고, 그 상태로 새로고침하면 닫은 판이 혼자 다시 열린다(실측으로 잡힌 실패).
+  //   useBackClose 는 X 버튼으로 닫을 때도 history.back() 을 쓰므로 두 경로 모두 여기를 지난다.
+  //   popstate 직후엔 리액트가 아직 닫힘을 커밋하지 않았을 수 있어 한 틱 뒤에 맞춘다.
+  const eventStateRef = useRef({ open: eventOpen, slug: eventSlug });
+  useEffect(() => { eventStateRef.current = { open: eventOpen, slug: eventSlug }; }, [eventOpen, eventSlug]);
+  useEffect(() => {
+    const onPop = () => { window.setTimeout(() => syncEventParam(eventStateRef.current.open, eventStateRef.current.slug), 0); };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [syncEventParam]);
 
   // ── QR 회원가입 (?signup=1) — 매장 QR 옆 가입 QR 스캔 시 회원가입 모달 바로 열기 ──
   useEffect(() => {
@@ -1371,11 +1481,22 @@ export default function App() {
     const today = new Date().toLocaleDateString('en-CA');
     return schedules.filter((sc) => sc.approved && sc.date >= today).map((sc) => sc.id).sort().join('|');
   }, [schedules]);
+  // [§5-B] 이 숫자를 그리는 곳은 **일정 탐색 카드뿐**이다(`ScheduleCard reserveCount` — 홈 카드는 이 prop 을 받지 않는다).
+  //   그런데 조회는 홈 진입에 돌아 오늘 이후 승인 일정 **전체 id**(수백 UUID)를 RPC 본문에 실어 보냈다.
+  //   → 일정 탐색 pane 이 실제로 마운트된 뒤에만 읽는다. 한 번 켜지면 계속 켜 둔다(sticky):
+  //     browse 는 keep-alive 라 언마운트되지 않으므로, 다시 끄면 화면에 남아 있는 카드의 숫자가 낡는다.
+  //   재동기화: 켜지는 순간 이 이펙트가 즉시 돌아 그동안의 변화를 한 번에 메운다.
+  //   ⚠ 다만 **첫 진입의 1왕복 동안은 '예약 N'·'마감 임박' 뱃지가 비어 있다**(독립 검증 지적).
+  //     전에는 부팅 때 미리 받아 둬서 탭을 열면 차 있었다. 영구 소실은 아니지만 "기능 소실 없음" 은 과장이라
+  //     사실대로 적는다 — 뱃지가 한 박자 늦게 뜨는 것과, 홈만 보는 사용자가 수백 UUID 를 늘 보내는 것의 교환이다.
+  const [resCountsWanted, setResCountsWanted] = useState(false);
+  useEffect(() => { if (activeTab === 'browse') setResCountsWanted(true); }, [activeTab]);
   useEffect(() => {
+    if (!resCountsWanted) return;   // 아직 소비처가 없다 — 화면에 그려지는 값이 없으므로 비울 것도 없다
     if (!resIdsKey) { setBrowseResCounts({}); return; }
     getReservationCounts(resIdsKey.split('|')).then(setBrowseResCounts).catch(() => {});
     // resVersion: 내가 예약/취소한 직후 '예약 N'·'마감 임박'이 낡은 채 남지 않게 한 번 더 읽는다
-  }, [resIdsKey, resVersion]);
+  }, [resCountsWanted, resIdsKey, resVersion]);
   const [venues,        setVenues]        = useState<Venue[]>(() => readSnap<Venue[]>('venues') ?? []);
   // 네트워크 매장 목록이 한 번이라도 도착했는가 — ?v= 딥링크의 '없는 매장' 판정은 이 뒤에만 한다
   // (부팅 직후 venues 는 localStorage 스냅샷이라, 스냅샷 이후 문을 연 매장의 링크를 '없음'으로 튕기면 안 된다).
@@ -1383,6 +1504,14 @@ export default function App() {
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
   const [comments,      setComments]      = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  /** 지금 로그인한 사람의 id — **늦게 도착한 이전 계정 응답을 버리기 위한 대조값**이다(N01).
+   *
+   *  알림 최초 조회(`[user?.id]` 이펙트)와 쪽지 카운트 폴링에는 이미 `alive` 가드가 있는데,
+   *  **Realtime 수신 재조회와 읽음 처리 실패 재조회 두 곳에만 없었다.**
+   *  A 로그인 → 재조회 시작 → 로그아웃 → B 로그인 → A 응답 도착 순서에서
+   *  B 의 알림 목록·배지가 A 의 알림으로 덮인다. 서버는 각자 제 데이터만 주므로 RLS 우회는 아니지만,
+   *  **남의 알림이 내 화면에 보이는 것** 자체가 사고다. */
+  const uidRef = useRef<string | null>(null);
   // 쪽지 미읽음 — Realtime 금지(연결 예산): 90s 폴링 + 패널 열 때(NotificationPanel 이 콜백으로 갱신)
   const [unreadMsgs,    setUnreadMsgs]    = useState(0);
   const [posts,         setPosts]         = useState<CommunityPost[]>(() => readSnap<CommunityPost[]>('posts') ?? []);
@@ -1396,6 +1525,7 @@ export default function App() {
   // MO-7B: 공지 스냅샷조차 없는 최초 방문에서 섹션이 늦게 끼어들며 목록을 밀지 않도록,
   // 응답 전에는 섹션 셸(헤더만)을 자리에 둔다. 스냅샷이 있으면 이미 확정 상태.
   const [noticesLoaded, setNoticesLoaded] = useState<boolean>(() => readSnap<MarketplaceNotice[]>('notices') != null);
+  const [noticesErr,    setNoticesErr]    = useState<unknown>(null);
   const [users,         setUsers]         = useState<User[]>([]);
   // 회원 목록 조회 실패 — 예전엔 세 곳 모두 삼켜서 '회원 0명' 으로 위장됐다(2026-09-11 점검).
   //   그러면 회원 관리가 '조건에 맞는 회원이 없습니다' 를 단언하고 승인대기·정지 요약도 0 이 되며,
@@ -1410,9 +1540,17 @@ export default function App() {
   /** 포스터 폼 — null: 닫힘 / undefined: 신규 / Schedule: 수정 */
   const [posterFormTarget, setPosterFormTarget] = useState<Schedule | null | undefined>(null);
   const [openPost, setOpenPost]         = useState<CommunityPost | null>(null);
+  // UI-04(2026-09-13): 이 글을 열었던 목록의 스냅샷(이전/다음 맥락). 목록에서 연 경우에만 있고, 검색·알림·내 글·공유 링크 진입은 null(이동 비활성 + 목록으로).
+  const [postNav, setPostNav]           = useState<PostNavCtx | null>(null);
+  const openPostWithNav = useCallback((p: CommunityPost, nav?: PostNavCtx) => { setOpenPost(p); setPostNav(nav ?? null); }, []);
+  const closePost = useCallback(() => { setOpenPost(null); setPostNav(null); }, []);
   // 공유 딥링크로 받은 글이 로드되면 상세를 연다(비로그인 열람 허용).
   useEffect(() => {
-    if (!pendingPostId || posts.length === 0) return;
+    // ⚠ N02: 예전엔 `posts.length === 0` 이면 여기서 그냥 돌아갔다. 그런데 `pendingPostId` 는
+    //   마운트 때 URL 에서 이미 지워지므로(1회성) **재시도 수단이 없어 링크가 영원히 무반응**이었다.
+    //   목록이 아직 안 왔거나 진짜로 0건이거나 — 어느 쪽이든 목록과 무관하게 대상을 해석해야 한다.
+    //   목록이 비어 있으면 `found` 가 undefined 라 자연히 아래 단건 조회로 떨어진다.
+    if (!pendingPostId) return;
     const found = posts.find((p) => p.id === pendingPostId);
     if (found) setOpenPost(found);
     // 링크가 최근 50건 밖(오래된 글)이면 조용히 실패하던 구간 — 단건 조회로 살린다
@@ -1420,12 +1558,53 @@ export default function App() {
       const missingId = pendingPostId;
       getPostById(missingId).then((fetched) => {
         if (fetched) setOpenPost(fetched);
+        // 없는 글과 못 불러온 글은 다른 사건이다 — 같은 문구로 뭉뚱그리면 유저가 새로고침할지 포기할지 모른다.
         else toast.show('삭제되었거나 찾을 수 없는 글이에요', 'info');
-      }).catch(() => {});
+      }).catch(() => {
+        toast.show('글을 불러오지 못했어요. 잠시 후 다시 시도해 주세요', 'error');
+      });
     }
     setPendingPostId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPostId, posts]);
+  // ── 로그인 왕복에서 '보고 있던 화면' 유지 (N03) ─────────────────────────────
+  //
+  // 구글 로그인은 페이지를 떠났다 origin 으로 돌아온다. 그래서 열려 있던 글·대회·매장·탭이 사라지고
+  // "댓글 쓰려고 로그인했는데 글이 어디 갔지" 가 됐다. 로그인 버튼은 AuthModal·대시보드 두 곳에 있는데
+  // 둘 다 무엇이 열려 있는지 모르므로, **화면 상태를 아는 여기가** 계속 적어 둔다.
+  // (실제 저장은 로그인 버튼이 떠나기 직전에 `rememberCurrentView()` 로 스냅샷한다.)
+  // ⚠ 어느 화면이 '지금 보고 있는 것'인지는 **순서가 곧 계약**이라 순수 함수(viewIntentRestore)로 내렸다.
+  //   여기에 인라인으로 쓰던 시절, 이벤트 페이지의 로그인 버튼이 `setEventOpen(false)` 를 먼저 부르는 바람에
+  //   스냅샷이 `kind:'tab'` 으로 덮여 로그인 왕복 뒤 홈에 떨어졌다 — 그런데 실패하는 테스트가 하나도 없었다.
+  useEffect(() => {
+    setCurrentView(currentViewFor({
+      eventOpen, eventSlug,
+      openPostId: openPost?.id ?? null,
+      openScheduleId: openSchedule?.id ?? null,
+      openVenueId,
+      activeTab,
+    }));
+  }, [eventOpen, eventSlug, openPost, openSchedule, openVenueId, activeTab]);
+
+  // 로그인이 성립한 순간 **한 번만** 복원한다(의도는 1회 소비·10분 만료).
+  // ⚠ 복원은 '보기'까지다 — 좋아요·예약·이용권 소비 같은 **행동은 다시 실행하지 않는다.**
+  //   사용자가 지시하지 않은 쓰기가 되기 때문이다.
+  const restoredViewRef = useRef(false);
+  useEffect(() => {
+    if (!user || restoredViewRef.current) return;
+    restoredViewRef.current = true;
+    const a = restoreActionFor(takeViewIntent(), (id) => (TAB_IDS as readonly string[]).includes(id));
+    if (!a) return;
+    if (a.open === 'post') setPendingPostId(a.id);          // 기존 딥링크 경로가 단건 조회까지 처리한다
+    else if (a.open === 'schedule') openScheduleById(a.id);
+    else if (a.open === 'venue') setOpenVenueId(a.id);
+    // 이벤트는 **판을 여는 데까지**다. 고르던 카드는 담지도 않고 열지도 않는다 —
+    // 로그인했더니 참여권이 한 장 줄어 있으면 그건 복원이 아니라 사용자가 지시하지 않은 쓰기다.
+    else if (a.open === 'event') openEvent(a.id);
+    else if (a.open === 'tab') setActiveTab(a.id as TabId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null); // 약관·정책 모달
   const [supportOpen, setSupportOpen] = useState(false); // 1:1 고객센터 문의
   const [voucherWalletOpen, setVoucherWalletOpen] = useState(false);
@@ -1523,6 +1702,9 @@ export default function App() {
       // 어느 응답이든 한 번 왔으면 스켈레톤은 걷고, 화면은 스냅샷/직전 성공값을 보여준다(기존 동작).
       .finally(() => setSchedulesLoaded(true));
   }, [posterDeleteQ]);
+  /** 실패 카드의 [다시 시도] — 일정 탐색(LoadErrorCard)과 홈이 **같은 조리법**을 쓴다.
+   *  인라인 화살표로 내리면 HomeTab prop 참조가 매 렌더 바뀐다(§5-B ③ 와 같은 이유). */
+  const retrySchedulesCb = useCallback(() => { setSchedulesLoaded(false); reloadSchedules(); }, [reloadSchedules]);
   // 당겨서 새로고침(유튜브·당근) — 최상단에서 아래로 56px+ 당기면 갱신
   // [DS] MO-4: 드래그 값은 React 상태 밖(§20.5 #2) — 예전엔 touchmove 마다 setPtr 로
   // App 전체가 프레임당 리렌더됐고, in-flow height 인디케이터가 리스트 전체를 매 프레임 밀었다.
@@ -1586,8 +1768,9 @@ export default function App() {
   // 조회 실패를 [] 로 두면 게시판이 '첫 게시글을 남겨보세요'(빈 상태)로 위장한다 — 실패는 상태로 올린다.
   //  직전에 성공한 목록은 지우지 않는다(오프라인에서 읽던 글이 사라지지 않게).
   const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); setPostsErr(null); writeSnap('posts', v); }).catch((e) => setPostsErr(e)); }, []);
-  const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
-  const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); writeSnap('notices', v); setNoticesLoaded(true); }).catch(() => {}); }, []);
+  const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => toast.show('댓글을 불러오지 못했습니다', 'error')); }, [toast]); // handleDeleteComment 의 실패 복원이 이 재조회에 기댄다 — 삼키면 화면엔 지워진 댓글이 서버엔 남는다(reloadVenues 와 같은 형태)
+  // N07(2026-09-13, 리드 승인): 공지 조회 실패를 삼키지 않고 noticesErr 로 내려 CommunityTab·MarketplaceTab 이 '없음' 과 가른다(DealerCommunity 와 같은 모양).
+  const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); setNoticesErr(null); writeSnap('notices', v); setNoticesLoaded(true); }).catch((e: unknown) => setNoticesErr(e)); }, []);
   // 홈 상단 배너(home_banners) — 관리자가 등록한 것만. 비면 PosterCarousel 이 기존 하드코딩으로 폴백한다.
   // 스냅샷 캐시를 쓰는 이유: 첫 화면 최상단이라 늦게 도착하면 캐러셀이 통째로 밀린다(CLS).
   const [homeBanners, setHomeBanners] = useState<HomeBannerFeed>(() => readSnap<HomeBannerFeed>('home-banners') ?? { banners: [], configured: false });
@@ -1624,7 +1807,8 @@ export default function App() {
       } else if (my === schedReqRef.current) setSchedulesError(sr.reason);
       setSchedulesLoaded(true); // 스켈레톤은 가드하지 않는다(reloadSchedules 의 finally 와 같은 이유)
       if (vr.status === 'fulfilled') { setVenues((prev) => (sameJson(prev, vr.value) ? prev : vr.value)); writeSnap('venues', vr.value); setVenuesLoaded(true); }
-      if (nr.status === 'fulfilled') { setNotices(nr.value); writeSnap('notices', nr.value); setNoticesLoaded(true); }
+      if (nr.status === 'fulfilled') { setNotices(nr.value); setNoticesErr(null); writeSnap('notices', nr.value); setNoticesLoaded(true); }
+      else setNoticesErr(nr.reason);
     });
     // posterDeleteQ 는 useMemo([]) 안정 참조 — 의존성에 넣어도 부팅 1회 그대로다
   }, [posterDeleteQ]);
@@ -1639,6 +1823,15 @@ export default function App() {
   // UX-1: 진행 중 클락 원본 — '지금 등록 되나' 판정을 browse 카드·상세로 승격(추가 네트워크 0, 기존 조회 재사용)
   const [liveClocks, setLiveClocks] = useState<ClockState[]>([]);
   const [clocksLoaded, setClocksLoaded] = useState(false); // 홈 '지금 등록 가능' 예약 접힘 판단
+  // 클락 재조회 **정본 하나** — 배지(liveCount)와 판정 원본(liveClocks)을 **같은 응답에서** 함께 쓴다.
+  // 두 setter 가 갈라지면 그 순간 배지와 본문이 서로를 반박한다(F5). 실패는 조용히 무시: 이미 받은
+  // 배열을 비우면 '진행 중 0' 이라는 사실이 아닌 화면이 된다.
+  const refreshClocks = useCallback(() => {
+    clockMod().then((m) => m.getRunningClocks())
+      .then((cs) => { setLiveCount(cs.length); setLiveClocks(cs); })
+      .catch(() => {});
+  }, []);
+  refreshClocksRef.current = refreshClocks;
   // 16-1 '이어서 하기' — 최근 방문 매장 1곳(my_visited_venues 재활용, 신규 쿼리 0)
   const [recentVenue, setRecentVenue] = useState<{ venueId: string; venueName: string | null } | null>(null);
   useEffect(() => {
@@ -1753,6 +1946,8 @@ export default function App() {
     // alive 가드: A 세션으로 나간 조회가 로그아웃→B 로그인 뒤에 도착하면 B 의 목록(배지·패널·내 정보 미리보기)을
     // A 의 알림 50건으로 덮었다. 계정 전환은 이 이펙트만 다시 돌리므로 여기가 그 레이스의 정본이다.
     let alive = true;
+    // 계정이 바뀌는 즉시 갱신한다 — Realtime 재조회·읽음 실패 재조회가 이 값으로 늦은 응답을 거른다.
+    uidRef.current = user?.id ?? null;
     if (user) getMyNotifications().then((ns) => { if (alive) setNotifications(ns); }).catch(() => {});
     else setNotifications([]);
     return () => { alive = false; };
@@ -1768,8 +1963,29 @@ export default function App() {
     let alive = true;
     const load = () => myUnreadMessageCount().then((n) => { if (alive) setUnreadMsgs(n); }).catch(() => {});
     load();
-    const t = setInterval(load, 90_000);
-    return () => { alive = false; clearInterval(t); };
+    // [§5-B] 숨은 탭에서는 폴링을 돌리지 않는다 — 게이트가 없을 때 사용자당 시간당 40요청이 백그라운드에서 나갔다.
+    //
+    // ⚠ 게이트만 걸면 **숨은 동안 온 쪽지가 배지에서 사라진다**(기능 소실). 재동기화가 반드시 한 쌍이다.
+    //   처음엔 아래 useVisibilityRefresh 에 얹었는데, **독립 검증에서 반증됐다**:
+    //   그 훅은 20초 스로틀이라, 20초 안에 두 번 오가고 그 사이에 틱이 숨은 채 지나가면
+    //   **복귀 재조회가 스로틀에 삼켜져 배지가 94초를 더 낡았다**(최대 낡음 90초 → 180초. 실브라우저 재현).
+    //   스로틀을 소진하는 것은 다른 소비자가 아니라 **직전 복귀 자신**이라 피할 수 없다.
+    //   카톡↔앱을 빠르게 오가는 모바일(사용자의 99%)에서 흔한 패턴이다.
+    //
+    //   그래서 **건너뛴 틱을 기억**한다. 리스너는 그때만 발사하므로 '같은 복귀에 두 번 조회'가 생기지 않는다 —
+    //   이게 별도 리스너를 피하려던 원래 이유였는데, 조건을 붙이면 그 이유가 성립하지 않는다.
+    let missedTick = false;
+    const t = setInterval(() => {
+      if (document.hidden) { missedTick = true; return; }
+      load();
+    }, 90_000);
+    const onShow = () => {
+      if (document.hidden || !missedTick) return;   // 건너뛴 적이 없으면 아무것도 하지 않는다
+      missedTick = false;
+      load();
+    };
+    document.addEventListener('visibilitychange', onShow);
+    return () => { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -1783,7 +1999,13 @@ export default function App() {
   //   (다른 탭 데이터는 그 탭으로 이동할 때 어차피 최신화된다 + 실시간 구독이 이미 돌고 있다)
   useVisibilityRefresh(() => {
     // 알림은 탭과 무관하게 항상 — 뱃지 숫자가 틀리면 바로 눈에 띈다(가볍기도 하다)
-    if (user) getMyNotifications().then(setNotifications).catch(() => {});
+    if (user) {
+      getMyNotifications().then(setNotifications).catch(() => {});
+      // ⚠ 쪽지 미읽음 카운트는 **여기서 받지 않는다.** 한때 여기 있었는데 독립 검증에서 반증됐다 —
+      //   이 훅의 20초 스로틀이 복귀 재조회를 삼켜 배지가 최대 180초까지 낡았다(HEAD 는 90초).
+      //   지금은 위 폴링 이펙트가 '건너뛴 틱'을 기억했다가 복귀 때 스로틀 없이 한 번 메운다.
+      //   여기서 다시 받으면 같은 복귀에 두 번 조회하게 된다.
+    }
     switch (activeTab) {
       case 'home':
         // 홈 배너 — 홈 탭은 언마운트되지 않아(display 토글) 재조회가 없으면 부팅 때 받은 목록을
@@ -1793,7 +2015,7 @@ export default function App() {
       case 'browse':
       case 'live':
       case 'my-store':
-        clockMod().then((m) => m.getRunningClocks()).then((cs) => { setLiveCount(cs.length); setLiveClocks(cs); }).catch(() => {});
+        refreshClocks();
         reloadSchedules(); reloadVenues(); reloadNotices();
         break;
       case 'community':
@@ -1813,20 +2035,29 @@ export default function App() {
       default:
         break;
     }
-  }, [activeTab, user, isAdmin, reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
+  }, [activeTab, user, isAdmin, refreshClocks, reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
 
   // 알림 실시간 수신(신규/읽음)
   useEffect(() => {
     if (!user) return;
-    const reload = () => getMyNotifications().then(setNotifications).catch(() => {});
+    let alive = true;
+    const forUid = user.id;
+    // ⚠ N01: 늦게 도착한 A 의 알림이 B 화면을 덮지 않게 한다. 구독 해제(alive)와 계정 대조를 함께 본다.
+    const reload = () => getMyNotifications()
+      .then((ns) => { if (alive && uidRef.current === forUid) setNotifications(ns); })
+      .catch(() => {});
     const ch = supabase
       .channel(`notif:${user.id}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
         reload)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [user]);
+    return () => { alive = false; supabase.removeChannel(ch); };
+    // ⚠ [user] 객체 의존이면 포인트·출석 반영으로 `user` 참조가 갈릴 때마다 채널이 teardown→재연결되고
+    //   그때마다 getMyNotifications() 가 한 번씩 더 나갔다. 위 `:1209` 의 바인요청 구독이 같은 churn 을
+    //   `user?.id` 로 이미 고쳐 뒀는데 여기만 남아 있었다. 재구독이 필요한 조건은 **계정이 바뀔 때**뿐이다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // 일정(포스터/게임) 실시간 동기화 — 다른 기기/사용자의 등록·수정·삭제 즉시 반영
   // #7 일정 실시간 — 700ms 디바운스로 변경 폭주 시 전체 refetch 를 1회로 합침(동시접속 팬아웃 완화).
@@ -1943,8 +2174,8 @@ export default function App() {
             const v = x.venueId ? venueById.get(x.venueId) : undefined;
             return v && v.lat != null && v.lng != null ? haversineKm(myPos.lat, myPos.lng, v.lat, v.lng) : Infinity;
           };
-          const dd = dOf(a) - dOf(b);
-          if (dd !== 0 && Number.isFinite(dd)) return dd;
+          // 한쪽만 좌표를 모를 때 거리 비교를 건너뛰던 결함(N08)은 이 함수 안에서 막는다.
+          return compareByDistanceThenStart(a, b, dOf);
         }
         return compareByStartThenBoost(a, b);
       });
@@ -1957,8 +2188,40 @@ export default function App() {
     const v = sc.venueId ? venueById.get(sc.venueId) : undefined;
     return v && v.lat != null && v.lng != null ? haversineKm(myPos.lat, myPos.lng, v.lat, v.lng) : undefined;
   }, [nearSort, myPos, venueById]);
+  // F3(2026-09-13) — 홈의 '마감까지 N분' 이 **memo 평가 시점에 얼어붙었다.**
+  //
+  //   `buildRegInfoMap(liveClocks, schedules)` 은 세 번째 인자(nowMs)를 기본값 `Date.now()` 로 받는데,
+  //   홈에 머무는 동안 liveClocks·schedules 가 둘 다 안 바뀐다(부팅 1회 + 복귀 재조회는 browse|live|my-store
+  //   분기에만 있다). 그래서 memo 가 재실행되지 않고, **이미 마감된 대회가 '지금 등록 가능 · 마감까지 70분'**
+  //   으로 남았다.
+  //
+  //   ⚠ 낡은 것은 클락 **데이터**가 아니라 memo 의 **now** 다. `effectiveLevel` 은 running 클락을 절대
+  //     `endsAt` 기준으로 전진시키므로, **신선한 now 만 있으면 카운트다운은 저절로 맞다.**
+  //   ⚠ '스케줄에 절대 마감시각(ISO)을 박아 두고 벽시계로 뺀다' 안은 **채택하지 않았다** — 일시정지 클락에는
+  //     절대 마감시각이라는 것이 없어서, 정지된 대회를 벽시계로 깎아 '마감' 이라고 거짓말하게 된다
+  //     (`lib/clockLevel.effectiveLevel` 은 running=false 면 nowMs 를 아예 읽지 않는다. 회귀: regStatus.test ⑤).
+  //
+  //   그래서 **now 만** 저빈도로 갈아 끼운다. 분 단위 표시라 30초면 최대 지연이 표시 단위 이하다.
+  //   ⚠ 숨은 탭에서는 돌지 않는다(§5-A 전면 게이트). 게이트만 넣으면 복귀 순간이 낡으므로 **재동기화가 한 쌍**이다 —
+  //     여기서는 건너뛴 틱을 기억할 필요조차 없다: now 는 누적값이 아니라 '지금 몇 시냐' 하나뿐이라
+  //     복귀 때 한 번 새로 읽으면 그것으로 완전히 최신이다.
+  const [regNow, setRegNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (activeTab !== 'home') return;   // 홈에 **보이는 동안만** — 다른 탭은 복귀 재조회가 클락째로 갈아 끼운다
+    // 같은 30초 칸 안이면 **state 를 건드리지 않는다**. 탭 진입·복귀가 겹치면 그때마다 새 Map 이 만들어져
+    // 화면의 모든 카드가 재렌더되는데, 표시 단위가 분이라 그 렌더에는 바뀌는 글자가 하나도 없다.
+    const bump = () => setRegNow((prev) => (Math.floor(Date.now() / 30_000) === Math.floor(prev / 30_000) ? prev : Date.now()));
+    bump();                             // 진입 즉시 한 번(숨어 있던 동안 흐른 시간을 여기서 메운다)
+    const t = setInterval(() => {
+      if (document.hidden) return;
+      bump();
+    }, 30_000);
+    const onShow = () => { if (!document.hidden) bump(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
+  }, [activeTab]);
   // UX-1: scheduleId → 레지 실측 상태(클락 기반). 클락 없는 대회는 맵에 없다 → 카드·모달이 기존 추정으로 폴백.
-  const regInfoBySchedule = useMemo(() => buildRegInfoMap(liveClocks, schedules), [liveClocks, schedules]);
+  const regInfoBySchedule = useMemo(() => buildRegInfoMap(liveClocks, schedules, regNow), [liveClocks, schedules, regNow]);
   // 🎯 내 토너 — 오늘 승인된 내 바인의 게임 목록(라이브 탭 참가자 시점 카드)
   const myApprovedGames = useMemo(() => myBuyinReqs
     .filter((r) => r.status === 'approved')
@@ -2226,7 +2489,7 @@ export default function App() {
   const ADOPT = { adoptable: true } as const;
   useBackClose(openSchedule !== null, closeSchedule, ADOPT);
   useBackClose(openVenueId !== null, () => setOpenVenueId(null), ADOPT);
-  useBackClose(openPost !== null, () => setOpenPost(null), ADOPT);
+  useBackClose(openPost !== null, closePost, ADOPT);
   useBackClose(openListing !== null, () => setOpenListing(null), ADOPT);
   useBackClose(openNotice !== null, () => setOpenNotice(null), ADOPT);
   useBackClose(posterFormTarget !== null, () => setPosterFormTarget(null), ADOPT);
@@ -2239,7 +2502,9 @@ export default function App() {
   // 참가(바인) 게임 선택 시트는 지금까지 뒤로가기 겹이 아예 없었다 — 이 화면에서 누른
   // 뒤로가기는 시트가 아니라 그 아래 탭을 닫아 홈으로 튀었다(순수 이득 케이스).
   useBackClose(buyinPick !== null, () => setBuyinPick(null), ADOPT);
-  useBackClose(eventOpen, () => setEventOpen(false));
+  // ADOPT 가 빠져 있었다(이웃은 전부 붙어 있었다). EventPage 는 lazy 라 '청크가 늦게 도착한 사이의 뒤로가기'
+  //   조건에 그대로 해당한다 — 그 창에서 누른 뒤로가기는 이벤트가 아니라 아래 탭을 닫아 홈으로 튀었다.
+  useBackClose(eventOpen, () => setEventOpen(false), ADOPT);
 
   // 로고 클릭 → 홈(메인)으로 + 모든 모달/패널 닫기 (오너 지시 2026-08-27: 일정탐색 아님)
   const handleHome = useCallback(() => {
@@ -2249,7 +2514,7 @@ export default function App() {
     setOpenVenueId(null);
     setOpenListing(null);
     setOpenNotice(null);
-    setOpenPost(null);
+    setOpenPost(null); setPostNav(null);
     setPosterFormTarget(null);
     setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null, budget: null });
     tabScrollRef.current.set('browse', 0); // 홈 = 처음부터 — 복원 로직이 옛 위치로 되돌리지 않게
@@ -2261,8 +2526,14 @@ export default function App() {
     setNotifications((prev) =>
       prev.map((n) => ids.includes(n.id) ? { ...n, read: true } : n),
     );
-    // 실패 시 서버 상태로 재동기화 — 배지가 사라졌다 되살아나는 왕복 방지
-    markNotificationsRead(ids).catch(() => { getMyNotifications().then(setNotifications).catch(() => {}); });
+    // 실패 시 서버 상태로 재동기화 — 배지가 사라졌다 되살아나는 왕복 방지.
+    // ⚠ N01: 재조회가 늦게 도착하는 사이 계정이 바뀌었으면 그 목록은 남의 것이다. 대조하고 버린다.
+    const forUid = uidRef.current;
+    markNotificationsRead(ids).catch(() => {
+      getMyNotifications()
+        .then((ns) => { if (uidRef.current === forUid) setNotifications(ns); })
+        .catch(() => {});
+    });
   }, []);
 
   // 알림 클릭 → 해당 페이지로 이동
@@ -2323,34 +2594,46 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openScheduleById, isAdmin, toast]);
 
+  // ⚠ N04: 매장 Q&A·요강 댓글도 게시글 댓글과 **같은 계약**이다 — 성공을 기다려 돌려주고, 실패는 던진다.
+  //   입력창을 비울지 말지는 CommentThread 가 이 Promise 로 판단한다.
+  //   여기서 조용히 삼키면(fire-and-forget) 실패해도 입력이 지워져 유저가 쓴 글이 사라진다.
+  //   한 곳만 고치면 나머지가 그대로 남으므로 세 경로(게시글·매장·요강)를 같은 모양으로 맞춘다.
   const handleSubmitVenueComment = useCallback(
-    (venueId: string, content: string, parentId?: string) => {
+    async (venueId: string, content: string, parentId?: string): Promise<void> => {
       if (!user) return;
-      addComment({
-        venueId, parentId,
-        userId: user.id, userName: user.name, userRole: user.role,
-        isOwner: user.role === 'venue_owner' && user.venueId === venueId,
-        content,
-      })
-        .then((saved) => setComments((prev) => [saved, ...prev]))
+      try {
+        const saved = await addComment({
+          venueId, parentId,
+          userId: user.id, userName: user.name, userRole: user.role,
+          isOwner: user.role === 'venue_owner' && user.venueId === venueId,
+          content,
+        });
+        setComments((prev) => [saved, ...prev]);
+      } catch (err) {
         // 사유를 버리면 제재된 회원이 왜 막혔는지 모른 채 계속 재시도한다(PostDetailModal 과 같은 처리).
-        .catch((err) => toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error'));
+        toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error');
+        throw err;   // 입력 보존은 호출부(CommentThread)가 이 예외로 판단한다
+      }
     },
     [user, toast],
   );
 
   const handleSubmitScheduleComment = useCallback(
-    (scheduleId: string, content: string, parentId?: string) => {
+    async (scheduleId: string, content: string, parentId?: string): Promise<void> => {
       if (!user) return;
       const s = schedules.find((x) => x.id === scheduleId);
-      addComment({
-        scheduleId, parentId,
-        userId: user.id, userName: user.name, userRole: user.role,
-        isOwner: user.role === 'venue_owner' && s?.ownerId === user.id,
-        content,
-      })
-        .then((saved) => setComments((prev) => [saved, ...prev]))
-        .catch((err) => toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error'));
+      try {
+        const saved = await addComment({
+          scheduleId, parentId,
+          userId: user.id, userName: user.name, userRole: user.role,
+          isOwner: user.role === 'venue_owner' && s?.ownerId === user.id,
+          content,
+        });
+        setComments((prev) => [saved, ...prev]);
+      } catch (err) {
+        toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error');
+        throw err;
+      }
     },
     [user, schedules, toast],
   );
@@ -2411,29 +2694,50 @@ export default function App() {
   }, [toast]);
 
   // 관리자: 회원 업데이트 (승인/정지/해제) — 서버 반영
-  const handleUpdateUser = useCallback((id: string, patch: Partial<User>) => {
+  /**
+   * 관리자 회원 상태 변경. **서버 완료를 기다려 돌려준다**(결함 A, 2026-09-12).
+   *
+   * 예전엔 `void` 라 호출부가 기다릴 방법이 없었고, `UserManagementTab` 이
+   * `onUpdate(...)` 직후 "영구 정지 · 안내 메일 발송" 토스트를 띄웠다 —
+   * **서버 왕복 전이라 실패해도 성공으로 보였고**, 실패 토스트가 뒤늦게 겹쳐 떠 운영자가 결과를 오판했다.
+   * 이제 성공 토스트는 이 Promise 가 resolve 된 뒤에만 뜬다.
+   *
+   * 실패 시 여기서 **서버 메시지 토스트 + 목록 재동기화**(낙관적 패치 되돌리기)를 하고 **다시 던진다** —
+   * 호출부는 성공 표시를 하지 않고 입력을 보존하면 된다(에러 토스트를 두 번 띄우지 않는다).
+   */
+  const handleUpdateUser = useCallback(async (id: string, patch: Partial<User>): Promise<UserUpdateResult> => {
     setUsers((prev) => prev.map((u) => u.id === id ? { ...u, ...patch } : u));
-    if (patch.approved !== undefined) {
-      // 실패 시 낙관적 패치를 서버 상태로 재동기화 — 승인 실패가 '승인됨'으로 남는 불일치 방지
-      approveOwner(id, patch.approved).catch(() => { toast.show('승인 처리에 실패했습니다', 'error'); loadUsers(); });
-    }
-    if (patch.status !== undefined) {
-      // 강제 탈퇴만 전용 RPC 로 간다 — profiles 세 컬럼 PATCH 로는 개인정보 파기·세션 종료·
-      // 재가입 차단이 하나도 일어나지 않는다(20260911k). 호출부가 여럿이어도 이 한 곳이 갈림길이다.
-      const done = patch.status === 'withdrawn'
-        ? adminWithdrawUser(id, patch.sanctionReason ?? '')
-        : updateUserStatus(id, patch.status, patch.suspendedUntil, patch.sanctionReason);
+    try {
+      if (patch.approved !== undefined) {
+        await approveOwner(id, patch.approved);
+      }
+      if (patch.status !== undefined) {
+        // 강제 탈퇴만 전용 RPC 로 간다 — profiles 세 컬럼 PATCH 로는 개인정보 파기·세션 종료·
+        // 재가입 차단이 하나도 일어나지 않는다(20260911k). 호출부가 여럿이어도 이 한 곳이 갈림길이다.
+        if (patch.status === 'withdrawn') {
+          await adminWithdrawUser(id, patch.sanctionReason ?? '');
+          return { mailSent: null };   // 전용 RPC 경로는 메일 결과를 돌려주지 않는다
+        }
+        const r = await updateUserStatus(id, patch.status, patch.suspendedUntil, patch.sanctionReason);
+        return { mailSent: r.mailSent };
+      }
+      return { mailSent: null };
+    } catch (e) {
       // 실패는 반드시 보인다 — 서버 메시지를 그대로 띄우고(예: RPC 미적용·매장 대표) 목록을 서버와
-      // 재동기화해 낙관적으로 바뀐 '강제탈퇴' 배지를 원상 복구한다.
-      done.catch((e) => { toast.show(e instanceof Error ? e.message : '상태 변경에 실패했습니다', 'error'); loadUsers(); });
+      // 재동기화해 낙관적으로 바뀐 배지를 원상 복구한다. 그리고 **던져서** 호출부가 성공 표시를 막게 한다.
+      toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
+      loadUsers();
+      throw e;
     }
-  }, [toast]);
+  }, [toast, loadUsers]);
 
   // 관리자/작성자: 게시글 삭제 — 서버 삭제 + 활동로그 기록(권한은 RLS가 강제)
   const handleDeletePost = useCallback((id: string) => {
     const target = posts.find((p) => p.id === id);
     setPosts((prev) => prev.filter((p) => p.id !== id));
     setOpenPost((cur) => (cur?.id === id ? null : cur));
+    // ⚠ 무조건 setPostNav(null) 이 아니다 — 이 줄은 realtime 으로 **남의 글**이 지워질 때도 돈다. 스냅샷에서 그 글만 뺀다(이웃만 갱신).
+    setPostNav((n) => dropFromCtx(n, id));
     deletePost(id)
       .then(() => {
         logActivity({ action: 'delete', targetType: 'post', targetId: id, targetOwnerId: target?.userId, targetSummary: target?.title || target?.content, actorName: user?.name });
@@ -2684,7 +2988,17 @@ export default function App() {
   // 헤더·탭바에 인라인 화살표를 넘기면 memo 를 걸어도 매 렌더 무효 — 참조 고정 콜백으로.
   const openLoginCb = useCallback(() => setAuthOpen(true), []);
   // 헤더 검색 버튼 제거(오너 지시) — 진입은 Cmd/Ctrl+K 단축키만 잔존
-  const pcTabs = useMemo(() => tabs.filter((t) => t.id !== 'market'), [tabs]);
+  // PC GNB — 이벤트는 **상태와 무관하게 늘 있다**(0개·조회 실패·소진·비로그인 어느 쪽이어도).
+  //   진행 중인 이벤트가 없으면 판이 '진행 중인 이벤트가 없어요'를 말한다. 그건 빈 화면이 아니라 답이다.
+  //   하단 5칸은 건드리지 않는다 — MobileTabBar 가 mappedActive 로 홈에 접는다(browse 선례).
+  const pcTabs = useMemo(
+    () => [...tabs.filter((t) => t.id !== 'market'), { id: 'event' as TabId, label: TAB_LABEL.event }],
+    [tabs],
+  );
+  /** GNB 에서 이벤트 칸을 눌렀을 때만 오버레이로 빠진다 — 나머지는 평소의 탭 전환. */
+  const gotoTabOrEvent = useCallback((t: TabId) => { if (t === 'event') openEvent(); else changeTab(t); }, [changeTab, openEvent]);
+  /** 이벤트 판이 떠 있는 동안 내비 활성 표시도 이벤트로 — 어디 있는지 모르는 화면을 만들지 않는다. */
+  const navActive: TabId = eventOpen ? 'event' : activeTab;
   const tabDot = useMemo(() => ({ community: commHasNew }), [commHasNew]);
   const tabCount = useMemo(() => ({ live: liveCount }), [liveCount]);
   // 전면(페이지성) 오버레이 열림 여부 — MobileTabBar 가 개폐 순간 잔존 hidden 을 리셋한다.
@@ -2740,9 +3054,55 @@ export default function App() {
   }, []);
   const marketSlot = useMemo(() => (
     <MarketplaceTab listings={listings} loading={!marketLoaded} error={marketError} notices={marketNotices}
+      noticesError={noticesErr} onRetryNotices={reloadNotices}
       onSelect={setOpenListing} onSelectNotice={setOpenNotice} onCreate={handleMarketCreate}
       canWriteNotice={isAdmin} onWriteNotice={handleWriteNotice} onListingsChanged={handleListingsChanged} />
-  ), [listings, marketLoaded, marketError, marketNotices, isAdmin, handleMarketCreate, handleWriteNotice, handleListingsChanged]);
+  ), [listings, marketLoaded, marketError, marketNotices, noticesErr, reloadNotices, isAdmin, handleMarketCreate, handleWriteNotice, handleListingsChanged]);
+
+  // ── [§5-B] '내 정보'(CustomerDashboardPage)는 **상주**다 ──────────────────────
+  //   한 번 열면 언마운트하지 않는다(위 keep-alive 계약). 그래서 닫혀 있어도 App 이 리렌더될 때마다
+  //   1,000줄짜리 트리가 통째로 다시 렌더됐다 — `unread={notifications.filter(...)}` 가 **매 렌더 새 배열**이라
+  //   자식에 memo 를 걸어도 애초에 히트할 수 없었다. 배열만 useMemo 로 덮는 것은 증상 가리기다:
+  //   나머지 8개 prop 이 전부 인라인 화살표라 그것들만으로도 매번 깨진다.
+  //   → 핸들러를 전부 안정화하고(이 파일이 이미 쓰는 `userRefForGate` 조리법), 자식을 memo 로 잠근다.
+  //   ⚠ 동작은 한 줄도 바꾸지 않았다 — 본문은 인라인이던 것 그대로다.
+  const notificationsRef = useRef(notifications);
+  useEffect(() => { notificationsRef.current = notifications; });
+  const unreadNotifList = useMemo(() => notifications.filter((n) => !n.read), [notifications]);
+  const closeMeCb = useCallback(() => withViewTransition(
+    // 닫힐 때는 커밋 콜백 안에서 마커를 내린다 — new 스냅샷에 이름 붙은 크롬이 들어가야
+    // 헤더·GNB 가 root 애니(블러·슬라이드)에 딸려가지 않는다('상시 크롬은 흔들리지 않는다' 계약).
+    () => { document.documentElement.removeAttribute('data-overlay'); flushSync(() => setVoucherWalletOpen(false)); },
+    () => { document.documentElement.removeAttribute('data-overlay'); setVoucherWalletOpen(false); },
+  ), []);
+  const handleMeOpenNotification = useCallback((id: string) => {
+    const n = notificationsRef.current.find((x) => x.id === id);
+    if (!n) { setVoucherWalletOpen(false); return; }
+    handleMarkRead([n.id]);
+    // [F09-c] 포스터 상세로 가는 알림은 openScheduleById 가 대시보드 개폐까지 맡는다 —
+    //   못 열면 '내 정보' 에 그대로 남고, 열었다가 닫으면 홈이 아니라 '내 정보' 로 돌아온다.
+    if (!/^\/schedules\//.test(n.link ?? '')) setVoucherWalletOpen(false);
+    handleNavigateNotification(n, { returnToMe: true });
+  }, [handleMarkRead, handleNavigateNotification]);
+  // [F09-b] 예약 행 → 그 대회 상세(scheduleId 로만). 닫으면 다시 '내 정보' 로.
+  const handleMeOpenSchedule = useCallback((sid: string, vid?: string | null) => (
+    openScheduleById(sid, { returnToMe: true, fallbackVenueId: vid })
+  ), [openScheduleById]);
+  const handleMeOpenPost = useCallback((pp: CommunityPost) => {
+    setVoucherWalletOpen(false); changeTab('community'); setOpenPost(pp);
+  }, [changeTab]);
+  const handleMeOpenLegal = useCallback((d: LegalDoc) => setLegalDoc(d), []);
+  const handleMeOpenSupport = useCallback(() => setSupportOpen(true), []);
+  // 장터·랭킹 상점은 **같은 조리법**(섹션 이벤트 + 세션 기억 + 탭 이동).
+  // 커뮤니티가 아직 안 떠 있을 수도 있어 이벤트만으로는 부족하다 → sessionStorage 가 도착 후 복원한다.
+  const goCommunitySection = useCallback((section: 'market' | 'rank') => {
+    setVoucherWalletOpen(false);
+    window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: section }));
+    try { sessionStorage.setItem('nuri:community-section', section); } catch { /* noop */ }
+    changeTab('community');
+  }, [changeTab]);
+  const handleMeOpenMarket = useCallback(() => goCommunitySection('market'), [goCommunitySection]);
+  const handleMeOpenRanking = useCallback(() => goCommunitySection('rank'), [goCommunitySection]);
 
   // ── 렌더 ──────────────────────────────────────────────────────────────
 
@@ -2753,9 +3113,13 @@ export default function App() {
     <div className={`relative z-[1] min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle${activeTab === 'my-store' ? ' xl:max-w-7xl' : ''}`}>
       {/* 아우라 후광(정적) — body 배경 위, 콘텐츠(z-1) 아래. 이 래퍼의 bg-surface-base 를 걷어낸 이유: 불투명이면 후광이 안 보인다 */}
       <div aria-hidden className="aura-bg" />
-      {/* 오프라인 배너(Phase 17-5) — 토스트(z-100)와 층 분리, 헤더 위 상시 고정 */}
+      {/* 오프라인 배너(Phase 17-5) — 토스트(z-100)와 층 분리, 헤더(z-50) 위 상시 고정.
+          ⚠ z-[52] 이지 z-[60] 이 아니다(2026-09-13, e2e post-nav ⑦ 가 4173 프로덕션 빌드에서 3/3 실패):
+            이 배너는 앱 셸(relative z-[1]) 안의 sticky 라 같은 스택 안의 전체화면 page 모달(fixed z-[55])·내 정보(z-[60])와 z 로 겨룬다.
+            60 이면 게시글 상세의 헤더 X(상단 46px) 를 덮어 닫기가 안 눌렸다(dev 5174 에선 렌더가 느려 300ms 안에 배너가 안 떠 거짓 통과).
+            헤더 위·오버레이 아래가 맞다 — 오버레이 안에서는 배너가 가려지지만 닫기가 막히는 것보다 낫고, 토스트(z-100)는 그대로 보인다. */}
       {offline && (
-        <div role="status" className="sticky top-0 z-[60] flex items-center justify-center gap-1.5 bg-amber-500/95 px-3 py-1.5 text-xs font-bold text-black">
+        <div role="status" className="sticky top-0 z-[52] flex items-center justify-center gap-1.5 bg-amber-500/95 px-3 py-1.5 text-xs font-bold text-black">
           <Icon name="wifi-off" size={14} className="shrink-0" /> 오프라인 — 저장된 정보를 보여드려요. 연결되면 자동으로 새로고침합니다.
         </div>
       )}
@@ -2823,44 +3187,19 @@ export default function App() {
           이전 계정으로 나간 늦은 응답이 새 계정 값을 덮었다. 계정이 바뀌면 새 인스턴스 — 늦은 응답은 언마운트에 떨어진다. */}
       {(voucherWalletOpen || meEverOpenedRef.current) && (
         <Suspense fallback={voucherWalletOpen ? <OverlayFallback /> : null}>
+          {/* prop 은 전부 안정 참조다(위 §5-B 블록) — 상주 컴포넌트라 memo 가 실제로 히트해야 의미가 있다. */}
           <CustomerDashboardPage key={user?.id ?? 'anon'} open={voucherWalletOpen}
-            onClose={() => withViewTransition(
-              // 닫힐 때는 커밋 콜백 안에서 마커를 내린다 — new 스냅샷에 이름 붙은 크롬이 들어가야
-              // 헤더·GNB 가 root 애니(블러·슬라이드)에 딸려가지 않는다('상시 크롬은 흔들리지 않는다' 계약).
-              () => { document.documentElement.removeAttribute('data-overlay'); flushSync(() => setVoucherWalletOpen(false)); },
-              () => { document.documentElement.removeAttribute('data-overlay'); setVoucherWalletOpen(false); },
-            )}
-            unread={notifications.filter((n) => !n.read)}
-            onOpenNotification={(id) => {
-              const n = notifications.find((x) => x.id === id);
-              if (!n) { setVoucherWalletOpen(false); return; }
-              handleMarkRead([n.id]);
-              // [F09-c] 포스터 상세로 가는 알림은 openScheduleById 가 대시보드 개폐까지 맡는다 —
-              //   못 열면 '내 정보' 에 그대로 남고, 열었다가 닫으면 홈이 아니라 '내 정보' 로 돌아온다.
-              if (!/^\/schedules\//.test(n.link ?? '')) setVoucherWalletOpen(false);
-              handleNavigateNotification(n, { returnToMe: true });
-            }}
-            // [F09-b] 예약 행 → 그 대회 상세(scheduleId 로만). 닫으면 다시 '내 정보' 로.
-            onOpenSchedule={(sid, vid) => openScheduleById(sid, { returnToMe: true, fallbackVenueId: vid })}
-            onOpenPost={(pp) => { setVoucherWalletOpen(false); changeTab('community'); setOpenPost(pp); }}
+            onClose={closeMeCb}
+            unread={unreadNotifList}
+            onOpenNotification={handleMeOpenNotification}
+            onOpenSchedule={handleMeOpenSchedule}
+            onOpenPost={handleMeOpenPost}
             initialTab={meTab}
             onReservationChange={bumpResVersion}
-            onOpenLegal={(d) => setLegalDoc(d)}
-            onOpenSupport={() => setSupportOpen(true)}
-            onOpenMarket={() => {
-              setVoucherWalletOpen(false);
-              window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: 'market' }));
-              try { sessionStorage.setItem('nuri:community-section', 'market'); } catch { /* noop */ }
-              changeTab('community');
-            }}
-            // 랭킹 상점 — 위 장터와 **같은 조리법**(섹션 이벤트 + 세션 기억 + 탭 이동).
-            // 커뮤니티가 아직 안 떠 있을 수도 있어 이벤트만으로는 부족하다 → sessionStorage 가 도착 후 복원한다.
-            onOpenRanking={() => {
-              setVoucherWalletOpen(false);
-              window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: 'rank' }));
-              try { sessionStorage.setItem('nuri:community-section', 'rank'); } catch { /* noop */ }
-              changeTab('community');
-            }} />
+            onOpenLegal={handleMeOpenLegal}
+            onOpenSupport={handleMeOpenSupport}
+            onOpenMarket={handleMeOpenMarket}
+            onOpenRanking={handleMeOpenRanking} />
         </Suspense>
       )}
 
@@ -2891,11 +3230,11 @@ export default function App() {
           언마운트해도 안전한 이유: beforeinstallprompt 참조를 모듈 스코프에서 잡아 둔다(InstallBanner.tsx). */}
       {!fullOverlayOpen && <InstallBanner />}
 
-      <TabBar tabs={pcTabs} active={activeTab} onChange={changeTab} />
+      <TabBar tabs={pcTabs} active={navActive} onChange={gotoTabOrEvent} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
-      <MobileTabBar tabs={tabs} active={activeTab} onChange={changeTab} dot={tabDot} count={tabCount}
+      <MobileTabBar tabs={tabs} active={navActive} onChange={changeTab} dot={tabDot} count={tabCount}
         onSameTap={(t) => { if (t === 'my-store') setMyStoreHomeNonce((v) => v + 1); }}
-        onOpenMe={openMeCb} overlayOpen={fullOverlayOpen} />
+        onOpenMe={openMeCb} overlayOpen={fullOverlayOpen} suppressed={openVenueId !== null} />
 
       {/* 일정 탐색 */}
       <div className="px-page-x"><StaffInviteBanner /></div>
@@ -2906,6 +3245,11 @@ export default function App() {
           <HomeTab
             schedules={schedules}
             loaded={schedulesLoaded}
+            /* §11 — 조회 실패를 '없음'으로 위장하지 않는다. 이 state 는 이미 존재했는데(일정 탐색만 소비)
+               홈에는 내려오지 않아, schedules 500 에서 홈이 '오늘 대회 0개 · 오늘·내일 예정 대회가
+               아직 없어요' 라고 말했다 — 사용자는 재시도할지 포기할지 판단할 근거를 못 받았다. */
+            schedulesError={schedulesError}
+            onRetrySchedules={retrySchedulesCb}
             clocksLoaded={clocksLoaded}
             regInfoBySchedule={regInfoBySchedule}
             onTools={() => changeTab('tools')}
@@ -2919,7 +3263,13 @@ export default function App() {
                **최소 ~300ms 유지**한다(폴백이 번쩍이는 걸 막으려는 스로틀). 그래서 청크를 미리 받아 둬도
                1회차에 283ms 빈 화면이 그대로 남았다(실측 2026-09-08: 그 구간에 긴 프레임 0 · 네트워크 0 —
                계산도 대기도 아닌 순수 스로틀이었다). 트랜지션이면 폴백 자체를 건너뛴다. */
-            onEvent={() => startTransition(() => setEventOpen(true))}
+            /* 인자 없이 부른다 — onClick 이 넘기는 MouseEvent 가 slug 자리에 들어가지 않게 */
+            onEvent={() => openEvent()}
+            /* 커뮤니티 **실제 글**(§6-1). 조회 실패(postsErr)면 빈 배열을 넘겨 홈이 섹션을 통째로 생략한다 —
+               홈에 '글이 없어요' 라고 적으면 그것도 §11 의 같은 거짓말이고, 커뮤니티 탭이 이미 제대로 말한다. */
+            posts={postsErr ? EMPTY_POSTS : posts}
+            onPost={handleMeOpenPost}
+            onCommunity={() => changeTab('community')}
           />
         </main>
       )}
@@ -3077,7 +3427,7 @@ export default function App() {
                   <ScheduleSkeletonGrid viewMode={viewMode} />
                 ) : schedulesError && schedules.length === 0 ? (
                   <LoadErrorCard error={schedulesError} what="대회 목록"
-                    onRetry={() => { setSchedulesLoaded(false); reloadSchedules(); }} />
+                    onRetry={retrySchedulesCb} />
                 ) : visibleSchedules.length === 0 && !hasActiveSearchFilter ? (
                   // P0-2(오너 진단): 0건 빈 일러스트가 화면 중앙을 차지하던 것 → 슬림 안내 1줄 +
                   // '지금 진행 중' 콘텐츠 승격. 아래 지난 대회·공지가 그 자리로 올라온다.
@@ -3296,11 +3646,12 @@ export default function App() {
             comments={comments}
             posts={posts}
             notices={communityNotices}
+            noticesError={noticesErr} onRetryNotices={reloadNotices}
             isAdmin={isAdmin}
             onWriteNotice={handleWriteNotice}
             onSelectNotice={setOpenNotice}
             onSelectVenue={handleVenueClick}
-            onSelectPost={setOpenPost}
+            onSelectPost={openPostWithNav}
             onOpenWrite={handleOpenWrite}
             onLikePost={handleLikePost}
             onDeletePost={handleDeletePost}
@@ -3441,7 +3792,13 @@ export default function App() {
           준비될 때까지 기다린다. 같은 구조를 위 CustomerDashboardPage 가 이미 쓰고 있다. */}
       <Suspense fallback={null}>
         {eventOpen && (
-          <EventPage open onClose={() => setEventOpen(false)} onLogin={() => { setEventOpen(false); setAuthOpen(true); }} />
+          /* ⚠ onLogin 은 이벤트 판을 **닫지 않는다.**
+              예전엔 `setEventOpen(false)` 를 먼저 불렀는데, 그 순간 '지금 보고 있는 화면' 스냅샷이
+              `kind:'tab'` 으로 덮여서 — AuthModal 이 구글로 떠나기 직전에 뜨는 그 스냅샷이다 —
+              로그인 왕복 뒤 이벤트가 아니라 홈에 떨어졌다. 복원 종류에 'event' 를 추가해도 순서가 그대로면 소용이 없다.
+              AuthModal 은 같은 z-[60] 을 이 뒤에 렌더하므로 위에 얹히고, 이메일 로그인처럼 떠나지 않는 경로에서는
+              닫으면 이벤트 판이 그대로 남아 있다(왕복 자체가 없어 더 낫다). */
+          <EventPage open slug={eventSlug} onClose={() => setEventOpen(false)} onLogin={() => setAuthOpen(true)} />
         )}
       </Suspense>
 
@@ -3458,9 +3815,10 @@ export default function App() {
         rating={openSchedule ? venueRatings[openSchedule.venueId] : undefined}
         regInfo={openSchedule ? regInfoBySchedule.get(openSchedule.id) : undefined}
         comments={comments}
-        onSubmitComment={(content, parentId) =>
-          openSchedule && handleSubmitScheduleComment(openSchedule.id, content, parentId)
-        }
+        onSubmitComment={async (content, parentId) => {
+          if (!openSchedule) return;
+          await handleSubmitScheduleComment(openSchedule.id, content, parentId);
+        }}
         onDeleteComment={handleDeleteComment}
         onDeletePoster={handleDeletePoster}
         onReservationChange={bumpResVersion}
@@ -3536,7 +3894,9 @@ export default function App() {
       <PostDetailModal
         open
         post={openPost}
-        onClose={() => setOpenPost(null)}
+        nav={postNav}
+        onNavigate={openPostWithNav}
+        onClose={closePost}
         onLike={handleLikePost}
         onDelete={handleDeletePost}
         venues={venues}

@@ -1,0 +1,110 @@
+---
+description: GTO 팀 — NURI SPOT·프리플랍 차트·계산기 허브·드릴. 파일 지도와 알려진 결함. GTO/도구 파일을 열 때 붙는다.
+globs: ["src/components/features/gto/**", "src/components/features/tools/**", "src/lib/spot*.ts", "src/lib/ranges*.ts", "src/lib/preflopQuiz.ts", "src/lib/nash*.ts", "src/components/features/HandGtoModal.tsx", "src/components/features/HandReplayer.tsx", "src/components/features/ICMCalculator.tsx", "src/components/features/ToolsPanel.tsx", "e2e/nuri-spot*.spec.ts"]
+alwaysApply: false
+---
+
+# GTO 팀
+
+> NURI SPOT(구조화 한 판 복기) · 프리플랍 레인지 차트 · 푸시폴드 Nash · 계산기 허브 · 드릴/오답노트 · 용어사전 · 딥 GTO · 에퀴티 엔진.
+
+> ⚠️ **이 문서의 신뢰 등급이 섞여 있다.** 아래 표기를 그대로 믿어라.
+> `[실측]` = 2026-09-12 에 코드를 돌려서 값을 확인함 · `[보고]` = 다른 에이전트가 주장했고 내가 재검증하지 않음 · `[구조]` = 파일 목록에서 읽은 사실.
+> 커뮤니티·내 매장 팀 문서와 달리 **전수 실측이 주간 한도로 중단됐다**. 처음 작업할 때 `/remap` 으로 먼저 지도를 다시 떠라.
+
+## 화면·진입점 `[구조]`
+
+- `src/components/features/gto/NuriSpotPanel.tsx` — NURI SPOT 입력 마법사(게임 → 자리·스택 → 카드·액션 → 리포트). `Pick`/`GameStep`/`SeatStep`/`STEPS`
+- `src/components/features/gto/SpotReport.tsx` — 분석 결과. `data-source-badge={evaluation.kind}` 가 e2e 셀렉터다
+- `src/components/features/gto/MySpotList.tsx` — 내 스팟 목록
+- `src/components/features/gto/GtoDeepPanel.tsx` · `GtoDeepModal.tsx` — 딥 GTO
+- `src/components/features/gto/HandReviewTool.tsx` · `HandBoardPicker.tsx` · `CardGridPicker.tsx` · `OutsFromCards.tsx` · `TdaRulesTool.tsx`
+- `src/components/features/gto/equity.worker.ts` · `equityEngine.ts` · `equityClient.ts` · `equityBands.ts` — 에퀴티(워커 오프로드)
+- `src/components/features/gto/gto.data.ts` · `gto.types.ts` · `gto.deep.data.ts` · `gto.deep.types.ts` · `gtoShare.ts`
+- `src/components/features/gto/useGtoCalculator.ts` · `useDeepGto.ts` · `useHandBoard.ts`
+- `src/components/features/ToolsPanel.tsx` — 도구 레지스트리(매장 설정에서도 재사용)
+- `src/components/features/tools/` — `PreflopTrainer` · `PostflopTrainer` · `DailyDrill` · `WrongNote` · `RangeMatrix13` · `RangeGuide` · `PushFoldChart` · `PotOddsCalc` · `OutsCalc` · `StackCalcs` · `DealCalc` · `ChipDistributor` · `BlindBuilder` · `StructureSim` · `AdvancedCalcs` · `MoreCalcs` · `GlossaryPanel` · `Term` · `SourceBadge` · `quizCards` · `calcUi`
+- `src/components/features/HandGtoModal.tsx` · `HandReplayer.tsx` · `ICMCalculator.tsx`
+
+## 로직 `[구조]`
+
+`src/lib/spot.ts`(SpotPosition·POSITION_ORDER·positionsFor·SpotReview·emptySpot·validateSpot·potBb·heroComboId·hasBlocker) ·
+`src/lib/spotEvaluate.ts`(evaluateSpot·toTablePos·DATASET_VERSION·COVERAGE_LABEL·VERDICT_LABEL) ·
+`src/lib/ranges.data.ts`(TablePos·RANGE_SCENARIOS·baseTableSize) · `src/lib/preflopQuiz.ts`(KEY_PREFIX·CHART_GROUPS·scenariosOf·makeQuiz·chartQuiz) ·
+`src/lib/snapshot.ts`(`nuri:snap:<name>:v<version>`) · `src/components/features/tools/drillPlan.ts` · `postflop.data.ts` · `glossary.data.ts` ·
+API 는 `src/api/spots.ts`.
+
+## 🔴 모르면 사고 내는 것
+
+1. **`SpotPosition` 과 `TablePos` 는 한 자리에서만 철자가 다르다 — 스팟은 `'UTG1'`, 차트는 `'UTG+1'`.** `[실측]`
+   9개 중 8개가 겹쳐서 **TypeScript 가 `spotPos === tablePos` 비교를 막지 못한다**(겹치는 멤버가 하나도 없어야 에러가 난다).
+   그래서 UTG+1 자리는 어떤 입력으로도 표에 안 걸리고 조용히 `math_only` 로 떨어졌다.
+   2026-09-12 실측 — 9인 오픈·BB 수비 둘 다 **그 자리만** math_only.
+   경계 변환 `toTablePos()`(spotEvaluate.ts)가 유일한 접점이다. `'UTG1'` 쪽을 바꾸지 마라 —
+   `post_spots.spot` jsonb·`spot_reviews`·localStorage 스냅샷에 이미 그 문자열이 저장돼 있어 옛 글이 자리 없는 스팟이 된다.
+
+2. **`positionsFor(n)` 은 9인 순서의 *꼬리*를 자른다.** `[실측]` 그래서 이름이 같은 자리는 테이블 인원과 무관하게 **뒤에 남은 사람 수가 같다**.
+   앞에서 자르도록 바꾸면 모든 차트 매칭이 조용히 어긋난다.
+
+3. **표마다 상정 인원이 다르다.** `[실측]` 얼리(UTG·UTG+1·MP) 오픈 수비 표는 9인용이다(`baseTableSize: 9`).
+   6인으로 단정하면 9인 입력에 **없는 차이를 적어** 정확 일치를 유사 스팟으로 끌어내린다.
+
+4. **defend 조회는 `hero` 도 같이 걸어야 한다.** `[실측]` defend 그룹에는 같은 `vs` 의 BB 표와 SB 표가 나란히 있다.
+   `hero === 'BB'` 조건이 없으면 **배열 순서에 기댄 우연한 정답**이 된다.
+   지금 데이터는 BB 표가 앞에 있어 조건을 빼도 **테스트가 전부 통과했다** — 그래서 조회를
+   `findDefendChart(list, villainPos)` 로 분리해 **순서를 뒤집은 사본**으로 검증한다(2026-09-12).
+
+5. **`makeQuiz(mode, retryKey?)` 는 키 복원에 실패하면 조용히 무관한 문제를 돌려준다.** `[실측]` 드릴 키는 반드시 검증해라.
+
+6. ✅ **`SpotAction.sizeBb` 는 "이번에 추가로 넣은 돈"(증분)이다 — 총액이 아니다.** `[실측]`
+   근거: `potBb()`(spot.ts:280)가 블라인드에 **모든 액션 금액을 그냥 더한다** — 레이즈가 총액이라면 팟이 부풀 것이다.
+   그래서 콜 금액은 **양쪽의 이번 스트리트 총액 차이**다:
+   `amountToCall()` = `investedThisStreet(villain) − investedThisStreet(hero)`,
+   `investedThisStreet` = 블라인드(프리플랍 BB 1 · SB `sbBb`) + 그 스트리트 증분의 합.
+
+   **2026-09-12 수정됨.** 고치기 전 두 가지가 틀렸다:
+   ① 히어로가 이미 낸 돈을 안 뺐다 — BB vs BTN 2.5x 가 `{"toCallBb":2.5,"neededEquityPct":38.5}`,
+      정답은 콜 1.5BB · **27.3%** (11포인트 과대 계산).
+   ② 빌런의 **마지막 증분**만 봐서 한 스트리트에 레이즈가 두 번 오가면 틀렸다 —
+      BTN 2.5 → BB 3벳 +8 → BTN 4벳 +22 이면 BB 가 더 넣을 돈은 15.5 다.
+
+   회귀검사 2묶음 11건. 증분을 총액으로 다루면(`+=` → `Math.max`) 3벳·4벳 건이 실패한다.
+   입력 UI 라벨도 `얼마나` → **`이번에 추가`** 로 바꿨다(NuriSpotPanel.tsx) — 총액으로 적어 넣으면 팟이 어긋난다.
+
+   ⚠ 남은 것: 멀티웨이 side pot · 미콜 베팅 반환 · 올인 처리는 아직 원장에 없다. v1 저장 스팟 adapter 도 없다.
+
+7. 🟡 **헤즈업(2인) SB 가 6맥스 SB 차트로 정규화된다.** `[실측]` `normalized_reference / 프리플랍 레인지 차트 · SB 오픈` 이 나온다.
+   스택에는 허용 밴드가 있는데 **인원수에는 밴드가 없다**. **미수정.**
+
+8. 🟡 **Nash ±1BB 폴백이 범위 안 *가장 낮은* 표를 고른다 — 가장 가까운 표가 아니라.** `[실측]`
+   9.8BB → `푸시·폴드 차트 · 9BB · 뒤 2명`(10BB 여야 함). **미수정.**
+
+9. **루트 폰트가 17px 이다.** `[실측]` 44px 히트영역은 `h-[44px]`, `h-11`(=46.75px) 아니다.
+
+10. `[보고 — 미검증]` 리플레이 → 스팟 카드 인계에서 `'undefinedundefined'` 가 생긴다(`ToolsPanel.tsx:53` 부근).
+
+11. `[보고 — 미검증]` `NuriSpotPanel.tsx:87` 의 스트리트 유도 조기 반환이 보드가 미리 채워진 스팟을 영구히 막는다.
+
+12. `[보고 — 미검증]` SB 수비 7개 표와 3벳 23개 표가 UI 에서 도달 불가.
+
+13. `[보고 — 미검증]` `api/spots.ts:114` 가 영문 스트리트 식별자를 공유 글에 흘린다.
+
+14. `[보고 — 미검증]` `gtoContract.test.ts:214` 에 빈 단언이 있고, `spot.test.ts:99` 가 villainPos 가드를 0 커버리지로 둔다.
+
+## 법적 하드 가드레일 (§8 — 어기면 서비스 리스크)
+
+- **GTO Wizard·PioSolver 등 타 서비스의 유료 데이터·문구·디자인·에셋을 복제하지 않는다.**
+- **가짜 solver 수치나 가짜 EV 를 만들지 않는다.** 근거 없는 숫자를 내느니 `math_only` 로 정직하게 떨어뜨려라.
+- 출처 배지(`SourceBadge`)는 장식이 아니라 계약이다 — 어떤 근거로 나온 값인지 화면이 말해야 한다.
+- TDA 룰 전문 번역 게시는 금지(BLOCKED #16, 오너 결정 대기).
+
+## 검증 명령
+
+```bash
+npx vitest run src/lib/spotEvaluate.test.ts src/lib/spot.test.ts src/lib/ranges.test.ts src/lib/preflopQuiz.test.ts
+npx vitest run src/components/features/tools src/components/features/gto
+npx playwright test e2e/nuri-spot.spec.ts e2e/nuri-spot-board.spec.ts
+npm run build
+```
+
+마무리는 전체 게이트 — `/ship`.

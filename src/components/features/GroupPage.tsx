@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
+import { useDialogFocus } from '../atoms/useDialogFocus';
 import Avatar from '../atoms/Avatar';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 import { relativeTime } from './MarketplaceTab';
@@ -59,6 +60,11 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
     lockScroll(); // 뷰포트 스크롤러는 html — 공용 유틸로 배경 스크롤 잠금
     return () => { unlockScroll(); };
   }, [open, group]);
+  // U06(2026-09-12): VenuePage 와 같은 계약(atoms/useDialogFocus) — 이 페이지에는 role/aria-modal 도,
+  // focus 이동·트랩·복원도 전혀 없었다(design-reviewer 실측: .focus() 0곳). Modal 을 새로 끼워 넣지 않고
+  // 같은 훅을 공유해 VenuePage 와 동일 계약으로 맞춘다.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(!!open && !!group, dialogRef);
 
   const reloadMembership = () => { if (group && user) getMyMembership(group.id).then(setMembership).catch(() => {}); };
   const reloadMembers = () => { if (group) getGroupMembers(group.id).then(setMembers).catch(() => {}); };
@@ -156,14 +162,22 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
   const images = group.images ?? (group.imageUrl ? [group.imageUrl] : []);
 
   return (
-    <div className="fixed inset-0 z-40 bg-surface-base flex flex-col animate-slide-up pt-[env(safe-area-inset-top)]" style={{ animationDuration: '0.25s' }}>
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${group.name} 그룹 페이지`}
+      className="fixed inset-0 z-40 bg-surface-base flex flex-col animate-slide-up pt-[env(safe-area-inset-top)]"
+      style={{ animationDuration: '0.25s' }}
+    >
       {/* 헤더 */}
       <header className="shrink-0 sticky top-0 z-30 flex items-center h-header-h px-page-x bg-surface-base border-b border-border-subtle">
         <button type="button" onClick={onClose} aria-label="뒤로 가기" className="w-11 h-11 -ml-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
           <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="14,5 7,11 14,17" /></svg>
         </button>
         <span className="ml-1 inline-flex items-center gap-1.5 min-w-0">
-          <span className="shrink-0 px-1.5 py-0.5 text-2xs font-bold rounded-badge bg-accent-300/15 text-accent-300">{kindLabel}</span>
+          {/* text-accent-300 은 다크 surface-base 위 3.33:1 AA 미달(design-reviewer 실측) — accent-200 으로 승격 */}
+          <span className="shrink-0 px-1.5 py-0.5 text-2xs font-bold rounded-badge bg-accent-300/15 text-accent-200">{kindLabel}</span>
           <h1 className="text-base font-bold text-ink-primary truncate">{group.name}</h1>
         </span>
       </header>
@@ -202,7 +216,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
               {!user ? (
                 <p className="rounded-input bg-surface-high px-3 py-2 text-center text-2xs text-ink-muted">로그인 후 가입할 수 있습니다</p>
               ) : isManager ? (
-                <span className="inline-block rounded-input bg-accent-300/15 px-3 py-1.5 text-xs font-bold text-accent-300">운영 중인 그룹</span>
+                <span className="inline-block rounded-input bg-accent-300/15 px-3 py-1.5 text-xs font-bold text-accent-200">운영 중인 그룹</span>
               ) : membership?.status === 'approved' ? (
                 <button type="button" onClick={leave} className="rounded-input border border-border-default px-3 py-1.5 text-xs font-semibold text-ink-secondary hover:text-danger-light">가입됨 · 탈퇴</button>
               ) : membership?.status === 'pending' ? (
@@ -256,8 +270,8 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
           {/* 공지 (공개) */}
           <div className="px-page-x py-3 border-b border-border-subtle">
             <div className="flex items-center justify-between mb-1.5">
-              <h3 className="text-xs font-bold text-accent-300">공지사항</h3>
-              {isManager && <button type="button" onClick={addNotice} className="text-2xs text-accent-300 hover:text-accent-200">+ 공지</button>}
+              <h3 className="text-xs font-bold text-accent-200">공지사항</h3>
+              {isManager && <button type="button" onClick={addNotice} className="text-2xs text-accent-200 hover:opacity-80">+ 공지</button>}
             </div>
             {notices.length === 0 ? (
               <p className="text-2xs text-ink-muted py-1">등록된 공지가 없습니다</p>
@@ -268,7 +282,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                     <p className="text-xs text-ink-primary whitespace-pre-wrap break-words">{n.content}</p>
                     <div className="mt-0.5 flex items-center gap-2 text-2xs text-ink-muted">
                       <span>{relativeTime(n.createdAt)}</span>
-                      {isManager && <button type="button" onClick={() => deleteVenueNotice(n.id).then(() => getVenueNotices(group.id).then(setNotices))} className="ml-auto hover:text-danger-light">삭제</button>}
+                      {isManager && <button type="button" onClick={() => deleteVenueNotice(n.id).then(() => getVenueNotices(group.id).then(setNotices)).catch((e) => toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'))} className="ml-auto hover:text-danger-light">삭제</button>}
                     </div>
                   </li>
                 ))}
@@ -280,7 +294,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
           {isManager && (
             <div className="px-page-x py-2 border-b border-border-subtle">
               <button type="button" onClick={() => setManagePanel((v) => !v)} className="flex w-full items-center justify-between text-xs font-semibold text-ink-secondary">
-                <span>멤버 관리 {pendingMembers.length > 0 && <span className="ml-1 text-accent-300">· 신청 {pendingMembers.length}</span>}</span>
+                <span>멤버 관리 {pendingMembers.length > 0 && <span className="ml-1 text-accent-200">· 신청 {pendingMembers.length}</span>}</span>
                 <span className="text-2xs text-ink-muted">{managePanel ? '닫기' : '열기'}</span>
               </button>
               {managePanel && (
@@ -306,7 +320,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
 
                   {pendingMembers.length > 0 && (
                     <div>
-                      <p className="text-2xs font-bold text-accent-300 mb-1">가입 신청 ({pendingMembers.length})</p>
+                      <p className="text-2xs font-bold text-accent-200 mb-1">가입 신청 ({pendingMembers.length})</p>
                       <ul className="space-y-1">
                         {pendingMembers.map((m) => (
                           <li key={m.id} className="flex items-center gap-2 rounded-input bg-surface-high px-2.5 py-1.5">
@@ -336,7 +350,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                           {/* 운영진 지정/해제는 **개설자만**(서버도 같은 규칙). 개설자 자신의 행에는 안 그린다. */}
                           {isOwner && m.userId !== group?.ownerId && (
                             <button type="button" onClick={() => toggleStaff(m)}
-                              className="shrink-0 text-2xs font-bold text-accent-300 hover:text-accent-200">
+                              className="shrink-0 text-2xs font-bold text-accent-200 hover:opacity-80">
                               {m.role === 'manager' ? '운영진 해제' : '운영진 지정'}
                             </button>
                           )}
@@ -430,7 +444,7 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
                 <span className="font-semibold text-ink-primary truncate">{m.userName}</span>
                 <span className="text-ink-muted ml-auto shrink-0">{relativeTime(m.createdAt)}</span>
                 {(canManage || m.userId === user?.id) && (
-                  <button type="button" onClick={() => deleteGroupMessage(m.id).then(() => setMessages((p) => (p ?? []).filter((x) => x.id !== m.id)))} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light">×</button>
+                  <button type="button" onClick={() => deleteGroupMessage(m.id).then(() => setMessages((p) => (p ?? []).filter((x) => x.id !== m.id))).catch((e) => toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'))} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light">×</button>
                 )}
               </div>
               <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words whitespace-pre-wrap">{m.content}</p>
@@ -607,7 +621,7 @@ function GroupRanking({ groupId }: { groupId: string }) {
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1">
                 <span className="truncate text-xs font-semibold text-ink-primary">{r.name}</span>
-                {r.role === 'manager' && <span className="shrink-0 text-2xs font-bold text-accent-300">매니저</span>}
+                {r.role === 'manager' && <span className="shrink-0 text-2xs font-bold text-accent-200">매니저</span>}
               </span>
               <span className="block text-2xs text-ink-muted tabular-nums">글 {r.posts} · 채팅 {r.messages}</span>
             </span>

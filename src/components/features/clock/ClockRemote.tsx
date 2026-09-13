@@ -2,16 +2,24 @@
 //
 // 왜 따로인가: 운영자 클락(TournamentClock)은 PC 조작대 문법이라 스테퍼가 작고 촘촘하다. 플로어에 서서 폰으로
 // 누르는 리모컨은 **큰 버튼 몇 개**여야 한다 — START/STOP · 레벨 이전/다음 · ±1분 · 엔트리/리바이/얼리/애드온 · 탈락.
-// 저장 경로는 운영자 클락과 **같은 saveClockState** 이고 liveStats 도 같은 식(computeLiveStats)으로 붙여 보내므로
-// TV(?display=)·라이브 카드·운영자 화면이 전부 같은 값을 본다. 쓰기 권한은 RLS(can_access_ledger)가 가른다 —
+// 저장 경로는 운영자 클락과 **같은 saveClockState** 이다. 쓰기 권한은 RLS(can_access_ledger)가 가른다 —
 // 권한이 없으면 저장이 거절되고 화면은 읽기전용으로 남는다(여기서 권한을 새로 만들지 않는다).
+// (C02, 2026-09-12) liveStats 는 여기서 장부까지 **다시 계산해** 저장하지 않는다 — 장부 연동 클락은
+// buyins/session 을 진입 시 1회만 읽고 재구독이 없어서, 그 stale 값으로 계산한 통계가 정본(TournamentClock 이
+// 최신 장부로 갱신한 값)을 덮어썼다. 장부 미연동(standalone) 클락만 예외다 — 그 경우 derived 는 늘 빈 값(0)이라
+// stale 위험이 없고, 리모컨만으로 운영되는 클락의 라이브 보드 표시를 지키려면 여기서 계산해 붙여야 한다.
+// (2026-09-13 보정) 그런데 정본을 '그대로 흘리기'만 했더니 리모컨으로 누른 탈락·보정이 TV 보드에 아예
+// 반영되지 않았다(TV 는 liveStats.alive 를 읽고, 다른 쓰기 경로는 장부가 움직여야만 발사된다 — 무인이면
+// 갱신자가 아예 없다). 그래서 장부 파생분은 정본 그대로 두고 **state 에서만 오는 adj*·eliminations 의
+// 변화분만** 얹는다(api/clock.ts applyRemoteStatDelta). 낡은 buyins 는 결과에 들어가지 않는다.
 // 진입: ?remote=<venueId>&g=<gameSeq> (TV 화면 하단 QR · 내 매장 클락 '휴대폰 리모컨' 버튼).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getClockState, saveClockState, subscribeClock, effectiveLevel, levelMovePatch, computeLiveStats, deriveClockCounts,
-  type ClockState, type ClockLevel,
+  applyRemoteStatDelta,
+  type ClockState,
 } from '../../../api/clock';
-import { clockPhase, CLOCK_PHASE_LABEL } from '../../../lib/clockLevel';
+import { clockPhase, CLOCK_PHASE_LABEL, levelNumberAt } from '../../../lib/clockLevel';
 import { getLedgerBuyins, getLedgerSession, type LedgerBuyin, type LedgerSession } from '../../../api/ledger';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../atoms/Toast';
@@ -20,11 +28,8 @@ import Icon from '../../atoms/Icon';
 /** 리모컨 딥링크 — TV 화면 QR·내 매장 버튼이 같은 URL 을 쓴다 */
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
-function levelNumberAt(levels: ClockLevel[], index: number): number {
-  let n = 0;
-  for (let i = 0; i <= index && i < levels.length; i++) if (levels[i].kind === 'level') n++;
-  return n;
-}
+// levelNumberAt 은 src/lib/clockLevel.ts 하나뿐이다 — 이 파일의 로컬 복제본이 msToRegClose 와
+// 같은 부류(2026-09-13)라 통합했다.
 
 export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, onLogin }: {
   venueId: string; gameSeq?: number; venueName?: string; onClose: () => void; onLogin?: () => void;
@@ -71,7 +76,13 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
     setState(next);
     busyRef.current = true;
     try {
-      await saveClockState({ ...next, liveStats: { ...computeLiveStats(next, derived, cfg), buyInAmount: session?.buyinAmount ?? null } });
+      // 장부 연동 클락은 정본 스냅샷을 기준으로 두고(장부 재계산 금지, C02) 이번 조작이 바꾼
+      // adj*·eliminations 차이만 얹는다 — 안 얹으면 리모컨 조작이 TV 보드에 영영 반영되지 않는다.
+      // 미연동(standalone) 클락은 derived 가 항상 빈 값이라 여기서 계산해도 stale 하지 않다.
+      const liveStats = state.sessionDate
+        ? applyRemoteStatDelta(state.liveStats, state, next, cfg)
+        : { ...computeLiveStats(next, derived, cfg), buyInAmount: session?.buyinAmount ?? null };
+      await saveClockState({ ...next, liveStats });
     } catch (e) {
       setState(prev);
       const msg = e instanceof Error ? e.message : String(e);
@@ -118,11 +129,16 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
   const remaining = eff.remainingMs;
   const nowMs = () => Date.now();
 
+  // (C03, 2026-09-12) 표시는 effectiveLevel(state) 인데 STOP 이 remainingMs 만 패치하고
+  // currentIndex 는 그대로 두면, 드리프트(endsAt 경과) 상태에서 정지할 때 '옛 레벨 번호 + 새 레벨의 남은 시간'
+  // 이라는 불일치 행이 저장됐다 — 같은 now·같은 실효 인덱스(eff.index)로 커밋한다.
   const toggleRun = () => {
-    if (state.running) persist({ running: false, remainingMs: Math.max(0, remaining), endsAt: null });
+    if (state.running) persist({ running: false, currentIndex: eff.index, remainingMs: Math.max(0, remaining), endsAt: null });
     else { const ms = Math.max(0, state.remainingMs || remaining); persist({ running: true, endsAt: new Date(nowMs() + ms).toISOString() }); }
   };
-  const moveLevel = (delta: number) => { const p = levelMovePatch(state, state.currentIndex, delta); if (p) persist(p); };
+  // levelMovePatch 의 계약(api/clock.ts levelMovePatch 주석)은 '실효 인덱스'를 요구한다 —
+  // raw state.currentIndex 를 넘기면 드리프트된 클락에서 엉뚱한 레벨을 기준으로 이동했다.
+  const moveLevel = (delta: number) => { const p = levelMovePatch(state, eff.index, delta); if (p) persist(p); };
   const adjustTime = (deltaMs: number) => {
     if (state.running && state.endsAt) persist({ endsAt: new Date(Math.max(nowMs(), new Date(state.endsAt).getTime() + deltaMs)).toISOString() });
     else persist({ remainingMs: Math.max(0, state.remainingMs + deltaMs) });

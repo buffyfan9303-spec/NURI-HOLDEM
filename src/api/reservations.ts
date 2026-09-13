@@ -1,5 +1,6 @@
 // src/api/reservations.ts — 포스터(게임) 예약 + 단골 고객 활동내역 CRM
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import { currentUser } from './_session';
 import { countVisitDays } from './checkins';
 /**
@@ -110,8 +111,8 @@ export async function deleteReservation(id: string): Promise<void> {
 }
 export async function updateReservationName(id: string, name: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('schedule_reservations').update({ display_name: name.trim().slice(0, 30) }).eq('id', id);
-  if (error) throw error;
+  // 형제 deleteReservation 과 같은 규칙 — 0행이면 호출부가 화면에만 새 이름을 써 넣는다.
+  await mustAffect(supabase.from('schedule_reservations').update({ display_name: name.trim().slice(0, 30) }).eq('id', id));
 }
 
 /** 내 활동 통계 — 방문(QR 체크인, 매장별 KST 날짜 distinct) / 예정 예약 / 예약 전체 건수. 프로필 뱃지·점수용.

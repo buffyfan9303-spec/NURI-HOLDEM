@@ -1,5 +1,6 @@
 // src/api/leagues.ts — 연합 리그(여러 매장 공동 보드): 생성 → 초대(알림) → 수락/거절 → 포인트 → 통합 순위
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import { currentUser } from './_session';
 
 export type LeagueMemberStatus = 'pending' | 'accepted' | 'declined';
@@ -55,8 +56,7 @@ export async function createLeague(venueId: string, name: string): Promise<strin
 
 export async function deleteLeague(leagueId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('leagues').delete().eq('id', leagueId);
-  if (error) throw error;
+  await mustAffect(supabase.from('leagues').delete().eq('id', leagueId));
 }
 
 /** 매장 초대 — insert 트리거가 상대 매장 전원에게 알림 발송 */
@@ -72,16 +72,14 @@ export async function inviteLeagueMember(leagueId: string, venueId: string): Pro
 /** 초대 응답(수락/거절) — update 트리거가 리그장 매장에 알림 */
 export async function respondLeagueInvite(memberId: string, accept: boolean): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('league_members')
+  await mustAffect(supabase.from('league_members')
     .update({ status: accept ? 'accepted' : 'declined', responded_at: new Date().toISOString() })
-    .eq('id', memberId);
-  if (error) throw error;
+    .eq('id', memberId));
 }
 
 export async function removeLeagueMember(memberId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('league_members').delete().eq('id', memberId);
-  if (error) throw error;
+  await mustAffect(supabase.from('league_members').delete().eq('id', memberId));
 }
 
 export async function getLeagueEntries(leagueId: string, limit = 400): Promise<LeagueEntry[]> {
@@ -109,8 +107,7 @@ export async function addLeagueEntry(leagueId: string, venueId: string, input: {
 
 export async function deleteLeagueEntry(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('league_entries').delete().eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('league_entries').delete().eq('id', id));
 }
 
 // ── 라이브 이벤트(실시간 정산 상태 + ITM + 전체정산 + 파이널) ──────────────────

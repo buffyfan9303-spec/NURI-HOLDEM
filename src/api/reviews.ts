@@ -1,5 +1,6 @@
 // src/api/reviews.ts — 매장 후기·별점. 읽기 공개 / 작성은 해당 매장 체크인 인증자만(RLS 강제).
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import { currentUser } from './_session';
 import { dedupe } from '../lib/inflight';
 
@@ -69,15 +70,38 @@ export async function saveVenueReview(venueId: string, rating: number, content: 
     if (error.code === '42501') throw new Error('매장 QR 체크인 후에 후기를 쓸 수 있어요');
     throw new Error(error.message);
   }
+  // 캐시를 비워 **다음에 별점을 조회하는 화면**이 TTL 을 기다리지 않게 한다.
+  // ⚠ '지금 이 화면에서 바로' 는 아니다 — 후기를 쓰는 `VenuePage` 는 별점 이펙트 deps 가 `[venue?.id]` 라
+  //   스스로 재조회하지 않는다(§5-B 이전에도 같았다. 회귀가 아니라 원래 그렇다).
+  invalidateVenueRatings();
 }
 
 /** 전 매장 별점 집계 — venueId → {avg, count}. 매장 카드·일정탐색 ⭐표시용(읽기 공개라 1쿼리). */
 export interface VenueRating { avg: number; count: number }
+
+/** 마지막으로 성공한 집계와 그 시각 — `dedupe` 가 못 잡는 **시차 중복**을 막는다(§5-B).
+ *
+ *  왜 필요한가: `dedupe` 는 **비행 중일 때만** 합류시킨다. 그런데 실제 호출 3곳은 시점이 어긋난다 —
+ *  App 부팅(`App.tsx:1782`)이 끝난 **뒤** idle 프리마운트로 `CommunityTab`(`:1092`)이 마운트되고,
+ *  `VenuePage`(`:115`)는 사용자가 매장을 열 때다. 성능 하네스가 **콜드·리로드·로그인 모든 조건에서**
+ *  `rpc/venue_rating_summary` ×2 를 재현한 것이 바로 이 시차다.
+ *
+ *  ⚠ 이것은 '영구 캐시'가 아니다. TTL 이 지나면 그대로 다시 나간다 —
+ *  즉 **재조회 시점은 보존**되고 '같은 순간 근처의 두 번째 왕복'만 사라진다.
+ *  내가 후기를 쓰거나 지우면 즉시 무효화한다 — **다음에 별점을 조회하는 화면**이 TTL 을 기다리지 않는다.
+ *  ⚠ '지금 보고 있는 화면에서 바로'는 아니다. 후기를 쓰는 `VenuePage` 는 별점 이펙트 deps 가 `[venue?.id]` 라
+ *  스스로 재조회하지 않는다(§5-B 이전에도 같았다 — 회귀가 아니라 원래 그렇다). */
+const RATINGS_TTL_MS = 60_000;
+let ratingsCache: { at: number; value: Record<string, VenueRating> } | null = null;
+/** 후기 쓰기/삭제 후 다음 조회가 서버를 다시 읽게 한다. */
+function invalidateVenueRatings(): void { ratingsCache = null; }
+
 export async function getVenueRatings(): Promise<Record<string, VenueRating>> {
   if (IS_MOCK) return {};
+  if (ratingsCache && Date.now() - ratingsCache.at < RATINGS_TTL_MS) return ratingsCache.value;
   // App(일정탐색 ⭐)과 CommunityTab(매장 목록)이 같은 순간 각자 부르며 5000행을 두 번 받아
   // 두 번 집계했다(실측 ×2) — 비행 중이면 합류해 왕복·파싱·집계를 한 번으로.
-  return dedupe('venue-ratings', async () => {
+  const fresh = await dedupe('venue-ratings', async () => {
     // 2026-08-29: 집계를 서버로 내렸다(venue_rating_summary RPC).
     //   예전엔 전 매장 후기를 통째로(limit 5000) 받아 브라우저에서 평균을 냈다 —
     //   **응답이 리뷰 수에 선형**이라 쌓일수록 콜드 부팅이 무거워지고,
@@ -104,10 +128,13 @@ export async function getVenueRatings(): Promise<Record<string, VenueRating>> {
     for (const [k, v] of agg) out[k] = { avg: Math.round((v.sum / v.n) * 10) / 10, count: v.n };
     return out;
   });
+  // 성공했을 때만 기억한다 — 실패(throw)는 캐시에 남지 않으므로 다음 호출이 그대로 재시도한다.
+  ratingsCache = { at: Date.now(), value: fresh };
+  return fresh;
 }
 
 /** 후기 삭제(본인 또는 운영자). */
 export async function deleteVenueReview(id: string): Promise<void> {
-  const { error } = await supabase.from('venue_reviews').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  await mustAffect(supabase.from('venue_reviews').delete().eq('id', id));
+  invalidateVenueRatings(); // 삭제한 후기가 평균에 남아 보이지 않게
 }

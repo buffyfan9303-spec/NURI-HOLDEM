@@ -17,6 +17,7 @@
 //   ③ 실패를 '기록 없음'으로 위장하지 않는다 — LoadErrorCard 로 드러내고 재시도를 준다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon, { type IconName } from '../atoms/Icon';
+import { isStaleResponse } from '../../lib/staleResponse';
 import CalendarToolsPanel from './CalendarToolsPanel';
 import { useToast } from '../atoms/Toast';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -87,12 +88,33 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   const [bankrollErr, setBankrollErr] = useState<unknown>(null);
 
   const uid = user?.id ?? null;
+
+  /** 진행 중인 조회의 세대. 새 조회가 시작되거나 로그아웃하면 올라가고, **늦게 도착한 이전 응답은 버려진다.**
+   *
+   *  ⚠ N01: 이 가드가 없으면 계정 A 의 찜·예약·뱅크롤 응답이 **B 의 화면에 그려질 수 있다.**
+   *  A 로그인 → 조회 시작 → 로그아웃 → B 로그인 → A 응답 도착 순서에서
+   *  `await` 뒤의 `setLikes/setReservations/setBankroll` 이 uid 를 다시 확인하지 않았다.
+   *  이건 클라이언트 표시 격리 문제이고 RLS 우회가 아니다 — 서버는 각자 제 데이터만 준다.
+   *  그래도 **남의 예약·뱅크롤이 내 화면에 보이는 것** 자체가 사고다. */
+  const reqSeq = useRef(0);
+  /** 세대 가드가 대조할 '지금 로그인한 사람'. 효과 ① 이 계정 전환 즉시 갱신한다. */
+  const uidRef = useRef<string | null>(uid);
+
   const reload = useCallback(async () => {
+    // 로그아웃 경로에서도 세대를 올린다 — 안 올리면 진행 중이던 A 응답이 살아남는다.
+    const seq = reqSeq.current + 1;
+    reqSeq.current = seq;
+    const forUid = uid;
+
     if (!uid) { setLoaded(true); setErr(null); setBankrollErr(null); return; }
     setErr(null); setBankrollErr(null);
     const r = await Promise.allSettled([
       getMyLikedScheduleIds(), getMyReservations(200), getMyBankroll(300),
     ]);
+    // ⚠ 여기서부터는 **늦게 도착한 응답일 수 있다.** 내 세대가 아니면 아무것도 그리지 않는다.
+    //   판정 계약은 `lib/staleResponse.ts` 하나로 둔다 — 화면마다 다르게 막으면 그중 하나는 반드시 빠진다.
+    if (isStaleResponse({ seq, owner: forUid }, { seq: reqSeq.current, owner: uidRef.current })) return;
+
     const [l, rv, w] = r;
     if (l.status === 'fulfilled') setLikes(l.value);
     if (rv.status === 'fulfilled') setReservations(rv.value);
@@ -106,8 +128,12 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   // ① 사용자가 바뀌면 화면을 비우고 다시 읽는다(계정 전환 시 이전 데이터 잔존 방지).
   const loadedForRef = useRef<string | null>(null);
   useEffect(() => {
+    // 세대 가드가 비교할 '지금 사용자'. 계정이 바뀌는 즉시 갱신해야 늦은 응답을 걸러낼 수 있다.
+    uidRef.current = uid;
     if (loadedForRef.current === uid) return;
     loadedForRef.current = uid;
+    // 계정이 바뀌었다 — 진행 중이던 이전 계정의 응답을 전부 무효화한다.
+    reqSeq.current += 1;
     setLikes(new Set()); setReservations([]); setBankroll([]);
     setLoaded(false); setErr(null); setBankrollErr(null);
   }, [uid]);
@@ -238,13 +264,15 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
         </button>
       </div>
 
-      {/* 2026-09-10 문구 정정 — '내 기록을(를) 불러오지 못했습니다' 는 무엇이 실패했는지 말하지 않고
-          '을(를)' 이 그대로 노출됐다. 제목·보조를 이 화면만 덮는다(공용 템플릿은 그대로). */}
+      {/* 2026-09-10: '내 기록을(를) 불러오지 못했습니다' 가 무엇이 실패했는지도 말하지 못하고
+          '을(를)' 까지 노출해서, `what` 을 구체화하고 제목을 이 화면만 따로 덮었다.
+          2026-09-12: 조사를 `lib/josa.ts` 가 처리하게 되어 **덮어쓴 제목과 기본 템플릿의 글자가 같아졌다**
+          ('데이터'·'정보' 둘 다 받침이 없어 '를'). 우회할 이유가 사라졌으므로 공용 템플릿으로 되돌린다 —
+          남겨 두면 앞으로 템플릿을 고칠 때 이 화면만 조용히 뒤처진다. `what` 구체화는 그대로 유지한다. */}
       {err != null && (
         <LoadErrorCard
           error={err}
           what={bankrollErr != null ? '뱅크롤 데이터' : '캘린더 정보'}
-          title={bankrollErr != null ? '뱅크롤 데이터를 불러오지 못했습니다' : '캘린더 정보를 불러오지 못했습니다'}
           hint="로그인이 만료되었거나 데이터를 불러오는 중 문제가 발생했습니다."
           onRetry={() => { setLoaded(false); void reload(); }}
           compact

@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '../atoms/Toast';
 import LoadErrorCard from '../atoms/LoadErrorCard';
-import type { User, UserStatus } from '../../api/auth';
+import type { User, UserStatus, UserUpdateResult } from '../../api/auth';
 import { adminSetNickname, adminSetShadowban } from '../../api/auth';
 import {
   getUserActivity, getActivityLog,
@@ -33,11 +33,18 @@ const POST_CAT_LABEL: Record<PostCategory, string> = {
 interface UserManagementTabProps {
   users: User[];
   posts: ModPost[];
-  onUpdateUser: (id: string, patch: Partial<User>) => void;
+  /** 서버 완료를 기다린다. 실패하면 던진다 — 성공 토스트는 resolve 뒤에만 띄운다(결함 A). */
+  onUpdateUser: (id: string, patch: Partial<User>) => Promise<UserUpdateResult>;
   onDeletePost: (id: string) => void;
   /** 회원 목록 조회 실패 — 넘어오면 '없음' 대신 실패를 그린다(2026-09-11). */
   usersErr?: unknown;
   onRetryUsers?: () => void;
+  /** 게시글 목록 조회 실패 — 회원 목록과 같은 배선(2026-09-13, F13).
+   *  이게 없던 동안 이 서브탭만 '관리할 게시글이 없습니다' 라고 단정했다 —
+   *  같은 실패를 노출관리>게시물과 커뮤니티 피드는 오류 카드로 보여주고 있었다. */
+  postsErr?: unknown;
+  /** ⚠ postsErr 과 반드시 같이 내린다 — 없으면 빠져나갈 수단 없는 막다른 오류 카드가 된다. */
+  onRetryPosts?: () => void;
 }
 
 type RoleFilter   = 'all' | 'user' | 'venue_owner' | 'admin';
@@ -56,7 +63,7 @@ const STATUS_LABEL: Record<UserStatus, { label: string; cls: string }> = {
 
 
 export default function UserManagementTab({
-  users, posts, onUpdateUser, onDeletePost, usersErr, onRetryUsers,
+  users, posts, onUpdateUser, onDeletePost, usersErr, onRetryUsers, postsErr, onRetryPosts,
 }: UserManagementTabProps) {
   const [section, setSection]       = useState<'users' | 'posts'>('users');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
@@ -90,8 +97,9 @@ export default function UserManagementTab({
     <div className="space-y-3">
       {/* 섹션 토글 — 하위 탭 전환(방향성 푸시). 탭바는 제자리, 아래 본문만 밀린다. */}
       <div data-usermgmt-secbar="" className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-        <SectionPill active={section === 'users'} onClick={() => goSubTab('usermgmt-sec', USERMGMT_ORDER, section, 'users', () => setSection('users'))} label="회원 관리" count={users.length} />
-        <SectionPill active={section === 'posts'} onClick={() => goSubTab('usermgmt-sec', USERMGMT_ORDER, section, 'posts', () => setSection('posts'))} label="게시글 관리" count={posts.length} />
+        {/* 조회에 실패한 목록의 개수는 0 이 아니라 '모름'(—) 이다 — 0 은 '없다'는 단정이다(F13). */}
+        <SectionPill active={section === 'users'} onClick={() => goSubTab('usermgmt-sec', USERMGMT_ORDER, section, 'users', () => setSection('users'))} label="회원 관리" count={usersErr != null ? null : users.length} />
+        <SectionPill active={section === 'posts'} onClick={() => goSubTab('usermgmt-sec', USERMGMT_ORDER, section, 'posts', () => setSection('posts'))} label="게시글 관리" count={postsErr != null ? null : posts.length} />
       </div>
 
       {/* 본문 — space-y-3 을 그대로 물려받도록 같은 간격의 래퍼를 쓴다(간격 회귀 방지) */}
@@ -144,7 +152,7 @@ export default function UserManagementTab({
           )}
         </>
       ) : (
-        <PostModeration posts={posts} onDelete={onDeletePost} />
+        <PostModeration posts={posts} onDelete={onDeletePost} postsErr={postsErr} onRetryPosts={onRetryPosts} />
       )}
       </div>
     </div>
@@ -164,12 +172,21 @@ const ACT_TYPE_LABEL: Record<string, string> = { post: '글', comment: '댓글',
 const ACT_TYPE_LABEL2: Record<string, string> = { post: '글', comment: '댓글', listing: '매물', schedule: '포스터', venue: '매장', live: '실시간' };
 const ACT_ACTION_LABEL: Record<string, string> = { delete: '삭제', hide: '숨김', suspend: '정지', inactive: '비활성', deactivate: '비활성', restore: '활성화', ad_on: 'AD ON', ad_off: 'AD OFF' };
 
-function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch: Partial<User>) => void }) {
+function UserRow({ user, onUpdate }: {
+  user: User;
+  /** 서버 완료를 기다린다. 실패하면 던진다 — 성공 표시는 resolve 뒤에만(결함 A). */
+  onUpdate: (id: string, patch: Partial<User>) => Promise<UserUpdateResult>;
+}) {
   const toast = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
   // 사유 입력 단계: 선택된 제재 + 사유 텍스트
   const [pending, setPending] = useState<SanctionKind | null>(null);
   const [reason, setReason]   = useState('');
+  /** 저장 중 — 버튼 비활성 표시용. 재진입 차단은 아래 ref 가 맡는다. */
+  const [busy, setBusy] = useState(false);
+  /** ⚠ 연타 차단은 **ref** 로 잰다. `useState` 는 배칭 때문에 두 번째 클릭이 먼저 통과할 수 있다
+   *  (CLAUDE.md 의 알약 프레스 함정과 같은 부류). 제재·승인이 두 번 나가면 안 된다. */
+  const busyRef = useRef(false);
   // 활동 내역 패널
   const [actOpen, setActOpen]       = useState(false);
   const [activity, setActivity]     = useState<UserActivityItem[]>([]);
@@ -196,23 +213,24 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
 
   const close = () => { setMenuOpen(false); setPending(null); setReason(''); };
 
-  const approve = () => {
-    onUpdate(user.id, { status: 'active', approved: true });
-    toast.show(`${user.name} 가입 승인`, 'success');
-    close();
+  /** 서버 완료를 기다려 성공일 때만 토스트·닫기. 실패하면 **입력을 보존한 채** 열어 둔다.
+   *  (에러 토스트는 App.handleUpdateUser 가 서버 메시지로 이미 띄운다 — 두 번 띄우지 않는다.) */
+  const run = async (patch: Partial<User>, ok: (r: UserUpdateResult) => void) => {
+    if (busyRef.current) return;            // 연타 차단 — state 배칭으로는 두 번째가 먼저 통과한다
+    busyRef.current = true; setBusy(true);
+    try { ok(await onUpdate(user.id, patch)); close(); }
+    catch { /* App 이 이미 알렸다. 시트를 열어 두고 입력을 남긴다. */ }
+    finally { busyRef.current = false; setBusy(false); }
   };
-  const restore = () => {
-    onUpdate(user.id, { status: 'active', suspendedUntil: undefined, sanctionReason: undefined });
-    toast.show(`${user.name} 제재 해제`, 'success');
-    close();
-  };
-  const reject = () => {
-    // 사유를 안 실으면 sanction_reason 이 null 로 저장돼 목록 행의 '사유:' 줄이 사라지고,
-    // 회원이 받는 메일의 상세 사유는 폴백 '운영원칙 위반'(notify-sanction)으로 나간다.
-    onUpdate(user.id, { status: 'banned', approved: false, sanctionReason: '가입 심사 거절' });
-    toast.show(`${user.name} 가입 거절`, 'error');
-    close();
-  };
+
+  const approve = () => run({ status: 'active', approved: true },
+    () => toast.show(`${user.name} 가입 승인`, 'success'));
+  const restore = () => run({ status: 'active', suspendedUntil: undefined, sanctionReason: undefined },
+    () => toast.show(`${user.name} 제재 해제`, 'success'));
+  // 사유를 안 실으면 sanction_reason 이 null 로 저장돼 목록 행의 '사유:' 줄이 사라지고,
+  // 회원이 받는 메일의 상세 사유는 폴백 '운영원칙 위반'(notify-sanction)으로 나간다.
+  const reject = () => run({ status: 'banned', approved: false, sanctionReason: '가입 심사 거절' },
+    () => toast.show(`${user.name} 가입 거절`, 'error'));
   // 운영자: 회원 아이디(닉네임) 변경 — 잠금 무시(admin_set_nickname RPC)
   const changeNick = async () => {
     const v = window.prompt('새 아이디(닉네임) 입력', user.nickname ?? '');
@@ -234,6 +252,13 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
   };
 
   // 사유 입력 후 제재 확정 — 자동 이메일은 App handleUpdateUser → updateUserStatus 에서 발송
+  /** 메일은 **갔을 때만 갔다고 말한다.** 예전엔 실패가 console.warn 으로만 삼켜져
+   *  화면이 언제나 "안내 메일 발송" 이라고 단정했다 — 안 갔는데 갔다고 말한 것이다. */
+  const mailNote = (r: UserUpdateResult) =>
+    r.mailSent === true ? ' · 안내 메일 발송'
+      : r.mailSent === false ? ' · 안내 메일은 발송되지 않았습니다'
+        : '';
+
   const confirmSanction = () => {
     if (!pending) return;
     const r = reason.trim();
@@ -241,18 +266,15 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
 
     if (pending.type === 'suspend') {
       const until = new Date(Date.now() + pending.days * 24 * 60 * 60 * 1000).toISOString();
-      onUpdate(user.id, { status: 'suspended', suspendedUntil: until, sanctionReason: r });
-      toast.show(`${user.name} ${pending.days}일 정지 · 안내 메일 발송`, 'info');
+      void run({ status: 'suspended', suspendedUntil: until, sanctionReason: r },
+        (res) => toast.show(`${user.name} ${pending.days}일 정지${mailNote(res)}`, 'info'));
     } else if (pending.type === 'ban') {
-      onUpdate(user.id, { status: 'banned', suspendedUntil: undefined, sanctionReason: r });
-      toast.show(`${user.name} 영구 정지 · 안내 메일 발송`, 'error');
+      void run({ status: 'banned', suspendedUntil: undefined, sanctionReason: r },
+        (res) => toast.show(`${user.name} 영구 정지${mailNote(res)}`, 'error'));
     } else {
-      onUpdate(user.id, { status: 'withdrawn', suspendedUntil: undefined, sanctionReason: r });
-      // 아직 '발송했다' 고 단정하지 않는다 — 서버 실패는 App.handleUpdateUser 가 빨간 토스트로 띄우고
-      // 목록을 되돌린다. 성공 단정과 실패 토스트가 겹쳐 뜨면 운영자가 결과를 오판한다.
-      toast.show(`${user.name} 강제 탈퇴 처리 중… (개인정보 파기·재가입 제한)`, 'info');
+      void run({ status: 'withdrawn', suspendedUntil: undefined, sanctionReason: r },
+        () => toast.show(`${user.name} 강제 탈퇴 완료 (개인정보 파기·재가입 제한)`, 'info'));
     }
-    close();
   };
 
   const sanctionTitle = !pending ? '' :
@@ -352,9 +374,9 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
               <div className="flex gap-1.5 justify-end">
                 <button type="button" onClick={() => { setPending(null); setReason(''); }}
                   className="btn-ghost text-2xs px-2.5 py-1">뒤로</button>
-                <button type="button" onClick={confirmSanction}
-                  className="text-2xs font-semibold px-2.5 py-1 rounded-badge border bg-danger/15 text-danger-light hover:bg-danger/25 border-danger/30 transition-colors">
-                  {sanctionTitle} 확정 + 메일 발송
+                <button type="button" onClick={confirmSanction} disabled={busy}
+                  className="text-2xs font-semibold px-2.5 py-1 rounded-badge border bg-danger/15 text-danger-light hover:bg-danger/25 border-danger/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {busy ? '처리 중…' : `${sanctionTitle} 확정`}
                 </button>
               </div>
             </div>
@@ -371,8 +393,8 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
               </button>
               {status === 'pending' && (
                 <>
-                  <ActionBtn onClick={approve} variant="success">가입 승인</ActionBtn>
-                  <ActionBtn onClick={reject}  variant="danger">가입 거절</ActionBtn>
+                  <ActionBtn onClick={approve} variant="success" disabled={busy}>가입 승인</ActionBtn>
+                  <ActionBtn onClick={reject}  variant="danger" disabled={busy}>가입 거절</ActionBtn>
                 </>
               )}
               {status === 'active' && (
@@ -386,7 +408,7 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
               )}
               {(status === 'suspended' || status === 'banned' || status === 'withdrawn') && (
                 <>
-                  <ActionBtn onClick={restore} variant="success">제재 해제</ActionBtn>
+                  <ActionBtn onClick={restore} variant="success" disabled={busy}>제재 해제</ActionBtn>
                   {/* 제재·기탈퇴 계정이야말로 강제 탈퇴(개인정보 파기) 대상이다 —
                       ① 예전엔 활성 회원에게만 버튼이 있어 정지·영구정지 계정은 정리할 방법이 없었고
                       ② 옛 경로로 status 만 바뀐 기존 '탈퇴' 계정은 실명·전화·CI 와 로그인 세션이
@@ -644,14 +666,14 @@ function BalanceTile({ label, value, accent }: { label: string; value?: number; 
 }
 
 function ActionBtn({
-  onClick, variant, children,
-}: { onClick: () => void; variant: 'success' | 'warn' | 'danger'; children: React.ReactNode }) {
+  onClick, variant, children, disabled,
+}: { onClick: () => void; variant: 'success' | 'warn' | 'danger'; children: React.ReactNode; disabled?: boolean }) {
   const cls = variant === 'success' ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border-emerald-500/30' :
               variant === 'warn'    ? 'bg-amber-500/15  text-amber-400  hover:bg-amber-500/25  border-amber-500/30'  :
                                       'bg-danger/15      text-danger-light hover:bg-danger/25     border-danger/30';
   return (
-    <button type="button" onClick={onClick}
-      className={`text-2xs font-semibold px-2.5 py-1 rounded-badge border ${cls} transition-colors`}>
+    <button type="button" onClick={onClick} disabled={disabled}
+      className={`text-2xs font-semibold px-2.5 py-1 rounded-badge border ${cls} transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}>
       {children}
     </button>
   );
@@ -660,9 +682,9 @@ function ActionBtn({
 // ── 게시글 관리 ────────────────────────────────────────────────────────────
 
 function PostModeration({
-  posts, onDelete, postsErr,
-}: { posts: ModPost[]; onDelete: (id: string) => void; postsErr?: unknown }) {
-  const toast = useToast();
+  posts, onDelete, postsErr, onRetryPosts,
+}: { posts: ModPost[]; onDelete: (id: string) => void; postsErr?: unknown; onRetryPosts?: () => void }) {
+  const failed = postsErr != null;
   // 게시판(카테고리)별 필터 — 게시판별로 골라 삭제 가능
   const [cat, setCat] = useState<'all' | PostCategory>('all');
   const cats: ('all' | PostCategory)[] = ['all', 'free', 'question', 'info', 'review', 'study'];
@@ -670,10 +692,13 @@ function PostModeration({
     c === 'all' ? posts.length : posts.filter((p) => (p.category ?? 'free') === c).length;
   const filtered = cat === 'all' ? posts : posts.filter((p) => (p.category ?? 'free') === cat);
 
+  // 삭제 결과 토스트는 App.handleDeletePost 하나가 낸다(src/App.tsx) —
+  // 거기서 deletePost(id).then(성공).catch(실패) 로 **서버 응답을 보고** 띄운다.
+  // 여기서 같이 띄우면 성공 시 같은 문구가 두 번 뜨고, 실패 시 '삭제되었습니다' 가
+  // 먼저 뜬 뒤 '실패했습니다' 가 따라와 운영자가 결과를 오판한다(F15). 확인창은 남긴다.
   const handleDelete = (id: string) => {
     if (confirm('이 게시글을 삭제하시겠습니까?')) {
       onDelete(id);
-      toast.show('게시글이 삭제되었습니다', 'success');
     }
   };
 
@@ -686,17 +711,22 @@ function PostModeration({
             key={c}
             active={cat === c}
             onClick={() => setCat(c)}
-            label={`${c === 'all' ? '전체' : POST_CAT_LABEL[c]} ${countOf(c)}`}
+            label={failed ? (c === 'all' ? '전체' : POST_CAT_LABEL[c]) : `${c === 'all' ? '전체' : POST_CAT_LABEL[c]} ${countOf(c)}`}
           />
         ))}
       </div>
 
       {/* 조회 실패를 '0건' 으로 위장하지 않는다 — 회원 목록과 같은 배선(2026-09-11) */}
-      {postsErr != null ? (
-        <LoadErrorCard error={postsErr} what="게시글 목록" compact
-          hint="관리할 글이 없는 것과는 다릅니다 — 목록을 못 읽었습니다." />
+      {failed ? (
+        <LoadErrorCard error={postsErr} what="게시글 목록" onRetry={onRetryPosts} compact
+          hint="관리할 글이 없는 것과는 다릅니다 — 목록을 못 읽었습니다. 다시 시도해 주세요." />
       ) : filtered.length === 0 ? (
-        <p className="py-8 text-center text-xs text-ink-muted">관리할 게시글이 없습니다</p>
+        /* '아무 글도 없다' 와 '이 게시판만 비었다' 는 처방이 다르다 — 후자는 필터만 바꾸면 된다(§11). */
+        posts.length === 0 ? (
+          <p className="py-8 text-center text-xs text-ink-muted">관리할 게시글이 없습니다<br />커뮤니티에 글이 올라오면 여기에서 확인하고 삭제할 수 있습니다.</p>
+        ) : (
+          <p className="py-8 text-center text-xs text-ink-muted">이 게시판에는 글이 없습니다<br />위에서 다른 게시판을 골라 보세요.</p>
+        )
       ) : (
         <ul className="space-y-1.5">
           {filtered.map((p) => (
@@ -730,14 +760,14 @@ function PostModeration({
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────
 
-function SectionPill({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number }) {
+function SectionPill({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number | null }) {
   return (
     <button type="button" onClick={onClick}
       className={[
         'flex-1 py-2 text-xs font-semibold rounded-[6px] transition-colors',
         active ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}>
-      {label} <span className="text-2xs opacity-70">({count})</span>
+      {label} <span className="text-2xs opacity-70">({count ?? '—'})</span>
     </button>
   );
 }

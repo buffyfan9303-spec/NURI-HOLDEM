@@ -1,6 +1,12 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // §B1 버튼 크기 변형(index.css) — Tailwind 는 @layer components 안의 **작성자 클래스도**
+  // content 스캔에서 안 보이면 통째로 지운다(index.css 의 §T1 주석이 같은 사실을 적어 뒀다).
+  // 이 두 클래스는 지금 호출부가 0곳이라(이행은 다음 배치) 그대로 두면 번들에서 사라져,
+  // 다른 팀이 `btn-lg` 를 쓰는 순간 **아무 일도 안 일어나는** 조용한 실패가 된다.
+  // 이행이 끝나면 스캔에 잡히므로 이 safelist 는 지워도 된다. 비용은 약 0.1KB.
+  safelist: ['btn-sm', 'btn-lg'],
   darkMode: 'class',
   // hover: 는 마우스 지원 기기(PC)에서만 적용 → 모바일에서 탭 후 hover 배경이 박히는 현상 제거
   future: { hoverOnlyWhenSupported: true },

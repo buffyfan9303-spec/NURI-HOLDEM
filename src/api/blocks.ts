@@ -2,6 +2,7 @@
 // 차단하면 그 사용자의 글·댓글·매물이 내 화면에서 숨겨진다(클라 필터). 본인 차단목록만 RLS로 관리.
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
+import { idempotentOff } from './_mustAffect';
 import { dedupe } from '../lib/inflight';
 
 export interface BlockedUser { blockedId: string; name: string; createdAt: string }
@@ -50,7 +51,8 @@ export async function unblockUser(blockedId: string): Promise<void> {
   if (IS_MOCK) return;
   const me = await currentUser();
   if (!me) return;
-  const { error } = await supabase.from('user_blocks').delete()
-    .eq('blocker_id', me.id).eq('blocked_id', blockedId);
-  if (error) throw new Error(error.message);
+  // 켜기(blockUser)가 upsert 라 끄기도 0행(이미 해제됨)을 성공으로 흡수한다 — 던지면 BlockContext 가 목록을 안 지우고
+  // '해제 실패' 를 띄워, 다른 기기에서 먼저 푼 차단이 화면에 남는다(서버엔 없다). 본인 행. error 는 그대로 던진다.
+  await idempotentOff(supabase.from('user_blocks').delete()
+    .eq('blocker_id', me.id).eq('blocked_id', blockedId));
 }

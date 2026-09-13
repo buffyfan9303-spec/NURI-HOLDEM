@@ -29,6 +29,10 @@ import { getAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from 
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 import { getUpcomingBirthdays } from '../../api/crm';
 import { relativeTime } from '../../lib/relativeTime';
+// 늦게 도착한 응답이 **지금 보고 있는 매장**을 덮지 않게(N01 계약). 매장 전환은 이 컴포넌트를
+// 언마운트하지 않는다(VenueManageTab 는 key 없이 재사용한다) — 데이터·오류·로딩·'HH:MM 기준'을
+// 한 세대로 묶지 않으면 A 매장 응답이 B 화면에 숫자/오류 배너/시각으로 남는다.
+import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 
 // '오늘'·'최근 N일'은 전부 **KST** — 장부·서버(ledger_business_date · kstToday)와 같은 달력이어야 한다.
 // 예전엔 브라우저 로컬 TZ(toLocaleDateString)라, KST 보다 뒤진 기기(해외 로밍·시계 오설정·UTC 러너)에서
@@ -91,6 +95,16 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const days = last7();
   const d14 = last14();
   const mr = monthRange();
+  // 지금 화면이 '어느 매장의 어느 날짜'인가 — 응답이 도착했을 때 이 값과 다르면 남의 화면 것이다.
+  // 렌더 본문에서 동기로 갱신한다(schedulesRef 와 같은 이유 — effect 한 틱을 기다리면 그 사이 응답이 들어온다).
+  // ⚠ 아래 1회성 effect(생일·요일 평균·지난 회차)들도 이 값을 쓰므로 **선언 위치가 맨 위여야 한다**.
+  const ownerRef = useRef(`${venueId}#${d}`);
+  ownerRef.current = `${venueId}#${d}`;
+  const genRef = useRef(0);       // 전체 reload 세대
+  const rangeGenRef = useRef(0);  // 14일 range 세대 — '다시 시도'가 전체 reload 와 독립적으로 돈다
+  const resGenRef = useRef(0);    // 예약 카운트 좁은 재조회 세대(realtime 이 부른다)
+  /** 이 매장·이 날짜의 응답일 때만 콜백을 실행한다(세대 없는 1회성 effect 용). */
+  const ownerOnly = <T,>(owner: string, fn: (v: T) => void) => (v: T) => { if (ownerRef.current === owner) fn(v); };
   const [session, setSession] = useState<LedgerSession | null>(null);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [clock, setClock] = useState<ClockState | null>(null);
@@ -119,8 +133,14 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   //   '총 인건비 0만원'이 금색 숫자로 정상처럼 떴다(2026-09-11 감사).
   const [wageErr, setWageErr] = useState(false);
   const [monthDealers, setMonthDealers] = useState<DealerShift[]>([]);
+  const [dealerErr, setDealerErr] = useState(false);
+  const [shiftErr, setShiftErr] = useState(false);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [range, setRange] = useState<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }>({ sessions: [], buyins: [] });
+  // ⚠ 14일 장부 조회 실패와 '장부가 없다'는 다르다 — 예전엔 catch(() => {}) 라 이 한 번의 실패가
+  //   '최근 7일 장부 데이터가 없습니다' · '비교할 장부 데이터가 없습니다' · 이용권 7일 **0장** ·
+  //   '오늘 게임' 표 통째 소실로 위장됐다(wageErr·resCountsErr 와 같은 모양으로 갈라놓는다).
+  const [rangeErr, setRangeErr] = useState<unknown>(null);
   const [regulars, setRegulars] = useState<VenueRegular[]>([]);
   const [regOpen, setRegOpen] = useState(false);
   const [dealerOpen, setDealerOpen] = useState(false);
@@ -149,14 +169,17 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [bdays, setBdays] = useState<{ name: string; birthday: string; dday: number }[]>([]);
   useEffect(() => {
     if (!caps.manage) return;
-    getUpcomingBirthdays(venueId).then(setBdays).catch(() => {});
-  }, [venueId, caps.manage]);
+    // §9-1: 매장 A 의 늦은 응답이 B 화면의 '생일 단골'로 남지 않게 소유자를 확인한다.
+    const owner = `${venueId}#${d}`;
+    getUpcomingBirthdays(venueId).then(ownerOnly(owner, setBdays)).catch(() => {});
+  }, [venueId, d, caps.manage]);
   // 같은 요일 평소 엔트리(최근 4주 동일 요일 평균) — 위젯 미니 추세용. 핫 리로드와 분리해 매장당 1회만 로드(28일 데이터).
   useEffect(() => {
     if (!caps.ledger) return;
     const d28 = last28();
     const todayDow = new Date(d + 'T00:00:00').getDay();
-    getLedgerRange(venueId, d28[0], d28[27]).then(({ sessions, buyins: bs }) => {
+    const owner = `${venueId}#${d}`;
+    getLedgerRange(venueId, d28[0], d28[27]).then(ownerOnly(owner, ({ sessions, buyins: bs }: Awaited<ReturnType<typeof getLedgerRange>>) => {
       // ⚠ 세션은 (날짜 + 게임)이 키다. 날짜만으로 매핑하면 사이드 게임이 있는 날
       //   메인 바인이 사이드 단가로 계산돼 엔트리·매출이 통째로 틀어진다(통계 화면과 값이 갈림).
       const byGame = new Map<string, LedgerSession>();
@@ -177,7 +200,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       }
       const avg = weeks.length > 0 ? Math.round(weeks.reduce((a, w) => a + w.entries, 0) / weeks.length) : null;
       setDowStats({ avg, weeks });
-    }).catch(() => {});
+    })).catch(() => {});
   }, [venueId, d, caps.ledger]);
   // 결제수단 기본값 학습 — 매장이 자주 쓰는 결제수단을 팝오버 첫 버튼으로(localStorage 카운트 기반)
   useEffect(() => {
@@ -199,43 +222,103 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   // 스티키 상단 바 매장명 — 이 매장 포스터의 pubName 재사용(추가 조회 없음). 포스터가 없으면 일반 명칭 폴백.
   const venueName = schedules.find((s) => s.venueId === venueId)?.pubName || '내 매장';
 
+  // C08(2026-09-12) — reload 는 [venueId, d] 로만 재생성되는데 예전엔 그 안에서 `schedules`(props)를
+  // 직접 읽어 예약 id 목록을 만들었다. schedules 가 바뀌어도(포스터 추가·삭제) reload 함수 자체는
+  // 재생성되지 않으므로, 구독 콜백(subscribeLedger/Clock/BuyinRequests/StaffSchedule)이 부르는 reload 는
+  // **reload 가 마지막으로 새로 만들어졌을 때(=venueId·d 바뀔 때)의 낡은 포스터 목록**으로 예약 인원을 조회했다
+  // — 화면엔 새 포스터가 보이는데 예약 카운트만 옛 목록 기준이었다. ref 는 매 렌더 본문에서 동기로 갱신되므로
+  // (effect 를 안 거친다) reload 의 정체성은 그대로 두면서도 항상 최신 schedules 를 읽는다 —
+  // deps 에 schedules 를 넣으면 ledger/clock/buyin/staff 구독까지 매번 재구독되는 부작용이 생긴다.
+  const schedulesRef = useRef(schedules);
+  schedulesRef.current = schedules;
+  // 예약 인원 조회 실패 — '0명'과 갈라놓는다(대시보드의 다른 실패-위장 결함들과 같은 원칙).
+  const [resCountsErr, setResCountsErr] = useState<unknown>(null);
+  // 예약 realtime 이벤트 하나 때문에 급여·28일 통계까지 통째로 재조회하지 않도록,
+  // 예약 카운트만 다시 읽는 좁은 재조회(narrow reload)를 따로 둔다(요청 수 절감).
+  const reloadReservations = useCallback(() => {
+    const ids = schedulesRef.current.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
+    if (!ids.length) { setResCounts({}); setResCountsErr(null); return Promise.resolve(); }
+    // §9-1: realtime 이 연달아 부르는 좁은 재조회다 — 데이터도 오류도 이 세대 것만 쓴다.
+    const stamp: RequestStamp<string> = { seq: resGenRef.current + 1, owner: ownerRef.current };
+    resGenRef.current = stamp.seq;
+    const rFresh = () => !isStaleResponse(stamp, { seq: resGenRef.current, owner: ownerRef.current });
+    return getReservationCounts(ids)
+      .then((c) => { if (rFresh()) { setResCounts(c); setResCountsErr(null); } })
+      .catch((e) => { if (rFresh()) setResCountsErr(e); });
+  }, [venueId, d]);
+
+  /** 14일 장부(최근 7일 추세·전주 대비·오늘 게임 표·이용권 7일)만 다시 읽는 좁은 재조회.
+   *  성공 여부를 돌려준다 — 실패한 재조회가 '갱신 시각'을 올리지 않게 호출부가 이 값을 본다. */
+  const reloadRange = useCallback(() => {
+    const stamp: RequestStamp<string> = { seq: rangeGenRef.current + 1, owner: ownerRef.current };
+    rangeGenRef.current = stamp.seq;
+    const stale = () => isStaleResponse(stamp, { seq: rangeGenRef.current, owner: ownerRef.current });
+    // d 는 KST 오늘 = 14일 창의 마지막 날(d14[13]).
+    return getLedgerRange(venueId, kstDaysAgo(13), d).then(
+      (r) => { if (stale()) return true; setRange(r); setRangeErr(null); return true; },
+      // 낡은(다른 매장·이전 세대) 실패는 지금 화면의 실패가 아니다 — 배너도 띄우지 않고 시각도 막지 않는다.
+      (e) => { if (stale()) return true; setRangeErr(e); return false; },
+    );
+  }, [venueId, d]);
+
   const reload = useCallback(() => {
-    const ids = schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
-    if (!ids.length) setResCounts({});
+    const stamp: RequestStamp<string> = { seq: genRef.current + 1, owner: `${venueId}#${d}` };
+    genRef.current = stamp.seq;
+    const fresh = () => !isStaleResponse(stamp, { seq: genRef.current, owner: ownerRef.current });
+    // §9-1: **이 세대의 응답만** 화면에 쓴다. 예전엔 아래 setter 들이 전부 무가드라
+    // 매장 A 의 늦은 응답이 B 화면에 숫자로 남았다(그리고 오류·로딩·갱신 시각도 같이).
+    // 콜백을 이 helper 로 감싸는 것이 규칙이다 — 감싸지 않은 setter 는 계약 테스트가 잡는다.
+    const guard = <T,>(fn: (v: T) => void) => (v: T) => { if (fresh()) fn(v); };
+    // 이번 세대에서 **표시되는 실패**가 하나라도 있었는가 — 있으면 'HH:MM 기준'을 올리지 않는다.
+    // (숫자는 옛 값으로 굳었는데 시각만 방금으로 갱신되면 그 시각 자체가 거짓말이다.)
+    let ok = true;
+    const ids = schedulesRef.current.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
+    if (!ids.length) { setResCounts({}); setResCountsErr(null); }
     // ⚠ 오늘 장부 3종만은 실패를 삼키지 않는다 — 이 화면의 모든 거짓 요약('미시작'·'지금 할 일')의 근원이다.
     const core = Promise.all([
-      getLedgerSession(venueId, d).then(setSession),
-      getLedgerBuyins(venueId, d).then(setBuyins),
-      getLedgerPlayers(venueId, d).then(setPlayers),
+      getLedgerSession(venueId, d).then(guard(setSession)),
+      getLedgerBuyins(venueId, d).then(guard(setBuyins)),
+      getLedgerPlayers(venueId, d).then(guard(setPlayers)),
       // '지금 할 일' 1·2순위의 근거도 core 다 — 이 둘이 실패를 []로 위장하면 두 달치 미마감이 쌓여 있어도
       // 카드는 '오늘 운영 완료'를 말하고 '순위 미입력' 카드가 사라진다. 실패는 아래 LoadErrorCard + 재시도로.
       // ⚠ src/api/ledger.ts 의 두 함수가 { error } 를 버리고 [] 를 돌려주는 동안은 여기까지 오지 않는다 —
       //   그쪽이 throw 하도록 바뀌면 이 자리가 그 실패를 받는다(같은 계약: getLedgerSession).
-      listStaleOpenSessions(venueId).then(setStaleOpen),
-      getPosterOpsSummaries(venueId).then((sums) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date)))),
+      listStaleOpenSessions(venueId).then(guard(setStaleOpen)),
+      getPosterOpsSummaries(venueId).then(guard((sums: Awaited<ReturnType<typeof getPosterOpsSummaries>>) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date))))),
       // 장부 권한이 없는 직원은 애초에 이 3종을 볼 수 없다(RLS 거절이 정상) — 그 거절을
       // 장애로 띄우면 포스터·출근 안내까지 같이 사라진다. 실패 분기는 장부를 보는 사람에게만.
-    ]).then(() => setLoadErr(null), (e) => setLoadErr(caps.ledger ? e : null));
+    ]).then(
+      () => { if (fresh()) setLoadErr(null); },
+      (e) => { if (!fresh()) return; const err = caps.ledger ? e : null; if (err) ok = false; setLoadErr(err); },
+    );
     // ⚠ 종전엔 promise 를 띄운 **직후 동기로** setLoading(false) 였다. 그래서 매 진입마다
     //   로딩이 데이터보다 먼저 끝나고, 스켈레톤 뒤에 초기값(0·없음) 화면이 한 번 확정돼 보였다.
     //   ('이번 주 엔트리 0' · '단골 없음' · '오늘 근무 없음' — 전부 이 한 줄이 원인)
     return Promise.all([
       core,
-      getClockState(venueId).then(setClock).catch(() => {}),
-      getVenueClocks(venueId).then(setVenueClocks).catch(() => {}),
-      getPendingBuyinRequests(venueId, d).then(setPendingReqs).catch(() => {}),
-      getStaffSchedule(venueId, d, d).then(setShifts).catch(() => {}),
-      getStaffSchedule(venueId, mr.start, mr.end).then(setMonthShifts).catch(() => {}),
-      getStaffWages(venueId).then((w) => { setWages(w); setWageErr(false); }).catch(() => { setWages([]); setWageErr(true); }),
-      getDealerShifts(venueId, mr.start, mr.end).then(setMonthDealers).catch(() => setMonthDealers([])),
-      getLedgerRange(venueId, d14[0], d14[13]).then(setRange).catch(() => {}),
-      getVenueRegulars(venueId).then(setRegulars).catch(() => {}),
-      getVenueRankings(venueId, d).then(({ entries }) => setRankEventsToday(entries.map((e) => e.eventName ?? ''))).catch(() => {}),
-      getVenueWeeklyFunnel(venueId).then(setFunnel).catch(() => {}),
-      ids.length ? getReservationCounts(ids).then(setResCounts).catch(() => {}) : Promise.resolve(),
-    ]).then(() => { setLoading(false); setRefreshedAt(new Date()); });
+      getClockState(venueId).then(guard(setClock)).catch(() => {}),
+      getVenueClocks(venueId).then(guard(setVenueClocks)).catch(() => {}),
+      getPendingBuyinRequests(venueId, d).then(guard(setPendingReqs)).catch(() => {}),
+      // 독립 검증 B(2026-09-13): 출근 조회 실패를 삼키면 딜러 인건비만의 값이 '총 인건비 N만원' 으로 뜬다 — wageErr·dealerErr 와 같은 모양.
+      getStaffSchedule(venueId, d, d).then(guard((ss: StaffShift[]) => { setShifts(ss); setShiftErr(false); })).catch(guard(() => { setShifts([]); setShiftErr(true); })),
+      getStaffSchedule(venueId, mr.start, mr.end).then(guard((ss: StaffShift[]) => { setMonthShifts(ss); setShiftErr(false); })).catch(guard(() => { setMonthShifts([]); setShiftErr(true); })),
+      getStaffWages(venueId).then(guard((w: StaffWage[]) => { setWages(w); setWageErr(false); })).catch(guard(() => { setWages([]); setWageErr(true); })),
+      // F6: getDealerShifts 가 이제 실패를 던진다 — 빈 배열로 받으면 '딜러 인건비 0' 이 정상값처럼 보인다. wageErr 와 같은 모양.
+      getDealerShifts(venueId, mr.start, mr.end).then(guard((ds: DealerShift[]) => { setMonthDealers(ds); setDealerErr(false); })).catch(guard(() => { setMonthDealers([]); setDealerErr(true); })),
+      // ⚠ 실패를 삼키지 않는다 — 실패하면 rangeErr 가 켜지고 이번 세대의 '갱신 시각'도 올리지 않는다(F14).
+      reloadRange().then((good) => { if (!good) ok = false; }),
+      getVenueRegulars(venueId).then(guard(setRegulars)).catch(() => {}),
+      getVenueRankings(venueId, d).then(guard(({ entries }: Awaited<ReturnType<typeof getVenueRankings>>) => setRankEventsToday(entries.map((e) => e.eventName ?? '')))).catch(() => {}),
+      getVenueWeeklyFunnel(venueId).then(guard(setFunnel)).catch(() => {}),
+      // 예약 인원도 화면에 '—' 로 실패가 보이는 값이다 — 이번 세대의 갱신 시각을 올리지 않는다.
+      ids.length ? getReservationCounts(ids).then(guard((c: Record<string, number>) => { setResCounts(c); setResCountsErr(null); })).catch(guard((e: unknown) => { ok = false; setResCountsErr(e); })) : Promise.resolve(),
+    ]).then(() => {
+      if (!fresh()) return;   // 매장을 바꿨거나 더 새 요청이 나갔다 — 이 응답으로 화면을 끝내지 않는다
+      setLoading(false);
+      if (ok) setRefreshedAt(new Date());
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venueId, d]);
+  }, [venueId, d, reloadRange]);
 
   // 오늘 장부(메인)의 순위 입력 여부 — 날짜 Set 으로 보면 사이드만 저장돼도 메인이 '완료'로 뭉쳤다(F02).
   const hasRankToday = useMemo(
@@ -260,7 +343,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     () => schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id),
     [schedules, venueId, d],
   );
-  useEffect(() => { if (active) return subscribeReservations(reload, upcomingIds); }, [reload, upcomingIds, active]);
+  // C08 — 예약 이벤트 하나 때문에 급여·28일 통계까지 통째로 재조회하지 않는다(narrow reload).
+  useEffect(() => { if (active) return subscribeReservations(reloadReservations, upcomingIds); }, [reloadReservations, upcomingIds, active]);
   // 이 줄만 active 게이트가 빠져 있어 숨은 탭에서도 채널을 물고 reload 를 돌렸다(다른 4개와 규칙을 맞춘다).
   useEffect(() => { if (active) return subscribeStaffSchedule(venueId, reload); }, [venueId, reload, active]);
 
@@ -283,7 +367,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [lastRound, setLastRound] = useState<LastClosedRound | null>(null);
   useEffect(() => {
     if (!caps.ledger) return;
-    getLastClosedRound(venueId, d).then(setLastRound).catch(() => {});
+    // §9-1: 매장 A 의 '지난 회차'가 B 화면의 [지난 게임 그대로 열기] 에 남으면 남의 단가·구조로 장부를 연다.
+    const owner = `${venueId}#${d}`;
+    getLastClosedRound(venueId, d).then(ownerOnly(owner, setLastRound)).catch(() => {});
   }, [venueId, d, caps.ledger]);
   // 장부 탭이 인텐트를 읽어 오늘 시작 화면에 지난 회차를 1회 자동 적용한다(파일 간 계약: nuri:last-round-intent)
   const gotoLedgerWithLastRound = () => {
@@ -324,6 +410,24 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   // 요청 게임의 바인 금액(결제 팝오버 표시) — 해당 게임 클락 liveStats 우선, 없으면 메인 세션
   const buyinAmountFor = (gameSeq: number | null) => venueClocks.find((c) => c.gameSeq === (gameSeq ?? 1))?.liveStats?.buyInAmount ?? session?.buyinAmount ?? null;
   const liveWidget = caps.ledger && (clockActive || activeClocks.length > 0 || pendingReqs.length > 0); // 진행 클락(메인/사이드) 또는 대기 요청
+
+  // ── 오늘 게임별 운영 표(§5 다섯 번째 행) ─────────────────────────────────────
+  //   새 조회를 만들지 않는다 — range 는 이미 14일치 전 게임을 담고 있고, venueClocks 도 이미 있다.
+  //   ⚠ 집계는 반드시 정본 함수로: 횟수·인원은 ledgerCounts, 금액은 buyinFinance.
+  //     표시용으로 여기서 합산식을 새로 만들면 장부·정산과 숫자가 갈린다(오너 규칙 2026-09-11).
+  //   ⚠ 이 값은 아래 stepInfo 5번(정산) 칩의 판정에도 쓰이므로 stepInfo **앞**에 있어야 한다(TDZ).
+  const todayGames = useMemo(() => {
+    const rows = range.sessions.filter((x) => x.sessionDate === d).sort((a, b) => a.gameSeq - b.gameSeq);
+    return rows.map((sx) => {
+      const bs = range.buyins.filter((b) => b.sessionDate === d && b.gameSeq === sx.gameSeq);
+      const c = ledgerCounts(bs);
+      let value = 0, unpaid = 0;
+      for (const b of bs) { const f = buyinFinance(b, sx); value += f.value; unpaid += f.unpaid; }
+      const ck = venueClocks.find((x) => x.gameSeq === sx.gameSeq) ?? null;
+      const ckLive = !!ck && (ck.running || ck.currentIndex > 0 || ck.endsAt != null);
+      return { sx, c, value, unpaid, ck, ckLive };
+    });
+  }, [range, d, venueClocks]);
   /* 오늘 파이프라인 5단계(포스터 → 장부 → 클락 → 순위 → 정산).
      예전엔 이 값으로 대시보드 안에 숫자 스트립을 그렸다. 지금은 **위의 알약 탭바 하나**가 그 역할을
      겸한다(오너 2026-09-08: "두 개를 2번으로 통일해서 한 페이지에서 왔다갔다") — 같은 파이프라인을
@@ -341,9 +445,18 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       clock: { done: clockActive || closed, dest: { section: 'clock', gameSeq: seq } },
       ranking: { done: hasRankToday === true, dest: { section: 'ranking', date: d, gameSeq: seq, title: session?.title } },
       // 정산은 별도 화면이 아니라 **장부의 마감**이다 — 미수가 남아 있으면 아직 끝난 게 아니다.
-      settle: { done: closed && fin.unpaid === 0, dest: { section: 'ledger', date: d, gameSeq: seq, settle: true } },
+      // F12(2026-09-13) — 1~4번은 '오늘 메인 세션 한 판'의 파이프라인이지만 5번이 여는 판만
+      // 2026-09-08 오너 결정으로 **날짜 단위 정산**(전 게임 합산 · '미마감 N게임' 배지)으로 승격됐다.
+      // 판정도 그 판과 같은 하루 범위로 맞춘다 — 사이드가 열려 있는데 ✓ 가 뜨면 칩이 여는 화면과 어긋난다.
+      // ⚠ todayGames 는 14일 range 에서 나온다. 아직 안 왔거나 조회가 실패했으면 rows 가 비고
+      //   every([])=true 라 **예전대로 메인 기준**으로 떨어진다 — 조회 실패가 ✓ 를 지우지 않는다
+      //   (실패 자체는 rangeErr 배너가 말한다: F14). 5번 칩 하나만 바꾼다 — KPI 밴드는 단일 세션 그대로.
+      settle: {
+        done: closed && fin.unpaid === 0 && todayGames.every((g) => g.sx.closed && g.unpaid === 0),
+        dest: { section: 'ledger', date: d, gameSeq: seq, settle: true },
+      },
     };
-  }, [loading, loadErr, caps.ledger, session, started, clockActive, hasRankToday, fin.unpaid, schedules, venueId, d]);
+  }, [loading, loadErr, caps.ledger, session, started, clockActive, hasRankToday, fin.unpaid, todayGames, schedules, venueId, d]);
   useEffect(() => { onProgress?.(stepInfo); }, [stepInfo, onProgress]);
   // '오늘 장부'를 뜻하는 이동(KPI 밴드·장부 보기·미수금·바인 요청 전체 관리·빠른 작업 장부)은 전부 이 하나로.
   // bare 'ledger' 는 resolveDest 규약상 시드를 만들지 않아 goStep 이 ledgerSeed 를 지우고, 장부 판이 처음이면
@@ -474,22 +587,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const entryDelta = prevBuyins > 0 ? Math.round(((weekEntry - prevBuyins) / prevBuyins) * 100) : null;
   const paidDelta = prevPaid > 0 ? Math.round(((weekPaid - prevPaid) / prevPaid) * 100) : null;
 
-  // ── 오늘 게임별 운영 표(§5 다섯 번째 행) ─────────────────────────────────────
-  //   새 조회를 만들지 않는다 — range 는 이미 14일치 전 게임을 담고 있고, venueClocks 도 이미 있다.
-  //   ⚠ 집계는 반드시 정본 함수로: 횟수·인원은 ledgerCounts, 금액은 buyinFinance.
-  //     표시용으로 여기서 합산식을 새로 만들면 장부·정산과 숫자가 갈린다(오너 규칙 2026-09-11).
-  const todayGames = useMemo(() => {
-    const rows = range.sessions.filter((x) => x.sessionDate === d).sort((a, b) => a.gameSeq - b.gameSeq);
-    return rows.map((sx) => {
-      const bs = range.buyins.filter((b) => b.sessionDate === d && b.gameSeq === sx.gameSeq);
-      const c = ledgerCounts(bs);
-      let value = 0, unpaid = 0;
-      for (const b of bs) { const f = buyinFinance(b, sx); value += f.value; unpaid += f.unpaid; }
-      const ck = venueClocks.find((x) => x.gameSeq === sx.gameSeq) ?? null;
-      const ckLive = !!ck && (ck.running || ck.currentIndex > 0 || ck.endsAt != null);
-      return { sx, c, value, unpaid, ck, ckLive };
-    });
-  }, [range, d, venueClocks]);
+  // (오늘 게임별 운영 표 todayGames 는 stepInfo 5번 칩과 같은 값을 쓰므로 위쪽으로 옮겼다 — F12)
 
   // ── 매장이용권(회수 티켓) 최근 7일 ──
   let weekTicket = 0;
@@ -534,6 +632,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   }
   laborTotal += dealerPay;
   laborHours += dealerHours;
+  // 시급이든 딜러 근무든 못 불러왔으면 합계는 숫자가 아니다 — '0만원' 이 정상값처럼 읽힌다(F6).
+  const laborErr = wageErr || dealerErr || shiftErr;
 
   // ── 손님 유형 비중(오늘 명단) ──
   const typeCount: Record<string, number> = {};
@@ -1140,7 +1240,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         {/* 최근 7일 추세 + 객단가 */}
         <DashCard show={caps.manage} title="최근 7일 추세" onClick={() => onGoto('stats')}
           badge={<span data-testid="dash-stats-link" className="text-2xs font-bold text-ink-muted">통계·운영 분석 →</span>}>
-          {loading ? <Skeleton /> : weekEntry === 0 ? (
+          {/* 순서가 중요하다 — 실패를 '데이터 없음'보다 **먼저** 판정한다(F14). 조회가 죽으면 range 가
+              빈 값이라 weekEntry 가 0 이고, 예전엔 그게 "7일간 손님이 없었다"로 읽혔다. */}
+          {loading ? <Skeleton /> : rangeErr ? (
+            <LoadFailRow what="최근 7일 장부" onRetry={reloadRange} />
+          ) : weekEntry === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">최근 7일 장부 데이터가 없습니다.</p>
           ) : (
             <>
@@ -1167,7 +1271,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         {/* 전주 대비(주간 비교) */}
         <DashCard show={moreOpen && caps.manage} title="전주 대비" onClick={() => onGoto('stats')}
           badge={<span className="text-2xs font-bold text-ink-muted">주간 비교</span>}>
-          {loading ? <Skeleton /> : (weekEntry === 0 && prevBuyins === 0) ? (
+          {loading ? <Skeleton /> : rangeErr ? (
+            <LoadFailRow what="비교할 14일 장부" onRetry={reloadRange} />
+          ) : (weekEntry === 0 && prevBuyins === 0) ? (
             <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>
           ) : (
             <div className="space-y-2 py-0.5">
@@ -1177,17 +1283,25 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
 
-        {/* 다가오는 예약 */}
+        {/* 다가오는 예약 — C08: 인원 조회 실패를 '0명'과 갈라놓는다(실패했는데 0명으로 보이면
+            "예약이 없다"는 거짓 안심을 준다). */}
         <DashCard show={caps.posters} title="다가오는 예약" onClick={() => onGoto('posters')}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">예약 {totalRes}</span>}>
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">예약 {resCountsErr ? '—' : totalRes}</span>}>
           {loading ? <Skeleton /> : upcoming.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">예정된 게임이 없습니다.</p>
           ) : (
             <ul className="space-y-1">
+              {!!resCountsErr && (
+                <li className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-2 py-1.5 text-2xs font-semibold text-ink-secondary">
+                  예약 인원을 불러오지 못했어요 — 0명과는 달라요.
+                  <button type="button" onClick={(e) => { e.stopPropagation(); reloadReservations(); }}
+                    className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-0.5 text-2xs font-bold text-ink-primary">다시 시도</button>
+                </li>
+              )}
               {upcoming.map((g) => (
                 <li key={g.id} className="flex items-center justify-between gap-2 text-xs">
                   <span className="truncate text-ink-secondary"><span className="text-2xs text-ink-muted tabular-nums mr-1">{g.date.slice(5).replace('-', '/')}</span>{g.title}</span>
-                  <span className="shrink-0 tabular-nums text-ink-muted">예약 {resCounts[g.id] ?? 0}명</span>
+                  <span className="shrink-0 tabular-nums text-ink-muted">예약 {resCountsErr ? '—' : (resCounts[g.id] ?? 0)}명</span>
                 </li>
               ))}
             </ul>
@@ -1227,7 +1341,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         {/* 오늘 출근 */}
         <DashCard show={moreOpen && caps.staff} title="오늘 출근" onClick={() => onGoto('staff')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">{workedStaff.length}/{shifts.length} 출근</span>}>
-          {loading ? <Skeleton /> : shifts.length === 0 ? (
+          {loading ? <Skeleton /> : shiftErr ? (
+            <p className="py-3 text-center text-2xs text-danger-light">출근 기록을 불러오지 못했습니다.</p>
+          ) : shifts.length === 0 && !shiftErr ? (
             <p className="py-3 text-center text-2xs text-ink-muted">오늘 배정된 직원이 없습니다.</p>
           ) : (
             <ul className="flex flex-wrap gap-2">
@@ -1243,17 +1359,19 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         {/* 인건비 요약(이번 달) */}
         <DashCard show={moreOpen && caps.staff} title="인건비 요약" onClick={() => onGoto('staff')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">{mr.label}</span>}>
-          {loading ? <Skeleton /> : laborHours === 0 ? (
+          {loading ? <Skeleton /> : (laborHours === 0 && !laborErr) ? (
             <p className="py-3 text-center text-2xs text-ink-muted">이번 달 출퇴근 기록이 없습니다.</p>
           ) : (
             <div className="space-y-1.5">
               <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                 {/* 시급을 못 불러왔으면 숫자를 만들지 않는다 — '0만원'이 정상값처럼 읽힌다 */}
-                <Stat label="총 인건비" value={wageErr ? '—' : wonToMan(laborTotal)} unit={wageErr ? '' : '만원'} gold />
-                <Stat label="총 근무" value={`${Math.round(laborHours)}`} unit="시간" />
+                <Stat label="총 인건비" value={laborErr ? '—' : wonToMan(laborTotal)} unit={laborErr ? '' : '만원'} gold />
+                <Stat label="총 근무" value={dealerErr ? '—' : `${Math.round(laborHours)}`} unit={dealerErr ? '' : '시간'} />
               </div>
               {wageErr && <p className="text-[11px] text-danger-light">시급을 불러오지 못해 금액을 계산할 수 없습니다.</p>}
-              {!wageErr && dealerPay > 0 && (
+              {dealerErr && <p className="text-[11px] text-danger-light">딜러 근무 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
+              {shiftErr && <p className="text-[11px] text-danger-light">출근 기록을 불러오지 못해 합계를 계산할 수 없습니다.</p>}
+              {!laborErr && dealerPay > 0 && (
                 <p className="text-[11px] text-ink-muted tabular-nums">직원 {wonToMan(laborTotal - dealerPay)}만 · 딜러 {wonToMan(dealerPay)}만</p>
               )}
             </div>
@@ -1265,12 +1383,15 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           badge={<span className="text-2xs font-bold text-ink-muted">발급·관리 →</span>}>
           {loading ? <Skeleton /> : (
             <>
+              {/* 7일 두 칸만 14일 range 에서 온다 — 그 조회가 죽으면 '0장'이 아니라 '—'다(F14).
+                  오늘 두 칸은 core(세션·바인)에서 오므로 그쪽 실패는 위 LoadErrorCard 가 말한다. */}
               <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                <Stat label="7일 발행" value={`${weekVoucher}`} unit="장" />
+                <Stat label="7일 발행" value={rangeErr ? '—' : `${weekVoucher}`} unit={rangeErr ? '' : '장'} />
                 <Stat label="오늘 발행" value={`${todayVoucher}`} unit="장" />
-                <Stat label="7일 회수" value={`${weekTicket}`} unit="장" />
+                <Stat label="7일 회수" value={rangeErr ? '—' : `${weekTicket}`} unit={rangeErr ? '' : '장'} />
                 <Stat label="오늘 회수" value={`${fin.ticket}`} unit="장" />
               </div>
+              {!!rangeErr && <div className="mt-2"><LoadFailRow what="최근 7일 이용권" onRetry={reloadRange} /></div>}
               <p className="mt-2 t-desc break-keep text-ink-muted">발행=장부에서 입력한 발급/시상 · 회수=티켓으로 바인한 건수(금액은 장부 정산 대차표에서 T 로).</p>
             </>
           )}
@@ -1322,15 +1443,19 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           PC 는 상세를 카드 나열보다 표로 본다 — 게임이 여럿이면 카드로는 대소 비교가 안 된다.
           모바일에서는 중요도가 낮은 열(첫 바인·리바인·클락)을 숨기고 표 자체가 내부 스크롤한다.
           ⚠ 페이지 전체 가로 스크롤이 생기지 않게 스크롤은 이 컨테이너 안에서만(overflow-x-auto + min-w). */}
-      {caps.ledger && todayGames.length > 0 && (
+      {/* F14 — 조회가 죽으면 이 표는 통째로 사라졌다('오늘 게임이 없다'와 구분 불가).
+          실패했으면 섹션을 남기고 이유·재시도를 보인다. 실패했는데 옛 행이 남아 있으면 개수는 '—'다. */}
+      {caps.ledger && (todayGames.length > 0 || !!rangeErr) && (
         <section className="rounded-aura border card-aura p-3" aria-labelledby="today-games-h">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p id="today-games-h" className="flex items-center gap-1.5 text-sm font-bold text-ink-primary">
               <Icon name="layers" size={14} className="shrink-0 text-ink-muted" />오늘 게임
-              <span className="text-2xs font-normal text-ink-muted">· {todayGames.length}개</span>
+              <span className="text-2xs font-normal text-ink-muted">· {rangeErr ? '—' : `${todayGames.length}개`}</span>
             </p>
             <span className="text-2xs text-ink-muted">머니인 가치 = 게임에 투입된 총 가치(현금·카드·이체·이용권)</span>
           </div>
+          {!!rangeErr && <div className="mb-2"><LoadFailRow what="오늘 게임" onRetry={reloadRange} /></div>}
+          {todayGames.length > 0 && (
           <div className="overflow-x-auto scrollbar-none">
             <table className="w-full min-w-[34rem] text-left text-xs">
               <thead>
@@ -1382,6 +1507,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               </tbody>
             </table>
           </div>
+          )}
         </section>
       )}
 
@@ -1420,6 +1546,19 @@ function DashCard({ title, badge, onClick, children, show = true }: { title: str
       </button>
       {children}
     </section>
+  );
+}
+
+/** 조회 실패 줄(F14) — '데이터가 없습니다'(성공했는데 빈 것)와 반드시 다르게 말한다.
+ *  숫자 자리는 '—' 로 비우고 여기에 이유와 재시도를 붙인다. DashCard 의 children 은 헤더 button 밖이라
+ *  진짜 <button> 을 쓸 수 있지만, 카드 전체 onClick 으로 새는 것은 stopPropagation 으로 막는다. */
+function LoadFailRow({ what, onRetry }: { what: string; onRetry: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-2 py-1.5 text-2xs font-semibold text-ink-secondary">
+      <span className="break-keep">{what}을(를) 불러오지 못했어요 — 0 과는 달라요.</span>
+      <button type="button" onClick={(e) => { e.stopPropagation(); onRetry(); }}
+        className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-0.5 text-2xs font-bold text-ink-primary">다시 시도</button>
+    </div>
   );
 }
 

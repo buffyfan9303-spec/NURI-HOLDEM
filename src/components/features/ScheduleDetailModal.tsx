@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState, useEffect, useMemo, type ReactNode } from 'react';
 import Modal from '../atoms/Modal';
-import MarqueeText from '../atoms/MarqueeText';
 import Icon, { type IconName } from '../atoms/Icon';
 import ImageLightbox from '../atoms/ImageLightbox';
 import CommentThread from './CommentThread';
@@ -10,10 +9,11 @@ import { isScheduleLiked, toggleScheduleLike } from '../../api/calendar';
 import StatefulActionButton from '../atoms/StatefulActionButton';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 import { getMyReservation, createReservation, cancelMyReservation, getOwnerReservations, type Reservation, type OwnerReservation } from '../../api/reservations';
-import { prizeMainText } from './ScheduleCard';
+import { prizeMainText, buyInText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import { scheduleStatus } from '../../lib/scheduleStatus';
-import { matchClockSchedule, msToRegClose, type RegInfo } from '../../lib/regStatus';
+import { matchClockScheduleDetailed, msToRegClose, type RegInfo } from '../../lib/regStatus';
+import { regCloseLevelOf } from '../../lib/regClose';
 import type { Comment } from '../../api/community';
 import {
   generateBlinds, getVenueClocks, subscribeClock, effectiveLevel,
@@ -37,7 +37,9 @@ interface ScheduleDetailModalProps {
   /** 매장 별점 집계(방문 후기) — 매장명 옆 ⭐ 표시 */
   rating?: { avg: number; count: number };
   comments: Comment[];
-  onSubmitComment: (content: string, parentId?: string) => void;
+  // N04(2026-09-12): CommentThread 와 같은 Promise 계약 — 성공을 기다린 뒤에만 입력을 비운다.
+  // App.tsx 의 handleSubmitScheduleComment 가 이 계약(await + 실패 시 throw)을 따라야 한다.
+  onSubmitComment: (content: string, parentId?: string) => Promise<void>;
   onDeleteComment?: (commentId: string) => void;
   /** 관리자 마스터 삭제(포스터) */
   onDeletePoster?: (id: string) => void;
@@ -274,52 +276,47 @@ export default function ScheduleDetailModal({
                 운영자 삭제
               </button>
             )}
+            {/* 매장명은 **첫 줄을 혼자 쓴다**(§6-2). 종전엔 매장명 · 지역 · 유형 · 별점이
+                한 줄에 묶여 있어, 360px 에서 매장명이 가장 먼저 접히거나 뒤쪽 값에 밀려 잘렸다 —
+                매장명은 1차 식별자라 다음 줄로 보조 정보(지역 · 형식 · 평점)를 내린다. */}
             {schedule.venueId ? (
               <button
                 type="button"
                 onClick={() => onVenueClick(schedule.venueId!)}
-                className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary hover:text-accent-300 transition-colors group"
+                className="mt-1.5 flex w-full items-center gap-1 text-left text-base text-ink-secondary hover:text-accent-300 transition-colors group"
               >
-                <span className="font-medium underline decoration-dotted underline-offset-2">
+                <span className="min-w-0 break-keep [overflow-wrap:anywhere] font-bold underline decoration-dotted underline-offset-2">
                   {schedule.pubName}
                 </span>
-                <span className="text-ink-muted">·</span>
-                <span>{schedule.region}</span>
-                {/* APIS 헤더 문법: 매장명 · 지역 · 유형 — 포스터 배지와 중복이지만 포스터를 지나쳐도 유형이 남는다 */}
-                <span className="text-ink-muted">·</span>
-                <span className="font-semibold tracking-wider">{schedule.format}</span>
-                {rating && rating.count > 0 && (
-                  <span className={`inline-flex shrink-0 items-center gap-0.5 font-bold tabular-nums ${ACCENT_INK}`} title={`방문 후기 ${rating.count}건 평균`}>
-                    <Icon name="star-fill" size={12} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
-                  </span>
-                )}
                 <svg
                   width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.6"
-                  className="opacity-50 group-hover:opacity-100 transition-opacity ml-1"
+                  className="shrink-0 opacity-50 group-hover:opacity-100 transition-opacity"
                   aria-hidden
                 >
                   <path d="M2 9 L9 2 M3.5 2 L9 2 L9 7.5" strokeLinecap="round" />
                 </svg>
               </button>
             ) : (
-              <p className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary">
-                <span className="font-medium">{schedule.pubName}</span>
-                <span className="text-ink-muted">·</span>
-                <span>{schedule.region}</span>
-                <span className="text-ink-muted">·</span>
-                <span className="font-semibold tracking-wider">{schedule.format}</span>
-                {rating && rating.count > 0 && (
-                  <span className={`inline-flex shrink-0 items-center gap-0.5 font-bold tabular-nums ${ACCENT_INK}`} title={`방문 후기 ${rating.count}건 평균`}>
-                    <Icon name="star-fill" size={12} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
-                  </span>
-                )}
-              </p>
+              <p className="mt-1.5 break-keep [overflow-wrap:anywhere] text-base font-bold text-ink-secondary">{schedule.pubName}</p>
             )}
+            {/* 지역 · 형식 · 별점 — 줄바꿈 허용(flex-wrap). 포스터 배지와 중복이지만 포스터를 지나쳐도 유형이 남는다 */}
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm text-ink-secondary">
+              <span className="break-keep">{schedule.region}</span>
+              <span className="text-ink-muted">·</span>
+              <span className="font-semibold tracking-wider">{schedule.format}</span>
+              {rating && rating.count > 0 && (
+                <span className={`inline-flex shrink-0 items-center gap-0.5 font-bold tabular-nums ${ACCENT_INK}`} title={`방문 후기 ${rating.count}건 평균`}>
+                  <Icon name="star-fill" size={12} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+                </span>
+              )}
+            </p>
             {schedule.address && (
               <a href={`https://map.kakao.com/link/search/${encodeURIComponent(schedule.address)}`}
                 target="_blank" rel="noopener noreferrer"
-                className="mt-0.5 ml-5 flex items-center gap-1.5 text-xs text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
-                <Icon name="map" size={13} className="shrink-0" />{schedule.address}
+                /* ml-5 제거(2026-09-12) — 매장명이 한 줄을 혼자 쓰게 되면서 들여쓰기 기준선이 사라졌다.
+                   §5-1: 좌측 제목 시작선에 맞춘다. 주소는 길면 줄바꿈(잘라 숨기지 않는다). */
+                className="mt-0.5 flex items-start gap-1.5 text-xs text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
+                <Icon name="map" size={13} className="mt-0.5 shrink-0" /><span className="break-keep [overflow-wrap:anywhere]">{schedule.address}</span>
               </a>
             )}
           </div>
@@ -402,9 +399,9 @@ export default function ScheduleDetailModal({
               상품 가격 정보라 표시를 유지한다. */}
           <div className="grid grid-cols-2 [&>div]:border-border-subtle [&>div:nth-child(even)]:border-l [&>div:nth-child(n+3)]:border-t">
             {/* 바이인 미입력(0)은 가격 정보가 아니다 — 카드·표와 같은 '—' 문법(§28은 실제 금액에만 적용) */}
-            <SummaryCell label="바이인" value={schedule.buyIn.amount > 0 ? schedule.buyIn.amount.toLocaleString() : '—'} />
+            <SummaryCell label="참가비" value={buyInText(schedule.buyIn?.amount)} />
             <SummaryCell
-              label={schedule.guaranteed ? '상금 풀' : '프라이즈'}
+              label={schedule.guaranteed ? '상금 보장(GTD)' : '예상 상금'}
               value={prizeMainText(schedule)}
               accent
               badge={(schedule.prizePool || schedule.prizePercent) ? (
@@ -419,7 +416,7 @@ export default function ScheduleDetailModal({
               ) : undefined}
             />
             <SummaryCell label="시작" value={`${d.getMonth() + 1}/${d.getDate()} (${dow}) ${schedule.startTime}`} />
-            <SummaryCell label="레지 마감" value={schedule.regCloseTime ? schedule.regCloseTime : '현장 안내'} />
+            <SummaryCell label="등록 마감" value={schedule.regCloseTime ? schedule.regCloseTime : '현장 안내'} />
             <SummaryCell label="스타팅 칩" value={schedule.structure?.startingChips != null ? schedule.structure.startingChips.toLocaleString() : '현장 안내'} />
             <SummaryCell label="리엔트리" value={rebuyText(schedule)} />
           </div>
@@ -461,13 +458,19 @@ export default function ScheduleDetailModal({
             <InfoRow label="날짜" value={`${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} (${dow})`} />
             {schedule.startTime && <InfoRow label="시작 시간" value={schedule.startTime} />}
             <InfoRow label="유형" value={`${schedule.format} · ${schedule.guaranteed ? 'GTD 보장' : '예상 상금'}`} />
-            <InfoRow label="바이인" value={buyinDetailText(schedule)} />
+            <InfoRow label="참가비" value={buyinDetailText(schedule)} />
             <InfoRow label="리엔트리" value={rebuyText(schedule)} />
             {schedule.structure?.startingChips != null && <InfoRow label="스타팅 칩" value={schedule.structure.startingChips.toLocaleString()} />}
             {schedule.structure?.rebuyStack != null && <InfoRow label="리바이 칩" value={schedule.structure.rebuyStack.toLocaleString()} />}
             {schedule.structure?.blindLevelMinutes != null && <InfoRow label="블라인드 타임" value={`${schedule.structure.blindLevelMinutes}분`} />}
             <InfoRow label="레지 마감" value={schedule.regCloseTime ? `${schedule.regCloseTime} · 레이트 레지 마감` : '현장 안내'} />
-            {schedule.structure?.lateRegLevels !== undefined && <InfoRow label="레이트 레지" value={`${schedule.structure.lateRegLevels}레벨`} />}
+            {/* ⚠ 2026-09-13: 이 줄은 `structure.lateRegLevels` 를 **날것으로** 찍어, 포스터가
+                `regCloseTime='16LV 00:12'` 와 `lateRegLevels=20` 을 함께 가지면 바로 위 '레지 마감'(16LV)과
+                같은 화면에서 20레벨이라고 말했다. 값은 regCloseLevelOf(정본=regCloseTime) 로 통일한다.
+                표시 조건은 건드리지 않는다 — 예전에 행이 뜨던 포스터에서만, 예전처럼 뜬다(0레벨 폴백 포함). */}
+            {schedule.structure?.lateRegLevels !== undefined && (
+              <InfoRow label="레이트 레지" value={`${regCloseLevelOf(schedule) ?? schedule.structure.lateRegLevels}레벨`} />
+            )}
             <InfoRow label="듀레이션" value={schedule.duration || '미정'} />
             <InfoRow
               label="이벤트"
@@ -591,7 +594,7 @@ export default function ScheduleDetailModal({
         <section className="overflow-hidden rounded-aura border border-border-subtle bg-surface-high">
           <div className="grid grid-cols-2 [&>div]:border-border-subtle [&>div:nth-child(even)]:border-l">
             <SummaryCell
-              label={schedule.guaranteed ? '상금 풀' : '프라이즈'}
+              label={schedule.guaranteed ? '상금 보장(GTD)' : '예상 상금'}
               value={prizeMainText(schedule)}
               accent
               badge={(schedule.prizePool || schedule.prizePercent) ? (
@@ -605,7 +608,7 @@ export default function ScheduleDetailModal({
                 </span>
               ) : undefined}
             />
-            <SummaryCell label="바이인" value={schedule.buyIn.amount > 0 ? schedule.buyIn.amount.toLocaleString() : '—'} />
+            <SummaryCell label="참가비" value={buyInText(schedule.buyIn?.amount)} />
           </div>
           {schedule.guaranteed && (
             <p className="border-t border-border-subtle px-3 py-1.5 text-2xs text-ink-muted">
@@ -774,19 +777,53 @@ export default function ScheduleDetailModal({
 // 390px 붕괴: 타이머가 1행 전체(col-span-2), 그 아래 프라이즈|PLAYERS 2열.
 // sm 이상에서 order 로 APIS 순서(프라이즈·타이머·PLAYERS)를 복원한다 — 모바일에서 타이머를
 // 맨 위에 두는 이유는 '지금 몇 분 남았나'가 이 화면의 심장이라서다.
+/** 사전식 비교 — 앞 키가 같을 때만 뒤 키를 본다. 음수면 a 가 이긴다. */
+function cmpKey(a: readonly number[], b: readonly number[]): number {
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i];
+  return 0;
+}
+
+/**
+ * F4(2026-09-13): 상세 라이브 패널이 붙일 클락을 **결정적으로** 고른다.
+ *
+ * 예전에는 `gs.find((g) => matchClockSchedule(g, stub))` 였다. 스텁이 **원소 1개**라
+ * `matchClockScheduleDetailed` 가 같은 매장·같은 날짜이기만 하면 제목이 달라도 `only` 로 매칭했고,
+ * 결국 승자는 `getVenueClocks`(clock.ts:362 — **ORDER BY 없음**)의 배열 순서였다.
+ * 멀티 클락 매장에서 포스터 상단의 **남은 시간·블라인드·PLAYERS 가 다른 게임(정지된 사이드 포함)** 것일 수 있었다.
+ *
+ * 규칙 — App.tsx 의 `buildRegInfoMap` 이 같은 포스터에 붙인 클락과 **같은 클락으로 수렴**한다:
+ *   ① running 우선 — App 의 후보는 `getRunningClocks()`(running=true)뿐이라 정지 클락은 애초에 App 후보가 아니다.
+ *   ② 제목 정확 일치 우선 — `buildRegInfoMap` 의 확신도 순위(title > only/fallback)와 같은 축.
+ *   ③ `gameSeq` 오름차순 — `buildRegInfoMap` 의 타이브레이크와 같다(메인=1 이 사이드를 이긴다).
+ * ⚠ 제목은 **타이브레이크일 뿐 탈락 조건이 아니다** — 제목이 한 글자만 달라도 타이머가 통째로 사라지면 안 된다.
+ * ⚠ `scheduleId` 로 고르는 안은 `ClockState` 에 그 필드가 없어 불가하다(스키마를 늘리지 않는다).
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- 테스트가 순수 함수를 직접 검증(CommentThread 와 같은 관행)
+export function pickLiveClock(clocks: ClockState[], schedules: Schedule[]): ClockState | null {
+  let best: ClockState | null = null;
+  let bestKey: number[] | null = null;
+  for (const g of clocks) {
+    const m = matchClockScheduleDetailed(g, schedules);
+    if (!m) continue; // 같은 매장·같은 날짜가 아니다 — 후보가 아니다
+    const key = [g.running ? 0 : 1, m.quality === 'title' ? 0 : 1, g.gameSeq ?? 1];
+    if (!bestKey || cmpKey(key, bestKey) < 0) { best = g; bestKey = key; }
+  }
+  return best;
+}
+
 function LiveClockPanel({ schedule, regInfo, onSeePrize }: {
   schedule: Schedule; regInfo?: RegInfo; onSeePrize: () => void;
 }) {
   const { id, venueId, date, title } = schedule;
-  // matchClockSchedule 은 Schedule[] 을 받는다 — 매칭 규칙(같은 매장·같은 날짜, 여럿이면 제목 일치)을
-  // 여기서 다시 짜면 규칙이 두 벌이 된다. 최소 필드 스텁 1개로 그 단일 소스를 그대로 호출한다.
+  // 후보 판정(같은 매장·같은 날짜)은 lib/regStatus 단일 소스에 그대로 맡긴다 — 최소 필드 스텁 1개.
+  // 승자 선택은 pickLiveClock 이 결정적으로 한다(배열 순서에 의존하지 않는다).
   const stub = useMemo(() => [{ id, venueId, date, title } as Schedule], [id, venueId, date, title]);
   const [clock, setClock] = useState<ClockState | null>(null);
   useEffect(() => {
     if (!venueId) return;
     let alive = true;
     const load = () => getVenueClocks(venueId)
-      .then((gs) => { if (alive) setClock(gs.find((g) => matchClockSchedule(g, stub)) ?? null); })
+      .then((gs) => { if (alive) setClock(pickLiveClock(gs, stub)); })
       // 조회 실패를 화면 상태로 승격시키지 않는다 — 패널은 직전 값을 유지하고,
       // 아래 참가 예약 문구(regInfo 기반)가 이미 '지금 등록 되나'의 답을 들고 있다.
       .catch(() => {});
@@ -1117,7 +1154,9 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
         <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}
           className="flex min-w-0 flex-1 items-center gap-2 text-left">
           <span className="shrink-0 text-sm font-bold text-accent-300">참가 예약</span>
-          <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">
+          {/* truncate → 줄바꿈(2026-09-12): 360px 에서 '미리 자리 잡아두기'가 87/102 로 잘렸다.
+              예약 상태·실패 안내가 들어가는 자리라 잘라 숨기면 안 된다(§5-2). */}
+          <span className="min-w-0 flex-1 break-keep [overflow-wrap:anywhere] text-2xs leading-tight text-ink-muted">
             {mineErr !== null && mine === undefined ? '예약 정보를 불러오지 못했어요'
               : mine === undefined ? ' ' : mine ? `예약자: ${mine.displayName}` : isManager ? resSummary : '미리 자리 잡아두기'}
           </span>
@@ -1299,11 +1338,10 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
 function BlindStructure({ schedule, alwaysOpen = false }: { schedule: Schedule; alwaysOpen?: boolean }) {
   const [open, setOpen] = useState(false);
   const shown = alwaysOpen || open;
-  const regClose = (() => {
-    const m = String(schedule.regCloseTime ?? '').match(/\d+/);
-    const n = m ? parseInt(m[0], 10) : 16;
-    return Math.min(Math.max(n, 1), 25);
-  })();
+  // 레벨 파싱은 lib/regClose 한 곳뿐이다(2026-09-13). 예전 `/\d+/` 는 **아무 숫자나** 집어
+  // 시각만 적힌 포스터('22:00')를 22레벨로 읽었다 — 카드(regCloseText)는 같은 문자열을
+  // '레벨 없음'으로 봤으니 같은 대회를 화면마다 다르게 말하고 있었다. LV 형태가 없으면 기본 16LV.
+  const regClose = Math.min(Math.max(regCloseLevelOf(schedule) ?? 16, 1), 25);
   const dur = schedule.structure?.blindLevelMinutes || 20;
   const custom = schedule.structure?.levels;
   // 포스터별 저장된 커스텀 레벨이 있으면 그걸, 없으면 파이널롤백 기반 자동 생성
@@ -1379,31 +1417,37 @@ function BlindStructure({ schedule, alwaysOpen = false }: { schedule: Schedule; 
 }
 
 
-// 게임 정보 2열 정의 행 — 라벨(dt) 좌 / 값(dd) 우. 긴 값은 MarqueeText 가 옆으로 흘린다.
+// 게임 정보 2열 정의 행 — 라벨(dt) 좌 / 값(dd) 우.
 // dl > div > dt+dd 는 HTML5 유효 구조 — 행 단위 구분선을 주려면 래퍼가 필요하다.
+// ⚠ 2026-09-12: 값에서 **MarqueeText 를 걷어냈다.** 참가비·등록 마감·스타팅 칩을 읽으려고
+//   글자가 흘러 지나가기를 기다려야 했다(§6-2). 지금은 어절 단위로 자연 줄바꿈하고 행이 늘어난다 —
+//   잘림도 없고 기다림도 없다. 띄어쓰기 없는 초장문 토큰만 [overflow-wrap:anywhere] 로 예외 절단.
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 py-1.5">
-      <dt className="text-2xs text-ink-muted">{label}</dt>
-      <dd className="min-w-0">
-        <MarqueeText text={value} className="text-xs font-semibold text-ink-primary tabular-nums text-right" />
+    <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-start gap-3 py-1.5">
+      <dt className="text-2xs leading-relaxed text-ink-muted">{label}</dt>
+      <dd className="min-w-0 break-keep [overflow-wrap:anywhere] text-right text-xs font-semibold leading-relaxed tabular-nums text-ink-primary">
+        {value}
       </dd>
     </div>
   );
 }
 
-// 상단 요약 그리드 셀 — 라벨(2xs muted) 위 / 값(sm bold) 아래, 행 높이 고정(h-14)
+// 상단 요약 그리드 셀 — 라벨(2xs muted) 위 / 값(sm bold) 아래.
+// ⚠ 2026-09-12(§6-2): **고정 h-14 와 MarqueeText 를 둘 다 걷어냈다.**
+//   ① 고정 높이는 '55,000원'처럼 조금만 길어도 값을 상자 밖으로 밀거나 마퀴로 흘려보냈다.
+//   ② 마퀴는 참가비·등록 마감을 **읽으려면 기다려야 하는** 값으로 만든다.
+//   지금은 min-h(=종전 h-14 와 같은 3.5rem)로 행 리듬만 지키고, 넘치면 자연 줄바꿈으로 늘어난다.
 function SummaryCell({ label, value, badge, accent = false }: {
   label: string; value: string; badge?: React.ReactNode; accent?: boolean;
 }) {
   return (
-    <div className="flex h-14 min-w-0 flex-col justify-center gap-0.5 px-3">
+    <div className="flex min-h-[3.5rem] min-w-0 flex-col justify-center gap-0.5 px-3 py-2">
       <span className="text-2xs leading-none text-ink-muted">{label}</span>
       <div className="flex min-w-0 items-center gap-1.5">
-        <MarqueeText
-          text={value}
-          className={`min-w-0 flex-1 text-sm font-bold tabular-nums leading-tight ${accent ? 'text-gold-300' : 'text-ink-primary'}`}
-        />
+        <span className={`min-w-0 flex-1 break-keep [overflow-wrap:anywhere] text-sm font-bold leading-snug tabular-nums ${accent ? 'text-gold-300' : 'text-ink-primary'}`}>
+          {value}
+        </span>
         {badge}
       </div>
     </div>

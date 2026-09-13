@@ -156,8 +156,32 @@ export function makeQuiz(mode: Mode, retryKey?: string): Quiz {
 export const foldFreq = (q: Quiz): number => Math.max(0, 1 - q.acts.reduce((s, a) => s + a.freq, 0));
 const freqOf = (q: Quiz, chose: string): number => (chose === FOLD ? foldFreq(q) : q.acts.find((a) => a.label === chose)?.freq ?? 0);
 
-/** 채점 — 고른 선택지의 빈도가 25% 이상이면 정답(혼합은 어느 쪽이든 정답). 폴드 빈도 = 1 − Σ액션. */
-export const gradePreflop = (q: Quiz, chose: string): boolean => freqOf(q, chose) >= 0.25;
+/** '주된 선택'으로 볼 빈도 하한. 이 아래여도 **혼합에 들어 있으면 오답이 아니다**(아래 참조). */
+export const MAIN_ACTION_FREQ = 0.25;
+
+/**
+ * 한 선택의 등급.
+ *
+ * - `best` — 빈도가 충분히 높다(주된 선택).
+ * - `mix`  — **혼합에 실제로 들어 있지만 드문** 선택. 정답으로 센다.
+ * - `wrong` — 빈도 0. 이 스팟에서 취하지 않는 액션이다.
+ *
+ * ⚠ 왜 `mix` 를 따로 두는가 (2026-09-12):
+ *   예전 채점은 `freq >= 0.25` 하나였다. 그래서 **12.5% 로 섞는 액션이 '빈도가 낮다'는 이유만으로 오답**이 됐다.
+ *   솔버 전략에서 12.5% 혼합은 틀린 선택이 아니라 **드물게 섞는 올바른 선택**이다 —
+ *   그걸 오답으로 세면 트레이너가 혼합 전략을 잘못 가르치고, 오답노트에도 엉뚱한 항목이 쌓인다.
+ *   지금 차트 데이터의 빈도는 1 · 0.75 · 0.5 · 0.25 뿐이라 **현재 동작은 달라지지 않는다.**
+ *   검증된 솔버 데이터가 들어와 0.125 같은 값이 생기는 날 이 구분이 일한다.
+ */
+export type PreflopGrade = 'best' | 'mix' | 'wrong';
+export const gradeDetail = (q: Quiz, chose: string): PreflopGrade => {
+  const f = freqOf(q, chose);
+  if (f >= MAIN_ACTION_FREQ) return 'best';
+  return f > 0 ? 'mix' : 'wrong';
+};
+
+/** 채점 — **혼합에 들어 있으면 정답**이다. 폴드 빈도 = 1 − Σ액션. */
+export const gradePreflop = (q: Quiz, chose: string): boolean => gradeDetail(q, chose) !== 'wrong';
 
 /** 권장 액션 문구 — '오픈' / '혼합 (3벳 50% · 콜 50%)' / '폴드' */
 export function verdictOf(q: Quiz): string {
@@ -169,11 +193,15 @@ export function verdictOf(q: Quiz): string {
 
 /**
  * 오답 노트에 보여 줄 '내 답' — 큐에는 키만 있고 무엇을 골랐는지는 저장돼 있지 않다.
- * 오답은 빈도 25% 미만인 선택지에서만 나므로, 그런 선택지가 **하나뿐이면** 그것이 곧 내 답이다.
+ * 오답은 **빈도 0인 선택지**에서만 나므로, 그런 선택지가 **하나뿐이면** 그것이 곧 내 답이다.
  * 둘 이상(3택에서 둘이 같이 틀리는 스팟)이거나 없으면(혼합) null.
+ *
+ * ⚠ `gradePreflop` 과 **같은 기준**이어야 한다. 예전엔 둘 다 25% 였는데,
+ *   채점이 '혼합에 들어 있으면 정답' 으로 바뀌었으므로 여기도 0 으로 맞춘다.
+ *   어긋나면 **정답으로 센 선택이 오답노트에 '내 답' 으로 찍힌다.**
  */
 export function wrongPickOf(q: Quiz): string | null {
-  const wrong = [...q.acts, { label: FOLD, freq: foldFreq(q) }].filter((c) => c.freq < 0.25);
+  const wrong = [...q.acts, { label: FOLD, freq: foldFreq(q) }].filter((c) => c.freq <= 0);
   return wrong.length === 1 ? wrong[0].label : null;
 }
 

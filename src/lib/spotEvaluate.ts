@@ -21,13 +21,13 @@
 //   · gto.deep.data.ts         **사람이 쓴 설명문에 빈도를 적어 넣은 예시** — 솔버 산출 아님
 // 그래서 이 파일은 exact_solver 를 반환하는 경로를 아예 갖지 않는다.
 // 나중에 검증된 데이터가 들어오면 evaluateSpot 안의 `lookupSolver` 자리 한 곳만 채우면 된다.
-import { RANGE_SCENARIOS } from './ranges.data';
+import { RANGE_SCENARIOS, type TablePos, type RangeScenario } from './ranges.data';
 import { KEY_PREFIX, PUSH_POS, PUSH_STACKS, type Mode } from './preflopQuiz';
 import { buildFreq } from './ranges';
 import { nashRange, NASH_STACKS, HAND_ORDER } from './nash.data';
 import {
   potBb, heroComboId, validateSpot, hasBlocker, positionsFor,
-  type SpotReview, type SpotActionType, type SpotIssue,
+  type SpotReview, type SpotActionType, type SpotIssue, type SpotPosition,
 } from './spot';
 
 // ── 결과 타입 ─────────────────────────────────────────────────────────────────
@@ -121,13 +121,50 @@ function freqOf(scenarioId: string, actionKey: string, combo: string): number {
 const isFirstIn = (s: SpotReview) => s.actions.length === 0;
 
 /** 히어로가 마주한 마지막 벳/레이즈(콜에 필요한 금액). 없으면 0. */
-function facingBet(s: SpotReview): number {
-  for (let i = s.actions.length - 1; i >= 0; i -= 1) {
-    const a = s.actions[i];
-    if (a.actor === 'villain' && (a.type === 'bet' || a.type === 'raise')) return a.sizeBb ?? 0;
-    if (a.actor === 'hero') break;
-  }
+/** 금액이 붙는 액션 — `potBb` 의 SIZED 와 같은 집합이다. */
+const SIZED_ACTION = new Set<SpotActionType>(['bet', 'raise', 'call']);
+
+/**
+ * 프리플랍에 그 자리가 **이미 내고 시작하는 돈**. 포스트플랍은 0 이다.
+ */
+function blindOf(s: SpotReview, pos: SpotPosition): number {
+  if (s.street !== 'preflop') return 0;
+  if (pos === 'BB') return 1;
+  if (pos === 'SB') return Number.isFinite(s.sbBb) ? s.sbBb : 0;
   return 0;
+}
+
+/**
+ * **이번 스트리트에 그 사람이 넣은 총액** — 액션 원장의 최소 단위다.
+ *
+ * `SpotAction.sizeBb` 는 "이번에 추가로 넣은 돈"(증분)이다. `potBb`(spot.ts)가
+ * 블라인드에 모든 액션 금액을 그냥 더하는 것이 그 증거다 — 레이즈가 총액이라면 팟이 부풀 것이다.
+ * 그래서 한 사람의 투입액은 **블라인드 + 그 스트리트 증분의 합**이다.
+ */
+function investedThisStreet(s: SpotReview, actor: 'hero' | 'villain'): number {
+  let invested = blindOf(s, actor === 'hero' ? s.heroPos : s.villainPos);
+  for (const a of s.actions) {
+    if (a.street !== s.street || a.actor !== actor) continue;
+    if (!SIZED_ACTION.has(a.type)) continue;
+    invested += Number.isFinite(a.sizeBb) ? (a.sizeBb as number) : 0;
+  }
+  return invested;
+}
+
+/**
+ * 히어로가 **더 넣어야 하는 돈** = 빌런의 이번 스트리트 총액 − 히어로의 총액.
+ *
+ * 예전에는 빌런의 **마지막 증분**을 그대로 콜 금액으로 썼다. 두 군데가 틀렸다:
+ *  ① 히어로가 이미 낸 돈을 빼지 않았다 — BB vs 2.5x 오픈에서 `2.5/(4+2.5)`=38.5% 가 나왔다.
+ *     BB 는 1BB 를 이미 냈으니 1.5 만 더 넣으면 되고 정답은 `1.5/(4+1.5)`=**27.3%** 다.
+ *  ② 한 스트리트에 레이즈가 두 번 이상 오가면 마지막 증분이 상대의 총액이 아니다.
+ *     (BTN 2.5 → BB 3벳 +8 → BTN 4벳 +22 이면 BTN 총액 24.5, BB 총액 9, 콜은 15.5 다.)
+ *
+ * 두 사람의 **총액 차이**로 재면 둘 다 자연히 맞고, 히어로가 이미 콜해 금액이 같으면 0 이 된다.
+ */
+export function amountToCall(s: SpotReview): number {
+  const diff = investedThisStreet(s, 'villain') - investedThisStreet(s, 'hero');
+  return Math.round(Math.max(0, diff) * 100) / 100;
 }
 
 interface ChartHit {
@@ -149,6 +186,38 @@ export interface DrillLink {
 }
 
 /**
+ * 스팟 포지션 → 차트 포지션.
+ *
+ * 두 축의 철자가 **한 자리에서만** 다르다: 스팟은 'UTG1', 차트는 'UTG+1'.
+ * 9개 중 8개가 겹쳐서 TypeScript 는 `spotPos === tablePos` 비교를 막지 못한다
+ * (겹치는 멤버가 하나도 없어야 에러가 난다). 그래서 UTG+1 자리는 어떤 입력으로도
+ * 표에 걸리지 않았다 — 2026-09-11 실측: 9인 오픈·BB 수비 둘 다 **그 자리만** math_only.
+ *
+ * 'UTG1' 쪽을 바꾸지 않는 이유: 이미 저장된 스팟(post_spots.spot jsonb · spot_reviews)과
+ * 스냅샷에 그 문자열이 들어 있다. 표기를 바꾸면 옛 글이 조용히 자리 없는 스팟이 된다.
+ * 그래서 **경계에서 옮긴다** — 이 함수가 두 축이 만나는 유일한 지점이다.
+ */
+export const toTablePos = (p: SpotPosition): TablePos => (p === 'UTG1' ? 'UTG+1' : p);
+
+/**
+ * BB 수비 표 조회 — **배열 순서에 기대지 않는다.**
+ *
+ * defend 그룹에는 같은 vs 로 BB 표와 SB 표가 나란히 들어 있다(`bb_vs_btn` 과 `sb_vs_btn`).
+ * hero 를 걸지 않으면 `find` 가 배열에서 먼저 만난 쪽을 집는다 — 지금 데이터가 BB 를 앞에 둬서
+ * **우연히** 맞고 있었을 뿐이고, 표를 한 줄만 옮기면 조용히 SB 표(3벳-or-폴드)를 본다.
+ *
+ * 목록을 인자로 받는 이유는 그 우연에 기대지 않았음을 **순서를 뒤집어 검증할 수 있게** 하려는 것이다.
+ * 인자가 없으면 이 함수는 실제 데이터 순서로만 테스트되고, 순서가 바뀐 날 조용히 틀린다.
+ */
+export const findDefendChart = (
+  list: readonly RangeScenario[],
+  villainPos: SpotPosition,
+): RangeScenario | null =>
+  list.find(
+    (x) => x.group === 'defend' && x.hero === 'BB' && x.vs === toTablePos(villainPos),
+  ) ?? null;
+
+/**
  * 프리플랍 차트 조회. 정확히 걸리면 differences 가 빈 배열,
  * 스택만 허용 범위 안에서 다르면 그 차이를 differences 에 담아 돌려준다.
  * 걸리지 않으면 null — **비슷하게 맞춰서 억지로 돌려주지 않는다.**
@@ -166,7 +235,7 @@ function lookupPreflopChart(s: SpotReview, combo: string): ChartHit | null {
   // ① 첫 진입 오픈(RFI) — 앞에 아무 액션이 없다
   if (isFirstIn(s)) {
     const group = s.tableSize >= 8 ? 'rfi9' : 'rfi6';
-    const sc = RANGE_SCENARIOS.find((x) => x.group === group && x.hero === s.heroPos);
+    const sc = RANGE_SCENARIOS.find((x) => x.group === group && x.hero === toTablePos(s.heroPos));
     if (!sc) return null;
     const diffs = [...stackDiff];
     const want = group === 'rfi9' ? 9 : 6;
@@ -185,10 +254,14 @@ function lookupPreflopChart(s: SpotReview, combo: string): ChartHit | null {
     && s.actions[0].actor === 'villain'
     && s.actions[0].type === 'raise';
   if (onlyOpen && s.heroPos === 'BB') {
-    const sc = RANGE_SCENARIOS.find((x) => x.group === 'defend' && x.vs === s.villainPos);
+    // hero 도 같이 건다 — 같은 vs 로 BB 표와 SB 표가 나란히 있어 순서에 기대면 조용히 틀린다.
+    const sc = findDefendChart(RANGE_SCENARIOS, s.villainPos);
     if (!sc) return null;
     const diffs = [...stackDiff];
-    if (s.tableSize !== 6) diffs.push(`이 표는 6인 기준인데 입력은 ${s.tableSize}인입니다.`);
+    // 표마다 상정 인원이 다르다 — 얼리(UTG·UTG+1·MP) 오픈 수비 표는 9인용이다.
+    // 6인으로 단정하면 9인 입력에 **없는 차이를 적어** 정확 일치를 유사 스팟으로 끌어내린다.
+    const want = sc.baseTableSize ?? 6;
+    if (s.tableSize !== want) diffs.push(`이 표는 ${want}인 기준인데 입력은 ${s.tableSize}인입니다.`);
     const raise = freqOf(sc.id, 'raise', combo);   // 3벳
     const call = freqOf(sc.id, 'call', combo);
     return {
@@ -246,7 +319,8 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
 
 function mathFacts(s: SpotReview, heroEquityPct: number | null): MathFacts {
   const pot = potBb(s);
-  const toCall = facingBet(s);
+  // 빌런의 레이즈는 **총액**이라 히어로가 이미 낸 돈을 빼야 실제로 더 넣는 돈이 된다.
+  const toCall = amountToCall(s);
   if (toCall <= 0) {
     return { potBb: pot, toCallBb: 0, potOddsPct: null, neededEquityPct: null, heroEquityPct };
   }

@@ -1,5 +1,6 @@
 // src/api/presets.ts — 게임 프리셋(포스터/장부 게임 내용 + 듀레이션 템플릿)
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import type { ClockLevel } from './clock';
 
 // ── PL2a: 단계 전용 네임스페이스 3개 ───────────────────────────────────────────
@@ -114,8 +115,7 @@ export async function saveGamePreset(venueId: string, name: string, data: GamePr
   if (IS_MOCK) throw new Error('Mock');
   const row = { venue_id: venueId, name: name.trim() || '무제 프리셋', data: data as unknown as object, updated_at: new Date().toISOString() };
   if (id) {
-    const { error } = await supabase.from('game_presets').update(row).eq('id', id);
-    if (error) throw new Error(error.message);
+    await mustAffect(supabase.from('game_presets').update(row).eq('id', id));
     return id;
   }
   const { data: ins, error } = await supabase.from('game_presets').insert(row).select('id').single();
@@ -125,6 +125,5 @@ export async function saveGamePreset(venueId: string, name: string, data: GamePr
 
 export async function deleteGamePreset(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('game_presets').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  await mustAffect(supabase.from('game_presets').delete().eq('id', id));
 }

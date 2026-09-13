@@ -1,5 +1,6 @@
 ﻿// src/api/schedules.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect, NoRowsAffectedError } from './_mustAffect';
 import type { DiscountType } from '../lib/promotionLabel';
 
 export type { DiscountType };
@@ -204,7 +205,7 @@ export async function createSchedule(
 // ── 업주: 포스터 수정 ─────────────────────────────────────────────────────────
 export async function updateSchedule(id: string, patch: Partial<Schedule>): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('schedules').update({
+  await mustAffect(supabase.from('schedules').update({
     ...(patch.title         !== undefined && { title:           patch.title }),
     ...(patch.date          !== undefined && { date:            patch.date }),
     ...(patch.startTime     !== undefined && { start_time:      patch.startTime }),
@@ -232,15 +233,13 @@ export async function updateSchedule(id: string, patch: Partial<Schedule>): Prom
     ...(patch.displayOrder  !== undefined && { display_order:   patch.displayOrder }),
     ...(patch.approved      !== undefined && { approved:        patch.approved }),
     updated_at: new Date().toISOString(),
-  }).eq('id', id);
-  if (error) throw error;
+  }).eq('id', id));
 }
 
 // ── 업주: 포스터 삭제 ─────────────────────────────────────────────────────────
 export async function deleteSchedule(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('schedules').delete().eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('schedules').delete().eq('id', id));
 }
 
 // ── 관리자: 포스터 반려 — 삭제가 아니라 상태로 남긴다(20260911o) ─────────────
@@ -253,10 +252,14 @@ export async function deleteSchedule(id: string): Promise<void> {
 export async function rejectSchedule(id: string, reason: string): Promise<'rejected' | 'deleted'> {
   if (IS_MOCK) return 'rejected';
   const now = new Date().toISOString();
-  const { error } = await supabase.from('schedules').update({
+  const { data, error } = await supabase.from('schedules').update({
     approved: false, rejected_at: now, reject_reason: reason.trim() || null, updated_at: now,
-  }).eq('id', id);
-  if (!error) return 'rejected';
+  }).eq('id', id).select();
+  if (!error) {
+    // RLS 거부는 error 없는 0행이다 — '반려되었습니다' 를 띄우고 낙관적으로 내린 화면이 새로고침 때 되살아난다.
+    if (!data || data.length === 0) throw new NoRowsAffectedError();
+    return 'rejected';
+  }
   if (error.code !== 'PGRST204' && error.code !== '42703') throw error;
   await deleteSchedule(id);
   return 'deleted';
@@ -267,41 +270,36 @@ export async function reorderSchedules(payload: ReorderPayload): Promise<void> {
   if (IS_MOCK) return;
   // 행별 UPDATE — upsert 는 INSERT 경로(RLS·NOT NULL)까지 걸려 관리자 순서변경이 막혀
   // '저장 실패' 가 나므로, 존재하는 행을 개별 update 한다(reorderVenues 와 동일 방식).
-  const results = await Promise.all(
+  await Promise.all(
     payload.items.map(({ id, displayOrder }) =>
-      supabase.from('schedules')
+      mustAffect(supabase.from('schedules')
         .update({ display_order: displayOrder, updated_at: new Date().toISOString() })
-        .eq('id', id),
+        .eq('id', id)),
     ),
   );
-  const failed = results.find((r) => r.error);
-  if (failed?.error) throw failed.error;
 }
 
 // ── 관리자: 포스터 부스트(N일 상단 고정 / 0 = 해제) ──────────────────────────────
 export async function boostSchedule(id: string, days: number): Promise<void> {
   if (IS_MOCK) return;
   const until = days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
-  const { error } = await supabase.from('schedules').update({
+  await mustAffect(supabase.from('schedules').update({
     premium_until: until, updated_at: new Date().toISOString(),
-  }).eq('id', id);
-  if (error) throw error;
+  }).eq('id', id));
 }
 
 // ── 관리자: 프리미엄 토글 ─────────────────────────────────────────────────────
 export async function togglePremium(id: string, isPremium: boolean): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('schedules').update({
+  await mustAffect(supabase.from('schedules').update({
     is_premium: isPremium, updated_at: new Date().toISOString(),
-  }).eq('id', id);
-  if (error) throw error;
+  }).eq('id', id));
 }
 
 // ── 관리자: 대회 분류 토글 — [대회] 필터 노출 여부 ────────────────────────────
 export async function toggleCompetition(id: string, isCompetition: boolean): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('schedules').update({
+  await mustAffect(supabase.from('schedules').update({
     is_competition: isCompetition, updated_at: new Date().toISOString(),
-  }).eq('id', id);
-  if (error) throw error;
+  }).eq('id', id));
 }

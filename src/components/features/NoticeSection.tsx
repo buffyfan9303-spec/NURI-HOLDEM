@@ -10,8 +10,9 @@
 // 아우라 v6 문법: 톤은 **타일 그라데이션**이 지고 글자는 ink 토큰을 쓴다(CustomerDashboardPage 의 Head/Tile 패턴).
 //   색 텍스트를 쓰지 않으므로 라이트/다크 대비 문제가 구조적으로 생기지 않는다.
 //   글로우(.ring-aura-glow)는 쓰지 않는다 — 반복 카드이고, 화면당 1곳 규칙의 주인공이 아니다.
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import Icon, { type IconName } from '../atoms/Icon';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import type { MarketplaceNotice, NoticeType } from '../../api/marketplace';
 import { relativeTime } from '../../lib/relativeTime';
 
@@ -104,23 +105,32 @@ export function NoticeRow({ notice, onSelect, reserveMarker }: {
 }
 
 /**
- * 공지 섹션 통본 — 커뮤니티·장터·딜러가 이걸 쓴다.
- * 헤더는 CustomerDashboardPage 의 Head 문법(타일 + h2 text-sm + 카운트 + 헤어라인).
+ * 공지 섹션 통본 — 커뮤니티·장터·딜러가 이걸 쓴다(홈 아코디언은 NoticeRow 만 쓴다).
+ *
+ * N07(2026-09-13): **접힌 한 줄 요약 바**. 예전 '큰 카드 헤더(타일+h2+카운트) + 공지 행 + 더 보기 행' 3단 구조를
+ *   `공지 · 대표 제목 한 줄 … · 전체 N건` 하나의 낮은 바(최소 44px, 글자 확대 시 늘어남)로 압축한다.
+ *   · 큰 타일·card-aura 그림자·LED 없이 작은 라벨 + 약한 surface. 공지가 일반 글보다 화려하지 않다.
+ *   · 대표 제목(NoticeRow 의 button) 클릭 = 그 공지 상세, 펼치기(형제 button) 클릭 = 전체 목록. 중첩 button 없음.
+ *   · 펼친 목록은 limit 없이 **전부** — 예전 딜러 limit={5} 는 '5/7건' 이라 적고 나머지에 닿을 길이 없었다.
+ *   · sortOrder 1차 키 정렬은 그대로(관리자 ▲▼). 조회 실패는 error 프롭으로 받아 '없음' 과 갈라 그린다.
+ *   · 정적 — 전광판·회전 transform 없음(e2e/notice-static). 약관·필수 경고 모달은 이 컴포넌트와 무관하다.
  */
 export default function NoticeSection({
-  notices, onSelect, canWrite, onWrite, limit, emptyText = '등록된 공지가 없습니다',
+  notices, onSelect, canWrite, onWrite, emptyText = '등록된 공지가 없습니다', error = null, onRetry,
 }: {
   notices: MarketplaceNotice[];
   onSelect?: (n: MarketplaceNotice) => void;
   canWrite?: boolean;
   onWrite?: () => void;
-  limit?: number;
   emptyText?: string;
+  /** 공지 조회 실패 — 있으면 '없음' 대신 재시도 카드를 그린다(패턴 A: `.catch(() => setX([]))` 금지) */
+  error?: unknown; onRetry?: () => void;
 }) {
   // 2026-09-10 오너 지시: 공지 칸이 화면을 먹는다 — **가장 중요한 1건만** 펼쳐 두고 나머지는 접는다.
   //   기능·데이터는 그대로다(접힌 것은 한 번 눌러 전부 볼 수 있다 — 삭제가 아니라 접기).
   //   중요도 = 주의 > 이벤트 > 공지, 같은 유형이면 최신순. 서버 정렬을 바꾸지 않고 여기서만 고른다.
   const [open, setOpen] = useState(false);
+  const listId = useId();
   const PRIORITY: Record<NoticeType, number> = { caution: 0, event: 1, pinned: 2 };
   const ranked = useMemo(
     () => [...notices].sort((a, b) =>
@@ -131,49 +141,57 @@ export default function NoticeSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [notices],
   );
-  const rows = limit ? ranked.slice(0, limit) : ranked;
+  const top = ranked[0];
+  const rest = ranked.slice(1);
   // 타일이 하나라도 섞여 있을 때만 pinned 행이 자리를 비운다(전부 pinned 면 왼쪽 여백 0).
-  const reserveMarker = rows.some((r) => r.type !== 'pinned');
+  const reserveMarker = ranked.some((r) => r.type !== 'pinned');
+  const writeBtn = canWrite && onWrite ? (
+    <button type="button" onClick={onWrite} className="shrink-0 rounded-chip px-2 py-1 text-2xs font-semibold chip-aura">
+      + 공지 작성
+    </button>
+  ) : null;
   return (
-    <section className="rounded-aura border card-aura p-3">
-      <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
-          <Icon name="megaphone" size={14} />
-        </span>
-        <div className="flex min-w-0 flex-1 items-baseline gap-x-2">
-          <h2 className="text-sm font-bold text-ink-primary">공지사항</h2>
-          {/* ⚠ limit 로 잘릴 때 전체 개수만 적으면 거짓이 된다 — 더보기도 스크롤도 없어서
-              잘린 공지에 도달할 방법이 아예 없기 때문이다(딜러가 limit={5}).
-              잘렸을 때만 '표시/전체' 로 적어 숨은 것이 있음을 드러낸다. */}
-          <span className="text-2xs font-semibold tabular-nums text-ink-muted">
-            {rows.length < notices.length ? `${rows.length}/${notices.length}건` : `${notices.length}건`}
-          </span>
+    <section data-notice-bar className="rounded-input border border-border-subtle bg-surface-low/60">
+      {/* 제목은 스크린리더·기존 탐색 계약(e2e 가 heading '공지사항' 으로 섹션을 찾는다)을 위해 남기되 화면에선 작은 라벨만 */}
+      <h2 className="sr-only">공지사항</h2>
+      {error != null ? (
+        <div className="p-2"><LoadErrorCard what="공지" error={error} onRetry={onRetry} compact /></div>
+      ) : !top ? (
+        // 공지 없음 — 큰 빈 상자를 만들지 않는다. 관리자 작성 진입만 한 줄에.
+        <div className="flex min-h-[var(--row-h-sm)] items-center gap-2 px-2.5">
+          <span className="text-2xs font-bold text-ink-secondary">공지</span>
+          <span className="min-w-0 flex-1 text-2xs text-ink-muted">{emptyText}</span>
+          {writeBtn}
         </div>
-        {canWrite && onWrite && (
-          <button type="button" onClick={onWrite}
-            className="shrink-0 rounded-chip px-2 py-1 text-2xs font-semibold chip-aura">
-            + 공지 작성
-          </button>
-        )}
-      </div>
-      {rows.length === 0 ? (
-        <p className="py-4 text-center text-2xs text-ink-muted">{emptyText}</p>
       ) : (
         <>
-          <ul className="mt-1 space-y-0.5">
-            {(open ? rows : rows.slice(0, 1)).map((n) => (
-              <NoticeRow key={n.id} notice={n} onSelect={onSelect} reserveMarker={reserveMarker} />
-            ))}
-          </ul>
-          {rows.length > 1 && (
-            <button type="button" onClick={() => setOpen((v) => !v)}
-              aria-expanded={open}
-              className="mt-0.5 flex w-full items-center justify-center gap-1 rounded-input py-1.5 text-2xs font-semibold text-ink-secondary transition-colors hover:bg-surface-high/50">
-              {/* ⚠ 회전(transform) 대신 아이콘을 바꾼다 — 이 섹션은 'transform 애니메이션 0개'가
-                  계약이다(e2e/notice-static: 전광판 재발 방지). 회전 트랜지션도 그 계수에 잡힌다. */}
-              {open ? '접기' : `나머지 ${rows.length - 1}건 더 보기`}
-              <Icon name={open ? 'chevron-up' : 'chevron-down'} size={12} />
-            </button>
+          <div className="flex min-h-[var(--row-h-sm)] items-center gap-1 pl-2.5 pr-1">
+            <span className="inline-flex shrink-0 items-center gap-1 text-2xs font-bold text-ink-secondary" aria-hidden>
+              <Icon name="megaphone" size={12} className="shrink-0" />공지
+            </span>
+            {/* 대표 1건 — NoticeRow 가 자기 <li><button> 을 그린다(접근성 이름 = 전체 제목 + 시각). */}
+            <ul className="min-w-0 flex-1">
+              <NoticeRow key={top.id} notice={top} onSelect={onSelect} reserveMarker={reserveMarker} />
+            </ul>
+            {rest.length > 0 && (
+              <button type="button" onClick={() => setOpen((v) => !v)}
+                aria-expanded={open} aria-controls={listId} aria-label={open ? '공지 목록 접기' : `공지 전체 ${ranked.length}건 펼치기`}
+                className="inline-flex h-11 shrink-0 items-center gap-0.5 rounded-input px-2 text-2xs font-semibold tabular-nums text-ink-secondary transition-colors hover:bg-surface-high/50">
+                {/* ⚠ 회전(transform) 대신 아이콘을 바꾼다 — 이 섹션은 'transform 애니메이션 0개'가
+                    계약이다(e2e/notice-static: 전광판 재발 방지). 회전 트랜지션도 그 계수에 잡힌다. */}
+                {open ? '접기' : `전체 ${ranked.length}건`}
+                <Icon name={open ? 'chevron-up' : 'chevron-down'} size={12} />
+              </button>
+            )}
+            {writeBtn}
+          </div>
+          {/* 펼친 목록 — 나머지 전부(대표 1건은 위 바에 이미 있다). id 는 펼치기 버튼의 aria-controls. */}
+          {open && rest.length > 0 && (
+            <ul id={listId} className="space-y-0.5 border-t border-border-subtle px-1 py-1">
+              {rest.map((n) => (
+                <NoticeRow key={n.id} notice={n} onSelect={onSelect} reserveMarker={reserveMarker} />
+              ))}
+            </ul>
           )}
         </>
       )}

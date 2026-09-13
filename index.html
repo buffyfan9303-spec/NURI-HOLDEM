@@ -95,143 +95,45 @@
          ⚠ 굵기를 좁혀도 payload 는 안 줄어든다 — wght@700;800 은 static 2벌이라 248 face(190KB)로 오히려 2배,
            wght@700..800 도 124 face(95KB)로 동일(2026-08-29 실측). 그래서 범위는 그대로 두고 로딩 방식만 바꾼다. -->
     <noscript></noscript>
-    <!-- [DS] FONT-1/FONT-3: Pretendard self-host(dynamic subset, font-display: optional).
-         라이선스: /fonts/pretendard/OFL.txt (SIL OFL 1.1)
+    <!-- [FONT · 2026-09-13 N03 리드 결정] Pretendard 를 **켰다** — 아래 09-12 메모의 '켜는 법' 그대로:
+           ① 서브셋 CSS 의 92 face `font-display: optional` → `fallback`  ② 여기 <head> 정적 <link> (유휴 지연 주입 금지 — CLS 0.132 의 원인).
+         preload 0개에서 시작(첫 화면 이득이 실측된 파일에만 최소 적용). 폰트 파일·OFL.txt 는 손대지 않는다(SIL OFL 1.1).
+         루트 17px·역할별 타이포 토큰은 그대로 — 폰트 활성화와 글자 크기 변경을 섞지 않는다.
+         적용 증거는 CDP CSS.getPlatformFontsForNode 만(e2e/font-apply-measure.spec.ts — 양성 검사로 갱신). -->
+    <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css">
+    <!-- [FONT] Pretendard 로딩을 **멈췄다**(2026-09-12 — 위 09-13 메모로 다시 켰다. 아래는 원인 규명 기록으로 남긴다). 파일은 지웠지 않고 그대로 둔다.
+         `public/fonts/pretendard/` (3.2MB, SIL OFL 1.1, 라이선스 /fonts/pretendard/OFL.txt)
 
-         [FONT-3 · 2026-08-30] 콜드 방문의 임계 경로에서 폰트를 통째로 걷어낸다.
+         ⚠ 왜 멈췄나 — 이 폰트는 self-host 도입일(2026-08-26, bbcf840)부터 **단 한 픽셀도 적용된 적이 없다.**
+           추측이 아니라 판정이다. CDP `CSS.getPlatformFontsForNode` 로 실제 그린 폰트를 물으면
+           헤더·h2·p 전부 `Malgun Gothic` 이고, 헤더 픽셀 해시가 **폰트를 아예 차단한 것과 완전히 같다**:
+             현재(optional) 533346822707 · woff2 전면차단 533346822707 · block/fallback/swap 93f74bbea87f
+           즉 콜드 방문마다 **13요청 321KB 를 받고 얻는 픽셀이 0** 이었다.
 
-         실측 조리법: 프로덕션 빌드 · gzip 정적 서버 · 1.6Mbps/150ms · CPU 4x ·
-           375/412 교대 · 5회 중앙값 · 같은 세션 안에서 조건 교대 · 콜드 캐시.
-           (전송량은 **서버측**으로 셌다 — 서비스워커가 대신 낸 요청은 page CDP 에 안 잡혀
-            폰트 바이트가 0 으로 보고된다. 그 함정에 한 번 빠졌다.)
+         원인(가설을 하나씩 갈라 확정): `pretendardvariable-dynamic-subset.css` 의 **92개 face 전부에 걸린
+           `font-display: optional`**. dynamic-subset 은 face 를 레이아웃 중에야 발견하므로 요청이 첫 페인트
+           근처에서야 출발하고, **13개 파일**의 캐시 읽기+압축 해제가 optional 의 블록 구간(~100ms)을 넘긴다.
+           한 번 넘기면 그 로드에서는 끝이다. 서브셋 커버리지(한글 158자 전수 대조)·주입 타이밍·서비스워커·
+           웜 캐시는 전부 무죄로 기각됐다 — CSS 에서 `optional` 한 단어만 `block` 으로 바꾸면 즉시 적용된다.
 
-         ※ 아래 수치는 **적대적 검증자가 독립 재측정한 값**이다(구현자 최초 보고는 LCP 개선폭을
-           약 50% 과대, 콜드 전송량을 '변화 없음' 으로 잘못 적었다 — 그대로 두면 다음 사람이
-           틀린 기준선과 비교하게 되므로 재측정값으로 갈아 끼웠다).
-           조리법: 1.6Mbps/150ms · CPU rate 4 · 375·412 교대 · 5회 중앙값 · 회차마다 순서 뒤집기.
+         ⚠ 그런데 **지금 켜지 않는다.** 이 앱의 행간·말줄임·박스 크기는 전부 Pretendard 가 적용되지 않은
+           상태에서 눈으로 맞춰진 것이다. 지금 켜는 것은 '의도한 디자인 복원'이 아니라 **전 화면 미검증 변경**이다
+           (글자 폭이 바뀌어 줄바꿈·말줄임·카드 높이가 전부 움직인다). 켜려면 모바일·PC 실화면 확인이 먼저다.
 
-                              이전        이후      폰트 전면차단(상한)
-           LCP 375           3,684ms    2,944ms      2,928ms   (-740 / -20.1%)
-           LCP 412           3,684ms    2,940ms      2,924ms   (-744 / -20.2%)
-             └ 회차 스프레드 ±25ms — 개선폭이 분산의 30배라 노이즈가 아니다.
-           CLS 콜드          0.0587     0.0587         —       (375 기준, 변화 없음)
-           콜드 전송          780KB      973KB        558KB    (+193KB / +24.8%)
-           콜드 폰트 적용      0/10       0/10          —
-           재방문 적용률       9/12      12/12          —
+         켜는 법(측정 완료 — 4173 프로덕션 빌드 · 412×915 · CPU 4x · SW 차단 · n=5 중앙값):
+           ① `public/fonts/pretendard/pretendardvariable-dynamic-subset.css` 의 `font-display: optional` → `fallback`
+           ② 여기 `<head>` 에 `<link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css">` 정적 추가
+           결과: 콜드 LCP 652 → **948ms** · 콜드 CLS 0.0775 → **0.0791(사실상 동일)** · 전송 321KB(지금도 받고 있던 양)
+           ⚠ '브랜드 폰트를 살리면 주르륵 밀린다'는 통념은 **이 경로에서 성립하지 않는다.** CLS 가 오르는 것은
+             `font-display` 탓이 아니라 **유휴 지연 주입** 탓이었다(지연 주입 + fallback 은 CLS 0.132).
+             `<head>` 정적이면 교체가 첫 페인트 근처라 늦은 재레이아웃이 없다. 대가는 LCP +약 300ms 다.
 
-         ⚠ 전송량은 **늘었다** — '변화 없음' 이 아니다. 이유:
-           dynamic-subset 은 **그 순간 화면에 그려진 글자가 속한 서브셋만** 받는다.
-           이전엔 CSS 가 head 에서 일찍 켜져 정적 셸 텍스트만 있을 때 매칭돼 5개(129KB)만 받았고,
-           이후엔 앱이 다 그려진 뒤 켜지므로 13개(321KB)가 전부 매칭된다.
-           **누적으로는 같다**(이전도 v1 에서 나머지 8개를 받는다) — 첫 방문에 앞당겨질 뿐이고,
-           그 다운로드는 LCP **뒤**에서 일어나 화면을 막지 않는다.
-           그래도 콜드 첫 방문의 모바일 데이터가 25% 늘어나는 것은 사실이라 여기 남긴다.
-
-         읽는 법 — 이 표의 핵심은 '콜드 폰트 적용 0/10' 한 칸이다.
-           font-display:optional 은 블록 구간(~100ms) 안에 폰트가 **이미 준비돼** 있지 않으면
-           그 로드에서 교체하지 않는다. media=print→all 뒤집기는 첫 렌더보다 늦으므로
-           콜드에선 구조적으로 항상 늦는다. 즉 321KB 를 임계 경로에 얹고도 얻는 픽셀이 0 이었다.
-           폰트를 전면 차단한 대조군과 화면이 **완전히 동일**하고 LCP 만 0.74초 빨랐다.
-         그래서 콜드에서는 첫 페인트·부팅이 끝난 뒤 유휴에 받아 캐시만 데우고,
-         '캐시에 있다'가 실측으로 확인된 웜 방문에서만 head 에서 즉시 적용한다(로컬 읽기라 공짜).
-         부수 효과로 재방문 적용률이 9/12 → 12/12 가 됐다 — 브랜드 폰트를 **덜** 보여주는 게 아니라
-         **더** 보여주면서 콜드가 0.74초 빨라진 것이다.
-
-         커버리지 손실 0 — 서브셋 구성·글자 범위는 손대지 않았다(한글 폴백 없음).
-         회귀 게이트: e2e/font-coverage.spec.ts (한글 1,016자 층화 표본 + 라이브 DB 실측 인벤토리를
-         픽셀 해시로 검사 — 서브셋을 좁히면 즉시 실패한다. 92→7 축소 변이로 실패 확인 완료).
-
-         최악의 경우도 재 뒀다: 플래그는 '캐시 있음'인데 실제 캐시가 비었을 때(축출) LCP 3,400ms —
-         **이전과 같은 수준까지만** 나빠지고, verify() 가 플래그를 지워 다음 방문에 스스로 돌아온다.
-
-         ⚠ 과거 함정 반복 금지: font-display 를 swap 으로 바꾸면 늦게 도착한 폰트가 전면
-           재레이아웃을 일으킨다(모션 헌법 "주르륵 밀림 금지"). optional 을 유지하는 이유다. -->
-    <script>
-      (function () {
-        var HREF = '/fonts/pretendard/pretendardvariable-dynamic-subset.css';
-        var KEY = 'nuri-font-cached';
-        var warm = false;
-        try { warm = localStorage.getItem(KEY) === '1'; } catch (e) { /* storage 차단 웹뷰 */ }
-
-        function inject(blocking) {
-          if (document.querySelector('link[data-nuri-font]')) return;
-          var l = document.createElement('link');
-          l.rel = 'stylesheet';
-          l.href = HREF;
-          l.setAttribute('data-nuri-font', '');
-          // 비차단 로드(print→all): 콜드 경로에서 CSS 파싱이 렌더 앞을 막지 않게.
-          if (!blocking) { l.media = 'print'; l.onload = function () { this.media = 'all'; }; }
-          document.head.appendChild(l);
-        }
-
-        // 다음 방문의 경로를 '추측'이 아니라 '실측'으로 정한다 —
-        // 이번 로드에서 Pretendard 가 실제 픽셀로 적용됐다면 캐시가 더워진 것이고,
-        // 아니라면(캐시 축출·용량 회수) 플래그를 지워 스스로 콜드 경로로 되돌아간다.
-        function verify() {
-          var check = function () {
-            // body 가 아직 없으면 '측정 불가'다 — 그때 플래그를 지우면 멀쩡한 캐시를 두고
-            // 다음 방문을 콜드 경로로 되돌린다. 판단이 안 서면 아무것도 바꾸지 않는다.
-            if (!document.body) return;
-            var ok = false;
-            try {
-              var mk = function (fam) {
-                var s = document.createElement('span');
-                s.style.cssText = 'position:absolute;left:-9999px;top:0;font-size:64px;white-space:pre;font-family:' + fam;
-                s.textContent = '오늘 내일 일정';
-                document.body.appendChild(s);
-                var w = s.getBoundingClientRect().width;
-                s.parentNode.removeChild(s);
-                return w;
-              };
-              ok = Math.abs(mk("'Pretendard Variable'") - mk('__nuri_no_font__,system-ui')) > 0.5;
-            } catch (e) { ok = false; }
-            try { if (ok) localStorage.setItem(KEY, '1'); else localStorage.removeItem(KEY); } catch (e) { /* noop */ }
-          };
-          var run = function () { setTimeout(check, 1200); };
-          if (document.fonts && document.fonts.ready) document.fonts.ready.then(run, run);
-          else setTimeout(run, 3000);
-        }
-
-        if (warm) {
-          // 웜: CSS 도 woff2 도 서비스워커 캐시/디스크 캐시에서 나온다 — 네트워크 왕복이 없다.
-          // head 에서 바로 적용해야 optional 의 블록 구간 안에 들어가 결정적으로 교체된다.
-          inject(true);
-          verify();
-          return;
-        }
-
-        // 콜드: 첫 페인트 + 앱 부팅이 끝나고 브라우저가 한가해진 뒤에만 받는다.
-        // (서드파티 지연 주입과 같은 사유 — <head> 에 두면 앱 번들과 '같은 순간' 출발한다.)
-        var fired = false;
-        var go = function () {
-          if (fired) return;
-          fired = true;
-          var start = function () {
-            inject(false);
-            // ⚠ 여기서 verify() 를 부르면 안 된다(2026-08-30 실측으로 잡은 함정).
-            //   콜드에서는 optional 이 구조적으로 항상 늦어 verify() 가 false 를 보고
-            //   플래그를 지운다 → 다음 방문(v1)도 콜드 경로를 탄다. 그런데 v1 엔 폰트가
-            //   **이미 캐시에 있어** optional 이 즉시 교체하고, 그건 '다 그려진 화면 위에서'
-            //   일어나므로 늦은 레이아웃 시프트가 난다(실측 CLS 0.0046, 로드 2.5s 이후 구간).
-            //   캐시가 더워진 것은 추측이 아니라 **사실**이다 — 방금 받았으니까.
-            //   그래서 로드 완료 시점에 플래그를 세워 v1 이 곧장 웜 경로(head 즉시 적용 =
-            //   optional 블록 구간 안 교체)를 타게 한다. 축출 감지는 웜 경로의 verify() 가 한다.
-            var l = document.querySelector('link[data-nuri-font]');
-            if (l) {
-              l.addEventListener('load', function () {
-                try { localStorage.setItem(KEY, '1'); } catch (e) { /* storage 차단 웹뷰 */ }
-              }, { once: true });
-            }
-          };
-          if (window.requestIdleCallback) window.requestIdleCallback(start, { timeout: 6000 });
-          else setTimeout(start, 2500);
-        };
-        var onLoad = function () { setTimeout(go, 1500); };
-        if (document.readyState === 'complete') onLoad();
-        else window.addEventListener('load', onLoad, { once: true });
-      })();
-    </script>
-    <noscript><link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css" /></noscript>
+         ⚠ 예전에 여기 있던 실측 표("콜드 0/10, 재방문 9/12 → 12/12")는 **전부 오염이라 지웠다.**
+           판정기가 `mk('__nuri_no_font__,system-ui')` 로 대조군에 폴백을 붙여 놓아, 적용되든 안 되든
+           항상 차이가 나 '적용됨'으로 읽혔다. 12/12 은 존재한 적이 없다.
+         ⚠ 판정 방법 주의: `document.fonts.check()` 는 **없는 폰트에도 true** 를 돌려준다(덮는 face 가 없으면 공허참).
+           고립 span 폭 비교도 못 쓴다 — 화면에 없던 글자로 프로브하면 그 순간 로드가 시작돼 optional 이 폴백을 확정한다.
+           믿을 것은 CDP 사용폰트 조회와 픽셀 해시뿐이다. 헤드리스도 그 둘로는 정확하다(폭 비교만 헤디드가 필요하다). -->
   </head>
   <body>
     <div id="root"><!--
@@ -270,17 +172,20 @@
       </header>
       <!-- [DS] P1(2026-08-27): 기본 화면 = 홈 — 셸도 홈 골격(인사 2줄 + 오늘·내일 일정 리스트).
            탐색 장치(검색/날짜/필터)는 '일정 탐색' 서브 화면으로 이동해 셸 예약 대상이 아니다. -->
-      <div class="px-page-x pt-3">
-        <div class="skeleton" style="height:13px;width:140px"></div>
-        <div class="skeleton" style="height:24px;width:220px;margin-top:6px"></div>
+      <!-- 오늘 안내 예약 — HomeTab 의 date 줄(12/18) + 수치 줄(18/26). 2026-09-13 §6-2 로
+           거대한 GTO 히어로(24/32 + 부제)가 빠지면서 이 블록이 48~60px 로 줄었다. -->
+      <div class="mx-auto w-full max-w-[1200px] md:px-[7px]">
+      <div class="px-page-x" style="padding-top:6.4px">
+        <div class="skeleton" style="height:19px;width:200px"></div>
+        <div class="skeleton" style="height:26px;width:230px;margin-top:2.1px"></div>
       </div>
-      <!-- 포스터 캐러셀 예약 — 풀폭 1장 배너(w-full × aspect 960/448 · PC 는 512px 캡:
-           lg '와' (hover:hover)+(pointer:fine) 둘 다 — 줌·배율 PC(CSS 뷰포트<1024)에서도 캡 유지.
-           PosterCarousel.tsx 규격과 동일·배경 없음). 셸과 실컴포넌트가 같은 문법이라 CLS 0. -->
-      <div class="pt-3"><div class="mx-page-x rounded-aura border border-transparent lg:mx-auto lg:max-w-[512px] [@media(hover:hover)_and_(pointer:fine)]:mx-auto [@media(hover:hover)_and_(pointer:fine)]:max-w-[512px]"><div class="skeleton aspect-[960/448] w-full rounded-aura"></div></div></div>
-      <div class="px-page-x" style="padding-top:16px;padding-bottom:6px"><div class="skeleton" style="height:22px;width:110px"></div></div>
+      <!-- 배너 예약 — PosterCarousel 과 **같은 문법**(mx-page-x · min-h 116/170/200 · rounded-aura).
+           비율(aspect-960/448)이 아니라 값이라 폭이 커져도 높이가 튀지 않는다. 점 제어 20px 도 함께 예약. -->
+      <div class="pt-3"><div class="mx-page-x rounded-aura border border-transparent"><div class="skeleton min-h-[116px] w-full rounded-aura md:min-h-[170px] lg:min-h-[200px]"></div></div><div class="mx-page-x mt-0.5 h-8"></div></div>
+      <div class="px-page-x" style="padding-top:20px;padding-bottom:10px"><div class="skeleton" style="height:26px;width:110px"></div></div>
       <div class="px-page-x pb-section">
         <div class="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura"><div class="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-2.5"><div class="skeleton h-16 w-16 shrink-0 rounded-input"></div><div class="flex min-w-0 flex-1 flex-col gap-1"><div class="skeleton h-3.5 w-1/3"></div><div class="skeleton h-[19px] w-3/4"></div><div class="skeleton h-3.5 w-1/2"></div><div class="skeleton h-3.5 w-2/3"></div></div></div><div class="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-2.5"><div class="skeleton h-16 w-16 shrink-0 rounded-input"></div><div class="flex min-w-0 flex-1 flex-col gap-1"><div class="skeleton h-3.5 w-1/3"></div><div class="skeleton h-[19px] w-3/4"></div><div class="skeleton h-3.5 w-1/2"></div><div class="skeleton h-3.5 w-2/3"></div></div></div><div class="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-2.5"><div class="skeleton h-16 w-16 shrink-0 rounded-input"></div><div class="flex min-w-0 flex-1 flex-col gap-1"><div class="skeleton h-3.5 w-1/3"></div><div class="skeleton h-[19px] w-3/4"></div><div class="skeleton h-3.5 w-1/2"></div><div class="skeleton h-3.5 w-2/3"></div></div></div><div class="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-2.5"><div class="skeleton h-16 w-16 shrink-0 rounded-input"></div><div class="flex min-w-0 flex-1 flex-col gap-1"><div class="skeleton h-3.5 w-1/3"></div><div class="skeleton h-[19px] w-3/4"></div><div class="skeleton h-3.5 w-1/2"></div><div class="skeleton h-3.5 w-2/3"></div></div></div></div>
+      </div>
       </div>
       <nav class="fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none" style="padding-bottom:env(safe-area-inset-bottom)">
         <div class="absolute inset-x-0 -top-3 bottom-0 bg-gradient-to-t from-surface-base via-surface-base/90 to-transparent"></div>

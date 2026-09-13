@@ -1,13 +1,24 @@
 // src/components/features/gto/useDeepGto.ts
+//
+// ⚠ actionFromEquity 는 솔버 산출이 아니다 (2026-09-12, §3.4 근거·채점 신뢰성 재확인)
+// 아래 구간별 상수(raise/call/fold)는 어느 솔버에서도 나온 적 없는, 사람이 정한 눈금이다
+// (spotEvaluate.ts:6-21 이 같은 사실을 NURI SPOT 쪽에서 이미 명시했다). 지우지 않고 남긴 이유는
+// 승률·팟오즈 기반 "참고 액션 가이드"가 실사용 기능이기 때문 — 화면이 비면 안 된다는 지시에 따라
+// 승률 계산은 그대로 두고, 대신 이 값을 GTO 빈도처럼 보이지 않게 이중으로 막는다:
+//   ① GtoDeepPanel.tsx 가 이 결과를 SourceBadge kind="heuristic" 로만 표시한다
+//      (gtoContract.test.ts 가 'solver' 배지 등장 자체를 잠그고, useDeepGto.test.ts 가 이 함수를 잠근다)
+//   ② 화면 문구가 "참고 액션 가이드"/"GTO 최적 행동이 아니다"를 명시한다(SourceBadge META.heuristic.hint)
+// 죽은 데이터였던 GtoDeepSituation(사람이 쓴 "약 40% 빈도로 3-Bet" 예시 프리셋)은 통째로 제거했다 —
+// 실제로는 어느 화면에도 렌더되지 않았고(situation/selectSituation 을 쓰는 컴포넌트가 없었다),
+// 남겨두면 나중에 실수로 이어붙였을 때 그 예시 숫자가 그대로 "GTO 40%"로 노출될 위험이 있었다.
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DEEP_SITUATIONS } from './gto.deep.data';
 import { canonicalizeHand, normalizeFrequency } from './useGtoCalculator';
 import { type WeightedCombo } from './equityEngine';
 import { equityAsync, equityVsRangeAsync } from './equityClient';
 import { buildFreq, type FreqMap } from '../../../lib/ranges';
 import { RANGE_SCENARIOS } from '../../../lib/ranges.data';
 import { SUITS, type ActionFrequency, type Card, type Rank, type Suit } from './gto.types';
-import type { GtoDeepSituation, GtoResult, Equity } from './gto.deep.types';
+import type { GtoResult, Equity } from './gto.deep.types';
 
 export type CardTarget = 'hero' | 'villain' | 'board';
 export type CardId = string; // 예: 'As'
@@ -22,8 +33,11 @@ export function cardId(c: Card): CardId {
 const SLOT_LIMIT: Record<CardTarget, number> = { hero: 2, villain: 2, board: 5 };
 const TARGET_ORDER: CardTarget[] = ['hero', 'villain', 'board'];
 
-/** 히어로 에퀴티(승률) -> 3-Bet/콜/폴드 추정 믹스 (정밀 데이터 없는 입력용) */
-function actionFromEquity(eq: number): ActionFrequency {
+/**
+ * 히어로 에퀴티(승률) -> 3-Bet/콜/폴드 참고 믹스(정밀 데이터 없는 입력용).
+ * **솔버 산출이 아니다** — 승률 구간에 사람이 붙인 임계값 눈금이다. export 는 회귀 테스트 전용.
+ */
+export function actionFromEquity(eq: number): ActionFrequency {
   if (eq >= 0.62) return { raise: 0.85, call: 0.13, fold: 0.02 };
   if (eq >= 0.52) return { raise: 0.50, call: 0.45, fold: 0.05 };
   if (eq >= 0.45) return { raise: 0.20, call: 0.50, fold: 0.30 };
@@ -83,9 +97,6 @@ export const VILLAIN_RANGE_PRESETS: VillainRangePreset[] = [
 ];
 
 export interface UseDeepGto {
-  situations: readonly GtoDeepSituation[];
-  situation: GtoDeepSituation;
-  selectSituation: (id: string) => void;
   hero: readonly (Card | null)[];
   villain: readonly (Card | null)[];
   board: readonly (Card | null)[];
@@ -122,10 +133,6 @@ function padSlots(cards: Card[] | undefined, n: number): (Card | null)[] {
 }
 
 export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
-  const situations = DEEP_SITUATIONS;
-  const [situationId, setSituationId] = useState<string>(situations[0].id);
-  const situation = useMemo(() => situations.find((s) => s.id === situationId) ?? situations[0], [situations, situationId]);
-
   const [hero, setHero] = useState<(Card | null)[]>(() => padSlots(init?.hero, 2));
   const [villain, setVillain] = useState<(Card | null)[]>(() => padSlots(init?.villain, 2));
   const [board, setBoard] = useState<(Card | null)[]>(() => padSlots(init?.board, 5));
@@ -201,15 +208,6 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     setCurrentTarget('hero');
   }, []);
 
-  const selectSituation = useCallback((id: string) => {
-    const s = situations.find((x) => x.id === id) ?? situations[0];
-    setSituationId(id);
-    setHero([s.heroHand[0], s.heroHand[1]]);
-    setVillain([null, null]);
-    setBoard([null, null, null, null, null]);
-    setCurrentTarget(villainMode === 'range' ? 'board' : 'villain');
-  }, [situations, villainMode]);
-
   // 보드 텍스처 프리셋 빠른 입력(이미 사용 중인 카드는 다른 무늬로 대체, 없으면 건너뜀)
   const applyBoardPreset = useCallback((cards: { rank: Rank; suit: Suit }[]) => {
     const order: Suit[] = ['s', 'h', 'd', 'c'];
@@ -270,9 +268,9 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     // 입력 완성 시 실시간 에퀴티 기반으로 참고 액션 믹스를 추정 (솔버 아님).
     if (!inputReady) return null;
     if (!equity) {
-      return { action: { raise: 0.34, call: 0.33, fold: 0.33 }, heuristic_explanation: '' };
+      return { action: { raise: 0.34, call: 0.33, fold: 0.33 } };
     }
-    return { action: actionFromEquity(equity.hero), equity, heuristic_explanation: '' };
+    return { action: actionFromEquity(equity.hero), equity };
   }, [inputReady, equity]);
 
   const normalizedAction = useMemo(
@@ -281,9 +279,6 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
   );
 
   return {
-    situations,
-    situation,
-    selectSituation,
     hero,
     villain,
     board,

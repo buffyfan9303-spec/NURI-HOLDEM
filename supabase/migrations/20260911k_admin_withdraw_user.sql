@@ -244,7 +244,12 @@ begin
   select p.oid, p.proconfig, p.proacl, p.prosrc into v_oid, v_cfg, v_acl, v_src
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname = 'admin_withdraw_user'
-     and pg_get_function_identity_arguments(p.oid) = 'uuid, text';
+     -- ⚠ 2026-09-12 정정: 여기는 `pg_get_function_identity_arguments(p.oid) = 'uuid, text'` 였다.
+     --   그 함수는 **파라미터 이름까지** 돌려준다(`p_user_id uuid, p_reason text`) — 영원히 불일치다.
+     --   즉 이 파일은 적용하는 순간 아래 ABORT 로 **트랜잭션 전체가 굴러떨어진다**(격리 컨테이너 실측).
+     --   BLOCKED 미적용 목록이 파일명 순이라 뒤따르는 20260911l·m·n·o 까지 5건이 함께 막혀 있었다.
+     --   `to_regprocedure` 는 **이름과 무관하게** 시그니처로 찾고, 없으면 예외 대신 NULL 이라 아래 가드가 산다.
+     and p.oid = to_regprocedure('public.admin_withdraw_user(uuid, text)')::oid;
   if v_oid is null then
     raise exception 'ABORT: admin_withdraw_user(uuid, text) 가 생성되지 않았습니다';
   end if;
@@ -288,7 +293,8 @@ begin
   select p.oid, p.prosrc into v_oid, v_src
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname = 'verify_identity_commit'
-     and pg_get_function_identity_arguments(p.oid) = 'uuid, text, text, text, date, text, text, text';
+     -- 위와 같은 결함이 여기에도 있었다(8인자라 이름이 더 길어 마찬가지로 영원히 불일치).
+     and p.oid = to_regprocedure('public.verify_identity_commit(uuid, text, text, text, date, text, text, text)')::oid;
   if v_oid is null then
     raise exception 'ABORT: verify_identity_commit(8-인자) 가 사라졌습니다';
   end if;

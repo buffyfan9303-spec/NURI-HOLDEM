@@ -14,7 +14,13 @@
 //   '못 불러옴'과 원인도 처방도 다르다 — 직원이 자기 조작을 의심하며 같은 버튼을 반복해서
 //   누르는 대신, 업주에게 권한을 요청하면 된다는 것을 문구가 말해 준다.
 //   재시도 버튼은 남긴다: 세션 복원 전에 날아간 요청도 42501 로 떨어지고, 그때는 재시도가 답이다.
+//
+// 2026-09-12: 제목의 `${what}을(를)` 을 실제 조사로 바꿨다(`lib/josa.ts`). 괄호 표기는 서류에서나
+//   쓰는 것이고, 실패 화면처럼 **이미 불안한 순간**에 나오면 완성되지 않은 화면으로 읽힌다.
+//   '이벤트을(를) 불러오지 못했습니다' 가 실제로 화면에 나가 있었다. `title` 로 통째로 덮어 쓰던
+//   화면(`CalendarPanel.tsx:267`)은 이제 그럴 이유가 없어졌지만, 계약은 그대로 둔다.
 import { msgOf, isDenied } from '../../lib/dbError';
+import { josa } from '../../lib/josa';
 
 export default function LoadErrorCard({ error, onRetry, what = '정보', compact = false, title, hint }: {
   error?: unknown;
@@ -46,7 +52,7 @@ export default function LoadErrorCard({ error, onRetry, what = '정보', compact
         <circle cx="12" cy="17" r="0.6" fill="currentColor" />
       </svg>
       <p className={['font-semibold text-danger-light', compact ? 'text-xs' : 'text-sm'].join(' ')}>
-        {denied ? `${what} 열람 권한이 없습니다` : (title ?? `${what}을(를) 불러오지 못했습니다`)}
+        {denied ? `${what} 열람 권한이 없습니다` : (title ?? `${what}${josa(what, '을')} 불러오지 못했습니다`)}
       </p>
       {/* 서버가 준 이유가 있으면 그대로 — '저장 실패' 한 문장으로 뭉개면 원인 추적이 끊긴다 */}
       {detail && <p className="text-2xs leading-relaxed text-ink-secondary">{detail}</p>}

@@ -95,11 +95,23 @@ function buildDeck(excludeKeys: ReadonlySet<number>): NCard[] {
   return deck;
 }
 
+/**
+ * 결과가 **어떻게 나온 값인지**. 숫자만 보면 전수 계산과 표본 추정과
+ * "계산할 수 없었음"이 구분되지 않는다.
+ */
+export type EquityKind = 'exact' | 'monte_carlo' | 'no_legal_combinations';
+
 export interface EquityResult {
   hero: number;
   villain: number;
   tie: number;
   iterations: number;
+  /** 전수 계산인지 표본인지, 아니면 계산 불가였는지 */
+  kind?: EquityKind;
+  /** 실제로 집계에 들어간 표본(또는 전수 쌍) 수 */
+  accepted?: number;
+  /** 시도 횟수 — accepted 와 크게 벌어지면 기각률이 높다는 뜻이다 */
+  attempts?: number;
 }
 
 /** 가중 콤보 — 레인지를 실제 카드 2장 조합으로 전개한 단위 (weight 0..1) */
@@ -128,9 +140,25 @@ function prepareCombos(range: WeightedCombo[], blockedKeys: ReadonlySet<number>)
   return { combos, total };
 }
 
+/**
+ * xorshift32 — `seed` 를 주면 **재현 가능한** 난수열이고, 없으면 `Math.random` 이다.
+ * 무작위 테스트가 어쩌다 실패하는 것을 막으려면 테스트가 seed 를 줘야 한다.
+ */
+function makeRng(seed?: number): () => number {
+  if (seed === undefined) return Math.random;
+  let s = seed >>> 0;
+  if (s === 0) s = 0x9e3779b9;
+  return () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5; s >>>= 0;
+    return s / 0x1_0000_0000;
+  };
+}
+
 /** 누적가중 이분탐색으로 콤보 1개 가중 랜덤 샘플 */
-function sampleCombo(combos: NWCombo[], total: number): NWCombo {
-  const r = Math.random() * total;
+function sampleCombo(combos: NWCombo[], total: number, rnd: () => number = Math.random): NWCombo {
+  const r = rnd() * total;
   let lo = 0;
   let hi = combos.length - 1;
   while (lo < hi) {
@@ -274,56 +302,150 @@ export function computeOuts(hero: [Card, Card], villain: [Card, Card], board: Ca
   };
 }
 
-/** 레인지 vs 레인지 — 양쪽 가중 샘플 + 충돌 시 빌런 리샘플 + 보드 완성 몬테카를로 */
+export interface RangeVsRangeOptions {
+  /** 몬테카를로 표본 수(보드가 덜 깔린 경우에만 쓴다) */
+  iterations?: number;
+  /** 주면 재현 가능한 난수열을 쓴다 — 테스트는 반드시 준다 */
+  seed?: number;
+  /** 결합 분포를 통째로 만들 최대 (히어로×빌런) 쌍 수 */
+  exactPairLimit?: number;
+}
+
+/**
+ * 레인지 vs 레인지.
+ *
+ * **히어로를 먼저 고정하고 빌런만 다시 뽑으면 결합 분포가 편향된다.**
+ * 예전 구현이 그랬다 — 히어로 콤보가 빌런을 많이 막을수록 그 히어로 콤보가
+ * 과대 대표된다(막힌 빌런 자리를 남은 빌런들이 대신 채우므로 히어로의 확률은 그대로 유지된다).
+ *
+ * 2026-09-12 실측(보드 `Qc 2d 3h 4s 9c` · 히어로 `AsAh,KsKh` · 빌런 `AsQs,QhQd`):
+ * 유효 쌍은 `AsAh/QhQd`·`KsKh/AsQs`·`KsKh/QhQd` 셋뿐이고 가중치가 같으니 **정답은 1/3 = 33.33%**.
+ * 옛 구현은 히어로를 50:50 으로 먼저 뽑아 `AsAh/QhQd` 가 50%, 나머지 둘이 25% 씩이 되어
+ * 히어로 승률이 **25% 부근(실측 24.8%)** 으로 나왔다 — 8.5%p 오차다.
+ *
+ * 그래서 **쌍 단위로** 다룬다:
+ *  · 보드가 이미 5장이면 유효 쌍을 **전수 계산**한다(표본 오차 0).
+ *  · 덜 깔렸으면 유효 쌍의 결합 가중치에서 직접 뽑고 보드만 무작위로 채운다.
+ *  · 쌍이 너무 많으면 **양쪽을 함께 다시 뽑는 기각 표본**을 쓴다(히어로만 고정하지 않는다).
+ */
 export function computeRangeVsRange(
   heroRange: WeightedCombo[],
   villainRange: WeightedCombo[],
   board: Card[],
-  iterations = 2500,
+  opts: number | RangeVsRangeOptions = {},
 ): EquityResult {
+  const o: RangeVsRangeOptions = typeof opts === 'number' ? { iterations: opts } : opts;
+  const iterations = o.iterations ?? 2500;
+  const exactPairLimit = o.exactPairLimit ?? 40_000;
+  const rnd = makeRng(o.seed);
+
   const boardN = board.map(toN);
   const blocked = new Set(boardN.map(keyOf));
   const heroP = prepareCombos(heroRange, blocked);
   const villP = prepareCombos(villainRange, blocked);
-  if (heroP.combos.length === 0 || villP.combos.length === 0) return NEUTRAL;
+  const none: EquityResult = { ...NEUTRAL, kind: 'no_legal_combinations', accepted: 0, attempts: 0 };
+  if (heroP.combos.length === 0 || villP.combos.length === 0) return none;
+
+  // prepareCombos 는 누적가중만 들고 있다 — 개별 가중치는 차분으로 되살린다.
+  const wOf = (cs: NWCombo[], i: number) => cs[i].cum - (i > 0 ? cs[i - 1].cum : 0);
+  const conflicts = (h: NWCombo, v: NWCombo) =>
+    v.ka === h.ka || v.ka === h.kb || v.kb === h.ka || v.kb === h.kb;
 
   const deck = buildDeck(blocked);
   const need = 5 - boardN.length;
 
-  let hw = 0; let vw = 0; let tie = 0; let total = 0;
-  for (let i = 0; i < iterations; i += 1) {
-    const hc = sampleCombo(heroP.combos, heroP.total);
-    // 충돌(카드 중복) 시 빌런 리샘플 — 상한을 두고 실패하면 이번 반복은 건너뜀
-    let vc = sampleCombo(villP.combos, villP.total);
-    let retry = 0;
-    while ((vc.ka === hc.ka || vc.ka === hc.kb || vc.kb === hc.ka || vc.kb === hc.kb) && retry < 30) {
-      vc = sampleCombo(villP.combos, villP.total);
-      retry += 1;
-    }
-    if (vc.ka === hc.ka || vc.ka === hc.kb || vc.kb === hc.ka || vc.kb === hc.kb) continue;
-
-    const full = boardN.slice();
-    if (need > 0) {
-      const used = new Set<number>([hc.ka, hc.kb, vc.ka, vc.kb]);
-      while (full.length < boardN.length + need) {
-        const c = deck[Math.floor(Math.random() * deck.length)];
-        const k = keyOf(c);
-        if (used.has(k)) continue;
-        used.add(k);
-        full.push(c);
+  interface Pair { h: NWCombo; v: NWCombo; w: number }
+  let pairs: Pair[] | null = null;
+  let pairTotal = 0;
+  if (heroP.combos.length * villP.combos.length <= exactPairLimit) {
+    pairs = [];
+    for (let i = 0; i < heroP.combos.length; i += 1) {
+      const h = heroP.combos[i];
+      const wh = wOf(heroP.combos, i);
+      if (wh <= 0) continue;
+      for (let j = 0; j < villP.combos.length; j += 1) {
+        const v = villP.combos[j];
+        if (conflicts(h, v)) continue;              // 카드가 겹치는 쌍은 애초에 존재하지 않는다
+        const w = wh * wOf(villP.combos, j);
+        if (w <= 0) continue;
+        pairTotal += w;
+        pairs.push({ h, v, w });
       }
     }
-    const h = best7([hc.a, hc.b, ...full]);
-    const v = best7([vc.a, vc.b, ...full]);
+    if (pairs.length === 0) return none;            // 모든 조합이 서로를 막는다
+  }
+
+  // ── 보드가 다 깔렸으면 표본을 쓸 이유가 없다 — 전수 계산 ──
+  if (need === 0 && pairs) {
+    let hw = 0; let vw = 0; let tw = 0;
+    for (const p of pairs) {
+      const h = best7([p.h.a, p.h.b, ...boardN]);
+      const v = best7([p.v.a, p.v.b, ...boardN]);
+      if (h > v) hw += p.w; else if (v > h) vw += p.w; else tw += p.w;
+    }
+    return {
+      hero: (hw + tw / 2) / pairTotal,
+      villain: (vw + tw / 2) / pairTotal,
+      tie: tw / pairTotal,
+      iterations: pairs.length,
+      kind: 'exact',
+      accepted: pairs.length,
+      attempts: pairs.length,
+    };
+  }
+
+  // ── 보드를 채워야 한다 — 쌍을 편향 없이 뽑는다 ──
+  let cum: Float64Array | null = null;
+  if (pairs) {
+    cum = new Float64Array(pairs.length);
+    let acc = 0;
+    for (let i = 0; i < pairs.length; i += 1) { acc += pairs[i].w; cum[i] = acc; }
+  }
+  const pickPair = (): Pair | null => {
+    if (pairs && cum) {
+      const r = rnd() * pairTotal;
+      let lo = 0; let hi = pairs.length - 1;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (cum[mid] <= r) lo = mid + 1; else hi = mid; }
+      return pairs[lo];
+    }
+    // 쌍이 너무 많아 표를 못 만든 경우 — **양쪽을 같이** 다시 뽑는다. 히어로를 고정하면 편향된다.
+    for (let t = 0; t < 40; t += 1) {
+      const h = sampleCombo(heroP.combos, heroP.total, rnd);
+      const v = sampleCombo(villP.combos, villP.total, rnd);
+      if (!conflicts(h, v)) return { h, v, w: 1 };
+    }
+    return null;
+  };
+
+  let hw = 0; let vw = 0; let tie = 0; let total = 0; let attempts = 0;
+  for (let i = 0; i < iterations; i += 1) {
+    attempts += 1;
+    const p = pickPair();
+    if (!p) continue;
+
+    const full = boardN.slice();
+    const used = new Set<number>([p.h.ka, p.h.kb, p.v.ka, p.v.kb]);
+    while (full.length < boardN.length + need) {
+      const c = deck[Math.floor(rnd() * deck.length)];
+      const k = keyOf(c);
+      if (used.has(k)) continue;
+      used.add(k);
+      full.push(c);
+    }
+    const h = best7([p.h.a, p.h.b, ...full]);
+    const v = best7([p.v.a, p.v.b, ...full]);
     if (h > v) hw += 1; else if (v > h) vw += 1; else tie += 1;
     total += 1;
   }
 
-  if (total === 0) return NEUTRAL;
+  if (total === 0) return none;
   return {
     hero: (hw + tie / 2) / total,
     villain: (vw + tie / 2) / total,
     tie: tie / total,
     iterations: total,
+    kind: 'monte_carlo',
+    accepted: total,
+    attempts,
   };
 }

@@ -1,23 +1,15 @@
 // src/components/features/ScheduleTable.tsx — 일정탐색 PC '토너 로비' 표 모드.
 // 바이낸스 표 문법: 행 40px대·셀 py-2·헤더 12px 회색·숫자 우측정렬 tabular·호버 행 배경·플랫.
-// 어휘는 ScheduleCard(APIS 예정 카드 문법)와 한 벌 — 'BUY-IN' 라벨 · REG 배지 · 상금=골드.
+// 어휘·포맷터는 ScheduleCard 와 **한 벌**이다 — '참가비'·'등록 마감'·상금=골드, 금액은 반올림 없음.
+//   (regCloseText·buyInText·prizeMainText 를 ScheduleCard 에서 가져다 쓴다. 종전엔 이 파일이 regLabel 과
+//    `Math.round(prizePool/10000)만` 을 **따로** 갖고 있어, 같은 대회가 카드에선 '1,000만' 표에선 '1000만',
+//    55,000원짜리 상금이 표에서만 '6만'으로 **반올림**돼 보였다.)
 import type { Schedule } from '../../api/schedules';
+import { regCloseText, buyInText, prizeMainText } from './ScheduleCard';
 
 function dayLabel(date: string): string {
   const d = new Date(`${date}T00:00:00`);
   return ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
-}
-
-/** REG 배지 텍스트 — ScheduleCard.regLabel 과 같은 규칙(레벨 우선 → 시각 → structure). */
-function regLabel(s: Schedule): string | null {
-  const rc = String(s.regCloseTime ?? '').trim();
-  const lv = rc.match(/(\d+)\s*LV/i);
-  if (lv) return `REG ~ Lv${lv[1]}`;
-  const tm = rc.match(/(\d{1,2}:\d{2})/);
-  if (tm) return `REG ~ ${tm[1]}`;
-  const n = s.structure?.lateRegLevels;
-  if (n != null && n > 0) return `REG ~ Lv${n}`;
-  return null;
 }
 
 export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
@@ -27,20 +19,25 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
 }) {
   return (
     <div className="overflow-hidden rounded-card border border-border-default bg-surface-low">
+      {/* 열 폭 — **자동 레이아웃**이다(table-fixed 를 쓰지 않는다).
+          한 번 table-fixed + colgroup 으로 폭을 못 박아 봤는데, 1280px 에서 게임 열이 90px 로 눌려
+          '등록 마감 14레벨' 배지(105px)가 칸 밖으로 밀렸다(실측 client 90 / scroll 105).
+          대신 **의미상 한 덩어리인 값**(일시·참가비·상금)만 nowrap 으로 제 최소 폭을 주장하게 하고,
+          매장·게임은 줄바꿈을 허용한다 — 브라우저가 내용이 긴 두 열에 남는 폭을 몰아준다. */}
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border-default text-xs text-ink-muted">
             <th className="px-3 py-2 text-left font-medium">일시</th>
             <th className="px-3 py-2 text-left font-medium">매장</th>
             <th className="px-3 py-2 text-left font-medium">게임</th>
-            <th className="px-3 py-2 text-right font-medium tracking-wider">BUY-IN</th>
+            <th className="px-3 py-2 text-right font-medium">참가비</th>
             <th className="px-3 py-2 text-right font-medium">상금</th>
             <th className="hidden px-3 py-2 text-left font-medium xl:table-cell">지역</th>
           </tr>
         </thead>
         <tbody>
           {schedules.map((s) => {
-            const reg = regLabel(s);
+            const reg = regCloseText(s);
             return (
               <tr
                 key={s.id}
@@ -57,48 +54,52 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
                   s.isPremium ? 'bg-accent-300/[0.05] hover:bg-accent-300/10' : 'hover:bg-surface-high/70',
                 ].join(' ')}
               >
-                <td className="whitespace-nowrap px-3 py-2 tabular-nums text-ink-secondary">
+                {/* 일시·참가비·상금은 '의미상 한 덩어리인 값'이라 한 줄 유지(whitespace-nowrap),
+                    매장·게임처럼 여러 줄이 될 수 있는 글은 **잘라 숨기지 않고 줄바꿈**한다(§5-2). */}
+                <td className="whitespace-nowrap px-3 py-2 align-top tabular-nums text-ink-secondary">
                   {s.date.slice(5).replace('-', '/')}({dayLabel(s.date)}) <b className="text-ink-primary">{s.startTime}</b>
                 </td>
-                <td className="max-w-[10rem] px-3 py-2">
+                <td className="px-3 py-2 align-top">
                   {/* 매장 미연결(venueId 없음)이면 버튼이 stopPropagation으로 행 클릭까지 삼켜
                       '무반응 클릭'이 됐다 — 링크 문법을 빼고 텍스트로(행 클릭은 그대로 포스터 열림). */}
                   {s.venueId ? (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onVenueClick(s.venueId); }}
-                      className="block max-w-full truncate font-semibold text-ink-primary hover:text-accent-300"
+                      className="block max-w-full break-keep [overflow-wrap:anywhere] text-left font-semibold text-ink-primary hover:text-accent-300"
                     >
                       {s.pubName}
                     </button>
                   ) : (
-                    <span className="block max-w-full truncate font-semibold text-ink-primary">{s.pubName}</span>
+                    <span className="block max-w-full break-keep [overflow-wrap:anywhere] font-semibold text-ink-primary">{s.pubName}</span>
                   )}
                 </td>
-                <td className="max-w-[16rem] px-3 py-2">
-                  <span className="flex items-center gap-1.5">
+                <td className="px-3 py-2 align-top">
+                  <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                     {s.isPremium && <span className="shrink-0 rounded-badge bg-accent-300 px-1 text-2xs font-bold leading-tight text-white">TOP</span>}
                     {s.isCompetition && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-bold leading-tight text-accent-200">대회</span>}
-                    <span className="truncate font-bold text-ink-primary">{s.title}</span>
-                    {/* REG 배지 — 카드와 같은 어휘. 데이터 있을 때만(레지 마감 레벨/시각) */}
+                    <span className="min-w-0 break-keep [overflow-wrap:anywhere] font-bold text-ink-primary">{s.title}</span>
+                    {/* 등록 마감 배지 — 카드와 같은 어휘·같은 포맷터. 데이터 있을 때만 */}
                     {reg && (
-                      <span className="shrink-0 rounded-badge bg-surface-high px-1.5 text-2xs font-bold leading-tight text-ink-muted">{reg}</span>
+                      <span className="shrink-0 whitespace-nowrap rounded-badge bg-surface-high px-1.5 text-2xs font-bold leading-tight text-ink-muted">{reg}</span>
                     )}
                   </span>
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums font-semibold text-ink-primary">
-                  {/* 바이인 미입력(0)은 '0원'이 아니라 정보 없음 — ScheduleCard 목록 문법과 동일하게 '—' */}
-                  {s.buyIn?.amount ? s.buyIn.amount.toLocaleString() : '—'}
+                <td className="whitespace-nowrap px-3 py-2 text-right align-top tabular-nums font-semibold text-ink-primary">
+                  {/* 참가비 미입력(0)은 '0원'·'무료'가 아니라 정보 없음 — 카드와 같은 '—' 문법 */}
+                  {buyInText(s.buyIn?.amount)}
                 </td>
-                {/* 상금은 골드 하나(스파인 컬러 예산: 상금·트로피=골드) — 카드·상세와 같은 색 역할 */}
-                <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gold-300 font-semibold">
-                  {s.guaranteed && s.prizePool
-                    ? `${Math.round(s.prizePool / 10000).toLocaleString()}만 GTD`
-                    : s.prizePercent
-                      ? `${s.prizePercent}% 예상`
-                      : '—'}
+                {/* 상금은 골드 하나(스파인 컬러 예산: 상금·트로피=골드) — 카드·상세와 같은 색 역할.
+                    '보장(GTD)'과 '예상'은 **다른 의미**라 같은 칸에서도 꼬리표로 구분한다. */}
+                <td className="whitespace-nowrap px-3 py-2 text-right align-top tabular-nums text-gold-300 font-semibold">
+                  {(s.prizePool || s.prizePercent) ? (
+                    <>
+                      {prizeMainText(s)}
+                      <span className="ml-1 text-2xs font-bold text-ink-muted">{s.guaranteed ? '보장' : '예상'}</span>
+                    </>
+                  ) : '—'}
                 </td>
-                <td className="hidden max-w-[7rem] truncate px-3 py-2 text-xs text-ink-muted xl:table-cell">{s.region}</td>
+                <td className="hidden px-3 py-2 align-top text-xs text-ink-muted xl:table-cell">{s.region}</td>
               </tr>
             );
           })}

@@ -3,6 +3,7 @@
 // 파이프라인 위치: **노출**(사슬 첫 칸). 종전엔 PosterCarousel.tsx 소스에 배너가 하드코딩돼 있어
 // 한 장 바꾸려면 배포가 필요했다 — 여기가 그걸 운영 가능하게 만든다.
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import { kstToday } from '../lib/kst';
 import { getAppSetting } from './settings';
 
@@ -113,16 +114,14 @@ export async function saveHomeBanner(b: BannerInput): Promise<void> {
     ends_at: b.endsAt || null,
     active: b.active,
   };
-  const { error } = b.id
-    ? await supabase.from('home_banners').update(payload).eq('id', b.id)
-    : await supabase.from('home_banners').insert(payload);
+  if (b.id) { await mustAffect(supabase.from('home_banners').update(payload).eq('id', b.id)); return; }
+  const { error } = await supabase.from('home_banners').insert(payload);
   if (error) throw new Error(error.message);
 }
 
 export async function deleteHomeBanner(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('home_banners').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  await mustAffect(supabase.from('home_banners').delete().eq('id', id));
 }
 
 /** 관리자: 순서 일괄 저장(위/아래 이동 후 확정). */
@@ -131,8 +130,7 @@ export async function reorderHomeBanners(ids: string[]): Promise<void> {
   // 행 수가 한 자리라 순차 업데이트로 충분하다. 실패 시 앞쪽만 반영될 수 있으나
   // sort_order 는 화면 순서일 뿐이라 부분 반영이 데이터를 깨지 않는다(재시도로 수렴).
   for (let i = 0; i < ids.length; i++) {
-    const { error } = await supabase.from('home_banners').update({ sort_order: i }).eq('id', ids[i]);
-    if (error) throw new Error(error.message);
+    await mustAffect(supabase.from('home_banners').update({ sort_order: i }).eq('id', ids[i]));
   }
 }
 

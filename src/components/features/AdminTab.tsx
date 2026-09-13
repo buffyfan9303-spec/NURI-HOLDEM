@@ -5,8 +5,9 @@ import ReportQueue from './ReportQueue';
 import UserManagementTab from './UserManagementTab';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import { goSubTab } from '../../lib/subTabTransition';
+import { msgOf } from '../../lib/dbError';
 import type { Schedule } from '../../api/schedules';
-import type { User } from '../../api/auth';
+import type { User, UserUpdateResult } from '../../api/auth';
 import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueStaff } from '../../api/community';
 import {
   getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue, getAllVenues,
@@ -26,6 +27,7 @@ import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PH
 import { usersTruncated } from '../../api/auth';
 import { getAdminPlatformStats, getFreePlanUsage, type PlatformStats, type PlanUsageRow } from '../../api/adminStats';
 import AdSlotsAdmin from './community/AdSlotsAdmin';
+import EventOpsAdmin from './EventOpsAdmin';
 import HomeBannersCard from './HomeBannersCard';
 import SystemSwitchesCard from './SystemSwitchesCard';
 import {
@@ -43,6 +45,7 @@ import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUr
 import { getAllInquiries, answerInquiry, subscribeInquiries, type SupportInquiry } from '../../api/support';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import { josa } from '../../lib/josa';
 
 // 1·2·3위 색 — 이모지 👑🥈🥉는 OS마다 금/은/동 색조가 달라 순위 서열이 뒤집혀 보였다.
 // 아이콘 + 토큰 색으로 옮겨 서열을 앱이 통제한다(App.tsx 시상대와 같은 규약).
@@ -55,7 +58,8 @@ interface AdminTabProps {
   posts: CommunityPost[];
   onApproveSchedule: (id: string) => void;
   onRejectSchedule: (id: string) => void;
-  onUpdateUser: (id: string, patch: Partial<User>) => void;
+  /** 서버 완료를 기다린다(결함 A). 그냥 통과시키는 자리라 계약만 맞춘다. */
+  onUpdateUser: (id: string, patch: Partial<User>) => Promise<UserUpdateResult>;
   onDeletePost: (id: string) => void;
   /** 매장 생성 후 목록 새로고침 */
   onReloadVenues?: () => void;
@@ -74,7 +78,7 @@ interface AdminTabProps {
 
 type AdminShout = Shout & { hidden: boolean };
 
-type Section = 'analytics' | 'pending' | 'reorder' | 'exposure' | 'switches' | 'users' | 'venues' | 'reports' | 'support' | 'errors';
+type Section = 'analytics' | 'pending' | 'reorder' | 'exposure' | 'switches' | 'users' | 'venues' | 'events' | 'reports' | 'support' | 'errors';
 // 노출 순서 하위 항목: 포스터(요강) / 매장
 type ReorderTarget = 'posters' | 'venues';
 // 노출 관리 하위 항목(2026-09-03 오너): 광고 / 외치기 / 게시물 / 공지
@@ -468,7 +472,7 @@ function HallOfFameAdminCard() {
         return next;
       });
       toast.show('지난달 자동 집계를 불러왔습니다. 필요하면 고쳐서 저장하세요', 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '불러오기 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '지난달 자동 집계를 불러오지 못했습니다'), 'error'); }   // getMonthlyHall 이 이제 PostgrestError 를 던진다 — 원문 SQL 노출 없이 사유를 옮긴다
     finally { setBusy(false); }
   };
 
@@ -1062,6 +1066,7 @@ const ADMIN_DESC: Record<Section, string> = {
   switches: '재배포 없이 켜고 끄는 기능 스위치 · 전 매장 공통 설정',
   users: '회원 검색 · 제재 · 섀도우밴 · 아이디 변경 · 활동점수(구매 환불 · 지급)',
   venues: '매장 생성 · 인증 · 그룹 승인',
+  events: '제휴 이벤트 캠페인 · 카드판 구성(서버 셔플) · 검증 · 공개/종료 · 경품 이용권 집계',
   reports: '신고 접수 처리',
   support: '고객센터 1:1 문의 답변',
   errors: '실유저 화면에서 자동 수집된 오류',
@@ -1076,6 +1081,8 @@ const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'switches', label: '기능 스위치', icon: aic(<><path d="M16 3H8a5 5 0 0 0 0 10h8a5 5 0 0 0 0-10Z" /><circle cx="16" cy="8" r="2" /><path d="M8 21h8a5 5 0 0 0 0-10H8a5 5 0 0 0 0 10Z" /><circle cx="8" cy="16" r="2" /></>) },
   { id: 'users', label: '회원 관리', icon: aic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>) },
   { id: 'venues', label: '매장', icon: aic(<><path d="M3 9.5 5 4h14l2 5.5" /><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5" /><path d="M9 21v-6h6v6" /></>) },
+  // lucide gift — 경품 이벤트
+  { id: 'events', label: '이벤트 관리', icon: aic(<><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13" /><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" /><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5" /></>) },
   { id: 'reports', label: '신고', icon: aic(<><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>) },
   { id: 'support', label: '고객문의', icon: aic(<><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" /></>) },
   { id: 'errors', label: '오류 로그', icon: aic(<><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></>) },
@@ -1259,8 +1266,11 @@ export default function AdminTab({
               onDeletePost={onDeletePost}
               usersErr={usersErr}
               onRetryUsers={onRetryUsers}
+              postsErr={postsErr}
+              onRetryPosts={onRetryPosts}
             />
           )}
+          {section === 'events' && <EventOpsAdmin venues={venues} />}
           {section === 'reports' && <ReportQueue />}
           {section === 'support' && <SupportInquiriesPanel />}
           {section === 'errors' && <ErrorLogPanel />}
@@ -1640,7 +1650,7 @@ function StaffRow({ staff, onChanged }: { staff: VenueStaff; onChanged: () => vo
     } finally { setBusy(false); }
   };
   const remove = async () => {
-    if (!confirm(`직원 '${staff.name || staff.login}'을(를) 삭제하시겠습니까?`)) return;
+    if (!confirm(`직원 '${staff.name || staff.login}'${josa(staff.name || staff.login, '을')} 삭제하시겠습니까?`)) return;
     setBusy(true);
     try {
       await removeVenueStaff(staff.id);

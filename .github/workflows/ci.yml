@@ -22,6 +22,16 @@ jobs:
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # ⚠ 2026-09-13 — 러너(Node) 시간대를 KST 로 맞춘다. `playwright.config.ts` 의 `timezoneId: 'Asia/Seoul'` 과 **짝**이다.
+      #   `timezoneId` 는 **브라우저만** 바꾼다. 그런데 일부 스펙이 픽스처 날짜를 **Node 에서** 만든다
+      #   (`toLocaleDateString('en-CA')`) — 러너가 UTC 면 픽스처(UTC)와 앱 버킷(KST)이 하루 어긋난다.
+      #   실측(2026-09-13, 489 테스트): Node UTC + 브라우저 UTC = 6실패 / Node UTC + 브라우저 KST = 2실패 /
+      #   **Node KST + 브라우저 KST = 1실패**(그 1건은 BLOCKED #20 의 auth-smoke 로 시간대와 무관).
+      #   즉 브라우저만 고치면 전체는 나아지지만 `home-flow-fit` 하나는 실패 창이 오히려 넓어진다(UTC 19~24시 → 15~24시).
+      #   둘을 짝으로 맞춰야 비대칭이 사라진다. 로컬 개발기는 이미 KST 라 무영향이다.
+      #   ⚠ 이건 게이트를 특정 시간대에 맞춰 '통과시키는' 것이 아니다 — 앱 사용자가 사실상 전원 한국이라
+      #     KST 가 **대표 환경**이고, UTC 러너가 오히려 아무도 겪지 않는 조건이었다.
+      TZ: Asia/Seoul
     steps:
       - uses: actions/checkout@v7
 

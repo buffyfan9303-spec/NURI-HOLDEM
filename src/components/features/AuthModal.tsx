@@ -7,6 +7,7 @@ import { useToast } from '../atoms/Toast';
 import StatefulActionButton from '../atoms/StatefulActionButton';
 import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox';
 import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
+import { rememberCurrentView, clearViewIntent } from '../../lib/pendingViewIntent';
 import { signInWithGoogle,
   signUpUser, signUpOwner, checkNicknameAvailable, checkNameAvailable, checkEmailAvailable, EMAIL_RE,
   requestPasswordReset, verifyPasswordResetOtp, setNewPassword,
@@ -428,7 +429,17 @@ function SocialLoginButtons({ onError, keepSignedIn }: { onError: (msg: string) 
         <span className="h-px flex-1 bg-white/[0.07]" />
       </div>
       <button type="button" disabled={busy !== null}
-        onClick={() => { setBusy('google'); signInWithGoogle(keepSignedIn).catch((e) => { onError(e instanceof Error ? e.message : '구글 로그인 실패'); setBusy(null); }); }}
+        onClick={() => {
+          // 구글 로그인은 페이지를 떠났다 origin 으로 돌아온다 — 열려 있던 글·대회·매장·탭을 여기서 적어 둔다(N03).
+          rememberCurrentView();
+          setBusy('google');
+          signInWithGoogle(keepSignedIn).catch((e) => {
+            // 떠나지 못했으면 남겨 둘 이유가 없다. 남기면 다음 로그인에 엉뚱한 화면이 열린다.
+            clearViewIntent();
+            onError(e instanceof Error ? e.message : '구글 로그인 실패');
+            setBusy(null);
+          });
+        }}
         className="flex h-[46px] w-full items-center justify-center gap-2.5 rounded-[14px] border border-white/20 bg-white text-sm font-bold text-[#1f1f1f] transition active:scale-[0.99] disabled:opacity-60">
         {/* 구글 공식 4색 G 로고(브랜드 가이드 규격) */}
         <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>

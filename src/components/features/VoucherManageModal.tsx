@@ -12,6 +12,8 @@ import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
 import { listVenueVouchers, isHeldVoucher, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, VOUCHER_REASONS, voucherReasonLabel, type VoucherReason } from '../../api/vouchers';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
+import { loadVenueVoucherPanel } from '../../lib/venueVoucherLoad';
+import type { RequestStamp } from '../../lib/staleResponse';
 import { voucherGroupLabel, stripVenuePrefix } from '../../lib/voucherLabel'; // 손님 지갑 표기 규칙(오너 지시 #19)과 같은 함수로 미리보기
 
 function fmtDateTime(iso: string | null): string {
@@ -54,19 +56,26 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [activeIdx, setActiveIdx] = useState(-1); // 자동완성 키보드 하이라이트
   const [busy, setBusy] = useState(false);
   const [stats, setStats] = useState<VoucherHolderStats | null>(null);
+  const [statsErr, setStatsErr] = useState<unknown>(null);
   const [qr, setQr] = useState('');
   const [signupQr, setSignupQr] = useState('');
   const [checkinQr, setCheckinQr] = useState('');
   const [buyinQr, setBuyinQr] = useState('');
   const [approved, setApproved] = useState(true);
+  // 승인 상태 조회 실패 — 삼키면 초기값 true 가 남아 '운영자 승인 필요' 경고가 사라진다(N04-A). 서버가 P0001 로 막긴 하지만 화면이 거짓말한다.
+  const [approvedErr, setApprovedErr] = useState<unknown>(null);
   // 발급 한도(쿼터) — null이면 구 DB(한도 미적용)라 표시 생략
   const [quota, setQuota] = useState<number | null>(null);
   // W2-1 VCH-1: 유상 충전 요청·조회 제거(§12-A-2) — 한도 표시는 유지
-  const reloadQuota = () => {
+  // N04-A: 매장 전환 뒤 도착한 앞 매장 쿼터를 버린다(effect cleanup). 발급 뒤 재조회는 quotaTick 으로.
+  const [quotaTick, setQuotaTick] = useState(0);
+  const reloadQuota = () => setQuotaTick((t) => t + 1);
+  useEffect(() => {
     if (!canIssue || !idOn) return;
-    getVoucherQuota(venueId).then(setQuota).catch(() => {});
-  };
-  useEffect(reloadQuota, [venueId, canIssue, idOn]);
+    let alive = true;
+    getVoucherQuota(venueId).then((q) => { if (alive) setQuota(q); }).catch(() => {});
+    return () => { alive = false; };
+  }, [venueId, canIssue, idOn, quotaTick]);
   const [holderQuery, setHolderQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [profileMap, setProfileMap] = useState<Map<string, VoucherHolderProfile>>(new Map());
@@ -74,15 +83,27 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [qrOpen, setQrOpen] = useState(false);       // QR 섹션 — 기본 접힘(PC 포함)
   const [ownerOpen, setOwnerOpen] = useState(false); // 보유자 현황·통계(업주 전용) — 기본 접힘
 
+  // N04-A(2026-09-13, 적대 반증 생존): 이 패널은 매장 A→B 전환에 리마운트되지 않는데(VenueManageTab pane key·memo) 비동기 setter 에
+  //   stale 가드가 0 이었다 — A 목록이 늦게 도착하면 B 화면에 A 이용권이 실리고 '회수'/'삭제'가 **A 매장 이용권 id** 로 나간다(admin 은
+  //   can_manage_pos 통과 → 실제 회수·삭제). 지갑·시트와 같은 lib/staleResponse 계약(owner=venueId, seq=호출마다)을 lib/venueVoucherLoad 가 든다.
+  //   독립 검증 D(2026-09-13)의 statsErr 관용구는 그 안에 그대로 있다.
+  const voucherReq = useRef<RequestStamp<string>>({ seq: 0, owner: '' });
   const reload = () => {
     if (!idOn) return; // 킬스위치 OFF — 꺼진 기능이 조용히 조회를 돌지 않게(무료 egress 예산)
-    setLoading(true);
-    listVenueVouchers(venueId).then((v) => { setList(v); setListErr(null); })
-      .catch((e) => setListErr(e)).finally(() => setLoading(false));
-    if (canIssue) voucherHolderStats(venueId).then(setStats).catch(() => {});
-    if (canIssue) voucherHolderProfiles(venueId).then((ps) => setProfileMap(new Map(ps.map((p) => [p.userId, p])))).catch(() => {});
-    isVoucherIssueApproved(venueId).then(setApproved).catch(() => {});
+    loadVenueVoucherPanel(voucherReq, venueId, canIssue,
+      { list: listVenueVouchers, stats: voucherHolderStats, profiles: voucherHolderProfiles, approved: isVoucherIssueApproved },
+      { list: setList, listErr: setListErr, loading: setLoading,
+        stats: setStats, profiles: (ps) => setProfileMap(new Map(ps.map((p) => [p.userId, p]))), statsErr: setStatsErr,
+        approved: setApproved, approvedErr: setApprovedErr });
   };
+  // 매장이 바뀌면 앞 매장의 데이터를 **즉시** 지운다(지갑의 V04 와 같다) — 응답 격리와 별개로 한 프레임이라도 A 의 목록이 B 로 보이면 안 된다.
+  //   받는 손님 선택도 A 화면에서 고른 것이라 함께 비운다(발급이 B 매장으로 나가면 안 된다).
+  useEffect(() => {
+    voucherReq.current = { seq: voucherReq.current.seq + 1, owner: venueId };   // 진행 중인 앞 매장 응답을 전부 stale 로
+    setList([]); setListErr(null); setStats(null); setStatsErr(null); setProfileMap(new Map());
+    setQuota(null); setApproved(true); setApprovedErr(null);
+    setRecvUserId(null); setRecvDisplay(''); setCands([]); setActiveIdx(-1); setExpanded(null);
+  }, [venueId]);
   useEffect(() => { reload(); }, [venueId, idOn]); // eslint-disable-line react-hooks/exhaustive-deps
   // 실시간: 이 매장 이용권이 들어오면(사용/발급/회수) 즉시 갱신 — 권한은 RLS로 자동 게이트.
   // ⚠ 킬스위치 OFF 에서는 채널을 열지 않는다 — Realtime 동시연결은 무료 한도의 실질 천장이라
@@ -145,9 +166,11 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     setIssueOpen(true);
     setRecvMode('id');
     setIdInput(q);
+    let alive = true;   // N04-A: 프리필이 바뀌거나 언마운트되면 늦은 검색 결과를 버린다
     findUserForTransfer(q)
-      .then((f) => { if (f.length === 1) pickRecv(f[0]); else setCands(f); })
+      .then((f) => { if (!alive) return; if (f.length === 1) pickRecv(f[0]); else setCands(f); })
       .catch(() => {});
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillReceiver]);
   const resolveId = async () => {
@@ -168,8 +191,9 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     if (!q) { setCands([]); return; }
     const finder = recvMode === 'phone' ? findUserByPhone : findUserForTransfer;
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => { finder(q).then((f) => { setCands(f); setActiveIdx(-1); }).catch(() => { setCands([]); setActiveIdx(-1); }); }, 280);
-    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+    let alive = true;   // N04-A: 타이머는 취소되지만 이미 나간 요청의 응답은 취소되지 않는다 — 다음 입력의 후보를 앞 응답이 덮지 않게
+    searchTimer.current = setTimeout(() => { finder(q).then((f) => { if (!alive) return; setCands(f); setActiveIdx(-1); }).catch(() => { if (!alive) return; setCands([]); setActiveIdx(-1); }); }, 280);
+    return () => { alive = false; if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [idInput, recvMode, recvUserId]);
 
   // 매장 비치용 인쇄 — 선택한 QR만 출력(종이가 작아 한꺼번에 불가). 3개 중 1~3개 선택.
@@ -353,8 +377,11 @@ ${cards}
           </button>
           {issueOpen && (
             <div className="space-y-1.5 px-2.5 pb-2.5">
-              {!isAdmin && !approved && (
+              {!isAdmin && approvedErr == null && !approved && (
                 <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/[0.08] px-2 py-1.5 text-2xs text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 운영자 승인 후 발급할 수 있습니다.</p>
+              )}
+              {!isAdmin && approvedErr != null && (
+                <LoadErrorCard what="발급 승인 상태" error={approvedErr} onRetry={reload} compact hint="승인 상태를 확인하기 전에는 발급할 수 없습니다." />
               )}
               <div className="flex gap-1.5">
                 <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm" />
@@ -465,7 +492,7 @@ ${cards}
                   <button type="button" onClick={() => setRecvMode('phone')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs"><Icon name="phone" size={12} /> 전화번호로 지정</button>
                 </div>
               )}
-              <button type="button" disabled={busy || (!isAdmin && !approved)} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 발급${recvDisplay ? ` → ${recvDisplay}` : ''}`}</button>
+              <button type="button" disabled={busy || (!isAdmin && (!approved || approvedErr != null))} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 발급${recvDisplay ? ` → ${recvDisplay}` : ''}`}</button>
               <p className="text-2xs text-ink-muted">1회 최대 1000개 · 아이디(닉네임)로 손님 지정 시 그 회원 지갑으로. 미지정이면 매장 보관용. 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
 
               {/* W2-1 VCH-1: 유상 충전(구매) 요청 UI 제거 — 이용권이 '상금 재원' 성격을 갖지 않게(§12-A-2).
@@ -543,7 +570,8 @@ ${cards}
           <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', ownerOpen ? 'rotate-180' : ''].join(' ')} />
         </button>
       )}
-      {canIssue && ownerOpen && stats && (
+      {canIssue && ownerOpen && statsErr != null && <LoadErrorCard what="보유자 통계" error={statsErr} onRetry={reload} compact />}
+      {canIssue && ownerOpen && statsErr == null && stats && (
         <div className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.07] via-surface-low to-surface-low p-3 space-y-2.5">
           <div className="grid grid-cols-3 gap-2">
             {([

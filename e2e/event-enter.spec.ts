@@ -40,9 +40,12 @@ const RECORDER = () => {
 const stop = (page: import('@playwright/test').Page) =>
   page.evaluate(() => { const w = window as unknown as { __f: string[]; __raf: number }; cancelAnimationFrame(w.__raf); return w.__f; });
 
-/** 홈의 이벤트 배너. 진행 중인 이벤트가 없으면 아예 렌더되지 않으므로 없으면 건너뛴다. */
+/** 홈의 이벤트 **배너(광고)**. 진행 중인 이벤트가 없으면 아예 렌더되지 않으므로 없으면 건너뛴다.
+ *  ⚠ 텍스트로 잡지 않는다(2026-09-12 §4): 이제 배너가 없을 때도 같은 자리에 **메뉴 한 줄**이 남는데,
+ *    그 줄에도 '이벤트'가 적혀 있어 텍스트 필터로는 둘이 구분되지 않는다. 이 스펙이 재는 것은
+ *    '씨앗이 있는 진입'이라 반드시 배너 쪽이어야 한다 → data-testid 로 고정한다. */
 const bannerOf = (page: import('@playwright/test').Page) =>
-  page.locator('button').filter({ hasText: /오픈 기념|카드 오픈|이벤트/ }).first();
+  page.getByTestId('home-event-banner').first();
 
 test.describe('오픈 기념 이벤트 — 진입', () => {
   test.beforeEach(async ({ page }) => {

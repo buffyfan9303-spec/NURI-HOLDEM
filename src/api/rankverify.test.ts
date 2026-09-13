@@ -54,10 +54,22 @@ describe('머니인 점수 임계 — 100만원(100T)당 1점', () => {
 const DIR = join(process.cwd(), 'supabase', 'migrations');
 const files = readdirSync(DIR).filter((f) => f.endsWith('.sql')).sort();
 
+/**
+ * 마이그레이션 본문은 **파일당 한 번만** 읽는다.
+ * `it()` 마다 200개를 다시 읽으면, 다른 작업(빌드·lint·e2e)과 겹쳐 CPU 가 밀릴 때
+ * vitest 기본 `testTimeout` 5초를 넘겨 **단정과 무관하게** 터진다(2026-09-12 실측).
+ */
+const TEXT = new Map<string, string>();
+const sql = (f: string): string => {
+  let t = TEXT.get(f);
+  if (t === undefined) { t = readFileSync(join(DIR, f), 'utf8'); TEXT.set(f, t); }
+  return t;
+};
+
 function lastDefinitionOf(fn: string): { file: string; body: string } | null {
   let hit: { file: string; body: string } | null = null;
   for (const f of files) {
-    const t = readFileSync(join(DIR, f), 'utf8');
+    const t = sql(f);
     const m = new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${fn}\\s*\\(`, 'i').exec(t);
     if (m) hit = { file: f, body: t.slice(m.index) };
   }
@@ -76,7 +88,7 @@ describe('서버 moneyin_points 본문 — 클라 상수와 같은 임계', () =
   it('마지막 COMMENT 가 100T 환산으로 설명한다(20260906d) — DB 를 보는 사람이 옛 10T 를 읽지 않게', () => {
     let last: { file: string; text: string } | null = null;
     for (const f of files) {
-      const t = readFileSync(join(DIR, f), 'utf8');
+      const t = sql(f);
       const re = /comment\s+on\s+function\s+public\.moneyin_points\(bigint\)\s+is\s*'([^']*)'/gi;
       for (let m = re.exec(t); m; m = re.exec(t)) last = { file: f, text: m[1] };
     }

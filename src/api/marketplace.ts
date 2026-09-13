@@ -1,5 +1,6 @@
 ﻿// src/api/marketplace.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import { currentUser } from './_session';
 
 // 카테고리(요구사항 4): '게임머니' 노출 제거 → [용품(pokerGear), 아이템(item), 기타(etc)].
@@ -111,14 +112,12 @@ export async function createListing(
 
 export async function updateListingStatus(id: string, status: ListingStatus): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('marketplace_listings').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('marketplace_listings').update({ status, updated_at: new Date().toISOString() }).eq('id', id));
 }
 
 export async function deleteListing(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('marketplace_listings').delete().eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('marketplace_listings').delete().eq('id', id));
 }
 
 // ── 찜(관심) ──────────────────────────────────────────────────────────────────
@@ -192,8 +191,7 @@ export async function getNotices(): Promise<MarketplaceNotice[]> {
 /** 관리자: 공지 노출 순서 저장 — RLS notices_admin_upd(my_role()='admin')가 강제. */
 export async function setNoticeOrder(id: string, sortOrder: number): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('marketplace_notices').update({ sort_order: sortOrder }).eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('marketplace_notices').update({ sort_order: sortOrder }).eq('id', id));
 }
 
 // 공지 작성 — RLS 정책(notices_admin_all)이 관리자(my_role()='admin')만 CUD 허용.
@@ -217,8 +215,7 @@ export async function createNotice(
 
 export async function deleteNotice(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('marketplace_notices').delete().eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('marketplace_notices').delete().eq('id', id));
 }
 
 export async function updateNotice(
@@ -226,13 +223,12 @@ export async function updateNotice(
   payload: Pick<MarketplaceNotice, 'type' | 'title' | 'body' | 'board'>,
 ): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('marketplace_notices').update({
+  await mustAffect(supabase.from('marketplace_notices').update({
     type:  payload.type,
     title: payload.title,
     body:  payload.body ?? null,
     board: payload.board ?? 'all',
-  }).eq('id', id);
-  if (error) throw error;
+  }).eq('id', id));
 }
 
 /** 매물 조회수 +1 — 서버가 (매물, 열람자, KST 날짜) 원장으로 중복을 거른다(increment_listing_view, 20260907e).

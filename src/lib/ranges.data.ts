@@ -43,6 +43,10 @@ export interface RangeScenario {
   hero: TablePos;
   /** 상대(오픈·3벳한 사람) 포지션 — RFI 처럼 상대가 특정되지 않으면 생략 */
   vs?: TablePos;
+  /** 이 표가 상정한 테이블 인원. 생략하면 6인(6맥스 기본).
+   *  NURI SPOT 분석이 "이 표는 N인 기준인데 입력은 M인입니다" 를 적을 때 쓴다 —
+   *  얼리 오픈 수비 표는 9인용인데 6인으로 단정해 **없는 차이를 만들어 내고 있었다**. */
+  baseTableSize?: 6 | 9;
   label: string;
   /** 상황 설명 한 줄 — 초보가 "언제 보는 표인지" 바로 알게 */
   desc: string;
@@ -568,7 +572,7 @@ const THREEBET_EARLY: RangeScenario[] = [
 // 블라인드 수비 vs 얼리 오픈 — BB 는 3벳+콜(콜은 A6s+ 를 0.5 로 받아 휠 에이스 블러프가 지배 역전을 만들지 않는다),
 // SB 는 3벳-or-폴드(레이크·포지션 불리로 콜 없음).
 const bbVsEarly = (vs: TablePos, wide: boolean): RangeScenario => ({
-  id: `bb_vs_${vs.toLowerCase().replace('+', '')}`, group: 'defend', hero: 'BB', vs,
+  id: `bb_vs_${vs.toLowerCase().replace('+', '')}`, group: 'defend', hero: 'BB', vs, baseTableSize: 9,
   label: `BB 수비 vs ${vs}`, desc: `9인 · ${vs} 오픈(2.5x)에 BB 에서 3벳·콜`,
   actions: [
     { key: 'raise', label: '3벳', spec: wide
@@ -581,7 +585,7 @@ const bbVsEarly = (vs: TablePos, wide: boolean): RangeScenario => ({
   note: '얼리 오픈엔 BB 도 콜 폭을 줄인다 — 수딧 커넥터·중간 페어는 남기고 오프수트 브로드웨이는 접는다. 3벳 블러프는 휠 에이스만.',
 });
 const sbVsEarly = (vs: TablePos): RangeScenario => ({
-  id: `sb_vs_${vs.toLowerCase().replace('+', '')}`, group: 'defend', hero: 'SB', vs,
+  id: `sb_vs_${vs.toLowerCase().replace('+', '')}`, group: 'defend', hero: 'SB', vs, baseTableSize: 9,
   label: `SB 수비 vs ${vs}`, desc: `9인 · ${vs} 오픈에 SB 는 3벳 아니면 폴드`,
   actions: [{ key: 'raise', label: '3벳', spec: { '1': 'JJ+ AKs AKo AQs', '0.5': 'TT AQo AJs KQs A5s A4s' } }],
   note: 'SB 콜은 포지션·레이크 둘 다 불리 — 얼리 오픈엔 3벳-or-폴드. 밸류 JJ+·AK·AQs, 블러프 휠 에이스.',

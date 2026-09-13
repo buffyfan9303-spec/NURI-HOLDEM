@@ -5,7 +5,12 @@
 # 우회가 꼭 필요하면 `git commit --no-verify` 대신 .secretlintrc.json 의 allows 에 '왜 공개키인지' 적고 넣어라.
 files=$(git diff --cached --name-only --diff-filter=ACMR | grep -vE '^(node_modules|dist|test-results|playwright-report)/' || true)
 [ -z "$files" ] && exit 0
-echo "$files" | xargs npx --no-install secretlint --format compact
+# ⚠ 2026-09-13: `xargs` 에 -n 이 없어서 스테이징 파일이 많으면 **비밀과 무관하게** 실패했다.
+#   283개를 커밋하려다 실측: exit 123 · "명령줄이 너무 깁니다"(Windows CreateProcess 인자 한계).
+#   그러면 훅이 "비밀로 보이는 문자열이 있다"는 잘못된 메시지를 내고, 사람은 --no-verify 로 우회하게 된다
+#   — 즉 파일이 많을수록 방어선이 꺼지는 구조였다. -n 으로 나눠 부른다.
+#   xargs 는 어느 배치든 실패하면 비영(123)을 돌려주므로 탐지력은 그대로다.
+echo "$files" | xargs -n 40 npx --no-install secretlint --format compact
 status=$?
 if [ $status -ne 0 ]; then
   echo ""

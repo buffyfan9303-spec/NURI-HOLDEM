@@ -326,10 +326,12 @@ export default function DraggableList({ initialItems }: DraggableListProps) {
     try {
       await togglePremium(id, !current);
     } catch {
-      // 실패 시 롤백
+      // 실패 시 롤백 — 조용히 되돌리면 '눌렀는데 안 된 것'을 아무도 모른다(부스트와 같은 표시)
       setItems((prev) =>
         prev.map((item) => item.id === id ? { ...item, isPremium: current } : item),
       );
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
     }
   }, []);
 
@@ -365,6 +367,8 @@ export default function DraggableList({ initialItems }: DraggableListProps) {
       setItems((prev) =>
         prev.map((item) => item.id === id ? { ...item, isCompetition: current } : item),
       );
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
     }
   }, []);
 

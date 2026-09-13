@@ -2,6 +2,7 @@ import Modal from '../atoms/Modal';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import Icon from '../atoms/Icon';
 import { NoticeBadge } from './NoticeSection';
+import { parseNoticeBody } from '../../lib/noticeBody';
 
 interface NoticeDetailModalProps {
   notice: MarketplaceNotice | null;
@@ -44,14 +45,32 @@ export default function NoticeDetailModal({ notice, open, onClose, isAdmin, onEd
           <span className="tabular-nums">{formatDateTime(notice.createdAt)}</span>
         </div>
 
+        {/* 메타 → 본문 경계: UI-03 아우라 구분선(독서 경계 공통 유틸 .divider-aura). 장식일 뿐 위계는 제목·간격이 전한다. */}
+        <hr className="divider-aura mt-4" aria-hidden="true" />
         {/* 본문 — 공지는 핸드·이미지가 거의 없는 순수 텍스트라 가독성이 전부다.
             text-sm/ink-secondary(작고 어두움) → text-base/ink-primary. 한글 장문이라 줄간격은 1.75.
-            줄간격은 애니메이트 속성이 아니라 모션 헌법과 무관하다. */}
-        <div className="mt-4 border-t border-border-subtle pt-4">
+            UI-01(2026-09-13): 줄 높이를 더 키우지 않고 **문단과 번호 항목을 나눈다**(lib/noticeBody — 원문은 그대로).
+            간격: 문단 1em · 항목 사이 0.85em · 번호 목록과 앞뒤 문단 1.25em. 문장 안 개행은 pre-wrap 으로 보존.
+            긴 URL·영문은 break-words(overflow-wrap) 로만 막는다 — 전역 break-all 을 쓰지 않는다. */}
+        <div className="mt-4">
           {notice.body ? (
-            <p className="whitespace-pre-wrap break-words text-base leading-[1.75] text-ink-primary">
-              {notice.body}
-            </p>
+            <div data-notice-body
+              className="break-words text-base leading-[1.75] text-ink-primary [&>*+*]:mt-[1em] [&>*+ol]:mt-[1.25em] [&>ol+*]:mt-[1.25em]">
+              {parseNoticeBody(notice.body).map((b, i) => b.kind === 'p' ? (
+                <p key={i} className="whitespace-pre-wrap">{b.lines.join('\n')}</p>
+              ) : (
+                <ol key={i} className="list-none space-y-[0.85em] pl-0">
+                  {b.items.map((it, j) => (
+                    <li key={j} className="flex gap-2">
+                      {/* 원문 번호 그대로 — 자동 번호에 맡기면 '3.' 이 '3)' 로 바뀌거나 건너뛴 번호가 메워진다 */}
+                      {/* 번호 뒤 공백을 텍스트로 둔다 — 복사·스크린리더·textContent 가 원문처럼 '1) 내용' 으로 읽힌다(flex 라 시각 폭은 gap 이 준다) */}
+                      <span className="shrink-0 tabular-nums">{it.marker}{' '}</span>
+                      <span className="min-w-0 flex-1 whitespace-pre-wrap">{it.lines.join('\n')}</span>
+                    </li>
+                  ))}
+                </ol>
+              ))}
+            </div>
           ) : (
             <p className="text-sm text-ink-muted">본문 내용이 없습니다.</p>
           )}

@@ -123,14 +123,25 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
   //   wages 가 빈 채로 남아 모든 급여가 0으로 계산되고 **'총 인건비 0원'이 정상 숫자처럼** 떴다
   //   (2026-09-11 감사). 돈 화면에서 '못 불러옴'과 '정말 0원'이 같아 보이면 안 된다.
   const [wageErr, setWageErr] = useState<string | null>(null);
+  // ⚠ 출근 기록·딜러 근무 조회 실패도 같은 부류다(F3·F6, 2026-09-13). 예전엔 둘 다 catch 로 삼켜
+  //   shifts=[]·dealers=[] → 총 인건비 '0원' 이 정상 숫자로 떴고, '없는 달' 과 '못 불러온 달' 이 같은 문장으로 끝났다.
+  const [shiftErr, setShiftErr] = useState<string | null>(null);
+  const [dealerErr, setDealerErr] = useState<string | null>(null);
+  const [shiftTick, setShiftTick] = useState(0);
   const [dealers, setDealers] = useState<DealerShift[]>([]);
   const [from, to] = monthRange(month);
   useEffect(() => {
-    const reload = () => getStaffSchedule(venueId, from, to).then(setShifts).catch(() => {});
+    const reload = () => getStaffSchedule(venueId, from, to)
+      .then((ss) => { setShifts(ss); setShiftErr(null); })
+      .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
     reload();
     return subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
-  }, [venueId, from, to]);
-  useEffect(() => { getDealerShifts(venueId, from, to).then(setDealers).catch(() => setDealers([])); }, [venueId, from, to]);
+  }, [venueId, from, to, shiftTick]);
+  useEffect(() => {
+    getDealerShifts(venueId, from, to)
+      .then((ds) => { setDealers(ds); setDealerErr(null); })
+      .catch((e) => setDealerErr(msgOf(e, '딜러 근무 기록을 불러오지 못했습니다')));
+  }, [venueId, from, to, shiftTick]);
   useEffect(() => {
     setWageErr(null);
     getStaffWages(venueId)
@@ -168,6 +179,8 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
   const totalHrs = rows.reduce((s, r) => s + r.hrs, 0) + dealerRows.reduce((s, r) => s + r.hrs, 0);
   const avgIn = avgHm(shifts.map((s) => s.checkIn));
   const avgOut = avgHm(shifts.map((s) => s.checkOut));
+  /** 셋 중 하나라도 못 불러왔으면 합계는 숫자가 아니다 — 먼저 난 실패 문장을 보여 준다. */
+  const payErr = wageErr ?? shiftErr ?? dealerErr;
 
   return (
     <div className="space-y-3">
@@ -179,16 +192,18 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-card border border-accent-400/40 bg-accent-300/[0.07] p-2.5 text-center">
           <p className="text-2xs text-ink-muted">총 인건비</p>
-          {wageErr
+          {payErr
             ? <p className="text-base font-extrabold text-danger-light">—</p>
             : <p className="text-xl font-extrabold text-accent-200 tabular-nums">{totalPay.toLocaleString()}원</p>}
-          {!wageErr && dealerPay > 0 && (
+          {!payErr && dealerPay > 0 && (
             <p className="text-[11px] text-ink-muted tabular-nums">직원 {staffPay.toLocaleString()} · 딜러 {dealerPay.toLocaleString()}</p>
           )}
         </div>
         <div className="rounded-card border border-border-subtle bg-surface-base p-2.5 text-center">
           <p className="text-2xs text-ink-muted">총 근무시간</p>
-          <p className="text-xl font-extrabold text-ink-primary tabular-nums">{totalHrs.toFixed(1)}h</p>
+          {shiftErr || dealerErr
+            ? <p className="text-base font-extrabold text-danger-light">—</p>
+            : <p className="text-xl font-extrabold text-ink-primary tabular-nums">{totalHrs.toFixed(1)}h</p>}
         </div>
       </div>
       {wageErr && (
@@ -196,7 +211,14 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
           {wageErr} — 급여 합계를 계산할 수 없습니다. 아래 표의 급여는 0원으로 보일 수 있습니다.
         </p>
       )}
-      {!wageErr && noWage.length > 0 && (
+      {(shiftErr || dealerErr) && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">
+          <span className="min-w-0 flex-1">{shiftErr ?? dealerErr} — 합계를 계산할 수 없습니다. 아래 표는 이번 달 기록의 전부가 아닐 수 있습니다.</span>
+          <button type="button" onClick={() => setShiftTick((t) => t + 1)}
+            className="shrink-0 rounded-badge border border-danger/40 px-2.5 py-1 text-2xs font-bold text-danger-light hover:bg-danger/15 transition-colors">다시 시도</button>
+        </div>
+      )}
+      {!payErr && noWage.length > 0 && (
         <p className="rounded-input border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-2xs text-amber-700 dark:text-amber-300">
           시급이 없는 직원 {noWage.length}명({noWage.slice(0, 4).join(' · ')}{noWage.length > 4 ? ' 외' : ''}) — 급여가 0원으로 빠져 총 인건비가 실제보다 적습니다.
         </p>
@@ -205,7 +227,7 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
         <div className="rounded-input border border-border-subtle bg-surface-base py-2 text-center"><p className="text-[11px] text-ink-muted">평균 출근</p><p className="text-base font-bold text-ink-primary tabular-nums">{avgIn}</p></div>
         <div className="rounded-input border border-border-subtle bg-surface-base py-2 text-center"><p className="text-[11px] text-ink-muted">평균 퇴근</p><p className="text-base font-bold text-ink-primary tabular-nums">{avgOut}</p></div>
       </div>
-      {rows.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">{month} 출근 기록이 없습니다.</p> : (
+      {shiftErr ? null : rows.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">{month} 출근 기록이 없습니다.</p> : (
         <div className="overflow-x-auto scrollbar-none">
           {/* 숫자 칼럼은 우측 정렬 + tabular-nums — 자릿수 비교가 세로로 맞아떨어지게.
               min-w 를 두지 않는다: 375px 에서 표가 340px 로 자라 **급여 칸이 잘렸는데**
@@ -257,12 +279,17 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
 export function StaffWorkLog({ venueId }: { venueId: string }) {
   const [month, setMonth] = useState(thisMonth);
   const [shifts, setShifts] = useState<StaffShift[]>([]);
+  // F3: 조회 실패를 '기록이 없습니다' 로 그리지 않는다.
+  const [shiftErr, setShiftErr] = useState<string | null>(null);
+  const [shiftTick, setShiftTick] = useState(0);
   const [from, to] = monthRange(month);
   useEffect(() => {
-    const reload = () => getStaffSchedule(venueId, from, to).then(setShifts).catch(() => {});
+    const reload = () => getStaffSchedule(venueId, from, to)
+      .then((ss) => { setShifts(ss); setShiftErr(null); })
+      .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
     reload();
     return subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
-  }, [venueId, from, to]);
+  }, [venueId, from, to, shiftTick]);
   const sorted = useMemo(() => [...shifts].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.name.localeCompare(b.name))), [shifts]);
   return (
     <div className="space-y-2">
@@ -271,7 +298,13 @@ export function StaffWorkLog({ venueId }: { venueId: string }) {
         <span className="text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[5rem] text-center">{month}</span>
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
       </div>
-      {sorted.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">기록이 없습니다.</p> : (
+      {shiftErr ? (
+        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">
+          <span className="min-w-0 flex-1">{shiftErr}</span>
+          <button type="button" onClick={() => setShiftTick((t) => t + 1)}
+            className="shrink-0 rounded-badge border border-danger/40 px-2.5 py-1 text-2xs font-bold text-danger-light hover:bg-danger/15 transition-colors">다시 시도</button>
+        </div>
+      ) : sorted.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">기록이 없습니다.</p> : (
         <div className="rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle max-h-[24rem] overflow-y-auto">
           {sorted.map((s, i) => (
             <div key={`${s.date}-${s.name}-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
@@ -293,16 +326,21 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
   const toast = useToast();
   const [month, setMonth] = useState(thisMonth);
   const [shifts, setShifts] = useState<StaffShift[]>([]);
+  // F3: 조회 실패를 '배정된 출근 일정이 없습니다' 로 그리지 않는다 — 직원이 자기 이름 배정을 의심하게 만든다.
+  const [shiftErr, setShiftErr] = useState<string | null>(null);
+  const [shiftTick, setShiftTick] = useState(0);
   const [from, to] = monthRange(month);
   const myNames = [user?.name, user?.nickname].filter(Boolean) as string[];
   const today = new Date().toLocaleDateString('en-CA');
   const nowHm = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
   useEffect(() => {
-    const reload = () => getStaffSchedule(venueId, from, to).then((ss) => setShifts(ss.filter((s) => myNames.includes(s.name)))).catch(() => {});
+    const reload = () => getStaffSchedule(venueId, from, to)
+      .then((ss) => { setShifts(ss.filter((s) => myNames.includes(s.name))); setShiftErr(null); })
+      .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
     reload();
     return subscribeStaffSchedule(venueId, reload); // 실시간 동기화
     /* eslint-disable-next-line */
-  }, [venueId, from, to, user]);
+  }, [venueId, from, to, shiftTick, user]);
   const setT = async (s: StaffShift, field: 'checkIn' | 'checkOut', val: string) => {
     const prev = s[field] ?? null;
     setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, [field]: val || null } : x)));
@@ -323,7 +361,13 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
           <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
         </div>
       </div>
-      {!user ? <p className="text-2xs text-ink-muted">로그인이 필요합니다.</p> : sorted.length === 0 ? (
+      {!user ? <p className="text-2xs text-ink-muted">로그인이 필요합니다.</p> : shiftErr ? (
+        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">
+          <span className="min-w-0 flex-1">{shiftErr}</span>
+          <button type="button" onClick={() => setShiftTick((t) => t + 1)}
+            className="shrink-0 rounded-badge border border-danger/40 px-2.5 py-1 text-2xs font-bold text-danger-light hover:bg-danger/15 transition-colors">다시 시도</button>
+        </div>
+      ) : sorted.length === 0 ? (
         <p className="text-2xs text-ink-muted text-center py-4">배정된 출근 일정이 없습니다 (내 이름: {myNames.join(' / ') || '-'}).<br />업주가 스케줄에 본인 이름으로 배정하면 여기서 출퇴근을 기록할 수 있습니다.</p>
       ) : (
         <div className="space-y-1.5">

@@ -211,7 +211,10 @@ begin
     if r.prosrc not like '%Asia/Seoul%' then
       raise exception 'ABORT: % 가 KST 를 안 쓴다', r.proname;
     end if;
-    if r.prosrc like '%current_date%' then
+    -- ⚠ 2026-09-12 정정: `like '%current_date%'` 는 **소문자만** 잡았다. 바로 위 `:200` 은 이미
+    --   `upper()` 로 정규화하는데 여기만 빠져 있어, `CURRENT_DATE` 로 쓴 회귀가 그냥 통과했다.
+    --   LIKE 의 `_` 가 단일문자 와일드카드인 문제도 함께 없앤다(20260911i 가 기록한 함정 — strpos 를 쓴다).
+    if strpos(upper(r.prosrc), 'CURRENT_DATE') > 0 then
       raise exception 'ABORT: % 에 UTC current_date 가 남아 있다', r.proname;
     end if;
   end loop;

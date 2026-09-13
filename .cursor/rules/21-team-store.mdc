@@ -1,0 +1,136 @@
+---
+description: 내 매장 팀 — 이 도메인의 파일 지도, 반드시 아는 함정, 검증 명령. 내 매장 관련 파일을 열거나 작업할 때 붙는다.
+globs: ["src/components/features/Venue*.tsx","src/components/features/Store*.tsx","src/components/features/*Ledger*.tsx","src/components/features/Ledger*.tsx","src/components/features/clock/**","src/components/features/Staff*.tsx","src/components/features/*Voucher*.tsx","src/components/features/Poster*.tsx","src/components/features/MyPostersTab.tsx","src/components/features/Schedule*.tsx","src/components/features/Preset*.tsx","src/components/features/Customer*.tsx","src/components/features/RegularsModal.tsx","src/components/features/SeasonPanel.tsx","src/components/features/KillSwitch.tsx","src/components/features/DealerShiftsModal.tsx","src/api/ledger.ts","src/api/clock.ts","src/api/vouchers.ts","src/api/rankings.ts","src/api/schedules.ts","src/api/reservations.ts","src/api/crm.ts","src/api/staffSchedule.ts","src/api/dealerShifts.ts","src/api/presets.ts","src/api/seasons.ts","src/api/checkins.ts","src/api/killswitch.ts","src/lib/ledger*.ts","src/lib/ranking*.ts","src/lib/voucher*.ts","src/lib/clockLevel.ts","src/lib/storeDestination.ts","src/lib/units.ts","src/lib/kst.ts"]
+alwaysApply: false
+---
+
+# 내 매장 팀
+
+> 내 매장 (my-store) — 매장 운영주 PC 스위트: 대시보드 · 게임 5단계(포스터→장부→클락→순위→정산) · 통계/고객 · 직원/급여 · 출석 · 매장 설정(페이지·프리셋·POS·이용권·운영도구·위험구역), 그리고 손님이 보는 매장 페이지·이용권 지갑까지. 화면 진입점은 App.tsx 의 'my-store' 탭(keep-alive, visitedTabs+display 토글 · App.tsx:914) + `?display=<venueId>&g=<seq>` 클락 TV 송출(App.tsx:2106).
+
+> 이 문서는 2026-09-12 에 저장소를 **실제로 열어서** 만들고, 별도 에이전트가 경로·행번호를 **전부 재대조**한 것이다.
+> 행번호는 코드가 움직이면 틀어진다 — 근거 파일을 열어 확인하고, 틀렸으면 이 파일을 같이 고쳐라.
+
+## 화면·진입점
+
+- `src/components/features/VenueManageTab.tsx` (2165줄) — 도메인 셸 — 7섹션·게임 5스텝·설정 6하위탭 라우팅, 권한 배치 조회, 시드 상태(ledgerSeed·clockSeed·rankingDraft) 정본, 매장 순위 편집기 내장
+- `src/components/features/StoreDashboard.tsx` (1526줄) — 대시보드 — 지금 할 일·오늘 장부·라이브·최근7일·예약·단골·인건비 요약, onGoto(StoreDest)로 각 판에 문맥과 함께 착지
+- `src/components/features/NuriPosLedger.tsx` (3179줄) — 장부(POS) 본체 — 세션 설정·플레이어 격자·결제/분납/할인/미수·바인 승인·마감. 도메인 최대 파일
+- `src/components/features/LedgerWorkspace.tsx` (97줄) — 장부 작업대 껍데기 — 전체화면 토글 + 우측 이용권 실시간 레일 자리(장부 본체는 안 건드린다)
+- `src/components/features/LedgerVoucherRail.tsx` (162줄) — 장부 옆 이용권 실시간 레일(구독·폴링은 active prop 으로 끊는다)
+- `src/components/features/LedgerStatsPanel.tsx` (1104줄) — 매출·손님 통계 패널(기간 2값 전환·경합 응답 차단) + PosSettingsPanel(POS·결제 설정) export
+- `src/components/features/LedgerSettlementPanel.tsx` (378줄) — 5단계 '정산' 판 — 완납/미수/손님 구성/순위를 그날 숫자로
+- `src/components/features/CustomerAnalytics.tsx` (178줄) — 고객 분석(통계 패널 안에 embed)
+- `src/components/features/clock/TournamentClock.tsx` (1522줄) — 운영자 클락 — 설정·START/PAUSE/END·레벨 전진 워치독·16:9 미리보기·순위 저장 진입
+- `src/components/features/clock/ClockDisplay.tsx` (704줄) — 매장 TV 송출 화면(App.tsx `?display=<venueId>&g=<seq>`) — 레이아웃 안정 계약 보유
+- `src/components/features/clock/ClockRemote.tsx` (228줄) — 클락 원격 조작
+- `src/components/features/clock/ClockThemePanel.tsx` (270줄) — 클락 테마·배경 설정
+- `src/components/features/clock/BlindLevelsEditor.tsx` (101줄) — 블라인드 레벨 표 편집기
+- `src/components/features/clock/clockTheme.ts` (404줄) — 클락 테마 정의·직렬화
+- `src/components/features/clock/clockBgImage.ts` (140줄) — 클락 배경 이미지 업로드/조회(supabase.storage 직접 접근 — 이 도메인의 유일한 예외)
+- `src/components/features/MyPostersTab.tsx` (539줄) — 1단계 포스터 — 내 매장 포스터 목록·예약 현황·삭제(실패를 '없음'으로 안 삼키는 규약)
+- `src/components/features/PosterFormModal.tsx` (959줄) — 대회 포스터 등록/수정 폼(참가비·할인·시상·프리셋 상속)
+- `src/components/features/PosterCarousel.tsx` (396줄) — 포스터 캐러셀(HomeTab 노출면)
+- `src/components/features/ScheduleDetailModal.tsx` (1432줄) — 대회 상세 + 업주 예약 관리·제3자 제공 고지
+- `src/components/features/ScheduleCard.tsx` (556줄) — 일정 카드(상태/마감 표시)
+- `src/components/features/ScheduleTable.tsx` (109줄) — 일정 표 모드(md 768 경계로 표/리스트 갈림)
+- `src/components/features/VenuePage.tsx` (2029줄) — 손님이 보는 매장 페이지(3계층 IA·연락처·지도·팔로우)
+- `src/components/features/VenueCustomizePanel.tsx` (863줄) — 매장 페이지 꾸미기 + VenueRankHub(매장 랭킹 허브)·ScorePointsPanel·ScoreCalendar export
+- `src/components/features/VenueContactFields.tsx` (73줄) — 연락처 목록 편집기(ContactListEditor default export) — VenuePage·꾸미기 공용
+- `src/components/features/VenueReviews.tsx` (204줄) — 매장 리뷰·업주 답글
+- `src/components/features/VenueVerificationCard.tsx` (49줄) — 업주 화면 상단 매장 인증 등급 표시(부여는 관리자)
+- `src/components/features/VenueManagement.tsx` (268줄) — 관리자 탭의 매장 관리(노출 순서 드래그·상태·AD·인증·삭제) — AdminTab 에서 마운트
+- `src/components/features/StoreToolsPanel.tsx` (54줄) — 매장 설정 > 운영 도구(ToolsPanel 레지스트리 재사용)
+- `src/components/features/StaffPayroll.tsx` (355줄) — 직원 급여 — StaffWageManager(:57)·StaffSettlement(:118)·StaffWorkLog(:257)·StaffSelfAttendance(:291) 4개 export
+- `src/components/features/StaffSchedule.tsx` (289줄) — 직원 근무 스케줄 표
+- `src/components/features/StaffInviteBanner.tsx` (55줄) — 회원에게 도착한 매장 구성원 초대 수락/거절 배너(App.tsx 상시 마운트)
+- `src/components/features/DealerShiftsModal.tsx` (113줄) — 딜러 근무(행마다 시급이 붙은 두 번째 급여 시스템)
+- `src/components/features/CustomerDashboardPage.tsx` (1038줄) — 손님 마이페이지 — 이용권 지갑·예약·전적·추천. 데이터는 전부 src/api/* 경유(lib/supabase 에서 isKeepSignedIn·setKeepSignedIn 세션 헬퍼만 import)
+- `src/components/features/RegularsModal.tsx` (230줄) — 단골/전체 고객 목록 모달(대시보드에서 열림)
+- `src/components/features/VoucherManageModal.tsx` (672줄) — 이용권 관리 — VoucherManagePanel(:24) export(설정>이용권·QR 탭), 발급·회수·내역·실시간
+- `src/components/features/VoucherWallet.tsx` (373줄) — 이용권 지갑 정본(헤더 시트와 마이페이지가 같은 컴포넌트 사용)
+- `src/components/features/MyVoucherSheet.tsx` (458줄) — 헤더 [이용권·출석] 시트(QR 제시·사용)
+- `src/components/features/QrScanModal.tsx` (199줄) — QR 스캔(이용권 사용·출석)
+- `src/components/features/CheckinModal.tsx` (60줄) — 출석 체크인 모달
+- `src/components/features/SeasonPanel.tsx` (182줄) — 매장 시즌 개설/종료·시즌 순위
+- `src/components/features/PresetManager.tsx` (227줄) — 게임 프리셋 관리(설정>게임 프리셋)
+- `src/components/features/PresetPicker.tsx` (103줄) — 프리셋 선택기(포스터·장부·클락 공용)
+- `src/components/features/AnnouncePanel.tsx` (50줄) — 매장 공지 발송(send_venue_announcement)
+- `src/components/features/KillSwitch.tsx` (227줄) — 위험 구역 — 매장 전체 영구 삭제 3중 게이트
+- `src/App.tsx` (3890줄) — 셸 — 'my-store' 탭 keep-alive(visitedTabs :914)·myStoreHomeNonce(재탭→대시보드 :903)·xl:max-w-7xl 폭(:2753)·`?display=` 클락 TV 라우팅(:2106)·/my-store/ledger 딥링크(:2306)
+
+## 로직·API
+
+- **lib**: `src/lib/storeDestination.ts` · `src/lib/ledgerLink.ts` · `src/lib/ledgerSettlement.ts` · `src/lib/buyinApproval.ts` · `src/lib/ownerReservations.ts` · `src/lib/rankingDraft.ts` · `src/lib/rankingGame.ts` · `src/lib/gameInherit.ts` · `src/lib/clockLevel.ts` · `src/lib/units.ts` · `src/lib/kst.ts` · `src/lib/venueContacts.ts` · `src/lib/venueFollow.ts` · `src/lib/voucherFeed.ts` · `src/lib/voucherLabel.ts` · `src/lib/posterDiscounts.ts` · `src/lib/promotionLabel.ts` · `src/lib/scheduleStatus.ts` · `src/lib/regStatus.ts` · `src/lib/qrPayload.ts` · `src/lib/identityFlag.ts` · `src/lib/loyalty.ts` · `src/lib/recordCard.ts` · `src/lib/railScroll.ts` · `src/lib/responsive.ts` · `src/lib/dbError.ts` · `src/lib/storage.ts`
+- **api**: `src/api/ledger.ts` · `src/api/clock.ts` · `src/api/vouchers.ts` · `src/api/rankings.ts` · `src/api/rankverify.ts` · `src/api/schedules.ts` · `src/api/reservations.ts` · `src/api/crm.ts` · `src/api/staffSchedule.ts` · `src/api/dealerShifts.ts` · `src/api/presets.ts` · `src/api/seasons.ts` · `src/api/reviews.ts` · `src/api/checkins.ts` · `src/api/announcements.ts` · `src/api/killswitch.ts` · `src/api/settings.ts` · `src/api/community.ts` · `src/api/auth.ts` · `src/api/_session.ts` · `src/api/events.ts` · `src/api/push.ts`
+
+## 서버 표면
+
+- **테이블**: `venues` · `venue_staff` · `venue_rankings` · `venue_reviews` · `venue_score_entries` · `venue_notices` · `venue_messages` · `venue_follows` · `ledger_sessions` · `ledger_buyins` · `ledger_players` · `ledger_access` · `ledger_buyin_requests` · `clock_states` · `clock_presets` · `game_presets` · `staff_schedule` · `staff_wage` · `dealer_shifts` · `store_vouchers` · `coupons` · `customer_profiles` · `customer_aliases` · `checkins` · `schedules` · `schedule_reservations` · `rank_verifications` · `profiles` · `app_settings`
+- **RPC**: `can_access_ledger` · `can_manage_pos` · `can_manage_venue_staff` · `can_view_vouchers` · `grant_ledger_access` · `revoke_ledger_access` · `get_voucher_access_user_ids` · `grant_voucher_access` · `revoke_voucher_access` · `request_buyin` · `approve_buyin_request` · `reject_buyin_request` · `cancel_buyin_request` · `get_my_buyin_requests_current` · `cancel_ledger_buyin` · `cancel_my_recent_buyin` · `delete_ledger_player` · `rename_ledger_player` · `delete_ledger_session` · `reopen_ledger_session` · `search_registered_players` · `notify_ledger_open` · `notify_venue_staff` · `send_venue_announcement` · `venue_announce_status` · `pos_has_password` · `set_pos_cancel_password` · `issue_voucher` · `revoke_voucher` · `revoke_vouchers` · `delete_voucher` · `accrue_voucher` · `redeem_voucher` · `redeem_my_voucher_by_qr` · `redeem_my_voucher_by_phone` · `voucher_history` · `voucher_usage_by_venue` · `voucher_holder_profiles` · `voucher_holder_stats` · `voucher_issue_approved` · `set_voucher_issue_approval` · `get_voucher_quota` · `request_voucher_credit` · `my_voucher_credit_requests` · `my_voucher_venues` · `admin_grant_voucher_quota` · `admin_list_voucher_credit_requests` · `admin_decide_voucher_credit` · `find_user_for_transfer` · `find_user_by_phone` · `save_venue_rankings` · `venue_rankings_public` · `venue_ranking_real_name_optins` · `search_ranking_members` · `resolve_ranking_members` · `set_venue_page_config` · `venue_hall_of_fame` · `venue_buyin_counts` · `venue_player_counts` · `venue_today_games` · `venue_weekly_funnel` · `venue_rating_summary` · `reply_to_review` · `global_ranking_totals` · `venues_season_leaders` · `my_championships` · `my_play_history` · `my_visited_venues` · `create_venue_season` · `end_venue_season` · `list_venue_seasons` · `current_season_standings` · `season_results` · `buy_season_badge` · `reserve_schedule` · `schedule_reservation_counts` · `schedule_reservations_for_owner` · `bump_schedule_view` · `open_event_card` · `event_board` · `check_in` · `link_customer_alias` · `unlink_customer_alias` · `set_my_shift_time` · `create_my_venue` · `add_venue_owner` · `remove_venue_owner` · `list_venue_owners` · `transfer_venue_primary` · `add_venue_staff` · `update_venue_staff` · `remove_venue_staff` · `set_venue_slug` · `set_venue_coords` · `update_venue_address` · `update_venue_contact` · `update_venue_contacts` · `admin_create_venue` · `admin_update_venue` · `admin_list_venue_owner_requests` · `admin_decide_venue_owner` · `get_my_venue_staff` · `get_my_venue_invites` · `invite_staff_by_email` · `cancel_staff_invite` · `respond_staff_invite` · `get_my_staff_invites` · `manage_staff` · `set_staff_title` · `set_my_venue_notify` · `kill_switch_is_set` · `set_kill_password` · `kill_venue` · `get_domestic_rankings` · `set_app_setting`
+
+## 🔴 모르면 사고 내는 것
+
+1. 바이인 횟수·엔트리·얼리는 서로 다른 세 수다. `entry` 는 금액 기여도라 소수가 된다(10만 게임 5만 할인 = 바이인 1회 · 엔트리 0.5), 횟수는 `ledgerCounts.totalBuyins`(항상 정수), 얼리는 사람 수가 아니라 기준칩 배수의 합이다. 화면에서 섞으면 반드시 틀린 숫자가 나온다 — src/api/ledger.ts:140, src/api/clock.ts:469, src/components/features/LedgerStatsPanel.tsx:159, src/lib/ledgerGolden.test.ts:1
+
+2. 장부 세션의 키는 (sessionDate + gameSeq) 이지 날짜가 아니다. 날짜만으로 buyin↔session 을 페어링하면 사이드 게임이 있는 날 메인 바인이 사이드 단가로 계산돼 대시보드와 통계가 서로 다른 매출·엔트리를 표시한다 — src/components/features/StoreDashboard.tsx:160, :433, src/lib/ledgerAgg.test.ts:5
+
+3. 이 도메인에서 조회 실패를 빈 값으로 삼키면 거짓 요약이 된다. `canAccessLedger` 의 실패를 false 로 뭉개면 권한 없음이 되고(src/api/ledger.ts:590), 세션 조회 error 를 버리면 '오늘 게임 없음'이 되어 세팅 폼이 뜨며(src/api/ledger.ts:625, src/components/features/NuriPosLedger.tsx:292), clock_states 조회 실패는 '클락 없음'이 된다(src/api/clock.ts:345). 시급 조회 실패와 '시급 0원'도 다르다 — src/components/features/StoreDashboard.tsx:118
+
+4. 권한 배치(Promise.all)에 보조 판정을 그냥 넣으면 화면 전체가 닫힌다. can_manage_venue_staff 를 4번째로 넣었더니 그 RPC 한 번의 실패가 배치를 거절시켜 permsError → setSection(null) 로 장부·정산·이용권까지 통째로 사라졌다. 보조 판정은 `.catch(() => false)` 로 격리한다 — src/components/features/VenueManageTab.tsx:476(배치), :498(포커스 재조회에도 같은 격리)
+
+5. VenueManageTab 은 keep-alive 라 홈으로 가도 언마운트되지 않는다. ① useBackClose 에 tabActive 게이트가 없으면 숨은 탭이 뒤로가기 겹을 계속 들고 있어 홈에서 뒤로가기가 무반응이 된다(:336, 게이트는 :341). ② '재탭 → 대시보드' effect 의 deps 에 gotoSection 을 두면 이용권 킬스위치(idOn)가 비동기로 도착하는 순간 함수 정체성이 바뀌어, 사용자가 장부/클락으로 옮긴 뒤 화면이 대시보드로 되돌아간다 — 느린 회선일수록 재현된다. ref 로 최신을 읽고 nonce 로만 돌린다 — src/components/features/VenueManageTab.tsx:344(:350 gotoRef), e2e/store-nav.spec.ts:3
+
+6. 클락 레벨 전진을 250ms 표시 틱에 얹으면 안 된다. 업주가 장부 섹션으로 옮기면 클락 판은 display:none 으로 마운트만 남아 전진이 멈추고 손님 TV 가 00:00 에 언다(2026-07 실제 사건). 그리고 클락 스테이지 레이아웃 판정은 뷰포트가 아니라 **스테이지 자신의 크기**로 해야 한다(`.clk-*` 컨테이너 쿼리, src/index.css) — 같은 보드가 TV 전체화면(ClockDisplay)과 운영자 16:9 미리보기(TournamentClock) 두 곳에서 산다 — e2e/clock-watchdog.spec.ts:1, e2e/clock-stage-container.spec.ts:1, src/components/features/clock/ClockDisplay.tsx:279
+
+7. 할인 프리셋 배열의 중간 칸을 빼거나 압축하면 과거 바인의 할인이 어긋난다. 바인은 discountIndex(1-based 자리번호)로 할인을 참조하므로 배열은 자리를 비워 둔 채로만 편집할 수 있다(마지막 칸만 실제로 줄이고, 중간 칸은 amount 0·label 빈 값으로 자리를 남긴다). level(자동 적용 레벨)도 함께 보존해야 한다 — src/components/features/NuriPosLedger.tsx:2052(removeDisc), :2226(저장 시 압축 금지). 참고로 0원 스냅샷 자체는 이제 허용된다(100% 할인 이벤트) — '저장된 0'과 '미저장 레거시'를 못 갈라 무료 손님이 매출로 부활하던 구멍은 날짜 센티널 SNAPSHOT_SINCE 로 닫혔고, 지금 막는 것은 **단가를 넘는** 할인뿐이다 — NuriPosLedger.tsx:2183~2189, src/api/ledger.ts:256·:261
+
+8. `voucherAccrualPerBin` 필드와 그 DB write 를 '자동적립 중단했으니 죽은 코드'라고 지우면 안 된다. 세션 저장 경로가 전 매장 설정을 0 으로 덮어쓴다 — src/components/features/NuriPosLedger.tsx:1575, :1595, :2223, :2497
+
+9. 함수가 존재하는 것과 화면이 그 함수를 부르는 것은 다르다. `splitMismatch()` 는 정의·문서·단위테스트가 셋 다 있었는데 프로덕션 호출부가 0곳이라 현금 4만+카드 4만이 10만 게임에 그대로 저장됐고 엔트리 0.8 로 세어졌다. 지금은 NuriPosLedger.tsx:2612 에서 호출되고 소스 배선 테스트가 그것을 잠근다. 돈 경로를 고칠 때는 값 테스트가 아니라 배선 테스트를 확인한다 — src/components/features/moneyWiring.test.ts:1(:35 정규식), e2e/ledger-split-gate.spec.ts:1
+
+10. 실명은 서버가 가린다(rankings.real_name 은 매장 관리자·본인 동의 닉네임에만 실린다). 클락 END → 순위 저장은 장부 자동완성 이름 '실명(닉네임)' 을 **닉네임 칸과 실명 칸으로 갈라서** 보내야 하고, 대회 이름은 클락 제목이 아니라 **연결된 장부의 제목**이어야 한다(아니면 장부의 '순위 미입력' 판정이 못 알아보고 두 벌 등재된다) — src/api/rankings.ts:92, e2e/clock-rank-save.spec.ts:1, src/lib/rankingGame.ts(rankingEventOf — ledger.ts:784 · NuriPosLedger.tsx:1218 · VenueManageTab.tsx:1177 가 쓴다)
+
+11. 인력 적정성·증원/감축 추천 어휘는 저장소 전체에서 금지다(오너 지시 2026-09-11). 근무 기록·시급·인건비 합계 같은 사실 데이터는 유지하되 '몇 명이 필요했는지' 판단·추천 문장을 통계·리포트·PDF·관리자 화면 어디에도 만들면 안 되고, 소스 스캔 테스트가 이를 잠근다(src/·supabase/functions/ 전수) — src/components/features/opsAnalysisSurface.test.ts:1
+
+12. 루트 폰트가 17px 이라(src/index.css:538) Tailwind rem 유틸이 전부 6.25% 크다(max-w-7xl = 1360px, h-11 = 46.75px). 그리고 my-store 폭은 두 군데를 같이 열어야 한다 — 셸(App.tsx:2753 의 `activeTab === 'my-store' ? ' xl:max-w-7xl' : ''`)이 6xl 이면 VenueManageTab 에서만 키워도 잘린다 — src/components/features/VenueManageTab.tsx:578
+
+13. 이 도메인의 컴포넌트는 supabase 클라이언트를 직접 부르지 않는다 — 전부 src/api/* 경유다. 유일한 예외는 clock/clockBgImage.ts(supabase.storage 3회, :117·:127·:139). 새 쿼리를 컴포넌트에 인라인하면 보안 감사(RPC 권한·컬럼 노출)와 e2e 목킹이 둘 다 어긋난다
+
+14. E2E 는 프로덕션 빌드(4173, playwright.config.ts:24·:54)를 검사하고 `e2e/_fixtures.ts:43` 의 isAllowedRequest 가 운영 Supabase 로의 쓰기를 전부 차단한다(GET/HEAD/OPTIONS·READ_ONLY_RPCS·auth token/logout 만 통과). 내 매장 화면을 띄우려면 로그인 세션 목킹 3종(localStorage JWT · /auth/v1/(user|token) · /rest/v1/profiles 를 **객체**로) 위에 `rpc/(can_access_ledger|can_manage_pos|can_view_vouchers)` → true 를 더해야 '매장 권한을 불러오지 못했습니다' 를 넘는다. 완본은 e2e/settle-pane.spec.ts:60~77
+
+15. [검증에서 제거됨: 2건] ① '0원 스냅샷을 만들면 무료 손님 행이 프리셋 수정 시 매출로 되살아난다' — 현재 코드는 100% 할인을 허용하고 그 부활 구멍을 SNAPSHOT_SINCE 날짜 센티널로 닫았다(NuriPosLedger.tsx:2187, ledger.ts:261). 과거 결함으로 축약해 7번 항목에 남겼다. ② 'CustomerDashboardPage.tsx 가 supabase 직접 접근 예외' — 이 파일은 lib/supabase 에서 isKeepSignedIn·setKeepSignedIn 세션 헬퍼만 import 하고 `supabase.` 호출·`.from(`·`.rpc(`·`.storage.` 가 0건이다. 직접 접근 예외는 clockBgImage.ts 하나뿐이다.
+
+## 지금 열려 있는 것
+
+- docs/plans/BLOCKED.md #20 — 운영 DB 미적용 마이그레이션 12개 중 이 도메인 직격 7건: 20260911g(같은 이용권 중복 대기 요청을 DB 가 못 막음) · h(장부 플레이어 검색이 매장 경계를 서버에서 안 자름) · i(일괄 삭제 시 이용권 미복구) · j(순위 회원 검색 매장 경계) · l(업주 교체 후 옛 업주가 장부·손님 명단 계속 조회) · m(정지된 매장의 포스터·클락이 살아 있어 손님이 계속 예약) · o(포스터 반려가 하드 삭제, 사유 미통지). 코드는 main 에 배포됨 — 서버만 옛 상태. 적용은 오너 승인 대기, `db push` 금지
+- docs/plans/BLOCKED.md #18 — 클락 TV 의 순위별 프라이즈 표(cfg.prizes) 금액 노출을 유지할지 법률 검토 대기(현재 §28 '상품 가격 정보'로 보고 유지 중)
+- docs/plans/BLOCKED.md #17 / #19 — 순위 등수 점수를 활동 등급에 반영할지, 이미 지급된 순위 유래 활동점수(라이브 12점 + 시상 7점) 회수 여부. 둘 다 현행(반영/회수 안 함) 유지, 오너 결정 대기
+- docs/plans/BLOCKED.md #1 + docs/plans/backlog.md §10 — 이용권 '모델 재정의'(머니인 보상 → 같은 매장 바이인)는 변호사 회신 전 착수 금지. 제한부(양도·유상쿼터·자동적립 차단)만 적용된 상태
+- VenueManageTab.tsx:551 — 알려진 천장: 자식(장부·클락·순위) 안에서 사용자가 날짜 입력칸을 직접 옮기면 셸의 '매장 › 날짜 › 게임' 문맥 줄이 따라오지 않는다. 자식이 현재 (date, gameSeq) 를 올려주는 prop 이 없어서이고, 그건 자식 계약 변경이라 미착수
+- VenueManageTab.tsx:528 — `matured.team` 게이트는 계산만 남아 있고 nav 적용(:535~:536 은 matured.insights 만 본다)에서는 빠져 있다(첫 직원을 만드는 화면이 그 안에 있어 자기 자신을 잠그던 데드락 때문). 게이트를 되살리려면 초대 경로를 먼저 밖으로 빼야 한다
+- supabase/functions/weekly-report/index.ts:6 — 매장 주간 리포트 엣지 함수는 **미사용**이다. 실제 cron(weekly-venue-reports)은 SQL 함수 public.send_weekly_venue_reports() 를 부른다. net.http_post 로 연결하거나 폐기할 것
+- docs/plans/backlog.md §13 — `my_play_history` 명칭 드리프트: 라이브 함수에 저장소에 없는 2026-09-04 동명이인 가드가 있다. 라이브 정의를 마이그레이션으로 역반영해 저장소를 동기화해야 한다
+- 코드 내 TODO/FIXME/HACK 마커는 이 도메인에 0건이다(src/api·src/lib·src/components/features·src/App.tsx 실측) — 미완은 전부 BLOCKED.md·backlog.md 와 파일 상단 ⚠ 주석에만 있다
+
+## 이 팀만 검증하는 명령
+
+```bash
+npx vitest run src/lib/ledgerGolden.test.ts src/lib/ledgerAgg.test.ts src/lib/ledgerSettlement.test.ts src/api/ledger.money.test.ts src/api/ledger.early.test.ts src/lib/units.test.ts
+npx vitest run src/components/features/moneyWiring.test.ts src/components/features/opsAnalysisSurface.test.ts src/lib/noExternalExport.test.ts
+npx vitest run src/lib/storeDestination.test.ts src/lib/rankingDraft.test.ts src/lib/rankingGame.test.ts src/lib/buyinApproval.test.ts src/lib/ownerReservations.test.ts src/lib/gameInherit.test.ts
+npx vitest run src/lib/clockPhase.test.ts src/api/clock.level.test.ts src/components/features/clock/clockTheme.test.ts src/components/features/clock/fullscreenContract.test.ts
+npx vitest run src/lib/voucherFeed.test.ts src/lib/voucherLabel.test.ts src/api/vouchers.held.test.ts src/api/vouchers.reason.test.ts src/api/vouchers.errortext.test.ts src/api/voucherMultiUse.migration.test.ts src/api/voucherRestore.migration.test.ts
+npx vitest run src/api/rankings.prize.test.ts src/api/rankings.career.test.ts src/api/rankverify.test.ts src/api/rankingMemberSearch.migration.test.ts
+npx vitest run src/api/reservations.crm.test.ts src/api/reservations.errors.test.ts src/lib/scheduleStatus.test.ts src/lib/regStatus.test.ts src/lib/promotionLabel.test.ts src/lib/posterDiscounts.test.ts
+npx playwright test e2e/store-nav.spec.ts e2e/store-destination.spec.ts e2e/store-dashboard-responsive.spec.ts e2e/store-rhythm.spec.ts
+npx playwright test e2e/ledger-split-gate.spec.ts e2e/settle-pane.spec.ts e2e/no-export-ui.spec.ts e2e/owner-layout-verify.spec.ts
+npx playwright test e2e/clock-catchup.spec.ts e2e/clock-watchdog.spec.ts e2e/clock-stage-container.spec.ts e2e/clock-visual.spec.ts e2e/clock-rank-save.spec.ts
+npx playwright test e2e/venue-ia.spec.ts e2e/voucher-sheet-open.spec.ts e2e/viewmode-viewport.spec.ts e2e/write-guard.spec.ts
+npm run build
+```
+
+- **테스트 파일**: `src/lib/ledgerGolden.test.ts` · `src/lib/ledgerAgg.test.ts` · `src/lib/ledgerSettlement.test.ts` · `src/lib/buyinApproval.test.ts` · `src/lib/storeDestination.test.ts` · `src/lib/rankingDraft.test.ts` · `src/lib/rankingGame.test.ts` · `src/lib/ownerReservations.test.ts` · `src/lib/gameInherit.test.ts` · `src/lib/clockPhase.test.ts` · `src/lib/units.test.ts` · `src/lib/voucherFeed.test.ts` · `src/lib/voucherLabel.test.ts` · `src/lib/posterDiscounts.test.ts` · `src/lib/promotionLabel.test.ts` · `src/lib/scheduleStatus.test.ts` · `src/lib/regStatus.test.ts` · `src/lib/qrPayload.test.ts` · `src/lib/venueContacts.test.ts` · `src/lib/venueFollow.test.ts` · `src/lib/noExternalExport.test.ts` · `src/components/features/moneyWiring.test.ts` · `src/components/features/opsAnalysisSurface.test.ts` · `src/components/features/clock/clockTheme.test.ts` · `src/components/features/clock/fullscreenContract.test.ts` · `src/api/ledger.money.test.ts` · `src/api/ledger.early.test.ts` · `src/api/ledgerPlayerSearch.migration.test.ts` · `src/api/buyinRequestLink.migration.test.ts` · `src/api/clock.level.test.ts` · `src/api/vouchers.held.test.ts` · `src/api/vouchers.reason.test.ts` · `src/api/vouchers.errortext.test.ts` · `src/api/voucherMultiUse.migration.test.ts` · `src/api/voucherRestore.migration.test.ts` · `src/api/bulkDeleteVoucherRestore.migration.test.ts` · `src/api/rankings.prize.test.ts` · `src/api/rankings.career.test.ts` · `src/api/rankingMemberSearch.migration.test.ts` · `src/api/rankverify.test.ts` · `src/api/reservations.crm.test.ts` · `src/api/reservations.errors.test.ts` · `src/api/checkins.visits.test.ts` · `src/api/checkins.result.test.ts` · `src/api/scheduleReject.migration.test.ts` · `src/api/suspendedVenue.migration.test.ts` · `src/api/adminUpdateVenueRevokeOwner.migration.test.ts` · `src/api/kstDates.migration.test.ts` · `src/api/aiSurface.test.ts`
+- **e2e**: `e2e/store-nav.spec.ts` · `e2e/store-destination.spec.ts` · `e2e/store-dashboard-responsive.spec.ts` · `e2e/store-rhythm.spec.ts` · `e2e/ledger-split-gate.spec.ts` · `e2e/settle-pane.spec.ts` · `e2e/owner-layout-verify.spec.ts` · `e2e/no-export-ui.spec.ts` · `e2e/clock-catchup.spec.ts` · `e2e/clock-watchdog.spec.ts` · `e2e/clock-stage-container.spec.ts` · `e2e/clock-visual.spec.ts` · `e2e/clock-rank-save.spec.ts` · `e2e/venue-ia.spec.ts` · `e2e/voucher-sheet-open.spec.ts` · `e2e/viewmode-viewport.spec.ts` · `e2e/write-guard.spec.ts` · `e2e/_fixtures.ts` · `e2e/_session.ts`
+
+마무리는 전체 게이트다 — `/ship` 또는 `.claude/skills/nuri-ship/SKILL.md`.

@@ -1,7 +1,8 @@
 // src/api/rankverify.ts — 순위(머니인) 인증: 외부 대회 입상 증빙 제출 → 운영자 승인 → 국내 순위 집계.
 // 이미지 2장(머니인 증빙 + 신분증)은 비공개 버킷 'verifications'에 저장 — 승인/거절 즉시 신분증 삭제.
 import { supabase, IS_MOCK } from '../lib/supabase';
-import { currentUser } from './_session';
+import { mustAffect } from './_mustAffect';
+import { currentUser, currentUserStrict } from './_session';
 import { resizeImage } from '../lib/storage';
 
 /**
@@ -79,7 +80,8 @@ export async function submitRankVerification(input: {
 /** 내 신청 내역 */
 export async function myRankVerifications(): Promise<RankVerification[]> {
   if (IS_MOCK) return [];
-  const u = await currentUser();
+  // UI-08-3: 세션 읽기 실패를 '신청 이력 없음' 으로 위장하면 회원이 신분증을 다시 올려 중복 신청한다 — currentUserStrict 는 던진다
+  const u = await currentUserStrict();
   if (!u) return [];
   const { data, error } = await supabase.from('rank_verifications').select('*')
     .eq('user_id', u.id).order('created_at', { ascending: false }).limit(10);
@@ -145,14 +147,15 @@ export async function adminDecideRankVerification(
     const { error: rmErr } = await supabase.storage.from('verifications').remove([v.idCardPath]);
     if (rmErr) throw new Error('신분증 삭제에 실패했습니다(심사를 중단합니다): ' + rmErr.message);
   }
-  const { error } = await supabase.from('rank_verifications').update({
+  // 0행(RLS·이미 심사됨)을 성공으로 넘기면 위에서 신분증은 이미 지웠는데 상태는 pending 인 채 남는다 —
+  // 다시 심사할 근거가 사라진 건이다. 반드시 드러낸다.
+  await mustAffect(supabase.from('rank_verifications').update({
     status: approve ? 'approved' : 'rejected',
     admin_note: opts?.note ?? null,
     event_kind: approve ? VERIFIABLE_EVENT_KIND : v.eventKind,
     decided_at: new Date().toISOString(),
     id_card_path: null,
-  }).eq('id', v.id);
-  if (error) throw new Error(error.message);
+  }).eq('id', v.id));
 }
 
 // (2026-09-11) 증빙 이미지 AI 진위 검사 제거 — 증빙 사진을 외부 모델로 보내던 경로였다.

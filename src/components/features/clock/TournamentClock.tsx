@@ -15,13 +15,16 @@ import {
   countLevels, withDerivedEarly, generateBlinds,
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
-  getClockState, saveClockState, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
+  getClockState, saveClockState, saveClockLiveStats, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
 } from '../../../api/clock';
 import {
   getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames, openLedgerSession,
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
-import { clockPhase, CLOCK_PHASE_LABEL, CLOCK_PHASE_ACTION } from '../../../lib/clockLevel';
+import { clockPhase, CLOCK_PHASE_LABEL, CLOCK_PHASE_ACTION, levelNumberAt, msToNextBreak } from '../../../lib/clockLevel';
+// msToRegClose 는 src/lib/regStatus.ts 하나뿐이다 — 이 파일의 복제본은 F2 가드(마감 레벨 미설정 = null)가 없고
+// 호출부에도 regLevel>0 게이트가 없어, 마감 레벨을 비워 둔 모든 대회에 TV 클락이 '마감' 을 띄웠다(2026-09-13).
+import { msToRegClose } from '../../../lib/regStatus';
 import { listGamePresets, saveGamePreset, type GamePreset } from '../../../api/presets';
 import { applyToClock, presetFromClockConfig } from '../../../lib/gameInherit';
 import PresetPicker from '../PresetPicker';
@@ -33,6 +36,7 @@ import Modal from '../../atoms/Modal';
 import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, publishClockSignal, type ClockTheme } from './clockTheme';
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
+import { isStaleResponse, type RequestStamp } from '../../../lib/staleResponse';
 import QRCode from 'qrcode';
 import Icon from '../../atoms/Icon';
 import ClockThemePanel from './ClockThemePanel';
@@ -50,41 +54,14 @@ function hms(ms: number): string {
 const computeRemaining = (s: ClockState): number =>
   s.running && s.endsAt ? new Date(s.endsAt).getTime() - now() : s.remainingMs;
 
-// 현재 인덱스부터 다음 브레이크까지 남은 ms(현재 레벨 잔여 + 중간 레벨 길이 합)
-function msToNextBreak(s: ClockState, remaining: number): number | null {
-  const lv = s.config.levels;
-  let acc = remaining;
-  for (let i = s.currentIndex + 1; i < lv.length; i++) {
-    if (lv[i].kind === 'break') return acc;
-    acc += lv[i].minutes * 60_000;
-  }
-  return null;
-}
-// 등록 마감 레벨 시작까지 남은 ms
-function msToRegClose(s: ClockState, remaining: number): number | null {
-  const lv = s.config.levels;
-  const target = s.config.regCloseLevel;
-  let acc = remaining, num = 0;
-  for (let i = 0; i <= s.currentIndex; i++) if (lv[i].kind === 'level') num++;
-  if (num >= target) return 0; // 이미 마감 레벨 이상
-  for (let i = s.currentIndex + 1; i < lv.length; i++) {
-    if (lv[i].kind === 'level') { num++; if (num >= target) return acc; }
-    acc += lv[i].minutes * 60_000;
-  }
-  return null;
-}
-// 레벨 번호(브레이크 제외) 계산
-function levelNumberAt(cfg: ClockConfig, index: number): number {
-  let n = 0;
-  for (let i = 0; i <= index && i < cfg.levels.length; i++) if (cfg.levels[i].kind === 'level') n++;
-  return n;
-}
+// msToNextBreak · levelNumberAt 은 src/lib/clockLevel.ts 하나뿐이다 — 이 파일의 로컬 복제본이
+// msToRegClose 와 같은 부류(2026-09-13)라 통합했다. clockLevel.contract.test.ts 가 복제를 막는다.
 function nextPlayableLabel(cfg: ClockConfig, index: number): string {
   const lv = cfg.levels;
   const nx = lv[index + 1];
   if (!nx) return '마지막 레벨';
   if (nx.kind === 'break') return `다음 · ${nx.label || '휴식'}`;
-  return `다음 레벨 ${levelNumberAt(cfg, index + 1)} · ${nx.sb.toLocaleString()} / ${nx.bb.toLocaleString()}${nx.ante > 0 ? ` · ANTE ${nx.ante.toLocaleString()}` : ''}`;
+  return `다음 레벨 ${levelNumberAt(cfg.levels, index + 1)} · ${nx.sb.toLocaleString()} / ${nx.bb.toLocaleString()}${nx.ante > 0 ? ` · ANTE ${nx.ante.toLocaleString()}` : ''}`;
 }
 
 // ── 메인: 설정 ↔ 라이브 ─────────────────────────────────────────────────────────
@@ -102,7 +79,21 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
 
   // 이 화면이 다루는 게임(클락). 연동 시작 시 그 게임으로 바뀜 — subscribe 콜백에서 최신값 참조용 ref.
   const curGameSeqRef = useRef(seedGameSeq);
-  const reloadState = useCallback(() => getClockState(venueId, curGameSeqRef.current).then((s) => setState(s)).catch(() => {}), [venueId]);
+  // C04(2026-09-12): switchGame(2)→switchGame(1) 을 빠르게 하면 2번 응답이 늦게 도착해 1번 화면을 덮는다.
+  // 화면마다 다르게 막지 않고 N01 에서 쓴 공통 계약(isStaleResponse)을 그대로 쓴다 —
+  // owner = 이 요청이 보여주려는 게임(gameSeq). switchGame·quickStart(→startClock) 가 공유한다.
+  const clockReqRef = useRef<RequestStamp<number>>({ seq: 0, owner: seedGameSeq });
+  const bumpClockReq = useCallback((owner: number): RequestStamp<number> => {
+    const stamp = { seq: clockReqRef.current.seq + 1, owner };
+    clockReqRef.current = stamp;
+    return stamp;
+  }, []);
+  const reloadState = useCallback(() => {
+    const my = bumpClockReq(curGameSeqRef.current);
+    return getClockState(venueId, my.owner)
+      .then((s) => { if (!isStaleResponse(my, clockReqRef.current)) setState(s); })
+      .catch(() => {});
+  }, [venueId, bumpClockReq]);
   const reloadPresets = useCallback(() => getClockPresets(venueId).then(setPresets).catch(() => {}), [venueId]);
 
   useEffect(() => {
@@ -138,6 +129,9 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
 
   const startClock = async (config: ClockConfig, linkDate: string | null, linkGameSeq: number = seedGameSeq) => {
     const gseq = linkDate ? linkGameSeq : curGameSeqRef.current; // 단독은 현재 선택 게임(멀티클락 전환 반영), 연동은 고른 게임
+    // C04: 이 시작 요청이 화면에 보일 자격을 얻는다 — 완료 전에 다른 게임으로 전환되면(switchGame/quickStart)
+    // clockReqRef.current 가 그쪽으로 넘어가 아래 setState 가 stale 로 걸러진다.
+    const my = bumpClockReq(gseq);
     const base = emptyClockState(venueId, withDerivedEarly(config), gseq);
     base.sessionDate = linkDate;
     base.title = base.config.title;
@@ -167,8 +161,12 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
           await saveLedgerSession({ ...sess, earlyDoubleMin: base.config.earlyDoubleMin, earlySingleMin: base.config.earlySingleMin });
         } catch { /* noop */ }
       }
-      curGameSeqRef.current = gseq;
-      setState(base); setView('live'); toast.show('클락을 시작 준비했습니다', 'success');
+      // 오래된 요청이면(그새 다른 게임으로 전환됨) 지금 화면을 덮지 않는다 — 저장 자체는 이미 끝났다.
+      if (!isStaleResponse(my, clockReqRef.current)) {
+        curGameSeqRef.current = gseq;
+        setState(base); setView('live');
+      }
+      toast.show('클락을 시작 준비했습니다', 'success');
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '시작 실패', 'error'); }
   };
@@ -184,9 +182,14 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
   };
   // 멀티 클락 오버뷰에서 다른 게임 탭 → 그 게임 클락으로 전환
   const switchGame = useCallback((g: number) => {
+    const my = bumpClockReq(g);
     curGameSeqRef.current = g;
-    getClockState(venueId, g).then((s) => { setState(s); setView(s ? 'live' : 'settings'); }).catch(() => {});
-  }, [venueId]);
+    getClockState(venueId, g).then((s) => {
+      // C04: 이 사이에 또 다른 switchGame/startClock 이 나갔으면 이 응답은 낡았다 — 지금 화면을 덮지 않는다.
+      if (isStaleResponse(my, clockReqRef.current)) return;
+      setState(s); setView(s ? 'live' : 'settings');
+    }).catch(() => {});
+  }, [venueId, bumpClockReq]);
   // ＋ 사이드 클락 — 옵션으로 장부 사이드 게임도 자동 생성(메인 설정 복사) 후 그 게임 클락 설정으로 전환
   const addSide = useCallback(async (nextSeq: number) => {
     const linkDate = new Date().toLocaleDateString('en-CA');
@@ -343,9 +346,12 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     loadAd();
     // 같은 탭(관리자 → 기능 스위치)에서 바꾸면 즉시, 다른 창·기기는 30초 폴링 — ClockDisplay 와 같은 계약.
     const off = subscribeClockAd(loadAd);
+    // ⚡ 폴링은 이 판이 실제로 보일 때만(active) — 숨은 탭이 시간당 240요청을 내지 않게(§5-A, 같은 파일 :289 1초 틱과 같은 게이트).
+    //   active 가 바뀔 때마다 effect 가 다시 돌며 위 loadAd() 가 먼저 실행되므로, 다시 보일 때 즉시 1회 재검증된다.
+    if (!active) return off;
     const t = setInterval(loadAd, 30_000);
     return () => { off(); clearInterval(t); };
-  }, []);
+  }, [active]);
   const changeAdSize = async (s: 'sm' | 'md' | 'lg') => {
     const prev = adSize;
     setAdSize(s);   // 낙관적 — 실패하면 되돌린다
@@ -449,12 +455,16 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
 
   // 장부 변동(엔트리/리바인/얼리/바인단가) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
   // (A2) persist(수동 제어)와 이중 저장되며 경쟁하던 것을 디바운스(400ms) 단일 쓰기로 정리 + buyinAmount 키 포함.
+  // (C01, 2026-09-12) 이 타이머는 마지막 렌더의 `state` 클로저를 캡처하는데 deps 가 derivedKey 뿐이라
+  // 400ms 사이 사람이 STOP 을 눌러도 취소되지 않는다 — 그래서 saveClockState(전 행 upsert)를 쓰면
+  // 낡은 running:true 로 방금 쓴 정지를 덮을 수 있었다. saveClockLiveStats 는 `live_stats` 컬럼만 쓰므로
+  // 몇 번째로 도착하든 running·currentIndex·endsAt·eliminations 를 절대 건드리지 못한다.
   const derivedKey = `${derived.entries}/${derived.rebuys}/${derived.earlies}/${derived.doubleEarlies}/${linkedSession?.buyinAmount ?? ''}`;
   useEffect(() => {
     if (!canManage || !state.sessionDate) return;
     if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
     snapTimerRef.current = setTimeout(() => {
-      saveClockState({ ...state, liveStats: { ...computeLiveStats(state, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null } }).catch(() => {});
+      saveClockLiveStats(state.venueId, state.gameSeq, { ...computeLiveStats(state, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null }).catch(() => {});
     }, 400);
     return () => { if (snapTimerRef.current) clearTimeout(snapTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -582,7 +592,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     // 2레벨 이상 한 번에 넘어갔다 = 그동안 아무도 전진을 쓰지 못했다는 뜻.
     // 조용히 넘기면 업주가 "레벨이 왜 튀지" 하고 수기로 되돌려 오히려 더 어긋난다.
     if (cu.advanced > 1) {
-      toast.show(`레벨 자동 보정 · L${levelNumberAt(cfg, state.currentIndex)} → L${levelNumberAt(cfg, cu.toIndex)}`, 'info', { durationMs: 5000 });
+      toast.show(`레벨 자동 보정 · L${levelNumberAt(cfg.levels, state.currentIndex)} → L${levelNumberAt(cfg.levels, cu.toIndex)}`, 'info', { durationMs: 5000 });
     }
   }, [state, persist, playChime, canManage, cfg, toast]);
 
@@ -770,8 +780,9 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     };
   }, [fs]);
 
-  const nextBreak = msToNextBreak(state, remaining);
-  const regClose = msToRegClose(state, remaining);
+  const nextBreak = msToNextBreak(state, state.currentIndex, remaining);
+  // 운영자 클락은 자기 state 가 권위라 currentIndex 를 그대로 쓴다(단일 소스의 3인자 시그니처에 맞춘 것뿐, 값은 종전과 같다).
+  const regClose = msToRegClose(state, state.currentIndex, remaining);
   // AVG STACK 의 BB 환산(실물 클락 ②티티X망고·④J-BLUFF 채택 패턴) — 플레이어가 실제 판단에
   // 쓰는 값은 칩 수가 아니라 'BB 로 몇 개인가'다. 브레이크 중엔 직전 플레이 레벨의 BB 로.
   const curBB = (() => {
@@ -783,7 +794,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   })();
   const totalPrize = cfg.prizes.reduce((s, p) => s + (p.amount || 0), 0);
   const isBreak = cur?.kind === 'break';
-  const levelNo = levelNumberAt(cfg, state.currentIndex);
+  const levelNo = levelNumberAt(cfg.levels, state.currentIndex);
 
   const title = (linkedSession?.title || cfg.title) || '토너먼트';
   const urgent = remaining <= 60_000 && state.running && !isBreak;
@@ -1240,7 +1251,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   };
   const applyBulkFrom = (fromNo: number, min: number) => {
     if (min <= 0) return;
-    set({ levels: cfg.levels.map((l, i) => (l.kind === 'level' && levelNumberAt(cfg, i) >= fromNo) ? { ...l, minutes: min } : l) });
+    set({ levels: cfg.levels.map((l, i) => (l.kind === 'level' && levelNumberAt(cfg.levels, i) >= fromNo) ? { ...l, minutes: min } : l) });
     toast.show(`레벨 ${fromNo}부터 듀레이션을 ${min}분으로 변경했습니다`, 'success');
   };
 
@@ -1441,7 +1452,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         <div className="space-y-1">
           {cfg.levels.map((l, i) => (
             <div key={i} className="flex items-center gap-1.5">
-              <span className="w-6 text-center text-2xs font-bold text-accent-300 shrink-0">{l.kind === 'break' ? 'B' : levelNumberAt(cfg, i)}</span>
+              <span className="w-6 text-center text-2xs font-bold text-accent-300 shrink-0">{l.kind === 'break' ? 'B' : levelNumberAt(cfg.levels, i)}</span>
               {l.kind === 'break' ? (
                 <input value={l.label ?? ''} onChange={(e) => setLevel(i, { label: e.target.value })} placeholder="BREAK" className="input flex-1 text-sm" />
               ) : (

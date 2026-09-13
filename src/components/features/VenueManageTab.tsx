@@ -44,6 +44,9 @@ import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsD
 import { onColorInkClass } from '../../lib/color';
 import LedgerWorkspace from './LedgerWorkspace';
 import { centerInRail } from '../../lib/railScroll';
+import { josa } from '../../lib/josa';
+import { accessViewOf, canToggleAccess, accessLabel, accessLoadFailedMsg, type AccessLoad, type AccessView, type AccessKind } from '../../lib/staffAccess';
+import { loadRankingsEffect } from '../../lib/rankingsLoad';
 
 // 'league' 는 §12-A-1 오너 결정으로 제거(LEAGUE-FREEZE 의 클라이언트 절반 — 코드는 동결, 진입 경로만 0)
 // IA2: 포스터·장부·클락·순위 4개 최상위 문(門)이 'game' 섹션의 4단계 스텝으로 통합 —
@@ -805,7 +808,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       onOpenStats={manageOk ? onOpenStatsCb : undefined} />
                   </LedgerWorkspaceM>
                 ))}
-                {visited.includes('stats') && manageOk && box('stats', <LedgerStatsPanelM venueId={venueId} />)}
+                {visited.includes('stats') && manageOk && box('stats', <LedgerStatsPanelM venueId={venueId} active={tabActive && renderSection === 'stats'} />)}
                 {/* 5단계 정산 — 그날 하루의 결산(게임 전부 합산 + 게임별 내역). 장부 하단 정산바는
                     '이 게임 하나를 닫는' 도구로 그대로 남는다. */}
                 {visited.includes('settle') && ledgerOk && box('settle',
@@ -1184,6 +1187,12 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   }, [venueId, date]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // ⚠ 조회 실패를 삼키면 **데이터가 사라진다**(F1, 2026-09-13). 예전 `.catch(() => setAllEntries([]))` 는 실패를
+  //   '저장된 순위 0건' 으로 바꿔 빈 줄 하나를 그렸고, 거기에 3명을 치고 저장하면 서버 save_venue_rankings 가
+  //   (날짜+게임) 전체 삭제→재삽입이라 **나머지 저장분이 영구 소실**됐다(ranking_point_awards·활동점수까지).
+  //   같은 파일 StaffWageManager 와 같은 패턴 — 실패 중에는 저장을 막는다.
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [rankTick, setRankTick] = useState(0);
   // 지류 양식 출력용 매장명 + 인증 여부(인증 펍만 지류 발급)
   const [venueName, setVenueName] = useState('');
   const [venueVerified, setVenueVerified] = useState(false);
@@ -1259,13 +1268,18 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameSel]);
 
+  // ⚠ 독립 검증(2026-09-13)이 잡은 잔여 경합: A 날짜 [다시 시도] 응답이 B 날짜로 옮긴 뒤 늦게 도착하면 rows 가 A 명단이 되고
+  //   저장하면 B 의 저장본이 A 명단으로 교체된다(F1 과 같은 소실). effect 가 반환하는 cleanup(alive=false)이 이전 요청의
+  //   성공·실패·finally 를 전부 버린다 — deps 가 바뀌면 React 가 cleanup 을 먼저 부른다(동작 검사: lib/rankingsLoad.test.ts).
   useEffect(() => {
     setLoading(true);
-    getVenueRankings(venueId, date)
-      .then(({ entries }) => { setAllEntries(entries); })
-      .catch(() => setAllEntries([]))
-      .finally(() => setLoading(false));
-  }, [venueId, date]);
+    return loadRankingsEffect({
+      fetch: () => getVenueRankings(venueId, date),
+      onLoaded: (entries) => { setAllEntries(entries); setLoadErr(null); },
+      onError: (m) => { setAllEntries([]); setLoadErr(m); },
+      onSettled: () => setLoading(false),
+    });
+  }, [venueId, date, rankTick]);
 
   // 선택한 게임(이벤트)의 줄만 편집 — 게임 전환 시 해당 저장본/장부 초안 로드.
   // ⚠ 여기서 rows 를 통째로 갈아끼운다. 그래서 갈아끼우기 직전에 임시 초안을 먼저 본다.
@@ -1274,7 +1288,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   //     전체 삭제 후 재삽입이라, 낡은 초안을 무심코 저장하면 이미 저장된 순위를 통째로 덮어쓴다.
   //     그래서 '되살리기' 버튼을 눌렀을 때만 올린다.
   useEffect(() => {
-    if (loading) return;
+    // 실패 중에는 rows 를 갈아끼우지 않는다 — 빈 줄을 보여 주면 '아무것도 없네' 로 읽혀 새로 치게 만든다(F1).
+    if (loading || loadErr) return;
     const mine = allEntries.filter((e) => (e.eventName ?? '') === eventName);
     // 오너 지시(2026-08-28): 장부 명단 자동 채움 폐지 — 빈 줄에서 시작한다.
     //   왜: 자동으로 20줄이 차 있으면 '등수'가 아니라 '바인 기록순'인데도 그럴듯해 보여서
@@ -1290,7 +1305,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     setRowsKey(dkey);
     setDrafted(!!kept && !mine.length);
     setRestorable(kept && mine.length && JSON.stringify(kept) !== baselineRef.current ? kept : null);
-  }, [loading, allEntries, eventName, dkey]);
+  }, [loading, loadErr, allEntries, eventName, dkey]);
 
   // 저장 전 입력분을 (매장·날짜·게임) 키로 임시 보관 — 전환·딥링크·섹션 정리·새로고침에도 남게.
   // rowsKey 가드가 핵심: 칩을 누른 직후 커밋에는 'rows=이전 게임 것 + dkey=새 게임'이 섞여 있어,
@@ -1459,7 +1474,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   // ▲▼만으로는 20위 우승자를 1위로 올리는 데 19번을 눌러야 한다 — 등수를 직접 찍어 한 번에 옮긴다
   // (게임 이름 '직접 추가'와 같은 window.prompt 패턴 — 이 화면의 기존 관행)
   const promptMoveTo = (from: number) => {
-    const v = window.prompt(`'${rows[from]?.nickname.trim() || `${from + 1}위`}' 을(를) 몇 위로 옮길까요? (1~${rows.length})`, String(from + 1));
+    const who = rows[from]?.nickname.trim() || `${from + 1}위`;
+    const v = window.prompt(`'${who}'${josa(who, '을')} 몇 위로 옮길까요? (1~${rows.length})`, String(from + 1));
     if (v == null) return;
     const n = parseInt(v.trim(), 10);
     if (!Number.isFinite(n) || n < 1 || n > rows.length) { toast.show(`1~${rows.length} 사이의 등수를 입력해 주세요`, 'error'); return; }
@@ -1473,6 +1489,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   // (서버 save_venue_rankings 도 활동점수를 만들지 않고, issue_voucher 는 '순위 시상' 사유를 거절한다 — 20260905g).
 
   const save = async () => {
+    // F1: 저장은 (날짜+게임) 전체 교체다 — 저장본을 못 읽은 채 보내면 못 읽은 만큼 지워진다. 버튼 disabled 와 별개로 여기서도 막는다.
+    if (loadErr) return toast.show('저장된 순위를 불러오지 못해 저장할 수 없습니다. 다시 시도한 뒤 저장해 주세요', 'error');
     const clean = rows.filter((r) => r.nickname.trim() || r.realName.trim());
     if (clean.length === 0) return toast.show('순위를 한 명 이상 입력해 주세요', 'error');
     if (clean.some((r) => !r.nickname.trim()))
@@ -1663,9 +1681,19 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         </div>
       )}
 
+      {loadErr && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-input border border-danger/40 bg-danger/10 px-3 py-2">
+          <span className="min-w-0 flex-1 text-2xs text-danger-light">
+            {loadErr} — 저장된 순위를 확인할 수 없어 저장을 막아 두었습니다. 지금 저장하면 이미 저장된 순위가 지워질 수 있어요.
+          </span>
+          <button type="button" onClick={() => setRankTick((t) => t + 1)}
+            className="shrink-0 rounded-badge border border-danger/40 px-2.5 py-1 text-2xs font-bold text-danger-light hover:bg-danger/15 transition-colors">다시 시도</button>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-center py-8 text-2xs text-ink-muted">불러오는 중…</p>
-      ) : (
+      ) : loadErr ? null : (
         <ul className="space-y-1">
           {rows.map((row, i) => (
             <li key={i}
@@ -1792,7 +1820,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       </button>
 
 
-      <button type="button" onClick={save} disabled={saving} className="btn-primary w-full disabled:opacity-60">
+      <button type="button" onClick={save} disabled={saving || !!loadErr} className="btn-primary w-full disabled:opacity-60">
         {saving ? '저장 중…' : `${date === today ? '오늘' : date} · ${eventName || '메인'} 순위 저장`}
       </button>
     </div>
@@ -1921,9 +1949,16 @@ function StaffManager({ venueId }: { venueId: string }) {
   const vchOn = useIdentityEnabled();
   const [staff, setStaff] = useState<User[]>([]);
   const [invites, setInvites] = useState<VenueInvite[]>([]);
-  const [access, setAccess] = useState<string[]>([]); // 장부·순위 권한 보유 직원 id
-  const [vouch, setVouch] = useState<string[]>([]); // 이용권 내역 열람 권한 보유 직원 id
+  // P02(2026-09-13): 권한 두 조회는 '확인 중 / 확인 실패 / 준비됨(ids)' 세 상태를 각자 든다.
+  // 예전엔 string[] 하나라 조회 실패 = [] = "모든 직원 권한 없음" 으로 보였고, 업주가 그걸 믿고 누르면
+  // 이미 있는 권한에 grant 가 나갔다. 두 조회는 서로 독립이다 — 하나가 실패해도 다른 하나는 그대로 그린다.
+  const [access, setAccess] = useState<AccessLoad>({ status: 'loading' }); // 장부·순위 권한 보유 직원 id
+  const [vouch, setVouch] = useState<AccessLoad>({ status: 'loading' }); // 이용권 내역 열람 권한 보유 직원 id
+  const [changing, setChanging] = useState<ReadonlySet<string>>(() => new Set()); // `${kind}:${id}` — 변경 중
+  const [accessTick, setAccessTick] = useState(0);
+  const [vouchTick, setVouchTick] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<unknown>(null); // 구성원·초대 목록 조회 실패(0명과 구분)
   // 초대 입력 하나가 두 경로를 겸한다 — '@' 가 있으면 이메일(기존 경로 그대로),
   // 없으면 아이디(닉네임) 검색. 모드 토글을 두지 않는 이유: 업주는 상대가
   // '이메일로 가입했는지'를 모르고, 아는 건 화면에 보이는 아이디뿐이다.
@@ -1935,14 +1970,40 @@ function StaffManager({ venueId }: { venueId: string }) {
   const identTrim = ident.trim();
   const isEmailMode = identTrim.includes('@');
 
+  // 구성원·초대 목록 — 실패는 '0명' 이 아니라 오류 카드(재시도)로 그린다.
   useEffect(() => {
+    let alive = true;
     setLoading(true);
-    Promise.all([getMyVenueStaff(venueId), getMyVenueInvites(venueId), getLedgerAccessUserIds(venueId), getVoucherAccessUserIds(venueId)])
-      .then(([s, i, a, va]) => { setStaff(s); setInvites(i); setAccess(a); setVouch(va); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    setListError(null);
+    Promise.all([getMyVenueStaff(venueId), getMyVenueInvites(venueId)])
+      .then(([s, i]) => { if (!alive) return; setStaff(s); setInvites(i); })
+      .catch((e: unknown) => { if (alive) setListError(e); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, [tick, venueId]);
+  // 권한 조회 두 개는 각자 실패한다 — Promise.all 에 같이 넣으면 한 조회의 실패가 나머지까지 빈 화면으로 만든다(S01 과 같은 뿌리).
+  useEffect(() => {
+    let alive = true;
+    setAccess({ status: 'loading' });
+    getLedgerAccessUserIds(venueId)
+      .then((ids) => { if (alive) setAccess({ status: 'ready', ids }); })
+      .catch((e: unknown) => { if (alive) setAccess({ status: 'error', error: e }); });
+    return () => { alive = false; };
+  }, [tick, accessTick, venueId]);
+  useEffect(() => {
+    let alive = true;
+    // P02 재작업 5: 이용권 킬스위치 OFF 면 버튼이 렌더되지도 않는데 조회 실패 배너만 뜨던 것 — 조회하지 않고 '아무도 없음' 으로 둔다.
+    if (!vchOn) { setVouch({ status: 'ready', ids: [] }); return; }
+    setVouch({ status: 'loading' });
+    getVoucherAccessUserIds(venueId)
+      .then((ids) => { if (alive) setVouch({ status: 'ready', ids }); })
+      .catch((e: unknown) => { if (alive) setVouch({ status: 'error', error: e }); });
+    return () => { alive = false; };
+  }, [tick, vouchTick, venueId, vchOn]);
   const reload = () => setTick((t) => t + 1);
+  const reloadAccess = () => setAccessTick((t) => t + 1);
+  const reloadVouch = () => setVouchTick((t) => t + 1);
+  const accessLoadFailed = access.status === 'error' || vouch.status === 'error';
 
   const saveTitle = async (id: string, title: string) => {
     const prev = staff.find((s) => s.id === id)?.staffTitle ?? '';
@@ -1951,18 +2012,52 @@ function StaffManager({ venueId }: { venueId: string }) {
     try { await setStaffTitle(id, title.trim()); }
     catch (e) { toast.show(msgOf(e, '직책 저장 실패'), 'error'); reload(); }
   };
+  // 권한 토글 — 지금 값을 **아는 상태(부여/미부여)에서만** grant/revoke 를 보낸다.
+  // 확인 실패에서 누르면 저장 대신 재조회, 확인 중·변경 중에서는 아무것도 보내지 않는다(P02).
+  const markChanging = (key: string, on: boolean) => setChanging((prev) => {
+    const next = new Set(prev);
+    if (on) next.add(key); else next.delete(key);
+    return next;
+  });
   const toggleAccess = async (id: string) => {
-    const has = access.includes(id);
-    setAccess((a) => has ? a.filter((x) => x !== id) : [...a, id]);
+    const view = accessViewOf(access, changingOf('ledger'), id);
+    if (!canToggleAccess(view)) {
+      if (view === 'failed') { toast.show(accessLoadFailedMsg(access.status === 'error' ? access.error : null), 'error'); reloadAccess(); }
+      return;
+    }
+    const has = view === 'granted';
+    markChanging(`ledger:${id}`, true);
+    setAccess((a) => a.status === 'ready' ? { status: 'ready', ids: has ? a.ids.filter((x) => x !== id) : [...a.ids, id] } : a);
     try { if (has) await revokeLedgerAccess(venueId, id); else await grantLedgerAccess(venueId, id); }
-    catch (e) { toast.show(msgOf(e, '장부·순위 권한 변경 실패'), 'error'); reload(); }
+    catch (e) {
+      // P02 재작업 4: 재조회만 걸면 한 커밋 동안 낙관값('권한 ✓')이 disabled 도 풀린 채 남는다 — catch 에서 **직접 역연산**으로 되돌린 뒤 재조회.
+      setAccess((a) => a.status === 'ready' ? { status: 'ready', ids: has ? [...a.ids, id] : a.ids.filter((x) => x !== id) } : a);
+      toast.show(msgOf(e, '장부·순위 권한 변경 실패'), 'error'); reloadAccess();
+    }
+    finally { markChanging(`ledger:${id}`, false); }
   };
   const toggleVoucher = async (id: string) => {
-    const has = vouch.includes(id);
-    setVouch((a) => has ? a.filter((x) => x !== id) : [...a, id]);
+    const view = accessViewOf(vouch, changingOf('voucher'), id);
+    if (!canToggleAccess(view)) {
+      if (view === 'failed') { toast.show(accessLoadFailedMsg(vouch.status === 'error' ? vouch.error : null), 'error'); reloadVouch(); }
+      return;
+    }
+    const has = view === 'granted';
+    markChanging(`voucher:${id}`, true);
+    setVouch((a) => a.status === 'ready' ? { status: 'ready', ids: has ? a.ids.filter((x) => x !== id) : [...a.ids, id] } : a);
     try { if (has) await revokeVoucherAccess(venueId, id); else await grantVoucherAccess(venueId, id); }
-    catch (e) { toast.show(msgOf(e, '이용권내역 권한 변경 실패'), 'error'); reload(); }
+    catch (e) {
+      setVouch((a) => a.status === 'ready' ? { status: 'ready', ids: has ? [...a.ids, id] : a.ids.filter((x) => x !== id) } : a);
+      toast.show(msgOf(e, '이용권내역 권한 변경 실패'), 'error'); reloadVouch();
+    }
+    finally { markChanging(`voucher:${id}`, false); }
   };
+  // 변경 중 집합은 `${kind}:${id}` 키 하나에 두 권한을 같이 담는다 — 판정 함수에는 그 권한의 id 집합만 넘긴다.
+  function changingOf(kind: AccessKind): ReadonlySet<string> {
+    const s = new Set<string>();
+    for (const k of changing) if (k.startsWith(`${kind}:`)) s.add(k.slice(kind.length + 1));
+    return s;
+  }
 
   // 아이디 검색 — 기존 RPC find_user_for_transfer 재사용(쪽지·이용권 전달과 같은 동선·같은 300ms).
   // profiles 직접 select 는 RLS 로 빈 결과라 반드시 RPC 경유. 결과의 id 가 초대의 정본 키다
@@ -2080,8 +2175,28 @@ function StaffManager({ venueId }: { venueId: string }) {
 
       {loading ? (
         <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
+      ) : listError != null ? (
+        <LoadErrorCard what="구성원 목록" error={listError} onRetry={reload} />
       ) : (
         <>
+          {/* 권한 조회 실패 — '전원 권한 없음' 이 아니라 '모른다' 로 말하고, 재시도를 준다(P02) */}
+          {accessLoadFailed && (
+            <div role="alert" className="flex flex-wrap items-center gap-2 rounded-input border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+              {/* P02 재작업 6: 두 조회가 서로 다른 사유로 실패하면 OR 로 뭉개 한쪽 처방만 말하던 것 — 순수 함수 accessLoadFailedMsg 를 조회마다 쓴다
+                  (세션 만료 PGRST301 은 '다시 시도' 가 아니라 재로그인 안내다). 같은 문장이면 한 번만 적는다. */}
+              <p className="flex-1 min-w-0 text-2xs text-ink-primary">
+                {[
+                  access.status === 'error' ? `장부·순위 권한: ${accessLoadFailedMsg(access.error)}` : null,
+                  vouch.status === 'error' ? `이용권내역 권한: ${accessLoadFailedMsg(vouch.error)}` : null,
+                ].filter((s): s is string => s !== null).join(' ')}
+                {' '}그동안 권한 버튼은 저장되지 않습니다.
+              </p>
+              <button type="button" onClick={() => { if (access.status === 'error') reloadAccess(); if (vouch.status === 'error') reloadVouch(); }}
+                className="shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border border-amber-500/40 text-amber-400 hover:bg-amber-500/15 transition-colors">
+                다시 시도
+              </button>
+            </div>
+          )}
           {/* 대기중 초대 */}
           {invites.length > 0 && (
             <div className="space-y-1.5">
@@ -2115,7 +2230,17 @@ function StaffManager({ venueId }: { venueId: string }) {
             ) : (
               <ul className="space-y-2">
                 {staff.map((s) => {
-                  const hasAccess = access.includes(s.id);
+                  const accessView = accessViewOf(access, changingOf('ledger'), s.id);
+                  const vouchView = accessViewOf(vouch, changingOf('voucher'), s.id);
+                  const hasAccess = accessView === 'granted';
+                  const hasVouch = vouchView === 'granted';
+                  // 확인 중·변경 중은 눌러도 아무것도 보내지 않으므로 비활성. 확인 실패는 눌러서 재조회할 수 있게 살려 둔다.
+                  const accessBusy = accessView === 'checking' || accessView === 'changing';
+                  const vouchBusy = vouchView === 'checking' || vouchView === 'changing';
+                  const toneOf = (view: AccessView, on: boolean) =>
+                    view === 'failed' ? 'bg-amber-500/10 text-amber-400 border-amber-500/40'
+                      : on ? 'bg-accent-300/15 text-accent-300 dark:text-accent-200 border-accent-400/40'
+                        : 'bg-surface-float text-ink-muted border-border-default';
                   return (
                   <li key={s.id} className="p-3 rounded-aura border card-aura space-y-2">
                     <div className="flex items-center gap-3">
@@ -2139,16 +2264,16 @@ function StaffManager({ venueId }: { venueId: string }) {
                         placeholder="직책 (매니저·딜러 등)"
                         className="input flex-1 min-w-0 text-xs py-1.5"
                       />
-                      <button type="button" onClick={() => toggleAccess(s.id)}
-                        className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors',
-                          hasAccess ? 'bg-accent-300/15 text-accent-300 dark:text-accent-200 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
-                        장부·순위 {hasAccess ? '권한 ✓' : '권한 없음'}
+                      <button type="button" onClick={() => toggleAccess(s.id)} disabled={accessBusy} aria-busy={accessBusy || undefined}
+                        data-access-state={accessView}
+                        className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors disabled:opacity-60', toneOf(accessView, hasAccess)].join(' ')}>
+                        {accessLabel('ledger', accessView)}
                       </button>
                       {vchOn && (
-                        <button type="button" onClick={() => toggleVoucher(s.id)}
-                          className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors',
-                            vouch.includes(s.id) ? 'bg-accent-300/15 text-accent-300 dark:text-accent-200 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
-                          이용권내역 {vouch.includes(s.id) ? '✓' : '✗'}
+                        <button type="button" onClick={() => toggleVoucher(s.id)} disabled={vouchBusy} aria-busy={vouchBusy || undefined}
+                          data-access-state={vouchView}
+                          className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors disabled:opacity-60', toneOf(vouchView, hasVouch)].join(' ')}>
+                          {accessLabel('voucher', vouchView)}
                         </button>
                       )}
                     </div>

@@ -44,6 +44,34 @@ export async function currentUser(): Promise<{ id: string } | null> {
   return id ? { id } : null;
 }
 
+/**
+ * `currentUser` 와 같지만 **세션을 읽지 못한 것**과 **로그인하지 않은 것**을 구분한다.
+ *
+ * ⚠ 왜 따로 필요한가 (A01, 2026-09-12):
+ *   `getSession()` 은 저장소 읽기 실패·토큰 갱신 실패(네트워크·5xx)에도 **reject 하지 않고**
+ *   `{ data: { session: null }, error }` 로 resolve 한다. 그래서 `currentUser()` 는
+ *   '일시적으로 확인 불가' 를 '비로그인' 과 똑같은 `null` 로 돌려줬다.
+ *   AuthContext 는 그 null 을 정상 성공으로 받아 **재시도 없이 비로그인 화면**을 만든다 —
+ *   토큰은 저장소에 멀쩡히 있는데 화면만 로그아웃된다. 사용자 눈에는 '자동 로그인이 안 됐다' 다.
+ *
+ *   같은 결함을 프로필 조회(`getMyProfile`)는 2026-09-11 에 '던지기' 로 이미 막았다.
+ *   **한 겹 앞인 세션 조회에 같은 구멍이 남아 있던 것**이라, 같은 방식으로 막는다.
+ *
+ * ⚠ 여기서 토큰을 지우지 않는다. 일시 오류에 저장소를 비우면 회복 가능한 상황을 확정 로그아웃으로 만든다.
+ *   무효·폐기된 세션 정리는 SDK 와 명시적 로그아웃 경로가 맡는다.
+ *
+ * 기존 `currentUser()` 는 그대로 둔다 — 호출부가 67곳이고, 대부분은 '비로그인이면 조용히 건너뛴다' 가 맞다.
+ *
+ * @throws 세션을 읽지 못했을 때(일시 오류). 호출부의 catch 가 **기존 상태를 유지**하고 재시도하게 한다.
+ */
+export async function currentUserStrict(): Promise<{ id: string } | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;                       // 확인 불가 — 비로그인으로 단정하지 않는다
+  const id = data.session?.user?.id;
+  return id ? { id } : null;                    // null 은 '정말 로그인 안 함' 일 때만
+}
+
 /** uid 만 필요할 때 */
 export async function currentUserId(): Promise<string | null> {
   return (await currentUser())?.id ?? null;

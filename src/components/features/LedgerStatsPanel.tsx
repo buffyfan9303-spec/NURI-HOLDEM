@@ -29,10 +29,10 @@ const PERIODS: { id: Period; label: string; ai?: boolean }[] = [
   { id: 'ai', label: '운영 분석', ai: true },
 ];
 
-export default function LedgerStatsPanel({ venueId }: { venueId: string }) {
+export default function LedgerStatsPanel({ venueId, active = true }: { venueId: string; active?: boolean }) {
   return (
     <div className="space-y-3">
-      <StatsView venueId={venueId} />
+      <StatsView venueId={venueId} active={active} />
       {/* 손님 관리 — 방문 고객 전체 행동 통계(바인·머니인·비율·미수·결제·시간대) */}
       <CustomerAnalytics venueId={venueId} />
     </div>
@@ -45,7 +45,7 @@ const DOW_RANGE_OPTS: { id: DowRange; label: string }[] = [
   { id: 'week', label: '최근 7일' }, { id: 'month', label: '이번 달' }, { id: 'all', label: '전체' },
 ];
 
-function StatsView({ venueId }: { venueId: string }) {
+function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
   // ⚠ 기간은 값이 **둘**이다(오너 제보 2026-09-06: "당일·일주일·한 달을 옮기면 스크롤이 깜빡이며 내려갔다 올라간다").
   //   tabPeriod = 방금 누른 탭(하이라이트는 즉시 — 응답이 늦으면 그게 더 큰 결함) /
   //   period    = **지금 화면에 그려져 있는 데이터의** 기간.
@@ -122,10 +122,19 @@ function StatsView({ venueId }: { venueId: string }) {
   }, [venueId, range.from, range.to, liveTick, reportTick]);
 
   // '당일' 통계를 보는 중 장부(바이인 등) 변경 시 실시간 갱신
+  // ⚡ 이 판이 실제로 보일 때만(active) 구독 — keep-alive 로 숨은 탭이 채널을 계속 물고 있지 않게(§5-A).
   useEffect(() => {
     if (tabPeriod !== 'day') return;
+    if (!active) return;
     return subscribeLedger(venueId, () => setLiveTick((t) => t + 1));
-  }, [venueId, tabPeriod]);
+  }, [venueId, tabPeriod, active]);
+
+  // 숨은 동안(구독 꺼짐) 놓친 변경을 다시 보일 때(active 상승) 한 번 재검증 — StoreDashboard·MyPostersTab 과 같은 배선.
+  const prevActiveRef = useRef(active);
+  useEffect(() => {
+    if (active && !prevActiveRef.current) setLiveTick((t) => t + 1);
+    prevActiveRef.current = active;
+  }, [active]);
 
   // 멀티게임: 바인↔세션 페어링은 (날짜+게임) 키로(사이드 단가 정확). 날짜 합산은 sessionsByDate.
   const sessionByKey = useMemo(() => {

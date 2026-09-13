@@ -58,8 +58,8 @@ describe('매핑을 거는 자리 — 손님 경로에만', () => {
   const SRC = readFileSync(join(__dirname, 'vouchers.ts'), 'utf8');
 
   it('손님 사용 경로 2개는 사람 말로 바꾼다', () => {
-    expect(SRC).toMatch(/redeemMyVouchersByQr[\s\S]{0,160}\.then\(humanize\)/);
-    expect(SRC).toMatch(/redeemMyVouchersByPhone[\s\S]{0,160}\.then\(humanize\)/);
+    expect(SRC).toMatch(/redeemMyVouchersByQr[\s\S]{0,220}\.then\(humanize\)/);
+    expect(SRC).toMatch(/redeemMyVouchersByPhone[\s\S]{0,220}\.then\(humanize\)/);
   });
 
   it('🔴 업주 경로는 원문을 잃지 않는다 — 사장님은 원문을 봐야 문의를 넣을 수 있다', () => {

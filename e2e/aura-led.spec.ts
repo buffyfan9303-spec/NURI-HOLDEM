@@ -124,29 +124,72 @@ test('🔴 커뮤니티 서브탭 — 320px 에서도 딜러가 잘리지 않고
 });
 
 // ── ② 앱 전체 규율 ──────────────────────────────────────────────────────────
-test('🔴 한 뷰포트 hero Aura 는 최대 1개이고 반복 목록에는 0개다 (AURA-03)', async ({ page }) => {
+// 2026-09-13 리드 결정: 옛 단언 "한 뷰포트 hero ≤ 1" 은 **2026-09-07 오너 지시로 삭제된 규칙**(CLAUDE.md '글로우 화면당 최대 1곳' 삭제 목록 ·
+//   실행문 §5.2-9 "'화면당 무조건 1개' 같은 삭제된 과거 규칙을 복원하지 않는다")이라 개수 상한을 계약에서 뺀다.
+//   단순 삭제(게이트 무력화)가 아니라 **실제로 중요한 것**으로 교체한다 — 반복 목록 형제 금지(§5.2-9 '반복 목록은 평온하게')는 남긴다.
+//   ⓐ LED 가 읽는 텍스트 위에 얹히지 않는다: hero 의 LED 는 바깥 그림자뿐(inset 0)이고 안쪽 글자 색·배경 대비가 유지된다(≥ 4.5).
+//   ⓑ 포커스 외곽선을 가리지 않는다: 포커스 가능한 hero 를 포커스하면 outline 이 있고 offset ≥ 0(LED 가 outline 을 덮는 inset 이 없다).
+//   ⓒ 페인트 비용이 현재 기준을 넘지 않는다(측정 가능한 형태): hero 호스트에 animation·filter·will-change·transform 이 없고,
+//      LED 확산 ≤ 48px · 알파 ≤ .22(§5.1 표 hero 24~40px/.12~.20 의 상한 여유) — 영구 GPU 레이어·블러 필터가 생기면 여기서 잡힌다.
+test('🔴 hero Aura 는 글자·포커스를 덮지 않고 페인트 비용 안에 있으며 반복 목록에는 0개다 (AURA-03)', async ({ page }) => {
   await stabilizeBackstack(page);
   await page.setViewportSize({ width: 390, height: 844 });
+  const lum = (c: [number, number, number]) => { const f = (v: number) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+  const contrast = (a: [number, number, number], b: [number, number, number]) => { const [l1, l2] = [lum(a), lum(b)].sort((x, y) => y - x); return (l1 + 0.05) / (l2 + 0.05); };
+  // 공허 통과 방지: 운영 데이터엔 hero 가 0개일 수 있다 — 외치기 방송(AURA-08 픽스처)으로 커뮤니티에 hero 를 최소 1개 보장하고 검사 수를 센다.
+  await page.route(/\/rest\/v1\/community_shouts\?/, (r) => r.fulfill(json([shoutRow()])));
+  let examined = 0;
   for (const url of ['/', '/?tab=browse', '/?tab=community', '/?tab=live']) {
     await page.goto(url);
     await dismissOverlays(page);
     await page.waitForTimeout(1200);
-    const counts = await page.evaluate(() => {
-      const vis = (el: Element) => {
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
-      };
-      const heroes = [...document.querySelectorAll('[data-aura-level="hero"]')].filter(vis);
+    const r = await page.evaluate(() => {
+      const vis = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight; };
+      const heroes = [...document.querySelectorAll<HTMLElement>('[data-aura-level="hero"]')].filter(vis);
+      const parse = (s: string) => { const m = s.match(/rgba?\(([\d.]+), ([\d.]+), ([\d.]+)(?:, ([\d.]+))?\)/); return m ? [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]] as [number, number, number, number] : null; };
+      const opaque = (el: Element | null): [number, number, number] | null => { let n: Element | null = el; while (n) { const c = parse(getComputedStyle(n).backgroundColor); if (c && c[3] > 0.99) return [c[0], c[1], c[2]]; n = n.parentElement; } return null; };
       return {
-        heroInViewport: heroes.length,
-        // 같은 부모에 형제로 둘 이상 = 반복 목록에 붙은 것
-        siblingHeroes: heroes.filter((h) => [...(h.parentElement?.children ?? [])]
-          .filter((c) => c !== h && c.hasAttribute('data-aura-level')).length > 0).length,
+        siblingHeroes: heroes.filter((h) => [...(h.parentElement?.children ?? [])].filter((c) => c !== h && c.hasAttribute('data-aura-level')).length > 0).length,
+        heroes: heroes.map((h) => {
+          const cs = getComputedStyle(h);
+          const blur = parseFloat(cs.getPropertyValue('--aura-led-blur')) || 0;
+          const a = parseFloat(cs.getPropertyValue('--aura-led-a')) || 0;
+          const texts = [...h.querySelectorAll<HTMLElement>('*')].filter((t) => t.childNodes.length && [...t.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? '').trim()));
+          const bg = opaque(h);
+          const contrasts = texts.slice(0, 6).map((t) => ({ text: (t.textContent ?? '').trim().slice(0, 12), fg: parse(getComputedStyle(t).color), bg }));
+          // ⚠ Chromium 은 `rgba(…) 0px 0px 34px 0px inset` 처럼 색을 **앞**에 직렬화한다 — 그림자 단위로 잘라 같은 항목 안에 inset 과 LED 색이 함께 있는지 본다
+          //   (초판은 'inset' 뒤 문자열만 봐서 음성 대조가 통과해 버렸다 — 2026-09-13 실측).
+          //   LED 색은 variant 5종만이 아니다 — 외치기는 ledVarStyle 로 등급색(예: 255 209 0)을 --aura-led-rgb 에 싣는다. 호스트의 그 변수값으로 맞춘다
+          //   (고정 5색 정규식은 gold 호스트의 inset 변형을 못 잡아 음성 대조가 두 번 통과했다 — 2026-09-13 실측).
+          const ledRgb = cs.getPropertyValue('--aura-led-rgb').trim().split(/\s+/).join(', ');
+          const insetLed = cs.boxShadow.split(/,(?![^(]*\))/).some((part) => /inset/.test(part) && (ledRgb !== '' && part.includes(`rgba(${ledRgb},`) || part.includes(`${blur}px`)));
+          return { cls: String(h.className).slice(0, 40), shadow: cs.boxShadow, inset: insetLed, blur, a,
+            animation: cs.animationName, filter: cs.filter, willChange: cs.willChange, transform: cs.transform, contrasts, focusable: h.tabIndex >= 0 || h.tagName === 'BUTTON' || h.tagName === 'A' };
+        }),
       };
     });
-    expect(counts.heroInViewport, `${url}: 한 뷰포트에 hero Aura 가 ${counts.heroInViewport}개다`).toBeLessThanOrEqual(1);
-    expect(counts.siblingHeroes, `${url}: 반복 목록 형제에 Aura 가 붙었다`).toBe(0);
+    expect(r.siblingHeroes, `${url}: 반복 목록 형제에 Aura 가 붙었다`).toBe(0);
+    for (const h of r.heroes) {
+      examined += 1;
+      expect(h.inset, `${url} ${h.cls}: LED 가 inset(글자 위)으로 그려진다`).toBe(false);
+      expect(h.blur, `${url} ${h.cls}: LED 확산 ${h.blur}px`).toBeLessThanOrEqual(48);
+      expect(h.a, `${url} ${h.cls}: LED 알파 ${h.a}`).toBeLessThanOrEqual(0.22);
+      expect(h.animation, `${url} ${h.cls}: hero 에 애니메이션`).toBe('none');
+      expect(h.filter).toBe('none'); expect(h.willChange).toBe('auto'); expect(h.transform).toBe('none');
+      for (const c of h.contrasts) if (c.fg && c.bg && c.fg[3] > 0.99) expect(contrast([c.fg[0], c.fg[1], c.fg[2]], c.bg), `${url} ${h.cls} "${c.text}" 대비`).toBeGreaterThanOrEqual(4.5);
+    }
+    // ⓑ 포커스 외곽선 — 포커스 가능한 hero 만
+    const focus = await page.evaluate(() => {
+      const h = [...document.querySelectorAll<HTMLElement>('[data-aura-level="hero"]')].find((x) => x.tabIndex >= 0 || x.tagName === 'BUTTON' || x.tagName === 'A');
+      if (!h) return null;
+      h.focus();
+      const cs = getComputedStyle(h);
+      return { outlineW: parseFloat(cs.outlineWidth), ringW: /0px 0px 0px (\d+)px/.exec(cs.boxShadow)?.[1] ?? '0', offset: parseFloat(cs.outlineOffset) || 0, hasFocus: document.activeElement === h };
+    });
+    if (focus && focus.hasFocus) expect(focus.outlineW > 0 || +focus.ringW > 0, `${url}: 포커스 표시가 없다(LED 가 대신하지 않는다)`).toBe(true);
+    if (focus && focus.hasFocus) expect(focus.offset).toBeGreaterThanOrEqual(0);
   }
+  expect(examined, 'hero 를 하나도 검사하지 못했다 — 공허 통과').toBeGreaterThan(0);
 });
 
 test('🔴 forced-colors 에서 장식광이 꺼진다 (AURA-04)', async ({ page }) => {

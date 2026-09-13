@@ -7,6 +7,7 @@ import Modal from '../atoms/Modal';
 import Icon, { type IconName } from '../atoms/Icon';
 import { REQUIRE_VERIFY_EVENT } from '../../lib/requireLogin';
 import { BIZ_REQUIRED } from './BusinessFooter';
+import { josa } from '../../lib/josa';
 
 const BENEFITS: { icon: IconName; t: string; d: string }[] = [
   { icon: 'edit',   t: '글·댓글 작성', d: '커뮤니티에 자유롭게 참여' },
@@ -38,7 +39,7 @@ export default function VerifyGateSheet({ onStart }: { onStart: () => void }) {
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-300/[0.12] text-accent-300"><Icon name="lock" size={26} /></div>
           <div>
             <p className="text-sm font-bold text-ink-primary">
-              {reason ? `'${reason}'은(는) 본인인증이 필요해요` : '본인인증이 필요한 기능이에요'}
+              {reason ? `'${reason}'${josa(reason, '은')} 본인인증이 필요해요` : '본인인증이 필요한 기능이에요'}
             </p>
             <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
               명의 도용·중복가입·노쇼 방지를 위한 1회 절차예요.

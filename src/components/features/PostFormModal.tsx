@@ -26,7 +26,7 @@ import {
   CardPicker, PollBuilder, emptyHand, emptyPoll, normalizeHand, normalizePoll,
   type HandDraft, type PollDraft,
 } from './PostComposerExtras';
-import { saveHand, savePoll } from '../../api/postAttachments';
+import { saveHand, savePoll, type HandAttachment, type PollAttachment } from '../../api/postAttachments';
 // supabase 클라이언트는 더 이상 쓰지 않는다 — 글 id 재조회(findCreatedPostId)가 사라졌다. IS_MOCK 만 남는다.
 import { IS_MOCK } from '../../lib/supabase';
 import Icon from '../atoms/Icon';
@@ -64,6 +64,34 @@ const CATEGORY_OPTIONS: { id: PostCategory; label: string }[] = [
 const MAX_IMAGES = 4;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
+// ── 부분 실패 단계별 복구 계약(N07, 2026-09-12) ──────────────────────────────
+// 재현한 버그: 글 본문은 이미 INSERT 됐는데(postId 발급) 핸드·투표 저장이 실패하면 그냥 닫아버렸다.
+// 다음에 글쓰기를 열면(위 open 이펙트) 폼이 초기화돼 실패한 초안이 통째로 사라졌고, 사용자가
+// 처음부터 다시 쓰면 본문이 **한 번 더** INSERT 됐다(중복 글). 그렇다고 실패해도 무조건 성공
+// 문구를 보여주면 사용자는 첨부가 저장 안 된 줄 모른다.
+// 수정: hand/poll 은 null 이면(성공했거나 애초에 없던 것) 아예 호출하지 않는다 — saveHand/savePoll 은
+// null 을 "삭제" 로 해석하므로(postAttachments.ts) null 을 넘기지 않는 것 자체가 "건드리지 않는다" 계약이다.
+// 렌더러 없이(vitest environment: node) 이 판정만 검증하려고 saveHand/savePoll 을 DI 로 뽑았다.
+export interface AttachmentSaveOutcome { handFailed: boolean; pollFailed: boolean }
+
+// eslint-disable-next-line react-refresh/only-export-components -- 테스트가 순수 함수를 직접 검증(N04 submitPostComment 와 같은 관행)
+export async function saveAttachments(
+  postId: string,
+  hand: HandAttachment | null,
+  poll: PollAttachment | null,
+  deps: { saveHand: (postId: string, hand: HandAttachment) => Promise<void>; savePoll: (postId: string, poll: PollAttachment) => Promise<void> },
+): Promise<AttachmentSaveOutcome> {
+  let handFailed = false;
+  let pollFailed = false;
+  if (hand !== null) {
+    try { await deps.saveHand(postId, hand); } catch { handFailed = true; }
+  }
+  if (poll !== null) {
+    try { await deps.savePoll(postId, poll); } catch { pollFailed = true; }
+  }
+  return { handFailed, pollFailed };
+}
+
 export default function PostFormModal({ open, onClose, onSubmit, defaultCategory, defaultContent, defaultReplay }: PostFormModalProps) {
   const { user } = useAuth();
   const toast = useToast();
@@ -94,6 +122,12 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
   const [handDraft, setHandDraft] = useState<HandDraft>(emptyHand);
   const [pollDraft, setPollDraft] = useState<PollDraft>(emptyPoll);
 
+  // N07(2026-09-12): 본문은 이미 등록됐는데(postId) 핸드·투표 저장만 실패한 상태 — null 이면 아직
+  // 이 단계에 온 적이 없다(정상 플로우). 값이 있으면 "다시 시도" 화면이고, onSubmit(본문 INSERT)은
+  // 다시 부르지 않는다(같은 글이 두 번 등록되지 않게).
+  const [pendingPostId, setPendingPostId] = useState<string | null>(null);
+  const [failedAttach, setFailedAttach] = useState<{ hand: boolean; poll: boolean }>({ hand: false, poll: false });
+
   // 모달 열릴 때 초기화 + 닫힐 때 objectURL 해제
   useEffect(() => {
     if (open) {
@@ -105,6 +139,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
       setPot(r?.pot ?? '');
       setActs({ pre: r?.actions.pre ?? '', flop: r?.actions.flop ?? '', turn: r?.actions.turn ?? '', river: r?.actions.river ?? '' });
       setHandDraft(emptyHand()); setPollDraft(emptyPoll());
+      setPendingPostId(null); setFailedAttach({ hand: false, poll: false });
       if (r) toast.show('핸드를 첨부한 글쓰기를 열었어요', 'success');
     }
   }, [open, defaultCategory, defaultContent, defaultReplay, toast]);
@@ -173,9 +208,39 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
     });
   };
 
+  // N07: 실패한 첨부만 다시 저장한다(이미 성공한 쪽은 손대지 않는다) — onSubmit(본문 INSERT)은
+  // 다시 부르지 않으므로 재시도해도 글이 중복 등록되지 않는다.
+  const retryAttachments = async () => {
+    if (!pendingPostId) return;
+    setSaving(true);
+    try {
+      const hand = failedAttach.hand ? normalizeHand(handDraft) : null;
+      const poll = failedAttach.poll ? normalizePoll(pollDraft) : null;
+      const outcome = await saveAttachments(pendingPostId, hand, poll, { saveHand, savePoll });
+      if (!outcome.handFailed && !outcome.pollFailed) {
+        toast.show('첨부까지 모두 저장됐습니다', 'success');
+        setPendingPostId(null); setFailedAttach({ hand: false, poll: false });
+        onClose();
+      } else {
+        setFailedAttach({ hand: outcome.handFailed, poll: outcome.pollFailed });
+        toast.show('아직 저장하지 못한 첨부가 있어요. 다시 시도해 주세요', 'error');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 실패한 첨부를 포기하고 닫는다 — 본문은 이미 저장돼 있으니 되돌리지 않는다(#12 와 같은 원칙: 함부로 지우지 않음).
+  const dismissPending = () => {
+    setPendingPostId(null); setFailedAttach({ hand: false, poll: false });
+    onClose();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return toast.show('로그인이 필요합니다', 'error');
+    // 본문은 이미 저장돼 있다(재시도 화면) — 여기서는 첨부만 다시 시도하고 아래 새 글 작성 경로는 타지 않는다.
+    if (pendingPostId) return retryAttachments();
     // 제목 필수(2026-08-29 오너 지시). 예전엔 선택이라 목록이 본문 앞부분을 제목처럼 잘라 보여줬는데,
     // 그러면 목록에서 무슨 글인지 알 수 없고 상세 최상단 제목 블록도 빈다.
     // 내용보다 **먼저** 검사한다 — 위에서 아래로 채우는 순서와 오류 지적 순서가 같아야 한다.
@@ -212,31 +277,39 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
       const created = await onSubmit({ category, title: title.trim(), content: encoded, images });
 
       // 어태치먼트 저장 — 판정은 normalize 가 단일 소스(빈 입력 → null → 저장 안 함).
-      // 여기서부터의 실패는 '글 등록 성공'을 뒤집지 않는다(부분 실패 토스트로만 안내).
       const hand = normalizeHand(handDraft);
       const poll = normalizePoll(pollDraft);
-      let extrasFailed = false;
-      if ((hand !== null || poll !== null) && !IS_MOCK) {
-        // onSubmit 이 저장된 글을 돌려준다(App.handleCreatePost). 재조회하지 않는다 —
-        // 같은 본문의 글이 둘이면 엉뚱한 글에 첨부가 붙던 구조였다.
-        const postId = created && typeof created === 'object' ? created.id : null;
-        if (!postId) {
-          extrasFailed = true;
-        } else {
-          try {
-            await saveHand(postId, hand);
-            await savePoll(postId, poll);
-          } catch {
-            extrasFailed = true;
-          }
-        }
+      if ((hand === null && poll === null) || IS_MOCK) {
+        toast.show('게시글이 등록되었습니다', 'success');
+        onClose();
+        return;
       }
-
+      // onSubmit 이 저장된 글을 돌려준다(App.handleCreatePost). 재조회하지 않는다 —
+      // 같은 본문의 글이 둘이면 엉뚱한 글에 첨부가 붙던 구조였다.
+      const postId = created && typeof created === 'object' ? created.id : null;
+      if (!postId) {
+        // 호출부가 id 를 못 돌려주는 구버전 경로 — 재시도할 postId 자체가 없어 첨부는 여기서 포기한다(종전 동작 보존)
+        toast.show('글은 등록됐지만 핸드·투표 첨부 저장에 실패했습니다', 'error');
+        onClose();
+        return;
+      }
+      const outcome = await saveAttachments(postId, hand, poll, { saveHand, savePoll });
+      if (!outcome.handFailed && !outcome.pollFailed) {
+        toast.show('게시글이 등록되었습니다', 'success');
+        onClose();
+        return;
+      }
+      // 부분 실패 — 본문은 이미 저장됐다. 모달을 닫지 않고 postId 를 들고 있는다(N07): 닫으면
+      // 다음에 열 때 폼이 초기화돼(위 open 이펙트) 실패한 초안이 통째로 사라지고, 처음부터 다시 쓰면
+      // 본문이 중복 등록된다. '무엇이' 실패했는지도 구분해서 보여준다(둘 다 성공했다고 뭉개지 않는다).
+      setPendingPostId(postId);
+      setFailedAttach({ hand: outcome.handFailed, poll: outcome.pollFailed });
       toast.show(
-        extrasFailed ? '글은 등록됐지만 핸드·투표 첨부 저장에 실패했습니다' : '게시글이 등록되었습니다',
-        extrasFailed ? 'error' : 'success',
+        outcome.handFailed && outcome.pollFailed ? '글은 저장됐지만 핸드·투표는 저장하지 못했어요'
+          : outcome.handFailed ? '글은 저장됐지만 핸드 카드는 저장하지 못했어요'
+          : '글은 저장됐지만 투표는 저장하지 못했어요',
+        'error',
       );
-      onClose();
     } catch (err) {
       toast.show(err instanceof Error ? err.message : '게시글 등록에 실패했습니다', 'error');
     } finally {
@@ -249,6 +322,16 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
       <form onSubmit={handleSubmit}>
         {/* 입력부 — 액션바(하단 고정)와 분리해야 sticky 가 스크롤포트 바닥에 붙는다 */}
         <div className="p-4 space-y-4">
+          {/* N07(2026-09-12): 글 본문은 이미 저장됐고 핸드·투표만 실패한 상태 — '실패'가 아니라
+              '부분 성공'임을 분명히 알린다. 무엇이 실패했는지 구분해서 보여준다. */}
+          {pendingPostId && (
+            <div data-testid="post-form-partial-fail" className="rounded-input border border-danger/40 bg-danger/[0.06] px-3 py-2.5 text-xs text-danger">
+              <p className="font-bold">
+                글은 저장됐지만 {failedAttach.hand && failedAttach.poll ? '핸드 카드·투표' : failedAttach.hand ? '핸드 카드' : '투표'}는 저장하지 못했어요
+              </p>
+              <p className="mt-0.5 text-ink-secondary">아래 내용을 확인하고 '다시 시도'를 눌러 주세요. 본문은 다시 등록되지 않습니다.</p>
+            </div>
+          )}
           {/* 카테고리 — 1행 가로 스크롤(오너 확정안 A).
               3열 그리드 3행(실측 168.1px)이 첫 화면의 절반을 먹어 '게시하기'를 접힘 아래로 밀어냈다.
               문법은 목록 필터(CommunityTab 카테고리 칩)와 동일 — 같은 것은 같게 보여야 학습이 이전된다.
@@ -470,9 +553,11 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
             (sticky bottom-0 / border-t / 불투명 bg-surface-mid). backdrop-filter 는 쓰지 않는다 —
             상시 노출 요소의 blur 는 스크롤 중 페인트 폭탄이다(모션 헌법 §20.4-3·5). */}
         <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border-default bg-surface-mid px-4 py-3">
-          <button type="button" onClick={onClose} className="btn-ghost flex-1">취소</button>
+          <button type="button" onClick={pendingPostId ? dismissPending : onClose} className="btn-ghost flex-1">
+            {pendingPostId ? '이대로 닫기' : '취소'}
+          </button>
           <button type="submit" disabled={saving} className="btn-primary flex-1 disabled:opacity-60">
-            {saving ? '등록 중…' : '게시하기'}
+            {saving ? '저장 중…' : pendingPostId ? '다시 시도' : '게시하기'}
           </button>
         </div>
       </form>

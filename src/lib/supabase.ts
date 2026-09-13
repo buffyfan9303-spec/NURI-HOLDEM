@@ -43,7 +43,12 @@ const memory = new Map<string, string>();
  *   배포하는 순간 라이브 사용자 전원이 로그아웃된다 — 그건 기능 추가가 아니라 사고다.
  */
 export function isKeepSignedIn(): boolean {
-  const v = safeLocal()?.getItem(KEEP_KEY) ?? null;
+  // ⚠ A03: `safeLocal()` 은 **접근**만 감싼다. 접근은 되는데 `getItem` 이 던지는 환경이 있다
+  //   (사파리 프라이빗·쿠키 차단 웹뷰의 SecurityError, 용량 초과 뒤 손상된 저장소).
+  //   여기서 새면 `stores()` → `authStorage.getItem` 이 **폴백에 닿기도 전에** 터져
+  //   supabase 어댑터가 통째로 실패한다 = 흰 화면. 읽기까지 감싼다.
+  let v: string | null;
+  try { v = safeLocal()?.getItem(KEEP_KEY) ?? null; } catch { v = null; }
   return v === null ? true : v === '1';
 }
 
@@ -53,13 +58,31 @@ export function isKeepSignedIn(): boolean {
  */
 export function setKeepSignedIn(on: boolean): void {
   try { safeLocal()?.setItem(KEEP_KEY, on ? '1' : '0'); } catch { /* 저장소 차단 환경 */ }
+  // 이 탭에서 **사용자가 직접** 고른 것이므로 현재 탭의 저장 위치도 함께 옮긴다(아래 A02 참조).
+  pinned = on ? 'local' : 'session';
 }
 
-/** 플래그에 따라 '쓸 곳'과 '비울 곳'을 정한다. */
+/**
+ * 이 탭의 세션이 **실제로 사는 곳**. `KEEP_KEY` 플래그와 분리한다.
+ *
+ * ⚠ A02(실측): `KEEP_KEY` 는 localStorage 라 **모든 탭이 공유**한다. 예전에는 `stores()` 가
+ *   매번 그 플래그를 다시 읽어서, **A 탭이 OFF 로 로그인해 sessionStorage 에 세션을 두고 있는데
+ *   B 탭에서 체크박스를 ON 으로 바꾸기만 해도** A 탭이 localStorage 를 보게 돼 자기 세션을 못 찾았다
+ *   (= 다른 탭의 폼 조작만으로 로그아웃된 것처럼 보인다).
+ *   플래그는 **다음 로그인의 기본 선택**이고, 이 값은 **지금 이 탭의 실제 위치**다.
+ *   부팅 때 한 번 플래그로 정해지고, 그 뒤에는 이 탭에서 명시적으로 바꿀 때만 움직인다.
+ */
+let pinned: 'local' | 'session' | null = null;
+
+/** 이 탭의 저장 위치를 잊는다 — 테스트 전용(모듈 상태 격리). */
+export function __resetAuthStoragePin(): void { pinned = null; }
+
+/** 플래그에 따라 '쓸 곳'과 '비울 곳'을 정한다. 한 번 정해지면 이 탭에서는 유지된다. */
 function stores(): { active: Storage | null; other: Storage | null } {
   const ls = safeLocal();
   const ss = safeSession();
-  return isKeepSignedIn() ? { active: ls, other: ss } : { active: ss, other: ls };
+  if (pinned === null) pinned = isKeepSignedIn() ? 'local' : 'session';
+  return pinned === 'local' ? { active: ls, other: ss } : { active: ss, other: ls };
 }
 
 /**
@@ -70,22 +93,27 @@ function stores(): { active: Storage | null; other: Storage | null } {
 export const authStorage = {
   getItem(k: string): string | null {
     const { active } = stores();
+    if (!active) return memory.get(k) ?? null;
     try {
-      const v = active?.getItem(k);
-      if (v != null) return v;
-    } catch { /* 접근 차단 — 메모리로 */ }
-    return memory.get(k) ?? null;
+      // ⚠ `null` 은 **그대로 null 로 돌려준다.** 여기서 메모리로 폴백하면
+      //   로그아웃·저장소 비움으로 정당하게 사라진 세션이 되살아난다("로그아웃했는데 다시 로그인됨").
+      //   메모리는 **읽기 자체가 막힌 환경**에서만 쓴다.
+      return active.getItem(k);
+    } catch {
+      return memory.get(k) ?? null;
+    }
   },
   setItem(k: string, v: string): void {
     const { active, other } = stores();
     // 반대편에 남은 같은 키는 즉시 지운다. 두 저장소에 세션이 동시에 존재하면
     // 플래그를 바꾼 순간 '유령 세션'이 살아난다.
     try { other?.removeItem(k); } catch { /* noop */ }
-    try {
-      if (!active) throw new Error('no storage');
-      active.setItem(k, v);
-      memory.delete(k);
-    } catch { memory.set(k, v); }
+    // ⚠ A03: 쓰기는 되는데 **읽기가 던지는** 환경이 있다(사파리 프라이빗·쿠키 차단 웹뷰).
+    //   예전엔 쓰기가 성공하면 `memory.delete(k)` 를 했는데, 그러면 방금 쓴 값을 **다시 읽을 수 없어**
+    //   탭 안에서 로그인이 유지되지 않았다. 그래서 메모리에 **항상 거울을 둔다** —
+    //   위 `getItem` 이 null 을 메모리로 덮지 않으므로 '되살아남' 은 생기지 않는다.
+    memory.set(k, v);
+    try { active?.setItem(k, v); } catch { /* 메모리에 이미 있다 */ }
   },
   removeItem(k: string): void {
     // 로그아웃은 **양쪽 다** 비운다 — 한쪽만 지우면 '로그아웃했는데 다시 로그인됨' 이 된다.

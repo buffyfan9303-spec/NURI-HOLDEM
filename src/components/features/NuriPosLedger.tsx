@@ -33,11 +33,13 @@ import { getSchedules, type Schedule } from '../../api/schedules';
 import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
-import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
+import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
 import { discountsFromPromotions, ledgerLabelOf } from '../../lib/posterDiscounts';
+import type { AccessLoad } from '../../lib/staffAccess';
+import { isFreshResponse, type RequestStamp } from '../../lib/staleResponse';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
@@ -186,18 +188,40 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const scheduleTitle = (id?: string | null) => venueSchedules.find((s) => s.id === id)?.title ?? null;
 
   const [staff, setStaff] = useState<User[]>([]);
-  const [accessIds, setAccessIds] = useState<string[]>([]); // 장부 접근 권한 보유 직원
-  useEffect(() => { getMyVenueStaff().then(setStaff).catch(() => {}); }, []);
-  useEffect(() => { getLedgerAccessUserIds(venueId).then(setAccessIds).catch(() => {}); }, [venueId]);
+  // 장부 접근 권한 보유 직원 — P02(2026-09-13): 조회 실패를 [] 로 두면 담당 직원 후보가 **조용히 빈다**
+  // (업주가 "권한 직원이 없네" 로 읽는다). 확인 중/실패/준비됨을 갈라 들고, 실패는 폼에서 재시도로 말한다.
+  const [accessLoad, setAccessLoad] = useState<AccessLoad>({ status: 'loading' });
+  const [accessTick, setAccessTick] = useState(0);
+  // 직원 목록 조회 실패도 후보를 '나' 뿐으로 조용히 줄인다 — 같은 배너로 말한다(독립 검증 Q2, 2026-09-13).
+  const [staffLoadError, setStaffLoadError] = useState<unknown>(null);
+  useEffect(() => {
+    let alive = true;
+    setStaffLoadError(null);
+    getMyVenueStaff()
+      .then((s) => { if (alive) setStaff(s); })
+      .catch((e: unknown) => { if (alive) setStaffLoadError(e); });
+    return () => { alive = false; };
+  }, [accessTick]);
+  useEffect(() => {
+    let alive = true;
+    setAccessLoad({ status: 'loading' });
+    getLedgerAccessUserIds(venueId)
+      .then((ids) => { if (alive) setAccessLoad({ status: 'ready', ids }); })
+      .catch((e: unknown) => { if (alive) setAccessLoad({ status: 'error', error: e }); });
+    return () => { alive = false; };
+  }, [venueId, accessTick]);
+  const reloadAccessIds = useCallback(() => setAccessTick((t) => t + 1), []);
+  const operatorOptionsError = accessLoad.status === 'error' ? accessLoad.error : staffLoadError;
   // 현재 사용자가 이 매장 업주/운영자인지(전체 접근). 아니면 장부권한 직원(담당 지정 장부만).
   const fullAccess = isAdmin || (user?.role === 'venue_owner' && user?.venueId === venueId);
   // 담당직원 후보 = 업주/운영자(나) + 장부 접근 권한 직원만(최대 10은 폼에서 제한)
   const operatorOptions = useMemo(() => {
+    const accessIds = accessLoad.status === 'ready' ? accessLoad.ids : [];
     const opts: { id: string; label: string }[] = [];
     if (user) opts.push({ id: user.id, label: `${user.name}${isAdmin ? ' (운영자)' : ' (업주/나)'}` });
     for (const s of staff) if (s.id !== user?.id && accessIds.includes(s.id)) opts.push({ id: s.id, label: `${s.name}${s.staffTitle ? ` · ${s.staffTitle}` : ''}${s.nickname ? ` · @${s.nickname}` : ''}` });
     return opts;
-  }, [user, staff, isAdmin, accessIds]);
+  }, [user, staff, isAdmin, accessLoad]);
   // 전 직원 이름맵(권한 무관) — 담당이 operatorOptions(권한 직원) 밖이어도 정확히 표기(오라벨 방지)
   const staffNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -278,8 +302,20 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     Promise.all([getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq)])
       .then(([b, p]) => { if (my === reloadSeq.current) { setBuyins(b); setPlayers(p); } }).catch(() => {});
   }, [venueId, date, gameSeq]);
-  const loadGames = useCallback(() => { getLedgerGames(venueId, date).then(setGames).catch(() => {}); }, [venueId, date]);
-  const reloadSession = useCallback(() => { getLedgerSession(venueId, date, gameSeq).then(setSession).catch(() => {}); loadGames(); }, [venueId, date, gameSeq, loadGames]);
+  // ⚠ 내부에서 실패를 삼키면 안 된다 — reloadSession 의 Promise.all 이 이 실패를 못 본다
+  //   (이미 resolve 된 것으로 보여 아래 setLoadError(null) 이 방금 실패한 재조회를 '성공'으로 지운다).
+  const loadGames = useCallback(() => getLedgerGames(venueId, date).then(setGames), [venueId, date]);
+  // C05 보완: return 을 살려도 `.catch(() => {})` 로 실패를 삼키면 '조회 실패'와 '정상'이 구분되지 않는다
+  // — 다른 접수대가 단가·할인·마감을 바꿨는데 이쪽 재조회가 실패하면 화면은 예전 값을 그대로 들고
+  //   아무 표시 없이 정상처럼 보이고, 운영자는 낡은 단가로 승인·정산한다.
+  // 기존 loadError 장치를 그대로 쓴다(새 상태 추가 안 함) — 렌더 쪽에서 '보여줄 데이터가 있는가'로
+  // 전면 카드(초기 로드 실패)와 인라인 배너(재조회 실패, 마지막 정상 값 유지)를 가른다 — hasBoardData 참고.
+  const reloadSession = useCallback(() => Promise.all([
+    getLedgerSession(venueId, date, gameSeq),
+    loadGames(),
+  ]).then(([s]) => { setSession(s); setLoadError(null); })
+    .catch((e) => { setLoadError(e); }), // session/games 는 건드리지 않는다 — 마지막 정상 값 유지
+  [venueId, date, gameSeq, loadGames]);
 
   useEffect(() => {
     // stale 응답 가드 — 날짜를 빠르게 바꾸면(예: 게임관리 '장부' 바로가기) 이전 날짜의
@@ -296,12 +332,34 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     return () => { alive = false; };
   }, [venueId, date, gameSeq]);
 
-  useEffect(() => subscribeLedger(venueId, () => { reload(); loadGames(); }), [venueId, reload, loadGames]);
+  // C05: reloadSession() 이 빠져 있었다 — 다른 접수대의 마감·단가·할인 변경이 realtime 으로 와도
+  // 현재 화면의 session state 가 안 바뀌었다(loadGames 만으로는 games 목록만 갱신됨).
+  // ⚡ 이 판이 실제로 보일 때만(active) 구독 — keep-alive 로 숨은 탭이 채널을 계속 물고 있지 않게(§5-A).
+  //   다시 보일 때(active 상승) 한 번 재검증해 숨은 동안 놓친 마감·단가·할인 변경을 메운다.
+  // ⚠ 재검증은 **active 상승 에지에서만** 돈다(2026-09-12 검증에서 잡힌 결함).
+  //   `reload`/`reloadSession` 의 identity 가 `date`·`gameSeq` 에 걸려 있어, 그냥 effect 첫 줄에 두면
+  //   **날짜·게임을 옮길 때마다** 같은 조회가 또 나갔다 — 바로 위 초기 로드 effect 가 이미 하는 것이다.
+  //   실측: 전환 1회당 요청 11건 → 7건(중복 4건). egress 를 아끼자는 변경이 반대로 비용을 만들고 있었다.
+  //   부수로 두 effect 가 `setLoadError` 를 동시에 쓰면서, 초기 로드가 세운 오류를 늦게 온 성공이 지울 수 있었다.
+  //   최초 마운트도 재검증하지 않는다 — 그 역시 초기 로드 effect 가 이미 한다.
+  const ledgerWasActive = useRef<boolean | null>(null);
+  useEffect(() => {
+    const rising = ledgerWasActive.current === false && active;
+    ledgerWasActive.current = active;
+    if (!active) return;
+    if (rising) { reload(); reloadSession(); }
+    return subscribeLedger(venueId, () => { reload(); reloadSession(); });
+  }, [venueId, reload, reloadSession, active]);
 
   // 손님 자가 바인요청(QR) — 그날 매장 단위 대기목록 로드 + 실시간. 승인 시 현재 게임(gameSeq) 명단에 추가.
   // 실패 시 기존 목록 유지 — 빈 배열로 덮으면 '요청 0건'으로 위장돼 새벽 대기열이 증발해 보인다
   const loadPending = useCallback(() => { getPendingBuyinRequests(venueId, date).then(setPendingReqs).catch(() => {}); }, [venueId, date]);
-  useEffect(() => { loadPending(); return subscribeBuyinRequests(venueId, loadPending); }, [venueId, loadPending]);
+  // ⚡ 위와 같은 이유로 active 게이트 — 다시 보일 때(active 상승) loadPending 이 재실행돼 놓친 대기열을 메운다.
+  useEffect(() => {
+    if (!active) return;
+    loadPending();
+    return subscribeBuyinRequests(venueId, loadPending);
+  }, [venueId, loadPending, active]);
   // 지하 매장 재연결 — 단절 중 놓친 바인·세션·대기요청을 복귀 즉시 일괄 재검증
   useEffect(() => {
     const onOn = () => { reload(); reloadSession(); loadPending(); };
@@ -335,8 +393,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     setPayPick(null); setSplitFor(null);
     // 접수대 결제 모달과 **같은 기본 할인**을 실어 보낸다(보드 상단 고정 선택 → 없으면 레벨 자동).
     // 예전엔 QR 승인 경로만 할인이 통째로 빠져, 같은 레벨인데 창구에 따라 금액이 갈렸다(2026-09-05 감사).
-    const discIdx = defaultDiscIdx();
-    return approveBuyinRequest(r.id, target, withBuyin, payMethod, split, discIdx)
+    // C06: target 이 지금 화면 게임과 다르면 그 게임 자신의 할인·레벨로 다시 계산한다.
+    return discIdxFor(target)
+      .then((discIdx) => approveBuyinRequest(r.id, target, withBuyin, payMethod, split, discIdx))
       .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? ' + 티켓 기록(이용권)' : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
       .catch((e) => { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); loadPending(); });
   };
@@ -366,8 +425,15 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     //   ledger_buyins_venue_date_game_player_entry_key 가 터져 둘 중 하나가 실패한다.
     (async () => {
       const rs: { status: 'fulfilled' | 'rejected' }[] = [];
+      // C06: 게임별로 한 번만 조회해 캐싱 — 같은 게임으로 가는 나머지 건은 재조회하지 않는다.
+      const discCache = new Map<number, number>();
       for (const x of flat) {
-        try { await approveBuyinRequest(x.id, x.seq, false, 'cash', undefined, defaultDiscIdx()); rs.push({ status: 'fulfilled' }); }
+        try {
+          let discIdx = discCache.get(x.seq);
+          if (discIdx === undefined) { discIdx = await discIdxFor(x.seq); discCache.set(x.seq, discIdx); }
+          await approveBuyinRequest(x.id, x.seq, false, 'cash', undefined, discIdx);
+          rs.push({ status: 'fulfilled' });
+        }
         catch { rs.push({ status: 'rejected' }); }
       }
       return rs;
@@ -387,25 +453,57 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
 
   // ── 연동 클락 — 리모컨 제어 + 바인 시점 얼리 확정(스타트 시각 미입력 버그 근본 해결) ──
   const [clock, setClock] = useState<ClockState | null>(null);
-  const reloadClock = useCallback(() => { getClockState(venueId, gameSeq).then(setClock).catch(() => {}); }, [venueId, gameSeq]);
-  useEffect(() => { reloadClock(); }, [reloadClock]);
-  useEffect(() => subscribeClock(venueId, reloadClock), [venueId, reloadClock]);
-  const clockLinked = !!clock && clock.sessionDate === date;
+  // F5(2026-09-13): 이 컴포넌트는 매장 전환에 언마운트되지 않는다(VenueManageTab keep-alive). 대상이 바뀌면 먼저 비우고,
+  //   늦게 도착한 앞 매장·앞 게임 응답은 owner 스탬프(staleResponse)로 버린다 — 앞 매장 클락이 이 장부의 정본으로 남아
+  //   리모컨 조작이 남의 매장 대회로 나가던 경로를 막는다.
+  const clockReq = useRef<RequestStamp<string>>({ seq: 0, owner: '' });
+  const reloadClock = useCallback(() => {
+    const owner = `${venueId}#${gameSeq}`;
+    if (clockReq.current.owner !== owner) setClock(null);
+    const stamp: RequestStamp<string> = { seq: clockReq.current.seq + 1, owner };
+    clockReq.current = stamp;
+    getClockState(venueId, gameSeq)
+      .then((c) => { if (isFreshResponse(stamp, clockReq.current)) setClock(c); })
+      .catch(() => {});
+  }, [venueId, gameSeq]);
+  // active 상승(다시 보일 때) 시에도 재실행 — 숨은 동안 놓친 클락 상태 변화를 메운다.
+  useEffect(() => { if (active) reloadClock(); }, [reloadClock, active]);
+  // ⚡ 이 판이 실제로 보일 때만(active) 구독 — keep-alive 로 숨은 탭이 채널을 계속 물고 있지 않게(§5-A).
+  useEffect(() => { if (!active) return; return subscribeClock(venueId, reloadClock); }, [venueId, reloadClock, active]);
+  // C04: sessionDate 만 보면 게임 전환 중 도착한 '다른 게임' 응답을 그대로 연동으로 본다 —
+  // reloadClock 은 항상 gameSeq 로 조회하지만 요청·응답 사이 gameSeq 가 바뀌면 그 응답은 이전 게임 것이다.
+  // 응답 자체에 찍힌 clock.gameSeq 를 지금 gameSeq 와 맞춰 보면 fetch 시점 가드 없이도 stale 을 걸러낸다.
+  // F5: venueId 까지 대조한다 — 매장 전환 직후 앞 매장 클락(같은 날짜·같은 gameSeq)이 연동으로 읽히면 안 된다.
+  const clockLinked = !!clock && clock.venueId === venueId && clock.sessionDate === date && clock.gameSeq === gameSeq;
   // 바인 추가 시점의 얼리 유형 — 클락의 "현재 레벨"을 earlyDouble/SingleLevel과 직접 비교해 확정 기록.
   // 클락 화면이 닫혀 전진 못 한 경우(endsAt 경과)는 경과분만큼 레벨을 전진시켜 판정.
   // ⚠ 레벨 세는 로직을 여기 인라인으로 두면 클락 화면과 한 칸씩 어긋난다(브레이크 처리 차이).
   //   currentLevelNo(api/clock)로 단일화 — 얼리(#21)와 레벨 할인(#20)이 같은 레벨 번호를 본다.
   /** 연동 클락의 '지금 레벨'(1-based). 0 = 클락 미연동 또는 블라인드 구조 없음. */
   const clockLevelNow = useCallback((): number => {
-    if (!clock || clock.sessionDate !== date) return 0;
+    if (!clockLinked || !clock) return 0;
     return currentLevelNo(clock);
-  }, [clock, date]);
+  }, [clockLinked, clock]);
   /** 새 바인의 기본 할인 자리번호 — 보드 상단 고정 선택이 있으면 그것, 없으면 클락 레벨 자동(#20).
    *  ⚠ 결제창·QR 단건 승인·QR 일괄 승인이 **모두** 이 함수를 쓴다. 창구에 따라 금액이 갈리면 안 된다. */
   const defaultDiscIdx = useCallback(
     (): number => discPick ?? autoDiscountIndex(session.discounts, clockLevelNow()),
     [discPick, session.discounts, clockLevelNow],
   );
+  /** C06: QR 승인 대상 게임(wantSeq(r))이 지금 보고 있는 게임과 다르면 defaultDiscIdx() 를 쓰면 안 된다 —
+   *  그건 **현재 화면**의 할인 배열·레벨로 계산된 자리번호인데, SQL 은 그 번호를 **대상 게임의**
+   *  할인 배열에 적용한다. 메인·사이드는 할인 순서·단가가 서로 다를 수 있어 자리번호만 맞고 금액이 틀린다.
+   *  대상 게임 자신의 세션·클락을 다시 조회해 계산한다 — 조회가 실패하면 그대로 던진다
+   *  (현재 게임 할인으로 조용히 fallback 하지 않는다: 실패는 실패로 드러낸다). */
+  const discIdxFor = useCallback(async (seq: number): Promise<number> => {
+    if (seq === gameSeq) return defaultDiscIdx();
+    const [targetSession, targetClock] = await Promise.all([
+      getLedgerSession(venueId, date, seq),
+      getClockState(venueId, seq),
+    ]);
+    const levelNo = (targetClock && targetClock.sessionDate === date) ? currentLevelNo(targetClock) : 0;
+    return autoDiscountIndex(targetSession.discounts, levelNo);
+  }, [venueId, date, gameSeq, defaultDiscIdx]);
   // 날짜·게임을 옮기면 할인 프리셋 목록 자체가 달라진다 — 자리번호를 물고 가면 다른 금액이 된다.
   useEffect(() => { setDiscPick(null); }, [date, gameSeq]);
   const clockEarlyNow = useCallback((): EarlyType | null => {
@@ -485,6 +583,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const regClosed = session.regClosed;
   // 실패는 '빈 장부'가 아니다 — loadError 가 있으면 세팅 폼으로 넘어가지 않는다.
   const showSetup = !loadError && !session.openedAt && !closed && buyins.length === 0 && players.length === 0;
+  // C05 보완 — 지금 보여줄 게 있는가(이미 정상 조회된 세션/명단이 있는가).
+  // 있으면 재조회 실패를 전면 카드로 덮지 않고 보드 위 인라인 배너로만 알린다(마지막 정상 값 유지).
+  // 없으면(진짜 초기 로드 실패, 또는 원래도 빈 장부) 기존처럼 전면 카드가 맞다 — 잃을 '정상 값'이 없다.
+  const hasBoardData = !!session.openedAt || closed || buyins.length > 0 || players.length > 0;
 
   // 마감 후 다음 액션 바 — **이 게임**의 순위가 이미 입력됐는지(미입력이면 입력 유도 강조).
   // 날짜만 보면 같은 날 메인만 저장해도 사이드가 '입력됨 ✓' 로 뭉쳐 입력 버튼이 사라진다(F02).
@@ -740,7 +842,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       // PL3: 같은 순간의 클락 '설정'(블라인드·얼리·프라이즈)도 회차 스냅샷으로 동봉 — clock_states 는
       // 다음 게임이 덮으므로, 마감 시점이 '지난 게임 그대로 열기'가 복원할 수 있는 유일한 캡처 기회다.
       let snap: LedgerCloseSnapshot | null = null;
-      if (clock && clock.sessionDate === date) {
+      if (clockLinked && clock) {
         const derived = deriveClockCounts(buyins, { earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin, tournamentStart: session.tournamentStart, openedAt: session.openedAt });
         const ls = computeLiveStats(clock, derived, clock.config);
         snap = {
@@ -791,7 +893,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     setRoundPresetState('busy');
     try {
       const sched = venueSchedules.find((s) => s.id === session.scheduleId) ?? null;
-      const cfg = (clock && clock.sessionDate === date) ? clock.config : (session.clockSnapshot?.gameSnapshot?.clockConfig ?? null);
+      const cfg = (clockLinked && clock) ? clock.config : (session.clockSnapshot?.gameSnapshot?.clockConfig ?? null);
       await saveGamePreset(venueId, session.title?.trim() || `${date} 게임`, presetFromRound(session, cfg, sched));
       setRoundPresetState('done');
       toast.show('프리셋으로 저장했어요. 포스터·장부·클락 어디서든 한 번에 불러올 수 있어요', 'success');
@@ -991,7 +1093,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   );
 
   // 불러오기 실패 — 세팅 폼(=새 장부 시작)으로 절대 넘기지 않는다.
-  if (loadError) {
+  // C05 보완: hasBoardData 면 이미 정상 조회된 값이 있다는 뜻이라 전면 카드로 덮지 않는다 —
+  // 아래 보드 렌더로 흘려보내고, 보드 안의 인라인 배너(DateBar 바로 아래)가 실패를 알린다.
+  if (loadError && !hasBoardData) {
     return (
       <div className="space-y-3">
         <DateBar date={date} setDate={setDate} onBack={() => setMode('list')} />
@@ -1017,6 +1121,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
           <SessionForm
             base={{ ...session, ...(prefill ?? {}) }} mode="open" operatorName={operatorName}
             prefilled={!!prefill} schedules={venueSchedules} operatorOptions={operatorOptions}
+            operatorOptionsError={operatorOptionsError} onRetryOperatorOptions={reloadAccessIds} operatorOptionsPartial={!fullAccess}
             presets={presets} scheduledDealers={scheduledNames} copyMain={copyMain}
             lastRound={lastRound} autoApplyLast={autoApplyLast} onLastApplied={() => setAutoApplyLast(false)}
             onSubmit={handleOpen}
@@ -1030,6 +1135,15 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   return (
     <div className="space-y-3 pb-48 lg:pb-28">
       <DateBar date={date} setDate={setDate} onBack={() => setMode('list')} />
+      {/* C05 보완 — 재조회 실패(다른 접수대의 마감·단가·할인 변경을 못 받아옴)를 조용히 감추지 않는다.
+          hasBoardData 라 전면 카드로 안 덮었을 뿐, 지금 보이는 값이 낡았을 수 있다는 사실은 알려야 한다. */}
+      {!!loadError && hasBoardData && (
+        <div role="alert" className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2">
+          <p className="text-2xs font-semibold text-ink-secondary">방금 장부를 새로 불러오지 못했어요. 아래는 마지막으로 확인된 내용이라 단가·할인이 바뀌었을 수 있어요.</p>
+          <button type="button" onClick={() => { reloadSession(); reload(); }}
+            className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-1 text-2xs font-bold text-ink-primary">다시 시도</button>
+        </div>
+      )}
       {(games.length > 0 || gameSeq > MAIN_GAME_SEQ) && (
         <GameSwitcher games={games} gameSeq={gameSeq} onSelect={(g) => { setGameSeq(g); setSelected(null); }} onAddSide={addSide} canAdd={operatorOk} />
       )}
@@ -1620,7 +1734,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {/* 세션 정보 수정 */}
       {editOpen && (
         <Overlay onClose={() => setEditOpen(false)} title="세션 정보 수정">
-          <SessionForm base={session} mode="edit" operatorName={operatorName} schedules={venueSchedules} operatorOptions={operatorOptions} scheduledDealers={scheduledNames} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
+          <SessionForm base={session} mode="edit" operatorName={operatorName} schedules={venueSchedules} operatorOptions={operatorOptions} operatorOptionsError={operatorOptionsError} onRetryOperatorOptions={reloadAccessIds} operatorOptionsPartial={!fullAccess} scheduledDealers={scheduledNames} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
         </Overlay>
       )}
 
@@ -1747,8 +1861,10 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
   // ⚠ liveStats.earlies 는 이미 adjEarlies 를 더한 '최종값'이다(computeLiveStats).
   //   여기서 adjEarlies 를 또 더하면 보정이 두 번 반영돼, +1 을 누를 때마다 표시가 2씩 뛴다.
   //   '자동'은 최종값에서 보정을 되빼야 나온다. (얼리 단위 = 기준칩 배수 — §#21)
-  const earlyTotal = ls?.earlies ?? 0;
-  const earlyAuto = earlyTotal - (clock.adjEarlies ?? 0);
+  //   ⚠ 2026-09-13: 되빼기는 **클램프 전 값**으로 해야 한다 — `earlies` 는 max(0,…) 라
+  //     자동 3·보정 −5 에서 '자동 5' 가 나왔다. earlyAutoOf(clock.ts)가 earliesRaw 를 쓴다.
+  const earlyTotal = ls?.earlies ?? 0;            // 화면 합계는 클램프된 값이 맞다(음수 얼리는 없다)
+  const earlyAuto = earlyAutoOf(ls, clock.adjEarlies);
   const out = (d: number) => onPatch({ eliminations: Math.max(0, clock.eliminations + d) });
   const adjEarly = (d: number) => onPatch({ adjEarlies: Math.max(-9999, (clock.adjEarlies ?? 0) + d) });
   const stepBtn = 'h-10 w-10 shrink-0 rounded-input border border-border-default text-ink-secondary text-base font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-35';
@@ -1954,10 +2070,16 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
 }
 
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
-function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], presets = [], scheduledDealers = [], copyMain = null, lastRound = null, autoApplyLast, onLastApplied }: {
+function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], operatorOptionsError = null, onRetryOperatorOptions, operatorOptionsPartial = false, presets = [], scheduledDealers = [], copyMain = null, lastRound = null, autoApplyLast, onLastApplied }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
   onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
   schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[]; presets?: LedgerPreset[]; scheduledDealers?: string[]; copyMain?: LedgerSession | null;
+  /** P02: 권한 직원 조회가 실패했으면 그 오류 — 후보가 '나' 뿐인 것이 실제 0명인지 못 불러온 것인지 폼이 갈라 말한다 */
+  operatorOptionsError?: unknown; onRetryOperatorOptions?: () => void;
+  /** F4(2026-09-13): 후보 목록이 **완전하지 않을 수 있다** — ledger_access 직접 SELECT 는 RLS(la_select) 때문에 POS 권한 없는
+   *  장부직원에게 자기 행만 준다. 그걸 '전체' 로 읽어 본인만 자동 선택·저장하면 동료 장부직원 전원이 그 장부에서 잠긴다.
+   *  부분이면 자동 선택하지 않는다(담당 비움 = 장부 권한 직원 전원 열람). 근본 수정은 can_access_ledger 게이트 RPC(DB 변경). */
+  operatorOptionsPartial?: boolean;
   /** PL3: 마지막 마감 회차(세션+클락 설정) — '지난 게임 그대로 열기' 1탭 */
   lastRound?: LastClosedRound | null;
   /** 대시보드 인텐트로 진입 시 1회 자동 적용 */
@@ -1981,7 +2103,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [operIds, setOperIds] = useState<string[]>(
     base.operators && base.operators.length ? base.operators
     : base.openedBy ? [base.openedBy]
-    : operatorOptions[0] ? [operatorOptions[0].id] : [],
+    : (!operatorOptionsPartial && operatorOptions[0]) ? [operatorOptions[0].id] : [],
   );
   const toggleOper = (id: string) => setOperIds((arr) => arr.includes(id) ? arr.filter((x) => x !== id) : (arr.length >= 10 ? arr : [...arr, id]));
   const [discs, setDiscs]     = useState<DiscountPreset[]>(base.discounts ?? []);
@@ -2211,9 +2333,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         ...(inheritClockRef.current.patch ?? {}), // PL2c: 게임 프리셋의 클락 몫(부분 패치)
         earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack });
       earlyDMin = cfg.earlyDoubleMin; earlySMin = cfg.earlySingleMin;
+      // F2(2026-09-13): 새 클락은 단일 소스 emptyClockState 로 — 인라인 리터럴 `remainingMs: 0` 은 clockPhase 가
+      //   'paused' 로 읽어 시작도 안 한 대회가 TV 에 PAUSED 로 뜨고, '계속하기' 를 누르면 endsAt=now 로 1레벨이 통째로 건너뛰었다.
       const next: ClockState = clockState
         ? { ...clockState, config: cfg }
-        : { venueId: base.venueId, gameSeq: base.gameSeq, sessionDate: null, title: base.title ?? '', config: cfg, currentIndex: 0, running: false, endsAt: null, remainingMs: 0, adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0, eliminations: 0 };
+        : { ...emptyClockState(base.venueId, cfg, base.gameSeq), title: base.title ?? '' };
       saveClockState(next).catch(() => {});
     }
     onSubmit({
@@ -2350,6 +2474,23 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             })}
           </div>
           <p className="text-2xs text-ink-muted mt-1">담당 직원만 열람·운영 가능(업주·운영자는 전체 접근). 후보는 장부 권한 직원.</p>
+          {operatorOptionsPartial && (
+            <p role="status" className="mt-1.5 rounded-input border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-2xs text-ink-primary">
+              권한 직원 전체 목록은 업주·운영자 계정에서만 불러올 수 있어요 — 지금 보이는 후보는 전부가 아닐 수 있어요.
+              담당을 비워 두면 장부 권한 직원 모두가 이 장부를 열 수 있어요.
+            </p>
+          )}
+          {operatorOptionsError != null && (
+            <div role="alert" className="mt-1.5 flex flex-wrap items-center gap-2 rounded-input border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5">
+              <span className="flex-1 min-w-0 text-2xs text-ink-primary">권한 직원 목록을 불러오지 못했어요. 다시 시도해 주세요. (지금 보이는 후보는 전부가 아닐 수 있어요)</span>
+              {onRetryOperatorOptions && (
+                <button type="button" onClick={onRetryOperatorOptions}
+                  className="shrink-0 text-2xs font-bold px-2.5 py-1 rounded-badge border border-amber-500/40 text-amber-400 hover:bg-amber-500/15 transition-colors">
+                  다시 시도
+                </button>
+              )}
+            </div>
+          )}
         </Field>
       )}
 

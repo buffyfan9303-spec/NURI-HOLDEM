@@ -94,7 +94,10 @@ test.describe('관리자 → 노출 관리', () => {
     // 실패인데 '등록된 배너가 없습니다' 로 위장되면 안 된다 — 이게 오너가 본 그 화면이다
     await expect(page.getByText('등록된 배너가 없습니다'),
       '조회가 403 인데 "등록된 배너가 없습니다" 로 위장했다').toHaveCount(0);
-    await expect(page.getByText(/불러오지 못했|다시 시도|실패/).first(),
+    // ⚠ 범위를 관리자 본문으로 좁힌다(2026-09-12). 탭은 keep-alive 라 홈 pane 이 display:none 으로 살아 있고,
+    //   거기에도 '…불러오지 못했어요'(이벤트 진입 칸의 실패 문구)가 있다 — page 전체에서 .first() 를 잡으면
+    //   **숨은 홈의 문구**가 먼저 걸려 영원히 안 보인다. 단언 자체는 그대로 강하다.
+    await expect(adminPane(page).getByText(/불러오지 못했|다시 시도|실패/).first(),
       '조회 실패가 화면에 전혀 표시되지 않는다').toBeVisible({ timeout: 10_000 });
   });
 

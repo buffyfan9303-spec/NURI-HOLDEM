@@ -4,7 +4,9 @@ import { centerInRail } from '../../lib/railScroll';
 import { promptLogin } from '../../lib/requireLogin';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { getActivePromotedPosts, type PromotedPost } from '../../api/ads';
-import { getEquippedMarks, getNickColors, isBumped } from '../../api/community';
+import { getEquippedMarks, getNickColors, isBumped, searchPosts, type PostCursor } from '../../api/community';
+import { isStaleResponse } from '../../lib/staleResponse';
+import type { PostNavCtx } from '../../lib/postNav';
 import { getAppSetting, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../api/settings';
 import { hotFirst, pinnedFirst, usableAdCount } from '../../lib/pinnedFirst';
 import { PostRow, PostCard } from './community/PostRowCard';
@@ -15,6 +17,7 @@ import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, 
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import NoticeSection from './NoticeSection';
+import { readBoardView, writeBoardView } from '../../lib/boardView';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { useBackClose } from '../../lib/backstack';
@@ -35,6 +38,7 @@ import { useIsDesktop } from '../../lib/responsive';
 import { BOARD_FILTER_CATEGORIES } from '../../lib/postCategory';
 import { relativeTime } from '../../lib/relativeTime';
 import { markProgrammaticScroll } from '../../lib/useScrollY';
+import { restoreScrollTop } from '../../lib/headerShrink';
 
 interface CommunityTabProps {
   /** 장터 화면 임베드 슬롯 — 서브탭을 유지한 채 커뮤니티 안에서 장터를 보여준다 */
@@ -47,12 +51,15 @@ interface CommunityTabProps {
   onRetryPosts?: () => void;
   /** 운영자 공지 (전역 피드 최상단에 핀 고정) */
   notices?: MarketplaceNotice[];
+  /** N07: 공지 조회 실패 — '없음' 과 갈라 그린다(App 이 내려준다) */
+  noticesError?: unknown; onRetryNotices?: () => void;
   isAdmin?: boolean;
   onWriteNotice?: () => void;
   /** 공지 클릭 시 상세 모달 열기 */
   onSelectNotice?: (notice: MarketplaceNotice) => void;
   onSelectVenue: (venueId: string) => void;
-  onSelectPost: (post: CommunityPost) => void;
+  /** UI-04: 목록에서 열 때는 이전/다음 맥락(스냅샷)이 함께 온다 */
+  onSelectPost: (post: CommunityPost, nav?: PostNavCtx) => void;
   /** 글쓰기 버튼 → 글쓰기 모달 열기. category로 기본 카테고리 지정('홀덤 공부' 탭=study) */
   onOpenWrite: (category?: PostCategory) => void;
   onLikePost: (postId: string) => void;
@@ -99,7 +106,7 @@ const TierLeaderboardM     = memo(TierLeaderboard);
 const DealerCommunityM     = memo(DealerCommunity);
 
 function CommunityTab({
-  venues, comments, posts: rawPosts, postsErr = null, onRetryPosts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
+  venues, comments, posts: rawPosts, postsErr = null, onRetryPosts, notices = [], noticesError = null, onRetryNotices, isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
   active = true,
 }: CommunityTabProps) {
@@ -126,14 +133,22 @@ function CommunityTab({
   const [visitedSecs] = useState(() => new Set<Section>([section]));
   useEffect(() => { visitedSecs.add(section); }, [section, visitedSecs]);
   // 섹션별 스크롤 — 스크롤러가 window 하나라 섹션을 오가면 위치가 섞인다. 떠날 때 저장, 도착하면 페인트 전 복원.
-  const secScrollRef = useRef(new Map<Section, number>());
+  // 헤더 높이도 같이 저장한다: 인플로우 sticky 헤더가 축소/복원되면 그 차이만큼 스크롤 앵커링이 scrollY 를 되민다
+  // (lib/headerShrink 주석·실측). 복원 목표값은 restoreScrollTop 이 그 되밀림을 고려해 정한다.
+  const secScrollRef = useRef(new Map<Section, { y: number; headerH: number }>());
+  const headerH = () => (document.querySelector('[data-stack-header]') as HTMLElement | null)?.offsetHeight ?? 0;
   const activeSecRef = useRef<Section>(section);
   useEffect(() => { activeSecRef.current = section; }, [section]);
   // 마지막 서브탭 전환 시각 — 유휴 프리마운트가 전환(VT .26s) 한복판에 커밋을 얹지 않도록 양보 판정용
   const lastSwitchAtRef = useRef(0);
-  // 스크롤 복원이 실제로 필요한 전환인지 — setSection 이 판정한다. 초기값 false 라
+  // 전환 뒤 스크롤을 어떻게 할지 — setSection 이 판정한다. 초기값 null 이라
   // '마운트만 된' 경우(App 의 탭 프리마운트로 숨긴 채 마운트)엔 보이는 탭의 스크롤을 건드리지 않는다.
-  const needScrollRef = useRef(false);
+  //   restore: 재방문 — 떠날 때 저장한 위치로 돌아간다. null 이면 스크롤을 건드리지 않는다(첫 방문·같은 위치).
+  //   keep:    전환 직전 위치. 첫 방문은 이 위치를 그대로 둔다 — 예전엔 저장값이 없다고 0 을 강제해 게시판 80px 에서
+  //            랭킹을 누르면 문서가 위로 튀고 헤더 히스테리시스까지 풀렸다(UI-06, 2026-09-13 실측 +140ms 에 0).
+  //            새 섹션이 그만큼 길지 않으면 브라우저가 물리 클램프한다(§4.2-3 별도 케이스) — 그 점프가 손짓으로
+  //            읽히지 않게 알리는 데만 쓴다. 공백을 채워 숫자를 억지로 지키지 않는다.
+  const pendingScrollRef = useRef<{ restore: { y: number; headerH: number } | null; keep: number } | null>(null);
   // 메인 하단 탭 changeTab(App.tsx)과 동일 조리법 — 재방문(keep-alive)은 View Transition 스냅샷 뒤
   // flushSync 동기 커밋(방향성 푸시: 오른쪽 탭 = forward), 첫 방문(lazy·초기 fetch)은 startTransition 으로
   // 이전 화면 유지. 렌더 상태를 읽지 않아(모듈 변수·ref·안정 Set) 빈 deps 리스너의 stale closure 에도 안전.
@@ -142,10 +157,11 @@ function CommunityTab({
     lastSwitchAtRef.current = performance.now(); // 프리마운트에게 '지금은 비켜라' 신호
     // scrollY 는 여기서 딱 한 번 읽는다 — 레이아웃이 아직 깨끗한 시점이라 강제 리플로우가 없다.
     const curY = window.scrollY;
-    secScrollRef.current.set(activeSecRef.current, curY);
+    secScrollRef.current.set(activeSecRef.current, { y: curY, headerH: headerH() });
     // 복원할 위치가 지금과 같으면(둘 다 0인 흔한 경우) scrollTo 를 아예 부르지 않는다 —
     // VT 콜백(flushSync) 안의 scrollTo 는 강제 동기 레이아웃을 한 번 더 유발한다.
-    needScrollRef.current = (secScrollRef.current.get(s) ?? 0) !== curY;
+    const saved = secScrollRef.current.get(s);
+    pendingScrollRef.current = { restore: saved && saved.y !== curY ? saved : null, keep: curY };
     lastCommunitySection = s;
     if (visitedSecs.has(s) && s !== activeSecRef.current) {
       // 서브섹션 전환 동안만 서브탭 바를 root 스냅샷에서 제외(자기 이름의 스냅샷 — index.css 마커 참조).
@@ -179,11 +195,20 @@ function CommunityTab({
   // 복원은 layout 단계(페인트 전) — '맨 위가 번쩍했다가 내려가는' 깜빡임 방지. keep-alive 라 DOM 높이가 이미 있다.
   // flushSync 커밋 경로에선 스냅샷 뒤에서 실행돼 복원 비용까지 크로스페이드가 가린다.
   useLayoutEffect(() => {
-    if (!needScrollRef.current) return;
-    needScrollRef.current = false;
-    // 이 점프는 손짓이 아니다 — 알리지 않으면 하단 탭바 자동숨김이 '확 긁었다'로 읽어 깜빡인다.
-    markProgrammaticScroll();
-    window.scrollTo({ top: secScrollRef.current.get(section) ?? 0, behavior: 'instant' as ScrollBehavior });
+    const pending = pendingScrollRef.current;
+    if (!pending) return;
+    pendingScrollRef.current = null;
+    // 레이아웃 읽기 1회 — 새 섹션이 보이는 문서의 최대 스크롤. 브라우저의 클램프도 이 시점에 확정된다.
+    const doc = document.scrollingElement ?? document.documentElement;
+    const maxScroll = Math.max(0, doc.scrollHeight - doc.clientHeight);
+    if (pending.restore) {
+      // 이 점프는 손짓이 아니다 — 알리지 않으면 하단 탭바 자동숨김이 '확 긁었다'로 읽어 깜빡인다.
+      markProgrammaticScroll();
+      window.scrollTo({ top: restoreScrollTop(pending.restore, headerH(), maxScroll), behavior: 'instant' as ScrollBehavior });
+    } else if (pending.keep > maxScroll) {
+      // 첫 방문인데 새 섹션이 짧다 — 스크롤은 부르지 않는다. 브라우저가 maxScroll 로 클램프한 점프만 손짓이 아님을 알린다.
+      markProgrammaticScroll();
+    }
   }, [section]);
   // 이미 마운트된 상태(keep-alive)에서 외부가 섹션을 지정할 때 — 예: 대시보드 '내 장터 거래'
   useEffect(() => {
@@ -201,6 +226,9 @@ function CommunityTab({
   // 데스크탑 게시판 2-pane: 좌측 목록 + 우측 인라인 상세. 모바일은 기존 오버레이 모달(onSelectPost) 사용.
   const isDesktop = useIsDesktop();
   const [boardSelected, setBoardSelected] = useState<CommunityPost | null>(null);
+  // UI-04: 2-pane 에서도 같은 스냅샷으로 이전/다음(컨테이너는 그대로, 글만 바뀐다 — 예전과 같은 인스턴스)
+  const [boardNav, setBoardNav] = useState<PostNavCtx | null>(null);
+  const selectBoard = useCallback((p: CommunityPost, nav?: PostNavCtx) => { setBoardSelected(p); setBoardNav(nav ?? null); }, []);
   // 인라인 화살표면 FeedSectionM 의 memo 가 서브탭 전환마다 깨진다 — 참조 고정
   const openWriteFree = useCallback(() => onOpenWrite('free'), [onOpenWrite]);
 
@@ -367,10 +395,10 @@ function CommunityTab({
               1440px 에서 510px — 화면의 35% 만 쓰고, 바로 오른쪽 660px 는
               '게시글을 선택하면 여기에 상세가 표시됩니다' 빈 자리였다(오너: "공지 칸이 절반이야").
               2-pane **위로** 올려 전체 폭을 쓴다. lg 미만(모바일)은 원래 단일 컬럼이라 변화 없다. */}
-          {((notices && notices.length > 0) || isAdmin) && (
+          {((notices && notices.length > 0) || isAdmin || noticesError != null) && (
             <div className="mb-2">
               <NoticeSection notices={notices ?? []} onSelect={onSelectNotice}
-                canWrite={isAdmin} onWrite={onWriteNotice} />
+                canWrite={isAdmin} onWrite={onWriteNotice} error={noticesError} onRetry={onRetryNotices} />
             </div>
           )}
           <div className="lg:flex lg:items-start lg:gap-4">
@@ -384,7 +412,7 @@ function CommunityTab({
               onRetryPosts={onRetryPosts}
               onOpenWrite={openWriteFree}
               onLike={onLikePost}
-              onSelectPost={isDesktop ? setBoardSelected : onSelectPost}
+              onSelectPost={isDesktop ? selectBoard : onSelectPost}
               selectedId={isDesktop ? boardSelected?.id : undefined}
               placeholder="나누고 싶은 이야기를 적어보세요…"
               emptyText="첫 게시글을 남겨보세요"
@@ -397,6 +425,8 @@ function CommunityTab({
               <PostDetailModal
                 inline open
                 post={boardSelected}
+                nav={boardNav}
+                onNavigate={selectBoard}
                 onClose={() => setBoardSelected(null)}
                 onLike={onLikePost}
                 onDelete={onDeletePost ? (id) => { onDeletePost(id); setBoardSelected(null); } : undefined}
@@ -511,7 +541,8 @@ function FeedSection({
   onRetryPosts?: () => void;
   onOpenWrite: () => void;
   onLike: (id: string) => void;
-  onSelectPost: (p: CommunityPost) => void;
+  /** UI-04: 열 때의 목록 스냅샷(이전/다음 글 맥락)을 함께 넘긴다 */
+  onSelectPost: (p: CommunityPost, nav?: PostNavCtx) => void;
   /** 데스크탑 2-pane: 현재 열린 게시글 id(목록 하이라이트용) */
   selectedId?: string;
   placeholder?: string;
@@ -525,13 +556,34 @@ function FeedSection({
   // 정렬(Phase 14, pokergosu 추천/인기 축) — 별도 게시판 신설 대신 정렬 칩으로.
   const [order, setOrder] = useState<'new' | 'popular'>('new');
   const [visible, setVisible] = useState(15);
+  // ── N06(2026-09-12): posts prop 은 App 이 준 최신 50건(+고정·끌올 예외)뿐이라
+  //   검색·인기 정렬·무한스크롤이 전부 그 안에 갇혀 있었다(61번째로 오래된 글은 영원히 안 걸림).
+  //   화면은 여전히 posts(로컬)로 먼저 그리되(고정·광고·HOT·끌올 dedupe 는 그대로 유지),
+  //   그걸로 visible 을 못 채우면 서버 커서 계약(searchPosts)으로 "그 다음"을 이어 받는다.
+  //   커서는 서버가 준 마지막 행 그대로 전진하므로 로컬과의 dedupe 결과와 무관하게 항상 진행한다.
+  const [serverExtra, setServerExtra] = useState<CommunityPost[]>([]);
+  const [serverCursor, setServerCursor] = useState<PostCursor | null>(null);
+  const [serverDone, setServerDone] = useState(false);
+  const [serverLoading, setServerLoading] = useState(false);
+  const [serverErr, setServerErr] = useState<unknown>(null);
+  // 필터(검색어·카테고리·정렬)가 바뀌면 커서·누적분·이전 요청을 전부 버린다 — 늦게 온 옛 필터
+  // 응답이 새 필터 화면에 붙지 않게 seq+owner 로 판정한다(N01 계약 재사용, src/lib/staleResponse.ts).
+  const searchSeqRef = useRef(0);
+  const filterKeyRef = useRef('');
+  useEffect(() => {
+    searchSeqRef.current += 1;
+    filterKeyRef.current = `${q.trim().toLowerCase()}|${enableCategory ? cat : 'all'}|${order}`;
+    setServerExtra([]); setServerCursor(null); setServerDone(false); setServerErr(null);
+  }, [q, cat, order, enableCategory]);
   // 보기 모드: feed(카드 스택, **기본**) / compact(에펨코리아식 한 줄).
   // 오너 리포트(2026-08-28) "샘플까지 줬는데 적용이 안 됐다"의 원인이 정확히 이 한 줄이었다 —
-  // PostCard(샘플 카드)는 만들어져 있었지만 기본값이 'compact'(PostRow)라 아무도 카드를 못 봤다.
-  // 저장된 선택은 그대로 존중하되(기능 보존), 미선택(=키 없음)의 기본을 카드로 뒤집는다.
-  const [view, setView] = useState<'compact' | 'feed'>(() =>
-    (typeof localStorage !== 'undefined' && localStorage.getItem('nuri:board-view') === 'compact') ? 'compact' : 'feed');
-  const switchView = (v: 'compact' | 'feed') => { setView(v); try { localStorage.setItem('nuri:board-view', v); } catch { /* noop */ } };
+  // 보기 모드 이력: 2026-08 에는 PostCard 를 아무도 못 봐서 미선택 기본을 카드(feed)로 뒤집었다.
+  // N08(2026-09-13 최신 요구): 미선택·손상 값·저장소 접근 예외의 기본은 **모아보기(compact)** 다.
+  //   사용자가 명시적으로 저장한 feed 는 그대로 존중한다(기능 보존 — 선택을 지우는 것이 아니라 기본값만 바뀐다).
+  //   판정·저장은 lib/boardView 한 벌(사생활 모드에서 localStorage 접근 자체가 throw 하는 경우까지 거기서 막는다).
+  //   저장 경로는 switchView(사용자 버튼) 하나뿐 — 자동 저장 경로를 두지 않는다.
+  const [view, setView] = useState<'compact' | 'feed'>(readBoardView);
+  const switchView = (v: 'compact' | 'feed') => { setView(v); writeBoardView(v); };
   // 커뮤니티 광고 5칸 — 게시판(enableCategory)에서만, 글 N개마다 한 칸씩 삽입.
   // 2026-09-11: 광고 = **승격된 진짜 게시글**. 아래에서 PostRow/PostCard 를 그대로 쓴다.
   const [ads, setAds] = useState<PromotedPost[]>([]);
@@ -623,14 +675,76 @@ function FeedSection({
   //   **usableAds 기준**이어야 한다 — 그리지도 않을 광고를 빼면 위 주석의 소실이 난다.
   const adPostIds = useMemo(() => new Set(usableAds.map((a) => a.post.id)), [usableAds]);
 
-  const listSource = useMemo(
+  const listSourceLocal = useMemo(
     () => (adPostIds.size ? listSourceRaw.filter((p) => !adPostIds.has(p.id)) : listSourceRaw),
     [listSourceRaw, adPostIds],
   );
+
+  // 서버에서 이어받은 초과분 — 로컬 목록(고정→HOT→끌올→최신) **뒤**에 이어 붙인다.
+  // id 중복은 로컬(고정·광고 포함)과 겹치지 않게 걸러낸다 — 같은 글이 두 번 보이면 안 된다.
+  const listSource = useMemo(() => {
+    if (serverExtra.length === 0) return listSourceLocal;
+    const seen = new Set(listSourceLocal.map((p) => p.id));
+    const extra = serverExtra.filter((p) => !seen.has(p.id) && !adPostIds.has(p.id));
+    return extra.length ? [...listSourceLocal, ...extra] : listSourceLocal;
+  }, [listSourceLocal, serverExtra, adPostIds]);
   const shown = listSource.slice(0, visible);
+  // UI-04: 글을 열 때 **이 화면의 실제 순서**(고정→HOT→끌올→최신 / 인기, 광고 제외·중복 제거·서버 이어받기 포함)를 스냅샷으로 넘긴다.
+  //   광고로 승격된 글은 listSource 에 없어 이웃 없음(no-context)으로 정직하게 떨어진다. 커서·done 은 상세가 '다음 글' 을 이어받는 데 쓴다.
+  const openWithNav = (p: CommunityPost) => onSelectPost(p, {
+    key: filterKeyRef.current, q: q.trim(), category: enableCategory ? cat : 'all', order,
+    items: listSource, cursor: serverCursor, done: serverDone,
+  });
+
+  // 서버 커서 이어받기 — cursor 는 항상 서버가 돌려준 마지막 원본 행 기준으로 전진한다
+  // (로컬과 겹쳐 dedupe 로 0건이 merge돼도 다음 페이지로 계속 나아간다 — 61번째 글도 결국 걸린다).
+  const fetchMore = useCallback(() => {
+    if (serverLoading || serverDone) return;
+    const stamp = { seq: searchSeqRef.current, owner: filterKeyRef.current };
+    setServerLoading(true);
+    searchPosts({
+      q: q.trim() || undefined,
+      category: enableCategory ? cat : 'all',
+      order,
+      cursor: serverCursor,
+    }).then((r) => {
+      // 그 사이 검색어·카테고리·정렬이 바뀌었으면 늦게 온 응답은 새 필터 화면에 붙이지 않는다
+      if (isStaleResponse(stamp, { seq: searchSeqRef.current, owner: filterKeyRef.current })) return;
+      setServerExtra((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        const merged = [...prev];
+        for (const p of r.posts) if (!seen.has(p.id)) { seen.add(p.id); merged.push(p); }
+        return merged;
+      });
+      setServerCursor(r.nextCursor);
+      if (!r.nextCursor) setServerDone(true);
+      setServerErr(null);
+    }).catch((e) => {
+      if (!isStaleResponse(stamp, { seq: searchSeqRef.current, owner: filterKeyRef.current })) setServerErr(e);
+    }).finally(() => {
+      if (!isStaleResponse(stamp, { seq: searchSeqRef.current, owner: filterKeyRef.current })) setServerLoading(false);
+    });
+  }, [q, cat, order, enableCategory, serverCursor, serverLoading, serverDone]);
+
+  // 로컬 목록이 지금 필요한 만큼(visible) 못 채우면 자동으로 서버에서 더 받아온다 —
+  // 검색어에 로컬 매치가 0건이어도(=61번째 글이 로컬 50건 밖) 스크롤을 기다리지 않고 바로 조회한다.
+  useEffect(() => {
+    if (serverDone || serverLoading || serverErr != null) return;
+    if (listSource.length < visible + 1) fetchMore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listSource.length, visible, serverDone, serverLoading, serverErr]);
+
+  // 더보기 — visible 을 늘리고, 직전 서버 조회가 실패해 있었으면(serverErr) 다시 시도한다.
+  const loadMore = useCallback(() => {
+    setVisible((v) => v + 15);
+    setServerErr(null);
+  }, []);
 
   return (
-    <div className="space-y-2">
+    // data-board-loaded: 서버 첫 페이지의 3상태(idle=아직 안 시작 · loading=진행 중 · done=커서 끝) — 화면은 그대로, e2e 계약용.
+    //   post-nav ③(2026-09-13): 네트워크 응답을 봐도 serverDone 커밋 전에 글을 열면 스냅샷 done=false 라 마지막 글이 '더 불러오기'(정직)로 뜬다.
+    //   테스트가 기다릴 DOM 신호가 없어서(:894 갈래는 목록이 비었을 때만 렌더) 상태를 속성으로 노출한다.
+    <div className="space-y-2" data-board-loaded={serverDone ? 'done' : serverLoading ? 'loading' : 'idle'}>
       {/* 글쓰기 — '글쓰기' 버튼 → 글쓰기 모달(카테고리·제목·내용·이미지) (Stage 2) */}
       {user ? (
         <button
@@ -696,8 +810,8 @@ function FeedSection({
               // 균일 높이·보더 없는 면 기반(활성만 인디고), browse 필터 레일과 같은 문법.
               // 44px 탭 타깃(오너 승인 2026-09-03): overflow-x-auto 레일 안에서는 .tap-y-44 의 ::before(-6px) 가
               // 세로 스크롤 오버플로를 만들므로, 버튼을 h-11 투명 컨테이너로 두고 안의 span 이 32px 시각 칩을 그린다.
-              // 레일은 -my-1.5 로 행 높이 32 유지(레이아웃 변화 0).
-              <div className="-my-1.5 flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-none">
+              // UI-05 로 보기 토글이 h-11(46.75px) 트랙이 되면서 행 높이도 46.75 — 레일의 -my-1.5(행 32 유지) 는 뺀다.
+              <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-none">
                 {BOARD_CATEGORIES.map((c) => (
                   <button
                     key={c.id}
@@ -720,22 +834,33 @@ function FeedSection({
             ) : (
               <div className="min-w-0 flex-1" />
             )}
-            {/* 보기 모드 토글 — 카드 스택(기본) / 한 줄 목록. 두 보기 모두 유지(기능 보존) */}
-            <div className="flex h-8 shrink-0 items-center rounded-input border border-border-default bg-surface-high p-0.5">
-              <button type="button" aria-label="카드 보기" title="카드 보기"
-                onClick={() => switchView('feed')}
-                className={['flex h-7 w-7 items-center justify-center rounded-[6px] transition-colors', view === 'feed' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                  <rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" />
-                </svg>
-              </button>
-              <button type="button" aria-label="한 줄 목록" title="한 줄 목록"
-                onClick={() => switchView('compact')}
-                className={['flex h-7 w-7 items-center justify-center rounded-[6px] transition-colors', view === 'compact' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
-                  <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
-                </svg>
-              </button>
+            {/* 보기 모드 토글 — 카드 스택 / 한 줄 목록(기본, N08). 두 보기 모두 유지(기능 보존).
+                UI-05(2026-09-13): 예전 트랙 h-8+p-0.5 안의 h-7 w-7 버튼은 클릭 영역 28×28 · 아이콘 15px 였고
+                트랙 안쪽(27.75px)보다 자식(29.75px)이 커 위아래가 어긋났다. 이제 **동일한 두 슬롯 h-11 w-11**(46.75px ≥ 44)이
+                버튼 자체이고, 선택 배경은 슬롯 안 inset 3px 의 별도 면(span)이라 빈틈이 없다. 아이콘 18px 중앙.
+                SlidingPill 을 쓰지 않는다(이 버튼은 그 소비처가 아니다 — 공유 pill 을 건드리면 13곳 회귀).
+                전역 프레스(button:active scale .97)는 버튼(=아이콘+선택면이 같이)에만 걸리고 트랙(div)은 움직이지 않는다 —
+                e2e/board-view-toggle.spec.ts 가 눌림 120ms·놓은 뒤 60/150/300/600ms·정지의 inset 을 잰다. */}
+            <div data-board-view-toggle role="group" aria-label="보기 방식"
+              className="flex h-11 shrink-0 items-center rounded-input border border-border-default bg-surface-high">
+              {([
+                { v: 'feed' as const, label: '카드 보기', icon: (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" />
+                  </svg>) },
+                { v: 'compact' as const, label: '한 줄 목록', icon: (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+                    <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
+                  </svg>) },
+              ]).map(({ v, label, icon }) => (
+                <button key={v} type="button" aria-label={label} title={label} aria-pressed={view === v}
+                  onClick={() => switchView(v)}
+                  className={['relative flex h-11 w-11 items-center justify-center rounded-input transition-colors',
+                    view === v ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                  <span aria-hidden className={['absolute inset-[3px] rounded-[6px]', view === v ? 'bg-surface-float' : ''].join(' ')} />
+                  <span className="relative">{icon}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -760,13 +885,19 @@ function FeedSection({
             <ul className="rounded-aura border card-aura overflow-hidden">
               <PostRow post={usableAds[0].post} promoted adSlot={usableAds[0].slot} mark={authorMarks[usableAds[0].post.userId] ?? ''}
                 titlePts={titleOf(usableAds[0].post.userId)} selected={usableAds[0].post.id === selectedId}
-                onClick={() => onSelectPost(usableAds[0].post)} />
+                onClick={() => openWithNav(usableAds[0].post)} />
             </ul>
           )}
-          {/* 조회 실패 / 아직 글 없음 / 검색 결과 없음 — 셋은 서로 다른 상태다. 실패를 '글 없음'으로 적으면
-              손님은 게시판이 비었다고 믿고 떠난다(문서 §5 '빈 결과·조회 실패를 구분'). */}
+          {/* 조회 실패 / 아직 글 없음 / 검색 결과 없음 / 아직 조회 중 — 넷은 서로 다른 상태다. 실패를 '글 없음'으로,
+              부분 조회 중을 '결과 없음'으로 적으면 손님은 게시판이 비었다고 믿고 떠난다(문서 §5).
+              N06(2026-09-12): 로컬 50건엔 없어도 서버가 그 다음(61번째 이후)을 아직 찾는 중일 수 있다 —
+              serverLoading 동안은 '결과 없음' 대신 조회 중임을 알린다. */}
           {postsErr != null && posts.length === 0 ? (
             <LoadErrorCard error={postsErr} what="게시글" onRetry={onRetryPosts} />
+          ) : serverLoading && !serverDone ? (
+            <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title="찾는 중…" /></div>
+          ) : serverErr != null ? (
+            <LoadErrorCard error={serverErr} what="검색 결과" onRetry={loadMore} />
           ) : (
             <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title={posts.length === 0 ? emptyText : '검색 결과가 없습니다'} /></div>
           )}
@@ -781,18 +912,18 @@ function FeedSection({
               {usableAds[0] && (
                 <PostRow post={usableAds[0].post} promoted adSlot={usableAds[0].slot} mark={authorMarks[usableAds[0].post.userId] ?? ''}
                   titlePts={titleOf(usableAds[0].post.userId)} selected={usableAds[0].post.id === selectedId}
-                  onClick={() => onSelectPost(usableAds[0].post)} />
+                  onClick={() => openWithNav(usableAds[0].post)} />
               )}
               {shown.map((p, i) => {
                 const ad = usableAds[Math.floor(i / adsEvery) + 1];
                 const showAd = i % adsEvery === adsEvery - 1 && !!ad; // 글 N개마다 다음 광고 한 칸(관리자 설정)
                 return (
                   <Fragment key={p.id}>
-                    <PostRow post={p} hot={pinHot && hotIds.has(p.id)} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
+                    <PostRow post={p} hot={pinHot && hotIds.has(p.id)} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onClick={() => openWithNav(p)} />
                     {showAd && (
                       <PostRow post={ad.post} promoted adSlot={ad.slot} mark={authorMarks[ad.post.userId] ?? ''}
                         titlePts={titleOf(ad.post.userId)} selected={ad.post.id === selectedId}
-                        onClick={() => onSelectPost(ad.post)} />
+                        onClick={() => openWithNav(ad.post)} />
                     )}
                   </Fragment>
                 );
@@ -800,7 +931,7 @@ function FeedSection({
             </ul>
           </div>
           {listSource.length > visible && (
-            <InfiniteSentinel onMore={() => setVisible((v) => v + 15)} remain={listSource.length - visible} />
+            <InfiniteSentinel onMore={loadMore} remain={listSource.length - visible} />
           )}
         </>
       ) : (
@@ -812,26 +943,26 @@ function FeedSection({
               <PostCard post={usableAds[0].post} promoted adSlot={usableAds[0].slot} mark={authorMarks[usableAds[0].post.userId] ?? ''}
                 nickToken={authorColors[usableAds[0].post.userId]} titlePts={titleOf(usableAds[0].post.userId)}
                 selected={usableAds[0].post.id === selectedId}
-                onLike={() => onLike(usableAds[0].post.id)} onClick={() => onSelectPost(usableAds[0].post)} />
+                onLike={() => onLike(usableAds[0].post.id)} onClick={() => openWithNav(usableAds[0].post)} />
             )}
             {shown.map((p, i) => {
               const ad = usableAds[Math.floor(i / adsEvery) + 1];
               const showAd = i % adsEvery === adsEvery - 1 && !!ad;
               return (
                 <Fragment key={p.id}>
-                  <PostCard post={p} hot={pinHot && hotIds.has(p.id)} mark={authorMarks[p.userId] ?? ''} nickToken={authorColors[p.userId]} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
+                  <PostCard post={p} hot={pinHot && hotIds.has(p.id)} mark={authorMarks[p.userId] ?? ''} nickToken={authorColors[p.userId]} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => openWithNav(p)} />
                   {showAd && (
                     <PostCard post={ad.post} promoted adSlot={ad.slot} mark={authorMarks[ad.post.userId] ?? ''}
                       nickToken={authorColors[ad.post.userId]} titlePts={titleOf(ad.post.userId)}
                       selected={ad.post.id === selectedId}
-                      onLike={() => onLike(ad.post.id)} onClick={() => onSelectPost(ad.post)} />
+                      onLike={() => onLike(ad.post.id)} onClick={() => openWithNav(ad.post)} />
                   )}
                 </Fragment>
               );
             })}
           </ul>
           {listSource.length > visible && (
-            <InfiniteSentinel onMore={() => setVisible((v) => v + 15)} remain={listSource.length - visible} />
+            <InfiniteSentinel onMore={loadMore} remain={listSource.length - visible} />
           )}
         </>
       )}
@@ -1066,7 +1197,9 @@ function VenuesSection({
             <span>정렬:</span>
             <span className="text-accent-300 font-semibold">인증</span>
             <span className="text-border-strong">→</span>
-            <span className="text-accent-300 font-semibold">유료광고</span>
+            {/* accent-300 은 다크 지면(surface-base)에서 3.6:1 로 AA(4.5) 미달이다 — accent-200 은 6.94:1.
+                대비는 순백이 아니라 **실제 지면**으로 잰다(.cursor/rules/30-traps.mdc). */}
+            <span className="text-accent-200 font-semibold">유료광고</span>
             <span className="text-border-strong">→</span>
             <span className="text-ink-secondary">팔로워순</span>
           </span>

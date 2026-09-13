@@ -21,11 +21,12 @@ import { gotoBoard } from '../../../lib/spotNav';
 import HandBoardPicker from './HandBoardPicker';
 import { useHandBoard } from './useHandBoard';
 import { equityAsync } from './equityClient';
+import { planEquity, canApplyEquity, equityCardsKey } from './equityRequest';
 import { cardId } from './useDeepGto';
 import type { Card } from './gto.types';
 import {
   emptySpot, validateSpot, hasBlocker, positionsFor, streetLabel, actionLabel,
-  potBb, canonicalSpotKey, BOARD_LEN, ACTION_TYPES,
+  potBb, BOARD_LEN, ACTION_TYPES,
   type SpotReview, type SpotAction, type SpotActionType, type SpotPosition, type Street,
 } from '../../../lib/spot';
 import { evaluateSpot, type SpotEvaluation } from '../../../lib/spotEvaluate';
@@ -98,23 +99,29 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
   const [equity, setEquity] = useState<number | null>(null);
   const [calculating, setCalculating] = useState(false);
   const reqId = useRef(0);
-  const key = canonicalSpotKey(spot);
+  // ⚠ 재계산 키는 **카드로** 잡는다. canonicalSpotKey 는 빌런 카드를 의도적으로 빼기 때문에
+  //   그 키를 쓰면 ① 히어로→빌런 순서 입력에서 마지막 변화가 키를 안 건드려 아예 계산되지 않고
+  //   ② 빌런만 바꾸면 이전 빌런 핸드의 승률이 그대로 남아 저장·공유된다(F11).
+  const cardsKey = equityCardsKey(hb.ids.hero, hb.ids.villain, hb.ids.board);
   useEffect(() => {
     const canCalc = hb.heroCards.length === 2 && hb.villainCards.length === 2 && !blocked;
-    if (!canCalc) { setEquity(null); setCalculating(false); return; }
-    const my = ++reqId.current;
+    // ⚠ 세대는 **조기 반환보다 먼저** 올린다 — 무효 전환도 진행 중인 요청을 끊어야 한다.
+    const plan = planEquity(reqId.current, canCalc);
+    reqId.current = plan.gen;
+    if (plan.kind === 'clear') { setEquity(null); setCalculating(false); return; }
+    const my = plan.gen;
     setCalculating(true);
     const h = hb.heroCards as [Card, Card];
     const v = hb.villainCards as [Card, Card];
     equityAsync(h, v, hb.boardCards, 2500).then((r) => {
-      if (my !== reqId.current) return;      // 오래된 응답 — 버린다
+      if (!canApplyEquity(my, reqId.current)) return;  // 오래된 응답 — 버린다
       setEquity(r.hero);
       setCalculating(false);
-    }).catch(() => { if (my === reqId.current) setCalculating(false); });
-    return () => { /* 취소는 reqId 비교로 처리 — 워커는 계속 돌게 둔다(중단 API 없음) */ };
-    // key 는 '의미가 바뀌었을 때만' 다시 계산하기 위한 안정 키다
+    }).catch(() => { if (canApplyEquity(my, reqId.current)) setCalculating(false); });
+    return () => { /* 취소는 세대 비교로 처리 — 워커는 계속 돌게 둔다(중단 API 없음) */ };
+    // cardsKey 는 '에퀴티 입력이 바뀌었을 때만' 다시 계산하기 위한 안정 키다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, blocked]);
+  }, [cardsKey, blocked]);
 
   const evaluation = useMemo<SpotEvaluation>(
     () => evaluateSpot(spot, { heroEquity: equity }),
@@ -133,7 +140,16 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
         />
       )}
       {tab === 'mine' && (
-        <MySpotList onOpen={(s) => { setSpot(s); setTab('analyze'); }} />
+        <MySpotList onOpen={(s) => {
+          // ⚠ 카드 그리드(hb)와 리포트(spot)를 **같은 커밋에서** 함께 갈아끼운다(F10).
+          //   hb 를 두고 setSpot 만 하면 그리드는 이전 스팟에 남고, 그 상태로 저장·공유하면
+          //   이전 스팟의 에퀴티가 영구 스냅샷에 박힌다. 그 뒤 카드를 하나만 건드리면
+          //   아래 동기화 이펙트가 돌아 **연 스팟의 카드가 이전 스팟으로 덮인다.**
+          //   교체 직후 동기화 이펙트는 문자열 비교가 같아 early-return 하므로 s.street 는 보존된다.
+          setSpot(s);
+          hb.setAll({ hero: s.hero, villain: s.villain, board: s.board });
+          setTab('analyze');
+        }} />
       )}
     </div>
   );
@@ -448,12 +464,15 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
           <Pick value={type} options={ACTION_TYPES} onChange={setType} fmt={actionLabel} />
         </Row>
         {sized && (
-          <Row label="얼마나">
+          // '총액으로 레이즈'가 아니라 **이번에 추가로 넣는 돈**이다. 둘을 섞으면 팟과 콜 금액이
+          // 통째로 어긋난다 — 저장된 스팟도 같은 규칙으로 적혀 있다.
+          <Row label="이번에 추가">
             <Pick value={size} options={presets} onChange={setSize} fmt={(v) => `${v}`} />
             <input
               type="number" inputMode="decimal" min={0} step={0.5} value={size}
               onChange={(e) => setSize(Number(e.target.value))}
-              className="input min-h-[36px] w-16 text-right" aria-label="액션 크기 BB 직접 입력"
+              className="input min-h-[36px] w-16 text-right"
+              aria-label="이번에 추가로 넣는 BB 직접 입력 (총액이 아니라 추가액)"
             />
             <span className="text-2xs text-ink-muted">BB</span>
           </Row>
@@ -475,11 +494,13 @@ function ChoiceStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<Spot
           onChange={(v) => patch({ heroAction: v })} fmt={actionLabel} />
       </Row>
       {sized && (
-        <Row label="얼마나">
+        // 액션 원장과 같은 규칙 — 총액이 아니라 **이번에 추가로 넣은 돈**이다.
+        <Row label="이번에 추가">
           <input
             type="number" inputMode="decimal" min={0} step={0.5} value={spot.heroActionSizeBb ?? 0}
             onChange={(e) => patch({ heroActionSizeBb: Number(e.target.value) })}
-            className="input min-h-[44px] w-24 text-right" aria-label="내 액션 크기 BB"
+            className="input min-h-[44px] w-24 text-right"
+            aria-label="내가 이번에 추가로 넣은 BB (총액이 아니라 추가액)"
           />
           <span className="text-2xs text-ink-muted">BB</span>
         </Row>

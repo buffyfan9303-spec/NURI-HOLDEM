@@ -60,7 +60,10 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
     return () => { window.clearInterval(t); un(); };
   }, [venueId, active, load]);
 
-  const now = Date.now();
+  // ⚠ 매 렌더 새 Date.now() 를 deps 에 넣으면 useMemo 가 절대 히트하지 않는다(항상 "다른 값"이라 매번 재계산).
+  //   만료 판정은 밀리초 정밀도가 필요 없다 — 마지막으로 데이터를 받아온 시각(at, 30초 폴링/실시간 갱신마다 갱신)을
+  //   기준으로 삼으면 데이터가 실제로 바뀔 때만 재계산되고, q 입력·busy 토글 같은 무관한 리렌더에서는 재사용된다.
+  const now = at ?? Date.now();
   const rows = useMemo(() => (vs ? toFeedRows(vs, now) : []), [vs, now]);
   const query = q.trim().toLowerCase();
   const shown = useMemo(

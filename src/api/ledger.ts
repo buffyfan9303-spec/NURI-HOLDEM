@@ -3,6 +3,7 @@ import { supabase, IS_MOCK } from '../lib/supabase';
 import { TICKET_WON } from '../lib/units';
 import { hasRankingForGame, rankingEventOf } from '../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
 import { currentUser } from './_session';
+import { mustAffect } from './_mustAffect';
 import type { ClockConfig as ClockConfigT } from './clock'; // 타입 전용 — 런타임 순환 없음
 
 export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card' | 'support';
@@ -908,10 +909,14 @@ export async function openLedgerSession(s: LedgerSession, operatorId?: string | 
 /** 레지(레지스트리) 마감 — 신규 등록/엔트리 중단(정산 마감과 별개) */
 export async function setRegistrationClosed(venueId: string, date: string, closed: boolean, gameSeq = MAIN_GAME_SEQ): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('ledger_sessions')
-    .update({ reg_closed: closed, reg_closed_at: closed ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
-    .eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq);
-  if (error) throw error;
+  // ⚠ getLedgerSession 은 행이 없으면 emptySession 을 합성한다 — 아직 '입장'하지 않은 장부에 이 UPDATE 를 보내면
+  //   0행이고, 종전엔 '레지 마감했습니다' 토스트만 남았다(RLS 거부도 같은 모양). 둘 다 성공이 아니다.
+  await mustAffect(
+    supabase.from('ledger_sessions')
+      .update({ reg_closed: closed, reg_closed_at: closed ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+      .eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq),
+    '저장된 장부를 찾지 못했습니다. 장부를 먼저 열었는지, 권한이 있는지 확인해 주세요',
+  );
 }
 
 /** 장부 정산 마감 — 읽기전용 스냅샷 + 마감 메모. PL3: 스냅샷에 gameSnapshot(클락 설정) 동봉 가능. */
@@ -926,10 +931,13 @@ export async function closeLedgerSession(venueId: string, date: string, memo: st
   //   ① 클락을 먼저 종료하고 정산 마감하면 ② 마감 해제 후 재마감하면, 회차 스냅샷이 통째로 사라졌다.
   //   그 스냅샷은 '지난 게임 그대로 열기'(PL3)가 블라인드·얼리·프라이즈를 복원하는 유일한 캡처다.
   if (clockSnapshot) patch.clock_snapshot = clockSnapshot;
-  const { error } = await supabase.from('ledger_sessions')
-    .update(patch)
-    .eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq);
-  if (error) throw error;
+  // 0행(입장 전 장부·RLS 거부)을 성공으로 넘기면 '마감 완료. 매출 …만' 토스트가 뜨고 장부는 열린 채 남는다.
+  await mustAffect(
+    supabase.from('ledger_sessions')
+      .update(patch)
+      .eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq),
+    '마감할 장부를 찾지 못했습니다. 장부를 먼저 열었는지, 권한이 있는지 확인해 주세요',
+  );
 }
 
 /** 마감 해제(업주 전용 — 서버 RPC가 can_manage_pos 로 강제, UI 게이트와 이중) */
@@ -983,8 +991,7 @@ export async function updateLedgerPlayer(id: string, patch: {
   if (patch.note !== undefined) p.note = patch.note;
   if (patch.sortOrder !== undefined) p.sort_order = patch.sortOrder;
   if (patch.name !== undefined) p.name = patch.name;
-  const { error } = await supabase.from('ledger_players').update(p).eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('ledger_players').update(p).eq('id', id));
 }
 
 /** 플레이어 이름 변경 — 로스터와 해당 세션 바인 기록(player_name 키)을 함께 갱신(오기 수정용) */
@@ -1009,8 +1016,7 @@ export async function deleteLedgerPlayerAtomic(id: string, password?: string): P
 
 export async function removeLedgerPlayer(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('ledger_players').delete().eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('ledger_players').delete().eq('id', id));
 }
 
 /** 미마감 지난 장부 — 대시보드 넛지용.
@@ -1122,8 +1128,8 @@ export async function upsertBuyin(input: {
     early_override: input.earlyOverride ?? null,
   };
   if (input.existingId) {
-    const { error } = await supabase.from('ledger_buyins').update(fields).eq('id', input.existingId);
-    if (error) throw error;
+    // 수정은 id 기반 UPDATE — 0행(RLS·다른 기기가 방금 취소)을 성공으로 돌려주면 모달이 닫히고 옛 값이 남는다(현금 기록).
+    await mustAffect(supabase.from('ledger_buyins').update(fields).eq('id', input.existingId));
     return input.existingId;
   }
   const { data, error } = await supabase.from('ledger_buyins').insert({
@@ -1139,8 +1145,7 @@ export async function upsertBuyin(input: {
 /** 기존 바인의 얼리 유형만 수기 변경(자동=null) */
 export async function setBuyinEarly(buyinId: string, override: EarlyType | null): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('ledger_buyins').update({ early_override: override }).eq('id', buyinId);
-  if (error) throw error;
+  await mustAffect(supabase.from('ledger_buyins').update({ early_override: override }).eq('id', buyinId));
 }
 
 /** 분납/할인 상세 입력 — 현금/카드/이체 금액 + 미수금액 + 티켓장수 + 레벨할인 */
@@ -1171,8 +1176,7 @@ export async function upsertBuyinSplit(input: {
     ...(input.earlyOverride !== undefined ? { early_override: input.earlyOverride } : {}),
   };
   if (input.existingId) {
-    const { error } = await supabase.from('ledger_buyins').update(fields).eq('id', input.existingId);
-    if (error) throw error;
+    await mustAffect(supabase.from('ledger_buyins').update(fields).eq('id', input.existingId));
     return input.existingId;
   }
   const { data, error } = await supabase.from('ledger_buyins').insert({
@@ -1355,10 +1359,13 @@ export async function setPosCancelPassword(venueId: string, password: string): P
 }
 
 // ── 직원 장부 권한 ────────────────────────────────────────────────────────────
+// ⚠ 조회 실패를 [] 로 뭉개지 않는다(P02, 2026-09-13). 예전엔 `if (error) return [];` 라 RLS 거부·네트워크 순단이
+//    곧 '모든 직원 권한 없음' 화면이 됐고, 업주가 이미 있는 권한을 다시 켜려 grant 를 쏘게 만들었다.
+//    위 canAccessLedger 와 같은 규약 — 실패는 실패로 올리고 호출부(StaffManager·NuriPosLedger)가 갈라 그린다.
 export async function getLedgerAccessUserIds(venueId: string): Promise<string[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('ledger_access').select('user_id').eq('venue_id', venueId);
-  if (error) return [];
+  if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => r.user_id);
 }

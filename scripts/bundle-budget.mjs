@@ -68,6 +68,23 @@ const html = readFileSync(join(DIST, 'index.html'), 'utf8');
 const localRefs = [...html.matchAll(/(?:src|href)="\/assets\/([^"]+)"/g)].map((m) => m[1]);
 const entryGz = files.filter((x) => localRefs.includes(x.f)).reduce((a, b) => a + b.gz, 0);
 
+// ── ①-b 임계 경로 누수 파수꾼 ────────────────────────────────────────────────
+// 2026-09-13 실측: App.tsx 가 lib/postNav 의 5줄짜리 dropFromCtx 하나를 정적으로 물자 neighborsOf·appendPage(gz 2.1KB)까지
+//   첫 화면으로 딸려 와 예산이 257.1/256 으로 넘쳤다(같은 함정: api/events → TIER_META·oddsRows, App.tsx:5-6 주석).
+//   크기 합계만 보면 "무엇이 샜는지" 를 모른다 — 지연 청크에만 있어야 하는 모듈의 **문자열 리터럴**을 파수꾼으로 둔다
+//   (미니파이가 함수명은 지우지만 리터럴은 남긴다). 걸리면 예산을 올릴 게 아니라 import 경로를 고친다.
+//   ⚠ 따옴표까지 맞추지 않는다 — 미니파이어는 리터럴을 백틱(`loaded-end`)으로도 낸다(2026-09-13 실측: "…"/'…' 만 보던
+//     첫 판은 합쳐 놓은 회귀 빌드(261KB)에서도 침묵했다). 리터럴 본문만 찾고, 다른 곳에 있을 법한 짧은 단어는 쓰지 않는다.
+const LEAK_SENTINELS = [
+  { lit: 'loaded-end', from: 'src/lib/postNav.ts', fix: 'App.tsx 는 lib/postNavCtx 만 물어야 한다(dropFromCtx·PostNavCtx)' },
+];
+const entryJs = files.filter((x) => localRefs.includes(x.f) && x.ext === '.js').map((x) => readFileSync(join(ASSETS, x.f), 'utf8')).join('\n');
+for (const s of LEAK_SENTINELS) {
+  if (entryJs.includes(s.lit)) {
+    fail.push(`임계 경로 누수: ${s.from} 가 첫 화면 청크에 들어왔다(리터럴 ${s.lit} 발견) — ${s.fix}`);
+  }
+}
+
 // 외부 스타일시트 = 렌더 블로킹. preconnect/dns-prefetch 는 블로킹이 아니라 제외한다.
 const extStyles = [...html.matchAll(/<link\b[^>]*>/g)]
   .map((m) => m[0])

@@ -1,6 +1,6 @@
 ﻿// src/api/auth.ts
 import { supabase, IS_MOCK, setKeepSignedIn, clearAuthStorage } from '../lib/supabase';
-import { currentUser } from './_session';
+import { currentUser, currentUserStrict } from './_session';
 import { dedupe } from '../lib/inflight';
 import { LEGAL_VERSION } from '../lib/legalVersion';
 import { isValidDisplayName } from '../lib/displayName';
@@ -343,7 +343,11 @@ export async function signOut(): Promise<void> {
 // ── 현재 세션에서 프로필 조회 ─────────────────────────────────────────────────
 export async function getMyProfile(): Promise<User | null> {
   if (IS_MOCK) return null;
-  const user = await currentUser();
+  // ⚠ A01: 세션을 **못 읽은 것**과 **로그인 안 한 것**을 구분한다.
+  //   `currentUser()` 는 둘 다 null 이라, 일시 오류가 '비로그인' 으로 둔갑해
+  //   AuthContext 가 재시도 없이 로그인 화면을 띄웠다(토큰은 저장소에 멀쩡히 있는데도).
+  //   던지면 아래 프로필 조회 실패와 **같은 경로**로 들어가 기존 재시도·상태 유지가 그대로 적용된다.
+  const user = await currentUserStrict();
   if (!user) return null;
 
   // 부팅 경로가 둘(초기 조회 + onAuthStateChange)이라 profiles·venues 가 각각 ×2 로 나갔다.
@@ -394,13 +398,27 @@ export async function listAllUsers(): Promise<User[]> {
 }
 
 // ── 관리자: 회원 상태 변경 (+ 사유 기록 + 제재 시 자동 이메일) ────────────────
+/**
+ * 상태 변경의 결과. **저장과 메일 전달은 다른 사건**이라 따로 돌려준다(2026-09-12).
+ *
+ * 예전엔 메일 실패를 `console.warn` 으로만 삼켜서, 화면은 언제나 "안내 메일 발송" 이라고 단정했다 —
+ * RESEND 미설정·함수 미배포면 **메일이 안 갔는데 갔다고 말한 것**이다.
+ */
+export interface UserStatusResult {
+  /** `true`=발송됨 · `false`=발송 실패 · `null`=메일 대상이 아닌 상태 변경 */
+  mailSent: boolean | null;
+}
+
+/** 관리자 회원 변경 한 건의 결과. 화면이 "메일 발송" 을 **갔을 때만** 말하도록 쓰는 값이다. */
+export type UserUpdateResult = UserStatusResult;
+
 export async function updateUserStatus(
   userId: string,
   status: UserStatus,
   suspendedUntil?: string,
   reason?: string,
-): Promise<void> {
-  if (IS_MOCK) return;
+): Promise<UserStatusResult> {
+  if (IS_MOCK) return { mailSent: null };
 
   // ⚠ .select().single() 로 받는다 — RLS 거부·대상 없음을 PostgREST 는 error 없이 **0행 200** 으로
   //   돌려준다. 그러면 '영구 정지' 토스트만 남고 서버는 그대로이고, 실패 토스트조차 안 뜬다.
@@ -412,18 +430,28 @@ export async function updateUserStatus(
   if (error) throw error;
 
   // 제재(정지/영구정지/강제탈퇴) 시 사유 포함 공지 메일 자동 발송.
-  // Edge Function(notify-sanction) 미배포 시에도 상태 변경은 성공하도록 실패는 무시.
-  if (status === 'suspended' || status === 'banned' || status === 'withdrawn') {
-    try {
-      const { data } = await supabase.functions.invoke('notify-sanction', {
-        body: { userId, status, reason: reason ?? '', suspendedUntil: suspendedUntil ?? null },
-      });
-      // #20 200 {sent:false}(RESEND 미설정 등)는 예외가 아니라 조용히 누락됨 → 가시화
+  // ⚠ Edge Function(notify-sanction) 미배포·RESEND 미설정이어도 **상태 변경은 성공**이다 —
+  //   그래서 여기서 던지지 않는다. 다만 **결과는 돌려준다.** 예전엔 console.warn 으로만 삼켜서
+  //   화면이 "안내 메일 발송" 이라고 단정했고, 메일이 안 갔는데 갔다고 말하는 상태였다.
+  if (status !== 'suspended' && status !== 'banned' && status !== 'withdrawn') {
+    return { mailSent: null };   // 메일 대상이 아닌 변경
+  }
+  try {
+    const { data } = await supabase.functions.invoke('notify-sanction', {
+      body: { userId, status, reason: reason ?? '', suspendedUntil: suspendedUntil ?? null },
+    });
+    // #20 200 {sent:false}(RESEND 미설정 등)는 예외가 아니라 조용히 누락됨 → 가시화
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sent = (data as any)?.sent;
+    if (sent === false) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (data && (data as any).sent === false) console.warn('[sanction] notify email NOT sent:', (data as any).error ?? 'RESEND_API_KEY 미설정 가능');
-    } catch (e) {
-      console.warn('[sanction] notify email failed (function may be undeployed):', e);
+      console.warn('[sanction] notify email NOT sent:', (data as any)?.error ?? 'RESEND_API_KEY 미설정 가능');
+      return { mailSent: false };
     }
+    return { mailSent: sent === true };
+  } catch (e) {
+    console.warn('[sanction] notify email failed (function may be undeployed):', e);
+    return { mailSent: false };
   }
 }
 
@@ -503,14 +531,49 @@ export async function withdrawMyAccount(): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/** 업주 승인이 **절반만** 끝났을 때 던진다 — 회원은 승인됐는데 매장 반영이 실패한 상태. */
+export class OwnerApprovalPartialError extends Error {
+  // ⚠ 파라미터 프로퍼티(`constructor(public cause)`)를 쓰지 않는다 —
+  //   이 저장소는 `erasableSyntaxOnly` 라 런타임 코드를 만드는 TS 문법이 금지된다(TS1294).
+  readonly cause: unknown;
+  constructor(cause: unknown) {
+    super('회원 승인은 저장됐지만 매장 승인 반영에 실패했습니다. 같은 버튼을 다시 눌러 주세요.');
+    this.name = 'OwnerApprovalPartialError';
+    this.cause = cause;
+  }
+}
+
 // ── 관리자: 업주 승인 ─────────────────────────────────────────────────────────
+/**
+ * 업주 회원을 승인하고, 연결된 매장도 함께 승인한다.
+ *
+ * ⚠ 2026-09-12 교정 — 두 겹으로 실패가 새고 있었다:
+ *   ① `profiles` 업데이트에 `.select()` 가 없어, **RLS 거부·대상 없음이 `error` 없이 0행 200** 으로 통과했다.
+ *      바로 위 `updateUserStatus` 주석이 경고하는 그 함정인데 여기만 안 따르고 있었다.
+ *   ② `venues` 업데이트는 `{ error }` 구조분해조차 없어 **오류가 통째로 버려졌다.**
+ *
+ *   남던 상태: 회원은 `approved=true` 인데 매장은 `approved=false`.
+ *   업주는 로그인이 되는데 **매장이 홈·검색에 안 뜬다.** 관리자 화면과 통계는 '승인됨' 으로 보이므로
+ *   아무도 이상을 모르고, 업주만 "승인됐다는데 왜 안 보이죠" 를 겪는다.
+ *
+ * 지금은 두 쓰기를 한 트랜잭션으로 묶지 못한다(원자화하려면 RPC + 마이그레이션이 필요하고,
+ * 운영 DB 적용은 오너 결정 사항이다). 그래서 **명시적인 부분 성공 계약**을 둔다 —
+ * 절반만 된 것을 성공이라고 말하지 않고, 다시 눌러 이어서 끝낼 수 있게 안내한다.
+ * 두 쓰기 모두 멱등이라 재시도가 안전하다.
+ */
 export async function approveOwner(userId: string, approve: boolean): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('profiles').update({ approved: approve }).eq('id', userId);
+
+  // ① 대상이 실제로 바뀌었는지까지 확인한다(0행이면 여기서 걸린다).
+  const { error } = await supabase
+    .from('profiles').update({ approved: approve }).eq('id', userId).select('id').single();
   if (error) throw error;
-  // 연결된 venue도 함께 승인
+
+  // ② 연결된 매장도 함께 승인. 매장이 아직 없으면 0행이 정상이므로 행 수는 보지 않고 **오류만** 본다.
   if (approve) {
-    await supabase.from('venues').update({ approved: true }).eq('owner_id', userId);
+    const { error: venueError } = await supabase
+      .from('venues').update({ approved: true }).eq('owner_id', userId);
+    if (venueError) throw new OwnerApprovalPartialError(venueError);
   }
 }
 

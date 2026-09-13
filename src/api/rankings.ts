@@ -1,6 +1,7 @@
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 // src/api/rankings.ts — 매장 일일 손님 순위
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import { currentUser } from './_session';
 import { makeSearchCache } from '../lib/searchCache';
 
@@ -375,8 +376,7 @@ export async function addScoreEntry(venueId: string, input: { name: string; poin
 
 export async function deleteScoreEntry(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venue_score_entries').delete().eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('venue_score_entries').delete().eq('id', id));
 }
 
 /** 머니인 비율용 — 이름별 바인 횟수(장부 집계, 금액 없음) */

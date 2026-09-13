@@ -59,3 +59,67 @@ describe('msgOf. 서버가 준 이유를 살린다', () => {
     expect(msgOf({}, '')).toBe('');
   });
 });
+
+// 보안 표준 6번 — **에러 메시지에 내부 식별자·SQL 을 노출하지 않는다.**
+//
+// `LoadErrorCard` 는 `msgOf(error, '')` 를 그대로 DOM 에 그린다(48곳+ 에서 쓰인다).
+// 그중에는 **비로그인도 닿는 화면**이 있다(이벤트 판). 공개 저장소 구조 위에서
+// Postgres 원문을 그리면 테이블·컬럼·제약 이름을 그대로 알려 주는 꼴이다.
+//
+// 동시에 이 파일이 원래 막으려던 것 — '전부 저장 실패로 뭉개짐' — 이 되돌아오면 안 된다.
+// 그래서 아래 두 절이 **양쪽**을 잠근다.
+describe('🔴 Postgres 내부 오류 원문이 화면으로 새지 않는다', () => {
+  const LEAKS: [string, string][] = [
+    ['42P01', 'relation "secret_settings" does not exist'],
+    ['42703', 'column profiles.ci_hash does not exist'],
+    ['42883', 'function admin_withdraw_user(uuid) does not exist'],
+    ['XX000', 'internal error: cache lookup failed for type 16385'],
+    ['53300', 'too many connections for role "authenticated"'],
+    ['40001', 'could not serialize access due to concurrent update'],
+  ];
+
+  for (const [code, message] of LEAKS) {
+    it(`${code} — 원문 대신 준비된 문구를 보여준다`, () => {
+      const out = msgOf({ code, message }, '불러오지 못했습니다');
+      expect(out, `원문이 그대로 화면에 나간다: ${out}`).toBe('불러오지 못했습니다');
+      expect(out).not.toContain('does not exist');
+    });
+  }
+
+  it('details 는 원문보다 더 노골적이다 — 같은 기준으로 막는다', () => {
+    const out = msgOf(
+      { code: '23503', details: 'Key (venue_id)=(9f2c…) is not present in table "venues"' },
+      '등록 실패',
+    );
+    // 23503 은 위 switch 가 이미 사람 문장으로 바꾼다 — details 가 덧붙지 않는지 확인한다.
+    expect(out).not.toMatch(/venues|venue_id/);
+  });
+
+  it('코드가 없는 details 는 그대로 둔다 — 우리 코드가 쓴 문장이라 식별자가 아니다', () => {
+    expect(msgOf({ details: 'column x does not exist' }, '등록 실패'))
+      .toBe('등록 실패 (column x does not exist)');
+  });
+});
+
+describe('🔴 그렇다고 전부 뭉개지 않는다 (이 파일이 원래 막으려던 것)', () => {
+  it('P0001 — 서버가 사용자를 향해 쓴 문장은 그대로 보여준다', () => {
+    expect(msgOf({ code: 'P0001', message: '이미 종료된 대회입니다' }, '기본값'))
+      .toBe('이미 종료된 대회입니다');
+  });
+
+  it('코드 없는 오류(네트워크·SDK·우리 throw)는 원문을 살린다', () => {
+    expect(msgOf({ message: '이미 사용된 이용권입니다' }, '기본값')).toBe('이미 사용된 이용권입니다');
+    expect(msgOf(new Error('클락 저장 실패'), '기본값')).toBe('클락 저장 실패');
+  });
+
+  it('행동 가능한 코드는 여전히 행동 가능한 문장이다', () => {
+    expect(msgOf({ code: '42501', message: 'permission denied for table ledger' }, 'x'))
+      .toMatch(/권한이 없습니다/);
+    expect(msgOf({ code: 'PGRST202', message: 'Could not find the function' }, 'x'))
+      .toMatch(/새로고침/);
+  });
+
+  it('PGRST 계층 코드는 5글자가 아니라 내부 분류에 걸리지 않는다', () => {
+    expect(msgOf({ code: 'PGRST116', message: '결과가 없습니다' }, '기본값')).toBe('결과가 없습니다');
+  });
+});

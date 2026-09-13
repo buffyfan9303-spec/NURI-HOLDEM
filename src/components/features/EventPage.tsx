@@ -15,23 +15,37 @@ import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
-import { cachedEventBoard,getEventBoard, openEventCard, oddsRows, TIER_META,
+import { cachedEventBoard,getEventBoard, openEventCard, oddsRows, TIER_META, CARD_EVENT_SLUG,
   type EventBoard, type EventCard, type OpenResult,
 } from '../../api/events';
+/* 참여 가능 여부는 **여기서 다시 판단하지 않는다** — 홈·관리자와 같은 단일 판정 함수를 부른다.
+   ⚠ `adminEvents` 가 아니라 `lib/eventState` 를 직접 import 한다(손님 화면이 관리자 RPC 를 끌고 오지 않게).
+   ⚠ 이 화면은 lazy 청크라 첫 화면 임계 경로가 늘지 않는다(홈은 같은 모듈을 동적 import 해 청크를 공유한다). */
+import { evaluateEvent, eventNow, type EventAvailability } from '../../lib/eventState';
 
 type Phase = 'idle' | 'confirm' | 'tearing' | 'result';
 
-export default function EventPage({ open, onClose, onLogin }: {
+/** 보드 → 판정 함수 입력. **홈(HomeTab)과 같은 매핑을 쓴다** — `EventBoard` 에는
+ *  `remainCards`/`totalCards` 가 없어서, 여기서 따로 만들면 홈과 상세가 다른 답을 낸다.
+ *  ⚠ `b.cards` 가 배열이 아닐 수 있다 — `getEventBoard` 는 RPC 응답을 검증 없이 `EventBoard` 로 단언한다. */
+const remainCardsOf = (b: EventBoard): number | null =>
+  (Array.isArray(b.cards) ? b.cards.filter((c) => !c.opened).length : null);
+const totalCardsOf = (b: EventBoard): number | null => (Array.isArray(b.cards) ? b.cards.length : null);
+
+export default function EventPage({ open, onClose, onLogin, slug = CARD_EVENT_SLUG }: {
   open: boolean;
   onClose: () => void;
   onLogin: () => void;
+  /** 캠페인 slug. 딥링크(`?event=<slug>`)로 다른 캠페인이 올 수 있다 — 조회·씨앗·카드 열기가 모두 이 값을 탄다.
+   *  하나라도 기본값에 묶여 있으면 다른 판을 보면서 **첫 캠페인의 카드를 여는** 일이 생긴다. */
+  slug?: string;
 }) {
   const { user } = useAuth();
   const toast = useToast();
   /* 홈 배너가 이미 받아 둔 보드로 **첫 프레임부터 내용을 그린다**.
      이게 없으면 열자마자 헤더만 뜬 빈 몸통이 15~80ms 보였다(실측 2026-09-08) — 그 한 번의
      교체가 남아 있던 마지막 깜빡임이었다. 씨앗이 없으면(첫 방문·로그인 직후) 종전대로 로딩부터. */
-  const seed = useRef(cachedEventBoard()).current;
+  const seed = useRef(cachedEventBoard(slug)).current;
   const [board, setBoard] = useState<EventBoard | null>(seed);
   const [loading, setLoading] = useState(!seed);
   const [err, setErr] = useState<unknown>(null);
@@ -42,10 +56,10 @@ export default function EventPage({ open, onClose, onLogin }: {
 
   const load = useCallback(() => {
     setErr(null);
-    getEventBoard().then(setBoard).catch(setErr).finally(() => setLoading(false));
-  }, []);
+    getEventBoard(slug).then(setBoard).catch(setErr).finally(() => setLoading(false));
+  }, [slug]);
   // 열릴 때마다 새로 — 그 사이 다른 사람이 카드를 열었을 수 있다(내 화면만 옛 상태면 헛클릭이 된다)
-  useEffect(() => { if (open) { setLoading(!cachedEventBoard()); load(); } }, [open, load]);
+  useEffect(() => { if (open) { setLoading(!cachedEventBoard(slug)); load(); } }, [open, load, slug]);
 
   /* 스켈레톤은 **느릴 때만** 보여준다.
      실측(2026-09-08): 보드 응답이 40~70ms 라 스켈레톤이 2~5프레임 떴다 사라졌다. 그 두세 프레임이
@@ -69,7 +83,7 @@ export default function EventPage({ open, onClose, onLogin }: {
     try {
       // ⚠ 서버 응답을 받은 **뒤에** 찢는다. 먼저 찢어 놓고 실패하면 '열렸다가 되돌아오는' 화면이 되는데,
       //   그건 당첨을 뺏긴 것처럼 보인다. 실패는 카드가 닫힌 채로 끝나야 한다.
-      const r = await openEventCard(pick.idx);
+      const r = await openEventCard(pick.idx, slug);
       setResult(r);
       setPhase('tearing');
       tearTimer.current = window.setTimeout(() => setPhase('result'), 320); // --dur-panel 과 맞춤
@@ -83,9 +97,25 @@ export default function EventPage({ open, onClose, onLogin }: {
 
   if (!open) return null;
 
-  const left = board ? board.cards.filter((c) => !c.opened).length : 0;
-  const total = board?.cards.length ?? 0;
-  const canPlay = !!user && (board?.myTickets ?? 0) > 0;
+  const left = board ? remainCardsOf(board) ?? 0 : 0;
+  const total = board ? totalCardsOf(board) ?? 0 : 0;
+  /* ⚠ 참여 가능 여부는 **참여권만 보는 값이 아니다.** 예전엔 `!!user && myTickets > 0` 뿐이라
+     종료·기간 만료 캠페인에서도 미개봉 카드 타일이 활성으로 떴고, 눌러 '찢기' 까지 간 뒤에야
+     서버가 '이벤트 기간이 아닙니다' 로 거절했다(= 눌러 보고 RPC 오류로 설명하기). 게다가 그 상태에선
+     Hero 3분기(소진/비로그인/참여권0)가 모두 빠져 **아무 안내도 없었다.**
+     이제 상태·기간·소진·보는 사람 조건을 단일 판정 함수 하나가 가른다. */
+  const av = evaluateEvent(
+    board && {
+      status: board.status,
+      startsAt: board.startsAt,
+      endsAt: board.endsAt,
+      totalCards: totalCardsOf(board),
+      remainCards: remainCardsOf(board),
+    },
+    eventNow(),
+    { signedIn: !!user, tickets: board?.myTickets },
+  );
+  const canPlay = av.canJoin;
 
   return (
     /* ⚠ 진입 애니메이션을 **일부러 걸지 않는다**(2026-09-08 실측 후 되돌림).
@@ -134,7 +164,7 @@ export default function EventPage({ open, onClose, onLogin }: {
         </div>
       ) : (
         <div className="px-page-x pb-24 pt-3">
-          <Hero board={board} left={left} total={total} user={!!user} onLogin={onLogin} />
+          <Hero board={board} left={left} total={total} user={!!user} onLogin={onLogin} av={av} />
 
           {/* 카드판 — 정사각 작은 칸. 100장이 한 화면에 들어와야 '고른다'가 성립한다
               (세로로 긴 카드였을 땐 스크롤 없이 20장도 안 보였다 — 오너 2026-09-06). */}
@@ -170,11 +200,14 @@ export default function EventPage({ open, onClose, onLogin }: {
 //      이 페이지는 전면 시트다 — 글로우를 뺀다(주인공이 없는 화면은 0곳이 정답).
 //    · 경품 칸의 **강한 색 테두리**도 v6 가 명시적으로 금지한다("네온·강한 테두리·큰 글로우 금지").
 //      색은 점과 숫자에만 남기고 면은 공용 헤어라인으로 통일한다.
-function Hero({ board, left, total, user, onLogin }: {
+function Hero({ board, left, total, user, onLogin, av }: {
   board: EventBoard; left: number; total: number; user: boolean; onLogin: () => void;
+  /** 단일 판정 결과 — 히어로의 안내·CTA 는 **이 값 하나로만** 갈린다(여기서 날짜를 다시 비교하지 않는다). */
+  av: EventAvailability;
 }) {
   const done = total - left;
-  const soldOut = left === 0;
+  // 카드 0장짜리 판도 '소진' 문구 쪽으로 보낸다 — 판정 함수는 total>0 일 때만 soldout 을 낸다.
+  const soldOut = av.state === 'soldout' || total === 0;
   return (
     <section className="relative overflow-hidden rounded-aura border card-aura p-3">
       {/* 블룸 한 겹만 — 정적 radial(§20.4 #6). 두 겹이면 작은 카드에서 탁해진다. */}
@@ -234,15 +267,27 @@ function Hero({ board, left, total, user, onLogin }: {
           <Icon name="check-circle" size={12} className="mt-px shrink-0 text-emerald-400" />
           <span>카드 {total}장이 모두 열렸어요 — 이벤트가 끝났습니다.</span>
         </p>
-      ) : !user ? (
-        <button type="button" onClick={onLogin} className="btn-primary relative mt-2.5 min-h-[42px] w-full text-sm">
+      ) : av.canJoin ? null : av.state === 'live' && !user ? (
+        /* ⚠ 이 이름은 `e2e/event-entry.spec.ts:86` 이 getByRole('button', { name: … }) 로 잡는다.
+           blockedReason('로그인 후 참여할 수 있습니다')으로 갈아끼우지 않는다 — 같은 뜻이지만 다른 글자다.
+           그래도 셀렉터가 글자에 매달리지 않게 data-testid 를 함께 단다. */
+        <button type="button" data-testid="event-login-cta" onClick={onLogin}
+          className="btn-primary relative mt-2.5 min-h-[42px] w-full text-sm">
           로그인하고 참여하기
         </button>
-      ) : board.myTickets === 0 ? (
-        <p className="relative mt-2.5 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs leading-relaxed text-ink-secondary">
+      ) : av.state === 'live' ? (
+        <p data-testid="event-no-ticket" className="relative mt-2.5 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs leading-relaxed text-ink-secondary">
           참여권이 없어요 — 매장에서 <b className="text-ink-primary">출석 QR</b>을 찍으면 1장이 바로 쌓여요.
         </p>
-      ) : null}
+      ) : (
+        /* 종료·기간 만료·시작 전·숨김·초안·판정 불가 — 예전에는 이 자리에 **아무것도 없었다**.
+           카드는 활성이고 안내는 없어서, 사용자는 눌러 보고 나서야 서버 오류로 사정을 알았다. */
+        <p data-testid="event-blocked-reason"
+          className="relative mt-2.5 flex items-start gap-1.5 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs font-semibold leading-relaxed text-ink-secondary">
+          <Icon name="info" size={12} className="mt-px shrink-0 text-ink-muted" />
+          <span>{av.blockedReason}</span>
+        </p>
+      )}
     </section>
   );
 }

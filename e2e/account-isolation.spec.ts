@@ -97,6 +97,10 @@ test.describe('계정 전환 — 이전 계정 데이터 격리', () => {
       return r.fulfill(json([]));
     });
     await page.route(/\/rest\/v1\/schedule_reservations\?/, (r) => r.fulfill(json([])));
+    // 2026-09-13: '내 업적'(getMyBadgeStats)은 venue_rankings 도 읽는다. 이 픽스처의 세션은 **서명 없는 위조 JWT** 라 운영 REST 가
+    //   PGRST301 로 거절하는데, 예전엔 그 실패를 `.catch(() => {})` 가 삼켜 우연히 통과했다(UI-08 이후 실패가 오류 카드로 드러남).
+    //   위조 세션으로 나가는 인증 읽기는 전부 route 로 받아야 한다 — 두 계정 모두 입상 없음.
+    await page.route(/\/rest\/v1\/venue_rankings\?/, (r) => r.fulfill(json([])));
     await bootAsA(page);
 
     const openMe = async (menu: string) => {

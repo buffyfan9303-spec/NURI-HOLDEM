@@ -9,6 +9,7 @@
 // 운영 데이터 안전: _fixtures 가 POST/PATCH/DELETE 와 변이 RPC 를 네트워크 단에서 끊는다.
 //   이 스펙은 거기에 더해 '미마감 지난 장부' 조회 **응답만** 갈아끼운다 — 쓰기는 하지 않는다.
 import { test, expect } from './_fixtures';
+import { kstToday } from '../src/lib/kst';
 import { type Page, type Route } from '@playwright/test';
 import { loginAs } from './_session';
 
@@ -63,7 +64,9 @@ test.describe('대시보드 → 게임 판 착지', () => {
     // 오늘 '열린' 장부가 있어야 정산 마감 버튼이 그려진다. 라이브 DB 에 장부를 만드는 것은 쓰기라
     // 할 수 없으므로 **오늘 세션 조회만** 픽스처로 바꾼다(session_date=eq.<오늘> 인 질의만 가로챈다 —
     // 미마감 지난 장부 조회(closed=eq.false)는 그대로 통과시켜야 다른 화면이 정상 동작한다).
-    const today = new Date().toLocaleDateString('en-CA');
+    // ⚠ 2026-09-13: **KST** 기준이어야 한다. 앱은 `kstToday` 로 조회하므로 Node 로컬(UTC 러너)로 만들면
+    //   라우트가 안 잡혀 픽스처가 통째 무효가 된다(아래 Honolulu 테스트의 구분력이 사라진다).
+    const today = kstToday();
     await page.route(
       (url) => url.pathname.endsWith('/rest/v1/ledger_sessions') && url.search.includes(`session_date=eq.${today}`),
       (route) => {

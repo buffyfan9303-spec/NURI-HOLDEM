@@ -16,6 +16,7 @@
 //
 // 실행: npx playwright test e2e/clock-catchup.spec.ts
 import { test, expect } from './_fixtures';
+import { kstToday } from '../src/lib/kst';
 import { loginAs, restAs, type E2ESession, WRITES_ALLOWED } from './_session';
 
 const EMAIL = process.env.E2E_EMAIL;
@@ -45,7 +46,8 @@ async function seedStaleClock(session: E2ESession): Promise<string> {
     prefer: 'resolution=merge-duplicates',
     body: {
       venue_id: venueId, game_seq: GAME_SEQ,
-      session_date: new Date().toLocaleDateString('en-CA'),
+      // ⚠ KST 기준(2026-09-13) — Node 로컬은 러너 시간대를 따라 앱과 어긋난다.
+      session_date: kstToday(),
       title: '⏱ 검증용 1분 블라인드',
       running: true, current_index: 0,
       ends_at: new Date(Date.now() - BEHIND_MS).toISOString(), // ← 한참 지난 시각 = '밀린' 상태

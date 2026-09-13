@@ -1,7 +1,9 @@
 // src/lib/loyalty.ts — 랭킹 허브(충성도): 주간 리그·업적 뱃지·주간 미션·명예의 전당.
 // 미션/뱃지는 코드 규칙(서버 검증은 claim_mission RPC), 리그·전당은 집계 조회.
 import { supabase, IS_MOCK } from './supabase';
-import { currentUser } from '../api/_session';
+// UI-08-3(2026-09-13): 세션 읽기 **실패**를 비로그인(0개/0점/미장착)으로 위장하지 않는다 — currentUserStrict 는 `if (error) throw error`.
+//   (setEquippedMark 만 currentUser 를 그대로 둔다 — 실패해도 서버 RPC 가 auth.uid() 로 최종 판정하고, 호출부가 '로그인이 필요합니다' 로 말한다.)
+import { currentUser, currentUserStrict } from '../api/_session';
 import { countVisitDays } from '../api/checkins';
 import type { IconName } from '../components/atoms/Icon';
 
@@ -66,7 +68,7 @@ export interface MissionProgress { key: string; current: number; claimed: boolea
 export async function getMissionProgress(_nickname: string | null, missions: Mission[] = MISSIONS): Promise<MissionProgress[]> {
   if (IS_MOCK) return missions.map((m) => ({ key: m.key, current: 0, claimed: false }));
   const ws = weekStartStr();
-  const uid = (await currentUser())?.id;
+  const uid = (await currentUserStrict())?.id;   // 세션 실패는 던진다 — '이번 주 0회' 로 위장하지 않는다
   if (!uid) return missions.map((m) => ({ key: m.key, current: 0, claimed: false }));
   const wsIso = new Date(`${ws}T00:00:00`).toISOString();
   const [ck, po, cl] = await Promise.all([
@@ -74,6 +76,8 @@ export async function getMissionProgress(_nickname: string | null, missions: Mis
     supabase.from('community_posts').select('id', { count: 'exact', head: true }).eq('user_id', uid).gte('created_at', wsIso),
     supabase.from('mission_claims').select('mission_key').eq('user_id', uid).eq('week_start', ws),
   ]);
+  // 세 쿼리의 error 를 예전엔 한 번도 읽지 않았다(UI-08-2) — 하나라도 실패면 진행도 0 이 아니라 실패다
+  for (const r of [ck, po, cl] as { error?: unknown }[]) if (r.error) throw r.error;
   const claimed = new Set(((cl as { data?: { mission_key: string }[] }).data ?? []).map((r) => r.mission_key));
   // 유형별 주간 카운트 — 고정·커스텀 미션이 같은 카운트를 공유(목표만 다름)
   const byType: Record<MissionGoalType, number> = {
@@ -109,7 +113,7 @@ export const BADGES: BadgeDef[] = [
 export async function getMyBadgeStats(nickname: string | null, points: number): Promise<BadgeStats> {
   const empty: BadgeStats = { moneyin: 0, bestPosition: 9999, visits: 0, streak: 0, points };
   if (IS_MOCK) return empty;
-  const u = await currentUser();
+  const u = await currentUserStrict();   // 세션 실패는 던진다 — '업적 0개' 로 위장하지 않는다(UI-08-2)
   const uid = u?.id;
   if (!uid) return empty;
   const [vr, ck, pf] = await Promise.all([
@@ -120,6 +124,7 @@ export async function getMyBadgeStats(nickname: string | null, points: number): 
     supabase.from('checkins').select('venue_id, created_at').eq('user_id', uid),
     supabase.from('profiles').select('checkin_streak').eq('id', uid).single(),
   ]);
+  for (const r of [vr, ck, pf] as { error?: unknown }[]) if (r.error) throw r.error;   // 쿼리 실패 = 실패(0개가 아니다)
   const positions = ((vr as { data?: { position: number }[] }).data ?? []).map((r) => r.position);
   return {
     moneyin: positions.length,
@@ -139,8 +144,9 @@ export async function getMonthlyHall(): Promise<{ label: string; rows: HallRow[]
   const end = new Date(now.getFullYear(), now.getMonth(), 0).toLocaleDateString('en-CA');
   const label = `${lastMonth.getMonth() + 1}월`;
   if (IS_MOCK) return { label, rows: [] };
-  const { data } = await supabase.from('venue_rankings').select('nickname, position')
+  const { data, error } = await supabase.from('venue_rankings').select('nickname, position')
     .gte('ranking_date', start).lte('ranking_date', end);
+  if (error) throw error;   // UI-08-4: 장애를 '지난달 입상 없음' 으로 그리지 않는다(화면 폴백 제거와 같은 커밋 — TierLeaderboard hallErr)
   const map = new Map<string, HallRow>();
   for (const r of (data ?? []) as { nickname: string | null; position: number }[]) {
     const nick = (r.nickname ?? '').trim();
@@ -168,10 +174,11 @@ export const SHOP_MARKS: ShopMark[] = [
 
 /** 내가 장착한 마크 키 조회 */
 export async function getMyEquippedMark(): Promise<string | null> {
-  const u = await currentUser();
+  const u = await currentUserStrict();   // 세션 실패 → 던진다('미장착' 으로 위장 금지)
   const uid = u?.id;
   if (!uid) return null;
-  const { data } = await supabase.from('profiles').select('equipped_mark').eq('id', uid).single();
+  const { data, error } = await supabase.from('profiles').select('equipped_mark').eq('id', uid).single();
+  if (error) throw error;
   return (data?.equipped_mark as string | null) ?? null;
 }
 

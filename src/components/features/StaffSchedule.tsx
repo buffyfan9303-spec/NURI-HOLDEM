@@ -9,6 +9,7 @@ import {
 import { getMyVenueStaff } from '../../api/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
+import { josa } from '../../lib/josa';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -102,7 +103,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
   const addName = async () => {
     const n = newName.trim();
     if (!n) { toast.show('직원 이름을 입력하세요', 'info'); return; }
-    if (roster.includes(n)) { toast.show(`${n} 은(는) 이미 명부에 있습니다`, 'info'); setNewName(''); return; }
+    if (roster.includes(n)) { toast.show(`${n}${josa(n, '은')} 이미 명부에 있습니다`, 'info'); setNewName(''); return; }
     setExtraNames((a) => [...a, n]); setNewName('');
     try { await addStaffName(venueId, n); setTick((t) => t + 1); }
     catch (e) { setExtraNames((a) => a.filter((x) => x !== n)); toast.show(msgOf(e, '직원 등록에 실패했습니다'), 'error'); }

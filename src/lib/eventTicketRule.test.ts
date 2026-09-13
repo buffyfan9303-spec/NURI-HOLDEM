@@ -21,11 +21,27 @@ import { join } from 'node:path';
 const DIR = join(process.cwd(), 'supabase', 'migrations');
 const files = readdirSync(DIR).filter((f) => f.endsWith('.sql')).sort(); // 파일명 = 적용 순서
 
+/**
+ * 마이그레이션 본문은 **파일당 한 번만** 읽는다.
+ *
+ * 예전에는 `it()` 마다 200개를 통째로 다시 읽어서, 테스트 4개면 800번 읽었다.
+ * 평소엔 통과하지만 다른 작업(빌드·lint·e2e)과 겹쳐 CPU 가 밀리면
+ * vitest 기본 `testTimeout` 5초를 넘겨 **단정과 무관하게** 터졌다 —
+ * 2026-09-12 실측: 전체 실행에서 이 파일 포함 3개가 `Test timed out in 5000ms` 로 실패,
+ * 단독 실행은 통과. 읽기를 한 번으로 접어 원인을 없앤다(단정은 그대로다).
+ */
+const TEXT = new Map<string, string>();
+const sql = (f: string): string => {
+  let t = TEXT.get(f);
+  if (t === undefined) { t = readFileSync(join(DIR, f), 'utf8'); TEXT.set(f, t); }
+  return t;
+};
+
 /** 그 함수를 마지막으로 정의한 마이그레이션의 본문을 돌려준다(뒤 파일이 앞 파일을 덮는다). */
 function lastDefinitionOf(fn: string): { file: string; body: string } | null {
   let hit: { file: string; body: string } | null = null;
   for (const f of files) {
-    const t = readFileSync(join(DIR, f), 'utf8');
+    const t = sql(f);
     const re = new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${fn}\\s*\\(`, 'i');
     const m = re.exec(t);
     if (!m) continue;
@@ -55,7 +71,7 @@ describe('이벤트 참여권 — 현장 증명 계약', () => {
     // 마지막으로 이 함수의 권한을 건드린 마이그레이션이 authenticated 를 **회수**해야 한다.
     let lastGrant: { file: string; line: string } | null = null;
     for (const f of files) {
-      for (const line of readFileSync(join(DIR, f), 'utf8').split('\n')) {
+      for (const line of sql(f).split('\n')) {
         if (!/redeem_my_voucher\s*\(\s*uuid\s*\)/i.test(line)) continue;
         if (!/^\s*(revoke|grant)\b/i.test(line)) continue;
         if (!/authenticated/i.test(line)) continue;
@@ -68,7 +84,7 @@ describe('이벤트 참여권 — 현장 증명 계약', () => {
   });
 
   it('증빙 있는 두 경로(_by_qr · _by_phone)는 손님에게 열려 있어야 한다 — 막으면 매장에서 이용권을 못 쓴다', () => {
-    const all = files.map((f) => readFileSync(join(DIR, f), 'utf8')).join('\n');
+    const all = files.map(sql).join('\n');
     for (const fn of ['redeem_my_voucher_by_qr', 'redeem_my_voucher_by_phone']) {
       expect(all, `${fn} 정의가 사라졌다 — 손님이 이용권을 쓸 길이 없어진다`)
         .toContain(fn);

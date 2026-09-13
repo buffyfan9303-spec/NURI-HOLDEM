@@ -1,20 +1,55 @@
 // src/components/features/HomeTab.tsx
-// 홈 — 오너 승인 P1(2026-08-27): '결정 3~5개' 원칙(Envato 2026·APIS 문법).
-// 구성: 시간대 인사 → 지금 등록 가능(라이브 실측) → 포스터 캐러셀 → 오늘·내일 일정(P2).
-// 검색·날짜·필터(탐색 장치)는 이 화면에 없다 — '전체 일정 ›'로 탐색 화면(구 일정 탭)에 위임.
-// GTO(도구) 탭은 그대로 유지 — 탭에서 밀려난 것은 화면이 아니라 '탐색 장치'다.
+// 홈 — §6(2026-09-13) 재구성: "작은 배너 다음에 **실제 콘텐츠**가 바로 이어지는 흐름".
+//
+// 순서(§6-1):
+//   헤더(App) → 짧은 오늘 안내(날짜·실제 수치) → 작은 실제 배너 → 추천 대회(가로 레일)
+//   → 지금 등록 가능 → 진행 중인 이벤트 → 오늘·내일 일정 → GTO 도구
+//
+// 바뀐 것과 이유
+//  · **거대한 GTO 히어로를 지웠다.** 24px 헤드라인 + 그라데이션 + 서브카피가 첫 화면의 절반을 먹어
+//    추천 콘텐츠를 아래로 밀었다(§6-2: "큰 인사말 때문에 추천 콘텐츠가 화면 아래로 밀리지 않게").
+//    그 자리를 **사실**(오늘 날짜 · 오늘 대회 수 · 지금 등록 가능 수)이 대신한다.
+//    GTO 진입은 **한 곳으로 합쳤다** — 화면 맨 아래 'GTO 도구' 한 줄(§6-1: 히어로와 대형 카드에
+//    같은 GTO 설명을 반복하지 않는다). 목적지(`onTools`)는 그대로라 사라진 길은 없다.
+//    같은 이유로 PosterCarousel 의 'GTO 도구' 브랜드 슬라이드도 뺐다.
+//  · **추천 대회 레일이 새로 생겼다.** 포스터 썸네일 + 정보 영역을 **구분**한 가로 카드다.
+//    예전에 배너 캐러셀이 돌리던 일정 포스터가 여기로 왔다 — 배너 비율(2.14:1)에 세로 포스터를
+//    우겨 넣던 크롭이 사라지고, 매장·참가비·상태를 이미지 **위가 아니라 아래**에서 읽는다.
+//  · 제목은 **'추천 대회'** 다. '인기'·'급상승'·'주목'은 운영 선정이나 검증된 지표가 있을 때만 쓴다(§6-1).
+//    부스트(`isPremium`)는 업주가 산 노출이라 정렬 근거로는 쓰되 '인기'라고 부르지 않는다.
+//  · **수치는 전부 실제 조회 결과와 일치한다.** '지금 등록 가능 N' 은 목록에 보이는 5개가 아니라
+//    실제로 열려 있는 **전체 수**이고, 클락 응답 전에는 아예 적지 않는다(없는 숫자를 만들지 않는다).
+//  · 이벤트 상태 판정은 `lib/eventState.evaluateEvent()` **하나**로 통일했다(자체 기간 판정 삭제).
+//  · 금액·상금·등록 마감 문자열은 `ScheduleCard` 가 export 한 포맷터를 그대로 쓴다(정본 하나).
+//
+// 유지: 탭 keep-alive(App 의 visitedTabs + display 토글) 전제 — 이벤트 보드는 마운트 1회로 끝내지
+//       않고 visibilitychange·체크인 신호로 다시 받는다. 스켈레톤 자리 예약(localStorage)도 그대로.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '../atoms/Icon';
-import PosterCarousel from './PosterCarousel';
+import LoadErrorCard from '../atoms/LoadErrorCard';
+import PosterCarousel, { type EventSlide } from './PosterCarousel';
 import type { HomeBanner } from '../../api/homeBanners';
-import ScheduleCard from './ScheduleCard';
+import ScheduleCard, { buyInText } from './ScheduleCard';
+import { thumbUrl } from '../../lib/imageUrl';
 import type { Schedule } from '../../api/schedules';
+import type { CommunityPost } from '../../api/community';   // 타입만 — 런타임 0
 import type { RegInfo } from '../../lib/regStatus';
 import { compareByStartThenBoost } from '../../lib/scheduleSort';
 import { scheduleStatus } from '../../lib/scheduleStatus';
-import { getEventBoard, type EventBoard } from '../../api/events';
+import type { EventState } from '../../lib/eventState';
+// ⚠ **타입만** 정적으로 받는다(런타임 0). 실제 조회(`getEventBoard`)는 아래에서 **동적 import** 다 —
+//   `api/events` 에는 이벤트 화면 전용 `TIER_META`(등급 4 × tailwind 클래스 6)와 `oddsRows` 가 들어 있어서,
+//   정적으로 물면 홈만 보고 나가는 손님도 그 바이트를 받는다. 홈이 이 모듈을 필요로 하는 시점은
+//   첫 페인트 **뒤**의 이벤트 보드 조회 하나뿐이라 늦춰도 되는 것을 늦췄다(lib/eventState 와 같은 조리법).
+import type { EventBoard } from '../../api/events';
+import { readSnap, writeSnap } from '../../lib/snapshot';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+/** 목록에 실제로 그리는 '지금 등록 가능' 줄 수(§6-1: 3~5개). 스켈레톤 예약도 같은 값을 쓴다. */
+const OPEN_NOW_ROWS = 5;
+/** 추천 레일 장수 — 모바일은 가로 스크롤, PC 는 4~6장이 한눈에 들어온다(§6-4). */
+const RAIL_MAX = 8;
 
 const UPCOMING_SEEN = 'nuri:upcoming-seen';
 /** 지난 방문에 '오늘·내일 일정'이 **몇 줄**이었나(1~8). 스켈레톤을 4행 고정으로 그리면 실제가 8행일 때
@@ -27,41 +62,119 @@ const upcomingSeenCount = () => {
   } catch { return 4; }
 };
 const OPENNOW_SEEN = 'nuri:opennow-seen';
-/** 지난 방문에 '지금 등록 가능'이 **몇 줄**이었나(0~4). 예전엔 '1'/'0' 만 저장해 한 줄만 예약했고,
+/** 지난 방문에 '지금 등록 가능'이 **몇 줄**이었나(0~5). 예전엔 '1'/'0' 만 저장해 한 줄만 예약했고,
  *  실제로 서너 줄이 오면 그 차이만큼 아래가 통째로 밀렸다. 옛 값('1')도 한 줄로 읽어 하위호환. */
 const openNowSeenCount = () => {
   try {
     const v = localStorage.getItem(OPENNOW_SEEN);
     if (!v || v === '0') return 0;
     const n = Number(v);
-    return Number.isFinite(n) ? Math.min(Math.max(n, 1), 4) : 1; // '1'(옛 값) → 1줄
+    return Number.isFinite(n) ? Math.min(Math.max(n, 1), OPEN_NOW_ROWS) : 1; // '1'(옛 값) → 1줄
   } catch { return 0; }
 };
 
-// 이벤트 배너도 같은 문제를 갖고 있었다(2026-09-07 실측, CPU 4× · 375×812):
-//   event_board 응답이 마운트 뒤에 도착하면서 `오늘·내일 일정` 위에 칸이 새로 생겨
-//   일정과 푸터가 **+83px 아래로 밀렸다**(940ms, CLS 기여 0.049). 이벤트를 없애면 드리프트 0 · CLS 0.105→0.056.
-// 그래서 '지금 등록 가능'(아래 openNowSeen)과 같은 방식으로 지난 방문의 사실을 기억해 자리를 예약한다.
-// 높이는 숫자로 찍지 않는다 — 실제 배너와 **같은 박스 모델**(pt-4 + card-aura px-3 py-2.5 + h-10 아이콘)로
-// 만들어 높이가 계산되게 한다. 값을 베끼면 배너가 바뀌는 순간 다시 틀린 높이가 된다.
+// 이벤트 진입 칸은 상태와 무관하게 **늘 그 자리에 있다**(2026-09-12 §4) — 그래서 '지난 방문에 배너가
+// 있었나'로 자리를 예약할 이유가 없다(항상 예약돼 있으니 드리프트 0). 키는 남긴다: perf.spec 이
+// 이 값으로 콜드 진입 케이스를 만들고, 배너 게이트가 바뀌면 다시 볼 신호다.
 const EVENT_SEEN = 'nuri:event-banner-seen';
-const eventSeen = () => { try { return localStorage.getItem(EVENT_SEEN) === '1'; } catch { return false; } };
-/** 배너를 실제로 그리는 조건 — 자리 예약과 본체가 같은 판정을 쓰게 한 곳에 둔다. */
-const eventBannerVisible = (b: EventBoard | null): b is EventBoard =>
-  !!b && b.status === 'live' && !(b.startsAt && new Date(b.startsAt) > new Date()) && b.cards.some((c) => !c.opened);
 
+/** 이벤트 상태 판정 모듈 — **동적 import** 다.
+ *
+ *  왜: `lib/eventState` 는 첫 화면 임계 경로에서 **0.72KB gz**(실측)를 차지하는데, 홈이 그 판정을
+ *  필요로 하는 시점은 `getEventBoard()` 응답이 온 **뒤**다(이벤트는 부가 기능이고 첫 페인트를
+ *  막지 않는다). 예산 여유가 0.8KB 뿐이라(255.2/256) 정적 import 는 그대로 초과였다 —
+ *  **상한을 올리지 않고** 실제로 늦춰도 되는 것을 늦췄다. 같은 파일이 EventPage(lazy)에서도
+ *  쓰이므로 별도 청크가 새로 생기는 것이 아니라 그쪽과 공유된다.
+ *
+ *  ⚠ 자체 기간 판정을 만들지 않는다 — 판정은 여전히 `evaluateEvent()` **하나**뿐이다.
+ *  ⚠ 모듈을 못 받아도 **진입은 막히지 않는다**(아래 eventShown 이 'menu' 로 떨어진다). */
+type EventStateMod = typeof import('../../lib/eventState');
 
-// 시간대 인사 카피(greeting)는 2026-08-29 제거됐다 — 그 줄이 NURI MIND 링크인데
-// "좋은 아침이에요"는 눌러야 할 이유를 주지 않아서, 유도 문구로 대체했다(오너 지시).
-// 헤드라인의 라이브/일정 문구가 '지금'의 맥락은 이미 담고 있어 정보 손실이 없다.
+/** 아직 안 열린 카드 수.
+ *  ⚠ `b.cards` 가 배열이 아닐 수 있다 — `getEventBoard` 는 RPC 응답을 **검증 없이** `EventBoard` 로
+ *    단언한다(`data as EventBoard | null`). RPC 가 `[]` 를 돌려주면 truthy 라 null 폴백도 안 걸리고,
+ *    `b.cards.length` 가 그대로 터져 **홈 전체가 오류 화면**이 된다(실측 2026-09-13, 목 응답으로 재현).
+ *    부가 기능 하나의 응답 모양 때문에 첫 화면이 죽으면 안 된다. */
+const remainCardsOf = (b: EventBoard): number | null =>
+  (Array.isArray(b.cards) ? b.cards.filter((c) => !c.opened).length : null);
+const totalCardsOf = (b: EventBoard): number | null => (Array.isArray(b.cards) ? b.cards.length : null);
+
+/** 이벤트 보드 → 단일 판정 함수 입력. `hiddenAt` 은 EventBoard 에 없다(= 서버가 모름 = 공개로 본다). */
+const eventStateOf = (m: EventStateMod, b: EventBoard): EventState => m.evaluateEvent({
+  status: b.status,
+  startsAt: b.startsAt,
+  endsAt: b.endsAt,
+  totalCards: totalCardsOf(b),
+  remainCards: remainCardsOf(b),
+}, m.eventNow()).state;
+
+const EVENT_SNAP_KEY = 'event-board';
+const EVENT_SNAP_MAX_AGE_MS = 30 * 60 * 1000;
+type EventSnap = { at: number; board: EventBoard | null };
+/** 30분 안의 마지막 보드 — 그보다 낡으면 없는 것으로(예약 슬라이드 '불러오는 중…' 경로). */
+function readEventSnap(): EventSnap | null {
+  const s = readSnap<EventSnap>(EVENT_SNAP_KEY);
+  return s && typeof s.at === 'number' && Date.now() - s.at <= EVENT_SNAP_MAX_AGE_MS ? s : null;
+}
+
+/** 진입 줄에 적을 한 마디 — 상태마다 다른 사실을 말한다.
+ *  '없음'과 '못 불러옴'이 같은 문구면 사용자는 새로고침할지 포기할지 판단할 수 없다.
+ *  기간·소진 판정은 evaluateEvent 가 한다(여기서 다시 날짜를 비교하지 않는다). */
+function eventMenuSubtitle(loaded: boolean, failed: boolean, b: EventBoard | null, state: EventState | null): string {
+  if (!loaded) return '불러오는 중…';
+  if (failed) return '이벤트 정보를 불러오지 못했어요 · 눌러서 다시';
+  if (!b) return '지금 진행 중인 이벤트가 없어요';
+  if (state === 'scheduled') return '곧 시작해요 · 눌러서 미리 보기';
+  if (state === 'soldout') return '카드가 모두 열렸어요 · 결과 보기';
+  if (state === 'ended' || state === 'expired') return '이번 이벤트는 끝났어요 · 지난 결과 보기';
+  return b.title;
+}
+
+/** 추천 카드·레일의 상태 칩 — ScheduleCard 의 statusBadge 와 **같은 라벨·같은 색 계약**이다.
+ *  ⚠ 그쪽은 export 되어 있지 않다(매장 팀 편집 직후라 열지 않았다). 문구가 갈리면 안 되므로
+ *     '등록 가능 / 진행 중 / 예정' 세 갈래만 그대로 복제했고, 근거 없는 '마감 임박' 류는 없다.
+ *     정본 하나로 합치려면 ScheduleCard 에서 statusBadge·StatusPill 을 export 하면 된다(후속). */
+function railBadge(s: Schedule, reg: RegInfo | undefined): { text: string; cls: string } {
+  const open = (reg?.msLeft ?? 0) > 0;
+  if (open) return { text: '등록 가능', cls: 'bg-emerald-700 text-white' };
+  if (scheduleStatus(s.date, s.startTime) === 'live') return { text: '진행 중', cls: 'bg-danger-dark text-white' };
+  return { text: '예정', cls: 'bg-surface-high text-ink-secondary' };
+}
+
+/** 섹션 제목·'더 보기' 버튼·진입 줄은 홈에서 3~4번 반복된다 — 문자열을 한 벌로 둔다
+ *  (읽기에도 좋고, 번들에서 같은 리터럴이 여러 벌 실리지 않는다). §5 역할표: 섹션 제목 18/26(PC 20/28). */
+const H3_CLS = 'font-display text-[18px] font-bold leading-[26px] tracking-tight text-ink-primary md:text-[20px] md:leading-[28px]';
+const MORE_CLS = 'flex items-center gap-0.5 py-2 -my-2 t-desc font-semibold text-ink-muted hover:text-ink-secondary';
+/** 진입 줄의 **크롬 치수는 px 고정**이다(rem 아님).
+ *  왜: 200% 글자 확대 · 320~360px 에서 `gap-2.5`·`px-3`·`h-10 w-10` 이 전부 2배로 불어
+ *  텍스트 칸이 **57px**(scroll 102)까지 쪼그라들어 'EVENT' 칩 하나도 못 들어갔다(실측).
+ *  아이콘 타일·여백은 글자가 아니라 장식이므로 확대를 따라갈 이유가 없다 — 확대되어야 하는 것은
+ *  글자다. 글자는 그대로 두고 **틀만 고정**해서 자리를 돌려줬다. */
+const ROW_CLS = 'flex w-full items-center gap-[10px] rounded-aura border card-aura px-[12px] py-[10px] text-left transition-colors hover:bg-surface-high/50 active:scale-[0.995]';
+const ROW_TILE_CLS = 'flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-input';
+
+const dayLabel = (date: string) => {
+  const d = new Date(`${date}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? date : `${d.getMonth() + 1}/${d.getDate()}(${DAYS_KO[d.getDay()]})`;
+};
 
 export default function HomeTab({
-  schedules, loaded, clocksLoaded, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [],
+  schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
+  onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [],
+  posts = [], onPost, onCommunity,
 }: {
+  /** 커뮤니티 **실제 글**(§6-1 마지막 줄). 비어 있거나 조회 실패면 **섹션 자체를 그리지 않는다** —
+   *  홈에 가짜 글줄을 채우느니 아무 말도 하지 않는 편이 낫다(없는 것을 있는 것처럼 만들지 않는다). */
+  posts?: CommunityPost[];
+  onPost?: (p: CommunityPost) => void;
+  onCommunity?: () => void;
   schedules: Schedule[];
   loaded: boolean;
-  /** 지금 클락이 돌아가는 게임 수(라이브 실측) */
-  /** 클락 응답 도착 여부 — 도착 전 '지금 등록 가능' 자리 예약 판단 */
+  /** 일정 조회가 **실패**했는가(§11). 스켈레톤(로딩) · 0건(진짜 빈 상태) · 실패는 서로 다른 사건이다 —
+   *  하나로 뭉개면 사용자는 다시 시도할지 포기할지 판단할 근거를 못 받는다. */
+  schedulesError?: unknown;
+  onRetrySchedules?: () => void;
+  /** 클락 응답 도착 여부 — 도착 전에는 '지금 등록 가능' 수치를 **적지 않는다**(0 은 사실이 아니다) */
   clocksLoaded: boolean;
   onTools: () => void;
   /** 관리자 등록 홈 배너(home_banners) 중 지금 게재 중인 것 — 비면 고정 포스터 자리가 없다(하드코딩 폴백 제거, 2026-09-10) */
@@ -75,20 +188,25 @@ export default function HomeTab({
   onEvent: () => void;
 }) {
   const now = new Date();
+  /** 조회가 실패했고 **보여 줄 것이 하나도 없을 때**만 '못 불러옴' 이다.
+   *  스냅샷/직전 성공값이 남아 있으면 그것은 낡았을 뿐 사실이라, 실패 카드로 덮지 않는다
+   *  (일정 탐색의 `schedulesError && schedules.length === 0` 과 **같은 판정**을 쓴다). */
+  const failed = !!schedulesError && schedules.length === 0;
   const today = now.toLocaleDateString('en-CA');
   const tomorrow = new Date(now.getTime() + 86400_000).toLocaleDateString('en-CA');
 
-  // 지금 등록 가능 — 클락 실측(regInfo)이 열려 있는 대회만(추정 아님)
-  const openNow = useMemo(
+  // 지금 등록 가능 — 클락 실측(regInfo)이 열려 있는 대회만(추정 아님).
+  // ⚠ 헤더 수치는 **자르기 전 전체 수**를 쓴다. 예전엔 slice(0,4) 한 배열의 length 를 적어
+  //   실제로 7개가 열려 있어도 화면이 '4' 라고 말했다(§6-1: 개수는 실제 조회 결과와 일치).
+  const openAll = useMemo(
     () => schedules
       .filter((s) => s.approved && (regInfoBySchedule.get(s.id)?.msLeft ?? 0) > 0)
-      .sort(compareByStartThenBoost)
-      .slice(0, 4),
+      .sort(compareByStartThenBoost),
     [schedules, regInfoBySchedule],
   );
+  const openNow = useMemo(() => openAll.slice(0, OPEN_NOW_ROWS), [openAll]);
 
-  // 오늘·내일 일정(P2 승인: 홈 기본 범위) — 상단 3장에서 결정이 끝나게.
-  // 종료 판정(시작+10h) 제외: 날짜만 보면 심야에 '오늘'의 끝난 대회가 종료 배지로 남는다
+  // 오늘·내일 일정 — 종료 판정(시작+10h) 제외: 날짜만 보면 심야에 '오늘'의 끝난 대회가 종료 배지로 남는다
   // (first-screen 게이트가 CI(UTC 시간대)에서 잡아낸 실버그 — browse hideEnded 와 동일 규칙).
   const upcoming = useMemo(
     () => schedules
@@ -99,24 +217,45 @@ export default function HomeTab({
     [schedules, today, tomorrow],
   );
 
-  // 학습 이어가기 — 로컬 트레이너 진행(신규 fetch 0). 학습 이력이 있는 기기만 노출.
-  // 이벤트 — 진행 중(live)일 때만 칸이 생긴다. draft·종료면 null 이라 홈에 아무 자리도 차지하지 않는다.
-  // 홈 첫 페인트를 막지 않게 **비차단**으로 받아 온다(실패는 조용히 무시 — 이벤트는 부가 기능이다).
-  const [event, setEvent] = useState<EventBoard | null>(null);
+  // 오늘 열리는 대회 수 — '오늘 안내'에 적는 **사실**. 끝난 대회는 세지 않는다(위와 같은 규칙).
+  const todayCount = useMemo(
+    () => schedules.filter((s) => s.approved && s.date === today && scheduleStatus(s.date, s.startTime) !== 'ended').length,
+    [schedules, today],
+  );
+
+  // 추천 대회 — 오늘 이후의 승인된 대회를 부스트 → 시작 순으로. **0개면 레일 자체를 그리지 않는다**
+  // (§6-3: 추천 0개면 레일을 생략하고 다음 실제 콘텐츠를 앞당긴다).
+  // 같은 포스터의 연속 회차(기간제 게임)는 첫 회차 1장만 — 레일에 동일 카드 도배 방지.
+  const rail = useMemo(() => {
+    const seenPoster = new Set<string>();
+    return schedules
+      .filter((s) => s.approved && s.date >= today && scheduleStatus(s.date, s.startTime) !== 'ended')
+      .sort((a, b) => Number(b.isPremium) - Number(a.isPremium) || compareByStartThenBoost(a, b))
+      .filter((s) => !s.posterUrl || (!seenPoster.has(s.posterUrl) && (seenPoster.add(s.posterUrl), true)))
+      .slice(0, RAIL_MAX);
+  }, [schedules, today]);
+
+  // 커뮤니티 최신 글 3개 — 가려진 글(신고 누적 자동 숨김)은 홈에 올리지 않는다.
+  // 정렬은 App 이 준 순서 그대로다(목록 화면과 같은 것을 본다 — 홈이 자기 순위를 발명하지 않는다).
+  const hotPosts = useMemo(() => posts.filter((p) => !p.blinded).slice(0, 3), [posts]);
+
+  // 캐시 퍼스트(Phase 6 · e2e cache-first 회귀 2026-09-13): 이벤트 슬라이드만 스냅샷이 없어 재방문에도 '불러오는 중…'(aria-busy)으로
+  //   시작했다. 다른 6개 키(schedules·venues·…)와 같이 마지막 보드를 스냅샷으로 두고 재검증한다.
+  //   ⚠ 다만 24h 가 아니라 30분까지만 믿는다 — 보드에는 관리자가 뒤집는 status 플래그가 있어(끝냄·숨김) 낡은 'live' 를
+  //     오래 보이면 §7.1-(4) '진행 중' 허위 표시가 된다(기간 판정은 evaluateEvent 가 지금 시각으로 다시 하므로 시간 만료는 스냅샷도 못 속인다).
+  const [event, setEvent] = useState<EventBoard | null>(() => readEventSnap()?.board ?? null);
   // ⚠ 마운트 1회만 받으면 배너가 세션 내내 낡는다(2026-09-07 감사). 홈 탭은 언마운트되지 않으므로
-  //   (App 의 visitedTabs + display 토글) 앱을 완전히 껐다 켜기 전까지 그 숫자가 영원히 안 바뀐다:
-  //    · 매장 QR 로 출석해 참여권을 받아도 배너는 계속 '매장 출석하면 참여권 1장'
-  //    · 카드 100장이 다 열려 이벤트가 끝나도 배너는 살아 있는 이벤트인 척한다
-  //      (배너 게이트가 event.cards.some(c => !c.opened) 라 낡은 스냅샷을 본다)
-  //   그래서 ① 체크인 성공 신호(nuri:event-board-refresh) ② 화면으로 돌아올 때 다시 받는다. 실패는 조용히 무시(이벤트는 부가 기능이고 홈 첫 페인트를 막지 않는다).
-  const [eventLoaded, setEventLoaded] = useState(false); // null 이 '미도착'과 '이벤트 없음' 둘 다라 따로 구분한다
+  //   앱을 완전히 껐다 켜기 전까지 그 숫자가 영원히 안 바뀐다. 그래서 ① 체크인 성공 신호
+  //   ② 화면으로 돌아올 때 다시 받는다. 실패는 조용히 무시(이벤트는 부가 기능이고 첫 페인트를 막지 않는다).
+  const [eventLoaded, setEventLoaded] = useState(() => readEventSnap() != null); // null 이 '미도착'과 '이벤트 없음' 둘 다라 따로 구분한다(스냅샷이 있으면 도착한 셈)
+  const [eventFailed, setEventFailed] = useState(false); // '이벤트 없음'과 '못 불러옴'도 다른 사건이다
   const loadEventBoard = useCallback(() => {
-    getEventBoard().then((b) => {
+    import('../../api/events').then((m) => m.getEventBoard()).then((b) => {
       setEvent(b);
+      writeSnap(EVENT_SNAP_KEY, { at: Date.now(), board: b } satisfies EventSnap); // 실패 시에는 손대지 않는다(마지막 성공값 유지)
+      setEventFailed(false);
       setEventLoaded(true);
-      // 다음 콜드 진입에서 자리를 예약할지 판단할 근거 — 배너가 실제로 보이는 조건과 같은 판정을 저장한다.
-      try { localStorage.setItem(EVENT_SEEN, eventBannerVisible(b) ? '1' : '0'); } catch { /* noop */ }
-    }).catch(() => { setEventLoaded(true); }); // 실패도 '도착'이다 — 아니면 예약 칸이 영원히 남는다
+    }).catch(() => { setEventFailed(true); setEventLoaded(true); }); // 실패도 '도착'이다 — 아니면 예약 칸이 영원히 남는다
   }, []);
   useEffect(() => {
     loadEventBoard();
@@ -129,235 +268,350 @@ export default function HomeTab({
     };
   }, [loadEventBoard]);
 
+  // 판정 모듈은 **비차단**으로 받아 온다 — 이벤트 보드 응답과 나란히 도착하므로 체감 지연이 없다.
+  const [esm, setEsm] = useState<EventStateMod | null>(null);
+  const [esmFailed, setEsmFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    import('../../lib/eventState')
+      .then((m) => { if (alive) setEsm(m); })
+      .catch(() => { if (alive) setEsmFailed(true); });
+    return () => { alive = false; };
+  }, []);
+
+  /** 배너(광고)를 그릴 조건 — 지금 **참여할 수 있을 때만**. 판정은 evaluateEvent 하나가 한다.
+   *  ⚠ 진입(메뉴)은 여기 묶지 않는다 — 이벤트가 0개·조회 실패·소진 중 하나만 걸려도 홈에서
+   *    이벤트로 가는 길이 통째로 사라졌던 사고(2026-09-12)의 원인이 그 결합이었다. */
+  const eventState = esm && event ? eventStateOf(esm, event) : null;
+  /** 지금 그릴 갈래 하나. 'pending' 은 응답 전(스켈레톤이지만 **누를 수 있다**).
+   *  판정 모듈이 아직이면 pending 이지만, **실패했으면 pending 에 머무르지 않는다** — 'menu' 로
+   *  떨어져 이벤트로 가는 길이 열린 채로 남는다(광고를 내리는 것과 문을 잠그는 것은 다른 결정이다). */
+  const eventShown: 'pending' | 'banner' | 'menu' =
+    !eventLoaded || (!esm && !esmFailed) ? 'pending'
+      : eventState === 'live' ? 'banner' : 'menu';
+  const eventRemain = (event && remainCardsOf(event)) ?? 0;
+  /** N06(§7.1): 이벤트 진입은 메인 배너(PosterCarousel) 안의 슬라이드 하나다 — 독립 카드는 없앴다.
+   *  · 세 갈래 그대로: 응답 전(누를 수 있음) · 참여 가능(evaluateEvent 'live' 만 강조) · 그 밖(0개·실패·소진·시작 전·종료 — 문구는
+   *    eventMenuSubtitle 이 사실대로 말한다. "진행 중" 허위 문구 없음).
+   *  · 관리자 배너가 이미 이벤트로 가는 링크(?event=)를 갖고 있으면 슬라이드를 넣지 않는다(§7.1-3 중복 제거 — 진입은 그 배너가 맡는다).
+   *  · 참여권·남은 카드 수는 조회 성공(live)일 때만 쓴다(§7.1-7). */
+  const eventSlide = useMemo<EventSlide | null>(() => {
+    if (banners.some((b) => /[?&]event=/.test(b.linkUrl ?? ''))) return null;
+    if (eventShown === 'pending') return { title: '이벤트', sub: '불러오는 중…', alt: '이벤트 — 불러오는 중', testId: 'home-event-menu', live: false, pending: true, onClick: onEvent };
+    if (eventShown === 'banner' && event) {
+      const sub = event.myTickets > 0 ? `참여권 ${event.myTickets}장 · 남은 카드 ${eventRemain}장` : `매장 출석하면 참여권 1장 · 남은 카드 ${eventRemain}장`;
+      return { title: event.title, sub, alt: `이벤트 · ${event.title} · ${sub}`, testId: 'home-event-banner', live: true, onClick: onEvent };
+    }
+    const sub = eventMenuSubtitle(eventLoaded, eventFailed, event, eventState);
+    return { title: '매장 이벤트', sub, alt: `매장 이벤트 · ${sub}`, testId: 'home-event-menu', live: false, onClick: onEvent };
+  }, [banners, eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
+
+  useEffect(() => {
+    if (!eventLoaded || !esm) return;
+    try { localStorage.setItem(EVENT_SEEN, eventState === 'live' ? '1' : '0'); } catch { /* noop */ }
+  }, [eventLoaded, esm, eventState]);
+
   const fmtLeft = (ms: number) => {
     const m = Math.floor(ms / 60_000);
     return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`;
   };
   if (clocksLoaded) {
-    try { localStorage.setItem(OPENNOW_SEEN, String(Math.min(openNow.length, 4))); } catch { /* noop */ }
+    try { localStorage.setItem(OPENNOW_SEEN, String(Math.min(openAll.length, OPEN_NOW_ROWS))); } catch { /* noop */ }
   }
   // 다음 방문의 스켈레톤 행 수 — 같은 기기는 대개 비슷한 줄 수를 본다.
-  // 이 한 줄이 없으면 위 upcomingSeenCount() 가 영원히 기본값 4 를 돌려준다.
   if (loaded) {
     try { localStorage.setItem(UPCOMING_SEEN, String(Math.min(Math.max(upcoming.length, 1), 8))); } catch { /* noop */ }
   }
 
   return (
-    <div className="hero-aurora pb-section">
-      {/* 시간대 인사 + 라이브 맥락 — 홈의 첫 줄은 컨트롤이 아니라 '지금'.
-          hero-aurora(딥 플럼 오로라 워시)·text-grad-violet(헤드라인 그라데이션)은
-          어워드 레퍼런스 브랜드 모멘트 — 홈 히어로 1곳 한정(과용 금지). */}
-      {/* 오너 지시(2026-08-28): 첫 줄(날짜·인사)은 NURI MIND 로, 헤드라인은 GTO 진입을 품는다 —
-          유저 핵심 콘텐츠가 GTO 라는 판단.
-          2026-09-08 오너: "몇 개의 게임이 진행중이라고 하는 것보다 GTO를 강조하는 문구를 고정으로".
-          → 헤드라인은 **언제나** GTO 문구다. 라이브 수로 갈라지던 분기를 없앤다.
-          부수 효과 둘이 같이 풀린다:
-            · 라이브 분기(98px)에 min-h(136px)를 대느라 'GTO 도구로 준비하기' 아래 38px 이
-              빈칸으로 남던 것 — 오너가 지적한 그 빈칸이다. 분기가 하나면 바닥을 댈 이유가 없다.
-            · 콜드 진입 136 → 클락 도착 98 로 아래가 통째로 튀던 CLS 도 원인째 사라진다.
-          라이브 정보는 사라지지 않는다 — 바로 아래 '지금 등록 가능' 섹션과 탭바 라이브 배지가 말한다. */}
-      <div className="px-page-x pt-3">
-        <a
-          href="https://www.nurimind.co.kr" target="_blank" rel="noopener"
-          className="inline-flex items-center gap-1 py-1 -my-1 text-2xs text-ink-muted transition-colors hover:text-accent-200"
-        >
-          {/* 2026-08-29 오너 지시: 인사말은 아무 데도 안 데려간다 — 링크인데 갈 이유를 안 준다.
-              날짜는 맥락으로 남기고, 그 자리를 NURI MIND 로 가고 싶게 만드는 문구로 바꾼다. */}
-          {now.getMonth() + 1}/{now.getDate()}({DAYS_KO[now.getDay()]}) · 오늘의 운을 점쳐보세요{' '}
-          <span className="font-semibold text-accent-300">· NURI MIND ›</span>
-        </a>
-        {/* 오너 지시(2026-09-02 v6.4): 카드 프레임 없이 **글자만** — 아우라 링·카드는 아래 배너가 맡는다(한 화면에 프레임 하나).
-            클릭 어포던스는 부제 끝 화살표 + press 로만. */}
-        <button type="button" onClick={onTools} className="mt-1 block w-full text-left transition-opacity active:opacity-80">
-          {/* v6 aura-ui.com 문법: 헤드라인은 흰색, 핵심 구절 하나만 채도 높은 그라데이션 */}
-          <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink-primary">
-            오늘 한 판, <span className="text-grad-violet text-grad-glow mr-[0.15em]">GTO</span>로 준비하세요
-          </h2>
-          <span className="mt-1.5 inline-flex items-center gap-0.5 text-2xs font-semibold text-accent-200">
-            차트 · 계산기 · 트레이너 열기 <Icon name="chevron-right" size={12} aria-hidden />
-          </span>
-        </button>
-      </div>
+    <div className="pb-section">
+      {/* §6-4: 일반 컨테이너 최대 1200px, 좌우 최소 24px. 안쪽 섹션은 공용 px-page-x(17px)를 쓰므로
+          md 이상에서 7px 를 더해 24px 를 만든다(index.css·tailwind.config 는 다른 팀 편집 중이라
+          토큰을 새로 만들지 않았다 — 필요해지면 page-x-md 토큰을 쓰도록 보고). */}
+      <div className="mx-auto w-full max-w-[1200px] md:px-[7px]">
+        {/* ── 상단: 오늘 안내 + 배너 ──────────────────────────────────────────
+            PC(lg~)는 5:7 두 칸(§6-4). 768~1023 은 **한 열 그대로** 쌓는다 — 중간 폭에서 성급히
+            두 칸으로 쪼개면 가운데 열이 눌린다. 좁아지면 DOM 읽기 순서대로 쌓인다. */}
+        <div className="lg:grid lg:grid-cols-12 lg:items-center lg:gap-6 lg:pt-4">
+          {/* 오늘 안내 — 기본 48~60px(§6-2). 큰 인사말이 아니라 **사실**이다. */}
+          <section data-testid="home-today" className="px-page-x pt-1.5 lg:col-span-5 lg:pt-0">
+            <a
+              href="https://www.nurimind.co.kr" target="_blank" rel="noopener"
+              className="inline-flex items-center gap-1 py-1 -my-1 t-desc text-ink-muted transition-colors hover:text-accent-200"
+            >
+              {/* 오너 지시(2026-08-29): 인사말은 아무 데도 안 데려간다 — 링크인데 갈 이유를 안 준다.
+                  날짜는 맥락으로 남기고, 그 자리를 NURI MIND 로 가고 싶게 만드는 문구로. */}
+              {now.getMonth() + 1}/{now.getDate()}({DAYS_KO[now.getDay()]}) · 오늘의 운을 점쳐보세요{' '}
+              <span className="font-semibold text-accent-300">· NURI MIND ›</span>
+            </a>
+            {/* §5 역할표: 홈 짧은 제목 18/26(PC 22/30). 수치는 **도착한 것만** 적는다 —
+                일정이 안 왔으면 대회 수를, 클락이 안 왔으면 등록 가능 수를 쓰지 않는다. */}
+            <p className="mt-0.5 text-[18px] font-bold leading-[26px] text-ink-primary md:text-[22px] md:leading-[30px]">
+              {/* ⚠ 여기서 '오늘 대회 0개' 라고 적으면 그것은 **조회 실패를 사실로 위장**하는 것이다(§11).
+                  수치는 '도착한 것만' 적는다는 이 줄의 원래 규칙에, 실패도 '미도착' 이라는 사실을 더한다. */}
+              {!loaded
+                ? <>오늘의 대회를 불러오는 중</>
+                : failed
+                  ? <>오늘 대회 정보를 불러오지 못했어요</>
+                  : <>오늘 대회 <span className="tabular-nums text-accent-300">{todayCount}</span>개</>}
+              {loaded && !failed && clocksLoaded && (
+                <> · 지금 등록 가능 <span className="tabular-nums stat-emerald">{openAll.length}</span>개</>
+              )}
+            </p>
+          </section>
 
-      {/* 지금 등록 가능 — 라이브 실측이 열려 있을 때만. 지난 방문에 열린 대회가 있던
-          기기는 클락 도착 '전'까지 자리를 예약해 삽입 밀림을 없앤다(도착하면 즉시 확정). */}
-      {!clocksLoaded && openNowSeenCount() > 0 && openNow.length === 0 && (
-        <section className="px-page-x pt-4" aria-hidden>
-          <div className="skeleton mb-1.5 h-[22px] w-36" />
-          {/* 실제 목록과 **같은 박스 모델**로 그 줄 수만큼 예약한다 — 높이를 숫자로 베끼지 않는다.
-              (아래 실제 행: rounded-aura border card-aura / divide-y / px-3 py-2.5 / 9px 바 + 2줄) */}
-          <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
-            {Array.from({ length: openNowSeenCount() }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-                <span className="skeleton h-9 w-0.5 shrink-0 rounded-full" />
-                <span className="min-w-0 flex-1">
-                  <span className="skeleton block h-[20px] w-2/3 rounded" />
-                  <span className="skeleton mt-0.5 block h-[16px] w-1/2 rounded" />
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-      {openNow.length > 0 && (
-        <section className="px-page-x pt-4">
-          <header className="flex items-baseline justify-between pb-1.5">
-            <h3 className="font-display text-lg font-bold tracking-tight text-ink-primary">
-              지금 등록 가능 <span className="text-sm tabular-nums stat-emerald">{openNow.length}</span>
-            </h3>
-            <button type="button" onClick={onLive} className="flex items-center gap-0.5 py-2 -my-2 text-xs font-semibold text-ink-muted hover:text-ink-secondary">
-              라이브 <Icon name="chevron-right" size={13} />
-            </button>
-          </header>
-          <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
-            {openNow.map((s) => {
-              const reg = regInfoBySchedule.get(s.id);
-              return (
-                <button key={s.id} type="button" onClick={() => onSelect(s)}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-high/50 active:bg-surface-high">
-                  {/* 좌측 상태 바 — 선이 아니라 상태 표시(APIS 문법) */}
-                  <span aria-hidden className="h-9 w-0.5 shrink-0 rounded-full bg-emerald-400" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-bold text-ink-primary">{s.title}</span>
-                    <span className="block truncate text-xs text-ink-muted">
-                      {s.pubName} · <span className="stat-emerald">등록 가능</span>
-                      {reg?.msLeft != null && reg.msLeft > 0 && reg.msLeft < 86400_000 && (
-                        <span className="tabular-nums"> · 마감까지 {fmtLeft(reg.msLeft)}</span>
-                      )}
-                    </span>
-                  </span>
-                  <span className="shrink-0 rounded-badge bg-accent-300/15 px-3 py-1.5 text-xs font-bold text-accent-300">참가</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* 포스터 캐러셀 — 관리자 배너(home_banners) 또는 고정 배너 + 브랜드 + 부스트 우선 대회 포스터 */}
-      <PosterCarousel
-        schedules={schedules}
-        onSelect={onSelect}
-        banners={banners}
-        onBannerUrl={(url) => {
-          // 관리자가 넣은 링크. 외부는 새 탭(noopener — opener 를 통한 탭내빙 차단),
-          // 내부 경로는 같은 탭. javascript: 같은 스킴은 애초에 열지 않는다.
-          //
-          // ⚠ '/' 로 시작한다고 내부가 아니다(2026-09-04 리뷰): `//evil.com` 은 프로토콜 상대 URL 이고
-          //   `/\evil.com` 도 브라우저가 외부로 해석한다 — 둘 다 예전 검사를 통과해 **같은 탭**으로
-          //   외부 사이트에 착지했다(오픈 리다이렉트). 문자열 앞머리를 보지 말고 URL 로 파싱해
-          //   **origin 이 우리와 같은지**로 판정한다.
-          const u = url.trim();
-          if (!u) return;
-          let parsed: URL;
-          try { parsed = new URL(u, window.location.origin); } catch { return; }
-          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;  // javascript:·data: 차단
-          if (parsed.origin === window.location.origin) { window.location.assign(parsed.pathname + parsed.search + parsed.hash); return; }
-          window.open(parsed.href, '_blank', 'noopener,noreferrer');
-        }}
-        onBanner={(a) => {
-          if (a === 'nurimind') { window.open('https://www.nurimind.co.kr', '_blank', 'noopener'); return; }
-          if (a === 'tools') onTools(); else if (a === 'explore') onExplore();
-        }}
-      />
-
-      {/* 이벤트 — 일정 **위**(오너 2026-09-06). '이어서 학습' 칸을 대체한다.
-          ⚠ 시작 전(starts_at 미래)인 이벤트는 홈에 광고하지 않는다 — 눌러도 참여가 안 되는 칸은
-             '고장난 버튼'으로 읽힌다. 예약해 둔 캠페인을 미리 켜 두고 점검할 수 있는 여지이기도 하다.
-          ⚠ 카드가 다 떨어진 이벤트도 같은 이유로 내린다 — 종료 조건이 시각이 아니라 재고다.
-          그 칸이 한 줄짜리 텍스트 버튼이었다면 이건 '지금 참여할 수 있는가'가 한눈에 보여야 한다:
-          제목 · 내 참여권 · 남은 카드. 숫자가 없으면 그냥 광고가 되고, 아무도 안 누른다. */}
-      {/* 자리 예약 — 지난 방문에 배너가 있던 기기만, 응답 도착 '전'까지. 도착하면 즉시 확정된다.
-          실제 배너와 같은 클래스로 만들어 높이가 같게 한다(값 복사 금지 — 배너가 바뀌면 같이 따라온다). */}
-      {!eventLoaded && eventSeen() && (
-        <div className="px-page-x pt-4" aria-hidden>
-          <div className="flex w-full items-center gap-2.5 rounded-aura border card-aura px-3 py-2.5">
-            <span className="skeleton h-10 w-10 shrink-0 rounded-input" />
-            <span className="min-w-0 flex-1">
-              <span className="skeleton block h-[18px] w-2/5 rounded" />
-              <span className="skeleton mt-0.5 block h-[15px] w-3/5 rounded" />
-            </span>
+          {/* 작은 실제 배너 — 하나의 메시지, 하나의 연결(§6-2) */}
+          <div className="lg:col-span-7">
+            <PosterCarousel
+              banners={banners}
+              eventSlide={eventSlide}
+              onBannerUrl={(url) => {
+                // 관리자가 넣은 링크. 외부는 새 탭(noopener — opener 를 통한 탭내빙 차단),
+                // 내부 경로는 같은 탭. javascript: 같은 스킴은 애초에 열지 않는다.
+                //
+                // ⚠ '/' 로 시작한다고 내부가 아니다(2026-09-04 리뷰): `//evil.com` 은 프로토콜 상대 URL 이고
+                //   `/\evil.com` 도 브라우저가 외부로 해석한다 — 둘 다 예전 검사를 통과해 **같은 탭**으로
+                //   외부 사이트에 착지했다(오픈 리다이렉트). 문자열 앞머리를 보지 말고 URL 로 파싱해
+                //   **origin 이 우리와 같은지**로 판정한다.
+                const u = url.trim();
+                if (!u) return;
+                let parsed: URL;
+                try { parsed = new URL(u, window.location.origin); } catch { return; }
+                if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;  // javascript:·data: 차단
+                if (parsed.origin === window.location.origin) { window.location.assign(parsed.pathname + parsed.search + parsed.hash); return; }
+                window.open(parsed.href, '_blank', 'noopener,noreferrer');
+              }}
+              onBanner={(a) => {
+                if (a === 'nurimind') { window.open('https://www.nurimind.co.kr', '_blank', 'noopener'); return; }
+                if (a === 'tools') onTools(); else if (a === 'explore') onExplore();
+              }}
+            />
           </div>
         </div>
-      )}
-      {eventBannerVisible(event) && (
-        <div className="px-page-x pt-4">
-          {/* ⚠ 아우라 규약(v6): 면은 **공용 card-aura**(불투명 + white 5% 헤어라인)로 통일한다.
-              예전엔 이 배너만 border-accent-400/40 + 보라 그라데이션이라 홈에서 **혼자 다른 문법**이었다
-              (오너 2026-09-06 "아우라 UI 가 제대로 안 된 것 같다"). v6 는 '네온·강한 테두리·큰 글로우 금지'다.
-              강조는 이미 있는 장치로만 낸다 — tile-grad 아이콘과 EVENT 칩, 그리고 숫자 색. */}
-          <button type="button" onClick={onEvent}
-            className="flex w-full items-center gap-2.5 rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:bg-surface-high/50 active:scale-[0.995]">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
-              <Icon name="gift" size={18} />
+
+        {/* ── 추천 대회 ────────────────────────────────────────────────────────
+            §6-3. 가로 스크롤은 **레일 안에서만** 일어난다 — 레일은 px-page-x 만큼의 안쪽 여백을
+            자기 패딩으로 갖고(문서 좌우 여백과 같은 선에서 시작), 넘치는 것은 레일의 overflow-x 다.
+            카드 폭 164px + 간격 10px → 390px 에서 2장 + 다음 카드 일부가 보인다(스크롤 가능성 신호). */}
+        {rail.length > 0 && (
+          <section className="pt-5" data-testid="home-rail">
+            <header className="flex items-baseline justify-between px-page-x pb-2.5">
+              <h3 className={H3_CLS}>
+                추천 대회 <span className="t-desc font-semibold tabular-nums text-ink-muted">{rail.length}</span>
+              </h3>
+              <button type="button" onClick={onExplore} className={MORE_CLS}>
+                전체 일정 <Icon name="chevron-right" size={13} />
+              </button>
+            </header>
+            <ul data-testid="home-rail-track" className="scrollbar-none flex snap-x gap-2.5 overflow-x-auto px-page-x pb-1">
+              {rail.map((s) => {
+                const badge = railBadge(s, regInfoBySchedule.get(s.id));
+                return (
+                  <li key={s.id} className="w-[164px] shrink-0 snap-start lg:w-[184px]">
+                    {/* 카드 주 동작 = 그 대회의 공식 상세/포스터. 겹치는 보조 버튼을 두지 않는다(§6-3). */}
+                    <button type="button" onClick={() => onSelect(s)}
+                      className="flex h-full w-full flex-col overflow-hidden rounded-card border card-aura text-left">
+                      {/* 포스터 썸네일 — 정보 영역과 **분리**한다. 이미지 위에 글자를 얹지 않는다. */}
+                      <span className="relative block h-[78px] w-full shrink-0 overflow-hidden bg-surface-high">
+                        {s.posterUrl ? (
+                          <img src={thumbUrl(s.posterUrl, 400) ?? s.posterUrl} alt="" loading="lazy" decoding="async"
+                            className="h-full w-full object-cover" />
+                        ) : (
+                          /* 포스터가 없으면 **실제 매장명·날짜**로 만든 간결한 대체 표면 — 장식 이미지를 만들지 않는다. */
+                          <span className="flex h-full w-full items-center justify-center px-2 text-center">
+                            <span className="line-clamp-2 break-keep t-desc font-bold text-ink-secondary">{s.pubName}</span>
+                          </span>
+                        )}
+                      </span>
+                      {/* 정보 영역 — 상태 → 매장명 → 대회명 → 참가비. 줄간격은 §5 역할표. */}
+                      <span className="flex min-w-0 flex-1 flex-col gap-1 px-2.5 py-2.5">
+                        {/* ⚠ 상태칩 + 날짜 + 시각을 한 줄에 다 넣었더니 164px 에서 **줄바꿈이 나** 카드가
+                            232.6px 로 커졌다(실측). 시각은 매장명 줄로 내린다 — 값은 하나도 안 버렸고
+                            카드는 212.4px 로 돌아온다. */}
+                        <span className="flex flex-wrap items-center gap-1">
+                          <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-badge px-1.5 py-0.5 t-meta font-bold ${badge.cls}`}>{badge.text}</span>
+                          <span className="t-meta tabular-nums text-ink-muted">{dayLabel(s.date)}</span>
+                        </span>
+                        <span className="truncate t-desc text-ink-muted">
+                          {s.startTime ? `${s.startTime} · ` : ''}{s.pubName}
+                        </span>
+                        {/* 대회명은 자르지 않고 두 줄까지 — 어절 유지(break-keep), 긴 영문 한 덩어리는 비상 줄바꿈 */}
+                        <span className="line-clamp-2 break-keep text-[13px] font-bold leading-[19px] text-ink-primary">{s.title}</span>
+                        {/* §6-3 이 열거한 것만 둔다(상태 → 매장명 → 대회명/참가비). 상금은 바로 아래
+                            '오늘·내일 일정' 카드와 상세가 말한다 — 같은 값을 카드마다 겹쳐 쌓지 않는다.
+                            참가비는 **줄이지 않는다**: 6자리도 원 단위 전액 그대로다. */}
+                        <span className="mt-auto pt-0.5 text-[13px] font-semibold leading-[19px] tabular-nums text-ink-secondary">
+                          참가비 {buyInText(s.buyIn?.amount)}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        {/* ── 지금 등록 가능 ──────────────────────────────────────────────────
+            라이브 실측이 열려 있을 때만. 지난 방문에 열린 대회가 있던 기기는 클락 도착 '전'까지
+            자리를 예약해 삽입 밀림을 없앤다(도착하면 즉시 확정). */}
+        {!clocksLoaded && openNowSeenCount() > 0 && openNow.length === 0 && (
+          <section className="px-page-x pt-5" aria-hidden>
+            <div className="skeleton mb-2 h-[26px] w-36" />
+            {/* 실제 목록과 **같은 박스 모델**로 그 줄 수만큼 예약한다 — 높이를 숫자로 베끼지 않는다. */}
+            <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
+              {Array.from({ length: openNowSeenCount() }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+                  <span className="skeleton h-9 w-0.5 shrink-0 rounded-full" />
+                  <span className="min-w-0 flex-1">
+                    <span className="skeleton block h-[20px] w-2/3 rounded" />
+                    <span className="skeleton mt-0.5 block h-[16px] w-1/2 rounded" />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+        {openNow.length > 0 && (
+          <section className="px-page-x pt-5">
+            <header className="flex items-baseline justify-between pb-2.5">
+              <h3 className={H3_CLS}>
+                지금 등록 가능 <span className="t-desc font-semibold tabular-nums stat-emerald">{openAll.length}</span>
+              </h3>
+              <button type="button" onClick={onLive} className={MORE_CLS}>
+                라이브 <Icon name="chevron-right" size={13} />
+              </button>
+            </header>
+            <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
+              {openNow.map((s) => {
+                const reg = regInfoBySchedule.get(s.id);
+                return (
+                  <button key={s.id} type="button" onClick={() => onSelect(s)}
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-high/50 active:bg-surface-high">
+                    {/* 좌측 상태 바 — 색만으로 상태를 말하지 않는다(아래 '등록 가능' 글자가 정본) */}
+                    <span aria-hidden className="h-9 w-0.5 shrink-0 rounded-full bg-emerald-400" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate t-title text-ink-primary">{s.title}</span>
+                      {/* ⚠ truncate 였다 — '마감까지 1시간 34분'이 실제로 잘려 나갔다(실측 250/390).
+                          §5: 이름은 줄여도 **등록 마감·금액은 잘라내지 않는다**. 줄바꿈으로 푼다. */}
+                      <span className="block break-keep t-desc text-ink-muted">
+                        {s.pubName} · <span className="stat-emerald">등록 가능</span>
+                        {reg?.msLeft != null && reg.msLeft > 0 && reg.msLeft < 86400_000 && (
+                          <span className="tabular-nums"> · 마감까지 {fmtLeft(reg.msLeft)}</span>
+                        )}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-badge bg-accent-300/15 px-3 py-1.5 t-desc font-bold text-accent-300">참가</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* N06(2026-09-13, 실행문 §7.1): 여기 있던 독립 이벤트 카드(home-event-banner/menu)는 위 PosterCarousel 안의 이벤트 슬라이드로 옮겼다(eventSlide).
+            세 갈래(응답 전 · 참여 가능 · 그 밖)는 그대로고 진입은 언제나 남는다 — 별도 카드를 다시 만들지 않는다. */}
+
+        {/* ── 오늘·내일 일정 ─────────────────────────────────────────────────
+            ⚠ '오늘·내일 일정'·'전체 일정' 문구는 e2e 셀렉터가 잡는다(click-paths·smoke·perf). 유지. */}
+        <section className="px-page-x pt-5">
+          <header className="flex items-baseline justify-between pb-2.5">
+            <h3 className={H3_CLS}>오늘·내일 일정</h3>
+            <button type="button" onClick={onExplore} className={MORE_CLS}>
+              전체 일정 <Icon name="chevron-right" size={13} />
+            </button>
+          </header>
+          {!loaded ? (
+            <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura" aria-busy="true">
+              {Array.from({ length: upcomingSeenCount() }).map((_, i) => (
+                /* min-h: 실제 카드 행과 같은 높이를 예약한다(--card-h-list — 카드가 바뀌면 그 토큰만 고친다). */
+                <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-2.5">
+                  <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="skeleton h-3.5 w-1/3" />
+                    <div className="skeleton h-[19px] w-3/4" />
+                    <div className="skeleton h-3.5 w-1/2" />
+                    <div className="skeleton h-3.5 w-2/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : failed ? (
+            /* 세 번째 갈래(§11) — '없음'이 아니라 '못 불러옴'. 카드·문구·재시도 버튼은 일정 탐색과
+               같은 정본(LoadErrorCard)을 쓴다. compact: 홈에서는 이 섹션 하나가 화면을 다 먹으면 안 된다. */
+            <LoadErrorCard compact error={schedulesError} what="대회 목록" onRetry={onRetrySchedules} />
+          ) : upcoming.length === 0 ? (
+            <div className="rounded-aura border card-aura px-3 py-4">
+              {/* 빈 상태는 **무엇이 없고 지금 무엇을 할 수 있는지**를 말한다 — '오늘·내일'이라는 창이
+                  비었을 뿐 전체 일정에는 있을 수 있다는 것이 사용자가 알아야 할 사실이다. */}
+              <p className="t-body text-ink-muted">오늘·내일 예정 대회가 아직 없어요. 다음 날짜에는 열려 있을 수 있어요.</p>
+              <button type="button" onClick={onExplore}
+                className="mt-2 inline-flex items-center gap-1 rounded-badge bg-surface-high px-3 py-2 t-desc font-bold text-ink-secondary transition-colors hover:bg-surface-float/70">
+                전체 일정에서 찾아보기 <Icon name="chevron-right" size={13} />
+              </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
+              {upcoming.map((s, i) => (
+                <ScheduleCard key={s.id} mode="list" schedule={s}
+                  regInfo={regInfoBySchedule.get(s.id)}
+                  onVenueClick={onVenue}
+                  onSelect={onSelect}
+                  priority={i < 4} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* ── GTO 도구 — 홈의 **유일한** GTO 진입 ────────────────────────────
+            §6-1: 같은 GTO 설명을 거대한 히어로와 또 다른 대형 카드에서 반복하지 않는다.
+            정체성은 유지하되 한 줄이다(목적지 onTools — 예전 히어로·브랜드 슬라이드와 같은 곳). */}
+        <div className="px-page-x pt-5">
+          <button type="button" onClick={onTools} data-testid="home-gto-entry"
+            className={ROW_CLS}>
+            <span className={`${ROW_TILE_CLS} tile-grad`} aria-hidden>
+              <Icon name="brain" size={18} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-1.5">
-                <span className="shrink-0 rounded-chip bg-accent-300/20 px-1.5 py-px text-[10px] font-bold tracking-wide text-accent-200">EVENT</span>
-                <span className="truncate text-sm font-bold text-ink-primary">{event.title}</span>
-              </span>
-              <span className="mt-0.5 block truncate text-2xs tabular-nums text-ink-muted">
-                {event.myTickets > 0
-                  ? <>참여권 <b className="text-accent-200">{event.myTickets}장</b> · 남은 카드 {event.cards.filter((c) => !c.opened).length}장</>
-                  : <>매장 출석하면 참여권 1장 · 남은 카드 {event.cards.filter((c) => !c.opened).length}장</>}
-              </span>
+              <span className="block truncate t-title text-ink-primary">GTO 도구</span>
+              <span className="mt-0.5 block truncate t-desc text-ink-muted">차트 · 계산기 · 트레이너 · 누리 스팟</span>
             </span>
             <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
           </button>
         </div>
-      )}
 
-      {/* 오늘·내일 일정 */}
-      <section className="px-page-x pt-4">
-        <header className="flex items-baseline justify-between pb-1.5">
-          <h3 className="font-display text-lg font-bold tracking-tight text-ink-primary">오늘·내일 일정</h3>
-          <button type="button" onClick={onExplore} className="flex items-center gap-0.5 py-2 -my-2 text-xs font-semibold text-ink-muted hover:text-ink-secondary">
-            전체 일정 <Icon name="chevron-right" size={13} />
-          </button>
-        </header>
-        {!loaded ? (
-          <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura" aria-busy="true">
-            {Array.from({ length: upcomingSeenCount() }).map((_, i) => (
-              /* min-h: 실제 카드 행과 같은 높이를 예약한다. 예전엔 스켈레톤 행이 98px 인데
-                 실제가 116px 라 4행이면 최대 72px 가 아래로 밀렸다(실측 2026-09-08).
-                 숫자를 여기 박지 않고 --card-h-list 를 쓴다 — 카드가 바뀌면 그 토큰만 고친다. */
-              <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-2.5">
-                <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <div className="skeleton h-3.5 w-1/3" />
-                  <div className="skeleton h-[19px] w-3/4" />
-                  <div className="skeleton h-3.5 w-1/2" />
-                  <div className="skeleton h-3.5 w-2/3" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : upcoming.length === 0 ? (
-          <div className="rounded-aura border card-aura px-3 py-4">
-            <p className="text-sm text-ink-muted">오늘·내일 예정 대회가 아직 없어요.</p>
-            <button type="button" onClick={onExplore}
-              className="mt-2 inline-flex items-center gap-1 rounded-badge bg-surface-high px-3 py-2 text-xs font-bold text-ink-secondary transition-colors hover:bg-surface-float/70">
-              전체 일정에서 찾아보기 <Icon name="chevron-right" size={13} />
-            </button>
-          </div>
-        ) : (
-          <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
-            {upcoming.map((s, i) => (
-              <ScheduleCard key={s.id} mode="list" schedule={s}
-                regInfo={regInfoBySchedule.get(s.id)}
-                onVenueClick={onVenue}
-                onSelect={onSelect}
-                priority={i < 4} />
-            ))}
-          </div>
+        {/* ── 커뮤니티 최신 글 ───────────────────────────────────────────────
+            §6-1 마지막 줄: 홈의 커뮤니티는 **실제 글**이어야 한다. 가짜 문구·플레이스홀더는 없다.
+            ⚠ **맨 아래**에 둔다. 게시글은 부팅 첫 배치가 아니라 유휴(loadDeferred)에 도착하므로,
+              위쪽에 끼우면 도착하는 순간 그 아래(GTO 도구 줄)가 통째로 밀린다 — 맨 아래면 밀 것이 없다.
+            ⚠ 자리 예약(스켈레톤)을 하지 않는 이유도 같다: '글이 있을 것'이라고 가정하지 않는다.
+              비로그인·조회 실패·글 0건이면 섹션이 통째로 없다(없는 것을 있는 것처럼 만들지 않는다). */}
+        {hotPosts.length > 0 && (
+          <section className="px-page-x pt-5" data-testid="home-community">
+            <header className="flex items-baseline justify-between pb-2.5">
+              <h3 className={H3_CLS}>커뮤니티</h3>
+              <button type="button" onClick={onCommunity} className={MORE_CLS}>
+                전체 글 <Icon name="chevron-right" size={13} />
+              </button>
+            </header>
+            <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
+              {hotPosts.map((p) => (
+                <button key={p.id} type="button" onClick={() => onPost?.(p)}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-high/50 active:bg-surface-high">
+                  <span className="min-w-0 flex-1">
+                    {/* 제목이 없는 글(구버전·짧은 글)은 본문 첫 줄이 곧 제목이다 — 빈 줄을 그리지 않는다. */}
+                    <span className="block truncate t-title text-ink-primary">{p.title?.trim() || p.content}</span>
+                    <span className="block truncate t-desc tabular-nums text-ink-muted">
+                      {p.userName} · 댓글 {p.commentCount}
+                    </span>
+                  </span>
+                  <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
+                </button>
+              ))}
+            </div>
+          </section>
         )}
-      </section>
-
-      {/* '이어서 학습' 칸은 오너 지시(2026-09-06)로 제거 — 그 자리는 일정 위 이벤트 칸이 대신한다. */}
-
-      {/* 커뮤니티 인기글 1행은 오너 지시(2026-08-27)로 제거 — 홈은 일정·포스터에 집중 */}
-
-      {/* 주간 머니인 킹 스트립은 2026-09-05 제거(법적위험완화 v3 — 상금 기준 정렬 위젯) */}
+      </div>
     </div>
   );
 }

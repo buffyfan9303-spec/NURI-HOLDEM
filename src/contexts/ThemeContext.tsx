@@ -17,10 +17,22 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 /** 초기 테마 = 저장값, 없으면 **다크**(오너 지시 2026-09-02: 기본 테마는 다크).
  *  OS 의 prefers-color-scheme 는 더 이상 보지 않는다 — index.html 첫 페인트 스크립트와 같은 규칙이라 첫 프레임 색 점프도 없다.
  *  라이트는 사용자가 헤더 토글로 고른 경우(localStorage 'nuri-theme'='light')에만. */
+/** ⚠ localStorage 접근은 **던질 수 있다** — 사파리 프라이빗·쿠키 차단 웹뷰·기업 정책에서
+ *  `getItem` 자체가 SecurityError 를 던진다(읽기도 예외 대상이다. 없는 값을 null 로 주는 것과 다르다).
+ *  여기는 `useState(resolveInitialTheme)` 의 초기화자라 던지면 **ThemeProvider 렌더가 통째로 터지고
+ *  앱 전체가 흰 화면**이 된다. 저장소가 막혀도 앱과 테마 전환은 작동해야 한다(§7-1).
+ *  같은 부류를 `src/lib/supabase.ts` 의 authStorage 가 이미 겪고 고쳤다(A03-1) — 같은 처방이다. */
+function readStoredTheme(): Theme | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === 'light' ? 'light' : null;
+  } catch {
+    return null;
+  }
+}
+
 function resolveInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'dark';
-  const saved = localStorage.getItem(STORAGE_KEY) as Theme | null;
-  return saved === 'light' ? 'light' : 'dark';
+  return readStoredTheme() ?? 'dark';
 }
 
 /** <html> 클래스(.dark/.light)를 실제 DOM에 반영 */
@@ -46,7 +58,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // theme 변경 시: DOM 클래스 + localStorage 동기화
   useEffect(() => {
     applyThemeClass(theme);
-    localStorage.setItem(STORAGE_KEY, theme);
+    // 저장 실패(할당량 초과·프라이빗 모드)가 화면 반영을 되돌리면 안 된다 — 클래스는 위에서 이미 붙었다.
+    // 이 세션 안에서는 전환이 정상 동작하고, 다음 방문에 기억되지 않을 뿐이다.
+    try { localStorage.setItem(STORAGE_KEY, theme); } catch { /* 저장소 차단 — 무시 */ }
   }, [theme]);
 
   const setTheme = useCallback((t: Theme) => setThemeState(t), []);

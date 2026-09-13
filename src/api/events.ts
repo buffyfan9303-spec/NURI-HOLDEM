@@ -6,9 +6,11 @@
 //  · **참여권 소모·카드 확정·이용권 발급은 한 트랜잭션**(open_event_card). 클라이언트가
 //    낙관적으로 열어 두고 나중에 맞추는 짓을 하지 않는다 — 실패하면 카드는 닫힌 채로 남아야 한다.
 import { supabase, IS_MOCK } from '../lib/supabase';
-
-/** 현재 진행 중인 첫 이벤트. 캠페인이 늘면 목록 API 를 따로 만든다(지금은 하나뿐). */
-export const CARD_EVENT_SLUG = 'card-open-2026-09';
+// slug 상수·검사는 `lib/eventSlug` 로 나갔다 — App.tsx 가 부팅 딥링크 때문에 **동기로** 필요로 하는데,
+// 여기 있으면 이 모듈 전체(TIER_META·oddsRows 포함)가 첫 화면 임계 경로 청크에 실린다(2026-09-13 번들 예산).
+// 여기서 **그대로 재수출**하므로 기존 임포트(`from '../../api/events'`)는 한 줄도 고칠 필요가 없다.
+import { CARD_EVENT_SLUG, isEventSlug } from '../lib/eventSlug';
+export { CARD_EVENT_SLUG, isEventSlug };
 
 export interface EventCard {
   idx: number;
@@ -84,17 +86,25 @@ export function oddsRows(b: EventBoard): OddsRow[] {
      이전 사람의 참여권 숫자가 한 프레임 스친다 — 그래서 auth 가 바뀌면 버린다.
      TOKEN_REFRESHED 는 같은 사람이라 남긴다(주기적으로 오므로 버리면 씨앗이 늘 없다).
    ⚠ 씨앗은 '즉시 그릴 첫 화면'일 뿐이고, 화면은 열리자마자 항상 다시 받아 갱신한다
-     (그 사이 다른 사람이 카드를 열었을 수 있다 — 낡은 채로 두면 헛클릭이 된다). */
-let lastBoard: EventBoard | null = null;
-export const cachedEventBoard = (): EventBoard | null => lastBoard;
-supabase.auth.onAuthStateChange((e) => { if (e !== 'TOKEN_REFRESHED') lastBoard = null; });
+     (그 사이 다른 사람이 카드를 열었을 수 있다 — 낡은 채로 두면 헛클릭이 된다).
+   ⚠ **씨앗은 slug 별로 둔다.** 예전엔 변수 하나였는데, 캠페인이 둘이 되는 순간 A 를 보고 온 사람이
+     B 딥링크를 열면 A 의 제목·카드·참여권이 첫 프레임에 그대로 뜬다(다른 이벤트인데 '이미 열려 있는 카드'로
+     보인다 — 헛클릭의 정의다). 키를 붙이면 그 자리는 그냥 '씨앗 없음'이 되어 종전대로 로딩부터 간다. */
+const lastBoards = new Map<string, EventBoard>();
+export const cachedEventBoard = (slug: string = CARD_EVENT_SLUG): EventBoard | null => lastBoards.get(slug) ?? null;
+/** @internal getEventBoard 전용 — 테스트가 씨앗 계약(슬러그별 격리)을 직접 잴 수 있게 열어 둔다. */
+export function rememberEventBoard(slug: string, b: EventBoard | null): void {
+  if (b) lastBoards.set(slug, b); else lastBoards.delete(slug);
+}
+supabase.auth.onAuthStateChange((e) => { if (e !== 'TOKEN_REFRESHED') lastBoards.clear(); });
 
 export async function getEventBoard(slug: string = CARD_EVENT_SLUG): Promise<EventBoard | null> {
   if (IS_MOCK) return null;
   const { data, error } = await supabase.rpc('event_board', { p_slug: slug });
   if (error) throw new Error(error.message);
-  lastBoard = (data as EventBoard | null) ?? null;
-  return lastBoard;
+  const b = (data as EventBoard | null) ?? null;
+  rememberEventBoard(slug, b);
+  return b;
 }
 
 /** 카드 열기 — 참여권 1장을 쓰고 그 자리를 확정한다. 실패는 그대로 던진다(카드는 닫힌 채 남는다). */

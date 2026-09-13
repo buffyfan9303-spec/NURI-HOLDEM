@@ -270,3 +270,41 @@ test.describe('NURI SPOT — 뷰포트 매트릭스', () => {
     });
   }
 });
+
+// 9인 UTG+1 자리가 화면에서 실제로 표에 걸리는가 (2026-09-11)
+//
+// 스팟은 자리를 'UTG1' 로 저장하고 차트는 'UTG+1' 로 적는다. 9개 중 8개가 겹쳐
+// TypeScript 가 === 비교를 잡지 못해, **그 한 자리만** 어떤 입력으로도 표에 안 걸리고
+// '수학 참고' 로 떨어졌다. 단위 테스트는 함수 반환값을 보지만, 이 버그는 사용자에게
+// "이 자리는 분석이 안 되네" 로 보였던 것이라 **화면에서** 한 번 더 못박는다.
+test.describe('NURI SPOT — 9인 UTG+1 자리', () => {
+  test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 412, height: 915 }); });
+
+  test('🔴 UTG+1 오픈이 수학 참고가 아니라 그 자리의 표에 걸린다', async ({ page }) => {
+    test.setTimeout(120_000);
+    await stubLogin(page); await stabilizeBackstack(page);
+    const dlg = await openSpot(page);
+    const steps = dlg.getByRole('group', { name: '입력 단계' });
+
+    await steps.getByRole('button', { name: /게임/ }).click();
+    await dlg.getByRole('button', { name: '9인', exact: true }).click();
+
+    await steps.getByRole('button', { name: /자리·스택/ }).click();
+    // '내 자리' 행이 먼저 온다 — 상대 자리에도 같은 이름의 칩이 있어 첫 번째를 집는다.
+    await dlg.getByRole('button', { name: 'UTG1', exact: true }).first().click();
+    await expect(dlg.getByRole('button', { name: 'UTG1', exact: true }).first(),
+      '내 자리가 UTG1 로 안 바뀐다').toHaveAttribute('aria-pressed', 'true');
+
+    await steps.getByRole('button', { name: /카드·액션/ }).click();
+    await dlg.locator('button[data-card="As"]').click();
+    await dlg.locator('button[data-card="Ks"]').click();
+    await page.waitForTimeout(900);
+
+    const report = dlg.getByLabel('스팟 리포트');
+    // 여기가 버그의 지점이다 — 예전엔 math_only 였다.
+    await expect(report.locator('[data-source-badge="chart_nash"]'),
+      'UTG+1 자리가 표에 안 걸린다 — 수학 참고로 떨어졌다').toBeVisible({ timeout: 15_000 });
+    // 이웃 표(UTG·MP)로 때운 것이 아니라 **제 표**를 봤는지까지 본다.
+    await expect(report.getByText(/UTG\+1/), '이웃 표로 때웠다').toBeVisible();
+  });
+});

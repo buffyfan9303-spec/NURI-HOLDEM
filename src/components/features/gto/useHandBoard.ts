@@ -35,6 +35,14 @@ export interface UseHandBoard {
   place: (c: Card) => void;
   removeAt: (t: HandTarget, index: number) => void;
   clear: () => void;
+  /**
+   * 외부 스팟으로 **통째 교체**. 저장된 스팟을 '다시 열기' 처럼 마운트 뒤에 카드를 갈아끼우는 유일한 길이다.
+   *
+   * ⚠ 왜 필요한가(F10): `init` 은 `useState` 초기화 함수에서만 소비되므로 마운트 뒤에는 아무 효력이 없다.
+   *   진입점이 없으면 '다시 열기' 가 리포트만 바꾸고 카드 그리드는 이전 스팟에 남아,
+   *   그 상태로 저장·공유하면 **이전 스팟의 에퀴티가 영구 스냅샷에 박힌다**.
+   */
+  setAll: (next?: HandBoardInit) => void;
   /** 빈 슬롯을 걷어낸 실제 카드(계산 엔진 입력용) */
   heroCards: Card[];
   villainCards: Card[];
@@ -49,16 +57,37 @@ function pad(ids: string[] | undefined, n: number): (Card | null)[] {
   return out;
 }
 
+export interface HandBoardState {
+  hero: (Card | null)[];
+  villain: (Card | null)[];
+  board: (Card | null)[];
+  target: HandTarget;
+}
+
+/**
+ * `init` 하나를 슬롯 상태로 펼친다 — **마운트 초기화와 `setAll` 이 같은 규칙을 쓰게** 하는 순수 함수.
+ * 두 곳이 각자 계산하면 '다시 열기' 한 스팟만 슬롯 규칙이 어긋난다.
+ *
+ * vitest 환경이 `node` 라 훅을 렌더해 검증할 수 없어 판정만 순수 함수로 뺀다(`lib/authGeneration.ts` 선례).
+ */
+export function initialHandBoard(init: HandBoardInit | undefined, boardSlots: number): HandBoardState {
+  return {
+    hero: pad(init?.hero, 2),
+    villain: pad(init?.villain, 2),
+    board: pad(init?.board, boardSlots),
+    target:
+      (init?.hero?.length ?? 0) < 2 ? 'hero'
+        : (init?.villain?.length ?? 0) < 2 ? 'villain'
+          : 'board',
+  };
+}
+
 /** @param boardSlots 보드 칸 수 — 아웃츠(플랍·턴)는 4, 리플레이(리버까지)는 5 */
 export function useHandBoard(boardSlots: number, init?: HandBoardInit): UseHandBoard {
-  const [hero, setHero] = useState<(Card | null)[]>(() => pad(init?.hero, 2));
-  const [villain, setVillain] = useState<(Card | null)[]>(() => pad(init?.villain, 2));
-  const [board, setBoard] = useState<(Card | null)[]>(() => pad(init?.board, boardSlots));
-  const [target, setTarget] = useState<HandTarget>(() => {
-    if ((init?.hero?.length ?? 0) < 2) return 'hero';
-    if ((init?.villain?.length ?? 0) < 2) return 'villain';
-    return 'board';
-  });
+  const [hero, setHero] = useState<(Card | null)[]>(() => initialHandBoard(init, boardSlots).hero);
+  const [villain, setVillain] = useState<(Card | null)[]>(() => initialHandBoard(init, boardSlots).villain);
+  const [board, setBoard] = useState<(Card | null)[]>(() => initialHandBoard(init, boardSlots).board);
+  const [target, setTarget] = useState<HandTarget>(() => initialHandBoard(init, boardSlots).target);
 
   const usedIds = useMemo(() => {
     const s = new Set<CardId>();
@@ -105,6 +134,14 @@ export function useHandBoard(boardSlots: number, init?: HandBoardInit): UseHandB
     setTarget('hero');
   }, [boardSlots]);
 
+  const setAll = useCallback((next?: HandBoardInit) => {
+    const s = initialHandBoard(next, boardSlots);
+    setHero(s.hero);
+    setVillain(s.villain);
+    setBoard(s.board);
+    setTarget(s.target);
+  }, [boardSlots]);
+
   const heroCards = useMemo(() => hero.filter((c): c is Card => c !== null), [hero]);
   const villainCards = useMemo(() => villain.filter((c): c is Card => c !== null), [villain]);
   const boardCards = useMemo(() => board.filter((c): c is Card => c !== null), [board]);
@@ -114,5 +151,5 @@ export function useHandBoard(boardSlots: number, init?: HandBoardInit): UseHandB
     board: boardCards.map(cardId),
   }), [heroCards, villainCards, boardCards]);
 
-  return { hero, villain, board, target, setTarget, usedIds, place, removeAt, clear, heroCards, villainCards, boardCards, ids };
+  return { hero, villain, board, target, setTarget, usedIds, place, removeAt, clear, setAll, heroCards, villainCards, boardCards, ids };
 }

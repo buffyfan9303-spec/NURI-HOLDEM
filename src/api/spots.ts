@@ -10,6 +10,7 @@
 //   방금 만든 글의 id 를 몰라 본문 문자열로 재조회까지 했다(PostFormModal.findCreatedPostId).
 //   RPC 하나면 둘 다 사라진다 — 실패하면 글도 안 남고, id 는 함수가 돌려준다.
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import { toJSON, fromJSON, type SpotReview } from '../lib/spot';
 import type { SpotEvaluation, CoverageKind } from '../lib/spotEvaluate';
 
@@ -32,8 +33,13 @@ export interface PostSpot {
   /** 작성자가 열어 준 것만 true — 기본은 둘 다 가림 */
   revealVillain: boolean;
   revealResult: boolean;
-  /** 공유 시점 분석 스냅샷. 엔진이 바뀌어도 옛 글의 결론이 말없이 변하지 않는다 */
-  analysis: unknown;
+  // ⚠ F9(2026-09-13): `analysis` 를 **읽지 않는다.**
+  //   이 컬럼은 `verdict`·`notes`·`math`(+차트 적중 시 `mix`·`heroFreq`)를 담는데,
+  //   그게 공개 GRANT 화이트리스트에 들어 있어 **글쓴이의 선택이 그대로 새어 나갔다**
+  //   (`mix`+`heroFreq` 가 나란히 오면 역산되고, `heroAction` 이 check 면 `notes` 에 문자 그대로 들어간다).
+  //   서버가 `hidden_villain`·`heroAction` 을 애써 잠가 둔 것이 이 파생값 하나로 무의미해졌다.
+  //   **값은 지우지 않는다**(엔진이 바뀌어도 옛 글의 결론이 변하지 않아야 한다) — 읽지 않을 뿐이다.
+  //   화면에서 쓰는 곳도 없었다(전수 확인). DB 회수는 20260913b 초안.
 }
 
 /** 분석 결과에서 저장할 조각만 뽑는다 — 화면 상태나 함수는 담지 않는다. */
@@ -103,8 +109,7 @@ export async function saveMySpot(spot: SpotReview, e: SpotEvaluation): Promise<s
 
 export async function deleteMySpot(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('spot_reviews').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  await mustAffect(supabase.from('spot_reviews').delete().eq('id', id));
 }
 
 // ── 스팟 토론 공유 ────────────────────────────────────────────────────────────
@@ -146,7 +151,7 @@ export async function fetchPostSpot(postId: string): Promise<PostSpot | null> {
   if (IS_MOCK) return null;
   const { data, error } = await supabase
     .from('post_spots')
-    .select('spot, coverage_kind, source_label, dataset_version, reveal_villain, reveal_result, analysis')
+    .select('spot, coverage_kind, source_label, dataset_version, reveal_villain, reveal_result')
     .eq('post_id', postId).maybeSingle();
   if (error || !data) return null;
   const spot = fromJSON(data.spot);
@@ -164,7 +169,6 @@ export async function fetchPostSpot(postId: string): Promise<PostSpot | null> {
     datasetVersion: data.dataset_version as string,
     revealVillain: data.reveal_villain === true,
     revealResult: data.reveal_result === true,
-    analysis: data.analysis,
   };
 }
 

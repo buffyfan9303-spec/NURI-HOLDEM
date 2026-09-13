@@ -1,7 +1,7 @@
 // preflopQuiz — 오답 노트가 기대는 두 계약: ① 키로 문제가 그대로 복원된다 ② 저장돼 있지 않은 '내 답'은 권장의 반대로 파생된다.
 // 모드 확장(2026-09-03): 6모드 문제 생성 · 채점 경계(0.25) · 키 왕복.
 import { describe, it, expect } from 'vitest';
-import { FOLD, MODES, gradePreflop, makeQuiz, modeOfKey, verdictOf, wrongPickOf, type Quiz, type QuizAct } from './preflopQuiz';
+import { FOLD, MODES, gradePreflop, gradeDetail, makeQuiz, modeOfKey, verdictOf, wrongPickOf, type Quiz, type QuizAct } from './preflopQuiz';
 import { RANGE_SCENARIOS } from './ranges.data';
 
 const q = (acts: QuizAct[] | number, actionLabel = '오픈'): Quiz => ({
@@ -9,35 +9,91 @@ const q = (acts: QuizAct[] | number, actionLabel = '오픈'): Quiz => ({
   acts: typeof acts === 'number' ? [{ label: actionLabel, freq: acts }] : acts,
 });
 
+// ⚠ 2026-09-12 계약 변경: 채점이 '혼합에 들어 있으면 정답' 으로 바뀌면서
+//   '틀릴 수 있는 선택지' 의 정의도 **빈도 25% 미만 → 빈도 0** 으로 함께 옮겼다.
+//   둘이 어긋나면 **정답으로 센 선택이 오답노트에 '내 답' 으로 찍힌다.**
+//   아래 기대값 중 일부(0.8 · 0.2 같은 합성 빈도)는 그래서 바뀌었다 —
+//   실제 차트 빈도는 1 · 0.75 · 0.5 · 0.25 뿐이라 **화면 동작은 달라지지 않는다.**
 describe('wrongPickOf · 파생 내 답', () => {
-  it('권장이 액션(>75%)이면 내 답은 폴드', () => { expect(wrongPickOf(q(1))).toBe('폴드'); expect(wrongPickOf(q(0.8))).toBe('폴드'); });
-  it('권장이 폴드(<25%)면 내 답은 그 액션 라벨', () => { expect(wrongPickOf(q(0, '올인'))).toBe('올인'); expect(wrongPickOf(q(0.2))).toBe('오픈'); });
-  it('혼합 구간은 오답이 날 수 없으므로 null — 경계 25%·75% 는 채점(빈도 ≥0.25 정답)과 같은 쪽', () => {
+  it('권장이 액션 100% 면 폴드 빈도가 0 이라 내 답은 폴드', () => {
+    expect(wrongPickOf(q(1))).toBe('폴드');
+  });
+  it('액션 빈도가 0 이면 그 액션이 내 답', () => {
+    expect(wrongPickOf(q(0, '올인'))).toBe('올인');
+  });
+  it('🔴 양쪽 다 혼합에 들어 있으면 오답이 날 수 없다 — null', () => {
+    // 오픈 20% / 폴드 80% — 예전엔 오픈이 '25% 미만' 이라 내 답으로 찍혔다.
+    // 이제 20% 는 정답이므로 틀릴 수 있는 선택지가 없다.
+    expect(wrongPickOf(q(0.2))).toBeNull();
+    expect(wrongPickOf(q(0.8))).toBeNull();
+  });
+  it('혼합 구간은 오답이 날 수 없으므로 null — 25%·75% 경계도 같다', () => {
     expect(wrongPickOf(q(0.5))).toBeNull(); expect(wrongPickOf(q(0.25))).toBeNull(); expect(wrongPickOf(q(0.75))).toBeNull();
   });
-  it('3택 — 틀릴 수 있는 선택지가 하나(폴드)면 그것, 둘(3벳·폴드)이면 특정 불가 null', () => {
+  it('3택 — 틀릴 수 있는 선택지가 하나(폴드)면 그것, 둘이면 특정 불가 null', () => {
+    // 3벳 50 · 콜 50 → 폴드 0 하나만 오답 후보
     expect(wrongPickOf(q([{ label: '3벳', freq: 0.5 }, { label: '콜', freq: 0.5 }]))).toBe('폴드');
+    // 3벳 0 · 콜 100 → 3벳과 폴드(0) 둘 다 오답 후보라 특정 불가
     expect(wrongPickOf(q([{ label: '3벳', freq: 0 }, { label: '콜', freq: 1 }]))).toBeNull();
   });
 });
 
-describe('gradePreflop · 빈도 25% 경계', () => {
-  it('액션 빈도 ≥0.25 면 액션 정답, 폴드 빈도(1−Σ) ≥0.25 면 폴드 정답', () => {
+describe('gradePreflop · 혼합에 들어 있으면 오답이 아니다', () => {
+  it('주된 선택(≥25%)은 정답이다 — 액션도 폴드도', () => {
     expect(gradePreflop(q(0.25), '오픈')).toBe(true);
-    expect(gradePreflop(q(0.24), '오픈')).toBe(false);
     expect(gradePreflop(q(0.75), FOLD)).toBe(true);
-    expect(gradePreflop(q(0.76), FOLD)).toBe(false);
   });
+
+  // §3.4: "12.5% 혼합 액션은 빈도가 낮다는 이유만으로 오답이 아니다."
+  // 예전 규칙(`freq >= 0.25`)은 12.5% 로 섞는 **올바른 선택**을 오답으로 셌다.
+  // 그러면 트레이너가 혼합 전략을 잘못 가르치고 오답노트에도 엉뚱한 항목이 쌓인다.
+  it('🔴 12.5% 로 섞는 액션은 오답이 아니다 — 드물 뿐 틀린 게 아니다', () => {
+    expect(gradePreflop(q(0.125), '오픈'), '혼합에 든 선택을 오답으로 셌다').toBe(true);
+    expect(gradeDetail(q(0.125), '오픈')).toBe('mix');
+  });
+
+  it('🔴 빈도 0 만 오답이다', () => {
+    expect(gradePreflop(q(0), '오픈')).toBe(false);
+    expect(gradeDetail(q(0), '오픈')).toBe('wrong');
+  });
+
+  it('등급은 셋으로 갈린다 — 주된 선택 / 드문 혼합 / 오답', () => {
+    expect(gradeDetail(q(0.5), '오픈')).toBe('best');
+    expect(gradeDetail(q(0.2), '오픈')).toBe('mix');
+    expect(gradeDetail(q(1), FOLD)).toBe('wrong');   // 액션이 100% 면 폴드 빈도 0
+  });
+
   it('3택 — 3벳 0.5 · 콜 0.5 면 폴드만 오답, 없는 라벨은 오답', () => {
     const m = q([{ label: '3벳', freq: 0.5 }, { label: '콜', freq: 0.5 }]);
     expect(gradePreflop(m, '3벳')).toBe(true);
     expect(gradePreflop(m, '콜')).toBe(true);
-    expect(gradePreflop(m, FOLD)).toBe(false);
-    expect(gradePreflop(m, '4벳')).toBe(false);
+    expect(gradePreflop(m, FOLD)).toBe(false);       // 1 − 1.0 = 0
+    expect(gradePreflop(m, '4벳')).toBe(false);      // 없는 라벨 = 빈도 0
     expect(verdictOf(m)).toBe('혼합 (3벳 50% · 콜 50%)');
     expect(verdictOf(q(0.25, '콜'))).toBe('혼합 (콜 25%)');
     expect(verdictOf(q(0.2, '콜'))).toBe(FOLD);
     expect(verdictOf(q(0.75))).toBe('오픈');
+  });
+
+  it('현재 차트 데이터(1 · 0.75 · 0.5 · 0.25)에서는 동작이 달라지지 않는다', () => {
+    // 이 규칙 변경은 **앞으로 솔버 데이터가 들어올 때**를 위한 것이다.
+    // 지금 쓰는 빈도에는 0 초과 0.25 미만이 없으므로 기존 판정과 같아야 한다.
+    for (const f of [1, 0.75, 0.5, 0.25]) {
+      expect(gradePreflop(q(f), '오픈')).toBe(f >= 0.25);
+      expect(gradePreflop(q(f), FOLD)).toBe(1 - f >= 0.25);
+    }
+  });
+});
+
+describe('wrongPickOf · 채점과 같은 기준을 쓴다', () => {
+  it('🔴 정답으로 센 혼합 선택이 오답노트의 "내 답" 으로 찍히지 않는다', () => {
+    // 오픈 12.5% / 폴드 87.5% — 오픈은 `mix`(정답)이므로 '내 답' 후보가 아니다.
+    expect(wrongPickOf(q(0.125))).toBeNull();
+  });
+
+  it('빈도 0 인 선택지가 하나뿐이면 그것이 내 답이다', () => {
+    // 3벳 0 · 콜 60 → 폴드 40% 는 혼합이라 정답, 남은 오답 후보는 3벳 하나뿐.
+    expect(wrongPickOf(q([{ label: '3벳', freq: 0 }, { label: '콜', freq: 0.6 }]))).toBe('3벳');
   });
 });
 

@@ -1,5 +1,6 @@
 // src/api/support.ts — 1:1 고객센터 문의. 회원 접수 + 운영자 답변(RLS로 권한 강제).
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import { currentUser } from './_session';
 
 export const INQUIRY_CATEGORIES = ['이용 문의', '신고/제재', '결제·이용권', '버그/오류', '기타'] as const;
@@ -63,17 +64,16 @@ export async function getAllInquiries(): Promise<SupportInquiry[]> {
 /** 운영자: 답변 등록(RLS로 admin만 update 허용) */
 export async function answerInquiry(id: string, answer: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('support_inquiries')
+  // 0행을 성공으로 넘기면 '답변을 등록했습니다' 뒤에 초안이 비워진다 — 운영자가 쓴 답변이 통째로 사라진다.
+  await mustAffect(supabase.from('support_inquiries')
     .update({ answer: answer.trim(), status: 'answered', answered_at: new Date().toISOString() })
-    .eq('id', id);
-  if (error) throw new Error(error.message);
+    .eq('id', id));
 }
 
 /** 본인: 문의 삭제(취소) */
 export async function deleteMyInquiry(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('support_inquiries').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  await mustAffect(supabase.from('support_inquiries').delete().eq('id', id));
 }
 
 // #14 실시간 — 신규 문의/답변을 즉시 반영(RLS가 수신 범위를 강제: 운영자=전체, 회원=본인). 변경 시 reload 콜백.

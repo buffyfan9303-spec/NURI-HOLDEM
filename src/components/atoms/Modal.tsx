@@ -4,6 +4,7 @@ import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import { springTo, presentationY, project, rubberband, releaseVelocity, type VelSample } from '../../lib/spring';
 import Icon from './Icon';
+import { useDialogFocus } from './useDialogFocus';
 
 interface ModalProps {
   open: boolean;
@@ -15,11 +16,20 @@ interface ModalProps {
   /** sheet: 하단 시트 / center: 센터 / page: 전체화면 불투명 페이지(뒤 비침 없음) */
   variant?: 'center' | 'sheet' | 'page';
   children: ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '6xl';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '6xl' | 'read';
   /** true면 모달 높이를 최대치로 고정 (탭 전환 시 크기 변동 방지) */
   fillHeight?: boolean;
   /** true면 오버레이가 아닌 인라인 패널로 렌더(데스크탑 2-pane 우측 패널용). */
   inline?: boolean;
+  /**
+   * 상단 조작행의 밀도. 기본('default')은 **종전 그대로**다 — 이 값을 주는 화면만 바뀐다.
+   *
+   * 'compact': 읽기 화면(게시글 상세)용. 그립 표시 + 창 제목 + 닫기가 **세 층으로 쌓여 있던 것**을
+   *   한 행으로 합친다(390px 실측 90.3px → 52px). 제목은 '이 창이 무엇인지'만 알리는 작은
+   *   보조 라벨이 되고(읽을 것은 글 제목이다), 닫기 버튼의 44px 터치 영역과 그립 드래그는 그대로다.
+   *   ⚠ 게시글 문맥 전용 — 전 모달을 일괄로 좁히는 값이 아니다.
+   */
+  density?: 'default' | 'compact';
   /** false면 배경(공백) 클릭으로 닫히지 않음 — 작성 폼에서 실수로 닫힘 방지(X·ESC는 유지). 기본 true. */
   dismissOnBackdrop?: boolean;
   /**
@@ -44,17 +54,33 @@ const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
   '2xl': 'max-w-2xl',
   '4xl': 'max-w-4xl',
   '6xl': 'max-w-6xl',
+  // UI-02(2026-09-13): 게시글 **읽기 열**. Pretendard `0` 자폭 0.5957em × 17px ≈ 10.13px/ch — 문서의 68~72ch 는 689~729px.
+  //   2xl(714) − lg:p-6(25.5×2) = 663px = 65.5ch(미달), 4xl(952)는 과다 → 46rem(782px) − 51 = 731px ≈ 72.2ch.
+  //   ⚠ tailwind content 스캔: 임의값은 소스에 **문자열 리터럴**로 있어야 한다(변수 조합 금지 — tailwind.config.js 경고).
+  read: 'max-w-[46rem]',
 };
 
-/** 지금 열려 있는(비-inline) 모달의 콘텐츠 요소 — 마지막이 맨 위. 포커스 되잡기·첫 포커스는 맨 위 모달만 한다. */
-const openModals: HTMLElement[] = [];
+/**
+ * 본문을 아래로 끌어 닫기(bodyDrag) 3상태(UI-02, 2026-09-13) — 진리표가 곧 회귀 계약이다(atoms/modalBodyDrag.test.ts).
+ *   page : `dragToClose` 를 안 넘기면(undefined) 예전처럼 **켜짐** — GTO 도구·매장 도구·일정 상세 5곳은 그대로다.
+ *          `false` 를 명시한 읽기 화면(게시글)만 꺼진다: 본문 선택·세로 읽기·댓글 편집 중 오닫힘 방지(실행문 §7.2).
+ *   sheet: 명시 `true` 만 켜진다(글쓰기·신고·문의·설정 폼 보호 — 종전과 같다).
+ *   center: 항상 꺼짐.
+ * ⚠ 기본값만 지우고 이 계산을 안 바꾸면 모든 sheet 가 조용히 통과한다 — 그래서 함수 하나로 뽑아 표로 잠근다.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function resolveBodyDrag(variant: NonNullable<ModalProps['variant']>, dragToClose: boolean | undefined): boolean {
+  if (variant === 'page') return dragToClose !== false;
+  if (variant === 'sheet') return dragToClose === true;
+  return false;
+}
 
 export default function Modal({
   open, onClose, title, headerAction, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
-  dragToClose = false,
+  dragToClose, density = 'default',
 }: ModalProps) {
-  // page 는 기존 동작 유지(항상 켜짐), sheet 는 opt-in.
-  const bodyDrag = variant === 'page' || (variant === 'sheet' && dragToClose);
+  const compact = density === 'compact';
+  const bodyDrag = resolveBodyDrag(variant, dragToClose);
   // 바디 스크롤 잠금
   // 드래그로 닫혔으면 닫힘 키프레임을 다시 돌리지 않는다(이미 화면 밖 — 되감아 올라왔다 다시 내려가는 이중 퇴장 방지)
   const [dragClosed, setDragClosed] = useState(false);
@@ -251,64 +277,12 @@ export default function Modal({
   const dragHandlers = bodyDrag
     ? { onTouchStart: onSheetStart, onTouchMove: onSheetMove, onTouchEnd: onSheetEnd, onTouchCancel: onSheetCancel }
     : {};
-  useEffect(() => {
-    // ⚠ render 를 같이 본다 — 마운트된 채 닫혀 있다가 열리는 모달(약관 시트 등)은 open 이 true 가 되는 커밋에
-    //   콘텐츠가 아직 없다(render 는 위 효과가 다음 커밋에 올린다). open 만 보면 el 이 null 이라 조용히 빠져
-    //   첫 포커스·트랩·복원이 전부 죽었다(2026-09-10 e2e 실측). render 가 오르는 커밋에서 다시 돈다.
-    if (!open || inline || !render) return;
-    const el = contentRef.current;
-    if (!el) return;
-
-    // 열기 직전에 포커스가 있던 곳을 기억한다. 닫을 때 여기로 돌려보내지 않으면
-    // 포커스가 문서 맨 앞으로 튀어, 방금 누른 버튼으로 못 돌아간다(키보드·스크린리더 사용자는
-    // 자기가 어디 있었는지 잃어버린다). 모달의 '되돌리기' 는 시각만이 아니라 포커스에도 필요하다.
-    const opener = document.activeElement as HTMLElement | null;
-
-    const focusables = () => Array.from(
-      el.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'),
-    ).filter((n) => n.offsetParent !== null);
-    // 열린 모달 스택 — 포커스를 되잡는 것은 **맨 위** 모달 하나뿐이다.
-    // 부모 Modal 위에 자식 Modal(글쓰기 시트·약관 시트)이 뜨면 자식 DOM 은 부모 el 밖이라, 부모가 "밖으로 샜다"고
-    // 보고 자식의 포커스를 매번 빼앗았다(자식 첫 포커스·Tab·Space 전부 부모 닫기 버튼으로 끌려감 — 2026-09-10 e2e 실측).
-    openModals.push(el);
-    const isTop = () => openModals[openModals.length - 1] === el;
-    const t = window.setTimeout(() => { if (isTop()) (focusables()[0] ?? el).focus(); }, 50);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const f = focusables();
-      if (!f.length) return;
-      const first = f[0], last = f[f.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    };
-    el.addEventListener('keydown', onKey);
-
-    // ⚠ Tab 키만 막는 건 반쪽짜리다. 포커스는 Tab 말고도 새는 길이 많다 —
-    //   배경 dim 버튼 클릭, 주소창에서 F6 로 돌아오기, 스크린리더의 가상 커서 이동,
-    //   모달 밖 요소가 자기 자신에게 focus() 를 거는 경우 등.
-    //   그래서 '탭 순서'가 아니라 '실제로 포커스가 어디에 들어왔는가'를 보고 되잡는다.
-    const onFocusIn = (e: FocusEvent) => {
-      const target = e.target as Node | null;
-      if (!target || el.contains(target)) return;
-      if (!isTop()) return; // 위에 다른 모달이 열려 있으면 그쪽 포커스다 — 뺏지 않는다
-      (focusables()[0] ?? el).focus();
-    };
-    document.addEventListener('focusin', onFocusIn);
-
-    return () => {
-      window.clearTimeout(t);
-      el.removeEventListener('keydown', onKey);
-      document.removeEventListener('focusin', onFocusIn);
-      const i = openModals.lastIndexOf(el);
-      if (i >= 0) openModals.splice(i, 1);
-      // 아직 화면에 붙어 있는 요소일 때만 되돌린다(그 사이 언마운트됐으면 건드리지 않는다).
-      if (opener && document.contains(opener)) {
-        // 되돌리는 순간의 focusin 이 위 가드에 걸리지 않도록 리스너 해제 뒤에 실행한다.
-        try { opener.focus({ preventScroll: true }); } catch { /* 포커스 불가 요소 무시 */ }
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, render]);
+  // ⚠ render 를 같이 본다 — 마운트된 채 닫혀 있다가 열리는 모달(약관 시트 등)은 open 이 true 가 되는 커밋에
+  //   콘텐츠가 아직 없다(render 는 위 효과가 다음 커밋에 올린다). open 만 보면 el 이 null 이라 조용히 빠져
+  //   첫 포커스·트랩·복원이 전부 죽었다(2026-09-10 e2e 실측). render 가 오르는 커밋에서 다시 돈다.
+  // 공유 계약(atoms/useDialogFocus, U06 2026-09-12) — VenuePage·GroupPage 등 Modal 을 쓰지 않는
+  // 풀스크린 오버레이도 같은 스택·같은 트랩·같은 복원을 쓴다. 로직을 두 번 만들지 않는다.
+  useDialogFocus(open && !inline && render, contentRef);
 
   // 인라인 패널(2-pane 우측) — 오버레이/딤/백버튼 없이 콘텐츠만 카드로.
   if (inline) {
@@ -316,8 +290,10 @@ export default function Modal({
     return (
       <div className="flex max-h-[calc(100vh-5rem)] flex-col overflow-hidden rounded-card border border-border-default bg-surface-mid">
         {title && (
-          <header className="flex shrink-0 items-center justify-between border-b border-border-strong px-4 py-3">
-            <h2 className="min-w-0 flex-1 truncate text-base font-bold tracking-tight text-ink-primary">{title}</h2>
+          <header className={['flex shrink-0 items-center justify-between border-b border-border-strong px-4',
+            compact ? 'py-2' : 'py-3'].join(' ')}>
+            <h2 className={['min-w-0 flex-1 truncate tracking-tight',
+              compact ? 'text-xs font-semibold text-ink-secondary' : 'text-base font-bold text-ink-primary'].join(' ')}>{title}</h2>
             <div className="flex shrink-0 items-center gap-1">
               {headerAction}
               <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
@@ -350,11 +326,18 @@ export default function Modal({
         data-scroll-lock
         className={['fixed inset-0 z-[55] bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]',
           closing ? (dragClosed ? '' : 'animate-fade-out') : 'animate-fade-in'].join(' ')}>
-        {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기 */}
-        <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
+        {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기. ⚠ 드래그를 끈 page(게시글 읽기)에는 그리지 않는다 —
+            핸들이 '끌 수 있다'고 말해 놓고 잡아끌면 아무 반응이 없으면 UI 가 거짓말을 한다(아래 sheet 그립 주석과 같은 원칙). */}
+        {bodyDrag && (
+          <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
+        )}
         {title && (
-          <header className="shrink-0 flex items-center justify-between px-4 h-header-h border-b border-border-strong bg-surface-base">
-            <h2 id="modal-title" className="min-w-0 flex-1 truncate text-base font-bold tracking-tight text-ink-primary">{title}</h2>
+          /* compact(UI-02): sheet compact 와 **같은 문법** — 창 제목은 '어느 게시판인가' 만 말하는 작은 보조 라벨, 닫기 44px 는 그대로.
+             density 를 안 넘기는 page 5곳은 바이트 동일(default 분기). */
+          <header className={['shrink-0 flex items-center justify-between border-b border-border-strong bg-surface-base',
+            compact ? 'px-3 py-1' : 'px-4 h-header-h'].join(' ')}>
+            <h2 id="modal-title" className={['min-w-0 flex-1 truncate tracking-tight',
+              compact ? 'text-xs font-semibold text-ink-secondary' : 'text-base font-bold text-ink-primary'].join(' ')}>{title}</h2>
             <div className="flex shrink-0 items-center gap-1.5">
               {headerAction}
               <button type="button" onClick={onClose} aria-label="닫기"
@@ -433,7 +416,9 @@ export default function Modal({
             ⚠ 예전엔 드래그 핸들러가 page 변형에만 붙어 있어서, 핸들이 '끌 수 있다'고 말해 놓고
               잡아끌면 아무 반응이 없었다. UI 가 거짓말을 하면 사용자는 앱을 못 믿게 된다.
             영역을 핸들 자체가 아니라 이 래퍼로 잡은 이유: 1px 짜리 막대를 정확히 짚기 어렵다. */}
-        {variant === 'sheet' && (
+        {/* compact 는 이 자리를 쓰지 않는다 — 그립을 헤더 행 안(절대 배치)으로 옮겨
+            '그립 층 + 제목 층'의 이중 높이를 없앤다. 드래그 손잡이는 헤더가 그대로 받는다. */}
+        {variant === 'sheet' && !compact && (
           <div
             className="flex justify-center pt-2 pb-1 sm:hidden touch-none cursor-grab active:cursor-grabbing"
             onTouchStart={onSheetStart}
@@ -451,8 +436,21 @@ export default function Modal({
           // '헤더가 어디서 끝나고 본문이 시작되는지'가 안 보였다. 스크롤로 본문이 헤더 밑을 지나가는
           // 시트에서는 그 선이 유일한 단서다. border-strong 으로 승격(다크 2.88 · 라이트 3.13 —
           // 팔레트에 이보다 강한 경계 토큰은 없다). subtle < default < strong 위계는 그대로 유지.
-          <header className="flex items-center justify-between px-4 py-3 border-b border-border-strong">
-            <h2 id="modal-title" className="text-base font-bold tracking-tight text-ink-primary">
+          <header
+            className={['relative flex items-center justify-between border-b border-border-strong',
+              compact ? 'px-3 py-1' : 'px-4 py-3'].join(' ')}
+            /* compact 시트에서는 이 행 자체가 그립이다 — 종전 그립 블록과 **같은 핸들러**를 쓴다.
+               (닫기 버튼 위에서 시작한 손짓도 8px 미만이면 드래그로 확정되지 않아 클릭이 그대로 간다.) */
+            {...(compact && variant === 'sheet'
+              ? { onTouchStart: onSheetStart, onTouchMove: onSheetMove, onTouchEnd: onSheetEnd, onTouchCancel: onSheetCancel }
+              : {})}
+          >
+            {compact && variant === 'sheet' && (
+              <div aria-hidden className="absolute left-1/2 top-1 h-1 w-10 -translate-x-1/2 rounded-full bg-border-strong sm:hidden" />
+            )}
+            <h2 id="modal-title"
+              className={['min-w-0 truncate tracking-tight',
+                compact ? 'text-xs font-semibold text-ink-secondary' : 'text-base font-bold text-ink-primary'].join(' ')}>
               {title}
             </h2>
             <button

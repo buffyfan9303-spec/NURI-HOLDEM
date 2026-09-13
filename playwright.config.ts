@@ -35,6 +35,22 @@ export default defineConfig({
     baseURL: BASE,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // ⚠ 2026-09-13 — 브라우저 시간대를 **KST 로 고정**한다. 안 하면 같은 스펙이 러너 시간대에 따라 갈린다.
+    //   근거 셋이 서로 다른 기준을 쓰고 있었다:
+    //     · `HomeTab.tsx:186` 의 오늘/내일 버킷 = `toLocaleDateString('en-CA')` → **기기 로컬**
+    //     · `scheduleStatus.ts:24` 의 시작 시각 = 문자열에 `+09:00` 를 박음 → **KST 고정**
+    //     · 스펙 픽스처 = `toISOString()`(UTC) 또는 `kstToday()`(KST)
+    //   그래서 픽스처만 고치면 **버그가 옮겨 갈 뿐**이다 — 실제로 그랬다: `home-cls.spec.ts` 를 KST 픽스처로
+    //   바꾸자 KST 개발기(00~09시)에서는 고쳐졌는데 **UTC CI(`ci.yml:19` ubuntu-latest)의 15~24시에 같은 버그가 재발**한다.
+    //   ⚠⚠ **이 줄만으로는 부족하다 — 브라우저만 바꾼다.** 픽스처를 **Node 에서** 만드는 스펙
+    //     (`toLocaleDateString('en-CA')`)은 러너 시간대를 따르므로, UTC 러너에서는 픽스처(UTC)와 앱 버킷(KST)이
+    //     여전히 하루 어긋난다. 실측(2026-09-13, 489 테스트): Node UTC + 브라우저 UTC = 6실패 /
+    //     Node UTC + 브라우저 KST = 2실패 / **Node KST + 브라우저 KST = 1실패**(BLOCKED #20, 시간대 무관).
+    //     전체는 나아지지만 `home-flow-fit` 하나는 실패 창이 오히려 넓어진다(UTC 19~24시 → 15~24시).
+    //     → **짝이 되는 `.github/workflows/ci.yml` 의 `TZ: Asia/Seoul` 이 함께 있어야 한다.** 하나만 있으면 비대칭이다.
+    //   둘이 짝을 이루면 버킷·시작 시각·픽스처가 같은 날짜를 보고, 어느 시각·어느 러너에서도 결과가 같다.
+    //   앱 사용자는 사실상 전원 한국이라 KST 가 **대표 환경**이기도 하다(CI 의 UTC 가 오히려 비현실적이었다).
+    timezoneId: 'Asia/Seoul',
   },
   // 앱 주 사용 환경(모바일 PWA) 기준 — 412px. 하단 탭바·모바일 헤더가 이 폭에서 렌더.
   projects: [{ name: 'mobile-chromium', use: { ...devices['Pixel 7'] } }],

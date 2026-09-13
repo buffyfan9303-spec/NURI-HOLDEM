@@ -3,7 +3,7 @@
 // 수정: groupThreads 가 루트 밑으로 전체 하위 트리를 평탄 수집(4레벨+ 흡수)하고,
 //       루트 직속이 아닌 답글엔 원부모 닉(mentionOf='@원부모닉' 프리픽스 재료)을 붙인다.
 import { describe, it, expect } from 'vitest';
-import { groupThreads } from './CommentThread';
+import { groupThreads, guardedSubmit } from './CommentThread';
 import type { Comment } from '../../api/community';
 
 const c = (id: string, parentId: string | undefined, userName: string): Comment => ({
@@ -59,5 +59,75 @@ describe('groupThreads · 3레벨+ 대댓글 유실 0', () => {
     const renderedIds = threads.flatMap((t) => [t.root.id, ...t.replies.map((r) => r.comment.id)]);
     expect(renderedIds).toContain('x');
     expect(threads.some((t) => t.root.id === 'x')).toBe(true);
+  });
+});
+
+// N04(2026-09-12) 재현·수정 검증 — 댓글/답글 submit 이 onSubmit 을 fire-and-forget 으로
+// 부른 뒤 즉시 입력을 비웠다(원문 유실 + 중복 제출 무방비). 아래는 그 계약을 렌더러 없이 잰다.
+describe('guardedSubmit · N04 제출 계약', () => {
+  it('① 실패하면 onSuccess(입력 비우기)가 호출되지 않아 원문이 남는다', async () => {
+    const pendingRef = { current: false };
+    let cleared = false;
+    const outcome = await guardedSubmit(
+      '오프라인에서 쓴 댓글',
+      pendingRef,
+      async () => { throw new Error('P0001: 제재 중'); },
+      () => { cleared = true; },
+    );
+    expect(outcome).toBe('error');
+    expect(cleared).toBe(false); // 원문이 지워지지 않았다 — 수정 전엔 즉시 지워졌다
+    expect(pendingRef.current).toBe(false); // 실패 후엔 재시도할 수 있어야 한다
+  });
+
+  it('② 성공했을 때만 onSuccess(입력 비우기)가 호출된다', async () => {
+    const pendingRef = { current: false };
+    let cleared = false;
+    const outcome = await guardedSubmit(
+      '정상 댓글',
+      pendingRef,
+      async () => {},
+      () => { cleared = true; },
+    );
+    expect(outcome).toBe('success');
+    expect(cleared).toBe(true);
+  });
+
+  it('③ pending 중 두 번째 제출은 skipped 로 막힌다(연타로 댓글 2개 방지)', async () => {
+    const pendingRef = { current: false };
+    let submitCount = 0;
+    let resolveFirst!: () => void;
+    const firstOnSubmit = () => new Promise<void>((resolve) => { resolveFirst = resolve; submitCount++; });
+
+    // 첫 호출 — setPending(true)까지는 동기 실행되므로 await 하지 않고 바로 두번째를 건다
+    const first = guardedSubmit('첫 클릭', pendingRef, firstOnSubmit, () => {});
+    const second = await guardedSubmit('두번째 클릭(연타)', pendingRef, async () => { submitCount++; }, () => {});
+
+    expect(second).toBe('skipped');
+    expect(submitCount).toBe(1); // 두번째 클릭은 실제 onSubmit 을 아예 부르지 않았다
+
+    resolveFirst();
+    const firstOutcome = await first;
+    expect(firstOutcome).toBe('success');
+    expect(pendingRef.current).toBe(false); // 끝난 뒤엔 다시 제출 가능
+  });
+
+  it('빈 문자열/공백만 있으면 onSubmit 을 부르지 않고 skipped', async () => {
+    const pendingRef = { current: false };
+    let called = false;
+    const outcome = await guardedSubmit('   ', pendingRef, async () => { called = true; }, () => {});
+    expect(outcome).toBe('skipped');
+    expect(called).toBe(false);
+  });
+
+  // 음성 대조: 아래는 수정 전 동작(fire-and-forget)을 그대로 흉내낸 구현이 이 계약을
+  // 통과하지 못함을 보여준다 — guardedSubmit 을 우회해 옛 방식으로 짜면 실패해야 정상.
+  it('[음성 대조] fire-and-forget 방식은 실패해도 원문을 지운다 — guardedSubmit 이 막는 바로 그 버그', async () => {
+    let cleared = false;
+    const legacySubmit = (content: string, onSubmit: (c: string) => Promise<void>, clear: () => void) => {
+      onSubmit(content).catch(() => {}); // 결과를 기다리지 않는다(수정 전 CommentThread.tsx 그대로)
+      clear();
+    };
+    legacySubmit('오프라인 댓글', async () => { throw new Error('네트워크 오류'); }, () => { cleared = true; });
+    expect(cleared).toBe(true); // 옛 방식은 실패해도 즉시 지운다 — 이것이 N04 버그였다
   });
 });

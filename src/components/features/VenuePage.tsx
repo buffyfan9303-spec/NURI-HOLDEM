@@ -40,6 +40,7 @@ import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
 import { followToggle, followMergeFetch, type FollowView } from '../../lib/venueFollow';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
+import { useDialogFocus } from '../atoms/useDialogFocus';
 import VenueReviews from './VenueReviews';
 import { PhoneActionButton, KakaoActionButton, KakaoChatRow, ContactRows } from './ContactActions';
 import ContactListEditor from './VenueContactFields';
@@ -57,7 +58,9 @@ interface VenuePageProps {
   comments: Comment[];
   /** 포스터 탭의 '금일 포스터'에 함께 노출할 공지글 */
   notices?: MarketplaceNotice[];
-  onSubmitComment: (venueId: string, content: string, parentId?: string) => void;
+  // N04(2026-09-12): CommentThread 와 같은 Promise 계약 — 성공을 기다린 뒤에만 입력을 비운다.
+  // App.tsx 의 handleSubmitVenueComment 가 이 계약(await + 실패 시 throw)을 따라야 한다.
+  onSubmitComment: (venueId: string, content: string, parentId?: string) => Promise<void>;
   onDeleteComment?: (commentId: string) => void;
   onUpdateDescription?: (venueId: string, description: string) => void;
   onUpdateImage?: (venueId: string, dataUrl: string) => void;
@@ -98,6 +101,11 @@ export default function VenuePage({
   const { user, isApprovedOwner, refreshProfile } = useAuth();
   const toast = useToast();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // U06(2026-09-12): 이 페이지는 Modal 을 쓰지 않는 role="dialog" 풀스크린 오버레이라
+  // focus 계약(첫 포커스·Tab 트랩·닫을 때 복원)이 통째로 빠져 있었다 — atoms/Modal 과 같은
+  // 계약을 공유 훅으로 쓴다(새로 만들지 않는다). 훅은 항상 호출하고, 활성 여부만 안에서 가른다.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(!!open && !!venue, dialogRef);
   // 매장 별점(방문 후기 평균) — 매장명 옆 ⭐
   const [rating, setRating] = useState<{ avg: number; count: number } | null>(null);
   useEffect(() => {
@@ -256,6 +264,7 @@ export default function VenuePage({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={`${venue.name} 매장 페이지`}
@@ -348,8 +357,10 @@ export default function VenuePage({
                   프리미엄
                 </span>
               )}
+              {/* text-accent-300 은 다크 surface-base 위 3.33:1 로 AA 미달(design-reviewer 실측,
+                  2026-09-12) — accent-200 은 다크 6.94·라이트 5.87 로 양쪽 통과(위 '오늘의 대회'와 동일 근거). */}
               {venue.verificationStatus === 'verified' && (
-                <span className="inline-flex items-center gap-0.5 px-2 py-[3px] leading-none text-2xs font-bold rounded-badge border border-accent-400/50 bg-accent-300/15 text-accent-300">
+                <span className="inline-flex items-center gap-0.5 px-2 py-[3px] leading-none text-2xs font-bold rounded-badge border border-accent-400/50 bg-accent-300/15 text-accent-200">
                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
                   인증
                 </span>
@@ -927,7 +938,7 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
                     메시지를 읽으려 탭한 손가락이 확인 없이 삭제를 실행한다(되돌리기 없음, 커뮤니티 라이브월과 같은 결함).
                     실제 박스를 키우고 음수 마진으로 되돌린다: 마진박스 16px = 이름행 높이라 행 높이가 그대로다. */}
                 {(canManage || m.userId === user?.id) && (
-                  <button type="button" onClick={() => deleteVenueMessage(m.id).then(() => setMessages((p) => p.filter((x) => x.id !== m.id))).catch(() => {})} aria-label="삭제" className="-my-3.5 flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
+                  <button type="button" onClick={() => deleteVenueMessage(m.id).then(() => setMessages((p) => p.filter((x) => x.id !== m.id))).catch((e) => toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'))} aria-label="삭제" className="-my-3.5 flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
                 )}
               </div>
               <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words whitespace-pre-wrap">{m.content}</p>

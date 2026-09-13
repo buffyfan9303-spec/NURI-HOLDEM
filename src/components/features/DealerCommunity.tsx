@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import {
@@ -44,12 +44,18 @@ export default function DealerCommunity() {
   const [openNotice, setOpenNotice] = useState<MarketplaceNotice | null>(null);
   const [openPost, setOpenPost] = useState<DealerPost | null>(null);
 
+  // N07(2026-09-13): 조회 실패를 '공지 없음' 으로 그리지 않는다 — 실패는 NoticeSection 이 재시도 카드로 말한다.
+  const [noticesErr, setNoticesErr] = useState<unknown>(null);
+  const [noticesTick, setNoticesTick] = useState(0);
+  const reloadNotices = useCallback(() => setNoticesTick((t) => t + 1), []);
   useEffect(() => {
+    let alive = true;
     getNotices()
       // '전체(all)' 공지는 게시판·장터엔 나오는데 딜러에만 안 나왔다 — App 의 communityNotices·marketNotices 와 같은 식으로 맞춘다.
-      .then((all) => setNotices(all.filter((n) => !n.board || n.board === 'all' || n.board === 'dealer')))
-      .catch(() => {});
-  }, []);
+      .then((all) => { if (!alive) return; setNotices(all.filter((n) => !n.board || n.board === 'all' || n.board === 'dealer')); setNoticesErr(null); })
+      .catch((e: unknown) => { if (alive) setNoticesErr(e); });
+    return () => { alive = false; };
+  }, [noticesTick]);
 
   // 작성 폼
   const [open, setOpen]       = useState(false);
@@ -116,7 +122,8 @@ export default function DealerCommunity() {
         <span className="font-semibold text-danger-light"><Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />불법 사행성·환전·도박 알선 관련 구인·구직은 강제 탈퇴 및 처벌 대상</span>{notices.length > 0 ? '입니다. 자세한 규정은 아래 공지를 확인하세요.' : '입니다.'}
       </div>
 
-      {notices.length > 0 && <NoticeSection notices={notices} onSelect={setOpenNotice} limit={5} />}
+      {/* limit={5} 를 뺐다(N07) — 펼친 목록에 전부 보인다. 예전엔 '5/7건' 이라 적고 나머지 2건에 닿을 길이 없었다. */}
+      {(notices.length > 0 || noticesErr != null) && <NoticeSection notices={notices} onSelect={setOpenNotice} error={noticesErr} onRetry={reloadNotices} />}
 
       {/* ICM 계산기 + 글쓰기 — 모바일에서 반반(두 칸 동일 너비). ICM 펼치면 아래 풀폭 */}
       <div className="grid grid-cols-2 gap-2">

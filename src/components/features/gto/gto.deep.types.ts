@@ -1,5 +1,11 @@
 // src/components/features/gto/gto.deep.types.ts
-import type { Card, ActionFrequency, Position, GameType, HandComboId, Street } from './gto.types';
+//
+// 2026-09-12: GtoDeepSituation(사람이 손으로 쓴 "T9s 는 약 40% 빈도로 3-Bet 한다" 류 예시 프리셋)을
+// 걷어냈다 — 어느 화면에서도 렌더되지 않던 죽은 데이터였고, 그 빈도 숫자는 솔버 산출이 아니라
+// 사람이 눈대중으로 적어 넣은 값이었다(spotEvaluate.ts:6-21 이 이미 같은 근거로 지적함).
+// 렌더되지 않으니 사용자 체감 기능 손실은 없다 — 남기면 나중에 누가 무심코 화면에 이어붙였을 때
+// "GTO 40%" 처럼 보이는 사고가 재발할 자리였다. 자세한 근거는 useDeepGto.ts 상단 주석 참고.
+import type { ActionFrequency } from './gto.types';
 
 /** 특정 핸드 대 특정 핸드 에퀴티 (0..1, hero + villain 합 약 1, 무승부는 분배) */
 export interface Equity {
@@ -9,45 +15,11 @@ export interface Equity {
   tie?: number;
 }
 
-/** GTO 결과 한 건 (레인지 기준 또는 빌런 특정 핸드 기준) */
+/** 참고 액션 믹스 결과 — 에퀴티 임계값 휴리스틱 산출이다. 솔버 결과가 아니다(GtoDeepPanel 의
+ *  SourceBadge kind="heuristic" 이 화면에서 이 사실을 명시한다). */
 export interface GtoResult {
-  /** 결과 액션 믹스 (raise = 3-Bet/벳 등) */
+  /** 결과 액션 믹스 (raise = 3-Bet/벳 등) — 근거: useDeepGto.ts 의 actionFromEquity */
   action: ActionFrequency;
-  /** 빌런 고정 전(레인지 대 레인지) 기준 믹스 — 변화량 비교용 */
-  baseline?: ActionFrequency;
-  /** 특정 핸드 대 특정 핸드일 때의 에퀴티 */
+  /** 특정 핸드 대 특정 핸드일 때의 에퀴티(몬테카를로) */
   equity?: Equity;
-  /** 핵심 기술 분석 */
-  heuristic_explanation: string;
-  /** 빌런 카드 고정이 일으킨 빈도 변화 설명 (바텀시트 대안 해설) */
-  blockerExplanation?: string;
-}
-
-/** Hero/Villain 핸드 + 보드를 직접 지정하는 심화 스팟 */
-export interface GtoDeepSituation {
-  id: string;
-  label: string;
-  description?: string;
-  street: Street;
-
-  heroPosition: Position;
-  villainPosition: Position;
-  /** 빌런 오픈 사이즈(bb) */
-  villainOpenBb?: number;
-  /** 히어로 3-Bet 사이즈(bb) */
-  heroRaiseBb?: number;
-  stackDepthBb: number;
-  gameType: GameType;
-
-  /** 히어로 특정 핸드 2장 */
-  heroHand: [Card, Card];
-  /** 유저가 직접 지정한 빌런 핸드 2장 (선택적) */
-  villainHand?: [Card, Card];
-  /** 보드 0~5장 (프리플랍이면 비어 있음/미설정) */
-  board?: Card[];
-
-  /** 빌런 미지정(레인지 대 레인지) 기준 결과 */
-  baseline: GtoResult;
-  /** 빌런 핸드를 특정 콤보로 고정했을 때의 결과: 콤보ID(AA 등) -> 결과 */
-  villainAdjustments: Readonly<Record<HandComboId, GtoResult>>;
 }

@@ -1,0 +1,81 @@
+---
+description: 홈 팀 — 셸(App.tsx)·탭 구조·홈 화면·캘린더·라이브·장터·검색·알림·로그인/동의·법적 고지. 전역 레이아웃을 만질 때 붙는다.
+globs: ["src/App.tsx", "src/main.tsx", "src/index.css", "src/components/features/HomeTab.tsx", "src/components/features/HomeBannersCard.tsx", "src/components/features/Notice*.tsx", "src/components/features/AnnouncePanel.tsx", "src/components/features/Calendar*.tsx", "src/components/features/EventPage.tsx", "src/components/features/LiveGamesTab.tsx", "src/components/features/Marketplace*.tsx", "src/components/features/ListingDetailModal.tsx", "src/components/features/MyMarketModal.tsx", "src/components/features/GlobalSearchModal.tsx", "src/components/features/IntegratedSearchBar.tsx", "src/components/features/NotificationPanel.tsx", "src/components/features/AuthModal.tsx", "src/components/features/ProfileModal.tsx", "src/components/features/ConsentGateModal.tsx", "src/components/features/LegalDocsModal.tsx", "src/components/features/BusinessFooter.tsx", "src/components/features/VerifyGateSheet.tsx", "src/components/features/TierLeaderboard.tsx", "src/components/features/LeaguePanel.tsx", "src/components/features/LevelUpCelebration.tsx", "src/components/atoms/**", "src/pages/legal/**"]
+alwaysApply: false
+---
+
+# 홈 팀 (셸 · 전역)
+
+> 앱 껍데기와 공용 표면: 탭 셸 · 홈 · 캘린더/대회 · 라이브 · 장터 · 통합검색 · 알림 · 로그인/동의/법적 고지 · 랭킹/리그 · 디자인 토큰.
+
+> ⚠️ **전수 실측이 주간 한도로 중단됐다.** 아래는 파일 목록·행 수 실측 + 저장소 기록에서 확인한 것만이다.
+> 커뮤니티·내 매장 문서 수준의 함정 목록이 아직 없다 — 처음 작업할 때 `/remap` 으로 지도를 먼저 떠라.
+
+## 이 팀이 위험한 이유
+
+다른 팀은 자기 화면만 깨뜨린다. **이 팀은 전부 깨뜨린다.** `App.tsx`(3890줄)와 `src/index.css` 는
+커뮤니티·내 매장·GTO 가 전부 그 위에 얹혀 있다. 여기를 고칠 때는 **네 팀의 e2e 를 다 돌려라**.
+
+## 화면·진입점 `[실측: 경로·행 수]`
+
+- `src/App.tsx` (3890줄) — 셸. 탭 keep-alive(`visitedTabs` Set + `display` 토글, :914 / :915), idle 프리마운트(:1346~), `?display=` 클락 TV 라우팅(:2106), my-store 폭(:2753), 홈 렌더 분기(:2904)
+- `src/components/features/HomeTab.tsx` (363줄) — 홈
+- `src/components/features/HomeBannersCard.tsx` (257줄) — 홈 배너
+- `src/components/features/NoticeSection.tsx` (182줄) · `NoticeDetailModal.tsx` · `NoticeFormModal.tsx` · `AnnouncePanel.tsx` — 공지
+- `src/components/features/CalendarPanel.tsx` (775줄) · `CalendarToolsPanel.tsx` · `EventPage.tsx` (459줄) — 대회 캘린더
+- `src/components/features/LiveGamesTab.tsx` (579줄) — 라이브(§28: `buyInAmount` 노출은 **유지**다)
+- `src/components/features/MarketplaceTab.tsx` (451줄) · `MarketplaceFormModal.tsx` · `ListingDetailModal.tsx` · `MyMarketModal.tsx` — 장터
+- `src/components/features/IntegratedSearchBar.tsx` (587줄) · `GlobalSearchModal.tsx` (164줄) — 검색
+- `src/components/features/NotificationPanel.tsx` (655줄) — 알림
+- `src/components/features/AuthModal.tsx` (914줄) — 로그인(소셜 = Google 단일, 카카오 코드는 0ea077a 로 삭제됨)
+- `src/components/features/ProfileModal.tsx` (1199줄) · `ConsentGateModal.tsx` (191줄) · `VerifyGateSheet.tsx` · `LegalDocsModal.tsx`
+- `src/components/features/BusinessFooter.tsx` (84줄) — 🔴 **법·규제. 전 화면 하단 상시 노출이 PG·카카오 심사 요건이다. 조건부 렌더로 바꾸지 마라.**
+- `src/components/features/TierLeaderboard.tsx` (1535줄) · `LeaguePanel.tsx` (359줄) · `SeasonPanel.tsx` · `LevelUpCelebration.tsx`
+- `src/components/atoms/Icon.tsx` — 아이콘 진입점 · `src/components/atoms/SlidingPill.tsx` — FLIP 인디케이터(13곳에서 사용)
+- `src/index.css` — 디자인 토큰(CSS 변수). `tailwind.config.js` 가 `rgb(var(--surface-*) / <alpha-value>)` 로 받는다. **루트 폰트 17px 이 여기(:538)**
+
+## api `[실측: 파일 존재]`
+
+`src/api/homeBanners.ts` · `calendar.ts` · `events.ts` · `marketplace.ts` · `notifications.ts` · `auth.ts` · `_session.ts` ·
+`identity.ts` · `rankings.ts` · `rankingConsent.ts` · `rankingDisplay.ts` · `leagues.ts` · `referrals.ts` · `support.ts` · `settings.ts` · `push.ts` · `adminStats.ts`
+
+## 🔴 모르면 사고 내는 것
+
+1. **탭은 언마운트되지 않는다.** `visitedTabs` + `display` 토글이라 홈으로 가도 다른 탭이 살아 있다.
+   → 뒤로가기 겹은 **반드시 `tabActive` 게이트**를 달아라(안 그러면 숨은 탭이 겹을 들고 있어 뒤로가기가 통째로 먹통).
+   → `.tab-pane` 안의 항상-렌더 진입 애니메이션은 재방문마다 다시 재생돼 깜빡인다. `src/index.css` 의 무효화 `:is(...)` 목록과 `prefers-reduced-motion` 목록에 같이 등록해라.
+
+2. **`BusinessFooter` 와 §28 은 오너 지시로도 코드에서 빼지 않는다.** `[프로젝트 규약]`
+   사업자 정보(상호·등록번호·대표자·주소·전화)는 전 화면 하단 상시 노출. 연결 화면 방식은 심사에서 인정되지 않는다.
+   §28 은 **환금성 프레이밍에만** 적용된다 — 참가비(바이인)·GTD·프라이즈풀은 **상품 가격이라 표시를 유지**한다.
+   카피는 '환전·현금·수익' 계열 전면 배제, '참가비·상금·이용권'으로 통일. `legalConsistency.test.ts` 가 감시한다.
+
+3. **루트 폰트 17px** — Tailwind rem 유틸이 전부 6.25% 크다. 44px 계약은 `h-[44px]`.
+
+4. **`offsetLeft` 는 transform 조상에서 끊긴다** — `button:active { transform: scale(.97) }` 때문에 방금 누른 버튼이 `offsetParent` 가 된다.
+   SlidingPill 좌표는 `offsetParent` 사슬을 레일까지 더해 구해라. Playwright click(누름 0ms)은 이걸 못 잡는다 → `e2e/pill-press.spec.ts` 의 CDP 터치 홀드.
+
+5. **`backdrop-filter`/`filter`/`transform` 이 걸린 요소는 `position: fixed` 자손의 컨테이닝 블록**이 된다(헤더 유리 효과 ↔ 알림 스크림 사건).
+
+6. **하단 고정 요소는 MobileTabBar 와 겹친다** — `--tabbar-safe` / `--tabbar-float` + `env(safe-area-inset-bottom)`.
+
+7. **라벨·이모지에 결합된 e2e 셀렉터**가 남아 있다. 텍스트를 바꾸면 같은 커밋에서 `data-testid` 로 교체(셀렉터 완화는 게이트 무력화라 금지).
+
+## 열려 있는 것 `[문서 기준]`
+
+- `20260911e_home_banners_kst_window` · `f_kst_date_defaults_and_season_window` 운영 미적용(BLOCKED #20)
+- Sentry 꺼져 있음(`VITE_SENTRY_DSN` 미등록) · PostHog 키 없음 → 피처플래그·행동트리거 연쇄 파킹
+- 홈 배너 폴백 'off' 투입 여부 오너 결정 대기
+
+## 검증 명령
+
+```bash
+npx vitest run src/api/homeBanners.test.ts src/api/homeBanners.migration.test.ts src/api/auth.social.test.ts src/api/auth.dedupe.test.ts src/api/auth.profilePatch.test.ts src/api/marketplace.like.test.ts src/api/kstDates.migration.test.ts
+npx vitest run src/pages/legal/legalConsistency.test.ts
+npm run legal:check
+npx playwright test e2e/pill-press.spec.ts e2e/subtab-motion.spec.ts e2e/sliding-pill-hidden.spec.ts e2e/skeleton-no-shift.spec.ts e2e/notice-static.spec.ts e2e/notice-scroll.spec.ts e2e/drag-close.spec.ts
+npm run bundle:budget
+npm run build
+```
+
+셸을 고쳤으면 **네 팀 e2e 를 다 돌려라** — `npm run test:e2e`.

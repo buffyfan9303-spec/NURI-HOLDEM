@@ -15,6 +15,7 @@ import { applyToPoster, presetFromPosterForm } from '../../lib/gameInherit';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
 import Icon from '../atoms/Icon';
+import { regCloseLevelFromText } from '../../lib/regClose';
 
 interface PosterFormModalProps {
   open: boolean;
@@ -157,9 +158,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
       setImgPreview(schedule.posterUrl ?? '');
       // 기존 레지마감 문자열에서 레벨/시간 분리
       const rc = schedule.regCloseTime ?? '';
-      const lv = rc.match(/(\d+)\s*LV/i);
+      const lv = regCloseLevelFromText(rc);
       const tm = rc.match(/(\d{1,2}:\d{2})/);
-      setRegLevel(lv ? lv[1] : '');
+      setRegLevel(lv ? String(lv) : '');
       setRegTime(tm ? tm[1] : '');
     } else if (open) {
       setForm(empty);
@@ -205,9 +206,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     setImgFile(null);
     setImgPreview(s.posterUrl ?? '');
     const rc = s.regCloseTime ?? '';
-    const lv = rc.match(/(\d+)\s*LV/i);
+    const lv = regCloseLevelFromText(rc);
     const tm = rc.match(/(\d{1,2}:\d{2})/);
-    setRegLevel(lv ? lv[1] : '');
+    setRegLevel(lv ? String(lv) : '');
     setRegTime(tm ? tm[1] : '');
     toast.show('지난 포스터를 불러왔습니다. 날짜만 확인하고 등록하세요', 'success');
   };
@@ -222,9 +223,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     if (patch.posterUrl) { setImgFile(null); setImgPreview(patch.posterUrl); }
     if (patch.regCloseTime !== undefined) {
       const rc = patch.regCloseTime ?? '';
-      const lv = rc.match(/(\d+)\s*LV/i);
+      const lv = regCloseLevelFromText(rc);
       const tm = rc.match(/(\d{1,2}:\d{2})/);
-      setRegLevel(lv ? lv[1] : '');
+      setRegLevel(lv ? String(lv) : '');
       setRegTime(tm ? tm[1] : '');
     }
     toast.show(`'${p.name}' 프리셋 적용 · 채워진 항목만 반영했어요(수정 가능)`, 'success');

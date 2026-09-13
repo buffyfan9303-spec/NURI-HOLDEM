@@ -16,9 +16,26 @@
 //   목킹 행이 e2e 에서 렌더되지 않는 원인을 찾으면 그때 다시 붙인다.
 import { test, expect } from './_fixtures';
 import { type Page } from '@playwright/test';
+// KST 날짜 헬퍼 — 같은 로직을 스펙 안에 새로 만들지 않는다(두 벌이 되는 순간 그게 버그다).
+import { kstToday } from '../src/lib/kst';
 
 const VENUE_ID = '11111111-1111-4111-8111-111111111111';
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+// ⚠ 2026-09-13: 여기가 `d.toISOString().slice(0,10)`(UTC) 이었다. 아래 47~49행이 이 값을 **달력 날짜**로 쓴다.
+//   ⚠⚠ **내가 처음 적은 근거는 틀렸다**(2차 독립 검증이 잡았다). "앱은 KST 로 배치한다" 고 썼는데,
+//     오늘/내일 **버킷팅**을 하는 곳은 `HomeTab.tsx:186` 의 `toLocaleDateString('en-CA')` 로 **기기 로컬**이다.
+//     KST 인 것은 `scheduleStatus.ts:24` 의 **시작 시각**뿐이다. 그래서 픽스처만 KST 로 바꾸면
+//     KST 기기에서는 고쳐지고 **UTC CI(ubuntu-latest)에서는 같은 버그가 재발**한다 — 버그가 옮겨 갈 뿐이다.
+//   → 진짜 수정은 `playwright.config.ts` 의 **`timezoneId: 'Asia/Seoul'` 고정**이다(거기 근거를 적었다).
+//     시간대가 고정되면 버킷(기기 로컬)·시작 시각(KST)·픽스처(KST)가 **셋 다 같은 날짜**를 보고,
+//     하루 중 어느 시각에 어느 러너에서 돌려도 결과가 같다. 이 파일의 `kstToday` 는 그 고정과 **짝**이다.
+//   원래 증상: 한국 시간 00:00~09:00 에 '오늘' 행이 어제로 찍히고, 05:00 이후엔 `시작(19:00)+10h` 를 넘겨 `ended` 가 된다.
+//   ⚠ 이 스펙은 그래도 **통과했다** — 단언이 라이브 유무 두 조건의 **대칭 비교**라 양쪽에서 똑같이 상쇄되기 때문이다.
+//     실패가 아니라 거짓 통과였고, `theme-tokens-v7` 에서 고친 것과 같은 가족이다.
+//   실측(2026-09-13 06:07 KST, 프로덕션 빌드 프로브): 현행 = 4행 중 **2장만 렌더** / 고친 뒤 = **4장 전부**.
+//   ⚠ 아래 11~16행의 "목킹 행이 e2e 에서 렌더되지 않는다(스켈레톤만 뜬다)" 는 **이것과 별개다** —
+//     내 프로브(나머지 REST 를 빈 배열로 막음)에서는 행이 정상 렌더됐다. 그 메모는 여전히 미해결이다.
+//   `session_date`(36행)도 같은 함수를 쓰므로 `matchClockSchedule` 의 문자열 완전 일치는 그대로 유지된다.
+const iso = (d: Date) => kstToday(d.getTime());
 
 const scheduleRow = (i: number, date: string) => ({
   id: `aaaaaaaa-0000-4000-8000-${String(i).padStart(12, '0')}`,
@@ -59,9 +76,13 @@ async function seed(page: Page, { live, slowSchedules = 0 }: { live: boolean; sl
   await page.route(/\/rest\/v1\/clock_states\?/, (r) => r.fulfill(json(live ? [clockRow()] : [])));
 }
 
+// §6(2026-09-13) 재구성으로 **거대한 GTO 히어로(h2)가 사라졌다** — 그 자리를 '오늘 안내'가 대신한다.
+// 앵커를 `main.tab-pane h2` 로 두면 요소를 못 찾아 null 이 되고, 이 게이트는 '히어로를 못 찾았다'로
+// 터진다. 셀렉터를 **느슨하게 푸는 것이 아니라**(그건 게이트 무력화다) 같은 역할의 요소로 옮긴다:
+// 지금 상단 칸의 높이를 정하는 것은 `home-today` 다. 여기도 클락 도착 전후로 문구가 한 조각
+// 늘어나므로(`· 지금 등록 가능 N개`), 이 스펙이 원래 재려던 **바로 그 위험**이 그대로 남아 있다.
 const heroH = (page: Page) => page.evaluate(() => {
-  const h2 = document.querySelector('main.tab-pane h2');
-  const hero = h2?.closest('.px-page-x');
+  const hero = document.querySelector('main[data-tab="home"] [data-testid="home-today"]');
   return hero ? Math.round(hero.getBoundingClientRect().height) : null;
 });
 const schedSectionY = (page: Page) => page.evaluate(() => {

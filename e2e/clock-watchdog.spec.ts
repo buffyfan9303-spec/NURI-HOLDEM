@@ -14,6 +14,7 @@
 //
 // 실행: npx playwright test e2e/clock-watchdog.spec.ts
 import { test, expect } from './_fixtures';
+import { kstToday } from '../src/lib/kst';
 import { loginAs, dismissOverlays, restAs, type E2ESession, WRITES_ALLOWED } from './_session';
 
 const EMAIL = process.env.E2E_EMAIL;
@@ -42,7 +43,8 @@ async function seedRunningClock(session: E2ESession): Promise<string> {
     body: {
       venue_id: venueId,
       game_seq: 1,
-      session_date: new Date().toLocaleDateString('en-CA'),
+      // ⚠ KST 기준(2026-09-13) — Node 로컬은 러너 시간대를 따라 앱과 어긋난다.
+      session_date: kstToday(),
       title: 'E2E 워치독',
       running: true,
       current_index: 0,

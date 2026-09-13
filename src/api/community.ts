@@ -1,6 +1,7 @@
 ﻿// src/api/community.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
+import { idempotentOff, mustAffect } from './_mustAffect';
 import type { UserRole } from './auth';
 import { dedupe } from '../lib/inflight';
 
@@ -239,35 +240,31 @@ export async function getVenues(): Promise<Venue[]> {
 // venues 는 NOT NULL 컬럼(name/region)이 많아 upsert가 불가하므로 개별 UPDATE로 처리.
 export async function reorderVenues(payload: { items: { id: string; displayOrder: number }[] }): Promise<void> {
   if (IS_MOCK) return;
-  const results = await Promise.all(
+  // 행별 UPDATE 라 RLS 거부는 error 없이 0행이다 — 한 행이라도 안 바뀌면 던져 호출부가 되돌리게 한다.
+  await Promise.all(
     payload.items.map(({ id, displayOrder }) =>
-      supabase.from('venues')
+      mustAffect(supabase.from('venues')
         .update({ display_order: displayOrder, updated_at: new Date().toISOString() })
-        .eq('id', id),
+        .eq('id', id)),
     ),
   );
-  const failed = results.find((r) => r.error);
-  if (failed?.error) throw failed.error;
 }
 
 export async function updateVenueDescription(venueId: string, description: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venues').update({ description, updated_at: new Date().toISOString() }).eq('id', venueId);
-  if (error) throw error;
+  await mustAffect(supabase.from('venues').update({ description, updated_at: new Date().toISOString() }).eq('id', venueId));
 }
 
 /** 카카오톡 오픈채팅/단톡방 링크 설정(업주) — RLS로 본인 매장만 허용 */
 export async function updateVenueKakao(venueId: string, kakaoUrl: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venues')
-    .update({ kakao_url: kakaoUrl.trim() || null, updated_at: new Date().toISOString() }).eq('id', venueId);
-  if (error) throw error;
+  await mustAffect(supabase.from('venues')
+    .update({ kakao_url: kakaoUrl.trim() || null, updated_at: new Date().toISOString() }).eq('id', venueId));
 }
 
 export async function updateVenueImage(venueId: string, imageUrl: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venues').update({ image_url: imageUrl, updated_at: new Date().toISOString() }).eq('id', venueId);
-  if (error) throw error;
+  await mustAffect(supabase.from('venues').update({ image_url: imageUrl, updated_at: new Date().toISOString() }).eq('id', venueId));
 }
 
 /** 업주/운영자: 매장 주소 수정 */
@@ -376,12 +373,12 @@ export async function addComment(
   return rowToComment(data);
 }
 
-// 댓글 삭제 — RLS 정책(comments_delete)이 "본인 또는 관리자"만 허용하므로
-// 클라이언트는 단순 delete만 호출하면 권한은 서버(Postgres RLS)에서 강제된다.
+// 댓글 삭제 — RLS 정책(comments_delete)이 "본인 또는 관리자"만 허용한다.
+// ⚠ RLS 거부는 error 가 아니라 0행이다(_mustAffect.ts). 호출부(App.handleDeleteComment)가 낙관적으로
+//   지우고 '댓글이 삭제되었습니다' 를 띄우므로, 0행을 성공으로 넘기면 화면만 지워진 채 새로고침 때 되살아난다.
 export async function deleteComment(commentId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('comments').delete().eq('id', commentId);
-  if (error) throw error;
+  await mustAffect(supabase.from('comments').delete().eq('id', commentId));
 }
 
 // 칭호 표시용 — 여러 유저의 활동점수 일괄 조회(공개 RPC). { userId: points } 맵 반환.
@@ -478,11 +475,14 @@ export async function togglePostLike(postId: string): Promise<{ liked: boolean; 
   return { liked: d.liked === true, count: Number(d.count ?? 0) };
 }
 
-// 게시글 삭제 — RLS(posts_delete: 본인 또는 admin)가 권한 강제
+// 게시글 삭제 — RLS(posts_delete: 본인 또는 admin)가 권한 강제.
+// ⚠ F15(2026-09-13): `.select()` 없이 delete 하면 RLS 거부가 **error 없이 0행 200** 이라 여기서 성공으로 통과했다.
+//   호출부(App.handleDeletePost)는 낙관적으로 목록에서 빼고 '게시글이 삭제되었습니다' 를 띄우고 감사 로그까지
+//   남기므로, 권한 없는 운영자가 눌러도 새로고침 전까지 아무도 몰랐다 — approveOwner 와 같은 부류의 두 번째.
+//   지금은 반영 행을 확인해 0행이면 던진다. App 의 catch 가 reloadPosts() 로 화면을 서버 상태로 되돌린다.
 export async function deletePost(postId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('community_posts').delete().eq('id', postId);
-  if (error) throw error;
+  await mustAffect(supabase.from('community_posts').delete().eq('id', postId));
 }
 
 // ── Live Wall (실시간 한 줄 보드) ───────────────────────────────────────────────
@@ -533,8 +533,7 @@ export async function addLiveMessage(
 
 export async function deleteLiveMessage(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('live_wall').delete().eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('live_wall').delete().eq('id', id));
 }
 
 // 실시간 구독 — 새 메시지 INSERT + 삭제 DELETE 수신(#19: 타인 삭제 전파). 반환 함수 호출로 구독 해제.
@@ -577,6 +576,117 @@ export function subscribeComments(onChange: () => void): () => void {
   return () => { supabase.removeChannel(channel); };
 }
 
+// N05(2026-09-12): 열린 글 상세 하나만 듣는 좁은 실시간 구독 — 위 subscribeComments(전역, 필터 없음)는
+// App 전역 댓글수 갱신용이라 postId 를 모른다. PostDetailModal 은 지금 열려 있는 글만 필요하고,
+// 전체 댓글(수백 건) 재조회로 대신하면 안 되므로(지시문) 이 글의 행만 필터링해 듣고
+// 매핑된 Comment 를 그대로 돌려준다(호출부가 rowToComment 를 다시 구현하지 않게).
+export type PostCommentEvent =
+  | { type: 'insert'; comment: Comment }
+  | { type: 'update'; comment: Comment }
+  | { type: 'delete'; id: string };
+
+export function subscribePostComments(postId: string, onEvent: (evt: PostCommentEvent) => void): () => void {
+  if (IS_MOCK) return () => {};
+  const channel = supabase
+    .channel(`post-comments:${postId}:${Math.random().toString(36).slice(2)}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'comments', filter: `post_id=eq.${postId}` },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (payload: any) => onEvent({ type: 'insert', comment: rowToComment(payload.new) }),
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'comments', filter: `post_id=eq.${postId}` },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (payload: any) => onEvent({ type: 'update', comment: rowToComment(payload.new) }),
+    )
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'comments', filter: `post_id=eq.${postId}` },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (payload: any) => { const id = payload.old?.id; if (id != null) onEvent({ type: 'delete', id: String(id) }); },
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
+// ── 게시판 검색·전체 목록 커서 페이지네이션(N06, 2026-09-12) ───────────────────
+// getPosts() 는 최신 50건(+고정·끌올 예외)만 준다 — 첫 화면엔 그걸로 충분하지만
+// 검색·인기 정렬·무한스크롤은 "50건 다음"을 알아야 한다. 이 함수가 그 서버 계약이다.
+// 커서는 정렬 축의 1차 키 + id — id 를 항상 동률 타이브레이커로 넣어야 같은 초에 만들어진
+// 두 글이 페이지 경계에서 빠지거나 중복되지 않는다("stable cursor").
+export interface PostCursor { createdAt: string; id: string; likeCount?: number }
+export interface SearchPostsParams {
+  q?: string;
+  category?: PostCategory | 'all';
+  order?: 'new' | 'popular';
+  /** 이전 페이지 마지막 행의 정렬 키 — 없으면 첫 페이지 */
+  cursor?: PostCursor | null;
+  limit?: number;
+}
+export interface SearchPostsResult {
+  posts: CommunityPost[];
+  /** limit 만큼 꽉 찼을 때만(=더 있을 수 있음) 채워진다. null 이면 끝 */
+  nextCursor: PostCursor | null;
+}
+
+// PostgREST or() 문법은 값 안의 콤마·괄호를 절 구분자로 읽는다 — 검색어에 그런 문자가 있어도
+// 필터 문법이 깨지지 않게 값 전체를 큰따옴표로 감싼다(공식 문법: col.op."value,with,commas").
+// %·_ 는 LIKE 와일드카드라 별도로 이스케이프해 사용자가 입력한 문자 그대로 찾게 한다.
+function orIlikeValue(kw: string): string {
+  const likeEscaped = kw.replace(/[\\%_]/g, (m) => `\\${m}`);
+  return `"%${likeEscaped.replace(/"/g, '\\"')}%"`;
+}
+
+export async function searchPosts(params: SearchPostsParams): Promise<SearchPostsResult> {
+  const limit = params.limit ?? 15;
+  const kw = (params.q ?? '').trim();
+  const popular = params.order === 'popular';
+  if (IS_MOCK) {
+    const { MOCK_COMMUNITY_POSTS } = await import('../mock/data');
+    let list = (MOCK_COMMUNITY_POSTS as CommunityPost[]).filter((p) => {
+      if (params.category && params.category !== 'all' && (p.category ?? 'free') !== params.category) return false;
+      if (kw) {
+        const k = kw.toLowerCase();
+        if (!(p.content.toLowerCase().includes(k) || (p.title?.toLowerCase().includes(k) ?? false) || p.userName.toLowerCase().includes(k))) return false;
+      }
+      return true;
+    });
+    list = popular
+      ? [...list].sort((a, b) => b.likeCount - a.likeCount)
+      : [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return { posts: list.slice(0, limit), nextCursor: null };
+  }
+  let q = supabase.from('community_posts').select('*');
+  if (params.category && params.category !== 'all') q = q.eq('category', params.category);
+  if (kw) {
+    const v = orIlikeValue(kw);
+    q = q.or(`content.ilike.${v},title.ilike.${v},user_name.ilike.${v}`);
+  }
+  if (popular) q = q.order('like_count', { ascending: false }).order('created_at', { ascending: false }).order('id', { ascending: false });
+  else q = q.order('created_at', { ascending: false }).order('id', { ascending: false });
+  // 커서 이후만 — PostgREST 는 서로 다른 or() 호출을 AND 로 묶으므로 "검색어 매치" ∧ "커서보다 뒤" 가 함께 걸린다.
+  if (params.cursor) {
+    const { createdAt, id } = params.cursor;
+    if (popular) {
+      const lc = params.cursor.likeCount ?? 0;
+      q = q.or(`like_count.lt.${lc},and(like_count.eq.${lc},created_at.lt.${createdAt}),and(like_count.eq.${lc},created_at.eq.${createdAt},id.lt.${id})`);
+    } else {
+      q = q.or(`created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${id})`);
+    }
+  }
+  const { data, error } = await q.limit(limit);
+  if (error) throw error;
+  const rows = (data ?? []) as Record<string, unknown>[];
+  const posts = rows.map(rowToPost);
+  const last = rows[rows.length - 1];
+  const nextCursor: PostCursor | null = rows.length === limit && last
+    ? { createdAt: last.created_at as string, id: last.id as string, likeCount: Number(last.like_count ?? 0) }
+    : null;
+  return { posts, nextCursor };
+}
+
 // ── 관리자: 매장 상태 관리 (게시물 관리) ───────────────────────────────────────
 // 관리자용 전체 매장 조회(미승인·숨김·정지 포함). RLS가 admin에 전체 SELECT 허용.
 export async function getAllVenues(): Promise<Venue[]> {
@@ -594,22 +704,19 @@ export async function getAllVenues(): Promise<Venue[]> {
 
 export async function updateVenueStatus(venueId: string, status: VenueStatus): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venues')
-    .update({ status, updated_at: new Date().toISOString() }).eq('id', venueId);
-  if (error) throw error;
+  await mustAffect(supabase.from('venues')
+    .update({ status, updated_at: new Date().toISOString() }).eq('id', venueId));
 }
 
 export async function setVenueAd(venueId: string, isAd: boolean): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venues')
-    .update({ is_paid_ad: isAd, updated_at: new Date().toISOString() }).eq('id', venueId);
-  if (error) throw error;
+  await mustAffect(supabase.from('venues')
+    .update({ is_paid_ad: isAd, updated_at: new Date().toISOString() }).eq('id', venueId));
 }
 
 export async function deleteVenue(venueId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venues').delete().eq('id', venueId);
-  if (error) throw error;
+  await mustAffect(supabase.from('venues').delete().eq('id', venueId));
 }
 
 // ── 활동/삭제 감사 로그 ────────────────────────────────────────────────────────
@@ -709,11 +816,10 @@ export async function createOwnerPost(content: string): Promise<void> {
 }
 export async function deleteOwnerPost(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase
+  await mustAffect(supabase
     .from('owner_posts')
     .update({ deleted: true, deleted_at: new Date().toISOString() })
-    .eq('id', id);
-  if (error) throw error;
+    .eq('id', id));
 }
 
 // 게시글 조회수 +1 (상세 진입 시)
@@ -795,11 +901,10 @@ export async function createDealerPost(input: {
 }
 export async function deleteDealerPost(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase
+  await mustAffect(supabase
     .from('dealer_posts')
     .update({ deleted: true, deleted_at: new Date().toISOString() })
-    .eq('id', id);
-  if (error) throw error;
+    .eq('id', id));
 }
 
 // ── 구인 지원서 ───────────────────────────────────────────────────────────────
@@ -902,14 +1007,12 @@ export async function joinGroup(groupId: string): Promise<MemberStatus> {
 /** 가입 승인(매니저) */
 export async function approveMember(memberId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('group_members').update({ status: 'approved' }).eq('id', memberId);
-  if (error) throw error;
+  await mustAffect(supabase.from('group_members').update({ status: 'approved' }).eq('id', memberId));
 }
 /** 멤버 추방/거절(매니저) 또는 탈퇴(본인) */
 export async function removeMember(memberId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('group_members').delete().eq('id', memberId);
-  if (error) throw error;
+  await mustAffect(supabase.from('group_members').delete().eq('id', memberId));
 }
 
 // ── 그룹 채팅(멤버 전용, 실시간) ──────────────────────────────────────────────
@@ -932,8 +1035,7 @@ export async function sendGroupMessage(groupId: string, input: { userName: strin
 }
 export async function deleteGroupMessage(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('group_messages').delete().eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('group_messages').delete().eq('id', id));
 }
 export function subscribeGroupMessages(groupId: string, onInsert: (m: GroupMessage) => void): () => void {
   if (IS_MOCK) return () => {};
@@ -967,8 +1069,7 @@ export async function sendVenueMessage(venueId: string, input: { userName: strin
 }
 export async function deleteVenueMessage(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venue_messages').delete().eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('venue_messages').delete().eq('id', id));
 }
 export function subscribeVenueMessages(venueId: string, onInsert: (m: VenueMessage) => void): () => void {
   if (IS_MOCK) return () => {};
@@ -999,8 +1100,7 @@ export async function createGroupPost(groupId: string, input: { authorName: stri
 }
 export async function deleteGroupPost(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('group_posts').update({ deleted: true }).eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('group_posts').update({ deleted: true }).eq('id', id));
 }
 
 // ── 그룹 프로필(팀 소개 · 전화 · 카카오톡) ────────────────────────────────────
@@ -1061,8 +1161,7 @@ export async function setGroupMemberRole(memberId: string, role: 'manager' | 'me
 
 export async function approveGroup(groupId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venues').update({ approved: true }).eq('id', groupId);
-  if (error) throw error;
+  await mustAffect(supabase.from('venues').update({ approved: true }).eq('id', groupId));
 }
 
 // ── 내 커뮤니티 관리 ──────────────────────────────────────────────────────────
@@ -1201,8 +1300,7 @@ export async function createVenueNotice(venueId: string, content: string): Promi
 }
 export async function deleteVenueNotice(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venue_notices').delete().eq('id', id);
-  if (error) throw error;
+  await mustAffect(supabase.from('venue_notices').delete().eq('id', id));
 }
 
 // ── 배드빗/굿런 반응 (작성자 활동점수 증가) ───────────────────────────────────
@@ -1228,10 +1326,11 @@ export async function removeReaction(postId: string): Promise<void> {
   if (IS_MOCK) return;
   const user = await currentUser();
   if (!user) return;
-  const { error } = await supabase
+  // 켜기(reactToPost)가 upsert 라 끄기도 0행(이미 없음)을 성공으로 흡수한다 — 던지면 PostDetailModal 이 스냅샷으로
+  // 되돌려 다른 탭에서 먼저 취소한 반응이 되살아난다(서버엔 없다). 본인 행. error 는 그대로 던진다.
+  await idempotentOff(supabase
     .from('post_reactions').delete()
-    .eq('post_id', postId).eq('user_id', user.id);
-  if (error) throw error;
+    .eq('post_id', postId).eq('user_id', user.id));
 }
 
 // ── 매장 인증 등급 ────────────────────────────────────────────────────────────
@@ -1245,14 +1344,12 @@ export async function getMyVenue(): Promise<Venue | null> {
 // 관리자: 인증 상태 변경
 export async function setVenueVerification(venueId: string, status: VenueVerificationStatus): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venues').update({ verification_status: status }).eq('id', venueId);
-  if (error) throw error;
+  await mustAffect(supabase.from('venues').update({ verification_status: status }).eq('id', venueId));
 }
 // 업주: 매장 갤러리(자동 슬라이드) 이미지 URL 목록 저장
 export async function updateVenueImages(venueId: string, urls: string[]): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('venues').update({ images: urls }).eq('id', venueId);
-  if (error) throw error;
+  await mustAffect(supabase.from('venues').update({ images: urls }).eq('id', venueId));
 }
 
 // ── 매장 팔로우(즐겨찾기) ──────────────────────────────────────────────────────
@@ -1278,8 +1375,9 @@ export async function unfollowVenue(venueId: string): Promise<void> {
   if (IS_MOCK) return;
   const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
-  const { error } = await supabase.from('venue_follows').delete().eq('user_id', user.id).eq('venue_id', venueId);
-  if (error) throw error;
+  // 켜기(followVenue)가 23505 를 무시하므로 끄기도 0행(이미 해제됨)을 성공으로 흡수한다 — 던지면 VenuePage 가
+  // setView(before) 로 **팔로우 중 + 팔로워 +1** 을 그린다(서버엔 팔로우가 없다). 본인 행. error 는 그대로 던진다.
+  await idempotentOff(supabase.from('venue_follows').delete().eq('user_id', user.id).eq('venue_id', venueId));
 }
 
 // ── 관리자 통계 ────────────────────────────────────────────────────────────────
@@ -1541,8 +1639,9 @@ export async function getShoutRules(): Promise<ShoutRules> {
 export async function getMyPointBalance(): Promise<PointBalance | null> {
   if (IS_MOCK) return null;
   const { data, error } = await supabase.rpc('my_point_balance');
+  if (error) throw error;   // UI-08-4: 잔액 조회 실패는 null(미도착)이 아니라 실패다 — 화면은 누적 점수를 잔액으로 대신 쓰지 않는다
   const r = Array.isArray(data) ? data[0] : data;
-  if (error || !r) return null;
+  if (!r) return null;
   return { total: r.total ?? 0, spent: r.spent ?? 0, available: r.available ?? 0 };
 }
 
@@ -1574,7 +1673,9 @@ export async function getLiveShouts(limit = 30): Promise<Shout[]> {
     .gt('expires_at', new Date().toISOString())
     .order('plays_at', { ascending: true })
     .limit(limit);
-  if (error) return [];
+  // 2026-09-13: `if (error) return []` 가 CommunityShoutBar 의 대기열 오류 UI(setQueueErr — "실패를 0 으로 뭉개면 지금 바로 방송이라고 거짓 약속")를
+  //   **도달 불능**으로 만들고 있었다. 던진다. 다른 호출부(:573 방송 목록)는 실패 시 [] 유지 — 옛 동작과 같다.
+  if (error) throw error;
   return (data ?? []).map(mapShout);
 }
 
@@ -1640,7 +1741,7 @@ export async function getShopSkus(): Promise<ShopSku[]> {
     .select('key, kind, label, descr, price, duration_hours, duration_seconds, tier_rank, sort')
     .eq('active', true)
     .order('sort');
-  if (error) return [];
+  if (error) throw error;   // UI-08-4
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
     key: r.key, kind: r.kind, label: r.label, descr: r.descr ?? '',
@@ -1688,7 +1789,8 @@ export interface OwnedMark { markKey: string; source: 'own' | 'rent'; until: str
 export async function getMyOwnedMarks(): Promise<OwnedMark[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('my_owned_marks');
-  if (error || !Array.isArray(data)) return [];
+  if (error) throw error;   // UI-08-4
+  if (!Array.isArray(data)) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data as any[]).map((r) => ({
     markKey: String(r.mark_key),
@@ -1994,7 +2096,8 @@ export interface OwnedCosmetic { kind: 'card_frame' | 'nick_color'; itemKey: str
 export async function getMyCosmetics(): Promise<OwnedCosmetic[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('my_cosmetics');
-  if (error || !Array.isArray(data)) return [];
+  if (error) throw error;   // UI-08-4
+  if (!Array.isArray(data)) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data as any[])
     .filter((r) => r.kind === 'card_frame' || r.kind === 'nick_color')
@@ -2053,7 +2156,8 @@ export interface OwnedSeasonBadge {
 export async function getBuyableSeasonBadges(): Promise<BuyableSeasonBadge[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('my_buyable_season_badges');
-  if (error || !Array.isArray(data)) return [];
+  if (error) throw error;   // UI-08-4
+  if (!Array.isArray(data)) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data as any[]).map((r) => ({
     venueId: r.venue_id, venueName: r.venue_name ?? '(매장)',
@@ -2064,7 +2168,8 @@ export async function getBuyableSeasonBadges(): Promise<BuyableSeasonBadge[]> {
 export async function getMySeasonBadges(): Promise<OwnedSeasonBadge[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('my_season_badges');
-  if (error || !Array.isArray(data)) return [];
+  if (error) throw error;   // UI-08-4
+  if (!Array.isArray(data)) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data as any[]).map((r) => ({
     seasonId: r.season_id, seasonName: r.season_name ?? '시즌',

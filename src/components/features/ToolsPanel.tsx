@@ -375,23 +375,36 @@ export default function ToolsPanel() {
           v6.5 글로우: GTO 탭의 주인공(탭당 1곳 규칙, CLAUDE.md). ⚠ button 안에는 phrasing content(span)만. */}
       <button type="button" onClick={() => open('range')}
         aria-label={`프리플랍 레인지 차트 · 스팟 ${RANGE_SCENARIOS.length}개. 열기`}
-        className="card-aura ring-aura ring-aura-glow flex w-full items-center gap-2.5 rounded-aura border px-3.5 py-3 text-left">
+        className="card-aura ring-aura ring-aura-glow flex w-full flex-wrap items-center gap-x-2.5 gap-y-2 rounded-aura border px-3.5 py-3 text-left">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input tile-grad">
           <Icon name={TOOLS.find((t) => t.key === 'range')!.icon} size={18} strokeWidth={1.8} aria-hidden />
         </span>
-        <span className="min-w-0 flex-1">
+        {/* ⚠ §7 P0-A(2026-09-12 재발·실측): 이 행이 `flex`(비-wrap) + 글 칸 `flex-1`(basis 0) 이었다.
+            basis 0 은 **줄바꿈 계산에 0 으로 잡혀** 오른쪽 `shrink-0` CTA 를 절대 아래로 못 내린다 —
+            390px·root 34px 에서 글 칸이 clientWidth 19 / scrollWidth 119 로 눌리고 설명이
+            **한 글자씩 세로로** 쌓여 카드가 1339px 이 됐다(도구 목록이 fold 밖으로 밀렸다).
+            → ① 행에 `flex-wrap` ② 글 칸에 **실질 basis(7rem)** 를 줘 줄바꿈 계산에 실제 요구폭이 잡히게 한다.
+              7rem 인 이유(실측으로 고른 값이다):
+                · 100%(root 17px) = 119px — 가장 좁은 320px 에서도 글 칸 여유가 132px 이라 **줄바꿈이 일어나지 않는다**(현행 레이아웃 불변).
+                · 200%(root 34px) = 238px — 아이콘(76.5)+간격(21.25) 뒤 남는 198.75px 보다 커서 **글 칸이 통째로 아랫줄로** 내려가고
+                  설명이 카드 폭 전부를 쓴다(6줄 → 3줄). CTA 는 그 아래 줄.
+            글자 크기는 한 곳도 건드리지 않았다(§7: 중요한 정보를 작게 줄여 박스에 넣지 마라). */}
+        <span className="min-w-0 flex-[1_1_7rem]">
           {/* 제목은 절대 안 자른다 — 폭이 모자라면 배지가 다음 줄로 내려간다(flex-wrap). */}
-          <span className="flex flex-wrap items-baseline gap-x-1.5">
+          <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
             <b className="text-sm font-bold text-ink-primary">프리플랍 레인지 차트</b>
             <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-200">{RANGE_SCENARIOS.length}개 스팟</span>
           </span>
           {/* truncate 금지 — 375px 에서 "오픈 · 블라인드 수비 · 3…" 로 잘려 무슨 표인지 사라졌다.
-              두 줄까지 허용(카드 높이 예약이 바뀌지 않게 line-clamp 로 상한만 둔다). */}
-          <span className="mt-0.5 block text-xs leading-snug text-ink-muted line-clamp-2">오픈 · 블라인드 수비 · 3벳 · vs 3벳 · 포지션으로 좁혀 보는 13×13</span>
+              ⚠ line-clamp-2 도 뺐다(2026-09-12 실측): 상한을 두면 200% 확대에서 33자 중 앞 14자만 남아
+              **가로 잘림을 세로 잘림으로 옮기는 것**일 뿐이다. 카드 높이는 이 카드 하나만의 문제라
+              (그리드가 아니다) 줄이 늘어도 아래 카드가 밀릴 뿐 다른 카드와 어긋나지 않는다. */}
+          <span className="mt-0.5 block text-xs leading-snug text-ink-muted">오픈 · 블라인드 수비 · 3벳 · vs 3벳 · 포지션으로 좁혀 보는 13×13</span>
         </span>
         {/* CTA — chip-aura 알약(index.css '선택형·바로가기 칩의 정본', 방금 걷어낸 칩과 같은 어휘).
-            btn-primary 는 보라 틴트 그림자가 글로우 카드 위에 글로우를 겹쳐(v3 실패 사유) 쓰지 않는다. */}
-        <span className="chip-aura inline-flex h-8 shrink-0 items-center rounded-chip px-2.5 text-2xs font-bold">열기 →</span>
+            btn-primary 는 보라 틴트 그림자가 글로우 카드 위에 글로우를 겹쳐(v3 실패 사유) 쓰지 않는다.
+            ml-auto: 아래 줄로 내려갔을 때도 오른쪽 끝에 선다(한 줄일 때의 자리와 같게). */}
+        <span className="chip-aura ml-auto inline-flex h-8 shrink-0 items-center rounded-chip px-2.5 text-2xs font-bold">열기 →</span>
       </button>
 
       {/* 오늘의 드릴 — 레인지 차트 카드 바로 아래(2026-09-03 오너 결정: 탭의 주인공 카드가 먼저, 드릴은 둘째 — 로드맵 ③ '최상단' 갱신).
@@ -404,10 +417,12 @@ export default function ToolsPanel() {
       <button type="button" onClick={() => open('drill')}
         aria-label={`오늘의 드릴 · ${drillTotal}문제 중 ${drillDone}문제 완료. 열기`}
         className="block w-full space-y-2 rounded-aura border card-aura px-3.5 py-3 text-left hover:border-accent-400/40">
-        <span className="flex items-center justify-between gap-2">
-          <span className="inline-flex min-w-0 items-center gap-1.5">
+        {/* §7 P0-A: 이 행들도 같은 부류였다 — 200% 에서 제목 `truncate` 가 42/136,
+            힌트가 146/272, 지표 줄이 68/195 로 잘렸다. 줄바꿈을 허용해 푼다(글자 크기 불변). */}
+        <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
             <Icon name="target" size={14} className="shrink-0 text-accent-300" aria-hidden />
-            <b className="truncate text-xs font-bold text-ink-primary">오늘의 드릴</b>
+            <b className="text-xs font-bold text-ink-primary">오늘의 드릴</b>
             <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-200">{drillDone}/{drillTotal}</span>
             {/* 복습 배지 — 있을 때만. h-4 = 제목 줄(text-xs 16px)과 같아 카드 높이가 변하지 않는다. */}
             {drillReview > 0 && (
@@ -427,12 +442,12 @@ export default function ToolsPanel() {
                 i < drillDone ? 'bg-accent-300' : i === drillDone && !drillFinished ? 'bg-accent-300/40 ring-1 ring-accent-400/60' : 'bg-surface-high'].join(' ')} />
             ))}
           </span>
-          <span className="min-w-0 truncate text-2xs text-ink-muted">{drillHint}</span>
+          <span className="min-w-0 text-2xs text-ink-muted">{drillHint}</span>
         </span>
 
         {/* 기존 진행 스트립의 지표를 그대로 보존 */}
-        <span className="flex items-center justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-3 text-2xs">
+        <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
             <span className="text-ink-muted">오늘 <b className="tabular-nums text-ink-primary">{prog.today}/{prog.goal}</b></span>
             <span className="inline-flex items-center gap-1 text-ink-muted">
               <Icon name="flame" size={12} className="text-accent-300" aria-hidden />
@@ -484,7 +499,7 @@ export default function ToolsPanel() {
       {/* 즐겨찾기 — 레인과 무관하게 항상 보이는 내 도구 */}
       {!hits && favTools.length > 0 && (
         <section className="space-y-2">
-          <div className="flex items-baseline gap-2 border-b border-border-subtle pb-1.5">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
             <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
               <Icon name="star-fill" size={13} className="text-accent-300" aria-hidden /> 즐겨찾기
             </h2>
@@ -508,12 +523,15 @@ export default function ToolsPanel() {
           const items = TOOLS.filter((t) => t.cat === l.id);
           return (
             <section key={l.id} className="space-y-2">
-              <div className="flex items-baseline gap-2 border-b border-border-subtle pb-1.5">
+              {/* §7 P0-A: 레인 설명이 `truncate` 라 320px·100% 에서도 172/178,
+                  200% 에서는 170/357 로 잘렸다("지난 판 되짚기 — 에퀴티·아웃…").
+                  소제목 줄을 wrap 시켜 설명이 필요하면 아랫줄로 흐르게 한다. */}
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
                 <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
                   <Icon name={l.icon} size={13} className="text-accent-300" aria-hidden /> {l.label}
                 </h2>
                 <span className="text-2xs font-semibold tabular-nums text-ink-muted">{items.length}개</span>
-                <span className="truncate text-2xs text-ink-secondary">{l.desc}</span>
+                <span className="min-w-0 text-2xs text-ink-secondary">{l.desc}</span>
               </div>
               {grid(items)}
             </section>
@@ -579,25 +597,40 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
       style={{ boxShadow: '0 0 28px rgb(139 92 246 / 0.26), 0 0 52px rgb(34 211 238 / 0.10)' }}
       aria-label="NURI SPOT"
     >
-      <div className="flex items-center gap-2.5">
+      {/* ⚠ U/§7 P0-2(2026-09-12 실측): 200% 텍스트 확대 · 390px 에서 이 행의 텍스트 칸이
+          clientWidth 19px / scrollWidth 119px 가 돼 **"NURI SPOT" 과 설명이 통째로 사라졌다.**
+          원인은 글자 크기가 아니라 오른쪽 배지가 `shrink-0` 로 행을 다 먹는 것 —
+          그래서 글자를 줄이는 대신 **배지를 아래 줄로 흘려보낸다**(§7: 중요한 정보를 작게 줄여 박스에 넣지 마라).
+          100% 에서는 폭이 남아 줄바꿈이 일어나지 않아 현재 화면은 그대로다. */}
+      <div className="flex flex-wrap items-center gap-2.5">
         <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12"
           style={{ background: 'radial-gradient(120% 120% at 50% 0%, #242B48 0%, #141930 58%, #0A0D1B 100%)' }} aria-hidden>
           <img src="/brand/nuri-holdem-symbol.svg" alt="" width={20} height={20} draggable={false} />
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-[1_1_3.5rem]">
           <p className="text-sm font-extrabold tracking-tight text-ink-primary">NURI SPOT</p>
-          <p className="truncate text-2xs text-ink-muted">핸드 분석 · 리플레이 · 토론</p>
+          {/* ⚠ §7(2026-09-12 실측): 360px 에서 `truncate` 로 잘려 87 < 142 였다.
+              이미 11.69px 라 **더 줄이면 안 되는 구간**이므로 글자를 키우지도 줄이지도 않고
+              줄바꿈으로 푼다(§7: 긴 정보는 줄바꿈·재배치로 푼다).
+              ⚠ 2026-09-12 2차: `line-clamp-2` 로 상한을 뒀더니 **320px·100% 에서 이미 clientHeight 32 /
+              scrollHeight 48** — 셋 중 마지막 토막('토론')이 잘려 있었다. 세로 잘림도 정보 소실이라 상한을 뺀다. */}
+          <p className="text-2xs text-ink-muted">핸드 분석 · 리플레이 · 토론</p>
         </div>
-        <span className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted"
+        {/* `text-[10px]` 은 역할 사다리 밖이라 루트 17px 확대를 못 받는다 — `text-2xs`(11.69px)로 올린다.
+            `shrink-0` 도 뺐다: 320px·200% 에서 이 배지 하나가 245px 을 선점해 섹션(199px)을 밖으로 밀었다.
+            배지 글자는 스스로 줄바꿈된다 — 잘리는 것이 아니라 두 줄이 된다. */}
+        <span className="min-w-0 rounded-badge border border-border-default bg-surface-high px-1.5 py-0.5 text-2xs font-semibold text-ink-muted"
           title="프리플랍은 자체 차트·Nash 데이터와 일치할 때만 기준 빈도를 보여주고, 포스트플랍은 에퀴티·팟오즈만 계산합니다.">
           프리플랍 차트 · 수학
         </span>
       </div>
+      {/* `.btn` 이 `whitespace-nowrap leading-none` 이라 200% 확대에서 '새 스팟 분석'(137px)이
+          2열 칸(128px)을 넘쳤다. 라벨을 줄이지 않고 **두 줄을 허용**한다(높이는 min-h-[44px] 가 이미 예약). */}
       <div className="mt-2.5 grid grid-cols-2 gap-1.5">
-        <button type="button" onClick={() => onOpen('spot')} className="btn-primary min-h-[44px] text-xs">
+        <button type="button" onClick={() => onOpen('spot')} className="btn-primary min-h-[44px] whitespace-normal px-2 text-xs leading-tight">
           새 스팟 분석
         </button>
-        <button type="button" onClick={() => onOpen('spot')} className="btn-ghost min-h-[44px] text-xs">
+        <button type="button" onClick={() => onOpen('spot')} className="btn-ghost min-h-[44px] whitespace-normal px-2 text-xs leading-tight">
           내 스팟
         </button>
       </div>
@@ -620,9 +653,16 @@ function ToolCard({ name, desc, icon, onClick, fav, onToggleFav, testId, tone = 
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
           <Icon name={icon} size={16} strokeWidth={1.8} aria-hidden />
         </span>
+        {/* ⚠ §7 P0-A(2026-09-12 실측) — 오버플로 31곳의 본체가 여기였다.
+            `truncate` 라 **100%·320px 에서도** 설명이 116/141 로 잘리고(13자 중 10자),
+            200% 확대에서는 108/282 = 38% 만 보였다. 이름의 `line-clamp-2` 도 200%·320px 에서
+            clientHeight 64 / scrollHeight 160 — '프리플랍 레인지 차트'가 5줄 중 2줄만 남았다.
+            글자는 이미 최소 크기(11.69px)라 줄일 여지가 없다 → **상한을 걷어내고 줄바꿈으로 푼다**.
+            카드 높이가 제각각이 되지 않는 이유: 그리드가 `auto-rows-fr` + 이 버튼이 `h-full` 이라
+            같은 행의 칸 높이는 가장 높은 칸에 맞춰 자동으로 같아진다(기존 계약 그대로). */}
         <span className="block min-w-0 w-full">
-          <span className="line-clamp-2 text-xs font-bold leading-tight text-ink-primary">{name}</span>
-          <span className="mt-0.5 block truncate text-2xs text-ink-muted">{desc}</span>
+          <span className="block text-xs font-bold leading-tight text-ink-primary">{name}</span>
+          <span className="mt-0.5 block text-2xs text-ink-muted">{desc}</span>
         </span>
       </button>
       {/* 별 — transform 유틸 금지: 전역 button:active 가 transform 을 scale 로 통째로 덮어 -translate-y-1/2 가 누르는 60ms 동안 사라져 별이 튀었다.

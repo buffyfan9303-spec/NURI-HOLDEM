@@ -13,7 +13,7 @@
 //   만들고, 그 안에서 Modal 의 fixed z-[60] 이 갇혀 하단 탭바(fixed z-50, DOM 후순위)에 덮였다 —
 //   시트 아래쪽 약 100px 이 잘려 버튼이 아예 안 보였다(오너 스크린샷). QrScanModal 이 2026-08-28 에
 //   createPortal 로 고친 것과 같은 결함이라, 여기서는 애초에 루트에서 렌더해 원인을 없앤다.
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import QrScanModal from './QrScanModal';
@@ -28,6 +28,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { checkIn, getMyCheckinStreak } from '../../api/checkins';
 import { useBackClose } from '../../lib/backstack';
+import { isStaleResponse } from '../../lib/staleResponse';
 
 export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, onBuyin }: {
   open: boolean;
@@ -47,13 +48,32 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
 
   // 보유 이용권은 시트가 **한 번** 읽는다 — 아래 '자주 가는 매장' 카드와 '보내기' 가 같은 목록을 본다.
   // 예전엔 카드가 혼자 읽어서, 보내기를 붙이면 같은 조회가 두 벌이 됐다.
+  // null=불러오는 중, [] 는 진짜 빈 목록(V04) — VenueVoucherCounts 는 이미 이 구분을 쓴다(rows: null 분기).
   const [held, setHeld] = useState<Voucher[] | null>(null);
+  const [heldErr, setHeldErr] = useState<unknown>(null);
+  const uid = user?.id ?? null;
+  // V05 — A 계정으로 나간 조회가 B 계정 화면(또는 시트를 닫았다 다시 연 뒤)에 늦게 얹히지 않게.
+  // seq 는 재조회마다, owner(uid) 는 계정 전환마다 갱신되고 둘 다 ref 라 응답 도착 시점의 '지금'을 본다.
+  const seqRef = useRef(0);
+  const ownerRef = useRef<string | null>(null);
   const reloadHeld = useCallback(() => {
-    if (!user?.id) { setHeld([]); return; }
+    const owner = uid;
+    ownerRef.current = owner;
+    seqRef.current += 1;
+    const seq = seqRef.current;
+    const stale = () => isStaleResponse({ seq, owner }, { seq: seqRef.current, owner: ownerRef.current });
+    if (!uid) { setHeld([]); setHeldErr(null); return; }
     listMyVouchers()
-      .then((vs) => { const now = Date.now(); setHeld(vs.filter((v) => isHeldVoucher(v, now) && !v.usedAt)); })
-      .catch(() => setHeld([]));
-  }, [user?.id]);
+      .then((vs) => {
+        if (stale()) return;
+        const now = Date.now();
+        setHeld(vs.filter((v) => isHeldVoucher(v, now) && !v.usedAt));
+        setHeldErr(null);
+      })
+      // V04 — 실패를 빈 배열로 바꾸지 않는다. held 를 그대로(마지막 정상 결과 또는 null) 두고
+      // heldErr 만 세운다 — '보낼 이용권이 있는데 안 보임'을 그냥 침묵으로 삼키지 않는다.
+      .catch((e) => { if (!stale()) setHeldErr(e); });
+  }, [uid]);
   useEffect(() => { if (open) reloadHeld(); }, [open, reloadHeld]);
 
   /** 매장별 보유 묶음 — 많은 순. '보유한 매장의 이용권만' 이라는 규칙의 단일 출처다.
@@ -77,6 +97,10 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
   const [plan, setPlan] = useState<null | {
     venueId: string; venueName: string; ids: string[]; via: 'qr' | 'phone'; gameSeq: number | null;
   }>(null);
+  // 계정이 바뀌면 이전 계정의 held/plan 을 즉시 지운다(V04) — A 의 매장별 장수·보내기 단계가
+  // B 화면에 한 프레임이라도 남으면 안 된다. phoneTarget 은 SendVouchersSheet 언마운트(=plan 초기화)로
+  // 함께 사라진다(그 state 가 그 컴포넌트 안에 있다).
+  useEffect(() => { setHeld(null); setHeldErr(null); setPlan(null); }, [uid]);
 
   /** 스캔된 QR 로 실행 — 매장이 미리 정해지지 않은 진입점이라 스캔 결과가 대상이자 의도다.
    *  손님에게 '출석/바인' 을 먼저 고르게 하지 않는다: 테이블의 QR 이 이미 무엇인지 말하고 있고,
@@ -185,7 +209,8 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
             </section>
           )}
 
-          <VenueVoucherCounts rows={held === null ? null : byVenue} onVenue={onVenue && ((venueId) => { onClose(); onVenue(venueId); })} />
+          <VenueVoucherCounts rows={held === null ? null : byVenue} error={held === null ? heldErr : null}
+            onRetry={reloadHeld} onVenue={onVenue && ((venueId) => { onClose(); onVenue(venueId); })} />
 
           {/* ── 매장이용권 지갑 — 대시보드와 같은 정본(킬스위치 OFF 면 스스로 아무것도 그리지 않는다) ──
               본인인증 CTA 는 시트 안에서 끝낼 수 없으니 내 정보로 넘긴다.
@@ -231,9 +256,12 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
  * (장부의 T 단위와 다르다). 킬스위치 OFF 여도 장수는 보여 준다 — 손님이 '몇 장 있는지'를 못 보는 게 더 이상하다.
  * 로딩은 실제 행과 같은 높이의 스켈레톤으로 자리를 예약한다(CLS 0).
  */
-function VenueVoucherCounts({ rows: all, onVenue }: {
-  /** 보유 묶음 — 시트가 한 번 읽어 내려준다(예전엔 이 컴포넌트가 따로 또 조회했다). null=로딩 중 */
+function VenueVoucherCounts({ rows: all, error, onRetry, onVenue }: {
+  /** 보유 묶음 — 시트가 한 번 읽어 내려준다(예전엔 이 컴포넌트가 따로 또 조회했다). null=로딩 중(또는 실패로 한 번도 못 받음) */
   rows: { venueId: string; name: string; ids: string[] }[] | null;
+  /** V04 — rows 가 null 인 게 '아직 로딩 중'인지 '실패로 한 번도 못 받음'인지 가른다. rows 가 있으면(마지막 정상 결과) 무시. */
+  error?: unknown;
+  onRetry?: () => void;
   onVenue?: (venueId: string) => void;
 }) {
   const { user } = useAuth();
@@ -251,7 +279,12 @@ function VenueVoucherCounts({ rows: all, onVenue }: {
           <span className="text-2xs text-ink-secondary">보유 많은 순</span>
         </div>
       </div>
-      {rows === null ? (
+      {rows === null && error ? (
+        <div role="alert" className="mt-2 flex items-center justify-between gap-2 rounded-input border border-danger/30 bg-danger/[0.06] px-3 py-2">
+          <p className="text-2xs font-semibold text-danger-light">불러오지 못했어요 — 없는 것과는 달라요.</p>
+          {onRetry && <button type="button" onClick={onRetry} className="hit shrink-0 rounded-input border border-danger/40 px-2 py-1 text-2xs font-bold text-danger-light">다시 시도</button>}
+        </div>
+      ) : rows === null ? (
         <div className="mt-2 space-y-1.5" aria-busy="true">
           {[0, 1].map((i) => <div key={i} className="skeleton h-11 rounded-input" />)}
         </div>
@@ -330,8 +363,10 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
   const send = async () => {
     setBusy(true);
     const ids = plan.ids.slice(0, count);
+    // V06 — QR 이 지정한 게임(plan.gameSeq)을 서버까지 들고 간다. 여기서 빠뜨리면 사이드 게임 QR 로
+    // 스캔해도 대기 요청이 게임 미지정이 되어, 운영자가 다른 게임을 보며 승인하면 그 게임으로 들어간다.
     const r = plan.via === 'qr'
-      ? await redeemMyVouchersByQr(ids, plan.venueId)
+      ? await redeemMyVouchersByQr(ids, plan.venueId, plan.gameSeq)
       : await redeemMyVouchersByPhone(ids, phone);
     setBusy(false);
     // 부분 성공을 전량 성공으로 말하지 않는다 — 그 한 문장이 장부에서 다툼이 된다.

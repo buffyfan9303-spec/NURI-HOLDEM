@@ -7,6 +7,7 @@
 //  * post_poll_results     — 집계 뷰(개별 투표자 비노출)
 // 읽기는 게시글과 동일하게 공개(비로그인 열람), 쓰기는 작성자 RLS.
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import { currentUser } from './_session';
 
 // ── 카드 타입 ─────────────────────────────────────────────────────────────────
@@ -185,9 +186,10 @@ export async function savePoll(postId: string, poll: PollAttachment | null): Pro
   let pollId: string;
   if (existing.data?.id) {
     pollId = existing.data.id as string;
-    const upd = await supabase.from('post_polls')
-      .update({ question, closes_at: poll.closesAt ?? null }).eq('id', pollId);
-    if (upd.error) throw upd.error;
+    // 방금 SELECT 로 찾은 행이다 — 0행이면 RLS(읽기는 되고 쓰기는 막힘)라 아래 보기 교체까지 가면 안 된다.
+    await mustAffect(supabase.from('post_polls')
+      .update({ question, closes_at: poll.closesAt ?? null }).eq('id', pollId));
+    // 보기 delete 는 행 수를 보지 않는다(허용 목록): 바로 뒤 insert 가 같은 RLS 에 걸려 오류로 드러난다.
     const del = await supabase.from('post_poll_options').delete().eq('poll_id', pollId);
     if (del.error) throw del.error;
   } else {

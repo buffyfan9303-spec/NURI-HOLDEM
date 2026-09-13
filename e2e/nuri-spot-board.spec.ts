@@ -142,37 +142,84 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     await expect(dlg.getByText('이 자리에서 어떻게 하시겠어요?').first()).toBeVisible();
     await expect(dlg.locator('[data-spot-post]'), '스팟이 없는 글에 카드가 섰다').toHaveCount(0);
   });
-  test('🔴 스팟을 공유하면 게시판으로 넘어가 방금 올린 글이 열린다', async ({ page }) => {
-    await installBoard(page);
-    // 공유 RPC 는 **가로채서** 새 글 id 만 돌려준다 — 운영 DB 에 쓰지 않는다.
-    let shared = 0;
-    await page.route(/\/rest\/v1\/rpc\/share_spot_post/, (r: Route) => {
-      shared += 1;
-      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(POST_ID) });
-    });
+  // ── 계약 변경 (F16, 2026-09-13) ───────────────────────────────────────────────
+  // 예전 이 블록은 '공유 버튼 = 즉시 게시' 를 단언했다(누르자마자 RPC 호출 수를 셌다).
+  // 그 동작이 문제였다: 본문은 클라이언트가 짓고 '내 선택 · 메모' 칸 — 안내문이 "왜 그렇게
+  // 했는지, 무엇이 고민이었는지" 라 사용자가 혼잣말을 적는 칸 — 이 그대로 공개 본문이 됐다.
+  // 확인·미리보기·편집 단계가 없었고, 게시 뒤 삭제는 실시간 구독으로 이미 노출된 뒤였다.
+  // 이제 계약은 **확인 시트를 거쳐야 올라간다** 이다. 셀렉터를 느슨하게 푸는 것이 아니라
+  // 단언의 내용을 바꾼 것이며, '취소하면 공개 글 0' 을 새로 잠근다.
+  /** 공유 버튼이 열릴 때까지 스팟을 채운다 — 카드 2장 + 내 선택(크기까지) */
+  async function fillShareableSpot(page: Page) {
     await page.goto('/?tab=tools');
     await dismissOverlays(page);
     await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 분석' }).click();
     const dlg = page.getByRole('dialog').first();
     await expect(dlg).toBeVisible({ timeout: 20_000 });
-    // 공유가 열리려면 막는 검증이 없어야 한다 — 카드 2장 + 액션(크기까지)
     await dlg.locator('button[data-card="As"]').click();
     await dlg.locator('button[data-card="Ks"]').click();
     await dlg.getByRole('group', { name: '입력 단계' }).getByRole('button', { name: /내 선택/ }).click();
     await dlg.getByRole('button', { name: '레이즈', exact: true }).first().click();
     await dlg.getByRole('spinbutton').first().fill('3');
     await page.waitForTimeout(600);
-
     const shareBtn = dlg.getByRole('button', { name: '스팟 토론에 공유' });
     await expect(shareBtn, '공유 버튼이 막혀 있다').toBeEnabled({ timeout: 10_000 });
+    return { dlg, shareBtn };
+  }
+
+  test('🔴 확인 시트를 거쳐야 올라간다 — 메모가 공개된다고 말하고, 고친 메모가 그대로 본문이 된다', async ({ page }) => {
+    await installBoard(page);
+    // 공유 RPC 는 **가로채서** 새 글 id 만 돌려준다 — 운영 DB 에 쓰지 않는다.
+    let shared = 0;
+    const bodies: string[] = [];
+    await page.route(/\/rest\/v1\/rpc\/share_spot_post/, (r: Route) => {
+      shared += 1;
+      bodies.push((r.request().postDataJSON() as { p_content?: string }).p_content ?? '');
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(POST_ID) });
+    });
+    const { shareBtn } = await fillShareableSpot(page);
     await shareBtn.click();
 
-    expect(shared, '공유 RPC 가 호출되지 않았다').toBeGreaterThan(0);
-    // ① 게시판으로 넘어간다
+    // ① 아직 아무것도 올라가지 않았다
+    const sheet = page.locator('[data-share-confirm]');
+    await expect(sheet, '확인 시트가 열리지 않는다').toBeVisible({ timeout: 10_000 });
+    expect(shared, '확인도 받기 전에 글이 올라갔다').toBe(0);
+    // ② 메모가 공개된다는 고지
+    await expect(sheet.getByText(/적어 둔 메모도 함께 공개됩니다/)).toBeVisible();
+    // ③ 미리보기는 **실제로 올라갈 본문**이다 — 그 자리에서 고치면 미리보기가 따라 바뀐다
+    const preview = sheet.locator('[data-share-preview]');
+    await expect(preview).toContainText('이 자리에서 어떻게 하시겠어요?');
+    await sheet.getByRole('textbox').fill('3벳이 무서웠다');
+    await expect(preview).toContainText('3벳이 무서웠다');
+
+    await sheet.getByRole('button', { name: '게시판에 올리기' }).click();
+    // ⚠ 클릭 직후 동기 단언은 플레이크다 — 요청이 나가기 전에 세면 0 이다(실측).
+    await expect.poll(() => shared, { message: '확인 뒤에도 공유 RPC 가 호출되지 않았다', timeout: 15_000 }).toBe(1);
+    expect(bodies[0], '미리보기에서 고친 메모가 본문에 실리지 않았다').toContain('3벳이 무서웠다');
+    // ④ 게시판으로 넘어가 방금 올린 글이 열린다 — 토스트만 띄우고 끝나면 자기 글을 못 본다
     await expect(page.locator('main[data-tab="community"]'), '공유 뒤 게시판으로 안 간다')
       .toBeVisible({ timeout: 15_000 });
-    // ② 방금 올린 글이 열린다 — 토스트만 띄우고 끝나면 자기 글을 못 본다
     await expect(page.locator('[data-spot-post]'), '방금 올린 글이 열리지 않는다')
       .toBeVisible({ timeout: 20_000 });
+  });
+
+  test('🔴 확인 시트를 취소하면 공개 글이 0 이다', async ({ page }) => {
+    await installBoard(page);
+    let shared = 0;
+    await page.route(/\/rest\/v1\/rpc\/share_spot_post/, (r: Route) => {
+      shared += 1;
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(POST_ID) });
+    });
+    const { shareBtn } = await fillShareableSpot(page);
+    await shareBtn.click();
+    const sheet = page.locator('[data-share-confirm]');
+    await expect(sheet).toBeVisible({ timeout: 10_000 });
+    await sheet.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(sheet, '취소했는데 시트가 남아 있다').toBeHidden({ timeout: 10_000 });
+    // 남는 것이 없어야 한다 — 글도, 이동도.
+    expect(shared, '취소했는데 글이 올라갔다').toBe(0);
+    await expect(page.locator('main[data-tab="community"]')).toBeHidden();
+    // 다시 열 수 있다(취소가 공유 경로를 망가뜨리지 않는다)
+    await expect(shareBtn).toBeEnabled();
   });
 });

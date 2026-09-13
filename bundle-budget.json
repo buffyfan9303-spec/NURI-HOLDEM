@@ -1,8 +1,8 @@
 {
-  "_주석": "번들 예산(gzip KB). 올릴 때는 왜 올리는지 커밋 메시지에 남길 것. --update 로 재작성.",
+  "_주석": "번들 예산(gzip KB). 올릴 때는 왜 올리는지 커밋 메시지에 남길 것. --update 로 재작성. 2026-09-13 entry 256→257(여유 0.2KB, 의도적으로 빡빡하게): N02·N06·N07·N09 첫 화면 기능 합산 +0.8KB(신규 lib 7개 합 ≈0.8KB gz, 개별 최대 702B). 누수 1건(postNav)은 분리로 제거했고 파수꾼(LEAK_SENTINELS)을 세웠다. 나머지는 기능 증가다. 관리자 4개 함수의 동적 import 는 auth 청크가 modulepreload 로 갈라져 오히려 258.2 가 되어 채택하지 않았다.",
   "totalJsGzipKb": 1000,
   "totalCssGzipKb": 32,
-  "entryGzipKb": 256,
+  "entryGzipKb": 257,
   "largestChunkGzipKb": 114,
   "externalStylesheets": 0
 }

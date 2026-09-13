@@ -5,8 +5,9 @@
 //   우 = 시작시각 / BUY-IN 라벨·금액 / GTD·이용권(골드)
 // 상세(리바인·평균스택·다음브레이크 등)는 카드 탭 → 관전 클락에서 그대로 제공(표면 간소화, 기능 보존).
 import { useEffect, useMemo, useState } from 'react';
-import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockState, type ClockLevel } from '../../api/clock';
+import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockState } from '../../api/clock';
 import { matchClockSchedule as matchSchedule, msToRegClose } from '../../lib/regStatus';
+import { levelNumberAt } from '../../lib/clockLevel';
 import { EmptyState } from '../atoms/Skeleton';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -45,11 +46,8 @@ const haversine = (a: [number, number], b: [number, number]): number => {
 
 // matchSchedule·msToRegClose 는 src/lib/regStatus.ts 로 승격(UX-1) — browse 카드·상세와 단일 소스 공유.
 
-function levelNumberAt(levels: ClockLevel[], index: number): number {
-  let n = 0;
-  for (let i = 0; i <= index && i < levels.length; i++) if (levels[i].kind === 'level') n++;
-  return n;
-}
+// levelNumberAt 은 src/lib/clockLevel.ts 하나뿐이다 — 이 파일의 로컬 복제본이 msToRegClose 와
+// 같은 부류(2026-09-13)라 통합했다.
 // 레지마감 잔여 ms → '몇 분' 라벨(오너 지정 1급 정보 — 분 단위 표기)
 function regMinLabel(ms: number): string {
   const min = Math.max(1, Math.ceil(ms / 60_000));

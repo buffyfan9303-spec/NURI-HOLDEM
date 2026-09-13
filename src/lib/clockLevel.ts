@@ -106,3 +106,34 @@ export const CLOCK_PHASE_ACTION: Record<ClockPhase, string> = {
  * 그 식은 **1레벨에서 일시정지한 진행 중 대회를 '미실행'** 이라고 말했다(currentIndex 가 0이라서).
  */
 export const clockIsLive = (s: ClockPhaseInput, nowMs = Date.now()): boolean => clockPhase(s, nowMs) !== 'idle';
+
+// ── 레벨 번호 · 다음 브레이크 — 4곳에 복제돼 있던 계산을 한 곳으로 (2026-09-13) ─────
+//
+// 왜 여기인가: 둘 다 순수 함수라 regStatus.ts/effectiveLevel 과 같은 이유로 lib/ 에 둔다
+// (api/clock 을 값으로 import 하면 업주 전용 장부 청크가 첫 화면 임계 경로에 딸려 온다 — 위 effectiveLevel 머리말 참조).
+// msToRegClose 복제 사고(regStatus.contract.test.ts 머리말)와 같은 부류라 같은 방식으로 막는다.
+
+/** levelNumberAt/msToNextBreak 이 실제로 읽는 것 — ClockLevel(api/clock)이 구조적으로 만족한다. */
+export interface ClockLevelKind { kind?: 'level' | 'break'; minutes?: number }
+
+/** 레벨 번호(브레이크 제외, 1부터) — index 까지 누적. */
+export function levelNumberAt(levels: ClockLevelKind[], index: number): number {
+  let n = 0;
+  for (let i = 0; i <= index && i < levels.length; i++) if (levels[i].kind === 'level') n++;
+  return n;
+}
+
+/**
+ * 다음 브레이크까지 남은 ms(현재 레벨 잔여 + 중간 레벨 길이 합). 브레이크가 없으면 null.
+ * index 를 받는 이유: DB 의 current_index 가 낡아 있을 수 있어 '실효 인덱스'로 계산해야 하는 소비처가 있다
+ * (TV·리모컨). 운영자 클락처럼 자기 state 가 권위인 소비처는 자신의 currentIndex 를 그대로 넘기면 된다.
+ */
+export function msToNextBreak(s: { config?: { levels?: ClockLevelKind[] } | null }, index: number, remaining: number): number | null {
+  const lv = s.config?.levels ?? [];
+  let acc = remaining;
+  for (let i = index + 1; i < lv.length; i++) {
+    if (lv[i].kind === 'break') return acc;
+    acc += (lv[i].minutes ?? 0) * 60_000;
+  }
+  return null;
+}

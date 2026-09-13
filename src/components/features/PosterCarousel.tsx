@@ -1,169 +1,219 @@
 // src/components/features/PosterCarousel.tsx
-// APIS식 상단 포스터 오토 캐러셀 — 고정 슬라이드(브랜드 배너·대회 포스터) + 예정 대회
-// 포스터가 화면 가로를 꽉 채우는 풀폭 1장 배너로 흐른다.
-// · 슬롯 규격(오너 지시 2026-08-27 4차): 카드 폭 = 스크롤러 clientWidth(w-full — 100vw 는
-//   PC 세로 스크롤바에서 가로 오버플로라 금지), 높이 = aspect 960/448(래스터 원본 비율 그대로 —
-//   어떤 기종에서도 크롭 0), 카드 간 여백 0. PC 는 풀폭이 과대해져 '스크롤러 자체'를
-//   max-w-[512px] 중앙 정렬로 캡(512×448/960≈239px ≤ 240px 캡) — 카드는 여전히 w-full 이라
-//   스텝 = clientWidth 불변식이 전 기종 단일 코드로 유지되고 비율 크롭도 없다.
-//   캡 트리거 = lg ∪ (hover:hover)+(pointer:fine)(2026-08-28): 줌·배율 PC(CSS 뷰포트<1024)에서도 캡.
-// · 터치 플릭 = 시작 카드 ±1장 정착(2026-08-28): touchend 클램프 → 기존 rAF 트윈 정착.
-//   포스터 크롭 2종만 래스터(960×448 WebP ≤120KB), 브랜드 배너 4종은 DOM(CSS+실텍스트 —
-//   전송 0B·PC 뭉개짐 없음), 일정 포스터는 thumbUrl(960) 서버 리사이즈 상한(풀폭 확대에 맞춤 —
-//   구 224px 슬롯 시절의 480 상한은 폐기).
-// · 고정 슬라이드는 마감 없이 상시 게시(오너 지시) — 날짜 필터는 일정 포스터에만 적용.
-//   항상 3장 이상이 확보되므로 캐러셀은 로딩과 무관하게 즉시 그려진다(빈 상태·스켈레톤 없음).
-// · 모션: APIS식 스텝 캐러셀 — 3.2초 정지 후 카드 한 장씩 rAF 트윈 이동(--ease 동일 곡선 420ms,
-//   구 UA smooth 는 프레임 제어 불가로 교체 — 오너 지시 3차·5차) + 유저 가로 스크롤 겸용
-//   (상호작용 시 6초 정지 + 트윈 즉시 취소, 양방향 무한 랩).
-//   prefers-reduced-motion 은 자동 스텝 없이 수동 스크롤만.
-// · 배경 없음(오너 지시 2026-08-27): 펠트 띠·패딩 없이 배너 카드만 흐른다.
-import { useEffect, useMemo, useRef } from 'react';
-import { thumbUrl } from '../../lib/imageUrl';
-import type { Schedule } from '../../api/schedules';
+// 홈 상단 **프로모션 배너** — 관리자 등록 배너(home_banners) + 브랜드 슬라이드.
+//
+// 2026-09-13 §6-2 재구성. 바뀐 계약 세 가지와 그 이유:
+//
+//  ① **높이가 비율이 아니라 값이다.** 예전엔 `aspect-[960/448]`(2.143:1) 이라 폭이 커질수록 높이가 같이
+//     커졌다 — 390px 에서 166px, 캡을 풀면 PC 에서 500px 을 넘는다. §6-2 는 배너 높이를 모바일
+//     104~116px · PC 180~220px 로 못박는다(홈 첫 화면을 배너 하나가 먹지 않게). 그래서 **공통 프레임**에
+//     `min-h` 를 주고 트랙의 flex stretch 로 **모든 슬라이드가 같은 높이**를 갖게 한다.
+//     `min-h` 라서 글자 확대로 내용이 커지면 프레임이 같이 늘어난다(고정 높이 잘림 없음).
+//
+//  ② **일정 포스터는 더 이상 여기 없다.** 세로 포스터를 2:1 배너 비율에 우겨 넣으면 크롭이 생긴다
+//     (§6-2: "포스터 전체 정보가 중요한 콘텐츠는 배너 비율에 억지로 잘라 넣지 않는다. 포스터는
+//     추천 카드 또는 상세에서 원본 비율로 볼 수 있게 한다"). 같은 대회·같은 `onSelect` 목적지가
+//     HomeTab 의 '추천 대회' 가로 레일로 옮겨 갔다 — **사라진 진입점은 없다**.
+//
+//  ③ **자동 넘김을 쓰지 않는다**(§6-2: "자동 넘김은 기본 사용하지 않는다"). 3.2초 인터벌 + rAF 트윈
+//     (EASE/STEP_MS/tweenTo/pause)이 통째로 빠졌다. 읽는 중 글자가 도망가지 않고, reduced-motion
+//     분기·탭 비활성 분기·상호작용 정지 타이머가 **존재할 이유 자체가 없어진다**.
+//     수동 스와이프·휠·드래그·스냅·양방향 무한 랩은 그대로다(2배 복제 + scrollLeft ±half).
+//
+//  ④ **PC 512px 중앙 캡 제거.** 캡은 ①의 비율 때문에 생긴 것이었다(풀폭 PC = 500px 배너).
+//     높이가 값으로 고정된 지금은 필요 없고, `(hover:hover)+(pointer:fine)` 미디어가 **모바일 폭에서도**
+//     공통 여백(mx-page-x)을 mx-auto 로 덮어 입력 방식마다 여백이 달라지던 문제도 같이 사라진다.
+//     폭은 **컨테이너**(HomeTab 의 max-w-[1200px] 두 칸 그리드)가 정한다.
+//
+// 유지: 카드 폭 = 스크롤러 clientWidth(w-full) 불변식 — 랩·스냅·스텝 경계가 전부 여기에 걸려 있다.
+//       트랙에 gap 을 넣거나 카드마다 폭을 달리하면 정착 위치가 깨진다. 여백은 **트랙 바깥**에 둔다.
+//       링크 없는 배너는 <div> 로 그린다(죽은 버튼 금지). 관리자 배너의 활성·정렬·기간 규칙은 API 담당.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Icon from '../atoms/Icon';
 import type { HomeBanner } from '../../api/homeBanners';
-
-const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
-
-// --ease(cubic-bezier(0.32,0.72,0,1)) 의 JS 평가 — 앱 유일 곡선(모션 헌법 §20.4)을 그대로 쓴다.
-// 기존 코드베이스에 JS 이징 헬퍼 없음(SlidingPill 은 CSS transition) — 로컬 함수로 둔다.
-// x(진행 시간 0..1) → t 를 뉴턴 5회로 풀고(발산 시 이분 20회 폴백), y(진행 거리)를 돌려준다.
-const EASE = (() => {
-  const x1 = 0.32, y1 = 0.72, x2 = 0, y2 = 1;
-  const ax = 1 - 3 * x2 + 3 * x1, bxc = 3 * x2 - 6 * x1, cx = 3 * x1;
-  const ay = 1 - 3 * y2 + 3 * y1, byc = 3 * y2 - 6 * y1, cy = 3 * y1;
-  const sampleX = (t: number) => ((ax * t + bxc) * t + cx) * t;
-  const sampleY = (t: number) => ((ay * t + byc) * t + cy) * t;
-  const slopeX = (t: number) => (3 * ax * t + 2 * bxc) * t + cx;
-  return (x: number): number => {
-    if (x <= 0) return 0;
-    if (x >= 1) return 1;
-    let t = x;
-    for (let i = 0; i < 5; i++) {
-      const d = slopeX(t);
-      if (d < 1e-6) break;
-      t -= (sampleX(t) - x) / d;
-    }
-    if (t < 0 || t > 1 || Math.abs(sampleX(t) - x) > 1e-4) {
-      let lo = 0, hi = 1;
-      for (let i = 0; i < 20; i++) { t = (lo + hi) / 2; if (sampleX(t) < x) lo = t; else hi = t; }
-    }
-    return sampleY(t);
-  };
-})();
-
-/** 자동 스텝 트윈 길이(ms) — 카드 1장 이동에 딱 맞는 짧은 감속. duration 토큰은 최대 .26s(panel)라
- *  화면폭 이동에는 부족 — §20.4 예외가 아니라 '거리에 맞춘 스크롤 트윈'으로 오너 승인 범위(사유 보고). */
-const STEP_MS = 420;
 
 export type BannerAction = 'tools' | 'explore' | 'nurimind';
 
 // 하드코딩 포스터(로티 단독 1000만 GTD · 8th 홀덤 마스터스)와 로티아레나 브랜드 슬라이드는 2026-09-10 런칭 정리로
 // 제거했다(오너 지시 "포스터 배너 로티 및 wpl 다 지워"). 고정 포스터 자리는 **관리자 등록 배너(home_banners)만** 쓴다 —
-// 비어 있으면 브랜드 슬라이드 3장 + 일정 포스터로만 돈다. 폴백 포스터를 다시 넣지 않는다(지웠는데 되살아나는 것이 사고다).
+// 비어 있으면 브랜드 슬라이드로만 돈다. 폴백 포스터를 다시 넣지 않는다(지웠는데 되살아나는 것이 사고다).
 
 /** 브랜드 배너 — DOM 렌더(오너 리포트 2026-08-27: PC에서 래스터 글자가 뭉개짐 →
  *  텍스트는 실텍스트로 그려 어떤 배율·DPR에서도 선명하게. 배경은 CSS 그라데이션 + 수트 글리프).
- *  ⚠ 텍스트·aria-label 은 e2e 잠금 문구(nav 라벨 exact·'전체 일정')와 겹치면 안 된다 —
- *    마퀴는 상시 이동이라 셀렉터가 이 버튼을 잡으면 안정성 대기 타임아웃으로 플레이크가 된다.
- *    (탭 진입 스펙들은 nav 스코프 셀렉터라 innerText 'GTO' 포함은 안전.) */
+ *  ⚠ 텍스트·aria-label 은 e2e 잠금 문구(nav 라벨 exact·'전체 일정')와 겹치면 안 된다.
+ *
+ *  2026-09-13 — **'GTO 도구' 슬라이드를 뺐다.** §6-1: "같은 GTO 설명을 거대한 히어로와 또 다른 대형
+ *  카드에서 반복하지 않는다. GTO 진입은 한 곳으로 합친다." 홈의 GTO 진입은 이제 하단 'GTO 도구' 줄
+ *  하나뿐이다(`onTools` — 목적지 동일).
+ *
+ *  2026-09-13 — **NURI MIND 부제를 목적지에 맞췄다.** 부제가 '매일 한 문제 · GTO 트레이닝' 이었는데
+ *  실제 목적지는 외부 nurimind.co.kr(오늘의 운세)이다. 같은 서비스를 HomeTab 날짜 줄은 '오늘의 운을
+ *  점쳐보세요', CustomerDashboardPage 는 '오늘의 운세'라고 부른다 — 여기만 어긋나 있었고, 우리가
+ *  제공하지 않는 기능(GTO 트레이닝)으로 유도하고 있었다. 외부 이동이라는 사실도 부제에 적는다. */
 const BRAND_SLIDES: {
   key: string; action: BannerAction; alt: string;
-  bg: string; glyph?: string; glyphColor?: string; logo?: string;
+  bg: string;
   title: string; sub: string; titleColor: string; subColor: string;
 }[] = [
-  /* gto·mind·nuri 배경 — 어워드 레퍼런스(DatawizzAI) 오로라 문법(2026-08-27): 딥 그라운드 위
-     저채도 바이올렛 빔 + 슬라이드 고유 힌트(gto 블루 · mind 마젠타 · nuri 는 골드가 주인공이라
-     배경만 딥 플럼). 정적 CSS 그라데이션 — 애니메이션 없음. 대비 실측(피크 최악 겹침 기준):
-     gto title 10.96/sub 5.92 · mind 10.21/5.67 · nuri 6.74/10.41 — 전부 AA 이상. */
+  /* 배경 — 딥 그라운드 위 저채도 바이올렛 빔(정적 CSS 그라데이션, 애니메이션 없음).
+     대비 실측(피크 최악 겹침 기준): mind title 10.21/sub 5.67 · nuri 6.74/10.41 — 전부 AA 이상. */
   {
-    key: 'gto', action: 'tools', alt: 'GTO 도구 · 차트·계산기·트레이너',
-    bg: 'radial-gradient(140% 180% at 82% -20%, rgba(130,177,255,0.12) 0%, transparent 55%), radial-gradient(150% 200% at 8% 110%, rgba(128,95,218,0.16) 0%, transparent 60%), linear-gradient(180deg, #131520 0%, #0e101a 100%)',
-    glyph: '♠', glyphColor: '#232a42',
-    title: 'GTO 도구', sub: '차트 · 계산기 · 트레이너 ›', titleColor: '#F0F2FA', subColor: '#A9B1E8',
-  },
-  {
-    key: 'mind', action: 'nurimind', alt: 'NURI MIND · nurimind.co.kr 바로가기',
+    key: 'mind', action: 'nurimind', alt: '오늘의 NURI MIND · 외부 사이트 nurimind.co.kr 에서 오늘의 운세 보기',
     bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.12) 0%, transparent 55%), radial-gradient(150% 200% at 8% 110%, rgba(128,95,218,0.16) 0%, transparent 60%), linear-gradient(180deg, #1a162e 0%, #110f20 100%)',
-    glyph: '♥', glyphColor: '#262142',
-    title: '오늘의 NURI MIND', sub: '매일 한 문제 · GTO 트레이닝 ›', titleColor: '#EEECFA', subColor: '#B2ACEC',
+    title: '오늘의 NURI MIND', sub: '오늘의 운세 보기 · 외부 사이트 ›', titleColor: '#EEECFA', subColor: '#B2ACEC',
   },
   {
-    key: 'nuri', action: 'explore', alt: 'NURI HOLDEM · 홀덤 일정 한곳에서',
+    key: 'nuri', action: 'explore', alt: 'NURI HOLDEM · 전국 홀덤 일정 한곳에서 보기',
     bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.07) 0%, transparent 55%), radial-gradient(150% 200% at 10% 110%, rgba(128,95,218,0.18) 0%, transparent 60%), linear-gradient(180deg, #151221 0%, #0d0b18 100%)',
-    glyph: '♦', glyphColor: '#2A2247',
     title: 'NURI HOLDEM', sub: '전국 홀덤 일정, 한곳에서 ›', titleColor: '#D9B25A', subColor: '#DCE4DC',
   },
 ];
-// 고정 슬라이드 수 — eager 로딩 힌트에만 쓴다. 관리자 배너가 들어오면 장수가 달라지므로
-// 컴포넌트 안에서 실제 배너 수로 다시 센다(아래 staticCount).
+
+/** N06(2026-09-13, 실행문 §7.1): 홈 이벤트 진입을 **이 캐러셀 안의 DOM 슬라이드**로 — 독립 카드(home-event-banner/menu)를 없앤다.
+ *  이미지 없는 DOM 슬라이드다(가짜 이미지 URL·home_banners 행을 만들지 않는다 — §7.1-6). 판정은 HomeTab 이 evaluateEvent 로 하고
+ *  여기는 받은 문구만 그린다: `live` 가 참일 때만 강조 배경 — 참여 가능 상태를 거짓 표시하지 않는다(§7.1-2·4). */
+export interface EventSlide {
+  /** 이벤트 제목(live) 또는 '매장 이벤트' 같은 안내 제목 */
+  title: string;
+  /** 상태 한 줄 — '진행 중' 허위 문구 금지는 HomeTab 의 eventMenuSubtitle 이 지킨다 */
+  sub: string;
+  alt: string;
+  /** e2e 계약: 'home-event-banner'(참여 가능) | 'home-event-menu'(그 밖) */
+  testId: 'home-event-banner' | 'home-event-menu';
+  live: boolean;
+  /** 응답 전 — 문구는 '불러오는 중…' 이고 그래도 누를 수 있다 */
+  pending?: boolean;
+  onClick: () => void;
+}
 
 type Slide = {
   key: string; alt: string;
   /** 없으면 클릭 목적지가 없는 슬라이드다 — 버튼이 아니라 그림으로 그린다(죽은 버튼 금지). */
   onClick?: () => void;
-  /* 래스터 슬라이드(포스터) */
+  /* 래스터 슬라이드(관리자 배너) */
   src?: string; title?: string; sub?: string;
   /* DOM 브랜드 슬라이드 */
   brand?: (typeof BRAND_SLIDES)[number];
+  /* DOM 이벤트 슬라이드(N06) */
+  event?: EventSlide;
 };
 
-export default function PosterCarousel({ schedules, onSelect, onBanner, banners = [], onBannerUrl }: {
-  schedules: Schedule[];
-  onSelect: (s: Schedule) => void;
+export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, eventSlide = null }: {
   onBanner: (action: BannerAction) => void;
-  /** 관리자 등록 배너(home_banners) 중 **지금 게재 중인 것**. 비어 있으면 고정 포스터 자리는 없다(폴백 없음). */
+  /** 관리자 등록 배너(home_banners) 중 **지금 게재 중인 것**. 비어 있으면 브랜드 슬라이드만 돈다(폴백 없음). */
   banners?: HomeBanner[];
   onBannerUrl?: (url: string) => void;
+  /** N06: 이벤트 진입 슬라이드 — 관리자 배너 뒤·브랜드 슬라이드 앞(§7.1-3: 관리자/광고 순서는 그대로). null 이면 없음. */
+  eventSlide?: EventSlide | null;
 }) {
-  const staticCount = banners.length + BRAND_SLIDES.length;
   const slides = useMemo<Slide[]>(() => {
-    const today = new Date().toLocaleDateString('en-CA');
-    // 같은 포스터의 연속 회차(기간제 게임)는 첫 회차 1장만 — 마퀴에 동일 카드 도배 방지
-    const seenPoster = new Set<string>();
-    const dyn = schedules
-      .filter((s) => s.approved && !!s.posterUrl && s.date >= today)
-      .sort((a, b) =>
-        Number(b.isPremium) - Number(a.isPremium)
-        || (a.date + (a.startTime || '')).localeCompare(b.date + (b.startTime || '')))
-      .filter((s) => !seenPoster.has(s.posterUrl!) && (seenPoster.add(s.posterUrl!), true))
-      .slice(0, 8)
-      .map((s): Slide => {
-        const d = new Date(s.date);
-        return {
-          key: `s:${s.id}`, src: thumbUrl(s.posterUrl!, 960) ?? s.posterUrl!, alt: s.title || '대회 포스터',
-          title: s.title,
-          sub: `${d.getMonth() + 1}/${d.getDate()}(${DAYS_KO[d.getDay()]}) ${s.startTime || ''} · ${s.pubName}`,
-          onClick: () => onSelect(s),
-        };
-      });
-    // 관리자 배너가 곧 고정 포스터 자리다 — 등록 순서(sort_order) 그대로 앞에 선다. 없으면 이 자리는 비어 있다.
-    // ⚠ 링크 없는 배너는 **누를 수 없어야 한다**(2026-09-11).
-    //   종전엔 링크 유무와 무관하게 <button> 이라 손 모양 커서·hover·press 반응이 다 나는데
-    //   눌러도 아무 일이 없었다 — 사용자에게는 '고장난 버튼' 이다. 관리 화면에서 링크는 '선택' 이라
+    // 관리자 배너가 앞에 선다 — 등록 순서(sort_order)·활성·기간 판정은 api/homeBanners 가 이미 걸렀다.
+    // ⚠ 링크 없는 배너는 **누를 수 없어야 한다**(2026-09-11). 관리 화면에서 링크는 '선택' 이라
     //   실제로 빈 배너가 등록될 수 있다. 목적지가 없으면 배너는 그냥 '보는 것' 으로 둔다.
     const posters: Slide[] = banners.map((b): Slide => ({
       key: `db:${b.id}`, src: b.imageUrl, alt: b.title || '배너', title: b.title, sub: b.subtitle,
       onClick: b.linkUrl ? () => onBannerUrl?.(b.linkUrl) : undefined,
     }));
+    const events: Slide[] = eventSlide ? [{ key: 'ev:home', alt: eventSlide.alt, event: eventSlide, onClick: eventSlide.onClick }] : [];
     const brands = BRAND_SLIDES.map((b): Slide => ({
       key: `b:${b.key}`, alt: b.alt, brand: b, onClick: () => onBanner(b.action),
     }));
-    // 관리자 배너 → 브랜드(3) → 일정 포스터. 브랜드만으로도 3장이라 루프 전제(3장 이상)는 유지된다.
-    return [...posters, ...brands, ...dyn];
-  }, [schedules, onSelect, onBanner, banners, onBannerUrl]);
+    return [...posters, ...events, ...brands];
+  }, [onBanner, banners, onBannerUrl, eventSlide]);
 
-  // 고정 슬라이드만으로도 3장 이상 — 항상 루프(2배 복제 + scrollLeft ±half 랩).
-  // ⚠ 풀폭 전환으로 세트 안 w-page-x 스페이서는 제거 — 카드 폭 = clientWidth 라 세트 폭이
-  //    정확히 N×clientWidth 가 되어야 half 경계·snap 경계·스텝 경계가 전부 일치한다.
-  //    (구 224px 슬롯 시절엔 좌측 여백 스페이서를 세트 '안'에 넣어 -50% 지점을 맞췄다 —
-  //    트랙 패딩으로 주면 랩 시 '뚝' 점프, 오너 실기기 리포트. 그 함정은 스페이서 제거로 소멸.)
+  const n = slides.length;
+  const multi = n > 1;
+  const vpRef = useRef<HTMLDivElement>(null);
+  const [idx, setIdx] = useState(0);
+  // §7.1-9: 데이터가 늦게 도착해 슬라이드 수가 변하면 현재 인덱스를 유효 범위로 맞춘다(점 표시·aria-current 가 없는 장을 가리키지 않게).
+  useEffect(() => { if (idx >= n) setIdx(Math.max(0, n - 1)); }, [n, idx]);
+
+  // ── 무한 랩 + 현재 장 추적 ────────────────────────────────────────────────
+  // 자동 스텝이 사라져 이 effect 가 하는 일은 둘뿐이다: 경계 랩, 그리고 점 표시용 인덱스.
+  // 기하는 캐시한다(스크롤 핫패스에서 scrollWidth/clientWidth 를 읽으면 write→read 스래싱이 난다 —
+  // 2026-08-29 실측, 탭 전환 구간 프레임 39.5ms). 관찰자는 플래그만 세우고 측정은 지연 실행한다.
+  useEffect(() => {
+    const vp = vpRef.current;
+    if (!vp || !multi) return;
+    const track = vp.firstElementChild as HTMLElement | null;
+    let vpW = 0, trackW = 0, geoDirty = true;
+    const markGeoDirty = () => { geoDirty = true; };
+    const geo = () => {
+      if (!geoDirty) return;
+      geoDirty = false;
+      vpW = vp.clientWidth;
+      trackW = vp.scrollWidth;
+    };
+    let ro: ResizeObserver | undefined;
+    if ('ResizeObserver' in window) { ro = new ResizeObserver(markGeoDirty); ro.observe(vp); }
+    let mo: MutationObserver | undefined;
+    if (track && 'MutationObserver' in window) { mo = new MutationObserver(markGeoDirty); mo.observe(track, { childList: true }); }
+    window.addEventListener('resize', markGeoDirty);
+
+    let raf = 0;
+    const onScroll = () => {
+      geo();
+      const half = trackW / 2;
+      const w = vpW; // 카드 폭 = clientWidth(w-full)
+      if (w > 0 && half > w) {
+        // ⚠ 우측 임계 = half + 카드 1장. (>=half → −half) ↔ (<=0 → +half) 짝은 0↔half 를 서로
+        //   되던지는 무한 스크롤 이벤트 루프가 된다(같은 픽셀이라 눈엔 안 보이고 메인스레드만 돈다).
+        if (vp.scrollLeft >= half + w) vp.scrollLeft -= half;
+        else if (vp.scrollLeft <= 0) vp.scrollLeft += half;
+      }
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (!w) return;
+        const i = ((Math.round(vp.scrollLeft / w) % n) + n) % n;
+        setIdx((prev) => (prev === i ? prev : i));
+      });
+    };
+    vp.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      ro?.disconnect();
+      mo?.disconnect();
+      window.removeEventListener('resize', markGeoDirty);
+      vp.removeEventListener('scroll', onScroll);
+    };
+  }, [multi, n]);
+
+  /** 점·화살표 이동 — UA 스무스 스크롤에 맡긴다(자체 트윈 없음 → 관성과 싸우지 않는다). */
+  const go = useCallback((delta: number) => {
+    const vp = vpRef.current;
+    if (!vp) return;
+    const w = vp.clientWidth;
+    if (!w) return;
+    // ⚠ 마운트 직후 scrollLeft 는 **0**이다. 여기서 '이전'을 누르면 음수로 클램프되어
+    //   스크롤 이벤트조차 안 나고 → 랩도 안 돌아 **첫 장에서 '이전'이 먹통**이 된다.
+    //   (자동 넘김이 있던 시절엔 위치가 알아서 밀려 있어 드러나지 않던 자리다.)
+    //   왼쪽으로 갈 자리가 없으면 **먼저 복제 세트의 같은 픽셀로 옮겨 둔다** — 화면은 그대로다.
+    const half = vp.scrollWidth / 2;
+    let from = vp.scrollLeft;
+    if (delta < 0 && from <= 0 && half > w) { vp.scrollLeft = half; from = half; }
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    vp.scrollTo({ left: from + delta * w, behavior: reduced ? 'auto' : 'smooth' });
+  }, []);
+  const goTo = useCallback((i: number) => {
+    const vp = vpRef.current;
+    if (!vp) return;
+    const w = vp.clientWidth;
+    if (!w) return;
+    const cur = ((Math.round(vp.scrollLeft / w) % n) + n) % n;
+    go(i - cur);
+  }, [go, n]);
 
   const card = (s: Slide, i: number, dup: boolean) => {
-    // 복제 세트는 보조기기·탭 순회에서 숨김
     const b = s.brand;
+    const ev = s.event;
     // 목적지가 없으면 <div> 로 그린다 — 커서·hover·포커스가 '누를 수 있다'고 거짓말하지 않게.
     const Tag = (s.onClick ? 'button' : 'div') as 'button' | 'div';
+    // 이벤트 슬라이드 배경 — live 만 브랜드 보라 빔, 그 밖은 중립(참여 가능을 색으로 거짓말하지 않는다). 정적 그라데이션, 애니메이션 없음.
+    const evBg = ev
+      ? (ev.live
+        ? 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.16) 0%, transparent 55%), radial-gradient(150% 200% at 8% 110%, rgba(128,95,218,0.22) 0%, transparent 60%), linear-gradient(180deg, #1c1633 0%, #120f22 100%)'
+        : 'linear-gradient(180deg, #15131f 0%, #0f0e18 100%)')
+      : undefined;
     return (
       <Tag
         key={`${s.key}:${dup ? 'd' : 'o'}`}
@@ -171,27 +221,35 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
         aria-hidden={dup || undefined}
         tabIndex={dup ? -1 : undefined}
         aria-label={dup ? undefined : s.alt}
-        // 오너 지시(2026-08-27 4차): 풀폭 1장 — w-full(=스크롤러 clientWidth) × aspect 960/448.
-        // 풀블리드 배너라 rounded 는 카드가 아니라 lg 캡 상태의 뷰포트에만(모바일은 모서리 없음).
-        className={['relative aspect-[960/448] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left', s.onClick ? '' : 'cursor-default'].join(' ')}
-        style={b ? { background: b.bg } : undefined}
+        {...(ev && !dup ? { 'data-testid': ev.testId } : {})}
+        /* 폭 = 스크롤러 clientWidth(w-full) — 랩·스냅 경계가 전부 이 불변식에 걸려 있다.
+           높이 = min-h(§6-2: 모바일 104~116 · PC 180~220). 트랙이 flex 라 **모든 슬라이드가
+           가장 큰 높이로 함께 늘어난다** — 슬라이드마다 높이가 달라지지 않으면서, 글자 확대에는
+           프레임이 같이 커져 잘리지 않는다(고정 h- 였다면 200%에서 글자가 잘린다). */
+        className={[
+          'relative min-h-[116px] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left md:min-h-[170px] lg:min-h-[200px]',
+          s.onClick ? '' : 'cursor-default',
+        ].join(' ')}
+        style={b ? { background: b.bg } : evBg ? { background: evBg } : undefined}
       >
-        {b ? (
+        {ev ? (
+          <span className="relative flex h-full flex-col justify-center gap-1 px-4 py-3 md:px-6">
+            <span className="flex flex-wrap items-center gap-1.5">
+              {/* 강조는 EVENT 칩 색으로만 — live 일 때 accent, 아니면 중립 */}
+              <span className={['shrink-0 rounded-chip px-1.5 py-px t-meta font-bold tracking-wide', ev.live ? 'bg-accent-300/25 text-accent-200' : 'bg-white/10 text-white/60'].join(' ')}>EVENT</span>
+              <span className="font-display text-[18px] font-extrabold leading-[26px] text-[#EEECFA] md:text-[22px] md:leading-[30px]">{ev.title}</span>
+            </span>
+            <span className="text-[13px] font-medium leading-[19px] tabular-nums text-[#B2ACEC]" aria-busy={ev.pending || undefined}>{ev.sub}</span>
+          </span>
+        ) : b ? (
           <>
-            {/* DOM 브랜드 배너 — 텍스트가 래스터가 아니라 어떤 화면에서도 선명(PC 뭉개짐 해결).
-                풀폭 전환(4차)으로 글리프·로고·타이포 스케일 상향 — 카피는 불변. */}
-            {b.glyph && (
-              <span aria-hidden className="absolute -right-2 -top-7 select-none text-[150px] font-bold leading-none" style={{ color: b.glyphColor }}>
-                {b.glyph}
-              </span>
-            )}
-            {b.logo && (
-              <img src={b.logo} alt="" width={144} height={122} loading="eager" decoding="async"
-                className="absolute left-5 top-1/2 h-[112px] w-[112px] -translate-y-1/2 object-contain" />
-            )}
-            <span className={['absolute inset-y-0 right-5 flex flex-col justify-center', b.logo ? 'left-[150px]' : 'left-6'].join(' ')}>
-              <span className="font-display text-xl font-extrabold leading-tight" style={{ color: b.titleColor }}>{b.title}</span>
-              <span className="mt-1 t-desc font-medium" style={{ color: b.subColor }}>{b.sub}</span>
+            {/* 2026-09-13 — **수트 글리프를 뺐다.** 104px 글리프가 116px 배너에서 카드 밖으로 나가
+                (실측 scrollWidth 367 / clientWidth 354, 세로 121/104) 잘린 채로만 보였고, 글자 자리를
+                92px 먹어 긴 제목을 밀었다. 깊이는 배경 그라데이션이 낸다 — 장식을 더 쌓지 않는다. */}
+            <span className="relative flex h-full flex-col justify-center gap-1 px-4 py-3 md:px-6">
+              {/* §5 역할표: 홈 짧은 제목 18/26(PC 22/30) · 보조 설명 13/19 */}
+              <span className="font-display text-[18px] font-extrabold leading-[26px] md:text-[22px] md:leading-[30px]" style={{ color: b.titleColor }}>{b.title}</span>
+              <span className="text-[13px] font-medium leading-[19px]" style={{ color: b.subColor }}>{b.sub}</span>
             </span>
           </>
         ) : (
@@ -199,198 +257,79 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
             <img
               src={s.src}
               alt=""
-              width={960}
-              height={448}
-              className="h-full w-full object-cover"
-              // ⚠ 마퀴 안에서 lazy 는 '빈 배너'가 된다 — transform 이동은 스크롤이 아니라
-              //    브라우저 지연 로딩 휴리스틱이 안 깨어난다(오너 실기기 리포트). 고정 슬라이드는
-              //    전부 eager, 일정 포스터(thumbUrl 960)만 4장째부터 lazy.
-              loading={i < staticCount + 3 ? 'eager' : 'lazy'}
+              className="absolute inset-0 h-full w-full object-cover"
+              /* ⚠ 마퀴 안에서 lazy 는 '빈 배너'가 된다 — 첫 두 장은 eager(오너 실기기 리포트). */
+              loading={i < 2 ? 'eager' : 'lazy'}
               decoding="async"
             />
-            {/* 하단 스크림 — 포스터 위 고정 다크(테마 무관 가독) */}
-            {s.title && (
+            {/* §6-2: 짧은 제목은 **왼쪽**, 이미지는 오른쪽 일부가 보이게. 이미지 위 글자가 읽히도록
+                왼쪽에서 오른쪽으로 빠지는 스크림 하나만 쓴다(여러 겹 금지). */}
+            {(s.title || s.sub) && (
               <span
-                className="absolute inset-x-0 bottom-0 px-4 pb-2.5 pt-8"
-                style={{ background: 'linear-gradient(to top, rgba(6,8,11,0.92) 25%, transparent)' }}
+                className="absolute inset-0 flex flex-col justify-center gap-1 px-4 pr-[38%] md:px-6"
+                style={{ background: 'linear-gradient(to right, rgba(6,8,11,0.92) 0%, rgba(6,8,11,0.78) 45%, transparent 100%)' }}
               >
-                <span className="block truncate text-sm font-bold text-white">{s.title}</span>
-                {s.sub && (
-                  <span className="block truncate text-xs tabular-nums text-white/70">{s.sub}</span>
-                )}
+                {s.title && <span className="font-display text-[18px] font-extrabold leading-[26px] text-white md:text-[22px] md:leading-[30px]">{s.title}</span>}
+                {s.sub && <span className="text-[13px] font-medium leading-[19px] text-white/80">{s.sub}</span>}
               </span>
             )}
+            {/* ⚠ '광고' 라벨은 **실제 광고 배너가 생길 때** 여기에 붙인다(§6-2: 실제 광고일 때만 광고라고
+                표시한다). 지금 `home_banners` 는 전부 자사 공지라 붙일 대상이 하나도 없어, 항상 false 인
+                죽은 분기를 남기지 않았다. 광고 상품이 생기면 HomeBanner 에 그 축을 추가하고 여기서 그린다. */}
           </>
         )}
       </Tag>
     );
   };
 
-  // 풀폭 전환으로 세트 = 카드 나열뿐(스페이서 없음) — 세트 폭이 정확히 N×카드 폭.
+  // 세트 = 카드 나열뿐(스페이서·gap 없음) — 세트 폭이 정확히 N×카드 폭이라 half 경계 = 스냅 경계.
   const set = (dup: boolean) => slides.map((s, i) => card(s, i, dup));
 
-  // APIS식 스텝 캐러셀(오너 지시 2026-08-27 3차: "물 흐르듯 말고 잠깐 멈췄다 한 칸씩").
-  // 3.2초마다 카드 한 장 폭만큼 smooth 스크롤 + 유저 가로 스크롤 겸용(상호작용 시 6초 정지).
-  // 랩(양방향 무한): 절반 경계를 넘으면 같은 픽셀의 반대쪽 세트로 즉시 되감아 끝없이 돈다.
-  // 스텝 폭 = 첫 카드 실측(getBoundingClientRect — 서브픽셀 포함). 상수 224 는 폐기 —
-  // 풀폭 카드는 기종·리사이즈마다 폭이 다르므로 스텝 '시점'마다 재실측한다(옵저버 불요).
-  const vpRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const vp = vpRef.current;
-    if (!vp) return;
-
-    // ── 기하 캐시(2026-08-29 실측) — scrollWidth·clientWidth 를 스크롤 핫패스에서 걷어낸다 ──
-    // wrap 은 **캐러셀 스크롤 이벤트마다** scrollWidth/clientWidth 를 읽었다. 자동 트윈이 매
-    // 프레임 scrollLeft 를 '쓰고' 그 직후 스크롤 이벤트가 같은 프레임에서 scrollWidth 를 '읽으니'
-    // 전형적인 write→read 스래싱이다(계측: 탭 전환 구간 트윈 프레임 자체 39.5ms/모바일 375 CPU4x).
-    //
-    // 그래서 '변한 적이 있을 때만' 다시 잰다(geoDirty). 값 자체는 예전과 같은 수치라
-    // 랩 임계·스텝 타깃·플릭 클램프 계산은 한 글자도 안 바뀐다.
-    //
-    // ⚠ 관찰자 콜백 '안에서' 재기하지 않는다 — 1차 시도에서 MutationObserver 콜백(마이크로태스크,
-    //   커밋 직후라 레이아웃이 가장 더러운 순간)에서 clientWidth 를 읽었더니 콜드 마운트 강제
-    //   레이아웃이 모바일 209→252ms 로 **역전**됐다. 관찰자는 플래그만 세우고, 실제 측정은
-    //   예전과 같은 자리(스텝 틱·wrap·touchend)에서 지연 실행한다 → 읽기 횟수가 예전 이하로만 간다.
-    const track = vp.firstElementChild as HTMLElement | null;
-    let vpW = 0;      // = 예전 vp.clientWidth
-    let trackW = 0;   // = 예전 vp.scrollWidth
-    let cardW = 0;    // = 예전 vp.querySelector('button').getBoundingClientRect().width
-    let geoDirty = true;
-    const markGeoDirty = () => { geoDirty = true; };
-    const geo = () => {
-      if (!geoDirty) return;
-      geoDirty = false;
-      vpW = vp.clientWidth;
-      trackW = vp.scrollWidth;
-      cardW = vp.querySelector<HTMLElement>('button')?.getBoundingClientRect().width || 0;
-    };
-    // 스크롤러 크기 변화(리사이즈·회전·PC 캡 전환·탭 keep-alive 로 0↔실폭) → RO.
-    // ⚠ 트랙은 flex 오버플로라 슬라이드가 늘어도 자기 박스 크기는 안 변한다 → RO 로는 못 잡는다.
-    //   슬라이드 개수 변화(포스터 도착)는 MutationObserver(childList)로 잡는다.
-    let ro: ResizeObserver | undefined;
-    if ('ResizeObserver' in window) {
-      ro = new ResizeObserver(markGeoDirty);
-      ro.observe(vp);
-    }
-    let mo: MutationObserver | undefined;
-    if (track && 'MutationObserver' in window) {
-      mo = new MutationObserver(markGeoDirty);
-      mo.observe(track, { childList: true });
-    }
-    window.addEventListener('resize', markGeoDirty);
-
-    const wrap = () => {
-      geo();
-      const half = trackW / 2;
-      const w = vpW; // 카드 폭 = clientWidth(w-full) — 스크롤 이벤트 핫패스라 실측 대신 이걸 쓴다
-      if (half <= w) return;
-      // ⚠ 우측 랩 임계 = half + 카드 1장 — 풀폭 전환으로 half 가 정확히 카드·snap 경계가 되면서
-      //   구식 (>=half → −half) ↔ (<=0 → +half) 짝은 0↔half 를 서로 되던지는 무한 스크롤 이벤트
-      //   루프가 됐다(같은 픽셀이라 눈엔 안 보이고 메인스레드만 영원히 돈다 — 브라우저 실측.
-      //   구 레이아웃은 세트 안 스페이서 탓에 half 가 경계가 아니라서 도달 불가였을 뿐).
-      //   half+w 에서 −half 하면 w(>0), 0 에서 +half 하면 half(<half+w) — 어느 랩도 반대쪽
-      //   임계를 못 건드려 진동이 원천 차단된다. 자동 스텝의 최대 타깃도 half+w 라 랩이
-      //   '비행 중'이 아닌 '착지 후'에만 일어난다(smooth 취소 → snap 역행 없음). 랩 전후는
-      //   복제 세트의 같은 카드라 픽셀 동일 — 텔레포트는 보이지 않는다.
-      if (vp.scrollLeft >= half + w) vp.scrollLeft -= half;
-      else if (vp.scrollLeft <= 0) vp.scrollLeft += half;
-    };
-    vp.addEventListener('scroll', wrap, { passive: true });
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    // 자동 스텝 = rAF 트윈(구 scrollTo smooth 교체 — 오너 리포트 2026-08-27 '프레임이 낮다').
-    // UA smooth 는 곡선·듀레이션 제어 불가 + 풀폭 960px 페인트와 겹치면 뚝뚝해 보였다.
-    // scrollLeft 를 --ease 동일 곡선으로 STEP_MS 트윈. ⚠ snap-x mandatory 컨테이너는
-    // 프로그램적 scrollLeft 대입도 '스크롤 조작'이라 UA 가 중간 프레임을 snap 경계로 되당길 수
-    // 있다(스펙상 허용) — 트윈 동안만 인라인 scroll-snap-type:none 으로 해제하고 착지 후 복원.
-    // 착지점 = 정확한 카드 경계(N×w)라 복원 순간 snap 재정착 이동 0(시각 점프 없음).
-    // (대안이던 'smooth 유지'는 원인 그 자체, '트랙 transform 트윈'은 수동 스크롤·랩과 좌표계가
-    //  갈라져 기각 — scrollLeft 트윈 + snap 일시 해제가 유일하게 랩 로직 불변으로 안전.)
-    let tweenRaf = 0;
-    const cancelTween = () => {
-      if (!tweenRaf) return;
-      cancelAnimationFrame(tweenRaf);
-      tweenRaf = 0;
-      vp.style.scrollSnapType = ''; // 수동 조작으로 넘어갈 땐 snap 즉시 복원
-    };
-    const tweenTo = (from: number, to: number) => {
-      cancelTween();
-      const t0 = performance.now();
-      vp.style.scrollSnapType = 'none';
-      const frame = (now: number) => {
-        const p = Math.min((now - t0) / STEP_MS, 1);
-        vp.scrollLeft = from + (to - from) * EASE(p);
-        if (p < 1) { tweenRaf = requestAnimationFrame(frame); return; }
-        tweenRaf = 0;
-        vp.style.scrollSnapType = ''; // 착지 = 카드 경계 — 복원해도 재정착 이동 없음
-      };
-      tweenRaf = requestAnimationFrame(frame);
-    };
-
-    // ② 터치 플릭 = **브라우저에 맡긴다**(2026-09-04). 예전엔 touchend 에서 rAF 트윈으로
-    //    '시작 카드 ±1장'을 강제했는데, 그 트윈이 UA 의 관성 스크롤과 같은 scrollLeft 를 두고
-    //    싸워 손으로 밀면 중간에 끊겼다(오너 리포트). 목적이던 '한 번에 한 장'은 슬라이드의
-    //    `scroll-snap-stop: always`(snap-always) 로 UA 가 자기 관성 곡선 위에서 달성한다 —
-    //    아무리 세게 밀어도 다음 스냅 지점을 건너뛰지 않는다. JS 가 낄 자리가 없어졌다.
-    //    (자동 스텝 트윈은 그대로 — 그건 사용자 입력과 겹치지 않고 pause 가 막아 준다.)
-
-    let pauseUntil = 0;
-    const pause = () => { pauseUntil = performance.now() + 6000; cancelTween(); }; // 수동 스와이프 감지 → 트윈 즉시 취소
-    // 자동 스텝은 reduced-motion 이면 없음(수동 스크롤 + 플릭 클램프만 — 클램프도 instant 세트)
-    const step = reduced ? 0 : window.setInterval(() => {
-      if (document.hidden || performance.now() < pauseUntil) return;
-      geo();
-      if (trackW / 2 <= vpW) return;
-      const w = cardW || vpW;
-      if (!w) return; // 탭 keep-alive 로 display:none 인 동안은 0 — 스텝 무의미
-      // 유저가 손으로 어중간하게 세워도 다음 카드 '경계'로 정렬해 이동(스냅 감각).
-      // ⚠ round(≠floor): snap 정착점이 경계 ±서브픽셀이라 floor 는 '경계-ε'에서
-      //   같은 경계를 재타깃해 한 사이클 제자리걸음이 된다 — round 로 현재 인덱스를 잡는다.
-      //   랩 유지 위치(≤ half)에서 타깃 최대치는 half + w — 착지 직후 wrap 이 w 로 되감는다
-      //   (트윈은 단조 증가라 중간 프레임이 half+w 임계를 먼저 건드릴 수 없다 — 랩은 착지 후에만).
-      const target = (Math.round(vp.scrollLeft / w) + 1) * w;
-      tweenTo(vp.scrollLeft, target);
-    }, 3200);
-    if (!reduced) {
-      vp.addEventListener('touchstart', pause, { passive: true });
-      vp.addEventListener('wheel', pause, { passive: true });
-      vp.addEventListener('pointerdown', pause, { passive: true });
-    }
-    return () => {
-      if (step) window.clearInterval(step);
-      cancelTween();
-      ro?.disconnect();
-      mo?.disconnect();
-      window.removeEventListener('resize', markGeoDirty);
-      vp.removeEventListener('scroll', wrap);
-      vp.removeEventListener('touchstart', pause);
-      vp.removeEventListener('wheel', pause);
-      vp.removeEventListener('pointerdown', pause);
-    };
-  }, []);
+  if (n === 0) return null; // 폴백 배너를 만들지 않는다 — 자리도 만들지 않는다.
 
   return (
-    <div className="pt-3">
-      {/* 오너 지시(2026-08-27): 배너만 — 펠트 배경·어두운 띠 없음. 스크롤바는 숨김.
-          snap-x mandatory: 수동 스와이프 1장 정렬 전담 — 자동 스텝(rAF 트윈)은 트윈 동안만
-          인라인 scroll-snap-type:none 으로 해제하고 카드 경계(N×clientWidth)에 착지 후 복원(점프 0).
-          PC 캡: 스크롤러 자체를 512px 중앙 정렬(≈239px 높이) — 카드 w-full 불변식 유지.
-          ⚠ 캡 트리거는 lg(뷰포트 폭) '와' (hover:hover)+(pointer:fine) 둘 다(오너 리포트 2026-08-28):
-          브라우저 줌·윈도우 배율 150~250% PC 는 CSS 뷰포트가 1024px 미만(1900 물리 창 ≈ 780 CSS)이라
-          lg 가 영원히 안 걸려 모바일 풀폭(780×364)이 그려졌다 — 마우스(정밀 포인터+호버) 환경은
-          줌·배율과 무관한 PC 판별이라 이 미디어로도 동일 캡을 건다(터치 온리 대화면은 기존 lg 담당).
-          index.html 셸 예약부와 클래스 문법 동일 유지(동커밋 동조 규칙).
-          트랙은 w-max 금지 — 카드 w-full(%)가 스크롤러 폭에 대해 확정 해석되려면
-          트랙 폭 = 스크롤러 content 폭이어야 한다(w-max 면 순환 참조로 깨짐). */}
-      {/* v6.4(오너 2026-09-02): 풀블리드 직각 배너가 카드 사이에서 "네모칸"으로 튀었다 → 카드 문법(여백·16px·그라데이션 헤어라인).
-          히어로 카드의 링은 여기로 옮겼다(한 화면에 링은 하나). 골격(index.html)도 같은 프레임 클래스로 높이 예약 — 동커밋 동조. */}
-      <div className="poster-frame mx-page-x overflow-hidden rounded-aura border card-aura ring-aura ring-aura-glow lg:mx-auto lg:max-w-[512px] [@media(hover:hover)_and_(pointer:fine)]:mx-auto [@media(hover:hover)_and_(pointer:fine)]:max-w-[512px]">
-        <div ref={vpRef} className="poster-marquee-viewport scrollbar-none snap-x snap-mandatory overflow-x-auto rounded-[inherit]">
+    <div className="pt-3 lg:pt-0">
+      <div className="poster-frame mx-page-x overflow-hidden rounded-aura border card-aura lg:mx-0">
+        <div
+          ref={vpRef}
+          data-testid="home-banner-viewport"
+          className="poster-marquee-viewport scrollbar-none snap-x snap-mandatory overflow-x-auto rounded-[inherit]"
+        >
+          {/* 트랙은 w-max 금지 — 카드 w-full(%)가 스크롤러 폭에 대해 확정 해석되려면
+              트랙 폭 = 스크롤러 content 폭이어야 한다(w-max 면 순환 참조로 깨짐).
+              블록 트랙 + flex 자식 — 원래 구조 그대로다(scroller 에 flex 를 걸면 트랙이 flex item 이
+              되어 폭 해석이 달라진다). */}
           <div className="flex">
             {set(false)}
-            {set(true)}
+            {/* 복제 세트는 **2장 이상일 때만** — 1장이면 랩할 것도 없고 복제는 낭비다. */}
+            {multi && set(true)}
           </div>
         </div>
       </div>
+      {/* §6-2: **배너 1개면 점·이전/다음 제어를 숨긴다.** 여러 개면 제어 영역 16~20px 을 쓰되
+          작은 점 자체만 터치 대상이 되지 않게 — 점은 6px 이고 눌리는 범위는 28×32px 이다. */}
+      {multi && (
+        <div className="mx-page-x mt-0.5 flex items-center justify-center gap-0.5 lg:mx-0" data-testid="home-banner-dots">
+          {/* ⚠ 행에 고정 높이(h-5)를 주고 버튼을 -my 로 넘치게 두면 **조상의 scrollHeight 가 9px 부푼다**
+              (실측 229/238) — 잘림 검사가 거짓 양성을 내고, 실제로도 버튼이 이웃 영역을 덮는다.
+              행 높이 = 버튼 높이로 두고, 시각적인 '제어 영역'은 6px 점 + 16px 화살표가 만든다. */}
+          <button type="button" onClick={() => go(-1)} aria-label="이전 배너"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:text-ink-secondary">
+            <Icon name="chevron-left" size={16} aria-hidden />
+          </button>
+          {slides.map((s, i) => (
+            <button key={s.key} type="button" onClick={() => goTo(i)}
+              aria-label={`${i + 1}번째 배너`} aria-current={i === idx ? 'true' : undefined}
+              className="flex h-8 w-7 items-center justify-center">
+              <span aria-hidden className={['block h-1.5 w-1.5 rounded-full transition-colors', i === idx ? 'bg-accent-300' : 'bg-border-strong'].join(' ')} />
+            </button>
+          ))}
+          <button type="button" onClick={() => go(1)} aria-label="다음 배너"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:text-ink-secondary">
+            <Icon name="chevron-right" size={16} aria-hidden />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

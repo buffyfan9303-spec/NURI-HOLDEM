@@ -1,6 +1,7 @@
 // src/components/features/TierLeaderboard.tsx
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { goSubTab } from '../../lib/subTabTransition';
+import { centerInRail } from '../../lib/railScroll';
 import {
   getDomesticRankings, myRankVerifications, submitRankVerification,
   EVENT_KIND_LABEL, type RankVerification, type DomesticRow,
@@ -25,6 +26,8 @@ import { onColorInkClass } from '../../lib/color';
 import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import { scopedLoad, bumpScope } from '../../lib/scopedLoad';
+import type { RequestStamp } from '../../lib/staleResponse';
 import Icon from '../atoms/Icon';
 import CountUp from '../atoms/CountUp';
 import SlidingPill from '../atoms/SlidingPill';
@@ -281,6 +284,18 @@ export default function TierLeaderboard() {
   const [loading, setLoading] = useState(true);
   const [showLadder, setShowLadder] = useState(false);
   const [board, setBoard] = useState<Board>('activity');
+  // ── UI-08-1·2·4(2026-09-13): 계정 경계 + 조회 실패 상태 ──────────────────────────────────────
+  //   · 계정 경계는 재마운트(key={user?.id})가 아니라 **owner 스탬프**다 — 재마운트하면 rows→[]·loading→true 로 랭킹 패널이 스켈레톤으로 접혀
+  //     문서 높이가 무너진다(오너 이슈 #5 실측: docHeight 1684→1418 · scrollY 487→221 · CLS 0.2516)고 UI-06 스크롤 복원 대상도 사라진다.
+  //     owner = user?.id ?? 'anon'. 계정이 바뀌면 스탬프를 올려 비행 중이던 A 계정 응답을 버리고, 아래 boundary effect 가 개인 상태를 비워
+  //     `=== null` 가드가 B 계정으로 다시 부르게 한다(업적·미션 진행도·순위 인증 신청 이력·장착 마크·소장품·잔액 = 개인정보).
+  //   · 실패는 '없음' 이 아니다 — 보드별 오류를 boardErr 한 곳에 들고 LoadErrorCard(재시도)로 그린다(머니인·국내순위·미션이 이미 쓰던 패턴 확장).
+  const scopeRef = useRef<RequestStamp<string>>({ seq: 0, owner: user?.id ?? 'anon' });
+  type BoardErrKey = 'badges' | 'hall' | 'verifs' | 'skus' | 'owned' | 'cosmetics' | 'season' | 'balance' | 'equip';
+  const [boardErr, setBoardErr] = useState<Partial<Record<BoardErrKey, unknown>>>({});
+  const fail = (k: BoardErrKey) => (e: unknown) => setBoardErr((prev) => ({ ...prev, [k]: e ?? new Error('불러오기 실패') }));
+  const clearErr = (...ks: BoardErrKey[]) => setBoardErr((prev) => { const n = { ...prev }; for (const k of ks) delete n[k]; return n; });
+  const shopErr = boardErr.skus ?? boardErr.owned ?? boardErr.cosmetics ?? boardErr.season ?? boardErr.balance ?? boardErr.equip ?? null;
   /**
    * 랭킹 세부 탭 전환 — 매장 서브탭(VenuePage)과 같은 방향성 푸시.
    * 탭바는 전환 중 자기 스냅샷 이름을 가져 제자리에 고정되고, 아래 본문만 밀린다.
@@ -290,6 +305,27 @@ export default function TierLeaderboard() {
    */
   const goBoard = useCallback((next: Board) => {
     goSubTab('rank-tab', RANK_TABS, board, next, () => setBoard(next));
+  }, [board]);
+  // ── 6개 메뉴 배치(UI-07, 2026-09-13 오너 지적 "메뉴가 중앙 정렬이 아니다") ────────────────
+  // 예전엔 라벨 글자수가 그대로 폭이었다(72.5/55.3/85.2/72.5/72.5/42.5px) — 넓은 화면에도 균등 슬롯이 없고,
+  // 좁은 화면에서 끝 탭을 누르면 레일이 따라가지 않아 활성 탭이 화면 밖에 남았다.
+  // 배치 계약은 CSS 하나다 — 레일 안 **inline-grid · grid-flow-col · auto-cols-fr · min-w-full · shrink-0** + 안쪽 span `whitespace-nowrap`(아래 JSX).
+  //   상태는 둘뿐이다(실행문 §4.3 — '충분한 공간 = 6개 동일 폭' / '좁은 공간 = 스크롤 레일'):
+  //   · 레일 폭 ≥ 가장 넓은 라벨 × 6 + 간격 → 그리드가 min-w-full 로 레일을 채우고 6개 **동일 폭** 슬롯, 라벨은 슬롯 중앙.
+  //   · 그보다 좁으면 → 그리드의 max-content 폭(= 가장 넓은 라벨 × 6 + 간격 — 자유 공간이 불확정일 때 fr 은 **가장 넓은 항목**으로
+  //     맞춰진다, CSS Grid §12.7.1)이 레일보다 커서 shrink-0 이 줄어들기를 막고 넘친다 → overflow-x:auto 한 줄 스크롤 레일
+  //     (왼쪽 정렬 — overflow 를 center 로 두면 첫 메뉴가 잘린다). 슬롯은 여전히 전부 같은 폭이다.
+  //   N03(2026-09-13) Pretendard 를 켜자 라벨 폭이 바뀌어 옛 flex-1 배치에서 430px 가 "넘치진 않는데 6등분도 안 되는" 세 번째 상태
+  //   (64/51/75/64/64/51)에 걸렸다 — 문서에 없는 상태라 e2e/rank-scroll-slots 가 잡았다. 폰트 적용에 따른 최소 넘침 보정으로 두 상태만 남긴다.
+  //   (옛 flex-1 배치의 실측 기록: flex-1 만 빼면 1280 에서 472.67/811.75 로 등폭이 깨졌고 basis-0·min-w-max 는 결과를 바꾸지 않았다.)
+  // 기준은 기기 폭이 아니라 **실제 라벨 필요 폭 vs 레일 폭**이고, 글꼴 스왑·회전은 레이아웃이 알아서 다시 푼다(JS 측정 없음).
+  // 알약(SlidingPill)은 레일의 직계 자식으로 남긴다 — 레일이 relative 라 span 의 offsetParent 는 그대로 레일이고, 측정은 offsetParent 사슬을 더한다.
+  // 라벨을 줄이거나 2줄로 쪼개 끼워 넣지 않는다(span nowrap). 버튼 h-11 = 46.75px 터치 높이.
+  const railRef = useRef<HTMLDivElement>(null);
+  // 활성 탭 노출 — 클릭이든 프로그램 전환(빈 화면 CTA 의 goBoard)이든 board 가 바뀌면 **레일의 scrollLeft 만** 움직인다.
+  // scrollIntoView 는 쓰지 않는다 — 조상 스크롤러(문서 세로)까지 끌어당긴다(railScroll.ts 주석). 넘치지 않는 레일이면 아무것도 안 한다.
+  useEffect(() => {
+    centerInRail(railRef.current?.querySelector<HTMLElement>('[data-pill-active]'), railRef.current);
   }, [board]);
   // 순위표 행의 닉네임 색 — rows 가 바뀔 때만 일괄 조회한다(행마다 부르지 않는다).
   const [rowNickTokens, setRowNickTokens] = useState<Record<string, string>>({});
@@ -374,7 +410,8 @@ export default function TierLeaderboard() {
   const nickFreeAt = user?.nameChangedAt
     ? new Date(new Date(user.nameChangedAt).getTime() + 30 * 24 * 3600_000).toLocaleDateString('ko-KR')
     : '';
-  const reloadBalance = useRef(() => { getMyPointBalance().then(setBalance).catch(() => {}); }).current;
+  // 잔액 실패는 balance=null(미도착) 그대로 — 누적 점수를 잔액으로 대신 쓰지 않는 보호는 그대로고, 실패는 boardErr.balance 로 말한다.
+  const reloadBalance = useRef(() => { scopedLoad(scopeRef, getMyPointBalance(), (b) => { setBalance(b); clearErr('balance'); }, fail('balance')); }).current;
   const [domestic, setDomestic] = useState<DomesticRow[] | null>(null);
   // 조회 실패는 '0건'이 아니다 — 실패로 그리고 다시 시도할 길을 준다(#20). null 이면 정상.
   const [domesticErr, setDomesticErr] = useState<unknown>(null);
@@ -421,8 +458,8 @@ export default function TierLeaderboard() {
       setVForm({ event: '', amount: '', overseas: false }); setVProof(null); setVIdCard(null);
       // 실패를 삼키면 myVerifs 가 null 로 남아 렌더 게이트(myVerifs && length > 0)가 이력 블록을 통째로 지운다 —
       // 방금 접수한 신청이 화면에서 사라져 회원이 신분증을 다시 올려 중복 신청한다.
-      setMyVerifs(null);
-      myRankVerifications().then(setMyVerifs).catch(() => { setMyVerifs([]); toast.show('신청 이력을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요', 'error'); });
+      setMyVerifs(null); clearErr('verifs');
+      scopedLoad(scopeRef, myRankVerifications(), setMyVerifs, (e) => { fail('verifs')(e); toast.show('신청 이력을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요', 'error'); });
       toast.show('인증 요청을 접수했어요. 운영자 확인 후 국내 순위에 합산됩니다', 'success');
     } catch (e) {
       // 실패 시 입력은 유지 — 던지는 쪽(rankverify·storage)이 한국어 메시지를 주므로 그대로 보여 준다
@@ -502,7 +539,7 @@ export default function TierLeaderboard() {
     try {
       const r = await buySeasonBadge(b.venueId);
       setSeasonBuyable((prev) => (prev ?? []).filter((x) => x.seasonId !== r.seasonId));
-      getMySeasonBadges().then(setSeasonOwned).catch(() => {});
+      scopedLoad(scopeRef, getMySeasonBadges(), setSeasonOwned, fail('season'));
       reloadBalance();
       toast.show(`${r.venueName} ${r.seasonName} 뱃지를 받았어요. ${seasonSku.price.toLocaleString()}점 사용`, 'success');
     } catch (e) {
@@ -539,41 +576,53 @@ export default function TierLeaderboard() {
   const [missionDefs, setMissionDefs] = useState<Mission[]>(MISSIONS);
   const [hall, setHall] = useState<HallBoard | null>(null);
   const [claiming, setClaiming] = useState<string | null>(null);
+  // 계정 경계(UI-08-1): 로그인/로그아웃/계정 전환마다 스탬프를 올리고 **개인 상태만** 비운다 — 공개 보드(rows·domestic·hall)는 남긴다.
+  //   예전엔 A 가 채운 badgeStats·missions·myVerifs·equippedMark 의 `=== null/undefined` 가드가 B 로는 영영 다시 안 불러 B 가 A 의 것을 봤다.
   useEffect(() => {
-    if (board === 'badges' && badgeStats === null && user) {
-      getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {});
+    bumpScope(scopeRef, user?.id ?? 'anon');
+    setBadgeStats(null); setMissions(null); setMissionsErr(null); setMyVerifs(null); setEquippedMark(undefined);
+    setOwned(null); setMyCosmetics(null); setSeasonBuyable(null); setSeasonOwned(null); setBalance(null);
+    setBoardErr({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+  useEffect(() => {
+    // 모든 조회는 scopedLoad 를 지난다 — 응답이 도착했을 때 계정(스탬프)이 그대로일 때만 상태를 만진다.
+    if (board === 'badges' && badgeStats === null && boardErr.badges == null && user) {
+      scopedLoad(scopeRef, getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0), setBadgeStats, fail('badges'));
     }
     if ((board === 'missions' || board === 'activity') && missions === null && missionsErr == null && user) {
       // 고정 3종 + 운영자 커스텀 미션 병합 → 병합 목록 기준으로 진행도 조회
-      getActiveMissions()
-        .then((defs) => { setMissionDefs(defs); return getMissionProgress(user.nickname ?? null, defs); })
-        .then(setMissions)
-        .catch((e) => setMissionsErr(e ?? new Error('불러오기 실패')));
+      const u = user;
+      scopedLoad(scopeRef,
+        getActiveMissions().then((defs) => getMissionProgress(u.nickname ?? null, defs).then((prog) => ({ defs, prog }))),
+        ({ defs, prog }) => { setMissionDefs(defs); setMissions(prog); },
+        (e) => setMissionsErr(e ?? new Error('불러오기 실패')));
     }
-    if (board === 'hall' && hall === null) getHallOfFame().then(setHall).catch(() => setHall({ label: '', rows: [], source: 'auto' }));
+    // 명예의 전당 — 예전 `.catch(() => setHall({ label: '', rows: [], source: 'auto' }))` 는 장애를 '기록 없음' 으로 그렸고, 빈 라벨 문장까지 만들었다.
+    //   getMonthlyHall 이 던지게 된 것과 **같은 커밋**에서 폴백을 걷었다(둘 중 하나만 하면 빈 라벨이 더 자주 난다).
+    if (board === 'hall' && hall === null && boardErr.hall == null) scopedLoad(scopeRef, getHallOfFame(), setHall, fail('hall'));
     if (board === 'domestic' && domestic === null && domesticErr == null) {
-      getDomesticRankings(30).then(setDomestic).catch((e) => setDomesticErr(e ?? new Error('불러오기 실패')));
+      scopedLoad(scopeRef, getDomesticRankings(30), setDomestic, (e) => setDomesticErr(e ?? new Error('불러오기 실패')));
     }
-    if (board === 'verify' && myVerifs === null && user) myRankVerifications().then(setMyVerifs).catch(() => setMyVerifs([]));
-    if (board === 'shop' && equippedMark === undefined && user) {
-      getMyEquippedMark().then((k) => setEquippedMark(k)).catch(() => setEquippedMark(null));
+    if (board === 'verify' && myVerifs === null && boardErr.verifs == null && user) scopedLoad(scopeRef, myRankVerifications(), setMyVerifs, fail('verifs'));
+    if (board === 'shop' && equippedMark === undefined && boardErr.equip == null && user) {
+      scopedLoad(scopeRef, getMyEquippedMark(), (k) => setEquippedMark(k), fail('equip'));
     }
-    if (board === 'shop' && user) {
+    if (board === 'shop' && user && shopErr == null) {
       reloadBalance();
-      getShoutRules().then((r) => setShoutCost(r.cost)).catch(() => {});
-      // 카탈로그·가격표는 서버가 단일 출처다. 응답 전에는 폴백으로 그려 두므로 화면이 비지 않는다.
-      loadShopMarks().then(() => { setEarnList(earnMarks()); setShopList(ownableMarks()); }).catch(() => {});
-      getShopSkus().then(setSkus).catch(() => {});
-      getMyOwnedMarks().then(setOwned).catch(() => setOwned([]));
-      // 소유물형(20260830n) — 카탈로그·소장 목록·시즌 뱃지. 실패해도 폴백으로 그려 화면이 비지 않는다.
-      loadCosmetics().then(() => setCosmetics([...frameCosmetics(), ...nickColorCosmetics()])).catch(() => {});
-      getMyCosmetics().then(setMyCosmetics).catch(() => setMyCosmetics([]));
-      getBuyableSeasonBadges().then(setSeasonBuyable).catch(() => setSeasonBuyable([]));
-      getMySeasonBadges().then(setSeasonOwned).catch(() => setSeasonOwned([]));
+      scopedLoad(scopeRef, getShoutRules(), (r) => setShoutCost(r.cost), () => {});   // 외치기 단가 — 기본값이 서버와 같은 상수라 실패해도 거짓이 아니다
+      // 카탈로그는 폴백으로 먼저 그려 두고, 가격표(SKU)·소장 목록·시즌 뱃지는 실패를 실패로 말한다(예전엔 '판매 준비 중'·'미보유' 로 위장).
+      scopedLoad(scopeRef, loadShopMarks(), () => { setEarnList(earnMarks()); setShopList(ownableMarks()); }, () => {});
+      scopedLoad(scopeRef, getShopSkus(), setSkus, fail('skus'));
+      scopedLoad(scopeRef, getMyOwnedMarks(), setOwned, fail('owned'));
+      scopedLoad(scopeRef, loadCosmetics(), () => setCosmetics([...frameCosmetics(), ...nickColorCosmetics()]), () => {});
+      scopedLoad(scopeRef, getMyCosmetics(), setMyCosmetics, fail('cosmetics'));
+      scopedLoad(scopeRef, getBuyableSeasonBadges(), setSeasonBuyable, fail('season'));
+      scopedLoad(scopeRef, getMySeasonBadges(), setSeasonOwned, fail('season'));
     }
-    // 오류 상태가 null 로 돌아오면(다시 시도) 같은 분기가 다시 돈다 — 그래서 의존성에 넣는다.
+    // 오류 상태가 지워지면(다시 시도) 같은 분기가 다시 돈다 — 그래서 의존성에 넣는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, user?.id, missionsErr, domesticErr]);
+  }, [board, user?.id, missionsErr, domesticErr, boardErr]);
   const handleClaim = async (key: string) => {
     setClaiming(key);
     try {
@@ -801,20 +850,26 @@ export default function TierLeaderboard() {
 
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
-        <div data-rank-tabbar className="relative flex items-center gap-1 bg-surface-high rounded-input px-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
+        <div ref={railRef} data-rank-tabbar className="relative flex items-center gap-1 bg-surface-high rounded-input px-0.5 mb-1.5 overflow-x-auto scrollbar-none">
           {/* 오너 지시(2026-08-28): 구 pill(그라데이션 배경) 제거 — 커뮤니티 서브탭과 같은
               밑줄(underline) 문법. 활성은 미끄러지는 2px 밑줄 + 잉크색·굵기. */}
           {/* 44px 터치 타깃(#15): overflow-x 레일이라 .hit/.tap-y-44 의 바깥 확장은 세로 오버플로가 된다 —
               버튼은 h-11 투명 히트박스, 안쪽 span 이 34px 시각 칩. SlidingPill 은 [data-pill-active] 박스를 재므로
               마커를 span 에 두고 버튼에서 relative 를 뺀다(span 의 offsetParent = 레일). */}
           <SlidingPill activeKey={board} underline className="rounded-full bg-accent-300" />
+          {/* 동일 폭 6슬롯 — 레일보다 넓으면 통째로 넘쳐 스크롤(위 주석). 레일의 gap-1 은 e2e 가 columnGap 을 레일에서 읽어 그대로 둔다. */}
+          <div className="inline-grid min-w-full shrink-0 grid-flow-col auto-cols-fr items-center gap-1">
           {RANK_TABS.map((b) => (
             <button key={b} type="button" onClick={() => goBoard(b)}
-              className={['shrink-0 inline-flex h-11 items-center t-tab transition-colors',
+              // 선택 상태를 프로그램적으로도 전달한다(리드 결정 2026-09-13). 전체 ARIA tablist 패턴(role·방향키·Home/End)은
+              // 함께 구현해야 하는 조건부라 여기서 반쪽으로 넣지 않는다 — aria-current 한 줄만.
+              aria-current={board === b ? 'true' : undefined}
+              className={['inline-flex h-11 items-center justify-center t-tab transition-colors',
                 board === b ? 'text-ink-primary font-bold' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
-              <span data-pill-active={board === b || undefined} className="relative inline-flex h-10 items-center px-2 lg:px-3 rounded-[6px]">{BOARD_LABEL[b]}</span>
+              <span data-pill-active={board === b || undefined} className="relative inline-flex h-10 shrink-0 items-center whitespace-nowrap px-2 lg:px-3 rounded-[6px]">{BOARD_LABEL[b]}</span>
             </button>
           ))}
+          </div>
         </div>
         <div data-rank-panel>
         {/* 보드 설명 — 1행/2행이 섞이면 탭을 옮길 때마다 아래가 통째로 밀린다. 2행분을 예약. */}
@@ -824,6 +879,7 @@ export default function TierLeaderboard() {
           missionsBlock
         ) : board === 'badges' ? (
           !user ? <p className="py-6 text-center t-desc text-ink-muted">로그인하면 업적을 모을 수 있습니다</p>
+          : boardErr.badges != null ? <LoadErrorCard error={boardErr.badges} what="업적" onRetry={() => { clearErr('badges'); setBadgeStats(null); }} />
           : badgeStats === null ? <p className="py-6 text-center t-desc text-ink-muted">불러오는 중…</p>
           : (
             <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
@@ -848,7 +904,7 @@ export default function TierLeaderboard() {
               title="아직 인증된 입상이 없어요"
               hint="'순위 인증' 탭에서 대회 입상 증빙을 올리면 이 순위에 합산됩니다"
               icon={<Icon name="trophy" />}
-              action={<button type="button" onClick={() => setBoard('verify')} className="btn-primary px-4 py-2 text-xs">순위 인증하러 가기</button>}
+              action={<button type="button" onClick={() => goBoard('verify')} className="btn-primary px-4 py-2 text-xs">순위 인증하러 가기</button>}
             />
           )
           : (
@@ -919,6 +975,10 @@ export default function TierLeaderboard() {
                   운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 국내 순위에 합산되며, <b className="text-ink-secondary">100만원(100T)당 1점</b>입니다(임계 미만은 점수 없음). 대회 여부는 증빙을 보고 운영자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
                 </p>
               </div>
+              {/* 신청 이력 조회 실패 — '이력 없음' 으로 위장하면 신분증을 다시 올려 중복 신청한다(UI-08-3·4) */}
+              {boardErr.verifs != null && (
+                <LoadErrorCard error={boardErr.verifs} what="신청 이력" onRetry={() => { clearErr('verifs'); setMyVerifs(null); }} compact hint="접수한 신청이 있어도 지금은 보이지 않을 수 있습니다 — 다시 제출하기 전에 먼저 다시 시도해 주세요." />
+              )}
               {myVerifs && myVerifs.length > 0 && (
                 <ul className="space-y-1">
                   {myVerifs.map((v) => (
@@ -944,6 +1004,12 @@ export default function TierLeaderboard() {
           !user ? <p className="py-6 text-center t-desc text-ink-muted">로그인하면 마크를 모을 수 있습니다</p>
           : (
             <div className="space-y-2">
+              {/* 상점 정보(가격표·소장 목록·시즌 뱃지·잔액·장착) 조회 실패 — '판매 준비 중'·'미보유'·잔액 미도착으로 위장하지 않는다(UI-08-4).
+                  기존 보호 유지: 잔액 미도착이면 누적 점수를 잔액으로 대신 쓰지 않고, SKU 없으면 구매 비활성. */}
+              {shopErr != null && (
+                <LoadErrorCard error={shopErr} what="상점 정보" compact
+                  onRetry={() => { clearErr('skus', 'owned', 'cosmetics', 'season', 'balance', 'equip'); setEquippedMark(undefined); }} />
+              )}
               {/* 누적 / 사용 가능을 함께 — 마크는 '도달'(누적)로 해금되고, 외치기는 '사용 가능'을 깎는다 */}
               <div className="flex items-center justify-between rounded-card border border-border-subtle bg-surface-high px-3 py-2">
                 <span className="text-xs text-ink-secondary">
@@ -1366,7 +1432,8 @@ export default function TierLeaderboard() {
             </div>
           )
         ) : board === 'hall' ? (
-          hall === null ? (
+          boardErr.hall != null ? <LoadErrorCard error={boardErr.hall} what="명예의 전당" onRetry={() => { clearErr('hall'); setHall(null); }} />
+          : hall === null ? (
             <div className="space-y-1.5" aria-busy="true">
               {[0, 1, 2].map((i) => <div key={i} className="skeleton h-[4.75rem] rounded-card" />)}
             </div>

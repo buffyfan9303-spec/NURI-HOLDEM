@@ -274,7 +274,7 @@ interface TierContract {
 const TIER_CONTRACTS: readonly TierContract[] = [
   {
     // TitleChip — 닉네임 옆 칭호 칩. 같은 등급색 10.2% 틴트 위의 같은 등급색 글자.
-    // 지면: 커뮤니티 목록 행(low · hover high) / 카드(low) / 게시글·프로필 모달(mid) / PET 바탕(base).
+    // 지면: 커뮤니티 목록 행(low · hover high) / 카드(low) / 프로필 모달(mid) / 게시글 상세(UI-02 전체화면 page 셸 = base · PC 2-pane 인라인 = mid) / PET 바탕(base).
     // 제외 float: 이 칩이 드롭다운·툴팁에 들어가는 곳이 없다. 넣으면 다크 3.99 로 즉시 미달이므로,
     //   float 지면에 칭호 칩을 새로 놓으려면 --tier-* 값부터 다시 유도해야 한다.
     where: '칭호 칩(TitleChip)', kind: 'text', chipBg: 'rgb(var(--tier-%T) / 0.102)',

@@ -5,7 +5,7 @@
 // 내 매장이용권(매장별) + 매장 이용내역(방문·참가(바인)·참가비). 매장이용권은 금전적 가치 없음.
 //   '방문' = QR 체크인(매장별 KST 날짜 distinct), '참가' = 장부 바인 — 둘 다 머니인(입상)과 다른 단위다(점검 #6·#8).
 // 사용(회수) = 발급 매장 QR 스캔 또는 그 매장 업주 전화번호로만. 유저 간 전송 불가.
-import { Suspense, startTransition, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, memo, startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { useAuth } from '../../contexts/AuthContext';
@@ -32,6 +32,7 @@ import QRCode from 'qrcode';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
 import TierBadge, { tierOf, tierProgress, allTiers, tierCss } from '../atoms/TierBadge';
 import ProfilePanels, { ProfileIdentityHeader, type ProfileTab } from './ProfileModal'; // 프로필·설정·보안 패널 + 아이덴티티 헤더 정본(중복 정의 0)
+import { rememberCurrentView, clearViewIntent } from '../../lib/pendingViewIntent';
 import { signInWithGoogle } from '../../api/auth'; // 비로그인 랜딩 — AuthModal 과 같은 OAuth 시작 함수 재사용(소셜은 Google 하나)
 import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox'; // 자동 로그인 — AuthModal 로그인 탭과 같은 원자·같은 플래그
 import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
@@ -62,7 +63,11 @@ const ME_TABS: { key: MeTab; label: string }[] = [
   { key: 'security',  label: '보안' },
 ];
 
-export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenSchedule, onOpenPost, onOpenMarket, onOpenRanking, initialTab = 'dashboard', onOpenLegal, onOpenSupport, onReservationChange }: {
+// ⚠ 이 페이지는 App 이 **상주**로 들고 있다(keep-alive — 한 번 열면 언마운트하지 않는다).
+//   그래서 닫혀 있는 동안에도 App 의 모든 리렌더가 이 1,000줄 트리를 다시 렌더했다.
+//   아래 `memo` 가 그것을 끊는다 — **App 쪽 prop 이 전부 안정 참조여야만 히트한다**(App.tsx §5-B 블록 참조).
+//   prop 을 다시 인라인 화살표로 되돌리면 이 memo 는 조용히 무력화된다.
+function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenSchedule, onOpenPost, onOpenMarket, onOpenRanking, initialTab = 'dashboard', onOpenLegal, onOpenSupport, onReservationChange }: {
   open: boolean; onClose: () => void;
   /** 미읽음 알림 미리보기(상위 3개) — 프로필 메뉴까지 안 가도 되게 */
   unread?: { id: string; title: string; message: string; createdAt: string }[];
@@ -105,6 +110,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [resvErr, setResvErr] = useState<unknown>(null);    // 대회 참가(예약) 내역
   const [ranksErr, setRanksErr] = useState<unknown>(null);  // 내 입상 기록
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
+  // UI-08 후속(2026-09-13, e2e account-isolation 회귀): getMyBadgeStats 가 던지게 되자 `.catch(() => {})` 가 살아나 섹션이 통째로 사라졌다.
+  //   실패는 '업적 0/12'(위장)도 '섹션 없음'도 아니다 — 헤더는 남기고 이유+재시도(LoadErrorCard)를 그린다(TierLeaderboard boardErr 관용구).
+  const [badgeErr, setBadgeErr] = useState<unknown>(null);
+  const [badgeTick, setBadgeTick] = useState(0);
   const [achOpen, setAchOpen] = useState(false); // 내 업적 접기/펼치기 — 기본 닫힘
   const [myPosts, setMyPosts] = useState<CommunityPost[]>([]); // 내가 쓴 글 — 그동안 찾을 화면 자체가 없었다
   const [myPostTotal, setMyPostTotal] = useState(0); // 내 글 총수 — 목록 limit(20)과 무관한 count(점검 #26)
@@ -127,7 +136,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   useEffect(() => {
     reloadSeq.current++;
     setVisits([]); setPlays([]); setResv([]); setRanks([]); setRefStats({ invited: 0, rewarded: 0 });
-    setPercentile(null); setChampionships(0); setBadgeStats(null); setVisitStats(null);
+    setPercentile(null); setChampionships(0); setBadgeStats(null); setBadgeErr(null); setVisitStats(null);
     setUsageErr(null); setResvErr(null); setRanksErr(null);
   }, [user?.id]);
 
@@ -185,9 +194,12 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   useEffect(() => {
     if (!open || !user) return;
     let alive = true; // 닫히거나 계정이 바뀐 뒤 도착한 응답은 버린다 — '내 업적'은 loading 게이트 없이 즉시 그려진다
-    getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then((s) => { if (alive) setBadgeStats(s); }).catch(() => {});
+    setBadgeErr(null);
+    getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0)
+      .then((s) => { if (alive) setBadgeStats(s); })
+      .catch((e: unknown) => { if (alive) setBadgeErr(e); });   // 실패 ≠ 없음 — 섹션을 숨기지 않고 오류 카드로 말한다
     return () => { alive = false; };
-  }, [open, user]);
+  }, [open, user, badgeTick]);
 
   // keep-alive(메인 탭과 같은 조리법) — 한 번 열린 뒤에는 언마운트하지 않고 display 토글만.
   // 재열림이 '풀 마운트 + 데이터 상태 재구축' 대신 display 복원이 되어, GTO 같은 무거운 탭 위에서
@@ -294,6 +306,15 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             </section>
           )}
           {/* 업적 — 기본 닫힘, 헤더 클릭으로 펼침 */}
+          {badgeErr != null && !badgeStats && (
+            <section className="rounded-aura border card-aura p-3">
+              <div className="flex w-full items-center gap-2">
+                <Tile icon="medal" tone="violet" />
+                <h2 className="text-sm font-bold text-ink-primary">내 업적</h2>
+              </div>
+              <div className="mt-2"><LoadErrorCard error={badgeErr} what="내 업적" onRetry={() => setBadgeTick((t) => t + 1)} compact /></div>
+            </section>
+          )}
           {badgeStats && (
             <section className="rounded-aura border card-aura p-3">
               <button type="button" onClick={() => setAchOpen((v) => !v)} aria-expanded={achOpen} className="flex w-full items-center gap-2 text-left">
@@ -552,6 +573,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   );
 }
 
+export default memo(CustomerDashboardPage);
+
 /** 비로그인 로그인 랜딩 — APIS '내 게임' 문법(타이틀 + 가치 제안 + 소셜 로그인 + 설정성 행).
  *  왜 별도 화면: 비로그인에게 빈 대시보드 껍데기를 보여주는 대신, 로그인의 '이유'를 먼저 판다. */
 function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden?: boolean }) {
@@ -622,7 +645,16 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
             <AutoLoginCheckbox checked={keepSignedIn} onChange={changeKeep} disabled={busy !== null} />
             {/* 소셜은 Google 하나 — 카카오 로그인은 2026-09-10 오너 지시로 삭제(AuthModal 과 동일) */}
             <button type="button" disabled={busy !== null}
-              onClick={() => { setBusy('google'); signInWithGoogle(keepSignedIn).catch((e) => { toast.show(e instanceof Error ? e.message : '구글 로그인 실패', 'error'); setBusy(null); }); }}
+              onClick={() => {
+                // AuthModal 과 같은 계약 — 떠나기 직전에 보고 있던 화면을 적어 둔다(N03).
+                rememberCurrentView();
+                setBusy('google');
+                signInWithGoogle(keepSignedIn).catch((e) => {
+                  clearViewIntent();
+                  toast.show(e instanceof Error ? e.message : '구글 로그인 실패', 'error');
+                  setBusy(null);
+                });
+              }}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-input border border-border-default bg-white text-sm font-bold text-[#1f1f1f] transition active:scale-[0.99] disabled:opacity-60">
               {/* 구글 공식 4색 G 로고(브랜드 가이드 규격) */}
               <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>

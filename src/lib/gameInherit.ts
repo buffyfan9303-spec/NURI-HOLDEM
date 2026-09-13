@@ -9,6 +9,7 @@ import { presetBuyInWon } from '../api/presets';
 import type { LedgerSession } from '../api/ledger';
 import type { PosterFormData } from '../components/features/PosterFormModal';
 import { manToWon, presetPrizeWon, rankingPrizeWon } from './units';
+import { regCloseLevelOf } from './regClose';
 
 /** 포스터 structure.levels → 클락 levels (isBreak 플래그 → kind 판별) */
 export function posterLevelsToClock(
@@ -26,7 +27,20 @@ export function clockPatchFromSchedule(sc: Schedule): Partial<ClockConfig> {
   if (sc.title) p.title = sc.title;
   const lv = sc.structure?.levels;
   if (lv && lv.length > 0) p.levels = posterLevelsToClock(lv);
-  if (sc.structure?.lateRegLevels) p.regCloseLevel = sc.structure.lateRegLevels;
+  // ⚠ 2026-09-13: 이 줄은 **한 번도 터지지 않았다.** `structure.lateRegLevels` 를 쓰는 코드가 앱에 없다
+  //   (PosterFormModal 은 레벨+시각을 합쳐 `regCloseTime='16LV 00:12'` 로만 저장하고,
+  //    App.handleSubmitPoster 의 structure 는 `{ levels }` 뿐이다 — 쓰기는 mock/data.ts 에만 있다).
+  //   그래서 포스터가 '16레벨'이라고 광고하는 동안 클락은 defaultClockConfig 의 12 로 돌았고,
+  //   ScheduleDetailModal 한 화면에 '레지 마감 · LV12'(라이브)와 '16LV 00:12'(포스터)가 같이 떴다.
+  //   정본은 **업주가 유저에게 광고한 포스터 값**이다(12 는 아무도 입력한 적 없는 기본값).
+  //   판정은 regClose.regCloseLevelOf 한 곳뿐이다 — 여기서 우선순위를 다시 쓰면 또 갈린다.
+  //   ⚠ 2026-09-13(2차): 이 줄만 `lateRegLevels` 를 먼저 봐서 **소비처 넷 중 혼자 답이 달랐다**
+  //     (포스터 `{ regCloseTime:'16LV 00:12', structure:{ lateRegLevels:20 } }` → 카드 16 · 블라인드 표 16 ·
+  //      상속 20). 정본은 유저가 보는 `regCloseTime` 이라 그쪽으로 통일했다 — regCloseLevelOf 주석 참조.
+  //   ⚠ 폴백이 없으면 **키 자체를 만들지 않는다**. 소비처가 `{ ...baseCfg, ...schedPatch }` 로 펴기 때문에
+  //     `regCloseLevel: undefined` 를 넣으면 업주가 직접 친 값을 undefined 로 덮어 버린다.
+  const lateReg = regCloseLevelOf(sc);
+  if (lateReg) p.regCloseLevel = lateReg;
   const start = sc.buyIn?.startStack ?? sc.structure?.startingChips;
   if (start) p.startStack = start;
   const rebuy = sc.buyIn?.rebuyStack ?? sc.structure?.rebuyStack;
@@ -84,7 +98,8 @@ export function presetFromSchedule(sc: Schedule): GamePresetData {
       events: sc.promotions?.length ? sc.promotions.map((p) => ({ ...p })) : undefined,
       posterUrl: sc.posterUrl || undefined,
     }),
-    clock: dropEmpty({ regCloseLevel: sc.structure?.lateRegLevels || undefined }),
+    // 같은 다리(위 clockPatchFromSchedule 주석 참조) — 프리셋 경유도 포스터의 'NNLv' 를 잇는다.
+    clock: dropEmpty({ regCloseLevel: regCloseLevelOf(sc) || undefined }),
   };
 }
 

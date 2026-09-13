@@ -204,7 +204,10 @@ describe('NURI SPOT — GTO 홈 통합', () => {
 
   it('오래된 에퀴티 응답이 최신 결과를 덮지 않는다', () => {
     expect(SPOT_PANEL).toMatch(/reqId/);
-    expect(SPOT_PANEL).toMatch(/my !== reqId\.current/);
+    // 2026-09-13(F11) — 인라인 `my !== reqId.current` 비교를 순수 판정 canApplyEquity 로 옮겼다.
+    // 세대 증가가 무효 전환에서도 일어나는지까지는 gto/equityRequest.test.ts 와
+    // gto/nuriSpotWiring.contract.test.ts 가 본다.
+    expect(SPOT_PANEL).toMatch(/!canApplyEquity\(my, reqId\.current\)/);
   });
 
   it('솔버 등급을 만들어 내는 경로가 없다', () => {

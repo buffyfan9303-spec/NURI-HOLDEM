@@ -29,12 +29,35 @@ interface Props {
   className?: string;
 }
 
+/**
+ * 이니셜 글자 크기 — 지름에 **비례하되 §T1 타이포 사다리 위에만** 떨어지도록 4구간 양자화.
+ *
+ * 왜(2026-09-12, 문서 5 §7 P0-B): 예전엔 `fontSize: Math.max(9, round(size*0.42))` 인라인 px 이라
+ * 실제 사용 size 7종(18·22·24·26·28·32·40)이 **9/9/10/11/12/13/17px 7단**을 만들었고 전부 사다리 밖이었다.
+ * 인라인 절대 px 은 `html{font-size:17px}`("50대 이용자 가독성" 결정)도 브라우저 확대도 **하나도 안 받는다**.
+ * 게시글 상세 한 화면에 10/13/17px 세 종류가 동시에 보였다(8개 파일이 이 아톰을 쓴다).
+ *
+ * 한 값으로 고정하면 40px 아바타의 이니셜이 우스워지므로 비례는 유지한다 — 구간만 사다리로 스냅한다.
+ *   18·22 → 11.69 (사다리 최소단. 더 작은 칸이 없다)  24·26·28 → 12.75  32 → 14.88  40 → 17
+ * `leading-none` 은 행상자를 글자 크기와 같게 만들어 flex 중앙정렬이 폰트 메트릭에 흔들리지 않게 한다.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- 테스트가 순수 함수를 직접 검증(CountUp·CommentThread 와 같은 관행)
+export function initialTextClass(size: number): string {
+  if (size >= 40) return 'text-base';   // 17px
+  if (size >= 32) return 'text-sm';     // 14.88px
+  if (size >= 24) return 'text-xs';     // 12.75px
+  return 'text-2xs';                    // 11.69px
+}
+
 /** 프로필 아바타 — 이미지가 있으면 이미지, 없으면 이니셜. 글/댓글/라이브 공통 사용. */
 export default function Avatar({ name, src, color, size = 28, fit = 'contain', className = '' }: Props) {
   /** 로드 실패한 src. 값이 같으면 이니셜로 폴백한다(깨진 이미지 아이콘 방지). */
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
-  const box: CSSProperties = { width: size, height: size };
+  // 원 지름도 rem 으로 — 글자만 rem 이 되면 **글자만 200% 확대**(html 34px)에서 이니셜이 원 밖으로
+  // 삐져나온다(실측: size 18 에서 잉크가 세로 +13px 넘침). 아바타는 원+글자가 한 덩어리로 커져야 한다.
+  // 1rem = 17px(src/index.css:538) 이므로 **100% 배율에서는 예전 px 값과 완전히 같다**(실측 확인).
+  const box: CSSProperties = { width: `${size / 17}rem`, height: `${size / 17}rem` };
 
   if (src && failedSrc !== src) {
     return (
@@ -58,11 +81,12 @@ export default function Avatar({ name, src, color, size = 28, fit = 'contain', c
   const bg = color ?? '#5A6175';
   return (
     <span
-      style={{ ...box, background: bg, fontSize: Math.max(9, Math.round(size * 0.42)) }}
+      style={{ ...box, background: bg }}
       // 글자색은 배경 상대휘도로 결정한다(렌더 중 동기 계산 → 초기 페인트부터 확정, 깜빡임 없음).
       // 하드코딩 text-white 는 팔레트 10색 중 9색에서 AA 미달이었다(#FFD100 1.46:1).
       className={[
-        'shrink-0 rounded-full flex items-center justify-center font-bold select-none',
+        'shrink-0 rounded-full flex items-center justify-center font-bold leading-none select-none',
+        initialTextClass(size),
         onColorInkClass(bg),
         className,
       ].join(' ')}

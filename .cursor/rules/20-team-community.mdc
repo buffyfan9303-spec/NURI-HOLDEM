@@ -1,0 +1,108 @@
+---
+description: 커뮤니티 팀 — 이 도메인의 파일 지도, 반드시 아는 함정, 검증 명령. 커뮤니티 관련 파일을 열거나 작업할 때 붙는다.
+globs: ["src/components/features/CommunityTab.tsx","src/components/features/community/**","src/components/features/chat/**","src/components/features/Post*.tsx","src/components/features/Comment*.ts*","src/components/features/Report*.tsx","src/components/features/CommunityShoutBar.tsx","src/components/features/DealerCommunity.tsx","src/components/features/GroupPage.tsx","src/api/community.ts","src/api/ads.ts","src/api/reports.ts","src/api/blocks.ts","src/api/spots.ts","src/api/postAttachments.ts","src/api/chat.ts","src/api/messages.ts","src/lib/content-filter.ts","src/lib/pinnedFirst.ts","src/lib/postCategory.ts","src/lib/mentions.tsx"]
+alwaysApply: false
+---
+
+# 커뮤니티 팀
+
+> 커뮤니티 (게시판·댓글·실시간 한 줄·외치기·그룹/딜러 커뮤니티·신고→제재·게시글 승격 광고·스팟 공유)
+
+> 이 문서는 2026-09-12 에 저장소를 **실제로 열어서** 만들고, 별도 에이전트가 경로·행번호를 **전부 재대조**한 것이다.
+> 행번호는 코드가 움직이면 틀어진다 — 근거 파일을 열어 확인하고, 틀렸으면 이 파일을 같이 고쳐라.
+
+## 화면·진입점
+
+- `src/components/features/CommunityTab.tsx` (1392줄) — 커뮤니티 탭 본체 — 6개 서브섹션(홀덤펍/게시판/실시간/랭킹/딜러/장터, Section 타입 76행) 레일 + 게시판 목록 조립(광고→고정→HOT→끌올→최신) + 데스크탑 2-pane 상세
+- `src/components/features/community/PostRowCard.tsx` (302줄) — 게시글 한 줄(PostRow)·피드 카드(PostCard) 단일 출처. 광고(promoted prop)도 같은 컴포넌트 — 손님 피드와 AdSlotsAdmin 미리보기가 공유
+- `src/components/features/community/SpotPostCard.tsx` (145줄) — 게시글에 붙은 NURI SPOT 카드. 상대 카드·결과 가림(reveal) 표시와 작성자의 공개 버튼
+- `src/components/features/community/AdSlotsAdmin.tsx` (297줄) — 운영자 광고 5칸 관리 — 기존 게시글을 슬롯에 승격. AdminTab 노출관리(exposureTarget==='ads')에서 마운트(AdminTab.tsx:1247)
+- `src/components/features/PostFormModal.tsx` (481줄) — 글쓰기 시트 — 카테고리/제목/내용/이미지(MAX_IMAGES=4, 64행)/핸드 카드/투표 첨부, content-filter 통과 후 등록
+- `src/components/features/PostDetailModal.tsx` (701줄) — 게시글 상세(모달 또는 inline 2-pane) — 조회수·반응·응원·끌올·블라인드·신고·댓글·첨부·스팟 카드·@매장 멘션
+- `src/components/features/CommentThread.tsx` (337줄) — 댓글 트리(글 상세·매장 Q&A·요강 공용). groupThreads 로 3레벨+ 평탄화, 차단 필터 단일 통로(271행)
+- `src/components/features/PostAttachments.tsx` (337줄) — 게시글 첨부 렌더 — 핸드 카드 배지/투표 결과 바
+- `src/components/features/PostComposerExtras.tsx` (500줄) — 작성기 부속 — CardPicker / PollBuilder 와 normalizeHand·normalizePoll 정규화
+- `src/components/features/ReportModal.tsx` (72줄) — 신고 사유 선택 모달(post/comment/listing/live/user 공용). PostDetailModal·ListingDetailModal 이 사용
+- `src/components/features/ReportQueue.tsx` (63줄) — 관리자 신고 처리 큐 — 해결/기각. AdminTab section==='reports' 에서 마운트(AdminTab.tsx:1264)
+- `src/components/features/CommunityShoutBar.tsx` (770줄) — 외치기(활동점수 구매형 20초 방송 슬롯) 바 — 서브탭 바로 아래 상시 노출, 구매/예약/색 선택/대기열
+- `src/components/features/DealerCommunity.tsx` (392줄) — 딜러 섹션 — 구인/구직/일반 글 + 지원(dealer_applications) + 공지 + ICM 계산기(ICMCalculator, 11행)
+- `src/components/features/GroupPage.tsx` (620줄) — 가입제 그룹 커뮤니티(딜러팀·동호회·유튜버) — 실시간 채팅/게시판/활동순위 3탭, 멤버 승인·추방
+- `src/components/features/chat/ChatPane.tsx` (260줄) — 1:1 대화 패널(ListingDetailModal·MyMarketModal·NotificationPanel 공용) — 스레드 경합 방지 key 분기
+- `src/contexts/BlockContext.tsx` (61줄) — 차단 전역 상태 — blockedIds/isBlocked 를 피드·댓글·매물 필터가 공유
+- `src/components/features/AdminTab.tsx` (1820줄) — (호스트) ReportQueue(1264)·AdSlotsAdmin(1247)을 마운트하는 관리자 탭 — 신고·광고 진입점
+
+## 로직·API
+
+- **lib**: `src/lib/content-filter.ts` · `src/lib/postCategory.ts` · `src/lib/pinnedFirst.ts` · `src/lib/mentions.tsx` · `src/lib/useTitles.ts` · `src/lib/hand.ts` · `src/lib/cosmetics.ts`
+- **api**: `src/api/community.ts` · `src/api/reports.ts` · `src/api/postAttachments.ts` · `src/api/ads.ts` · `src/api/blocks.ts` · `src/api/spots.ts` · `src/api/chat.ts` · `src/api/messages.ts`
+
+## 서버 표면
+
+- **테이블**: `community_posts` · `comments` · `post_likes` · `post_reactions` · `post_cheers` · `live_wall` · `community_shouts` · `community_ads` · `reports` · `post_hands` · `post_polls` · `post_poll_options` · `post_poll_votes` · `post_spots` · `spot_reviews` · `user_blocks` · `group_posts` · `group_messages` · `group_members` · `dealer_posts` · `dealer_applications` · `owner_posts` · `venue_messages` · `venue_notices` · `venue_follows` · `user_messages` · `listing_messages` · `listing_message_reads` · `activity_log` · `point_grants` · `shop_skus` · `marketplace_listings` · `venues` · `venue_staff`
+- **RPC**: `community_ads_public` · `toggle_post_like` · `admin_set_post_blinded` · `admin_set_post_pinned` · `increment_post_view` · `bump_post` · `send_cheer` · `public_activity_points` · `get_activity_leaderboard` · `get_equipped_marks` · `get_nick_colors` · `cast_poll_vote` · `poll_results` · `share_spot_post` · `reveal_post_spot` · `buy_shout` · `hide_shout` · `shout_rules` · `shout_queue_info` · `admin_shout_bump` · `admin_shout_refunds` · `my_point_balance` · `admin_point_summary` · `admin_grant_points` · `admin_list_purchases` · `admin_refund_purchase` · `buy_mark` · `buy_mark_rental` · `buy_cosmetic` · `buy_season_badge` · `buy_nickname_reset` · `my_cosmetics` · `my_owned_marks` · `my_mark_rental` · `my_season_badges` · `my_buyable_season_badges` · `set_equipped_cosmetic` · `create_group` · `join_group` · `set_group_join_approval` · `set_group_member_role` · `group_activity_ranking` · `update_group_profile` · `create_my_venue` · `is_slug_available` · `set_venue_slug` · `get_public_profiles`
+
+## 🔴 모르면 사고 내는 것
+
+1. 광고(승격 게시글)를 목록에서 뺄 때는 **실제로 그려질 광고만** 뺀다. usableAdCount(src/lib/pinnedFirst.ts:31-35)로 자리 있는 개수 k 를 구해 ads.slice(0,k) 기준으로만 중복 제거한다(src/components/features/CommunityTab.tsx:616-629 — usableAds → adPostIds → listSource). 자리 없는 광고까지 빼면 그 글은 광고로도 목록으로도 검색으로도 안 나와 화면에서 사라진다 — 2026-09-11 실측: 글 17개·슬롯 5칸·adsEvery 4 → 1건 소실.
+
+2. 광고는 게시글과 같은 매핑·같은 컴포넌트를 탄다. rowToPost(src/api/community.ts:157)를 src/api/ads.ts:18 이 import 하고 화면은 PostRow/PostCard 하나만 쓴다(src/components/features/community/PostRowCard.tsx:1-12). 광고용 매핑이나 카드를 새로 만들면 한쪽만 고쳐져 '광고만 필드가 빈다'로 되돌아간다(옛 AdRow 는 link_url 이 없으면 <div> 라 아예 클릭이 안 됐다 — src/api/ads.ts:7-10).
+
+3. 스팟 스포일러(상대 카드·결과)는 서버가 가린다 — 20260911d 가 공유 시점에 hidden_* 컬럼으로 옮기고 SELECT 권한을 회수한다. src/api/spots.ts:158-159 의 spot.villain=[] / delete spot.result 는 이중 방어일 뿐이니 지우지 말고, 반대로 여기에만 의존해 서버 가림을 빼지도 마라(devtools 로 그냥 보여 투표가 무의미해진다). 근거: src/components/features/community/SpotPostCard.tsx:11-14, src/api/spots.ts:154-157.
+
+4. 댓글 등록 실패는 error.code==='P0001' 일 때만 서버 문장을 그대로 올리고 나머지는 뭉갠다(src/api/community.ts:375). 제재·금칙어·쿨다운 게이트가 plpgsql raise 라 이 분기가 사라지면 정지된 회원이 왜 막혔는지 모른 채 재시도하고, 전부 올리면 RLS 원문이 노출된다(보안표준 6). 이 판정은 **api 한 곳뿐**이고 호출부(src/App.tsx:2337, src/components/features/PostDetailModal.tsx:308)는 err.message 를 토스트로 올리기만 하므로, 호출부에서 메시지를 고정 문구로 바꾸면 사유가 통째로 사라진다. 계약은 src/api/sanctionGateComments.migration.test.ts:124 가 문자열째 잠근다.
+
+5. 차단 필터는 CommentThread 한 곳에서만 건다(src/components/features/CommentThread.tsx:263-273) — 호출부(글 상세·매장 Q&A·요강 댓글)에 개별로 넣지 말고, 본인 댓글은 절대 걸러내지 마라(내가 쓴 말이 사라지면 '글이 안 써졌다'로 오해한다 — 271행의 `c.userId === user?.id ||`). 차단 목록 dedupe 키에는 반드시 uid 가 들어간다(src/api/blocks.ts:17); 빼면 로그아웃→다른 계정 로그인 경합에서 남의 차단 목록으로 글이 숨는다(src/api/blocks.dedupe.test.ts).
+
+6. 블라인드 글 열람 판정은 isPostHidden(src/api/community.ts:200-205) 하나로만 — 서버 RLS(20260905m posts_select)와 같은 식이라 화면마다 다시 쓰면 '서버는 막았는데 캐시된 글이 열리는' 구멍이 생긴다. 신고 기각은 자동 블라인드(서로 다른 신고자 3인 트리거)까지 되돌려야 한다(src/api/reports.ts:61-63) — 빼면 무고 신고로 숨은 글이 영구히 숨는다. PostgREST 는 RLS 가 막은 UPDATE 를 오류가 아니라 0행으로 주므로 반환 행 수로 도달을 확인한다(src/api/reports.ts:53-57).
+
+7. 게시판 목록은 최근 50건 상한이고(src/api/community.ts:405) 끌올·관리자 고정 글은 50건 밖에 있어도 별도 조회로 반드시 건져 온다(src/api/community.ts:411-425). 이 두 쿼리를 지우면 100점 내고 끌올한 사용자가 아무것도 못 얻는다. 컬럼 미존재 환경에서는 조용히 건너뛰게 되어 있으니(422행 `if (res.error) continue`) 에러로 바꾸지 마라. 무필터 getComments({}) 는 limit 300 이 걸려 있다(src/api/community.ts:351) — 풀면 전 서비스 댓글이 첫 화면 로딩과 경쟁한다.
+
+8. 글 등록은 42703(컬럼 없음)이면 content-only 로 조용히 폴백한다(src/api/community.ts:460-468). 이때 category·title·images 는 DB 에 저장되지 않는데 반환값에는 합쳐져 있어 화면만 정상으로 보인다 — 새 컬럼을 추가하다 이 폴백에 걸리면 '새로고침하면 사라지는 값' 버그로 나타난다.
+
+9. 커뮤니티 탭은 keep-alive(display 토글)이고 App 의 idle 프리마운트로 보이기 전에 먼저 마운트된다. 뒤로가기 겹은 active && section !== entrySection 일 때만 등록한다(src/components/features/CommunityTab.tsx:169-178) — 조건을 느슨하게 풀면 보이지 않는 탭이 겹을 들고 있어 뒤로가기가 통째로 먹통이 된다(2026-08-28 근치). 같은 이유로 외치기 바의 전환은 animation 이 아니라 transition 이다(src/components/features/CommunityShoutBar.tsx:30-34).
+
+10. 루트 폰트가 17px 이라 Tailwind rem 유틸이 전부 6.25% 크다 — 서브탭 히트박스는 h-[44px] 로 px 고정이고 h-8(=34px) 같은 rem 유틸을 쓰면 안 된다(src/components/features/CommunityTab.tsx:467, 481). 서브탭 버튼에 relative 를 두면 span 의 offsetParent 가 바뀌어 SlidingPill 의 offsetLeft 가 깨진다(같은 파일 470행). 하단 탭바 '커뮤니티' 라벨과 '홀덤펍' 버튼의 parentElement=레일 구조는 e2e 셀렉터에 잠겨 있다(CommunityTab.tsx:304, 324-325).
+
+11. 외치기 구매 페이로드: 색은 하이라이트(gold) 등급에서만 보낸다(기본에 실으면 서버가 조용히 무시하지 않고 거절), 예약 시각은 datetime-local 로컬 문자열이 아니라 ISO(UTC)로 보낸다(src/components/features/CommunityShoutBar.tsx:397-403). 하루 상한은 shout_rules().daily_cap 이 아니라 서버가 실제로 세는 값(DAILY_PURCHASE_CAP=10, 구매 합산)이다(같은 파일 509-512행). 방송 순번은 서버가 찍은 plays_at 창으로만 판정한다(610행) — 클라이언트가 floor(now/20s)%n 으로 유도하면 사람마다 다른 외침을 본다(같은 파일 21-24행). floor(now/20s)는 **빈 자리 안내 문구 롤링**(620행)에만 남아 있다.
+
+12. 투표 기표는 RPC cast_poll_vote 로만 한다 — post_poll_votes 에 직접 INSERT 정책이 없다. 집계도 뷰가 아니라 RPC poll_results 다(SECURITY DEFINER 뷰가 어드바이저 ERROR 라 2026-09-02 교체). 근거: src/api/postAttachments.ts:6-7, 75-82, 126-138.
+
+13. [검증에서 제거됨: 2건] ① open_work 의 'src/lib/emojiPolicy.ts 를 소스 어디에서도 import 하지 않는다(grep 0건)' — 거짓. e2e/emoji-glyphs.spec.ts:12 가 `import { SUIT_CP, SHOP_MARK_CP } from '../src/lib/emojiPolicy'` 로 실제 사용한다(잔재 아님). ② 댓글 P0001 gotcha 의 '같은 처리를 src/App.tsx:2336 이 복제하고 있다' — 거짓. P0001 판별 분기는 src/api/community.ts:375 한 곳뿐이고 App.tsx:2337·PostDetailModal.tsx:308 은 err.message 를 토스트로 올릴 뿐이다(해당 문장만 삭제하고 실제 구조로 교체). 그 밖에 행번호 8곳을 실측값으로 교정: pinnedFirst.ts:35→31-35 · CommunityTab 617-627→616-629 · SpotPostCard 11-16→11-14 · community.ts 200-206→200-205 · community.ts 412-419→411-425 · ShoutBar 32-36→30-34 · CommunityTab 471→470 · CommunityTab 74-78→72-74. 파일 경로는 entry/lib/api/test/e2e 56개 전부 존재를 확인했고 삭제한 경로는 없다(줄 수도 17개 entry 전부 일치). db_tables 34개·rpcs 47개도 전부 소스 또는 supabase/migrations 에서 참조를 확인했다.
+
+## 지금 열려 있는 것
+
+- supabase/migrations/20260911a_community_ads_promoted_posts 운영 미적용 — 앱이 없는 RPC community_ads_public 을 불러 커뮤니티 탭 진입마다 404. src/api/ads.ts:53 이 PGRST202 를 잡아 세션 1회만 묻고 '광고 없음'으로 degrade 하지만 e2e/auth-smoke 가 이 404 로 실패한다. 마이그레이션 §5(테이블 읽기 축소)는 앱 배포 뒤 별도 실행. 근거: docs/plans/BLOCKED.md:49 (파일 실재: supabase/migrations/20260911a_community_ads_promoted_posts.sql)
+- supabase/migrations/20260911n_sanction_gate_comments 운영 미적용 — 정지된 회원이 댓글·쪽지(user_messages·listing_messages)·구인글(dealer_posts)·그룹 글/채팅·라이브 한 줄로 계속 쓸 수 있다(파일 58-97행: BEFORE INSERT 트리거 9개+). 클라 쪽 P0001 분기(src/api/community.ts:375)는 이미 들어가 있어 적용 즉시 동작한다. 근거: docs/plans/BLOCKED.md:59
+- 업주 전용 커뮤니티('매장')는 2026-09-10 오너 지시로 화면에서 전량 폐기됐으나 서버 데이터·API 는 남아 있다 — owner_posts 테이블과 getOwnerPosts/createOwnerPost/deleteOwnerPost(src/api/community.ts:690-717)가 호출부 0곳으로 잔존(grep: 주석 언급 1건뿐). 근거: src/components/features/CommunityTab.tsx:72-74
+- 금칙어 검사는 클라이언트 정규식 단일 방어다(src/lib/content-filter.ts, PostFormModal·CommunityShoutBar·CommunityTab·MarketplaceFormModal·PosterFormModal 5곳 호출 — grep 확인). 서버 금칙어 게이트는 외치기(20260829j·20260830f)와 댓글 경로(20260911n, P0001)에만 있고 community_posts 본문 서버측 검사는 마이그레이션에 없다.
+- 게시판 50건 상한은 backlog 에 '코드 결함은 맞으나 현재 데이터로는 안 보임 / 데이터가 커지면 재점검'으로 남아 있다. 근거: docs/plans/backlog.md:62
+- post_poll_results 집계 뷰는 RPC poll_results 로 대체됐지만 주석에 이름이 남아 있다(src/api/postAttachments.ts:7) — 뷰 자체의 정리 여부는 미확인
+
+## 이 팀만 검증하는 명령
+
+```bash
+npx vitest run src/api/community.hidden.test.ts src/api/community.balance.test.ts src/api/ads.promoted.test.ts src/api/ads.migration.test.ts src/api/blocks.dedupe.test.ts src/api/sanctionGateComments.migration.test.ts src/components/features/CommentThread.test.ts src/lib/pinnedFirst.test.ts
+npx vitest run src/api/community src/api/ads src/lib/pinnedFirst
+npx tsc -b --noEmit
+npx eslint src/components/features/CommunityTab.tsx src/components/features/community src/components/features/PostFormModal.tsx src/components/features/PostDetailModal.tsx src/components/features/CommentThread.tsx src/api/community.ts src/api/ads.ts src/api/reports.ts src/api/spots.ts
+npm run build
+npx playwright test e2e/community-ads.spec.ts e2e/shout-queue.spec.ts e2e/nuri-spot-board.spec.ts e2e/ad-click-paths.spec.ts
+npx playwright test e2e/drag-close.spec.ts e2e/market-isolation.spec.ts e2e/notif-thread-race.spec.ts e2e/notice-static.spec.ts
+```
+
+환경변수를 붙여 돌릴 때는 셸별 문법이 다르다 — `VAR=값 명령` 은 PowerShell 에서 동작하지 않는다.
+
+```powershell
+# PowerShell (이 저장소 기본 셸)
+$env:E2E_BASE_URL = 'http://localhost:4173'; npx playwright test e2e/community-ads.spec.ts
+```
+
+```bash
+# bash / Git Bash
+E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/community-ads.spec.ts
+```
+
+- **테스트 파일**: `src/api/community.hidden.test.ts` · `src/api/community.balance.test.ts` · `src/api/sanctionGateComments.migration.test.ts` · `src/api/ads.promoted.test.ts` · `src/api/ads.migration.test.ts` · `src/api/blocks.dedupe.test.ts` · `src/components/features/CommentThread.test.ts` · `src/lib/pinnedFirst.test.ts`
+- **e2e**: `e2e/community-ads.spec.ts` · `e2e/shout-queue.spec.ts` · `e2e/nuri-spot-board.spec.ts` · `e2e/ad-click-paths.spec.ts` · `e2e/drag-close.spec.ts` · `e2e/market-isolation.spec.ts` · `e2e/notif-thread-race.spec.ts` · `e2e/notice-static.spec.ts` · `e2e/notice-scroll.spec.ts` · `e2e/subtab-motion.spec.ts` · `e2e/sliding-pill-hidden.spec.ts` · `e2e/pill-press.spec.ts` · `e2e/skeleton-no-shift.spec.ts` · `e2e/load-failure.spec.ts` · `e2e/write-guard.spec.ts`
+
+마무리는 전체 게이트다 — `/ship` 또는 `.claude/skills/nuri-ship/SKILL.md`.

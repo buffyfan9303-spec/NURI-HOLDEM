@@ -63,8 +63,23 @@ function scanCss(src: string): Hit[] {
   return hits;
 }
 
-const scanFile = (p: string) =>
-  (p.endsWith('.css') ? scanCss(fs.readFileSync(p, 'utf8')) : scanTs(fs.readFileSync(p, 'utf8'), p));
+/**
+ * 파일 하나의 스캔 결과. **파일당 한 번만** 읽고 훑는다.
+ *
+ * `src/` 전체(400개 넘는다)를 `it()` 마다 다시 읽고 정규식으로 훑으면,
+ * 다른 작업(빌드·lint·e2e)과 겹쳐 CPU 가 밀릴 때 vitest 기본 `testTimeout` 5초를 넘겨
+ * **단정과 무관하게** 터진다 — 2026-09-12 실측: 전체 실행에서 이 파일 포함 3개가
+ * `Test timed out in 5000ms`, 단독 실행은 통과. 결과를 접어 원인을 없앤다(단정은 그대로다).
+ */
+const SCAN = new Map<string, ReturnType<typeof scanTs>>();
+const scanFile = (p: string) => {
+  let hits = SCAN.get(p);
+  if (hits === undefined) {
+    hits = p.endsWith('.css') ? scanCss(fs.readFileSync(p, 'utf8')) : scanTs(fs.readFileSync(p, 'utf8'), p);
+    SCAN.set(p, hits);
+  }
+  return hits;
+};
 
 /**
  * 기준선 — 파일별로 '이 코드포인트가 몇 개까지 있어도 되는가'.

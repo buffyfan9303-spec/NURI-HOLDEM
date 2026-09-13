@@ -69,9 +69,13 @@ function mapRow(r: any): Voucher {
 /** 발행 매장 기준 전체 이용권 (업주·인증직원 열람) */
 export async function listVenueVouchers(venueId: string): Promise<Voucher[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.from('store_vouchers')
+  // ⚠ error 를 버리지 않는다(V04, 2026-09-12): `const { data } = ...` 로만 받으면 RLS 거부·네트워크
+  //   끊김이 전부 빈 배열이 되어 '이용권 없음'으로 위장된다. 호출부(LedgerVoucherRail·VoucherManageModal)는
+  //   이미 catch 로 실패를 받고 있어 여기서 throw 해도 안전하다.
+  const { data, error } = await supabase.from('store_vouchers')
     .select('*, venue:venue_id(name), used_venue:used_venue_id(name)')
     .eq('venue_id', venueId).order('created_at', { ascending: false });
+  if (error) throw error;
   return (data ?? []).map(mapRow);
 }
 
@@ -83,6 +87,24 @@ export function subscribeVenueVouchers(venueId: string, onChange: () => void): (
     .on('postgres_changes', { event: '*', schema: 'public', table: 'store_vouchers', filter: `venue_id=eq.${venueId}` }, () => onChange())
     .subscribe();
   return () => { supabase.removeChannel(ch); };
+}
+
+/** V07(2026-09-12) — 내(보유자) 이용권 realtime 구독. 사용 요청이 거절·취소·자동마감으로
+ *  지갑에 되돌아오는 것(_restore_voucher: status 'used'→'active')을 손님 화면이 재진입 없이 본다.
+ *  예전엔 VoucherWallet 이 마운트/계정전환 때만 조회해서, 복원이 실제로는 즉시 일어나도
+ *  화면은 시트를 닫았다 다시 열 때까지 '사용됨'인 채로 남아 있었다("복원이 늦게 보인다"). */
+export function subscribeMyVouchers(onChange: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  let ch: ReturnType<typeof supabase.channel> | null = null;
+  let cancelled = false;
+  currentUser().then((u) => {
+    if (cancelled || !u) return;
+    ch = supabase
+      .channel(`my_vouchers_${u.id}_${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'store_vouchers', filter: `holder_user_id=eq.${u.id}` }, () => onChange())
+      .subscribe();
+  });
+  return () => { cancelled = true; if (ch) supabase.removeChannel(ch); };
 }
 
 /** 내가 보유한 이용권의 발급 매장명 — venues 의 RLS(approved 게이트)를 우회해 보유자에게만 이름을 돌려준다.
@@ -100,9 +122,13 @@ export async function listMyVouchers(): Promise<Voucher[]> {
   if (IS_MOCK) return [];
   const uid = (await currentUser())?.id;
   if (!uid) return [];
-  const { data } = await supabase.from('store_vouchers')
+  // ⚠ error 를 버리지 않는다(V04, 2026-09-12): 여기서 삼키면 VoucherWallet/MyVoucherSheet 의
+  //   catch 가 절대 도달하지 못해 '조회 실패'가 '보유 0장'으로 보였다 — 손님이 산 이용권이
+  //   사라진 것처럼 보이는 화면이다. 호출부가 loading/empty/data/error 를 분리해 받는다.
+  const { data, error } = await supabase.from('store_vouchers')
     .select('*, venue:venue_id(name), used_venue:used_venue_id(name)')
     .eq('holder_user_id', uid).order('created_at', { ascending: false });
+  if (error) throw error;
   const rows = (data ?? []).map(mapRow);
   // 매장명 보강 — venues_select 는 `approved = true or owner or admin` 이라
   // **미승인 매장이 발급한 이용권**은 위 임베드에서 venue 가 통째로 null 로 온다(2026-08-30 기준 미승인 2곳 실재).
@@ -247,28 +273,63 @@ export async function revokeVouchers(ids: string[]): Promise<BulkResult> {
 export const deleteVouchers = (ids: string[]) => bulk(ids, deleteVoucher);
 
 // 회수(사용): 발급 매장 QR 스캔 — 그 매장에서만 사용 가능. 매장명 반환.
-export async function redeemMyVoucherByQr(voucherId: string, venueId: string): Promise<string> {
+// ⚠ V06(2026-09-12) — gameSeq 는 QR 이 어느 게임(메인/사이드) 테이블의 것인지를 서버까지 들고 간다.
+//   예전엔 이 인자가 아예 없어서 사용 → 트리거(voucher_redeem_to_ledger_request)가 만드는 대기 요청의
+//   requested_game_seq 가 항상 NULL 이었고, 그 요청을 승인할 때(buyinApproval.planBuyinApprovals)
+//   null 은 '운영자가 지금 보고 있는 게임'으로 대체된다 — 사이드2 QR 로 찍었는데 메인1 을 보며 승인하면
+//   메인1 명단에 들어갔다. 서버는 이 값을 세션 변수(nuri.voucher_game_seq)로 받아 같은 트랜잭션 안에서
+//   트리거의 INSERT 에 실어 보낸다(마이그레이션 초안 20260912b, 미적용) — 소비 후 게임을 따로 고치는
+//   비원자 보정이 아니라 소비와 요청 생성이 같은 문장 흐름 안에서 game_seq 를 함께 갖는다.
+//
+// ⚠ **배포 순서**: 코드가 서버보다 먼저 나갈 수 있다(이 저장소는 실제로 미적용 마이그레이션이 12개 밀려 있다).
+//   PostgREST 는 **인자 이름으로 함수를 찾는다** — 구 시그니처 서버에 `p_game_seq` 를 주면 그냥 무시되는 게 아니라
+//   `PGRST202`(함수를 못 찾음)로 **전멸**한다. 즉 마이그레이션 적용 전에 배포하면 QR·전화 사용이 통째로 죽는다.
+//   그래서 한 번 실패하면 **구 시그니처로 되돌려 재시도**하고, 그 사실을 세션에 기억한다
+//   (`api/ads.ts` 의 `community_ads_public` 폴백과 같은 방식). 게임 지정만 못 할 뿐 사용은 계속 된다.
+let gameSeqParamMissing = false;
+const isMissingFnError = (e: { code?: string; message?: string } | null): boolean =>
+  e?.code === 'PGRST202' || /Could not find the function|does not exist/i.test(e?.message ?? '');
+
+export async function redeemMyVoucherByQr(voucherId: string, venueId: string, gameSeq?: number | null): Promise<string> {
   if (IS_MOCK) return '';
   assertVoucherOn();
-  const { data, error } = await supabase.rpc('redeem_my_voucher_by_qr', { p_voucher_id: voucherId, p_venue_id: venueId });
+  const base = { p_voucher_id: voucherId, p_venue_id: venueId };
+  if (!gameSeqParamMissing) {
+    const r = await supabase.rpc('redeem_my_voucher_by_qr', { ...base, p_game_seq: gameSeq ?? null });
+    if (!r.error) return (r.data as string) ?? '';
+    if (!isMissingFnError(r.error)) throw new Error(r.error.message);
+    gameSeqParamMissing = true;   // 서버가 아직 20260912b 이전이다 — 이번 세션 내내 구 시그니처로 간다
+  }
+  const { data, error } = await supabase.rpc('redeem_my_voucher_by_qr', base);
   if (error) throw new Error(error.message);
   return (data as string) ?? '';
 }
 /** 일괄 사용(매장 QR) — 한 번 스캔하고 N장을 같은 매장에 쓴다(오너 2026-09-08 "몇 장을 보낼 것인지").
  *  서버에 묶음 RPC 가 없어 순차로 돈다. 부분 성공을 **부분 성공이라고** 돌려주는 게 중요하다 —
- *  3장 중 1장이 만료돼 실패했는데 '3장 사용'이라고 말하면 그게 장부에서 다툼이 된다. */
-export const redeemMyVouchersByQr = (ids: string[], venueId: string): Promise<BulkResult> =>
-  bulk(ids, async (id) => { await redeemMyVoucherByQr(id, venueId); }).then(humanize);
+ *  3장 중 1장이 만료돼 실패했는데 '3장 사용'이라고 말하면 그게 장부에서 다툼이 된다.
+ *  gameSeq — QR 이 지정한 게임(V06, 위 redeemMyVoucherByQr 주석). 없으면(null) 서버가 요청을 게임
+ *  미지정으로 만들고, 그때만 승인 화면이 '지금 보는 게임'으로 대체한다(그게 원래 옳은 폴백이다). */
+export const redeemMyVouchersByQr = (ids: string[], venueId: string, gameSeq?: number | null): Promise<BulkResult> =>
+  bulk(ids, async (id) => { await redeemMyVoucherByQr(id, venueId, gameSeq); }).then(humanize);
 
-/** 일괄 사용(업주 전화번호) — QR 없이 보내는 유일한 경로. 무증빙 경로는 폐지됐다(아래 주석). */
-export const redeemMyVouchersByPhone = (ids: string[], phone: string): Promise<BulkResult> =>
-  bulk(ids, async (id) => { await redeemMyVoucherByPhone(id, phone); }).then(humanize);
+/** 일괄 사용(업주 전화번호) — QR 없이 보내는 유일한 경로. 무증빙 경로는 폐지됐다(아래 주석).
+ *  전화번호 경로는 QR 증빙이 없어 게임을 지정할 근거도 없다 — gameSeq 는 항상 null(호출부도 null 만 보낸다). */
+export const redeemMyVouchersByPhone = (ids: string[], phone: string, gameSeq?: number | null): Promise<BulkResult> =>
+  bulk(ids, async (id) => { await redeemMyVoucherByPhone(id, phone, gameSeq); }).then(humanize);
 
 // 회수(사용): 발급 매장 업주 전화번호로만.
-export async function redeemMyVoucherByPhone(voucherId: string, phone: string): Promise<string> {
+export async function redeemMyVoucherByPhone(voucherId: string, phone: string, gameSeq?: number | null): Promise<string> {
   if (IS_MOCK) return '';
   assertVoucherOn();
-  const { data, error } = await supabase.rpc('redeem_my_voucher_by_phone', { p_voucher_id: voucherId, p_phone: phone });
+  // QR 과 같은 배포 순서 폴백(위 주석 참조) — 구 시그니처 서버에서 PGRST202 로 죽지 않게 한다.
+  const base = { p_voucher_id: voucherId, p_phone: phone };
+  if (!gameSeqParamMissing) {
+    const r = await supabase.rpc('redeem_my_voucher_by_phone', { ...base, p_game_seq: gameSeq ?? null });
+    if (!r.error) return (r.data as string) ?? '';
+    if (!isMissingFnError(r.error)) throw new Error(r.error.message);
+    gameSeqParamMissing = true;
+  }
+  const { data, error } = await supabase.rpc('redeem_my_voucher_by_phone', base);
   if (error) throw new Error(error.message);
   return (data as string) ?? '';
 }
@@ -302,7 +363,8 @@ export const findUserByPhone = makeSearchCache(rawFindUserByPhone, (s) => s.repl
 
 export async function voucherUsageByVenue(venueId: string): Promise<VoucherUsage[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.rpc('voucher_usage_by_venue', { p_venue_id: venueId });
+  const { data, error } = await supabase.rpc('voucher_usage_by_venue', { p_venue_id: venueId });
+  if (error) throw error; // V04 — 실패를 [] 로 뭉개지 않는다
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ usedVenueId: r.used_venue_id ?? null, venueName: r.venue_name ?? null, usedCount: Number(r.used_count) || 0 }));
 }
@@ -321,26 +383,28 @@ export async function myVisitedVenues(): Promise<VisitedVenue[]> {
 // ── 직원 이용권내역 열람 권한(업주 설정) ──
 export async function getVoucherAccessUserIds(venueId: string): Promise<string[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.rpc('get_voucher_access_user_ids', { p_venue_id: venueId });
+  const { data, error } = await supabase.rpc('get_voucher_access_user_ids', { p_venue_id: venueId });
+  if (error) throw error; // P02 — error 를 구조분해에서 빼면 실패가 '전원 ✗' 가 된다(위 myVisitedVenues·V04 와 같은 관용구)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => r.user_id as string);
 }
 export async function grantVoucherAccess(venueId: string, userId: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('grant_voucher_access', { p_venue_id: venueId, p_user_id: userId });
-  if (error) throw new Error(error.message);
+  if (error) throw error;   // P02 재작업: new Error(message) 는 code 를 버린다 — 형제 ledger.grantLedgerAccess 와 같이 객체 그대로(msgOf 가 code 로 분류한다)
 }
 export async function revokeVoucherAccess(venueId: string, userId: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('revoke_voucher_access', { p_venue_id: venueId, p_user_id: userId });
-  if (error) throw new Error(error.message);
+  if (error) throw error;
 }
 
 // ── 보유 회원수/사용 현황 + 사용내역 ──
 export interface VoucherHolderStats { holderCount: number; activeCount: number; usedCount: number }
 export async function voucherHolderStats(venueId: string): Promise<VoucherHolderStats> {
   if (IS_MOCK) return { holderCount: 0, activeCount: 0, usedCount: 0 };
-  const { data } = await supabase.rpc('voucher_holder_stats', { p_venue_id: venueId });
+  const { data, error } = await supabase.rpc('voucher_holder_stats', { p_venue_id: venueId });
+  if (error) throw error; // V04 — 실패를 0/0/0 으로 뭉개지 않는다
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const r: any = (data ?? [])[0] ?? {};
   return { holderCount: Number(r.holder_count) || 0, activeCount: Number(r.active_count) || 0, usedCount: Number(r.used_count) || 0 };
@@ -350,7 +414,8 @@ export async function voucherHolderStats(venueId: string): Promise<VoucherHolder
 export interface VoucherHolderProfile { userId: string; realName: string | null; nickname: string | null }
 export async function voucherHolderProfiles(venueId: string): Promise<VoucherHolderProfile[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.rpc('voucher_holder_profiles', { p_venue_id: venueId });
+  const { data, error } = await supabase.rpc('voucher_holder_profiles', { p_venue_id: venueId });
+  if (error) throw error; // V04 — 실패를 [] 로 뭉개지 않는다
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ userId: r.user_id, realName: r.real_name ?? null, nickname: r.nickname ?? null }));
 }
@@ -358,7 +423,8 @@ export async function voucherHolderProfiles(venueId: string): Promise<VoucherHol
 export interface VoucherHistoryRow { id: string; title: string; holderName: string | null; realName: string | null; nickname: string | null; usedAt: string | null }
 export async function voucherHistory(venueId: string): Promise<VoucherHistoryRow[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.rpc('voucher_history', { p_venue_id: venueId });
+  const { data, error } = await supabase.rpc('voucher_history', { p_venue_id: venueId });
+  if (error) throw error; // V04 — 실패를 [] 로 뭉개지 않는다
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, title: r.title, holderName: r.holder_name ?? null, realName: r.real_name ?? null, nickname: r.nickname ?? null, usedAt: r.used_at ?? null }));
 }

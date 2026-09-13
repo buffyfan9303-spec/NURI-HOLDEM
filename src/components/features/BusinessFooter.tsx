@@ -26,8 +26,9 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
   return (
     <footer className="mt-6 border-t border-border-subtle px-page-x pt-5 pb-[calc(var(--tabbar-safe)+0.5rem)] lg:pb-8">
       <div className="mx-auto w-full max-w-5xl space-y-3">
-        {/* 약관·정책 링크 */}
-        <nav className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-2xs">
+        {/* 약관·정책 링크 — §7 P0-C(2026-09-12 실측): 11.69px 로, 이미 t-desc(12.75px)로 올라간
+            사업자 정보·법정 고지보다 1.06px 작았다. 같은 '법정 고지' 역할이라 같은 토큰으로 맞춘다. */}
+        <nav className="flex flex-wrap items-center gap-x-3 gap-y-1.5 t-desc">
           {/* 업주 완전 사용설명서(공개 정적 페이지) — 회원가입부터 정산까지 전 기능 안내 */}
           {/* PG 심사 요건: '어떤 서비스를 운영하는지' 확인 가능한 소개 페이지(정적 URL) */}
           <a href="/about.html" target="_blank" rel="noopener" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">서비스 소개</a>
@@ -48,30 +49,42 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
         </nav>
 
         {/* 사업자 정보 — PG 심사 필수 5항목은 상시 노출, 부가 항목만 펼침 */}
-        <dl className="flex flex-wrap gap-x-3 gap-y-0.5 text-2xs leading-relaxed text-ink-muted">
+        {/* ⚠ §7 P1-1(2026-09-12 실측): 여기가 앱에서 **가장 작고 가장 빽빽한 블록**이었다
+            (11.69px / 행간 18.99 — 권장 하한 12px 미달). 그런데 사업자 정보·1336 고지는
+            **법정 상시 노출** 대상이다. 새 규격을 만들지 않고 기존 역할 토큰 `t-desc`(12.75 / 19.13)로 올린다.
+            위계는 유지된다 — 본문 14.88 > 설명 12.75. */}
+        {/* ⚠ §7 P0-C(2026-09-12 실측): dt 를 `text-ink-muted/70` 로 반투명 처리했더니 지면(surface-base)과
+            합성된 실제 렌더 색이 라이트 2.81:1·다크 3.09:1 로 AA(4.5) 미달이었다 — 순백이 아니라 실제 지면
+            기준으로 재서 드러났다. 위계(라벨 < 값)는 불투명 토큰만으로도 이미 성립한다
+            (`ink-muted` rgb(92,107,138) ≠ `ink-secondary` rgb(74,88,120), 라이트 기준) — 그래서 투명도를
+            걷어내고 불투명 `text-ink-muted` 그대로 둔다(재측정: 라이트 4.99:1·다크 5.28:1, AA 통과).
+            `whitespace-nowrap` 은 320px 에서 "사업장 주소" 라벨이 "사업장 / 주소" 로 줄바꿈되던 것 — 값(dd)은
+            그대로 여러 줄로 흘러도 되지만 라벨 자체가 쪼개지면 안 된다. */}
+        <dl className="flex flex-wrap gap-x-3 gap-y-0.5 t-desc text-ink-muted">
           {BIZ_REQUIRED.map(([k, v]) => (
             <div key={k} className="flex items-center gap-1">
-              <dt className="text-ink-muted/70">{k}</dt>
+              <dt className="shrink-0 whitespace-nowrap">{k}</dt>
               <dd className="text-ink-secondary">{v}</dd>
             </div>
           ))}
         </dl>
-        <details className="group/biz text-2xs leading-relaxed text-ink-muted">
+        <details className="group/biz t-desc text-ink-muted">
           <summary className="inline-flex cursor-pointer list-none items-center gap-0.5 text-ink-muted underline decoration-border-default underline-offset-2">
             추가 정보<span aria-hidden className="transition-transform group-open/biz:rotate-180">▾</span>
           </summary>
           <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
             {BIZ_EXTRA.map(([k, v]) => (
               <div key={k} className="flex items-center gap-1">
-                <dt className="text-ink-muted/70">{k}</dt>
+                <dt className="shrink-0 whitespace-nowrap">{k}</dt>
                 <dd className="text-ink-secondary">{v}</dd>
               </div>
             ))}
           </dl>
         </details>
 
-        {/* 사행성 배제 고지 */}
-        <p className="text-2xs leading-relaxed text-ink-muted/80">
+        {/* 사행성 배제 고지 — §7 P0-C: `/80` 반투명이 라이트 3.37:1·다크 3.72:1 로 AA 미달이었다.
+            위 dt 와 같은 이유로 투명도를 걷어내고 불투명 `text-ink-muted` 로 (재측정: 라이트 4.99:1·다크 5.28:1). */}
+        <p className="t-desc text-ink-muted">
           NURI HOLDEM은 「국민체육진흥법」상 마인드 스포츠인 홀덤의 합법적 토너먼트 정보 제공 플랫폼이며, 어떠한 형태의 도박·환전·사행행위와도 무관합니다.
           <br />만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 1336(24시간·무료)
           {/* 약관 개정 사전 고지 — 비로그인 방문자에게도 보여야 '서비스 내 공지'가 성립한다. */}

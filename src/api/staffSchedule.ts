@@ -1,5 +1,6 @@
 // src/api/staffSchedule.ts — 딜러/직원 월별 출근 스케줄
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 import { currentUser } from './_session';
 
 /** 직원 출근 스케줄 변경 실시간 구독(매장별) — 셀프 출퇴근·배정 변경을 자동 반영 */
@@ -60,9 +61,10 @@ export async function setShiftTimes(venueId: string, date: string, name: string,
 /** 해당 기간 스케줄 전체 확정 */
 export async function confirmSchedule(venueId: string, from: string, to: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('staff_schedule').update({ confirmed: true })
-    .eq('venue_id', venueId).gte('work_date', from).lte('work_date', to);
-  if (error) throw error;
+  // 0행을 성공으로 넘기면 호출부가 전 직원에게 '확정' 알림(RPC)까지 보낸다 — DB 는 그대로인데.
+  // (호출부 버튼은 배정 0건이면 비활성이라, 여기서 0행은 RLS 거부다 — setShiftTimes 와 같은 규칙.)
+  await mustAffect(supabase.from('staff_schedule').update({ confirmed: true })
+    .eq('venue_id', venueId).gte('work_date', from).lte('work_date', to));
 }
 
 /** 매장 소속 전 직원에게 알림 발송(업주/POS관리자만) */
@@ -135,9 +137,8 @@ export async function addStaffName(venueId: string, name: string): Promise<void>
 /** 명부에서 이름 빼기 — 등록만 하고 배정한 적 없는 이름(오타 등) 정리용. 인건비 설정도 함께 사라진다. */
 export async function removeStaffName(venueId: string, name: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('staff_wage').delete()
-    .eq('venue_id', venueId).eq('staff_name', name);
-  if (error) throw error;
+  await mustAffect(supabase.from('staff_wage').delete()
+    .eq('venue_id', venueId).eq('staff_name', name));
 }
 
 /**
@@ -160,7 +161,6 @@ export async function addStaffShift(venueId: string, date: string, name: string,
 /** 출근 배정 해제 */
 export async function removeStaffShift(venueId: string, date: string, name: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('staff_schedule').delete()
-    .eq('venue_id', venueId).eq('work_date', date).eq('staff_name', name);
-  if (error) throw error;
+  await mustAffect(supabase.from('staff_schedule').delete()
+    .eq('venue_id', venueId).eq('work_date', date).eq('staff_name', name));
 }
