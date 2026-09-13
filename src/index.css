@@ -1878,7 +1878,8 @@ html[data-vt-scope='crm-range'] [data-crm-panel] { view-transition-name: crm-pan
 html[data-vt-scope='crm-range']::view-transition-old(root),
 html[data-vt-scope='crm-range']::view-transition-new(root) { animation: none; }
 
-/* 새 화면에 지면색 — 두 스냅샷이 반투명으로 겹쳐 글자가 두 벌로 보이던 문제(venue-tab 실측)의 해법. */
+/* 새 화면에 지면색 — 두 스냅샷이 반투명으로 겹쳐 글자가 두 벌로 보이던 문제(venue-tab 실측)의 해법.
+   ⚠ notif-panel 은 여기 없다 — 아래 별도 규칙 참고(이 목록은 전부 전체화면/섹션 패널이라 --surface-base 가 맞다). */
 ::view-transition-new(admin-secpanel),
 ::view-transition-new(adminpos-panel),
 ::view-transition-new(usermgmt-panel),
@@ -1889,9 +1890,17 @@ html[data-vt-scope='crm-range']::view-transition-new(root) { animation: none; }
 ::view-transition-new(group-panel),
 ::view-transition-new(profile-panel),
 ::view-transition-new(sched-panel),
-::view-transition-new(notif-panel),
 ::view-transition-new(legal-panel),
 ::view-transition-new(crm-panel) { background-color: rgb(var(--surface-base)); }
+
+/* notif-panel(알림 패널 쪽지·알림 목록)은 위 목록과 달리 **뜨는 카드**다 — 부모가 bg-surface-mid
+   (NotificationPanel.tsx 컨테이너), 지면(--surface-base) 위가 아니다. 위 공동 규칙에 같이 묶여
+   --surface-base 를 쓰던 것이 원인으로, 다크 테마에서 카드색(#151C30)과 지면색(#06080F) 차이가 커
+   쪽지⇄알림 전환마다 목록 박스가 검게 번쩍였다 잡히는 증상이었다(오너 리포트 2026-09-14).
+   old 쪽도 명시한다 — 위 주석(반투명 겹침 방지)과 같은 이유로, 이 셀렉터가 없으면 old 스냅샷은
+   자기 배경이 없어 `::view-transition` 루트 배경(--surface-base, 다크에서 근흑색)이 그대로 비친다. */
+::view-transition-old(notif-panel),
+::view-transition-new(notif-panel) { background-color: rgb(var(--surface-mid)); }
 
 /* 방향성 푸시 — venue-tab·rank-tab 과 완전히 같은 키프레임·토큰. */
 html[data-vt-dir='forward']::view-transition-old(admin-secpanel),

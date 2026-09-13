@@ -27,6 +27,7 @@ import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { scopedLoad, bumpScope } from '../../lib/scopedLoad';
+import { readRankRowCount, writeRankRowCount } from '../../lib/rankRowCount';
 import type { RequestStamp } from '../../lib/staleResponse';
 import Icon from '../atoms/Icon';
 import CountUp from '../atoms/CountUp';
@@ -121,19 +122,27 @@ function RankNum({ n }: { n: number }) {
 // 실제 목록(수백 px)과 높이가 전혀 달라서, 로딩이 끝나는 순간 아래 콘텐츠가 통째로 밀린다.
 // 그래서 로딩 표시는 **실제 행 높이와 같은** 스켈레톤으로 채운다.
 //   · 행 1개 = px-3 py-2 + 28px 아바타 = 44px(h-11) — 실측으로 맞춘 값.
-//   · 마지막으로 본 행 수를 기억해(localStorage) 다음 진입에는 **정확한** 높이를 예약한다.
+//   · 마지막으로 본 행 수를 기억해(localStorage, lib/rankRowCount) 다음 진입에는 **정확한** 높이를 예약한다.
 //     기기마다 회원 수가 다르지도, 자주 바뀌지도 않아서 두 번째 진입부터는 사실상 오차 0이다.
-//     저장이 막힌 브라우저(프라이빗 등)에서도 기본값 8로 정상 동작한다.
-const ROW_COUNT_KEY = 'nuri:rank-rows';
-let lastActivityRowCount = (() => {
-  try {
-    const v = Number(localStorage.getItem(ROW_COUNT_KEY));
-    return Number.isFinite(v) && v > 0 ? Math.min(30, v) : 8;
-  } catch { return 8; }
-})();
+//     저장이 막힌 브라우저(프라이빗 등)에서도 보드별 기본값으로 정상 동작한다.
+//   · 2026-09-14(랭킹 스크롤 점프 조사): 머니인·국내 순위는 각자 rows={8}/{6} 을 하드코딩했었다 — 대회
+//     입상 0건이 흔해(EmptyState 문구가 그 증거) 실제가 추정치보다 짧으면 응답 도착 시 문서가 줄어드는
+//     방향으로 튀었다. 활동 순위와 같은 조리법으로 보드별 키를 나눠 세 보드 모두에 적용한다
+//     (activity 는 종전 키 'nuri:rank-rows' 그대로 — 이미 값을 가진 브라우저의 캐시를 버리지 않는다).
+let lastActivityRowCount = readRankRowCount('activity');
+let lastMoneyinRowCount = readRankRowCount('moneyin');
+let lastDomesticRowCount = readRankRowCount('domestic');
 function rememberRowCount(n: number) {
   lastActivityRowCount = Math.max(1, Math.min(30, n));
-  try { localStorage.setItem(ROW_COUNT_KEY, String(lastActivityRowCount)); } catch { /* 저장 차단 환경 */ }
+  writeRankRowCount('activity', n);
+}
+function rememberMoneyinRowCount(n: number) {
+  lastMoneyinRowCount = Math.max(1, Math.min(30, n));
+  writeRankRowCount('moneyin', n);
+}
+function rememberDomesticRowCount(n: number) {
+  lastDomesticRowCount = Math.max(1, Math.min(30, n));
+  writeRankRowCount('domestic', n);
 }
 
 function RowSkeleton({ rows }: { rows: number }) {
@@ -201,7 +210,7 @@ function CareerBoard({ myNick, nickStyle, markPrefix }: {
     let alive = true;
     setRows(null); setLoadErr(null);
     getGlobalRankingTotals(period)
-      .then((r) => { if (alive) setRows(r); })
+      .then((r) => { if (alive) { setRows(r); rememberMoneyinRowCount(r.length); } })
       .catch((e) => { if (alive) setLoadErr(e ?? new Error('불러오기 실패')); });
     return () => { alive = false; };
   }, [period, tick]);
@@ -225,7 +234,7 @@ function CareerBoard({ myNick, nickStyle, markPrefix }: {
       {loadErr != null ? (
         <LoadErrorCard error={loadErr} what="대회 입상 경력" onRetry={() => setTick((t) => t + 1)} />
       ) : rows === null ? (
-        <RowSkeleton rows={8} />
+        <RowSkeleton rows={lastMoneyinRowCount} />
       ) : rows.length === 0 ? (
         <EmptyState
           title={period === 'all' ? '아직 집계된 대회 입상이 없어요' : '이 기간의 대회 입상이 없어요'}
@@ -602,7 +611,9 @@ export default function TierLeaderboard() {
     //   getMonthlyHall 이 던지게 된 것과 **같은 커밋**에서 폴백을 걷었다(둘 중 하나만 하면 빈 라벨이 더 자주 난다).
     if (board === 'hall' && hall === null && boardErr.hall == null) scopedLoad(scopeRef, getHallOfFame(), setHall, fail('hall'));
     if (board === 'domestic' && domestic === null && domesticErr == null) {
-      scopedLoad(scopeRef, getDomesticRankings(30), setDomestic, (e) => setDomesticErr(e ?? new Error('불러오기 실패')));
+      scopedLoad(scopeRef, getDomesticRankings(30),
+        (d) => { setDomestic(d); rememberDomesticRowCount(d.length); },
+        (e) => setDomesticErr(e ?? new Error('불러오기 실패')));
     }
     if (board === 'verify' && myVerifs === null && boardErr.verifs == null && user) scopedLoad(scopeRef, myRankVerifications(), setMyVerifs, fail('verifs'));
     if (board === 'shop' && equippedMark === undefined && boardErr.equip == null && user) {
@@ -898,7 +909,7 @@ export default function TierLeaderboard() {
           )
         ) : board === 'domestic' ? (
           domesticErr != null ? <LoadErrorCard error={domesticErr} what="국내 순위" onRetry={() => setDomesticErr(null)} />
-          : domestic === null ? <RowSkeleton rows={6} />
+          : domestic === null ? <RowSkeleton rows={lastDomesticRowCount} />
           : domestic.length === 0 ? (
             <EmptyState
               title="아직 인증된 입상이 없어요"

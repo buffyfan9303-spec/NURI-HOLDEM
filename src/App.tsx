@@ -79,9 +79,6 @@ import type { ClockState } from './api/clock';
 //   ① 부팅 첫 배치 ② 복귀 재조회(useVisibilityRefresh) 둘뿐이었다. 지금은 ③ 라이브 탭 진입이 더해졌다.
 //   어느 쪽이든 **정적 import 는 아니다**: 여기 있어야 할 이유가 없는 것은 ledger 청크 쪽이다.
 const clockMod = () => import('./api/clock');
-/** '보여 줄 글이 없다' 를 넘길 때 쓰는 **고정 참조** — `[]` 리터럴을 인라인으로 쓰면 매 렌더 새 배열이라
- *  홈의 useMemo 가 매번 다시 돈다(§5-B ③ 이 잡은 것과 같은 부류). */
-const EMPTY_POSTS: CommunityPost[] = [];
 import { buildRegInfoMap } from './lib/regStatus';
 import { myVisitedVenues } from './api/vouchers';
 import { haversineKm } from './lib/geo';
@@ -3265,11 +3262,6 @@ export default function App() {
                계산도 대기도 아닌 순수 스로틀이었다). 트랜지션이면 폴백 자체를 건너뛴다. */
             /* 인자 없이 부른다 — onClick 이 넘기는 MouseEvent 가 slug 자리에 들어가지 않게 */
             onEvent={() => openEvent()}
-            /* 커뮤니티 **실제 글**(§6-1). 조회 실패(postsErr)면 빈 배열을 넘겨 홈이 섹션을 통째로 생략한다 —
-               홈에 '글이 없어요' 라고 적으면 그것도 §11 의 같은 거짓말이고, 커뮤니티 탭이 이미 제대로 말한다. */
-            posts={postsErr ? EMPTY_POSTS : posts}
-            onPost={handleMeOpenPost}
-            onCommunity={() => changeTab('community')}
           />
         </main>
       )}

@@ -32,7 +32,6 @@ import type { HomeBanner } from '../../api/homeBanners';
 import ScheduleCard, { buyInText } from './ScheduleCard';
 import { thumbUrl } from '../../lib/imageUrl';
 import type { Schedule } from '../../api/schedules';
-import type { CommunityPost } from '../../api/community';   // 타입만 — 런타임 0
 import type { RegInfo } from '../../lib/regStatus';
 import { compareByStartThenBoost } from '../../lib/scheduleSort';
 import { scheduleStatus } from '../../lib/scheduleStatus';
@@ -161,13 +160,7 @@ const dayLabel = (date: string) => {
 export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
   onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [],
-  posts = [], onPost, onCommunity,
 }: {
-  /** 커뮤니티 **실제 글**(§6-1 마지막 줄). 비어 있거나 조회 실패면 **섹션 자체를 그리지 않는다** —
-   *  홈에 가짜 글줄을 채우느니 아무 말도 하지 않는 편이 낫다(없는 것을 있는 것처럼 만들지 않는다). */
-  posts?: CommunityPost[];
-  onPost?: (p: CommunityPost) => void;
-  onCommunity?: () => void;
   schedules: Schedule[];
   loaded: boolean;
   /** 일정 조회가 **실패**했는가(§11). 스켈레톤(로딩) · 0건(진짜 빈 상태) · 실패는 서로 다른 사건이다 —
@@ -234,10 +227,6 @@ export default function HomeTab({
       .filter((s) => !s.posterUrl || (!seenPoster.has(s.posterUrl) && (seenPoster.add(s.posterUrl), true)))
       .slice(0, RAIL_MAX);
   }, [schedules, today]);
-
-  // 커뮤니티 최신 글 3개 — 가려진 글(신고 누적 자동 숨김)은 홈에 올리지 않는다.
-  // 정렬은 App 이 준 순서 그대로다(목록 화면과 같은 것을 본다 — 홈이 자기 순위를 발명하지 않는다).
-  const hotPosts = useMemo(() => posts.filter((p) => !p.blinded).slice(0, 3), [posts]);
 
   // 캐시 퍼스트(Phase 6 · e2e cache-first 회귀 2026-09-13): 이벤트 슬라이드만 스냅샷이 없어 재방문에도 '불러오는 중…'(aria-busy)으로
   //   시작했다. 다른 6개 키(schedules·venues·…)와 같이 마지막 보드를 스냅샷으로 두고 재검증한다.
@@ -579,38 +568,6 @@ export default function HomeTab({
             <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
           </button>
         </div>
-
-        {/* ── 커뮤니티 최신 글 ───────────────────────────────────────────────
-            §6-1 마지막 줄: 홈의 커뮤니티는 **실제 글**이어야 한다. 가짜 문구·플레이스홀더는 없다.
-            ⚠ **맨 아래**에 둔다. 게시글은 부팅 첫 배치가 아니라 유휴(loadDeferred)에 도착하므로,
-              위쪽에 끼우면 도착하는 순간 그 아래(GTO 도구 줄)가 통째로 밀린다 — 맨 아래면 밀 것이 없다.
-            ⚠ 자리 예약(스켈레톤)을 하지 않는 이유도 같다: '글이 있을 것'이라고 가정하지 않는다.
-              비로그인·조회 실패·글 0건이면 섹션이 통째로 없다(없는 것을 있는 것처럼 만들지 않는다). */}
-        {hotPosts.length > 0 && (
-          <section className="px-page-x pt-5" data-testid="home-community">
-            <header className="flex items-baseline justify-between pb-2.5">
-              <h3 className={H3_CLS}>커뮤니티</h3>
-              <button type="button" onClick={onCommunity} className={MORE_CLS}>
-                전체 글 <Icon name="chevron-right" size={13} />
-              </button>
-            </header>
-            <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
-              {hotPosts.map((p) => (
-                <button key={p.id} type="button" onClick={() => onPost?.(p)}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-high/50 active:bg-surface-high">
-                  <span className="min-w-0 flex-1">
-                    {/* 제목이 없는 글(구버전·짧은 글)은 본문 첫 줄이 곧 제목이다 — 빈 줄을 그리지 않는다. */}
-                    <span className="block truncate t-title text-ink-primary">{p.title?.trim() || p.content}</span>
-                    <span className="block truncate t-desc tabular-nums text-ink-muted">
-                      {p.userName} · 댓글 {p.commentCount}
-                    </span>
-                  </span>
-                  <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
       </div>
     </div>
   );
