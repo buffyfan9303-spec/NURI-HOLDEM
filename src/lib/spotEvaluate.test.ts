@@ -317,7 +317,8 @@ describe('9인 모든 자리가 표에 걸린다 — 한 자리만 죽는 것을
   it('모든 스팟 자리가 차트 축에 실재하는 이름으로 옮겨진다', () => {
     const heroes = new Set(RANGE_SCENARIOS.map((s) => s.hero));
     for (const p of NINE) {
-      expect(heroes.has(toTablePos(p)), `${p} → ${toTablePos(p)} 가 어느 표에도 없다`).toBe(true);
+      const t = toTablePos(p);
+      expect(t !== null && heroes.has(t), `${p} → ${t} 가 어느 표에도 없다`).toBe(true);
     }
   });
 
@@ -544,5 +545,88 @@ describe('표가 상정한 인원을 표 자신에게 묻는다', () => {
     })));
     expect(c.kind).toBe('normalized_reference');
     expect(c.differences.join(' ')).toMatch(/6인 기준인데 입력은 9인/);
+  });
+});
+
+// ── 10인 테이블 (2026-09-14 오너 요청) ────────────────────────────────────────
+//
+// 10인 표는 저장소에 없다. 그래서 10인은 (1) 9인 표를 **차이를 적고** 참조하거나 (2) 자리가 표에 없으면
+// Nash/math_only 로 정직하게 떨어진다. UTG2 를 이웃 표(UTG+1)로 접지 않는 것이 이 블록이 잠그는 것이다.
+describe('10인 테이블 — 없는 표를 있는 것처럼 보여 주지 않는다', () => {
+  const open = { effectiveBb: 100, villainPos: 'BB' as const };
+
+  it('UTG2 는 차트 축에 대응이 없다', () => {
+    expect(toTablePos('UTG2')).toBeNull();
+    expect(toTablePos('UTG1')).toBe('UTG+1');
+    expect(findDefendChart(RANGE_SCENARIOS, 'UTG2')).toBeNull();
+  });
+
+  it('10인 UTG2 첫 진입(100BB)은 표가 없어 math_only — 이웃 표로 때우지 않는다', () => {
+    const e = evaluateSpot(base({ tableSize: 10, heroPos: 'UTG2', ...open }));
+    expect(e.kind).toBe('math_only');
+  });
+
+  it('10인 UTG·UTG1 은 9인 표를 참조하되 뒤 인원이 1명 많다는 차이를 적고, 개선 필요로 단정하지 않는다', () => {
+    for (const p of ['UTG', 'UTG1'] as const) {
+      const c = chart(evaluateSpot(base({
+        tableSize: 10, heroPos: p, ...open, hero: ['7d', '2c'], heroAction: 'raise', heroActionSizeBb: 2.5,
+      })));
+      expect(c.kind).toBe('normalized_reference');
+      expect(c.differences.join(' ')).toMatch(/9인 기준인데 입력은 10인/);
+      expect(c.differences.join(' ')).toMatch(/뒤 인원이 1명 더 많/);
+      expect(c.verdict, `${p} 72o 오픈이 유사 스팟인데 '개선 필요' 로 단정됐다`).not.toBe('improve');
+    }
+  });
+
+  it('10인 MP 이하는 9인 표와 뒤 인원이 같다 — 인원 차이만 적고 뒤 인원 문구는 없다', () => {
+    for (const p of ['MP', 'LJ', 'HJ', 'CO', 'BTN', 'SB'] as const) {
+      const c = chart(evaluateSpot(base({ tableSize: 10, heroPos: p, ...open })));
+      expect(c.kind).toBe('normalized_reference');
+      expect(c.differences.join(' ')).toMatch(/9인 기준인데 입력은 10인/);
+      expect(c.differences.join(' '), `${p} 에 없는 뒤 인원 차이가 붙었다`).not.toMatch(/뒤 인원/);
+    }
+  });
+
+  it('BB 수비 vs 10인 UTG 도 상대 자리의 뒤 인원 차이를 적는다', () => {
+    const c = chart(evaluateSpot(base({
+      tableSize: 10, heroPos: 'BB', villainPos: 'UTG', effectiveBb: 100,
+      actions: [{ street: 'preflop', actor: 'villain', type: 'raise', sizeBb: 2.5 }],
+    })));
+    expect(c.kind).toBe('normalized_reference');
+    expect(c.differences.join(' ')).toMatch(/상대 자리 UTG .*1명 더 많/);
+  });
+
+  it('숏스택 10인: UTG 는 뒤 9명이라 Nash 범위 밖(math_only), UTG2 는 뒤 7명 표에 정확히 걸린다', () => {
+    expect(evaluateSpot(base({ tableSize: 10, heroPos: 'UTG', villainPos: 'BB', effectiveBb: 10 })).kind).toBe('math_only');
+    const c = chart(evaluateSpot(base({ tableSize: 10, heroPos: 'UTG2', villainPos: 'BB', effectiveBb: 10 })));
+    expect(c.kind).toBe('chart_nash');
+    expect(c.sourceLabel).toMatch(/뒤 7명/);
+  });
+
+  it('9인 이하 결과는 10인 추가 전과 같다 — 9인 8자리 오픈이 전부 정확 일치', () => {
+    for (const p of positionsFor(9).filter((x) => x !== 'BB')) {
+      expect(evaluateSpot(base({ tableSize: 9, heroPos: p, ...open })).kind, `9인 ${p}`).toBe('chart_nash');
+    }
+    expect(evaluateSpot(base({ tableSize: 6, heroPos: 'BTN', ...open })).kind).toBe('chart_nash');
+  });
+});
+
+// ── 앤티 = BB앤티 총액 (2026-09-14 오너 확정) ─────────────────────────────────
+describe('앤티는 BB 한 명이 내는 총액이다', () => {
+  it('10인·앤티 1BB 의 프리플랍 팟은 2.5BB — 인원을 곱하면 11.5 가 된다', () => {
+    const e = evaluateSpot(base({ tableSize: 10, heroPos: 'CO', villainPos: 'BB', effectiveBb: 20, anteBb: 1 }));
+    expect(e.math.potBb).toBe(2.5);
+  });
+
+  it('BB앤티 1BB 는 Nash 앤티 표에 정확히 걸린다', () => {
+    const c = chart(evaluateSpot(base({ tableSize: 9, heroPos: 'CO', villainPos: 'BB', effectiveBb: 20, anteBb: 1 })));
+    expect(c.kind).toBe('chart_nash');
+    expect(c.sourceLabel).toMatch(/BB앤티/);
+  });
+
+  it('BB앤티 0.5BB 는 1BB 표를 참조하되 그 차이를 반드시 적는다 — 없는 0.5BB 표를 있는 척하지 않는다', () => {
+    const c = chart(evaluateSpot(base({ tableSize: 9, heroPos: 'CO', villainPos: 'BB', effectiveBb: 20, anteBb: 0.5 })));
+    expect(c.kind).toBe('normalized_reference');
+    expect(c.differences.join(' ')).toMatch(/BB앤티 1BB 기준인데 입력 앤티는 0\.5BB/);
   });
 });

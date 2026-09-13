@@ -26,7 +26,7 @@ import { cardId } from './useDeepGto';
 import type { Card } from './gto.types';
 import {
   emptySpot, validateSpot, hasBlocker, positionsFor, streetLabel, actionLabel,
-  potBb, BOARD_LEN, ACTION_TYPES,
+  potBb, BOARD_LEN, ACTION_TYPES, fromJSON,
   type SpotReview, type SpotAction, type SpotActionType, type SpotPosition, type Street,
 } from '../../../lib/spot';
 import { evaluateSpot, type SpotEvaluation } from '../../../lib/spotEvaluate';
@@ -65,7 +65,8 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
 
   // 스팟 상태 — 마지막 입력을 24h 복원(기존 도구와 같은 조리법).
   const [spot, setSpot] = useState<SpotReview>(() => {
-    const saved = readSnap<SpotReview>(SNAP_KEY);
+    // fromJSON 을 거쳐야 옛 스키마 초안(v1 · 1인당 앤티)이 지금 의미로 올라온다.
+    const saved = fromJSON(readSnap<unknown>(SNAP_KEY));
     return { ...emptySpot(), ...(saved ?? {}), ...(init?.spot ?? {}) };
   });
   const patch = useCallback((p: Partial<SpotReview>) => setSpot((s) => ({ ...s, ...p })), []);
@@ -149,7 +150,7 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
           setSpot(s);
           hb.setAll({ hero: s.hero, villain: s.villain, board: s.board });
           setTab('analyze');
-        }} />
+        }} onNew={() => setTab('analyze')} />
       )}
     </div>
   );
@@ -317,9 +318,10 @@ function StepBar({ step, onStep, spot }: { step: StepKey; onStep: (s: StepKey) =
   );
 }
 
+/** 라벨 위 · 칩 전폭(2026-09-14 design 실측: 라벨과 나란히 두면 360px 에서 '유효 스택 100BB'·'이번에 추가 4' 가 혼자 다음 줄로 떨어졌다). */
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5">
+    <div className="flex flex-col items-stretch gap-1.5 py-1.5">
       <span className="shrink-0 text-xs font-medium text-ink-secondary">{label}</span>
       <div className="flex min-w-0 items-center gap-1.5">{children}</div>
     </div>
@@ -329,11 +331,20 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function Pick<T extends string | number>({ value, options, onChange, fmt }: {
   value: T; options: readonly T[]; onChange: (v: T) => void; fmt?: (v: T) => string;
 }) {
+  // 현재 값이 선택지에 없으면(옛 초안의 앤티 등) 마지막 칩으로 보여 준다 — 값을 접거나 버리지 않는다.
+  // '' 는 '아직 미선택'(heroAction null) 이라 칩을 만들지 않는다.
+  const shown = options.includes(value) || value === '' ? options : [...options, value];
+  // 줄바꿈 허용(flex-wrap). Row 가 라벨을 위로 올려 전폭을 쓰므로 360px 에서 유효 스택·이번에 추가는 1줄이고,
+  // 자리 칩 10개(10인)만 2줄이 된다 — 균형 잡힌 줄바꿈이라 받아들인다. 한 줄 가로 스크롤은 시도했다가 철회했다:
+  // e2e 접근성 게이트(가로 잘림 0·가로 스크롤 0)가 clientWidth < scrollWidth 를 잘림으로 보고 200% 확대에선 통과 불가.
+  // 같은 이유로 whitespace-nowrap 도 두지 않는다(칩 안에서 글자가 접혀야 320px·200% 를 지난다).
+  // ⚠ gap-y-3: 두 줄이 될 때 `.tap-y-44` 의 위아래 6px 확장이 겹치지 않게(gap-1 이면 실효 터치가 줄어든다).
   return (
-    <div className="flex flex-wrap justify-end gap-1">
-      {options.map((o) => (
+    <div className="flex min-w-0 flex-1 flex-wrap gap-x-1 gap-y-3">
+      {shown.map((o) => (
         <button key={String(o)} type="button" aria-pressed={o === value} onClick={() => onChange(o)}
-          className={['min-h-[32px] rounded-input border px-2 text-2xs font-bold transition-colors',
+          // min-h 36 + tap-y-44 의 위아래 6px = 48px 터치(전엔 32px 로 44px 계약 미달)
+          className={['tap-y-44 min-h-[36px] rounded-input border px-2 text-2xs font-bold transition-colors',
             o === value ? 'border-accent-300 bg-accent-300 text-white'
               : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
           {fmt ? fmt(o) : String(o)}
@@ -351,7 +362,7 @@ function GameStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
           onChange={(v) => patch({ format: v })} fmt={(v) => (v === 'mtt' ? '토너먼트' : '캐시')} />
       </Row>
       <Row label="테이블 인원">
-        <Pick value={spot.tableSize} options={[2, 6, 8, 9]}
+        <Pick value={spot.tableSize} options={[2, 6, 8, 9, 10]}
           onChange={(v) => {
             const seats = positionsFor(v);
             patch({
@@ -362,8 +373,9 @@ function GameStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
           }}
           fmt={(v) => `${v}인`} />
       </Row>
-      <Row label="앤티">
-        <Pick value={spot.anteBb} options={[0, 0.125, 0.25]}
+      <Row label="BB 앤티">
+        {/* BB 한 명이 대표로 내는 총액(2026-09-14 오너 확정). 옛 초안의 0.125/0.25 는 칩이 안 눌린 채 값만 남는다. */}
+        <Pick value={spot.anteBb} options={[0, 0.5, 1]}
           onChange={(v) => patch({ anteBb: v })} fmt={(v) => (v === 0 ? '없음' : `${v}BB`)} />
       </Row>
     </div>

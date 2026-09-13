@@ -26,14 +26,21 @@ export const STREETS: readonly Street[] = ['preflop', 'flop', 'turn', 'river'];
 /** 스트리트별 보드 장수 — 검증의 단일 소스 */
 export const BOARD_LEN: Record<Street, number> = { preflop: 0, flop: 3, turn: 4, river: 5 };
 
-/** 9인 기준 포지션 이름. 테이블 인원이 적으면 앞자리부터 빠진다(POSITIONS_FOR). */
-export type SpotPosition = 'UTG' | 'UTG1' | 'MP' | 'LJ' | 'HJ' | 'CO' | 'BTN' | 'SB' | 'BB';
-const POSITION_ORDER: readonly SpotPosition[] = ['UTG', 'UTG1', 'MP', 'LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
+/** 포지션 이름. 9인까지는 뒤(BTN·블라인드)를 남기고 앞자리부터 빠진다(positionsFor). 10인은 UTG+2 가 낀다. */
+export type SpotPosition = 'UTG' | 'UTG1' | 'UTG2' | 'MP' | 'LJ' | 'HJ' | 'CO' | 'BTN' | 'SB' | 'BB';
+const POSITION_ORDER: readonly SpotPosition[] = ['UTG', 'UTG1', 'UTG2', 'MP', 'LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
+const MAX_TABLE = 10;
 
-/** 테이블 인원 → 실제로 존재하는 포지션. 9인 순서에서 **뒤(BTN·블라인드)를 남기고 앞을 자른다**. */
+/**
+ * 테이블 인원 → 실제로 존재하는 포지션.
+ * 9인 이하는 9인 순서(UTG…BB)에서 **뒤를 남기고 앞을 자른다** — 그래서 이름이 같은 자리는 인원과 무관하게
+ * 뒤에 남은 사람 수가 같고, 차트 매칭이 그 성질에 기댄다. 10인은 UTG1 과 MP 사이에 'UTG2' 가 **끼어든다**
+ * (관례: UTG·UTG+1·UTG+2·MP…). 배열 끝에 붙이면 UTG2 가 BB 뒤로 가고, 9인 순서에 끼워 두면 꼬리 슬라이스가
+ * 9인 이하를 전부 어긋나게 하므로 10인일 때만 포함한다.
+ */
 export function positionsFor(tableSize: number): SpotPosition[] {
-  const n = Math.max(2, Math.min(9, Math.round(tableSize)));
-  return POSITION_ORDER.slice(POSITION_ORDER.length - n);
+  const n = Math.max(2, Math.min(MAX_TABLE, Math.round(tableSize)));
+  return POSITION_ORDER.filter((p) => n === MAX_TABLE || p !== 'UTG2').slice(-n);
 }
 
 export type SpotActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise';
@@ -60,14 +67,21 @@ export interface SpotResult {
 
 /** 구조화된 한 판. 저장·공유·분석의 단일 소스. */
 export interface SpotReview {
-  /** 스키마 버전 — 늘어나면 마이그레이션 지점이 여기 하나다. */
-  v: 1;
+  /**
+   * 스키마 버전 — 늘어나면 마이그레이션 지점은 fromJSON 하나다.
+   *  v1 (2026-09-11) anteBb = 1인당 앤티, potBb 가 인원을 곱했다
+   *  v2 (2026-09-14) anteBb = BB앤티 총액. v1 값은 fromJSON 이 `× tableSize` 로 올린다(팟 동일)
+   */
+  v: 2;
   game: 'nlhe';
   format: 'mtt' | 'cash';
-  tableSize: number;        // 2~9
+  tableSize: number;        // 2~10
   /** 스몰블라인드(BB 단위). 보통 0.5 */
   sbBb: number;
-  /** 앤티(BB 단위, 1인당). 없으면 0 */
+  /**
+   * BB 앤티(BB 단위) — **한 명(BB)이 대표로 내는 총액**이지 1인당 금액이 아니다. 없으면 0.
+   * ⚠ 2026-09-14 오너 확정으로 의미가 바뀌었다(v1 은 '1인당'). 옛 값은 fromJSON 의 v1→v2 변환이 받는다.
+   */
   anteBb: number;
   /** 유효 스택(BB) — 둘 중 짧은 쪽 */
   effectiveBb: number;
@@ -140,8 +154,8 @@ export function validateSpot(s: SpotReview): SpotIssue[] {
   const out: SpotIssue[] = [];
 
   // 테이블·블라인드·스택
-  if (!finite(s.tableSize) || s.tableSize < 2 || s.tableSize > 9) {
-    out.push({ field: 'table', level: 'blocker', message: '테이블 인원은 2~9명으로 입력해 주세요.' });
+  if (!finite(s.tableSize) || s.tableSize < 2 || s.tableSize > MAX_TABLE) {
+    out.push({ field: 'table', level: 'blocker', message: `테이블 인원은 2~${MAX_TABLE}명으로 입력해 주세요.` });
   }
   if (!finite(s.sbBb) || s.sbBb <= 0) {
     out.push({ field: 'stack', level: 'blocker', message: '스몰블라인드는 0보다 커야 합니다.' });
@@ -276,7 +290,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  */
 export function potBb(s: SpotReview): number {
   const blinds = (finite(s.sbBb) ? s.sbBb : 0) + 1;                    // SB + BB(=1)
-  const antes = (finite(s.anteBb) ? s.anteBb : 0) * Math.max(0, s.tableSize);
+  const antes = finite(s.anteBb) ? s.anteBb : 0;                       // BB 앤티 총액 — 인원을 곱하지 않는다
   const bets = s.actions.reduce((sum, a) => sum + (SIZED.has(a.type) && finite(a.sizeBb) ? (a.sizeBb as number) : 0), 0);
   return round2(blinds + antes + bets);
 }
@@ -364,12 +378,18 @@ export function fromJSON(raw: unknown): SpotReview | null {
   const heroAction = (ACTION_TYPES as readonly string[]).includes(String(o.heroAction))
     ? (o.heroAction as SpotActionType) : null;
 
+  // v1 → v2: anteBb 가 '1인당' 에서 'BB앤티 총액' 이 됐다. 옛 값 × 인원 = 옛 팟 그대로 —
+  // 항등 변환이지 지어낸 값이 아니다(0.125×8 = 1). v 가 없으면 v1 로 본다.
+  const v = finite(o.v) ? (o.v as number) : 1;
+  const tableSize = num('tableSize', 6);
+  const anteBb = v < 2 ? round2(num('anteBb', 0) * Math.max(0, tableSize)) : num('anteBb', 0);
+
   const s: SpotReview = {
-    v: 1, game: 'nlhe',
+    v: 2, game: 'nlhe',
     format: o.format === 'cash' ? 'cash' : 'mtt',
-    tableSize: num('tableSize', 6),
+    tableSize,
     sbBb: num('sbBb', 0.5),
-    anteBb: num('anteBb', 0),
+    anteBb,
     effectiveBb: num('effectiveBb', 100),
     heroPos: (POSITION_ORDER as readonly string[]).includes(str('heroPos', '')) ? (o.heroPos as SpotPosition) : 'BTN',
     villainPos: (POSITION_ORDER as readonly string[]).includes(str('villainPos', '')) ? (o.villainPos as SpotPosition) : 'BB',
@@ -405,7 +425,7 @@ export function fromJSON(raw: unknown): SpotReview | null {
 /** 빈 스팟 — 입력 화면의 시작점. 6맥스 100bb BTN vs BB 가 가장 흔한 학습 스팟이다. */
 export function emptySpot(): SpotReview {
   return {
-    v: 1, game: 'nlhe', format: 'mtt', tableSize: 6,
+    v: 2, game: 'nlhe', format: 'mtt', tableSize: 6,
     sbBb: 0.5, anteBb: 0, effectiveBb: 100,
     heroPos: 'BTN', villainPos: 'BB',
     hero: [], villain: [], board: [],

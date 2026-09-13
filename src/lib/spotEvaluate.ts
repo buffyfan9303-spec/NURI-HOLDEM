@@ -196,8 +196,36 @@ export interface DrillLink {
  * 'UTG1' 쪽을 바꾸지 않는 이유: 이미 저장된 스팟(post_spots.spot jsonb · spot_reviews)과
  * 스냅샷에 그 문자열이 들어 있다. 표기를 바꾸면 옛 글이 조용히 자리 없는 스팟이 된다.
  * 그래서 **경계에서 옮긴다** — 이 함수가 두 축이 만나는 유일한 지점이다.
+ *
+ * 10인의 'UTG2' 는 차트 축에 **없다**(ranges.data 에 10인 표가 없다) → null.
+ * 이웃 자리(UTG+1)로 접지 않는다 — 없는 표를 있는 것처럼 보여 주는 것이 되기 때문이다.
+ * null 이면 호출부가 차트 조회를 건너뛰고 Nash 또는 math_only 로 간다.
  */
-export const toTablePos = (p: SpotPosition): TablePos => (p === 'UTG1' ? 'UTG+1' : p);
+export const toTablePos = (p: SpotPosition): TablePos | null =>
+  p === 'UTG1' ? 'UTG+1' : p === 'UTG2' ? null : p;
+
+/** 그 인원 테이블에서 이 자리 뒤에 남은 사람 수. 자리가 없으면 null. */
+function behindOf(tableSize: number, pos: SpotPosition): number | null {
+  const seats = positionsFor(tableSize);
+  const at = seats.indexOf(pos);
+  return at < 0 ? null : seats.length - 1 - at;
+}
+
+/**
+ * 표가 상정한 인원과 입력 인원이 다를 때 적는 차이.
+ * 9인 이하는 이름이 같으면 뒤 인원이 같지만(positionsFor 가 앞을 자른다), 10인은 UTG2 가 끼어
+ * **UTG·UTG+1 의 뒤 인원이 9인 표보다 1명 많다** — 그 표를 참조는 하되 그 사실도 같이 적는다.
+ */
+function tableSizeDiff(s: SpotReview, want: number, pos: SpotPosition, who: string): string[] {
+  if (s.tableSize === want) return [];
+  const out = [`이 표는 ${want}인 기준인데 입력은 ${s.tableSize}인입니다.`];
+  const have = behindOf(s.tableSize, pos);
+  const chart = behindOf(want, pos);
+  if (have !== null && chart !== null && have !== chart) {
+    out.push(`${who} ${pos} 는 ${want}인 표보다 뒤 인원이 ${Math.abs(have - chart)}명 더 ${have > chart ? '많' : '적'}습니다.`);
+  }
+  return out;
+}
 
 /**
  * BB 수비 표 조회 — **배열 순서에 기대지 않는다.**
@@ -212,10 +240,11 @@ export const toTablePos = (p: SpotPosition): TablePos => (p === 'UTG1' ? 'UTG+1'
 export const findDefendChart = (
   list: readonly RangeScenario[],
   villainPos: SpotPosition,
-): RangeScenario | null =>
-  list.find(
-    (x) => x.group === 'defend' && x.hero === 'BB' && x.vs === toTablePos(villainPos),
-  ) ?? null;
+): RangeScenario | null => {
+  const vs = toTablePos(villainPos);
+  if (!vs) return null;
+  return list.find((x) => x.group === 'defend' && x.hero === 'BB' && x.vs === vs) ?? null;
+};
 
 /**
  * 프리플랍 차트 조회. 정확히 걸리면 differences 가 빈 배열,
@@ -235,11 +264,11 @@ function lookupPreflopChart(s: SpotReview, combo: string): ChartHit | null {
   // ① 첫 진입 오픈(RFI) — 앞에 아무 액션이 없다
   if (isFirstIn(s)) {
     const group = s.tableSize >= 8 ? 'rfi9' : 'rfi6';
-    const sc = RANGE_SCENARIOS.find((x) => x.group === group && x.hero === toTablePos(s.heroPos));
+    const hero = toTablePos(s.heroPos);
+    const sc = hero ? RANGE_SCENARIOS.find((x) => x.group === group && x.hero === hero) : undefined;
     if (!sc) return null;
-    const diffs = [...stackDiff];
     const want = group === 'rfi9' ? 9 : 6;
-    if (s.tableSize !== want) diffs.push(`이 표는 ${want}인 기준인데 입력은 ${s.tableSize}인입니다.`);
+    const diffs = [...stackDiff, ...tableSizeDiff(s, want, s.heroPos, '내 자리')];
     const raise = freqOf(sc.id, 'raise', combo);
     return {
       sourceLabel: `프리플랍 레인지 차트 · ${sc.label} 오픈`,
@@ -257,11 +286,10 @@ function lookupPreflopChart(s: SpotReview, combo: string): ChartHit | null {
     // hero 도 같이 건다 — 같은 vs 로 BB 표와 SB 표가 나란히 있어 순서에 기대면 조용히 틀린다.
     const sc = findDefendChart(RANGE_SCENARIOS, s.villainPos);
     if (!sc) return null;
-    const diffs = [...stackDiff];
     // 표마다 상정 인원이 다르다 — 얼리(UTG·UTG+1·MP) 오픈 수비 표는 9인용이다.
     // 6인으로 단정하면 9인 입력에 **없는 차이를 적어** 정확 일치를 유사 스팟으로 끌어내린다.
     const want = sc.baseTableSize ?? 6;
-    if (s.tableSize !== want) diffs.push(`이 표는 ${want}인 기준인데 입력은 ${s.tableSize}인입니다.`);
+    const diffs = [...stackDiff, ...tableSizeDiff(s, want, s.villainPos, '상대 자리')];
     const raise = freqOf(sc.id, 'raise', combo);   // 3벳
     const call = freqOf(sc.id, 'call', combo);
     return {
@@ -301,6 +329,10 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
 
   const diffs: string[] = [];
   if (exact === undefined) diffs.push(`이 표는 ${stack}BB 기준인데 입력은 ${s.effectiveBb}BB 입니다.`);
+  // nash.data 의 앤티 표는 **BB앤티 1BB** 한 벌뿐이다. 0.5BB 처럼 다른 총액이면 그 표를 참조하되 차이로 남긴다.
+  if (s.anteBb > 0 && Math.abs(s.anteBb - 1) > 0.01) {
+    diffs.push(`이 표는 BB앤티 1BB 기준인데 입력 앤티는 ${s.anteBb}BB 입니다.`);
+  }
   return {
     sourceLabel: `푸시·폴드 차트 · ${stack}BB · 뒤 ${k}명${s.anteBb > 0 ? ' · BB앤티' : ''}`,
     // 올인은 레이즈 갈래로 표시한다 — 이 차트에 콜 갈래는 없다(첫 진입 셔브/폴드 두 갈래)

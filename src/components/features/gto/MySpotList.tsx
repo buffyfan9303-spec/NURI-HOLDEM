@@ -11,7 +11,7 @@ import { spotSummary, streetLabel, actionLabel, type SpotReview } from '../../..
 import { COVERAGE_LABEL } from '../../../lib/spotEvaluate';
 import { listMySpots, deleteMySpot, type SavedSpot } from '../../../api/spots';
 
-export default function MySpotList({ onOpen }: { onOpen: (s: SpotReview) => void }) {
+export default function MySpotList({ onOpen, onNew }: { onOpen: (s: SpotReview) => void; onNew: () => void }) {
   const { user } = useAuth();
   const toast = useToast();
   const [rows, setRows] = useState<SavedSpot[] | null>(null);
@@ -59,9 +59,14 @@ export default function MySpotList({ onOpen }: { onOpen: (s: SpotReview) => void
     );
   }
   if (rows.length === 0) {
+    // design 실측(2026-09-14): 빈 카드 147px 아래 빈 여백이 화면의 51% 였고 다음 행동이 없었다.
+    // 여백을 위아래로 나누고, 다음 행동(새 스팟 만들기)을 버튼으로 준다.
     return (
-      <Empty icon="bookmark" title="아직 저장한 스팟이 없어요"
-        desc="분석 탭에서 한 판을 입력하고 '내 스팟에 저장'을 누르면 여기에 쌓입니다." />
+      <div className="flex min-h-[50dvh] flex-col justify-center">
+        <Empty icon="bookmark" title="아직 저장한 스팟이 없어요"
+          desc="분석 탭에서 한 판을 입력하고 '내 스팟에 저장'을 누르면 여기에 쌓입니다."
+          action={<button type="button" onClick={onNew} className="btn-primary min-h-[44px] px-4 text-xs">분석 탭에서 새 스팟 만들기</button>} />
+      </div>
     );
   }
 

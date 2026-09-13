@@ -45,6 +45,15 @@ describe('테이블 인원 → 포지션', () => {
     expect(positionsFor(6)).toEqual(['LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB']);
     expect(positionsFor(2)).toEqual(['SB', 'BB']);
   });
+
+  it('10인은 UTG+1 과 MP 사이에 UTG2 가 끼고, 9인 이하에는 UTG2 가 절대 없다', () => {
+    expect(positionsFor(10)).toEqual(['UTG', 'UTG1', 'UTG2', 'MP', 'LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB']);
+    for (let n = 2; n <= 9; n++) {
+      expect(positionsFor(n), `${n}인에 UTG2 가 들어갔다`).not.toContain('UTG2');
+      expect(positionsFor(n).length).toBe(n);
+    }
+    expect(positionsFor(11)).toEqual(positionsFor(10));   // 상한 10
+  });
 });
 
 describe('검증 — 분석 불가 입력', () => {
@@ -100,6 +109,12 @@ describe('검증 — 분석 불가 입력', () => {
     expect(hasBlocker(validateSpot(base({ tableSize: 6, heroPos: 'UTG' })))).toBe(true);
     expect(hasBlocker(validateSpot(base({ tableSize: 9, heroPos: 'UTG' })))).toBe(false);
   });
+
+  it('10인은 허용하고 UTG2 는 10인에만 있다 · 11인은 막는다', () => {
+    expect(hasBlocker(validateSpot(base({ tableSize: 10, heroPos: 'UTG2' })))).toBe(false);
+    expect(hasBlocker(validateSpot(base({ tableSize: 9, heroPos: 'UTG2' })))).toBe(true);
+    expect(hasBlocker(validateSpot(base({ tableSize: 11 })))).toBe(true);
+  });
 });
 
 describe('팟 — 사용자 입력을 덮어쓰지 않는다', () => {
@@ -110,8 +125,21 @@ describe('팟 — 사용자 입력을 덮어쓰지 않는다', () => {
     expect(potBb(s)).toBe(4);            // 0.5 + 1 + 2.5
   });
 
-  it('앤티는 인원수만큼 더한다', () => {
-    expect(potBb(base({ anteBb: 0.125, tableSize: 8 }))).toBe(2.5);   // 0.5 + 1 + 1
+  it('v1 저장본의 1인당 앤티는 읽을 때 총액으로 올린다 — 옛 팟이 그대로 보존된다', () => {
+    // v1 스팟(2026-09-11 형식): 8인 · 1인당 0.125 → 그때 팟 = 0.5 + 1 + 0.125×8 = 2.5
+    const legacy = fromJSON({ v: 1, tableSize: 8, anteBb: 0.125, hero: ['As', 'Kh'] });
+    expect(legacy?.v).toBe(2);
+    expect(legacy?.anteBb).toBe(1);                    // 0.125 × 8
+    expect(legacy && potBb(legacy)).toBe(2.5);         // 변환 전과 같은 팟
+    expect(fromJSON({ tableSize: 6, anteBb: 0.25 })?.anteBb).toBe(1.5);   // v 가 없으면 v1
+    expect(fromJSON({ v: 2, tableSize: 10, anteBb: 1 })?.anteBb).toBe(1); // v2 는 그대로
+    expect(fromJSON({ v: 1, tableSize: 9, anteBb: 0 })?.anteBb).toBe(0);
+  });
+
+  it('앤티는 BB앤티 총액이라 인원을 곱하지 않는다 (2026-09-14 오너 확정)', () => {
+    expect(potBb(base({ anteBb: 1, tableSize: 10 }))).toBe(2.5);     // 0.5 + 1 + 1 — 인원 곱이면 11.5
+    expect(potBb(base({ anteBb: 0.5, tableSize: 6 }))).toBe(2);      // 0.5 + 1 + 0.5 — 인원 곱이면 4.5
+    expect(potBb(base({ anteBb: 1, tableSize: 6 }))).toBe(potBb(base({ anteBb: 1, tableSize: 10 })));
   });
 
   it('입력 팟이 계산과 다르면 blocker 가 아니라 warn 이다', () => {
