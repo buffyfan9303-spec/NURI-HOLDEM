@@ -5,9 +5,11 @@
 //   ② 닫기의 44px 터치 영역은 줄지 않았다(상단을 좁히느라 버튼을 깎지 않았다).
 //   ③ 글 제목은 §5-2 규격(20–22px / 행간 1.32–1.48)이고 **최대 줄수로 자르지 않는다**.
 //   ④ 본문 행간 1.65–1.75.
-//   ⑤ (UI-03, 2026-09-13 교체 — 실행문 §7.1·§9.3) 댓글 면은 본문과 **이어지는 같은 지면**이고(예전 단언 "다른 색" 은 검은 띠의 원인이었다),
-//      층 경계는 아우라 구분선(.divider-aura, 1px·양끝 투명·중앙 accent)이 말하며, 댓글 **입력창**만 한 단계 다른 면이다.
-//      댓글 구역은 full-bleed 가 아니다(본문과 같은 좌우 안쪽 선). 다크·라이트 둘 다.
+//   ⑤ (UI-Aura, 2026-09-14 재교체 — design 실측: compact 셸을 surface-mid 로 고치자 본문·댓글이 전부 투명이라
+//      인접 면 대비가 1.00 이었다·오너가 말한 "단색 잔상") 댓글 section 은 이제 **본문과 다른 지면**(테두리
+//      있는 우물 — border-strong 2.71:1(다크)/3.16:1(라이트) + bg-surface-base)이고, full-bleed 는 아니다
+//      (본문과 같은 좌우 안쪽 선 — §5-1 이 겪은 "화면을 가로지르는 검은 띠"와는 다른 모양). 경계는 이제
+//      본문→댓글 hr(border-t border-border-strong, 옛 divider-aura 대체)로도 다시 한 번 말한다. 다크·라이트 둘 다.
 //   ⑥ PC 2-pane 읽기 폭 ≥ 600px.
 //   (UI-02, 2026-09-13: 독립 열기는 sheet → **page 전체화면**으로 바뀌었다. ①의 '한 행' 은 이제 compact page 헤더(≈35px)다.
 //    전체화면 셸·닫는 길 3종·이전/다음은 e2e/post-nav.spec.ts 가 잰다. 2-pane 인라인(⑥)은 바이트 동일.)
@@ -184,7 +186,7 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
   });
 
   for (const theme of ['dark', 'light'] as const) {
-    test(`🔴 댓글은 본문과 이어지는 같은 지면 + 아우라 구분선 + 입력창만 다른 면 (${theme})`, async ({ page, baseURL }) => {
+    test(`🔴 댓글 section 은 본문과 다른 지면(우물) + border-strong 경계선 + 입력창은 또 다른 면 (${theme})`, async ({ page, baseURL }) => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.addInitScript((t) => { try { localStorage.setItem('nuri-theme', t as string); } catch { /* 저장소 차단 */ } }, theme);
       await install(page, baseURL);
@@ -203,8 +205,8 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
         const body = document.querySelector('[data-pd-body]')!;
         const comments = document.querySelector('[data-pd-comments]')!;
         const article = document.querySelector('[data-pd-root]')!;
-        // 본문과 댓글 사이의 구분선 — 문서 순서상 본문 뒤·댓글 앞에 있는 마지막 divider-aura
-        const hrs = Array.from(article.querySelectorAll('hr.divider-aura'));
+        // 본문과 댓글 사이의 구분선 — 문서 순서상 본문 뒤·댓글 앞에 있는 마지막 border-strong 실선(옛 divider-aura 대체)
+        const hrs = Array.from(article.querySelectorAll('hr.border-border-strong'));
         const between = hrs.filter((h) => (body.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING) && (h.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING));
         // 본문 뒤에는 반응 줄의 선도 있다 — 댓글 **바로 앞** 형제만 경계선이다
         const hr = between.find((h) => h.nextElementSibling === comments) ?? null;
@@ -213,33 +215,39 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
           ?? Array.from(comments.querySelectorAll<HTMLElement>('button')).find((b) => /로그인하면 댓글/.test(b.textContent ?? ''))
           ?? null;
         const hcs = hr ? getComputedStyle(hr) : null;
+        const ccs = getComputedStyle(comments);
         return {
           bodyGround: opaque(body), commentsGround: opaque(comments),
           bodyLeft: body.getBoundingClientRect().left, commentsLeft: comments.getBoundingClientRect().left,
-          commentsBgSelf: getComputedStyle(comments).backgroundColor,
+          commentsBgSelf: ccs.backgroundColor,
+          commentsBorderW: ccs.borderTopWidth, commentsBorderColor: ccs.borderTopColor,
           hrCount: hr ? 1 : 0, betweenCount: between.length, hrH: hr ? hr.getBoundingClientRect().height : -1,
-          hrImage: hcs?.backgroundImage ?? '', hrBorder: hcs?.borderTopWidth ?? '', hrAnims: hr ? hr.getAnimations().length : -1,
+          hrImage: hcs?.backgroundImage ?? '', hrBorder: hcs?.borderTopWidth ?? '', hrBorderColor: hcs?.borderTopColor ?? '', hrAnims: hr ? hr.getAnimations().length : -1,
           inputBg: input ? getComputedStyle(input).backgroundColor : '',
-          totalAuraLines: hrs.length,
+          totalDividerLines: hrs.length,
         };
       });
       expect(g.bodyGround, '본문 지면을 못 읽었다').not.toBe('');
-      // ① 이어지는 지면 — 댓글 section 자신은 배경을 칠하지 않고, 합성 지면이 본문과 같다
-      expect(g.commentsBgSelf).toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
-      expect(g.commentsGround, `댓글 면(${g.commentsGround})이 본문 면(${g.bodyGround})과 다르다 — 검은 띠가 돌아왔다`).toBe(g.bodyGround);
-      // ② full-bleed 가 아니다 — 본문과 같은 왼쪽 안쪽 선(음수 마진 없음)
+      // ① UI-Aura(2026-09-14): 댓글 section 은 이제 **자기 배경을 스스로 칠한다**(bg-surface-base) —
+      //    본문과 같은 지면이면 인접 면 대비가 1.00(구분 자체가 없음)이라는 design 실측 결함을 이렇게 뒤집었다.
+      //    옛 단언("본문과 같다")을 지운 게 아니라 **반대 방향으로 더 강하게** 건다: 다를 것 + 테두리가 있을 것.
+      expect(g.commentsBgSelf, '댓글 section 이 스스로 배경을 안 칠한다 — 다시 투명해졌다').not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+      expect(g.commentsGround, `댓글 면(${g.commentsGround})이 본문 면(${g.bodyGround})과 같다 — 면 구분이 다시 사라졌다`).not.toBe(g.bodyGround);
+      expect(g.commentsBorderW, '댓글 section 에 경계 테두리가 없다').not.toBe('0px');
+      expect(g.commentsBorderColor, '댓글 section 테두리가 투명하다').not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+      // ② full-bleed 가 아니다 — 본문과 같은 왼쪽 안쪽 선(음수 마진 없음). 우물이어도 여전히 지켜야 한다.
       expect(Math.abs(g.commentsLeft - g.bodyLeft), `댓글 구역 왼쪽 ${g.commentsLeft} vs 본문 ${g.bodyLeft} — 화면 끝까지 번진다`).toBeLessThanOrEqual(1);
-      // ③ 본문→댓글 경계에 아우라 구분선 하나 — 1px 실체, 그라데이션(양끝 투명), border 아님, 애니메이션 0
-      expect(g.hrCount, '댓글 바로 앞에 divider-aura 가 없다').toBe(1);
+      // ③ 본문→댓글 경계에 border-strong 실선 하나 — 1px 실체, 실제 border(배경 이미지 아님), 애니메이션 0
+      expect(g.hrCount, '댓글 바로 앞에 경계선이 없다').toBe(1);
       expect(g.betweenCount, '본문→댓글 사이 선은 반응 줄 + 댓글 경계 둘').toBe(2);
       expect(g.hrH).toBeGreaterThanOrEqual(0.5);
       expect(g.hrH).toBeLessThanOrEqual(1.5);
-      expect(g.hrImage).toMatch(/linear-gradient\(/);
-      expect(g.hrImage, '양끝이 투명이 아니다').toMatch(/rgba\(0, 0, 0, 0\)/);
-      expect(g.hrBorder).toBe('0px');
+      expect(g.hrImage, '옛 divider-aura 그라데이션 배경이 남아 있다').toBe('none');
+      expect(g.hrBorder, 'border-strong 실선이 아니다(1px 가 아님)').toBe('1px');
+      expect(g.hrBorderColor, '경계선 색이 투명하다').not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
       expect(g.hrAnims).toBe(0);
       // ④ 독서 경계 세 곳(작성자→본문 · 반응 줄 · 본문→댓글)이 같은 스타일 하나를 쓴다
-      expect(g.totalAuraLines).toBe(3);
+      expect(g.totalDividerLines).toBe(3);
       // ⑤ 입력창만 한 단계 다른 면 — 지면과 실제로 다른 색
       expect(g.inputBg, '댓글 입력창을 못 찾았다').not.toBe('');
       expect(g.inputBg, '댓글 입력창이 지면에 흡수됐다').not.toBe(g.commentsGround);

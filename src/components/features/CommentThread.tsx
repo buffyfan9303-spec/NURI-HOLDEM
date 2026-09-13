@@ -355,9 +355,14 @@ export default function CommentThread({
         </button>
       )}
 
-      {/* 목록 */}
+      {/* 목록 — 입력 폼이 이미 "쓸 수 있다"고 말하고 있으므로, 로그인 상태(=입력 폼 렌더)에서는
+          같은 말을 반복하는 점선 안내 박스를 생략한다(오너 2026-09-14: 댓글 0 헤더 → 입력창 →
+          "첫 댓글을 남겨보세요" 3단 중복). 비로그인(=입력 폼 대신 로그인 버튼)에서는 이 박스가
+          "댓글이 없다"를 알리는 유일한 신호라 그대로 둔다 — 기존 `user` 분기를 그대로 재사용한다. */}
       {threads.length === 0 ? (
-        <p className="rounded-card border border-dashed border-border-default py-6 text-center text-xs text-ink-muted">{emptyText}</p>
+        user ? null : (
+          <p className="rounded-card border border-dashed border-border-default py-6 text-center text-xs text-ink-muted">{emptyText}</p>
+        )
       ) : (
         <div className="space-y-4">
           {threads.map(({ root, replies }) => (

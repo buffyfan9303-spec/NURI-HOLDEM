@@ -324,7 +324,11 @@ export default function Modal({
         {...dragHandlers}
         data-drag-close={bodyDrag ? '' : undefined}
         data-scroll-lock
-        className={['fixed inset-0 z-[55] bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]',
+        // UI-Aura(2026-09-14, 실행문 §4-1): compact page(게시글 상세)만 surface-mid — 본문 대부분이 투명이라
+        // 셸이 곧 화면 전체 지면이다. surface-base(다크 #06080F 거의 검정)를 그대로 두면 "단색 검정 한 장"이 된다.
+        // compact 아닌 나머지 5곳(캘린더/매장 도구·GTO 분석·일정 상세 등)은 그대로(바이트 동일 유지).
+        className={['fixed inset-0 z-[55] flex flex-col pt-[env(safe-area-inset-top)]',
+          compact ? 'bg-surface-mid' : 'bg-surface-base',
           closing ? (dragClosed ? '' : 'animate-fade-out') : 'animate-fade-in'].join(' ')}>
         {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기. ⚠ 드래그를 끈 page(게시글 읽기)에는 그리지 않는다 —
             핸들이 '끌 수 있다'고 말해 놓고 잡아끌면 아무 반응이 없으면 UI 가 거짓말을 한다(아래 sheet 그립 주석과 같은 원칙). */}
@@ -334,8 +338,8 @@ export default function Modal({
         {title && (
           /* compact(UI-02): sheet compact 와 **같은 문법** — 창 제목은 '어느 게시판인가' 만 말하는 작은 보조 라벨, 닫기 44px 는 그대로.
              density 를 안 넘기는 page 5곳은 바이트 동일(default 분기). */
-          <header className={['shrink-0 flex items-center justify-between border-b border-border-strong bg-surface-base',
-            compact ? 'px-3 py-1' : 'px-4 h-header-h'].join(' ')}>
+          <header className={['shrink-0 flex items-center justify-between border-b border-border-strong',
+            compact ? 'px-3 py-1 bg-surface-mid' : 'px-4 h-header-h bg-surface-base'].join(' ')}>
             <h2 id="modal-title" className={['min-w-0 flex-1 truncate tracking-tight',
               compact ? 'text-xs font-semibold text-ink-secondary' : 'text-base font-bold text-ink-primary'].join(' ')}>{title}</h2>
             <div className="flex shrink-0 items-center gap-1.5">

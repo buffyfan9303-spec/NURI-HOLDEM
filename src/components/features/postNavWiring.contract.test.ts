@@ -30,8 +30,9 @@ describe('UI-02 · 전체화면 셸', () => {
     expect(MODAL).toMatch(/const bodyDrag = resolveBodyDrag\(variant, dragToClose\);/);
     expect(MODAL).not.toMatch(/dragToClose = false, density/);
     // page 헤더가 compact 를 읽는다(sheet compact 와 같은 문법)
+    // UI-Aura(2026-09-14): compact 헤더는 surface-mid, 그 외는 surface-base — 값 자체는 readingSurface.contract.test.ts 가 본다.
     const i = MODAL.indexOf("if (variant === 'page') {");
-    expect(MODAL.slice(i, i + 3000)).toMatch(/compact \? 'px-3 py-1' : 'px-4 h-header-h'/);
+    expect(MODAL.slice(i, i + 3000)).toMatch(/compact \? 'px-3 py-1 bg-surface-mid' : 'px-4 h-header-h bg-surface-base'/);
   });
 });
 

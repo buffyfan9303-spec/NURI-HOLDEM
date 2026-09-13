@@ -532,15 +532,20 @@ export default function PostDetailModal({
             2026-08-30: 공유는 아래 반응 줄로 내렸다(같은 '이 글 메뉴' 가족이고,
             헤더 우측 4버튼이 폭을 먹어 이름+칩이 3줄로 접히던 원인이었다).
             여기 남는 신고·차단·삭제는 '가끔 쓰는 관리 동작'이라 한 덩어리로 묶어 우측에 둔다. */}
-        {/* UI-03(2026-09-13): 작성자→본문 경계는 border-b 대신 아우라 구분선(.divider-aura) — 공지·댓글 경계와 같은 한 스타일. */}
+        {/* UI-Aura(2026-09-14, design 실측): 작성자→본문 경계는 border-strong 실선(mid 위 2.71:1) — 아래 참고.
+            제목→본문 84.8px 는 실측 과다 — pb-3→pb-2(본문 mt-4→mt-3 과 합쳐 −13px). line-height 는 안 건드린다. */}
         {!hidden && (
-        <header className="mt-3 flex items-center gap-2.5 pb-3">
+        <header className="mt-3 flex items-center gap-2.5 pb-2">
           {/* 2026-08-30: 여기 있던 `!object-contain` 땜질을 제거했다 — Avatar 의 기본값이 contain 이 됐다.
               (근거 실측은 유지: 이 글 작성자 아바타가 256×151 로고인데 object-cover 가 가로 59% 만 남겨
                원 안에 글자 토막만 보였다. 정사각 사진에서는 cover 와 결과가 동일해 회귀가 없다.)
               꽉 채우는 크롭이 필요해지면 `fit="cover"` 로 명시할 것 — ! 유틸을 다시 붙이지 말 것. */}
-          <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={40}
-            className="border border-border-default" />
+          {/* UI-Aura(2026-09-14): data-aura 는 Avatar.tsx(공용 atom, 8개 파일이 쓴다)가 임의 속성을 안 받아
+              직접 못 붙인다 — 그 파일을 고치는 대신 원 모양(rounded-full)의 얇은 래퍼로 감싼다. */}
+          <span data-aura data-aura-level="micro" className="inline-block shrink-0 rounded-full">
+            <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={40}
+              className="border border-border-default" />
+          </span>
           <div className="flex-1 min-w-0">
             {/* flex-wrap(2026-08-28 스윕): 390px에서 우측 버튼들이 폭을 다 먹어 작성자 이름이
                 '♣..'로 통째로 사라졌다 — 칩이 다음 줄로 내려가고 이름이 먼저 살아남게 줄바꿈을
@@ -620,7 +625,10 @@ export default function PostDetailModal({
           </div>
         </header>
         )}
-        {!hidden && <hr className="divider-aura" aria-hidden="true" />}
+        {/* UI-Aura(2026-09-14): divider-aura(peak 1.89:1, 양끝 0)는 사실상 안 보였다 — index.css 는 공용(NoticeDetailModal
+            도 쓰고, home-team 이 같은 파일 view-transition 블록을 동시 편집 중)이라 전역 alpha 대신 이 화면 세 곳만
+            국소적으로 border-strong 실선(mid 위 2.71:1)으로 바꾼다. */}
+        {!hidden && <hr className="border-t border-border-strong" aria-hidden="true" />}
 
         {/* 신고 누적 자동 숨김 안내 — 배너는 blinded 면 항상(운영자에겐 해제 버튼), 아래 본문·사진·댓글은 hidden 이면 미렌더 */}
         {post.blinded && (
@@ -641,7 +649,7 @@ export default function PostDetailModal({
         {!hidden && (() => {
           const { text, hand, replay } = parseAttachments(post.content);
           return (
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-3">
               {text && (
                 <div data-pd-body onDoubleClick={doubleLike}
                   /* 읽기 면: 문단·공백·링크·멘션은 renderMentions 가 그대로 보존한다(whitespace-pre-wrap).
@@ -741,10 +749,14 @@ export default function PostDetailModal({
           {/* 알약 셋만 자기들끼리 접히는 그룹 — 공유는 바깥에 두어 폭이 어떻게 변해도
               항상 첫 줄 오른쪽에 고정된다. 한 통에 넣으면 좋아요가 4자리(1,284)가 되는 순간
               공유가 밀려 내려가 줄 수가 바뀐다(= 숫자 때문에 레이아웃이 흔들린다). */}
-          <div className="flex min-w-0 flex-wrap items-center gap-1">
+          {/* UI-Aura(2026-09-14): ring-aura 헤어라인으로 묶음 전체를 한 면으로 묶는다. 활성 알약에만
+              data-aura(micro) — '지금 누른 것'에만 LED, 상시 3개가 다 켜지지 않는다. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-1 ring-aura rounded-card p-1.5">
             <button
               type="button"
               aria-pressed={!!post.liked}
+              data-aura={post.liked || undefined}
+              data-aura-level={post.liked ? 'micro' : undefined}
               onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; } onLike(post.id); }}
               className={reactionPill(!!post.liked)}
             >
@@ -755,6 +767,8 @@ export default function PostDetailModal({
             <button
               type="button"
               aria-pressed={myReaction === 'goodrun'}
+              data-aura={myReaction === 'goodrun' || undefined}
+              data-aura-level={myReaction === 'goodrun' ? 'micro' : undefined}
               onClick={() => react('goodrun')}
               className={reactionPill(myReaction === 'goodrun')}
             >
@@ -764,6 +778,8 @@ export default function PostDetailModal({
             <button
               type="button"
               aria-pressed={myReaction === 'badbeat'}
+              data-aura={myReaction === 'badbeat' || undefined}
+              data-aura-level={myReaction === 'badbeat' ? 'micro' : undefined}
               onClick={() => react('badbeat')}
               className={reactionPill(myReaction === 'badbeat')}
             >
@@ -795,7 +811,7 @@ export default function PostDetailModal({
             보조 기능이 내용보다 강하게 읽혔다. 지금은 가는 줄 하나로 묶인 보조 구역이고,
             버튼만 테두리를 유지한다(누를 수 있는 것이라 비텍스트 3:1 대상이다).
             값·조건 문구는 한 글자도 바꾸지 않았다 — 가격은 서버 shop_skus 가 출처. */}
-        {!hidden && <hr className="divider-aura mt-3" aria-hidden="true" />}
+        {!hidden && <hr className="border-t border-border-strong mt-3" aria-hidden="true" />}
         {!hidden && (
         <div className="mt-3 flex items-center gap-2">
           <Icon name="chip-stack" size={16} strokeWidth={1.8} className="shrink-0 text-ink-muted" />
@@ -815,11 +831,19 @@ export default function PostDetailModal({
               응원함
             </span>
           ) : (
-            <button type="button" disabled={cheerBusy || cheerPrice === null}
-              onClick={() => handleCheer({})}
-              className="hit shrink-0 rounded-badge border border-accent-400/50 px-2.5 py-1 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
-              {cheerBusy ? '보내는 중…' : cheerPrice === null ? '준비 중' : `${cheerPrice.toLocaleString()}점 응원`}
-            </button>
+            // UI-Aura(2026-09-14): ring-aura-glow 는 누를 수 있을 때만 — '준비 중'(비활성)에 글로우가 붙으면
+            // 안 된다는 지시라 disabled 와 반대로 묶는다(같은 조건을 두 번 계산하지 않고 변수 하나로).
+            (() => {
+              const cheerDisabled = cheerBusy || cheerPrice === null;
+              return (
+                <button type="button" disabled={cheerDisabled}
+                  onClick={() => handleCheer({})}
+                  className={['hit shrink-0 rounded-badge border border-accent-400/50 px-2.5 py-1 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50',
+                    cheerDisabled ? '' : 'ring-aura-glow'].join(' ')}>
+                  {cheerBusy ? '보내는 중…' : cheerPrice === null ? '준비 중' : `${cheerPrice.toLocaleString()}점 응원`}
+                </button>
+              );
+            })()
           )}
         </div>
         )}
@@ -853,20 +877,15 @@ export default function PostDetailModal({
         {/* 댓글은 '이 글' 이 아니라 그 다음 층이라 유일하게 가로줄로 끊는다.
             예전엔 본문 위(header)·반응 위 두 군데에 줄이 있어, 짧은 글에서는 거의 빈 띠를
             선 두 개가 감싼 꼴이었다. 경계는 진짜 층이 바뀌는 여기 하나면 충분하다. */}
-        {/* 면 구분(§5-1): 본문은 창 지면 그대로 둔 **중립 읽기 면**, 댓글은 그 아래 층인 **보조 면**이다.
-            그래서 여기서만 지면을 바꾼다 — surface-base(다크 #06080F · 라이트 #F5F7FB)는 두 테마
-            모두에서 창(surface-mid: #151C30 / #FFFFFF)과 실제로 다른 색이다.
-            surface-high 를 쓰지 않은 이유: 댓글 입력창(.input)이 바로 그 surface-high 라
-            입력 면이 지면에 흡수돼 '어디에 쓰는지'가 사라진다(라이트에서 특히).
-            좌우 음수 마진은 article 의 좌우 여백과 **정확히 같은 값**이라 밴드가 창 폭을 꽉 채운다.
-            문단마다 상자를 만들지 않는다 — 늘어나는 것은 이 밴드 하나뿐이다. */}
-        {/* UI-03(2026-09-13, 실행문 §7.1): 위 '면 구분' 처방을 뒤집는다 — 댓글은 **본문과 이어지는 같은 지면**이다.
-            full-bleed 음수 마진 + surface-base 띠가 오너가 말한 "갑자기 큰 검은 띠로 끊긴다" 의 정체였다.
-            층 경계는 아우라 구분선 하나로 말하고, 입력창(.input = surface-high)과 댓글 항목만 한 단계 다른 면으로 구분된다.
-            e2e/post-detail-read.spec.ts 의 옛 '두 면이 다른 색' 단언은 이 요구로 교체됐다(§9.3). */}
-        {!hidden && <hr className="divider-aura mt-4" aria-hidden="true" />}
+        {/* 면 구분 이력: §5-1(2026-08)은 full-bleed 음수 마진 + surface-base 띠 → 오너가 "갑자기 큰 검은
+            띠로 끊긴다"고 지적해 UI-03(2026-09-13)이 걷어내고 구분선 하나로만 말하게 했다.
+            UI-Aura(2026-09-14, design 실측): compact 셸을 surface-mid 로 고친 뒤 재보니 article·본문·댓글
+            섹션이 **전부 투명**이라 인접 면 대비가 1.00(구분 자체가 없음)이었다. 그래서 **full-bleed 가 아닌
+            테두리 있는 우물**(rounded-card, article 좌우 여백 안에 갇힘 — 창 폭을 꽉 채우지 않는다)로
+            다시 도입한다 — §5-1 이 겪은 "화면을 가로지르는 검은 띠"와는 다른 모양이라 같은 결함이 아니다. */}
+        {!hidden && <hr className="border-t border-border-strong mt-4" aria-hidden="true" />}
         {!hidden && (
-        <section data-pd-comments className="reveal mt-4 space-y-2">
+        <section data-pd-comments className="reveal mt-4 space-y-2 rounded-card border border-border-strong bg-surface-base p-3 ring-aura">
           {/* 댓글 수는 화면에 실제로 불러온 목록(replies)만 신뢰한다.
               post.commentCount 는 DB 트리거가 같은 값을 넣어주는 컬럼이라 더하면 2배가 된다.
               (트리거 도입 전에는 항상 0이라 0+n 으로 우연히 맞아 보였을 뿐이다.
@@ -895,7 +914,8 @@ export default function PostDetailModal({
         </section>
         )}
         {/* ── 이전 글 / 다음 글(UI-04, 실행문 §7.3·§7.4) — 열었던 목록의 실제 화면 순서(스냅샷) 기준. lib/postNav 가 이웃·끝·상한을 판정한다.
-            새 hr 을 두지 않는다(독서 경계 아우라 선은 3곳 계약 — readingSurface.contract) — 탐색 행은 subtle 경계선 하나. */}
+            새 hr 을 두지 않는다(독서 경계 구분선은 3곳 계약 — readingSurface.contract) — 탐색 행은 subtle 경계선 하나.
+            UI-Aura(2026-09-14): 활성 카드만 border-transparent + ring-aura(헤어라인). 비활성은 그대로 둔다. */}
         <nav aria-label="이전 글 · 다음 글" data-pd-nav className="mt-6 grid grid-cols-2 gap-2 border-t border-border-subtle pt-3">
           {(['prev', 'next'] as const).map((dir) => {
             const side = dir === 'prev' ? neighbors.prev : neighbors.next;
@@ -916,7 +936,7 @@ export default function PostDetailModal({
                 onClick={() => goNeighbor(dir)}
                 className={['flex min-h-11 min-w-0 items-center gap-1.5 rounded-input border px-3 py-2 text-left transition-colors',
                   dir === 'next' ? 'flex-row-reverse text-right' : '',
-                  enabled ? 'border-border-default hover:bg-surface-high/50' : 'border-border-subtle opacity-60 cursor-not-allowed'].join(' ')}>
+                  enabled ? 'border-transparent ring-aura hover:bg-surface-high/50' : 'border-border-subtle opacity-60 cursor-not-allowed'].join(' ')}>
                 <Icon name={dir === 'prev' ? 'chevron-left' : 'chevron-right'} size={14} className="shrink-0 text-ink-muted" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-2xs font-bold text-ink-muted">{label}</span>

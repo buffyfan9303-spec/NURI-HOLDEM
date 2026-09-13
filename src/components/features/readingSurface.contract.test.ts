@@ -19,6 +19,7 @@ const strip = (s: string) => s.replace(/(^|[\s{(])\/\*[\s\S]*?\*\//g, '$1').repl
 const NOTICE = strip(readFileSync(join(__dirname, 'NoticeDetailModal.tsx'), 'utf-8'));
 const POST = strip(readFileSync(join(__dirname, 'PostDetailModal.tsx'), 'utf-8'));
 const COMM = strip(readFileSync(join(__dirname, 'CommunityTab.tsx'), 'utf-8'));
+const MODAL = strip(readFileSync(join(__dirname, '..', 'atoms', 'Modal.tsx'), 'utf-8'));
 const CSS = readFileSync(join(__dirname, '..', '..', 'index.css'), 'utf-8');
 
 describe('UI-01 · 공지 본문 구조화', () => {
@@ -49,20 +50,83 @@ describe('UI-03 · 아우라 구분선', () => {
     // 움직이는 네온·큰 그림자 없음
     expect(block).not.toMatch(/animation|box-shadow:\s*0 0 (1[0-9]|[2-9][0-9])px/);
   });
-  it('🔴 독서 경계 4곳이 divider-aura 를 쓰고, 옛 border 선·댓글 검은 띠가 없다', () => {
+  it('🔴 공지 독서 경계는 divider-aura, 옛 border 선이 없다(NOTICE 전용 — divider-aura 는 공용이라 손대지 않았다)', () => {
     expect(NOTICE).toMatch(/<hr className="divider-aura mt-4" aria-hidden="true" \/>/);
     expect(NOTICE).not.toMatch(/border-t border-border-subtle pt-4/);
-    const n = (POST.match(/<hr className="divider-aura[^"]*" aria-hidden="true" \/>/g) ?? []).length;
+  });
+  // UI-Aura(2026-09-14, design 실측): divider-aura peak 1.89:1·양끝 0 이라 PostDetailModal 에서는 사실상 안 보였다.
+  // index.css 는 공용(NoticeDetailModal 도 쓰고 home-team 이 동시 편집 중)이라 전역 alpha 대신
+  // 이 화면 세 곳만 국소적으로 border-strong 실선(mid 위 2.71:1)으로 바꿨다 — 그래서 PostDetailModal 은
+  // 더 이상 divider-aura 를 쓰지 않는다(NOTICE 는 그대로 위 테스트가 지킨다).
+  it('🔴 PostDetailModal 독서 경계 3곳은 border-strong 실선이고, 옛 border-b/border-subtle·divider-aura 가 없다', () => {
+    const n = (POST.match(/<hr className="border-t border-border-strong[^"]*" aria-hidden="true" \/>/g) ?? []).length;
     expect(n, 'PostDetailModal 의 작성자→본문 · 반응 줄 · 본문→댓글 세 곳').toBe(3);
+    expect(POST).not.toMatch(/<hr className="divider-aura/);
     expect(POST).not.toMatch(/<header className="mt-3 flex items-center gap-2\.5 border-b border-border-default pb-3">/);
     expect(POST).not.toMatch(/mt-3 flex items-center gap-2 border-t border-border-subtle pt-3/);
+  });
+  // UI-Aura(2026-09-14, design 실측): compact 셸을 surface-mid 로 고친 뒤 재보니 article·본문·댓글가 전부 투명이라
+  // 인접 면 대비가 1.00(구분 자체가 없음)이었다 — 그래서 댓글 section 에 **테두리 있는 우물**(article 좌우 여백
+  // 안에 갇힌 카드, 창 폭을 꽉 채우지 않는다)을 다시 넣는다. §5-1 이 겪은 "화면을 가로지르는 검은 띠"는
+  // full-bleed 음수 마진(-mx-4)이 원인이었다 — 그 마진만 없으면 같은 결함이 아니다(그래서 그것만 금지한다).
+  it('🔴 댓글 section 은 border-strong 테두리의 우물(bg-surface-base)이고, full-bleed 음수 마진은 없다', () => {
     const c = POST.match(/<section data-pd-comments className="([^"]*)"/);
     expect(c, '댓글 section 을 찾지 못했다').not.toBeNull();
-    expect(c![1]).not.toMatch(/-mx-4|bg-surface-base|border-t/);
+    expect(c![1]).toMatch(/rounded-card border border-border-strong bg-surface-base p-3/);
+    expect(c![1]).toMatch(/\bring-aura\b/);
+    expect(c![1]).not.toMatch(/-mx-4/);
   });
   it('입력창·표·focus ring 은 손대지 않는다 — .input 정의는 그대로다', () => {
     expect(CSS).toMatch(/\.input\s*\{/);
     expect((CSS.match(/divider-aura/g) ?? []).length, 'CSS 안 divider-aura 는 정의 2곳(기본·라이트)뿐').toBeLessThanOrEqual(4);
+  });
+});
+
+// UI-Aura 장식(2026-09-14, design 최종 스펙) — 색·간격이 아니라 "장식이 상태를 따라가는가"만 본다.
+// 잘못되면 실제 버그가 되는 두 곳만 계약으로 잠근다: 비활성 버튼에 글로우가 붙거나, 안 누른 알약이 켜진 것처럼 보이면
+// "지금 이걸 눌렀다"는 거짓 신호가 된다. 나머지(아바타·묶음 링·이전/다음 카드)는 순수 장식이라 계약을 걸지 않는다.
+describe('UI-Aura(2026-09-14) · 장식이 상태를 거짓말하지 않는다', () => {
+  it('🔴 응원 버튼의 ring-aura-glow 는 비활성(cheerDisabled)일 때 빠진다', () => {
+    const i = POST.indexOf('const cheerDisabled = cheerBusy || cheerPrice === null;');
+    expect(i, 'cheerDisabled 판정을 찾지 못했다').toBeGreaterThan(-1);
+    const block = POST.slice(i, i + 500);
+    expect(block).toMatch(/cheerDisabled \? '' : 'ring-aura-glow'/);
+  });
+  it('🔴 반응 알약 3개는 각자의 active 조건일 때만 data-aura 를 켠다(상시 on 이 아니다)', () => {
+    expect(POST).toMatch(/data-aura=\{post\.liked \|\| undefined\}/);
+    expect(POST).toMatch(/data-aura=\{myReaction === 'goodrun' \|\| undefined\}/);
+    expect(POST).toMatch(/data-aura=\{myReaction === 'badbeat' \|\| undefined\}/);
+    // 셋 다 조건 없는 상시 data-aura(문자열 리터럴)로 되돌아오지 않았는지 — data-aura-level 은 별개 속성이라 제외
+    expect(POST).not.toMatch(/<button[^>]*\bdata-aura(?![-=])/);
+  });
+});
+
+describe('UI-Aura(2026-09-14) · Modal page 셸 — compact(게시글 상세)만 surface-mid', () => {
+  // 재현했던 결함: PostDetailModal 은 article/헤더에 자체 배경이 없어(위 divider-aura 검사가 이미 확인)
+  // Modal 의 page 셸 색이 곧 화면 전체 지면이다. 셸이 무조건 surface-base(다크 #06080F, 거의 검정)면
+  // "단색 검정 한 장"이 된다 — density를 받으면서도 셸 색은 분기가 없던 것이 근본 원인(오너 2026-09-14 스크린샷).
+  // 음성 대조: 아래 삼항연산자를 `'bg-surface-base'` 상수 하나로 되돌리면 이 두 단언이 즉시 실패한다(직접 확인함).
+  it('🔴 page 전체화면 셸: compact 는 surface-mid, 그 외 5곳(캘린더/매장 도구·GTO·일정)은 surface-base 그대로', () => {
+    expect(MODAL).toMatch(/className=\{\['fixed inset-0 z-\[55\] flex flex-col pt-\[env\(safe-area-inset-top\)\]',\s*\n\s*compact \? 'bg-surface-mid' : 'bg-surface-base',/);
+    // 옛 무조건 surface-base(분기 없음) 패턴이 되돌아오지 않았는지 — 같은 class 문자열 안에 bg-surface-base 가 고정으로 붙어 있으면 실패
+    expect(MODAL).not.toMatch(/\['fixed inset-0 z-\[55\] bg-surface-base /);
+  });
+  it('🔴 page 헤더: compact 는 surface-mid(본문과 같은 지면), 그 외는 surface-base — border-strong 구분선은 공통', () => {
+    expect(MODAL).toMatch(/<header className=\{\['shrink-0 flex items-center justify-between border-b border-border-strong',\s*\n\s*compact \? 'px-3 py-1 bg-surface-mid' : 'px-4 h-header-h bg-surface-base'\]/);
+    expect(MODAL).not.toMatch(/justify-between border-b border-border-strong bg-surface-base',\s*\n\s*compact \? 'px-3 py-1'/);
+  });
+});
+
+describe('UI-Aura(2026-09-14) · 제목→본문 간격 — design 실측 84.8px 과다분만 줄인다', () => {
+  // line-height 는 실측상 정상(본문 1.7·제목 1.375·댓글 1.625)이라 어느 것도 건드리지 않는다 — 아래는 여백만 본다.
+  it('🔴 작성자 헤더 pb-2 · 본문 래퍼 mt-3 — 옛 pb-3/mt-4 로 되돌아오지 않았다', () => {
+    expect(POST).toMatch(/<header className="mt-3 flex items-center gap-2\.5 pb-2">/);
+    expect(POST).not.toMatch(/<header className="mt-3 flex items-center gap-2\.5 pb-3">/);
+    expect(POST).toMatch(/<div className="mt-3 space-y-3">/);
+    expect(POST).not.toMatch(/<div className="mt-4 space-y-3">/);
+    // leading-* 유틸은 이번 변경과 무관 — 실측상 정상이라 그대로다
+    expect(POST).toMatch(/leading-snug/);
+    expect(POST).toMatch(/leading-\[1\.7\]/);
   });
 });
 

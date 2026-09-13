@@ -3,8 +3,13 @@
 // 수정: groupThreads 가 루트 밑으로 전체 하위 트리를 평탄 수집(4레벨+ 흡수)하고,
 //       루트 직속이 아닌 답글엔 원부모 닉(mentionOf='@원부모닉' 프리픽스 재료)을 붙인다.
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { groupThreads, guardedSubmit } from './CommentThread';
 import type { Comment } from '../../api/community';
+
+// 렌더러 없이(environment: node) 소스 배선만 보는 계약 — readingSurface.contract.test.ts 와 같은 관행.
+const SRC = readFileSync(join(__dirname, 'CommentThread.tsx'), 'utf-8');
 
 const c = (id: string, parentId: string | undefined, userName: string): Comment => ({
   id,
@@ -129,5 +134,19 @@ describe('guardedSubmit · N04 제출 계약', () => {
     };
     legacySubmit('오프라인 댓글', async () => { throw new Error('네트워크 오류'); }, () => { cleared = true; });
     expect(cleared).toBe(true); // 옛 방식은 실패해도 즉시 지운다 — 이것이 N04 버그였다
+  });
+});
+
+// 오너 2026-09-14: "댓글 0" 헤더 → 입력창(이미 "쓸 수 있다"는 신호) → "첫 댓글을 남겨보세요" 점선박스
+// 3단이 같은 말을 반복했다. 로그인(=입력 폼 렌더) 상태에서는 박스를 생략하고, 비로그인(=로그인 버튼만 있고
+// 입력 폼이 없음)에서는 그대로 둔다 — 그 경우 박스가 "댓글이 없다"를 알리는 유일한 신호이기 때문이다.
+// 음성 대조: `user ? null : (` 가지를 지우고 무조건 렌더로 되돌리면 이 계약이 실패한다(직접 확인함).
+describe('댓글 빈 안내 — 입력 폼과 중복되지 않는다(오너 2026-09-14)', () => {
+  it('🔴 threads.length === 0 분기가 user 유무로 갈려 있다 — 로그인 시 null, 비로그인 시 emptyText', () => {
+    const i = SRC.indexOf('{threads.length === 0 ? (');
+    expect(i, 'threads.length === 0 분기를 찾지 못했다').toBeGreaterThan(-1);
+    const block = SRC.slice(i, i + 300);
+    expect(block).toMatch(/threads\.length === 0 \? \(\s*\n\s*user \? null : \(/);
+    expect(block).toMatch(/border-dashed border-border-default py-6[^]*\{emptyText\}/);
   });
 });
