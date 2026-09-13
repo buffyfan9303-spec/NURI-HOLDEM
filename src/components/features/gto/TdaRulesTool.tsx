@@ -1,6 +1,6 @@
-// src/components/features/gto/TdaRulesTool.tsx — 2024 TDA 규칙(한글 번역본) 열람 + AI 질의응답.
+// src/components/features/gto/TdaRulesTool.tsx — 2026 TDA 규칙(한글 번역본) 열람 + AI 질의응답.
 //
-// 오너 지시(2026-09-06): GTO 탭에 2024 TDA 를 넣고, "딜러가 카드를 쏟았어요" 처럼 물으면
+// 오너 지시(2026-09-06): GTO 탭에 TDA 규칙을 넣고(2026-09-14 부터 2026 판), "딜러가 카드를 쏟았어요" 처럼 물으면
 // "TDA 어디에 의하면 이렇게 진행해야 합니다" 로 답하게 할 것.
 //
 // ⚠ 이 기능의 유일한 위험은 **없는 조항을 지어내는 것**이다. 규칙 번호를 틀리게 말하는 순간
@@ -156,7 +156,7 @@ export default function TdaRulesTool() {
       {/* 전체 열람 */}
       <section className="rounded-aura border card-aura p-3">
         <div className="flex items-center gap-2">
-          <h3 className="min-w-0 flex-1 text-sm font-bold text-ink-primary">2024 TDA 규칙</h3>
+          <h3 className="min-w-0 flex-1 text-sm font-bold text-ink-primary">2026 TDA 규칙</h3>
           <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{browse.length}개</span>
         </div>
         <div className="mt-2 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none]">
@@ -178,8 +178,10 @@ export default function TdaRulesTool() {
 
       {/* 출처 — 번역본은 번역자에게 저작권이 있다. 표기를 지우지 말 것. */}
       <p className="px-1 text-[10px] leading-relaxed text-ink-muted">
-        출처: POKER TOURNAMENT DIRECTORS ASSN. {data.version} · © 2024 Poker TDA (use policy: PokerTDA.com)<br />
-        한글 번역: 안성준 · Copyright 2024 Sungjoon Ahnn. 최종 판단은 언제나 플로어(토너먼트 디렉터)의 재량입니다.
+        출처: POKER TOURNAMENT DIRECTORS ASSN. {data.version} · © 2026 Poker TDA (use policy: PokerTDA.com)<br />
+        한글 번역: 안성준 · Copyright 2024 Sungjoon Ahnn (2024년 규칙 본문).
+        2026년 개정·신설 조항의 한글 번역: 누리홀덤(2026-09-14) — 위 번역본에는 없는 부분입니다.<br />
+        최종 판단은 언제나 플로어(토너먼트 디렉터)의 재량입니다.
       </p>
     </div>
   );

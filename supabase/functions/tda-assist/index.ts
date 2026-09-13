@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import RULES_DATA from './rules.json' with { type: 'json' };
 
-// NURI HOLDEM — TDA 2024 규칙 질의 전용 AI 함수 (2026-09-11)
+// NURI HOLDEM — TDA 2026 규칙 질의 전용 AI 함수 (2026-09-11 · 2026-09-14 부터 2026 판)
 //
 // 왜 이 함수가 따로 생겼나
 //   종전의 `gemini` 함수는 **범용 프록시**였다: 클라이언트가 prompt·system·images·model·temperature 를
@@ -42,7 +42,7 @@ const UPSTREAM_TIMEOUT_MS = 20_000;
 const DAILY_LIMIT = 40;         // 유저·일. 규칙 질의는 현장에서 몇 번 쓰는 도구다.
 
 const TDA_SYSTEM = [
-  '너는 포커 토너먼트 디렉터를 돕는 규칙 안내자다. 아래 제공된 TDA 2024 규칙 발췌만을 근거로 답한다.',
+  '너는 포커 토너먼트 디렉터를 돕는 규칙 안내자다. 아래 제공된 TDA 2026 규칙 발췌만을 근거로 답한다.',
   '답변 형식: ① 첫 줄에 결론(무엇을 해야 하는가) ② 그 아래 "근거: 규칙 N. 제목" 형태로 인용 ③ 필요하면 예외·주의.',
   '반드시 지킬 것:',
   '- 제공된 발췌에 없는 내용은 지어내지 않는다. 근거가 부족하면 "제공된 규칙만으로는 단정할 수 없습니다"라고 먼저 말한다.',
@@ -149,7 +149,7 @@ Deno.serve(async (req: Request) => {
 
     // 프롬프트는 **서버가** 만든다. 질문은 인용 블록 안에 넣어 지시문과 섞이지 않게 한다.
     const prompt = [
-      '아래는 포커 토너먼트 현장에서 들어온 상황이다. 그 아래 TDA 2024 규칙 발췌만을 근거로 답하라.',
+      '아래는 포커 토너먼트 현장에서 들어온 상황이다. 그 아래 TDA 2026 규칙 발췌만을 근거로 답하라.',
       '',
       '<상황>',
       question,

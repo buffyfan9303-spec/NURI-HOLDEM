@@ -133,7 +133,7 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
   close: X, back: ChevronLeft, 'chevron-left': ChevronLeft, 'chevron-right': ChevronRight,
   'chevron-down': ChevronDown, 'chevron-up': ChevronUp, search: Search, plus: Plus, minus: Minus,
   maximize: Maximize2, minimize: Minimize2,   // 장부 전체화면 토글
-  gavel: Gavel,                               // 2024 TDA 규칙(토너먼트 판정)
+  gavel: Gavel,                               // 2026 TDA 규칙(토너먼트 판정)
   check: Check, 'check-circle': CheckCircle2, trash: Trash2, edit: Pencil, star: Star,
   heart: Heart, alert: AlertTriangle, info: Info, lock: Lock, smartphone: Smartphone, user: User, users: Users,
   bell: Bell, qr: QrCode, calendar: Calendar, clock: Clock, settings: Settings, share: Share2,

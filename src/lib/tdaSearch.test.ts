@@ -8,9 +8,9 @@ const nos = (q: string, n = 6) => searchTda(TDA_RULES, q, n).map((h) => h.rule.n
 const titles = (q: string, n = 6) => searchTda(TDA_RULES, q, n).map((h) => h.rule.title);
 
 describe('TDA 데이터 자체의 건전성', () => {
-  it('규칙 1~71 이 빠짐없이 있다 — 번호가 틀리면 이 기능은 해롭다', () => {
-    const numbered = new Set(TDA_RULES.filter((r) => r.section !== '2024 실전 예제 부록' && r.no !== null).map((r) => r.no));
-    const missing = Array.from({ length: 71 }, (_, i) => i + 1).filter((n) => !numbered.has(n));
+  it('규칙 1~74 가 빠짐없이 있다(2026 판) — 번호가 틀리면 이 기능은 해롭다', () => {
+    const numbered = new Set(TDA_RULES.filter((r) => !r.section.startsWith('실전 예제 부록') && r.no !== null).map((r) => r.no));
+    const missing = Array.from({ length: 74 }, (_, i) => i + 1).filter((n) => !numbered.has(n));
     expect(missing, `빠진 규칙 번호: ${missing.join(', ')}`).toEqual([]);
   });
 
