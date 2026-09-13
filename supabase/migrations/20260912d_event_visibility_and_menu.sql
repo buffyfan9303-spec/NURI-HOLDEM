@@ -1,8 +1,8 @@
 -- ============================================================================
 -- 20260912d — 캠페인 공개/숨김을 lifecycle 과 **분리**한다 (§8-2·§8-3)
 --
--- ⚠ 아직 **적용하지 않았다(오너 승인 대기)**. 이 파일은 초안이다.
---    `supabase db push` 하지 않았고 운영 DB 에 어떤 쓰기도 하지 않았다.
+-- APPLIED 2026-09-13: event_voucher_bundle_20260913_hardened.
+-- Activation and campaign data are separate; do not re-run this file on production.
 --    선행: `20260912c_admin_event_ops.sql`(이 파일이 그 RPC 를 재정의한다). 파일명 순서대로 돌린다.
 --
 -- ── 왜 필요한가 ──────────────────────────────────────────────────────────────
@@ -41,6 +41,29 @@
 -- 멱등: add column if not exists / create or replace / drop policy if exists. 두 번 실행해도 같다.
 -- 롤백: 파일 맨 아래 ROLLBACK 절.
 -- ============================================================================
+
+-- ── 선행 확인 — 20260912c 가 먼저 적용됐는가 ────────────────────────────────
+-- ⚠ 2026-09-13 격리 컨테이너(postgres:17) 실측으로 드러난 구멍을 막는다.
+--   이 파일을 c 없이 단독 실행하면 **ABORT 없이 조용히 EXIT 0 으로 성공**했다.
+--   아래 ⑤ open_event_card 가 `store_vouchers(…, event_campaign_id, event_card_idx)` 에
+--   INSERT 하는데, plpgsql 본문은 **생성 시점에 이름 해석을 하지 않아** Postgres 가 안 잡는다.
+--   맨 아래 자가검사도 못 잡는다 — `strpos(v_src, 'event_campaign_id, event_card_idx')` 는
+--   **이 파일이 방금 써 넣은 함수 소스 문자열**만 보기 때문이다(항상 참).
+--   결과: 마이그레이션은 성공한 것처럼 보이고, **첫 손님이 카드를 여는 순간** 런타임에 터진다.
+--   그래서 문자열이 아니라 **카탈로그**를 본다.
+do $order_guard$
+begin
+  if not exists (select 1 from information_schema.columns
+                  where table_schema = 'public' and table_name = 'store_vouchers'
+                    and column_name = 'event_campaign_id') then
+    raise exception 'ABORT: 20260912c 를 먼저 적용해야 한다(store_vouchers.event_campaign_id 없음).';
+  end if;
+  if not exists (select 1 from information_schema.columns
+                  where table_schema = 'public' and table_name = 'store_vouchers'
+                    and column_name = 'event_card_idx') then
+    raise exception 'ABORT: 20260912c 를 먼저 적용해야 한다(store_vouchers.event_card_idx 없음).';
+  end if;
+end $order_guard$;
 
 -- ── ⓪ 공개 여부 축 (비파괴, nullable) ───────────────────────────────────────
 alter table public.event_campaigns
@@ -143,6 +166,14 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
+  -- 같은 회원·매장·KST 날짜의 동시 출석을 한 줄로 세운다. 뒤 트랜잭션은 앞 커밋 뒤에
+  -- 오늘 출석을 다시 조회하므로 EXISTS 검사와 INSERT 사이의 경합으로 참여권이 두 장 생기지 않는다.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    new.user_id::text || ':' || new.venue_id::text || ':' ||
+    ((new.created_at at time zone 'Asia/Seoul')::date)::text,
+    0
+  ));
+
   -- 그 매장에 **오늘 이미 출석 기록이 있으면** 참여권을 주지 않는다(KST 기준, 방금 들어온 행은 제외).
   if exists (
     select 1 from public.checkins c
@@ -514,6 +545,9 @@ begin
   if strpos(v_src, 'at time zone ''Asia/Seoul''') = 0
      or strpos(v_src, 'ec.opened_at is null') = 0 then
     raise exception 'ABORT: _grant_event_tickets 재정의에서 20260907d(오늘 첫 출석)·20260906c(재고) 가드가 사라졌습니다';
+  end if;
+  if strpos(v_src, 'pg_advisory_xact_lock') = 0 then
+    raise exception 'ABORT: 동시 출석이 오늘 첫 출석 검사를 함께 통과해 참여권을 중복 지급할 수 있습니다';
   end if;
 
   -- ⑥ 목록이 공개 여부를 싣는가 (앱이 '확인 불가' 를 벗어나는 조건)

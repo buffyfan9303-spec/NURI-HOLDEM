@@ -65,6 +65,8 @@ describe('이벤트 참여권 — 현장 증명 계약', () => {
     expect(def!.body, `${def!.file}: KST 날짜 비교가 없다 — '오늘' 판정이 사라졌다`).toMatch(/Asia\/Seoul/);
     expect(def!.body, `${def!.file}: 방금 들어온 행을 제외하는 조건(c.id <> new.id)이 없다 — 자기 자신을 보고 항상 건너뛴다`)
       .toMatch(/c\.id\s*<>\s*new\.id/);
+    expect(def!.body, `${def!.file}: 동시 첫 출석을 직렬화하지 않아 참여권이 두 장 생길 수 있다`)
+      .toMatch(/pg_advisory_xact_lock/);
   });
 
   it('🔴 무증빙 사용 경로(redeem_my_voucher)의 실행 권한이 회수돼 있다', () => {

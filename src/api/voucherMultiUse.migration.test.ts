@@ -64,7 +64,12 @@ describe('20260911g — 이용권 N장은 대기 요청 N건이 된다', () => {
 
   it('클라이언트는 voucher_id 를 직접 꽂을 수 없다 — 인덱스를 좁힌 만큼 RLS 로 되돌린다', () => {
     expect(CODE).toContain('drop policy if exists lbr_insert_self on public.ledger_buyin_requests;');
-    expect(CODE).toContain('with check (user_id = (select auth.uid()) and voucher_id is null);');
+    expect(CODE).toContain("with check (user_id = (select auth.uid()) and voucher_id is null and status = 'pending');");
+  });
+
+  it('클라이언트가 처리 완료 상태를 직접 꽂아 승인 통계를 위조할 수 없다', () => {
+    expect(CODE).toContain("voucher_id is null and status = 'pending'");
+    expect(SQL).toMatch(/ABORT: 클라이언트가 처리 완료 상태를 직접 꽂을 수 있다/);
   });
 
   it('적용 직후 스스로 확인하고 어긋나면 중단한다', () => {

@@ -44,7 +44,7 @@ describe('V06 · 클라이언트가 QR 게임 번호를 소비 RPC 까지 들고
   });
 });
 
-describe('V06 · 서버 초안 — 트리거와 RPC 가 게임 번호를 원자적으로 주고받는다(초안, 미적용)', () => {
+describe('V06 · 서버 계약 — 트리거와 RPC 가 게임 번호를 원자적으로 주고받는다', () => {
   it('트리거가 트랜잭션 범위 세션 변수(nuri.voucher_game_seq)를 읽어 requested_game_seq 에 싣는다', () => {
     expect(MIGRATION_SQL).toMatch(/current_setting\('nuri\.voucher_game_seq', true\)/);
     expect(MIGRATION_SQL).toMatch(/insert into public\.ledger_buyin_requests\([^)]*requested_game_seq\)/);
@@ -69,6 +69,14 @@ describe('V06 · 서버 초안 — 트리거와 RPC 가 게임 번호를 원자�
     expect(MIGRATION_SQL).toMatch(/ledger_is_closed\(p_venue_id, v_biz, p_game_seq\)/);
     expect(MIGRATION_SQL).toMatch(/ledger_is_closed\(v_venue, v_biz, p_game_seq\)/);
     expect(MIGRATION_SQL).toMatch(/이미 마감된 게임입니다/);
+  });
+
+  it('두 RPC 모두 양수인 실제 장부 게임만 허용한다(없는 회차로 이용권을 소비하지 않는다)', () => {
+    const guards = MIGRATION_SQL.match(/if p_game_seq < 1 then/g) ?? [];
+    const sessions = MIGRATION_SQL.match(/select 1 from public\.ledger_sessions ls/g) ?? [];
+    expect(guards).toHaveLength(2);
+    expect(sessions).toHaveLength(2);
+    expect(MIGRATION_SQL).toContain('해당 게임을 찾을 수 없습니다');
   });
 
   it('두 RPC 모두 PUBLIC/anon 회수 + authenticated·service_role 재부여(보안표준 §3)', () => {

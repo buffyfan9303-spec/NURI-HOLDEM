@@ -286,8 +286,8 @@ const bodyOf = (name: string, tag = '$fn$'): string => {
 };
 
 describe('20260912d — 보안 표준과 비파괴 계약', () => {
-  it('초안임을 파일이 스스로 말한다', () => {
-    expect(SQL).toContain('아직 **적용하지 않았다(오너 승인 대기)**');
+  it('운영 적용 기록을 파일이 스스로 말한다', () => {
+    expect(SQL).toContain('APPLIED 2026-09-13: event_voucher_bundle_20260913_hardened.');
   });
 
   it('🔴 숨김을 lifecycle 로 구현하지 않는다 — status 를 쓰는 곳이 없다', () => {

@@ -1,6 +1,6 @@
 -- V01 / P1 — 바인 요청 승인의 경합을 막는다 (2026-09-12)
 --
--- ⚠ 이 파일은 **초안이며 운영 DB 에 적용하지 않았다.** 적용 판단은 오너 몫이다.
+-- APPLIED 2026-09-13: event_voucher_bundle_20260913_hardened. Activation is separate.
 --
 -- ── 무엇이 문제인가 ────────────────────────────────────────────────────────────
 -- `approve_buyin_request` 는 요청 행을 **잠그지 않고** 읽고, 마지막 전이에도 상태 술어가 없다:
@@ -151,17 +151,9 @@ comment on function public.approve_buyin_request(uuid, smallint, boolean, text, 
 -- ── 요청당 확정 바인 1건 계약 ────────────────────────────────────────────────
 --
 -- `ledger_buyins_request_idx`(20260911c:38)는 **nonunique** 라 중복 승인을 막지 못한다.
--- unique 로 올리고 싶지만, **기존 데이터에 이미 중복이 있으면 인덱스 생성이 실패**한다.
--- 그래서 여기서는 **읽기 검사만** 한다 — 데이터를 임의로 지우지 않는다(오너 결정 사항).
---
--- 중복이 0건임을 확인한 뒤에 아래 주석을 풀어 적용해라:
---
---   create unique index concurrently if not exists ledger_buyins_request_uniq
---     on public.ledger_buyins (request_id) where request_id is not null;
---
---   (concurrently 는 트랜잭션 밖에서 돌려야 한다. 마이그레이션 러너가 트랜잭션으로 감싸면
---    별도 수동 실행으로 분리해라.)
-do $$
+-- 먼저 중복을 검사해 데이터가 있으면 임의 정리하지 않고 전체 적용을 중단한다. 0건이면 같은
+-- 트랜잭션에서 유니크 인덱스를 만들어 함수 잠금뿐 아니라 저장 구조로도 1:1 계약을 고정한다.
+do $request_uniq_preflight$
 declare v_dup int;
 begin
   select count(*) into v_dup
@@ -169,8 +161,24 @@ begin
            where request_id is not null
            group by request_id having count(*) > 1) d;
   if v_dup > 0 then
-    raise notice 'V01: request_id 중복 % 건 — unique 인덱스를 올리기 전에 오너 확인이 필요하다(자동 삭제하지 않는다).', v_dup;
-  else
-    raise notice 'V01: request_id 중복 0건 — unique 인덱스를 올릴 수 있다.';
+    raise exception 'ABORT: request_id 중복 %건 — 자동 삭제하지 않고 적용을 중단합니다', v_dup;
   end if;
-end $$;
+end $request_uniq_preflight$;
+
+create unique index if not exists ledger_buyins_request_uniq
+  on public.ledger_buyins (request_id) where request_id is not null;
+
+do $request_uniq_check$
+declare v_def text;
+begin
+  select indexdef into v_def from pg_indexes
+   where schemaname = 'public' and indexname = 'ledger_buyins_request_uniq';
+  if v_def is null
+     or not exists (select 1 from pg_index where indexrelid = to_regclass('public.ledger_buyins_request_uniq')
+                    and indisunique and indisvalid and indisready)
+     or lower(v_def) not like '%unique%'
+     or lower(v_def) not like '%(request_id)%'
+     or lower(v_def) not like '%request_id is not null%' then
+    raise exception 'ABORT: 요청당 확정 바인 1건 유니크가 올바르지 않습니다 — %', coalesce(v_def, 'missing');
+  end if;
+end $request_uniq_check$;

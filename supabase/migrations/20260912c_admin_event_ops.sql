@@ -1,10 +1,8 @@
 -- ============================================================================
 -- 20260912c — 관리자 이벤트 운영(§6) 서버 경로 + 당첨↔이용권 구조적 참조
 --
--- ⚠ 아직 **적용하지 않았다(오너 승인 대기)**. 이 파일은 초안이다.
---    `supabase db push` 하지 않았고 운영 DB 에 어떤 쓰기도 하지 않았다.
---    적용 순서는 반드시 **DB 먼저 → 앱 나중**이다. 반대로 하면 관리자 화면이 PGRST202 로 뜬다
---    (그 창을 앱이 '0건'으로 위장하지 않게 src/api/events.ts 가 rpcMissing 으로 분리해 둔다).
+-- APPLIED 2026-09-13: event_voucher_bundle_20260913_hardened.
+-- Activation and campaign data are separate; do not re-run this file on production.
 --
 -- ── 무엇이 없었나 (2026-09-12 실측) ─────────────────────────────────────────────
 --   `event_campaigns` 에 insert/update/delete 정책이 **하나도 없다**(20260906b:84-86 은 select 뿐).
@@ -60,6 +58,12 @@ comment on column public.store_vouchers.event_card_idx is
 create index if not exists store_vouchers_event_src_idx
   on public.store_vouchers(event_campaign_id, event_card_idx)
   where event_campaign_id is not null;
+
+-- 모든 매장 출석을 대상으로 하는 초안/진행 이벤트는 하나만 허용한다. 함수의 EXISTS 검사는
+-- 친절한 안내용이고, 이 유니크 인덱스가 동시 생성 경합까지 원자적으로 막는 최종 방어선이다.
+create unique index if not exists event_campaigns_one_global_open_idx
+  on public.event_campaigns ((true))
+  where ticket_venue_id is null and status in ('draft', 'live');
 
 -- ── ① open_event_card — 20260906b 정의 + 원천 참조 두 컬럼 ────────────────────
 -- 손님 경로의 **동작은 한 글자도 바꾸지 않는다**. insert 열 목록에 두 컬럼이 붙을 뿐이다.
@@ -672,7 +676,7 @@ notify pgrst, 'reload schema';
 -- 여기서 찾는 문자열이 각 함수의 본문 주석에 등장하지 않는지 확인해 두었다.
 do $check$
 declare
-  v_oid oid; v_cfg text[]; v_acl aclitem[]; v_src text; v_n int;
+  v_oid oid; v_cfg text[]; v_acl aclitem[]; v_src text; v_def text; v_n int;
   v_fn text;
   -- ⚠ 이름으로만 찾는다. `pg_get_function_identity_arguments` 는 **파라미터 이름까지** 돌려주므로
   --    ('p_user_id uuid, p_reason text') 타입만 적어 비교하면 **영원히 일치하지 않아** 자가검사가
@@ -764,6 +768,17 @@ begin
   end if;
   if strpos(v_src, 'ticket_venue_id is null and exists') = 0 then
     raise exception 'ABORT: ticket_venue_id=NULL 캠페인 중복 활성화 가드가 없습니다(출석 1회로 여러 판 참여권이 생긴다)';
+  end if;
+  select indexdef into v_def from pg_indexes
+   where schemaname = 'public' and indexname = 'event_campaigns_one_global_open_idx';
+  if v_def is null
+     or not exists (select 1 from pg_index where indexrelid = to_regclass('public.event_campaigns_one_global_open_idx')
+                    and indisunique and indisvalid and indisready)
+     or lower(v_def) not like '%unique%'
+     or lower(v_def) not like '%((true))%'
+     or lower(v_def) not like '%ticket_venue_id is null%'
+     or lower(v_def) not like '%status%''draft''%''live''%' then
+    raise exception 'ABORT: 전체 매장 이벤트 동시 생성 유니크가 올바르지 않습니다 — %', coalesce(v_def, 'missing');
   end if;
 
   select p.oid, p.prosrc into v_oid, v_src from pg_proc p join pg_namespace n on n.oid = p.pronamespace

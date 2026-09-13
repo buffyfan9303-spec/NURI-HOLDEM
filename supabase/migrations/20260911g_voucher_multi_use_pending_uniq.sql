@@ -61,10 +61,9 @@
 --   클라이언트에는 ledger_buyin_requests 직접 INSERT 가 한 곳도 없다(2026-09-11 grep — src/api/ledger.ts 는
 --   select·realtime 구독뿐, e2e 는 route 목킹뿐, supabase/functions/* 는 이 표를 쓰지 않는다).
 --
--- 이번에 **일부러 안 닫는** 인접 구멍 (알고 남긴다)
---   · lbr_insert_self 는 status 를 여전히 열어 둔다 — 로그인 유저가 임의 venue_id 로 status='approved' 행을
---     꽂아 그 매장의 승인율·평균대기(getBuyinReqStats, src/api/ledger.ts:1300)를 위조할 수 있다.
---     같은 정책에 `and status = 'pending'` 한 조각이면 닫히지만 M1 범위 밖이라 별건으로 둔다.
+-- 같이 닫는 인접 구멍
+--   · lbr_insert_self 는 status='pending' 도 강제한다. 로그인 유저가 임의 venue_id 로 approved 행을
+--     꽂아 승인율·평균대기 통계를 위조하는 경로를 같은 신뢰 경계에서 막는다.
 --   · ledger_buyin_requests.voucher_id 에 FK 를 새로 걸지 않는다 — ③이 클라 입력을 막아 불필요하고,
 --     라이브 표에 검증 스캔을 얹을 이유가 없다.
 --
@@ -138,7 +137,7 @@ grant execute on function public.request_buyin(uuid, text, smallint, date) to au
 --   같은 트랜잭션 안이라 정책이 비는 순간이 없다. 서버(SECURITY DEFINER 트리거)는 RLS 를 타지 않는다.
 drop policy if exists lbr_insert_self on public.ledger_buyin_requests;
 create policy lbr_insert_self on public.ledger_buyin_requests for insert to authenticated
-  with check (user_id = (select auth.uid()) and voucher_id is null);
+  with check (user_id = (select auth.uid()) and voucher_id is null and status = 'pending');
 
 notify pgrst, 'reload schema';
 
@@ -199,9 +198,12 @@ begin
   if lower(v_def) not like '%voucher_id is null%' then
     raise exception 'ABORT: 클라이언트가 voucher_id 를 직접 꽂을 수 있다 — 무료 티켓 위조 · 대기열 도배 — %', v_def;
   end if;
+  if lower(v_def) not like '%status = ''pending''%' then
+    raise exception 'ABORT: 클라이언트가 처리 완료 상태를 직접 꽂을 수 있다 — 승인 통계 위조 — %', v_def;
+  end if;
   if lower(v_def) not like '%auth.uid()%' then raise exception 'ABORT: lbr_insert_self 의 본인 확인이 사라졌다 — %', v_def; end if;
 
-  raise notice 'M1 OK — 대기 유니크는 이용권 요청을 비켜간다 · request_buyin 두 술어 · lbr_insert_self voucher_id 차단';
+  raise notice 'M1 OK — 대기 유니크는 이용권 요청을 비켜간다 · request_buyin 두 술어 · lbr_insert_self voucher_id/status 차단';
   raise notice 'M1 남은 일 — 접수대 bulkApprove(NuriPosLedger.tsx)를 순차 승인으로 바꾼 커밋이 배포됐는지 확인할 것';
 end $$;
 

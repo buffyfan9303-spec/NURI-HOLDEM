@@ -103,4 +103,11 @@ describe('바인 요청 승인 — 경합 방어 계약', () => {
     expect(body.slice(0, 600), `${file}: set search_path = public, pg_temp 가 없다`)
       .toMatch(/set\s+search_path\s*=\s*public\s*,\s*pg_temp/i);
   });
+
+  it('요청 1건은 확정 바인 1건만 가질 수 있다 — 함수 밖 저장 구조도 경합을 막는다', () => {
+    const t = sql('20260912a_buyin_request_approve_race.sql');
+    expect(t).toMatch(/create\s+unique\s+index\s+if\s+not\s+exists\s+ledger_buyins_request_uniq/i);
+    expect(t).toMatch(/on\s+public\.ledger_buyins\s*\(request_id\)\s*where\s+request_id\s+is\s+not\s+null/i);
+    expect(t).toMatch(/ABORT: request_id 중복/);
+  });
 });

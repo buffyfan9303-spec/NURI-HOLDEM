@@ -1,6 +1,5 @@
 -- 20260912b — 이용권 QR 사용의 게임(메인/사이드) 지정이 서버까지 가지 않던 것 (V06, 2026-09-12 재현)
--- ⚠ 초안(DRAFT) — 라이브 적용 금지. 매장 담당(store-team)이 재현·계약만 확정하고, 적용은
---   nuri-migration 절차(임퍼소네이션+ROLLBACK 검증)를 다시 밟아야 한다.
+-- APPLIED 2026-09-13: event_voucher_bundle_20260913_hardened. Activation is separate.
 --
 -- 근본 원인
 --   손님이 사이드 게임 테이블의 바인 QR 을 찍으면 클라이언트(MyVoucherSheet.tsx)는 hit.gameSeq 를
@@ -93,7 +92,7 @@ begin
   -- NULL-safe(2026-09-13): auth.uid() 가 NULL(비로그인)이면 `<>` 는 NULL 이 되어 IF 를 건너뛰었다(fail-open). 명시 체크 + is distinct from.
   if auth.uid() is null then raise exception '로그인이 필요합니다'; end if;
   if v_holder is null or v_holder is distinct from auth.uid() then raise exception '본인이 보유한 이용권만 사용할 수 있습니다'; end if;
-  if v_venue <> p_venue_id then raise exception '이 매장의 이용권이 아닙니다 (발급 매장에서만 사용 가능)'; end if;
+  if v_venue is distinct from p_venue_id then raise exception '이 매장의 이용권이 아닙니다 (발급 매장에서만 사용 가능)'; end if;
   if v_status = 'used' then raise exception '이미 사용한 이용권입니다 — 지갑의 사용 내역에서 확인할 수 있어요'; end if;
   if v_status = 'revoked' then raise exception '매장이 회수한 이용권입니다 — 발급 매장에 문의해 주세요'; end if;
   if v_status <> 'active' then raise exception '사용할 수 없는 이용권입니다 (상태: %)', v_status; end if;
@@ -101,7 +100,16 @@ begin
     raise exception '유효기간이 지난 이용권입니다 (만료 %)', to_char(v_exp at time zone 'Asia/Seoul', 'YYYY-MM-DD');
   end if;
   if p_game_seq is not null then
+    if p_game_seq < 1 then
+      raise exception '게임 번호가 올바르지 않습니다 — 접수대에서 게임을 다시 선택해 주세요';
+    end if;
     v_biz := public.ledger_business_date(p_venue_id);
+    if not exists (
+      select 1 from public.ledger_sessions ls
+       where ls.venue_id = p_venue_id and ls.session_date = v_biz and ls.game_seq = p_game_seq
+    ) then
+      raise exception '해당 게임을 찾을 수 없습니다 — 접수대에서 게임을 다시 선택해 주세요';
+    end if;
     if public.ledger_is_closed(p_venue_id, v_biz, p_game_seq) then
       raise exception '이미 마감된 게임입니다 — 접수대에서 다른 게임으로 다시 요청해 주세요';
     end if;
@@ -149,7 +157,16 @@ begin
   end if;
   if v_ownerphone is null or v_ownerphone = '' or v_ownerphone <> v_norm then raise exception '이 매장 업주의 전화번호가 아닙니다'; end if;
   if p_game_seq is not null then
+    if p_game_seq < 1 then
+      raise exception '게임 번호가 올바르지 않습니다 — 접수대에서 게임을 다시 선택해 주세요';
+    end if;
     v_biz := public.ledger_business_date(v_venue);
+    if not exists (
+      select 1 from public.ledger_sessions ls
+       where ls.venue_id = v_venue and ls.session_date = v_biz and ls.game_seq = p_game_seq
+    ) then
+      raise exception '해당 게임을 찾을 수 없습니다 — 접수대에서 게임을 다시 선택해 주세요';
+    end if;
     if public.ledger_is_closed(v_venue, v_biz, p_game_seq) then
       raise exception '이미 마감된 게임입니다 — 접수대에서 다른 게임으로 다시 요청해 주세요';
     end if;

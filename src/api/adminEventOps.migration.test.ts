@@ -1,7 +1,7 @@
 // 관리자 이벤트 운영(§6) — 클라이언트 계약 + 서버(SQL) 계약. 마이그레이션 20260912c.
 //
 // 왜 이 파일이 필요한가
-//   ① 클라이언트: 마이그레이션이 **아직 운영에 없다**(오너 승인 대기). 앱이 먼저 배포되는 창에서
+//   ① 클라이언트: 롤백·미적용 환경이나 앱/DB 배포 순서가 어긋난 창에서
 //      PostgREST 는 PGRST202 를 준다. 그때 목록을 `[]` 로 바꾸면 관리자는 '이벤트가 0건'이라고
 //      믿고 새로 만들려다 또 실패한다 — 이용권이 바로 이 순서 문제로 전멸할 뻔했다
 //      (voucherRpcFallback.test.ts). 그래서 **'함수 없음'과 '0건'을 구분해서 던지는 것**을 잠근다.
@@ -190,8 +190,14 @@ const ADMIN_FNS = [
 ];
 
 describe('20260912c — 보안 표준을 하나도 빠뜨리지 않는다', () => {
-  it('초안임을 파일이 스스로 말한다 — 적용 여부를 헷갈리지 않게', () => {
-    expect(SQL).toContain('아직 **적용하지 않았다(오너 승인 대기)**');
+  it('운영 적용 기록을 파일이 스스로 말한다', () => {
+    expect(SQL).toContain('APPLIED 2026-09-13: event_voucher_bundle_20260913_hardened.');
+  });
+
+  it('전체 매장 이벤트는 하나만 열 수 있다 — 동시 생성도 DB 유니크가 막는다', () => {
+    expect(SQL).toMatch(/create unique index if not exists event_campaigns_one_global_open_idx/i);
+    expect(SQL).toMatch(/on public\.event_campaigns \(\(true\)\)[\s\S]*ticket_venue_id is null[\s\S]*status in \('draft', 'live'\)/i);
+    expect(SQL).toMatch(/ABORT: 전체 매장 이벤트 동시 생성 유니크/);
   });
 
   it('🔴 관리자 가드가 전부 NULL-safe — `<>` 는 비로그인에서 열린다', () => {
