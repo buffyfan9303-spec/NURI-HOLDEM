@@ -15,32 +15,26 @@
 //   뷰포트 기준(vmin·md:·landscape:)으로 돌아가면 둘 중 하나가 반드시 틀린다(2026-09-11 실측 2회).
 //   폭·방향 분기도 같은 이유로 Tailwind 변형이 아니라 `.clk-*` 컨테이너 쿼리(src/index.css)를 쓴다.
 import { memo, useEffect, useState, type ReactNode } from 'react';
-import { effectiveLevel, type ClockState, type ClockLevel } from '../../../api/clock';
-import { clockPhase, CLOCK_PHASE_TV, gameLabel } from '../../../lib/clockLevel';
+import { effectiveLevel, type ClockState } from '../../../api/clock';
+import { clockPhase, CLOCK_PHASE_TV, gameLabel, levelNumberAt, msToNextBreak } from '../../../lib/clockLevel';
+import { msToRegClose } from '../../../lib/regStatus';
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
 const hms = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s >= 3600 ? `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}` : `${pad(s / 60)}:${pad(s % 60)}`; };
 
-function levelNumberAt(levels: ClockLevel[], index: number): number {
-  let n = 0;
-  for (let i = 0; i <= index && i < levels.length; i++) if (levels[i].kind === 'level') n++;
-  return n;
-}
-// index 를 받는 이유: DB 의 current_index 가 낡아 있을 수 있어 '실효 인덱스'로 계산해야 한다.
-function msToNextBreak(s: ClockState, index: number, remaining: number): number | null {
-  const lv = s.config?.levels ?? []; let acc = remaining;
-  for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'break') return acc; acc += lv[i].minutes * 60_000; }
-  return null;
-}
-function msToRegClose(s: ClockState, index: number, remaining: number): number | null {
-  const lv = s.config?.levels ?? []; const target = s.config?.regCloseLevel ?? 0;
-  let acc = remaining, num = 0;
-  for (let i = 0; i <= index; i++) if (lv[i]?.kind === 'level') num++;
-  if (num >= target) return 0;
-  for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'level') { num++; if (num >= target) return acc; } acc += lv[i].minutes * 60_000; }
-  return null;
-}
+// levelNumberAt · msToNextBreak · msToRegClose 는 위 import 의 lib 한 곳뿐이다.
+//
+// ⚠ 2026-09-13 병합에서 실제로 되돌아왔던 자리다. 이 파일이 생기기 전(2026-09-11) 네 화면에 흩어져 있던
+//   복제본을 lib 로 통합했는데, ClockStage 로 보드를 한 벌로 만들며 **로컬 사본 3개가 다시 들어왔다.**
+//   그중 `msToRegClose` 에는 F2 가드(`if (target <= 0) return null;`)가 빠져 있었다 —
+//   등록 마감 레벨을 **비워 둔** 대회에서 `0 >= 0` 이 참이 되어 손님이 보는 TV 보드가 '마감' 을 단언한다.
+//   이 파일이 이제 TV·운영자 보드의 **단일 마크업**이라 그 오판이 두 화면에 동시에 나간다.
+//   clockLevel.contract.test.ts · regStatus.contract.test.ts 가 이 복제를 잡아 여기까지 왔다.
+//   로컬 사본을 다시 만들지 마라 — 두 계약이 빨간불로 막는다.
+//
+// 로컬 사본에는 또 `lv[i].minutes * 60_000`(널 가드 없음)이 있었는데 lib 은 `(minutes ?? 0)` 이다.
+// 분 값이 비면 로컬본은 NaN 을 퍼뜨린다.
 /**
  * 총 진행 시간 — 지난 레벨들의 길이 합 + 현재 레벨에서 지나간 시간.
  *

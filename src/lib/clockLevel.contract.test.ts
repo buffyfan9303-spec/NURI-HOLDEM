@@ -18,6 +18,12 @@
 //   6~34KB 짜리 거대한 컴포넌트 본문이라 '패턴 지문'(kind === 'level' 카운트 등)으로 잡으려 하면
 //   무관한 리팩터마다 오탐이 나 결국 느슨하게 풀리게 된다 — 그게 더 나쁘다. 그래서 배선 앵커
 //   (import 줄 + 정확한 호출부 정규식)로 "복제해도 화면이 그걸 실제로 쓰는가"만 못 박는다.
+//
+// ⚠ 2026-09-13 병합 정정(상류 03cd8bb "보드를 ClockStage 한 벌로"): 렌더가 TournamentClock·ClockDisplay 두 벌에서
+//   clock/ClockStage.tsx 한 벌로 옮겨 가면서 **로컬 사본 3개(levelNumberAt·msToNextBreak·msToRegClose)가 다시 들어왔고**,
+//   위 '정의는 한 곳뿐' 단언이 그것을 잡았다(11건 빨강). 리드가 사본을 지우고 lib import 로 바꿨다.
+//   아래 배선 목록은 그 뒤의 현실이다: ClockStage 가 세 함수의 소비처, TournamentClock 은 levelNumberAt 만(설정 폼·자동 보정),
+//   ClockDisplay 는 gameLabel 만 쓴다(세 함수 소비처 아님). 다음 리팩터에서 또 옮기면 각 it 의 "왜 이 파일인가" 줄부터 봐라.
 // 실행: npx vitest run src/lib/clockLevel.contract.test.ts
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -58,16 +64,27 @@ describe('levelNumberAt · msToNextBreak — 정의는 src/lib/clockLevel.ts 하
   });
 });
 
-describe('배선 — 네 소비처가 그 한 곳을 실제로 부른다', () => {
+describe('배선 — 소비처가 그 한 곳을 실제로 부른다(2026-09-13 병합 후 지도)', () => {
+  const stage = strip(readFileSync(join(CLOCK_DIR, 'ClockStage.tsx'), 'utf-8'));
   const display = strip(readFileSync(join(CLOCK_DIR, 'ClockDisplay.tsx'), 'utf-8'));
   const remote = strip(readFileSync(join(CLOCK_DIR, 'ClockRemote.tsx'), 'utf-8'));
   const tv = strip(readFileSync(join(CLOCK_DIR, 'TournamentClock.tsx'), 'utf-8'));
   const live = strip(readFileSync(join(FEAT_DIR, 'LiveGamesTab.tsx'), 'utf-8'));
 
-  it('ClockDisplay.tsx: import 1회 · levelNumberAt(lvls, eff.index) · msToNextBreak(g, eff.index, eff.remainingMs)', () => {
-    expect(count(display, /^import \{ clockPhase, CLOCK_PHASE_TV, levelNumberAt, msToNextBreak \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
-    expect(count(display, /\blevelNumberAt\(lvls, eff\.index\)/)).toBeGreaterThanOrEqual(1);
-    expect(count(display, /\bmsToNextBreak\(g, eff\.index, eff\.remainingMs\)/)).toBeGreaterThanOrEqual(1);
+  // 왜 이 파일인가: 03cd8bb 이후 TV·운영자 보드의 **단일 마크업**이 ClockStage 다 — 레벨 번호·휴식까지 계산이 전부 여기서 그려진다.
+  it('🔴 ClockStage.tsx: import 1회 · levelNumberAt(lvls, eff.index) ×1 · msToNextBreak(g, eff.index, eff.remainingMs) ×2(레일·미니 보드)', () => {
+    expect(count(stage, /^import \{ clockPhase, CLOCK_PHASE_TV, gameLabel, levelNumberAt, msToNextBreak \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
+    expect(count(stage, /\blevelNumberAt\(lvls, eff\.index\)/)).toBe(1);
+    expect(count(stage, /\bmsToNextBreak\(g, eff\.index, eff\.remainingMs\)/)).toBe(2);
+    expect(count(stage, DEF_LNA), '상류 사본(levelNumberAt)이 되살아났다').toBe(0);
+    expect(count(stage, DEF_MTB), '상류 사본(msToNextBreak)이 되살아났다').toBe(0);
+  });
+
+  // 왜 이 파일인가: ClockDisplay 는 이제 ClockStage 를 감싸는 껍데기라 gameLabel 만 쓴다 — 세 함수를 여기서 다시 부르기 시작하면 두 벌 마크업으로 되돌아가는 신호다.
+  it('ClockDisplay.tsx: gameLabel 만 import · levelNumberAt/msToNextBreak 호출 0', () => {
+    expect(count(display, /^import \{ gameLabel \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
+    expect(count(display, /\blevelNumberAt\(/)).toBe(0);
+    expect(count(display, /\bmsToNextBreak\(/)).toBe(0);
   });
 
   it('ClockRemote.tsx: import 1회 · levelNumberAt(lvls, eff.index)', () => {
@@ -80,14 +97,16 @@ describe('배선 — 네 소비처가 그 한 곳을 실제로 부른다', () =>
     expect(count(live, /\blevelNumberAt\(lvls, eff\.index\)/)).toBeGreaterThanOrEqual(1);
   });
 
-  it('🔴 TournamentClock.tsx: import 1회 · cfg.levels 로 호출(로컬 cfg 시그니처가 되살아나면 여기서 걸린다)', () => {
-    expect(count(tv, /^import \{ clockPhase, CLOCK_PHASE_LABEL, CLOCK_PHASE_ACTION, levelNumberAt, msToNextBreak \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
+  // 왜 이 파일인가: 운영자 클락은 보드 렌더를 ClockStage 에 넘겼고, 설정 폼·자동 보정·레벨 표에서만 levelNumberAt(cfg.levels, …) 를 쓴다.
+  it('🔴 TournamentClock.tsx: import 1회(levelNumberAt 만) · cfg.levels 로 호출(로컬 cfg 시그니처가 되살아나면 여기서 걸린다)', () => {
+    expect(count(tv, /^import \{ clockPhase, CLOCK_PHASE_ACTION, levelNumberAt \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
     expect(count(tv, /\blevelNumberAt\(cfg\.levels, /)).toBeGreaterThanOrEqual(1);
     expect(count(tv, /\blevelNumberAt\(cfg, /), '옛 cfg 시그니처 호출이 남아 있다').toBe(0);
   });
 
-  it('🔴 TournamentClock.tsx: msToNextBreak 는 state.currentIndex 를 실효 인덱스로 넘긴다(운영자 클락은 자기 state 가 권위)', () => {
-    expect(count(tv, /\bmsToNextBreak\(state, state\.currentIndex, remaining\)/)).toBe(1);
+  // 왜 이 파일인가: '휴식까지' 계산은 03cd8bb 로 ClockStage 가 맡았다 — 운영자 클락이 다시 계산하기 시작하면 두 벌이 갈리는 첫 신호다.
+  it('🔴 TournamentClock.tsx: msToNextBreak 호출 0 (보드가 한다) · 옛 2인자 로컬 시그니처 0', () => {
+    expect(count(tv, /\bmsToNextBreak\(/), '운영자 클락이 휴식 계산을 다시 들고 왔다 — ClockStage 한 벌이 답이다').toBe(0);
     expect(count(tv, /\bmsToNextBreak\(state, remaining\)/), '옛 2인자 로컬 시그니처가 되살아났다').toBe(0);
   });
 });

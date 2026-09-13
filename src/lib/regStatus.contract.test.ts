@@ -10,7 +10,12 @@
 //   (단위 테스트가 함수를 직접 import 하면 '아무도 안 부르는 함수' 도 통과한다 — 배선 앵커를 따로 둔다)
 //   ③ 임포트 방향 — regStatus 는 effectiveLevel 을 lib/clockLevel 에서 가져온다(api/clock 이면 업주 전용 장부 청크가
 //   첫 화면 임계 경로로 딸려 온다 — regStatus.ts 머리말의 실측 기록) ④ TV 클락의 exact 호출 형태로 null → '—'.
-// 음성 대조: ClockDisplay.tsx 나 TournamentClock.tsx 에 `function msToRegClose(` 를 다시 넣으면 첫 테스트가 실패한다.
+// 음성 대조: ClockStage.tsx 에 `function msToRegClose(` 를 다시 넣으면 첫 테스트가 실패한다.
+//
+// ⚠ 2026-09-13 병합 정정(상류 03cd8bb "보드를 ClockStage 한 벌로"): 마감을 그리던 TournamentClock·ClockDisplay 의 렌더가
+//   clock/ClockStage.tsx 로 옮겨 갔고, 상류는 거기에 **F2 가드가 빠진 로컬 msToRegClose**(`num >= target` → 0>=0 참 = '마감')를
+//   다시 넣었다. 위 정의-단일성 단언이 그것을 잡았고(실제 회귀), 리드가 사본을 지우고 lib import 로 바꿨다.
+//   아래 소비처 목록·regCloseLevel 분포는 그 뒤의 현실이다. 다음 리팩터에서 또 옮기면 각 it 의 "왜 이 파일인가" 줄부터 봐라.
 // 실행: npx vitest run src/lib/regStatus.contract.test.ts
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -51,20 +56,25 @@ describe('msToRegClose — 정의는 src/lib/regStatus.ts 하나뿐이다', () =
   });
 });
 
-describe('배선 — 두 클락 화면이 그 한 곳을 실제로 부른다', () => {
+describe('배선 — 클락 보드가 그 한 곳을 실제로 부른다(2026-09-13 병합 후 지도)', () => {
+  const stage = strip(readFileSync(join(CLOCK_DIR, 'ClockStage.tsx'), 'utf-8'));
   const display = strip(readFileSync(join(CLOCK_DIR, 'ClockDisplay.tsx'), 'utf-8'));
   const tv = strip(readFileSync(join(CLOCK_DIR, 'TournamentClock.tsx'), 'utf-8'));
   const IMPORT = /^import \{ msToRegClose \} from '\.\.\/\.\.\/\.\.\/lib\/regStatus';$/m;
 
-  it('ClockDisplay.tsx: import 1회 · 실효 index/remaining 으로 부른다', () => {
-    expect(count(display, IMPORT)).toBe(1);
-    expect(count(display, /\bmsToRegClose\(g, eff\.index, eff\.remainingMs\)/)).toBeGreaterThanOrEqual(1);
+  // 왜 이 파일인가: 03cd8bb 이후 TV·운영자 보드의 단일 마크업이 ClockStage 다 — 손님 앞 TV 의 '등록 마감' 레일과 미니 보드 둘 다 여기서 그린다.
+  it('🔴 ClockStage.tsx: import 1회 · regLevel > 0 게이트 뒤에 실효 index/remaining 으로 2회(레일·미니 보드) 부른다', () => {
+    expect(count(stage, IMPORT)).toBe(1);
+    expect(count(stage, /const reg = regLevel > 0 \? msToRegClose\(g, eff\.index, eff\.remainingMs\) : null;/)).toBe(2);
+    expect(count(stage, DEF), '상류 사본(F2 가드 없는 msToRegClose)이 되살아났다 — 마감 레벨을 비운 대회가 TV 에서 "마감" 이 된다').toBe(0);
   });
 
-  it('🔴 TournamentClock.tsx: import 1회 · 3인자 호출 1회 — 2인자 로컬 시그니처가 되살아나면 여기서 걸린다', () => {
-    expect(count(tv, IMPORT)).toBe(1);
-    expect(count(tv, /const regClose = msToRegClose\(state, state\.currentIndex, remaining\);/)).toBe(1);
-    expect(count(tv, /\bmsToRegClose\(state, remaining\)/), '옛 2인자 호출이 남아 있다').toBe(0);
+  // 왜 이 파일인가: 두 화면은 이제 ClockStage 를 감싸는 껍데기다 — 여기서 msToRegClose 를 다시 부르기 시작하면 두 벌 마크업(F2 의 온상)으로 되돌아가는 신호다.
+  it('TournamentClock.tsx · ClockDisplay.tsx: msToRegClose import/호출 0 (보드에 위임)', () => {
+    for (const [name, code] of [['TournamentClock', tv], ['ClockDisplay', display]] as const) {
+      expect(count(code, IMPORT), `${name} 이 마감 계산을 다시 들고 왔다`).toBe(0);
+      expect(count(code, /\bmsToRegClose\(/), `${name}: 호출이 있다`).toBe(0);
+    }
   });
 
   // ── 나머지 두 소비처(2026-09-13 재검증 B2b) ────────────────────────────────────
@@ -81,11 +91,11 @@ describe('배선 — 두 클락 화면이 그 한 곳을 실제로 부른다', (
       .filter((p) => /\bmsToRegClose\b/.test(strip(readFileSync(p, 'utf-8'))))
       .map((p) => relative(SRC, p).replace(/\\/g, '/'))
       .sort();
+    // 2026-09-13 병합(03cd8bb): ClockDisplay·TournamentClock 의 마감 렌더가 ClockStage 한 벌로 합쳐져 넷→넷(파일이 바뀜, 수는 같음).
     expect(consumers).toEqual([
       'components/features/LiveGamesTab.tsx',
       'components/features/ScheduleDetailModal.tsx',
-      'components/features/clock/ClockDisplay.tsx',
-      'components/features/clock/TournamentClock.tsx',
+      'components/features/clock/ClockStage.tsx',
       'lib/regStatus.ts',
     ]);
   });
@@ -107,8 +117,9 @@ describe('배선 — 두 클락 화면이 그 한 곳을 실제로 부른다', (
       'api/presets.ts': 1,                                 // 프리셋 타입
       'components/features/LiveGamesTab.tsx': 1,           // regLevel > 0 게이트
       'components/features/ScheduleDetailModal.tsx': 1,    // regLv 표시
-      'components/features/clock/ClockDisplay.tsx': 1,     // regLevel > 0 게이트
-      'components/features/clock/TournamentClock.tsx': 9,  // 설정 폼 · 자동 생성 · 표시
+      // 2026-09-13 병합(03cd8bb): ClockDisplay 의 regLevel 게이트(1)가 ClockStage 로 옮겨 갔고, TournamentClock 의 표시 1건도 보드로 갔다(9→8).
+      'components/features/clock/ClockStage.tsx': 1,       // regLevel > 0 게이트(레일·미니 보드 공통)
+      'components/features/clock/TournamentClock.tsx': 8,  // 설정 폼 · 자동 생성(표시는 ClockStage 로 이동)
       'lib/gameInherit.ts': 7,                             // 포스터 ↔ 클락 상속 매핑
       'lib/regStatus.ts': 1,                               // ← 계산은 여기 하나뿐이다
     };
@@ -144,8 +155,11 @@ describe('배선 — 두 클락 화면이 그 한 곳을 실제로 부른다', (
     expect(nullIdx, 'null 검사가 0 검사보다 뒤에 있으면 미설정 대회가 마감으로 보인다').toBeLessThan(zeroIdx);
   });
 
-  it('TournamentClock.tsx: null 은 "—", 0 만 "마감" 으로 렌더하는 분기가 1회 남아 있다', () => {
-    expect(count(tv, /regClose === null \? '—' : regClose === 0 \? '마감'/)).toBe(1);
+  // 왜 이 파일인가: 그 렌더는 03cd8bb 로 ClockStage 에 갔다 — 미니 보드는 null 을 먼저 거르고(표시 없음), 0 만 '마감'; TV 레일은 regLevel > 0 게이트 뒤라 null 이 못 들어온다.
+  it('🔴 ClockStage.tsx: null 은 "마감" 이 아니다 — 미니 보드 `reg === null ? null : reg === 0 ? \'마감\'` 1회 · 레일 `reg === 0 ? \'마감\'` 1회', () => {
+    expect(count(stage, /const regText = reg === null \? null : reg === 0 \? '마감'/)).toBe(1);
+    expect(count(stage, /value=\{reg === 0 \? '마감' : hms\(reg\)\}/)).toBe(1);
+    expect(count(stage, /reg === null \? '마감'|reg == null \? '마감'/), 'null 을 마감으로 그린다').toBe(0);
   });
 });
 
