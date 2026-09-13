@@ -5,16 +5,27 @@
 // 이제 도구는 앱의 다른 상세 화면과 같은 전체화면 페이지(Modal page)다 — 그 계약을 잰다.
 // 데이터 게이트: 레인지·푸시폴드가 실데이터(콤보 가중 %)를 렌더하는지까지.
 import { test, expect } from './_fixtures';
-import { stabilizeBackstack, dismissOverlays, loginAs } from './_session';
+import { stabilizeBackstack, dismissOverlays, stubLogin } from './_session';
 
 // GTO 도구 실행은 로그인 회원 전용이 됐다(오너 지시 2026-08-27) — 이 스펙은 로그인 후 계약을 잰다.
-const EMAIL = process.env.E2E_EMAIL;
-const PASSWORD = process.env.E2E_PASSWORD;
-test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 미설정 — GTO 도구는 로그인 전용');
+//
+// 2026-09-12: 자격증명 게이트를 걷고 stubLogin(네트워크 0)으로 연다 — 계정 은퇴로 6건이 꺼져 있었다.
+//   이 파일은 교체에 특히 안전하다: 여는 도구 셋이 **서버를 안 부른다**(레인지·Nash 는 번들 상수,
+//   트레이너 기록은 localStorage). 즉 '목킹이 정의상 통과시키는 서버 응답' 이 이 파일에는 애초에 없고,
+//   콤보 가중 %·포지션별 올인 비율·오답 접두 키 단언은 교체 전후로 똑같이 물린다.
+//   스텁이 깨져도 조용하지 않다 — ToolsPanel 이 promptLogin() 을 띄워 6건이 다 큰 소리로 실패한다.
+//
+// ⚠ 두 가지를 알아 둘 것:
+//   · stubLogin 은 `/auth/v1/user` 를 라우트하지 않는다. 지금 이 경로의 신원 판정은 전부 로컬 세션
+//     읽기(src/api/_session.ts)라 무해하지만, 부팅 경로에 `supabase.auth.getUser()` 가 하나라도
+//     들어오면 6건이 동시에 죽고 증상은 '로그인이 안 된다' 로 보인다 — 그때 여길 보라.
+//   · 딥링크 테스트의 '라이브 판이 섰다' 단언은 `[data-tab="live"]` 래퍼를 보는데, 그 래퍼는
+//     ErrorBoundary **바깥**이다. 즉 라이브 데이터가 깨져도 통과한다 — 교체가 만든 헐거움이 아니라
+//     원래 그랬다(이 테스트가 재는 건 데이터가 아니라 '뒤로가기가 어느 판으로 돌아오는가' 다).
 
 async function gotoTools(page: import('@playwright/test').Page) {
   await stabilizeBackstack(page);
-  await loginAs(page, EMAIL!, PASSWORD!);
+  await stubLogin(page);          // ⚠ addInitScript 를 심는다 — goto 보다 먼저여야 한다
   await page.goto('/');
   // 온보딩 시트는 첫 페인트 700ms '뒤에' 뜬다 — 즉시 count 체크는 레이스(홈 전환으로 부팅이
   // 빨라지며 실제로 물렸다). 지연 등장까지 기다려 걷어내는 공용 헬퍼 사용.
@@ -25,8 +36,12 @@ async function gotoTools(page: import('@playwright/test').Page) {
 test.describe('도구 탭 — 전체화면 실행', () => {
   test('🔴 도구 카드를 누르면 전체화면 페이지로 열리고, 닫으면 런처로 돌아온다', async ({ page }) => {
     await gotoTools(page);
-    // 플레이어 그룹은 첫 방문 기본 펼침 — 카드가 바로 보여야 한다
-    const card = page.getByTestId('tool-range');
+    // 레인(5갈래)은 접이가 아니라 상시 노출 섹션이다(f511890 이 GTO IA 를 레인·검색·즐겨찾기로 갈았다)
+    //   — 펼치는 동작 없이 카드가 바로 보여야 한다.
+    // ⚠ .first(): grid() 가 즐겨찾기 행과 레인 섹션 양쪽에서 같은 data-testid 를 찍는다.
+    //   nuri:fav-tools 가 비어 오늘은 유일하지만, 기본 즐겨찾기가 생기는 순간 이건 회귀가 아니라
+    //   strict mode violation 으로 죽는다.
+    const card = page.getByTestId('tool-range').first();
     await expect(card).toBeVisible({ timeout: 10_000 });
     await card.click();
 
@@ -45,7 +60,7 @@ test.describe('도구 탭 — 전체화면 실행', () => {
 
   test('🔴 프리플랍 레인지 차트 — 13x13 매트릭스와 콤보 가중 %가 실제로 렌더된다', async ({ page }) => {
     await gotoTools(page);
-    await page.getByTestId('tool-range').click();
+    await page.getByTestId('tool-range').first().click();   // ⚠ 즐겨찾기 중복 — 위 주석 참고
     const dialog = page.locator('[role="dialog"]').filter({ has: page.getByTestId('range-guide') }).first();
     await expect(dialog).toBeVisible();
 
@@ -138,7 +153,7 @@ test.describe('도구 딥링크 — 다른 탭에서 열기', () => {
     await stabilizeBackstack(page);
     // 프리마운트(idle 마다 live→community→tools 숨김 마운트)가 '미방문' 전제를 깨지 않도록 idle 을 5s 폴백으로 미룬다.
     await page.addInitScript(() => { if (window.top === window) delete (window as unknown as Record<string, unknown>).requestIdleCallback; });
-    await loginAs(page, EMAIL!, PASSWORD!);
+    await stubLogin(page);
     await page.goto('/');
     await dismissOverlays(page);
     await page.locator('nav').getByRole('button', { name: '라이브', exact: true }).first().click();

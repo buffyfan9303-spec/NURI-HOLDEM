@@ -1,5 +1,6 @@
 import { test, expect } from './_fixtures';
-import { loginAs } from './_session';
+import type { Page } from '@playwright/test';
+import { bootOwner, openMyStore, MOCK_VENUE, MOCK_VENUE_NAME, MOCK_DAY } from './_mockOwner';
 
 // 오너에게 보낸 전후 비교 이미지가 **실제 앱에서도 그런지** 재는 스펙(오너 지시 2026-09-06 "제대로 됐나 확인").
 //
@@ -7,24 +8,76 @@ import { loginAs } from './_session';
 // 하네스가 맞는 것과 앱이 맞는 것은 다른 명제다 — 컴포넌트가 그 사이에 바뀌었거나,
 // 부모의 폭·패딩·다른 규칙이 끼어들면 하네스만 맞고 앱은 틀릴 수 있다. 여기서 그 간극을 없앤다.
 //
-// 로그인 화면이라 자격증명이 없으면 통째로 건너뛴다(다른 로그인 스펙과 같은 규약).
-const EMAIL = process.env.E2E_EMAIL;
-const PASSWORD = process.env.E2E_PASSWORD;
+// 2026-09-12: 자격증명 게이트를 걷고 **목킹 업주**(e2e/_mockOwner)로 연다 — 계정 은퇴로 넷이 꺼져 있었다.
+//   ⚠ 대신 잃은 것을 적어 둔다: playwright.config 머리말이 적었듯 이 스펙의 자격증명 실행은
+//     'StatCard 정렬 회귀와 **404 RPC**' 를 드러냈다. bootOwner 가 권한 RPC 를 정규식으로 통째로
+//     대답하므로 **서버 쪽에서 그 RPC 가 사라지는 부류는 여기서 영원히 안 보인다**.
+//     여기 초록을 '서버가 아직 이 권한을 준다' 로 읽지 마라 — 그 방어는 write-guard·admin-exposure·
+//     마이그레이션 테스트에만 남는다. 이 스펙은 **기하 실측 전용**이다.
+//   ⚠ 뷰포트를 412×915 로 못박는다. 원래 playwright.config 의 유일한 프로젝트(Pixel 7) 폭에서 돌던
+//     스펙이고, C 의 '넘침 ≤ 0' · 캘린더의 '접힌 메뉴' · StatCard 보조줄 접힘이 전부 모바일 폭 조건이다.
 
-test.describe('오너 지적 레이아웃 — 실제 앱 실측', () => {
-  test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 없음 — 로그인 화면은 잴 수 없다');
+/** 오늘(KST) 장부 한 건 — StatCard 보조줄이 **글자를 갖도록** 채운다.
+ *  0회/0건/0원이면 보조줄이 짧아 '좁은 폭에서 두 줄로 접히는' 결함을 애초에 재현할 수 없다. */
+const SESSION = {
+  venue_id: MOCK_VENUE, session_date: MOCK_DAY, game_seq: 1, title: '데일리 메인',
+  buyin_amount: 100_000, card_amount: null, game_type: 'gtd', target_entries: 20, max_entries: 0,
+  is_addon: false, addon_stack: 0, discounts: [{ label: '얼리', amount: 50_000 }],
+  early_double_min: 0, early_single_min: 0, reg_closed: false, closed: false,
+  opened_at: `${MOCK_DAY}T02:00:00Z`, tournament_start: null, schedule_id: null,
+};
+const BUYINS = Array.from({ length: 17 }, (_, i) => ({
+  id: `cccccccc-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+  venue_id: MOCK_VENUE, session_date: MOCK_DAY, game_seq: 1,
+  player_name: `손님${i + 1}`, entry_no: 1, payment_method: 'cash', is_unpaid: false,
+  buyin_at: `${MOCK_DAY}T12:00:00Z`, is_split: false,
+  cash_amount: i < 7 ? 50_000 : 100_000, card_amount: 0, transfer_amount: 0,
+  ticket_count: 0, unpaid_amount: 0, discount_level: i < 7 ? 1 : 0, discount_index: 0, early_override: null,
+}));
+const POSTER = {
+  id: 'aaaaaaaa-0000-4000-8000-000000000001', title: '금요 딥스택 100K GTD',
+  venue_id: MOCK_VENUE, owner_id: '11111111-1111-4111-8111-111111111111',
+  pub_name: MOCK_VENUE_NAME, region: '서울', address: '서울 강남구 1',
+  date: '2099-12-31', start_time: '19:00', duration: '', format: '홀덤',
+  guaranteed: '', prize_pool: '', approved: true, display_order: 1,
+  buy_in: { amount: 100_000 }, seats: null, structure: null, description: '',
+  side_events: null, ranking_prizes: null, partners: null, promotions: null,
+  payment_methods: null, rules: null, poster_url: null, poster_color: null,
+  is_premium: false, premium_until: null, unread_qna_count: 0, view_count: 0,
+};
 
-  test.beforeEach(async ({ page }) => {
-    await loginAs(page, EMAIL!, PASSWORD!);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+/** 목킹 업주로 부팅 + 내 매장 진입. 못 열면 **실패**다(조용한 skip 통로를 만들지 않는다). */
+async function openStore(page: Page) {
+  await bootOwner(page, {
+    viewport: { width: 412, height: 915 },
+    extra: async (p) => {
+      const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+      const isSingle = (r: import('@playwright/test').Route) =>
+        (r.request().headers()['accept'] ?? '').includes('pgrst.object');
+      // ⚠ bootOwner 와 같은 단건/배열 분기를 쓴다 — 모양이 틀리면 supabase-js 가 조용히 이상한 값을 만든다.
+      await p.route(/\/rest\/v1\/ledger_sessions\?/, (r) => (r.request().method() === 'GET'
+        ? r.fulfill(json(isSingle(r) ? SESSION : [SESSION])) : r.fallback()));
+      await p.route(/\/rest\/v1\/ledger_buyins\?/, (r) => (r.request().method() === 'GET'
+        ? r.fulfill(json(BUYINS)) : r.fallback()));
+      // venueName 은 `schedules.find(s => s.venueId === venueId)?.pubName || '내 매장'` 이다 —
+      //   없으면 D 가 3글자 폴백 폭을 재게 된다.
+      await p.route(/\/rest\/v1\/schedules\?/, (r) => (r.request().method() === 'GET'
+        ? r.fulfill(json([POSTER])) : r.fallback()));
+      for (const t of ['schedule_likes', 'schedule_reservations', 'bankroll_entries']) {
+        await p.route(new RegExp(`/rest/v1/${t}\\?`), (r) => (r.request().method() === 'GET' ? r.fulfill(json([])) : r.fallback()));
+      }
+      // 이게 _fixtures 의 blocked-writes 주석을 더럽히는 실제 요청이다(_session.stubLogin 도 일부러 받아 준다).
+      await p.route(/\/rest\/v1\/rpc\/claim_daily_login_point/, (r) => r.fulfill(json(null)));
+    },
   });
+  await openMyStore(page);
+  await expect(page.locator('[data-tab="my-store"]'), '목킹 업주로 내 매장을 열지 못했다').toBeVisible({ timeout: 20_000 });
+}
+
+test.describe('오너 지적 레이아웃 — 실제 앱 실측(목킹 업주 · 계정 없이)', () => {
 
   test('C·D — 대시보드: 단계 바 노출·크기 · 헤더 날짜 위치', async ({ page }) => {
-    const store = page.getByRole('button', { name: /^내 매장/ });
-    test.skip(await store.count() === 0, '이 계정에는 내 매장 탭이 없다');
-    await store.first().click();
-    await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
+    await openStore(page);
 
     // C — 진행 단계. 예전엔 대시보드 안의 숫자 스트립이었고, 오너 지적은 "동그라미가 칸에 붙었다"였다.
     //   2026-09-08 에 그 스트립을 없애고 게임 진행의 알약 바 하나로 합쳤다(한 페이지에서 왕복).
@@ -62,10 +115,7 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측', () => {
   });
 
   test('A·B — 매출·손님: StatCard 숫자 밑변 · Mini 숫자 시작점', async ({ page }) => {
-    const store = page.getByRole('button', { name: /^내 매장/ });
-    test.skip(await store.count() === 0, '이 계정에는 내 매장 탭이 없다');
-    await store.first().click();
-    await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
+    await openStore(page);
 
     // 대시보드의 '최근 7일 추세' 카드가 통계 화면으로 가는 실제 진입점이다
     // (섹션 버튼은 접힌 메뉴 안이라 폭 0 — 실측으로 확인).
@@ -74,9 +124,12 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측', () => {
     const stats = page.locator('button:has([data-testid="dash-stats-link"])').first();
     test.skip(await stats.count() === 0, '통계 진입점을 못 찾았다');
     await stats.click();
-    // 통계 패널의 표식
-    const panel = page.getByText('총 바이인').first();
-    await expect(panel).toBeVisible({ timeout: 25_000 });
+    // 🔴 통계 패널의 표식 — **보이는 것**으로 좁힌다.
+    //   '내 매장' 은 keep-alive 라 숨은 대시보드 DOM 이 그대로 살아 있고, 거기에도 '총 바이인'
+    //   문자열이 있다(StoreDashboard 의 span). getByText(...).first() 는 그 숨은 사본을 집어
+    //   toBeVisible 이 25초 뒤 실패한다 — 이 저장소가 click-paths.spec 에 이미 실측해 둔 현상이다.
+    const panel = page.locator('p:visible').filter({ hasText: '총 바이인' }).first();
+    await expect(panel, '통계 패널이 뜨지 않았다').toBeVisible({ timeout: 25_000 });
 
     const m = await page.evaluate(() => {
       const sp = (a: number[]) => (a.length ? Math.round(Math.max(...a) - Math.min(...a)) : -1);
@@ -102,12 +155,19 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측', () => {
     console.log('[A StatCard]', JSON.stringify({ n: m.statCount, 밑변어긋남: m.statBottomSpread }));
     console.log('[B Mini]', JSON.stringify({ n: m.miniCount, 시작점어긋남: m.miniLeftSpread, lefts: m.miniLefts }));
 
-    if (m.statCount >= 2) expect(m.statBottomSpread, 'StatCard 숫자 밑변이 어긋난다(하네스에선 18→0 이었다)').toBe(0);
-    if (m.miniCount >= 2) expect(m.miniLeftSpread, 'Mini 숫자 시작점이 어긋난다(하네스에선 34→0 이었다)').toBe(0);
+    // 🔴 조건부였다 — 화면이 LoadErrorCard 로 빠져 칸이 0개여도 **조용히 통과**했다.
+    //   잴 대상이 있다는 것부터 단언하고, 그 다음에 기하를 잰다.
+    expect(m.statCount, 'StatCard 행을 못 찾았다 — 통계 화면이 아니거나 오류 카드다').toBeGreaterThanOrEqual(2);
+    expect(m.statBottomSpread, 'StatCard 숫자 밑변이 어긋난다(하네스에선 18→0 이었다)').toBe(0);
+    expect(m.miniCount, 'Mini 타일 행을 못 찾았다').toBeGreaterThanOrEqual(2);
+    expect(m.miniLeftSpread, 'Mini 숫자 시작점이 어긋난다(하네스에선 34→0 이었다)').toBe(0);
   });
 
   test('GTO 도구 — 공유 버튼이 제목줄에 있다(본문 위에 홀로 떠 있지 않다)', async ({ page }) => {
+    // 이 테스트만 내 매장에 들어가지 않는다 — 부팅만 목킹으로 한다(종전 beforeEach 자리).
+    await bootOwner(page, { viewport: { width: 412, height: 915 } });
     await page.getByRole('navigation', { name: '하단 내비게이션' }).getByRole('button', { name: 'GTO', exact: true }).click();
+    // ⚠ 즐겨찾기(localStorage nuri:fav-tools)가 있으면 같은 카드가 두 번 그려진다 — .first() 로 고정.
     const card = page.getByRole('button', { name: /프리플랍 레인지 차트/ }).first();
     await expect(card).toBeVisible({ timeout: 20_000 });
     await card.click();
@@ -137,10 +197,7 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측', () => {
   test('캘린더 — 내가 적는 기록: 날짜·메모 오른쪽 변 일치 · 컨트롤 높이 통일', async ({ page }) => {
     // ⚠ 매장 계정에는 하단 '캘린더' 탭이 없다(5번째 칸이 '내 매장'). 대신 **내 매장 안의 '내 캘린더' 섹션**이
     //   같은 CalendarPanel 을 쓴다(VenueManageTab.tsx:165 — 중복 구현 금지). 그래서 판이 아니라 그 섹션에서 잰다.
-    const store = page.getByRole('button', { name: /^내 매장/ });
-    test.skip(await store.count() === 0, '이 계정에는 내 매장 탭이 없다');
-    await store.first().click();
-    await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
+    await openStore(page);
 
     // ⚠ 섹션 버튼('내 캘린더' 등)은 접힌 메뉴 안에 있어 폭이 0이다 — 먼저 그 메뉴를 열어야 한다.
     //   (실측으로 알아냈다: 보이는 건 '대시보드 메뉴' 하나뿐이고 나머지는 전부 w=0이었다.)
@@ -178,8 +235,9 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측', () => {
     expect(m!.오른쪽변_차이, '날짜칸과 메모칸의 오른쪽 변이 어긋난다(하네스에선 11→0 이었다)').toBeLessThanOrEqual(1);
     expect(Math.abs(m!.날짜높이 - m!.메모높이), '컨트롤 높이가 줄마다 다르다').toBeLessThanOrEqual(1);
     expect(m!.날짜높이, '터치 타깃 44px 미만').toBeGreaterThanOrEqual(43);
-    if (m!.금액_마이너스_오른쪽차 !== null) {
-      expect(m!.금액_마이너스_오른쪽차, '두 줄의 오른쪽 끝이 안 맞는다').toBeLessThanOrEqual(1);
-    }
+    // 🔴 종전엔 `!== null` 조건부였다 — 금액 칸이나 '마이너스로 기록' 버튼이 사라지면
+    //   6칸 그리드의 존재 이유인 '두 줄의 오른쪽 끝 일치' 단언이 **소리 없이** 없어진다.
+    expect(m!.금액_마이너스_오른쪽차, '금액 칸 또는 마이너스 버튼이 없다 — 6칸 그리드가 아니다').not.toBeNull();
+    expect(m!.금액_마이너스_오른쪽차!, '두 줄의 오른쪽 끝이 안 맞는다').toBeLessThanOrEqual(1);
   });
 });

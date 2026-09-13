@@ -107,6 +107,9 @@ export const CLOCK_PHASE_ACTION: Record<ClockPhase, string> = {
  */
 export const clockIsLive = (s: ClockPhaseInput, nowMs = Date.now()): boolean => clockPhase(s, nowMs) !== 'idle';
 
+/** 게임 라벨 — 메인/사이드N. 클락 보드와 TV 게임 전환 버튼이 같은 문구를 써야 해서 여기 둔다. */
+export const gameLabel = (g: { gameSeq: number }) => (g.gameSeq > 1 ? `사이드${g.gameSeq - 1}` : '메인');
+
 // ── 레벨 번호 · 다음 브레이크 — 4곳에 복제돼 있던 계산을 한 곳으로 (2026-09-13) ─────
 //
 // 왜 여기인가: 둘 다 순수 함수라 regStatus.ts/effectiveLevel 과 같은 이유로 lib/ 에 둔다
