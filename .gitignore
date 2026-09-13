@@ -57,3 +57,11 @@ playstore/*.png
 
 # 클락 TV 시각 검증 캡처 — 로컬 확인용(42MB). e2e/clock-visual.spec.ts 로 언제든 재생성한다.
 docs/clock-shots/
+
+# 서브에이전트 로컬 메모리(memory: local) — 이 체크아웃 전용이라 공유하지 않는다.
+.claude/agent-memory-local/
+
+# 디버깅 캡처 — 로컬 확인용(37MB, 100장). 바로 위 docs/clock-shots/ 와 같은 부류다.
+#   결함을 잡는 동안 남긴 증거라 그때는 유용하지만, 저장소에 넣으면 이력에서 영영 안 지워진다
+#   (pack 70MB → 107MB). 필요하면 해당 e2e/프로브를 다시 돌려 재생성한다.
+docs/bugshots/
