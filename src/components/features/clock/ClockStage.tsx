@@ -530,6 +530,20 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
   const isBreak = lv?.kind === 'break';
   const next = (() => { for (let i = eff.index + 1; i < lvls.length; i++) if (lvls[i].kind === 'level') return lvls[i]; return null; })();
   const num = (n: number) => n.toLocaleString();
+  // 글자 크기를 **칸 폭에도** 묶는다(2026-09-13 검증자 실측 — 폰트 ON 에서 15,000/30,000 이 1920×1080 에서 NEXT 와 8px 겹치고
+  //   프라이즈 열을 30px 침범, 200K/400K 는 99px 겹침·세로 TV 68px 잘림. 폴백 폰트에서도 6자리는 24px 겹치던 기존 결함).
+  //   cqmin 만으로는 '높이'에만 묶여 자릿수가 늘면 폭을 넘는다. 폭 식은 index.css 의 --clk-half(레이아웃별 반쪽 칸 폭, cq 단위)다.
+  //   자릿수→em 폭은 실제 보드 DOM 에서 잰 값(scratchpad glyph-metrics, Pretendard Variable 800 tabular): 숫자 0.668em · 쉼표 0.2915em ·
+  //   '/'(0.5em 글리프) ≈0.19em, 그 좌우 여백 mx-[0.6cqmin] 은 em 이 아니라 cqmin 항(1.2cqmin). 폴백 폰트는 더 좁아(0.58em) 같은 식으로 안전.
+  //   font ≤ (칸 폭 − 좌우 패딩 4cqmin − '/' 여백 1.2cqmin) / em. 4자리(500/1,000)는 어느 뷰포트에서든 이 상한이 7.2cqmin 보다 커서 그대로다
+  //   (1920: 84px > 77.8 · 1080 세로: 85 > 77 · 3440: 160 > 104) — 줄어드는 것은 실제로 넘치던 5~6자리뿐이다. 하한 26px/20px 은 유지.
+  const emOf = (a: number, b: number) => {
+    const s = num(a) + num(b);
+    const digits = s.replace(/\D/g, '').length;
+    const commas = s.length - digits;
+    return 0.668 * digits + 0.2915 * commas + 0.19;
+  };
+  const fit = (em: number) => `calc((var(--clk-half, 50cqw) - 5.2cqmin) / ${em.toFixed(3)})`;
   return (
     <div className="grid h-full grid-cols-2 items-center gap-[2cqmin]">
       {/* CURRENT */}
@@ -547,7 +561,7 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
           <>
             {/* whitespace-nowrap: 자릿수가 커져도 줄바꿈되지 않는다. '/' 는 숫자보다 작게. */}
             <p className="mt-[0.6cqmin] whitespace-nowrap font-extrabold leading-none tabular-nums"
-              style={{ fontSize: 'clamp(26px, 7.2cqmin, 128px)', color: 'var(--clk-accent, #818CF8)' }}>
+              style={{ fontSize: `clamp(26px, min(7.2cqmin, ${fit(lv ? emOf(lv.sb, lv.bb) : 1)}), 128px)`, color: 'var(--clk-accent, #818CF8)' }}>
               {lv ? <>{num(lv.sb)}<span className="mx-[0.6cqmin] align-middle text-[0.5em] text-white/30">/</span>{num(lv.bb)}</> : '-'}
             </p>
             {/* ANTE 가 없으면 이 줄 자체를 그리지 않는다(빈 행을 남기지 않는다).
@@ -568,7 +582,7 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
         {next ? (
           <>
             <p className="mt-[0.6cqmin] whitespace-nowrap font-extrabold leading-none tabular-nums text-white/75"
-              style={{ fontSize: 'clamp(20px, 5.4cqmin, 96px)' }}>
+              style={{ fontSize: `clamp(20px, min(5.4cqmin, ${fit(emOf(next.sb, next.bb))}), 96px)` }}>
               {num(next.sb)}<span className="mx-[0.6cqmin] align-middle text-[0.5em] text-white/25">/</span>{num(next.bb)}
             </p>
             {next.ante > 0 && (
