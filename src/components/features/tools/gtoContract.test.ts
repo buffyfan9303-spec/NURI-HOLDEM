@@ -68,6 +68,14 @@ describe('GTO 탭 — 실사용 흐름 5갈래 IA', () => {
     expect(TOOLS_PANEL).toContain('export const renderCalendarTool');
   });
 
+  it("'오늘의 드릴' 은 GTO 카탈로그·검색·즐겨찾기에서 빠졌다 — 딥링크 키는 남는다(2026-09-14 오너 지시)", () => {
+    expect(TOOLS_PANEL).toContain("const HIDDEN_SET = new Set<ToolKey>([...STORE_SET, 'drill'])");
+    expect(TOOLS_PANEL).toContain('t.cat === l.id && !HIDDEN_SET.has(t.key)');   // 카탈로그 섹션
+    expect(TOOLS_PANEL).toContain('!HIDDEN_SET.has(t.key) && (t.name');            // 검색
+    expect(TOOLS_PANEL).not.toContain("open('drill')");                            // 상단 카드 진입 없음
+    expect(entries.some((e) => e.key === 'drill'), '#tool=drill 딥링크가 죽었다').toBe(true);
+  });
+
   it('매장 운영 5종은 그대로 내 매장 쪽이다', () => {
     for (const k of ['chip', 'sim', 'blindgen', 'payout', 'endtime']) {
       expect(entries.find((e) => e.key === k)?.cat, `${k} 가 GTO 탭으로 돌아왔다`).toBe('ops');
@@ -171,7 +179,8 @@ describe('NURI SPOT — GTO 홈 통합', () => {
   it('레인은 5갈래 그대로다 — NURI SPOT 은 6번째 레인이 아니다', () => {
     // ⚠ LANES 는 라벨을 세로로 맞추려고 공백을 넣어 두었다 — 공백을 허용하지 않으면 절반만 잡힌다.
     const lanes = [...TOOLS_PANEL.matchAll(/\{ id: '([a-z]+)',\s+label: '/g)].map((m) => m[1]);
-    expect(lanes).toEqual(['explore', 'train', 'review', 'tourney', 'rules']);
+    // 2026-09-14 오너 지시로 '규칙 · 수학'(TDA)이 맨 앞. 5갈래·id 는 그대로.
+    expect(lanes).toEqual(['rules', 'explore', 'train', 'review', 'tourney']);
   });
 
   it('대표 카드가 검색창보다 위에 있다 — 첫 화면에서 스팟이 먼저 읽힌다', () => {

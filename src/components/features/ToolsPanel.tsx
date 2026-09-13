@@ -5,7 +5,6 @@ import Icon, { type IconName } from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
 import { shareOrCopy } from '../../lib/calendar';
 import { useTrainerProgress } from '../../lib/trainerProgress';
-import { useDrillPlan } from './tools/drillPlan';
 import { useAuth } from '../../contexts/AuthContext';
 import { promptLogin } from '../../lib/requireLogin';
 import { goSubTab } from '../../lib/subTabTransition';
@@ -74,9 +73,10 @@ type ToolCat = 'explore' | 'train' | 'review' | 'tourney' | 'rules' | 'ops' | 'm
  *  icon = lucide 팩 이름(2026-09-03 오너 "아이콘팩에서 최대한 잘 맞는 걸로" — 손그림 SVG 26개를 Icon 아톰으로 통일).
  *  ⚠ 26개 도구는 서로 다른 아이콘이어야 한다 — ToolsPanel.icons.test.ts 가 게이트. */
 const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?: string; icon: IconName }[] = [
+  // TDA 규칙이 첫 항목(오너 지시 2026-09-14: TDA 를 위로). 2026 판 — 데이터는 src/data/tdaRules.ts.
+  { key: 'tda', cat: 'rules', name: '2026 TDA 규칙', desc: '상황 물으면 규칙 찾아줌', keywords: '토너먼트 디렉터 규칙 TDA 2026 2024 한글 판정 플로어 딜러 카드 노출 올인 페널티 룰북', icon: 'gavel' },
   // ── 학습 — 차트·트레이너 ──
   { key: 'drill', cat: 'train', name: '오늘의 드릴', desc: '약한 부분만 하루 5문제', keywords: '약점 기반 하루 5문제', icon: 'target' },
-  { key: 'tda', cat: 'rules', name: '2024 TDA 규칙', desc: '상황 물으면 규칙 찾아줌', keywords: '토너먼트 디렉터 규칙 TDA 2024 한글 판정 플로어 딜러 카드 노출 올인 페널티 룰북', icon: 'gavel' },
   { key: 'range', cat: 'explore', name: '프리플랍 레인지 차트', desc: '포지션별 시작 핸드 기준표', keywords: '9인·6맥스 포지션별 오픈·3벳·수비·vs 3벳', icon: 'grid-3x3' },
   { key: 'pushfold', cat: 'explore', name: '푸시 · 폴드 차트', desc: '칩 적을 때 올인 기준표', keywords: '자체 Nash · 셔브·콜 레인지', icon: 'arrow-up-from-line' },
   { key: 'trainer', cat: 'train', name: '프리플랍 트레이너', desc: '오픈과 올인 판단 연습', keywords: '오픈·셔브 맞히기, 오답 노트', icon: 'dumbbell' },
@@ -118,12 +118,14 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
  *  §7 ⑥b: '매장 운영' 레인은 GTO 탭에서 빠져 내 매장(StoreToolsPanel)으로 이관 —
  *  카탈로그에서만 숨기고 TOOLS/renderTool 에는 남겨 #tool= 딥링크·공유 하위호환을 지킨다.
  *  icon = 섹션 소제목 앞 글리프(즐겨찾기 헤더의 star-fill 과 같은 문법) — 도구 아이콘과 겹치지 않는 이름. */
+// 순서(2026-09-14 오너 지시): '규칙 · 수학'(TDA)이 맨 앞 — 마지막에 있으면 좁은 폭에서 혼자 줄바꿈되던 항목이기도 하다.
+// id·아이콘은 그대로다(gtoContract 갈래 계약 · icons 게이트).
 const LANES: { id: ToolCat; label: string; desc: string; icon: IconName }[] = [
+  { id: 'rules',   label: '규칙 · 수학', desc: 'TDA 규칙과 포커 수학 보조', icon: 'gavel' },
   { id: 'explore', label: '전략 탐색', desc: '스팟을 정하고 레인지·빈도를 본다', icon: 'table' },
   { id: 'train',   label: '트레이너',   desc: '풀고 · 틀리고 · 오답 노트로 복습', icon: 'graduation-cap' },
   { id: 'review',  label: '핸드 리뷰',  desc: '지난 판 되짚기 — 에퀴티·아웃츠·팟오즈·SPR', icon: 'microscope' },
   { id: 'tourney', label: '토너먼트 랩', desc: 'ICM · 딜 · M존', icon: 'trophy' },
-  { id: 'rules',   label: '규칙 · 수학', desc: 'TDA 규칙과 포커 수학 보조', icon: 'gavel' },
 ];
 // eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유(§7 ⑥b)
 export const STORE_TOOL_KEYS = ['chip', 'sim', 'blindgen', 'payout', 'endtime'] as const;
@@ -132,6 +134,9 @@ export const STORE_TOOL_KEYS = ['chip', 'sim', 'blindgen', 'payout', 'endtime'] 
 // eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유
 export const CALENDAR_TOOL_KEYS = ['bankroll', 'variance'] as const;
 const STORE_SET = new Set<ToolKey>([...STORE_TOOL_KEYS, ...CALENDAR_TOOL_KEYS]);
+/** GTO 탭 카탈로그·검색·즐겨찾기에서 숨기는 도구 = 이관 도구 + '오늘의 드릴'(오너 지시 2026-09-14: GTO 탭에서 삭제).
+ *  같은 조리법 — TOOLS/renderTool 에는 남겨 #tool=drill 딥링크와 gtoContract LEGACY_KEYS 계약을 지킨다. */
+const HIDDEN_SET = new Set<ToolKey>([...STORE_SET, 'drill']);
 /** 레인 칩 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. 화면에 놓인 차례 그대로. */
 const LANE_ORDER = ['all', ...LANES.map((l) => l.id)] as (ToolCat | 'all')[];
 
@@ -306,8 +311,8 @@ export default function ToolsPanel() {
   const [q, setQ] = useState('');
   const [lane, setLane] = useState<ToolCat | 'all'>('all');
   const ql = q.trim().toLowerCase();
-  // 검색도 카탈로그와 같은 범위(매장 운영 도구 제외 — 내 매장으로 이관, ⑥b)
-  const hits = ql ? TOOLS.filter((t) => !STORE_SET.has(t.key) && (t.name.toLowerCase().includes(ql) || t.desc.toLowerCase().includes(ql) || (t.keywords ?? '').toLowerCase().includes(ql))) : null;
+  // 검색도 카탈로그와 같은 범위(이관 도구·오늘의 드릴 제외)
+  const hits = ql ? TOOLS.filter((t) => !HIDDEN_SET.has(t.key) && (t.name.toLowerCase().includes(ql) || t.desc.toLowerCase().includes(ql) || (t.keywords ?? '').toLowerCase().includes(ql))) : null;
   // 즐겨찾기 — 레인 위에 상시 노출(최대 6개)
   const [favs, setFavs] = useState<ToolKey[]>(() => {
     try { return JSON.parse(localStorage.getItem('nuri:fav-tools') || '[]'); } catch { return []; }
@@ -317,19 +322,10 @@ export default function ToolsPanel() {
     try { localStorage.setItem('nuri:fav-tools', JSON.stringify(next)); } catch { /* quota */ }
     return next;
   });
-  const favTools = favs.map((k) => TOOLS.find((t) => t.key === k)).filter((t) => t && !STORE_SET.has(t.key)) as typeof TOOLS;
+  const favTools = favs.map((k) => TOOLS.find((t) => t.key === k)).filter((t) => t && !HIDDEN_SET.has(t.key)) as typeof TOOLS;
 
   // 트레이너 진행(스트릭/XP/오늘 목표) — 이미 로컬에 있는 데이터 구독(신규 fetch 0)
   const prog = useTrainerProgress();
-  // 오늘의 드릴 편성·진행 — 같은 로컬 기록에서 파생(서버 왕복 0)
-  const drill = useDrillPlan();
-  const drillTotal = drill.items.length;
-  const drillDone = Math.min(drill.idx, drillTotal);
-  const drillFinished = drillDone >= drillTotal;
-  const drillHint = drillFinished
-    ? `오늘 완료 · ${drill.correct}/${drillTotal} 정답`
-    : (drill.items[drill.idx]?.reason ?? '약점에 맞춰 편성했습니다');
-  const drillReview = drill.items.filter((it) => it.review).length; // 간격 반복 복습 문항 수(srs.ts)
 
   // 다른 곳(공유 링크·도구 간 상호 딥링크·nuri:open-tool)에서 해시가 바뀌면 반영.
   // ⚠ layout 이펙트인 이유(2026-09-03 실측): 다른 탭에서 이 패널을 처음 마운트시키며 여는 경로는
@@ -407,59 +403,22 @@ export default function ToolsPanel() {
         <span className="chip-aura ml-auto inline-flex h-8 shrink-0 items-center rounded-chip px-2.5 text-2xs font-bold">열기 →</span>
       </button>
 
-      {/* 오늘의 드릴 — 레인지 차트 카드 바로 아래(2026-09-03 오너 결정: 탭의 주인공 카드가 먼저, 드릴은 둘째 — 로드맵 ③ '최상단' 갱신).
-          예전엔 이 자리가 "오늘 0/20" 진행 스트립뿐이라 **숙제만 내고 무엇을 풀지는 유저가 골랐다** —
-          초보가 이탈하는 지점이었다. 이제 약점 카테고리(포스트플랍 정답률)와 오답 노트(프리플랍 큐)로
-          편성한 5문제를 여기서 바로 시작한다. 기존 지표(오늘 N/목표 · 스트릭 · XP · 목표까지 N문제)는
-          아래 줄에 그대로 남겼다 — 없어진 정보 0.
-          card-elev: 아래 ToolCard 와 같은 카드 문법으로 통일(surface-low 라 ink-muted 5.01:1 유지).
-          ⚠ button 안에는 phrasing content 만 — 자식은 전부 span 이다(div 중첩 금지). */}
-      <button type="button" onClick={() => open('drill')}
-        aria-label={`오늘의 드릴 · ${drillTotal}문제 중 ${drillDone}문제 완료. 열기`}
-        className="block w-full space-y-2 rounded-aura border card-aura px-3.5 py-3 text-left hover:border-accent-400/40">
-        {/* §7 P0-A: 이 행들도 같은 부류였다 — 200% 에서 제목 `truncate` 가 42/136,
-            힌트가 146/272, 지표 줄이 68/195 로 잘렸다. 줄바꿈을 허용해 푼다(글자 크기 불변). */}
-        <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-          <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-            <Icon name="target" size={14} className="shrink-0 text-accent-300" aria-hidden />
-            <b className="text-xs font-bold text-ink-primary">오늘의 드릴</b>
-            <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-200">{drillDone}/{drillTotal}</span>
-            {/* 복습 배지 — 있을 때만. h-4 = 제목 줄(text-xs 16px)과 같아 카드 높이가 변하지 않는다. */}
-            {drillReview > 0 && (
-              <span data-testid="drill-review-badge" className="chip-aura inline-flex h-4 shrink-0 items-center rounded-chip px-1.5 text-2xs font-bold leading-none tabular-nums">복습 {drillReview}개</span>
-            )}
+      {/* 트레이너 진행 스트립(오늘 N/목표 · 스트릭 · XP · 목표까지 N문제).
+          2026-09-14 오너 지시로 이 자리의 '오늘의 드릴' 카드는 뺐다(드릴 화면 자체는 #tool=drill 로 남는다).
+          이 지표는 드릴이 아니라 트레이너 기록이라 그대로 둔다 — 없어진 정보 0. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
+          <span className="text-ink-muted">오늘 <b className="tabular-nums text-ink-primary">{prog.today}/{prog.goal}</b></span>
+          <span className="inline-flex items-center gap-1 text-ink-muted">
+            <Icon name="flame" size={12} className="text-accent-300" aria-hidden />
+            <b className="tabular-nums text-accent-200">{prog.streak}</b>일
           </span>
-          <span className="shrink-0 text-2xs font-bold text-accent-200">
-            {drillFinished ? '복습하기' : drillDone > 0 ? '이어서 풀기 →' : '시작하기 →'}
-          </span>
+          <span className="text-ink-muted">XP <b className="tabular-nums text-ink-secondary">{prog.xp.toLocaleString()}</b></span>
         </span>
-
-        {/* 진행 점 + 다음 문제를 낸 이유(약점 보완 · 오답 노트 …) */}
-        <span className="flex items-center gap-2">
-          <span className="flex shrink-0 items-center gap-1">
-            {drill.items.map((_, i) => (
-              <span key={i} className={['h-1.5 w-1.5 rounded-full',
-                i < drillDone ? 'bg-accent-300' : i === drillDone && !drillFinished ? 'bg-accent-300/40 ring-1 ring-accent-400/60' : 'bg-surface-high'].join(' ')} />
-            ))}
-          </span>
-          <span className="min-w-0 text-2xs text-ink-muted">{drillHint}</span>
+        <span className={['shrink-0 text-2xs font-semibold', prog.goalMet ? 'text-emerald-400' : 'text-ink-muted'].join(' ')}>
+          {prog.goalMet ? '오늘 목표 달성' : `목표까지 ${prog.remaining}문제`}
         </span>
-
-        {/* 기존 진행 스트립의 지표를 그대로 보존 */}
-        <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-          <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
-            <span className="text-ink-muted">오늘 <b className="tabular-nums text-ink-primary">{prog.today}/{prog.goal}</b></span>
-            <span className="inline-flex items-center gap-1 text-ink-muted">
-              <Icon name="flame" size={12} className="text-accent-300" aria-hidden />
-              <b className="tabular-nums text-accent-200">{prog.streak}</b>일
-            </span>
-            <span className="text-ink-muted">XP <b className="tabular-nums text-ink-secondary">{prog.xp.toLocaleString()}</b></span>
-          </span>
-          <span className={['shrink-0 text-2xs font-semibold', prog.goalMet ? 'text-emerald-400' : 'text-ink-muted'].join(' ')}>
-            {prog.goalMet ? '오늘 목표 달성' : `목표까지 ${prog.remaining}문제`}
-          </span>
-        </span>
-      </button>
+      </div>
 
       {/* NURI SPOT — GTO 홈의 대표 진입점. 검색·레인 칩보다 위, 그러나 낮게. */}
       {!hits && <SpotHeroCard onOpen={open} />}
@@ -473,12 +432,16 @@ export default function ToolsPanel() {
       </div>
 
       {/* 레인 필터 칩 — 보이는 높이 34px, 탭 타깃 46px(`.tap-y-44::before { inset:-6px 0 }` 로 위아래 6px 확장), aria-pressed 토글.
-          ⚠ gap-y 가 gap-x 보다 큰 이유(2026-09-11 실측): 갈래가 5개로 늘어 이 바가 360·375px 에서 **두 줄로 접힌다**.
-            gap-1.5(6.375px)는 위아래 줄의 6px 확장이 서로 겹치는 폭이라, 겹친 쪽은 나중 요소가 히트를 가져가
-            실효 터치 높이가 39px 로 줄었다(elementFromPoint 실측: '전체'·'트레이너' 39px).
-            gap-y-3(12.75px) > 6+6 이면 두 줄 모두 46px 을 온전히 가진다. 가로는 겹칠 확장이 없어 1.5 그대로. */}
+          3×2 그리드(2026-09-14). design 실측: 칩 6개 폭 합 420.7px 인데 바 가용폭은 360→326 · 390→356 · 430→396 이라
+          flex-wrap 에서는 어떤 폰 폭에서도 마지막 칩 하나만 혼자 둘째 줄로 떨어졌다(오너 지적). 3+3 으로 고정하면 고아가 없다.
+          한 줄 가로 스크롤은 시도했다가 철회했다 — e2e 접근성 게이트(typography-regression 의 "가로 잘림 0",
+          gto-tab-verify 의 "가로 스크롤 0")가 clientWidth < scrollWidth 를 잘림으로 보고, 200% 확대에서는 어떤 한 줄도 못 지난다.
+          그래서 칩에 whitespace-nowrap 도 두지 않는다 — 320px·200% 에서는 칩 안에서 글자가 접혀야 게이트를 지난다.
+          ⚠ gap-y 가 gap-x 보다 큰 이유(2026-09-11 실측): gap-1.5(6.375px)는 위아래 줄의 6px 확장이 서로 겹치는 폭이라
+            실효 터치 높이가 39px 로 줄었다. gap-y-3(12.75px) > 6+6 이면 두 줄 모두 46px 을 온전히 가진다. */}
       {!hits && (
-        <div data-tools-lanebar="" className="flex flex-wrap gap-x-1.5 gap-y-3" role="group" aria-label="도구 분류 필터">
+        <div data-tools-lanebar="" role="group" aria-label="도구 분류 필터"
+          className="flex flex-wrap justify-center gap-x-1.5 gap-y-3">
           {([{ id: 'all' as const, label: '전체' }, ...LANES]).map((l) => {
             const on = lane === l.id;
             return (
@@ -487,7 +450,7 @@ export default function ToolsPanel() {
               //   게이트가 조용히 꺼진다 — subtab-motion 의 tools-lane 계측이 실제로 그렇게 죽어 있었다.
               <button key={l.id} type="button" aria-pressed={on} data-lane={l.id}
                 onClick={() => { const next = on && l.id !== 'all' ? 'all' : l.id; goSubTab('tools-lane', LANE_ORDER, lane, next, () => setLane(next)); }}
-                className={['tap-y-44 inline-flex h-8 items-center rounded-badge border px-2.5 text-2xs font-semibold transition-colors',
+                className={['tap-y-44 inline-flex h-8 items-center justify-center rounded-badge border px-2.5 text-2xs font-semibold transition-colors',
                   on ? 'border-accent-300 bg-accent-300 text-white' : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {l.label}
               </button>
@@ -520,7 +483,7 @@ export default function ToolsPanel() {
       ) : (
         // 5갈래 흐름 — 비접이 소제목 섹션(필터 칩이 보이는 갈래를 고른다)
         LANES.filter((l) => lane === 'all' || lane === l.id).map((l) => {
-          const items = TOOLS.filter((t) => t.cat === l.id);
+          const items = TOOLS.filter((t) => t.cat === l.id && !HIDDEN_SET.has(t.key));
           return (
             <section key={l.id} className="space-y-2">
               {/* §7 P0-A: 레인 설명이 `truncate` 라 320px·100% 에서도 172/178,
