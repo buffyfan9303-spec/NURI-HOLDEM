@@ -61,7 +61,7 @@ describe('accessLabel — 글귀', () => {
     expect(accessLoadFailedMsg({ message: 'Failed to fetch' })).toBe(ACCESS_LOAD_FAILED_MSG);
     expect(accessLoadFailedMsg(null)).toBe(ACCESS_LOAD_FAILED_MSG);
   });
-  // P02 재작업(2026-09-13): 이 RPC 들은 인가를 WHERE 절로 표현해 42501 을 만들 수 없다 — 실제로 나는 것은 PGRST301·PGRST202·네트워크다.
+  // 20260915a 부터 두 RPC 는 비인가에 42501 을 준다(위 테스트). 그 밖에 실제로 나는 것은 PGRST301·PGRST202·네트워크다.
   it('🔴 PGRST301(세션 만료)은 "다시 시도" 가 아니라 재로그인 안내다 — msgOf 와 같은 문장', () => {
     expect(accessLoadFailedMsg({ code: 'PGRST301', message: 'JWT expired' })).toBe('로그인이 만료되었습니다. 다시 로그인해 주세요');
     expect(accessLoadFailedMsg({ code: 'PGRST301', message: 'JWT expired' })).not.toMatch(/다시 시도/);

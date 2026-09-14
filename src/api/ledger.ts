@@ -1367,9 +1367,12 @@ export async function setPosCancelPassword(venueId: string, password: string): P
 // ⚠ 조회 실패를 [] 로 뭉개지 않는다(P02, 2026-09-13). 예전엔 `if (error) return [];` 라 RLS 거부·네트워크 순단이
 //    곧 '모든 직원 권한 없음' 화면이 됐고, 업주가 이미 있는 권한을 다시 켜려 grant 를 쏘게 만들었다.
 //    위 canAccessLedger 와 같은 규약 — 실패는 실패로 올리고 호출부(StaffManager·NuriPosLedger)가 갈라 그린다.
+// ⚠ 테이블 직접 SELECT 가 아니라 RPC 다(20260915a). 직접 SELECT 는 RLS(la_select) 가 비인가자에게 오류 대신 **0행**을,
+//    장부직원에게는 **자기 행만** 줘서 '아무도 없음'·'나 혼자' 로 위장됐다. RPC 는 can_access_ledger 게이트를 지나면 전체,
+//    아니면 42501 을 던진다 → 호출부의 accessLoadFailedMsg(isDenied) 가 계정 안내로 갈라 말한다.
 export async function getLedgerAccessUserIds(venueId: string): Promise<string[]> {
   if (IS_MOCK) return [];
-  const { data, error } = await supabase.from('ledger_access').select('user_id').eq('venue_id', venueId);
+  const { data, error } = await supabase.rpc('get_ledger_access_user_ids', { p_venue_id: venueId });
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => r.user_id);

@@ -1,4 +1,5 @@
 -- 20260913c — 직원 권한 보유자 목록 조회에서 "비인가" 와 "아무도 없음" 이 같은 200+0행이던 것 (P02 재작업, 2026-09-13)
+-- ⛔ 20260915a_ledger_access_user_ids_rpc_denied_is_error.sql 로 대체됨(2026-09-15 라이브 적용). 이 파일은 적용하지 않는다.
 -- ⚠ 초안(DRAFT) — 라이브 적용 금지. 매장 담당(store-team)이 계약만 확정한다. 적용·클라이언트 전환은 nuri-lead 가
 --   nuri-migration 절차(격리 컨테이너 자가검사 → 임퍼소네이션 + ROLLBACK 검증)를 밟은 뒤에만 한다.
 --   이 파일이 적용되기 전까지 클라이언트(src/api/ledger.ts getLedgerAccessUserIds · src/api/vouchers.ts getVoucherAccessUserIds)는

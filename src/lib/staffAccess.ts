@@ -37,10 +37,9 @@ export const ACCESS_LOAD_FAILED_MSG = '권한을 불러오지 못했어요. 다�
 /** 서버가 42501/403 을 준 경우 — '다시 시도' 가 답이 아니다(nuri-async-guard 부류 2). 처방이 다르니 문장도 다르다. */
 export const ACCESS_LOAD_DENIED_MSG = '권한 설정을 볼 수 있는 계정이 아니에요. 매장 업주 계정으로 다시 로그인해 주세요.';
 /** 실패 사유별 안내 — 권한 거부(isDenied)·세션 만료(PGRST301)·그 밖의 실패(네트워크·구버전 서버 PGRST202)를 갈라 말한다.
- *  ⚠ P02 재작업(2026-09-13 독립 검증): 이 두 RPC(get_ledger_access_user_ids·get_voucher_access_user_ids)는 인가를 WHERE 절
- *    (`can_manage_pos`)로 표현해 비인가 호출자에게 **200 + 0행**을 준다 — 42501 은 서버가 만들 수 없는 조건이고 `throw error` 로는 못 잡는다.
- *    실제로 나는 실패는 세션 만료(PGRST301)·구버전 서버(PGRST202)·네트워크다. PGRST301 은 '다시 시도' 로 영원히 성공하지 않는다 —
- *    재로그인이 답이라 msgOf 의 문장('로그인이 만료되었습니다. 다시 로그인해 주세요')을 그대로 쓴다. */
+ *  ⚠ 20260915a 부터 두 RPC(get_ledger_access_user_ids·get_voucher_access_user_ids)는 비인가 호출자에게 0행이 아니라 **42501** 을 준다
+ *    (그전엔 인가가 WHERE 절이라 200+0행 = '아무도 없음' 으로 위장됐다). 42501 은 '다시 시도' 가 답이 아니라 계정 안내다.
+ *    PGRST301 도 '다시 시도' 로 영원히 성공하지 않는다 — 재로그인이 답이라 msgOf 의 문장('로그인이 만료되었습니다. 다시 로그인해 주세요')을 그대로 쓴다. */
 export function accessLoadFailedMsg(error: unknown): string {
   if (isDenied(error)) return ACCESS_LOAD_DENIED_MSG;
   const code = error && typeof error === 'object' ? String((error as { code?: unknown }).code ?? '') : '';
