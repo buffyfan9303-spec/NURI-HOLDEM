@@ -1551,8 +1551,18 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
   useBackClose(true, onClose, { escape: true });
 
   return (
-    <div data-scroll-lock className="fixed inset-0 z-[60] bg-surface-base overflow-y-auto transform-gpu animate-fade-in">
-      <header className="sticky top-0 z-10 h-header-h px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
+    /* ⚠ 합성 힌트 유틸(translateZ 를 거는 그것)을 뗐다(2026-09-15).
+        ⚠ 여기에 그 클래스 이름을 그대로 적지 마라 — tailwind 의 content 스캐너가 주석도 평문으로 읽어
+          번들에 죽은 CSS 를 만든다(2026-09-15 b09c7a8 에서 실제로 밟았다).
+        transform 이 걸린 요소는 `position: fixed` 자손의
+        **컨테이닝 블록**이 되는데, 이 안에 뜨는 NuriPosLedger 의 정산 바가 바로 그 fixed 다.
+        격리 재현(390×844, transform:translateZ(0) 유무만 다른 두 판): 스크롤 600px 에서
+        바가 top 804 → 204 로 **같이 밀렸다**(없으면 804 고정). 화면에 붙어 있어야 할 정산 바가
+        본문과 함께 흘러간 것 — 합성 힌트 하나로 기능이 사라지는 부류라 근본에서 뗀다.
+        상단 안전영역: 루트가 아니라 헤더에 얹는다(루트에 얹으면 sticky top-0 이 다시 상태바로 들어간다).
+        높이는 header-h + inset 으로 키워야 border-box 에서 내용 칸이 안 줄어든다. */
+    <div data-scroll-lock className="fixed inset-0 z-[60] bg-surface-base overflow-y-auto animate-fade-in">
+      <header className="sticky top-0 z-10 h-[calc(theme(spacing.header-h)+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
         <button type="button" onClick={onClose} className="text-sm font-semibold text-ink-secondary hover:text-ink-primary">← 닫기</button>
         <span className="text-sm font-bold text-ink-primary truncate">{venueName} · 장부/통계</span>
         <span className="ml-auto shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-2 py-0.5 rounded-badge">운영자 전체 접근</span>

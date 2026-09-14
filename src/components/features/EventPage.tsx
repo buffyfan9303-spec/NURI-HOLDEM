@@ -135,7 +135,13 @@ export default function EventPage({ open, onClose, onLogin, slug = CARD_EVENT_SL
        ▶ 다시 넣고 싶다면: 격자를 content-visibility 로 잘라 첫 페인트 면적을 줄인 **뒤에** 재고,
          반드시 위 수치와 같은 자로 다시 재라. 재지 않고 넣으면 이 실측을 되돌리는 것이다. */
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-surface-base" role="dialog" aria-modal="true" aria-label="이벤트">
-      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-surface-base/95 px-page-x py-2.5 backdrop-blur">
+      {/* 상단 안전영역 — 이 오버레이는 `fixed inset-0` 이고 index.html 의 viewport 가 `viewport-fit=cover` 라
+          노치 아이폰·설치형(PWA, status-bar-style=black-translucent)에서 **내용이 상태바 밑으로 들어간다.**
+          실측(2026-09-15, 강제 inset top=47 로 만든 사본): 닫기 버튼이 11~53 에 그대로 있어 47px 아래
+          6px 만 손가락에 닿았다 — 이 화면의 유일한 탈출구다. pt 에 얹어 헤더 자체를 내린다
+          (루트 스크롤러에 얹으면 `sticky top-0` 이 스크롤포트 top=0 에 붙어 다시 상태바로 들어간다).
+          py-2.5 를 pt/pb 로 가른 이유: 같은 속성을 두 클래스가 쓰면 캐스케이드 순서에 결과가 달린다. */}
+      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-surface-base/95 px-page-x pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] backdrop-blur">
         {/* hit: 시각 40px 그대로, 손가락 영역만 44px(TOUCH-01 — 유저 모바일 99% 화면) */}
         <button type="button" onClick={onClose} aria-label="닫기"
           className="hit -ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-input text-ink-secondary transition-colors hover:bg-surface-high">

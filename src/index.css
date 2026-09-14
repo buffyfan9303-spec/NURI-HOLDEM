@@ -1402,6 +1402,15 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
 @media (max-width: 1023.5px) {
   /* py-* 유틸 클래스가 태그 셀렉터를 이겨 패딩이 무효되던 버그 — 하단 탭바 가림의 원인 */
   main { padding-bottom: var(--tabbar-safe) !important; }
+  /* 브라우저가 '포커스된 칸을 보이게' 스크롤할 때는 **뷰포트만** 본다 — 그 위에 떠 있는 하단 탭바를 모른다.
+     그래서 화면 밖 바로 아래 칸으로 포커스가 가면(소프트 키보드의 '다음', Tab, 검증 실패 포커스)
+     최소 스크롤(block:nearest)로 화면 **맨 아래 모서리**에 붙이고, 그 자리가 정확히 탭바 뒤다.
+     실측(2026-09-15, 프로덕션 4173 · 390×844 · 캘린더 기록 입력):
+       없을 때  날짜·금액·메모 → 800~844 (탭바 top=770) = 완전히 가려짐
+       110px    →              690~734 = 완전히 드러남
+     레이아웃은 한 픽셀도 안 바뀐다(scroll-margin 은 스크롤 정렬에만 쓰인다).
+     값은 하단 탭바 회피 단일 소스를 그대로 쓴다 — 임의 상수 신설 금지(위 --tabbar-safe 주석). */
+  input, textarea, select, [contenteditable] { scroll-margin-bottom: var(--tabbar-safe); }
   /* 모바일: 항상 떠 있던 세로 스크롤바 숨김(터치 스크롤이라 불필요) — 오른쪽 '삐져나옴' 제거.
      데스크톱은 scrollbar-gutter:stable 로 폭 흔들림 방지 유지(위 html 규칙). */
   html { overflow-y: auto; scrollbar-gutter: auto; }

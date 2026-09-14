@@ -618,7 +618,9 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
       </header>
 
       {/* 서피스 깊이·오로라 확장(2026-08-27): 비로그인 랜딩 상단 오로라 워시 — 정적 1회 페인트 */}
-      <div className="hero-aurora flex-1 overflow-y-auto">
+      {/* pb-[env(safe-area-inset-bottom)]: 로그인 판(위 :251)에는 있는데 이 비로그인 랜딩에만 빠져 있었다.
+          같은 `fixed inset-0` 전면 화면인데 한쪽만 홈 인디케이터 띠를 비워 두면 그 자체가 버그다. */}
+      <div className="hero-aurora flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto w-full max-w-md space-y-4 px-page-x py-section">
           <div>
             <h1 className="text-xl font-extrabold text-ink-primary">반갑습니다</h1>

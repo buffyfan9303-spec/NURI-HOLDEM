@@ -65,7 +65,10 @@ export default function LedgerWorkspace({ venueId, active, children }: {
       /* data-ledger-fullscreen: 정산바(NuriPosLedger, position:fixed)가 화면이 아니라
          **이 안의 장부 칸**에 맞도록 좌우 경계를 넘긴다. 값은 index.css 에 있다 —
          레일 폭(20rem)과 칸 여백(px-3)이 바뀌면 그 한 곳만 고치면 된다. */
-      <div ref={hostRef} data-ledger-fullscreen className="fixed inset-0 z-[70] flex flex-col bg-surface-base">
+      /* 안전영역: 브라우저 전체화면이 거부되면(iOS 사파리 등) 이건 그냥 `fixed inset-0` 오버레이라
+          viewport-fit=cover 아래에서 머리말이 상태바 밑으로, 바닥이 홈 인디케이터 밑으로 들어간다.
+          데스크톱에서는 env(...) 가 0 이라 PC 렌더는 한 픽셀도 안 바뀐다. */
+      <div ref={hostRef} data-ledger-fullscreen className="fixed inset-0 z-[70] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
           <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">장부 · 전체화면</span>
           <span className="hidden text-2xs text-ink-muted sm:inline">Esc 로 나가기</span>
