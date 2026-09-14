@@ -243,8 +243,9 @@ ${cards}
   };
   const issue = async () => {
     if (reason === 'other' && !reasonNote.trim()) { toast.show('기타 사유는 비고에 발급 이유를 적어 주세요', 'error'); return; }
-    // 받는 손님 미지정이 기본 경로라 실수로 '매장 보관'에 들어가던 사고 — 한 번 확인
-    if (!recvUserId && !window.confirm(`받는 손님 없이 매장 보관용으로 ${count}개를 발급할까요?\n\n손님에게 주려면 [취소] 후 '받는 손님'을 지정하세요.`)) return;
+    // 오너 결정(2026-09-14): 손님 미지정 발급을 막는다 — 나중에 손님을 배정하는 기능이 없어 영원히 못 쓰는 표가 되고,
+    // 서버도 보유자 없는 이용권의 사용 전이를 거절한다(20260914b). 버튼도 비활성화하지만 한 번 더 막는다.
+    if (!recvUserId) { toast.show('받는 손님을 먼저 지정해 주세요', 'error'); return; }
     setBusy(true);
     try {
       await issueVoucher(venueId, { title, count, holderUserId: recvUserId ?? undefined, holderName: recvDisplay || undefined, expiresAt: expiry ? `${expiry}T23:59:59+09:00` : null, reason, note: reason === 'other' ? reasonNote.trim() || undefined : undefined });
@@ -487,13 +488,18 @@ ${cards}
                   ) : null}
                 </div>
               ) : (
-                <div className="flex gap-1.5">
-                  <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs"><Icon name="user" size={12} /> 아이디(닉네임)로 지정</button>
-                  <button type="button" onClick={() => setRecvMode('phone')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs"><Icon name="phone" size={12} /> 전화번호로 지정</button>
+                <div className="space-y-1">
+                  <p className="text-2xs font-semibold text-ink-secondary">받는 손님 <span className="text-danger-light">필수</span></p>
+                  <div className="flex gap-1.5">
+                    <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs"><Icon name="user" size={12} /> 아이디(닉네임)로 지정</button>
+                    <button type="button" onClick={() => setRecvMode('phone')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs"><Icon name="phone" size={12} /> 전화번호로 지정</button>
+                  </div>
                 </div>
               )}
-              <button type="button" disabled={busy || (!isAdmin && (!approved || approvedErr != null))} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 발급${recvDisplay ? ` → ${recvDisplay}` : ''}`}</button>
-              <p className="text-2xs text-ink-muted">1회 최대 1000개 · 아이디(닉네임)로 손님 지정 시 그 회원 지갑으로. 미지정이면 매장 보관용. 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
+              <button type="button" disabled={busy || !recvUserId || (!isAdmin && (!approved || approvedErr != null))} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : recvUserId ? `+ ${count}개 발급 → ${recvDisplay}` : '받는 손님을 먼저 지정하세요'}</button>
+              {/* 오너 결정(2026-09-14): 손님 미지정 발급은 나중에 배정할 방법이 없어 영원히 못 쓰는 표가 된다 —
+                  '미지정이면 매장 보관용'은 더 이상 사실이 아니라 지웠다. 본인인증을 마친 회원 계정에만 발급되는 이유를 남긴다. */}
+              <p className="text-2xs text-ink-muted">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 발급됩니다(받는 손님 지정 필수). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
 
               {/* W2-1 VCH-1: 유상 충전(구매) 요청 UI 제거 — 이용권이 '상금 재원' 성격을 갖지 않게(§12-A-2).
                   서버(request_voucher_credit·admin_decide approve)도 봉쇄됨. 한도는 운영자 문의로만. */}

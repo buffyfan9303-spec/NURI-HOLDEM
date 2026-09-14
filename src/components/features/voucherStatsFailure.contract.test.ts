@@ -60,6 +60,13 @@ describe('N04-A · 매장 전환 경합 — staleResponse 계약 배선', () => 
   it('🔴 승인 상태 조회 실패는 approvedErr 로 갈라 말하고 발급 버튼을 잠근다', () => {
     expect(VM).toMatch(/const \[approvedErr, setApprovedErr\] = useState<unknown>\(null\);/);
     expect(VM).toMatch(/\{!isAdmin && approvedErr != null && \(\s*<LoadErrorCard what="발급 승인 상태" error=\{approvedErr\} onRetry=\{reload\} compact/);
-    expect(VM).toMatch(/disabled=\{busy \|\| \(!isAdmin && \(!approved \|\| approvedErr != null\)\)\}/);
+    expect(VM).toMatch(/disabled=\{busy \|\| !recvUserId \|\| \(!isAdmin && \(!approved \|\| approvedErr != null\)\)\}/);
+  });
+
+  // 오너 결정(2026-09-14): 받는 손님 미지정 발급을 막는다 — 나중에 배정할 방법이 없어 영원히 못 쓰는 표가 되고,
+  // 서버(20260914b)도 보유자 없는 이용권의 사용 전이를 거절한다. 화면은 그 전에 버튼을 잠가야 한다.
+  it('🔴 받는 손님을 지정하지 않으면 발급 버튼이 잠긴다', () => {
+    expect(VM).toMatch(/if \(!recvUserId\) \{ toast\.show\('받는 손님을 먼저 지정해 주세요', 'error'\); return; \}/);
+    expect(VM).toMatch(/disabled=\{busy \|\| !recvUserId \|\| \(!isAdmin && \(!approved \|\| approvedErr != null\)\)\}/);
   });
 });

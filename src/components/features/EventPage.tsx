@@ -15,6 +15,8 @@ import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
+import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29) — 새 판정을 만들지 않고 재사용
+import { ensureVerified } from '../../lib/requireLogin'; // 본인인증 안내 시트(VerifyGateSheet)를 여는 기존 진입점 재사용
 import { cachedEventBoard,getEventBoard, openEventCard, oddsRows, TIER_META, CARD_EVENT_SLUG,
   type EventBoard, type EventCard, type OpenResult,
 } from '../../api/events';
@@ -42,6 +44,7 @@ export default function EventPage({ open, onClose, onLogin, slug = CARD_EVENT_SL
 }) {
   const { user } = useAuth();
   const toast = useToast();
+  const idOn = useIdentityEnabled(); // 킬스위치 — 오너 지시(2026-09-14): 새 판정 로직을 만들지 않고 이 훅을 그대로 쓴다
   /* 홈 배너가 이미 받아 둔 보드로 **첫 프레임부터 내용을 그린다**.
      이게 없으면 열자마자 헤더만 뜬 빈 몸통이 15~80ms 보였다(실측 2026-09-08) — 그 한 번의
      교체가 남아 있던 마지막 깜빡임이었다. 씨앗이 없으면(첫 방문·로그인 직후) 종전대로 로딩부터. */
@@ -165,6 +168,11 @@ export default function EventPage({ open, onClose, onLogin, slug = CARD_EVENT_SL
       ) : (
         <div className="px-page-x pb-24 pt-3">
           <Hero board={board} left={left} total={total} user={!!user} onLogin={onLogin} av={av} />
+
+          {/* 본인인증/킬스위치 사전 안내(오너 지시 2026-09-14) — 카드를 열기 전에 미리 알린다.
+              카드 자체는 막지 않는다(canPlay 는 그대로 av.canJoin 만 본다) — 서버가 참여권 소모 전에
+              이미 정확히 막고 있어서, 여기서 또 막으면 나중에 서버 규칙이 바뀔 때 화면이 거짓말을 한다. */}
+          <EventVerifyNotice idOn={idOn} live={av.state === 'live'} loggedIn={!!user} verified={!!user?.verified} />
 
           {/* 카드판 — 정사각 작은 칸. 100장이 한 화면에 들어와야 '고른다'가 성립한다
               (세로로 긴 카드였을 땐 스크롤 없이 20장도 안 보였다 — 오너 2026-09-06). */}
@@ -290,6 +298,50 @@ function Hero({ board, left, total, user, onLogin, av }: {
       )}
     </section>
   );
+}
+
+// ── 본인인증·킬스위치 사전 안내 ─────────────────────────────────────────────────
+// 오너 지시(2026-09-14): 미인증 손님도 출석하면 참여권이 쌓이지만, 카드를 열려는 순간에야
+// 서버(open_event_card)가 거절 문구를 보여줬다 — 오픈기념 이벤트는 신규 손님이 대부분이라
+// 이 화면이 가장 자주 보인다. 누르기 전에 무엇이 필요하고 왜 필요한지, 어디로 가면 되는지 미리 안내한다.
+//
+// ⚠ 이 배너는 **안내일 뿐**이다 — 카드 타일의 disabled 는 여전히 av.canJoin(서버와 같은 판정) 하나만 본다.
+//   여기서 또 막으면 서버 규칙이 바뀔 때 화면이 거짓말을 한다(참여권도 이미 안 닳는다 — 소모 전에 거절된다).
+// ⚠ 비로그인은 다루지 않는다 — Hero 의 '로그인하고 참여하기' CTA 가 이미 그 상태를 말한다
+//   (같은 말을 두 번 하지 않는다 — 로그인부터 하면 그다음에 이 배너가 인증을 이어 말한다).
+// ⚠ 킬스위치 OFF 는 **로그인·인증 여부와 무관하게** 모두를 막는다(assertVoucherOn·20260914b 와 같은 조건).
+//   그래서 이 가지는 loggedIn 을 보지 않는다 — '인증하세요'만 뜨면 킬스위치 OFF 에서 화면이 거짓말이 된다.
+function EventVerifyNotice({ idOn, live, loggedIn, verified }: {
+  idOn: boolean; live: boolean; loggedIn: boolean; verified: boolean;
+}) {
+  if (!live) return null;
+  if (!idOn) {
+    return (
+      <section data-testid="event-killswitch-notice" className="mt-3 rounded-aura border border-border-default bg-surface-high px-3 py-2.5 text-2xs leading-relaxed text-ink-secondary">
+        <p className="flex items-start gap-1.5 font-bold text-ink-primary">
+          <Icon name="alert" size={13} className="mt-px shrink-0" />
+          매장이용권이 현재 비활성화되어 있어 카드를 열 수 없어요
+        </p>
+        <p className="mt-1">쌓인 참여권은 그대로 남아 있어요 — 준비되면 다시 열립니다.</p>
+      </section>
+    );
+  }
+  if (loggedIn && !verified) {
+    return (
+      <section data-testid="event-verify-notice" className="mt-3 rounded-aura border border-danger/40 bg-danger/[0.08] px-3 py-2.5">
+        <p className="flex items-start gap-1.5 text-2xs font-bold text-danger-deep dark:text-danger-light">
+          <Icon name="alert" size={13} className="mt-px shrink-0" />
+          본인인증을 완료해야 카드를 열 수 있어요
+        </p>
+        <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
+          쌓인 참여권은 그대로 남아 있어요 — 인증만 마치면 바로 열 수 있습니다.
+        </p>
+        <button type="button" onClick={() => ensureVerified({ verified }, '이벤트 참여')}
+          className="btn-primary mt-2 h-9 w-full text-xs">프로필에서 본인인증하기</button>
+      </section>
+    );
+  }
+  return null;
 }
 
 // ── 카드 뒷면 4종 ──────────────────────────────────────────────────────────────
