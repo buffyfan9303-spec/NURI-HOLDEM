@@ -71,7 +71,7 @@ alwaysApply: false
 
 ## 지금 열려 있는 것
 
-- supabase/migrations/20260911a_community_ads_promoted_posts 운영 미적용 — 앱이 없는 RPC community_ads_public 을 불러 커뮤니티 탭 진입마다 404. src/api/ads.ts:53 이 PGRST202 를 잡아 세션 1회만 묻고 '광고 없음'으로 degrade 하지만 e2e/auth-smoke 가 이 404 로 실패한다. 마이그레이션 §5(테이블 읽기 축소)는 앱 배포 뒤 별도 실행. 근거: docs/plans/BLOCKED.md:49 (파일 실재: supabase/migrations/20260911a_community_ads_promoted_posts.sql)
+- ✅ **2026-09-15 해소**: `supabase/migrations/20260911a_community_ads_promoted_posts` 는 **운영에 적용됐다.** `community_ads_public` RPC 가 생겨 커뮤니티 탭 404 와 그로 인한 `e2e/auth-smoke` 실패가 **사라졌다**. §5(테이블 읽기 축소)도 `20260915b_community_ads_read_admin_only.sql` 로 별도 적용 완료(anon 직접 읽기 4행 → 0행 실측). `src/api/ads.ts` 의 PGRST202 degrade 는 **그대로 둔다** — 새 환경·롤백 대비 안전망이다. (옛 기록: 이 줄은 원래 '미적용이라 404' 였다.)
 - supabase/migrations/20260911n_sanction_gate_comments 운영 미적용 — 정지된 회원이 댓글·쪽지(user_messages·listing_messages)·구인글(dealer_posts)·그룹 글/채팅·라이브 한 줄로 계속 쓸 수 있다(파일 58-97행: BEFORE INSERT 트리거 9개+). 클라 쪽 P0001 분기(src/api/community.ts:375)는 이미 들어가 있어 적용 즉시 동작한다. 근거: docs/plans/BLOCKED.md:59
 - 업주 전용 커뮤니티('매장')는 2026-09-10 오너 지시로 화면에서 전량 폐기됐으나 서버 데이터·API 는 남아 있다 — owner_posts 테이블과 getOwnerPosts/createOwnerPost/deleteOwnerPost(src/api/community.ts:690-717)가 호출부 0곳으로 잔존(grep: 주석 언급 1건뿐). 근거: src/components/features/CommunityTab.tsx:72-74
 - 금칙어 검사는 클라이언트 정규식 단일 방어다(src/lib/content-filter.ts, PostFormModal·CommunityShoutBar·CommunityTab·MarketplaceFormModal·PosterFormModal 5곳 호출 — grep 확인). 서버 금칙어 게이트는 외치기(20260829j·20260830f)와 댓글 경로(20260911n, P0001)에만 있고 community_posts 본문 서버측 검사는 마이그레이션에 없다.
