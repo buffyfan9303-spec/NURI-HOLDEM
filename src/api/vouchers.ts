@@ -467,7 +467,11 @@ export async function getVoucherQuota(venueId: string): Promise<number | null> {
   if (IS_MOCK) return null;
   const { data, error } = await supabase.rpc('get_voucher_quota', { p_venue_id: venueId });
   if (error || data == null) return null;
-  return typeof data === 'number' ? data : Number(data);
+  // 스칼라 반환이 아니면(집합 반환·스키마 변경) Number() 가 NaN 을 내는데, 호출부는 그것을
+  // 그대로 그려 업주 화면에 "잔여 한도 NaN개" 가 마지막까지 나간다(2026-09-15 합성 응답으로 재현).
+  // 알 수 없는 값은 null(한도 미설정)로 떨어뜨린다 — 거짓 숫자보다 모름이 정직하다.
+  const n = typeof data === 'number' ? data : Number(data);
+  return Number.isFinite(n) ? n : null;
 }
 
 /** 충전(구매) 요청 — 업주. 대기 중 요청이 있으면 서버가 거부 */

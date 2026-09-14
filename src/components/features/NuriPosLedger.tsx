@@ -1154,7 +1154,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
 
       {/* 세션 요약 */}
       <div className="rounded-aura border card-aura p-2.5 flex items-center gap-2 flex-wrap">
-        <span className="text-sm font-bold text-ink-primary">{session.title || '세션'}</span>
+        <span className="text-pretty text-sm font-bold text-ink-primary">{session.title || '세션'}</span>
         <span className="text-2xs text-ink-muted">현금 {wonToMan(session.buyinAmount)}만원
           {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${wonToMan(session.cardAmount)}만원` : ' · 카드=현금'}</span>
         {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operFull(session.openedBy)}</span>}

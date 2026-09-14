@@ -813,7 +813,7 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
    * 프롭으로 빼면 adj·setLevel·adjustTime 등 12개를 배선해야 한다(클로저 그대로 쓰는 편이 작다).
    */
   const consoleUI = (
-    <div className={['shrink-0 border-white/5 bg-black/30 px-2 py-2', fs ? 'border-t' : 'rounded-card border'].join(' ')}>
+    <div className={['shrink-0 border-border-default bg-surface-mid px-2 py-2 dark:border-white/5 dark:bg-black/30', fs ? 'border-t' : 'rounded-card border'].join(' ')}>
       {/* ① 주 조작 — 가장 크고, 항상 첫 화면에 */}
       <div className="flex items-center gap-2">
         <button type="button" onClick={toggleRun} data-testid="clk-main-action"
@@ -839,7 +839,13 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
       </div>
 
       {/* ③ 현재 상태 입력 — 엔트리·생존·리바이·얼리·애드온 */}
-      <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-white/[0.06] pt-2">
+      {/* ⚠ 2026-09-15 실측: 예전엔 flex-wrap 이라 Stepper 5개가 4+1 로 갈려 Addon 만 다음 줄에 고아로 남았다.
+          그렇다고 grid-cols-5 로만 두면 이번엔 **좁은 폭에서 잘린다** — 실측 360px 2px · 320px 6px 넘침(행 scrollW > clientW).
+          항목 폭 61.6px 은 값 자릿수가 아니라 **`w-7` 버튼 2개(29.75×2 + gap 4.25)**가 정하는 상수다.
+          따라서 5열 임계값은 행 폭 ≥ 5×61.6 + 4×4.25 = 325px, 즉 **넷포트 ≈ 378px** 이다.
+          임계값에 붙여 `min-[380px]:` 로 조이면 `w-7` 을 건드리는 순간 조용히 깨진다 — 그래서 일부러 헐거운 `sm:`(640px)을 고른다.
+          640 이상은 5열 렌더가 종전과 **수치까지 동일**하고(행 clientW·트랙 폭 불변), 미만은 3+2 로 **균형 접힘**이라 고아가 아니다. */}
+      <div className="mt-2 grid grid-cols-3 sm:grid-cols-5 items-end justify-items-center gap-x-1 gap-y-2 border-t border-border-default dark:border-white/[0.06] pt-2">
         <Stepper label="Entries" value={liveStats.entries} onPlus={() => adj('adjEntries', 1)} onMinus={() => adj('adjEntries', -1)} />
         <Stepper label="Player" value={liveStats.alive} onPlus={() => adjPlayer(1)} onMinus={() => adjPlayer(-1)} />
         <Stepper label="Rebuy" value={liveStats.rebuys} onPlus={() => adj('adjRebuys', 1)} onMinus={() => adj('adjRebuys', -1)} />
@@ -848,30 +854,30 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
       </div>
 
       {/* ④ 소리 */}
-      <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-white/[0.06] pt-2">
+      <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-border-default dark:border-white/[0.06] pt-2">
         <VolCtl value={volume} onChange={setVolume} onToggleMute={toggleMute} />
         <button type="button" onClick={() => playChime('level')} title="알림음 미리듣기" aria-label="알림음 미리듣기"
-          className="grid h-7 w-7 shrink-0 place-items-center self-end rounded-input border border-border-default bg-white/10 text-ink-secondary hover:bg-white/15 hover:text-[#8B94E8]"><Icon name="volume" size={14} /></button>
+          className="grid h-7 w-7 shrink-0 place-items-center self-end rounded-input border border-border-strong dark:border-border-default bg-surface-high dark:bg-white/10 text-ink-secondary hover:bg-surface-float dark:hover:bg-white/15 hover:text-[#8B94E8]"><Icon name="volume" size={14} /></button>
         <div className="flex flex-col items-center gap-0.5">
           <span className="text-[9px] text-ink-muted">10초틱</span>
           <button type="button" onClick={() => setTickStyle((t) => t === 'beep' ? 'soft' : t === 'soft' ? 'off' : 'beep')}
             title="마지막 10초 카운트다운 틱 음색 · 비프/부드러움/끔(끔=레벨업음만)"
-            className="h-7 rounded-input border border-border-default bg-white/10 px-2 text-2xs font-bold text-ink-secondary hover:bg-white/15 hover:text-[#8B94E8]">
+            className="h-7 rounded-input border border-border-strong dark:border-border-default bg-surface-high dark:bg-white/10 px-2 text-2xs font-bold text-ink-secondary hover:bg-surface-float dark:hover:bg-white/15 hover:text-[#8B94E8]">
             {tickStyle === 'beep' ? '비프' : tickStyle === 'soft' ? '부드러움' : '끔'}
           </button>
         </div>
       </div>
 
       {/* ⑤ 위험군 — 주 버튼에서 떼어 맨 아래. 되돌릴 수 없는 것과 매번 누르는 것을 이웃시키지 않는다. */}
-      <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.06] pt-2">
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-border-default dark:border-white/[0.06] pt-2">
         <button type="button" onClick={resetClock}
-          className="rounded-input border border-border-default bg-white/10 px-3 py-2 text-2xs font-bold text-ink-secondary hover:bg-white/15 hover:text-amber-300">↺ 초기화</button>
+          className="rounded-input border border-border-strong dark:border-border-default bg-surface-high dark:bg-white/10 px-3 py-2 text-2xs font-bold text-ink-secondary hover:bg-surface-float dark:hover:bg-white/15 hover:text-amber-300">↺ 초기화</button>
         {/* 콘솔은 이제 `!fs` 일 때만 렌더된다(아래 사용처) — 여기 있던 `fs ? 해제 : 토너 종료` 삼항은
             영영 두 번째 가지만 타는 죽은 분기가 됐다. 전체화면 해제는 모서리 오버레이로 옮겼다. */}
         {/* ⚠ 2026-09-14 라이트 실측: 여기 있던 text-white/45·55·60 은 **다크 전용 하드코딩**이라
             라이트 지면(합성 rgb(180,181,184)) 위에서 대비가 1.48~1.95:1 이었다 — Level·Min·Sec·＋－ 가
             거의 안 보였다. 같은 파일의 나머지 UI 가 쓰는 ink 토큰으로 통일한다(다크는 토큰이 같은 계열). */}
-        <button type="button" onClick={handleEnd} className="rounded-input border border-border-default bg-white/10 px-4 py-2 text-2xs font-bold text-ink-secondary hover:bg-white/15 hover:text-danger-light">토너 종료</button>
+        <button type="button" onClick={handleEnd} className="rounded-input border border-border-strong dark:border-border-default bg-surface-high dark:bg-white/10 px-4 py-2 text-2xs font-bold text-ink-secondary hover:bg-surface-float dark:hover:bg-white/15 hover:text-danger-light">토너 종료</button>
       </div>
     </div>
   );
@@ -879,7 +885,10 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
   return (
     <div ref={wrapRef} data-scroll-lock className={fs ? 'fixed inset-0 z-[70] bg-[#06080c] flex items-center justify-center overflow-hidden' : ''}>
       {/* 전체화면 최소 오버레이 — 해제·음소거만. 모서리에 두어 대회명·지표를 가리지 않고,
-          2.5초 잠잠하면 사라져 송출 화면에 아무 버튼도 남지 않는다. ESC 로도 해제된다(위 useBackClose). */}
+          2.5초 잠잠하면 사라져 송출 화면에 아무 버튼도 남지 않는다. ESC 로도 해제된다(위 useBackClose).
+          ⚠ 안의 bg-black/50·text-white/75 는 토큰화하지 않는다(2026-09-15 판정). 조작 패널(:816)과 달리
+          이 오버레이는 **항상 다크한 클락 보드 위에만** 떠서 테마를 타지 않는다 — 라이트에서도 지면이
+          어둠이라 하드코딩 알파가 정답이다. 같은 이유로 클락 보드 자체(아래 [container-type:size] div)도 그대로 둔다. */}
       {fs && (
         <div data-testid="clk-fs-overlay"
           className={['absolute bottom-[2vmin] right-[2vmin] z-10 flex items-center gap-[1vmin] transition-opacity duration-300',
@@ -1036,11 +1045,11 @@ function Stepper({ label, value, onPlus, onMinus, size = 'sm', plusDisabled, min
   return (
     <div className="flex flex-col items-center gap-0.5">
       <span className="text-[9px] text-ink-muted">
-        {label}{value !== undefined && <b className="ml-1 font-bold tabular-nums text-white/80">{value}</b>}
+        {label}{value !== undefined && <b className="ml-1 font-bold tabular-nums text-ink-primary">{value}</b>}
       </span>
       <div className={size === 'lg' ? 'flex gap-1.5' : 'flex gap-0.5'}>
-        <button type="button" onClick={onPlus} disabled={plusDisabled} className={`${box} rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-ink-secondary hover:text-[#8B94E8] leading-none disabled:opacity-30`}>＋</button>
-        <button type="button" onClick={onMinus} disabled={minusDisabled} className={`${box} rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-ink-secondary hover:text-danger-light leading-none disabled:opacity-30`}>－</button>
+        <button type="button" onClick={onPlus} disabled={plusDisabled} className={`${box} rounded-input bg-surface-high dark:bg-white/10 hover:bg-surface-float dark:hover:bg-white/15 border border-border-strong dark:border-border-default text-ink-secondary hover:text-[#8B94E8] leading-none disabled:opacity-30`}>＋</button>
+        <button type="button" onClick={onMinus} disabled={minusDisabled} className={`${box} rounded-input bg-surface-high dark:bg-white/10 hover:bg-surface-float dark:hover:bg-white/15 border border-border-strong dark:border-border-default text-ink-secondary hover:text-danger-light leading-none disabled:opacity-30`}>－</button>
       </div>
     </div>
   );
