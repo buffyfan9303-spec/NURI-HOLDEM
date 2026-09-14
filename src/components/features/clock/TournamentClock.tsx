@@ -851,12 +851,12 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
       <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-white/[0.06] pt-2">
         <VolCtl value={volume} onChange={setVolume} onToggleMute={toggleMute} />
         <button type="button" onClick={() => playChime('level')} title="알림음 미리듣기" aria-label="알림음 미리듣기"
-          className="grid h-7 w-7 shrink-0 place-items-center self-end rounded-input border border-border-default bg-white/10 text-white/60 hover:bg-white/15 hover:text-[#8B94E8]"><Icon name="volume" size={14} /></button>
+          className="grid h-7 w-7 shrink-0 place-items-center self-end rounded-input border border-border-default bg-white/10 text-ink-secondary hover:bg-white/15 hover:text-[#8B94E8]"><Icon name="volume" size={14} /></button>
         <div className="flex flex-col items-center gap-0.5">
-          <span className="text-[9px] text-white/45">10초틱</span>
+          <span className="text-[9px] text-ink-muted">10초틱</span>
           <button type="button" onClick={() => setTickStyle((t) => t === 'beep' ? 'soft' : t === 'soft' ? 'off' : 'beep')}
             title="마지막 10초 카운트다운 틱 음색 · 비프/부드러움/끔(끔=레벨업음만)"
-            className="h-7 rounded-input border border-border-default bg-white/10 px-2 text-2xs font-bold text-white/60 hover:bg-white/15 hover:text-[#8B94E8]">
+            className="h-7 rounded-input border border-border-default bg-white/10 px-2 text-2xs font-bold text-ink-secondary hover:bg-white/15 hover:text-[#8B94E8]">
             {tickStyle === 'beep' ? '비프' : tickStyle === 'soft' ? '부드러움' : '끔'}
           </button>
         </div>
@@ -865,10 +865,13 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
       {/* ⑤ 위험군 — 주 버튼에서 떼어 맨 아래. 되돌릴 수 없는 것과 매번 누르는 것을 이웃시키지 않는다. */}
       <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.06] pt-2">
         <button type="button" onClick={resetClock}
-          className="rounded-input border border-border-default bg-white/10 px-3 py-2 text-2xs font-bold text-white/55 hover:bg-white/15 hover:text-amber-300">↺ 초기화</button>
+          className="rounded-input border border-border-default bg-white/10 px-3 py-2 text-2xs font-bold text-ink-secondary hover:bg-white/15 hover:text-amber-300">↺ 초기화</button>
         {/* 콘솔은 이제 `!fs` 일 때만 렌더된다(아래 사용처) — 여기 있던 `fs ? 해제 : 토너 종료` 삼항은
             영영 두 번째 가지만 타는 죽은 분기가 됐다. 전체화면 해제는 모서리 오버레이로 옮겼다. */}
-        <button type="button" onClick={handleEnd} className="rounded-input border border-border-default bg-white/10 px-4 py-2 text-2xs font-bold text-white/55 hover:bg-white/15 hover:text-danger-light">토너 종료</button>
+        {/* ⚠ 2026-09-14 라이트 실측: 여기 있던 text-white/45·55·60 은 **다크 전용 하드코딩**이라
+            라이트 지면(합성 rgb(180,181,184)) 위에서 대비가 1.48~1.95:1 이었다 — Level·Min·Sec·＋－ 가
+            거의 안 보였다. 같은 파일의 나머지 UI 가 쓰는 ink 토큰으로 통일한다(다크는 토큰이 같은 계열). */}
+        <button type="button" onClick={handleEnd} className="rounded-input border border-border-default bg-white/10 px-4 py-2 text-2xs font-bold text-ink-secondary hover:bg-white/15 hover:text-danger-light">토너 종료</button>
       </div>
     </div>
   );
@@ -1032,12 +1035,12 @@ function Stepper({ label, value, onPlus, onMinus, size = 'sm', plusDisabled, min
   const box = size === 'lg' ? 'w-10 h-10 text-base' : 'w-7 h-7 text-sm';
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <span className="text-[9px] text-white/45">
+      <span className="text-[9px] text-ink-muted">
         {label}{value !== undefined && <b className="ml-1 font-bold tabular-nums text-white/80">{value}</b>}
       </span>
       <div className={size === 'lg' ? 'flex gap-1.5' : 'flex gap-0.5'}>
-        <button type="button" onClick={onPlus} disabled={plusDisabled} className={`${box} rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-[#8B94E8] leading-none disabled:opacity-30`}>＋</button>
-        <button type="button" onClick={onMinus} disabled={minusDisabled} className={`${box} rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-danger-light leading-none disabled:opacity-30`}>－</button>
+        <button type="button" onClick={onPlus} disabled={plusDisabled} className={`${box} rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-ink-secondary hover:text-[#8B94E8] leading-none disabled:opacity-30`}>＋</button>
+        <button type="button" onClick={onMinus} disabled={minusDisabled} className={`${box} rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-ink-secondary hover:text-danger-light leading-none disabled:opacity-30`}>－</button>
       </div>
     </div>
   );
@@ -1045,7 +1048,7 @@ function Stepper({ label, value, onPlus, onMinus, size = 'sm', plusDisabled, min
 function VolCtl({ value, onChange, onToggleMute }: { value: number; onChange: (v: number) => void; onToggleMute: () => void }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <span className="text-[9px] text-white/45">Volume ({value})</span>
+      <span className="text-[9px] text-ink-muted">Volume ({value})</span>
       <div className="flex items-center gap-1">
         <button type="button" onClick={onToggleMute} title={value > 0 ? '음소거' : '음소거 해제'} aria-label={value > 0 ? '음소거' : '음소거 해제'}
           className="grid place-items-center hover:opacity-80"><Icon name={value > 0 ? 'volume' : 'volume-off'} size={14} /></button>

@@ -82,10 +82,15 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
       <div className="flex items-start gap-2.5">
         <Icon name="bomb" size={19} className="mt-0.5 shrink-0 text-danger" />
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-danger">위험 구역 · 매장 전체 초기화(킬스위치)</h3>
+          {/* ⚠ 2026-09-14 라이트 실측: text-danger(rgb 246,70,93)는 라이트 보정 목록에 없어 연분홍 지면 위에서
+              제목 3.13 · 본문 3.13 · 버튼 2.78 로 AA 미달이었다. **되돌릴 수 없는 파괴 동작의 경고문**이라
+              안 읽히면 그 자체가 사고다. 이 저장소가 "라이트 테마 텍스트용 딥 레드"로 만들어 둔
+              text-danger-light(라이트 #B82640 — 틴트 위 5.36 · 흰 카드 6.20)로 바꾼다.
+              ⚠ text-danger 는 저장소 전체 346곳이라 전역 오버라이드는 실측 없이 하지 않는다 — 이 파일만 바꾼다. */}
+          <h3 className="text-sm font-bold text-danger-light">위험 구역 · 매장 전체 초기화(킬스위치)</h3>
           <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">
             내 매장의 <b className="text-ink-secondary">모든 데이터(장부·순위·이용권·직원·클락·로그 전부)</b>를 영구 삭제합니다.
-            <b className="text-danger"> 복구할 수 없습니다.</b> 업주 본인 확인 → 킬스위치 비밀번호 → 최종 확인 3단계를 거칩니다.
+            <b className="text-danger-light"> 복구할 수 없습니다.</b> 업주 본인 확인 → 킬스위치 비밀번호 → 최종 확인 3단계를 거칩니다.
           </p>
           {/* 안내 문구는 '설정 여부를 아는 동안'에만. 모르면 아무 약속도 하지 않는다. */}
           {pwIsSet === false && (
@@ -111,7 +116,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
           type="button"
           onClick={() => { reset(); setOpen(true); }}
           disabled={pwIsSet === null}
-          className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-input border border-danger/50 bg-danger/10 py-2.5 text-sm font-bold text-danger transition-colors hover:bg-danger/20 disabled:opacity-50"
+          className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-input border border-danger/50 bg-danger/10 py-2.5 text-sm font-bold text-danger-light transition-colors hover:bg-danger/20 disabled:opacity-50"
         >
           {pwIsSet === null ? '확인 중…' : <><Icon name={pwIsSet ? 'bomb' : 'lock'} size={15} className="shrink-0" />{pwIsSet ? '매장 전체 영구 삭제' : '킬스위치 비밀번호 설정'}</>}
         </button>
@@ -125,7 +130,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               <div className="rounded-card border border-amber-500/30 bg-amber-500/[0.06] p-3">
                 <p className="text-2xs font-bold text-amber-300">킬스위치 비밀번호 설정 (최초 1회)</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
-                  이 비밀번호는 매장 전체를 삭제할 때 필요합니다. <b className="text-danger">한 번 설정하면 변경·재설정할 수 없으니</b> 신중히 정하고 안전하게 보관하세요.
+                  이 비밀번호는 매장 전체를 삭제할 때 필요합니다. <b className="text-danger-light">한 번 설정하면 변경·재설정할 수 없으니</b> 신중히 정하고 안전하게 보관하세요.
                 </p>
               </div>
               <Lbl label="킬스위치 비밀번호 (4자 이상)">
@@ -134,7 +139,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               <Lbl label="비밀번호 다시 입력">
                 <input type="password" value={setupPw2} onChange={(e) => setSetupPw2(e.target.value)} autoComplete="new-password" className="input w-full text-sm" placeholder="한 번 더 입력" />
               </Lbl>
-              {err && <p role="alert" className="text-2xs font-semibold text-danger">{err}</p>}
+              {err && <p role="alert" className="text-2xs font-semibold text-danger-light">{err}</p>}
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={close} className="btn-ghost flex-1 text-sm">취소</button>
                 <button type="button" onClick={doSetup} disabled={busy} className="flex-1 rounded-input bg-amber-500 py-2 text-sm font-bold text-black disabled:opacity-50">{busy ? '설정 중…' : '비밀번호 설정'}</button>
@@ -147,13 +152,13 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               {step === 1 && (
                 <>
                   <div className="rounded-card border border-danger/30 bg-danger/[0.05] p-3">
-                    <p className="text-2xs font-bold text-danger">1단계 · 업주 본인 확인</p>
+                    <p className="text-2xs font-bold text-danger-light">1단계 · 업주 본인 확인</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">본인인증된 <b className="text-ink-secondary">업주 본인의 실명</b>을 입력하세요.</p>
                   </div>
                   <Lbl label="업주 실명">
                     <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} className="input w-full text-sm" placeholder="실명 입력" autoFocus />
                   </Lbl>
-                  {err && <p role="alert" className="text-2xs font-semibold text-danger">{err}</p>}
+                  {err && <p role="alert" className="text-2xs font-semibold text-danger-light">{err}</p>}
                   <div className="flex gap-2 pt-1">
                     <button type="button" onClick={close} className="btn-ghost flex-1 text-sm">취소</button>
                     <button type="button" onClick={() => { if (!ownerName.trim()) { setErr('업주 실명을 입력하세요.'); return; } setErr(''); setStep(2); }} className="flex-1 rounded-input bg-danger py-2 text-sm font-bold text-white">다음</button>
@@ -163,13 +168,13 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               {step === 2 && (
                 <>
                   <div className="rounded-card border border-danger/30 bg-danger/[0.05] p-3">
-                    <p className="text-2xs font-bold text-danger">2단계 · 킬스위치 비밀번호</p>
+                    <p className="text-2xs font-bold text-danger-light">2단계 · 킬스위치 비밀번호</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">최초에 설정한 <b className="text-ink-secondary">킬스위치 비밀번호</b>를 입력하세요.</p>
                   </div>
                   <Lbl label="킬스위치 비밀번호">
                     <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" className="input w-full text-sm" placeholder="비밀번호" autoFocus />
                   </Lbl>
-                  {err && <p role="alert" className="text-2xs font-semibold text-danger">{err}</p>}
+                  {err && <p role="alert" className="text-2xs font-semibold text-danger-light">{err}</p>}
                   <div className="flex gap-2 pt-1">
                     <button type="button" onClick={() => { setErr(''); setStep(1); }} className="btn-ghost flex-1 text-sm">이전</button>
                     <button type="button" onClick={() => { if (!password) { setErr('비밀번호를 입력하세요.'); return; } setErr(''); setStep(3); }} className="flex-1 rounded-input bg-danger py-2 text-sm font-bold text-white">다음</button>
@@ -179,15 +184,15 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               {step === 3 && (
                 <>
                   <div className="rounded-card border border-danger/50 bg-danger/[0.08] p-3">
-                    <p className="text-2xs font-bold text-danger">3단계 · 최종 확인</p>
+                    <p className="text-2xs font-bold text-danger-light">3단계 · 최종 확인</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
-                      정말 <b className="text-danger">매장 전체를 영구 삭제</b>하시겠습니까? 장부·순위·이용권·직원·클락 등 <b className="text-ink-secondary">모든 데이터가 즉시 사라지며 복구할 수 없습니다.</b>
+                      정말 <b className="text-danger-light">매장 전체를 영구 삭제</b>하시겠습니까? 장부·순위·이용권·직원·클락 등 <b className="text-ink-secondary">모든 데이터가 즉시 사라지며 복구할 수 없습니다.</b>
                     </p>
                   </div>
                   <Lbl label={`확인을 위해 '${CONFIRM_PHRASE}'를 입력하세요`}>
                     <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} className="input w-full text-sm" placeholder={CONFIRM_PHRASE} autoFocus />
                   </Lbl>
-                  {err && <p role="alert" className="text-2xs font-semibold text-danger">{err}</p>}
+                  {err && <p role="alert" className="text-2xs font-semibold text-danger-light">{err}</p>}
                   <div className="flex gap-2 pt-1">
                     <button type="button" onClick={() => { setErr(''); setStep(2); }} className="btn-ghost flex-1 text-sm">이전</button>
                     <button type="button" onClick={doKill} disabled={busy || confirmText.trim() !== CONFIRM_PHRASE}

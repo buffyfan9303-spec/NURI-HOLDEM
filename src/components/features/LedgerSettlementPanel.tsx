@@ -242,7 +242,9 @@ function Report({ r }: { r: SettlementReport }) {
                     <td className="py-2 px-2 text-right font-bold text-emerald-700 dark:text-emerald-300">{man(g.revenue)}</td>
                     <td className={`py-2 px-2 text-right ${g.unpaid > 0 ? 'font-bold text-danger-light' : 'text-ink-muted'}`}>{man(g.unpaid)}</td>
                     <td className="py-2 pl-2 text-right text-2xs">
-                      {g.closed ? <span className="text-emerald-600 dark:text-emerald-400">마감</span> : <span className="text-amber-500">진행</span>}
+                      {/* ⚠ 2026-09-14 라이트 실측: text-amber-500 '진행' 2.15 · text-emerald-600 '마감' 3.30(11.7px) 으로 AA 미달.
+                          두 색 다 라이트 보정 목록에 없던 유틸이라, 보정이 들어 있는 stat-* 토큰으로 바꾼다. */}
+                      {g.closed ? <span className="stat-emerald">마감</span> : <span className="stat-gold">진행</span>}
                     </td>
                   </tr>
                 ))}

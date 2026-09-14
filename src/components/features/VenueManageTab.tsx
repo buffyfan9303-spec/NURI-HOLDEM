@@ -1038,7 +1038,11 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
                 className={['inline-flex h-9 shrink-0 items-center gap-1 rounded-badge px-3.5 text-xs font-bold leading-none transition-colors',
                   on ? 'bg-accent-300/15 text-accent-300' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
                 <span>{label(g.gameSeq)}</span>
-                {g.title && <span className="max-w-[8rem] truncate font-semibold opacity-80">· {g.title}</span>}
+                {/* ⚠ 2026-09-14 실측(1440·1280, 게임 4개): 칩 하나가 192~236px 라 레일이 1012 / 948 로 넘쳐
+                    '+ 새 게임' 버튼이 컨테이너 밖으로 나갔다(오버레이 스크롤바 환경에선 더 있다는 단서가 없다).
+                    ⚠ 루트 폰트 17px 라 8rem = 136px 다 — 6rem(102px)으로 줄여 칩을 좁힌다.
+                    opacity-80 도 라이트에서 4.01 이라 경계값이었다 → opacity 를 빼고 토큰 계열로 둔다. */}
+                {g.title && <span className="max-w-[6rem] truncate font-semibold">· {g.title}</span>}
                 {g.closed && <span className="text-2xs opacity-70">마감</span>}
               </button>
             );

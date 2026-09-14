@@ -1250,7 +1250,10 @@ body { overscroll-behavior-y: contain; }
    이미 이 블록에 있던 gold-400 의 딥 톤(#8F6200)으로 통일 — 새 색 신설 없이 아래를 만족한다:
    흰 배경 5.39:1 · surface-low(#F2F3F5 계열) 4.77:1. (2026-08-28 일정 표 상금 골드화로 노출 확대)*/
 html.light .text-gold-200, html.light .text-gold-300, html.light .text-gold-400 { color: #8F6200; }
-html.light .text-emerald-300, html.light .text-emerald-400 { color: #0A8F5C; }
+/* v8(2026-09-14 실측): #0A8F5C 는 장부 바인 셀의 emerald/10 틴트(#E7F8F1) 위에서 3.74,
+   시각 10px 은 2.83 로 AA 미달이었다(장부 셀 88곳·순위 명단·프리셋·승인·라이브 시계).
+   새 색을 만들지 않고 이 파일이 이미 가진 stat-emerald 의 라이트 값(#167247, 흰 지면 5.9)으로 통일한다. */
+html.light .text-emerald-300, html.light .text-emerald-400 { color: #167247; }
 /* 은메달(2위) — slate 계열만 이 보정 목록에서 빠져 있어 라이트 명예의 전당에서 1.10:1 이었다(2026-09-04 조사).
    다크의 은색 색조(#E2E8F0)는 그대로 두고 라이트에만 딥 슬레이트를 준다. */
 html.light .text-slate-200 { color: #475569; }

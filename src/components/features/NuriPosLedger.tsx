@@ -1170,7 +1170,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         <div role="button" tabIndex={0} title="탭하면 정산 마감 버튼으로"
           onClick={pointAtSettle}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pointAtSettle(); } }}
-          className="sticky top-header-h z-10 grid grid-cols-4 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur cursor-pointer">
+          className="sticky top-header-h z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur cursor-pointer sm:grid-cols-4">
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
           {(() => {
@@ -1368,7 +1368,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                     <span className="tabular-nums">{d.label || `할인${i + 1}`} −{wonToMan(d.amount)}만</span>
                   </button>
                 )))}
-                <p className="min-w-0 flex-1 break-keep text-2xs leading-tight text-ink-muted">
+                {/* ⚠ 2026-09-14 실측: 할인 프리셋이 3개면 이 안내문이 flex-wrap 에서 남은 ~20px 를 받아
+                    **한 글자씩 세로로** 내려와 박스가 490px 가 됐다. break-keep 이 있어도 전역
+                    overflow-wrap:break-word(index.css)가 한 글자 단위로 쪼갠다.
+                    basis-full 로 **줄 전체**를 차지하게 해 칩과 같은 줄을 다투지 않게 한다. */}
+                <p className="basis-full break-keep text-2xs leading-tight text-ink-muted">
                   {discPick === null
                     ? '클락 레벨에 맞춰 자동으로 골라 줍니다. 결제창에서 건별로 바꿀 수 있어요.'
                     : '새 바인·QR 승인의 기본값입니다. 결제창에서 건별로 바꿀 수 있어요.'}
@@ -1613,7 +1617,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
           removed={stats.removed} players={players}
         />
         <div className="flex items-center gap-2">
-          <div className="grid grid-cols-4 gap-2 flex-1 text-center">
+          {/* ⚠ 2026-09-14 실측(375): 4열이면 칸이 좁아 값이 숫자 중간에서 끊겼다("7,194 / .44만").
+              가장 좁은 폭만 2×2 로 내린다 — sm 이상은 종전 4열 그대로(PC 렌더 불변). */}
+          <div className="grid grid-cols-2 gap-2 flex-1 text-center sm:grid-cols-4">
             {/* 2026-09-11: 이 줄은 상시 떠 있는 기준선이다. 엔트리(금액 기준·소수)만 세워 두면
                 '3명 앉았는데 2.5' 가 인원으로 오독된다 — 마감 모달·대시보드처럼 **횟수를 주로**,
                 엔트리를 보조로 같이 적는다(오너 규칙: 바이인 횟수 ≠ 엔트리). */}
@@ -1936,7 +1942,8 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
         <span className="text-2xs text-ink-muted/70">자동 {earlyAuto}{(clock.adjEarlies ?? 0) !== 0 ? ` ${(clock.adjEarlies ?? 0) > 0 ? '+' : ''}${clock.adjEarlies}` : ''}</span>
         <span className="flex-1" />
         <button type="button" onClick={() => adjEarly(-1)} aria-label="얼리 −1" className={stepBtn}>−</button>
-        <span className="w-7 text-center text-sm font-extrabold text-accent-300 tabular-nums">{earlyTotal}</span>
+        {/* 2026-09-14: w-7(29.75px)에 3자리("321")가 "32 / 1" 두 줄로 떨어졌다(엔트리 1,238 규모 대회). */}
+        <span className="min-w-7 whitespace-nowrap px-1 text-center text-sm font-extrabold text-accent-300 tabular-nums">{earlyTotal}</span>
         <button type="button" onClick={() => adjEarly(1)} aria-label="얼리 +1" className={stepBtn}>+</button>
       </div>
     </div>
@@ -2072,7 +2079,9 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
   return (
     <div>
       <p className="text-2xs text-ink-muted leading-none">{label}</p>
-      <p className={['text-sm font-bold tabular-nums leading-tight mt-0.5', c].join(' ')}>{value}</p>
+      {/* ⚠ 2026-09-14: 375 의 4열 칸이 좁아 값이 **숫자 중간**에서 끊겼다("7,194 / .44만", "250.3 / 7만").
+          금액은 한 덩어리라 쪼개지면 읽는 사람이 다른 수로 오해한다 — 줄바꿈을 막는다. */}
+      <p className={['text-sm font-bold tabular-nums leading-tight mt-0.5 whitespace-nowrap', c].join(' ')}>{value}</p>
       {/* 보조 수 — 같은 칸에서 '횟수 vs 엔트리' 처럼 **다른 척도**를 나란히 세울 때만 쓴다 */}
       {sub && <p className="text-2xs tabular-nums leading-none text-ink-muted mt-0.5">{sub}</p>}
     </div>

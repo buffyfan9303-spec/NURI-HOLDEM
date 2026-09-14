@@ -544,6 +544,17 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
     return 0.668 * digits + 0.2915 * commas + 0.19;
   };
   const fit = (em: number) => `calc((var(--clk-half, 50cqw) - 5.2cqmin) / ${em.toFixed(3)})`;
+  /** 자릿수에 맞춘 크기 — **하한도 fit 을 넘지 못하게** 묶는다.
+   *  ⚠ 2026-09-14 실측: 옛 식의 26px 하한이 fit 을 덮어썼다.
+   *    운영자 화면의 16:9 미리보기는 스테이지가 570px 뿐이라 `--clk-half`=146px 인데
+   *    5자리(20,000/40,000)는 7.45em x 26px = 194px -> CURRENT 와 NEXT 가 22px 겹쳤고,
+   *    10만대는 53px(우측 레일 침범), 80만대는 75px, 375 에서는 135px 로 통째로 포개졌다.
+   *    TV(1920x1080 / 1080x1920)는 fit 이 커서 하한이 그대로라 **송출 렌더는 픽셀 불변**이다.
+   *  min(하한, fit) 이라 좁아질 때만 하한이 따라 내려온다. */
+  const fitted = (floor: string, pref: string, ceil: string, em: number) => {
+    const f = fit(em);
+    return `clamp(min(${floor}, ${f}), min(${pref}, ${f}), ${ceil})`;
+  };
   return (
     <div className="grid h-full grid-cols-2 items-center gap-[2cqmin]">
       {/* CURRENT */}
@@ -561,7 +572,7 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
           <>
             {/* whitespace-nowrap: 자릿수가 커져도 줄바꿈되지 않는다. '/' 는 숫자보다 작게. */}
             <p className="mt-[0.6cqmin] whitespace-nowrap font-extrabold leading-none tabular-nums"
-              style={{ fontSize: `clamp(26px, min(7.2cqmin, ${fit(lv ? emOf(lv.sb, lv.bb) : 1)}), 128px)`, color: 'var(--clk-accent, #818CF8)' }}>
+              style={{ fontSize: fitted('26px', '7.2cqmin', '128px', lv ? emOf(lv.sb, lv.bb) : 1), color: 'var(--clk-accent, #818CF8)' }}>
               {lv ? <>{num(lv.sb)}<span className="mx-[0.6cqmin] align-middle text-[0.5em] text-white/30">/</span>{num(lv.bb)}</> : '-'}
             </p>
             {/* ANTE 가 없으면 이 줄 자체를 그리지 않는다(빈 행을 남기지 않는다).
@@ -582,7 +593,7 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
         {next ? (
           <>
             <p className="mt-[0.6cqmin] whitespace-nowrap font-extrabold leading-none tabular-nums text-white/75"
-              style={{ fontSize: `clamp(20px, min(5.4cqmin, ${fit(emOf(next.sb, next.bb))}), 96px)` }}>
+              style={{ fontSize: fitted('20px', '5.4cqmin', '96px', emOf(next.sb, next.bb)) }}>
               {num(next.sb)}<span className="mx-[0.6cqmin] align-middle text-[0.5em] text-white/25">/</span>{num(next.bb)}
             </p>
             {next.ante > 0 && (
