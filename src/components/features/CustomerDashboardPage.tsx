@@ -26,7 +26,8 @@ import { getPostsByUser, type CommunityPost } from '../../api/community';
 import { getMyRankingHistory, getGlobalRankingTotals, placementPoints, type MyRankingRow } from '../../api/rankings';
 import { shareRecordCard, shareRecordCardKakao } from '../../lib/recordCard';
 import { kakaoConfigured, kakaoShareLink } from '../../lib/kakao';
-import { getMyReferralStats, inviteUrl, type ReferralStats } from '../../api/referrals';
+import { getMyReferralStats, claimPendingReferralTickets, inviteUrl,
+  type ReferralStats, type ReferralTicketClaim } from '../../api/referrals';
 import { getMyChampionships } from '../../api/seasons';
 import QRCode from 'qrcode';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
@@ -99,6 +100,8 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   const [resv, setResv] = useState<MyReservationRow[]>([]);   // 대회 참가(예약) 이력
   const [ranks, setRanks] = useState<MyRankingRow[]>([]);     // 내 입상 기록(닉네임 기준)
   const [refStats, setRefStats] = useState<ReferralStats>({ invited: 0, rewarded: 0 }); // 친구 초대 현황
+  // 밀린 참여권(오너 #9) — null = 아직 모른다(RPC 미적용·조회 실패). 0 장이라고 단정하지 않는다.
+  const [refTickets, setRefTickets] = useState<ReferralTicketClaim | null>(null);
   const [percentile, setPercentile] = useState<number | null>(null); // 전국 상위 N% — 대회 입상 횟수 기준(상금 무관, 2026-09-05)
   const [championships, setChampionships] = useState(0); // 시즌 우승 횟수(영구 배지)
   // 첫 프레임에 loading 이 false 면 방문·예약·입상 세 섹션이 동시에 "아직 없습니다"로 떨어진다
@@ -161,10 +164,13 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
       getMyVisitStats(),
       user?.nickname ? getMyRankingHistory(user.nickname, 200) : Promise.resolve([] as MyRankingRow[]),
       user?.nickname ? getMyReferralStats() : Promise.resolve({ invited: 0, rewarded: 0 }),
+      // 🔴 여기가 '그 사람이 다음에 들어올 때' 다 — 이 호출이 빠지면 밀린 참여권이 영원히 안 풀린다.
+      //   지급과 대기 수 조회가 같은 RPC 라, 화면에 쓰는 값과 실제로 지급된 값이 갈릴 수 없다.
+      user ? claimPendingReferralTickets() : Promise.resolve(null),
       user?.nickname ? getMyChampionships(user.nickname) : Promise.resolve(0),
       user?.nickname ? getGlobalRankingTotals('all') : Promise.resolve([]),
     ])
-      .then(([vi, pl, rv, vs, rk, rs, ch, gt]) => {
+      .then(([vi, pl, rv, vs, rk, rs, rt, ch, gt]) => {
         if (seq !== reloadSeq.current) return; // 늦게 온 이전 세대(다른 계정·이전 호출) 응답 — 버린다
         // 성공한 것만 덮어쓴다 — 실패해도 직전에 받아 둔 값은 그대로 둔다(오프라인에서 내역이 사라지지 않게).
         if (vi.status === 'fulfilled') setVisits(vi.value);
@@ -177,6 +183,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
         if (rk.status === 'fulfilled') setRanks(rk.value);
         setRanksErr(rk.status === 'rejected' ? rk.reason : null);
         if (rs.status === 'fulfilled') setRefStats(rs.value);
+        if (rt.status === 'fulfilled') setRefTickets(rt.value);
         if (ch.status === 'fulfilled') setChampionships(ch.value);
         // 전국 상위 N% — 대회 입상 횟수 기준(랭킹 허브 '머니인' 보드와 같은 careerCompare 정렬, 서버가 이미 정렬). 상금 무관.
         // 실패하면 백분위 자체를 숨긴다(null) — 0%·100% 같은 그럴듯한 거짓 숫자를 만들지 않는다.
@@ -424,11 +431,11 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
             </section>
           )}
 
-          {/* 친구 초대 — 추천 링크 + 현황. 친구 가입+본인인증 시 양쪽 활동점수.
+          {/* 친구 초대 — 추천 링크 + 현황. 친구 가입+본인인증 시 **양쪽에게 이벤트 참여권 1장씩**(오너 #9, 2026-09-15).
               ⚠ 보상 지급은 서버 트리거 trg_referral_reward_on_verify(after update of profiles.ci_hash)다 —
                  본인인증이 꺼진 동안에는 **새 보상이 나가지 않는다**(초대 기록 referrals 는 그대로 쌓이고,
                  인증이 다시 열리면 그때 인증하는 친구 건부터 정상 지급된다). 문구가 이 사실을 말하게 한다. */}
-          <InviteSection nickname={user?.nickname ?? ''} stats={refStats} idOn={idOn} />
+          <InviteSection nickname={user?.nickname ?? ''} stats={refStats} tickets={refTickets} idOn={idOn} />
 
           {idOn && (
             <div className="rounded-aura border card-aura p-3">
@@ -970,8 +977,13 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
         <div className="mt-3 rounded-card border border-border-subtle bg-surface-low p-2.5 text-2xs leading-relaxed text-ink-secondary">
           <b className="text-ink-primary">점수 올리는 법</b><br />
           · 접속 +1 · 글쓰기 +3 · 댓글 +1<br />
-          · 친구 초대(본인인증) +500 · 추천 가입 +300{!idOn && <span className="text-ink-muted">본인인증 준비 중이라 잠시 중단</span>}<br />
           · 시즌 1·2·3위 +1,000 / +500 / +300
+          {/* 친구 초대는 2026-09-15 오너 지시로 활동점수(+500/+300) → 이벤트 참여권으로 바뀌었다.
+              '점수 올리는 법' 목록에 남겨 두면 점수가 오를 것처럼 읽혀 거짓말이 된다 — 목록 밖에서 따로 말한다. */}
+          <span className="mt-1.5 block text-ink-muted">
+            친구 초대는 점수가 아니라 <b className="text-ink-secondary">이벤트 참여권 1장</b>씩이에요(본인인증 완료 시 둘 다).
+            {!idOn && ' 본인인증 준비 중이라 잠시 중단'}
+          </span>
         </div>
         </div>
       </div>
@@ -1019,8 +1031,14 @@ function LevelCard({ points, championships = 0 }: { points: number; championship
   );
 }
 
-/** 친구 초대 — 추천 링크(닉네임 코드) + 현황. 친구 가입+본인인증 시 양쪽 활동점수(+500/+300). */
-function InviteSection({ nickname, stats, idOn }: { nickname: string; stats: ReferralStats; idOn: boolean }) {
+/**
+ * 친구 초대 — 추천 링크(닉네임 코드) + 현황.
+ * 친구 가입 + 본인인증 시 **양쪽에게 이벤트 참여권 1장씩**(오너 지시 #9, 2026-09-15 · 종전 활동점수 +500/+300).
+ * 진행 중인 이벤트가 없으면 보류됐다가 다음 이벤트에 지급된다 — 그 대기를 **반드시 화면이 말한다**(tickets.pending).
+ */
+function InviteSection({ nickname, stats, tickets, idOn }: {
+  nickname: string; stats: ReferralStats; tickets: ReferralTicketClaim | null; idOn: boolean;
+}) {
   const toast = useToast();
   const [qr, setQr] = useState<string | null>(null);
   const url = nickname ? inviteUrl(nickname) : '';
@@ -1037,13 +1055,13 @@ function InviteSection({ nickname, stats, idOn }: { nickname: string; stats: Ref
   const copy = async () => { try { await navigator.clipboard.writeText(url); toast.show('초대 링크를 복사했어요', 'success'); } catch { toast.show('복사 실패', 'error'); } };
   const share = async () => {
     const text = idOn
-      ? 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 본인인증하면 둘 다 활동점수 받아요'
+      ? 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 본인인증하면 둘 다 이벤트 참여권 1장씩 받아요'
       : 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 함께 대회 일정·전적을 챙겨요';
     if (navigator.share) { try { await navigator.share({ title: 'NURI HOLDEM 초대', text, url }); return; } catch { return; } }
     copy();
   };
   const kakao = async () => {
-    const ok = await kakaoShareLink({ title: 'NURI HOLDEM 초대 🎁', description: idOn ? '내 링크로 가입하고 본인인증하면 둘 다 활동점수를 받아요!' : '내 링크로 가입하고 함께 대회 일정·전적을 챙겨요!', link: url });
+    const ok = await kakaoShareLink({ title: 'NURI HOLDEM 초대 🎁', description: idOn ? '내 링크로 가입하고 본인인증하면 둘 다 이벤트 참여권 1장씩 받아요!' : '내 링크로 가입하고 함께 대회 일정·전적을 챙겨요!', link: url });
     if (!ok) { toast.show('카카오 공유가 미설정이라 링크를 복사했어요', 'info'); copy(); }
   };
   return (
@@ -1054,8 +1072,21 @@ function InviteSection({ nickname, stats, idOn }: { nickname: string; stats: Ref
         <span className="ml-auto shrink-0 text-2xs text-ink-muted">초대 <b className="text-ink-secondary tabular-nums">{stats.invited}</b> · 보상 <b className="stat-fuchsia tabular-nums">{stats.rewarded}</b></span>
       </div>
       <p className="mt-1.5 text-2xs leading-relaxed text-ink-secondary">{idOn
-        ? <>친구가 내 링크로 가입하고 <b className="text-ink-primary">본인인증</b>까지 마치면 <b className="text-accent-300">둘 다 활동점수</b>(나 +500 · 친구 +300)!</>
-        : <>초대 기록은 계속 쌓입니다. <b className="text-accent-300">활동점수 보상</b>(나 +500 · 친구 +300)은 본인인증이 다시 열리면 지급돼요.</>}</p>
+        ? <>친구가 내 링크로 가입하고 <b className="text-ink-primary">본인인증</b>까지 마치면 <b className="text-accent-300">둘 다 이벤트 참여권 1장</b>씩!</>
+        : <>초대 기록은 계속 쌓입니다. <b className="text-accent-300">이벤트 참여권 1장</b>씩은 본인인증이 다시 열리면 지급돼요.</>}</p>
+      {/* 🔴 대기 안내 — 오너 조건: 조용히 사라지면 안 된다.
+          진행 중인 이벤트가 없는 동안 확정된 보상은 여기서만 보인다. 이벤트가 다시 안 열리면 대기는
+          영원히 안 풀릴 수 있으므로 **상시 노출**한다(닫을 수 있는 배너로 만들지 않는다).
+          tickets 가 null 이면(RPC 미적용·조회 실패) 아무것도 그리지 않는다 — '대기 0장'은 사실 주장이라 위장이 된다. */}
+      {tickets && tickets.pending > 0 && (
+        <p className="mt-1.5 flex items-start gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/[0.08] px-2.5 py-1.5 text-2xs leading-relaxed text-ink-secondary">
+          <Icon name="clock" size={13} className="mt-px shrink-0 text-accent-300" />
+          <span>
+            <b className="text-accent-300 tabular-nums">이벤트 참여권 {tickets.pending}장</b> 대기 중 —
+            지금 진행 중인 이벤트가 없어요. <b className="text-ink-primary">다음 이벤트가 열리면 지급</b>됩니다.
+          </span>
+        </p>
+      )}
       <div className="mt-2 flex items-center gap-2.5">
         {qr && <img src={qr} alt="초대 QR" className="h-16 w-16 shrink-0 rounded bg-white p-0.5" />}
         <div className="min-w-0 flex-1">

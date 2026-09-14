@@ -72,6 +72,11 @@ interface AdminTabProps {
   usersErr?: unknown;
   /** 글 목록 조회 실패 — 관리자 게시물 목록이 빈 상태로 위장하지 않게 App 이 내려 준다 */
   postsErr?: unknown;
+  /** 이 탭이 지금 **보이는가**. keep-alive 로 관리자 pane 이 숨은 채 살아 있게 되면서 필요해졌다
+   *  (2026-09-15). 숨어 있는 동안 `useBackClose` 가 계속 뒤로가기를 가로채 **back 한 번이 통째로
+   *  먹혔다** — 홈에서 뒤로가기를 눌렀는데 화면은 그대로이고 숨은 관리자 섹션만 바뀌었다(실측).
+   *  보이지 않는 화면은 뒤로가기를 가져가면 안 된다. 기본값 true 라 안 넘겨도 종전과 같다. */
+  tabActive?: boolean;
   onRetryPosts?: () => void;
   onRetryUsers?: () => void;
 }
@@ -1179,11 +1184,12 @@ function PlanUsageCard() {
 }
 
 export default function AdminTab({
-  schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues, onReloadNotices, onReloadBanners, usersErr, onRetryUsers, postsErr, onRetryPosts,
+  schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues, onReloadNotices, onReloadBanners, usersErr, onRetryUsers, postsErr, onRetryPosts, tabActive = true,
 }: AdminTabProps) {
   const [section, setSection] = useState<Section>('analytics');
   // 뒤로가기 — 비기본 섹션에선 먼저 기본(운영분석)으로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
-  useBackClose(section !== 'analytics', () => setSection('analytics'));
+  // ⚠ `tabActive &&` 가 핵심이다 — 숨은 pane 이 뒤로가기를 먹지 않게(위 tabActive 주석).
+  useBackClose(tabActive && section !== 'analytics', () => setSection('analytics'));
   const [reorderTarget, setReorderTarget] = useState<ReorderTarget>('posters');
   const [exposureTarget, setExposureTarget] = useState<ExposureTarget>('banners');
 
@@ -1191,8 +1197,13 @@ export default function AdminTab({
   // 마이그레이션 전 서버에서는 rejectedAt 이 전부 null 이라 종전(미승인=대기)과 똑같이 동작한다.
   const pending = schedules.filter((s) => !s.approved && !s.rejectedAt);
 
+  /* ⚠ 폭은 다른 탭과 같아야 한다(오너 2026-09-15 "내 매장 들어가는 순간 전체가 넓어져 이질감").
+     관리자만 max-w-5xl(1088px) 단독이라 다른 탭 본문(1188px)보다 100px 좁았다.
+     xl 에서만 넓히면 index.css 의 전역 `main{max-width:72rem}`(1224px)가 잘라 **1188 로 맞는다**.
+     ⚠ 이 주석을 JSX 주석(중괄호+별)으로 바꿔 return 안에 넣지 마라 — JSX 루트 **앞**에 두면 자식이 둘이 되어 파스가 깨진다.
+       (2026-09-15 실제로 밟았다. 같은 날 다른 파일에서도 같은 사고가 났다.) */
   return (
-    <div className="space-y-3 mx-auto w-full max-w-5xl">
+    <div className="space-y-3 mx-auto w-full max-w-5xl xl:max-w-7xl">
       <StatsPanel />
       <div className="lg:flex lg:gap-4">
         <nav data-admin-secbar="" className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
@@ -1565,7 +1576,8 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
       <header className="sticky top-0 z-10 h-[calc(theme(spacing.header-h)+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
         <button type="button" onClick={onClose} className="text-sm font-semibold text-ink-secondary hover:text-ink-primary">← 닫기</button>
         <span className="text-sm font-bold text-ink-primary truncate">{venueName} · 장부/통계</span>
-        <span className="ml-auto shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-2 py-0.5 rounded-badge">운영자 전체 접근</span>
+        {/* 오너 지시 2026-09-15 #10: "'운영자 전체 접근' 이건 없어야 해" — 배지만 지운다.
+            권한 분기와 무관하다(이 화면 자체가 admin 게이트 안이다). VenueManageTab 의 같은 문구도 같은 날 지웠다. */}
       </header>
       <div className="max-w-6xl mx-auto px-page-x py-3">
         <div data-adminpos-tabbar="" className="mb-3">
