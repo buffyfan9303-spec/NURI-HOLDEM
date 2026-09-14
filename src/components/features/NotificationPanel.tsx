@@ -389,9 +389,14 @@ export default function NotificationPanel({
           </div>
         </header>
 
-        {/* ── 쪽지: 스레드 목록 ── */}
+        {/* ── 쪽지: 스레드 목록 ──
+            min-h-[160px]: 빈 상태(py-12 안내문, 실측 159.5px)와 같은 높이로 바닥을 잡는다.
+            쪽지 1~2건은 그 자체 높이(행 1개 63.75px)가 빈 상태보다 **작아서**, 실제로 대화가
+            있는 사람이 오히려 빈 상태보다 작은 박스를 보는 역전이 있었다(design 실측 2026-09-14:
+            빈 159.5 vs 2건 128.5). 그 역전만 없앤다 — 빈 상태 높이는 그대로라 첫 화면은 안 커진다.
+            3건 이상(192px+)처럼 실제로 더 긴 목록은 이 바닥보다 커지는 것이 자연스러워 그대로 둔다. */}
         {mode === 'messages' && msgView === 'list' && (
-          <ul data-notif-panel="" className="flex-1 overflow-y-auto">
+          <ul data-notif-panel="" className="flex-1 min-h-[160px] overflow-y-auto">
             {threadsErr != null && threads.length === 0 ? (
               // 실패가 빈 상태보다 먼저다 — 목록이 이미 있으면(재조회 실패) 보던 목록은 그대로 둔다.
               <li className="p-3"><LoadErrorCard error={threadsErr} what="쪽지 목록" onRetry={reloadThreads} compact /></li>
@@ -555,9 +560,11 @@ export default function NotificationPanel({
           </div>
         )}
 
-        {/* ── 알림 목록(기존 UI 전량 유지) ── */}
+        {/* ── 알림 목록(기존 UI 전량 유지) ──
+            min-h-[160px]: 위 쪽지 목록과 같은 바닥(빈 상태 159.5px) — 두 탭이 같은 최소 높이를
+            쓰지 않으면 탭 전환마다 그 차이만큼 다시 튄다. 이유는 위 쪽지 목록 주석 참고. */}
         {mode === 'notifs' && (
-        <ul data-notif-panel="" className="flex-1 overflow-y-auto">
+        <ul data-notif-panel="" className="flex-1 min-h-[160px] overflow-y-auto">
           {visible.length === 0 ? (
             <li className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
               <Icon name="bell" size={32} strokeWidth={1.5} />

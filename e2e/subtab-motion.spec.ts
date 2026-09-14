@@ -85,6 +85,59 @@ ${joined}`).toEqual([]);
 ${joined}`).toEqual([]);
 }
 
+/**
+ * notif-tab 전용 계약(2026-09-14, 오너 리포트: "쪽지·알림 왔다갔다 할 때 박스가 팝업 밖으로
+ * 왼쪽/오른쪽으로 갔다가 온다") — 위 expectPanelPush 와 **반대** 방향으로 건다.
+ *
+ * 왜 notif-panel 만 다른가: 다른 본문(admin-secpanel·venue-tab·rank-tab 등)은 뷰포트 폭을 쓰는
+ * 전체화면 패널이라 방향성 푸시(vt-panel-in-r/out-l, ±18px translateX)가 안전하다. notif-panel 은
+ * 좌우 여백 17px 짜리 **뜨는 작은 카드**인데(390px 모바일 실측: 카드 left=17·right=373), View
+ * Transition 스냅샷은 top layer 로 올라가 카드의 overflow-hidden·rounded-card 클립을 안 받는다 —
+ * 18px(여백 17px 초과) 를 밀면 카드 테두리를 넘어 화면 가장자리까지 삐져나갔다(실측: 전환 시작
+ * 프레임의 실제 transform 이 `matrix(1,0,0,1,18,0)`). 그래서 notif-panel 만 old 를 페이드아웃만
+ * 시키고(vt-fade-out, opacity 만), new 는 애니메이션 없이 즉시 자리를 지키게 바꿨다(index.css) —
+ * new 에 페이드를 안 넣는 이유는 두 스냅샷이 동시에 반투명이면 글자가 두 벌로 겹쳐 보이던 옛
+ * 버그(venue-tab 주석·검은 번쩍임 수정 때와 동일)가 돌아오기 때문이다.
+ *
+ * 이 계약이 지키는 것 — 누가 notif-panel 을 다시 공동 방향성 푸시 목록에 넣으면 빨개진다:
+ *   ① old 는 vt-fade-out 을 쓴다(방향성 푸시 vt-panel-out-* 를 쓰면 안 된다)
+ *   ② new 는 애니메이션이 전혀 없다(방향성 푸시 vt-panel-in-* 는 물론 어떤 키프레임도 없다)
+ *   ③ root·탭바(notif-tabbar)는 여전히 정지 — 이건 다른 스코프와 같은 공용 계약이다.
+ * notif-pill(알약)은 이 계약 대상이 아니다 — 전용 애니메이션 규칙이 원래 없어 브라우저 기본
+ * 크로스페이드(-ua-view-transition-fade-*)를 그대로 쓰는 것이 기존 동작이다(내가 바꾼 적 없다).
+ */
+function expectNotifPanelFadeOnly(samples: string[]) {
+  const joined = samples.join('\n');
+  const has = (prefix: string) => samples.some((x) => x.startsWith(prefix));
+
+  expect(has('::view-transition-old(notif-panel) :: vt-fade-out'),
+    `notif-panel old 스냅샷이 vt-fade-out 으로 애니메이트되지 않았다
+실측:
+${joined}`).toBe(true);
+
+  expect(has('::view-transition-old(notif-panel) :: vt-panel-out'),
+    `notif-panel old 스냅샷이 방향성 푸시(vt-panel-out-*)를 다시 쓴다 — 팝업 카드 여백(17px)보다
+큰 이동량(18px)이라 top layer 스냅샷이 카드 밖으로 삐져나간다(2026-09-14 오너 리포트 재발 조건)
+실측:
+${joined}`).toBe(false);
+
+  expect(has('::view-transition-new(notif-panel) ::'),
+    `notif-panel new 스냅샷에 애니메이션이 붙었다 — new 는 즉시 자리를 지켜야 한다(방향성 푸시로
+되돌리면 위와 같은 재발 조건이고, 페이드를 넣으면 old 와 겹쳐 글자가 두 벌로 보이는 옛 버그가 온다)
+실측:
+${joined}`).toBe(false);
+
+  const moved = (name: string) => samples.filter((x) =>
+    (x.startsWith(`::view-transition-old(${name}) :: `) || x.startsWith(`::view-transition-new(${name}) :: `))
+    && !x.endsWith(':: '));
+  expect(moved('root'), `root 가 애니메이트됐다 — 탭바 위쪽까지 통째로 밀린다
+실측:
+${joined}`).toEqual([]);
+  expect(moved('notif-tabbar'), `탭바(notif-tabbar)가 애니메이트됐다 — 제자리에 고정돼야 한다
+실측:
+${joined}`).toEqual([]);
+}
+
 // CI 러너(공유 vCPU)에서는 VT/스프링 프레임 타이밍이 흔들려 간헐 실패한다(2026-09-02 실측: 로컬 14/14 통과·CI 1회 실패 후 재실행 통과).
 // 임계는 그대로, 재시도만 CI 에서 2회 — perf.spec 과 같은 규약.
 test.describe.configure({ retries: process.env.CI ? 2 : 0 });
@@ -157,13 +210,15 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     expectPanelPush(samples, 'profile-panel', 'profile-tabbar');
   });
 
-  test('🔴 알림 패널 쪽지·알림(notif-tab)', async ({ page }) => {
+  test('🔴 알림 패널 쪽지·알림(notif-tab) — 방향성 푸시가 아니라 페이드아웃만 돈다', async ({ page }) => {
     await boot(page);
     await page.locator('button[aria-label^="알림"]').first().click();
     const bar = page.locator('[data-notif-tabbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
     const samples = await probe(page, bar.getByRole('tab', { name: '알림', exact: true }));
-    expectPanelPush(samples, 'notif-panel', 'notif-tabbar');
+    // ⚠ 다른 스코프처럼 expectPanelPush(방향성 푸시)를 쓰지 않는다 — notif-panel 은 예외다.
+    //   근거는 expectNotifPanelFadeOnly 주석 참고(팝업 카드 좌우 여백 17px < 푸시 이동량 18px).
+    expectNotifPanelFadeOnly(samples);
   });
 });
 

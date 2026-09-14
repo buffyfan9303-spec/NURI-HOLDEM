@@ -91,6 +91,16 @@ describe('하위 탭 전환 · 스코프와 CSS 규칙의 1:1', () => {
     //   생기므로 이미 유일하다 — 스코프 셀렉터를 다시 붙이면 같은 뜻이 4배로 늘 뿐이다).
     //   그래서 여기서도 '이 스코프가 부여하는 두 이름 중 하나'가 방향 규칙에 걸렸는지를 본다.
     //   (구세대 venue-tab·rank-tab 은 스코프까지 함께 적은 형태라 접미사로 찾는다 — 둘 다 유효.)
+    //
+    //   ⚠ notif-tab 은 예외다(2026-09-14 오너 리포트: "쪽지·알림 왔다갔다 할 때 박스가 팝업 밖으로
+    //   왼쪽/오른쪽으로 갔다가 온다"). 원인은 notif-panel 이 뜨는 작은 카드(좌우 여백 17px)인데
+    //   가로 푸시(±18px translateX)를 쓰던 view-transition 스냅샷이 top layer 라 카드의
+    //   overflow-hidden 클립을 안 받아 18px > 17px 여백만큼 카드 밖으로 삐져나갔기 때문이다(실측:
+    //   전환 시작 프레임 transform 이 matrix(1,0,0,1,18,0)). 그래서 notif-panel 만 방향성 푸시가 아니라
+    //   old 만 페이드아웃(vt-fade-out)하고 new 는 애니메이션 없이 즉시 자리를 지키는 방식으로 바꿨다 —
+    //   `data-vt-dir` 자체를 쓰지 않으므로 이 방향 검사 대상에서 뺀다. ①②(이름 최소 2개·root 정지)는
+    //   notif-tab 도 그대로 지킨다(이미 통과 확인).
+    if (scope === 'notif-tab') return;
     const hasDir = (n: string, dir: string, phase: string) =>
       CSS.includes(`data-vt-dir='${dir}']::view-transition-${phase}(${n})`);
     const panel = names.find((n) => hasDir(n, 'forward', 'new'));

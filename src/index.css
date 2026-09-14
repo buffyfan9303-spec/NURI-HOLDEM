@@ -1902,6 +1902,23 @@ html[data-vt-scope='crm-range']::view-transition-new(root) { animation: none; }
 ::view-transition-old(notif-panel),
 ::view-transition-new(notif-panel) { background-color: rgb(var(--surface-mid)); }
 
+/* notif-panel 은 가로 푸시(vt-panel-in-r/out-l 등, ±18px translateX)를 쓰지 않는다(2026-09-14 오너 리포트:
+   "쪽지·알림 왔다갔다 할 때 박스가 팝업 밖으로 왼쪽/오른쪽으로 갔다가 온다").
+   ⚠ 실측(390px 모바일): 팝업 카드는 좌우 17px 여백만 두고 뜬다(left 17 · right 373, viewport 390).
+   VT 스냅샷은 top layer 로 올라가 카드의 overflow-hidden·rounded-card 클립을 안 받는다 — 그 상태에서
+   ±18px 를 밀면(18px > 17px 여백) 카드 테두리를 넘어 화면 가장자리까지 삐져나간다. getComputedStyle 로
+   전환 시작 프레임의 실제 transform 을 재서 확인함: forward 전환의 새 스냅샷이 `matrix(1,0,0,1,18,0)`.
+   다른 서브탭(admin-secpanel·venue-tab·rank-tab 등)은 전부 뷰포트 폭을 쓰는 전체화면 패널이라 같은
+   18px 가 안 보인다 — notif-panel 만 좁고 테두리 있는 뜨는 카드라서 나는 문제다. 그래서 notif-panel 만
+   빼서 가로 이동이 없는 전환으로 따로 둔다(아래) — vt-panel-in-r/out-l 자체는 손대지 않는다(다른 탭 공유).
+   새 스냅샷은 애니메이션을 주지 않는다(즉시 불투명) — old 위에 new 가 항상 위 레이어라 겹쳐 보여도 완전히
+   가린다. **new 에 페이드를 넣지 않는 이유는 위 venue-tab 주석과 같다**: new 도 함께 반투명이 되면
+   old 와 겹쳐 글자가 두 벌로 보이던 옛 버그(2026-08-29)가 돌아온다 — old 만 사라지게 하고 new 는 항상
+   완전 불투명으로 즉시 자리를 지킨다. */
+@keyframes vt-fade-out { to { opacity: 0; } }
+::view-transition-old(notif-panel) { animation: vt-fade-out var(--dur-fast) var(--ease-out) both; }
+::view-transition-new(notif-panel) { animation: none; }
+
 /* 방향성 푸시 — venue-tab·rank-tab 과 완전히 같은 키프레임·토큰. */
 html[data-vt-dir='forward']::view-transition-old(admin-secpanel),
 html[data-vt-dir='forward']::view-transition-old(adminpos-panel),
@@ -1913,7 +1930,6 @@ html[data-vt-dir='forward']::view-transition-old(dealer-panel),
 html[data-vt-dir='forward']::view-transition-old(group-panel),
 html[data-vt-dir='forward']::view-transition-old(profile-panel),
 html[data-vt-dir='forward']::view-transition-old(sched-panel),
-html[data-vt-dir='forward']::view-transition-old(notif-panel),
 html[data-vt-dir='forward']::view-transition-old(legal-panel),
 html[data-vt-dir='forward']::view-transition-old(crm-panel) { animation: vt-panel-out-l var(--dur-fast) var(--ease-out) both; }
 html[data-vt-dir='forward']::view-transition-new(admin-secpanel),
@@ -1926,7 +1942,6 @@ html[data-vt-dir='forward']::view-transition-new(dealer-panel),
 html[data-vt-dir='forward']::view-transition-new(group-panel),
 html[data-vt-dir='forward']::view-transition-new(profile-panel),
 html[data-vt-dir='forward']::view-transition-new(sched-panel),
-html[data-vt-dir='forward']::view-transition-new(notif-panel),
 html[data-vt-dir='forward']::view-transition-new(legal-panel),
 html[data-vt-dir='forward']::view-transition-new(crm-panel) { animation: vt-panel-in-r var(--dur-tab) var(--ease) both; }
 html[data-vt-dir='back']::view-transition-old(admin-secpanel),
@@ -1939,7 +1954,6 @@ html[data-vt-dir='back']::view-transition-old(dealer-panel),
 html[data-vt-dir='back']::view-transition-old(group-panel),
 html[data-vt-dir='back']::view-transition-old(profile-panel),
 html[data-vt-dir='back']::view-transition-old(sched-panel),
-html[data-vt-dir='back']::view-transition-old(notif-panel),
 html[data-vt-dir='back']::view-transition-old(legal-panel),
 html[data-vt-dir='back']::view-transition-old(crm-panel) { animation: vt-panel-out-r var(--dur-fast) var(--ease-out) both; }
 html[data-vt-dir='back']::view-transition-new(admin-secpanel),
@@ -1952,7 +1966,6 @@ html[data-vt-dir='back']::view-transition-new(dealer-panel),
 html[data-vt-dir='back']::view-transition-new(group-panel),
 html[data-vt-dir='back']::view-transition-new(profile-panel),
 html[data-vt-dir='back']::view-transition-new(sched-panel),
-html[data-vt-dir='back']::view-transition-new(notif-panel),
 html[data-vt-dir='back']::view-transition-new(legal-panel),
 html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-in-l var(--dur-tab) var(--ease) both; }
 

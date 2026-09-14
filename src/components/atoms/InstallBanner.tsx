@@ -48,8 +48,14 @@ export default function InstallBanner() {
 
   if (hidden || !evt) return null;
   return (
-    // 모바일: 하단 탭바(z-50, ~5.75rem)를 덮지 않게 그 위로 — PC는 기존 위치
-    <div className="fixed bottom-[var(--tabbar-float)] lg:bottom-3 left-1/2 z-[60] w-[min(92%,28rem)] -translate-x-1/2 animate-slide-up">
+    // 모바일: 하단 탭바 쪽으로 더 내린다(오너 지시 2026-09-14: "하단 메뉴바쪽으로 조금 더") — PC는 기존 위치.
+    // ⚠ --tabbar-float 은 토스트(Toast.tsx)·맨 위로 버튼(App.tsx)과 공유하는 변수라 값 자체는 안 건드린다.
+    //   이 배너만 낮추려고 rem 부분만 5.75→4.5 로 줄인 값을 여기 하드코딩한다(safe-area·tabbar-lift 항은 그대로
+    //   물려받는다 — 실기기 안전영역·삼성 보정을 잃지 않는다).
+    //   실측(390×844, safe-area 0): 탭바 top=769.75px. 기존 배너 bottom=734.25px(탭바까지 35.5px 여백) →
+    //   4.5rem 로 낮추면 bottom≈755.5px(탭바까지 14.25px 여백) — 탭 버튼 히트 영역(top 770.75px)과
+    //   14px 넘게 떨어져 있어 덮지 않는다. "조금 더"의 상한("탭바 바로 위에 붙는 정도")을 넘지 않는 선.
+    <div className="fixed bottom-[calc(4.5rem_+_var(--tabbar-lift)_+_max(env(safe-area-inset-bottom),12px))] lg:bottom-3 left-1/2 z-[60] w-[min(92%,28rem)] -translate-x-1/2 animate-slide-up">
       <div className="flex items-center gap-3 rounded-card border border-accent-400/40 bg-surface-float/95 px-3 py-2.5 shadow-dialog backdrop-blur">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
