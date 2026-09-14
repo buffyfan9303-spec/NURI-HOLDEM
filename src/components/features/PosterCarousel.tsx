@@ -52,6 +52,11 @@ export type BannerAction = 'tools' | 'explore' | 'nurimind';
 const BRAND_SLIDES: {
   key: string; action: BannerAction; alt: string;
   bg: string;
+  /** 2026-09-14 오너 지시 — 관리자 배너와 같은 '아트워크 + 왼쪽 스크림 + 글자' 구조로 통일.
+   *  ⚠ 아트워크에는 **글자를 넣지 않는다**(제목·부제는 아래 DOM 이 그린다 — 두 벌로 겹치면 안 된다).
+   *  ⚠ 볼거리는 오른쪽에 두되 **오른쪽 끝 ~200px(1200 기준)은 비운다** — 모바일(390×110)의
+   *     object-cover 가 좌우를 각 80px(원본 175px) 잘라내 끝에 붙인 그림이 잘린다(실측 2026-09-14). */
+  img: string;
   title: string; sub: string; titleColor: string; subColor: string;
 }[] = [
   /* 배경 — 딥 그라운드 위 저채도 바이올렛 빔(정적 CSS 그라데이션, 애니메이션 없음).
@@ -59,11 +64,13 @@ const BRAND_SLIDES: {
   {
     key: 'mind', action: 'nurimind', alt: '오늘의 NURI MIND · 외부 사이트 nurimind.co.kr 에서 오늘의 운세 보기',
     bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.12) 0%, transparent 55%), radial-gradient(150% 200% at 8% 110%, rgba(128,95,218,0.16) 0%, transparent 60%), linear-gradient(180deg, #1a162e 0%, #110f20 100%)',
+    img: '/banners/mind.webp',
     title: '오늘의 NURI MIND', sub: '오늘의 운세 보기 · 외부 사이트 ›', titleColor: '#EEECFA', subColor: '#B2ACEC',
   },
   {
     key: 'nuri', action: 'explore', alt: 'NURI HOLDEM · 전국 홀덤 일정 한곳에서 보기',
     bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.07) 0%, transparent 55%), radial-gradient(150% 200% at 10% 110%, rgba(128,95,218,0.18) 0%, transparent 60%), linear-gradient(180deg, #151221 0%, #0d0b18 100%)',
+    img: '/banners/nuri.webp',
     title: 'NURI HOLDEM', sub: '전국 홀덤 일정, 한곳에서 ›', titleColor: '#D9B25A', subColor: '#DCE4DC',
   },
 ];
@@ -246,7 +253,19 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
             {/* 2026-09-13 — **수트 글리프를 뺐다.** 104px 글리프가 116px 배너에서 카드 밖으로 나가
                 (실측 scrollWidth 367 / clientWidth 354, 세로 121/104) 잘린 채로만 보였고, 글자 자리를
                 92px 먹어 긴 제목을 밀었다. 깊이는 배경 그라데이션이 낸다 — 장식을 더 쌓지 않는다. */}
-            <span className="relative flex h-full flex-col justify-center gap-1 px-4 py-3 md:px-6">
+            <img
+              src={b.img}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              /* 관리자 배너와 같은 규칙 — 마퀴 안에서 lazy 는 '빈 배너'가 된다(오너 실기기 리포트). */
+              loading={i < 2 ? 'eager' : 'lazy'}
+              decoding="async"
+            />
+            {/* 아트워크 위 글자가 읽히도록 왼쪽에서 오른쪽으로 빠지는 스크림 하나만 — 관리자 배너와 동일(여러 겹 금지). */}
+            <span
+              className="absolute inset-0 flex flex-col justify-center gap-1 px-4 pr-[38%] md:px-6"
+              style={{ background: 'linear-gradient(to right, rgba(6,8,11,0.92) 0%, rgba(6,8,11,0.78) 45%, transparent 100%)' }}
+            >
               {/* §5 역할표: 홈 짧은 제목 18/26(PC 22/30) · 보조 설명 13/19 */}
               <span className="font-display text-[18px] font-extrabold leading-[26px] md:text-[22px] md:leading-[30px]" style={{ color: b.titleColor }}>{b.title}</span>
               <span className="text-[13px] font-medium leading-[19px]" style={{ color: b.subColor }}>{b.sub}</span>
