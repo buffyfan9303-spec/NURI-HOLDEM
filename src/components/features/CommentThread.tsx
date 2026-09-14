@@ -4,7 +4,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { promptLogin } from '../../lib/requireLogin';
 import Avatar from '../atoms/Avatar';
-import Icon from '../atoms/Icon';
 import TitleChip from '../atoms/TitleChip';
 import { useTitlePoints } from '../../lib/useTitles';
 import { getEquippedMarks, getNickColors } from '../../api/community';
@@ -22,19 +21,6 @@ interface CommentThreadProps {
   /** 이 영역(예: 본인 매장 커뮤니티)에서 모든 댓글을 관리(삭제)할 수 있는 권한자 — 업주 등 */
   moderator?: boolean;
   emptyText?: string;
-  // ── 응원(30점) 배선 — **커뮤니티 글 댓글에서만** 쓴다(2026-08-30).
-  //   onCheer 를 넘기지 않으면 버튼 자체가 안 그려진다 → 요강 Q&A·매장 댓글은 종전 그대로다
-  //   (서버 send_cheer 도 post_id 없는 댓글은 거절한다 — 화면과 서버가 같은 범위를 본다).
-  /** 댓글 id → 받은 응원 수 */
-  cheers?: Record<string, number>;
-  /** 내가 이미 응원한 댓글 id */
-  myCheers?: Set<string>;
-  /** 응원 보내기. 미전달 = 응원 UI 없음 */
-  onCheer?: (commentId: string) => void;
-  /** 응원 1회 가격(서버 shop_skus.cheer). null 이면 '준비 중' */
-  cheerPrice?: number | null;
-  /** 응원 요청 진행 중 — 연타 방지 */
-  cheerBusy?: boolean;
 }
 
 
@@ -124,22 +110,12 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
   onDelete,
   canDelete,
   loggedIn,
-  cheer,
 }: {
   marks?: Record<string, string>;
   /** userId → 닉네임 색의 등급 토큰명(--tier-<token>). 상점 600점 · 20260830n */
   nickTokens?: Record<string, string>;
   titleOf?: (id?: string | null) => number | undefined;
   comment: Comment;
-  /** 응원 배선 묶음 — 없으면 버튼을 그리지 않는다(요강 Q&A·매장 댓글) */
-  cheer?: {
-    counts: Record<string, number>;
-    mine: Set<string>;
-    price: number | null;
-    busy: boolean;
-    onSend: (commentId: string) => void;
-    myId?: string;
-  };
   /** 평탄화된 3레벨+ 답글의 원부모 닉 — '@닉' 프리픽스로 맥락 유지 */
   mention?: string;
   replies: ThreadGroup['replies'];
@@ -210,27 +186,6 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
             >
               {showReplyBox ? '취소' : '답글'}
             </button>
-            {/* 응원 — 유료 동작이라 값을 라벨에 박는다(누르기 전에 가격을 읽게).
-                내 댓글에는 아예 안 그린다(서버도 자기 글 응원을 거절한다 — 화면이 먼저 말한다). */}
-            {cheer && cheer.myId !== comment.userId && (
-              cheer.mine.has(comment.id) ? (
-                <span className="inline-flex items-center gap-0.5 text-2xs font-bold text-accent-200">
-                  <Icon name="chip-stack" size={11} strokeWidth={2} className="shrink-0" />
-                  응원 <span className="tabular-nums">{cheer.counts[comment.id] ?? 1}</span>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  disabled={cheer.busy || cheer.price === null}
-                  onClick={() => { if (!loggedIn) { promptLogin(); return; } cheer.onSend(comment.id); }}
-                  className="hit inline-flex items-center gap-0.5 text-2xs tabular-nums text-ink-muted transition-colors hover:text-accent-200 disabled:opacity-50"
-                >
-                  <Icon name="chip-stack" size={11} strokeWidth={2} className="shrink-0" />
-                  응원{cheer.price === null ? '' : ` ${cheer.price.toLocaleString()}점`}
-                  {(cheer.counts[comment.id] ?? 0) > 0 && <span className="ml-0.5 text-accent-200">{cheer.counts[comment.id]}</span>}
-                </button>
-              )
-            )}
             {/* 관리자(또는 본인)에게만 삭제 버튼 노출 */}
             {onDelete && canDelete(comment) && (
               <button
@@ -269,7 +224,7 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
       {replies.length > 0 && (
         <div className="ml-10 space-y-3 border-l border-border-strong pl-3">
           {replies.map(({ comment: r, mentionOf }) => (
-            <CommentItem key={r.id} marks={marks} nickTokens={nickTokens} titleOf={titleOf} comment={r} mention={mentionOf} replies={[]} composeParentId={composeParentId} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} cheer={cheer} />
+            <CommentItem key={r.id} marks={marks} nickTokens={nickTokens} titleOf={titleOf} comment={r} mention={mentionOf} replies={[]} composeParentId={composeParentId} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} />
           ))}
         </div>
       )}
@@ -279,7 +234,6 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
 
 export default function CommentThread({
   comments, onSubmit, onDelete, moderator = false, emptyText = '아직 댓글이 없습니다.',
-  cheers, myCheers, onCheer, cheerPrice = null, cheerBusy = false,
 }: CommentThreadProps) {
   const { user } = useAuth();
   const { isBlocked } = useBlocks();
@@ -315,12 +269,6 @@ export default function CommentThread({
     () => groupThreads(comments.filter((c) => c.userId === user?.id || !isBlocked(c.userId))),
     [comments, isBlocked, user?.id],
   );
-
-  // 응원 배선 — onCheer 가 없으면 undefined 라 버튼이 통째로 사라진다(종전 화면 그대로).
-  const cheer = onCheer
-    ? { counts: cheers ?? {}, mine: myCheers ?? new Set<string>(), price: cheerPrice,
-        busy: cheerBusy, onSend: onCheer, myId: user?.id }
-    : undefined;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -378,7 +326,6 @@ export default function CommentThread({
               onDelete={onDelete}
               canDelete={canDelete}
               loggedIn={!!user}
-              cheer={cheer}
             />
           ))}
         </div>

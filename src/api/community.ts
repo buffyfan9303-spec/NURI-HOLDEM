@@ -108,8 +108,6 @@ export interface CommunityPost {
   goodrunCount?: number;    // 나이스런(Good Run) 수
   blinded?: boolean;        // 신고 누적 자동 숨김(운영자/작성자만 열람)
   liked?: boolean;          // 현재 사용자가 좋아요했는지(post_likes 기준) — 토글 UI용
-  /** 받은 응원 수(30점 소비형). 서버 community_posts.cheer_count 비정규화 값 */
-  cheerCount?: number;
   /** 끌올 만료 시각(ISO). now 보다 크면 목록 상단 고정 — 판정은 isBumped() 하나로 */
   bumpedUntil?: string | null;
   /** 끌올 누적 횟수(표시용) */
@@ -167,7 +165,6 @@ export const rowToPost = (r: any): CommunityPost => ({
   images:   Array.isArray(r.images) ? r.images : undefined,
   blinded:  r.blinded ?? false,
   // 20260830m 추가분 — 컬럼이 없던 시절 응답(캐시 스냅샷 포함)에서도 0/null 로 안전하게 접힌다
-  cheerCount:  r.cheer_count ?? 0,
   bumpedUntil: r.bumped_until ?? null,
   bumpCount:   r.bump_count ?? 0,
   pinnedAt:    r.pinned_at ?? null,
@@ -1718,7 +1715,8 @@ export interface ShopSku {
   /**
    * mark = 영구 소장 마크(2026-08-30 전환 · SKU `mark_own`) ·
    * shout = 20초 슬롯 외침 ·
-   * cheer = 응원 보내기(글·댓글, 30점) · bump = 글 끌올(3시간 상단, 100점) ·
+   * cheer = **2026-09-15 오너 지시로 삭제된 응원 보내기**(더 팔지 않지만 과거 구매 기록이 이 값을 그대로 들고 있다) ·
+   * bump = 글 끌올(3시간 상단, 100점) ·
    * mark_rent = **판매 중지된 기간권**(서버가 active=false 로 내려서 목록에 오지 않는다.
    *   타입을 지우지 않는 이유: 과거 구매 기록(point_purchases.kind)이 이 값을 그대로 들고 있다).
    */
@@ -1812,80 +1810,20 @@ export async function buyMark(markKey: string): Promise<string> {
   return typeof r === 'string' ? r : String((r as { mark_key?: string }).mark_key ?? markKey);
 }
 
-// ── 반복 소비형 ① 응원 보내기 · ② 글 끌올 (2026-08-30 · 20260830m) ──────────
+// ── 반복 소비형 · 글 끌올 (2026-08-30 · 20260830m) ──────────────────────────
 //
-// 왜 이 둘인가(근거는 supabase/migrations/20260830m_cheer_bump_and_pricing.sql 헤더):
-//  · 실측에서 **구매 0건 · 총 소비 0점**이었다. 상품이 없어서가 아니라 가격이 획득률의 40배였다.
-//    마크를 800점으로 내리고(하루 최대치 16일), 그 아래에 30점 칸을 만든다.
-//  · 현 상점에는 '나를 꾸미는 것'만 있고 **'남에게 쓰는 것'이 없었다.** 소액·고빈도·사회적 동기가
-//    경제를 도는 엔진이고, 홀덤펍 커뮤니티는 축하할 일이 매일 생긴다.
-//  · ⚠ 응원은 **받는 사람에게 점수를 주지 않는다.** 유저 간 포인트 이전은 게임산업법 §32①7
-//    (환전 알선) 위험이라 설계에서 배제됐다 — 점수는 소각되고 표시·알림만 남는다.
-//    이 성질을 바꾸는 변경(받는 사람 지급)을 절대 넣지 말 것.
+// 2026-09-15 오너 지시로 **응원 보내기를 전량 삭제**했다(클라이언트 기능·표시 전부).
+//   서버 쪽(send_cheer RPC · post_cheers 테이블 · community_posts.cheer_count)은 그대로 두었다 —
+//   이미 소비된 포인트 이력(point_purchases kind='cheer')과 환불 경로가 그 위에 서 있고,
+//   DB 정리 여부는 오너 결정 사항이다. 마이그레이션은 쓰지 않았다.
+//   ⚠ 응원 하루 한도(서버 send_cheer 의 CHEER_DAILY_CAP)와 아이템 구매 10회 상한
+//     (daily_purchase_count)이 **별개**라는 서버 계산은 건드리지 않았다 — 합치면 30점짜리
+//     소액 상품이 그날의 외치기·마크 구매를 잠그는 역전이 난다.
+//
+// 남는 반복 소비형은 끌올 하나다: 내 글을 3시간 동안 목록 맨 위로(100점).
 
-/**
- * 응원 하루 한도 — **아이템 구매 10회 상한과 별개다.**
- * 합산하면 30점짜리 소액 상품이 그날의 외치기·마크 구매를 잠가 버린다(싼 것이 비싼 것을 막는 역전).
- * ⚠ 서버 send_cheer 의 CHEER_DAILY_CAP 과 같은 값이어야 한다.
- */
-export const CHEER_DAILY_CAP = 10;
 /** 동시 끌올 자리 — 서버 bump_post 의 BUMP_SLOTS 와 같은 값 */
 export const BUMP_SLOTS = 3;
-
-/** 응원 결과 — 전부 서버 계산값(화면이 다시 세지 않는다) */
-export interface CheerResult { cheers: number; available: number; remainingToday: number }
-
-/**
- * 응원 보내기 — 글 또는 댓글 **하나**에. 가격은 서버 shop_skus.cheer 가 단일 출처라 보내지 않는다.
- * 자기 글 금지·같은 대상 1회·20초 쿨다운·하루 10회는 전부 서버가 최종 판정한다.
- */
-export async function sendCheer(target: { postId?: string; commentId?: string }): Promise<CheerResult> {
-  const { data, error } = await supabase.rpc('send_cheer', {
-    p_post_id: target.postId ?? null, p_comment_id: target.commentId ?? null,
-  });
-  if (error) throw new Error(error.message);
-  const r = Array.isArray(data) ? data[0] : data;
-  if (!r) throw new Error('응원에 실패했습니다');
-  return {
-    cheers: Number(r.cheers) || 0,
-    available: Number(r.available) || 0,
-    remainingToday: Number(r.remaining_today) || 0,
-  };
-}
-
-/** 응원 현황 — 대상 id → 받은 수, 그리고 내가 이미 응원한 대상 집합 */
-export interface CheerState { counts: Record<string, number>; mine: Set<string> }
-
-/**
- * 글 1건 + 그 댓글들의 응원 현황.
- *
- * 글의 응원 수는 community_posts.cheer_count(비정규화)가 있지만 **댓글은 없다** —
- * comments 에는 본인 UPDATE 정책(comments_update_self)이 열려 있어서, 거기에 카운터를 두면
- * 유저가 PostgREST 로 자기 댓글의 응원 수를 위조할 수 있다(유료 신호의 위조 = 발권과 같은 급).
- * 그래서 댓글 응원은 원장(post_cheers)을 그대로 센다. 댓글 수는 글당 수십 건이라 부하가 없다.
- */
-export async function getCheerState(postId: string, commentIds: string[] = []): Promise<CheerState> {
-  const empty: CheerState = { counts: {}, mine: new Set() };
-  if (IS_MOCK) return empty;
-  // ⚠ supabase.auth.getUser() 금지 — 매번 인증 왕복이 붙는다(src/api/_session.ts 헤더 참조)
-  const me = (await currentUser())?.id ?? null;
-  let q = supabase.from('post_cheers').select('post_id, comment_id, sender_id').limit(500);
-  q = commentIds.length > 0
-    ? q.or(`post_id.eq.${postId},comment_id.in.(${commentIds.join(',')})`)
-    : q.eq('post_id', postId);
-  const { data, error } = await q;
-  if (error) return empty;
-  const counts: Record<string, number> = {};
-  const mine = new Set<string>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const r of (data ?? []) as any[]) {
-    const key = (r.comment_id ?? r.post_id) as string | null;
-    if (!key) continue;
-    counts[key] = (counts[key] ?? 0) + 1;
-    if (me && r.sender_id === me) mine.add(key);
-  }
-  return { counts, mine };
-}
 
 /** 끌올 결과 — 만료 시각·잔액·현재 사용 중인 자리 수(전부 서버 계산값) */
 export interface BumpResult { untilAt: string; available: number; activeSlots: number }

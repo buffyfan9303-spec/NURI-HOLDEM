@@ -3,8 +3,9 @@
 // 이 파일이 보는 것
 //   1. PostDetailModal 이 page 셸 + read 폭 + dragToClose={false} + compact 로 열리고, `inline ? 'sheet' : 'page'` 분기가 없다.
 //   2. Modal 의 page 그립은 bodyDrag 일 때만 그린다.
-//   3. §7.4 순서 의존 쌍: cheer/bump 의 finally stale 가드와 리셋 effect 의 setCheerBusy(false)/setBumpBusy(false) 가 **둘 다** 있다
-//      (하나만 있으면 유료 버튼 2종이 영구 disabled 로 굳는다).
+//   3. §7.4 순서 의존 쌍: bump 의 finally stale 가드와 리셋 effect 의 setBumpBusy(false) 가 **둘 다** 있다
+//      (하나만 있으면 유료 버튼이 영구 disabled 로 굳는다).
+//      2026-09-15: 오너 지시로 응원(cheer)을 전량 삭제해 이 쌍의 한 축이 사라졌다 — 남은 끌올만 본다.
 //   4. CommunityTab 이 실제 화면 배열(listSource)·서버 커서·done 을 스냅샷으로 넘기고, 2-pane 도 같은 스냅샷을 쓴다.
 //   5. App 은 삭제 시 스냅샷에서 그 글만 빼며(무조건 null 금지 — realtime 남의 글 삭제), 닫을 때 맥락을 비운다.
 // 음성 대조: PostDetailModal 의 `variant="page"` 를 `variant="sheet"` 로, App 의 `dropFromCtx(n, id)` 를 `null` 로 되돌리면 각각 실패한다.
@@ -38,11 +39,12 @@ describe('UI-02 · 전체화면 셸', () => {
 
 describe('UI-04 · 이전/다음 배선', () => {
   it('🔴 §7.4 순서 의존 쌍 — finally stale 가드 + 리셋 effect 의 busy 해제가 둘 다 있다', () => {
-    expect(PD).toMatch(/finally \{ if \(currentPostIdRef\.current === startId\) setCheerBusy\(false\); \}/);
     expect(PD).toMatch(/finally \{ if \(currentPostIdRef\.current === startId\) setBumpBusy\(false\); \}/);
-    expect(PD).toMatch(/setCheerBusy\(false\); setBumpBusy\(false\); setNavBusy\(false\); setNavErr\(null\);/);
-    // 응답 적용도 현재 글 대조 뒤에
-    expect((PD.match(/if \(currentPostIdRef\.current !== startId\) return;/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect(PD).toMatch(/setBumpBusy\(false\); setNavBusy\(false\); setNavErr\(null\);/);
+    // 응원 삭제(2026-09-15) 뒤에도 끌올·이동 두 갈래는 남는다 — 응답 적용도 현재 글 대조 뒤에.
+    expect((PD.match(/if \(currentPostIdRef\.current !== startId\) return;/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // 삭제한 기능이 되살아나면 이 계약이 먼저 말한다(되살리려면 위 쌍도 같이 되살려야 한다).
+    expect(PD).not.toMatch(/setCheerBusy|sendCheer|getCheerState/);
   });
   it('🔴 훅은 `if (!post) return null` 위에 있고, 이동 뒤 늘어난 ctx 를 onNavigate 로 올린다(라이브락 방지)', () => {
     expect(PD.indexOf('const neighbors = useMemo(')).toBeLessThan(PD.indexOf('if (!post) return null;'));

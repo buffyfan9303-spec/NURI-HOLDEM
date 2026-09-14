@@ -8,7 +8,7 @@ import { useBlocks } from '../../contexts/BlockContext';
 import { useToast } from '../atoms/Toast';
 import type { CommunityPost, ReactionType, Comment } from '../../api/community';
 import type { UserRole } from '../../api/auth';
-import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded, getComments, addComment, deleteComment, sendCheer, bumpPost, getCheerState, getShopSkus, isBumped, isPostHidden, BUMP_SLOTS, subscribePostComments, type PostCommentEvent } from '../../api/community';
+import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded, getComments, addComment, deleteComment, bumpPost, getShopSkus, isBumped, isPostHidden, BUMP_SLOTS, subscribePostComments, type PostCommentEvent } from '../../api/community';
 import CommentThread from './CommentThread';
 import ReportModal from './ReportModal';
 import { parseAttachments } from '../../lib/hand';
@@ -224,37 +224,27 @@ export default function PostDetailModal({
   const [myReaction, setMyReaction] = useState<ReactionType | null>(null);
   const [bb, setBb] = useState(0);
   const [gr, setGr] = useState(0);
-  // ── 응원(30점) · 끌올(100점) — 2026-08-30 반복 소비형 2종
+  // ── 끌올(100점) — 2026-08-30 반복 소비형. (응원은 2026-09-15 오너 지시로 전량 삭제했다.)
   //   상태를 bb/gr 과 **같은 방식**으로 둔다: 글이 바뀔 때만 props 로 재시드하고,
   //   그 뒤로는 서버가 돌려준 값만 믿는다. (App 이 posts 갱신마다 openPost 를 갈아끼우므로
-  //    props 를 매 렌더 신뢰하면 방금 보낸 응원이 한 프레임 뒤에 되돌아간 것처럼 보인다.)
-  const [cheerN, setCheerN] = useState(0);
-  const [cheered, setCheered] = useState(false);
-  const [cheerBusy, setCheerBusy] = useState(false);
-  /** 댓글별 응원 수 · 내가 응원한 댓글 — 원장(post_cheers)이 단일 출처 */
-  const [cCheers, setCCheers] = useState<Record<string, number>>({});
-  const [cMine, setCMine] = useState<Set<string>>(new Set());
+  //    props 를 매 렌더 신뢰하면 방금 누른 끌올이 한 프레임 뒤에 되돌아간 것처럼 보인다.)
   const [bumpUntil, setBumpUntil] = useState<string | null>(null);
   const [bumpBusy, setBumpBusy] = useState(false);
-  // 가격은 서버 shop_skus 가 유일한 출처다 — 화면에 30/100 을 박지 않는다.
+  // 가격은 서버 shop_skus 가 유일한 출처다 — 화면에 100 을 박지 않는다.
   // (박아 두면 가격표를 바꾼 날 화면은 옛 값을 말하고 서버는 새 값을 걷는다.)
-  const [cheerPrice, setCheerPrice] = useState<number | null>(null);
   const [bumpSku, setBumpSku] = useState<{ price: number; hours: number } | null>(null);
 
   useEffect(() => {
     if (!open || !post) return;
     setBb(post.badbeatCount ?? 0);
     setGr(post.goodrunCount ?? 0);
-    setCheerN(post.cheerCount ?? 0);
-    setCheered(false);
-    setCCheers({}); setCMine(new Set());
     setBumpUntil(post.bumpedUntil ?? null);
     setMyReaction(null);
     setZoomIdx(null); // 2-pane 은 같은 인스턴스로 글만 갈아끼우므로 이전 글의 확대 뷰가 남는다
     setImgErr({});    // 같은 이유로 이전 글의 '사진 못 불러옴' 표시도 함께 지운다
-    // UI-04 §7.4: 이전/다음으로 글이 바뀌면 A 글에서 비행 중이던 응원·끌올의 finally 는 stale 이라 setXBusy(false) 를 안 돌린다 —
-    //   그래서 **여기서 같이** busy 를 푼다(둘 중 하나만 넣으면 유료 버튼 2종이 영구 disabled 로 굳는다).
-    setCheerBusy(false); setBumpBusy(false); setNavBusy(false); setNavErr(null);
+    // UI-04 §7.4: 이전/다음으로 글이 바뀌면 A 글에서 비행 중이던 끌올의 finally 는 stale 이라 setXBusy(false) 를 안 돌린다 —
+    //   그래서 **여기서 같이** busy 를 푼다(빼면 유료 버튼이 영구 disabled 로 굳는다).
+    setBumpBusy(false); setNavBusy(false); setNavErr(null);
     openedAtRef.current = performance.now();
     let active = true;
     getMyReaction(post.id).then((r) => { if (active) setMyReaction(r); }).catch(() => {});
@@ -273,14 +263,6 @@ export default function PostDetailModal({
       .then((cs) => {
         if (!active) return;
         setReplies(cs);
-        // 댓글이 도착한 뒤에야 '어떤 댓글의 응원을 세야 하는지'를 안다 — 그래서 여기서 잇는다.
-        return getCheerState(post.id, cs.map((c) => c.id));
-      })
-      .then((st) => {
-        if (!active || !st) return;
-        setCCheers(st.counts);
-        setCMine(st.mine);
-        setCheered(st.mine.has(post.id));
       })
       .catch((e) => { if (active) setCErr(e); });
     return () => { active = false; };
@@ -299,15 +281,14 @@ export default function PostDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, post?.id]);
 
-  // 가격표(서버 단일 출처) — 응원·끌올 버튼 라벨이 여기서 나온다. 열릴 때 1회.
+  // 가격표(서버 단일 출처) — 끌올 버튼 라벨이 여기서 나온다. 열릴 때 1회.
+  //   (2026-09-15 오너 지시로 응원 SKU 조회는 함께 걷어냈다.)
   useEffect(() => {
     if (!open) return;
     let active = true;
     getShopSkus().then((list) => {
       if (!active) return;
-      const c = list.find((s) => s.kind === 'cheer');
       const b = list.find((s) => s.kind === 'bump');
-      setCheerPrice(c ? c.price : null);
       setBumpSku(b ? { price: b.price, hours: b.durationHours } : null);
     }).catch(() => {});
     return () => { active = false; };
@@ -379,30 +360,6 @@ export default function PostDetailModal({
     }
   };
 
-  // ── 응원 보내기 — 차감·기록·알림이 서버 한 트랜잭션이라 화면은 결과만 반영한다.
-  //   낙관 갱신을 하지 않는 이유: 유료 동작이라 '숫자가 올랐다가 되돌아가는' 그림이
-  //   곧 '점수가 빠졌나?'라는 불안이 된다. 서버가 준 최종 수만 그린다.
-  const handleCheer = async (target: { commentId?: string }) => {
-    if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; }
-    if (cheerBusy) return;
-    setCheerBusy(true);
-    const startId = post.id;   // UI-04 §7.4: A 글에서 시작한 응원 응답이 B 글 상태를 바꾸지 않게
-    try {
-      const key = target.commentId ?? post.id;
-      const r = await sendCheer(target.commentId ? { commentId: target.commentId } : { postId: post.id });
-      if (currentPostIdRef.current !== startId) return;
-      if (target.commentId) {
-        setCCheers((prev) => ({ ...prev, [target.commentId as string]: r.cheers }));
-        setCMine((prev) => new Set(prev).add(key));
-      } else {
-        setCheerN(r.cheers);
-        setCheered(true);
-      }
-      toast.show(`응원을 보냈어요. 오늘 ${r.remainingToday}번 더 보낼 수 있어요`, 'success');
-    } catch (e) {
-      toast.show(e instanceof Error ? e.message : '응원에 실패했습니다', 'error');
-    } finally { if (currentPostIdRef.current === startId) setCheerBusy(false); }   // 글이 바뀌었으면 리셋 effect 가 이미 풀었다
-  };
 
   // ── 끌올 — 내 글만. 자리 상한·중복은 서버가 최종 판정하고, 화면은 결과만 반영한다.
   const handleBump = async () => {
@@ -800,53 +757,7 @@ export default function PostDetailModal({
         </div>
         )}
 
-        {/* ── 응원(칩 던지기) ───────────────────────────────────────────────
-            반응 알약(좋아요·추천·비추천) 옆에 끼워 넣지 않는다. 저 셋은 공짜고 이건 **유료**다 —
-            같은 모양으로 나란히 두면 값을 치르는 동작이 무료 카운터로 오독된다(375px 실측에서
-            네 알약이 이미 한 줄을 넘겼던 것도 같은 자리의 문제였다).
-            그래서 자기 줄에 두고, 값을 **버튼 라벨에 박아** 누르기 전에 가격을 읽게 한다
-            (상점의 '800점 소장' 버튼과 같은 규약 — 값은 서버 shop_skus.cheer 가 출처다). */}
-        {/* 2026-09-12(§5-1): 여기 있던 **채워진 박스 두 개**(테두리 + 면)를 걷어냈다.
-            'ddd' 같은 짧은 글에서 본문은 평범한 글 한 줄인데 응원·끌올만 색 테두리 상자 두 개라
-            보조 기능이 내용보다 강하게 읽혔다. 지금은 가는 줄 하나로 묶인 보조 구역이고,
-            버튼만 테두리를 유지한다(누를 수 있는 것이라 비텍스트 3:1 대상이다).
-            값·조건 문구는 한 글자도 바꾸지 않았다 — 가격은 서버 shop_skus 가 출처. */}
         {!hidden && <hr className="border-t border-border-strong mt-3" aria-hidden="true" />}
-        {!hidden && (
-        <div className="mt-3 flex items-center gap-2">
-          <Icon name="chip-stack" size={16} strokeWidth={1.8} className="shrink-0 text-ink-muted" />
-          {/* 조건 문구('점수는 상대에게 가지 않아요')는 유료 동작을 누르기 전에 **읽혀야 하는 사실**이다.
-              11.69px·ink-muted(다크 4.46:1 — AA 미달)로 두면 '있지만 안 읽히는' 고지가 된다 →
-              12.75px·ink-secondary. 문구는 그대로다. */}
-          <span className="min-w-0 flex-1 text-xs leading-tight text-ink-secondary">
-            <b className="text-ink-primary">응원</b>
-            <span className="ml-1 tabular-nums text-accent-200">{cheerN}</span>
-            <span className="ml-1.5">점수는 상대에게 가지 않아요</span>
-          </span>
-          {user?.id === post.userId ? (
-            <span className="shrink-0 text-2xs text-ink-muted">내 글</span>
-          ) : cheered ? (
-            <span className="shrink-0 inline-flex items-center gap-1 rounded-badge border border-accent-300 bg-accent-300/15 px-2 py-1 text-2xs font-bold text-accent-200">
-              <Icon name="check" size={12} strokeWidth={2.4} className="shrink-0" />
-              응원함
-            </span>
-          ) : (
-            // UI-Aura(2026-09-14): ring-aura-glow 는 누를 수 있을 때만 — '준비 중'(비활성)에 글로우가 붙으면
-            // 안 된다는 지시라 disabled 와 반대로 묶는다(같은 조건을 두 번 계산하지 않고 변수 하나로).
-            (() => {
-              const cheerDisabled = cheerBusy || cheerPrice === null;
-              return (
-                <button type="button" disabled={cheerDisabled}
-                  onClick={() => handleCheer({})}
-                  className={['hit shrink-0 rounded-badge border border-accent-400/50 px-2.5 py-1 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50',
-                    cheerDisabled ? '' : 'ring-aura-glow'].join(' ')}>
-                  {cheerBusy ? '보내는 중…' : cheerPrice === null ? '준비 중' : `${cheerPrice.toLocaleString()}점 응원`}
-                </button>
-              );
-            })()
-          )}
-        </div>
-        )}
 
         {/* ── 끌올 — 작성자 본인에게만. 남의 글에서는 아예 그리지 않는다(살 수 없는 버튼은 소음이다). */}
         {user?.id === post.userId && (
@@ -903,13 +814,6 @@ export default function PostDetailModal({
             moderator={user?.role === 'admin'}
             /* 미로드 구간에는 빈 상태 문구를 내지 않는다 — '없다'는 아직 사실이 아니다 */
             emptyText={replies === null ? ' ' : '첫 댓글을 남겨보세요'}
-            /* 응원은 커뮤니티 글 댓글에만 배선한다 — 요강 Q&A·매장 댓글은 이 props 를 안 받아
-               종전 화면 그대로다(서버 send_cheer 도 post_id 없는 댓글은 거절한다). */
-            cheers={cCheers}
-            myCheers={cMine}
-            onCheer={(commentId) => handleCheer({ commentId })}
-            cheerPrice={cheerPrice}
-            cheerBusy={cheerBusy}
           />
         </section>
         )}

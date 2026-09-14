@@ -86,11 +86,11 @@ describe('UI-03 · 아우라 구분선', () => {
 // 잘못되면 실제 버그가 되는 두 곳만 계약으로 잠근다: 비활성 버튼에 글로우가 붙거나, 안 누른 알약이 켜진 것처럼 보이면
 // "지금 이걸 눌렀다"는 거짓 신호가 된다. 나머지(아바타·묶음 링·이전/다음 카드)는 순수 장식이라 계약을 걸지 않는다.
 describe('UI-Aura(2026-09-14) · 장식이 상태를 거짓말하지 않는다', () => {
-  it('🔴 응원 버튼의 ring-aura-glow 는 비활성(cheerDisabled)일 때 빠진다', () => {
-    const i = POST.indexOf('const cheerDisabled = cheerBusy || cheerPrice === null;');
-    expect(i, 'cheerDisabled 판정을 찾지 못했다').toBeGreaterThan(-1);
-    const block = POST.slice(i, i + 500);
-    expect(block).toMatch(/cheerDisabled \? '' : 'ring-aura-glow'/);
+  // 2026-09-15 오너 지시로 응원 보내기를 전량 삭제했다 — 이 항목이 보던 버튼이 없어졌다.
+  //   느슨하게 푼 것이 아니라 대상이 사라진 것이라, 그 자리에 '되살아나지 않는다'를 세운다.
+  it('🔴 응원 버튼은 화면에 없다(전량 삭제 — 되살리려면 ring-aura-glow 계약도 같이 되살려라)', () => {
+    expect(POST).not.toMatch(/cheerDisabled|cheerBusy|cheerPrice|handleCheer/);
+    expect(POST).not.toContain('응원');
   });
   it('🔴 반응 알약 3개는 각자의 active 조건일 때만 data-aura 를 켠다(상시 on 이 아니다)', () => {
     expect(POST).toMatch(/data-aura=\{post\.liked \|\| undefined\}/);

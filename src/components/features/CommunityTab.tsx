@@ -596,12 +596,21 @@ function FeedSection({
   // 작성자 닉네임 색(상점 600점 · 20260830n) — 마크와 **같은 결합 지점**이라 같은 자리에서 함께 받는다.
   // 값은 색이 아니라 등급 토큰명('blue' 등)이다 → 실제 색은 --tier-<token> 이라 테마를 따라간다.
   const [authorColors, setAuthorColors] = useState<Record<string, string>>({});
+  // 상점에서 마크·닉네임 색을 사거나 바꾸면 `nuri:cosmetics-changed` 로 다시 받는다(TierLeaderboard 가 쏜다).
+  //   이 탭은 최상위라 언마운트되지 않고 posts 도 마운트 때 한 번만 받으므로(1028행 `reload()`),
+  //   신호가 없으면 방금 산 색이 새로고침 전까지 내 글에 안 붙는다 — 오너 #8 과 같은 부류다.
+  const [cosmeticStamp, setCosmeticStamp] = useState(0);
+  useEffect(() => {
+    const bump = () => setCosmeticStamp((n) => n + 1);
+    window.addEventListener('nuri:cosmetics-changed', bump);
+    return () => window.removeEventListener('nuri:cosmetics-changed', bump);
+  }, []);
   useEffect(() => {
     const ids = [...new Set(posts.map((p) => p.userId).filter(Boolean))];
     if (ids.length === 0) { setAuthorMarks({}); setAuthorColors({}); return; }
     getEquippedMarks(ids).then(setAuthorMarks).catch(() => {});
     getNickColors(ids).then(setAuthorColors).catch(() => {});
-  }, [posts]);
+  }, [posts, cosmeticStamp]);
   // 작성자 칭호(활동점수) — posts의 userId 일괄 조회(닉네임 옆 칭호)
   const titleOf = useTitlePoints(posts.map((p) => p.userId));
   // 광고 목록·빈도 — 관리자가 바꾸면 `nuri:ads-changed` 로 다시 받는다(AdSlotsAdmin 이 쏜다).

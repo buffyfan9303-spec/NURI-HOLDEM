@@ -10,7 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierColor, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS, tierCss, ACE_VAR } from '../atoms/TierBadge';
 import {
   getActivityLeaderboard, getMyPointBalance, buyLabel, lacksPoints, getShoutRules,
-  getShopSkus, getMyOwnedMarks, buyMark, SHOUT_SLOT_SECONDS, CHEER_DAILY_CAP, BUMP_SLOTS,
+  getShopSkus, getMyOwnedMarks, buyMark, SHOUT_SLOT_SECONDS, BUMP_SLOTS,
   getMyCosmetics, buyCosmetic, setEquippedCosmetic, getNickColors,
   getBuyableSeasonBadges, getMySeasonBadges, buySeasonBadge, buyNicknameReset,
   type LeaderboardEntry, type PointBalance, type ShopSku, type OwnedMark,
@@ -62,7 +62,7 @@ const BOARD_LABEL: Record<Board, string> = {
 const BOARD_DESC: Record<Board, string> = {
   domestic: '대회(토너먼트) 입상만 인정. 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(100T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
   verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(100T)당 1점입니다.',
-  shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·응원·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
+  shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
   moneyin: '전국 대회 머니인(입상) 경력 순위. 매장이 등록한 대회 순위 기록만 세며 상금·금액은 보지 않습니다 — 입상 횟수 → 우승 → TOP3 → 최고 등수 순.',
   badges: '조건을 달성하면 자동으로 열리는 업적 뱃지. 모아서 프로필을 채우세요.',
@@ -191,6 +191,15 @@ function ActivityBoardSkeleton({ reserveMyRow }: { reserveMyRow: boolean }) {
  *  테두리를 항상 1px 잡아 두는 것이 핵심이다(활성일 때만 transparent):
  *  예전엔 활성 상태만 테두리가 없어 누르는 순간 높이가 2px 줄었다 늘었다 — 그게 오너가 본 '툭' 이다.
  *  바뀌는 것을 색·글자로만 한정하면 transition-colors 하나로 부드러워진다(모션 헌법 §4). */
+/*  라벨의 동사(오너 #6, 2026-09-15): '400점 소장' 을 '400점' 으로 바꾸되 좌우 공백이 너무 크면 '영구소장'.
+ *  실측(Chromium 375px · Pretendard Variable 실제 적용 · root 17px · text-2xs=11.6875px/700 · tabular-nums,
+ *   버튼 바깥폭 133.31px = 341 − p-3(25.5) − gap(6.375) ÷2 − p-2.5(21.25), 내용폭 114.00px):
+ *     '400점'          33.05px · 좌우 40.48px 씩 · 채움 29.0%
+ *     '400점 소장'      55.94px · 29.03px       · 49.1%
+ *     '400점 영구소장'   76.13px · 18.94px       · 66.8%   ← 채택
+ *   판단 근거는 **같은 버튼의 다른 상태**다: '✓ 적용 중 · 해제' 가 73.31px(64.3%)라,
+ *   '400점'(29%)만 두면 같은 자리가 상태에 따라 절반쯤 빈 상자로 읽힌다. '영구소장' 은 66.8% 로 그 옆값과 2.5%p 차이다.
+ *   320px(버튼 105.81px·내용 87px)에서도 좌우 5.44px 로 **줄바꿈 없이** 들어간다(높이 16px 유지 — 실측). */
 const SHOP_BTN = 'mt-1.5 inline-flex w-full min-h-[30px] items-center justify-center gap-1 rounded-input border px-2 py-1.5 text-2xs font-bold transition-colors disabled:opacity-50';
 const SHOP_BTN_ON = 'border-transparent bg-accent-300 text-white';
 const SHOP_BTN_OFF = 'border-accent-400/40 text-accent-300 hover:bg-accent-300/10';
@@ -391,7 +400,6 @@ export default function TierLeaderboard() {
   // (가격표가 바뀌면 화면은 옛 값을 말하고 서버는 새 값을 걷는다 — shoutCost 폴백 30 vs 서버 200 과 같은 함정).
   const markSku = skus.find((s) => s.kind === 'mark') ?? null;
   // 반복 소비형 2종(2026-08-30) — 상점은 가격만 보여 주고, 구매는 대상이 있는 커뮤니티에서 한다.
-  const cheerSku = skus.find((s) => s.kind === 'cheer') ?? null;
   const bumpSku = skus.find((s) => s.kind === 'bump') ?? null;
   // 판매 중지된 기간권 — 서버가 active=false 로 이미 빼 주지만, 되살아나도 살 수 없게 화면에서도 막는다.
   const deadRentSkus = skus.filter((s) => s.kind === 'mark_rent');
@@ -421,6 +429,25 @@ export default function TierLeaderboard() {
     : '';
   // 잔액 실패는 balance=null(미도착) 그대로 — 누적 점수를 잔액으로 대신 쓰지 않는 보호는 그대로고, 실패는 boardErr.balance 로 말한다.
   const reloadBalance = useRef(() => { scopedLoad(scopeRef, getMyPointBalance(), (b) => { setBalance(b); clearErr('balance'); }, fail('balance')); }).current;
+  /**
+   * 🔴 오너 #8 '상점에서 뭘 사도 그대로다' 의 근본 원인.
+   *   순위표(마크 글리프)·닉네임 색 재조회 이펙트가 `[user?.activityPoints]` 하나에만 걸려 있었는데,
+   *   **모든 구매는 activity_points 가 아니라 spent_points 만 깎는다**
+   *   (20260830f:141 buy_mark · 20260830n:505 buy_cosmetic — 둘 다 `set spent_points = ... + v_price`).
+   *   ⇒ 구매·장착으로 activityPoints 가 바뀌는 일이 **구조적으로 없어** 이펙트가 영영 다시 돌지 않았고,
+   *     보고 있던 순위표의 내 행은 새로고침 전까지 옛 마크·옛 색 그대로였다. 상점 카드만 '✓ 장착 중' 이 됐다.
+   *   표시가 바뀌는 구매·장착은 전부 이 스탬프를 올려 같은 이펙트를 다시 태운다
+   *   (이펙트는 stale-while-revalidate 라 목록이 '불러오는 중…' 으로 무너지지 않는다 — 아래 CLS 주석 참조).
+   */
+  const [displayStamp, setDisplayStamp] = useState(0);
+  /**
+   * 같은 표시가 게시판에도 걸려 있다(글·댓글의 닉네임 앞 마크·닉네임 색 = 같은 결합 지점).
+   * 커뮤니티 탭은 keep-alive 라 신호 없이는 부팅 때 받은 값을 계속 쓴다 — `nuri:ads-changed` 와 같은 처방.
+   */
+  const refreshDisplay = useRef(() => {
+    setDisplayStamp((n) => n + 1);
+    try { window.dispatchEvent(new CustomEvent('nuri:cosmetics-changed')); } catch { /* 무시 */ }
+  }).current;
   const [domestic, setDomestic] = useState<DomesticRow[] | null>(null);
   // 조회 실패는 '0건'이 아니다 — 실패로 그리고 다시 시도할 길을 준다(#20). null 이면 정상.
   const [domesticErr, setDomesticErr] = useState<unknown>(null);
@@ -486,6 +513,7 @@ export default function TierLeaderboard() {
       setOwned((prev) => [...(prev ?? []).filter((o) => o.markKey !== key), { markKey: key, source: 'own', until: null }]);
       setEquippedMark(key);                 // 서버가 구매 즉시 장착까지 끝냈다
       reloadBalance();
+      refreshDisplay();                     // 순위표 내 행의 마크 글리프까지 바꿔 준다(오너 #8)
       await refreshProfile?.();
       toast.show(`${markOf(key)?.name ?? '마크'} 소장! ${markSku.price.toLocaleString()}점 사용. 이제 계속 쓸 수 있어요`, 'success');
     } catch (e) {
@@ -505,6 +533,7 @@ export default function TierLeaderboard() {
     try {
       await saveEquippedMark(key);
       setEquippedMark(key);
+      refreshDisplay();
     } catch { /* 실패 시 기존 유지 */ }
     finally { setEquipBusy(null); }
   };
@@ -524,6 +553,7 @@ export default function TierLeaderboard() {
         { kind: c.kind, itemKey: key, equipped: true },
       ]);
       reloadBalance();
+      refreshDisplay();                     // 순위표 내 행의 닉네임 색까지 바꿔 준다(오너 #8)
       toast.show(`${c.label} 소장! ${sku.price.toLocaleString()}점 사용. 바로 적용됐어요`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
@@ -537,6 +567,7 @@ export default function TierLeaderboard() {
       const key = await setEquippedCosmetic(c.kind, on ? null : c.key);
       setMyCosmetics((prev) => (prev ?? []).map((o) =>
         o.kind === c.kind ? { ...o, equipped: key !== null && o.itemKey === key } : o));
+      refreshDisplay();
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '적용에 실패했습니다', 'error');
     } finally { setEquipBusy(null); }
@@ -672,7 +703,8 @@ export default function TierLeaderboard() {
       .catch(() => {})
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [user?.activityPoints]);
+    // displayStamp — 구매·장착은 spent_points 만 깎아 activityPoints 가 안 바뀐다(refreshDisplay 주석 참조).
+  }, [user?.activityPoints, displayStamp]);
 
   const myProg = user ? tierProgress(user.activityPoints ?? 0) : null;
   const isAdmin = user?.role === 'admin';
@@ -1098,7 +1130,7 @@ export default function TierLeaderboard() {
                             className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                             {buying === mk.key ? '구매 중…'
                               : !markSku ? '판매 준비 중'
-                                : buyLabel(balance, price, '소장')}
+                                : buyLabel(balance, price, '영구소장')}
                           </button>
                         )}
                       </div>
@@ -1135,7 +1167,7 @@ export default function TierLeaderboard() {
                 <div className="rounded-card border border-border-subtle bg-surface-high p-3">
                   <div className="flex items-baseline justify-between gap-2">
                     <p className="text-xs font-bold text-ink-primary">
-                      {frameSku.label} <span className="font-normal text-ink-muted">공유 카드 테두리 · 영구 소장</span>
+                      {frameSku.label} <span className="font-normal text-ink-muted">인증서 테두리 · 영구 소장</span>
                     </p>
                     <p className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-2xs font-extrabold tabular-nums text-accent-300">
                       {frameSku.price.toLocaleString()}점
@@ -1150,8 +1182,8 @@ export default function TierLeaderboard() {
                       ① 세로 중앙 정렬로 빈 아래를 없애고 ② 오른쪽에 '지금 장착' 실체를 하나 더 얹어
                       두 열의 무게를 맞춘다 ③ 좁은 폭에서는 아예 위아래로 쌓는다(옆에 두면 텍스트가 눌린다). */}
                   <div className="mt-2 flex flex-col items-center gap-3 sm:flex-row sm:items-center">
-                    <canvas ref={setCardEl} width={640} height={880} aria-label="프로필 공유 카드 미리보기"
-                            className="h-[15.4rem] w-[11.2rem] shrink-0 rounded-card border border-border-subtle" />
+                    <canvas ref={setCardEl} width={640} height={880} aria-label="활동 인증서 미리보기"
+                            className="h-[15.4rem] w-[11.2rem] shrink-0 rounded-card border border-border-strong shadow-lg" />
                     <div className="min-w-0 w-full flex-1 space-y-2">
                       <div className="rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
                         <p className="text-2xs text-ink-muted">지금 장착</p>
@@ -1165,7 +1197,7 @@ export default function TierLeaderboard() {
                       </p>
                       <button type="button" onClick={handleSaveCard}
                         className="btn-primary w-full py-2 text-xs">
-                        <span className="inline-flex items-center gap-1"><Icon name="download" size={13} className="shrink-0" />카드 이미지 저장</span>
+                        <span className="inline-flex items-center gap-1"><Icon name="download" size={13} className="shrink-0" />인증서 이미지 저장</span>
                       </button>
                     </div>
                   </div>
@@ -1194,7 +1226,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleBuyCosmetic(c)}
                               className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                               {buying === c.key ? '구매 중…'
-                                : buyLabel(balance, frameSku.price, '소장')}
+                                : buyLabel(balance, frameSku.price, '영구소장')}
                             </button>
                           )}
                         </div>
@@ -1249,7 +1281,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleBuyCosmetic(c)}
                               className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                               {buying === c.key ? '구매 중…'
-                                : buyLabel(balance, nickSku.price, '소장')}
+                                : buyLabel(balance, nickSku.price, '영구소장')}
                             </button>
                           )}
                         </div>
@@ -1360,28 +1392,13 @@ export default function TierLeaderboard() {
                 <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-1 text-2xs font-extrabold text-accent-300">{shoutCost.toLocaleString()}점~</span>
               </button>
 
-              {/* ── 소비형 ③④ 응원 · 끌올 (2026-08-30 · 20260830m) ─────────────
-                  여기서 **사지 않는다.** 둘 다 '어느 글/댓글에' 를 골라야 성립하는 상품이라
-                  구매 버튼을 상점에 두면 대상 없는 결제가 된다. 상점은 가격 사다리를 보여 주는
-                  자리이고(30 → 100 → 50/150 → 800), 실제 구매는 커뮤니티 글에서 일어난다.
-                  가격은 서버 shop_skus 가 출처라 화면에 숫자를 박지 않는다. */}
-              {(cheerSku || bumpSku) && (
-                <div className="grid gap-1.5 sm:grid-cols-2">
-                  {cheerSku && (
-                    <div className="flex items-center gap-2.5 rounded-card border border-border-subtle bg-surface-high px-3 py-2.5">
-                      <Icon name="chip-stack" size={18} className="shrink-0 text-accent-300" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-xs font-bold text-ink-primary">{cheerSku.label}</span>
-                        <span className="block text-2xs leading-tight text-ink-muted">
-                          커뮤니티 글·댓글에서 보냅니다 · 하루 {CHEER_DAILY_CAP}번까지
-                        </span>
-                      </span>
-                      <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-1 text-2xs font-extrabold tabular-nums text-accent-300">
-                        {cheerSku.price.toLocaleString()}점
-                      </span>
-                    </div>
-                  )}
-                  {bumpSku && (
+              {/* ── 소비형 · 글 끌올 (2026-08-30 · 20260830m) ──────────────────
+                  여기서 **사지 않는다.** '어느 글에' 를 골라야 성립하는 상품이라 구매 버튼을
+                  상점에 두면 대상 없는 결제가 된다. 상점은 가격을 보여 주는 자리이고,
+                  실제 구매는 내 글에서 일어난다. 가격은 서버 shop_skus 가 출처라 화면에 숫자를 박지 않는다.
+                  2026-09-15 오너 지시로 **응원 칸을 전량 삭제**했다 — 남은 반복 소비형은 끌올 하나다. */}
+              {bumpSku && (
+                <div className="grid gap-1.5">
                     <div className="flex items-center gap-2.5 rounded-card border border-border-subtle bg-surface-high px-3 py-2.5">
                       <Icon name="zap" size={18} className="shrink-0 text-accent-300" />
                       <span className="min-w-0 flex-1">
@@ -1394,12 +1411,8 @@ export default function TierLeaderboard() {
                         {bumpSku.price.toLocaleString()}점
                       </span>
                     </div>
-                  )}
                 </div>
               )}
-              <p className="text-2xs leading-relaxed text-ink-muted">
-                응원은 <b className="text-ink-secondary">받는 사람에게 점수가 가지 않습니다</b> — 표시와 알림만 남고 점수는 소멸해요.
-              </p>
 
               {/* ── 활동으로 얻는 것 — 여기 있는 16종은 **살 수 없다.** 점수로만 열린다.
                   위(점수로 사는 것)와 시각적으로 갈라 두지 않으면 '해금한 마크를 또 사야 하나'로 읽힌다. */}
