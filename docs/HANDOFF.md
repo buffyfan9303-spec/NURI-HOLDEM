@@ -90,7 +90,7 @@ Supabase 어드바이저 보안 ERROR 0 (INFO 1 · WARN 3, 전부 기존)
 (그 원인이던 마이그레이션을 적용했다). 이제 **빨간불은 전부 빨간불이다.**
 
 ### DB
-`BLOCKED.md` #20 의 마이그레이션은 **전부 적용 완료**(17건). 어드바이저 보안 ERROR 0 유지 중.
+`docs/plans/BLOCKED.md` #20 의 마이그레이션은 **전부 적용 완료**(17건). 어드바이저 보안 ERROR 0 유지 중.
 
 ---
 
@@ -274,7 +274,7 @@ CLI 이름으로 바꿔 시도하면 **원격 이력 350여 건이 로컬에 없
   ⚠ 미니파이어가 **같은 값의 셀렉터를 한 규칙으로 합치고**, Tailwind 클래스의 대괄호·콜론은
   **백슬래시로 이스케이프**된다(`.sm\:grid-cols-5`, `.min-h-\[50svh\]`). 정확한 문자열 대신 **패턴**으로 찾아라.
   ⚠ lightningcss 가 미디어쿼리를 최신 문법으로 바꾼다 — `@media (min-width:640px)` 가 아니라 **`@media (width>=640px)`** 다.
-- ⚠ **sitemap `lastmod` 는 KST 자정~오전 9시에는 쓸모없다.** `gen-sitemap.mjs` 가 `toISOString()`(**UTC**)을 쓴다.
+- ⚠ **sitemap `lastmod` 는 KST 자정~오전 9시에는 쓸모없다.** `scripts/gen-sitemap.mjs` 가 `toISOString()`(**UTC**)을 쓴다.
   KST 00:35(9/15) 빌드가 `2026-09-14` 로 찍힌다. 그 시간대엔 청크 해시로만 판정해라.
 
 ---
@@ -323,7 +323,7 @@ CLI 이름으로 바꿔 시도하면 **원격 이력 350여 건이 로컬에 없
 **주석에 적은 클래스도 CSS 를 만든다.** `dvh` 를 금지하는 계약 테스트의 설명문에 그 클래스를 적었더니
 라이브 CSS 에 죽은 규칙이 실렸다. **금지하려는 클래스명을 주석에 그대로 쓰지 마라.**
 
-⑪ **줄끝이 파일마다 다르다.** `App.tsx` 는 **LF**, `HomeTab.tsx`·`MySpotList.tsx` 는 **CRLF**, BOM 있는 파일도 있다.
+⑪ **줄끝이 파일마다 다르다.** `src/App.tsx` 는 **LF**, `src/components/features/HomeTab.tsx`·`src/components/features/gto/MySpotList.tsx` 는 **CRLF**, BOM 있는 파일도 있다.
 **편집 전에 재고, 편집 후에 다시 재라.** 파이썬으로 고칠 때 `\n` 으로 매칭하면 CRLF 파일에서 빗나간다.
 
 ⑫ **`.codex/config.toml` 은 다른 도구(Codex)의 변경이다.** 커밋하지 말고 건드리지 마라.
@@ -360,16 +360,53 @@ CLI 이름으로 바꿔 시도하면 **원격 이력 350여 건이 로컬에 없
 
 ---
 
-## 8. 팀·모델 운영
+## 8. 팀·모델 운영 — **전부 git 에 있다. 그대로 살아난다**
 
-- 정본: `.claude/rules/nuri-team-capabilities.md`.
-- 기본 배정: 단순 점검 haiku · 명확한 저위험 구현/정형 검증 **Sonnet 5** · 조정 **Opus 5**.
-  **디자인/이미지 해석 · 보안/권한 · 이용권 · GTO 계산 · 복잡한 연동 · 첫 재발**은 **Fable 5.1**.
-- ⚠ **2026-09-15 기준 Fable 5.1 은 한도 소진 상태였다**(4회 연속 거절). 오너 상시 지시:
-  **한도가 차면 Opus 5 로 전환한다. 크레딧 구매·계정 전환 금지.** `/usage-credits` 를 부르지 마라.
-- 하위 에이전트는 **사용자에게 직접 묻지 않는다.** `NEEDS_USER:` 로 리드에게 올리고 **리드가 묻는다.**
-- 구현이 끝나면 **독립 검증**을 붙인다.
-- ⚠ 에이전트에게 메시지가 **엇갈려 닿을 수 있다.** 같은 결정을 두 번 물어오면 **한 장으로 압축해서** 다시 보내라.
+### 확인됨(2026-09-15): 새 계정에서 팀이 바로 뜬다
+| 무엇 | 상태 |
+|---|---|
+| 팀원 정의 **10개** (`.claude/agents/*.md`) | ✅ 추적됨 — `nuri-lead`·`home-team`·`community-team`·`store-team`·`gto-team`·`design-reviewer`·`critical-reviewer`·`root-cause-debugger`·`verifier`·`capability-steward` |
+| 스킬 **11개** (`.claude/skills/**`) | ✅ 추적됨 — **여기가 정본이다** |
+| 팀·모델 정책 (`.claude/rules/nuri-team-capabilities.md`) | ✅ |
+| 보안 훅 (`.claude/hooks/nuri-guard.mjs`) | ✅ (`node:fs` 만 쓴다 — 외부 의존 없음) |
+| `.claude/settings.json` | ✅ — **`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: 1`** · `teammateMode: in-process` · 기본 에이전트 `nuri-lead` · 비밀 파일 Read/Write deny |
+
+### ⚠ 안 따라오는 것 — 알고 있어야 한다
+- **`.claude/agent-memory-local/`** — `.gitignore:62`. **설계상 로컬 전용이다.** 그래서 거기 있던
+  상시 지시·상태를 **전부 이 문서로 옮겨 놨다**(아래 §8-b · §2 · §3 · §7).
+- **`.claude/settings.local.json`** — 로컬 권한 승인 기록. 새 계정은 처음 몇 번 승인 프롬프트를 더 본다. 정상이다.
+- 🔴 **`.agents/skills/**` 에 낡은 사본이 있다.** 대부분 미추적이라 안 따라오지만,
+  `nuri-migration`·`nuri-ship`·`security-audit` **3개는 추적된다.**
+  **정본은 언제나 `.claude/skills/**` 다.** `.agents` 쪽 수치·기준선을 인용하지 마라
+  (2026-09-15 실측: 같은 이름인데 내용이 다르다).
+
+### 모델 배정
+기본: 단순 점검 haiku · 명확한 저위험 구현/정형 검증 **Sonnet 5** · 조정 **Opus 5**.
+**디자인/이미지 해석 · 보안/권한 · 이용권 · GTO 계산 · 복잡한 연동 · 첫 재발**은 **Fable 5.1**.
+⚠ **2026-09-15 내내 Fable 5.1 은 한도 소진이었다**(4회 연속 거절). 오너 상시 지시대로 **Opus 5 로 전환**했다.
+실패한 스폰은 왕복만 낭비하니 **한도가 회복됐는지 모르면 그냥 Opus 5 로 가라.**
+
+### 팀을 굴릴 때 (오늘 실제로 겪은 것)
+- **파일별 편집자는 정확히 한 명.** 프롬프트에 **"네 파일"과 "남의 파일"을 명시**해라.
+  남의 파일을 고쳐야 하면 `NEEDS_USER:` 로 리드에게 올리게 해라.
+- **메시지가 엇갈린다.** 같은 결정을 두 번 물어오면 **한 장으로 압축해서** 다시 보내라.
+- **하위 에이전트는 사용자에게 직접 묻지 않는다.** `NEEDS_USER:` → 리드가 묻는다.
+- 프롬프트에 **"내 가설을 검증하거나 반증해라. 전제하지 마라"** 를 꼭 넣어라(§7-⑱).
+- 끝난 팀원은 **바로 종료**해라. 껍데기가 쌓이면 누가 일하는지 안 보인다.
+
+---
+
+## 8-b. 🔴 오너 상시 지시 — **메모리에만 있던 것이라 여기 옮긴다**
+
+1. **배포까지 한다.** 커밋·푸시·Vercel 배포는 **상시 위임**(2026-09-14). "push만 남았습니다" 로 넘기지 마라.
+   단 **라이브 DB 적용은 위임에 포함되지 않는다** — 마이그레이션은 리드가 판단해서 적용하되 근거를 남긴다.
+2. **추가 과금에 자동 동의 금지.** Fable 한도가 차면 **Opus 5 로 전환**한다.
+   `/usage-credits` 를 부르지 마라. 계정 전환도 하지 마라.
+3. **응답은 한국어로.** 코드·경로·식별자는 원문 그대로.
+4. **이 체크아웃은 누리홀덤 전용.** 다른 프로젝트(CRM 등) 경로가 와도 여기서 시작하지 마라.
+5. **파이프라인 우선** — 모든 기능은 `노출 → 예약 → 방문 → 바인/장부 → 클락 → 순위 → 재방문` 한 사슬에 연결된다.
+6. **"좋아 보임"·자기평가·문서 작성은 완료가 아니다.** 완료 증거는 테스트 출력·스크린샷·서버 저장 결과다.
+7. 보고할 때 **"고친 것 / 남긴 것(이유) / 미검증"** 을 갈라서 적는다.
 
 ---
 
@@ -380,11 +417,11 @@ CLI 이름으로 바꿔 시도하면 **원격 이력 350여 건이 로컬에 없
 | **내 스팟 흔들림(`dvh`→`svh`)** | 고쳐서 배포했지만 **실기기 확인 못 함.** PC 에 주소창이 없다. 오너 안드로이드에서 재확인 필요. 여전히 흔들리면 원인은 다른 데 있다 |
 | **매장 상세 열 때 18프레임·853ms** | 안 고침. `handleVenueClick` 이 VT 모핑 때문에 `flushSync` **동기 커밋**이라 `startTransition` 처방이 안 먹는다. **모핑을 포기할지가 설계 결정** |
 | **공지 상세 18프레임·377ms** | 안 고침. 처방은 한 줄인데 진입 경로가 운영 데이터에 의존해 재현이 불안정했다 |
-| **`NotificationPanel.tsx` 의 전체 리로드** | **의도적**이다(주석에 근거). 쿼리·해시형 딥링크는 SPA 핸들러가 모르고 부팅 딥링크가 1회 ref 로 잠겨 있다. 걷어내려면 이펙트 여러 개를 재진입 가능하게 만들어야 한다 |
+| **`src/components/features/NotificationPanel.tsx` 의 전체 리로드** | **의도적**이다(주석에 근거). 쿼리·해시형 딥링크는 SPA 핸들러가 모르고 부팅 딥링크가 1회 ref 로 잠겨 있다. 걷어내려면 이펙트 여러 개를 재진입 가능하게 만들어야 한다 |
 | **E2E 운영 데이터 결합** | 91개 중 83개 파일이 운영을 읽는다. `home_banners` 만 막았다. **다음은 다른 테이블로 온다** |
 | **`gemini` 엣지 함수 완전 삭제** | 스텁으로 통로는 닫았으나 함수는 ACTIVE. **Supabase 대시보드에서 오너만** 가능 |
 | **`.git/worktrees` 고아 10개** | 권한 차단. 무해하지만 경고가 나온다 |
-| **모바일 사각지대 감사** | 2026-09-15 진행 중이었다. `AdminTab.tsx`·`CustomerDashboardPage.tsx`·`EventPage.tsx`·`LedgerWorkspace.tsx`·`index.css` 에 **미완성 변경이 남아 있을 수 있다.** 이어받기 전에 `git status --short` 와 `npx tsc -b --force` 로 상태부터 확인해라 |
+| **모바일 사각지대 감사** | 2026-09-15 진행 중이었다. `src/components/features/AdminTab.tsx`·`src/components/features/CustomerDashboardPage.tsx`·`src/components/features/EventPage.tsx`·`src/components/features/LedgerWorkspace.tsx`·`src/index.css` 에 **미완성 변경이 남아 있을 수 있다.** 이어받기 전에 `git status --short` 와 `npx tsc -b --force` 로 상태부터 확인해라 |
 
 ---
 
