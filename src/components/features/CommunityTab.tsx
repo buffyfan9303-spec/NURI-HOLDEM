@@ -898,6 +898,12 @@ function FeedSection({
             <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title="찾는 중…" /></div>
           ) : serverErr != null ? (
             <LoadErrorCard error={serverErr} what="검색 결과" onRetry={loadMore} />
+          ) : user && posts.length === 0 ? (
+            // AI 문구 정리(2026-09-14): 위 '글쓰기' 바가 이미 "쓸 수 있다"고 말하고 있다 — 로그인 상태에서
+            // 그 아래 emptyText 로 같은 말을 또 하면 댓글 0→입력창→"첫 댓글을 남겨보세요" 와 같은 3단 중복이다
+            // (CommentThread.tsx 와 같은 판단, 같은 user 조건 재사용). 검색으로 0건이 된 경우(비로그인 포함)는
+            // 새 정보라 그대로 보여준다 — 아래 else 분기.
+            null
           ) : (
             <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title={posts.length === 0 ? emptyText : '검색 결과가 없습니다'} /></div>
           )}

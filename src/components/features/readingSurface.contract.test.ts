@@ -130,6 +130,15 @@ describe('UI-Aura(2026-09-14) · 제목→본문 간격 — design 실측 84.8px
   });
 });
 
+// AI 문구 정리(2026-09-14): CommentThread 와 같은 판단 — 로그인(=위 '글쓰기' 바 렌더) 상태에서 목록이
+// 정말 비었으면 emptyText 박스를 생략한다(3단 중복 제거). 검색 결과 0건은 새 정보라 그대로 둔다.
+describe('AI 문구 정리(2026-09-14) · 게시글 목록 빈 안내도 입력 바와 중복되지 않는다', () => {
+  it('🔴 posts.length===0 분기가 user 유무로 갈린다 — 로그인+글 없음은 null, 그 외는 emptyText/검색결과없음', () => {
+    const i = COMM.indexOf("serverErr != null ? (\n            <LoadErrorCard error={serverErr} what=\"검색 결과\" onRetry={loadMore} />\n          ) : user && posts.length === 0 ? (");
+    expect(i, 'user && posts.length===0 분기를 찾지 못했다').toBeGreaterThan(-1);
+  });
+});
+
 describe('N08 · 게시판 보기 기본값은 compact — 읽기·쓰기가 lib/boardView 한 벌', () => {
   it('🔴 CommunityTab 이 readBoardView/writeBoardView 를 쓰고, 옛 인라인 localStorage 판정이 없다', () => {
     expect(COMM).toMatch(/import \{ readBoardView, writeBoardView \} from '\.\.\/\.\.\/lib\/boardView';/);
