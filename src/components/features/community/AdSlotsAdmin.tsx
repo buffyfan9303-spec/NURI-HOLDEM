@@ -19,7 +19,10 @@ import { relativeTime } from '../../../lib/relativeTime';
 import { kstToday } from '../../../lib/kst';
 import { getAdSlots, saveAdSlot, swapAdSlots, type AdSlot } from '../../../api/ads';
 import { getAppSetting, setAppSetting, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../../api/settings';
-import type { CommunityPost } from '../../../api/community';
+import { addPost, searchPosts, type CommunityPost, type PostCategory } from '../../../api/community';
+import { POST_CATEGORIES } from '../../../lib/postCategory';
+import { filterContent } from '../../../lib/content-filter';
+import { useAuth } from '../../../contexts/AuthContext';
 import { PostRow, PostCard } from './PostRowCard';
 
 export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
@@ -27,8 +30,12 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
   const [slots, setSlots] = useState<AdSlot[]>([]);
   const [loadErr, setLoadErr] = useState<unknown>(null);
   const [busySlot, setBusySlot] = useState<number | null>(null);
-  const [picking, setPicking] = useState<number | null>(null);   // AD 지정 중인 슬롯
+  const [picking, setPicking] = useState<number | null>(null);   // 게시글 연결 중인 슬롯
+  const [composing, setComposing] = useState<number | null>(null); // 새 글을 써서 연결할 슬롯
   const [preview, setPreview] = useState<'compact' | 'feed'>('feed');
+  /** 이 화면에서 방금 쓴 글 — App 의 `posts`(부팅 때 받은 최근 50건)에는 아직 없다.
+   *  실시간 구독이 돌면 결국 들어오지만 그때까지 미리보기가 '목록에 없습니다'로 보이면 안 된다. */
+  const [freshPosts, setFreshPosts] = useState<CommunityPost[]>([]);
 
   const reload = useCallback(() => {
     getAdSlots().then((r) => { setLoadErr(null); setSlots(r); }).catch((e) => { setLoadErr(e); setSlots([]); });
@@ -46,7 +53,12 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
    */
   const announce = () => { try { window.dispatchEvent(new CustomEvent('nuri:ads-changed')); } catch { /* 무시 */ } };
 
-  const postById = useMemo(() => new Map(posts.map((p) => [p.id, p])), [posts]);
+  // 방금 쓴 글이 앞에 — App 이 나중에 같은 글을 실어 오면 Map 이 뒤엣것으로 덮어써 중복이 생기지 않는다.
+  const allPosts = useMemo(() => {
+    const ids = new Set(posts.map((p) => p.id));
+    return [...freshPosts.filter((p) => !ids.has(p.id)), ...posts];
+  }, [freshPosts, posts]);
+  const postById = useMemo(() => new Map(allPosts.map((p) => [p.id, p])), [allPosts]);
   // 같은 글이 두 활성 슬롯에 들어가지 않게 — DB 부분 유니크 인덱스와 같은 규칙을 화면에서도 먼저 막는다.
   const takenPostIds = useMemo(
     () => new Set(slots.filter((s) => s.active && s.postId).map((s) => s.postId as string)),
@@ -56,8 +68,10 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
   const save = async (next: AdSlot, msg: string) => {
     setBusySlot(next.slot);
     try {
-      await saveAdSlot(next);
-      setSlots((arr) => arr.map((x) => (x.slot === next.slot ? next : x)));
+      // ⚠ 낙관적 값(next)이 아니라 **서버가 돌려준 행**을 그린다 — RLS 가 막았는데 화면만 바뀌는
+      //   '저장했습니다 거짓말'을 여기서 끊는다(saveAdSlot 이 0행이면 던진다).
+      const saved = await saveAdSlot(next);
+      setSlots((arr) => arr.map((x) => (x.slot === saved.slot ? saved : x)));
       toast.show(msg, 'success');
       announce();
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); reload(); }
@@ -141,7 +155,8 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
       </div>
 
       {loadErr != null ? <LoadErrorCard error={loadErr} what="광고 슬롯" onRetry={reload} compact /> : slots.length === 0 ? (
-        /* 아직 응답 전(또는 슬롯 행 0건) — 빈 <ul> 로 두면 카드가 통째로 비어 '광고 칸이 없다'로 읽힌다 */
+        /* 아직 응답 전 — getAdSlots 는 응답이 오면 **항상 다섯 칸**을 주므로(빈 칸 포함)
+           이 분기는 오직 '첫 응답 전' 이다. 빈 <ul> 로 두면 카드가 통째로 비어 '광고 칸이 없다'로 읽힌다 */
         <ul className="space-y-1.5" aria-busy="true">{[1, 2, 3, 4, 5].map((i) => <li key={i} className="skeleton h-11 rounded-input" />)}</ul>
       ) : (
         <ul className="space-y-1.5">
@@ -167,12 +182,15 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
                       s.active ? 'border-accent-400/50 bg-accent-300/15 text-accent-200' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}>
                     노출 {s.active ? '켜짐' : '꺼짐'}
                   </button>
-                  <button type="button" onClick={() => setPicking(s.slot)} disabled={busySlot === s.slot}
+                  {/* 상태 배지가 '게시글 연결 필요' 라고 말하는데 버튼은 'AD 지정' 이라 오너가 둘을
+                      같은 것으로 읽지 못했다(2026-09-15 리포트: "연결할 수 있는 부분이 없어").
+                      배지의 말과 버튼의 말을 같게 맞춘다. 셀렉터는 data-testid 로 고정한다. */}
+                  <button type="button" data-testid="ad-admin-pick" onClick={() => setPicking(s.slot)} disabled={busySlot === s.slot}
                     className="min-h-8 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 text-xs font-bold text-accent-300 disabled:opacity-50">
-                    {s.postId ? '글 바꾸기' : 'AD 지정'}
+                    {s.postId ? '게시글 바꾸기' : '게시글 연결'}
                   </button>
                   {s.postId && (
-                    <button type="button" disabled={busySlot === s.slot}
+                    <button type="button" data-testid="ad-admin-unlink" disabled={busySlot === s.slot}
                       onClick={() => save({ ...s, postId: null, active: false }, '광고 ' + s.slot + '번의 글 연결을 해제했습니다')}
                       className="min-h-8 rounded-input border border-danger/40 px-2.5 text-xs font-bold text-danger-light transition-colors hover:bg-danger/10 disabled:opacity-40">해제</button>
                   )}
@@ -209,7 +227,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
 
                 {!s.postId && s.legacyTitle.trim() && (
                   <p className="text-2xs text-amber-200">
-                    옛 문구형 광고: “{s.legacyTitle}” — 새 방식에서는 노출되지 않습니다. 같은 내용의 글을 게시판에 올린 뒤 <b>AD 지정</b>으로 연결해 주세요.
+                    옛 문구형 광고: “{s.legacyTitle}” — 새 방식에서는 노출되지 않습니다. 같은 내용의 글을 게시판에 올린 뒤 <b>게시글 연결</b>로 이어 주세요.
                   </p>
                 )}
               </li>
@@ -222,9 +240,11 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
 
       {picking !== null && (
         <AdPostPicker
-          posts={posts}
+          posts={allPosts}
           takenPostIds={takenPostIds}
+          slot={picking}
           onClose={() => setPicking(null)}
+          onCompose={() => { const s = picking; setPicking(null); setComposing(s); }}
           onPick={(post) => {
             const s = slots.find((x) => x.slot === picking);
             if (!s) return;
@@ -233,26 +253,88 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
           }}
         />
       )}
+
+      {composing !== null && (
+        <AdPostComposer
+          slot={composing}
+          onClose={() => setComposing(null)}
+          onSubmit={async (draft) => {
+            const s = slots.find((x) => x.slot === composing);
+            if (!s) throw new Error('광고 칸을 찾지 못했습니다 — 새로고침 뒤 다시 시도해 주세요');
+            // ① 글 등록. addPost 는 `.insert().select().single()` 이라 RLS 가 막아 0행이면 스스로 던진다
+            //    (되읽기 확인이 이미 들어 있다) — 여기서 던지면 초안을 유지한 채 폼이 열려 있는다.
+            const saved = await addPost({
+              userId: draft.user.id, userName: draft.user.name, userRole: draft.user.role,
+              userColor: draft.user.avatarColor,
+              content: draft.content, category: draft.category, title: draft.title,
+            });
+            setFreshPosts((arr) => [saved, ...arr]);
+            // ② 슬롯 연결. 여기서 실패해도 ①의 글은 **이미 서버에 있다** — 다시 쓰게 하면 같은 글이
+            //    두 번 등록된다(PostFormModal N07 이 겪은 그 버그). 그래서 폼은 닫고, 무엇이 안 됐는지 말한다.
+            try {
+              const savedSlot = await saveAdSlot({ ...s, postId: saved.id, active: true });
+              setSlots((arr) => arr.map((x) => (x.slot === savedSlot.slot ? savedSlot : x)));
+              toast.show('글을 등록하고 광고 ' + s.slot + '번에 연결했습니다', 'success');
+              announce();
+            } catch (e) {
+              toast.show(
+                '글은 등록됐지만 광고 ' + s.slot + '번 연결에 실패했습니다 ('
+                + (e instanceof Error ? e.message : '원인 불명') + ') — 아래 게시글 연결에서 “' + draft.title + '” 을 골라 주세요',
+                'error',
+              );
+              reload();
+            }
+          }}
+        />
+      )}
     </section>
   );
 }
 
-// ── AD 지정 — 최근 글에서 고르기 ────────────────────────────────────────────
+// ── 게시글 연결 — 글을 골라 슬롯에 올린다 ───────────────────────────────────
 // 광고 전용 글을 새로 만들지 않는다(오너 지시). 이미 있는 글만 고른다.
-function AdPostPicker({ posts, takenPostIds, onClose, onPick }: {
+//
+// ⚠ 넘겨받는 `posts` 는 App 이 부팅 때 받은 **최근 50건**뿐이다(src/api/community.ts getPosts).
+//   그 안에서만 걸러 주면 51번째 글부터는 검색해도 안 나와서 '연결할 수 있는 글이 없다' 가 된다.
+//   그래서 검색어가 있으면 **서버 검색**(community.searchPosts — 게시판 검색이 이미 쓰는 그 함수)을
+//   함께 돌려 최근 50건 밖의 글도 고를 수 있게 한다. 새 API 를 만들지 않는다.
+function AdPostPicker({ posts, takenPostIds, slot, onClose, onPick, onCompose }: {
   posts: CommunityPost[];
   takenPostIds: Set<string>;
+  slot: number;
   onClose: () => void;
   onPick: (p: CommunityPost) => void;
+  onCompose: () => void;
 }) {
   const [q, setQ] = useState('');
-  const kw = q.trim().toLowerCase();
-  const list = posts
-    .filter((p) => !kw
-      || (p.title ?? '').toLowerCase().includes(kw)
-      || p.userName.toLowerCase().includes(kw)
-      || p.id.toLowerCase().startsWith(kw))
-    .slice(0, 40);
+  const kw = q.trim();
+  const [found, setFound] = useState<CommunityPost[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchErr, setSearchErr] = useState<unknown>(null);
+
+  useEffect(() => {
+    if (!kw) { setFound([]); setSearchErr(null); setSearching(false); return; }
+    // alive: 늦게 도착한 옛 검색 응답이 지금 화면을 덮지 않게(nuri-async-guard).
+    let alive = true;
+    setSearching(true);
+    const t = setTimeout(() => {
+      searchPosts({ q: kw, limit: 40 })
+        .then((r) => { if (alive) { setFound(r.posts); setSearchErr(null); } })
+        .catch((e) => { if (alive) { setFound([]); setSearchErr(e); } })
+        .finally(() => { if (alive) setSearching(false); });
+    }, 300);
+    return () => { alive = false; clearTimeout(t); };
+  }, [kw]);
+
+  const lower = kw.toLowerCase();
+  // 손에 있는 최근 글이 먼저(즉시 반응), 서버가 더 찾아 온 글이 뒤에. id 로 중복 제거.
+  const local = posts.filter((p) => !lower
+    || (p.title ?? '').toLowerCase().includes(lower)
+    || p.content.toLowerCase().includes(lower)
+    || p.userName.toLowerCase().includes(lower)
+    || p.id.toLowerCase().startsWith(lower));
+  const seen = new Set(local.map((p) => p.id));
+  const list = [...local, ...found.filter((p) => !seen.has(p.id))].slice(0, 40);
 
   /** 광고로 쓸 수 없는 이유 — 목록에서 **빼지 않고** 적어서 비활성화한다.
    *  안 보이면 운영자는 '왜 없지?' 로 시간을 버린다. */
@@ -264,12 +346,24 @@ function AdPostPicker({ posts, takenPostIds, onClose, onPick }: {
   };
 
   return (
-    <Modal open onClose={onClose} title="AD 로 올릴 글 고르기" variant="sheet" maxWidth="md">
-      <div className="space-y-2 px-4 py-3">
+    <Modal open onClose={onClose} title="광고에 연결할 게시글 고르기" variant="sheet" maxWidth="md">
+      <div className="space-y-2 px-4 py-3" data-testid="ad-post-picker">
+        {/* 올릴 글이 아직 없을 때의 막다른 길을 여기서 연다(오너 지시 2026-09-15).
+            글이 하나도 없으면 검색창만 놓아 두는 것은 '연결할 수 있는 부분이 없다' 와 같다. */}
+        <button type="button" data-testid="ad-admin-compose" onClick={onCompose}
+          className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-input border border-dashed border-accent-400/50 bg-accent-300/[0.06] px-3 text-sm font-bold text-accent-300 transition-colors hover:bg-accent-300/10">
+          <Icon name="plus" size={15} className="shrink-0" />새 글을 써서 {slot}번 칸에 연결
+        </button>
         <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="글 검색"
-          placeholder="제목 · 작성자 · 게시글 ID" className="input min-h-[44px] w-full text-sm" />
+          placeholder="제목 · 본문 · 작성자 · 게시글 ID" className="input min-h-[44px] w-full text-sm" />
+        {/* 검색 실패를 '결과 없음' 으로 위장하지 않는다 — 운영자가 '그런 글이 없다' 로 잘못 판단한다. */}
+        {searchErr != null && (
+          <p className="text-2xs text-danger-light">글 검색을 불러오지 못했습니다 — 아래는 최근 글 안에서만 찾은 결과입니다.</p>
+        )}
         {list.length === 0 ? (
-          <p className="py-6 text-center text-2xs text-ink-muted">{posts.length === 0 ? '최근 게시글이 없습니다.' : '검색 결과가 없습니다.'}</p>
+          <p className="py-6 text-center text-2xs text-ink-muted" aria-busy={searching || undefined}>
+            {searching ? '찾는 중…' : posts.length === 0 && !kw ? '최근 게시글이 없습니다.' : '검색 결과가 없습니다.'}
+          </p>
         ) : (
           <ul className="space-y-1">
             {list.map((p) => {
@@ -291,6 +385,110 @@ function AdPostPicker({ posts, takenPostIds, onClose, onPick }: {
             })}
           </ul>
         )}
+      </div>
+    </Modal>
+  );
+}
+
+// ── 광고용 글 새로 쓰기 ─────────────────────────────────────────────────────
+// 오너 지시 2026-09-15: "관리자 화면에서 광고용 글을 쓸 경로가 없으면 만들어 그냥."
+// 2026-09-11 의 '광고 전용 글을 새로 만들지 않는다' 보다 **오늘 지시가 우선**한다.
+// 다만 그 옛 지시의 정신(게시판을 광고로 오염시키지 않는다)은 그대로 지킨다:
+//   · 생성은 **기존 글쓰기 API 하나**(community.addPost)만 탄다 — 광고용 우회 경로·새 RPC 를 만들지 않는다.
+//   · 금칙어 검사는 일반 글쓰기와 **같은 관문**(lib/content-filter)을 지난다.
+//   · 어느 게시판에 올릴지 **반드시 고르게** 한다 — 기본 선택이 없다. 이 선택이 중요한 이유:
+//     광고로 실제 그려지는 동안 그 글은 목록에서 빠지지만(CommunityTab adPostIds), 슬롯을 끄거나
+//     게재 기간이 끝나면 **그 게시판의 평범한 글로 남는다**. 어디에 남을지를 운영자가 알고 골라야 한다.
+//
+// 화려하게 만들지 않는다(오너: 나만 보는 화면). 제목·본문·게시판·저장뿐 —
+// 이미지·핸드·투표가 필요한 글은 기존 글쓰기(커뮤니티 탭)로 쓰고 '게시글 연결'로 고르면 된다.
+interface AdPostDraft {
+  user: { id: string; name: string; role: CommunityPost['userRole']; avatarColor?: string };
+  category: PostCategory;
+  title: string;
+  content: string;
+}
+
+function AdPostComposer({ slot, onClose, onSubmit }: {
+  slot: number;
+  onClose: () => void;
+  /** 등록 실패면 **던진다**(초안을 유지한 채 폼이 열려 있는다). 연결만 실패한 경우는 던지지 않는다 —
+   *  그때 글은 이미 서버에 있어서 다시 쓰게 하면 같은 글이 두 번 등록된다. */
+  onSubmit: (d: AdPostDraft) => Promise<void>;
+}) {
+  const { user } = useAuth();
+  const toast = useToast();
+  const [category, setCategory] = useState<PostCategory | ''>('');   // ← 기본값 없음(오너 조건)
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!user) { toast.show('로그인이 필요합니다', 'error'); return; }
+    if (!category) { toast.show('어느 게시판에 올릴지 골라 주세요', 'error'); return; }
+    const t = title.trim();
+    const b = body.trim();
+    if (!t) { toast.show('제목을 입력해 주세요', 'error'); return; }
+    if (!b) { toast.show('내용을 입력해 주세요', 'error'); return; }
+    const check = filterContent(t + ' ' + b);
+    if (check.blocked) { toast.show(check.reason ?? '게시할 수 없는 표현이 있습니다', 'error'); return; }
+    setSaving(true);
+    try {
+      await onSubmit({
+        user: { id: user.id, name: user.name, role: user.role, avatarColor: user.avatarColor },
+        category, title: t, content: b,
+      });
+      onClose();
+    } catch (e) {
+      // 등록 자체가 실패했다 — 초안을 지우지 않는다(다시 쓰게 하면 그게 손실이다).
+      toast.show(e instanceof Error ? e.message : '글 등록에 실패했습니다', 'error');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={'광고 ' + slot + '번에 올릴 글 쓰기'} variant="sheet" maxWidth="md">
+      <div className="space-y-2.5 px-4 py-3" data-testid="ad-post-composer">
+        <fieldset className="space-y-1.5">
+          <legend className="text-2xs font-bold text-ink-secondary">어느 게시판에 올릴까요? (필수)</legend>
+          <div className="flex flex-wrap gap-1">
+            {POST_CATEGORIES.map((c) => (
+              <button key={c.id} type="button" aria-pressed={category === c.id}
+                onClick={() => setCategory(c.id)}
+                className={['min-h-8 rounded-input border px-2.5 text-xs font-bold transition-colors',
+                  category === c.id ? 'border-accent-400/50 bg-accent-300/15 text-accent-200' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-2xs text-ink-muted">
+            {category
+              ? '광고로 걸려 있는 동안에는 게시판 목록에서 빠지고 광고 칸에만 섭니다. 광고를 끄거나 기간이 끝나면 ‘'
+                + (POST_CATEGORIES.find((c) => c.id === category)?.label ?? '') + '’ 게시판의 일반 글로 남습니다.'
+              : '고르지 않으면 저장할 수 없습니다 — 광고가 내려간 뒤 이 글이 어디에 남을지를 정하는 선택입니다.'}
+          </p>
+        </fieldset>
+
+        <label className="block space-y-1">
+          <span className="text-2xs font-bold text-ink-secondary">제목 (필수)</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80}
+            className="input min-h-[44px] w-full text-sm" placeholder="광고 칸에 그대로 보일 제목" />
+        </label>
+
+        <label className="block space-y-1">
+          <span className="text-2xs font-bold text-ink-secondary">내용 (필수)</span>
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5}
+            className="input w-full resize-y text-sm" placeholder="누르면 열리는 글의 본문입니다" />
+        </label>
+
+        <div className="flex items-center gap-1.5 pt-0.5">
+          <button type="button" onClick={onClose} disabled={saving}
+            className="min-h-[44px] flex-1 rounded-input border border-border-default text-sm font-bold text-ink-secondary transition-colors hover:text-ink-primary disabled:opacity-50">취소</button>
+          <button type="button" data-testid="ad-composer-save" onClick={() => void submit()}
+            disabled={saving || !category || !title.trim() || !body.trim()}
+            className="btn-primary min-h-[44px] flex-[2] text-sm disabled:opacity-50">
+            {saving ? '등록 중…' : '등록하고 ' + slot + '번에 연결'}
+          </button>
+        </div>
       </div>
     </Modal>
   );

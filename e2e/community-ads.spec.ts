@@ -260,9 +260,11 @@ test.describe('커뮤니티 광고 — 게시글 승격', () => {
     await install(page, { ads: [adRow(1, 'ad-1', '광고 글')] });
     await openBoard(page);
     await expect(promoted(page).first()).toBeVisible({ timeout: 15_000 });
-    // 광고 카드 어디에도 'AD 지정'·'해제' 같은 운영 액션이 없다
-    await expect(page.getByRole('button', { name: 'AD 지정' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '해제' })).toHaveCount(0);
+    // 광고 카드 어디에도 '게시글 연결'·'해제' 같은 운영 액션이 없다
+    // ⚠ 라벨이 아니라 data-testid 로 고정한다 — 라벨로 잡으면 운영 화면에서 문구를 바꾼 날
+    //   이 단언이 조용히 공허해진다(2026-09-15 'AD 지정' → '게시글 연결' 개명이 그 경우였다).
+    await expect(page.locator('[data-testid="ad-admin-pick"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="ad-admin-unlink"]')).toHaveCount(0);
     // 관리자 탭 자체가 비로그인에게 없다
     await expect(page.locator('[data-tab="admin"]')).toHaveCount(0);
   });
@@ -292,5 +294,194 @@ test.describe('커뮤니티 광고 — 게시글 승격', () => {
     expect(info.tabindex).toBe('0');
     expect(info.cursor).toBe('pointer');
     expect(info.hitsSelf, '카드 위에 투명 레이어가 덮여 있다').toBe(true);
+  });
+});
+
+// ── 운영자: 광고 칸에 게시글을 실제로 연결할 수 있는가 (2026-09-15 오너 리포트) ──
+//
+// 오너 리포트: "노출관리 광고 탭에 '게시글 연결 필요' 라고 되어 있는데 게시글에 연결할 수 있는 부분이 없어."
+// 운영 DB 실측(2026-09-15): community_ads 에 슬롯 **1·3·4·5 네 행만** 있고 2번 행이 없었다.
+// 테이블에 있는 행만 그리던 화면은 '5칸' 이라 써 놓고 네 칸만 그렸고, 없는 자리에는 버튼도 없었다.
+// 여기서 잠그는 것: ① 다섯 칸이 전부 선다 ② 고르면 **그 글 id 가 실제로 서버로 나간다**
+//                   ③ 해제도 같은 경로로 서버에 나간다.
+// 세션은 가짜(로컬), 쓰기는 route 로 가로채 운영 DB 에 아무것도 보내지 않는다.
+const ADMIN_KEY = 'sb-idsxiqspecrucvfvtgbw-auth-token';
+const ADMIN_UID = '00000000-0000-4000-8000-00000000ad11';
+const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+const ADMIN_SESSION = (() => {
+  const jwt = [b64({ alg: 'HS256', typ: 'JWT' }),
+    b64({ sub: ADMIN_UID, aud: 'authenticated', role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }), 'e2e'].join('.');
+  return { access_token: jwt, refresh_token: 'e2e-fake', token_type: 'bearer', expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    user: { id: ADMIN_UID, aud: 'authenticated', role: 'authenticated', email: 'admin@example.com', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' } };
+})();
+
+/** 운영에 실제로 있던 상태: 슬롯 1·3·4·5 만 있고 전부 옛 문구(post_id 없음) */
+const legacyAdRows = () => [1, 3, 4, 5].map((slot) => ({
+  slot, title: `옛 광고 ${slot}`, link_url: null, advertiser: null,
+  post_id: null, active: false, starts_at: null, expires_at: null, updated_at: '2026-09-11T00:00:00Z',
+}));
+
+test.describe('운영자 → 노출 관리 → 광고', () => {
+  test('🔴 다섯 칸이 모두 서고, 고른 글 id 가 실제로 서버로 나간다', async ({ page }) => {
+    test.setTimeout(120_000);
+    const writes: Record<string, unknown>[] = [];
+    let adRows = legacyAdRows();
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* 차단 환경 */ } },
+      [ADMIN_KEY, JSON.stringify(ADMIN_SESSION)] as [string, string]);
+    await page.route(/\/auth\/v1\/(user|token)/, (r) => r.fulfill(json(ADMIN_SESSION.user)));
+    await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
+      id: ADMIN_UID, name: '운영자', nickname: '운영자', role: 'admin', approved: true, status: 'active',
+      venue_id: null, activity_points: 0, created_at: '2026-01-01T00:00:00Z',
+      agreed_to_terms: true, consented_legal_version: 2,
+    })));
+    // 🔴 쓰기는 여기서 끊고 페이로드만 기록한다 — 운영 DB 에 나가지 않는다.
+    await page.route(/\/rest\/v1\/community_ads/, (r) => {
+      if (r.request().method() === 'GET') return r.fulfill(json(adRows));
+      const body = r.request().postDataJSON() as Record<string, unknown> | Record<string, unknown>[];
+      const rows = Array.isArray(body) ? body : [body];
+      writes.push(...rows);
+      // 서버가 저장한 행을 돌려준다(saveAdSlot 이 반환 행으로 화면을 그린다)
+      adRows = adRows.filter((x) => !rows.some((n) => n.slot === x.slot))
+        .concat(rows.map((n) => ({ ...legacyAdRows()[0], ...n, slot: n.slot as number }))) as typeof adRows;
+      return r.fulfill(json(rows.map((n) => ({
+        slot: n.slot, post_id: n.post_id ?? null, active: n.active ?? false,
+        starts_at: n.starts_at ?? null, expires_at: n.expires_at ?? null, title: '옛 광고',
+      }))));
+    });
+    await page.route(POSTS_REST, (r) => r.fulfill(json([postRow('pick-me', '광고로 올릴 글'), postRow('n2', '다른 글')])));
+    await page.route(ADS_RPC, (r) => r.fulfill(json([])));
+    for (const t of ['schedules', 'venues', 'marketplace_notices', 'shouts', 'notifications', 'client_errors', 'home_banners'])
+      await page.route(new RegExp(`/rest/v1/${t}\\?`), (r) => r.fulfill(json([])));
+
+    await stabilizeBackstack(page);
+    await page.goto('/?tab=admin');
+    await dismissOverlays(page);
+
+    const section = page.getByRole('button', { name: '노출 관리', exact: true }).first();
+    await expect(section, '관리자로 들어가지 못했다').toBeVisible({ timeout: 30_000 });
+    await section.click();
+    await page.getByRole('button', { name: '광고', exact: true }).first().click();
+
+    // ① DB 에 네 행뿐이어도 다섯 칸이 선다 — 2번 칸에도 연결 버튼이 있어야 한다
+    await expect(page.locator('[data-ad-admin-slot]'),
+      'DB 행 개수만큼만 그리면 없는 슬롯에는 연결할 방법이 없다').toHaveCount(5, { timeout: 15_000 });
+    await expect(page.locator('[data-ad-admin-slot="2"]')).toBeVisible();
+
+    // ② 2번 칸 '게시글 연결' → 글 고르기 → 그 글 id 가 요청에 실린다
+    const pick = page.locator('[data-ad-admin-slot="2"] [data-testid="ad-admin-pick"]');
+    await expect(pick, '빈 칸에 게시글 연결 버튼이 없다').toBeVisible();
+    await pick.click();
+    const picker = page.locator('[data-testid="ad-post-picker"]');
+    await expect(picker, '글 고르기 화면이 열리지 않는다').toBeVisible({ timeout: 10_000 });
+    await picker.getByText('광고로 올릴 글').click();
+
+    await expect.poll(() => writes.length, { timeout: 15_000 }).toBeGreaterThan(0);
+    expect(writes[0], '고른 글 id 가 서버 요청에 실리지 않았다')
+      .toMatchObject({ slot: 2, post_id: 'pick-me', active: true });
+
+    // ③ 연결 뒤에는 해제도 같은 경로로 나간다
+    const unlink = page.locator('[data-ad-admin-slot="2"] [data-testid="ad-admin-unlink"]');
+    await expect(unlink, '연결 뒤에 해제 버튼이 없다').toBeVisible({ timeout: 10_000 });
+    await unlink.click();
+    await expect.poll(() => writes.length, { timeout: 15_000 }).toBeGreaterThan(1);
+    expect(writes[writes.length - 1], '해제가 서버로 나가지 않았다')
+      .toMatchObject({ slot: 2, post_id: null, active: false });
+  });
+
+  // 오너 지시 2026-09-15: "관리자 화면에서 광고용 글을 쓸 경로가 없으면 만들어 그냥."
+  // 운영 community_posts 에 글이 1건뿐이라 '연결 UI 는 있는데 연결할 게 없는' 막다른 길이었다.
+  // 세 단계를 한 테스트에서 통째로 잠근다: **글을 쓴다 → 그 슬롯에 붙는다 → 손님 화면 광고 칸에 뜬다.**
+  test('🔴 관리자가 글을 써서 바로 광고 칸에 연결하고, 손님 화면에 그 글이 뜬다', async ({ page }) => {
+    test.setTimeout(150_000);
+    const adWrites: Record<string, unknown>[] = [];
+    let postWrite: Record<string, unknown> | null = null;
+    let adRows = legacyAdRows();
+    const NEW_ID = 'cccccccc-0000-4000-8000-000000000777';
+    let liveAds: unknown[] = [];
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* 차단 환경 */ } },
+      [ADMIN_KEY, JSON.stringify(ADMIN_SESSION)] as [string, string]);
+    await page.route(/\/auth\/v1\/(user|token)/, (r) => r.fulfill(json(ADMIN_SESSION.user)));
+    await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
+      id: ADMIN_UID, name: '운영자', nickname: '운영자', role: 'admin', approved: true, status: 'active',
+      venue_id: null, activity_points: 0, created_at: '2026-01-01T00:00:00Z',
+      agreed_to_terms: true, consented_legal_version: 2,
+    })));
+    await page.route(/\/rest\/v1\/community_ads/, (r) => {
+      if (r.request().method() === 'GET') return r.fulfill(json(adRows));
+      const body = r.request().postDataJSON() as Record<string, unknown> | Record<string, unknown>[];
+      const rows = Array.isArray(body) ? body : [body];
+      adWrites.push(...rows);
+      adRows = adRows.map((x) => { const n = rows.find((y) => y.slot === x.slot); return n ? { ...x, ...n } as typeof x : x; });
+      return r.fulfill(json(rows.map((n) => ({
+        slot: n.slot, post_id: n.post_id ?? null, active: n.active ?? false,
+        starts_at: n.starts_at ?? null, expires_at: n.expires_at ?? null, title: '옛 광고',
+      }))));
+    });
+    // 🔴 글 INSERT 는 여기서 끊는다 — 운영 DB 에 글을 만들지 않는다. 서버가 저장한 것처럼 행을 돌려준다.
+    await page.route(POSTS_REST, (r) => {
+      // ⚠ 본문 없는 비-GET(프리플라이트·HEAD)도 여기로 온다 — postDataJSON() 이 null 이면 삽입이 아니다.
+      const body = r.request().method() === 'GET' ? null : (r.request().postDataJSON() as Record<string, unknown> | null);
+      if (!body) return r.fulfill(json([postRow('n1', '원래 있던 글')]));
+      postWrite = body;
+      return r.fulfill(json({
+        ...postRow(NEW_ID, String(body.title ?? '')),
+        content: body.content, category: body.category, user_name: '운영자',
+      }));
+    });
+    await page.route(ADS_RPC, (r) => r.fulfill(json(liveAds)));
+    for (const t of ['schedules', 'venues', 'marketplace_notices', 'shouts', 'notifications', 'client_errors', 'home_banners'])
+      await page.route(new RegExp(`/rest/v1/${t}\\?`), (r) => r.fulfill(json([])));
+
+    await stabilizeBackstack(page);
+    await page.goto('/?tab=admin');
+    await dismissOverlays(page);
+    const section = page.getByRole('button', { name: '노출 관리', exact: true }).first();
+    await expect(section).toBeVisible({ timeout: 30_000 });
+    await section.click();
+    await page.getByRole('button', { name: '광고', exact: true }).first().click();
+
+    // ① 막다른 길이던 자리에서 글쓰기로 들어간다
+    await page.locator('[data-ad-admin-slot="2"] [data-testid="ad-admin-pick"]').click();
+    const compose = page.locator('[data-testid="ad-admin-compose"]');
+    await expect(compose, '올릴 글이 없을 때 새로 쓸 경로가 없다').toBeVisible({ timeout: 10_000 });
+    await compose.click();
+
+    const form = page.locator('[data-testid="ad-post-composer"]');
+    await expect(form).toBeVisible({ timeout: 10_000 });
+    const saveBtn = page.locator('[data-testid="ad-composer-save"]');
+
+    // ② 게시판을 고르기 전에는 저장할 수 없다 — 기본값을 조용히 정하지 않는다(오너 조건)
+    await form.getByPlaceholder('광고 칸에 그대로 보일 제목').fill('가을 정기 대회 안내');
+    await form.getByPlaceholder('누르면 열리는 글의 본문입니다').fill('10월 12일 토요일 저녁 7시 시작합니다.');
+    await expect(saveBtn, '게시판을 고르지 않았는데 저장이 열려 있다').toBeDisabled();
+    await form.getByRole('button', { name: '정보', exact: true }).click();
+    await expect(saveBtn).toBeEnabled();
+
+    // ③ 등록 — 기존 글쓰기 API 를 그대로 타고(community_posts INSERT), 곧바로 슬롯에 붙는다
+    await saveBtn.click();
+    await expect.poll(() => postWrite, { timeout: 15_000 }).not.toBeNull();
+    expect(postWrite!, '고른 게시판·제목·본문이 글 등록 요청에 실리지 않았다')
+      .toMatchObject({ category: 'info', title: '가을 정기 대회 안내', content: '10월 12일 토요일 저녁 7시 시작합니다.' });
+    await expect.poll(() => adWrites.length, { timeout: 15_000 }).toBeGreaterThan(0);
+    expect(adWrites[adWrites.length - 1], '쓴 글이 그 슬롯에 연결되지 않았다')
+      .toMatchObject({ slot: 2, post_id: NEW_ID, active: true });
+    await expect(form, '등록 뒤에도 글쓰기 창이 닫히지 않았다').toBeHidden({ timeout: 10_000 });
+    await expect(page.locator('[data-ad-admin-slot="2"]').getByText('게재중')).toBeVisible({ timeout: 10_000 });
+
+    // ④ 손님 화면 — 서버 RPC 가 그 글을 광고로 내려주면 게시판 광고 칸에 그 글이 선다
+    liveAds = [adRow(2, NEW_ID, '가을 정기 대회 안내', { user_name: '운영자', category: 'info' })];
+    await page.goto('/?tab=community');
+    await dismissOverlays(page);
+    const bar = page.locator('[data-community-secbar]');
+    await expect(bar).toBeVisible({ timeout: 20_000 });
+    await bar.getByRole('button', { name: '게시판', exact: true }).click();
+    const ad = page.locator(`[data-promoted-post-id="${NEW_ID}"]`);
+    await expect(ad, '관리자가 쓴 글이 손님 화면 광고 칸에 뜨지 않는다').toBeVisible({ timeout: 20_000 });
+    await expect(ad).toContainText('가을 정기 대회 안내');
   });
 });

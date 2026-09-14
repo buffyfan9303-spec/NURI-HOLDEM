@@ -64,37 +64,72 @@ export async function getActivePromotedPosts(): Promise<{ ads: PromotedPost[]; e
 
 // ── 관리자 ──────────────────────────────────────────────────────────────────
 
-/** 전체 슬롯(빈 칸·미연결 포함). 쓰기와 같은 테이블을 직접 읽는다(관리자 RLS). */
-export async function getAdSlots(): Promise<AdSlot[]> {
-  if (IS_MOCK) return [];
-  const { data, error } = await supabase
-    .from('community_ads')
-    .select('slot, post_id, active, starts_at, expires_at, title')
-    .order('slot');
-  if (error) throw new Error(error.message);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return ((data ?? []) as any[]).map((r) => ({
-    slot: r.slot,
+/** 관리 화면이 다루는 자리 — 화면이 '5칸' 이라고 말하는 그 다섯이다. */
+export const AD_SLOT_NUMBERS = [1, 2, 3, 4, 5] as const;
+
+const SLOT_COLUMNS = 'slot, post_id, active, starts_at, expires_at, title';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToSlot(r: any): AdSlot {
+  return {
+    slot: Number(r.slot),
     postId: r.post_id ?? null,
     active: r.active ?? true,
     startsAt: r.starts_at ?? null,
     expiresAt: r.expires_at ?? null,
     legacyTitle: r.title ?? '',
-  }));
+  };
 }
 
-/** 슬롯 저장(연결·게재 창·노출). post_id 가 null 이면 '연결 해제'다. */
-export async function saveAdSlot(s: AdSlot): Promise<void> {
-  if (IS_MOCK) return;
-  const { error } = await supabase.from('community_ads').upsert({
+const emptySlot = (slot: number): AdSlot =>
+  ({ slot, postId: null, active: false, startsAt: null, expiresAt: null, legacyTitle: '' });
+
+/**
+ * 전체 슬롯(빈 칸·미연결 포함). 쓰기와 같은 테이블을 직접 읽는다(관리자 RLS).
+ *
+ * ⚠ **행이 없는 자리도 반드시 돌려준다**(2026-09-15 운영 실측). 운영 DB 의 community_ads 에는
+ *   슬롯 1·3·4·5 네 행만 있고 **2번 행이 아예 없었다** — 테이블에 있는 행만 그리던 종전 구현은
+ *   '커뮤니티 광고 5칸' 이라고 써 놓고 네 칸만 그렸고, 없는 자리에는 버튼이 없으니 운영자에게는
+ *   **그 칸에 글을 연결할 방법 자체가 없었다**. 슬롯은 PK 1~5 라는 고정 개념이므로 목록도 고정이다.
+ *   (저장은 upsert 라 없던 행은 그때 만들어진다 — DB 를 미리 손볼 필요가 없다.)
+ */
+export async function getAdSlots(): Promise<AdSlot[]> {
+  if (IS_MOCK) return AD_SLOT_NUMBERS.map(emptySlot);
+  const { data, error } = await supabase
+    .from('community_ads')
+    .select(SLOT_COLUMNS)
+    .order('slot');
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = ((data ?? []) as any[]).map(rowToSlot);
+  const bySlot = new Map(rows.map((s) => [s.slot, s]));
+  // 1~5 는 항상 · 그 밖의 행(옛 데이터)이 있으면 뒤에 붙여 잃어버리지 않는다.
+  const extra = rows.filter((s) => !(AD_SLOT_NUMBERS as readonly number[]).includes(s.slot));
+  return [...AD_SLOT_NUMBERS.map((n) => bySlot.get(n) ?? emptySlot(n)), ...extra];
+}
+
+/**
+ * 슬롯 저장(연결·게재 창·노출). post_id 가 null 이면 '연결 해제'다.
+ *
+ * ⚠ **저장한 것을 서버에서 다시 읽어 돌려준다.** 종전엔 `{ error }` 만 보고 화면 상태를 낙관적으로
+ *   갈아 끼웠다 — RLS 가 막거나 트리거가 값을 바꿔도 운영자는 '저장했습니다' 토스트를 보고
+ *   화면만 바뀐 상태로 떠났다(nuri-affect: PostgREST 는 도달하지 못한 변이를 오류가 아니라 0행으로 준다).
+ *   호출부는 이 반환값을 그대로 화면에 쓴다 — 화면에 뜨는 것 = 서버에 있는 것.
+ */
+export async function saveAdSlot(s: AdSlot): Promise<AdSlot> {
+  if (IS_MOCK) return s;
+  const { data, error } = await supabase.from('community_ads').upsert({
     slot: s.slot,
     post_id: s.postId,
     active: s.active,
     starts_at: s.startsAt || null,
     expires_at: s.expiresAt || null,
     updated_at: new Date().toISOString(),
-  });
+  }).select(SLOT_COLUMNS);
   if (error) throw new Error(error.message);
+  const saved = (data ?? [])[0];
+  if (!saved) throw new Error('저장이 서버에 반영되지 않았습니다 — 관리자 권한을 확인해 주세요');
+  return rowToSlot(saved);
 }
 
 /**
