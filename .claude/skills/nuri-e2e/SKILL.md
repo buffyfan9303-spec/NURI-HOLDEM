@@ -126,19 +126,22 @@ netstat -ano | grep -E ':4173 .*LISTENING' || echo FREE
 `dist/index.html`(`046ef659…`) 해시가 **둘 다 그대로**였다(7.4초, 17 passed).
 
 ### ② 수치로 말한다
-현재 등록 규모(실측 `--list`): **main 489 tests / 83 files + boot 2 tests / 1 file = 491 실행**.
+현재 등록 규모(2026-09-15 실측 `--list`): **main 552 tests / 91 files + boot 2 tests / 1 file = 554 실행**.
 
-인계받은 기준선은 **464 passed / 1 failed / 26 skipped**(합 491 — 자릿수가 맞는다).
-⚠ **이 스킬을 쓰는 시점에 전체를 재실행해 확인한 것이 아니다.** 위 규모만 실측했고, 통과/실패 분포는 인계 수치다.
+기준선(2026-09-15 전량 실행, preview 4173 프로덕션 빌드, `--retries=2`):
+**main 526 passed / 0 failed / 26 skipped / 0 flaky · boot 2 passed = 528 passed / 0 failed / 26 skipped**.
+🟢 **이 저장소에서 E2E 전량 초록은 이때가 처음이다.** 빨간불 하나라도 남으면 통과가 아니다 — 아래 ③ 참고.
 네가 돌린 결과가 다르면 **네 결과가 기준**이다. 보고는 `N passed / M failed / K skipped (F flaky)` 로 한다 —
 "그린" · "잘 됨" 은 완료 증거가 아니다.
 
-### ③ 유일하게 허용되는 실패 1건
-`e2e/auth-smoke.spec.ts:93` — `로그인 사용자의 주요 탭이 예외 없이 렌더된다`.
-원인은 코드가 아니라 **운영 DB 미적용**이다: `docs/plans/BLOCKED.md` #20 의 `20260911a_community_ads_promoted_posts`
-가 안 올라가 앱이 없는 RPC `community_ads_public` 을 불러 커뮤니티 탭마다 404 를 낸다. **오너 결정 대기라 코드로 못 고친다.**
-→ 이 1건만 남으면 통과로 보고하되, **반드시 BLOCKED #20 을 명시**해라. 스펙을 고치거나 skip 처리해서 지우지 마라.
-다른 실패가 하나라도 붙으면 통과가 아니다.
+### ③ 허용되는 실패는 **없다** (2026-09-15 변경)
+
+예전에 여기 "유일하게 허용되는 실패 1건 = `e2e/auth-smoke.spec.ts:93`(BLOCKED #20 미적용)" 이라고 적혀 있었다.
+**그 면제는 끝났다** — 2026-09-14~15 에 `20260911a` 를 포함해 마이그레이션을 운영에 적용해서
+`community_ads_public` 이 생겼고, 그 스펙은 통과한다(실측: `auth-smoke.spec.ts` 의 `:24`·`:36`·`:59`·`:93` 4건 전부 ✓).
+
+**이제 실패는 전부 실패다.** 하나라도 빨간불이면 통과라고 말하지 마라.
+⚠ 실패를 봤을 때 **회귀부터 의심하지 말고 `운영 데이터 결합`을 먼저 배제해라** — 아래 ⑦ 이 그 절차다.
 
 ### ④ flaky 인가 회귀인가
 **단독 재실행이 통과했다고 플레이크라고 단정하지 마라.** 단독 실행은 부하 조건이 다르다.
@@ -150,7 +153,17 @@ E2E_BASE_URL=http://localhost:4173 npx playwright test --grep-invert @boot --ret
 ```
 
 - 리포터가 `flaky` 로 세면 → 부하 플레이크. 알려진 목록이 `playwright.config.ts:32` 주석에 있다:
-  **subtab-motion root 이동 · clock-catchup · shout-queue**. (인계 관측: `e2e/event-backnav.spec.ts:70` — 이 스킬에서 재현은 안 해봤다.)
+  **subtab-motion root 이동 · clock-catchup · shout-queue**.
+  2026-09-15 전량 `--retries=2` 실행에서 관측된 것(네 개를 **다른 등급으로** 갈라 적는다 — 뭉뚱그리면 다음 사람이 오판한다):
+
+  | 스펙 | 2026-09-15 관측 | 등급 |
+  |---|---|---|
+  | `event-backnav.spec.ts:70` | ✓ 통과, retry 0회 | **반증됨.** 지난 실패는 flake 가 아니라 `home_banners` 운영 결합(⑥)이었다 — 목록에서 뺀다 |
+  | `subtab-motion.spec.ts` | ✓ 8건 통과, retry 0회 | **이번엔 안 나왔을 뿐.** 반증 아님 — 남긴다 |
+  | `shout-queue.spec.ts` | ✓ 3건 통과, retry 0회 | **이번엔 안 나왔을 뿐.** 반증 아님 — 남긴다 |
+  | `clock-catchup.spec.ts` | ⊘ 2건 skip | **관측 자체가 없다.** `:68` 의 `test.skip(!EMAIL \|\| !PASSWORD \|\| !WRITES_ALLOWED)` 때문에 **운영 프로젝트(쓰기 차단)에서는 구조적으로 영원히 skip** 이다 — 로컬 안전 절차로는 flaky 여부를 판정할 방법이 없다 |
+
+  ⚠ "이번 실행에서 안 나왔다" 와 "반증됐다" 는 다르다. 목록에서 빼려면 **왜 지난 실패가 flake 가 아니었는지**를 대야 한다.
 - 재시도를 다 쓰고도 `failed` 면 → **회귀다.** 플레이크로 부르지 마라.
 - 목록에 없는 스펙이 flaky 로 나오면 **새 불안정성**이다. 목록에 얹지 말고 원인을 봐라.
 
@@ -174,6 +187,47 @@ grep -rlo 'LV/i'      dist/assets | head        # 정규식 리터럴 — 보존
 preview 는 SPA 폴백이라 **없는 경로에도 200 + index.html** 을 준다 —
 실측: `curl -o /dev/null -w '%{http_code}' http://localhost:4173/__never_existed.txt` → `200`.
 "200 이니까 배포됐다" 는 거짓 통과다. 신선도 판정은 ⑥단계의 **엔트리 해시 대조**뿐이다.
+
+### ⑦ 코드를 안 바꿨는데 빨개졌다면 — **운영 데이터 결합부터 배제해라** (2026-09-15 사고)
+
+실제로 있었던 일: 오너가 운영에 배너 **1건**을 등록했는데 그 `link_url` 이 `/?event=rotiarena-attend` 였고,
+`src/components/features/HomeTab.tsx:286` 의 중복 제거(`?event=` 링크를 가진 배너가 있으면 이벤트 슬라이드를
+넣지 않는다)가 발동해 **커밋 0개로 스펙 9건이 빨개졌다**(home-event-banner ①~④ · event-entry ×3 ·
+event-backnav ×2 · a11y-modal 이벤트 닫기). 제품은 멀쩡했다 — **테스트가 운영 데이터를 타고 있었다.**
+
+**왜 생기나**: `e2e/_fixtures.ts` 의 context route 는 **쓰기만** 끊는다. 읽기는 그대로 운영으로 나간다.
+그리고 스펙이 `if (opts.banners) await page.route(...)` 처럼 **조건부로** 목킹하면
+"안 넘기면 기본값" 처럼 보이는 코드가 실제로는 **"안 넘기면 라이브"** 다.
+
+**구멍의 크기(2026-09-15 실측)** — 운영 Supabase 를 목킹 없이 읽는 스펙 파일이 **91개 중 83개**다.
+상위 테이블: `app_settings` 2253 · `community_posts` 1191 · `venues` 1105 · `clock_states` 1045 ·
+`schedules` 978 · `home_banners` 892(전체 17,394건 계측).
+`home_banners` 는 fixture 에서 기본 `[]` 로 막았다(`_fixtures.ts`). **나머지는 안 막혀 있다** — 다음은 다른 테이블로 온다.
+
+**계측하는 법** — `_fixtures.ts` 의 `route.continue()` **직전**에 URL 로그를 넣고 전체를 1회 돌린다.
+스펙이 `page.route` 로 이미 이긴 요청은 거기까지 오지 않으므로, 찍히는 것이 곧 **"목킹 없이 운영으로 나간 요청"** 이다.
+
+**판정 순서**:
+1. 그 스펙이 **어느 표를 목킹 없이 읽는지** 위 방법으로 찾는다.
+2. 그 응답만 바꿔 **배타 가설**로 가른다 — 존재가 문제인지, 특정 **값**이 문제인지.
+   (그 사고에서는 같은 배너의 `link_url` 만 `/live` 로 바꾸니 되살아났다. **배너의 존재가 아니라 `?event=` 문자열 하나**가 변수였다.)
+3. 🔴 **운영 데이터를 지워서 초록을 만들지 마라.** 그게 이 부류의 최악의 오답이다.
+   고칠 곳은 **목킹의 기본값**이지 오너의 자산이 아니다.
+4. `context.route` 를 **밖에 따로 걸지 마라** — Playwright 는 route 를 **나중에 등록된 것부터** 맞춰 보므로
+   기존 `SUPABASE_API` 핸들러가 먼저 이겨 조용히 무효가 된다(실측: 통과 수 변화 0). **기존 핸들러 안**에 넣어라.
+
+### ⑧ `toBeVisible` 이 **거짓 통과**할 수 있다 — 부분일치 셀렉터 (같은 날)
+
+`drag-close.spec.ts` 가 `page.locator('[role="dialog"]').filter({ hasText: '글쓰기' })` 로 시트를 찾았는데,
+운영 계정에 `ci_hash` 가 없어(`src/api/auth.ts:99` `verified: !!row.ci_hash`) 글쓰기 대신 **본인인증 게이트 시트**가
+열렸고 그 시트의 **"'글쓰기'는 본인인증이 필요해요"** 문구에 붙어 `toBeVisible` 이 **통과**했다.
+스펙은 그 뒤 제목 입력에서 타임아웃했다 — **검증 대상에 도달조차 못 하는 죽은 커버리지**였다.
+
+→ 접근성 이름으로 **좁혀라**: `getByRole('dialog', { name: '글쓰기' })`.
+→ 로그인 게이트(본인인증·권한)가 막아 도달이 안 되면, **도달 조건만** 목킹하고 **단언은 손대지 마라**.
+   `profiles` 를 고정 객체로 갈아치우지 말고 **필요한 필드만 덧붙여라**(운영 응답의 나머지는 그대로 통과).
+→ 셀렉터를 고친 뒤에는 **일부러 결함을 넣어 빨개지는지** 보고 원복해라(`git hash-object` 로 바이트 동일 확인).
+   "고쳤더니 초록" 은 그 스펙이 살아 있다는 증거가 아니다.
 
 ---
 
@@ -211,9 +265,11 @@ preview 는 SPA 폴백이라 **없는 경로에도 200 + index.html** 을 준다
 ## 실패했을 때 보고 형식
 
 ```
-E2E: 464 passed / 1 failed / 26 skipped / 0 flaky   (main 489 + boot 2, E2E_BASE_URL 경로)
-sitemap: 6130e085… → 6130e085…  (불변 확인)
-실패 1건: auth-smoke.spec.ts:93 — BLOCKED #20(community_ads_public 미적용, 오너 결정 대기)
+E2E: 528 passed / 0 failed / 26 skipped / 0 flaky   (main 552 + boot 2, E2E_BASE_URL 경로)
+sitemap: 5b5953aa… → 5b5953aa…  (불변 확인)
 ```
+실패가 있으면 **건별로** 적는다 — `파일:줄 — 원인(회귀 / 운영 데이터 결합 / 환경)`.
+⚠ dev(5173)에서 돌린 숫자를 보고하지 마라: modulepreload·청크 분리·정적 셸이 없어
+`boot-budget` · `gto-tab-verify` · `static-shell` 이 **환경 탓으로 빨개진다**(2026-09-15 실측 — preview 에서는 전부 통과).
 
 빌드를 못 돌렸거나 ⑥ 대조를 건너뛴 실행은 **결과를 보고하지 마라** — 옛 dist 를 검사한 숫자일 수 있다.

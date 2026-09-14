@@ -66,7 +66,7 @@ export const test = base.extend({
       //   HomeTab.tsx:286 의 중복 제거(`?event=` 링크가 있으면 이벤트 슬라이드를 넣지 않는다)가 발동해
       //   home-event-menu / home-event-banner 가 0개가 됐다 → **코드 변경 0으로** 스펙 9건이 빨개졌다
       //   (home-event-banner ①~④ · event-entry ×3 · event-backnav ×2 · a11y-modal 이벤트 닫기).
-      //   실측(2026-09-15): 이 표를 목킹 없이 운영에서 받아 오던 스펙 파일이 **79개**였다.
+      //   실측(2026-09-15): 이 표를 목킹 없이 운영에서 받아 오던 스펙 파일이 **80개**였다(집계 스크립트 기준 — 눈으로 센 79는 오차).
       // 🔴 이 줄을 밖의 별도 `context.route(/home_banners/)` 로 옮기지 마라 — **조용히 무효가 된다.**
       //   Playwright 는 route 를 **나중에 등록된 것부터** 맞춰 본다(역순). 밖에 걸면 아래 SUPABASE_API
       //   핸들러가 먼저 이겨 route.continue() 로 운영에 나간다. 실측으로 확인했다(전후 통과 수 변화 0).
