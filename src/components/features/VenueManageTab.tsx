@@ -1,5 +1,6 @@
-import { useEffect, useState, useDeferredValue, type ReactNode, useRef, memo, useCallback, useMemo } from 'react';
+import { useEffect, useState, type ReactNode, useRef, memo, useCallback, useMemo } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
+import { goSubTab } from '../../lib/subTabTransition';
 import Icon, { type IconName } from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
@@ -136,6 +137,16 @@ type GameSel = { n: number; name: string };
 type NavGroup = '오늘' | '분석' | '관리';
 const NAV_GROUPS: readonly NavGroup[] = ['오늘', '분석', '관리'];
 
+/** 내 매장 하위탭의 **진열 순서** — goSubTab 이 여기서 forward/back 을 뽑는다.
+ *  사이드바 순서(오늘·분석·관리) 안에 게임 스텝과 설정 하위탭을 펼쳐 둔 한 줄짜리 목록이다.
+ *  목록에 없는 id 는 indexOf 가 -1 이라 back 으로 취급된다 — 방향이 뒤집힐 뿐 동작은 정상이다. */
+const MYSTORE_ORDER: readonly string[] = [
+  'dashboard',
+  'game', 'posters', 'ledger', 'clock', 'ranking', 'settle',
+  'calendar', 'stats', 'staff', 'attendance',
+  'settings', 'page', 'presets', 'pos', 'voucher', 'optools', 'danger',
+];
+
 // LINK-MAP(§15.6 #9): 알림 딥링크 id 정규화의 단일 지점 — 구 번들·기발송 푸시의 구 id 를 계속 수용.
 // IA2 확장 완료: ledger|clock|ranking|posters → 게임 스텝. 미지 값은 null → 호출부가 대시보드 + 토스트.
 const DEEP_SECTION_ALIAS: Record<string, Section | GameStep | SettingsTab> = {
@@ -214,11 +225,19 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     return 'ledger';
   });
   useEffect(() => { try { localStorage.setItem('nuri:game-step', gameStep); } catch { /* noop */ } }, [gameStep]);
+  useEffect(() => { sectionRef.current = section; settingsTabRef.current = settingsTab; });
   // IA3c: 설정 하위탭 상태(기본 '매장 페이지')
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('page');
-  const renderSettingsTab = useDeferredValue(settingsTab);
+  // ⚠ 예전엔 useDeferredValue 였다. VT 의 flushSync 커밋 안에서 deferred 값은 옛 값으로 남아
+  //   스냅샷이 **옛 판**을 찍고 진짜 교체가 전환 뒤에 노출됐다(오너 2026-09-15 "드르륵").
+  //   판은 keep-alive(display 토글)라 재방문 전환 비용이 거의 없고, 첫 마운트 비용은 VT 스냅샷이 가린다.
+  const renderSettingsTab = settingsTab;
   // 스텝 백스택(§13-C: 백버튼 스텝→섹션→탭 3단) — 직전 스텝 1개를 기억해 back 1회 흡수
   const [stepHist, setStepHist] = useState<GameStep[]>([]);
+  /** goSubTab 의 `from` — 렌더 상태를 읽으면 콜백 참조가 흔들려 memo 가 깨진다(이 파일의 caps 주석 참고).
+   *  그래서 ref 로 읽는다. 값은 아래 effect 가 매 커밋마다 맞춘다. */
+  const sectionRef = useRef<Section | null>(null);
+  const settingsTabRef = useRef<SettingsTab>('page');
   const gameStepRef = useRef<GameStep>(gameStep);
   useEffect(() => { gameStepRef.current = gameStep; }, [gameStep]);
   const inGameRef = useRef(false);
@@ -258,16 +277,30 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 
   // 스텝 이동 공통(IA2) — 게임 섹션 안에서의 이동은 직전 스텝을 백스택에 1개 기억.
   // 장부를 메뉴/칩으로 직접 열 땐 게임관리 시드를 지워 일반 진입으로(시드 부착 진입은 keepLedgerSeed).
+  /** 지금 화면에 떠 있는 '판' 하나의 id — 섹션이 game/settings 면 그 하위 id 가 진짜 판이다. */
+  const currentPane = useCallback((): string => {
+    const cur = sectionRef.current;
+    if (cur === 'game') return gameStepRef.current;
+    if (cur === 'settings') return settingsTabRef.current;
+    return cur ?? 'dashboard';
+  }, []);
   const goStep = useCallback((s: GameStep, opts?: { keepLedgerSeed?: boolean }) => {
     if (s === 'ledger' && !opts?.keepLedgerSeed) setLedgerSeed(null);
+    // ⚠ from 은 **ref 를 고치기 전에** 읽어야 한다. 아래에서 gameStepRef 를 먼저 s 로 바꾸면
+    //   currentPane() 이 s 를 돌려줘 from === to 가 되고, goSubTab 이 `if (from === to) return` 으로
+    //   **커밋을 통째로 건너뛴다** — 단계가 아예 안 바뀐다(2026-09-15 e2e/store-nav.spec.ts 가 잡았다).
+    const from = currentPane();
     if (inGameRef.current && gameStepRef.current !== s) {
       const prev = gameStepRef.current;
       setStepHist((h) => [...h.filter((x) => x !== prev), prev].slice(-4));
     }
     gameStepRef.current = s;
-    setGameStep(s);
-    setSection('game');
-  }, []);
+    // 다른 하위탭 15종과 **같은 조리법**으로 전환한다(src/lib/subTabTransition.ts).
+    //   새 이징·duration·키프레임은 하나도 만들지 않았다 — index.css 의 mystore-sec 규칙이
+    //   admin-sec 와 같은 vt-panel-* 를 탄다. goSubTab 은 VT 미지원·모션축소에서 commit 을
+    //   그대로 부르므로, 전환이 실패해도 **이동은 반드시 일어난다.**
+    goSubTab('mystore-sec', MYSTORE_ORDER, from, s, () => { setGameStep(s); setSection('game'); });
+  }, [currentPane]);
   // IA3c 하위탭 노출 판정의 **단일 지점** — 탭 목록·딥링크 착지·판(pane) 렌더가 서로 갈리면
   // "탭 바에는 없는 탭이 열려 있는" 빈 화면이 된다. 실제로 두 조합이 그랬다:
   //  ① 이용권 킬스위치 OFF 인데 알림 딥링크가 voucher 를 지정 → 제목만 '이용권·QR' 인 백지
@@ -281,11 +314,16 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const firstSettingsTab = useCallback((): SettingsTab => SETTINGS_TABS.find((t) => canSettingsTab(t.id))?.id ?? 'page', [canSettingsTab]);
   // 섹션 이동 공통 — 레거시 게임 스텝·설정 하위탭 id 도 수용(StoreDashboard·라이브바·딥링크)
   const gotoSection = useCallback((s: Section | GameStep | SettingsTab) => {
-    if (isGameStep(s)) { goStep(s); return; }
+    if (isGameStep(s)) { goStep(s); return; }   // goStep 안에서 전환한다(이중 감싸기 금지)
+    const from = currentPane();
     // 권한 밖 하위탭으로 착지 요청이 오면 백지 대신 '지금 열 수 있는 첫 탭'으로 흡수
-    if (isSettingsTab(s)) { setSettingsTab(canSettingsTab(s) ? s : firstSettingsTab()); setSection('settings'); return; }
-    setSection(s);
-  }, [goStep, canSettingsTab, firstSettingsTab]);
+    if (isSettingsTab(s)) {
+      const to = canSettingsTab(s) ? s : firstSettingsTab();
+      goSubTab('mystore-sec', MYSTORE_ORDER, from, to, () => { setSettingsTab(to); setSection('settings'); });
+      return;
+    }
+    goSubTab('mystore-sec', MYSTORE_ORDER, from, s, () => setSection(s));
+  }, [goStep, canSettingsTab, firstSettingsTab, currentPane]);
 
   // ── memo 섹션에 넘기는 핸들러/객체 prop 을 참조 고정(재렌더 건너뛰기 조건 충족) ──
   // caps.voucher = '대시보드에 이용권 카드/단골 이용권 보내기를 그릴까' — 킬스위치가 그대로 반영된다.
@@ -548,10 +586,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     : available.filter((a) => (a.id === 'stats' ? matured.insights : true));
   const navHiddenCount = available.length - navItems.length;
   const curItem = available.find((a) => a.id === section);
-  // 콘텐츠 전환은 deferred — 내비(탭 하이라이트)는 즉시 반응하고, 무거운 섹션 렌더는 메인스레드를 막지 않고 양보.
-  // 폰(저사양 CPU)에서 메뉴 이동 시 동기 렌더가 프레임을 막아 생기던 "치직임/끊김"을 제거.
-  const renderSection = useDeferredValue(section);
-  const renderGameStep = useDeferredValue(gameStep); // 스텝 전환도 deferred — 무거운 판 렌더가 칩 하이라이트를 막지 않게
+  // ⚠ 2026-09-15 — deferred 를 걷어냈다. 이유는 위 renderSettingsTab 주석과 같다:
+  //   내 매장은 이제 goSubTab(VT) 을 타는데, deferred 값은 flushSync 커밋 안에서 갱신되지 않아
+  //   전환이 **옛 판을 찍고** 진짜 교체가 전환 밖에서 드러났다. 지금은 VT 스냅샷이 렌더 비용을 가린다.
+  //   (원래 deferred 가 막으려던 '저사양 폰 끊김'은 VT 마스킹이 같은 일을 더 잘 한다.)
+  const renderSection = section;
+  const renderGameStep = gameStep;
   const dItem = available.find((a) => a.id === renderSection); // deferred 기준 — 헤더·잠금화면·콘텐츠가 한 번에 원자적으로 전환
 
   // ── U1: 스텝 공통 문맥(매장 › 날짜 › 게임) ────────────────────────────────
@@ -677,7 +717,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 )}
               </div>
               {/* PC: 세로 사이드바 — 그룹 헤더 3개 + 라이브 배지 자리(IA3 에서 공급), 폭 w-44→w-52 */}
-              <nav className="hidden lg:flex lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-52 lg:shrink-0 lg:flex-col lg:self-start lg:gap-5">
+              {/* data-mystore-secbar / -secpanel / -active: index.css 의 mystore-sec 블록이 잡는 표식.
+                  admin-sec 와 같은 구조다(사이드바 + 섹션 패널, 알약 없음). */}
+              <nav data-mystore-secbar className="hidden lg:flex lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-52 lg:shrink-0 lg:flex-col lg:self-start lg:gap-5">
                 {NAV_GROUPS.map((grp) => {
                   const items = navItems.filter((a) => a.group === grp);
                   if (items.length === 0) return null;
@@ -686,6 +728,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       <p className="px-3 pb-1 text-2xs font-bold tracking-wide text-ink-muted">{grp}</p>
                       {items.map((a) => (
                         <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked}
+                          {...(section === a.id ? { 'data-mystore-active': '' } : {})}
                           onClick={() => gotoSection(a.id)}>{a.label}</SectionBtn>
                       ))}
                     </div>
@@ -701,7 +744,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               </nav>
             </>)}
 
-          <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
+          <div data-mystore-secpanel className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
             {dItem?.locked && (
               <div className="space-y-2 rounded-aura border card-aura p-5 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-high text-ink-muted"><Icon name="lock" size={22} /></div>

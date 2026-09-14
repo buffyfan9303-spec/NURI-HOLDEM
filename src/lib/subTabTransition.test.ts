@@ -127,6 +127,7 @@ describe('하위 탭 전환 · 알약이 탭바 스냅샷에 갇히지 않는다
    *  = 활성 표시가 정적이라 가려질 이동 자체가 없다. 2026-09-07 마크업 전수 확인. */
   const NO_PILL: Record<string, string> = {
     'admin-sec': '관리자 8섹션 내비 — 지시자 없음(정적 버튼)',
+    'mystore-sec': '내 매장 사이드바 — 지시자 없음(SectionBtn 정적 버튼). 강조는 data-mystore-active 가 자기 이름을 받아 미끄러진다(admin-sec 와 같은 조리법).',
     'usermgmt-sec': '회원관리 섹션 — 지시자 없음',
     'tools-lane': 'GTO 레인 바 — 지시자 없음',
     'market-cat': '장터 카테고리 — 지시자 없음',
