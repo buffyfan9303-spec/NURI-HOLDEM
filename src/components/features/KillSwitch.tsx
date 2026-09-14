@@ -86,7 +86,9 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               제목 3.13 · 본문 3.13 · 버튼 2.78 로 AA 미달이었다. **되돌릴 수 없는 파괴 동작의 경고문**이라
               안 읽히면 그 자체가 사고다. 이 저장소가 "라이트 테마 텍스트용 딥 레드"로 만들어 둔
               text-danger-light(라이트 #B82640 — 틴트 위 5.36 · 흰 카드 6.20)로 바꾼다.
-              ⚠ text-danger 는 저장소 전체 346곳이라 전역 오버라이드는 실측 없이 하지 않는다 — 이 파일만 바꾼다. */}
+              ⚠ 2026-09-15 후속: 그 전역 실측을 끝냈다 — 단독 `text-danger` 는 62곳(-light 300곳과 별개)이고
+                라이트에서 얹히는 배경에 불투명 bg-danger 가 0곳이라, src/index.css 에 html.light 전역 교정을 넣었다.
+                그래서 이 파일의 -light 지정은 이제 중복이지만 같은 값(#B82640)이라 무해하다. */}
           <h3 className="text-sm font-bold text-danger-light">위험 구역 · 매장 전체 초기화(킬스위치)</h3>
           <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">
             내 매장의 <b className="text-ink-secondary">모든 데이터(장부·순위·이용권·직원·클락·로그 전부)</b>를 영구 삭제합니다.
@@ -221,8 +223,11 @@ function Steps({ step }: { step: 1 | 2 | 3 }) {
         const on = step === n, done = step > n;
         return (
           <div key={t} className="flex flex-1 items-center gap-1.5">
+            {/* ⚠ 2026-09-15 라이트 실측: 끝난 단계의 ✓ 가 `bg-danger/30` 위에 서면 2.39,
+                라이트 딥 레드(#B82640)로 바꿔도 4.19 로 AA(4.5) 미달이다 — 틴트를 한 단계 낮춰
+                같은 색으로 5.12 를 만든다(다크도 3.20 → 3.96 — 오르긴 하나 다크는 여전히 4.5 미달이라 별건이다). ✓ 는 '끝났다'를 말하는 유일한 신호다. */}
             <div className={['flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-2xs font-bold',
-              on ? 'bg-danger text-white' : done ? 'bg-danger/30 text-danger' : 'bg-surface-high text-ink-muted'].join(' ')}>{done ? '✓' : n}</div>
+              on ? 'bg-danger text-white' : done ? 'bg-danger/15 text-danger' : 'bg-surface-high text-ink-muted'].join(' ')}>{done ? '✓' : n}</div>
             <span className={['text-2xs font-semibold', on ? 'text-danger' : 'text-ink-muted'].join(' ')}>{t}</span>
           </div>
         );
