@@ -54,6 +54,10 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+/** 이 페이지가 Vercel 위에서 돌고 있는가 — 계측을 켤지 정한다.
+ *  운영 도메인과 Vercel 프리뷰(*.vercel.app)만 참. localhost 는 거짓. */
+const onVercel = /(^|\.)nuriholdem\.com$|\.vercel\.app$/.test(location.hostname);
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
@@ -76,7 +80,12 @@ createRoot(document.getElementById('root')!).render(
                     모든 경로를 index.html 로 보내므로 **HTML 이 200 으로 돌아오면 조용히 죽는다**
                     (이 프로젝트가 이미 당한 함정). 배포 후 content-type 을 실측해서 확인할 것 —
                     text/html 이면 동작하지 않는 것이고, 그때는 rewrite 예외를 추가해야 한다. */}
-                <SpeedInsights />
+                {/* 계측 스크립트는 **Vercel 에만 존재**하는 동일 출처 경로다(/_vercel/…).
+                    로컬 프리뷰(vite preview)·dev 에는 그 경로가 없어 **404 콘솔 오류**가 난다 —
+                    e2e/auth-smoke.spec.ts 가 '탭 이동 중 콘솔 오류 0' 을 요구하므로 게이트가 빨개진다
+                    (2026-09-15 실측: 546 passed / 1 failed. 운영은 200 application/javascript 로 정상).
+                    잴 곳에서만 켠다 — 로컬에서 켜 봐야 보낼 곳도 없다. */}
+                {onVercel && <SpeedInsights />}
               </BlockProvider>
             </AuthProvider>
           </ToastProvider>

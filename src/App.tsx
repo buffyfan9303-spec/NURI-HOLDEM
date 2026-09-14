@@ -1067,7 +1067,7 @@ export default function App() {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setGlobalSearchOpen(true); }
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); startTransition(() => setGlobalSearchOpen(true)); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -1384,7 +1384,7 @@ export default function App() {
       const detail = (e as CustomEvent).detail as { category?: PostCategory; replay?: ReplayData } | undefined;
       setPostFormCategory(detail?.category ?? 'free');
       setPostFormReplay(detail?.replay ?? null);
-      setPostFormOpen(true);
+      startTransition(() => setPostFormOpen(true)); // 폴백 스로틀 회피 — openLogin 주석 참고
     };
     window.addEventListener(OPEN_POST_FORM_EVENT, h);
     return () => window.removeEventListener(OPEN_POST_FORM_EVENT, h);
@@ -1580,7 +1580,10 @@ export default function App() {
   const [openPost, setOpenPost]         = useState<CommunityPost | null>(null);
   // UI-04(2026-09-13): 이 글을 열었던 목록의 스냅샷(이전/다음 맥락). 목록에서 연 경우에만 있고, 검색·알림·내 글·공유 링크 진입은 null(이동 비활성 + 목록으로).
   const [postNav, setPostNav]           = useState<PostNavCtx | null>(null);
-  const openPostWithNav = useCallback((p: CommunityPost, nav?: PostNavCtx) => { setOpenPost(p); setPostNav(nav ?? null); }, []);
+  const openPostWithNav = useCallback((p: CommunityPost, nav?: PostNavCtx) => {
+    setPostNav(nav ?? null);
+    startTransition(() => setOpenPost(p)); // 폴백 스로틀 회피 — 위 openLogin 주석 참고
+  }, []);
   const closePost = useCallback(() => { setOpenPost(null); setPostNav(null); }, []);
   // 공유 딥링크로 받은 글이 로드되면 상세를 연다(비로그인 열람 허용).
   useEffect(() => {
@@ -1676,7 +1679,7 @@ export default function App() {
       if (!sp.has('shared')) return;
       const parts = [sp.get('title'), sp.get('text'), sp.get('url')].filter(Boolean);
       setShareText(parts.join('\n'));
-      setPostFormCategory('free'); setPostFormOpen(true);
+      setPostFormCategory('free'); startTransition(() => setPostFormOpen(true));
       const url = new URL(window.location.href);
       ['shared', 'title', 'text', 'url'].forEach((k) => url.searchParams.delete(k));
       history.replaceState(null, '', url.pathname + url.search);
@@ -2890,11 +2893,13 @@ export default function App() {
       toast.show('매장 승인 완료 후 포스터를 등록할 수 있습니다', 'error');
       return;
     }
-    setPosterFormTarget(undefined);
+    // ⚠ undefined 는 '닫기'가 아니라 **'대상 없이 새로 열기'** 다(게이트가 posterFormTarget !== null).
+    //   그래서 여는 경로이고, 트랜지션이 필요하다.
+    startTransition(() => setPosterFormTarget(undefined));
   }, [user, toast]);
   const handleEditPosterFromStore = useCallback((id: string) => {
     const s = schedules.find((x) => x.id === id);
-    if (s) setPosterFormTarget(s);
+    if (s) startTransition(() => setPosterFormTarget(s));
   }, [schedules]);
   const handleConsumeMyStoreDeep = useCallback(() => setMyStoreDeep(null), []);
 
@@ -3028,7 +3033,7 @@ export default function App() {
   // (A2) CommunityTab/MarketplaceTab props 안정화 — memo 적용 시 App의 무관한 재렌더(알림·바인요청 등)에 피드가 재렌더되지 않게.
   const communityNotices = useMemo(() => notices.filter((n) => !n.board || n.board === 'all' || n.board === 'community'), [notices]);
   const marketNotices    = useMemo(() => notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market'), [notices]);
-  const handleWriteNotice = useCallback(() => setNoticeFormOpen(true), []);
+  const handleWriteNotice = useCallback(() => startTransition(() => setNoticeFormOpen(true)), []);
   // 헤더·탭바에 인라인 화살표를 넘기면 memo 를 걸어도 매 렌더 무효 — 참조 고정 콜백으로.
   const openLoginCb = useCallback(() => openLogin(), [openLogin]);
   // 헤더 검색 버튼 제거(오너 지시) — 진입은 Cmd/Ctrl+K 단축키만 잔존
@@ -3102,7 +3107,10 @@ export default function App() {
     if (meEverOpenedRef.current) {
       withViewTransition(() => flushSync(() => setVoucherWalletOpen(true)), () => startTransition(() => setVoucherWalletOpen(true)));
     } else {
-      setVoucherWalletOpen(true); // 첫 열림 — lazy 청크 Suspense 대기가 끼므로 VT 없이 기존 경로
+      // 첫 열림 — lazy 청크 Suspense 가 끼므로 VT 를 쓰지 않는다. 다만 **그냥 setState 로 열면**
+      //   바깥 경계가 불투명 폴백을 커밋하고 리액트가 ~300ms 붙잡는다(openLogin 주석의 그 스로틀).
+      //   트랜지션이면 폴백을 커밋하지 않고 준비될 때까지 이전 화면을 유지한다.
+      startTransition(() => setVoucherWalletOpen(true));
     }
   }, []);
   // ⚠ deps 에 user '객체'를 두면 부팅 중 참조 교체(로그인→일일점수)마다 콜백이 재생성돼
@@ -3113,21 +3121,28 @@ export default function App() {
   const handleOpenWrite = useCallback((category?: PostCategory) => {
     if (!ensureVerified(userRefForGate.current, '글쓰기')) return; // 본인인증 회원만 글쓰기
     setPostFormCategory(category ?? 'free');
-    setPostFormOpen(true);
+    startTransition(() => setPostFormOpen(true));
   }, []);
-  const handleMarketCreate = useCallback(() => { if (ensureVerified(userRefForGate.current, '중고장터 등록')) setMarketFormOpen(true); }, []);
+  const handleMarketCreate = useCallback(() => {
+    if (ensureVerified(userRefForGate.current, '중고장터 등록')) startTransition(() => setMarketFormOpen(true));
+  }, []);
   // 목록 재조회 정본 — 등록·상태변경 후 갱신과 실패 카드의 '다시 시도'가 같은 함수를 쓴다(껍데기 버튼 방지).
   const handleListingsChanged = useCallback(() => {
     getListings().then((l) => { setListings(l); setMarketError(null); writeSnap('listings', l); })
       .catch((e) => setMarketError(e))
       .finally(() => setMarketLoaded(true));
   }, []);
+  /** 장터 상세·공지 상세 진입 — setter 를 **그대로** prop 으로 넘기면 트랜지션이 안 걸린다.
+   *  (오너 2026-09-15 "공지 열 때 멈칫"의 자리다. openLogin 주석의 폴백 스로틀과 같은 부류다.)
+   *  참조는 useCallback([]) 으로 고정한다 — 아래 useMemo deps 에 들어가므로 매번 새로 만들면 memo 가 깨진다. */
+  const openListingT = useCallback((l: MarketplaceListing) => startTransition(() => setOpenListing(l)), []);
+  const openNoticeT = useCallback((x: MarketplaceNotice) => startTransition(() => setOpenNotice(x)), []);
   const marketSlot = useMemo(() => (
     <MarketplaceTab listings={listings} loading={!marketLoaded} error={marketError} notices={marketNotices}
       noticesError={noticesErr} onRetryNotices={reloadNotices}
-      onSelect={setOpenListing} onSelectNotice={setOpenNotice} onCreate={handleMarketCreate}
+      onSelect={openListingT} onSelectNotice={openNoticeT} onCreate={handleMarketCreate}
       canWriteNotice={isAdmin} onWriteNotice={handleWriteNotice} onListingsChanged={handleListingsChanged} />
-  ), [listings, marketLoaded, marketError, marketNotices, noticesErr, reloadNotices, isAdmin, handleMarketCreate, handleWriteNotice, handleListingsChanged]);
+  ), [listings, marketLoaded, marketError, marketNotices, noticesErr, reloadNotices, isAdmin, handleMarketCreate, handleWriteNotice, handleListingsChanged, openListingT, openNoticeT]);
 
   // ── [§5-B] '내 정보'(CustomerDashboardPage)는 **상주**다 ──────────────────────
   //   한 번 열면 언마운트하지 않는다(위 keep-alive 계약). 그래서 닫혀 있어도 App 이 리렌더될 때마다
@@ -3159,7 +3174,7 @@ export default function App() {
     openScheduleById(sid, { returnToMe: true, fallbackVenueId: vid })
   ), [openScheduleById]);
   const handleMeOpenPost = useCallback((pp: CommunityPost) => {
-    setVoucherWalletOpen(false); changeTab('community'); setOpenPost(pp);
+    setVoucherWalletOpen(false); changeTab('community'); startTransition(() => setOpenPost(pp));
   }, [changeTab]);
   const handleMeOpenLegal = openLegal;
   const handleMeOpenSupport = openSupport;
@@ -3400,7 +3415,7 @@ export default function App() {
                   {evNotice ? (
                     <button
                       type="button"
-                      onClick={() => setOpenNotice(evNotice)}
+                      onClick={() => startTransition(() => setOpenNotice(evNotice))}
                       className="min-w-0 flex-1 text-left focus:outline-none"
                     >
                       <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 · 출석 도장 2배 · 첫 예약 +50 · 웰컴 +100</p>
@@ -3472,7 +3487,7 @@ export default function App() {
                           공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
                         </button>
                         {isAdmin && (
-                          <button type="button" onClick={() => setNoticeFormOpen(true)} className="-my-2 py-2 pl-2 text-2xs text-accent-300 hover:text-accent-200 font-semibold">
+                          <button type="button" onClick={handleWriteNotice} className="-my-2 py-2 pl-2 text-2xs text-accent-300 hover:text-accent-200 font-semibold">
                             + 공지 작성
                           </button>
                         )}
@@ -3956,7 +3971,7 @@ export default function App() {
         notice={openNotice}
         onClose={() => setOpenNotice(null)}
         isAdmin={user?.role === 'admin'}
-        onEdit={() => { setEditingNotice(openNotice); setOpenNotice(null); setNoticeFormOpen(true); }}
+        onEdit={() => { setEditingNotice(openNotice); setOpenNotice(null); startTransition(() => setNoticeFormOpen(true)); }}
         onDelete={() => { if (openNotice) handleDeleteNotice(openNotice.id); }}
       />
       )}
