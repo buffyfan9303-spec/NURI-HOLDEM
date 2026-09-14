@@ -267,11 +267,27 @@ export interface StaffInvite { id: string; venueId: string; venueName: string; c
 export interface VenueInvite { id: string; userId: string; email: string; nickname?: string; name: string; createdAt: string; }
 
 // 업주/운영자: 매장 구성원(수락 완료) 목록. venueId 생략 시 본인 소유 매장(업주), 지정 시 해당 매장(운영자).
+// ⚠ get_my_venue_staff 는 20260914d 부터 아래 6컬럼만 내려준다(보안 표준 §6 — 예전엔 profiles 전 컬럼이 나가
+//   업주가 직원의 ci_hash·실명·전화까지 받았다). rowToUser 로 받으면 verified(!!ci_hash)가 조용히 false 가 되므로
+//   전용 매퍼로 받는다 — 직원 화면(StaffManager·NuriPosLedger·StaffSchedule·StaffPayroll)이 쓰는 필드는 이 여섯뿐이다.
+interface StaffRow { id: string; name: string; nickname: string | null; email: string; avatar_color: string | null; staff_title: string | null }
+function staffRowToUser(row: StaffRow): User {
+  return {
+    id:          row.id,
+    email:       row.email,
+    name:        row.name,
+    nickname:    row.nickname ?? undefined,
+    role:        'venue_staff', // RPC 가 role = 'venue_staff' 로 걸러 준다
+    avatarColor: row.avatar_color ?? undefined,
+    staffTitle:  row.staff_title ?? undefined,
+    // verified·realName·phone 등은 서버가 내려주지 않는다 — undefined(모름)로 둔다. false 로 뭉개지 않는다.
+  };
+}
 export async function getMyVenueStaff(venueId?: string): Promise<User[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('get_my_venue_staff', { p_venue_id: venueId ?? null });
   if (error) throw error;
-  return (data ?? []).map(rowToUser);
+  return ((data ?? []) as StaffRow[]).map(staffRowToUser);
 }
 // 업주/운영자: 이메일로 구성원 초대(매장 기준 권한 체크)
 export async function inviteStaffByEmail(email: string, venueId?: string): Promise<void> {
