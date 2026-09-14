@@ -122,6 +122,11 @@ grant execute on function public.community_ads_public() to anon, authenticated, 
 notify pgrst, 'reload schema';
 
 -- ============================================================================
+-- ✅ §5 는 2026-09-15 에 적용됐다 → supabase/migrations/20260915b_community_ads_read_admin_only.sql
+--    (전제였던 '앱 배포'는 2026-09-14 배포로 충족. 실측 전/후: anon 직접 읽기 4행 → 0행,
+--     anon RPC 노출 0 → 0 불변, 관리자 4행 그대로.)
+--    아래는 그때 적어 둔 원안이다 — 기록으로 남긴다.
+--
 -- §5 원본 테이블 공개 읽기 축소 — **앱 배포가 프로덕션에 오른 뒤에** 별도로 실행한다.
 --    (지금 실행하면 옛 번들이 광고를 못 읽어 조용히 사라진다)
 --
