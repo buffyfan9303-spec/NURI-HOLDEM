@@ -13,13 +13,30 @@ const SRC = readFileSync(join(__dirname, 'NuriSpotPanel.tsx'), 'utf-8');
 const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 describe('F10 · 저장 스팟 다시 열기가 spot 과 hb 를 같은 커밋에서 바꾼다', () => {
-  it('MySpotList onOpen 이 setSpot 과 hb.setAll 을 함께 호출한다', () => {
-    const m = code.match(/<MySpotList onOpen=\{[\s\S]*?\}\}\s*\/>/);
-    expect(m, 'MySpotList onOpen 핸들러를 찾지 못했다').not.toBeNull();
+  // 2026-09-14: 저장 목록에 '게시판에 공유'가 생기면서 진입점이 둘(열기·공유)이 됐다.
+  // 그래서 인라인 핸들러를 openSaved 한 곳으로 뽑았고, 계약도 그 모양을 따라간다 —
+  // **약화가 아니라 강화**다: 이제 두 진입점이 같은 함수를 지나는 것까지 잠근다.
+  // (진입점마다 핸들러를 따로 쓰면 한쪽이 hb.setAll 을 빠뜨려 F10 이 그대로 재발한다.)
+  it('openSaved 가 setSpot 과 hb.setAll 을 함께 호출한다', () => {
+    const m = code.match(/const openSaved = useCallback\([\s\S]*?\}, \[hb\]\);/);
+    expect(m, 'openSaved 를 찾지 못했다').not.toBeNull();
     const body = m![0];
     expect(body).toContain('setSpot(s)');
     // 이게 빠지면 리포트만 B, 카드 그리드는 A 로 남는다(F10).
     expect(body).toContain('hb.setAll(');
+  });
+
+  it('열기·공유 두 진입점이 모두 openSaved 를 지난다', () => {
+    const m = code.match(/<MySpotList[\s\S]*?\/>/);
+    expect(m, 'MySpotList 사용처를 찾지 못했다').not.toBeNull();
+    const body = m![0];
+    expect(body, 'onOpen 이 openSaved 가 아니다').toMatch(/onOpen=\{openSaved\}/);
+    expect(body, 'onShare 가 openSaved 를 지나지 않는다').toContain('openSaved(s)');
+  });
+
+  it('저장 목록은 게시 RPC 를 직접 부르지 않는다 — 확인 시트를 우회하는 두 번째 경로 금지', () => {
+    const list = readFileSync(join(__dirname, 'MySpotList.tsx'), 'utf-8');
+    expect(list, 'MySpotList 가 직접 게시한다(F16 우회)').not.toContain('shareSpotPost');
   });
 
   it('useHandBoard 가 setAll 을 노출한다', () => {

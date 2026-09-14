@@ -8,7 +8,7 @@
 //
 // ⚠ '어그레션 차트' 같은 해석이 어려운 그림은 쓰지 않는다. 폴드·콜·레이즈 누적 막대 하나로
 //   끝내고, 퍼센트와 액션명은 **막대 밖에서도** 읽히게 목록으로 함께 적는다(작은 화면·색맹 대응).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import Modal from '../../atoms/Modal';
 import { ensureLogin } from '../../../lib/requireLogin';
@@ -53,11 +53,16 @@ interface Props {
   evaluation: SpotEvaluation;
   calculating: boolean;
   blocked: boolean;
+  /** 2026-09-14: 저장 목록(MySpotList)에서 "공유"로 열었을 때 증가하는 신호.
+   *  ⚠ 여기서 **게시하지 않는다** — 기존 확인 시트(onShare)를 열 뿐이다.
+   *     저장 목록에 shareSpotPost 를 직접 붙이면 F16 이 세운 "올라갈 본문을 먼저 보여 준다"는
+   *     계약을 우회하는 두 번째 게시 경로가 생긴다. 그래서 진입점만 늘리고 경로는 하나로 둔다. */
+  shareIntent?: number;
   user: ReturnType<typeof useAuth>['user'];
   toast: ReturnType<typeof useToast>;
 }
 
-export default function SpotReport({ spot, evaluation, calculating, blocked, user, toast }: Props) {
+export default function SpotReport({ spot, evaluation, calculating, blocked, user, toast, shareIntent = 0 }: Props) {
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const [saved, setSaved] = useState(false);
   /** 공유 확인 시트가 떠 있는가 — 이게 true 인 동안에도 아직 올라간 글은 없다. */
@@ -97,6 +102,19 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
     setDraftNote(spot.note?.trim() ?? '');
     setConfirming(true);
   };
+
+  // 저장 목록에서 '공유'로 들어오면 **여기서** 확인 시트를 연다.
+  // ⚠ 게시는 여전히 onConfirmShare 한 곳뿐이다 — 진입점만 늘리고 경로는 하나로 둔다(F16 계약).
+  // ⚠ 계산이 끝난 뒤에 연다. 계산 중에 열면 시트가 **비어 있거나 이전 스팟의 본문**을 보여 준다.
+  // ⚠ blocked(입력 미완성)면 열지 않는다 — 올릴 수 없는 상태에서 시트만 뜨면 막다른 길이다.
+  useEffect(() => {
+    if (!shareIntent || calculating || blocked) return;
+    if (!ensureLogin(user)) return;
+    setDraftNote(spot.note?.trim() ?? '');
+    setConfirming(true);
+    // spot 은 의도적으로 의존성에서 뺀다 — 메모를 고칠 때마다 시트가 다시 열리면 안 된다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareIntent, calculating, blocked, user]);
 
   // 취소는 시트만 닫는다 — 여기에는 네트워크 호출이 하나도 없다(공개 글 0).
   const onCancelShare = () => {

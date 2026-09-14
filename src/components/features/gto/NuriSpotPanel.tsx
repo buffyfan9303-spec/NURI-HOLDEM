@@ -73,6 +73,8 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
 
   // 임시 저장 — 타이핑마다 쓰지 않도록 400ms 디바운스(HandReviewTool 선례)
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  /** 저장 목록에서 "공유"로 들어왔다는 신호 — 값이 바뀌면 리포트가 **확인 시트를 연다**(게시는 아니다). */
+  const [shareIntent, setShareIntent] = useState(0);
   useEffect(() => {
     const t = window.setTimeout(() => { writeSnap(SNAP_KEY, spot); setSavedAt(Date.now()); }, 400);
     return () => window.clearTimeout(t);
@@ -124,6 +126,18 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardsKey, blocked]);
 
+  /** 저장한 스팟을 분석 탭으로 연다. '열기'와 '공유' 가 **같은 한 곳**을 지나야 상태 교체가 갈라지지 않는다. */
+  const openSaved = useCallback((s: SpotReview) => {
+    // ⚠ 카드 그리드(hb)와 리포트(spot)를 **같은 커밋에서** 함께 갈아끼운다(F10).
+    //   hb 를 두고 setSpot 만 하면 그리드는 이전 스팟에 남고, 그 상태로 저장·공유하면
+    //   이전 스팟의 에퀴티가 영구 스냅샷에 박힌다. 그 뒤 카드를 하나만 건드리면
+    //   아래 동기화 이펙트가 돌아 **연 스팟의 카드가 이전 스팟으로 덮인다.**
+    //   교체 직후 동기화 이펙트는 문자열 비교가 같아 early-return 하므로 s.street 는 보존된다.
+    setSpot(s);
+    hb.setAll({ hero: s.hero, villain: s.villain, board: s.board });
+    setTab('analyze');
+  }, [hb]);
+
   const evaluation = useMemo<SpotEvaluation>(
     () => evaluateSpot(spot, { heroEquity: equity }),
     [spot, equity],
@@ -137,20 +151,14 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
         <AnalyzeTab
           spot={spot} patch={patch} hb={hb} issues={issues} blocked={blocked}
           evaluation={evaluation} calculating={calculating} savedAt={savedAt}
-          user={user} toast={toast}
+          user={user} toast={toast} shareIntent={shareIntent}
         />
       )}
       {tab === 'mine' && (
-        <MySpotList onOpen={(s) => {
-          // ⚠ 카드 그리드(hb)와 리포트(spot)를 **같은 커밋에서** 함께 갈아끼운다(F10).
-          //   hb 를 두고 setSpot 만 하면 그리드는 이전 스팟에 남고, 그 상태로 저장·공유하면
-          //   이전 스팟의 에퀴티가 영구 스냅샷에 박힌다. 그 뒤 카드를 하나만 건드리면
-          //   아래 동기화 이펙트가 돌아 **연 스팟의 카드가 이전 스팟으로 덮인다.**
-          //   교체 직후 동기화 이펙트는 문자열 비교가 같아 early-return 하므로 s.street 는 보존된다.
-          setSpot(s);
-          hb.setAll({ hero: s.hero, villain: s.villain, board: s.board });
-          setTab('analyze');
-        }} onNew={() => setTab('analyze')} />
+        <MySpotList
+          onShare={(s) => { openSaved(s); setShareIntent((n) => n + 1); }}
+          onOpen={openSaved}
+          onNew={() => setTab('analyze')} />
       )}
     </div>
   );
@@ -238,13 +246,15 @@ interface AnalyzeProps {
   issues: ReturnType<typeof validateSpot>;
   blocked: boolean;
   evaluation: SpotEvaluation;
+  /** 저장 목록의 '공유'로 들어온 신호 — 리포트가 확인 시트를 연다(게시 아님) */
+  shareIntent: number;
   calculating: boolean;
   savedAt: number | null;
   user: ReturnType<typeof useAuth>['user'];
   toast: ReturnType<typeof useToast>;
 }
 
-function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, calculating, savedAt, user, toast }: AnalyzeProps) {
+function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, calculating, savedAt, user, toast, shareIntent }: AnalyzeProps) {
   const [step, setStep] = useState<StepKey>('cards');
   const cur = STEPS.find((s) => s.key === step) ?? STEPS[2];
 
@@ -275,7 +285,7 @@ function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, calculating,
 
       <div className="mt-3 min-w-0 lg:mt-0 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)]">
         <SpotReport
-          spot={spot} evaluation={evaluation} calculating={calculating} blocked={blocked}
+          spot={spot} evaluation={evaluation} calculating={calculating} blocked={blocked} shareIntent={shareIntent}
           user={user} toast={toast}
         />
       </div>

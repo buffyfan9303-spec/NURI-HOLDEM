@@ -11,7 +11,15 @@ import { spotSummary, streetLabel, actionLabel, type SpotReview } from '../../..
 import { COVERAGE_LABEL } from '../../../lib/spotEvaluate';
 import { listMySpots, deleteMySpot, type SavedSpot } from '../../../api/spots';
 
-export default function MySpotList({ onOpen, onNew }: { onOpen: (s: SpotReview) => void; onNew: () => void }) {
+export default function MySpotList({ onOpen, onShare, onNew }: {
+  onOpen: (s: SpotReview) => void;
+  /** 2026-09-14 오너 지시 — 저장한 스팟을 **여기서 바로** 게시판에 올린다.
+   *  ⚠ 여기서 게시 RPC 를 부르지 않는다. 분석 탭으로 열면서 리포트의 **확인 시트**를 띄울 뿐이다.
+   *     올라갈 본문을 먼저 보여 주고 메모를 고칠 기회를 주는 F16 계약을 우회하면 안 된다
+   *     ('내 선택·메모' 칸은 사용자가 혼잣말로 적는 자리라 그대로 공개되면 사고다). */
+  onShare: (s: SpotReview) => void;
+  onNew: () => void;
+}) {
   const { user } = useAuth();
   const toast = useToast();
   const [rows, setRows] = useState<SavedSpot[] | null>(null);
@@ -40,7 +48,7 @@ export default function MySpotList({ onOpen, onNew }: { onOpen: (s: SpotReview) 
   if (!user) {
     return (
       <Empty icon="lock" title="로그인하면 스팟을 저장할 수 있어요"
-        desc="저장한 스팟은 나만 볼 수 있습니다. 공유하기 전까지 게시판에 올라가지 않아요." />
+        desc="저장한 스팟은 나만 볼 수 있습니다. '게시판에 공유'를 누르기 전까지 올라가지 않아요." />
     );
   }
   // 스켈레톤 높이를 실제 카드와 맞춘다 — 값이 들어올 때 목록이 내려앉지 않게.
@@ -92,6 +100,9 @@ export default function MySpotList({ onOpen, onNew }: { onOpen: (s: SpotReview) 
           <div className="mt-2 flex gap-1.5">
             <button type="button" onClick={() => onOpen(r.spot)} className="btn-ghost min-h-[44px] flex-1 text-xs">
               다시 열기
+            </button>
+            <button type="button" onClick={() => onShare(r.spot)} className="btn-primary min-h-[44px] flex-1 text-xs">
+              게시판에 공유
             </button>
             {confirmId === r.id ? (
               <>
