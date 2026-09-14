@@ -1073,6 +1073,18 @@ export default function App() {
   const hasActiveSearchFilter = !!(searchState.query || searchState.dates.length || searchState.regions.length || searchState.format || searchState.gtdOnly || searchState.competitionOnly || searchState.grade || searchState.budget != null);
   const [authOpen, setAuthOpen]       = useState(false);
   const [authMode, setAuthMode]       = useState<'login' | 'signup-user'>('login'); // QR 회원가입 진입용
+  /** 로그인 창 열기 — **진입점이 8곳**이라 한 곳에 모은다(헤더·QR 체크인·QR 바인·가입QR·추천코드·쓰기 게이트·클락 리모컨·캘린더·이벤트).
+   *
+   *  ⚠ `startTransition` 이 핵심이다(2026-09-15 실측). `lazyWithReload` 는 `lazy(async () => …)` 라
+   *    **청크가 이미 캐시에 있어도 첫 렌더는 반드시 한 번 서스펜드**한다. 그냥 setState 로 열면
+   *    바깥 경계(`<Suspense fallback={<OverlayFallback/>}>`)가 **불투명 전면 오버레이**를 커밋하고
+   *    리액트가 그것을 최소 ~300ms 붙잡는다 — 실측 19프레임(363ms), 청크를 9초 데운 뒤에도 같았다.
+   *    트랜지션이면 리액트가 폴백을 커밋하지 않고 준비될 때까지 이전 화면을 유지한다.
+   *    (EventPage 가 2026-09-08 에 같은 증상을 같은 방식으로 고친 자리다 — openEvent 를 보라.) */
+  const openLogin = useCallback((mode: 'login' | 'signup-user' = 'login') => {
+    setAuthMode(mode);
+    startTransition(() => setAuthOpen(true));
+  }, []);
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
   // changeTab(상단 선언)에서 TDZ 없이 오버레이를 닫기 위한 ref 바인딩
   closeOverlaysRef.current = () => setOpenVenueId(null);
@@ -1127,7 +1139,7 @@ export default function App() {
       // 카카오·구글 로그인은 페이지를 떠났다 돌아오는데 그때 ?checkin= 이 사라진다 —
       // 하려던 일을 적어 두고(30분 수명), 로그인 후 아래 '보류된 QR' effect 가 이어서 처리한다.
       rememberQrIntent({ kind: 'checkin', venueId: cv, gameSeq: null });
-      setAuthOpen(true);
+      openLogin();
       return;
     }
     // 여기서 직접 처리하기로 정했으므로 보류 의도를 **지금** 버린다(2026-09-07).
@@ -1183,7 +1195,7 @@ export default function App() {
     const gRaw = gmRaw ? parseInt(gmRaw, 10) : NaN;
     if (!user) {
       rememberQrIntent({ kind: 'buyin', venueId: bv, gameSeq: Number.isFinite(gRaw) && gRaw > 0 ? gRaw : null });
-      setAuthOpen(true);
+      openLogin();
       return;
     }
     // 이쪽은 URL 을 **동기로** 지운다 — 그러면 같은 커밋의 '보류된 QR' effect 가 '파라미터 없음'으로 보고
@@ -1303,7 +1315,7 @@ export default function App() {
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
     // deps 가 [] 이던 시절에는 이 `!user` 가 **언제나 참**이었다(첫 커밋의 user 는 항상 null) —
     // 이미 가입한 단골이 카운터의 가입 QR 을 찍으면 가입 폼이 떴다(2026-09-06 감사).
-    if (!user) { setAuthMode('signup-user'); setAuthOpen(true); }
+    if (!user) openLogin('signup-user');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, authLoading]);
 
@@ -1316,7 +1328,7 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.delete('ref');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    if (!user) { setAuthMode('signup-user'); setAuthOpen(true); }
+    if (!user) openLogin('signup-user');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1333,10 +1345,10 @@ export default function App() {
 
   // 비로그인 사용자가 쓰기(글·댓글·반응·채팅·예약)를 시도하면 로그인 모달을 띄운다.
   useEffect(() => {
-    const h = () => { setAuthMode('login'); setAuthOpen(true); };
+    const h = () => openLogin();
     window.addEventListener(REQUIRE_LOGIN_EVENT, h);
     return () => window.removeEventListener(REQUIRE_LOGIN_EVENT, h);
-  }, []);
+  }, [openLogin]); // openLogin 은 deps [] 인 useCallback — 참조가 고정이라 재구독이 생기지 않는다
 
   // 본인인증 게이트 안내는 <VerifyGateSheet/> 가 REQUIRE_VERIFY_EVENT 를 직접 듣고 시트로 띄운다(#31).
   // (기존: 사라지는 토스트 → 무엇이 왜 필요한지 설명하는 하단 시트로 교체)
@@ -1604,6 +1616,12 @@ export default function App() {
 
   const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null); // 약관·정책 모달
   const [supportOpen, setSupportOpen] = useState(false); // 1:1 고객센터 문의
+  /** 약관·고객센터 열기 — 진입점이 여럿(푸터·내 정보·알림 링크)이라 한 곳에 모은다.
+   *  ⚠ startTransition 은 openLogin 과 같은 이유다(2026-09-15 실측). 그냥 setState 로 열었더니
+   *    바깥 경계가 불투명 전면 오버레이(OverlayFallback)를 커밋했다 — 약관 18프레임·389ms,
+   *    고객센터 2프레임·184ms. `lazy(async …)` 는 청크가 캐시에 있어도 첫 렌더에 한 번 서스펜드한다. */
+  const openLegal = useCallback((d: LegalDoc) => startTransition(() => setLegalDoc(d)), []);
+  const openSupport = useCallback(() => startTransition(() => setSupportOpen(true)), []);
   const [voucherWalletOpen, setVoucherWalletOpen] = useState(false);
   const [voucherSheetOpen, setVoucherSheetOpen] = useState(false); // 헤더 [이용권·출석] 시트(루트 렌더)
   // 통합 '내 정보' 페이지(2026-09-04: 대시보드+프로필 관리 합침)의 진입 탭 — 열 때마다 이 값으로 리셋된다
@@ -2582,7 +2600,7 @@ export default function App() {
       return;
     }
     // /support (1:1 문의 답변 알림) → 고객센터 모달 열기
-    if (link === '/support') { setSupportOpen(true); return; }
+    if (link === '/support') { openSupport(); return; }
     // /wallet (🎟 이용권 도착) → 내 지갑(이용권 대시보드) 바로 열기
     if (link === '/wallet') { setMeTab('dashboard'); setVoucherWalletOpen(true); return; } // 초기 탭 명시 — 보안 탭 진입 뒤 stale 방지
     // '/' (홈 안내형 알림) → 홈 탭으로 — 제목만 다시 토스트하는 막다른 길 방지
@@ -2983,7 +3001,7 @@ export default function App() {
   const marketNotices    = useMemo(() => notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market'), [notices]);
   const handleWriteNotice = useCallback(() => setNoticeFormOpen(true), []);
   // 헤더·탭바에 인라인 화살표를 넘기면 memo 를 걸어도 매 렌더 무효 — 참조 고정 콜백으로.
-  const openLoginCb = useCallback(() => setAuthOpen(true), []);
+  const openLoginCb = useCallback(() => openLogin(), [openLogin]);
   // 헤더 검색 버튼 제거(오너 지시) — 진입은 Cmd/Ctrl+K 단축키만 잔존
   // PC GNB — 이벤트는 **상태와 무관하게 늘 있다**(0개·조회 실패·소진·비로그인 어느 쪽이어도).
   //   진행 중인 이벤트가 없으면 판이 '진행 중인 이벤트가 없어요'를 말한다. 그건 빈 화면이 아니라 답이다.
@@ -2994,6 +3012,32 @@ export default function App() {
   );
   /** GNB 에서 이벤트 칸을 눌렀을 때만 오버레이로 빠진다 — 나머지는 평소의 탭 전환. */
   const gotoTabOrEvent = useCallback((t: TabId) => { if (t === 'event') openEvent(); else changeTab(t); }, [changeTab, openEvent]);
+  /** 관리자 배너 등 **같은 문서 안의 링크**를 문서를 새로 받지 않고 연다. 열었으면 true.
+   *
+   *  ⚠ 왜 있나(2026-09-15 실측): 홈 배너의 내부 링크는 `window.location.assign` 으로 갔다.
+   *    오너가 등록한 배너 `link_url = '/?event=rotiarena-attend'` 를 누르면 **앱이 통째로 재부팅**돼
+   *    홈이 스켈레톤으로 되돌아갔다가 다시 차오르고, 그 뒤에 빈 이벤트 판이 뜨고, 그제야 내용이 찼다 —
+   *    번쩍임이 두 번이다. CDP 스크린캐스트 실프레임 휘도(375 라이트): 211 → **246(홈 스켈레톤)** → 211 →
+   *    **247(빈 이벤트 판)** → 243. 열림도 55ms(앱 안 전환) → 267ms 로 5배였다.
+   *    View Transition 도 Suspense 폴백도 아니었다(같은 계측에서 각각 호출 0 · 노출 프레임 0).
+   *  ⚠ 아는 목적지만 맡는다. 모르는 링크는 false 를 돌려 **기존 이동 경로를 그대로** 쓰게 둔다
+   *    (`/about.html` 같은 정적 페이지가 여기서 조용히 먹히면 그게 기능 소실이다).
+   *  ⚠ 경로가 다르면 맡지 않는다 — 같은 문서 안에서 바꿀 수 있는 것만 여기 해당한다. */
+  const openInternalLink = useCallback((u: URL): boolean => {
+    if (u.pathname !== window.location.pathname) return false;
+    const ev = u.searchParams.get('event');
+    // '1'·'true' 승격 규칙은 딥링크 이펙트(위 `?event=` useEffect)와 **같은 규칙**이어야 한다.
+    if (ev) { openEvent(ev === '1' || ev === 'true' ? CARD_EVENT_SLUG : ev); return true; }
+    // `?tab=` — 화이트리스트는 부팅 딥링크(위 `?tab=` 이펙트)와 **같은 `TAB_IDS`** 를 쓴다(새로 만들지 않는다).
+    //   ⚠ 앱 안에서 전환하면 주소에 `tab=` 이 남지 않는다. 그게 맞다 — `?tab=` 은 App.tsx 딥링크 이펙트가
+    //     부팅 때 소비하고 지우는 **1회성** 파라미터라, 리로드로 들어왔을 때도 그 상태는 잠깐만 존재했고
+    //     공유·새로고침으로 재현되지도 않았다. 그래서 `e2e/ad-click-paths.spec.ts` 의 도착 판정도
+    //     주소가 아니라 **도착한 pane** 으로 바꿨다(같은 커밋 — 구현에 결합된 대리 증거를 실제 도착으로 좁힌 것).
+    //   모르는 탭(`?tab=zzz`)은 맡지 않는다 → 아래 기존 이동 경로로 떨어진다.
+    const tab = u.searchParams.get('tab');
+    if (tab && (TAB_IDS as readonly string[]).includes(tab)) { changeTab(tab as TabId); return true; }
+    return false;
+  }, [openEvent, changeTab]);
   /** 이벤트 판이 떠 있는 동안 내비 활성 표시도 이벤트로 — 어디 있는지 모르는 화면을 만들지 않는다. */
   const navActive: TabId = eventOpen ? 'event' : activeTab;
   const tabDot = useMemo(() => ({ community: commHasNew }), [commHasNew]);
@@ -3088,8 +3132,8 @@ export default function App() {
   const handleMeOpenPost = useCallback((pp: CommunityPost) => {
     setVoucherWalletOpen(false); changeTab('community'); setOpenPost(pp);
   }, [changeTab]);
-  const handleMeOpenLegal = useCallback((d: LegalDoc) => setLegalDoc(d), []);
-  const handleMeOpenSupport = useCallback(() => setSupportOpen(true), []);
+  const handleMeOpenLegal = openLegal;
+  const handleMeOpenSupport = openSupport;
   // 장터·랭킹 상점은 **같은 조리법**(섹션 이벤트 + 세션 기억 + 탭 이동).
   // 커뮤니티가 아직 안 떠 있을 수도 있어 이벤트만으로는 부족하다 → sessionStorage 가 도착 후 복원한다.
   const goCommunitySection = useCallback((section: 'market' | 'rank') => {
@@ -3211,7 +3255,7 @@ export default function App() {
       {/* 휴대폰 리모컨(?remote=) — 운영자·직원이 플로어에서 클락을 조작 */}
       {remoteTarget && (
         <Suspense fallback={<OverlayFallback />}>
-          <ClockRemote onLogin={() => setAuthOpen(true)} venueId={remoteTarget.venueId} gameSeq={remoteTarget.gameSeq}
+          <ClockRemote onLogin={openLoginCb} venueId={remoteTarget.venueId} gameSeq={remoteTarget.gameSeq}
             venueName={venues.find((v) => v.id === remoteTarget.venueId)?.name}
             onClose={closeRemote} />
         </Suspense>
@@ -3262,6 +3306,7 @@ export default function App() {
                계산도 대기도 아닌 순수 스로틀이었다). 트랜지션이면 폴백 자체를 건너뛴다. */
             /* 인자 없이 부른다 — onClick 이 넘기는 MouseEvent 가 slug 자리에 들어가지 않게 */
             onEvent={() => openEvent()}
+            onInternalLink={openInternalLink}
           />
         </main>
       )}
@@ -3669,7 +3714,7 @@ export default function App() {
       {!hasStoreTabs && (activeTab === 'calendar' || visitedTabs.has('calendar')) && (
         <main data-tab="calendar" className="tab-pane" style={activeTab !== 'calendar' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="calendar">
-            <CalendarPanelM schedules={schedules} onSelect={handleScheduleSelect} onOpenSchedule={openScheduleById} onVenue={handleVenueClick} onLogin={() => setAuthOpen(true)} active={activeTab === 'calendar'} resVersion={resVersion} />
+            <CalendarPanelM schedules={schedules} onSelect={handleScheduleSelect} onOpenSchedule={openScheduleById} onVenue={handleVenueClick} onLogin={openLoginCb} active={activeTab === 'calendar'} resVersion={resVersion} />
           </ErrorBoundary>
         </main>
       )}
@@ -3724,7 +3769,7 @@ export default function App() {
 
       {/* 사업자 정보 푸터 — 전 화면 하단 상시 노출(전자상거래법 표시의무 + 약관 링크 + 고객센터) */}
       <div className="reveal">
-        <BusinessFooter onOpenLegal={(d) => setLegalDoc(d)} onOpenSupport={() => setSupportOpen(true)} />
+        <BusinessFooter onOpenLegal={openLegal} onOpenSupport={openSupport} />
       </div>
 
       {/* ── 모달 — 전부 lazy: 여는 순간에만 해당 청크 로드(첫 화면 가볍게) ── */}
@@ -3790,7 +3835,7 @@ export default function App() {
               로그인 왕복 뒤 이벤트가 아니라 홈에 떨어졌다. 복원 종류에 'event' 를 추가해도 순서가 그대로면 소용이 없다.
               AuthModal 은 같은 z-[60] 을 이 뒤에 렌더하므로 위에 얹히고, 이메일 로그인처럼 떠나지 않는 경로에서는
               닫으면 이벤트 판이 그대로 남아 있다(왕복 자체가 없어 더 낫다). */
-          <EventPage open slug={eventSlug} onClose={() => setEventOpen(false)} onLogin={() => setAuthOpen(true)} />
+          <EventPage open slug={eventSlug} onClose={() => setEventOpen(false)} onLogin={openLoginCb} />
         )}
       </Suspense>
 

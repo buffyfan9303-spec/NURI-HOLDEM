@@ -159,7 +159,7 @@ const dayLabel = (date: string) => {
 
 export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
-  onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [],
+  onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], onInternalLink,
 }: {
   schedules: Schedule[];
   loaded: boolean;
@@ -179,6 +179,8 @@ export default function HomeTab({
   onLive: () => void;
   /** 이벤트 **별도 페이지**로 (오너 2026-09-06: 게시판 안에 넣지 말 것) */
   onEvent: () => void;
+  /** 같은 문서 안에서 열 수 있는 내부 링크면 앱 안에서 열고 true — 못 열면 false(그때만 주소창 이동). */
+  onInternalLink?: (u: URL) => boolean;
 }) {
   const now = new Date();
   /** 조회가 실패했고 **보여 줄 것이 하나도 없을 때**만 '못 불러옴' 이다.
@@ -367,7 +369,17 @@ export default function HomeTab({
                 let parsed: URL;
                 try { parsed = new URL(u, window.location.origin); } catch { return; }
                 if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;  // javascript:·data: 차단
-                if (parsed.origin === window.location.origin) { window.location.assign(parsed.pathname + parsed.search + parsed.hash); return; }
+                if (parsed.origin === window.location.origin) {
+                  // ⚠ 앱 안에서 열 수 있는 곳이면 **문서를 새로 받지 않는다**(2026-09-15 오너 리포트 "한번 번쩍이면서 들어가줘").
+                  //   location.assign 은 같은 오리진이어도 전체 리로드라 앱이 재부팅된다 — 홈이 스켈레톤으로
+                  //   되돌아갔다가 다시 차오르고(번쩍 ①) 그 뒤 빈 판이 떴다가 내용이 찬다(번쩍 ②).
+                  //   실측(CDP 실프레임 휘도, 375 라이트): 211 → 246 → 211 → 247 → 243 / 열림 267ms.
+                  //   앱 안 전환으로 열면 중간 프레임이 없고 55ms 다. 판정은 App 의 openInternalLink 가 한다 —
+                  //   모르는 링크는 false 를 돌려주므로 아래 이동 경로가 그대로 남는다(정적 페이지·다른 경로 보존).
+                  if (onInternalLink?.(parsed)) return;
+                  window.location.assign(parsed.pathname + parsed.search + parsed.hash);
+                  return;
+                }
                 window.open(parsed.href, '_blank', 'noopener,noreferrer');
               }}
               onBanner={(a) => {

@@ -65,7 +65,17 @@ test.describe('광고성 요소 — 클릭 목적지 점검', () => {
     await expect(slide).toBeVisible({ timeout: 20_000 });
     await expect(slide).toHaveJSProperty('tagName', 'BUTTON');
     await slide.click();
-    await expect(page).toHaveURL(/tab=browse/, { timeout: 10_000 });
+    // ⚠ 2026-09-15 — 도착 판정을 **주소에서 도착한 pane 으로** 바꿨다. 단언을 푼 것이 아니라 좁힌 것이다.
+    //   예전 단언은 `toHaveURL(/tab=browse/)` 였는데, 그 URL 상태는 **리로드 구현 때문에만 잠깐 존재**했다:
+    //   `?tab=` 은 App.tsx 의 딥링크 이펙트가 부팅 때 소비하고 주소에서 지우는 1회성 파라미터라
+    //   공유·새로고침으로 재현되지 않는다. 그래서 배너의 내부 링크를 전체 리로드 대신 앱 안 전환으로
+    //   바꾸자(오너 리포트 "번쩍이면서 들어간다" — 리로드가 홈을 스켈레톤으로 되돌렸다) 주소에 `tab=` 이
+    //   아예 안 남게 됐다. 이 스펙이 지키려는 계약은 '광고를 누르면 **browse 에 도착한다**' 이므로
+    //   대리 증거(주소) 대신 결과(pane)를 본다 — 홈 pane 이 내려갔는지까지 같이 확인해 더 강하다.
+    //   음성 대조(2026-09-15 실측): `openInternalLink` 가 `?tab=` 을 **맡되 `changeTab` 을 안 부르게**
+    //   (= 클릭을 삼키는 죽은 버튼으로) 바꾸면 이 단언이 실제로 빨개진다. 아래 결과 참고.
+    await expect(page.locator('[data-tab="browse"]'), '광고 배너를 눌렀는데 browse 판이 안 뜬다').toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-tab="home"]'), 'browse 로 갔는데 홈 판이 같이 떠 있다').toBeHidden();
   });
 
   test('🔴 위험한 scheme 의 배너 링크는 열리지 않는다', async ({ page }) => {
