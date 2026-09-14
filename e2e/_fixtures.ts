@@ -61,6 +61,20 @@ export const test = base.extend({
     const blocked: string[] = [];
     await context.route(SUPABASE_API, (route) => {
       const req = route.request();
+      // home_banners 는 **스펙이 따로 목킹하지 않으면 빈 목록**으로 준다 — 기본값이 라이브면 안 된다.
+      //   2026-09-15 사고: 오너가 운영에 등록한 배너 1건의 link_url 이 `/?event=rotiarena-attend` 였고,
+      //   HomeTab.tsx:286 의 중복 제거(`?event=` 링크가 있으면 이벤트 슬라이드를 넣지 않는다)가 발동해
+      //   home-event-menu / home-event-banner 가 0개가 됐다 → **코드 변경 0으로** 스펙 9건이 빨개졌다
+      //   (home-event-banner ①~④ · event-entry ×3 · event-backnav ×2 · a11y-modal 이벤트 닫기).
+      //   실측(2026-09-15): 이 표를 목킹 없이 운영에서 받아 오던 스펙 파일이 **79개**였다.
+      // 🔴 이 줄을 밖의 별도 `context.route(/home_banners/)` 로 옮기지 마라 — **조용히 무효가 된다.**
+      //   Playwright 는 route 를 **나중에 등록된 것부터** 맞춰 본다(역순). 밖에 걸면 아래 SUPABASE_API
+      //   핸들러가 먼저 이겨 route.continue() 로 운영에 나간다. 실측으로 확인했다(전후 통과 수 변화 0).
+      //   스펙이 `page.route` 로 덮는 것은 그대로 이긴다(page route > context route) — ⑤번처럼
+      //   배너가 필요한 테스트는 지금처럼 자기 목킹을 그대로 쓰면 된다.
+      if (/\/rest\/v1\/home_banners\?/.test(req.url())) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      }
       if (isAllowedRequest(req.method(), req.url())) return route.continue();
       blocked.push(`${req.method()} ${req.url().replace(/^https:\/\/[a-z0-9]+\.supabase\.co/, '')}`);
       return route.abort('blockedbyclient');

@@ -120,6 +120,24 @@ test.describe('끌어 내려 닫기 — 필수 제외(작성 중 화면)', () =>
   test('🔴 커뮤니티 글쓰기 — 적다가 아래로 끌어도 닫히지 않고 입력이 남는다', async ({ page }) => {
     test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 미설정 — 글쓰기는 로그인 전용');
     await stabilizeBackstack(page);
+    // 본인인증(ci_hash)만 보강한다 — 나머지 프로필 필드는 운영 응답 **그대로** 쓴다.
+    //   왜: App.tsx:3041 이 `ensureVerified(user, '글쓰기')` 로 막는데, 그 판정은 auth.ts:99 의
+    //   `verified: !!row.ci_hash` 다. 운영 E2E 계정에는 ci_hash 가 없어 글쓰기 대신
+    //   **본인인증 게이트 시트**가 열렸고, 아래 dialog 셀렉터가 그 시트의 "'글쓰기'는 본인인증이
+    //   필요해요" 문구에 붙어 toBeVisible 이 **거짓 통과**한 뒤 제목 입력에서 타임아웃했다(2026-09-15).
+    //   즉 이 스펙은 검증 대상(글쓰기 시트)에 **도달조차 못 하고** 있었다 — 죽은 커버리지였다.
+    //   선례: a11y-modal.spec.ts 의 openDetail 도 같은 이유로 ci_hash 를 심는다.
+    //   ⚠ 여기서 푸는 것은 **도달 조건**뿐이다. 끌어도 안 닫힌다는 단언은 아래 그대로 둔다.
+    await page.route(/\/rest\/v1\/profiles\?/, async (r) => {
+      const res = await r.fetch();
+      let body = await res.text();
+      try {
+        const parsed: unknown = JSON.parse(body);
+        const withCi = (o: unknown) => (o && typeof o === 'object' && !Array.isArray(o) ? { ...o, ci_hash: (o as { ci_hash?: string }).ci_hash ?? 'e2e' } : o);
+        body = JSON.stringify(Array.isArray(parsed) ? parsed.map(withCi) : withCi(parsed));
+      } catch { /* JSON 이 아니면 원문 그대로 — 조용히 바꿔치지 않는다 */ }
+      await r.fulfill({ status: res.status(), contentType: 'application/json', body });
+    });
     await loginAs(page, EMAIL!, PASSWORD!);
     await page.goto('/');
     await dismissOverlays(page);
@@ -131,8 +149,11 @@ test.describe('끌어 내려 닫기 — 필수 제외(작성 중 화면)', () =>
     await expect(write).toBeVisible({ timeout: 10_000 });
     await write.click();
 
-    const dialog = page.locator('[role="dialog"]').filter({ hasText: '글쓰기' }).first();
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    // 🔴 `filter({ hasText: '글쓰기' })` 로 찾지 마라 — 본인인증 게이트 시트도 본문에 '글쓰기' 를 담아서
+    //   엉뚱한 dialog 에 붙고, toBeVisible 이 거짓 통과한다(2026-09-15 실측). 접근성 이름으로 특정한다
+    //   (Modal 은 title 을 aria-labelledby='modal-title' 로 건다 — a11y-modal.spec.ts 와 같은 방식).
+    const dialog = page.getByRole('dialog', { name: '글쓰기' });
+    await expect(dialog, '글쓰기 시트가 열리지 않았다(로그인·본인인증 게이트?)').toBeVisible({ timeout: 10_000 });
     const title = dialog.locator('input[placeholder="제목을 입력하세요"]');
     await title.fill('끌어내리기 회귀 검증');
 
