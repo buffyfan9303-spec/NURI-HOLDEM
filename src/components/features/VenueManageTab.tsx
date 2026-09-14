@@ -1043,7 +1043,9 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
                     ⚠ 루트 폰트 17px 라 8rem = 136px 다 — 6rem(102px)으로 줄여 칩을 좁힌다.
                     opacity-80 도 라이트에서 4.01 이라 경계값이었다 → opacity 를 빼고 토큰 계열로 둔다. */}
                 {g.title && <span className="max-w-[6rem] truncate font-semibold">· {g.title}</span>}
-                {g.closed && <span className="text-2xs opacity-70">마감</span>}
+                {/* 2026-09-14 라이트 실측: opacity-70 이 3.24:1 이었다. '마감'은 그 게임에 더 못 넣는다는
+                    운영 상태라 흐리면 안 된다 — 투명도 대신 의미가 있는 토큰으로. */}
+                {g.closed && <span className="text-2xs font-semibold text-ink-muted">마감</span>}
               </button>
             );
           })}
@@ -1106,9 +1108,11 @@ function GameStepBar({ steps, active, onPick, onHome, progress }: {
             onClick={() => onPick(st.id)} className={chip(on)}>
             {/* 완료 표시는 **번호 자리를 대신한다** — 칸을 넓히지 않고 상태를 얹는다(옛 숫자 스트립의 ✓ 승계). */}
             <span className="relative inline-flex items-center gap-px">
+              {/* ⚠ 2026-09-14 라이트 실측: 단계 번호가 `text-ink-muted/70` 이라 2.76:1 이었다(AA 4.5 미달).
+                  '지금 몇 번째인가'를 말하는 정보라 흐릴 이유가 없다 — 투명도를 빼고 토큰 그대로 둔다. */}
               {progress?.[st.id]?.done
                 ? <Icon name="check" size={12} className="shrink-0 text-emerald-400" />
-                : <span className={on ? undefined : 'text-ink-muted/70'}>{i + 1}.</span>}
+                : <span className={on ? undefined : 'text-ink-muted'}>{i + 1}.</span>}
               {st.label}
             </span>
           </button>
