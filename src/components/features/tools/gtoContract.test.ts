@@ -1,7 +1,7 @@
 // GTO 탭 계약 — 정보 구조 · 출처 표시 · 과장 금지 (2026-09-11 오너 지시)
 //
 // 잠그는 것
-//  ① 실사용 흐름 5갈래 IA 가 유지되고, 모든 도구가 정확히 한 갈래에 속한다.
+//  ① 실사용 흐름 4갈래 IA(2026-09-14 tourney → rules 합병)가 유지되고, 모든 도구가 정확히 한 갈래에 속한다.
 //  ② `#tool=` 딥링크 키가 하나도 사라지지 않는다(공유 링크·검색 결과 하위호환).
 //  ③ 실제 solver 데이터가 없는데 'solver' 배지를 붙이지 않는다.
 //  ④ 화면 문구에 'GTO 정답 · 최선의 선택 · 실계산 · EV 손실' 같은 근거 없는 정밀함이 없다.
@@ -24,19 +24,20 @@ const LEGACY_KEYS = [
   'chip', 'sim', 'blindgen', 'payout', 'endtime',
 ];
 
-describe('GTO 탭 — 실사용 흐름 5갈래 IA', () => {
+describe('GTO 탭 — 실사용 흐름 4갈래 IA', () => {
   it('도구 레지스트리가 비어 있지 않다', () => {
     expect(entries.length).toBeGreaterThanOrEqual(28);
   });
 
   it('모든 도구가 정의된 갈래 중 하나에 속한다', () => {
-    const allowed = new Set(['explore', 'train', 'review', 'tourney', 'rules', 'ops', 'money']);
+    // 2026-09-14 오너 결정으로 tourney 는 rules 에 합쳐졌다 — 다시 생기면 그건 회귀다.
+    const allowed = new Set(['explore', 'train', 'review', 'rules', 'ops', 'money']);
     const bad = entries.filter((e) => !allowed.has(e.cat));
     expect(bad, `알 수 없는 갈래: ${JSON.stringify(bad)}`).toEqual([]);
   });
 
-  it('다섯 갈래가 전부 채워져 있다 — 빈 섹션을 화면에 만들지 않는다', () => {
-    for (const cat of ['explore', 'train', 'review', 'tourney', 'rules']) {
+  it('네 갈래가 전부 채워져 있다 — 빈 섹션을 화면에 만들지 않는다', () => {
+    for (const cat of ['explore', 'train', 'review', 'rules']) {
       expect(entries.filter((e) => e.cat === cat).length, `${cat} 갈래가 비었다`).toBeGreaterThan(0);
     }
   });
@@ -53,11 +54,14 @@ describe('GTO 탭 — 실사용 흐름 5갈래 IA', () => {
     expect(catOf('pot')).toBe('review');
     expect(catOf('spr')).toBe('review');
     expect(catOf('combo')).toBe('review');
-    expect(catOf('icm')).toBe('tourney');        // 토너먼트 랩
-    expect(catOf('deal')).toBe('tourney');
-    expect(catOf('mzone')).toBe('tourney');
-    expect(catOf('tda')).toBe('rules');          // 규칙·수학
-    expect(catOf('mdf')).toBe('rules');
+    expect(catOf('mdf')).toBe('review');         // 포커 수학(MDF·EV)도 핸드 리뷰로(2026-09-14)
+    expect(catOf('ev')).toBe('review');
+    expect(catOf('tda')).toBe('rules');          // 규칙 · 대회 — TDA 가 첫 갈래의 첫 도구
+    expect(catOf('glossary')).toBe('rules');
+    expect(catOf('icm')).toBe('rules');          // 종전 토너먼트 랩 → 규칙 · 대회
+    expect(catOf('deal')).toBe('rules');
+    expect(catOf('mzone')).toBe('rules');
+    expect(entries[0]?.key, 'TDA 가 도구 목록 첫 항목이어야 한다(오너 지시 "TDA 를 위로")').toBe('tda');
   });
 
   it('뱅크롤·분산은 GTO 카탈로그에서 빠져 캘린더로 이관됐다', () => {
@@ -74,6 +78,24 @@ describe('GTO 탭 — 실사용 흐름 5갈래 IA', () => {
     expect(TOOLS_PANEL).toContain('!HIDDEN_SET.has(t.key) && (t.name');            // 검색
     expect(TOOLS_PANEL).not.toContain("open('drill')");                            // 상단 카드 진입 없음
     expect(entries.some((e) => e.key === 'drill'), '#tool=drill 딥링크가 죽었다').toBe(true);
+  });
+
+  it("'자주 쓰는 도구' 4개가 즐겨찾기 아래·카탈로그 위에 있고, '전체' 카탈로그에서는 빠진다(2026-09-14 오너 지시)", () => {
+    expect(TOOLS_PANEL).toContain("export const FEATURED_KEYS = ['spot', 'range', 'pushfold', 'gto'] as const");
+    for (const k of ['spot', 'range', 'pushfold', 'gto']) expect(entries.some((e) => e.key === k), `${k} 가 TOOLS 에 없다`).toBe(true);
+    // 전체 보기에서만 위로 빼고 카탈로그에서 뺀다 — 갈래·검색 중에는 제 자리로
+    expect(TOOLS_PANEL).toContain("!(lane === 'all' && FEATURED_SET.has(t.key))");
+    expect(TOOLS_PANEL).toContain("{!hits && lane === 'all' && (");
+    expect(TOOLS_PANEL).toContain('data-testid="tools-featured"');
+    // 레인지 차트 대표 카드는 2026-09-14 오너 결정으로 뺐다 — 자주 쓰는 도구의 range 가 대신한다(되살리면 두 번 보인다)
+    expect(TOOLS_PANEL).not.toContain("open('range')");
+    // 순서: 즐겨찾기 → 자주 쓰는 도구 → 카탈로그(lanepanel)
+    const fav = TOOLS_PANEL.indexOf('즐겨찾기 — 레인과 무관하게');
+    const feat = TOOLS_PANEL.indexOf('data-testid="tools-featured"');
+    const panel = TOOLS_PANEL.indexOf('data-tools-lanepanel=""');
+    expect(fav).toBeGreaterThan(0);
+    expect(feat).toBeGreaterThan(fav);
+    expect(panel).toBeGreaterThan(feat);
   });
 
   it('매장 운영 5종은 그대로 내 매장 쪽이다', () => {
@@ -163,7 +185,7 @@ describe('프리플랍 전략의 단일 소스', () => {
 // ── NURI SPOT (2026-09-11 오너 지시) ─────────────────────────────────────────
 // 잠그는 것
 //  ① 대표 카드가 GTO 홈 **카탈로그 위**에 있다 — 첫 화면에서 스팟·차트·트레이너 셋이 함께 보인다
-//  ② 레인은 여전히 5갈래다 — 6번째를 만들면 e2e 의 '섹션 5개' 계약이 깨진다
+//  ② 레인은 4갈래다 — 스팟을 위해 갈래를 늘리면 e2e 의 '섹션 4개' 계약이 깨진다
 //  ③ 무거운 분석 화면은 lazy — 열지 않은 사용자의 첫 화면 예산을 먹지 않는다
 //  ④ 기존 도구(gto·replay)는 그대로 살아 있다 — 통합한다고 지우지 않는다
 //  ⑤ 어디에도 '솔버 기준' 을 자칭하지 않는다 — 검증된 솔버 데이터가 이 저장소에 없다
@@ -179,8 +201,8 @@ describe('NURI SPOT — GTO 홈 통합', () => {
   it('레인은 5갈래 그대로다 — NURI SPOT 은 6번째 레인이 아니다', () => {
     // ⚠ LANES 는 라벨을 세로로 맞추려고 공백을 넣어 두었다 — 공백을 허용하지 않으면 절반만 잡힌다.
     const lanes = [...TOOLS_PANEL.matchAll(/\{ id: '([a-z]+)',\s+label: '/g)].map((m) => m[1]);
-    // 2026-09-14 오너 지시로 '규칙 · 수학'(TDA)이 맨 앞. 5갈래·id 는 그대로.
-    expect(lanes).toEqual(['rules', 'explore', 'train', 'review', 'tourney']);
+    // 2026-09-14 오너 지시로 '규칙 · 대회'(TDA)가 맨 앞이고, 같은 날 "분류를 합쳐서 한 줄로" 로 tourney 가 rules 에 합쳐져 4갈래다.
+    expect(lanes).toEqual(['rules', 'explore', 'train', 'review']);
   });
 
   it('대표 카드가 검색창보다 위에 있다 — 첫 화면에서 스팟이 먼저 읽힌다', () => {

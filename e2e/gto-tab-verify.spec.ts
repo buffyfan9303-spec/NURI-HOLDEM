@@ -3,7 +3,7 @@
 // 계약 테스트(src/components/features/tools/gtoContract.test.ts)는 소스를 읽어 IA·문구를 잠근다.
 // 그것만으로는 "빌드에 들어갔지만 화면에는 안 뜬다" 를 못 잡는다 — 실제로 한 번 그런 상태였다.
 // 이 스펙은 프로덕션 번들을 브라우저에 띄워 다음을 확인한다:
-//   ① 5갈래 흐름이 칩·소제목으로 서고, 각 갈래가 자기 도구만 보여준다
+//   ① 4갈래 흐름이 칩·소제목으로 서고, 각 갈래가 자기 도구만 보여준다
 //   ② #tool= 딥링크가 살아 있다(공유 링크 하위호환)
 //   ③ 전략 결과 옆 **출처 배지**가 눈에 보인다 — solver 아님을 스크롤 없이 읽을 수 있다
 //   ④ 무거운 도구 번들은 열기 전에는 안 받는다(lazy)
@@ -43,22 +43,39 @@ async function openTools(page: Page, hash = '') {
   await expect(page.locator('[data-tools-lanebar]')).toBeVisible({ timeout: 20_000 });
 }
 
-test.describe('GTO 탭 — 5갈래 흐름이 화면에 선다', () => {
+test.describe('GTO 탭 — 4갈래 흐름이 화면에 선다', () => {
   test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 375, height: 812 }); });
 
-  test('🔴 레인 칩 6개(전체 + 5갈래)가 서고, 갈래를 고르면 그 갈래만 남는다', async ({ page }) => {
+  // 2026-09-14 오너 결정 "분류를 합쳐서 한 줄로": 토너먼트 랩이 규칙 · 대회에 합쳐져 칩 5개(전체 + 4갈래)다.
+  test('🔴 레인 칩 5개(전체 + 4갈래)가 서고, 갈래를 고르면 그 갈래만 남는다', async ({ page }) => {
     await openTools(page);
     const bar = page.locator('[data-tools-lanebar]');
-    for (const label of ['전체', '전략 탐색', '트레이너', '핸드 리뷰', '토너먼트 랩', '규칙 · 수학']) {
+    for (const label of ['전체', '규칙 · 대회', '전략 탐색', '트레이너', '핸드 리뷰']) {
       await expect(bar.getByRole('button', { name: label, exact: true }), `레인 칩 '${label}' 이 없다`).toBeVisible();
     }
-    // '전체' 에서는 5개 섹션이 전부 보인다 — 빈 섹션을 만들지 않는다
+    await expect(bar.getByRole('button'), '칩 수가 다르다 — 갈래가 늘거나 줄었다').toHaveCount(5);
+    // 360px 에서도 칩이 **한 줄**이다 — 합친 이유가 이것이다(두 줄이면 다시 고아 줄바꿈이 난다).
+    // 375 에서는 합치기만으로도 한 줄이라 검사가 안 울린다 — 실측(2026-09-14): 360 바 326px vs 칩 px-2.5 337.9 / px-2 316.6.
+    await page.setViewportSize({ width: 360, height: 812 });
+    const tops = await bar.getByRole('button').evaluateAll((els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().top)))]);
+    expect(tops, '레인 칩이 360px 에서 두 줄로 접혔다').toHaveLength(1);
+    await page.setViewportSize({ width: 375, height: 812 });
+    // '전체' 에서는 4개 섹션이 전부 보인다 — 빈 섹션을 만들지 않는다
     const panel = page.locator('[data-tools-lanepanel]');
-    await expect(panel.locator('section')).toHaveCount(5);
+    await expect(panel.locator('section')).toHaveCount(4);
 
-    // 한 갈래를 고르면 섹션이 하나만 남는다
+    // '자주 쓰는 도구'(오너 지시 2026-09-14) — '전체' 에서 카탈로그 위에 4개, 카탈로그에는 같은 카드가 없다(중복 0)
+    const featured = page.getByTestId('tools-featured');
+    await expect(featured, "'자주 쓰는 도구' 섹션이 없다").toBeVisible();
+    for (const k of ['spot', 'range', 'pushfold', 'gto']) {
+      await expect(featured.locator(`[data-testid="tool-${k}"]`), `tool-${k} 가 자주 쓰는 도구에 없다`).toBeVisible();
+      await expect(page.locator(`[data-testid="tool-${k}"]`), `tool-${k} 가 두 번 그려졌다`).toHaveCount(1);
+    }
+
+    // 한 갈래를 고르면 섹션이 하나만 남고, '자주 쓰는 도구'는 사라지며 그 도구는 제 갈래로 돌아온다
     await bar.getByRole('button', { name: '전략 탐색', exact: true }).click();
     await expect(panel.locator('section')).toHaveCount(1);
+    await expect(featured, '갈래를 골랐는데 자주 쓰는 도구가 위에 남아 있다').toHaveCount(0);
     // 전략 탐색 갈래의 도구가 실제로 그 안에 있다
     for (const k of ['range', 'pushfold', 'aggro', 'rvr']) {
       await expect(panel.locator(`[data-testid="tool-${k}"]`), `tool-${k} 가 전략 탐색에 없다`).toBeVisible();
@@ -153,11 +170,41 @@ test.describe('GTO — 무거운 데이터는 첫 화면 임계 경로에 없다
     });
     await stubLogin(page);
     await stabilizeBackstack(page);
+    // 마운트 마커가 DOM 에 **들어간 순간**을 페이지 시계(performance.now)로 찍는다.
+    // ⚠ 2026-09-14 실측: 종전에는 waitForSelector 가 마커를 **발견한** 시점까지의 요청을 임계 경로로 셌는데,
+    //   waitForSelector 는 폴링이라 마커가 이미 떠 있어도 다음 폴까지 수십 ms 가 비고, 그 사이 idle 예열
+    //   (App.tsx warm — 일정 도착 뒤 requestIdleCallback)이 먼저 시작하면 정상 동작이 회귀로 잡혔다
+    //   (HEAD 기준선 빌드에서도 20회 중 3회 실패 — 앱이 아니라 측정의 경쟁이었다). 리소스 타이밍의 startTime 을
+    //   마커 삽입 시각과 비교하면 경쟁이 없다. 계약은 그대로다: 첫 화면이 서기 **전에** GTO 청크를 받지 않는다.
+    await page.addInitScript(() => {
+      const w = window as unknown as { __firstScreenAt?: number; __preloadAtMark?: string[] };
+      const mark = () => {
+        if (!document.querySelector('button[aria-label^="알림"]')) return false;
+        w.__firstScreenAt = performance.now();
+        // ⚠ modulepreload 는 마커 **시점**의 것만 센다 — Vite 의 동적 import 헬퍼가 idle 예열 때 의존 청크의
+        //   modulepreload 링크를 나중에 DOM 에 넣으므로, 평가 시점에 읽으면 정상 예열이 회귀로 잡힌다.
+        w.__preloadAtMark = [...document.querySelectorAll('link[rel="modulepreload"]')].map((l) => (l as HTMLLinkElement).href);
+        return true;
+      };
+      // ⚠ init script 시점엔 <html> 이 아직 없을 수 있다(documentElement=null) — Document 노드를 관찰한다.
+      if (!mark()) new MutationObserver((_, o) => { if (mark()) o.disconnect(); }).observe(document, { childList: true, subtree: true });
+    });
     await page.goto('/');
-    // 마운트 마커가 뜨는 순간 = 첫 화면이 인터랙티브해진 시점. 여기까지의 요청만 임계 경로다.
     await page.waitForSelector('button[aria-label^="알림"]', { timeout: 20_000 });
-    const critical = chunks.filter((c) => /ToolsPanel|GtoDeep|useDeepGto/i.test(c));
-    expect(critical, `첫 화면 임계 경로에 GTO 청크가 실렸다: ${critical.join(', ')}`).toEqual([]);
+    const critical = await page.evaluate(() => {
+      const w = window as unknown as { __firstScreenAt?: number; __preloadAtMark?: string[] };
+      const t0 = w.__firstScreenAt ?? 0;
+      const gto = /ToolsPanel|GtoDeep|useDeepGto/i;
+      // ① 첫 화면 시점의 정적 그래프·프리로드에 실리지 않았다(임계 경로의 본체)
+      const preloaded = (w.__preloadAtMark ?? []).map((h) => h.split('/').pop() ?? '').filter((n) => gto.test(n));
+      // ② 마커가 DOM 에 들어가기 전에 시작된 GTO 청크 요청이 없다
+      const early = performance.getEntriesByType('resource')
+        .filter((e) => gto.test(e.name) && e.startTime < t0).map((e) => e.name.split('/').pop() ?? e.name);
+      return { t0, preloaded, early };
+    });
+    expect(critical.t0, '첫 화면 마커 시각을 못 찍었다').toBeGreaterThan(0);
+    expect(critical.preloaded, `GTO 청크가 modulepreload 에 실렸다: ${critical.preloaded.join(', ')}`).toEqual([]);
+    expect(critical.early, `첫 화면이 서기 전에 GTO 청크를 받았다: ${critical.early.join(', ')}`).toEqual([]);
 
     // idle 예열이 실제로 돈다(도구 탭을 눌렀을 때 스피너를 안 보게 하는 장치) — 죽어 있으면 그것도 회귀다
     await expect.poll(() => chunks.some((c) => /ToolsPanel/i.test(c)), {

@@ -67,13 +67,14 @@ test.describe('GTO 홈 — NURI SPOT 이 대표로 선다', () => {
     await expect(page.locator('[data-testid="tool-spot"]'), '카탈로그에도 스팟이 있어야 한다').toBeVisible();
   });
 
-  test('🔴 레인은 여전히 5갈래 · 칩 6개 — 기존 계약을 깨지 않았다', async ({ page }) => {
+  test('🔴 레인은 4갈래 · 칩 5개 — 기존 계약을 깨지 않았다(2026-09-14 토너먼트 랩 → 규칙 · 대회 합병)', async ({ page }) => {
     await openTools(page);
     const bar = page.locator('[data-tools-lanebar]');
-    for (const label of ['전체', '전략 탐색', '트레이너', '핸드 리뷰', '토너먼트 랩', '규칙 · 수학']) {
+    for (const label of ['전체', '규칙 · 대회', '전략 탐색', '트레이너', '핸드 리뷰']) {
       await expect(bar.getByRole('button', { name: label, exact: true })).toBeVisible();
     }
-    await expect(page.locator('[data-tools-lanepanel] section')).toHaveCount(5);
+    await expect(bar.getByRole('button')).toHaveCount(5);
+    await expect(page.locator('[data-tools-lanepanel] section')).toHaveCount(4);
   });
 
   test('🔴 기존 핸드 분석·리플레이 딥링크가 살아 있다', async ({ page }) => {

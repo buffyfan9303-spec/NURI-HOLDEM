@@ -26,7 +26,6 @@ import GlossaryPanel from './tools/GlossaryPanel';
 import DealCalc from './tools/DealCalc';
 import DailyDrill from './tools/DailyDrill';
 import WrongNote, { type PushJump, type RangeJump } from './tools/WrongNote';
-import { RANGE_SCENARIOS } from '../../lib/ranges.data';
 
 // GTO 패널·핸드 리플레이어는 에퀴티 엔진을 포함해 무거우므로 지연 로드
 import { clearSnap, readSnap } from '../../lib/snapshot';
@@ -57,17 +56,20 @@ function spotInitFromSnapshots(): { spot?: Partial<SpotReview> } | undefined {
 }
 
 type ToolKey = 'spot' | 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'wrongnote' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal' | 'tda';
-/** 실사용 흐름 5갈래 IA (2026-09-11 오너 지시).
+/** 실사용 흐름 4갈래 IA (2026-09-11 오너 지시 5갈래 → 2026-09-14 4갈래).
  *  종전 4레인(차트/트레이닝/분석/계산기)은 '도구의 종류'로 나눈 것이라, 하나의 목적(예: 한 판 복기)을
  *  이루려면 레인 세 개를 오가야 했다. 이제 **무엇을 하러 왔는가**로 가른다:
  *    explore  전략 탐색   — 스팟을 정하고 레인지·빈도를 본다
  *    train    트레이너     — 풀고 틀리고 복습한다
- *    review   핸드 리뷰    — 지난 판을 되짚는다(에퀴티·아웃츠·팟오즈·SPR·콤보가 여기 모인다)
- *    tourney  토너먼트 랩  — ICM·딜·M존
- *    rules    규칙·수학    — TDA 규칙과 포커 수학 보조
+ *    review   핸드 리뷰    — 지난 판을 되짚는다(에퀴티·아웃츠·팟오즈·SPR·콤보·MDF·EV — 포커 수학이 여기 모인다)
+ *    rules    규칙 · 대회  — TDA 규칙·용어사전 + 대회 도구(ICM·딜·M존)
+ *  2026-09-14 오너 결정 "분류를 합쳐서 한 줄로": 종전 tourney(토너먼트 랩)를 rules 에 합쳤다(id 는 e2e 가 data-lane="rules" 로
+ *  짚으므로 rules 유지). 규칙·수학의 '수학'(MDF·EV)은 review 로 옮겼다 — 합친 갈래 이름이 내용과 맞아야 해서다.
+ *  왜 5→4 인가: 칩 6개 폭 합이 420.7px 인데 360px 바 가용폭은 326px 이라 flex-wrap 에서 항상 두 줄이었다.
+ *  가로 스크롤·nowrap·고정 그리드는 접근성 게이트(가로 잘림 0 · 200% 확대)에 걸려 못 쓴다 — 총폭을 줄이는 것만 남는다.
  *  ops(매장 운영 5종)·money(뱅크롤 2종)는 GTO 탭 밖으로 이관됐다 — 카탈로그에서만 숨기고
  *  TOOLS/renderTool 에는 남겨 #tool= 딥링크·공유 하위호환을 지킨다(ops 이관 때와 같은 조리법). */
-type ToolCat = 'explore' | 'train' | 'review' | 'tourney' | 'rules' | 'ops' | 'money';
+type ToolCat = 'explore' | 'train' | 'review' | 'rules' | 'ops' | 'money';
 
 /** desc = 카드 한 줄(≤13자 완결형 명사구, 2026-09-03 개고) · keywords = 개고 전 설명(검색 재현율 보존용, 화면엔 안 그림)
  *  icon = lucide 팩 이름(2026-09-03 오너 "아이콘팩에서 최대한 잘 맞는 걸로" — 손그림 SVG 26개를 Icon 아톰으로 통일).
@@ -87,8 +89,8 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   { key: 'glossary', cat: 'rules', name: '홀덤 용어사전', desc: '74개 용어 검색과 뜻풀이', keywords: '용어 74개 · 한글 설명·검색', icon: 'book-a' },
   // ── 분석 — 핸드·레인지 에퀴티 ──
   // NURI SPOT — 카드·포지션·스택·액션을 **하나의 구조화된 스팟**으로 받아 분석·저장·토론까지 잇는다.
-  //   ⚠ 6번째 레인을 만들지 않고 'review'(핸드 리뷰)에 넣는다 — 레인이 6개가 되면
-  //     e2e/gto-tab-verify.spec.ts 의 '섹션 정확히 5개'·'칩 6개' 계약이 깨진다.
+  //   ⚠ 새 레인을 만들지 않고 'review'(핸드 리뷰)에 넣는다 — 레인이 늘면
+  //     e2e/gto-tab-verify.spec.ts 의 '섹션 정확히 4개'·'칩 5개' 계약이 깨진다.
   //     대신 카탈로그 위에 대표 카드(SpotHeroCard)를 따로 세워 우선순위를 준다.
   { key: 'spot', cat: 'review', name: '누리 스팟', desc: '핸드 분석 · 리플레이 · 토론', keywords: 'NURI SPOT 스팟 복기 구조화 분석 저장 토론 공유 액션 타임라인', icon: 'spade' },
   { key: 'replay', cat: 'review', name: '핸드 리플레이어', desc: '지난 판 복기와 승률 흐름', keywords: '그 핸드 복기 · 승률 추이·아웃', icon: 'clapperboard' },
@@ -97,13 +99,13 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   // ── 계산기 — 수치 판단 ──
   { key: 'pot', cat: 'review', name: '팟 오즈 계산기', desc: '콜에 필요한 최소 승률', keywords: '콜에 필요한 승률 계산', icon: 'percent' },
   { key: 'outs', cat: 'review', name: '아웃츠 / 확률', desc: '카드만 넣으면 완성될 확률', keywords: '카드만 넣으면 아웃 자동 계산', icon: 'dice' },
-  { key: 'mdf', cat: 'rules', name: 'MDF · 블러프 계산기', desc: '벳 크기별 최소 방어 비율', keywords: '수비 빈도·블러프 비율', icon: 'shield-check' },
-  { key: 'icm', cat: 'tourney', name: 'ICM 계산기', desc: '지금 내 칩의 상금 가치', keywords: '토너먼트 기대 상금', icon: 'trophy' },
-  { key: 'deal', cat: 'tourney', name: '딜 계산기', desc: '남은 사람끼리 상금 분배', keywords: 'ICM 딜 vs 칩찹 분배 비교', icon: 'handshake' },
+  { key: 'mdf', cat: 'review', name: 'MDF · 블러프 계산기', desc: '벳 크기별 최소 방어 비율', keywords: '수비 빈도·블러프 비율', icon: 'shield-check' },
+  { key: 'icm', cat: 'rules', name: 'ICM 계산기', desc: '지금 내 칩의 상금 가치', keywords: '토너먼트 기대 상금', icon: 'trophy' },
+  { key: 'deal', cat: 'rules', name: '딜 계산기', desc: '남은 사람끼리 상금 분배', keywords: 'ICM 딜 vs 칩찹 분배 비교', icon: 'handshake' },
   { key: 'spr', cat: 'review', name: 'SPR 계산기', desc: '팟 대비 내 칩 비율', keywords: '스택 대 팟 비율', icon: 'scale' },
-  { key: 'ev', cat: 'rules', name: 'EV 계산기', desc: '이 선택의 장기 기대값', keywords: '기대값 손익 판단', icon: 'sigma' },
+  { key: 'ev', cat: 'review', name: 'EV 계산기', desc: '이 선택의 장기 기대값', keywords: '기대값 손익 판단', icon: 'sigma' },
   { key: 'combo', cat: 'review', name: '콤보 계산기', desc: '그 패가 나올 경우의 수', keywords: '핸드·레인지 콤보 수', icon: 'layers' },
-  { key: 'mzone', cat: 'tourney', name: 'M존 계산기', desc: '내 칩으로 버틸 바퀴 수', keywords: '토너 생존 압박 지수', icon: 'gauge' },
+  { key: 'mzone', cat: 'rules', name: 'M존 계산기', desc: '내 칩으로 버틸 바퀴 수', keywords: '토너 생존 압박 지수', icon: 'gauge' },
   { key: 'bankroll', cat: 'money', name: '뱅크롤 관리', desc: '게임별 권장 참가비 배수', keywords: '바인 대비 자금 권장선', icon: 'piggy-bank' },
   { key: 'variance', cat: 'money', name: '분산 시뮬', desc: '운 나쁠 때 잃을 폭 예측', keywords: 'ROI·표본 → 파산 확률', icon: 'trending-up-down' },
   // ── 매장 운영 ──
@@ -118,14 +120,15 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
  *  §7 ⑥b: '매장 운영' 레인은 GTO 탭에서 빠져 내 매장(StoreToolsPanel)으로 이관 —
  *  카탈로그에서만 숨기고 TOOLS/renderTool 에는 남겨 #tool= 딥링크·공유 하위호환을 지킨다.
  *  icon = 섹션 소제목 앞 글리프(즐겨찾기 헤더의 star-fill 과 같은 문법) — 도구 아이콘과 겹치지 않는 이름. */
-// 순서(2026-09-14 오너 지시): '규칙 · 수학'(TDA)이 맨 앞 — 마지막에 있으면 좁은 폭에서 혼자 줄바꿈되던 항목이기도 하다.
-// id·아이콘은 그대로다(gtoContract 갈래 계약 · icons 게이트).
+// 순서(2026-09-14 오너 지시): '규칙 · 대회'(TDA)가 맨 앞. id·아이콘은 그대로다(gtoContract 갈래 계약 · icons 게이트).
+// 4갈래(2026-09-14 오너 결정 "분류를 합쳐서 한 줄로"). 실측(360px, 칩 px-2): 전체 39.3 + 규칙 · 대회 68.2 + 전략 탐색 62.2
+// + 트레이너 59.4 + 핸드 리뷰 62.2 + gap 25.5 = 316.6 ≤ 326 → 한 줄. 라벨은 하나도 줄이지 않았다(px-2.5→px-2 로 4.25px×5 확보).
+// '규칙 · 대회': TDA 규칙·용어사전 + ICM·딜·M존. '토너먼트'(문자폭 63.6)를 쓰면 336 으로 넘친다 — 앱 전반이 '대회'(대회 일정·대회 후기)를 쓴다.
 const LANES: { id: ToolCat; label: string; desc: string; icon: IconName }[] = [
-  { id: 'rules',   label: '규칙 · 수학', desc: 'TDA 규칙과 포커 수학 보조', icon: 'gavel' },
+  { id: 'rules',   label: '규칙 · 대회', desc: 'TDA 규칙 · 용어사전 · ICM · 딜 · M존', icon: 'gavel' },
   { id: 'explore', label: '전략 탐색', desc: '스팟을 정하고 레인지·빈도를 본다', icon: 'table' },
   { id: 'train',   label: '트레이너',   desc: '풀고 · 틀리고 · 오답 노트로 복습', icon: 'graduation-cap' },
-  { id: 'review',  label: '핸드 리뷰',  desc: '지난 판 되짚기 — 에퀴티·아웃츠·팟오즈·SPR', icon: 'microscope' },
-  { id: 'tourney', label: '토너먼트 랩', desc: 'ICM · 딜 · M존', icon: 'trophy' },
+  { id: 'review',  label: '핸드 리뷰',  desc: '지난 판 되짚기 — 에퀴티·아웃츠·팟오즈·SPR·MDF·EV', icon: 'microscope' },
 ];
 // eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유(§7 ⑥b)
 export const STORE_TOOL_KEYS = ['chip', 'sim', 'blindgen', 'payout', 'endtime'] as const;
@@ -137,6 +140,13 @@ const STORE_SET = new Set<ToolKey>([...STORE_TOOL_KEYS, ...CALENDAR_TOOL_KEYS]);
 /** GTO 탭 카탈로그·검색·즐겨찾기에서 숨기는 도구 = 이관 도구 + '오늘의 드릴'(오너 지시 2026-09-14: GTO 탭에서 삭제).
  *  같은 조리법 — TOOLS/renderTool 에는 남겨 #tool=drill 딥링크와 gtoContract LEGACY_KEYS 계약을 지킨다. */
 const HIDDEN_SET = new Set<ToolKey>([...STORE_SET, 'drill']);
+/** '자주 쓰는 도구' 4개(오너 지시 2026-09-14: "스팟, 차트류의 GTO 등 잘 만들어 둔 좋은 툴 4개를 상단으로") — 순서가 곧 진열 순서.
+ *  '전체' 보기에서만 위 섹션으로 빼고 카탈로그에서는 뺀다(같은 카드를 두 번 그리지 않는다). 갈래를 고르거나 검색하면 이 섹션은
+ *  사라지고 그 갈래·검색 결과에 제 자리로 돌아온다 — "필터를 걸었는데 관계없는 도구가 위에 떠 있는" 상태를 만들지 않기 위해서다.
+ *  TOOLS/renderTool/딥링크는 그대로다(이관·드릴과 같은 조리법). */
+// eslint-disable-next-line react-refresh/only-export-components -- 계약 테스트가 진열 순서를 읽는다
+export const FEATURED_KEYS = ['spot', 'range', 'pushfold', 'gto'] as const satisfies readonly ToolKey[];
+const FEATURED_SET = new Set<ToolKey>(FEATURED_KEYS);
 /** 레인 칩 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. 화면에 놓인 차례 그대로. */
 const LANE_ORDER = ['all', ...LANES.map((l) => l.id)] as (ToolCat | 'all')[];
 
@@ -360,49 +370,8 @@ export default function ToolsPanel() {
 
   return (
     <div className="hero-aurora space-y-3">
-      {/* 프리플랍 레인지 차트 — GTO 탭 편입(오너 지시 2026-08-30).
-          "차트가 GTO 탭에 없다"가 아니라 **찾기 어렵다**가 실제 문제였다(이 탭이 곧 GTO 탭이고
-          차트는 학습 레인 카드 하나로만 들어갈 수 있었다). 그래서 전용 뷰를 새로 만들지 않는다 —
-          같은 169셀 렌더러가 두 벌이 되면 그게 곧 유지보수 분기다. 대신 탭 상단에 상시 진입점을 둔다.
-          2026-09-03 오너 지시: 상황 바로가기 칩 5개 제거 — 그룹 선택은 차트 안(RangeGuide 의 칩, data-testid=range-guide)에
-          그대로 있어 기능 소실 0. 칩이 빠지면서 section+button 이중 구조를 **버튼 하나**로 접었다(드릴 카드와 같은 문법 —
-          패딩 띠까지 눌리고 전역 프레스 규칙을 탄다). 제목 sm·타일 h-9·설명 xs 로 아래 ToolCard(xs·h-8·2xs)보다 한 단 크게 —
-          글로우 말고도 '카탈로그 카드가 아니라 진입점' 으로 읽히게. 차트 레인 카드(tool-range)와 #tool=range 딥링크는 그대로.
-          v6.5 글로우: GTO 탭의 주인공(탭당 1곳 규칙, CLAUDE.md). ⚠ button 안에는 phrasing content(span)만. */}
-      <button type="button" onClick={() => open('range')}
-        aria-label={`프리플랍 레인지 차트 · 스팟 ${RANGE_SCENARIOS.length}개. 열기`}
-        className="card-aura ring-aura ring-aura-glow flex w-full flex-wrap items-center gap-x-2.5 gap-y-2 rounded-aura border px-3.5 py-3 text-left">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input tile-grad">
-          <Icon name={TOOLS.find((t) => t.key === 'range')!.icon} size={18} strokeWidth={1.8} aria-hidden />
-        </span>
-        {/* ⚠ §7 P0-A(2026-09-12 재발·실측): 이 행이 `flex`(비-wrap) + 글 칸 `flex-1`(basis 0) 이었다.
-            basis 0 은 **줄바꿈 계산에 0 으로 잡혀** 오른쪽 `shrink-0` CTA 를 절대 아래로 못 내린다 —
-            390px·root 34px 에서 글 칸이 clientWidth 19 / scrollWidth 119 로 눌리고 설명이
-            **한 글자씩 세로로** 쌓여 카드가 1339px 이 됐다(도구 목록이 fold 밖으로 밀렸다).
-            → ① 행에 `flex-wrap` ② 글 칸에 **실질 basis(7rem)** 를 줘 줄바꿈 계산에 실제 요구폭이 잡히게 한다.
-              7rem 인 이유(실측으로 고른 값이다):
-                · 100%(root 17px) = 119px — 가장 좁은 320px 에서도 글 칸 여유가 132px 이라 **줄바꿈이 일어나지 않는다**(현행 레이아웃 불변).
-                · 200%(root 34px) = 238px — 아이콘(76.5)+간격(21.25) 뒤 남는 198.75px 보다 커서 **글 칸이 통째로 아랫줄로** 내려가고
-                  설명이 카드 폭 전부를 쓴다(6줄 → 3줄). CTA 는 그 아래 줄.
-            글자 크기는 한 곳도 건드리지 않았다(§7: 중요한 정보를 작게 줄여 박스에 넣지 마라). */}
-        <span className="min-w-0 flex-[1_1_7rem]">
-          {/* 제목은 절대 안 자른다 — 폭이 모자라면 배지가 다음 줄로 내려간다(flex-wrap). */}
-          <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-            <b className="text-sm font-bold text-ink-primary">프리플랍 레인지 차트</b>
-            <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-200">{RANGE_SCENARIOS.length}개 스팟</span>
-          </span>
-          {/* truncate 금지 — 375px 에서 "오픈 · 블라인드 수비 · 3…" 로 잘려 무슨 표인지 사라졌다.
-              ⚠ line-clamp-2 도 뺐다(2026-09-12 실측): 상한을 두면 200% 확대에서 33자 중 앞 14자만 남아
-              **가로 잘림을 세로 잘림으로 옮기는 것**일 뿐이다. 카드 높이는 이 카드 하나만의 문제라
-              (그리드가 아니다) 줄이 늘어도 아래 카드가 밀릴 뿐 다른 카드와 어긋나지 않는다. */}
-          <span className="mt-0.5 block text-xs leading-snug text-ink-muted">오픈 · 블라인드 수비 · 3벳 · vs 3벳 · 포지션으로 좁혀 보는 13×13</span>
-        </span>
-        {/* CTA — chip-aura 알약(index.css '선택형·바로가기 칩의 정본', 방금 걷어낸 칩과 같은 어휘).
-            btn-primary 는 보라 틴트 그림자가 글로우 카드 위에 글로우를 겹쳐(v3 실패 사유) 쓰지 않는다.
-            ml-auto: 아래 줄로 내려갔을 때도 오른쪽 끝에 선다(한 줄일 때의 자리와 같게). */}
-        <span className="chip-aura ml-auto inline-flex h-8 shrink-0 items-center rounded-chip px-2.5 text-2xs font-bold">열기 →</span>
-      </button>
-
+      {/* 프리플랍 레인지 차트 대표 카드(2026-08-30 편입)는 2026-09-14 오너 결정으로 뺐다 — '자주 쓰는 도구'(FEATURED_KEYS 의 range)가
+          그 역할을 대신한다. NURI SPOT 대표 카드는 '탭의 주인공'(2026-09-03 오너 결정)이라 남긴다. */}
       {/* 트레이너 진행 스트립(오늘 N/목표 · 스트릭 · XP · 목표까지 N문제).
           2026-09-14 오너 지시로 이 자리의 '오늘의 드릴' 카드는 뺐다(드릴 화면 자체는 #tool=drill 로 남는다).
           이 지표는 드릴이 아니라 트레이너 기록이라 그대로 둔다 — 없어진 정보 0. */}
@@ -432,10 +401,11 @@ export default function ToolsPanel() {
       </div>
 
       {/* 레인 필터 칩 — 보이는 높이 34px, 탭 타깃 46px(`.tap-y-44::before { inset:-6px 0 }` 로 위아래 6px 확장), aria-pressed 토글.
-          3×2 그리드(2026-09-14). design 실측: 칩 6개 폭 합 420.7px 인데 바 가용폭은 360→326 · 390→356 · 430→396 이라
-          flex-wrap 에서는 어떤 폰 폭에서도 마지막 칩 하나만 혼자 둘째 줄로 떨어졌다(오너 지적). 3+3 으로 고정하면 고아가 없다.
-          한 줄 가로 스크롤은 시도했다가 철회했다 — e2e 접근성 게이트(typography-regression 의 "가로 잘림 0",
-          gto-tab-verify 의 "가로 스크롤 0")가 clientWidth < scrollWidth 를 잘림으로 보고, 200% 확대에서는 어떤 한 줄도 못 지난다.
+          flex-wrap + 칩 5개(2026-09-14 오너 결정 "분류를 합쳐서 한 줄로"). 종전 6개는 폭 합 420.7px 이라 360px 바(326px)에서
+          마지막 칩 하나만 혼자 둘째 줄로 떨어졌다(오너 지적). 갈래를 합치고 px-2 로 줄여 316.6px — 360 부터 한 줄이고
+          320·200% 확대에서는 자연히 두 줄로 접힌다(줄바꿈 능력을 남긴 채 폭만 줄였다).
+          한 줄 가로 스크롤·3×2 고정 그리드는 시도했다가 철회했다 — e2e 접근성 게이트(typography-regression 의 "가로 잘림 0",
+          gto-tab-verify 의 "가로 스크롤 0")가 clientWidth < scrollWidth 를 잘림으로 보고, 고정 셀은 200% 에서 3px 넘쳤다.
           그래서 칩에 whitespace-nowrap 도 두지 않는다 — 320px·200% 에서는 칩 안에서 글자가 접혀야 게이트를 지난다.
           ⚠ gap-y 가 gap-x 보다 큰 이유(2026-09-11 실측): gap-1.5(6.375px)는 위아래 줄의 6px 확장이 서로 겹치는 폭이라
             실효 터치 높이가 39px 로 줄었다. gap-y-3(12.75px) > 6+6 이면 두 줄 모두 46px 을 온전히 가진다. */}
@@ -450,7 +420,7 @@ export default function ToolsPanel() {
               //   게이트가 조용히 꺼진다 — subtab-motion 의 tools-lane 계측이 실제로 그렇게 죽어 있었다.
               <button key={l.id} type="button" aria-pressed={on} data-lane={l.id}
                 onClick={() => { const next = on && l.id !== 'all' ? 'all' : l.id; goSubTab('tools-lane', LANE_ORDER, lane, next, () => setLane(next)); }}
-                className={['tap-y-44 inline-flex h-8 items-center justify-center rounded-badge border px-2.5 text-2xs font-semibold transition-colors',
+                className={['tap-y-44 inline-flex h-8 items-center justify-center rounded-badge border px-2 text-2xs font-semibold transition-colors',
                   on ? 'border-accent-300 bg-accent-300 text-white' : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {l.label}
               </button>
@@ -472,6 +442,20 @@ export default function ToolsPanel() {
         </section>
       )}
 
+      {/* 자주 쓰는 도구 — 즐겨찾기 아래, 카탈로그 위(오너 지시 2026-09-14). '전체' 보기에서만; 갈래·검색 중에는 제 자리로 돌아간다. */}
+      {!hits && lane === 'all' && (
+        <section data-testid="tools-featured" className="space-y-2">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
+            <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
+              <Icon name="trophy" size={13} className="text-accent-300" aria-hidden /> 자주 쓰는 도구
+            </h2>
+            <span className="text-2xs font-semibold tabular-nums text-ink-muted">{FEATURED_KEYS.length}개</span>
+            <span className="min-w-0 text-2xs text-ink-secondary">스팟 · 차트 · GTO 분석 바로가기</span>
+          </div>
+          {grid(FEATURED_KEYS.map((k) => TOOLS.find((t) => t.key === k)!))}
+        </section>
+      )}
+
       {/* 도구 목록 — 레인 전환의 본문(방향성 푸시 대상).
           레인 사이는 space-y-4(17px): 섹션 안(헤더→그리드) 8.5px 의 2배라 밑줄 헤더가 자기 그리드 쪽으로 붙어 레인이 묶음으로 읽힌다
           (space-y-3 은 1.5배라 '계산기 N개' 헤더가 위 레인의 마지막 카드에 붙어 보였다). */}
@@ -481,9 +465,10 @@ export default function ToolsPanel() {
           ? <p className="py-8 text-center text-2xs text-ink-muted">'{q.trim()}' 에 맞는 도구가 없습니다</p>
           : grid(hits)
       ) : (
-        // 5갈래 흐름 — 비접이 소제목 섹션(필터 칩이 보이는 갈래를 고른다)
+        // 4갈래 흐름 — 비접이 소제목 섹션(필터 칩이 보이는 갈래를 고른다)
         LANES.filter((l) => lane === 'all' || lane === l.id).map((l) => {
-          const items = TOOLS.filter((t) => t.cat === l.id && !HIDDEN_SET.has(t.key));
+          // '전체' 에서는 위 '자주 쓰는 도구' 4개를 여기서 뺀다(중복 카드 0). 갈래를 고르면 그 갈래에 제 자리로 돌아온다.
+          const items = TOOLS.filter((t) => t.cat === l.id && !HIDDEN_SET.has(t.key) && !(lane === 'all' && FEATURED_SET.has(t.key)));
           return (
             <section key={l.id} className="space-y-2">
               {/* §7 P0-A: 레인 설명이 `truncate` 라 320px·100% 에서도 172/178,

@@ -27,7 +27,8 @@ describe('ToolsPanel 도구 아이콘', () => {
     const laneBlock = src.slice(src.indexOf('const LANES:'), src.indexOf('export const STORE_TOOL_KEYS'));
     const laneIcons = [...laneBlock.matchAll(/icon: '([a-z0-9-]+)'/g)].map((m) => m[1]);
     const laneCount = (laneBlock.match(/\{ id: '/g) ?? []).length;
-    expect(laneCount, '레인 수가 바뀌었다 — 의도한 것이면 이 숫자를 고쳐라').toBe(5);
+    // 2026-09-14 오너 결정 "분류를 합쳐서 한 줄로": tourney → rules 합병으로 5 → 4.
+    expect(laneCount, '레인 수가 바뀌었다 — 의도한 것이면 이 숫자를 고쳐라').toBe(4);
     expect(laneIcons, '아이콘이 없는 레인이 있다').toHaveLength(laneCount);
     for (const n of [...toolIcons, ...laneIcons]) expect(knownNames.has(n), n).toBe(true);
   });

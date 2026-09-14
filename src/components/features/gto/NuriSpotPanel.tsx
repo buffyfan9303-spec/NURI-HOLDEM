@@ -181,15 +181,14 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
           <h2 className="text-base font-extrabold tracking-tight text-ink-primary">NURI SPOT</h2>
           <p className="truncate text-2xs text-ink-muted">핸드 분석 · 리플레이 · 토론</p>
         </div>
-        {/* 토론 탭은 없앴다(오너 지시 2026-09-11: "스팟 토론은 게시판에서 하게 해야 돼").
-            대신 **가는 길**은 남긴다 — 탭을 지우면서 길까지 지우면 게시판으로 갈 방법이
-            공유 버튼 하나뿐이 되고, 아직 올릴 게 없는 사람은 토론을 구경할 수도 없다. */}
-        <button type="button" onClick={gotoBoard}
-          className="flex h-[44px] shrink-0 items-center gap-0.5 rounded-input px-2 text-2xs font-bold text-accent-200">
-          게시판 토론<Icon name="chevron-right" size={12} aria-hidden />
-        </button>
       </div>
-      <div className="mt-2.5 overflow-x-auto">
+      {/* 내비 행 — 분석 | 내 스팟 | 게시판 토론 › 셋이 같은 행·같은 세로 중심·같은 글자 규격(t-tab).
+          2026-09-14 실측(390px): '게시판 토론'이 소개 행(y 73.6, 11.7px)에, 탭은 아래 행(y 132.8, 12.75px)에 있어
+          "위치가 다르다"(오너 지적)가 났다 — 탭을 오갈 때 좌표 자체는 같았고(분석·내 스팟 모두 동일), 다른 행·다른 규격이 원인.
+          토론 탭은 없앴다(오너 지시 2026-09-11: "스팟 토론은 게시판에서 하게 해야 돼"). 대신 **가는 길**은 남긴다 —
+          같은 행의 형제 버튼이지 세 번째 탭(role=tab·aria-selected·알약)이 아니다. 좁은 폭·200% 에서는 CTA 가 다음 줄로 내려간다
+          (flex-wrap — 가로 스크롤·whitespace-nowrap 은 접근성 게이트에 걸려 쓰지 않는다). */}
+      <div data-testid="spot-primary-nav" className="mt-2 flex flex-wrap items-stretch gap-1.5">
         <SegmentedTabs
           items={[
             { key: 'analyze' as const, label: '분석' },
@@ -198,8 +197,14 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
           value={tab} onChange={onTab} grow
           // ⚠ .tap-y-44 는 **컨테이너**의 ::before 를 넓힐 뿐이라 버튼 자체의 히트 영역은 그대로다
           //   (실측 27px). 자식 버튼에 직접 높이를 준다 — 이 화면의 1급 내비게이션이라 44px 계약 대상이다.
-          className="w-full [&>button]:min-h-[44px]"
+          //   flex-[2_1_10rem]: 줄 배치용 basis 일 뿐 최소 폭이 아니라(200% 에서도 320px 을 밀지 않는다) 남는 폭을 탭이 가져간다.
+          className="min-w-0 flex-[2_1_10rem] [&>button]:min-h-[44px]"
         />
+        <button type="button" onClick={gotoBoard} data-testid="spot-board-link"
+          className="flex min-h-[44px] shrink-0 items-center justify-center gap-1 rounded-input border border-border-subtle bg-surface-high/60 px-2.5 t-tab font-semibold text-accent-200">
+          <span data-testid="spot-board-label">게시판 토론</span>
+          <Icon name="chevron-right" size={12} className="block shrink-0" aria-hidden />
+        </button>
       </div>
     </div>
   );
@@ -208,13 +213,14 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
 /** 골드 스페이드 + 뒤쪽 국소 LED. 브랜드 심벌은 기존 자산을 쓴다(새 이미지 생성 0). */
 function SpadeMark() {
   return (
-    <span className="relative grid h-11 w-11 shrink-0 place-items-center" aria-hidden>
+    // h-10(42.5px): 소개 행 높이를 정하는 요소다 — 상단이 첫 화면의 23% 를 먹어(design 실측, 콘텐츠 시작 y=192.6) 한 단 줄였다.
+    <span className="relative grid h-10 w-10 shrink-0 place-items-center" aria-hidden>
       <span
         className="pointer-events-none absolute inset-0 rounded-full"
         style={{ boxShadow: '0 0 18px rgb(139 92 246 / 0.42), 0 0 34px rgb(34 211 238 / 0.18)' }}
       />
       <span
-        className="grid h-11 w-11 place-items-center rounded-full border border-white/12"
+        className="grid h-10 w-10 place-items-center rounded-full border border-white/12"
         style={{ background: 'radial-gradient(120% 120% at 50% 0%, #242B48 0%, #141930 58%, #0A0D1B 100%)' }}
       >
         <img src="/brand/nuri-holdem-symbol.svg" alt="" width={22} height={22} draggable={false} />
@@ -318,12 +324,14 @@ function StepBar({ step, onStep, spot }: { step: StepKey; onStep: (s: StepKey) =
   );
 }
 
-/** 라벨 위 · 칩 전폭(2026-09-14 design 실측: 라벨과 나란히 두면 360px 에서 '유효 스택 100BB'·'이번에 추가 4' 가 혼자 다음 줄로 떨어졌다). */
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+/** 라벨 위 · 칩 전폭(2026-09-14 design 실측: 라벨과 나란히 두면 360px 에서 '유효 스택 100BB'·'이번에 추가 4' 가 혼자 다음 줄로 떨어졌다).
+ *  py-1 · gap-1: 행 하나가 72px 이라 '액션 순서' 카드가 412px(390px 실측)였다 — 세로 여백만 한 단 줄인다(칩·글자 크기 불변).
+ *  wrap: 자식이 칩 묶음 + 직접 입력처럼 둘일 때 입력을 다음 줄로 내려 칩 줄에서 고아를 만들지 않는다. */
+function Row({ label, children, wrap = false }: { label: string; children: React.ReactNode; wrap?: boolean }) {
   return (
-    <div className="flex flex-col items-stretch gap-1.5 py-1.5">
+    <div className="flex flex-col items-stretch gap-1 py-1">
       <span className="shrink-0 text-xs font-medium text-ink-secondary">{label}</span>
-      <div className="flex min-w-0 items-center gap-1.5">{children}</div>
+      <div className={['flex min-w-0 items-center gap-1.5', wrap ? 'flex-wrap' : ''].join(' ')}>{children}</div>
     </div>
   );
 }
@@ -392,19 +400,22 @@ function SeatStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
       <Row label="상대 자리">
         <Pick value={spot.villainPos} options={seats} onChange={(v) => patch({ villainPos: v as SpotPosition })} />
       </Row>
-      <Row label="유효 스택">
+      {/* 칩과 직접 입력은 **같은 값**을 넣는 두 방법이라 한 묶음이다(전엔 따로 노는 별도 행이었다).
+          입력한 값이 칩에 없으면 Pick 이 그 값을 눌린 칩으로 보여 줘 둘이 항상 같은 상태를 가리킨다.
+          wrap: 360px 에서 칩 5개(266px)+입력은 한 줄에 못 들어가므로 입력이 둘째 줄로 내려간다 — 칩 줄은 그대로 한 줄. */}
+      <Row label="유효 스택" wrap>
         <Pick value={spot.effectiveBb} options={[10, 20, 40, 60, 100]}
           onChange={(v) => patch({ effectiveBb: v })} fmt={(v) => `${v}BB`} />
+        <label className="flex shrink-0 items-center gap-1.5">
+          <span className="text-2xs font-medium text-ink-secondary">직접 입력</span>
+          <input
+            type="number" inputMode="decimal" min={1} step={0.5} value={spot.effectiveBb}
+            onChange={(e) => patch({ effectiveBb: Number(e.target.value) })}
+            className="input min-h-[44px] w-20 text-right" aria-label="유효 스택 BB 직접 입력"
+          />
+          <span className="text-2xs text-ink-muted">BB</span>
+        </label>
       </Row>
-      <label className="mt-2 flex items-center gap-2">
-        <span className="shrink-0 text-xs font-medium text-ink-secondary">직접 입력</span>
-        <input
-          type="number" inputMode="decimal" min={1} step={0.5} value={spot.effectiveBb}
-          onChange={(e) => patch({ effectiveBb: Number(e.target.value) })}
-          className="input min-h-[44px] w-24 text-right" aria-label="유효 스택 BB 직접 입력"
-        />
-        <span className="text-2xs text-ink-muted">BB</span>
-      </label>
     </div>
   );
 }
