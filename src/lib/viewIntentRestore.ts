@@ -16,8 +16,9 @@ import type { ViewIntent, ViewKind } from './pendingViewIntent';
 export interface OpenViewState {
   /** 이벤트 별도 페이지(z-60, 가장 위) */
   eventOpen: boolean;
-  /** 이벤트 캠페인 slug — 카드 번호가 아니다 */
-  eventSlug: string;
+  /** 이벤트 캠페인 slug — 카드 번호가 아니다.
+   *  `null` = 아직 어느 캠페인인지 못 정했다(판을 열자마자 서버가 고르는 중). */
+  eventSlug: string | null;
   openPostId: string | null;
   openScheduleId: string | null;
   openVenueId: string | null;
@@ -29,7 +30,10 @@ export interface OpenViewState {
  * 그 아래 글·대회가 무엇이든 사용자가 보고 있는 것은 이벤트다.
  */
 export function currentViewFor(s: OpenViewState): ViewIntent {
-  if (s.eventOpen) return { kind: 'event', id: s.eventSlug };
+  // ⚠ slug 를 아직 모르면 `'1'` 로 적는다 — 빈 문자열은 `isSafeIntentId` 가 거부해 **복원 자체가 사라진다**
+  //   (로그인하고 돌아왔더니 홈). `'1'` 은 '캠페인이 하나뿐이던 시절' 의 딥링크 토큰이고,
+  //   App 의 openEvent 가 그것을 '지금 열려 있는 캠페인' 으로 되읽는다 — 승격 규칙은 거기 한 곳에만 있다.
+  if (s.eventOpen) return { kind: 'event', id: s.eventSlug ?? '1' };
   if (s.openPostId) return { kind: 'post', id: s.openPostId };
   if (s.openScheduleId) return { kind: 'schedule', id: s.openScheduleId };
   if (s.openVenueId) return { kind: 'venue', id: s.openVenueId };

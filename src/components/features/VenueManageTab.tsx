@@ -584,14 +584,20 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 
   return (
     // 매장 운영주는 PC 99%(AGENTS.md 플랫폼) — 1280px 이상에서 1088px 에 가둬 두면 장부 표와
-    // 대시보드 12컬럼이 접혀 정보 밀도가 죽는다. xl 부터 7xl(80rem × 17px = **1360px**)로 연다.
+    // 대시보드 12컬럼이 접혀 정보 밀도가 죽는다. 그래서 xl 부터 상한을 푼다.
     //   ⚠ 루트 폰트가 17px 이라 Tailwind rem 유틸은 전부 6.25% 크다(5xl=1088 · 6xl=1224 · 7xl=1360).
-    //   앱 셸(App.tsx)도 my-store 일 때만 같은 폭으로 열어야 실제로 넓어진다 — 셸이 6xl 이면 여기서만 키워도 잘린다.
+    //   ⚠ 실제로 도달하는 폭은 7xl(1360)이 **아니라 1190px** 이다(실측 2026-09-15, 1440px 뷰포트).
+    //     상한을 쥐고 있는 것은 앱 셸이 아니라 `src/index.css:1073` 의 전역 `main { max-width: 72rem }`(=1224px)이고,
+    //     여기서 좌우 여백(px-page-x 17px×2)을 뺀 값이 1190 이다. 그래서 셸의 my-store 예외(xl:max-w-7xl)는
+    //     테두리 기둥만 136px 넓히고 콘텐츠는 그대로여서 2026-09-15 에 제거했다(오너: "내 매장만 넓어 이질감").
+    //     이 `xl:max-w-7xl` 은 남겨 둔다 — 지우면 xl 에서 1088 로 돌아가 **다른 탭보다 좁아진다.**
     <div className="space-y-3 mx-auto w-full max-w-5xl xl:max-w-7xl">
-      {/* 운영자: 전 매장 접근 — 관리할 매장 선택 */}
+      {/* 관리자만 보는 매장 고르개(`isAdmin` 게이트는 그대로 — 기능은 손대지 않는다).
+          ⚠ 2026-09-15 오너 지시: '운영자 전체 접근' **표기**를 없앤다. 일반 업주에게는 원래 이 칸 자체가
+            안 보이지만, 문구가 남아 있으면 관리자 화면에서 권한 등급이 그대로 읽힌다. 남기는 것은 '관리할 매장 선택' 하나. */}
       {isAdmin && (
         <div className="space-y-2 rounded-card border border-accent-400/40 bg-accent-300/[0.06] p-3">
-          <p className="text-2xs font-bold text-accent-300">운영자 전체 접근 · 관리할 매장 선택</p>
+          <p className="text-2xs font-bold text-accent-300">관리할 매장 선택</p>
           <select value={venueId ?? ''} onChange={(e) => setAdminVenueId(e.target.value || null)} className="input text-sm">
             {adminVenues.length === 0 && <option value="">불러오는 중…</option>}
             {adminVenues.map((v) => (

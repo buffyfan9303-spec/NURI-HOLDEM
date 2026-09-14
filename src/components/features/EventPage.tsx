@@ -17,7 +17,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29) — 새 판정을 만들지 않고 재사용
 import { ensureVerified } from '../../lib/requireLogin'; // 본인인증 안내 시트(VerifyGateSheet)를 여는 기존 진입점 재사용
-import { cachedEventBoard,getEventBoard, openEventCard, oddsRows, TIER_META, CARD_EVENT_SLUG,
+import { cachedEventBoard,getEventBoard, lastEventCardCount, openEventCard, oddsRows, TIER_META,
   type EventBoard, type EventCard, type OpenResult,
 } from '../../api/events';
 /* 참여 가능 여부는 **여기서 다시 판단하지 않는다** — 홈·관리자와 같은 단일 판정 함수를 부른다.
@@ -34,13 +34,18 @@ const remainCardsOf = (b: EventBoard): number | null =>
   (Array.isArray(b.cards) ? b.cards.filter((c) => !c.opened).length : null);
 const totalCardsOf = (b: EventBoard): number | null => (Array.isArray(b.cards) ? b.cards.length : null);
 
-export default function EventPage({ open, onClose, onLogin, slug = CARD_EVENT_SLUG }: {
+export default function EventPage({ open, onClose, onLogin, slug = null, onSlug }: {
   open: boolean;
   onClose: () => void;
   onLogin: () => void;
-  /** 캠페인 slug. 딥링크(`?event=<slug>`)로 다른 캠페인이 올 수 있다 — 조회·씨앗·카드 열기가 모두 이 값을 탄다.
-   *  하나라도 기본값에 묶여 있으면 다른 판을 보면서 **첫 캠페인의 카드를 여는** 일이 생긴다. */
-  slug?: string;
+  /** 캠페인 slug. 딥링크(`?event=<slug>`)로 다른 캠페인이 올 수 있다 — 조회·씨앗이 이 값을 탄다.
+   *  ⚠ `null` = **지금 열려 있는 캠페인**(api/events 의 getCurrentEventSlug 가 고른다). 고정 slug 를
+   *    기본값으로 두면 캠페인이 바뀌는 순간 "진행 중인 이벤트가 없어요" 가 된다(2026-09-15 실사고).
+   *  ⚠ 카드 열기는 여기 값이 아니라 **서버가 돌려준 `board.slug`** 로 한다 — 보고 있는 판과 여는 판이 갈라지지 않게. */
+  slug?: string | null;
+  /** 고른 캠페인을 셸에 알린다 — `?event=<slug>` 주소가 **실제로 연 판**을 가리키게 하려고.
+   *  slug 없이 열린 경우(홈 칸·PC GNB·`?event=1`)에만 한 번 불린다. */
+  onSlug?: (slug: string) => void;
 }) {
   const { user } = useAuth();
   const toast = useToast();
@@ -48,7 +53,11 @@ export default function EventPage({ open, onClose, onLogin, slug = CARD_EVENT_SL
   /* 홈 배너가 이미 받아 둔 보드로 **첫 프레임부터 내용을 그린다**.
      이게 없으면 열자마자 헤더만 뜬 빈 몸통이 15~80ms 보였다(실측 2026-09-08) — 그 한 번의
      교체가 남아 있던 마지막 깜빡임이었다. 씨앗이 없으면(첫 방문·로그인 직후) 종전대로 로딩부터. */
-  const seed = useRef(cachedEventBoard(slug)).current;
+  const seed = useRef(cachedEventBoard(slug ?? undefined)).current;
+  /** 로딩 격자의 칸 수 — 씨앗이 있으면 그 판의 실제 장수, 없으면 지난번에 받은 보드의 장수(CLS: 아래 격자 주석). */
+  const skeletonCards = useRef(
+    (Array.isArray(seed?.cards) && seed.cards.length) || lastEventCardCount(),
+  ).current;
   const [board, setBoard] = useState<EventBoard | null>(seed);
   const [loading, setLoading] = useState(!seed);
   const [err, setErr] = useState<unknown>(null);
@@ -57,12 +66,21 @@ export default function EventPage({ open, onClose, onLogin, slug = CARD_EVENT_SL
   const [result, setResult] = useState<OpenResult | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /* ⚠ ref 로 받는다 — `onSlug` 를 `load` 의 deps 에 넣으면 인라인 화살표를 넘긴 호출부에서
+     매 렌더마다 `load` 가 새로 만들어지고, 아래 이펙트가 그때마다 다시 조회한다(무한 요청). */
+  const onSlugRef = useRef(onSlug);
+  useEffect(() => { onSlugRef.current = onSlug; });
+
   const load = useCallback(() => {
     setErr(null);
-    getEventBoard(slug).then(setBoard).catch(setErr).finally(() => setLoading(false));
+    getEventBoard(slug ?? undefined).then((b) => {
+      setBoard(b);
+      // slug 없이 열렸으면 **고른 결과**를 셸에 돌려준다(주소·공유·새로고침이 같은 판을 가리키게).
+      if (b && slug == null) onSlugRef.current?.(b.slug);
+    }).catch(setErr).finally(() => setLoading(false));
   }, [slug]);
   // 열릴 때마다 새로 — 그 사이 다른 사람이 카드를 열었을 수 있다(내 화면만 옛 상태면 헛클릭이 된다)
-  useEffect(() => { if (open) { setLoading(!cachedEventBoard(slug)); load(); } }, [open, load, slug]);
+  useEffect(() => { if (open) { setLoading(!cachedEventBoard(slug ?? undefined)); load(); } }, [open, load, slug]);
 
   /* 스켈레톤은 **느릴 때만** 보여준다.
      실측(2026-09-08): 보드 응답이 40~70ms 라 스켈레톤이 2~5프레임 떴다 사라졌다. 그 두세 프레임이
@@ -81,12 +99,13 @@ export default function EventPage({ open, onClose, onLogin, slug = CARD_EVENT_SL
   const closeSheet = () => { setPick(null); setPhase('idle'); setResult(null); };
 
   const doOpen = async () => {
-    if (!pick || busy) return;
+    if (!pick || !board || busy) return;
     setBusy(true);
     try {
       // ⚠ 서버 응답을 받은 **뒤에** 찢는다. 먼저 찢어 놓고 실패하면 '열렸다가 되돌아오는' 화면이 되는데,
       //   그건 당첨을 뺏긴 것처럼 보인다. 실패는 카드가 닫힌 채로 끝나야 한다.
-      const r = await openEventCard(pick.idx, slug);
+      // ⚠ prop 의 slug 가 아니라 **지금 보고 있는 보드의 slug**. 둘이 갈라지면 다른 판의 카드를 연다.
+      const r = await openEventCard(pick.idx, board.slug);
       setResult(r);
       setPhase('tearing');
       tearTimer.current = window.setTimeout(() => setPhase('result'), 320); // --dur-panel 과 맞춤
@@ -159,10 +178,12 @@ export default function EventPage({ open, onClose, onLogin, slug = CARD_EVENT_SL
       {loading ? (slow && (
         <div className="px-page-x py-4" aria-busy="true">
           <div className="skeleton h-32 rounded-aura" />
-          {/* 칸 수는 본문과 같은 100 — 40칸이면 스켈레톤이 본문보다 10줄 짧아서, 교체 순간 격자가
-              통째로 늘어난다. 같은 격자가 색만 채워져야 '기다렸다'가 되지 '바뀌었다'가 안 된다. */}
+          {/* 칸 수는 **본문과 같아야** 한다 — 다르면 교체 순간 격자가 통째로 늘었다 줄었다 한다.
+              같은 격자가 색만 채워져야 '기다렸다'가 되지 '바뀌었다'가 안 된다.
+              ⚠ 100 고정이던 시절의 수는 캠페인이 '오픈 기념'(100장) 하나뿐일 때 맞았다. 지금은 캠페인마다
+                장수가 다르다(운영 중인 로티아레나 30장) — 지난번에 받은 보드의 칸 수를 쓴다(api/events). */}
           <div className="mt-3 grid grid-cols-6 gap-1.5 sm:grid-cols-10 lg:grid-cols-12">
-            {Array.from({ length: 100 }).map((_, i) => <div key={i} className="skeleton aspect-square rounded-input" />)}
+            {Array.from({ length: skeletonCards }).map((_, i) => <div key={i} className="skeleton aspect-square rounded-input" />)}
           </div>
         </div>
       )) : err ? (

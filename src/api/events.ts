@@ -6,6 +6,8 @@
 //  · **참여권 소모·카드 확정·이용권 발급은 한 트랜잭션**(open_event_card). 클라이언트가
 //    낙관적으로 열어 두고 나중에 맞추는 짓을 하지 않는다 — 실패하면 카드는 닫힌 채로 남아야 한다.
 import { supabase, IS_MOCK } from '../lib/supabase';
+// 상태·기간 판정은 **하나뿐인 함수**를 그대로 쓴다(경계가 여기서 갈라지면 홈과 상세가 다른 판을 연다).
+import { evaluateEvent, eventNow } from '../lib/eventState';
 // slug 상수·검사는 `lib/eventSlug` 로 나갔다 — App.tsx 가 부팅 딥링크 때문에 **동기로** 필요로 하는데,
 // 여기 있으면 이 모듈 전체(TIER_META·oddsRows 포함)가 첫 화면 임계 경로 청크에 실린다(2026-09-13 번들 예산).
 // 여기서 **그대로 재수출**하므로 기존 임포트(`from '../../api/events'`)는 한 줄도 고칠 필요가 없다.
@@ -91,19 +93,112 @@ export function oddsRows(b: EventBoard): OddsRow[] {
      B 딥링크를 열면 A 의 제목·카드·참여권이 첫 프레임에 그대로 뜬다(다른 이벤트인데 '이미 열려 있는 카드'로
      보인다 — 헛클릭의 정의다). 키를 붙이면 그 자리는 그냥 '씨앗 없음'이 되어 종전대로 로딩부터 간다. */
 const lastBoards = new Map<string, EventBoard>();
-export const cachedEventBoard = (slug: string = CARD_EVENT_SLUG): EventBoard | null => lastBoards.get(slug) ?? null;
+/** 슬러그 없이 연 진입(홈 칸·PC GNB·`?event=1`)이 **마지막으로 고른** 캠페인.
+ *  씨앗을 찾는 키다 — 이게 없으면 슬러그를 모르는 진입은 늘 로딩판부터 시작한다(EventPage 의 seed 주석). */
+let lastCurrentSlug: string | undefined;
+export const cachedEventBoard = (slug?: string): EventBoard | null =>
+  lastBoards.get(slug ?? lastCurrentSlug ?? CARD_EVENT_SLUG) ?? null;
+// ── 스켈레톤 칸 수 기억 ─────────────────────────────────────────────────────
+// 왜 필요한가: 이벤트 판의 로딩 격자는 **본문과 같은 칸 수**여야 한다(칸 수가 다르면 교체 순간 격자가
+//   통째로 늘었다 줄었다 한다 = CLS). 예전엔 100 고정이었는데 그건 '오픈 기념'(100장) 하나뿐이던 시절의 수다.
+//   캠페인마다 장수가 다르다 — 운영 중인 로티아레나는 **30장**이라 100 고정이면 70칸이 사라지며 튄다.
+// 왜 localStorage 인가: 스켈레톤이 뜨는 유일한 경로가 **씨앗 없는 콜드 진입**(QR 딥링크)이라
+//   모듈 메모리는 그 순간 늘 비어 있다. 문서를 새로 받아도 남는 곳이어야 한다(HomeTab 의 `*-seen` 과 같은 조리법).
+const CARDS_SEEN_KEY = 'nuri:event-cards-seen';
+/** 지난번에 본 카드 칸 수(1~200). 본 적이 없으면 `fallback`. */
+export function lastEventCardCount(fallback = 100): number {
+  try {
+    const n = Number(localStorage.getItem(CARDS_SEEN_KEY));
+    return Number.isFinite(n) && n > 0 ? Math.min(Math.round(n), 200) : fallback;
+  } catch { return fallback; }
+}
+function rememberEventCardCount(n: number): void {
+  try { if (n > 0) localStorage.setItem(CARDS_SEEN_KEY, String(Math.min(Math.round(n), 200))); } catch { /* 스토리지 차단 */ }
+}
+
 /** @internal getEventBoard 전용 — 테스트가 씨앗 계약(슬러그별 격리)을 직접 잴 수 있게 열어 둔다. */
 export function rememberEventBoard(slug: string, b: EventBoard | null): void {
   if (b) lastBoards.set(slug, b); else lastBoards.delete(slug);
 }
 supabase.auth.onAuthStateChange((e) => { if (e !== 'TOKEN_REFRESHED') lastBoards.clear(); });
 
-export async function getEventBoard(slug: string = CARD_EVENT_SLUG): Promise<EventBoard | null> {
+// ── '지금 열려 있는 캠페인' 고르기 ──────────────────────────────────────────
+//
+// 왜 있나(2026-09-15 오너 보고): PC GNB '이벤트' 와 홈 진입 칸이 **고정 slug**(`CARD_EVENT_SLUG`)를 열었다.
+//   운영에 실제로 살아 있는 캠페인은 `rotiarena-attend` 하나인데(실측: event_campaigns 전체가 그 한 줄),
+//   `card-open-2026-09` 은 **행 자체가 없어서** event_board 가 NULL 을 돌려줬다 →
+//   진행 중인 이벤트가 있는데도 "진행 중인 이벤트가 없어요".
+//   slug 상수를 새 캠페인 이름으로 바꾸는 것은 고치는 게 아니라 **다음 캠페인 때 같은 사고를 예약**하는 것이다.
+//
+// 새 RPC 도, 마이그레이션도 쓰지 않는다 — 이미 열려 있는 길로 고른다(실측 2026-09-15, 운영 DB):
+//   · `grant select on public.event_campaigns to anon, authenticated` (20260906b:94) — 살아 있음
+//   · RLS `event_campaigns_read`: `status <> 'draft' and (hidden_at is null or my_role() = 'admin')` — 살아 있음
+//   즉 초안·숨긴 판은 **서버가** 걸러 준다. 여기서는 기간·상태만 본다.
+
+/** 고르기에 필요한 최소 컬럼만. `select *` 를 쓰지 않는다(보안 표준 §6). */
+export interface EventCampaignRow {
+  slug: string;
+  status: string | null;
+  hidden_at?: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+}
+
+const startMs = (r: EventCampaignRow, fallback: number): number => {
+  const t = r.starts_at ? Date.parse(r.starts_at) : NaN;
+  return Number.isFinite(t) ? t : fallback;
+};
+
+/** 손님에게 보여 줄 캠페인 하나 — **진행 중**이 있으면 그중 가장 최근에 시작한 것,
+ *  없으면 **가장 먼저 시작할 예정**인 것. 끝난 판은 고르지 않는다(지난 행사를 홈에서 광고하지 않는다).
+ *
+ *  순수 함수로 둔 이유: 경계(시작 포함·종료 미포함)가 계약이라 테스트가 직접 재야 한다.
+ *  판정은 `evaluateEvent` 하나만 쓴다 — 여기서 `now >= starts_at` 를 다시 적는 순간 서버·홈·상세가 갈라진다. */
+export function pickCurrentEvent(rows: EventCampaignRow[] | null | undefined, nowMs: number): string | null {
+  let live: EventCampaignRow | null = null;
+  let next: EventCampaignRow | null = null;
+  for (const r of rows ?? []) {
+    if (!isEventSlug(r?.slug)) continue;
+    const { state } = evaluateEvent(
+      { status: r.status, hiddenAt: r.hidden_at ?? null, startsAt: r.starts_at, endsAt: r.ends_at },
+      nowMs,
+    );
+    if (state === 'live') {
+      if (!live || startMs(r, -Infinity) > startMs(live, -Infinity)) live = r;
+    } else if (state === 'scheduled') {
+      if (!next || startMs(r, Infinity) < startMs(next, Infinity)) next = r;
+    }
+  }
+  return (live ?? next)?.slug ?? null;
+}
+
+/** 지금 열려 있는 캠페인의 slug. 없으면 null. 조회 실패는 **던진다** —
+ *  '이벤트 없음'과 '못 불러옴'은 다른 사건이고 화면이 그 둘을 다르게 말한다(HomeTab eventMenuSubtitle). */
+export async function getCurrentEventSlug(nowMs: number = eventNow()): Promise<string | null> {
   if (IS_MOCK) return null;
-  const { data, error } = await supabase.rpc('event_board', { p_slug: slug });
+  const { data, error } = await supabase
+    .from('event_campaigns')
+    .select('slug,status,hidden_at,starts_at,ends_at')
+    .neq('status', 'draft')      // RLS 가 이미 막지만 전송량을 줄인다
+    .order('starts_at', { ascending: false, nullsFirst: false })
+    .limit(20);
+  if (error) throw new Error(error.message);
+  return pickCurrentEvent(data as EventCampaignRow[] | null, nowMs);
+}
+
+/** 보드 조회. `slug` 를 주지 않으면 **지금 열려 있는 캠페인**을 고른다(홈 칸·PC GNB·`?event=1`).
+ *  고를 게 없으면 옛 기본 캠페인으로 물어본다 — `?event=1` 이 가리키던 그 자리이고,
+ *  없으면 event_board 가 NULL 을 줘 화면은 종전대로 '이벤트 없음'이 된다. */
+export async function getEventBoard(slug?: string): Promise<EventBoard | null> {
+  if (IS_MOCK) return null;
+  const s = slug ?? (await getCurrentEventSlug()) ?? CARD_EVENT_SLUG;
+  const { data, error } = await supabase.rpc('event_board', { p_slug: s });
   if (error) throw new Error(error.message);
   const b = (data as EventBoard | null) ?? null;
-  rememberEventBoard(slug, b);
+  rememberEventBoard(s, b);
+  if (slug === undefined) lastCurrentSlug = s;
+  // 다음 콜드 진입의 스켈레톤이 이 칸 수로 자리를 예약한다(홈이 받든 이벤트 판이 받든 같은 곳에 적는다).
+  if (Array.isArray(b?.cards)) rememberEventCardCount(b.cards.length);
   return b;
 }
 

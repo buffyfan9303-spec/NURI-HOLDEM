@@ -4,7 +4,7 @@ import { withViewTransition, type VTDirection } from './lib/viewTransition';
 import { getAppSetting } from './api/settings';
 // ⚠ `api/events` 가 아니라 `lib/eventSlug` 에서 받는다 — 둘은 같은 값이지만(그쪽이 재수출한다),
 //   api/events 를 정적으로 물면 TIER_META·oddsRows 까지 첫 화면 임계 경로로 딸려 온다(실측 2026-09-13).
-import { CARD_EVENT_SLUG, isEventSlug } from './lib/eventSlug';
+import { isEventSlug } from './lib/eventSlug';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import type { MyBuyinRequest } from './api/ledger';
@@ -105,7 +105,7 @@ import { enablePush, isPushSubscribed, pushSupported } from './api/push';
 import { rememberQrIntent, takeQrIntent, clearQrIntent } from './lib/pendingQrIntent';
 import { setCurrentView, takeViewIntent } from './lib/pendingViewIntent';
 import { currentViewFor, restoreActionFor } from './lib/viewIntentRestore';
-import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral } from './api/referrals';
+import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral, claimPendingReferralTickets } from './api/referrals';
 import LevelUpWatcher from './components/features/LevelUpCelebration';
 import BusinessFooter from './components/features/BusinessFooter';
 import { useBlocks } from './contexts/BlockContext';
@@ -825,12 +825,19 @@ export default function App() {
   const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
   const [eventOpen, setEventOpen] = useState(false); // 이벤트 별도 페이지
-  /** 지금 보고 있는 캠페인. `?event=<slug>` 로 다른 캠페인이 올 수 있어 화면·조회·카드 열기가 모두 이 값을 탄다. */
-  const [eventSlug, setEventSlug] = useState<string>(CARD_EVENT_SLUG);
+  /** 지금 보고 있는 캠페인. `?event=<slug>` 로 다른 캠페인이 올 수 있어 화면·조회가 이 값을 탄다.
+   *  ⚠ `null` = **아직 안 정함 → 지금 열려 있는 캠페인**. 예전엔 고정 slug(`CARD_EVENT_SLUG`)가 기본이었는데,
+   *    그 캠페인이 운영 DB 에 없어서 PC GNB '이벤트' 가 늘 "진행 중인 이벤트가 없어요" 였다(2026-09-15 오너 보고).
+   *    고른 결과는 EventPage 가 `onSlug` 로 돌려주고, 그때 주소에 `?event=<그 slug>` 가 박힌다. */
+  const [eventSlug, setEventSlug] = useState<string | null>(null);
   /** 이벤트 페이지 열기 — 진입점이 넷(홈 칸·PC GNB·딥링크·로그인 복귀)이라 한 곳에 모은다.
    *  startTransition: 청크가 아직이면 **이전 화면을 유지**한다(폴백 스로틀 ~300ms 회피 — 아래 EventPage 주석). */
   const openEvent = useCallback((slug?: string) => {
-    setEventSlug(isEventSlug(slug) ? slug : CARD_EVENT_SLUG);
+    // '1'·'true' 는 캠페인이 하나뿐이던 시절의 딥링크·복원 토큰이다(이미 뿌려진 QR·공유 링크에 남아 있다).
+    //   그때의 '그 하나' = 지금의 '그 하나' 이므로 **지금 열려 있는 캠페인**으로 읽는다.
+    //   ⚠ 승격 규칙은 여기 한 곳에만 둔다 — 딥링크·배너 링크·로그인 복원이 전부 이 함수를 지난다.
+    const s = slug === '1' || slug === 'true' ? undefined : slug;
+    setEventSlug(isEventSlug(s) ? s : null); // 모르면 '지금 열려 있는 캠페인'(EventPage 가 고른다)
     startTransition(() => setEventOpen(true));
   }, []);
   const [myBuyinReqs, setMyBuyinReqs] = useState<MyBuyinRequest[]>([]); // 손님 본인 오늘 바인요청(상태 배너)
@@ -1264,8 +1271,8 @@ export default function App() {
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('event');
     if (!v) return;
-    // '1'·'true' 는 캠페인이 하나뿐이던 시절의 딥링크다. 이미 뿌려진 QR·공유 링크라 그대로 받아 준다.
-    openEvent(v === '1' || v === 'true' ? CARD_EVENT_SLUG : v);
+    // '1'·'true' 승격은 openEvent 안에 있다(여기·배너 링크·로그인 복원이 같은 규칙을 쓰게).
+    openEvent(v);
   }, [openEvent]);
 
   // 열려 있는 동안 주소에 남긴다 — 새로고침·공유가 **같은 대상**으로 간다.
@@ -1274,13 +1281,19 @@ export default function App() {
   //   첫 커밋은 건너뛴다: 위 딥링크 이펙트가 `setEventOpen(true)` 를 트랜지션에 넣어 두는 사이
   //   여기가 먼저 돌면 방금 들어온 `?event=` 를 스스로 지웠다가 다시 쓴다(불필요한 replaceState 왕복).
   const eventUrlSyncedRef = useRef(false);
-  const syncEventParam = useCallback((open: boolean, slug: string) => {
+  const syncEventParam = useCallback((open: boolean, slug: string | null) => {
     try {
       const url = new URL(window.location.href);
       const cur = url.searchParams.get('event');
       if (open) {
-        if (cur === slug) return;
-        url.searchParams.set('event', slug);
+        // 아직 어느 캠페인인지 모르는 동안(열려 있는 판을 고르는 중)에도 **주소는 비워 두지 않는다.**
+        //   ⚠ 비워 두면 그 사이의 주소가 공유·새로고침으로 재현되지 않는다(e2e/event-backnav ②가 잠그는 계약).
+        //     보드 응답이 오기 전이라 실제 slug 를 모르지만, `1` 은 '지금 열려 있는 그 하나' 를 뜻하는
+        //     옛 토큰이고 openEvent 가 그대로 되읽는다 — 즉 이 주소도 같은 화면을 재현한다.
+        //   고른 뒤 onSlug 가 여기를 다시 불러 실제 slug 로 바뀐다(둘 다 replaceState 라 겹이 늘지 않는다).
+        const next = slug ?? '1';
+        if (cur === next) return;
+        url.searchParams.set('event', next);
       } else {
         if (cur === null) return;
         url.searchParams.delete('event');
@@ -1339,9 +1352,20 @@ export default function App() {
     const code = pendingRefCode();
     if (!code) return;
     refRecorded.current = true;
-    recordReferral(code).then((ok) => { if (ok) toast.show('추천 가입이 연결됐어요 · 본인인증하면 둘 다 활동점수!', 'success'); clearRefCode(); }).catch(() => {});
+    recordReferral(code).then((ok) => { if (ok) toast.show('추천 가입이 연결됐어요 · 본인인증하면 둘 다 이벤트 참여권 1장씩!', 'success'); clearRefCode(); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // 밀린 친구 초대 참여권 — 로그인 세션당 1회 당겨 간다(오너 #9 · 지급 시점 = "그 사람이 다음에 들어올 때").
+  //   왜 여기인가: 지급이 '내 정보' 화면에만 걸려 있으면 **그 화면을 안 여는 사람은 받을 자격이 있는데 영영 못 받는다.**
+  //   바로 위 추천 코드 기록과 같은 '로그인 완료 직후 1회' 자리라 새 생명주기를 만들지 않는다.
+  //   ⚠ 반환값을 상태에 넣지 않는다 — 대기 수를 **보여 주는 곳은 '내 정보' 하나**이고 여기서는 지급만 시킨다.
+  //     그래서 늦은 응답이 지금 화면을 덮는 부류(nuri-async-guard)가 생기지 않는다.
+  //   ⚠ 실패·RPC 미적용(PGRST202)은 api 가 null 로 삼킨다 — 부팅을 막지 않고 다음 진입에서 다시 시도된다.
+  useEffect(() => {
+    if (!user?.id) return;
+    claimPendingReferralTickets().catch(() => {});
+  }, [user?.id]);
 
   // 비로그인 사용자가 쓰기(글·댓글·반응·채팅·예약)를 시도하면 로그인 모달을 띄운다.
   useEffect(() => {
@@ -1460,7 +1484,12 @@ export default function App() {
         // 내 매장은 역할 보유자에게 최우선 프리마운트 — '다른 탭→내 매장'이 사장님 핵심 동선이자
         // 가장 무거운 스위트(320KB+)라, 이걸 idle 에 미리 치러야 첫 진입 멈칫이 사라진다.
         const canStore = isOwner || isAdmin || user?.role === 'venue_staff';
-        const seq: TabId[] = [...(canStore ? (['my-store'] as TabId[]) : []), 'live', 'community', 'tools'];
+        // 관리자는 **맨 뒤**다 — 오너 본인만 쓰고(isAdmin 게이트), my-store·라이브·커뮤니티보다 급하지 않다.
+        //   청크는 위 warm() 이 이미 `isAdmin` 조건으로 받아 두므로 **첫 화면 예산은 1바이트도 늘지 않는다**
+        //   (실측 2026-09-15: 첫 화면 임계 경로 전후 동일). 여기서 더하는 것은 idle 한 번의 숨김 마운트뿐이고,
+        //   그게 없으면 관리자 **첫 진입만** root 전환이 통째로 빠진다(실측: 커뮤니티 첫 진입은 vt-push 가 도는데 관리자는 VT 0개).
+        const seq: TabId[] = [...(canStore ? (['my-store'] as TabId[]) : []), 'live', 'community', 'tools',
+          ...(isAdmin ? (['admin'] as TabId[]) : [])];
         const mountNext = () => {
           const t = seq.find((x) => !visitedTabs.has(x));
           if (!t) return;
@@ -3026,8 +3055,8 @@ export default function App() {
   const openInternalLink = useCallback((u: URL): boolean => {
     if (u.pathname !== window.location.pathname) return false;
     const ev = u.searchParams.get('event');
-    // '1'·'true' 승격 규칙은 딥링크 이펙트(위 `?event=` useEffect)와 **같은 규칙**이어야 한다.
-    if (ev) { openEvent(ev === '1' || ev === 'true' ? CARD_EVENT_SLUG : ev); return true; }
+    // '1'·'true' 승격은 openEvent 안에서 한 번만 한다 — 여기·딥링크 이펙트·로그인 복원이 규칙 하나를 공유한다.
+    if (ev) { openEvent(ev); return true; }
     // `?tab=` — 화이트리스트는 부팅 딥링크(위 `?tab=` 이펙트)와 **같은 `TAB_IDS`** 를 쓴다(새로 만들지 않는다).
     //   ⚠ 앱 안에서 전환하면 주소에 `tab=` 이 남지 않는다. 그게 맞다 — `?tab=` 은 App.tsx 딥링크 이펙트가
     //     부팅 때 소비하고 지우는 **1회성** 파라미터라, 리로드로 들어왔을 때도 그 상태는 잠깐만 존재했고
@@ -3149,9 +3178,15 @@ export default function App() {
 
   return (
     // 모바일: 폭 그대로(full). 데스크톱: 중앙 정렬 + 최대폭으로 무한 확장 방지 + 프레임.
-    // 내 매장만 xl 부터 7xl(1360px)로 연다 — 운영주는 PC 99% 이고 장부 표·대시보드 12컬럼이 1224px 에선 접힌다.
-    //   다른 탭은 6xl(1224px) 그대로다: 유저 화면은 모바일 99% 라 더 넓히면 한 줄이 길어져 읽기만 나빠진다.
-    <div className={`relative z-[1] min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle${activeTab === 'my-store' ? ' xl:max-w-7xl' : ''}`}>
+    // 앱 셸의 폭은 **모든 탭이 같다**. 예전엔 my-store 만 `xl:max-w-7xl` 로 열었는데(1224 → 1360),
+    //   ⚠ 실측(2026-09-15, 1440px): 그 예외는 **콘텐츠를 1px 도 넓히지 못했다.**
+    //     `src/index.css:1073` 의 전역 규칙 `main { max-width: 48rem }` + `@media(min-width:1024px){ main{max-width:72rem} }`
+    //     가 탭 본문(`<main class="tab-pane">`)을 72rem×17px = **1224px 에서 이미 자르고 있었다** —
+    //     my-store 본문 1190px vs 커뮤니티·GTO 1188px(차이 2px = 셸 테두리). 넓어진 것은 **테두리 기둥과 지면뿐**이라,
+    //     내 매장에 들어가는 순간 좌우로 68px 씩 벌어지는 것만 보였다(오너 보고 "전체가 넓어져서 이질감").
+    //   그래서 예외를 지운다. 콘텐츠 폭은 전후가 같으므로 장부 표·입력칸이 새로 좁아지는 일이 없다.
+    //   ⚠ 장부·클락을 **진짜로** 넓히려면 레버는 여기가 아니라 index.css 의 `main` 상한이다(별도 결정).
+    <div className="relative z-[1] min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
       {/* 아우라 후광(정적) — body 배경 위, 콘텐츠(z-1) 아래. 이 래퍼의 bg-surface-base 를 걷어낸 이유: 불투명이면 후광이 안 보인다 */}
       <div aria-hidden className="aura-bg" />
       {/* 오프라인 배너(Phase 17-5) — 토스트(z-100)와 층 분리, 헤더(z-50) 위 상시 고정.
@@ -3741,11 +3776,21 @@ export default function App() {
         </main>
       )}
 
-      {/* 관리자 */}
-      {activeTab === 'admin' && (
-        <main className="px-page-x py-section">
+      {/* 관리자 — 다른 탭과 **같은 구조**로 맞춘다(2026-09-15 오너 3번 "관리자 설정이 자꾸 이질감이 느껴진다").
+          예전엔 여기만 `{activeTab === 'admin' && …}` 라 떠났다 오면 통째로 재마운트됐고, 그 결과가 실측으로 셋이었다:
+            ① 섹션이 매번 '운영 분석'으로 리셋(실측: 떠날 때 '포스터 승인' → 돌아오니 '운영 분석')
+            ② 첫 진입에 root 전환이 **아예 없다**(커뮤니티는 vt-push-out-l 220ms / vt-push-in-r 300ms)
+            ③ 진입 CLS 0.1297 (대조군 커뮤니티 0.0029) — 늦게 자란 본문이 푸터를 205px 끌어내린다
+          ⚠ data-tab·tab-pane 도 같이 붙인다 — 다른 탭 pane 을 고르는 셀렉터·스타일이 전부 이 둘을 본다.
+          ⚠ 역할 게이트(isAdmin)는 **유지**한다: 권한이 빠지면 숨은 채로도 남아 있으면 안 된다(my-store 와 같은 규칙). */}
+      {isAdmin && (activeTab === 'admin' || visitedTabs.has('admin')) && (
+        <main data-tab="admin" className="tab-pane px-page-x py-section" style={activeTab !== 'admin' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="admin">
           <AdminTab
+            /* 숨은 pane 이 뒤로가기 겹을 들고 있지 않게 — AdminTab 이 `useBackClose(tabActive && …)` 로 스스로 막는다.
+               내 매장이 쓰는 바로 그 규칙이고, 이게 없으면 홈에서 누른 뒤로가기가 **보이지 않는 곳에서** 소비된다
+               (실측 2026-09-15: 화면 변화 0, 숨은 관리자 섹션만 '포스터 승인' → '운영 분석'). */
+            tabActive={activeTab === 'admin'}
             schedules={schedules}
             venues={venues}
             users={users}
@@ -3835,7 +3880,7 @@ export default function App() {
               로그인 왕복 뒤 이벤트가 아니라 홈에 떨어졌다. 복원 종류에 'event' 를 추가해도 순서가 그대로면 소용이 없다.
               AuthModal 은 같은 z-[60] 을 이 뒤에 렌더하므로 위에 얹히고, 이메일 로그인처럼 떠나지 않는 경로에서는
               닫으면 이벤트 판이 그대로 남아 있다(왕복 자체가 없어 더 낫다). */
-          <EventPage open slug={eventSlug} onClose={() => setEventOpen(false)} onLogin={openLoginCb} />
+          <EventPage open slug={eventSlug} onSlug={setEventSlug} onClose={() => setEventOpen(false)} onLogin={openLoginCb} />
         )}
       </Suspense>
 

@@ -35,6 +35,15 @@ describe('① 복귀가 안 된다 — 이벤트 판이 현재 화면으로 잡�
     expect(currentViewFor(state({ eventOpen: true }))).toEqual({ kind: 'event', id: 'card-open-2026-09' });
   });
 
+  it('🔴 slug 를 아직 모를 때도 복원이 살아남는다 — 빈 id 면 isViewIntent 가 거부해 홈으로 떨어진다', () => {
+    const v = currentViewFor(state({ eventOpen: true, eventSlug: null }));
+    expect(v.kind).toBe('event');
+    expect(isViewIntent(v), 'slug 미정이면 저장 단계에서 통째로 버려진다(로그인하고 오면 홈)').toBe(true);
+    // '1' 은 App 의 openEvent 가 '지금 열려 있는 캠페인' 으로 되읽는 옛 토큰이다(승격 규칙은 거기 한 곳).
+    expect(v.id).toBe('1');
+    expect(restoreActionFor(v, isKnownTab)).toEqual({ open: 'event', id: '1' });
+  });
+
   it('🔴 아래에 글·대회·매장이 깔려 있어도 이벤트가 이긴다 — 화면 위에 있는 것이 사용자가 보는 것이다', () => {
     const s = state({ eventOpen: true, openPostId: 'p1', openScheduleId: 's1', openVenueId: 'v1', activeTab: 'community' });
     expect(currentViewFor(s).kind, '이벤트가 열렸는데 아래 화면이 스냅샷됐다').toBe('event');

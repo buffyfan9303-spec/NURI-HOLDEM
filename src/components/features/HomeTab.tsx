@@ -41,6 +41,8 @@ import type { EventState } from '../../lib/eventState';
 //   정적으로 물면 홈만 보고 나가는 손님도 그 바이트를 받는다. 홈이 이 모듈을 필요로 하는 시점은
 //   첫 페인트 **뒤**의 이벤트 보드 조회 하나뿐이라 늦춰도 되는 것을 늦췄다(lib/eventState 와 같은 조리법).
 import type { EventBoard } from '../../api/events';
+// slug 판정만 담은 순수 모듈(런타임 의존 0) — 중복 제거가 **어느 캠페인인지** 보게 하려고 여기서만 정적으로 받는다.
+import { bannerCoversEvent } from '../../lib/eventSlug';
 import { readSnap, writeSnap } from '../../lib/snapshot';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
@@ -284,10 +286,12 @@ export default function HomeTab({
   /** N06(§7.1): 이벤트 진입은 메인 배너(PosterCarousel) 안의 슬라이드 하나다 — 독립 카드는 없앴다.
    *  · 세 갈래 그대로: 응답 전(누를 수 있음) · 참여 가능(evaluateEvent 'live' 만 강조) · 그 밖(0개·실패·소진·시작 전·종료 — 문구는
    *    eventMenuSubtitle 이 사실대로 말한다. "진행 중" 허위 문구 없음).
-   *  · 관리자 배너가 이미 이벤트로 가는 링크(?event=)를 갖고 있으면 슬라이드를 넣지 않는다(§7.1-3 중복 제거 — 진입은 그 배너가 맡는다).
+   *  · 관리자 배너가 **우리가 열 그 캠페인**으로 가면 슬라이드를 넣지 않는다(§7.1-3 중복 제거 — 진입은 그 배너가 맡는다).
+   *    다른 캠페인 배너는 중복이 아니다 — 그렇게 보던 예전 판정이 진행 중인 이벤트의 진입을 지웠다(2026-09-15).
    *  · 참여권·남은 카드 수는 조회 성공(live)일 때만 쓴다(§7.1-7). */
   const eventSlide = useMemo<EventSlide | null>(() => {
-    if (banners.some((b) => /[?&]event=/.test(b.linkUrl ?? ''))) return null;
+    // ⚠ '이벤트 링크가 있으면' 이 아니라 '**같은 캠페인**으로 가면' 이다 — 판정 근거는 bannerCoversEvent 주석.
+    if (bannerCoversEvent(banners.map((b) => b.linkUrl), event?.slug, eventShown === 'pending')) return null;
     if (eventShown === 'pending') return { title: '이벤트', sub: '불러오는 중…', alt: '이벤트 — 불러오는 중', testId: 'home-event-menu', live: false, pending: true, onClick: onEvent };
     if (eventShown === 'banner' && event) {
       const sub = event.myTickets > 0 ? `참여권 ${event.myTickets}장 · 남은 카드 ${eventRemain}장` : `매장 출석하면 참여권 1장 · 남은 카드 ${eventRemain}장`;

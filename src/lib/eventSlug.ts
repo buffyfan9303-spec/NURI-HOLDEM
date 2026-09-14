@@ -19,3 +19,34 @@ export const CARD_EVENT_SLUG = 'card-open-2026-09';
  *  나중에 누가 한 줄을 쓰는 순간 오픈 리다이렉트가 된다. */
 export const isEventSlug = (s: unknown): s is string =>
   typeof s === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(s);
+
+/** 링크 주소에 실린 `?event=` 값. 이벤트 링크가 아니면 null(빈 값 `?event=` 도 null). */
+export function eventParamOf(url: string | null | undefined): string | null {
+  const m = /[?&]event=([^&#]*)/.exec(url ?? '');
+  if (!m || m[1] === '') return null;
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; }
+}
+
+/**
+ * 관리자 배너가 **우리가 열 그 캠페인**으로 가는가 — 홈 이벤트 슬라이드 중복 제거(§7.1-3)의 판정.
+ *
+ * ⚠ 예전에는 `?event=` 가 **들어 있기만 하면** 중복으로 봤다(HomeTab.tsx:286).
+ *   그런데 홈 진입은 고정 slug 를 열고 운영 배너는 다른 캠페인(`?event=rotiarena-attend`)으로 가고 있어서,
+ *   **서로 다른 판인데** 이벤트 슬라이드가 사라졌다(2026-09-15 오너 보고 — PC '이벤트' 가 빈 판을 열던 것과 한 뿌리).
+ *
+ * · `?event=1`·`true` 는 '지금 열려 있는 캠페인' 이라 우리와 같은 곳이다(App.tsx 의 승격 규칙과 같은 규칙).
+ * · 아직 어느 판을 열지 모르면(보드 응답 전) 중복으로 본다 — 같은 곳으로 가는 칸을 둘 그리지 않는다.
+ *   진입은 그 배너가 맡으므로 이벤트로 가는 길이 사라지지는 않는다.
+ */
+export function bannerCoversEvent(
+  links: readonly (string | null | undefined)[],
+  ourSlug: string | null | undefined,
+  slugUnknown: boolean,
+): boolean {
+  return links.some((u) => {
+    const v = eventParamOf(u);
+    if (v === null) return false;
+    if (v === '1' || v === 'true') return true;
+    return slugUnknown || v === ourSlug;
+  });
+}
