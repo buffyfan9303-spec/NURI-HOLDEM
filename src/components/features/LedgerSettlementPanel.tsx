@@ -47,7 +47,11 @@ export default function LedgerSettlementPanel({ venueId, date, active = true }: 
     getLedgerRange(venueId, day, day)
       .then(async ({ sessions, buyins }) => {
         // 명단은 게임별 조회밖에 없다. 하루의 게임은 보통 1~3개라 그대로 병렬로 부른다.
-        const rosters = await Promise.all(sessions.map((s) => getLedgerPlayers(venueId, day, s.gameSeq).catch(() => [])));
+        // ⚠ 여기서 실패를 `.catch(() => [])` 로 삼키면 안 된다(2026-09-14 고침). 명단이 비면
+        //   손님 유형이 전부 '미분류'가 되고 신규/기존이 0, 참여 인원이 줄어든 **그럴듯한 숫자**가 뜬다 —
+        //   바로 아래 주석이 경계하는 "실패를 빈 화면으로 위장" 과 같은 사고인데 명단만 예외였다.
+        //   Promise.all 은 첫 거부에서 바로 거부되므로 아래 .catch 가 그대로 받아 배너를 띄운다.
+        const rosters = await Promise.all(sessions.map((s) => getLedgerPlayers(venueId, day, s.gameSeq)));
         setData({ sessions, buyins, players: rosters.flat() });
       })
       // 통계는 '0원'과 '못 불러옴'이 시각적으로 같아서 특히 위험하다 — 실패를 빈 화면으로 위장하지 않는다.

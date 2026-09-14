@@ -827,12 +827,16 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     const priceChanged = s.buyinAmount !== session.buyinAmount
       || (s.cardAmount ?? null) !== (session.cardAmount ?? null)
       || JSON.stringify(s.discounts ?? []) !== JSON.stringify(session.discounts ?? []);
-    // 스냅샷 전환 후 신규 기록은 소급되지 않는다 — 금액 미저장 '레거시' 행에만 경고
-    const legacyCnt = buyins.filter((b) => !b.isSplit
-      && (b.paymentMethod === 'cash' || b.paymentMethod === 'card' || b.paymentMethod === 'transfer')
-      && (b.cashAmount + b.cardAmount + b.transferAmount) === 0).length;
-    if (priceChanged && legacyCnt > 0 && !window.confirm(
-      `단가·할인 변경이 예전 방식으로 저장된 바인 ${legacyCnt}건의 매출 계산에 소급 적용됩니다.\n(새 기록은 기록 시점 금액이 고정돼 영향 없음) 계속할까요?`)) return;
+    // ⚠ 2026-09-14 D1 — 여기 있던 경고문은 **사실과 반대**였다.
+    //   "새 기록은 기록 시점 금액이 고정돼 영향 없음" 이라고 적혀 있었지만, 엔트리는
+    //   `적용금액 ÷ 세션 **현재** 단가`(ledger.ts buyinFinance.seal)라 스냅샷이 있는 행도 분모가 바뀐다.
+    //   10만 게임에 3건 기록 후 단가를 5만으로 바꾸면 엔트리가 3.0 → 6.0, 달성률이 2배가 된다.
+    //   게다가 예전 조건은 '레거시 행이 있을 때만' 이라 **레거시가 0건이면 경고조차 안 땡다.**
+    //   폼에서 이미 잠갔지만(lockPricing), 저장 경로에서도 막는다 — 폼을 우회해도 장부가 틀어지지 않게.
+    if (priceChanged && buyins.length > 0) {
+      toast.show('이미 기록된 바인이 있어 단가·할인을 바꿀 수 없습니다. 해당 바인을 지운 뒤 고쳐 주세요', 'error');
+      return;
+    }
     try { await saveLedgerSession(s); await syncDealersToSchedule(s.sessionDate, s.dealers); setSession((prev) => ({ ...prev, ...s })); setEditOpen(false); toast.show('세션 정보를 저장했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
@@ -1630,8 +1634,14 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                     regClosed ? 'border-danger/40 text-danger-light bg-danger/10' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
                   {regClosed ? '레지 열기' : '레지 마감'}
                 </button>
-                <button ref={settleBtnRef} type="button" onClick={() => setCloseOpen(true)} data-testid="ledger-settle"
-                  className={`btn-primary text-2xs px-2 py-1${settleHot ? ' ring-2 ring-gold-300 ring-offset-2 ring-offset-surface-mid' : ''}`}>정산 마감</button>
+                {/* P2(2026-09-14): 정산 마감은 **업주만** 가능하다 — 서버 트리거(_guard_ledger_session_update)가
+                    closed 변경을 can_manage_pos 로만 허용한다. 예전엔 장부 권한 직원에게도 버튼이 보여
+                    누르면 항상 '마감 상태 변경은 업주만 가능합니다' 오류였다(누를 수 있는 척하는 죽은 버튼).
+                    레지 마감(regClose)은 직원도 되므로 그대로 둔다. 오너 결정: 권한을 넓히지 않고 화면을 서버에 맞춘다. */}
+                {canManage && (
+                  <button ref={settleBtnRef} type="button" onClick={() => setCloseOpen(true)} data-testid="ledger-settle"
+                    className={`btn-primary text-2xs px-2 py-1${settleHot ? ' ring-2 ring-gold-300 ring-offset-2 ring-offset-surface-mid' : ''}`}>정산 마감</button>
+                )}
               </div>
             ) : <span className="text-2xs text-accent-300 text-center font-bold px-3 py-1">마감됨</span>}
           </div>
@@ -1734,7 +1744,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {/* 세션 정보 수정 */}
       {editOpen && (
         <Overlay onClose={() => setEditOpen(false)} title="세션 정보 수정">
-          <SessionForm base={session} mode="edit" operatorName={operatorName} schedules={venueSchedules} operatorOptions={operatorOptions} operatorOptionsError={operatorOptionsError} onRetryOperatorOptions={reloadAccessIds} operatorOptionsPartial={!fullAccess} scheduledDealers={scheduledNames} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
+          <SessionForm base={session} mode="edit" lockPricing={buyins.length > 0} operatorName={operatorName} schedules={venueSchedules} operatorOptions={operatorOptions} operatorOptionsError={operatorOptionsError} onRetryOperatorOptions={reloadAccessIds} operatorOptionsPartial={!fullAccess} scheduledDealers={scheduledNames} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
         </Overlay>
       )}
 
@@ -2070,7 +2080,7 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
 }
 
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
-function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], operatorOptionsError = null, onRetryOperatorOptions, operatorOptionsPartial = false, presets = [], scheduledDealers = [], copyMain = null, lastRound = null, autoApplyLast, onLastApplied }: {
+function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], operatorOptionsError = null, onRetryOperatorOptions, operatorOptionsPartial = false, presets = [], scheduledDealers = [], copyMain = null, lastRound = null, autoApplyLast, onLastApplied, lockPricing = false }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
   onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
   schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[]; presets?: LedgerPreset[]; scheduledDealers?: string[]; copyMain?: LedgerSession | null;
@@ -2084,6 +2094,12 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   lastRound?: LastClosedRound | null;
   /** 대시보드 인텐트로 진입 시 1회 자동 적용 */
   autoApplyLast?: boolean; onLastApplied?: () => void;
+  /** 2026-09-14 D1: 이미 기록된 바인이 있으면 단가·할인을 잠근다.
+   *  엔트리는 `적용금액 ÷ **세션 현재 단가**`(ledger.ts buyinFinance.seal)라, 기록 뒤에 단가를 바꾸면
+   *  **이미 저장된 행의 엔트리·할인액·기준매출이 소급해서 변한다**(10만→5만 이면 엔트리가 2배).
+   *  잠그는 쪽을 택한 이유(오너 결정 2026-09-14): 행마다 정가 스냅샷을 심는 근본 수정은 마이그레이션과
+   *  기존 행 백필이 필요하고, 그 전까지 라이브 장부가 계속 틀린 값을 말하게 둘 수는 없다. */
+  lockPricing?: boolean;
 }) {
   const formToast = useToast();
   const [title, setTitle]     = useState(base.title ?? '');
@@ -2494,6 +2510,15 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         </Field>
       )}
 
+      {/* D1: 바인이 한 건이라도 기록된 뒤에는 단가·할인을 못 고친다. 입력을 하나씩 disabled 로 다는 대신
+          fieldset 하나로 감싼다 — 중첩된 input·button 이 전부 네이티브로 잠기고, 나중에 칸이 늘어도 자동으로 덮인다. */}
+      {lockPricing && (
+        <p className="rounded-input border border-accent-400/40 bg-accent-300/10 px-2.5 py-2 text-2xs leading-relaxed text-accent-200">
+          이미 기록된 바인이 있어 <b>단가·할인은 잠겨 있습니다</b>. 여기서 바꾸면 이미 저장된 바인의
+          엔트리·달성률까지 <b>소급해서 바뀝니다</b>. 금액을 잘못 넣었다면 해당 바인 기록을 지운 뒤 고쳐 주세요.
+        </p>
+      )}
+      <fieldset disabled={lockPricing} className="contents">
       <div className="grid grid-cols-2 gap-2">
         <Field label="현금단가(만원) *">
           <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(cash)} onChange={(e) => setCash(parseMan(e.target.value))} placeholder="10" className="input w-full text-sm tabular-nums" />
@@ -2548,6 +2573,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           </p>
         </div>
       </Field>
+      </fieldset>
 
       <Field label="토너먼트 스타트 시각 · 선택 (클락 연동·얼리 판정 기준)">
         <DateTimePicker value={startISO} onChange={setStartISO} defaultDate={base.sessionDate} placeholder="스타트 날짜·시각 선택" />

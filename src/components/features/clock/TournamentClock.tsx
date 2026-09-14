@@ -181,7 +181,23 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     if (window.confirm(`사이드${nextSeq - 1} 게임을 장부에도 만들고 클락을 시작할까요?\n\n확인 = 장부 사이드 게임 생성 + 클락 / 취소 = 클락만`)) {
       try {
         const main = await getLedgerSession(venueId, linkDate, 1);
-        await openLedgerSession({ ...main, gameSeq: nextSeq, sessionDate: linkDate, title: `${(main.title || '게임').trim()} 사이드${nextSeq - 1}` });
+        // ⚠ P1(2026-09-14) — 오늘 메인 장부가 없으면 getLedgerSession 은 **빈 세션**을 돌려준다(ledger.ts:637).
+        //   그걸 그대로 복사하면 **단가 0원짜리 사이드 장부**가 생기고, 그 0원 게임이 장부 목록과
+        //   venue_today_games(출석 QR)에까지 나타난다. 단가 0 은 정산에서 엔트리 분모가 0 이라 의미도 없다.
+        if (!main.openedAt) {
+          toast.show('오늘 메인 장부가 아직 없습니다 — 장부에서 게임을 먼저 연 뒤에 사이드를 만들어 주세요', 'error');
+          switchGame(nextSeq);
+          return;
+        }
+        // ⚠ 마감 상태는 **복사하지 않는다.** 예전엔 `...main` 이 closed·regClosed 를 그대로 실어,
+        //   같은 seq 의 사이드 장부가 이미 마감돼 있으면 upsert 가 closed:false 로 덮어써
+        //   업주 화면에서는 **조용히 마감이 풀렸다**(직원은 서버 트리거 오류). 마감 해제는 reopen 경로만이다.
+        await openLedgerSession({
+          ...main,
+          gameSeq: nextSeq, sessionDate: linkDate,
+          closed: false, regClosed: false,   // opened_at 은 openLedgerSession 이 스스로 now() 로 채운다
+          title: `${(main.title || '게임').trim()} 사이드${nextSeq - 1}`,
+        });
         toast.show(`사이드${nextSeq - 1} 게임을 장부에 생성했어요`, 'success');
       } catch (e) { toast.show(e instanceof Error ? e.message : '사이드 게임 생성 실패', 'error'); }
     }

@@ -437,7 +437,12 @@ export function discountSummary(
     //   티켓·가게지원은 할인을 해도 받을 현금이 애초에 0원이라 매출이 줄지 않는다.
     //   예전엔 total 하나로 뭉뚱그려, 마감 모달의 "할인이 없었다면 완납 매출은 …"이
     //   티켓 할인까지 더해 과대 계상했다(2026-09-05 실측).
-    if (b.isSplit || (b.paymentMethod !== 'ticket' && b.paymentMethod !== 'support')) cashTotal += amt;
+    //   ⚠ 분납도 같은 잣대다(2026-09-14). 예전엔 `b.isSplit ||` 로 **무조건** 더해서, 이용권만으로 낸
+    //     분납 행(현금·카드·이체 0 + 티켓 5T)의 할인까지 '덜 받은 현금'에 들어갔다 — 현금 거래가
+    //     한 푼도 없는데 "할인이 없었다면 현금성 매출 5만" 이라고 말했다.
+    //     분모 개념은 위 buyinFinance 의 `cashy` 와 같다(현금+카드+이체).
+    const cashy = b.isSplit ? b.cashAmount + b.cardAmount + b.transferAmount : 0;
+    if (b.isSplit ? cashy > 0 : (b.paymentMethod !== 'ticket' && b.paymentMethod !== 'support')) cashTotal += amt;
     entryLoss += Math.max(0, 1 - buyinFinance(b, sf).entry);
   }
   return { count, total, cashTotal, entryLoss };
