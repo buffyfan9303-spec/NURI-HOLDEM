@@ -2557,12 +2557,16 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               <span className="w-9 shrink-0 text-2xs font-bold text-accent-300">할인{i + 1}</span>
               <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input min-w-0 flex-1 text-sm" />
               <div className="relative w-20 shrink-0">
-                <input type="number" inputMode="decimal" step="0.1" min="0" max={minUnit > 0 ? minUnit / WON_PER_MAN : undefined} value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" aria-invalid={badDisc === i}
+                <input type="number" inputMode="decimal" step="0.1" min="0" max={minUnit > 0 ? minUnit / WON_PER_MAN : undefined} value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="금액" aria-invalid={badDisc === i}
                   className={['input w-full pr-6 text-sm tabular-nums', badDisc === i ? 'border-danger text-danger-light' : ''].join(' ')} />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
               </div>
               {/* #20: 이 칸이 '자동 적용'의 전부다. 비워 두면 예전과 똑같이 수기 선택 전용으로 남는다. */}
-              <div className="relative w-16 shrink-0">
+              {/* ⚠ 폭 주의(2026-09-15 오너 리포트 "LV 칸에 한 글자만 보인다"):
+                  w-16(68px) − pl-3(12.75) − pr-6(25.5) = 글자 공간 **29.75px** 인데 placeholder '자동' 이
+                  text-sm(14.875px)×2 = **29.75px** 로 정확히 경계라 한 글자에서 잘렸다. 여유를 준다.
+                  줄이려면 placeholder 를 먼저 줄여라 — 폭만 줄이면 같은 자리로 돌아온다. */}
+              <div className="relative w-[4.75rem] shrink-0">
                 <input type="number" inputMode="numeric" min="0" max="60" value={d.level || ''} onChange={(e) => setDisc(i, { level: Math.max(0, Math.min(60, parseInt(e.target.value, 10) || 0)) })} placeholder="자동" className="input w-full pr-6 text-sm tabular-nums" />
                 <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">LV</span>
               </div>
@@ -2572,7 +2576,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           {discs.length < 5 && (
             <button type="button" onClick={addDisc} className="w-full rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">+ 할인 추가</button>
           )}
-          <p className="text-2xs leading-relaxed text-ink-muted">
+          <p className="text-2xs leading-[1.75] text-ink-muted">
             할인은 <b className="text-accent-300">금액에서만</b> 차감합니다 — 예) 10만 게임에 5만 할인 = 적용금액 5만원 · 바이인 <b className="text-accent-300">1회</b> · 엔트리 <b className="text-accent-300">0.5</b>.<br />
             {badDisc >= 0 && (
               <b className="block text-danger-light">
