@@ -1013,13 +1013,19 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
       <p className="flex min-w-0 items-center gap-1 text-2xs">
         <span className="sr-only">작업 대상 </span>
         <Icon name="store" size={12} className="shrink-0 text-ink-muted" />
+        {/* ⚠ 2026-09-14 실측(375, 긴 매장명): 매장명이 폭을 **먼저** 다 먹어 게임명이 17px `메…` 로 소실됐다
+            — 이 줄의 존재 이유("지금 어느 게임인가")가 사라지는 정보 소실이다.
+            ⚠ 루트 폰트가 17px 라 max-w-[14rem] = 238px 다(Tailwind rem 유틸이 6.25% 크다).
+            그래서 우선순위를 뒤집는다: 매장명은 flex-1(basis 0)로 **남는 폭만** 먹고 먼저 줄어들며,
+            게임명은 shrink-0 으로 제 폭을 지키되 max-w-[50%] 로 긴 이름일 때만 잘린다.
+            max-w-[14rem] 은 남겨 둬 PC 에서 매장명이 줄을 독점하지 않게 한다(1440·1280 렌더 불변). */}
         {venueName && (<>
-          <span className="min-w-0 max-w-[14rem] truncate font-bold text-ink-primary">{venueName}</span>
+          <span className="min-w-0 max-w-[14rem] flex-1 truncate font-bold text-ink-primary">{venueName}</span>
           {sep}
         </>)}
         <span className="shrink-0 tabular-nums text-ink-secondary">{dLabel}</span>
         {sep}
-        <span className="min-w-0 truncate font-bold text-accent-300">{gLabel}</span>
+        <span className="min-w-0 max-w-[50%] shrink-0 truncate font-bold text-accent-300">{gLabel}</span>
       </p>
       {/* 멀티게임(메인+사이드) 날에만 나오는 전환 줄 — 단일 게임이면 접는다(잡음 0, 종전 동작 유지) */}
       {games.length > 1 && (

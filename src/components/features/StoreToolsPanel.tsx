@@ -20,7 +20,10 @@ export default function StoreToolsPanel() {
       {/* 칸 수는 GTO 탭과 같은 4단 유지 — 5칸으로 늘려 봤더니(1440 실측 칸폭 159px)
           '블라인드 생성기' 제목이 잘리고 설명이 '스택 구성·총 칩 / 수'로 끊겨 더 나빠졌다.
           1440 에서 4칸이면 칸폭 202px 로 제목·설명이 온전히 들어간다. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {/* ⚠ 2026-09-14 실측(375): 2열이면 설명 폭이 94px 라 line-clamp 2줄의 마지막 줄이
+          `배수`·`예측`·`칩 수` 같은 **한 단어 고아**가 됐다. 가장 좁은 폭만 1열로 내린다 —
+          sm(3열)·lg(4열)은 그대로다(위 주석의 1440 칸폭 202px 계약 불변). */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {tools.map((t) => (
           <button key={t.key} type="button" onClick={() => setActive(t.key)}
             className="flex w-full items-center gap-2 rounded-aura border card-aura p-3 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high active:scale-[0.98]">

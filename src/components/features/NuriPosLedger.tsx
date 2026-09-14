@@ -2575,7 +2575,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       </Field>
       </fieldset>
 
-      <Field label="토너먼트 스타트 시각 · 선택 (클락 연동·얼리 판정 기준)">
+      {/* 2026-09-14: 375 에서 `기준)` 이 고아로 떨어졌다 — 괄호 설명을 줄여 한 줄에 맞춘다(아래 설명 줄이 전체를 말한다). */}
+      <Field label="토너먼트 스타트 시각 · 선택">
         <DateTimePicker value={startISO} onChange={setStartISO} defaultDate={base.sessionDate} placeholder="스타트 날짜·시각 선택" />
         <p className="text-2xs text-ink-muted mt-1 leading-relaxed">
           얼리 구간은 <b className="text-accent-300">「클락」 설정의 레벨 기준</b> — 클락 연동 시 스타트 시각으로 자동 분류되고, 바인 칸에서 수기 변경도 됩니다.
@@ -2619,7 +2620,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <Field label="기준 엔트리(통계용) · 선택">
           <div className="flex items-center gap-2">
             <input type="number" inputMode="numeric" value={target || ''} onChange={(e) => setTarget(parseInt(e.target.value, 10) || 0)} placeholder="100" className="input w-32 shrink-0 text-sm tabular-nums" />
-            <span className="text-2xs text-ink-muted leading-snug">통계에서 목표 대비 달성률 비교에 사용</span>
+            <span className="text-2xs text-ink-muted leading-snug">통계의 목표 달성률에 사용</span>
           </div>
         </Field>
       ) : (

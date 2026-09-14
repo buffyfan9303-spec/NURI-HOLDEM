@@ -358,7 +358,8 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
             <StatCard label="총 할인액" value={`${m.discountWon.toLocaleString()} 원`} sub={m.grossSum > 0 ? `정상가 ${wonToMan(m.grossSum)}만원` : '할인 없음'} icon="percent" gold />
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <StatCard label="완납 매출액" value={`${m.revenue.toLocaleString()} 원`} icon="wallet" emerald />
+            {/* 2026-09-14: 3열 타일 폭 55px 에서 이 라벨만 `완납`/`매출액` 두 줄이었다(옆 타일은 1줄). */}
+            <StatCard label="완납액" value={`${m.revenue.toLocaleString()} 원`} icon="wallet" emerald />
             <StatCard label="미수 금액" value={`${m.unpaid.toLocaleString()} 원`} icon="alert" danger={m.unpaid > 0} />
             <StatCard label="회수 티켓" value={`${m.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} icon="ticket" gold sub={m.ticketUnpaid > 0 ? `미수 ${m.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : '1T = 1만원'} />
           </div>

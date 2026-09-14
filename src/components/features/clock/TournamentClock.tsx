@@ -1269,7 +1269,8 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           애드온 게임 (라이브에 ADD-ON 표시 · 켜야 애드온 스택 입력 가능)
         </label>
         <div className="grid grid-cols-3 gap-2">
-          <Field label={`등록마감 레벨 (전체 ${totalLevels})`}><input type="number" inputMode="numeric" min="0" max="60" value={cfg.regCloseLevel || ''} onChange={(e) => set({ regCloseLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
+          {/* 2026-09-14: 3열 그리드 99px 칸에서 `18)` 이 고아로 떨어졌다 — 전체 레벨 수를 placeholder 로 옮긴다(정보 유지). */}
+          <Field label="등록마감 레벨"><input type="number" inputMode="numeric" min="0" max="60" placeholder={`전체 ${totalLevels}`} value={cfg.regCloseLevel || ''} onChange={(e) => set({ regCloseLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
           <Field label="최대 레벨 (자동생성용)"><input type="number" inputMode="numeric" min="1" max="60" value={cfg.maxLevel || ''} onChange={(e) => set({ maxLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
           <Field label="미스터리 바운티"><input type="number" inputMode="numeric" value={cfg.mysteryBounty || ''} onChange={(e) => set({ mysteryBounty: +e.target.value || 0 })} className={numInput} /></Field>
         </div>
