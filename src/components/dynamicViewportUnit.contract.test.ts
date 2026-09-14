@@ -8,7 +8,7 @@
 //
 // 실제로 났던 일 (오너 리포트 2026-09-15, 안드로이드 크롬)
 //   "누리 스팟 … 내 스팟 눌러보면 내 스팟 쪽이 깜빡이고 있어" → 확인해 보니 **화면 전체가 흔들리는** 것이었다.
-//   `MySpotList.tsx` 의 빈 화면에 `min-h-[50dvh]` 가 있었고, 그 패널은 자체 스크롤 컨테이너가 없어
+//   `MySpotList.tsx` 의 빈 화면이 min-height 를 50dvh 로 잡고 있었고, 그 패널은 자체 스크롤 컨테이너가 없어
 //   **페이지가 스크롤**된다(= 주소창이 움직인다). 저장소 전체에서 뷰포트 단위는 그 한 곳뿐이었다.
 //
 // 🔴 이 부류가 특히 위험한 이유 — **PC 에서는 재현되지 않는다.**
@@ -23,6 +23,11 @@
 //
 // 정말 `dvh` 가 필요하면(주소창을 **따라가야 하는** 전면 오버레이 등) 이 파일의 ALLOWED 에
 // 파일 경로와 **이유**를 적어라. 적는 순간 다음 사람이 그 판단을 검토할 수 있다.
+// ⚠ 이 파일을 고칠 때 — **금지하려는 클래스명을 주석에 그대로 쓰지 마라.**
+//   tailwind.config.js 의 content 가 `./src/**/*.{js,ts,jsx,tsx}` 를 **평문으로** 스캔한다.
+//   주석인지 코드인지 가리지 않으므로, 여기에 그 클래스를 적으면 Tailwind 가 실제로 CSS 를 만들어
+//   번들에 **죽은 규칙**이 남는다(2026-09-15 실측: 라이브 CSS 에 `min-height:50dvh` 가 그대로 실렸다).
+//   설명이 필요하면 대괄호 형태를 피해서 풀어 써라.
 // 실행: npx vitest run src/components/dynamicViewportUnit.contract.test.ts
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
