@@ -11,7 +11,7 @@ import { uploadPoster } from '../../../lib/storage';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
   defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats,
-  countLevels, withDerivedEarly, generateBlinds,
+  countLevels, withDerivedEarly, generateBlinds, clampAdjEarlies,
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
   getClockState, saveClockState, saveClockLiveStats, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
@@ -683,8 +683,11 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
       persist({ remainingMs: Math.max(0, state.remainingMs + deltaMs) });
     }
   };
-  const adj = (key: 'adjEntries' | 'adjRebuys' | 'adjEarlies' | 'adjAddons', d: number) =>
+  const adj = (key: 'adjEntries' | 'adjRebuys' | 'adjAddons', d: number) =>
     persist({ [key]: Math.max(-9999, state[key] + d) } as Partial<ClockState>);
+  // 얼리만 하한이 다르다 — 실효 카운트(장부 자동 몫 + 보정)가 0 밑으로 내려가면
+  // 카운트는 max(0,…) 로 멈추고 칩만 음수로 떨어졌다 — TV '총 칩' −5,000(#11, 오너 보고 2026-09-15).
+  const adjEarly = (d: number) => persist({ adjEarlies: clampAdjEarlies(liveStats, state.adjEarlies, d) });
   const adjPlayer = (d: number) => persist({ eliminations: Math.max(0, state.eliminations - d) }); // +면 생존↑(아웃↓)
 
   const toggleFs = () => {
@@ -849,7 +852,7 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
         <Stepper label="Entries" value={liveStats.entries} onPlus={() => adj('adjEntries', 1)} onMinus={() => adj('adjEntries', -1)} />
         <Stepper label="Player" value={liveStats.alive} onPlus={() => adjPlayer(1)} onMinus={() => adjPlayer(-1)} />
         <Stepper label="Rebuy" value={liveStats.rebuys} onPlus={() => adj('adjRebuys', 1)} onMinus={() => adj('adjRebuys', -1)} />
-        <Stepper label="Early" value={liveStats.earlies} onPlus={() => adj('adjEarlies', 1)} onMinus={() => adj('adjEarlies', -1)} />
+        <Stepper label="Early" value={liveStats.earlies} onPlus={() => adjEarly(1)} onMinus={() => adjEarly(-1)} />
         <Stepper label="Addon" value={liveStats.addons} onPlus={() => adj('adjAddons', 1)} onMinus={() => adj('adjAddons', -1)} />
       </div>
 

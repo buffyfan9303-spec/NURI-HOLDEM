@@ -18,6 +18,9 @@ import { memo, useEffect, useState, type ReactNode } from 'react';
 import { effectiveLevel, type ClockState } from '../../../api/clock';
 import { clockPhase, CLOCK_PHASE_TV, gameLabel, levelNumberAt, msToNextBreak } from '../../../lib/clockLevel';
 import { msToRegClose } from '../../../lib/regStatus';
+import {
+  PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, pickPrizeLayout, prizePlaceText, type PrizeRow,
+} from './prizeFit';
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
@@ -152,37 +155,11 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
                 ⚠ 그래도 계약은 유지된다: 블라인드 행이 **고정 높이(22cqmin)** 라 ANTE 유무와 무관하게
                    스택 총높이가 상수다 → 통째로 중앙 정렬해도 타이머 y 가 움직이지 않는다. */}
             <div className="relative flex min-h-0 flex-col items-center justify-center gap-[2.5cqmin]">
-              {/* ── NURI Aura Clock Frame — 타이머·블라인드를 감싸는 얇은 이중 기하 프레임 ──
-                  레퍼런스 보드의 육각 프레임을 그대로 베끼지 않고 Aura 문법으로 옮긴 것:
-                  세로로 긴 둥근 다각형 실루엣을 **테두리 2겹 + 뒤쪽 bloom 1겹**으로만 만든다.
-                  · 외부 SVG·이미지 0 · 애니메이션 0 — 상시 송출 TV 라 1회 페인트 후 정적이어야 한다.
-                  · 색은 --clk-frame/--clk-frame-soft(= accent 파생). 프리셋을 바꾸면 프레임도 따라간다.
-                  · **타이머보다 강해 보이면 실패다** — 그래서 바깥 65%·안쪽 38%·bloom 0.14 로 눌러 뒀다.
-                  · aria-hidden + pointer-events-none: 장식이라 스크린리더·클릭 대상이 아니다.
-                  · inset 으로만 그린다 — 부모가 overflow-hidden 이어도 잘리지 않는다.
-                  · 좁은 폭(모바일 관전)에서는 숨긴다: 프레임이 글자를 침범하는 것보다 없는 편이 낫다. */}
-              {/* 치수는 실측으로 맞췄다(1920×1080 캡처): inset-y-2% 로 열 전체를 덮었더니
-                  프레임 안 위아래에 각각 170px 씩 죽은 띠가 생겼다 — 프레임이 내용을 감싸는 게 아니라
-                  내용이 프레임 안에서 떠 보였다. 위아래 비대칭인 이유: 블라인드 행이 h-[22cqmin] **고정**이라
-                  그 안에서 내용이 중앙 정렬되면서 아래쪽에만 빈 띠가 더 남는다 — 그래서 bottom 을 더 올린다. */}
-              <span aria-hidden className="clk-wide-land pointer-events-none absolute inset-x-[7%] bottom-[14%] top-[13%]">
-                {/* 바깥 선 + **뒤로 번지는 LED**. box-shadow 두 겹이 전부다 —
-                    밖으로 2.6cqmin 번져 패널 뒤 광원이 벽을 비추는 느낌을 만들고(§15 2단계),
-                    안으로 1.2cqmin 은 테두리 안쪽을 살짝 채워 선이 납작해 보이지 않게 한다.
-                    filter·blur 를 쓰지 않는다 — 상시 송출 TV 라 1회 페인트 후 정적이어야 한다
-                    (프로젝트 관례도 글로우는 box-shadow 로 만든다). 알파는 §15 상한 0.18 안. */}
-                <span className="absolute inset-0 rounded-[8cqmin] border-2"
-                  style={{
-                    borderColor: 'var(--clk-frame, rgba(129,140,248,.65))',
-                    boxShadow: '0 0 2.6cqmin color-mix(in srgb, var(--clk-accent, #818CF8) 16%, transparent),'
-                             + ' inset 0 0 1.2cqmin color-mix(in srgb, var(--clk-accent, #818CF8) 10%, transparent)',
-                  }} />
-                <span className="absolute inset-[1.1cqmin] rounded-[7cqmin] border"
-                  style={{ borderColor: 'var(--clk-frame-soft, rgba(129,140,248,.38))' }} />
-                {/* 뒤쪽 LED bloom — 프레임 안쪽에만, 글자 뒤로는 번지지 않게 closest-side 로 가둔다 */}
-                <span className="absolute inset-[3cqmin] rounded-[6cqmin] opacity-[0.14]"
-                  style={{ background: 'radial-gradient(closest-side, var(--clk-frame, #818CF8), transparent)' }} />
-              </span>
+              {/* 2026-09-15 오너 지시 #12: 타이머·블라인드를 감싸던 이중 기하 프레임(NURI Aura Clock Frame)을 삭제했다.
+                  "클락 중앙에 네모 테두리 있는데 이거 삭제" — 1920x1080 캡처로 이 요소임을 확인한 뒤 지웠다.
+                  레이아웃 영향 0: 그 프레임은 `absolute inset-x-[7%] top-[13%] bottom-[14%]` 장식이라
+                  형제(CenterPanel·BlindsRow)의 폭·높이를 전혀 먹지 않았다(삭제 전후 타이머 rect 동일 — 실측).
+                  타이머 뒤 약한 radial bloom(CenterPanel 안)은 테두리가 아니라 남긴다. */}
               <CenterPanel g={g} />
               <div className="h-[22cqmin] w-full shrink-0">
                 <BlindsRow g={g} />
@@ -234,25 +211,37 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
   );
 }
 
-/** 한 장에 싣는 순위 수. 레퍼런스 보드(1/2 표기)가 쓰는 단위다. */
-const PRIZES_PER_PAGE = 15;
-/** 장 넘김 주기. 멀티게임 자동 순환(15초)보다 짧게 둬야 한 게임 안에서 두 장이 다 보인다. */
-const PRIZE_PAGE_MS = 10_000;
+/** 한 장이 머무는 시간. 두 경계에 끼어 있다 — 실측으로 7초를 골람다.
+ *  · 위: 멀티게임 자동 순환이 15초다(ClockDisplay.tsx:146). 2장짜리(21~40등) 대회에서 한 게임이
+ *    송출되는 동안 두 장이 다 보이려면 `2 × (머무름 + 전환) ≤ 15,000` → 머무름 ≤ 7,100ms.
+ *  · 아래: 20줄을 눈으로 훑는 데 필요한 시간. 자기 등수를 찾는 읽기라 줄당 0.3초 ≈ 6초가 바닥이다.
+ *  7,000 + 400 = 7,400 → 2장 14.8초(15초 안) · 200등(10장) 한 바퀴 74초. */
+const PRIZE_PAGE_MS = 7_000;
+/** 가로 전환 시간. 짧고 단호하게 — 글자가 흐르는 동안은 읽을 수 없으니 머무름(7초)에 비해 무시할 만해야 한다. */
+const PRIZE_SLIDE_MS = 400;
 
 /**
- * PrizeColumn — 총 프라이즈 + 순위별 표. 15개를 넘으면 **자동으로 장을 넘긴다**(1/2).
+ * PrizeColumn — 총 프라이즈 + 순위별 표. 한 장 **20줄(좌단 1~10 · 우단 11~20)**, 넘으면 **옆으로 밀린다**.
  *
- * 왜 잘라내지 않고 넘기나: 종전에는 `prizes.slice(0, 12)` 라 13등부터는 TV 에 **영원히 안 나왔다**.
- *   상금 구조를 22등까지 잡은 대회에서 참가자가 "내 등수는 얼마인가"를 확인할 방법이 화면에 없었다.
+ * 왜 잘라내지 않나: 종전에는 `prizes.slice(0, 12)` 라 13등부터는 TV 에 **영원히 안 나왔다**.
+ *   상금 구조를 200등까지 잡은 대회에서 참가자가 "내 등수는 얼마인가"를 확인할 방법이 화면에 없었다.
  *   자르는 것은 '안 보이는 것'이고 넘기는 것은 '늦게 보이는 것'이라 정보 손실이 다르다.
  *
- * ⚠ 마지막 장을 **빈 줄로 채운다**(pad). 18개면 15 + 3 인데, 3줄짜리 장을 그대로 그리면
- *   열 높이가 줄고 이 열은 세로 중앙 정렬이라 총액·표가 통째로 위아래로 튄다 —
- *   상시 송출 TV 에서 10초마다 화면이 들썩이는 것은 결함이다. 빈 줄은 높이만 차지한다(aria-hidden).
+ * 2026-09-15 오너 지시 #13 — 세로 교체를 **가로 슬라이드**로 바꾸고 한 장을 20줄로 늘렸다.
+ *   ① 모든 장을 가로로 늘어놓고 트랙을 translateX 로 민다 → 장마다 높이가 흔들리지 않는다
+ *      (예전의 빈 줄 채우기 pad 가 필요 없어졌다 — 가장 긴 장이 높이를 정한다).
+ *   ② **2단 × 10줄**이라 20줄을 넣고도 글자를 거의 안 줄인다. 1단 20줄은 세로가 195px 모자라
+ *      글자를 17% 줄여야 했는데, 이 열은 폭 401px 중 잉크가 150px 뿐이라 **가로가 놀고 있었다**.
+ *   ③ 규격은 `pickPrizeLayout` 이 **상금 자릿수·등수 자릿수로 계산해서** 고른다(prizeFit.ts).
+ *      어떤 규격으로도 2단이 안 되면 **1단 20줄로 떨어진다** — 잘림은 구조적으로 나오지 않는다.
  *
- * 초당 틱이 아니라 10초 인터벌이고, 장이 하나면 인터벌 자체를 걸지 않는다.
+ * ⚠ 읽는 순서는 **위→아래, 좌→우**다(좌단 1~10등 · 우단 11~20등). 좌우로 번갈아 가면 안 된다.
+ * ⚠ 접근성: `motion-reduce:transition-none` — 모션을 줄인 환경에서는 **즉시** 전환된다.
+ *   멈추지는 않는다. 멈추면 21등 아래가 그 기기에서 영영 안 보여 기능 소실이 되기 때문이다.
+ *
+ * 초당 틱이 아니라 7초 인터벌이고, 장이 하나면 인터벌 자체를 걸지 않는다(언마운트·장 수 변화에서 정리).
  */
-function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: { place: string; amount: number }[]; totalPrize: number; mysteryBounty: number }) {
+function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]; totalPrize: number; mysteryBounty: number }) {
   const pages = Math.ceil(prizes.length / PRIZES_PER_PAGE);
   const [page, setPage] = useState(0);
   useEffect(() => {
@@ -262,9 +251,33 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: { place: s
   }, [pages]);
   // 표가 짧아져 장 수가 줄면 현재 장이 범위를 벗어난다 — 빈 화면 대신 첫 장으로.
   const cur = Math.min(page, pages - 1);
-  const start = cur * PRIZES_PER_PAGE;
-  const rows = prizes.slice(start, start + PRIZES_PER_PAGE);
-  const padCount = pages > 1 ? PRIZES_PER_PAGE - rows.length : 0;
+  const { spec, twoCol } = pickPrizeLayout(prizes);
+  const sheets = Array.from({ length: pages }, (_, i) => prizes.slice(i * PRIZES_PER_PAGE, (i + 1) * PRIZES_PER_PAGE));
+  const cq = (n: number) => `${n}cqmin`;
+
+  /** 한 단. `from` 은 전체 표에서의 시작 번호 — 1등 줄(큰 글자)을 그것으로 판정한다. */
+  const column = (rows: PrizeRow[], from: number, hidden: boolean) => (
+    <ul className={twoCol ? 'min-w-0 flex-1' : 'w-full'} aria-hidden={hidden ? true : undefined}>
+      {rows.map((p, i) => {
+        // 1등만 한 단계 크게 — **전체 1등**이지 '이 단의 첫 줄'이 아니다(우단 11등이 커지면 거짓말이 된다).
+        const lead = from + i === 0;
+        return (
+          // min-h 로 줄 높이를 고정한다 — 1등만 글자가 큰데, 그 줄이 있는 장과 없는 장의 높이가
+          //   달라지면 세로 중앙 정렬 때문에 장이 바뀔 때마다 총액이 위아래로 튄다(실측 3.7px).
+          <li key={from + i} className="flex items-baseline justify-between gap-[1.2cqmin] leading-tight"
+            style={{ minHeight: cq(spec.minH), marginTop: i === 0 ? undefined : cq(spec.gap) }}>
+            <span className="shrink-0 font-bold tabular-nums" style={{ fontSize: cq(lead ? spec.leadPlace : spec.place), ...DIM }}>
+              {prizePlaceText(p.place)}
+            </span>
+            <span className="font-extrabold tabular-nums"
+              style={{ fontSize: cq(lead ? spec.leadAmount : spec.amount), color: 'var(--clk-prize, #F5C451)' }}>
+              {p.amount.toLocaleString()}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   return (
     <aside data-testid="clk-prizes" className="clk-col min-h-0 flex-col justify-center">
@@ -273,31 +286,29 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: { place: s
         style={{ fontSize: 'clamp(22px, 4.6cqmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
         {totalPrize.toLocaleString()}
       </p>
-      <ul className="mt-[1.4cqmin] space-y-[0.45cqmin] border-t border-white/[0.08] pt-[1.2cqmin]">
-        {rows.map((p, i) => {
-          // 1등만 한 단계 크게 — **전체 1등**이지 '이 장의 첫 줄'이 아니다(2장에서 16등이 커지면 거짓말이 된다).
-          const lead = start + i === 0;
-          return (
-            // min-h: 줄 높이를 **1등 줄 기준으로 고정**한다. 1등만 글자가 한 단계 큰데, 그 줄이
-            //   있는 장과 없는 장의 높이가 달라지면 세로 중앙 정렬 때문에 장이 바뀔 때마다
-            //   총액이 위아래로 튄다(실측 3.7px — 상시 송출 TV 에서 10초마다 들썩인다).
-            <li key={start + i} className="flex min-h-[3.2cqmin] items-baseline justify-between gap-[1.2cqmin] leading-tight">
-              <span className="shrink-0 font-bold tabular-nums" style={{ fontSize: lead ? '2.2cqmin' : '1.9cqmin', ...DIM }}>
-                {/^\d+$/.test(p.place) ? `${p.place}등` : p.place}
-              </span>
-              <span className="font-extrabold tabular-nums"
-                style={{ fontSize: lead ? '2.5cqmin' : '2.1cqmin', color: 'var(--clk-prize, #F5C451)' }}>
-                {p.amount.toLocaleString()}
-              </span>
-            </li>
-          );
-        })}
-        {/* 높이 지킴이 — 마지막 장이 짧아도 열 높이가 그대로다(위 ⚠ 참고) */}
-        {Array.from({ length: padCount }, (_, i) => (
-          <li key={`pad-${i}`} aria-hidden className="min-h-[3.2cqmin]" />
-        ))}
-      </ul>
-      {/* 미스터리 바운티 — 03cd8bb 에서 옮 보드가 사라지며 **함께 사라졌던** 값이다.
+      {/* 가로 뷰포트 — 트랙이 여기서 잘린다. 세로는 자르지 않는다(잘리면 줄이 반만 보인다). */}
+      <div className="mt-[1.4cqmin] overflow-x-hidden border-t border-white/[0.08] pt-[1.2cqmin]">
+        <div data-testid="clk-prize-track" className="flex transition-transform ease-out motion-reduce:transition-none"
+          style={{ transform: `translateX(-${cur * 100}%)`, transitionDuration: `${PRIZE_SLIDE_MS}ms` }}>
+          {sheets.map((rows, pi) => {
+            const from = pi * PRIZES_PER_PAGE;
+            const hidden = pi !== cur;
+            return (
+              // 장 한 벌. e2e 는 `[data-prize-sheet]:not([aria-hidden])` 로 **보이는 장**을 잡는다.
+              <div key={pi} data-prize-sheet={pi} aria-hidden={hidden ? true : undefined}
+                className="w-full shrink-0" style={twoCol ? { display: 'flex', gap: cq(PRIZE_GUTTER_CQ) } : undefined}>
+                {twoCol
+                  ? (<>
+                      {column(rows.slice(0, PRIZE_LEFT_ROWS), from, hidden)}
+                      {column(rows.slice(PRIZE_LEFT_ROWS), from + PRIZE_LEFT_ROWS, hidden)}
+                    </>)
+                  : column(rows, from, hidden)}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {/* 미스터리 바운티 — 03cd8bb 에서 옛 보드가 사라지며 **함께 사라졌던** 값이다.
           설정 입력란(TournamentClock)은 그대로 남아 있어서, 없으면 '써도 아무 데도 안 나오는 죽은 컨트롤' 이 된다. */}
       {mysteryBounty > 0 && (
         <div data-testid="clk-mystery" className="mt-[1.2cqmin] border-t border-white/[0.08] pt-[1cqmin]">

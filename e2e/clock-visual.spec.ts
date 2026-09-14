@@ -194,18 +194,20 @@ test.describe('클락 TV — 상태별 캡처와 레이아웃 계약', () => {
   });
 });
 
-// ── 프라이즈 자동 장 넘김 ─────────────────────────────────────────────────────
-// 종전에는 `slice(0, 12)` 라 13등부터는 TV 에 **영원히 안 나왔다**. 상금 구조를 22등까지 잡은 대회에서
-// 참가자가 자기 등수의 금액을 확인할 방법이 화면에 없었다. 이제 15줄씩 장을 넘긴다(레퍼런스의 1/2 표기).
+// ── 프라이즈 자동 가로 전환 ───────────────────────────────────────────────────
+// 종전에는 `slice(0, 12)` 라 13등부터는 TV 에 **영원히 안 나왔다**. 상금 구조를 200등까지 잡은 대회에서
+// 참가자가 자기 등수의 금액을 확인할 방법이 화면에 없었다.
+// 2026-09-15 오너 지시 #13: 한 장 20줄, 넘으면 **몇 초마다 옆으로** 밀어 다음 구간을 보여준다.
 //
-// 이 스펙이 잠그는 것 셋:
-//   ① 넘어간 등수가 실제로 나온다(16등이 2장에 보인다) — '잘림'과 '늦게 보임'의 차이
-//   ② 장이 바뀌어도 **열이 들썩이지 않는다** — 마지막 장이 짧으면 세로 중앙 정렬 때문에 총액이 튄다
-//   ③ 22줄짜리 표에서도 열이 넘치거나 겹치지 않는다
-test.describe('클락 TV — 프라이즈 장 넘김', () => {
+// 이 스펙이 잠그는 것 넷:
+//   ① 20줄까지는 한 화면에 전부 — 장 표시조차 만들지 않는다
+//   ② 넘어간 등수가 실제로 나온다(21등이 2장에 보인다) — '잘림'과 '늦게 보임'의 차이
+//   ③ 전환이 **가로**다(트랙 translateX) — 세로로 갈아끼우면 오너가 말한 움직임이 아니다
+//   ④ 장이 바뀌어도 **열이 들썩이지 않고** 보이는 장이 열을 넘치거나 겹치지 않는다
+test.describe('클락 TV — 프라이즈 가로 전환', () => {
   const manyPrizes = (n: number) => Array.from({ length: n }, (_, i) => ({ place: String(i + 1), amount: (n - i) * 100_000 }));
 
-  test('15개를 넘으면 1/2 로 장을 넘긴다 — 넘어간 등수가 실제로 나온다', async ({ page }) => {
+  test('20개를 넘으면 옆으로 밀어 다음 등수를 보여준다 — 넘어간 등수가 실제로 나온다', async ({ page }) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 1920, height: 1080 });
     const body = row({ endsInMs: 9 * 60_000 });
@@ -215,48 +217,121 @@ test.describe('클락 TV — 프라이즈 장 넘김', () => {
     await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
 
     const aside = page.getByTestId('clk-prizes');
+    const track = page.getByTestId('clk-prize-track');
     const indicator = page.getByTestId('clk-prize-page');
-    await expect(indicator, '22개인데 장 표시가 없다 — 13등 이후가 화면에 영원히 안 나온다').toHaveText('1 / 2');
-    // 1장: 1~15등. 빈 줄 패딩이 없으므로 li 는 정확히 15개.
-    await expect(aside.locator('li')).toHaveCount(15);
-    await expect(aside).toContainText('15등');
-    await expect(aside, '1장에 16등이 보인다 — 장 나눔이 안 됐다').not.toContainText('16등');
+    // 보이는 장 = aria-hidden 이 없는 장 한 벌. 나머지 장도 DOM 에 있다(가로로 늘어놓고 미는 구조라).
+    //   ⚠ 2단이면 장 안에 ul 이 둘이라 `ul:not([aria-hidden])` 로 잡으면 strict mode 위반이다.
+    const shown = aside.locator('[data-prize-sheet]:not([aria-hidden])');
 
-    // ② 들썩임 — 장이 바뀌기 전후로 총액 줄의 y 가 같아야 한다.
+    await expect(indicator, '22개인데 장 표시가 없다 — 21등 이후가 화면에 영원히 안 나온다').toHaveText('1 / 2');
+    await expect(shown.locator('li'), '한 장은 20줄이다').toHaveCount(20);
+    await expect(shown).toContainText('20등');
+    await expect(shown, '1장에 21등이 보인다 — 장 나눔이 안 됐다').not.toContainText('21등');
+
+    // ③ 가로 전환 — 트랙이 translateX 로 움직인다(matrix 의 tx 가 0 → 음수).
+    const tx = () => track.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).m41);
+    expect(await tx(), '1장인데 트랙이 이미 밀려 있다').toBe(0);
+
+    // ④ 들썩임 — 장이 바뀌기 전후로 총액 줄의 y 가 같아야 한다.
     const total = aside.locator('p').nth(1);
-    const before = (await total.boundingBox())!;
-    await expect(indicator).toHaveText('2 / 2', { timeout: 20_000 });   // 10초 주기
-    await expect(aside, '2장에 16등이 없다 — 넘어간 등수가 여전히 안 보인다').toContainText('16등');
-    await expect(aside).toContainText('22등');
-    const after = (await total.boundingBox())!;
-    expect(Math.abs(after.y - before.y), `장이 바뀌며 총액이 세로로 ${Math.round(after.y - before.y)}px 움직였다 — 10초마다 TV 가 들썩인다`)
+    const beforeY = (await total.boundingBox())!;
+    await expect(indicator).toHaveText('2 / 2', { timeout: 20_000 });
+    await page.waitForTimeout(600);   // 전환(0.4s)이 끝난 뒤에 잰다
+    const moved = await tx();
+    expect(moved, `2장인데 트랙이 가로로 안 움직였다(tx=${moved}) — 세로 교체로 돌아갔다`).toBeLessThan(-100);
+    await expect(shown, '2장에 21등이 없다 — 넘어간 등수가 여전히 안 보인다').toContainText('21등');
+    await expect(shown).toContainText('22등');
+    const afterY = (await total.boundingBox())!;
+    expect(Math.abs(afterY.y - beforeY.y), `장이 바뀌며 총액이 세로로 ${Math.round(afterY.y - beforeY.y)}px 움직였다 — 몇 초마다 TV 가 들썩인다`)
       .toBeLessThanOrEqual(2);
 
-    // ③ 22줄 구성에서도 열이 넘치거나 겹치지 않는다(1장 15줄 + 2장 7줄 + 빈 줄 8).
+    // 보이는 장이 열을 넘치거나 겹치지 않는다(안 보이는 장은 가로로 밀려 있어 당연히 밖이다).
     const fit = await aside.evaluate((el) => {
       const a = el.getBoundingClientRect();
-      const items = Array.from(el.querySelectorAll('li')).map((li) => li.getBoundingClientRect());
-      return {
-        overflowY: el.scrollHeight - el.clientHeight,
-        outside: items.filter((r) => r.top < a.top - 1 || r.bottom > a.bottom + 1 || r.bottom > innerHeight).length,
-        overlap: items.slice(1).filter((r, i) => r.top < items[i].bottom - 1).length,
-      };
+      // ⚠ 2단은 **단별로** 본다. 첫 ul 만 보면 우단이 검사에서 빠지고,
+      //   두 단을 한 줄로 이어 보면 우단 첫 줄이 좌단 마지막 줄과 '겹친다'고 오판한다.
+      const sheetEl = el.querySelector('[data-prize-sheet]:not([aria-hidden])')!;
+      const cols = Array.from(sheetEl.querySelectorAll('ul'));
+      let outside = 0, overlap = 0, sideways = 0;
+      for (const ul of cols) {
+        const items = Array.from(ul.querySelectorAll('li')).map((li) => li.getBoundingClientRect());
+        outside += items.filter((r) => r.top < a.top - 1 || r.bottom > a.bottom + 1 || r.bottom > innerHeight).length;
+        overlap += items.slice(1).filter((r, i) => r.top < items[i].bottom - 1).length;
+        sideways += items.filter((r) => r.right > a.right + 1 || r.left < a.left - 1).length;
+      }
+      return { overflowY: el.scrollHeight - el.clientHeight, outside, overlap, sideways, cols: cols.length };
     });
     expect(fit.overflowY, `프라이즈 열이 ${fit.overflowY}px 넘쳤다`).toBeLessThanOrEqual(0);
     expect(fit.outside, `프라이즈 ${fit.outside}줄이 열 밖으로 나갔다`).toBe(0);
     expect(fit.overlap, `프라이즈 ${fit.overlap}줄이 윗줄과 겹친다`).toBe(0);
+    expect(fit.cols, `한 장이 ${fit.cols}단이다 — 2단이어야 한다`).toBe(2);
+    expect(fit.sideways, `프라이즈 ${fit.sideways}줄이 열 폭을 가로로 넘어갔다 — TV 에서 금액이 잘린다`).toBe(0);
     await page.screenshot({ path: `test-results/clock-shots/${PHASE}-prize-page2.png` });
   });
 
-  test('15개 이하면 장 표시를 만들지 않는다', async ({ page }) => {
+  test('🔴 20개 이하면 한 화면에 전부 — 장 표시를 만들지 않는다', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    for (const n of [15, 20]) {
+      const body = row({ endsInMs: 9 * 60_000 });
+      body.config.prizes = manyPrizes(n);
+      await serveClock(page, body);
+      await page.goto(`/?display=${VENUE}&g=1&auto=0`);
+      await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
+      const aside = page.getByTestId('clk-prizes');
+      await expect(aside.locator('li'), `${n}줄인데 한 화면에 다 안 나온다`).toHaveCount(n);
+      await expect(aside).toContainText(`${n}등`);
+      await expect(page.getByTestId('clk-prize-page'), `${n}줄은 한 장뿐인데 장 표시를 그렸다`).toHaveCount(0);
+      // 한 화면에 다 들어가는가 — 넘치면 마지막 등수가 잘려 보인다.
+      const fit = await aside.evaluate((el) => {
+        const a = el.getBoundingClientRect();
+        const items = Array.from(el.querySelectorAll('li')).map((li) => li.getBoundingClientRect());
+        return {
+          overflowY: el.scrollHeight - el.clientHeight,
+          outside: items.filter((r) => r.top < a.top - 1 || r.bottom > a.bottom + 1 || r.bottom > innerHeight).length,
+        };
+      });
+      expect(fit.overflowY, `${n}줄에서 프라이즈 열이 ${fit.overflowY}px 넘쳤다`).toBeLessThanOrEqual(0);
+      expect(fit.outside, `${n}줄에서 ${fit.outside}줄이 열 밖으로 나갔다`).toBe(0);
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+    }
+  });
+
+  test('🔴 2단 읽는 순서 — 좌단 1~10등 · 우단 11~20등(위→아래, 좌→우)', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     const body = row({ endsInMs: 9 * 60_000 });
-    body.config.prizes = manyPrizes(15);
+    body.config.prizes = manyPrizes(22);
     await serveClock(page, body);
     await page.goto(`/?display=${VENUE}&g=1&auto=0`);
     await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId('clk-prizes').locator('li')).toHaveCount(15);
-    await expect(page.getByTestId('clk-prize-page'), '한 장뿐인데 1/1 을 그렸다').toHaveCount(0);
+    const sheet = page.getByTestId('clk-prizes').locator('[data-prize-sheet]:not([aria-hidden])');
+    const cols = sheet.locator('ul');
+    await expect(cols, '2단이 아니다').toHaveCount(2);
+    // 좌단이 1~10등, 우단이 11~20등 — 좌우로 번갈아 가면 여기서 깨진다.
+    const places = (i: number) => cols.nth(i).locator('li > span:first-child').allInnerTexts();
+    const L = (await places(0)).map((t) => t.trim());
+    const R = (await places(1)).map((t) => t.trim());
+    console.log('[prize-2col]', JSON.stringify({ L, R }));
+    expect(L, '좌단은 1~10등이어야 한다').toEqual(Array.from({ length: 10 }, (_, i) => `${i + 1}등`));
+    expect(R, '우단은 11~20등이어야 한다').toEqual(Array.from({ length: 10 }, (_, i) => `${i + 11}등`));
+    // 좌단이 실제로 우단 왼쪽에 서 있는가 · 두 단의 윗줄이 같은 높이인가
+    const bl = (await cols.nth(0).boundingBox())!, br = (await cols.nth(1).boundingBox())!;
+    expect(bl.x, '좌단이 우단 오른쪽에 있다').toBeLessThan(br.x);
+    expect(Math.abs(bl.y - br.y), '두 단의 윗줄 높이가 다르다').toBeLessThanOrEqual(2);
+    await page.screenshot({ path: `test-results/clock-shots/${PHASE}-prize-2col.png` });
+  });
+
+  test('🔴 모션을 줄인 환경에서도 21등 이후에 도달한다 — 즉시 전환이지 정지가 아니다', async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const body = row({ endsInMs: 9 * 60_000 });
+    body.config.prizes = manyPrizes(22);
+    await serveClock(page, body);
+    await page.goto(`/?display=${VENUE}&g=1&auto=0`);
+    await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
+    // 멈추면 21등이 그 기기에서 영영 안 보인다 = 기능 소실.
+    await expect(page.getByTestId('clk-prize-page')).toHaveText('2 / 2', { timeout: 20_000 });
+    await expect(page.getByTestId('clk-prizes').locator('[data-prize-sheet]:not([aria-hidden])')).toContainText('21등');
   });
 });
 

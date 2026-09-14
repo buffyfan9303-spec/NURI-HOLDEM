@@ -33,7 +33,7 @@ import { getSchedules, type Schedule } from '../../api/schedules';
 import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
-import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
+import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
@@ -1882,7 +1882,9 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
   const earlyTotal = ls?.earlies ?? 0;            // 화면 합계는 클램프된 값이 맞다(음수 얼리는 없다)
   const earlyAuto = earlyAutoOf(ls, clock.adjEarlies);
   const out = (d: number) => onPatch({ eliminations: Math.max(0, clock.eliminations + d) });
-  const adjEarly = (d: number) => onPatch({ adjEarlies: Math.max(-9999, (clock.adjEarlies ?? 0) + d) });
+  // 얼리만 하한이 다르다 — 실효 카운트(장부 자동 몫 + 보정)가 0 밑으로 내려가면
+  // 카운트는 max(0,…) 로 멈추고 칩만 음수로 떨어졌다 — TV '총 칩' −5,000(#11, 오너 보고 2026-09-15).
+  const adjEarly = (d: number) => onPatch({ adjEarlies: clampAdjEarlies(ls, clock.adjEarlies, d) });
   const stepBtn = 'h-10 w-10 shrink-0 rounded-input border border-border-default text-ink-secondary text-base font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-35';
 
   return (

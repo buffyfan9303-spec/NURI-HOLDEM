@@ -505,13 +505,35 @@ export function earlyAutoOf(
   return (ls?.earliesRaw ?? ls?.earlies ?? 0) - (adjEarlies ?? 0);
 }
 
+/** 얼리 수기 보정의 하한 — 실효 카운트(장부 자동 몫 + 보정)가 0 밑으로 내려가지 않게 한다(#11).
+ *
+ *  왜 상태 쪽에도 하한이 필요한가: 칩 환산을 클램프하면 화면은 맞지만, 그러면 [−] 를 여러 번
+ *  누른 만큼 adjEarlies 가 조용히 내려가 [+] 를 같은 횟수만큼 눌러야 숫자가 움직인다 —
+ *  오너가 본 "얼리 표기가 안되고" 가 바로 그것이다. 버튼은 상태를 더 내리지 않아야 한다.
+ *
+ *  장부 자동 몫은 스냅샷에서 역산한다(earlyAutoOf) — 호출부가 derived/cfg 를 들고 있지 않아도
+ *  liveStats 만으로 같은 하한을 쓴다. ls 가 없는 클락(장부 미연동)은 보정이 곧 카운트라 0 이 하한이다.
+ *  ⚠ 이미 음수로 저장된 낡은 행은 **그 자리에 멈추기만** 한다(강제로 0 으로 올리지 않는다) —
+ *    [−] 를 누른 것이 값을 **올리는** 일이 되면 그것도 거짓말이다. [+] 로 올라오면 그때 복구된다. */
+export function clampAdjEarlies(
+  ls: Pick<ClockLiveStats, 'earlies' | 'earliesRaw'> | null | undefined,
+  currentAdj: number | null | undefined,
+  delta: number,
+): number {
+  const cur = currentAdj ?? 0;
+  const auto = Math.max(0, earlyAutoOf(ls, cur));
+  const lo = auto > 0 ? -auto : 0;   // `-auto` 그대로 쓰면 auto 0 에서 -0 이 나온다(Object.is 로 보는 단언이 갈린다)
+  return Math.max(Math.min(cur, lo), cur + delta);
+}
+
 /** 라이브 통계 스냅샷 계산(클락 디스플레이 + 라이브 보드 공통). */
 export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: ClockConfig): ClockLiveStats {
   const entries = derived.entries + st.adjEntries;
   const rebuys = derived.rebuys + st.adjRebuys;
   // ⚠ 얼리는 인원이 아니라 기준칩 배수의 합(#21). 수기 보정은 그대로 '단위' 가산이다.
   // 클램프 전 값을 함께 남긴다 — 리모컨이 이 스냅샷에 차분을 얹을 때 기준이 된다(아래 applyRemoteStatDelta).
-  const earliesRaw = earlyUnitTotal(derived, cfg) + st.adjEarlies;
+  const earlyAuto = earlyUnitTotal(derived, cfg);
+  const earliesRaw = earlyAuto + st.adjEarlies;
   const earlies = Math.max(0, earliesRaw);
   const addons = st.adjAddons;
   const alive = Math.max(0, entries - st.eliminations);
@@ -521,7 +543,10 @@ export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: Cl
   //   예전엔 이것을 sEarly(인원)에 섞어 넣고 earlyBonus 를 곱했다 — 기준 단위와 1얼리 보너스가
   //   같은 기본 설정(5,000 / 10,000)에서만 우연히 맞고, 1얼리를 안 쓰는 게임(earlyBonus=0,
   //   더블만 10,000)에서는 보정 칩이 통째로 0 이 되어 사라졌다. 단위 → 칩으로 환산해 따로 더한다.
-  const adjChips = st.adjEarlies * (earlyUnitChips(cfg) || cfg.earlyBonus);
+  // ⚠ #11(2026-09-15): 예전엔 `st.adjEarlies` 를 **그대로** 곱했다 — 카운트만 max(0,…) 로 클램프되고
+  //   칩은 클램프되지 않아 둘이 갈렸다. 자동 0 에서 [얼리 −] 1회 → 얼리 0 인데 총 칩 **−5,000**(오너 보고).
+  //   실제로 반영된 보정분(= 클램프 뒤 카운트 − 장부 파생분)으로 환산해야 두 값이 같은 것을 말한다.
+  const adjChips = (earlies - earlyAuto) * (earlyUnitChips(cfg) || cfg.earlyBonus);
   const totalStack = entries * cfg.startStack + rebuys * cfg.rebuyStack + addons * cfg.addonStack
     + dEarly * cfg.doubleEarlyBonus + sEarly * cfg.earlyBonus + adjChips;
   const avgStack = alive > 0 ? Math.round(totalStack / alive) : 0;
@@ -564,8 +589,10 @@ export function applyRemoteStatDelta(
   const eliminations = next.eliminations;
   const alive = Math.max(0, entries - eliminations);
   // ⚠ 얼리 보정의 칩 환산은 computeLiveStats 의 adjChips 와 같은 식이어야 한다(단위 → 칩).
+  //   #11: 그쪽과 같이 **클램프된** 카운트 차분(earlies − canon.earlies)를 쓴다 — dEarlies 를 그대로
+  //   곱하면 0 에서 한 번 더 누른 [얼리 −] 가 카운트를 안 움직이면서 칩만 −5,000 씩 깎았다.
   const totalStack = canon.totalStack + dEntries * cfg.startStack + dRebuys * cfg.rebuyStack
-    + dAddons * cfg.addonStack + dEarlies * (earlyUnitChips(cfg) || cfg.earlyBonus);
+    + dAddons * cfg.addonStack + (earlies - canon.earlies) * (earlyUnitChips(cfg) || cfg.earlyBonus);
   const avgStack = alive > 0 ? Math.round(totalStack / alive) : 0;
   return { ...canon, entries, rebuys, earlies, earliesRaw, addons, alive, eliminations, totalStack, avgStack };
 }

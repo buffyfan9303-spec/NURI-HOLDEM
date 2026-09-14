@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getClockState, saveClockState, subscribeClock, effectiveLevel, levelMovePatch, computeLiveStats, deriveClockCounts,
-  applyRemoteStatDelta,
+  applyRemoteStatDelta, clampAdjEarlies,
   type ClockState,
 } from '../../../api/clock';
 import { clockPhase, CLOCK_PHASE_LABEL, levelNumberAt } from '../../../lib/clockLevel';
@@ -143,10 +143,13 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
     if (state.running && state.endsAt) persist({ endsAt: new Date(Math.max(nowMs(), new Date(state.endsAt).getTime() + deltaMs)).toISOString() });
     else persist({ remainingMs: Math.max(0, state.remainingMs + deltaMs) });
   };
-  const adj = (key: 'adjEntries' | 'adjRebuys' | 'adjEarlies' | 'adjAddons', d: number) =>
-    persist({ [key]: Math.max(-9999, state[key] + d) } as Partial<ClockState>);
-  const adjAlive = (d: number) => persist({ eliminations: Math.max(0, state.eliminations - d) }); // +면 생존↑
   const stats = computeLiveStats(state, derived, cfg);
+  const adj = (key: 'adjEntries' | 'adjRebuys' | 'adjAddons', d: number) =>
+    persist({ [key]: Math.max(-9999, state[key] + d) } as Partial<ClockState>);
+  // 얼리만 하한이 다르다 — 실효 카운트(장부 자동 몫 + 보정)가 0 밑으로 내려가면
+  // 카운트는 max(0,…) 로 멈추고 칩만 음수로 떨어졌다 — TV '총 칩' −5,000(#11, 오너 보고 2026-09-15).
+  const adjEarly = (d: number) => persist({ adjEarlies: clampAdjEarlies(stats, state.adjEarlies, d) });
+  const adjAlive = (d: number) => persist({ eliminations: Math.max(0, state.eliminations - d) }); // +면 생존↑
   const disabled = readOnly;
 
   return (
@@ -189,7 +192,7 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
         <Counter label="탈락(생존 −)" value={stats.alive} onMinus={() => adjAlive(-1)} onPlus={() => adjAlive(1)} disabled={disabled} minusFirst />
         <Counter label="엔트리" value={stats.entries} onMinus={() => adj('adjEntries', -1)} onPlus={() => adj('adjEntries', 1)} disabled={disabled} />
         <Counter label="리바이" value={stats.rebuys} onMinus={() => adj('adjRebuys', -1)} onPlus={() => adj('adjRebuys', 1)} disabled={disabled} />
-        <Counter label="얼리" value={stats.earlies} onMinus={() => adj('adjEarlies', -1)} onPlus={() => adj('adjEarlies', 1)} disabled={disabled} />
+        <Counter label="얼리" value={stats.earlies} onMinus={() => adjEarly(-1)} onPlus={() => adjEarly(1)} disabled={disabled} />
         <Counter label="애드온" value={stats.addons} onMinus={() => adj('adjAddons', -1)} onPlus={() => adj('adjAddons', 1)} disabled={disabled} />
       </section>
       <p className="px-1 text-center text-2xs text-ink-muted">
