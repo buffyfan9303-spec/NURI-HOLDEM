@@ -1,0 +1,65 @@
+-- 20260915f — 🔴 초대를 수락한 **모든 직원**이 매장 관리 권한을 자동으로 얻던 구멍
+-- ✅ 2026-09-15 라이브 적용 완료(nuri-lead). 자가검사 통과 · 어드바이저 보안 ERROR 0 유지.
+--
+-- ## 무엇이 문제였나
+-- `can_manage_venue(v)` 에 `role='venue_staff' AND approved AND venue_id=v` 가지가 있었다.
+-- `respond_staff_invite` 가 **수락 즉시** 그 세 값을 한 번에 쓰므로, 업주가 권한 토글을 하나도 켜지 않아도
+-- **그 순간** 아래가 전부 열렸다(감사 실측, 2026-09-15):
+--
+--   💰 돈    : redeem_voucher — 남의 이용권을 'used' 로 못 박는다. **되돌리기는 can_manage_pos 전용**이라 비대칭
+--   🔒 개인정보: checkins(방문자 전원 user_id·닉네임·시각) · 랭킹 **실명** 4경로
+--   ⛔ 불가역 : venue_rankings DELETE · save_venue_rankings 의 delete-then-insert · venue_messages DELETE
+--   🏪 매장   : 주소·전화·연락처·지도 좌표 변조
+--
+-- 🔴 가장 나쁜 것: `_can_see_ranking_real_names` 가 `can_manage_venue` **그 자체**였다.
+--    2026-09-10 에 `venue_rankings.real_name` 컬럼 GRANT 를 회수해 **서버에서 실명을 가려** 놨는데,
+--    그 마스킹을 푸는 유일한 통로 4개(`venue_rankings_public`·`venue_hall_of_fame`·
+--    `current_season_standings`·`venues_season_leaders`)의 열쇠가 이것이었다.
+--    **직원 한 명이 그 보안 조치를 통째로 우회했다.**
+--
+-- 🔴 그리고 이건 **화면이 유일한 가드**였던 축 5개다(CLAUDE.md 보안 §2 위반):
+--    순위 편집(화면 ledgerOk) · 매장 정보(화면 staffOk) · 이용권 사용처리(**화면 호출부 0곳**) ·
+--    랭킹 실명(화면 없음) · 방문자 명단. 번들에 anon 키가 있고 본인 세션 JWT 가 있으므로
+--    **브라우저 콘솔 한 줄로 도달**한다.
+--
+-- ## 왜 "가지만 떼기" 로는 안 되나 (감사가 내 첫 안을 반증했다)
+-- `ledger_access` 를 받은 직원에게 **순위 편집은 정당한 업무**다(오너 요구 "장부만" = 장부·클락·**순위**).
+-- 가지만 떼면 그 사람이 순위를 못 쓴다 — 부여 경로가 사라진다.
+-- → **가지 제거와 축 이동을 한 커밋**으로 한다.
+--
+-- ## 한 일
+-- ① `can_manage_venue` 에서 `venue_staff` 가지 제거 (대표·승인 공동사장·admin 만)
+-- ② 순위 3정책 · `checkins_select` · `rpa_select` · `save_venue_rankings` · `_can_see_ranking_real_names`
+--    → **`can_access_ledger`** (화면이 이미 ledgerOk 다. 업주는 can_manage_pos 로 통과)
+-- ③ `venue_messages.vmsg_delete` → **`can_manage_pos`** (화면이 이미 staffOk)
+-- ④ 나머지 5개(`redeem_voucher`·`set_venue_coords`·`update_venue_address/contact/contacts`)는
+--    가지가 사라지면서 **자동으로 업주 전용**이 됐다 — 의도한 결과다
+--
+-- ## 안 건드린 것 (원래 공개라 대상이 아니다)
+-- `venue_rankings.vr_read`(순위 읽기 공개) · `venue_messages.vmsg_select`(채팅 읽기 공개)
+-- 출퇴근(`is_my_shift_row`·`set_my_shift_time`)은 `can_manage_venue` 를 안 쓴다 — 직원 화면은 그대로다
+--
+-- ## 전제 (적용 시점 실측)
+-- `venue_staff`=0 · `profiles.role='venue_staff'`=0 · `ledger_access`=0 · `voucher_access`=0 ·
+-- `venue_staff_invites`=0 · `staff_title` 보유=0 · `venue_owners`=1(approved)
+-- → **잠복 결함이었다. 되던 게 안 되는 사람이 0명이고 데이터 마이그레이션도 없다.**
+--   사전검사가 이 전제를 확인하고, 깨졌으면 사람이 다시 보게 멈춘다.
+--
+-- ## 덤 — 선행 불일치도 같이 사라진다
+-- `can_manage_pos` 는 `venue_owners.status='approved'` 만 보는데 `can_manage_venue` 는 **추가로**
+-- `profiles.role='venue_owner' AND approved` 를 요구했다. 프로필 role 이 `user` 인 공동사장을 들이면
+-- pos=true / venue=false 가 되어 **순위 저장만 안 되는** 잠복 결함이 있었다(해당자 0명이라 안 터졌다).
+-- 순위를 `can_access_ledger` 로 옮기면서 동반 소멸한다.
+--
+-- ## 적용 방법
+-- `supabase db push` 불가(파일명 규칙·원격 이력 불일치) — **MCP execute_sql 로 2부에 나눠 적용**했다.
+-- 자가검사: 직원 가지 제거 · 업주/admin 가지 보존 · 실명 열쇠가 장부 축 · `can_manage_venue` 를 쓰는 정책 0개 ·
+-- 공개 읽기 정책 2개 보존 · `save_venue_rankings` 의 **상금 보존 로직과 "prize 는 입력값을 안 쓴다" 계약** 보존 ·
+-- 남은 `can_manage_venue` 사용 함수가 정확히 5개.
+--
+-- ## 되돌리기
+-- `can_manage_venue` 에 `or (p.role = 'venue_staff' and p.approved and p.venue_id = p_venue_id)` 를 되살리고
+-- 위 정책·함수의 축을 `can_manage_venue` 로 되돌린다. 데이터는 만들거나 지우지 않았다.
+--
+-- ⚠ 남은 격차는 `docs/HANDOFF.md` 에 있다 — 직함↔권한 미연결 · 초대 시점 권한 부여 · 본인 인건비(스키마 부재) ·
+--   직원 스케줄 위임 · "장부/정산" 분리 불가(정산은 서버 데이터가 따로 없다).
