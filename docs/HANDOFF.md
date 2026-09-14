@@ -51,15 +51,21 @@ HANDOFF.md 의 "3. 남은 일" 표에서 아직 안 끝난 항목을 이어서 �
 | `7177c0a` | 라이트 테마에서 **안 보이던 클락 조작 패널**(흰 글자 × 흰 배경) |
 | `6836e9c` | 라이트 `text-danger` 62곳 대비 미달 |
 
-### 게이트 기준선 (이 숫자에서 나빠지면 통과가 아니다)
+### 게이트 기준선 — **2026-09-15(2차) 실측. 이 숫자에서 나빠지면 통과가 아니다**
 ```
-lint           0 errors / 281 warnings   ← warnings 는 전부 기존. errors 만 본다
-vitest         2152 passed (194 files)
+lint           0 errors / 295 warnings   ← warnings 는 전부 기존. errors 만 본다
+vitest         2229 passed (203 files)
 tsc -b --force rc=0
-bundle:budget  통과 (여유 0~3% — 아슬아슬하다. 청크를 늘리면 바로 터진다)
-E2E            538 passed / 0 failed / 26 skipped / 0 flaky
-Supabase 어드바이저 보안 ERROR 0
+bundle:budget  통과 — 첫 화면 256.8/257 · JS 986.8/1000 · CSS 31.2/32 · 최대청크 111.4/114
+               ⚠ 첫 화면 여유 0%. 청크를 늘리면 바로 터진다
+E2E            549 passed / 0 failed / 20 skipped  (main 547 + boot 2, --retries=2)
+               등록 규모 --list: main 567 / 93 files + boot 2 / 1 file
+Supabase 어드바이저 보안 ERROR 0 (INFO 1 · WARN 3, 전부 기존)
 ```
+🔴 **E2E 를 돌릴 때 preview 서버 생존을 확인해라.** 2026-09-15 전량 실행에서 **preview 가 도중에 죽어**
+꼬리 5건이 `ERR_CONNECTION_REFUSED` 로 무너졌다. 단독 재실행은 전부 통과했다.
+메인 실행이 끝난 직후 `curl -o /dev/null -w "%{http_code}" http://localhost:4173/` 로 200 을 확인하고,
+아니면 재기동한 뒤 boot 을 돌려라. **그 확인 없이 나온 실패 수는 믿지 마라.**
 🟢 **E2E 전량 초록은 2026-09-15 가 처음이다.** 예전 문서에 적힌 "허용되는 실패 1건"은 **폐기됐다**
 (그 원인이던 마이그레이션을 적용했다). 이제 **빨간불은 전부 빨간불이다.**
 
@@ -97,15 +103,17 @@ Supabase 어드바이저 보안 ERROR 0
 | 안드로이드에서 화면이 흔들리던 `dvh` → `svh` + 계약 | `9bedbb6` |
 
 ### 🔴 남은 것 — 다음 세션이 이어받을 것
-1. **9번 마이그레이션 미적용** — 초안: `…/scratchpad/DRAFT-20260915a_referral_reward_event_ticket.sql`
+1. **9번 마이그레이션 미적용** — 파일은 저장소에 있다: `supabase/migrations/20260915e_referral_reward_event_ticket.sql`
+   ⚠ **`supabase db push` 로는 못 올린다**(확인함). CLI 가 이 저장소 파일명 규칙을 건너뛰고,
+   CLI 이름으로 바꾸면 **원격 이력 350여 건이 로컬에 없다**며 `migration repair` 를 요구한다 — 하지 마라.
+   👉 **SQL 편집기 / Supabase MCP `execute_sql` 로 파일 내용을 직접** 적용해라.
    (클라이언트는 **미적용이면 `null` 을 받아 안내를 안 그리므로** 지금 상태로도 안전하다. 적용하면 대기→지급이 돈다.)
    멱등 두 겹(PK `(referee_id,user_id)` + 조건부 `granted_at` UPDATE + `event_tickets` 유니크)이 **전부 DB 보장**이다.
    `§8` 에 `my_referral_stats` 를 `granted_at` 기준으로 바꾸는 것이 들어 있다 — 안 바꾸면
    "대기 중인 것까지 보상 완료로" 세어 **거짓말이 된다.**
 2. **하위탭 이동 시 화면이 위아래로 튄다** (오너 2026-09-15: "모든 탭에서 한 번씩 다 됐다")
    → 탭마다 고치지 말고 **공통 원인**부터 찾아라. 관리자에서 잡은 CLS 0.1297(푸터가 238px 밀림)과 같은 부류일 수 있다.
-3. **세로 TV(1080×1920)에서 상금표가 아예 안 보인다** — `clk-prizes` rect 0×0,
-   `.clk-col` 컨테이너 쿼리가 세로에서 열을 숨긴다. **기존 동작**이고 오너 확인 대기.
+3. ~~세로 TV 상금표~~ — **오너 확인 결과 세로로 거는 매장이 없다(2026-09-15). 과제에서 뺀다.**
 4. **Vercel Speed Insights 도입 검토** — Vercel Pro 구독 중. 실기기 필드 데이터가 없어서
    오늘 `dvh` 흔들림을 오너가 눈으로 발견할 때까지 몰랐다. 단 첫 화면 예산 여유가 **0%** 라 예산 상향이 필요하다.
 5. **AI Gateway** — 오너가 문서를 줬다. **A(API키)는 토큰당 과금**이라 한도를 넘지만 돈이 든다.
@@ -148,8 +156,8 @@ src/lib/spotEvaluate.ts
 ```bash
 cd "C:/Users/buffy/OneDrive/바탕 화면/누리홀덤"
 npx tsc -b --force          # rc=0
-npm run lint                # 0 errors (warnings 281 은 기존)
-npm run test                # 2152 passed
+npm run lint                # 0 errors (warnings 295 는 기존)
+npm run test                # 2229 passed
 npm run bundle:budget       # 통과 (여유 0~3%)
 ```
 
