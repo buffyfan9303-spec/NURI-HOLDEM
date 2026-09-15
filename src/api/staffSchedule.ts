@@ -96,6 +96,27 @@ export async function saveStaffWage(venueId: string, w: StaffWage): Promise<void
   if (error) throw error;
 }
 
+/** 직원 **본인**의 인건비(20260915h·i).
+ *
+ * 왜 테이블 SELECT 가 아니라 RPC 인가: `staff_wage.memo` 는 업주가 그 직원에 대해 적는 인사 메모다.
+ *   본인 행 SELECT 를 정책으로 열면 memo 까지 열리는데, 업주도 직원도 똑같이 `authenticated` 롤이라
+ *   **컬럼 GRANT 로는 둘을 못 가른다.** 그래서 서버가 필요한 3칼럼만 돌려준다.
+ *
+ * ⚠ 서버는 `user_id` 로 **명시 연결된 줄만** 돌려준다(이름 매칭 안 씀 — 20260915i).
+ *   업주가 급여 줄에 직원을 연결하지 않았으면 **0행**이다. 그건 오류가 아니라 '아직 연결 안 됨' 이다.
+ *   화면은 그 둘을 갈라 말해야 한다(빈 화면 + 안내). 급여에서는 빈 화면이 남의 금액보다 낫다.
+ */
+export interface MyWage { hourlyWage: number; payday: number; weeklyOff: string; updatedAt: string | null }
+export async function getMyStaffWage(venueId: string): Promise<MyWage | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('my_staff_wage', { p_venue_id: venueId });
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = (data ?? [])[0] as any;
+  if (!r) return null;
+  return { hourlyWage: r.hourly_wage ?? 0, payday: r.payday ?? 0, weeklyOff: r.weekly_off ?? '', updatedAt: r.updated_at ?? null };
+}
+
 /**
  * 직원 본인 출퇴근 기록 — check_in/check_out 만 바꾸는 전용 RPC.
  *

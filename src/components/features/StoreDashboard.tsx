@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import CountUp from '../atoms/CountUp';
 import Icon, { type IconName } from '../atoms/Icon';
 import { getVenueWeeklyFunnel, type WeeklyFunnel } from '../../api/schedules';
+import { getMyStaffWage, type MyWage } from '../../api/staffSchedule';
 import type { Schedule } from '../../api/schedules';
 import { listStaleOpenSessions,
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
@@ -644,16 +645,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const typeEntries = Object.entries(typeCount).sort((a, b) => b[1] - a[1]);
   const playerTotal = players.length;
 
-  // 직원 권한에 따른 노출 — 권한 0이면 안내(권한 없는 화면으로의 진입 차단)
+  // 직원 권한에 따른 노출 — 운영 권한이 0이어도 **본인 것**은 볼 수 있어야 한다(오너 지시 2026-09-15 ④:
+  //   "일반 직원들의 경우 본인의 스케쥴을 볼 수 있는 메뉴와 본인 인건비, 출퇴근을 볼 수 있어야").
+  //   예전엔 여기가 막다른 안내 한 장이라 일반 직원에게 내 매장이 **아무 쓸모가 없었다.**
   const anyCap = caps.ledger || caps.manage || caps.voucher || caps.posters || caps.staff;
-  if (!anyCap) {
-    return (
-      <div className="rounded-card border border-border-default bg-surface-low p-5 text-center space-y-2">
-        <p className="text-sm font-bold text-ink-primary">아직 부여된 권한이 없습니다</p>
-        <p className="t-desc break-keep text-ink-muted">업주에게 <span className="font-semibold text-ink-primary">장부·순위</span> 또는 <span className="font-semibold text-ink-primary">이용권 내역</span> 권한을 요청하면<br />이 매장의 운영 화면을 이용할 수 있습니다.</p>
-      </div>
-    );
-  }
+  if (!anyCap) return <MyStaffCard venueId={venueId} />;
 
   return (
     <div className="space-y-3">
@@ -1663,3 +1659,81 @@ function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => vo
 }
 
 // Skeleton은 공용 atom(../atoms/Skeleton) 사용
+
+/** 운영 권한이 없는 구성원이 보는 화면 — **본인 것만** 보여 준다.
+ *
+ *  서버는 `my_staff_wage` 로 `user_id` 가 **명시 연결된 줄만** 돌려준다(20260915i).
+ *  그래서 결과가 없는 경우가 두 가지인데 **뜻이 다르다**:
+ *    · 0행  → 업주가 아직 내 급여 줄을 연결하지 않았다(정상. 오류 아님)
+ *    · 오류 → 조회 자체가 실패했다(네트워크·권한)
+ *  둘을 같은 문장으로 말하면 직원이 "고장인가?" 하고 업주에게 헛되이 묻는다. 갈라 말한다.
+ */
+function MyStaffCard({ venueId }: { venueId: string }) {
+  const [wage, setWage] = useState<MyWage | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    let alive = true;
+    setState('loading');
+    getMyStaffWage(venueId)
+      .then((w) => { if (alive) { setWage(w); setState('ready'); } })
+      .catch(() => { if (alive) setState('error'); });
+    return () => { alive = false; };
+  }, [venueId]);
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-card border border-border-default bg-surface-low p-5 space-y-3">
+        <p className="text-sm font-bold text-ink-primary">내 근무 정보</p>
+
+        {state === 'loading' && <p className="t-desc text-ink-muted">불러오는 중…</p>}
+
+        {state === 'error' && (
+          <p className="t-desc break-keep text-ink-muted">
+            인건비를 불러오지 못했어요. 잠시 후 다시 열어 주세요.
+          </p>
+        )}
+
+        {state === 'ready' && wage && (
+          <dl className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-badge bg-surface-high py-2">
+              <dt className="text-2xs text-ink-muted">시급</dt>
+              <dd className="text-sm font-bold text-ink-primary">{wage.hourlyWage.toLocaleString()}원</dd>
+            </div>
+            <div className="rounded-badge bg-surface-high py-2">
+              <dt className="text-2xs text-ink-muted">급여일</dt>
+              <dd className="text-sm font-bold text-ink-primary">{wage.payday ? `매월 ${wage.payday}일` : '미정'}</dd>
+            </div>
+            <div className="rounded-badge bg-surface-high py-2">
+              <dt className="text-2xs text-ink-muted">휴무</dt>
+              <dd className="text-sm font-bold text-ink-primary">{wage.weeklyOff || '미정'}</dd>
+            </div>
+          </dl>
+        )}
+
+        {state === 'ready' && !wage && (
+          <p className="t-desc break-keep text-ink-muted">
+            아직 업주가 내 급여 정보를 연결하지 않았어요.<br />
+            업주에게 <span className="font-semibold text-ink-primary">직원 연결</span>을 요청하면 여기에 표시됩니다.
+          </p>
+        )}
+      </div>
+
+      <div className="rounded-card border border-border-default bg-surface-low p-5 space-y-2">
+        <p className="text-sm font-bold text-ink-primary">내 스케줄·출퇴근</p>
+        <p className="t-desc break-keep text-ink-muted">
+          왼쪽 메뉴의 <span className="font-semibold text-ink-primary">출근 관리</span>에서 본인 일정을 보고 출퇴근을 기록할 수 있어요.
+        </p>
+      </div>
+
+      <div className="rounded-card border border-border-default bg-surface-low p-5 space-y-2">
+        <p className="text-sm font-bold text-ink-primary">더 필요한 권한이 있나요?</p>
+        <p className="t-desc break-keep text-ink-muted">
+          업주에게 <span className="font-semibold text-ink-primary">장부·순위</span>,{' '}
+          <span className="font-semibold text-ink-primary">이용권 내역</span>,{' '}
+          <span className="font-semibold text-ink-primary">스케줄 편성</span> 권한을 요청할 수 있습니다.
+        </p>
+      </div>
+    </div>
+  );
+}

@@ -6,10 +6,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
-import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle } from '../../api/auth';
+import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, setInviteGrants } from '../../api/auth';
 import { msgOf } from '../../lib/dbError';
 import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
-import { canAccessLedger, canManagePos, canManageVenueStaff, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
+import { canAccessLedger, canManagePos, canManageVenueStaff, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess,
+  getScheduleAccessUserIds, grantScheduleAccess, revokeScheduleAccess } from '../../api/ledger';
 import { getAllVenues, createMyVenue, getMyVenue, getVenueStaff, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
 import { splitLedgerName } from '../../lib/rankingGame';
@@ -2026,9 +2027,11 @@ function StaffManager({ venueId }: { venueId: string }) {
   // 이미 있는 권한에 grant 가 나갔다. 두 조회는 서로 독립이다 — 하나가 실패해도 다른 하나는 그대로 그린다.
   const [access, setAccess] = useState<AccessLoad>({ status: 'loading' }); // 장부·순위 권한 보유 직원 id
   const [vouch, setVouch] = useState<AccessLoad>({ status: 'loading' }); // 이용권 내역 열람 권한 보유 직원 id
+  const [sched, setSched] = useState<AccessLoad>({ status: 'loading' }); // 스케줄 편성 위임 직원 id(20260915g)
   const [changing, setChanging] = useState<ReadonlySet<string>>(() => new Set()); // `${kind}:${id}` — 변경 중
   const [accessTick, setAccessTick] = useState(0);
   const [vouchTick, setVouchTick] = useState(0);
+  const [schedTick, setSchedTick] = useState(0);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<unknown>(null); // 구성원·초대 목록 조회 실패(0명과 구분)
   // 초대 입력 하나가 두 경로를 겸한다 — '@' 가 있으면 이메일(기존 경로 그대로),
@@ -2072,9 +2075,20 @@ function StaffManager({ venueId }: { venueId: string }) {
       .catch((e: unknown) => { if (alive) setVouch({ status: 'error', error: e }); });
     return () => { alive = false; };
   }, [tick, vouchTick, venueId, vchOn]);
+  // ⚠ 권한 조회 셋은 각자 실패한다 — Promise.all 에 같이 넣으면 한 조회의 실패가 나머지까지
+  //   빈 화면으로 만든다(위 두 조회와 같은 이유. S01 과 같은 뿌리).
+  useEffect(() => {
+    let alive = true;
+    setSched({ status: 'loading' });
+    getScheduleAccessUserIds(venueId)
+      .then((ids) => { if (alive) setSched({ status: 'ready', ids }); })
+      .catch((e: unknown) => { if (alive) setSched({ status: 'error', error: e }); });
+    return () => { alive = false; };
+  }, [tick, schedTick, venueId]);
   const reload = () => setTick((t) => t + 1);
   const reloadAccess = () => setAccessTick((t) => t + 1);
   const reloadVouch = () => setVouchTick((t) => t + 1);
+  const reloadSched = () => setSchedTick((t) => t + 1);
   const accessLoadFailed = access.status === 'error' || vouch.status === 'error';
 
   const saveTitle = async (id: string, title: string) => {
@@ -2107,6 +2121,25 @@ function StaffManager({ venueId }: { venueId: string }) {
       toast.show(msgOf(e, '장부·순위 권한 변경 실패'), 'error'); reloadAccess();
     }
     finally { markChanging(`ledger:${id}`, false); }
+  };
+  // ponytail: 토글 셋이 같은 모양의 복사본이다. 하나로 묶을 수 있지만, 돌아가는 권한 코드를
+  //   늦은 시각에 리팩터하는 위험이 더 크다고 봤다. 네 번째가 생기면 그때 묶어라.
+  const toggleSchedule = async (id: string) => {
+    const view = accessViewOf(sched, changingOf('schedule'), id);
+    if (!canToggleAccess(view)) {
+      if (view === 'failed') { toast.show(accessLoadFailedMsg(sched.status === 'error' ? sched.error : null), 'error'); reloadSched(); }
+      return;
+    }
+    const has = view === 'granted';
+    markChanging(`schedule:${id}`, true);
+    setSched((a) => a.status === 'ready' ? { status: 'ready', ids: has ? a.ids.filter((x) => x !== id) : [...a.ids, id] } : a);
+    try { if (has) await revokeScheduleAccess(venueId, id); else await grantScheduleAccess(venueId, id); }
+    catch (e) {
+      // 재조회만 걸면 한 커밋 동안 낙관값이 남는다 — catch 에서 **직접 역연산**으로 되돌린 뒤 재조회(P02).
+      setSched((a) => a.status === 'ready' ? { status: 'ready', ids: has ? [...a.ids, id] : a.ids.filter((x) => x !== id) } : a);
+      toast.show(msgOf(e, '스케줄 편성 권한 변경 실패'), 'error'); reloadSched();
+    }
+    finally { markChanging(`schedule:${id}`, false); }
   };
   const toggleVoucher = async (id: string) => {
     const view = accessViewOf(vouch, changingOf('voucher'), id);
@@ -2169,6 +2202,33 @@ function StaffManager({ venueId }: { venueId: string }) {
     void sendInvite(identTrim);
   };
 
+  /** 대기 중 초대의 권한을 바꾼다 — **수락과 같은 트랜잭션에서** 부여된다(20260915j).
+   *  그래서 업주가 '수락됐나' 를 지켜보다 권한을 따로 줄 필요가 없다.
+   *  낙관 갱신 후 실패하면 **역연산으로 되돌린다** — 재조회만 걸면 한 커밋 동안 틀린 값이 남는다(P02 와 같은 규율). */
+  const toggleInviteGrant = async (iv: VenueInvite, key: 'ledger' | 'voucher' | 'schedule') => {
+    const next = {
+      ledger: iv.grantLedger, voucher: iv.grantVoucher, schedule: iv.grantSchedule, title: iv.staffTitle,
+    };
+    next[key] = !next[key];
+    setInvites((list) => list.map((x) => (x.id === iv.id
+      ? { ...x, grantLedger: next.ledger, grantVoucher: next.voucher, grantSchedule: next.schedule } : x)));
+    try { await setInviteGrants(iv.id, next); }
+    catch (e) {
+      setInvites((list) => list.map((x) => (x.id === iv.id
+        ? { ...x, grantLedger: iv.grantLedger, grantVoucher: iv.grantVoucher, grantSchedule: iv.grantSchedule } : x)));
+      toast.show(msgOf(e, '초대 권한 변경 실패'), 'error');
+    }
+  };
+  const saveInviteTitle = async (iv: VenueInvite, title: string) => {
+    const t = title.trim().slice(0, 20);
+    if ((iv.staffTitle ?? '') === t) return;
+    setInvites((list) => list.map((x) => (x.id === iv.id ? { ...x, staffTitle: t || undefined } : x)));
+    try { await setInviteGrants(iv.id, { ledger: iv.grantLedger, voucher: iv.grantVoucher, schedule: iv.grantSchedule, title: t }); }
+    catch (e) {
+      setInvites((list) => list.map((x) => (x.id === iv.id ? { ...x, staffTitle: iv.staffTitle } : x)));
+      toast.show(msgOf(e, '직책 저장 실패'), 'error');
+    }
+  };
   const cancel = async (id: string) => {
     try { await cancelStaffInvite(id); toast.show('초대를 취소했습니다', 'info'); reload(); }
     catch (e) { toast.show(msgOf(e, '초대 취소에 실패했습니다'), 'error'); }
@@ -2275,7 +2335,8 @@ function StaffManager({ venueId }: { venueId: string }) {
               <p className="text-xs font-semibold text-ink-secondary">대기중 초대 ({invites.length})</p>
               <ul className="space-y-1.5">
                 {invites.map((iv) => (
-                  <li key={iv.id} className="flex items-center gap-2 p-2.5 rounded-input bg-surface-low border border-amber-500/30">
+                  <li key={iv.id} className="flex flex-col gap-2 p-2.5 rounded-input bg-surface-low border border-amber-500/30">
+                    <div className="flex items-center gap-2">
                     {/* ⚠ 셋을 한 truncate 에 넣어 이름이 길면 **누구에게 보낸 초대인지(이메일)** 와
                         상태가 함께 사라지고 옆의 '취소' 버튼만 남았다. 이메일도 가변이라 각자 줄인다. */}
                     <span className="flex flex-1 min-w-0 items-center gap-1">
@@ -2284,6 +2345,33 @@ function StaffManager({ venueId }: { venueId: string }) {
                       <span className="shrink-0 text-2xs text-amber-400">· 수락 대기</span>
                     </span>
                     <button type="button" onClick={() => cancel(iv.id)} className="text-2xs px-2.5 py-1.5 rounded-input text-ink-muted hover:text-danger-light transition-colors">취소</button>
+                    </div>
+                    {/* 수락 **전에** 권한·직책을 정해 둔다 — 수락과 같은 트랜잭션에서 부여되므로
+                        "들어왔는데 아무것도 못 하는" 구간이 없다(오너 지시 2026-09-15 ①). */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <input
+                        type="text" defaultValue={iv.staffTitle ?? ''} list="staff-title-suggest" maxLength={20}
+                        onBlur={(e) => void saveInviteTitle(iv, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                        placeholder="직책 (매니저·딜러 등)"
+                        className="input min-w-0 flex-1 text-2xs py-1"
+                      />
+                      {([
+                        ['ledger', '장부·순위', iv.grantLedger],
+                        ['voucher', '이용권내역', iv.grantVoucher],
+                        ['schedule', '스케줄 편성', iv.grantSchedule],
+                      ] as const).map(([k, label, on]) => (
+                        (k === 'voucher' && !vchOn) ? null : (
+                          <button key={k} type="button" onClick={() => void toggleInviteGrant(iv, k)}
+                            aria-pressed={on}
+                            className={['shrink-0 text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
+                              on ? 'border-accent-400/40 bg-accent-300/15 text-accent-300 dark:text-accent-200'
+                                 : 'border-border-subtle text-ink-muted'].join(' ')}>
+                            {on ? `${label} ✓` : label}
+                          </button>
+                        )
+                      ))}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -2304,6 +2392,9 @@ function StaffManager({ venueId }: { venueId: string }) {
                 {staff.map((s) => {
                   const accessView = accessViewOf(access, changingOf('ledger'), s.id);
                   const vouchView = accessViewOf(vouch, changingOf('voucher'), s.id);
+                  const schedView = accessViewOf(sched, changingOf('schedule'), s.id);
+                  const schedBusy = !canToggleAccess(schedView);
+                  const hasSched = schedView === 'granted';
                   const hasAccess = accessView === 'granted';
                   const hasVouch = vouchView === 'granted';
                   // 확인 중·변경 중은 눌러도 아무것도 보내지 않으므로 비활성. 확인 실패는 눌러서 재조회할 수 있게 살려 둔다.
@@ -2348,6 +2439,13 @@ function StaffManager({ venueId }: { venueId: string }) {
                           {accessLabel('voucher', vouchView)}
                         </button>
                       )}
+                      {/* 스케줄 편성 위임(20260915g) — 서버가 staff_schedule 쓰기 정책을 can_manage_schedule 로 본다.
+                          이 버튼이 없으면 그 권한을 줄 경로가 없어 마이그레이션이 무용지물이다. */}
+                      <button type="button" onClick={() => toggleSchedule(s.id)} disabled={schedBusy} aria-busy={schedBusy || undefined}
+                        data-access-state={schedView}
+                        className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors disabled:opacity-60', toneOf(schedView, hasSched)].join(' ')}>
+                        {accessLabel('schedule', schedView)}
+                      </button>
                     </div>
                   </li>
                   );

@@ -264,7 +264,25 @@ export async function signUpOwner(payload: SignupOwnerPayload): Promise<void> {
 
 // ── 매장 구성원(직원) — 업주 초대 + 수락 모델 ────────────────────────────────
 export interface StaffInvite { id: string; venueId: string; venueName: string; createdAt: string; }
-export interface VenueInvite { id: string; userId: string; email: string; nickname?: string; name: string; createdAt: string; }
+export interface VenueInvite {
+  id: string; userId: string; email: string; nickname?: string; name: string; createdAt: string;
+  /** 수락과 **같은 트랜잭션**에서 부여될 권한(20260915j). 수락~부여 사이 위험 구간을 없앤다. */
+  grantLedger: boolean; grantVoucher: boolean; grantSchedule: boolean; staffTitle?: string;
+}
+
+/** 대기 중 초대의 권한·직함을 정한다(업주만). 초대 자체는 `inviteStaffByEmail` 이 만든다.
+ *  ⚠ `invite_staff_by_email` 에 파라미터를 더하지 않은 이유: 파라미터 추가는 덮어쓰기가 아니라
+ *    **오버로드**라 기존 2인자 호출이 "function is not unique" 로 깨지고, 피하려면 DROP → ACL 초기화다. */
+export async function setInviteGrants(
+  inviteId: string, g: { ledger: boolean; voucher: boolean; schedule: boolean; title?: string },
+): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('set_invite_grants', {
+    p_invite_id: inviteId, p_ledger: g.ledger, p_voucher: g.voucher, p_schedule: g.schedule,
+    p_title: g.title ?? null,
+  });
+  if (error) throw error;
+}
 
 // 업주/운영자: 매장 구성원(수락 완료) 목록. venueId 생략 시 본인 소유 매장(업주), 지정 시 해당 매장(운영자).
 // ⚠ get_my_venue_staff 는 20260914d 부터 아래 6컬럼만 내려준다(보안 표준 §6 — 예전엔 profiles 전 컬럼이 나가
@@ -301,7 +319,12 @@ export async function getMyVenueInvites(venueId?: string): Promise<VenueInvite[]
   const { data, error } = await supabase.rpc('get_my_venue_invites', { p_venue_id: venueId ?? null });
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, userId: r.user_id, email: r.email, nickname: r.nickname ?? undefined, name: r.name, createdAt: r.created_at }));
+  return (data ?? []).map((r: any) => ({
+    id: r.id, userId: r.user_id, email: r.email, nickname: r.nickname ?? undefined,
+    name: r.name, createdAt: r.created_at,
+    grantLedger: !!r.grant_ledger, grantVoucher: !!r.grant_voucher, grantSchedule: !!r.grant_schedule,
+    staffTitle: r.staff_title ?? undefined,
+  }));
 }
 // 업주: 대기중 초대 취소 / 구성원 제거
 export async function cancelStaffInvite(inviteId: string): Promise<void> {

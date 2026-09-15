@@ -1387,3 +1387,25 @@ export async function revokeLedgerAccess(venueId: string, userId: string): Promi
   const { error } = await supabase.rpc('revoke_ledger_access', { p_venue_id: venueId, p_user_id: userId });
   if (error) throw error;
 }
+
+// ── 스케줄 편성 위임(20260915g) — 장부 권한과 **같은 계약**이다.
+//    조회는 테이블 직접 SELECT 가 아니라 RPC 다: 비인가 호출자에게 0행이 아니라 42501 을 준다
+//    (0행이면 '아무도 권한이 없음' 으로 위장돼 업주가 이미 있는 권한에 grant 를 또 보낸다 — P02 와 같은 뿌리).
+//    ⚠ 부여·회수는 **업주만**(서버가 can_manage_pos 로 잠근다). 위임받은 직원이 다시 나눠 주면 권한이 번진다.
+export async function getScheduleAccessUserIds(venueId: string): Promise<string[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('get_schedule_access_user_ids', { p_venue_id: venueId });
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => r.user_id);
+}
+export async function grantScheduleAccess(venueId: string, userId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('grant_schedule_access', { p_venue_id: venueId, p_user_id: userId });
+  if (error) throw error;
+}
+export async function revokeScheduleAccess(venueId: string, userId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('revoke_schedule_access', { p_venue_id: venueId, p_user_id: userId });
+  if (error) throw error;
+}

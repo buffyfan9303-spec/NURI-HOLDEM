@@ -47,16 +47,16 @@ export function accessLoadFailedMsg(error: unknown): string {
   return ACCESS_LOAD_FAILED_MSG;
 }
 
-export type AccessKind = 'ledger' | 'voucher';
+export type AccessKind = 'ledger' | 'voucher' | 'schedule';
 
 /** 버튼 글귀. 부여/미부여 글귀는 종전 화면 그대로(기능 보존) — 나머지 세 상태만 새로 말한다. */
 export function accessLabel(kind: AccessKind, view: AccessView): string {
-  const name = kind === 'ledger' ? '장부·순위' : '이용권내역';
+  const name = kind === 'ledger' ? '장부·순위' : kind === 'voucher' ? '이용권내역' : '스케줄 편성';
   switch (view) {
     case 'checking': return `${name} 확인 중…`;
     case 'failed': return `${name} 확인 실패 · 다시 시도`;
     case 'changing': return `${name} 변경 중…`;
-    case 'granted': return kind === 'ledger' ? '장부·순위 권한 ✓' : '이용권내역 ✓';
-    case 'ungranted': return kind === 'ledger' ? '장부·순위 권한 없음' : '이용권내역 ✗';
+    case 'granted': return kind === 'ledger' ? '장부·순위 권한 ✓' : kind === 'voucher' ? '이용권내역 ✓' : '스케줄 편성 ✓';
+    case 'ungranted': return kind === 'ledger' ? '장부·순위 권한 없음' : kind === 'voucher' ? '이용권내역 ✗' : '스케줄 편성 ✗';
   }
 }
