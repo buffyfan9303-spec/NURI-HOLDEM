@@ -56,9 +56,18 @@ Deno.serve(async (req: Request) => {
       headers: { Authorization: `PortOne ${PORTONE}` },
     });
     if (!pres.ok) {
-      // 상류·DB·예외 원문은 서버 로그에만 — 응답에 실으면 로그인 유저 누구나 내부 문구를 탐색할 수 있다(보안 표준 §6).
-      console.error('[verify-identity] PortOne 조회 실패', pres.status, (await pres.text()).slice(0, 300));
-      return json({ error: '본인인증 조회 실패' }, 502);
+      // 상류·DB·예외 **원문**은 서버 로그에만 — 응답에 실으면 로그인 유저 누구나 내부 문구를 탐색할 수 있다(보안 표준 6번).
+      const raw = await pres.text();
+      console.error('[verify-identity] PortOne 조회 실패', pres.status, raw.slice(0, 500));
+      // ⚠ 2026-09-17 오너 보고: "인증완료하면 본인인증 조회 실패가 나와".
+      //   원인이 **우리 설정** 탓인지 **그 건의 상태** 탓인지 화면에서 구분할 길이 전혀 없었다 —
+      //   `error` 한 줄만 나가고 PortOne 이 준 이유는 통째로 버려졌다(api/identity.ts 는 j.error 만 읽는다).
+      //   그래서 **분류 코드만** 함께 내보낸다. PortOne 의 `type` 은 우리 연동 상태를 가리키는 값이지
+      //   사용자 개인정보가 아니다(예: UNAUTHORIZED · FORBIDDEN · IDENTITY_VERIFICATION_NOT_FOUND).
+      //   원문 메시지는 싣지 않는다 — 보안 표준이 막는 것은 '내부 문구 탐색'이고 그건 type 으로는 안 된다.
+      let code = `HTTP_${pres.status}`;
+      try { const j = JSON.parse(raw); if (typeof j?.type === 'string') code = j.type; } catch { /* JSON 이 아니면 상태코드로 */ }
+      return json({ error: `본인인증 조회 실패 (${code})`, code }, 502);
     }
     const iv = await pres.json();
     if (iv?.status !== 'VERIFIED') return json({ error: '본인인증이 완료되지 않았습니다.' }, 400);

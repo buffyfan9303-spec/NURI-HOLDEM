@@ -73,7 +73,18 @@ export default function IdentityVerificationButton({ onVerified, label = '휴대
   // 결과를 화면에 알린다 — 창 방식(프로미스)과 리다이렉트 복귀(모듈 보관분)가 같은 문장을 쓴다.
   const settle = (p: Promise<{ name: string | null }>) => p.then(
     ({ name }) => { toast.show(`${name ? name + '님 ' : ''}본인인증이 완료되었습니다.`, 'success'); onVerified?.(name); },
-    (e: unknown) => { toast.show(e instanceof Error ? e.message : '본인인증에 실패했습니다.', 'error'); },
+    (e: unknown) => {
+      // 🔴 2026-09-17 — 여기서 **서버 검증 실패가 통째로 사라졌다.**
+      //   아래 run() 의 catch 는 PortOne SDK 오류만 잡는다 — `await settle(verifyIdentity(…))` 는
+      //   settle 이 rejection 을 삼켜 이미 정상 종료한 프로미스라 그 catch 에 **닿지 않는다**.
+      //   모바일 리다이렉트 복귀(consumeIdentityReturn) 도 같은 settle 을 쓴다.
+      //   그래서 2026-09-16 에 팝업 경로에만 로깅을 넣고도 client_errors 가 **0건**이었고,
+      //   오너가 "인증완료하면 조회 실패"를 보는 동안 서버에는 502 가 5번 찍혔는데
+      //   클라이언트 기록은 한 줄도 없었다. 두 경로가 **모두** 지나는 이 자리에서 한 번만 남긴다.
+      const msg = e instanceof Error ? e.message : '본인인증에 실패했습니다.';
+      logClientError(`[idv:verify] ${msg}`.slice(0, 480), e instanceof Error ? (e.stack ?? null) : null);
+      toast.show(msg, 'error');
+    },
   ).finally(() => setBusy(false));
 
   // 리다이렉트 복귀분 — 한 번만 꺼내 보여준다(탭을 오갈 때마다 같은 토스트가 반복되지 않게).
