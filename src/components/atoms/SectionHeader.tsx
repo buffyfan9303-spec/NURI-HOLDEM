@@ -60,13 +60,20 @@ export default function SectionHeader({ title, desc, icon, tone = 'violet', acti
             {typeof icon === 'string' ? <Icon name={icon as IconName} size={14} /> : icon}
           </span>
         )}
-        <div className="min-w-0">
+        {/* 제목과 설명을 **같은 줄에 놓되, 안 들어가면 내려보낸다**(오너 2026-09-17:
+            "대시보드에 보면 두줄로 되서 굳이 아래에 없어도 되거나 어색하고").
+            예전엔 h2 와 p 가 형제 **블록**이라 desc 가 있으면 **구조적으로 항상 2행**이었다 —
+            폭이 남아도 무조건 내려갔다. flex-wrap + items-baseline 이면 폭이 있을 때만 한 줄이 된다.
+            ⚠ 대시보드만 고치지 않는다. 이 헤더는 업주 전 섹션(SECTION_DESC 18키)과 관리자가
+              통과하는 **한 개의 공유 헤더**라, 한 화면만 1행으로 만들면 섹션마다 헤더 높이가 갈린다.
+            ⚠ 설명을 지우지 않는다 — 같은 파일의 SectionHead(유저용)가 이미 쓰는 문법 그대로다. */}
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
           <h2 className="text-fluid-lg font-bold leading-tight tracking-tight text-ink-primary">{title}</h2>
           {/* 설명문 행간은 §T1 t-desc(12.75/19.13 = 1.5배) 한 값으로.
               leading-snug(17.53px)는 한글 두 줄이 붙어 보였고, 같은 12.75px 설명문이
               화면마다 17 / 17.53 두 값으로 갈려 있었다(1440 실측). break-keep 은
               '매장 운영 현황을 한눈에' 같은 어절이 줄 끝에서 쪼개지는 것을 막는다. */}
-          {desc && <p className="mt-1 t-desc break-keep text-ink-muted">{desc}</p>}
+          {desc && <p className="t-desc break-keep text-ink-muted">{desc}</p>}
         </div>
       </div>
       {action && (

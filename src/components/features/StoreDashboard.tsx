@@ -149,7 +149,17 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [boostOpen, setBoostOpen] = useState(false);
   // IA3a 대시보드 다이어트 — 기본 6카드(지금 할 일·라이브·오늘 장부·최근7일·예약·단골)만 노출,
   // 나머지는 '더 보기' 뒤로. 카드 옷을 입은 순수 링크 5장은 제거/유틸 줄로 강등.
-  const [moreOpen, setMoreOpen] = useState(false);
+  // PC 는 펴고 시작한다 — 오너 2026-09-17: "대시보드에 정보가 샘플 준 것에 비해 너무 없고".
+  //   실측 구조: 카드 그리드가 `xl:grid-cols-3` 인데 기본 노출은 3장뿐(최근 7일 추세·다가오는 예약·고객·단골)
+  //   → PC 에서 **딱 한 줄**로 끝나고 아래가 통째로 빈다. 접혀 있는 7장(클락·전주 대비·오늘 출근·
+  //   인건비·매장이용권·생일 단골·손님 유형)은 **이미 데이터를 받아 그리고 있는 카드**다 —
+  //   없는 정보를 만드는 게 아니라 펴는 것이라 새 쿼리가 0건이다.
+  // 업주 = PC 99%(CLAUDE.md '플랫폼'), 모바일은 종전대로 접는다 — 거기선 스크롤이 실제 비용이다.
+  // 토글은 그대로 살아 있어 언제든 '간단히 보기' 로 접을 수 있다.
+  // ⚠ 마운트 1회 판정이다(리사이즈를 따라가지 않는다). 업주가 창을 줄여도 접히지 않지만,
+  //   접기는 토글로 되고 매 리사이즈마다 펴고 접는 쪽이 더 놀랍다.
+  const [moreOpen, setMoreOpen] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)')?.matches === true);
   // 운영 가이드 배너 — 베테랑 매장에도 영구 노출되던 것을 닫기 가능으로(닫으면 기억)
   const [guideHidden, setGuideHidden] = useState(() => {
     try { return localStorage.getItem('nuri:guide-banner-dismissed') === '1'; } catch { return false; }

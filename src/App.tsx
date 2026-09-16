@@ -1473,6 +1473,13 @@ export default function App() {
         // 이벤트 화면 — 홈 배너에서 바로 들어가는 길인데 목록에 빠져 있었다. 클릭 순간 청크를 받느라
         //   Suspense 폴백(불투명 스피너)이 **299ms** 떴다(실측 2026-09-08). gzip 5.2KB 라 idle 에 데워도 싸다.
         import('./components/features/EventPage'),
+        // 이용권 시트 — 헤더 상시 진입점 중 **유일하게 cold** 였다(오너 2026-09-17: "이용권 아이콘을 누르면 딜레이가 걸려").
+        //   여는 경로가 startTransition(아래 onOpenVoucher) + `<Suspense fallback={null}>` 조합이라
+        //   청크가 도착할 때까지 **스피너조차 없이 이전 화면이 그대로** 있다 — 왕복 시간이 그대로 체감 딜레이다.
+        //   (바로 옆 알림 아이콘에는 이 비용이 0이다: NotificationPanel 은 정적 import 에 상시 마운트라 서스펜드가 없다.)
+        // ⚠ user 게이트가 필요하다 — 이용권 버튼 자체가 `{user && (` 안이라 비로그인에는 없는 화면이다.
+        //   위 VenueManageTab 주석이 기록한 '게이트를 무력화해 손님에게 내려보낸' 사고와 같은 부류를 만들지 않는다.
+        ...(user ? [import('./components/features/MyVoucherSheet')] : []),
         // 역할 전용 청크 — 해당 역할일 때만(손님에게 업주 스위트를 내려보내지 않는다)
         // 직원(venue_staff)도 내 매장 탭을 쓰므로 업주와 같은 게이트에 포함
         ...((isOwner || isAdmin || user?.role === 'venue_staff') ? [import('./components/features/VenueManageTab')] : []),
@@ -1506,7 +1513,9 @@ export default function App() {
     idle(warm);
     // visitedTabs 는 안정 Set 인스턴스 — 참조 불변
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedulesLoaded, isOwner, isAdmin, user?.role]);
+    // user?.id 까지 보는 이유: 위 이용권 프리로드가 `user` 게이트를 쓰는데, 같은 role 로 계정만
+    //   바뀌는 전환에서는 user?.role 이 안 변해 warm 이 다시 돌지 않는다.
+  }, [schedulesLoaded, isOwner, isAdmin, user?.role, user?.id]);
   // 예약이 바뀌었다는 신호 하나(F06) — 값이 아니라 '다시 읽어라'만 나른다.
   // 왜 카운터인가: 예약/취소는 상세 모달(ReserveBox)과 '내 정보'(스와이프 취소) 두 곳에서 일어나는데
   // 그 결과를 보는 곳은 App 이 들고 있는 셋(홈 '오늘 예약한 대회' · 카드 '예약 N' · 캘린더 탭)이다.
