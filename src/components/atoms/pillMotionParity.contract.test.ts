@@ -27,6 +27,25 @@ const named = [...CSS.matchAll(/view-transition-name:\s*([a-z0-9-]+-pill)\s*;/g)
 /** group 규칙이 걸린 알약 전부 */
 const grouped = new Set([...CSS.matchAll(/::view-transition-group\(([a-z0-9-]+-pill)\)/g)].map((m) => m[1]));
 
+/** index.css 가 `view-transition-name: …-label` 로 이름을 주는 활성 라벨 전부 */
+const namedLabels = [...new Set([...CSS.matchAll(/view-transition-name:\s*([a-z0-9-]+-label)\s*;/g)].map((m) => m[1]))];
+
+// 라벨 이름 하나를 새로 만들면 **세 목록(group·old·new)에 전부** 등록해야 한다.
+//   하나라도 빠지면 글자가 옛 버튼에서 새 버튼으로 끌려간다(2026-09-11 오너 리포트의 그 증상).
+//   🔴 전수로 본다 — 예전에는 새로 만든 이름 2개만 손으로 확인했다. "오늘 만든 것만 지키는 계약"은
+//      다음 사람이 네 번째 자리를 빠뜨리는 것을 그대로 허용한다.
+describe('활성 라벨 — 이름을 만들면 세 목록에 빠짐없이 등록된다', () => {
+  it('정규식이 죽으면 조용히 통과하는 것을 막는다 — 라벨 이름이 여럿 잡힌다', () => {
+    expect(namedLabels.length, '라벨 이름을 못 찾았다(정규식이 죽었다)').toBeGreaterThanOrEqual(8);
+  });
+
+  it.each(['group', 'old', 'new'] as const)('🔴 %s 목록에 전부 등록돼 있다', (kind) => {
+    const missing = namedLabels.filter((n) => !CSS.includes(`::view-transition-${kind}(${n})`));
+    expect(missing, `::view-transition-${kind} 목록에서 빠졌다 — 그 화면만 글자가 알약을 따라 끌려간다: ${missing.join(', ')}`)
+      .toEqual([]);
+  });
+});
+
 describe('알약 모션 — 모든 메뉴에서 같은 값으로 움직인다', () => {
   it('정규식이 죽으면 조용히 통과하는 것을 막는다 — 이름이 여럿 잡힌다', () => {
     expect(named.length, '알약 이름을 하나도 못 찾았다(정규식이 죽었다)').toBeGreaterThanOrEqual(8);

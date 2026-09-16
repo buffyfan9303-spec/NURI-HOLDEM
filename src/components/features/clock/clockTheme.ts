@@ -68,11 +68,49 @@ export const BLACK_MARBLE_GOLD_BG = [
   '#080706',
 ].join(', ');
 
+/** 🔴 NURI 시그니처(기본 테마 v4 — 2026-09-17 오너 지시 "누리홀덤의 시그니쳐 디자인 … 그걸 메인테마로 쓰고싶어").
+ *
+ *  무엇을 신호로 삼았나 — 앱의 정체성 두 색이다: **바이올렛이 주색, 틸이 신호색**(아우라 v2 결정).
+ *  기존 'aura' 는 그 두 색을 쓰긴 했지만 후광 2겹뿐이라 다른 다크 보드와 구별되지 않았다.
+ *  시그니처는 **형태**를 하나 갖는다 — 화면 위·아래를 가로지르는 **바이올렛→틸 헤어라인 한 쌍**이다.
+ *
+ *  레이어(위→아래)
+ *   ① 중앙 보호막: 타이머·블라인드 뒤를 눌러 **시간이 가장 먼저 읽히게** 한다(블랙 마블과 같은 원리).
+ *   ② 프레이밍 헤어라인 2줄 — 8% · 92%. 상단 상태바(h-8cqmin)와 하단 지표 레일(h-12cqmin)이 앉는
+ *      바로 그 자리라, 선이 장식이 아니라 **판의 구조를 드러낸다**. 좌우로 페이드되어 직선이 화면을
+ *      가로질러 끊지 않는다. 위는 바이올렛→틸, 아래는 틸→바이올렛(대칭이 아니라 **교차** — 한 벌로 읽힌다).
+ *   ③ 오로라 2겹: 좌상단 바이올렛, 우하단 틸. 큰 반경·낮은 알파라 면으로 깔린다.
+ *   ④ 대각 시닌 1겹: 카드 테이블 천에 조명이 스치는 결. 45°가 아니라 116° — 헤어라인과 평행해지지 않게.
+ *   ⑤ 하단 온기 + 바탕색.
+ *
+ *  ⚠ 중앙에 **프레임(테두리)을 두지 않는다.** 2026-09-15 오너 지시로 'NURI Aura Clock Frame'(이중 기하 테두리)이
+ *    삭제됐다("클락 중앙에 네모 테두리 있는데 이거 삭제"). 시그니처는 배경·팔레트·프레이밍 선으로만 만든다.
+ *  ⚠ 애니메이션·외부 자산 0 — 매장 TV 는 몇 시간을 켜 두는 정지 화면이라 페인트 1회로 끝나야 한다.
+ *  ⚠ 색은 **마지막 레이어에만** 둔다(background 단축 속성 규칙 — clockThemeVars 가 사진 아래에 이 값을 잇는다.
+ *    clockTheme.test.ts 가 'color 는 마지막 레이어'를 단언한다).
+ */
+export const NURI_SIGNATURE_BG = [
+  'radial-gradient(52% 46% at 50% 50%, rgba(0,0,0,.52) 0%, rgba(0,0,0,.26) 54%, transparent 78%)',
+  'linear-gradient(90deg, transparent 0%, rgba(181,166,255,.44) 16%, rgba(45,212,191,.40) 84%, transparent 100%) 50% 8% / 100% 1px no-repeat',
+  'linear-gradient(90deg, transparent 0%, rgba(45,212,191,.36) 16%, rgba(181,166,255,.40) 84%, transparent 100%) 50% 92% / 100% 1px no-repeat',
+  'radial-gradient(58vmax 40vmax at 6% -8%, rgba(139,92,246,.26) 0%, transparent 62%)',
+  'radial-gradient(52vmax 36vmax at 102% 106%, rgba(20,184,166,.15) 0%, transparent 62%)',
+  'linear-gradient(116deg, transparent 34%, rgba(255,255,255,.035) 50%, transparent 66%)',
+  'radial-gradient(130% 42% at 50% 110%, rgba(76,50,140,.30) 0%, transparent 62%)',
+  '#05060D',
+].join(', ');
+
 /** 기본 룩 — 변수 기본값의 단일 출처. 2026-09-02 딥 인디고 → 아우라 골드 → **아우라(인디고)**(오너 승인).
  *  ⚠ 기존 매장 테마(DB 저장값)는 프리셋 id 로 대조되므로 그대로 유효 — 바뀌는 것은 '테마 없음' 매장의 기본 룩뿐이다. */
 export const CLOCK_DEFAULTS = {
-  bg: AURA_BG,
-  accent: '#818CF8',       // 인디고 400 — 레벨 알약·블라인드 강조. #06080F 위 6.9:1
+  // 2026-09-17: 기본 룩이 aura(인디고) → **NURI 시그니처**로 올라갔다(오너 지시 "그걸 메인테마로").
+  //   ⚠ 이 줄을 바꾸면 **테마를 고른 적 없는 매장**의 TV 가 바뀐다(프리셋을 저장해 둔 매장은 그대로다 —
+  //     저장값은 id 로 대조되고 'aura' 는 프리셋 목록에 그대로 남아 있다).
+  bg: NURI_SIGNATURE_BG,
+  accent: '#B5A6FF',       // 누리 바이올렛 — 앱 주색 계열. #05060D 위 9.4:1(인디고 400 의 6.9:1 보다 높다).
+  //   ⚠ **스와치(CLOCK_ACCENT_SWATCHES)에 없는 값이어야 한다.** 스와치 값을 프리셋 기본으로 쓰면
+  //     '매장이 직접 고른 색'과 '프리셋 기본색'을 구분할 수 없어진다 — clockTheme.test.ts:198 이 그것을 지킨다.
+  //     처음에 #A78BFA(바이올렛 스와치)를 썼다가 그 계약에 걸려 바꿨다.
   timer: '#FFFFFF',        // 타이머는 순백 — accent 를 고른 매장은 타이머도 그 색(구 동작 유지)
   prize: '#F5C451',        // 골드는 프라이즈 금액에만(잠금 — 테마가 못 덮는다). #06080F 위 12.6:1
   timerUrgent: '#fb7185',  // rose-400 — 잠금(1분 미만 긴급)
@@ -140,7 +178,10 @@ export interface ClockThemePreset {
 // 9종 — 전부 다크. aura(인디고)가 기본(2026-09-02 오너 승인), aura-gold(APIS풍)·deep-indigo(구 기본)는 프리셋으로 남긴다.
 // 새 프리셋은 여기 한 줄이면 관리자 패널 미리보기·저장·TV 송출에 전부 붙는다(id 는 DB 왕복 키 — 바꾸지 않는다).
 export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
-  { id: 'aura', label: '아우라(기본)', kind: 'gradient', bg: AURA_BG, accent: CLOCK_DEFAULTS.accent, timer: CLOCK_DEFAULTS.timer },
+  // 기본 = NURI 시그니처. 목록 맨 앞에 둔다(관리자 패널이 이 순서로 스와치를 그린다).
+  { id: 'nuri-signature', label: 'NURI 시그니처(기본)', kind: 'gradient', bg: NURI_SIGNATURE_BG, accent: '#B5A6FF', timer: '#FFFFFF' },
+  // 구 기본. **id 를 지우지 않는다** — 이걸 저장해 둔 매장의 DB 값이 그대로 살아 있어야 한다.
+  { id: 'aura', label: '아우라(인디고)', kind: 'gradient', bg: AURA_BG, accent: '#818CF8', timer: '#FFFFFF' },
   { id: 'aura-gold', label: '아우라 골드', kind: 'gradient', bg: AURA_GOLD_BG, accent: '#E0A94E', timer: '#FFFFFF' },
   { id: 'deep-indigo', label: '딥 인디고', kind: 'solid', bg: '#06080B', accent: '#5E6AD2' },
   {
@@ -169,7 +210,7 @@ export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
   { id: 'black-marble-gold', label: '블랙 마블 골드', kind: 'gradient', bg: BLACK_MARBLE_GOLD_BG, accent: '#E0A94E', timer: '#FFFFFF' },
 ];
 
-export const DEFAULT_CLOCK_PRESET_ID = 'aura';
+export const DEFAULT_CLOCK_PRESET_ID = 'nuri-signature';
 
 export function clockPresetById(id: string | undefined | null): ClockThemePreset | null {
   if (!id) return null;

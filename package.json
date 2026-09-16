@@ -24,7 +24,8 @@
     "test:e2e:headed": "playwright test --headed",
     "test": "vitest run",
     "test:mutation": "node scripts/mutation-check.mjs",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "gate": "node scripts/gate.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

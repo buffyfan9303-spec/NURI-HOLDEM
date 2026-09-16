@@ -99,7 +99,18 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
   for (let i = curIdx; i >= 0; i--) { const l = lvls[i]; if (l && l.kind === 'level' && l.bb > 0) { curBB = l.bb; break; } }
   const buyIn = ls.buyInAmount ?? 0;
   const regLevel = g.config?.regCloseLevel ?? 0;
-  const showRebuy = hasCounts && (ls.rebuys > 0 || ls.addons > 0 || !!g.config?.isAddon);
+  // 리바이·애드온·얼리는 **각자** 판정한다(예전엔 셋이 한 조건에 묶여 '리바이 · 애드온' 한 줄이었고 얼리는 아예 없었다).
+  //   오너 2026-09-17: "에드온, 얼리는 꼭 포함해야해".
+  //   ⚠ 값이 0이어도 **그 대회가 그 규칙을 쓰면** 보여 준다 — 0 은 정보다("아직 아무도 안 했다").
+  //     반대로 규칙 자체가 없는 대회에 0 을 띄우면 빈 칸만 늘어 글자가 작아진다.
+  const showRebuy = hasCounts && (ls.rebuys > 0 || g.config?.rebuyStack > 0);
+  const showAddon = hasCounts && (ls.addons > 0 || !!g.config?.isAddon || (g.config?.addonStack ?? 0) > 0);
+  const showEarly = hasCounts && (ls.earlies > 0 || (g.config?.earlyDoubleLevel ?? 0) > 0 || (g.config?.earlySingleLevel ?? 0) > 0);
+  const extras = [
+    showRebuy && { k: 'rebuy', label: '리바이', v: ls.rebuys ?? 0 },
+    showAddon && { k: 'addon', label: '애드온', v: ls.addons ?? 0 },
+    showEarly && { k: 'early', label: '얼리', v: ls.earlies ?? 0 },
+  ].filter(Boolean) as { k: string; label: string; v: number }[];
 
   return (
     <>
@@ -169,7 +180,11 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
             {/* 우 — 지표 세로 레일. 라벨 작게 위, 숫자 크게 아래(레퍼런스 공통 문법). */}
             <aside data-testid="clk-rails" className="clk-col min-h-0 flex-col justify-center gap-[1.5cqmin]">
               <Rail label="생존 / 엔트리" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
-              {showRebuy && <Rail label="리바이 · 애드온" value={String(ls?.rebuys ?? 0)} sub={`· ${ls?.addons ?? 0}`} />}
+              {/* 리바이 · 애드온 · 얼리 — **한 줄 안에서** 각자 라벨과 숫자를 갖는다.
+                  줄을 세 개로 늘리지 않는 이유: 이 열은 세로로 꽉 차 있어 줄이 늘면 clamp 가 글자를 줄이고,
+                  그러면 10m 거리에서 가장 중요한 '생존 / 엔트리'까지 같이 작아진다(바로 아래 2026-09-11 주석의 그 사고).
+                  한 줄에 묶어도 각 값은 제 라벨을 갖고 숫자 크기는 일반 Rail 과 같은 급이다. */}
+              {extras.length > 0 && <GroupRail items={extras} />}
               {buyIn > 0 && <Rail label="바이인" value={buyIn.toLocaleString()} />}
               {/* 2026-09-11: 총 칩·평균 스택은 **하단 레일**로 내렸다(아래 BottomMetrics).
                   우측 열에 7줄이 몰려 글자가 작아지는 동안 화면 하단 중앙이 통째로 비어 있었다 —
@@ -637,6 +652,25 @@ function Rail({ label, value, sub, lead, danger }: { label: string; value: strin
                    color: danger ? 'var(--clk-timer-urgent, #fb7185)' : '#FFFFFF' }}>{value}</span>
         {sub && <span className="text-[1.9cqmin] font-semibold tabular-nums" style={DIM}>{sub}</span>}
       </p>
+    </div>
+  );
+}
+
+/** 한 줄에 2~3개 지표를 나란히 — 각자 라벨 + 숫자. 줄 수를 늘리지 않고 항목을 늘리는 자리.
+ *  숫자 크기는 일반 Rail(3.6cqmin)에서 항목 수만큼만 줄인다(2개=3.2 / 3개=2.8) — 라벨은 그대로라 읽는 법이 같다. */
+function GroupRail({ items }: { items: { k: string; label: string; v: number }[] }) {
+  const size = items.length >= 3 ? '2.8cqmin' : items.length === 2 ? '3.2cqmin' : '3.6cqmin';
+  return (
+    <div className="min-w-0 border-b border-white/[0.07] pb-[1.1cqmin] last:border-b-0">
+      <div className="flex items-end gap-[1.6cqmin]">
+        {items.map((it) => (
+          <div key={it.k} className="min-w-0 flex-1">
+            <p className={`${LABEL} text-[1.35cqmin]`} style={SOFT}>{it.label}</p>
+            <p className="mt-[0.2cqmin] font-extrabold tabular-nums leading-none text-white"
+               style={{ fontSize: `clamp(15px, ${size}, 48px)` }}>{it.v.toLocaleString()}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

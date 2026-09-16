@@ -199,7 +199,10 @@ describe('색 역할 분리 — 강조색이 덮을 수 있는 것과 없는 것
   });
 
   it('12~13. 허용목록 밖 accent · 배경 URL 은 차단되고 기본값으로 떨어진다', () => {
-    const bad = clockThemeVars(makeClockTheme('aura', 'javascript:alert(1)', 'https://evil.example.com/x.png'));
+    // ⚠ **기본 프리셋**으로 잰다 — 이 단언은 `CLOCK_DEFAULTS.accent` 와 대조하므로,
+    //   기본이 아닌 프리셋을 쓰면 '폴백이 깨졌다' 가 아니라 '이 프리셋이 기본과 다르다' 를 재게 된다
+    //   (2026-09-17 기본이 aura → nuri-signature 로 바뀌며 실제로 그렇게 어긋났다).
+    const bad = clockThemeVars(makeClockTheme(DEFAULT_CLOCK_PRESET_ID, 'javascript:alert(1)', 'https://evil.example.com/x.png'));
     expect(bad['--clk-accent']).toBe(CLOCK_DEFAULTS.accent);   // 스와치에 없는 값 → 프리셋 기본
     expect(bad['--clk-bg']).not.toContain('evil.example.com'); // 외부 URL 은 배경에 들어가지 않는다
     expect(bad['--clk-bg']).not.toContain('javascript:');
