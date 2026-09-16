@@ -357,7 +357,7 @@ export default function ToolsPanel() {
   }, []);
 
   const grid = (items: typeof TOOLS) => (
-    <div className="grid auto-rows-fr grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <div className="grid auto-rows-fr grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
       {items.map((t) => (
         <ToolCard key={t.key} testId={`tool-${t.key}`} tone={LANE_TONE[t.cat]} name={t.name} desc={t.desc} icon={t.icon} onClick={() => open(t.key)}
           fav={favs.includes(t.key)} onToggleFav={() => toggleFav(t.key)} />

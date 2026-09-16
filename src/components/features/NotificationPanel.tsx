@@ -351,7 +351,7 @@ export default function NotificationPanel({
             </div>
           )}
 
-          <div className="flex shrink-0 items-center gap-2 text-2xs">
+          <div data-notif-actions="" className="flex shrink-0 items-center gap-2 text-2xs">
             {mode === 'notifs' && (
               <>
                 {notifications.some((n) => !n.read) && (

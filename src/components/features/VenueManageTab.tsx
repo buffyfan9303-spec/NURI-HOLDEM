@@ -106,7 +106,7 @@ function SettingsTabBar({ tabs, active, onPick }: {
     return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
   }, []);
   return (
-    <div className="relative">
+    <div className="relative" data-mystore-rail="">
       <div ref={ref} role="tablist" aria-label="매장 설정 하위탭"
         className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5 [scrollbar-width:none]">
         <SlidingPill activeKey={active} className="rounded-[6px] pill-active" />
@@ -1141,7 +1141,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress }: {
   const chip = (on: boolean) => ['relative inline-flex h-9 min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:flex-none sm:basis-auto sm:px-3',
     on ? 'font-bold text-white' : 'font-semibold text-ink-muted hover:text-ink-secondary'].join(' ');
   return (
-    <div ref={ref} role="tablist" aria-label="매장 단계 이동"
+    <div ref={ref} role="tablist" aria-label="매장 단계 이동" data-mystore-rail=""
       className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
       <SlidingPill containerRef={ref} activeKey={active} className="rounded-[6px] pill-active" />
       {/* 요약(대시보드) — 번호가 없는 유일한 칸이라 '단계가 아니라 돌아가는 곳'으로 읽힌다.

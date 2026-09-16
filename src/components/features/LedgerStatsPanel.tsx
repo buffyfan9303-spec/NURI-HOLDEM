@@ -278,11 +278,13 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
             <SlidingPill activeKey={period} className="rounded-[6px] pill-active" />
         {PERIODS.map((p) => {
           const on = tabPeriod === p.id; // 하이라이트는 즉시 — 데이터를 기다리지 않는다
+          /* ⚠ `on && !p.ai` 로 두면 AI 칸이 활성인 동안 [data-pill-active] 가 DOM 에서 **사라진다** →
+             SlidingPill 이 prevRect 를 null 로 버리고, AI→일반 복귀가 `!prev` 분기를 타 **미끄러지지 않고 점프**한다.
+             같은 바 안에서 미끄러짐과 점프가 섞이던 자리다(2026-09-17 오너 '어색함').
+             AI 칸의 그라데이션 span(absolute inset-0)이 알약 박스를 덮으므로 보이는 배경은 그대로다.
+             ⚠ 이 주석은 `return (` **위**에 있어야 한다 — 그 자리는 식(expression) 자리라
+               JSX 주석 컨테이너를 넣으면 파싱되지 않는다(2026-09-17 에 실제로 빌드를 깼다). */
           return (
-            {/* ⚠ `on && !p.ai` 로 두면 AI 칸이 활성인 동안 [data-pill-active] 가 DOM 에서 **사라진다** →
-                SlidingPill 이 prevRect 를 null 로 버리고, AI→일반 복귀가 `!prev` 분기를 타 **미끄러지지 않고 점프**한다.
-                같은 바 안에서 미끄러짐과 점프가 섞이던 자리다(2026-09-17 오너 '어색함').
-                AI 칸의 그라데이션 span(absolute inset-0)이 알약 박스를 덮으므로 보이는 배경은 그대로다. */}
             <button key={p.id} type="button" data-pill-active={on || undefined} onClick={() => setTabPeriod(p.id)}
               className={['relative flex-1 min-w-[3.6rem] py-1.5 t-tab rounded-[6px] whitespace-nowrap transition-colors duration-[var(--dur-fast)] focus:outline-none',
                 on ? 'font-bold text-white' : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>

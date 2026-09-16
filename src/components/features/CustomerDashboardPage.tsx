@@ -272,9 +272,11 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
         <div hidden={tab === 'dashboard'} className="mx-auto w-full max-w-2xl">
           <ProfilePanels open={open} tab={tab === 'dashboard' ? 'profile' : tab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
         </div>
-        {tab === 'dashboard' && (
         {/* 🔴 py-4 — 나머지 세 탭 래퍼가 전부 p-4(17px) 인데 여기만 py-section(25.5px) 이라
-            탭을 옮길 때마다 커버 밴드가 세로로 **8.5px** 튀었다(PC·모바일 공통). 가로는 px-page-x 로 이미 같다. */}
+            탭을 옮길 때마다 커버 밴드가 세로로 **8.5px** 튀었다(PC·모바일 공통). 가로는 px-page-x 로 이미 같다.
+            ⚠ 주석은 `&& (` **위**에 둔다 — `(` 바로 뒤는 식(expression) 자리라
+              JSX 주석 컨테이너를 넣으면 파싱되지 않는다(2026-09-17 에 실제로 빌드를 깼다). */}
+        {tab === 'dashboard' && (
         <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-4">
           {/* 통합 프로필 아이덴티티 헤더(오너 지시 2026-08-27) — ProfileModal '프로필' 탭과 같은 정본.
               커버 밴드(등급색 틴트) + 오버랩 아바타(등급 링) + 닉네임·등급·칭호·인증 + 등급 진행바. */}

@@ -1809,17 +1809,20 @@ html[data-vt-scope='rank-tab'][data-vt-dir='back']::view-transition-new(rank-pan
 ::view-transition-group(rank-label),      ::view-transition-group(adminpos-label),
 ::view-transition-group(group-label),     ::view-transition-group(sched-label),
 ::view-transition-group(notif-label),     ::view-transition-group(legal-label),
-::view-transition-group(crm-label),      ::view-transition-group(profile-label) { animation: none; }
+::view-transition-group(crm-label),      ::view-transition-group(profile-label),
+::view-transition-group(mystore-rail-label), ::view-transition-group(notiffilter-label) { animation: none; }
 ::view-transition-old(community-label), ::view-transition-old(venue-label),
 ::view-transition-old(rank-label),      ::view-transition-old(adminpos-label),
 ::view-transition-old(group-label),     ::view-transition-old(sched-label),
 ::view-transition-old(notif-label),     ::view-transition-old(legal-label),
-::view-transition-old(crm-label),        ::view-transition-old(profile-label) { animation: none; opacity: 0; }
+::view-transition-old(crm-label),        ::view-transition-old(profile-label),
+::view-transition-old(mystore-rail-label), ::view-transition-old(notiffilter-label) { animation: none; opacity: 0; }
 ::view-transition-new(community-label), ::view-transition-new(venue-label),
 ::view-transition-new(rank-label),      ::view-transition-new(adminpos-label),
 ::view-transition-new(group-label),     ::view-transition-new(sched-label),
 ::view-transition-new(notif-label),     ::view-transition-new(legal-label),
-::view-transition-new(crm-label),        ::view-transition-new(profile-label) { animation: none; opacity: 1; }
+::view-transition-new(crm-label),        ::view-transition-new(profile-label),
+::view-transition-new(mystore-rail-label), ::view-transition-new(notiffilter-label) { animation: none; opacity: 1; }
 
 /* ── 전환 캡처 프레임에 '바뀌기 전 라벨 색'이 인쇄되던 것 — 2026-09-17 ─────────────
    오너: "지금은 뭔가 좀 어색한 느낌이 있어서"
@@ -1864,7 +1867,8 @@ html[data-vt-scope] :has(> [data-sliding-pill]) button * { transition: none; }
 ::view-transition-group(crm-pill),       ::view-transition-group(group-pill),
 ::view-transition-group(legal-pill),     ::view-transition-group(notif-pill),
 ::view-transition-group(profile-pill),   ::view-transition-group(rank-pill),
-::view-transition-group(sched-pill),     ::view-transition-group(venue-pill) {
+::view-transition-group(sched-pill),     ::view-transition-group(venue-pill),
+::view-transition-group(mystore-rail-pill), ::view-transition-group(notiffilter-pill) {
   animation-duration: var(--dur-base);
   animation-timing-function: var(--ease-move);
 }
@@ -1901,6 +1905,18 @@ html[data-vt-scope='admin-sec']::view-transition-new(root) { animation: none; }
 html[data-vt-scope='mystore-sec'] [data-mystore-secbar] { view-transition-name: mystore-secbar; }
 html[data-vt-scope='mystore-sec'] [data-mystore-secpanel] { view-transition-name: mystore-secpanel; }
 html[data-vt-scope='mystore-sec'] [data-mystore-secbar] [data-mystore-active] { view-transition-name: mystore-active; }
+/* 단계 레일(GameStepBar)·설정 레일(SettingsTabBar)은 **패널 안**에 있다(VenueManageTab.tsx:748 이
+   data-mystore-secpanel 을 열고 :770 · :810 이 그 안이다). 패널은 vt-panel-out-l/in-r(±18px + 페이드)를
+   타므로, 내용이 하나도 안 바뀌는 레일이 판을 옮길 때마다 **같이 미끄러지고 흐려졌다**
+   (오너 2026-09-17: "내 매장은 움직일 때마다 뚝뚝 끊키거나 기존 화면이 남아있거나 위에서 자료가 주르륵 내려오는").
+   mystore-secbar·community-secbar 가 바로 이걸 막으려고 이름을 받은 것과 같은 처리를 레일에도 준다.
+   ⚠ 이름 한 벌로 충분하다 — 두 레일은 같은 `section` 값에서 갈려 **절대 공존하지 않는다**
+     (game|dashboard ↔ settings). 동시에 같은 이름이 둘이면 전환이 통째로 실패하므로 이 배타성이 전제다.
+   ⚠ 바에 `animation: none` 을 주지 않는다 — 레일이 **없는 섹션으로 갈 때**(예: 설정→직원) old 만 남아
+     300ms 동안 안 사라지는 진짜 잔상이 된다. 짝이 맞을 때는 두 이미지가 같아 기본 교차페이드가 안 보인다. */
+html[data-vt-scope='mystore-sec'] [data-mystore-rail] { view-transition-name: mystore-rail; }
+html[data-vt-scope='mystore-sec'] [data-mystore-rail] [data-sliding-pill] { view-transition-name: mystore-rail-pill; }
+html[data-vt-scope='mystore-sec'] [data-mystore-rail] [data-pill-active] { view-transition-name: mystore-rail-label; }
 html[data-vt-scope='mystore-sec']::view-transition-old(root),
 html[data-vt-scope='mystore-sec']::view-transition-new(root) { animation: none; }
 /* 운영자 매장 장부/통계 2탭 */
@@ -1980,6 +1996,14 @@ html[data-vt-scope='notif-tab'] [data-notif-tabbar] [data-sliding-pill] { view-t
    글자가 알약에 덮인다(위 community-label 주석에 실측·대조 실험 근거). */
 html[data-vt-scope='notif-tab'] [data-notif-tabbar] [data-pill-active] { view-transition-name: notif-label; }
 html[data-vt-scope='notif-tab'] [data-notif-panel] { view-transition-name: notif-panel; }
+/* 헤더 **우측 액션 묶음**은 이름이 없어서 얼어붙은 root 스냅샷 안에 있었다.
+   쪽지↔알림을 오가면 이 자리의 내용이 통째로 바뀌는데([새 쪽지] ↔ [모두 읽음][전체|안읽음]),
+   root 는 이 스코프에서 animation:none 이라 **옛 이미지가 300ms 내내 불투명하게 덮고 있다가 툭 바뀐다**
+   (오너 2026-09-17: "우편함 쪽지 알림 이동시 잔상 남아 부드러운 잔상이 아니라 그냥 더러운 잔상이야").
+   이름을 주면 root 밖으로 나와 기본 교차페이드를 타고, 안의 전체/안읽음 알약도 제 이름으로 미끄러진다. */
+html[data-vt-scope='notif-tab'] [data-notif-actions] { view-transition-name: notif-actions; }
+html[data-vt-scope='notif-tab'] [data-notif-actions] [data-sliding-pill] { view-transition-name: notiffilter-pill; }
+html[data-vt-scope='notif-tab'] [data-notif-actions] [data-pill-active] { view-transition-name: notiffilter-label; }
 html[data-vt-scope='notif-tab']::view-transition-old(root),
 html[data-vt-scope='notif-tab']::view-transition-new(root) { animation: none; }
 /* 알림 팝업은 <header data-stack-header>(app-header 스냅샷) 안에 산다(App.tsx) — 모바일 스크림(fixed inset-0
