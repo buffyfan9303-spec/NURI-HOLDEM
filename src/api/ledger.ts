@@ -264,8 +264,13 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
   //   현금성 수납과는 별도 항목으로 표시한다(정산 대차표의 ticket 칸).
   if (b.paymentMethod === 'ticket') {
     const t = net / TICKET_WON; // 10만 게임 = 10T · 5만 할인이면 5T
-    return seal({ ...z, ticketPaid: b.isUnpaid ? 0 : t, ticketUnpaid: b.isUnpaid ? t : 0,
-                  value: net, tender: { ...ZERO_TENDER, ticket: net } });
+    // ⚠ 가불(미수) 티켓은 **아직 회수하지 않았다**(2026-09-17).
+    //   예전엔 미수여도 `tender.ticket = net` 을 실었다 — tender.ticket 은 정산 대차표의 '수납 완료' 칸이라
+    //   (ledgerGolden.test.ts '수납 완료 가치 = 현금+카드+이체+이용권') 안 받은 돈이 매출로 올라가고
+    //   미수 금액·미수자 명단에서는 동시에 사라졌다. 받을 돈은 unpaid 로 세워야 정산이 맞는다.
+    //   대차(gross − disc === value === Σtender)는 그대로 성립한다 — 실리는 칸만 ticket → unpaid 로 바뀐다.
+    if (b.isUnpaid) return seal({ ...z, ticketUnpaid: t, unpaid: net, value: net, tender: { ...ZERO_TENDER, unpaid: net } });
+    return seal({ ...z, ticketPaid: t, value: net, tender: { ...ZERO_TENDER, ticket: net } });
   }
 
   // 현금·카드·이체 — 스냅샷 우선(2026-08-18 전환): 기록 시점 net 금액이 amounts 칸에 저장돼 있으면 그 값이 정본.
@@ -396,7 +401,7 @@ export interface DiscountSummary {
   count: number;
   /** 깎아 준 총액(원) — 결제수단 무관. '고객에게 얼마를 깎아 줬나'. */
   total: number;
-  /** 그중 **실제로 덜 받은 현금**(원). 티켓·가게지원은 받을 현금이 0원이라 제외된다.
+  /** 그중 **실제로 덜 받은 현금**(원). 티켓·가게지원·미수는 받을 현금이 0원이라 제외된다.
    *  '할인이 없었다면 매출은 얼마였나'는 반드시 이 값을 써야 한다. */
   cashTotal: number;
   /**
@@ -458,8 +463,11 @@ export function discountSummary(
     //     분납 행(현금·카드·이체 0 + 티켓 5T)의 할인까지 '덜 받은 현금'에 들어갔다 — 현금 거래가
     //     한 푼도 없는데 "할인이 없었다면 현금성 매출 5만" 이라고 말했다.
     //     분모 개념은 위 buyinFinance 의 `cashy` 와 같다(현금+카드+이체).
+    //   ⚠ 미수도 같은 잣대다(2026-09-17). 받은 현금이 0원이라 할인해도 **완납 매출이 줄지 않는다** —
+    //     줄어든 것은 매출이 아니라 받을 돈(미수금)이다. 여기 더하면 '할인이 없었다면 현금성 매출'이 부풀려진다.
+    //     같은 미수를 분납으로 적으면 cashy=0 이라 이미 제외됐다 — 두 적는 방식의 답이 갈리던 자리이기도 하다.
     const cashy = b.isSplit ? b.cashAmount + b.cardAmount + b.transferAmount : 0;
-    if (b.isSplit ? cashy > 0 : (b.paymentMethod !== 'ticket' && b.paymentMethod !== 'support')) cashTotal += amt;
+    if (b.isSplit ? cashy > 0 : (!b.isUnpaid && b.paymentMethod !== 'ticket' && b.paymentMethod !== 'support')) cashTotal += amt;
     entryLoss += Math.max(0, 1 - buyinFinance(b, sf).entry);
   }
   return { count, total, cashTotal, entryLoss };

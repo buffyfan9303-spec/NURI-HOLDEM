@@ -3,7 +3,7 @@ import { TICKET_WON } from '../../lib/units'; // 티켓 T 단위(1T=1만원) —
 import { useIsDesktop } from '../../lib/responsive';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // NURI POS 장부 — 표(table) 형태. 장부 입장 시 세션 설정(담당직원·게임·단가·이벤트·딜러) → 보드.
-// 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 티켓·지원은 미수 불가. 미수=붉은색.
+// 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 가게지원만 미수 불가(티켓은 가불 허용). 미수=붉은색.
 // 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모.
 // (엑셀 내보내기는 2026-09-09 오너 지시로 제거 — 외부 반출 기능 삭제.)
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
@@ -3199,7 +3199,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
                 {stats.discount.total !== stats.discount.cashTotal && (
                   <span className="block text-ink-muted">
                     (깎아 준 총액 {wonToMan(stats.discount.total)}만원 중 현금으로 덜 받은 것은 {wonToMan(stats.discount.cashTotal)}만원 —
-                    나머지는 티켓·가게지원이라 원래 현금이 오가지 않습니다)
+                    나머지는 티켓·가게지원·미수라 현금이 오가지 않습니다)
                   </span>
                 )}
               </p>

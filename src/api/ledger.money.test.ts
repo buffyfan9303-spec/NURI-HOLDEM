@@ -395,6 +395,19 @@ describe('할인 집계 — 깎아 준 총액과 덜 받은 현금을 가른다'
     expect(d).toMatchObject({ total: 50_000, cashTotal: 50_000 });
   });
 
+  // 2026-09-17 — 티켓·지원(2026-09-05)·분납(2026-09-14)에 이어 **미수** 한 갈래가 남아 있었다.
+  //   cashTotal 은 '할인이 없었다면 현금 매출이 얼마였을까'에 답하는 수인데, 미수는 현금이 0원 오갔다.
+  //   할인해서 줄어든 것은 매출이 아니라 받을 돈이다.
+  it('현금 미수 할인은 깎아 준 총액에만 들어간다 — 받은 현금이 0원이다', () => {
+    const d = discountSummary([buyin({ paymentMethod: 'cash', isUnpaid: true, cashAmount: 50_000, discountIndex: 1 })], SESSION);
+    expect(d).toMatchObject({ count: 1, total: 50_000, cashTotal: 0 });
+  });
+
+  it('같은 미수를 분납으로 적어도 같은 답이 나온다 — 적는 방식이 답을 바꾸면 안 된다', () => {
+    expect(discountSummary([buyin({ paymentMethod: 'cash', isUnpaid: true, cashAmount: 50_000, discountIndex: 1 })], SESSION))
+      .toEqual(discountSummary([buyin({ isSplit: true, unpaidAmount: 50_000, discountIndex: 1 })], SESSION));
+  });
+
   it('분납이든 액면가든 바인은 1회다', () => {
     const split = buyin({ isSplit: true, ticketCount: 10, discountIndex: 1 });
     expect(buyinFinance(split, SESSION).entry).toBe(1);

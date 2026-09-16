@@ -127,6 +127,28 @@ describe('순위 셋', () => {
     expect(r.total.unpaid).toBe(100_000);
   });
 
+  // 2026-09-17 — 가불(미수) 티켓이 '수납 완료'로 올라가고 미수에서는 사라지던 자리.
+  //   tender.ticket 은 정산 대차표의 '수납 완료' 칸이라(ledgerGolden '수납 완료 가치') 안 받은 돈이 매출이 됐다.
+  it('티켓 가불(미수)은 회수 이용권이 아니라 미수다', () => {
+    const r = settlementReport(DATE, [session()],
+      [buyin({ playerName: '가', paymentMethod: 'ticket', isUnpaid: true })],
+      [player('가', 'new')]);
+    expect(r.total.ticketWon).toBe(0);
+    expect(r.total.unpaid).toBe(100_000);
+    expect(r.total.tender.ticket).toBe(0);
+    expect(r.unpaidPlayers.map((p) => p.name)).toEqual(['가']);
+    expect(r.total.gross - r.total.disc).toBe(r.total.value);   // 대차는 그대로 성립한다
+  });
+
+  // 🔴 양성 대조 — 이게 없으면 '티켓이 통째로 사라지는 고장'을 못 잡는다.
+  it('완납 티켓은 그대로 회수 이용권이다', () => {
+    const r = settlementReport(DATE, [session()],
+      [buyin({ playerName: '나', paymentMethod: 'ticket' })],
+      [player('나', 'new')]);
+    expect(r.total.ticketWon).toBe(100_000);
+    expect(r.total.unpaid).toBe(0);
+  });
+
   it('같은 값이면 이름 순 — 순서가 매번 바뀌지 않는다', () => {
     const r = settlementReport(DATE, [session()],
       [buyin({ playerName: '나' }), buyin({ playerName: '가' })],
