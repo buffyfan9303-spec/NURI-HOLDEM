@@ -34,6 +34,7 @@ import { getSchedules, type Schedule } from '../../api/schedules';
 import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
+import { resolveDiscountIndex } from '../../api/discountIndex';
 import { getClockState, clockHasProgress, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
@@ -501,14 +502,13 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
    *  할인 배열에 적용한다. 메인·사이드는 할인 순서·단가가 서로 다를 수 있어 자리번호만 맞고 금액이 틀린다.
    *  대상 게임 자신의 세션·클락을 다시 조회해 계산한다 — 조회가 실패하면 그대로 던진다
    *  (현재 게임 할인으로 조용히 fallback 하지 않는다: 실패는 실패로 드러낸다). */
+  // 지금 보고 있는 게임은 **사람이 고른 값**(discPick)이 이긴다. 다른 게임이면 자동 판정인데,
+  //   그 판정은 `resolveDiscountIndex` **한 곳**에만 있다 — 대시보드 QR 승인도 같은 함수를 쓴다.
+  //   예전엔 이 계산이 여기에만 있어서 대시보드는 할인 0으로 승인했고, 같은 손님이 창구에 따라
+  //   다른 금액으로 기록됐다(2026-09-17).
   const discIdxFor = useCallback(async (seq: number): Promise<number> => {
     if (seq === gameSeq) return defaultDiscIdx();
-    const [targetSession, targetClock] = await Promise.all([
-      getLedgerSession(venueId, date, seq),
-      getClockState(venueId, seq),
-    ]);
-    const levelNo = (targetClock && targetClock.sessionDate === date) ? currentLevelNo(targetClock) : 0;
-    return autoDiscountIndex(targetSession.discounts, levelNo);
+    return resolveDiscountIndex(venueId, date, seq);
   }, [venueId, date, gameSeq, defaultDiscIdx]);
   // 날짜·게임을 옮기면 할인 프리셋 목록 자체가 달라진다 — 자리번호를 물고 가면 다른 금액이 된다.
   useEffect(() => { setDiscPick(null); }, [date, gameSeq]);

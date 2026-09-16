@@ -1,3 +1,4 @@
+import { resolveDiscountIndex } from '../../api/discountIndex';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import CountUp from '../atoms/CountUp';
 import Icon, { type IconName } from '../atoms/Icon';
@@ -501,7 +502,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   // 위젯 인라인 승인/거절 — 장부로 안 넘어가고 즉시 처리(승인=요청 게임에 추가, 결제 기록은 장부에서 별도)
   const quickApprove = async (r: BuyinRequest) => {
     setReqBusy(r.id);
-    try { await approveBuyinRequest(r.id, r.requestedGameSeq ?? 1, false); setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(`${r.playerName} 참가 승인`, 'success'); }
+    // ⚠ 이용권 요청이면 서버가 **티켓 바인을 자동 기록**한다(record_buyin=false 여도). 그때도 할인 자리번호가
+    //   쓰이므로 여기서도 넘겨야 한다 — 안 넘기면 0(정가)으로 굳어 discountSummary 가 그 바인을 못 센다.
+    try {
+      const seq = r.requestedGameSeq ?? MAIN_GAME_SEQ;
+      await approveBuyinRequest(r.id, seq, false, 'cash', undefined, await resolveDiscountIndex(venueId, r.sessionDate, seq));
+      setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(`${r.playerName} 참가 승인`, 'success');
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); }
     finally { setReqBusy(null); }
   };
@@ -558,7 +565,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     setPayFor(null); setReqBusy(r.id);
     try {
       // method 경로 = 서버 계산(split 미전달). 분할 경로만 화면이 정한 금액을 보낸다.
-      await approveBuyinRequest(r.id, r.requestedGameSeq ?? 1, true, method ?? 'cash', method ? undefined : split);
+      // 🔴 2026-09-17: 여기 9번째 인자가 **없었다** → 서버 기본값 0(할인 없음)으로 들어가,
+      //   1레벨 5만 할인 프리셋이 있는 게임에서 장부 승인은 5만, 대시보드 승인은 10만으로 갈렸다.
+      //   판정은 장부와 **같은 함수**를 쓴다(resolveDiscountIndex) — 두 벌로 두면 또 갈린다.
+      const seq = r.requestedGameSeq ?? MAIN_GAME_SEQ;
+      const discIdx = await resolveDiscountIndex(venueId, r.sessionDate, seq);
+      await approveBuyinRequest(r.id, seq, true, method ?? 'cash', method ? undefined : split, discIdx);
       bumpPay(method ?? (split.cash >= split.card && split.cash >= split.transfer ? 'cash' : split.card >= split.transfer ? 'card' : 'transfer'));
       setPendingReqs((p) => p.filter((x) => x.id !== r.id));
       // ⚠ 서버가 계산한 경로에서는 **금액을 말하지 않는다** — 화면의 프리필은 대상 게임에 클락이 없으면

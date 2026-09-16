@@ -34,8 +34,16 @@ const decode = (s: string | undefined): Float32Array => {
 };
 
 export type NashKind = 'shove' | 'callBB' | 'callSB';
+const tableOf = (kind: NashKind, k: number, stack: number, ante: boolean): string | undefined =>
+  (kind === 'shove' ? SHOVE : kind === 'callBB' ? CALL_BB : CALL_SB)[ante ? 'ante' : 'no']?.[String(k)]?.[String(stack)];
+
+/** 그 조합의 표가 실제로 있는가. 없는 조합을 nashRange 로 읽으면 전부 0(=전부 폴드)이라 **틀린 조언이 된다** —
+ *  화면은 이걸로 먼저 걸러 "데이터 없음"을 정직하게 보여야 한다(가까운 깊이로 몰래 대체하지 않는다). */
+export function hasNashRange(kind: NashKind, k: number, stack: number, ante: boolean): boolean {
+  return tableOf(kind, k, stack, ante) !== undefined;
+}
+
 /** k(뒤 인원)·스택(bb)·앤티 여부로 169핸드 빈도(0..1)를 돌려준다. callSB 는 k>=2 전용. */
 export function nashRange(kind: NashKind, k: number, stack: number, ante: boolean): Float32Array {
-  const src = kind === 'shove' ? SHOVE : kind === 'callBB' ? CALL_BB : CALL_SB;
-  return decode(src[ante ? 'ante' : 'no']?.[String(k)]?.[String(stack)]);
+  return decode(tableOf(kind, k, stack, ante));
 }

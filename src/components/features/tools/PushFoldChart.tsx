@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { CalcCard } from './calcUi';
 import RangeMatrix13, { type MatrixAction } from './RangeMatrix13';
 import SourceBadge from './SourceBadge';
 import { ACTION_COLORS } from '../../../lib/ranges.data';
 import { freqFromArray } from '../../../lib/ranges';
-import { HAND_ORDER, NASH_STACKS, nashRange } from '../../../lib/nash.data';
+import { HAND_ORDER, NASH_STACKS, hasNashRange, nashRange } from '../../../lib/nash.data';
 import Icon from '../../atoms/Icon';
+import SlidingPill from '../../atoms/SlidingPill';
 
 // 푸시·폴드 차트 — 자체 계산 Nash 균형(fictitious play)로 전면 교체.
 // 예전 버전은 스택 6구간×비율 1개(총 6개 숫자)짜리 근사에 포지션 축도, 콜 레인지도 없었다.
@@ -33,9 +34,12 @@ export default function PushFoldChart({ initialK, initialStack, initialAnte, ini
   const [ante, setAnte] = useState(initialAnte ?? false);
   const [view, setView] = useState<View>(initialView ?? 'shove');
   const pos = POSITIONS.find((p) => p.k === k)!;
+  const stackRailRef = useRef<HTMLDivElement>(null);
 
   // SB 콜 레인지는 SB 가 콜러인 상황(k>=2)에서만 존재(k=1 은 SB 가 셔버 본인)
   const effView: View = view === 'callSB' && k < 2 ? 'callBB' : view;
+  // 표가 없는 조합은 행렬을 그리지 않는다 — 빈 표를 decode 하면 전부 0(=전부 폴드)이라 틀린 조언이 된다.
+  const hasData = hasNashRange(effView, k, stack, ante);
 
   const actions = useMemo<MatrixAction[]>(() => {
     const arr = nashRange(effView, k, stack, ante);
@@ -51,31 +55,44 @@ export default function PushFoldChart({ initialK, initialStack, initialAnte, ini
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
     <CalcCard desc="숏스택 올인 균형 · 포지션·스택·앤티별, 콜 레인지까지">
       {/* 포지션 */}
-      <div className="grid grid-cols-4 gap-1">
-        {POSITIONS.map((p) => {
-          const on = p.k === k;
-          return (
-            <button key={p.k} type="button" onClick={() => setK(p.k)}
-              className={['h-8 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
-                on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
-              {p.label}
-            </button>
-          );
-        })}
+      <div className="space-y-1">
+        <p className="text-2xs font-bold text-ink-secondary">내 자리</p>
+        <div className="grid grid-cols-4 gap-1">
+          {POSITIONS.map((p) => {
+            const on = p.k === k;
+            return (
+              <button key={p.k} type="button" onClick={() => setK(p.k)} aria-pressed={on}
+                className={['h-8 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
+                  on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* 스택(bb) */}
-      <div className="flex flex-wrap items-center gap-1">
-        {NASH_STACKS.map((s) => {
-          const on = s === stack;
-          return (
-            <button key={s} type="button" onClick={() => setStack(s)}
-              className={['h-8 min-w-[2.4rem] px-1.5 rounded-input text-2xs font-bold leading-none border tabular-nums transition-colors focus:outline-none',
-                on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
-              {s}bb
-            </button>
-          );
-        })}
+      {/* 스택(bb) — 오너 지시(2026-09-17) "BB 를 골라서 볼 수 있게": 라벨 + 현재값 큰 표시 + 44px 칩(공용 SlidingPill).
+          가로 스크롤 레일은 e2e 잘림 게이트에 걸리므로 flex-wrap(두 줄 허용). 칩은 데이터가 실제로 있는 깊이(NASH_STACKS)만. */}
+      <div className="space-y-1" data-testid="pushfold-stack-picker">
+        <div className="flex items-baseline justify-between">
+          <p className="text-2xs font-bold text-ink-secondary">내 스택 <span className="font-normal text-ink-muted">(빅블라인드 기준)</span></p>
+          <p className="text-sm font-bold tabular-nums text-ink-primary" aria-live="polite">{stack}<span className="text-2xs text-ink-muted"> bb</span></p>
+        </div>
+        <div ref={stackRailRef} role="radiogroup" aria-label="스택 깊이(bb)" className="relative flex flex-wrap gap-1">
+          <SlidingPill containerRef={stackRailRef} activeKey={stack} className="rounded-input pill-active" />
+          {NASH_STACKS.map((s) => {
+            const on = s === stack;
+            const ok = hasNashRange(effView, k, s, ante);
+            return (
+              <button key={s} type="button" role="radio" aria-checked={on} data-pill-active={on || undefined} onClick={() => setStack(s)}
+                title={ok ? undefined : '이 깊이는 데이터가 없습니다'}
+                className={['relative h-[44px] min-w-[44px] px-1.5 rounded-input text-xs font-bold leading-none border tabular-nums transition-colors focus:outline-none',
+                  on ? 'border-transparent text-white' : ok ? 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary' : 'border-dashed border-border-subtle text-ink-muted/50'].join(' ')}>
+                {s}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* 보기 — 누가 올인하고, 누가 콜하는지 */}
@@ -122,7 +139,13 @@ export default function PushFoldChart({ initialK, initialStack, initialAnte, ini
 
       {/* 자체 산출 Nash 다 — 상용 솔버 표가 아니라는 것이 결과 옆에서 바로 보여야 한다. */}
       <div className="flex justify-center"><SourceBadge kind="nash" note="first-in · 단일 콜러 근사" /></div>
-      <RangeMatrix13 actions={actions} initialSel={highlight} />
+      {hasData
+        ? <RangeMatrix13 actions={actions} initialSel={highlight} />
+        : (
+          <p role="status" data-testid="pushfold-no-data" className="rounded-input border border-dashed border-border-subtle px-3 py-6 text-center text-xs text-ink-muted">
+            이 깊이({stack}bb)는 데이터가 없습니다. 가까운 값으로 대체하지 않습니다 — 다른 스택을 고르세요.
+          </p>
+        )}
 
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
         ※ 자체 계산 Nash 균형(fictitious play, 첫 진입 올인·단일 콜러 모델) — 몬테카를로 에퀴티 4만회/쌍 기반.

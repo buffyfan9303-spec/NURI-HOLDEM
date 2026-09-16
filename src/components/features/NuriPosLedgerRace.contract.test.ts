@@ -68,10 +68,30 @@ describe('C06 · QR 승인 대상 게임의 할인은 대상 게임 자신의 �
     const m = code.match(/const discIdxFor = useCallback\(async \(seq: number\)[\s\S]*?\n {2}\}, \[/);
     expect(m, 'discIdxFor 정의를 찾지 못했다').not.toBeNull();
     const body = m![0];
-    expect(body).toContain('getLedgerSession(');
-    expect(body).toContain('getClockState(');
     // seq === gameSeq(같은 게임) 일 때만 현재 화면 값을 쓴다 — 다른 게임 분기에서 fallback 하면 회귀.
     expect(body).toMatch(/if \(seq === gameSeq\) return defaultDiscIdx\(\);/);
+    // 2026-09-17: 실제 조회는 `src/api/discountIndex.ts` 의 **공유 정본**으로 옮겼다.
+    //   대시보드 QR 승인이 이 계산을 하지 않아 같은 손님이 창구에 따라 다른 금액으로 기록됐고,
+    //   고치는 방법이 "대시보드에도 같은 코드를 복사" 였다면 다음에 또 갈렸을 것이다 — 그래서 한 곳으로 모았다.
+    //   계약은 느슨해진 것이 아니라 **옮겨간 자리까지 따라간다**: 아래에서 그 파일의 내용을 직접 단언한다.
+    expect(body).toContain('resolveDiscountIndex(');
+  });
+
+  it('공유 정본(discountIndex.ts)이 대상 게임의 세션·클락을 그 게임 기준으로 다시 조회한다', () => {
+    const shared = readFileSync(join(__dirname, '..', '..', 'api', 'discountIndex.ts'), 'utf-8');
+    expect(shared).toContain('getLedgerSession(venueId, date, gameSeq)');
+    expect(shared).toContain('getClockState(venueId, gameSeq)');
+    // 다른 날짜의 클락 레벨로 오늘 할인을 주면 안 된다.
+    expect(shared).toMatch(/clock\.sessionDate === date/);
+    expect(shared).toContain('autoDiscountIndex(');
+  });
+
+  it('🔴 대시보드 QR 승인도 **같은 정본**으로 할인을 계산한다 (2026-09-17: 여기가 빠져 있었다)', () => {
+    const dash = readFileSync(join(__dirname, 'StoreDashboard.tsx'), 'utf-8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(dash, '대시보드가 공유 정본을 쓰지 않는다 — 장부와 다른 금액이 기록된다').toContain('resolveDiscountIndex(');
+    // 승인 호출에 할인 인자가 빠지면(기본값 0 = 정가) 다시 갈린다.
+    expect(dash).not.toMatch(/approveBuyinRequest\(r\.id, r\.requestedGameSeq \?\? 1, true, method \?\? 'cash', method \? undefined : split\)/);
   });
 
   it('approveReq 가 defaultDiscIdx() 대신 대상 게임 기준 discIdxFor(target) 을 쓴다', () => {
