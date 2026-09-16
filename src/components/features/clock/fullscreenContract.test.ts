@@ -29,17 +29,40 @@ describe('전체화면은 조작 콘솔을 렌더하지 않는다', () => {
     }
   });
 
-  it('전체화면 오버레이는 해제·음소거만 — 운영 버튼을 다시 들이지 않는다', () => {
+  // ⚠ 2026-09-16 오너 지시로 **허용 범위가 한 번 넓어졌다** — '엔트리·생존 보정 둘'이 오버레이에 들어왔다.
+  //   오너: "클락 전체화면 최하단에는 직원들이 엔트리 플레이어등을 수동으로도 올릴 수 있도록 버튼이 있어야해."
+  //   2026-09-11 결정의 **핵심은 그대로다** — 타이머·레벨·시간 보정·초기화·종료·설정은 여전히 금지다.
+  //   (전체화면은 TV 송출 보드이고, 그 다섯은 화면을 덮고 오조작 피해도 크다.)
+  //   손님 TV 라우트 ClockDisplay(`/?display=`)는 무인증이라 **그쪽엔 어떤 쓰기 버튼도 넣지 않는다** — 아래 별도 계약.
+  it('전체화면 오버레이 — 허용은 해제·음소거·엔트리/생존 보정뿐이다', () => {
     const i = code.indexOf('data-testid="clk-fs-overlay"');
     expect(i, '전체화면 최소 오버레이가 없다 — 해제 수단이 사라졌다').toBeGreaterThan(-1);
-    // 오버레이 블록 안(닫는 </div> 까지)에 운영 조작이 들어오지 않았는지
-    const block = code.slice(i, i + 1200);
+    // ⚠ 예전에는 `slice(i, i + 1200)` 고정 창이었다. 버튼이 하나 늘자 toggleFs 가 창 밖으로 밀려
+    //   **코드가 멀쩡한데도** 빨개졌다(2026-09-16). 창 크기가 계약이 되면 안 된다 —
+    //   다음 형제 요소가 시작되는 지점(풀스크린 16:9 박스 주석)까지를 블록으로 본다.
+    const end = code.indexOf('aspect-[16/9]', i);
+    expect(end, '오버레이 뒤의 16:9 박스를 못 찾았다 — 구조가 바뀌었으면 이 계약부터 다시 읽어라').toBeGreaterThan(i);
+    const block = code.slice(i, end);
+
     for (const forbidden of ['toggleRun', 'setLevel', 'adjustTime', 'resetClock', 'handleEnd', 'onOpenSettings']) {
-      expect(block.includes(forbidden), `오버레이에 운영 조작(${forbidden})이 들어왔다`).toBe(false);
+      expect(block.includes(forbidden), `오버레이에 운영 조작(${forbidden})이 들어왔다 — 2026-09-11 결정은 이 다섯에 대해 유효하다`).toBe(false);
     }
     expect(block).toContain('toggleFs');    // 해제
     expect(block).toContain('toggleMute');  // 음량
     expect(block).toContain('aria-label');  // 키보드·스크린리더 접근
+
+    // 새로 허용한 둘 — '있어야 한다' 로 못박는다(지워지면 오너 요청이 조용히 사라진 것이다).
+    expect(block, '엔트리 보정 버튼이 없다(오너 2026-09-16)').toContain("adj('adjEntries'");
+    expect(block, '생존(플레이어) 보정 버튼이 없다(오너 2026-09-16)').toContain('adjPlayer(');
+    // 🔴 권한 게이트 — 운영 권한 없이는 그리지 않는다.
+    expect(block, '보정 버튼이 canManage 로 감싸여 있지 않다').toContain('canManage &&');
+  });
+
+  it('🔴 손님 TV 송출 화면(ClockDisplay)에는 쓰기 버튼이 없다 — 무인증 공개 라우트다', () => {
+    const display = strip(readFileSync(join(__dirname, 'ClockDisplay.tsx'), 'utf-8'));
+    for (const forbidden of ['adjPlayer', 'adjEntries', 'toggleRun', 'setLevel', 'resetClock', 'saveClockState']) {
+      expect(display.includes(forbidden), `ClockDisplay 에 쓰기 경로(${forbidden})가 들어왔다 — 로그인 없이 열리는 화면이다`).toBe(false);
+    }
   });
 
   it('ESC/네이티브 해제가 React 상태를 되돌린다(fullscreenchange 구독)', () => {

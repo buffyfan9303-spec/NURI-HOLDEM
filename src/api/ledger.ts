@@ -184,6 +184,23 @@ export function grossOf(s: { buyinAmount: number }): number {
 
 /** 이 행에 실제로 적용되는 할인액(원). 정상가를 넘지 못한다 — 과거 데이터에 비정상 프리셋이 있어도
  *  음수 가치를 만들지 않는다. **데이터를 고치지는 않는다**(읽는 쪽에서만 방어). */
+/**
+ * 할인 프리셋 변경이 **뒤에 덧붙이기만** 인가 — 기존 바인에 소급되지 않는 변경인가를 판정한다.
+ *
+ * 왜 필요한가: 바인은 할인을 **자리번호**(`discountIndex`, 1-based)로 참조한다(위 discountOf).
+ *   그래서 앞쪽 자리가 그대로면 **뒤에 새 할인을 추가해도 기존 행의 계산은 한 글자도 안 바뀐다.**
+ *   반대로 기존 자리의 금액·라벨·레벨을 고치거나 길이를 줄이면 이미 기록된 바인의 적용금액·엔트리가 소급 변형된다.
+ *   (라벨도 자리 식별에 쓰이므로 불변으로 본다 — 장부를 나중에 읽는 사람이 '할인2 = 무엇' 을 라벨로 판단한다.)
+ *
+ * 이 함수가 생기기 전에는 `JSON.stringify` 로 통째 비교해서 **추가까지 막았다.**
+ * 그 탓에 바인이 1건이라도 있으면 할인을 새로 등록할 길이 없었다(2026-09-16 오너 리포트 "할인이 없어").
+ */
+export function discountsAppendOnly(prev: DiscountPreset[], next: DiscountPreset[]): boolean {
+  if (next.length < prev.length) return false;
+  return prev.every((d, i) =>
+    d.label === next[i]?.label && d.amount === next[i]?.amount && (d.level ?? 0) === (next[i]?.level ?? 0));
+}
+
 export function discountOf(b: { discountIndex: number }, s: { buyinAmount: number; discounts?: DiscountPreset[] }): number {
   return Math.min(grossOf(s), Math.max(0, Math.round(discountAmountOf(s, b.discountIndex))));
 }

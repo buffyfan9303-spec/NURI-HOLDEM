@@ -26,6 +26,7 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
   getPendingBuyinRequests, approveBuyinRequest, rejectBuyinRequest, subscribeBuyinRequests, type BuyinRequest,
   getLastClosedRound, type LastClosedRound,
+  discountsAppendOnly,
 } from '../../api/ledger';
 import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
@@ -826,7 +827,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     // 사실을 모르고 고치면 실제 받은 현금과 장부가 조용히 어긋난다. 바뀔 때만 한 번 묻는다.
     const priceChanged = s.buyinAmount !== session.buyinAmount
       || (s.cardAmount ?? null) !== (session.cardAmount ?? null)
-      || JSON.stringify(s.discounts ?? []) !== JSON.stringify(session.discounts ?? []);
+      // ⚠ 2026-09-16: 예전에는 JSON.stringify 통째 비교라 **할인을 '추가'하는 것까지 막았다.**
+      //   바인은 자리번호로 할인을 참조하므로 뒤에 덧붙이는 것은 소급 영향이 0 이다(ledger.ts discountsAppendOnly).
+      //   덤으로 통째 비교는 jsonb 키 순서(label,level,amount)와 폼 키 순서(label,amount,level)가 달라
+      //   **제목만 고쳐도** 거부되는 거짓 양성이 있었다 — 필드 비교로 함께 해소된다.
+      || !discountsAppendOnly(session.discounts ?? [], s.discounts ?? []);
     // ⚠ 2026-09-14 D1 — 여기 있던 경고문은 **사실과 반대**였다.
     //   "새 기록은 기록 시점 금액이 고정돼 영향 없음" 이라고 적혀 있었지만, 엔트리는
     //   `적용금액 ÷ 세션 **현재** 단가`(ledger.ts buyinFinance.seal)라 스냅샷이 있는 행도 분모가 바뀐다.
@@ -834,7 +839,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     //   게다가 예전 조건은 '레거시 행이 있을 때만' 이라 **레거시가 0건이면 경고조차 안 땡다.**
     //   폼에서 이미 잠갔지만(lockPricing), 저장 경로에서도 막는다 — 폼을 우회해도 장부가 틀어지지 않게.
     if (priceChanged && buyins.length > 0) {
-      toast.show('이미 기록된 바인이 있어 단가·할인을 바꿀 수 없습니다. 해당 바인을 지운 뒤 고쳐 주세요', 'error');
+      toast.show('이미 기록된 바인이 있어 단가와 기존 할인은 바꿀 수 없습니다. 할인은 뒤에 추가만 됩니다', 'error');
       return;
     }
     try { await saveLedgerSession(s); await syncDealersToSchedule(s.sessionDate, s.dealers); setSession((prev) => ({ ...prev, ...s })); setEditOpen(false); toast.show('세션 정보를 저장했습니다', 'success'); }
@@ -2525,10 +2530,13 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           fieldset 하나로 감싼다 — 중첩된 input·button 이 전부 네이티브로 잠기고, 나중에 칸이 늘어도 자동으로 덮인다. */}
       {lockPricing && (
         <p className="rounded-input border border-accent-400/40 bg-accent-300/10 px-2.5 py-2 text-2xs leading-relaxed text-accent-200">
-          이미 기록된 바인이 있어 <b>단가·할인은 잠겨 있습니다</b>. 여기서 바꾸면 이미 저장된 바인의
-          엔트리·달성률까지 <b>소급해서 바뀝니다</b>. 금액을 잘못 넣었다면 해당 바인 기록을 지운 뒤 고쳐 주세요.
+          이미 기록된 바인이 있어 <b>단가와 기존 할인은 잠겨 있습니다</b> — 바꾸면 이미 저장된 바인의
+          엔트리·달성률까지 <b>소급해서 바뀝니다</b>. 금액을 잘못 넣었다면 해당 바인 기록을 지운 뒤 고쳐 주세요.<br />
+          다만 <b>할인은 뒤에 새로 추가할 수 있습니다</b> — 기존 바인은 자리번호로 할인을 참조해 영향이 없습니다.
         </p>
       )}
+      {/* D1 잠금은 **단가 두 칸에만** 건다. 할인은 아래에서 행별로 잠근다 —
+          기존 자리는 잠그되 **새 행 추가는 열어 둔다**(바인이 자리번호로 참조하므로 뒤에 붙이면 소급 영향 0). */}
       <fieldset disabled={lockPricing} className="contents">
       <div className="grid grid-cols-2 gap-2">
         <Field label="현금단가(만원) *">
@@ -2538,6 +2546,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(card)} onChange={(e) => setCard(parseMan(e.target.value))} placeholder="미입력=현금단가" className="input w-full text-sm tabular-nums" />
         </Field>
       </div>
+      </fieldset>
 
       <Field label="할인 이벤트 (최대 5) · 선택">
         <div className="space-y-1.5">
@@ -2552,8 +2561,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               </span>
             </button>
           )}
-          {discs.map((d, i) => (
-            <div key={i} className="flex items-center gap-1.5">
+          {discs.map((d, i) => {
+            // 바인이 있으면 **이미 저장돼 있던 자리**만 잠근다. 새로 추가한 행은 자유롭게 입력할 수 있다.
+            const rowLocked = lockPricing && i < (base.discounts?.length ?? 0);
+            return (
+            <fieldset key={i} disabled={rowLocked} className="flex items-center gap-1.5">
               <span className="w-9 shrink-0 text-2xs font-bold text-accent-300">할인{i + 1}</span>
               <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input min-w-0 flex-1 text-sm" />
               <div className="relative w-20 shrink-0">
@@ -2571,8 +2583,9 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
                 <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">LV</span>
               </div>
               <button type="button" onClick={() => removeDisc(i)} aria-label={`할인${i + 1} 비우기`} className="flex h-9 w-9 shrink-0 items-center justify-center text-xs text-ink-muted hover:text-danger-light">✕</button>
-            </div>
-          ))}
+            </fieldset>
+            );
+          })}
           {discs.length < 5 && (
             <button type="button" onClick={addDisc} className="w-full rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">+ 할인 추가</button>
           )}
@@ -2588,7 +2601,6 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           </p>
         </div>
       </Field>
-      </fieldset>
 
       {/* 2026-09-14: 375 에서 `기준)` 이 고아로 떨어졌다 — 괄호 설명을 줄여 한 줄에 맞춘다(아래 설명 줄이 전체를 말한다). */}
       <Field label="토너먼트 스타트 시각 · 선택">
@@ -2979,7 +2991,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               </div>
               {/* 할인 이벤트 — 단순 결제와 동일한 프리셋을 분납에서도 적용(예: 1레벨 바인 5만 할인).
                   이전의 '레벨 할인' 숫자칸은 계산 어디에도 반영되지 않는 죽은 값이라 제거했다. */}
-              {discs.length > 0 && (
+              {discs.some((d) => d.amount > 0) ? (
                 <div>
                   <span className="mb-1 block text-2xs text-ink-muted">할인 이벤트 (선택)</span>
                   <div className="flex flex-wrap gap-1">
@@ -2997,6 +3009,13 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                     )))}
                   </div>
                 </div>
+              ) : (
+                /* 2026-09-16 오너 리포트 "분납은 있는데 할인이 없어" — 헤더가 '분납 / 할인' 이라고 약속해 놓고
+                   프리셋이 0개면 줄 자체를 안 그려 **기능이 없는 것처럼 보였다.** 없으면 없다고 말한다. */
+                <p className="text-2xs leading-relaxed text-ink-muted">
+                  이 게임에 등록된 할인이 없습니다 — <b className="text-ink-secondary">‘세션 정보 수정’</b>의
+                  <b className="text-ink-secondary">‘할인 이벤트’</b>에 추가하면 여기서 고를 수 있어요.
+                </p>
               )}
               <p className="text-2xs text-ink-secondary text-right">
                 합계 <b className={`tabular-nums ${mismatch === 0 ? '' : 'text-danger-light'}`}>{wonToMan(splitTotal)}</b>만원

@@ -46,7 +46,7 @@ import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationBu
 import StaffInviteBanner from './components/features/StaffInviteBanner';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
-import { promptLogin, REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, ensureVerified } from './lib/requireLogin';
+import { promptLogin, REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, ensureLogin } from './lib/requireLogin';
 import { tierCss, tierOf, ADMIN_VIVID_VAR } from './components/atoms/TierBadge';
 
 /**
@@ -1377,10 +1377,12 @@ export default function App() {
   // 본인인증 게이트 안내는 <VerifyGateSheet/> 가 REQUIRE_VERIFY_EVENT 를 직접 듣고 시트로 띄운다(#31).
   // (기존: 사라지는 토스트 → 무엇이 왜 필요한지 설명하는 하단 시트로 교체)
 
-  // 어디서든 글쓰기 모달 열기 — 포스터 상세 '대회 후기 쓰기' 등(카테고리 프리셋). 본인인증 회원만.
+  // 어디서든 글쓰기 모달 열기 — 포스터 상세 '대회 후기 쓰기' 등(카테고리 프리셋).
+  // ⚠ 2026-09-16 오너 결정: **글쓰기는 본인인증과 무관하다** — 로그인 가드만 둔다(`ensureLogin`).
+  //   본인인증은 이용권·참가가 걸린 곳(이벤트 참여·대회 예약)에만 남는다. 계약: postGateContract.test.ts
   useEffect(() => {
     const h = (e: Event) => {
-      if (!ensureVerified(user, '글쓰기')) return;
+      if (!ensureLogin(user)) return;
       const detail = (e as CustomEvent).detail as { category?: PostCategory; replay?: ReplayData } | undefined;
       setPostFormCategory(detail?.category ?? 'free');
       setPostFormReplay(detail?.replay ?? null);
@@ -3119,12 +3121,12 @@ export default function App() {
   const userRefForGate = useRef(user);
   useEffect(() => { userRefForGate.current = user; });
   const handleOpenWrite = useCallback((category?: PostCategory) => {
-    if (!ensureVerified(userRefForGate.current, '글쓰기')) return; // 본인인증 회원만 글쓰기
+    if (!ensureLogin(userRefForGate.current)) return; // 로그인만 — 본인인증은 요구하지 않는다(오너 2026-09-16)
     setPostFormCategory(category ?? 'free');
     startTransition(() => setPostFormOpen(true));
   }, []);
   const handleMarketCreate = useCallback(() => {
-    if (ensureVerified(userRefForGate.current, '중고장터 등록')) startTransition(() => setMarketFormOpen(true));
+    if (ensureLogin(userRefForGate.current)) startTransition(() => setMarketFormOpen(true)); // 로그인만 — 본인인증 무관(오너 2026-09-16)
   }, []);
   // 목록 재조회 정본 — 등록·상태변경 후 갱신과 실패 카드의 '다시 시도'가 같은 함수를 쓴다(껍데기 버튼 방지).
   const handleListingsChanged = useCallback(() => {

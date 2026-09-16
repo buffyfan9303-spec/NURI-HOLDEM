@@ -29,7 +29,10 @@ export function openPostForm(category?: string, replay?: ReplayData): void {
 }
 
 // ── 본인인증 게이트 ──────────────────────────────────────────────────────────
-// 본인인증(휴대폰)이 필요한 민감 기능(글쓰기·중고장터 등록·예약) 시도 시, App이 듣고 본인인증 안내 시트를 띄운다.
+// 본인인증(휴대폰)이 필요한 민감 기능 시도 시, App이 듣고 본인인증 안내 시트를 띄운다.
+// ⚠ 2026-09-16 오너 결정으로 **글쓰기·중고장터 등록은 이 게이트에서 빠졌다**(로그인만 요구).
+//   남은 사용처는 **이용권·참가가 걸린 곳** 둘뿐이다 — 이벤트 참여(EventPage) · 대회 예약(ScheduleDetailModal).
+//   계약: src/components/features/postGateContract.test.ts
 export const REQUIRE_VERIFY_EVENT = 'nuri:require-verify';
 /** @param reason 차단된 기능명(예: '예약', '글쓰기') — 안내 시트가 맥락 문구로 표시. */
 export function promptVerify(reason?: string): void {

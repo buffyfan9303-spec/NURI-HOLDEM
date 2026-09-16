@@ -887,7 +887,13 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
 
   return (
     <div ref={wrapRef} data-scroll-lock className={fs ? 'fixed inset-0 z-[70] bg-[#06080c] flex items-center justify-center overflow-hidden' : ''}>
-      {/* 전체화면 최소 오버레이 — 해제·음소거만. 모서리에 두어 대회명·지표를 가리지 않고,
+      {/* 전체화면 최소 오버레이 — 해제·음소거 + **엔트리·생존 보정 둘**(오너 2026-09-16).
+          2026-09-11 결정('전체화면에 조작 콘솔을 넣지 않는다')은 그대로다 — 타이머·레벨·시간·초기화·종료는
+          여전히 여기 없다. 오너 요청은 "직원들이 엔트리·플레이어를 수동으로도 올릴 수 있게" 딱 그 둘이었고,
+          노트북을 TV 에 직결한 매장에서 전체화면을 풀지 않고 접수를 반영하려면 이 둘이 필요하다.
+          ⚠ 운영 권한(canManage)이 있을 때만 그린다. 손님 TV 송출 라우트(ClockDisplay, `/?display=`)는
+          무인증 공개 화면이라 **거기엔 넣지 않는다** — 넣으면 손님이 닿는 화면에서 대회 상태가 바뀐다.
+          모서리에 두어 대회명·지표를 가리지 않고,
           2.5초 잠잠하면 사라져 송출 화면에 아무 버튼도 남지 않는다. ESC 로도 해제된다(위 useBackClose).
           ⚠ 안의 bg-black/50·text-white/75 는 토큰화하지 않는다(2026-09-15 판정). 조작 패널(:816)과 달리
           이 오버레이는 **항상 다크한 클락 보드 위에만** 떠서 테마를 타지 않는다 — 라이트에서도 지면이
@@ -896,6 +902,28 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
         <div data-testid="clk-fs-overlay"
           className={['absolute bottom-[2vmin] right-[2vmin] z-10 flex items-center gap-[1vmin] transition-opacity duration-300',
             ctlOn ? 'opacity-100' : 'opacity-0 pointer-events-none'].join(' ')}>
+          {/* 엔트리·생존 보정 — 콘솔(:852)과 **같은 persist/adj 경로**를 재사용한다. 새 저장 경로를 만들지 않는다.
+              장부 연동 중이면 자동 반영분 **위에 얹는 보정**이라 aria-label 에 그 사실을 적는다
+              (비전체화면 캡션은 `!fs` 라 여기선 안 보인다). */}
+          {canManage && (
+            <div className="flex items-center gap-[1.2vmin] rounded-[1vmin] bg-black/50 px-[1.2vmin] py-[0.6vmin] backdrop-blur-sm">
+              {[
+                { k: 'e', label: '엔트리', value: liveStats.entries, plus: () => adj('adjEntries', 1), minus: () => adj('adjEntries', -1) },
+                { k: 'p', label: '생존', value: liveStats.alive, plus: () => adjPlayer(1), minus: () => adjPlayer(-1) },
+              ].map((it) => (
+                <div key={it.k} className="flex items-center gap-[0.5vmin]">
+                  <span className="text-[1.3vmin] font-semibold text-white/60">{it.label}</span>
+                  <button type="button" onClick={it.minus}
+                    aria-label={`${it.label} 1 줄이기${state.sessionDate ? ' (장부 자동 반영분 보정)' : ''}`}
+                    className="grid h-[4vmin] min-h-[44px] w-[4vmin] min-w-[44px] place-items-center rounded-[1vmin] bg-white/10 text-[2vmin] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">−</button>
+                  <span className="min-w-[3.4vmin] text-center text-[1.9vmin] font-bold tabular-nums text-white">{it.value}</span>
+                  <button type="button" onClick={it.plus}
+                    aria-label={`${it.label} 1 늘리기${state.sessionDate ? ' (장부 자동 반영분 보정)' : ''}`}
+                    className="grid h-[4vmin] min-h-[44px] w-[4vmin] min-w-[44px] place-items-center rounded-[1vmin] bg-white/10 text-[2vmin] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">+</button>
+                </div>
+              ))}
+            </div>
+          )}
           <button type="button" onClick={toggleMute} aria-label={volume > 0 ? '음소거' : '음소거 해제'}
             className="grid h-[4vmin] min-h-[36px] w-[4vmin] min-w-[36px] place-items-center rounded-[1vmin] bg-black/50 text-white/75 backdrop-blur-sm transition-colors hover:bg-black/70 hover:text-white">
             <Icon name={volume > 0 ? 'volume' : 'volume-off'} size={16} />
