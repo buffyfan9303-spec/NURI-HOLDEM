@@ -674,8 +674,25 @@ export async function changeMyPassword(
   if (error) throw error;
 }
 
+/** 이메일 인증코드(OTP)의 자릿수 — **화면 전체의 단일 정본**.
+ *
+ *  이 값은 우리가 정하는 것이 아니라 **Supabase 대시보드의 Email OTP Length 설정을 따라 적는 것**이다
+ *  (Authentication → Email → OTP Length, 허용 범위 6~10). 앱은 코드를 직접 만들지 않는다 —
+ *  `auth.reauthenticate()` · `resetPasswordForEmail()` 이 보내는 메일의 `{{ .Token }}` 이 그대로 온다.
+ *
+ *  🔴 2026-09-17: 라이브에서 **8자리**가 오는데 코드 주석과 supabase/config.toml 은 **6이라고 적고 있었다**.
+ *     `supabase/config.toml` 의 otp_length 는 **로컬 개발(supabase start)용**이라 호스팅 프로젝트에
+ *     적용되지 않는다 — 그래서 아무도 어긋남을 눈치채지 못했다. 오너 결정으로 **8을 정본**으로 삼는다.
+ *
+ *  ⚠ 여기 한 곳만 고치면 입력칸 상한·자르기·제출 가드·안내 문구가 **같이** 따라온다.
+ *    예전에는 두 화면(ProfileModal · AuthModal)에 `slice(0, 8)` / `length < 6` / "6자리" 가 각각
+ *    박혀 있어 **서로 다른 숫자 세 개**가 한 흐름 안에 공존했다. 리터럴을 다시 흩뿌리지 마라
+ *    (`src/api/emailOtpLength.contract.test.ts` 가 막는다).
+ */
+export const EMAIL_OTP_LENGTH = 8;
+
 // ── 비밀번호 변경 (이메일 인증 OTP) ───────────────────────────────────────────
-// 1) 로그인한 본인 이메일로 재인증 OTP(6자리) 발송
+// 1) 로그인한 본인 이메일로 재인증 OTP 발송 (자릿수는 EMAIL_OTP_LENGTH)
 export async function requestPasswordChangeCode(): Promise<void> {
   if (IS_MOCK) { await new Promise((r) => setTimeout(r, 600)); return; }
   const { error } = await supabase.auth.reauthenticate();
@@ -697,7 +714,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
   if (error) throw error;
 }
 
-// 2) 이메일로 받은 6자리 OTP 검증 → 복구 세션 수립
+// 2) 이메일로 받은 OTP 검증 → 복구 세션 수립 (자릿수는 EMAIL_OTP_LENGTH)
 export async function verifyPasswordResetOtp(email: string, token: string): Promise<void> {
   if (IS_MOCK) { await new Promise((r) => setTimeout(r, 600)); return; }
   const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: token.trim(), type: 'recovery' });

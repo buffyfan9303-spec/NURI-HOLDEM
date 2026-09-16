@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useBlocks } from '../../contexts/BlockContext';
 import { resizeImage } from '../../lib/storage';
-import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, checkNicknameAvailable, checkNameAvailable, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent } from '../../api/auth';
+import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, checkNicknameAvailable, checkNameAvailable, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent, EMAIL_OTP_LENGTH } from '../../api/auth';
 import { PASSWORD_RULES, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER, validatePassword } from '../../lib/password';
 import { useAvailabilityCheck, availabilityHint } from '../atoms/AvailabilityField';
 import { isValidDisplayName } from '../../lib/displayName';
@@ -203,7 +203,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     // 발송 후에도 새 비밀번호 입력란이 열려 있으므로 확정 단계에서 규칙·일치를 다시 게이트한다
     if (!validatePassword(newPw).ok) return toast.show(`비밀번호 규칙: ${PASSWORD_RULE_HINT}`, 'error');
     if (newPw !== confirmPw) return toast.show('새 비밀번호가 일치하지 않습니다', 'error');
-    if (!IS_MOCK && code.trim().length < 6) return toast.show('이메일로 받은 인증번호를 입력해 주세요', 'error');
+    if (!IS_MOCK && code.trim().length < EMAIL_OTP_LENGTH) return toast.show(`이메일로 받은 인증번호 ${EMAIL_OTP_LENGTH}자리를 입력해 주세요`, 'error');
     setChangingPw(true);
     try {
       await changeMyPasswordWithCode(newPw, code.trim());
@@ -685,14 +685,11 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                   type="text"
                   inputMode="numeric"
                   value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 8))}
-                  placeholder="이메일로 받은 인증번호"
-                  /* ⚠ Supabase 의 이메일 OTP 길이는 **대시보드 설정값(6~10)** 이다. 저장소의 supabase/config.toml 은 로컬 개발용이라 호스팅 프로젝트에 적용되지 않는다.
-                     2026-09-17 오너 보고: 실제로 **8자리**가 온다(주석·config 은 6 이라고 적혀 있었다).
-                     8 로 두면 지금은 딱 맞지만 설정을 9·10 으로 올리는 순간 **입력칸이 조용히 잘라먹는다**
-                     (붙여넣기가 마지막 한·두 글자를 버려도 사용자는 모른다). 서버 상한인 10 으로 열어 둔다.
-                     제출 가드는 `length < 6`(최소값)이라 길이가 바뀜어도 그대로 동작한다. */
-                  maxLength={10}
+                  /* 자릿수는 api/auth.ts 의 EMAIL_OTP_LENGTH 하나가 정한다 — 자르기·상한·안내·가드가 같은 값을 본다.
+                     ⚠ 예전에는 여기 slice(0, 8) · maxLength · 문구 · 제출 가드(6)가 따로 박혀 있었다. */
+                  onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, EMAIL_OTP_LENGTH))}
+                  placeholder={`이메일로 받은 인증번호 ${EMAIL_OTP_LENGTH}자리`}
+                  maxLength={EMAIL_OTP_LENGTH}
                   className="input text-center font-bold tracking-[0.3em]"
                   autoFocus
                 />
@@ -707,7 +704,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
               </div>
               <button
                 type="submit"
-                disabled={changingPw || (!IS_MOCK && code.length < 6) || !validatePassword(newPw).ok || newPw !== confirmPw}
+                disabled={changingPw || (!IS_MOCK && code.trim().length < EMAIL_OTP_LENGTH) || !validatePassword(newPw).ok || newPw !== confirmPw}
                 className="btn-primary w-full disabled:opacity-60"
               >
                 {changingPw ? '변경 중…' : '비밀번호 변경'}

@@ -10,7 +10,7 @@ import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
 import { rememberCurrentView, clearViewIntent } from '../../lib/pendingViewIntent';
 import { signInWithGoogle,
   signUpUser, signUpOwner, checkNicknameAvailable, checkNameAvailable, checkEmailAvailable, EMAIL_RE,
-  requestPasswordReset, verifyPasswordResetOtp, setNewPassword,
+  requestPasswordReset, verifyPasswordResetOtp, setNewPassword, EMAIL_OTP_LENGTH,
 } from '../../api/auth';
 import { validatePassword, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER } from '../../lib/password';
 import AvailabilityField, { useAvailabilityCheck } from '../atoms/AvailabilityField';
@@ -599,7 +599,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
 
   const reset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (code.trim().length < 6) return toast.show('인증번호를 입력해 주세요', 'error');
+    if (code.trim().length < EMAIL_OTP_LENGTH) return toast.show(`인증번호 ${EMAIL_OTP_LENGTH}자리를 입력해 주세요`, 'error');
     if (!validatePassword(newPw).ok) return toast.show(`비밀번호 규칙: ${PASSWORD_RULE_HINT}`, 'error');
     if (newPw !== confirmPw)    return toast.show('새 비밀번호가 일치하지 않습니다', 'error');
     setLoading(true);
@@ -637,9 +637,9 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         <label className="block text-xs font-medium text-ink-secondary mb-1.5">인증번호</label>
         <input
           type="text" inputMode="numeric" value={code}
-          onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 8))}
-          /* ⚠ Supabase 의 이메일 OTP 길이는 **대시보드 설정값(6~10)** 이다. 저장소의 supabase/config.toml 은 로컬 개발용이라 호스팅 프로젝트에 적용되지 않는다. 위 ProfileModal 과 같은 이유로 서버 상한(10)에 맞춘다. */
-          placeholder="이메일로 받은 인증번호" maxLength={10}
+          /* 자릿수 정본은 api/auth.ts 의 EMAIL_OTP_LENGTH — ProfileModal 과 같은 값을 본다. */
+          onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, EMAIL_OTP_LENGTH))}
+          placeholder={`이메일로 받은 인증번호 ${EMAIL_OTP_LENGTH}자리`} maxLength={EMAIL_OTP_LENGTH}
           className="input text-center font-bold tracking-[0.3em]" autoFocus
         />
       </div>

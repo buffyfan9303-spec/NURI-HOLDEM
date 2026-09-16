@@ -229,7 +229,11 @@ secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
 max_frequency = "1s"
 # Number of characters used in the email OTP.
-otp_length = 6
+# ⚠ 이 값은 **로컬 개발(supabase start)에만** 적용된다 — 호스팅 프로젝트는 대시보드
+#   (Authentication → Email → OTP Length)가 정본이고, 라이브는 8이다(2026-09-17 오너 확인).
+#   예전에 여기만 6이라 코드 주석까지 6으로 퍼졌고, 실제 메일은 8자리였다. 로컬도 8로 맞춘다.
+#   클라이언트 자릿수 정본은 src/api/auth.ts 의 EMAIL_OTP_LENGTH 다.
+otp_length = 8
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
