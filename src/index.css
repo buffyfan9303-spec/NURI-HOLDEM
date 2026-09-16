@@ -1400,8 +1400,20 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
 
 /* ── 모바일 하단 탭바(Riot Mobile 스타일) 공간 확보 — 컨텐츠가 탭바에 가리지 않게 */
 @media (max-width: 1023.5px) {
-  /* py-* 유틸 클래스가 태그 셀렉터를 이겨 패딩이 무효되던 버그 — 하단 탭바 가림의 원인 */
-  main { padding-bottom: var(--tabbar-safe) !important; }
+  /* 🔴 여기 있던 `main { padding-bottom: var(--tabbar-safe) !important }` 를 지웠다(2026-09-17, 오너 결정).
+     그 규칙은 **문서의 마지막 요소가 main 이던 시절**의 것이다. 지금은 PG·카카오 심사 요건으로
+     `BusinessFooter` 가 전 화면 하단에 상시 렌더되고(App.tsx:3834, main 의 **형제**이자 뒤),
+     그 푸터가 `pb-[calc(var(--tabbar-safe)+0.5rem)]` 로 같은 예약을 **한 번 더** 하고 있었다.
+     → 탭바 자리를 두 번 비워 두는 셈이라 본문 끝과 사업자정보 사이에 죽은 띠가 생겼다.
+     라이브 실측(375px · 홈 · 문서 끝):
+       본문 끝 → 푸터 시작 **131.0px** · 푸터 끝 → 탭바 윗변 **128.3px**
+       게다가 문서 끝에서는 탭바가 의도적으로 숨는다(App.tsx:693) — 비워 둔 자리를 쓸 것이 없다.
+     안전 근거(라이브 5탭 실측): main 은 어디서도 뷰포트 바닥에 붙은 스크롤 상자가 아니고
+       (`position:static` · `overflow-y:visible`), **모든 탭에서 푸터가 main 뒤에 온다.**
+       즉 탭바 가림 방지는 푸터의 예약 하나로 충분하다.
+     ⚠ 이 예약은 이제 **푸터 한 곳뿐**이다 — `BusinessFooter.tsx:28` 의 pb 를 지우면 문서 끝이 탭바 뒤로 들어간다.
+        그래서 `src/components/features/tabbarClearance.contract.test.ts` 가 양쪽을 다 단언한다.
+     (아래 scroll-margin-bottom 은 **별개**다 — 포커스 스크롤은 뷰포트만 보고 떠 있는 탭바를 모른다. 건드리지 마라.) */
   /* 브라우저가 '포커스된 칸을 보이게' 스크롤할 때는 **뷰포트만** 본다 — 그 위에 떠 있는 하단 탭바를 모른다.
      그래서 화면 밖 바로 아래 칸으로 포커스가 가면(소프트 키보드의 '다음', Tab, 검증 실패 포커스)
      최소 스크롤(block:nearest)로 화면 **맨 아래 모서리**에 붙이고, 그 자리가 정확히 탭바 뒤다.
