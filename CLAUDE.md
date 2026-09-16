@@ -63,18 +63,29 @@ PG(포트원·다날) 입점 심사와 카카오 비즈니스 심사가 모두 �
 
 ## 검증
 
-UI를 바꿨으면 `npm run build` 와 `npm run test:e2e` 를 돌립니다. 마무리는 `nuri-ship` 게이트.
+UI를 바꿨으면 게이트를 돌립니다. 마무리는 `nuri-ship` 게이트.
+🔴 **`npm run test:e2e` 도 `npm run build` 도 오너 보호 파일 `public/sitemap.xml` 을 덮어씁니다** —
+백업 → 빌드 → 즉시 복원 → 해시 대조 절차는 `.claude/skills/nuri-e2e/SKILL.md`. `git checkout -- public/sitemap.xml` 은 금지입니다.
 dev 서버는 포트 **5173**(`.claude/launch.json` 의 `holdem-dev`). E2E는 프로덕션 빌드(4173)를 검사합니다.
+> ⚠️ 하네스(`mobile-chromium` = `devices['Pixel 7']`)에는 **주소창 접힘이 없어 `dvh`==`svh`==`lvh`** 입니다.
+> 동적 뷰포트 부류는 여기서 재현되지 않습니다 — **재현 못 함 ≠ 없음.** 못 재면 소스 계약으로 막으세요(`src/components/dynamicViewportUnit.contract.test.ts`).
+> ⚠️ E2E 스펙 **대부분이 운영 데이터를 목킹 없이 읽습니다**(`e2e/_fixtures.ts` 가드는 쓰기만 끊습니다).
+> **코드를 안 바꿨는데 빨개지면 회귀보다 운영 데이터 변경을 먼저 의심하세요** — 배너 1장 등록에 커밋 0개로 9건이 빨개진 적이 있습니다.
+> ⚠️ 도커 앱 컨테이너(`nuri-holdem-app-1`:3000)로 화면을 확인하지 마세요. `.dockerignore` 가 `tailwind.config.js` 를 빼서
+> CSS 가 운영의 30%(56KB vs 187KB)인 깨진 빌드를 서빙합니다. 도커 파일 3종은 **오너 파일(git 미추적)** 입니다.
 
 남아 있는 테스트는 **"동작하는가"를 보는 것들**입니다(접근성 대비·히트영역·성능 상한·크래시·보안 계약).
 스타일을 규정하던 테스트는 위 표대로 삭제했습니다.
 
+> ⚠️ 부분일치 셀렉터(`filter({ hasText })`)는 **실패할 때보다 거짓 통과할 때가 위험합니다** — `'글쓰기'` 가 본인인증 게이트 시트 문구에
+> 붙어 `toBeVisible` 이 통과했고 정작 대상은 열리지도 않았습니다. `getByRole(name)` 으로 좁히세요.
+>
 > ⚠️ 라벨·이모지에 결합된 e2e 셀렉터가 일부 있습니다. 그 텍스트를 바꾸면 **같은 커밋에서
 > 셀렉터를 `data-testid`로 교체**하세요. 셀렉터를 느슨하게 푸는 것은 게이트 무력화라 안 됩니다
 > (이건 스타일 규칙이 아니라 테스트 자체를 지키는 것이라 남깁니다).
 
 ## 마스터 실행 계획
-`docs/plans/nuri-master-execution-plan.md` (§0~§16) · `BLOCKED.md`(오너 결정) · `backlog.md`(범위 밖).
+`docs/plans/nuri-master-execution-plan.md` (§0~§16) · `docs/plans/BLOCKED.md`(오너 결정) · `docs/plans/backlog.md`(범위 밖).
 **§15가 §1~§14를 이깁니다.**
 
 ## 실행 순서는 구현 책임자가 정한다 (오너 지시 2026-09-12)
@@ -103,6 +114,10 @@ dev 서버는 포트 **5173**(`.claude/launch.json` 의 `holdem-dev`). E2E는 �
    pre-commit(secretlint)이 막지만, 새면 **키 로테이션이 먼저**다(공개 저장소는 이력이 곧 공개).
 2. **인가는 서버(DB)가 한다.** 클라이언트의 `user.role`·`verified` 판정은 UI 분기용일 뿐이다. 모든 권한은 RLS 정책 또는
    SECURITY DEFINER RPC 안의 `auth.uid()`·`my_role()` 검사로 강제한다. NULL-safe 비교(`IS DISTINCT FROM`) — `<>` 는 비로그인에서 가드가 열린다.
+   **권한 함수를 손댈 때는 그 함수를 부르는 함수·정책까지 전이 폐쇄로 센다.** 직접 호출부만 세면 놓친다 —
+   `_can_see_ranking_real_names` 가 `can_manage_venue` **자체**여서 그 한 겹 너머 4개 RPC 가 실명 마스킹을 풀고 있었다(2026-09-15).
+   **화면 게이트와 서버 게이트를 표로 나란히 놓고** '화면이 유일한 가드'인 자리를 찾아라. 2026-09-15 에 5개가 나왔고
+   하나는 **화면 호출부 0곳인데 RPC 만 살아 있었다.** 탭만 숨기는 분리(장부 vs 정산)는 권한이 아니다 — 같은 테이블을 읽을 수 있으면 이미 준 것이다.
 3. **RPC 권한 기본값**: 변이(mutation) RPC 는 `revoke execute … from public, anon` + `grant … to authenticated, service_role`.
    `from anon` 만으로는 무효(PUBLIC 기본 GRANT). 트리거·크론·`_` 내부 함수는 anon·authenticated 모두 회수. 읽기 RPC 만 anon 허용.
    SECURITY DEFINER 는 `set search_path = public, pg_temp` 고정.
@@ -124,6 +139,10 @@ dev 서버는 포트 **5173**(`.claude/launch.json` 의 `holdem-dev`). E2E는 �
 8. **의존성**: `npm audit --omit=dev` 의 high/critical 은 즉시. 새 패키지는 주간 다운로드·라이선스·최근 갱신을 확인하고 `npm view` 로 실체를 본 뒤 도입.
 
 DB 를 바꿀 때는 `nuri-migration` 스킬을 먼저 부른다(라이브 DB 안전 절차 — fail-open 권한 버그가 실제로 났던 기록).
+⚠ **Supabase 브랜치와 `supabase db push` 는 이 저장소에서 못 쓴다** — 파일명 규칙과 원격 이력(357건)이 어긋나 옛 스키마가 나온다(유료 $0.01344/시간).
+   `supabase/migrations/` 에 파일을 만들고 **MCP `execute_sql` 로 직접 적용**한 뒤 파일 머리에 "✅ 적용 완료 + 실측값" 을 적고 커밋한다.
+   시험은 라이브에서 `begin; … rollback;` 리허설로 한다(무료·정확). 검증 계정은 **역할·소유·소속을 먼저 조회해서** 고르고,
+   음성(막아야 할 것)뿐 아니라 **양성 대조**(업주는 여전히 통과)를 같이 넣는다 — 아무도 통과 못 하는 고장은 음성만으론 안 잡힌다.
 
 ---
 
@@ -140,12 +159,31 @@ DB 를 바꿀 때는 `nuri-migration` 스킬을 먼저 부른다(라이브 DB �
 - **스크롤되는 시트 본문 위의 제스처는 Pointer Events 로 못 잡는다.** Chrome 이 스크롤로 판정하는 순간
   `pointercancel` 로 스트림을 끊는다. 본문 드래그는 Touch Events 로 받는다(`src/lib/spring.ts`).
 - **라이트 모드 대비는 순백이 아니라 실제 지면(`surface-base`)으로 재라.** 순백 기준으로 고른 색이 지면 위에서 AA 미달이었다.
+- **판이 바뀌며 문서가 짧아지면 브라우저가 `scrollY` 를 깎는다(클램프).** 하위탭 이동 시 화면이 튀는 근본 원인이다.
+  실측(2026-09-15 · 390×844 · 스크롤 600px): community 4곳 −12~−26px, tools 규칙·대회 **−1174px**(scrollY −259), live 0.
+  ⚠ **CLS 로는 못 잡는다**(같은 이동에서 `cls: 0`). `scrollHeight` 변동과 `scrollY` 를 직접 단언하고 스코프 전체를 순회해라.
+  잴 때 Playwright `locator.click()` 은 대상까지 자동 스크롤해 **측정을 오염시킨다** — `page.evaluate(() => btn.click())` 로 눌러라.
+- **`text-2xs` 같은 fontSize 유틸은 `lineHeight` 를 함께 싣는다.** `leading-*` 과 누가 이기는지는 **빌드된 CSS 의 순서**가 정한다
+  (실측: `.leading-relaxed` 가 뒤에 와서 이긴다). 소스 grep 말고 computed style 로 확인해라.
 - **CLS** — 스켈레톤 높이를 실제 콘텐츠와 맞추고 이미지 치수를 예약한다. `content-visibility` 의
   `contain-intrinsic-size` 가 실제 행 높이와 다르면 스크롤이 점프한다.
-- **SlidingPill** — `src/components/atoms/SlidingPill.tsx` 의 자체 FLIP 인디케이터가 13곳에 쓰인다.
+- **SlidingPill** — `src/components/atoms/SlidingPill.tsx` 의 자체 FLIP 인디케이터가 **12곳(11개 파일)** 에 쓰인다(2026-09-16 실측).
   다른 방식(framer-motion `layoutId` 등)을 도입해도 되지만, 같은 인디케이터가 두 방식으로 구현되면 그 자체가 버그다.
 - **`offsetLeft` 는 transform 이 걸린 조상에서 끊긴다(Chromium).** 전역 프레스 물리 `button:active { transform: scale(.97) }`
   + 0.2s 복귀 전환 동안 방금 누른 버튼이 자식의 `offsetParent` 가 되어 `offsetLeft` 가 0 이 된다 — 알약이 첫 칸으로
   가던 근본 원인(2026-09-10, 3일간 4번 고쳐도 재발). 레이아웃 좌표는 `offsetParent` 사슬을 레일까지 더해 구한다.
   **Playwright 의 click/tap 은 누름이 0ms 라 이 부류를 절대 재현하지 못한다** — 실제 손가락 조건은 CDP
   `Input.dispatchTouchEvent` 로 touchStart→(100ms+)→touchEnd 를 보내야 한다(`e2e/pill-press.spec.ts`).
+- **줄끝은 파일 속성이 아니라 체크아웃 속성이다.** 이 저장소는 `core.autocrlf=true`(system) — 인덱스는 LF, **작업트리는 전부 CRLF** 다
+  (`src/api/auth.ts` 는 **BOM** 도 있다). 문서에 적힌 파일별 LF/CRLF 표는 계정·컴퓨터가 바뀌면 뒤집힌다.
+  스크립트로 편집하기 전에 `git ls-files --eol <파일>` 또는 바이트를 직접 재라 — `
+` 으로 매칭하면 CRLF 파일에서 조용히 빗나간다.
+- **Suspense 폴백 스로틀** — `lazyWithReload`(=`lazy(async …)`)는 청크가 캐시에 있어도 첫 렌더에 한 번 서스펜드해
+  불투명 폴백을 **최소 ~300ms 붙잡는다**("한 번 번쩍" 부류, 2026-09-15 에 17곳). → 여는 `setState` 를 `startTransition` 으로 감싼다.
+  구별법: **청크를 미리 데워도 안 사라지면 네트워크가 아니라 스로틀이다.**
+- **Tailwind `content` 는 평문 스캔이라 주석에 적은 클래스도 CSS 를 만든다.** 금지 클래스명을 계약 테스트 설명문에 적었더니
+  라이브 CSS 에 죽은 규칙이 실렸다 — **금지하려는 클래스명을 주석에 그대로 쓰지 마라.**
+- **같은 오리진이어도 `location.assign` 은 전체 리로드다.** 앱이 재부팅돼 홈이 스켈레톤으로 되돌아갔다 온다.
+  앱 안에서 열 수 있는 목적지는 앱 안에서 열어라.
+- **입력칸 잘림은 "경계값" 이다.** 오너가 "한 글자만 보인다"고 한 자리는 글자 공간 27.75px 에 placeholder 가 29.75px 였고,
+  옆 칸은 **여유 0.12px** 로 멀쩡해 보였다. `clientWidth − paddingLeft − paddingRight` 대 **실제 글자 폭**을 재고, **옆 칸의 여유도 같이 재라.**

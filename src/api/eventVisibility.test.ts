@@ -275,7 +275,11 @@ const SQL = readFileSync(
   'utf-8',
 );
 /** 주석을 지운 **실행되는 SQL 만**. ROLLBACK 절(전부 주석)이 금지 문자열 검사를 오탐시키던 것을 막는다. */
-const CODE = SQL.split('\n').map((l) => l.replace(/--.*$/, '')).join('\n');
+// 🔴 먼저 줄끝을 LF 로 통일한다. JS 정규식의 점(.)은 **CR 도 줄바꿈으로 보고 안 먹는다** —
+// CRLF 파일을 개행으로 쪼개면 각 줄 끝에 CR 이 남고, 아래 --.*$ 가 문자열 끝에 닿지 못해 **매칭 자체가 실패**한다.
+// 그러면 이 주석 제거기가 조용히 아무 일도 안 하고, ROLLBACK 안내 주석의 drop column 이
+// “데이터 삭제”로 오판돼 계약이 거짓으로 빨개진다(2026-09-16 실측: 코드 변경 0 인데 워크트리에서 빨개졌다).
+const CODE = SQL.split('\r\n').join('\n').split('\n').map((l) => l.replace(/--.*$/, '')).join('\n');
 
 /** 함수 본문만 잘라 본다 — 머리말 주석이 통과시켜 주는 착시를 막는다. */
 const bodyOf = (name: string, tag = '$fn$'): string => {

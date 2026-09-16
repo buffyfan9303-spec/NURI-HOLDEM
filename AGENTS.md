@@ -63,7 +63,10 @@ PG(포트원·다날) 입점 심사와 카카오 비즈니스 심사가 모두 �
 
 ## 검증
 
-UI를 바꿨으면 `npm run build` 와 `npm run test:e2e` 를 돌립니다. 마무리는 `nuri-ship` 게이트.
+UI를 바꿨으면 게이트를 돌립니다. 마무리는 `nuri-ship` 게이트.
+🔴 **`npm run test:e2e` 를 그냥 치지 마세요.** 그것도 `npm run build` 도 오너 보호 파일 `public/sitemap.xml` 을 **덮어씁니다**
+(`build` 첫 단계가 `scripts/gen-sitemap.mjs`, E2E 는 `reuseExistingServer:false` 라 빌드를 다시 돕니다).
+백업 → 빌드 → 즉시 복원 → 해시 대조 절차는 `.claude/skills/nuri-e2e/SKILL.md` 에 있습니다. `git checkout -- public/sitemap.xml` 은 금지입니다.
 dev 서버는 포트 **5173**(`.claude/launch.json` 의 `holdem-dev`). E2E는 프로덕션 빌드(4173)를 검사합니다.
 
 남아 있는 테스트는 **"동작하는가"를 보는 것들**입니다(접근성 대비·히트영역·성능 상한·크래시·보안 계약).
@@ -90,7 +93,10 @@ dev 서버는 포트 **5173**(`.claude/launch.json` 의 `holdem-dev`). E2E는 �
    SECURITY DEFINER RPC 안의 `auth.uid()`·`my_role()` 검사로 강제한다. NULL-safe 비교(`IS DISTINCT FROM`) — `<>` 는 비로그인에서 가드가 열린다.
 3. **RPC 권한 기본값**: 변이(mutation) RPC 는 `revoke execute … from public, anon` + `grant … to authenticated, service_role`.
    `from anon` 만으로는 무효(PUBLIC 기본 GRANT). 트리거·크론·`_` 내부 함수는 anon·authenticated 모두 회수. 읽기 RPC 만 anon 허용.
-   SECURITY DEFINER 는 `set search_path = public, pg_temp` 고정. `CREATE OR REPLACE` 는 ACL 을 초기화하므로 REVOKE/GRANT 를 다시 쓴다.
+   SECURITY DEFINER 는 `set search_path = public, pg_temp` 고정.
+   ⚠ **ACL 이 초기화되는 것은 `DROP` + 재생성이다**(반환 타입 변경이 그 경우). `CREATE OR REPLACE` 는 ACL 을 **보존**한다 —
+   2026-09-12 격리 컨테이너 실측 정정이고 정본 서술은 `CLAUDE.md` 보안 표준 3번이다. 예전에 여기 반대로 적혀 있었다(2026-09-16 정정).
+   이 차이 때문에 **ACL 자가검사가 거짓 통과한다** — 음성 대조는 `DROP` 후 적용으로 해야 한다.
 4. **엣지 함수는 첫 분기에서 호출자를 증명한다.** `verify_jwt=true` 는 anon 키 JWT 도 통과시키므로 게이트가 아니다:
    유저 기능은 `auth.getUser(token)`, 관리자 기능은 `profiles.role = 'admin'`, 크론·트리거는 Vault 공유 시크릿 헤더(타이밍 안전 비교).
    외부 API(Gemini·Resend)를 부르는 함수는 유저별 일일 상한(`consume_ai_quota`)이나 시크릿 게이트 없이 열지 않는다(과금 남용 = 보안 사고).

@@ -15,12 +15,18 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const strip = (s: string) => s.replace(/(^|[\s{(])\/\*[\s\S]*?\*\//g, '$1').replace(/^\s*\/\/.*$/gm, '');
+// 줄끝을 먼저 LF 로 맞춘다. 이 저장소는 core.autocrlf=true 라 **체크아웃마다 작업트리 줄끝이 다르다**
+// (git 이 받아쓴 워크트리는 CRLF, 편집 스크립트가 쓴 파일은 LF). 아래 계약들은 줄바꿈이 든 **정확 문자열**로
+// 소스를 찾으므로 정규화하지 않으면 **코드가 멀쩡한데도 다른 체크아웃에서만 빨개진다**
+// (2026-09-16 실측: CommunityTab 의 같은 분기를 LF 로는 못 찾고 CRLF 로는 찾았다).
+// claude-A / claude-B 가 서로 다른 체크아웃에서 같은 게이트를 돌리므로, 이 정규화가 두 계정의 판정을 일치시킨다.
+const eol = (s: string) => s.split('\r\n').join('\n');
+const strip = (s: string) => eol(s).replace(/(^|[\s{(])\/\*[\s\S]*?\*\//g, '$1').replace(/^\s*\/\/.*$/gm, '');
 const NOTICE = strip(readFileSync(join(__dirname, 'NoticeDetailModal.tsx'), 'utf-8'));
 const POST = strip(readFileSync(join(__dirname, 'PostDetailModal.tsx'), 'utf-8'));
 const COMM = strip(readFileSync(join(__dirname, 'CommunityTab.tsx'), 'utf-8'));
 const MODAL = strip(readFileSync(join(__dirname, '..', 'atoms', 'Modal.tsx'), 'utf-8'));
-const CSS = readFileSync(join(__dirname, '..', '..', 'index.css'), 'utf-8');
+const CSS = eol(readFileSync(join(__dirname, '..', '..', 'index.css'), 'utf-8'));
 
 describe('UI-01 · 공지 본문 구조화', () => {
   it('🔴 parseNoticeBody 로 그리고, 단일 pre-wrap <p> 덩어리·HTML 주입이 없다', () => {

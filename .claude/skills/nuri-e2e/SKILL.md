@@ -75,7 +75,7 @@ D=$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)
 echo "[6] 엔트리 일치 $S"
 
 # ⑦ E2E — E2E_BASE_URL 이 있으므로 webServer 는 undefined, 빌드는 안 돈다
-#    🔴 set -e 를 반드시 끈다. 실패가 1건이라도 나면(③의 BLOCKED #20 은 **정상 경로다**)
+#    🔴 set -e 를 반드시 끈다. 실패가 1건이라도 나면 playwright 가 1 로 끝나 스크립트가 여기서 죽고 —
 #       playwright 가 1 로 끝나 스크립트가 여기서 죽고 — ⑧의 보호 파일 대조가 통째로 안 돈다.
 set +e
 E2E_BASE_URL=http://localhost:4173 npx playwright test --grep-invert @boot --reporter=list; RC_MAIN=$?
@@ -126,10 +126,10 @@ netstat -ano | grep -E ':4173 .*LISTENING' || echo FREE
 `dist/index.html`(`046ef659…`) 해시가 **둘 다 그대로**였다(7.4초, 17 passed).
 
 ### ② 수치로 말한다
-현재 등록 규모(2026-09-15 실측 `--list`): **main 552 tests / 91 files + boot 2 tests / 1 file = 554 실행**.
+현재 등록 규모(**2026-09-16 실측** `--list`): **main 567 tests / 93 files + boot 2 tests / 1 file = 569 등록**.
 
 기준선(2026-09-15 전량 실행, preview 4173 프로덕션 빌드, `--retries=2`):
-**main 526 passed / 0 failed / 26 skipped / 0 flaky · boot 2 passed = 528 passed / 0 failed / 26 skipped**.
+**549 passed / 0 failed / 20 skipped (main 547 + boot 2)** — 2026-09-15 2차 전량 실행(`--retries=2`).
 🟢 **이 저장소에서 E2E 전량 초록은 이때가 처음이다.** 빨간불 하나라도 남으면 통과가 아니다 — 아래 ③ 참고.
 네가 돌린 결과가 다르면 **네 결과가 기준**이다. 보고는 `N passed / M failed / K skipped (F flaky)` 로 한다 —
 "그린" · "잘 됨" 은 완료 증거가 아니다.
@@ -199,7 +199,7 @@ event-backnav ×2 · a11y-modal 이벤트 닫기). 제품은 멀쩡했다 — **
 그리고 스펙이 `if (opts.banners) await page.route(...)` 처럼 **조건부로** 목킹하면
 "안 넘기면 기본값" 처럼 보이는 코드가 실제로는 **"안 넘기면 라이브"** 다.
 
-**구멍의 크기(2026-09-15 실측)** — 운영 Supabase 를 목킹 없이 읽는 스펙 파일이 **91개 중 83개**다.
+**구멍의 크기(2026-09-15 실측)** — 운영 Supabase 를 목킹 없이 읽는 스펙 파일이 **91개 중 83개**다(2026-09-15 계측 · 스펙 파일은 2026-09-16 현재 **93개**라 분모를 다시 세야 한다).
 상위 테이블: `app_settings` 2253 · `community_posts` 1191 · `venues` 1105 · `clock_states` 1045 ·
 `schedules` 978 · `home_banners` 892(전체 17,394건 계측).
 `home_banners` 는 fixture 에서 기본 `[]` 로 막았다(`_fixtures.ts`). **나머지는 안 막혀 있다** — 다음은 다른 테이블로 온다.
@@ -240,7 +240,8 @@ event-backnav ×2 · a11y-modal 이벤트 닫기). 제품은 멀쩡했다 — **
   그 조건은 CDP `Input.dispatchTouchEvent` 로 touchStart→(100ms+)→touchEnd 를 보내야 한다(`e2e/pill-press.spec.ts` 가 그 방식이다).
 - **운영 DB 상태에 의존한다.** `e2e/_fixtures.ts:61-69` 의 route 가드는 **쓰기만** 끊는다(`route.abort('blockedbyclient')`).
   읽기는 그대로 운영 Supabase 로 나간다 → 운영 데이터가 바뀌거나 DB 가 내려가면 **코드 회귀가 아닌데도 빨개진다.**
-  실패를 보면 먼저 "DB 쪽인가"를 갈라라(③의 BLOCKED #20 이 그 예다).
+  실패를 보면 먼저 "운영 데이터 쪽인가"를 갈라라(⑦ 이 그 절차다). ⚠ 예전에 여기 "BLOCKED #20 이 그 예다" 라고 적혀 있었는데
+  그 면제는 **폐기됐다**(③ 참고) — 마이그레이션이 전부 적용돼 이제 빨간불은 전부 빨간불이다.
 - **시간대 창을 못 본다.** 하루 중 특정 시각에만 나는 실패는 이 절차로 안 잡힌다.
   KST/UTC 축이 엇갈리는 문제는 **`nuri-time` 스킬이 담당**한다 — 여기서 되풀이하지 않는다.
   다만 실행 전 한 줄만 확인해라: `playwright.config.ts:53` 의 `timezoneId: 'Asia/Seoul'`(브라우저)과

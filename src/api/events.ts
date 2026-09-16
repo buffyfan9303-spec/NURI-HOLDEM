@@ -120,7 +120,12 @@ function rememberEventCardCount(n: number): void {
 export function rememberEventBoard(slug: string, b: EventBoard | null): void {
   if (b) lastBoards.set(slug, b); else lastBoards.delete(slug);
 }
-supabase.auth.onAuthStateChange((e) => { if (e !== 'TOKEN_REFRESHED') lastBoards.clear(); });
+// 🔴 모듈 최상위에서 supabase 를 만지는 유일한 자리다 — 반드시 IS_MOCK 로 막는다.
+//   .env.local 이 없는 체크아웃(= 새 git worktree. gitignore 라 따라오지 않는다)에서는 supabase 가 null 이라
+//   이 줄이 import 순간 TypeError 를 던지고, 이 파일을 import 하는 **테스트 파일 전체가 0건으로 증발**한다
+//   (2026-09-16 실측: events.slug/current.test.ts 가 "0 test" 로 죽어 단위 게이트가 빨개졌다 — 코드 회귀가 아니었다).
+//   계약: src/api/moduleSideEffect.contract.test.ts
+if (!IS_MOCK) supabase.auth.onAuthStateChange((e) => { if (e !== 'TOKEN_REFRESHED') lastBoards.clear(); });
 
 // ── '지금 열려 있는 캠페인' 고르기 ──────────────────────────────────────────
 //
