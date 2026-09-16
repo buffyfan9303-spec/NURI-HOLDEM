@@ -1,4 +1,4 @@
-// src/api/community.ts
+﻿// src/api/community.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 import { idempotentOff, mustAffect } from './_mustAffect';
