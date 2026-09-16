@@ -126,135 +126,41 @@ anon 키 REST 직접 호출로 **4행**(이름 + 7·2·6·12회)이 나왔다. �
 `CustomerDashboardPage`(3열 타일 값 2줄 · 라벨만 19.13px 내려감) · `ScheduleCard`(그리드 제목 줄수 차이) ·
 `NuriPosLedger`(2열 라벨 2줄 · 값 11.69px 내려감).
 
-### 🔴 오너가 새로 지목한 것 — **아직 안 고쳤다**
-> "프로필 내 정보에 보면 대시보드 프로필 설정 보안 움직이는데 아래 하단바가 잔여물이 남아 이부분 수정
+### ✅ 오너가 새로 지목한 것 — **원인 규명·수정·배포 완료** (`99f1296`)
+> "프로필 내 정보에 보면 대시보드 프로필 설정 보안 움직이는데 아래 하단바가 잔여물이 남아
 >  비슷한 부분 전체 수정 실시 이런 오류가 이곳 저곳에서 나옴"
 
-읽기 전용 조사 워크플로를 돌렸다(내 정보 하위탭 · 전역 하단바 · keep-alive×fixed · 초기화 안 되는 state ·
-SlidingPill · safe-area 여백 4갈래 + 반증). **결과 처리는 다음 세션 몫이다.**
-조사 시 전제: 탭은 언마운트되지 않고 `display` 토글이라 **숨은 판의 fixed/portal 요소가 살아 있을 수 있다.**
+**원인은 keep-alive 도 fixed 요소도 아니었다 — View Transition 스냅샷이다.**
 
----
+1. `index.css` profile-tab 스코프에 `[data-sliding-pill]`·`[data-pill-active]` 규칙이 **없었다**.
+   탭바만 이름을 가지면 밑줄이 **탭바 스냅샷 안에 인쇄**되고, 2031행이 그 old/new 를 `animation:none` 으로
+   못 박아 페이드도 혼합도 없앤다 → 탭바 배경이 투명이라 **옛 밑줄이 0.3초 내내 선명하게** 남는다.
+   `group-tab`(1868~1872)과 같은 조리법으로 맞췄다. `profile-label` 은 **1787/1792/1797 세 고정 목록에도 등록**했다 —
+   이름만 주고 등록을 빼면 2026-09-11 오너 리포트('글자가 pill 을 따라가')가 재발한다.
+2. `CustomerDashboardPage` 의 `data-profile-panel` 이 스크롤 상자가 아니라 **안쪽 내용 div** 에 있었다.
+   old 2600px vs new 420px → 새 패널 아래로 **2180px 돌출** = 화면 하단에 이전 탭이 띠로 남던 것. 스크롤 상자로 옮겼다.
+3. 🔴 **게이트가 거짓 근거로 꺼져 있었다** — `subTabTransition.test.ts:136` 의
+   `'profile-tab': '내 정보 탭 — 지시자 없음'` 은 **사실과 다르다**(CustomerDashboardPage:252 → UnderlineTabs:20 → SlidingPill).
+   그 한 줄을 지웠다. 음성 대조: 지우기만 하면 빨개지고(46 → 1 failed), CSS 를 넣으면 47 통과.
+   나머지 NO_PILL 7개는 마크업을 직접 열어 전부 정적 버튼임을 확인했다 — **거짓 면제는 이 하나뿐**이었다.
 
-## 0-a2. 2026-09-16 claude-A 작업 결과 — **claude-B 가 내일 먼저 읽을 것**
+라이브 검증: 배포 CSS 에 `profile-pill` ×1 · `profile-label` ×4(이름 1 + 목록 3) — `group-pill` 과 같은 구조.
 
-### 배포됨
-| 커밋 | 무엇 |
-|---|---|
-| `c4c56e3` | 인수인계 학습 반영 · 체크아웃 독립 게이트(줄끝·env) · A/B 레인 |
-| `badf111` | 장부 할인 복구 · 클락 전체화면 엔트리/생존 보정 · 글쓰기·장터 인증 게이트 해제 |
+> 👉 **이 부류를 다시 만들지 않는 법**: 하위탭 바에 `view-transition-name` 을 줄 때는 **바·알약·활성라벨 세 줄이 한 세트**다.
+> 바만 주면 알약이 스냅샷에 갇히고, 알약만 주면 라벨이 알약에 덮인다. 그리고 `NO_PILL` 에 넣을 때는
+> **마크업을 직접 열어** SlidingPill/SegmentedTabs/UnderlineTabs 가 없는지 확인해라 — 이번 건이 그걸 안 해서 생겼다.
 
-🔴 **배포는 alias 를 직접 걸어야 끝난다**(§6). 2026-09-16 에도 그대로였다 —
-빌드는 READY 였고 `nuri-holdem-nuridream.vercel.app` 같은 **Vercel 기본 alias 는 자동으로 붙었는데
-커스텀 도메인 둘만 안 붙었다.** POST `/v2/deployments/<id>/aliases` 로 걸고 확인했다
-(`get_deployment nuriholdem.com` → githubCommitSha 대조가 가장 확실한 증거다).
+### 🟡 오너 판단 대기 — 모바일 하단 '죽은 공간' 약 260px (실측, 미수정)
+라이브 375px 에서 직접 쟀다(홈, 문서 끝까지 스크롤):
+- `main` 콘텐츠 끝 → 푸터 시작 **131.0px** (`main { padding-bottom: var(--tabbar-safe) }` = 105.5px + 여백)
+- 푸터 콘텐츠 끝 → 탭바 윗변 **128.3px** (`footer { padding-bottom: 114px }`)
+- 게다가 문서 끝에서는 탭바가 **의도적으로 숨는다**(App.tsx:693) — 비워 둔 자리를 쓸 것이 없다.
 
-### 라이브 DB 변경
-- `20260916a_portone_webhook_events.sql` **적용 완료** — PortOne 웹훅 수신 기록(멱등 키 = `webhook_id`).
-  RLS on · 정책 0 · anon/auth SELECT 불가 · service_role INSERT 가능(양성 대조 확인).
-
-### 엣지 함수
-- **`portone-webhook` 신규 배포**(v1, `verify_jwt=false`).
-  주소: `https://idsxiqspecrucvfvtgbw.supabase.co/functions/v1/portone-webhook`
-  게이트는 **Standard Webhooks 서명**이다(`verify_jwt` 는 anon 키도 통과하므로 게이트가 아니다).
-  실측: GET 200 · 서명없음 401 · 틀린서명 401 · **올바른 서명 200 + 기록 1행** · 같은 id 재전송 시 **행 1개 유지**(멱등).
-
-### 🔴 오너 조치가 필요한 것
-1. 🔴 **본인인증은 "고장"이 아니라 "미개통"이다** — 2026-09-16 PortOne REST API 로 확정했다.
-
-   | 확인한 것 | 결과 |
-   |---|---|
-   | storeId·channelKey 유효성 | ✅ **유효.** 일부러 틀린 값을 넣으면 `storeId is not correct` / `channelKey is not correct` 로 **다르게** 응답한다 |
-   | 채널 조회 | ✅ **성공.** `identityVerificationTxId` 까지 발급된다 |
-   | 실패 지점 | ❌ `failureType: **FAILURE_TYPE_PREPARE_TGS_FAILED**` — TGS(PortOne↔PG 게이트웨이) 구간 |
-   | 본인인증 이력 전수 | **전부 FAILED · VERIFIED 0건.** 첫 시도가 2026-09-15 13:43 |
-   | 결제 이력 | **0건**(`totalCount: 0`) — 이 상점은 어떤 거래도 성공한 적이 없다 |
-
-   ⚠ **예전에 여기 "2026-06-13 에 인증 성공 이력이 있다" 고 적혀 있었는데 반증됐다.**
-   2026-06-10 배포 번들에 storeId·channelKey 가 **아예 없었고**(기능이 꺼져 있었다),
-   같은 시기 커밋이 *"운영자 계정 활동점수5만·**본인인증 처리(DB)**"* 다 — DB 의 그 1건은 **손으로 넣은 값**이다.
-
-   👉 **오너 조치 — 포트원 콘솔이 아니라 `partner.kcp.co.kr`(KCP 관리자)에서 해야 한다.**
-   오너 확인: 본인인증 계약·심사는 **완료**됐고 코드도 받았다. 그런데도 실패한다면 남은 것은 **KCP 쪽 스위치 둘**이다
-   (포트원 공식 문서 "NHN KCP 본인인증 연동" 의 연동 준비 항목):
-
-   | # | 어디 | 무엇 |
-   |---|---|---|
-   | ① | `partner.kcp.co.kr` → 부가서비스 → 휴대폰본인확인 → **연동방식 설정** | **"신규 연동방식(V2) 사용여부" 를 `사용` 으로** — 문서가 *"설정하지 않을 경우 오류가 발생할 수 있습니다"* 라고 명시한다 |
-   | ② | `partner.kcp.co.kr` → 부가서비스 → 휴대폰본인확인 → **인증결과URL설정** | **`checkout-service.prod.iamport.co`** 를 넣는다 |
-
-   🔴 **①을 먼저 보라.** KCP 본인인증은 **구 방식과 신규(V2) 방식**이 따로 있고 **포트원 V2 는 신규 방식만** 쓴다.
-   이 스위치가 꺼져 있으면 계약이 끝나 있어도 TGS 의 해시 발급 호출이 거절되고, 그것이 정확히
-   `FAILURE_TYPE_PREPARE_TGS_FAILED`(= 창을 열기 **전** 실패)다.
-   ②(인증결과URL)는 인증을 **마친 뒤** 결과가 안 돌아오는 부류라 증상 시점이 다르다 — 그래도 같이 맞춰 둬야 한다.
-
-   근거(2026-09-16 실측): KCP 본인인증 드라이버(`cdn.portone.io/drivers/pg/kcp-v2/identity-verification/…`)는
-   1.6KB 짜리로 **서버가 준 `action`+`formData` 를 form POST 하는 것이 전부**다 —
-   사이트코드·해시 등 KCP 파라미터는 **전부 TGS 가 채널 자격증명으로 만든다.**
-   즉 우리 코드·요청 필드로는 고칠 수 있는 것이 없다.
-   PortOne 지원에 문의할 때 쓸 증거: `failureType=FAILURE_TYPE_PREPARE_TGS_FAILED` ·
-   실패 건 예시 `idv-diag-status-1789563506977` · 상점 `store-4fb62e44-…` · 채널 `channel-key-60601348-…`.
-   ⚠ 그동안 **이벤트 참여·대회 예약은 계속 막힌다**(글쓰기·장터는 오너 지시로 게이트를 뗐다).
-   ⚠ 진단 과정에서 PortOne 에 실패 건 몇 개가 남았다(`idv-diag-*`). 개인정보는 없다.
-2. **비밀 3개 로테이션 권고** — `PORTONE_API_SECRET` · `PORTONE_WEBHOOK_SECRET` · `VERCEL_TOKEN`.
-   셋 다 채팅에 평문으로 오갔다. 지금은 `secret_settings`(RLS 전면잠금)에 있다.
-
-### 🔴 워크트리에서는 E2E·시각 검증이 **구조적으로 불가능하다** (2026-09-16 확증)
-
-`.env.local` 이 없으면 `VITE_SUPABASE_*` 가 비어 **`IS_MOCK=true` 로 빌드**된다. 실측:
-로컬 `dist/assets/**` 에 `supabase.co` **0건** / 운영 번들에는 `vendor-supabase-*.js` 에 존재.
-
-그러면 **E2E 스펙 대부분이 무너진다** — 스펙들은 Supabase **HTTP 요청을 목킹**하는데
-mock 모드에서는 앱이 **그 요청을 아예 안 보내서** 목킹할 대상이 없다. 화면이 안 그려지고
-`clk-timer` 같은 셀렉터가 영원히 안 뜬다.
-실측: 레이아웃 스펙 6개를 돌려 **25 failed / 37 passed** — **전부 환경 실패였다.**
-
-👉 **이걸 회귀로 오해하지 마라.** 판정 순서:
-1. `git status --short` 로 `src/` 가 깨끗한지 → 깨끗하면 코드 회귀가 아니다
-2. `grep -rl "supabase.co" dist/assets/ | head -1` → **0건이면 mock 빌드**다. 거기서 멈춰라.
-3. E2E·시각 검증은 **`.env.local` 이 있는 체크아웃**에서만 의미가 있다.
-
-단위 테스트(vitest)·lint·tsc 는 워크트리에서도 정상이다 — 그 셋으로 게이트를 본다.
-
-### 🔴 죽은 게이트 — 문서 레벨 가로 넘침 단언은 **항상 통과한다** (2026-09-16 증명)
-
-`src/index.css:602` 의 `html { overflow-x: clip }` 때문에 `document.documentElement.scrollWidth` 는
-**`clientWidth` 에 고정된다.** 무엇이 넘쳐도 0 이 나온다.
-
-**증명**(운영 1280): body 에 `width:3000px` 자식을 붙인 뒤 —
-`documentElement.scrollWidth = 1274 (= clientWidth)` · `body.scrollWidth = 3000`.
-
-**고친 것**(2026-09-16 claude-A): `e2e/store-dashboard-responsive.spec.ts:121`(내 매장 7뷰포트 단언) ·
-`e2e/clock-visual.spec.ts:143` → `document.body.scrollWidth` 기준으로.
-
-🔴 **아직 같은 패턴인 곳 — claude-B 가 E2E 를 돌릴 수 있는 환경에서 값을 읽으며 고쳐라**
-
-| 파일 | 줄 |
-|---|---|
-| `e2e/admin-event-ops.spec.ts` | 198 |
-| `e2e/aura-led.spec.ts` | 84 · 118 (`> window.innerWidth` 형태) |
-| `e2e/gto-tab-verify.spec.ts` | 224 |
-| `e2e/header-320.spec.ts` | 71 (`- window.innerWidth` 형태) |
-| `e2e/nuri-spot.spec.ts` | 250 — ⚠ **오너 보호 파일. 오너 허락 없이 건드리지 마라** |
-
-⚠ 고친 직후 처음 빨개지면 **회귀가 아니라 지금까지 숨어 있던 넘침**일 수 있다. 값부터 읽어라.
-⚠ 대안으로 **안쪽 요소 스캔**(`e2e/post-detail-read.spec.ts:112` 의 `clippedNodes()`)이 더 정확하다 —
-   `body.scrollWidth` 도 풀블리드 레일(`-mx-page-x`)이 패딩 밖으로 나가면 +17 을 보고할 수 있다.
-
-### 오너가 나에게 위임한 결정 — 내가 이렇게 정했다 (2026-09-16)
-
-오너: *"결정 필요한거 다 너가 생각해서 좋은 부분으로 진행"*
-
-| 결정 | 내 판단 | 근거 |
-|---|---|---|
-| 터치 히트영역 **24px(AA) vs 44px** | **요소별 유지.** 일괄 44 로 바꾸지 않았다 | 저장소가 이미 자리마다 계약을 갖고 있다(`e2e/live-card-fit.spec.ts:138`=24 · `e2e/a11y-modal.spec.ts:113`=44). 단일 숫자 규칙은 2026-09-07 이 지운 "전부 N 으로 통일" 부류다. **24 미만인 것만** 고쳤다(푸터 `summary` 19.1px) |
-| `.btn`·`.input` **40.8px → 44px** 전역 | **안 올렸다** | `src/index.css:702` 가 *'터치 최소 40px 유지'* 를 오너 토큰 결정으로 기록. 40.8 > 24 AA 이고, 전역 3.2px 변경은 내 매장 PC 폼·클락 설정까지 흔든다 |
-| 필터 칩 가로 `min-w-[44px]` | **안 넣었다** | `src/index.css:909` 가 *'가로는 늘리지 않는다(칩 사이 gap 이라 겹친다)'* 를 결정으로 남겼다 |
-| `e2e/nuri-spot.spec.ts:250` 죽은 게이트 | **안 건드렸다** | **보호 파일.** 내가 판단할 권한이 아니다 — 오너 결정이 필요하다 |
-
-### 미검증
-- E2E 미실행 · 클락 보정 버튼 실기기/TV 확인 안 함 · 장부 할인은 마감 세션이라 새 게임에서 확인 필요
-- 번들 첫 화면이 **188/259(여유 27%)** 로 기록된 257.8 보다 70KB 낮다 — **원인 미확인**. 여유가 생겼다고 단정하지 마라.
+즉 탭바 자리를 **두 번** 예약한다. 스크린샷상 저작권 줄 아래가 통째로 비어 있다.
+**고치지 않았다** — 전 모바일 화면에 걸리는 전역 여백 변경이라 오너가 눈으로 보고 정해야 한다.
+후보 수정: `index.css:1404` 의 `main { padding-bottom: var(--tabbar-safe) !important }` 제거
+(문서 끝 여유는 푸터가 이미 준다). 함께 볼 것: `VenuePage.tsx:320`·`GroupPage.tsx:186` 의
+`pb-[var(--tabbar-safe)]` — 이 두 화면은 여는 동안 탭바가 항상 꺼져 있어 같은 죽은 공간이다.
 
 ---
 
