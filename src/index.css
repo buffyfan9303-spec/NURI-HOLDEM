@@ -1821,6 +1821,28 @@ html[data-vt-scope='rank-tab'][data-vt-dir='back']::view-transition-new(rank-pan
 ::view-transition-new(notif-label),     ::view-transition-new(legal-label),
 ::view-transition-new(crm-label),        ::view-transition-new(profile-label) { animation: none; opacity: 1; }
 
+/* ── 전환 캡처 프레임에 '바뀌기 전 라벨 색'이 인쇄되던 것 — 2026-09-17 ─────────────
+   오너: "지금은 뭔가 좀 어색한 느낌이 있어서"
+
+   위 세 목록이 라벨 스냅샷을 일부러 얼려 둔다(group animation:none · old opacity:0 · new opacity:1).
+   그 자체는 의도다 — 글자가 알약을 따라 끌려가지 않게 하는 장치다.
+   문제는 **그 얼어붙은 이미지에 '아직 안 바뀐 색'이 인쇄되는 것**이었다.
+   버튼 라벨의 color 가 CSS 전환(0.15~0.2s)을 타는데, View Transition 은 update 콜백 직후의
+   **렌더된 값**으로 새 스냅샷을 뜬다 → 그 순간 색 전환은 아직 0% 다.
+
+   라이브 A/B 실측(nuriholdem.com 비로그인 커뮤니티 서브탭):
+     수정 전 · 캡처 시점(t.ready) 10.8ms — 들어가는 활성 라벨 rgb(154,170,194)(회색) /
+              나가는 활성 라벨 rgb(255,255,255)(흰색). 정상 색은 finished(329.4ms)에서야 나온다.
+     수정 후 · 같은 시점 6.3ms — 정확히 뒤집힌다. 전환 길이는 그대로(314.3ms).
+   즉 **알약은 220ms 에 도착하는데 글자는 320ms 까지 안 바뀌던** 어긋남이 사라진다.
+
+   범위: 알약을 가진 레일의 버튼과 그 자손뿐이다(라이브 실측 2개 레일). 알약 자신은 버튼의
+   자손이 아니라 이 규칙에 안 걸린다 — 알약 모션(220ms)은 그대로다.
+   :has() 미지원 브라우저에선 선택자 목록 전체가 무효가 되어 현 동작이 유지된다
+   (VT 는 Chrome 111+, :has() 는 105+ 라 VT 경로에선 항상 유효). */
+html[data-vt-scope] :has(> [data-sliding-pill]) button,
+html[data-vt-scope] :has(> [data-sliding-pill]) button * { transition: none; }
+
 /* ── 알약(인디케이터) 모션 통일 — 2026-09-17 오너 지시 ────────────────────────────
    "알약의 모션이나 이동을 모든 메뉴에서 통일시켜줘 … 지금은 뭔가 좀 어색한 느낌"
 

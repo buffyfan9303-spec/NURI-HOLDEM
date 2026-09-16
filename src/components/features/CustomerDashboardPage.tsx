@@ -263,11 +263,19 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
       <div data-profile-panel="" className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
         {/* 프로필·설정·보안 패널은 keep-alive(hidden 토글) — 설정 탭에서 편집 중(닉네임·크롭 사진) 대시보드를 다녀와도
             입력이 남는다(점검 #18). 상태는 ProfilePanels 본체에 있어 대시보드 표시 중엔 'profile' 로 접어 두기만 한다. */}
-        <div hidden={tab === 'dashboard'} className="mx-auto w-full max-w-md">
+        {/* 🔴 max-w-2xl — 대시보드 래퍼(아래)와 **같은 폭**이어야 한다(2026-09-17 오너 '지진').
+            예전엔 max-w-md(476px) 라 PC 에서 탭을 옮길 때마다 커버 밴드 폭이 714↔476 으로 **238px** 튀었다.
+            밴드는 h-20 고정에 w-full 이라 래퍼 폭을 그대로 따라간다 — 아바타(110.5px)는 그대로인데
+            밴드만 커졌다 작아져 '크기가 달라지고 지진나는 것처럼' 보였다.
+            md 는 **모달** 폭 토큰이 페이지 래퍼에 따라붙은 것이다(같은 커밋의 LevelGuideModal 이 max-w-md).
+            ⚠ 좁히는 쪽(대시보드를 476 으로)은 기각했다 — 정보를 476px 에 우겨넣게 되어 실질 손실이다. */}
+        <div hidden={tab === 'dashboard'} className="mx-auto w-full max-w-2xl">
           <ProfilePanels open={open} tab={tab === 'dashboard' ? 'profile' : tab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
         </div>
         {tab === 'dashboard' && (
-        <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-section">
+        {/* 🔴 py-4 — 나머지 세 탭 래퍼가 전부 p-4(17px) 인데 여기만 py-section(25.5px) 이라
+            탭을 옮길 때마다 커버 밴드가 세로로 **8.5px** 튀었다(PC·모바일 공통). 가로는 px-page-x 로 이미 같다. */}
+        <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-4">
           {/* 통합 프로필 아이덴티티 헤더(오너 지시 2026-08-27) — ProfileModal '프로필' 탭과 같은 정본.
               커버 밴드(등급색 틴트) + 오버랩 아바타(등급 링) + 닉네임·등급·칭호·인증 + 등급 진행바. */}
           {user && (
