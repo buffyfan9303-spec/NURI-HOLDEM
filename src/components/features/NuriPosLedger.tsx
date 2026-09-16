@@ -3013,7 +3013,8 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                 /* 2026-09-16 오너 리포트 "분납은 있는데 할인이 없어" — 헤더가 '분납 / 할인' 이라고 약속해 놓고
                    프리셋이 0개면 줄 자체를 안 그려 **기능이 없는 것처럼 보였다.** 없으면 없다고 말한다. */
                 <p className="text-2xs leading-relaxed text-ink-muted">
-                  이 게임에 등록된 할인이 없습니다 — <b className="text-ink-secondary">‘세션 정보 수정’</b>의
+                  {/* ⚠ 줄 끝 `{' '}` 없으면 JSX 가 줄바꿈+들여쓰기를 통째로 지워 `…수정’의‘할인 이벤트’…` 로 붙는다(2026-09-16 실측). */}
+                  이 게임에 등록된 할인이 없습니다 — <b className="text-ink-secondary">‘세션 정보 수정’</b>의{' '}
                   <b className="text-ink-secondary">‘할인 이벤트’</b>에 추가하면 여기서 고를 수 있어요.
                 </p>
               )}

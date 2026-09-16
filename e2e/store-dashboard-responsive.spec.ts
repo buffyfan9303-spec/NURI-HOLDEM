@@ -117,9 +117,17 @@ async function openDashboard(page: Page, theme: 'dark' | 'light' = 'dark') {
   await expect(page.locator('[data-tab="my-store"]').getByText('오늘 장부').first()).toBeVisible({ timeout: 25_000 });
 }
 
-/** 페이지 전체 가로 스크롤 — 1px 반올림 오차는 허용(브라우저 서브픽셀). */
+/** 페이지 전체 가로 스크롤 — 1px 반올림 오차는 허용(브라우저 서브픽셀).
+ *
+ * 🔴 2026-09-16 정정: 예전에는 `document.documentElement.scrollWidth` 를 썼는데 **그 단언은 공허했다.**
+ *   `src/index.css:602` 의 `html { overflow-x: clip }` 때문에 documentElement 의 scrollWidth 는
+ *   clientWidth 에 고정된다 — 무엇이 넘쳐도 항상 0 이 나온다.
+ *   실측 증명(운영 1280): body 에 width:3000px 자식을 붙여도
+ *   `documentElement.scrollWidth = 1274 (= clientWidth)` · `body.scrollWidth = 3000`.
+ *   → **body 기준으로 잰다.** 이 교정 직후 처음 빨개지면 회귀가 아니라
+ *   **지금까지 이 게이트가 못 보던 넘침**일 수 있으니 값부터 읽어라. */
 async function pageOverflowPx(page: Page): Promise<number> {
-  return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  return page.evaluate(() => document.body.scrollWidth - document.documentElement.clientWidth);
 }
 
 const VIEWPORTS = [

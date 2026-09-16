@@ -140,7 +140,8 @@ test.describe('클락 TV — 상태별 캡처와 레이아웃 계약', () => {
       await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
       await page.waitForTimeout(500);
       if (PHASE !== 'skip-shot') await page.screenshot({ path: `test-results/clock-shots/${PHASE}-view-${name}.png` });
-      const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      // 🔴 body 기준 — html{overflow-x:clip}(src/index.css:602) 때문에 documentElement 로 재면 항상 0 이다(2026-09-16 실측).
+      const over = await page.evaluate(() => document.body.scrollWidth - document.documentElement.clientWidth);
       expect(over, `${name}: 가로로 ${over}px 넘친다`).toBeLessThanOrEqual(0);
     });
   }

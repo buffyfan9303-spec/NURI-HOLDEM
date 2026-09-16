@@ -156,6 +156,31 @@ mock 모드에서는 앱이 **그 요청을 아예 안 보내서** 목킹할 대
 
 단위 테스트(vitest)·lint·tsc 는 워크트리에서도 정상이다 — 그 셋으로 게이트를 본다.
 
+### 🔴 죽은 게이트 — 문서 레벨 가로 넘침 단언은 **항상 통과한다** (2026-09-16 증명)
+
+`src/index.css:602` 의 `html { overflow-x: clip }` 때문에 `document.documentElement.scrollWidth` 는
+**`clientWidth` 에 고정된다.** 무엇이 넘쳐도 0 이 나온다.
+
+**증명**(운영 1280): body 에 `width:3000px` 자식을 붙인 뒤 —
+`documentElement.scrollWidth = 1274 (= clientWidth)` · `body.scrollWidth = 3000`.
+
+**고친 것**(2026-09-16 claude-A): `e2e/store-dashboard-responsive.spec.ts:121`(내 매장 7뷰포트 단언) ·
+`e2e/clock-visual.spec.ts:143` → `document.body.scrollWidth` 기준으로.
+
+🔴 **아직 같은 패턴인 곳 — claude-B 가 E2E 를 돌릴 수 있는 환경에서 값을 읽으며 고쳐라**
+
+| 파일 | 줄 |
+|---|---|
+| `e2e/admin-event-ops.spec.ts` | 198 |
+| `e2e/aura-led.spec.ts` | 84 · 118 (`> window.innerWidth` 형태) |
+| `e2e/gto-tab-verify.spec.ts` | 224 |
+| `e2e/header-320.spec.ts` | 71 (`- window.innerWidth` 형태) |
+| `e2e/nuri-spot.spec.ts` | 250 — ⚠ **오너 보호 파일. 오너 허락 없이 건드리지 마라** |
+
+⚠ 고친 직후 처음 빨개지면 **회귀가 아니라 지금까지 숨어 있던 넘침**일 수 있다. 값부터 읽어라.
+⚠ 대안으로 **안쪽 요소 스캔**(`e2e/post-detail-read.spec.ts:112` 의 `clippedNodes()`)이 더 정확하다 —
+   `body.scrollWidth` 도 풀블리드 레일(`-mx-page-x`)이 패딩 밖으로 나가면 +17 을 보고할 수 있다.
+
 ### 미검증
 - E2E 미실행 · 클락 보정 버튼 실기기/TV 확인 안 함 · 장부 할인은 마감 세션이라 새 게임에서 확인 필요
 - 번들 첫 화면이 **188/259(여유 27%)** 로 기록된 257.8 보다 70KB 낮다 — **원인 미확인**. 여유가 생겼다고 단정하지 마라.

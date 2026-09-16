@@ -1049,8 +1049,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           ponytail: 둘 다 비면(할 일 없음 + 위험 없음) 부모 space-y 의 간격 한 칸이 남는다.
             '오늘 운영이 전부 끝난' 드문 상태라 그대로 둔다 — 없애려면 두 IIFE 의 null 조건을
             바깥으로 끌어내야 하고, 그 리팩터가 이 12.75px 보다 위험하다. */}
-      <div className="space-y-3 xl:grid xl:grid-cols-12 xl:items-start xl:gap-4 xl:space-y-0">
-      <div className="space-y-3 empty:hidden xl:col-span-8">
+      {/* ⚠ 2026-09-16: 예전엔 `xl:grid-cols-12` + `col-span-8/4` 였다. 그런데 `empty:hidden` 으로 오른쪽이 사라져도
+          `grid-column: span 8` 은 여전히 12열 중 8열이라 **좌측이 626px 에 갇히고 321.7px 이 빈 채 남았다**
+          (실측: 패널 948px · 우측 empty 시 좌 626.3 / 공백 321.7). flex 로 바꾸면 이웃이 사라질 때 남은 쪽이 948 을 다 쓴다. */}
+      <div className="space-y-3 xl:flex xl:items-start xl:gap-4 xl:space-y-0">
+      <div className="space-y-3 empty:hidden xl:min-w-0 xl:flex-[2]">
       {/* 지금 할 일 — 시간대·운영 상태 인지형 다음 행동 카드(대시보드 = 행동 안내판) */}
       {(() => {
         // ⚠ 이 카드의 모든 분기가 session/started 를 근거로 삼는다. 못 불러왔으면 침묵한다 —
@@ -1125,7 +1128,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       })()}
 
       </div>
-      <div className="space-y-3 empty:hidden xl:col-span-4">
+      <div className="space-y-3 empty:hidden xl:min-w-0 xl:flex-1">
       {/* 밀린 순위 미입력 대회 — 마감했지만 순위가 비어 있는 지난 대회(오늘 외)
           ⚠ 예전엔 카드 전체가 onGoto('ranking') 하나였다. 4개가 밀려 있어도 **오늘 메인 칩**이 열려서,
              목록에 적힌 '08/30 사이드1' 을 보고 눌렀는데 전혀 다른 대회가 열렸다(2026-09-07 추적).
@@ -1713,7 +1716,7 @@ function MyStaffCard({ venueId }: { venueId: string }) {
 
         {state === 'ready' && !wage && (
           <p className="t-desc break-keep text-ink-muted">
-            아직 업주가 내 급여 정보를 연결하지 않았어요.<br />
+            아직 업주가 내 급여 정보를 연결하지 않았어요.{' '}
             업주에게 <span className="font-semibold text-ink-primary">직원 연결</span>을 요청하면 여기에 표시됩니다.
           </p>
         )}
