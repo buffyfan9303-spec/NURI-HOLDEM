@@ -391,16 +391,22 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
           {/* ── 좌: 필드 현황(생존/엔트리 · 평균 스택) — 세로 중앙 ── */}
           {hasPlayers && (
             <div data-live-players className="flex shrink-0 flex-col items-center justify-center">
-              {/* 생존 / 엔트리 — 두 줄(오너 2026-09-08 "100/120 이런식이면 크기도 문제").
-                  한 줄 '87/213' 은 이 열(54px)에 57px 로 들어가 양옆이 잘렸다. 글자 크기를 자릿수마다
-                  깎는 방법은 네 자리(1000/1200)에서 다시 깨져 사다리가 끝나지 않는다 — 줄을 나누면
-                  가장 넓은 줄이 '/12000' 정도라 어떤 값에도 안 잘린다. 덤으로 위계가 맞다:
-                  지금 몇 명 남았나(생존)가 이 카드에서 크게 읽혀야 할 숫자고, 엔트리는 그 분모다. */}
-              <p className="text-xl font-extrabold leading-none tabular-nums text-ink-primary">
-                <span className="sr-only">생존 </span>{alive}
-              </p>
-              <p className="mt-0.5 text-2xs font-bold leading-none tabular-nums text-ink-muted">
-                <span aria-hidden>/</span><span className="sr-only">, 엔트리 </span>{entries}
+              {/* 생존 / 엔트리 — **한 줄**(오너 2026-09-16 "라이브에 플레이어 수가 7하고 9가 다른 줄이야").
+                  ⚠ 예전엔 두 줄이었고 그 근거는 "한 줄 '87/213' 은 이 열(**54px 고정**)에 57px 로 들어가 양옆이 잘렸다"
+                    였다(오너 2026-09-08). 그런데 **그 고정폭은 이미 없어졌다** — 같은 주석이 아래에서
+                    "폭을 고정하지 않고 내용이 정하게 바꿨다" 고 적고 있다. 두 줄만 그때의 잔재로 남아 있었다.
+                  실측(2026-09-16 · 라이브 375px · 실제 폰트로 측정):
+                    열 폭을 정하는 것은 숫자가 아니라 **`PLAYERS` 라벨(53.2px)** 이다.
+                    한 줄 합본 폭 — `7/9` **26.2px**(라벨 안, 여유 27px) · `87/213` 55.7px(+2.5px).
+                    즉 현실적인 값에서 **열 폭이 사실상 안 변한다.**
+                  위계는 그대로 둔다: 생존이 크고 엔트리는 그 분모라 작다. 글자 크기 사다리는 만들지 않는다. */}
+              <p className="flex items-baseline justify-center leading-none tabular-nums">
+                <span className="text-xl font-extrabold text-ink-primary">
+                  <span className="sr-only">생존 </span>{alive}
+                </span>
+                <span className="text-2xs font-bold text-ink-muted">
+                  <span aria-hidden>/</span><span className="sr-only">, 엔트리 </span>{entries}
+                </span>
               </p>
               {/* 아우라 마이크로 라벨(실제 데이터 라벨에만) — 시안 'RECOVERY SCORE' 문법: 틸·대문자·자간. 라틴 라벨이라 자간이 산다.
                   ⚠ 이 라벨이 열의 폭을 정한다. 예전엔 열이 54px 고정이라 라벨(11px·0.1em → 57px)이 양옆으로

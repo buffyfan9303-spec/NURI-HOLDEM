@@ -139,6 +139,23 @@ npx tsc -b --force                # rc=0 이어야 한다
 2. **비밀 3개 로테이션 권고** — `PORTONE_API_SECRET` · `PORTONE_WEBHOOK_SECRET` · `VERCEL_TOKEN`.
    셋 다 채팅에 평문으로 오갔다. 지금은 `secret_settings`(RLS 전면잠금)에 있다.
 
+### 🔴 워크트리에서는 E2E·시각 검증이 **구조적으로 불가능하다** (2026-09-16 확증)
+
+`.env.local` 이 없으면 `VITE_SUPABASE_*` 가 비어 **`IS_MOCK=true` 로 빌드**된다. 실측:
+로컬 `dist/assets/**` 에 `supabase.co` **0건** / 운영 번들에는 `vendor-supabase-*.js` 에 존재.
+
+그러면 **E2E 스펙 대부분이 무너진다** — 스펙들은 Supabase **HTTP 요청을 목킹**하는데
+mock 모드에서는 앱이 **그 요청을 아예 안 보내서** 목킹할 대상이 없다. 화면이 안 그려지고
+`clk-timer` 같은 셀렉터가 영원히 안 뜬다.
+실측: 레이아웃 스펙 6개를 돌려 **25 failed / 37 passed** — **전부 환경 실패였다.**
+
+👉 **이걸 회귀로 오해하지 마라.** 판정 순서:
+1. `git status --short` 로 `src/` 가 깨끗한지 → 깨끗하면 코드 회귀가 아니다
+2. `grep -rl "supabase.co" dist/assets/ | head -1` → **0건이면 mock 빌드**다. 거기서 멈춰라.
+3. E2E·시각 검증은 **`.env.local` 이 있는 체크아웃**에서만 의미가 있다.
+
+단위 테스트(vitest)·lint·tsc 는 워크트리에서도 정상이다 — 그 셋으로 게이트를 본다.
+
 ### 미검증
 - E2E 미실행 · 클락 보정 버튼 실기기/TV 확인 안 함 · 장부 할인은 마감 세션이라 새 게임에서 확인 필요
 - 번들 첫 화면이 **188/259(여유 27%)** 로 기록된 257.8 보다 70KB 낮다 — **원인 미확인**. 여유가 생겼다고 단정하지 마라.
