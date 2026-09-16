@@ -150,38 +150,42 @@ anon 키 REST 직접 호출로 **4행**(이름 + 7·2·6·12회)이 나왔다. �
 > 바만 주면 알약이 스냅샷에 갇히고, 알약만 주면 라벨이 알약에 덮인다. 그리고 `NO_PILL` 에 넣을 때는
 > **마크업을 직접 열어** SlidingPill/SegmentedTabs/UnderlineTabs 가 없는지 확인해라 — 이번 건이 그걸 안 해서 생겼다.
 
-### 🟡 오너 판단 대기 — 모바일 하단 '죽은 공간' 약 260px (실측, 미수정)
-라이브 375px 에서 직접 쟀다(홈, 문서 끝까지 스크롤):
-- `main` 콘텐츠 끝 → 푸터 시작 **131.0px** (`main { padding-bottom: var(--tabbar-safe) }` = 105.5px + 여백)
-- 푸터 콘텐츠 끝 → 탭바 윗변 **128.3px** (`footer { padding-bottom: 114px }`)
-- 게다가 문서 끝에서는 탭바가 **의도적으로 숨는다**(App.tsx:693) — 비워 둔 자리를 쓸 것이 없다.
+### ✅ 모바일 하단 죽은 공간 129px 제거 (오너 결정 2026-09-17 — "본문 쪽 예약만 없앤다")
+`index.css` 의 `main { padding-bottom: var(--tabbar-safe) !important }` 를 지웠다.
+그 규칙은 **문서의 마지막 요소가 main 이던 시절**의 것이고, 지금은 `BusinessFooter` 가
+`pb-[calc(var(--tabbar-safe)+0.5rem)]` 로 같은 예약을 한 번 더 한다(App.tsx:3834, main 의 형제이자 뒤).
 
-즉 탭바 자리를 **두 번** 예약한다. 스크린샷상 저작권 줄 아래가 통째로 비어 있다.
-**고치지 않았다** — 전 모바일 화면에 걸리는 전역 여백 변경이라 오너가 눈으로 보고 정해야 한다.
-후보 수정: `index.css:1404` 의 `main { padding-bottom: var(--tabbar-safe) !important }` 제거
-(문서 끝 여유는 푸터가 이미 준다). 함께 볼 것: `VenuePage.tsx:320`·`GroupPage.tsx:186` 의
-`pb-[var(--tabbar-safe)]` — 이 두 화면은 여는 동안 탭바가 항상 꺼져 있어 같은 죽은 공간이다.
+라이브 실측(375px · 홈 · 문서 끝):
 
----
+| | 본문끝→푸터시작 | 푸터끝→탭바윗변 | 문서높이 |
+|---|---|---|---|
+| 전 | 141.4px | 40.1px | 1238px |
+| 후 | **25.5px** | **128.8px** | **1109px**(−129) |
 
+가려지는 콘텐츠는 없다(푸터의 회피분 128.8px 유지 · 스크린샷 확인).
+안전 근거(라이브 5탭 실측): main 은 어디서도 뷰포트 바닥 스크롤 상자가 아니고
+(`position:static`·`overflow-y:visible`) **모든 탭에서 푸터가 main 뒤**다.
 
-## 0-b. 🔴 **다른 계정/다른 컴퓨터에서 처음 여는 경우 — 먼저 이것부터**
+⚠ `scroll-margin-bottom: var(--tabbar-safe)` 는 **건드리지 않았다** — 별개다.
+  포커스 스크롤은 뷰포트만 보고 떠 있는 탭바를 모른다. 레이아웃을 한 픽셀도 안 바꾼다.
 
-이 문서 말고는 아무것도 안 따라온다. 대화 기록도, 에이전트 메모리도(`.gitignore:62`) 안 온다.
-**막히는 지점은 늘 같은 셋이다. 없으면 오너에게 요청해라 — 추측해서 만들지 마라.**
+🔒 새 계약 `src/components/features/tabbarClearance.contract.test.ts` — 예약이 이제 **한 곳뿐**이라
+  양쪽을 다 잠갔다: main 에 되살아나면 실패(죽은 띠 재발) · 푸터에서 사라지면 실패(탭바 뒤로 숨음).
+  음성 대조 양방향 확인 완료.
 
-| 필요한 것 | 확인 방법 | 없으면 |
-|---|---|---|
-| **저장소 최신** | `git pull && git log --oneline -3` | — |
-| **`.env.local`** (gitignore) | 워크트리 루트에 있는지 확인(`ls -a | grep env`) · `VITE_SUPABASE_URL`·`VITE_SUPABASE_ANON_KEY`·`E2E_EMAIL`·`E2E_PASSWORD` | **오너에게 받아라. 🔴 새 git worktree 에는 gitignore 라 안 따라온다.** 없으면 `IS_MOCK` 이 참이 되어 **E2E 로그인 스펙이 조용히 skip** 되고, 모듈 최상위에서 supabase 를 만지는 파일이 있으면 **단위 테스트 파일이 통째로 `(0 test)` 로 증발**한다(2026-09-16 실측). 후자는 계약으로 잠갔다 — `src/api/moduleSideEffect.contract.test.ts` |
-| **Vercel 토큰** | 환경변수 `VERCEL_TOKEN` | **오너에게 받아라.** 문서에 적지 않는다. 없으면 §6 의 alias 를 못 건다 = **배포가 안 끝난다** |
-| **Supabase 접근** | `npx supabase projects list` 가 되면 OK | 안 되면 `npx supabase login`. DB 변경은 **MCP `execute_sql`** 로 한다(§6-b) |
-
-⚠ **`npm ci` 를 먼저 돌려라.** Playwright 브라우저가 없으면 `npx playwright install chromium`.
-
-### E2E 실행 스크립트는 저장소에 없다 — §5 절차를 보고 직접 만들어라
-지난 세션은 임시 폴더에 스크립트를 만들어 썼다. **그 폴더는 세션마다 사라진다.**
-§5 에 단계가 다 적혀 있으니 그대로 셸에 붙여 쓰면 된다. 매번 새로 만드는 게 정상이다.
+### 남은 감사 결과 — 아직 처리 안 함 (반증까지 끝난 것만 적는다)
+`d4.txt`/`d4-verdicts.txt` 는 스크래치패드로 옮겼다(git 추적 안 함). 반증을 통과한 미처리 항목:
+- 이용권 레일 RLS 위장(`VenueManageTab.tsx:861` + `LedgerWorkspace.tsx:14-19`)
+- 티켓 미수가 정산 판에서 사라짐(`ledgerSettlement.ts:47-89`)
+- `discountSummary` 가 미수를 제외(`ledger.ts:461` 한 줄)
+- QR 분할 승인이 '단가 − 할인' 이 아니라 `unit` 으로 검증(`NuriPosLedger.tsx:1236/1249-1250/1258`) — 라이브 노출 0
+- `lp_delete` RLS: 장부 접근권만으로 취소 비밀번호 없이 명단 삭제
+- `remove_venue_staff` 외 5개 RPC 가 0행인데 성공 토스트
+- StatsPanel 9칸이 조회 실패를 0 으로 그림(`community.ts:1391-1396` `count ?? 0`)
+- 환불 견적 실패 시 환불 버튼이 조용히 사라짐
+- 관리자 → 매장 장부/통계 전체화면에서 상단 헤더·PC GNB 가 오버레이 위에 얹힘(`App.tsx:3084`)
+- `VenuePage.tsx:320`·`GroupPage.tsx:186` 의 `pb-[var(--tabbar-safe)]` — 이 두 화면은 여는 동안
+  탭바가 항상 꺼져 있어 같은 죽은 공간이다(위 수정과 같은 부류, 미적용)
 
 ---
 
