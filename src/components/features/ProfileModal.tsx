@@ -156,6 +156,8 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     initRef.current = true;
 
     setName(user.name);
+    // 미확정이면 자동 생성된 아이디를 프리필한다 — 빈칸을 주면 지금 뭐가 쓰이고 있는지 알 수 없다.
+    setRecvId(user.nickname ?? '');
     setColor(user.avatarColor ?? '#FFD100');
     setAvatarPreview(user.avatarUrl ?? '');
     setAvatarFile(null);
@@ -221,8 +223,12 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     if (v.length < 2) { toast.show('아이디(닉네임)는 2자 이상이어야 합니다', 'error'); return; }
     setRecvBusy(true);
     try {
-      // 중복 체크 필수(오너 2026-09-03) — 서버 RPC 도 같은 검사를 하지만 원인을 먼저 알려 준다
-      if (!(await checkNicknameAvailable(v))) { toast.show('이미 사용 중인 아이디(닉네임)입니다', 'error'); return; }
+      // 중복 체크 필수(오너 2026-09-03) — 서버 RPC 도 같은 검사를 하지만 원인을 먼저 알려 준다.
+      // ⚠ 단 **지금 내 값 그대로 확정하는 경우는 건너뛴다.** 사전 검사 RPC(is_nickname_available)는
+      //   본인 행을 제외하지 않아서, 자동 생성된 아이디를 그대로 확정하려 하면 '이미 사용 중' 으로 막힌다
+      //   = 확정이 영원히 불가능해진다. 서버 set_my_nickname 의 중복 검사는 `id <> auth.uid()` 라 안전하다.
+      const same = v.toLowerCase() === (user?.nickname ?? '').toLowerCase();
+      if (!same && !(await checkNicknameAvailable(v))) { toast.show('이미 사용 중인 아이디(닉네임)입니다', 'error'); return; }
       await setMyNickname(v);
       toast.show('받는 아이디(닉네임)를 설정했습니다', 'success');
       await refreshProfile().catch(() => {});
@@ -230,7 +236,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     } catch (err) {
       toast.show(err instanceof Error ? err.message : '설정 실패', 'error');
     } finally { setRecvBusy(false); }
-  }, [recvId, toast, refreshProfile]);
+  }, [recvId, toast, refreshProfile, user?.nickname]);
 
   if (!user) return null;
 
@@ -511,8 +517,10 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
           <div>
             {/* 킬스위치 OFF 에서도 이 아이디 자체는 살아 있다 — 순위·전적이 닉네임으로 연결되기 때문.
                 바뀌는 것은 '왜 필요한가'의 설명뿐이다(없는 기능을 근거로 설정을 요구하지 않는다). */}
-            <label className="block text-xs font-medium text-ink-secondary mb-1.5">받는 아이디 <span className="text-2xs font-normal text-ink-muted">({idOn ? '매장이용권 수령용' : '순위·전적 연결용'})</span></label>
-            {user.nickname ? (
+            <label htmlFor="recv-id-input" className="block text-xs font-medium text-ink-secondary mb-1.5">받는 아이디 <span className="text-2xs font-normal text-ink-muted">({idOn ? '매장이용권 수령용' : '순위·전적 연결용'})</span></label>
+            {/* 🔴 판정은 `nicknameLocked`(서버 확정 플래그)다. `user.nickname` 으로 가르면
+                소셜 가입자가 **한 번도 고른 적 없는 자동 아이디**에 영원히 잠긴다(오너 2026-09-16). */}
+            {user.nicknameLocked ? (
               <>
                 <div className="flex items-center justify-between gap-2 rounded-input border border-border-default bg-surface-high/60 px-3 py-2">
                   <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">{user.nickname}</span>
@@ -523,10 +531,10 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             ) : (
               <>
                 <div className="flex gap-1.5">
-                  <input type="text" value={recvId} onChange={(e) => setRecvId(e.target.value)} maxLength={20} placeholder="받을 아이디 (2~20자, 중복 불가)" className="input min-w-0 flex-1" />
+                  <input id="recv-id-input" type="text" value={recvId} onChange={(e) => setRecvId(e.target.value)} maxLength={20} placeholder="받을 아이디 (2~20자, 중복 불가)" className="input min-w-0 flex-1" />
                   <button type="button" onClick={saveRecvId} disabled={recvBusy} className="btn-primary shrink-0 px-4 text-sm disabled:opacity-60">{recvBusy ? '설정 중…' : '설정'}</button>
                 </div>
-                <p className="mt-1 text-2xs leading-relaxed text-ink-muted">{idOn ? '매장이용권을 받을 때 쓰는 고유 아이디입니다.' : '매장 순위·전적이 이 아이디로 연결됩니다.'} <b className="text-amber-400">최초 1회만 설정</b>되며, 이후에는 운영자만 바꿀 수 있습니다.</p>
+                <p className="mt-1 text-2xs leading-relaxed text-ink-muted">{idOn ? '매장이용권을 받을 때 쓰는 고유 아이디입니다.' : '매장 순위·전적이 이 아이디로 연결됩니다.'} <b className="text-amber-400">지금은 자유롭게 바꿀 수 있습니다</b> — ‘설정’을 누르면 확정되고, 그 뒤에는 운영자만 바꿀 수 있습니다.</p>
               </>
             )}
           </div>

@@ -14,6 +14,12 @@ export interface User {
   email: string;
   name: string;
   nickname?: string;       // 표시용 닉네임 (Stage 3, unique)
+  /** 받는 아이디가 **확정**됐는가(`profiles.nickname_locked`).
+   *  🔴 `nickname` 존재 여부와 다르다 — 소셜 가입 트리거(20260909a)가 가입 순간 `이름_uuid앞4자` 를
+   *  **자동으로 넣어 두기 때문**이다. 그래서 '닉네임이 있으니 확정됐다' 는 판단은 틀린다
+   *  (2026-09-16 오너 리포트 "저건 어디서 나온 아이디인지 모르겠고 변경이 불가하게 되어있어").
+   *  잠금 판정은 **반드시 이 값**으로 하라. 서버 `set_my_nickname` 도 이 컬럼만 본다. */
+  nicknameLocked?: boolean;
   role: UserRole;
   approved?: boolean;
   venueId?: string;
@@ -74,6 +80,7 @@ function rowToUser(row: any): User {
     email:          row.email,
     name:           row.name,
     nickname:       row.nickname ?? undefined,
+    nicknameLocked: row.nickname_locked === true,
     role:           row.role,
     approved:       row.approved,
     venueId:        row.venue_id,

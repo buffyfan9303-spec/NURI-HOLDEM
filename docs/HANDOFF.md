@@ -76,6 +76,46 @@ npx tsc -b --force                # rc=0 이어야 한다
 ---
 
 
+## 0-a2. 2026-09-16 claude-A 작업 결과 — **claude-B 가 내일 먼저 읽을 것**
+
+### 배포됨
+| 커밋 | 무엇 |
+|---|---|
+| `c4c56e3` | 인수인계 학습 반영 · 체크아웃 독립 게이트(줄끝·env) · A/B 레인 |
+| `badf111` | 장부 할인 복구 · 클락 전체화면 엔트리/생존 보정 · 글쓰기·장터 인증 게이트 해제 |
+
+🔴 **배포는 alias 를 직접 걸어야 끝난다**(§6). 2026-09-16 에도 그대로였다 —
+빌드는 READY 였고 `nuri-holdem-nuridream.vercel.app` 같은 **Vercel 기본 alias 는 자동으로 붙었는데
+커스텀 도메인 둘만 안 붙었다.** POST `/v2/deployments/<id>/aliases` 로 걸고 확인했다
+(`get_deployment nuriholdem.com` → githubCommitSha 대조가 가장 확실한 증거다).
+
+### 라이브 DB 변경
+- `20260916a_portone_webhook_events.sql` **적용 완료** — PortOne 웹훅 수신 기록(멱등 키 = `webhook_id`).
+  RLS on · 정책 0 · anon/auth SELECT 불가 · service_role INSERT 가능(양성 대조 확인).
+
+### 엣지 함수
+- **`portone-webhook` 신규 배포**(v1, `verify_jwt=false`).
+  주소: `https://idsxiqspecrucvfvtgbw.supabase.co/functions/v1/portone-webhook`
+  게이트는 **Standard Webhooks 서명**이다(`verify_jwt` 는 anon 키도 통과하므로 게이트가 아니다).
+  실측: GET 200 · 서명없음 401 · 틀린서명 401 · **올바른 서명 200 + 기록 1행** · 같은 id 재전송 시 **행 1개 유지**(멱등).
+
+### 🔴 오너 조치가 필요한 것
+1. **본인인증이 라이브에서 막혀 있다.** PortOne 서버가 prepare 단계에서 우리 상점·채널을 거절한다
+   (데스크톱에서도 256ms 만에 `PORTONE_ERROR`). 우리 코드·모바일·CSP·환경변수는 **전부 반증됐다.**
+   채널은 콘솔상 `인증 / NHN KCP / kcp_v2 / PO05S` 로 맞게 돼 있다 → 남은 후보는
+   **연동 모드(테스트/실연동)** · `PO05S` 가 **본인인증 전용 사이트코드인지** · KCP 본인인증 **사전계약**.
+   2026-06-13 에는 인증 성공 이력이 있다(그 뒤 채널 상태가 바뀐 것으로 보인다).
+   ⚠ 그동안 **이벤트 참여·대회 예약은 계속 막힌다**(글쓰기·장터는 오너 지시로 게이트를 뗐다).
+2. **비밀 3개 로테이션 권고** — `PORTONE_API_SECRET` · `PORTONE_WEBHOOK_SECRET` · `VERCEL_TOKEN`.
+   셋 다 채팅에 평문으로 오갔다. 지금은 `secret_settings`(RLS 전면잠금)에 있다.
+
+### 미검증
+- E2E 미실행 · 클락 보정 버튼 실기기/TV 확인 안 함 · 장부 할인은 마감 세션이라 새 게임에서 확인 필요
+- 번들 첫 화면이 **188/259(여유 27%)** 로 기록된 257.8 보다 70KB 낮다 — **원인 미확인**. 여유가 생겼다고 단정하지 마라.
+
+---
+
+
 ## 0-b. 🔴 **다른 계정/다른 컴퓨터에서 처음 여는 경우 — 먼저 이것부터**
 
 이 문서 말고는 아무것도 안 따라온다. 대화 기록도, 에이전트 메모리도(`.gitignore:62`) 안 온다.
@@ -266,8 +306,8 @@ i 를 되돌리면 급여 유출이 함께 돌아온다(위 표 참조).
 
 ### 게이트 기준선 — **2026-09-15(2차) 실측. 이 숫자에서 나빠지면 통과가 아니다**
 ```
-lint           0 errors / **301** warnings   ← errors 만 본다. (2026-09-16 claude-A 재측정. 295 는 낡은 값)
-vitest         **2230 passed | 6 skipped (2236) · 205 files**  (2026-09-16 claude-A 재측정)
+lint           0 errors / **309 warnings**   ← errors 만 본다 (2026-09-16 claude-A 최종 실측)
+vitest         **2249 passed | 6 skipped (2255) · 209 files**  (2026-09-16 claude-A 최종 실측)
                ⚠ 2026-09-15 의 `2229 passed (203 files)` 에서 늘어난 이유: 워크트리에서 `(0 test)` 로 죽어 있던
                  `events.slug/current.test.ts` 를 살렸고(`IS_MOCK` 가드), 계약 1파일을 더했다.
                🔴 **숫자를 베끼지 마라 — 각자 재고 측정 날짜를 같이 적어라.**
