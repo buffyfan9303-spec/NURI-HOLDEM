@@ -1828,7 +1828,7 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
         remainingMs: cu.patch.remainingMs ?? 0,
         endsAt: cu.patch.endsAt ?? null,
         ...(cu.finished && { running: false }),
-      }).catch(() => {
+      }, boundary).catch(() => {   // CAS — 다른 기기가 정지·전진시켰으면 이 쓰기는 0행이 된다
         // 쓰기가 한 번 실패했다고 이 레벨 경계를 영구 포기하면(wroteForRef 가 그대로 남으면)
         // 대회장 와이파이가 잠깐 끊긴 것만으로 레벨이 영영 안 넘어간다 → 다음 틱에 재시도하게 푼다.
         if (wroteForRef.current === boundary) wroteForRef.current = null;

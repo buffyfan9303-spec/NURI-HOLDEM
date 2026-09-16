@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getClockState, saveClockState, subscribeClock, effectiveLevel, levelMovePatch, computeLiveStats, deriveClockCounts,
-  applyRemoteStatDelta, clampAdjEarlies,
+  applyRemoteStatDelta, clampAdjEarlies, clampAdjCount,
   type ClockState,
 } from '../../../api/clock';
 import { clockPhase, CLOCK_PHASE_LABEL, levelNumberAt } from '../../../lib/clockLevel';
@@ -144,10 +144,13 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
     else persist({ remainingMs: Math.max(0, state.remainingMs + deltaMs) });
   };
   const stats = computeLiveStats(state, derived, cfg);
-  const adj = (key: 'adjEntries' | 'adjRebuys' | 'adjAddons', d: number) =>
-    persist({ [key]: Math.max(-9999, state[key] + d) } as Partial<ClockState>);
-  // 얼리만 하한이 다르다 — 실효 카운트(장부 자동 몫 + 보정)가 0 밑으로 내려가면
-  // 카운트는 max(0,…) 로 멈추고 칩만 음수로 떨어졌다 — TV '총 칩' −5,000(#11, 오너 보고 2026-09-15).
+  // 하한은 얼리와 같은 규칙이다 — 실효 카운트(장부 자동 몫 + 보정)가 0 밑으로 내려가면
+  // 카운트는 max(0,…) 로 멈추고 칩만 음수로 떨어진다(#11, 오너 보고 2026-09-15 · TV '총 칩' −5,000).
+  // 2026-09-17: 예전엔 여기만 `Math.max(-9999, …)` 라 엔트리·리바이·애드온에 같은 증상이 남아 있었다.
+  const adj = (key: 'adjEntries' | 'adjRebuys' | 'adjAddons', d: number) => {
+    const auto = key === 'adjEntries' ? derived.entries : key === 'adjRebuys' ? derived.rebuys : 0;
+    persist({ [key]: clampAdjCount(auto, state[key], d) } as Partial<ClockState>);
+  };
   const adjEarly = (d: number) => persist({ adjEarlies: clampAdjEarlies(stats, state.adjEarlies, d) });
   const adjAlive = (d: number) => persist({ eliminations: Math.max(0, state.eliminations - d) }); // +면 생존↑
   const disabled = readOnly;

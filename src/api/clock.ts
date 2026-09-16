@@ -266,15 +266,26 @@ export function levelUndoPatch(snap: ClockLevelSnapshot): Partial<ClockState> {
 export async function saveClockLevel(
   venueId: string, gameSeq: number,
   patch: Pick<ClockState, 'currentIndex' | 'remainingMs' | 'endsAt'> & Partial<Pick<ClockState, 'running'>>,
+  expectEndsAt?: string,
 ): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('clock_states').update({
+  let q = supabase.from('clock_states').update({
     current_index: patch.currentIndex,
     remaining_ms: patch.remainingMs,
     ends_at: patch.endsAt,
     ...(patch.running !== undefined && { running: patch.running }),
     updated_at: new Date().toISOString(),
   }).eq('venue_id', venueId).eq('game_seq', gameSeq);
+  // CAS — '내가 읽은 레벨 경계가 아직 그대로일 때만' 쓴다(2026-09-17).
+  //   부분 업데이트로 좁혀도 남는 구멍이 하나 있었다: 다른 기기에서 [정지]를 누르면 그 순간
+  //   ends_at 이 null 이 되는데, realtime 이 이 기기에 닿기 전 1초 틱이 먼저 돌면 **멈춘 클락의
+  //   레벨을 한 칸 올려 버린다**(전진 조건은 낡은 스냅샷으로 판단되기 때문이다).
+  //   읽은 경계를 그대로 조건에 걸면, 누가 먼저 움직였을 때 이 쓰기는 0행 = 아무 일도 안 한다.
+  //   ends_at 은 레벨이 바뀔 때마다 새 절대시각이 되므로 사실상 버전 토큰으로 쓸 수 있다.
+  //   ⚠ null 은 조건으로 걸지 않는다(PostgREST 는 .is() 가 필요하고, 백업 전진자는 항상 값이 있는
+  //     경계에서만 쓴다). expectEndsAt 을 안 주면 예전 동작 그대로다.
+  if (expectEndsAt) q = q.eq('ends_at', expectEndsAt);
+  const { error } = await q;
   if (error) throw error;
 }
 
@@ -542,14 +553,41 @@ export function clampAdjEarlies(
   currentAdj: number | null | undefined,
   delta: number,
 ): number {
+  return clampAdjCount(earlyAutoOf(ls, currentAdj), currentAdj, delta);
+}
+
+/** 수기 보정의 하한 — **모든 카운트 보정에 쓰는 한 규칙**(#11 과 같은 부류).
+ *
+ *  `auto` 는 장부에서 자동으로 세어진 몫이다. 보정은 그 위에 얹는 값이라
+ *  실효 카운트(auto + 보정)가 0 밑으로 내려가면 안 된다 → 보정의 하한은 `-auto`.
+ *
+ *  ⚠ 왜 화면 클램프만으론 안 되나(#11 실측): 칩 환산만 막으면 숫자는 맞아 보이지만
+ *    [−] 를 누른 만큼 보정값이 조용히 내려가, [+] 를 같은 횟수만큼 눌러야 화면이 움직인다.
+ *    오너가 본 "표기가 안되고" 가 그것이다. **버튼이 상태를 더 내리지 않아야** 한다.
+ *  ⚠ 이미 범위 밖인 낡은 행은 그 자리에 두되(`Math.min(cur, lo)`) 더 내려가지 못하게 하고,
+ *    [+] 로는 정상 범위로 올라오게 한다.
+ *  ⚠ `-auto` 를 그대로 쓰면 auto 0 에서 `-0` 이 나온다(Object.is 로 보는 단언이 갈린다).
+ *
+ *  2026-09-17: 얼리에만 있던 이 규칙을 엔트리·리바이·애드온으로 넓혔다.
+ *    그쪽은 `Math.max(-9999, …)` 라 [−] 를 계속 누르면 엔트리가 음수가 되고
+ *    `totalStack = entries × startStack + …` 이 음수로 떨어졌다 — #11 과 같은 증상, 다른 필드다.
+ *    (애드온은 장부 자동 몫이 없어 auto=0 → 하한 0 이다.)
+ */
+export function clampAdjCount(auto: number, currentAdj: number | null | undefined, delta: number): number {
   const cur = currentAdj ?? 0;
-  const auto = Math.max(0, earlyAutoOf(ls, cur));
-  const lo = auto > 0 ? -auto : 0;   // `-auto` 그대로 쓰면 auto 0 에서 -0 이 나온다(Object.is 로 보는 단언이 갈린다)
+  const a = Math.max(0, auto);
+  const lo = a > 0 ? -a : 0;
   return Math.max(Math.min(cur, lo), cur + delta);
 }
 
 /** 라이브 통계 스냅샷 계산(클락 디스플레이 + 라이브 보드 공통). */
 export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: ClockConfig): ClockLiveStats {
+  // ⚠ 여기서 Math.max(0, …) 로 자르지 **않는다**(2026-09-17 시도 후 철회).
+  //   applyRemoteStatDelta 는 이 스냅샷(canon)에 차분을 엹는다 — 여기서 잘라 버리면
+  //   차분의 기준점이 사라져 리모컨과 PC 값이 갈라진다(얼리가 earliesRaw 를
+  //   따로 들고 다니는 이유다). 음수는 **쓰기 쪽 하한**(clampAdjCount)으로 막는다 —
+  //   그러면 버튼으로 도달 가능한 상태에서 이 값이 애초에 음수가 되지 않는다.
+  //   (라이브 실측 2026-09-17: clock_states 1행 · 음수 보정 0건 — 난한 난 행이 없다.)
   const entries = derived.entries + st.adjEntries;
   const rebuys = derived.rebuys + st.adjRebuys;
   // ⚠ 얼리는 인원이 아니라 기준칩 배수의 합(#21). 수기 보정은 그대로 '단위' 가산이다.

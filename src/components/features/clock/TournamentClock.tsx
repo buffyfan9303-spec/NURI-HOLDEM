@@ -11,7 +11,7 @@ import { uploadPoster } from '../../../lib/storage';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
   defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, computeLiveStats,
-  countLevels, withDerivedEarly, generateBlinds, clampAdjEarlies,
+  countLevels, withDerivedEarly, generateBlinds, clampAdjEarlies, clampAdjCount,
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
   getClockState, saveClockState, saveClockLiveStats, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
@@ -689,10 +689,14 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
       persist({ remainingMs: Math.max(0, state.remainingMs + deltaMs) });
     }
   };
-  const adj = (key: 'adjEntries' | 'adjRebuys' | 'adjAddons', d: number) =>
-    persist({ [key]: Math.max(-9999, state[key] + d) } as Partial<ClockState>);
-  // 얼리만 하한이 다르다 — 실효 카운트(장부 자동 몫 + 보정)가 0 밑으로 내려가면
-  // 카운트는 max(0,…) 로 멈추고 칩만 음수로 떨어졌다 — TV '총 칩' −5,000(#11, 오너 보고 2026-09-15).
+  // 하한은 얼리와 같은 규칙이다 — 실효 카운트(장부 자동 몫 + 보정)가 0 밑으로 내려가면
+  // 카운트는 max(0,…) 로 멈추고 칩만 음수로 떨어진다(#11, 오너 보고 2026-09-15 · TV '총 칩' −5,000).
+  // 2026-09-17: 예전엔 여기만 `Math.max(-9999, …)` 라 엔트리·리바이·애드온에 같은 증상이 남아 있었다.
+  // 애드온은 장부 자동 몫이 없어 auto=0 → 하한 0.
+  const adj = (key: 'adjEntries' | 'adjRebuys' | 'adjAddons', d: number) => {
+    const auto = key === 'adjEntries' ? derived.entries : key === 'adjRebuys' ? derived.rebuys : 0;
+    persist({ [key]: clampAdjCount(auto, state[key], d) } as Partial<ClockState>);
+  };
   const adjEarly = (d: number) => persist({ adjEarlies: clampAdjEarlies(liveStats, state.adjEarlies, d) });
   const adjPlayer = (d: number) => persist({ eliminations: Math.max(0, state.eliminations - d) }); // +면 생존↑(아웃↓)
 
