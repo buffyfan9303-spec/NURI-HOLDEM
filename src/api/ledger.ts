@@ -1044,11 +1044,6 @@ export async function deleteLedgerPlayerAtomic(id: string, password?: string): P
   if (error) throw new Error(error.message);
 }
 
-export async function removeLedgerPlayer(id: string): Promise<void> {
-  if (IS_MOCK) return;
-  await mustAffect(supabase.from('ledger_players').delete().eq('id', id));
-}
-
 /** 미마감 지난 장부 — 대시보드 넛지용.
  *  ⚠ 정정(2026-09-07): "마감을 안 하면 순위→시즌→전적 하류가 막힌다"고 적혀 있었으나 **서버는 그렇지 않다**.
  *  실측: save_venue_rankings·current_season_standings·global_ranking_totals 어느 것도 ledger_sessions·closed 를

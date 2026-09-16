@@ -858,7 +858,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {/* 장부는 '작업대'로 감싼다 — 전체화면 토글과 우측 이용권 실시간 레일이 거기 산다(오너 2026-09-06).
                     장부 컴포넌트 자체는 손대지 않는다(2800줄에 조건 분기를 더 심지 않으려고). */}
                 {visited.includes('ledger') && ledgerOk && box('ledger', (
-                  <LedgerWorkspaceM venueId={venueId} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'}>
+                  <LedgerWorkspaceM venueId={venueId} canViewVouchers={caps.voucher} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'}>
                     <NuriPosLedgerM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'} seed={ledgerSeed}
                       followGame={ledgerFollow}
                       settleSignal={settleSignal}

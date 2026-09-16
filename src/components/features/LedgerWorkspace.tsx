@@ -11,10 +11,18 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import Icon from '../atoms/Icon';
 import LedgerVoucherRail from './LedgerVoucherRail';
 
-export default function LedgerWorkspace({ venueId, active, children }: {
+export default function LedgerWorkspace({ venueId, active, canViewVouchers, children }: {
   venueId: string;
   /** 장부 판이 실제로 보이는가 — 레일의 구독·폴링을 이 값으로 끊는다 */
   active: boolean;
+  /** 이용권 내역 열람 권한(VenueManageTab 의 caps.voucher).
+   *  🔴 없으면 레일을 **아예 그리지 않는다**(2026-09-17). 장부 권한과 이용권 권한은 서버에서 갈린다 —
+   *  can_access_ledger = can_manage_pos ‖ ledger_access / can_view_vouchers = can_manage_pos ‖ voucher_access.
+   *  '장부만 준 직원' 조합이 실제로 만들어지는데(초대 화면의 grant_ledger·grant_voucher 가 따로다),
+   *  그 사람에게 레일을 그리면 RLS(store_vouchers_select)가 **에러 없이 0행**을 준다.
+   *  PostgREST 는 RLS 거부를 에러가 아니라 빈 배열로 돌려주므로 `if (error) throw` 로는 못 잡는다.
+   *  그 0행을 레일이 '보낸 기록이 없어요' 라고 **단언**한다 — 카운터에서 손님에게 틀린 답을 하는 자리다. */
+  canViewVouchers: boolean;
   children: ReactNode;
 }) {
   const [full, setFull] = useState(false);
@@ -77,9 +85,11 @@ export default function LedgerWorkspace({ venueId, active, children }: {
         {/* 좌: 장부(스크롤) / 우: 이용권 레일(고정). 레일은 세로로 길수록 쓸모가 커진다. */}
         <div className="flex min-h-0 flex-1">
           <div className="min-w-0 flex-1 overflow-y-auto px-3 py-3">{children}</div>
-          <div className="hidden w-[20rem] shrink-0 border-l border-border-subtle p-3 md:block">
-            <LedgerVoucherRail venueId={venueId} active dense />
-          </div>
+          {canViewVouchers && (
+            <div className="hidden w-[20rem] shrink-0 border-l border-border-subtle p-3 md:block">
+              <LedgerVoucherRail venueId={venueId} active dense />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -89,11 +99,16 @@ export default function LedgerWorkspace({ venueId, active, children }: {
     <div ref={hostRef}>
       <div className="mb-2 flex items-center justify-end">{toggle}</div>
       {/* PC 는 2단(장부 + 레일), 좁은 폭은 장부 아래에 레일을 둔다 — 좁은 화면에서 옆에 붙이면 둘 다 못 쓴다. */}
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start lg:gap-4">
+      {/* ⚠ 레일 div 만 감싸면 안 된다 — 2열 그리드 선언이 남아 **19rem 빈 거터**가 그대로 생기고
+          장부가 계속 좁아진다(매장 운영주 = PC 99%). 그리드도 같은 조건에 묶는다.
+          클래스는 **통짜 리터럴**로 둔다 — 조각을 조립하면 Tailwind content 스캔이 못 찾아 규칙이 통째로 사라진다. */}
+      <div className={canViewVouchers ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start lg:gap-4' : ''}>
         <div className="min-w-0">{children}</div>
-        <div className="mt-4 h-[26rem] lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:mt-0 lg:h-[calc(100vh-var(--stack-top,6.0625rem)-2rem)]">
-          <LedgerVoucherRail venueId={venueId} active={active} />
-        </div>
+        {canViewVouchers && (
+          <div className="mt-4 h-[26rem] lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:mt-0 lg:h-[calc(100vh-var(--stack-top,6.0625rem)-2rem)]">
+            <LedgerVoucherRail venueId={venueId} active={active} />
+          </div>
+        )}
       </div>
     </div>
   );
