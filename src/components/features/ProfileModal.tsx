@@ -687,7 +687,12 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 8))}
                   placeholder="이메일로 받은 인증번호"
-                  maxLength={8}
+                  /* ⚠ Supabase 의 이메일 OTP 길이는 **대시보드 설정값(6~10)** 이다. 저장소의 supabase/config.toml 은 로컬 개발용이라 호스팅 프로젝트에 적용되지 않는다.
+                     2026-09-17 오너 보고: 실제로 **8자리**가 온다(주석·config 은 6 이라고 적혀 있었다).
+                     8 로 두면 지금은 딱 맞지만 설정을 9·10 으로 올리는 순간 **입력칸이 조용히 잘라먹는다**
+                     (붙여넣기가 마지막 한·두 글자를 버려도 사용자는 모른다). 서버 상한인 10 으로 열어 둔다.
+                     제출 가드는 `length < 6`(최소값)이라 길이가 바뀜어도 그대로 동작한다. */
+                  maxLength={10}
                   className="input text-center font-bold tracking-[0.3em]"
                   autoFocus
                 />

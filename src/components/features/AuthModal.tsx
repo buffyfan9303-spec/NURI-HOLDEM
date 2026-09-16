@@ -638,7 +638,8 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         <input
           type="text" inputMode="numeric" value={code}
           onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 8))}
-          placeholder="이메일로 받은 인증번호" maxLength={8}
+          /* ⚠ Supabase 의 이메일 OTP 길이는 **대시보드 설정값(6~10)** 이다. 저장소의 supabase/config.toml 은 로컬 개발용이라 호스팅 프로젝트에 적용되지 않는다. 위 ProfileModal 과 같은 이유로 서버 상한(10)에 맞춘다. */
+          placeholder="이메일로 받은 인증번호" maxLength={10}
           className="input text-center font-bold tracking-[0.3em]" autoFocus
         />
       </div>
