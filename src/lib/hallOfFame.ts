@@ -13,7 +13,8 @@
 // 이 파일은 '어느 쪽을 보여줄지'만 고른다(규칙 2중화 금지).
 import { supabase, IS_MOCK } from './supabase';
 import { getMonthlyHall, type HallRow } from './loyalty';
-
+
+import { mustAffect } from '../api/_mustAffect';
 export interface HallEntry extends HallRow {
   /** 운영자가 붙인 한 줄 소개 — 수동 등록에만 있다 */
   note?: string | null;
@@ -103,8 +104,7 @@ export async function adminSaveHallEntry(e: {
 }
 
 export async function adminDeleteHallEntry(id: number): Promise<void> {
-  const { error } = await supabase.from('hall_of_fame').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  await mustAffect(supabase.from('hall_of_fame').delete().eq('id', id));
 }
 
 /**

@@ -24,10 +24,18 @@
 // 실행: npx vitest run src/api/mutationAffected.contract.test.ts
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
-const API = __dirname;
-const rel = (name: string) => `src/api/${name}`;
+const API = __dirname;          // 아래 'import 통로' 검사가 계속 쓴다(그쪽은 src/api 만 본다)
+// ⚠ 2026-09-17: 예전엔 스캔 뿌리가 src/api 뿐이었다. 그래서 **같은 부류의 확인 없는 변이가
+//   src/lib · src/components 에 있어도 계약이 초록**이었다(loyalty·hallOfFame·AdminTab 에서 4곳 발견).
+//   '전수 계약' 이라는 이름이 거짓이었던 것이다 — 뿌리를 src 전체로 넓힌다.
+const SRC = join(__dirname, '..');
+const rel = (name: string) => `src/${name}`;
+const walk = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walk(join(dir, e.name))
+      : /\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) ? [join(dir, e.name)] : []);
 
 /** 확인 불필요로 판단한 변이 — 키: `파일::함수::연산:테이블`. 값: 이유. 새 항목은 이유 없이 못 올린다. */
 const ALLOW: Record<string, string> = {
@@ -196,9 +204,9 @@ function enclosingFn(code: string, i: number): string {
 
 function scan(): Site[] {
   const out: Site[] = [];
-  for (const name of readdirSync(API)) {
-    if (!/\.ts$/.test(name) || /\.test\.ts$/.test(name)) continue;
-    const code = stripComments(readFileSync(join(API, name), 'utf-8'));
+  for (const path of walk(SRC)) {
+    const name = relative(SRC, path).split(sep).join('/');   // 'api/community.ts' | 'lib/loyalty.ts'
+    const code = stripComments(readFileSync(path, 'utf-8'));
     const re = /\.(update|delete)\(/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(code))) {

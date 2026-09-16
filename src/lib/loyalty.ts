@@ -6,7 +6,8 @@ import { supabase, IS_MOCK } from './supabase';
 import { currentUser, currentUserStrict } from '../api/_session';
 import { countVisitDays } from '../api/checkins';
 import type { IconName } from '../components/atoms/Icon';
-
+
+import { mustAffect } from '../api/_mustAffect';
 // ── 티어·뱃지 글리프를 이모지 → 아이콘으로 (ICON-2, 2026-08-29) ────────────────
 // 이모지는 폰트라 OS 마다 그림이 달라 '사다리'가 무너졌다: 🥈🥇 는 애플에선 금·은이 또렷한데
 // Segoe 에선 둘 다 회색 원반이고, ⚪🟤 는 크기·광택이 제각각이라 등급 서열이 읽히지 않았다.
@@ -48,15 +49,13 @@ export async function adminListCustomMissions(): Promise<CustomMissionRow[]> {
 }
 export async function adminSaveCustomMission(m: Partial<CustomMissionRow> & Pick<CustomMissionRow, 'title' | 'goal_type' | 'goal' | 'reward'>): Promise<void> {
   const row = { title: m.title.trim(), goal_type: m.goal_type, goal: m.goal, reward: m.reward, active: m.active ?? true };
-  const q = m.id
-    ? supabase.from('custom_missions').update(row).eq('id', m.id)
-    : supabase.from('custom_missions').insert(row);
-  const { error } = await q;
+  // update 는 0행이 곧 '권한이 없거나 그 사이 사라졌다' 다 — 성공 토스트로 나가면 안 고쳐진 미션을 고쳤다고 믿는다.
+  if (m.id) return mustAffect(supabase.from('custom_missions').update(row).eq('id', m.id));
+  const { error } = await supabase.from('custom_missions').insert(row);
   if (error) throw new Error(error.message);
 }
 export async function adminDeleteCustomMission(id: number): Promise<void> {
-  const { error } = await supabase.from('custom_missions').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  await mustAffect(supabase.from('custom_missions').delete().eq('id', id));
 }
 function weekStartStr(): string {
   const now = new Date();

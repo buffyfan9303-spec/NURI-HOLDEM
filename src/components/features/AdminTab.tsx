@@ -587,9 +587,12 @@ function ShoutsAdminCard() {
   const [refundId, setRefundId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [err, setErr] = useState<unknown>(null);
+  // 견적 실패는 목록 실패와 다르다 — 목록은 보이는데 '환불 가능 여부'만 모르는 상태다.
+  // 그걸 조용히 {} 로 두면 환불 버튼이 사라지고 관리자는 '환불 불가한 건'으로 오해한다.
+  const [quoteErr, setQuoteErr] = useState(false);
   const reload = useCallback(() => {
     adminListShouts(50).then((r) => { setErr(null); setRows(r); }).catch((e) => { setErr(e); setRows([]); });
-    adminShoutRefunds(50).then(setRefunds).catch(() => setRefunds({}));
+    adminShoutRefunds(50).then((m) => { setQuoteErr(false); setRefunds(m); }).catch(() => { setQuoteErr(true); setRefunds({}); });
   }, []);
   useEffect(() => { reload(); }, [reload]);
   const hide = async (s: AdminShout) => {
@@ -636,6 +639,7 @@ function ShoutsAdminCard() {
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />외치기 관리 <span className="text-xs font-normal text-ink-muted">활동점수로 구매한 커뮤니티 강조 메시지. 대기열 순서대로 20초씩 1회 방송</span></p>
+      {quoteErr && <p className="text-2xs text-danger-light">환불 견적을 불러오지 못했습니다 — 환불 가능 여부를 알 수 없습니다</p>}
       {rows === null ? (
         <ul className="space-y-1">{[0, 1, 2].map((i) => <li key={i} className="skeleton h-9 rounded-input" />)}</ul>
       ) : err != null ? (
@@ -948,8 +952,12 @@ function ErrorLogPanel() {
 
   const clearAll = async () => {
     if (!confirm('오류 로그를 전부 비울까요?')) return;
-    const { error } = await supabase.from('client_errors').delete().gte('created_at', '1970-01-01');
+    // ⚠ 이 버튼은 rows.length > 0 일 때만 렌더된다 — 0행은 '이미 비어 있다' 가 아니라 **권한이 없다** 는 뜻이다.
+    //   mustAffect 를 쓰지 않는 이유: clearAll 에 try/catch 가 없어 throw 가 조용히 삼켜진다.
+    //   .select('id') — 무인자 .select() 는 message·stack 을 통째로 되받는다(민감 컬럼).
+    const { data, error } = await supabase.from('client_errors').delete().gte('created_at', '1970-01-01').select('id');
     if (error) toast.show(error.message, 'error');
+    else if (!data || data.length === 0) toast.show('비우지 못했습니다 — 권한이 없거나 이미 비어 있습니다', 'error');
     else { toast.show('오류 로그를 비웠습니다', 'success'); reload(); }
   };
   const fmt = (iso: string) => {
@@ -1729,11 +1737,11 @@ function StaffRow({ staff, onChanged }: { staff: VenueStaff; onChanged: () => vo
 
 function StatsPanel() {
   const [s, setS] = useState<AdminStats | null>(null);
-  useEffect(() => {
-    let active = true;
-    getAdminStats().then((x) => { if (active) setS(x); }).catch(() => {});
-    return () => { active = false; };
-  }, []);
+  // 실패를 삼키면 9칸이 전부 0 으로 그려져 '오늘 아무 일도 없었다'로 읽힌다 — 로딩(null)과도 구분이 안 된다.
+  const [err, setErr] = useState<unknown>(null);
+  const load = useCallback(() => { getAdminStats().then((x) => { setErr(null); setS(x); }).catch(setErr); }, []);
+  useEffect(() => { load(); }, [load]);
+  if (err != null) return <LoadErrorCard error={err} what="운영 지표" onRetry={load} compact />;
   if (!s) return null;
   const cards = [
     { label: '전체 회원', v: s.users },        { label: '업주', v: s.owners },            { label: '승인대기 업주', v: s.pendingOwners },

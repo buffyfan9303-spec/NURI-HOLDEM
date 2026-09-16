@@ -1,4 +1,4 @@
-﻿// src/api/community.ts
+// src/api/community.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 import { idempotentOff, mustAffect } from './_mustAffect';
@@ -1390,7 +1390,10 @@ export async function getAdminStats(): Promise<AdminStats> {
   const cnt = async (tbl: string, build?: (q: any) => any): Promise<number> => {
     let q = supabase.from(tbl).select('*', { count: 'exact', head: true });
     if (build) q = build(q);
-    const { count } = await q;
+    // ⚠ error 를 읽지 않으면 조회 실패가 **진짜 0 과 구분되지 않는다** — 관리자가 '오늘 가입 0명'을
+    //   사실로 읽는다. 9칸이 전부 같은 함수를 타므로 여기 한 곳이 아홉 칸을 동시에 속였다.
+    const { count, error } = await q;
+    if (error) throw error;
     return count ?? 0;
   };
   const [users, owners, pendingOwners, suspended, posts, listings, schedules, pendingSchedules, signups7d] = await Promise.all([
@@ -1403,8 +1406,6 @@ export async function getAdminStats(): Promise<AdminStats> {
     cnt('schedules'),
     // 반려된 포스터는 '승인대기' 가 아니다(20260911o) — 행이 더 이상 지워지지 않으므로
     // 필터를 안 걸면 이 숫자가 영구히 부풀고 좌측 네비 배지(pending.length)와 갈라진다.
-    // ⚠ 마이그레이션 전 서버에서는 이 필터가 42703 을 내고 cnt 가 0 을 돌려준다(cnt 는 에러를 삼킨다).
-    //   타일 한 칸이 잠시 0 으로 보일 뿐 화면은 멀쩡하고, 실제 대기 건수는 '포스터 승인' 배지가 계속 맞다.
     cnt('schedules', (q) => q.eq('approved', false).is('rejected_at', null)),
     cnt('profiles', (q) => q.gt('joined_at', since)),
   ]);
@@ -1955,7 +1956,9 @@ export async function adminShoutRefunds(
 ): Promise<Record<string, { purchaseId: number; estimate: number; block: string | null }>> {
   if (IS_MOCK) return {};
   const { data, error } = await supabase.rpc('admin_shout_refunds', { p_limit: limit });
-  if (error) return {};
+  // 조회 실패를 '견적 없음'({})으로 위장하면 환불 버튼이 **무음으로 사라진다** —
+  // 관리자는 '환불 불가한 건' 이라고 읽는다. 실패는 실패라고 말해야 화면이 그것을 띄울 수 있다.
+  if (error) throw error;
   const map: Record<string, { purchaseId: number; estimate: number; block: string | null }> = {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const r of (data ?? []) as any[]) {
