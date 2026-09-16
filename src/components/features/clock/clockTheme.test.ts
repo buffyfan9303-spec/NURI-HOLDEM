@@ -112,11 +112,11 @@ describe('black-marble-gold 프리셋', () => {
   it('목록에 1항목으로 존재하고 왕복(make → sanitize → vars)에서 그 배경을 쓴다', () => {
     const p = clockPresetById('black-marble-gold');
     expect(p?.label).toBe('블랙 마블 골드');
-    expect(p?.timer).toBe('#FFFFFF');          // 타이머 순백(레퍼런스 위계: 시간이 먼저)
+    expect(p?.timer).toBe(CLOCK_DEFAULTS.timer);          // 타이머 순백(레퍼런스 위계: 시간이 먼저)
     const v = clockThemeVars(sanitizeClockTheme(makeClockTheme('black-marble-gold')));
     expect(v['--clk-bg']).toBe(BLACK_MARBLE_GOLD_BG);
     expect(v['--clk-accent']).toBe(p?.accent);
-    expect(v['--clk-timer']).toBe('#FFFFFF');
+    expect(v['--clk-timer']).toBe(CLOCK_DEFAULTS.timer);
   });
 
   it('CSS 만으로 만든다 — url() 0 · 색은 마지막 레이어에만(사진 아래에 그대로 이어 붙일 수 있게)', () => {
@@ -152,20 +152,45 @@ describe('색 역할 분리 — 강조색이 덮을 수 있는 것과 없는 것
 
   it('1~3. 아우라 기본 · 아우라 골드 · 블랙 마블 골드 — 메인 타이머는 흰색', () => {
     for (const id of ['aura', 'aura-gold', 'black-marble-gold']) {
-      expect(vars(id)['--clk-timer'], id).toBe('#FFFFFF');
+      expect(vars(id)['--clk-timer'], id).toBe(CLOCK_DEFAULTS.timer);
     }
   });
 
   it('🔴 프리셋 9종 **전부** 메인 타이머가 흰색 — timer 미지정 프리셋이 accent 로 새지 않는다', () => {
     for (const p of CLOCK_THEME_PRESETS) {
-      expect(vars(p.id)['--clk-timer'], p.label).toBe('#FFFFFF');
+      expect(vars(p.id)['--clk-timer'], p.label).toBe(CLOCK_DEFAULTS.timer);
     }
   });
 
   it('4. custom violet accent 를 적용해도 --clk-timer 는 흰색', () => {
     for (const p of CLOCK_THEME_PRESETS) {
-      expect(vars(p.id, VIOLET)['--clk-timer'], p.label).toBe('#FFFFFF');
+      expect(vars(p.id, VIOLET)['--clk-timer'], p.label).toBe(CLOCK_DEFAULTS.timer);
     }
+  });
+
+  // ⚠ 2026-09-17: 위 단언들이 예전엔 리터럴 '#FFFFFF' 였다. 타이머가 off-white(#F4F6FA)로 바뀌면서
+  //   `CLOCK_DEFAULTS.timer` 를 참조하게 됐는데, 그러면 **'타이머 색이 하나로 고정된다'** 는 말은 지키지만
+  //   정작 이 테스트들이 막으려던 사고 — **타이머가 매장이 고른 accent 색으로 새는 것** — 은 못 잡는다.
+  //   (CLOCK_DEFAULTS.timer 를 누가 accent 값으로 바꿔 놓으면 위 단언은 전부 통과한다.)
+  //   그래서 그 계약을 값에 기대지 않는 형태로 **따로** 적는다. 이쪽이 원래 지키려던 것이다.
+  it('🔴 타이머 색은 어느 프리셋에서도 accent 와 같지 않다 (2026-09-10 사고: timer 가 accent 로 샜다)', () => {
+    for (const p of CLOCK_THEME_PRESETS) {
+      const v = vars(p.id);
+      expect(v['--clk-timer'], `${p.label}: 타이머가 프리셋 accent 와 같은 색이 됐다`).not.toBe(v['--clk-accent']);
+      const cv = vars(p.id, VIOLET);
+      expect(cv['--clk-timer'], `${p.label}: 매장이 고른 강조색이 타이머까지 덮었다`).not.toBe(cv['--clk-accent']);
+    }
+  });
+
+  it('타이머 색은 거의 흰색이어야 한다 — 어두운 보드에서 시간이 가장 먼저 읽혀야 한다', () => {
+    // off-white 는 허용하되 '색'이 되는 것은 막는다: 채널 셋이 모두 0xE0 이상이고 서로 24 이내.
+    const hex = CLOCK_DEFAULTS.timer;
+    expect(hex, '타이머 색은 #rrggbb 리터럴이어야 한다').toMatch(/^#[0-9A-Fa-f]{6}$/);
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    for (const [n, c] of [['R', r], ['G', g], ['B', b]] as const) {
+      expect(c, `${n} 채널이 너무 어둡다(${hex})`).toBeGreaterThanOrEqual(0xE0);
+    }
+    expect(Math.max(r, g, b) - Math.min(r, g, b), `채널 편차가 커서 색이 돈다(${hex})`).toBeLessThanOrEqual(24);
   });
 
   it('5. custom accent 는 --clk-accent 와 프레임 역할만 바꾼다', () => {
@@ -187,7 +212,7 @@ describe('색 역할 분리 — 강조색이 덮을 수 있는 것과 없는 것
       expect(v['--clk-prize'], p.label).toBe(CLOCK_DEFAULTS.prize);
       expect(v['--clk-timer-urgent'], p.label).toBe(CLOCK_DEFAULTS.timerUrgent);
       expect(v['--clk-timer-break'], p.label).toBe(CLOCK_DEFAULTS.timerBreak);
-      expect(v['--clk-ink'], p.label).toBe('#FFFFFF');    // 일반 핵심 숫자
+      expect(v['--clk-ink'], p.label).toBe(CLOCK_DEFAULTS.timer);    // 일반 핵심 숫자
     }
   });
 
@@ -223,7 +248,7 @@ describe('프리셋 전환 — 이전 강조색은 버리고 배경 사진은 �
     const v = clockThemeVars(next);
     expect(v['--clk-accent']).toBe('#E0A94E');             // 아우라 골드의 기본 샴페인 골드
     expect(v['--clk-accent']).not.toBe('#A78BFA');         // 보라가 따라오지 않는다
-    expect(v['--clk-timer']).toBe('#FFFFFF');              // 타이머는 어느 경로에서도 흰색
+    expect(v['--clk-timer']).toBe(CLOCK_DEFAULTS.timer);              // 타이머는 어느 경로에서도 흰색
   });
 
   it('배경 사진이 없던 매장은 전환 후에도 없다(없는 것을 만들지 않는다)', () => {

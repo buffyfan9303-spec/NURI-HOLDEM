@@ -277,6 +277,12 @@ export function presetFromPosterForm(f: PosterFormData): GamePresetData {
       events: f.events?.length ? f.events : undefined,
       posterUrl: f.posterUrl || undefined,
     }),
+    // 🔴 2026-09-17: 여기에 `clock` 네임스페이스가 통째로 없었다. presetFromSchedule(:102)은 담는데
+    //   이쪽만 빠져서, 포스터에 '16LV' 라고 적고 "프리셋으로도 저장"한 뒤 클락에서 그 프리셋을 불러오면
+    //   등록 마감이 기본 12 로 돌아갔다 — TV 의 '등록 마감' 표시와 블라인드 자동생성이 포스터와 어긋난다.
+    //   2026-09-13 에 고친 '포스터 16 vs 클락 12' 사고의 남은 경로다.
+    //   판정은 `regCloseLevelOf` **한 곳**을 그대로 쓴다(여기서 다시 파싱하면 또 갈린다).
+    clock: dropEmpty({ regCloseLevel: regCloseLevelOf({ regCloseTime: f.regCloseTime }) || undefined }),
   };
 }
 

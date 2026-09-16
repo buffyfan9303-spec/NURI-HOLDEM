@@ -120,7 +120,9 @@ describe('배선 — 클락 보드가 그 한 곳을 실제로 부른다(2026-09
       // 2026-09-13 병합(03cd8bb): ClockDisplay 의 regLevel 게이트(1)가 ClockStage 로 옮겨 갔고, TournamentClock 의 표시 1건도 보드로 갔다(9→8).
       'components/features/clock/ClockStage.tsx': 1,       // regLevel > 0 게이트(레일·미니 보드 공통)
       'components/features/clock/TournamentClock.tsx': 8,  // 설정 폼 · 자동 생성(표시는 ClockStage 로 이동)
-      'lib/gameInherit.ts': 7,                             // 포스터 ↔ 클락 상속 매핑
+      // 2026-09-17: 7→8. presetFromPosterForm 이 clock.regCloseLevel 을 잃던 것을 고치며 regCloseLevelOf 호출이 하나 늘었다.
+      //   계산을 다시 구현한 것이 아니라 **같은 판정기(regStatus.ts)를 한 번 더 부른 것**이라 아래 'lib/regStatus.ts': 1 은 그대로다.
+      'lib/gameInherit.ts': 8,                             // 포스터 ↔ 클락 상속 매핑
       'lib/regStatus.ts': 1,                               // ← 계산은 여기 하나뿐이다
     };
     const TOKEN = /\bregCloseLevel\b/g;

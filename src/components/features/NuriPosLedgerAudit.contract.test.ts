@@ -26,7 +26,16 @@ const code = SRC.replace(/(^|[\s{(])\/\*[\s\S]*?\*\//g, '$1').replace(/^\s*\/\/.
 describe('F2 · 장부 시작 폼의 새 클락은 emptyClockState 단일 소스로 만든다', () => {
   it('🔴 emptyClockState 를 import 하고 SessionForm 의 새 클락이 그것을 펼친다', () => {
     expect(code).toMatch(/import \{[^}]*\bemptyClockState\b[^}]*\} from '\.\.\/\.\.\/api\/clock';/);
-    expect(code).toMatch(/const next: ClockState = clockState\s*\? \{ \.\.\.clockState, config: cfg \}\s*: \{ \.\.\.emptyClockState\(base\.venueId, cfg, base\.gameSeq\), title: base\.title \?\? '' \};/);
+    // 2026-09-17: 모양이 바뀌었다(아래 F2b 참고) — 지켜야 할 것은 **emptyClockState 를 펼친다**는 사실이다.
+    expect(code).toMatch(/\{ \.\.\.emptyClockState\(base\.venueId, cfg, base\.gameSeq\), title: base\.title \?\? '' \}/);
+  });
+
+  // 🔴 F2b (2026-09-17) — 새로 생긴 계약이다. 여기서 쓰던 clockState 는 폼 마운트 시 한 번 읽은 스냅샷이라
+  //   장부 판 keep-alive 동안 낡고, 조회 실패 시에는 아예 null 이었다. 그 값으로 전 행 upsert 를 하면
+  //   **진행 중인 대회가 0 으로 초기화된다.** 쓰기 직전 재조회 + 진행 흔적 검사를 계약으로 박아 둔다.
+  it('🔴 클락 설정 쓰기 전에 다시 읽고, 진행 중이면 덮지 않는다', () => {
+    expect(code, '쓰기 직전 재조회가 사라졌다').toMatch(/const fresh = await getClockState\(base\.venueId, base\.gameSeq\);/);
+    expect(code, '진행 흔적 검사가 사라졌다').toMatch(/fresh\.running \|\| clockHasProgress\(fresh\)/);
   });
 
   it('🔴 `remainingMs: 0` 인라인 리터럴이 파일에 없다 — 있으면 시작 전 클락이 PAUSED 가 된다', () => {

@@ -38,11 +38,18 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
 
   const shiftMonth = (delta: number) => { const [y, m] = month.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); const mk = ym(d); setMonth(mk); reload(mk); };
 
+  // ⚠ 연타 가드. `dealer_shifts` 에는 (매장·딜러·날짜·시작시각) 유니크가 없고 급여는 **행 단위 합산**이라
+  //   더블클릭 한 번이 그 시프트 급여(예: 8h × 15,000 = 12만)만큼 인건비를 부풀린다. 삭제는 한 줄씩이라
+  //   눈치채기 전까지 계속 남는다. 서버 유니크는 마이그레이션이 필요하고, 화면 가드는 지금 닫을 수 있다.
+  const [adding, setAdding] = useState(false);
   const add = async () => {
+    if (adding) return;
     if (!name.trim() || !date) return toast.show('딜러 이름과 날짜를 입력하세요', 'error');
+    setAdding(true);
     try { await addDealerShift({ venueId, dealerName: name, shiftDate: date, startTime: start, endTime: end, hourlyWage: wage }); setName(''); setStart(''); setEnd(''); setWage(0); reload(month); }
     // ⚠ `e instanceof Error ? e.message` 를 쓰지 않는다 — PostgrestError 는 extends Error 라 'permission denied for table …' 원문이 그대로 토스트됐다(독립 검증 C).
     catch (e) { toast.show(msgOf(e, '추가 실패'), 'error'); }
+    finally { setAdding(false); }
   };
   const del = async (id: string) => { try { await removeDealerShift(id); reload(month); } catch (e) { toast.show(msgOf(e, '삭제 실패'), 'error'); } };
 
@@ -83,7 +90,7 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
             </div>
           </div>
-          <button type="button" onClick={add} className="btn-primary w-full text-sm">+ 시프트 추가</button>
+          <button type="button" onClick={add} disabled={adding} className="btn-primary w-full text-sm disabled:opacity-60">{adding ? '추가 중…' : '+ 시프트 추가'}</button>
         </div>
 
         {/* 급여 명세 */}

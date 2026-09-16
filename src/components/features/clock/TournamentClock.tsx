@@ -98,7 +98,15 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     setView('settings');
   }, [venueId, seedSessionDate, seedGameSeq]);
 
-  useEffect(() => subscribeClock(venueId, reloadState), [venueId, reloadState]);
+  // 구독은 **이 판이 보일 때만** 연다. 탭 keep-alive 라 홈으로 가도 컴포넌트가 살아 있어서
+  //   예전엔 안 보이는 판이 계속 realtime 을 붙들었다(무료 한도: 동시연결 200·월 200만 메시지).
+  //   다시 보일 때 1회 재조회해 구독이 없던 동안의 변화를 따라잡는다 — 같은 파일 광고 폴링(:357)·
+  //   장부·대시보드가 이미 쓰는 `if (!active) return` 관례와 맞췄다.
+  useEffect(() => {
+    if (!active) return;
+    reloadState();
+    return subscribeClock(venueId, reloadState);
+  }, [venueId, reloadState, active]);
   useEffect(() => { if (state) curGameSeqRef.current = state.gameSeq; }, [state]);
 
   const seededInitial = useMemo<ClockConfig>(() => {
@@ -267,9 +275,10 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
       getVenueClocks(venueId).then(setClocks).catch(() => {});
       getLedgerGames(venueId, sessionDate || undefined).then((gs) => setGames(gs.map((g) => ({ gameSeq: g.gameSeq, title: g.title })))).catch(() => setGames([]));
     };
+    if (!active) return;   // 안 보이는 동안은 전 매장 clock_states 구독을 붙들지 않는다(위와 같은 이유)
     load();
     return subscribeRunningClocks(load);
-  }, [venueId, sessionDate]);
+  }, [venueId, sessionDate, active]);
   useEffect(() => { if (!active) return; const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, [active]);
   // 게임 슬롯 = 클락 존재 게임 ∪ 그날 장부 게임
   const seqs = [...new Set([...clocks.map((c) => c.gameSeq), ...games.map((g) => g.gameSeq)])].sort((a, b) => a - b);
@@ -454,10 +463,16 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
   }), [buyins, linkedSession, cfg.earlyDoubleMin, cfg.earlySingleMin]);
   const liveStats = useMemo(() => computeLiveStats(state, derived, cfg), [state, derived, cfg]);
 
+  // ⚠ 낙관적 반영에는 **롤백이 있어야 한다**(2026-09-17). 예전엔 실패해도 로컬 state 가 next 로 남아,
+  //   예컨대 [일시정지] 저장이 실패하면 PC 만 '정지'로 보이고 서버·TV·장부는 계속 진행했다.
+  //   그 상태에서 아무 버튼이나 누르면 `{...state, ...patch}` 전 행 upsert 라 **서버의 진행 레벨이
+  //   PC 의 옛 레벨·정지 상태로 되돌아갔다.** 리모컨(ClockRemote:86)은 이미 되돌리는데 PC 만 빠져 있었다.
   const persist = useCallback((patch: Partial<ClockState>) => {
+    const prev = state;
     const next = { ...state, ...patch };
     onChange(next);
-    if (canManage) saveClockState({ ...next, liveStats: { ...computeLiveStats(next, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null } }).catch((e) => toast.show(e instanceof Error ? e.message : '저장 실패', 'error'));
+    if (canManage) saveClockState({ ...next, liveStats: { ...computeLiveStats(next, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null } })
+      .catch((e) => { onChange(prev); toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); });
   }, [state, canManage, onChange, toast, derived, cfg, linkedSession]);
 
   // 장부 변동(엔트리/리바인/얼리/바인단가) 시 라이브 통계 스냅샷 최신화 → 보드 반영.

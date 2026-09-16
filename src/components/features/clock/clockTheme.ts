@@ -89,16 +89,34 @@ export const BLACK_MARBLE_GOLD_BG = [
  *  ⚠ 색은 **마지막 레이어에만** 둔다(background 단축 속성 규칙 — clockThemeVars 가 사진 아래에 이 값을 잇는다.
  *    clockTheme.test.ts 가 'color 는 마지막 레이어'를 단언한다).
  */
+// 2026-09-17 「누리 오로라」 — 오너가 후보 4종 실렌더를 보고 고른 안.
+//   바뀐 것은 셋뿐이고 형태(교차 헤어라인 + 바이올렛/틸 대각 오로라)는 그대로다:
+//   ① 바탕 #05060D → #090B18. 종전은 사실상 순흑이라 오로라가 좌상 모서리에만 남고 화면 80%가
+//      검정이었다 — 색을 깔아 놓고 안 보이던 상태다. 살짝 들면 오로라가 '면'으로 읽힌다.
+//      순흑을 피하는 것은 다크 디스플레이 실무 관례이기도 하다(고도 표현 여지·눈 피로, Material).
+//   ② 비네트 한 겹 추가 — 방송 스코어버그가 중앙 위계를 지키는 고전적 수단이다.
+//   ③ 116° 시닌 알파 .035 → .03. 순흑 위에서 백색 .035 가 화면 중앙 우측에 **얼룩처럼** 보였다.
+//   그리고 메시 3점째(인디고)를 넣어 두 오로라 사이가 끊기지 않게 했다.
 export const NURI_SIGNATURE_BG = [
-  'radial-gradient(52% 46% at 50% 50%, rgba(0,0,0,.52) 0%, rgba(0,0,0,.26) 54%, transparent 78%)',
-  'linear-gradient(90deg, transparent 0%, rgba(181,166,255,.44) 16%, rgba(45,212,191,.40) 84%, transparent 100%) 50% 8% / 100% 1px no-repeat',
-  'linear-gradient(90deg, transparent 0%, rgba(45,212,191,.36) 16%, rgba(181,166,255,.40) 84%, transparent 100%) 50% 92% / 100% 1px no-repeat',
-  'radial-gradient(58vmax 40vmax at 6% -8%, rgba(139,92,246,.26) 0%, transparent 62%)',
-  'radial-gradient(52vmax 36vmax at 102% 106%, rgba(20,184,166,.15) 0%, transparent 62%)',
-  'linear-gradient(116deg, transparent 34%, rgba(255,255,255,.035) 50%, transparent 66%)',
-  'radial-gradient(130% 42% at 50% 110%, rgba(76,50,140,.30) 0%, transparent 62%)',
-  '#05060D',
+  'radial-gradient(52% 46% at 50% 50%, rgba(0,0,0,.50) 0%, rgba(0,0,0,.24) 54%, transparent 78%)',
+  'radial-gradient(140% 100% at 50% 50%, transparent 55%, rgba(0,0,0,.34) 100%)',
+  'linear-gradient(90deg, transparent 0%, rgba(181,166,255,.48) 16%, rgba(94,234,212,.44) 84%, transparent 100%) 50% 8% / 100% 1px no-repeat',
+  'linear-gradient(90deg, transparent 0%, rgba(94,234,212,.40) 16%, rgba(181,166,255,.44) 84%, transparent 100%) 50% 92% / 100% 1px no-repeat',
+  'radial-gradient(64vmax 44vmax at 4% -10%, rgba(139,92,246,.28) 0%, transparent 60%)',
+  'radial-gradient(40vmax 30vmax at 30% 112%, rgba(99,68,206,.14) 0%, transparent 60%)',
+  'radial-gradient(56vmax 40vmax at 104% 108%, rgba(20,184,166,.20) 0%, transparent 60%)',
+  'linear-gradient(116deg, transparent 34%, rgba(255,255,255,.03) 50%, transparent 66%)',
+  '#090B18',
 ].join(', ');
+
+/** 메인 타이머 색 — **모든 프리셋이 공유하는 하나의 값**이다(accent 로 새면 안 된다).
+ *
+ *  2026-09-17 오너 결정: 순백 #FFFFFF → **off-white #F4F6FA**.
+ *    왜: #FFF 은 거의 검은 바탕 위에서 21:1 이라 난시(인구의 약 1/3)에게 글자 가장자리가 번진다(할레이션).
+ *    281px 짜리 타이머는 이 현상이 가장 크게 나타나는 자리다. #F4F6FA 는 대비 18.5:1 로 여전히 넉넉하다.
+ *  ⚠ 2026-09-11 에 '순백 잠금'으로 정했던 것을 오너가 명시적으로 푼 것이다. 잠금의 **본래 목적**
+ *    (타이머가 매장이 고른 accent 색으로 새지 않는다)은 그대로다 — 값만 바뀌고 계약은 유지된다. */
+export const CLOCK_TIMER_INK = '#F4F6FA';
 
 /** 기본 룩 — 변수 기본값의 단일 출처. 2026-09-02 딥 인디고 → 아우라 골드 → **아우라(인디고)**(오너 승인).
  *  ⚠ 기존 매장 테마(DB 저장값)는 프리셋 id 로 대조되므로 그대로 유효 — 바뀌는 것은 '테마 없음' 매장의 기본 룩뿐이다. */
@@ -111,13 +129,18 @@ export const CLOCK_DEFAULTS = {
   //   ⚠ **스와치(CLOCK_ACCENT_SWATCHES)에 없는 값이어야 한다.** 스와치 값을 프리셋 기본으로 쓰면
   //     '매장이 직접 고른 색'과 '프리셋 기본색'을 구분할 수 없어진다 — clockTheme.test.ts:198 이 그것을 지킨다.
   //     처음에 #A78BFA(바이올렛 스와치)를 썼다가 그 계약에 걸려 바꿨다.
-  timer: '#FFFFFF',        // 타이머는 순백 — accent 를 고른 매장은 타이머도 그 색(구 동작 유지)
+  timer: CLOCK_TIMER_INK,  // 타이머 색은 프리셋이 못 덮는다 — 위 CLOCK_TIMER_INK 주석 참고
   prize: '#F5C451',        // 골드는 프라이즈 금액에만(잠금 — 테마가 못 덮는다). #06080F 위 12.6:1
   timerUrgent: '#fb7185',  // rose-400 — 잠금(1분 미만 긴급)
   timerBreak: '#7dd3fc',   // sky-300 — 잠금(브레이크)
-  // 보조 라벨 2단 — 기본값은 현행 text-white/45 · text-white/50 과 1:1(배경 이미지 없으면 픽셀 변화 0).
-  inkDim: 'rgba(255,255,255,0.45)',
-  inkSoft: 'rgba(255,255,255,0.5)',
+  // 보조 라벨 2단.
+  // 2026-09-17: .45/.50 → **.55/.62** (오너 승인). 종전 값은 바탕 위 4.47:1 로 AA(4.5) 를 **아슬하게 밑돌았고**,
+  //   오로라 후광 피크 위에서는 3.43:1 로 분명히 미달이었다(라벨은 14~16px 이라 큰 글자 예외 3:1 이 아니다).
+  //   .55 면 바탕 위 ≈6.3, 피크 위 ≈4.5 로 어느 자리에서도 AA 를 넘는다.
+  //   ⚠ dim < soft 순서를 지킨다 — dim 만 올리면 '흐린 쪽'이 '부드러운 쪽'보다 밝아져 이름이 거짓말이 된다.
+  //     soft .62 는 배경 이미지용 CLOCK_BG_INK.dim 과 같은 값이라 두 경로의 밝기 어휘가 하나로 모인다.
+  inkDim: 'rgba(255,255,255,0.55)',
+  inkSoft: 'rgba(255,255,255,0.62)',
 } as const;
 
 // ── 배경 이미지(TV 송출) — 가독 보호 계약 ────────────────────────────────────
@@ -179,10 +202,10 @@ export interface ClockThemePreset {
 // 새 프리셋은 여기 한 줄이면 관리자 패널 미리보기·저장·TV 송출에 전부 붙는다(id 는 DB 왕복 키 — 바꾸지 않는다).
 export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
   // 기본 = NURI 시그니처. 목록 맨 앞에 둔다(관리자 패널이 이 순서로 스와치를 그린다).
-  { id: 'nuri-signature', label: 'NURI 시그니처(기본)', kind: 'gradient', bg: NURI_SIGNATURE_BG, accent: '#B5A6FF', timer: '#FFFFFF' },
+  { id: 'nuri-signature', label: 'NURI 시그니처(기본)', kind: 'gradient', bg: NURI_SIGNATURE_BG, accent: '#B5A6FF', timer: CLOCK_TIMER_INK },
   // 구 기본. **id 를 지우지 않는다** — 이걸 저장해 둔 매장의 DB 값이 그대로 살아 있어야 한다.
-  { id: 'aura', label: '아우라(인디고)', kind: 'gradient', bg: AURA_BG, accent: '#818CF8', timer: '#FFFFFF' },
-  { id: 'aura-gold', label: '아우라 골드', kind: 'gradient', bg: AURA_GOLD_BG, accent: '#E0A94E', timer: '#FFFFFF' },
+  { id: 'aura', label: '아우라(인디고)', kind: 'gradient', bg: AURA_BG, accent: '#818CF8', timer: CLOCK_TIMER_INK },
+  { id: 'aura-gold', label: '아우라 골드', kind: 'gradient', bg: AURA_GOLD_BG, accent: '#E0A94E', timer: CLOCK_TIMER_INK },
   { id: 'deep-indigo', label: '딥 인디고', kind: 'solid', bg: '#06080B', accent: '#5E6AD2' },
   {
     id: 'midnight-felt', label: '미드나잇 펠트', kind: 'felt',
@@ -207,7 +230,7 @@ export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
     accent: '#FCD535',
   },
   // 검정 대리석 + 절제된 금 결. 타이머는 순백, 레벨·블라인드는 샴페인 골드(스와치 검증색 — #080706 위 약 9.5:1).
-  { id: 'black-marble-gold', label: '블랙 마블 골드', kind: 'gradient', bg: BLACK_MARBLE_GOLD_BG, accent: '#E0A94E', timer: '#FFFFFF' },
+  { id: 'black-marble-gold', label: '블랙 마블 골드', kind: 'gradient', bg: BLACK_MARBLE_GOLD_BG, accent: '#E0A94E', timer: CLOCK_TIMER_INK },
 ];
 
 export const DEFAULT_CLOCK_PRESET_ID = 'nuri-signature';

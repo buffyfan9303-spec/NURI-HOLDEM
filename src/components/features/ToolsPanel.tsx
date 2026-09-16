@@ -23,6 +23,7 @@ import { MdfCalc, AggroChart, RangeMatrix } from './tools/AdvancedCalcs';
 import PostflopTrainer from './tools/PostflopTrainer';
 import BlindBuilder from './tools/BlindBuilder';
 import GlossaryPanel from './tools/GlossaryPanel';
+import HandRankPanel from './tools/HandRankPanel';
 import DealCalc from './tools/DealCalc';
 import DailyDrill from './tools/DailyDrill';
 import WrongNote, { type PushJump, type RangeJump } from './tools/WrongNote';
@@ -55,7 +56,7 @@ function spotInitFromSnapshots(): { spot?: Partial<SpotReview> } | undefined {
   return { spot: { hero, villain, board } };
 }
 
-type ToolKey = 'spot' | 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'wrongnote' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal' | 'tda';
+type ToolKey = 'spot' | 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'wrongnote' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'handrank' | 'deal' | 'tda';
 /** 실사용 흐름 4갈래 IA (2026-09-11 오너 지시 5갈래 → 2026-09-14 4갈래).
  *  종전 4레인(차트/트레이닝/분석/계산기)은 '도구의 종류'로 나눈 것이라, 하나의 목적(예: 한 판 복기)을
  *  이루려면 레인 세 개를 오가야 했다. 이제 **무엇을 하러 왔는가**로 가른다:
@@ -87,6 +88,8 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   { key: 'wrongnote', cat: 'train', name: '오답 노트', desc: '틀린 핸드 모아 다시 풀기', keywords: '오답 목록 · 차트에서 보기 · 다시 풀기', icon: 'book-x' },
   { key: 'aggro', cat: 'explore', name: '어그레션 차트', desc: '포지션별 공격 권장 빈도', keywords: '포지션별 권장 빈도', icon: 'swords' },
   { key: 'glossary', cat: 'rules', name: '홀덤 용어사전', desc: '74개 용어 검색과 뜻풀이', keywords: '용어 74개 · 한글 설명·검색', icon: 'book-a' },
+  // 홀덤 족보(오너 지시 2026-09-17 "용어 있는 쪽에 탭 하나 더"). 아이콘 crown = 로열 플러시. 데이터는 tools/handRank.data.ts.
+  { key: 'handrank', cat: 'rules', name: '홀덤 족보', desc: '10가지 족보 순서와 예시', keywords: '핸드 랭킹 족보 순위 로열 스트레이트 플러시 포카드 풀하우스 트리플 투페어 원페어 하이카드 키커 휠 스플릿', icon: 'crown' },
   // ── 분석 — 핸드·레인지 에퀴티 ──
   // NURI SPOT — 카드·포지션·스택·액션을 **하나의 구조화된 스팟**으로 받아 분석·저장·토론까지 잇는다.
   //   ⚠ 새 레인을 만들지 않고 'review'(핸드 리뷰)에 넣는다 — 레인이 늘면
@@ -125,7 +128,7 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
 // + 트레이너 59.4 + 핸드 리뷰 62.2 + gap 25.5 = 316.6 ≤ 326 → 한 줄. 라벨은 하나도 줄이지 않았다(px-2.5→px-2 로 4.25px×5 확보).
 // '규칙 · 대회': TDA 규칙·용어사전 + ICM·딜·M존. '토너먼트'(문자폭 63.6)를 쓰면 336 으로 넘친다 — 앱 전반이 '대회'(대회 일정·대회 후기)를 쓴다.
 const LANES: { id: ToolCat; label: string; desc: string; icon: IconName }[] = [
-  { id: 'rules',   label: '규칙 · 대회', desc: 'TDA 규칙 · 용어사전 · ICM · 딜 · M존', icon: 'gavel' },
+  { id: 'rules',   label: '규칙 · 대회', desc: 'TDA 규칙 · 용어사전 · 족보 · ICM · 딜 · M존', icon: 'gavel' },
   { id: 'explore', label: '전략 탐색', desc: '스팟을 정하고 레인지·빈도를 본다', icon: 'table' },
   { id: 'train',   label: '트레이너',   desc: '풀고 · 틀리고 · 오답 노트로 복습', icon: 'graduation-cap' },
   { id: 'review',  label: '핸드 리뷰',  desc: '지난 판 되짚기 — 에퀴티·아웃츠·팟오즈·SPR·MDF·EV', icon: 'microscope' },
@@ -200,6 +203,7 @@ function renderTool(k: ToolKey): ReactNode {
     case 'sim': return <StructureSim />;
     case 'blindgen': return <BlindBuilder />;
     case 'glossary': return <GlossaryPanel />;
+    case 'handrank': return <HandRankPanel />;
     case 'deal': return <DealCalc />;
     default: return null;
   }

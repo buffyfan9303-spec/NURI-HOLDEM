@@ -195,6 +195,27 @@ describe('PL3 변환기 · 클락 프리셋·회차 스냅샷 → 프리셋', ()
   });
 });
 
+/** 🔴 두 입구가 **같은 대회**를 프리셋으로 만들면 클락에 닿는 값도 같아야 한다.
+ *
+ *  왜 이 테스트가 필요한가: 프리셋을 만드는 경로가 둘이다 — 포스터 **폼**에서 만드는 것(등록·수정 화면)과
+ *  이미 저장된 **포스터 행**에서 만드는 것. 2026-09-17 까지 앞의 것만 `clock.regCloseLevel` 을 안 담아,
+ *  같은 대회인데 어느 입구로 프리셋을 만들었느냐에 따라 TV 의 '등록 마감'과 블라인드 자동생성이 달라졌다.
+ *  값 하나를 단언하는 것으로는 이 부류를 못 막는다 — **두 입구의 결과를 맞대야** 다음에 필드가 늘어도 잡힌다. */
+describe('프리셋 두 입구 동치 · 포스터 폼 ≡ 저장된 포스터 (클락에 닿는 값)', () => {
+  it('같은 대회면 applyToClock 결과의 regCloseLevel 이 같다', () => {
+    const fromForm = presetFromPosterForm({
+      title: '데일리 6만', date: '2026-08-26', startTime: '19:00', regCloseTime: '9LV', duration: '', blinds: '',
+      prizeType: 'GTD', prizeAmount: 110, prizePercent: 0, buyIn: 60_000, gameType: '', addonStack: 0, addonCost: 0,
+      startStack: 0, rebuyStack: 0, region: '서울', isCompetition: false, grade: null,
+      paymentMethods: ['현금'], partners: [], prizes: [],
+      rankingPrizes: [], events: [], blindLevels: [],
+    });
+    const fromRow = presetFromSchedule(sched({ regCloseTime: '9LV' } as unknown as Record<string, unknown>));
+    expect(applyToClock(fromForm).regCloseLevel).toBe(applyToClock(fromRow).regCloseLevel);
+    expect(applyToClock(fromForm).regCloseLevel, '어느 입구든 포스터에 적힌 9LV 여야 한다').toBe(9);
+  });
+});
+
 describe('presetFromSchedule / presetFromPosterForm · 왕복 단위 무손실(1/10,000 회귀)', () => {
   it('presetFromSchedule: 포스터 네임스페이스 + 정규형 병기', () => {
     const d = presetFromSchedule(sched({ startTime: '19:00', region: '서울', paymentMethods: ['현금'] } as unknown as Record<string, unknown>));
@@ -212,6 +233,9 @@ describe('presetFromSchedule / presetFromPosterForm · 왕복 단위 무손실(1
     });
     expect(d.prizeAmountWon).toBe(1_100_000);
     expect(d.buyInWon).toBe(60_000);
+    // 🔴 2026-09-17: 여기 `clock` 네임스페이스가 통째로 빠져 있었다 — 포스터에 '9LV' 라고 적고
+    //   "프리셋으로도 저장"한 뒤 클락에서 불러오면 등록 마감이 기본값으로 돌아갔다.
+    expect(d.clock?.regCloseLevel, '포스터 폼 프리셋이 등록 마감 레벨을 잃었다').toBe(9);
     expect(d.rankingPrizes).toEqual([{ rank: '1', amount: 50, unit: '만원', amountWon: 500_000 }]);
     // 왕복: 포스터 폼 → 프리셋 → 포스터 폼에서 단위가 보존된다
     const back = applyToPoster(d);

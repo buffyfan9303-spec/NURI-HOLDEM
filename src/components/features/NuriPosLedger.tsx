@@ -34,7 +34,7 @@ import { getSchedules, type Schedule } from '../../api/schedules';
 import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
-import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
+import { getClockState, clockHasProgress, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
@@ -2377,10 +2377,28 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       earlyDMin = cfg.earlyDoubleMin; earlySMin = cfg.earlySingleMin;
       // F2(2026-09-13): 새 클락은 단일 소스 emptyClockState 로 — 인라인 리터럴 `remainingMs: 0` 은 clockPhase 가
       //   'paused' 로 읽어 시작도 안 한 대회가 TV 에 PAUSED 로 뜨고, '계속하기' 를 누르면 endsAt=now 로 1레벨이 통째로 건너뛰었다.
-      const next: ClockState = clockState
-        ? { ...clockState, config: cfg }
-        : { ...emptyClockState(base.venueId, cfg, base.gameSeq), title: base.title ?? '' };
-      saveClockState(next).catch(() => {});
+      // 🔴 2026-09-17: 여기서 쓰던 `clockState` 는 이 폼이 **마운트될 때 한 번** 읽은 스냅샷이다(:2185, 구독 없음).
+      //   장부 판은 keep-alive 라 세팅 폼이 열린 채 남는데, 그 사이 업주가 클락 판에서 게임을 시작하면
+      //   이 스냅샷은 '정지·레벨 0' 인 채로 낡는다. 낡은 값으로 **전 행 upsert** 를 하면 진행 중인 대회가
+      //   0 으로 초기화되고 TV·리모컨까지 realtime 으로 같이 튄다. 게다가 :2185 의 catch 가 조회 실패를
+      //   삼켜 `clockState === null` 로 만들기 때문에 **네트워크가 한 번 흔들린 것만으로도** 같은 사고가 난다.
+      //   `clock.ts:381` 이 경고하는 "조회 실패가 '클락 없음'이 되면 진행 중 대회가 0으로 덮인다" 가 바로 이 자리다.
+      //   → 쓰기 직전에 다시 읽고, 진행 흔적이 있으면 **덮지 않는다**(TournamentClock.startClock 과 같은 조리법).
+      //     그리고 실패를 더 이상 삼키지 않는다 — 설정이 안 넘어간 것을 업주가 알아야 한다.
+      void (async () => {
+        try {
+          const fresh = await getClockState(base.venueId, base.gameSeq);
+          if (fresh && (fresh.running || clockHasProgress(fresh))) {
+            formToast.show('진행 중인 클락이 있어 클락 설정은 덮어쓰지 않았습니다', 'error');
+            return;
+          }
+          await saveClockState(fresh
+            ? { ...fresh, config: cfg }
+            : { ...emptyClockState(base.venueId, cfg, base.gameSeq), title: base.title ?? '' });
+        } catch (e) {
+          formToast.show(e instanceof Error ? e.message : '클락 설정 저장에 실패했습니다', 'error');
+        }
+      })();
     }
     onSubmit({
       ...base, title: title.trim() || undefined,
