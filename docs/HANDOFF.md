@@ -100,12 +100,25 @@ npx tsc -b --force                # rc=0 이어야 한다
   실측: GET 200 · 서명없음 401 · 틀린서명 401 · **올바른 서명 200 + 기록 1행** · 같은 id 재전송 시 **행 1개 유지**(멱등).
 
 ### 🔴 오너 조치가 필요한 것
-1. **본인인증이 라이브에서 막혀 있다.** PortOne 서버가 prepare 단계에서 우리 상점·채널을 거절한다
-   (데스크톱에서도 256ms 만에 `PORTONE_ERROR`). 우리 코드·모바일·CSP·환경변수는 **전부 반증됐다.**
-   채널은 콘솔상 `인증 / NHN KCP / kcp_v2 / PO05S` 로 맞게 돼 있다 → 남은 후보는
-   **연동 모드(테스트/실연동)** · `PO05S` 가 **본인인증 전용 사이트코드인지** · KCP 본인인증 **사전계약**.
-   2026-06-13 에는 인증 성공 이력이 있다(그 뒤 채널 상태가 바뀐 것으로 보인다).
+1. 🔴 **본인인증은 "고장"이 아니라 "미개통"이다** — 2026-09-16 PortOne REST API 로 확정했다.
+
+   | 확인한 것 | 결과 |
+   |---|---|
+   | storeId·channelKey 유효성 | ✅ **유효.** 일부러 틀린 값을 넣으면 `storeId is not correct` / `channelKey is not correct` 로 **다르게** 응답한다 |
+   | 채널 조회 | ✅ **성공.** `identityVerificationTxId` 까지 발급된다 |
+   | 실패 지점 | ❌ `failureType: **FAILURE_TYPE_PREPARE_TGS_FAILED**` — TGS(PortOne↔PG 게이트웨이) 구간 |
+   | 본인인증 이력 전수 | **전부 FAILED · VERIFIED 0건.** 첫 시도가 2026-09-15 13:43 |
+   | 결제 이력 | **0건**(`totalCount: 0`) — 이 상점은 어떤 거래도 성공한 적이 없다 |
+
+   ⚠ **예전에 여기 "2026-06-13 에 인증 성공 이력이 있다" 고 적혀 있었는데 반증됐다.**
+   2026-06-10 배포 번들에 storeId·channelKey 가 **아예 없었고**(기능이 꺼져 있었다),
+   같은 시기 커밋이 *"운영자 계정 활동점수5만·**본인인증 처리(DB)**"* 다 — DB 의 그 1건은 **손으로 넣은 값**이다.
+
+   👉 **오너 조치**: KCP 쪽 **본인인증 개통**을 끝내야 한다(사이트코드 `PO05S` 가 본인인증용인지 · 사전계약 · 연동 모드).
+   PortOne 지원에 문의할 때 쓸 증거: `failureType=FAILURE_TYPE_PREPARE_TGS_FAILED` ·
+   실패 건 예시 `idv-diag-status-1789563506977` · 상점 `store-4fb62e44-…` · 채널 `channel-key-60601348-…`.
    ⚠ 그동안 **이벤트 참여·대회 예약은 계속 막힌다**(글쓰기·장터는 오너 지시로 게이트를 뗐다).
+   ⚠ 진단 과정에서 PortOne 에 실패 건 몇 개가 남았다(`idv-diag-*`). 개인정보는 없다.
 2. **비밀 3개 로테이션 권고** — `PORTONE_API_SECRET` · `PORTONE_WEBHOOK_SECRET` · `VERCEL_TOKEN`.
    셋 다 채팅에 평문으로 오갔다. 지금은 `secret_settings`(RLS 전면잠금)에 있다.
 

@@ -6,6 +6,7 @@ import { verifyIdentity } from '../../api/identity';
 import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useToast } from '../atoms/Toast';
 import { useIdentityEnabled } from '../../lib/identityFlag';
+import { logClientError } from '../../lib/errorLog';
 
 const STORE_ID = import.meta.env.VITE_PORTONE_STORE_ID as string | undefined;
 const CHANNEL_KEY = import.meta.env.VITE_PORTONE_CHANNEL_KEY as string | undefined;
@@ -99,11 +100,22 @@ export default function IdentityVerificationButton({ onVerified, label = '휴대
       });
       if (!res) { setBusy(false); return; }
       // code가 있으면 실패/취소
-      if (res.code !== undefined) { toast.show(res.message || '본인인증이 취소되었습니다.', 'error'); setBusy(false); return; }
+      if (res.code !== undefined) {
+        // 🔴 code 를 버리지 않는다 — 사용자에게는 '취소'로 보여도 실제로는 PG 거절일 수 있다.
+        logClientError(`[idv] code=${res.code} ${res.message ?? ''}`.slice(0, 480), null);
+        toast.show(res.message || '본인인증이 취소되었습니다.', 'error'); setBusy(false); return;
+      }
       // 서버 교차검증(PortOne REST + CI 중복검사 + 저장)
       await settle(verifyIdentity(res.identityVerificationId));
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '본인인증에 실패했습니다.', 'error');
+      // 🔴 이 실패는 **조용히 삼켜지고 있었다.** 2026-09-16 실측: 운영에서 계속 실패하는데
+      //   client_errors 에 0건이었다 — catch 된 오류라 window.onerror 에도 안 닿고,
+      //   Sentry 는 DSN 이 없어 비활성이라 **아무도 모르는 채로 5명 중 4명이 막혀 있었다.**
+      //   PortOne 이 주는 code 는 원인 분류의 핵심이다(예: PORTONE_ERROR = PG 준비 단계 실패).
+      const code = (e as { code?: string } | null)?.code ?? 'thrown';
+      const msg = e instanceof Error ? e.message : '본인인증에 실패했습니다.';
+      logClientError(`[idv] code=${code} ${msg}`.slice(0, 480), e instanceof Error ? (e.stack ?? null) : null);
+      toast.show(msg, 'error');
       setBusy(false);
     }
   };
