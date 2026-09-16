@@ -51,24 +51,57 @@ Deno.serve(async (req: Request) => {
       : (typeof body.identity_id === 'string' ? body.identity_id : (typeof body.tx_id === 'string' ? body.tx_id : ''));
     if (!idv) return json({ error: 'identityVerificationId가 필요합니다.' }, 400);
 
-    // PortOne V2 REST 교차검증(Secret)
-    const pres = await fetch(`https://api.portone.io/identity-verifications/${encodeURIComponent(idv)}`, {
-      headers: { Authorization: `PortOne ${PORTONE}` },
-    });
+    // ── PortOne V2 REST 교차검증(Secret) ──────────────────────────────────────
+    // 🔴 2026-09-17 오너 보고: PASS 문자인증까지 **끝낸 뒤** "본인인증 조회 실패".
+    //   즉 PortOne 에 VERIFIED 기록은 있는데 **우리가 그걸 못 읽는** 상태다.
+    //   원인 후보가 셋인데 화면에서는 전부 같은 문구로 보였다:
+    //     ⓐ API Secret 이 무효(없음·V1 키·폐기)      ⓑ 다른 상점의 Secret      ⓒ 상점 지정이 필요한 계정 구조
+    //   그래서 **묻지 말고 판별한다.**
+    const lookup = (id: string, qs = '') =>
+      fetch(`https://api.portone.io/identity-verifications/${encodeURIComponent(id)}${qs}`, {
+        headers: { Authorization: `PortOne ${PORTONE}` },
+      });
+
+    let pres = await lookup(idv);
+
+    // ⓒ 재시도 — 상점을 명시하면 읽히는 계정이 있다. storeId 는 클라이언트 공개값이고
+    //   권한은 어디까지나 우리 Secret 이 쥐고 있으므로 신뢰 경계가 아니다(틀린 값이면 그냥 또 실패한다).
+    const storeId = typeof body.storeId === 'string' ? body.storeId : '';
+    let viaStore = false;
+    if (!pres.ok && storeId) {
+      const second = await lookup(idv, `?storeId=${encodeURIComponent(storeId)}`);
+      if (second.ok) { pres = second; viaStore = true; console.warn('[verify-identity] storeId 를 붙여야 읽힌다 — 연동 설정 확인 필요'); }
+    }
+
     if (!pres.ok) {
-      // 상류·DB·예외 **원문**은 서버 로그에만 — 응답에 실으면 로그인 유저 누구나 내부 문구를 탐색할 수 있다(보안 표준 6번).
+      // 원문은 서버 로그에만 — 응답에 실으면 로그인 유저 누구나 내부 문구를 탐색할 수 있다(보안 표준 6번).
       const raw = await pres.text();
-      console.error('[verify-identity] PortOne 조회 실패', pres.status, raw.slice(0, 500));
-      // ⚠ 2026-09-17 오너 보고: "인증완료하면 본인인증 조회 실패가 나와".
-      //   원인이 **우리 설정** 탓인지 **그 건의 상태** 탓인지 화면에서 구분할 길이 전혀 없었다 —
-      //   `error` 한 줄만 나가고 PortOne 이 준 이유는 통째로 버려졌다(api/identity.ts 는 j.error 만 읽는다).
-      //   그래서 **분류 코드만** 함께 내보낸다. PortOne 의 `type` 은 우리 연동 상태를 가리키는 값이지
-      //   사용자 개인정보가 아니다(예: UNAUTHORIZED · FORBIDDEN · IDENTITY_VERIFICATION_NOT_FOUND).
-      //   원문 메시지는 싣지 않는다 — 보안 표준이 막는 것은 '내부 문구 탐색'이고 그건 type 으로는 안 된다.
       let code = `HTTP_${pres.status}`;
       try { const j = JSON.parse(raw); if (typeof j?.type === 'string') code = j.type; } catch { /* JSON 이 아니면 상태코드로 */ }
-      return json({ error: `본인인증 조회 실패 (${code})`, code }, 502);
+
+      // ── 차분 프로브 ──────────────────────────────────────────────────────
+      // **일부러 없는 id** 로 같은 Secret 을 한 번 더 던진다. 대조군이 원인을 갈라 준다:
+      //   · NOT_FOUND 계열 → Secret 은 **유효**하다(서버가 우리를 인증하고 "그런 건 없다"고 답한 것)
+      //     ⇒ 원인은 ⓑ 상점 불일치 또는 그 건 자체
+      //   · UNAUTHORIZED/FORBIDDEN → Secret 이 **무효**다 ⇒ 원인은 ⓐ
+      // 한 번의 실패가 곧 진단이 되게 한다 — 오너에게 다시 시도해 달라고 부탁하는 왕복을 없앤다.
+      let probe = 'skipped';
+      try {
+        const pr = await lookup('identity-verification-nuri-probe-0000');
+        probe = `HTTP_${pr.status}`;
+        try { const pj = JSON.parse(await pr.text()); if (typeof pj?.type === 'string') probe = pj.type; } catch { /* noop */ }
+      } catch (pe) { probe = `probe_error:${String(pe).slice(0, 40)}`; }
+
+      const secretOk = /NOT_FOUND/i.test(probe);
+      console.error('[verify-identity] PortOne 조회 실패', { status: pres.status, code, probe, secretOk, viaStore, storeIdSent: !!storeId, raw: raw.slice(0, 500) });
+
+      // 사용자에게는 **무엇을 해야 하는지**가 다른 두 문장으로 갈라 준다(같은 '실패'가 아니다).
+      const hint = secretOk
+        ? '인증 기록을 찾지 못했습니다. 잠시 후 다시 시도해 주세요.'   // Secret 유효 → 그 건/상점 문제
+        : '본인인증 서버 설정에 문제가 있습니다. 운영자에게 문의해 주세요.'; // Secret 무효 → 우리가 고칠 것
+      return json({ error: `${hint} (${code}/${probe})`, code, probe, secretOk }, 502);
     }
+
     const iv = await pres.json();
     if (iv?.status !== 'VERIFIED') return json({ error: '본인인증이 완료되지 않았습니다.' }, 400);
     const vc = iv.verifiedCustomer ?? {};
