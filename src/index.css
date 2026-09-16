@@ -1821,6 +1821,32 @@ html[data-vt-scope='rank-tab'][data-vt-dir='back']::view-transition-new(rank-pan
 ::view-transition-new(notif-label),     ::view-transition-new(legal-label),
 ::view-transition-new(crm-label),        ::view-transition-new(profile-label) { animation: none; opacity: 1; }
 
+/* ── 알약(인디케이터) 모션 통일 — 2026-09-17 오너 지시 ────────────────────────────
+   "알약의 모션이나 이동을 모든 메뉴에서 통일시켜줘 … 지금은 뭔가 좀 어색한 느낌"
+
+   알약이 움직이는 길은 **둘**이다:
+     ① CSS FLIP — SlidingPill.tsx 가 `transform var(--dur-base) var(--ease-move)` 로 직접 민다
+     ② View Transition — VT 스코프 안에서는 SlidingPill 이 최종 위치로 즉시 점프하고
+        보간을 VT 에 **위임**한다(그 파일의 isViewTransitionActive 분기).
+
+   그런데 ②에 **아무 규칙도 없었다**(2026-09-17 실측: `*-pill` 이름 10개 전부 애니메이션 규칙 0건.
+   같은 자리의 `*-label` 은 10개 모두 정확히 3건씩이었다 — 라벨만 통일돼 있었다).
+   그래서 ②는 브라우저 기본값(0.25s · ease)으로 돌고 ①은 0.22s · ease-move 로 돌았다 —
+   **같은 알약인데 화면마다 시간도 곡선도 달랐다.** 이것이 '어색함'의 한 축이다.
+
+   여기서 ①의 값을 그대로 ②에 준다. 새 토큰을 만들지 않는다 — 기존 --dur-base·--ease-move 를 쓴다.
+   ⚠ `animation: none` 이 아니라 **duration/timing-function 만** 덮는다.
+      UA 의 group 키프레임(위치·크기 보간)은 그대로 둬야 알약이 실제로 미끄러진다.
+   ⚠ 이름이 새로 생기면 여기에도 등록해야 한다 — `src/components/atoms/pillMotionParity.contract.test.ts` 가 강제한다. */
+::view-transition-group(adminpos-pill),  ::view-transition-group(community-pill),
+::view-transition-group(crm-pill),       ::view-transition-group(group-pill),
+::view-transition-group(legal-pill),     ::view-transition-group(notif-pill),
+::view-transition-group(profile-pill),   ::view-transition-group(rank-pill),
+::view-transition-group(sched-pill),     ::view-transition-group(venue-pill) {
+  animation-duration: var(--dur-base);
+  animation-timing-function: var(--ease-move);
+}
+
 /* ── 하위 탭 전수 적용(오너 #10, 2026-08-30) ─────────────────────────────────────
    "하위탭들 이동시 기존에 정해놨던 부드러운 모션을 빠짐없이."
    위 venue-tab · rank-tab 과 **같은 레시피**다 — 새 이징·새 duration·새 키프레임 0.

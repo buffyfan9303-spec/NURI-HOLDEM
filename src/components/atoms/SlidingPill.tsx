@@ -202,11 +202,26 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
     const onWake = () => { if (document.visibilityState === 'visible') scheduleVerify(); };
     document.addEventListener('visibilitychange', onWake);
     window.addEventListener('pageshow', onWake);
+    //  ⓓ **앱 자신의 탭이 보이게 됐을 때** (2026-09-17, 라이브 재현으로 추가)
+    //     ⓑ 의 visibilitychange·pageshow 는 **브라우저 탭**이지 앱 안의 display 토글이 아니다.
+    //     그래서 keep-alive 판이 켜지는 순간에는 아무도 안 깨웠고, MO 도 DOM 이 그대로라 침묵했다.
+    //     남은 것은 타이머뿐인데 그것들은 **마운트 시점** 기준이라, 판이 숨은 채 마운트되면
+    //     150~5000ms 가 전부 숨은 동안 소진된다 → 그 뒤로는 영영 아무도 다시 재지 않는다.
+    //     실측(라이브 nuriholdem.com, 새로고침 후 커뮤니티 첫 진입):
+    //       바는 284px 로 보이는데 알약은 opacity 0 · width 0 이 **3초 뒤까지 유지**.
+    //       그동안 타깃은 내내 측정 가능했다(offsetParent=DIV · offsetWidth=42) —
+    //       즉 '못 재서' 가 아니라 '아무도 다시 재라고 하지 않아서' 였다.
+    //       서브탭을 한 번 누르면(activeKey 변경) 그제야 나타난다 = 사용자에겐 '활성 표시가 없다'.
+    //     IntersectionObserver 는 display 토글·content-visibility·스크롤 진입을 한 번에 받는다.
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) scheduleVerify();
+    });
+    io.observe(container);
     const lateTimers = [3000, 5000].map((ms) => window.setTimeout(verify, ms));
 
     return () => {
       alive = false;
-      ro.disconnect(); mo.disconnect();
+      ro.disconnect(); mo.disconnect(); io.disconnect();
       if (raf) cancelAnimationFrame(raf);
       document.removeEventListener('visibilitychange', onWake);
       window.removeEventListener('pageshow', onWake);
