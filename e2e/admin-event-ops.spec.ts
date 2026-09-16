@@ -195,7 +195,9 @@ test.describe('관리자 → 이벤트 관리', () => {
     for (const w of [1280, 768, 390]) {
       await page.setViewportSize({ width: w, height: 900 });
       await page.waitForTimeout(300);
-      const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      // 🔴 body 기준 — html{overflow-x:clip}(src/index.css:602) 때문에 documentElement 로 재면 **항상 0** 이다.
+      //   증명(2026-09-16 운영 1280): body 에 width:3000px 자식 → documentElement.scrollWidth 1274(=clientWidth) · body.scrollWidth 3000.
+      const over = await page.evaluate(() => document.body.scrollWidth - document.documentElement.clientWidth);
       expect(over, `${w}px 에서 페이지가 가로로 ${over}px 넘친다`).toBeLessThanOrEqual(1);
     }
   });

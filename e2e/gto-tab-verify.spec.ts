@@ -221,7 +221,8 @@ test.describe('GTO 탭 — 뷰포트 매트릭스', () => {
 
       // ① 가로 스크롤이 없다
       const over = await page.evaluate(() => ({
-        doc: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        // 🔴 body 기준 — html{overflow-x:clip} 때문에 documentElement 로 재면 항상 0 이다(2026-09-16 실측).
+        doc: document.body.scrollWidth - document.documentElement.clientWidth,
         body: document.body.scrollWidth - document.body.clientWidth,
       }));
       expect(over.doc, `문서가 ${over.doc}px 가로로 넘친다`).toBeLessThanOrEqual(1);

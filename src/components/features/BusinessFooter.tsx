@@ -13,7 +13,8 @@ export const BIZ_REQUIRED: [string, string][] = [
   ['상호', '엔에이치홀딩스'],
   ['사업자등록번호', '525-20-02937'],
   ['대표자', '김윤혜'],
-  ['사업장 주소', '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호'],
+  // ⚠ '201동 1403호' 의 공백은 **NBSP**다 — 일반 공백이면 360·390 에서 '1403호' 만 다음 줄에 혼자 떨어진다(2026-09-16 실측).
+  ['사업장 주소', '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호'],
   ['전화번호', '010-7508-7689'],
 ];
 const BIZ_EXTRA: [string, string][] = [
@@ -69,7 +70,9 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
           ))}
         </dl>
         <details className="group/biz t-desc text-ink-muted">
-          <summary className="inline-flex cursor-pointer list-none items-center gap-0.5 text-ink-muted underline decoration-border-default underline-offset-2">
+          {/* ⚠ 히트영역 — 실측 19.1px 로 이 저장소가 쓰는 WCAG 2.5.8 AA(24px) 에도 못 미쳤다(2026-09-16).
+              py-1.5 -my-1.5 로 **레이아웃은 그대로** 두고 세로 타깃만 31.9px 로 넓힌다(위 링크들과 같은 관용구). */}
+          <summary className="inline-flex cursor-pointer list-none items-center gap-0.5 py-1.5 -my-1.5 text-ink-muted underline decoration-border-default underline-offset-2">
             추가 정보<span aria-hidden className="transition-transform group-open/biz:rotate-180">▾</span>
           </summary>
           <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
@@ -86,9 +89,11 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
             위 dt 와 같은 이유로 투명도를 걷어내고 불투명 `text-ink-muted` 로 (재측정: 라이트 4.99:1·다크 5.28:1). */}
         <p className="t-desc text-ink-muted">
           NURI HOLDEM은 「국민체육진흥법」상 마인드 스포츠인 홀덤의 합법적 토너먼트 정보 제공 플랫폼이며, 어떠한 형태의 도박·환전·사행행위와도 무관합니다.
-          <br />만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 1336(24시간·무료)
+          {/* ⚠ 320 에서 '1336(24시간·무료)' 만 마지막 줄에 혼자 떨어졌다 — 법정 고지라 한 덩어리로 읽혀야 한다(2026-09-16 실측). */}
+          <br />만 19세 미만은 이용할 수 없습니다 · <span className="whitespace-nowrap">도박문제 상담 1336(24시간·무료)</span>
           {/* 약관 개정 사전 고지 — 비로그인 방문자에게도 보여야 '서비스 내 공지'가 성립한다. */}
-          <br />약관·개인정보처리방침 개정 안내: {LEGAL_NOTICE_DATE} 공지 · {LEGAL_EFFECTIVE_DATE} 시행 (시행 전까지는 {LEGAL_PREV_EFFECTIVE_DATE} 시행판 적용)
+          {/* ⚠ 날짜가 내부 공백에서 끊겨 '2026년 9월' / '29일' 로 갈라졌다(412 실측). 상수는 그대로 — textContent 불변이라 legalVersion 검사에 영향 없다. */}
+          <br />약관·개인정보처리방침 개정 안내: <span className="whitespace-nowrap">{LEGAL_NOTICE_DATE}</span> 공지 · <span className="whitespace-nowrap">{LEGAL_EFFECTIVE_DATE}</span> 시행 (시행 전까지는 <span className="whitespace-nowrap">{LEGAL_PREV_EFFECTIVE_DATE}</span> 시행판 적용)
           <br />© {`2026`} 엔에이치홀딩스. All rights reserved.
         </p>
       </div>

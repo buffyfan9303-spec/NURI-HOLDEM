@@ -81,7 +81,8 @@ test('🔴 커뮤니티 서브탭 — 히트 44px 는 지키고 시각 알약만
         .flatMap((b) => [getComputedStyle(b).boxShadow, getComputedStyle(b.querySelector('span')!).boxShadow])
         .filter((s) => s && s !== 'none'),
       auraInBar: bar2.querySelectorAll('[data-aura]').length,
-      docOverflowX: document.documentElement.scrollWidth > window.innerWidth,
+      // 🔴 body 기준 — html{overflow-x:clip} 때문에 documentElement 로 재면 항상 false 다(2026-09-16 실측).
+      docOverflowX: document.body.scrollWidth > document.documentElement.clientWidth,
     };
   });
 
@@ -115,7 +116,8 @@ test('🔴 커뮤니티 서브탭 — 320px 에서도 딜러가 잘리지 않고
     return {
       dealerInView: r ? r.left >= -0.5 && r.right <= window.innerWidth + 0.5 : null,
       vOverflow: bar2.scrollHeight - bar2.clientHeight,
-      docOverflowX: document.documentElement.scrollWidth > window.innerWidth,
+      // 🔴 body 기준 — html{overflow-x:clip} 때문에 documentElement 로 재면 항상 false 다(2026-09-16 실측).
+      docOverflowX: document.body.scrollWidth > document.documentElement.clientWidth,
     };
   });
   expect(m.dealerInView, "320px 에서 '딜러'가 화면 밖으로 잘렸다").toBe(true);

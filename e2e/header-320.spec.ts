@@ -67,8 +67,9 @@ test.describe('헤더 — 320px 현재 위치 (U01)', () => {
     await page.setViewportSize({ width: 320, height: 720 });
     await page.goto('/');
     await stabilizeBackstack(page);
+    // 🔴 body 기준 — html{overflow-x:clip}(src/index.css:602) 때문에 documentElement 로 재면 항상 0 이다(2026-09-16 실측).
     const over = await page.evaluate(() =>
-      document.documentElement.scrollWidth - window.innerWidth);
+      document.body.scrollWidth - document.documentElement.clientWidth);
     expect(over, '가로 스크롤이 생겼다 — 글자를 살리려고 폭을 넘겼다').toBeLessThanOrEqual(0);
   });
 });

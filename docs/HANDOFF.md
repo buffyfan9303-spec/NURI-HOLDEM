@@ -181,6 +181,17 @@ mock 모드에서는 앱이 **그 요청을 아예 안 보내서** 목킹할 대
 ⚠ 대안으로 **안쪽 요소 스캔**(`e2e/post-detail-read.spec.ts:112` 의 `clippedNodes()`)이 더 정확하다 —
    `body.scrollWidth` 도 풀블리드 레일(`-mx-page-x`)이 패딩 밖으로 나가면 +17 을 보고할 수 있다.
 
+### 오너가 나에게 위임한 결정 — 내가 이렇게 정했다 (2026-09-16)
+
+오너: *"결정 필요한거 다 너가 생각해서 좋은 부분으로 진행"*
+
+| 결정 | 내 판단 | 근거 |
+|---|---|---|
+| 터치 히트영역 **24px(AA) vs 44px** | **요소별 유지.** 일괄 44 로 바꾸지 않았다 | 저장소가 이미 자리마다 계약을 갖고 있다(`e2e/live-card-fit.spec.ts:138`=24 · `e2e/a11y-modal.spec.ts:113`=44). 단일 숫자 규칙은 2026-09-07 이 지운 "전부 N 으로 통일" 부류다. **24 미만인 것만** 고쳤다(푸터 `summary` 19.1px) |
+| `.btn`·`.input` **40.8px → 44px** 전역 | **안 올렸다** | `src/index.css:702` 가 *'터치 최소 40px 유지'* 를 오너 토큰 결정으로 기록. 40.8 > 24 AA 이고, 전역 3.2px 변경은 내 매장 PC 폼·클락 설정까지 흔든다 |
+| 필터 칩 가로 `min-w-[44px]` | **안 넣었다** | `src/index.css:909` 가 *'가로는 늘리지 않는다(칩 사이 gap 이라 겹친다)'* 를 결정으로 남겼다 |
+| `e2e/nuri-spot.spec.ts:250` 죽은 게이트 | **안 건드렸다** | **보호 파일.** 내가 판단할 권한이 아니다 — 오너 결정이 필요하다 |
+
 ### 미검증
 - E2E 미실행 · 클락 보정 버튼 실기기/TV 확인 안 함 · 장부 할인은 마감 세션이라 새 게임에서 확인 필요
 - 번들 첫 화면이 **188/259(여유 27%)** 로 기록된 257.8 보다 70KB 낮다 — **원인 미확인**. 여유가 생겼다고 단정하지 마라.
@@ -774,7 +785,7 @@ E2E 는 `vite preview` 로 **진짜 프로덕션 빌드**를 검사한다 — �
 | 무엇 | 상태 |
 |---|---|
 | 팀원 정의 **10개** (`.claude/agents/*.md`) | ✅ 추적됨 — `nuri-lead`·`home-team`·`community-team`·`store-team`·`gto-team`·`design-reviewer`·`critical-reviewer`·`root-cause-debugger`·`verifier`·`capability-steward` |
-| 스킬 **11개** (`.claude/skills/**`) | ✅ 추적됨 — **여기가 정본이다** |
+| 스킬 **12개** (`.claude/skills/**`) | ✅ 추적됨 — **여기가 정본이다** |
 | 팀·모델 정책 (`.claude/rules/nuri-team-capabilities.md`) | ✅ |
 | 보안 훅 (`.claude/hooks/nuri-guard.mjs`) | ✅ (`node:fs` 만 쓴다 — 외부 의존 없음) |
 | `.claude/settings.json` | ✅ — **`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: 1`** · `teammateMode: in-process` · 기본 에이전트 `nuri-lead` · 비밀 파일 Read/Write deny |
