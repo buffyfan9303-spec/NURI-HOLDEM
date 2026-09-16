@@ -196,6 +196,28 @@ export function emptyClockState(venueId: string, config = defaultClockConfig(), 
   };
 }
 
+/** 이 클락에 **진행 이력**이 있는가 — [시작]이 통째로 덮어쓰기(upsert) 전에 물어야 할 판정.
+ *
+ *  ⚠ 왜 `running` 만 보면 안 되는가: 딜러가 브레이크·정산·사고로 **일시정지**해 두면 `running === false` 다.
+ *    레벨 7 · 엔트리 30 · 탈락 12 인 대회도 멈춰 있으면 running 은 false 라,
+ *    [시작] 가드가 `existing?.running` 만 보던 동안 **경고 한 번 없이 0 으로 덮어썼다.**
+ *    되돌릴 수 없는 손실이라 판정을 여기 한 곳에 모은다(화면이 둘 이상이다).
+ *
+ *  판정 규칙: `emptyClockState` 가 만드는 '갓 만든 클락' 과 **한 곳이라도 다르면** 진행 이력으로 본다.
+ *    - remainingMs 는 첫 레벨 전체 분과 비교한다(레벨 0 에서 3분만 흘러도 잡힌다).
+ *    - config 가 비어 있으면 emptyClockState 와 같은 기본값 20분을 쓴다.
+ */
+export function clockHasProgress(s: ClockState | null | undefined): boolean {
+  if (!s) return false;
+  const fullMs = (s.config?.levels?.[0]?.minutes ?? 20) * 60_000;
+  return s.running
+    || s.endsAt !== null
+    || s.currentIndex > 0
+    || s.eliminations > 0
+    || s.adjEntries !== 0 || s.adjRebuys !== 0 || s.adjEarlies !== 0 || s.adjAddons !== 0
+    || s.remainingMs < fullMs;
+}
+
 // ── 레벨 이동 / 되돌리기 ───────────────────────────────────────────────────────
 // 왜 여기(api)에 두는가: 레벨을 움직이는 화면이 둘(클락 하단 Level ＋－, 장부 클락 리모컨 ‹ ›)인데
 // 각자 인라인으로 계산하다 보니 경계 가드가 한쪽에만 있고(‹ 쪽 누락) 되돌리기는 양쪽 다 없었다.

@@ -10,7 +10,7 @@ import { getAppSetting, setAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '.
 import { uploadPoster } from '../../../lib/storage';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
-  defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats,
+  defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, computeLiveStats,
   countLevels, withDerivedEarly, generateBlinds, clampAdjEarlies,
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
@@ -126,10 +126,16 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     //   진행 중인 대회를 0으로 되돌리는 것보다 '시작이 안 되는' 쪽이 훨씬 낫다.
     try {
       const existing = await getClockState(venueId, gseq);
-      if (existing?.running) {
+      // ⚠ `existing?.running` 만 보면 **일시정지된 대회**를 못 잡는다(브레이크·정산 중이면 running=false).
+      //   레벨·엔트리·탈락이 쌓인 대회가 경고 없이 0 이 되던 자리다 — 판정은 clockHasProgress 한 곳에서 한다.
+      if (clockHasProgress(existing)) {
         const ok = window.confirm(
-          '이 게임에 이미 진행 중인 클락이 있습니다.\n'
-          + '새로 시작하면 지금까지의 레벨·경과 시간이 사라집니다.\n\n그래도 새로 시작할까요?',
+          existing?.running
+            ? '이 게임에 이미 진행 중인 클락이 있습니다.\n'
+              + '새로 시작하면 지금까지의 레벨·경과 시간·엔트리·탈락이 사라집니다.\n\n그래도 새로 시작할까요?'
+            : '이 게임에 진행하던 클락이 있습니다(일시정지 상태).\n'
+              + `레벨 ${(existing?.currentIndex ?? 0) + 1} · 엔트리 보정 ${existing?.adjEntries ?? 0} · 탈락 ${existing?.eliminations ?? 0}\n`
+              + '새로 시작하면 이 기록이 전부 사라집니다.\n\n그래도 새로 시작할까요?',
         );
         if (!ok) return;
       }

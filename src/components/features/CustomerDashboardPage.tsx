@@ -919,9 +919,13 @@ function RankTrendChart({ rows }: { rows: MyRankingRow[] }) {
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center">
+    // ⚠ 값이 2줄이 되는 칸이 있으면 그 칸만 라벨이 한 줄(19.13px) 내려가 옆 칸과 어긋났다.
+    //   320px 3열에서 내용폭이 62.9px 인데 '1,250점' 은 73.19px, 375px(81.25px)에서 '12,500점' 은 85.97px 라 접힌다.
+    //   그리드가 칸 높이는 맞춰 주므로, 라벨을 mt-auto 로 **바닥선**에 붙이면 값이 몇 줄이든 라벨이 나란해진다
+    //   (LedgerStatsPanel StatCard 가 쓰는 것과 같은 관용구). 1줄 칸의 라벨 y 는 그대로다.
+    <div className="flex flex-col rounded-input border border-border-subtle bg-surface-low p-2 text-center">
       <p className={`text-lg font-extrabold leading-none tabular-nums ${accent ? 'stat-violet' : 'text-ink-primary'}`}>{value}</p>
-      <p className="mt-1 text-2xs text-ink-muted">{label}</p>
+      <p className="mt-auto pt-1 text-2xs text-ink-muted">{label}</p>
     </div>
   );
 }

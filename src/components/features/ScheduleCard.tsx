@@ -545,7 +545,10 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
         <h3 className={[
           // break-keep — 목록 카드와 같은 이유. 그리드는 360px 2열이라 카드 폭이 ~150px 로
           // 더 좁아 음절 절단이 더 자주 났다(예: '홀덤 스페'/'셜').
-          'text-sm font-bold tracking-tight leading-tight line-clamp-2 break-keep [overflow-wrap:anywhere]',
+          // min-h-[2.5em] — 그리드 2열에서 한 카드 제목이 2줄이고 옆 카드가 1줄이면, 본문이 flex-col 로
+          // 위에서부터 쌓이는 탓에 아래 매장·참가비·메타 행이 카드끼리 한 줄(18.59px)만큼 어긋났다.
+          // 2줄 자리를 항상 예약해 아래 행들이 카드 사이에서 같은 y 에 오게 한다(2.5em = 2 × leading-tight 1.25).
+          'min-h-[2.5em] text-sm font-bold tracking-tight leading-tight line-clamp-2 break-keep [overflow-wrap:anywhere]',
           // accent-300 은 다크 카드 위 3.71:1(AA 미달) — 액센트 '텍스트' 토큰인 200 으로(8.18 / 6.34)
           schedule.isPremium ? 'text-accent-200' : 'text-ink-primary',
         ].join(' ')}>

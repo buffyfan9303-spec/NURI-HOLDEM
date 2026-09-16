@@ -1410,8 +1410,22 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
 
   const owner = candidates.find((u) => u.id === venue.ownerId);
 
-  useEffect(() => { isVoucherIssueApproved(venue.id).then(setVIssue).catch(() => {}); }, [venue.id]);
+  // ⚠ 조회가 실패하면 vIssue 는 null 로 남는다. 예전에는 그 상태에서 눌러도 `!null === true` 가 되어
+  //   **현재 승인 상태를 모르는 채로 '승인 ON' 을 서버에 썼다**(이용권 발급은 돈이 걸린 스위치다).
+  //   이제 ①조회 실패를 삼키지 않고 ②모르는 상태에서는 버튼을 잠그고 ③핸들러에서 한 번 더 막는다
+  //   (disabled 만으로는 stale 렌더·키보드 경로를 못 막는다).
+  useEffect(() => {
+    let alive = true;
+    isVoucherIssueApproved(venue.id)
+      .then((v) => { if (alive) setVIssue(v); })
+      .catch(() => { if (alive) setVIssue(null); });
+    return () => { alive = false; };
+  }, [venue.id]);
   const toggleVIssue = async () => {
+    if (vIssue == null) {
+      toast.show('현재 발급 승인 상태를 불러오지 못했습니다. 새로고침 후 다시 시도하세요', 'error');
+      return;
+    }
     const next = !vIssue;
     setVIssue(next);
     try { await setVoucherIssueApproval(venue.id, next); toast.show(next ? '매장이용권 발급을 승인했습니다' : '발급 승인을 해제했습니다', 'success'); }
@@ -1471,8 +1485,9 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
         <button
           type="button"
           onClick={toggleVIssue}
-          title="매장이용권 발급 승인"
-          className={['shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border transition-colors',
+          disabled={vIssue == null}
+          title={vIssue == null ? '발급 승인 상태를 불러오지 못했습니다' : '매장이용권 발급 승인'}
+          className={['shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
             vIssue ? 'border-accent-400/40 text-accent-300 bg-accent-300/10' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}
         >
           이용권발급 {vIssue == null ? '…' : vIssue ? '✓' : '✗'}

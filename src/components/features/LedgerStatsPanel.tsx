@@ -842,7 +842,10 @@ function buildOpsReport(m: StatsAgg, days = 7): OpsReportResult {
     : ' 이 기간에 사이드 게임 기록은 없습니다.';
   const sales =
     `${periodLabel} 완납 매출 ${man(m.revenue)}만 원 · 바이인 ${m.total}회 · 플레이어 ${m.players}명(영업 ${openDays.size}일).` +
-    ` 결제수단 중 카드 비중은 ${Math.round(m.cardRatio)}%입니다(완납 매출 대비).` + sideLine;
+    // ⚠ m.cardRatio 는 **금액이 아니라 건수**다(:194 byMethod[method]++, :235 card/(cash+transfer+card)).
+    //   예전 문구는 '(완납 매출 대비)'라고 적어 금액 비중처럼 읽혔다 — 10만 원 카드 1건과 1만 원 현금 1건이
+    //   똑같이 1로 세지는데도 그랬다. 이 리포트는 인쇄·내보내기까지 되므로 분자·분모·단위를 전부 문구에 적는다.
+    ` 현금성 결제(현금·이체·카드) 중 카드 비중은 ${Math.round(m.cardRatio)}%입니다(바인 건수 기준 · 티켓·지원 제외).` + sideLine;
 
   // ── 위험 — 미수·할인은 **금액과 비교 기준**을 붙여 사실로만 적는다 ──
   //   ⚠ '마진·이익'이라고 부르지 않는다. 장부에 상금·인건비·임대료가 없어 계산할 수 없다.

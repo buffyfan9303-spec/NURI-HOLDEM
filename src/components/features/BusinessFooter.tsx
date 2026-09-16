@@ -63,7 +63,7 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
             그대로 여러 줄로 흘러도 되지만 라벨 자체가 쪼개지면 안 된다. */}
         <dl className="flex flex-wrap gap-x-3 gap-y-0.5 t-desc text-ink-muted">
           {BIZ_REQUIRED.map(([k, v]) => (
-            <div key={k} className="flex items-center gap-1">
+            <div key={k} className="flex items-start gap-1">
               <dt className="shrink-0 whitespace-nowrap">{k}</dt>
               <dd className="text-ink-secondary">{v}</dd>
             </div>
@@ -77,7 +77,7 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
           </summary>
           <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
             {BIZ_EXTRA.map(([k, v]) => (
-              <div key={k} className="flex items-center gap-1">
+              <div key={k} className="flex items-start gap-1">
                 <dt className="shrink-0 whitespace-nowrap">{k}</dt>
                 <dd className="text-ink-secondary">{v}</dd>
               </div>

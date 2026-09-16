@@ -246,11 +246,14 @@ test.describe('NURI SPOT — 뷰포트 매트릭스', () => {
       const dlg = await openSpot(page);
       await page.waitForTimeout(500);
 
+      // ⚠ 2026-09-16 — 이 스펙은 오너 보호 파일이다. **오너가 이 죽은 단언 제거만 허락**해 고쳤다.
+      //   `documentElement` 기준 판정은 **공허했다**: `src/index.css:602` 의 `html { overflow-x: clip }`
+      //   때문에 scrollWidth 가 clientWidth 에 고정돼 무엇이 넘쳐도 0 이 나온다.
+      //   실측(운영, body 에 width:3000px 자식 주입): **doc = 0** / **body = 1982**.
+      //   → 살아 있는 `body` 판정만 남긴다. 죽은 단언은 지우는 게 맞다 — 거짓 안심을 주기 때문이다.
       const over = await page.evaluate(() => ({
-        doc: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         body: document.body.scrollWidth - document.body.clientWidth,
       }));
-      expect(over.doc, `문서가 ${over.doc}px 넘친다`).toBeLessThanOrEqual(1);
       expect(over.body, `body 가 ${over.body}px 넘친다`).toBeLessThanOrEqual(1);
 
       // 주요 조작 버튼의 **실제 히트 영역**을 잰다(.tap-y-44 가 ::before 로 넓히므로 박스만 보면 틀린다)

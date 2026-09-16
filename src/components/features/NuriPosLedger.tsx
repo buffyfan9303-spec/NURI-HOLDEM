@@ -2085,7 +2085,10 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
   const c = tone === 'emerald' ? 'text-emerald-400' : tone === 'danger' ? 'text-danger-light' : 'text-ink-primary';
   return (
     <div>
-      <p className="text-2xs text-ink-muted leading-none">{label}</p>
+      {/* truncate — 640 미만 2열에서 '총 바이인(제외 적용)'(94.59px)이 칸(72.5px)보다 넓어 2줄이 되면
+          그 칸의 값만 11.69px 아래로 내려가 옆 '티켓' 칸과 어긋났다. 라벨은 한 줄로 두고 전체 문구는 title 로
+          보여 준다(같은 파일 Mini/Tile 과 같은 관용구). PC(sm 이상 4열)는 폭이 넉넉해 렌더가 변하지 않는다. */}
+      <p className="truncate text-2xs text-ink-muted leading-none" title={label}>{label}</p>
       {/* ⚠ 2026-09-14: 375 의 4열 칸이 좁아 값이 **숫자 중간**에서 끊겼다("7,194 / .44만", "250.3 / 7만").
           금액은 한 덩어리라 쪼개지면 읽는 사람이 다른 수로 오해한다 — 줄바꿈을 막는다. */}
       <p className={['text-sm font-bold tabular-nums leading-tight mt-0.5 whitespace-nowrap', c].join(' ')}>{value}</p>
