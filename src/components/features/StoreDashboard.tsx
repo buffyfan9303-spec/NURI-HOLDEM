@@ -534,16 +534,36 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       setPayOrder((['cash', 'card', 'transfer'] as const).slice().sort((a, b) => (c[b] || 0) - (c[a] || 0)));
     } catch { /* noop */ }
   };
-  // 승인 + 바인 기록(금액/분할) — split 금액으로 기록, 우세 결제수단 학습
-  const doApprove = async (r: BuyinRequest, split: { cash: number; card: number; transfer: number }) => {
+  // 승인 + 바인 기록. 우세 결제수단 학습.
+  //
+  // 🔴 2026-09-17 — `method` 가 있으면 **split 을 서버에 보내지 않는다.** 이게 이 함수의 핵심이다.
+  //   서버 `approve_buyin_request` 는 두 갈래다(pg_get_functiondef 실측):
+  //     · 비분할: `v_net := greatest(0, v_unit - v_disc)` — **서버가 대상 게임의 단가·할인을 직접 계산**하고
+  //       discount_index 도 서버가 찍는다.
+  //     · 분할:   `insert … values (…, true, p_cash, p_card, p_transfer, v_idx …)` — **검증이 0이다.**
+  //   예전엔 단일 결제수단 3버튼도 split 객체를 넘겨(`p_split = !!split = true`) 분할 갈래로 들어갔다.
+  //   그래서 대시보드에서 기록된 **모든** 바인이 is_split=true · discount_index=0 · 화면 입력값 그대로가 됐다.
+  //   같은 손님을 장부 화면에서 승인하면 할인이 적용된 **다른 금액**이 찍힌다 — 접수 창구에 따라 매출이 갈렸다.
+  //   여파는 금액만이 아니다: discount_index=0 이면 `api/ledger.ts` 의 discountSummary 가 그 바인을 못 세고,
+  //   buyinFinance 의 disc=0 때문에 엔트리가 0.5 대신 1.0 으로 잡힌다.
+  //   ⚠ 라이브 노출은 오늘 0이다(할인 프리셋을 등록한 세션 0건). **첫 할인 프리셋을 만드는 날 켜질 잠복 결함**이라
+  //     그 전에 닫는다 — 4a66248 이 장부 쪽에 같은 이유로 넣은 가드와 짝이다.
+  const doApprove = async (
+    r: BuyinRequest,
+    split: { cash: number; card: number; transfer: number },
+    method?: 'cash' | 'card' | 'transfer',
+  ) => {
     const sum = split.cash + split.card + split.transfer;
     if (sum <= 0) { toast.show('금액을 입력하세요', 'error'); return; }
     setPayFor(null); setReqBusy(r.id);
     try {
-      await approveBuyinRequest(r.id, r.requestedGameSeq ?? 1, true, 'cash', split);
-      bumpPay(split.cash >= split.card && split.cash >= split.transfer ? 'cash' : split.card >= split.transfer ? 'card' : 'transfer');
+      // method 경로 = 서버 계산(split 미전달). 분할 경로만 화면이 정한 금액을 보낸다.
+      await approveBuyinRequest(r.id, r.requestedGameSeq ?? 1, true, method ?? 'cash', method ? undefined : split);
+      bumpPay(method ?? (split.cash >= split.card && split.cash >= split.transfer ? 'cash' : split.card >= split.transfer ? 'card' : 'transfer'));
       setPendingReqs((p) => p.filter((x) => x.id !== r.id));
-      toast.show(`${r.playerName} 승인 · 바인 ${wonToMan(sum)}만`, 'success');
+      // ⚠ 서버가 계산한 경로에서는 **금액을 말하지 않는다** — 화면의 프리필은 대상 게임에 클락이 없으면
+      //   메인 게임 단가로 떨어지므로, 그 숫자를 성공 토스트에 적으면 틀린 금액을 사실처럼 알리게 된다.
+      toast.show(method ? `${r.playerName} 승인 · 바인 기록` : `${r.playerName} 승인 · 바인 ${wonToMan(sum)}만`, 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); }
     finally { setReqBusy(null); }
   };
@@ -922,7 +942,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                             {!splitOpen ? (
                               <div className="flex items-center gap-1">
                                 {payOrder.map((m, i) => (
-                                  <button key={m} type="button" onClick={() => doApprove(r, { cash: m === 'cash' ? payAmt : 0, card: m === 'card' ? payAmt : 0, transfer: m === 'transfer' ? payAmt : 0 })}
+                                  <button key={m} type="button" onClick={() => doApprove(r, { cash: m === 'cash' ? payAmt : 0, card: m === 'card' ? payAmt : 0, transfer: m === 'transfer' ? payAmt : 0 }, m)}
                                     className={['flex-1 rounded-[5px] py-1 text-2xs font-bold', i === 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-surface-high text-ink-secondary hover:text-accent-300'].join(' ')}>{PM_LABEL[m]}</button>
                                 ))}
                                 <button type="button" onClick={() => setPayFor(null)} aria-label="닫기" className="shrink-0 px-1 text-ink-muted hover:text-ink-secondary"><Icon name="close" size={12} /></button>
@@ -941,7 +961,16 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                                 <div className="flex items-center justify-between gap-1">
                                   <span className={['text-2xs tabular-nums', (splitVals.cash + splitVals.card + splitVals.transfer) === payAmt && payAmt > 0 ? 'text-emerald-400' : 'text-ink-muted'].join(' ')}>합계 {(splitVals.cash + splitVals.card + splitVals.transfer).toLocaleString()}{payAmt ? ` / ${payAmt.toLocaleString()}` : ''}</span>
                                   <span className="flex items-center gap-1">
-                                    <button type="button" onClick={() => doApprove(r, splitVals)} className="rounded-[5px] bg-emerald-500/20 px-2 py-1 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/30">승인</button>
+                                    {/* 🔴 합계가 금액과 맞아야 확정된다. 예전엔 `sum <= 0` 만 봐서 **합계가 안 맞아도 눌렸다** —
+                                        분할 갈래는 서버 검증이 0이라 8만만 적힌 10만 게임이 그대로 저장되고, 미수 칸이 0이라
+                                        사라진 2만이 장부 어디에도 남지 않는다. 바로 왼쪽 '합계' 글자색이 이미 같은 식을 계산하고 있었다 —
+                                        눈에만 보여 주던 판정을 버튼에 연결한다(새 식 0개).
+                                        ⚠ 금액 칸은 업주가 고칠 수 있으므로 프리필이 틀려도 막다른 길이 아니다
+                                          (4a66248 의 '기준을 모르면 막지 않는다' 와 어긋나지 않는다 — 여기서는 기준을 업주가 정한다). */}
+                                    <button type="button" onClick={() => doApprove(r, splitVals)}
+                                      disabled={payAmt <= 0 || (splitVals.cash + splitVals.card + splitVals.transfer) !== payAmt}
+                                      title={payAmt <= 0 ? '금액을 먼저 입력하세요' : (splitVals.cash + splitVals.card + splitVals.transfer) !== payAmt ? '분할 합계가 금액과 다릅니다' : undefined}
+                                      className="rounded-[5px] bg-emerald-500/20 px-2 py-1 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-40">승인</button>
                                     <button type="button" onClick={() => setPayFor(null)} aria-label="닫기" className="px-1 text-ink-muted hover:text-ink-secondary"><Icon name="close" size={12} /></button>
                                   </span>
                                 </div>

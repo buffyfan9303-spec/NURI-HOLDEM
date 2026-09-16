@@ -153,7 +153,14 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
        VenuePage 에 같은 클래스가 멀쩡한 건 거기 100장이 없어서다 — 같은 클래스라고 같은 비용이 아니다.
        ▶ 다시 넣고 싶다면: 격자를 content-visibility 로 잘라 첫 페인트 면적을 줄인 **뒤에** 재고,
          반드시 위 수치와 같은 자로 다시 재라. 재지 않고 넣으면 이 실측을 되돌리는 것이다. */
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-surface-base" role="dialog" aria-modal="true" aria-label="이벤트">
+    /* ⚠ 이 자리는 `return (` 바로 뒤 = **식(expression) 자리** 라
+       {/∗ … ∗/} 형태가 올 수 없다(빈 객체 리터럴로 읽힌 뒤 <div 에서 파서가 무너진다).
+       2026-09-17 에 이 부류로 배포를 한 번 깨뜨렸다 — 위 주석처럼 **JS 블록 주석**을 쓴다.
+       z-[55] — **z-[60] 이면 안 된다.** Modal.tsx 가 정해 둔 층이다: z-[60] 은 시트·모달, z-[55] 는 전체화면 page 변형.
+        z-[60] 으로 두면 이 오버레이와 안내 시트가 **같은 층**이 되어 DOM 순서로 이 판이 이기고,
+        배너의 '프로필에서 본인인증하기' 를 눌러도 시트가 뒤에 그려져 **아무 일도 안 나는 것처럼 보인다**
+        (그다음 뒤로가기 한 번은 보이지 않는 시트를 닫느라 먹힌다). 2026-09-17 스윕에서 확인. */
+    <div className="fixed inset-0 z-[55] overflow-y-auto bg-surface-base" role="dialog" aria-modal="true" aria-label="이벤트">
       {/* 상단 안전영역 — 이 오버레이는 `fixed inset-0` 이고 index.html 의 viewport 가 `viewport-fit=cover` 라
           노치 아이폰·설치형(PWA, status-bar-style=black-translucent)에서 **내용이 상태바 밑으로 들어간다.**
           실측(2026-09-15, 강제 inset top=47 로 만든 사본): 닫기 버튼이 11~53 에 그대로 있어 47px 아래

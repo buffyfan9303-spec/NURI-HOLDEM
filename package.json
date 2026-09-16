@@ -13,7 +13,7 @@
     "playstore:assets": "node scripts/playstore-shots.mjs --fixture && node scripts/playstore-feature.mjs",
     "bundle:budget": "node scripts/bundle-budget.mjs",
     "bundle:budget:update": "node scripts/bundle-budget.mjs --update",
-    "lint": "eslint .",
+    "lint": "node scripts/lint.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
     "secrets": "secretlint \"**/*\" --format compact",
     "preview": "vite preview",

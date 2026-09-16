@@ -155,14 +155,16 @@ describe('하위 탭 전환 · 알약이 탭바 스냅샷에 갇히지 않는다
     const hasPill = CSS.split('\n').some(
       (l) => l.includes(`data-vt-scope='${scope}'`) && l.includes('[data-sliding-pill]'),
     );
-    if (hasPill) return;
+    // ⚠ 예전엔 `if (hasPill) return;` 이었다. 그러면 알약 규칙이 있는 스코프(11개)에서 **단언이 0개**가 되고,
+    //   테스트는 초록인데 **아무것도 검사하지 않는다**(2026-09-17 `vitest --expect.requireAssertions` 로 발각).
+    //   조기 반환 대신 **두 갈래를 한 식으로** 단언한다 — 어느 쪽이든 최소 한 번은 실제로 확인된다.
     expect(
-      NO_PILL[scope],
+      hasPill || Boolean(NO_PILL[scope]),
       `${scope}: 탭바가 스냅샷으로 대체되는데 알약 규칙이 없다. 탭바 안에 ` +
         `SlidingPill/SegmentedTabs/UnderlineTabs 가 있으면 그 탭바 규칙 바로 아래에 ` +
         `\`html[data-vt-scope='${scope}'] [<탭바속성>] [data-sliding-pill] { view-transition-name: …-pill; }\` ` +
         `를 추가하고, 없으면 NO_PILL 에 이유와 함께 등록하라.`,
-    ).toBeTruthy();
+    ).toBe(true);
   });
 
   it('알약 이름이 서로 겹치지 않는다 — 같은 이름이 둘이면 전환이 통째로 실패한다', () => {

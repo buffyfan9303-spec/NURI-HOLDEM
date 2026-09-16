@@ -74,7 +74,7 @@ try {
 
   // ③ 린트 — 경고는 통과, **오류는 실패**(eslint 기본 동작).
   //    경고가 300건대라 사람이 요약줄만 보면 오류가 묻힌다 — 그래서 사람이 아니라 종료코드가 판정한다.
-  step('린트 (eslint)', 'npx', ['eslint', '.']);
+  step('린트 (eslint + 공회전 가드)', 'npm', ['run', 'lint']);
 
   if (!QUICK) {
     if (existsSync(SITEMAP)) sitemapBefore = readFileSync(SITEMAP);
