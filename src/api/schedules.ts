@@ -208,7 +208,17 @@ export async function createSchedule(
 }
 
 // ── 업주: 포스터 수정 ─────────────────────────────────────────────────────────
-export async function updateSchedule(id: string, patch: Partial<Schedule>): Promise<void> {
+/** 포스터 수정 패치. `posterUrl: null` = **이미지를 지운다**, `undefined` = 건드리지 않는다.
+ *
+ *  왜 `Schedule` 을 통째로 넓히지 않나: 화면 수십 곳이 `schedule.posterUrl` 을 `<img src>` 에 그대로 넘긴다.
+ *    `string | null` 로 넓히면 그 자리가 전부 타입 오류가 난다 — 지우는 뜻이 필요한 곳은 **이 입구뿐**이다.
+ *
+ *  ⚠ `Partial<Schedule> & { posterUrl?: string | null }` 로 쓰면 **안 된다.** 교집합 타입은 속성 타입도
+ *    교집합을 취해서 `posterUrl` 이 다시 `string | undefined` 로 좁혀진다(2026-09-17 tsc 가 잡았다).
+ *    넓히려면 `Omit` 으로 원래 속성을 빼낸 뒤 다시 얹어야 한다. */
+export type SchedulePatch = Omit<Partial<Schedule>, 'posterUrl'> & { posterUrl?: string | null };
+
+export async function updateSchedule(id: string, patch: SchedulePatch): Promise<void> {
   if (IS_MOCK) return;
   await mustAffect(supabase.from('schedules').update({
     ...(patch.title         !== undefined && { title:           patch.title }),

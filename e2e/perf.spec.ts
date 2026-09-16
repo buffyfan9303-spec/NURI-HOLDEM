@@ -108,15 +108,42 @@ function reportShifts(label: string, p: PerfBag, top = 4): void {
   for (const f of slow) console.log(`[loaf:${label}] ${f.dur}ms (blocking ${f.blocking}ms) @${f.t}ms ${f.script}`);
 }
 
+/** 홈의 자리 예약 장치(`nuri:opennow-seen`·`nuri:upcoming-seen`)가 **근거를 갖도록** 한 번 미리 방문한다.
+ *
+ *  🔴 2026-09-17 실측으로 밝혀진 것: 이 스펙들은 매번 **새 프로필**로 돌아서 그 두 키가 비어 있었다.
+ *     그러면 `HomeTab.tsx:463` 의 `openNowSeenCount() > 0` 이 거짓이라 '지금 등록 가능' 은 **한 칸도
+ *     예약되지 않고**, 클락이 도착하는 순간 최대 5줄(≈256px)이 '오늘·내일 일정' **위에** 통째로 삽입된다.
+ *     → 같은 결함을 두 게이트가 번갈아 잡았다: CI 는 perf①(CLS 0.291), 로컬은 perf④(드리프트 256px).
+ *     어느 쪽이 터지느냐는 그날 운영에 열린 대회가 몇 개냐에 달려 있었다.
+ *
+ *  왜 목킹이 아니라 워밍업인가: 예약 장치의 계약은 "**지난 방문의 사실**로 자리를 잡아 둔다" 이다.
+ *    응답을 가짜로 만들면 그 계약이 아니라 우리가 지어낸 숫자를 재게 된다. 한 번 방문해 두면
+ *    앱이 스스로 두 키를 쓰고(App.tsx:313-318), 다음 방문이 **실제 재방문**이 된다 — 99% 의 유저가 그쪽이다.
+ *
+ *  ⚠ 첫 방문의 밀림은 이 워밍업으로 **사라지지 않는다.** 그건 예약할 근거가 없는 경우라
+ *    perf④ 가 이미 '기록만 하고 게이트로 걸지 않는다' 고 정해 둔 자리다(아래 HOME_CASES 주석).
+ *    이 함수는 그 정책을 perf① 에도 똑같이 적용하는 것이지, 상한을 푸는 것이 아니다.
+ */
+async function warmUpReservations(page: Page): Promise<void> {
+  await page.goto('/');
+  await page.getByText('오늘·내일 일정').first().waitFor({ state: 'visible', timeout: 30_000 });
+  await page.waitForTimeout(3500); // 클락 도착까지 — 이때 앱이 seen 키를 쓴다
+}
+
 test('perf① 홈 콜드 진입 — CLS·롱프레임 기록 + 상한', async ({ page }) => {
+  await warmUpReservations(page);
   await page.goto('/');
   await expect(page.getByText('오늘·내일 일정').first()).toBeVisible();
   await page.waitForTimeout(3500); // 배너·개인화 블록 도착분까지 CLS 에 포함
   const p = await readPerf(page);
   console.log(`[perf-baseline] browse-cold CLS=${p.cls.toFixed(3)} longFrames=${p.longFrames}`);
   reportShifts('home-cold', p);
-  // 상한 = 실측 + 작은 여유(2026-09-10, 프로덕션 빌드·Pixel 7·5회 연속: CLS 0.190 / 롱프레임 1 — 목킹 픽스처라 결정적).
+  // 상한 = 실측 + 작은 여유(2026-09-10, 프로덕션 빌드·Pixel 7·5회 연속: CLS 0.190 / 롱프레임 1).
   //   예전 0.35/40 은 실측의 2배/40배라 회귀를 못 잡았다. CLS 는 +0.06(≈30%), 롱프레임은 CI 러너 편차를 감안해 8.
+  //   ⚠ 2026-09-17 정정: 위 줄에 '목킹 픽스처라 결정적' 이라고 적혀 있었는데 **사실이 아니었다.**
+  //     `e2e/_fixtures.ts` 가 가리는 것은 배너뿐이고 schedules·clock_states 는 운영을 그대로 읽는다.
+  //     그래서 이 값은 그날 데이터에 따라 0.190~0.291 사이를 오갔다(상한 0.25 가 그 폭 **안**에 있었다).
+  //     이제 warmUpReservations() 로 자리 예약을 켜서 데이터 양에 대한 민감도를 없앴다 — 상한은 그대로다.
   expect(p.cls, 'browse 콜드 CLS').toBeLessThan(0.25);
   expect(p.longFrames, 'browse 콜드 롱프레임').toBeLessThan(8);
 });
@@ -193,6 +220,11 @@ const HOME_CASES: HomeCase[] = [
 
 for (const c of HOME_CASES) {
   test(`perf④ 홈 콜드 — ${c.label}: 오늘·내일 일정이 밀리지 않는다`, async ({ page }) => {
+    // 게이트를 거는 케이스는 **진짜 재방문**이어야 한다 — 이벤트 키만 심고 나머지 예약 키를
+    //   첫 방문 기본값으로 두면 '재방문' 이라는 이름과 달리 반쪽짜리가 된다(2026-09-17 실측: 드리프트 256px).
+    //   ⚠ 순서가 중요하다: addInitScript 는 **매 내비게이션마다** 돌므로 워밍업이 덮어쓴
+    //     event-banner-seen 을 측정 방문 직전에 다시 이 케이스의 값으로 되돌려 준다.
+    if (c.seen !== null) await warmUpReservations(page);
     if (c.seen !== null) {
       const v = c.seen ? '1' : '0';
       await page.addInitScript((val) => { try { localStorage.setItem('nuri:event-banner-seen', val as string); } catch { /* noop */ } }, v);

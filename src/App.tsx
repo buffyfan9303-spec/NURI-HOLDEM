@@ -94,8 +94,7 @@ import { SpringButton } from './components/atoms/StatefulActionButton';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner, adminWithdrawUser } from './api/auth';
 import { bumpScheduleView,
-  getSchedules, getScheduleById, createSchedule, updateSchedule, deleteSchedule, rejectSchedule, subscribeSchedules,
-} from './api/schedules';
+  getSchedules, getScheduleById, createSchedule, updateSchedule, deleteSchedule, rejectSchedule, subscribeSchedules, type SchedulePatch } from './api/schedules';
 import { getPostById,
   getVenues, getComments, getPosts, addComment, addPost, togglePostLike, deletePost, subscribePosts, subscribeComments,
   updateVenueDescription, updateVenueImage, updateVenueImages, deleteComment, logActivity,
@@ -2956,7 +2955,8 @@ export default function App() {
 
     // ── 수정 모드 ──
     if (data.id) {
-      const patch: Partial<Schedule> = {
+      // 타입 정본은 `SchedulePatch` 하나다(src/api/schedules.ts) — 여기서 모양을 다시 적으면 어긋난다.
+      const patch: SchedulePatch = {
         title:        data.title,
         date:         data.date,
         startTime:    data.startTime,
@@ -2976,10 +2976,16 @@ export default function App() {
         promotions:   data.events,
         seats,
       };
+      // `null`(이미지 제거)도 **반드시 실어 보낸다** — 예전엔 제거가 undefined 라 이 게이트에서
+      //   사라졌고, 업주는 '수정되었습니다' 를 보고도 옛 이미지가 그대로 남는 것을 봤다.
       if (data.posterUrl !== undefined) patch.posterUrl = data.posterUrl;
 
       setSchedules((prev) => prev.map((s) =>
-        s.id === data.id ? { ...s, ...patch, posterUrl: data.posterUrl ?? s.posterUrl } : s));
+        // ⚠ `??` 는 null 도 옛 값으로 되돌린다 — 제거가 화면에서도 무반응이던 두 번째 원인이었다.
+      //   '건드리지 않음(undefined)' 일 때만 옛 값을 유지한다.
+      s.id === data.id
+        ? { ...s, ...patch, posterUrl: data.posterUrl === undefined ? s.posterUrl : (data.posterUrl ?? undefined) }
+        : s));
       updateSchedule(data.id, patch)
         .then(reloadSchedules)
         .catch(() => { toast.show('수정 저장에 실패했습니다', 'error'); reloadSchedules(); });
@@ -3018,7 +3024,7 @@ export default function App() {
       rankingPrizes:  data.rankingPrizes.filter((r) => r.amount > 0),
       promotions:     data.events,
       seats,
-      posterUrl:      data.posterUrl,
+      posterUrl:      data.posterUrl ?? undefined, // 신규 등록에 '지움'은 없다 — 없는 것과 같다
       posterColor:    '#7C2D7E',
       displayOrder:   999,
       isPremium:      false,
@@ -3027,10 +3033,16 @@ export default function App() {
     // 반복 등록: 매주 같은 요일/시간으로 N주 생성(1=반복 없음, 최대 12)
     const weeks = Math.max(1, Math.min(data.repeatWeeks ?? 1, 12));
     const dates = Array.from({ length: weeks }, (_, i) => addDays(data.date, i * 7));
-    Promise.all(dates.map((dt) => createSchedule(mkPayload(dt))))
-      .then(reloadSchedules)
-      .then(() => { if (weeks > 1) toast.show(`${weeks}주 반복 일정이 등록되었습니다`, 'success'); })
-      .catch(() => toast.show('포스터 등록에 실패했습니다. 매장 승인 상태를 확인해 주세요.', 'error'));
+    // ⚠ 예전엔 `Promise.all` + `.catch` 였다 — 3주 중 1주만 실패하면 **성공한 2건이 서버에만 있고
+    //   화면에는 없는** 상태로 끝났다(reload 가 성공 경로에만 걸려 있었다). 부분 성공은 실패가 아니다.
+    Promise.allSettled(dates.map((dt) => createSchedule(mkPayload(dt))))
+      .then(async (rs) => {
+        const ok = rs.filter((r) => r.status === 'fulfilled').length;
+        if (ok > 0) await reloadSchedules();          // 하나라도 나갔으면 반드시 다시 읽는다
+        if (ok === rs.length) { if (weeks > 1) toast.show(`${weeks}주 반복 일정이 등록되었습니다`, 'success'); }
+        else if (ok === 0) toast.show('포스터 등록에 실패했습니다. 매장 승인 상태를 확인해 주세요.', 'error');
+        else toast.show(`${rs.length}주 중 ${ok}주만 등록되었습니다. 나머지를 다시 시도해 주세요.`, 'error');
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, venues, toast, reloadSchedules]);
 

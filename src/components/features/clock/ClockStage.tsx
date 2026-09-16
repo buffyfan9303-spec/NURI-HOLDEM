@@ -106,8 +106,12 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
   const showRebuy = hasCounts && (ls.rebuys > 0 || g.config?.rebuyStack > 0);
   const showAddon = hasCounts && (ls.addons > 0 || !!g.config?.isAddon || (g.config?.addonStack ?? 0) > 0);
   const showEarly = hasCounts && (ls.earlies > 0 || (g.config?.earlyDoubleLevel ?? 0) > 0 || (g.config?.earlySingleLevel ?? 0) > 0);
-  const extras = [
-    showRebuy && { k: 'rebuy', label: '리바이', v: ls.rebuys ?? 0 },
+  // 오너 2026-09-17: "애드온과 얼리는 한줄 / 리바인은 따로 … 이미지에 애드온/얼리 한줄만 추가하면 돼".
+  //   → 리바이는 레퍼런스 보드 그대로 **자기 줄**(일반 Rail, 3.6cqmin)을 갖는다.
+  //     새로 얹는 것은 '애드온 · 얼리' **한 줄뿐**이라 보드에 줄이 하나만 늘어난다.
+  //   ⚠ 셋을 한 줄로 묶었던 직전 판은 리바이 숫자까지 2.8cqmin 으로 줄여 놨었다 —
+  //     리바이는 가장 자주 바뀌는 수라 원래 크기로 되돌린다.
+  const addonEarly = [
     showAddon && { k: 'addon', label: '애드온', v: ls.addons ?? 0 },
     showEarly && { k: 'early', label: '얼리', v: ls.earlies ?? 0 },
   ].filter(Boolean) as { k: string; label: string; v: number }[];
@@ -180,11 +184,12 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
             {/* 우 — 지표 세로 레일. 라벨 작게 위, 숫자 크게 아래(레퍼런스 공통 문법). */}
             <aside data-testid="clk-rails" className="clk-col min-h-0 flex-col justify-center gap-[1.5cqmin]">
               <Rail label="생존 / 엔트리" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
-              {/* 리바이 · 애드온 · 얼리 — **한 줄 안에서** 각자 라벨과 숫자를 갖는다.
-                  줄을 세 개로 늘리지 않는 이유: 이 열은 세로로 꽉 차 있어 줄이 늘면 clamp 가 글자를 줄이고,
-                  그러면 10m 거리에서 가장 중요한 '생존 / 엔트리'까지 같이 작아진다(바로 아래 2026-09-11 주석의 그 사고).
-                  한 줄에 묶어도 각 값은 제 라벨을 갖고 숫자 크기는 일반 Rail 과 같은 급이다. */}
-              {extras.length > 0 && <GroupRail items={extras} />}
+              {/* 리바이는 **자기 줄**(레퍼런스 보드와 같다). 애드온·얼리만 아래 한 줄로 묶는다.
+                  줄을 무한정 늘리지 않는 이유는 그대로다: 이 열은 세로로 꽉 차 있어 줄이 늘면 clamp 가
+                  글자를 줄이고, 10m 거리에서 가장 중요한 '생존 / 엔트리'까지 같이 작아진다(2026-09-11 사고).
+                  그래서 늘리는 줄은 **하나**로 묶고, 그 안에서 각 값이 제 라벨을 갖는다. */}
+              {showRebuy && <Rail label="리바이" value={(ls.rebuys ?? 0).toLocaleString()} />}
+              {addonEarly.length > 0 && <GroupRail items={addonEarly} />}
               {buyIn > 0 && <Rail label="바이인" value={buyIn.toLocaleString()} />}
               {/* 2026-09-11: 총 칩·평균 스택은 **하단 레일**로 내렸다(아래 BottomMetrics).
                   우측 열에 7줄이 몰려 글자가 작아지는 동안 화면 하단 중앙이 통째로 비어 있었다 —

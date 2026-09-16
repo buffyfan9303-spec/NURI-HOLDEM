@@ -59,7 +59,10 @@ export interface PosterFormData {
   repeatWeeks?: number;
   /** 포스터별 커스텀 블라인드 표(비우면 기본 자동 생성 표시) */
   blindLevels?: { sb: number; bb: number; ante: number; minutes: number; isBreak?: boolean }[];
-  posterUrl?: string;
+  /** `null` = **이미지를 지운다**. `undefined` = 이 항목을 건드리지 않는다.
+   *  둘을 한 값(undefined)으로 쓰던 때는 '이미지 제거'가 App 의 `!== undefined` 게이트에서
+   *  통째로 걸러져 서버에도 화면에도 반영되지 않았다(2026-09-17). 두 뜻은 두 값이어야 한다. */
+  posterUrl?: string | null;
   // 관리자 직접 등록용 — 홀덤펍 선택(기존) 또는 직접 입력
   venueId?: string;
   pubName?: string;
@@ -362,7 +365,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp"
             className="hidden" onChange={handleImageChange} />
           {imgPreview && (
-            <button type="button" onClick={() => { setImgFile(null); setImgPreview(''); update('posterUrl', undefined); }}
+            <button type="button" onClick={() => { setImgFile(null); setImgPreview(''); update('posterUrl', null); }}
               className="mt-1 text-2xs text-ink-muted hover:text-danger transition-colors">
               이미지 제거
             </button>
