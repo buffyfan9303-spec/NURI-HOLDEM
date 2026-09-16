@@ -133,7 +133,6 @@ describe('하위 탭 전환 · 알약이 탭바 스냅샷에 갇히지 않는다
     'market-cat': '장터 카테고리 — 지시자 없음',
     'live-sort': '실시간 정렬 — 지시자 없음',
     'dealer-kind': '딜러 종류 — 지시자 없음',
-    'profile-tab': '내 정보 탭 — 지시자 없음',
   };
 
   /** 탭바든 본문이든 view-transition-name 을 부여하는 스코프 전부.

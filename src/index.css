@@ -1784,17 +1784,17 @@ html[data-vt-scope='rank-tab'][data-vt-dir='back']::view-transition-new(rank-pan
 ::view-transition-group(rank-label),      ::view-transition-group(adminpos-label),
 ::view-transition-group(group-label),     ::view-transition-group(sched-label),
 ::view-transition-group(notif-label),     ::view-transition-group(legal-label),
-::view-transition-group(crm-label) { animation: none; }
+::view-transition-group(crm-label),      ::view-transition-group(profile-label) { animation: none; }
 ::view-transition-old(community-label), ::view-transition-old(venue-label),
 ::view-transition-old(rank-label),      ::view-transition-old(adminpos-label),
 ::view-transition-old(group-label),     ::view-transition-old(sched-label),
 ::view-transition-old(notif-label),     ::view-transition-old(legal-label),
-::view-transition-old(crm-label) { animation: none; opacity: 0; }
+::view-transition-old(crm-label),        ::view-transition-old(profile-label) { animation: none; opacity: 0; }
 ::view-transition-new(community-label), ::view-transition-new(venue-label),
 ::view-transition-new(rank-label),      ::view-transition-new(adminpos-label),
 ::view-transition-new(group-label),     ::view-transition-new(sched-label),
 ::view-transition-new(notif-label),     ::view-transition-new(legal-label),
-::view-transition-new(crm-label) { animation: none; opacity: 1; }
+::view-transition-new(crm-label),        ::view-transition-new(profile-label) { animation: none; opacity: 1; }
 
 /* ── 하위 탭 전수 적용(오너 #10, 2026-08-30) ─────────────────────────────────────
    "하위탭들 이동시 기존에 정해놨던 부드러운 모션을 빠짐없이."
@@ -1873,8 +1873,21 @@ html[data-vt-scope='group-tab'] [data-group-tabbar] [data-pill-active] { view-tr
 html[data-vt-scope='group-tab'] [data-group-panel] { view-transition-name: group-panel; }
 html[data-vt-scope='group-tab']::view-transition-old(root),
 html[data-vt-scope='group-tab']::view-transition-new(root) { animation: none; }
-/* 프로필 모달 프로필·설정·보안 */
+/* 내 정보 대시보드·프로필·설정·보안 (CustomerDashboardPage → UnderlineTabs → SlidingPill)
+   🔴 2026-09-17 오너 보고 "아래 하단바가 잔여물이 남아" 의 원인이 바로 이 두 줄의 부재였다.
+   탭바만 이름을 가지면 밑줄(SlidingPill)이 **탭바 스냅샷 안에 인쇄**된다. 게다가 아래 2031 행이
+   profile-tabbar 의 old/new 를 `animation:none` 으로 못 박아 페이드도 혼합도 없앤다 —
+   탭바는 배경이 투명해(`relative flex border-b`) 새 스냅샷 너머로 **옛 밑줄이 전환 내내(0.3s)
+   선명하게** 비친다. 격리 재현: 전환 중간 프레임에 밑줄 2개·활성 라벨 2개가 동시에 그려졌다.
+   SlidingPill 은 VT 중에 CSS 전환을 끄고 최종 위치로 점프한다(보간을 VT 에 맡기는 설계, SlidingPill.tsx:105)
+   — 그래서 이름이 없으면 미끄러짐마저 사라지고 잔상만 남았다.
+   group-tab(위 1868~1872)과 글자 그대로 같은 조리법이다. */
 html[data-vt-scope='profile-tab'] [data-profile-tabbar] { view-transition-name: profile-tabbar; }
+html[data-vt-scope='profile-tab'] [data-profile-tabbar] [data-sliding-pill] { view-transition-name: profile-pill; }
+/* 활성 라벨도 이름을 갖는다 — 알약이 자기 스냅샷이 되면 라벨 span 의 relative 가 무의미해져
+   글자가 알약에 덮인다(위 community-label 주석의 실측). 이름만 주고 아래 세 목록에 등록하지 않으면
+   2026-09-11 오너 리포트 '글자가 pill 을 따라가' 가 그대로 재발한다 — 반드시 같이 넣는다. */
+html[data-vt-scope='profile-tab'] [data-profile-tabbar] [data-pill-active] { view-transition-name: profile-label; }
 html[data-vt-scope='profile-tab'] [data-profile-panel] { view-transition-name: profile-panel; }
 html[data-vt-scope='profile-tab']::view-transition-old(root),
 html[data-vt-scope='profile-tab']::view-transition-new(root) { animation: none; }

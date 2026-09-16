@@ -255,9 +255,12 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
       {/* pb-[env(safe-area-inset-bottom)]: 아이폰 홈 인디케이터 띠만큼 바닥을 비워 둔다.
           예전엔 상단만 예약해 마지막 요소(저장·탈퇴)가 그 띠 안으로 들어갔다 —
           탈퇴는 되돌릴 수 없는 조작이라 '눌리지 않는' 것보다 '잘못 눌리는' 쪽이 더 나쁘다. */}
-      <div className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
-        {/* 본문 — 탭 전환의 방향성 푸시 대상(탭바는 제자리 고정) */}
-        <div data-profile-panel="">
+      {/* 본문 — 탭 전환의 방향성 푸시 대상(탭바는 제자리 고정).
+          🔴 data-profile-panel 은 **이 스크롤 상자**에 있어야 한다(2026-09-17). 안쪽 내용 div 에 붙였더니
+          old 스냅샷 높이 = 이전 탭 콘텐츠 전체(대시보드 2600px), new = 새 탭(보안 420px) 이 되어
+          새 패널이 끝나는 지점 **아래로 2180px** 이 돌출했다 — 화면 하단에 이전 탭이 띠로 남던 원인이다
+          (오너 보고 "아래 하단바가 잔여물이 남아"). 스크롤 상자는 높이가 뷰포트에 묶여 old·new 가 같다(실측 743px). */}
+      <div data-profile-panel="" className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
         {/* 프로필·설정·보안 패널은 keep-alive(hidden 토글) — 설정 탭에서 편집 중(닉네임·크롭 사진) 대시보드를 다녀와도
             입력이 남는다(점검 #18). 상태는 ProfilePanels 본체에 있어 대시보드 표시 중엔 'profile' 로 접어 두기만 한다. */}
         <div hidden={tab === 'dashboard'} className="mx-auto w-full max-w-md">
@@ -573,7 +576,6 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
           </section>
         </div>
         )}
-        </div>
       </div>
 
     </div>
