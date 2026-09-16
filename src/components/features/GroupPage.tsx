@@ -182,8 +182,10 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
         </span>
       </header>
 
-      {/* 모바일 하단 탭바(z-50)가 이 오버레이(z-40) 위에 떠 있으므로 하단 여백 확보 */}
-      <div className="flex-1 overflow-y-auto pb-[var(--tabbar-safe)] lg:pb-0">
+      {/* 🔴 하단 탭바는 이 화면이 떠 있는 동안 꺼져 있다(App.tsx `suppressed={openVenueId !== null}` → invisible).
+          탭바 자리를 예약하지 않는다 — 라이브 375×812 실측 죽은 띠 104.83px.
+          ⚠ 홈 인디케이터 띠는 남긴다(루트에 하단 inset 예약이 없다). */}
+      <div className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto w-full max-w-2xl">
           {/* 이미지 갤러리 */}
           <div className="relative w-full overflow-hidden h-40 sm:h-48 bg-surface-low">

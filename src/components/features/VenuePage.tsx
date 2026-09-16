@@ -316,8 +316,13 @@ export default function VenuePage({
       />
 
       {/* ── 스크롤 컨테이너 ────────────────────────────────────────────── */}
-      {/* 모바일 하단 탭바(z-50)가 이 오버레이(z-40) 위에 떠 있으므로 마지막 콘텐츠가 가려지지 않게 하단 여백 확보 */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-[var(--tabbar-safe)] lg:pb-0">
+      {/* 🔴 하단 탭바는 이 화면이 떠 있는 동안 **꺼져 있다** — App.tsx 가 `suppressed={openVenueId !== null}` 로
+          넘겨 invisible + aria-hidden 이 되고, 이 화면 자체도 같은 `openVenueId !== null` 안에서만 렌더되므로
+          둘이 어긋날 수가 없다. 그래서 탭바 자리를 예약하지 않는다 — 비워 두면 쓸 것이 없는 죽은 띠다
+          (라이브 375×812 실측 104.75px).
+          ⚠ `pb-0` 으로 두면 안 된다: 루트가 pt-[env(safe-area-inset-top)] 만 갖고 하단 inset 예약이 없어
+            아이폰에서 마지막 행이 홈 인디케이터 밑으로 들어간다. PC 하네스는 env 가 항상 0이라 영영 못 본다. */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
         {/* PC 에서 전체 폭으로 퍼져 공백이 과해지지 않도록 중앙 컬럼(최대 768px)으로 제한 */}
         <div className="mx-auto w-full max-w-3xl">
 

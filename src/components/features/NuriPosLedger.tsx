@@ -491,6 +491,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     (): number => discPick ?? autoDiscountIndex(session.discounts, clockLevelNow()),
     [discPick, session.discounts, clockLevelNow],
   );
+  /** 이 요청으로 **받을 금액**(원) = 단가 − 할인. 접수대 모달의 splitMismatch 와 같은 기준이다.
+   *  ⚠ 화면이 할인을 아는 것은 **대상이 지금 보고 있는 게임일 때뿐**이다 —
+   *    다른 게임의 할인은 discIdxFor 가 승인 시점에 비동기로 구한다(C06 주석 참고). */
+  const splitDue = (seq: number) =>
+    Math.max(0, (gameUnit(seq) || 0) - (seq === gameSeq ? discountAmountOf(session, defaultDiscIdx()) : 0));
   /** C06: QR 승인 대상 게임(wantSeq(r))이 지금 보고 있는 게임과 다르면 defaultDiscIdx() 를 쓰면 안 된다 —
    *  그건 **현재 화면**의 할인 배열·레벨로 계산된 자리번호인데, SQL 은 그 번호를 **대상 게임의**
    *  할인 배열에 적용한다. 메인·사이드는 할인 순서·단가가 서로 다를 수 있어 자리번호만 맞고 금액이 틀린다.
@@ -1233,7 +1238,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                         {([['cash', '현금'], ['card', '카드'], ['transfer', '이체']] as const).map(([mth, lbl]) => (
                           <button key={mth} type="button" onClick={() => approveReq(r, true, mth)} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-emerald-500/50 px-2 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/15">{lbl}</button>
                         ))}
-                        <button type="button" onClick={() => { setSplitFor(r.id); setSplitAmts({ cash: gameUnit(wantSeq(r)) || 0, card: 0, transfer: 0 }); }} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-accent-400/50 px-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">분할</button>
+                        <button type="button" onClick={() => { setSplitFor(r.id); setSplitAmts({ cash: splitDue(wantSeq(r)), card: 0, transfer: 0 }); }} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-accent-400/50 px-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">분할</button>
                       </div>
                     ) : (
                       <>
@@ -1246,16 +1251,18 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                         </div>
                         {(() => {
                           const sum = splitAmts.cash + splitAmts.card + splitAmts.transfer;
-                          const unit = gameUnit(wantSeq(r)) || 0; // 현재 화면 게임이 아니라 '승인해서 들어갈 게임'의 단가
-                          const mismatch = unit > 0 && sum !== unit;
+                          const due = splitDue(wantSeq(r)); // '승인해서 들어갈 게임'의 받을 금액(단가 − 할인)
+                          // ⚠ 대상이 다른 게임이면 그 게임의 할인을 화면이 모른다. 모르는 기준으로 막으면
+                          //   사이드 게임 할인 요청은 **어떤 숫자를 넣어도 승인이 불가능**해진다 — 그때는 막지 않는다.
+                          const mismatch = wantSeq(r) === gameSeq && due > 0 && sum !== due;
                           return (
                             <div className="flex items-center gap-1.5">
                               <span className="flex-1 text-2xs">
                                 <span className="text-ink-muted">합계 </span><b className={['tabular-nums', mismatch ? 'text-danger-light' : 'text-ink-secondary'].join(' ')}>{sum.toLocaleString()}</b><span className="text-ink-muted">원</span>
-                                {mismatch && <span className="text-danger-light"> · 단가 {unit.toLocaleString()}원과 다름</span>}
+                                {mismatch && <span className="text-danger-light"> · 받을 금액 {due.toLocaleString()}원과 다름</span>}
                               </span>
                               <button type="button" onClick={() => setSplitFor(null)} className="rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-muted">취소</button>
-                              <button type="button" disabled={sum <= 0} onClick={() => approveReq(r, true, 'cash', splitAmts)} className="rounded-input bg-emerald-500/90 px-3 py-1 text-2xs font-bold text-ink-inverse hover:bg-emerald-500 disabled:opacity-40">확정</button>
+                              <button type="button" disabled={sum <= 0 || mismatch} onClick={() => approveReq(r, true, 'cash', splitAmts)} className="rounded-input bg-emerald-500/90 px-3 py-1 text-2xs font-bold text-ink-inverse hover:bg-emerald-500 disabled:opacity-40">확정</button>
                             </div>
                           );
                         })()}
