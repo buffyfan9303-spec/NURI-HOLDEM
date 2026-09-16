@@ -34,7 +34,7 @@ import {
   MISSIONS, adminListCustomMissions, adminSaveCustomMission, adminDeleteCustomMission,
   type CustomMissionRow, type MissionGoalType,
 } from '../../lib/loyalty';
-import { isVoucherIssueApproved, setVoucherIssueApproval, adminListVoucherCreditRequests, adminDecideVoucherCredit, type AdminCreditRequest } from '../../api/vouchers';
+import { isVoucherIssueApproved, setVoucherIssueApproval, adminListVoucherCreditRequests, adminDecideVoucherCredit, getVoucherQuota, adminGrantVoucherQuota, type AdminCreditRequest } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import { REGION_CHIPS } from './IntegratedSearchBar';
@@ -1415,6 +1415,14 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
   const [busy, setBusy]       = useState(false);
   const [posOpen, setPosOpen] = useState(false);
   const [vIssue, setVIssue]   = useState<boolean | null>(null); // 매장이용권 발급 승인
+  // 발급 한도 — 서버 RPC(admin_grant_voucher_quota)는 2026-06-14 부터 있었는데 **부르는 화면이 앱 어디에도 없었다**.
+  //   그래서 발급을 승인해 줘도 매장 한도는 0 에서 시작하고, 업주는 '잔여 한도 0개'를 본 뒤
+  //   issue_voucher 가 '운영자에게 문의' 로 거절한다. 그 문의를 받은 운영자에게 올릴 레버가 없었다.
+  //   (유상 충전 요청 경로는 서버가 의도적으로 닫아 둔 상태라, 수동 조정이 유일한 길이다.)
+  // ⚠ null 은 '모름'이고 0 과 다르다 — getVoucherQuota 주석대로 권한/미배포일 때 null 이 온다.
+  const [quota, setQuota]     = useState<number | null>(null);
+  const [quotaAmt, setQuotaAmt] = useState('');
+  const [quotaBusy, setQuotaBusy] = useState(false);
 
   const owner = candidates.find((u) => u.id === venue.ownerId);
 
@@ -1429,6 +1437,32 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
       .catch(() => { if (alive) setVIssue(null); });
     return () => { alive = false; };
   }, [venue.id]);
+  // 한도는 **펼쳤을 때만** 읽는다 — 행마다 읽으면 매장 수만큼 RPC 가 나간다.
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    getVoucherQuota(venue.id)
+      .then((q) => { if (alive) setQuota(q); })
+      .catch(() => { if (alive) setQuota(null); });
+    return () => { alive = false; };
+  }, [open, venue.id]);
+
+  /** 한도 ± 적용. 서버가 greatest(0, …) 로 하한을 잡고 my_role() IS DISTINCT FROM 'admin' 으로 막는다. */
+  const grantQuota = async (sign: 1 | -1) => {
+    const n = Number(quotaAmt);
+    // 화면 검증은 오타 방지용이다 — 권한과 하한은 서버가 정본이다.
+    if (!Number.isInteger(n) || n <= 0) { toast.show('1 이상의 정수를 입력하세요', 'error'); return; }
+    setQuotaBusy(true);
+    try {
+      const left = await adminGrantVoucherQuota(venue.id, sign * n);
+      setQuota(left);
+      setQuotaAmt('');
+      toast.show(`발급 한도를 ${n}개 ${sign > 0 ? '충전' : '차감'}했습니다 · 잔여 ${left}개`, 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '한도 변경에 실패했습니다', 'error');
+    } finally { setQuotaBusy(false); }
+  };
+
   const toggleVIssue = async () => {
     if (vIssue == null) {
       toast.show('현재 발급 승인 상태를 불러오지 못했습니다. 새로고침 후 다시 시도하세요', 'error');
@@ -1513,6 +1547,35 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
 
       {open && (
         <div className="px-3 pb-3 pt-2 space-y-2 border-t border-border-subtle animate-slide-up">
+          {/* 매장이용권 발급 한도 — 바로 위 '이용권발급 ✓/✗' 토글과 **같은 스위치의 나머지 반쪽**이다.
+              승인만으로는 한도가 0 이라 업주가 한 장도 못 만든다. 두 레버를 같은 행에 둔다. */}
+          <div className="rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-2xs font-bold text-ink-secondary">이용권 발급 한도</span>
+              <span className="text-2xs font-bold tabular-nums text-ink-primary">
+                {quota == null ? '모름' : `잔여 ${quota}개`}
+              </span>
+              <input
+                type="number" min={1} step={1} inputMode="numeric"
+                value={quotaAmt} onChange={(e) => setQuotaAmt(e.target.value)}
+                placeholder="수량" aria-label="충전·차감할 수량"
+                className="input ml-auto w-20 text-sm"
+              />
+              <button type="button" onClick={() => grantQuota(1)} disabled={quotaBusy}
+                className="shrink-0 rounded-input border border-accent-400/40 px-2.5 py-1 text-2xs font-semibold text-accent-300 transition-colors hover:bg-accent-300/10 disabled:cursor-not-allowed disabled:opacity-50">
+                + 충전
+              </button>
+              {/* 차감을 같이 둔 이유: 오타로 1000 을 충전하면 화면으로는 되돌릴 길이 없어진다 —
+                  지금 고치고 있는 결함과 정확히 같은 부류를 새로 만들지 않는다. */}
+              <button type="button" onClick={() => grantQuota(-1)} disabled={quotaBusy}
+                className="shrink-0 rounded-input border border-border-default px-2.5 py-1 text-2xs font-semibold text-ink-muted transition-colors hover:text-ink-primary disabled:cursor-not-allowed disabled:opacity-50">
+                − 차감
+              </button>
+            </div>
+            {vIssue === false && (
+              <p className="mt-1.5 text-2xs text-amber-400">발급 승인이 꺼져 있습니다 — 한도를 채워도 업주는 발급할 수 없어요.</p>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
               <span className="block text-2xs text-ink-secondary mb-1">매장명 <span className="text-danger">*</span></span>
