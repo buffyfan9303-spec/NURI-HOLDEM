@@ -21,10 +21,10 @@
 //   · gto.deep.data.ts         **사람이 쓴 설명문에 빈도를 적어 넣은 예시** — 솔버 산출 아님
 // 그래서 이 파일은 exact_solver 를 반환하는 경로를 아예 갖지 않는다.
 // 나중에 검증된 데이터가 들어오면 evaluateSpot 안의 `lookupSolver` 자리 한 곳만 채우면 된다.
-import { RANGE_SCENARIOS, type TablePos, type RangeScenario } from './ranges.data';
+import { RANGE_SCENARIOS, type TablePos, type RangeScenario, type RangeAction } from './ranges.data';
 import { KEY_PREFIX, PUSH_POS, PUSH_STACKS, type Mode } from './preflopQuiz';
 import { buildFreq } from './ranges';
-import { nashRange, NASH_STACKS, HAND_ORDER } from './nash.data';
+import { nashRange, NASH_STACKS, HAND_ORDER, isNashQuarantined } from './nash.data';
 import {
   potBb, heroComboId, validateSpot, hasBlocker, positionsFor,
   type SpotReview, type SpotActionType, type SpotIssue, type SpotPosition,
@@ -55,7 +55,13 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
   out_of_scope: '정확한 분석 범위 밖',
 };
 
-/** 액션별 빈도(0~1). 합은 1. 이 앱의 차트는 fold/call/raise 세 갈래만 쓴다. */
+/**
+ * 액션별 빈도(0~1). 이 앱의 차트는 fold/call/raise 세 갈래만 쓴다.
+ *
+ * ⚠ **합이 1 이 아닐 수 있다.** 표가 그 갈래를 아예 담지 않으면(→ `absent`) 그 자리는 0 이다.
+ * 0 은 "그 표가 말하지 않았다" 는 뜻이지 "빈도가 0" 이 아니다 — 둘을 구별하려면 `absent` 를 봐라.
+ * (잔여를 폴드로 채우면 표가 한 적 없는 주장을 엔진이 지어내는 것이 되고, 그건 이 파일이 막으려는 바로 그 병이다.)
+ */
 export interface ActionMix { fold: number; call: number; raise: number }
 
 export interface MathFacts {
@@ -88,7 +94,12 @@ export type SpotEvaluation =
     /** 어떤 표를 봤는가 — 화면·게시글에 그대로 남는다 */
     sourceLabel: string;
     mix: ActionMix;
-    /** 내가 고른 액션의 차트 빈도(0~1). heroAction 이 없으면 null */
+    /**
+     * **그 표가 주장하지 않는 갈래.** `mix` 에서 이 자리의 0 은 빈도가 아니라 침묵이다.
+     * 화면은 이 갈래를 `0%` 가 아니라 `—` 로 그려야 한다(0% 는 "접지 마라" 로 읽힌다).
+     */
+    absent: (keyof ActionMix)[];
+    /** 내가 고른 액션의 차트 빈도(0~1). heroAction 이 없거나 그 갈래가 `absent` 면 null */
     heroFreq: number | null;
     /** normalized_reference 일 때 **무엇이 달랐는가**. 비어 있으면 정확 일치 */
     differences: string[];
@@ -109,12 +120,88 @@ const NORMALIZE_BAND: [number, number] = [70, 150]; // 이 밖이면 유사 스�
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const pct = (n: number) => Math.round(n * 1000) / 10;
 
-/** 시나리오의 한 액션에서 이 콤보의 빈도(0~1). 표에 없으면 0. */
-function freqOf(scenarioId: string, actionKey: string, combo: string): number {
-  const sc = RANGE_SCENARIOS.find((s) => s.id === scenarioId);
-  const act = sc?.actions.find((a) => a.key === actionKey);
-  if (!act) return 0;
-  return clamp01(buildFreq(act.spec).get(combo) ?? 0);
+/**
+ * 시나리오가 **실제로 담은 갈래**로 ActionMix 를 만든다.
+ *
+ * 예전 `freqOf(id, 'raise', combo)` 는 호출부가 액션 키를 문자열로 알아야 했고, 없는 키에
+ * 조용히 0 을 돌려줬다. 63표 전수 실측(2026-09-17): 공격 갈래의 키가 그룹마다 다르다 —
+ * rfi6/rfi9/defend/threebet 은 `'raise'`, **vs3bet 12표는 12/12 전부 `'fourbet'`** 이다.
+ * 그래서 4벳한 사람이 "레이즈 0% · 개선 필요" 를 받고 있었다.
+ *
+ * `absent` 는 **그 표가 주장하지 않는 갈래**다. 빈도 0(= "하지 마라")과 반드시 구별된다:
+ *  · threebet 23표와 SB 얼리 수비 3표(sb_vs_utg·sb_vs_utg1·sb_vs_mp)에는 **콜 갈래가 없다.**
+ *  · 그러면 잔여(1 − 3벳)가 콜인지 폴드인지 표가 말하지 않으므로 **콜·폴드를 함께** absent 로 둔다.
+ *  · 근거(실측): 같은 노드를 담은 두 표가 **서로 다른 말을 한다.** `sb_vs_btn` 은 A9s 를
+ *    3벳 0.5 **+ 콜 0.5** 로 담고 note 에 "나머지 절반을 콜로 받아" 라고 적는데, 짝인
+ *    `sb_3bet_btn` 은 3벳 0.5 만 담고 note 에 "3벳 아니면 폴드" 라고 적는다. 두 표의 raise
+ *    스펙은 169/169 콤보가 전부 같다. 즉 잔여의 정체는 데이터가 **합의하지 못한** 값이지
+ *    폴드도 콜도 아니다 — 어느 한쪽으로 채우면 같은 플랫콜이 자리에 따라 반대 판정을 받는다.
+ *  · 단 `canCall === false`(첫 진입 RFI·푸시폴드)면 콜이 애초에 불가능하므로 잔여는 폴드로 확정된다.
+ */
+function mixOf(
+  sc: RangeScenario, combo: string, canCall: boolean,
+): { mix: ActionMix; absent: (keyof ActionMix)[] } {
+  const at = (key: RangeAction['key']) => sc.actions.find((a) => a.key === key);
+  const aggro = at('raise') ?? at('fourbet') ?? at('allin');
+  const callAct = at('call');
+  const freq = (a: RangeAction | undefined) => (a ? clamp01(buildFreq(a.spec).get(combo) ?? 0) : 0);
+  const raise = freq(aggro);
+  const call = freq(callAct);
+
+  const absent: (keyof ActionMix)[] = [];
+  if (!aggro) absent.push('raise');
+  if (canCall && !callAct) absent.push('call', 'fold');
+
+  return {
+    mix: { raise, call, fold: absent.includes('fold') ? 0 : clamp01(1 - raise - call) },
+    absent,
+  };
+}
+
+/**
+ * 표가 상정한 **상대 레이즈 총액**(BB). 0.5BB 오차가 아니라 "그 표가 푸는 문제인가" 를 가른다.
+ *
+ * 2026-09-17 실측 결함: `BB vs BTN · AKs · 100BB` 가 **2.5bb 오픈과 25bb 오픈에서 똑같이
+ * "정확 일치"** 였다. 수비 표의 3벳/콜 비율은 특정 오픈 크기의 팟오즈에서 역산된 것이라
+ * (표들의 note 가 알파·MDF 역산을 그대로 적어 둔다) 크기가 바뀌면 그 표는 다른 문제의 답이다.
+ *
+ * ⚠ 이 숫자는 `ranges.data.ts` 의 **구조화된 필드에서 읽어온 것이 아니다 — 그런 필드가 없다.**
+ * 크기는 산문에만 있다: `bb_vs_btn.desc` "버튼이 2.5bb 오픈" · `bb_vs_sb.desc` "SB가 3bb 오픈" ·
+ * 9인 생성 표 "오픈(2.5x)" · `hj_vs_btn3bet.note` "3벳이 3x(7.5bb)" · "BB 의 OOP 4x(10bb)".
+ * 산문을 정규식으로 파싱하면 **카피가 바뀌는 날 조용히 틀린다**(ranges.data 스스로
+ * "라벨 문자열을 파싱해 추측하지 않는다" 고 적어 둔 그 함정이다). 그래서 표별로 읽지 않고
+ * **한 벌의 밴드**로 두고, 같은 데이터에서 뽑힌 `preflopQuiz` 의 상대 크기(오픈 2.5 · SB 3 ·
+ * 3벳 8)가 이 밴드 안인지를 계약 테스트로 잠근다.
+ * 표별 정확한 크기가 필요해지면 `ranges.data.ts` 에 구조화된 필드가 **먼저** 있어야 한다(오너 보호 파일).
+ */
+/** 차트가 "정확 일치"라고 말해도 되는 오픈 크기(BB).
+ *
+ *  ⚠ 2026-09-17 에 상한을 **4 → 3** 으로 좁혔다. 표들이 스스로 상정 크기를 적어 두는데
+ *  (`ranges.data.ts` 의 "2.5bb 오픈" · "SB가 3bb 오픈") 4bb 오픈까지 정확 일치로 쳤다.
+ *  같은 손의 **필요승률이 2.5x 27.3% vs 4x 35.3% 로 8%p 벌어진다**(Fable 검증자 실측) —
+ *  그 차이만큼 콜/3벳 비율이 달라지는데 "차트와 정확히 일치" 라고 말하면 확신 못 하는 것을 확신하는 것이다.
+ *  기능을 줄이는 것이 아니다: 3~6BB 는 `OPEN_REFERENCE_BAND` 가 받아 **참고(normalized_reference)** 로
+ *  그대로 답하고 차이 문장이 붙는다. 등급만 정직해진다. */
+export const CHART_OPEN_BB: readonly [number, number] = [2, 3];
+export const CHART_3BET_BB: readonly [number, number] = [6, 12];
+/** 이 밖이면 유사 스팟으로도 보지 않는다 — 그 표가 푸는 문제가 아니다. */
+const OPEN_REFERENCE_BAND: readonly [number, number] = [1.5, 6];
+const THREEBET_REFERENCE_BAND: readonly [number, number] = [4, 20];
+
+/**
+ * 상대 레이즈 총액이 표가 상정한 크기 안인가.
+ * 안 → 빈 배열 · 참조 범위 안 → 차이 한 줄 · 밖 → **null**(그 표를 아예 보지 않는다).
+ *
+ * `sizeBb` 가 아니라 **그 스트리트 총액**을 받는다 — `SpotAction.sizeBb` 는 증분이라
+ * SB 가 3bb 로 열면 증분은 2.5 다(블라인드 0.5 를 이미 냈다). 증분으로 재면 SB 오픈만 어긋난다.
+ */
+function raiseSizeDiff(
+  toBb: number, want: readonly [number, number], band: readonly [number, number], what: string,
+): string[] | null {
+  if (!Number.isFinite(toBb)) return null;
+  if (toBb >= want[0] && toBb <= want[1]) return [];
+  if (toBb < band[0] || toBb > band[1]) return null;
+  return [`이 표는 ${what} ${want[0]}~${want[1]}BB 기준인데 입력은 ${toBb}BB 입니다.`];
 }
 
 /** 히어로 앞에 액션이 하나도 없는가(첫 진입). */
@@ -170,6 +257,8 @@ export function amountToCall(s: SpotReview): number {
 interface ChartHit {
   sourceLabel: string;
   mix: ActionMix;
+  /** 그 표가 주장하지 않는 갈래 — `mix` 의 0 과 구별된다 */
+  absent: (keyof ActionMix)[];
   differences: string[];
   /** 이 표를 그대로 연습할 수 있는 트레이너 문제. 대응 문제가 없으면 없음 */
   drill?: DrillLink;
@@ -237,13 +326,23 @@ function tableSizeDiff(s: SpotReview, want: number, pos: SpotPosition, who: stri
  * 목록을 인자로 받는 이유는 그 우연에 기대지 않았음을 **순서를 뒤집어 검증할 수 있게** 하려는 것이다.
  * 인자가 없으면 이 함수는 실제 데이터 순서로만 테스트되고, 순서가 바뀐 날 조용히 틀린다.
  */
+export function findChart(
+  list: readonly RangeScenario[],
+  group: RangeScenario['group'],
+  hero: TablePos,
+  /** 상대 자리. `undefined` 는 **상대를 명시하지 않은 표**(vs3bet 4표)를 고른다는 뜻이다. */
+  vs: TablePos | undefined,
+): RangeScenario | null {
+  return list.find((x) => x.group === group && x.hero === hero && x.vs === vs) ?? null;
+}
+
 export const findDefendChart = (
   list: readonly RangeScenario[],
   villainPos: SpotPosition,
 ): RangeScenario | null => {
   const vs = toTablePos(villainPos);
-  if (!vs) return null;
-  return list.find((x) => x.group === 'defend' && x.hero === 'BB' && x.vs === vs) ?? null;
+  if (!vs) return null;                    // UTG2 는 차트 축에 없다 — vs 생략 표로 흘러가면 안 된다
+  return findChart(list, 'defend', 'BB', vs);
 };
 
 /**
@@ -269,34 +368,74 @@ function lookupPreflopChart(s: SpotReview, combo: string): ChartHit | null {
     if (!sc) return null;
     const want = group === 'rfi9' ? 9 : 6;
     const diffs = [...stackDiff, ...tableSizeDiff(s, want, s.heroPos, '내 자리')];
-    const raise = freqOf(sc.id, 'raise', combo);
+    // canCall=false — 첫 진입에는 콜할 대상이 없다. 잔여는 폴드로 확정된다.
+    const { mix, absent } = mixOf(sc, combo, false);
     return {
       sourceLabel: `프리플랍 레인지 차트 · ${sc.label} 오픈`,
-      mix: { raise, call: 0, fold: clamp01(1 - raise) },
+      mix, absent,
       differences: diffs,
       drill: { mode: 'rfi', key: `${KEY_PREFIX.rfi}|${sc.id}|${combo}` },
     };
   }
 
-  // ② BB 수비 — 상대의 오픈 레이즈 하나만 앞에 있다
+  const hero = toTablePos(s.heroPos);
+  if (!hero) return null;                  // 10인 UTG2 — 차트 축에 자리가 없다
+  const vs = toTablePos(s.villainPos);
+
+  // ② 상대의 오픈 레이즈 하나만 앞에 있다 — 블라인드면 **수비 표**, 그 밖의 자리면 **3벳 표**.
+  //
+  // hero 를 걸지 않으면 안 된다: 같은 vs 로 BB 표와 SB 표가 나란히 있어(bb_vs_btn · sb_vs_btn)
+  // 순서에 기대면 조용히 틀린다. 그리고 자리 조합이 표에 없으면 **null 로 떨어진다** —
+  // 그게 "오픈이 내 뒤에서 나왔다"(CO 히어로 vs BTN 오픈처럼 불가능한 순서)를 걸러 내는 그물이기도 하다.
   const onlyOpen = s.actions.length === 1
     && s.actions[0].actor === 'villain'
     && s.actions[0].type === 'raise';
-  if (onlyOpen && s.heroPos === 'BB') {
-    // hero 도 같이 건다 — 같은 vs 로 BB 표와 SB 표가 나란히 있어 순서에 기대면 조용히 틀린다.
-    const sc = findDefendChart(RANGE_SCENARIOS, s.villainPos);
+  if (onlyOpen) {
+    if (!vs) return null;
+    const group = (s.heroPos === 'BB' || s.heroPos === 'SB') ? 'defend' : 'threebet';
+    const sc = findChart(RANGE_SCENARIOS, group, hero, vs);
     if (!sc) return null;
+    const sizeDiff = raiseSizeDiff(
+      investedThisStreet(s, 'villain'), CHART_OPEN_BB, OPEN_REFERENCE_BAND, '상대 오픈',
+    );
+    if (!sizeDiff) return null;
     // 표마다 상정 인원이 다르다 — 얼리(UTG·UTG+1·MP) 오픈 수비 표는 9인용이다.
     // 6인으로 단정하면 9인 입력에 **없는 차이를 적어** 정확 일치를 유사 스팟으로 끌어내린다.
     const want = sc.baseTableSize ?? 6;
-    const diffs = [...stackDiff, ...tableSizeDiff(s, want, s.villainPos, '상대 자리')];
-    const raise = freqOf(sc.id, 'raise', combo);   // 3벳
-    const call = freqOf(sc.id, 'call', combo);
+    const { mix, absent } = mixOf(sc, combo, true);
     return {
       sourceLabel: `프리플랍 레인지 차트 · ${sc.label}`,
-      mix: { raise, call, fold: clamp01(1 - raise - call) },
-      differences: diffs,
-      drill: { mode: 'defend', key: `${KEY_PREFIX.defend}|${sc.id}|${combo}` },
+      mix, absent,
+      differences: [...stackDiff, ...sizeDiff, ...tableSizeDiff(s, want, s.villainPos, '상대 자리')],
+      drill: { mode: group, key: `${KEY_PREFIX[group]}|${sc.id}|${combo}` },
+    };
+  }
+
+  // ③ 내가 오픈했는데 상대가 3벳했다 — vs3bet 표(공격 갈래 키가 'fourbet' 인 12표).
+  const openThen3bet = s.actions.length === 2
+    && s.actions[0].actor === 'hero' && s.actions[0].type === 'raise'
+    && s.actions[1].actor === 'villain' && s.actions[1].type === 'raise';
+  if (openThen3bet) {
+    // 상대를 특정한 표가 우선. 없으면 상대를 명시하지 않은 표(vs 생략 4표)로 내려가되
+    // **그 사실을 차이로 적는다** — hj_vs_btn3bet.note 가 "'누가 3벳했는지'를 구분하지 않는 표가
+    // 왜 부정확한지" 를 직접 적어 두고 있다(같은 HJ 가 BB 4x 와 BTN 3x 에 1.6%p 다르게 수비한다).
+    const named = vs ? findChart(RANGE_SCENARIOS, 'vs3bet', hero, vs) : null;
+    const sc = named ?? findChart(RANGE_SCENARIOS, 'vs3bet', hero, undefined);
+    if (!sc) return null;
+    const sizeDiff = raiseSizeDiff(
+      investedThisStreet(s, 'villain'), CHART_3BET_BB, THREEBET_REFERENCE_BAND, '상대 3벳',
+    );
+    if (!sizeDiff) return null;
+    const { mix, absent } = mixOf(sc, combo, true);
+    return {
+      sourceLabel: `프리플랍 레인지 차트 · ${sc.label}`,
+      mix, absent,
+      differences: [
+        ...stackDiff, ...sizeDiff,
+        ...(named ? [] : [`이 표는 3벳한 사람을 특정하지 않습니다(입력 상대 ${s.villainPos}).`]),
+        ...tableSizeDiff(s, sc.baseTableSize ?? 6, s.heroPos, '내 자리'),
+      ],
+      drill: { mode: 'vs3bet', key: `${KEY_PREFIX.vs3bet}|${sc.id}|${combo}` },
     };
   }
 
@@ -323,6 +462,12 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   const stack = exact ?? NASH_STACKS.find((v) => Math.abs(v - s.effectiveBb) <= 1);
   if (stack === undefined) return null;
 
+  // 🔴 격리 구간(빅 앤티 4~6BB)은 표 값이 틀렸다 — `nash.data.ts` 의 `NASH_ANTE_QUARANTINE` 참고.
+  //   여기서 null 을 돌려주면 이 스팟은 **수학 참고(math_only)** 로 떨어진다. 틀린 차트로 "개선 필요" 라고
+  //   말하는 것보다 "차트 없음 + 팟오즈만" 이 정직하다. ⚠ `nashRange` 를 그냥 부르면 격리 표는 **전부 0**
+  //   (= 전부 폴드)이라 그것도 거짓말이 된다 — 그래서 읽기 전에 막는다.
+  if (isNashQuarantined(stack, s.anteBb > 0)) return null;
+
   const arr = nashRange('shove', k, stack, s.anteBb > 0);
   if (!arr || arr.length <= idx) return null;
   const shove = clamp01(arr[idx]);
@@ -335,8 +480,10 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   }
   return {
     sourceLabel: `푸시·폴드 차트 · ${stack}BB · 뒤 ${k}명${s.anteBb > 0 ? ' · BB앤티' : ''}`,
-    // 올인은 레이즈 갈래로 표시한다 — 이 차트에 콜 갈래는 없다(첫 진입 셔브/폴드 두 갈래)
+    // 올인은 레이즈 갈래로 표시한다 — 이 차트에 콜 갈래는 없다(첫 진입 셔브/폴드 두 갈래).
+    // 첫 진입이라 콜할 대상 자체가 없으므로 잔여는 폴드로 **확정**된다 → absent 없음.
     mix: { raise: shove, call: 0, fold: clamp01(1 - shove) },
+    absent: [],
     differences: diffs,
     // ⚠ 트레이너 푸시 문제는 PUSH_POS 자리만 낸다(k=7 = 9인 UTG+1 은 없다).
     //   없는 자리로 키를 만들면 makeQuiz 가 **조용히 무관한 문제**를 낸다 — 그게 CTA 를
@@ -427,10 +574,18 @@ export function evaluateSpot(s: SpotReview, options: EvaluateOptions = {}): Spot
   if (hit) {
     const exact = hit.differences.length === 0;
     const key = s.heroAction ? mixKeyOf(s.heroAction) : null;
-    const heroFreq = key ? hit.mix[key] : null;
+    // **빈도 0 과 "표가 말하지 않음" 은 다르다.** 0 은 "하지 마라"(→ 개선 필요)지만,
+    // 표가 그 갈래를 담지 않았으면 판정할 근거가 아예 없다(→ 참고). 3벳 23표와 SB 얼리 수비
+    // 3표에는 콜 갈래가 없어, 구별하지 않으면 **같은 플랫콜이 BB 에서는 '좋은 선택',
+    // CO 에서는 '개선 필요'** 가 된다 — 라우팅이 판정을 뒤집는다.
+    const silent = key !== null && hit.absent.includes(key);
+    const heroFreq = key !== null && !silent ? hit.mix[key] : null;
     const notes: string[] = [hit.sourceLabel];
     if (s.heroAction && !key) {
       notes.push(`이 표에는 '${s.heroAction}' 갈래가 없어 내 선택과 직접 비교하지 않았습니다.`);
+    }
+    if (silent) {
+      notes.push(`이 표는 '${s.heroAction}' 갈래를 담지 않습니다 — 나머지가 콜인지 폴드인지 표가 말하지 않아 판정하지 않았습니다.`);
     }
     if (!exact) notes.push(...hit.differences);
     if (heroFreq !== null && heroFreq > 0 && heroFreq < 0.5) {
@@ -441,10 +596,11 @@ export function evaluateSpot(s: SpotReview, options: EvaluateOptions = {}): Spot
       kind: exact ? 'chart_nash' : 'normalized_reference',
       sourceLabel: hit.sourceLabel,
       mix: hit.mix,
+      absent: hit.absent,
       ...(hit.drill ? { drill: hit.drill } : {}),
       heroFreq,
       differences: hit.differences,
-      verdict: verdictFromFreq(heroFreq, exact),
+      verdict: silent ? 'reference' : verdictFromFreq(heroFreq, exact),
       notes,
     };
   }

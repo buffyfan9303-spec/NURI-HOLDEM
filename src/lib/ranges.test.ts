@@ -1,7 +1,7 @@
 // 레인지 파서·콤보 가중·Nash 데이터 정합 검증
 import { describe, it, expect } from 'vitest';
 import { expandRange, buildFreq, comboCount, rangeComboPct, gridName, freqFromArray, R_CH, R_VAL } from './ranges';
-import { HAND_ORDER, NASH_STACKS, nashRange } from './nash.data';
+import { HAND_ORDER, NASH_STACKS, nashRange, hasNashRange, isNashQuarantined } from './nash.data';
 import { RANGE_SCENARIOS } from './ranges.data';
 
 describe('expandRange 표기 파서', () => {
@@ -99,6 +99,35 @@ describe('nash.data 정합', () => {
     expect(pct(1)).toBeGreaterThan(pct(2));
     expect(pct(2)).toBeGreaterThan(pct(5));
     expect(pct(5)).toBeGreaterThan(pct(8));
+  });
+
+  it('🔴 단조성을 **전 깊이 × 앤티 유무**로 확인한다 — 한 칸만 보던 계약이 깨진 표를 6개월 가렸다', () => {
+    // 왜 넓히나: 위 계약은 **10bb·앤티없음 한 칸**에서만 돌았다. 그 사이 빅 앤티 4~6BB 표가
+    //   순서를 뒤집은 채(9맥스 UTG 가 SB 보다 넓다) 라이브에서 "K2o 100% 올인" 을 조언했는데
+    //   어떤 테스트도 빨개지지 않았다(2026-09-17 감사). 한 칸 계약은 계약이 아니다.
+    // 격리된 조합은 `hasNashRange` 가 false 라 여기서도 자동으로 빠진다 — 격리를 풀면 이 계약이 판정한다.
+    const pctOf = (k: number, stack: number, ante: boolean) =>
+      rangeComboPct(freqFromArray(nashRange('shove', k, stack, ante), HAND_ORDER));
+    const broken: string[] = [];
+    for (const ante of [false, true]) for (const stack of NASH_STACKS) {
+      if (!hasNashRange('shove', 1, stack, ante)) continue; // 격리 구간
+      // 2~3BB 는 스택 대비 데드머니가 커서 전 포지션 any-two 잼이 정답에 가깝다 — 순서가 무의미해진다.
+      if (ante && stack <= 3) continue;
+      const wide = pctOf(1, stack, ante), narrow = pctOf(8, stack, ante);
+      if (!(wide >= narrow)) broken.push(`${stack}bb ante=${ante}: k1=${wide.toFixed(1)} < k8=${narrow.toFixed(1)}`);
+    }
+    expect(broken, `뒤 인원이 많은데 레인지가 더 넓다 — 표가 깨졌다:\n${broken.join('\n')}`).toEqual([]);
+  });
+
+  it('🔴 빅 앤티 4~6BB 는 격리돼 있다 — 데이터를 안 고치고 되살리면 여기서 걸린다', () => {
+    // 이 계약이 없으면 `NASH_ANTE_QUARANTINE` 을 비우는 한 줄로 거짓 조언이 조용히 돌아온다.
+    for (const s of [4, 5, 6]) {
+      expect(hasNashRange('shove', 8, s, true), `${s}bb 빅앤티가 격리에서 풀렸다`).toBe(false);
+      expect(isNashQuarantined(s, true)).toBe(true);
+    }
+    // 노앤티와 7BB 이상은 정상이므로 막지 않는다 — 기능을 통째로 죽이는 것이 아니다.
+    for (const s of [4, 5, 6]) expect(hasNashRange('shove', 8, s, false), `${s}bb 노앤티까지 막혔다`).toBe(true);
+    for (const s of [7, 8, 10]) expect(hasNashRange('shove', 8, s, true), `${s}bb 빅앤티가 잘못 막혔다`).toBe(true);
   });
   it('안테가 있으면 셔브가 넓어진다 (SB 10bb)', () => {
     const noA = rangeComboPct(freqFromArray(nashRange('shove', 1, 10, false), HAND_ORDER));

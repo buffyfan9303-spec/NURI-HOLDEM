@@ -27,11 +27,14 @@ const SNAP = 'tool:outs';
 // 진입 즉시 결과 — 빈 폼 대신 대표 상황(A♠K♠ 넛 플러시 드로우 vs 셋). GTO 패널의 데모 프리필과 같은 문법.
 const DEMO: HandBoardInit = { hero: ['As', 'Ks'], villain: ['Qh', 'Qd'], board: ['Qs', '7s', '2h'] };
 
-/** 아웃 o 장이 남은 T 장 중 2장 안에 뜰 확률(정확한 카드 세기 — 근사 아님) */
-function twoCardProb(o: number, T: number): number {
-  if (T < 2 || o <= 0) return 0;
-  return 1 - ((T - o) / T) * ((T - 1 - o) / (T - 1));
-}
+// 2026-09-17 삭제: twoCardProb(o, T) = 1 − ((T−o)/T)((T−1−o)/(T−1)).
+// 이 식을 화면에서 "정확값" 이라 불렀는데 **근사였다.** 두 가지가 겹쳐 틀린다:
+//  ① computeOuts 의 아웃은 "턴에 뜨면 내가 **우세해지는** 카드"지 "뜨면 이기는 카드"가 아니다.
+//     우세해진 뒤에도 리버에서 뒤집힌다(보드가 페어되며 상대가 풀하우스).
+//  ② 두 장을 독립처럼 곱해 런아웃 상호작용을 통째로 무시한다.
+// 실측(전수계산 대비): 데모 핸드 32.7% vs 25.6% = **7.2%p**, 셋 vs 플러시드로는 97.2% vs 74.4% = **22.7%p**.
+// 쓸 정확값은 **이미 화면에 있다** — heroEquity 는 플랍·턴에서 computeEquity 가 잔여 조합을
+// 전수계산한 값이다(플랍 990조합 · 턴 44장). 없는 함수를 새로 만들 이유가 없다.
 
 export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number, street: 'flop' | 'turn') => void }) {
   const init = useMemo<HandBoardInit>(() => {
@@ -87,7 +90,6 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
   const o = outs?.outs ?? 0;
   const oneCard = outs?.prob ?? 0;
   const onFlop = hb.boardCards.length === 3;
-  const twoCard = onFlop ? twoCardProb(o, T) : 0;
   const rule = onFlop ? Math.min(o * 4, 100) : o * 2; // 4·2 법칙
   const breakeven = oneCard > 0 && oneCard < 1
     ? `${(Math.round(((1 - oneCard) / oneCard) * 10) / 10).toFixed(1)} : 1`
@@ -162,13 +164,11 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
             <>
               <div className="grid grid-cols-2 gap-2">
                 <Result label={`다음 ${outs.next === 'river' ? '리버' : '턴'} 1장 확률`} value={`${(oneCard * 100).toFixed(1)}%`} />
-                {onFlop
-                  ? <Result label="턴+리버 2장 확률" value={`${(twoCard * 100).toFixed(1)}%`} />
-                  : <Result label="간이 (4·2 법칙)" value={`≈${rule}%`} />}
+                <Result label="간이 (4·2 법칙)" value={`≈${rule}%`} />
               </div>
               {onFlop && (
-                <Result label="간이 (4·2 법칙 · 2장 기준)" value={`≈${rule}%`}
-                  desc={`정확값은 ${(twoCard * 100).toFixed(1)}%. 4·2 법칙은 아웃이 많을수록 실제보다 크게 나옵니다.`} />
+                <Result label="턴+리버까지 이길 확률" value={`${((heroEquity ?? 0) * 100).toFixed(1)}%`}
+                  desc={`남은 카드를 전부 돌려 계산한 값입니다. 4·2 법칙(≈${rule}%)은 2장 기준이라 아웃이 많을수록 실제보다 크게 나옵니다.`} />
               )}
               <Result label="브레이크이븐 팟 오즈" value={breakeven} desc="다음 1장 기준" />
               {onFlop && (

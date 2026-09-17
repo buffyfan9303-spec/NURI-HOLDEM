@@ -182,10 +182,10 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
 
       {/* ② 빈도 또는 수학 */}
       {(evaluation.kind === 'chart_nash' || evaluation.kind === 'normalized_reference') && (
-        <MixBar mix={evaluation.mix} heroKey={heroMixKey(spot)} />
+        <MixBar mix={evaluation.mix} absent={evaluation.absent} heroKey={heroMixKey(spot)} />
       )}
       {(evaluation.kind === 'math_only' || evaluation.kind === 'unsupported') && (
-        <MathBlock math={evaluation.math} />
+        <MathBlock math={evaluation.math} boardCount={spot.board.length} />
       )}
 
       {/* ③ 왜 그런지 · 가정 · 출처
@@ -354,16 +354,29 @@ function heroMixKey(spot: SpotReview): keyof ActionMix | null {
 }
 
 /** 폴드·콜·레이즈 가로 누적 막대 + 목록. 퍼센트는 막대 밖에서도 읽힌다. */
-function MixBar({ mix, heroKey }: { mix: ActionMix; heroKey: keyof ActionMix | null }) {
+/**
+ * 기준 빈도 막대.
+ *
+ * 🔴 **`absent` 갈래는 `0%` 가 아니라 `—` 로 그린다.** `mix` 에서 그 자리의 0 은 빈도가 아니라
+ * **표의 침묵**이다(spotEvaluate 의 ActionMix 주석). 3벳 표 23장과 SB 얼리 수비 3장에는 콜 갈래가
+ * 아예 없어서, 그대로 찍으면 "정확 일치" 배지 옆에 **"콜 0% · 폴드 0%"** 가 뜬다 —
+ * 유저는 그걸 "차트가 접지 말라고 한다" 로 읽는다. 실측(2026-09-17 Fable 검증):
+ * `CO vs LJ · JJ · 콜` 에서 배지 "정확 일치" + 막대 "폴드 0% · 콜 0% · 레이즈 50%" 가 그대로 나갔다.
+ * 엔진이 잔여를 지어내지 않으려고 `absent` 를 만든 이유가 화면에서 도로 무너지던 자리다.
+ * aria-label 도 같이 고친다 — 스크린리더에게만 "0%" 라고 말하면 그것도 거짓말이다.
+ */
+function MixBar({ mix, absent, heroKey }: { mix: ActionMix; absent: readonly (keyof ActionMix)[]; heroKey: keyof ActionMix | null }) {
   const order: (keyof ActionMix)[] = ['fold', 'call', 'raise'];
   const pct = (n: number) => Math.round(n * 1000) / 10;
-  const text = order.map((k) => `${MIX_TONE[k].label} ${pct(mix[k])}%`).join(', ');
+  const silent = (k: keyof ActionMix) => absent.includes(k);
+  const cell = (k: keyof ActionMix) => (silent(k) ? '—' : `${pct(mix[k])}%`);
+  const text = order.map((k) => `${MIX_TONE[k].label} ${silent(k) ? '표에 없음' : `${pct(mix[k])}%`}`).join(', ');
   return (
     <div className="mt-2.5">
       {/* 막대 자체는 장식 — 실제 값은 아래 목록이 전한다(스크린리더는 목록을 읽는다) */}
       <div className="flex h-3 w-full overflow-hidden rounded-full bg-surface-high" role="img" aria-label={`기준 빈도 — ${text}`}>
         {order.map((k) => (
-          mix[k] > 0 ? <span key={k} className={MIX_TONE[k].bar} style={{ width: `${mix[k] * 100}%` }} /> : null
+          !silent(k) && mix[k] > 0 ? <span key={k} className={MIX_TONE[k].bar} style={{ width: `${mix[k] * 100}%` }} /> : null
         ))}
       </div>
       <ul className="mt-1.5 space-y-1">
@@ -374,7 +387,8 @@ function MixBar({ mix, heroKey }: { mix: ActionMix; heroKey: keyof ActionMix | n
               {MIX_TONE[k].label}
               {heroKey === k && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-px font-bold text-accent-200">내 선택</span>}
             </span>
-            <span className="tabular-nums font-bold text-ink-primary">{pct(mix[k])}%</span>
+            <span className={['tabular-nums font-bold', silent(k) ? 'text-ink-muted' : 'text-ink-primary'].join(' ')}
+              title={silent(k) ? '이 표는 이 갈래를 담지 않습니다 — 빈도 0 이 아닙니다' : undefined}>{cell(k)}</span>
           </li>
         ))}
       </ul>
@@ -382,12 +396,26 @@ function MixBar({ mix, heroKey }: { mix: ActionMix; heroKey: keyof ActionMix | n
   );
 }
 
-function MathBlock({ math }: { math: SpotEvaluation['math'] }) {
+/**
+ * 승률은 **두 가지 방식**으로 계산된다 — 같은 문구로 뭉뚱그리면 한쪽은 반드시 거짓말이 된다.
+ * `computeEquity` 는 보드가 3장 이상이면 잔여 조합을 **전수계산**하고(플랍 990 · 턴 44 · 리버 1),
+ * 프리플랍·보드 1~2장일 때만 몬테카를로 표본을 쓴다.
+ *
+ * 2026-09-17 실측: 표본 10,000회에서 같은 프리플랍 핸드를 12번 돌리면 폭이 1.4~1.7%p 였다
+ * (2,500회일 때는 2.7~3.5%p). 즉 **소수점 자리는 잡음**이라 표본일 때는 정수로 적는다.
+ * 반대로 플랍 이후는 흔들리지 않는 값인데 "돌릴 때마다 달라진다" 고 적혀 있었다 — 그것도 거짓이었다.
+ */
+function MathBlock({ math, boardCount }: { math: SpotEvaluation['math']; boardCount: number }) {
+  const sampled = boardCount < 3;
+  const eq = math.heroEquityPct;
   const rows: [string, string, string?][] = [
     ['팟', `${math.potBb}BB`],
     ...(math.toCallBb > 0 ? [['콜 금액', `${math.toCallBb}BB`] as [string, string]] : []),
     ...(math.neededEquityPct !== null ? [['필요 승률', `${math.neededEquityPct}%`, '이 승률보다 높아야 콜이 손해가 아닙니다'] as [string, string, string]] : []),
-    ...(math.heroEquityPct !== null ? [['내 승률(추정)', `${math.heroEquityPct}%`, '무작위 시행 추정치 — 돌릴 때마다 소수점이 조금 달라집니다'] as [string, string, string]] : []),
+    ...(eq !== null ? [sampled
+      ? ['내 승률(추정)', `약 ${Math.round(eq)}%`, '무작위 표본 추정치 — 다시 계산하면 1%p 안팎으로 달라집니다(그래서 정수로 적습니다)']
+      : ['내 승률', `${eq}%`, '남은 카드를 전부 돌려 계산한 값입니다 — 다시 계산해도 같습니다'],
+    ] as [string, string, string][] : []),
   ];
   return (
     <dl className="mt-2.5 space-y-1">

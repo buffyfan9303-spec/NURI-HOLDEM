@@ -226,7 +226,12 @@ open 25bb   → chart_nash · 차이 없음 · 필요승률 47.5
 - 결과: 도달 **21 → 61/63**. 새로 여는 35개는 **항상 `normalized_reference`(참고)** — 확신 못 하는 건 확신하지 않는다.
 - **새 coverage 등급 0개 → 마이그레이션 불필요.**
 - 🔴 `evaluateSpot` 의 `'${s.heroAction}' 갈래가 없어` 문장은 **한 글자도 바꾸지 마라** —
-  `SpotReport.tsx:371-374` 의 `koreanizeActionKeys` 가 작은따옴표 안 영문 키를 우리말로 바꾼다.
+  ~~`SpotReport.tsx:371-374` 의 `koreanizeActionKeys` 가 작은따옴표 안 영문 키를 우리말로 바꾼다.~~
+  🔴 **2026-09-17 정정 — 이 근거는 거짓이었다.** `koreanizeActionKeys` 는 **저장소에도 git 이력에도 없다**
+  (`grep -rn koreanize src` 0건 · `git log -S koreanizeActionKeys` 0건). 앞 세션이 지어낸 것이고,
+  실제로는 그 문장의 영문 액션 키가 **그대로 화면에 뜬다**(낮은 심각도이지만 사실은 사실이다).
+  👉 교훈: **인수인계서에 적힌 "건드리지 마라"의 근거도 한 번은 확인해라.** 근거 없는 금지는
+  다음 사람의 손을 묶어 놓고 정작 진짜 문제(영문 키 노출)는 가린다. 이 건은 Fable 검증자가 잡았다.
 - 후속: `SpotReport.tsx:377-383` 의 `heroMixKey` 는 `mixKeyOf` 의 **화면 쪽 사본**이라
   엔진이 `heroFreq=null` 로 둬도 콜 막대를 0% 로 강조한다. 막대 표기는 화면 소유 → 별건.
 

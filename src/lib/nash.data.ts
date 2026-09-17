@@ -39,8 +39,32 @@ const decode = (s: string | undefined): Float32Array => {
 };
 
 export type NashKind = 'shove' | 'callBB' | 'callSB';
+
+/** 🔴 **격리 구간 — 빅 앤티 4·5·6BB.** 이 표들은 값이 틀렸다(2026-09-17 감사·오너 결정).
+ *
+ *  무엇이 틀렸나: first-in 올인에서 같은 스택이면 **뒤에 남은 인원(k)이 많을수록 셔브 레인지는 좁아야** 한다.
+ *  그런데 앤티 표의 4~6BB 는 그 순서가 **뒤집혀 있다** — 9맥스 UTG(k=8)가 SB(k=1)보다 넓다.
+ *  실측(콤보 가중 %, 2026-09-17):
+ *    4bb k1=71.5 k2=75.9 k5=75.5 k8=74.9 · 5bb k1=67.1 … k8=69.0 · 6bb k1=64.6 k2=67.4 k5=66.0 k8=65.5
+ *  같은 표가 **9맥스 UTG 6BB 에서 K2o·22 를 100% 올인**이라고 말하고, 화면은 그걸
+ *  `chart_nash`(최고 신뢰 등급)로 내보냈다. 손익분기 역산으로 교차 확인했다(3BB 기준 UTG 46.2% vs SB 38.5%
+ *  → 정답은 SB 잼·UTG 폴드인데 표는 정반대). **노앤티 표는 정상**이고(공표 Nash 와 일치) 7BB 이상도 정상이다.
+ *
+ *  왜 2~3BB 는 안 막나: 스택 대비 데드머니가 커서 **전 포지션 any-two 잼**이 실제로 정답에 가깝다.
+ *  그 구간의 100% 는 모델이 깨진 증거가 아니다. 오너 결정(2026-09-17): **4~6BB 만 막고 표는 재산출한다.**
+ *
+ *  ⚠ 되살리려면 **데이터를 고친 뒤** 이 목록을 비워라. 목록만 비우면 같은 거짓 조언이 그대로 돌아온다.
+ *  `nash.data.test.ts` 의 단조성 계약이 그때 진짜인지 판정해 준다. */
+export const NASH_ANTE_QUARANTINE: readonly number[] = [4, 5, 6];
+
+/** 이 조합이 격리 구간인가. 소비자 셋(차트·드릴·스팟 분석)이 **같은 판정**을 쓰게 하는 단 하나의 함수다. */
+export function isNashQuarantined(stack: number, ante: boolean): boolean {
+  return ante && NASH_ANTE_QUARANTINE.includes(stack);
+}
+
 const tableOf = (kind: NashKind, k: number, stack: number, ante: boolean): string | undefined =>
-  (kind === 'shove' ? SHOVE : kind === 'callBB' ? CALL_BB : CALL_SB)[ante ? 'ante' : 'no']?.[String(k)]?.[String(stack)];
+  isNashQuarantined(stack, ante) ? undefined
+    : (kind === 'shove' ? SHOVE : kind === 'callBB' ? CALL_BB : CALL_SB)[ante ? 'ante' : 'no']?.[String(k)]?.[String(stack)];
 
 /** 그 조합의 표가 실제로 있는가. 없는 조합을 nashRange 로 읽으면 전부 0(=전부 폴드)이라 **틀린 조언이 된다** —
  *  화면은 이걸로 먼저 걸러 "데이터 없음"을 정직하게 보여야 한다(가까운 깊이로 몰래 대체하지 않는다). */

@@ -15,7 +15,7 @@
 import { labelToCards, type Card } from './preflop';
 import { buildFreq, gridName, freqFromArray, type FreqMap } from './ranges';
 import { RANGE_SCENARIOS, type RangeScenario } from './ranges.data';
-import { HAND_ORDER, NASH_BIG_ANTE, nashRange } from './nash.data';
+import { HAND_ORDER, NASH_BIG_ANTE, nashRange, isNashQuarantined } from './nash.data';
 
 export type Mode = 'rfi' | 'threebet' | 'defend' | 'vs3bet' | 'push' | 'call';
 export const MODES: { id: Mode; label: string }[] = [
@@ -35,6 +35,13 @@ export const PUSH_POS: { k: number; label: string }[] = [
   { k: 3, label: 'CO' }, { k: 2, label: 'BTN' }, { k: 1, label: 'SB' },
 ];
 export const PUSH_STACKS = [5, 7, 8, 10, 12, 15]; // 실전 빈발 구간
+/** 드릴이 실제로 낼 수 있는 깊이 — **격리 구간을 뺀 것**.
+ *
+ *  왜 따로 두나: 빅 앤티 4~6BB 표는 값이 틀려 격리됐다(`nash.data.ts` 의 `NASH_ANTE_QUARANTINE`).
+ *  격리된 조합을 `nashRange` 로 읽으면 **전부 0** 이 돌아오는데, 드릴은 그걸 "전부 폴드가 정답" 으로
+ *  채점한다 — 틀린 조언이 채점 기준이 되는 것이라 차트에 "데이터 없음" 을 띄우는 것보다 나쁘다.
+ *  ⚠ `PUSH_STACKS` 자체는 그대로 둔다 — 표를 재산출해 격리를 풀면 이 목록이 자동으로 되살아난다. */
+export const PUSH_STACKS_AVAILABLE = PUSH_STACKS.filter((s) => !isNashQuarantined(s, NASH_BIG_ANTE));
 /** 올인 콜 자리 — SB 콜 레인지는 셔버가 SB 가 아닌 k≥2 에서만 존재(nash.data) */
 const CALL_SEATS = [{ id: 'bb', kind: 'callBB' as const, label: 'BB', minK: 1 }, { id: 'sb', kind: 'callSB' as const, label: 'SB', minK: 2 }];
 
@@ -104,6 +111,9 @@ function chartQuiz(mode: Mode, scen: RangeScenario, hand: string): Quiz {
 function pushQuiz(k: number, stack: number, hand: string): Quiz | null {
   const p = PUSH_POS.find((x) => x.k === k);
   if (!p) return null;
+  // 격리 구간은 문제로 내지 않는다 — **저장된 오답 큐에서 되살아나는 경로**까지 여기서 막는다.
+  //   (makeQuiz 는 복원 실패 시 조용히 새 문제를 뽑으므로 사용자는 끊김을 못 느낀다.)
+  if (isNashQuarantined(stack, NASH_BIG_ANTE)) return null;
   return {
     mode: 'push', key: `push|${k}-${stack}|${hand}`, posLabel: p.label, situ: `${stack}bb · 첫 진입 · 빅 앤티`,
     hand, cards: labelToCards(hand), stackBb: stack, acts: [{ label: '올인', freq: nashFreq('shove', k, stack).get(hand) ?? 0 }],
@@ -113,6 +123,7 @@ function callQuiz(seatId: string, k: number, stack: number, hand: string): Quiz 
   const seat = CALL_SEATS.find((s) => s.id === seatId);
   const shover = PUSH_POS.find((x) => x.k === k);
   if (!seat || !shover || k < seat.minK) return null;
+  if (isNashQuarantined(stack, NASH_BIG_ANTE)) return null; // 위 pushQuiz 와 같은 이유
   return {
     mode: 'call', key: `call|${seat.id}-${k}-${stack}|${hand}`, posLabel: seat.label, situ: `${stack}bb · ${shover.label} 올인 · 빅 앤티`,
     hand, cards: labelToCards(hand), stackBb: stack, vs: { label: shover.label, bb: stack },
@@ -141,12 +152,12 @@ export function makeQuiz(mode: Mode, retryKey?: string): Quiz {
     if (q && q.key === retryKey) return q;
   }
   if (mode === 'push') {
-    const k = pick(PUSH_POS).k, stack = pick(PUSH_STACKS);
+    const k = pick(PUSH_POS).k, stack = pick(PUSH_STACKS_AVAILABLE);
     return pushQuiz(k, stack, weightedPick(nashFreq('shove', k, stack)))!;
   }
   if (mode === 'call') {
     const seat = pick(CALL_SEATS);
-    const k = pick(PUSH_POS.filter((p) => p.k >= seat.minK)).k, stack = pick(PUSH_STACKS);
+    const k = pick(PUSH_POS.filter((p) => p.k >= seat.minK)).k, stack = pick(PUSH_STACKS_AVAILABLE);
     return callQuiz(seat.id, k, stack, weightedPick(nashFreq(seat.kind, k, stack)))!;
   }
   const scen = pick(scenariosOf(mode));

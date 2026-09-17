@@ -550,6 +550,11 @@ const early3bet = (hero: TablePos, vs: TablePos, wide: 0 | 1 | 2): RangeScenario
   return {
     id: `${hero.toLowerCase().replace('+', '')}_3bet_${vs.toLowerCase().replace('+', '')}`,
     group: 'threebet', hero, vs,
+    // 이 표들은 desc 가 말하는 대로 **9인 기준**이다. 이 필드가 없으면 엔진이 6인으로 단정해
+    // 9인 입력에 "이 표는 6인 기준인데 입력은 9인입니다" 라는 **거짓 차이**를 붙이고 등급을 낮춘다
+    // (2026-09-17 Fable 검증자 실측: 같은 스팟의 BB 수비 표는 baseTableSize 9 라 chart_nash 인데
+    //  얼리 3벳 표만 reference 로 떨어졌다). 오너 허락을 받아 **이 한 필드만** 추가한다 — 레인지 값·빈도는 무변경.
+    baseTableSize: 9,
     label: `${hero} 3벳 vs ${vs}`,
     desc: `9인 · ${vsName} 오픈에 ${hero}에서 리레이즈`,
     actions: [{ key: 'raise', label: '3벳', spec }],
@@ -600,6 +605,7 @@ const DEFEND_EARLY: RangeScenario[] = [
 //       1 = UTG+1 · 2 = MP
 const earlyVs3bet = (hero: TablePos, width: 0 | 1 | 2): RangeScenario => ({
   id: `${hero.toLowerCase().replace('+', '')}_vs_3bet`, group: 'vs3bet', hero,
+  baseTableSize: 9, // 위 early3bet 과 같은 이유(9인 입력에 거짓 차이가 붙던 것) — 2026-09-17
   label: `${hero} vs 3벳`, desc: `9인 · 내 ${hero} 오픈이 3벳을 맞았을 때 · 4벳·콜`,
   actions: [
     { key: 'fourbet', label: '4벳', spec: width === 2 ? { '1': 'KK+ AKs', '0.5': 'QQ AKo A5s A4s' } : width === 1 ? { '1': 'KK+ AKs', '0.5': 'QQ AKo A5s' } : { '1': 'KK+ AKs', '0.5': 'QQ AKo' } },

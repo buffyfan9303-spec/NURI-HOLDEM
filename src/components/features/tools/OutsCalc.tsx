@@ -32,7 +32,12 @@ export default function OutsCalc() {
   const exact = street === 'flop' ? twoCard : oneCard;
   const rule = street === 'flop' ? Math.min(o * 4, 100) : o * 2; // 4·2 법칙
   const pct = Math.round(exact * 1000) / 10;
-  const breakeven = exact > 0 && exact < 1 ? `${(Math.round(((1 - exact) / exact) * 10) / 10).toFixed(1)} : 1` : '-';
+  const oneCardPct = Math.round(oneCard * 1000) / 10;
+  // 브레이크이븐은 **다음 1장 기준**이다 — 한 스트리트 콜 판단에 쓰는 값이라 2장 확률로 재면 안 된다.
+  // 2026-09-17 실측 결함: 플랍에서 2장 기준(9아웃 35.0% → 1.9:1)을 띄우는 바람에 바로 아래 경고문
+  // "한 스트리트 콜 판단은 1장 기준"과 정면으로 어긋났고, '카드로 세기' 모드(1장 기준)와 **같은 라벨로
+  // 다른 답**을 줬다. ⅓팟 벳(필요 3:1)에서 한 모드는 콜, 다른 모드는 폴드라고 말한다 — 정답은 폴드다.
+  const breakeven = oneCard > 0 && oneCard < 1 ? `${(Math.round(((1 - oneCard) / oneCard) * 10) / 10).toFixed(1)} : 1` : '-';
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
@@ -86,7 +91,13 @@ export default function OutsCalc() {
             <Result label="완성 확률 (정확)" value={`${pct}%`} accent />
             <Result label="간이 (4·2 법칙)" value={`≈${rule}%`} />
           </div>
-          <Result label="브레이크이븐 팟 오즈" value={breakeven} />
+          <Result
+            label="브레이크이븐 팟 오즈"
+            value={breakeven}
+            desc={street === 'flop'
+              ? `다음 1장(${oneCardPct}%) 기준 — 위 완성 확률은 턴+리버 2장 기준입니다`
+              : '다음 1장 기준'}
+          />
           {street === 'flop' && (
             <p className="flex items-start gap-1 text-2xs leading-relaxed text-amber-400"><Icon name="alert" size={12} className="mt-px shrink-0" />한 스트리트 콜 판단은 1장 기준(2장 확률은 올인일 때만)</p>
           )}

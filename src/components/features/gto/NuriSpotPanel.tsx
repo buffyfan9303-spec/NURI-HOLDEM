@@ -116,7 +116,11 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
     setCalculating(true);
     const h = hb.heroCards as [Card, Card];
     const v = hb.villainCards as [Card, Card];
-    equityAsync(h, v, hb.boardCards, 2500).then((r) => {
+    // 표본 수는 **프리플랍·보드 1~2장일 때만** 쓰인다(그 밖은 computeEquity 가 전수계산).
+    // 2026-09-17 실측: 2,500회는 12회 반복 폭이 2.7~3.5%p 라 정수 자리도 흔들렸다.
+    // 10,000회면 폭 1.4~1.7%p(이론 95% 구간 ±0.98%p)로 정수 자리가 의미를 갖는다.
+    // 25,000회(796ms)는 ±0.62%p 로 더 좋지만 정수로 적는 값에 3배 시간을 쓸 이유가 없다.
+    equityAsync(h, v, hb.boardCards, 10000).then((r) => {
       if (!canApplyEquity(my, reqId.current)) return;  // 오래된 응답 — 버린다
       setEquity(r.hero);
       setCalculating(false);

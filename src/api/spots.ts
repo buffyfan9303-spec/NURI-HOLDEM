@@ -50,6 +50,10 @@ function analysisSnapshot(e: SpotEvaluation): Record<string, unknown> {
   };
   if (e.kind === 'chart_nash' || e.kind === 'normalized_reference') {
     base.mix = e.mix;
+    // ⚠ `absent` 를 함께 담아야 **옛 글을 나중에 해석할 수 있다.** `mix` 만 저장하면 그 자리의 0 이
+    //   "빈도 0(하지 마라)" 인지 "표가 말하지 않음" 인지 영영 구별할 수 없다 — 3벳 표 23장이 그 경우다.
+    //   (2026-09-17 Fable 검증 지적. 지금 읽는 곳은 없지만, 저장은 되돌릴 수 없어 지금 담는 것이 싸다.)
+    base.absent = e.absent;
     base.heroFreq = e.heroFreq;
     base.sourceLabel = e.sourceLabel;
     base.differences = e.differences;

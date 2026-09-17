@@ -72,3 +72,24 @@ describe('F11 · 에퀴티 이펙트의 세대와 재계산 키', () => {
     expect(code).not.toContain('canonicalSpotKey');
   });
 });
+
+describe('🔴 표가 말하지 않는 갈래를 0% 로 그리지 않는다 (2026-09-17)', () => {
+  const REPORT = readFileSync(join(__dirname, 'SpotReport.tsx'), 'utf-8');
+  const report = REPORT.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  // 왜 계약으로 잠그나: 엔진(spotEvaluate)이 `absent` 를 만든 이유가 **잔여를 지어내지 않기 위해서**인데,
+  //   화면이 그걸 안 읽으면 `mix` 의 0 이 그대로 "0%" 로 나가 같은 거짓말이 복원된다.
+  //   실측(Fable 검증 2026-09-17): `CO vs LJ · JJ · 콜` 에서 "정확 일치" 배지 + "콜 0% · 폴드 0%".
+  //   3벳 표 23장과 SB 얼리 수비 3장이 전부 이 경로다 — 드문 구석이 아니라 기본 동선이다.
+  it('MixBar 가 absent 를 받아 — 로 그린다', () => {
+    expect(report, 'MixBar 호출부가 absent 를 안 넘긴다').toMatch(/<MixBar[^>]*absent=\{evaluation\.absent\}/);
+    expect(report, 'MixBar 가 absent 를 안 받는다').toMatch(/function MixBar\(\{[^}]*absent[^}]*\}/);
+    expect(report, "absent 갈래를 '—' 로 그리는 자리가 없다").toContain("'—'");
+  });
+
+  it('aria-label 에도 0% 라고 말하지 않는다 — 스크린리더에게만 거짓말하지 않는다', () => {
+    const label = report.match(/aria-label=\{`기준 빈도 — \$\{text\}`\}/);
+    expect(label, 'aria-label 형태가 바뀌었다 — 계약을 같이 고쳐라').not.toBeNull();
+    expect(report, 'text 가 absent 를 반영하지 않는다').toMatch(/silent\(k\) \? '표에 없음'/);
+  });
+});
