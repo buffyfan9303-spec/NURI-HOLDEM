@@ -175,8 +175,11 @@ const dayLabel = (date: string) => {
 export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
   onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], onInternalLink,
-  liveClocks = [], visitedVenues = [], myTodayRes = [],
+  liveClocks = [], visitedVenues = [], myTodayRes = [], venueById,
 }: {
+  /** 매장 대표 이미지·테마색 조회용 — 목록 줄 왼쪽 **매장 로고** 자리가 쓴다(2026-09-18).
+   *  App 이 이미 들고 있는 `venueById` 를 그대로 받는다(새 조회 0). 없으면 이니셜만 보인다. */
+  venueById?: ReadonlyMap<string, { imageUrl?: string; themeColor?: string }>;
   /** 추천 근거(2026-09-17) — 셋 다 App 이 **이미 받아 둔** 응답이다(새 조회 0). 안 넘기면 종전 정렬 그대로다. */
   liveClocks?: ClockState[];
   visitedVenues?: VisitedVenue[];
@@ -626,6 +629,7 @@ export default function HomeTab({
             <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
               {upcoming.map((s, i) => (
                 <ScheduleCard key={s.id} mode="list" schedule={s}
+                  venue={venueById?.get(s.venueId)}
                   regInfo={regInfoBySchedule.get(s.id)}
                   onVenueClick={onVenue}
                   onSelect={onSelect}

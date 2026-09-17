@@ -1534,7 +1534,11 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
      (CI 실측: `--card-h-list(182) 가 실제 카드 높이(128.5)와 53.5px 어긋난다` — 게이트가 잡았다).
      129 는 CI 하네스 실측 128.5 를 올림한 값이다. 라이브 더미(내용이 짧은 카드)는 116 이라
      허용오차(±26, `e2e/theme-tokens-v7.spec.ts` ⑦) 안에 둘 다 들어온다.
-     ⚠ **카드 레이아웃을 바꾸면 이 토큰을 같이 재라** — 둘은 한 쌍이다. */
+     ⚠ **카드 레이아웃을 바꾸면 이 토큰을 같이 재라** — 둘은 한 쌍이다.
+   🔴 2026-09-18: 줄을 레퍼런스 형태(좌 매장 로고 / 우 참가비·GTD)로 다시 만들면서 **다시 쟀다**.
+     360~639 는 CI 하네스 128.5 로 **그대로**(129 유지) — 시각 열(w-20)이 빠진 만큼 시각이 정보 줄로
+     내려와 높이가 상쇄됐다. 라이브 실측도 130.7(전형)·149.8(제목 2줄).
+     640+ 는 117 → **110**(CI 110.4 · 라이브 768/1440 모두 109.4~110.4). 종전 117 은 7px 과대였다. */
 :root { --card-h-list: 167px; }
 @media (min-width: 360px) { :root { --card-h-list: 129px; } }
 
@@ -1546,7 +1550,7 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
 @media (min-width: 768px) {
   [data-ledger-fullscreen] { --ledger-bar-right: calc(20rem + 1px + 0.75rem); }
 }
-@media (min-width: 640px) { :root { --card-h-list: 117px; } }  /* 실측 117.3 — 구 81 은 36px 어긋나 있었다 */
+@media (min-width: 640px) { :root { --card-h-list: 110px; } }  /* 실측 109.4~110.4 (2026-09-18 새 줄) */
 /* ⚠ 위 --row-h-sm 과 같은 이유로 **cis 에서만** padding 을 뺀다 — `--card-h-list` 는
    `HomeTab.tsx` 의 스켈레톤 `min-h`(border 박스)와 공유하는 값이다.
    실측(2026-09-17 라이브): 실제 181.2 vs cis 추정 **203.3**(+22.1 = py-2.5 21.25).

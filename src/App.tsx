@@ -3506,6 +3506,7 @@ export default function App() {
               ⚠ 이 주석을 여는 태그의 **속성 목록 안**으로 옮기지 마라 — 거기선 JSX 주석이 구문 오류다(2026-09-17 실제로 밟았다). */}
           <HomeTab
             schedules={schedules}
+            venueById={venueById}
             loaded={schedulesLoaded}
             /* §11 — 조회 실패를 '없음'으로 위장하지 않는다. 이 state 는 이미 존재했는데(일정 탐색만 소비)
                홈에는 내려오지 않아, schedules 500 에서 홈이 '오늘 대회 0개 · 오늘·내일 예정 대회가
@@ -3745,6 +3746,7 @@ export default function App() {
                         key={s.id}
                         mode={viewMode}
                         schedule={s}
+                        venue={venueById.get(s.venueId)}
                         reserveCount={browseResCounts[s.id]}
                         rating={venueRatings[s.venueId]}
                         distanceKm={distanceOf(s)}
@@ -3763,7 +3765,7 @@ export default function App() {
                 {viewMode === 'table' && !isMdUp && visibleSchedules.length > 0 && (
                   <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura md:hidden">
                     {visibleSchedules.map((s, i) => (
-                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} />
+                      <ScheduleCard key={s.id} mode="list" schedule={s} venue={venueById.get(s.venueId)} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} />
                     ))}
                   </div>
                 )}

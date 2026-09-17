@@ -87,7 +87,11 @@ const SUITS = ['♠', '♥', '♦', '♣'];
 
 function PosterArea({
   posterUrl, posterColor = '#1a1d24', title, className = '', thumbWidth = 400, priority = false, vtName, compact = false,
+  fallbackText,
 }: { posterUrl?: string; posterColor?: string; title: string; className?: string; thumbWidth?: number; priority?: boolean;
+  /** 이미지가 없을 때 ♠ 대신 보여줄 글자(매장 이니셜). 목록 줄의 매장 로고 자리가 쓴다 —
+   *  같은 매장의 대회 3개가 **같은 글자·같은 색**으로 묶여 보이는 것이 ♠ 세 개보다 식별에 낫다. */
+  fallbackText?: string;
   /** [DS] MO-8B: 열리는 카드 1장에만 부여되는 view-transition-name — 카드가 그 자리에서 커져 모달이 된다.
    *  문서 내 유일해야 하므로(중복이면 전환 자체가 취소) App 이 열림 대상에만 조건부로 내려준다. */
   vtName?: string;
@@ -124,16 +128,24 @@ function PosterArea({
       className={`relative overflow-hidden flex items-center justify-center ${className}`}
       style={{ background: `linear-gradient(135deg, ${posterColor}ee 0%, #0a0c0f 100%)`, ...(vtName ? { viewTransitionName: vtName } : {}) }}
     >
-      {!compact && (
+      {!compact && !fallbackText && (
         <div className="absolute inset-0 grid grid-cols-3 gap-2 p-3 opacity-[0.08] select-none pointer-events-none" aria-hidden>
           {Array.from({ length: 12 }, (_, i) => (
             <span key={i} className="text-2xl text-white text-center">{SUITS[i % 4]}</span>
           ))}
         </div>
       )}
-      <span className={`relative select-none opacity-25 ${compact ? 'text-sm' : 'text-4xl'}`} aria-hidden>♠</span>
+      {fallbackText
+        ? <span className="relative select-none text-base font-extrabold leading-none text-white/85" aria-hidden>{fallbackText}</span>
+        : <span className={`relative select-none opacity-25 ${compact ? 'text-sm' : 'text-4xl'}`} aria-hidden>♠</span>}
     </div>
   );
+}
+
+/** 매장 이니셜 — 이미지 없는 매장의 로고 자리. 이모지·서로게이트 쌍이 반 글자로 잘리지 않게 코드포인트로 자른다. */
+function venueInitial(name: string): string {
+  const ch = [...(name ?? '').trim()][0];
+  return ch ?? '?';
 }
 
 // ── 서브: 매장 링크 ─────────────────────────────────────────────────────────
@@ -279,6 +291,10 @@ interface CardProps {
   favorited?: boolean;
   /** ♥ 토글. 미제공이면 하트 자체를 렌더하지 않는다(무반응 클릭 금지) */
   onToggleFavorite?: (venueId: string) => void;
+  /** 매장 대표 이미지·테마색 — 목록 줄 **왼쪽 로고 자리**가 쓴다(2026-09-18 오너 레퍼런스).
+   *  DB 에 '로고' 전용 칸은 없어 `venues.image_url`·`theme_color` 를 그대로 쓴다(서버 변경 0).
+   *  App 이 이미 `venueById` 를 들고 있으므로 호출부에서 꺼내 내려 준다 — 조회를 카드가 하지 않는다. */
+  venue?: { imageUrl?: string; themeColor?: string };
 }
 
 /** 시작까지 남은 시간(24시간 이내) — 배지가 아니라 텍스트(§20.2 시각 노이즈 감소) */
@@ -295,7 +311,7 @@ const gradeLabel = (g: Schedule['grade']) =>
 
 function ListCard({
   schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, regInfo, vtActive,
-  favorited = false, onToggleFavorite,
+  favorited = false, onToggleFavorite, venue,
 }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
   const status = scheduleStatus(schedule.date, schedule.startTime);
@@ -347,80 +363,68 @@ function ListCard({
         schedule.isPremium ? 'bg-accent-300/[0.05]' : '',
       ].join(' ')}
     >
-      {/* ── 시각 블록 — 360px 이상은 좌측 고정 열(w-20), 359px 이하는 1행 왼쪽의 가로 묶음.
-             '언제·지금 어떤 상태인가'를 한 덩어리로 묶으면 목록 세로 스캔이 한 번에 끝난다.
-             캡션은 24시간 이내면 '시작' 대신 남은 시간(§20.2 — 배지가 아니라 텍스트).
-             ⚠ 좁은 화면 가로 묶음에서 min-w-0 을 빼면 안 된다 — '2시간 30분 후'가 참가비를 밀어낸다. */}
-      <div className="order-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 min-[360px]:order-none min-[360px]:block min-[360px]:w-20 min-[360px]:shrink-0">
-        <StatusPill b={badge} />
-        <p className="shrink-0 text-2xs tabular-nums leading-tight text-ink-muted min-[360px]:mt-0.5 min-[360px]:truncate">
-          {d.monthDay}({d.dow})
-        </p>
-        <p className="shrink-0 text-base font-extrabold tabular-nums leading-tight tracking-tight text-ink-primary min-[360px]:mt-1 min-[360px]:truncate min-[360px]:text-xl">
-          {d.time || '—'}
-        </p>
-        <p className={`min-w-0 truncate text-2xs leading-tight min-[360px]:mt-1 ${soon ? 'font-bold text-accent-200' : 'text-ink-muted'}`}>
-          {soon ?? '시작'}
-        </p>
-      </div>
+      {/* ── ① 매장 로고 ────────────────────────────────────────────────────
+             2026-09-18 오너 레퍼런스: "좌측에 매장 로고, 우측에 게임이름·GTD·참가비·시작 시간·
+             레지 마감·가능하면 지역". 예전 이 자리는 **시각 열(w-20)** 이었고 시각은 아래 정보 줄로 갔다.
+             왜 로고인가: 목록을 세로로 훑을 때 같은 매장의 대회가 **같은 그림으로 묶여** 보인다.
+             소스는 `venues.image_url` · 없으면 `theme_color` 바탕에 매장 이름 첫 글자(오너 선택).
+             ⚠ 여기가 카드→상세 모핑(vt-poster)의 출발점이다. 예전엔 매장명 옆 28px 포스터 썸네일이
+               그 역할이었는데 이 줄에서 사라졌다 — 이름을 안 옮기면 **모핑이 통째로 없어진다**. */}
+      <PosterArea
+        posterUrl={venue?.imageUrl}
+        posterColor={venue?.themeColor ?? schedule.posterColor}
+        fallbackText={venueInitial(schedule.pubName)}
+        title={schedule.pubName}
+        className="order-1 h-12 w-12 shrink-0 rounded-input min-[360px]:h-14 min-[360px]:w-14"
+        thumbWidth={128}
+        priority={priority}
+        compact
+        vtName={vtActive ? 'vt-poster' : undefined}
+      />
 
-      {/* ── 참가비 블록 — §28 참가비는 상품 가격 정보라 표시 유지.
-             359px 이하: 1행 오른쪽('참가비 60,000원' 한 줄, 자리가 없으면 wrap 으로 다음 줄).
-             360px 이상: 우측 고정 열(라벨/금액/상금 3단). 'BUY-IN' → '참가비'(§9 쉬운 한국어). */}
-      <div className="order-2 ml-auto flex min-w-0 flex-wrap items-baseline justify-end gap-x-1 text-right min-[360px]:order-3 min-[360px]:ml-0 min-[360px]:block min-[360px]:shrink-0 min-[360px]:pt-0.5">
-        <p className="text-2xs font-bold leading-tight text-ink-muted min-[360px]:tracking-wider">참가비</p>
-        <p className="text-sm font-extrabold tabular-nums leading-tight text-ink-primary min-[360px]:mt-1">
+      {/* ── ③ 참가비·상금 — §28 참가비·GTD 는 상품 가격 정보라 표시 유지.
+             `order-2` 로 **로고 바로 다음**에 둔다(DOM 순서는 로고→금액→내용). 화면에서는 flex 가
+             `ml-auto` 로 오른쪽 끝에 붙이고, 내용 블록이 `order-3` 으로 가운데를 차지한다.
+             이 순서여야 폭이 모자랄 때 **내용 블록만** 다음 줄로 내려가고 금액은 첫 줄에 남는다. */}
+      <div className="order-2 ml-auto shrink-0 pt-0.5 text-right min-[360px]:order-3 min-[360px]:ml-0">
+        <p className="text-2xs font-bold leading-tight text-ink-muted">참가비</p>
+        <p className="mt-0.5 text-sm font-extrabold tabular-nums leading-tight text-ink-primary min-[360px]:text-base">
           {buyInText(schedule.buyIn?.amount)}
         </p>
-        {/* tabular-nums: 같은 열의 '상금 보장 1,000만'·'상금 보장 500만' 자릿수를 세로로 맞춘다.
-            359px 이하에서는 이 값이 아래 행 오른쪽으로 내려간다(min-[360px]:hidden 짝) — 1행은 참가비만. */}
-        <p className={`mt-1.5 hidden break-keep text-2xs font-bold tabular-nums leading-tight min-[360px]:block ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
+        {/* tabular-nums: 같은 열의 '1,000만 GTD'·'500만 GTD' 자릿수를 세로로 맞춘다. */}
+        <p className={`mt-1 break-keep text-2xs font-bold tabular-nums leading-tight ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
           {sub ?? '—'}
         </p>
       </div>
 
-      {/* ── 내용 블록: 제목 / 매장 / 등록 마감·상금 / 메타 ─────────────────── */}
-      {/* flex-[1_1_6rem] — **rem 기준 basis** 라 루트 글자 확대(200% = 17→34px)를 그대로 탄다.
-          글자가 커지면 이 블록이 **스스로 다음 줄로 내려간다**(px 미디어쿼리는 글자 확대를 감지하지 못하므로 이 축이 필요하다).
-
-          🔴 2026-09-17: basis 를 **9rem → 6rem** 으로 낮췄다. 오너 리포트: "공백이 너무 많고 좌측에는
-          정보가 너무 많아 일부러 이렇게 해놓은거야?"
-          9rem(=153px)은 360~639px 에서 **3열이 한 줄에 안 들어가는 값**이었다. 그러면 참가비 블록이
-          wrap 으로 내려가 **시각 열(85px) 아래에 쌓이고**, 넓은 중앙 열은 아래가 통째로 빈다.
-          라이브 실측(2026-09-17 · 루트 17px):
-            390px 카드 354 → 좌측 6줄(y17~171) · 우측은 y86 에서 끝 = **빈 공간 95px** · 카드 높이 181
-            basis 를 낮추면 → 참가비 x=262(우측 열) · 카드 높이 **116**(−36%)
-            360px: 9rem·8rem 접힘 / **7rem 부터 3열 유지**(카드 181 → 141)
-          7rem 이 임계인데 **6rem 을 쓴다** — 임계에 딱 붙이면 폰트가 조금만 달라져도 도로 접힌다
-          (§7-⑯ '경계값' 함정). basis 는 **접히는 시점만** 정하고 실제 제목 폭은 grow 가 정하므로
-          6rem 이든 7rem 이든 렌더 폭은 같다(실측 둘 다 122px) — 낮출수록 안전하고 손해가 없다.
-          ⚠ **접근성 축은 그대로다**(실측): 루트 34px 에서 9rem·6rem 모두 제목 블록이 y=220 으로
-          줄을 내리고 가로 넘침 0 이다. 이 값을 다시 올리려면 360px 에서 3열이 유지되는지 먼저 재라. */}
+      {/* ── ② 내용 — 게임 이름 / 시각·마감 / 매장·지역 / 유형 ─────────────────
+             `w-full` + `order-3` 이라 로고·금액 다음 줄을 통째로 쓴다… 가 아니라, 아래
+             `min-[360px]` 에서 `flex-1` 로 **가운데 열**이 된다. 359px 이하에서만 아래로 접힌다.
+             ⚠ basis 를 rem 으로 두는 이유는 종전과 같다 — 루트 글자 200% 확대(17→34px)에서
+               이 블록이 **스스로 줄을 내리는** 접근성 축이 여기 달려 있다(px 미디어쿼리는 못 잡는다). */}
       <div className="order-3 w-full min-w-0 min-[360px]:order-2 min-[360px]:w-auto min-[360px]:flex-[1_1_6rem]">
-        {/* 제목 — 목록은 최대 2줄 요약, 전문은 상세에서 보인다.
-            break-keep: 브라우저 기본(word-break:normal)은 한글을 **음절 단위**로 아무 데서나 꺾는다.
-            360px 에서 중앙 열이 ~170px 밖에 안 돼 '나이트 토너먼트' 가 '나이트 토너'/'먼트' 로 갈렸다 —
-            대회명은 1차 식별자라 어절 단위(keep-all)로 접는다. [overflow-wrap:anywhere] 는
-            띄어쓰기 없는 초장문 토큰만 예외로 절단(Toast·VoucherWallet 과 같은 짝).
-            크기: 359px 이하 0.9375rem(루트17px=15.9px, '15~16px') / 360px 이상은 종전 text-sm 유지. */}
-        <h3 className="line-clamp-2 break-keep [overflow-wrap:anywhere] text-[0.9375rem] font-bold leading-snug tracking-tight text-ink-primary min-[360px]:text-sm">
-          {schedule.isPremium && <span className="mr-1 align-middle text-2xs font-extrabold text-accent-200">TOP</span>}
-          {schedule.title}
+        {/* 게임 이름 — 목록은 최대 2줄, 전문은 상세에서. break-keep 은 한글을 어절 단위로 접는다. */}
+        <h3 className="flex items-start gap-1 text-[0.9375rem] font-bold leading-snug tracking-tight text-ink-primary min-[360px]:text-sm">
+          <StatusPill b={badge} />
+          <span className="line-clamp-2 break-keep [overflow-wrap:anywhere]">
+            {schedule.isPremium && <span className="mr-1 align-middle text-2xs font-extrabold text-accent-200">TOP</span>}
+            {schedule.title}
+          </span>
         </h3>
 
-        {/* 매장 로고(포스터 썸네일) + 매장명 · 지역 + ♥ — 이제 **행 전체 폭**을 쓴다.
-            썸네일은 그대로 둔다: vt-poster(카드→모달 모핑)의 대상이라 숨기면 전환이 사라진다. */}
+        {/* 시각 줄 — 오너 요청의 '게임 스타트 시간 + 레지 마감 시간'. 날짜는 레퍼런스와 같이 앞에 둔다.
+            시작 시각만 **굵게** — 목록을 훑을 때 가장 먼저 찾는 값이다.
+            남은 시간(24시간 이내)은 배지가 아니라 텍스트다(§20.2 시각 노이즈 감소). */}
+        <p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs leading-tight text-ink-secondary">
+          <span className="tabular-nums text-ink-muted">{d.monthDay}({d.dow})</span>
+          <span className="text-sm font-extrabold tabular-nums tracking-tight text-ink-primary">{d.time || '—'}</span>
+          <span className="text-ink-muted">시작</span>
+          {reg && <><span aria-hidden className="text-ink-muted">·</span><span className="font-semibold tabular-nums">{reg}</span></>}
+          {soon && <><span aria-hidden className="text-ink-muted">·</span><span className="font-bold text-accent-200">{soon}</span></>}
+        </p>
+
+        {/* 매장 · 지역 ♥ — 지역은 오너가 "가능하면" 이라 한 값이고 VenueLink 가 이미 함께 그린다. */}
         <div className="mt-1 flex items-center gap-1">
-          <PosterArea
-            posterUrl={schedule.posterUrl}
-            posterColor={schedule.posterColor}
-            title={schedule.title}
-            className="h-7 w-7 shrink-0 rounded-input"
-            thumbWidth={64}
-            priority={priority}
-            compact
-            vtName={vtActive ? 'vt-poster' : undefined}
-          />
           <VenueLink
             pubName={schedule.pubName}
             region={schedule.region}
@@ -437,25 +441,11 @@ function ListCard({
           )}
         </div>
 
-        {/* 등록 마감 + 상금 — 참가 판단의 두 값이라 **숨은 가로 스크롤에 넣지 않는다**(§6-1).
-            상금은 360px 이상에서 우측 참가비 열로 올라가므로 여기서는 좁은 폭 전용(min-[360px]:hidden). */}
-        {(reg || sub) && (
-          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs leading-tight min-[360px]:hidden">
-            <span className="font-semibold text-ink-secondary">{reg ?? ''}</span>
-            {sub && <span className="font-bold tabular-nums text-gold-300">{sub}</span>}
-          </div>
-        )}
-
         {/* 메타 — 유형·등급·게임종류 · 별점 · 거리 · 예약.
-            ⚠ 종전엔 `overflow-x-auto` 한 줄이라 등록 마감·유형이 **숨은 가로 스크롤** 안으로 사라졌다
-              (스크롤바도 없어 유저는 그 정보가 없는 대회로 오해한다). 지금은 줄바꿈으로 전부 보인다.
-            ⚠ '예약 N명'은 **사실**이다 — 정원·마감 시각 데이터가 없으므로 이걸로 '마감 임박'을 만들지 않는다. */}
+            ⚠ 가로 스크롤에 넣지 않는다 — 예전에 등록 마감·유형이 **숨은 가로 스크롤** 안으로 사라져
+              유저가 그 정보가 없는 대회로 오해했다(§6-1). 줄바꿈으로 전부 보인다.
+            ⚠ '예약 N명'은 **사실**이다 — 정원·마감 데이터가 없으므로 '마감 임박'을 만들지 않는다. */}
         <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-tight text-ink-muted">
-          {reg && (
-            <span className="hidden rounded-badge bg-surface-high px-1.5 py-0.5 font-bold leading-tight text-ink-muted min-[360px]:inline">
-              {reg}
-            </span>
-          )}
           <span className="break-keep">{meta || '—'}</span>
           {rating && rating.count > 0 && (
             <span className="shrink-0 tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
