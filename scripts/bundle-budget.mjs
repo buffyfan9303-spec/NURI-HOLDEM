@@ -104,6 +104,21 @@ const injectedExt = inlineScripts.flatMap((code) => {
 });
 extStyles.push(...injectedExt);
 
+// ── ①-c mock 빌드 탐지 (2026-09-17) ────────────────────────────────────────
+// 🔴 이 게이트가 **세 번째로 눈을 감은** 자리다(위 두 건: 폰트 JS 주입 · 임계 경로 누수).
+//   `.env.local` 이 없는 체크아웃에서 빌드하면 `src/lib/supabase.ts` 의 `IS_MOCK` 이 켜지고
+//   `@supabase/supabase-js` 가 **정적 그래프에서 통째로 빠진다**. 그러면 임계 경로가
+//   실측 **189KB** 로 나오는데 CI(실 env)는 **259KB** 다 — 70KB 차이다.
+//   즉 로컬은 "여유 27%" 라고 말하고 CI 는 같은 커밋에서 초과로 죽는다.
+//   실제로 2026-09-17 에 그렇게 갈렸다(로컬 게이트 4단계 통과 → CI 번들 예산 실패).
+//
+//   판정: 빌드 시 VITE_SUPABASE_URL 이 박혔으면 번들 어딘가에 그 호스트 리터럴이 남는다.
+//   ⚠ 여기서 '통과' 라고 말하지 않는다. **측정 불가**라고 말하고 그 항목을 판정에서 뺀다 —
+//     검사하지 않은 것을 통과로 세는 것이 이 저장소가 반복해서 밟은 바로 그 함정이다.
+const allJs = files.filter((x) => x.ext === '.js')
+  .map((x) => readFileSync(join(ASSETS, x.f), 'utf8')).join('\n');
+const isMockBuild = !/\.supabase\.co/.test(allJs);
+
 const actual = {
   totalJsGzipKb: kb(totalJs),
   totalCssGzipKb: kb(totalCss),
@@ -146,7 +161,13 @@ const check = (key, label, unit = 'KB gz') => {
 };
 
 console.log('번들 예산 검사 (gzip)');
-check('entryGzipKb', '첫 화면 임계 경로');
+if (isMockBuild) {
+  console.log('  첫 화면 임계 경로              측정 불가 — **mock 빌드**다(.env.local 없이 빌드됨)');
+  console.log('    supabase 클라이언트가 정적 그래프에서 빠져 실제보다 ~70KB 작게 나온다.');
+  console.log('    이 항목은 판정에서 **제외**했다. 진짜 값은 CI(실 env)가 잰다.');
+} else {
+  check('entryGzipKb', '첫 화면 임계 경로');
+}
 check('totalJsGzipKb', 'JS 전체');
 check('totalCssGzipKb', 'CSS 전체');
 check('largestChunkGzipKb', `최대 청크(${biggest.f})`);

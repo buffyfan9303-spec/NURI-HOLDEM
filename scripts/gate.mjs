@@ -23,7 +23,7 @@
 //     (빌드가 실패해도 복원한다 — finally 로 감싼다.)
 //
 // 쓰는 법
-//   npm run gate            전체(타입·단위·린트·빌드)
+//   npm run gate            전체(타입·단위·린트·빌드·번들예산·비밀스캔) — ci.yml 과 같은 집합(E2E 만 제외)
 //   npm run gate -- --quick 빌드 빼고(타입·단위·린트만) — 편집 중 빠른 확인용
 
 import { spawnSync } from 'node:child_process';
@@ -80,6 +80,16 @@ try {
     if (existsSync(SITEMAP)) sitemapBefore = readFileSync(SITEMAP);
     // ④ 실제 빌드 — Vercel 이 돌리는 것과 같은 명령. 여기서 통과해야 배포가 산다.
     step('프로덕션 빌드 (npm run build)', 'npm', ['run', 'build']);
+
+    // ⑤⑥ 🔴 2026-09-17: 이 둘이 **게이트에 없어서** 로컬 4단계 통과 → CI 실패가 났다.
+    //   ci.yml 은 lint → build → **bundle:budget** → test:e2e → **secrets** 를 돈다.
+    //   게이트가 CI 보다 느슨하면 로컬 초록은 거짓말이다 — 오늘 아침 반대 방향의 같은 구멍
+    //   ('CI 는 gate 가 아니라 lint 를 부른다')을 고쳤는데, 이쪽이 남아 있었다.
+    //   ⚠ test:e2e 는 일부러 뺀다(17분 + 운영 데이터 의존). 그건 CI 가 잰다.
+    //   ⚠ bundle:budget 은 `.env.local` 이 없는 체크아웃에서 **임계 경로를 재지 못한다** —
+    //     그 경우 스스로 '측정 불가' 라고 말하고 판정에서 뺀다(bundle-budget.mjs 참고).
+    step('번들 예산 (bundle:budget)', 'npm', ['run', 'bundle:budget']);
+    step('비밀 스캔 (secretlint)', 'npm', ['run', 'secrets']);
   }
   summary(null);
 } catch (err) {
