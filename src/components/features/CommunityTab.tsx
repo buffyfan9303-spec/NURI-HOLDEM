@@ -382,7 +382,7 @@ function CommunityTab({
 
       {/* 섹션 콘텐츠 — 게시판은 2-pane 전체폭, 그 외 단일 컬럼은 읽기폭(max-w-3xl)으로 제한.
           keep-alive: 방문한 섹션은 언마운트하지 않고 display 토글(메인 탭과 동일) — 재방문 커밋 프레임이 가볍다 */}
-      <div className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
+      <div data-community-secpanel="" className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
       {(visitedSecs.has('live') || section === 'live') && (
         <div data-sec="live" style={{ display: section === 'live' ? undefined : 'none' }}>
           <LiveWallSectionM visible={section === 'live'} />

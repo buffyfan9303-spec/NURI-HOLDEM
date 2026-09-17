@@ -67,9 +67,9 @@ describe('하위 탭 전환 · 스코프와 CSS 규칙의 1:1', () => {
   });
 
   it.each(
-    // community-sec 은 root 를 함께 미는 1세대 조리법이라 '본문 이름·root 정지' 규칙이 없다 —
-    // 기존 동작을 바꾸지 않기 위해 그대로 둔다(기능 보존). 나머지는 모두 2세대 규격을 따른다.
-    [...usedScopes()].filter((s) => s !== 'community-sec').sort(),
+    // 2026-09-17 까지 community-sec 만 면제였다(root 를 함께 미는 1세대) — 그 면제가 유일한 위반자를 6개월 숨겼다.
+    // 지금은 전 스코프가 2세대 규격(본문 이름·root 정지·4방향)이라 면제가 없다.
+    [...usedScopes()].sort(),
   )("'%s' 스코프에 탭바·본문 이름과 방향 애니메이션이 모두 있다", (scope) => {
     const rules = CSS.split('\n').filter((l) => l.includes(`data-vt-scope='${scope}'`));
     const text = rules.join('\n');
@@ -113,6 +113,53 @@ describe('하위 탭 전환 · 스코프와 CSS 규칙의 1:1', () => {
   });
 });
 
+// ── 돌출 가드는 반쪽이면 안 고쳐진다 ─────────────────────────────────────────
+//
+// 왜 이 게이트가 필요한가: 판마다 높이가 다른 스코프에서 본문 스냅샷이 group 박스 밖으로 그려진다
+// (::view-transition-old/new 는 inline-size:100%·block-size:auto 라 **원래 높이**로 그려지는데
+// group 박스는 새 높이로 보간되기 때문). 이걸 막는 조리법은 **두 줄이 한 쌍**이다:
+//   ① group { overflow: clip }                      — 안 하면 페인트가 안 잘린다
+//   ② old/new { height:100%; object-fit:none; … }   — 안 하면 스냅샷이 group 폭에 맞춰 축소(줌)된다
+//
+// 🔴 반쪽만 적용해도 **아무 에러가 안 난다.** 게다가 ① 만 빠진 경우는 계측으로도 안 잡힌다 —
+// `getComputedStyle(documentElement, '::view-transition-old(x)').height` 가 0 을 말하는데
+// 실제 페인트는 안 잘려 있다(VT 스냅샷은 object-fit 클립을 받지 않는다).
+// 2026-09-17 에 정확히 이걸로 한 번 오판했다: computed 0 을 근거로 통과시켰다가
+// 스크린샷에서 옛 본문이 새 푸터 위에 그대로 그려지는 것을 보고 뒤집었다.
+// 숫자가 영원히 초록인 결함이라 **소스 계약으로만** 막을 수 있다.
+describe('하위 탭 전환 · 돌출 가드는 두 줄이 한 쌍이다', () => {
+  /** CSS 에서 `::view-transition-<phase>(<name>)` 에 실제로 선언 블록이 붙은 이름을 모은다. */
+  const namesWith = (phase: string, decl: RegExp): Set<string> => {
+    const found = new Set<string>();
+    for (const m of CSS.matchAll(
+      new RegExp(String.raw`::view-transition-${phase}\(([a-z0-9-]+)\)[^{]*\{([^}]*)\}`, 'g'),
+    )) {
+      if (decl.test(m[2])) found.add(m[1]);
+    }
+    return found;
+  };
+
+  it('object-fit 가드가 있는 패널은 group overflow:clip 도 갖는다(그 반대도)', () => {
+    const clipped = namesWith('group', /overflow:\s*clip/);
+    const fitted = new Set([
+      ...namesWith('old', /object-fit:\s*none/),
+      ...namesWith('new', /object-fit:\s*none/),
+    ]);
+
+    const missingClip = [...fitted].filter((n) => !clipped.has(n));
+    const missingFit = [...clipped].filter((n) => !fitted.has(n));
+
+    expect(
+      missingClip,
+      `object-fit:none 은 있는데 group overflow:clip 이 없다 → computed 는 0 을 말하지만 페인트는 안 잘린다: ${missingClip.join(', ')}`,
+    ).toEqual([]);
+    expect(
+      missingFit,
+      `group overflow:clip 은 있는데 old/new object-fit:none 이 없다 → 스냅샷이 group 폭에 맞춰 축소(줌)된다: ${missingFit.join(', ')}`,
+    ).toEqual([]);
+  });
+});
+
 // ── 알약(SlidingPill) 이 스냅샷에 갇히지 않는가 ─────────────────────────────
 //
 // 왜 이 게이트가 필요한가: 탭바에 view-transition-name 을 주면 그 탭바는 전환 동안 **정지 이미지**로
@@ -127,12 +174,12 @@ describe('하위 탭 전환 · 알약이 탭바 스냅샷에 갇히지 않는다
    *  = 활성 표시가 정적이라 가려질 이동 자체가 없다. 2026-09-07 마크업 전수 확인. */
   const NO_PILL: Record<string, string> = {
     'admin-sec': '관리자 8섹션 내비 — 지시자 없음(정적 버튼)',
-    // 'mystore-sec' 는 2026-09-17 에 **면제에서 내렸다**. 여기 '지시자 없음(정적 버튼)' 이라고 적혀 있었지만
-    //   사실이 아니었다 — 그 스코프 안에 SlidingPill 이 **둘**이다(GameStepBar · SettingsTabBar).
-    //   둘 다 data-mystore-secpanel **안**에 있어서(VenueManageTab.tsx:748 이 패널을 열고 :770·:810 이 그 안)
-    //   판을 옮길 때마다 패널의 vt-panel-*(±18px + 페이드)에 실려 같이 미끄러지고 흐려졌다
-    //   (오너 2026-09-17: "내 매장은 움직일 때마다 뚝뚝 끊키거나 기존 화면이 남아있거나").
-    //   면제는 '지시자가 없다'는 **사실 주장**인데, 그 사실이 바뀐 뒤에도 아무도 다시 확인하지 않아
+    // 'mystore-sec' 는 2026-09-17 에 **면제에서 내렸다**. 여기 '지시자 없음(정적 버튼)' 이라고 적혀 있었지만
+    //   사실이 아니었다 — 그 스코프 안에 SlidingPill 이 **둘**이다(GameStepBar · SettingsTabBar).
+    //   둘 다 data-mystore-secpanel **안**에 있어서(VenueManageTab.tsx:748 이 패널을 열고 :770·:810 이 그 안)
+    //   판을 옮길 때마다 패널의 vt-panel-*(±18px + 페이드)에 실려 같이 미끄러지고 흐려졌다
+    //   (오너 2026-09-17: "내 매장은 움직일 때마다 뚝뚝 끊키거나 기존 화면이 남아있거나").
+    //   면제는 '지시자가 없다'는 **사실 주장**인데, 그 사실이 바뀐 뒤에도 아무도 다시 확인하지 않아
     //   이 줄이 검사를 계속 통과시켰다. 지금은 알약 규칙이 있으므로 목록에 있을 이유가 없다.
     'usermgmt-sec': '회원관리 섹션 — 지시자 없음',
     'tools-lane': 'GTO 레인 바 — 지시자 없음',

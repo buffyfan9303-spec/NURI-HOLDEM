@@ -1720,6 +1720,27 @@ html[data-vt-scope='community-sec'] [data-community-secbar] [data-sliding-pill] 
    대조 실험으로 확정했다 — community-pill 이름만 빼면 같은 프레임에 글자가 보인다.
    라벨은 알약과 정확히 같은 박스(h-10 w-full)라 같이 미끄러지며, 캡처가 알약보다 뒤라 위에 얹힌다. */
 html[data-vt-scope='community-sec'] [data-community-secbar] [data-pill-active] { view-transition-name: community-label; }
+/* 본문(6개 keep-alive 섹션 래퍼)에 자기 이름 — root 에서 분리해 **본문만** 밀고 root 기본 연출(vt-push-*, blur)은 끈다.
+   2026-09-17 까지 community-sec 만 root 를 blur 와 함께 밀던 1세대였다(같은 화면의 rank-tab 은 본문만 밀어 두 바의 모션이 달랐다).
+   외치기 바(CommunityShoutBar)·secbar 는 래퍼 밖이라 제자리. 게이트: subTabTransition.test.ts(면제 삭제). */
+html[data-vt-scope='community-sec'] [data-community-secpanel] { view-transition-name: community-secpanel; }
+html[data-vt-scope='community-sec']::view-transition-old(root),
+html[data-vt-scope='community-sec']::view-transition-new(root) { animation: none; }
+/* 돌출 가드 — 이름을 받은 순간 본문은 root 의 뷰포트 고정 스냅샷 보호를 잃는다. ::view-transition-old/new 는
+   inline-size:100%·block-size:auto 라 **원래 높이**로 그려지고, group 박스가 새 높이로 보간되는 동안 아래로 삐져나온다.
+   실측(2026-09-17, 390×844, 게시판 246px ↔ 순위 560px): 가드 없이 양방향 313.5px 돌출 —
+   짧아지는 방향에서 옛 본문 아랫부분이 새 푸터 위로 페이드아웃되는 잔상이 눈에 보였다.
+   🔴 **아래 두 줄은 반드시 함께 있어야 한다.** 한쪽만으로는 안 고쳐지고, 그 사실이 계측에 안 잡힌다:
+     · old/new 만(height·object-fit) → `getComputedStyle(...'::view-transition-old').height` 는 0 이 되는데
+       **페인트는 안 잘린다**(VT 스냅샷은 object-fit 클립을 받지 않는다). 2026-09-17 에 이걸로 한 번 오판했다 —
+       computed 0 을 믿고 통과시켰다가 스크린샷에서 옛 본문이 푸터 위에 그대로 그려지는 것을 봤다.
+     · group overflow:clip 만 → 클립은 되지만 old/new 가 group 폭에 맞춰 **축소(줌)** 돼 글자가 작아진다.
+   둘을 합쳐야 자연폭·좌상단 정렬로 group 경계에서만 잘린다. 390·768·1280 세 폭 양방향 +80/+160ms
+   스크린샷으로 확인(1280 에서만 폭이 바뀐다 — 게시판 1188px ↔ 순위 816px, max-w-3xl 때문).
+   ⚠ **판정은 스크린샷으로 해라.** computed 높이는 이 결함 앞에서 항상 0 을 말한다. */
+html[data-vt-scope='community-sec']::view-transition-group(community-secpanel) { overflow: clip; }
+html[data-vt-scope='community-sec']::view-transition-old(community-secpanel),
+html[data-vt-scope='community-sec']::view-transition-new(community-secpanel) { height: 100%; object-fit: none; object-position: top left; }
 /* 매장 페이지 탭바(매장소개·순위·포스터·일정·커뮤니티)도 같은 조리법 — 전환 동안만 자기 이름을 갖게 해
    본문만 크로스페이드되고 탭바는 제자리에 고정된다(2026-08-29 오너 지적: 소메뉴에 모션이 없다).
    상시 name 을 주면 매장 페이지를 닫을 때 old-only 스냅샷이 얼어붙는다 — 커뮤니티 서브탭에서 실측한 그 함정. */
@@ -2046,6 +2067,7 @@ html[data-vt-scope='crm-range']::view-transition-new(root) { animation: none; }
 ::view-transition-new(profile-panel),
 ::view-transition-new(sched-panel),
 ::view-transition-new(legal-panel),
+::view-transition-new(community-secpanel),
 ::view-transition-new(crm-panel) { background-color: rgb(var(--surface-base)); }
 
 /* notif-panel(알림 패널 쪽지·알림 목록)은 위 목록과 달리 **뜨는 카드**다 — 부모가 bg-surface-mid
@@ -2087,6 +2109,7 @@ html[data-vt-dir='forward']::view-transition-old(group-panel),
 html[data-vt-dir='forward']::view-transition-old(profile-panel),
 html[data-vt-dir='forward']::view-transition-old(sched-panel),
 html[data-vt-dir='forward']::view-transition-old(legal-panel),
+html[data-vt-dir='forward']::view-transition-old(community-secpanel),
 html[data-vt-dir='forward']::view-transition-old(crm-panel) { animation: vt-panel-out-l var(--dur-fast) var(--ease-out) both; }
 html[data-vt-dir='forward']::view-transition-new(admin-secpanel),
 html[data-vt-dir='forward']::view-transition-new(mystore-secpanel),
@@ -2100,6 +2123,7 @@ html[data-vt-dir='forward']::view-transition-new(group-panel),
 html[data-vt-dir='forward']::view-transition-new(profile-panel),
 html[data-vt-dir='forward']::view-transition-new(sched-panel),
 html[data-vt-dir='forward']::view-transition-new(legal-panel),
+html[data-vt-dir='forward']::view-transition-new(community-secpanel),
 html[data-vt-dir='forward']::view-transition-new(crm-panel) { animation: vt-panel-in-r var(--dur-tab) var(--ease) both; }
 html[data-vt-dir='back']::view-transition-old(admin-secpanel),
 html[data-vt-dir='back']::view-transition-old(mystore-secpanel),
@@ -2113,6 +2137,7 @@ html[data-vt-dir='back']::view-transition-old(group-panel),
 html[data-vt-dir='back']::view-transition-old(profile-panel),
 html[data-vt-dir='back']::view-transition-old(sched-panel),
 html[data-vt-dir='back']::view-transition-old(legal-panel),
+html[data-vt-dir='back']::view-transition-old(community-secpanel),
 html[data-vt-dir='back']::view-transition-old(crm-panel) { animation: vt-panel-out-r var(--dur-fast) var(--ease-out) both; }
 html[data-vt-dir='back']::view-transition-new(admin-secpanel),
 html[data-vt-dir='back']::view-transition-new(mystore-secpanel),
@@ -2126,6 +2151,7 @@ html[data-vt-dir='back']::view-transition-new(group-panel),
 html[data-vt-dir='back']::view-transition-new(profile-panel),
 html[data-vt-dir='back']::view-transition-new(sched-panel),
 html[data-vt-dir='back']::view-transition-new(legal-panel),
+html[data-vt-dir='back']::view-transition-new(community-secpanel),
 html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-in-l var(--dur-tab) var(--ease) both; }
 
 /* 탭바는 제자리 고정 — 스냅샷만 뜨고 움직이지 않는다(venue-tabbar 와 같은 처리). */

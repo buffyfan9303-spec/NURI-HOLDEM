@@ -261,6 +261,62 @@ ${joined}`).toEqual([]);
   });
 });
 
+// ── 커뮤니티 서브탭(community-sec) — 본문만 밀린다 (2026-09-17 오너 리포트: "순위 탭 모션이 다른 탭과 다르다") ──
+//
+// 이상한 쪽은 순위(rank-tab)가 아니라 바로 위 커뮤니티 서브탭이었다. goSubTab 스코프 17개 중 community-sec 만
+// root(화면 전체)를 blur 와 함께 밀던 1세대였고, 2px 아래 rank-tab 은 본문만 밀어 같은 화면에서 두 바의 모션이 달랐다.
+// 수정 전 실측: ::view-transition-new(root) :: vt-push-in-r · community-secpanel 0건.
+// 수정 후 실측: ::view-transition-new(community-secpanel) :: vt-panel-in-r · old/new(root) 애니메이션 0건.
+// subTabTransition.test.ts 의 community-sec 면제가 이 결함을 6개월 숨겼다 — 같은 커밋에서 면제를 지웠다.
+//
+// 돌출(본문이 이름을 받으면 root 의 뷰포트 고정 스냅샷 보호를 잃고 old/new 가 원래 높이로 그려진다)은
+// index.css 의 height:100%·object-fit:none 가드로 막았다 — 여기서 old/new 높이가 group 높이와 같은지도 같이 잰다
+// (실측 2026-09-17, 게시판 246px ↔ 순위 560px: 가드 없이 양방향 313.5px 돌출, 가드 뒤 0).
+//
+// 커뮤니티 서브탭은 비로그인으로도 보이므로 자격 증명 없이 돈다. 클릭은 page.evaluate 로 — Playwright locator.click 은
+// 대상까지 자동 스크롤해 측정을 오염시킨다(CLAUDE.md).
+test.describe('하위 탭 — 커뮤니티 서브탭도 본문만 밀린다', () => {
+  test('🔴 커뮤니티 서브탭(community-sec): 본문 스냅샷이 밀리고 root 는 정지·돌출 0', async ({ page }) => {
+    await stabilizeBackstack(page);
+    await page.goto('/');
+    const community = page.locator('nav').getByRole('button', { name: '커뮤니티', exact: true }).first();
+    await expect(community).toBeVisible({ timeout: 20_000 });
+    await dismissOverlays(page);
+    await community.click();
+    const board = page.getByTestId('sec-tab-board').first();
+    await expect(board).toBeVisible({ timeout: 15_000 });
+    await board.click();
+    await page.waitForTimeout(900); // 앞선 전환·초기 로드가 끝난 뒤에 잰다
+
+    // 전환 한복판에서 본문 그룹·old·new 의 높이를 낚아챈다 — 돌출량 = old(또는 new) − group.
+    const heights = page.evaluate(() => new Promise<{ g: number; o: number; n: number }[] | null>((resolve) => {
+      const t0 = performance.now();
+      const cs = (pe: string) => parseFloat(getComputedStyle(document.documentElement, pe).height);
+      const out: { g: number; o: number; n: number }[] = [];
+      const tick = () => {
+        const g = cs('::view-transition-group(community-secpanel)');
+        if (!Number.isNaN(g)) out.push({ g, o: cs('::view-transition-old(community-secpanel)'), n: cs('::view-transition-new(community-secpanel)') });
+        if (performance.now() - t0 < 900) requestAnimationFrame(tick);
+        else resolve(out.length ? out : null);
+      };
+      requestAnimationFrame(tick);
+    }));
+
+    await startSampler(page);
+    await page.evaluate(() => { (document.querySelector('[data-testid="sec-tab-rank"]') as HTMLElement).click(); });
+    const samples = await collect(page);
+    expectPanelPush(samples, 'community-secpanel', 'community-secbar');
+
+    const frames = await heights;
+    expect(frames, `community-secpanel 그룹이 전환 중 잡히지 않았다 — 본문에 이름이 안 붙었다
+실측:
+${samples.join('\n')}`).not.toBeNull();
+    const over = Math.max(...frames!.map((f) => Math.max(f.o - f.g, f.n - f.g)));
+    expect(over, `본문 스냅샷이 group 박스 밖으로 ${over.toFixed(1)}px 돌출한다 — index.css 의 height:100%·object-fit:none 가드를 확인하라
+프레임: ${JSON.stringify(frames!.slice(0, 4))}`).toBeLessThanOrEqual(1);
+  });
+});
+
 // ── 알약(SlidingPill)이 탭바 스냅샷에 갇히지 않는다 (오너 리포트 2026-09-07) ──────────
 //
 // 증상: "이 메뉴탭이 누르면 나중에 움직여 제대로 안 움직인다"(커뮤니티 서브탭 홀덤펍·게시판·…).
