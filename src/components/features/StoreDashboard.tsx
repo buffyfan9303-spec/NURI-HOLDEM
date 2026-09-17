@@ -1434,13 +1434,14 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               {/* 7일 두 칸만 14일 range 에서 온다 — 그 조회가 죽으면 '0장'이 아니라 '—'다(F14).
                   오늘 두 칸은 core(세션·바인)에서 오므로 그쪽 실패는 위 LoadErrorCard 가 말한다. */}
               <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                <Stat label="7일 발행" value={rangeErr ? '—' : `${weekVoucher}`} unit={rangeErr ? '' : '장'} />
-                <Stat label="오늘 발행" value={`${todayVoucher}`} unit="장" />
+                {/* 2026-09-18 오너 결정: "이용권은 T 단위로" — 발행도 T 로 맞춘다.
+                    이 카드는 **업주 집계 화면**이라 통계·정산(`1T = 1만원`)과 같은 단위를 쓴다.
+                    ⚠ 손님 지갑(MyVoucherSheet·EventPage)의 '장' 은 **그대로 둔다** —
+                      "몇 장을 보낼까요?"·"한 장 줄이기" 처럼 세는 말이라 T 로 바꾸면 문장이 깨진다. */}
+                <Stat label="7일 발행" value={rangeErr ? '—' : `${weekVoucher}`} unit={rangeErr ? '' : 'T'} />
+                <Stat label="오늘 발행" value={`${todayVoucher}`} unit="T" />
                 {/* 2026-09-18: 위 KPI(:843)가 같은 수(fin.ticket)를 'T' 로 부르는데 여기만 '장' 이었다 —
-                    한 화면에서 같은 숫자가 '8T' 와 '8장' 으로 두 번 보였다(PC 전수조사 2026-09-18).
-                    2026-09-11 주석이 기록한 '회수는 T 로 통일' 을 카드에도 적용한다.
-                    ⚠ 발행 두 칸은 그대로 '장' 이다 — 발행(장부 발급·시상)과 회수(티켓 바인)는 다른 수라
-                      같은 이름으로 묶으면 또 다른 혼동이 생긴다. 둘 다 T 로 갈지는 오너 결정이 필요하다. */}
+                    한 화면에서 같은 숫자가 '8T' 와 '8장' 으로 두 번 보였다(PC 전수조사 2026-09-18). */}
                 <Stat label="7일 회수" value={rangeErr ? '—' : `${weekTicket}`} unit={rangeErr ? '' : 'T'} />
                 <Stat label="오늘 회수" value={`${fin.ticket}`} unit="T" />
               </div>
