@@ -2281,16 +2281,15 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
 ::view-transition-old(adminpos-tabbar), ::view-transition-new(adminpos-tabbar),
 ::view-transition-old(usermgmt-secbar), ::view-transition-new(usermgmt-secbar),
 ::view-transition-old(tools-lanebar), ::view-transition-new(tools-lanebar),
-::view-transition-old(market-catbar), ::view-transition-new(market-catbar),
+/* ⚠ market-catbar · dealer-kindbar 는 여기서 **뺐다**(2026-09-18) — 아래 라벨 조리법으로 갔다.
+   live-sortbar 는 바 배경이 불투명(bg-surface-*)이라 겹쳐도 안 보인다 → 여기 남는다. */
 ::view-transition-old(live-sortbar), ::view-transition-new(live-sortbar),
-::view-transition-old(dealer-kindbar), ::view-transition-new(dealer-kindbar),
 ::view-transition-old(group-tabbar), ::view-transition-new(group-tabbar),
 ::view-transition-old(profile-tabbar), ::view-transition-new(profile-tabbar),
 ::view-transition-old(sched-tabbar), ::view-transition-new(sched-tabbar),
 ::view-transition-old(notif-tabbar), ::view-transition-new(notif-tabbar),
-/* mystore-rail(내 매장 사이드 레일 컨테이너)은 이름만 있고 규칙이 없었다(2026-09-17 전수 조사).
-   ⚠ notif-actions 는 **여기 넣으면 안 된다** — 아래 별도 규칙 참고(내용이 모드마다 통째로 바뀐다). */
-::view-transition-old(mystore-rail), ::view-transition-new(mystore-rail),
+/* ⚠ mystore-rail 도 2026-09-18 에 여기서 **뺐다** — 아래 라벨 조리법 참고.
+   ⚠ notif-actions 도 여기 넣으면 안 된다(같은 이유). */
 ::view-transition-old(legal-tabbar), ::view-transition-new(legal-tabbar),
 ::view-transition-old(crm-rangebar), ::view-transition-new(crm-rangebar) { animation: none; }
 
@@ -2307,6 +2306,37 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
      **틀린 규칙**을 줬다. 활성 라벨과 같은 조리법(옛 것은 숨기고 새 것만 남긴다)이 맞다. */
 ::view-transition-old(notif-actions) { animation: none; opacity: 0; }
 ::view-transition-new(notif-actions) { animation: none; opacity: 1; }
+
+/* 🔴 같은 병 3건 더 (2026-09-18 전수 실측 · design-reviewer).
+   판정 기준이 '바냐 아니냐' 가 아니라 **두 가지가 동시에 참이냐** 였다:
+     ① 컨테이너 배경이 투명하고  ② 활성 표시가 그 컨테이너 스냅샷 안에 찍혀 있다
+   둘 다 참이면 `animation: none` 바 조리법은 old·new 를 300ms 동안 **둘 다 opacity 1** 로 겹쳐
+   활성 항목이 두 개로 보인다. 하나라도 거짓이면(바 배경이 불투명하거나, 활성이 제 이름으로 분리돼
+   있거나) 안 보인다 — live-sortbar·tools-lanebar·usermgmt-secbar 가 그래서 위에 남았다.
+
+   · market-catbar (장터 카테고리, MarketplaceTab.tsx:182) — 컨테이너 `-my-2.5 flex …` 투명,
+     활성은 `text-accent-200 font-bold` **글자색뿐**. 실측: 전체→용품 에서 '전체'(흰 굵게)와
+     '용품'(보라)이 동시에 보였다.
+   · dealer-kindbar (딜러 구인·구직 필터, DealerCommunity.tsx:193) — 같은 구조, 같은 증상.
+   · mystore-rail (내 매장 단계·설정 레일) — 2026-09-17 에 '이름만 있고 규칙 없음' 을 고치며
+     바 목록에 넣었는데, **레일은 내용이 섹션마다 통째로 바뀐다**(GameStepBar ↔ SettingsTabBar,
+     심지어 섹션에 따라 사라진다). 실측: 게임→매장설정 에서 '매장 페이지' 위에 '1.포스터 2.장부…'
+     가 겹쳤고, 매장설정→직원관리(레일 소멸)에서는 옛 레일이 '직원 관리' 제목 위에 전환 내내 남았다.
+     ⚠ 바로 위 mystore-rail 블록 주석이 경고하던 '잔상' 이 정확히 이것이다 — 내가 그 경고를 어겼다. */
+::view-transition-old(market-catbar),
+::view-transition-old(dealer-kindbar),
+::view-transition-old(mystore-rail) { animation: none; opacity: 0; }
+::view-transition-new(market-catbar),
+::view-transition-new(dealer-kindbar),
+::view-transition-new(mystore-rail) { animation: none; opacity: 1; }
+
+/* 🔴 사라지는 알약의 퇴장 — old 만 있고 new 가 없는 경우(`:only-child`).
+   notiffilter-pill(알림 [전체|안읽음] 알약)은 쪽지 모드로 가면 **없어진다**. 그런데 알약은 평소
+   UA 크로스페이드를 쓰므로(자기 배경이 있어 평소엔 문제가 없다) 퇴장할 때도 fade-out 을 타고,
+   보라 알약이 새로 뜬 '글쓰기' 버튼 위를 220ms 지나간다(실측 2026-09-18).
+   `:only-child` 는 image-pair 안에 스냅샷이 **하나뿐일 때**(= 퇴장 또는 입장) 만 맞는다 —
+   양쪽 다 있는 평소 전환의 알약 이동은 건드리지 않는다. */
+::view-transition-old(notiffilter-pill):only-child { animation: none; opacity: 0; }
 
 /* 가로 스크롤러의 스크롤바 숨김(배너 캐러셀 등) — 기능은 그대로, 표시만 제거 */
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }

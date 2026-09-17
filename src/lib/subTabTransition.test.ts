@@ -214,6 +214,43 @@ describe('하위 탭 전환 · 알약이 탭바 스냅샷에 갇히지 않는다
     ).toBe(true);
   });
 
+  it('활성 표시 속성이 컴포넌트에 먹히지 않는다 — data-mystore-active 가 실제로 그랬다', () => {
+    // 🔴 2026-09-18 실측: `VenueManageTab.tsx:738` 은 `data-mystore-active` 를 `<SectionBtn>` 에
+    //   넘겼는데, SectionBtn 이 `{active,onClick,icon,children,locked}` 만 구조분해해서 **버렸다**.
+    //   JSX 는 스프레드로 들어온 남는 속성을 초과 프로퍼티 검사에서 안 걸러 tsc 도 통과했고,
+    //   DOM 에 `[data-mystore-active]` 가 0개라 index.css 의 라벨 조리법이 한 번도 안 걸렸다 →
+    //   내 매장 사이드바 전환마다 **활성 항목이 두 개**로 보였다.
+    //   다른 활성 표시(data-pill-active · data-admin-active)는 전부 소문자 DOM 요소에 직접 붙어 있어
+    //   멀쩡했다. 그래서 규칙은 "DOM 에 직접 붙이거나, 받는 컴포넌트가 rest 를 넘겨라" 다.
+    const attrs = [...new Set([...CSS.matchAll(/\[(data-[a-z-]*active)\]/g)].map((m) => m[1]))];
+    expect(attrs.length, 'index.css 에서 활성 표시 속성을 못 찾았다 — 정규식이 낡았다').toBeGreaterThan(0);
+
+    const bad: string[] = [];
+    for (const f of walk(SRC)) {
+      const t = readFileSync(f, 'utf8');
+      for (const attr of attrs) {
+        // ⚠ `['"]?` 가 꼭 필요하다 — 실제 호출부는 스프레드라 `{ 'data-mystore-active': '' }` 처럼
+        //   **따옴표가 닫힌 뒤에** 콜론이 온다. 이걸 빼먹어서 첫 음성 대조가 거짓 통과했다(2026-09-18).
+        for (const m of t.matchAll(new RegExp(`${attr}['"]?\\s*[=:]`, 'g'))) {
+          // 이 속성이 붙은 JSX 여는 태그를 뒤로 찾는다.
+          const tag = t.slice(0, m.index).match(/<([A-Za-z][A-Za-z0-9]*)[^<>]*$/);
+          if (!tag) continue;
+          const name = tag[1];
+          if (name[0] === name[0].toLowerCase()) continue; // 소문자 = DOM 요소, 안전
+          // 컴포넌트다 — 같은 파일의 정의가 rest 를 DOM 으로 흘리는지 본다.
+          const def = t.match(new RegExp(`function ${name}\\(\\{([^}]*)\\}`));
+          const forwards = !!def && def[1].includes('...');
+          if (!forwards) bad.push(`${f.split('src')[1]} : <${name}> 이 ${attr} 를 받는데 rest 를 안 넘긴다`);
+        }
+      }
+    }
+    expect(
+      bad,
+      `활성 표시 속성이 컴포넌트에서 사라진다(DOM 에 안 붙는다):\n  ${bad.join('\n  ')}\n` +
+      '→ 속성을 소문자 DOM 요소에 직접 붙이거나, 받는 컴포넌트가 `...rest` 를 받아 `<button {...rest}>` 로 넘겨라.',
+    ).toEqual([]);
+  });
+
   it('알약 이름이 서로 겹치지 않는다 — 같은 이름이 둘이면 전환이 통째로 실패한다', () => {
     const names = [...CSS.matchAll(/\[data-sliding-pill\]\s*\{\s*view-transition-name:\s*([a-z0-9-]+)/g)].map((m) => m[1]);
     expect(names.length, '알약 규칙이 하나도 없다 — 셀렉터가 바뀌었는지 확인하라').toBeGreaterThanOrEqual(8);

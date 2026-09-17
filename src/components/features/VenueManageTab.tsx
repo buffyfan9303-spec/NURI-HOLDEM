@@ -1183,9 +1183,15 @@ function GameStepBar({ steps, active, onPick, onHome, progress }: {
   );
 }
 
-function SectionBtn({ active, onClick, icon, children, locked }: {
+// 🔴 `...rest` 가 없으면 호출부(:738)가 넘기는 `data-mystore-active` 가 **조용히 버려진다**.
+//   JSX 는 스프레드로 들어온 남는 속성을 초과 프로퍼티 검사에서 걸러 주지 않아 tsc 도 통과한다.
+//   그 결과 DOM 에 `[data-mystore-active]` 가 0개였고 → index.css 의 `mystore-active` 라벨 조리법이
+//   **한 번도 적용되지 않았다** → 활성 하이라이트가 secbar 스냅샷에 통째로 찍혀, 내 매장 사이드바
+//   전환마다 **활성 항목이 두 개**로 보였다(실측 2026-09-18 · PC 1280 · 대시보드→게임 진행 등 6전환).
+//   admin-secbar 는 같은 구조인데 admin-active 가 제대로 분리돼 있어 멀쩡했다 — 여기만 샜다.
+function SectionBtn({ active, onClick, icon, children, locked, ...rest }: {
   active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode; locked?: boolean;
-}) {
+} & Record<`data-${string}`, string | undefined>) {
   // 모바일: 가로 스크롤 칩 바 — 선택된 칩이 항상 화면 안에 오도록 부드럽게 센터링.
   // ⚠ 예전엔 scrollIntoView({behavior:'smooth', inline:'center'}) 였다. 그 API 는 가로만 부탁해도
   //   조상 스크롤러를 전부 맞추느라 **페이지를 세로로 끌어당기고**, smooth 라 그 움직임이 눈에 보였다
@@ -1196,7 +1202,7 @@ function SectionBtn({ active, onClick, icon, children, locked }: {
     if (active && window.innerWidth < 1024) centerInRail(ref.current, null, 'smooth');
   }, [active]);
   return (
-    <button type="button" onClick={onClick} ref={ref}
+    <button type="button" onClick={onClick} ref={ref} {...rest}
       // 모바일=인라인 칩(아이콘+라벨 한 줄, 1행 가로 스크롤) / PC=세로 리스트.
       // §T1: PC 만 13px(사다리 밖)이라 모바일 12.75 와 어긋나 있었다 → t-tab 한 값으로 고정(-0.25px).
       className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2 t-tab transition-colors duration-[var(--dur-fast)] focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:py-2',
