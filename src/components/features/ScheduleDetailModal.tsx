@@ -317,7 +317,12 @@ export default function ScheduleDetailModal({
                 target="_blank" rel="noopener noreferrer"
                 /* ml-5 제거(2026-09-12) — 매장명이 한 줄을 혼자 쓰게 되면서 들여쓰기 기준선이 사라졌다.
                    §5-1: 좌측 제목 시작선에 맞춘다. 주소는 길면 줄바꿈(잘라 숨기지 않는다). */
-                className="mt-0.5 flex items-start gap-1.5 text-xs text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
+                /* ⚠ 히트영역 — 글자만 두면 **17px** 이라 손가락으로 못 누른다(2026-09-17 실측).
+                   그런데 바로 위 매장명 버튼(25.5px)과 간격이 **2px** 뿐이라, 위아래로 그냥 넓히면
+                   두 타깃이 겹쳐 오히려 오탭이 난다. 그래서 **간격을 먼저 벌리고**(mt-0.5 → mt-3)
+                   그 벌린 만큼만 위로 확장한다(py-1.5 + -my-1.5 = 각 12.75px).
+                   결과 42.5px · 위쪽 확장이 간격과 정확히 맞닿아 겹침 0. 레이아웃은 아래로 10px 만 움직인다. */
+                className="-my-1.5 mt-3 flex items-start gap-1.5 py-1.5 text-xs text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
                 <Icon name="map" size={13} className="mt-0.5 shrink-0" /><span className="break-keep [overflow-wrap:anywhere]">{schedule.address}</span>
               </a>
             )}
