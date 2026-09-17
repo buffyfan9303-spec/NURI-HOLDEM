@@ -75,6 +75,51 @@ type ToolCat = 'explore' | 'train' | 'review' | 'rules' | 'ops' | 'money';
 /** desc = 카드 한 줄(≤13자 완결형 명사구, 2026-09-03 개고) · keywords = 개고 전 설명(검색 재현율 보존용, 화면엔 안 그림)
  *  icon = lucide 팩 이름(2026-09-03 오너 "아이콘팩에서 최대한 잘 맞는 걸로" — 손그림 SVG 26개를 Icon 아톰으로 통일).
  *  ⚠ 26개 도구는 서로 다른 아이콘이어야 한다 — ToolsPanel.icons.test.ts 가 게이트. */
+/**
+ * 카드 제목의 **줄바꿈 지점** — 2026-09-18 오너 지시: "프리플랍 / (줄바꿈) 레인지 차트 이렇게 열을 맞춰서 정렬".
+ *
+ * 왜 CSS 가 아니라 데이터인가(실측): 카드 폭이 **158.75px(360·2열) ~ 290.625px(1440·4열)** 로 거의 2배 차이라
+ * 자동 줄바꿈 지점이 폭마다 달라진다 — 같은 열의 카드들이 서로 다른 곳에서 꺾여 **열이 안 맞는다.**
+ * 그래서 의미 단위를 사람이 정해 고정한다.
+ *
+ * ⚠ TOOLS 배열에 필드를 더하지 않고 **별도 표**로 둔다 — `tools/gtoContract.test.ts` 가 TOOLS 블록을
+ *   정규식으로 검사하고 있어(항목 포맷·개수) 배열 모양을 건드리면 그 계약이 흔들린다.
+ * ⚠ 여기 없는 키는 **한 줄**로 그린다. 그래도 칸 높이는 맞는다 — 제목 칸이 2줄 자리를 늘 예약한다.
+ * ⚠ 두 줄을 합치면 반드시 `name` 과 같아야 한다(공백 하나). 아래 계약 테스트가 그걸 잠근다.
+ */
+const TITLE_LINES: Partial<Record<ToolKey, readonly [string, string]>> = {
+  tda:       ['2026', 'TDA 규칙'],
+  drill:     ['오늘의', '드릴'],
+  range:     ['프리플랍', '레인지 차트'],
+  pushfold:  ['푸시 · 폴드', '차트'],
+  trainer:   ['프리플랍', '트레이너'],
+  postflop:  ['포스트플랍', '트레이너'],
+  wrongnote: ['오답', '노트'],
+  aggro:     ['어그레션', '차트'],
+  glossary:  ['홀덤', '용어사전'],
+  handrank:  ['홀덤', '족보'],
+  spot:      ['누리', '스팟'],
+  replay:    ['핸드', '리플레이어'],
+  gto:       ['GTO', '핸드 분석'],
+  rvr:       ['레인지', 'vs 레인지'],
+  pot:       ['팟 오즈', '계산기'],
+  outs:      ['아웃츠 /', '확률'],
+  mdf:       ['MDF · 블러프', '계산기'],
+  icm:       ['ICM', '계산기'],
+  deal:      ['딜', '계산기'],
+  spr:       ['SPR', '계산기'],
+  ev:        ['EV', '계산기'],
+  combo:     ['콤보', '계산기'],
+  mzone:     ['M존', '계산기'],
+  bankroll:  ['뱅크롤', '관리'],
+  variance:  ['분산', '시뮬'],
+  chip:      ['칩', '분배기'],
+  sim:       ['구조', '시뮬'],
+  blindgen:  ['블라인드', '생성기'],
+  payout:    ['상금', '분배'],
+  endtime:   ['종료시간', '예측'],
+};
+
 const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?: string; icon: IconName }[] = [
   // TDA 규칙이 첫 항목(오너 지시 2026-09-14: TDA 를 위로). 2026 판 — 데이터는 src/data/tdaRules.ts.
   { key: 'tda', cat: 'rules', name: '2026 TDA 규칙', desc: '상황 물으면 규칙 찾아줌', keywords: '토너먼트 디렉터 규칙 TDA 2026 2024 한글 판정 플로어 딜러 카드 노출 올인 페널티 룰북', icon: 'gavel' },
@@ -363,7 +408,7 @@ export default function ToolsPanel() {
   const grid = (items: typeof TOOLS) => (
     <div className="grid auto-rows-fr grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
       {items.map((t) => (
-        <ToolCard key={t.key} testId={`tool-${t.key}`} tone={LANE_TONE[t.cat]} name={t.name} desc={t.desc} icon={t.icon} onClick={() => open(t.key)}
+        <ToolCard key={t.key} testId={`tool-${t.key}`} tone={LANE_TONE[t.cat]} name={t.name} lines={TITLE_LINES[t.key]} desc={t.desc} icon={t.icon} onClick={() => open(t.key)}
           fav={favs.includes(t.key)} onToggleFav={() => toggleFav(t.key)} />
       ))}
     </div>
@@ -590,8 +635,13 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
   );
 }
 
-function ToolCard({ name, desc, icon, onClick, fav, onToggleFav, testId, tone = 'violet' }: {
-  name: string; desc: string; icon: IconName; onClick: () => void; testId?: string; tone?: TileTone;
+function ToolCard({ name, lines, desc, icon, onClick, fav, onToggleFav, testId, tone = 'violet' }: {
+  name: string;
+  /** 제목의 줄바꿈 지점(TITLE_LINES). 없으면 한 줄로 그린다. 합치면 `name` 과 같아야 한다. */
+  lines?: readonly [string, string];
+  /** 카드에 **그리지 않는다**(2026-09-18 오너: 설명줄 전체 삭제). PC 호버 툴팁(title)으로만 남긴다 —
+   *  데이터 자체는 TOOLS 에 그대로 있어 검색(`t.desc`)과 다른 두 화면(StoreToolsPanel·CalendarToolsPanel)이 계속 쓴다. */
+  desc: string; icon: IconName; onClick: () => void; testId?: string; tone?: TileTone;
   fav?: boolean; onToggleFav?: () => void;
 }) {
   // 버튼 안에 role="button" 스팬(중첩 인터랙티브 위반) 대신 형제 버튼 2개 — 키보드로도 별을 켤 수 있다.
@@ -600,21 +650,27 @@ function ToolCard({ name, desc, icon, onClick, fav, onToggleFav, testId, tone = 
       {/* 세로 타일(2026-09-03 오너: "설명이 너무 길고 불완전") — 아이콘을 위로 올려 텍스트 폭을 106px → 155px(390px 2열)로 넓히고,
           설명은 ≤13자 완결형 명사구 한 줄(TOOLS[].desc 전면 개고). 이름은 안 자른다(2줄 허용) — 같은 행 칸 높이는 그리드 auto-rows-fr + h-full 이 맞춘다.
           아이콘 행 오른쪽 자리는 즐겨찾기 별(형제 버튼, 우상단). 레퍼런스 aura-ui 피처 카드 문법(아이콘 타일 위 · 제목 · 한 줄 설명). */}
-      <button type="button" onClick={onClick} data-testid={testId}
-        className="flex h-full w-full flex-col items-start gap-2 rounded-aura border card-aura px-2.5 py-2.5 text-left hover:border-accent-400/40">
+      {/* 🔴 2026-09-18 오너 지시로 **가로 배치**가 됐다 — 아이콘 왼쪽, 제목 오른쪽, 설명줄 없음.
+          예전 주석(세로 타일·설명 ≤13자)은 그 지시로 폐기됐다. 남은 계약은 이것뿐이다:
+            · 제목 칸은 **늘 2줄 자리를 예약**한다(min-h-[2.5em] + leading-tight) — 그래야 한 줄짜리 제목이
+              섞여도 같은 행의 카드들이 **같은 높이·같은 기준선**이 된다(오너: "열을 맞춰서 정렬").
+            · 줄바꿈 지점은 CSS 자동이 아니라 TITLE_LINES 가 정한다(카드 폭이 폭마다 2배 차이).
+            · 오른쪽 `pr-7` 은 우상단 즐겨찾기 별(h-8 w-8 · right-1)을 피하는 자리다.
+          ⚠ `flex-wrap` + 제목 칸 `flex-[1_1_5rem]` — **rem basis 라 루트 글자 200% 확대를 그대로 탄다.**
+            확대되면 아이콘(h-8 = 2rem → 68px)과 별 회피 여백이 카드를 다 먹어 제목이 들어갈 자리가 없어진다.
+            그때 제목 칸이 **스스로 아이콘 아래로 내려가** 카드 전폭을 쓴다(예전 세로 배치로 자동 복귀).
+            실측(2026-09-18): 넣기 전 320·390 200% 에서 카드 clientWidth 116 / scrollWidth 166 = 50px 잘림.
+          ⚠ `aria-label={name}` — 두 줄로 쪼갠 제목이 보조기기에서 한 낱말로 읽히게 한다.
+          ⚠ `title={desc}` — 화면에서 뺀 설명을 **버리지는 않는다**(PC 호버 툴팁). 검색은 계속 t.desc 를 읽는다. */}
+      <button type="button" onClick={onClick} data-testid={testId} aria-label={name} title={desc}
+        className="flex h-full w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-aura border card-aura py-2.5 pl-2.5 pr-8 text-left hover:border-accent-400/40">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
           <Icon name={icon} size={16} strokeWidth={1.8} aria-hidden />
         </span>
-        {/* ⚠ §7 P0-A(2026-09-12 실측) — 오버플로 31곳의 본체가 여기였다.
-            `truncate` 라 **100%·320px 에서도** 설명이 116/141 로 잘리고(13자 중 10자),
-            200% 확대에서는 108/282 = 38% 만 보였다. 이름의 `line-clamp-2` 도 200%·320px 에서
-            clientHeight 64 / scrollHeight 160 — '프리플랍 레인지 차트'가 5줄 중 2줄만 남았다.
-            글자는 이미 최소 크기(11.69px)라 줄일 여지가 없다 → **상한을 걷어내고 줄바꿈으로 푼다**.
-            카드 높이가 제각각이 되지 않는 이유: 그리드가 `auto-rows-fr` + 이 버튼이 `h-full` 이라
-            같은 행의 칸 높이는 가장 높은 칸에 맞춰 자동으로 같아진다(기존 계약 그대로). */}
-        <span className="block min-w-0 w-full">
-          <span className="block text-xs font-bold leading-tight text-ink-primary">{name}</span>
-          <span className="mt-0.5 block text-2xs text-ink-muted">{desc}</span>
+        <span className="block min-h-[2.5em] min-w-0 flex-[1_1_4rem] text-xs font-bold leading-tight text-ink-primary">
+          {(lines ?? [name]).map((l) => (
+            <span key={l} className="block [overflow-wrap:anywhere]">{l}</span>
+          ))}
         </span>
       </button>
       {/* 별 — transform 유틸 금지: 전역 button:active 가 transform 을 scale 로 통째로 덮어 -translate-y-1/2 가 누르는 60ms 동안 사라져 별이 튀었다.

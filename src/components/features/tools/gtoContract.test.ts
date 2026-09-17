@@ -281,6 +281,53 @@ describe('NURI SPOT — GTO 홈 통합', () => {
     expect(EVAL).toContain('GTO 추천 액션이 없습니다');
   });
 
+  // ── 도구 카드 제목 2줄 (2026-09-18 오너: "프리플랍 / 레인지 차트 이렇게 열을 맞춰서 정렬") ──
+  describe('카드 제목 줄바꿈표(TITLE_LINES)', () => {
+    const PANEL = readFileSync(join(ROOT, 'src/components/features/ToolsPanel.tsx'), 'utf-8');
+    const namesOf = () => {
+      const m = new Map<string, string>();
+      for (const x of PANEL.matchAll(/\{ key: '([a-z]+)', cat: '[a-z]+', name: '([^']+)'/g)) m.set(x[1], x[2]);
+      return m;
+    };
+    const linesOf = () => {
+      const block = PANEL.match(/const TITLE_LINES[\s\S]*?^\};/m);
+      const m = new Map<string, [string, string]>();
+      if (!block) return m;
+      for (const x of block[0].matchAll(/^\s*([a-z]+):\s*\['([^']*)', '([^']*)'\],/gm)) m.set(x[1], [x[2], x[3]]);
+      return m;
+    };
+
+    it('두 줄을 합치면 원래 이름과 같다 — 제목이 조용히 바뀌면 안 된다', () => {
+      const names = namesOf(); const lines = linesOf();
+      expect(names.size, 'TOOLS 이름을 못 읽었다 — 정규식이 낡았다').toBeGreaterThan(25);
+      expect(lines.size, 'TITLE_LINES 를 못 읽었다 — 정규식이 낡았다').toBeGreaterThan(25);
+      const bad: string[] = [];
+      for (const [k, [a, b]] of lines) {
+        const full = names.get(k);
+        if (!full) { bad.push(`${k}: TOOLS 에 없는 키`); continue; }
+        if (`${a} ${b}` !== full) bad.push(`${k}: '${a} ${b}' ≠ '${full}'`);
+      }
+      expect(bad, `줄바꿈표가 원래 이름과 어긋난다(합치면 name 과 같아야 한다): ${bad.join(' / ')}`)
+        .toEqual([]);
+    });
+
+    it('카드가 설명줄을 그리지 않는다 — 대신 title 툴팁으로 남긴다', () => {
+      const card = [PANEL.slice(PANEL.indexOf('function ToolCard'), PANEL.indexOf('function ToolCard') + 3000)];
+      expect(PANEL, 'ToolCard 를 못 찾았다').toContain('function ToolCard');
+      expect(card![0], '설명(desc)이 다시 화면에 그려진다 — 오너 지시로 뺀 자리다')
+        .not.toMatch(/>\{desc\}</);
+      expect(card![0], 'desc 를 버리면 안 된다 — PC 호버 툴팁으로는 남긴다').toMatch(/title=\{desc\}/);
+      expect(card![0], '두 줄로 쪼갠 제목이 보조기기에서 한 낱말로 읽히려면 aria-label 이 필요하다')
+        .toMatch(/aria-label=\{name\}/);
+    });
+
+    it('제목 칸이 2줄 자리를 늘 예약한다 — 한 줄짜리가 섞여도 열이 맞는다', () => {
+      const card = [PANEL.slice(PANEL.indexOf('function ToolCard'), PANEL.indexOf('function ToolCard') + 3000)];
+      expect(card![0], '2줄 예약(min-h)이 없으면 카드마다 높이가 달라 열이 안 맞는다')
+        .toMatch(/min-h-\[2\.5em\]/);
+    });
+  });
+
   it('스팟 저장·공유는 전용 API 를 쓴다 — 게시글 재조회 경로가 없다', () => {
     const SPOTS_API = readFileSync(join(ROOT, 'src/api/spots.ts'), 'utf-8');
     expect(SPOTS_API).toContain('share_spot_post');
