@@ -13,7 +13,7 @@ const BENEFITS: { icon: IconName; t: string; d: string }[] = [
   { icon: 'edit',   t: '글·댓글 작성', d: '커뮤니티에 자유롭게 참여' },
   { icon: 'cart',   t: '중고장터 등록', d: '안전 거래를 위한 판매자 인증' },
   { icon: 'ticket', t: '대회 예약', d: '노쇼 방지 · 신뢰 좌석 확보' },
-  { icon: 'trophy', t: '전적·랭킹 인정', d: '본인 명의로 기록이 집계' },
+  { icon: 'trophy', t: '전적·순위 인정', d: '본인 명의로 기록이 집계' },
 ];
 
 export default function VerifyGateSheet({ onStart }: { onStart: () => void }) {

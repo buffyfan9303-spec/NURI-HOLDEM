@@ -359,7 +359,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
               '할인 전 매출' 은 결제수단을 보지 않는 discountWon 을 더해 이용권·지원 할인까지 얹혔었다 →
               정상가 합계(grossSum)를 그대로 쓴다. */}
           <div className="grid grid-cols-3 gap-2">
-            <StatCard label="총 바이인" value={`${m.buyinCount.toLocaleString()}회`} sub={`첫 ${m.firstBuyins} · 리바인 ${m.rebuys}`} icon="users" />
+            <StatCard testId="stat-total-buyins" label="총 바인" value={`${m.buyinCount.toLocaleString()}회`} sub={`첫 ${m.firstBuyins} · 리바인 ${m.rebuys}`} icon="users" />
             <StatCard label="할인 바인" value={`${m.discountCnt}건`} sub={`바인 중 ${m.discountRatio.toFixed(1)}%`} icon="down" />
             <StatCard label="총 할인액" value={`${m.discountWon.toLocaleString()} 원`} sub={m.grossSum > 0 ? `정상가 ${wonToMan(m.grossSum)}만원` : '할인 없음'} icon="percent" gold />
           </div>
@@ -375,11 +375,11 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
             {period === 'day'
               ? <Mini label="기준 달성률" value={m.fillRatio !== null ? `${m.fillRatio}%` : '-'} />
               : <Mini label="영업일수" value={`${m.dayCount}일`} />}
-            {period !== 'day' && <Mini label="일평균 바이인" value={m.avgBuyinPerDay.toFixed(1)} />}
+            {period !== 'day' && <Mini label="일평균 바인" value={m.avgBuyinPerDay.toFixed(1)} />}
             <Mini label="플레이어" value={`${m.players}명`} />
-            <Mini label="바이인/인" value={m.perPlayer ? m.perPlayer.toFixed(1) : '0'} />
+            <Mini label="바인/인" value={m.perPlayer ? m.perPlayer.toFixed(1) : '0'} />
             <Mini label="객단가/인" value={`${wonToMan(Math.round(m.arpGuest))}만`} hint="미수 포함" />
-            <Mini label="객단가/바이인" value={`${wonToMan(Math.round(m.arpEntry))}만`} hint="미수 포함" />
+            <Mini label="객단가/바인" value={`${wonToMan(Math.round(m.arpEntry))}만`} hint="미수 포함" />
             {period === 'day'
               ? <Mini label="가게지원" value={`${m.support}건`} />
               : <Mini label="일평균 매출" value={`${m.avgRevenuePerDay.toLocaleString(undefined, { maximumFractionDigits: 0 })}원`} hint="완납 기준" />}
@@ -422,9 +422,9 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
             const max = Math.max(1, ...totals);
             const fmt = (n: number) => trendMetric === 'revenue' ? `${wonToMan(n)}만` : trendMetric === 'entries' ? n.toFixed(n % 1 ? 1 : 0) : `${n}명`;
             return (
-              <Section icon="wallet" title="일자별 추세" suffix={trendMetric === 'revenue' ? '· 매출' : trendMetric === 'entries' ? '· 바이인' : '· 인원'}>
+              <Section icon="wallet" title="일자별 추세" suffix={trendMetric === 'revenue' ? '· 매출' : trendMetric === 'entries' ? '· 바인' : '· 인원'}>
                 <SegmentedTabs grow className="flex w-full mb-2"
-                  items={[{ key: 'revenue', label: '매출' }, { key: 'entries', label: '바이인' }, { key: 'players', label: '인원' }]}
+                  items={[{ key: 'revenue', label: '매출' }, { key: 'entries', label: '바인' }, { key: 'players', label: '인원' }]}
                   value={trendMetric} onChange={(k) => setTrendMetric(k as 'revenue' | 'entries' | 'players')} />
                 <div className="flex items-end gap-1 overflow-x-auto pb-1">
                   {m.trend.map((d, i) => {
@@ -460,7 +460,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
                     <div className="mt-2 rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2.5">
                       <p className="text-2xs font-bold text-accent-300 mb-1.5">{d.date} 상세</p>
                       <div className="grid grid-cols-3 gap-1.5 text-center">
-                        <div><p className="text-2xs text-ink-muted">바이인</p><p className="text-sm font-bold text-ink-primary tabular-nums">{f1(d.mainB + d.sideB)}</p><p className="text-[10px] text-ink-muted">메인 {f1(d.mainB)} · 사이드 {f1(d.sideB)}</p></div>
+                        <div><p className="text-2xs text-ink-muted">바인</p><p className="text-sm font-bold text-ink-primary tabular-nums">{f1(d.mainB + d.sideB)}</p><p className="text-[10px] text-ink-muted">메인 {f1(d.mainB)} · 사이드 {f1(d.sideB)}</p></div>
                         <div><p className="text-2xs text-ink-muted">매출</p><p className="text-sm font-bold text-emerald-400 tabular-nums">{wonToMan(d.mainRev + d.sideRev)}만</p><p className="text-[10px] text-ink-muted">메인 {wonToMan(d.mainRev)} · 사이드 {wonToMan(d.sideRev)}</p></div>
                         <div><p className="text-2xs text-ink-muted">인원</p><p className="text-sm font-bold text-ink-primary tabular-nums">{d.players}명</p></div>
                       </div>
@@ -480,7 +480,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
                 <Mini label="얼리(칩단위)" value={`${clockAgg.earlies}`} tone="amber" />
               </div>
               <p className="text-2xs text-ink-muted mt-1.5 leading-relaxed">
-                마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 바이인({m.buyinCount.toLocaleString()}회 · 엔트리 {m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})은 바인 기록 기준</b>이라 다를 수 있어요. 통계·정산은 장부 기준, 이 값은 운영 참고용입니다. 얼리는 <b className="text-ink-secondary">기준칩 배수 합</b>(더블얼리 1명 = 2)이며, 2026-08-30 이전 마감분은 인원 수로 기록돼 있어 그대로 표시됩니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
+                마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 바인({m.buyinCount.toLocaleString()}회 · 엔트리 {m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})은 바인 기록 기준</b>이라 다를 수 있어요. 통계·정산은 장부 기준, 이 값은 운영 참고용입니다. 얼리는 <b className="text-ink-secondary">기준칩 배수 합</b>(더블얼리 1명 = 2)이며, 2026-08-30 이전 마감분은 인원 수로 기록돼 있어 그대로 표시됩니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
               </p>
             </Section>
           )}
@@ -595,7 +595,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Mini label="기준 달성률" value={overallFill !== null ? `${overallFill}%` : '기준 미설정'} />
         <Mini label="영업일" value={`${totalDays}일`} />
-        <Mini label="총 바이인" value={`${totalBuyins.toLocaleString()}회`} />
+        <Mini label="총 바인" value={`${totalBuyins.toLocaleString()}회`} />
         <Mini label="총 매출(만)" value={wonToMan(totalRevenue)} hint="완납 기준" />
       </div>
 
@@ -610,9 +610,9 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
       {/* 막대 차트 — 엔트리/매출 토글 */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <p className="text-2xs font-semibold text-ink-secondary">요일별 {metric === 'fill' ? '기준 엔트리 달성률' : metric === 'entry' ? '일평균 바이인' : '일평균 매출'}</p>
+          <p className="text-2xs font-semibold text-ink-secondary">요일별 {metric === 'fill' ? '기준 엔트리 달성률' : metric === 'entry' ? '일평균 바인' : '일평균 매출'}</p>
           <div className="flex gap-0.5 bg-surface-high rounded-input p-0.5">
-            {([['fill', '달성률'], ['entry', '바이인'], ['revenue', '매출']] as const).map(([k, lbl]) => (
+            {([['fill', '달성률'], ['entry', '바인'], ['revenue', '매출']] as const).map(([k, lbl]) => (
               <button key={k} type="button" onClick={() => setMetric(k)}
                 className={['px-2 py-0.5 text-2xs font-bold rounded-[5px] transition-colors',
                   metric === k ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{lbl}</button>
@@ -651,7 +651,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
           <thead><tr className="text-2xs text-ink-muted">
             <th scope="col" className="py-1 pl-1 font-normal">요일</th>
             <th scope="col" className="py-1 pr-1 text-right font-normal">영업일</th>
-            <th scope="col" className="py-1 pr-1 text-right font-normal"><span className="block">일평균</span>바이인</th>
+            <th scope="col" className="py-1 pr-1 text-right font-normal"><span className="block">일평균</span>바인</th>
             <th scope="col" className="py-1 pr-1 text-right font-normal"><span className="block">일평균</span>매출(만)</th>
             <th scope="col" className="py-1 pr-1 text-right font-normal"><span className="block">완납 객단가</span>(만)</th>
           </tr></thead>
@@ -709,12 +709,12 @@ function StatIcon({ name, className = '' }: { name: IconName; className?: string
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>{ICON_PATHS[name]}</svg>;
 }
 
-function StatCard({ label, value, sub, icon, danger, emerald, gold }: { label: string; value: string; sub?: string; icon: IconName; danger?: boolean; emerald?: boolean; gold?: boolean }) {
+function StatCard({ label, value, sub, icon, danger, emerald, gold, testId }: { label: string; value: string; sub?: string; icon: IconName; danger?: boolean; emerald?: boolean; gold?: boolean; testId?: string }) {
   const c = danger ? 'text-danger-light' : emerald ? 'text-emerald-400' : gold ? 'text-accent-300' : 'text-ink-primary';
   return (
     <div className="flex min-h-[5.25rem] flex-col rounded-aura border card-aura p-2.5">
       <div className="flex items-start justify-between gap-1">
-        <p className="text-xs font-medium leading-tight text-ink-secondary">{label}</p>
+        <p data-testid={testId} className="text-xs font-medium leading-tight text-ink-secondary">{label}</p>
         <StatIcon name={icon} className="shrink-0 text-ink-muted" />
       </div>
       <p className={['mt-auto pt-2 text-lg font-extrabold leading-none tabular-nums', c].join(' ')}>{value}</p>
@@ -847,7 +847,7 @@ function buildOpsReport(m: StatsAgg, days = 7): OpsReportResult {
     ? ` 사이드 게임 ${m.sideGameCount}종이 완납 매출의 ${Math.round(sideShare)}%(${man(m.sideRev)}만 원 · ${m.sideBuyins}회)를 차지합니다.`
     : ' 이 기간에 사이드 게임 기록은 없습니다.';
   const sales =
-    `${periodLabel} 완납 매출 ${man(m.revenue)}만 원 · 바이인 ${m.total}회 · 플레이어 ${m.players}명(영업 ${openDays.size}일).` +
+    `${periodLabel} 완납 매출 ${man(m.revenue)}만 원 · 바인 ${m.total}회 · 플레이어 ${m.players}명(영업 ${openDays.size}일).` +
     // ⚠ m.cardRatio 는 **금액이 아니라 건수**다(:194 byMethod[method]++, :235 card/(cash+transfer+card)).
     //   예전 문구는 '(완납 매출 대비)'라고 적어 금액 비중처럼 읽혔다 — 10만 원 카드 1건과 1만 원 현금 1건이
     //   똑같이 1로 세지는데도 그랬다. 이 리포트는 인쇄·내보내기까지 되므로 분자·분모·단위를 전부 문구에 적는다.
@@ -912,7 +912,7 @@ h1{font-size:22px;font-weight:900}.sub{color:#777;font-size:12px;margin:4px 0 20
 ${card('데이터 신뢰도', `집계 기간 ${days}일 중 영업 ${rpt.coverage.days}일 · 바인 ${rpt.coverage.buyins}회 · 플레이어 ${rpt.coverage.players}명`
   + (rpt.lowSample ? ` — 최소 표본(바인 ${MIN_BUYINS}회 · 영업 ${MIN_DAYS}일)에 못 미쳐 진단을 생성하지 않았습니다.` : '')
   + (rpt.coverage.dowReady ? '' : ` 요일 비교는 각 요일 ${MIN_DOW_REPEAT}회 이상 운영이 필요합니다.`))}
-${card('매출 및 바이인', rpt.sales)}
+${card('매출 및 바인', rpt.sales)}
 ${rpt.risk ? card('미수 · 할인', rpt.risk) : ''}
 ${rpt.weekday ? card('요일 비교', rpt.weekday) : ''}
 ${rpt.actions.length
@@ -960,7 +960,7 @@ ${rpt.actions.length
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <ReportCard tone="emerald" title="매출 및 바이인" body={rpt.sales} />
+          <ReportCard tone="emerald" title="매출 및 바인" body={rpt.sales} />
           <ReportCard tone="rose" title="미수 · 할인" body={rpt.risk} />
           <ReportCard tone="sky" title="요일 비교" body={rpt.weekday} />
           <ReportCard tone="amber" title="실행 제안" actions={rpt.actions} />

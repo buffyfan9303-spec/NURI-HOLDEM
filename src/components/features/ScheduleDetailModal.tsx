@@ -50,6 +50,8 @@ interface ScheduleDetailModalProps {
   inline?: boolean;
   /** UX-1: 라이브 클락 실측 레지 상태 — '매장에 확인해 주세요'를 실제 답으로 교체 */
   regInfo?: RegInfo;
+  /** 진행 중 포스터 → 관전 클락(풀스크린). 라이브 카드의 눈 아이콘과 같은 App.openDisplay 다(2026-09-17 연결 감사 B). */
+  onDisplay?: (venueId: string, gameSeq: number) => void;
 }
 
 // APIS 상세 문법(오너 지목 벤치마크) — [메인][블라인드][프라이즈][매장정보] + 기존 Q&A.
@@ -61,7 +63,7 @@ const TAB_ORDER: Tab[] = ['main', 'blinds', 'prize', 'venue', 'qna'];
 const TABS: { key: Tab; label: string }[] = [
   { key: 'main',   label: '메인' },
   { key: 'blinds', label: '블라인드' },
-  { key: 'prize',  label: '프라이즈' },
+  { key: 'prize',  label: '상금' },
   { key: 'venue',  label: '매장정보' },
   { key: 'qna',    label: 'Q&A' },
 ];
@@ -106,7 +108,7 @@ function Head({ icon, tile = '', children }: { icon: IconName; tile?: string; ch
 }
 
 export default function ScheduleDetailModal({
-  schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline, regInfo, onReservationChange,
+  schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline, regInfo, onReservationChange, onDisplay,
 }: ScheduleDetailModalProps) {
   const [tab, setTab] = useState<Tab>('main');
   const [lightbox, setLightbox] = useState(false);
@@ -391,7 +393,7 @@ export default function ScheduleDetailModal({
             돌고 있다는 App 의 실측 증거다. 그래서 여기서만 클락을 읽는다(포스터 열 때마다 조회 X).
             라이브가 아니면 기존 핵심 요약 그리드를 그대로 유지한다. */}
         {liveShown ? (
-          <LiveClockPanel schedule={schedule} regInfo={regInfo} onSeePrize={() => goSubTab('sched-tab', TAB_ORDER, tab, 'prize', () => setTab('prize'))} />
+          <LiveClockPanel schedule={schedule} regInfo={regInfo} onSeePrize={() => goSubTab('sched-tab', TAB_ORDER, tab, 'prize', () => setTab('prize'))} onDisplay={onDisplay} />
         ) : (
         <section className="overflow-hidden rounded-aura border border-border-subtle bg-surface-high">
           {/* ── 핵심 요약 그리드(APIS '오늘 예정' 문법) — 바이인·프라이즈·시작·레지마감·스타팅칩·
@@ -433,7 +435,7 @@ export default function ScheduleDetailModal({
             넘길 수 있어, 클릭 시점에 다시 판정해야 하기 때문 */}
         <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId}
           date={schedule.date} startTime={schedule.startTime} sched={schedule} regInfo={regInfo}
-          onReservationChange={onReservationChange} />
+          onReservationChange={onReservationChange} onVenueClick={onVenueClick} />
 
         {/* 현장 바인(참가) 요청 — 대회 당일에만 연다. 요청이 '오늘' 장부로 들어가기 때문(위 kToday 주석)
             지난 대회에선 안내조차 띄우지 않는다 — 할 수 있는 게 없어 소음일 뿐이라. */}
@@ -476,7 +478,7 @@ export default function ScheduleDetailModal({
               label="이벤트"
               value={schedule.sideEvents && schedule.sideEvents.length > 0
                 ? `사이드 ${schedule.sideEvents.length}개 · ${schedule.sideEvents.map((se) => se.name).join(', ')}`
-                : '메인 토너먼트'}
+                : '메인 대회'}
             />
           </dl>
         </section>
@@ -755,7 +757,7 @@ export default function ScheduleDetailModal({
           comments={qnaComments}
           onSubmit={onSubmitComment}
           onDelete={onDeleteComment}
-          emptyText="이 토너먼트에 대해 첫 질문을 남겨보세요."
+          emptyText="이 대회에 대해 첫 질문을 남겨보세요."
         />
       </>)}
       </div>
@@ -811,8 +813,8 @@ export function pickLiveClock(clocks: ClockState[], schedules: Schedule[]): Cloc
   return best;
 }
 
-function LiveClockPanel({ schedule, regInfo, onSeePrize }: {
-  schedule: Schedule; regInfo?: RegInfo; onSeePrize: () => void;
+function LiveClockPanel({ schedule, regInfo, onSeePrize, onDisplay }: {
+  schedule: Schedule; regInfo?: RegInfo; onSeePrize: () => void; onDisplay?: (venueId: string, gameSeq: number) => void;
 }) {
   const { id, venueId, date, title } = schedule;
   // 후보 판정(같은 매장·같은 날짜)은 lib/regStatus 단일 소스에 그대로 맡긴다 — 최소 필드 스텁 1개.
@@ -916,7 +918,7 @@ function LiveClockPanel({ schedule, regInfo, onSeePrize }: {
           </p>
           <button type="button" onClick={onSeePrize}
             className={`mt-auto pt-2 text-left text-2xs font-bold ${ACCENT_INK}`}>
-            프라이즈 전체보기 →
+            상금 전체보기 →
           </button>
         </div>
 
@@ -933,7 +935,18 @@ function LiveClockPanel({ schedule, regInfo, onSeePrize }: {
           </dl>
         </div>
       </div>
-      <p className="mt-1.5 px-1 text-2xs text-ink-muted">운영 중 클락의 공개 정보입니다 · 실시간 반영</p>
+      {/* 관전 클락 — 이 패널이 보여 주는 바로 그 클락(pickLiveClock 승자)을 풀스크린으로 연다.
+          예전엔 상세에서 갈 곳이 '프라이즈 탭' 뿐이라 라이브 카드에는 있는 관전 길이 여기엔 없었다(연결 감사 B).
+          gameSeq 는 패널이 고른 clock → App 이 고른 regInfo → 메인(1) 순서로 같은 클락에 수렴한다. */}
+      <div className="mt-1.5 flex items-center gap-2 px-1">
+        <p className="min-w-0 flex-1 truncate text-2xs text-ink-muted">운영 중 클락의 공개 정보입니다 · 실시간 반영</p>
+        {onDisplay && venueId && (
+          <button type="button" data-testid="sched-live-display" onClick={() => onDisplay(venueId, clock?.gameSeq ?? regInfo?.gameSeq ?? 1)}
+            className={`hit shrink-0 whitespace-nowrap rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold ${ACCENT_INK}`}>
+            관전 클락
+          </button>
+        )}
+      </div>
     </section>
   );
 }
@@ -1039,7 +1052,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
   );
 }
 
-function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regInfo, onReservationChange }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string; sched: Schedule; regInfo?: RegInfo; onReservationChange?: () => void }) {
+function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regInfo, onReservationChange, onVenueClick }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string; sched: Schedule; regInfo?: RegInfo; onReservationChange?: () => void; onVenueClick?: (venueId: string) => void }) {
   const { user } = useAuth();
   const toast = useToast();
   // undefined = 아직 조회 안 함 · null = 조회했고 예약 없음.
@@ -1194,7 +1207,15 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
       {justReserved && mine && (
         <div className="animate-fade-in space-y-2 rounded-input border border-emerald-500/40 bg-emerald-500/[0.07] p-3">
           <p className="flex items-center gap-1.5 text-sm font-bold text-emerald-400"><Icon name="check-circle" size={15} className="shrink-0" />예약 완료 · {ddayLabel} {startTime?.slice(0, 5)} 시작</p>
-          <div className="grid gap-2">
+          {/* 예약 완료 → 다음 단계가 '확인' 뿐이었다(연결 감사 F). 매장 페이지(위치·오늘 대회·내 활동)로 잇는다 —
+              상세 헤더의 매장명 탭과 같은 onVenueClick 이라 길이 둘로 갈리지 않는다. 2열은 매장이 있을 때만. */}
+          <div className={['grid gap-2', venueId && onVenueClick ? 'grid-cols-2' : ''].join(' ')}>
+            {venueId && onVenueClick && (
+              <button type="button" data-testid="reserve-done-venue" onClick={() => onVenueClick(venueId)}
+                className="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-input border border-border-default bg-surface-high py-2.5 text-2xs font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
+                <Icon name="store" size={13} className="shrink-0" />매장 보기
+              </button>
+            )}
             {pushSupported() ? (
               <button type="button" onClick={enableReminderPush} disabled={pushOn}
                 className={['flex items-center justify-center gap-1.5 rounded-input border py-2.5 text-2xs font-bold transition-colors',
@@ -1225,7 +1246,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
             <span>예약하면 이 매장에 <b className="text-accent-300">이름(실명)과 닉네임</b>이 전달됩니다</span>
           </p>
           <ul className="mt-1 space-y-0.5 text-2xs leading-relaxed text-ink-muted">
-            <li>· 전달 항목: 닉네임, 이름(실명 · 본인인증을 마친 회원), 입력한 예약명, 예약 일시, 대회 당일 매장 체크인 여부</li>
+            <li>· 전달 항목: 닉네임, 이름(실명 · 본인인증을 마친 회원), 입력한 예약명, 예약 일시, 대회 당일 매장 출석 여부</li>
             <li>· 받는 곳: {sched.pubName || '이 대회를 여는 매장'}의 운영주체(업주·매장 운영자)</li>
             <li>· 이용 목적: 예약자 본인 확인, 좌석 배정, 변경·취소 및 대회 진행 안내</li>
             <li>· 보유 기간: 대회 종료 후 분쟁 대응에 필요한 기간까지. 예약을 취소하면 매장 명단에서 곧바로 지워집니다</li>
@@ -1305,7 +1326,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
                           {r.visited
                             ? <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1 py-0.5 text-2xs font-bold leading-none text-emerald-400">방문 완료</span>
                             : ended
-                              ? <span title="이 대회 당일 이 매장의 체크인 기록이 없습니다. 체크인(QR)을 운영하지 않는 날이면 방문 여부를 알 수 없습니다."
+                              ? <span title="이 대회 당일 이 매장의 출석 기록이 없습니다. 출석 QR을 운영하지 않는 날이면 방문 여부를 알 수 없습니다."
                                   className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1 py-0.5 text-2xs font-bold leading-none text-ink-muted">방문 확인 안 됨</span>
                               : null}
                         </p>

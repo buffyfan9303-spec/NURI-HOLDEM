@@ -152,9 +152,9 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     await dismissOverlays(page);
   }
 
-  async function gotoCommunitySection(page: Page, label: string) {
+  async function gotoCommunitySection(page: Page, secId: string) {
     await page.locator('nav').getByRole('button', { name: '커뮤니티', exact: true }).first().click();
-    const tab = page.getByRole('button', { name: label, exact: true }).first();
+    const tab = page.getByTestId(`sec-tab-${secId}`).first();
     await expect(tab).toBeVisible({ timeout: 15_000 });
     await tab.click();
     await page.waitForTimeout(600); // 섹션 전환(VT)이 끝난 뒤에 재야 이번 전환과 안 섞인다
@@ -174,7 +174,7 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
 
   test('🔴 장터 카테고리(market-cat)', async ({ page }) => {
     await boot(page);
-    await gotoCommunitySection(page, '장터');
+    await gotoCommunitySection(page, 'market');
     const bar = page.locator('[data-market-catbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
     const samples = await probe(page, bar.getByRole('button', { name: '용품', exact: true }));
@@ -183,7 +183,7 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
 
   test('🔴 딜러 커뮤니티 구인·구직 필터(dealer-kind)', async ({ page }) => {
     await boot(page);
-    await gotoCommunitySection(page, '딜러');
+    await gotoCommunitySection(page, 'dealer');
     const bar = page.locator('[data-dealer-kindbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
     const samples = await probe(page, bar.getByRole('button', { name: /^구인/ }));
@@ -192,7 +192,7 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
 
   test('🔴 랭킹 허브 세부 탭(rank-tab · 오너가 지목한 화면)', async ({ page }) => {
     await boot(page);
-    await gotoCommunitySection(page, '랭킹');
+    await gotoCommunitySection(page, 'rank');
     const bar = page.locator('[data-rank-tabbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
     const samples = await probe(page, bar.getByRole('button', { name: /명예/ }).first());
@@ -234,7 +234,7 @@ test.describe('하위 탭 — 느린 기기에서도 root 는 끝까지 정지',
     await expect(community).toBeVisible({ timeout: 20_000 });
     await dismissOverlays(page);
     await community.click();
-    const tab = page.getByRole('button', { name: '랭킹', exact: true }).first();
+    const tab = page.getByTestId('sec-tab-rank').first();
     await expect(tab).toBeVisible({ timeout: 15_000 });
     await tab.click();
     const bar = page.locator('[data-rank-tabbar]');

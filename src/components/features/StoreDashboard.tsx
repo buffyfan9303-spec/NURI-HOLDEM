@@ -825,7 +825,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 </span>
               </span>
               <span className="block">
-                <span className="block text-2xs text-ink-muted">총 바이인</span>
+                <span data-testid="dash-kpi-buyins" className="block text-2xs text-ink-muted">총 바인</span>
                 <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-indigo">
                   <CountUp value={cnt.totalBuyins} /><span className="ml-1 text-sm font-semibold text-ink-muted">회</span>
                   {/* 엔트리는 금액 기준이라 소수가 된다 — CountUp 은 정수 애니라 옆에 그대로 적는다. */}
@@ -890,7 +890,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             {/* 진행 클락(선택 게임) */}
             <button type="button" onClick={() => onGoto('clock')} className="flex items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-white/[0.02]">
               <div className="min-w-0">
-                <p className="mb-1 text-2xs text-ink-muted">{activeClocks.length >= 2 ? (widgetGame <= 1 ? '메인' : `사이드${widgetGame - 1}`) + ' 클락' : '토너먼트 클락'}{wActive ? (wClock?.running ? ' · 진행' : ' · 일시정지') : ''}</p>
+                <p className="mb-1 text-2xs text-ink-muted">{activeClocks.length >= 2 ? (widgetGame <= 1 ? '메인' : `사이드${widgetGame - 1}`) + ' 클락' : '대회 클락'}{wActive ? (wClock?.running ? ' · 진행' : ' · 일시정지') : ''}</p>
                 {wActive && wLvl ? (
                   wLvl.kind === 'break' ? (
                     <p className="text-2xl font-extrabold leading-none text-ink-primary">BREAK</p>
@@ -1012,7 +1012,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 const max = Math.max(1, ...bars.map((b) => b.entries));
                 return (
                   <div className="px-3 pb-3">
-                    <p className="mb-2 text-2xs text-ink-muted">최근 {DOW[todayDow]}요일 바이인 추이</p>
+                    <p className="mb-2 text-2xs text-ink-muted">최근 {DOW[todayDow]}요일 바인 추이</p>
                     {/* 막대 트랙(h-16) + 4주 평균 점선 오버레이 */}
                     <div className="relative h-16">
                       {sameDowAvg != null && sameDowAvg > 0 && (
@@ -1081,7 +1081,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             <span aria-hidden className="shrink-0 text-ink-muted">→</span>
             <div className="min-w-0 flex-1 rounded-input bg-surface-high px-1 py-2">
               <p className="text-lg font-extrabold tabular-nums text-ink-primary">{funnel.checkins}</p>
-              <p className="mt-1 text-2xs text-ink-muted">방문 체크인</p>
+              <p className="mt-1 text-2xs text-ink-muted">출석</p>
             </div>
           </div>
           {funnel.views === 0 && (
@@ -1130,8 +1130,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요. 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto({ section: 'ranking', date: d, gameSeq: session?.gameSeq, title: session?.title }), tone: 'warn' };
         } else if (caps.ledger && started && !session?.closed) {
           todo = clockActive
-            ? { icon: 'cards', title: `게임 진행 중 · 바이인 ${cnt.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
-            : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `바이인 ${cnt.totalBuyins}회 · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
+            ? { icon: 'cards', title: `게임 진행 중 · 바인 ${cnt.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
+            : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `바인 ${cnt.totalBuyins}회 · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
         } else if (caps.ledger && !started && todayPoster) {
           todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto('ledger'), tone: 'gold' };
         } else if (caps.ledger && !started && !todayPoster && lastRound) {
@@ -1144,7 +1144,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             cta: '그대로 열기', onClick: gotoLedgerWithLastRound, tone: 'gold',
           };
         } else if (caps.posters && !started && !todayPoster && hour >= 12) {
-          todo = { icon: 'plus', title: '오늘 등록된 게임이 없어요', desc: '포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요.', cta: '게임 등록하기', onClick: onCreatePoster, tone: 'gold' };
+          todo = { icon: 'plus', title: '오늘 등록된 대회가 없어요', desc: '포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요.', cta: '대회 등록하기', onClick: onCreatePoster, tone: 'gold' };
         } else if (caps.manage && session?.closed) {
           todo = { icon: 'check-circle', title: '오늘 운영 완료', desc: '수고하셨습니다. 주간 추세와 요일 분석을 확인해 보세요.', cta: '주간 리포트', onClick: () => onGoto('stats'), tone: 'ok' };
         }
@@ -1195,7 +1195,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               <Icon name="trophy" size={20} className="shrink-0 text-gold-300" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-ink-primary">순위 미입력 · {labelOf(p)}</p>
-                <p className="mt-1 truncate text-2xs text-ink-muted">마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
+                <p className="mt-1 truncate text-2xs text-ink-muted">마감했지만 순위가 비어 있어요. 입력하면 순위표·아카이브에 반영됩니다.</p>
               </div>
               <span className="shrink-0 rounded-input bg-gold-400 px-3 py-2 text-xs font-bold text-ink-inverse">순위 입력</span>
             </button>
@@ -1207,7 +1207,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             <p className="flex items-center gap-2 text-sm font-bold text-ink-primary">
               <Icon name="trophy" size={18} className="shrink-0 text-gold-300" />순위 미입력 대회 {pendingRanks.length}개
             </p>
-            <p className="mt-1 text-2xs text-ink-muted">마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
+            <p className="mt-1 text-2xs text-ink-muted">마감했지만 순위가 비어 있어요. 입력하면 순위표·아카이브에 반영됩니다.</p>
             <ul className="mt-2 space-y-1">
               {shown.map((p) => (
                 <li key={`${p.date}#${p.gameSeq}`}>
@@ -1241,7 +1241,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* 빠른 작업 — 권한 있는 항목만 */}
       {(caps.posters || caps.ledger) && (
         <div className="grid grid-cols-4 gap-3">
-          {caps.posters && <QuickAction label="새 게임" tone="violet" onClick={onCreatePoster}
+          {caps.posters && <QuickAction label="새 대회" tone="violet" onClick={onCreatePoster}
             icon={<><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>} />}
           {caps.ledger && <QuickAction label="장부" tone="indigo" onClick={gotoTodayLedger}
             icon={<><path d="M4 4h12a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" /></>} />}
@@ -1259,7 +1259,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {/* 오늘 장부 카드는 ③ KPI 헤드라인으로 격상(내용 동일 — 총 바이인·완납 매출·미수금·회수 이용권) */}
         {/* 클락 — 라이브 위젯이 클락을 표시 중(clockActive)이면 중복 방지 위해 숨김 */}
-        <DashCard show={moreOpen && caps.ledger && !clockActive} title="토너먼트 클락" onClick={() => onGoto('clock')}
+        <DashCard show={moreOpen && caps.ledger && !clockActive} title="대회 클락" onClick={() => onGoto('clock')}
           badge={clockActive
             ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gold-400/15 text-gold-300'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
             : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-muted">미실행</span>}>
@@ -1310,7 +1310,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               </div>
               <div className="mt-1 flex items-center justify-between text-2xs">
                 <span className="text-ink-muted">평균 객단가</span>
-                <span className="text-ink-secondary tabular-nums"><b className="text-gold-300">{wonToMan(avgSpend)}</b>만 / 바이인{bestDay.entry > 0 && <> · 활발 <b className="text-ink-primary">{bestDay.dow}</b></>}</span>
+                <span className="text-ink-secondary tabular-nums"><b className="text-gold-300">{wonToMan(avgSpend)}</b>만 / 바인{bestDay.entry > 0 && <> · 활발 <b className="text-ink-primary">{bestDay.dow}</b></>}</span>
               </div>
             </>
           )}
@@ -1325,7 +1325,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>
           ) : (
             <div className="space-y-2 py-0.5">
-              <CompareRow label="바이인" now={weekEntry} prev={prevBuyins} delta={entryDelta} />
+              <CompareRow label="바인" now={weekEntry} prev={prevBuyins} delta={entryDelta} />
               <CompareRow label="매출" now={weekPaid} prev={prevPaid} delta={paidDelta} won />
             </div>
           )}
@@ -1570,7 +1570,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* 유틸 줄(IA3a) — 카드 옷을 입던 순수 링크들. '그 자리에서 끝내거나, 유틸이거나' */}
       {caps.manage && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-1 text-2xs">
-          <button type="button" onClick={() => setCheckinOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">방문 체크·QR 명단</button>
+          <button type="button" onClick={() => setCheckinOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">출석·QR 명단</button>
           <span className="text-border-strong" aria-hidden>·</span>
           <button type="button" onClick={() => setDealerOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">딜러 로테이션·급여</button>
           <span className="text-border-strong" aria-hidden>·</span>

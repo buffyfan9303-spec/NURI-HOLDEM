@@ -33,7 +33,7 @@ export default function StructureSim() {
   }, [players, start, rebuyPct, startBB, perLevel]);
 
   return (
-    <CalcCard title="토너먼트 구조 시뮬" desc="인원·스택·리바인으로 총 칩과 평균 스택 깊이를 추정합니다.">
+    <CalcCard title="대회 구조 시뮬" desc="인원·스택·리바인으로 총 칩과 평균 스택 깊이를 추정합니다.">
       <div className="grid grid-cols-2 gap-2">
         <Field label="참가 인원"><NumIn value={players} onChange={setPlayers} suffix="명" /></Field>
         <Field label="스타팅 스택"><NumIn value={start} onChange={setStart} /></Field>

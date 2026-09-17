@@ -67,7 +67,7 @@ export async function saveVenueReview(venueId: string, rating: number, content: 
   }, { onConflict: 'venue_id,user_id' });
   if (error) {
     // RLS 위반(체크인 기록 없음)이 42501로 옴 — 사용자 언어로 변환
-    if (error.code === '42501') throw new Error('매장 QR 체크인 후에 후기를 쓸 수 있어요');
+    if (error.code === '42501') throw new Error('매장 QR 출석 후에 후기를 쓸 수 있어요');
     throw new Error(error.message);
   }
   // 캐시를 비워 **다음에 별점을 조회하는 화면**이 TTL 을 기다리지 않게 한다.

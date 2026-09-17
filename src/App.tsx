@@ -157,6 +157,15 @@ const CalendarPanelLazy = lazyWithReload(() => import('./components/features/Cal
 const CalendarPanelM  = memo(CalendarPanelLazy);
 const VenueManageTabM = memo(VenueManageTab); // 내 매장 keep-alive 전환에 필수 — 숨김 상태에서 App 재렌더에 끌려가지 않게
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
+
+/** ?venue=<전체id> 또는 ?v=<슬러그|8자리> → 매장. 부팅 딥링크와 알림 링크(openInternalLink)가 같은 규칙을 쓴다. */
+function resolveVenueLink(venues: Venue[], full: string | null, short: string | null): Venue | null {
+  if (full) return venues.find((v) => v.id === full) ?? null;
+  if (!short) return null;
+  // 커스텀 슬러그 정확 일치 우선 → 구형 8자리 id 프리픽스 폴백
+  return venues.find((v) => v.slug && v.slug.toLowerCase() === short.toLowerCase())
+    ?? venues.find((v) => v.id.startsWith(short)) ?? null;
+}
 // 이벤트는 **별도 페이지**다(오너 2026-09-06) — 탭도 게시판도 아니고, 열 때만 내려받는다.
 const EventPage = lazyWithReload(() => import('./components/features/EventPage'));
 import type { MeTab } from './components/features/CustomerDashboardPage'; // 타입만(런타임 0)
@@ -195,8 +204,10 @@ interface TabDef { id: TabId; label: string; }
 
 const AppHeader = memo(function AppHeader({
   unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenMe,
-  onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange, onOpenVoucher,
+  onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange, onOpenVoucher, onInternalLink,
 }: {
+  /** 알림의 쿼리·해시형 링크를 앱 안에서 여는 App.openInternalLink(연결 감사 D) */
+  onInternalLink?: (u: URL) => boolean;
   /** [이용권 · 출석] 버튼 — 시트 자체는 **App 루트**에서 렌더한다(헤더 안이면 하단 탭바에 덮인다) */
   onOpenVoucher: () => void;
   /** (미사용 — 텍스트 내비로 대체) 모바일 헤더 좌측 큰 타이틀 */
@@ -468,6 +479,7 @@ const AppHeader = memo(function AppHeader({
         onMarkRead={onMarkRead}
         onNavigate={onNavigateNotification}
         onUnreadMessagesChange={onUnreadMessagesChange}
+        onInternalLink={onInternalLink}
       />
     </header>
   );
@@ -1161,12 +1173,13 @@ export default function App() {
         // 출석 = 이벤트 참여권 1장. 홈 배너가 그 숫자를 들고 있으므로 갱신 신호를 쏜다
         // (홈 탭은 언마운트되지 않아 마운트 1회 조회로는 영원히 낡는다 — HomeTab.tsx 주석).
         window.dispatchEvent(new Event('nuri:event-board-refresh'));
+        window.dispatchEvent(new Event('nuri:checkin-done')); // 홈 '이어서 하기'·'가 본 매장'(visitedVenues) 재조회
         const fire = streak >= 2 ? ` · ${streak}일 연속` : '';
-        toast.show(`${name || '매장'} 체크인 완료!${points > 0 ? ` 출석 도장 +${points}점` : ''}${fire}`, 'success');
+        toast.show(`${name || '매장'} 출석 완료!${points > 0 ? ` 출석 +${points}점` : ''}${fire}`, 'success');
         // 매장 QR 스캔은 '그 매장에 와 있다'는 뜻 — 홈이 아니라 그 매장 페이지(오늘 대회·내 활동)에 착지
         setOpenVenueId(cv);
       })
-      .catch((e) => toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'))
+      .catch((e) => toast.show(e instanceof Error ? e.message : '출석 실패', 'error'))
       .finally(() => {
         const url = new URL(window.location.href);
         url.searchParams.delete('checkin');
@@ -1230,10 +1243,11 @@ export default function App() {
         // 출석 = 이벤트 참여권 1장. 홈 배너가 그 숫자를 들고 있으므로 갱신 신호를 쏜다
         // (홈 탭은 언마운트되지 않아 마운트 1회 조회로는 영원히 낡는다 — HomeTab.tsx 주석).
         window.dispatchEvent(new Event('nuri:event-board-refresh'));
-          toast.show(`${name || '매장'} 체크인 완료!${points > 0 ? ` 출석 도장 +${points}점` : ''}${streak >= 2 ? ` · ${streak}일 연속` : ''}`, 'success');
+        window.dispatchEvent(new Event('nuri:checkin-done')); // 홈 '이어서 하기'·'가 본 매장'(visitedVenues) 재조회
+          toast.show(`${name || '매장'} 출석 완료!${points > 0 ? ` 출석 +${points}점` : ''}${streak >= 2 ? ` · ${streak}일 연속` : ''}`, 'success');
           setOpenVenueId(it.venueId);
         })
-        .catch((e) => toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'));
+        .catch((e) => toast.show(e instanceof Error ? e.message : '출석 실패', 'error'));
     } else {
       startBuyinRequest(it.venueId, it.gameSeq);
     }
@@ -1594,7 +1608,15 @@ export default function App() {
     setPostNav(nav ?? null);
     startTransition(() => setOpenPost(p)); // 폴백 스로틀 회피 — 위 openLogin 주석 참고
   }, []);
-  const closePost = useCallback(() => { setOpenPost(null); setPostNav(null); }, []);
+  // '내 정보' 에서 연 게시글은 닫을 때 '내 정보' 로 — 대회(meReturnRef)에는 있던 복귀가 게시글에는 빠져 있었다(연결 감사 C).
+  const postMeReturnRef = useRef(false);
+  const closePost = useCallback(() => {
+    const backToMe = postMeReturnRef.current;
+    postMeReturnRef.current = false;
+    setOpenPost(null); setPostNav(null);
+    if (backToMe) setVoucherWalletOpen(true);
+  }, []);
+  useEffect(() => { if (openPost === null) postMeReturnRef.current = false; }, [openPost]);
   // 공유 딥링크로 받은 글이 로드되면 상세를 연다(비로그인 열람 허용).
   useEffect(() => {
     // ⚠ N02: 예전엔 `posts.length === 0` 이면 여기서 그냥 돌아갔다. 그런데 `pendingPostId` 는
@@ -1897,7 +1919,12 @@ export default function App() {
   const recentVenue = visitedVenues[0] ?? null;
   useEffect(() => {
     if (!user) { setVisitedVenues([]); return; }
-    myVisitedVenues().then(setVisitedVenues).catch(() => {});
+    const load = () => { myVisitedVenues().then(setVisitedVenues).catch(() => {}); };
+    load();
+    // 체크인 성공(QR 딥링크 2경로 · 매장 페이지 스캐너)마다 다시 읽는다 — 첫 방문 매장에서 찍어도
+    // 홈 '이어서 하기'·추천 레일 '가 본 매장' 이 옛 값이던 것(연결 감사 E, 2026-09-17).
+    window.addEventListener('nuri:checkin-done', load);
+    return () => window.removeEventListener('nuri:checkin-done', load);
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const deferredLoadedRef = useRef(false);
   const loadDeferred = useCallback(() => {
@@ -2306,8 +2333,17 @@ export default function App() {
 
   // ── 핸들러 ─────────────────────────────────────────────────────────────
 
-  const handleVenueClick = useCallback((venueId: string) => {
-    if (!venueId) return; // 직접입력 포스터 등 매장 미연결 시 무시
+  const venuesRef = useRef(venues);
+  useEffect(() => { venuesRef.current = venues; });
+  const handleVenueClick = useCallback((venueId: string): boolean => {
+    if (!venueId) return false; // 직접입력 포스터 등 매장 미연결 시 무시
+    // 목록에 없는 매장(문 닫음·삭제·아직 로드 전)은 열지 않는다 — VenuePage 는 venue=null 이면 null 을 그려
+    //   '빈 전면 오버레이 + 뒤로가기 겹' 이 된다. 막다른 골목을 고치다 다른 막다른 골목을 만들지 않는다(2026-09-17).
+    //   deps 를 늘리지 않고 ref 로 본다 — 이 핸들러는 §5-B 안정 참조 계약(memo 자식들)에 묶여 있다.
+    if (!venuesRef.current.some((v) => v.id === venueId)) {
+      toast.show(venuesRef.current.length === 0 ? '매장 목록을 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요' : '그 매장을 찾을 수 없어요. 문을 닫았거나 주소가 바뀌었을 수 있습니다', 'error');
+      return false;
+    }
     // 스냅샷 전에 동기적으로 — 매장 페이지도 전면 오버레이라 크롬 스냅샷이 위에 얹힌다(openMeCb 와 같은 이유).
     document.documentElement.setAttribute('data-overlay', '');
     // 풀페이지 마운트(지도 임베드 포함)를 스냅샷 뒤에서 끝낸다 — 포스터→매장 전환도 크로스페이드
@@ -2315,7 +2351,8 @@ export default function App() {
       setOpenSchedule(null);   // 일정 모달이 열려있으면 닫고 매장으로 전환
       setOpenVenueId(venueId);
     }));
-  }, []);
+    return true;
+  }, [toast]);
 
   // 딥링크: ?v=<8자리코드>(단축) 또는 ?venue=<전체id>(구버전 호환) 진입 시 매장 페이지 자동 오픈
   const deepLinked = useRef(false);
@@ -2325,13 +2362,7 @@ export default function App() {
     const full = params.get('venue');
     const short = params.get('v');
     if (!full && !short) return;
-    const target = full
-      ? venues.find((v) => v.id === full)
-      : short
-        // 커스텀 슬러그 정확 일치 우선 → 구형 8자리 id 프리픽스 폴백
-        ? venues.find((v) => v.slug && v.slug.toLowerCase() === short.toLowerCase())
-          ?? venues.find((v) => v.id.startsWith(short))
-        : null;
+    const target = resolveVenueLink(venues, full, short);
     // 스냅샷에 없어도 네트워크 목록이 아직이면 판정을 미룬다 — 로드가 끝나면 venuesLoaded 가 바뀌어 다시 돈다.
     if (!target && !venuesLoaded) return;
     deepLinked.current = true;
@@ -2456,6 +2487,17 @@ export default function App() {
   // 이름이 문서에 2개 이상이면 전환이 통째로 취소되므로, 열림 중에는 카드가 이름을 잃고
   // 모달만 가진다(카드 조건: vtPosterId 일치 && 모달 닫힘). 닫힘 역모핑이 끝난 뒤에만 해제.
   const [vtPosterId, setVtPosterId] = useState<string | null>(null);
+  // [H · 2026-09-17] 업주 '손님 화면' — 자기 매장의 공개 페이지(VenuePage). VenueManageTab → VenueCustomizePanel 배선은
+  //   업주 팀이 끝냈고 이 prop 이 내려가는 순간 버튼이 켜진다(옵셔널 게이트).
+  // ⚠ 목록에 없으면 VenuePage `if (!open || !venue) return null` 이라 **눌러도 아무 일도 안 난다** —
+  //   dead-end 를 고치다 새 dead-end 를 만들지 않으려면 먼저 확인하고 안내한다.
+  const handleOpenOwnVenue = useCallback((venueId: string) => {
+    if (!venues.some((v) => v.id === venueId)) {
+      toast.show('매장 목록을 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요', 'error');
+      return;
+    }
+    setOpenVenueId(venueId);
+  }, [venues, toast]);
   const handleScheduleSelect = useCallback((s: Schedule) => {
     // 포스터 상세는 전체화면 2열 모달(PC: 포스터 좌+정보 우)로 표시 — 좁은 패널보다 가독성↑
     // 마운트 비용을 스냅샷 뒤에서 치러 sheet-up 첫 프레임 드랍을 없앤다(미지원은 기존 경로)
@@ -2484,6 +2526,23 @@ export default function App() {
   // 로고 → handleHome, 포스터 삭제). 그때 복귀 표시가 남아 있으면 **다음에 연 아무 상세**를 닫을 때
   // 엉뚱하게 '내 정보' 가 열린다 — 상세가 닫히는 모든 길에서 한 곳으로 지운다.
   useEffect(() => { if (openSchedule === null) meReturnRef.current = false; }, [openSchedule]);
+  // [연결 감사 C · 2026-09-17] 포스터·게시글·'내 정보' 에서 연 매장 페이지는 닫을 때 **출발지로 돌아온다**.
+  //   handleVenueClick 이 setOpenSchedule(null) 을, 게시글 경로가 setOpenPost(null) 을 하므로 매장을 닫으면
+  //   홈으로 떨어졌다("포스터 → 매장 → 뒤로 = 포스터가 사라진다"). meReturnRef 와 같은 조리법 —
+  //   z-index 를 올리지 않고 여는 쪽이 복귀 동작 하나를 맡긴다. 매장이 닫히는 다른 길(로고·탭 전환)은 복귀 없음.
+  const venueReturnRef = useRef<(() => void) | null>(null);
+  const closeVenue = useCallback(() => {
+    const back = venueReturnRef.current;
+    venueReturnRef.current = null;
+    setOpenVenueId(null);
+    back?.();
+  }, []);
+  useEffect(() => { if (openVenueId === null) venueReturnRef.current = null; }, [openVenueId]);
+  const openVenueFromSchedule = useCallback((vid: string) => {
+    const s = openSchedule;
+    if (!handleVenueClick(vid)) return; // 거절(목록에 없음)이면 포스터는 그대로 열려 있다 — 복귀 ref 를 남기지 않는다
+    venueReturnRef.current = s ? () => handleScheduleSelect(s) : null;
+  }, [openSchedule, handleScheduleSelect, handleVenueClick]);
 
   // [F09] scheduleId 하나로 '정확히 그 대회' 를 연다 — 알림·홈 오늘예약·내 정보 예약 행·캘린더 공용.
   //   목록(schedules)은 browse/live/my-store/admin 탭에서만 갱신되므로, 다른 탭에 머문 사용자에게
@@ -2549,7 +2608,7 @@ export default function App() {
   //   history 항목이 두 개로 불어나지 않는다(입양 — backstack.pushLayer 참고).
   const ADOPT = { adoptable: true } as const;
   useBackClose(openSchedule !== null, closeSchedule, ADOPT);
-  useBackClose(openVenueId !== null, () => setOpenVenueId(null), ADOPT);
+  useBackClose(openVenueId !== null, closeVenue, ADOPT);
   useBackClose(openPost !== null, closePost, ADOPT);
   useBackClose(openListing !== null, () => setOpenListing(null), ADOPT);
   useBackClose(openNotice !== null, () => setOpenNotice(null), ADOPT);
@@ -3084,6 +3143,8 @@ export default function App() {
    *  ⚠ 아는 목적지만 맡는다. 모르는 링크는 false 를 돌려 **기존 이동 경로를 그대로** 쓰게 둔다
    *    (`/about.html` 같은 정적 페이지가 여기서 조용히 먹히면 그게 기능 소실이다).
    *  ⚠ 경로가 다르면 맡지 않는다 — 같은 문서 안에서 바꿀 수 있는 것만 여기 해당한다. */
+  const openScheduleByIdRef = useRef(openScheduleById);
+  useEffect(() => { openScheduleByIdRef.current = openScheduleById; });
   const openInternalLink = useCallback((u: URL): boolean => {
     if (u.pathname !== window.location.pathname) return false;
     const ev = u.searchParams.get('event');
@@ -3097,8 +3158,25 @@ export default function App() {
     //   모르는 탭(`?tab=zzz`)은 맡지 않는다 → 아래 기존 이동 경로로 떨어진다.
     const tab = u.searchParams.get('tab');
     if (tab && (TAB_IDS as readonly string[]).includes(tab)) { changeTab(tab as TabId); return true; }
+    // [연결 감사 D · 2026-09-17] 알림 링크가 만들 수 있는 부팅 딥링크형(?s= ?v= #tool= #gto=)도 앱 안에서 연다 —
+    //   NotificationPanel 은 이 함수가 false 를 돌릴 때만 location.assign(전체 리로드)으로 떨어진다.
+    //   각 목적지는 부팅 딥링크 이펙트와 **같은 함수**를 쓴다(openScheduleById · resolveVenueLink · nuri:open-tool · hashchange).
+    const sid = u.searchParams.get('s');
+    if (sid) { openScheduleByIdRef.current(sid); return true; }
+    const vFull = u.searchParams.get('venue'), vShort = u.searchParams.get('v');
+    if (vFull || vShort) {
+      const target = resolveVenueLink(venuesRef.current, vFull, vShort);
+      if (target) { handleVenueClick(target.id); return true; }
+      return false; // 목록에 없으면 부팅 경로(venuesLoaded 대기 + 안내 토스트)에 맡긴다
+    }
+    if (u.hash.startsWith('#tool=')) { window.dispatchEvent(new CustomEvent('nuri:open-tool', { detail: u.hash.slice('#tool='.length) })); return true; }
+    if (u.hash.startsWith('#gto=')) {
+      try { history.replaceState(null, '', window.location.pathname + window.location.search + u.hash); } catch { return false; }
+      window.dispatchEvent(new HashChangeEvent('hashchange')); // 위 #gto= 이펙트가 소비한다
+      return true;
+    }
     return false;
-  }, [openEvent, changeTab]);
+  }, [openEvent, changeTab, handleVenueClick]); // venues·openScheduleById 는 ref — 이 함수는 memo 자식(AppHeader·HomeTab)에 내려가므로 안정 참조여야 한다
   /** 이벤트 판이 떠 있는 동안 내비 활성 표시도 이벤트로 — 어디 있는지 모르는 화면을 만들지 않는다. */
   const navActive: TabId = eventOpen ? 'event' : activeTab;
   const tabDot = useMemo(() => ({ community: commHasNew }), [commHasNew]);
@@ -3201,8 +3279,16 @@ export default function App() {
     openScheduleById(sid, { returnToMe: true, fallbackVenueId: vid })
   ), [openScheduleById]);
   const handleMeOpenPost = useCallback((pp: CommunityPost) => {
+    postMeReturnRef.current = true;
     setVoucherWalletOpen(false); changeTab('community'); startTransition(() => setOpenPost(pp));
   }, [changeTab]);
+  // [연결 감사 A] 내 정보(이용 내역·입상 기록·이용권 묶음) → 매장. 대시보드(z-60)가 매장(z-40)을 덮으므로 먼저 닫고,
+  //   매장을 닫으면 다시 '내 정보' 로(venueReturnRef) — 재방문 사슬이 왕복한다.
+  const handleMeOpenVenue = useCallback((vid: string) => {
+    if (!handleVenueClick(vid)) return; // 거절이면 '내 정보' 를 닫지 않는다(토스트만)
+    venueReturnRef.current = () => setVoucherWalletOpen(true);
+    setVoucherWalletOpen(false);
+  }, [handleVenueClick]);
   const handleMeOpenLegal = openLegal;
   const handleMeOpenSupport = openSupport;
   // 장터·랭킹 상점은 **같은 조리법**(섹션 이벤트 + 세션 기억 + 탭 이동).
@@ -3251,6 +3337,7 @@ export default function App() {
         onUnreadMessagesChange={setUnreadMsgs}
         onOpenLogin={openLoginCb}
         onNavigateNotification={handleNavigateNotification}
+        onInternalLink={openInternalLink}
         onHome={handleHome}
         onOpenMe={openMeCb}
         /* startTransition + 아래 Suspense 선마운트 — 둘이 **함께**여야 첫 클릭에 열린다.
@@ -3317,7 +3404,9 @@ export default function App() {
             onOpenLegal={handleMeOpenLegal}
             onOpenSupport={handleMeOpenSupport}
             onOpenMarket={handleMeOpenMarket}
-            onOpenRanking={handleMeOpenRanking} />
+            onOpenRanking={handleMeOpenRanking}
+            onOpenVenue={handleMeOpenVenue}
+            venues={venues} />
         </Suspense>
       )}
 
@@ -3451,12 +3540,12 @@ export default function App() {
                       onClick={() => startTransition(() => setOpenNotice(evNotice))}
                       className="min-w-0 flex-1 text-left focus:outline-none"
                     >
-                      <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 · 출석 도장 2배 · 첫 예약 +50 · 웰컴 +100</p>
+                      <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 · 출석 점수 2배 · 첫 예약 +50 · 웰컴 +100</p>
                       <p className="text-2xs text-ink-muted">8/3(월)까지 · 자세히 보기 →</p>
                     </button>
                   ) : (
                     <div className="min-w-0 flex-1 text-left">
-                      <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 · 출석 도장 2배 · 첫 예약 +50 · 웰컴 +100</p>
+                      <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 · 출석 점수 2배 · 첫 예약 +50 · 웰컴 +100</p>
                       <p className="text-2xs text-ink-muted">8/3(월)까지</p>
                     </div>
                   )}
@@ -3722,7 +3811,7 @@ export default function App() {
                         <span className="block text-2xs font-bold text-ink-muted">이어서 하기</span>
                         <span className="block truncate text-sm font-bold text-ink-primary">{recentVenue.venueName ?? '최근 방문 매장'}</span>
                       </span>
-                      <span className="shrink-0 text-2xs font-bold text-accent-300">체크인 · 오늘 대회 ›</span>
+                      <span className="shrink-0 text-2xs font-bold text-accent-300">출석 · 오늘 대회 ›</span>
                     </button>
                   </div>
                 )}
@@ -3819,6 +3908,7 @@ export default function App() {
             onCreatePoster={handleCreatePosterFromStore}
             onEditPoster={handleEditPosterFromStore}
             onDeletePoster={handleDeletePoster}
+            onOpenVenue={handleOpenOwnVenue}
           />
           </ErrorBoundary>
         </main>
@@ -3941,7 +4031,8 @@ export default function App() {
         open
         schedule={openSchedule}
         onClose={closeSchedule}
-        onVenueClick={handleVenueClick}
+        onVenueClick={openVenueFromSchedule}
+        onDisplay={openDisplay}
         rating={openSchedule ? venueRatings[openSchedule.venueId] : undefined}
         regInfo={openSchedule ? regInfoBySchedule.get(openSchedule.id) : undefined}
         comments={comments}
@@ -3962,13 +4053,13 @@ export default function App() {
           <Suspense fallback={<OverlayFallback />}>
             {/* key=대상: 그룹/매장이 바뀌면 재마운트 — 이전 대상의 늦은 멤버십·게시글·전송 응답이 새 대상에 붙지 않는다 */}
             {isGroup ? (
-              <GroupPage key={openVenueId} open group={ov} onClose={() => setOpenVenueId(null)} />
+              <GroupPage key={openVenueId} open group={ov} onClose={closeVenue} />
             ) : (
               <VenuePage
                 key={openVenueId}
                 open
                 venue={ov}
-                onClose={() => setOpenVenueId(null)}
+                onClose={closeVenue}
                 schedules={schedules}
                 comments={comments}
                 notices={browseNotices}
@@ -4030,7 +4121,12 @@ export default function App() {
         onLike={handleLikePost}
         onDelete={handleDeletePost}
         venues={venues}
-        onVenueClick={(vid) => { setOpenPost(null); handleVenueClick(vid); }}
+        onVenueClick={(vid) => {
+          const p = openPost, nav = postNav;
+          if (!handleVenueClick(vid)) return; // 거절이면 게시글은 그대로
+          venueReturnRef.current = () => { setOpenPost(p); setPostNav(nav); };
+          setOpenPost(null);
+        }}
       />
       )}
 

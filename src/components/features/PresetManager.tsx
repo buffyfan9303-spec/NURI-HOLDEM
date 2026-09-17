@@ -95,11 +95,11 @@ export default function PresetManager({ venueId }: { venueId: string }) {
           <button type="button" onClick={() => setEditing(null)} className="text-lg leading-none text-ink-muted">✕</button>
         </div>
         <Field label="프리셋 이름 *"><input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} maxLength={40} placeholder="예: 데일리 6만 스타팅" className="input w-full text-sm" /></Field>
-        <Field label="게임 제목"><input value={d.title ?? ''} onChange={(e) => set({ title: e.target.value })} placeholder="예: 데일리 토너먼트" className="input w-full text-sm" /></Field>
+        <Field label="게임 제목"><input value={d.title ?? ''} onChange={(e) => set({ title: e.target.value })} placeholder="예: 데일리 대회" className="input w-full text-sm" /></Field>
         <Field label="게임 종류"><input value={d.gameType ?? ''} onChange={(e) => set({ gameType: e.target.value })} placeholder="프리즈아웃 · 바운티 · 애드온 등" className="input w-full text-sm" /></Field>
         <div className="grid grid-cols-2 gap-2">
           {/* PL2a 정규형 병기: 입력은 원 그대로, 저장은 buyInWon(단위 명시)+구형 buyIn 동시 */}
-          <Field label="바이인(원)"><NumInput v={presetBuyInWon(d) || undefined} on={(n) => set({ buyIn: n, buyInWon: n })} /></Field>
+          <Field label="참가비(원)"><NumInput v={presetBuyInWon(d) || undefined} on={(n) => set({ buyIn: n, buyInWon: n })} /></Field>
           <Field label="듀레이션"><input value={d.duration ?? ''} onChange={(e) => set({ duration: e.target.value })} placeholder="예: 레벨당 20분" className="input w-full text-sm" /></Field>
           <Field label="스타팅 스택"><NumInput v={d.startStack} on={(n) => set({ startStack: n })} /></Field>
           <Field label="리바인 스택"><NumInput v={d.rebuyStack} on={(n) => set({ rebuyStack: n })} /></Field>
@@ -116,7 +116,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
           {d.prizeType === 'GTD'
             /* PL0 정규형: 입력은 만원(한국 관행), 저장은 원(prizeAmountWon)+구형 만원 동시 — 오환산 차단 */
             ? <Field label="보장 상금(만원)"><NumInput v={d.prizeAmount} on={(n) => set({ prizeAmount: n, prizeAmountWon: manToWon(n) })} /></Field>
-            : <Field label="프라이즈 비율(%)"><NumInput v={d.prizePercent} on={(n) => set({ prizePercent: n })} /></Field>}
+            : <Field label="상금 비율(%)"><NumInput v={d.prizePercent} on={(n) => set({ prizePercent: n })} /></Field>}
         </div>
         {/* PL2b: 순위별 상금 에디터 — 죽은 필드(타입만 있고 UI 없음) 복구. 매장이 가장 자주 재입력·오기록하던 항목.
             입력 만원 · 저장 원(amountWon)+만원(구형 호환) — 포스터·클락·순위에 올바른 단위로 주입된다. */}

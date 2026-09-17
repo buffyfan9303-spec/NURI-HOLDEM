@@ -11,9 +11,9 @@ const read = (f: string) => readFileSync(join(__dirname, f), 'utf-8');
 const CASES: [string, string, string][] = [
   ['HomeTab.tsx',              '오늘·내일 예정 대회가 없어요',                    '다음 날짜에는 열려 있을 수 있어요'],
   ['ScheduleDetailModal.tsx',  '참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요', '다른 플레이어에게 큰 도움이 됩니다'],
-  ['VenuePage.tsx',            '체크인하면 출석 도장 · 전적 인정 · 방문 후기가 열려요', '하루 한 번이면 충분해요'],
+  ['VenuePage.tsx',            '출석하면 점수 적립 · 전적 인정 · 방문 후기가 열려요', '하루 한 번이면 충분해요'],
   ['VenuePage.tsx',            '오늘 진행되는 포스터가 없습니다',                  '아래 예정 포스터를 확인해 보세요'],
-  ['MyVoucherSheet.tsx',       '매장 비치 체크인 QR',                             '하루 한 번이면 충분해요'],
+  ['MyVoucherSheet.tsx',       '매장 비치 출석 QR',                             '하루 한 번이면 충분해요'],
   ['MyVoucherSheet.tsx',       '수동으로 보내기',                                 '장수를 정하고 한 번 더 확인한 뒤 보냅니다'],
   ['MyVoucherSheet.tsx',       '업주 전화번호</b>를 입력하세요',                   '번호가 맞아야 서버가 보내 줍니다'],
   ['MyVoucherSheet.tsx',       '승인하면 확정됩니다',                              '매장 장부에 사용 요청으로 올라가고'],

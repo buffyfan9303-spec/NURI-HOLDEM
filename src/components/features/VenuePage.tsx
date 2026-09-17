@@ -224,12 +224,12 @@ export default function VenuePage({
   // '체크인'은 매장에 실제로 왔다는 증명 — 버튼은 스캐너 모달만 열고, 체크인 RPC(doCheckin)는
   // 매장 비치 QR(?checkin=<venueId>) 스캔 검증 후에만 실행된다. 딥링크 자동 체크인은 App.tsx 보존.
   const openQrScan = () => {
-    if (!user) { toast.show('로그인 후 체크인할 수 있습니다', 'error'); promptLogin(); return; }
+    if (!user) { toast.show('로그인 후 출석할 수 있습니다', 'error'); promptLogin(); return; }
     if (checkinBusy) return;
     setQrScanOpen(true);
   };
   const doCheckin = async () => {
-    if (!user) { toast.show('로그인 후 체크인할 수 있습니다', 'error'); promptLogin(); return; }
+    if (!user) { toast.show('로그인 후 출석할 수 있습니다', 'error'); promptLogin(); return; }
     if (checkinBusy) return;
     setCheckinBusy(true);
     try {
@@ -246,10 +246,13 @@ export default function VenuePage({
       // 🔥 는 OS 마다 다른 그림으로 떠서 통제가 안 됐다(같은 이유로 본문 전역에서 제거).
       const fire = streak >= 2 ? ` · ${streak}일 연속` : '';
       // 16-4 성공 = 다음 여정의 출발점: 오늘 대회가 있으면 바로 열어볼 수 있게.
-      toast.show(`${name || venue!.name} 체크인 완료!${points > 0 ? ` 출석 도장 +${points}점` : ''}${fire}`, 'success',
+      toast.show(`${name || venue!.name} 출석 완료!${points > 0 ? ` +${points}점` : ''}${fire}`, 'success',
         todayPosters.length > 0 ? { action: { label: '오늘 대회 보기', onClick: () => onSelectSchedule?.(todayPosters[0]) } } : undefined);
       setMyAct({ streak, visits: visited.find((v) => v.venueId === venue!.id)?.visits ?? 0 });
-    } catch (e) { toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'); }
+      // 홈 '이어서 하기'·'가 본 매장' 은 App 의 visitedVenues 가 만든다 — 여기서 재조회한 목록은 이 페이지 몫이고,
+      // App 은 이 신호를 듣고 자기 것을 다시 읽는다(연결 감사 E · 첫 방문 매장에서 체크인해도 홈이 옛 값이던 것).
+      window.dispatchEvent(new Event('nuri:checkin-done'));
+    } catch (e) { toast.show(e instanceof Error ? e.message : '출석 실패', 'error'); }
     finally { setCheckinBusy(false); }
   };
   const shareVenue = async () => {
@@ -429,7 +432,7 @@ export default function VenuePage({
                   </span>
                   <span className="block truncate text-sm font-bold text-ink-primary">{t0.title}</span>
                   <span className="block text-2xs text-ink-secondary tabular-nums">
-                    {t0.startTime} 시작{t0.buyIn?.amount ? ` · 바이인 ${t0.buyIn.amount.toLocaleString()}원` : ''}
+                    {t0.startTime} 시작{t0.buyIn?.amount ? ` · 참가비 ${t0.buyIn.amount.toLocaleString()}원` : ''}
                   </span>
                 </span>
                 <span className={['shrink-0 text-2xs font-bold px-2 py-0.5 rounded-badge',
@@ -447,10 +450,10 @@ export default function VenuePage({
               보조 행은 `flex` + `flex-1` 이라 전화·주소가 없는 매장에서도 남은 것끼리 자동 균등이 된다
               (grid-cols-3 고정이면 빈 칸이 생긴다). */}
           <div className="space-y-2">
-            <button type="button" onClick={openQrScan} disabled={checkinBusy} data-coach="venue-checkin"
+            <button type="button" onClick={openQrScan} disabled={checkinBusy} data-coach="venue-checkin" data-testid="venue-checkin"
               className="btn-primary h-11 w-full text-sm font-bold disabled:opacity-60">
               <Icon name="map-pin" size={16} className="-mt-px" />
-              {checkinBusy ? '체크인 중…' : 'QR 체크인'}
+              {checkinBusy ? '출석 중…' : '출석 QR'}
             </button>
             <div className="flex gap-2">
             {/* 대표 번호 = 다중 연락처의 첫 항목(신 필드 우선, 없으면 기존 contactPhone 폴백) */}
@@ -479,7 +482,7 @@ export default function VenuePage({
             <KakaoActionButton kakao={kakao} />
             </div>
           </div>
-          <CoachMark id="venue-checkin">체크인하면 출석 도장 · 전적 인정 · 방문 후기가 열려요</CoachMark>
+          <CoachMark id="venue-checkin">출석하면 점수 적립 · 전적 인정 · 방문 후기가 열려요</CoachMark>
           {user && myAct && (myAct.streak > 0 || myAct.visits > 0) && (
             <p className="flex items-center gap-1 text-2xs text-ink-muted tabular-nums">
               {myAct.streak > 0 && <><Icon name="flame" size={13} className="shrink-0" />연속 출석 <b className="text-ink-secondary">{myAct.streak}일</b></>}
@@ -1160,7 +1163,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
 
   if (loading) return <SkeletonList rows={6} rowClassName="h-14" />;
   if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0) {
-    return <EmptyState title="아직 등록된 순위가 없어요" hint="매장에서 순위를 등록하면 누적 랭킹이 자동으로 집계됩니다." />;
+    return <EmptyState title="아직 등록된 순위가 없어요" hint="매장에서 순위를 등록하면 누적 순위가 자동으로 집계됩니다." />;
   }
 
   const unit = boardUnit(cur, cfg);
@@ -1876,7 +1879,7 @@ function PostersPanel({
                       <p className="text-sm font-medium text-ink-primary truncate">{s.title}</p>
                       <p className="text-2xs text-ink-muted mt-0.5">
                         {/* 바이인 미입력(0)이면 '바이인 0'(거짓 정보) 대신 세그먼트 자체를 생략 — Tier1 오늘의 대회와 동일 문법 */}
-                        {s.startTime}{s.buyIn.amount > 0 ? ` · 바이인 ${s.buyIn.amount.toLocaleString()}` : ''}
+                        {s.startTime}{s.buyIn.amount > 0 ? ` · 참가비 ${s.buyIn.amount.toLocaleString()}` : ''}
                       </p>
                     </div>
                     <span className="shrink-0 text-2xs font-bold text-accent-200 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">
@@ -1892,11 +1895,11 @@ function PostersPanel({
 
       {/* ── 예정 포스터 ─────────────────────────────────────────── */}
       <div className="reveal space-y-2">
-        <p className="text-2xs font-bold text-ink-muted px-0.5">예정 포스터 ({upcoming.length})</p>
+        <p className="text-2xs font-bold text-ink-muted px-0.5">예정 대회 ({upcoming.length})</p>
         {/* 빈 상태를 회색 한 줄에서 공용 EmptyState 로 — 카피는 보존하고 '그래서 뭘 하면 되는지'를 덧댄다.
             (순위 탭은 이미 EmptyState 를 쓰고 있었다 — 탭마다 빈 화면의 문법이 달랐던 것을 맞춘다) */}
         {upcoming.length === 0 ? (
-          <EmptyState title="예정된 포스터가 없습니다." hint="매장을 팔로우하면 새 대회 포스터가 올라올 때 알려드려요." />
+          <EmptyState title="예정된 대회가 없습니다." hint="매장을 팔로우하면 새 대회가 올라올 때 알려드려요." />
         ) : (
           <ul className="space-y-2">
             {upcoming.map((s) => {
@@ -1913,7 +1916,7 @@ function PostersPanel({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-ink-primary truncate">{s.title}</p>
                     <p className="text-2xs text-ink-muted mt-0.5">
-                      {s.startTime}{s.buyIn.amount > 0 ? ` · 바이인 ${s.buyIn.amount.toLocaleString()}` : ''}
+                      {s.startTime}{s.buyIn.amount > 0 ? ` · 참가비 ${s.buyIn.amount.toLocaleString()}` : ''}
                     </p>
                   </div>
                 </li>
@@ -2005,7 +2008,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
 
 function SchedulesPanel({ schedules, onSelect }: { schedules: Schedule[]; onSelect?: (s: Schedule) => void }) {
   if (schedules.length === 0) {
-    return <EmptyState title="예정된 토너먼트가 없습니다." hint="매장을 팔로우하면 새 일정이 등록될 때 알려드려요." />;
+    return <EmptyState title="예정된 대회가 없습니다." hint="매장을 팔로우하면 새 일정이 등록될 때 알려드려요." />;
   }
   const dows = ['일','월','화','수','목','금','토'];
   return (
@@ -2024,7 +2027,7 @@ function SchedulesPanel({ schedules, onSelect }: { schedules: Schedule[]; onSele
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-ink-primary truncate">{s.title}</p>
               <p className="text-2xs text-ink-muted mt-0.5">
-                {s.startTime} · {s.duration}{s.buyIn.amount > 0 ? ` · 바이인 ${s.buyIn.amount.toLocaleString()}` : ''}
+                {s.startTime} · {s.duration}{s.buyIn.amount > 0 ? ` · 참가비 ${s.buyIn.amount.toLocaleString()}` : ''}
               </p>
             </div>
             <span className={[

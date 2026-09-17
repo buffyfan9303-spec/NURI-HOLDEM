@@ -53,7 +53,7 @@ describe('matchClockSchedule · 같은 매장·같은 날짜, 여럿이면 제�
 describe('buildRegInfoMap · scheduleId → 레지 실측 상태', () => {
   it('일시정지 클락에서 msLeft·running 이 결정적으로 매핑된다', () => {
     const map = buildRegInfoMap([clock()], [sched()], 0);
-    expect(map.get('s1')).toEqual({ msLeft: 55 * 60_000, running: false });
+    expect(map.get('s1')).toEqual({ msLeft: 55 * 60_000, running: false, gameSeq: 1 });
   });
 
   it('클락과 매칭되지 않는 대회는 맵에 없다 (소비처가 추정으로 폴백)', () => {
@@ -140,7 +140,7 @@ describe('🔴 F3 — 일시정지 클락의 msLeft 는 벽시계로 깎이지 �
     const t0 = Date.UTC(2026, 7, 26, 10, 0, 0);
     const a = buildRegInfoMap([paused], [sched()], t0).get('s1');
     const b = buildRegInfoMap([paused], [sched()], t0 + 3 * 3600_000).get('s1');
-    expect(a, '일시정지 클락이 맵에서 빠졌다').toEqual({ msLeft: 55 * 60_000, running: false });
+    expect(a, '일시정지 클락이 맵에서 빠졌다').toEqual({ msLeft: 55 * 60_000, running: false, gameSeq: 1 });
     expect(b, '정지된 대회를 벽시계로 깎았다 — 절대 마감시각 방식으로 되돌아갔다는 뜻이다').toEqual(a);
   });
 

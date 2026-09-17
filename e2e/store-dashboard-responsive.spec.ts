@@ -195,10 +195,10 @@ test('🔴 KPI 숫자 넷이 360px 에서 서로 겹치지 않는다', async ({ 
   await openDashboard(page);
 
   const store = page.locator('[data-tab="my-store"]');
-  const labels = ['완납 매출', '총 바이인', '미수금', '회수 이용권'];
+  const labels = ['완납 매출', '[data-testid="dash-kpi-buyins"]', '미수금', '회수 이용권'];
   const boxes: { name: string; r: { x: number; y: number; w: number; h: number } }[] = [];
   for (const name of labels) {
-    const el = store.getByText(name, { exact: true }).first();
+    const el = (name.startsWith('[') ? store.locator(name) : store.getByText(name, { exact: true })).first();
     await expect(el, `KPI '${name}' 이 사라졌다`).toBeVisible({ timeout: 20_000 });
     const bb = await el.boundingBox();
     if (bb) boxes.push({ name, r: { x: bb.x, y: bb.y, w: bb.width, h: bb.height } });
@@ -236,7 +236,7 @@ async function contrastOf(page: Page, selectorText: string): Promise<{ ratio: nu
       return [p[0], p[1], p[2]];
     };
     const all = [...document.querySelectorAll('[data-tab="my-store"] *')] as HTMLElement[];
-    const el = all.find((n) => n.children.length === 0 && n.textContent?.trim() === txt);
+    const el = txt.startsWith('[') ? document.querySelector<HTMLElement>('[data-tab="my-store"] ' + txt) : all.find((n) => n.children.length === 0 && n.textContent?.trim() === txt);
     if (!el) return { ratio: -1, fg: '', bg: '(요소 없음)' };
     const fg = parse(getComputedStyle(el).color) ?? [0, 0, 0];
     // 실제로 칠해진 조상을 찾는다 — 투명이면 계속 올라간다(순백 가정 금지)
@@ -273,7 +273,7 @@ test('🔴 라이트 테마 — 레이아웃이 무너지지 않고 본문 대�
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForTimeout(200);
   const bad: string[] = [];
-  for (const t of ['완납 매출', '총 바이인', '미수금', '회수 이용권', '오늘 장부']) {
+  for (const t of ['완납 매출', '[data-testid="dash-kpi-buyins"]', '미수금', '회수 이용권', '오늘 장부']) {
     const c = await contrastOf(page, t);
     if (c.ratio < 0) { bad.push(`'${t}' 를 찾지 못했다`); continue; }
     if (c.ratio < 4.5) bad.push(`'${t}' 대비 ${c.ratio.toFixed(2)}:1 (글자 ${c.fg} / 지면 ${c.bg})`);

@@ -63,7 +63,8 @@ describe('UI-04 · 이전/다음 배선', () => {
   it('🔴 App: 삭제는 스냅샷에서 그 글만 빼고(무조건 null 금지), 닫을 때 맥락을 비운다', () => {
     expect(APP).toMatch(/setOpenPost\(\(cur\) => \(cur\?\.id === id \? null : cur\)\);\s*setPostNav\(\(n\) => dropFromCtx\(n, id\)\);/);
     expect(APP).not.toMatch(/setOpenPost\(\(cur\) => \(cur\?\.id === id \? null : cur\)\);\s*setPostNav\(null\)/);
-    expect(APP).toMatch(/const closePost = useCallback\(\(\) => \{ setOpenPost\(null\); setPostNav\(null\); \}, \[\]\);/);
+    // 2026-09-17 연결 감사 C: closePost 가 '내 정보' 복귀(postMeReturnRef)를 얻었다 — 맥락 비우기는 그대로 한 문장이다.
+    expect(APP).toMatch(/const closePost = useCallback\(\(\) => \{[\s\S]{0,200}?setOpenPost\(null\); setPostNav\(null\);[\s\S]{0,120}?\}, \[\]\);/);
     expect(APP).toMatch(/useBackClose\(openPost !== null, closePost, ADOPT\);/);
     expect(APP).toMatch(/nav=\{postNav\}\s+onNavigate=\{openPostWithNav\}\s+onClose=\{closePost\}/);
   });

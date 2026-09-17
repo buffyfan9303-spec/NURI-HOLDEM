@@ -98,9 +98,11 @@ export interface LedgerSeed {
 }
 
 // venueName 은 엑셀 파일명에만 쓰였다(내보내기 제거로 미사용). 호출자(VenueManageTab·AdminTab)가 아직 넘기므로 타입만 남긴다.
-export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, seed, followGame, settleSignal = 0, active = true }: {
+export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, onOpenSchedule, seed, followGame, settleSignal = 0, active = true }: {
   venueId: string; canManage: boolean; venueName?: string; active?: boolean;
   onMakeRankingDraft?: (date: string, names: string[], eventName?: string) => void;
+  /** 세션 요약의 '대회 …' → 손님이 보는 대회 상세. 없으면 글자로만 남는다(AdminTab 등). */
+  onOpenSchedule?: (s: Schedule) => void;
   onOpenClock?: (date: string, gameSeq: number) => void;
   /** 마감 후 '주간 리포트 보기' — 통계 섹션으로 이동(업주/운영자만 전달) */
   onOpenStats?: () => void;
@@ -821,7 +823,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       const others = (s.operators ?? []).filter((id) => id && id !== user?.id);
       if (others.length) notifyLedgerOpen(venueId, s.title ?? '', others).catch(() => {});
       // 포스터→장부→클락 원클릭 체인: 시작 직후 클락도 이어서 켤지 한 번만 묻는다
-      if (onOpenClock && window.confirm('장부를 시작했습니다.\n클락(토너먼트 타이머)도 같이 켤까요?')) {
+      if (onOpenClock && window.confirm('장부를 시작했습니다.\n클락(대회 타이머)도 같이 켤까요?')) {
         onOpenClock(s.sessionDate, s.gameSeq ?? MAIN_GAME_SEQ);
       }
     }
@@ -1168,7 +1170,12 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         <span className="text-2xs text-ink-muted">현금 {wonToMan(session.buyinAmount)}만원
           {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${wonToMan(session.cardAmount)}만원` : ' · 카드=현금'}</span>
         {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operFull(session.openedBy)}</span>}
-        {scheduleTitle(session.scheduleId) && <span className="text-2xs text-accent-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>}
+        {/* 대회명은 글자로만 있었다 — 업주가 자기 포스터의 손님 화면으로 갈 길이 장부엔 없었다(2026-09-17 감사). */}
+        {scheduleTitle(session.scheduleId) && (onOpenSchedule
+          ? <button type="button" title="손님이 보는 대회 상세 열기"
+              onClick={() => { const s = venueSchedules.find((x) => x.id === session.scheduleId); if (s) onOpenSchedule(s); }}
+              className="text-2xs text-accent-300 font-semibold whitespace-nowrap hover:underline underline-offset-2">· 대회 {scheduleTitle(session.scheduleId)}</button>
+          : <span className="text-2xs text-accent-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>)}
         <span className="flex-1" />
         {onOpenClock && <button type="button" onClick={() => onOpenClock(date, gameSeq)} className="btn-ghost inline-flex items-center gap-1.5 text-sm px-3.5 py-2 font-semibold"><Icon name="timer" size={15} className="shrink-0" />클락</button>}
         {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">세션 정보 수정</button>}
@@ -1635,7 +1642,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             {/* 2026-09-11: 이 줄은 상시 떠 있는 기준선이다. 엔트리(금액 기준·소수)만 세워 두면
                 '3명 앉았는데 2.5' 가 인원으로 오독된다 — 마감 모달·대시보드처럼 **횟수를 주로**,
                 엔트리를 보조로 같이 적는다(오너 규칙: 바이인 횟수 ≠ 엔트리). */}
-            <Metric label={exKeys.size > 0 ? '총 바이인(제외 적용)' : '총 바이인'}
+            <Metric label={exKeys.size > 0 ? '총 바인(제외 적용)' : '총 바인'}
               value={`${stats.totalBuyins.toLocaleString()}회`}
               sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}`} />
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
@@ -2617,7 +2624,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <button type="button" onClick={addDisc} className="w-full rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">+ 할인 추가</button>
           )}
           <p className="text-2xs leading-[1.75] text-ink-muted">
-            할인은 <b className="text-accent-300">금액에서만</b> 차감합니다 — 예) 10만 게임에 5만 할인 = 적용금액 5만원 · 바이인 <b className="text-accent-300">1회</b> · 엔트리 <b className="text-accent-300">0.5</b>.<br />
+            할인은 <b className="text-accent-300">금액에서만</b> 차감합니다 — 예) 10만 게임에 5만 할인 = 적용금액 5만원 · 바인 <b className="text-accent-300">1회</b> · 엔트리 <b className="text-accent-300">0.5</b>.<br />
             {badDisc >= 0 && (
               <b className="block text-danger-light">
                 할인{badDisc + 1}이 단가({wonToMan(minUnit)}만{card > 0 && card !== cash ? ' · 현금·카드 중 낮은 쪽' : ''})보다 큽니다 —
@@ -2630,7 +2637,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       </Field>
 
       {/* 2026-09-14: 375 에서 `기준)` 이 고아로 떨어졌다 — 괄호 설명을 줄여 한 줄에 맞춘다(아래 설명 줄이 전체를 말한다). */}
-      <Field label="토너먼트 스타트 시각 · 선택">
+      <Field label="대회 시작 시각 · 선택">
         <DateTimePicker value={startISO} onChange={setStartISO} defaultDate={base.sessionDate} placeholder="스타트 날짜·시각 선택" />
         <p className="text-2xs text-ink-muted mt-1 leading-relaxed">
           얼리 구간은 <b className="text-accent-300">「클락」 설정의 레벨 기준</b> — 클락 연동 시 스타트 시각으로 자동 분류되고, 바인 칸에서 수기 변경도 됩니다.
@@ -2871,7 +2878,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                 {discIdx > 0 && (() => {
                   const applied = Math.max(0, session.buyinAmount - discWon);
                   const ent = session.buyinAmount > 0 ? applied / session.buyinAmount : 1;
-                  return <span className="text-accent-300"> · 바이인 1회 · 엔트리 {ent.toLocaleString(undefined, { maximumFractionDigits: 2 })} · 적용금액 {wonToMan(applied)}만원</span>;
+                  return <span className="text-accent-300"> · 바인 1회 · 엔트리 {ent.toLocaleString(undefined, { maximumFractionDigits: 2 })} · 적용금액 {wonToMan(applied)}만원</span>;
                 })()}
               </p>
             )}
@@ -2923,7 +2930,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                         </span>
                       : (autoDiscIdx > 0 && !cell.buyin)
                         ? <>{autoFromLevel ? '자동 적용' : '기본값'}({discs[autoDiscIdx - 1]?.label || `할인${autoDiscIdx}`})을 직접 바꿨습니다.</>
-                        : '할인액만큼 금액에서만 차감합니다 — 바이인은 1회, 엔트리는 그 비율만큼 줄어듭니다.'}
+                        : '할인액만큼 금액에서만 차감합니다 — 바인은 1회, 엔트리는 그 비율만큼 줄어듭니다.'}
                   </p>
                 </div>
               )}

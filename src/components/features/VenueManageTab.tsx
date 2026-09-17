@@ -189,10 +189,12 @@ const StaffSelfAttendanceM = memo(StaffSelfAttendance);
 // '내 캘린더' 섹션 — App 의 하단 탭 캘린더와 **같은 컴포넌트**다(중복 구현 금지).
 const CalendarPanelM = memo(lazyWithReload(() => import('./CalendarPanel')));
 
-export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, deepSection, onConsumeDeepSection, tabActive = true, homeNonce = 0 }: {
+export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, onOpenVenue, deepSection, onConsumeDeepSection, tabActive = true, homeNonce = 0 }: {
   schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
-  /** '내 캘린더' 행 → 대회 상세. 없으면 행이 클릭되지 않을 뿐 화면은 그대로 뜬다 */
+  /** '내 캘린더' 행·포스터 행 '손님화면'·장부 '대회 …' → 손님이 보는 대회 상세. 없으면 행이 클릭되지 않을 뿐 화면은 그대로 뜬다 */
   onOpenSchedule?: (s: Schedule) => void;
+  /** 매장 설정 › 매장 페이지 '손님 화면' → 손님이 보는 매장 페이지(App 의 openVenueId). 없으면 버튼이 렌더되지 않는다 */
+  onOpenVenue?: (venueId: string) => void;
   /** 알림 딥링크 등 외부 진입 — 지정 섹션/게임스텝으로 바로 이동(1회 소비, 구 id 는 LINK-MAP 이 정규화) */
   deepSection?: Section | GameStep | null;
   onConsumeDeepSection?: () => void;
@@ -850,6 +852,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
                   active={tabActive && renderSection === 'game' && renderGameStep === 'posters'}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
+                  onOpenSchedule={onOpenSchedule}
                   onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
                 {visited.includes('presets') && canSettingsTab('presets') && box('presets', <PresetManagerM venueId={venueId} />)}
                 {/* venueName: 장부 엑셀 내보내기의 머리글·파일명에 찍히는 값. 안 넘겨서 마감 파일이
@@ -864,6 +867,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       settleSignal={settleSignal}
                       onMakeRankingDraft={onMakeRankingDraft}
                       onOpenClock={onOpenClockFromLedger}
+                      onOpenSchedule={onOpenSchedule}
                       onOpenStats={manageOk ? onOpenStatsCb : undefined} />
                   </LedgerWorkspaceM>
                 ))}
@@ -877,7 +881,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {/* IA3c '매장 페이지' 탭 = 구 매장꾸미기 + 구 매장랭킹(시즌·랭킹보드) 병합 — 같은
                     venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
                 {visited.includes('page') && canSettingsTab('page') && box('page', <>
-                  <VenueCustomizePanelM venueId={venueId} />
+                  <VenueCustomizePanelM venueId={venueId} onOpenVenue={onOpenVenue ? () => onOpenVenue(venueId) : undefined} />
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} /></div>}
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </>)}
@@ -911,16 +915,16 @@ const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
   ledger: '오늘 장부로 바로 들어갑니다 · 다른 날짜는 상단 뒤로가기에서 목록으로',
   stats: '기간별 매출·엔트리·요일 분석',
   ranking: '대회 순위 등록. 닉네임이 일치하는 회원에게 점수가 자동 반영됩니다',
-  clock: '토너먼트 타이머. 장부 연동 시 엔트리·생존이 자동 반영됩니다',
+  clock: '대회 타이머. 장부 연동 시 엔트리·생존이 자동 반영됩니다',
   attendance: '내 출퇴근 기록',
-  voucher: '매장이용권 발행·사용 내역 + 매장 QR(이용권·출석 체크인·가입) 인쇄',
-  page: '손님 화면 탭 순서 · 내 매장 링크 · 시즌 · 랭킹 보드 · 칭호 · 기준 점수 · 포인트',
+  voucher: '매장이용권 발행·사용 내역 + 매장 QR(이용권·출석·가입) 인쇄',
+  page: '손님 화면 탭 순서 · 내 매장 링크 · 시즌 · 순위 보드 · 칭호 · 기준 점수 · 포인트',
   staff: '구성원·권한·출근 스케줄·인건비',
   settings: '매장 페이지 · 게임 프리셋 · POS·결제 · 운영 도구 · 위험 구역',
   // ⚠ 설명은 '이 화면에 실제로 있는 것'만 적는다 — 결제수단·할인 프리셋은 장부(세션 설정)에 있고
   //   여기엔 없다. 없는 것을 약속하면 사장님이 이 탭을 열고 찾다가 포기한다.
   pos: 'POS 취소 비밀번호 · 매장 알림 수신 · 공동 사장님 관리',
-  optools: '토너먼트 세팅 계산기 · 칩 분배·구조·블라인드·상금·종료시간 (GTO 탭에서 이관)',
+  optools: '대회 세팅 계산기 · 칩 분배·구조·블라인드·상금·종료시간 (GTO 탭에서 이관)',
   danger: '매장 영구 삭제. 복구할 수 없습니다. 신중하게.',
   settle: '그날 하루 결산 — 매출·미수·손님 구성·순위·기준 엔트리 대비',
 };
@@ -1314,7 +1318,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   ${field('COUNTRY', '국가')}
   ${field('EVENT', '대회명')}
   ${field('PLACE', '순위')}
-  ${field('PRIZE', '프라이즈')}
+  ${field('PRIZE', '상금')}
   ${field('TD SIGN', '토너먼트 디렉터 서명')}
 </div>
 <div class="foot"><span>DATE: ________________</span><span><b>nuriholdem.com</b> · 본 기록지는 금전적 가치가 없습니다</span></div>
@@ -1733,7 +1737,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
           <span className="ml-1 text-ink-muted underline decoration-border-default underline-offset-2 group-open/rkhelp:hidden">자세히</span>
         </summary>
         <p className="mt-1">
-          순위는 <span className="text-accent-300 font-semibold">참가자와 최종 등수</span>만 기록합니다(상금·이용권 입력 없음). 등수마다 매장 랭킹 설정의 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 매장 순위·시즌 집계에만 쓰이며, 금전적 가치나 보상으로 바뀌지 않습니다. 손님 화면엔 <span className="text-accent-300 font-semibold">닉네임</span>으로 표시되고, 실명은 본인이 프로필에서 선택한 경우에만 보입니다. 같은 닉네임 회원이 둘 이상(<span className="text-amber-300 font-semibold">중복</span>)이면 닉네임 칸 자동완성에서 기록 주인을 먼저 골라 주세요.
+          순위는 <span className="text-accent-300 font-semibold">참가자와 최종 등수</span>만 기록합니다(상금·이용권 입력 없음). 등수마다 매장 순위 설정의 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 매장 순위·시즌 집계에만 쓰이며, 금전적 가치나 보상으로 바뀌지 않습니다. 손님 화면엔 <span className="text-accent-300 font-semibold">닉네임</span>으로 표시되고, 실명은 본인이 프로필에서 선택한 경우에만 보입니다. 같은 닉네임 회원이 둘 이상(<span className="text-amber-300 font-semibold">중복</span>)이면 닉네임 칸 자동완성에서 기록 주인을 먼저 골라 주세요.
         </p>
       </details>
 

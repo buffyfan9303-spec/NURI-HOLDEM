@@ -106,14 +106,16 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (!active) return; return subscribeRunningClocks(load); }, [active]); // 레벨 전환·통계 즉시 반영
 
-  // ♥ 즐겨찾기(매장 팔로우) — APIS 카드의 하트 자리. 표시 전용이라 1회 조회로 충분하고,
-  // 비로그인은 빈 배열이라 그냥 아무 카드에도 하트가 안 붙는다(에러 표면 없음).
+  // ♥ 즐겨찾기(매장 팔로우) — APIS 카드의 하트 자리. 비로그인은 빈 배열이라 그냥 아무 카드에도 하트가 안 붙는다(에러 표면 없음).
+  // ⚠ '1회 조회' 였다(연결 감사 E, 2026-09-17): 이 탭은 keep-alive 라 마운트가 한 번뿐이고, 매장 페이지에서
+  //   팔로우하고 돌아와도 하트가 영원히 안 붙었다. CalendarPanel ② 와 같은 조리법 — 탭이 **보이게 될 때마다** 다시 읽는다.
   const [favIds, setFavIds] = useState<ReadonlySet<string>>(() => new Set());
   useEffect(() => {
+    if (!active) return;
     let alive = true;
     getMyFollowedVenueIds().then((ids) => { if (alive) setFavIds(new Set(ids)); }).catch(() => { /* 표시 보조 — 실패는 무시 */ });
     return () => { alive = false; };
-  }, []);
+  }, [active]);
 
   // [DS] MO-9B①: venues.find 선형 탐색 제거 — Map 조회(O(게임수×매장수) → O(게임수))
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
@@ -199,7 +201,9 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             {/* v6.5: 실제로 뛰는 내 게임이 정확히 1장일 때만 글로우(주인공이 둘이면 아무도 빛나지 않는다 — CLAUDE.md 글로우 배치 규칙) */}
             {myLive.map(({ m, g }) => (
               <MyTournamentCard key={`${g.venueId}:${g.gameSeq ?? 0}`} g={g} venueName={m.venueName} hero={myLive.length === 1}
-                onDisplay={() => onDisplay(g.venueId, g.gameSeq ?? 1)} />
+                onDisplay={() => onDisplay(g.venueId, g.gameSeq ?? 1)}
+                onPoster={(() => { const sched = matchSchedule(g, schedules); return sched ? () => onSchedule(sched) : undefined; })()}
+                onVenue={() => onVenue(g.venueId)} />
             ))}
           </div>
         )}
@@ -367,7 +371,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
   const pct = sched?.prizePercent ?? 0;
   const extras: string[] = [];
   if (sched?.guaranteed && pool > 0) extras.push(`GTD ${wonShort(pool)}`);
-  else if (pct > 0) extras.push(`프라이즈 ${pct}%`);
+  else if (pct > 0) extras.push(`상금 ${pct}%`);
   const seat = sched?.seats?.[0];
   if (seat) extras.push(`${seat.label} ${seat.count}석${(sched?.seats?.length ?? 0) > 1 ? ' 외' : ''}`);
   const hasRight = !!startTime || buyIn > 0 || extras.length > 0;
@@ -444,7 +448,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
               </button>
             </p>
             <p className="flex min-w-0 items-center gap-1.5 leading-none">
-              <span className="min-w-0 truncate text-xs font-semibold leading-none text-ink-secondary">{g.title || g.config?.title || '토너먼트'}</span>
+              <span className="min-w-0 truncate text-xs font-semibold leading-none text-ink-secondary">{g.title || g.config?.title || '대회'}</span>
               {/* 미니 클락의 심장(오너 2026-08-28) — 현재 레벨 잔여. 3행(레벨·블라인드·REG)은 오너 지정 문법이라
                   건드리지 않고, 폭 여유가 가장 큰 게임명 줄 끝에 둔다. 라벨 없이 읽히는 게 클락 관습이라 aria 로만 보강. */}
               <span className="ml-auto flex shrink-0 items-center gap-1" aria-label={`${isBreak ? '재개' : '레벨 종료'}까지 ${mm}분 ${ss}초`}>
@@ -505,7 +509,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
   );
 }
 
-function MyTournamentCard({ g, venueName, onDisplay, hero = false }: { g: ClockState; venueName: string; onDisplay: () => void; hero?: boolean }) {
+function MyTournamentCard({ g, venueName, onDisplay, onPoster, onVenue, hero = false }: { g: ClockState; venueName: string; onDisplay: () => void; onPoster?: () => void; onVenue: () => void; hero?: boolean }) {
   const lvls = g.config?.levels ?? [];
   const eff = effectiveLevel(g);
   const lv = lvls[eff.index];
@@ -540,7 +544,13 @@ function MyTournamentCard({ g, venueName, onDisplay, hero = false }: { g: ClockS
       hero ? 'border-accent-300/30 ring-aura ring-aura-glow' : 'border-accent-300/60'].join(' ')}>
       <div className="flex items-center justify-between gap-2">
         <p className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="target" size={14} className="shrink-0" /><span className="truncate">내 토너 · <span className="text-ink-primary">{venueName}</span></span></p>
-        <button type="button" onClick={onDisplay} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs">관전 화면</button>
+        {/* 일반 라이브 카드는 포스터·매장·관전 세 길을 다 갖는데 이 카드는 관전뿐이었다(연결 감사 G).
+            헤더 폭은 매장명이 truncate 로 흡수하므로 짧은 라벨 셋이 한 줄에 선다(375·320 실측은 계약 파일 머리 참조). */}
+        <div className="flex shrink-0 items-center gap-1">
+          {onPoster && <button type="button" onClick={onPoster} data-testid="my-tour-poster" className="btn-ghost whitespace-nowrap px-2 py-1 text-2xs">포스터</button>}
+          <button type="button" onClick={onVenue} data-testid="my-tour-venue" className="btn-ghost whitespace-nowrap px-2 py-1 text-2xs">매장</button>
+          <button type="button" onClick={onDisplay} className="btn-ghost shrink-0 whitespace-nowrap px-2.5 py-1 text-2xs">관전 화면</button>
+        </div>
       </div>
       <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
         <div className="rounded-input bg-surface-base/60 px-1 py-1.5">

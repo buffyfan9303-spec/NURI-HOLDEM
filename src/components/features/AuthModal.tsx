@@ -876,7 +876,7 @@ const useNicknameCheck = () => useAvailabilityCheck(checkNicknameAvailable, isVa
 
 // 인증 화면의 세 중복검사 필드는 비밀번호 칸과 **같은 규격**을 쓴다 — 한쪽만 밝으면 폼이 층져 보인다.
 function NameField(props: FieldProps) {
-  return <AvailabilityField label="닉네임" placeholder="2~20자 (랭킹·글에 표시)" maxLength={20} invalidText="2~20자로 입력해 주세요"
+  return <AvailabilityField label="닉네임" placeholder="2~20자 (순위·글에 표시)" maxLength={20} invalidText="2~20자로 입력해 주세요"
     inputClassName={FIELD_CLS} quietLabel {...props} />;
 }
 function NicknameField(props: FieldProps) {

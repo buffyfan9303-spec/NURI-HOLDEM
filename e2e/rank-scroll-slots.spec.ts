@@ -54,8 +54,8 @@ async function scrollWin(page: Page, y: number): Promise<void> {
 }
 
 /** 탭 클릭 뒤 rAF · +140ms · +1000ms 세 지점의 타임라인 */
-async function clickAndTimeline(page: Page, label: string): Promise<{ raf: Probe; t140: Probe; t1000: Probe }> {
-  await page.getByRole('button', { name: label, exact: true }).first().click();
+async function clickAndTimeline(page: Page, secId: string): Promise<{ raf: Probe; t140: Probe; t1000: Probe }> {
+  await page.getByTestId(`sec-tab-${secId}`).first().click();
   await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => r())));
   const raf = await probe(page);
   await page.waitForTimeout(140);
@@ -96,7 +96,7 @@ test.describe('UI-06 랭킹 진입 — 문서·헤더가 움직이지 않는다 
   test('🔴 첫 방문: 게시판 80px 에서 랭킹을 눌러도 scrollY·헤더·서브탭 바가 2px 이내', async ({ page }) => {
     await openCommunity(page);
     const before = await gotoBoardAt(page, 80);
-    const { raf, t140, t1000 } = await clickAndTimeline(page, '랭킹');
+    const { raf, t140, t1000 } = await clickAndTimeline(page, 'rank');
     const log = `\n  진입 전 ${fmt(before)}\n  rAF     ${fmt(raf)}\n  +140ms  ${fmt(t140)}\n  +1000ms ${fmt(t1000)}`;
     for (const [name, p] of [['rAF', raf], ['+140ms', t140], ['+1000ms', t1000]] as const) {
       expect(Math.abs(p.winY - before.winY), `${name}: scrollY 가 ${before.winY} → ${p.winY} 로 움직였다(첫 방문 0 강제 회귀)${log}`).toBeLessThanOrEqual(2);
@@ -112,7 +112,7 @@ test.describe('UI-06 랭킹 진입 — 문서·헤더가 움직이지 않는다 
     // 헤더를 뒤집고 스크롤 앵커링이 그 높이 차(12.75)만큼 문서를 되밀므로, 보정(lib/headerShrink.restoreScrollTop)이 없으면
     // 게시판은 30→42.75, 랭킹은 107→94 에 선다(2026-09-13 실측). 저장·복원의 기준은 scrollTo 값이 아니라 **정착값**이다.
     const boardAt = await gotoBoardAt(page, 30);
-    await page.getByRole('button', { name: '랭킹', exact: true }).first().click();
+    await page.getByTestId('sec-tab-rank').first().click();
     await page.waitForTimeout(1500); // 첫 조회·스켈레톤 교체가 끝난 뒤 읽던 위치를 만든다
     const r0 = await probe(page);
     const target = Math.min(120, r0.maxScroll);
@@ -120,10 +120,10 @@ test.describe('UI-06 랭킹 진입 — 문서·헤더가 움직이지 않는다 
     await scrollWin(page, target);
     const atRank = await probe(page);
 
-    const board = await clickAndTimeline(page, '게시판');
+    const board = await clickAndTimeline(page, 'board');
     expect(Math.abs(board.t1000.winY - boardAt.winY), `게시판 저장 위치(${boardAt.winY}) 복원 실패: ${fmt(board.t1000)}`).toBeLessThanOrEqual(2);
 
-    const back = await clickAndTimeline(page, '랭킹');
+    const back = await clickAndTimeline(page, 'rank');
     const log = `\n  랭킹 읽던 위치 ${fmt(atRank)}\n  게시판 복귀    ${fmt(board.t1000)}\n  랭킹 +140ms    ${fmt(back.t140)}\n  랭킹 +1000ms   ${fmt(back.t1000)}`;
     expect(Math.abs(back.t140.winY - atRank.winY), `+140ms 복원 오차 ${Math.abs(back.t140.winY - atRank.winY)}px${log}`).toBeLessThanOrEqual(2);
     expect(Math.abs(back.t1000.winY - atRank.winY), `+1000ms 복원 오차 ${Math.abs(back.t1000.winY - atRank.winY)}px (복원 순간 문서 높이 클램프 회귀)${log}`).toBeLessThanOrEqual(2);
@@ -133,7 +133,7 @@ test.describe('UI-06 랭킹 진입 — 문서·헤더가 움직이지 않는다 
     await openCommunity(page);
     const p0 = await probe(page);
     const before = await gotoBoardAt(page, Math.min(300, p0.maxScroll > 300 ? 300 : 80));
-    const { t140, t1000 } = await clickAndTimeline(page, '딜러'); // 첫 방문 · 길이는 데이터에 따라 다르다
+    const { t140, t1000 } = await clickAndTimeline(page, 'dealer'); // 첫 방문 · 길이는 데이터에 따라 다르다
     const log = `\n  진입 전 ${fmt(before)}\n  +140ms  ${fmt(t140)}\n  +1000ms ${fmt(t1000)}`;
     // 기대값은 '이전 Y' 가 아니라 '이전 Y 와 새 문서 최대 중 작은 쪽' — 짧으면 물리 클램프가 정답이고 그것을 숨기지 않는다.
     expect(Math.abs(t1000.winY - Math.min(before.winY, t1000.maxScroll)), `클램프 기대값 ${Math.min(before.winY, t1000.maxScroll)} 과 다르다${log}`).toBeLessThanOrEqual(2);
@@ -170,7 +170,7 @@ function railGeom(page: Page): Promise<Rail> {
 
 async function openRank(page: Page): Promise<void> {
   await openCommunity(page);
-  await page.getByRole('button', { name: '랭킹', exact: true }).first().click();
+  await page.getByTestId('sec-tab-rank').first().click();
   await expect(page.locator('[data-rank-tabbar]')).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(1200);
 }

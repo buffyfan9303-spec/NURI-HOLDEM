@@ -812,7 +812,7 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
   // 파생값(nextBreak·regClose·curBB·totalPrize·isBreak·levelNo)은 상류 03cd8bb 가 ClockStage 로 옮겼다 —
   // 여기선 계산하지 않는다. 2026-09-13 병합에서 regClose 를 남겼다가 tsc 가 '읽지 않는 선언' 으로 잡아 걷어냈다.
 
-  const title = (linkedSession?.title || cfg.title) || '토너먼트';
+  const title = (linkedSession?.title || cfg.title) || '대회';
 
   /** ClockStage 에 넘기는 한 벌 — 저장 스냅샷이 아니라 **지금 파생값**을 얹는다.
    *  TV 는 clock_states.live_stats(디바운스 저장된 스냅샷)를 읽지만 운영자 화면은
@@ -1418,7 +1418,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
 
       {/* 프라이즈 */}
       <section className="rounded-aura border card-aura p-3 space-y-2">
-        <p className="text-2xs font-semibold text-ink-secondary">프라이즈 <span className="font-normal text-ink-muted">· 금액은 원 단위로 입력 (예: 50만원 → 500000)</span></p>
+        <p className="text-2xs font-semibold text-ink-secondary">상금 <span className="font-normal text-ink-muted">· 금액은 원 단위로 입력 (예: 50만원 → 500000)</span></p>
         <div className="space-y-1">
           {cfg.prizes.map((p, i) => (
             <div key={i} className="flex items-center gap-1.5">
@@ -1443,7 +1443,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
             </p>
           ) : null;
         })()}
-        <button type="button" onClick={addPrize} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 프라이즈</button>
+        <button type="button" onClick={addPrize} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 상금</button>
       </section>
 
       {/* TV 송출 화면 — 테마·배경 이미지(매장 단위 설정이라 즉시 저장 · 이 폼의 '시작'과 무관) */}

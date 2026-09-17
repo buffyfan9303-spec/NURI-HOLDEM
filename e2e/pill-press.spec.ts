@@ -43,10 +43,10 @@ test('🔴 손가락으로 누르고 있다 뗀 탭 — 알약이 첫 칸으로 
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 }); // 실기기 가까이 — 빠른 기기에선 창이 좁아진다
 
-  const seq = ['실시간', '랭킹', '게시판', '딜러', '홀덤펍', '장터'];
+  const seq = ['live', 'rank', 'board', 'dealer', 'venues', 'market']; // SectionTab data-testid=sec-tab-<id>
   const failures: string[] = [];
   for (const name of seq) {
-    const btn = bar.getByRole('button', { name, exact: true });
+    const btn = bar.getByTestId(`sec-tab-${name}`);
     if (await btn.count() === 0) continue;
     const box = await btn.boundingBox();
     if (!box) continue;

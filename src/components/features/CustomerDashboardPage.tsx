@@ -68,7 +68,7 @@ const ME_TABS: { key: MeTab; label: string }[] = [
 //   그래서 닫혀 있는 동안에도 App 의 모든 리렌더가 이 1,000줄 트리를 다시 렌더했다.
 //   아래 `memo` 가 그것을 끊는다 — **App 쪽 prop 이 전부 안정 참조여야만 히트한다**(App.tsx §5-B 블록 참조).
 //   prop 을 다시 인라인 화살표로 되돌리면 이 memo 는 조용히 무력화된다.
-function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenSchedule, onOpenPost, onOpenMarket, onOpenRanking, initialTab = 'dashboard', onOpenLegal, onOpenSupport, onReservationChange }: {
+function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenSchedule, onOpenPost, onOpenMarket, onOpenRanking, initialTab = 'dashboard', onOpenLegal, onOpenSupport, onReservationChange, onOpenVenue, venues }: {
   open: boolean; onClose: () => void;
   /** 미읽음 알림 미리보기(상위 3개) — 프로필 메뉴까지 안 가도 되게 */
   unread?: { id: string; title: string; message: string; createdAt: string }[];
@@ -89,6 +89,10 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   /** 여기서 예약을 취소했다 — App 이 홈 '오늘 예약한 대회'·카드 '예약 N'·캘린더를 다시 읽는다(F06).
    *  상세 모달(ReserveBox)과 같은 신호를 쓰므로 어느 경로로 취소해도 숫자가 갈리지 않는다. */
   onReservationChange?: () => void;
+  /** 매장 이용 내역·입상 기록·이용권 묶음 → 그 매장 페이지(재방문 사슬). App 이 이 페이지를 닫고 매장을 연다(연결 감사 A). */
+  onOpenVenue?: (venueId: string) => void;
+  /** 입상 기록은 매장명뿐이라(getMyRankingHistory) 이름→id 를 여기서 푼다. App 의 venues 그대로(참조 안정). */
+  venues?: { id: string; name: string }[];
 }) {
   const { user } = useAuth();
   const toast = useToast();
@@ -228,7 +232,11 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
     e.buyins = p.buyinCount; e.amount = p.totalAmount; e.lastAt = p.lastAt;
     usageMap.set(p.venueId, e);
   }
-  const usage = [...usageMap.values()].sort((a, b) => (b.buyins + b.visits) - (a.buyins + a.visits));
+  const usage = [...usageMap.entries()].map(([venueId, e]) => ({ venueId, ...e })).sort((a, b) => (b.buyins + b.visits) - (a.buyins + a.visits));
+  // 입상 행 → 매장: 이름 조인(위 rankCountByVenue 와 같은 한계). 전체 venues 를 먼저 보고, 없으면 내 이용 내역의 이름으로.
+  const venueIdByName = new Map<string, string>();
+  for (const u of usage) venueIdByName.set(u.name, u.venueId);
+  for (const v of venues ?? []) venueIdByName.set(v.name, v.id);
   // 입상(머니인) 횟수 — 이미 내려온 ranks 를 매장 이름으로 센다(표시 전용 — usage 는 venueId, ranks 는 매장명뿐이라 이름 조인).
   const rankCountByVenue = new Map<string, number>();
   for (const r of ranks) rankCountByVenue.set(r.venueName, (rankCountByVenue.get(r.venueName) ?? 0) + 1);
@@ -420,7 +428,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
             {onOpenRanking && (
               <button type="button" onClick={onOpenRanking}
                 className="rounded-aura border card-aura px-3 py-2.5 text-left">
-                <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-fuchsia"><Icon name="medal" size={13} /></span> 랭킹 · 상점</span>
+                <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-fuchsia"><Icon name="medal" size={13} /></span> 순위 · 상점</span>
                 <span className="block text-2xs text-ink-muted mt-0.5">마크 · 카드 프레임 · 닉네임 색</span>
               </button>
             )}
@@ -484,7 +492,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               ⚠ open 게이트: 이 페이지는 keep-alive(언마운트 없이 display 토글)라 그냥 두면 다시 열어도
                  지갑이 처음 읽은 값에 머문다 — 닫는 순간 언마운트해서 재열림마다 새로 읽게 한다
                  (덤으로 진행 중이던 RedeemSheet·QR 카메라도 함께 정리된다. 예전 !open 이펙트와 같은 효과). */}
-          {open && <VoucherWallet onNeedVerify={() => goTab('security')} />}
+          {open && <VoucherWallet onNeedVerify={() => goTab('security')} onVenue={onOpenVenue} />}
 
           <section className="space-y-2">
             <Head icon="store" tone="cyan" title="매장 이용·참가 내역" count={usage.length} unit="곳" />
@@ -495,10 +503,14 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               : usageErr != null ? <LoadErrorCard error={usageErr} what="매장 이용 내역" onRetry={reload} compact />
               : usage.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="store" />} title="방문·참가 기록이 아직 없습니다." /></div>
                 : <ul className="space-y-1.5">{usage.map((u, i) => (
-                  <li key={i} className="rounded-input border border-border-subtle bg-surface-low px-3 py-2">
+                  <li key={i}>
+                  {/* 행 전체가 매장 페이지 링크 — 예전엔 눌러도 아무 일도 없는 막다른 골목이었다(연결 감사 A). 높이 그대로. */}
+                  <button type="button" data-testid="me-usage-venue" onClick={() => onOpenVenue?.(u.venueId)} disabled={!onOpenVenue}
+                    className="block w-full rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors enabled:hover:border-accent-400/40">
                     <div className="flex items-center justify-between gap-2">
                       <p className="min-w-0 truncate text-sm font-semibold text-ink-primary">{u.name}</p>
                       {u.lastAt && <span className="shrink-0 text-2xs text-ink-muted">최근 {fmtDate(u.lastAt)}</span>}
+                      {onOpenVenue && <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-muted">
                       <span>방문 <b className="text-ink-secondary tabular-nums">{u.visits}</b>회</span>
@@ -506,6 +518,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                       <span>입상 <b className="text-ink-secondary tabular-nums">{rankCountByVenue.get(u.name) ?? 0}</b>회</span>
                       <span>참가비 <b className="text-accent-300 tabular-nums">{u.amount ? wonToMan(u.amount) + '만' : '-'}</b></span>
                     </div>
+                  </button>
                   </li>
                 ))}</ul>}
           </section>
@@ -571,8 +584,11 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               : !user?.nickname ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">아이디 설정하기</button>} /></div>
               : ranks.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장에서 순위가 등록되면 자동으로 표시됩니다." /></div>
                 : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
-                <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => (
-                  <li key={i} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
+                <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => { const vid = onOpenVenue ? venueIdByName.get(r.venueName) : undefined; return (
+                  <li key={i}>
+                  {/* 입상 행 → 그 매장(연결 감사 A). 이름으로 못 푼 매장(문 닫음·개명)은 눌리지 않는 그대로의 행. */}
+                  <button type="button" data-testid="me-rank-venue" onClick={() => vid && onOpenVenue?.(vid)} disabled={!vid}
+                    className="flex w-full items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors enabled:hover:border-accent-400/40">
                     <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums',
                       r.position === 1 ? 'bg-gold-300 text-ink-inverse' : r.position <= 3 ? 'border border-border-default bg-surface-float text-ink-primary' : 'bg-surface-float text-ink-secondary'].join(' ')}>
                       {r.position}
@@ -581,8 +597,10 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                       <p className="truncate text-sm font-semibold text-ink-primary">{r.venueName}</p>
                       <p className="text-2xs tabular-nums text-ink-muted">{r.date}</p>
                     </div>
+                    {vid && <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />}
+                  </button>
                   </li>
-                ))}</ul></>}
+                ); })}</ul></>}
           </section>
         </div>
         )}
@@ -857,7 +875,7 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
   return (
     <div className="mb-2 rounded-aura border card-aura p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="flex flex-wrap items-center gap-1 text-xs font-bold text-gold-300"><Icon name="trophy" size={13} /> 내 토너먼트 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span>
+        <p className="flex flex-wrap items-center gap-1 text-xs font-bold text-gold-300"><Icon name="trophy" size={13} /> 내 대회 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span>
           {percentile != null && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs text-accent-300" title="전국 대회 입상 횟수 기준">전국 상위 {percentile}%</span>}
         </p>
         <div className="flex shrink-0 gap-1">

@@ -105,7 +105,7 @@ export function BankrollCalc() {
     <CalcCard title="뱅크롤 관리" desc="게임 유형·바이인 기준 권장 뱅크롤">
       <Field label="게임 유형">
         <div className="flex gap-1.5">
-          {([{ id: 'tourney', label: '토너먼트' }, { id: 'cash', label: '캐시' }] as const).map((t) => (
+          {([{ id: 'tourney', label: '대회' }, { id: 'cash', label: '캐시' }] as const).map((t) => (
             <button key={t.id} type="button" onClick={() => setType(t.id)}
               className={['flex-1 h-9 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
                 type === t.id ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>

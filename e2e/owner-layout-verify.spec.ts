@@ -128,7 +128,7 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측(목킹 업주 ·
     //   '내 매장' 은 keep-alive 라 숨은 대시보드 DOM 이 그대로 살아 있고, 거기에도 '총 바이인'
     //   문자열이 있다(StoreDashboard 의 span). getByText(...).first() 는 그 숨은 사본을 집어
     //   toBeVisible 이 25초 뒤 실패한다 — 이 저장소가 click-paths.spec 에 이미 실측해 둔 현상이다.
-    const panel = page.locator('p:visible').filter({ hasText: '총 바이인' }).first();
+    const panel = page.locator('p[data-testid="stat-total-buyins"]:visible').first();
     await expect(panel, '통계 패널이 뜨지 않았다').toBeVisible({ timeout: 25_000 });
 
     const m = await page.evaluate(() => {
@@ -136,7 +136,7 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측(목킹 업주 ·
       const txtRect = (el: Element) => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect(); };
 
       // StatCard 한 행 = '총 바이인 / 할인 바인 / 총 할인액'
-      const head = [...document.querySelectorAll('p')].find((p) => p.textContent?.trim() === '총 바이인');
+      const head = document.querySelector('p[data-testid="stat-total-buyins"]');
       const row = head?.closest('.grid');
       const statVals = row ? [...row.querySelectorAll(':scope > div > p.text-lg')].map((e) => Math.round(e.getBoundingClientRect().bottom)) : [];
 

@@ -247,7 +247,7 @@ export const RANK_METRIC_DESC: Record<RankMetric, string> = {
   visit_count: 'QR 출석 누적 · 기록 없으면 장부 방문일 기준',
 };
 
-// 업주가 직접 만드는 커스텀 랭킹 보드(웹 데이터에 없는 랭킹 — 명단·점수 직접 입력)
+// 업주가 직접 만드는 커스텀 순위 보드(웹 데이터에 없는 랭킹 — 명단·점수 직접 입력)
 // period: 'all'=누적(기본) / 'month'=매월 1일 자동 리셋 / 'season'=시즌 시작일부터(리셋 버튼으로 갱신)
 export interface CustomBoard { key: string; name: string; unit?: string; period?: 'all' | 'month' | 'season'; seasonStart?: string }
 
@@ -287,13 +287,13 @@ export const customKeyOf = (id: string): string => id.slice('custom:'.length);
 
 /** 보드 라벨 — 기본 6종은 고정 라벨, 커스텀은 업주가 정한 이름 */
 export function boardLabel(id: RankBoardId, cfg?: VenuePageConfig | null): string {
-  if (isCustomBoard(id)) return cfg?.customBoards?.find((b) => b.key === customKeyOf(id))?.name ?? '커스텀 랭킹';
+  if (isCustomBoard(id)) return cfg?.customBoards?.find((b) => b.key === customKeyOf(id))?.name ?? '커스텀 순위';
   return RANK_METRIC_LABEL[id as RankMetric] ?? id;
 }
 export function boardDesc(id: RankBoardId, cfg?: VenuePageConfig | null): string {
   if (isCustomBoard(id)) {
     const b = cfg?.customBoards?.find((x) => x.key === customKeyOf(id));
-    return `업주가 직접 입력하는 랭킹${b?.unit ? ` (단위: ${b.unit})` : ''}`;
+    return `업주가 직접 입력하는 순위${b?.unit ? ` (단위: ${b.unit})` : ''}`;
   }
   return RANK_METRIC_DESC[id as RankMetric] ?? '';
 }

@@ -32,6 +32,9 @@ interface NotificationPanelProps {
   onNavigate?: (notification: AppNotification) => void;
   /** 쪽지 미읽음 수 변동(스레드 로드·읽음 처리) → 헤더 뱃지 합산 갱신 */
   onUnreadMessagesChange?: (n: number) => void;
+  /** 쿼리·해시형 링크('?s=' '?v=' '?tab=' '#tool=' …)를 **앱 안에서** 여는 App.openInternalLink.
+   *  true 면 처리됐다 — 아래 전체 리로드(location.assign)로 떨어지지 않는다(2026-09-17 연결 감사 D). */
+  onInternalLink?: (u: URL) => boolean;
 }
 
 // ── 타입 → Icon 레지스트리 글리프 매핑 (커스텀 인라인 SVG 제거, PATHS 단일 소스) ──
@@ -61,7 +64,7 @@ const AVATAR_FALLBACK = '#5A6175';
 // ── 메인 ────────────────────────────────────────────────────────────────────
 
 export default function NotificationPanel({
-  open, onClose, notifications, onMarkRead, onNavigate, onUnreadMessagesChange,
+  open, onClose, notifications, onMarkRead, onNavigate, onUnreadMessagesChange, onInternalLink,
 }: NotificationPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
@@ -582,7 +585,11 @@ export default function NotificationPanel({
                     // 정규화(api normalizeLink) 후에도 절대 URL = 외부 도메인 — 앱을 떠나지 않고 새 탭
                     window.open(link, '_blank', 'noopener');
                   } else if (link.startsWith('?') || link.startsWith('#')) {
-                    openBootDeepLink(n, link); // 읽음 커밋 후 전체 재진입 — 패널 닫힘은 리로드가 대신한다
+                    // 앱 안에서 열 수 있으면 문서를 새로 받지 않는다 — location.assign 은 같은 오리진이어도
+                    // 전체 리로드라 앱이 재부팅된다(HomeTab 배너 링크가 2026-09-15 에 같은 이유로 고쳐진 자리).
+                    const u = (() => { try { return new URL(link, window.location.origin); } catch { return null; } })();
+                    if (u && onInternalLink?.(u)) { handleClose(); return; }
+                    openBootDeepLink(n, link); // 모르는 링크만 읽음 커밋 후 전체 재진입 — 패널 닫힘은 리로드가 대신한다
                     return;
                   } else if (onNavigate) {
                     onNavigate(n); // '/경로' 형태 전부 — App 핸들러(미지 경로는 토스트 폴백 내장)

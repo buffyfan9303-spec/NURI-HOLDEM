@@ -199,7 +199,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   // 매장 비치용 인쇄 — 선택한 QR만 출력(종이가 작아 한꺼번에 불가). 3개 중 1~3개 선택.
   const QR_DEFS = [
     { id: 'voucher', title: '매장이용권 사용', data: () => QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 1024, margin: 2 }), desc: '대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’' },
-    { id: 'checkin', title: '출석 체크인', data: () => QRCode.toDataURL(checkinUrl(venueId), { width: 1024, margin: 2 }), desc: 'QR 스캔 → 오늘 출석 도장(매장 점수 적립 · 출석왕 집계)' },
+    { id: 'checkin', title: '출석', data: () => QRCode.toDataURL(checkinUrl(venueId), { width: 1024, margin: 2 }), desc: 'QR 스캔 → 오늘 출석(매장 점수 적립 · 출석왕 집계)' },
     { id: 'signup', title: '회원가입', data: () => QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 1024, margin: 2 }), desc: 'QR 스캔 → 바로 회원가입' },
     { id: 'buyin', title: '바인(참가) 요청', data: () => QRCode.toDataURL(buyinRequestUrl(venueId), { width: 1024, margin: 2 }), desc: '손님 스캔 → 참가 요청(게임 선택) → 운영자가 장부에서 원탭 승인' },
     { id: 'buyinG1', title: '바인 요청 · 메인', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 1), { width: 1024, margin: 2 }), desc: '메인 테이블 비치 · 스캔 시 메인 게임 바로 요청' },
@@ -519,7 +519,7 @@ ${cards}
       {canIssue && qr && (
         <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
           <button type="button" onClick={() => setQrOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-xs font-bold text-accent-300">매장 QR <span className="font-normal text-ink-muted">· 이용권 · 출석 체크인 · 회원가입</span></span>
+            <span className="text-xs font-bold text-accent-300">매장 QR <span className="font-normal text-ink-muted">· 이용권 · 출석 · 회원가입</span></span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', qrOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
           {qrOpen && (
@@ -531,9 +531,9 @@ ${cards}
                   <p className="text-center text-2xs leading-snug text-ink-muted">손님이 스캔해 사용 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
-                  <p className="text-center text-2xs font-bold text-ink-secondary">출석 체크인 QR</p>
-                  {checkinQr && <img src={checkinQr} alt="출석 체크인 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
-                  <p className="text-center text-2xs leading-snug text-ink-muted">손님 스캔 → 출석 도장 · 출석왕 집계 (고정)</p>
+                  <p className="text-center text-2xs font-bold text-ink-secondary">출석 QR</p>
+                  {checkinQr && <img src={checkinQr} alt="출석 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
+                  <p className="text-center text-2xs leading-snug text-ink-muted">손님 스캔 → 출석 · 출석왕 집계 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">회원가입 QR</p>

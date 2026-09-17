@@ -28,13 +28,15 @@ interface MyPostersTabProps {
   onOpenLedger?: (s: Schedule, existing: LedgerLinkTarget | null) => void;
   /** '순위 미입력' 뱃지 클릭 — 그 장부의 (날짜, 게임) 순위 입력 화면으로. event=게임 이름(메인 장부 title 또는 '사이드N') */
   onGotoRanking?: (date: string, event?: string) => void;
+  /** '손님화면' — 이 포스터의 손님용 대회 상세(App 의 handleScheduleSelect). 없으면 버튼이 안 뜬다. */
+  onOpenSchedule?: (s: Schedule) => void;
   /** 이 판이 실제로 보이는가('내 매장' 탭 + 게임관리 → 게임 스텝). keep-alive(display:none) 로
    *  숨은 동안은 구독을 끊고, 다시 보일 때 한 번 재검증한다(StoreDashboard 와 같은 배선). */
   active?: boolean;
 }
 
 /** 게임 관리 — 승인 업주가 본인 포스터(게임)와 예약을 관리. */
-export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking, active = true }: MyPostersTabProps) {
+export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking, onOpenSchedule, active = true }: MyPostersTabProps) {
   const { user, isApprovedOwner } = useAuth();
   const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
   const [ops, setOps] = useState<Record<string, PosterOpsSummary>>({}); // scheduleId → 연결 장부 운영 요약
@@ -122,6 +124,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
                   checkinNonce={checkinNonce}
                   onLedgerAt={onOpenLedger ? (t) => onOpenLedger(p, t) : undefined}
                   onRanking={onGotoRanking}
+                  onOpenSchedule={onOpenSchedule ? () => onOpenSchedule(p) : undefined}
                   gameDates={myPosters.filter((q) => q.title.trim() === p.title.trim()).map((q) => ({ id: q.id, date: isoOf(q) })).sort((a, b) => a.date.localeCompare(b.date))} />
               ))}
               {shown.length === 0 && <li className="py-6 text-center text-2xs text-ink-muted">그 날짜에 등록된 게임이 없습니다. 다른 날짜를 선택하세요</li>}
@@ -149,9 +152,11 @@ function PendingApprovalView() {
 }
 
 // ── 단일 게임 행 + 예약 관리 패널 ─────────────────────────────────────────────
-function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, resCounts, checkinNonce, onLedgerAt, onRanking, gameDates }: {
+function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, resCounts, checkinNonce, onLedgerAt, onRanking, onOpenSchedule, gameDates }: {
   schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>;
   onEdit: () => void; onDelete: () => void;
+  /** 손님이 보는 이 포스터의 상세 — 행 액션이 예약관리/장부/순위/수정/삭제뿐이라 손님 화면으로 가는 길이 없었다(2026-09-17 감사) */
+  onOpenSchedule?: () => void;
   ops?: PosterOpsSummary | null; resCounts: Record<string, number>; checkinNonce?: number;
   onLedgerAt?: (target: LedgerLinkTarget | null) => void; onRanking?: (date: string, event?: string) => void;
   gameDates?: { id: string; date: string }[]; // 같은 제목(같은 게임)의 날짜별 스케줄 — 예약을 날짜별로 전환
@@ -279,7 +284,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
             <span className="rounded-badge bg-surface-high text-ink-secondary border border-border-default px-1 py-0.5 text-2xs font-semibold leading-none">{schedule.format}</span>
           </div>
           <p className="text-sm font-medium text-ink-primary truncate">{schedule.title}</p>
-          <p className="text-2xs text-ink-muted mt-0.5">{d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 바이인 {schedule.buyIn.amount.toLocaleString()}</p>
+          <p className="text-2xs text-ink-muted mt-0.5">{d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 참가비 {schedule.buyIn.amount.toLocaleString()}</p>
           {/* 반려 사유 — 포스터가 사라지는 대신 여기 남는다. 다음 행동(수정→재제출)까지 같이 적는다. */}
           {schedule.rejectedAt && (
             <p className="mt-1 rounded-input border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-2xs leading-relaxed text-rose-400">
@@ -320,10 +325,14 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
           )}
           {ops?.closed && !ops.hasRankings && onRanking && (
             <button type="button" onClick={() => onRanking(ops.date, ops.rankingEvent)}
-              title={`${ledgerGameLabel(ops.gameSeq)} 장부는 마감됐는데 순위가 아직 없어요. 입력하면 랭킹·아카이브에 바로 반영됩니다`}
+              title={`${ledgerGameLabel(ops.gameSeq)} 장부는 마감됐는데 순위가 아직 없어요. 입력하면 순위표·아카이브에 바로 반영됩니다`}
               className="rounded-badge border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-2xs font-bold text-amber-400 active:opacity-80">
               순위 미입력
             </button>
+          )}
+          {onOpenSchedule && (
+            <button type="button" onClick={onOpenSchedule} title="손님이 보는 대회 상세 열기"
+              className="btn-ghost text-xs px-2 whitespace-nowrap text-ink-secondary">손님화면</button>
           )}
           <button type="button" onClick={onEdit} className="btn-ghost text-xs px-2 text-accent-300">수정</button>
           {/* 확인 단계를 이 자리에 겹치지 않는 이유: 예전엔 같은 좌표에 라벨까지 같은 '삭제'가 나타나
@@ -391,6 +400,9 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
               className={['flex-1 py-2.5 text-xs font-semibold active:bg-surface-high/60', ledgerDate ? 'text-emerald-400' : 'text-ink-secondary'].join(' ')}>
               장부{ledgerDate ? (ledgersOpen ? ' ▲' : ' ▼') : ' +'}
             </button>
+          )}
+          {onOpenSchedule && (
+            <button type="button" onClick={onOpenSchedule} className="flex-1 py-2.5 text-xs font-semibold whitespace-nowrap text-ink-secondary active:bg-surface-high/60">손님화면</button>
           )}
           <button type="button" onClick={onEdit} className="flex-1 py-2.5 text-xs font-semibold text-accent-300 active:bg-surface-high/60">수정</button>
           {/* 칸 수가 4개 그대로라 마지막 칸의 좌표가 픽셀 단위로 같았다 — 더블탭 1회로 확인이 통과됐다.
@@ -518,7 +530,7 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
         <div className="border-t border-border-subtle px-2.5 py-2">
           {!act ? <p className="text-2xs text-ink-muted text-center py-1">불러오는 중…</p> : (
             <div className="grid grid-cols-3 gap-1.5 text-center">
-              <Cell label="바이인" value={`${act.buyins}회`} />
+              <Cell label="바인" value={`${act.buyins}회`} />
               <Cell label="방문" value={`${act.visits}회`} />
               <Cell label="머니인" value={`${act.moneyIn}회`} />
               <Cell label="예약" value={`${act.reservations}회`} />

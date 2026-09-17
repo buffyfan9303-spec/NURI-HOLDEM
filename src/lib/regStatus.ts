@@ -61,6 +61,8 @@ export interface RegInfo {
   msLeft: number | null;
   /** 클락이 실제로 돌고 있는가(일시정지면 false) */
   running: boolean;
+  /** 이 판정을 만든 클락의 game_seq — 포스터 상세가 '관전 클락' 을 **같은 클락**으로 연다(2026-09-17 연결 감사 B). */
+  gameSeq: number;
 }
 
 /** 확신도 순위 — 높을수록 강하다. */
@@ -91,7 +93,7 @@ export function buildRegInfoMap(clocks: ClockState[], schedules: Schedule[], now
     if (prev && (rank < prev.rank || (rank === prev.rank && g.gameSeq >= prev.gameSeq))) continue;
     const eff = effectiveLevel(g, nowMs);
     won.set(m.schedule.id, { rank, gameSeq: g.gameSeq });
-    map.set(m.schedule.id, { msLeft: msToRegClose(g, eff.index, eff.remainingMs), running: g.running });
+    map.set(m.schedule.id, { msLeft: msToRegClose(g, eff.index, eff.remainingMs), running: g.running, gameSeq: g.gameSeq });
   }
   return map;
 }

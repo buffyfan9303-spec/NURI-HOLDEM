@@ -116,7 +116,7 @@ test('🔴 포스터가 없으면 카드 탭 → 그 매장 커뮤니티', async
   await page.waitForTimeout(1200);
   // 매장 페이지만 가진 행동 — 카드에는 없다(카드에도 있는 매장명으로 재면 안 열려도 통과한다).
   // 매장 페이지만 가진 행동 두 개 — QR 체크인·길찾기. 카드에는 없다.
-  await expect(page.getByText('QR 체크인').first()).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByTestId('venue-checkin').first()).toBeVisible({ timeout: 8_000 });
   await expect(page.getByText('길찾기').first()).toBeVisible();
 });
 

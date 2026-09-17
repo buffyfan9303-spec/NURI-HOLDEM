@@ -82,6 +82,7 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
                 <dd className="text-ink-secondary">{v}</dd>
               </div>
             ))}
+            <div className="flex items-start gap-1"><dt className="shrink-0 whitespace-nowrap">오픈소스 라이선스</dt><dd><a href="/legal/licenses.html" target="_blank" rel="noopener" className="inline-flex items-center py-1.5 -my-1.5 text-ink-secondary underline decoration-border-default underline-offset-2 hover:text-accent-300">고지 보기</a></dd></div>
           </dl>
         </details>
 

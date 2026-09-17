@@ -246,7 +246,7 @@ function UserRow({ user, onUpdate }: {
     try {
       await adminSetShadowban(user.id, next);
       onUpdate(user.id, { shadowbanned: next });
-      toast.show(next ? `${user.name} 섀도우밴 · 활동 랭킹에서 제외됨` : `${user.name} 섀도우밴 해제`, next ? 'info' : 'success');
+      toast.show(next ? `${user.name} 섀도우밴 · 활동 순위에서 제외됨` : `${user.name} 섀도우밴 해제`, next ? 'info' : 'success');
       close();
     } catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
   };
@@ -310,7 +310,7 @@ function UserRow({ user, onUpdate }: {
               {statusStyle.label}
             </span>
             {user.shadowbanned && (
-              <span className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded-badge border font-semibold border-violet-400/40 bg-violet-500/15 text-violet-300" title="활동 랭킹에서 조용히 제외됨"><Icon name="eye-off" size={11} className="shrink-0" />섀도우밴</span>
+              <span className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded-badge border font-semibold border-violet-400/40 bg-violet-500/15 text-violet-300" title="활동 순위에서 조용히 제외됨"><Icon name="eye-off" size={11} className="shrink-0" />섀도우밴</span>
             )}
           </div>
           <p className="text-2xs text-ink-muted truncate">{user.email}</p>

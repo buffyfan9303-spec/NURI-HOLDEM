@@ -260,9 +260,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     e.preventDefault();
     if (!form.title.trim())     return failAt(titleId, '게임 이름을 입력해 주세요');
     if (!form.region.trim())    return failAt(regionId, '지역을 선택해 주세요');
-    if (form.buyIn <= 0)        return failAt(buyInId, '바이인 금액을 입력해 주세요');
+    if (form.buyIn <= 0)        return failAt(buyInId, '참가비 금액을 입력해 주세요');
     if (form.prizeType === 'GTD'   && form.prizeAmount <= 0)  return failAt(prizeAmountId, '보장 상금 금액을 입력해 주세요');
-    if (form.prizeType === 'ENTRY' && form.prizePercent <= 0) return failAt(prizePercentId, '프라이즈 비율(%)을 입력해 주세요');
+    if (form.prizeType === 'ENTRY' && form.prizePercent <= 0) return failAt(prizePercentId, '상금 비율(%)을 입력해 주세요');
     const regClose = [regLevel.trim() ? `${regLevel.trim()}LV` : '', regTime.trim()].filter(Boolean).join(' ');
     if (!regClose)              return failAt(regLevelId, '레지마감은 레벨 또는 시간 중 하나 이상 입력해 주세요');
     // 과거 날짜 가드 — 신규 등록이 어제로 잡히면 첫 화면에서 '종료'로 시작한다(오타 사고 방지)
@@ -547,12 +547,12 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
                 onChange={(e) => update('prizeAmount', Number(e.target.value))} placeholder="1100" className="input" />
             </FieldWrap>
           ) : (
-            <FieldWrap label="프라이즈" suffix="%" required htmlFor={prizePercentId}>
+            <FieldWrap label="상금" suffix="%" required htmlFor={prizePercentId}>
               <input id={prizePercentId} type="number" inputMode="numeric" required min={0} max={100} value={form.prizePercent || ''}
                 onChange={(e) => update('prizePercent', Number(e.target.value))} placeholder="예: 90" className="input" />
             </FieldWrap>
           )}
-          <FieldWrap label="바이인" suffix="원" required htmlFor={buyInId}>
+          <FieldWrap label="참가비" suffix="원" required htmlFor={buyInId}>
             <input id={buyInId} type="number" inputMode="numeric" required min={0} value={form.buyIn || ''}
               onChange={(e) => update('buyIn', Number(e.target.value))} placeholder="100000" className="input" />
             {/* 실시간 환산 — 옆 칸(만원)과 단위가 달라 0 하나 오차가 잦다 */}

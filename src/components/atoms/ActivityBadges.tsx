@@ -1,6 +1,6 @@
 // src/components/atoms/ActivityBadges.tsx
 // 프로필 활동 점수 + 뱃지 진열장.
-//  - 커뮤니티 랭킹 점수: 활동 점수(접속/글/댓글). TierBadge 등급과 연동.
+//  - 커뮤니티 순위 점수: 활동 점수(접속/글/댓글). TierBadge 등급과 연동.
 //  - 매장 방문 점수: QR 체크인 방문 일수(매장별 KST 날짜 distinct — getMyVisitStats, 2026-09-05 #8). 예약은 '예정 N' 으로만.
 import TierBadge, { tierCss } from './TierBadge';
 
@@ -53,7 +53,7 @@ export default function ActivityBadges({ points, visits, upcoming }: { points: n
       {/* 점수 2종 */}
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-input border border-border-subtle bg-surface-high p-2.5">
-          <p className="mb-1 text-2xs text-ink-muted">커뮤니티 랭킹 점수</p>
+          <p className="mb-1 text-2xs text-ink-muted">커뮤니티 순위 점수</p>
           <div className="flex items-center gap-1.5">
             <TierBadge points={points} size={18} />
             <span className="text-base font-extrabold leading-none text-ink-primary tabular-nums">{points.toLocaleString()}</span>

@@ -34,7 +34,11 @@ const PLACEMENT_POINT_MAX = 100;
 const MAX_PLACEMENT_ROWS = 30;
 
 /** 매장 꾸미기 — 매장 페이지 탭 순서. (순위 보드·칭호·점수는 「매장 랭킹」 탭) */
-export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
+export default function VenueCustomizePanel({ venueId, onOpenVenue }: {
+  venueId: string;
+  /** '손님 화면' — 손님이 보는 이 매장 페이지. 없으면 버튼이 렌더되지 않는다(호출부가 App 배선 전이어도 안전). */
+  onOpenVenue?: () => void;
+}) {
   const toast = useToast();
   const [cfg, setCfg] = useState<VenuePageConfig>({});
   const [loaded, setLoaded] = useState(false);
@@ -106,12 +110,12 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
       <VenueContactSection venueId={venueId} />
 
       {/* 내 매장 링크(커스텀 슬러그) — nuriholdem.com/s/<원하는이름> */}
-      <SlugEditor venueId={venueId} />
+      <SlugEditor venueId={venueId} onOpenVenue={onOpenVenue} />
 
       {/* 클락 테마·배경 이미지는 클락을 세팅하는 자리로 이사했다(중복 배치 금지) — 경로만 남긴다 */}
       <p className="text-2xs text-ink-muted">TV 송출 화면의 <span className="font-semibold text-accent-300">클락 테마·배경 이미지</span>는 「게임 진행 → 3. 클락 → 클락 설정」 화면 아래쪽에서 설정합니다.</p>
 
-      <p className="text-2xs text-ink-muted">순위 탭에 보일 <span className="font-semibold text-accent-300">랭킹 보드 종류·1~3등 칭호·기준 점수·포인트 지급</span>은 「매장 랭킹」 탭에서 설정합니다.</p>
+      <p className="text-2xs text-ink-muted">순위 탭에 보일 <span className="font-semibold text-accent-300">순위 보드 종류·1~3등 칭호·기준 점수·포인트 지급</span>은 「매장 순위」 탭에서 설정합니다.</p>
 
       <button type="button" onClick={save} disabled={saving} className="btn-primary w-full text-sm py-2.5 disabled:opacity-50">
         {saving ? '저장 중…' : '탭 순서 저장'}
@@ -213,7 +217,7 @@ function VenueContactSection({ venueId }: { venueId: string }) {
 }
 
 /** 내 매장 링크 — nuriholdem.com/s/<슬러그>. 중복·형식은 서버에서도 강제(set_venue_slug). */
-function SlugEditor({ venueId }: { venueId: string }) {
+function SlugEditor({ venueId, onOpenVenue }: { venueId: string; onOpenVenue?: () => void }) {
   const toast = useToast();
   const [slug, setSlug] = useState('');
   const [saved, setSaved] = useState<string | null>(null);
@@ -249,7 +253,14 @@ function SlugEditor({ venueId }: { venueId: string }) {
 
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2">
-      <h3 className="text-sm font-bold text-ink-primary">내 매장 링크 <span className="text-2xs font-normal text-ink-muted">(공유 주소를 원하는 이름으로)</span></h3>
+      <div className="flex items-center gap-2">
+        <h3 className="min-w-0 flex-1 text-sm font-bold text-ink-primary">내 매장 링크 <span className="text-2xs font-normal text-ink-muted">(공유 주소를 원하는 이름으로)</span></h3>
+        {/* 링크 '설정'만 있고 '열기'가 없어 업주가 자기 매장의 손님 화면을 볼 길이 없었다(2026-09-17 감사). */}
+        {onOpenVenue && (
+          <button type="button" onClick={onOpenVenue} data-testid="open-customer-venue" title="손님이 보는 내 매장 페이지 열기"
+            className="btn-ghost shrink-0 whitespace-nowrap px-3 text-xs">손님 화면</button>
+        )}
+      </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="shrink-0 text-xs font-semibold tabular-nums text-ink-muted">nuriholdem.com/s/</span>
         <input value={slug}
@@ -373,7 +384,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
       };
       await setVenuePageConfig(venueId, next);
       setCfg(next);
-      toast.show('매장 랭킹 설정을 저장했습니다. 매장 커뮤니티 순위 탭에 바로 반영됩니다', 'success');
+      toast.show('매장 순위 설정을 저장했습니다. 매장 커뮤니티 순위 탭에 바로 반영됩니다', 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
     finally { setSaving(false); }
   };
@@ -386,7 +397,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
       {canConfigure && (<>
         {/* ① 보드 종류 — 자동 산출 6종 + 커스텀 */}
         <section className="rounded-aura border card-aura p-3 space-y-2">
-          <h3 className="text-sm font-bold text-ink-primary">랭킹 보드 종류 <span className="text-2xs font-normal text-ink-muted">(1~2개 선택 · 웹 데이터 자동 산출)</span></h3>
+          <h3 className="text-sm font-bold text-ink-primary">순위 보드 종류 <span className="text-2xs font-normal text-ink-muted">(1~2개 선택 · 웹 데이터 자동 산출)</span></h3>
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {allBoards.map((m) => {
               const on = metrics.includes(m);
@@ -496,7 +507,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
         </section>
 
         <button type="button" onClick={save} disabled={saving} className="btn-primary w-full text-sm py-2.5 disabled:opacity-50">
-          {saving ? '저장 중…' : '매장 랭킹 설정 저장'}
+          {saving ? '저장 중…' : '매장 순위 설정 저장'}
         </button>
       </>)}
 

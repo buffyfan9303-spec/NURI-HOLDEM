@@ -515,7 +515,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
         />
         {/* 바이인 예산 축(UX-2) — '오늘 5만원짜리 뭐 있지'가 한국 유저 1차 질문 */}
         <FilterSelectChip
-          ariaLabel="바이인 예산"
+          ariaLabel="참가비 예산"
           value={budget != null ? String(budget) : ''}
           onChange={(v) => setBudget(v ? Number(v) : null)}
           placeholder="예산"

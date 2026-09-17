@@ -121,7 +121,7 @@ function Report({ r }: { r: SettlementReport }) {
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Kpi label="완납 매출" value={man(t.revenue)} tone="emerald" hint="현금 + 카드 + 이체" />
         <Kpi label="미수금" value={man(t.unpaid)} tone={t.unpaid > 0 ? 'danger' : 'muted'} hint="아직 못 받은 참가비" />
-        <Kpi label="총 바이인" value={`${t.buyinCount.toLocaleString()}회`} tone="accent"
+        <Kpi testId="kpi-buyins" label="총 바인" value={`${t.buyinCount.toLocaleString()}회`} tone="accent"
           hint={`첫 바인 ${t.firstBuyins} · 리바인 ${t.rebuys} · 엔트리 ${ent(t.entries)}`} />
         <Kpi label="참여 인원" value={`${r.people}명`} tone="accent"
           hint={`신규 ${r.newPeople} · 기존 ${r.regularPeople}`} />
@@ -138,10 +138,10 @@ function Report({ r }: { r: SettlementReport }) {
 
       {/* ── ② 기준 엔트리 대비 ── */}
       <Card title="기준 엔트리 대비" icon="target"
-        note="엔트리는 금액 기준입니다 — 10만 게임에 5만 할인 손님은 바이인 1회지만 엔트리는 0.5입니다. 상금·인건비·임대료는 장부에 없어, 여기 '차액'은 순이익이 아니라 기준 매출과의 차이입니다.">
+        note="엔트리는 금액 기준입니다 — 10만 게임에 5만 할인 손님은 바인 1회지만 엔트리는 0.5입니다. 상금·인건비·임대료는 장부에 없어, 여기 '차액'은 순이익이 아니라 기준 매출과의 차이입니다.">
         {hasTarget ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Line label="엔트리" value={ent(t.entries)} sub={`달성 ${entryRate}% · 바이인 ${t.buyinCount}회`}
+            <Line label="엔트리" value={ent(t.entries)} sub={`달성 ${entryRate}% · 바인 ${t.buyinCount}회`}
               tone={entryRate >= 100 ? 'emerald' : entryRate >= 80 ? 'amber' : 'danger'} />
             <Line label="기준 엔트리" value={`${t.targetEntries.toLocaleString()}`} sub="세션에 설정한 GTD 목표" />
             <Line label="기준 매출" value={man(t.targetRevenue)} sub="기준 엔트리 × 현금 단가" />
@@ -218,13 +218,13 @@ function Report({ r }: { r: SettlementReport }) {
 
       {/* ── ⑥ 게임별 내역 ── */}
       {r.games.length > 1 && (
-        <Card title="게임별 내역" icon="layers" note="'바이인'은 앉은 횟수, '엔트리'는 금액 기준입니다. 합계만 보면 어느 게임이 기준에 못 미쳤는지 알 수 없습니다.">
+        <Card title="게임별 내역" icon="layers" note="'바인'은 앉은 횟수, '엔트리'는 금액 기준입니다. 합계만 보면 어느 게임이 기준에 못 미쳤는지 알 수 없습니다.">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[36rem] text-left text-xs">
               <thead>
                 <tr className="border-b border-border-subtle text-2xs text-ink-muted">
                   <th className="py-1.5 pr-2 font-semibold">게임</th>
-                  <th className="py-1.5 px-2 text-right font-semibold">바이인</th>
+                  <th className="py-1.5 px-2 text-right font-semibold">바인</th>
                   <th className="py-1.5 px-2 text-right font-semibold">엔트리</th>
                   <th className="py-1.5 px-2 text-right font-semibold">기준</th>
                   <th className="py-1.5 px-2 text-right font-semibold">완납 매출</th>
@@ -297,10 +297,10 @@ const TONE: Record<string, string> = {
   muted: 'text-ink-secondary',
 };
 
-function Kpi({ label, value, hint, tone = 'muted' }: { label: string; value: string; hint?: string; tone?: keyof typeof TONE | string }) {
+function Kpi({ label, value, hint, tone = 'muted', testId }: { label: string; value: string; hint?: string; tone?: keyof typeof TONE | string; testId?: string }) {
   return (
     <div className="rounded-aura border card-aura px-3 py-2.5">
-      <p className="text-2xs font-semibold text-ink-muted">{label}</p>
+      <p data-testid={testId} className="text-2xs font-semibold text-ink-muted">{label}</p>
       <p className={`mt-0.5 text-xl font-extrabold tabular-nums ${TONE[tone] ?? TONE.muted}`}>{value}</p>
       {hint && <p className="mt-0.5 truncate text-2xs text-ink-muted" title={hint}>{hint}</p>}
     </div>

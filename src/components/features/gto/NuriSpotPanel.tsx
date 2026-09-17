@@ -377,7 +377,7 @@ function GameStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
     <div className="rounded-card border border-border-default bg-surface-mid p-3">
       <Row label="형식">
         <Pick value={spot.format} options={['mtt', 'cash'] as const}
-          onChange={(v) => patch({ format: v })} fmt={(v) => (v === 'mtt' ? '토너먼트' : '캐시')} />
+          onChange={(v) => patch({ format: v })} fmt={(v) => (v === 'mtt' ? '대회' : '캐시')} />
       </Row>
       <Row label="테이블 인원">
         <Pick value={spot.tableSize} options={[2, 6, 8, 9, 10]}

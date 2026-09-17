@@ -193,7 +193,7 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
           <span className="inline-block mr-1 px-1 py-0.5 rounded-badge bg-surface-high text-2xs">
             {item.format}
           </span>
-          {item.pubName} · {item.region} · 바이인 {item.buyIn.amount.toLocaleString()}
+          {item.pubName} · {item.region} · 참가비 {item.buyIn.amount.toLocaleString()}
         </p>
       </div>
 

@@ -1,4 +1,4 @@
-// src/components/features/gto/TdaRulesTool.tsx — 2026 TDA 규칙(한글 번역본) 열람 + AI 질의응답.
+// src/components/features/gto/TdaRulesTool.tsx — 2026 TDA 규칙(누리홀덤 한글 해설) 열람 + AI 질의응답.
 //
 // 오너 지시(2026-09-06): GTO 탭에 TDA 규칙을 넣고(2026-09-14 부터 2026 판), "딜러가 카드를 쏟았어요" 처럼 물으면
 // "TDA 어디에 의하면 이렇게 진행해야 합니다" 로 답하게 할 것.
@@ -176,12 +176,10 @@ export default function TdaRulesTool() {
         </ul>
       </section>
 
-      {/* 출처 — 번역본은 번역자에게 저작권이 있다. 표기를 지우지 말 것. */}
+      {/* 출처 — 원문 권리는 Poker TDA. 한글은 누리홀덤이 쓴 해설이라 번역 크레딧이 없다(2026-09-17, 제3자 번역본 제거). */}
       <p className="px-1 text-[10px] leading-relaxed text-ink-muted">
-        출처: POKER TOURNAMENT DIRECTORS ASSN. {data.version} · © 2026 Poker TDA (use policy: PokerTDA.com)<br />
-        한글 번역: 안성준 · Copyright 2024 Sungjoon Ahnn (2024년 규칙 본문).
-        2026년 개정·신설 조항의 한글 번역: 누리홀덤(2026-09-14) — 위 번역본에는 없는 부분입니다.<br />
-        최종 판단은 언제나 플로어(토너먼트 디렉터)의 재량입니다.
+        출처: Poker TDA 2026 규칙 {data.version} · © 2026 Poker TDA (use policy: PokerTDA.com)<br />
+        한글 해설은 누리홀덤이 작성했습니다. 최종 판단은 언제나 플로어(토너먼트 디렉터)의 재량입니다.
       </p>
     </div>
   );

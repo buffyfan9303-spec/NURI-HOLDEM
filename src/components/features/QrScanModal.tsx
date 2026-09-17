@@ -69,9 +69,9 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
       if (actionable && hit?.venueId && (!venueId || hit.venueId === venueId)) { onMatchRef.current(hit.venueId, hit); return true; }
       setWarn(actionable ? '이 매장의 QR이 아닙니다'
         : hit && elsewhereMsg(hit.kind) ? elsewhereMsg(hit.kind)!
-        : hit?.kind === 'buyin' ? '바인 요청 QR이에요. 출석은 매장 비치 체크인 QR을 비춰 주세요'
+        : hit?.kind === 'buyin' ? '바인 요청 QR이에요. 출석은 매장 비치 출석 QR을 비춰 주세요'
         : accept === 'both' ? '매장 QR이 아니에요. 테이블·카운터에 비치된 출석 또는 바인 요청 QR을 비춰 주세요'
-        : '체크인 QR이 아니에요. 매장에 비치된 체크인 QR을 비춰 주세요');
+        : '출석 QR이 아니에요. 매장에 비치된 출석 QR을 비춰 주세요');
       return false;
     };
 
@@ -154,7 +154,7 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
   // 루트의 하단 탭바(z-50)가 시트 하단 안내 문구를 덮었다(390px 실측 — 겹침).
   // body 로 포털해 루트 컨텍스트의 z-[60]으로 올린다(다른 루트 모달과 동일한 층).
   return createPortal(
-    <Modal open={open} onClose={onClose} title={accept === 'both' ? 'QR 스캔' : 'QR 체크인'} maxWidth="sm" variant="sheet">
+    <Modal open={open} onClose={onClose} title={accept === 'both' ? 'QR 스캔' : '출석 QR'} maxWidth="sm" variant="sheet">
       <div className="space-y-3 p-4 pb-6">
         {(phase === 'unsupported' || phase === 'denied') ? (
           <div className="flex flex-col items-center gap-3 rounded-card border border-border-subtle bg-surface-low px-4 py-8 text-center">
@@ -164,7 +164,7 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
             </p>
             <p className="text-2xs leading-relaxed text-ink-muted">
               기기 카메라 앱으로 {venueName ?? '매장'}에 비치된 QR을 스캔해 주세요 — 링크가 열리면
-              {accept === 'both' ? ' 출석 또는 참가(바인) 요청이 이어집니다.' : ' 자동으로 체크인됩니다.'}
+              {accept === 'both' ? ' 출석 또는 참가(바인) 요청이 이어집니다.' : ' 자동으로 출석됩니다.'}
               {phase === 'denied' && <><br />또는 브라우저 설정에서 카메라 권한을 허용한 뒤 다시 시도해 주세요.</>}
             </p>
           </div>
@@ -183,7 +183,7 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
               )}
             </div>
             <p className="text-center text-2xs text-ink-muted">
-              {venueName ?? '매장'}에 비치된 <b className="text-ink-secondary">{accept === 'both' ? '출석 또는 바인 요청 QR' : '체크인 QR'}</b>을 프레임 안에 비춰 주세요.
+              {venueName ?? '매장'}에 비치된 <b className="text-ink-secondary">{accept === 'both' ? '출석 또는 바인 요청 QR' : '출석 QR'}</b>을 프레임 안에 비춰 주세요.
             </p>
             {warn && (
               <p role="alert" className="flex items-center justify-center gap-1.5 rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-xs font-bold text-danger-light">

@@ -190,7 +190,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
                   그래서 늘리는 줄은 **하나**로 묶고, 그 안에서 각 값이 제 라벨을 갖는다. */}
               {showRebuy && <Rail label="리바이" value={(ls.rebuys ?? 0).toLocaleString()} />}
               {addonEarly.length > 0 && <GroupRail items={addonEarly} />}
-              {buyIn > 0 && <Rail label="바이인" value={buyIn.toLocaleString()} />}
+              {buyIn > 0 && <Rail label="바인" value={buyIn.toLocaleString()} />}
               {/* 2026-09-11: 총 칩·평균 스택은 **하단 레일**로 내렸다(아래 BottomMetrics).
                   우측 열에 7줄이 몰려 글자가 작아지는 동안 화면 하단 중앙이 통째로 비어 있었다 —
                   레퍼런스 보드처럼 '칩 경제'는 아래 가로줄, '사람 수'는 오른쪽 세로줄로 나눈다. */}
@@ -301,7 +301,7 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
 
   return (
     <aside data-testid="clk-prizes" className="clk-col min-h-0 flex-col justify-center">
-      <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>총 프라이즈</p>
+      <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>총 상금</p>
       <p className="mt-[0.3cqmin] font-black leading-none tabular-nums"
         style={{ fontSize: 'clamp(22px, 4.6cqmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
         {totalPrize.toLocaleString()}

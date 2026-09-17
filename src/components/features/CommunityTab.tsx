@@ -364,12 +364,12 @@ function CommunityTab({
                 하단 메인 탭바와 같은 문법이고, 활성 탭은 정의상 1개라 '글로우는 화면당 1곳' 규칙과 충돌하지 않는다.
                 (ring-aura-glow 는 쓰지 않는다 — 카드 후광이고 이 화면엔 이미 유료광고 카드의 강조가 있다) */}
             <SlidingPill containerRef={secBarRef} activeKey={shownSec} className="rounded-[9px] pill-active" />
-          <SectionTab active={shownSec === 'venues'} label="홀덤펍" onClick={() => setSection('venues')} />
-          <SectionTab active={shownSec === 'board'}  label="게시판" onClick={() => setSection('board')} />
-          <SectionTab active={shownSec === 'live'}   label="실시간" onClick={() => setSection('live')} />
-          <SectionTab active={shownSec === 'rank'}   label="랭킹"   onClick={() => setSection('rank')} />
-          {marketSlot && <SectionTab active={shownSec === 'market'} label="장터" onClick={() => setSection('market')} />}
-          <SectionTab active={shownSec === 'dealer'} label="딜러"   onClick={() => setSection('dealer')} />
+          <SectionTab id="venues" active={shownSec === 'venues'} label="홀덤펍" onClick={() => setSection('venues')} />
+          <SectionTab id="board" active={shownSec === 'board'}  label="게시판" onClick={() => setSection('board')} />
+          <SectionTab id="live" active={shownSec === 'live'}   label="실시간" onClick={() => setSection('live')} />
+          <SectionTab id="rank" active={shownSec === 'rank'}   label="순위"   onClick={() => setSection('rank')} />
+          {marketSlot && <SectionTab id="market" active={shownSec === 'market'} label="장터" onClick={() => setSection('market')} />}
+          <SectionTab id="dealer" active={shownSec === 'dealer'} label="딜러"   onClick={() => setSection('dealer')} />
         </div>
       </div>
 
@@ -480,10 +480,11 @@ function CommunityTab({
 
 // ── 섹션 토글 버튼 ───────────────────────────────────────────────────────────
 
-function SectionTab({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+function SectionTab({ id, active, label, onClick }: { id: string; active: boolean; label: string; onClick: () => void }) {
   return (
     <button
       type="button"
+      data-testid={`sec-tab-${id}`}
       onClick={onClick}
       className={[
         // flex-[1_0_auto]: 자리가 남으면 균등 분배, 좁으면 내용 폭(일정한 px-2)을 지키고 바가 가로 스크롤

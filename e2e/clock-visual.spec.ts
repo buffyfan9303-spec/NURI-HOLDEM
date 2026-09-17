@@ -175,7 +175,7 @@ test.describe('클락 TV — 상태별 캡처와 레이아웃 계약', () => {
     await page.screenshot({ path: `test-results/clock-shots/${PHASE}-theme-black-marble-gold.png` });
 
     // 프라이즈 열 — 12줄 전부 열 안·화면 안에 있고 열 자체가 스크롤을 만들지 않는다. 총액도 가로로 잘리지 않는다.
-    const aside = page.locator('aside', { hasText: '총 프라이즈' });
+    const aside = page.getByTestId('clk-prizes');
     await expect(aside.locator('li')).toHaveCount(12);
     const fit = await aside.evaluate((el) => {
       const a = el.getBoundingClientRect();

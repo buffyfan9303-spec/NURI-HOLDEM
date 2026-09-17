@@ -127,7 +127,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
       onClose();
       onVenue?.(venueId);
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '체크인에 실패했어요', 'error');
+      toast.show(e instanceof Error ? e.message : '출석에 실패했어요', 'error');
     } finally { setBusy(false); }
   };
 
@@ -156,7 +156,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
               <li className="flex items-start gap-2">
                 <Icon name="check-circle" size={13} className="mt-px shrink-0 text-emerald-400" />
                 <p className="text-2xs leading-relaxed text-ink-muted">
-                  <b className="text-ink-secondary">출석</b> — 매장 비치 체크인 QR
+                  <b className="text-ink-secondary">출석</b> — 매장 비치 출석 QR
                 </p>
               </li>
               <li className="flex items-start gap-2">
@@ -169,7 +169,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
             <button type="button" disabled={busy}
               onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있어요', 'error'); return; } setScanOpen(true); }}
               className="btn-primary mt-2.5 min-h-[44px] w-full text-sm disabled:opacity-50">
-              {busy ? '체크인 중…' : 'QR 스캔하기'}
+              {busy ? '출석 중…' : 'QR 스캔하기'}
             </button>
           </section>
 

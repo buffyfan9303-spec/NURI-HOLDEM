@@ -271,7 +271,7 @@ function RankVerifyAdminCard() {
   };
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— <b className="text-ink-secondary">대회(토너먼트) 입상만 승인</b>합니다. 일반 펍 정기 게임 증빙은 <b className="text-ink-secondary">반려</b>하세요 · 승인/거절 시 신분증 즉시 삭제 · 승인분은 100만원(100T)당 1점으로 국내 순위 합산</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— <b className="text-ink-secondary">대회 입상만 승인</b>합니다. 일반 펍 정기 게임 증빙은 <b className="text-ink-secondary">반려</b>하세요 · 승인/거절 시 신분증 즉시 삭제 · 승인분은 100만원(100T)당 1점으로 국내 순위 합산</span></p>
       {/* 실패를 '대기 중인 신청이 없습니다'로 단언하면 인증 요청이 조용히 묻힌다 — 실패 분기가 먼저 온다 */}
       {err != null ? <LoadErrorCard error={err} what="순위 인증 신청" onRetry={reload} compact />
         : list.length === 0 ? <p className="py-2 text-center text-2xs text-ink-muted">대기 중인 신청이 없습니다.</p> : (
@@ -327,7 +327,7 @@ function RankVerifyAdminCard() {
 // 커뮤니티 광고 5칸 관리는 './community/AdSlotsAdmin' 로 옮겼다(2026-09-11 게시글 승격 방식).
 // ── 주간 미션 관리(운영자) — 고정 3종 외 커스텀 미션 추가·수정·중단 ─────────────
 const GOAL_TYPE_OPTIONS: { value: MissionGoalType; label: string }[] = [
-  { value: 'checkin', label: '매장 체크인 N회' },
+  { value: 'checkin', label: '매장 출석 N회' },
   { value: 'post', label: '게시글 N개 쓰기' },
 ];
 function MissionsAdminCard() {
@@ -385,7 +385,7 @@ function MissionsAdminCard() {
 
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="target" size={15} className="shrink-0" />주간 미션 관리 <span className="text-xs font-normal text-ink-muted">랭킹 &gt; 미션 보드에 노출. 매주 월요일 진행도 리셋</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="target" size={15} className="shrink-0" />주간 미션 관리 <span className="text-xs font-normal text-ink-muted">순위 &gt; 미션 보드에 노출. 매주 월요일 진행도 리셋</span></p>
       {/* 고정 미션 안내 */}
       <ul className="space-y-1">
         {MISSIONS.map((m) => (
@@ -487,7 +487,7 @@ function HallOfFameAdminCard() {
     setBusy(true);
     try {
       await adminSaveHallEntry({ period, rank, nickname: d.nickname, note: d.note });
-      toast.show(`${period} ${rank}위를 저장했습니다. 랭킹 > 명예의 전당에 바로 반영됩니다`, 'success');
+      toast.show(`${period} ${rank}위를 저장했습니다. 순위 > 명예의 전당에 바로 반영됩니다`, 'success');
       reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
     finally { setBusy(false); }
@@ -509,7 +509,7 @@ function HallOfFameAdminCard() {
 
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />명예의 전당 등록 <span className="text-xs font-normal text-ink-muted">랭킹 &gt; 명예의 전당. 등록한 달은 자동 집계보다 우선</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />명예의 전당 등록 <span className="text-xs font-normal text-ink-muted">순위 &gt; 명예의 전당. 등록한 달은 자동 집계보다 우선</span></p>
       <p className="text-xs leading-relaxed text-ink-muted">
         노출 기준은 <b className="text-ink-secondary">직전 달</b>입니다(현재 <b className="text-ink-secondary">{last}</b>).
         이번 달({thisMonthPeriod()}) 자리에 미리 채워두면 다음 달에 자동으로 올라갑니다.
@@ -1072,7 +1072,7 @@ const aic = (children: ReactNode) => (
 );
 // 섹션 설명 — 공용 SectionHeader(내 매장과 동일 규격)
 const ADMIN_DESC: Record<Section, string> = {
-  analytics: '플랫폼 핵심 지표 · 회원·매장·대회·체크인·추천·푸시 한눈에',
+  analytics: '플랫폼 핵심 지표 · 회원·매장·대회·출석·추천·푸시 한눈에',
   pending: '업주가 등록한 포스터 검수. 승인하면 일정 탐색에 노출됩니다',
   reorder: '포스터 노출 순서 · 부스트 연락처 · 공동 업주 승인 · 이용권 충전 요청 · 순위 인증 심사 · 주간 미션 · 명예의 전당',
   exposure: '커뮤니티 광고 노출·순서 · 외치기 대기열 · 게시물 고정·블라인드 · 공지 순서',
@@ -1132,7 +1132,7 @@ function PlatformStatsCard() {
     { label: '신규 가입(30일)', value: `${s.newUsers30d}` },
     { label: '총 매장', value: `${s.venues}`, sub: `활성 ${s.activeVenues}` },
     { label: '총 대회', value: `${s.schedules}`, sub: `예정 ${s.upcomingSchedules}`, accent: true },
-    { label: '체크인(7일)', value: `${s.checkins7d}`, sub: `오늘 ${s.checkinsToday}` },
+    { label: '출석(7일)', value: `${s.checkins7d}`, sub: `오늘 ${s.checkinsToday}` },
     { label: '추천 가입', value: `${s.referrals}`, sub: `보상 ${s.referralsRewarded}`, accent: true },
     { label: '푸시 구독', value: `${s.pushSubs}`, sub: '알림 켠 기기' },
     { label: '커뮤니티 글(7일)', value: `${s.posts7d}` },
@@ -1882,7 +1882,7 @@ function PendingRow({
         </div>
         <p className="text-sm font-medium text-ink-primary truncate">{schedule.title}</p>
         <p className="text-2xs text-ink-muted mt-0.5 truncate">
-          {schedule.pubName || '매장 미지정'} · {d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 바이인 {schedule.buyIn.amount.toLocaleString()}
+          {schedule.pubName || '매장 미지정'} · {d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 참가비 {schedule.buyIn.amount.toLocaleString()}
         </p>
       </div>
 

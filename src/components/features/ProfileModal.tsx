@@ -116,7 +116,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     setRankDispBusy(true);
     try {
       await setMyPublicRankingConsent(on);
-      toast.show(on ? '랭킹 부가 정보 공개에 동의했습니다' : '랭킹 부가 정보를 공개하지 않습니다', 'success');
+      toast.show(on ? '순위 부가 정보 공개에 동의했습니다' : '순위 부가 정보를 공개하지 않습니다', 'success');
     } catch (e) {
       setRankDisp(prev);
       toast.show(e instanceof Error ? e.message : '설정 저장 실패', 'error');
@@ -506,7 +506,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                   '변경은 원래 무료'라는 사실을 같이 적는다(있던 기능을 뺏은 것처럼 읽히면 안 된다). */}
               <p className={['text-2xs leading-relaxed', nicknameLocked ? 'text-amber-400' : 'text-ink-muted'].join(' ')}>
                 {nicknameLocked
-                  ? `30일에 한 번만 변경 가능 · 다음 변경 가능일 ${nextNameDateStr} · 기다리지 않으려면 랭킹 › 상점의 '닉네임 즉시 변경권'`
+                  ? `30일에 한 번만 변경 가능 · 다음 변경 가능일 ${nextNameDateStr} · 기다리지 않으려면 순위 › 상점의 '닉네임 즉시 변경권'`
                   : '닉네임은 변경 후 30일간 다시 바꿀 수 없습니다'}
               </p>
               <p className="text-2xs text-ink-muted shrink-0">{name.length} / 20</p>
@@ -545,7 +545,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
           {rankDisp && (
             <div className="rounded-aura border border-border-default bg-surface-high/60 p-3">
               <p className="flex items-center gap-1.5 text-xs font-bold text-ink-primary">
-                <Icon name="trophy" size={13} className="shrink-0 text-accent-300" />랭킹 공개 설정
+                <Icon name="trophy" size={13} className="shrink-0 text-accent-300" />순위 공개 설정
               </p>
 
               <label className="mt-2 block text-2xs font-medium text-ink-secondary">순위표 표시 이름</label>
@@ -569,7 +569,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
 
               <label className="mt-3 flex items-center justify-between gap-2 rounded-input border border-border-default px-3 py-2 text-2xs">
                 <span className="min-w-0 text-ink-secondary">
-                  랭킹 부가 정보 공개
+                  순위 부가 정보 공개
                   <span className="block font-normal text-ink-muted">순위 옆에 자주 가는 매장 등을 함께 표시</span>
                 </span>
                 <input type="checkbox" disabled={rankDispBusy}

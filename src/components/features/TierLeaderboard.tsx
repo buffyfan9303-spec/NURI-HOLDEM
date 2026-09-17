@@ -60,7 +60,7 @@ const BOARD_LABEL: Record<Board, string> = {
   badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
-  domestic: '대회(토너먼트) 입상만 인정. 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(100T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
+  domestic: '대회 입상만 인정. 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(100T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
   verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(100T)당 1점입니다.',
   shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
@@ -182,7 +182,7 @@ function ActivityBoardSkeleton({ reserveMyRow }: { reserveMyRow: boolean }) {
         ))}
       </div>
       <RowSkeleton rows={lastActivityRowCount} />
-      <span className="sr-only">랭킹을 불러오는 중입니다</span>
+      <span className="sr-only">순위를 불러오는 중입니다</span>
     </div>
   );
 }
@@ -814,7 +814,7 @@ export default function TierLeaderboard() {
 
           {/* 다음 등급 진행률 (운영자는 SS 고정) */}
           {isAdmin ? (
-            <p className="mt-3 text-2xs font-bold text-danger-light">운영자 전용 SS 등급 · 랭킹 집계 제외</p>
+            <p className="mt-3 text-2xs font-bold text-danger-light">운영자 전용 SS 등급 · 순위 집계 제외</p>
           ) : myProg.next ? (
             <div className="mt-3">
               <div className="flex items-center justify-between text-2xs text-ink-muted mb-1">
@@ -994,7 +994,7 @@ export default function TierLeaderboard() {
                     '내면 뭐라도 남겠지'라는 기대가 생겨 반려만 늘어난다 — 조건을 먼저 말한다. */}
                 <p className="flex items-start gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/[0.08] px-2.5 py-2 text-2xs leading-relaxed text-ink-secondary">
                   <Icon name="trophy" size={13} className="mt-px shrink-0 text-accent-300" />
-                  <span><b className="text-accent-200">대회(토너먼트) 입상만 인증됩니다.</b> 매장 정기 게임(일반 펍) 기록은 순위 인증 대상이 아니며, 제출해도 반려됩니다.</span>
+                  <span><b className="text-accent-200">대회 입상만 인증됩니다.</b> 매장 정기 게임(일반 펍) 기록은 순위 인증 대상이 아니며, 제출해도 반려됩니다.</span>
                 </p>
                 <label className="flex items-center justify-between gap-2 rounded-input border border-border-default px-3 py-2 text-2xs">
                   <span className="text-ink-secondary">해외 대회입니다 <span className="text-ink-muted">해외도 정식 대회면 인정돼요</span></span>
@@ -1496,7 +1496,7 @@ export default function TierLeaderboard() {
         ) : loading ? (
           <ActivityBoardSkeleton reserveMyRow={!!user && !isAdmin} />
         ) : rows.length === 0 ? (
-          <EmptyState title="아직 랭킹이 없어요" hint="접속·글쓰기·댓글로 활동 점수를 모으면 이 자리에 이름이 올라갑니다" />
+          <EmptyState title="아직 순위가 없어요" hint="접속·글쓰기·댓글로 활동 점수를 모으면 이 자리에 이름이 올라갑니다" />
         ) : (
           <>
           {/* 상단 고정 '내 순위' 요약 1행 — 스크롤 없이 내 위치부터(TOP30 밖은 기존 하단 카드 유지) */}

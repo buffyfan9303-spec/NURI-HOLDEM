@@ -34,7 +34,7 @@ test.describe('매장 페이지 — 3계층 IA', () => {
     await page.waitForTimeout(1200);
 
     // Tier1 프라이머리 — QR 체크인이 스크롤 없이 보인다
-    const checkin = page.getByRole('button', { name: /QR 체크인/ });
+    const checkin = page.getByTestId('venue-checkin');
     await expect(checkin, 'Tier1 [QR 체크인] 이 없다').toBeVisible();
     const box = await checkin.boundingBox();
     expect(box!.y, 'QR 체크인이 첫 뷰포트(915px) 밖이다 — Tier1 이 아니다').toBeLessThan(915);
