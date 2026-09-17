@@ -49,6 +49,7 @@ import { buildLiveFactMap, rankRail, railFact, todayLine } from '../../lib/homeR
 import type { ClockState } from '../../api/clock';
 import type { VisitedVenue } from '../../api/vouchers';
 import type { MyReservationRow } from '../../api/reservations';
+import { readSeenCount, writeSeenCount } from '../../lib/seenCount';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -61,22 +62,24 @@ const UPCOMING_SEEN = 'nuri:upcoming-seen';
 /** 지난 방문에 '오늘·내일 일정'이 **몇 줄**이었나(1~8). 스켈레톤을 4행 고정으로 그리면 실제가 8행일 때
  *  데이터 도착 순간 4행 × --card-h-list 만큼 아래가 통째로 밀린다(2026-09-10 용량·모션 점검에서
  *  '툭'의 최대 단일 원인으로 지목). 첫 방문 기본값은 종전과 같은 4. openNow 와 같은 조리법이다. */
-const upcomingSeenCount = () => {
-  try {
-    const n = Number(localStorage.getItem(UPCOMING_SEEN));
-    return Number.isFinite(n) && n > 0 ? Math.min(Math.max(n, 1), 8) : 4;
-  } catch { return 4; }
+// 조리법은 `src/lib/seenCount.ts` 한 곳에 있다 — 일정 탐색도 같은 함수를 쓴다(2026-09-17 통합).
+const upcomingSeenCount = () => readSeenCount(UPCOMING_SEEN, { fallback: 4, min: 1, max: 8 });
+const RAIL_SEEN = 'nuri:rail-seen';
+/** 지난 방문에 '추천 대회' 레일이 **몇 장**이었나(0~6). 레일은 `rail.length > 0` 일 때만 그려서
+ *  로딩 중 자리가 **0** 이었다 — 실측(2026-09-17): 스켈레톤 0 vs 실제 274.8px 로, 데이터가 오면
+ *  아래 섹션이 통째로 밀렸다(홈 CLS 0.32 의 큰 몫). 저장값 '0' 은 '지난번엔 없었다'는 뜻이라 그대로 0. */
+const railSeenCount = () => {
+  try { if (localStorage.getItem(RAIL_SEEN) === '0') return 0; } catch { return 0; }
+  return readSeenCount(RAIL_SEEN, { fallback: 0, min: 1, max: 6 });
 };
 const OPENNOW_SEEN = 'nuri:opennow-seen';
 /** 지난 방문에 '지금 등록 가능'이 **몇 줄**이었나(0~5). 예전엔 '1'/'0' 만 저장해 한 줄만 예약했고,
  *  실제로 서너 줄이 오면 그 차이만큼 아래가 통째로 밀렸다. 옛 값('1')도 한 줄로 읽어 하위호환. */
 const openNowSeenCount = () => {
-  try {
-    const v = localStorage.getItem(OPENNOW_SEEN);
-    if (!v || v === '0') return 0;
-    const n = Number(v);
-    return Number.isFinite(n) ? Math.min(Math.max(n, 1), OPEN_NOW_ROWS) : 1; // '1'(옛 값) → 1줄
-  } catch { return 0; }
+  // ⚠ 이쪽만 조리법이 조금 다르다: 저장값 '0' 은 **'지난번엔 한 줄도 없었다'** 라는 뜻이라 0 을 그대로 쓴다.
+  //   그래서 공용 헬퍼(값 없음 → fallback)로 완전히 대체하지 않고, 0 판정을 앞에서 처리한 뒤 넘긴다.
+  try { if (localStorage.getItem(OPENNOW_SEEN) === '0') return 0; } catch { return 0; }
+  return readSeenCount(OPENNOW_SEEN, { fallback: 0, min: 1, max: OPEN_NOW_ROWS });
 };
 
 // 이벤트 진입 칸은 상태와 무관하게 **늘 그 자리에 있다**(2026-09-12 §4) — 그래서 '지난 방문에 배너가
@@ -340,11 +343,12 @@ export default function HomeTab({
     return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`;
   };
   if (clocksLoaded) {
-    try { localStorage.setItem(OPENNOW_SEEN, String(Math.min(openAll.length, OPEN_NOW_ROWS))); } catch { /* noop */ }
+    writeSeenCount(OPENNOW_SEEN, openAll.length, { min: 0, max: OPEN_NOW_ROWS });
+    writeSeenCount(RAIL_SEEN, rail.length, { min: 0, max: 6 });
   }
   // 다음 방문의 스켈레톤 행 수 — 같은 기기는 대개 비슷한 줄 수를 본다.
   if (loaded) {
-    try { localStorage.setItem(UPCOMING_SEEN, String(Math.min(Math.max(upcoming.length, 1), 8))); } catch { /* noop */ }
+    writeSeenCount(UPCOMING_SEEN, upcoming.length, { min: 1, max: 8 });
   }
 
   return (
@@ -432,6 +436,29 @@ export default function HomeTab({
             §6-3. 가로 스크롤은 **레일 안에서만** 일어난다 — 레일은 px-page-x 만큼의 안쪽 여백을
             자기 패딩으로 갖고(문서 좌우 여백과 같은 선에서 시작), 넘치는 것은 레일의 overflow-x 다.
             카드 폭 164px + 간격 10px → 390px 에서 2장 + 다음 카드 일부가 보인다(스크롤 가능성 신호). */}
+        {/* 로딩 중 자리 예약 — **실제 레일과 같은 박스 모델**로 그 장수만큼(아래 '지금 등록 가능'과 같은 조리법).
+            높이를 숫자로 베끼지 않는다: 포스터 78px + 정보 영역(gap-1 px-2.5 py-2.5) 골격을 그대로 복제한다. */}
+        {!loaded && rail.length === 0 && railSeenCount() > 0 && (
+          <section className="pt-5" aria-hidden>
+            <header className="flex items-baseline justify-between px-page-x pb-2.5">
+              <div className="skeleton h-[26px] w-28" />
+            </header>
+            <ul className="scrollbar-none flex snap-x gap-2.5 overflow-x-auto px-page-x pb-1">
+              {Array.from({ length: railSeenCount() }).map((_, i) => (
+                <li key={i} className="w-[164px] shrink-0 lg:w-[184px]">
+                  <div className="flex h-full w-full flex-col overflow-hidden rounded-card border card-aura">
+                    <div className="skeleton h-[78px] w-full rounded-none" />
+                    <div className="flex min-w-0 flex-1 flex-col gap-1 px-2.5 py-2.5">
+                      <div className="skeleton h-[17px] w-2/3" />
+                      <div className="skeleton h-[16px] w-3/4" />
+                      <div className="skeleton h-[17px] w-1/2" />
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {rail.length > 0 && (
           <section className="pt-5" data-testid="home-rail">
             <header className="flex items-baseline justify-between px-page-x pb-2.5">

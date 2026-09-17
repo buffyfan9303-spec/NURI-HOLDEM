@@ -169,13 +169,35 @@ function resolveVenueLink(venues: Venue[], full: string | null, short: string | 
 // 이벤트는 **별도 페이지**다(오너 2026-09-06) — 탭도 게시판도 아니고, 열 때만 내려받는다.
 const EventPage = lazyWithReload(() => import('./components/features/EventPage'));
 import type { MeTab } from './components/features/CustomerDashboardPage'; // 타입만(런타임 0)
+import { readSeenCount, writeSeenCount } from './lib/seenCount';
+/** 일정 탐색 목록이 지난 방문에 몇 줄이었나 — 스켈레톤 자리 예약용(홈의 nuri:upcoming-seen 과 같은 조리법). */
+const BROWSE_SEEN = 'nuri:browse-seen';
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
 const ClockRemote    = lazyWithReload(() => import('./components/features/clock/ClockRemote'));
 
-// 지연 로딩 폴백 — 청크 받아오는 짧은 순간의 로더(레이아웃 점프 최소화)
+/** 지연 로딩 폴백 — 청크를 받아오는 동안의 자리.
+ *
+ *  🔴 **스피너 높이가 아니라 화면 높이를 예약한다.** 예전엔 `py-24`(≈228px)뿐이라,
+ *  `?tab=` 딥링크·새로고침·PWA 바로가기로 들어오면 **첫 페인트에 사업자 푸터가 헤더 바로 아래**
+ *  (y≈316)에 떴다가 실제 pane 이 오면서 통째로 밀렸다. 유저가 탭을 열자마자 보는 것이
+ *  법적 고지이고, 읽으려는 순간 화면이 내려간다.
+ *
+ *  실측(2026-09-17 라이브 · 탭 직접 진입 직후 · 스크롤 전):
+ *    tools 0.63 · market 0.53 · home 0.32 · browse 0.32 · live 0.30+0.30(두 번 튐) · community 0.19~0.20
+ *    (CLS 0.1 양호 / **0.25 불량**) · tools 는 첫 페인트 228px → 실제 1,815px
+ *
+ *  왜 `svh` 인가: `dvh` 는 주소창 개폐로 값이 변해 안드로이드에서 화면이 흔들렸다(2026-09-15 오너 리포트).
+ *  `src/components/dynamicViewportUnit.contract.test.ts` 가 `dvh` 사용을 금지한다 — 여기서도 `svh` 를 쓴다.
+ *  헤더·탭바 몫을 빼서 **정확히 한 화면**만 잡는다(더 잡으면 폴백이 사라질 때 위로 당겨진다).
+ *  ⚠ 이것으로 시프트가 0 이 되지는 않는다 — 실제 pane 이 한 화면보다 길면 그만큼은 남는다.
+ *    다만 **푸터가 첫 화면 위로 올라오지 못하게** 막는 것이 요점이다(CLS 의 대부분이 거기서 나왔다). */
 function LazyFallback() {
   return (
-    <div className="flex items-center justify-center py-24" aria-busy="true" aria-label="불러오는 중">
+    <div
+      className="flex min-h-[calc(100svh-theme(spacing.header-h)-var(--tabbar-safe))] items-start justify-center pt-24"
+      aria-busy="true"
+      aria-label="불러오는 중"
+    >
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-ink-secondary" />
     </div>
   );
@@ -2239,6 +2261,10 @@ export default function App() {
   //   오너 결정(2026-09-06)으로 필터를 걷어내면서 이 로드도 함께 제거한다.
   //   매장 페이지의 팔로우 버튼은 자기 상태를 스스로 관리한다(src/lib/venueFollow.ts).
 
+  /** 일정 탐색 스켈레톤이 예약할 줄 수 — 지난 방문의 실제 줄 수(`src/lib/seenCount.ts`, 홈과 같은 함수).
+   *  첫 방문 기본값 6 은 **종전 고정값과 같다**(회귀 0). 최대 8 — 그보다 길면 스켈레톤이 화면을 넘긴다. */
+  const [browseSeenRows] = useState(() => readSeenCount(BROWSE_SEEN, { fallback: 6, min: 1, max: 8 }));
+
   const visibleSchedules = useMemo(() => {
     const list = schedules.filter((s) => s.approved);
     const q = searchState.query.trim();
@@ -2281,6 +2307,13 @@ export default function App() {
         return compareByStartThenBoost(a, b);
       });
   }, [schedules, searchState, nearSort, myPos, venueById]);
+
+  /** 이번에 실제로 그린 줄 수를 기억한다 — 다음 방문의 스켈레톤이 그만큼 자리를 잡는다.
+   *  ⚠ 로딩이 끝난 뒤에만 쓴다. 로딩 중(0줄)을 저장하면 다음 방문이 1줄만 예약해 더 크게 튄다. */
+  useEffect(() => {
+    if (!schedulesLoaded) return;
+    writeSeenCount(BROWSE_SEEN, visibleSchedules.length, { min: 1, max: 8 });
+  }, [schedulesLoaded, visibleSchedules.length]);
   // 날짜 슬라이더 점 표시용 — 승인된 대회가 있는 날짜 집합(헛탭 방지)
   const eventDates = useMemo(() => new Set(schedules.filter((sc) => sc.approved).map((sc) => sc.date)), [schedules]);
   // 📍 가까운 순일 때 카드에 실제 거리를 보여준다 — 정렬만 하고 숫자를 감추면 체감·검증 불가
@@ -3652,7 +3685,7 @@ export default function App() {
                   </div>
                 )}
                 {!schedulesLoaded ? (
-                  <ScheduleSkeletonGrid viewMode={viewMode} />
+                  <ScheduleSkeletonGrid viewMode={viewMode} rows={browseSeenRows} />
                 ) : schedulesError && schedules.length === 0 ? (
                   <LoadErrorCard error={schedulesError} what="대회 목록"
                     onRetry={retrySchedulesCb} />
@@ -4422,9 +4455,13 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
 // 전엔 grid 가 포스터 높이(aspect-[3/4])만 있어 실데이터 교체 순간 본문 높이만큼(+713px/10장)
 // 낙하했고, list 는 임의값 h-24(96px) vs 실측 87px 로 어긋났다. 골격을 복제하면 높이가
 // 구조적으로 일치한다(list 는 실측 87px 고정 — 2026-08-25, 375px, html 17px).
-function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table' }) {
+/** ⚠ 목록 행은 **개수와 높이를 둘 다** 실제와 맞춰야 자리 예약이 성립한다(2026-09-17 감사).
+ *  · 높이: `min-h-[var(--card-h-list)]` — 예전엔 내용 높이(≈98.7px)만 차지해 실제 카드와 어긋났다.
+ *  · 개수: 지난 방문에 몇 줄이었는지를 기억한다(`src/lib/seenCount.ts` — 홈과 **같은 함수**).
+ *    6행 고정이던 시절 실측: 스켈레톤 642.5px vs 실제 232.9px → 데이터 도착 때 그만큼 위로 당겨졌다. */
+function ScheduleSkeletonGrid({ viewMode, rows }: { viewMode: 'grid' | 'list' | 'table'; rows?: number }) {
   const grid = viewMode === 'grid';
-  const n = grid ? 10 : 6;
+  const n = grid ? 10 : (rows ?? 6);
   return (
     <div className={[grid ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low'].join(' ')} aria-busy="true">
       {Array.from({ length: n }).map((_, i) =>
@@ -4442,7 +4479,7 @@ function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table
           </div>
         ) : (
           // ListCard 골격: 4줄 행 문법 복제(시간/제목/매장/가격 — 재문법과 높이 동조)
-          <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+          <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-2.5">
             <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="skeleton h-3.5 w-1/3" />

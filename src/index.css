@@ -1475,7 +1475,12 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
    (실측: cis 100px → 카드 123.3px). 즉 토큰은 '카드 전체 높이'가 아니라 '콘텐츠 높이'로 잡아야 한다.
    실측 콘텐츠 높이 = 본문 1줄 113.5 / 2줄 133 → 최빈 124. (구 120px 은 승격 전 값) */
 @media (min-width: 640px) { :root { --row-h-md: 63px; } }
-.cv-row-sm { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-sm); }  /* 커뮤니티 한줄 행 */
+/* ⚠ cis 는 **콘텐츠 박스**라 padding 이 그 위에 더 붙는다(위 --row-h-lg 주석과 같은 함정).
+   --row-h-sm 은 `PostRowCard.tsx` 의 `min-h`(= **border 박스**)와 **같은 값을 공유**하므로,
+   토큰은 border 박스로 두고 **cis 쪽에서만** padding 을 뺀다. 안 빼면 화면 밖 행이 행마다 과대평가돼
+   긴 목록에서 문서가 부풀었다가 스크롤하며 줄어든다(스크롤바가 튄다).
+   실측(2026-09-17 라이브): 실제 44 vs cis 추정 **61**(+17 = py-2 17). */
+.cv-row-sm { content-visibility: auto; contain-intrinsic-size: auto calc(var(--row-h-sm) - 1rem); }  /* 커뮤니티 한줄 행 */
 .cv-row-lg { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-lg); }  /* 커뮤니티 피드 카드 */
 .cv-row-md { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-md); }  /* 장터 행 */
 
@@ -1542,7 +1547,11 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
   [data-ledger-fullscreen] { --ledger-bar-right: calc(20rem + 1px + 0.75rem); }
 }
 @media (min-width: 640px) { :root { --card-h-list: 117px; } }  /* 실측 117.3 — 구 81 은 36px 어긋나 있었다 */
-.cv-card-list { content-visibility: auto; contain-intrinsic-size: auto var(--card-h-list); }
+/* ⚠ 위 --row-h-sm 과 같은 이유로 **cis 에서만** padding 을 뺀다 — `--card-h-list` 는
+   `HomeTab.tsx` 의 스켈레톤 `min-h`(border 박스)와 공유하는 값이다.
+   실측(2026-09-17 라이브): 실제 181.2 vs cis 추정 **203.3**(+22.1 = py-2.5 21.25).
+   같은 날 토큰을 129 로 맞췄지만 cis 쪽은 150 으로 잡히고 있었다 — 반쪽만 맞은 것이었다. */
+.cv-card-list { content-visibility: auto; contain-intrinsic-size: auto calc(var(--card-h-list) - 1.25rem); }
 @media (min-width: 1024px) {
   :root { --card-h-grid: 447px; }
   .cv-card-grid { content-visibility: auto; contain-intrinsic-size: auto var(--card-h-grid); }
