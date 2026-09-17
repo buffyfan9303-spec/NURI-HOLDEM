@@ -1763,6 +1763,32 @@ html[data-vt-scope='venue-tab'] [data-venue-tabbar] [data-pill-active] { view-tr
 html[data-vt-scope='venue-tab'] [data-venue-tabpanel] { view-transition-name: venue-tabpanel; }
 html[data-vt-scope='venue-tab']::view-transition-old(root),
 html[data-vt-scope='venue-tab']::view-transition-new(root) { animation: none; }
+/* ── 돌출 가드 (2026-09-17 전수 측정) ────────────────────────────────────────
+   왜: 본문에 view-transition-name 을 주면 root 의 뷰포트 고정 스냅샷 보호를 잃는다.
+   ::view-transition-old/new 는 inline-size:100%·block-size:auto 라 **원래 높이**로 그려지는데
+   group 박스는 새 높이로 보간돼, 짧아지는 쪽에서 옛 본문이 새 푸터 위에 겹쳐 페이드된다.
+
+   🔴 **두 줄이 한 쌍이다. 한쪽만 넣으면 안 고쳐지고 그 사실이 계측에 안 잡힌다.**
+     · old/new 만 → `getComputedStyle(...'::view-transition-old').height` 는 0 이 되는데
+       **페인트는 안 잘린다**(VT 스냅샷은 object-fit 클립을 안 받는다. 가림률 94% 실측).
+     · group clip 만 → 잘리지만 스냅샷이 group 폭에 맞춰 축소(줌)된다.
+   게이트: `src/lib/subTabTransition.test.ts` 의 '두 줄이 한 쌍' 계약(양방향 음성 대조 확인).
+
+   측정법: 앱의 500ms skipTransition 을 감싸 무력화 → 애니메이션 pause → +40/+80/+160ms 스크린샷.
+   **판정은 그림으로 했다.** 390×844·1280×900 양방향. 아래 Δ 는 (390 / 1280) 최대 높이차.
+
+   넣지 않은 것 — 실측 Δ0 이라 불필요:
+     · profile-panel — `data-profile-panel` 이 스크롤 상자(flex-1 overflow-y-auto) 자체라 4탭 전부 736.8px 로 불변.
+       (2026-09-17 낮에 돌던 '2180px' 은 attribute 가 안쪽 div 에 있던 때의 값이다 — 그 뒤 옮겨졌다.)
+     · live-panel — 정렬은 순서만 바꾼다. · legal-panel — max-h-[65vh] 상자에 네 문서 모두 그보다 길다.
+     · notif-panel — 방향 푸시를 안 쓰는 의도된 예외(subTabTransition.test.ts 에 이유가 있다).
+
+   ⚠ 알아둘 거동(community/rank 포함 전 스코프 공통): 짧아지는 방향에서 new 의 surface-base 배경이
+     아직 큰 group 상자를 ≤250ms 채우며 푸터를 덮었다 걷힌다. 결함으로 보지 않았다. */
+/* Δ150/90 — 포스터→순위에서 옛 포스터 꼬리가 빈 상태 아래 남았다 */
+html[data-vt-scope='venue-tab']::view-transition-group(venue-tabpanel) { overflow: clip; }
+html[data-vt-scope='venue-tab']::view-transition-old(venue-tabpanel),
+html[data-vt-scope='venue-tab']::view-transition-new(venue-tabpanel) { height: 100%; object-fit: none; object-position: top left; }
 /* 패널 전용 키프레임 — root 용(vt-push-*)을 그대로 쓰면 안 된다(2026-08-29 오너 지적: "겹쳐서 지직 블러").
    두 가지가 겹쳐서 생긴 문제였다:
      ① root 전환은 `::view-transition { background-color }` 덕에 **불투명 바닥** 위에서 일어나는데,
@@ -1927,6 +1953,10 @@ html[data-vt-scope='admin-sec'] [data-admin-secpanel] { view-transition-name: ad
 html[data-vt-scope='admin-sec'] [data-admin-secbar] [data-admin-active] { view-transition-name: admin-active; }
 html[data-vt-scope='admin-sec']::view-transition-old(root),
 html[data-vt-scope='admin-sec']::view-transition-new(root) { animation: none; }
+/* Δ1305/753 — 게시물관리→운영분석에서 옛 본문이 푸터 위로 */
+html[data-vt-scope='admin-sec']::view-transition-group(admin-secpanel) { overflow: clip; }
+html[data-vt-scope='admin-sec']::view-transition-old(admin-secpanel),
+html[data-vt-scope='admin-sec']::view-transition-new(admin-secpanel) { height: 100%; object-fit: none; object-position: top left; }
 /* 내 매장(업주 PC) 사이드바 — 2026-09-15. admin-sec 와 **같은 구조**라 규칙도 그대로 복제한다.
    왜 이제야: 내 매장은 goSubTab 을 아예 안 타고 setSection 을 직접 불렀다(호출 0 · 스코프 0).
    그래서 src/lib/subTabTransition.test.ts 의 목록에도 안 들어갔고 — 게이트가 초록이던 건
@@ -1949,6 +1979,11 @@ html[data-vt-scope='mystore-sec'] [data-mystore-rail] [data-sliding-pill] { view
 html[data-vt-scope='mystore-sec'] [data-mystore-rail] [data-pill-active] { view-transition-name: mystore-rail-label; }
 html[data-vt-scope='mystore-sec']::view-transition-old(root),
 html[data-vt-scope='mystore-sec']::view-transition-new(root) { animation: none; }
+/* Δ3473/2695(최대) — 1280 요약→클락에서 옛 대시보드 카드가 푸터 위로.
+   레일 SlidingPill(mystore-rail-pill)은 가드 전후 같은 프레임·같은 위치 — 형제 group 이라 clip 이 안 미친다(실측) */
+html[data-vt-scope='mystore-sec']::view-transition-group(mystore-secpanel) { overflow: clip; }
+html[data-vt-scope='mystore-sec']::view-transition-old(mystore-secpanel),
+html[data-vt-scope='mystore-sec']::view-transition-new(mystore-secpanel) { height: 100%; object-fit: none; object-position: top left; }
 /* 운영자 매장 장부/통계 2탭 */
 html[data-vt-scope='adminpos-tab'] [data-adminpos-tabbar] { view-transition-name: adminpos-tabbar; }
 html[data-vt-scope='adminpos-tab'] [data-adminpos-tabbar] [data-sliding-pill] { view-transition-name: adminpos-pill; }
@@ -1958,21 +1993,37 @@ html[data-vt-scope='adminpos-tab'] [data-adminpos-tabbar] [data-pill-active] { v
 html[data-vt-scope='adminpos-tab'] [data-adminpos-panel] { view-transition-name: adminpos-panel; }
 html[data-vt-scope='adminpos-tab']::view-transition-old(root),
 html[data-vt-scope='adminpos-tab']::view-transition-new(root) { animation: none; }
+/* Δ888/701 — 통계→장부에서 옛 통계 카드가 장부 아래 */
+html[data-vt-scope='adminpos-tab']::view-transition-group(adminpos-panel) { overflow: clip; }
+html[data-vt-scope='adminpos-tab']::view-transition-old(adminpos-panel),
+html[data-vt-scope='adminpos-tab']::view-transition-new(adminpos-panel) { height: 100%; object-fit: none; object-position: top left; }
 /* 회원 관리 / 게시글 관리 */
 html[data-vt-scope='usermgmt-sec'] [data-usermgmt-secbar] { view-transition-name: usermgmt-secbar; }
 html[data-vt-scope='usermgmt-sec'] [data-usermgmt-panel] { view-transition-name: usermgmt-panel; }
 html[data-vt-scope='usermgmt-sec']::view-transition-old(root),
 html[data-vt-scope='usermgmt-sec']::view-transition-new(root) { animation: none; }
+/* Δ168/152 — 회원→게시글에서 옛 필터 칩·명단이 푸터 위 */
+html[data-vt-scope='usermgmt-sec']::view-transition-group(usermgmt-panel) { overflow: clip; }
+html[data-vt-scope='usermgmt-sec']::view-transition-old(usermgmt-panel),
+html[data-vt-scope='usermgmt-sec']::view-transition-new(usermgmt-panel) { height: 100%; object-fit: none; object-position: top left; }
 /* 도구 탭 레인 필터 */
 html[data-vt-scope='tools-lane'] [data-tools-lanebar] { view-transition-name: tools-lanebar; }
 html[data-vt-scope='tools-lane'] [data-tools-lanepanel] { view-transition-name: tools-lanepanel; }
 html[data-vt-scope='tools-lane']::view-transition-old(root),
 html[data-vt-scope='tools-lane']::view-transition-new(root) { animation: none; }
+/* Δ1005/681 — 전체→전략탐색에서 옛 카드가 사업자 정보 위 */
+html[data-vt-scope='tools-lane']::view-transition-group(tools-lanepanel) { overflow: clip; }
+html[data-vt-scope='tools-lane']::view-transition-old(tools-lanepanel),
+html[data-vt-scope='tools-lane']::view-transition-new(tools-lanepanel) { height: 100%; object-fit: none; object-position: top left; }
 /* 장터 카테고리 + 정렬 */
 html[data-vt-scope='market-cat'] [data-market-catbar] { view-transition-name: market-catbar; }
 html[data-vt-scope='market-cat'] [data-market-panel] { view-transition-name: market-panel; }
 html[data-vt-scope='market-cat']::view-transition-old(root),
 html[data-vt-scope='market-cat']::view-transition-new(root) { animation: none; }
+/* Δ498/378 — 전체→기타에서 옛 매물이 푸터 위 */
+html[data-vt-scope='market-cat']::view-transition-group(market-panel) { overflow: clip; }
+html[data-vt-scope='market-cat']::view-transition-old(market-panel),
+html[data-vt-scope='market-cat']::view-transition-new(market-panel) { height: 100%; object-fit: none; object-position: top left; }
 /* 라이브 진행 게임 정렬 */
 html[data-vt-scope='live-sort'] [data-live-sortbar] { view-transition-name: live-sortbar; }
 html[data-vt-scope='live-sort'] [data-live-panel] { view-transition-name: live-panel; }
@@ -1983,6 +2034,10 @@ html[data-vt-scope='dealer-kind'] [data-dealer-kindbar] { view-transition-name: 
 html[data-vt-scope='dealer-kind'] [data-dealer-panel] { view-transition-name: dealer-panel; }
 html[data-vt-scope='dealer-kind']::view-transition-old(root),
 html[data-vt-scope='dealer-kind']::view-transition-new(root) { animation: none; }
+/* Δ636/551 — 전체→구직에서 옛 목록이 푸터 위 */
+html[data-vt-scope='dealer-kind']::view-transition-group(dealer-panel) { overflow: clip; }
+html[data-vt-scope='dealer-kind']::view-transition-old(dealer-panel),
+html[data-vt-scope='dealer-kind']::view-transition-new(dealer-panel) { height: 100%; object-fit: none; object-position: top left; }
 /* 그룹(모임) 채팅·게시판·순위 */
 html[data-vt-scope='group-tab'] [data-group-tabbar] { view-transition-name: group-tabbar; }
 html[data-vt-scope='group-tab'] [data-group-tabbar] [data-sliding-pill] { view-transition-name: group-pill; }
@@ -1992,6 +2047,10 @@ html[data-vt-scope='group-tab'] [data-group-tabbar] [data-pill-active] { view-tr
 html[data-vt-scope='group-tab'] [data-group-panel] { view-transition-name: group-panel; }
 html[data-vt-scope='group-tab']::view-transition-old(root),
 html[data-vt-scope='group-tab']::view-transition-new(root) { animation: none; }
+/* Δ201/210 — 채팅→순위에서 옛 말풍선이 빈 상태 아래 겹침 */
+html[data-vt-scope='group-tab']::view-transition-group(group-panel) { overflow: clip; }
+html[data-vt-scope='group-tab']::view-transition-old(group-panel),
+html[data-vt-scope='group-tab']::view-transition-new(group-panel) { height: 100%; object-fit: none; object-position: top left; }
 /* 내 정보 대시보드·프로필·설정·보안 (CustomerDashboardPage → UnderlineTabs → SlidingPill)
    🔴 2026-09-17 오너 보고 "아래 하단바가 잔여물이 남아" 의 원인이 바로 이 두 줄의 부재였다.
    탭바만 이름을 가지면 밑줄(SlidingPill)이 **탭바 스냅샷 안에 인쇄**된다. 게다가 아래 2031 행이
@@ -2019,6 +2078,10 @@ html[data-vt-scope='sched-tab'] [data-sched-tabbar] [data-pill-active] { view-tr
 html[data-vt-scope='sched-tab'] [data-sched-panel] { view-transition-name: sched-panel; }
 html[data-vt-scope='sched-tab']::view-transition-old(root),
 html[data-vt-scope='sched-tab']::view-transition-new(root) { animation: none; }
+/* Δ1645/1569 — 메인→Q&A 에서 옛 '참가 예약·QR' 블록이 Q&A 아래 */
+html[data-vt-scope='sched-tab']::view-transition-group(sched-panel) { overflow: clip; }
+html[data-vt-scope='sched-tab']::view-transition-old(sched-panel),
+html[data-vt-scope='sched-tab']::view-transition-new(sched-panel) { height: 100%; object-fit: none; object-position: top left; }
 /* 알림 패널 쪽지·알림 */
 html[data-vt-scope='notif-tab'] [data-notif-tabbar] { view-transition-name: notif-tabbar; }
 html[data-vt-scope='notif-tab'] [data-notif-tabbar] [data-sliding-pill] { view-transition-name: notif-pill; }
@@ -2061,6 +2124,12 @@ html[data-vt-scope='crm-range'] [data-crm-rangebar] [data-pill-active] { view-tr
 html[data-vt-scope='crm-range'] [data-crm-panel] { view-transition-name: crm-panel; }
 html[data-vt-scope='crm-range']::view-transition-old(root),
 html[data-vt-scope='crm-range']::view-transition-new(root) { animation: none; }
+/* ⚠ **예방 적용 — 실측 돌출 아님.** 빈 상태 Δ0 만 쟀다(장부 RPC 를 목킹 못 해
+   데이터 있는 상태는 **측정 불가**). 구조상 목록 max-h-[28rem](476px) ↔ 빈 문구 84px 라 최대 ≈392 가능.
+   폭 고정·알약이 바 쪽이라 역효과 요소는 없음을 확인했다. 데이터 있는 매장에서 한 번 재라 */
+html[data-vt-scope='crm-range']::view-transition-group(crm-panel) { overflow: clip; }
+html[data-vt-scope='crm-range']::view-transition-old(crm-panel),
+html[data-vt-scope='crm-range']::view-transition-new(crm-panel) { height: 100%; object-fit: none; object-position: top left; }
 
 /* 새 화면에 지면색 — 두 스냅샷이 반투명으로 겹쳐 글자가 두 벌로 보이던 문제(venue-tab 실측)의 해법.
    ⚠ notif-panel 은 여기 없다 — 아래 별도 규칙 참고(이 목록은 전부 전체화면/섹션 패널이라 --surface-base 가 맞다). */
