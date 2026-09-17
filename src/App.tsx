@@ -1486,6 +1486,14 @@ export default function App() {
         // 이벤트 화면 — 홈 배너에서 바로 들어가는 길인데 목록에 빠져 있었다. 클릭 순간 청크를 받느라
         //   Suspense 폴백(불투명 스피너)이 **299ms** 떴다(실측 2026-09-08). gzip 5.2KB 라 idle 에 데워도 싸다.
         import('./components/features/EventPage'),
+        // 캘린더 — **일반 유저의 5번째 탭인데 이 목록에도, 아래 프리마운트 seq 에도 빠져 있었다.**
+        //   오너 2026-09-17: "다른 메뉴에서 캘린더로 이동하는 경우 다른 메뉴 이동과 다르게 버벅임이 있다."
+        //   실측(라이브 프로덕션 · 390×844 · 로그아웃): 첫 진입 **261ms** vs 라이브 18ms · 커뮤니티 21ms.
+        //   ⚠ 긴 작업 0 · 최장 프레임 9ms 였다 — CPU 가 버벅인 게 아니라 **청크 왕복 동안 화면이 멈춘 것**이다.
+        //   판별: 같은 청크가 캐시에 있는 두 번째 방문은 **17ms**(transferSize 0) → 스로틀이 아니라 네트워크.
+        //   업주·직원·관리자에게는 내려보내지 않는다 — 그들에겐 이 칸이 '내 매장'이라 캘린더 판 자체가 없다
+        //   (위 VenueManageTab 주석이 기록한 '게이트를 무력화해 손님에게 내려보낸' 사고의 반대 방향 적용).
+        ...(!(isOwner || isAdmin || user?.role === 'venue_staff') ? [import('./components/features/CalendarPanel')] : []),
         // 이용권 시트 — 헤더 상시 진입점 중 **유일하게 cold** 였다(오너 2026-09-17: "이용권 아이콘을 누르면 딜레이가 걸려").
         //   여는 경로가 startTransition(아래 onOpenVoucher) + `<Suspense fallback={null}>` 조합이라
         //   청크가 도착할 때까지 **스피너조차 없이 이전 화면이 그대로** 있다 — 왕복 시간이 그대로 체감 딜레이다.
@@ -1510,7 +1518,12 @@ export default function App() {
         //   청크는 위 warm() 이 이미 `isAdmin` 조건으로 받아 두므로 **첫 화면 예산은 1바이트도 늘지 않는다**
         //   (실측 2026-09-15: 첫 화면 임계 경로 전후 동일). 여기서 더하는 것은 idle 한 번의 숨김 마운트뿐이고,
         //   그게 없으면 관리자 **첫 진입만** root 전환이 통째로 빠진다(실측: 커뮤니티 첫 진입은 vt-push 가 도는데 관리자는 VT 0개).
+        // 캘린더는 **비업주에게만** 있는 5번째 칸이다 — my-store 와 같은 자리이므로 같은 대우를 한다.
+        //   tools 뒤에 두는 이유: 핵심 동선(라이브·커뮤니티·GTO)보다 뒤지만, 탭바에 상시 보이는 칸이라
+        //   프리마운트까지 해 둬야 첫 진입도 '재방문 경로'(스냅샷 뒤 flushSync)가 된다.
+        //   ⚠ 숨김 마운트 시점에는 active=false 라 CalendarPanel 의 조회 effect 가 돌지 않는다(왕복 0).
         const seq: TabId[] = [...(canStore ? (['my-store'] as TabId[]) : []), 'live', 'community', 'tools',
+          ...(canStore ? [] : (['calendar'] as TabId[])),
           ...(isAdmin ? (['admin'] as TabId[]) : [])];
         const mountNext = () => {
           const t = seq.find((x) => !visitedTabs.has(x));
