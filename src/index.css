@@ -1719,6 +1719,15 @@ html[data-vt-scope='adminpos-tab'] [data-stack-tabbar],
 html[data-vt-scope='crm-range'] [data-stack-header],
 html[data-vt-scope='crm-range'] nav[aria-label="하단 내비게이션"],
 html[data-vt-scope='crm-range'] [data-stack-tabbar] { view-transition-name: none; }
+/* 🔴 하위 탭 전환에서는 root 의 **그룹**도 얼린다.
+   아래 16개 스코프가 전부 `::view-transition-old/new(root) { animation: none }` 만 적고 있었다.
+   그건 스냅샷의 **그림**만 고정하고, 그 스냅샷을 담은 **박스**는 UA 그룹 애니가 그대로 보간한다 —
+   하위 탭마다 본문 높이가 달라 페이지 높이가 바뀌면 root 박스가 움직이고, 거기 들어 있는 것들이 같이 밀린다.
+   실측(2026-09-18 · 로컬 프로덕션 빌드 · 390×844 · 일정 상세 '메인→블라인드'):
+     ::view-transition-group(root) :: -ua-view-transition-group-anim-root   ← 돌고 있었다
+   `[data-vt-scope]` 마커는 viewTransition.ts 가 **하위 탭 전환에서만** 켜고 끝나면 지운다(:189-192).
+   즉 상위 탭 전환(root 가 실제로 밀려야 하는 vt-push-*)은 이 규칙에 안 걸린다. */
+html[data-vt-scope]::view-transition-group(root) { animation: none; }
 /* 커뮤니티 서브탭 바(sticky)도 상시 크롬 — 서브섹션 전환(root 스냅샷)에 딸려 블러·슬라이드되던 것 제외(오너 리포트).
    단 상시 켜두면 메인 탭 전환(커뮤니티→홈)에서 old-only 스냅샷이 전환 내내 잔상으로 얼어붙는다(실측) —
    서브섹션 전환 동안만 CommunityTab 이 html 에 켜는 마커로 조건부 활성(vtDir 마커와 같은 조리법). */
@@ -2099,6 +2108,23 @@ html[data-vt-scope='sched-tab']::view-transition-new(root) { animation: none; }
 html[data-vt-scope='sched-tab']::view-transition-group(sched-panel) { overflow: clip; }
 html[data-vt-scope='sched-tab']::view-transition-old(sched-panel),
 html[data-vt-scope='sched-tab']::view-transition-new(sched-panel) { height: 100%; object-fit: none; object-position: top left; }
+/* 🔴 포스터(vt-poster)는 하위 탭이 바뀌어도 **같은 그림**이다 — 전환에서 완전히 고정한다.
+   왜 샜는가: 이 이름은 CSS 가 아니라 **JS 인라인 스타일**로 붙는다
+     (ScheduleDetailModal.tsx:176 `viewTransitionName: 'vt-poster'` · ScheduleCard.tsx 는 카드→모달 모핑용).
+     그래서 index.css 만 훑는 vtNameCoverage 계약이 이 이름을 **모르고 있었다**.
+   모달이 열려 있는 동안에는 이름이 항상 붙어 있어서, 하위 탭만 바꿔도 포스터가 따로 스냅샷이 되고
+   UA 기본 연출(그룹 보간 + plus-lighter 크로스페이드)이 그대로 돌았다.
+   실측(2026-09-18 · 390×844 · 전환을 2.5s 로 늘려 중간 프레임 수집):
+     ::view-transition-group(vt-poster) :: -ua-view-transition-group-anim-vt-poster
+     ::view-transition-old(vt-poster)   :: -ua-view-transition-fade-out + -ua-mix-blend-mode-plus-lighter
+     ::view-transition-new(vt-poster)   :: -ua-view-transition-fade-in  + -ua-mix-blend-mode-plus-lighter
+   오너 리포트: "일정 포스터에 눌러보면 포스터 부분까지 같이 움직여"(2026-09-18)
+   내용이 동일한 자리라 '바 조리법'(old·new 둘 다 animation: none)이 맞다 — 같은 픽셀이 겹쳐도 눈에는 정지로 보인다.
+   내용이 바뀌는 자리라면 라벨 조리법이어야 한다(notif-actions 가 그 경우다).
+   ⚠ 카드→모달 모핑은 이 스코프가 아니라 건드리지 않는다 — sched-tab 안에서만 꺼진다. */
+html[data-vt-scope='sched-tab']::view-transition-group(vt-poster),
+html[data-vt-scope='sched-tab']::view-transition-old(vt-poster),
+html[data-vt-scope='sched-tab']::view-transition-new(vt-poster) { animation: none; }
 /* 알림 패널 쪽지·알림 */
 html[data-vt-scope='notif-tab'] [data-notif-tabbar] { view-transition-name: notif-tabbar; }
 html[data-vt-scope='notif-tab'] [data-notif-tabbar] [data-sliding-pill] { view-transition-name: notif-pill; }

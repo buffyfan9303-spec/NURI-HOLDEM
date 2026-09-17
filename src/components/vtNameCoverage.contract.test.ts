@@ -21,13 +21,31 @@
 //
 // 이 검사가 못 보는 것
 //   · 규칙이 **맞는지**는 안 본다(잘못된 배경색을 줘도 통과한다 — 그건 notifPanelBg 계약의 몫이다).
-//   · JS 로 동적 부여하는 이름(현재 0곳). CSS 선언만 센다.
+//   ⚠ 예전에 여기 "JS 로 동적 부여하는 이름(현재 0곳)" 이라고 적혀 있었는데 **사실이 아니었다** —
+//     `vt-poster` 는 ScheduleDetailModal.tsx 가 인라인 스타일로 붙이는 이름이라 CSS 전수 검사에
+//     **한 번도 안 잡혔다**. 2026-09-18 오너 리포트("일정 포스터에 눌러보면 포스터 부분까지 같이
+//     움직여")의 원인이 정확히 그 구멍이다. 아래 describe 가 이제 tsx 쪽 이름도 같이 센다.
 // 실행: npx vitest run src/components/vtNameCoverage.contract.test.ts
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const CSS = readFileSync(join(process.cwd(), 'src', 'index.css'), 'utf8');
+/** src 아래 모든 .tsx 경로(테스트 제외). */
+function tsxFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, e.name);
+    if (e.isDirectory()) out.push(...tsxFiles(full));
+    else if (e.name.endsWith('.tsx') && !e.name.includes('.test.')) out.push(full);
+  }
+  return out;
+}
+
+// ⚠ **주석을 지우고** 읽는다. 이 저장소의 주석에는 실측 로그가 그대로 들어 있어
+//   `::view-transition-group(vt-poster) :: -ua-…` 같은 문자열이 본문에 산다. 주석째 훑으면
+//   규칙을 통째로 지워도 주석이 대신 통과시켜 준다(2026-09-18 음성 대조에서 실제로 걸렸다).
+//   같은 이유로 dynamicViewportUnit 판정기도 주석을 지우고 코드만 본다.
+const CSS = readFileSync(join(process.cwd(), 'src', 'index.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
 /** `view-transition-name: X;` 로 선언된 이름 전부. `none` 은 **해제**라 대상이 아니다. */
 function declaredNames(): string[] {
@@ -60,6 +78,25 @@ describe('view-transition-name 을 준 요소는 그리는 법까지 정해져 �
       naked,
       `이름만 붙고 규칙이 없다(전환마다 루트 배경이 비쳐 깜빡인다): ${naked.join(', ')}\n` +
       '→ 바·컨테이너면 animation: none 목록에, 활성 라벨이면 라벨 목록에, 뜨는 카드면 배경 규칙에 등록해라.',
+    ).toEqual([]);
+  });
+
+  it('tsx 가 인라인으로 붙이는 이름도 규칙을 갖는다 — vt-poster 가 여기서 샜다', () => {
+    // CSS 만 훑으면 JS 로 붙는 이름은 영원히 안 보인다. 실제로 2026-09-18 까지 안 보였다.
+    const names = new Set<string>();
+    for (const f of tsxFiles(join(process.cwd(), 'src'))) {
+      const src = readFileSync(f, 'utf8');
+      for (const m of src.matchAll(/viewTransitionName:\s*'([a-zA-Z0-9_-]+)'/g)) names.add(m[1]);
+      for (const m of src.matchAll(/vtName=\{[^}]*'([a-zA-Z0-9_-]+)'/g)) names.add(m[1]);
+    }
+    expect(names.size, 'tsx 에서 이름을 하나도 못 찾았다 — 정규식이 낡았다').toBeGreaterThan(0);
+    const naked = [...names].filter((n) => n !== 'none' && !hasRule(n));
+    expect(
+      naked,
+      `tsx 가 붙인 이름에 index.css 규칙이 없다: ${naked.join(', ')}\n` +
+      '→ 이름을 주는 것은 "이 요소를 따로 그리겠다"는 선언이라, 어떻게 그릴지까지 적어야 끝난다.\n' +
+      '  vt-poster 실측(2026-09-18): 하위 탭 전환에서 UA 그룹 보간 + plus-lighter 크로스페이드가\n' +
+      '  그대로 돌아 "포스터 부분까지 같이 움직여" 로 보였다.',
     ).toEqual([]);
   });
 
