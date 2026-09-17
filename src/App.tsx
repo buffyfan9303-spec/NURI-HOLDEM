@@ -833,7 +833,7 @@ export default function App() {
   const [venueRatings, setVenueRatings] = useState<Record<string, { avg: number; count: number }>>({});
   // (별점 로드는 loadDeferred 로 이동 — 부팅 임계경로에서 제외)
   // 알림 딥링크 → 내 매장 탭의 특정 섹션(예: 📒 장부 시작 → 장부)
-  const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
+  const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | 'partners' | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
   const [eventOpen, setEventOpen] = useState(false); // 이벤트 별도 페이지
   /** 지금 보고 있는 캠페인. `?event=<slug>` 로 다른 캠페인이 올 수 있어 화면·조회가 이 값을 탄다.
@@ -2697,6 +2697,12 @@ export default function App() {
     if (link === '/my-store/ledger') {
       changeTab('my-store');
       setMyStoreDeep('ledger');
+      return;
+    }
+    // /my-store/partners (파트너 매칭 신청·수락 알림) — 없으면 알림을 눌러도 토스트로 떨어진다.
+    if (link === '/my-store/partners') {
+      changeTab('my-store');
+      setMyStoreDeep('partners');
       return;
     }
     // /admin (포스터 승인 알림)

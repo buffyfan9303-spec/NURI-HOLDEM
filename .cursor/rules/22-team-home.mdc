@@ -1,6 +1,6 @@
 ---
 description: 홈 팀 — 셸(App.tsx)·탭 구조·홈 화면·캘린더·라이브·장터·검색·알림·로그인/동의·법적 고지. 전역 레이아웃을 만질 때 붙는다.
-globs: ["src/App.tsx", "src/main.tsx", "src/index.css", "src/components/features/HomeTab.tsx", "src/components/features/HomeBannersCard.tsx", "src/components/features/Notice*.tsx", "src/components/features/AnnouncePanel.tsx", "src/components/features/Calendar*.tsx", "src/components/features/EventPage.tsx", "src/components/features/LiveGamesTab.tsx", "src/components/features/Marketplace*.tsx", "src/components/features/ListingDetailModal.tsx", "src/components/features/MyMarketModal.tsx", "src/components/features/GlobalSearchModal.tsx", "src/components/features/IntegratedSearchBar.tsx", "src/components/features/NotificationPanel.tsx", "src/components/features/AuthModal.tsx", "src/components/features/ProfileModal.tsx", "src/components/features/ConsentGateModal.tsx", "src/components/features/LegalDocsModal.tsx", "src/components/features/BusinessFooter.tsx", "src/components/features/VerifyGateSheet.tsx", "src/components/features/TierLeaderboard.tsx", "src/components/features/LeaguePanel.tsx", "src/components/features/LevelUpCelebration.tsx", "src/components/atoms/**", "src/pages/legal/**"]
+globs: ["src/App.tsx", "src/main.tsx", "src/index.css", "src/components/features/HomeTab.tsx", "src/components/features/HomeBannersCard.tsx", "src/components/features/Notice*.tsx", "src/components/features/AnnouncePanel.tsx", "src/components/features/Calendar*.tsx", "src/components/features/EventPage.tsx", "src/components/features/LiveGamesTab.tsx", "src/components/features/Marketplace*.tsx", "src/components/features/ListingDetailModal.tsx", "src/components/features/MyMarketModal.tsx", "src/components/features/GlobalSearchModal.tsx", "src/components/features/IntegratedSearchBar.tsx", "src/components/features/NotificationPanel.tsx", "src/components/features/AuthModal.tsx", "src/components/features/ProfileModal.tsx", "src/components/features/ConsentGateModal.tsx", "src/components/features/LegalDocsModal.tsx", "src/components/features/BusinessFooter.tsx", "src/components/features/VerifyGateSheet.tsx", "src/components/features/TierLeaderboard.tsx", "src/components/features/LevelUpCelebration.tsx", "src/components/atoms/**", "src/pages/legal/**"]
 alwaysApply: false
 ---
 
@@ -30,7 +30,7 @@ alwaysApply: false
 - `src/components/features/AuthModal.tsx` (914줄) — 로그인(소셜 = Google 단일, 카카오 코드는 0ea077a 로 삭제됨)
 - `src/components/features/ProfileModal.tsx` (1199줄) · `ConsentGateModal.tsx` (191줄) · `VerifyGateSheet.tsx` · `LegalDocsModal.tsx`
 - `src/components/features/BusinessFooter.tsx` (84줄) — 🔴 **법·규제. 전 화면 하단 상시 노출이 PG·카카오 심사 요건이다. 조건부 렌더로 바꾸지 마라.**
-- `src/components/features/TierLeaderboard.tsx` (1535줄) · `LeaguePanel.tsx` (359줄) · `SeasonPanel.tsx` · `LevelUpCelebration.tsx`
+- `src/components/features/TierLeaderboard.tsx` (1535줄) · `SeasonPanel.tsx` · `LevelUpCelebration.tsx`
 - `src/components/atoms/Icon.tsx` — 아이콘 진입점 · `src/components/atoms/SlidingPill.tsx` — FLIP 인디케이터(13곳에서 사용)
 - `src/index.css` — 디자인 토큰(CSS 변수). `tailwind.config.js` 가 `rgb(var(--surface-*) / <alpha-value>)` 로 받는다. **루트 폰트 17px 이 여기(:538)**
 

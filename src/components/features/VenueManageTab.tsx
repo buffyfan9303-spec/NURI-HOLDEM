@@ -54,7 +54,7 @@ import { loadRankingsEffect } from '../../lib/rankingsLoad';
 // IA2: 포스터·장부·클락·순위 4개 최상위 문(門)이 'game' 섹션의 4단계 스텝으로 통합 —
 // 순차 운영 제품은 객체형이 아니라 워크플로형 내비여야 한다(§13-C). 자식 컴포넌트 props 무변경.
 // IA3c: 프리셋·매장랭킹·매장꾸미기·이용권·POS설정 5개 문(門)이 '매장 설정' 하위탭으로 통합
-type Section = 'dashboard' | 'game' | 'calendar' | 'stats' | 'staff' | 'attendance' | 'settings';
+type Section = 'dashboard' | 'game' | 'calendar' | 'stats' | 'staff' | 'attendance' | 'partners' | 'settings';
 type GameStep = 'posters' | 'ledger' | 'clock' | 'ranking' | 'settle';
 type SettingsTab = 'page' | 'presets' | 'pos' | 'voucher' | 'optools' | 'danger';
 /** keep-alive box()·visited 의 단위 — 섹션 / 게임 스텝 / 설정 하위탭 */
@@ -144,7 +144,7 @@ const NAV_GROUPS: readonly NavGroup[] = ['오늘', '분석', '관리'];
 const MYSTORE_ORDER: readonly string[] = [
   'dashboard',
   'game', 'posters', 'ledger', 'clock', 'ranking', 'settle',
-  'calendar', 'stats', 'staff', 'attendance',
+  'calendar', 'stats', 'staff', 'attendance', 'partners',
   'settings', 'page', 'presets', 'pos', 'voucher', 'optools', 'danger',
 ];
 
@@ -156,6 +156,7 @@ const DEEP_SECTION_ALIAS: Record<string, Section | GameStep | SettingsTab> = {
   // IA3c: 구 섹션 id → 설정 하위탭('venueRank' 는 매장 페이지 탭에 병합, 구 'settings' = POS)
   venueRank: 'page', voucher: 'voucher', page: 'page', settings: 'pos', optools: 'optools',
   league: 'dashboard', // §12-A-1 제거 — 구 알림의 무음 실패 방지(대시보드 착지)
+  partners: 'partners', // 연합 대회 파트너 알림(/my-store/partners)
 };
 const normalizeDeepSection = (raw: string): Section | GameStep | SettingsTab | null => DEEP_SECTION_ALIAS[raw] ?? null;
 
@@ -179,6 +180,7 @@ const AnnouncePanelM = memo(AnnouncePanel);
 const VenueRankHubM = memo(VenueRankHub);
 const PosSettingsPanelM = memo(PosSettingsPanel);
 const StaffSelfAttendanceM = memo(StaffSelfAttendance);
+const VenueMatchPanelM = memo(lazyWithReload(() => import('./VenueMatchPanel')));
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 // PC 밀도 규약(오너 #5, 2026-08-30) — 내 매장 셸(사이드바·섹션 헤더·라이브 바·순위 입력·직원 허브)의
@@ -573,6 +575,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 자기 출퇴근을 못 보던 오게이팅 — 이 탭에 들어온 소속 구성원이면 누구나
   available.push({ id: 'attendance', label: '출근 관리', group: '관리' });
   if (staffOk) available.push({ id: 'staff', label: '직원 관리', group: '관리' });
+  // 연합 대회 파트너 매장(오너 2026-09-17: 옛 연합리그 자리에 '매칭만') — 업주만. 점수·정산 없음.
+  if (manageOk) available.push({ id: 'partners', label: '파트너 매장', group: '관리' });
   // IA3c: 프리셋·매장랭킹·매장꾸미기·이용권·POS 가 '매장 설정' 하위탭 5개로 통합
   if (staffOk || voucherView) available.push({ id: 'settings', label: '매장 설정', group: '관리' });
   // IA3d: nav 노출용 목록 — 성숙도 미달 항목 비노출(운영자·전체보기·직원 계정은 게이팅 없음).
@@ -888,6 +892,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} venueName={venueName || undefined} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
                 {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
                 {visited.includes('staff') && staffOk && box('staff', <StaffHub venueId={venueId} />)}
+                {visited.includes('partners') && manageOk && box('partners', <VenueMatchPanelM venueId={venueId} canConfigure={manageOk} />)}
                 {visited.includes('pos') && canSettingsTab('pos') && box('pos', <PosSettingsPanelM venueId={venueId} />)}
                 {visited.includes('voucher') && canSettingsTab('voucher') && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
                 {/* §7 ⑥b: 운영 도구 5종 — GTO 탭에서 이관(레지스트리는 ToolsPanel 재사용) */}
@@ -920,6 +925,7 @@ const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
   voucher: '매장이용권 발행·사용 내역 + 매장 QR(이용권·출석·가입) 인쇄',
   page: '손님 화면 탭 순서 · 내 매장 링크 · 시즌 · 순위 보드 · 칭호 · 기준 점수 · 포인트',
   staff: '구성원·권한·출근 스케줄·인건비',
+  partners: '연합 대회를 함께 열 매장 — 게시·신청·수락',
   settings: '매장 페이지 · 게임 프리셋 · POS·결제 · 운영 도구 · 위험 구역',
   // ⚠ 설명은 '이 화면에 실제로 있는 것'만 적는다 — 결제수단·할인 프리셋은 장부(세션 설정)에 있고
   //   여기엔 없다. 없는 것을 약속하면 사장님이 이 탭을 열고 찾다가 포기한다.
@@ -950,6 +956,7 @@ const SECTION_ICON: Record<Section | GameStep | SettingsTab, ReactNode> = {
   pos: ic(<><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /></>),
   optools: ic(<><rect x="4" y="2" width="16" height="20" rx="2" /><line x1="8" y1="6" x2="16" y2="6" /><line x1="8" y1="10" x2="10" y2="10" /><line x1="14" y1="10" x2="16" y2="10" /><line x1="8" y1="14" x2="10" y2="14" /><line x1="14" y1="14" x2="16" y2="14" /><line x1="8" y1="18" x2="16" y2="18" /></>),
   danger: ic(<><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>),
+  partners: ic(<><circle cx="7" cy="12" r="3" /><circle cx="17" cy="12" r="3" /><path d="M10 12h4" /></>),
   staff: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
   page: ic(<><path d="m12 19 7-7 3 3-7 7-3-3z" /><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="m2 2 7.586 7.586" /><circle cx="11" cy="11" r="2" /></>),
   settings: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>),
