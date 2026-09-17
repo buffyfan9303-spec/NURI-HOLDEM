@@ -1671,7 +1671,10 @@ function MapShell({ address, children }: { address: string; children: ReactNode 
       <a
         href={`https://map.naver.com/p/search/${encodeURIComponent(address)}`}
         target="_blank" rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-accent-200 transition-colors"
+        /* ⚠ 히트영역 — 글자만 두면 **15.9px** 이라 손가락으로 못 누른다(2026-09-17 실측).
+           위아래로 패딩을 주고 같은 만큼 음수 마진으로 당겨 **레이아웃은 그대로, 누르는 면만** 넓힌다.
+           여기는 섹션 끝의 단독 링크라 인접 타깃과 겹칠 일이 없다 — 조밀한 목록에서는 이 방법을 쓰면 안 된다. */
+        className="-my-2 inline-flex items-center gap-1 py-2 text-2xs text-ink-muted transition-colors hover:text-accent-200"
       >
         네이버 지도에서 보기 <Icon name="external" size={12} />
       </a>
