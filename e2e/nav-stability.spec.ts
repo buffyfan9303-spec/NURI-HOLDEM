@@ -173,7 +173,8 @@ test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도
     { id: 'auth', name: '로그인 모달', open: async (p) => { await p.locator('button[aria-label="로그인"]').first().click(); } },
     // 홈 일정 목록의 첫 카드(ScheduleCard ListCard = article.cv-card-list). 예전엔 하드코딩 포스터('1000만 GTD')를
     // 눌렀는데 2026-09-10 런칭 정리로 그 포스터·일정이 사라졌다 — 일정이 0건이면 아래에서 skip 한다.
-    { id: 'poster', name: '포스터 상세', open: async (p) => { await p.locator('[data-tab="home"] article.cv-card-list').first().click(); } },
+    // 정중앙 클릭은 카드 높이가 바뀌면 중첩 버튼(매장) 위로 옮겨간다 — 제목으로 좁힌다(2026-09-17).
+    { id: 'poster', name: '포스터 상세', open: async (p) => { await p.locator('[data-tab="home"] article.cv-card-list').first().getByRole('heading').click(); } },
   ];
 
   for (const ov of overlays) {

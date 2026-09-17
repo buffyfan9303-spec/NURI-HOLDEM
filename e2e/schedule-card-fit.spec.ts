@@ -278,7 +278,12 @@ for (const w of [360, 1280]) {
     const external: string[] = [];
     await mockAll(page, external);
     await openHome(page, w, 'dark', false);
-    await page.locator('main[data-tab="browse"] article.cv-card-list').first().click();
+    // ⚠ 카드 **정중앙을 누르지 않는다** — 카드 안에는 매장 버튼 같은 중첩 타깃이 있고,
+    //   카드 높이가 바뀌면 중앙점이 그 위로 옮겨가 **매장 페이지가 열린다**(2026-09-17 실측:
+    //   카드 181→116px 로 낮아지자 정중앙이 "누리 테스트 홀덤펍·서울" 버튼 위가 됐다).
+    //   이 테스트가 보려는 것은 '대회 상세의 요약 값'이지 '어디를 누르는가'가 아니므로
+    //   제목(h3)을 눌러 의도를 그대로 말한다(§7-④ getByRole 로 좁혀라).
+    await page.locator('main[data-tab="browse"] article.cv-card-list').first().getByRole('heading').click();
     await page.waitForSelector('[data-sched-panel]', { timeout: 15_000 });
     const r = await page.evaluate(() => {
       const panel = document.querySelector<HTMLElement>('[data-sched-panel]');
