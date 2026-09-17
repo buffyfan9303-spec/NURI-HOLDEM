@@ -44,6 +44,11 @@ import type { EventBoard } from '../../api/events';
 // slug 판정만 담은 순수 모듈(런타임 의존 0) — 중복 제거가 **어느 캠페인인지** 보게 하려고 여기서만 정적으로 받는다.
 import { bannerCoversEvent } from '../../lib/eventSlug';
 import { readSnap, writeSnap } from '../../lib/snapshot';
+// 추천 레일의 순서·근거 한 줄(순수 함수). 왜 이 근거인지는 lib/homeRail.ts 머리말.
+import { buildLiveFactMap, rankRail, railFact, todayLine } from '../../lib/homeRail';
+import type { ClockState } from '../../api/clock';
+import type { VisitedVenue } from '../../api/vouchers';
+import type { MyReservationRow } from '../../api/reservations';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -154,6 +159,11 @@ const MORE_CLS = 'flex items-center gap-0.5 py-2 -my-2 t-desc font-semibold text
 const ROW_CLS = 'flex w-full items-center gap-[10px] rounded-aura border card-aura px-[12px] py-[10px] text-left transition-colors hover:bg-surface-high/50 active:scale-[0.995]';
 const ROW_TILE_CLS = 'flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-input';
 
+/** 문장 속 숫자만 강조색 — 종전 '오늘 대회 <N>개' 의 색 계약을 문자열 한 줄에도 그대로 적용한다. */
+const Nums = ({ text }: { text: string }) => (
+  <>{text.split(/(\d+)/).map((t, i) => (i % 2 ? <span key={i} className="tabular-nums text-accent-300">{t}</span> : t))}</>
+);
+
 const dayLabel = (date: string) => {
   const d = new Date(`${date}T00:00:00`);
   return Number.isNaN(d.getTime()) ? date : `${d.getMonth() + 1}/${d.getDate()}(${DAYS_KO[d.getDay()]})`;
@@ -162,7 +172,12 @@ const dayLabel = (date: string) => {
 export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
   onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], onInternalLink,
+  liveClocks = [], visitedVenues = [], myTodayRes = [],
 }: {
+  /** 추천 근거(2026-09-17) — 셋 다 App 이 **이미 받아 둔** 응답이다(새 조회 0). 안 넘기면 종전 정렬 그대로다. */
+  liveClocks?: ClockState[];
+  visitedVenues?: VisitedVenue[];
+  myTodayRes?: MyReservationRow[];
   schedules: Schedule[];
   loaded: boolean;
   /** 일정 조회가 **실패**했는가(§11). 스켈레톤(로딩) · 0건(진짜 빈 상태) · 실패는 서로 다른 사건이다 —
@@ -223,14 +238,28 @@ export default function HomeTab({
   // 추천 대회 — 오늘 이후의 승인된 대회를 부스트 → 시작 순으로. **0개면 레일 자체를 그리지 않는다**
   // (§6-3: 추천 0개면 레일을 생략하고 다음 실제 콘텐츠를 앞당긴다).
   // 같은 포스터의 연속 회차(기간제 게임)는 첫 회차 1장만 — 레일에 동일 카드 도배 방지.
-  const rail = useMemo(() => {
-    const seenPoster = new Set<string>();
-    return schedules
-      .filter((s) => s.approved && s.date >= today && scheduleStatus(s.date, s.startTime) !== 'ended')
-      .sort((a, b) => Number(b.isPremium) - Number(a.isPremium) || compareByStartThenBoost(a, b))
-      .filter((s) => !s.posterUrl || (!seenPoster.has(s.posterUrl) && (seenPoster.add(s.posterUrl), true)))
-      .slice(0, RAIL_MAX);
-  }, [schedules, today]);
+  // 순서: 부스트 → 내 예약 → 가 본 매장 → 지금 뛰는 판 → 시작 순(lib/homeRail). 근거는 카드 한 줄로 말한다.
+  // ⚠ regNow 는 여기 안 받는다 — 레벨 번호는 30초 틱으로 깎을 값이 아니고(레벨은 분 단위), 클락 재조회가 갱신한다.
+  const railCtx = useMemo(() => ({
+    today,
+    visitsByVenue: new Map(visitedVenues.map((v) => [v.venueId, v.visits])),
+    reservedIds: new Set(myTodayRes.map((r) => r.scheduleId)),
+    live: buildLiveFactMap(liveClocks, schedules),
+    isEnded: (s: Schedule) => scheduleStatus(s.date, s.startTime) === 'ended',
+  }), [today, visitedVenues, myTodayRes, liveClocks, schedules]);
+  const rail = useMemo(() => rankRail(schedules, railCtx, RAIL_MAX), [schedules, railCtx]);
+
+  // 오늘 안내 — 이력이 있으면 **그 사람** 문장(lib/homeRail.todayLine), 없으면 '' 라 아래 JSX 가 종전 문구로 떨어진다.
+  // 조회 전·실패는 문장을 만들지 않는다(§11 — 없는 숫자로 문장을 쓰지 않는다).
+  const personal = loaded && !failed
+    ? todayLine({
+      visitedCount: visitedVenues.length,
+      todayAtVisited: schedules.filter((s) => s.approved && s.date === today && railCtx.visitsByVenue.has(s.venueId)
+        && scheduleStatus(s.date, s.startTime) !== 'ended').length,
+      reservedToday: myTodayRes.length,
+      openNow: clocksLoaded ? openAll.length : null,
+    })
+    : '';
 
   // 캐시 퍼스트(Phase 6 · e2e cache-first 회귀 2026-09-13): 이벤트 슬라이드만 스냅샷이 없어 재방문에도 '불러오는 중…'(aria-busy)으로
   //   시작했다. 다른 6개 키(schedules·venues·…)와 같이 마지막 보드를 스냅샷으로 두고 재검증한다.
@@ -341,15 +370,20 @@ export default function HomeTab({
             </a>
             {/* §5 역할표: 홈 짧은 제목 18/26(PC 22/30). 수치는 **도착한 것만** 적는다 —
                 일정이 안 왔으면 대회 수를, 클락이 안 왔으면 등록 가능 수를 쓰지 않는다. */}
-            <p className="mt-0.5 text-[18px] font-bold leading-[26px] text-ink-primary md:text-[22px] md:leading-[30px]">
+            {/* 한 줄 고정(h-[26px] + nowrap): 방문·예약 응답은 일정보다 늦게 오는데, 그때 문장이 바뀌며 두 줄이 되거나
+                높이가 흔들리면 아래 전부가 밀린다(home-cls.spec 이 재는 바로 그 자리). 문장은 todayLine 이 3조각으로
+                제한해 375px 에서 한 줄임을 실측했다 — 길어지면 자르는 게 아니라 **말을 줄인다**. */}
+            <p data-testid="home-today-line" className="mt-0.5 h-[26px] whitespace-nowrap text-[18px] font-bold leading-[26px] text-ink-primary md:h-[30px] md:text-[22px] md:leading-[30px]">
               {/* ⚠ 여기서 '오늘 대회 0개' 라고 적으면 그것은 **조회 실패를 사실로 위장**하는 것이다(§11).
                   수치는 '도착한 것만' 적는다는 이 줄의 원래 규칙에, 실패도 '미도착' 이라는 사실을 더한다. */}
               {!loaded
                 ? <>오늘의 대회를 불러오는 중</>
                 : failed
                   ? <>오늘 대회 정보를 불러오지 못했어요</>
-                  : <>오늘 대회 <span className="tabular-nums text-accent-300">{todayCount}</span>개</>}
-              {loaded && !failed && clocksLoaded && (
+                  : personal
+                    ? <Nums text={personal} />
+                    : <>오늘 대회 <span className="tabular-nums text-accent-300">{todayCount}</span>개</>}
+              {loaded && !failed && clocksLoaded && !personal && (
                 <> · 지금 등록 가능 <span className="tabular-nums stat-emerald">{openAll.length}</span>개</>
               )}
             </p>
@@ -448,6 +482,12 @@ export default function HomeTab({
                         <span className="mt-auto pt-0.5 text-[13px] font-semibold leading-[19px] tabular-nums text-ink-secondary">
                           참가비 {buyInText(s.buyIn?.amount)}
                         </span>
+                        {/* 추천 **근거** 한 줄 — "지금 12명 · Lv 8" · "내 예약" · "3번 가 본 매장". 정보 나열 사이트가 못 적는 줄이다.
+                            ⚠ 근거가 없어도 줄은 남는다(h 고정): 클락·방문 응답은 일정보다 **늦게** 오므로, 줄이 나중에
+                            생기면 레일 전체 높이가 밀린다(CLS 게이트). 글자만 비운다. */}
+                        {(() => { const f = railFact(s, railCtx); return (
+                          <span data-testid="home-rail-fact" className="block h-[15px] truncate t-meta font-semibold tabular-nums text-accent-300">{f}</span>
+                        ); })()}
                       </span>
                     </button>
                   </li>

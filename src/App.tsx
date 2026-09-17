@@ -80,7 +80,7 @@ import type { ClockState } from './api/clock';
 //   어느 쪽이든 **정적 import 는 아니다**: 여기 있어야 할 이유가 없는 것은 ledger 청크 쪽이다.
 const clockMod = () => import('./api/clock');
 import { buildRegInfoMap } from './lib/regStatus';
-import { myVisitedVenues } from './api/vouchers';
+import { myVisitedVenues, type VisitedVenue } from './api/vouchers';
 import { haversineKm } from './lib/geo';
 import { compareByStartThenBoost, compareByDistanceThenStart } from './lib/scheduleSort';
 import { readSnap, writeSnap } from './lib/snapshot';
@@ -1890,10 +1890,14 @@ export default function App() {
   }, []);
   refreshClocksRef.current = refreshClocks;
   // 16-1 '이어서 하기' — 최근 방문 매장 1곳(my_visited_venues 재활용, 신규 쿼리 0)
-  const [recentVenue, setRecentVenue] = useState<{ venueId: string; venueName: string | null } | null>(null);
+  // 2026-09-17: 예전엔 응답의 **첫 항목만** 남기고 배열을 버렸다. 홈 추천 레일이 '가 본 매장'을
+  //   말하려면 목록 전체가 필요한데, 그 데이터를 이미 받아 놓고 던지고 있었다 — **새 조회 0건**으로 살린다.
+  //   recentVenue(16-1 '이어서 하기')는 그 배열의 첫 항목으로 그대로 파생시킨다(동작 변화 없음).
+  const [visitedVenues, setVisitedVenues] = useState<VisitedVenue[]>([]);
+  const recentVenue = visitedVenues[0] ?? null;
   useEffect(() => {
-    if (!user) { setRecentVenue(null); return; }
-    myVisitedVenues().then((vs) => setRecentVenue(vs[0] ?? null)).catch(() => {});
+    if (!user) { setVisitedVenues([]); return; }
+    myVisitedVenues().then(setVisitedVenues).catch(() => {});
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const deferredLoadedRef = useRef(false);
   const loadDeferred = useCallback(() => {
@@ -3356,6 +3360,9 @@ export default function App() {
       {/* 홈(P1) — 결정 3섹션: 지금 등록 가능 · 포스터 · 오늘·내일 일정 */}
       {(activeTab === 'home' || visitedTabs.has('home')) && (
         <main data-tab="home" className="tab-pane" style={activeTab !== 'home' ? { display: 'none' } : undefined}>
+          {/* liveClocks·visitedVenues·myTodayRes 는 추천 레일이 '왜 이 대회인가'를 말하게 하는 세 가지다.
+              전부 **이미 받아 둔 응답**이라 새 조회가 0건이다.
+              ⚠ 이 주석을 여는 태그의 **속성 목록 안**으로 옮기지 마라 — 거기선 JSX 주석이 구문 오류다(2026-09-17 실제로 밟았다). */}
           <HomeTab
             schedules={schedules}
             loaded={schedulesLoaded}
@@ -3366,6 +3373,9 @@ export default function App() {
             onRetrySchedules={retrySchedulesCb}
             clocksLoaded={clocksLoaded}
             regInfoBySchedule={regInfoBySchedule}
+            liveClocks={liveClocks}
+            visitedVenues={visitedVenues}
+            myTodayRes={myTodayRes}
             onTools={() => changeTab('tools')}
             banners={homeBanners.banners}
             onSelect={handleScheduleSelect}

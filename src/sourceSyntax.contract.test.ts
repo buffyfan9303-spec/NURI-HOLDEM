@@ -57,3 +57,43 @@ describe('소스 구문 — 빌드가 깨질 파일이 하나도 없다', () => 
     expect(broken, `구문 오류:\n  ${broken.join('\n  ')}`).toEqual([]);
   });
 });
+
+// 🔴 2026-09-17 — 보이지 않는 제어문자가 계약을 **조용히 무력화**한 실례에서 나왔다.
+//   `nash.data.test.ts` 의 정규식 `/const BIG_ANTE\b/` 가 소스에는 **진짜 백스페이스 바이트(0x08)** 로
+//   들어가 있었다. 그러면 "BIG_ANTE 뒤에 백스페이스 문자가 오는 것" 을 찾게 되어 **영원히 매치되지 않는다** —
+//   즉 그 계약은 아무것도 지키지 않으면서 초록이었다(음성 대조를 해 보고서야 드러났다).
+//
+//   eslint 의 no-control-regex 가 잡아 주긴 했지만 그건 **정규식 안**일 때뿐이다.
+//   같은 바이트가 문자열이나 JSX 텍스트에 섞이면 아무도 보지 않는다:
+//     · 화면 문구에 섞이면 사용자에게 깨진 글자로 나간다
+//     · 비교식에 섞이면 영원히 거짓인 조건이 된다
+//   눈에 보이지 않는다는 것이 이 부류의 본질이라 **기계가 세는 수밖에 없다.**
+//
+//   ⚠ 무엇을 **세지 않는지**가 중요하다:
+//     · 탭(0x09)·LF(0x0A)·CR(0x0D) 은 제외한다. 특히 CR 을 세면 **거짓 경보 공장**이 된다 —
+//       이 저장소는 core.autocrlf=true 라 줄끝이 파일 속성이 아니라 **체크아웃 속성**이고,
+//       계정·머신이 바뀌면 값이 통째로 뒤집힌다(CLAUDE.md 참고). 그건 다른 문제다.
+//     · 한글·이모지(U+00A0 이상)는 정상이다.
+//   남는 것은 C0 제어문자(0x00~0x08 · 0x0B · 0x0C · 0x0E~0x1F)와 DEL(0x7F) 뿐이고,
+//   이건 **소스에 원시 바이트로 들어갈 정당한 이유가 없다.** 값이 꼭 필요하면 `\u0000` 처럼 이스케이프로 쓴다
+//   (그래야 diff·리뷰·복붙에서 살아남는다 — pendingViewIntent.test.ts 의 NUL 을 그렇게 바꿨다).
+describe('소스에 보이지 않는 제어문자가 없다', () => {
+  it('🔴 C0 제어문자·DEL 이 원시 바이트로 박힌 소스가 없다 — 계약을 조용히 무력화한다', () => {
+    // 이 줄만 no-control-regex 예외다 — **제어문자를 찾는 것이 이 테스트의 목적**이라 규칙과 의도가 정반대다.
+    // eslint-disable-next-line no-control-regex
+    const BAD_CHAR = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/;
+    const bad: string[] = [];
+    for (const f of FILES) {
+      // CR 은 여기서 통째로 지운다(줄끝 문제와 섞이지 않게).
+      const lines = readFileSync(f, 'utf8').replace(/\r/g, '').split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const m = lines[i].match(BAD_CHAR);
+        if (m) {
+          const cp = m[0].charCodeAt(0).toString(16).toUpperCase().padStart(4, '0');
+          bad.push(f + ':' + (i + 1) + ' 에 U+' + cp + ' — 이스케이프(\\u' + cp + ')로 바꿔라');
+        }
+      }
+    }
+    expect(bad, '원시 제어문자:' + '\n  ' + bad.join('\n  ')).toEqual([]);
+  });
+});

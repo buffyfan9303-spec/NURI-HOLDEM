@@ -107,6 +107,8 @@ describe('🔴 §11 — 홈은 조회 실패를 "없어요" 로 위장하지 않
   it('🔴 실패했을 때 "오늘 대회 0개" 라고 말하지 않는다', () => {
     expect(HOME).toMatch(/failed\s*\n?\s*\? <>오늘 대회 정보를 불러오지 못했어요<\/>/);
     expect(HOME, "실패 중에 '지금 등록 가능 N' 을 적으면 같은 거짓말이 한 줄 더 는다")
-      .toMatch(/\{loaded && !failed && clocksLoaded && \(/);
+      .toMatch(/\{loaded && !failed && clocksLoaded && !personal && \(/);
+    // 2026-09-17: 그 사람 문장(personal)도 같은 게이트 뒤에서만 만들어진다 — 실패·미도착에 이력 문장을 쓰면 같은 거짓말이다.
+    expect(HOME).toMatch(/const personal = loaded && !failed\s*\n?\s*\? todayLine\(/);
   });
 });

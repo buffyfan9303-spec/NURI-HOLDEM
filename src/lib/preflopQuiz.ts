@@ -15,7 +15,7 @@
 import { labelToCards, type Card } from './preflop';
 import { buildFreq, gridName, freqFromArray, type FreqMap } from './ranges';
 import { RANGE_SCENARIOS, type RangeScenario } from './ranges.data';
-import { HAND_ORDER, nashRange } from './nash.data';
+import { HAND_ORDER, NASH_BIG_ANTE, nashRange } from './nash.data';
 
 export type Mode = 'rfi' | 'threebet' | 'defend' | 'vs3bet' | 'push' | 'call';
 export const MODES: { id: Mode; label: string }[] = [
@@ -77,7 +77,7 @@ function weightedPick(freqMap: FreqMap): string {
 
 const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
 const scenariosOf = (mode: Mode): RangeScenario[] => RANGE_SCENARIOS.filter((s) => CHART_GROUPS[mode]?.includes(s.group));
-const nashFreq = (kind: 'shove' | 'callBB' | 'callSB', k: number, stack: number): FreqMap => freqFromArray(nashRange(kind, k, stack, false), HAND_ORDER);
+const nashFreq = (kind: 'shove' | 'callBB' | 'callSB', k: number, stack: number): FreqMap => freqFromArray(nashRange(kind, k, stack, NASH_BIG_ANTE), HAND_ORDER); // 차트와 같은 표(빅 앤티) — 오답 노트 '차트에서 보기' 와 채점이 어긋나지 않게
 
 /** 차트 스팟 1개의 액션별 FreqMap + continue 합(샘플링용 — 3벳 0.5 + 콜 0.5 는 continue 1) */
 function chartFreqs(scen: RangeScenario): { acts: { label: string; freq: FreqMap }[]; total: FreqMap } {
@@ -105,7 +105,7 @@ function pushQuiz(k: number, stack: number, hand: string): Quiz | null {
   const p = PUSH_POS.find((x) => x.k === k);
   if (!p) return null;
   return {
-    mode: 'push', key: `push|${k}-${stack}|${hand}`, posLabel: p.label, situ: `${stack}bb · 첫 진입`,
+    mode: 'push', key: `push|${k}-${stack}|${hand}`, posLabel: p.label, situ: `${stack}bb · 첫 진입 · 빅 앤티`,
     hand, cards: labelToCards(hand), stackBb: stack, acts: [{ label: '올인', freq: nashFreq('shove', k, stack).get(hand) ?? 0 }],
   };
 }
@@ -114,7 +114,7 @@ function callQuiz(seatId: string, k: number, stack: number, hand: string): Quiz 
   const shover = PUSH_POS.find((x) => x.k === k);
   if (!seat || !shover || k < seat.minK) return null;
   return {
-    mode: 'call', key: `call|${seat.id}-${k}-${stack}|${hand}`, posLabel: seat.label, situ: `${stack}bb · ${shover.label} 올인`,
+    mode: 'call', key: `call|${seat.id}-${k}-${stack}|${hand}`, posLabel: seat.label, situ: `${stack}bb · ${shover.label} 올인 · 빅 앤티`,
     hand, cards: labelToCards(hand), stackBb: stack, vs: { label: shover.label, bb: stack },
     acts: [{ label: '콜', freq: nashFreq(seat.kind, k, stack).get(hand) ?? 0 }],
   };

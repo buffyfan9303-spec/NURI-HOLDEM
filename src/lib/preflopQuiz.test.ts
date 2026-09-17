@@ -122,10 +122,10 @@ describe('makeQuiz(mode, key) · 오답 키 복원', () => {
   });
   it('push 키도 포지션·스택·핸드가 그대로 돌아온다', () => {
     const back = makeQuiz('push', 'push|2-10|A5s');
-    expect(back).toMatchObject({ mode: 'push', key: 'push|2-10|A5s', posLabel: 'BTN', situ: '10bb · 첫 진입', hand: 'A5s', stackBb: 10, acts: [{ label: '올인', freq: expect.any(Number) }] });
+    expect(back).toMatchObject({ mode: 'push', key: 'push|2-10|A5s', posLabel: 'BTN', situ: '10bb · 첫 진입 · 빅 앤티', hand: 'A5s', stackBb: 10, acts: [{ label: '올인', freq: expect.any(Number) }] });
   });
   it('올인 콜 키 — SB 콜은 셔버가 SB(k=1)면 데이터가 없어 복원 대신 새 문제', () => {
-    expect(makeQuiz('call', 'call|sb-2-10|A5s')).toMatchObject({ key: 'call|sb-2-10|A5s', posLabel: 'SB', situ: '10bb · BTN 올인', vs: { label: 'BTN', bb: 10 } });
+    expect(makeQuiz('call', 'call|sb-2-10|A5s')).toMatchObject({ key: 'call|sb-2-10|A5s', posLabel: 'SB', situ: '10bb · BTN 올인 · 빅 앤티', vs: { label: 'BTN', bb: 10 } });
     expect(makeQuiz('call', 'call|sb-1-10|A5s').key).not.toBe('call|sb-1-10|A5s');
   });
   it('사라진 스팟 키·다른 모드 접두는 조용히 새 문제를 뽑는다(키가 달라진다)', () => {
