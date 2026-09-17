@@ -1,4 +1,5 @@
 // src/components/features/tools/glossary.data.ts
+// © 2026 엔에이치홀딩스(NURI HOLDEM). 용어·개념 자체는 공용 사실이라 저작권 대상이 아니고, 설명문(desc)만 자체 작성물이다.
 // 홀덤 용어사전 — 앱 전역 단일 출처(Single Source of Truth).
 //
 // 왜 파일이 갈라졌나: GKR-4 에서 이 데이터는 GlossaryPanel.tsx 안의 const 였다.

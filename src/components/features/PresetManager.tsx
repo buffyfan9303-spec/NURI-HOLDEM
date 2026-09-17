@@ -171,15 +171,14 @@ export default function PresetManager({ venueId }: { venueId: string }) {
 
   return (
     <section className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-2xs text-ink-muted">자주 여는 게임의 내용·듀레이션을 프리셋으로 저장해 두고 재사용하세요.</p>
+      <div className="flex items-center justify-end gap-2">
         <button type="button" onClick={startNew} className="btn-ghost shrink-0 px-3 py-1 text-2xs">빈 폼으로 만들기</button>
       </div>
       {/* PL3 생성 경로 역전 — 기본 경로는 '지난 게임에서 만들기'(내용이 채워진 채 열림, 이름만 지으면 끝).
           마감 장부 회차(운영 중 수정까지 반영된 스냅샷)가 최우선 후보, 포스터가 그다음. */}
       {(rounds.length > 0 || recent.length > 0) && (
         <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-2.5">
-          <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="zap" size={12} className="shrink-0" />지난 게임에서 프리셋 만들기. 내용이 채워진 채 열려요</p>
+          <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="zap" size={12} className="shrink-0" />지난 게임에서 프리셋 만들기</p>
           {rounds.length > 0 && (
             <div className="mb-1.5 flex flex-wrap gap-1.5">
               {rounds.map((r) => (
@@ -198,11 +197,10 @@ export default function PresetManager({ venueId }: { venueId: string }) {
               </button>
             ))}
           </div>
-          {rounds.length > 0 && <p className="mt-1.5 text-2xs text-ink-muted">초록 칩(장부)은 마감 시점의 클락 설정·할인·딜러까지 담긴 완성본입니다.</p>}
         </div>
       )}
       {presets === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
-        : presets.length === 0 ? <p className="rounded-aura border card-aura py-6 text-center text-2xs text-ink-muted">저장된 프리셋이 없습니다. 위 ‘지난 게임에서 만들기’가 가장 빠릅니다.</p>
+        : presets.length === 0 ? <p className="rounded-aura border card-aura py-6 text-center text-2xs text-ink-muted">저장된 프리셋이 없습니다.</p>
           : <ul className="space-y-1.5">{presets.map((p) => (
             <li key={p.id} className="rounded-aura border card-aura px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">

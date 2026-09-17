@@ -450,7 +450,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
                 {(form.blindLevels?.length ?? 0) > 0 && <button type="button" onClick={() => setBlinds(() => [])} className="btn-ghost text-2xs px-2 hover:text-danger-light">전체 비우기</button>}
               </div>
               {(form.blindLevels?.length ?? 0) === 0 ? (
-                <p className="text-2xs text-ink-muted text-center py-3">자동 생성 후 값을 수정하거나 행을 추가하세요. 비워두면 기본(파이널롤백) 표가 표시됩니다.</p>
+                <p className="text-2xs text-ink-muted text-center py-3">비워두면 기본(파이널롤백) 표가 표시됩니다.</p>
               ) : (
                 <div className="max-h-64 overflow-y-auto space-y-1">
                   {(form.blindLevels ?? []).map((l, i) => (
@@ -671,7 +671,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         {!isEdit && presetVenueId && (
           <label className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-xs text-ink-secondary">
             <input type="checkbox" checked={alsoPreset} onChange={(e) => setAlsoPreset(e.target.checked)} className="h-4 w-4 accent-accent-300" />
-            이 설정을 <b className="text-ink-primary">게임 프리셋으로도 저장</b> — 다음 장부·클락에서 한 번에 불러와요
+            이 설정을 <b className="text-ink-primary">게임 프리셋으로도 저장</b>
           </label>
         )}
 

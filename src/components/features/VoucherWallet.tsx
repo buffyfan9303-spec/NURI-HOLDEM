@@ -373,7 +373,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
               남은 두 경로는 둘 다 현장 증빙이 있다: 벽에 붙은 매장 QR, 또는 업주가 알려 주는 전화번호.
               서버에서도 같은 커밋으로 redeem_my_voucher 실행 권한을 회수했다(20260907d) — UI 만 내리면
               콘솔에서 그대로 부를 수 있으므로 둘을 함께 막아야 한다. */}
-          <p className="text-2xs text-ink-muted">발급 매장(<b className="text-ink-secondary">{stack.venueName ?? '확인 중'}</b>)에서만 사용됩니다. <b className="text-ink-secondary">매장에서</b> 아래 방법 중 하나로 사용해 주세요.</p>
+          <p className="text-2xs text-ink-muted">발급 매장(<b className="text-ink-secondary">{stack.venueName ?? '확인 중'}</b>)에서만 사용됩니다.</p>
           <button type="button" onClick={() => setMode('qr')} className="btn-primary inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="qr" size={16} /> 매장 QR 스캔해서 사용</button>
           <button type="button" onClick={() => setMode('phone')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="phone" size={16} /> 매장 업주 전화번호로 전송</button>
         </>)}

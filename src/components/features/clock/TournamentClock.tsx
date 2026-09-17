@@ -1061,7 +1061,7 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
       {finishRows && state.sessionDate && active && (
         <Modal open onClose={() => { setFinishRows(null); setEndAfterFinish(false); }} title="입상 순위 입력" maxWidth="md" variant="sheet">
           <div className="space-y-2 p-4">
-            <p className="text-2xs text-ink-muted">저장하면 매장 순위·시즌에 자동 반영 · 이름은 장부에서 자동완성 · 등수만 기록합니다(상금 입력 없음).</p>
+            <p className="text-2xs text-ink-muted">등수만 기록합니다(상금 입력 없음) · 저장하면 매장 순위·시즌에 반영됩니다.</p>
             <datalist id="clk-finish-players">
               {[...new Set(buyins.map((b) => b.playerName).filter(Boolean))].map((n) => <option key={n} value={n} />)}
             </datalist>
@@ -1285,10 +1285,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3 space-y-2">
         <p className="text-base font-bold text-accent-300">프리셋 · 클릭해 불러오기</p>
         <PresetPicker key={pickerKey} venueId={venueId} scope="clock" onApply={applyGamePreset}
-          note="제목·블라인드·스택·레지레벨·얼리·상금을 한 번에 채웁니다(수정 가능). 프리셋 저장·수정은 [내 매장 → 프리셋]에서." />
-        {presets.length === 0 && (
-          <p className="text-2xs text-ink-muted">프리셋 저장·관리는 [내 매장 → 프리셋]에서. '지난 게임에서 만들기'로 1탭에 만들 수 있어요.</p>
-        )}
+          note="프리셋 저장·수정은 [내 매장 → 프리셋]에서." />
         {/* 구 클락 프리셋 — 불러오기·삭제만 유지(신규 저장 진입점 0), 변환 버튼으로 게임 프리셋에 흡수 */}
         {presets.length > 0 && (<>
           <div className="flex items-center justify-between gap-2 pt-1">
@@ -1318,7 +1315,6 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
             className="w-full rounded-input border border-accent-400/40 bg-accent-300/12 py-2 text-xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 disabled:opacity-50">
             {convertBusy ? '가져오는 중…' : `클락 프리셋 ${presets.length}개 → 게임 프리셋으로 가져오기 (1회 변환)`}
           </button>
-          <p className="text-2xs text-ink-muted">가져오면 포스터·장부·클락 공용이 돼요. 구형은 ✕로 정리.</p>
         </>)}
       </section>
 
@@ -1334,7 +1330,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         </div>
         <label className="flex items-center gap-2 text-xs text-ink-secondary">
           <input type="checkbox" checked={cfg.isAddon} onChange={(e) => set({ isAddon: e.target.checked })} className="accent-accent-300 w-4 h-4" />
-          애드온 게임 (라이브에 ADD-ON 표시 · 켜야 애드온 스택 입력 가능)
+          애드온 게임
         </label>
         <div className="grid grid-cols-3 gap-2">
           {/* 2026-09-14: 3열 그리드 99px 칸에서 `18)` 이 고아로 떨어졌다 — 전체 레벨 수를 placeholder 로 옮긴다(정보 유지). */}
@@ -1342,8 +1338,8 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <Field label="최대 레벨 (자동생성용)"><input type="number" inputMode="numeric" min="1" max="60" value={cfg.maxLevel || ''} onChange={(e) => set({ maxLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
           <Field label="미스터리 바운티"><input type="number" inputMode="numeric" value={cfg.mysteryBounty || ''} onChange={(e) => set({ mysteryBounty: +e.target.value || 0 })} className={numInput} /></Field>
         </div>
-        <button type="button" onClick={autoGenerate} className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-input bg-accent-300/12 text-accent-300 border border-accent-400/40 text-xs font-bold hover:bg-accent-300/20">
-          <Icon name="settings" size={14} className="shrink-0" />블라인드 자동 생성 — 등록마감({cfg.regCloseLevel || '-'})·최대({cfg.maxLevel || 15})레벨 기준 (마감 후 가파르게)
+        <button type="button" onClick={autoGenerate} className="w-full inline-flex items-center justify-center gap-1.5 whitespace-nowrap py-2 rounded-input bg-accent-300/12 text-accent-300 border border-accent-400/40 text-xs font-bold hover:bg-accent-300/20">
+          <Icon name="settings" size={14} className="shrink-0" />블라인드 자동 생성 · 마감 {cfg.regCloseLevel || '-'} · 최대 {cfg.maxLevel || 15}레벨
         </button>
       </section>
 
@@ -1391,7 +1387,6 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
             <button type="button" onClick={() => applyBulkFrom(bulkFrom, bulkFromMin)} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-accent-300/15 text-accent-300 border border-accent-400/40 hover:bg-accent-300/25">적용</button>
           </div>
           <button type="button" onClick={() => setBulkFrom(cfg.regCloseLevel || 9)} className="inline-flex items-center gap-1 text-2xs text-accent-300/90 hover:text-accent-300"><Icon name="undo" size={12} className="shrink-0" />레지 마감 레벨({cfg.regCloseLevel || 9})부터로 설정</button>
-          <p className="text-2xs text-ink-muted">레지 마감 후 블라인드가 길어지면, 마감 레벨부터 다른 듀레이션을 일괄 적용하세요.</p>
         </div>
         <div className="space-y-1">
           {cfg.levels.map((l, i) => (

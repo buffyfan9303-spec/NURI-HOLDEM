@@ -968,7 +968,6 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
           <button type="button" onClick={onClose} aria-label="닫기" className="hit text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-        <p className="mb-3 text-2xs leading-relaxed text-ink-muted">활동점수가 쌓이면 레벨이 오릅니다. 지금은 <b className="text-accent-300">Lv {cur.level} · {cur.title}</b>.</p>
         <ul className="space-y-1.5">
           {tiers.map((t) => {
             const isCur = t.level === cur.level;

@@ -156,7 +156,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
               <li className="flex items-start gap-2">
                 <Icon name="check-circle" size={13} className="mt-px shrink-0 text-emerald-400" />
                 <p className="text-2xs leading-relaxed text-ink-muted">
-                  <b className="text-ink-secondary">출석</b> — 매장 비치 체크인 QR. 하루 한 번이면 충분해요.
+                  <b className="text-ink-secondary">출석</b> — 매장 비치 체크인 QR
                 </p>
               </li>
               <li className="flex items-start gap-2">
@@ -192,7 +192,6 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
                   <span className="text-2xs text-ink-secondary">QR 없이 · 업주 번호</span>
                 </div>
               </div>
-              <p className="mt-2 text-2xs leading-relaxed text-ink-muted">보유한 매장만 보입니다. 장수를 정하고 한 번 더 확인한 뒤 보냅니다.</p>
               <ul className="mt-2 space-y-1.5">
                 {byVenue.map((g) => (
                   <li key={g.venueId}>
@@ -437,7 +436,7 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
 
         {step === 'phone' && (
           <div className="space-y-2">
-            <p className="text-2xs text-ink-muted">발급 매장 <b className="text-ink-secondary">업주 전화번호</b>를 입력하세요. 번호가 맞아야 서버가 보내 줍니다.</p>
+            <p className="text-2xs text-ink-muted">발급 매장 <b className="text-ink-secondary">업주 전화번호</b>를 입력하세요.</p>
             <input value={phone} onChange={(e) => { setPhone(e.target.value); setTarget(null); setAgreed(false); }}
               inputMode="tel" autoComplete="tel" placeholder="010-0000-0000" aria-label="업주 전화번호"
               className="input h-11 w-full text-sm" />
@@ -470,7 +469,7 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
                 승인 전 취소·매장 거절·자동 마감이면 서버가 이용권을 지갑으로 되돌린다.
                 홈 배너는 이미 '이용권은 지갑으로 돌아갔어요'(App.tsx:3183) 라고 말한다 — 두 화면이 어긋나면 안 된다.
                 더블체크 체크박스는 그대로 둔다: 경고는 '못 돌린다'가 아니라 '승인되면 확정된다'로 한다. */}
-            <p className="text-2xs leading-relaxed text-ink-muted">보낸 이용권은 매장 장부에 사용 요청으로 올라가고, 운영자가 <b className="text-ink-secondary">승인하면 확정됩니다.</b> 승인 전에 취소하거나 매장이 거절하면 지갑으로 돌아옵니다.</p>
+            <p className="text-2xs leading-relaxed text-ink-muted">운영자가 <b className="text-ink-secondary">승인하면 확정됩니다.</b> 승인 전에 취소하거나 매장이 거절하면 지갑으로 돌아옵니다.</p>
             {/* 더블체크 — 버튼을 한 번 더 누르는 건 확인이 아니다. 장수를 다시 인정하게 만든다. */}
             <label className="flex cursor-pointer items-start gap-2 rounded-input border border-border-default px-3 py-2.5">
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[rgb(var(--accent-400))]" />

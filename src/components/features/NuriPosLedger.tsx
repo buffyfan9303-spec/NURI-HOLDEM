@@ -2515,7 +2515,6 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <option value="">연결 안 함 / 직접 입력</option>
             {schedules.map((s) => <option key={s.id} value={s.id}>{s.date} · {s.title} · 바인 {(s.buyIn?.amount ?? 0).toLocaleString()}</option>)}
           </select>
-          <p className="mt-1 text-xs text-ink-muted">선택하면 게임명·바인 단가·유형을 자동으로 불러옵니다(수정 가능).</p>
         </Field>
       )}
 
@@ -2644,7 +2643,6 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <EarlyNum label="스타팅 스택" value={startStack} onChange={setStartStack} suffix="칩" disabled={!!clockState?.running} />
           <EarlyNum label="리바인 스택" value={rebuyStack} onChange={setRebuyStack} suffix="칩" disabled={!!clockState?.running} />
         </div>
-        <p className="text-2xs text-ink-muted mt-1 leading-relaxed">첫 바인은 스타팅 스택(+얼리 추가스택), 2번째부터는 리바인 스택을 받습니다. 평균 스택·라이브 보드에 반영됩니다.</p>
       </Field>
 
       <Field label="얼리 설정 · 연동 클락 (추가 스택 · 레벨)">
@@ -2704,7 +2702,6 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <span className="text-2xs text-ink-muted leading-snug">애드온이 있으면 켜서 스택을 입력하세요.</span>
           )}
         </div>
-        {isAddon && <p className="text-2xs text-ink-muted mt-1">애드온 스택은 클락에 표시됩니다.</p>}
       </Field>
 
       <Field label="매장이용권 발행/시상 · 선택 (당일 발급 장수)">
@@ -2713,7 +2710,6 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             placeholder="0" className="input w-full text-sm pr-7 tabular-nums" />
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">장</span>
         </div>
-        <p className="text-2xs text-ink-muted mt-1">오늘 발행·시상한 매장이용권 수. 대시보드 '매장이용권' 카드에 합산됩니다.</p>
       </Field>
 
       {/* W2-2 VCH-1b: '바인 1회당 이용권 자동 적립' 입력 UI 제거 — 문체부 '적립→입장료' 패턴 회피(§12-A-3).

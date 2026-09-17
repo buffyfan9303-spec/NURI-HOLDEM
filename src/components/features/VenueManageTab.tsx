@@ -1682,7 +1682,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                 className="inline-flex min-h-9 items-center text-xs font-bold px-2.5 py-1.5 rounded-input border bg-surface-float text-accent-300 dark:text-accent-200 border-dashed border-accent-400/40 hover:bg-accent-300/10">+ 직접 추가</button>
             </Section>
 
-            <p className="t-desc break-keep text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 골라 입력하세요. 메인·사이드·기타를 선택해 순위를 넣으면 그 게임 순위만 따로 저장·표시됩니다. <b className="text-accent-300 dark:text-accent-200">✓</b> 표시는 이미 입력된 게임입니다.</p>
+            <p className="t-desc break-keep text-ink-muted">게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 골라 입력하세요. <b className="text-accent-300 dark:text-accent-200">✓</b> 는 입력된 게임입니다.</p>
           </div>
         );
       })()}
@@ -1945,7 +1945,7 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
       <div className="text-center space-y-1">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-300/15 text-accent-300"><Icon name="store" size={26} /></div>
         <h2 className="text-base font-bold text-ink-primary">내 매장 만들기</h2>
-        <p className="t-desc break-keep text-ink-muted">매장 정보를 입력하면 NURI HOLDEM 커뮤니티에 매장이 등록됩니다.<br />운영자 승인 후 일정탐색·커뮤니티에 공개돼요.</p>
+        <p className="t-desc break-keep text-ink-muted">운영자 승인 후 일정 탐색·커뮤니티에 공개돼요.</p>
         {/* 신규 업주 온보딩 — 운영 가이드 슬라이드로 전체 흐름 먼저 파악 */}
         <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
           className="mx-auto inline-flex items-center gap-1 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-2 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
@@ -1977,7 +1977,7 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         <button type="button" disabled={!ready || busy} onClick={submit} className="btn-primary w-full py-3 text-sm font-bold disabled:opacity-50">
           {busy ? '생성 중…' : '+ 매장 생성하기'}
         </button>
-        <p className="t-desc break-keep text-ink-muted">* 표시는 필수예요. 생성 후 ‘매장 꾸미기·설정’에서 추가 정보(갤러리·테마·블라인드 등)를 채울 수 있어요.</p>
+        <p className="t-desc break-keep text-ink-muted">* 필수 항목</p>
       </div>
     </div>
   );

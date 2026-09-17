@@ -44,14 +44,15 @@ export function ScenarioQuizCard({ sc, picked, onPick, badge, banner, footer }: 
           <span className="flex items-center gap-1">
             <span className="text-2xs text-ink-muted mr-0.5">내 핸드</span>
             {cards.map((c) => (
-              <span key={c} className={['rounded-[5px] border border-border-default bg-surface-base px-1.5 py-1 text-sm font-extrabold', suitColor(c)].join(' ')}>{c}</span>
+              <span key={c} className={['rounded-[5px] border border-border-default bg-surface-base px-1 py-1 text-sm font-extrabold', suitColor(c)].join(' ')}>{c}</span>
             ))}
           </span>
+          {/* 보드 5장 + 구분점 2개는 px-1.5 로 320px 에서 246>231 로 넘쳤다(실측) — px-1 로 한 줄에 넣는다 */}
           {boardCards.length > 0 && (
             <span className="flex items-center gap-1">
               <span className="text-2xs text-ink-muted mr-0.5">보드</span>
               {boardCards.map((c, i) => c === '/' ? <span key={i} className="text-ink-muted">·</span> : (
-                <span key={i} className={['rounded-[5px] border border-border-default bg-surface-base px-1.5 py-1 text-sm font-extrabold', suitColor(c)].join(' ')}>{c}</span>
+                <span key={i} className={['rounded-[5px] border border-border-default bg-surface-base px-1 py-1 text-sm font-extrabold', suitColor(c)].join(' ')}>{c}</span>
               ))}
             </span>
           )}

@@ -1,0 +1,41 @@
+NURI HOLDEM — All Rights Reserved
+Copyright (c) 2026 엔에이치홀딩스 (NH Holdings)
+
+이 저장소는 **공개(public)** 되어 있지만 오픈소스가 아닙니다.
+소스를 읽을 수 있다는 것과 쓸 수 있다는 것은 다릅니다.
+
+권리자의 사전 서면 허락 없이 다음을 할 수 없습니다.
+  · 이 저장소의 소스 코드·데이터·디자인 자산의 복제, 배포, 전송, 전시
+  · 2차적 저작물 작성(수정·번안·개작 포함)
+  · 상업적·비상업적 이용을 불문한 재사용
+
+---
+
+## 저장소 안에 있지만 **우리 것이 아닌 것**
+
+저작권 표기는 틀리면 그 자체가 문제가 되므로, 출처가 다른 것을 여기 분명히 적습니다.
+
+### 제3자 저작물
+- **Poker TDA 토너먼트 규칙** — © Poker Tournament Directors Association.
+  앱 안의 규칙 본문은 TDA 의 문서이며 누리의 저작물이 아닙니다.
+  한글 번역의 출처 표기는 앱 화면(도구 > 규칙 · 대회 > TDA 규칙)에 있습니다.
+- **글꼴**
+  - Pretendard — SIL Open Font License 1.1, © Kil Hyung-jin. 라이선스 전문을 `public/fonts/pretendard/OFL.txt` 에 동봉합니다.
+  - NuriMarks (Noto Emoji 서브셋) — SIL Open Font License 1.1, © Google.
+    라이선스 전문을 `public/fonts/nuri-marks/OFL.txt` 에 동봉합니다.
+    OFL 의 예약 글꼴 이름(Reserved Font Name) 규정을 지키기 위해 "Noto" 를 이름에 쓰지 않습니다.
+- **오픈소스 의존성** — React, Supabase, Sentry, lucide-react(ISC), @dnd-kit, qrcode,
+  html5-qrcode(Apache-2.0) 등. 각 라이선스와 저작권 고지는 `node_modules/<패키지>/` 안의
+  LICENSE 파일에 있으며, 해당 라이선스가 요구하는 고지 의무를 따릅니다.
+
+### 저작권 대상이 아닌 것
+포커의 규칙 자체(핸드 족보의 순서, 확률, 블라인드 구조 등)는 **사실**이므로 누구의 저작물도 아닙니다.
+누리가 권리를 주장하는 것은 그것을 **설명한 문장·편집·배열·화면**이지 사실 자체가 아닙니다.
+
+### 이용자가 올린 것
+게시글·후기·포스터 이미지 등 회원이 작성·업로드한 콘텐츠의 저작권은 **작성한 회원에게** 있습니다.
+서비스는 이용약관 제11조에 따른 범위에서만 이를 이용합니다.
+
+---
+
+문의: 앱 하단 사업자 정보의 연락처

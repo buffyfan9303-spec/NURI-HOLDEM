@@ -26,9 +26,11 @@ const POSITIONS: { k: number; label: string; desc: string }[] = [
 
 type View = 'shove' | 'callBB' | 'callSB';
 /** 토글 문구 — 알약은 **4글자 이내 + nowrap**(오너 2026-09-17: '빅블라인드가 콜' 이 두 줄로 쪼개졌다).
- *  뜻은 차트 바로 위 한 줄 문장(VIEW_SENTENCE)이 말한다 — 알약 안에 설명을 넣지 않는다. */
+ *  뜻은 차트 바로 위 한 줄 문장(VIEW_SENTENCE)이 말한다 — 알약 안에 설명을 넣지 않는다.
+ *  문장은 **9글자 이내·세 갈래 같은 길이**: '빅블라인드(BB)가 콜할 수 있는 핸드' 는 320px 에서 두 줄(38px)이 되어
+ *  알약을 누를 때마다 판이 튀었다(오너 2026-09-17 "연결성이 없다"). 약어는 알약과 같은 말을 쓴다 — 되풀이 풀이 없음. */
 const VIEW_LABEL: Record<View, string> = { shove: '올인', callBB: 'BB 콜', callSB: 'SB 콜' };
-const VIEW_SENTENCE: Record<View, string> = { shove: '내가 올인할 수 있는 핸드', callBB: '빅블라인드(BB)가 콜할 수 있는 핸드', callSB: '스몰블라인드(SB)가 콜할 수 있는 핸드' };
+const VIEW_SENTENCE: Record<View, string> = { shove: '내가 올인하는 핸드', callBB: 'BB가 콜하는 핸드', callSB: 'SB가 콜하는 핸드' };
 
 export default function PushFoldChart({ initialK, initialStack, initialView, highlight }: {
   /** 오답 노트 '차트에서 보기' — 그 포지션·스택·셀(올인 콜 오답은 콜 표)로 바로 진입.
@@ -110,8 +112,9 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
       {/* 보기 — 내가 올인하는 쪽인가, 올인을 받는 쪽인가(공용 세그먼트) */}
       <SegmentedTabs items={viewItems} value={effView} onChange={setView} grow className="w-full [&_button]:whitespace-nowrap" />
 
-      {/* 차트 바로 위 한 줄 — 자리·스택·보기 세 축을 문장 하나로 읽는다(약어의 뜻도 여기서 풀린다). 글자를 더 얹지 않는다. */}
-      <p className="text-2xs font-bold leading-relaxed text-ink-primary" data-testid="pushfold-readback">
+      {/* 차트 바로 위 한 줄 — 자리·스택·보기 세 축을 문장 하나로 읽는다. 글자를 더 얹지 않는다.
+          nowrap: 어떤 자리·보기 조합이든 높이가 같아야 알약을 눌러도 판이 안 튄다(실측 320px·UTG(9인)·SB 콜 = 19px 한 줄). */}
+      <p className="text-2xs font-bold leading-relaxed text-ink-primary whitespace-nowrap" data-testid="pushfold-readback">
         {pos.label} · {stack}bb · 빅 앤티 — {VIEW_SENTENCE[effView]}
       </p>
 

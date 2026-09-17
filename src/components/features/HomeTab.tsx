@@ -589,7 +589,7 @@ export default function HomeTab({
             <div className="rounded-aura border card-aura px-3 py-4">
               {/* 빈 상태는 **무엇이 없고 지금 무엇을 할 수 있는지**를 말한다 — '오늘·내일'이라는 창이
                   비었을 뿐 전체 일정에는 있을 수 있다는 것이 사용자가 알아야 할 사실이다. */}
-              <p className="t-body text-ink-muted">오늘·내일 예정 대회가 아직 없어요. 다음 날짜에는 열려 있을 수 있어요.</p>
+              <p className="t-body text-ink-muted">오늘·내일 예정 대회가 없어요</p>
               <button type="button" onClick={onExplore}
                 className="mt-2 inline-flex items-center gap-1 rounded-badge bg-surface-high px-3 py-2 t-desc font-bold text-ink-secondary transition-colors hover:bg-surface-float/70">
                 전체 일정에서 찾아보기 <Icon name="chevron-right" size={13} />

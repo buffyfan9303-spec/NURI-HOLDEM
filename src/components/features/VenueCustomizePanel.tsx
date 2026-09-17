@@ -84,7 +84,7 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
     <div className="space-y-3">
       <section className="rounded-aura border card-aura p-3 space-y-2">
         <h3 className="text-sm font-bold text-ink-primary">매장 페이지 탭 순서</h3>
-        <p className="text-2xs text-ink-muted">손님이 매장을 열었을 때 보이는 탭 순서를 정하세요. 가장 위가 가장 왼쪽에 노출됩니다.</p>
+        <p className="text-2xs text-ink-muted">가장 위가 가장 왼쪽에 노출됩니다.</p>
         <ul className="space-y-1">
           {order.map((k, i) => {
             const t = PAGE_TABS.find((x) => x.key === k)!;
@@ -174,7 +174,7 @@ function VenueContactSection({ venueId }: { venueId: string }) {
     <section className="rounded-aura border card-aura p-3 space-y-3">
       <div className="space-y-1">
         <h3 className="text-sm font-bold text-ink-primary">위치 · 연락처 · 영업시간 · 카카오톡</h3>
-        <p className="text-2xs text-ink-muted">매장 페이지 「매장 소개」에 그대로 나갑니다. 연락처는 <span className="font-semibold text-accent-300">1개 필수 · 최대 5개</span>이며, 손님 화면에서 번호마다 따로 전화가 걸립니다.</p>
+        <p className="text-2xs text-ink-muted">연락처는 <span className="font-semibold text-accent-300">1개 필수 · 최대 5개</span>입니다.</p>
       </div>
       {!loaded ? (
         <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
@@ -412,7 +412,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
         {/* ② 커스텀 보드 만들기 — 목록에 없는 랭킹을 직접 */}
         <section className="rounded-card border border-violet-500/30 bg-violet-500/[0.04] p-3 space-y-2">
           <h3 className="text-sm font-bold text-ink-primary">커스텀 보드 만들기 <span className="text-2xs font-normal text-ink-muted">(최대 {MAX_CUSTOM_BOARDS}개)</span></h3>
-          <p className="text-2xs text-ink-muted">위 목록에 없는 랭킹(예: 월요 토너 킹, 6월 이벤트 랭킹)을 직접 만들고, 명단·점수는 아래 「포인트 지급 · 차감」에서 보드를 골라 입력하세요.</p>
+          <p className="text-2xs text-ink-muted">명단·점수는 아래 「포인트 지급 · 차감」에서 보드를 골라 입력하세요.</p>
           {customBoards.length > 0 && (
             <ul className="space-y-1">
               {customBoards.map((b) => (
@@ -583,7 +583,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
     <section className="rounded-aura border card-aura p-3 space-y-3">
       <div>
         <h3 className="text-sm font-bold text-ink-primary">포인트 지급 · 차감</h3>
-        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 자유 점수를 <span className="font-semibold text-accent-300">날짜·보드별</span>로 매일 기록합니다. 커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다. <span className="font-semibold text-accent-300">사유는 필수</span>입니다. 나중에"이 점수 왜 나갔나"를 되짚는 유일한 단서예요.</p>
+        <p className="text-2xs text-ink-muted mt-0.5">커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다. <span className="font-semibold text-accent-300">사유는 필수</span>입니다.</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
         <select value={board} onChange={(e) => setBoard(e.target.value)} className="input w-full text-sm sm:w-auto sm:min-w-[10rem]">
@@ -706,7 +706,6 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-bold text-ink-primary">일별 기록 달력</h3>
-          <p className="text-2xs text-ink-muted">날짜를 누르면 그날 누가 몇 점 받았는지 보입니다.</p>
         </div>
         <button type="button" onClick={() => move(-1)} aria-label="이전 달" className="h-8 w-8 shrink-0 rounded-input border border-border-default text-ink-secondary hover:border-accent-400/50">‹</button>
         <span className="shrink-0 text-sm font-bold tabular-nums text-accent-300">{ym.y}.{String(ym.m + 1).padStart(2, '0')}</span>

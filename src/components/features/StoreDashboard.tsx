@@ -814,9 +814,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             <span className="text-2xs font-bold text-ink-muted">오늘 장부</span>
             <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>
           </span>
-          {loading ? <div className="mt-2"><Skeleton /></div> : !started ? (
-            <p className="mt-2 text-sm text-ink-muted">오늘 장부가 아직 시작되지 않았습니다.</p>
-          ) : (
+          {loading ? <div className="mt-2"><Skeleton /></div> : !started ? null : (
             /* 2026-09-11 PC 개편: flex-wrap 이면 1360px 에서 숫자 넷이 왼쪽 700px 에 몰리고 오른쪽이 통째로 빈다.
                고정 4열 그리드로 폭을 실제로 쓴다. 모바일은 2×2 — 360px 에서도 숫자와 단위가 겹치지 않는다. */
             <span className="mt-2 grid grid-cols-2 items-end gap-x-5 gap-y-3 lg:grid-cols-4">
@@ -1087,7 +1085,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             </div>
           </div>
           {funnel.views === 0 && (
-            <p className="mt-2 t-desc break-keep text-ink-muted">조회수는 손님이 포스터 상세를 열 때부터 쌓여요. 이번 주부터 집계를 시작했어요.</p>
+            <p className="mt-2 t-desc break-keep text-ink-muted">조회수는 손님이 포스터 상세를 열 때 쌓여요.</p>
           )}
         </section>
       )}
@@ -1442,7 +1440,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 <Stat label="오늘 회수" value={`${fin.ticket}`} unit="장" />
               </div>
               {!!rangeErr && <div className="mt-2"><LoadFailRow what="최근 7일 이용권" onRetry={reloadRange} /></div>}
-              <p className="mt-2 t-desc break-keep text-ink-muted">발행=장부에서 입력한 발급/시상 · 회수=티켓으로 바인한 건수(금액은 장부 정산 대차표에서 T 로).</p>
+              <p className="mt-2 t-desc break-keep text-ink-muted">발행 = 장부 발급·시상 · 회수 = 티켓 바인 건수</p>
             </>
           )}
         </DashCard>

@@ -209,7 +209,8 @@ export default function ICMCalculator() {
     <CalcCard desc={mode === 'equity'
       ? '스택과 상금을 입력하면 각 플레이어의 기대 상금(ICM)을 계산합니다.'
       : '상대가 올인했을 때, 콜하려면 칩 기준 승률이 몇 % 필요한지 계산합니다.'}>
-      <div className="flex items-center justify-between gap-2">
+      {/* flex-wrap: 320px 에서 탭(130px)+버블 버튼이 한 줄에 못 들어가 탭이 4px 잘렸다(실측) — 좁으면 버블 버튼이 다음 줄로 */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <SegmentedTabs items={MODES} value={mode} onChange={setMode} />
         <button type="button" onClick={applyBubble}
           className="shrink-0 rounded-input border border-accent-400/50 bg-accent-300/10 px-2 py-1 text-2xs font-bold text-accent-300 leading-none">

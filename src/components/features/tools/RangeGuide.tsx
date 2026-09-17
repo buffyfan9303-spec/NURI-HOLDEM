@@ -74,7 +74,6 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
   const pickGroup = (g: RangeScenario['group']) => setScenId(firstOfGroup(g).id);
   const pickHero = (h: TablePos) =>
     setScenId(inGroup.filter((s) => s.hero === h).sort((a, b) => byPos(a.vs ?? a.hero, b.vs ?? b.hero))[0].id);
-  const groupMeta = RANGE_GROUPS.find((g) => g.id === group)!;
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
@@ -87,7 +86,8 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
           </button>
         ))}
       </div>
-      <p className="text-2xs leading-relaxed text-ink-secondary rounded-input bg-surface-high/60 border border-border-subtle px-2 py-1.5"><Icon name="lightbulb" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0 text-accent-300" />{groupMeta.desc}</p>
+      {/* 그룹 설명(전구 팁)은 뺐다(오너 2026-09-17 "쓸데없는 부연설명 빼") — 자리·상대는 아래 칩 행이, 기준(100bb)은 출처 배지가 이미 말한다.
+          320px 에서 '오픈 (9인)' 만 두 줄이라 그룹을 누를 때마다 높이가 튀었다(실측). */}
 
       {/* ② 내 포지션 — 한 행 5개 이하라 375px 에서도 접히지 않는다(넘치면 가로 스크롤) */}
       <div>

@@ -60,7 +60,7 @@ export function MdfCalc() {
       <p className="text-2xs text-ink-muted">{'※ 벳 크기에서 바로 나오는 산술값입니다(솔버 출력이 아닙니다). 상대가 과도하게 폴드/콜하면 그에 맞춰 블러프를 늘리거나 줄이세요.'}</p>
       {/* 중복 인지 제거 — '콜에 필요한 승률'은 팟 오즈 계산기와 같은 개념(딥링크, 계산 로직 불변) */}
       <a href="#tool=pot" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
-        '콜에 필요한 승률'을 실제 팟·콜 금액으로 — 팟 오즈 계산기 →
+        실제 팟·콜 금액으로 — 팟 오즈 계산기 →
       </a>
     </CalcCard>
   );

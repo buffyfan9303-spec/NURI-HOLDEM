@@ -1,4 +1,5 @@
 // src/components/features/tools/handRank.data.ts
+// © 2026 엔에이치홀딩스(NURI HOLDEM). 족보 순서·확률(freq)은 공용 사실이라 저작권 대상이 아니고, 설명문(desc)·메모(HAND_RANK_NOTES)만 자체 작성물이다.
 // 홀덤 족보(핸드 랭킹) 단일 출처 — HandRankPanel 이 그린다. 강한 순서대로 10개.
 // freq = 텍사스 홀덤 7장(내 2장 + 보드 5장)에서 최선 5장이 그 족보가 될 확률(%) — 표준 조합 계산값.
 export type HandRank = {

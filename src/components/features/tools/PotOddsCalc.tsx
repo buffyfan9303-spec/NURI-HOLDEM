@@ -37,7 +37,7 @@ export default function PotOddsCalc() {
       </div>
       {/* 중복 인지 제거 — 아웃츠 계산기와 같은 '필요 승률' 개념을 딥링크로 잇는다(계산 로직 불변) */}
       <a href="#tool=outs" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
-        이 승률이 실제로 나오는지는 아웃츠 / 확률 계산기에서 확인 →
+        이 승률이 나오는지 — 아웃츠 계산기 →
       </a>
     </CalcCard>
   );

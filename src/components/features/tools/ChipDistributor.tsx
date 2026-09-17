@@ -19,11 +19,12 @@ export default function ChipDistributor() {
     <CalcCard title="칩 분배기" desc="1인 스택 구성과 매장이 준비할 총 칩 수를 계산합니다.">
       <Field label="참가 인원"><NumIn value={players} onChange={setPlayers} suffix="명" /></Field>
       <div className="space-y-1.5">
-        <div className="grid grid-cols-[1fr_1fr_1.3fr_auto] gap-1.5 px-1 text-2xs text-ink-muted">
+        {/* 액면 칸을 넓게(1.4fr): 320px 에서 1fr 칸은 글자 공간 36.5px 인데 '25000' 이 47.5px 라 잘렸다(실측) — 개수·총 필요는 짧다 */}
+        <div className="grid grid-cols-[1.4fr_1fr_1fr_auto] gap-1.5 px-1 text-2xs text-ink-muted">
           <span>칩 액면</span><span>1인 개수</span><span className="text-right">총 필요</span><span />
         </div>
         {rows.map((r, i) => (
-          <div key={i} className="grid grid-cols-[1fr_1fr_1.3fr_auto] gap-1.5 items-center">
+          <div key={i} className="grid grid-cols-[1.4fr_1fr_1fr_auto] gap-1.5 items-center">
             <NumIn value={r.denom} onChange={(v) => setRow(i, { denom: v })} />
             <NumIn value={r.per} onChange={(v) => setRow(i, { per: v })} />
             <span className="text-right text-xs tabular-nums text-ink-secondary">{((r.per || 0) * players).toLocaleString()}개</span>

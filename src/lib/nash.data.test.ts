@@ -47,9 +47,23 @@ describe('PushFoldChart 화면 계약(소스)', () => {
     expect(src).toContain('className="w-full [&_button]:whitespace-nowrap"');   // 세그먼트 알약 nowrap
     expect(src).toMatch(/flex-1 min-w-0[^\n]*whitespace-nowrap/);            // 스택 눈금 nowrap(min-w-[24px] 는 320px 에서 288>259 로 넘쳤다)
     expect(src).toMatch(/aria-pressed=\{on\} title=\{p\.desc\}[\s\S]{0,200}whitespace-nowrap/); // 자리 버튼 nowrap
-    expect(src).toContain("callBB: '빅블라인드(BB)가 콜할 수 있는 핸드', callSB: '스몰블라인드(SB)가 콜할 수 있는 핸드'"); // 약어는 문장이 푼다
     expect(src).toMatch(/data-testid="pushfold-readback">\s*\{pos\.label\} · \{stack\}bb · 빅 앤티 — \{VIEW_SENTENCE\[effView\]\}/);
     expect(src).not.toContain('lightbulb'); // 설명 문단 추가 금지 — 글자 수 최소(오너)
+  });
+
+  it('②-2 차트 위 한 줄 문장은 세 갈래 모두 10글자 이내 + nowrap — 알약을 눌러도 높이가 안 변한다', () => {
+    // 2026-09-17 실측: '빅블라인드(BB)가 콜할 수 있는 핸드' 는 320px 에서 두 줄(38px), 올인은 한 줄(19px) — 알약마다 판이 튀었다.
+    // 고친 뒤 실측: UTG(9인)(가장 긴 자리) × 올인·BB 콜·SB 콜 × 375·320·1280 = 전부 19px 한 줄, 넘침 0.
+    const m = src.match(/const VIEW_SENTENCE: Record<View, string> = \{ shove: '([^']*)', callBB: '([^']*)', callSB: '([^']*)' \};/);
+    expect(m, 'VIEW_SENTENCE 형태가 바뀌었다').not.toBeNull();
+    const [shove, callBB, callSB] = m!.slice(1, 4);
+    for (const s of [shove, callBB, callSB]) {
+      expect(s.length, `문장 "${s}" 이 10글자를 넘는다 — 320px·UTG(9인) 에서 한 줄(259px)에 안 들어간다`).toBeLessThanOrEqual(10);
+      expect(s, `"${s}" — 약어를 다시 풀지 않는다(알약과 같은 말)`).not.toMatch(/블라인드/);
+    }
+    expect(callBB.length).toBe(callSB.length); // 콜 두 갈래는 글자 수까지 같다
+    expect(src).toMatch(/data-testid="pushfold-readback"/);
+    expect(src).toMatch(/className="[^"]*whitespace-nowrap[^"]*" data-testid="pushfold-readback"/); // 어떤 조합이든 한 줄 높이
   });
 
   it('③ 빅 앤티 고정 — 앤티 토글·상태가 없고 데이터는 ante=on 만 읽는다 · ④ "앤티 = …" 설명이 없다', () => {

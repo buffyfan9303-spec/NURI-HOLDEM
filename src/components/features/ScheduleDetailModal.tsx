@@ -742,7 +742,7 @@ export default function ScheduleDetailModal({
           <Icon name="edit" size={15} className="shrink-0 text-accent-300" />
           <span className="min-w-0 flex-1">
             <span className={`block text-xs font-bold ${ACCENT_INK}`}>이 대회 후기 쓰기</span>
-            <span className="block text-2xs text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요. 다른 플레이어에게 큰 도움이 됩니다.</span>
+            <span className="block text-2xs text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요</span>
           </span>
           <span className={`shrink-0 ${ACCENT_INK}`} aria-hidden>→</span>
         </button>

@@ -159,6 +159,35 @@ describe('GTO 데이터 — 출처를 속이지 않는다', () => {
   });
 });
 
+describe('도구 화면 — 320px 한 줄 계약 (2026-09-17 오너 "두 줄 · 연결성 없음 · 부연설명")', () => {
+  // 전부 scratch 프로덕션 빌드 375·320·1280 실측으로 잡힌 것. 되돌리면 같은 폭에서 다시 두 줄·잘림이 난다.
+  const read = (f: string) => readFileSync(join(ROOT, f), 'utf-8');
+
+  it('계산기 사이 딥링크 문구는 31글자 이내 — 34·35글자짜리가 320px 에서 두 줄(32px)이 됐다(31글자 OutsCalc 는 한 줄 실측)', () => {
+    for (const f of ['src/components/features/tools/PotOddsCalc.tsx', 'src/components/features/tools/AdvancedCalcs.tsx', 'src/components/features/tools/OutsCalc.tsx']) {
+      const links = [...read(f).matchAll(/href="#tool=[a-z]+"[^>]*>\s*([^<]+?)\s*<\/a>/g)].map((m) => m[1].trim());
+      expect(links.length, `${f} 딥링크 형태가 바뀌었다`).toBeGreaterThan(0);
+      for (const t of links) expect(t.length, `${f} 링크 "${t}" 가 31글자를 넘는다`).toBeLessThanOrEqual(31);
+    }
+  });
+
+  it('퀴즈 카드 칩은 px-1 — 보드 5장+구분점이 320px 에서 246>231 로 넘쳤다', () => {
+    expect(read('src/components/features/tools/quizCards.tsx')).not.toMatch(/bg-surface-base px-1\.5 py-1 text-sm font-extrabold/);
+  });
+
+  it('ICM 모드 탭 행은 flex-wrap — 320px 에서 버블 버튼이 탭을 4px 잘랐다', () => {
+    expect(read('src/components/features/ICMCalculator.tsx')).toMatch(/className="flex flex-wrap items-center justify-between gap-2">\s*<SegmentedTabs items=\{MODES\}/);
+  });
+
+  it('칩 분배기 액면 칸은 1.4fr — 320px 에서 1fr(36.5px) 에 "25000"(47.5px) 이 잘렸다', () => {
+    expect(read('src/components/features/tools/ChipDistributor.tsx').match(/grid-cols-\[1\.4fr_1fr_1fr_auto\]/g)?.length).toBe(2);
+  });
+
+  it('레인지 차트에 전구 팁 문단이 없다 — 그룹마다 줄 수가 달라 누를 때마다 높이가 튀었다', () => {
+    expect(read('src/components/features/tools/RangeGuide.tsx')).not.toMatch(/name="lightbulb"/);
+  });
+});
+
 describe('프리플랍 전략의 단일 소스', () => {
   const modal = readFileSync(join(ROOT, 'src/components/features/HandGtoModal.tsx'), 'utf-8');
 

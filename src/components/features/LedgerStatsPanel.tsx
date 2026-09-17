@@ -671,9 +671,9 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
 
       {/* 인사이트 */}
       <p className="text-[11px] text-ink-secondary bg-surface-low/70 border border-border-default rounded-input p-2.5 leading-relaxed">
-        <Icon name="lightbulb" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0 text-accent-300" />{multi
-          ? <>{DOW[worst.w]}요일이 일평균 <b className="text-rose-300">{worst.avgEntry.toFixed(1)}</b>회로 가장 저조합니다(전체 평균 {meanAvg.toFixed(1)}). 반대로 <b className="text-emerald-300">{DOW[best.w]}</b>요일이 {best.avgEntry.toFixed(1)}로 가장 활발합니다. {DOW[worst.w]}요일에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 보세요.</>
-          : <>아직 한 요일({DOW[best.w]})만 집계됐습니다. 다른 요일도 운영되면 요일 간 비교·약한 요일 진단을 표시합니다.</>}
+        {multi
+          ? <>{DOW[worst.w]}요일이 일평균 <b className="text-rose-300">{worst.avgEntry.toFixed(1)}</b>회로 가장 저조합니다(전체 평균 {meanAvg.toFixed(1)}). 반대로 <b className="text-emerald-300">{DOW[best.w]}</b>요일이 {best.avgEntry.toFixed(1)}로 가장 활발합니다.</>
+          : <>아직 한 요일({DOW[best.w]})만 집계됐습니다.</>}
       </p>
     </div>
   );
@@ -1059,7 +1059,6 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
       {/* 사장님(공동 업주) 관리 — 업주/운영자만 */}
       {canOwner && <OwnerManageCard venueId={venueId} />}
 
-      <p className="text-2xs text-ink-muted pt-1 border-t border-border-default">통계는 업주 전용 · 직원 <span className="text-accent-300 font-semibold">권한·직책</span>은 「직원 관리」, 탭·순위 구성은 <span className="text-accent-300 font-semibold">「매장 꾸미기」</span>에서.</p>
     </section>
   );
 }

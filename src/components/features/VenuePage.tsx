@@ -479,7 +479,7 @@ export default function VenuePage({
             <KakaoActionButton kakao={kakao} />
             </div>
           </div>
-          <CoachMark id="venue-checkin">체크인하면 출석 도장 · 전적 인정 · 방문 후기가 열려요. 하루 한 번이면 충분해요.</CoachMark>
+          <CoachMark id="venue-checkin">체크인하면 출석 도장 · 전적 인정 · 방문 후기가 열려요</CoachMark>
           {user && myAct && (myAct.streak > 0 || myAct.visits > 0) && (
             <p className="flex items-center gap-1 text-2xs text-ink-muted tabular-nums">
               {myAct.streak > 0 && <><Icon name="flame" size={13} className="shrink-0" />연속 출석 <b className="text-ink-secondary">{myAct.streak}일</b></>}
@@ -1856,7 +1856,7 @@ function PostersPanel({
 
             {/* 금일 포스터 목록 */}
             {todayPosters.length === 0 ? (
-              <p className="text-center py-4 text-xs text-ink-muted">오늘 진행되는 포스터가 없습니다. 아래 예정 포스터를 확인해 보세요.</p>
+              <p className="text-center py-4 text-xs text-ink-muted">오늘 진행되는 포스터가 없습니다</p>
             ) : (
               <ul className="space-y-2">
                 {todayPosters.map((s) => (

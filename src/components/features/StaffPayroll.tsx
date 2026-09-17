@@ -77,7 +77,7 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
 
   return (
     <div className="space-y-2">
-      <p className="text-2xs text-ink-muted">시급제 기준(기본급 없음). 직원별 시급·급여일·휴무 요일을 설정하세요.</p>
+      <p className="text-2xs text-ink-muted">시급제 (기본급 없음)</p>
       {loadErr && (
         <p role="alert" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">
           {loadErr} — 지금 저장하면 기존 시급이 0으로 덮어써지므로 저장을 막아 두었습니다. 새로고침 후 다시 시도하세요.
