@@ -16,13 +16,32 @@ const EMAIL = process.env.E2E_EMAIL;
 const PASSWORD = process.env.E2E_PASSWORD;
 
 declare global {
-  interface Window { __VT_SAMPLES?: string[] }
+  interface Window {
+    __VT_SAMPLES?: string[];
+    __GEO?: { barYs: number[]; aboveYs: number[]; pillXs: number[] };
+  }
 }
 
 /** 전환이 도는 동안 프레임마다 의사요소 애니메이션을 수집한다(앱 코드는 건드리지 않는다). */
-async function startSampler(page: Page): Promise<void> {
-  await page.evaluate(() => {
+/** 한 번의 전환에서 거둔 것 — VT 스냅샷 목록 + 프레임별 기하(중복 제거). */
+interface Probe {
+  samples: string[];
+  /** 탭바의 화면 y — 값이 하나면 '1px 도 안 움직였다'. */
+  barYs: number[];
+  /** 탭바 **위쪽**(앱 헤더)의 y — 같은 의미. */
+  aboveYs: number[];
+  /** 알약의 x — 값이 여러 개여야 '미끄러졌다'. 알약이 없는 바면 빈 배열. */
+  pillXs: number[];
+}
+
+async function startSampler(page: Page, barSel: string | null): Promise<void> {
+  await page.evaluate((sel) => {
     window.__VT_SAMPLES = [];
+    window.__GEO = { barYs: [], aboveYs: [], pillXs: [] };
+    const bar = sel ? (document.querySelector(sel) as HTMLElement | null) : null;
+    const pill = bar?.querySelector('[data-sliding-pill]') as HTMLElement | null;
+    const header = document.querySelector('header') as HTMLElement | null;
+    const g = window.__GEO!;
     const t0 = performance.now();
     const tick = () => {
       for (const a of document.getAnimations()) {
@@ -32,22 +51,58 @@ async function startSampler(page: Page): Promise<void> {
         const name = (a as unknown as { animationName?: string }).animationName ?? '';
         window.__VT_SAMPLES!.push(`${pe} :: ${name}`);
       }
+      if (bar) g.barYs.push(+bar.getBoundingClientRect().y.toFixed(1));
+      if (header) g.aboveYs.push(+header.getBoundingClientRect().y.toFixed(1));
+      if (pill) g.pillXs.push(+pill.getBoundingClientRect().x.toFixed(1));
       if (performance.now() - t0 < 900) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  });
+  }, barSel);
 }
 
-async function collect(page: Page): Promise<string[]> {
+async function collect(page: Page): Promise<Probe> {
   await page.waitForTimeout(950);
-  return page.evaluate(() => [...new Set(window.__VT_SAMPLES ?? [])].sort());
+  return page.evaluate(() => ({
+    samples: [...new Set(window.__VT_SAMPLES ?? [])].sort(),
+    barYs: [...new Set(window.__GEO?.barYs ?? [])],
+    aboveYs: [...new Set(window.__GEO?.aboveYs ?? [])],
+    pillXs: [...new Set(window.__GEO?.pillXs ?? [])],
+  }));
 }
 
-/** 탭 하나를 누르고 전환을 계측한다. */
-async function probe(page: Page, target: Locator): Promise<string[]> {
-  await startSampler(page);
+/** 탭 하나를 누르고 전환을 계측한다.
+ *  @param barSel 탭바의 CSS 셀렉터 — 주면 바·헤더·알약 기하까지 같이 잰다.
+ *  ⚠ 표본을 시작하기 **전에** 대상을 화면 안으로 넣는다 — Playwright 의 click 은 대상까지
+ *    자동 스크롤해서, 그대로 두면 바 y 가 스크롤 때문에 움직여 '바가 움직였다' 고
+ *    거짓 보고한다(CLAUDE.md 의 측정 오염 항목). */
+async function probe(page: Page, target: Locator, barSel: string | null = null): Promise<Probe> {
+  await target.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(200);
+  await startSampler(page, barSel);
   await target.click();
   return collect(page);
+}
+
+/**
+ * 🔴 오너가 직접 지정한 요구(2026-09-18):
+ *   "메뉴는 그대로 유지하고 안에 있는 콘텐츠만 바뀌었으면 좋겠는데 자꾸 메뉴가 있는 쪽도
+ *    전환되거나 그 위쪽 콘텐츠 변환이 없는 부분도 같이 가는 것 같아"
+ *
+ * 두 가지를 잠근다.
+ *   ① 탭바와 그 위쪽(헤더)은 전환 내내 **값이 하나** — 1px 도 안 움직인다.
+ *   ② 알약은 **여러 프레임에 걸쳐** 이동한다(순간이동이 아니다).
+ *     — 2026-09-18 실측: SlidingPill 의 FLIP 은 ResizeObserver 의 **관찰 시작 콜백**에
+ *       한 프레임 뒤 덮어쓰였다(82.0 → 208.0, dur 0.22s → 0s). 그동안은 VT 가 제 손으로
+ *       보간해 가려져 있었고, VT 를 걷어내자 드러났다. 이 판정이 그 복귀를 막는다.
+ */
+function expectMenuStill(r: Probe, where: string) {
+  expect(r.barYs.length, `${where}: 탭바가 움직였다 — 메뉴는 제자리여야 한다.
+관측된 y: ${r.barYs.join(' → ')}`).toBe(1);
+  expect(r.aboveYs.length, `${where}: 탭바 위쪽(헤더)이 움직였다 — 바뀔 것이 없는 자리다.
+관측된 y: ${r.aboveYs.join(' → ')}`).toBeLessThanOrEqual(1);
+  if (r.pillXs.length === 0) return;   // 알약이 없는 바(밑줄·색만 바뀌는 곳)는 여기서 판정하지 않는다
+  expect(r.pillXs.length, `${where}: 알약이 제자리에서 튀었다(중간 프레임 없음) — CSS FLIP 이 죽었다.
+관측된 x: ${r.pillXs.join(' → ')}`).toBeGreaterThanOrEqual(3);
 }
 
 /**
@@ -84,89 +139,6 @@ function expectNoViewTransition(samples: string[], where: string) {
   ).toEqual([]);
 }
 
-function expectPanelPush(samples: string[], panel: string, bar: string) {
-  const joined = samples.join('\n');
-  const has = (prefix: string) => samples.some((x) => x.startsWith(prefix));
-
-  // ① 본문이 방향성 푸시로 애니메이트된다(old 는 빠지고 new 는 들어온다).
-  expect(has(`::view-transition-old(${panel}) :: vt-panel-out-`),
-    `본문(${panel})의 old 스냅샷이 vt-panel-out-* 로 애니메이트되지 않았다 — 전환이 안 돌았거나 이름이 안 붙었다
-실측:
-${joined}`)
-    .toBe(true);
-  expect(has(`::view-transition-new(${panel}) :: vt-panel-in-`),
-    `본문(${panel})의 new 스냅샷이 vt-panel-in-* 로 애니메이트되지 않았다
-실측:
-${joined}`)
-    .toBe(true);
-
-  // ② root 는 정지 — 여기가 살아 있으면 헤더·히어로까지 페이지 전체가 밀린다(2026-08-29 회귀).
-  const moved = (name: string) => samples.filter((x) =>
-    (x.startsWith(`::view-transition-old(${name}) :: `) || x.startsWith(`::view-transition-new(${name}) :: `))
-    && !x.endsWith(':: '));
-  expect(moved('root'), `root 가 애니메이트됐다 — 탭바 위쪽까지 통째로 밀린다
-실측:
-${joined}`).toEqual([]);
-
-  // ③ 탭바도 정지 — 손가락이 짚고 있는 바가 같이 움직이면 '어디를 눌렀는지'가 흔들린다.
-  expect(moved(bar), `탭바(${bar})가 애니메이트됐다 — 제자리에 고정돼야 한다
-실측:
-${joined}`).toEqual([]);
-}
-
-/**
- * notif-tab 전용 계약(2026-09-14, 오너 리포트: "쪽지·알림 왔다갔다 할 때 박스가 팝업 밖으로
- * 왼쪽/오른쪽으로 갔다가 온다") — 위 expectPanelPush 와 **반대** 방향으로 건다.
- *
- * 왜 notif-panel 만 다른가: 다른 본문(admin-secpanel·venue-tab·rank-tab 등)은 뷰포트 폭을 쓰는
- * 전체화면 패널이라 방향성 푸시(vt-panel-in-r/out-l, ±18px translateX)가 안전하다. notif-panel 은
- * 좌우 여백 17px 짜리 **뜨는 작은 카드**인데(390px 모바일 실측: 카드 left=17·right=373), View
- * Transition 스냅샷은 top layer 로 올라가 카드의 overflow-hidden·rounded-card 클립을 안 받는다 —
- * 18px(여백 17px 초과) 를 밀면 카드 테두리를 넘어 화면 가장자리까지 삐져나갔다(실측: 전환 시작
- * 프레임의 실제 transform 이 `matrix(1,0,0,1,18,0)`). 그래서 notif-panel 만 old 를 페이드아웃만
- * 시키고(vt-fade-out, opacity 만), new 는 애니메이션 없이 즉시 자리를 지키게 바꿨다(index.css) —
- * new 에 페이드를 안 넣는 이유는 두 스냅샷이 동시에 반투명이면 글자가 두 벌로 겹쳐 보이던 옛
- * 버그(venue-tab 주석·검은 번쩍임 수정 때와 동일)가 돌아오기 때문이다.
- *
- * 이 계약이 지키는 것 — 누가 notif-panel 을 다시 공동 방향성 푸시 목록에 넣으면 빨개진다:
- *   ① old 는 vt-fade-out 을 쓴다(방향성 푸시 vt-panel-out-* 를 쓰면 안 된다)
- *   ② new 는 애니메이션이 전혀 없다(방향성 푸시 vt-panel-in-* 는 물론 어떤 키프레임도 없다)
- *   ③ root·탭바(notif-tabbar)는 여전히 정지 — 이건 다른 스코프와 같은 공용 계약이다.
- * notif-pill(알약)은 이 계약 대상이 아니다 — 전용 애니메이션 규칙이 원래 없어 브라우저 기본
- * 크로스페이드(-ua-view-transition-fade-*)를 그대로 쓰는 것이 기존 동작이다(내가 바꾼 적 없다).
- */
-function expectNotifPanelFadeOnly(samples: string[]) {
-  const joined = samples.join('\n');
-  const has = (prefix: string) => samples.some((x) => x.startsWith(prefix));
-
-  expect(has('::view-transition-old(notif-panel) :: vt-fade-out'),
-    `notif-panel old 스냅샷이 vt-fade-out 으로 애니메이트되지 않았다
-실측:
-${joined}`).toBe(true);
-
-  expect(has('::view-transition-old(notif-panel) :: vt-panel-out'),
-    `notif-panel old 스냅샷이 방향성 푸시(vt-panel-out-*)를 다시 쓴다 — 팝업 카드 여백(17px)보다
-큰 이동량(18px)이라 top layer 스냅샷이 카드 밖으로 삐져나간다(2026-09-14 오너 리포트 재발 조건)
-실측:
-${joined}`).toBe(false);
-
-  expect(has('::view-transition-new(notif-panel) ::'),
-    `notif-panel new 스냅샷에 애니메이션이 붙었다 — new 는 즉시 자리를 지켜야 한다(방향성 푸시로
-되돌리면 위와 같은 재발 조건이고, 페이드를 넣으면 old 와 겹쳐 글자가 두 벌로 보이는 옛 버그가 온다)
-실측:
-${joined}`).toBe(false);
-
-  const moved = (name: string) => samples.filter((x) =>
-    (x.startsWith(`::view-transition-old(${name}) :: `) || x.startsWith(`::view-transition-new(${name}) :: `))
-    && !x.endsWith(':: '));
-  expect(moved('root'), `root 가 애니메이트됐다 — 탭바 위쪽까지 통째로 밀린다
-실측:
-${joined}`).toEqual([]);
-  expect(moved('notif-tabbar'), `탭바(notif-tabbar)가 애니메이트됐다 — 제자리에 고정돼야 한다
-실측:
-${joined}`).toEqual([]);
-}
-
 // CI 러너(공유 vCPU)에서는 VT/스프링 프레임 타이밍이 흔들려 간헐 실패한다(2026-09-02 실측: 로컬 14/14 통과·CI 1회 실패 후 재실행 통과).
 // 임계는 그대로, 재시도만 CI 에서 2회 — perf.spec 과 같은 규약.
 test.describe.configure({ retries: process.env.CI ? 2 : 0 });
@@ -197,8 +169,9 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     // ⚠ 라벨이 아니라 data-lane 으로 짚는다 — 예전엔 '계산기' 라는 이름으로 짚었는데 레인 라벨이
     //    '규칙 · 수학' 으로 바뀌면서 **이 계측이 조용히 죽어 있었다**(클릭 타임아웃으로만 드러났다).
     //    CLAUDE.md 규약: 라벨에 묶인 셀렉터는 라벨을 바꾸는 커밋에서 data-* 로 갈아탄다.
-    const samples = await probe(page, bar.locator('[data-lane="rules"]'));
-    expectNoViewTransition(samples, 'tools-lanepanel');
+    const r = await probe(page, bar.locator('[data-lane="rules"]'), '[data-tools-lanebar]');
+    expectNoViewTransition(r.samples, 'tools-lanepanel');
+    expectMenuStill(r, 'tools-lane');
   });
 
   test('🔴 장터 카테고리(market-cat)', async ({ page }) => {
@@ -206,8 +179,9 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     await gotoCommunitySection(page, 'market');
     const bar = page.locator('[data-market-catbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
-    const samples = await probe(page, bar.getByRole('button', { name: '용품', exact: true }));
-    expectNoViewTransition(samples, 'market-panel');
+    const r = await probe(page, bar.getByRole('button', { name: '용품', exact: true }), '[data-market-catbar]');
+    expectNoViewTransition(r.samples, 'market-panel');
+    expectMenuStill(r, 'market-cat');
   });
 
   test('🔴 딜러 커뮤니티 구인·구직 필터(dealer-kind)', async ({ page }) => {
@@ -215,8 +189,9 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     await gotoCommunitySection(page, 'dealer');
     const bar = page.locator('[data-dealer-kindbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
-    const samples = await probe(page, bar.getByRole('button', { name: /^구인/ }));
-    expectNoViewTransition(samples, 'dealer-panel');
+    const r = await probe(page, bar.getByRole('button', { name: /^구인/ }), '[data-dealer-kindbar]');
+    expectNoViewTransition(r.samples, 'dealer-panel');
+    expectMenuStill(r, 'dealer-kind');
   });
 
   test('🔴 랭킹 허브 세부 탭(rank-tab · 오너가 지목한 화면)', async ({ page }) => {
@@ -224,8 +199,9 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     await gotoCommunitySection(page, 'rank');
     const bar = page.locator('[data-rank-tabbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
-    const samples = await probe(page, bar.getByRole('button', { name: /명예/ }).first());
-    expectNoViewTransition(samples, 'rank-panel');
+    const r = await probe(page, bar.getByRole('button', { name: /명예/ }).first(), '[data-rank-tabbar]');
+    expectNoViewTransition(r.samples, 'rank-panel');
+    expectMenuStill(r, 'rank-tab');
   });
 
   test('🔴 내 정보 통합 페이지 탭(profile-tab)', async ({ page }) => {
@@ -235,8 +211,9 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     await page.getByRole('button', { name: '내 정보 열기' }).click();
     const bar = page.locator('[data-profile-tabbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
-    const samples = await probe(page, bar.getByRole('tab', { name: '설정', exact: true }));
-    expectNoViewTransition(samples, 'profile-panel');
+    const r = await probe(page, bar.getByRole('tab', { name: '설정', exact: true }), '[data-profile-tabbar]');
+    expectNoViewTransition(r.samples, 'profile-panel');
+    expectMenuStill(r, 'profile-tab');
   });
 
   test('🔴 알림 패널 쪽지·알림(notif-tab) — 방향성 푸시가 아니라 페이드아웃만 돈다', async ({ page }) => {
@@ -244,10 +221,11 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     await page.locator('button[aria-label^="알림"]').first().click();
     const bar = page.locator('[data-notif-tabbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
-    const samples = await probe(page, bar.getByRole('tab', { name: '알림', exact: true }));
+    const r = await probe(page, bar.getByRole('tab', { name: '알림', exact: true }), '[data-notif-tabbar]');
     // ⚠ 다른 스코프처럼 expectPanelPush(방향성 푸시)를 쓰지 않는다 — notif-panel 은 예외다.
     //   근거는 expectNotifPanelFadeOnly 주석 참고(팝업 카드 좌우 여백 17px < 푸시 이동량 18px).
-    expectNoViewTransition(samples, 'notif-panel');
+    expectNoViewTransition(r.samples, 'notif-panel');
+    expectMenuStill(r, 'notif-tab');
   });
 });
 
@@ -273,7 +251,8 @@ test.describe('하위 탭 — 느린 기기에서도 root 는 끝까지 정지',
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 8 });
     try {
-      const samples = await probe(page, bar.getByRole('button', { name: /명예/ }).first());
+      const r = await probe(page, bar.getByRole('button', { name: /명예/ }).first(), '[data-rank-tabbar]');
+      const samples = r.samples;
       const joined = samples.join('\n');
       // root 가 한 프레임이라도 밀리면(blur) 실패 — 마커가 전환보다 먼저 풀렸다는 뜻.
       expect(samples.filter((x) => /\(root\) :: vt-push-/.test(x)), `느린 기기에서 root 가 밀렸다(마커가 전환 도중 풀림)
@@ -283,6 +262,8 @@ ${joined}`).toEqual([]);
       //   예전 이 테스트가 잡던 것(마커가 전환 도중 풀려 root 가 blur 로 밀림)은 구조적으로 불가능해졌다 —
       //   마커 자체가 안 켜진다. 그래도 이 케이스는 남긴다: 느린 기기에서 누가 VT 를 되살리면 여기서 걸린다.
       expectNoViewTransition(samples, 'rank-tab(CPU×8)');
+      // 느린 기기에서도 메뉴는 제자리·알약은 미끄러진다 — CPU×8 이 진짜 손가락에 가장 가깝다.
+      expectMenuStill(r, 'rank-tab(CPU×8)');
     } finally {
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     }
