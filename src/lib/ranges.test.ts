@@ -108,26 +108,45 @@ describe('nash.data 정합', () => {
     // 격리된 조합은 `hasNashRange` 가 false 라 여기서도 자동으로 빠진다 — 격리를 풀면 이 계약이 판정한다.
     const pctOf = (k: number, stack: number, ante: boolean) =>
       rangeComboPct(freqFromArray(nashRange('shove', k, stack, ante), HAND_ORDER));
+    // 🔴 여기 있던 "2~3BB 는 데드머니가 커서 any-two 잼이 정상" 이라는 예외는 **반증됐다**(2026-09-17).
+    //   UTG(k=8) 손익분기 S/(0.5+2S) 는 2BB 에서도 44.4% 이고 S 에 대해 단조 증가한다 —
+    //   32o(32.5%) 는 **어떤 스택에서도** 그 선을 못 넘으므로 9맥스 UTG 의 any-two 잼은 원리적으로 불가다.
+    //   예외를 두면 그 구간이 영영 검사되지 않는다. 격리된 조합은 `hasNashRange` 가 걸러 준다.
     const broken: string[] = [];
     for (const ante of [false, true]) for (const stack of NASH_STACKS) {
-      if (!hasNashRange('shove', 1, stack, ante)) continue; // 격리 구간
-      // 2~3BB 는 스택 대비 데드머니가 커서 전 포지션 any-two 잼이 정답에 가깝다 — 순서가 무의미해진다.
-      if (ante && stack <= 3) continue;
-      const wide = pctOf(1, stack, ante), narrow = pctOf(8, stack, ante);
-      if (!(wide >= narrow)) broken.push(`${stack}bb ante=${ante}: k1=${wide.toFixed(1)} < k8=${narrow.toFixed(1)}`);
+      // 살아 있는 k 끼리만 비교한다 — 격리된 열을 끌어들이면 '없는 값'으로 판정하게 된다.
+      const live = [1, 2, 5, 8].filter((k) => hasNashRange('shove', k, stack, ante));
+      for (let i = 0; i + 1 < live.length; i++) {
+        const a = live[i], b2 = live[i + 1];
+        const wide = pctOf(a, stack, ante), narrow = pctOf(b2, stack, ante);
+        // 허용오차 1.0%p — 이 데이터는 **빈도가 0~8 단계로 양자화**돼 있어(SourceBadge 가 그렇게 고지한다)
+        //   콤보 몇 개가 한 단계 움직이면 0.x%p 가 그냥 흔들린다. 실측 예: 2bb 노엔티 k2 75.9 → k8 76.5(0.6%p).
+        //   반면 진짜 결함이던 빅엔티 4~6BB 는 3.4%p 역전이었고 내용 자체가 모순이었다(UTG 가 K2o 를 100% 잼).
+        //   ⚠ 이 값을 올려서 실패를 없애지 마라 — 1%p 를 넘는 역전은 잡음이 아니다.
+        if (!(wide >= narrow - 1.0)) broken.push(`${stack}bb ante=${ante}: k${a}=${wide.toFixed(1)} < k${b2}=${narrow.toFixed(1)}`);
+      }
     }
     expect(broken, `뒤 인원이 많은데 레인지가 더 넓다 — 표가 깨졌다:\n${broken.join('\n')}`).toEqual([]);
   });
 
   it('🔴 빅 앤티 4~6BB 는 격리돼 있다 — 데이터를 안 고치고 되살리면 여기서 걸린다', () => {
     // 이 계약이 없으면 `NASH_ANTE_QUARANTINE` 을 비우는 한 줄로 거짓 조언이 조용히 돌아온다.
-    for (const s of [4, 5, 6]) {
-      expect(hasNashRange('shove', 8, s, true), `${s}bb 빅앤티가 격리에서 풀렸다`).toBe(false);
-      expect(isNashQuarantined(s, true)).toBe(true);
+    // 막는 것: 빅엔티 2~6BB 의 **k≥2 열**. UTG(k=8) 손익분기(2BB 44.4% · 3BB 46.2%)를 못 넘는 핸드를
+    //   100% 잼이라고 말하던 자리다.
+    for (const s of [2, 3, 4, 5, 6]) for (const k of [2, 5, 8]) {
+      expect(hasNashRange('shove', k, s, true), `${s}bb k=${k} 빅엔티가 격리에서 풀렸다`).toBe(false);
+      expect(isNashQuarantined(s, true, k)).toBe(true);
     }
-    // 노앤티와 7BB 이상은 정상이므로 막지 않는다 — 기능을 통째로 죽이는 것이 아니다.
-    for (const s of [4, 5, 6]) expect(hasNashRange('shove', 8, s, false), `${s}bb 노앤티까지 막혔다`).toBe(true);
-    for (const s of [7, 8, 10]) expect(hasNashRange('shove', 8, s, true), `${s}bb 빅앤티가 잘못 막혔다`).toBe(true);
+    // 살리는 것 ①: **SB(k=1)** — 임계 (S−0.5)/2S 는 2BB 37.5%·3BB 41.7% 로 낮고 표와 정합한다(역산 확인).
+    for (const s of [2, 3, 4, 5, 6]) {
+      expect(hasNashRange('shove', 1, s, true), `${s}bb SB 열까지 막혔다 — 이 열은 맞는 값이다`).toBe(true);
+      expect(isNashQuarantined(s, true, 1)).toBe(false);
+    }
+    // 살리는 것 ②: 노앤티 전 구간 · 빅엔티 7BB 이상. 기능을 통째로 죽이는 것이 아니다.
+    for (const s of [2, 4, 6]) expect(hasNashRange('shove', 8, s, false), `${s}bb 노앤티까지 막혔다`).toBe(true);
+    for (const s of [7, 8, 10]) expect(hasNashRange('shove', 8, s, true), `${s}bb 빅엔티가 잘못 막혔다`).toBe(true);
+    // k 를 안 넘기면 보수적으로 격리 — '모르면 덜 말한다'
+    expect(isNashQuarantined(3, true)).toBe(true);
   });
   it('안테가 있으면 셔브가 넓어진다 (SB 10bb)', () => {
     const noA = rangeComboPct(freqFromArray(nashRange('shove', 1, 10, false), HAND_ORDER));

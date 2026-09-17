@@ -55,15 +55,26 @@ export type NashKind = 'shove' | 'callBB' | 'callSB';
  *
  *  ⚠ 되살리려면 **데이터를 고친 뒤** 이 목록을 비워라. 목록만 비우면 같은 거짓 조언이 그대로 돌아온다.
  *  `nash.data.test.ts` 의 단조성 계약이 그때 진짜인지 판정해 준다. */
-export const NASH_ANTE_QUARANTINE: readonly number[] = [4, 5, 6];
+export const NASH_ANTE_QUARANTINE: readonly number[] = [2, 3, 4, 5, 6];
 
-/** 이 조합이 격리 구간인가. 소비자 셋(차트·드릴·스팟 분석)이 **같은 판정**을 쓰게 하는 단 하나의 함수다. */
-export function isNashQuarantined(stack: number, ante: boolean): boolean {
-  return ante && NASH_ANTE_QUARANTINE.includes(stack);
+/** 이 조합이 격리 구간인가. 소비자 셋(차트·드릴·스팟 분석)이 **같은 판정**을 쓰게 하는 단 하나의 함수다.
+ *
+ *  🔴 **k(뒤에 남은 인원)를 함께 본다 — 깨진 것은 k≥2 열이고 k=1(SB)은 맞다.**
+ *  2026-09-17 1차 판단은 "2~3BB 는 데드머니가 커서 any-two 잼이 정상" 이었는데 **역산으로 반증됐다**:
+ *    UTG(k=8) 손익분기 = S/(0.5+2S) → 2BB **44.4%** · 3BB **46.2%** · S→∞ 50% 로 **단조 증가**한다.
+ *    즉 어떤 스택에서도 44.4% 밑으로 내려가지 않는다. 그런데 앱 엔진 실측 승률은
+ *    32o 32.5% · 82o 36.9% · 93o 40.2% 로 전부 그 아래인데 표는 **UTG 100% 잼**이라고 말한다.
+ *    빅 엔티도 이 결론을 못 뒤집는다 — 엔티 1BB 는 데드머니(1.5→2.5)만 키우고 분모의 `2S` 를 못 건드린다.
+ *  반면 SB(k=1) 임계는 `(S−0.5)/(2S)` → 2BB 37.5% · 3BB 41.7% 로 낮고, 표의 SB 열(2BB 91.9%)은
+ *  그 임계와 정합한다(100% 아닌 12개가 전부 37.5% 미만). **그래서 SB 열은 살린다.**
+ *  ⚠ k 를 안 넘기면(예전 호출부) 보수적으로 **격리로 본다** — 모르면 덜 말하는 쪽이 안전하다. */
+export function isNashQuarantined(stack: number, ante: boolean, k?: number): boolean {
+  if (!ante || !NASH_ANTE_QUARANTINE.includes(stack)) return false;
+  return k === undefined || k >= 2;
 }
 
 const tableOf = (kind: NashKind, k: number, stack: number, ante: boolean): string | undefined =>
-  isNashQuarantined(stack, ante) ? undefined
+  isNashQuarantined(stack, ante, k) ? undefined
     : (kind === 'shove' ? SHOVE : kind === 'callBB' ? CALL_BB : CALL_SB)[ante ? 'ante' : 'no']?.[String(k)]?.[String(stack)];
 
 /** 그 조합의 표가 실제로 있는가. 없는 조합을 nashRange 로 읽으면 전부 0(=전부 폴드)이라 **틀린 조언이 된다** —

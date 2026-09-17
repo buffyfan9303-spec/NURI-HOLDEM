@@ -466,7 +466,7 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   //   여기서 null 을 돌려주면 이 스팟은 **수학 참고(math_only)** 로 떨어진다. 틀린 차트로 "개선 필요" 라고
   //   말하는 것보다 "차트 없음 + 팟오즈만" 이 정직하다. ⚠ `nashRange` 를 그냥 부르면 격리 표는 **전부 0**
   //   (= 전부 폴드)이라 그것도 거짓말이 된다 — 그래서 읽기 전에 막는다.
-  if (isNashQuarantined(stack, s.anteBb > 0)) return null;
+  if (isNashQuarantined(stack, s.anteBb > 0, k)) return null;
 
   const arr = nashRange('shove', k, stack, s.anteBb > 0);
   if (!arr || arr.length <= idx) return null;
