@@ -619,7 +619,7 @@ export default function HomeTab({
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate t-title text-ink-primary">GTO 도구</span>
-              <span className="mt-0.5 block truncate t-desc text-ink-muted">차트 · 계산기 · 트레이너 · 누리 스팟</span>
+              <span className="mt-0.5 block truncate t-desc text-ink-muted">차트 · 계산기 · 트레이너 · NURI SPOT</span>
             </span>
             <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
           </button>

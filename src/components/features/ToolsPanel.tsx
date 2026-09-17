@@ -38,6 +38,8 @@ const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 // NURI SPOT — 구조화 스팟·분석 엔진·리포트를 물고 있어 도구 중 가장 무겁다. 열 때 받는다.
 const NuriSpotPanel = lazyWithReload(() => import('./gto/NuriSpotPanel'));
+// 타입만 가져온다 — 컴파일에서 지워지므로 위 lazy 청크를 앞당겨 받지 않는다.
+import type { SpotTab } from './gto/NuriSpotPanel';
 
 /**
  * NURI SPOT 진입 초기값 — 직전 스팟이 있으면 그것, 없으면 **기존 두 도구의 스냅샷에서 카드를 물려받는다**.
@@ -95,7 +97,11 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   //   ⚠ 새 레인을 만들지 않고 'review'(핸드 리뷰)에 넣는다 — 레인이 늘면
   //     e2e/gto-tab-verify.spec.ts 의 '섹션 정확히 4개'·'칩 5개' 계약이 깨진다.
   //     대신 카탈로그 위에 대표 카드(SpotHeroCard)를 따로 세워 우선순위를 준다.
-  { key: 'spot', cat: 'review', name: '누리 스팟', desc: '핸드 분석 · 리플레이 · 토론', keywords: 'NURI SPOT 스팟 복기 구조화 분석 저장 토론 공유 액션 타임라인', icon: 'spade' },
+  // 🔴 이름은 **NURI SPOT 하나**다(오너 확정 2026-09-17). 창 제목이 이 `name` 을 그대로 쓰므로
+  //    `NuriSpotPanel` 의 패널 `<h2>NURI SPOT</h2>` 삭제와 **한 쌍**이다 — 하나만 바꾸면
+  //    `e2e/nuri-spot.spec.ts:45` 의 strict 1개 단언이 0개 또는 2개로 즉시 터진다.
+  //    한글 검색 재현율은 `keywords` 의 '누리 스팟' 이 지킨다(검색은 name·desc·keywords 를 함께 본다).
+  { key: 'spot', cat: 'review', name: 'NURI SPOT', desc: '핸드 분석 · 리플레이 · 토론', keywords: '누리 스팟 NURI SPOT 스팟 복기 구조화 분석 저장 토론 공유 액션 타임라인', icon: 'spade' },
   { key: 'replay', cat: 'review', name: '핸드 리플레이어', desc: '지난 판 복기와 승률 흐름', keywords: '그 핸드 복기 · 승률 추이·아웃', icon: 'clapperboard' },
   { key: 'gto', cat: 'review', name: 'GTO 핸드 분석', desc: '내 패 승률과 참고 액션', keywords: '프리/포스트플랍 승률·휴리스틱 참고 액션', icon: 'scan-search' },
   { key: 'rvr', cat: 'explore', name: '레인지 vs 레인지', desc: '양쪽 패 범위의 승률 비교', keywords: '레인지 간 에퀴티 매트릭스', icon: 'git-compare' },
@@ -156,12 +162,14 @@ const LANE_ORDER = ['all', ...LANES.map((l) => l.id)] as (ToolCat | 'all')[];
 // 트레이너류는 '퀴즈' 뉘앙스(맞히기), 나머지 계산기·차트류는 '도구' 뉘앙스로 라벨링.
 const QUIZ_KEYS = new Set<ToolKey>(['drill', 'range', 'pushfold', 'trainer', 'postflop', 'wrongnote']);
 
-function renderTool(k: ToolKey): ReactNode {
+function renderTool(k: ToolKey, spotTab?: SpotTab): ReactNode {
   switch (k) {
     case 'tda': return <TdaRulesTool />;
     // NURI SPOT — 직전 입력(tool:spot)이 있으면 그것으로, 없으면 기존 두 도구의 스냅샷에서 카드를 물려받는다.
     //   그래야 '핸드 분석에서 카드 고르다 스팟으로 넘어온' 사용자가 처음부터 다시 안 찍는다.
-    case 'spot': return <NuriSpotPanel init={spotInitFromSnapshots()} />;
+    //   ⚠ spotTab: 히어로 카드의 '내 스팟' 버튼이 실어 보낸다. 없으면 NuriSpotPanel 이 'analyze' 로 시작한다
+    //     (예전에는 두 버튼이 **둘 다** 분석 탭을 열어 `init.tab` 이 생산자 0인 죽은 코드였다).
+    case 'spot': return <NuriSpotPanel init={{ ...spotInitFromSnapshots(), ...(spotTab ? { tab: spotTab } : {}) }} />;
     // '결과 먼저': 빈 폼 대신 직전 입력(스냅샷) 또는 대표 데모 핸드(AKs vs QQ)로 진입 즉시 결과.
     case 'gto': {
       const saved = readSnap<DeepGtoInit>('tool:gto');
@@ -262,6 +270,11 @@ export default function ToolsPanel() {
     setActive(k);
   }, [authLoading, user]);
   const close = () => setActive(null);
+  /** 히어로 카드 두 버튼이 여는 탭 — '새 스팟 분석' 은 analyze, '내 스팟' 은 mine.
+   *  Modal 이 `{active ? … : null}` 로 갈아끼우며 언마운트하므로 NuriSpotPanel 의
+   *  `useState(init?.tab ?? 'analyze')` 가 열 때마다 다시 실행된다(새 기계 0). */
+  const [spotTab, setSpotTab] = useState<SpotTab>('analyze');
+  const openSpot = (t: SpotTab) => { setSpotTab(t); open('spot'); };
 
   // ── 딥링크 해시(#tool=)는 **도구 자신의 history 항목**에 얹는다 ──────────────
   // 2026-08-28 회귀 수정. 예전엔 open() 이 그 자리에서 replaceState 로 해시를 썼다.
@@ -394,7 +407,7 @@ export default function ToolsPanel() {
       </div>
 
       {/* NURI SPOT — GTO 홈의 대표 진입점. 검색·레인 칩보다 위, 그러나 낮게. */}
-      {!hits && <SpotHeroCard onOpen={open} />}
+      {!hits && <SpotHeroCard onOpen={openSpot} />}
 
       {/* 도구 검색 */}
       <div className="relative">
@@ -514,7 +527,7 @@ export default function ToolsPanel() {
         <div className="px-page-x py-3 pb-8" onClick={swapToolOnLinkClick}>
           <Suspense fallback={<div className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
             {/* #tool= 딥링크로 비로그인 진입해도 게이트가 유지되게 실행 지점에서 한 번 더 확인 */}
-            {active ? (user ? renderTool(active) : (
+            {active ? (user ? renderTool(active, spotTab) : (
               <div className="flex flex-col items-center gap-3 py-14 text-center">
                 <p className="text-sm font-bold text-ink-primary">로그인하면 GTO 도구를 쓸 수 있어요</p>
                 <p className="text-2xs text-ink-muted">차트·트레이너·계산기 전부 무료입니다</p>
@@ -540,7 +553,7 @@ const LANE_TONE: Record<string, TileTone> = { chart: 'violet', learn: 'fuchsia',
  * 대신 **높이를 낮게 유지**한다 — 모바일 첫 화면에서 이 카드 아래로 검색창·레인 칩·차트/트레이너가
  * 바로 이어져야 한다(오너 지시 2: 첫 화면에서 새 스팟 분석·차트·트레이너 셋을 다 알아볼 수 있을 것).
  */
-function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
+function SpotHeroCard({ onOpen }: { onOpen: (t: SpotTab) => void }) {
   return (
     <section
       data-testid="spot-hero"
@@ -579,10 +592,10 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
       {/* `.btn` 이 `whitespace-nowrap leading-none` 이라 200% 확대에서 '새 스팟 분석'(137px)이
           2열 칸(128px)을 넘쳤다. 라벨을 줄이지 않고 **두 줄을 허용**한다(높이는 min-h-[44px] 가 이미 예약). */}
       <div className="mt-2.5 grid grid-cols-2 gap-1.5">
-        <button type="button" onClick={() => onOpen('spot')} className="btn-primary min-h-[44px] whitespace-normal px-2 text-xs leading-tight">
+        <button type="button" onClick={() => onOpen('analyze')} className="btn-primary min-h-[44px] whitespace-normal px-2 text-xs leading-tight">
           새 스팟 분석
         </button>
-        <button type="button" onClick={() => onOpen('spot')} className="btn-ghost min-h-[44px] whitespace-normal px-2 text-xs leading-tight">
+        <button type="button" onClick={() => onOpen('mine')} className="btn-ghost min-h-[44px] whitespace-normal px-2 text-xs leading-tight">
           내 스팟
         </button>
       </div>

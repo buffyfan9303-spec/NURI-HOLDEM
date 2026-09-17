@@ -26,10 +26,10 @@ import { cardId } from './useDeepGto';
 import type { Card } from './gto.types';
 import {
   emptySpot, validateSpot, hasBlocker, positionsFor, streetLabel, actionLabel,
-  potBb, BOARD_LEN, ACTION_TYPES, fromJSON,
+  potBb, ACTION_TYPES, fromJSON,
   type SpotReview, type SpotAction, type SpotActionType, type SpotPosition, type Street,
 } from '../../../lib/spot';
-import { evaluateSpot, type SpotEvaluation } from '../../../lib/spotEvaluate';
+import { amountToCall, evaluateSpot, type SpotEvaluation } from '../../../lib/spotEvaluate';
 import SpotReport from './SpotReport';
 import MySpotList from './MySpotList';
 
@@ -43,13 +43,49 @@ const SIZE_PRESETS: Record<'pre' | 'post', number[]> = {
   post: [1, 2, 3, 5, 8],
 };
 
+const STREET_ORDER: readonly Street[] = ['preflop', 'flop', 'turn', 'river'];
+
+/**
+ * 액션 프리셋 — **이 화면에서 탭이 실제로 줄어드는 단 하나**다.
+ * `SIZE_PRESETS.pre` 에 8 이 없어 '상대 3벳 8BB' 줄은 오늘 반드시 타이핑 1회가 든다.
+ *
+ * `actions(st)` 는 순수 함수다 — 계약 테스트가 클릭 없이 결과 배열을 그대로 대조한다.
+ * ⚠ 이름에 '액션 추가' 를 넣지 마라. `e2e/nuri-spot.spec.ts:148` 이 그 이름으로 버튼 **1개**를
+ *   부분일치로 집고, `:260-271` 이 같은 이름으로 히트 영역을 잰다.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- 계약 테스트가 프리셋 정의를 직접 읽는다
+export const ACTION_PRESETS: readonly { key: string; label: string; actions: (st: Street) => SpotAction[] }[] = [
+  { key: 'firstin', label: '첫 진입', actions: () => [] },
+  { key: 'vsopen', label: '상대 오픈 2.5BB', actions: (st) => [{ street: st, actor: 'villain', type: 'raise', sizeBb: 2.5 }] },
+  {
+    key: 'vs3bet',
+    label: '내 오픈 2.5 → 상대 3벳 8',
+    actions: (st) => [
+      { street: st, actor: 'hero', type: 'raise', sizeBb: 2.5 },
+      { street: st, actor: 'villain', type: 'raise', sizeBb: 8 },
+    ],
+  },
+  { key: 'vsbet', label: '상대 벳', actions: (st) => [{ street: st, actor: 'villain', type: 'bet', sizeBb: st === 'preflop' ? 2.5 : 3 }] },
+];
+
+/** 프리셋은 **지금 스트리트만** 갈아끼운다 — 앞 스트리트에 쌓아 둔 기록을 지우지 않는다.
+ *  sort 는 안정 정렬이라 스트리트 안 순서는 그대로다. */
+// eslint-disable-next-line react-refresh/only-export-components -- 위와 같은 이유(순수 함수 단위 테스트)
+export function applyPreset(prev: readonly SpotAction[], st: Street, next: SpotAction[]): SpotAction[] {
+  return [...prev.filter((a) => a.street !== st), ...next]
+    .sort((a, b) => STREET_ORDER.indexOf(a.street) - STREET_ORDER.indexOf(b.street));
+}
+
 // ── 입력 단계 ────────────────────────────────────────────────────────────────
-// 한 화면에 필드를 다 펼치면 모바일에서 스크롤만 길어진다. 네 묶음으로 나눈다.
+// 2026-09-17: **배타 렌더를 버렸다.** 네 묶음은 그대로지만 화면을 갈아끼우지 않고 한 문서로 쌓고,
+// 이 목록은 그 밴드로 데려다주는 **앵커 레일**이 된다(단계 이름은 게이트가 정규식으로 읽으므로 그대로).
+// 순서는 **문서 순서와 같다** — 레일이 가리키는 차례가 곧 아래에 놓인 차례여야 순서를 잘못 가르치지 않는다.
+// 단계 힌트 문장 4개는 지웠다(밴드 제목이 같은 말을 한다 — 누락이 아니라 결정).
 const STEPS = [
-  { key: 'game', label: '게임', hint: '어떤 판이었는지 먼저 정합니다.' },
-  { key: 'seat', label: '자리·스택', hint: '내 자리와 상대 자리, 유효 스택을 고릅니다.' },
-  { key: 'cards', label: '카드·액션', hint: '카드를 고르고 액션을 순서대로 쌓습니다.' },
-  { key: 'choice', label: '내 선택', hint: '그 자리에서 실제로 한 선택을 고릅니다.' },
+  { key: 'cards', label: '카드·액션' },
+  { key: 'choice', label: '내 선택' },
+  { key: 'seat', label: '자리·스택' },
+  { key: 'game', label: '게임' },
 ] as const;
 type StepKey = typeof STEPS[number]['key'];
 
@@ -183,13 +219,11 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
           backgroundRepeat: 'no-repeat',
         }}
       />
-      <div className="flex items-center gap-3">
-        <SpadeMark />
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-extrabold tracking-tight text-ink-primary">NURI SPOT</h2>
-          <p className="truncate text-2xs text-ink-muted">핸드 분석 · 리플레이 · 토론</p>
-        </div>
-      </div>
+      {/* ⚠ 제목을 여기서 **지웠다**(2026-09-17). 창 제목(`Modal.tsx` 의 `<h2 id="modal-title">` = `TOOLS[spot].name`)이
+          이미 `NURI SPOT` 을 말한다 — 같은 글자가 두 번 떴고, 상단 42.5px(실측)을 먹고 있었다.
+          🔴 이 삭제와 `ToolsPanel.tsx` 의 `name: '누리 스팟'` → `'NURI SPOT'` 은 **한 쌍**이다.
+             하나만 하면 `e2e/nuri-spot.spec.ts:45` 의 `getByText('NURI SPOT', {exact:true})` 가
+             0개(strict 타임아웃) 또는 2개(strict 위반)로 즉시 터진다 — 격리 재현으로 4경우 전부 확인했다. */}
       {/* 내비 행 — 분석 | 내 스팟 | 게시판 토론 › 셋이 같은 행·같은 세로 중심·같은 글자 규격(t-tab).
           2026-09-14 실측(390px): '게시판 토론'이 소개 행(y 73.6, 11.7px)에, 탭은 아래 행(y 132.8, 12.75px)에 있어
           "위치가 다르다"(오너 지적)가 났다 — 탭을 오갈 때 좌표 자체는 같았고(분석·내 스팟 모두 동일), 다른 행·다른 규격이 원인.
@@ -218,24 +252,9 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
   );
 }
 
-/** 골드 스페이드 + 뒤쪽 국소 LED. 브랜드 심벌은 기존 자산을 쓴다(새 이미지 생성 0). */
-function SpadeMark() {
-  return (
-    // h-10(42.5px): 소개 행 높이를 정하는 요소다 — 상단이 첫 화면의 23% 를 먹어(design 실측, 콘텐츠 시작 y=192.6) 한 단 줄였다.
-    <span className="relative grid h-10 w-10 shrink-0 place-items-center" aria-hidden>
-      <span
-        className="pointer-events-none absolute inset-0 rounded-full"
-        style={{ boxShadow: '0 0 18px rgb(139 92 246 / 0.42), 0 0 34px rgb(34 211 238 / 0.18)' }}
-      />
-      <span
-        className="grid h-10 w-10 place-items-center rounded-full border border-white/12"
-        style={{ background: 'radial-gradient(120% 120% at 50% 0%, #242B48 0%, #141930 58%, #0A0D1B 100%)' }}
-      >
-        <img src="/brand/nuri-holdem-symbol.svg" alt="" width={22} height={22} draggable={false} />
-      </span>
-    </span>
-  );
-}
+// ⚠ `SpadeMark`(골드 스페이드 + 국소 LED)는 위 제목 행과 함께 지웠다 — 호출부가 0곳이 됐다.
+//   같은 심벌은 GTO 홈의 대표 카드(`ToolsPanel.tsx` 의 `SpotHeroCard`)에 그대로 살아 있고,
+//   자산(`public/brand/nuri-holdem-symbol.svg`)도 손대지 않았다. 잃은 기능 0.
 
 // ── 분석 탭 ──────────────────────────────────────────────────────────────────
 
@@ -256,80 +275,107 @@ interface AnalyzeProps {
 
 function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, calculating, savedAt, user, toast, shareIntent }: AnalyzeProps) {
   const [step, setStep] = useState<StepKey>('cards');
-  const cur = STEPS.find((s) => s.key === step) ?? STEPS[2];
+  const bands = useRef<Partial<Record<StepKey, HTMLDivElement | null>>>({});
+  // 레일은 화면을 갈아끼우지 않는다 — 그 밴드로 데려다줄 뿐이다.
+  const goStep = (k: StepKey) => {
+    setStep(k);
+    bands.current[k]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
 
   return (
-    // PC 는 2열(왼쪽 입력 · 오른쪽 결과 sticky), 모바일은 한 줄로 쌓인다 — 같은 컴포넌트·같은 데이터.
-    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-4">
-      <div className="min-w-0 space-y-3">
-        <StepBar step={step} onStep={setStep} spot={spot} />
-        <p className="text-2xs text-ink-muted">{cur.hint}</p>
+    <>
+      <AnchorRail step={step} onStep={goStep} />
+      {/* PC 는 2열(왼쪽 입력 2행 · 오른쪽 결과 sticky), 모바일은 grid 가 꺼져 **DOM 순서 그대로** 쌓인다.
+          ⚠ `lg:items-start` 를 빼면 오른쪽 열이 그리드 전체 높이로 stretch 돼 sticky 가 **조용히 죽는다**
+            (1280 실측: 박스 높이 420 → 1276.5, 스크롤 482px 뒤 리포트 top +176.3 → −409.8 = 화면 밖). */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-4">
+        {/* ① 내 패 · ② 덱 52장 · ③ 보드·상대·초기화 — HandBoardPicker 한 덩어리.
+            `hint` 를 안 넘긴다: 공용 컴포넌트의 `{hint ? … : null}` 이 이미 옵셔널이라 한 글자도 안 고친다.
+            스트리트는 아래 액션 타임라인의 소제목이 말한다. */}
+        <div ref={(el) => { bands.current.cards = el; }} className="min-w-0 scroll-mt-14 lg:col-start-1 lg:row-start-1">
+          <HandBoardPicker hb={hb} />
+        </div>
 
-        {step === 'game' && <GameStep spot={spot} patch={patch} />}
-        {step === 'seat' && <SeatStep spot={spot} patch={patch} />}
-        {step === 'cards' && (
-          <div className="space-y-3">
-            <HandBoardPicker hb={hb} hint={<>보드는 플랍 3장부터 리버 5장까지 — 지금은 <b className="text-ink-secondary">{streetLabel(spot.street)}</b></>} />
-            <ActionTimeline spot={spot} patch={patch} />
+        {/* ⑤ 리포트 — 카드 2장 뒤 등급 배지가 **첫 화면 안**에 있으려면 여기여야 한다.
+            375×667 실측: ④ 내 선택 + IssueList 를 리포트 앞에 두면 배지 top 840.17(화면 밖 173px),
+            뒤로 내리면 596.05(bottom 618.23, 여유 48.8px). 취향이 아니라 측정 결과다. */}
+        {/* ⚠ sticky 오프셋을 `var(--stack-top)` 에서 `lg:top-3` 으로 **고쳤다**(2026-09-17 실측).
+            `--stack-top`(App.tsx:1994)은 앱 헤더+GNB 탭바의 **뷰포트 기준 하단**이라 인페이지 sticky
+            (AdminTab·VenueManageTab·StoreDashboard·LedgerWorkspace)에는 맞지만, 이 화면은 그 둘을
+            z-[55] 로 덮는 전체화면 모달 안이고 기준점은 모달 본문 스크롤포트다.
+            1280×900 실측: 리포트가 스크롤포트 상단에서 115.75px 아래에 붙어 841px 읽기 높이의 13.9% 를
+            빈칸으로 버렸다(top 202.06 → 스크롤 후 175.25, 스크롤포트 top 59.5).
+            다른 5곳은 모달 밖이라 그대로 둔다 — 여기만 기준점이 어긋나 있었다.
+            ⚠ `top-3`(12.75px)으로 줄였더니 이번엔 **sticky 레일이 리포트 머리를 덮었다** — 1280 스크린샷에서
+              등급 배지 줄이 통째로 가려졌다(숫자로는 안 보였다. 레일 래퍼 45.56px = 칩 32.81 + py-1.5 12.75).
+              `top-14`(59.5px)가 레일 아래 13.94px 여유를 남긴다. 밴드의 `scroll-mt-14` 와 같은 값이다. */}
+        <div className="mt-3 min-w-0 lg:mt-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-14">
+          <SpotReport
+            spot={spot} evaluation={evaluation} calculating={calculating} blocked={blocked} shareIntent={shareIntent}
+            user={user} toast={toast}
+          />
+        </div>
+
+        <div className="mt-3 min-w-0 space-y-3 lg:mt-0 lg:col-start-1 lg:row-start-2">
+          {/* 무엇을 고쳐야 하는지 — 모든 상태에서 화면에 남는다(issues 가 비면 스스로 null 을 돌려준다). */}
+          <IssueList issues={issues} />
+          <div ref={(el) => { bands.current.choice = el; }} className="scroll-mt-14">
+            <ChoiceStep spot={spot} patch={patch} />
           </div>
-        )}
-        {step === 'choice' && <ChoiceStep spot={spot} patch={patch} />}
-
-        <IssueList issues={issues} />
-        {savedAt !== null && (
-          <p className="text-2xs text-ink-muted" aria-live="polite">
-            <Icon name="check" size={11} className="mr-1 inline-block align-[-1px]" />임시 저장됨 — 나갔다 와도 그대로입니다
-          </p>
-        )}
+          <ActionTimeline spot={spot} patch={patch} />
+          <div ref={(el) => { bands.current.seat = el; }} className="scroll-mt-14">
+            <SeatStep spot={spot} patch={patch} />
+          </div>
+          <div ref={(el) => { bands.current.game = el; }} className="scroll-mt-14">
+            <GameStep spot={spot} patch={patch} />
+          </div>
+          {savedAt !== null && (
+            <p className="text-2xs text-ink-muted" aria-live="polite">
+              <Icon name="check" size={11} className="mr-1 inline-block align-[-1px]" />임시 저장됨 — 나갔다 와도 그대로입니다
+            </p>
+          )}
+        </div>
       </div>
-
-      <div className="mt-3 min-w-0 lg:mt-0 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)]">
-        <SpotReport
-          spot={spot} evaluation={evaluation} calculating={calculating} blocked={blocked} shareIntent={shareIntent}
-          user={user} toast={toast}
-        />
-      </div>
-    </div>
+    </>
   );
 }
 
-/** 단계 바 — 현재 단계와 완료 상태를 함께 보여준다. */
-function StepBar({ step, onStep, spot }: { step: StepKey; onStep: (s: StepKey) => void; spot: SpotReview }) {
-  const done: Record<StepKey, boolean> = {
-    game: true,
-    seat: spot.heroPos !== spot.villainPos,
-    cards: spot.hero.length === 2 && spot.board.length === BOARD_LEN[spot.street],
-    choice: spot.heroAction !== null,
-  };
-  // 네 칩은 412px 에서 한 줄에 안 들어간다 — 가로 스크롤은 두되,
-  // **지금 서 있는 단계가 잘려 보이면** 안 된다(412px 실측: '4 내 선택' 이 오른쪽에서 잘렸다).
-  // block:'nearest' 로 세로는 건드리지 않아 시트 본문이 같이 튀는 것을 막는다.
+/**
+ * 앵커 레일 — 이 화면에서 **sticky 는 이것 하나뿐**이다(내비 행은 올리지 않는다 → 겹침 0).
+ *
+ * 번호(`{i+1}`)와 완료 체크를 뺐다: `done.game` 은 상수 true 였고 `done.seat` 은 기본값에서 항상 참이라
+ * 거짓말이었으며, 3번에서 시작하는 번호는 순서를 잘못 가르쳤다. 칩 폭이 상태에 따라 넓어지지 않게 되면서
+ * `e2e/nuri-spot.spec.ts:185-193` 이 잡던 "나중에 넓어져 잘림" 부류는 구조적으로 재발할 수 없다.
+ */
+function AnchorRail({ step, onStep }: { step: StepKey; onStep: (s: StepKey) => void }) {
+  // 네 칩은 좁은 폭·200% 확대에서 한 줄에 안 들어간다 — 가로 스크롤은 두되,
+  // **지금 서 있는 칩이 잘려 보이면** 안 된다. block:'nearest' 로 세로는 건드리지 않는다
+  // (레일이 sticky 라 항상 보이므로 'nearest' 는 세로 스크롤을 만들지 않는다 — 밴드 스크롤과 싸우지 않는다).
   const barRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     barRef.current?.querySelector('[aria-current="step"]')
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-    // ⚠ deps 에 done 을 반드시 넣는다. step 만 보면 이렇게 샌다(412px 실측):
-    //   4단계로 이동(체크 없음 → 거의 들어맞음, scrollLeft=1) → 액션 선택 →
-    //   체크 아이콘이 생겨 칩이 넓어짐 → 그런데 step 은 그대로라 효과가 안 돈다 → 잘린 채 남는다.
-  }, [step, done.seat, done.cards, done.choice]);
+    // deps 에서 done 3개가 빠졌다 — 체크 아이콘을 없애 칩 폭이 상태와 무관해졌기 때문이다.
+  }, [step]);
   return (
-    <div ref={barRef} className="flex gap-1.5 overflow-x-auto pb-0.5" role="group" aria-label="입력 단계">
-      {STEPS.map((s, i) => {
-        const on = s.key === step;
-        return (
-          <button
-            key={s.key} type="button" aria-current={on ? 'step' : undefined}
-            onClick={() => onStep(s.key)}
-            className={['tap-y-44 flex shrink-0 items-center gap-1.5 rounded-badge border px-2.5 py-1.5 text-2xs font-bold transition-colors',
-              on ? 'border-accent-300 bg-accent-300 text-white'
-                : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}
-          >
-            <span className={on ? 'text-white/80' : 'text-ink-muted'}>{i + 1}</span>
-            {s.label}
-            {done[s.key] && <Icon name="check" size={11} className={on ? 'text-white' : 'text-emerald-400'} aria-label="완료" />}
-          </button>
-        );
-      })}
+    // -mx-page-x px-page-x: 모달 본문의 좌우 여백(17px)까지 덮어야 sticky 아래로 내용이 비치지 않는다.
+    <div className="sticky top-0 z-10 -mx-page-x bg-surface-base px-page-x py-1.5">
+      <div ref={barRef} className="flex gap-1.5 overflow-x-auto pb-0.5" role="group" aria-label="입력 단계">
+        {STEPS.map((s) => {
+          const on = s.key === step;
+          return (
+            <button
+              key={s.key} type="button" aria-current={on ? 'step' : undefined}
+              onClick={() => onStep(s.key)}
+              className={['tap-y-44 flex shrink-0 items-center rounded-badge border px-2.5 py-1.5 text-2xs font-bold transition-colors',
+                on ? 'border-accent-300 bg-accent-300 text-white'
+                  : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -346,8 +392,11 @@ function Row({ label, children, wrap = false }: { label: string; children: React
   );
 }
 
-function Pick<T extends string | number>({ value, options, onChange, fmt }: {
+function Pick<T extends string | number>({ value, options, onChange, fmt, label }: {
   value: T; options: readonly T[]; onChange: (v: T) => void; fmt?: (v: T) => string;
+  /** 접근명을 넓힌다(보이는 글자를 **포함**해야 한다 — WCAG 2.5.3).
+   *  같은 라벨의 칩이 화면에 둘 이상일 때 게이트가 `.first()` 순서에 기대지 않게 하는 용도다. */
+  label?: (v: T) => string;
 }) {
   // 현재 값이 선택지에 없으면(옛 초안의 앤티 등) 마지막 칩으로 보여 준다 — 값을 접거나 버리지 않는다.
   // '' 는 '아직 미선택'(heroAction null) 이라 칩을 만들지 않는다.
@@ -361,6 +410,7 @@ function Pick<T extends string | number>({ value, options, onChange, fmt }: {
     <div className="flex min-w-0 flex-1 flex-wrap gap-x-1 gap-y-3">
       {shown.map((o) => (
         <button key={String(o)} type="button" aria-pressed={o === value} onClick={() => onChange(o)}
+          aria-label={label ? label(o) : undefined}
           // min-h 36 + tap-y-44 의 위아래 6px = 48px 터치(전엔 32px 로 44px 계약 미달)
           className={['tap-y-44 min-h-[36px] rounded-input border px-2 text-2xs font-bold transition-colors',
             o === value ? 'border-accent-300 bg-accent-300 text-white'
@@ -426,6 +476,14 @@ function SeatStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
           <span className="text-2xs text-ink-muted">BB</span>
         </label>
       </Row>
+      {/* UTG·HJ·CO 가 무엇인지 모르는 사람에게 이 화면은 여기서 막힌다.
+          `ToolsPanel` 의 앵커 위임(`a[href^="#tool="]`)이 이미 받으므로 새 컴포넌트·새 이벤트 0 —
+          전체 리로드 없이 용어사전 도구로 갈아끼운다. */}
+      <a href="#tool=glossary"
+        className="inline-flex min-h-[44px] items-center gap-1 text-2xs font-semibold text-accent-200 transition-colors hover:text-accent-300">
+        자리 이름 뜻 보기
+        <Icon name="chevron-right" size={12} className="block shrink-0" aria-hidden />
+      </a>
     </div>
   );
 }
@@ -445,7 +503,7 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
   const removeAt = (i: number) => patch({ actions: spot.actions.filter((_, n) => n !== i) });
 
   // 스트리트별로 묶어 보여준다 — 순서가 눈에 보여야 입력이 맞았는지 안다.
-  const grouped = (['preflop', 'flop', 'turn', 'river'] as Street[])
+  const grouped = STREET_ORDER
     .map((st) => ({ st, rows: spot.actions.map((a, i) => ({ a, i })).filter((x) => x.a.street === st) }))
     .filter((g) => g.rows.length > 0);
 
@@ -489,12 +547,26 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
 
       {/* 추가 줄 — 버튼으로 빠르게, 필요하면 숫자를 직접 */}
       <div className="mt-2.5 space-y-1.5 border-t border-border-subtle pt-2.5">
+        <Row label="자주 쓰는 시작점" wrap>
+          {ACTION_PRESETS.map((p) => (
+            <button key={p.key} type="button"
+              onClick={() => patch({ actions: applyPreset(spot.actions, spot.street, p.actions(spot.street)) })}
+              className="tap-y-44 min-h-[36px] rounded-input border border-border-default bg-surface-high px-2 text-2xs font-bold text-ink-secondary transition-colors break-keep hover:text-ink-primary">
+              {p.label}
+            </button>
+          ))}
+        </Row>
         <Row label="누가">
           <Pick value={actor} options={['villain', 'hero'] as const} onChange={setActor}
             fmt={(v) => (v === 'hero' ? `나 (${spot.heroPos})` : `상대 (${spot.villainPos})`)} />
         </Row>
         <Row label="무엇을">
-          <Pick value={type} options={ACTION_TYPES} onChange={setType} fmt={actionLabel} />
+          {/* ⚠ 접근명을 '상대 레이즈' 로 넓힌다. ④ ChoiceStep 에도 같은 '레이즈' 칩이 있어
+              `getByRole('button', {name:'레이즈', exact:true})`(e2e:182 · board:162)가 둘 다 잡았고,
+              `.first()` 가 **DOM 순서라는 관습**에만 기대고 있었다. 이제 여기는 exact 매칭에서 아예 빠진다.
+              보이는 글자('레이즈')가 접근명에 그대로 들어 있어 WCAG 2.5.3 을 지킨다. */}
+          <Pick value={type} options={ACTION_TYPES} onChange={setType} fmt={actionLabel}
+            label={(v) => `${actor === 'hero' ? '나' : '상대'} ${actionLabel(v)}`} />
         </Row>
         {sized && (
           // '총액으로 레이즈'가 아니라 **이번에 추가로 넣는 돈**이다. 둘을 섞으면 팟과 콜 금액이
@@ -520,10 +592,17 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
 
 function ChoiceStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotReview>) => void }) {
   const sized = spot.heroAction === 'call' || spot.heroAction === 'bet' || spot.heroAction === 'raise';
+  // 낼 돈이 있는 자리에서는 '체크' 가 애초에 불가능한 선택이다. 그런데 고를 수 있게 두면
+  // mixKeyOf('check') 가 null → verdictFromFreq(null, true) = 'mixed' 로 떨어져
+  // 리포트가 **허용되는 혼합**이라고 판정해 버린다(표가 판정한 적이 없는데).
+  // 포스트플랍 노벳(=0)에서는 그대로 보인다. 저장된 옛 스팟의 'check' 는 Pick 이 마지막 칩으로 살려 둔다.
+  const choices: readonly SpotActionType[] = amountToCall(spot) > 0
+    ? ACTION_TYPES.filter((t) => t !== 'check')
+    : ACTION_TYPES;
   return (
     <div className="rounded-card border border-border-default bg-surface-mid p-3">
       <Row label="그때 나는">
-        <Pick value={spot.heroAction ?? ('' as SpotActionType)} options={ACTION_TYPES}
+        <Pick value={spot.heroAction ?? ('' as SpotActionType)} options={choices}
           onChange={(v) => patch({ heroAction: v })} fmt={actionLabel} />
       </Row>
       {sized && (

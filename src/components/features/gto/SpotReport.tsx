@@ -14,7 +14,7 @@ import Modal from '../../atoms/Modal';
 import { ensureLogin } from '../../../lib/requireLogin';
 import type { useToast } from '../../atoms/Toast';
 import type { useAuth } from '../../../contexts/AuthContext';
-import { actionLabel, spotSummary, type SpotReview } from '../../../lib/spot';
+import { actionLabel, spotSummary, type SpotReview, type SpotActionType } from '../../../lib/spot';
 import {
   COVERAGE_LABEL, VERDICT_LABEL,
   type SpotEvaluation, type CoverageKind, type Verdict, type ActionMix,
@@ -69,6 +69,8 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
   const [confirming, setConfirming] = useState(false);
   /** 시트에서 고치는 메모. 원본 spot 은 건드리지 않는다(내 스팟 임시저장을 흔들지 않게). */
   const [draftNote, setDraftNote] = useState('');
+  /** 등급 배지 설명 펼침 — 모바일 99% 라 `title`(hover) 은 아무도 못 읽는다. 눌러서 편다. */
+  const [hintOpen, setHintOpen] = useState(false);
   const tone = COVERAGE_TONE[evaluation.kind];
 
   const onSave = async () => {
@@ -147,26 +149,42 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
     >
       {/* ① 먼저 보이는 것 */}
       <header className="flex flex-wrap items-center gap-2">
-        {/* 평가 배지는 **판정할 것이 있을 때만** 세운다.
+        {/* 평가 배지는 **판정할 것이 있을 때만** 세운다. 세 조건 전부 필요하다:
             · 내가 고른 액션이 없으면 판정할 대상이 없다.
-            · out_of_scope 는 아래 등급 배지가 이미 같은 문장을 말한다 — 두 배지가 같은 글자를
-              나란히 띄우면 정보가 늘지 않고 화면만 시끄러워진다(1280 실측에서 실제로 그랬다). */}
-        {spot.heroAction !== null && evaluation.verdict !== 'out_of_scope' && (
+            · 등급 배지와 **같은 글자**면 두 번 띄우지 않는다(out_of_scope 뿐 아니라
+              `수학 참고`(math/math_only)·`유사 스팟 참고`(reference/normalized_reference) 두 쌍도
+              나란히 같은 말을 한다 — 1280 실측에서 실제로 그랬다). 라벨로 일반화한다.
+            · 표에 그 갈래가 없는 선택(체크)은 `verdictFromFreq(null, true)` 가 'mixed' 로 떨어져
+              **허용되는 혼합**이라고 말해 버린다. 표가 판정한 적이 없는데 판정한 척하는 자리라 막는다. */}
+        {spot.heroAction !== null
+          && VERDICT_LABEL[evaluation.verdict] !== COVERAGE_LABEL[evaluation.kind]
+          && heroMixKey(spot) !== null && (
           <span className={['inline-flex items-center gap-1 rounded-badge border px-2 py-0.5 text-2xs font-bold', VERDICT_TONE[evaluation.verdict]].join(' ')}>
             <Icon name={evaluation.verdict === 'good' ? 'check' : evaluation.verdict === 'improve' ? 'alert' : 'info'} size={11} aria-hidden />
             {VERDICT_LABEL[evaluation.verdict]}
           </span>
         )}
-        <span
+        {/* ⚠ `data-source-badge` 와 `title` 은 게이트가 읽는다(e2e/nuri-spot.spec.ts:130-140) — 속성은 그대로 두고
+            요소만 button 으로 바꾼다. hover 가 없는 모바일에서 `title` 은 0명이 읽는다. */}
+        <button
+          type="button"
           data-source-badge={evaluation.kind}
           title={coverageHint(evaluation.kind)}
-          className={['inline-flex items-center gap-1 rounded-badge border border-border-default bg-surface-high px-2 py-0.5 text-2xs font-semibold', tone.text].join(' ')}
+          aria-expanded={hintOpen}
+          onClick={() => setHintOpen((v) => !v)}
+          className={['tap-y-44 inline-flex items-center gap-1 rounded-badge border border-border-default bg-surface-high px-2 py-0.5 text-2xs font-semibold', tone.text].join(' ')}
         >
           <Icon name={tone.icon} size={11} aria-hidden />
           {COVERAGE_LABEL[evaluation.kind]}
-        </span>
+          <Icon name={hintOpen ? 'chevron-up' : 'chevron-down'} size={11} aria-hidden />
+        </button>
         {calculating && <span className="text-2xs text-ink-muted" aria-live="polite">계산 중…</span>}
       </header>
+      {hintOpen && (
+        <p className="mt-1.5 rounded-input bg-surface-high px-2.5 py-2 text-2xs leading-relaxed text-ink-secondary break-keep">
+          {coverageHint(evaluation.kind)}
+        </p>
+      )}
 
       <p className="mt-1.5 text-2xs text-ink-muted">{spotSummary(spot)}</p>
 
@@ -180,13 +198,15 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
         </span>
       </div>
 
-      {/* ② 빈도 또는 수학 */}
+      {/* ② 빈도 **와** 수학.
+          `math` 는 유니온 공통 base 에 늘 실려 있고(spotEvaluate.ts:403 `const base = { …, math }`),
+          에퀴티 이펙트는 히어로2+빌런2면 무조건 돈다(NuriSpotPanel 의 에퀴티 이펙트).
+          그런데 차트에 걸리면 `MixBar` 만 그려 **이미 계산이 끝난 승률이 화면에만 없었다.**
+          빌런 카드를 넣은 사람이 아무 보상도 못 받던 자리라 항상 함께 세운다. */}
       {(evaluation.kind === 'chart_nash' || evaluation.kind === 'normalized_reference') && (
         <MixBar mix={evaluation.mix} heroKey={heroMixKey(spot)} />
       )}
-      {(evaluation.kind === 'math_only' || evaluation.kind === 'unsupported') && (
-        <MathBlock math={evaluation.math} />
-      )}
+      <MathBlock math={evaluation.math} />
 
       {/* ③ 왜 그런지 · 가정 · 출처
           범위 밖일 때는 **리포트 한 문장(reason)** 만 세운다.
@@ -204,7 +224,7 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
           {evaluation.notes.map((n, i) => (
             <li key={i} className="flex items-start gap-1.5 text-2xs leading-relaxed text-ink-secondary break-keep">
               <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-muted" aria-hidden />
-              <span>{n}</span>
+              <span>{koreanizeActionKeys(n)}</span>
             </li>
           ))}
         </ul>
@@ -322,7 +342,10 @@ function ShareConfirmSheet({
             '게시판 · 핸드 카테고리에 올라갑니다.',
             '자리·스택·내 카드가 담긴 스팟 카드가 글에 붙습니다.',
             "'당신이라면?' 액션 투표가 함께 만들어집니다.",
-            '상대 카드와 결과는 가려진 채 올라갑니다 — 나중에 직접 열 수 있습니다.',
+            // ⚠ 예전 문구는 '상대 카드와 **결과**'였는데 `result` 는 입력 UI 가 0곳인 값이다(lib/spot.ts) —
+            //    없는 기능을 약속하고 있었다. 실제로 가려지는 것은 `heroAction` 이고,
+            //    e2e/nuri-spot-board.spec.ts:124 가 `[data-spot-heroaction]` 0개를 단언한다.
+            '상대 카드와 내 선택은 가려진 채 올라갑니다 — 나중에 직접 열 수 있습니다.',
           ].map((t) => (
             <li key={t} className="flex items-start gap-1.5 text-2xs leading-relaxed text-ink-secondary break-keep">
               <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-muted" aria-hidden />
@@ -345,6 +368,12 @@ function ShareConfirmSheet({
   );
 }
 
+/** 근거 문장 안의 영문 액션 키를 우리말로 — `이 표에는 'check' 갈래가 없어…`(spotEvaluate.ts:433).
+ *  판정 엔진은 보호 파일이라 못 고친다. 화면에서 글자만 바꾼다(의미·판정은 그대로). */
+function koreanizeActionKeys(s: string): string {
+  return s.replace(/'(fold|check|call|bet|raise)'/g, (_, k: SpotActionType) => `'${actionLabel(k)}'`);
+}
+
 function heroMixKey(spot: SpotReview): keyof ActionMix | null {
   const a = spot.heroAction;
   if (a === 'fold') return 'fold';
@@ -360,6 +389,8 @@ function MixBar({ mix, heroKey }: { mix: ActionMix; heroKey: keyof ActionMix | n
   const text = order.map((k) => `${MIX_TONE[k].label} ${pct(mix[k])}%`).join(', ');
   return (
     <div className="mt-2.5">
+      {/* 이 말이 오늘은 막대의 `aria-label` 안에만 있어 **눈으로는 아무도 못 읽었다.** 제목으로 세운다. */}
+      <p className="mb-1 text-2xs font-bold text-ink-secondary">이 자리의 기준 빈도</p>
       {/* 막대 자체는 장식 — 실제 값은 아래 목록이 전한다(스크린리더는 목록을 읽는다) */}
       <div className="flex h-3 w-full overflow-hidden rounded-full bg-surface-high" role="img" aria-label={`기준 빈도 — ${text}`}>
         {order.map((k) => (
