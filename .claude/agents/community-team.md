@@ -39,8 +39,8 @@ memory: local
 - `git pull`·`switch`·`checkout`·`reset`·`restore`·`clean`·`stash`·`commit`·`push` 는
   사용자가 명시적으로 요청할 때만 실행한다.
 - 아래 사용자 작업 중인 파일은 건드리지 않는다:
-  `e2e/nuri-spot.spec.ts` · `public/sitemap.xml` · `src/lib/ranges.data.ts` ·
-  `src/lib/spotEvaluate.test.ts` · `src/lib/spotEvaluate.ts`
+  `e2e/nuri-spot.spec.ts` · `public/sitemap.xml` · `src/lib/ranges.data.ts`
+  (2026-09-17 오너 지시로 `src/lib/spotEvaluate.ts` 는 보호 해제 — GTO 담당만 편집한다)
 
 ## memory — 시작할 때 읽고, 끝낼 때 남긴다
 

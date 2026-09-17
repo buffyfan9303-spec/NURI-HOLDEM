@@ -82,4 +82,5 @@ description: 오너가 외부에서 가져온 프롬프트 템플릿 3종 — �
 
 - 위 세 프롬프트 중 어느 것도 새 금지 규칙을 만들지 않는다 — "이 파일 이 줄을 이렇게" 구체 변경만 요구한다.
 - §28 카피 계약(참가비·GTD·상금 = 가격 정보로 표시 유지, '환전·현금·수익·시세표·에스크로' 계열 어휘 금지)은 세 템플릿 어디에서든 카피를 건드리면 항상 같이 확인한다.
-- 보호 파일(`e2e/nuri-spot.spec.ts` · `public/sitemap.xml` · `src/lib/ranges.data.ts` · `src/lib/spotEvaluate.ts`/`spotEvaluate.test.ts`)은 세 템플릿 어느 것으로도 수정 대상에 넣지 않는다.
+- 보호 파일(`e2e/nuri-spot.spec.ts` · `public/sitemap.xml` · `src/lib/ranges.data.ts`)은 세 템플릿 어느 것으로도 수정 대상에 넣지 않는다.
+  ⚠ `src/lib/spotEvaluate.ts` 는 2026-09-17 오너 지시로 **보호에서 내렸다**. `spotEvaluate.test.ts` 는 추가만 허용(기존 단언 삭제·약화는 리드 보고).

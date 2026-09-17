@@ -31,8 +31,9 @@ nuri-lead 의 영향 분석과 편집자 지정 없이 고치지 않는다.
 - `e2e/nuri-spot.spec.ts`
 - `public/sitemap.xml`
 - `src/lib/ranges.data.ts`
-- `src/lib/spotEvaluate.test.ts`
-- `src/lib/spotEvaluate.ts`
+
+> ⚠ 2026-09-17 오너 지시로 `src/lib/spotEvaluate.ts` 는 **보호에서 내렸다**(3벳·vs 3벳·SB 수비 표를 판정 엔진에 연결하기 위해). `spotEvaluate.test.ts` 는 **추가만** 허용 —
+> 기존 단언을 지우거나 약화하려면 리드에게 먼저 보고한다. 나머지 세 파일은 그대로 보호한다.
 
 ## 일하는 방식
 

@@ -3,7 +3,7 @@
 > **다른 Claude Code 계정·다른 컴퓨터에서 이어서 작업할 때 이 파일 하나만 읽으면 된다.**
 > 한도가 끊기거나 계정을 바꿔도 이 파일은 git 에 있으므로 `git pull` 이면 따라온다.
 >
-> 마지막 갱신: **2026-09-15(2차)** · 오너 지시 13건 전량 구현 완료, 배포 진행
+> 마지막 갱신: **2026-09-17(밤 · claude-B)** · 커뮤니티/순위 모션 + 순위 결함 6건 배포, 누리 스팟 재설계 진행 중
 > ⚠ **이 파일은 살아 있는 문서다.** 작업을 끝낼 때마다 "남은 일" 표와 "마지막 갱신"을 고쳐라.
 > 날짜별 파일을 새로 만들지 마라 — 정본이 여러 개면 전부 못 믿게 된다.
 
@@ -75,6 +75,101 @@ npx tsc -b --force                # rc=0 이어야 한다
 
 ---
 
+
+## 0-a4. 2026-09-17 **밤 · claude-B 세션** — 여기가 가장 최신이다
+
+> 앞 절(0-a3)은 같은 날 **낮에 claude-A** 가 쓴 것이다. 아래가 그 뒤의 일이다.
+> 브랜치 `NURI/account-handover-learning-sync-8fd949` · 워크트리 `.claude/worktrees/account-handover-learning-sync-8fd949`.
+
+### ✅ 배포 완료 (main 에 푸시됨, CI 초록)
+
+| 커밋 | 내용 |
+|---|---|
+| `8459d2c` | 커뮤니티 서브탭을 2세대 모션으로 — 화면 전체 blur 제거 + **죽은 면제 삭제** |
+| `82841d5` | 순위 탭 6건 — 무한 루프 · 실패 위장 · 재조회 · 판 돌출 · localStorage 실명 · `ilike` 와일드카드 |
+
+### 🔴 다음 사람이 **반드시** 알아야 할 것 — 오늘 네 번 밟은 함정
+
+**계측기가 0을 말해도 결함이 없는 게 아니다.**
+
+`getComputedStyle(document.documentElement, '::view-transition-old(x)').height` 로 잰
+스냅샷 돌출량은 `object-fit: none` 만 넣어도 **0 이 된다. 그런데 그림은 그대로 넘친다**
+(자홍 기준선 가림률 94% 실측). VT 스냅샷은 `object-fit` 클립을 받지 않는다.
+
+→ **View Transition 관련 판정은 전환 중간 프레임 스크린샷으로 해라.** 숫자는 보조다.
+→ 조리법은 **두 줄이 한 쌍**이다. 한쪽만 넣으면 안 고쳐지고, 그 사실이 계측에 안 잡힌다:
+```css
+html[data-vt-scope='<스코프>']::view-transition-group(<이름>) { overflow: clip; }
+html[data-vt-scope='<스코프>']::view-transition-old(<이름>),
+html[data-vt-scope='<스코프>']::view-transition-new(<이름>) { height: 100%; object-fit: none; object-position: top left; }
+```
+`src/lib/subTabTransition.test.ts` 에 **'두 줄이 한 쌍' 계약**을 넣어 반쪽 적용을 막았다(양방향 음성 대조 확인).
+
+같은 부류 4건이 오늘 나왔다 — 전부 **"증거가 없는 것을 통과로 읽는 것"**:
+1. 위의 거짓 0.
+2. `subTabTransition.test.ts:70` 이 **유일한 위반자만 면제**해 6개월 숨겼다(`community-sec`). 지웠다.
+3. `RAISE NOTICE` 가 Supabase MCP 출력에 **안 보인다** → 리허설 결과를 임시 테이블에 담아 `select` 로 돌려받아야 한다.
+4. 390px 에서만 재면 `max-w-3xl` 이 안 물려 **폭 변화가 측정에 아예 안 들어온다**. 넓은 화면을 따로 재라.
+
+### 🔓 보호 해제 (오너 지시)
+`src/lib/spotEvaluate.ts` — §4 참고. `ranges.data.ts` 는 **계속 보호**.
+
+### ✅ 라이브 DB 적용 — `20260917g` (오너 승인 "모두 진행")
+`can_search_ranking_members()` 에 승인·상태 조건을 더했다.
+전에는 `role in ('venue_owner','admin')` 뿐이라 **심사를 안 거친 가입자가 가입 직후부터 통과**했다
+(가입 경로가 `role:'venue_owner'` 를 그대로 박는다). 통과하면 닉네임 100개씩
+"회원인가·본인인증했나"를 조회할 수 있다.
+
+적용 전 리허설 5건 + 적용 후 실측 7건 전부 기대대로. **막힌 사람 0명**(미승인 업주가 현재 0명).
+⚠ `approved` 는 **nullable boolean** 이라 `is true` 로 받았다 — `= true` 로 썼으면 NULL 이 통과해 fail-open 이었다.
+
+### 📋 순위 구조 전수 감사 — 결함 22건 중 **라이브 실측으로 반증된 것**
+
+감사팀이 🔴치명으로 올렸으나 **라이브에서는 안전하다. 다시 고치지 마라**:
+
+| 감사 주장 | 라이브 실측(2026-09-17) |
+|---|---|
+| 실명 판정기가 `can_manage_venue` → 직원도 통과 | **`can_access_ledger` 다** ✅ |
+| `can_manage_venue` 에 `venue_staff` 가지 살아 있음 | **없다** ✅ |
+| `venue_rankings.real_name` 을 anon 이 읽는다 | **회수됨**(테이블 SELECT 자체가 anon·authenticated 둘 다 불가) ✅ |
+| 닉네임 선점으로 실명이 샌다 | `venue_rankings` **0행** · 실명공개 동의 **2명** — 노출 0 |
+
+**저장소가 라이브보다 뒤처진 것이지 노출이 아니다.**
+다만 `20260915f` 는 65줄 전부 주석이고 `20260910b:188-198` 도 주석이라
+**마이그레이션을 처음부터 다시 돌리면 구멍이 되살아난다** → 아래 남은 일 참고.
+
+> 🔴 **교훈**: 저장소에 실행 SQL 이 없다는 관찰은 정확했지만, 거기서 "그러므로 라이브도 열려 있다"로
+> 건너뛴 것이 틀렸다. 저장소가 증명 못 하는 것은 '닫혀 있다'뿐이고 '열려 있다'도 똑같이 증명 못 한다.
+> **한 줄 쿼리면 끝나는 것을 추론으로 대체하지 마라.**
+
+### 🔄 이 세션이 남기고 가는 진행 중 작업
+
+1. **누리 스팟 재설계 구현** — 설계 확정, 구현 워크플로 진행 중.
+   설계 정본은 워크플로 산출물(아래 "설계 문서 위치" 참고). 핵심: **배타 렌더를 버리고 한 문서로 편다.**
+   오너 결정: 이름 `NURI SPOT` 통일(검색어로 `누리 스팟` 유지) · 카드 2장 뒤 커서는 현행 유지.
+   ⚠ `TOOLS[spot].name` 변경과 패널 `<h2>` 삭제는 **반드시 같은 커밋** — 하나만 하면
+   `e2e/nuri-spot.spec.ts:45` 의 strict 1개가 0개 또는 2개가 되어 즉시 터진다.
+2. **3벳 판정 엔진 연결** — 조사·설계 워크플로 진행 중(읽기 전용). 구현은 1번이 끝난 뒤.
+3. **패널 14개 돌출 전수 측정** — `adminpos/admin-sec/crm/dealer/group/legal/live/market/mystore-sec/
+   profile/sched/tools-lane/usermgmt/venue-tab` panel. `notif-panel` 은 의도된 예외라 제외.
+   이미 확인된 것: `community-secpanel` 313.5px · `rank-panel` 320px · `profile-panel` 2180px(모두 가드 적용/필요).
+
+### 남은 일 — 우선순위대로
+
+| # | 할 일 | 왜 | 어디 |
+|---|---|---|---|
+| 1 | 위 진행 중 3건 마무리 | 오너가 "마무리까지 전체" 지시 | — |
+| 2 | **주석만 있는 마이그레이션 2건에 실행 SQL 채우기** | 재해복구 시 실명 구멍이 되살아난다 | `20260915f` · `20260910b:188-198` |
+| 3 | 순위 감사 나머지 결함 | D3 닉네임 기반 동의 · D5 출석왕 RLS · D10 '지난 대회' event_name · D11 폐지된 보상 광고 | `tasks/audit.md`(임시) — 정본은 커밋 메시지 `82841d5` |
+| 4 | 순위 판 스크롤 클램프 227px | 문서가 짧아지며 `scrollY` 가 깎인다. VT 와 무관한 별건 | `TierLeaderboard.tsx` |
+| 5 | PortOne `@portone/browser-sdk` 라이선스 확인 | 라이선스 필드·파일이 어디에도 없다 | 오너가 PortOne 에 문의 |
+
+### 설계 문서 위치 (임시 — git 밖이다)
+누리 스팟 설계 정본과 순위 감사 전문은 세션 임시 폴더에 있다:
+`C:\Users\buffy\AppData\Local\Temp\claude\C--Users-buffy-OneDrive-------------claude-worktrees-account-handover-learning-sync-8fd949\1bba1840-945a-4ff7-807d-14cc8e33fff5\tasks\spot.md` · `audit.md`
+⚠ **계정이 바뀌면 이 경로는 못 읽는다.** 필요하면 구현 커밋 메시지에 요지를 옮겨 적어라.
+
+---
 
 ## 0-a3. 2026-09-17 claude-A 작업 결과 — **여기가 가장 최신이다**
 
@@ -391,9 +486,14 @@ Supabase 어드바이저 보안 ERROR 0 (INFO 1 · WARN 3, 전부 기존)
 e2e/nuri-spot.spec.ts
 public/sitemap.xml
 src/lib/ranges.data.ts
-src/lib/spotEvaluate.test.ts
-src/lib/spotEvaluate.ts
 ```
+
+> 🔓 **2026-09-17 오너 지시로 `src/lib/spotEvaluate.ts` 는 보호에서 내렸다.**
+> 이유: 3벳·vs 3벳·SB 수비 표가 `ranges.data.ts` 에 있는데 판정 엔진이 조회하지 않아
+> 그 스팟들은 어떤 입력으로도 등급이 안 나온다. 연결하려면 엔진을 고쳐야 한다.
+> `src/lib/spotEvaluate.test.ts` 는 **추가만** 허용 — 기존 단언을 지우거나 약화하려면 먼저 보고한다.
+> **표 데이터(`ranges.data.ts`)는 계속 보호한다.** 고칠 수 있는 것은 엔진뿐이다.
+> 같은 해제를 `.claude/agents/*.md` 5개와 `.claude/skills/nuri-prompt-templates/SKILL.md` 에도 반영했다.
 ⚠ `npm run build` 와 `npm run test:e2e` 는 **`public/sitemap.xml` 을 덮어쓴다.** §5 절차를 써라.
 
 ### 라이브 DB
