@@ -2156,6 +2156,25 @@ html[data-vt-scope='notif-tab'] [data-notif-panel] { view-transition-name: notif
 html[data-vt-scope='notif-tab'] [data-notif-actions] { view-transition-name: notif-actions; }
 html[data-vt-scope='notif-tab'] [data-notif-actions] [data-sliding-pill] { view-transition-name: notiffilter-pill; }
 html[data-vt-scope='notif-tab'] [data-notif-actions] [data-pill-active] { view-transition-name: notiffilter-label; }
+
+/* 🔴 알림 목록 필터(전체 | 안읽음) — **모드 전환(쪽지↔알림)과 다른 스코프**다.
+   무엇이 문제였나(2026-09-18 오너 리포트: "알림에 읽음 안읽음 누르면 계속 깜빡거려"):
+     필터 토글이 모드 전환과 **같은 `notif-tab` 스코프**를 쓰고 있었다. 그래서 전체↔안읽음을
+     누를 때마다 모드 전환용 연출이 통째로 돌았다 — 특히 `old(notif-panel) { vt-fade-out }` 이
+     **목록 전체를 페이드아웃**시킨다. 같은 목록을 거르기만 하는 동작인데 판이 한 번 사라졌다 온다.
+   실측(390×844 · 목킹 세션 · 전환 2.5s 로 늘려 중간 프레임):
+     old(notif-panel) opacity 1 · animation **vt-fade-out**   ← 깜빡임의 정체
+     group(notif-panel) UA 보간(목록 길이가 바뀌어 박스까지 움직인다)
+     notif-pill(쪽지|알림 알약)도 UA 크로스페이드 — 모드는 그대로인데 헛돈다
+   고침: 필터 전용 스코프에서는 **패널에 이름을 주지 않는다.** 이름이 없으면 목록은 얼어붙은
+   root 안에 남아 t=0 에 즉시 새 목록으로 바뀐다 — 페이드가 아예 없다.
+   이름을 받는 것은 **알약과 활성 라벨 둘뿐**이라 알약만 미끄러진다(그게 이 동작의 전부다).
+   ⚠ 위 notif-tab 쪽 notiffilter-* 규칙은 **지운 게 아니다** — 모드가 바뀔 때 필터가 사라지는
+     경우(쪽지로 이동)에 `:only-child` 퇴장 규칙이 걸려야 하므로 그대로 둔다. */
+html[data-vt-scope='notif-filter'] [data-notif-actions] [data-sliding-pill] { view-transition-name: notiffilter-pill; }
+html[data-vt-scope='notif-filter'] [data-notif-actions] [data-pill-active] { view-transition-name: notiffilter-label; }
+html[data-vt-scope='notif-filter']::view-transition-old(root),
+html[data-vt-scope='notif-filter']::view-transition-new(root) { animation: none; }
 html[data-vt-scope='notif-tab']::view-transition-old(root),
 html[data-vt-scope='notif-tab']::view-transition-new(root) { animation: none; }
 /* 알림 팝업은 <header data-stack-header>(app-header 스냅샷) 안에 산다(App.tsx) — 모바일 스크림(fixed inset-0

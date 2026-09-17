@@ -58,8 +58,32 @@ describe('하위 탭 전환 · 알약과 활성 라벨의 스냅샷 순서', () 
     });
 });
 
+/**
+ * 방향성 푸시(vt-panel-in/out-*)를 **일부러 안 쓰는** 스코프와 그 이유.
+ * 면제는 목록이 아니라 **사유와 한 쌍**이다 — 이유 없이 이름만 늘면 게이트가 조용히 비어 간다
+ * (2026-09-17 에 community-sec 면제 하나가 유일한 위반자를 6개월 숨긴 전례가 있다).
+ */
+const NO_DIR: Record<string, string> = {
+  'notif-tab':
+    '뜨는 작은 카드(좌우 여백 17px)라 ±18px 가로 푸시가 카드 밖으로 삐져나갔다(2026-09-14 오너 리포트). '
+    + 'old 만 vt-fade-out, new 는 애니메이션 없음. data-vt-dir 자체를 쓰지 않는다.',
+  'notif-filter':
+    '알림 목록 **필터**(전체|안읽음)는 판을 바꾸는 것이 아니라 같은 목록을 거르는 것이다. '
+    + '그래서 본문에 이름을 아예 주지 않는다 — 목록은 얼어붙은 root 안에 남아 t=0 에 즉시 바뀐다. '
+    + '이름을 받는 것은 알약과 활성 라벨 둘뿐이라 알약만 미끄러진다. '
+    + '2026-09-18 오너 리포트("알림에 읽음 안읽음 누르면 계속 깜빡거려")의 원인이 이 동작을 '
+    + 'notif-tab 스코프로 돌려 notif-panel 이 매번 vt-fade-out 된 것이었다.',
+};
+
 describe('하위 탭 전환 · 스코프와 CSS 규칙의 1:1', () => {
   const scopes = [...usedScopes()].sort();
+
+  it('방향 면제는 사유와 함께 적혀 있고, 실제로 쓰이는 스코프만 면제된다', () => {
+    for (const [scope, why] of Object.entries(NO_DIR)) {
+      expect(scopes, `NO_DIR 에 있는 '${scope}' 가 더 이상 쓰이지 않는다 — 면제를 지워라`).toContain(scope);
+      expect(why.length, `${scope}: 면제 사유가 너무 짧다`).toBeGreaterThan(40);
+    }
+  });
 
   it('스코프가 실제로 여럿 등록돼 있다(전수 적용의 최소 증거)', () => {
     // 오너 #10 이전에는 3개(community-sec · venue-tab · rank-tab)뿐이었다.
@@ -100,7 +124,7 @@ describe('하위 탭 전환 · 스코프와 CSS 규칙의 1:1', () => {
     //   old 만 페이드아웃(vt-fade-out)하고 new 는 애니메이션 없이 즉시 자리를 지키는 방식으로 바꿨다 —
     //   `data-vt-dir` 자체를 쓰지 않으므로 이 방향 검사 대상에서 뺀다. ①②(이름 최소 2개·root 정지)는
     //   notif-tab 도 그대로 지킨다(이미 통과 확인).
-    if (scope === 'notif-tab') return;
+    if (NO_DIR[scope]) return;
     const hasDir = (n: string, dir: string, phase: string) =>
       CSS.includes(`data-vt-dir='${dir}']::view-transition-${phase}(${n})`);
     const panel = names.find((n) => hasDir(n, 'forward', 'new'));
@@ -251,9 +275,32 @@ describe('하위 탭 전환 · 알약이 탭바 스냅샷에 갇히지 않는다
     ).toEqual([]);
   });
 
-  it('알약 이름이 서로 겹치지 않는다 — 같은 이름이 둘이면 전환이 통째로 실패한다', () => {
-    const names = [...CSS.matchAll(/\[data-sliding-pill\]\s*\{\s*view-transition-name:\s*([a-z0-9-]+)/g)].map((m) => m[1]);
-    expect(names.length, '알약 규칙이 하나도 없다 — 셀렉터가 바뀌었는지 확인하라').toBeGreaterThanOrEqual(8);
-    expect(new Set(names).size, `알약 이름 중복: ${names.join(',')}`).toBe(names.length);
+  it('한 스코프 안에서 알약 이름이 겹치지 않는다 — 같은 이름이 둘이면 전환이 통째로 실패한다', () => {
+    // ⚠ 2026-09-18 정정: 예전엔 **CSS 전체**에서 이름 중복을 셌다. 그러면 서로 다른 스코프가
+    //   **같은 요소**에 같은 이름을 주는 정당한 경우까지 빨개진다 — `notiffilter-pill` 이
+    //   `notif-tab`(모드 전환, 필터가 사라지는 쪽)과 `notif-filter`(필터 토글) 양쪽에 필요하다.
+    //   실제 위험은 "한 순간에 DOM 에 같은 이름이 둘"이다. `data-vt-scope` 는 값이 하나뿐이라
+    //   (viewTransition.ts:189) 스코프가 다르면 절대 동시에 걸리지 않는다.
+    //   그래서 **스코프별로** 센다. 더해서, 스코프를 넘어 같은 이름을 쓸 때는 **같은 마커**여야
+    //   한다고 못 박는다 — 다른 요소에 같은 이름을 주는 것이 진짜 사고다.
+    const rows = [...CSS.matchAll(
+      /html\[data-vt-scope='([a-z0-9-]+)'\] \[(data-[a-z0-9-]+)\] \[data-sliding-pill\] \{ view-transition-name: ([a-z0-9-]+); \}/g)]
+      .map((m) => ({ scope: m[1], marker: m[2], name: m[3] }));
+    expect(rows.length, '알약 규칙이 하나도 없다 — 셀렉터가 바뀌었는지 확인하라').toBeGreaterThanOrEqual(8);
+
+    const byScope = new Map<string, string[]>();
+    for (const r of rows) byScope.set(r.scope, [...(byScope.get(r.scope) ?? []), r.name]);
+    for (const [scope, names] of byScope) {
+      expect(new Set(names).size, `${scope} 안에서 알약 이름 중복: ${names.join(',')}`).toBe(names.length);
+    }
+
+    const markerOf = new Map<string, string>();
+    for (const r of rows) {
+      const prev = markerOf.get(r.name);
+      expect(prev ?? r.marker,
+        `알약 이름 '${r.name}' 이 서로 다른 요소에 붙는다(${prev} vs ${r.marker}) — 둘이 동시에 뜨면 전환이 통째로 실패한다`)
+        .toBe(r.marker);
+      markerOf.set(r.name, r.marker);
+    }
   });
 });

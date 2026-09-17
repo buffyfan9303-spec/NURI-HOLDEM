@@ -367,7 +367,7 @@ export default function NotificationPanel({
                   </button>
                 )}
                 <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안읽음' }]} value={filter}
-                  onChange={(v) => goSubTab('notif-tab', NOTIF_FILTER_ORDER, filter, v, () => setFilter(v))} />
+                  onChange={(v) => goSubTab('notif-filter', NOTIF_FILTER_ORDER, filter, v, () => setFilter(v))} />
               </>
             )}
             {mode === 'messages' && msgView === 'list' && (
