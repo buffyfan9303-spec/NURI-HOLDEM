@@ -137,7 +137,7 @@ function rememberRowCount(n: number) {
   writeRankRowCount('activity', n);
 }
 function rememberMoneyinRowCount(n: number) {
-  lastMoneyinRowCount = Math.max(1, Math.min(30, n));
+  lastMoneyinRowCount = Math.max(0, Math.min(30, n)); // 0 은 0 — 다음 스켈레톤이 EmptyState 높이를 예약한다(CareerBoard)
   writeRankRowCount('moneyin', n);
 }
 function rememberDomesticRowCount(n: number) {
@@ -206,28 +206,31 @@ const SHOP_BTN_OFF = 'border-accent-400/40 text-accent-300 hover:bg-accent-300/1
 
 /** 전국 대회 머니인 입상 경력 보드(오너 결정 2026-09-05) — 상금·금액 없이 '입상 경력'만 강조한다.
  *  기간 칩(전체·올해·최근 90일) · 내 경력 카드(전국 순위·상위 %) · 목록(입상 횟수 큰 숫자 + 우승·TOP3·최고 등수·매장 수·최근 입상). */
-function CareerBoard({ myNick, nickStyle, markPrefix }: {
+// D-moneyin(2026-09-17): rows·기간·오류가 이 컴포넌트의 local state 였다 — 보드 전환마다 언마운트돼 **웜 방문에도 매번**
+//   global_ranking_totals 를 불렀다(hall·domestic 은 부모가 들어 첫 진입 1회). 상태는 부모(TierLeaderboard, career*)로 올리고
+//   여기는 그리기만 한다. rows === null 은 '미도착'(부모가 조회 중), loadErr 는 부모 boardErr.career.
+function CareerBoard({ myNick, nickStyle, markPrefix, period, setPeriod, rows, loadErr, onRetry }: {
   myNick: string | null;
   nickStyle: (r: unknown) => CSSProperties | undefined;
   markPrefix: (r: unknown) => string;
+  period: CareerPeriod;
+  setPeriod: (p: CareerPeriod) => void;
+  rows: GlobalRankingTotal[] | null;
+  loadErr: unknown;
+  onRetry: () => void;
 }) {
-  const [period, setPeriod] = useState<CareerPeriod>('all');
-  const [rows, setRows] = useState<GlobalRankingTotal[] | null>(null);
-  const [loadErr, setLoadErr] = useState<unknown>(null); // 실패는 '0건'과 다른 상태 — 굳지 않게 rows 는 null 로 둔다
-  const [tick, setTick] = useState(0); // 실패 후 '다시' — 같은 기간이라도 재조회
-  useEffect(() => {
-    let alive = true;
-    setRows(null); setLoadErr(null);
-    getGlobalRankingTotals(period)
-      .then((r) => { if (alive) { setRows(r); rememberMoneyinRowCount(r.length); } })
-      .catch((e) => { if (alive) setLoadErr(e ?? new Error('불러오기 실패')); });
-    return () => { alive = false; };
-  }, [period, tick]);
   const key = (myNick ?? '').trim().toLowerCase();
   const myIdx = rows && key ? rows.findIndex((r) => r.nickname.trim().toLowerCase() === key) : -1;
   const me = myIdx >= 0 && rows ? rows[myIdx] : null;
   const pct = me && rows ? Math.max(1, Math.round(((myIdx + 1) / rows.length) * 100)) : null;
   const fmtDate = (d: string | null) => (d ? d.slice(2).replace(/-/g, '.') : '');
+  const careerEmpty = (
+    <EmptyState
+      title={period === 'all' ? '아직 집계된 대회 입상이 없어요' : '이 기간의 대회 입상이 없어요'}
+      hint="매장이 대회 순위를 올리면 입상 경력이 이 표에 자동으로 오릅니다"
+      icon={<Icon name="trophy" />}
+    />
+  );
   return (
     <div className="space-y-2">
       {/* 기간 — 경력은 누적이 본질이라 '전체'가 기본. 올해·최근 90일은 현역 감각용. */}
@@ -241,15 +244,13 @@ function CareerBoard({ myNick, nickStyle, markPrefix }: {
         ))}
       </div>
       {loadErr != null ? (
-        <LoadErrorCard error={loadErr} what="대회 입상 경력" onRetry={() => setTick((t) => t + 1)} />
+        <LoadErrorCard error={loadErr} what="대회 입상 경력" onRetry={onRetry} />
       ) : rows === null ? (
-        <RowSkeleton rows={lastMoneyinRowCount} />
+        // 지난번 0건이었으면 1행 스켈레톤(142px)이 아니라 **실제 EmptyState 를 감춰서** 같은 높이를 예약한다(298px, 156px 차가
+        // 전환 도중 판을 키워 '멈칫' 을 만들었다). 실제 컴포넌트를 그리므로 높이가 정의상 같다 — px 상수를 두지 않는다.
+        lastMoneyinRowCount === 0 ? <div className="invisible" aria-hidden>{careerEmpty}</div> : <RowSkeleton rows={lastMoneyinRowCount} />
       ) : rows.length === 0 ? (
-        <EmptyState
-          title={period === 'all' ? '아직 집계된 대회 입상이 없어요' : '이 기간의 대회 입상이 없어요'}
-          hint="매장이 대회 순위를 올리면 입상 경력이 이 표에 자동으로 오릅니다"
-          icon={<Icon name="trophy" />}
-        />
+        careerEmpty
       ) : (
         <>
           {/* 내 경력 — 전국 순위·상위 % 와 경력 한 줄. 로그인 전엔 그리지 않는다. */}
@@ -309,10 +310,16 @@ export default function TierLeaderboard() {
   //     `=== null` 가드가 B 계정으로 다시 부르게 한다(업적·미션 진행도·순위 인증 신청 이력·장착 마크·소장품·잔액 = 개인정보).
   //   · 실패는 '없음' 이 아니다 — 보드별 오류를 boardErr 한 곳에 들고 LoadErrorCard(재시도)로 그린다(머니인·국내순위·미션이 이미 쓰던 패턴 확장).
   const scopeRef = useRef<RequestStamp<string>>({ seq: 0, owner: user?.id ?? 'anon' });
-  type BoardErrKey = 'badges' | 'hall' | 'verifs' | 'skus' | 'owned' | 'cosmetics' | 'season' | 'balance' | 'equip';
+  type BoardErrKey = 'activity' | 'career' | 'badges' | 'hall' | 'verifs' | 'skus' | 'owned' | 'cosmetics' | 'season' | 'balance' | 'equip';
   const [boardErr, setBoardErr] = useState<Partial<Record<BoardErrKey, unknown>>>({});
   const fail = (k: BoardErrKey) => (e: unknown) => setBoardErr((prev) => ({ ...prev, [k]: e ?? new Error('불러오기 실패') }));
-  const clearErr = (...ks: BoardErrKey[]) => setBoardErr((prev) => { const n = { ...prev }; for (const k of ks) delete n[k]; return n; });
+  // 지울 키가 없으면 **같은 참조**를 돌려준다(D8, 2026-09-17). boardErr 는 아래 보드 이펙트의 deps 라, 성공 경로의
+  // clearErr('balance') 가 매번 새 객체를 만들면 성공→새 참조→이펙트→재조회→성공… 으로 상점 RPC 9개가 무한히 돈다
+  // (실측 390×844: 10초에 my_point_balance 1,035회, 다른 섹션으로 나가도 keep-alive 라 계속). 실패해야만 멈추던 루프였다.
+  const clearErr = (...ks: BoardErrKey[]) => setBoardErr((prev) => {
+    if (!ks.some((k) => k in prev)) return prev;
+    const n = { ...prev }; for (const k of ks) delete n[k]; return n;
+  });
   const shopErr = boardErr.skus ?? boardErr.owned ?? boardErr.cosmetics ?? boardErr.season ?? boardErr.balance ?? boardErr.equip ?? null;
   /**
    * 랭킹 세부 탭 전환 — 매장 서브탭(VenuePage)과 같은 방향성 푸시.
@@ -440,6 +447,7 @@ export default function TierLeaderboard() {
    *   (이펙트는 stale-while-revalidate 라 목록이 '불러오는 중…' 으로 무너지지 않는다 — 아래 CLS 주석 참조).
    */
   const [displayStamp, setDisplayStamp] = useState(0);
+  const [activityTick, setActivityTick] = useState(0); // 활동 순위 실패 후 '다시 시도' — 같은 점수라도 재조회(D9)
   /**
    * 같은 표시가 게시판에도 걸려 있다(글·댓글의 닉네임 앞 마크·닉네임 색 = 같은 결합 지점).
    * 커뮤니티 탭은 keep-alive 라 신호 없이는 부팅 때 받은 값을 계속 쓴다 — `nuri:ads-changed` 와 같은 처방.
@@ -615,6 +623,9 @@ export default function TierLeaderboard() {
   const [missions, setMissions] = useState<MissionProgress[] | null>(null);
   const [missionDefs, setMissionDefs] = useState<Mission[]>(MISSIONS);
   const [hall, setHall] = useState<HallBoard | null>(null);
+  // 머니인(대회 입상 경력) — 기간별 캐시. CareerBoard 의 local state 였던 것을 올렸다(D-moneyin, 위 CareerBoard 주석).
+  const [careerPeriod, setCareerPeriod] = useState<CareerPeriod>('all');
+  const [career, setCareer] = useState<Partial<Record<CareerPeriod, GlobalRankingTotal[]>>>({});
   const [claiming, setClaiming] = useState<string | null>(null);
   // 계정 경계(UI-08-1): 로그인/로그아웃/계정 전환마다 스탬프를 올리고 **개인 상태만** 비운다 — 공개 보드(rows·domestic·hall)는 남긴다.
   //   예전엔 A 가 채운 badgeStats·missions·myVerifs·equippedMark 의 `=== null/undefined` 가드가 B 로는 영영 다시 안 불러 B 가 A 의 것을 봤다.
@@ -641,6 +652,11 @@ export default function TierLeaderboard() {
     // 명예의 전당 — 예전 `.catch(() => setHall({ label: '', rows: [], source: 'auto' }))` 는 장애를 '기록 없음' 으로 그렸고, 빈 라벨 문장까지 만들었다.
     //   getMonthlyHall 이 던지게 된 것과 **같은 커밋**에서 폴백을 걷었다(둘 중 하나만 하면 빈 라벨이 더 자주 난다).
     if (board === 'hall' && hall === null && boardErr.hall == null) scopedLoad(scopeRef, getHallOfFame(), setHall, fail('hall'));
+    // 머니인 — 기간별 캐시(D-moneyin). 웜 방문·기간 되돌리기는 재조회 없음, 늦게 온 응답도 제 기간 칸에만 들어간다.
+    if (board === 'moneyin' && career[careerPeriod] === undefined && boardErr.career == null) {
+      const p = careerPeriod;
+      scopedLoad(scopeRef, getGlobalRankingTotals(p), (r) => { setCareer((prev) => ({ ...prev, [p]: r })); rememberMoneyinRowCount(r.length); }, fail('career'));
+    }
     if (board === 'domestic' && domestic === null && domesticErr == null) {
       scopedLoad(scopeRef, getDomesticRankings(30),
         (d) => { setDomestic(d); rememberDomesticRowCount(d.length); },
@@ -664,7 +680,7 @@ export default function TierLeaderboard() {
     }
     // 오류 상태가 지워지면(다시 시도) 같은 분기가 다시 돈다 — 그래서 의존성에 넣는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, user?.id, missionsErr, domesticErr, boardErr]);
+  }, [board, user?.id, missionsErr, domesticErr, boardErr, careerPeriod]);
   const handleClaim = async (key: string) => {
     setClaiming(key);
     try {
@@ -694,17 +710,21 @@ export default function TierLeaderboard() {
     getActivityLeaderboard(30)
       .then((r) => {
         if (!active) return;
-        setRows(r);
+        setRows(r); clearErr('activity');
         if (r.length) rememberRowCount(r.length >= 3 ? r.length - 3 : r.length);
         // 닉네임 색은 순위표가 도착한 뒤 한 번만 — 행 렌더 중에 부르면 30회 왕복이 된다.
         const ids = r.map((x) => x.id).filter(Boolean);
         if (ids.length) getNickColors(ids).then((m) => { if (active) setRowNickTokens(m); }).catch(() => {});
       })
-      .catch(() => {})
+      // D9(2026-09-17): 예전 `.catch(() => {})` 는 RLS 거부·세션 만료·순단을 '아직 순위가 없어요' 로 위장했다 — 순위 탭 첫 화면인데
+      // 7개 보드 중 여기만 LoadErrorCard 가 없었다. 목록이 이미 있으면 그대로 둔다(stale-while-revalidate, 아래 렌더 분기).
+      .catch((e) => { if (active) fail('activity')(e); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
     // displayStamp — 구매·장착은 spent_points 만 깎아 activityPoints 가 안 바뀐다(refreshDisplay 주석 참조).
-  }, [user?.activityPoints, displayStamp]);
+    // activityTick — 실패 카드의 '다시 시도'. boardErr 는 이 deps 에 없어 clearErr 만으로는 재조회가 안 돈다(머니인 tick 과 같은 조리법).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.activityPoints, displayStamp, activityTick]);
 
   const myProg = user ? tierProgress(user.activityPoints ?? 0) : null;
   const isAdmin = user?.role === 'admin';
@@ -1492,11 +1512,14 @@ export default function TierLeaderboard() {
             </div>
           )
         ) : board === 'moneyin' ? (
-          <CareerBoard myNick={user?.nickname ?? null} nickStyle={nickStyle} markPrefix={markPrefix} />
+          <CareerBoard myNick={user?.nickname ?? null} nickStyle={nickStyle} markPrefix={markPrefix}
+            period={careerPeriod} setPeriod={(p) => { setCareerPeriod(p); clearErr('career'); }}
+            rows={career[careerPeriod] ?? null} loadErr={boardErr.career ?? null} onRetry={() => clearErr('career')} />
         ) : loading ? (
           <ActivityBoardSkeleton reserveMyRow={!!user && !isAdmin} />
         ) : rows.length === 0 ? (
-          <EmptyState title="아직 순위가 없어요" hint="접속·글쓰기·댓글로 활동 점수를 모으면 이 자리에 이름이 올라갑니다" />
+          boardErr.activity != null ? <LoadErrorCard error={boardErr.activity} what="활동 순위" onRetry={() => { clearErr('activity'); setActivityTick((t) => t + 1); }} />
+          : <EmptyState title="아직 순위가 없어요" hint="접속·글쓰기·댓글로 활동 점수를 모으면 이 자리에 이름이 올라갑니다" />
         ) : (
           <>
           {/* 상단 고정 '내 순위' 요약 1행 — 스크롤 없이 내 위치부터(TOP30 밖은 기존 하단 카드 유지) */}

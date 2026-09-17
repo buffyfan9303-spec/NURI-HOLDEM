@@ -123,10 +123,16 @@ export const authStorage = {
   },
 };
 
+/** 매장 순위 패널 첫 렌더 캐시의 localStorage 키 접두사(VenuePage.writeRankCache) — 로그아웃이 같이 걷는다(아래). */
+export const RANK_CACHE_PREFIX = 'nuri:rankcache:';
+
 /**
  * 로그아웃 마무리 청소 — supabase 가 지우는 건 '자기가 아는 현재 키' 하나뿐이라,
  * PKCE 검증자(`...-auth-token-code-verifier`)나 이전 프로젝트 ref 로 남은 잔재는 그대로 남는다.
  * 두 저장소를 훑어 `sb-*-auth-token*` 을 전부 걷어낸다.
+ * D4(2026-09-17): 순위 패널 캐시(`nuri:rankcache:*`)도 함께 — 업주가 보던 매장의 순위 데이터가 공용 매장 PC 에
+ * 로그아웃 뒤에도 남아 다음 사용자의 첫 렌더에 그려졌다. 캐시 자체는 이제 실명·사유·방문자 명단을 넣지 않지만(redactForCache),
+ * 로그아웃 = 흔적 제거가 맞다.
  */
 export function clearAuthStorage(): void {
   for (const s of [safeLocal(), safeSession()]) {
@@ -135,7 +141,7 @@ export function clearAuthStorage(): void {
       const doomed: string[] = [];
       for (let i = 0; i < s.length; i++) {
         const k = s.key(i);
-        if (k && /^sb-.+-auth-token/.test(k)) doomed.push(k);
+        if (k && (/^sb-.+-auth-token/.test(k) || k.startsWith(RANK_CACHE_PREFIX))) doomed.push(k);
       }
       doomed.forEach((k) => s.removeItem(k));
     } catch { /* noop */ }

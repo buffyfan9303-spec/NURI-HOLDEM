@@ -92,7 +92,7 @@ describe('UI-08-4 · 실패 ≠ 없음 — LoadErrorCard 패턴을 보드 전부
     }
   });
   it('🔴 화면은 보드별 오류를 boardErr 로 들고 LoadErrorCard 로 그린다 — 옛 조용한 catch 가 없다', () => {
-    expect(TL).toMatch(/type BoardErrKey = 'badges' \| 'hall' \| 'verifs' \| 'skus' \| 'owned' \| 'cosmetics' \| 'season' \| 'balance' \| 'equip';/);
+    expect(TL).toMatch(/type BoardErrKey = 'activity' \| 'career' \| 'badges' \| 'hall' \| 'verifs' \| 'skus' \| 'owned' \| 'cosmetics' \| 'season' \| 'balance' \| 'equip';/);
     for (const old of ['.catch(() => setMyVerifs([]))', '.catch(() => setOwned([]))', '.catch(() => setMyCosmetics([]))', '.catch(() => setSeasonBuyable([]))', '.catch(() => setSeasonOwned([]))', '.catch(() => setSkus([]))', '.catch(() => setBalance(null))', '.catch(() => setBadgeStats(']) {
       expect(TLC, `옛 위장 ${old}`).not.toContain(old);
     }
@@ -118,6 +118,19 @@ describe('UI-08-5/6 · 지키는 것 — 상점 게이트·잔액 보호·레일
   });
   it('고아 스토리지 정리 같은 클라이언트 삭제 로직을 넣지 않았다(삭제 정책은 관리자만)', () => {
     expect(TL).not.toMatch(/storage\s*\.\s*from\([^)]*\)\s*\.\s*remove\(/);
+  });
+});
+
+describe('D8·D9(2026-09-17) · 상점 RPC 무한 루프 · 활동 순위 실패 위장', () => {
+  it('🔴 D8 clearErr 는 지울 키가 없으면 같은 참조를 돌려준다 — boardErr 가 이펙트 deps 라 새 객체면 성공→재조회가 무한히 돈다(실측 10초 1,035회)', () => {
+    expect(TLC).toContain('if (!ks.some((k) => k in prev)) return prev;');
+  });
+  it('🔴 D9 활동 순위 조회 실패는 EmptyState 가 아니라 LoadErrorCard 다 — 재시도는 tick 으로 실제 재조회를 낸다', () => {
+    // 옛 조용한 catch 는 `.finally(setLoading(false))` 바로 앞에 있었다(getNickColors 의 `.catch(() => {})` 는 색 조회라 그대로 둔다).
+    expect(TLC).not.toMatch(/\.catch\(\(\) => \{\}\)\s*\.finally\(\(\) => \{ if \(active\) setLoading\(false\)/);
+    expect(TLC).toMatch(/getActivityLeaderboard\(30\)[\s\S]{0,900}?\.catch\(\(e\) => \{ if \(active\) fail\('activity'\)\(e\); \}\)/);
+    expect(TLC).toMatch(/boardErr\.activity != null \? <LoadErrorCard error=\{boardErr\.activity\} what="활동 순위" onRetry=\{\(\) => \{ clearErr\('activity'\); setActivityTick\(\(t\) => t \+ 1\); \}\}/);
+    expect(TLC).toMatch(/\}, \[user\?\.activityPoints, displayStamp, activityTick\]\);/);
   });
 });
 

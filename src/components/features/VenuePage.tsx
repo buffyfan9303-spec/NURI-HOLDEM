@@ -30,11 +30,12 @@ import { thumbUrl } from '../../lib/imageUrl';
 import CoachMark from '../atoms/CoachMark';
 import {
   getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay, getVenueRealNameOptIns,
-  getVenuePageConfig, getScoreEntries, getVenuePlayerCounts,
+  getVenuePageConfig, getScoreEntries, getVenuePlayerCounts, redactForCache,
   boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart,
   DEFAULT_RANK_METRICS, RANK_METRIC_LABEL,
   type RankingEntry, type RankingTotal, type VenuePageConfig, type RankBoardId, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
+import { RANK_CACHE_PREFIX } from '../../lib/supabase';
 import { listVenueCheckins } from '../../api/checkins';
 import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
@@ -966,6 +967,11 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
 // ── 팔로우 버튼 ────────────────────────────────────────────────────────────
 
 // 탭 전환 시 깜빡임 방지 — 매장별 마지막 로드 결과 캐시(원격 변경은 백그라운드 갱신, 스켈레톤 미표시).
+// ⚠ D4(2026-09-17): 이 캐시는 **속도용**이다. 실명(realName)·업주 사유(manual.reason)·방문자 명단(checkinRows)은
+//   넣지 않는다(redactForCache) — 매장 PC 는 공용이라 localStorage 는 다음 사용자·다른 확장·같은 오리진 스크립트가 읽고,
+//   첫 렌더가 이 캐시로 그려지므로 비로그인 방문자가 이전 업주 세션의 명단을 잠깐 봤다. 메모리 캐시도 같은 값을 든다
+//   (리로드 없는 로그아웃 뒤 같은 탭에서 열려도 안전). 실명·명단은 매 로드마다 서버가 옵트인/권한 기준으로 다시 준다.
+//   로그아웃은 clearAuthStorage 가 이 키(RANK_CACHE_PREFIX)를 함께 지운다.
 interface RankPanelCache {
   cfg: VenuePageConfig | null; totals: RankingTotal[]; manual: ScoreEntry[];
   buyinCounts: Record<string, number>; latest: { date: string | null; entries: RankingEntry[] };
@@ -973,7 +979,7 @@ interface RankPanelCache {
 }
 const rankPanelCache = new globalThis.Map<string, RankPanelCache>();
 // 새로고침 후에도 깜빡임 없도록 localStorage에 영속(메모리 우선, 없으면 LS 폴백 → 즉시 표시 후 백그라운드 갱신)
-const RANK_LS = (venueId: string) => `nuri:rankcache:${venueId}`;
+const RANK_LS = (venueId: string) => `${RANK_CACHE_PREFIX}${venueId}`;
 function readRankCache(venueId: string): RankPanelCache | undefined {
   const mem = rankPanelCache.get(venueId);
   if (mem) return mem;
@@ -981,8 +987,9 @@ function readRankCache(venueId: string): RankPanelCache | undefined {
   return undefined;
 }
 function writeRankCache(venueId: string, e: RankPanelCache) {
-  rankPanelCache.set(venueId, e);
-  try { localStorage.setItem(RANK_LS(venueId), JSON.stringify(e)); } catch { /* noop */ }
+  const safe = redactForCache(e); // 민감값은 저장 직전에 떨어뜨린다 — 메모리·LS 둘 다
+  rankPanelCache.set(venueId, safe);
+  try { localStorage.setItem(RANK_LS(venueId), JSON.stringify(safe)); } catch { /* noop */ }
 }
 
 /** 현 시즌 선두 위젯 — 매장 페이지 상단. 진행 시즌의 1위(닉네임·점수). 탭하면 시즌 랭킹으로. */

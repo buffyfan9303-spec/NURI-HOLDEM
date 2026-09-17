@@ -89,10 +89,15 @@ export async function getVenueRealNameOptIns(venueId: string): Promise<Set<strin
   return new Set(await cachedVenueRealNameOptIns(venueId));
 }
 
-/** 순위 읽기는 전부 서버 RPC venue_rankings_public 을 탄다(2026-09-10, supabase/migrations/20260910b).
+/** 실명이 실리는 순위 읽기는 서버 RPC venue_rankings_public 을 탄다(2026-09-10, supabase/migrations/20260910b).
  *  ⚠ real_name 은 **서버가** 가린다 — 매장 관리자·운영자이거나 본인이 실명 표시를 고른 닉네임에만 실리고
  *  나머지는 null 로 온다. 예전엔 테이블을 직접 select 해 전원 실명을 받아 클라이언트(rankDisplay)가 가렸는데,
- *  anon 키 하나로 전원 실명을 긁을 수 있는 구조였다. 테이블의 real_name 컬럼 권한은 배포 뒤 회수한다(같은 파일 B).
+ *  anon 키 하나로 전원 실명을 긁을 수 있는 구조였다. 테이블의 real_name 컬럼 SELECT 권한은 anon·authenticated 에서
+ *  회수돼 있다(2026-09-17 라이브 실측: 두 롤이 읽을 수 있는 컬럼에 real_name 없음).
+ *  ⚠ "전부 RPC" 는 아니다(2026-09-17 정정) — 실명이 필요 없는 직접 SELECT 가 4곳 남아 있고 그대로 둔다:
+ *    getLatestRankingDate(ranking_date) · getMyRankingHistory(nickname ilike) · loyalty.getMyBadgeStats(nickname ilike) ·
+ *    loyalty.getMonthlyHall(nickname, position). 이들은 컬럼 권한 회수 덕에 실명을 못 읽는다.
+ *    닉네임으로 거르는 두 곳은 반드시 likeLiteral 을 거친다(아래 — `_`·`%` 가 와일드카드라 남의 행이 섞였다).
  *  rankDisplay 의 클라이언트 규칙은 그대로 둔다 — 서버와 같은 규칙이라 결과가 같고, 이중 안전망이다. */
 type RankRow = { id: string; venue_id: string; ranking_date: string; position: number; nickname: string; real_name: string | null; prize: string | null; event_name: string | null };
 async function fetchRankingsPublic(venueIds: string[], dates?: string[]): Promise<RankRow[]> {
@@ -392,6 +397,23 @@ export async function getVenueBuyinCounts(venueId: string): Promise<Map<string, 
 }
 
 /** 바인왕/출석왕 보드용 — 이름별 바인·방문(고유 일자) 횟수(장부 집계, 금액 없음) */
+/** 순위 패널 첫 렌더 캐시(VenuePage.writeRankCache → localStorage)에 넣기 **전에** 사람 식별 정보를 떨어뜨린다.
+ *  D4(2026-09-17): 캐시에 실명(totals·latest.entries.realName)·업주 자유 텍스트 사유(manual.reason)·방문자 명단(checkinRows)이
+ *  통째로 들어가 공용 매장 PC 의 localStorage 에 영구히 남았고, 비로그인 방문자의 첫 렌더에 그려졌다.
+ *  캐시는 깜빡임 방지용이라 점수·닉네임·보드 설정만 있으면 된다 — 실명은 매 로드마다 서버(RPC)가 옵트인 기준으로 다시 준다.
+ *  제네릭인 이유: 캐시 타입(RankPanelCache)은 화면 파일에 있고, 여기서는 민감 필드 4개만 안다. */
+export function redactForCache<T extends {
+  totals: RankingTotal[]; latest: { date: string | null; entries: RankingEntry[] }; manual: ScoreEntry[]; checkinRows: unknown[];
+}>(e: T): T {
+  return {
+    ...e,
+    totals: e.totals.map((t) => ({ ...t, realName: '' })),
+    latest: { date: e.latest.date, entries: e.latest.entries.map((x) => ({ ...x, realName: '' })) },
+    manual: e.manual.map((m) => ({ ...m, reason: null })),
+    checkinRows: [],
+  };
+}
+
 export interface PlayerCounts { name: string; buyins: number; visits: number }
 export async function getVenuePlayerCounts(venueId: string): Promise<PlayerCounts[]> {
   if (IS_MOCK) return [];
@@ -435,6 +457,14 @@ export async function getGlobalRankingTotals(period: CareerPeriod = 'all'): Prom
 }
 
 
+/** PostgREST like/ilike 값에 사용자 입력을 **글자 그대로** 넣을 때 — `%`·`_` 는 와일드카드, `\` 는 이스케이프 문자다.
+ *  D7(2026-09-17): 소셜 가입 기본 닉네임 `이름_1a2b`(20260903c) 의 `_` 가 한 글자 와일드카드로 먹혀 '내 입상 기록'과
+ *  업적 머니인 카운트에 남의 행이 섞였고, 닉네임 `%` 는 전 행과 매칭됐다. set_my_nickname 엔 문자 화이트리스트가 없다.
+ *  ilike 를 eq 로 바꾸지 않는 이유: 서버 규칙이 전부 lower(nickname)=lower(x)(20260905g·20260910b) 라 대소문자 무시가 의도다.
+ *  ponytail: PostgREST 는 `*` 도 `%` 로 바꾸고 이스케이프할 방법이 없다(라이브 REST 실측 — `\*` 는 리터럴 `%` 가 된다).
+ *  `*` 든 닉네임은 자기 행을 못 찾을 뿐 남의 행은 안 섞인다(라이브 0명). 필요해지면 imatch(`^…$`, 정규식 이스케이프)로 옮긴다. */
+export function likeLiteral(s: string): string { return s.replace(/[\\%_]/g, '\\$&'); }
+
 // ── 내 입상 기록(개인 대시보드) — 닉네임 기준 전 매장 순위 등록 이력 ────────────
 export interface MyRankingRow { date: string; venueName: string; position: number; prize: string | null }
 export async function getMyRankingHistory(nickname: string, limit = 30): Promise<MyRankingRow[]> {
@@ -442,7 +472,7 @@ export async function getMyRankingHistory(nickname: string, limit = 30): Promise
   const { data, error } = await supabase
     .from('venue_rankings')
     .select('ranking_date, position, prize, venues(name)')
-    .ilike('nickname', nickname.trim())
+    .ilike('nickname', likeLiteral(nickname.trim()))
     .order('ranking_date', { ascending: false })
     .limit(limit);
   if (error) return [];

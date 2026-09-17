@@ -1803,6 +1803,15 @@ html[data-vt-scope='rank-tab']::view-transition-old(root),
 html[data-vt-scope='rank-tab']::view-transition-new(root) { animation: none; }
 ::view-transition-old(rank-tabbar), ::view-transition-new(rank-tabbar) { animation: none; }
 html[data-vt-scope='rank-tab']::view-transition-new(rank-panel) { background-color: rgb(var(--surface-base)); }
+/* 돌출 가드 — community-secpanel(:1734~) 과 같은 결함·같은 조리법. 두 줄이 한 쌍이다(거기 주석에 이유를 적었다).
+   순위는 보드마다 판 높이가 크게 다르다(실측 2026-09-17, 390×844 비로그인):
+   활동 456 · 머니인 298 · 명예의전당 251 · 전국 323 · 인증/상점 136 → 최대 차 **Δ320px**(활동↔인증·상점).
+   root 가 animation:none 이라 푸터는 t=0 에 즉시 새 위치로 점프하는데, 그 위에 옛 목록 꼬리가 150ms 동안
+   겹쳐 페이드됐다 — 오너 2026-09-17 "멈칫멈칫하고 뚝뚝해" 의 실체. 전환 프레임 스크린샷으로 확정했다.
+   ⚠ old/new 만 넣은 변형은 computed 돌출이 0 인데 **그림은 그대로 넘쳤다**(자홍 기준선 가림률 94%). 계측이 거짓말한다. */
+html[data-vt-scope='rank-tab']::view-transition-group(rank-panel) { overflow: clip; }
+html[data-vt-scope='rank-tab']::view-transition-old(rank-panel),
+html[data-vt-scope='rank-tab']::view-transition-new(rank-panel) { height: 100%; object-fit: none; object-position: top left; }
 html[data-vt-scope='rank-tab'][data-vt-dir='forward']::view-transition-old(rank-panel) { animation: vt-panel-out-l var(--dur-fast) var(--ease-out) both; }
 html[data-vt-scope='rank-tab'][data-vt-dir='forward']::view-transition-new(rank-panel) { animation: vt-panel-in-r  var(--dur-tab)  var(--ease)     both; }
 html[data-vt-scope='rank-tab'][data-vt-dir='back']::view-transition-old(rank-panel)    { animation: vt-panel-out-r var(--dur-fast) var(--ease-out) both; }

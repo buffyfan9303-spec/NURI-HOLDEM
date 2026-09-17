@@ -33,10 +33,15 @@ describe('readRankRowCount — 보드별 키·기본값, 손상 값·예외는 �
     it(`${kind}: 30 초과는 30으로 클램프`, () => {
       expect(readRankRowCount(kind, mem({ [key]: '999' }))).toBe(30);
     });
-    it(`🔴 ${kind}: 손상 값(0·음수·문자열·빈 문자열) → 기본값`, () => {
-      for (const v of ['0', '-5', 'NaN', '', 'grid']) {
+    it(`🔴 ${kind}: 손상 값(음수·문자열·빈 문자열) → 기본값`, () => {
+      for (const v of ['-5', 'NaN', '', ' ', 'grid']) {
         expect(readRankRowCount(kind, mem({ [key]: v })), JSON.stringify(v)).toBe(fallback);
       }
+    });
+    // D-moneyin(2026-09-17): '모름' 과 '0건으로 확인됨' 을 가른다. Number(null)·Number('') 이 0 이라
+    //   `v >= 0` 만으로는 첫 방문자가 0행으로 읽힌다 — 위 '키 없음 → 기본값' 과 이 항목이 **동시에** 초록이어야 한다.
+    it(`🔴 ${kind}: 저장된 '0' → 0(0건으로 확인됨 — 기본값이 아니다)`, () => {
+      expect(readRankRowCount(kind, mem({ [key]: '0' }))).toBe(0);
     });
     it(`🔴 ${kind}: 저장소 접근이 throw 해도(사생활 모드·차단) 기본값 — 예외가 새지 않는다`, () => {
       expect(readRankRowCount(kind, throwing)).toBe(fallback);
@@ -54,17 +59,22 @@ describe('readRankRowCount — 보드별 키·기본값, 손상 값·예외는 �
   });
 });
 
-describe('writeRankRowCount — 1~30 클램프, 0건도 최소 1행으로 남긴다', () => {
+describe('writeRankRowCount — 0~30 클램프, 0건은 0 으로 남긴다', () => {
   for (const { kind, key } of KINDS) {
     it(`${kind}: 정상 값을 그대로 저장`, () => {
       const s = mem();
       writeRankRowCount(kind, 12, s);
       expect(s.dump()).toEqual({ [key]: '12' });
     });
-    it(`${kind}: 0건(EmptyState) → 최소 1행으로 저장(다음 스켈레톤이 완전히 사라지지 않게)`, () => {
+    it(`🔴 ${kind}: 0건(EmptyState) → 0 으로 저장(다음 진입은 EmptyState 높이를 예약한다 — 1 로 클램프하면 156px 낙차가 돌아온다)`, () => {
       const s = mem();
       writeRankRowCount(kind, 0, s);
-      expect(s.dump()).toEqual({ [key]: '1' });
+      expect(s.dump()).toEqual({ [key]: '0' });
+    });
+    it(`${kind}: 음수는 0 으로 클램프해 저장`, () => {
+      const s = mem();
+      writeRankRowCount(kind, -3, s);
+      expect(s.dump()).toEqual({ [key]: '0' });
     });
     it(`${kind}: 30 초과는 30으로 클램프해 저장`, () => {
       const s = mem();

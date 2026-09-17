@@ -28,20 +28,27 @@ const defaultStorage = (): StorageLike | null => {
   try { return typeof localStorage === 'undefined' ? null : localStorage; } catch { return null; }
 };
 
-/** 마지막으로 본 실제 행 수(1~30). 키 없음·손상 값·저장소 접근 예외 → 보드 기본값. */
+/** 마지막으로 본 실제 행 수(0~30). 키 없음·손상 값·저장소 접근 예외 → 보드 기본값.
+ *  ⚠ '키 없음(모름)' 과 '저장된 0(0건으로 확인됨)' 은 다르다 — `Number(null)`·`Number('')` 이 0 이라 Number() 에 넣기 전에 가른다.
+ *    가르지 않으면 한 번도 저장된 적 없는 첫 방문자가 '0행' 으로 읽혀 스켈레톤 없이 0 에서 실제 높이로 튄다. */
 export function readRankRowCount(kind: RankBoardKind, storage: StorageLike | null = defaultStorage()): number {
   try {
-    const v = Number(storage?.getItem(KEY[kind]));
-    return Number.isFinite(v) && v > 0 ? Math.min(30, v) : DEFAULT_ROWS[kind];
+    const raw = storage?.getItem(KEY[kind]);
+    if (raw == null || raw.trim() === '') return DEFAULT_ROWS[kind];   // 모름 ≠ 0행
+    const v = Number(raw);
+    return Number.isFinite(v) && v >= 0 ? Math.min(30, v) : DEFAULT_ROWS[kind];
   } catch {
     return DEFAULT_ROWS[kind];
   }
 }
 
-/** 응답이 실제로 도착했을 때만 부른다 — 1~30 으로 클램프한다.
- *  0건(EmptyState)도 최소 1행으로 남긴다: 다음 진입에 8행짜리 스켈레톤이 0건으로 꺼지는 큰 낙차 대신
- *  1행짜리 스켈레톤이 EmptyState 로 바뀌는 작은 낙차만 남는다. */
+/** 응답이 실제로 도착했을 때만 부른다 — 0~30 으로 클램프한다.
+ *  0건(EmptyState)은 0 으로 남긴다(2026-09-17, D-moneyin). 예전엔 최소 1행으로 클램프했다 — "8행 스켈레톤이 0건으로 꺼지는
+ *  큰 낙차 대신 1행 → EmptyState 의 작은 낙차만" 이라는 CLS 의도였는데, 실측은 1행 스켈레톤 142px 대 EmptyState 298px 로
+ *  156px 낙차가 남아 보드 전환 도중 판이 커지는 '멈칫' 이 됐다. 0 을 0 으로 기억하면 화면이 그 자리에 **EmptyState 자체를
+ *  감춰 그려**(TierLeaderboard CareerBoard) 낙차가 작아지는 게 아니라 0 이 된다. 다시 1 로 클램프하면 그 156px 이 돌아온다.
+ *  0 을 못 다루는 보드(RowSkeleton 은 rows 를 max(1, …) 로 받는다)는 종전과 같이 1행으로 그린다. */
 export function writeRankRowCount(kind: RankBoardKind, n: number, storage: StorageLike | null = defaultStorage()): void {
-  const clamped = Math.max(1, Math.min(30, n));
+  const clamped = Math.max(0, Math.min(30, n));
   try { storage?.setItem(KEY[kind], String(clamped)); } catch { /* 저장 차단 환경 — 이번 세션만 유지된다 */ }
 }
