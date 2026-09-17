@@ -13,7 +13,7 @@
 // 남겨두면 나중에 실수로 이어붙였을 때 그 예시 숫자가 그대로 "GTO 40%"로 노출될 위험이 있었다.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { canonicalizeHand, normalizeFrequency } from './useGtoCalculator';
-import { type WeightedCombo } from './equityEngine';
+import { type WeightedCombo, type EquityKind } from './equityEngine';
 import { equityAsync, equityVsRangeAsync } from './equityClient';
 import { buildFreq, type FreqMap } from '../../../lib/ranges';
 import { RANGE_SCENARIOS } from '../../../lib/ranges.data';
@@ -118,8 +118,17 @@ export interface UseDeepGto {
   selectVillainRange: (id: string) => void;
   result: GtoResult | null;
   normalizedAction: Required<ActionFrequency> | null;
-  /** 몬테카를로 실시간 에퀴티 (입력 완성 시, 보드 반영) */
+  /** 실시간 에퀴티 (입력 완성 시, 보드 반영). 보드 5장이면 전수계산, 그 밖은 몬테카를로 */
   equity: Equity | null;
+  /** 그 값이 **어떻게** 나왔는지. 'no_legal_combinations' 면 equity 는 승률이 아니다 */
+  equityKind: EquityKind | undefined;
+  /**
+   * 빌런 레인지가 내 카드·보드에 **전부 막혀** 계산 자체가 불가능한 상태.
+   * 이때 `result` 는 null 이다(없는 근거로 액션을 만들지 않는다) — 화면은 그 이유를 말해 주는 것이 좋다.
+   * ⚠ 현재 프리셋 6개로는 도달하지 않는다(히어로 1326조합 전수 확인: 최소 잔여 콤보 191개).
+   *    직접 만든 좁은 레인지가 들어올 때를 대비한 안전망이다.
+   */
+  equityBlocked: boolean;
   /** 에퀴티 계산 중 여부 */
   calculating: boolean;
 }
@@ -240,10 +249,14 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
 
   // 실시간 에퀴티: 입력 완성 시 다음 틱에 몬테카를로 계산(탭 반응성 유지) + 계산 중 표시
   const [equity, setEquity] = useState<Equity | null>(null);
+  // 엔진이 값을 **어떻게** 냈는지. 'no_legal_combinations' 는 "못 냈다" 는 뜻이라
+  // hero=0.5 가 승률이 아니라 자리표시자다 — 이걸 버리면 참고 믹스가 그 0.5 를 먹는다.
+  const [equityKind, setEquityKind] = useState<EquityKind | undefined>(undefined);
   const [calculating, setCalculating] = useState(false);
   useEffect(() => {
     if (!inputReady) {
       setEquity(null);
+      setEquityKind(undefined);
       setCalculating(false);
       return;
     }
@@ -258,6 +271,9 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
       : equityAsync([h[0], h[1]], [v[0], v[1]], b, 2500)
     ).then((r) => {
       if (!alive) return;
+      // kind 를 같이 들고 온다 — 이걸 버리면 '계산 못 함(0.5)' 과 '정말 5:5' 가 구별되지 않아
+      // 아래 actionFromEquity 가 근거 없는 믹스를 만든다(엔진만 고쳐서는 여기서 도로 무너진다).
+      setEquityKind(r.kind);
       setEquity({ hero: r.hero, villain: r.villain, tie: r.tie });
       setCalculating(false);
     });
@@ -267,11 +283,14 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
   const result = useMemo<GtoResult | null>(() => {
     // 입력 완성 시 실시간 에퀴티 기반으로 참고 액션 믹스를 추정 (솔버 아님).
     if (!inputReady) return null;
+    // 엔진이 "계산할 수 없었다" 고 말했으면 **아무 액션도 만들지 않는다.**
+    // 이 경우 hero 는 0.5 인데 그건 승률이 아니라 자리표시자다 — 넣으면 '콜 50%' 가 나온다.
+    if (equityKind === 'no_legal_combinations') return null;
     if (!equity) {
       return { action: { raise: 0.34, call: 0.33, fold: 0.33 } };
     }
     return { action: actionFromEquity(equity.hero), equity };
-  }, [inputReady, equity]);
+  }, [inputReady, equity, equityKind]);
 
   const normalizedAction = useMemo(
     () => (result ? normalizeFrequency(result.action) : null),
@@ -300,6 +319,8 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     result,
     normalizedAction,
     equity,
+    equityKind,
+    equityBlocked: equityKind === 'no_legal_combinations',
     calculating,
   };
 }

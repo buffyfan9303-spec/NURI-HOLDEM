@@ -1,11 +1,20 @@
 // src/components/features/gto/useGtoCalculator.ts
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { GTO_SCENARIOS, DEFAULT_SCENARIO_ID } from './gto.data';
+//
+// ⚠ 이름과 달리 **더 이상 훅이 아니다**(2026-09-18). `useGtoCalculator()` 와 그 데이터
+// `gto.data.ts`(GTO_SCENARIOS)를 지웠다 — 호출부가 전수 grep 로 0곳이었고, 그 표는 BTN RFI 에서
+// A9s·K8s·J9s 를 100% 폴드로 적어 두어 **화면에 연결되는 순간 그대로 오조언**이 되는 물건이었다
+// (죽은 데이터를 지운 GtoDeepSituation 전례와 같은 이유 — useDeepGto.ts 머리말 참고).
+//
+// 남은 것은 콤보 표기 순수 함수들이고, 이건 살아 있다:
+//   canonicalizeHand  ← src/lib/spot.ts · GtoDeepPanel.tsx · useDeepGto.ts
+//   normalizeFrequency ← useDeepGto.ts
+// 그래서 **파일째 지우지 않았다.** 파일명 정리는 `src/lib/spot.ts` 를 포함한 3곳의 import 를
+// 건드려야 해서 그 파일 소유자와 함께 할 일로 남긴다.
 import {
-  RANKS, FOLD_FREQUENCY,
+  RANKS,
   type Rank, type Suitedness, type ComboKind,
   type HandCombo, type HandComboId,
-  type ActionFrequency, type GtoScenario,
+  type ActionFrequency,
 } from './gto.types';
 
 /** 랭크 강도 인덱스(0 = A 가장 강함 … 12 = 2). 정렬용 순수 함수 */
@@ -45,127 +54,10 @@ export function parseComboId(id: HandComboId): { ranks: Rank[]; suitedness: Suit
   return null;
 }
 
-const RECENT_KEY = 'nh_gto_recent';
-const RECENT_MAX = 8;
-function loadRecent(): HandComboId[] {
-  try {
-    const raw = sessionStorage.getItem(RECENT_KEY);
-    return raw ? (JSON.parse(raw) as HandComboId[]).slice(0, RECENT_MAX) : [];
-  } catch {
-    return [];
-  }
-}
-function saveRecent(list: readonly HandComboId[]): void {
-  try { sessionStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* noop */ }
-}
-
 /** 빈도 합으로 정규화(데이터가 1로 안 맞아도 차트가 안정적이도록) */
 export function normalizeFrequency(f: ActionFrequency): Required<ActionFrequency> {
   const allin = f.allin ?? 0;
   const total = f.raise + f.call + f.fold + allin;
   if (total <= 0) return { raise: 0, call: 0, fold: 1, allin: 0 };
   return { raise: f.raise / total, call: f.call / total, fold: f.fold / total, allin: allin / total };
-}
-
-export interface UseGtoCalculator {
-  scenarios: readonly GtoScenario[];
-  scenario: GtoScenario;
-  selectScenario: (id: string) => void;
-
-  ranks: readonly Rank[];
-  suitedness: Suitedness;
-  combo: HandCombo | null;
-  comboId: HandComboId | null;
-  isComplete: boolean;
-  isPair: boolean;
-
-  /** 원본 빈도(표에 없으면 100% 폴드), 미완성 입력이면 null */
-  frequency: ActionFrequency | null;
-  /** 차트용 정규화 빈도 */
-  normalized: Required<ActionFrequency> | null;
-
-  /** 최근 조회한 콤보(세션 저장, 최신순) */
-  recent: readonly HandComboId[];
-  /** 콤보 ID 로 입력 상태를 한 번에 설정(최근/즐겨찾기 재선택) */
-  applyCombo: (id: HandComboId) => void;
-
-  pushRank: (rank: Rank) => void;
-  setSuitedness: (s: Suitedness) => void;
-  removeLast: () => void;
-  clear: () => void;
-}
-
-export function useGtoCalculator(initialScenarioId: string = DEFAULT_SCENARIO_ID): UseGtoCalculator {
-  const scenarios = GTO_SCENARIOS;
-  const [scenarioId, setScenarioId] = useState<string>(initialScenarioId);
-  const [ranks, setRanks] = useState<readonly Rank[]>([]);
-  const [suitedness, setSuitednessState] = useState<Suitedness>('suited');
-  const [recent, setRecent] = useState<readonly HandComboId[]>(() => loadRecent());
-
-  const scenario = useMemo<GtoScenario>(
-    () => scenarios.find((s) => s.id === scenarioId) ?? scenarios[0],
-    [scenarios, scenarioId],
-  );
-
-  const combo = useMemo(() => canonicalizeHand(ranks, suitedness), [ranks, suitedness]);
-  const isPair = ranks.length === 2 && ranks[0] === ranks[1];
-
-  // 완성된 콤보를 최근 목록 맨 앞에 기록(중복 제거, 최대 RECENT_MAX)
-  useEffect(() => {
-    if (!combo) return;
-    setRecent((prev) => {
-      if (prev[0] === combo.id) return prev;
-      const next = [combo.id, ...prev.filter((x) => x !== combo.id)].slice(0, RECENT_MAX);
-      saveRecent(next);
-      return next;
-    });
-  }, [combo]);
-
-  const frequency = useMemo<ActionFrequency | null>(() => {
-    if (!combo) return null;
-    return scenario.strategy[combo.id] ?? FOLD_FREQUENCY;
-  }, [combo, scenario]);
-
-  const normalized = useMemo(
-    () => (frequency ? normalizeFrequency(frequency) : null),
-    [frequency],
-  );
-
-  // 랭크가 이미 2개면 새 입력으로 리셋(키패드 UX). 그 외엔 누적.
-  const pushRank = useCallback((rank: Rank) => {
-    setRanks((prev) => (prev.length >= 2 ? [rank] : [...prev, rank]));
-  }, []);
-  const removeLast = useCallback(() => setRanks((prev) => prev.slice(0, -1)), []);
-  const clear = useCallback(() => setRanks([]), []);
-  const setSuitedness = useCallback((s: Suitedness) => setSuitednessState(s), []);
-  const applyCombo = useCallback((id: HandComboId) => {
-    const parsed = parseComboId(id);
-    if (!parsed) return;
-    setRanks(parsed.ranks);
-    setSuitednessState(parsed.suitedness);
-  }, []);
-  const selectScenario = useCallback((id: string) => {
-    setScenarioId(id);
-    setRanks([]); // 시나리오 변경 시 입력 초기화
-  }, []);
-
-  return {
-    scenarios,
-    scenario,
-    selectScenario,
-    ranks,
-    suitedness,
-    combo,
-    comboId: combo?.id ?? null,
-    isComplete: combo !== null,
-    isPair,
-    frequency,
-    normalized,
-    recent,
-    applyCombo,
-    pushRank,
-    setSuitedness,
-    removeLast,
-    clear,
-  };
 }

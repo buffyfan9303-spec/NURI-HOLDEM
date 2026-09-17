@@ -233,10 +233,42 @@ export function computeEquityVsRange(
   const boardN = board.map(toN);
   const blocked = new Set([...heroN, ...boardN].map(keyOf));
   const { combos, total: rangeTotal } = prepareCombos(villainRange, blocked);
-  if (combos.length === 0 || rangeTotal <= 0) return NEUTRAL; // 레인지가 전부 차단됨
+  // 레인지가 전부 차단됐다 — **0.5 를 돌려주면 "반반" 이라는 근거 없는 조언이 된다.**
+  // 예전에는 NEUTRAL 만 돌려줘 호출부가 "계산 못 함" 과 "정말 5:5" 를 구별할 수 없었고,
+  // useDeepGto 가 그 0.5 를 actionFromEquity 에 넣어 '콜 50% · 폴드 30% · 레이즈 20%' 까지 만들어 냈다.
+  // computeRangeVsRange 는 같은 상황에서 이미 kind 를 실어 준다 — 그쪽과 같은 모양으로 맞춘다.
+  if (combos.length === 0 || rangeTotal <= 0) {
+    return { ...NEUTRAL, kind: 'no_legal_combinations', accepted: 0, attempts: 0 };
+  }
 
   const deck = buildDeck(blocked); // 빌런 후보 카드는 덱에 남음 → 매 반복 리젝션으로 회피
   const need = 5 - boardN.length;
+
+  // ── 보드가 다 깔렸으면 남은 무작위성은 '빌런 콤보 하나' 뿐이다 — 가중 평균이 곧 정답이다.
+  // 표본을 쓰면 답이 있는데도 흔들린다(실측: KsKh vs 4콤보 · 보드 5장에서 2500회 12번 반복 폭 2.40%p,
+  // 10만 회를 써도 0.7511 로 정답 0.7500 에 닿지 못한다). computeRangeVsRange:379 와 같은 조리법.
+  if (need === 0) {
+    const h = best7([...heroN, ...boardN]);
+    let hw = 0; let vw = 0; let tw = 0;
+    for (let i = 0; i < combos.length; i += 1) {
+      const c = combos[i];
+      const w = c.cum - (i > 0 ? combos[i - 1].cum : 0);   // 누적가중의 차분 = 개별 가중치
+      if (w <= 0) continue;
+      const v = best7([c.a, c.b, ...boardN]);
+      if (h > v) hw += w; else if (v > h) vw += w; else tw += w;
+    }
+    const sum = hw + vw + tw;
+    if (sum <= 0) return { ...NEUTRAL, kind: 'no_legal_combinations', accepted: 0, attempts: 0 };
+    return {
+      hero: (hw + tw / 2) / sum,
+      villain: (vw + tw / 2) / sum,
+      tie: tw / sum,
+      iterations: combos.length,
+      kind: 'exact',
+      accepted: combos.length,
+      attempts: combos.length,
+    };
+  }
 
   let hw = 0; let vw = 0; let tie = 0; let total = 0;
   for (let i = 0; i < iterations; i += 1) {
@@ -263,6 +295,9 @@ export function computeEquityVsRange(
     villain: (vw + tie / 2) / total,
     tie: tie / total,
     iterations: total,
+    kind: 'monte_carlo',
+    accepted: total,
+    attempts: total,
   };
 }
 

@@ -29,7 +29,7 @@ import {
   potBb, BOARD_LEN, ACTION_TYPES, fromJSON,
   type SpotReview, type SpotAction, type SpotActionType, type SpotPosition, type Street,
 } from '../../../lib/spot';
-import { evaluateSpot, type SpotEvaluation } from '../../../lib/spotEvaluate';
+import { evaluateSpot, investedThisStreet, type SpotEvaluation } from '../../../lib/spotEvaluate';
 import SpotReport from './SpotReport';
 import MySpotList from './MySpotList';
 
@@ -37,7 +37,17 @@ export type SpotTab = 'analyze' | 'mine';
 
 const SNAP_KEY = 'tool:spot';
 
-/** 자주 쓰는 사이징 프리셋(BB) — 직접 입력도 그대로 된다. */
+/**
+ * 자주 쓰는 사이징 프리셋(BB) — 직접 입력도 그대로 된다.
+ *
+ * ⚠ 이 숫자는 **이번에 추가로 넣는 돈**이지 "얼마까지 올렸나"(총액)가 아니다.
+ * 포커에서 오픈 크기는 관례상 총액으로 말하므로(`2.5bb 오픈`) 프리셋 숫자가 총액처럼 읽히는데,
+ * 블라인드 자리는 이미 낸 돈이 있어 **거기서만 어긋난다**:
+ *   SB(0.5 냄)가 프리셋 3 → 총액 3.5BB → 필요승률 35.7%.  "3BB 로 오픈" 의 정답은 33.3% (추가 2.5).
+ * 비블라인드 자리는 이미 낸 돈이 0 이라 추가액 = 총액이 되어 **우연히 맞는다** — 그래서 안 드러났다.
+ * 저장된 스팟(post_spots.spot jsonb)과 potBb 가 전부 '추가액' 규약이라 **의미는 바꾸지 않고**,
+ * 고르는 순간 총액을 함께 보여 준다(아래 `투입 총액`).
+ */
 const SIZE_PRESETS: Record<'pre' | 'post', number[]> = {
   pre: [2, 2.2, 2.5, 3, 4],
   post: [1, 2, 3, 5, 8],
@@ -441,6 +451,11 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
   const [size, setSize] = useState<number>(2.5);
   const sized = type === 'call' || type === 'bet' || type === 'raise';
   const presets = spot.street === 'preflop' ? SIZE_PRESETS.pre : SIZE_PRESETS.post;
+  // 돈 계산은 한 벌만 둔다 — 예전에는 여기 사본(spotSizing.investedSoFar)이 있었다.
+  // investedThisStreet 은 반올림하지 않으므로 **표시할 때** 자릿수를 맞춘다.
+  const already = Math.round(investedThisStreet(spot, actor) * 100) / 100;
+  const actorPos = actor === 'hero' ? spot.heroPos : spot.villainPos;
+  const totalAfter = Math.round((already + (Number.isFinite(size) ? size : 0)) * 100) / 100;
 
   const add = () => {
     const a: SpotAction = { street: spot.street, actor, type, ...(sized ? { sizeBb: size } : {}) };
@@ -509,10 +524,18 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
               type="number" inputMode="decimal" min={0} step={0.5} value={size}
               onChange={(e) => setSize(Number(e.target.value))}
               className="input min-h-[36px] w-16 text-right"
-              aria-label="이번에 추가로 넣는 BB 직접 입력 (총액이 아니라 추가액)"
+              aria-label={`이번에 추가로 넣는 BB 직접 입력 (총액이 아니라 추가액). 지금 값이면 투입 총액 ${totalAfter}BB`}
             />
             <span className="text-2xs text-ink-muted">BB</span>
           </Row>
+        )}
+        {sized && (
+          // 프리셋 숫자는 '추가액' 인데 포커 관례는 총액이라, 블라인드 자리에서만 조용히 어긋난다.
+          // 고르는 순간 결과 총액을 보여 주면 그 함정이 사라진다(2026-09-18 실측: SB 프리셋 3 → 3.5BB).
+          <p className="text-2xs leading-relaxed text-ink-muted">
+            투입 총액 <b className="tabular-nums text-ink-secondary">{totalAfter}BB</b>
+            {already > 0 && <> — {actor === 'hero' ? '나' : '상대'}({actorPos})가 이미 낸 {already}BB 포함</>}
+          </p>
         )}
         <button type="button" onClick={add} className="btn-ghost mt-1 min-h-[44px] w-full text-xs">
           <Icon name="plus" size={13} className="mr-1 inline-block align-[-2px]" />액션 추가
