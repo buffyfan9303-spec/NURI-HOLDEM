@@ -994,12 +994,15 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         <button type="button" onClick={() => openBoard(todayStr)} className="btn-primary text-xs px-3 shrink-0">+ 장부 추가</button>
         </div>
 
-        {/* 기간으로 보기 — 시작~종료 범위의 장부만 표시(필터) */}
+        {/* 기간으로 보기 — 시작~종료 범위의 장부만 표시(필터)
+            ⚠ `min-w-0` 이 없으면 flex 아이템의 min-width:auto 가 `<input type="date">` 의 **내재 폭(164px)**
+              으로 고정돼 flex-1 이 무력해진다 — 360px 에서 두 칸+`~` 가 컨테이너(326)를 넘어
+              오른쪽 칸이 뷰포트 밖(365 > 360)으로 잘렸다(실측 2026-09-18). 390 은 우연히 들어왔다. */}
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5">
-            <input type="date" value={filterFrom} max={filterTo || todayStr} onChange={(e) => setFilterFrom(e.target.value)} className="input flex-1 text-sm" aria-label="시작일" />
+            <input type="date" value={filterFrom} max={filterTo || todayStr} onChange={(e) => setFilterFrom(e.target.value)} className="input min-w-0 flex-1 text-sm" aria-label="시작일" />
             <span className="text-2xs text-ink-muted shrink-0">~</span>
-            <input type="date" value={filterTo} min={filterFrom || undefined} max={todayStr} onChange={(e) => setFilterTo(e.target.value)} className="input flex-1 text-sm" aria-label="종료일" />
+            <input type="date" value={filterTo} min={filterFrom || undefined} max={todayStr} onChange={(e) => setFilterTo(e.target.value)} className="input min-w-0 flex-1 text-sm" aria-label="종료일" />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-2xs text-ink-muted">{hasRange ? `${filterFrom || '처음'} ~ ${filterTo || '오늘'}` : '기간 설정 시 그 범위만'}</span>
@@ -2732,7 +2735,12 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       </Field>
 
       {/* sticky — 필드 15+ 폼이라 실행 버튼이 화면 밖으로 밀렸다. 매일 반복하는 화면이니 항상 보이게 */}
-      <div className={['sticky bottom-0 -mx-1 flex gap-2 px-1 pb-1 pt-2 backdrop-blur-sm', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
+      {/* 🔴 `bottom-0` 이면 **모바일 하단 탭바(fixed z-50) 밑에 깔린다** — 실측(2026-09-18):
+          360 '장부 시작' [30.8,735,298×41] vs 탭바 [0,705.75,360×74] → 버튼이 **전면 가림**.
+          390 도 동일. 탭바가 스크롤로 자동숨김된 동안에만 보였다 = 매일 쓰는 실행 버튼이 안 눌린다.
+          `--tabbar-safe` 는 이 저장소의 **탭바 회피 단일 소스**다(index.css) — 임의 상수를 새로 만들지 않는다.
+          PC(lg+)에는 하단 탭바가 없으므로 종전대로 bottom-0. */}
+      <div className={['sticky bottom-[var(--tabbar-safe)] lg:bottom-0 -mx-1 flex gap-2 px-1 pb-1 pt-2 backdrop-blur-sm', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
         {onCancel && <button type="button" onClick={onCancel} className="btn-ghost text-sm flex-1">취소</button>}
         <button type="button" onClick={submit} disabled={cash <= 0} className="btn-primary text-sm flex-1 disabled:opacity-50">
           {mode === 'open' ? '장부 시작' : '저장'}
