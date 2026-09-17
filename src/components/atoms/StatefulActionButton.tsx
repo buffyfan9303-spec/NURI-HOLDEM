@@ -68,7 +68,10 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
     try {
       await (onAction ? onAction() : new Promise((r) => setTimeout(r, 2000)));
       setPhase('success');
-      if (onDone) setTimeout(onDone, 900);
+      // 🔴 900 → 560 (2026-09-18 실측): 체크 드로잉은 0.05+0.45s = **500ms** 에 끝나는데 900ms 를 기다려
+      //   그 사이 **약 430ms 가 완전 정지 화면**이었다(스크린캐스트 618→784→982ms 구간 새 프레임 0).
+      //   오너: "잠깐 떠 있다가 없어진다" 의 정체가 이 공백이다. 드로잉 끝 + 여유 60ms 로 맞춘다.
+      if (onDone) setTimeout(onDone, 560);
     } catch {
       setPhase('idle'); // 실패 토스트는 onAction 쪽 책임 — 버튼은 재시도 가능 상태로
       setShakeKey((k) => k + 1); // '아니야'를 몸짓으로 — 좌우 6px 흔들기

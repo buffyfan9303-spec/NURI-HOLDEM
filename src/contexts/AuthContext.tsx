@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.tsx
-import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, startTransition } from 'react';
 import type { ReactNode } from 'react';
 import type { User, ProfilePatch } from '../api/auth';
 import {
@@ -96,7 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // (세대는 오르지 않는다 — 올리면 바로 이 응답이 버려져 자동 로그인이 화면에 안 뜬다).
     if (profile) genRef.current = withOwner(genRef.current, profile.id);
 
-    setUser((prev) => keepIfSame(prev, profile));
+    // 🔴 startTransition (2026-09-18 실측): 로그인 성공 프레임에서 setUser 전역 재렌더 +
+    //   토스트 + 헤더 클러스터 교체가 **한 배치**로 들어가 CPU 6x 에서 LoAF 161ms · rAF 공백 167ms 였다
+    //   (오너: "갑자기 드득 하면서"). 트랜지션으로 감싸면 그 재렌더가 시분할돼 성공 애니메이션이 안 멈춘다.
+    //   ⚠ setUser 만 감싼다 — 아래 제재(sanction) 동기 판정 흐름은 그대로 둔다.
+    startTransition(() => setUser((prev) => keepIfSame(prev, profile)));
     if (!profile) return null;
 
     const pointStamp = genRef.current;

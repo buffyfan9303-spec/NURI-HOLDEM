@@ -508,7 +508,6 @@ function PasswordField({
 
 function LoginForm({ onClose, onForgot, onSignup }: { onClose: () => void; onForgot: () => void; onSignup: () => void }) {
   const { login } = useAuth();
-  const toast = useToast();
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
@@ -526,7 +525,9 @@ function LoginForm({ onClose, onForgot, onSignup }: { onClose: () => void; onFor
     setError('');
     try {
       await login(email.trim(), password, keepSignedIn);
-      toast.show('로그인되었습니다', 'success');
+      // 🔴 성공 토스트를 뺐다 (2026-09-18 실측): 버튼이 이미 '환영합니다!' 를 말하는데 토스트가
+      //   z-[120] 로 시트(z-[60]) **위** 구글 버튼 자리에 겹쳐 떴다(스크린샷 f020). 같은 말을 두 번 하면서
+      //   성공 프레임의 렌더 부담만 키웠다 — 오너가 말한 '드득' 의 절반이 이 배치다.
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '';
       // 제재(탈퇴·정지) 계정은 사유를 그대로 보여준다 — 자격증명 오류로 뭉개면 회원은 비밀번호만

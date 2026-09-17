@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, type ReactNode } from 'react';
+import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { flushSync } from 'react-dom';
 import { withViewTransition, type VTDirection } from './lib/viewTransition';
 import { getAppSetting } from './api/settings';
@@ -1112,6 +1113,7 @@ export default function App() {
   const searchBarRef = useRef<{ clearAll: () => void } | null>(null);
   const hasActiveSearchFilter = !!(searchState.query || searchState.dates.length || searchState.regions.length || searchState.format || searchState.gtdOnly || searchState.competitionOnly || searchState.grade || searchState.budget != null);
   const [authOpen, setAuthOpen]       = useState(false);
+  const authMounted = useDelayedUnmount(authOpen);
   const [authMode, setAuthMode]       = useState<'login' | 'signup-user'>('login'); // QR 회원가입 진입용
   /** 로그인 창 열기 — **진입점이 8곳**이라 한 곳에 모은다(헤더·QR 체크인·QR 바인·가입QR·추천코드·쓰기 게이트·클락 리모컨·캘린더·이벤트).
    *
@@ -4097,8 +4099,15 @@ export default function App() {
         )}
       </Suspense>
 
-      {authOpen && (
-        <AuthModal key={authMode} open onClose={() => { setAuthOpen(false); setAuthMode('login'); }} initialMode={authMode} />
+      {/* 🔴 퇴장 애니메이션 살리기 (2026-09-18 실측).
+          예전: `{authOpen && <AuthModal open …>}` — `open` 이 **항상 true** 라 부모가 통째로 언마운트되고
+          `Modal.tsx` 의 slide-down(200ms)이 **한 프레임도 안 돌았다**. 성공→소실이 **0ms**,
+          한 프레임에 `animation: sheet-up` → 없음(오너: "갑자기 없어진다").
+          지금: 마운트 수명과 `open` 을 분리한다 — `open={authOpen}` 로 Modal 이 퇴장을 돌리고,
+          `useDelayedUnmount` 가 220ms(Modal 200ms + 여유) 뒤에 내린다.
+          ⚠ App 에 같은 모양의 lazy 오버레이가 14곳 더 있다 — 전부 퇴장이 죽어 있다. 순차로 같은 훅을 씌운다. */}
+      {authMounted && (
+        <AuthModal key={authMode} open={authOpen} onClose={() => { setAuthOpen(false); setAuthMode('login'); }} initialMode={authMode} />
       )}
 
       {openSchedule !== null && (
