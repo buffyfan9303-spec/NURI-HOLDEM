@@ -65,7 +65,7 @@ export default function OutsCalc() {
           <OutsFromCards onCounted={(n, s) => { setOuts(n); setStreet(s); }} />
         </Suspense>
       ) : (
-        <CalcCard desc="남은 아웃츠로 완성 확률과 필요한 팟 오즈를 계산">
+        <CalcCard>
           <Field label="아웃츠 (남은 도움 카드 수)">
             {/* 디스카운트 아웃츠(예: 7.5장) 입력을 위해 소수 허용 */}
             <NumIn value={outs} onChange={setOuts} suffix="장" decimal />

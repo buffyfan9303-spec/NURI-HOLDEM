@@ -3507,6 +3507,9 @@ export default function App() {
           <HomeTab
             schedules={schedules}
             venueById={venueById}
+            /* 홈 퀵액션 '출석 체크' — 헤더 [이용권·출석] 과 **같은 시트·같은 조리법**(startTransition +
+               선마운트 Suspense). 비로그인은 시트 대신 로그인부터 — 무반응 클릭을 만들지 않는다. */
+            onOpenVoucher={() => (user ? startTransition(() => setVoucherSheetOpen(true)) : openLoginCb())}
             loaded={schedulesLoaded}
             /* §11 — 조회 실패를 '없음'으로 위장하지 않는다. 이 state 는 이미 존재했는데(일정 탐색만 소비)
                홈에는 내려오지 않아, schedules 500 에서 홈이 '오늘 대회 0개 · 오늘·내일 예정 대회가

@@ -749,7 +749,11 @@ export default function ScheduleDetailModal({
           <Icon name="edit" size={15} className="shrink-0 text-accent-300" />
           <span className="min-w-0 flex-1">
             <span className={`block text-xs font-bold ${ACCENT_INK}`}>이 대회 후기 쓰기</span>
-            <span className="block text-2xs text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요</span>
+            {/* ⚠ 이 줄은 **지우지 않는다** — 2026-09-18 부제 전수 정리에서 한 번 지웠다가 되돌렸다.
+                `userScreenCopy.contract.test.ts` 가 이 문구를 **남기라고** 잠그고 있다: 예전 오너 지시로
+                부연 한 줄만 지우고 **목적지를 말하는 이 줄은 남기기로** 정했다(금지 문구를 여기 적으면 계약이 스스로 걸린다).
+                버튼 제목은 목적지(커뮤니티 게시판)를 말하지 않는다 — 어디에 글이 올라가는지가 판단 정보다. */}
+            <p className="mt-0.5 t-desc text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요</p>
           </span>
           <span className={`shrink-0 ${ACCENT_INK}`} aria-hidden>→</span>
         </button>

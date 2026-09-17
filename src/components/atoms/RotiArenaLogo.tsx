@@ -174,7 +174,7 @@ export default function RotiArenaLogo({ variant = 'full', className = '' }: Roti
           <p className="font-serif font-extrabold text-2xl tracking-[0.3em]" style={{ color: GOLD }}>
             ROTI ARENA
           </p>
-          <p className="text-xs text-ink-muted tracking-widest mt-1">PREMIUM HOLDEM ARENA</p>
+          {/* 2026-09-18 오너 지시로 설명줄 제거 — 장식용 태그라인일 뿐 아니라 이 variant('banner') 자체가 코드베이스 어디서도 호출되지 않는 죽 */}
         </div>
       </div>
     );

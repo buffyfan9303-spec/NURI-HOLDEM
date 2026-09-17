@@ -179,7 +179,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-fluid-lg font-bold text-ink-primary text-grad-violet">진행 중 게임 {games ? <span className="text-accent-200 text-grad-keep">{games.length}</span> : null}</h2>
-            <p className="mt-0.5 t-desc text-ink-muted">지금 클락이 돌아가는 대회 · 블라인드와 레지마감을 한눈에 · 탭하면 상세</p>
+            {/* 2026-09-18 오너 지시로 설명줄 제거 — 제목 '진행 중 게임'이 이미 화면의 정체를 말하고, '블라인드·레지마감을 한눈에'는 바로 아래 카드 목록에 */}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {games && games.length > 1 && (

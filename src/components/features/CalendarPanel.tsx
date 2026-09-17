@@ -431,7 +431,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
       <section className="rounded-aura border card-aura p-3">
         <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink-primary">
           <Icon name="piggy-bank" size={15} className="shrink-0 text-accent-300" aria-hidden />자금 도구
-          <span className="text-xs font-normal text-ink-muted">권장 참가비 배수 · 분산 예측</span>
+          {/* 2026-09-18 오너 지시로 설명줄 제거 — 제목 옆 태그라인. 아래 CalendarToolsPanel 이 실제 계산기 UI를 바로 보여주므로 사전 설명 */}
         </p>
         <CalendarToolsPanel />
       </section>
@@ -600,7 +600,7 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
         <div className="flex min-w-0 flex-1 flex-col">
           {/* 2026-09-10 — '내가 적는 기록'은 기능을 말하지 않는다. 제목/부제를 맞바꾼다. */}
           <h3 className="text-sm font-bold leading-tight text-ink-primary">뱅크롤 · 일정</h3>
-          <span className="text-2xs leading-tight text-ink-secondary">손익을 기록하고 개인 일정을 관리해요</span>
+          {/* 2026-09-18 오너 지시로 설명줄 제거 — 제목 '뱅크롤 · 일정' 자체가 이미 두 기능(손익 기록 / 일정)을 말하고 있고, 바로 아래 탭(뱅크롤·일 */}
         </div>
       </div>
 

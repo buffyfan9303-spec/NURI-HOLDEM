@@ -16,7 +16,7 @@ export default function ChipDistributor() {
   const del = (i: number) => setRows((rs) => rs.filter((_, k) => k !== i));
 
   return (
-    <CalcCard title="칩 분배기" desc="1인 스택 구성과 매장이 준비할 총 칩 수를 계산합니다.">
+    <CalcCard>
       <Field label="참가 인원"><NumIn value={players} onChange={setPlayers} suffix="명" /></Field>
       <div className="space-y-1.5">
         {/* 액면 칸을 넓게(1.4fr): 320px 에서 1fr 칸은 글자 공간 36.5px 인데 '25000' 이 47.5px 라 잘렸다(실측) — 개수·총 필요는 짧다 */}

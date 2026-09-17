@@ -66,7 +66,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
-    <CalcCard desc="칩이 적을 때 올인·콜 기준표 · 자리와 스택을 고르면 바로 바뀝니다">
+    <CalcCard>
       {/* 포지션 */}
       <div className="space-y-1">
         <p className="text-2xs font-bold text-ink-secondary">내 자리</p>

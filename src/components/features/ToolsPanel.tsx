@@ -528,7 +528,10 @@ export default function ToolsPanel() {
                   <Icon name={l.icon} size={13} className="text-accent-300" aria-hidden /> {l.label}
                 </h2>
                 <span className="text-2xs font-semibold tabular-nums text-ink-muted">{items.length}개</span>
-                <span className="min-w-0 text-2xs text-ink-secondary">{l.desc}</span>
+                {/* 🔴 2026-09-18: 레인 소제목(l.desc)을 화면에서 뺐다 — 바로 아래 카드 그리드가
+                    같은 도구 이름을 그대로 다시 보여준다(화면에 이미 보이는 것의 반복).
+                    이 줄은 320px·200% 에서 170/357 로 잘리던 자리이기도 하다(위 주석) — 중복을 없애니 잘림도 같이 사라진다.
+                    ⚠ LANES[].desc 데이터는 그대로 둔다 — 지우면 gtoContract 의 LANES 포맷 검사가 흔들린다. */}
               </div>
               {grid(items)}
             </section>
@@ -611,7 +614,9 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
               줄바꿈으로 푼다(§7: 긴 정보는 줄바꿈·재배치로 푼다).
               ⚠ 2026-09-12 2차: `line-clamp-2` 로 상한을 뒀더니 **320px·100% 에서 이미 clientHeight 32 /
               scrollHeight 48** — 셋 중 마지막 토막('토론')이 잘려 있었다. 세로 잘림도 정보 소실이라 상한을 뺀다. */}
-          <p className="text-2xs text-ink-muted">핸드 분석 · 리플레이 · 토론</p>
+          {/* 🔴 2026-09-18 오너 지시로 설명줄을 뺐다("누리 스팟 아래 핸드 분석 리플레이 토론 이런 설명들 전체 삭제").
+              같은 커밋에서 `e2e/nuri-spot.spec.ts:56` 의 이 문구 단언도 `data-testid` 기준으로 바꿨다
+              (CLAUDE.md: 라벨을 바꾸면 같은 커밋에서 셀렉터를 data-testid 로 교체). */}
         </div>
         {/* `text-[10px]` 은 역할 사다리 밖이라 루트 17px 확대를 못 받는다 — `text-2xs`(11.69px)로 올린다.
             `shrink-0` 도 뺐다: 320px·200% 에서 이 배지 하나가 245px 을 선점해 섹션(199px)을 밖으로 밀었다.

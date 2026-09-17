@@ -175,11 +175,14 @@ const dayLabel = (date: string) => {
 export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
   onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], onInternalLink,
-  liveClocks = [], visitedVenues = [], myTodayRes = [], venueById,
+  liveClocks = [], visitedVenues = [], myTodayRes = [], venueById, onOpenVoucher,
 }: {
   /** 매장 대표 이미지·테마색 조회용 — 목록 줄 왼쪽 **매장 로고** 자리가 쓴다(2026-09-18).
    *  App 이 이미 들고 있는 `venueById` 를 그대로 받는다(새 조회 0). 없으면 이니셜만 보인다. */
   venueById?: ReadonlyMap<string, { imageUrl?: string; themeColor?: string }>;
+  /** 출석 체크 퀵액션 — 헤더 [이용권·출석] 과 **같은 시트**를 연다(App 이 로그인 여부까지 판단한다).
+   *  같은 목적지에 서로 다른 경로를 새로 만들지 않는다 — 헤더 진입점은 그대로 둔다(오너: 헤더는 유지). */
+  onOpenVoucher?: () => void;
   /** 추천 근거(2026-09-17) — 셋 다 App 이 **이미 받아 둔** 응답이다(새 조회 0). 안 넘기면 종전 정렬 그대로다. */
   liveClocks?: ClockState[];
   visitedVenues?: VisitedVenue[];
@@ -389,9 +392,9 @@ export default function HomeTab({
                   ? <>오늘 대회 정보를 불러오지 못했어요</>
                   : personal
                     ? <Nums text={personal} />
-                    : <>오늘 대회 <span className="tabular-nums text-accent-300">{todayCount}</span>개</>}
+                    : <>오늘 대회 <span className="stat-glow tabular-nums text-accent-300" style={{ '--aura-led-rgb': '139 92 246' } as React.CSSProperties}>{todayCount}</span>개</>}
               {loaded && !failed && clocksLoaded && !personal && (
-                <> · 지금 등록 가능 <span className="tabular-nums stat-emerald">{openAll.length}</span>개</>
+                <> · 지금 등록 가능 <span className="stat-glow tabular-nums stat-emerald" style={{ '--aura-led-rgb': '52 211 153' } as React.CSSProperties}>{openAll.length}</span>개</>
               )}
             </p>
           </section>
@@ -434,6 +437,58 @@ export default function HomeTab({
             />
           </div>
         </div>
+
+        {/* ── 퀵액션 2열 — 출석 체크 · 제휴 혜택 (2026-09-18 오너 시안) ────────
+            시안(첨부 HTML 152행)의 2열 압축 액션 그리드. **없던 것을 더하는 것이지 무엇도 지우지 않는다** —
+            헤더 [이용권·출석]·캐러셀 이벤트 슬라이드는 그대로 두고 홈에 지름길을 하나 더 낸다.
+            · 출석 체크 → 헤더와 **같은 시트**(onOpenVoucher). 같은 목적지에 두 벌 경로를 만들지 않는다.
+            · 제휴 혜택 → 이벤트(onEvent). 라벨은 오너 지시 문구이고, **밑에 적는 상태는 실제 값**이다
+              (진행 중이면 남은 카드·참여권, 아니면 eventMenuSubtitle 이 사실대로 말한다 — §6-1).
+            ⚠ 제목 행에 `min-h-[1.5rem]` — 배지(참여권·카드 수)는 **응답이 와야** 생긴다. 자리를 안 잡으면
+              도착하는 순간 행이 3~6px 커지고 그 아래 '오늘·내일 일정'이 통째로 밀린다
+              (perf④ 가 잡았다: "첫 페인트 뒤 3px 밀렸다"). 배지 유무와 무관하게 같은 높이를 예약한다.
+            ⚠ 제목 행은 `flex-wrap` 이고 배지도 `shrink-0` 가 아니다 — 루트 글자 200% 확대에서
+              제목+배지가 한 줄에 못 들어가 **97/141 로 잘렸다**(실측 2026-09-18, 390px·200%).
+              배지가 아랫줄로 흐르게 두는 것이 글자를 줄이는 것보다 낫다(§7).
+            ⚠ 글로우는 여기 둘에만 준다(micro). 화면에서 '지금 여기를 눌러라' 가 이 둘뿐이기 때문이다 —
+              목록 줄처럼 반복되는 자리에 같은 빛을 주면 강조가 아니라 소음이 된다. */}
+        <section className="px-page-x pt-3" data-testid="home-quick">
+          <div className="grid grid-cols-2 gap-2.5">
+            <button type="button" onClick={onOpenVoucher} data-testid="home-quick-checkin"
+              data-aura data-aura-level="micro" data-aura-variant="violet"
+              className="flex min-h-[44px] flex-col rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
+              <span className="flex min-h-[1.5rem] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
+                <span className="min-w-0 t-desc font-extrabold text-ink-primary">출석 체크</span>
+                {eventShown === 'banner' && event && event.myTickets > 0 && (
+                  <span className="min-w-0 rounded-badge border border-accent-400/40 bg-surface-high px-1.5 py-0.5 text-2xs font-bold tabular-nums text-accent-200">
+                    참여권 {event.myTickets}
+                  </span>
+                )}
+              </span>
+              <span className="mt-2 flex flex-wrap items-center justify-between gap-x-1 border-t border-border-subtle pt-1.5">
+                <span className="min-w-0 text-2xs font-bold text-emerald-300">매장 QR 열기</span>
+                <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted" />
+              </span>
+            </button>
+
+            <button type="button" onClick={onEvent} data-testid="home-quick-event"
+              data-aura data-aura-level="micro" data-aura-variant="amber"
+              className="flex min-h-[44px] flex-col rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:border-gold-300/40">
+              <span className="flex min-h-[1.5rem] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
+                <span className="min-w-0 t-desc font-extrabold text-ink-primary">제휴 혜택</span>
+                {eventShown === 'banner' && eventRemain > 0 && (
+                  <span className="min-w-0 rounded-badge border border-gold-300/40 bg-surface-high px-1.5 py-0.5 text-2xs font-bold tabular-nums text-gold-300">
+                    카드 {eventRemain}
+                  </span>
+                )}
+              </span>
+              <span className="mt-2 flex flex-wrap items-center justify-between gap-x-1 border-t border-border-subtle pt-1.5">
+                <span className="min-w-0 text-2xs font-bold text-gold-300">이벤트 보기</span>
+                <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted" />
+              </span>
+            </button>
+          </div>
+        </section>
 
         {/* ── 추천 대회 ────────────────────────────────────────────────────────
             §6-3. 가로 스크롤은 **레일 안에서만** 일어난다 — 레일은 px-page-x 만큼의 안쪽 여백을
@@ -635,6 +690,13 @@ export default function HomeTab({
                   onSelect={onSelect}
                   priority={i < 4} />
               ))}
+              {/* 목록 끝의 '전체 일정' — 시안(첨부 HTML 271행 'See All Tournaments')의 자리.
+                  헤더에도 같은 링크가 있지만, 목록을 다 훑고 난 **그 자리**에서 이어 가게 하는 것이 요점이다
+                  (위로 되돌아가지 않아도 된다). 목적지는 같은 onExplore 하나다 — 경로를 두 벌로 만들지 않는다. */}
+              <button type="button" onClick={onExplore} data-testid="home-upcoming-all"
+                className="flex min-h-[44px] w-full items-center justify-center gap-1 bg-surface-high/40 px-3 py-2.5 text-2xs font-bold text-accent-200 transition-colors hover:bg-surface-high">
+                전체 일정 보기 <Icon name="chevron-right" size={12} />
+              </button>
             </div>
           )}
         </section>
@@ -650,7 +712,7 @@ export default function HomeTab({
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate t-title text-ink-primary">GTO 도구</span>
-              <span className="mt-0.5 block truncate t-desc text-ink-muted">차트 · 계산기 · 트레이너 · 누리 스팟</span>
+              {/* 2026-09-18 오너 지시로 설명줄 제거 — 오너가 예로 든 ToolsPanel 'desc' 와 같은 형태 — 제목 밑에 하위 기능을 나열만 하는 한 줄 */}
             </span>
             <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
           </button>

@@ -297,7 +297,7 @@ function Hero({ board, left, total, user, onLogin, av }: {
               <p className="mt-0.5 whitespace-nowrap text-base font-extrabold leading-none tabular-nums text-ink-primary">
                 {l}<span className="ml-0.5 text-[10px] font-semibold text-ink-muted">장</span>
               </p>
-              <p className="truncate text-[10px] leading-tight text-ink-muted">이용권 {v}장</p>
+              <p className="truncate text-[10px] leading-tight text-ink-muted">이용권 {v}T</p>
             </div>
           );
         })}

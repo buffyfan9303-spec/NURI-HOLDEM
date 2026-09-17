@@ -65,7 +65,7 @@ const BOARD_DESC: Record<Board, string> = {
   shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
   moneyin: '전국 대회 머니인(입상) 경력 순위. 매장이 등록한 대회 순위 기록만 세며 상금·금액은 보지 않습니다 — 입상 횟수 → 우승 → TOP3 → 최고 등수 순.',
-  badges: '조건을 달성하면 자동으로 열리는 업적 뱃지. 모아서 프로필을 채우세요.',
+  badges: '',
   missions: '이번 주 미션. 달성하면 활동점수 보상을 바로 받아요. 월요일 리셋.',
   hall: '지난달 가장 빛난 플레이어 TOP3. 운영자가 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
 };
@@ -1098,7 +1098,7 @@ export default function TierLeaderboard() {
                     아이콘도 지갑(추상) → 카트(산다)로 — 아래 '활동으로 얻는 것'의 메달과 짝이 맞는다. */}
                 <Icon name="cart" size={13} className="shrink-0 text-accent-300" />
                 <p className="shrink-0 text-2xs font-extrabold text-accent-300">점수로 사는 것</p>
-                <p className="shrink-0 text-2xs text-ink-muted">사용 가능 점수로 구매합니다</p>
+                {/* 2026-09-18 오너 지시로 설명줄 제거 — 섹션 제목 '점수로 사는 것'을 사실상 그대로 반복 — 새 정보 없음. */}
                 <span className="h-px flex-1 bg-border-subtle" />
               </div>
 

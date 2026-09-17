@@ -90,7 +90,7 @@ export default function TdaRulesTool() {
           </span>
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-bold text-ink-primary">규칙 물어보기</h3>
-            <p className="text-2xs text-ink-muted">상황을 그대로 적으면 해당 규칙을 찾아 드려요</p>
+            {/* 2026-09-18 오너 지시로 설명줄 제거 — 바로 아래 입력창의 placeholder('예) 딜러가 카드를 쏟았어요')와 예시 칩이 같은 사용법을 이미  */}
           </div>
         </div>
 

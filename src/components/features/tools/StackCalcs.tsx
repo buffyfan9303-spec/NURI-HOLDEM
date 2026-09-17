@@ -102,7 +102,7 @@ export function BankrollCalc() {
   const [type, setType] = useState<'cash' | 'tourney'>('tourney');
   const mult = type === 'cash' ? { min: 20, rec: 30 } : { min: 50, rec: 100 };
   return (
-    <CalcCard title="뱅크롤 관리" desc="게임 유형·바이인 기준 권장 뱅크롤">
+    <CalcCard>
       <Field label="게임 유형">
         <div className="flex gap-1.5">
           {([{ id: 'tourney', label: '대회' }, { id: 'cash', label: '캐시' }] as const).map((t) => (

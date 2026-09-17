@@ -285,10 +285,12 @@ function AuraSpade({ size }: { size: number }) {
 }
 
 /** 모드별 제목·설명 — 레퍼런스처럼 '한 화면에 한 가지 목적'만 말한다. */
-const MODE_INTRO: Record<Mode, { title: string; desc: string }> = {
-  'login':        { title: '다시 만나 반가워요',   desc: '누리홀덤의 일정과 커뮤니티를 계속 이용하세요.' },
-  'signup-user':  { title: '누리홀덤 시작하기',     desc: '일정·커뮤니티·GTO를 한 계정으로 이용하세요.' },
-  'signup-owner': { title: '매장 운영 시작하기',    desc: '포스터·예약·장부·이용권을 한곳에서 관리하세요.' },
+/** 모드별 제목 — `desc` 는 **있을 때만** 그린다(2026-09-18 오너 지시로 인트로 문장 3개를 뺐다).
+ *  '비밀번호 찾기' 만 남겼다 — 인증번호가 **어디로** 가는지는 제목이 말하지 않는 판단 정보다. */
+const MODE_INTRO: Record<Mode, { title: string; desc?: string }> = {
+  'login':        { title: '다시 만나 반가워요',   },
+  'signup-user':  { title: '누리홀덤 시작하기',     },
+  'signup-owner': { title: '매장 운영 시작하기',    },
   'forgot':       { title: '비밀번호를 잊으셨나요?', desc: '가입한 이메일로 인증번호를 보내드릴게요.' },
 };
 

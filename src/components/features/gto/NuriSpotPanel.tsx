@@ -201,7 +201,8 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
         <SpadeMark />
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-extrabold tracking-tight text-ink-primary">NURI SPOT</h2>
-          <p className="truncate text-2xs text-ink-muted">핸드 분석 · 리플레이 · 토론</p>
+          {/* 🔴 2026-09-18: 같은 문구가 세 곳에 있었다(TOOLS 데이터 · SpotHeroCard · 여기).
+              화면에 보이던 둘을 같이 뺀다 — 한쪽만 지우면 "설명 없앤 목록 → 열면 같은 설명이 다시" 가 된다. */}
         </div>
       </div>
       {/* 내비 행 — 분석 | 내 스팟 | 게시판 토론 › 셋이 같은 행·같은 세로 중심·같은 글자 규격(t-tab).

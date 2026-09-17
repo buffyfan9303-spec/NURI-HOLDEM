@@ -271,6 +271,16 @@
   @media (prefers-reduced-transparency: reduce) { [data-aura] { box-shadow: none; } }
   @media (prefers-contrast: more)               { [data-aura] { box-shadow: none; } }
   @media (forced-colors: active)                { [data-aura] { box-shadow: none; } }
+  /* 🔴 '지금' 신호 숫자에만 거는 글로우 (2026-09-18 오너 시안).
+     왜 box-shadow(=data-aura)가 아니라 text-shadow 인가: 홈 첫 줄은 `h-[26px] whitespace-nowrap` 으로
+     **높이가 고정**돼 있고 home-cls.spec 이 그 자리를 잰다. 배지(패딩·테두리)로 바꾸면 26px 을 넘겨
+     아래가 통째로 밀린다. text-shadow 는 레이아웃을 1px 도 바꾸지 않는다.
+     ⚠ 목록처럼 **반복되는 자리에는 쓰지 않는다** — 다 빛나면 아무것도 안 빛난다. 화면당 한두 곳. */
+  .stat-glow { text-shadow: 0 0 12px rgb(var(--aura-led-rgb, 139 92 246) / 0.55); }
+  html.light .stat-glow { text-shadow: 0 0 8px rgb(var(--aura-led-rgb, 139 92 246) / 0.22); }
+  @media (prefers-contrast: more)  { .stat-glow { text-shadow: none; } }
+  @media (forced-colors: active)   { .stat-glow { text-shadow: none; } }
+
   /* 네온 링/게이지 — 진행 스트로크에만(정적 필터, 애니메이트하지 않는다 §4) */
   .ring-glow { filter: drop-shadow(0 0 6px rgb(var(--aura-300) / 0.8)); }
   html.light .ring-glow { filter: none; }

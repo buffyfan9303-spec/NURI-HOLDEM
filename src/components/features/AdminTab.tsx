@@ -509,7 +509,7 @@ function HallOfFameAdminCard() {
 
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />명예의 전당 등록 <span className="text-xs font-normal text-ink-muted">순위 &gt; 명예의 전당. 등록한 달은 자동 집계보다 우선</span></p>
+      {/* 2026-09-18 오너 지시로 설명줄 제거 — 바로 아래 513~517행에서 같은 내용(직전 달 노출 기준, 수동 등록이 자동 집계보다 우선)을 더 상세히 */}
       <p className="text-xs leading-relaxed text-ink-muted">
         노출 기준은 <b className="text-ink-secondary">직전 달</b>입니다(현재 <b className="text-ink-secondary">{last}</b>).
         이번 달({thisMonthPeriod()}) 자리에 미리 채워두면 다음 달에 자동으로 올라갑니다.

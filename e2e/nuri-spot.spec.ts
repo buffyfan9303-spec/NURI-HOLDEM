@@ -53,7 +53,10 @@ test.describe('GTO 홈 — NURI SPOT 이 대표로 선다', () => {
     await openTools(page);
     const hero = page.getByTestId('spot-hero');
     await expect(hero, '대표 카드가 없다').toBeVisible();
-    await expect(hero.getByText('핸드 분석 · 리플레이 · 토론')).toBeVisible();
+    // 2026-09-18: 오너 지시로 이 설명줄을 화면에서 뺐다. 텍스트 대신 **카드 자체와 두 진입 버튼**으로
+    //   같은 계약(대표 카드가 첫 화면에서 읽힌다)을 지킨다 — 셀렉터를 느슨하게 푼 것이 아니라
+    //   사라진 요소를 빼고 남은 요소를 그대로 단언한다.
+    await expect(hero.getByText('NURI SPOT')).toBeVisible();
     await expect(hero.getByRole('button', { name: '새 스팟 분석' })).toBeVisible();
     await expect(hero.getByRole('button', { name: '내 스팟' })).toBeVisible();
 

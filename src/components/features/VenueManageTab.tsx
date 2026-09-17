@@ -924,22 +924,19 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 }
 
 // 섹션 설명 — 공용 SectionHeader에 표시(제목·설명·액션 규격 통일)
-const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
-  dashboard: '매장 운영 현황을 한눈에 · 오늘 장부·클락·추세·단골',
-  game: '포스터 → 장부 → 클락 → 순위, 게임 하나를 단계로 진행합니다',
+/** 섹션 소개문 — **일부만 있다**(2026-09-18 오너 지시로 5개를 뺐다: 바로 아래에 그 위젯들이 그대로 나열된다).
+ *  Partial 이라 없는 키는 undefined 이고, SectionHeader 의 `desc?: string` 이 그러면 줄을 안 그린다. */
+const SECTION_DESC: Partial<Record<Section | GameStep | SettingsTab, string>> = {
   calendar: '내 예약·찜·직접 적는 일정과 뱅크롤·ROI',
   posters: '게임(포스터)별 예약 관리. 게임을 누르면 예약 리스트가 펼쳐집니다',
   presets: '게임 내용·듀레이션을 템플릿으로 저장 · 포스터/장부 없이 만들고 수정',
   ledger: '오늘 장부로 바로 들어갑니다 · 다른 날짜는 상단 뒤로가기에서 목록으로',
-  stats: '기간별 매출·엔트리·요일 분석',
   ranking: '대회 순위 등록. 닉네임이 일치하는 회원에게 점수가 자동 반영됩니다',
   clock: '대회 타이머. 장부 연동 시 엔트리·생존이 자동 반영됩니다',
   attendance: '내 출퇴근 기록',
   voucher: '매장이용권 발행·사용 내역 + 매장 QR(이용권·출석·가입) 인쇄',
   page: '손님 화면 탭 순서 · 내 매장 링크 · 시즌 · 순위 보드 · 칭호 · 기준 점수 · 포인트',
-  staff: '구성원·권한·출근 스케줄·인건비',
   partners: '연합 대회를 함께 열 매장 — 게시·신청·수락',
-  settings: '매장 페이지 · 게임 프리셋 · POS·결제 · 운영 도구 · 위험 구역',
   // ⚠ 설명은 '이 화면에 실제로 있는 것'만 적는다 — 결제수단·할인 프리셋은 장부(세션 설정)에 있고
   //   여기엔 없다. 없는 것을 약속하면 사장님이 이 탭을 열고 찾다가 포기한다.
   pos: 'POS 취소 비밀번호 · 매장 알림 수신 · 공동 사장님 관리',

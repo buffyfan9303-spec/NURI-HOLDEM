@@ -147,7 +147,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
               </span>
               <div className="flex min-w-0 flex-1 items-baseline gap-x-2">
                 <h3 className="text-sm font-bold text-ink-primary">QR</h3>
-                <span className="text-2xs text-ink-secondary">출석 · 바인 요청</span>
+                {/* 2026-09-18 오너 지시로 설명줄 제거 — 바로 아래 155-168행의 상세 목록이 '출석'과 '바인 요청' 각각을 이미 자세히 설명 — 화면에 이미  */}
               </div>
             </div>
             {/* 무엇을 하는지는 QR 이 정한다 — 손님이 먼저 고르지 않는다. 그래서 버튼은 하나이고,
@@ -199,7 +199,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
                       onClick={() => setPlan({ ...g, venueName: g.name, via: 'phone', gameSeq: null })}
                       className="flex min-h-[44px] w-full items-center gap-2 rounded-input border card-aura-sub px-3 py-2 text-left transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50">
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{g.name}</span>
-                      <span className="shrink-0 text-sm font-bold tabular-nums text-accent-200">{g.ids.length}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">장</span></span>
+                      <span className="shrink-0 text-sm font-bold tabular-nums text-accent-200">{g.ids.length}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">T</span></span>
                       <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
                     </button>
                   </li>
@@ -296,7 +296,7 @@ function VenueVoucherCounts({ rows: all, error, onRetry, onVenue }: {
               <button type="button" onClick={() => onVenue?.(r.venueId)} disabled={!onVenue}
                 className="flex min-h-[44px] w-full items-center gap-2 rounded-input border card-aura-sub px-3 py-2 text-left transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50 disabled:cursor-default">
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{r.name}</span>
-                <span className="shrink-0 text-sm font-bold tabular-nums text-accent-200">{r.count}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">장</span></span>
+                <span className="shrink-0 text-sm font-bold tabular-nums text-accent-200">{r.count}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">T</span></span>
                 {onVenue && <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />}
               </button>
             </li>
@@ -377,8 +377,8 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
     //     그래도 부분 실패는 남는다 — 만료·회수·다른 기기 사용. 색 규칙은 그래서 그대로 둔다.
     onDone(
       r.failed > 0
-        ? `${plan.venueName} ${r.ok}장 전송 · ${r.failed}장 실패(${r.reasons[0] ?? '사유 미상'})`
-        : `${plan.venueName} ${r.ok}장 전송 완료`,
+        ? `${plan.venueName} ${r.ok}T 전송 · ${r.failed}T 실패(${r.reasons[0] ?? '사유 미상'})`
+        : `${plan.venueName} ${r.ok}T 전송 완료`,
       r.failed === 0,
     );
   };
@@ -393,35 +393,35 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-ink-primary">{plan.venueName}</p>
             <p className="text-2xs text-ink-muted">
-              보유 {max}장 · {plan.via === 'qr' ? '바인 QR 확인됨' : 'QR 없이 보내기'}
+              보유 {max}T · {plan.via === 'qr' ? '바인 QR 확인됨' : 'QR 없이 보내기'}
             </p>
           </div>
           <button type="button" onClick={onCancel} aria-label="닫기" className="hit shrink-0 text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
 
         {step === 'count' && (<>
-          <p className="text-2xs text-ink-muted">몇 장을 보낼까요?</p>
+          <p className="text-2xs text-ink-muted">몇 개를 보낼까요?</p>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setCountSafe(count - 1)} disabled={count <= 1}
-              aria-label="한 장 줄이기"
+              aria-label="하나 줄이기"
               className="btn-ghost h-11 w-11 shrink-0 text-lg font-bold disabled:opacity-40">−</button>
             <input type="number" inputMode="numeric" min={1} max={max} value={count}
               onChange={(e) => setCountSafe(Number(e.target.value) || 1)}
-              aria-label="보낼 장수"
+              aria-label="보낼 수량"
               className="input h-11 min-w-0 flex-1 text-center text-lg font-extrabold tabular-nums" />
             <button type="button" onClick={() => setCountSafe(count + 1)} disabled={count >= max}
-              aria-label="한 장 늘리기"
+              aria-label="하나 늘리기"
               className="btn-ghost h-11 w-11 shrink-0 text-lg font-bold disabled:opacity-40">+</button>
           </div>
           {/* 자주 쓰는 장수 — 1장이 대부분이고, 전량은 '남김없이'를 한 번에 고르는 길 */}
           <div className="flex gap-1.5">
             {[1, 2, 3].filter((n) => n <= max).map((n) => (
               <button key={n} type="button" onClick={() => setCountSafe(n)}
-                className={`min-h-[40px] flex-1 rounded-input border text-sm font-bold tabular-nums transition-colors ${count === n ? 'border-accent-400 bg-accent-400/15 text-accent-200' : 'border-border-default text-ink-secondary'}`}>{n}장</button>
+                className={`min-h-[40px] flex-1 rounded-input border text-sm font-bold tabular-nums transition-colors ${count === n ? 'border-accent-400 bg-accent-400/15 text-accent-200' : 'border-border-default text-ink-secondary'}`}>{n}T</button>
             ))}
             {max > 3 && (
               <button type="button" onClick={() => setCountSafe(max)}
-                className={`min-h-[40px] flex-1 rounded-input border text-sm font-bold tabular-nums transition-colors ${count === max ? 'border-accent-400 bg-accent-400/15 text-accent-200' : 'border-border-default text-ink-secondary'}`}>전량 {max}장</button>
+                className={`min-h-[40px] flex-1 rounded-input border text-sm font-bold tabular-nums transition-colors ${count === max ? 'border-accent-400 bg-accent-400/15 text-accent-200' : 'border-border-default text-ink-secondary'}`}>전량 {max}T</button>
             )}
           </div>
           <button type="button" onClick={() => setStep(plan.via === 'phone' ? 'phone' : 'confirm')}
@@ -457,12 +457,12 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
                 <dd className="min-w-0 truncate text-sm font-bold text-ink-primary">{target?.display || plan.venueName}</dd>
               </div>
               <div className="flex items-baseline justify-between gap-2">
-                <dt className="shrink-0 text-2xs text-ink-muted">보낼 장수</dt>
-                <dd className="text-base font-extrabold tabular-nums text-accent-200">{count}장</dd>
+                <dt className="shrink-0 text-2xs text-ink-muted">보낼 수량</dt>
+                <dd className="text-base font-extrabold tabular-nums text-accent-200">{count}T</dd>
               </div>
               <div className="flex items-baseline justify-between gap-2">
-                <dt className="shrink-0 text-2xs text-ink-muted">보낸 뒤 남는 장수</dt>
-                <dd className="text-sm font-bold tabular-nums text-ink-secondary">{max - count}장</dd>
+                <dt className="shrink-0 text-2xs text-ink-muted">보낸 뒤 남는 수량</dt>
+                <dd className="text-sm font-bold tabular-nums text-ink-secondary">{max - count}T</dd>
               </div>
             </dl>
             {/* ⚠ 예전엔 '되돌릴 수 없다'고 단정했다 — 20260911b·c 이후로 거짓이다.
@@ -474,14 +474,14 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
             <label className="flex cursor-pointer items-start gap-2 rounded-input border border-border-default px-3 py-2.5">
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[rgb(var(--accent-400))]" />
               <span className="text-2xs font-semibold text-ink-secondary">
-                네, <b className="text-ink-primary">{target?.display || plan.venueName}</b>에 <b className="tabular-nums text-ink-primary">{count}장</b>을 보냅니다.
+                네, <b className="text-ink-primary">{target?.display || plan.venueName}</b>에 <b className="tabular-nums text-ink-primary">{count}T</b> 를 보냅니다.
               </span>
             </label>
             <div className="flex gap-2">
               <button type="button" onClick={() => setStep(plan.via === 'phone' ? 'phone' : 'count')} className="btn-ghost h-11 flex-1 text-sm">뒤로</button>
               <button type="button" disabled={!agreed || busy} onClick={send} data-testid="voucher-send-confirm"
                 className="btn-primary inline-flex h-11 flex-1 items-center justify-center gap-1 text-sm disabled:opacity-50">
-                {busy ? '보내는 중…' : <><Icon name="check" size={14} /> {count}장 보내기</>}
+                {busy ? '보내는 중…' : <><Icon name="check" size={14} /> {count}T 보내기</>}
               </button>
             </div>
           </div>

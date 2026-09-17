@@ -134,8 +134,8 @@ test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전�
   await expect(sheet).toBeVisible();
 
   // ② 장수 — 3장으로
-  await sheet.getByRole('button', { name: '3장', exact: true }).click();
-  await expect(sheet.getByLabel('보낼 장수')).toHaveValue('3');
+  await sheet.getByRole('button', { name: '3T', exact: true }).click();
+  await expect(sheet.getByLabel('보낼 수량')).toHaveValue('3');
   await sheet.getByRole('button', { name: '다음' }).click();
   const phone = sheet.getByLabel('업주 전화번호');
   await phone.click();
@@ -153,8 +153,8 @@ test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전�
   const send = sheet.getByTestId('voucher-send-confirm');
   await expect(send).toBeVisible({ timeout: 8_000 });
   await expect(send, '체크도 안 했는데 보내기가 열려 있다').toBeDisabled();
-  await expect(sheet).toContainText('3장');
-  await expect(sheet, '보낸 뒤 남는 장수를 말해야 한다').toContainText('2장');
+  await expect(sheet).toContainText('3T');
+  await expect(sheet, '보낸 뒤 남는 장수를 말해야 한다').toContainText('2T');
   await sheet.locator('input[type="checkbox"]').check();
   await expect(send).toBeEnabled();
 

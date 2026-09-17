@@ -178,7 +178,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
               본인인증을 완료해야 이용권을 사용할 수 있어요
             </p>
             <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
-              보유하신 {active.length}장은 그대로 남아 있습니다 — 인증만 마치면 바로 사용할 수 있어요.
+              보유하신 {active.length}T 는 그대로 남아 있습니다 — 인증만 마치면 바로 사용할 수 있어요.
               매장에 도착하기 전에 <b className="text-ink-primary">프로필 &gt; 본인인증</b>을 먼저 끝내 주세요.
             </p>
             {onNeedVerify && (
@@ -214,7 +214,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
                 <>
                   <span className="mt-[7px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent-300" />
                   <span className="min-w-0 flex-1 break-keep text-left [overflow-wrap:anywhere]">{g.label}</span>
-                  <span className="mt-0.5 shrink-0 text-2xs font-bold tabular-nums text-accent-300">{g.count}장</span>
+                  <span className="mt-0.5 shrink-0 text-2xs font-bold tabular-nums text-accent-300">{g.count}T</span>
                 </>
               );
               return (
@@ -268,7 +268,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
               {/* #4: 이용권은 발급 매장에서만 쓸 수 있다(서버 redeem_* 3경로 모두 used_venue_id := venue_id).
                   usedVenueName 을 앞세우면 '다른 매장에서 썼을 수도 있다'는 없는 개념을 암시한다. */}
               <span className="min-w-0 flex-1 truncate text-ink-secondary">{voucherLineLabel(v.title, v.venueName)}</span>
-              <span className="shrink-0 font-bold text-danger-light tabular-nums">-1장</span>
+              <span className="shrink-0 font-bold text-danger-light tabular-nums">-1T</span>
             </li>
           ))}</ul>
         </section>
@@ -302,7 +302,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
           </svg>
           <p className="text-2xl font-extrabold">이용권 사용 요청 전송</p>
           <p className="text-sm font-semibold opacity-90">{voucherLineLabel(redeemDone.title, redeemDone.venueName)}</p>
-          <p className="text-4xl font-extrabold tabular-nums">남은 이용권 {redeemDone.remain}장</p>
+          <p className="text-4xl font-extrabold tabular-nums">남은 이용권 {redeemDone.remain}T</p>
           <p className="mt-1 text-xs font-semibold opacity-90">매장 승인 후 확정돼요 · 거절되면 지갑으로 돌아와요</p>
           <p className="mt-2 text-xs opacity-75">화면을 탭하면 닫힙니다</p>
         </div>

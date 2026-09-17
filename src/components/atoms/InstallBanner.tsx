@@ -64,7 +64,7 @@ export default function InstallBanner() {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold text-ink-primary">홈 화면에 추가</p>
-          <p className="truncate text-2xs text-ink-muted">앱처럼 더 빠르게 이용하세요</p>
+          {/* 2026-09-18 오너 지시로 설명줄 제거 — 홈 화면 추가의 이점은 이미 널리 알려진 통념 — 뻔한 마케팅 카피, 제목 '홈 화면에 추가'만으로 충분. */}
         </div>
         <button type="button" onClick={install} className="btn-primary shrink-0 px-3 py-1.5 text-xs">설치</button>
         {/* 34x34 + 세로 보탬(tap-y-44). ⚠ .hit 는 금지 — 44x44 가 왼쪽 '설치' 버튼 위로 번져

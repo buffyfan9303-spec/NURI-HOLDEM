@@ -420,7 +420,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               <button type="button" onClick={onOpenMarket}
                 className="rounded-aura border card-aura px-3 py-2.5 text-left">
                 <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-cyan"><Icon name="cart" size={13} /></span> 내 장터 거래</span>
-                <span className="block text-2xs text-ink-muted mt-0.5">판매목록 · 채팅 · 찜</span>
+                {/* 2026-09-18 오너 지시로 설명줄 제거 — 417행과 같은 성격 — 하위 화면 미리보기 나열, 클릭하면 바로 확인 가능. 유지 사유 없음. */}
               </button>
             )}
             {/* 랭킹 상점 — 활동점수를 쓰는 유일한 곳인데 커뮤니티 안쪽 서브탭에만 있어 찾기 어려웠다(오너 2026-09-04).
@@ -429,7 +429,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               <button type="button" onClick={onOpenRanking}
                 className="rounded-aura border card-aura px-3 py-2.5 text-left">
                 <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-fuchsia"><Icon name="medal" size={13} /></span> 순위 · 상점</span>
-                <span className="block text-2xs text-ink-muted mt-0.5">마크 · 카드 프레임 · 닉네임 색</span>
+                {/* 2026-09-18 오너 지시로 설명줄 제거 — 동일 — 뻔한 하위 항목 나열. 유지 사유 없음. */}
               </button>
             )}
           </div>
@@ -718,7 +718,7 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
               <Icon name="download" size={17} className="shrink-0 text-ink-secondary" />
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold text-ink-primary">앱 설치</span>
-                <span className="block text-2xs text-ink-muted">홈 화면에 추가하고 앱처럼 쓰기</span>
+                {/* 2026-09-18 오너 지시로 설명줄 제거 — '앱 설치'라는 제목이 이미 뜻을 다 말함(PWA 설치는 보편적 개념). 뻔한 것. */}
               </span>
               <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
             </button>
@@ -737,7 +737,7 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
               <Icon name="mail" size={17} className="shrink-0 text-ink-secondary" />
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold text-ink-primary">광고 문의</span>
-                <span className="block text-2xs text-ink-muted">배너·제휴 광고 제안을 보내주세요</span>
+                {/* 2026-09-18 오너 지시로 설명줄 제거 — '광고 문의'라는 제목의 정의를 그대로 반복. 뻔한 것. */}
               </span>
               <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
             </a>
