@@ -80,7 +80,7 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   { key: 'tda', cat: 'rules', name: '2026 TDA 규칙', desc: '상황 물으면 규칙 찾아줌', keywords: '토너먼트 디렉터 규칙 TDA 2026 2024 한글 판정 플로어 딜러 카드 노출 올인 페널티 룰북', icon: 'gavel' },
   // ── 학습 — 차트·트레이너 ──
   { key: 'drill', cat: 'train', name: '오늘의 드릴', desc: '약한 부분만 하루 5문제', keywords: '약점 기반 하루 5문제', icon: 'target' },
-  { key: 'range', cat: 'explore', name: '프리플랍 레인지 차트', desc: '포지션별 시작 핸드 기준표', keywords: '9인·6맥스 포지션별 오픈·3벳·수비·vs 3벳', icon: 'grid-3x3' },
+  { key: 'range', cat: 'explore', name: '프리플랍 레인지 차트', desc: '포지션별 시작 핸드 기준표', keywords: '9인·6인·6맥스 포지션별 오픈·3벳·수비·vs 3벳', icon: 'grid-3x3' },
   { key: 'pushfold', cat: 'explore', name: '푸시 · 폴드 차트', desc: '칩 적을 때 올인 기준표', keywords: '자체 Nash · 셔브·콜 레인지', icon: 'arrow-up-from-line' },
   { key: 'trainer', cat: 'train', name: '프리플랍 트레이너', desc: '오픈과 올인 판단 연습', keywords: '오픈·셔브 맞히기, 오답 노트', icon: 'dumbbell' },
   { key: 'postflop', cat: 'train', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈와 해설', keywords: '실전 상황 퀴즈·해설', icon: 'brain' },

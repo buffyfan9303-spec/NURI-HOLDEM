@@ -81,7 +81,7 @@ const AGGRO_ROWS: { pos: string; open: number; threeBet: number; coldCall: numbe
 export function AggroChart() {
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
-    <CalcCard desc="6맥스 · 100bb 기준 포지션별 권장 빈도(근사). 내 성향이 이 범위에서 크게 벗어나면 누수일 수 있어요.">
+    <CalcCard desc="6인 · 100bb 기준 포지션별 권장 빈도(근사). 내 성향이 이 범위에서 크게 벗어나면 누수일 수 있어요.">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[26rem] text-center text-xs">
           <thead>

@@ -80,7 +80,7 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
             <>
               <div>
                 <p className="mb-1 flex items-center justify-between gap-2 text-2xs font-bold text-ink-secondary">
-                  <span>포지션별 오픈 기준 · 6맥스</span>
+                  <span>포지션별 오픈 기준 · 6인</span>
                   <SourceBadge kind="chart" note="100bb" />
                 </p>
                 <div className="grid grid-cols-5 gap-1">
