@@ -2377,7 +2377,12 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
 ::view-transition-group(app-gnb),
 ::view-transition-group(community-secbar),
 ::view-transition-group(venue-tabbar),
-::view-transition-group(rank-tabbar),
+/* ⚠ rank-tabbar 는 **일부러 뺐다**(2026-09-18 최종 확인). 얼려 봤더니 geometry 는 58px→0 으로
+   좋아졌는데 **그림이 더 나빠졌다**: 바만 새 자리에 서 있고 제 밑줄 알약이 80px 위 허공에서
+   대각선으로 날아 들어오고, 전반부에는 패널 글자가 바 위쪽에 얹혔다(실측 스크린샷 4프레임).
+   되돌리면 바·알약·패널이 **같이** 58px 미끄러져 늘 붙어 있다 — 이 화면에선 그쪽이 낫다.
+   여기만 다른 이유: 다른 바는 sticky 이거나 별도 열이라 클램프에서도 그림 차이가 없다.
+   근본은 짧아지는 판에서 scrollY 가 깎이는 것이고, 그게 고쳐지면 동결 여부는 무관해진다. */
 ::view-transition-group(admin-secbar),
 ::view-transition-group(mystore-secbar),
 ::view-transition-group(mystore-rail),
@@ -2395,13 +2400,13 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
 ::view-transition-group(legal-tabbar),
 ::view-transition-group(crm-rangebar) { animation: none; }
 
-/* 🔴 얼린 바가 패널에 **덮이는** 곳이 하나 있었다 — 순위 허브(2026-09-18 최종 확인).
-   바를 새 위치에 얼려 두면, 클램프 전환에서 패널 group 은 옛 위치 y=64 에서 149 로 미끄러지는데
-   패널이 DOM 상 뒤라 top layer 에서 바 **위에** 그려진다 → 전환 전반부에 탭바가 통째로 사라지고
-   밑줄 알약만 홀로 떠 있었다(실측 스크린샷). 얼리기 전에는 바도 같이 58px 미끄러져 늘 패널 위였다.
-   바가 자기 패널에 덮이는 것은 어떤 경우에도 옳지 않으므로 순서를 명시한다.
-   ⚠ 이 조합(비sticky 바 + 판 높이 차가 큰 화면)은 지금 이곳뿐이다 —
-     community-secbar 는 sticky, mystore-secbar 는 별도 열이라 스크린샷상 차이가 없었다.
+/* 바가 자기 패널에 덮이지 않게 순서를 명시한다 — 순위 허브에서 실제로 덮였다(2026-09-18).
+   경위: 위 목록에 rank-tabbar 를 넣어 봤더니, 얼어 있는 바 위로 패널 group 이 옛 위치 y=64 에서
+   미끄러져 들어와 **전환 전반부에 탭바가 통째로 사라졌다**(패널이 DOM 상 뒤라 top layer 에서 위에 그려진다).
+   그래서 이 z-index 를 넣었고 '바가 사라지는 것' 은 실제로 사라졌다 — 그런데 **그림은 여전히 나빴다**:
+   바만 새 자리에 서 있고 제 밑줄 알약이 80px 위 허공에서 대각선으로 날아 들어왔다. 그래서
+   **동결 쪽을 되돌렸다**(위 목록 주석 참고). 이 규칙은 남긴다 — 바가 패널에 덮이는 것은
+   어떤 경우에도 옳지 않고, 동결하지 않은 지금도 무해하다(실측: 역방향·스크롤 0 양방향 정상).
    ⚠ 근본 원인은 여전히 **판이 짧아질 때 scrollY 가 깎이는 것**이다(CLAUDE.md 참고 메모). */
 html[data-vt-scope='rank-tab']::view-transition-group(rank-tabbar) { z-index: 1; }
 
