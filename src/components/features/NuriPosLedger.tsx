@@ -2740,7 +2740,10 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           390 도 동일. 탭바가 스크롤로 자동숨김된 동안에만 보였다 = 매일 쓰는 실행 버튼이 안 눌린다.
           `--tabbar-safe` 는 이 저장소의 **탭바 회피 단일 소스**다(index.css) — 임의 상수를 새로 만들지 않는다.
           PC(lg+)에는 하단 탭바가 없으므로 종전대로 bottom-0. */}
-      <div className={['sticky bottom-[var(--tabbar-safe)] lg:bottom-0 -mx-1 flex gap-2 px-1 pb-1 pt-2 backdrop-blur-sm', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
+      {/* ⚠ `pr-12` — 스크롤 뒤 나타나는 '맨 위로' FAB(`.scroll-top-fab`, `bottom-[var(--tabbar-float)] right-4`)가
+          같은 기준선에 서서 실행 버튼 오른쪽 끝을 덮었다(실측 360: 겹침 28×41 ≈ 1,173px²).
+          글자는 가운데라 안 가려지고 탭도 됐지만 그림이 겹친다 — FAB 폭(42.5)+여백만큼 비켜 준다. */}
+      <div className={['sticky bottom-[var(--tabbar-safe)] lg:bottom-0 -mx-1 flex gap-2 px-1 pb-1 pr-12 pt-2 backdrop-blur-sm lg:pr-1', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
         {onCancel && <button type="button" onClick={onCancel} className="btn-ghost text-sm flex-1">취소</button>}
         <button type="button" onClick={submit} disabled={cash <= 0} className="btn-primary text-sm flex-1 disabled:opacity-50">
           {mode === 'open' ? '장부 시작' : '저장'}
