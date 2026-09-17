@@ -2262,17 +2262,25 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
 ::view-transition-old(profile-tabbar), ::view-transition-new(profile-tabbar),
 ::view-transition-old(sched-tabbar), ::view-transition-new(sched-tabbar),
 ::view-transition-old(notif-tabbar), ::view-transition-new(notif-tabbar),
-/* 🔴 notif-actions(알림 패널의 '모두 읽음 · 전체 · 안읽음' 바)는 **이 목록에 빠져 있었다**(2026-09-17).
-   이름(view-transition-name)만 붙고 규칙이 없으면 전환마다 자기 스냅샷이 **기본 크로스페이드**로 뜨는데,
-   스냅샷에는 자기 배경이 없어 `::view-transition` 루트 배경(다크에서 근흑색)이 그대로 비친다 —
-   오너 리포트: "읽음 안읽음 이런 것들 보면 블링크 되면서 너무 깜빡여"(2026-09-17).
-   같은 스코프의 형제(notif-tabbar)와 다른 바 10개는 전부 이 규칙을 받고 있었고 이 하나만 샜다.
-   ⚠ 알약·활성 라벨(notiffilter-pill/-label)은 위 1869~1927 에서 따로 다룬다 — 여기 넣으면 알약이 안 움직인다. */
-::view-transition-old(notif-actions), ::view-transition-new(notif-actions),
-/* mystore-rail(내 매장 사이드 레일 컨테이너)도 같은 누락이었다 — 이름만 있고 규칙이 없었다(2026-09-17 전수 조사). */
+/* mystore-rail(내 매장 사이드 레일 컨테이너)은 이름만 있고 규칙이 없었다(2026-09-17 전수 조사).
+   ⚠ notif-actions 는 **여기 넣으면 안 된다** — 아래 별도 규칙 참고(내용이 모드마다 통째로 바뀐다). */
 ::view-transition-old(mystore-rail), ::view-transition-new(mystore-rail),
 ::view-transition-old(legal-tabbar), ::view-transition-new(legal-tabbar),
 ::view-transition-old(crm-rangebar), ::view-transition-new(crm-rangebar) { animation: none; }
+
+/* 🔴 notif-actions — 알림 패널 우상단 자리. **내용이 모드마다 통째로 바뀐다**:
+     알림 모드 = '모두 읽음' + [전체|안읽음]   ·   쪽지 모드 = '글쓰기'
+   그래서 위 '바' 조리법(animation: none 만)을 쓰면 안 된다. 그 조리법은 **내용이 같은 바**(알약만 움직이는)
+   전용이다 — 내용이 다르면 옛 스냅샷이 opacity 1 로 남아 **두 글자가 겹쳐** 보인다.
+   실측(2026-09-18 · 로컬 프로덕션 빌드 · 목킹 세션 · 전환 4초로 늘려 중간 프레임):
+     old(notif-actions) opacity **1** · animation none · 배경 투명
+     new(notif-actions) opacity **1** · animation none · 배경 투명   → 둘 다 그려진다
+     (대조군 old(notif-panel) 은 vt-fade-out + 배경 있음 = 정상)
+   오너 리포트: "쪽지에서 알림가고 쪽지로 이동할 때 우상단에 글쓰는 것과 읽음 안읽음 표시가 계속 겹쳐서 나와"
+   ⚠ 2026-09-17 에 내가 이 요소를 '바' 목록에 넣은 것이 원인이다 — 규칙이 없던 것을 고치려다
+     **틀린 규칙**을 줬다. 활성 라벨과 같은 조리법(옛 것은 숨기고 새 것만 남긴다)이 맞다. */
+::view-transition-old(notif-actions) { animation: none; opacity: 0; }
+::view-transition-new(notif-actions) { animation: none; opacity: 1; }
 
 /* 가로 스크롤러의 스크롤바 숨김(배너 캐러셀 등) — 기능은 그대로, 표시만 제거 */
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
