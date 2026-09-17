@@ -2395,6 +2395,16 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
 ::view-transition-group(legal-tabbar),
 ::view-transition-group(crm-rangebar) { animation: none; }
 
+/* 🔴 얼린 바가 패널에 **덮이는** 곳이 하나 있었다 — 순위 허브(2026-09-18 최종 확인).
+   바를 새 위치에 얼려 두면, 클램프 전환에서 패널 group 은 옛 위치 y=64 에서 149 로 미끄러지는데
+   패널이 DOM 상 뒤라 top layer 에서 바 **위에** 그려진다 → 전환 전반부에 탭바가 통째로 사라지고
+   밑줄 알약만 홀로 떠 있었다(실측 스크린샷). 얼리기 전에는 바도 같이 58px 미끄러져 늘 패널 위였다.
+   바가 자기 패널에 덮이는 것은 어떤 경우에도 옳지 않으므로 순서를 명시한다.
+   ⚠ 이 조합(비sticky 바 + 판 높이 차가 큰 화면)은 지금 이곳뿐이다 —
+     community-secbar 는 sticky, mystore-secbar 는 별도 열이라 스크린샷상 차이가 없었다.
+   ⚠ 근본 원인은 여전히 **판이 짧아질 때 scrollY 가 깎이는 것**이다(CLAUDE.md 참고 메모). */
+html[data-vt-scope='rank-tab']::view-transition-group(rank-tabbar) { z-index: 1; }
+
 /* 가로 스크롤러의 스크롤바 숨김(배너 캐러셀 등) — 기능은 그대로, 표시만 제거 */
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
