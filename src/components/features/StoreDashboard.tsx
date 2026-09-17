@@ -1238,20 +1238,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       </div>
       </div>
 
-      {/* 빠른 작업 — 권한 있는 항목만 */}
-      {(caps.posters || caps.ledger) && (
-        <div className="grid grid-cols-4 gap-3">
-          {caps.posters && <QuickAction label="새 대회" tone="violet" onClick={onCreatePoster}
-            icon={<><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>} />}
-          {caps.ledger && <QuickAction label="장부" tone="indigo" onClick={gotoTodayLedger}
-            icon={<><path d="M4 4h12a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" /></>} />}
-          {caps.ledger && <QuickAction label="클락" tone="cyan" onClick={() => onGoto('clock')}
-            icon={<><circle cx="12" cy="13" r="7" /><path d="M12 10v3l2 2" /><line x1="9" y1="2" x2="15" y2="2" /></>} />}
-          {caps.ledger && <QuickAction label="순위·포인트" tone="fuchsia" onClick={() => onGoto('ranking')}
-            icon={<><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>} />}
-        </div>
-      )}
-
+      {/* 🔴 2026-09-18 오너 지시로 **뺐다**: "이 부분 뺄 수 있으면 빼 … 4개가 너무 큰 칸을 차지해".
+          빠른 작업 4칸(새 대회·장부·클락·순위·포인트)은 **바로 위 단계 레일과 겹쳤다** —
+          레일(GAME_STEPS: 포스터·장부·클락·순위·정산)이 장부·클락·순위를 이미 최상단에서 한 줄로 제공하고,
+          '새 대회'는 GameChipBar 의 `+ 새 게임`(VenueManageTab.tsx:1124)과 포스터 섹션 버튼(:846)이 맡는다.
+          → 없어지는 기능 0. 큰 타일 4칸(1360px 에서 한 칸 ~325px)이 화면 최상단에서 빠진다.
+          ⚠ 되살릴 거면 레일과의 중복부터 정리해라 — 같은 목적지를 두 벌로 두는 것이 원래 문제였다. */}
       {/* 카드 사이 간격을 8.5 → 12.75 로. 카드도 최상위 블록과 같은 위계인데
           블록 사이만 12.75, 카드 사이는 8.5 로 갈려 있었다(1440 실측) — 한 값으로 맞춘다. */}
       {/* 2026-09-11 PC 개편: xl(1360px)에서 3열. 2열로 두면 카드 하나가 660px 까지 늘어나
@@ -1649,23 +1641,6 @@ function CompareRow({ label, now, prev, delta, won }: { label: string; now: numb
 
 // card-sink(카드 깊이) — 이 타일은 surface-high 라 card-elev 금지 티어(index.css .card-elev 주석).
 // 아래를 낮추는 방향이라 대비는 오히려 오른다(ink-secondary 6.52→7.04 실측).
-function QuickAction({ label, icon, onClick, tone = 'violet' }: { label: string; icon: ReactNode; onClick: () => void; tone?: 'violet' | 'indigo' | 'fuchsia' | 'cyan' }) {
-  return (
-    /* 2026-09-11 비율 조정(오너 지적: "4개밖에 없는데 칸이 너무 크고 아이콘은 작다").
-       원인은 높이가 아니라 **폭**이었다 — 1360px 에서 4열이면 한 칸이 ~325px 인데 세로 배치라
-       아이콘·글자가 가운데 한 줄로 서고 좌우 260px 이 통째로 빈다.
-       sm 부터 가로 배치로 바꿔 폭을 쓰게 하고(아이콘 왼쪽 · 글자 오른쪽), 타일도 9→10 으로 키운다.
-       360px 에서는 한 칸이 ~78px 라 가로가 안 들어가므로 세로 그대로 둔다. */
-    <button type="button" onClick={onClick}
-      className="card-sink flex flex-col items-center justify-center gap-1 rounded-card border border-border-default bg-surface-high py-2.5 text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300 active:scale-[0.98] sm:flex-row sm:gap-2.5 sm:py-3.5">
-      {/* v6.3 아이콘 그라데이션 타일(레퍼런스 #features) — 흰 아이콘, 레인 색 */}
-      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
-      </span>
-      <span className="text-2xs font-bold sm:text-sm">{label}</span>
-    </button>
-  );
-}
 
 // ── ⚡ 부스트(포스터 상단 고정) 문의 모달 ─────────────────────────────────────
 // 연락처는 운영자가 관리자 설정 → 게시물 관리에서 입력(app_settings) — 미입력 시 준비 중 안내.

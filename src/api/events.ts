@@ -191,6 +191,46 @@ export async function getCurrentEventSlug(nowMs: number = eventNow()): Promise<s
   return pickCurrentEvent(data as EventCampaignRow[] | null, nowMs);
 }
 
+/** 손님에게 보여 줄 **이벤트 목록** (2026-09-18 오너: "이벤트 탭을 누르면 이벤트 리스트로 이동").
+ *  종전에는 진행 중인 캠페인 **하나**로 바로 들어갔다(`getCurrentEventSlug`). 캠페인이 여럿일 때
+ *  나머지로 가는 길이 화면에 없었다 — 목록이 그 길이다. 딥링크(`?event=<slug>`)는 종전대로 바로 판으로 간다.
+ *
+ *  정렬: 진행 중(최근 시작 순) → 예정(빨리 시작 순) → 끝남(최근 종료 순).
+ *  ⚠ 상태 판정은 `evaluateEvent` **하나만** 쓴다 — 여기서 날짜 비교를 다시 적으면 홈·목록·상세가 갈라진다.
+ *  ⚠ `draft` 는 서버(RLS)도 막지만 전송량을 줄이려 여기서도 뺀다. */
+export interface EventListItem {
+  slug: string; title: string; subtitle: string | null;
+  state: ReturnType<typeof evaluateEvent>['state'];
+  startsAt: string | null; endsAt: string | null;
+}
+export async function listEvents(nowMs: number = eventNow()): Promise<EventListItem[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase
+    .from('event_campaigns')
+    .select('slug,title,subtitle,status,hidden_at,starts_at,ends_at')
+    .neq('status', 'draft')
+    .order('starts_at', { ascending: false, nullsFirst: false })
+    .limit(30);
+  if (error) throw new Error(error.message);
+  const rank: Record<string, number> = { live: 0, scheduled: 1 };
+  const out: EventListItem[] = [];
+  for (const r of (data ?? []) as (EventCampaignRow & { title: string; subtitle: string | null })[]) {
+    if (!isEventSlug(r?.slug)) continue;
+    const { state } = evaluateEvent(
+      { status: r.status, hiddenAt: r.hidden_at ?? null, startsAt: r.starts_at, endsAt: r.ends_at },
+      nowMs,
+    );
+    if (state === 'hidden') continue;   // 운영자가 내린 판은 목록에 없다
+    out.push({ slug: r.slug, title: r.title, subtitle: r.subtitle ?? null, state, startsAt: r.starts_at, endsAt: r.ends_at });
+  }
+  return out.sort((a, b) => {
+    const ra = rank[a.state] ?? 2, rb = rank[b.state] ?? 2;
+    if (ra !== rb) return ra - rb;
+    const ta = a.startsAt ? Date.parse(a.startsAt) : 0, tb = b.startsAt ? Date.parse(b.startsAt) : 0;
+    return a.state === 'scheduled' ? ta - tb : tb - ta;
+  });
+}
+
 /** 보드 조회. `slug` 를 주지 않으면 **지금 열려 있는 캠페인**을 고른다(홈 칸·PC GNB·`?event=1`).
  *  고를 게 없으면 옛 기본 캠페인으로 물어본다 — `?event=1` 이 가리키던 그 자리이고,
  *  없으면 event_board 가 NULL 을 줘 화면은 종전대로 '이벤트 없음'이 된다. */
