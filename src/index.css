@@ -2349,6 +2349,51 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
    `:only-child` 는 image-pair 안에 스냅샷이 **하나뿐일 때**(= 퇴장 또는 입장) 만 맞는다 —
    양쪽 다 있는 평소 전환의 알약 이동은 건드리지 않는다. */
 ::view-transition-old(notiffilter-pill):only-child { animation: none; opacity: 0; }
+/* 🔴 사라지는 알약 2번째 — 내 매장 레일 알약도 같은 병이다(2026-09-18 재측정에서 남은 1건).
+   매장설정→직원관리 로 가면 레일이 통째로 없어지는데, 알약만 old-only 로 UA fade-out 을 타
+   '직원 관리' 제목 바로 아래에 보라 알약이 220ms 떠 있었다(실측 op 0.97).
+   반대 방향(직원→대시보드, 레일 등장)은 new-only fade-in 이라 무해하다 — 그래서 old 만 다룬다. */
+::view-transition-old(mystore-rail-pill):only-child { animation: none; opacity: 0; }
+
+/* 🔴 '제자리 고정' 은 old/new 만으로는 끝나지 않는다 — **그룹(박스)도 얼려야** 한다.
+   위 목록들은 스냅샷의 **그림**을 고정할 뿐이고, 그 그림을 담은 박스는 UA 그룹 애니가 보간한다.
+   평소에는 안 보인다(스크롤 0 에서 바 22개 전부 정지 — 실측). 문제는 **판이 짧아져 scrollY 가
+   깎이는 전환**이다: root 는 얼어 있어 본문이 t=0 에 새 위치로 **점프**하는데, 이름 붙은 바만
+   220ms 미끄러져 서로 어긋난다.
+   실측(2026-09-18 · 전환 3s · +150ms/+900ms 두 시점 group 박스):
+     rank-tabbar     순위 활동→인증(scrollY 230→108)  y 10.3 → 67.9   (58px)
+     mystore-secbar  직원→대시보드(scrollY 184→0)      y 117 → 152     (34px)
+     community-secbar 게시판→순위(scrollY 179→0)        y 51.3 → 56.0   (5px)
+     app-tabbar      위 전환들 — 자동숨김으로 내려가 있던 탭바의 복귀를 VT 가 대신 보간
+     app-header      스크롤 압축 헤더가 제 높이로 돌아오는 것을 VT 가 대신 보간 48.1 → 54.1
+     notif-actions   쪽지↔알림 **항상** x 286→268 · 폭 69→87 → 글자가 220ms 가로로 늘어난다
+   그룹을 얼리면 바도 본문과 같이 t=0 에 점프해 **어긋남이 사라진다**('바는 제자리' 계약과 정합).
+   ⚠ 근본 원인은 짧아지는 판에서 scrollY 가 깎이는 것이다(CLAUDE.md 참고 메모의 −1174px 부류).
+     그건 별건이고, 여기서는 이미 선언한 '제자리' 를 실제로 지키게만 한다.
+   ⚠ 알약(*-pill)과 활성 라벨(*-label)의 그룹은 **절대 여기 넣지 마라** — 그 둘은 옛 자리에서
+     새 자리로 미끄러지는 것이 존재 이유다(라벨 그룹은 이미 따로 얼려져 있다). */
+::view-transition-group(app-header),
+::view-transition-group(app-tabbar),
+::view-transition-group(app-gnb),
+::view-transition-group(community-secbar),
+::view-transition-group(venue-tabbar),
+::view-transition-group(rank-tabbar),
+::view-transition-group(admin-secbar),
+::view-transition-group(mystore-secbar),
+::view-transition-group(mystore-rail),
+::view-transition-group(adminpos-tabbar),
+::view-transition-group(usermgmt-secbar),
+::view-transition-group(tools-lanebar),
+::view-transition-group(market-catbar),
+::view-transition-group(live-sortbar),
+::view-transition-group(dealer-kindbar),
+::view-transition-group(group-tabbar),
+::view-transition-group(profile-tabbar),
+::view-transition-group(sched-tabbar),
+::view-transition-group(notif-tabbar),
+::view-transition-group(notif-actions),
+::view-transition-group(legal-tabbar),
+::view-transition-group(crm-rangebar) { animation: none; }
 
 /* 가로 스크롤러의 스크롤바 숨김(배너 캐러셀 등) — 기능은 그대로, 표시만 제거 */
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }

@@ -274,7 +274,16 @@ function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, calculating,
 
   return (
     // PC 는 2열(왼쪽 입력 · 오른쪽 결과 sticky), 모바일은 한 줄로 쌓인다 — 같은 컴포넌트·같은 데이터.
-    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-4">
+    // 🔴 요약 열이 22rem 이면 **왼쪽 입력 열이 289px** 밖에 안 남아 모바일 360 보다 좁아진다 —
+    // 벳 크기 칩이 1024~1920 전 폭에서 4+1 로 접혔다(오너가 지적한 '한 개만 떨어지는' 모양).
+    // 폭을 잡는 것은 뷰포트가 아니라 **`ToolsPanel.tsx` 의 `max-w-2xl`(714px) 고정 컨테이너**라
+    // 화면을 넓혀도 그대로다 — `lg:` 를 `xl:` 로 미루는 것은 헛수고다(1280 에서 같은 714 로 돌아온다).
+    // 실측 사슬: 714 −34(padding) = 680 → −17(gap) −374(22rem) = 289(왼쪽 열)
+    // → −25.5(p-3) = 262(행) → −68(w-16 입력) −14('BB') −12.75(gap) = **166px**
+    // 칩 필요 폭: 프리플랍 170 · 포스트플랍 188 → 166 으로는 둘 다 접힌다.
+    // 18rem 으로 줄이면 wrap 234px 로 **둘 다 한 줄**(여유 46px).
+    // 오른쪽 요약 패널은 374→306px 에서 빈 상태·채운 상태 모두 높이 변화 0 · 가로 스크롤 0(실측).
+    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-4">
       <div className="min-w-0 space-y-3">
         <StepBar step={step} onStep={setStep} spot={spot} />
         <p className="text-2xs text-ink-muted">{cur.hint}</p>
