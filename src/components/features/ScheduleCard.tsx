@@ -136,7 +136,10 @@ function PosterArea({
         </div>
       )}
       {fallbackText
-        ? <span className="relative select-none text-base font-extrabold leading-none text-white/85" aria-hidden>{fallbackText}</span>
+        // ⚠ `leading-none`(line-height = font-size) 은 **한글 글리프를 담지 못한다** — 200% 확대에서
+        //   span 이 34px 인데 글자가 37px 를 요구해 잘림 검사에 걸렸다(CI 실측 320px/200%: 34/37).
+        //   글자 크기는 그대로 두고 줄 상자만 넉넉히 준다(부모가 flex 중앙정렬이라 위치는 그대로).
+        ? <span className="relative select-none text-base font-extrabold leading-tight text-white/85" aria-hidden>{fallbackText}</span>
         : <span className={`relative select-none opacity-25 ${compact ? 'text-sm' : 'text-4xl'}`} aria-hidden>♠</span>}
     </div>
   );
