@@ -4,7 +4,7 @@ import RangeMatrix13, { type MatrixAction } from './RangeMatrix13';
 import SourceBadge from './SourceBadge';
 import { ACTION_COLORS } from '../../../lib/ranges.data';
 import { freqFromArray } from '../../../lib/ranges';
-import { HAND_ORDER, NASH_BIG_ANTE, NASH_STACKS, hasNashRange, nashRange } from '../../../lib/nash.data';
+import { HAND_ORDER, NASH_BIG_ANTE, NASH_STACKS, hasNashRange, nashRange, isNashQuarantined } from '../../../lib/nash.data';
 import SegmentedTabs from '../../atoms/SegmentedTabs';
 
 // 푸시·폴드 차트 — 자체 계산 Nash 균형(fictitious play)로 전면 교체.
@@ -123,9 +123,19 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
       {hasData
         ? <RangeMatrix13 actions={actions} initialSel={highlight} />
         : (
-          <p role="status" data-testid="pushfold-no-data" className="rounded-input border border-dashed border-border-subtle px-3 py-6 text-center text-xs text-ink-muted">
-            이 깊이({stack}bb)는 데이터가 없습니다. 가까운 값으로 대체하지 않습니다 — 다른 스택을 고르세요.
-          </p>
+          <div role="status" data-testid="pushfold-no-data" className="space-y-1.5 rounded-input border border-dashed border-border-subtle px-3 py-6 text-center text-xs text-ink-muted">
+            <p>이 깊이({stack}bb)는 데이터가 없습니다. 가까운 값으로 대체하지 않습니다 — 다른 스택을 고르세요.</p>
+            {/* ⚠ 왜 비었는지 말한다. 예전엔 '없습니다' 만 떠서, 유저는 **표가 원래 없는 것**인지
+                **일시적으로 내린 것**인지 알 수 없었다. 2~6BB 의 뒤 인원 2명 이상은 값이 틀린 것이
+                확인돼(포지션 단조성 역전) 2026-09-18 에 내렸다 — 틀린 조언보다 빈 칸이 낫다는 판단이다.
+                SB(뒤 1명)와 7BB 이상은 검증돼 그대로 쓴다. `nash.data.ts` 의 NASH_ANTE_QUARANTINE 참고. */}
+            {isNashQuarantined(stack, NASH_BIG_ANTE, k) && (
+              <p className="text-2xs">
+                이 구간(2~6bb · 뒤 2명 이상)은 값이 틀린 것이 확인돼 <b>일시적으로 내렸습니다</b>.
+                표를 다시 만들면 돌아옵니다. 그동안 <b>SB(뒤 1명)</b>와 <b>7bb 이상</b>은 그대로 쓰실 수 있어요.
+              </p>
+            )}
+          </div>
         )}
 
       <p className="text-2xs text-ink-muted text-center leading-relaxed">

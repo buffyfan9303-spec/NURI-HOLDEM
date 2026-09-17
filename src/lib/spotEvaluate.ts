@@ -227,8 +227,13 @@ function blindOf(s: SpotReview, pos: SpotPosition): number {
  * `SpotAction.sizeBb` 는 "이번에 추가로 넣은 돈"(증분)이다. `potBb`(spot.ts)가
  * 블라인드에 모든 액션 금액을 그냥 더하는 것이 그 증거다 — 레이즈가 총액이라면 팟이 부풀 것이다.
  * 그래서 한 사람의 투입액은 **블라인드 + 그 스트리트 증분의 합**이다.
+ *
+ * ⚠ **export 한다**(2026-09-18). 화면(`NuriSpotPanel` 의 크기 프리셋)이 "상대가 이미 낸 돈"을 알아야
+ *   `3` 이라는 프리셋이 **총액 3.5BB**(SB 는 0.5 를 이미 냈다)라는 것을 유저에게 말해 줄 수 있는데,
+ *   비공개였던 탓에 같은 계산이 `spotSizing.ts` 에 한 벌 복제됐다. 돈 계산이 두 벌이면 한쪽만
+ *   고쳐지는 날이 온다(`nuri-single-source`) — 사본을 지우고 이 함수를 쓰게 한다.
  */
-function investedThisStreet(s: SpotReview, actor: 'hero' | 'villain'): number {
+export function investedThisStreet(s: SpotReview, actor: 'hero' | 'villain'): number {
   let invested = blindOf(s, actor === 'hero' ? s.heroPos : s.villainPos);
   for (const a of s.actions) {
     if (a.street !== s.street || a.actor !== actor) continue;
