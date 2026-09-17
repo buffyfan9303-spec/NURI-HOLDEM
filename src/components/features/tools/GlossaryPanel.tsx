@@ -41,7 +41,10 @@ export default function GlossaryPanel() {
       </div>
 
       {/* 카테고리 칩 필터 — aria-pressed 토글(켜진 칩 다시 누르면 전체로 복귀) */}
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="용어 분류 필터">
+      {/* ⚠ 줄바꿈이 아니라 가로 스크롤이다(오너 2026-09-18) — 칩이 8개(전체+7분류)라 좁은 폭에서
+          반드시 접히고, 마지막 줄에 한두 개만 남는 **고아 줄**이 생긴다. 게다가 분류를 고를 때마다
+          줄 수가 변해 아래 목록이 위아래로 튄다. 앱의 다른 칩 레일(커뮤니티 서브탭·장터 분류)과 같은 규약이다. */}
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="용어 분류 필터">
         {(['all', ...CATS] as const).map((c) => {
           const on = cat === c;
           return (
@@ -51,7 +54,8 @@ export default function GlossaryPanel() {
               aria-pressed={on}
               onClick={() => setCat(on && c !== 'all' ? 'all' : c)}
               className={[
-                'inline-flex h-8 items-center rounded-input border px-2.5 text-2xs font-semibold transition-colors',
+                // shrink-0 필수 — 가로 스크롤 레일에서 이게 없으면 칩이 눌려 글자가 짜부라진다.
+                'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-input border px-2.5 text-2xs font-semibold transition-colors',
                 on ? 'border-accent-300 bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
               ].join(' ')}
             >

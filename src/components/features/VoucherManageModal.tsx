@@ -395,10 +395,12 @@ ${cards}
                 </div>
               </div>
               {/* 발급 근거(2026-09-05 정책) — 모든 발급에 사유를 남긴다. 순위·시상 사유는 목록에 없고, 제목·비고에 적어도 서버가 거절한다. */}
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label="발급 근거">
+              {/* ⚠ 줄바꿈이 아니라 가로 스크롤(오너 2026-09-18 "한개가 또 떨어져 있어") — 칩 5개라 좁은 폭에서
+                  마지막 줄에 한두 개만 남는 **고아 줄**이 생기고, 고를 때마다 줄 수가 변해 아래가 튄다. */}
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="발급 근거">
                 {VOUCHER_REASONS.map((o) => (
                   <button key={o.value} type="button" onClick={() => setReason(o.value)} aria-pressed={reason === o.value} title={o.hint}
-                    className={['min-h-9 rounded-chip border px-2.5 text-2xs font-bold transition-colors',
+                    className={['min-h-9 shrink-0 whitespace-nowrap rounded-chip border px-2.5 text-2xs font-bold transition-colors',
                       reason === o.value ? 'border-transparent bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                     {o.label}
                   </button>

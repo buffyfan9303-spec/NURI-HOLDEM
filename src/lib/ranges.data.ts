@@ -625,7 +625,10 @@ export const RANGE_SCENARIOS: RangeScenario[] = [
 
 export const RANGE_GROUPS: { id: RangeScenario['group']; label: string; desc: string }[] = [
   { id: 'rfi9', label: '오픈 (9인)', desc: '국내 라이브 표준 · UTG부터 SB까지 8자리 오픈 레이즈' },
-  { id: 'rfi6', label: '오픈 (6맥스)', desc: '온라인·숏핸드 · LJ부터 SB까지' },
+  // ⚠ 라벨 단위를 '인' 으로 통일한다(오너 2026-09-18: "오픈 9인 옆에는 오픈 6맥스 이건 왜 다르며").
+  //   같은 줄에 '9인' 과 '6맥스' 가 나란히 있으면 **다른 축으로 읽힌다** — 테이블 인원이라는 같은 축이다.
+  //   '맥스' 는 설명(desc)에만 남긴다(온라인 용어라 아는 사람에겐 단서가 된다).
+  { id: 'rfi6', label: '오픈 (6인)', desc: '온라인·숏핸드(6맥스) · LJ부터 SB까지' },
   { id: 'threebet', label: '3벳', desc: '상대 오픈에 리레이즈 · 얼리(UTG·UTG+1·MP) 오픈 포함' },
   { id: 'defend', label: '블라인드 수비', desc: '상대 오픈에 BB·SB의 3벳·콜 · 얼리 오픈 포함' },
   { id: 'vs3bet', label: 'vs 3벳', desc: '내 오픈이 3벳을 맞았을 때 · 4벳·콜 · 얼리 포함' },

@@ -1337,10 +1337,12 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
       <form onSubmit={submit} className="p-4 space-y-3">
         <div>
           <span className="block text-2xs text-ink-secondary mb-1">종류</span>
-          <div className="flex flex-wrap gap-1.5">
+          {/* ⚠ 줄바꿈이 아니라 가로 스크롤(오너 2026-09-18 "한개가 또 떨어져 있어") — 칩 4개라 좁은 폭에서
+              마지막 줄에 한두 개만 남는 **고아 줄**이 생기고, 고를 때마다 줄 수가 변해 아래가 튄다. */}
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none">
             {KINDS.map((k) => (
               <button key={k} type="button" onClick={() => setKind(k)}
-                className={['rounded-badge border px-3 py-1.5 text-xs font-semibold transition-colors',
+                className={['shrink-0 whitespace-nowrap rounded-badge border px-3 py-1.5 text-xs font-semibold transition-colors',
                   kind === k ? 'bg-accent-300/15 text-accent-200 border-accent-400/45' : 'chip-aura'].join(' ')}>
                 {GROUP_KIND_LABEL[k]}
               </button>

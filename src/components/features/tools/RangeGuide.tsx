@@ -79,7 +79,11 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
     <CalcCard desc={`포지션·상황별 표준 프리플랍 레인지 ${RANGE_SCENARIOS.length}개 · 셀을 누르면 핸드별 빈도`}>
       {/* ① 상황 그룹 */}
-      <div data-testid="range-guide" className="flex flex-wrap gap-1">
+      {/* ⚠ 줄바꿈(flex-wrap)이 아니라 **가로 스크롤**이다(오너 2026-09-18: "아직도 아래에는 왜 한개가 또 떨어져 있어").
+          5개가 한 줄에 안 들어가면 wrap 은 마지막 하나만 아래로 떨어뜨려 **4+1 고아**를 만들고,
+          그룹을 누를 때마다 줄 수가 변해 카드 높이가 튄다(이 파일이 2026-08-30 에 이미 겪은 문제다).
+          아래 '내 포지션'·'상대' 두 줄이 쓰는 방식과 같게 맞춘다 — 넘치면 옆으로 민다. */}
+      <div data-testid="range-guide" className="flex gap-1 overflow-x-auto scrollbar-none">
         {RANGE_GROUPS.map((g) => (
           <button key={g.id} type="button" onClick={() => pickGroup(g.id)} aria-pressed={g.id === group} className={chipCls(g.id === group)}>
             {g.label}
