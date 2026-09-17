@@ -194,7 +194,7 @@ const ClockRemote    = lazyWithReload(() => import('./components/features/clock/
 function LazyFallback() {
   return (
     <div
-      className="flex min-h-[calc(100svh-theme(spacing.header-h)-var(--tabbar-safe))] items-start justify-center pt-24"
+      className="pane-reserve flex items-start justify-center pt-24"
       aria-busy="true"
       aria-label="불러오는 중"
     >
@@ -3947,6 +3947,24 @@ export default function App() {
           keep-alive: 가장 무거운 스위트(장부·클락·통계)를 탭 전환마다 완전 재마운트하던 것이
           '다른 탭→내 매장' 멈칫의 근본 원인. 다른 탭과 같은 display 토글로 전환하고,
           tabActive 로 숨김 중 구독·틱을 끈다. 역할 게이트(로그아웃 시 즉시 언마운트) 필수. */}
+      {/* 🔴 역할 게이트가 아직 false 인 구간의 자리 예약 (2026-09-18).
+          `?tab=my-store` 로 **직접** 들어오면(홈화면 바로가기·알림 링크가 쓰는 경로) 프로필이 오기
+          전까지 isOwner/isStaff/isAdmin 이 전부 false 라 아래 <main> 이 통째로 안 그려진다 —
+          그 동안 Suspense 도 안 걸리므로 LazyFallback 조차 없고, 푸터가 헤더 바로 밑(y=86)까지
+          올라왔다가 프로필이 도착하는 순간 735px 아래로 떨어졌다(실측 이동 0.398).
+          앱 안에서 탭을 누를 때는 이미 참이라 이 자리가 안 쓰인다(대조군 CLS 0).
+          ⚠ `authLoading` 조건이 꼭 있어야 한다 — 빼면 **권한 없는 사람이 이 URL 로 들어왔을 때
+            빈 예약 칸이 영원히 남는다**(예전엔 아무것도 안 그려졌다). 자리는 '아직 모르는 동안' 만 잡는다.
+          ⚠ 여기서 VenueManageTab 을 미리 마운트하면 안 된다 — 권한 없는 사용자에게 그 코드를
+            내려보내는 것이고, 바로 위 주석의 '로그아웃 시 즉시 언마운트' 계약도 깨진다. */}
+      {authLoading && !(isOwner || isStaff || isAdmin) && activeTab === 'my-store' && (
+        // ⚠ `data-tab="my-store"` 를 붙이지 않는다 — 진짜 pane 과 같은 표식이 둘이 되면
+        //   e2e 셀렉터와 `tabPaneParity` 계약이 이 빈 자리를 진짜 판으로 착각한다(실제로 걸렸다).
+        <div className="px-page-x pt-3 pb-section">
+          <div className="pane-reserve" aria-busy="true" aria-label="불러오는 중" />
+        </div>
+      )}
+
       {(isOwner || isStaff || isAdmin) && (activeTab === 'my-store' || visitedTabs.has('my-store')) && (
         <main data-tab="my-store" className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'my-store' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="my-store">

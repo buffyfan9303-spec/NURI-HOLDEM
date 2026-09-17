@@ -659,7 +659,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       {!venueId ? (
         <p className="py-16 text-center text-sm text-ink-muted">관리할 매장을 선택하세요.</p>
       ) : !permsLoaded ? (
-        <p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>
+        // 🔴 자리 예약 (2026-09-18) — 예전엔 `py-16`(196px) 한 줄이라, 바로 앞의 LazyFallback(735px)
+        //   에서 여기로 넘어오는 순간 판이 **줄어들며** 아래가 통째로 올라왔다(실측 이동 0.284).
+        //   폴백·역할 게이트와 같은 `.pane-reserve` 를 써서 세 구간의 높이를 맞춘다.
+        <p className="pane-reserve pt-16 text-center text-sm text-ink-muted">불러오는 중…</p>
       ) : permsError ? (
         // 조회 실패 — '메뉴 없음'(빈 상태)과 구분해서 보여주고, 재시도로 되살린다
         <LoadErrorCard what="매장 권한" error={permsError} onRetry={() => setPermsNonce((n) => n + 1)} />

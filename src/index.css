@@ -1552,6 +1552,18 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
    실측(2026-09-17 라이브): 실제 181.2 vs cis 추정 **203.3**(+22.1 = py-2.5 21.25).
    같은 날 토큰을 129 로 맞췄지만 cis 쪽은 150 으로 잡히고 있었다 — 반쪽만 맞은 것이었다. */
 .cv-card-list { content-visibility: auto; contain-intrinsic-size: auto calc(var(--card-h-list) - 1.25rem); }
+
+/* 🔴 판(pane)이 도착하기 전 **같은 자리**를 잡아 둔다 — 값이 한 곳에만 있어야 한다.
+   쓰는 곳 셋: `App.tsx` 의 LazyFallback · 내 매장 역할 게이트가 false 인 구간 · VenueManageTab 권한 로딩 셸.
+   왜 셋이 같아야 하는가(2026-09-18 실측 · rAF 시계열 · `?tab=my-store` 직접 진입):
+     첫 프레임    pane 도 폴백도 없다(역할 게이트 false) → 푸터가 y=86 에
+     t+194ms     프로필 도착 → 폴백 735px 등장   → 이동 **0.398**
+     t+273ms     폴백 → 권한 로딩 셸 196px       → 이동 **0.284**
+     t+327ms     셸 → 실제 대시보드 1219px        → 이동 **0.917**
+   총 CLS 768px 에서 **1.86**(앱 안에서 탭을 누르면 0 — 그땐 프로필·권한이 이미 있다).
+   세 구간이 같은 높이를 잡으면 이 세 번의 이동이 한 번으로 준다.
+   ⚠ 이것으로 0 이 되지는 않는다 — 실제 판이 한 화면보다 길면 그 차이는 남는다. */
+.pane-reserve { min-height: calc(100svh - theme(spacing.header-h) - var(--tabbar-safe)); }
 @media (min-width: 1024px) {
   :root { --card-h-grid: 447px; }
   .cv-card-grid { content-visibility: auto; contain-intrinsic-size: auto var(--card-h-grid); }

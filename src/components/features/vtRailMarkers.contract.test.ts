@@ -74,11 +74,38 @@ describe('VT 레일 표식 — 표식과 CSS 가 짝으로 산다', () => {
     },
   );
 
-  it('🔴 바 이름을 animation:none 으로 얼리지 않는다 — 레일이 없는 섹션으로 갈 때 진짜 잔상이 된다', () => {
-    // 레일은 섹션에 따라 있다 없다 한다(설정→직원 처럼). old 만 남은 채 얼리면 300ms 동안 안 사라진다.
-    // 짝이 맞을 때는 두 이미지가 사실상 같아(알약·활성라벨은 따로 이름을 받아 빠져나감) 기본 페이드가 안 보인다.
-    const frozen = /::view-transition-(?:old|new)\((?:mystore-rail|notif-actions)\)/;
-    const block = CSS.split('\n').filter((l) => frozen.test(l) && /animation:\s*none/.test(l));
-    expect(block, `얼린 규칙이 있다: ${block.join(' / ')}`).toEqual([]);
+  it('🔴 옛 스냅샷을 얼릴 거면 반드시 같이 숨긴다 — 안 그러면 잔상·겹침이 된다', () => {
+    // 레일·액션 자리는 **내용이 모드마다 통째로 바뀌고, 아예 사라지기도 한다**(설정→직원 처럼).
+    //
+    // ⚠ 이 단언은 2026-09-18 까지 **틀린 것을 보고 있었다.** 원래 조건은 "`animation: none` 이면 무조건
+    //   실패" 였는데, 그때 실제 CSS 는 이름들을 **여러 줄에 걸친 공동 목록**으로 얼리고 있어서
+    //   (`::view-transition-old(mystore-rail),` 한 줄에는 `{` 가 없다) 줄 단위 검사가 **못 봤다** —
+    //   2026-09-17 에 mystore-rail·notif-actions 를 그 목록에 넣었는데 이 계약은 초록이었고,
+    //   화면에서는 '매장 페이지' 위에 옛 레일이, 알림 우상단에 '글쓰기' 와 '읽음/안읽음' 이 겹쳤다.
+    //
+    // 올바른 기준은 '얼렸느냐' 가 아니라 **'얼렸으면 옛 것을 숨겼느냐'** 다:
+    //   old { animation: none; opacity: 0 }  +  new { animation: none; opacity: 1 }   ← 라벨 조리법, 안전
+    //   old { animation: none }                                                       ← 300ms 남는다, 금지
+    // new 쪽은 `animation: none` 만으로 괜찮다 — 새 내용은 보여야 하는 것이 맞다.
+    const bad: string[] = [];
+    for (const name of ['mystore-rail', 'notif-actions', 'market-catbar', 'dealer-kindbar']) {
+      const sel = `::view-transition-old(${name})`;
+      let i = CSS.indexOf(sel);
+      if (i < 0) { bad.push(`${name}: old 규칙 자체가 없다 — 이름만 있고 규칙이 없으면 UA 크로스페이드가 돈다`); continue; }
+      while (i >= 0) {
+        const open = CSS.indexOf('{', i);
+        const close = CSS.indexOf('}', open);
+        const body = open >= 0 && close > open ? CSS.slice(open, close) : '';
+        if (/animation:\s*none/.test(body) && !/opacity:\s*0/.test(body)) {
+          bad.push(`${name}: old 를 얼렸는데 opacity: 0 이 없다 → ${body.replace(/\s+/g, ' ').trim()}`);
+        }
+        i = CSS.indexOf(sel, i + sel.length);
+      }
+    }
+    expect(
+      bad,
+      `옛 스냅샷이 전환 내내 남는다:\n  ${bad.join('\n  ')}\n` +
+      '→ `::view-transition-old(이름) { animation: none; opacity: 0 }` 로 숨기고, new 에 opacity: 1 을 줘라.',
+    ).toEqual([]);
   });
 });

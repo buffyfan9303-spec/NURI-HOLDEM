@@ -25,13 +25,30 @@ const root = process.cwd();
 const APP = readFileSync(join(root, 'src', 'App.tsx'), 'utf8');
 const HOME = readFileSync(join(root, 'src', 'components', 'features', 'HomeTab.tsx'), 'utf8');
 const CSS = readFileSync(join(root, 'src', 'index.css'), 'utf8');
+const VMT = readFileSync(join(root, 'src', 'components', 'features', 'VenueManageTab.tsx'), 'utf8');
 
 describe('① 지연 로딩 폴백이 화면 높이를 예약한다', () => {
-  it('LazyFallback 이 뷰포트 기준 min-h 를 갖는다 — 푸터가 첫 화면 위로 못 올라온다', () => {
+  it('LazyFallback 이 뷰포트 기준 높이를 갖는다 — 푸터가 첫 화면 위로 못 올라온다', () => {
     const m = APP.match(/function LazyFallback\(\)[\s\S]{0,600}?\n}/);
     expect(m, 'LazyFallback 이 사라졌다 — 계약을 같이 고쳐라').not.toBeNull();
     expect(m![0], '스피너 높이만 잡고 있다(예전 py-24). 화면 높이를 예약해야 푸터가 안 올라온다')
-      .toMatch(/min-h-\[calc\(100svh/);
+      .toMatch(/pane-reserve/);
+  });
+
+  it('예약 높이의 정의가 한 곳뿐이다 — .pane-reserve', () => {
+    // 예전엔 `min-h-[calc(100svh-…)]` 문자열을 쓰는 곳마다 적었다. 2026-09-18 에 쓰는 곳이 셋으로
+    // 늘면서(폴백 · 내 매장 역할 게이트 · 권한 로딩 셸) 한 벌로 모았다 — 두 벌이 되면 한쪽만 고쳐진다.
+    expect(CSS, '.pane-reserve 정의가 없다').toMatch(/\.pane-reserve\s*\{[^}]*min-height:\s*calc\(100svh/);
+  });
+
+  it('내 매장 직접 진입에도 같은 자리를 잡는다 — 역할 게이트와 권한 로딩 셸', () => {
+    // `?tab=my-store` 로 바로 들어오면 프로필이 오기 전엔 역할 게이트가 false 라 판이 통째로 없었고,
+    // 그다음 권한 로딩 셸이 196px 한 줄이라 폴백(735px)에서 줄어들며 아래가 올라왔다.
+    // 실측(2026-09-18 · 768px): 총 CLS 1.86 중 이 두 구간이 0.398 + 0.284.
+    expect(APP, '역할 게이트가 false 인 동안 자리를 안 잡는다')
+      .toMatch(/!\(isOwner \|\| isStaff \|\| isAdmin\)[\s\S]{0,400}pane-reserve/);
+    expect(VMT, '권한 로딩 셸이 한 줄 높이로 돌아갔다(예전 py-16)')
+      .toMatch(/!permsLoaded \?[\s\S]{0,400}pane-reserve/);
   });
 
   // ⚠ '동적 뷰포트 단위 금지'는 여기서 **다시 검사하지 않는다.**

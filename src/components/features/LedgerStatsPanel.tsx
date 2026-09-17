@@ -371,11 +371,17 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
           </div>
 
           {/* 보조 지표 */}
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+          {/* 🔴 항목 수를 **6개로 고정**하고 3열로 바꿨다 (2026-09-18 오너 결정: "항목수는 6으로, 영업일수를 빼").
+              왜: 예전에는 당일 6개 / 주간·월간 7개라 **어떤 열 수로도 두 경우를 다 맞출 수 없었다**.
+              실측(PC 전수조사 · 최소 내용 폭 128px '일평균 매출 100,505원'):
+                4열 → 당일 4/2 · 주간 4/3   (360 에서는 주간이 2/2/2/1)
+                6열 → 셀 112~148px < 128px  (주간 불가)
+                3열 → 360 2/2/2(셀 146) · 768 3/3(231) · 1024 3/3(234) · 1440 3/3(302)  ← 전 폭 성립
+              영업일수는 지우지 않고 '일평균 바인' 의 hint 로 옮겼다 — 일평균을 읽을 때 분모가 같이 보인다. */}
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             {period === 'day'
               ? <Mini label="기준 달성률" value={m.fillRatio !== null ? `${m.fillRatio}%` : '-'} />
-              : <Mini label="영업일수" value={`${m.dayCount}일`} />}
-            {period !== 'day' && <Mini label="일평균 바인" value={m.avgBuyinPerDay.toFixed(1)} />}
+              : <Mini label="일평균 바인" value={m.avgBuyinPerDay.toFixed(1)} hint={`영업 ${m.dayCount}일`} />}
             <Mini label="플레이어" value={`${m.players}명`} />
             <Mini label="바인/인" value={m.perPlayer ? m.perPlayer.toFixed(1) : '0'} />
             <Mini label="객단가/인" value={`${wonToMan(Math.round(m.arpGuest))}만`} hint="미수 포함" />
