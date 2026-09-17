@@ -1866,19 +1866,22 @@ html[data-vt-scope='rank-tab'][data-vt-dir='back']::view-transition-new(rank-pan
 ::view-transition-group(group-label),     ::view-transition-group(sched-label),
 ::view-transition-group(notif-label),     ::view-transition-group(legal-label),
 ::view-transition-group(crm-label),      ::view-transition-group(profile-label),
-::view-transition-group(mystore-rail-label), ::view-transition-group(notiffilter-label) { animation: none; }
+::view-transition-group(mystore-rail-label), ::view-transition-group(notiffilter-label),
+::view-transition-group(admin-active),      ::view-transition-group(mystore-active) { animation: none; }
 ::view-transition-old(community-label), ::view-transition-old(venue-label),
 ::view-transition-old(rank-label),      ::view-transition-old(adminpos-label),
 ::view-transition-old(group-label),     ::view-transition-old(sched-label),
 ::view-transition-old(notif-label),     ::view-transition-old(legal-label),
 ::view-transition-old(crm-label),        ::view-transition-old(profile-label),
-::view-transition-old(mystore-rail-label), ::view-transition-old(notiffilter-label) { animation: none; opacity: 0; }
+::view-transition-old(mystore-rail-label), ::view-transition-old(notiffilter-label),
+::view-transition-old(admin-active),      ::view-transition-old(mystore-active) { animation: none; opacity: 0; }
 ::view-transition-new(community-label), ::view-transition-new(venue-label),
 ::view-transition-new(rank-label),      ::view-transition-new(adminpos-label),
 ::view-transition-new(group-label),     ::view-transition-new(sched-label),
 ::view-transition-new(notif-label),     ::view-transition-new(legal-label),
 ::view-transition-new(crm-label),        ::view-transition-new(profile-label),
-::view-transition-new(mystore-rail-label), ::view-transition-new(notiffilter-label) { animation: none; opacity: 1; }
+::view-transition-new(mystore-rail-label), ::view-transition-new(notiffilter-label),
+::view-transition-new(admin-active),      ::view-transition-new(mystore-active) { animation: none; opacity: 1; }
 
 /* ── 전환 캡처 프레임에 '바뀌기 전 라벨 색'이 인쇄되던 것 — 2026-09-17 ─────────────
    오너: "지금은 뭔가 좀 어색한 느낌이 있어서"
@@ -2245,6 +2248,15 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
 ::view-transition-old(profile-tabbar), ::view-transition-new(profile-tabbar),
 ::view-transition-old(sched-tabbar), ::view-transition-new(sched-tabbar),
 ::view-transition-old(notif-tabbar), ::view-transition-new(notif-tabbar),
+/* 🔴 notif-actions(알림 패널의 '모두 읽음 · 전체 · 안읽음' 바)는 **이 목록에 빠져 있었다**(2026-09-17).
+   이름(view-transition-name)만 붙고 규칙이 없으면 전환마다 자기 스냅샷이 **기본 크로스페이드**로 뜨는데,
+   스냅샷에는 자기 배경이 없어 `::view-transition` 루트 배경(다크에서 근흑색)이 그대로 비친다 —
+   오너 리포트: "읽음 안읽음 이런 것들 보면 블링크 되면서 너무 깜빡여"(2026-09-17).
+   같은 스코프의 형제(notif-tabbar)와 다른 바 10개는 전부 이 규칙을 받고 있었고 이 하나만 샜다.
+   ⚠ 알약·활성 라벨(notiffilter-pill/-label)은 위 1869~1927 에서 따로 다룬다 — 여기 넣으면 알약이 안 움직인다. */
+::view-transition-old(notif-actions), ::view-transition-new(notif-actions),
+/* mystore-rail(내 매장 사이드 레일 컨테이너)도 같은 누락이었다 — 이름만 있고 규칙이 없었다(2026-09-17 전수 조사). */
+::view-transition-old(mystore-rail), ::view-transition-new(mystore-rail),
 ::view-transition-old(legal-tabbar), ::view-transition-new(legal-tabbar),
 ::view-transition-old(crm-rangebar), ::view-transition-new(crm-rangebar) { animation: none; }
 
