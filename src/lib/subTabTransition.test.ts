@@ -275,6 +275,45 @@ describe('하위 탭 전환 · 알약이 탭바 스냅샷에 갇히지 않는다
     ).toEqual([]);
   });
 
+  /** 패널 group 동결에서 **일부러 빠진** 이름과 사유. 면제는 목록이 아니라 사유와 한 쌍이다. */
+  const PANEL_GROUP_EXEMPT: Record<string, string> = {
+    'rank-panel':
+      '순위 허브는 판마다 문서 높이 차가 커서 스크롤이 깎인다(클램프). 그 조건에선 동결 전후가 둘 다 깨진다 — '
+      + '전: 바·패널이 같이 135px 미끄러져 라벨이 패널 밑에 숨고, 후: 패널만 제자리라 바가 떨어져 내려온다. '
+      + '근본은 클램프이고 `[data-rank-panel]` 에 min-height 를 줘 문서 높이 차를 없애야 한다(디자인 결정 · 오너 몫). '
+      + '그게 정해지면 이 면제를 지우고 목록에 넣어라.',
+  };
+
+  it('이름을 받은 본문 패널은 group 도 얼려 둔다 — 안 그러면 밑 콘텐츠와 시계가 어긋난다', () => {
+    // 🔴 2026-09-18: root 는 `animation:none` 이라 t=0 에 점프하는데 패널 group 만 UA 기본 0.25s 로
+    //   높이를 보간해서, 커질 땐 빈 틈이 · 줄어들 땐 불투명 박스가 푸터를 덮었다 물러났다.
+    //   오너가 "메뉴 이동할 때 화면 전체가 왔다 갔다 한다 · 두드득 끊긴다" 고 한 것의 정체다.
+    //   새 스코프가 같은 병을 조용히 들고 오지 않게 전수로 잠근다.
+    const panels = [...new Set(
+      [...CSS.matchAll(/html\[data-vt-scope='[a-z0-9-]+'\] \[data-[a-z0-9-]+\]\s*\{\s*view-transition-name:\s*([a-z0-9-]*panel[a-z0-9-]*);\s*\}/g)]
+        .map((m) => m[1]),
+    )];
+    expect(panels.length, '본문 패널 이름을 못 찾았다 — 정규식이 낡았다').toBeGreaterThanOrEqual(10);
+    // ⚠ 공동 선택자 목록(여러 group 이름이 쉼표로 이어진 한 블록)을 **한 덩어리로** 읽어야 한다.
+    //   이름 하나만 보는 정규식은 목록의 **마지막 이름**을 놓친다(앞에 쉼표가 없다) — 실제로 한 번 걸렸다.
+    const frozenGroups = new Set<string>();
+    for (const m of CSS.matchAll(/([^{}]*)\{([^}]*)\}/g)) {
+      if (!/animation:\s*none/.test(m[2])) continue;
+      for (const g of m[1].matchAll(/::view-transition-group\(([a-z0-9-]+)\)/g)) frozenGroups.add(g[1]);
+    }
+    const naked = panels.filter((n) => !PANEL_GROUP_EXEMPT[n] && !frozenGroups.has(n));
+    expect(
+      naked,
+      `패널 group 이 안 얼려져 있다: ${naked.join(', ')}
+`
+      + '→ index.css 의 패널 group 동결 목록에 넣어라. 일부러 빼는 것이면 PANEL_GROUP_EXEMPT 에 **사유와 함께** 등록해라.',
+    ).toEqual([]);
+    for (const [name, why] of Object.entries(PANEL_GROUP_EXEMPT)) {
+      expect(panels, `면제 목록의 '${name}' 이 더 이상 쓰이지 않는다 — 면제를 지워라`).toContain(name);
+      expect(why.length, `${name}: 면제 사유가 너무 짧다`).toBeGreaterThan(60);
+    }
+  });
+
   it('한 스코프 안에서 알약 이름이 겹치지 않는다 — 같은 이름이 둘이면 전환이 통째로 실패한다', () => {
     // ⚠ 2026-09-18 정정: 예전엔 **CSS 전체**에서 이름 중복을 셌다. 그러면 서로 다른 스코프가
     //   **같은 요소**에 같은 이름을 주는 정당한 경우까지 빨개진다 — `notiffilter-pill` 이

@@ -2433,15 +2433,49 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
 ::view-transition-group(legal-tabbar),
 ::view-transition-group(crm-rangebar) { animation: none; }
 
-/* 바가 자기 패널에 덮이지 않게 순서를 명시한다 — 순위 허브에서 실제로 덮였다(2026-09-18).
-   경위: 위 목록에 rank-tabbar 를 넣어 봤더니, 얼어 있는 바 위로 패널 group 이 옛 위치 y=64 에서
-   미끄러져 들어와 **전환 전반부에 탭바가 통째로 사라졌다**(패널이 DOM 상 뒤라 top layer 에서 위에 그려진다).
-   그래서 이 z-index 를 넣었고 '바가 사라지는 것' 은 실제로 사라졌다 — 그런데 **그림은 여전히 나빴다**:
-   바만 새 자리에 서 있고 제 밑줄 알약이 80px 위 허공에서 대각선으로 날아 들어왔다. 그래서
-   **동결 쪽을 되돌렸다**(위 목록 주석 참고). 이 규칙은 남긴다 — 바가 패널에 덮이는 것은
-   어떤 경우에도 옳지 않고, 동결하지 않은 지금도 무해하다(실측: 역방향·스크롤 0 양방향 정상).
-   ⚠ 근본 원인은 여전히 **판이 짧아질 때 scrollY 가 깎이는 것**이다(CLAUDE.md 참고 메모). */
-html[data-vt-scope='rank-tab']::view-transition-group(rank-tabbar) { z-index: 1; }
+/* 🔴 패널 **박스**도 얼린다 — 오너가 말한 "메뉴 이동할 때 화면 전체가 왔다 갔다 한다 · 두드득 끊긴다" 의 정체다.
+   무엇이었나(2026-09-18 실측 · 중간 프레임 스크린샷):
+     `html[data-vt-scope]::view-transition-group(root){animation:none}` 이라 **푸터·본문 밑은 t=0 에 새 자리로 점프**한다.
+     그런데 `::view-transition-group(<패널>)` 에는 규칙이 없어 **UA 기본 0.25s ease 로 높이를 보간**한다.
+     즉 한 화면에서 **시계가 넷**이 된다: old 페이드 150ms · group 크기 250ms · new 슬라이드 300ms · 알약 220ms.
+       커질 때  → 새 목록이 group 높이에 잘리고 푸터는 이미 내려가 있어 **빈 틈**이 250ms 동안 닫힌다
+       줄어들 때 → `new(패널)` 이 불투명(surface-base)이라 **그 박스가 푸터를 덮었다 물러난다**
+     실측 높이 차: community 324↔378↔222 · rank 456↔251 · venue 419↔785 · mystore 1167↔416 · sched 952↔1092 px
+   근거: Chrome 공식 문서 — group 의 width/height 애니메이션은 **프레임마다 레이아웃을 돈다**,
+     `animation: none` 이 기본 애니메이션을 끈다.
+     https://developer.chrome.com/docs/web-platform/view-transitions/same-document
+   검증: community·venue·mystore·sched 중간 프레임에서 틈·덮임 **0**, 푸터 제자리,
+     알약 슬라이드·가로 푸시·돌출 가드 전부 생존. 대조군(legal, 높이 고정)은 수치 불변.
+   ⚠ 이 블록을 위 `overflow: clip` 블록과 **합치지 마라** — subTabTransition 의 클립 쌍 검사가
+     블록의 첫 이름만 잡기 때문에 합치면 검사 대상이 조용히 바뀐다.
+   ⚠ `rank-panel` 은 **일부러 뺐다**. 순위 허브는 판마다 문서 높이 차가 커서 스크롤이 깎이는데(클램프),
+     그 조건에서는 동결 전후가 **둘 다** 깨진다(전: 바·패널이 같이 135px 미끄러져 라벨이 숨음 /
+     후: 패널만 제자리라 바가 떨어져 내려옴). 근본은 클램프다 — `[data-rank-panel]` 에 min-height 를 줘
+     짧은 판(137~250px)을 긴 판(456px) 근처로 올리면 문서 높이 차가 사라진다. 그건 디자인 결정이라 오너 몫이고,
+     정해지면 그때 이 목록에 넣어라. */
+::view-transition-group(admin-secpanel),
+::view-transition-group(mystore-secpanel),
+::view-transition-group(adminpos-panel),
+::view-transition-group(usermgmt-panel),
+::view-transition-group(tools-lanepanel),
+::view-transition-group(market-panel),
+::view-transition-group(live-panel),
+::view-transition-group(dealer-panel),
+::view-transition-group(group-panel),
+::view-transition-group(profile-panel),
+::view-transition-group(sched-panel),
+::view-transition-group(legal-panel),
+::view-transition-group(community-secpanel),
+::view-transition-group(venue-tabpanel),
+::view-transition-group(crm-panel),
+::view-transition-group(notif-panel) { animation: none; }
+
+/* 🔴 여기 있던 `html[data-vt-scope='rank-tab']::view-transition-group(rank-tabbar) { z-index: 1 }` 를 **지웠다**(2026-09-18).
+   내가 같은 날 넣은 규칙이고, geometry 만 보고 "무해" 라고 판정한 것이 **오판**이었다.
+   실측(중간 프레임 스크린샷 3장 전부): 불투명한 바 스냅샷(bg-surface-high)이 형제인
+   `rank-label`·`rank-pill` group **위로** 올라가 **전환 내내 활성 라벨과 밑줄이 통째로 안 보였다**
+   ("명예의 전당" 자리가 빈 채로 있었다). `z-index: auto` 로 되돌리면 보인다.
+   ⚠ 교훈: 의사요소에 z-index 를 주면 **형제 group 의 쌓임 순서**가 통째로 바뀐다. 숫자로는 안 잡힌다. */
 
 /* 가로 스크롤러의 스크롤바 숨김(배너 캐러셀 등) — 기능은 그대로, 표시만 제거 */
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }

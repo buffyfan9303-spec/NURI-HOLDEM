@@ -55,6 +55,35 @@ async function probe(page: Page, target: Locator): Promise<string[]> {
  * @param panel index.css 에 등록된 본문 스냅샷 이름
  * @param bar   탭바 스냅샷 이름
  */
+/**
+ * 🔴 2026-09-18 새 계약 — **하위 탭 전환에는 View Transition 이 없다.**
+ *
+ * 왜 바뀌었나: 오너가 같은 증상을 네 번 지적했다("화면 전체가 왔다 갔다", "알약이 위에서 뚝 떨어진다",
+ * "두드득 끊기는 것처럼 보인다", "책처럼 덮는다"). 원인은 **하나**였고 명세에 적혀 있다 —
+ * VT 스냅샷의 transform 은 **뷰포트(snapshot containing block) 원점 기준**이다:
+ *   https://drafts.csswg.org/css-view-transitions-1/  §4.1·§7.3.1
+ *   열린 WG 이슈: https://github.com/w3c/csswg-drafts/issues/10197
+ * 하위 탭은 판마다 문서 높이가 크게 다르다(내 매장 3544px → 1023px). 짧은 판으로 가면 브라우저가
+ * scrollY 를 깎는데(클램프), 그 순간 old 스냅샷은 옛 좌표에 박혀 있어 이름 붙은 요소가 그만큼 날아간다.
+ * 실측: 스크롤 1500 → 23, 알약 궤적 (291,−1305) → (411,172) — **1,300px 낙하**, 3/3 재현.
+ *
+ * 그래서 하위 탭 본문에서 VT 를 걷어냈다(`src/lib/subTabTransition.ts`). Ant Design 탭의 기본값이
+ * `{ inkBar: true, tabPane: false }`(본문 무애니)이고 Radix·MUI 도 인디케이터만 움직인다.
+ * 이 저장소에도 같은 방식이 이미 5곳 있었고 **그 화면들엔 이 신고가 한 번도 없었다.**
+ *
+ * 이 판정이 지키는 것: 누가 하위 탭에 VT 를 **다시 넣으면** 빨개진다. 그러면 위 낙하가 함께 돌아온다.
+ */
+function expectNoViewTransition(samples: string[], where: string) {
+  const joined = samples.join('\n');
+  expect(
+    samples,
+    `${where}: 하위 탭 전환에 View Transition 이 다시 들어왔다.\n` +
+    'VT 스냅샷은 뷰포트 좌표계라, 판 높이가 달라 스크롤이 깎이는 순간 알약·바가 그 차이만큼 날아간다\n' +
+    '(실측 1,300px 낙하 · csswg-drafts#10197). 본문은 즉시 교체하고 알약만 CSS FLIP 으로 움직여라.\n' +
+    `실측:\n${joined}`,
+  ).toEqual([]);
+}
+
 function expectPanelPush(samples: string[], panel: string, bar: string) {
   const joined = samples.join('\n');
   const has = (prefix: string) => samples.some((x) => x.startsWith(prefix));
@@ -169,7 +198,7 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     //    '규칙 · 수학' 으로 바뀌면서 **이 계측이 조용히 죽어 있었다**(클릭 타임아웃으로만 드러났다).
     //    CLAUDE.md 규약: 라벨에 묶인 셀렉터는 라벨을 바꾸는 커밋에서 data-* 로 갈아탄다.
     const samples = await probe(page, bar.locator('[data-lane="rules"]'));
-    expectPanelPush(samples, 'tools-lanepanel', 'tools-lanebar');
+    expectNoViewTransition(samples, 'tools-lanepanel');
   });
 
   test('🔴 장터 카테고리(market-cat)', async ({ page }) => {
@@ -178,7 +207,7 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     const bar = page.locator('[data-market-catbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
     const samples = await probe(page, bar.getByRole('button', { name: '용품', exact: true }));
-    expectPanelPush(samples, 'market-panel', 'market-catbar');
+    expectNoViewTransition(samples, 'market-panel');
   });
 
   test('🔴 딜러 커뮤니티 구인·구직 필터(dealer-kind)', async ({ page }) => {
@@ -187,7 +216,7 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     const bar = page.locator('[data-dealer-kindbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
     const samples = await probe(page, bar.getByRole('button', { name: /^구인/ }));
-    expectPanelPush(samples, 'dealer-panel', 'dealer-kindbar');
+    expectNoViewTransition(samples, 'dealer-panel');
   });
 
   test('🔴 랭킹 허브 세부 탭(rank-tab · 오너가 지목한 화면)', async ({ page }) => {
@@ -196,7 +225,7 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     const bar = page.locator('[data-rank-tabbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
     const samples = await probe(page, bar.getByRole('button', { name: /명예/ }).first());
-    expectPanelPush(samples, 'rank-panel', 'rank-tabbar');
+    expectNoViewTransition(samples, 'rank-panel');
   });
 
   test('🔴 내 정보 통합 페이지 탭(profile-tab)', async ({ page }) => {
@@ -207,7 +236,7 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     const bar = page.locator('[data-profile-tabbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
     const samples = await probe(page, bar.getByRole('tab', { name: '설정', exact: true }));
-    expectPanelPush(samples, 'profile-panel', 'profile-tabbar');
+    expectNoViewTransition(samples, 'profile-panel');
   });
 
   test('🔴 알림 패널 쪽지·알림(notif-tab) — 방향성 푸시가 아니라 페이드아웃만 돈다', async ({ page }) => {
@@ -218,7 +247,7 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     const samples = await probe(page, bar.getByRole('tab', { name: '알림', exact: true }));
     // ⚠ 다른 스코프처럼 expectPanelPush(방향성 푸시)를 쓰지 않는다 — notif-panel 은 예외다.
     //   근거는 expectNotifPanelFadeOnly 주석 참고(팝업 카드 좌우 여백 17px < 푸시 이동량 18px).
-    expectNotifPanelFadeOnly(samples);
+    expectNoViewTransition(samples, 'notif-panel');
   });
 });
 
@@ -250,33 +279,31 @@ test.describe('하위 탭 — 느린 기기에서도 root 는 끝까지 정지',
       expect(samples.filter((x) => /\(root\) :: vt-push-/.test(x)), `느린 기기에서 root 가 밀렸다(마커가 전환 도중 풀림)
 실측:
 ${joined}`).toEqual([]);
-      // 마커가 풀리면 본문도 UA 기본 크로스페이드로 떨어진다 — 그것도 잡는다.
-      expect(samples.filter((x) => x.startsWith('::view-transition-new(rank-panel) :: -ua-')), `본문이 UA 크로스페이드로 떨어졌다
-실측:
-${joined}`).toEqual([]);
-      expectPanelPush(samples, 'rank-panel', 'rank-tabbar');
+      // 2026-09-18: 하위 탭은 VT 를 안 타므로 **느린 기기에서도 스냅샷이 아예 안 생긴다.**
+      //   예전 이 테스트가 잡던 것(마커가 전환 도중 풀려 root 가 blur 로 밀림)은 구조적으로 불가능해졌다 —
+      //   마커 자체가 안 켜진다. 그래도 이 케이스는 남긴다: 느린 기기에서 누가 VT 를 되살리면 여기서 걸린다.
+      expectNoViewTransition(samples, 'rank-tab(CPU×8)');
     } finally {
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     }
   });
 });
 
-// ── 커뮤니티 서브탭(community-sec) — 본문만 밀린다 (2026-09-17 오너 리포트: "순위 탭 모션이 다른 탭과 다르다") ──
+// ── 커뮤니티 서브탭(community-sec) — 본문은 **즉시** 바뀌고 알약만 미끄러진다 ──────────────
 //
-// 이상한 쪽은 순위(rank-tab)가 아니라 바로 위 커뮤니티 서브탭이었다. goSubTab 스코프 17개 중 community-sec 만
-// root(화면 전체)를 blur 와 함께 밀던 1세대였고, 2px 아래 rank-tab 은 본문만 밀어 같은 화면에서 두 바의 모션이 달랐다.
-// 수정 전 실측: ::view-transition-new(root) :: vt-push-in-r · community-secpanel 0건.
-// 수정 후 실측: ::view-transition-new(community-secpanel) :: vt-panel-in-r · old/new(root) 애니메이션 0건.
-// subTabTransition.test.ts 의 community-sec 면제가 이 결함을 6개월 숨겼다 — 같은 커밋에서 면제를 지웠다.
+// 2026-09-18 이전 이 자리의 계약은 "본문이 방향성 푸시(VT)로 밀린다" 였다. 그 구조가 오너가 네 번
+// 지적한 증상(알약 낙하·화면 왔다 갔다·두드득·책장 덮기)의 원인이어서 하위 탭에서 VT 를 걷어냈다
+// (근거는 위 expectNoViewTransition 주석 — 명세 §7.3.1 · csswg-drafts#10197 · 실측 1,300px 낙하).
 //
-// 돌출(본문이 이름을 받으면 root 의 뷰포트 고정 스냅샷 보호를 잃고 old/new 가 원래 높이로 그려진다)은
-// index.css 의 height:100%·object-fit:none 가드로 막았다 — 여기서 old/new 높이가 group 높이와 같은지도 같이 잰다
-// (실측 2026-09-17, 게시판 246px ↔ 순위 560px: 가드 없이 양방향 313.5px 돌출, 가드 뒤 0).
-//
-// 커뮤니티 서브탭은 비로그인으로도 보이므로 자격 증명 없이 돈다. 클릭은 page.evaluate 로 — Playwright locator.click 은
-// 대상까지 자동 스크롤해 측정을 오염시킨다(CLAUDE.md).
-test.describe('하위 탭 — 커뮤니티 서브탭도 본문만 밀린다', () => {
-  test('🔴 커뮤니티 서브탭(community-sec): 본문 스냅샷이 밀리고 root 는 정지·돌출 0', async ({ page }) => {
+// 지금 지키는 것 셋:
+//   ① 전환에 VT 스냅샷이 **하나도 없다**(다시 넣으면 낙하가 함께 돌아온다)
+//   ② 본문이 **실제로 바뀐다** — 즉시 교체가 "아무 일도 안 일어남" 으로 퇴화하지 않았는지
+//   ③ 알약이 **미끄러진다** — SlidingPill 의 CSS FLIP(레이아웃 좌표라 스크롤 클램프와 무관).
+//      제자리 점프면 인디케이터의 의미가 없다.
+// 비로그인으로도 보이므로 자격 증명 없이 돈다. 클릭은 page.evaluate 로 — locator.click 은 대상까지
+// 자동 스크롤해 측정을 오염시킨다(CLAUDE.md).
+test.describe('하위 탭 — 본문은 즉시, 알약만 미끄러진다', () => {
+  test('🔴 커뮤니티 서브탭(community-sec): VT 0 · 본문 교체됨 · 알약 이동', async ({ page }) => {
     await stabilizeBackstack(page);
     await page.goto('/');
     const community = page.locator('nav').getByRole('button', { name: '커뮤니티', exact: true }).first();
@@ -286,157 +313,73 @@ test.describe('하위 탭 — 커뮤니티 서브탭도 본문만 밀린다', ()
     const board = page.getByTestId('sec-tab-board').first();
     await expect(board).toBeVisible({ timeout: 15_000 });
     await board.click();
-    await page.waitForTimeout(900); // 앞선 전환·초기 로드가 끝난 뒤에 잰다
-
-    // 전환 한복판에서 본문 그룹·old·new 의 높이를 낚아챈다 — 돌출량 = old(또는 new) − group.
-    const heights = page.evaluate(() => new Promise<{ g: number; o: number; n: number }[] | null>((resolve) => {
-      const t0 = performance.now();
-      const cs = (pe: string) => parseFloat(getComputedStyle(document.documentElement, pe).height);
-      const out: { g: number; o: number; n: number }[] = [];
-      const tick = () => {
-        const g = cs('::view-transition-group(community-secpanel)');
-        if (!Number.isNaN(g)) out.push({ g, o: cs('::view-transition-old(community-secpanel)'), n: cs('::view-transition-new(community-secpanel)') });
-        if (performance.now() - t0 < 900) requestAnimationFrame(tick);
-        else resolve(out.length ? out : null);
-      };
-      requestAnimationFrame(tick);
-    }));
-
-    await startSampler(page);
-    await page.evaluate(() => { (document.querySelector('[data-testid="sec-tab-rank"]') as HTMLElement).click(); });
-    const samples = await collect(page);
-    expectPanelPush(samples, 'community-secpanel', 'community-secbar');
-
-    const frames = await heights;
-    expect(frames, `community-secpanel 그룹이 전환 중 잡히지 않았다 — 본문에 이름이 안 붙었다
-실측:
-${samples.join('\n')}`).not.toBeNull();
-    const over = Math.max(...frames!.map((f) => Math.max(f.o - f.g, f.n - f.g)));
-    expect(over, `본문 스냅샷이 group 박스 밖으로 ${over.toFixed(1)}px 돌출한다 — index.css 의 height:100%·object-fit:none 가드를 확인하라
-프레임: ${JSON.stringify(frames!.slice(0, 4))}`).toBeLessThanOrEqual(1);
-  });
-});
-
-// ── 알약(SlidingPill)이 탭바 스냅샷에 갇히지 않는다 (오너 리포트 2026-09-07) ──────────
-//
-// 증상: "이 메뉴탭이 누르면 나중에 움직여 제대로 안 움직인다"(커뮤니티 서브탭 홀덤펍·게시판·…).
-//
-// 두 겹의 원인이 있었고 둘 다 여기서 잰다.
-//   ① 탭바에 view-transition-name 이 붙으면 탭바는 **정지 이미지**로 대체된다. 알약은 그 이미지
-//      안에 인쇄돼 있어 살아 있는 DOM 에서 아무리 미끄러져도 안 보인다 → 알약에 자기 이름을 줘야
-//      VT 가 알약만 따로 보간한다(index.css community-pill).
-//   ② 그런데 이름만 줘서는 부족하다. SlidingPill 의 FLIP 은 '이전 위치에서 시작하는 CSS 트랜지션'
-//      이라, VT 가 새 스냅샷을 뜨는 순간(경과 0) 알약은 아직 **이전 위치**다 → VT 가 A→A 를 보간해
-//      결국 안 움직인다. 그래서 전환 중에는 최종 위치로 즉시 가게 했다(SlidingPill + isViewTransitionActive).
-//
-// 그래서 '그룹이 생겼다'로 끝내지 않고 **키프레임의 transform 이 실제로 달라지는지**까지 본다.
-// A→A 로 보간되면 시작·끝 transform 이 같아서 이 단언이 깨진다 — ②의 회귀를 정확히 잡는 지점이다.
-//
-// 커뮤니티 서브탭은 비로그인으로도 보이므로 자격 증명 없이 돈다.
-test.describe('하위 탭 — 알약이 탭바 스냅샷에 갇히지 않는다', () => {
-  test('🔴 커뮤니티 서브탭: 알약이 자기 그룹으로 분리돼 옛→새 위치로 보간된다', async ({ page }) => {
-    await stabilizeBackstack(page);
-    await page.goto('/');
-    const community = page.locator('nav').getByRole('button', { name: '커뮤니티', exact: true }).first();
-    await expect(community).toBeVisible({ timeout: 20_000 });
-    await dismissOverlays(page);
-    await community.click();
+    await page.waitForTimeout(900);
 
     const bar = page.locator('[data-community-secbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
-    await page.waitForTimeout(900); // 앞선 전환·초기 로드가 끝난 뒤에 잰다
+    expect(await bar.locator('[data-sliding-pill]').count(), '알약이 없다 — 이 바의 인디케이터 구조가 바뀌었다').toBe(1);
 
-    // 같은 이름이 둘이면 캡처가 통째로 실패한다 — 규칙을 넣기 전 반드시 성립해야 하는 전제.
-    expect(await bar.locator('[data-sliding-pill]').count(),
-      '탭바 안 알약이 1개가 아니다 — view-transition-name 이 겹쳐 전환이 통째로 실패한다').toBe(1);
+    const r = await page.evaluate(async () => {
+      const barEl = document.querySelector('[data-community-secbar]') as HTMLElement;
+      const pill = barEl.querySelector('[data-sliding-pill]') as HTMLElement;
+      const panel = document.querySelector('[data-community-secpanel]') as HTMLElement;
+      const target = document.querySelector('[data-testid="sec-tab-rank"]') as HTMLElement;
+      if (!pill || !panel || !target) return null;
 
-    // 전환 한복판에서 알약 그룹의 UA 애니메이션 키프레임을 낚아챈다.
-    const pillKeyframes = page.evaluate(() => new Promise<string[] | null>((resolve) => {
+      // ⚠ innerText — `textContent` 는 keep-alive 로 `display:none` 된 다른 섹션까지 읽어
+      //   탭을 바꿔도 앞 80자가 그대로였다(실제로 이 검사가 거짓 실패했다). 보이는 글자만 본다.
+      const before = { pillX: pill.getBoundingClientRect().x, text: (panel.innerText ?? '').replace(/\s+/g, ' ').slice(0, 80) };
+      const vt: string[] = [];
+      const pillXs: number[] = [];
+      // 🔴 오너 요구(2026-09-18): "메뉴는 그대로 유지하고 **안에 있는 콘텐츠만** 바뀌었으면 좋겠는데
+      //   자꾸 메뉴가 있는 쪽도 전환되거나 그 위쪽 콘텐츠도 같이 간다" — 바와 그 위쪽을 프레임마다 잰다.
+      const barYs: number[] = [];
+      const aboveYs: number[] = [];
+      const above = document.querySelector('[data-stack-header]') as HTMLElement | null;
       const t0 = performance.now();
       const tick = () => {
         for (const a of document.getAnimations()) {
-          const eff = a.effect as KeyframeEffect | null;
-          const pe = eff?.pseudoElement ?? '';
-          if (pe.includes('view-transition-group(community-pill)')) {
-            resolve(eff!.getKeyframes().map((k) => String((k as Record<string, unknown>).transform ?? '')));
-            return;
-          }
+          const pe = (a.effect as KeyframeEffect | null)?.pseudoElement ?? null;
+          if (pe?.startsWith('::view-transition')) vt.push(`${pe} :: ${(a as unknown as { animationName?: string }).animationName ?? ''}`);
         }
-        if (performance.now() - t0 < 1500) requestAnimationFrame(tick);
-        else resolve(null);
+        pillXs.push(+pill.getBoundingClientRect().x.toFixed(1));
+        barYs.push(+barEl.getBoundingClientRect().y.toFixed(1));
+        if (above) aboveYs.push(+above.getBoundingClientRect().y.toFixed(1));
+        if (performance.now() - t0 < 700) requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
-    }));
-
-    // 전환 한복판의 라벨 스냅샷 상태 — ④가 '이름이 통째로 빠진' 경우에도 통과해 버리는 것을 막는다.
-    //   ④는 '라벨 그룹이 애니메이트되지 않는다' 인데, 이름이 아예 없으면 그룹도 없어서 역시 0건이다
-    //   (= 글자가 알약에 덮이던 3552ae4 의 원래 결함을 통과시킨다). 그래서 존재까지 같이 잰다.
-    const labelPaint = page.evaluate(() => new Promise<Record<string, string> | null>((resolve) => {
-      const t0 = performance.now();
-      const cs = (pe: string) => getComputedStyle(document.documentElement, pe);
-      const tick = () => {
-        const g = cs('::view-transition-group(community-label)');
-        if (g.width && g.width !== 'auto') {
-          resolve({
-            groupWidth: g.width,
-            oldOpacity: cs('::view-transition-old(community-label)').opacity,
-            newOpacity: cs('::view-transition-new(community-label)').opacity,
-          });
-          return;
-        }
-        if (performance.now() - t0 < 1500) requestAnimationFrame(tick);
-        else resolve(null);
+      target.click();
+      await new Promise((f) => setTimeout(f, 800));
+      return {
+        vt: [...new Set(vt)].sort(),
+        pillXs: [...new Set(pillXs)],
+        barYs: [...new Set(barYs)],
+        aboveYs: [...new Set(aboveYs)],
+        before,
+        after: { pillX: pill.getBoundingClientRect().x, text: (panel.innerText ?? '').replace(/\s+/g, ' ').slice(0, 80) },
       };
-      requestAnimationFrame(tick);
-    }));
+    });
+    expect(r, '커뮤니티 서브탭의 바·본문·알약을 못 찾았다').not.toBeNull();
 
-    await startSampler(page);
-    await page.getByRole('button', { name: '게시판', exact: true }).first().click();
-    const kf = await pillKeyframes;
-    const paint = await labelPaint;
-    const samples = await collect(page);
-    const joined = samples.join('\n');
+    // ① VT 가 하나도 없다
+    expectNoViewTransition(r!.vt, 'community-sec');
 
-    // ① 알약이 자기 그룹으로 분리됐다 — 없으면 탭바 스냅샷 안에 갇혀 있다는 뜻(index.css 규칙 누락).
-    expect(kf, `알약이 자기 view-transition 그룹을 못 받았다 — 탭바 스냅샷에 갇힌다.
-index.css 의 html[data-vt-scope='community-sec'] [data-community-secbar] [data-sliding-pill] 규칙을 확인하라.
-실측 의사요소:
-${joined}`).not.toBeNull();
+    // ② 본문이 실제로 바뀌었다 — '즉시 교체' 가 '아무 일도 안 함' 이 되지 않았는지
+    expect(r!.after.text, `본문이 그대로다 — 탭을 눌렀는데 판이 안 바뀌었다.
+전: ${r!.before.text}
+후: ${r!.after.text}`).not.toBe(r!.before.text);
 
-    // ② 그 그룹이 **실제로 자리를 옮긴다** — 시작과 끝 transform 이 같으면 A→A 보간이다(안 움직인다).
-    const uniq = [...new Set((kf ?? []).filter((s) => s && s !== 'none'))];
-    expect(uniq.length, `알약 그룹의 transform 이 처음부터 끝까지 같다 — 제자리에서 보간됐다는 뜻이다.
-SlidingPill 이 전환 중에도 CSS 트랜지션을 걸면(이전 위치에서 시작) VT 가 이전 위치를 새 스냅샷으로 잡아 이렇게 된다.
-키프레임: ${JSON.stringify(kf)}
-실측 의사요소:
-${joined}`).toBeGreaterThanOrEqual(2);
+    // ③ 알약이 미끄러진다 — 중간 좌표가 있어야 '이동' 이다(둘뿐이면 순간이동)
+    expect(r!.after.pillX, '알약이 안 움직였다').not.toBe(r!.before.pillX);
+    expect(r!.pillXs.length, `알약이 제자리에서 튀었다(중간 프레임 없음) — CSS FLIP 전환이 죽었다.
+관측된 x: ${r!.pillXs.join(' → ')}`).toBeGreaterThanOrEqual(3);
 
-    // ③ 탭바 자신은 여전히 정지 — 손가락이 짚은 바가 흔들리면 안 된다(기존 계약 유지).
-    expect(samples.filter((x) =>
-      (x.startsWith('::view-transition-old(community-secbar) :: ') || x.startsWith('::view-transition-new(community-secbar) :: '))
-      && !x.endsWith(':: ')), `탭바가 애니메이트됐다 — 제자리에 고정돼야 한다
-실측:
-${joined}`).toEqual([]);
-
-    // ④ **글자는 따라가지 않는다**(오너 리포트 2026-09-11: "탭을 이동하면 글자가 pill을 따라가").
-    //    community-label 은 [data-pill-active] 에 붙는데 그 선택자는 탭을 바꾸는 순간 옛 버튼에서
-    //    새 버튼으로 **옮겨간다**. VT 는 같은 이름의 old/new 를 한 요소로 보고 보간하므로, 이름만
-    //    주고 두면 활성 라벨이 옛 자리 → 새 자리로 끌려간다. 이름 자체는 있어야 한다(없으면 라벨이
-    //    바 스냅샷에 들어가 알약에 덮인다 — ①의 반대쪽 결함) → 이름은 두고 **이동만** 끈 것이
-    //    index.css 의 ::view-transition-group(community-label) { animation: none } 이다.
-    //    여기서 그룹 애니메이션이 되살아나면 그 규칙이 지워졌거나 뒤에서 덮인 것이다.
-    expect(samples.filter((x) => x.startsWith('::view-transition-group(community-label) :: ') && !x.endsWith(':: ')),
-      `활성 라벨 그룹이 애니메이트됐다 — 글자가 알약을 따라 미끄러진다(오너가 리포트한 그 증상).
-index.css 의 ::view-transition-group(community-label) { animation: none } 를 확인하라.
-실측:
-${joined}`).toEqual([]);
-
-    // ⑤ 그런데 라벨은 **자기 스냅샷으로 존재해야** 한다 — ④만으로는 이름을 통째로 지운 경우도 통과한다
-    //    (그러면 라벨이 바 스냅샷에 들어가 알약에 덮인다 = 3552ae4 의 원래 결함이 그대로 재발).
-    //    old 를 감추고 new 만 불투명하게 두는 것이 '옛 글자·새 글자 교차 페이드로 뭉개짐'을 막는 지점이다.
-    expect(paint, `전환 중 community-label 스냅샷이 없다 — 이름이 빠졌다는 뜻이고, 그러면 활성 글자가 알약에 덮인다.
-index.css 의 [data-pill-active] { view-transition-name: community-label } 를 확인하라.`).not.toBeNull();
-    expect(paint?.oldOpacity, `옛 글자가 안 감춰졌다 — 새 자리에 두 단어가 겹쳐 뭉갠다. 실측: ${JSON.stringify(paint)}`).toBe('0');
-    expect(paint?.newOpacity, `새 글자가 불투명하지 않다 — 전환 동안 글자가 흐려진다. 실측: ${JSON.stringify(paint)}`).toBe('1');
+    // ④ 🔴 메뉴(탭바)와 그 위쪽은 **1px 도** 움직이지 않는다 — 오너가 직접 지적한 요구다.
+    //   VT 를 쓰던 시절에는 바·헤더가 스냅샷으로 떠서 같이 밀리거나, root 가 얼어 t=0 에 점프했다.
+    //   지금은 DOM 이 그대로라 애초에 움직일 이유가 없다 — 그 사실을 계약으로 못 박는다.
+    expect(r!.barYs.length, `탭바가 전환 중에 움직였다 — 메뉴는 제자리에 있어야 한다.
+관측된 y: ${r!.barYs.join(' → ')}`).toBe(1);
+    expect(r!.aboveYs.length, `탭바 **위쪽** 콘텐츠가 움직였다 — 바뀌지 않는 부분은 가만히 있어야 한다.
+관측된 y: ${r!.aboveYs.join(' → ')}`).toBeLessThanOrEqual(1);
   });
 });

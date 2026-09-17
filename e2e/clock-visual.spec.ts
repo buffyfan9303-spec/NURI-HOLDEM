@@ -347,7 +347,11 @@ test.describe('클락 테마 패널', () => {
     await openMyStore(page);
     await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
 
-    const clock = page.getByRole('button', { name: '클락', exact: true }).first();
+// ⚠ 2026-09-18: 예전에는 대시보드 상단의 빠른이동 타일에 이름이 정확히 '클락' 인 버튼이 있었다.
+//   7cf1cf5 가 그 4칸을 레일과 중복이라 빼면서 사라져 CI 가 4건 빨개졌다.
+//   남은 진입점은 단계 레일의 알약이고, 그 접근성 이름은 번호가 붙어 '3.클락' 이라 exact 가 안 맞는다.
+//   store-nav.spec.ts 가 쓰는 것과 같은 조리법으로 고정한다(레일 안 role=tab 중 '클락' 하나뿐).
+    const clock = page.locator('[aria-label="매장 단계 이동"] [role=tab]').filter({ hasText: '클락' }).first();
     await expect(clock).toBeVisible({ timeout: 20_000 });
     await clock.click();
     await page.waitForTimeout(2500);
@@ -376,7 +380,7 @@ test.describe('PC 운영자 화면', () => {
       await openMyStore(page);
       await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
 
-      const clock = page.getByRole('button', { name: '클락', exact: true }).first();
+      const clock = page.locator('[aria-label="매장 단계 이동"] [role=tab]').filter({ hasText: '클락' }).first();
       await expect(clock).toBeVisible({ timeout: 20_000 });
       await clock.click();
       await page.waitForTimeout(3000);
@@ -412,7 +416,7 @@ test.describe('운영자 화면 — 유휴 렌더', () => {
     await openMyStore(page);
     await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(2500);
-    const clock = page.getByRole('button', { name: '클락', exact: true }).first();
+    const clock = page.locator('[aria-label="매장 단계 이동"] [role=tab]').filter({ hasText: '클락' }).first();
     await expect(clock).toBeVisible({ timeout: 20_000 });
     await clock.click();
     await page.waitForTimeout(4000);

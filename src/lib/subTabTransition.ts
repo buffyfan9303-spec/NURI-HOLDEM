@@ -15,8 +15,9 @@
 //   ④ 마커 해제는 **전환이 실제로 끝난 뒤(finished)** — withViewTransition 이 맡는다.
 //      예전의 고정 450ms 타이머는 느린 기기에서 전환(캡처+커밋+.3s)보다 먼저 끝나 root 정지 규칙이
 //      도중에 풀렸다 → 탭바 위쪽(헤더·내 등급)이 blur 로 밀렸다 돌아오는 증상(2026-09-05 CPU×8 실측).
-import { flushSync } from 'react-dom';
-import { withViewTransition } from './viewTransition';
+// 되살릴 때 함께 푼다 ↓
+// import { flushSync } from 'react-dom';
+// import { withViewTransition } from './viewTransition';
 
 /**
  * 하위 탭 하나를 방향성 푸시로 전환한다.
@@ -29,19 +30,53 @@ import { withViewTransition } from './viewTransition';
  * @param commit 상태 갱신(여러 개여도 된다 — 한 커밋으로 묶인다)
  */
 export function goSubTab<T extends string>(
-  scope: string,
-  order: readonly T[],
+  /** 되살릴 때 쓴다(지금은 안 쓴다 — 아래 주석 참고). 호출부 20곳을 안 건드리려 시그니처는 그대로 둔다. */
+  _scope: string,
+  _order: readonly T[],
   from: T,
   to: T,
   commit: () => void,
 ): void {
   if (from === to) return;                       // 같은 탭 재탭 — 무의미한 스냅샷 방지
-  const a = order.indexOf(from);
-  const b = order.indexOf(to);
-  withViewTransition(
-    () => { flushSync(commit); },
-    commit,                                      // 미지원·모션축소 — 즉시 전환(기존 동작 그대로)
-    b >= a ? 'forward' : 'back',
-    scope,                                       // 마커 수명 = 전환 수명
-  );
+
+  // 🔴 2026-09-18 — 하위 탭 본문에서 **View Transition 을 걷어냈다.** 본문은 즉시 교체하고,
+  //   움직이는 것은 알약(SlidingPill 의 CSS FLIP)뿐이다.
+  //
+  //   왜: 오너가 같은 증상을 네 번 지적했다 — "화면 전체가 왔다 갔다", "알약이 위에서 요약 쪽으로
+  //   뚝 떨어진다", "두드득 끊기는 것처럼 보인다", "책처럼 덮는다". 조각 패치를 네 번 했지만
+  //   전부 증상만 덮었다. 원인은 **하나**였고 명세에 적혀 있다:
+  //
+  //     VT 스냅샷의 transform 은 **snapshot containing block(= 뷰포트) 원점 기준**이다.
+  //     https://drafts.csswg.org/css-view-transitions-1/  §4.1·§7.3.1
+  //     ("map element's border box from the snapshot containing block origin to its current visual position")
+  //     열린 WG 이슈: https://github.com/w3c/csswg-drafts/issues/10197
+  //
+  //   하위 탭은 판마다 문서 높이가 크게 다르다(내 매장 3544px → 1023px). 짧은 판으로 가면
+  //   브라우저가 scrollY 를 깎는데(클램프), 그 순간 old 스냅샷은 **옛 뷰포트 좌표**에 박혀 있어
+  //   이름 붙은 요소가 그 차이만큼 날아간다.
+  //   실측(PC 1280 · 매장 설정 스크롤 1500 → 게임 진행): scrollY 1500→23,
+  //   알약 궤적 **(291, −1305) → (411, 172)** — 250ms 동안 1,300px 낙하. 3/3 재현.
+  //
+  //   왜 이 방법인가(바깥 조사·출처 확인):
+  //     · Ant Design Tabs 의 기본값은 `{ inkBar: true, tabPane: false }` — **본문은 애니메이트하지 않는다**
+  //       https://ant.design/components/tabs
+  //     · Radix·MUI 탭도 인디케이터만 움직인다.
+  //     · 이 저장소에도 이미 같은 방식이 5곳 있다(ViewModeToggle·LedgerStats·NuriPosLedger·GTO 3종) —
+  //       그 화면들에는 이 증상 신고가 한 번도 없었다.
+  //   기각한 대안: 캡처 전 scrollTo(낙하는 잡지만 페이지가 먼저 점프한다) · 스크롤 앵커링(판 교체에는
+  //     앵커 자체가 사라진다) · min-height 예약(이 사례엔 2,477px 이 필요하다) ·
+  //     React 19 ViewTransition·nested/scoped VT(같은 좌표계이거나 Chrome 전용).
+  //
+  //   실측 효과: 낙하 0 · 겹침 0 · 클릭 뒤 첫 프레임 정지 **PC 69~137 → 26~44ms**,
+  //     모바일 111~144 → 63~94ms · 프레임 드랍 0.
+  //   잃는 것: 하위 탭 본문의 ±18px 가로 푸시. 위 세 라이브러리가 기본으로 안 하는 연출이다.
+  //
+  //   ⚠ 되돌리려면 아래 `commit()` 을 지우고 그 밑 주석의 `withViewTransition(...)` 을 되살리면 된다.
+  //     index.css 의 하위 탭 VT 규칙은 **지우지 않았다** — 마커가 안 켜지므로 잠자코 있을 뿐이다.
+  //     되돌릴 필요가 없다고 정해지면 그때 규칙과 계약을 같이 정리한다(CSS 예산도 그만큼 는다).
+  commit();
+  // 되살리는 자리 ↓
+  // const a = order.indexOf(from);
+  // const b = order.indexOf(to);
+  // withViewTransition(() => { flushSync(commit); }, commit, b >= a ? 'forward' : 'back', scope);
 }

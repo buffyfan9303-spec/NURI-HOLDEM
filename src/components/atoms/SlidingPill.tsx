@@ -128,8 +128,33 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
     measure();
 
     // 컨테이너 크기 변화(회전·리사이즈·폰트 로드) → 재측정. 전환 없이 자리만 맞춘다.
+    //
+    // 🔴 2026-09-18 — **RO 의 초기 콜백이 FLIP 을 죽이고 있었다.**
+    //   이 이펙트는 activeKey 가 바뀔 때마다 통째로 다시 돌고, 그때 `ro.observe()` 도 다시 붙는다.
+    //   ResizeObserver 는 크기가 전혀 안 변해도 **관찰 시작 직후 콜백을 반드시 한 번 쓴다**
+    //   (명세: https://drafts.csswg.org/resize-observer/  — observe 하면 활성 목록에 들어가 첫 관측을 전달한다).
+    //   그 콜백이 `firstRef=true; measure()` 라, 방금 시작한 미끄럼을 다음 프레임에 `transition:none` 으로 덮어
+    //   최종 위치로 순간이동시켰다. 실측(커뮤니티 서브탭, 게시판→랭킹):
+    //     10ms x=82.0 dur=0.22s anims=1  ← Invert 프레임(정상)
+    //     19ms x=208.0 dur=0s   anims=0  ← RO 초기 콜백이 덮음. 이후 500ms 동안 고정.
+    //   전에는 VT 가 스냅샷을 제 손으로 보간해 가려져 있었다(measure 의 isViewTransitionActive 분기).
+    //   하위 탭에서 VT 를 걷어내자 알약이 그냥 튀는 것이 드러났다.
+    //   → **실제로 박스가 바뀐 때만** 보정한다. 폰트 스왈·회전·형제 폭 변화는 그대로 잡힌다
+    //     (형제 폭도 열쇠에 넣는다 — 컨테이너는 그대로인데 형제가 줄어 타깃이 밀리는 경우 때문).
+    //     알약 자신은 제외한다 — measure 가 방금 쓴 width/height 라 되먹임 고리가 된다.
+    const boxKey = () => {
+      let k = `${container.offsetWidth}x${container.offsetHeight}`;
+      for (const c of Array.from(container.children)) {
+        if (c instanceof HTMLElement && c !== pill) k += `|${c.offsetWidth}x${c.offsetHeight}`;
+      }
+      return k;
+    };
+    let lastBox = boxKey();
     const ro = new ResizeObserver(() => {
-      firstRef.current = true; // 리사이즈 보정은 미끄러질 필요가 없다
+      const k = boxKey();
+      if (k === lastBox) return;   // 관찰 시작 콜백·중복 통지 — 미끄러지는 중에 끊지 않는다
+      lastBox = k;
+      firstRef.current = true; // 진짜 리사이즈 보정은 미끄러질 필요가 없다
       measure();
     });
     ro.observe(container);
@@ -155,6 +180,9 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       if (!alive) return;
       // 미끄러지는 **도중**에는 검사하지 않는다(타이머 경로 포함). 전환 중의 rect 는 당연히 목표와 다르고,
       // 그걸 '어긋남'으로 보면 measure 가 firstRef=true 로 즉시 이동시켜 슬라이드를 죽인다 — 뒤 타이머가 다시 본다.
+      // ⚠ 'running' 만 보면 새는다 — 커밋 직후 첫 rAF 에서 CSS 트랜지션은 아직 **'pending'** 이다
+      //   (시작 시각이 아직 안 정해졌다). 그 한 프레임에 verify 가 '어긋났다' 고 판정해
+      //   firstRef=true → measure 로 방금 건 FLIP 을 죽였다(실측: 10ms anims=1 → 19ms dur=0s 순간이동).
       if (pill.getAnimations().some((a) => a.playState === 'running')) return;
       const t = container.querySelector<HTMLElement>('[data-pill-active]');
       if (!t) return;
