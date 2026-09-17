@@ -1756,6 +1756,29 @@ export default function App() {
   }, []);
   const [marketFormOpen, setMarketFormOpen] = useState(false);   // 중고장터 글쓰기
 
+  /* 🔴 오버레이 퇴장 살리기 (2026-09-18 실측) — `{state && <X open …>}` 는 `open` 이 항상 true 라
+     부모가 통째로 언마운트되고 Modal 의 slide-down(200ms)이 **한 프레임도 안 돈다**(성공→소실 0ms).
+     아래는 전부 Modal 기반이라 퇴장이 실제로 있는 것들이다. 값형(`x !== null`)은 퇴장 220ms 동안
+     내용이 비지 않게 **마지막 값을 붙잡아** 넘긴다 — 안 그러면 빈 시트가 내려간다.
+     ⚠ 뺀 것 4개: openSchedule·openPost 는 `inline` 이라 Modal 이 퇴장 없이 null 을 돌려주고(전환은
+       withViewTransition 이 맡는다), openVenueId·eventOpen 은 Modal 자체가 아니다 —
+       씌우면 220ms 정지 후 소실이 되어 지금보다 나빠진다. */
+  const voucherMounted   = useDelayedUnmount(voucherSheetOpen);
+  const listingMounted   = useDelayedUnmount(openListing !== null);
+  const noticeMounted    = useDelayedUnmount(openNotice !== null);
+  const posterFormMounted= useDelayedUnmount(posterFormTarget !== null);
+  const legalMounted     = useDelayedUnmount(legalDoc !== null);
+  const supportMounted   = useDelayedUnmount(supportOpen);
+  const searchMounted    = useDelayedUnmount(globalSearchOpen);
+  const noticeFormMounted= useDelayedUnmount(noticeFormOpen);
+  const postFormMounted  = useDelayedUnmount(postFormOpen);
+  const marketFormMounted= useDelayedUnmount(marketFormOpen);
+  /** 퇴장 동안 props 가 비지 않게 마지막 non-null 을 붙잡는다(값형 4곳). */
+  const lastListing = useRef(openListing);      if (openListing !== null) lastListing.current = openListing;
+  const lastNotice = useRef(openNotice);        if (openNotice !== null) lastNotice.current = openNotice;
+  const lastPosterTarget = useRef(posterFormTarget); if (posterFormTarget !== null) lastPosterTarget.current = posterFormTarget;
+  const lastLegal = useRef(legalDoc);           if (legalDoc !== null) lastLegal.current = legalDoc;
+
   // GTO 공유 링크(#gto=...) 진입 — 받은 사람이 열면 같은 스팟으로 GTO 검색 모달 표시
   const [gtoInit, setGtoInit] = useState<DeepGtoInit | null>(null);
   useEffect(() => {
@@ -4070,9 +4093,9 @@ export default function App() {
           여기 폴백은 null 이라 **아무 일도 안 일어난 것처럼** 보였다(스피너조차 없다). 두 번째 클릭에서는
           청크가 이미 있어 곧바로 열린다 — 그게 '두 번 눌러야' 의 정체다. 경계를 미리 마운트해 둔다. */}
       <Suspense fallback={null}>
-        {voucherSheetOpen && (
+        {voucherMounted && (
           <MyVoucherSheet
-            open
+            open={voucherSheetOpen}
             onClose={() => setVoucherSheetOpen(false)}
             onVenue={handleVenueClick}
             onOpenWallet={() => openMeCb('dashboard')}
@@ -4160,9 +4183,9 @@ export default function App() {
         );
       })()}
 
-      {openListing !== null && (
+      {listingMounted && (
       <ListingDetailModal
-        open
+        open={openListing !== null}
         listing={openListing}
         onClose={() => setOpenListing(null)}
         onDelete={handleDeleteListing}
@@ -4173,9 +4196,9 @@ export default function App() {
       />
       )}
 
-      {openNotice !== null && (
+      {noticeMounted && (
       <NoticeDetailModal
-        open
+        open={openNotice !== null}
         notice={openNotice}
         onClose={() => setOpenNotice(null)}
         isAdmin={user?.role === 'admin'}
@@ -4184,9 +4207,9 @@ export default function App() {
       />
       )}
 
-      {posterFormTarget !== null && (
+      {posterFormMounted && (
       <PosterFormModal
-        open
+        open={posterFormTarget !== null}
         schedule={posterFormTarget}
         onClose={() => setPosterFormTarget(null)}
         onSubmit={handleSubmitPoster}
@@ -4214,17 +4237,17 @@ export default function App() {
       />
       )}
 
-      {legalDoc !== null && (
-      <LegalDocsModal open initial={legalDoc} onClose={() => setLegalDoc(null)} />
+      {legalMounted && (
+      <LegalDocsModal open={legalDoc !== null} initial={legalDoc ?? lastLegal.current ?? undefined} onClose={() => setLegalDoc(null)} />
       )}
 
-      {supportOpen && (
-      <SupportInquiryModal open onClose={() => setSupportOpen(false)} />
+      {supportMounted && (
+      <SupportInquiryModal open={supportOpen} onClose={() => setSupportOpen(false)} />
       )}
 
-      {globalSearchOpen && (
+      {searchMounted && (
       <GlobalSearchModal
-        open
+        open={globalSearchOpen}
         onClose={() => setGlobalSearchOpen(false)}
         venues={venues}
         schedules={schedules}
@@ -4240,9 +4263,9 @@ export default function App() {
       )}
 
       {/* 관리자 전용 공지 작성 모달 (커뮤니티/장터 '공지 작성' 버튼에서 진입) */}
-      {noticeFormOpen && (
+      {noticeFormMounted && (
       <NoticeFormModal
-        open
+        open={noticeFormOpen}
         onClose={() => { setNoticeFormOpen(false); setEditingNotice(null); }}
         onSubmit={handleSubmitNotice}
         editing={editingNotice}
@@ -4250,9 +4273,9 @@ export default function App() {
       )}
 
       {/* 커뮤니티 글쓰기 모달 (Stage 2) */}
-      {postFormOpen && (
+      {postFormMounted && (
       <PostFormModal
-        open
+        open={postFormOpen}
         onClose={closePostForm}
         onSubmit={handleCreatePost}
         defaultCategory={postFormCategory}
@@ -4280,9 +4303,9 @@ export default function App() {
       <ScrollTopButton />
 
       {/* 중고장터 글쓰기 모달 (Stage 2) */}
-      {marketFormOpen && (
+      {marketFormMounted && (
       <MarketplaceFormModal
-        open
+        open={marketFormOpen}
         onClose={() => setMarketFormOpen(false)}
         onSubmit={handleCreateListing}
       />

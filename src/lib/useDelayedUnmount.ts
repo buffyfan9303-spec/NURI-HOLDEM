@@ -34,10 +34,16 @@ export function useDelayedUnmount(open: boolean, ms = 220): boolean {
   const [mounted, setMounted] = useState(open);
   const timer = useRef(0);
 
+  // 🔴 여는 것은 **렌더 중에** 즉시 반영한다 — 이펙트로 미루면 마운트가 한 커밋 늦어진다.
+  //   실측(2026-09-18): 이펙트로 켰더니 이용권 시트가 뜨기까지 10프레임 → **24프레임**이 됐다
+  //   (`voucher-sheet-open.spec.ts:81` 이 잡았다). 늦어진 한 커밋이 lazy 청크의 Suspense 폴백
+  //   스로틀(~300ms)에 걸리는 창을 만든다. 렌더 중 같은 컴포넌트의 상태를 올리는 것은
+  //   React 가 허용하는 파생 상태 패턴이고, 커밋 없이 곧바로 다시 렌더된다.
+  if (open && !mounted) setMounted(true);
+
   useEffect(() => {
     if (open) {
       if (timer.current) { window.clearTimeout(timer.current); timer.current = 0; }
-      setMounted(true);
       return;
     }
     if (!mounted) return;                       // 이미 내려가 있으면 타이머를 새로 걸지 않는다
