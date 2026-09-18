@@ -321,6 +321,34 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
         </div>
       </CalcCard>
 
+      {/* 카드 선택 그리드 — 🔴 슬롯 **바로 밑**이어야 한다.
+          2026-09-19 오너: "보드를 선택할 수 없어". 고장이 아니라 **닿을 수 없었다** —
+          실측(390×844): 보드 슬롯이 y284 에서 끝나는데 그리드는 결과 카드 뒤 **y883**,
+          보이는 영역(785) 밖이었다. 슬롯을 눌러도 화면에서는 아무 일도 일어나지 않는다.
+          짝이 되는 도구(HandBoardPicker)는 처음부터 '슬롯 → 그리드 → 결과' 였다 —
+          같은 앱에서 카드를 고르는 방법이 둘이면 그게 버그다. 순서를 그쪽에 맞춘다. */}
+      <CalcCard>
+        <div className="flex items-center justify-between">
+          <div className="flex gap-1">
+            {TARGET_TABS.filter(({ t }) => !(rangeMode && t === 'villain')).map(({ t, label }) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => deep.setTarget(t)}
+                className={[
+                  'h-7 rounded-input px-2.5 text-2xs font-semibold transition-colors',
+                  deep.currentTarget === t ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary border border-border-default',
+                ].join(' ')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={deep.clearAll} className="text-2xs font-semibold text-ink-muted hover:text-danger-light">초기화</button>
+        </div>
+        <CardGridPicker usedIds={deep.usedIds} onPick={deep.placeCard} />
+      </CalcCard>
+
       {/* 결과 */}
       {showResult && deep.result && deep.normalizedAction ? (
         <CalcCard className="animate-fade-in">
@@ -422,29 +450,6 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
             : '그리드에서 Hero·Villain 2장씩 고르면 에퀴티·참고 액션 표시. (보드는 선택)'}
         </p>
       )}
-
-      {/* 카드 선택 그리드 */}
-      <CalcCard>
-        <div className="flex items-center justify-between">
-          <div className="flex gap-1">
-            {TARGET_TABS.filter(({ t }) => !(rangeMode && t === 'villain')).map(({ t, label }) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => deep.setTarget(t)}
-                className={[
-                  'h-7 rounded-input px-2.5 text-2xs font-semibold transition-colors',
-                  deep.currentTarget === t ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary border border-border-default',
-                ].join(' ')}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <button type="button" onClick={deep.clearAll} className="text-2xs font-semibold text-ink-muted hover:text-danger-light">초기화</button>
-        </div>
-        <CardGridPicker usedIds={deep.usedIds} onPick={deep.placeCard} />
-      </CalcCard>
 
       <DeepActionSheet
         open={sheetOpen}

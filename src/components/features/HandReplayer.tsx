@@ -29,7 +29,9 @@ function OutChip({ card }: { card: Card }) {
 function CardRow({ label, cards, hidden }: { label: string; cards: string[]; hidden?: boolean }) {
   if (cards.length === 0) return null;
   return (
-    <div className="flex items-center gap-2.5">
+    // data-hand-row: e2e 가 '상대 핸드가 뒷면인가' 를 잴 때 쓰는 고정 손잡이.
+    // 라벨 글자로 찾으면 문구를 바꾸는 순간 검사가 조용히 빗나간다(CLAUDE.md 셀렉터 규칙).
+    <div data-hand-row={label} className="flex items-center gap-2.5">
       <span className="w-14 shrink-0 text-xs font-semibold text-ink-muted">{label}</span>
       {hidden ? (
         <div className="flex flex-wrap gap-1.5">
@@ -49,7 +51,16 @@ function CardRow({ label, cards, hidden }: { label: string; cards: string[]; hid
   );
 }
 
-export default function HandReplayer({ replay }: { replay: ReplayData }) {
+/**
+ * @param revealAll 처음부터 전부 펼친 채로 시작한다(토글은 그대로 남는다).
+ *
+ * 🔴 2026-09-19 오너: "핸드 리플레이어 상대 핸드가 보이지 않아".
+ *   단계 공개는 **읽는 사람**을 위한 장치다 — 글을 보는 사람은 결과를 모르는 채로 추론해야 한다.
+ *   그런데 도구(HandReviewTool)에서는 카드를 **방금 자기가 넣은 사람**이 보고 있다.
+ *   자기가 입력한 상대 핸드가 뒷면으로 가려지니 '고장' 으로 읽혔다(실측: 눈감김 아이콘 2개 · 카드 0장).
+ *   그래서 기능을 없애지 않고 **기본값만 쓰는 쪽에 맞춘다** — 글은 단계별, 도구는 펼침.
+ */
+export default function HandReplayer({ replay, revealAll = false }: { replay: ReplayData; revealAll?: boolean }) {
   const flop = replay.board.slice(0, 3);
   const turn = replay.board.slice(3, 4);
   const river = replay.board.slice(4, 5);
@@ -65,7 +76,7 @@ export default function HandReplayer({ replay }: { replay: ReplayData }) {
   const total = n;
 
   const [step, setStep] = useState(0);
-  const [showAll, setShowAll] = useState(!hasBoard || total === 0); // 보드 없는 핸드는 스텝이 무의미
+  const [showAll, setShowAll] = useState(revealAll || !hasBoard || total === 0); // 보드 없는 핸드는 스텝이 무의미
   const on = (at: number) => showAll || step >= at;
   const nextLabel = step + 1 === flopAt ? '플랍 열기' : step + 1 === turnAt ? '턴 열기'
     : step + 1 === riverAt ? '리버 열기' : step + 1 === showdownAt ? '상대 핸드 공개' : '';

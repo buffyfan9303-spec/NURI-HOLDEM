@@ -1134,6 +1134,19 @@ export default function App() {
     catch (e) { toast.show(e instanceof Error ? e.message : '알림 설정 실패', 'error'); }
   };
   const dismissPushNudge = () => { setPushNudge(false); try { localStorage.setItem('nuri:push-nudge-dismissed', '1'); } catch { /* noop */ } };
+
+  // 본인인증 유도 배너 닫기(2026-09-19 오너: "x 눌러서 끌 수도 있게").
+  // ⚠ 값에 **닫은 계정 id** 를 넣는다 — 플래그('1')로 두면 공용 PC 에서 다음 손님이 로그인해도
+  //   배너가 안 뜬다(같은 함정을 App 이 keep-alive 캐시에서 이미 한 번 겪었다: key=계정).
+  //   기능은 그대로다 — 민감 기능은 VerifyGateSheet 가 여전히 막고, 내 정보>보안에 진입점이 남는다.
+  const [verifyNudgeOffFor, setVerifyNudgeOffFor] = useState<string | null>(() => {
+    try { return localStorage.getItem('nuri:verify-nudge-off'); } catch { return null; }
+  });
+  const dismissVerifyNudge = () => {
+    const id = user?.id ?? '';
+    setVerifyNudgeOffFor(id);
+    try { localStorage.setItem('nuri:verify-nudge-off', id); } catch { /* noop */ }
+  };
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -3536,14 +3549,28 @@ export default function App() {
         </div>
       )}
 
-      {/* 본인인증 유도 배너 (미인증·PortOne 설정 시) */}
-      {user && !user.verified && PORTONE_CONFIGURED && (
-        <button type="button" onClick={() => openMeCb('security')}
-          className="w-full flex items-center gap-2 bg-accent-300/[0.08] border-b border-accent-400/30 px-page-x py-2 text-left hover:bg-accent-300/[0.12] transition-colors">
-          <span className="text-accent-300" aria-hidden><Icon name="lock" size={14} /></span>
-          <span className="flex-1 text-2xs text-accent-300">휴대폰 본인인증이 필요합니다. 안전한 이용을 위해 인증해 주세요.</span>
-          <span className="shrink-0 text-2xs font-bold text-accent-300">인증하기 →</span>
-        </button>
+      {/* 본인인증 유도 배너 (미인증·PortOne 설정 시)
+          🔴 2026-09-19 오너: "글이 2줄이라 깨져서 나와 … x 눌러서 끌 수도 있게".
+            실측(전): 320·360·390 **전부 2줄**(span 32px = 줄높이 15.94 × 2), 390 에서는 둘째 줄이
+            `주세요.` 33px 짜리 **고아줄**이었다. 문장 뒤쪽('안전한 이용을 위해 인증해 주세요')은
+            바로 옆 '인증하기 →' 가 이미 말하고 있어 지워도 잃는 정보가 없다.
+          ⚠ 닫기를 넣으려면 셸이 button 이면 안 된다 — button 안의 button 은 무효 HTML 이라
+            중첩된 쪽 클릭이 브라우저마다 갈린다. 위 푸시 배너와 같은 문법(div + 형제 버튼 둘)으로 맞춘다.
+          ⚠ `truncate` 는 장식이 아니라 **한 줄 보증**이다. 문구가 길어지면 말줄임으로 끝나고
+            줄이 늘지 않는다(고아줄이 구조적으로 불가능해진다). */}
+      {user && !user.verified && PORTONE_CONFIGURED && verifyNudgeOffFor !== user.id && (
+        <div className="flex items-center gap-2 border-b border-accent-400/30 bg-accent-300/[0.08] px-page-x py-2">
+          <span className="shrink-0 text-accent-300" aria-hidden><Icon name="lock" size={14} /></span>
+          <button type="button" onClick={() => openMeCb('security')}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left transition-opacity hover:opacity-80">
+            <span className="min-w-0 flex-1 truncate text-2xs text-accent-300">휴대폰 본인인증이 필요합니다</span>
+            <span className="shrink-0 text-2xs font-bold text-accent-300">인증하기 →</span>
+          </button>
+          <button type="button" onClick={dismissVerifyNudge} aria-label="본인인증 안내 닫기"
+            className="hit relative shrink-0 px-1 text-ink-muted transition-colors hover:text-ink-secondary">
+            <Icon name="close" size={14} />
+          </button>
+        </div>
       )}
 
       {/* 본인인증 게이트 안내 시트(#31) — 미인증 회원이 민감 기능 시도 시 자동 표시 */}

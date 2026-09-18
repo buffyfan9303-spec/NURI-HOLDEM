@@ -101,7 +101,9 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
         <p className="text-2xs font-bold text-ink-secondary">리플레이 미리보기</p>
         {hasHand ? (
           <div className="flex justify-center">
-            <HandReplayer key={`${heroKey}|${villainKey}|${boardKey}`} replay={replay} />
+            {/* revealAll: 도구에서는 내가 넣은 카드를 내가 본다 — 단계 공개는 글을 '읽는' 쪽 장치다.
+                '단계별 보기' 토글은 그대로라 독자가 볼 화면도 여기서 확인할 수 있다. */}
+            <HandReplayer key={`${heroKey}|${villainKey}|${boardKey}`} replay={replay} revealAll />
           </div>
         ) : (
           <p className="rounded-aura border card-aura px-3 py-6 text-center text-2xs leading-relaxed text-ink-muted">
