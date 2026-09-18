@@ -21,14 +21,20 @@ const CSS = readFileSync(join(process.cwd(), 'src', 'index.css'), 'utf8');
 
 describe('InstallBanner 위치 — 하단 탭바 쪽으로 낮췄지만 공유 변수는 안 건드림', () => {
   it('모바일 bottom 이 종전 --tabbar-float(5.75rem) 대신 더 작은 4.5rem 을 쓴다', () => {
-    const m = SRC.match(/className="fixed bottom-\[([^\]]+)\]/);
+    // 2026-09-18: className 이 문자열 하나에서 **배열 join** 으로 바뀜다
+    //   (등장 애니메이션을 1회로 제한하고 오버레이 중에는 숨기려고 조건부 클래스를 붙였다).
+    //   이 검사의 요지는 '어떤 구문이냐' 가 아니라 **bottom 계산식이 무엇이냐** 라 구문 의존을 눈다.
+    const m = SRC.match(/fixed bottom-\[([^\]]+)\]/);
     expect(m, 'InstallBanner 의 fixed bottom 클래스를 찾지 못했다').toBeTruthy();
     expect(m![1], '--tabbar-float 를 그대로 쓰면 다시 35.5px 여백으로 돌아간다').not.toContain('var(--tabbar-float)');
     expect(m![1]).toContain('4.5rem');
   });
 
   it('safe-area(env)·삼성 보정(--tabbar-lift) 항은 그대로 물려받는다', () => {
-    const m = SRC.match(/className="fixed bottom-\[([^\]]+)\]/);
+    // 2026-09-18: className 이 문자열 하나에서 **배열 join** 으로 바뀜다
+    //   (등장 애니메이션을 1회로 제한하고 오버레이 중에는 숨기려고 조건부 클래스를 붙였다).
+    //   이 검사의 요지는 '어떤 구문이냐' 가 아니라 **bottom 계산식이 무엇이냐** 라 구문 의존을 눈다.
+    const m = SRC.match(/fixed bottom-\[([^\]]+)\]/);
     expect(m![1]).toContain('env(safe-area-inset-bottom)');
     expect(m![1]).toContain('var(--tabbar-lift)');
   });

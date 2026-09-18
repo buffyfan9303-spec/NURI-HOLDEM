@@ -3568,7 +3568,11 @@ export default function App() {
       {/* [F10] 설치 안내는 전면(페이지성) 오버레이 위에 남지 않는다 — 상세 본문·CTA·내 정보·매장을 가렸다.
           z-index 를 올리는 대신 하단 탭바와 **같은 오버레이 상태**를 쓴다(fullOverlayOpen).
           언마운트해도 안전한 이유: beforeinstallprompt 참조를 모듈 스코프에서 잡아 둔다(InstallBanner.tsx). */}
-      {!fullOverlayOpen && <InstallBanner />}
+      {/* ⚠ 언마운트하지 않는다 — 2026-09-18 오너: "탭을 이동할 때나 페이지를 이동할 때에
+          홈화면에 추가는 새로고침되거나 다른 탭에서도 같이 움직인다".
+          `{!fullOverlayOpen && <InstallBanner/>}` 였기 때문에 오버레이·탭을 오갈 때마다 다시
+          마운트되며 등장 애니메이션이 재생됐다. 이제 자리를 지킨 채 보이기만 끈다. */}
+      <InstallBanner hidden={fullOverlayOpen} />
 
       <TabBar tabs={pcTabs} active={navActive} onChange={gotoTabOrEvent} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}

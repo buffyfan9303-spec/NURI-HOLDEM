@@ -1,7 +1,7 @@
 // src/components/atoms/InstallBanner.tsx
 // PWA 홈 화면 설치 안내 배너. beforeinstallprompt 지원 브라우저에서만 노출.
 // 이미 설치(standalone)했거나 닫은 적 있으면 표시하지 않는다.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface BIPEvent extends Event {
   prompt: () => Promise<void>;
@@ -26,7 +26,16 @@ function suppressed(): boolean {
   } catch { return false; }
 }
 
-export default function InstallBanner() {
+/** 등장 애니메이션을 **한 번만** 돌리기 위한 모듈 스코프 기억.
+ *  컴포넌트가 다시 마운트돼도(=화면을 오갔어도) 두 번째부터는 미끄러져 들어오지 않는다. */
+let didEnter = false;
+
+/** @param hidden 전면 오버레이가 떠 있어 잠시 물러나야 하는가.
+ *  ⚠ 예전에는 App 이 `{!fullOverlayOpen && <InstallBanner/>}` 로 **언마운트**했다.
+ *    그래서 내 매장·상세를 갔다 오거나 탭을 옮길 때마다 다시 마운트되며 `animate-slide-up` 이
+ *    재생돼, 오너 눈에는 "새로고침되거나 다른 탭에서도 같이 움직이는" 것으로 보였다(2026-09-18).
+ *    이제는 자리를 지킨 채 **보이기만 끈다** — 위치도 애니메이션도 그대로다. */
+export default function InstallBanner({ hidden: covered = false }: { hidden?: boolean } = {}) {
   const [evt, setEvt] = useState<BIPEvent | null>(deferred);
   // 닫힘은 localStorage 에도 남으므로(아래 dismiss) 오버레이로 언마운트됐다 돌아와도 되살아나지 않는다.
   const [hidden, setHidden] = useState(suppressed);
@@ -46,6 +55,12 @@ export default function InstallBanner() {
     try { localStorage.setItem(DISMISS_KEY, '1'); } catch { /* noop */ }
   };
 
+  // 이번 마운트에서 등장 애니메이션을 돌릴지 — 앱 수명 동안 최초 1회만.
+  //   렌더 중에 모듈 변수를 고치면 안 된다(react-hooks) — 기억은 ref 로 뜨고 표시는 이펙트에서 한다.
+  const enterRef = useRef(!didEnter);
+  const enter = enterRef.current;
+  useEffect(() => { didEnter = true; }, []);
+
   if (hidden || !evt) return null;
   return (
     // 모바일: 하단 탭바 쪽으로 더 내린다(오너 지시 2026-09-14: "하단 메뉴바쪽으로 조금 더") — PC는 기존 위치.
@@ -55,7 +70,18 @@ export default function InstallBanner() {
     //   실측(390×844, safe-area 0): 탭바 top=769.75px. 기존 배너 bottom=734.25px(탭바까지 35.5px 여백) →
     //   4.5rem 로 낮추면 bottom≈755.5px(탭바까지 14.25px 여백) — 탭 버튼 히트 영역(top 770.75px)과
     //   14px 넘게 떨어져 있어 덮지 않는다. "조금 더"의 상한("탭바 바로 위에 붙는 정도")을 넘지 않는 선.
-    <div className="fixed bottom-[calc(4.5rem_+_var(--tabbar-lift)_+_max(env(safe-area-inset-bottom),12px))] lg:bottom-3 left-1/2 z-[60] w-[min(92%,28rem)] -translate-x-1/2 animate-slide-up">
+    <div
+      aria-hidden={covered || undefined}
+      className={[
+        'fixed bottom-[calc(4.5rem_+_var(--tabbar-lift)_+_max(env(safe-area-inset-bottom),12px))] lg:bottom-3 left-1/2 z-[60] w-[min(92%,28rem)] -translate-x-1/2',
+        // 등장은 처음 한 번만 — 다시 마운트돼도 미끄러져 들어오지 않는다(위 didEnter 주석).
+        enter ? 'animate-slide-up' : '',
+        // 전면 오버레이가 떠 있으면 **자리를 지킨 채** 물러난다. 언마운트하지 않으므로 돌아올 때 안 튄다.
+        //   visibility 까지 끄는 이유: opacity 0 만 주면 키보드 포커스가 안 보이는 버튼에 들어간다.
+        covered ? 'pointer-events-none invisible opacity-0' : 'opacity-100',
+        'transition-opacity duration-[var(--dur-fast)]',
+      ].join(' ')}
+    >
       {/* 🔴 2026-09-18 오너: "저부분은 도대체 그냥 UI/UX가 없잖아 그리고 너무 커 위아래로
           설치 위아래 갭도 크고 아이콘도 이상하고"
 
@@ -69,15 +95,15 @@ export default function InstallBanner() {
             · 아우라를 입혀 띄우개만 떠 보이게 했다(data-aura micro · 우상단 블러 원).
           ⚠ 위치 계산(bottom calc)은 그대로다 — InstallBanner.position.test.ts 가 잠그고 있다. */}
       <div data-aura data-aura-level="micro" data-aura-variant="violet"
-        className="relative flex items-center gap-2.5 overflow-hidden rounded-card border border-accent-400/40 bg-surface-float/95 px-3 py-1.5 shadow-dialog backdrop-blur">
+        className="relative flex items-center gap-3 overflow-hidden rounded-card border border-accent-400/40 bg-surface-float/95 px-3.5 py-2 shadow-dialog backdrop-blur">
         <span aria-hidden className="quick-blob quick-blob-violet" />
         {/* 앱 아이콘 타일 — 휴대폰 홈화면의 아이콘처럼 **둔덕한 사각 테두리**를 두른다(2026-09-18 오너).
             '이걸 홈에 놓는다' 를 그림으로 말해 주는 장치라 테두리가 있어야 아이콘으로 읽힌다. */}
-        <span aria-hidden className="relative z-10 grid h-[36px] w-[36px] shrink-0 place-items-center rounded-[10px] border border-border-strong bg-surface-high shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]">
-          <img src="/brand/nuri-holdem-symbol.svg" alt="" width={24} height={24} className="h-[24px] w-[24px]" />
+        <span aria-hidden className="relative z-10 grid h-[42px] w-[42px] shrink-0 place-items-center rounded-[12px] border border-border-strong bg-surface-high shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]">
+          <img src="/brand/nuri-holdem-symbol.svg" alt="" width={28} height={28} className="h-[28px] w-[28px]" />
         </span>
         <div className="relative z-10 min-w-0 flex-1 leading-tight">
-          <p className="truncate text-xs font-extrabold text-ink-primary">홈 화면에 추가</p>
+          <p className="truncate text-sm font-extrabold text-ink-primary">홈 화면에 추가</p>
           {/* 설명줄은 오너 지시(2026-09-18)로 없다. 제목 한 줄로 충분하다. */}
         </div>
         {/* 보이는 높이 30px, 누르는 높이는 tap-y-44 가 위아래 7px 씩 보태 44px. */}
@@ -86,7 +112,7 @@ export default function InstallBanner() {
             기존 유틸([data-aura])을 쓴다 — 새 그림자를 만들지 않고, 고대비·강제색에서 자동으로 물러난다. */}
         <button type="button" onClick={install}
           data-aura data-aura-level="micro" data-aura-variant="violet"
-          className="tap-y-44 relative z-10 inline-flex h-[30px] shrink-0 items-center rounded-[8px] bg-accent-300 px-3 text-2xs font-bold leading-none text-white transition-colors hover:bg-accent-400">
+          className="tap-y-44 relative z-10 inline-flex h-[34px] shrink-0 items-center rounded-[9px] bg-accent-300 px-3.5 text-xs font-bold leading-none text-white transition-colors hover:bg-accent-400">
           설치
         </button>
         {/* 34x34 + 세로 보태(tap-y-44). ⚠ .hit 는 금지 — 44x44 가 왼쪽 '설치' 버튼 위로 번져

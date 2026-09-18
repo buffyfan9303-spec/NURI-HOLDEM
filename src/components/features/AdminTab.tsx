@@ -1657,8 +1657,14 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
         바가 top 804 → 204 로 **같이 밀렸다**(없으면 804 고정). 화면에 붙어 있어야 할 정산 바가
         본문과 함께 흘러간 것 — 합성 힌트 하나로 기능이 사라지는 부류라 근본에서 뗀다.
         상단 안전영역: 루트가 아니라 헤더에 얹는다(루트에 얹으면 sticky top-0 이 다시 상태바로 들어간다).
-        높이는 header-h + inset 으로 키워야 border-box 에서 내용 칸이 안 줄어든다. */
-    <div data-scroll-lock className="fixed inset-0 z-[60] bg-surface-base overflow-y-auto animate-fade-in">
+        높이는 header-h + inset 으로 키워야 border-box 에서 내용 칸이 안 줄어든다.
+        ⚠ 이 전체화면은 **대화상자**다 — role/aria-modal 을 안 주면 접근성 트리에서 그냥 div 다.
+        같은 부류인 VenuePage·atoms/Modal 은 둘 다 role="dialog" 를 쓴다 — 여기만 사이에 빠져 있었다.
+        실제로 문제가 됐다: 2026-09-18 연동성 크롤이 이 오버레이를 대화상자로 알아보지 못해
+        관리자 패널 탐색이 그 지점에서 통째로 막혔다. 자동화가 막혔다는 것은 보조기술 사용자도
+        같은 곳에서 막힌다는 뜻이다(닫기·Escape 동작 자체는 멀줸했다). */
+    <div data-scroll-lock role="dialog" aria-modal="true" aria-label={`${venueName} 장부/통계`}
+      className="fixed inset-0 z-[60] bg-surface-base overflow-y-auto animate-fade-in">
       <header className="sticky top-0 z-10 h-[calc(theme(spacing.header-h)+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
         <button type="button" onClick={onClose} className="text-sm font-semibold text-ink-secondary hover:text-ink-primary">← 닫기</button>
         <span className="text-sm font-bold text-ink-primary truncate">{venueName} · 장부/통계</span>
