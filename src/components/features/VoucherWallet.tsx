@@ -162,9 +162,16 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
     .map(([vid, g]) => ({ vid, name: g.name, label: voucherGroupLabel(g.name), count: [...g.stacks.values()].reduce((n, s) => n + s.ids.length, 0), stacks: [...g.stacks.values()] }))
     .sort((a, b) => a.label.localeCompare(b.label, 'ko'));
 
+  // 🔴 2026-09-19 오너: "다 박스 안에 있는데 **내 매장이용권만 밖에 있어** — 동일하게 안쪽으로".
+  //   [이용권·출석] 시트(compact)의 다른 두 섹션(QR · 자주 가는 매장 이용권)은
+  //   `rounded-aura border card-aura p-3` 박스 **안에** 머리글이 들어 있는데 이 섹션만 맨몸이었다.
+  //   머리글이 박스 밖에 뜨고 빈 상태 카드만 박스로 보여서 "혼자 밖에 있는" 모양이 됐다.
+  // ⚠ compact 일 때만 박스를 씌운다. 대시보드(내 정보)는 형제 섹션들도 전부 맨몸이라
+  //   거기서 박스를 씌우면 이 섹션만 혼자 튄다 — **같은 화면 안에서 같아 보이는 것**이 기준이다.
+  const boxed = compact;
   const body = (
     <>
-      <section className="space-y-2">
+      <section className={boxed ? 'rounded-aura border card-aura p-3 space-y-2' : 'space-y-2'}>
         <Head icon="ticket" tone="cyan" title="내 매장이용권" count={active.length} unit="장" />
         {/* 본인인증 게이트를 '사용 시점'이 아니라 '지갑을 여는 시점'에 알린다.
             왜: 서버 트리거(trg_voucher_verified)가 status='used' 전이를 막는데,
@@ -204,7 +211,11 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
                 <button type="button" onClick={load} className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-1 text-2xs font-bold text-ink-primary">다시 시도</button>
               </div>
             )}
-            {venueGroups.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="ticket" />} title="보유한 매장이용권이 없습니다." /></div>
+            {/* ⚠ 박스 안에서는 빈 상태에 **또 박스를 두르지 않는다** — 테두리가 겹쳐 두 겹으로 보인다.
+                바로 위 '자주 가는 매장 이용권' 도 박스 안에서는 글 한 줄로만 비었음을 말한다(같은 문법). */}
+            {venueGroups.length === 0 ? (boxed
+              ? <EmptyState icon={<Icon name="ticket" />} title="보유한 매장이용권이 없습니다." />
+              : <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="ticket" />} title="보유한 매장이용권이 없습니다." /></div>)
             : <div className="space-y-3">{venueGroups.map((g) => {
               // 머리글이 '{매장명} 매장이용권'을 통째로 말한다(오너 지시 #19).
               // truncate 가 아니라 줄바꿈인 이유: 375px 에서 긴 매장명을 한 줄로 자르면

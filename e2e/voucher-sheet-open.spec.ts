@@ -175,3 +175,65 @@ test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전�
   // 만료: i=4(09-20) → i=2(09-30) → i=1(12-31) → i=0,3(무기한)
   expect(sent.map((id) => id.slice(-2)), '만료 임박순이 아니라 발급 최신순으로 나갔다').toEqual(['04', '02', '01']);
 });
+
+// ── 시트 안 섹션이 **전부 같은 박스**인가 ──────────────────────────────────────
+//
+// 🔴 2026-09-19 오너: "다 박스 안에 있는데 **내 매장이용권만 밖에 있어** — 동일하게 안쪽으로".
+//   QR · 자주 가는 매장 이용권은 `rounded-aura border card-aura p-3` 박스 안에 머리글이 들어 있는데
+//   VoucherWallet(내 매장이용권)만 맨몸이라 머리글이 박스 밖에 뜨고 빈 상태 카드만 박스로 보였다.
+// ⚠ '테두리가 있나' 만 보면 안 된다 — 빈 상태 카드에도 테두리가 있어서 그것만으로는 통과한다.
+//   **머리글(h2/h3)이 박스 안에 있는가**를 봐야 오너가 본 그 차이를 잡는다.
+test('🔴 시트 안 섹션이 전부 같은 박스 — 머리글이 박스 밖으로 새지 않는다', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 390, height: 900 });
+  // ⚠ 킬스위치와 보유 목록까지 목킹해야 **지갑 섹션이 실제로 그려진다.** 안 그러면 QR·자주가는
+  //   두 섹션만 잡혀 이 검사가 조용히 통과한다 — 처음에 실제로 그랬다(아래 toContain 가드가 잡았다).
+  await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); localStorage.setItem('nuri:identity-gate', 'on'); } catch { /* 차단 환경 */ } },
+    [KEY, JSON.stringify(FAKE)] as [string, string]);
+  const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+  await page.route(/\/auth\/v1\/user/, (r) => r.fulfill(json(FAKE.user)));
+  await page.route(/\/auth\/v1\/token/, (r) => r.fulfill(json(FAKE)));
+  await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
+    id: FAKE.user.id, name: 'E2E', nickname: 'E2E', role: 'user', status: 'active',
+    activity_points: 0, created_at: FAKE.user.created_at,
+  })));
+  await page.route(/\/rest\/v1\/app_settings\?.*identity_voucher_enabled/, (r) => r.fulfill(json({ value: 'on' })));
+  await page.route(/\/rest\/v1\/store_vouchers/, (r) => r.fulfill(json([0, 1, 2].map(voucherRow))));
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  await page.locator('header').getByRole('button', { name: '이용권 · 출석', exact: true }).click({ timeout: 15_000 });
+  await page.waitForTimeout(1200);
+
+  const rows = await page.evaluate(() => {
+    const sheet = document.querySelector('[role="dialog"]');
+    if (!sheet) return null;
+    // ⚠ `section` 안의 머리글만 본다. 시트 **자신의 제목**('이용권 · 출석')은 섹션이 아니라
+    //   모달 헤더라 박스가 없는 게 맞다 — 처음에 그것까지 세어 거짓 실패가 났다.
+    return [...sheet.querySelectorAll('section h2, section h3')].map((h) => {
+      const title = (h.textContent || '').trim().slice(0, 24);
+      // 머리글에서 위로 올라가며 '박스'(테두리+둥근모서리)를 찾는다. 시트 자체는 제외한다.
+      let n: HTMLElement | null = h.parentElement;
+      let boxed = false;
+      while (n && n !== sheet) {
+        const cs = getComputedStyle(n);
+        if (parseFloat(cs.borderTopWidth) > 0 && parseFloat(cs.borderTopLeftRadius) > 8) { boxed = true; break; }
+        n = n.parentElement;
+      }
+      return { title, boxed };
+    });
+  });
+
+  expect(rows, '시트를 못 찾았다 — 잴 것이 없으면 통과가 아니다').not.toBeNull();
+  // 🔴 **오너가 지적한 그 섹션이 실제로 잡혔는가.** 이게 없으면 지갑이 안 그려진 날
+  //   나머지 두 섹션만 보고 조용히 통과한다 — 오늘 여러 번 만난 '빈 통과' 부류다.
+  expect(
+    rows!.map((r) => r.title),
+    "'내 매장이용권' 섹션을 못 찾았다 — 이 검사가 지금 그 섹션을 안 보고 있다",
+  ).toContain('내 매장이용권');
+  const 밖 = rows!.filter((r) => !r.boxed).map((r) => r.title);
+  expect(
+    밖,
+    '박스 밖에 있는 머리글이 있다 — 한 섹션만 다르게 보인다:\n' + 밖.join('\n')
+    + '\n→ 시트(compact)에서는 모든 섹션이 `rounded-aura border card-aura p-3` 를 쓴다.',
+  ).toEqual([]);
+});
