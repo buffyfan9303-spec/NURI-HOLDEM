@@ -1209,7 +1209,10 @@ function VenuesSection({
           <h2 className="text-sm font-bold text-ink-primary">{VENUE_FILTERS.find((f) => f.key === kindFilter)?.label ?? '전체'}</h2>
           <span className="text-2xs font-semibold tabular-nums text-ink-muted">{filtered.length}개</span>
           {/* 정렬 안내 — 실제 정렬(인증 → 유료광고 → 팔로워순)과 일치 */}
-          <span className="ml-auto flex shrink-0 items-center gap-1.5 whitespace-nowrap text-2xs text-ink-muted">
+          {/* ⚠ shrink-0 + whitespace-nowrap 이라 좁아져도 줄지도 접히지도 않아, 390·200% 에서
+              "→ 팔로워순" 이 뷰포트 밖으로 나갔다(실측 2026-09-18). 이건 안내 문구이므로
+              접히는 편이 사라지는 편보다 낫다 — 접을 수 있게 풀어 준다. */}
+          <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5 text-2xs text-ink-muted">
             <span>정렬:</span>
             <span className="text-accent-300 font-semibold">인증</span>
             <span className="text-border-strong">→</span>

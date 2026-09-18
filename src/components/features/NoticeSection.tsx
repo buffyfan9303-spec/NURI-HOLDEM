@@ -179,7 +179,10 @@ export default function NoticeSection({
                 className="inline-flex h-11 shrink-0 items-center gap-0.5 rounded-input px-2 text-2xs font-semibold tabular-nums text-ink-secondary transition-colors hover:bg-surface-high/50">
                 {/* ⚠ 회전(transform) 대신 아이콘을 바꾼다 — 이 섹션은 'transform 애니메이션 0개'가
                     계약이다(e2e/notice-static: 전광판 재발 방지). 회전 트랜지션도 그 계수에 잡힌다. */}
-                {open ? '접기' : `전체 ${ranked.length}건`}
+                {/* ⚠ 360 에서 이 라벨(71.7px)이 제목 칸을 101.5px 까지 밀어 "🛒 중고장터…" 4자만 남겼다
+                    (실측 2026-09-18 · 필요 폭 ~230). 좁은 폭에서는 **숫자만** 남긴다 —
+                    버튼의 aria-label 이 "공지 전체 N건 펼치기" 를 그대로 말하므로 정보는 안 사라진다. */}
+                {open ? '접기' : (<><span className="hidden min-[400px]:inline">전체 </span>{ranked.length}<span className="hidden min-[400px]:inline">건</span></>)}
                 <Icon name={open ? 'chevron-up' : 'chevron-down'} size={12} />
               </button>
             )}
