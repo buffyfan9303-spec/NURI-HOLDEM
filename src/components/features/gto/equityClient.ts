@@ -2,8 +2,8 @@
 // 워커 1개를 지연 생성해 요청을 id 로 짝짓는다. 워커 생성 실패·런타임 사망 시
 // 기존 동기 엔진으로 폴백(결과 동일, 성능만 이전 수준) — 기능 회귀 0 원칙.
 import {
-  computeEquity, computeEquityVsRange, computeRangeVsRange, computeOuts,
-  type EquityResult, type OutsResult, type WeightedCombo,
+  computeEquity, computeEquityVsRange, computeRangeVsRange, computeOuts, computeEquityMulti,
+  type EquityResult, type OutsResult, type WeightedCombo, type MultiEquityResult,
 } from './equityEngine';
 import type { Card } from './gto.types';
 
@@ -49,6 +49,18 @@ function post<T>(msg: Record<string, unknown>, fallback: () => T): Promise<T> {
 export function equityAsync(hero: [Card, Card], villain: [Card, Card], board: Card[], iterations?: number): Promise<EquityResult> {
   return post({ kind: 'equity', hero, villain, board, iterations },
     () => computeEquity(hero, villain, board, iterations));
+}
+
+/** 워커 없는 기기(생성 실패·사망)에서 동기 폴백이 메인스레드를 잡는 시간 상한 — 6인 10,000회는 1.3s 라 낮춘다. */
+export const MULTI_FALLBACK_ITERATIONS = 2500;
+
+/**
+ * 멀티웨이(빌런 A~E). 워커가 없으면 **시행수를 낮춘** 동기 폴백 — 결과 모양은 같고 오차만 커진다
+ * (호출부는 `iterations` 로 표본 수를 화면에 적으니 거짓말이 되지 않는다).
+ */
+export function equityMultiAsync(hero: [Card, Card], villains: Card[][], board: Card[], iterations?: number): Promise<MultiEquityResult> {
+  return post({ kind: 'multi', hero, villains, board, iterations },
+    () => computeEquityMulti(hero, villains, board, Math.min(iterations ?? MULTI_FALLBACK_ITERATIONS, MULTI_FALLBACK_ITERATIONS)));
 }
 
 export function equityVsRangeAsync(hero: [Card, Card], range: WeightedCombo[], board: Card[], iterations?: number): Promise<EquityResult> {

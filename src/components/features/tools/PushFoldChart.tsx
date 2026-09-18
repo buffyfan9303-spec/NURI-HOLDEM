@@ -93,15 +93,27 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
         </div>
         <input type="range" min={0} max={NASH_STACKS.length - 1} step={1} value={stackIdx}
           onChange={(e) => setStack(NASH_STACKS[Number(e.target.value)])}
-          aria-label="스택 깊이(bb)" aria-valuetext={`${stack}bb`}
+          aria-label="스택 깊이(bb)" aria-valuetext={`${stack}bb${hasData ? '' : ' — 이 자리는 데이터 없음'}`}
           className="block w-full h-[44px] accent-accent-300 cursor-pointer" />
+        {/* 눈금 — 2026-09-19 오너 "10BB 이하로 내려가면 차트가 색이 아무것도 채워져 있지 않아": 격리 구간(2~6bb · 뒤 2명+)의
+            눈금이 7~20 과 똑같이 생겨 **고르기 전에는** 데이터가 없는 줄 알 수 없었다. 현재 자리·보기 기준으로 표가 없는 눈금을
+            흐리게 + 점선 밑줄로 미리 구분한다(SB 는 2bb 부터 정상이라 자리를 바꾸면 표시도 바뀐다).
+            ⚠ 누르지 못하게 막지 않는다 — 눌러야 '왜 없는지' 를 읽는다.
+            ⚠ aria-disabled 를 **붙이지 않는다**(실측 2026-09-19): Playwright 의 click 이 aria-disabled 를 '비활성' 으로 보고
+              60초 동안 기다리다 죽었다 — 자동화·보조기기가 같은 해석을 한다. 이 눈금은 aria-hidden 컨테이너 안의 장식이고
+              보조기기용 상태는 위 슬라이더의 aria-valuetext("… 데이터 없음")가 이미 말한다. */}
         <div className="flex justify-between" aria-hidden="true">
           {NASH_STACKS.map((s) => {
             const on = s === stack;
+            const has = hasNashRange(effView, k, s, NASH_BIG_ANTE);
             return (
               <button key={s} type="button" tabIndex={-1} onClick={() => setStack(s)}
+                data-stack={s} data-has-data={has ? 'true' : 'false'}
+                title={has ? undefined : `${s}bb — 이 자리(${pos.label})는 데이터가 없습니다. 눌러서 이유 보기`}
                 className={['h-6 flex-1 min-w-0 rounded-[6px] text-2xs tabular-nums leading-none whitespace-nowrap transition-colors',
-                  on ? 'font-bold text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                  on ? 'font-bold text-accent-300'
+                    : has ? 'text-ink-muted hover:text-ink-secondary'
+                      : 'text-ink-muted/45 underline decoration-dotted underline-offset-2 hover:text-ink-muted'].join(' ')}>
                 {s}
               </button>
             );
@@ -123,25 +135,30 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
       {hasData
         ? <RangeMatrix13 actions={actions} initialSel={highlight} />
         : (
-          <div role="status" data-testid="pushfold-no-data" className="space-y-1.5 rounded-input border border-dashed border-border-subtle px-3 py-6 text-center text-xs text-ink-muted">
-            <p>이 깊이({stack}bb)는 데이터가 없습니다. 가까운 값으로 대체하지 않습니다 — 다른 스택을 고르세요.</p>
-            {/* ⚠ 왜 비었는지 말한다. 예전엔 '없습니다' 만 떠서, 유저는 **표가 원래 없는 것**인지
-                **일시적으로 내린 것**인지 알 수 없었다. 2~6BB 의 뒤 인원 2명 이상은 값이 틀린 것이
-                확인돼(포지션 단조성 역전) 2026-09-18 에 내렸다 — 틀린 조언보다 빈 칸이 낫다는 판단이다.
-                SB(뒤 1명)와 7BB 이상은 검증돼 그대로 쓴다. `nash.data.ts` 의 NASH_ANTE_QUARANTINE 참고. */}
-            {isNashQuarantined(stack, NASH_BIG_ANTE, k) && (
-              <p className="text-2xs">
-                이 구간(2~6bb · 뒤 2명 이상)은 값이 틀린 것이 확인돼 <b>일시적으로 내렸습니다</b>.
-                표를 다시 만들면 돌아옵니다. 그동안 <b>SB(뒤 1명)</b>와 <b>7bb 이상</b>은 그대로 쓰실 수 있어요.
-              </p>
+          // 왜 비었는지가 **첫 줄**이다(2026-09-19 리드): 예전엔 회색 점선 '빈 상태' 모양에 이유가 둘째 문단이라
+          // 오너가 "색이 아무것도 없다" 로만 읽었다. 정보 톤(빨강 아님 — 사용자 잘못이 아니다)으로 올린다.
+          // 2~6BB 의 뒤 인원 2명 이상은 값이 틀린 것이 확인돼(포지션 단조성 역전) 2026-09-18 에 내렸다 —
+          // 틀린 조언보다 빈 칸이 낫다는 판단이다. `nash.data.ts` 의 NASH_ANTE_QUARANTINE 참고.
+          <div role="status" data-testid="pushfold-no-data" className="rounded-input border border-aura-300/40 bg-aura-300/10 px-3 py-3 text-left text-xs text-ink-primary">
+            {isNashQuarantined(stack, NASH_BIG_ANTE, k, effView) ? (
+              <>
+                <p className="font-bold break-keep">{pos.label} · {stack}bb — 이 표는 값이 틀린 것이 확인돼 <b className="text-aura-300">일시적으로 내렸습니다</b>.</p>
+                <p className="mt-1 text-2xs leading-relaxed text-ink-secondary break-keep">
+                  가까운 깊이로 대체하지 않습니다. 눈금에서 점선으로 표시된 깊이(
+                  {NASH_STACKS.filter((s) => !hasNashRange(effView, k, s, NASH_BIG_ANTE)).join('·')}bb)가 그 구간이고,
+                  <b> SB(뒤 1명)</b>와 <b>{NASH_STACKS.find((s) => hasNashRange(effView, k, s, NASH_BIG_ANTE)) ?? 7}bb 이상</b>은 그대로 쓰실 수 있어요. 표를 다시 만들면 돌아옵니다.
+                </p>
+              </>
+            ) : (
+              <p className="font-bold break-keep">{pos.label} · {stack}bb — 이 깊이는 데이터가 없습니다. 가까운 값으로 대체하지 않습니다.</p>
             )}
           </div>
         )}
 
+      {/* 손님용 한 줄만 남긴다(리드 2026-09-19: 알고리즘·에퀴티 회수는 개발자용 설명). '생성기 재현 필요' 는
+          e2e(gto-tab-verify)·gtoContract 가 화면에서 보는 문구라 그대로 둔다 — 근거 상세는 nash.data.ts 머리말. */}
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
-        ※ 자체 계산 Nash 균형(fictitious play, 첫 진입 올인·단일 콜러 모델) — 몬테카를로 에퀴티 4만회/쌍 기반.
-        부분 채움 셀은 혼합 전략(그 빈도만큼만 올인). 빅 앤티(BB 앤티 1bb) 기준.
-        <br />기존 자체 생성 데이터 · <b>생성기 재현 필요</b>(생성 스크립트가 저장소에 없어 같은 값을 다시 만들 수 없습니다).
+        ※ 자체 계산 Nash(첫 진입 올인 · 단일 콜러) · 빅 앤티 기준 · 부분 채움 셀 = 그 빈도만큼 올인 · <b>생성기 재현 필요</b>
       </p>
     </CalcCard>
   );

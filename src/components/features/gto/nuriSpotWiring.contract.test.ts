@@ -68,8 +68,17 @@ describe('F11 · 에퀴티 이펙트의 세대와 재계산 키', () => {
   });
 
   it('재계산 키가 빌런 카드를 포함한다 — canonicalSpotKey 는 빌런을 빼므로 쓰지 않는다', () => {
-    expect(code).toContain('equityCardsKey(hb.ids.hero, hb.ids.villain, hb.ids.board)');
+    // 2026-09-19 멀티웨이: 키는 **남아 있는 상대 전원**(liveVillains)의 카드로 만든다. 상대마다 ';' 로 끝맺어
+    // 상대 수·누가 빈손인지·누가 폴드로 빠졌는지까지 키가 바뀐다 — 안 그러면 B 를 지워도 옛 승률이 남는다(F11 재발).
+    expect(code).toContain("equityCardsKey(hb.ids.hero, live.map((v) => `${v.cards.join('')};`), hb.ids.board)");
+    expect(code).toMatch(/const live = useMemo\(\(\) => liveVillains\(spot\), \[spot\]\);/);
     expect(code).not.toContain('canonicalSpotKey');
+  });
+
+  it('멀티웨이 엔진을 부르고, 상대 카드가 비어도 계산한다(무작위 핸드) — 2인 전용 equityAsync 로 되돌리지 않는다', () => {
+    expect(m![0]).toContain('equityMultiAsync(h, villains, hb.boardCards, 10000)');
+    expect(m![0]).not.toContain('hb.villainCards.length === 2');
+    expect(code).not.toMatch(/\bequityAsync\(/);
   });
 });
 
@@ -91,5 +100,27 @@ describe('🔴 표가 말하지 않는 갈래를 0% 로 그리지 않는다 (202
     const label = report.match(/aria-label=\{`기준 빈도 — \$\{text\}`\}/);
     expect(label, 'aria-label 형태가 바뀌었다 — 계약을 같이 고쳐라').not.toBeNull();
     expect(report, 'text 가 absent 를 반영하지 않는다').toMatch(/silent\(k\) \? '표에 없음'/);
+  });
+});
+
+// ── 빌런 B~E (2026-09-19) — 배선 셋 ──────────────────────────────────────────
+describe('빌런 B~E 배선', () => {
+  it('슬롯 수는 스팟(자리 목록)이 정본이다 — hb.setExtraCount 가 spot.extra.length 를 따라간다', () => {
+    // 이게 빠지면 자리 단계에서 상대를 추가해도 카드 단계에 슬롯이 안 생기고, 지우면 유령 슬롯의 카드가 승률에 남는다
+    expect(code).toMatch(/if \(extraSlots !== spot\.extra\.length\) setExtraCount\(spot\.extra\.length\);/);
+  });
+
+  it('내 선택 아래 판정 줄(VerdictLine)은 evaluation 을 그대로 읽는다 — 다시 계산하지 않는다(정본은 하나)', () => {
+    const m = code.match(/function VerdictLine\([\s\S]*?\n\}/);
+    expect(m, 'VerdictLine 을 찾지 못했다').not.toBeNull();
+    expect(m![0]).not.toContain('evaluateSpot(');
+    expect(m![0]).toContain('VERDICT_LABEL[v]');
+    // 리포트의 판정 배지와 같은 조건 — 내 선택이 없으면 판정할 것도 없다
+    expect(m![0]).toContain('if (spot.heroAction === null) return null;');
+  });
+
+  it('공유 스팟을 읽을 때 가려진 상대는 B~E 카드까지 비운다(이중 방어) — A 만 비우면 B 의 카드가 새어 나간다', () => {
+    const api = readFileSync(join(__dirname, '../../../api/spots.ts'), 'utf-8');
+    expect(api).toMatch(/if \(!data\.reveal_villain\) \{ spot\.villain = \[\]; spot\.extra = spot\.extra\.map\(\(v\) => \(\{ \.\.\.v, cards: \[\] \}\)\); \}/);
   });
 });

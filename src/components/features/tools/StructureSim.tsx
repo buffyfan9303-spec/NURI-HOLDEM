@@ -17,9 +17,13 @@ export default function StructureSim() {
     const avg = players > 0 ? Math.round(total / players) : 0;
     const startDepth = startBB > 0 ? Math.round(start / startBB) : 0;
     const totalBB = startBB > 0 ? Math.round(total / startBB) : 0;
-    // 시계열: 시작 BB(=스택/시작깊이)에서 레벨마다 1.4x 상승 가정 → 레벨 N의 평균 스택 깊이(bb).
+    // 시계열: 시작 BB(사용자가 입력한 블라인드 값 그 자체)에서 레벨마다 1.4x 상승 가정 → 레벨 N의 평균 스택 깊이(bb).
     // 평균 스택은 탈락 없이 총칩/인원(리바인 포함) 고정으로 두는 단순 추정.
-    const bb1 = startBB > 0 ? start / startBB : 0;
+    // 🔴 2026-09-19 GTO 감사 [high]: 예전엔 `start / startBB` 였다 — 그건 "시작 BB" 를 블라인드 값이 아니라
+    //   나누는 분모로 써서 **깊이(80bb)를 다시 계산**한 것이다(위 startDepth 와 같은 식). 그 값을 다시 "BB 크기"로
+    //   불러 1.4x 씩 복리로 키우니 LV1 부터 BB=100·깊이=400bb 처럼 화면 위쪽(시작 깊이 80bb)과 5배 어긋났다.
+    //   시작 BB 는 사용자가 직접 넣은 값(startBB) 그 자체를 써야 한다 — 재계산하지 않는다.
+    const bb1 = startBB;
     const timeline: { lv: number; bb: number; depth: number; min: number }[] = [];
     if (bb1 > 0 && avg > 0) {
       for (let n = 1; n <= 12; n++) {

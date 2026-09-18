@@ -973,3 +973,100 @@ describe('도달 범위 — 고친 뒤 실제로 몇 장을 보는가', () => {
     expect(makeQuiz(ev.drill.mode, ev.drill.key).key).toBe(ev.drill.key);
   });
 });
+
+// ── 빌런 B~E (2026-09-19) — 멀티웨이는 표를 억지로 맞추지 않는다 ──────────────
+// 리드 결정: 상대가 둘 이상 살아 있는 팟은 '수학 참고'(정오 판정 없음)가 정직한 답이다.
+describe('빌런 B~E — 멀티웨이 팟과 표의 경계', () => {
+  const openBy = (pos: 'CO' | 'HJ' | 'SB' | 'UTG', sizeBb = 2.5) =>
+    ({ street: 'preflop' as const, actor: 'villain' as const, pos, type: 'raise' as const, sizeBb });
+  const foldBy = (pos: 'CO' | 'HJ' | 'SB' | 'UTG') =>
+    ({ street: 'preflop' as const, actor: 'villain' as const, pos, type: 'fold' as const });
+
+  it('앞에서 접은 상대(B)는 표 조회를 바꾸지 않는다 — BB vs BTN 오픈이 그대로 정확 일치', () => {
+    const plain = base({ heroPos: 'BB', villainPos: 'BTN', actions: [{ street: 'preflop', actor: 'villain', type: 'raise', sizeBb: 2.5 }] });
+    const withFold = base({
+      heroPos: 'BB', villainPos: 'BTN', extra: [{ pos: 'CO', cards: [] }],
+      actions: [foldBy('CO'), { street: 'preflop', actor: 'villain', type: 'raise', sizeBb: 2.5 }],
+    });
+    expect(evaluateSpot(plain).kind).toBe('chart_nash');
+    expect(evaluateSpot(withFold).kind).toBe('chart_nash');
+    expect(chart(evaluateSpot(withFold)).sourceLabel).toBe(chart(evaluateSpot(plain)).sourceLabel);
+  });
+
+  it('오픈한 사람이 빌런 A 가 아니어도 그 사람의 표를 본다 — B(CO) 오픈, A(BTN)는 안 움직임', () => {
+    const s = base({
+      heroPos: 'BB', villainPos: 'BTN', extra: [{ pos: 'CO', cards: [] }],
+      actions: [openBy('CO')],
+    });
+    const ev = chart(evaluateSpot(s));
+    expect(ev.kind).toBe('chart_nash');
+    expect(ev.sourceLabel).toContain('CO');
+    expect(ev.sourceLabel).not.toContain('BTN');
+  });
+
+  it('상대 둘이 살아 있으면(오픈 + 콜) 표를 맞추지 않고 수학 참고로 떨어지며 그 이유를 적는다', () => {
+    const s = base({
+      heroPos: 'BB', villainPos: 'BTN', extra: [{ pos: 'CO', cards: [] }],
+      actions: [openBy('CO'), { street: 'preflop', actor: 'villain', type: 'call', sizeBb: 2.5 }],
+      heroAction: 'call', heroActionSizeBb: 1.5,
+    });
+    const ev = evaluateSpot(s);
+    expect(ev.kind).toBe('math_only');
+    expect(ev.verdict).toBe('math');
+    expect(ev.notes.some((n) => n.includes('둘 이상'))).toBe(true);
+    // 콜 금액은 가장 많이 넣은 사람 기준(둘 다 2.5) — BB 는 1 을 이미 냈으니 1.5
+    expect(ev.math.toCallBb).toBe(1.5);
+    expect(ev.math.potBb).toBe(6.5);          // 0.5 + 1 + 2.5 + 2.5
+  });
+
+  it('콜 금액은 여럿 중 가장 많이 넣은 사람과의 차액이다 — A(BTN) 오픈 2.5, B(CO) 3벳 +8', () => {
+    // ⚠ 더 많이 넣은 쪽이 **B(extra)** 여야 판별력이 있다 — A 가 최대면 'A 만 보는' 옛 계산도 같은 답을 낸다(음성 대조에서 잡힘).
+    const s = base({
+      heroPos: 'BB', villainPos: 'BTN', extra: [{ pos: 'CO', cards: [] }],
+      actions: [{ street: 'preflop', actor: 'villain', type: 'raise', sizeBb: 2.5 }, openBy('CO', 8)],
+    });
+    expect(evaluateSpot(s).math.toCallBb).toBe(7);   // B 총액 8 − BB 1 (A 만 보면 1.5)
+    expect(evaluateSpot(s).kind).toBe('math_only');  // 상대 둘이 살아 있다
+  });
+
+  it('상대 폴드만 앞에 있으면 첫 진입이다 — B(UTG) 폴드 뒤 BTN 오픈은 RFI 표', () => {
+    const s = base({ tableSize: 9, heroPos: 'BTN', villainPos: 'BB', extra: [{ pos: 'UTG', cards: [] }], actions: [foldBy('UTG')] });
+    const ev = chart(evaluateSpot(s));
+    expect(ev.kind).toBe('chart_nash');
+    expect(ev.sourceLabel).toContain('오픈');
+  });
+
+  it('B~E 가 자리 검증에 걸리면 unsupported — 겹친 자리로 표를 보지 않는다', () => {
+    const s = base({ heroPos: 'BB', villainPos: 'BTN', extra: [{ pos: 'BTN', cards: [] }] });
+    expect(evaluateSpot(s).kind).toBe('unsupported');
+  });
+});
+
+// ── vs3벳 표는 내 오픈 크기도 잰다 (감사 2026-09-19) ─────────────────────────
+// 표는 "내가 2~3BB 로 열었다" 를 전제로 알파·MDF 를 역산했다. 상대 3벳 크기만 재고 내 오픈은 안 쟀더니
+// 6BB 오픈이 2.5BB 오픈과 똑같이 '정확 일치' 였다 — 같은 3벳 금액이라도 다른 문제다.
+describe('vs3벳 — 내 오픈 크기 검증', () => {
+  const vs3bet = (openBb: number, threeBetTotal = 9) => base({
+    heroPos: 'CO', villainPos: 'BB', hero: ['As', 'Ks'],
+    actions: [
+      { street: 'preflop', actor: 'hero', type: 'raise', sizeBb: openBb },
+      { street: 'preflop', actor: 'villain', type: 'raise', sizeBb: threeBetTotal - 1 },   // BB 는 1 을 냈다 → 총액 threeBetTotal
+    ],
+  });
+
+  it('2.5BB 오픈 → 정확 일치 그대로다(고치면서 되레 좁히지 않았다)', () => {
+    const ev = chart(evaluateSpot(vs3bet(2.5)));
+    expect(ev.kind).toBe('chart_nash');
+    expect(ev.differences).toEqual([]);
+  });
+
+  it('6BB 오픈 → 정확 일치가 아니라 참고이고, 내 오픈 크기가 차이로 적힌다', () => {
+    const ev = chart(evaluateSpot(vs3bet(6)));
+    expect(ev.kind).toBe('normalized_reference');
+    expect(ev.differences.some((d) => d.includes('내 오픈') && d.includes('6BB'))).toBe(true);
+  });
+
+  it('참조 밴드 밖(10BB 오픈)은 그 표를 아예 보지 않는다 — 수학 참고 (상대 3벳 총액은 밴드 안인 9 그대로)', () => {
+    expect(evaluateSpot(vs3bet(10)).kind).toBe('math_only');
+  });
+});

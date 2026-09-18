@@ -286,9 +286,11 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     // 엔진이 "계산할 수 없었다" 고 말했으면 **아무 액션도 만들지 않는다.**
     // 이 경우 hero 는 0.5 인데 그건 승률이 아니라 자리표시자다 — 넣으면 '콜 50%' 가 나온다.
     if (equityKind === 'no_legal_combinations') return null;
-    if (!equity) {
-      return { action: { raise: 0.34, call: 0.33, fold: 0.33 } };
-    }
+    // 계산이 끝나기 전에는 **아무 액션도 만들지 않는다** — 위 분기와 같은 원칙이다.
+    // 예전엔 여기서 { raise: 0.34, call: 0.33, fold: 0.33 } 자리표시자를 돌려줬고, 화면은 그걸 '권장 액션: 레이즈 34%' 로
+    // 확정처럼 그렸다가 계산이 끝나면 '콜 50%' 로 뒤집었다(감사 2026-09-19, 데모 AKs vs QQ = 46.3%).
+    // 같은 카드 안에서 위(에퀴티)는 '계산 중', 아래(액션)는 '확정' 이던 자리다 — 둘 다 계산 중이어야 한다.
+    if (!equity) return null;
     return { action: actionFromEquity(equity.hero), equity };
   }, [inputReady, equity, equityKind]);
 

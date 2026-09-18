@@ -13,6 +13,29 @@
 //
 // vitest 환경이 `node` 라 패널을 렌더해 검증할 수 없어 판정만 순수 함수로 뺀다(`lib/authGeneration.ts` 선례).
 
+/**
+ * 화면에 적을 승률 메타(2026-09-19, 멀티웨이). 숫자만 넘기면 리포트가 **표본인지·누구를 무작위로 뽑았는지**를
+ * 말할 수 없다 — 가정을 숨긴 숫자는 이 저장소가 금지하는 것이다.
+ */
+export interface EquityMeta {
+  /** 히어로 몫(0~1) */
+  hero: number;
+  kind: 'exact' | 'monte_carlo' | 'no_legal_combinations';
+  /** 무작위로 채운 상대 카드 장수 */
+  unknownCards: number;
+  /** 표본 수(전수면 전수 쌍 수) */
+  iterations: number;
+  /** 겨룬 상대 수(폴드한 상대 제외) */
+  villains: number;
+}
+
+/** 표본 승률의 95% 구간 반폭(%p) — 정규 근사 1.96·√(p(1−p)/n). 전수면 0. */
+export function equityHalfWidthPct(m: Pick<EquityMeta, 'hero' | 'kind' | 'iterations'>): number {
+  if (m.kind !== 'monte_carlo' || m.iterations <= 0) return 0;
+  const p = Math.min(1, Math.max(0, m.hero));
+  return Math.round(1.96 * Math.sqrt((p * (1 - p)) / m.iterations) * 1000) / 10;
+}
+
 /** 이펙트가 한 번 돌 때 내려야 할 결정. 어느 쪽이든 **세대는 반드시 오른다**. */
 export type EquityPlan =
   | { kind: 'clear'; gen: number }

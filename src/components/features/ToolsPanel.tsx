@@ -128,7 +128,7 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   //   ⚠ 새 레인을 만들지 않고 'review'(핸드 리뷰)에 넣는다 — 레인이 늘면
   //     e2e/gto-tab-verify.spec.ts 의 '섹션 정확히 4개'·'칩 5개' 계약이 깨진다.
   //     대신 카탈로그 위에 대표 카드(SpotHeroCard)를 따로 세워 우선순위를 준다.
-  { key: 'spot', cat: 'review', name: '누리 스팟', desc: '핸드 분석 · 리플레이 · 토론', keywords: 'NURI SPOT 스팟 복기 구조화 분석 저장 토론 공유 액션 타임라인', icon: 'spade' },
+  { key: 'spot', cat: 'review', name: '누리 스팟', desc: '핸드 분석 · 리플레이 · 토론', keywords: 'NURI SPOT 스팟 복기 구조화 분석 저장 토론 공유 액션 타임라인', icon: 'cards' },
   { key: 'replay', cat: 'review', name: '핸드 리플레이어', desc: '지난 판 복기와 승률 흐름', keywords: '그 핸드 복기 · 승률 추이·아웃', icon: 'clapperboard' },
   { key: 'gto', cat: 'review', name: 'GTO 핸드 분석', desc: '내 패 승률과 참고 액션', keywords: '프리/포스트플랍 승률·휴리스틱 참고 액션', icon: 'scan-search' },
   { key: 'rvr', cat: 'explore', name: '레인지 vs 레인지', desc: '양쪽 패 범위의 승률 비교', keywords: '레인지 간 에퀴티 매트릭스', icon: 'git-compare' },
@@ -598,9 +598,14 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
           그래서 글자를 줄이는 대신 **배지를 아래 줄로 흘려보낸다**(§7: 중요한 정보를 작게 줄여 박스에 넣지 마라).
           100% 에서는 폭이 남아 줄바꿈이 일어나지 않아 현재 화면은 그대로다. */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12"
+        {/* 🔴 2026-09-19 오너: "GTO 탭에 누리스팟 이모티콘 변경".
+            여기 있던 것은 `/brand/nuri-holdem-symbol.svg` — **앱 로고 심볼 그 자체**였다.
+            같은 화면 맨 위 헤더에 똑같은 마크가 있어서 NURI SPOT 이 '도구' 가 아니라
+            '앱 이름' 처럼 읽혔다. 도구 카탈로그 타일과 커뮤니티의 NURI SPOT 배지까지
+            **같은 마크 하나**(cards)로 맞춘다 — 한 기능에 마크가 셋이면 그게 버그다. */}
+        <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12 text-accent-200"
           style={{ background: 'radial-gradient(120% 120% at 50% 0%, #242B48 0%, #141930 58%, #0A0D1B 100%)' }} aria-hidden>
-          <img src="/brand/nuri-holdem-symbol.svg" alt="" width={20} height={20} draggable={false} />
+          <Icon name="cards" size={20} />
         </span>
         <div className="min-w-0 flex-[1_1_3.5rem]">
           <p className="text-sm font-extrabold tracking-tight text-ink-primary">NURI SPOT</p>
@@ -681,7 +686,16 @@ function ToolCard({ name, lines, desc, icon, onClick, fav, onToggleFav, testId, 
           opacity-30 은 비텍스트 대비(WCAG 1.4.11) 미달 — 색 토큰만으로 켬/끔 구분(채운 별+accent vs 윤곽 별+muted). */}
       {onToggleFav && (
         <button type="button" onClick={onToggleFav} aria-label={fav ? `${name} 즐겨찾기 해제` : `${name} 즐겨찾기 추가`} aria-pressed={fav}
-          className={['absolute right-1 top-1 flex h-8 w-8 items-center justify-center',
+          // [B] 34×34px 미달 — .hit 로 44px 확보하려 했으나 실측(elementFromPoint)에서 실패했다:
+          //   `.hit{position:relative}`(index.css, components 레이어)와 `absolute` 유틸(utilities 레이어,
+          //   같은 특이도 0,1,0)이 같은 position 속성을 놓고 부딪히는데 이 저장소 빌드에서는 `.hit` 이 이겨
+          //   버튼이 `position:relative` 로 떨어지며 `right-1 top-1` 배치가 깨졌다 — 카드 밑에 깔린 본문
+          //   버튼이 시각적 중심을 가로챘다(2026-09-19 스윕 재실측 실제 재현, ImageLightbox.tsx:150 에
+          //   이미 같은 함정이 기록돼 있었다 — absolute 요소에는 `.hit` 대신 이 방식을 쓴다).
+          //   inline style 로 position 을 최우선 순위로 못박아 `.hit` 의 확장(::after)은 그대로 살리고
+          //   자기 배치만 되찾는다 — index.css 를 고치지 않는 최소 수정.
+          style={{ position: 'absolute' }}
+          className={['hit right-1 top-1 flex h-8 w-8 items-center justify-center',
             fav ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
           <Icon name={fav ? 'star-fill' : 'star'} size={14} aria-hidden />
         </button>

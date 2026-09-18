@@ -12,7 +12,7 @@
 //
 // ⚠ 로그인은 stubLogin 으로 로컬에서만 만든다(운영 DB 무접촉). _fixtures 가 비-GET 을 끊는다.
 import { test, expect } from './_fixtures';
-import { type Page } from '@playwright/test';
+import { type Locator, type Page } from '@playwright/test';
 import { dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
 
 const VIEWPORTS = [
@@ -44,6 +44,11 @@ async function openSpot(page: Page) {
   await expect(dlg, 'NURI SPOT 이 안 열린다').toBeVisible({ timeout: 20_000 });
   await expect(dlg.getByText('NURI SPOT', { exact: true })).toBeVisible({ timeout: 15_000 });
   return dlg;
+}
+
+/** 2026-09-19 오너 지시로 진입 단계가 1번(게임)이 됐다 — 카드·액션은 눌러서 간다. */
+async function gotoStep(dlg: Locator, name: RegExp) {
+  await dlg.getByRole('group', { name: '입력 단계' }).getByRole('button', { name }).click();
 }
 
 test.describe('GTO 홈 — NURI SPOT 이 대표로 선다', () => {
@@ -124,6 +129,7 @@ test.describe('NURI SPOT — 분석 흐름', () => {
     const report = dlg.getByLabel('스팟 리포트');
     await expect(report, '리포트 영역이 없다').toBeVisible();
 
+    await gotoStep(dlg, /카드·액션/);
     // 내 카드 2장 — CardGridPicker 의 data-card 훅으로 정확히 집는다(라벨 문구에 결합하지 않는다)
     await dlg.locator('button[data-card="As"]').click();
     await dlg.locator('button[data-card="Ks"]').click();
@@ -145,6 +151,7 @@ test.describe('NURI SPOT — 분석 흐름', () => {
 
   test('🔴 액션 타임라인에 행이 쌓이고 지워진다', async ({ page }) => {
     const dlg = await openSpot(page);
+    await gotoStep(dlg, /카드·액션/);
     await expect(dlg.getByText('액션 순서')).toBeVisible();
     await expect(dlg.getByText('아직 액션이 없습니다.')).toBeVisible();
 
@@ -169,6 +176,31 @@ test.describe('NURI SPOT — 분석 흐름', () => {
     await expect(dlg.getByText('내 자리').first()).toBeVisible();
     await expect(dlg.getByText('유효 스택').first()).toBeVisible();
   });
+
+  // 오너 6건(2026-09-19) 중 화면으로 확인할 수 있는 넷 — 되돌리면 각 줄이 빨개진다.
+  test('🔴 진입은 1번 게임부터 · 단계 바는 360px 에서도 가로 스크롤 0 · 인원 select · 스택 프리셋 없음', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    const dlg = await openSpot(page);
+    const bar = dlg.getByRole('group', { name: '입력 단계' });
+    // ① 진입 단계 — 예전엔 useState('cards') 라 3번부터 열렸다
+    await expect(bar.locator('[aria-current="step"]'), '진입 단계가 1번 게임이 아니다').toHaveText(/게임/);
+    // ② 단계 바 — 예전 알약 4개(합 340.7px)는 폭 326 에서 15px 넘쳐 스크롤이 났다
+    const over = await bar.evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(over, `단계 바가 ${over}px 넘친다 — 가로 스크롤이 생긴다`).toBeLessThanOrEqual(0);
+    // ③ 테이블 인원 2~10 은 네이티브 select 한 줄
+    const sel = dlg.getByLabel('테이블 인원');
+    await expect(sel).toBeVisible();
+    expect(await sel.locator('option').allTextContents()).toEqual(['2인', '3인', '4인', '5인', '6인', '7인', '8인', '9인', '10인']);
+    // ④ 유효 스택은 직접 입력만 — 프리셋 칩(10BB·20BB…)이 없다
+    await bar.getByRole('button', { name: /자리·스택/ }).click();
+    await expect(dlg.getByLabel('유효 스택 BB 직접 입력')).toBeVisible();
+    await expect(dlg.getByRole('button', { name: /^(10|20|40|60|100)BB$/ })).toHaveCount(0);
+    // ⑤ 빌런 B~E 추가 — 자리 목록에 '상대 B 자리' 행이 생기고 카드 단계에 슬롯이 선다
+    await dlg.getByRole('button', { name: /상대 추가/ }).click();
+    await expect(dlg.getByText('상대 B 자리')).toBeVisible();
+    await gotoStep(dlg, /카드·액션/);
+    await expect(dlg.getByRole('button', { name: /^상대 B/ }).first()).toBeVisible();
+  });
 });
 
 test.describe('NURI SPOT — 단계 바', () => {
@@ -176,6 +208,7 @@ test.describe('NURI SPOT — 단계 바', () => {
 
   test('🔴 현재 단계 칩은 잘리지 않는다 — 체크가 붙어 넓어져도', async ({ page }) => {
     const dlg = await openSpot(page);
+    await gotoStep(dlg, /카드·액션/);
     // 4단계로 간 **뒤에** 액션을 고른다 → 완료 체크가 붙어 칩이 넓어진다.
     // 여기서 실제 회귀가 났다: step 만 보고 스크롤을 맞춰서, 나중에 넓어진 칩이 잘린 채 남았다.
     await dlg.locator('button[data-card="As"]').click();
@@ -208,6 +241,7 @@ test.describe('NURI SPOT — 비슷한 스팟 풀기', () => {
     await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 분석' }).click();
     const dlg = page.getByRole('dialog').first();
     await dlg.waitFor({ timeout: 20_000 });
+    await gotoStep(dlg, /카드·액션/);
 
     // 기본 스팟(6맥스 100BB BTN 첫 진입) + AKs → RFI 차트에 걸린다
     await dlg.locator('button[data-card="As"]').click();
@@ -294,7 +328,8 @@ test.describe('NURI SPOT — 9인 UTG+1 자리', () => {
     const steps = dlg.getByRole('group', { name: '입력 단계' });
 
     await steps.getByRole('button', { name: /게임/ }).click();
-    await dlg.getByRole('button', { name: '9인', exact: true }).click();
+    // 2026-09-19: 테이블 인원은 네이티브 select(2~10인) — 칩이 아니다
+    await dlg.getByLabel('테이블 인원').selectOption('9');
 
     await steps.getByRole('button', { name: /자리·스택/ }).click();
     // '내 자리' 행이 먼저 온다 — 상대 자리에도 같은 이름의 칩이 있어 첫 번째를 집는다.

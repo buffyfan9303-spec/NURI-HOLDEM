@@ -223,11 +223,13 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
   const rangeMode = deep.villainMode === 'range';
   // 레인지 모드에선 빌런 슬롯 대신 선택 레인지 이름을 표시
   const villainId = rangeMode ? deep.villainRange.label : deep.villainComboId;
-  const showResult = deep.heroComplete && (rangeMode || deep.villainComplete) && deep.result && deep.normalizedAction;
+  // 계산 중에도 결과 카드는 세운다 — 단 에퀴티·참고 액션 두 섹션이 **함께** '계산 중' 이다(감사 2026-09-19: 예전엔 액션만 가짜 34/33/33 확정).
+  const showResult = deep.heroComplete && (rangeMode || deep.villainComplete) && (deep.calculating || (deep.result && deep.normalizedAction));
 
   const na = deep.normalizedAction;
   // 권장 액션 배지 — 액션 축이므로 ACTION_COLORS(빈도바와 동일 색)만 쓴다.
-  const recommended = na
+  // 계산 중에는 배지도 없다 — 입력을 바꾸면 새 값이 올 때까지 이전 핸드의 값이 남는데, 그걸 지금 핸드의 권장으로 읽는다.
+  const recommended = na && !deep.calculating
     ? [{ label: '레이즈', v: na.raise, color: ACTION_COLORS.raise, textColor: ACTION_TEXT_COLORS.raise }, { label: '콜', v: na.call, color: ACTION_COLORS.call, textColor: ACTION_TEXT_COLORS.call }, { label: '폴드', v: na.fold, color: ACTION_COLORS.fold, textColor: ACTION_TEXT_COLORS.fold }]
         .reduce((a, b) => (b.v > a.v ? b : a))
     : null;
@@ -350,7 +352,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
       </CalcCard>
 
       {/* 결과 */}
-      {showResult && deep.result && deep.normalizedAction ? (
+      {showResult ? (
         <CalcCard className="animate-fade-in">
           <p className="text-center text-sm">
             <b className="text-accent-300">{heroId}</b>
@@ -382,9 +384,19 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
 
           <div>
             <p className="mb-1 text-2xs font-semibold text-ink-secondary">참고 액션 가이드</p>
-            <MixBar action={deep.normalizedAction} />
-            <div className="mt-1.5 flex"><SourceBadge kind="heuristic" /></div>
-            <p className="mt-1 text-2xs text-ink-muted">※ 에퀴티·팟오즈 기반 근사(솔버 아님). 실제 GTO 솔버 값과 다를 수 있습니다.</p>
+            {/* 에퀴티 섹션과 같은 조건 — 계산 전에는 숫자를 그리지 않는다(자리표시자 34/33/33 이 '권장 레이즈' 로 나가던 자리). */}
+            {deep.normalizedAction && !deep.calculating ? (
+              <>
+                <MixBar action={deep.normalizedAction} />
+                <div className="mt-1.5 flex"><SourceBadge kind="heuristic" /></div>
+                <p className="mt-1 text-2xs text-ink-muted">※ 에퀴티·팟오즈 기반 근사(솔버 아님). 실제 GTO 솔버 값과 다를 수 있습니다.</p>
+              </>
+            ) : (
+              <div data-testid="gto-action-pending" className="flex h-5 items-center gap-2 text-2xs text-ink-muted">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent-300 border-t-transparent" />
+                참고 액션 계산 중...
+              </div>
+            )}
           </div>
 
           {deep.equity && !deep.calculating && (() => {

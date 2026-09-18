@@ -46,7 +46,8 @@ describe('src/api/spots.ts 의 shareBody 와 같은 규칙인가', () => {
   });
 
   it('첫 줄 템플릿이 글자 하나까지 같다', () => {
-    const head = '`${spot.heroPos} vs ${spot.villainPos} · ${spot.effectiveBb}BB · '
+    // 2026-09-19: 상대가 여럿이면 자리 목록(villainsLabel) — 두 벌 모두 같은 함수를 부른다
+    const head = '`${spot.heroPos} vs ${villainsLabel(spot)} · ${spot.effectiveBb}BB · '
       + "${spot.street === 'preflop' ? '프리플랍' : spot.street}`";
     const MINE = readFileSync(join(__dirname, 'spotShareBody.ts'), 'utf-8');
     expect(m![0], 'spots.ts 의 본문 첫 줄이 바뀌었다 — spotShareBody.ts 도 같이 고쳐라').toContain(head);

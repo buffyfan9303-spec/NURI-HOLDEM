@@ -67,8 +67,12 @@ export default function OutsCalc() {
       ) : (
         <CalcCard>
           <Field label="아웃츠 (남은 도움 카드 수)">
-            {/* 디스카운트 아웃츠(예: 7.5장) 입력을 위해 소수 허용 */}
-            <NumIn value={outs} onChange={setOuts} suffix="장" decimal />
+            {/* 디스카운트 아웃츠(예: 7.5장) 입력을 위해 소수 허용.
+                🔴 2026-09-19 GTO 감사 [medium]: value 에 raw outs 를 그대로 넘겨 21 초과를 입력하면
+                (예: 25) 칸은 '25'를 보여주는데 아래 확률은 클램프된 o(21) 기준으로 몰래 계산됐다
+                (25장 실제 확률 78.6% vs 화면에 뜨는 21장 기준 69.9%). 클램프된 o 를 넘겨 입력창이
+                즉시 21로 바뀌게 한다 — 화면 숫자와 계산에 쓰인 숫자를 같게 만든다. */}
+            <NumIn value={o} onChange={setOuts} suffix="장" decimal />
           </Field>
           <Field label="시점">
             <div className="flex gap-1.5">

@@ -30,6 +30,9 @@ export const BOARD_LEN: Record<Street, number> = { preflop: 0, flop: 3, turn: 4,
 export type SpotPosition = 'UTG' | 'UTG1' | 'UTG2' | 'MP' | 'LJ' | 'HJ' | 'CO' | 'BTN' | 'SB' | 'BB';
 const POSITION_ORDER: readonly SpotPosition[] = ['UTG', 'UTG1', 'UTG2', 'MP', 'LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
 const MAX_TABLE = 10;
+/** 저장값·스냅샷의 자리 문자열 검증 — 목록에 없는 문자열은 자리가 아니다. */
+export const isPosition = (p: unknown): p is SpotPosition =>
+  typeof p === 'string' && (POSITION_ORDER as readonly string[]).includes(p);
 
 /**
  * 테이블 인원 → 실제로 존재하는 포지션.
@@ -50,9 +53,22 @@ const SIZED: ReadonlySet<SpotActionType> = new Set<SpotActionType>(['call', 'bet
 
 export type SpotActor = 'hero' | 'villain';
 
+/**
+ * 빌런 B~E — `villainPos`/`villain`(빌런 A) 뒤에 붙는 상대. 카드는 0~2장, 모르면 빈 배열.
+ * ⚠ 와이어(toJSON)에서는 카드가 이 객체 안에 실리지 **않는다** — `villain` 키 안에 A..E 순서로 들어간다.
+ *   서버(`share_spot_post`, 20260911d:190)가 **최상위 `villain` 키만** 가리므로, 다른 키에 카드를 두면
+ *   공유 글에 상대 카드가 그대로 공개된다(hidden_villain 설계 무력화). spot.test.ts 의 스포일러 계약이 이걸 잠근다.
+ */
+export interface SpotVillain { pos: SpotPosition; cards: string[] }
+/** 빌런 A + 최대 4명 = 5명(오너 지시 2026-09-19 "빌런 A~E") */
+export const MAX_EXTRA_VILLAINS = 4;
+export const EXTRA_LETTERS = ['B', 'C', 'D', 'E'] as const;
+
 export interface SpotAction {
   street: Street;
   actor: SpotActor;
+  /** 빌런 B~E 의 액션이면 그 자리. 없으면 actor 의 기본 자리(hero→heroPos, villain→villainPos = 빌런 A). */
+  pos?: SpotPosition;
   type: SpotActionType;
   /** 이 액션으로 **이번 스트리트에 추가로 넣은** 칩(BB). check/fold 는 없음. */
   sizeBb?: number;
@@ -71,8 +87,10 @@ export interface SpotReview {
    * 스키마 버전 — 늘어나면 마이그레이션 지점은 fromJSON 하나다.
    *  v1 (2026-09-11) anteBb = 1인당 앤티, potBb 가 인원을 곱했다
    *  v2 (2026-09-14) anteBb = BB앤티 총액. v1 값은 fromJSON 이 `× tableSize` 로 올린다(팟 동일)
+   *  v3 (2026-09-19) 빌런 B~E(`extra`). 와이어는 자리를 `extraPos`, 카드를 `villain` 키 안 string[][] 로 싣는다.
+   *     v2 이하의 `villain`(평면 string[]) 은 빌런 A 카드로 그대로 읽힌다.
    */
-  v: 2;
+  v: 3;
   game: 'nlhe';
   format: 'mtt' | 'cash';
   tableSize: number;        // 2~10
@@ -86,11 +104,14 @@ export interface SpotReview {
   /** 유효 스택(BB) — 둘 중 짧은 쪽 */
   effectiveBb: number;
   heroPos: SpotPosition;
+  /** 빌런 A 의 자리 */
   villainPos: SpotPosition;
   /** 'As' 형식. 0~2장 */
   hero: string[];
-  /** 선택 — 모르면 빈 배열. 공유 시 기본 비공개 */
+  /** 빌런 A 카드. 선택 — 모르면 빈 배열. 공유 시 기본 비공개 */
   villain: string[];
+  /** 빌런 B~E (0~4명). 카드가 없는 상대는 승률에서 무작위 핸드로 계산된다. 공유 시 카드는 기본 비공개 */
+  extra: SpotVillain[];
   /** 0~5장. street 와 장수가 맞아야 한다 */
   board: string[];
   /** 분석할 결정 지점의 스트리트 */
@@ -178,10 +199,26 @@ export function validateSpot(s: SpotReview): SpotIssue[] {
   if (s.heroPos === s.villainPos) {
     out.push({ field: 'position', level: 'blocker', message: '내 자리와 상대 자리가 같습니다.' });
   }
+  // 빌런 B~E — 자리는 테이블에 있어야 하고, 나·A·서로와 겹치면 안 된다(한 자리에 둘이 앉을 수 없다)
+  if (s.extra.length > MAX_EXTRA_VILLAINS) {
+    out.push({ field: 'position', level: 'blocker', message: `상대는 빌런 A 포함 ${MAX_EXTRA_VILLAINS + 1}명까지입니다.` });
+  }
+  const taken = new Set<SpotPosition>([s.heroPos, s.villainPos]);
+  s.extra.forEach((v, i) => {
+    const who = `상대 ${EXTRA_LETTERS[i] ?? i + 2}`;
+    if (!seats.includes(v.pos)) {
+      out.push({ field: 'position', level: 'blocker', message: `${s.tableSize}인 테이블에 ${v.pos} 자리가 없습니다(${who}).` });
+    } else if (taken.has(v.pos)) {
+      out.push({ field: 'position', level: 'blocker', message: `${who}의 자리 ${v.pos} 가 다른 사람과 겹칩니다.` });
+    }
+    taken.add(v.pos);
+    if (v.cards.length > 2) out.push({ field: 'cards', level: 'blocker', message: `${who} 카드는 2장까지입니다.` });
+  });
 
   // 카드 형식
   const groups: [SpotIssue['field'], string[]][] = [
     ['cards', s.hero], ['cards', s.villain], ['board', s.board],
+    ...s.extra.map((v): [SpotIssue['field'], string[]] => ['cards', v.cards]),
   ];
   for (const [field, cards] of groups) {
     for (const c of cards) {
@@ -194,7 +231,7 @@ export function validateSpot(s: SpotReview): SpotIssue[] {
 
   // 중복 카드 — 한 덱에서 나온 카드는 같은 것이 둘일 수 없다
   const seen = new Map<string, number>();
-  for (const c of [...s.hero, ...s.villain, ...s.board]) {
+  for (const c of [...s.hero, ...s.villain, ...s.board, ...s.extra.flatMap((v) => v.cards)]) {
     if (!isCardCode(c)) continue;
     seen.set(c, (seen.get(c) ?? 0) + 1);
   }
@@ -232,6 +269,11 @@ export function validateSpot(s: SpotReview): SpotIssue[] {
       out.push({ field: 'actions', level: 'blocker', message: '액션 순서가 스트리트를 거슬러 올라갑니다.' });
     }
     cursor = Math.max(cursor, at);
+
+    // 빌런 B~E 의 액션은 그 자리가 상대 목록에 있어야 한다 — 없는 사람의 액션은 팟을 부풀린다
+    if (a.pos !== undefined && !s.extra.some((v) => v.pos === a.pos)) {
+      out.push({ field: 'actions', level: 'blocker', message: `${i + 1}번째 액션의 자리(${a.pos})가 상대 목록에 없습니다.` });
+    }
 
     if (SIZED.has(a.type)) {
       if (!finite(a.sizeBb) || (a.sizeBb as number) < 0) {
@@ -315,15 +357,17 @@ export function canonicalSpotKey(s: SpotReview): string {
     ? (heroComboId(s.hero) ?? s.hero.slice().sort(byCard).join(''))
     : s.hero.slice().sort(byCard).join('');
   const acts = s.actions
-    .map((a) => `${a.street[0]}${a.actor[0]}${a.type}${SIZED.has(a.type) ? round2(a.sizeBb ?? 0) : ''}`)
+    .map((a) => `${a.street[0]}${a.actor[0]}${a.pos ?? ''}${a.type}${SIZED.has(a.type) ? round2(a.sizeBb ?? 0) : ''}`)
     .join('.');
   const hero = s.heroAction
     ? `${s.heroAction}${SIZED.has(s.heroAction) ? round2(s.heroActionSizeBb ?? 0) : ''}`
     : '-';
+  // 빌런 B~E 는 자리만 키에 든다 — 카드는 A 와 같은 이유로 뺀다
+  const extra = s.extra.length ? `+${s.extra.map((v) => v.pos).join(',')}` : '';
   return [
     `v${s.v}`, s.game, s.format,
     `t${s.tableSize}`, `sb${round2(s.sbBb)}`, `an${round2(s.anteBb)}`, `ef${round2(s.effectiveBb)}`,
-    `${s.heroPos}v${s.villainPos}`, s.street,
+    `${s.heroPos}v${s.villainPos}${extra}`, s.street,
     `h:${heroPart}`, `b:${board.join('')}`,
     `a:${acts}`, `x:${hero}`,
   ].join('|');
@@ -338,13 +382,21 @@ export function toJSON(s: SpotReview): Record<string, unknown> {
     v: s.v, game: s.game, format: s.format, tableSize: s.tableSize,
     sbBb: s.sbBb, anteBb: s.anteBb, effectiveBb: s.effectiveBb,
     heroPos: s.heroPos, villainPos: s.villainPos,
-    hero: s.hero, villain: s.villain, board: s.board,
+    hero: s.hero,
+    // 🔴 상대 카드는 **전부 `villain` 키 안에** 둔다(빌런 B~E 포함, A..E 순서의 string[][]).
+    //    서버가 최상위 `villain` 키를 통째로 빼내 hidden_villain 에 넣는다 — 다른 키에 두면 가려지지 않는다.
+    //    빌런이 A 뿐이면 v2 와 같은 평면 string[] 이라 옛 읽기 경로·픽스처가 그대로 맞는다.
+    villain: s.extra.length ? [s.villain, ...s.extra.map((v) => v.cards)] : s.villain,
+    board: s.board,
     street: s.street,
-    actions: s.actions.map((a) => (a.sizeBb === undefined
-      ? { street: a.street, actor: a.actor, type: a.type }
-      : { street: a.street, actor: a.actor, type: a.type, sizeBb: a.sizeBb })),
+    actions: s.actions.map((a) => ({
+      street: a.street, actor: a.actor, type: a.type,
+      ...(a.pos !== undefined ? { pos: a.pos } : {}),
+      ...(a.sizeBb !== undefined ? { sizeBb: a.sizeBb } : {}),
+    })),
     heroAction: s.heroAction,
   };
+  if (s.extra.length) o.extraPos = s.extra.map((v) => v.pos);   // 자리만 — 카드는 위 villain 안
   if (s.heroActionSizeBb !== undefined) o.heroActionSizeBb = s.heroActionSizeBb;
   if (s.potBbInput !== undefined) o.potBbInput = s.potBbInput;
   if (s.note) o.note = s.note;
@@ -370,6 +422,7 @@ export function fromJSON(raw: unknown): SpotReview | null {
       const actor: SpotActor = a.actor === 'villain' ? 'villain' : 'hero';
       const type = a.type as SpotActionType;
       const out: SpotAction = { street: a.street as Street, actor, type };
+      if (actor === 'villain' && isPosition(a.pos)) out.pos = a.pos;
       if (SIZED.has(type) && finite(a.sizeBb)) out.sizeBb = a.sizeBb as number;
       return [out];
     })
@@ -384,17 +437,39 @@ export function fromJSON(raw: unknown): SpotReview | null {
   const tableSize = num('tableSize', 6);
   const anteBb = v < 2 ? round2(num('anteBb', 0) * Math.max(0, tableSize)) : num('anteBb', 0);
 
+  // 상대 카드 — 와이어 v3 는 `villain` 이 string[][](A..E), v2 이하는 평면 string[](A). 모양으로 가른다(버전이 아니라).
+  // 서버가 `villain` 키를 통째로 뺀 공유 스팟은 여기서 전부 빈 카드가 된다(가림이 곧 부재).
+  const rawV = Array.isArray(o.villain) ? (o.villain as unknown[]) : [];
+  const nested = rawV.length > 0 && rawV.every(Array.isArray);
+  const villainSets: string[][] = nested
+    ? rawV.map((x) => (x as unknown[]).filter(isCardCode).slice(0, 2))
+    : [rawV.filter(isCardCode).slice(0, 2)];
+  // 빌런 B~E 자리 — 와이어는 `extraPos`, 메모리 스냅샷(writeSnap 은 메모리 모양을 그대로 쓴다)은 `extra:[{pos,cards}]`.
+  // 둘 다 받아야 초안 복원에서 B~E 가 조용히 사라지지 않는다.
+  let extra: SpotVillain[] = [];
+  if (Array.isArray(o.extra)) {
+    extra = (o.extra as unknown[]).flatMap((x) => {
+      if (!x || typeof x !== 'object') return [];
+      const e = x as Record<string, unknown>;
+      if (!isPosition(e.pos)) return [];
+      return [{ pos: e.pos, cards: (Array.isArray(e.cards) ? (e.cards as unknown[]) : []).filter(isCardCode).slice(0, 2) }];
+    });
+  } else if (Array.isArray(o.extraPos)) {
+    extra = (o.extraPos as unknown[]).flatMap((p, i) => (isPosition(p) ? [{ pos: p, cards: villainSets[i + 1] ?? [] }] : []));
+  }
+
   const s: SpotReview = {
-    v: 2, game: 'nlhe',
+    v: 3, game: 'nlhe',
     format: o.format === 'cash' ? 'cash' : 'mtt',
     tableSize,
     sbBb: num('sbBb', 0.5),
     anteBb,
     effectiveBb: num('effectiveBb', 100),
-    heroPos: (POSITION_ORDER as readonly string[]).includes(str('heroPos', '')) ? (o.heroPos as SpotPosition) : 'BTN',
-    villainPos: (POSITION_ORDER as readonly string[]).includes(str('villainPos', '')) ? (o.villainPos as SpotPosition) : 'BB',
+    heroPos: isPosition(o.heroPos) ? o.heroPos : 'BTN',
+    villainPos: isPosition(o.villainPos) ? o.villainPos : 'BB',
     hero: cards('hero').slice(0, 2),
-    villain: cards('villain').slice(0, 2),
+    villain: villainSets[0] ?? [],
+    extra: extra.slice(0, MAX_EXTRA_VILLAINS),
     board: cards('board').slice(0, 5),
     street,
     actions,
@@ -425,10 +500,10 @@ export function fromJSON(raw: unknown): SpotReview | null {
 /** 빈 스팟 — 입력 화면의 시작점. 6맥스 100bb BTN vs BB 가 가장 흔한 학습 스팟이다. */
 export function emptySpot(): SpotReview {
   return {
-    v: 2, game: 'nlhe', format: 'mtt', tableSize: 6,
+    v: 3, game: 'nlhe', format: 'mtt', tableSize: 6,
     sbBb: 0.5, anteBb: 0, effectiveBb: 100,
     heroPos: 'BTN', villainPos: 'BB',
-    hero: [], villain: [], board: [],
+    hero: [], villain: [], extra: [], board: [],
     street: 'preflop', actions: [], heroAction: null,
   };
 }
@@ -465,7 +540,30 @@ export function spotFromCards(hero: string[], villain: string[], board: string[]
   return s;
 }
 
-/** 목록·카드에 쓰는 한 줄 요약. 'BTN vs BB · 100BB · 플랍' */
+/** 상대 자리 목록 한 줄 — 'BB' · 'BB·CO·SB'. 요약·공유 본문이 같은 함수를 쓴다(두 벌이면 한쪽이 틀린다). */
+export function villainsLabel(s: SpotReview): string {
+  return [s.villainPos, ...s.extra.map((v) => v.pos)].join('·');
+}
+
+/** 액션을 한 사람의 자리. B~E 는 `pos`, 그 밖은 actor 의 기본 자리. */
+export function actorPos(s: SpotReview, a: Pick<SpotAction, 'actor' | 'pos'>): SpotPosition {
+  if (a.actor === 'hero') return s.heroPos;
+  return a.pos ?? s.villainPos;
+}
+
+/**
+ * 결정 지점에 **아직 팟에 남아 있는 상대**(A + B~E) — 마지막 액션이 폴드인 사람은 뺀다.
+ * 승률은 이 사람들과 겨루는 값이다. 액션이 하나도 없는 상대(뒤에서 아직 안 움직인 블라인드 등)는 남아 있는 것으로 본다.
+ */
+export function liveVillains(s: SpotReview): SpotVillain[] {
+  const all: SpotVillain[] = [{ pos: s.villainPos, cards: s.villain }, ...s.extra];
+  return all.filter((v) => {
+    const mine = s.actions.filter((a) => a.actor === 'villain' && actorPos(s, a) === v.pos);
+    return mine.length === 0 || mine[mine.length - 1].type !== 'fold';
+  });
+}
+
+/** 목록·카드에 쓰는 한 줄 요약. 'BTN vs BB · 100BB · 플랍' / 'BTN vs BB·CO · 100BB · 플랍' */
 export function spotSummary(s: SpotReview): string {
-  return `${s.heroPos} vs ${s.villainPos} · ${round2(s.effectiveBb)}BB · ${streetLabel(s.street)}`;
+  return `${s.heroPos} vs ${villainsLabel(s)} · ${round2(s.effectiveBb)}BB · ${streetLabel(s.street)}`;
 }

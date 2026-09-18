@@ -4,6 +4,31 @@ import { describe, it, expect } from 'vitest';
 import { FOLD, MODES, gradePreflop, gradeDetail, makeQuiz, modeOfKey, verdictOf, wrongPickOf, type Quiz, type QuizAct } from './preflopQuiz';
 import { RANGE_SCENARIOS } from './ranges.data';
 
+// ── 콜 문제는 **콜 표의 격리**를 본다 (2026-09-19: 빅앤티 BB 콜 7~9bb k≥2 격리) ──────────
+// 저장된 오답 키로 복원할 때 격리된 콜 표 문제가 되살아나면 "콜 0% = 폴드가 정답" 이라는 거짓 채점이 된다.
+describe('call 모드 — 격리된 BB 콜 표는 문제로 내지 않는다', () => {
+  it('BTN(k=2) 올인에 BB 콜 · 7bb 키는 복원되지 않고 새 문제로 대체된다', () => {
+    const key = 'call|bb-2-7|AA';
+    expect(makeQuiz('call', key).key).not.toBe(key);
+  });
+  it('SB(k=1) 올인에 BB 콜 · 7bb 는 살아 있는 표라 그대로 복원된다(양성 대조)', () => {
+    const key = 'call|bb-1-7|AA';
+    expect(makeQuiz('call', key).key).toBe(key);
+  });
+  it('같은 깊이의 SB 콜(k=2 · 7bb)은 격리와 무관하다 — kind 별 격리', () => {
+    const key = 'call|sb-2-7|AA';
+    expect(makeQuiz('call', key).key).toBe(key);
+  });
+  it('새로 뽑는 콜 문제 100건 중 격리된 (BB · 7~9bb · k≥2) 조합이 없다', () => {
+    for (let i = 0; i < 100; i += 1) {
+      const k = makeQuiz('call').key;                       // call|<seat>-<k>-<stack>|<hand>
+      const [, situ] = k.split('|');
+      const [seat, kk, stack] = situ.split('-');
+      if (seat === 'bb' && Number(kk) >= 2) expect([7, 8, 9], k).not.toContain(Number(stack));
+    }
+  });
+});
+
 const q = (acts: QuizAct[] | number, actionLabel = '오픈'): Quiz => ({
   mode: 'rfi', key: 'rfi|x|AKs', posLabel: 'CO', situ: '', hand: 'AKs', cards: [] as unknown as Quiz['cards'], stackBb: 100,
   acts: typeof acts === 'number' ? [{ label: actionLabel, freq: acts }] : acts,

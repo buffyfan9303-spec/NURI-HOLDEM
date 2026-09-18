@@ -62,3 +62,27 @@ describe('⑪ setAll — 외부 스팟으로 통째 교체', () => {
     expect(ids(s.hero)).toEqual(['As', 'Kd']);
   });
 });
+
+// 2026-09-19 빌런 B~E 슬롯 — 아웃츠·리플레이는 extra 를 안 주므로 옛 규칙이 그대로여야 한다.
+describe('빌런 B~E 슬롯(extra)', () => {
+  it('extra 가 없으면 예전과 같다 — 슬롯 [] · 대상 규칙 불변', () => {
+    const s = initialHandBoard(SPOT_A, 5);
+    expect(s.extra).toEqual([]);
+    expect(s.target).toBe('board');
+  });
+
+  it('B 가 덜 찼으면 대상이 v1 이고, B 까지 다 찼으면 보드로 간다', () => {
+    const half = initialHandBoard({ ...SPOT_A, extra: [['Jc']] }, 5);
+    expect(ids(half.extra[0])).toEqual(['Jc']);
+    expect(half.extra[0]).toHaveLength(2);       // 2칸 패딩
+    expect(half.target).toBe('v1');
+    const full = initialHandBoard({ ...SPOT_A, extra: [['Jc', 'Js'], []] }, 5);
+    expect(full.target).toBe('v2');
+    expect(initialHandBoard({ ...SPOT_A, extra: [['Jc', 'Js']] }, 5).target).toBe('board');
+  });
+
+  it('5명째부터는 버린다 — 빌런 A 포함 5명 상한', () => {
+    const s = initialHandBoard({ ...SPOT_A, extra: [[], [], [], [], []] }, 5);
+    expect(s.extra).toHaveLength(4);
+  });
+});

@@ -11,6 +11,7 @@ import {
   emptySpot, validateSpot, hasBlocker, canonicalSpotKey, heroComboId,
   toJSON, fromJSON,
   spotFromReplay, spotFromCards, potBb, positionsFor, isCardCode,
+  spotSummary, villainsLabel, liveVillains,
   type SpotReview,
 } from './spot';
 import { parseAttachments, encodeReplay, type ReplayData } from './hand';
@@ -128,7 +129,7 @@ describe('팟 — 사용자 입력을 덮어쓰지 않는다', () => {
   it('v1 저장본의 1인당 앤티는 읽을 때 총액으로 올린다 — 옛 팟이 그대로 보존된다', () => {
     // v1 스팟(2026-09-11 형식): 8인 · 1인당 0.125 → 그때 팟 = 0.5 + 1 + 0.125×8 = 2.5
     const legacy = fromJSON({ v: 1, tableSize: 8, anteBb: 0.125, hero: ['As', 'Kh'] });
-    expect(legacy?.v).toBe(2);
+    expect(legacy?.v).toBe(3);
     expect(legacy?.anteBb).toBe(1);                    // 0.125 × 8
     expect(legacy && potBb(legacy)).toBe(2.5);         // 변환 전과 같은 팟
     expect(fromJSON({ tableSize: 6, anteBb: 0.25 })?.anteBb).toBe(1.5);   // v 가 없으면 v1
@@ -287,5 +288,107 @@ describe('레거시 호환', () => {
   it('레거시에서 온 스팟도 검증을 통과한다 — 열자마자 오류로 막히지 않는다', () => {
     const s = spotFromCards(['As', 'Kh'], ['Qs', 'Qd'], ['7d', '2c', '9h']);
     expect(hasBlocker(validateSpot(s))).toBe(false);
+  });
+});
+
+// ── v3: 빌런 B~E 와 스포일러 경계 (2026-09-19) ─────────────────────────────
+// 서버(share_spot_post, 20260911d:190)는 **최상위 `villain` 키만** 빼내 가린다.
+// 상대 카드가 다른 키에 실리는 순간 공유 글에 그대로 공개된다 — 되돌릴 수 없는 사고라 여기서 잠근다.
+describe('v3 — 빌런 B~E · 스포일러 경계', () => {
+  const multi = (): SpotReview => base({
+    villain: ['Qs', 'Qd'],
+    extra: [{ pos: 'CO', cards: ['Jh', 'Jc'] }, { pos: 'SB', cards: [] }],
+  });
+  const VILLAIN_CARD = /"(Qs|Qd|Jh|Jc)"/;
+
+  it('🔴 toJSON 출력에서 상대 카드는 villain 키에만 있다 — 서버가 가리는 키가 그것뿐이다', () => {
+    const o = toJSON(multi());
+    const holds = (k: string) => VILLAIN_CARD.test(JSON.stringify(o[k]));
+    expect(Object.keys(o).filter(holds)).toEqual(['villain']);
+    expect(o.villain).toEqual([['Qs', 'Qd'], ['Jh', 'Jc'], []]);   // A..E 순서
+    expect(o.extraPos).toEqual(['CO', 'SB']);                      // 자리는 공개 키 — 카드 없음
+    // 서버가 하는 일을 그대로: villain 키를 빼면 상대 카드가 한 장도 남지 않고, 내 카드는 남는다(양성 대조)
+    const stripped = Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'villain'));
+    expect(JSON.stringify(stripped)).not.toMatch(VILLAIN_CARD);
+    expect(JSON.stringify(stripped)).toMatch(/"As"/);
+  });
+
+  it('빌런이 A 뿐이면 와이어는 v2 와 같은 평면 배열이다 — 옛 픽스처·읽기 경로가 그대로 맞는다', () => {
+    const o = toJSON(base({ villain: ['Qs', 'Qd'] }));
+    expect(o.villain).toEqual(['Qs', 'Qd']);
+    expect(o.extraPos).toBeUndefined();
+  });
+
+  it('round trip — B~E 자리·카드·자리 붙은 액션이 그대로 돌아온다', () => {
+    const s = multi();
+    s.actions = [
+      { street: 'preflop', actor: 'villain', pos: 'CO', type: 'raise', sizeBb: 2.5 },
+      { street: 'preflop', actor: 'villain', type: 'fold' },
+    ];
+    expect(fromJSON(toJSON(s))).toEqual(s);
+  });
+
+  it('v2 저장본(평면 villain)은 빌런 A 카드로 읽히고 extra 는 비어 있다', () => {
+    const s = fromJSON({ v: 2, villain: ['Qs', 'Qd'], villainPos: 'BB' });
+    expect(s?.villain).toEqual(['Qs', 'Qd']);
+    expect(s?.extra).toEqual([]);
+  });
+
+  it('서버가 villain 키를 뺀 공유 스팟은 B~E 카드까지 전부 빈다 — 가림이 곧 부재', () => {
+    const stripped = Object.fromEntries(Object.entries(toJSON(multi())).filter(([k]) => k !== 'villain'));
+    const s = fromJSON(stripped)!;
+    expect(s.villain).toEqual([]);
+    expect(s.extra).toEqual([{ pos: 'CO', cards: [] }, { pos: 'SB', cards: [] }]);
+  });
+
+  it('메모리 스냅샷 모양(extra:[{pos,cards}])도 읽는다 — writeSnap 은 toJSON 을 거치지 않는다', () => {
+    const s = fromJSON(JSON.parse(JSON.stringify(multi())))!;
+    expect(s.extra).toEqual(multi().extra);
+    expect(s.villain).toEqual(['Qs', 'Qd']);
+  });
+
+  it('자리가 겹치면 blocker — 나·A·B~E 서로', () => {
+    expect(hasBlocker(validateSpot(base({ extra: [{ pos: 'BB', cards: [] }] })))).toBe(true);      // A(BB) 와 겹침
+    expect(hasBlocker(validateSpot(base({ extra: [{ pos: 'CO', cards: [] }, { pos: 'CO', cards: [] }] })))).toBe(true);
+    expect(hasBlocker(validateSpot(base({ extra: [{ pos: 'CO', cards: [] }, { pos: 'SB', cards: [] }] })))).toBe(false);
+  });
+
+  it('B~E 카드도 중복·장수 검사를 받고, 빌런 6명째부터 막는다', () => {
+    expect(hasBlocker(validateSpot(base({ extra: [{ pos: 'CO', cards: ['As', 'Qc'] }] })))).toBe(true);   // 내 As 와 중복
+    const five = (['UTG', 'UTG1', 'MP', 'LJ', 'HJ'] as const).map((pos) => ({ pos, cards: [] as string[] }));
+    expect(hasBlocker(validateSpot(base({ tableSize: 9, extra: five })))).toBe(true);
+    expect(hasBlocker(validateSpot(base({ tableSize: 9, extra: five.slice(0, 4) })))).toBe(false);
+  });
+
+  it('B~E 액션은 그 자리가 상대 목록에 있어야 한다', () => {
+    const act = [{ street: 'preflop' as const, actor: 'villain' as const, pos: 'CO' as const, type: 'raise' as const, sizeBb: 2.5 }];
+    expect(hasBlocker(validateSpot(base({ actions: act })))).toBe(true);
+    expect(hasBlocker(validateSpot(base({ extra: [{ pos: 'CO', cards: [] }], actions: act })))).toBe(false);
+  });
+
+  it('liveVillains — 마지막 액션이 폴드인 상대는 승률에서 빠진다', () => {
+    const s = base({
+      extra: [{ pos: 'CO', cards: [] }, { pos: 'SB', cards: [] }],
+      actions: [
+        { street: 'preflop', actor: 'villain', pos: 'CO', type: 'raise', sizeBb: 2.5 },
+        { street: 'preflop', actor: 'villain', pos: 'SB', type: 'fold' },
+      ],
+    });
+    expect(liveVillains(s).map((v) => v.pos)).toEqual(['BB', 'CO']);
+    expect(liveVillains(base()).map((v) => v.pos)).toEqual(['BB']);
+  });
+
+  it('canonical key 는 B~E 자리를 보고 카드는 안 본다', () => {
+    const a = base({ extra: [{ pos: 'CO', cards: [] }] });
+    const b = base({ extra: [{ pos: 'CO', cards: ['Jh', 'Jc'] }] });
+    const c = base({ extra: [{ pos: 'SB', cards: [] }] });
+    expect(canonicalSpotKey(a)).toBe(canonicalSpotKey(b));
+    expect(canonicalSpotKey(a)).not.toBe(canonicalSpotKey(c));
+    expect(canonicalSpotKey(a)).not.toBe(canonicalSpotKey(base()));
+  });
+
+  it('요약과 공유 본문 첫 줄이 상대 자리를 전부 적는다', () => {
+    expect(spotSummary(multi())).toBe('BTN vs BB·CO·SB · 100BB · 프리플랍');
+    expect(villainsLabel(base())).toBe('BB');
   });
 });

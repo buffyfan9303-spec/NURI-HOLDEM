@@ -69,19 +69,13 @@ export default function MySpotList({ onOpen, onShare, onNew }: {
   if (rows.length === 0) {
     // design 실측(2026-09-14): 빈 카드 147px 아래 빈 여백이 화면의 51% 였고 다음 행동이 없었다.
     // 여백을 위아래로 나누고, 다음 행동(새 스팟 만들기)을 버튼으로 준다.
+    // 2026-09-19 오너: "탭 위아래 공백이 너무 크다" — 예전 `min-h-[50svh]` 가운데 정렬(422px 상자에 204px 카드)이
+    // 빈 카드 위아래에 각 109px 공백을 만들었다(390px 실측). 뷰포트 단위 자체를 뺀다 — 카드가 탭 바로 아래 온다.
+    // (그 전의 `dvh` 되먹임 고리 문제(2026-09-15)는 단위가 없어졌으니 같이 사라진다.)
     return (
-    // 🔴 단위는 `svh` 다. `dvh` 를 쓰면 안 된다(2026-09-15 오너 리포트 "화면 전체가 흔들림", 안드로이드 크롬).
-    //   `dvh` 는 **주소창이 접히고 펴지는 것을 따라가도록 정의된** 단위다. 이 패널은 자체 스크롤 컨테이너가
-    //   없어 **페이지가 스크롤**되므로 안드로이드 크롬에서 주소창이 움직이고, 그때마다 이 칸의 min-height 가
-    //   같이 변한다 → 문서 높이가 변한다 → 스크롤 가능 여부가 뒤집히면 주소창이 다시 움직인다(되먹임 고리).
-    //   `svh` 는 **주소창이 보이는 상태의 높이로 고정**이라 그 고리가 생기지 않는다(명세상 변하지 않는다).
-    //   ⚠ 데스크톱에는 주소창이 없어 dvh=svh=lvh 라 **PC 하네스로는 이 증상을 재현할 수 없다** —
-    //     2026-09-15 조사가 뷰포트 높이 6단을 훑고도 "혐의 없음"으로 본 이유다. 재현 못 했다고 없는 게 아니다.
-      <div className="flex min-h-[50svh] flex-col justify-center">
-        <Empty icon="bookmark" title="아직 저장한 스팟이 없어요"
-          desc="분석 탭에서 한 판을 입력하고 '내 스팟에 저장'을 누르면 여기에 쌓입니다."
-          action={<button type="button" onClick={onNew} className="btn-primary min-h-[44px] px-4 text-xs">분석 탭에서 새 스팟 만들기</button>} />
-      </div>
+      <Empty icon="bookmark" title="아직 저장한 스팟이 없어요"
+        desc="분석 탭에서 한 판을 입력하고 '내 스팟에 저장'을 누르면 여기에 쌓입니다."
+        action={<button type="button" onClick={onNew} className="btn-primary min-h-[44px] px-4 text-xs">분석 탭에서 새 스팟 만들기</button>} />
     );
   }
 

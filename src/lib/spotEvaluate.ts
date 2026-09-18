@@ -26,8 +26,8 @@ import { KEY_PREFIX, PUSH_POS, PUSH_STACKS, type Mode } from './preflopQuiz';
 import { buildFreq } from './ranges';
 import { nashRange, NASH_STACKS, HAND_ORDER, isNashQuarantined } from './nash.data';
 import {
-  potBb, heroComboId, validateSpot, hasBlocker, positionsFor,
-  type SpotReview, type SpotActionType, type SpotIssue, type SpotPosition,
+  potBb, heroComboId, validateSpot, hasBlocker, positionsFor, actorPos,
+  type SpotReview, type SpotAction, type SpotActionType, type SpotIssue, type SpotPosition,
 } from './spot';
 
 // ── 결과 타입 ─────────────────────────────────────────────────────────────────
@@ -204,8 +204,23 @@ function raiseSizeDiff(
   return [`이 표는 ${what} ${want[0]}~${want[1]}BB 기준인데 입력은 ${toBb}BB 입니다.`];
 }
 
-/** 히어로 앞에 액션이 하나도 없는가(첫 진입). */
-const isFirstIn = (s: SpotReview) => s.actions.length === 0;
+/**
+ * 차트 조회용 액션 열 — **상대의 폴드는 뺀다.** 빌런 B~E(2026-09-19)가 앞에서 접은 것은
+ * 표가 상정한 '앞선 오픈 하나' 를 바꾸지 않는다(표는 원래 접은 사람을 세지 않는다).
+ */
+const coreActions = (s: SpotReview): SpotAction[] =>
+  s.actions.filter((a) => !(a.actor === 'villain' && a.type === 'fold'));
+
+/**
+ * 폴드가 아닌 액션을 한 상대 자리들. **둘 이상이면 멀티웨이 팟**이라 2인 프리플랍 표가 풀 문제가 아니다 —
+ * 그때는 표를 억지로 맞추지 않고 math_only 로 떨어진다(솔버 데이터 없이 멀티웨이 정답을 지어내지 않는다).
+ * 하나면 그 자리가 표의 `vs` 다 — 빌런 A 가 아니어도 된다(B 가 오픈하고 A 는 안 움직였을 수 있다).
+ */
+export const activeVillainPositions = (s: SpotReview): SpotPosition[] =>
+  [...new Set(s.actions.filter((a) => a.actor === 'villain' && a.type !== 'fold').map((a) => actorPos(s, a)))];
+
+/** 히어로 앞에 (상대 폴드를 뺀) 액션이 하나도 없는가(첫 진입). */
+const isFirstIn = (s: SpotReview) => coreActions(s).length === 0;
 
 /** 히어로가 마주한 마지막 벳/레이즈(콜에 필요한 금액). 없으면 0. */
 /** 금액이 붙는 액션 — `potBb` 의 SIZED 와 같은 집합이다. */
@@ -234,10 +249,18 @@ function blindOf(s: SpotReview, pos: SpotPosition): number {
  *   고쳐지는 날이 온다(`nuri-single-source`) — 사본을 지우고 이 함수를 쓰게 한다.
  */
 export function investedThisStreet(s: SpotReview, actor: 'hero' | 'villain'): number {
-  let invested = blindOf(s, actor === 'hero' ? s.heroPos : s.villainPos);
+  return investedByPos(s, actor === 'hero' ? s.heroPos : s.villainPos);
+}
+
+/**
+ * **자리 기준** 이번 스트리트 투입액 — 빌런 B~E(2026-09-19)가 생기면서 actor 두 값으로는 사람을 못 가른다.
+ * 액션의 사람은 `actorPos`(hero→heroPos · villain→pos ?? villainPos)로 정한다.
+ */
+export function investedByPos(s: SpotReview, pos: SpotPosition): number {
+  let invested = blindOf(s, pos);
   for (const a of s.actions) {
-    if (a.street !== s.street || a.actor !== actor) continue;
-    if (!SIZED_ACTION.has(a.type)) continue;
+    if (a.street !== s.street || !SIZED_ACTION.has(a.type)) continue;
+    if (actorPos(s, a) !== pos) continue;
     invested += Number.isFinite(a.sizeBb) ? (a.sizeBb as number) : 0;
   }
   return invested;
@@ -255,7 +278,9 @@ export function investedThisStreet(s: SpotReview, actor: 'hero' | 'villain'): nu
  * 두 사람의 **총액 차이**로 재면 둘 다 자연히 맞고, 히어로가 이미 콜해 금액이 같으면 0 이 된다.
  */
 export function amountToCall(s: SpotReview): number {
-  const diff = investedThisStreet(s, 'villain') - investedThisStreet(s, 'hero');
+  // 상대가 여럿이면 **가장 많이 넣은 사람**과의 차액이다 — 콜은 최고 베팅에 맞추는 것이다.
+  const most = Math.max(investedByPos(s, s.villainPos), ...s.extra.map((v) => investedByPos(s, v.pos)));
+  const diff = most - investedByPos(s, s.heroPos);
   return Math.round(Math.max(0, diff) * 100) / 100;
 }
 
@@ -385,23 +410,30 @@ function lookupPreflopChart(s: SpotReview, combo: string): ChartHit | null {
 
   const hero = toTablePos(s.heroPos);
   if (!hero) return null;                  // 10인 UTG2 — 차트 축에 자리가 없다
-  const vs = toTablePos(s.villainPos);
+
+  // 표의 상대 = 폴드 아닌 액션을 한 **그 사람**(빌런 A 가 아닐 수 있다). 상대의 폴드는 core 에서 이미 빠져 있다.
+  // 멀티웨이(그런 상대가 둘 이상)는 아래 두 패턴(오픈 하나 · 내 오픈+3벳 하나)에 애초에 안 걸려 null 로 떨어진다 —
+  // 별도 가드를 두면 죽은 코드다(음성 대조 2026-09-19: 가드를 빼도 테스트가 그대로 초록).
+  const active = activeVillainPositions(s);
+  const vsPos = active[0] ?? s.villainPos;
+  const vs = toTablePos(vsPos);
+  const core = coreActions(s);
 
   // ② 상대의 오픈 레이즈 하나만 앞에 있다 — 블라인드면 **수비 표**, 그 밖의 자리면 **3벳 표**.
   //
   // hero 를 걸지 않으면 안 된다: 같은 vs 로 BB 표와 SB 표가 나란히 있어(bb_vs_btn · sb_vs_btn)
   // 순서에 기대면 조용히 틀린다. 그리고 자리 조합이 표에 없으면 **null 로 떨어진다** —
   // 그게 "오픈이 내 뒤에서 나왔다"(CO 히어로 vs BTN 오픈처럼 불가능한 순서)를 걸러 내는 그물이기도 하다.
-  const onlyOpen = s.actions.length === 1
-    && s.actions[0].actor === 'villain'
-    && s.actions[0].type === 'raise';
+  const onlyOpen = core.length === 1
+    && core[0].actor === 'villain'
+    && core[0].type === 'raise';
   if (onlyOpen) {
     if (!vs) return null;
     const group = (s.heroPos === 'BB' || s.heroPos === 'SB') ? 'defend' : 'threebet';
     const sc = findChart(RANGE_SCENARIOS, group, hero, vs);
     if (!sc) return null;
     const sizeDiff = raiseSizeDiff(
-      investedThisStreet(s, 'villain'), CHART_OPEN_BB, OPEN_REFERENCE_BAND, '상대 오픈',
+      investedByPos(s, vsPos), CHART_OPEN_BB, OPEN_REFERENCE_BAND, '상대 오픈',
     );
     if (!sizeDiff) return null;
     // 표마다 상정 인원이 다르다 — 얼리(UTG·UTG+1·MP) 오픈 수비 표는 9인용이다.
@@ -411,15 +443,15 @@ function lookupPreflopChart(s: SpotReview, combo: string): ChartHit | null {
     return {
       sourceLabel: `프리플랍 레인지 차트 · ${sc.label}`,
       mix, absent,
-      differences: [...stackDiff, ...sizeDiff, ...tableSizeDiff(s, want, s.villainPos, '상대 자리')],
+      differences: [...stackDiff, ...sizeDiff, ...tableSizeDiff(s, want, vsPos, '상대 자리')],
       drill: { mode: group, key: `${KEY_PREFIX[group]}|${sc.id}|${combo}` },
     };
   }
 
   // ③ 내가 오픈했는데 상대가 3벳했다 — vs3bet 표(공격 갈래 키가 'fourbet' 인 12표).
-  const openThen3bet = s.actions.length === 2
-    && s.actions[0].actor === 'hero' && s.actions[0].type === 'raise'
-    && s.actions[1].actor === 'villain' && s.actions[1].type === 'raise';
+  const openThen3bet = core.length === 2
+    && core[0].actor === 'hero' && core[0].type === 'raise'
+    && core[1].actor === 'villain' && core[1].type === 'raise';
   if (openThen3bet) {
     // 상대를 특정한 표가 우선. 없으면 상대를 명시하지 않은 표(vs 생략 4표)로 내려가되
     // **그 사실을 차이로 적는다** — hj_vs_btn3bet.note 가 "'누가 3벳했는지'를 구분하지 않는 표가
@@ -428,16 +460,22 @@ function lookupPreflopChart(s: SpotReview, combo: string): ChartHit | null {
     const sc = named ?? findChart(RANGE_SCENARIOS, 'vs3bet', hero, undefined);
     if (!sc) return null;
     const sizeDiff = raiseSizeDiff(
-      investedThisStreet(s, 'villain'), CHART_3BET_BB, THREEBET_REFERENCE_BAND, '상대 3벳',
+      investedByPos(s, vsPos), CHART_3BET_BB, THREEBET_REFERENCE_BAND, '상대 3벳',
     );
     if (!sizeDiff) return null;
+    // 표는 **내가 2~3BB 로 열었다**는 전제에서 알파·MDF 를 역산한 것이다(ranges.data 주석 "OOP 4x → 알파 75%").
+    // 상대 3벳 크기만 재고 내 오픈은 안 쟀더니 6BB 오픈도 '정확 일치' 였다(감사 2026-09-19) — ② onlyOpen 분기와 대칭으로 잰다.
+    const openDiff = raiseSizeDiff(
+      investedByPos(s, s.heroPos), CHART_OPEN_BB, OPEN_REFERENCE_BAND, '내 오픈',
+    );
+    if (!openDiff) return null;
     const { mix, absent } = mixOf(sc, combo, true);
     return {
       sourceLabel: `프리플랍 레인지 차트 · ${sc.label}`,
       mix, absent,
       differences: [
-        ...stackDiff, ...sizeDiff,
-        ...(named ? [] : [`이 표는 3벳한 사람을 특정하지 않습니다(입력 상대 ${s.villainPos}).`]),
+        ...stackDiff, ...openDiff, ...sizeDiff,
+        ...(named ? [] : [`이 표는 3벳한 사람을 특정하지 않습니다(입력 상대 ${vsPos}).`]),
         ...tableSizeDiff(s, sc.baseTableSize ?? 6, s.heroPos, '내 자리'),
       ],
       drill: { mode: 'vs3bet', key: `${KEY_PREFIX.vs3bet}|${sc.id}|${combo}` },
@@ -612,7 +650,10 @@ export function evaluateSpot(s: SpotReview, options: EvaluateOptions = {}): Spot
 
   // ③ 수학만 — 추천 액션을 만들지 않는다
   const notes: string[] = [];
-  if (s.street === 'preflop') {
+  if (activeVillainPositions(s).length > 1) {
+    // 멀티웨이 — 2인 표를 억지로 맞추지 않은 이유를 화면이 말해야 한다(리드 결정 2026-09-19).
+    notes.push('상대가 둘 이상 살아 있는 팟은 기준 차트가 없습니다 — 옳고 그름을 판정하지 않고 수치만 계산했습니다.');
+  } else if (s.street === 'preflop') {
     notes.push('이 조건에 맞는 검증된 프리플랍 표가 없어 수치만 계산했습니다.');
   } else {
     notes.push('이 앱에는 검증된 포스트플랍 솔버 데이터가 없습니다 — 에퀴티·팟오즈만 계산했습니다.');

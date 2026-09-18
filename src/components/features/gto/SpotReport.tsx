@@ -23,6 +23,7 @@ import { writeSnap } from '../../../lib/snapshot';
 import { saveMySpot, shareSpotPost } from '../../../api/spots';
 import { gotoBoardPost } from '../../../lib/spotNav';
 import { buildShareBody, spotWithNote } from './spotShareBody';
+import { equityHalfWidthPct, type EquityMeta } from './equityRequest';
 
 /** 등급별 색 — **색만으로 의미를 전하지 않는다.** 항상 라벨·아이콘과 함께 쓴다. */
 /** led = [data-aura-variant](index.css) — 인라인 rgb 링은 라이트·고대비·강제색에서 못 껐다(2026-09-18). unsupported 는 LED 없음. */
@@ -59,11 +60,13 @@ interface Props {
    *     저장 목록에 shareSpotPost 를 직접 붙이면 F16 이 세운 "올라갈 본문을 먼저 보여 준다"는
    *     계약을 우회하는 두 번째 게시 경로가 생긴다. 그래서 진입점만 늘리고 경로는 하나로 둔다. */
   shareIntent?: number;
+  /** 승률 메타(2026-09-19 멀티웨이) — 표본인지·몇 장을 무작위로 뽑았는지. 없으면 승률 행이 비어 나온다 */
+  equityMeta?: EquityMeta | null;
   user: ReturnType<typeof useAuth>['user'];
   toast: ReturnType<typeof useToast>;
 }
 
-export default function SpotReport({ spot, evaluation, calculating, blocked, user, toast, shareIntent = 0 }: Props) {
+export default function SpotReport({ spot, evaluation, calculating, blocked, user, toast, shareIntent = 0, equityMeta = null }: Props) {
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const [saved, setSaved] = useState(false);
   /** 공유 확인 시트가 떠 있는가 — 이게 true 인 동안에도 아직 올라간 글은 없다. */
@@ -189,7 +192,7 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
         <MixBar mix={evaluation.mix} absent={evaluation.absent} heroKey={heroMixKey(spot)} />
       )}
       {(evaluation.kind === 'math_only' || evaluation.kind === 'unsupported') && (
-        <MathBlock math={evaluation.math} boardCount={spot.board.length} />
+        <MathBlock math={evaluation.math} boardCount={spot.board.length} meta={equityMeta} />
       )}
 
       {/* ③ 왜 그런지 · 가정 · 출처
@@ -219,13 +222,15 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
       </p>
 
       {/* ④ 행동 */}
+      {/* whitespace-normal · leading-tight: `.btn` 의 nowrap 이 200% 글자확대(root 34px)에서 '내 스팟에 저장' 을 칸 밖으로
+          흘려 옆 버튼 위에 겹쳤다(2026-09-19 스윕, 320~390px). 라벨을 줄이지 않고 두 줄을 허용한다 — SpotHeroCard(ToolsPanel) 와 같은 조리법. */}
       <div className="mt-2.5 grid grid-cols-2 gap-1.5 border-t border-border-subtle pt-2.5">
         <button type="button" onClick={onSave} disabled={blocked || busy !== null}
-          className="btn-ghost min-h-[44px] text-xs disabled:opacity-50">
+          className="btn-ghost min-h-[44px] whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">
           {busy === 'save' ? '저장 중…' : saved ? '저장됨' : '내 스팟에 저장'}
         </button>
         <button type="button" onClick={onShare} disabled={blocked || busy !== null}
-          className="btn-primary min-h-[44px] text-xs disabled:opacity-50">
+          className="btn-primary min-h-[44px] whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">
           {busy === 'share' ? '올리는 중…' : '스팟 토론에 공유'}
         </button>
       </div>
@@ -336,10 +341,11 @@ function ShareConfirmSheet({
         </ul>
 
         <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+          {/* 같은 처방 — '게시판에 올리기' 가 200% 에서 오른쪽 경계를 넘었다(스윕 [medium]). */}
           <button type="button" onClick={onCancel} disabled={busy}
-            className="btn-ghost min-h-[44px] text-xs disabled:opacity-50">취소</button>
+            className="btn-ghost min-h-[44px] whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">취소</button>
           <button type="button" onClick={onConfirm} disabled={busy}
-            className="btn-primary min-h-[44px] text-xs disabled:opacity-50">
+            className="btn-primary min-h-[44px] whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">
             {busy ? '올리는 중…' : '게시판에 올리기'}
           </button>
         </div>
@@ -409,27 +415,40 @@ function MixBar({ mix, absent, heroKey }: { mix: ActionMix; absent: readonly (ke
  * (2,500회일 때는 2.7~3.5%p). 즉 **소수점 자리는 잡음**이라 표본일 때는 정수로 적는다.
  * 반대로 플랍 이후는 흔들리지 않는 값인데 "돌릴 때마다 달라진다" 고 적혀 있었다 — 그것도 거짓이었다.
  */
-function MathBlock({ math, boardCount }: { math: SpotEvaluation['math']; boardCount: number }) {
-  const sampled = boardCount < 3;
+function MathBlock({ math, boardCount, meta }: { math: SpotEvaluation['math']; boardCount: number; meta: EquityMeta | null }) {
+  // 2026-09-19 멀티웨이: 표본 여부는 엔진이 말한다(kind). 상대 카드가 한 장이라도 비면 보드가 다 깔려도 표본이다.
+  //   메타가 없는 옛 경로만 예전 규칙(보드 3장 미만 = 표본)으로 본다.
+  const sampled = meta ? meta.kind === 'monte_carlo' : boardCount < 3;
+  const half = meta ? equityHalfWidthPct(meta) : null;   // 95% 구간 반폭(%p) — 오차를 숨기지 않는다(리드 결정)
   const eq = math.heroEquityPct;
+  const vs = meta && meta.villains > 1 ? ` · 상대 ${meta.villains}명` : '';
   const rows: [string, string, string?][] = [
     ['팟', `${math.potBb}BB`],
     ...(math.toCallBb > 0 ? [['콜 금액', `${math.toCallBb}BB`] as [string, string]] : []),
     ...(math.neededEquityPct !== null ? [['필요 승률', `${math.neededEquityPct}%`, '이 승률보다 높아야 콜이 손해가 아닙니다'] as [string, string, string]] : []),
     ...(eq !== null ? [sampled
-      ? ['내 승률(추정)', `약 ${Math.round(eq)}%`, '무작위 표본 추정치 — 다시 계산하면 1%p 안팎으로 달라집니다(그래서 정수로 적습니다)']
-      : ['내 승률', `${eq}%`, '남은 카드를 전부 돌려 계산한 값입니다 — 다시 계산해도 같습니다'],
+      ? [`내 승률(추정)${vs}`, `약 ${Math.round(eq)}%${half ? ` ±${half}%p` : ''}`,
+        `무작위 표본 ${meta ? meta.iterations.toLocaleString() : ''}회 추정치 — 95% 구간 ±${half ?? 1}%p 라 정수로 적습니다`]
+      : [`내 승률${vs}`, `${eq}%`, '남은 카드를 전부 돌려 계산한 값입니다 — 다시 계산해도 같습니다'],
     ] as [string, string, string][] : []),
   ];
   return (
-    <dl className="mt-2.5 space-y-1">
-      {rows.map(([k, v, help]) => (
-        <div key={k} className="flex items-baseline justify-between gap-2 rounded-input bg-surface-high px-2.5 py-1.5">
-          <dt className="text-2xs text-ink-secondary" title={help}>{k}{help && <Icon name="info" size={10} className="ml-1 inline-block align-[-1px] text-ink-muted" aria-hidden />}</dt>
-          <dd className="text-sm font-bold tabular-nums text-ink-primary">{v}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="mt-2.5">
+      <dl className="space-y-1">
+        {rows.map(([k, v, help]) => (
+          <div key={k} className="flex items-baseline justify-between gap-2 rounded-input bg-surface-high px-2.5 py-1.5">
+            <dt className="text-2xs text-ink-secondary" title={help}>{k}{help && <Icon name="info" size={10} className="ml-1 inline-block align-[-1px] text-ink-muted" aria-hidden />}</dt>
+            <dd className="text-sm font-bold tabular-nums text-ink-primary">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {/* 가정을 숨기고 숫자만 보여 주는 것이 금지다 — 카드를 안 넣은 상대는 무작위 핸드라는 사실을 적는다(리드 결정 2026-09-19). */}
+      {eq !== null && meta && meta.unknownCards > 0 && (
+        <p data-testid="spot-equity-assumption" className="mt-1.5 text-2xs leading-relaxed text-ink-muted break-keep">
+          카드를 넣지 않은 상대는 <b className="text-ink-secondary">무작위 핸드</b>로 계산했습니다(무작위 {meta.unknownCards}장). 상대 레인지를 가정하지 않은 근사치입니다.
+        </p>
+      )}
+    </div>
   );
 }
 

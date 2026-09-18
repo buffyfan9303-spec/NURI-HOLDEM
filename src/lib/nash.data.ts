@@ -68,13 +68,26 @@ export const NASH_ANTE_QUARANTINE: readonly number[] = [2, 3, 4, 5, 6];
  *  반면 SB(k=1) 임계는 `(S−0.5)/(2S)` → 2BB 37.5% · 3BB 41.7% 로 낮고, 표의 SB 열(2BB 91.9%)은
  *  그 임계와 정합한다(100% 아닌 12개가 전부 37.5% 미만). **그래서 SB 열은 살린다.**
  *  ⚠ k 를 안 넘기면(예전 호출부) 보수적으로 **격리로 본다** — 모르면 덜 말하는 쪽이 안전하다. */
-export function isNashQuarantined(stack: number, ante: boolean, k?: number): boolean {
+/** 🔴 **BB 콜 표 전용 격리 — 빅 앤티 7·8·9BB · 노앤티 3BB 의 k≥2 열**(2026-09-19 감사, 셔브 표와 같은 방법).
+ *
+ *  무엇이 틀렸나: 상대가 좁고 강한 레인지로 셔브할수록(k↑) BB 의 콜 레인지는 좁아야 하는데, 이 칸들은 **SB 셔브보다
+ *  BTN 셔브에 더 넓게 콜**한다. 실측(콤보 %): 빅앤티 7bb k1=76.4 → k2=**92.2** · 8bb 66.0 → **78.6** · 9bb 59.0 → **64.4** ·
+ *  노앤티 3bb 93.6 → **99.2**. 게다가 그 행들은 k=2..8 이 거의 평평하다(7bb 92.2→88.6) — 깨진 4~6BB 셔브 표와 같은 서명이고,
+ *  k=1 열은 6→7→8→9→10bb 로 매끈하게 이어진다(89.0·76.4·66.0·59.0·54.0). 그래서 셔브 표 때와 같이 **k≥2 열만** 막는다.
+ *  callSB 는 전 구간 단조(위반 0) · shove 도 정상 — kind 를 구분하지 않으면 정상 표까지 같이 가려지므로 kind 별로 격리한다.
+ *  ⚠ 데이터를 손으로 고치지 않는다(생성기 재현 불가). 되살리려면 표를 다시 만든 뒤 이 목록을 비우고 `ranges.test.ts` 의
+ *    콜 표 단조성 계약이 판정하게 해라. */
+export const NASH_CALLBB_QUARANTINE: { readonly ante: readonly number[]; readonly no: readonly number[] } = { ante: [7, 8, 9], no: [3] };
+
+export function isNashQuarantined(stack: number, ante: boolean, k?: number, kind: NashKind = 'shove'): boolean {
+  const brokenColumn = k === undefined || k >= 2;   // 모르면 보수적으로 격리 — '모르면 덜 말한다'
+  if (kind === 'callBB' && (ante ? NASH_CALLBB_QUARANTINE.ante : NASH_CALLBB_QUARANTINE.no).includes(stack) && brokenColumn) return true;
   if (!ante || !NASH_ANTE_QUARANTINE.includes(stack)) return false;
-  return k === undefined || k >= 2;
+  return brokenColumn;
 }
 
 const tableOf = (kind: NashKind, k: number, stack: number, ante: boolean): string | undefined =>
-  isNashQuarantined(stack, ante, k) ? undefined
+  isNashQuarantined(stack, ante, k, kind) ? undefined
     : (kind === 'shove' ? SHOVE : kind === 'callBB' ? CALL_BB : CALL_SB)[ante ? 'ante' : 'no']?.[String(k)]?.[String(stack)];
 
 /** 그 조합의 표가 실제로 있는가. 없는 조합을 nashRange 로 읽으면 전부 0(=전부 폴드)이라 **틀린 조언이 된다** —

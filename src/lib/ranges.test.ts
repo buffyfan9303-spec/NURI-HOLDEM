@@ -1,7 +1,7 @@
 // 레인지 파서·콤보 가중·Nash 데이터 정합 검증
 import { describe, it, expect } from 'vitest';
 import { expandRange, buildFreq, comboCount, rangeComboPct, gridName, freqFromArray, R_CH, R_VAL } from './ranges';
-import { HAND_ORDER, NASH_STACKS, nashRange, hasNashRange, isNashQuarantined } from './nash.data';
+import { HAND_ORDER, NASH_STACKS, NASH_KS, nashRange, hasNashRange, isNashQuarantined } from './nash.data';
 import { RANGE_SCENARIOS } from './ranges.data';
 
 describe('expandRange 표기 파서', () => {
@@ -73,11 +73,17 @@ describe('nash.data 정합', () => {
     }
   });
   it('🔴 BB 콜은 전 포지션(k=1~8)에 데이터가 있다(예전 버그: k>=3 이 비어 100% 폴드)', () => {
+    // 2026-09-19: 노앤티 3bb 의 k≥2 열은 BB 콜 전용 격리다(역전 93.6→99.2) — 격리된 칸은 '빈 표' 가 맞다.
+    //   격리를 빼고 검사하되, 격리가 정확히 그 칸만인지는 아래 'BB 콜 표 격리' 계약이 잠근다(여기서 되풀이하지 않는다).
+    let checked = 0;
     for (const k of [1, 2, 3, 4, 5, 6, 7, 8]) for (const s of NASH_STACKS) {
+      if (isNashQuarantined(s, false, k, 'callBB')) continue;
       const a = nashRange('callBB', k, s, false);
       const sum = Array.from(a).reduce((x, y) => x + y, 0);
       expect(sum, `callBB k=${k} s=${s}`).toBeGreaterThan(0); // AA 는 어디서든 콜
+      checked += 1;
     }
+    expect(checked, '격리가 너무 넓어 검사할 칸이 줄었다').toBe(8 * NASH_STACKS.length - 7);   // 3bb 의 k=2..8 일곱 칸만 빠진다
   });
   it('SB 콜은 k>=2 에 데이터가 있다', () => {
     for (const k of [2, 3, 4, 5, 6, 7, 8]) {
@@ -148,6 +154,40 @@ describe('nash.data 정합', () => {
     // k 를 안 넘기면 보수적으로 격리 — '모르면 덜 말한다'
     expect(isNashQuarantined(3, true)).toBe(true);
   });
+
+  it('🔴 콜 표(callBB·callSB)도 전 깊이 × 앤티 유무 단조성 — 셔브 표에만 있던 계약이라 BB 콜 7~9bb 역전이 새어 나갔다(2026-09-19)', () => {
+    // 상대가 좁고 강한 레인지로 셔브할수록(k↑) 콜 레인지는 좁아야 한다 — 셔브 표와 같은 원리, 같은 허용오차(1.0%p).
+    // 격리된 조합은 hasNashRange 가 false 라 자동으로 빠진다 — 격리를 풀면 이 계약이 판정한다.
+    const broken: string[] = [];
+    for (const kind of ['callBB', 'callSB'] as const) for (const ante of [false, true]) for (const stack of NASH_STACKS) {
+      const live = NASH_KS.filter((k) => hasNashRange(kind, k, stack, ante));
+      for (let i = 0; i + 1 < live.length; i++) {
+        const a = live[i], b2 = live[i + 1];
+        const wide = rangeComboPct(freqFromArray(nashRange(kind, a, stack, ante), HAND_ORDER));
+        const narrow = rangeComboPct(freqFromArray(nashRange(kind, b2, stack, ante), HAND_ORDER));
+        if (!(wide >= narrow - 1.0)) broken.push(`${kind} ${stack}bb ante=${ante}: k${a}=${wide.toFixed(1)} < k${b2}=${narrow.toFixed(1)}`);
+      }
+    }
+    expect(broken, `상대 레인지가 더 강한데 콜이 더 넓다 — 표가 깨졌다:\n${broken.join('\n')}`).toEqual([]);
+  });
+
+  it('🔴 BB 콜 표 격리 — 빅앤티 7·8·9bb · 노앤티 3bb 의 k≥2 열만 막고, k=1 과 셔브·SB 콜 표는 살린다', () => {
+    // 막는 것: 실측 역전(빅앤티 7bb k1=76.4 → k2=92.2 · 8bb 66.0→78.6 · 9bb 59.0→64.4 · 노앤티 3bb 93.6→99.2)
+    for (const s of [7, 8, 9]) for (const k of [2, 5, 8]) {
+      expect(hasNashRange('callBB', k, s, true), `callBB ${s}bb k=${k} 빅앤티가 격리에서 풀렸다`).toBe(false);
+      expect(isNashQuarantined(s, true, k, 'callBB')).toBe(true);
+    }
+    for (const k of [2, 5, 8]) expect(hasNashRange('callBB', k, 3, false), `callBB 3bb k=${k} 노앤티가 격리에서 풀렸다`).toBe(false);
+    // 살리는 것: k=1 열(6→7→8→9→10bb 로 매끈: 89.0·76.4·66.0·59.0·54.0) · 같은 깊이의 셔브·SB 콜 표 · 10bb 이상
+    for (const s of [7, 8, 9]) {
+      expect(hasNashRange('callBB', 1, s, true), `callBB ${s}bb SB 열까지 막혔다`).toBe(true);
+      expect(hasNashRange('shove', 5, s, true), `shove ${s}bb 가 콜 표 격리에 휩쓸렸다 — kind 별 격리가 깨졌다`).toBe(true);
+      expect(hasNashRange('callSB', 5, s, true), `callSB ${s}bb 가 콜 표 격리에 휩쓸렸다`).toBe(true);
+    }
+    for (const s of [10, 12, 20]) expect(hasNashRange('callBB', 5, s, true), `callBB ${s}bb 가 잘못 막혔다`).toBe(true);
+    // kind 를 안 넘기면 셔브 기준이다 — 예전 호출부가 콜 표 격리를 모르는 채 통과하면 안 되는 자리는 위 호출부 계약이 잡는다
+    expect(isNashQuarantined(7, true, 5)).toBe(false);
+  });
   it('안테가 있으면 셔브가 넓어진다 (SB 10bb)', () => {
     const noA = rangeComboPct(freqFromArray(nashRange('shove', 1, 10, false), HAND_ORDER));
     const wA = rangeComboPct(freqFromArray(nashRange('shove', 1, 10, true), HAND_ORDER));
@@ -183,6 +223,22 @@ describe('ranges.data 표준 차트 위생', () => {
     expect(pct('rfi_hj')).toBeLessThan(pct('rfi_co'));
     expect(pct('rfi_co')).toBeLessThan(pct('rfi_btn'));
   });
+  it('🔴 한 액션 안에서 같은 핸드가 두 빈도 버킷에 적히지 않는다 — bb_vs_hj 콜의 JTo 가 1 과 0.5 에 동시에 있었다(2026-09-19)', () => {
+    // buildFreq 는 첫 지정을 우선해 계산값은 멀쩡했지만, 소스가 두 값을 말하면 다음 편집이 어느 쪽을 믿을지 모른다.
+    const dup: string[] = [];
+    for (const sc of RANGE_SCENARIOS) for (const a of sc.actions) {
+      const seen = new Map<string, string>();
+      for (const [f, str] of Object.entries(a.spec)) {
+        if (!str) continue;
+        for (const h of expandRange(str)) {
+          if (seen.has(h)) dup.push(`${sc.id}/${a.key}: ${h} @${seen.get(h)} 와 @${f}`);
+          else seen.set(h, f);
+        }
+      }
+    }
+    expect(dup, `한 액션 안에서 핸드가 두 번 적혔다:\n${dup.join('\n')}`).toEqual([]);
+  });
+
   it('한 시나리오 안에서 액션 간 핸드 중복 없음(3벳과 콜이 같은 핸드를 1.0으로 겹치지 않음)', () => {
     for (const s of RANGE_SCENARIOS) {
       if (s.actions.length < 2) continue;

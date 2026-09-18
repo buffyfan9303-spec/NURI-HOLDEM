@@ -11,7 +11,7 @@
 //   RPC 하나면 둘 다 사라진다 — 실패하면 글도 안 남고, id 는 함수가 돌려준다.
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { mustAffect } from './_mustAffect';
-import { toJSON, fromJSON, type SpotReview } from '../lib/spot';
+import { toJSON, fromJSON, villainsLabel, type SpotReview } from '../lib/spot';
 import type { SpotEvaluation, CoverageKind } from '../lib/spotEvaluate';
 
 /** 저장된 내 스팟 한 건 */
@@ -120,7 +120,7 @@ export async function deleteMySpot(id: string): Promise<void> {
 
 /** 공유 본문 — 스팟 카드가 구조를 보여주므로 본문은 짧게. 메모가 있으면 그것을 쓴다. */
 function shareBody(spot: SpotReview): string {
-  const head = `${spot.heroPos} vs ${spot.villainPos} · ${spot.effectiveBb}BB · ${spot.street === 'preflop' ? '프리플랍' : spot.street}`;
+  const head = `${spot.heroPos} vs ${villainsLabel(spot)} · ${spot.effectiveBb}BB · ${spot.street === 'preflop' ? '프리플랍' : spot.street}`;
   return spot.note?.trim() ? `${head}\n\n${spot.note.trim()}` : `${head}\n\n이 자리에서 어떻게 하시겠어요?`;
 }
 
@@ -164,7 +164,7 @@ export async function fetchPostSpot(postId: string): Promise<PostSpot | null> {
   // hidden_* 컬럼(컬럼 수준 SELECT 회수)에 넣어 두고, 작성자가 열 때 되돌려 넣는다
   // (20260911d). 그러니 여기 온 spot 에는 열리기 전 정답이 애초에 없다.
   // 아래 두 줄은 그 계약이 깨졌을 때를 위한 이중 방어다 — 지우지 마라.
-  if (!data.reveal_villain) spot.villain = [];
+  if (!data.reveal_villain) { spot.villain = []; spot.extra = spot.extra.map((v) => ({ ...v, cards: [] })); }
   if (!data.reveal_result) delete spot.result;
   return {
     spot,

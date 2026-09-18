@@ -11,14 +11,14 @@
 // ⚠ 스트리트 표기가 `spotSummary()` 와 다르다(프리플랍만 한글, 나머지는 영문 식별자).
 //   그것이 **지금 실제로 올라가는 문자열**이라 미리보기도 그대로 따른다 — 여기서 몰래
 //   예쁘게 고치면 미리보기와 게시물이 달라진다.
-import type { SpotReview } from '../../../lib/spot';
+import { villainsLabel, type SpotReview } from '../../../lib/spot';
 
 /** 메모가 없을 때 본문 뒤에 붙는 기본 질문 */
 export const SHARE_BODY_FALLBACK = '이 자리에서 어떻게 하시겠어요?';
 
-/** 본문 첫 줄 — 자리·스택·스트리트 */
+/** 본문 첫 줄 — 자리·스택·스트리트. 상대가 여럿이면 'BTN vs BB·CO·SB'(villainsLabel — spots.ts 와 같은 함수). */
 export function shareBodyHead(spot: SpotReview): string {
-  return `${spot.heroPos} vs ${spot.villainPos} · ${spot.effectiveBb}BB · ${spot.street === 'preflop' ? '프리플랍' : spot.street}`;
+  return `${spot.heroPos} vs ${villainsLabel(spot)} · ${spot.effectiveBb}BB · ${spot.street === 'preflop' ? '프리플랍' : spot.street}`;
 }
 
 /**

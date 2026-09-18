@@ -96,6 +96,23 @@ function buildDeck(excludeKeys: ReadonlySet<number>): NCard[] {
 }
 
 /**
+ * 같은 카드가 두 번 들어왔는가(그룹 안·그룹 사이 모두). 화면의 카드 선택기는 이걸 못 만들지만
+ * 손으로 적은 `[[REPLAY:hero=As,As;…]]` 마커는 검증 없이 여기까지 온다 — 감사 2026-09-19: As·As 로
+ * 아웃츠 44장/46장 같은 있을 수 없는 숫자가 확정처럼 나갔다. 엔진 진입부에서 막는다.
+ */
+export function hasDuplicateCards(...groups: readonly (readonly Card[])[]): boolean {
+  const seen = new Set<number>();
+  for (const g of groups) {
+    for (const c of g) {
+      const k = keyOf(toN(c));
+      if (seen.has(k)) return true;
+      seen.add(k);
+    }
+  }
+  return false;
+}
+
+/**
  * 결과가 **어떻게 나온 값인지**. 숫자만 보면 전수 계산과 표본 추정과
  * "계산할 수 없었음"이 구분되지 않는다.
  */
@@ -176,6 +193,8 @@ export function computeEquity(
   board: Card[],
   iterations = 2500,
 ): EquityResult {
+  // 겹친 카드 = 존재할 수 없는 핸드. 0.5 로 위장하지 않고 '계산 못 함' 을 싣는다(computeEquityVsRange 와 같은 모양).
+  if (hasDuplicateCards(hero, villain, board)) return { ...NEUTRAL, kind: 'no_legal_combinations', accepted: 0, attempts: 0 };
   const heroN = [toN(hero[0]), toN(hero[1])];
   const villN = [toN(villain[0]), toN(villain[1])];
   const boardN = board.map(toN);
@@ -219,6 +238,116 @@ export function computeEquity(
     villain: (vw + tie / 2) / total,
     tie: tie / total,
     iterations: total,
+  };
+}
+
+/**
+ * 멀티웨이 결과 (2026-09-19, NURI SPOT 빌런 A~E).
+ * 팟이 하나(사이드팟 없음 — spot.ts 원장 규칙)라 '히어로가 최고 패인가' 와 공동 1등 분할(1/승자수)만 의미 있다.
+ * 2등·3등은 세지 않는다 — 그 값으로 할 수 있는 말이 없다.
+ */
+export interface MultiEquityResult {
+  /** 히어로 몫(공동 1등은 1/승자수로 분할) */
+  hero: number;
+  /** 히어로가 공동 1등에 든 확률(분할 전) */
+  tie: number;
+  /** 상대별 몫(입력 순서). 합 = 1 − hero */
+  villains: number[];
+  iterations: number;
+  /** 'no_legal_combinations' = 겹친 카드 등으로 계산할 수 없었다 — 숫자는 전부 0 이고 승률이 아니다 */
+  kind: 'exact' | 'monte_carlo' | 'no_legal_combinations';
+  /** 무작위로 채운 상대 카드 장수 — 0 이면 전원 카드를 알았다 */
+  unknownCards: number;
+}
+
+/**
+ * Hero 2장 vs 상대 N명(각 0~2장 — 모자란 장수는 **무작위 핸드로 채운다**), 보드 0~5장.
+ *
+ * 화면은 이 가정을 반드시 적어야 한다("카드를 넣지 않은 상대는 무작위 핸드로 계산") — 가정을 숨기고
+ * 숫자만 보여 주는 것이 이 저장소가 금지하는 것이지, 가정을 밝힌 근사는 SourceBadge heuristic 선례대로 허용된다.
+ *
+ * 전수는 **상대 카드를 전부 알고 잔여 보드가 2장 이하**일 때만이다(플랍 C(45,2)=990 · 턴 44 · 리버 1).
+ * 상대 카드가 한 장이라도 비면 표본이다 — 6인 프리플랍은 배분 순열이 ~10^13 이라 전수가 없다.
+ * 실측(2026-09-19, node): 10,000회 = 2인 0.35s · 6인(5명 모름) 1.0~1.4s, 12회 반복 SD 0.51%p.
+ * 25,000회는 3s 라 폰에서 너무 길다 — 표본이면 화면이 ±0.5%p 수준의 오차를 같이 적는다.
+ *
+ * ⚠ 잔여 카드가 보드와 상대 손에 섞여 들어가는 경우(예: 턴 + 상대 1장 모름)는 unordered 쌍 루프로 전수화하면
+ *   (보드←i, 손←j) 와 (보드←j, 손←i) 중 하나만 세어 **편향**된다. 그래서 그 경우는 전수화하지 않는다.
+ */
+export function computeEquityMulti(
+  hero: [Card, Card],
+  villains: readonly (readonly Card[])[],
+  board: Card[],
+  iterations = 10000,
+  seed?: number,
+): MultiEquityResult {
+  if (hasDuplicateCards(hero, ...villains, board)) {
+    return { hero: 0, tie: 0, villains: villains.map(() => 0), iterations: 0, kind: 'no_legal_combinations', unknownCards: 0 };
+  }
+  const heroN = [toN(hero[0]), toN(hero[1])];
+  const villN = villains.map((v) => v.slice(0, 2).map(toN));
+  const boardN = board.map(toN);
+  const known = new Set([...heroN, ...villN.flat(), ...boardN].map(keyOf));
+  const deck = buildDeck(known);
+  const need = Math.max(0, 5 - boardN.length);
+  const missing = villN.map((v) => 2 - v.length);
+  const unknownCards = missing.reduce((a, b) => a + b, 0);
+  const draw = need + unknownCards;
+  const rnd = makeRng(seed);
+
+  let hw = 0; let ht = 0; let total = 0;
+  const vw = new Array<number>(villains.length).fill(0);
+  const judge = (full: NCard[], hands: NCard[][]) => {
+    const h = best7([...heroN, ...full]);
+    let max = h; let winners = 1; let heroTop = true;
+    const vs = hands.map((hand) => best7([...hand, ...full]));
+    for (const v of vs) {
+      if (v > max) { max = v; winners = 1; heroTop = false; } else if (v === max) winners += 1;
+    }
+    if (heroTop) { hw += 1 / winners; if (winners > 1) ht += 1; }
+    for (let i = 0; i < vs.length; i += 1) if (vs[i] === max) vw[i] += 1 / winners;
+    total += 1;
+  };
+
+  let kind: MultiEquityResult['kind'];
+  if (draw === 0) {
+    kind = 'exact';
+    judge(boardN, villN);
+  } else if (unknownCards === 0 && need <= 2) {
+    kind = 'exact';
+    if (need === 1) {
+      for (let i = 0; i < deck.length; i += 1) judge([...boardN, deck[i]], villN);
+    } else {
+      for (let i = 0; i < deck.length; i += 1)
+        for (let j = i + 1; j < deck.length; j += 1) judge([...boardN, deck[i], deck[j]], villN);
+    }
+  } else {
+    kind = 'monte_carlo';
+    for (let it = 0; it < iterations; it += 1) {
+      // 부분 Fisher-Yates: 앞쪽 draw 장만 무작위 추출 → 상대 손(모자란 장수) → 보드 순으로 배분
+      for (let k = 0; k < draw; k += 1) {
+        const j = k + Math.floor(rnd() * (deck.length - k));
+        const tmp = deck[k]; deck[k] = deck[j]; deck[j] = tmp;
+      }
+      let p = 0;
+      const hands = villN.map((v, i) => {
+        if (missing[i] === 0) return v;
+        const hand = [...v, ...deck.slice(p, p + missing[i])];
+        p += missing[i];
+        return hand;
+      });
+      judge([...boardN, ...deck.slice(p, p + need)], hands);
+    }
+  }
+
+  if (total === 0) return { hero: 0, tie: 0, villains: vw, iterations: 0, kind: 'exact', unknownCards };
+  return {
+    hero: hw / total,
+    tie: ht / total,
+    villains: vw.map((x) => x / total),
+    iterations: total,
+    kind,
+    unknownCards,
   };
 }
 
@@ -319,6 +448,7 @@ export interface OutsResult {
  */
 export function computeOuts(hero: [Card, Card], villain: [Card, Card], board: Card[]): OutsResult | null {
   if (board.length !== 3 && board.length !== 4) return null;
+  if (hasDuplicateCards(hero, villain, board)) return null;   // 겹친 카드 — 있을 수 없는 핸드의 아웃츠는 없다
   const known = new Set([...hero, ...villain, ...board].map((c) => keyOf(toN(c))));
   const deck = buildDeck(known);
   const cards: Card[] = [];

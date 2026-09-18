@@ -29,7 +29,11 @@ export function PayoutCalc() {
 
   const preset = presetId ? PAYOUT_PRESETS.find((p) => p.id === presetId)! : null;
   const autoPct = style === 'flat' ? 0.18 : style === 'satellite' ? 0.15 : 0.10;
-  const places = preset ? preset.pct.length : Math.max(1, placesIn > 0 ? placesIn : Math.round(entries * autoPct));
+  // 🔴 2026-09-19 GTO 감사 [medium]: 시상 인원(수동 입력)에 상한이 없어 참가 5명인데 12명을 시상하는
+  //   표가 그대로 만들어졌다(합계는 맞아떨어져 눈치채기 어렵다). 시상 인원은 참가 인원을 넘을 수 없다
+  //   (places ≤ entries). 아래 Result 라벨이 실제 쓰인 places 를 그대로 보여주므로 클램프해도
+  //   "화면 숫자와 계산 숫자가 갈린다"(OutsCalc 와 같은 부류)는 문제가 생기지 않는다.
+  const places = preset ? preset.pct.length : Math.max(1, Math.min(entries, placesIn > 0 ? placesIn : Math.round(entries * autoPct)));
 
   let amounts: number[];
   if (preset) {

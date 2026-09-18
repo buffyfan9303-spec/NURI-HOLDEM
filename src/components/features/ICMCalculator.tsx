@@ -27,6 +27,23 @@ const MODES: { key: Mode; label: string }[] = [
 const num = (v: number) => v.toLocaleString('ko-KR');
 const fmt = (n: number) => Math.round(n).toLocaleString('ko-KR');
 
+/** 최대잔여법(largest-remainder) — 각 행을 독립적으로 반올림하면 표시값 합이 실제 풀과 어긋난다
+ *  (실측: 384+328+289=1,001 인데 실제 상금은 1,000). decimals 자리로 반올림하되, 남는/모자란
+ *  1단위를 소수부가 큰 순서로 배분해 합이 항상 Math.round(실제 합) 과 같게 만든다.
+ *  🔴 2026-09-19 GTO 감사 [medium]: 실제 상금 분배(딜)에 쓰는 표라 표시값 합계가 실제 총액과
+ *  어긋나면 분쟁 소지다. */
+function apportion(vals: number[], decimals: number): number[] {
+  const scale = 10 ** decimals;
+  const scaled = vals.map((v) => v * scale);
+  const floors = scaled.map(Math.floor);
+  const target = Math.round(scaled.reduce((a, b) => a + b, 0));
+  const remainder = target - floors.reduce((a, b) => a + b, 0);
+  const order = scaled.map((v, i) => ({ i, frac: v - Math.floor(v) })).sort((a, b) => b.frac - a.frac);
+  const result = [...floors];
+  for (let k = 0; k < remainder && k < order.length; k++) result[order[k].i] += 1;
+  return result.map((v) => v / scale);
+}
+
 /** 기대 지분 모드에서 압박 계산을 건너뛸 때 쓰는 자리표시자(렌더되지 않는다) */
 const IDLE_PRESSURE = callPressure({ stacks: [], prizes: [], heroIndex: 0, villainIndex: 0, pot: 0 });
 
@@ -60,7 +77,12 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
   const equities = useMemo(() => {
     const s = stacks.map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
     if (s.reduce((a, b) => a + b, 0) <= 0) return stacks.map(() => 0);
-    return icmEquity(s, prizes.map((v) => (Number.isFinite(v) ? v : 0)));
+    // 🔴 2026-09-19 GTO 감사 [medium]: 예전엔 NaN 만 걸렀다 — 상금 칸에 음수(예: 3위 −1000)를 넣으면
+    //   icmEquity 가 그대로 받아 지분이 음수로 나왔고(실측 −326.67 × 3), 아래 딜 비교 표의 칩찹 열은
+    //   chipChop(lib/icm.ts:64)이 이미 `x>0` 으로 걸러 다른 풀(750 vs 800)을 나눠 두 열의 합이 갈렸다.
+    //   chipChop·callPressure 와 같은 정제(`Number.isFinite(v) && v > 0`)로 맞춘다 — icm.ts 자신이
+    //   세운 "두 열은 같은 풀을 나눈다" 불변식(60~61행 주석)을 화면이 깨고 있었다.
+    return icmEquity(s, prizes.map((v) => (Number.isFinite(v) && v > 0 ? v : 0)));
   }, [stacks, prizes]);
   // 실제 지급되는 상금 합계(= 기대값 합). 상금 자리가 인원보다 많아도 % 가 100%로 합산되도록 분모로 사용.
   const awarded = equities.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
@@ -70,6 +92,10 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
   // 딜 비교 — 칩찹(스택 비례). ICM 은 상위 n개 상금만 배분하므로 칩찹도 같은 풀을 나눠야 두 열의 합이 같다(lib/icm chipChop).
   const totalStack = stacks.reduce((a, b) => a + (Number.isFinite(b) && b > 0 ? b : 0), 0);
   const chop = useMemo(() => (mode === 'deal' ? chipChop(stacks, prizes) : []), [mode, stacks, prizes]);
+  // 딜 비교 표 표시값 — 최대잔여법으로 반올림해 행을 손으로 더한 합이 항상 실제 풀과 같게 한다(위 apportion 참고).
+  const dealDecimals = looksPct ? 1 : 0;
+  const equitiesShown = useMemo(() => (mode === 'deal' ? apportion(equities, dealDecimals) : []), [mode, equities, dealDecimals]);
+  const chopShown = useMemo(() => (mode === 'deal' ? apportion(chop, dealDecimals) : []), [mode, chop, dealDecimals]);
 
   // 인원을 줄이면 저장된 자리 인덱스가 범위를 벗어난다 — 표시 직전에 좁혀서 쓴다(effect 불필요).
   const n = stacks.length;
@@ -122,7 +148,8 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
       {prizes.map((v, i) => (
         <label key={i} className="block">
           <span className="block text-2xs text-ink-muted mb-0.5">{i + 1}위</span>
-          <input type="number" inputMode="decimal" value={v === 0 ? '' : v}
+          {/* min=0 — 팟 입력(아래 pressureInputs)엔 이미 있는데 상금 입력엔 없어 음수가 그대로 들어갔다(감사 발견) */}
+          <input type="number" inputMode="decimal" min={0} value={v === 0 ? '' : v}
             onChange={(e) => setPrize(i, e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
             className="input w-full text-sm tabular-nums" />
         </label>
@@ -204,13 +231,17 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
           </thead>
           <tbody className="divide-y divide-border-subtle">
             {stacks.map((v, i) => {
-              const diff = (equities[i] ?? 0) - (chop[i] ?? 0);
+              // apportion 을 거친 표시값끼리 뺀다 — 행에 보이는 세 숫자(ICM 딜·칩찹·차이)가 항상
+              // 서로 앞뒤가 맞아야 한다(raw 값으로 diff 를 내면 반올림 경계에서 1 단위가 어긋날 수 있다).
+              const icmShown = equitiesShown[i] ?? 0;
+              const chopShownV = chopShown[i] ?? 0;
+              const diff = icmShown - chopShownV;
               return (
                 <tr key={i}>
                   <td className="px-2 py-1.5 font-bold text-ink-secondary">P{i + 1}</td>
                   <td className="px-2 py-1.5 text-right text-ink-secondary">{fmt(v)}</td>
-                  <td className="px-2 py-1.5 text-right font-extrabold text-accent-300">{money(equities[i] ?? 0)}</td>
-                  <td className="px-2 py-1.5 text-right font-bold text-ink-primary">{money(chop[i] ?? 0)}</td>
+                  <td className="px-2 py-1.5 text-right font-extrabold text-accent-300">{money(icmShown)}</td>
+                  <td className="px-2 py-1.5 text-right font-bold text-ink-primary">{money(chopShownV)}</td>
                   <td className={`px-2 py-1.5 text-right font-bold ${diff > 0.5 ? 'text-emerald-400' : diff < -0.5 ? 'text-danger-light' : 'text-ink-muted'}`}>
                     {diff > 0.5 ? `+${money(diff)}` : diff < -0.5 ? `−${money(-diff)}` : '0'}
                   </td>

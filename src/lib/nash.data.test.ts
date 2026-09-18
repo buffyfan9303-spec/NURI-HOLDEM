@@ -13,7 +13,7 @@ describe('nash.data — BB 깊이별 표 존재 계약', () => {
     //   여기서 예외로 두지 않고 격리를 풀면 "K2o 100% 올인" 이 다시 라이브로 나간다.
     //   격리가 **실제로 걸려 있는지**는 `ranges.test.ts` 의 격리 계약이 따로 잠근다(여기서 되풀이하지 않는다).
     for (const kind of ['shove', 'callBB'] as NashKind[]) for (const ante of [false, true]) for (const k of NASH_KS) for (const s of NASH_STACKS) {
-      if (isNashQuarantined(s, ante)) continue;
+      if (isNashQuarantined(s, ante, k, kind)) continue;   // kind 별 격리(2026-09-19: BB 콜 7~9bb·노앤티 3bb 의 k≥2)
       expect(hasNashRange(kind, k, s, ante), `${kind} ante=${ante} k=${k} ${s}bb`).toBe(true);
       expect(nashRange(kind, k, s, ante).some((v) => v > 0), `${kind} ante=${ante} k=${k} ${s}bb 가 전부 0`).toBe(true);
     }
@@ -21,7 +21,7 @@ describe('nash.data — BB 깊이별 표 존재 계약', () => {
 
   it('callSB 는 k>=2 에만 있고 k=1(SB 가 셔버 본인)은 없다고 말한다 — 없는 표를 0 으로 꾸며 주지 않는다', () => {
     for (const ante of [false, true]) for (const s of NASH_STACKS) {
-      if (isNashQuarantined(s, ante)) continue; // 격리 구간(빅앤티 4~6BB) — 위 계약과 같은 이유
+      if (isNashQuarantined(s, ante, undefined, 'callSB')) continue; // 격리 구간(빅앤티 2~6BB) — 위 계약과 같은 이유
       expect(hasNashRange('callSB', 1, s, ante)).toBe(false);
       for (const k of NASH_KS) if (k >= 2) expect(hasNashRange('callSB', k, s, ante), `callSB k=${k} ${s}bb`).toBe(true);
     }

@@ -85,7 +85,9 @@ export default function HandReplayer({ replay, revealAll = false }: { replay: Re
   // ── 에퀴티 오버레이 ─────────────────────────────────────────────────────────
   // hero·villain 둘 다 2장을 알 때만 계산(그 외엔 숨김 → 기존 동작 유지).
   // '그 시점 보드'(현재 공개된 스트리트까지)로 hero 승률을 표시한다.
-  const canEquity = replay.hero.length === 2 && replay.villain.length === 2;
+  // 손으로 적은 [[REPLAY:]] 마커는 검증을 안 거친다 — 겹친 카드(As,As · 보드와 겹침)는 있을 수 없는 핸드라 계산하지 않는다(감사 2026-09-19).
+  const allCards = [...replay.hero, ...replay.villain, ...replay.board];
+  const canEquity = replay.hero.length === 2 && replay.villain.length === 2 && new Set(allCards).size === allCards.length;
   const shownBoard = [
     ...(on(flopAt) ? flop : []),
     ...(on(turnAt) ? turn : []),

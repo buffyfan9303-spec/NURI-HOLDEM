@@ -131,6 +131,10 @@ describe('GTO 데이터 — 출처를 속이지 않는다', () => {
       ['src/components/features/tools/PushFoldChart.tsx', 'nash'],     // 자체 Nash 모델
       ['src/components/features/gto/GtoDeepPanel.tsx', 'heuristic'],   // 휴리스틱 참고
       ['src/components/features/HandGtoModal.tsx', 'chart'],
+      // 2026-09-19 GTO 감사 — AdvancedCalcs.tsx 는 자체 주석(70~71행)이 '자체 제작 학습 차트'라고
+      // 스스로 약속해 놓고 배지가 없었다. RangeMatrix 도 같은 이유로 빠져 있었다(mc = 몬테카를로).
+      ['src/components/features/tools/AdvancedCalcs.tsx', 'chart'],    // AggroChart — 통설 요약값
+      ['src/components/features/tools/AdvancedCalcs.tsx', 'mc'],       // RangeMatrix — 실시간 몬테카를로
     ];
     for (const [f, kind] of need) {
       const src = readFileSync(join(ROOT, f.replace('src/components/features/HandGtoModal.tsx', 'src/components/features/HandGtoModal.tsx')), 'utf-8');

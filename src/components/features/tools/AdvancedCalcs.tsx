@@ -5,6 +5,7 @@ import { type WeightedCombo } from '../gto/equityEngine';
 import { rangeVsRangeAsync } from '../gto/equityClient';
 import { expandFreqToCombos, scenarioActionCombos } from '../gto/useDeepGto';
 import Term from './Term';
+import SourceBadge from './SourceBadge';
 
 /* 보조 도구 3종 — MDF/블러프 계산기 · 어그레션 빈도 차트 · 레인지 vs 레인지 에퀴티(몬테카를로) */
 
@@ -82,6 +83,9 @@ export function AggroChart() {
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
     <CalcCard desc="6인 · 100bb 기준 포지션별 권장 빈도(근사). 내 성향이 이 범위에서 크게 벗어나면 누수일 수 있어요.">
+      {/* 🔴 2026-09-19 GTO 감사 [medium]: 70~71행 주석이 스스로 "자체 제작 학습 차트로 표시한다"고
+          약속해 놓고 실제로는 배지가 없었다. 출처는 결과 바로 옆(RangeGuide.tsx 와 같은 자리). */}
+      <div className="flex justify-center"><SourceBadge kind="chart" note="100bb" /></div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[26rem] text-center text-xs">
           <thead>
@@ -213,6 +217,9 @@ export function RangeMatrix() {
       <p className="text-2xs text-ink-muted">
         {'표준 차트 '}<Term name="레인지">레인지</Term>{'를 '}<Term name="콤보">콤보</Term>{' 단위로 전개해 프리플랍 승률을 실시간 계산합니다.'}
       </p>
+      {/* 🔴 2026-09-19 GTO 감사 [medium]: AggroChart 와 같은 이유로 빠져 있었다 — 이쪽은 사람이 정리한
+          표가 아니라 실시간 몬테카를로 계산이라 kind 를 다르게 쓴다(RangeGuide.tsx 의 chart 와 구분). */}
+      <div className="flex justify-center"><SourceBadge kind="mc" note={`${MATRIX_ITER.toLocaleString()}회/쌍`} /></div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="space-y-1">
           <span className="text-2xs font-semibold text-accent-300">내 레인지</span>

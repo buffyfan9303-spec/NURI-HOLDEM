@@ -156,9 +156,12 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 분석' }).click();
     const dlg = page.getByRole('dialog').first();
     await expect(dlg).toBeVisible({ timeout: 20_000 });
+    // 2026-09-19 오너 지시로 진입 단계가 1번(게임)이 됐다 — 카드 그리드는 3번 단계에서만 선다.
+    const steps = dlg.getByRole('group', { name: '입력 단계' });
+    await steps.getByRole('button', { name: /카드·액션/ }).click();
     await dlg.locator('button[data-card="As"]').click();
     await dlg.locator('button[data-card="Ks"]').click();
-    await dlg.getByRole('group', { name: '입력 단계' }).getByRole('button', { name: /내 선택/ }).click();
+    await steps.getByRole('button', { name: /내 선택/ }).click();
     await dlg.getByRole('button', { name: '레이즈', exact: true }).first().click();
     await dlg.getByRole('spinbutton').first().fill('3');
     await page.waitForTimeout(600);

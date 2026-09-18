@@ -166,7 +166,9 @@ const DEFEND: RangeScenario[] = [
       { key: 'call', label: '콜', spec: {
         '1': 'AJo ATs ATo A9s A8s A7s A6s KQo K9s QJo QTs Q9s JTs JTo J9s T9s 98s 88 87s 77 76s 66 65s 55 54s 44 33 22',
         '0.75': '99 KTs QJs A9o',
-        '0.5': 'JJ TT AJs KQs KJs A4s A3s A2s KJo AQo KTo K8s K7s QTo Q9o Q8s JTo J8s T9o T8s 98o 97s 86s 75s 64s 53s',
+        // JTo 는 위 '1' 목록에 이미 있다(형제 표 bb_vs_lj·co·btn·sb 와 같이 100% 콜). 여기 중복돼 있던 것을 뺐다(감사 2026-09-19) —
+        // buildFreq 가 첫 지정을 우선해 계산값은 원래 100% 였고, 소스의 모순만 지운 것이다.
+        '0.5': 'JJ TT AJs KQs KJs A4s A3s A2s KJo AQo KTo K8s K7s QTo Q9o Q8s J8s T9o T8s 98o 97s 86s 75s 64s 53s',
       } },
     ],
     note: 'HJ 오픈은 LJ보다 약간 넓다. 3벳에 A5s~A2s 블러프를 더하고 콜 레인지도 확장(총 수비 25.9%). 3벳 혼합의 잔여는 전부 콜이라 QJs·KTs·A9o 도 컨티뉴 100% 다.',

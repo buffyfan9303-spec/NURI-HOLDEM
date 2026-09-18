@@ -15,7 +15,7 @@
 import { labelToCards, type Card } from './preflop';
 import { buildFreq, gridName, freqFromArray, type FreqMap } from './ranges';
 import { RANGE_SCENARIOS, type RangeScenario } from './ranges.data';
-import { HAND_ORDER, NASH_BIG_ANTE, nashRange, isNashQuarantined } from './nash.data';
+import { HAND_ORDER, NASH_BIG_ANTE, nashRange, isNashQuarantined, type NashKind } from './nash.data';
 
 export type Mode = 'rfi' | 'threebet' | 'defend' | 'vs3bet' | 'push' | 'call';
 export const MODES: { id: Mode; label: string }[] = [
@@ -123,7 +123,7 @@ function callQuiz(seatId: string, k: number, stack: number, hand: string): Quiz 
   const seat = CALL_SEATS.find((s) => s.id === seatId);
   const shover = PUSH_POS.find((x) => x.k === k);
   if (!seat || !shover || k < seat.minK) return null;
-  if (isNashQuarantined(stack, NASH_BIG_ANTE, k)) return null; // 위 pushQuiz 와 같은 이유
+  if (isNashQuarantined(stack, NASH_BIG_ANTE, k, seat.kind)) return null; // 위 pushQuiz 와 같은 이유 — 콜 표는 kind 별 격리(2026-09-19)
   return {
     mode: 'call', key: `call|${seat.id}-${k}-${stack}|${hand}`, posLabel: seat.label, situ: `${stack}bb · ${shover.label} 올인 · 빅 앤티`,
     hand, cards: labelToCards(hand), stackBb: stack, vs: { label: shover.label, bb: stack },
@@ -153,8 +153,9 @@ export function makeQuiz(mode: Mode, retryKey?: string): Quiz {
   }
   // ⚠ 자리(k)와 깊이(stack)는 **짝으로** 골라야 한다 — 격리는 (깊이, k) 조합 단위라
   //   따로 고르면 격리된 짝이 나와 pushQuiz 가 null 을 주고 `!` 가 거짓말이 된다(런타임 크래시).
-  const seatsFor = (stack: number, minK = 1) =>
-    PUSH_POS.filter((p) => p.k >= minK && !isNashQuarantined(stack, NASH_BIG_ANTE, p.k));
+  //   콜 문제는 **그 콜 표의 격리**로 거른다(2026-09-19: 빅앤티 BB 콜 7~9bb k≥2 가 따로 격리됐다 — shove 기준으로 고르면 격리된 콜 표를 낸다).
+  const seatsFor = (stack: number, minK = 1, kind: NashKind = 'shove') =>
+    PUSH_POS.filter((p) => p.k >= minK && !isNashQuarantined(stack, NASH_BIG_ANTE, p.k, kind));
   if (mode === 'push') {
     const stack = pick(PUSH_STACKS_AVAILABLE);
     const k = pick(seatsFor(stack)).k;
@@ -162,8 +163,8 @@ export function makeQuiz(mode: Mode, retryKey?: string): Quiz {
   }
   if (mode === 'call') {
     const seat = pick(CALL_SEATS);
-    const stack = pick(PUSH_STACKS_AVAILABLE.filter((s) => seatsFor(s, seat.minK).length > 0));
-    const k = pick(seatsFor(stack, seat.minK)).k;
+    const stack = pick(PUSH_STACKS_AVAILABLE.filter((s) => seatsFor(s, seat.minK, seat.kind).length > 0));
+    const k = pick(seatsFor(stack, seat.minK, seat.kind)).k;
     return callQuiz(seat.id, k, stack, weightedPick(nashFreq(seat.kind, k, stack)))!;
   }
   const scen = pick(scenariosOf(mode));

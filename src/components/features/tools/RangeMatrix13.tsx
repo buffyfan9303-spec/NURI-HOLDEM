@@ -71,8 +71,12 @@ export default function RangeMatrix13({ actions, foldLabel = '폴드', initialSe
         </div>
       </div>
 
-      {/* 범례 + 콤보 가중 요약 (셀 수 %가 아니라 1326콤보 기준 — 실제 빈도 감각) */}
-      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+      {/* 범례 + 콤보 가중 요약 (셀 수 %가 아니라 1326콤보 기준 — 실제 빈도 감각)
+          ⚠ 2026-09-19 오너: "100% 폴드인데 모든 핸드가 4bet 2.몇%" — 이 줄의 **레인지 전체** 비율(vs3벳 4벳 1.9~2.2%)을
+          방금 누른 핸드의 값으로 읽었다(실측: 72o 상세는 '폴드 100%', 셀 색 없음, 데이터도 0). 숫자는 맞고 **무엇의 %인지**가 없었다.
+          '전체' 라벨을 붙여 아래 핸드 상세('이 핸드')와 구별한다 — 값·형식('라벨 xx.x%')은 그대로다(e2e tools.spec 이 그 형식을 본다). */}
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1" title="레인지 전체(1326콤보)에서 각 액션이 차지하는 비율 — 특정 핸드의 빈도가 아닙니다">
+        <span className="text-2xs font-semibold text-ink-muted">전체 레인지 기준</span>
         {summary.map((a) => (
           <span key={a.key} className="inline-flex items-center gap-1 text-2xs text-ink-secondary">
             <span className="inline-block h-3 w-3 rounded-[3px]" style={{ background: a.color }} />
@@ -92,7 +96,7 @@ export default function RangeMatrix13({ actions, foldLabel = '폴드', initialSe
         return (
           <div className="rounded-input border border-border-default bg-surface-high px-3 py-2 animate-fade-in">
             <div className="flex items-baseline justify-between">
-              <b className="text-sm text-ink-primary">{sel}</b>
+              <b className="text-sm text-ink-primary">{sel} <span className="text-2xs font-semibold text-ink-muted">이 핸드</span></b>
               <span className="text-2xs tabular-nums text-ink-muted">{comboCount(sel)}콤보</span>
             </div>
             <div className="mt-1 space-y-1">

@@ -30,7 +30,10 @@ export function NumIn({ value, onChange, suffix, placeholder, decimal }: { value
   // decimal 모드: '3.' 같은 입력 중간 문자열을 살리기 위해 [원문, 그때 보낸 숫자]를 기억.
   // 외부에서 value 가 바뀌면(프리셋 버튼 등) 기억을 버리고 value 를 그대로 표시한다.
   const [draft, setDraft] = useState<{ raw: string; sent: number } | null>(null);
-  const shown = decimal && draft && draft.sent === value ? draft.raw : (value || '');
+  // 🔴 2026-09-19 GTO 감사 [medium]: `value || ''` 는 값이 0 일 때도 falsy 라 빈칸으로 지워버렸다
+  //   (EV 계산기 '상대 폴드 확률'·'폴드 시 얻는 팟' 기본값 0이 항상 빈칸으로 보였다). String(value) 로
+  //   0 을 '0' 그대로 보여준다 — decimal 모드가 타이핑 중간 문자열을 살리는 draft 경로는 그대로다.
+  const shown = decimal && draft && draft.sent === value ? draft.raw : String(value);
   return (
     <div className="relative">
       <input
