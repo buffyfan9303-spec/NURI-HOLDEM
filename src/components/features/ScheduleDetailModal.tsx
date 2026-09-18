@@ -372,7 +372,10 @@ export default function ScheduleDetailModal({
               className={[
                 // §T1 탭 굵기 규격: 비활성 600 / 활성 700.
                 // ⚠ font-semibold 와 font-bold 를 함께 주면 안 된다 — Tailwind 출력 순서상 semibold 가 뒤라 이긴다.
-                'relative min-w-0 px-0.5 py-3 text-center text-xs transition-colors sm:text-sm',
+                // 2026-09-18(재검증): 실측 42.5px 로 이 저장소의 44px 히트영역 관례에 1.5px 모자랐다.
+                // ⚠ `min-h-11` 이 아니라 `min-h-[44px]` 다 — 루트 폰트가 17px 이라 h-11 은 46.75px 가 된다
+                //   (CLAUDE.md: "44px 계약은 h-[44px] 로"). rem 유틸로 44 를 맞출 수 없다.
+                'relative min-h-[44px] min-w-0 px-0.5 py-3 text-center text-xs transition-colors sm:text-sm',
                 active ? 'font-bold' : 'font-semibold',
                 // 활성 탭 라벨은 accent-300 단독이면 다크 surface-base 위 4.0:1 로 소형 텍스트 기준 미달 —
                 // 다크에서만 accent-200 으로 올린다(8.8:1). 밑줄 색은 그대로 accent-300.

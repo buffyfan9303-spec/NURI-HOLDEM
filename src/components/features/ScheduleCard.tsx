@@ -451,14 +451,36 @@ function ListCard({
       </div>
 
       {/* ② 가운데 — 매장 / 대회명 / 등록·유형 */}
-      <div className="order-2 min-w-0 flex-[1_1_7rem]">
+      {/* 🔴 2026-09-18(재검증): **320px 에서 3열이 무너져 있었다.** 참가비·GTD 열이 통째로
+          둘째 줄 좌측에 떨어지고 행 높이가 113.8 → 176.8px(+55%) 였다(다크·라이트 동일).
+          원인은 오늘 3차 개정에서 **28px 로고를 왼쪽 열에 넣으며** 그 열의 실렌더 폭이
+          46 → 56.4px 로 커진 것이다. 같은 파일 위쪽 폭 계산 주석은 옮기기 **전** 값(46)을
+          그대로 두고 있었다 — 수치를 안 맞춘 게 아니라 **옮긴 사람이 예산을 다시 안 잰 것**이다.
+          실측(320px): 가용 258.5 = 284 − 패딩 25.5
+            좌 56.4 + gap 8.5 + 가운데 basis 7rem(119) + gap 8.5 + 우 68 = 260.4 → **1.9px 초과**.
+        ⚠ flex-wrap 은 **줄어들기 전 가상 크기**로 줄을 가른다 — 1.9px 모자라도 가운데 열이
+          그만큼 줄어드는 게 아니라 **마지막 항목이 통째로** 다음 줄로 밀린다. 그래서 2px 가 55% 가 된다.
+        ⚠ 360px 부터는 좌 52·우 80·gap 6 으로 예산이 달라 멀쩡했다 — 320 만의 문제라 이 구간만 낮춘다.
+          6rem(102px)이면 260.4 → 243.4 로 15px 여유가 생긴다.
+        ⚠ 원래 의도했던 접힘은 '가운데 열이 스스로 내려가고 좌·우는 첫 줄에 남는' 것이었다(위 주석).
+          실제 CSS 는 반대로 동작했다 — 주석의 기대와 브라우저 동작이 다르면 **브라우저가 맞다.** */}
+      <div className="order-2 min-w-0 flex-[1_1_6rem] min-[360px]:flex-[1_1_7rem]">
         {/* 로고는 왼쪽 열로 갔다(위 주석). 여기는 TOP 배지 + 매장명 + 지역 + 즐겨찾기만 남는다 —
             그만큼 매장명이 쓸 폭이 늘었다(실측 18px 로고 + gap 4px = 22px 회수). */}
         <div className="flex min-w-0 items-center gap-1">
           {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
+          {/* 🔴 2026-09-18(재검증): `wrap` 을 **안 넘기고 있었다.** VenueLink 의 기본값은 false(말줄임)라
+              지역('서울')이 320·360px/200% 에서 **clientWidth 0** — 말줄임표조차 없이 통째로 사라졌다.
+              같은 파일 VenueLink 머리말(2026-09-12)이 "목록 카드는 말줄임 대신 줄바꿈이다(wrap=true)" 라고
+              적어 두고 있었는데, 3열로 다시 짜면서 호출부에서 이 prop 을 흘렸다.
+            ⚠ 주석이 의도를 적어 둬도 **호출부가 안 넘기면 기본값이 이긴다.** 기본값이 '안전하지 않은 쪽'
+              (말줄임)인 prop 은 이렇게 조용히 사라진다.
+            ⚠ 그리드 카드(GridCard)의 호출부는 그대로 둔다 — 거기선 포스터가 식별을 대신하고
+              별점이 같은 줄에 있어 말줄임이 의도된 동작이다. */}
           <VenueLink
             pubName={schedule.pubName}
             region={schedule.region}
+            wrap
             sizeCls="text-[0.8125rem] min-[360px]:text-xs"
             onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
           />

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, useRef, memo, useCallback, useMemo } from 'react';
+import { useEffect, useState, type ReactNode, useRef, memo, useCallback, useMemo, startTransition } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { goSubTab } from '../../lib/subTabTransition';
 import Icon, { type IconName } from '../atoms/Icon';
@@ -728,7 +728,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                             {items.map((a) => {
                               const on = section === a.id;
                               return (
-                                <button key={a.id} type="button" onClick={() => { gotoSection(a.id); setNavOpen(false); }}
+                                /* 위 사이드바와 같은 이유로 startTransition — 같은 경로를 쓴다.
+                                    ⚠ setNavOpen(false) 는 **밖에 둔다**. 시트를 닫는 것은 즉시 일어나야 하는
+                                      피드백이고, 그것까지 전환 안에 넣으면 청크를 기다리는 동안 시트가 열린 채 남는다. */
+                                <button key={a.id} type="button" onClick={() => { startTransition(() => gotoSection(a.id)); setNavOpen(false); }}
                                   className={['flex min-w-0 items-center gap-2 rounded-input px-2.5 py-2.5 text-xs font-bold transition-colors',
                                     on ? 'pill-active text-white' : a.locked ? 'text-ink-muted/60' : 'text-ink-secondary hover:bg-surface-float'].join(' ')}>
                                   <span className="shrink-0" aria-hidden>{SECTION_ICON[a.id]}</span>
@@ -760,10 +763,18 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   return (
                     <div key={grp} className="flex flex-col gap-0.5">
                       <p className="px-3 pb-1 text-2xs font-bold tracking-wide text-ink-muted">{grp}</p>
+                      {/* 🔴 2026-09-18(재검증): 처음 여는 섹션은 lazy 청크라, 아래 setState 가 동기면
+                          Suspense 가 **화면 전체를 폴백으로 덮는다** — 사이드바·진행상황·배지까지 사라지고
+                          스피너 하나만 ~300ms 떴다가 통째로 돌아온다(신규 '이벤트 신청'에서 실측).
+                          유저에겐 클릭이 씹혔거나 새로고침된 것처럼 보인다.
+                        ⚠ startTransition 으로 감싸면 React 가 **이전 화면을 유지한 채** 새 청크를 기다린다.
+                          App.tsx 가 탭 첫 방문에 쓰는 것과 같은 1줄 처방이다(새 API·의존성 0).
+                        ⚠ JSX 주석은 **속성 목록 한가운데 둘 수 없다.** 여기(children 자리)가 맞다 —
+                          오늘만 이 함정에 두 번 걸렸다. */}
                       {items.map((a) => (
                         <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked}
                           {...(section === a.id ? { 'data-mystore-active': '' } : {})}
-                          onClick={() => gotoSection(a.id)}>{a.label}</SectionBtn>
+                          onClick={() => startTransition(() => gotoSection(a.id))}>{a.label}</SectionBtn>
                       ))}
                     </div>
                   );
