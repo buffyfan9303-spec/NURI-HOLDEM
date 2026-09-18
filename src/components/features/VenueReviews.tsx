@@ -17,9 +17,15 @@ interface Props {
 function Stars({ value, size = 14, onPick }: { value: number; size?: number; onPick?: (n: number) => void }) {
   // 표시 전용(onPick 없음)일 땐 버튼이 아니라 장식이다 — disabled 버튼 5개는 스크린리더·
   // IA 게이트(첫 뷰포트 행동 요소)에 유령 액션 10개(평균+후기 카드)로 잡혔다.
+  // 🔴 2026-09-18: 색이 박혀 있었다(`#FCD535` · `#5E6673`). 앞의 것은 **gold-300 토큰과 값이 같았고**
+  //   뒤의 것은 어느 토큰도 아닌 임의의 회색이었다 — 즉 토큰이 있는데 안 쓴 자리였다.
+  //   박힌 색은 테마를 못 따라간다. 라이트 모드에서 별은 흰 배경 위에 뜨는데 #FCD535 는 그때 너무 밝다.
+  // ⚠ `gold-400 dark:gold-300` 은 이 저장소가 이미 쓰는 짝이다(LiveGamesTab 상금 줄) —
+  //   라이트에서 한 단계 진하게 가는 쪽이 이 팔레트의 관행이라 새 규칙을 만들지 않고 따른다.
   const star = (n: number) => (
     <svg width={size} height={size} viewBox="0 0 24 24"
-      fill={n <= value ? '#FCD535' : 'none'} stroke={n <= value ? '#FCD535' : '#5E6673'}
+      className={n <= value ? 'text-gold-400 dark:text-gold-300' : 'text-ink-muted'}
+      fill={n <= value ? 'currentColor' : 'none'} stroke="currentColor"
       strokeWidth="1.6" strokeLinejoin="round" aria-hidden>
       <path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9 2.9-6z" />
     </svg>

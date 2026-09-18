@@ -348,7 +348,10 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
               <img src={imgPreview} alt="포스터 미리보기" className="absolute inset-0 w-full h-full object-cover" />
             ) : (
               <>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#5A6175" strokeWidth="1.5" aria-hidden>
+                {/* 🔴 2026-09-18: `stroke="#5A6175"` 가 박혀 있었다 — 바로 아래 안내 글자는 `text-ink-muted`
+                    인데 아이콘만 임의의 회색이라, 라이트 테마에서 둘의 밝기가 어긋났다.
+                    같은 뜻의 두 요소는 같은 토큰을 써야 한다. */}
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden className="text-ink-muted">
                   <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/>
                   <polyline points="21 15 16 10 5 21"/>
                 </svg>

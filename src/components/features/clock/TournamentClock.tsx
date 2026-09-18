@@ -1251,7 +1251,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
             <span className="text-2xs text-ink-muted tabular-nums shrink-0">{filteredSessions.length}/{sessions.length}</span>
           </div>
           <div className="relative mb-1">
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
             <input value={sessQuery} onChange={(e) => setSessQuery(e.target.value)} placeholder="검색 (예: 2026-06 · 게임명)" className="input w-full text-xs pl-8 py-1.5" />
           </div>
           <div className="max-h-[11.5rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
