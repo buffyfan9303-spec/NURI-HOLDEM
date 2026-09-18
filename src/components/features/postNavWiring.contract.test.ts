@@ -21,8 +21,15 @@ const COMM = strip(readFileSync(join(__dirname, 'CommunityTab.tsx'), 'utf-8'));
 const APP = strip(readFileSync(join(__dirname, '..', '..', 'App.tsx'), 'utf-8'));
 
 describe('UI-02 · 전체화면 셸', () => {
-  it('🔴 PostDetailModal: page + read 폭 + dragToClose=false + compact, inline 분기 없음', () => {
-    expect(PD).toMatch(/<Modal open=\{open\} onClose=\{onClose\} title="커뮤니티 게시판" maxWidth=\{inline \? '2xl' : 'read'\} variant="page" inline=\{inline\} density="compact" dragToClose=\{false\}>/);
+  it('🔴 PostDetailModal: page + read 폭 + compact + 스와이프 닫기 + keepViewport, inline 분기 없음', () => {
+    // 🔴 2026-09-19 오너 지시 둘을 반영해 계약을 뒤집었다.
+    //   ① "창이 내려가는 모션 살려줘" → `dragToClose={false}` 제거(page 변형의 기본값이 켜짐).
+    //   ② "밑으로 쭉 내려갔다 버벅이며 올라가" → `keepViewport` 로 배경 잠금 방식을 바꿈.
+    //      `html{overflow:hidden}` 은 문서를 스크롤 불가로 만들어 모바일 주소창을 도로 펼친다.
+    //   ⚠ keepViewport 가 빠지면 증상이 **조용히** 돌아온다 — 하네스에 주소창이 없어 브라우저
+    //      검사로는 영원히 못 잡는다. 그래서 소스 계약으로 잠근다(이 파일이 그 일을 하는 자리다).
+    expect(PD).toMatch(/<Modal open=\{open\} onClose=\{onClose\} title="커뮤니티 게시판" maxWidth=\{inline \? '2xl' : 'read'\} variant="page" inline=\{inline\} density="compact" keepViewport>/);
+    expect(PD, '스와이프 닫기를 다시 껐다 — 오너가 살리라고 한 모션이다').not.toMatch(/dragToClose=\{false\}/);
     expect(PD).not.toMatch(/inline \? 'sheet' : 'page'/);
   });
   it('🔴 Modal: read 폭이 문자열 리터럴이고, page 그립은 bodyDrag 일 때만 그린다', () => {

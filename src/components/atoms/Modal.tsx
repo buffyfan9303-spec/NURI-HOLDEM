@@ -41,6 +41,15 @@ interface ModalProps {
    *    조회 전용 화면에서만 켠다.
    */
   dragToClose?: boolean;
+  /** 주소창이 흔들리지 않게 배경을 **위치 고정**으로 잠근다(전체화면 읽기 화면용).
+   *  🔴 2026-09-19 오너: "게시판 글 클릭하면 밑으로 쭉 내려갔다 버벅이며 올라가. 다 그래".
+   *    기본 잠금은 `html{overflow:hidden}` 인데, 목록을 내려 주소창이 접힌 상태에서 그걸 걸면
+   *    브라우저가 주소창을 도로 펼쳐 뷰포트 높이가 바뀌고 `fixed inset-0` 셸이 다시 그려진다.
+   *  ⚠ **켜는 곳만 켠다.** 지금은 게시글 상세 한 곳뿐이다 — 공용 모듈이라 나머지 소비처
+   *    (라이트박스·장부·클락·전체화면 클락)는 바이트 동일하게 옛 경로를 쓴다.
+   *  ⚠ 하네스에 주소창이 없어 **효과는 실기기에서만 확인된다**(CLAUDE.md: 재현 못 함 ≠ 없음).
+   *    여기서 검증 가능한 것은 '닫은 뒤 목록 위치가 그대로인가' 까지다(e2e/post-nav). */
+  keepViewport?: boolean;
 }
 
 /** 텍스트를 편집 중인 컨트롤 — 여기서 시작한 손짓은 절대 '닫기'로 해석하지 않는다. */
@@ -77,7 +86,7 @@ export function resolveBodyDrag(variant: NonNullable<ModalProps['variant']>, dra
 
 export default function Modal({
   open, onClose, title, headerAction, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
-  dragToClose, density = 'default',
+  dragToClose, density = 'default', keepViewport = false,
 }: ModalProps) {
   const compact = density === 'compact';
   const bodyDrag = resolveBodyDrag(variant, dragToClose);
@@ -87,9 +96,11 @@ export default function Modal({
   useEffect(() => { if (open) setDragClosed(false); }, [open]);
   useEffect(() => {
     if (!open || inline) return;
-    lockScroll(); // 뷰포트 스크롤러는 html — body만 잠그면 무효(scrollLock 유틸이 둘 다 처리)
+    lockScroll(keepViewport); // 뷰포트 스크롤러는 html — body만 잠그면 무효(scrollLock 유틸이 둘 다 처리)
     return () => { unlockScroll(); };
-  }, [open, inline]);
+    // keepViewport 를 deps 에 둔다 — 소비처마다 상수라 실제로는 안 바뀌지만, 바뀌면 잠금을 다시
+    //   걸어야 모드가 따라간다(잠금은 **첫 잠금이 모드를 정한다**는 규칙이라 재잠금이 유일한 길이다).
+  }, [open, inline, keepViewport]);
 
   // 뒤로가기(브라우저/모바일 back)·ESC → 페이지 이탈 대신 "이 모달만" 닫기.
   // 중앙 back-stack 매니저가 중첩/충돌/이중 pop 을 모두 처리한다. ESC 도 같은 스택이 최상단 한 겹만 닫는다 —

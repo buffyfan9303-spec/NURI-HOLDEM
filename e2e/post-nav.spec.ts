@@ -66,7 +66,7 @@ const openFromList = async (page: Page, title: string) => {
 const navBtn = (page: Page, dir: 'prev' | 'next') => dialog(page).locator(`[data-pd-nav-dir="${dir}"]`);
 const titleOf = (page: Page) => dialog(page).locator('[data-pd-title]').first().textContent();
 
-test('🔴 ① 모바일 전체화면 셸 — 뷰포트를 채우고 backdrop·그립이 없고 헤더 compact·X 44px·fade-in', async ({ page }) => {
+test('🔴 ① 모바일 전체화면 셸 — 뷰포트를 채우고 backdrop 없이 그립·드래그 있고 헤더 compact·X 44px·fade-in', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await install(page);
   await openBoard(page);
@@ -85,8 +85,12 @@ test('🔴 ① 모바일 전체화면 셸 — 뷰포트를 채우고 backdrop·�
   expect(g.position).toBe('fixed');
   expect([g.x, g.y]).toEqual([0, 0]); expect(g.w).toBeCloseTo(g.vw, 0); expect(g.h).toBeCloseTo(g.vh, 0);
   expect(g.scrimBtn, 'backdrop 버튼이 있다(page 가 아니다)').toBe(false);
-  expect(g.grip, '드래그를 껐는데 그립을 그린다').toBe(false);
-  expect(g.dragAttr, '읽기 화면인데 드래그 닫기가 켜져 있다').toBe(false);
+  // 🔴 2026-09-19 오너: "위에서 아래로 스와이프 해서 내리면 창이 내려가는 모션 살려줘".
+  //   종전 계약은 그 반대(그립 없음·드래그 꺼짐)였다 — UI-02 때 '읽는 중 실수로 닫힘' 을 막으려던 결정이다.
+  //   오너가 모션을 되살리라고 해서 뒤집는다. **그립과 드래그는 한 쌍이다** — 둘 중 하나만 있으면
+  //   UI 가 거짓말을 한다(손잡이를 그려 놓고 안 끌리거나, 끌리는데 손잡이가 없어 아무도 모른다).
+  expect(g.grip, '드래그를 켰는데 그립(손잡이)이 없다 — 끌 수 있다는 걸 아무도 모른다').toBe(true);
+  expect(g.dragAttr, '스와이프로 닫기가 꺼져 있다 — 오너가 살리라고 한 모션이다').toBe(true);
   expect(g.anim).toBe('fade-in'); expect(g.dur).toBe('0.16s');
   // compact page 헤더 = 닫기 44px(h-11 46.75) + py-1(8.5×2, 루트 17px) + border 1 = **56.25px**(리드 실측과 같다). default 헤더(h-header-h 60.5+1)보다 낮다.
   expect(g.headerH, `헤더 ${g.headerH}px — compact(56.25) 여야 한다`).toBeLessThanOrEqual(57);
@@ -263,4 +267,57 @@ test('🔴 ⑧ 목록 이어받기가 비행 중일 때 연 마지막 글 — "�
   await expect(dialog(page).locator('[data-pd-title]').first()).toHaveText('서버 15번 글');
   expect(cursorCalls, '상세가 실제로 서버를 이어받았다').toBeGreaterThanOrEqual(2);
   release();
+});
+
+// ── 배경 스크롤 잠금 — 글을 열고 닫아도 목록 위치를 잃지 않는다 ─────────────────
+//
+// 🔴 2026-09-19 오너: "게시판 글 클릭하면 한번 밑으로 쭉 내려갔다가 버벅이면서 올라가. 다 그래."
+//   원인은 잠금 방식이었다. `html{overflow:hidden}` 으로 잠그면 문서가 스크롤 불가가 되고,
+//   모바일 브라우저는 그 순간 **접혀 있던 주소창을 도로 펼친다** — 뷰포트 높이가 바뀌면서
+//   `fixed inset-0` 셸이 다시 그려지는 것이 "쭉 내려갔다 올라오는" 움직임이다.
+//   → 게시글 상세만 `keepViewport` 로 바꿨다: body 를 `position:fixed; top:-Y` 로 붙잡고
+//     html 의 overflow 는 건드리지 않는다(브라우저가 보기에 문서는 계속 스크롤 가능).
+//
+// ⚠ **주소창 흔들림 자체는 여기서 못 잰다.** 하네스(Pixel 7)에 주소창이 없어 dvh==svh==lvh 다
+//   (CLAUDE.md). 그래서 이 검사는 재현 가능한 쪽만 잠근다 — **위치 보존**과 **모드 선택**이다.
+//   실기기 확인은 오너 몫이고, 그 사실을 숨기지 않는다.
+test('🔴 ⑨ 글을 열고 닫아도 목록 스크롤 위치가 그대로다 (배경 잠금 방식)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await install(page);
+  await openBoard(page);
+  await page.evaluate(() => window.scrollTo(0, 99999));
+  await page.waitForTimeout(400);
+  const before = await page.evaluate(() => Math.round(window.scrollY));
+
+  await openFromList(page, '둘째 글 제목');
+  const open = await page.evaluate(() => ({
+    pos: document.body.style.position,
+    top: document.body.style.top,
+    htmlOv: document.documentElement.style.overflow,
+  }));
+
+  if (before > 0) {
+    // 스크롤이 실제로 내려간 경우 — 새 방식(위치 고정)이어야 한다.
+    expect(open.pos, `목록이 ${before}px 내려가 있는데 body 를 고정하지 않았다 — 옛 방식이면 주소창이 흔들린다`).toBe('fixed');
+    expect(open.top, 'body.top 이 스크롤 위치의 음수가 아니다 — 화면이 맨 위로 튄다').toBe(`-${before}px`);
+    expect(open.htmlOv, 'html 의 overflow 를 건드렸다 — 문서가 스크롤 불가가 되면 주소창이 도로 펼쳐진다').not.toBe('hidden');
+  } else {
+    // 맨 위라 지킬 위치가 없다 — 설계상 **옛 방식으로 물러난다**(방어 원칙 ③).
+    expect(open.htmlOv, '맨 위에서는 옛 방식(html overflow hidden)으로 물러나야 한다').toBe('hidden');
+    expect(open.pos, '맨 위인데 body 를 고정했다 — 새 경로에 불필요하게 노출된다').not.toBe('fixed');
+  }
+
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(700);
+  const after = await page.evaluate(() => ({
+    y: Math.round(window.scrollY),
+    pos: document.body.style.position,
+    top: document.body.style.top,
+    htmlOv: document.documentElement.style.overflow,
+  }));
+  // 🔴 닫은 뒤 원상복구 — 이걸 빠뜨리면 목록이 맨 위로 튄다(고치려던 것보다 나쁜 증상).
+  expect(after.pos, '닫았는데 body 가 fixed 로 남았다 — 페이지 전체가 죽는다').toBe('');
+  expect(after.top, '닫았는데 body.top 이 남았다').toBe('');
+  expect(after.htmlOv, '닫았는데 html overflow 가 남았다').toBe('');
+  expect(after.y, `목록 위치를 잃었다: ${before} → ${after.y}`).toBe(before);
 });

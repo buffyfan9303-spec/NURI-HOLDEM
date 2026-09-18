@@ -434,10 +434,14 @@ export default function PostDetailModal({
     {/* UI-02(2026-09-13, 실행문 §7.1·N02 §6.1): 모바일은 짧은 글도 **전체화면**(page) — 위쪽 큰 검은 scrim·작은 하단 시트 없음.
         PC 독립 열기도 같은 전체화면 셸 안 중앙 읽기 열(read = 46rem → 본문 ≈ 72ch). inline(2-pane)은 Modal 의 inline 분기가
         page 분기보다 먼저 return 하므로 **바이트 동일** — `inline ? 'sheet' : 'page'` 같은 분기를 만들지 않는다.
-        dragToClose={false}: 본문 선택·세로 읽기·댓글 편집 중 끌어내려 닫히지 않는다(그립도 그리지 않는다).
+        🔴 2026-09-19 오너: "위에서 아래로 스와이프 해서 내리면 **창이 내려가는 모션 살려줘**".
+          종전 `dragToClose={false}` 를 뺐다(page 변형의 기본값은 켜짐). 그립(상단 손잡이)도 다시 그려진다.
+        ⚠ 껐던 이유는 "본문 선택·세로 읽기·댓글 편집 중 끌어내려 닫히는 것" 이었다. 그 위험은 남아 있지만,
+          드래그는 **스크롤러가 맨 위일 때만** 시작된다(Modal 의 bodyDrag 주석). 글을 읽어 내려간 상태나
+          댓글 입력 중에는 시작되지 않는다. 오너가 모션을 명시적으로 요구했으므로 되살린다.
         backdrop 클릭 닫기는 page 에 정의상 없다(리드 결정) — 닫는 길은 헤더 X(44px)·ESC·뒤로가기 셋이고 e2e/post-nav.spec.ts 가 셋 다 잠근다.
         진입 모션: sheet-up 0.26s → fade-in 0.16s(index.css 가 tailwind 값을 덮는다). */}
-    <Modal open={open} onClose={onClose} title="커뮤니티 게시판" maxWidth={inline ? '2xl' : 'read'} variant="page" inline={inline} density="compact" dragToClose={false}>
+    <Modal open={open} onClose={onClose} title="커뮤니티 게시판" maxWidth={inline ? '2xl' : 'read'} variant="page" inline={inline} density="compact" keepViewport>
       {/* 리듬은 space-y-4 균등 간격이 아니라 **블록별 mt** 로 준다.
           균등 간격은 'ddd' 같은 짧은 글에서 제목·작성자·본문·반응이 전부 같은 거리로 떨어져
           섬 여섯 개처럼 흩어져 보였다(본문 45px < 반응 92px — 내용보다 버튼이 큰 화면).
