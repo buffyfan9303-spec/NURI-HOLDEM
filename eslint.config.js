@@ -4,6 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import security from 'eslint-plugin-security'
+import playwright from 'eslint-plugin-playwright'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
@@ -47,6 +48,26 @@ export default defineConfig([
       'react-hooks/purity': 'off',
       'react-hooks/preserve-manual-memoization': 'off',
       'react-hooks/immutability': 'off',
+    },
+  },
+  // 🔴 e2e 전용 — **거짓 통과하는 테스트**를 잡는 룰만 골랐다(2026-09-18).
+  //   이 저장소가 실제로 겪었던 자리다: 부분일치 셀렉터가 엉뚱한 것을 잡아 toBeVisible 이 통과했고,
+  //   음성 대조가 주석을 매칭해 거짓 통과했고, 571개 중 542개만 돌았는데 '전체 통과' 로 보고됐다.
+  //   expect-expect(단언이 아예 없는 테스트)·no-conditional-expect(if 안에 숨어 안 돌 수도 있는 단언)가
+  //   바로 그 부류다. 나머지 스타일 룰은 꺼 둔다 — 이 저장소는 waitForTimeout·수동 셀렉터를
+  //   일부러 쓴다(모션 계측·CDP 터치). 소음을 늘리면 게이트를 안 보게 된다.
+  {
+    files: ['e2e/**/*.ts'],
+    plugins: { playwright },
+    rules: {
+      'playwright/expect-expect': 'error',
+      // 기존 43건이 있다 — 대부분 테마·폭 분기 안의 정당한 단언이라 일괄 error 로 올리면
+      //   게이트가 통째로 막힌다. 경고로 띄워 두고 줄여 나간다(새로 쓰는 테스트는 피할 것).
+      'playwright/no-conditional-expect': 'warn',
+      'playwright/no-standalone-expect': 'error',
+      'playwright/valid-expect': 'error',
+      'playwright/no-focused-test': 'error',
+      'playwright/no-useless-await': 'warn',
     },
   },
 ])
