@@ -28,6 +28,7 @@
 //       트랙에 gap 을 넣거나 카드마다 폭을 달리하면 정착 위치가 깨진다. 여백은 **트랙 바깥**에 둔다.
 //       링크 없는 배너는 <div> 로 그린다(죽은 버튼 금지). 관리자 배너의 활성·정렬·기간 규칙은 API 담당.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { thumbUrl } from '../../lib/imageUrl';
 import Icon from '../atoms/Icon';
 import type { HomeBanner } from '../../api/homeBanners';
 
@@ -257,13 +258,22 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
             {/* 2026-09-13 — **수트 글리프를 뺐다.** 104px 글리프가 116px 배너에서 카드 밖으로 나가
                 (실측 scrollWidth 367 / clientWidth 354, 세로 121/104) 잘린 채로만 보였고, 글자 자리를
                 92px 먹어 긴 제목을 밀었다. 깊이는 배경 그라데이션이 낸다 — 장식을 더 쌓지 않는다. */}
+            {/* 🔴 2026-09-19 실측 — 브랜드 배너도 **원본**을 받고 있었다
+                (mind.webp 2,262B → -400 변형본 572B · 74.7%↓). 배너는 가로를 꽉 채우므로 400px 변형본.
+                변형본이 없으면 아래 onError 가 원본으로 되돌린다(VenueThumb·PosterArea 와 같은 조리법). */}
             <img
-              src={b.img}
+              src={thumbUrl(b.img, 400)}
               alt=""
               className="absolute inset-0 h-full w-full object-cover"
               /* 관리자 배너와 같은 규칙 — 마퀴 안에서 lazy 는 '빈 배너'가 된다(오너 실기기 리포트). */
               loading={i < 2 ? 'eager' : 'lazy'}
               decoding="async"
+              onError={(e) => {
+                const el = e.currentTarget;
+                if (el.dataset.fb) return;   // 원본도 실패하면 더 시도하지 않는다(무한 루프 방지)
+                el.dataset.fb = '1';
+                el.src = b.img;
+              }}
             />
             {/* 아트워크 위 글자가 읽히도록 왼쪽에서 오른쪽으로 빠지는 스크림 하나만 — 관리자 배너와 동일(여러 겹 금지). */}
             <span
