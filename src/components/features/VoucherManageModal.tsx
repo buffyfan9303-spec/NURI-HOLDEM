@@ -1,7 +1,7 @@
 // src/components/features/VoucherManageModal.tsx
 // 매장이용권 관리 — 업주: 배포/회수/삭제, 인증직원: 사용 처리. 금전적 가치(금액) 없음.
 // VoucherManagePanel(인라인, 매장관리 메뉴) + VoucherManageModal(대시보드 카드용 모달).
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -10,7 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
-import { listVenueVouchers, isHeldVoucher, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, VOUCHER_REASONS, voucherReasonLabel, type VoucherReason } from '../../api/vouchers';
+import { listVenueVouchers, isHeldVoucher, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, requestVoucherQuota, myVoucherCreditRequests, type VoucherCreditRequest, VOUCHER_REASONS, voucherReasonLabel, type VoucherReason } from '../../api/vouchers';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 import { loadVenueVoucherPanel } from '../../lib/venueVoucherLoad';
 import type { RequestStamp } from '../../lib/staleResponse';
@@ -524,13 +524,12 @@ ${cards}
                   '미지정이면 매장 보관용'은 더 이상 사실이 아니라 지웠다. 본인인증을 마친 회원 계정에만 발급되는 이유를 남긴다. */}
               <p className="text-2xs text-ink-muted">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 발급됩니다(받는 손님 지정 필수). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
 
-              {/* W2-1 VCH-1: 유상 충전(구매) 요청 UI 제거 — 이용권이 '상금 재원' 성격을 갖지 않게(§12-A-2).
-                  서버(request_voucher_credit·admin_decide approve)도 봉쇄됨. 한도는 운영자 문의로만. */}
-              {quota !== null && quota < count && (
-                <p className="rounded-input border border-border-subtle bg-surface-low p-2 text-2xs text-ink-muted">
-                  한도 추가는 <b className="text-ink-secondary">운영자 문의</b> (유상 충전 종료).
-                </p>
-              )}
+              {/* 🔴 2026-09-18 오너: "매장이용권 발행 한도 늘리는 요청(관리자에게)부터 시작해서 더 편하게",
+                  "이용권 한도는 한도 증액 문구를 사용해서 전혀 금전적인게 없게".
+                  종전엔 "운영자 문의 (유상 충전 종료)" 한 줄이 끝이었다 — 어디로 문의하는지도 없었다.
+                ⚠ 금전 낱말(충전·구매·결제·금액)을 **한 개도 쓰지 않는다.** 오가는 것은 발행 가능 '장수'뿐이다.
+                  유상 충전 경로(request_voucher_credit)는 §12-A-2 로 봉쇄된 채 그대로 두고, 그 옆에 낸 다른 길이다. */}
+              <QuotaRequestPanel venueId={venueId} quota={quota} onGranted={reloadQuota} />
             </div>
           )}
         </div>
@@ -708,6 +707,112 @@ const EXPIRY_PRESETS = [0, 1, 3, 7, 30] as const;
  *  ⚠ 기기 로컬 날짜가 아니라 KST 로 센다 — 서버 판정(now() at time zone 'Asia/Seoul')과 기준이 갈리면
  *    해외·시계 오설정 기기에서 하루가 어긋난 표가 발급된다(src/lib/kst.ts 와 같은 이유). */
 const addKstDays = (n: number, now: number = Date.now()): string => kstToday(now + n * 86_400_000);
+
+/** 한도 증액 요청 — 업주가 운영자에게 '발행 가능 장수를 늘려 달라' 고 남기는 대기열.
+ *
+ *  ⚠ 결제가 아니다. 금액·가격·환불 개념이 없고, 승인은 운영자가 무상으로 해 주는 행위다.
+ *  ⚠ 서버에 RPC 가 아직 없을 수 있다(마이그레이션 20260918d 적용 전). 그때는 **오류가 아니라
+ *    '준비 중'** 으로 말한다 — 배포 순서 때문에 업주 화면에 빨간 오류가 뜨면 안 된다.
+ */
+function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quota: number | null; onGranted: () => void }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState(500);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [mine, setMine] = useState<VoucherCreditRequest[]>([]);
+  const [pending, setPending] = useState(false);
+
+  const load = useCallback(() => {
+    myVoucherCreditRequests(venueId).then((rs) => {
+      setMine(rs);
+      setPending(rs.some((r) => r.status === 'pending'));
+    }).catch(() => { /* 조회 실패는 목록만 비운다 — 요청 자체를 막지 않는다 */ });
+  }, [venueId]);
+  useEffect(() => { if (open) load(); }, [open, load]);
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const r = await requestVoucherQuota(venueId, amount, reason.trim() || undefined);
+      if (r === 'not-deployed') {
+        toast.show('한도 증액 요청 기능을 준비 중입니다 — 잠시 뒤 다시 시도해 주세요', 'error');
+        return;
+      }
+      toast.show(`${amount.toLocaleString()}장 증액을 요청했습니다 — 운영자 확인 후 반영됩니다`, 'success');
+      setReason('');
+      load();
+      onGranted();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '요청하지 못했습니다', 'error');
+    } finally { setBusy(false); }
+  };
+
+  const BADGE: Record<string, { label: string; cls: string }> = {
+    pending:  { label: '검토 중', cls: 'bg-amber-500/15 text-amber-400' },
+    approved: { label: '반영됨', cls: 'bg-emerald-500/15 text-emerald-300' },
+    rejected: { label: '반려', cls: 'bg-surface-float text-ink-muted' },
+  };
+
+  return (
+    <div className="rounded-input border border-border-subtle bg-surface-low p-2">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 text-2xs">
+        <span className="font-bold text-ink-secondary">
+          한도 증액 요청
+          {quota !== null && <span className="ml-1.5 font-normal text-ink-muted">· 지금 잔여 {quota.toLocaleString()}장</span>}
+        </span>
+        <Icon name="chevron-down" size={12} className={['shrink-0 text-ink-muted transition-transform', open ? 'rotate-180' : ''].join(' ')} />
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-2xs font-semibold text-ink-secondary">몇 장이 더 필요하신가요?</span>
+            {[100, 300, 500, 1000, 3000].map((n) => (
+              <button key={n} type="button" aria-pressed={amount === n} onClick={() => setAmount(n)}
+                className={[
+                  'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold tabular-nums transition-colors',
+                  amount === n ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
+                               : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
+                ].join(' ')}>
+                {n.toLocaleString()}장
+              </button>
+            ))}
+          </div>
+          <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200}
+            placeholder="필요한 이유 (선택) — 예) 주말 시리즈 3일 · 예상 참가 200명"
+            className="input w-full text-sm" aria-label="증액이 필요한 이유" />
+          <button type="button" disabled={busy || pending} onClick={submit}
+            className="btn-primary w-full text-xs disabled:opacity-50">
+            {busy ? '보내는 중…' : pending ? '이미 검토 중인 요청이 있습니다' : `${amount.toLocaleString()}장 증액 요청하기`}
+          </button>
+          {/* 🔴 비용이 없다는 사실을 **화면에** 적는다 — 업주가 '돈이 드나?' 로 읽으면 요청 자체를 안 한다. */}
+          <p className="text-2xs leading-relaxed text-ink-muted">
+            <b className="text-ink-secondary">비용은 없습니다.</b> 운영자가 확인한 뒤 발행 가능 장수만 늘려 드립니다.
+            매장이용권은 금전적 가치가 없으며, 구매·충전 개념이 아닙니다.
+          </p>
+
+          {mine.length > 0 && (
+            <ul className="space-y-1 border-t border-border-subtle pt-2">
+              {mine.slice(0, 5).map((r) => {
+                const b = BADGE[r.status] ?? BADGE.pending;
+                return (
+                  <li key={r.id} className="flex flex-wrap items-center gap-1.5 text-2xs">
+                    <span className={`shrink-0 rounded-badge px-1.5 py-0.5 font-bold ${b.cls}`}>{b.label}</span>
+                    <span className="font-bold tabular-nums text-ink-secondary">{r.amount.toLocaleString()}장</span>
+                    <span className="tabular-nums text-ink-muted">{r.createdAt.slice(0, 10)}</span>
+                    {r.adminNote && <span className="w-full break-words text-ink-muted">운영자: {r.adminNote}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function VoucherManageModal({ open, onClose, venueId, prefillReceiver }: { open: boolean; onClose: () => void; venueId: string; prefillReceiver?: string }) {
   return (

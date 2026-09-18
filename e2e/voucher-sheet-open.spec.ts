@@ -50,7 +50,10 @@ test('🔴 티켓 아이콘 — 한 번의 클릭으로 이용권·출석 시트
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  const btn = page.getByRole('button', { name: '이용권 · 출석' });
+  // ⚠ 2026-09-18 — 홈 퀵액션의 이름이 '출석 체크' → '이용권 · 출석' 로 바뀌면서(오너 지시)
+  //   이 셀렉터가 **두 요소**를 잡아 strict mode 로 터졌다. 이 검사는 제목 그대로 **헤더** 버튼 몫이다.
+  //   헤더로 범위를 좁히고 exact 를 준다 — 셀렉터를 느슨하게 푸는 방향이 아니라 좁히는 방향이다.
+  const btn = page.locator('header').getByRole('button', { name: '이용권 · 출석', exact: true });
   await expect(btn, '헤더 티켓 버튼이 없다(로그인 상태가 아님)').toBeVisible({ timeout: 10_000 });
 
   // 프레임마다 '시트가 떴는가'를 적는다 — 몇 번째 프레임에 떴는지가 곧 체감이다.
@@ -118,7 +121,7 @@ test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전�
   await page.route(/\/rest\/v1\/store_vouchers/, (r) => r.fulfill(json([0, 1, 2, 3, 4].map(voucherRow))));
   await page.goto('/');
   await page.waitForLoadState('networkidle');
-  await page.getByRole('button', { name: '이용권 · 출석' }).click();
+  await page.locator('header').getByRole('button', { name: '이용권 · 출석', exact: true }).click();
 
 
   const card = page.locator('section').filter({ hasText: '수동으로 보내기' }).first();

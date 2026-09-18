@@ -474,10 +474,42 @@ export async function getVoucherQuota(venueId: string): Promise<number | null> {
   return Number.isFinite(n) ? n : null;
 }
 
-/** 충전(구매) 요청 — 업주. 대기 중 요청이 있으면 서버가 거부 */
+/** 충전(구매) 요청 — 업주. 대기 중 요청이 있으면 서버가 거부.
+ *  ⚠ 2026-08-26 §12-A-2 로 **서버가 봉쇄**돼 있다(호출하면 항상 예외). 남겨 두는 이유는 구 번들 호환뿐이고,
+ *    새 화면은 아래 `requestVoucherQuota`(무상 한도 증액)를 쓴다. */
 export async function requestVoucherCredit(venueId: string, amount: number, note?: string): Promise<void> {
   const { error } = await supabase.rpc('request_voucher_credit', { p_venue_id: venueId, p_amount: amount, p_note: note ?? null });
   if (error) throw new Error(error.message);
+}
+
+/** RPC 가 아직 배포되지 않은 상태인가 — PostgREST 는 없는 함수를 PGRST202 로 돌려준다.
+ *  ⚠ 이걸 '실패' 와 같이 취급하면 배포 전 업주 화면에 빨간 오류가 뜬다. 둘은 다른 말이어야 한다. */
+const isMissingRpc = (e: { code?: string; message?: string } | null): boolean =>
+  !!e && (e.code === 'PGRST202' || /could not find the function|does not exist/i.test(e.message ?? ''));
+
+/** 발급 한도 증액 요청(무상) — 업주.
+ *
+ *  🔴 2026-09-18 오너: "매장이용권 발행 한도 늘리는 요청(관리자에게)부터 시작해서 더 편하게 만들어",
+ *     "이용권 한도는 한도 증액 문구를 사용해서 전혀 금전적인게 없게".
+ *  ⚠ 금전 낱말(충전·구매·결제)을 쓰지 않는다. 오가는 값은 **발행 가능 장수**뿐이고 결제 연동이 없다.
+ *     유상 충전 경로(request_voucher_credit)는 §12-A-2 로 봉쇄된 채 그대로 둔다 — 이건 그 옆에 난 다른 길이다.
+ *  @returns 'ok' | 'not-deployed' — 서버에 함수가 아직 없으면 오류가 아니라 '준비 중'이다.
+ */
+export async function requestVoucherQuota(venueId: string, amount: number, reason?: string): Promise<'ok' | 'not-deployed'> {
+  if (IS_MOCK) return 'ok';
+  const { error } = await supabase.rpc('request_voucher_quota', { p_venue_id: venueId, p_amount: amount, p_reason: reason ?? null });
+  if (isMissingRpc(error)) return 'not-deployed';
+  if (error) throw new Error(error.message);
+  return 'ok';
+}
+
+/** (운영자) 한도 증액 요청 승인·반려. 승인 시 증액 후 잔여 한도를 돌려준다. */
+export async function adminDecideVoucherQuota(requestId: string, approve: boolean, adminNote?: string): Promise<number | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('admin_decide_voucher_quota', { p_request_id: requestId, p_approve: approve, p_admin_note: adminNote ?? null });
+  if (error) throw new Error(error.message);
+  const n = typeof data === 'number' ? data : Number(data);
+  return Number.isFinite(n) ? n : null;
 }
 
 export async function myVoucherCreditRequests(venueId: string): Promise<VoucherCreditRequest[]> {

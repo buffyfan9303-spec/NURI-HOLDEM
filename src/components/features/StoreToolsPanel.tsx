@@ -36,7 +36,10 @@ export default function StoreToolsPanel() {
                   정작 잘리던 것은 설명 쪽이었다('레벨·브레이크 → 종료 …'가 truncate 로 잘림).
                   이름 1줄 + 설명 2줄 예약이면 전 칸 높이는 그대로 같고, 잘리는 글자는 사라진다. */}
               <span className="block truncate text-xs font-bold text-ink-primary">{t.name}</span>
-              <span className="mt-1 block min-h-[1.875rem] text-2xs text-ink-muted [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden break-keep">{t.desc}</span>
+              {/* xl 부터는 예약을 푼다 — main 상한(1224px) 때문에 1280·1440·1920 전부 칸폭 226.9px 로 같고 7종 설명이
+                  전부 1줄(실측 2026-09-18)이라, 2줄 예약이 칸마다 15px 빈 줄 + 아이콘이 글자 중심보다 8px 아래로 처졌다.
+                  lg(1024~1279, 칸폭 ~177px)까지는 2줄로 접히는 설명이 있어 예약을 유지한다. */}
+              <span className="mt-1 block min-h-[1.875rem] xl:min-h-0 text-2xs text-ink-muted [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden break-keep">{t.desc}</span>
             </span>
           </button>
         ))}

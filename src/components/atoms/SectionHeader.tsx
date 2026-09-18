@@ -52,10 +52,16 @@ export function SectionHead({ icon, tone, title, count, unit = '개', desc }: { 
 
 export default function SectionHeader({ title, desc, icon, tone = 'violet', action }: Props) {
   return (
-    <header className="flex items-end justify-between gap-3 border-b border-border-subtle pb-3">
-      <div className="flex min-w-0 items-start gap-2">
+    <header className="flex items-center justify-between gap-3 border-b border-border-subtle pb-3">
+      {/* 2026-09-18 PC 실측(1280·1440·1920 동일): 예전 items-start + 타일 mt-0.5 는 타일 중심이 제목 글자 중심보다
+          4.5px 아래였고, 행 높이를 글자(26.6)가 아니라 타일(31.9)이 잡아 제목 아래 5px 가 비었다. 액션이 있는
+          포스터만 items-end 로 제목이 6.4px 내려가 헤더가 52 vs 45.6 으로 갈렸다. lg 부터 행을 액션 높이(h-8)로
+          예약하고 가운데 정렬 — 액션 유무와 무관하게 전 섹션 헤더 47.75px · 제목/타일 중심 일치.
+          ⚠ lg 미만은 종전 그대로(items-start + mt-0.5). 모바일은 설명이 제목 아래로 2줄 내려가 블록이 64px 인데,
+            거기서 가운데 정렬하면 타일이 제목이 아니라 설명 옆에 떠 보였다(390 실측: 타일 top 2.1 → 17.2). */}
+      <div className="flex min-w-0 items-start gap-2 lg:min-h-8 lg:items-center">
         {icon && (
-          <span className={['mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad',
+          <span className={['mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad lg:mt-0',
             tone === 'violet' ? '' : `tile-grad-${tone}`].join(' ')} aria-hidden>
             {typeof icon === 'string' ? <Icon name={icon as IconName} size={14} /> : icon}
           </span>
@@ -77,9 +83,9 @@ export default function SectionHeader({ title, desc, icon, tone = 'violet', acti
         </div>
       </div>
       {action && (
-        // 자식 버튼 규격 강제: 높이 38px·글자 12px·패딩 통일 — 섹션마다 버튼 크기가 달라지는 것 방지
+        // 자식 버튼 규격 강제: 높이 34px(=btn-sm·행 예약 min-h-8 과 같은 값)·글자 12px·패딩 통일 — 섹션마다 버튼 크기가 달라지는 것 방지
         // (min-h-0: .btn-primary 기본 min-h 40.8px가 h-9를 이기는 것 차단)
-        <div className="flex shrink-0 items-center gap-1.5 [&_button]:h-9 [&_button]:min-h-0 [&_button]:px-3.5 [&_button]:text-xs [&_button]:font-semibold [&_button]:whitespace-nowrap">
+        <div className="flex shrink-0 items-center gap-1.5 [&_button]:h-8 [&_button]:min-h-0 [&_button]:px-3.5 [&_button]:text-xs [&_button]:font-semibold [&_button]:whitespace-nowrap">
           {action}
         </div>
       )}
