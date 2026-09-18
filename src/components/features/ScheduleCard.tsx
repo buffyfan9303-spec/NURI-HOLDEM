@@ -93,12 +93,21 @@ export function regCloseText(s: Pick<Schedule, 'regCloseTime' | 'structure'>): s
 /** 상금 표시 정본 — '상금 보장'(GTD)과 '예상 상금'(엔트리 비례)의 **의미를 섞지 않는다**.
  *  데이터가 없으면 null 이다(0 이나 확정값처럼 적지 않는다). */
 // eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
-export function prizeText(s: Schedule): string | null {
+export function prizeParts(s: Schedule): { label: string; amount: string } | null {
   if (!s.prizePool && !s.prizePercent) return null;
   // 2026-09-18 오너: "'상금 보장' 이라는 문구도 GTD로 변경".
   //   ⚠ '예상 상금'(엔트리 비례)은 그대로 둔다 — GTD 는 **보장**이라는 뜻이라 둘을 같은 말로 적으면
-  //     보장되지 않은 금액을 보장처럼 말하게 된다(이 함수 머리말의 '의미를 섞지 않는다'가 그 뜻이다).
-  return `${s.guaranteed ? 'GTD' : '예상 상금'} ${prizeMainText(s)}`;
+  //     보장되지 않은 금액을 보장처럼 말하게 된다.
+  return { label: s.guaranteed ? 'GTD' : '예상 상금', amount: prizeMainText(s) };
+}
+
+/** 위 `prizeParts` 를 한 줄 문자열로 — 표·상세처럼 라벨과 금액을 따로 그릴 필요가 없는 곳이 쓴다.
+ *  ⚠ 목록 카드는 `prizeParts` 를 쓴다(라벨은 작게, 금액은 크게). 두 곳이 **같은 계산**을 보게
+ *    이 함수가 prizeParts 를 부른다 — 문자열을 다시 쪼개 쓰면 정본이 둘이 된다. */
+// eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
+export function prizeText(s: Schedule): string | null {
+  const p = prizeParts(s);
+  return p ? `${p.label} ${p.amount}` : null;
 }
 
 // ── 서브: 포스터 영역 ───────────────────────────────────────────────────────
@@ -252,7 +261,6 @@ function FavoriteButton({
 
 // ── 서브: 상태 배지(행당 1개) ───────────────────────────────────────────────
 
-interface StatusBadge { text: string; cls: string; dot: boolean }
 
 /** 실측 레지 상태 → 배지 텍스트·톤. regInfo 없으면 기존 추정('진행 중') 유지.
  *  §9 쉬운 한국어: 'LIVE' → '진행 중', '레지마감' → '등록 마감'. */
@@ -262,35 +270,39 @@ function liveBadge(regInfo: RegInfo | undefined): { text: string; closed: boolea
   return { text: '진행 중', closed: false };
 }
 
-/** 배지 예산 = 행당 1개. 우선순위: 종료 > 실측 레지 > 예정.
- *  2단 톤 체계 — '지금 행동할 수 있는' 상태만 솔리드 채움(대비 실측 ≥4.99:1 양 테마),
- *  나머지(예정·종료·등록 마감)는 무채 surface-high(§20.1 색 배지 무지개 금지).
+/** 제목 끝의 GTD 표기를 **화면에서만** 뗀다 — 오른쪽 열이 같은 값을 이미 보여준다.
  *
- *  🔴 2026-09-12: **'마감 임박'을 지웠다.** 종전 조건은 `reserveCount >= 10` 하나뿐이었는데
- *     Schedule 에는 정원(capacity)도 예약 마감 시각도 **없다** — 10명은 그냥 10명이지 '임박'의
- *     근거가 아니다. 100석 대회의 예약 10명에도 붉은 '마감 임박'이 붙어 거짓 긴박감을 만들었다.
- *     근거가 생기기 전까지는 사실만 쓴다: 메타 행의 '예약 10명'. */
-function statusBadge(status: ReturnType<typeof scheduleStatus>, regInfo: RegInfo | undefined): StatusBadge {
-  if (status === 'ended') return { text: '종료', cls: 'bg-surface-high text-ink-muted', dot: false };
-  if (status !== 'upcoming') {
-    const b = liveBadge(regInfo);
-    if (b.closed) return { text: '등록 마감', cls: 'bg-surface-high text-ink-muted', dot: false };
-    // emerald-700/danger-dark: 흰 글자 실측 5.47 / 4.99 — emerald-600·danger 는 3.30 / 3.7 로 AA 미달이었다
-    return b.text === '등록 가능'
-      ? { text: '등록 가능', cls: 'bg-emerald-700 text-white', dot: true }
-      : { text: '진행 중', cls: 'bg-danger-dark text-white', dot: true };
-  }
-  return { text: '예정', cls: 'bg-surface-high text-ink-secondary', dot: true };
+ *  🔴 2026-09-18(5차) 오너: "1000만Gtd는 우측에 gtd 1000만이 있으니 삭제".
+ *    같은 값이 한 카드 안에 두 번 나오면 둘 중 하나가 낡았을 때 아무도 모른다(정본 하나 원칙).
+ *    오른쪽 열의 GTD 는 `prizePool`(숫자)에서 계산되고 제목의 GTD 는 업주가 손으로 적은 글자다 —
+ *    **숫자 쪽이 정본**이므로 글자 쪽을 화면에서 뗀다.
+ *
+ *  ⚠ DB 는 건드리지 않는다. 업주가 적은 제목은 그대로 두고 **표시할 때만** 뗀다 —
+ *    상세·검색·공유는 원문을 쓰고, 규칙을 되돌려도 데이터가 안 상한다. `title` 속성에도 원문을 남긴다.
+ *  ⚠ **끝에 붙은 것만** 뗀다. 'GTD 1000만 위클리' 처럼 가운데 있는 것은 제목의 일부일 수 있다.
+ *  ⚠ 오른쪽 열에 GTD 가 **없으면**(prizePool 미입력) 떼지 않는다 — 그러면 정보가 통째로 사라진다.
+ *  ⚠ 다 떼서 빈 제목이 되면 원문을 쓴다(제목이 'GTD 1000만' 뿐인 대회가 실제로 있을 수 있다). */
+// eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
+export function titleWithoutGtd(title: string, hasGtdColumn: boolean): string {
+  if (!hasGtdColumn) return title;
+  const cut = title
+    // "… 1000만 GTD" · "… 1,000만 보장" · "… 10000000 GTD"
+    .replace(/[\s·,|/-]*\d[\d,]*\s*(?:억|만)?\s*(?:GTD|gtd|Gtd|보장)\s*$/u, '')
+    // "… GTD 1000만"
+    .replace(/[\s·,|/-]*(?:GTD|gtd|Gtd)\s*\d[\d,]*\s*(?:억|만)?\s*$/u, '')
+    .trim();
+  return cut || title;
 }
 
-function StatusPill({ b }: { b: StatusBadge }) {
-  return (
-    <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-badge px-1.5 py-0.5 text-2xs font-bold leading-none ${b.cls}`}>
-      {b.dot && <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />}
-      {b.text}
-    </span>
-  );
-}
+/* 🔴 2026-09-18(5차) 오너: "진행중은 없애도 되고". 여기 있던 상태 표시 3종을 지웠다 —
+ *   `interface StatusBadge` · `statusBadge()`(5상태 → 색·모양) · `StatusDot`(로고 모서리 점).
+ *   4차에서 알약 → 점으로 줄였다가, 5차에서 오너가 표시 자체를 빼도 된다고 했다.
+ * ⚠ 잃은 것: 목록 줄에서 **종료·등록 마감**을 한눈에 구분하는 표식.
+ *   남아 있는 단서는 메타 줄의 `등록 마감 N레벨`(regCloseText)과 `N분 후`(soonText) 둘이다.
+ * ⚠ `liveBadge()` 는 지우지 않았다 — 아래 GridCard(포스터 카드)가 아직 배지로 쓴다.
+ * ⚠ 되살릴 때: git 이력에 `StatusDot`(absolute 로 로고 모서리에 겹쳐 폭·높이 0) 형태가 있다.
+ *   그 방식만이 3열 폭 예산을 안 건드린다 — 인라인·다른 열로 옮기면 카드가 오히려 커진다(실측). */
+
 
 // ── 메인: 목록 뷰 카드 ────────────────────────────────────────────────────────
 
@@ -331,8 +343,12 @@ function soonText(schedule: Schedule, status: ReturnType<typeof scheduleStatus>)
   return `${h > 0 ? `${h}시간 ` : ''}${m}분 후`;
 }
 
+// ⚠ `regInfo`(실측 레지 상태)를 더 이상 받지 않는다 — 5차에서 상태 표시를 없애며 유일한 소비처가
+//   사라졌다. **prop 자체는 CardProps 에 남는다**(GridCard 가 아직 배지로 쓴다).
+//   목록 줄에서 잃은 것: 서버가 실측한 '등록 마감/등록 가능'. 남은 단서는 메타 줄의
+//   `등록 마감 N레벨`(포스터에 적힌 정적 값)과 `N분 후`뿐이다. 되살리려면 여기서 다시 받으면 된다.
 function ListCard({
-  schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, regInfo, vtActive,
+  schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, vtActive,
   favorited = false, onToggleFavorite, venue,
 }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
@@ -349,10 +365,10 @@ function ListCard({
   // 실측 근거(진단 P1-C): home 320 에서 매장명이 client 52 / scroll 205 — 25% 만 보였다.
   //   중앙 열이 85px 짜리 시각 열과 안 줄어드는 가격 열 사이에 끼어 ~170px 밖에 못 받았기 때문이다.
   // 유지: §28(참가비·GTD 는 상품 가격 → 표시 유지) · 배지 예산 1개 · 빈 값은 '—'로 자리 보존.
-  const badge = statusBadge(status, regInfo);
   const soon = soonText(schedule, status);
   const reg = regCloseText(schedule);
-  const sub = prizeText(schedule);
+  // 목록 카드만 라벨·금액을 따로 그린다(라벨 작게·금액 크게) — 계산은 정본 하나(prizeParts).
+  const prize = prizeParts(schedule);
   // (2026-09-18 3차) 목록 줄에서 형식·등급·게임종류 표기를 뺐다(오너 지시) — 이 값은 상세 화면이 보여 준다.
   //   계산 자체를 지우지 않고 남겨 둔다면 죽은 코드가 되므로 제거한다. 되살릴 때는 아래 GridCard 의
   //   같은 줄을 복사해 오면 된다(포맷이 갈리지 않게 **그쪽이 정본**이다).
@@ -419,35 +435,48 @@ function ListCard({
           로고라고 알아볼 수도 없었다. 왼쪽 열 최소폭(42/52)이 28px 를 이미 감당한다.
         ⚠ vt-poster(카드→상세 모핑)의 출발점이 이 로고다 — 자리를 옮겨도 이름은 그대로 둔다.
           이름을 빼면 모핑이 조용히 사라진다(index.css 는 그대로 초록이라 아무도 모른다). */}
-      <div className="order-1 min-w-[42px] shrink-0 min-[360px]:min-w-[52px]">
+      {/* 🔴 2026-09-18(4차) 오너: "진행중하고 18:00을 다른데로 이동시키던지 해서 **칸 줄여**".
+          상태 알약이 이 열에서 **한 줄을 통째로** 쓰고 있었고, 이 열이 4단(로고·알약·시각·날짜)이라
+          카드 높이를 혼자 정하고 있었다. 실측(390·다크·100%, 세 열 높이):
+            o1 **92.5** / o2 114.5·57.1·82.9 / o3 61.1·90.9·61.1
+          → 알약을 로고 모서리로 겹쳐 **줄 하나를 없앴다**(아래 StatusDot).
+
+        🔴 **옮길 곳 세 군데를 전부 실측해서 골랐다.** 나머지 둘은 옮긴 자리가 새 병목이 되어
+           카드가 **오히려 커졌다** (390 카드3장 높이 / 괄호는 320px):
+             옮기기 전            136 · 115 · 115   (206 · 111 · 135)
+             가운데 매장 줄로      137 · 113 · 123   (183 · 125 · 153)  ← 긴 매장명이 접혀 +8
+             오른쪽 열 맨 위로     136 · 131 · 105   (165 · 129 · 135)  ← 긴 금액과 겹쳐 +16
+             시각 옆 인라인 점     136 · 113 · 105   (206 · **123** · 135) ← 열 폭 +11px 이 가운데를 뺏어 +12
+             로고 모서리(채택)     아래 실측
+           ⚠ 배운 것: 이 3열에서는 **폭이 곧 높이다.** 왼쪽 열을 11px 넓히면 가운데 basis 가 그만큼
+             줄어 제목이 한 줄 더 접히고, 그 줄이 카드 높이가 된다. 그래서 겹치는(absolute) 배치만이
+             폭·높이 어느 쪽도 안 건드린다.
+        ⚠ vt-poster(카드→상세 모핑)의 출발점이 이 로고다 — 점을 얹어도 PosterArea 와 vtName 은 그대로다. */}
+      {/* 🔴 2026-09-18(6차) 오너: "좌측 '누' 아이콘 크기를 키워서 **공란을 좀 줄여**".
+          로고가 28px 이라 그 아래 60px 가 빈 채로 남아 있었다(카드 95.6px). 44/56px 로 키워 메운다.
+        ⚠ 무한정 키울 수 없다 — 이 열이 넓어지면 가운데 basis 가 그만큼 줄어 제목이 접히고,
+          그 줄이 카드 높이가 된다(4차에서 11px 때문에 카드가 커진 그 함정).
+          폭 예산: 320 = 44 + 8.5 + 102 + 8.5 + 80 = 243 ≤ 258.5 · 360 = 56 + 6.4 + 119 + 6.4 + 96 = 283.8 ≤ 298.6
+        ⚠ vt-poster(카드→상세 모핑)의 출발점이라 크기를 바꿔도 이름은 그대로 둔다. */}
+      <div className="order-1 min-w-[48px] shrink-0 min-[360px]:min-w-[56px]">
+        {/* 🔴 2026-09-18(8차) 오너: "10T 폰트를 줄여서 **정사각 아이콘 크기에 맞춰**".
+            7차에서 세로 포스터(40×60 / 48×74)로 늘렸던 것을 **정사각형으로 되돌리되**,
+            오른쪽 열이 짧아진 만큼(74.1 → 57.4 / 61.4 → 48.9) 그 높이에 맞춘다.
+              320px: 48×48  vs 오른쪽 48.9   ·   360px+: 56×56  vs 오른쪽 57.4
+          ⚠ 폭 예산이 빠듯하다 — 320px: 48 + 8.5 + basis 102 + 8.5 + 88 = 255 ≤ 258.5 (**여유 3.5px**).
+            여기서 왼쪽이나 오른쪽을 조금만 더 키우면 3열이 무너진다. 바꾸기 전에 반드시 다시 재라
+            (e2e schedule-card-fit 의 '3열이 접혔다' 단언이 잡는다).
+          ⚠ vt-poster(카드→상세 모핑)의 출발점 — 비율을 바꿔도 이름은 그대로 둔다. */}
         <PosterArea
           posterUrl={venue?.imageUrl}
           posterColor={venue?.themeColor ?? schedule.posterColor}
           fallbackText={venueInitial(schedule.pubName)}
           title={schedule.pubName}
-          className="mb-0.5 h-[28px] w-[28px] rounded-[7px]"
-          thumbWidth={64}
+          className="h-[48px] w-[48px] rounded-[11px] min-[360px]:h-[56px] min-[360px]:w-[56px]"
+          thumbWidth={128}
           priority={priority}
-          compact
           vtName={vtActive ? 'vt-poster' : undefined}
         />
-        {/* ⚠ StatusPill 은 inline-flex 라 **줄상자(line box)** 를 만든다 — 그 자체로 6.9px 의
-            여백이 위에 붙었다(실측 390: 로고 하단 32.3 vs 알약 상단 39.1). 블록 flex 로 감싸면
-            줄상자가 사라진다. 로고가 들어오면서 이 열이 가장 높은 열이 됐으므로(104.2 vs 가운데 78.4)
-            여기서 아끼는 px 가 곧 **모든 줄의 높이**다. */}
-        <div className="flex"><StatusPill b={badge} /></div>
-        <p className="mt-0.5 text-base font-extrabold tabular-nums leading-tight tracking-tight text-ink-primary min-[360px]:text-lg">
-          {d.time || '—'}
-        </p>
-        {/* 🔴 날짜를 되돌린다(2026-09-18). 3열로 다시 짤 때 `{d.monthDay}({d.dow})` 가 통째로 빠졌고
-            e2e(theme-tokens-v7 ⑦)가 "9/18 일정 행이 한 장도 안 보인다" 로 잡았다.
-            이 목록은 **여러 날짜가 한 줄로 섞여 있는 평면 목록**이라(일정 탐색) 날짜가 없으면
-            유저가 어느 날 대회인지 알 방법이 없다 — 레퍼런스 스크린샷은 날짜별로 묶인 화면이라
-            행에 날짜가 없어도 됐던 것이고, 우리 화면은 그 전제가 다르다.
-          ⚠ 자리를 만들려고 '시작' 을 뺐다. '시작' 은 모든 줄에 똑같이 적히는 **고정 낱말**이라
-            정보가 0이고, 날짜는 줄마다 다른 **데이터**다. 굵은 시각 + 상태 알약이 이미 '시작 시각'
-            이라는 뜻을 전한다. 기능이 아니라 장식을 뺀 것이다. */}
-        <p className="text-2xs leading-tight text-ink-muted tabular-nums">{d.monthDay}({d.dow})</p>
       </div>
 
       {/* ② 가운데 — 매장 / 대회명 / 등록·유형 */}
@@ -464,11 +493,17 @@ function ListCard({
           6rem(102px)이면 260.4 → 243.4 로 15px 여유가 생긴다.
         ⚠ 원래 의도했던 접힘은 '가운데 열이 스스로 내려가고 좌·우는 첫 줄에 남는' 것이었다(위 주석).
           실제 CSS 는 반대로 동작했다 — 주석의 기대와 브라우저 동작이 다르면 **브라우저가 맞다.** */}
-      <div className="order-2 min-w-0 flex-[1_1_6rem] min-[360px]:flex-[1_1_7rem]">
-        {/* 로고는 왼쪽 열로 갔다(위 주석). 여기는 TOP 배지 + 매장명 + 지역 + 즐겨찾기만 남는다 —
-            그만큼 매장명이 쓸 폭이 늘었다(실측 18px 로고 + gap 4px = 22px 회수). */}
+      {/* 🔴 2026-09-18(5차) 오너: "누리 테스트 홀덤펍과 누리 테스트 위클리의 **간격을 맞춰**".
+          종전엔 줄마다 `mt-0.5` 를 따로 붙여 놨는데, 각 줄의 글자 크기가 달라(매장 13px · 제목 15px ·
+          시각 17px) **내장 line-height 가 줄마다 다른 여백**을 만들었다. 눈에는 그게 '간격이 안 맞는' 것이다.
+          → 줄마다 붙이던 `mt-0.5` 를 걷고 **부모에 `space-y-0.5` 하나**로 통일한다. 리듬이 한 곳에서 정해진다.
+        ⚠ 이 열의 자식은 전부 `leading-tight` 로 맞춘다 — 그래야 `space-y` 가 실제 간격이 된다.
+          (fontSize 유틸이 line-height 를 같이 싣는다는 것은 이 저장소가 여러 번 데인 자리다.) */}
+      <div className="order-2 min-w-0 flex-[1_1_6rem] space-y-0.5 min-[360px]:flex-[1_1_7rem]">
+        {/* 🔴 2026-09-18(5차) 오너: "top 를 누리 테스트 홀덤펍 **뒤로**".
+            TOP 은 유료 노출 표식이라 매장 **이름보다 앞에 서면 광고가 이름을 가린다.**
+            이름 → 지역 → TOP 순서면 눈이 '어느 매장인가' 를 먼저 읽는다. */}
         <div className="flex min-w-0 items-center gap-1">
-          {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
           {/* 🔴 2026-09-18(재검증): `wrap` 을 **안 넘기고 있었다.** VenueLink 의 기본값은 false(말줄임)라
               지역('서울')이 320·360px/200% 에서 **clientWidth 0** — 말줄임표조차 없이 통째로 사라졌다.
               같은 파일 VenueLink 머리말(2026-09-12)이 "목록 카드는 말줄임 대신 줄바꿈이다(wrap=true)" 라고
@@ -481,9 +516,10 @@ function ListCard({
             pubName={schedule.pubName}
             region={schedule.region}
             wrap
-            sizeCls="text-[0.8125rem] min-[360px]:text-xs"
+            sizeCls="text-[0.75rem] min-[360px]:text-[0.6875rem]"
             onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
           />
+          {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
           {onToggleFavorite && schedule.venueId && (
             <FavoriteButton
               pubName={schedule.pubName}
@@ -496,14 +532,46 @@ function ListCard({
         {/* 대회명 — 이제 가운데 열을 온전히 쓴다. 2줄까지 허용(레퍼런스는 1줄이지만 한글 제목이 더 길다). */}
         {/* ⚠ TOP 배지를 제목 안에 두지 않는다 — 실측(320·100%) 그 배지가 **43px** 를 먹어
             제목 칸이 그만큼 줄었다. 매장 줄은 여유가 있어 거기로 옮긴다. */}
-        <h3 className="mt-0.5 line-clamp-2 break-keep text-[0.9375rem] font-bold leading-snug tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-sm">
-          {schedule.title}
+        <h3 className="line-clamp-2 break-keep text-[0.9375rem] font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-sm"
+          title={schedule.title}>
+          {titleWithoutGtd(schedule.title, !!prize)}
         </h3>
 
-        {/* 등록 마감 · 유형 · 별점 · 거리 · 예약 — 레퍼런스의 'REG ~ Lv16' 줄에 해당한다.
-            ⚠ 가로 스크롤에 넣지 않는다 — 예전에 등록 마감이 숨은 스크롤 안으로 사라져
-              유저가 그 정보가 없는 대회로 오해했다(§6-1). */}
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs leading-tight text-ink-muted">
+        {/* 🔴 2026-09-18(6차) 오너: "참가비를 누리 테스트 위클리 **하단으로** 변경".
+            참가비(라벨+금액)가 제목 바로 아래로 왔다. 5차에서 시각이 있던 자리다.
+          ⚠ 라벨과 금액은 **한 덩어리**로 붙여 둔다. 떼어 놓으면 라벨이 옆 금액(GTD)을 가리키는 것처럼
+            읽혀 '참가비 1,000만' 으로 오독된다 — 금액 오독은 §28 이 막으려는 바로 그 사고다.
+          ⚠ title 에 원 단위 금액을 남긴다 — T 가 무엇인지 모르는 첫 방문자가 확인할 수 있어야 한다. */}
+        {/* 참가비 + 등록 마감 · 별점 · 거리 · 예약 — **한 줄**이다.
+            🔴 2026-09-18(7차) 오너 선택: 참가비를 등록 마감 줄과 합쳐 가운데 열을 한 단 줄인다.
+               합치기 전 이 열은 4단(매장 / 제목 / 참가비 / 메타)이라 일정 탐색의 정보 많은 줄이
+               390px 에서 136 → 168px 로 커져 있었다. 합치면 참가비 줄(24px)이 메타 줄에 흡수된다.
+             ⚠ `items-baseline` 이다(`items-center` 아님). 참가비 금액은 17~19px, 나머지는 10.6px 라
+               가운데 정렬하면 작은 글자들이 붕 뜬다 — 글자 밑선을 맞춰야 한 줄로 읽힌다.
+             ⚠ `flex-wrap` 은 그대로 둔다. 320px 에서 `참가비 1,234,567원`(133px) 하나가 이미
+               열 폭(113.5px)을 넘는다 — 접혀야 금액이 온전히 남는다(§28 반올림 금지).
+               즉 좁은 폭에서는 두 줄로 돌아가지만 **잘리지는 않는다.** 넓은 폭에서 버는 구조다.
+             ⚠ 가로 스크롤에 넣지 않는다 — 예전에 등록 마감이 숨은 스크롤 안으로 사라져
+               유저가 그 정보가 없는 대회로 오해했다(§6-1). */}
+        {/* 🔴 2026-09-18(9차) 오너: "참가비 10T 에서 **위로 줄간격을 붙여**" → 10차 "**조금 더 올려줘**".
+            부모의 `space-y-0.5`(+2.125px)를 0 으로 되돌린 뒤, 한 번 더 요청이 와서 **−4.25px** 로 당겼다.
+          ⚠ `!` 가 필수다. `space-y-*` 는 `.space-y-0\.5 > :not([hidden]) ~ :not([hidden])` 라
+            명시도가 (0,3,0) 이고 평범한 `-mt-1`(0,1,0)은 진다 — important 없이는 조용히 무시된다.
+          ⚠ 음수 마진은 **줄상자를 겹치게** 만든다. 제목이 2줄일 때 아랫줄 글자와 참가비 글자가
+            부딪히지 않는지 반드시 실측해라(잘림 게이트는 겹침을 못 본다 — 넘침이 아니라서). */}
+        <div className="!-mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-2xs leading-tight text-ink-muted">
+          {/* ⚠ `shrink-0` 을 주지 마라. `참가비 1,234,567원` 은 131px 인데 320px 의 이 열은 114px 다 —
+              줄지도 접히지도 못해 **값이 잘린다**(실측 `114/131`, 잘림 게이트가 잡았다).
+              안쪽도 `flex-wrap` 이라야 라벨이 윗줄로 가고 금액이 온전히 남는다. */}
+          <span className="flex min-w-0 flex-wrap items-baseline gap-x-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">참가비</span>
+            {/* 🔴 2026-09-18(8차) 오너: "10T 의 폰트 크기를 줄여서". text-base/lg → text-sm/base.
+                이 한 단계가 곧 이 줄의 높이라, 가운데 열이 그만큼 낮아지고 왼쪽 정사각 타일과 키가 맞는다. */}
+            <span className="text-[0.8125rem] font-extrabold tabular-nums tracking-tight text-ink-primary min-[360px]:text-sm"
+              title={schedule.buyIn?.amount ? `${schedule.buyIn.amount.toLocaleString()}원` : undefined}>
+              {buyInText(schedule.buyIn?.amount)}
+            </span>
+          </span>
           {reg && <span className="font-semibold tabular-nums text-ink-secondary">{reg}</span>}
           {soon && <span className="font-bold text-accent-200">{soon}</span>}
           {/* 🔴 2026-09-18(3차) 오너: "14분 후 오른쪽 mtt gtd 삭제".
@@ -522,21 +590,41 @@ function ListCard({
         </div>
       </div>
 
-      {/* ③ GTD · 참가비 — §28 상품 가격 정보라 표시를 유지한다.
-          🔴 2026-09-18(3차) 오너: "10T 아래에 GTD 1000만 있는데 GTD를 위로 올리고 10T를 밑으로".
-             순서를 뒤집었다. 상금(GTD)이 위, 참가비가 아래다 — 유저가 목록에서 먼저 보는 것은
-             '얼마를 걸고 얼마를 받나' 중 **받는 쪽**이라는 판단이다.
-           ⚠ '참가비' 라벨은 금액 **바로 위**에 붙여 둔다. 라벨을 맨 위로 올리면 그게 GTD 를 가리키는
-             것처럼 읽혀 '참가비 1,000만' 으로 오독된다 — 금액 오독은 §28 이 막으려는 바로 그 사고다.
-           ⚠ title 에 원 단위 금액을 남긴다 — T 가 무엇인지 모르는 첫 방문자가 확인할 수 있어야 한다. */}
-      <div className="order-3 w-[68px] shrink-0 text-right min-[360px]:w-[80px]">
-        <p className={`break-keep text-2xs font-bold tabular-nums leading-tight ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
-          {sub ?? '—'}
+      {/* ③ GTD · 시각 — §28 상품 가격 정보라 표시를 유지한다.
+          🔴 2026-09-18(6차) 오너: "GTD 1000만 **크기를 키우고** 참가비 있는 쪽으로 변경 /
+             시간과 날짜를 GTD 1000만 쪽으로". 참가비가 가운데 열로 갔고(위) 이 열은 GTD·시각이 됐다.
+             GTD 는 text-2xs(10.6px) → text-sm/base 로 키웠다.
+           ⚠ 열 폭을 80 → 92px 로 같이 넓혔다. 안 넓히면 커진 GTD 가 두 줄로 접혀 이 열이 새 병목이 된다
+             (4차에 오른쪽 열로 옮겼다가 카드가 +16px 커진 그 자리다).
+             폭 예산 320 = 44 + 8.5 + 102 + 8.5 + 84 = 247 ≤ 258.5 · 360 = 56 + 6.4 + 119 + 6.4 + 92 = 279.8 ≤ 298.6
+           ⚠ 날짜를 빼지 마라 — 여러 날짜가 섞인 평면 목록이라 날짜가 유일한 날짜 단서다.
+             한 번 빠졌다가 e2e(theme-tokens-v7 ⑦)가 "9/18 일정 행이 한 장도 안 보인다" 로 잡았다. */}
+      <div className="order-3 w-[88px] shrink-0 text-right min-[360px]:w-[96px]">
+        {/* 🔴 라벨은 작게, 금액은 크게 — 'GTD 1,000만' 을 **한 덩어리 큰 글자**로 두면 88px 안에서
+            두 줄로 접히고(실측) 이 열이 4단이 되어 카드가 95.6 → 118.7px 로 커졌다.
+            라벨/금액을 나누면 같은 2줄이라도 라벨 줄이 13px 라 높이가 절반이다.
+          ⚠ 라벨과 금액은 **정본 하나**(prizeParts)에서 온다 — 문자열을 다시 쪼개 쓰지 마라. */}
+        {/* 🔴 2026-09-18(8차) 오너: "GTD 와 아래 1000만을 **한 줄로 합치고**".
+            라벨과 금액을 한 줄에 둔다 — 이 열이 3단 → 2단이 되어 카드가 그만큼 낮아진다.
+          ⚠ 11차에서 금액을 한 단계 키우며(text-sm/base → text-base/lg) **라벨을 10 → 9px 로 줄이고
+            `tracking-wide` 를 뺐다.** 열 폭을 안 건드리고 금액에 줄 자리를 라벨에서 번 것이다 —
+            폭 예산이 320px 에서 여유 3.5px 뿐이라 열을 넓히는 선택지가 없었다.
+            실측 폭: 라벨 21 → 17 · 금액 54~62 → 63~71 · 합계 84(320) / 92(360+) ≤ 88 / 96.
+          ⚠ `items-baseline` — 10px 과 15~17px 를 가운데 정렬하면 작은 라벨이 붕 뜬다. */}
+        <p className={`flex flex-wrap items-baseline justify-end gap-x-1 leading-tight ${prize ? 'text-gold-300' : 'text-ink-muted'}`}>
+          <span className="text-[9px] font-bold uppercase opacity-80">{prize?.label ?? '상금'}</span>
+          <span className="break-keep text-base font-extrabold tabular-nums min-[360px]:text-lg">{prize?.amount ?? '—'}</span>
         </p>
-        <p className="mt-1 text-[10px] font-bold uppercase leading-tight tracking-wide text-ink-muted">참가비</p>
-        <p className="text-base font-extrabold tabular-nums leading-tight text-ink-primary min-[360px]:text-lg"
-          title={schedule.buyIn?.amount ? `${schedule.buyIn.amount.toLocaleString()}원` : undefined}>
-          {buyInText(schedule.buyIn?.amount)}
+        {/* 🔴 2026-09-18(9차) 오너: "날짜를 좌측으로 시간을 우측에 붙여줘". 순서를 뒤집었다.
+            오른쪽 정렬 열이라 **시각이 열 끝에 딱 붙고** 날짜가 그 왼쪽에 선다 —
+            줄마다 시각의 오른쪽 모서리가 같은 x 에 서므로 세로로 훑기 좋다. */}
+        {/* 🔴 2026-09-18(11차) 오너: "GTD 1000만을 조금 더 키우고 **아래 시간 날짜를 줄여**".
+            시각 text-base/lg → text-sm/base, 날짜는 9px. GTD 가 이 열의 주인공이 되도록 대비를 벌린다.
+          ⚠ `flex-wrap` 을 넣어 둔다. 320px 에서 `9/18(금) 18:00` 은 87px 로 열(88px)에 **1px 남기고**
+            들어간다 — 요일이 한 글자 더 길거나 글꼴이 바뀌면 바로 넘친다. 접히는 편이 잘리는 것보다 낫다. */}
+        <p className="mt-0.5 flex flex-wrap items-baseline justify-end gap-x-1 leading-tight">
+          <span className="text-[9px] tabular-nums text-ink-muted">{d.monthDay}({d.dow})</span>
+          <span className="text-sm font-extrabold tabular-nums tracking-tight text-ink-primary min-[360px]:text-base">{d.time || '—'}</span>
         </p>
       </div>
    </article>

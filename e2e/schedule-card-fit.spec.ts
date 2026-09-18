@@ -147,9 +147,24 @@ const measure = (page: Page) => page.evaluate(() => {
         const el = c.querySelector<HTMLElement>(`:scope > [class*="${k}"]`);
         if (!el) return null;
         const r = el.getBoundingClientRect();
-        return { top: Math.round(r.top * 10) / 10, w: Math.round(r.width * 10) / 10 };
+        return { top: Math.round(r.top * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 };
       };
       return { o1: pick('order-1'), o2: pick('order-2'), o3: pick('order-3') };
+    }),
+    // 🔴 제목 줄과 그 아래(참가비·등록마감) 줄이 **겹치지 않는가**.
+    //   오너가 "줄간격을 붙여 / 더 올려" 를 반복 요청해 그 줄에 **음수 마진**이 들어갔다(2026-09-18).
+    //   음수 마진은 줄상자를 겹치게 만드는데, 잘림 게이트는 이걸 **구조적으로 못 본다** —
+    //   넘침(scrollHeight > clientHeight)이 아니라 겹침이라서다. 여기서 따로 잰다.
+    //   기준은 글자 크기에 비례한다(200% 확대에서 같은 비율로 커지므로 px 고정이면 거짓 실패가 난다).
+    titleGap: cards.map((c) => {
+      const h3 = c.querySelector('h3');
+      const next = h3?.nextElementSibling;
+      if (!h3 || !next) return null;
+      const a = h3.getBoundingClientRect(); const b = next.getBoundingClientRect();
+      return {
+        gap: Math.round((b.top - a.bottom) * 10) / 10,
+        fs: Math.round(parseFloat(getComputedStyle(h3).fontSize) * 10) / 10,
+      };
     }),
     docScrollX: doc.scrollWidth - doc.clientWidth,
     cardH: cards.map((c) => Math.round(c.getBoundingClientRect().height)),
@@ -211,7 +226,7 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
           expect(r.cards, '일정 카드가 렌더되지 않았다 — 잴 것이 없으면 통과가 아니다').toBeGreaterThan(0);
           console.log(`[${w}/${theme}/${zoom ? 200 : 100}] cards=${r.cards} h=${r.cardH.join(',')} clamp=${r.clamped.length} ellip=${r.ellipsis.length}`);
           // 열 기하를 **항상** 찍는다 — 접힘은 통과/실패보다 먼저 눈에 보여야 원인을 짚는다.
-          console.log(`  cols ${r.cols.map((c) => `[${c.o1?.top}/${c.o1?.w} ${c.o2?.top}/${c.o2?.w} ${c.o3?.top}/${c.o3?.w}]`).join(' ')}`);
+          console.log(`  cols(h) ${r.cols.map((c) => `[${c.o1?.h} ${c.o2?.h} ${c.o3?.h}]`).join(' ')}  w ${r.cols.map((c) => `[${c.o1?.w} ${c.o2?.w} ${c.o3?.w}]`).join(' ')}`);
           expect(r.clippedValues, `🔴 값이 잘렸다 — 이름은 줄여도 금액·등록 마감은 못 줄인다:\n${r.clippedValues.join('\n')}`).toEqual([]);
           expect(r.hiddenScroll, `등록 마감·참가비가 숨은 가로 스크롤 안에 있다:\n${r.hiddenScroll.join('\n')}`).toEqual([]);
           expect(
@@ -219,6 +234,21 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
             '카드 안에서 잘린 요소가 있다',
           ).toEqual([]);
           expect(r.docScrollX, '문서가 가로로 스크롤된다').toBeLessThanOrEqual(0);
+
+          // 🔴 제목 ↔ 참가비 줄 겹침 상한. 음수 마진으로 줄을 당기는 것 자체는 허용하되(오너 지시),
+          //   글자끼리 부딪히는 선을 넘지 못하게 막는다. 한계는 제목 글자 크기의 **1/3**이다 —
+          //   leading-tight(1.25배)의 아래쪽 여유가 대략 그만큼이고, 그 안에서는 글리프가 안 닿는다
+          //   (실측 2026-09-18: 320px 제목 2줄에서 gap −4.2px / 글자 15.9px → 한계 −5.3px, 안 닿음).
+          const 겹침 = r.titleGap
+            .map((g, i) => ({ i, g }))
+            .filter(({ g }) => g && g.gap < -g.fs / 3)
+            .map(({ i, g }) => `${i + 1}번째 카드: 간격 ${g!.gap}px (제목 ${g!.fs}px · 한계 ${Math.round(-g!.fs / 3 * 10) / 10}px)`);
+          expect(
+            겹침,
+            '제목과 아래 줄의 글자가 겹친다 — 음수 마진이 줄상자 여유를 넘었다:\n'
+            + 겹침.join('\n')
+            + '\n→ 더 붙이려면 마진이 아니라 `leading-*`(줄높이) 를 줄여라. 그쪽은 글리프를 안 건드린다.',
+          ).toEqual([]);
 
           // 🔴 3열 골격 — 오너가 스크린샷을 주며 두 차례 요구한 계약이다([시각][내용][참가비]).
           // ⚠ 글자 100% 에서만 단언한다. 200% 에서 세로로 접히는 것은 **설계된 접근성 탈출구**다.
@@ -266,7 +296,10 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
     expect(all, '🔴 참가비 1,234,567원이 T 로 반올림됐다 — 가격을 바꿔 적으면 안 된다').toContain('1,234,567원');
     expect(all, 'T 로 안 떨어지는 금액에 T 가 붙었다').not.toMatch(/12[0-9.]*T/);
     // 라벨 '상금 보장' → 'GTD'(2026-09-18 오너). 금액 표시 유지라는 요지는 그대로.
-    expect(all, 'GTD 1,000만이 안 보인다(§28 가격 정보는 표시 유지)').toContain('GTD 1,000만');
+    // ⚠ 2026-09-18(6차) — GTD 라벨과 금액이 **다른 요소**로 나뉘었다(라벨은 작게·금액은 크게).
+    //   그래서 `textContent` 가 'GTD1,000만' 로 붙어 나온다 — 공백을 박은 문자열 비교는 이걸 못 본다.
+    //   이 검사의 요지는 **금액이 반올림되지 않는 것**이므로 공백을 선택적으로 보는 정규식으로 바꾼다.
+    expect(all, 'GTD 1,000만이 안 보인다(§28 가격 정보는 표시 유지)').toMatch(/GTD\s*1,000만/);
     expect(all, '예약 12명은 정원 근거가 없다 — "마감 임박"으로 부풀리면 안 된다').not.toContain('마감 임박');
     expect(all, '예약 인원은 사실 그대로 표시한다').toContain('예약 12명');
     // 참가비 미입력(0)을 '무료'·'0원'으로 만들지 않는다
