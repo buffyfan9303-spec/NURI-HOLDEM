@@ -352,7 +352,7 @@ export default function HomeTab({
               {/* 오너 지시(2026-08-29): 인사말은 아무 데도 안 데려간다 — 링크인데 갈 이유를 안 준다.
                   날짜는 맥락으로 남기고, 그 자리를 NURI MIND 로 가고 싶게 만드는 문구로. */}
               {now.getMonth() + 1}/{now.getDate()}({DAYS_KO[now.getDay()]}) · 오늘의 운을 점쳐보세요{' '}
-              <span className="font-semibold text-accent-300">· NURI MIND ›</span>
+              <span className="inline-flex items-center gap-0.5 font-semibold text-accent-300">· NURI MIND<Icon name="chevron-right" size={12} className="shrink-0" /></span>
             </a>
             {/* §5 역할표: 홈 짧은 제목 18/26(PC 22/30). 수치는 **도착한 것만** 적는다 —
                 일정이 안 왔으면 대회 수를, 클락이 안 왔으면 등록 가능 수를 쓰지 않는다. */}

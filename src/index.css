@@ -709,6 +709,21 @@
   :focus-visible {
     @apply outline-none ring-2 ring-accent-300 ring-offset-2 ring-offset-surface-base;
   }
+
+  /* 🔴 브라우저 기본 표면도 디자인이다 (2026-09-18).
+     그리지 않은 부분—글자 선택색·캐럿·밑줄 간격—은 내버려 두면 어느 디자인 시스템에도
+     속하지 않는 기본값이 그대로 나간다. '조립한 페이지'와 '만든 페이지'를 가르는
+     가장 싼 신호이고, 가장 자주 빠뜨리는 자리다(impeccable craft-floor 'Browser surfaces').
+     ⚠ 선택색은 **불투명에 가까운 바탕 + 명시적 글자색**으로 둔다 — 반투명만 주면 지면과 섞여
+       어둠에서 글자가 읽히지 않는다(선택 상태도 대비를 지켜야 한다). */
+  ::selection      { background-color: rgb(var(--accent-300) / 0.85); color: rgb(255 255 255); }
+  ::-moz-selection { background-color: rgb(var(--accent-300) / 0.85); color: rgb(255 255 255); }
+  html.light ::selection      { background-color: rgb(var(--accent-300) / 0.18); color: rgb(var(--ink-primary)); }
+  html.light ::-moz-selection { background-color: rgb(var(--accent-300) / 0.18); color: rgb(var(--ink-primary)); }
+  /* 입력 커서도 강조색으로 — 폼이 많은 앱이라 매일 보이는 디테일이다. */
+  input, textarea, [contenteditable] { caret-color: rgb(var(--accent-300)); }
+  /* 밑줄이 글자에 붙어 있으면 한글 받침을 자른다. */
+  a:hover, a:focus-visible { text-underline-offset: 0.2em; }
 }
 
 @layer components {
