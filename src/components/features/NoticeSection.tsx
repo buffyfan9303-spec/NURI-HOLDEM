@@ -92,7 +92,7 @@ export function NoticeRow({ notice, onSelect, reserveMarker }: {
            글자를 2배로 키운 화면에서 '한 줄'을 지키는 유일한 방법은 글자를 지우는 것뿐이고,
            그건 요구를 지킨 게 아니라 기능을 없앤 것이다). */}
       <span title={notice.title}
-        className="min-w-[6rem] flex-1 break-words text-sm font-semibold text-ink-primary line-clamp-1">
+        className="min-w-[4rem] flex-1 break-words text-sm font-semibold text-ink-primary line-clamp-1">
         {notice.title}
       </span>
       <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{when}</span>

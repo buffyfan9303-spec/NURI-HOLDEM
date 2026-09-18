@@ -2,7 +2,7 @@
 // 라이브 — 진행 중(클락 running) 게임 현황 보드.
 // 오너 지시(2026-08-28): 라이브 카드를 APIS 라이브 카드 문법으로 재구성 — 3열 스캔 카드.
 //   좌 = 큰 생존/엔트리 + PLAYERS · 중앙 = ●LIVE·매장·지역·♥ / 게임명 / Lv·블라인드·REG
-//   우 = 시작시각 / BUY-IN 라벨·금액 / GTD·이용권(골드)
+//   우 = 시작시각 / GTD·상금(골드) / 참가비 라벨·금액 / 이용권 — 일정 목록 카드(ScheduleCard ③열)와 같은 순서·어휘·정본
 // 상세(리바인·평균스택·다음브레이크 등)는 카드 탭 → 관전 클락에서 그대로 제공(표면 간소화, 기능 보존).
 import { useEffect, useMemo, useState } from 'react';
 import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockState } from '../../api/clock';
@@ -24,6 +24,8 @@ const LIVE_SORT_LABEL: Record<(typeof LIVE_SORT_ORDER)[number], string> = {
 };
 import { getMyFollowedVenueIds, type Venue } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
+// 참가비·상금 문자열과 '오늘 곧 시작' 줄은 일정 목록 카드의 정본을 그대로 쓴다(두 벌 계산·두 문법 금지, 2026-09-18).
+import ScheduleCard, { buyInText, prizeText } from './ScheduleCard';
 
 // 지역 중심좌표(근사) — 정확한 주소 좌표가 없어 지역 단위로 "가까운 순" 근사. GPS와 함께 사용.
 const REGION_GEO: Record<string, [number, number]> = {
@@ -55,18 +57,14 @@ function regMinLabel(ms: number): string {
 }
 
 // ── 축약 표기(APIS 문법) ─────────────────────────────────────────────────────
-// 규칙 하나만 지킨다: **축약이 값을 바꾸면 축약하지 않는다.** 카드가 좁다고 참가비 55,000 을
-// '5만'으로 반올림해 보여주면 그건 압축이 아니라 오정보다(§28 — 참가비·GTD 는 가격 고지).
+// 규칙 하나만 지킨다: **축약이 값을 바꾸면 축약하지 않는다.** 블라인드 1,500 을 '1.5K' 로 적는 것은 압축이지만
+// 참가비 55,000 을 '5만' 으로 반올림하면 오정보다(§28 — 참가비·GTD 는 가격 고지).
 // 소수 2자리까지 되돌려 원값과 일치할 때만 축약하고, 아니면 전체 숫자를 그대로 쓴다.
+// ⚠ 참가비·상금 문자열은 여기서 만들지 않는다 — ScheduleCard 의 buyInText('10T')·prizeText('GTD 1,000만') 가 정본이다.
+//   같은 대회가 일정 목록에서는 '10T', 라이브에서는 '10만' 으로 보이던 것을 2026-09-18 에 없앴다(예전 wonShort).
 function unitOrNull(n: number, div: number): string | null {
   const r = Math.round((n / div) * 100) / 100;
   return Math.abs(r * div - n) < 0.5 ? String(r) : null;
-}
-/** 금액 축약 — 50000→'5만' · 55000→'5.5만' · 60,000,000→'6000만' · 100,000,000→'1억' · 나머지는 원 숫자 */
-function wonShort(n: number): string {
-  if (n >= 100_000_000) { const s = unitOrNull(n, 100_000_000); if (s) return `${s}억`; }
-  if (n >= 10_000) { const s = unitOrNull(n, 10_000); if (s) return `${s}만`; }
-  return n.toLocaleString();
 }
 /** 블라인드 축약 — 1000→'1K' · 1500→'1.5K' · 150000→'150K' · 1,000,000→'1M' */
 function blindShort(n: number): string {
@@ -298,22 +296,15 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         </div>
         {upcoming.length > 0 && (
           <div className="reveal space-y-1.5 pt-1">
-            <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-muted"><Icon name="clock" size={12} className="shrink-0" />오늘 곧 시작 <span className="text-accent-300">{upcoming.length}</span> <span className="font-normal">아직 클락 전</span></p>
-            <ul className="grid grid-cols-1 gap-1.5">
+            <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-muted"><Icon name="clock" size={12} className="shrink-0" />오늘 곧 시작 <span className="text-accent-300">{upcoming.length}</span> <span className="whitespace-nowrap font-normal">아직 클락 전</span></p>
+            {/* 일정 목록 카드(ScheduleCard list) 그 자체 — 같은 대회가 일정 탭과 여기서 다른 줄 문법으로 보이지 않게(2026-09-18).
+                예전의 자체 3열(시각·제목·매장명)에는 참가비·GTD·등록 마감이 없었다 — '갈까?' 를 정하는 값이 빠진 줄이었고
+                320px 에서는 제목이 잘렸다(실측 134/190). 컨테이너 클래스는 App 의 일정 목록과 같다. */}
+            <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
               {upcoming.map((s) => (
-                <li key={s.id}>
-                  {/* Luma 시간 우선 행 문법 — 시간(무채·tabular)이 행의 앵커, 제목이 그다음 */}
-                  {/* 매장명 칼럼은 fit-content(40%) — auto 트랙 안의 max-w-[40%]는 트랙 자기 폭 기준으로
-                      순환 해석돼 매장명이 '로…'(23px)로 뭉개졌다(PC 점검 2026-08-28). 트랙 정의로 상한을 옮긴다. */}
-                  <button type="button" onClick={() => onSchedule(s)}
-                    className="grid w-full grid-cols-[auto_minmax(0,1fr)_fit-content(40%)] items-center gap-2 rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 active:scale-[0.99]">
-                    <span className="text-2xs font-bold tabular-nums text-ink-secondary">{s.startTime || '예정'}</span>
-                    <span className="truncate text-xs font-semibold text-ink-primary">{s.title}</span>
-                    <span className="min-w-0 justify-self-end truncate text-2xs text-ink-muted">{nameOf(s.venueId)}</span>
-                  </button>
-                </li>
+                <ScheduleCard key={s.id} mode="list" schedule={s} venue={venueById.get(s.venueId)} onSelect={onSchedule} onVenueClick={onVenue} />
               ))}
-            </ul>
+            </div>
           </div>
         )}
         <p className="text-center text-2xs text-ink-muted">운영 중 클락의 공개 정보입니다 · 30초 자동 갱신.</p>
@@ -324,7 +315,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
 
 function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster, onVenue, onDisplay }: { g: ClockState; name: string; sched: Schedule | null; region?: string; fav?: boolean; active?: boolean; onPoster: () => void; onVenue: () => void; onDisplay: () => void }) {
   // APIS 라이브 카드 문법(오너 지시 2026-08-28) — 3열 스캔:
-  //   [생존/엔트리 · PLAYERS] │ [●LIVE 매장 지역 ♥ / 게임명 / Lv·블라인드·타이머·REG] │ [시작 / BUY-IN / 금액 / GTD]
+  //   [생존/엔트리 · PLAYERS] │ [●LIVE 매장 지역 ♥ / 게임명 / Lv·블라인드·타이머·REG] │ [시작 / 참가비 / 금액 / GTD·이용권]
   // 카드 전체 탭 = 관전 클락(onDisplay) 유지. 1초 틱은 running 카드만(MO-9 LiveCard 격리 문법).
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -367,14 +358,11 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
   // 우측 열 — 시작시각·참가비·부가(§28: 참가비·GTD·이용권은 가격 정보라 표시 유지)
   const startTime = sched?.startTime || '';
   const buyIn = ls?.buyInAmount ?? sched?.buyIn?.amount ?? 0; // 라이브 장부값 우선, 없으면 포스터값
-  const pool = sched?.prizePool ?? 0;
-  const pct = sched?.prizePercent ?? 0;
-  const extras: string[] = [];
-  if (sched?.guaranteed && pool > 0) extras.push(`GTD ${wonShort(pool)}`);
-  else if (pct > 0) extras.push(`상금 ${pct}%`);
+  // 상금 문자열은 일정 목록 카드와 같은 정본(prizeText) — 'GTD 1,000만' · '예상 상금 50%'. 반올림 없음.
+  const prize = sched ? prizeText(sched) : null;
   const seat = sched?.seats?.[0];
-  if (seat) extras.push(`${seat.label} ${seat.count}석${(sched?.seats?.length ?? 0) > 1 ? ' 외' : ''}`);
-  const hasRight = !!startTime || buyIn > 0 || extras.length > 0;
+  const seatText = seat ? `${seat.label} ${seat.count}석${(sched?.seats?.length ?? 0) > 1 ? ' 외' : ''}` : null;
+  const hasRight = !!startTime || buyIn > 0 || !!prize || !!seatText;
   const regionLabel = regionShort(region);
 
   // 카드 전체 탭 = **포스터**(오너 2026-09-08 "라이브인 것을 누르면 포스터로 들어가게").
@@ -393,8 +381,14 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
         className="card-elev absolute inset-0 z-0 rounded-aura border border-accent-400/30 bg-surface-low transition-colors hover:border-accent-400/60" />
       <div className="pointer-events-none relative z-10 px-3.5 py-2.5 text-left">
         {/* min-h 고정 = 열 조합(집계 없음·포스터 없음)이 달라도 카드 높이가 같다 → 스켈레톤과 동조(CLS 0).
-            좌/우 열은 고정 폭 + overflow-hidden — 긴 값이 중앙 열의 폭을 갉아먹지 못하게 막는다. */}
-        <div className="flex min-h-[4.25rem] items-stretch gap-2">
+            ⚠ 2026-09-18 실측으로 뒤집은 것: 우측 열이 **고정 68px + overflow-hidden** 이라 참가비 '1,234,567' 이
+              '1,234…' 로, 'GTD 1000만 · 5만 이용권 3석 외' 가 'GTD 1000…' 으로 **모든 폭(1440 포함)에서** 잘렸다.
+              이름은 줄여도 금액·상금은 못 줄인다(§5) — 우측 열은 내용이 폭을 정하고 중앙 열이 대신 양보한다.
+            ⚠ 200% 확대: rem 고정 열이 카드 밖으로 밀려 '시작 18'·'BUY'·'10' 이 잘렸다(실측 320: 행 157/281).
+              flex-wrap + 중앙 열 basis(4.5rem) — 폭이 모자라면 중앙 열이 **스스로 아래 줄로** 내려가고 좌/우 열은 첫 줄에 남는다
+              (ScheduleCard ListCard 와 같은 조리법). 100% 에서는 320px 까지 3열이 그대로다 — basis 를 5rem 으로 두면
+              320px 에서 '1,234,567원'(우측 104px) 카드와 묶음 카드의 중앙 열(82px)이 줄을 내렸다(실측 h 171). */}
+        <div className="flex min-h-[4.25rem] flex-wrap items-stretch gap-x-2 gap-y-1">
           {/* ── 좌: 필드 현황(생존/엔트리 · 평균 스택) — 세로 중앙 ── */}
           {hasPlayers && (
             <div data-live-players className="flex shrink-0 flex-col items-center justify-center">
@@ -428,7 +422,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
           )}
 
           {/* ── 중앙: 정체성 / 게임명·타이머 / 레벨·블라인드·REG ── */}
-          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
+          <div className="flex min-w-0 flex-[1_1_4.5rem] flex-col justify-center gap-1.5">
             <p className="flex min-w-0 items-center gap-1.5 leading-none">
               {/* ● 점은 bg-current — 라이트 테마 딥 톤 보정을 그대로 물려받는다(고정 bg-emerald-400 은 흰 배경서 2.2:1) */}
               <span className={`inline-flex shrink-0 items-center gap-1 text-2xs font-bold leading-none ${g.running ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-400'}`}>
@@ -492,19 +486,31 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
             </p>
           </div>
 
-          {/* ── 우: 시작시각 / BUY-IN / 부가(골드) ── */}
+          {/* ── 우: 시작시각 / 상금(골드) / 참가비 라벨·금액 / 이용권 — ScheduleCard ③열과 **같은 순서·같은 라벨·같은 정본** ──
+              ml-auto: 중앙 열이 아래 줄로 내려간 첫 줄에서도 이 열이 오른쪽 끝에 붙는다(3열일 땐 남는 폭이 없어 무효).
+              값 줄에는 truncate 를 걸지 않는다 — 공백 자리에서 줄바꿈(break-keep)할 뿐 글자를 지우지 않는다.
+              상금·이용권 줄만 6rem 상한 — 이 줄의 max-content 가 곧 열 폭이라, 상한이 없으면 긴 이용권 라벨이 320px 에서
+              중앙 열을 basis 아래로 밀어 줄을 내린다. 4.5rem 으로 좁히면 '5만 이용권 3석 외'(82px)가 두 줄이 되어 카드만 커진다(실측 122px).
+              금액 줄은 상한 없음(못 자른다 — '1,234,567원' 104px 도 그대로).
+              max-w-full: 320px·200% 에서 열이 행(157px)보다 넓어져 11px 삐져나왔다 — 행 폭을 상한으로 두면 이용권 줄이 접힌다.
+              (금액 한 줄이 행보다 넓은 극단(320·200%·'1,234,567원' 208px)은 숫자를 쪼갤 수 없어 그대로 둔다.) */}
           {hasRight && (
-            <div className="flex w-16 min-w-0 shrink-0 flex-col items-end justify-center gap-1 overflow-hidden text-right">
-              {startTime && <p className="max-w-full truncate text-2xs leading-none tabular-nums text-ink-muted">시작 {startTime}</p>}
+            <div className="ml-auto flex max-w-full shrink-0 flex-col items-end justify-center gap-1 text-right">
+              {/* 🔴 순서는 일정 목록(ScheduleCard ③열)과 **같아야 한다** — 상금(GTD) 위, 참가비 아래.
+                  오너 지시(2026-09-18 3차) "GTD를 위로 올리고 10T를 밑으로" 는 값에 대한 결정이지
+                  한 화면에 대한 결정이 아니다. 같은 두 값이 화면마다 순서가 다르면 그게 곧
+                  오너가 반복해서 지적한 '연동성' 결함이다.
+                ⚠ '참가비' 라벨은 금액 **바로 위**에 붙여 둔다. 맨 위로 올리면 그 라벨이 GTD 를
+                  가리키는 것처럼 읽혀 '참가비 300만' 으로 오독된다(§28 이 막으려는 사고). */}
+              {startTime && <p className="text-2xs leading-none tabular-nums text-ink-muted">시작 {startTime}</p>}
+              {prize && <p className="max-w-[6rem] break-keep text-2xs font-bold leading-tight tabular-nums text-gold-400 dark:text-gold-300">{prize}</p>}
               {buyIn > 0 && (
                 <>
-                  <p className="t-micro leading-none">BUY-IN</p>
-                  <p className="max-w-full truncate text-base font-extrabold leading-none tabular-nums text-ink-primary">{wonShort(buyIn)}</p>
+                  <p className="text-2xs font-bold leading-none tracking-wide text-ink-muted">참가비</p>
+                  <p className="text-base font-extrabold leading-none tabular-nums text-ink-primary">{buyInText(buyIn)}</p>
                 </>
               )}
-              {extras.length > 0 && (
-                <p className="max-w-full truncate text-2xs font-bold leading-none tabular-nums text-gold-400 dark:text-gold-300" title={extras.join(' · ')}>{extras.join(' · ')}</p>
-              )}
+              {seatText && <p className="max-w-[6rem] break-keep text-2xs leading-tight tabular-nums text-ink-muted">{seatText}</p>}
             </div>
           )}
         </div>
