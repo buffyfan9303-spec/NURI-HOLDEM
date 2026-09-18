@@ -11,14 +11,22 @@
 //   ⑥ 복제 슬라이드(무한 랩)는 aria-hidden·tabIndex -1 이고 testid 를 갖지 않는다 — '이전 배너' 첫 클릭이 마지막 장으로 랩한다.
 // 운영 DB 에 쓰지 않는다 — event_board · home_banners 는 page.route 로 만든다(_fixtures 가드).
 // 실행: E2E_BASE_URL=http://localhost:5174 npx playwright test e2e/home-event-banner.spec.ts
+//
+// 2026-09-18 오너 지시("이벤트 탭을 누르면 이벤트 리스트로 이동하게 해") 반영: ①·③ 은 menu/banner 클릭이
+//   이제 목록을 먼저 연다는 것을 전제로 "목록 열림 → event-list-item 클릭 → 보드 확인" 한 단계를 끼웠다
+//   (단언을 지운 게 아니다). ②④⑤⑥ 은 보드까지 가지 않는(또는 딥링크 축과 무관한) 테스트라 그대로 뒀다.
 import { test, expect } from './_fixtures';
 import type { Page, Route } from '@playwright/test';
 import { stabilizeBackstack, dismissOverlays } from './_session';
 
 const EVENT_RPC = /\/rest\/v1\/rpc\/event_board/;
+const EVENTS_LIST = /\/rest\/v1\/event_campaigns\?/;
 const BANNERS = /\/rest\/v1\/home_banners\?/;
 const DIALOG = '[role="dialog"][aria-label="이벤트"]';
+const LIST = '[data-testid="event-list-page"]';
 const j = (r: Route, body: unknown, status = 200) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+/** 목록에 실릴 캠페인 1개 — ①·③ 이 이 slug 를 눌러 각자의 보드로 간다. */
+const listedFor = (slug: string, title: string) => [{ slug, title, subtitle: null, status: 'live', hidden_at: null, starts_at: null, ends_at: null }];
 
 const liveBoard = (over: Record<string, unknown> = {}) => ({
   slug: 'open', title: '오픈 기념 카드 뽑기', subtitle: null, status: 'live', venueId: 'v1',
@@ -27,12 +35,14 @@ const liveBoard = (over: Record<string, unknown> = {}) => ({
   myTickets: 2, remainByTier: {}, totalByTier: {}, voucherByTier: {}, ...over,
 });
 
-async function openHome(page: Page, opts: { board?: unknown | 'fail' | 'slow'; banners?: unknown[] } = {}) {
+async function openHome(page: Page, opts: { board?: unknown | 'fail' | 'slow'; banners?: unknown[]; events?: unknown[] } = {}) {
   await page.route(EVENT_RPC, async (r) => {
     if (opts.board === 'fail') return j(r, { message: 'boom' }, 500);
     if (opts.board === 'slow') { await new Promise((res) => setTimeout(res, 2500)); return j(r, liveBoard()); }
     return j(r, opts.board === undefined ? null : opts.board);
   });
+  // 2026-09-18 — menu/banner 클릭이 목록을 거치므로, 목록까지 눌러 보드에 닿는 테스트는 이걸 채운다.
+  if (opts.events) await page.route(EVENTS_LIST, (r) => j(r, opts.events));
   if (opts.banners) await page.route(BANNERS, (r) => j(r, opts.banners));
   await stabilizeBackstack(page);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -44,8 +54,8 @@ async function openHome(page: Page, opts: { board?: unknown | 'fail' | 'slow'; b
 const vp = (page: Page) => page.getByTestId('home-banner-viewport');
 const frameH = (page: Page) => page.getByTestId('home-banner-viewport').evaluate((el) => el.getBoundingClientRect().height);
 
-test('🔴 ① 캠페인 0: 캐러셀 안 menu 슬라이드 1개 · "진행 중" 없음 · 누르면 이벤트 판 · 바깥 카드 없음', async ({ page }) => {
-  await openHome(page, { board: null });
+test('🔴 ① 캠페인 0: 캐러셀 안 menu 슬라이드 1개 · "진행 중" 없음 · 누르면 목록 → 보드 · 바깥 카드 없음', async ({ page }) => {
+  await openHome(page, { board: null, events: listedFor('e2e-menu', 'E2E 메뉴 캠페인') });
   await page.waitForTimeout(1500);
   const menu = page.getByTestId('home-event-menu');
   await expect(menu, 'menu 슬라이드는 정확히 하나(복제 슬라이드에는 testid 가 없다)').toHaveCount(1);
@@ -61,7 +71,11 @@ test('🔴 ① 캠페인 0: 캐러셀 안 menu 슬라이드 1개 · "진행 중"
   expect(outside, '독립 이벤트 카드가 남아 있다').toBe(0);
   await menu.scrollIntoViewIfNeeded();
   await menu.click();
-  await expect(page.locator(DIALOG)).toBeVisible({ timeout: 15_000 });
+  // 2026-09-18: 슬라이드는 이제 목록을 먼저 연다 — 목록 열림 확인 → event-list-item 클릭 → 보드 확인.
+  const list = page.locator(LIST);
+  await expect(list, '슬라이드를 눌렀는데 목록이 안 열린다').toBeVisible({ timeout: 15_000 });
+  await list.getByTestId('event-list-item').first().click();
+  await expect(page.locator(DIALOG), '목록에서 캠페인을 골랐는데 보드가 안 열린다').toBeVisible({ timeout: 15_000 });
 });
 
 test('🔴 ② 조회 실패는 "없음" 이 아니다 — 불러오지 못했어요 + 눌러서 다시', async ({ page }) => {
@@ -73,8 +87,9 @@ test('🔴 ② 조회 실패는 "없음" 이 아니다 — 불러오지 못했�
   await expect(menu).not.toContainText('진행 중인 이벤트가 없어요');
 });
 
-test('🔴 ③ 참여 가능(live): banner 슬라이드 제목·남은 카드 2장 · 누르면 이벤트 판 · soldout/ended 는 menu', async ({ page }) => {
-  await openHome(page, { board: liveBoard() });
+test('🔴 ③ 참여 가능(live): banner 슬라이드 제목·남은 카드 2장 · 누르면 목록 → 보드 · soldout/ended 는 menu', async ({ page }) => {
+  const board = liveBoard();
+  await openHome(page, { board, events: listedFor(board.slug, board.title) });
   await page.waitForTimeout(1500);
   const banner = page.getByTestId('home-event-banner');
   await expect(banner).toHaveCount(1);
@@ -83,8 +98,15 @@ test('🔴 ③ 참여 가능(live): banner 슬라이드 제목·남은 카드 2�
   await expect(banner).toContainText('참여권 2장');
   await expect(banner).toContainText('남은 카드 2장');
   await banner.click();
-  await expect(page.locator(DIALOG)).toBeVisible({ timeout: 15_000 });
-  await page.keyboard.press('Escape');
+  // 2026-09-18: 배너도 목록을 먼저 연다 — 목록 열림 확인 → event-list-item 클릭 → 보드 확인.
+  const list = page.locator(LIST);
+  await expect(list, '배너를 눌렀는데 목록이 안 열린다').toBeVisible({ timeout: 15_000 });
+  await list.getByTestId('event-list-item').first().click();
+  await expect(page.locator(DIALOG), '목록에서 캠페인을 골랐는데 보드가 안 열린다').toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press('Escape'); // 보드 닫기
+  await expect(page.locator(DIALOG)).toBeHidden({ timeout: 15_000 });
+  await page.keyboard.press('Escape'); // 목록까지 닫기 — 아래부터는 순수 홈 화면을 본다
+  await expect(list).toBeHidden({ timeout: 15_000 });
   // soldout — 카드 전부 열림
   await page.unroute(EVENT_RPC);
   await page.route(EVENT_RPC, (r) => j(r, liveBoard({ cards: [{ idx: 0, opened: true }, { idx: 1, opened: true }] })));

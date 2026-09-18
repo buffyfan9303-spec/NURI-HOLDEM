@@ -169,6 +169,7 @@ function resolveVenueLink(venues: Venue[], full: string | null, short: string | 
 }
 // 이벤트는 **별도 페이지**다(오너 2026-09-06) — 탭도 게시판도 아니고, 열 때만 내려받는다.
 const EventPage = lazyWithReload(() => import('./components/features/EventPage'));
+const EventListPage = lazyWithReload(() => import('./components/features/EventListPage'));
 import type { MeTab } from './components/features/CustomerDashboardPage'; // 타입만(런타임 0)
 import { readSeenCount, writeSeenCount } from './lib/seenCount';
 /** 일정 탐색 목록이 지난 방문에 몇 줄이었나 — 스켈레톤 자리 예약용(홈의 nuri:upcoming-seen 과 같은 조리법). */
@@ -858,15 +859,25 @@ export default function App() {
   // 알림 딥링크 → 내 매장 탭의 특정 섹션(예: 📒 장부 시작 → 장부)
   const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | 'partners' | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
-  const [eventOpen, setEventOpen] = useState(false); // 이벤트 별도 페이지
+  const [eventOpen, setEventOpen] = useState(false); // 이벤트 별도 페이지(보드)
+  /** 이벤트 **목록** — 슬러그 없이 openEvent() 를 부른 진입(PC GNB·홈 칸)의 목적지(오너 2026-09-18:
+   *  "이벤트 탭을 누르면 이벤트 리스트로 이동"). 보드(eventOpen)와 별개 겹이다 — 목록에서 카드를 고르면
+   *  보드가 그 위에 열리고(둘 다 true), 보드를 닫으면 목록이 그대로 드러난다(뒤로가기: 보드 → 목록 → 닫기).
+   *  아래 useBackClose 두 줄이 그 순서를 각자 만든다 — 새 상태 머신을 만들지 않는다. */
+  const [eventListOpen, setEventListOpen] = useState(false);
   /** 지금 보고 있는 캠페인. `?event=<slug>` 로 다른 캠페인이 올 수 있어 화면·조회가 이 값을 탄다.
    *  ⚠ `null` = **아직 안 정함 → 지금 열려 있는 캠페인**. 예전엔 고정 slug(`CARD_EVENT_SLUG`)가 기본이었는데,
    *    그 캠페인이 운영 DB 에 없어서 PC GNB '이벤트' 가 늘 "진행 중인 이벤트가 없어요" 였다(2026-09-15 오너 보고).
    *    고른 결과는 EventPage 가 `onSlug` 로 돌려주고, 그때 주소에 `?event=<그 slug>` 가 박힌다. */
   const [eventSlug, setEventSlug] = useState<string | null>(null);
   /** 이벤트 페이지 열기 — 진입점이 넷(홈 칸·PC GNB·딥링크·로그인 복귀)이라 한 곳에 모은다.
-   *  startTransition: 청크가 아직이면 **이전 화면을 유지**한다(폴백 스로틀 ~300ms 회피 — 아래 EventPage 주석). */
+   *  startTransition: 청크가 아직이면 **이전 화면을 유지**한다(폴백 스로틀 ~300ms 회피 — 아래 EventPage 주석).
+   *  ⚠ 오너 2026-09-18: "이벤트 탭을 누르면 이벤트 리스트로 이동" — **슬러그 없이(인자 자체가 undefined)**
+   *    부른 경우만 목록이다. 딥링크(`?event=<slug>`)·`'1'`·`'true'`(옛 단일 캠페인 토큰)·로그인 복원은
+   *    전부 **실제 문자열 인자**를 들고 이 함수를 지나므로 종전대로 보드 직행이다 — 이미 뿌려진 QR·공유
+   *    링크가 그 약속을 믿고 있다. */
   const openEvent = useCallback((slug?: string) => {
+    if (slug === undefined) { startTransition(() => setEventListOpen(true)); return; }
     // '1'·'true' 는 캠페인이 하나뿐이던 시절의 딥링크·복원 토큰이다(이미 뿌려진 QR·공유 링크에 남아 있다).
     //   그때의 '그 하나' = 지금의 '그 하나' 이므로 **지금 열려 있는 캠페인**으로 읽는다.
     //   ⚠ 승격 규칙은 여기 한 곳에만 둔다 — 딥링크·배너 링크·로그인 복원이 전부 이 함수를 지난다.
@@ -2696,6 +2707,7 @@ export default function App() {
   // ADOPT 가 빠져 있었다(이웃은 전부 붙어 있었다). EventPage 는 lazy 라 '청크가 늦게 도착한 사이의 뒤로가기'
   //   조건에 그대로 해당한다 — 그 창에서 누른 뒤로가기는 이벤트가 아니라 아래 탭을 닫아 홈으로 튀었다.
   useBackClose(eventOpen, () => setEventOpen(false), ADOPT);
+  useBackClose(eventListOpen, () => setEventListOpen(false), ADOPT);
 
   // 로고 클릭 → 홈(메인)으로 + 모든 모달/패널 닫기 (오너 지시 2026-08-27: 일정탐색 아님)
   const handleHome = useCallback(() => {
@@ -3201,7 +3213,7 @@ export default function App() {
   const openLoginCb = useCallback(() => openLogin(), [openLogin]);
   // 헤더 검색 버튼 제거(오너 지시) — 진입은 Cmd/Ctrl+K 단축키만 잔존
   // PC GNB — 이벤트는 **상태와 무관하게 늘 있다**(0개·조회 실패·소진·비로그인 어느 쪽이어도).
-  //   진행 중인 이벤트가 없으면 판이 '진행 중인 이벤트가 없어요'를 말한다. 그건 빈 화면이 아니라 답이다.
+  //   눌러 들어가는 곳은 이제 목록이다(오너 2026-09-18) — 캠페인이 하나도 없으면 목록이 그 사실을 말한다.
   //   하단 5칸은 건드리지 않는다 — MobileTabBar 가 mappedActive 로 홈에 접는다(browse 선례).
   const pcTabs = useMemo(
     () => [...tabs.filter((t) => t.id !== 'market'), { id: 'event' as TabId, label: TAB_LABEL.event }],
@@ -3254,8 +3266,8 @@ export default function App() {
     }
     return false;
   }, [openEvent, changeTab, handleVenueClick]); // venues·openScheduleById 는 ref — 이 함수는 memo 자식(AppHeader·HomeTab)에 내려가므로 안정 참조여야 한다
-  /** 이벤트 판이 떠 있는 동안 내비 활성 표시도 이벤트로 — 어디 있는지 모르는 화면을 만들지 않는다. */
-  const navActive: TabId = eventOpen ? 'event' : activeTab;
+  /** 이벤트 판(목록·보드 어느 쪽이든)이 떠 있는 동안 내비 활성 표시도 이벤트로 — 어디 있는지 모르는 화면을 만들지 않는다. */
+  const navActive: TabId = (eventOpen || eventListOpen) ? 'event' : activeTab;
   const tabDot = useMemo(() => ({ community: commHasNew }), [commHasNew]);
   const tabCount = useMemo(() => ({ live: liveCount }), [liveCount]);
   // 전면(페이지성) 오버레이 열림 여부 — MobileTabBar 가 개폐 순간 잔존 hidden 을 리셋한다.
@@ -3263,7 +3275,7 @@ export default function App() {
   // 순수 입력 폼(글쓰기·공지작성 등)·소형 확인 다이얼로그는 내비가 아니라 제외 — 문서끝 숨김 계약 유지.
   const fullOverlayOpen = voucherWalletOpen || supportOpen || globalSearchOpen
     || openVenueId !== null || openSchedule !== null || openPost !== null || openListing !== null
-    || openNotice !== null || displayTarget !== null || legalDoc !== null || gtoInit !== null || eventOpen;
+    || openNotice !== null || displayTarget !== null || legalDoc !== null || gtoInit !== null || eventOpen || eventListOpen;
   // 전면 오버레이가 떠 있는 동안 상시 크롬의 VT 스냅샷 이름을 끈다(index.css `html:not([data-overlay])`).
   // 이름이 붙은 크롬은 top layer 의 ::view-transition-group 으로 그려져, top layer 가 아닌
   // 오버레이(fixed z-[60]) **위**에 얹힌다 — PC '내 정보' 겹침의 원인.
@@ -4110,6 +4122,15 @@ export default function App() {
           1회차에 283ms 빈 화면이 그대로 남았다 — 실측(2026-09-08) 그 구간에 긴 프레임 0 · 네트워크 0,
           계산도 대기도 아닌 순수 스로틀이었다. 경계를 미리 마운트해 두면 트랜지션이 홈을 유지한 채
           준비될 때까지 기다린다. 같은 구조를 위 CustomerDashboardPage 가 이미 쓰고 있다. */}
+      {/* 이벤트 **목록** — EventPage(보드) 보다 먼저 렌더한다. 같은 z-[55] 는 DOM 순서가 이기므로
+          보드가 목록 위에 덮인다. 목록은 여기서 닫지 않는다 — 보드를 닫으면 그대로 드러나야
+          "뒤로가기: 보드 → 목록 → 닫기" 가 성립한다(위 eventListOpen 주석 참고). */}
+      <Suspense fallback={null}>
+        {eventListOpen && (
+          <EventListPage open onClose={() => setEventListOpen(false)} onSelect={(slug) => openEvent(slug)} />
+        )}
+      </Suspense>
+
       <Suspense fallback={null}>
         {eventOpen && (
           /* ⚠ onLogin 은 이벤트 판을 **닫지 않는다.**
