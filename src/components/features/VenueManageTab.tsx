@@ -54,9 +54,14 @@ import { loadRankingsEffect } from '../../lib/rankingsLoad';
 // IA2: 포스터·장부·클락·순위 4개 최상위 문(門)이 'game' 섹션의 4단계 스텝으로 통합 —
 // 순차 운영 제품은 객체형이 아니라 워크플로형 내비여야 한다(§13-C). 자식 컴포넌트 props 무변경.
 // IA3c: 프리셋·매장랭킹·매장꾸미기·이용권·POS설정 5개 문(門)이 '매장 설정' 하위탭으로 통합
-type Section = 'dashboard' | 'game' | 'calendar' | 'stats' | 'staff' | 'attendance' | 'partners' | 'settings';
+// 🔴 2026-09-18 오너: "매장이용권 발급은 여기말고 관리에 따로 탭을 하나 만들어서 ...
+//   매장이용권을 매장입장에서 거의 제일 많이 쓸 예정이라 이것 생각해서 해야해".
+//   'voucher' 를 **매장 설정 하위탭에서 '관리' 그룹의 최상위 섹션으로 승격**했다.
+//   하루에 몇 번씩 쓰는 기능이 설정 → 하위탭 2단계 뒤에 있으면 그게 곧 마찰이다.
+//   ⚠ 딥링크·구 알림은 그대로 산다 — DEEP_SECTION_ALIAS.voucher 가 이제 Section 'voucher' 를 가리킨다.
+type Section = 'dashboard' | 'game' | 'calendar' | 'stats' | 'staff' | 'attendance' | 'partners' | 'voucher' | 'settings';
 type GameStep = 'posters' | 'ledger' | 'clock' | 'ranking' | 'settle';
-type SettingsTab = 'page' | 'presets' | 'pos' | 'voucher' | 'optools' | 'danger';
+type SettingsTab = 'page' | 'presets' | 'pos' | 'optools' | 'danger';
 /** keep-alive box()·visited 의 단위 — 섹션 / 게임 스텝 / 설정 하위탭 */
 type PaneId = Exclude<Section, 'game' | 'settings'> | GameStep | SettingsTab;
 const GAME_STEPS: readonly { id: GameStep; label: string }[] = [
@@ -71,7 +76,7 @@ const GAME_STEPS: readonly { id: GameStep; label: string }[] = [
 const isGameStep = (s: string): s is GameStep => GAME_STEPS.some((g) => g.id === s);
 const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
   { id: 'page', label: '매장 페이지' }, { id: 'presets', label: '게임 프리셋' },
-  { id: 'pos', label: 'POS·결제' }, { id: 'voucher', label: '이용권·QR' },
+  { id: 'pos', label: 'POS·결제' },
   { id: 'optools', label: '운영 도구' }, { id: 'danger', label: '위험 구역' },
 ];
 const isSettingsTab = (s: string): s is SettingsTab => SETTINGS_TABS.some((t) => t.id === s);
@@ -144,8 +149,8 @@ const NAV_GROUPS: readonly NavGroup[] = ['오늘', '분석', '관리'];
 const MYSTORE_ORDER: readonly string[] = [
   'dashboard',
   'game', 'posters', 'ledger', 'clock', 'ranking', 'settle',
-  'calendar', 'stats', 'staff', 'attendance', 'partners',
-  'settings', 'page', 'presets', 'pos', 'voucher', 'optools', 'danger',
+  'calendar', 'stats', 'staff', 'attendance', 'partners', 'voucher',
+  'settings', 'page', 'presets', 'pos', 'optools', 'danger',
 ];
 
 // LINK-MAP(§15.6 #9): 알림 딥링크 id 정규화의 단일 지점 — 구 번들·기발송 푸시의 구 id 를 계속 수용.
@@ -312,10 +317,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //  ② 이용권 열람 권한만 있는 직원(staffOk=false)이 '매장 설정' 첫 진입 → 기본값 'page' 가
   //     권한 밖이라 백지. 볼 수 있는 탭이 하나 있는데도 아무것도 안 보인다.
   const canSettingsTab = useCallback((t: SettingsTab) => (
-    t === 'voucher' ? (idOn && (manageOk || voucherView))
-      : t === 'danger' ? (isOwner && !!venueId)
-        : staffOk
-  ), [idOn, manageOk, voucherView, isOwner, venueId, staffOk]);
+    t === 'danger' ? (isOwner && !!venueId) : staffOk
+  ), [isOwner, venueId, staffOk]);
+  /** 이용권 섹션을 열 수 있는가 — 종전 canSettingsTab('voucher') 와 **같은 조건**이다(권한을 넓히지 않았다).
+   *  idOn = 본인인증·이용권 통합 킬스위치. 꺼져 있으면 탭 자체를 만들지 않는다 —
+   *  '제목만 있고 백지' 를 피하려고 이 판정을 단일 지점으로 두는 이유는 아래 주석과 같다. */
+  const canVoucher = idOn && (manageOk || voucherView);
   const firstSettingsTab = useCallback((): SettingsTab => SETTINGS_TABS.find((t) => canSettingsTab(t.id))?.id ?? 'page', [canSettingsTab]);
   // 섹션 이동 공통 — 레거시 게임 스텝·설정 하위탭 id 도 수용(StoreDashboard·라이브바·딥링크)
   const gotoSection = useCallback((s: Section | GameStep | SettingsTab) => {
@@ -577,8 +584,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   if (staffOk) available.push({ id: 'staff', label: '직원 관리', group: '관리' });
   // 연합 대회 파트너 매장(오너 2026-09-17: 옛 연합리그 자리에 '매칭만') — 업주만. 점수·정산 없음.
   if (manageOk) available.push({ id: 'partners', label: '파트너 매장', group: '관리' });
-  // IA3c: 프리셋·매장랭킹·매장꾸미기·이용권·POS 가 '매장 설정' 하위탭 5개로 통합
-  if (staffOk || voucherView) available.push({ id: 'settings', label: '매장 설정', group: '관리' });
+  // 🔴 2026-09-18 오너 승격: 이용권은 '매장 설정 > 이용권·QR' 이 아니라 **관리 그룹의 독립 탭**이다.
+  //   조건은 종전 하위탭과 같다(canVoucher) — 발행매장이 아니면 영원히 안 열리는 '잠금'은 만들지 않는다.
+  if (canVoucher) available.push({ id: 'voucher', label: '이용권 · QR', group: '관리' });
+  // IA3c: 프리셋·매장랭킹·매장꾸미기·POS 가 '매장 설정' 하위탭으로 통합
+  if (staffOk) available.push({ id: 'settings', label: '매장 설정', group: '관리' });
   // IA3d: nav 노출용 목록 — 성숙도 미달 항목 비노출(운영자·전체보기·직원 계정은 게이팅 없음).
   // 콘텐츠 접근(curItem·dItem·딥링크)은 available 기준 유지 — 숨김은 nav 표시만 줄인다.
   //
@@ -907,7 +917,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('staff') && staffOk && box('staff', <StaffHub venueId={venueId} />)}
                 {visited.includes('partners') && manageOk && box('partners', <VenueMatchPanelM venueId={venueId} canConfigure={manageOk} />)}
                 {visited.includes('pos') && canSettingsTab('pos') && box('pos', <PosSettingsPanelM venueId={venueId} />)}
-                {visited.includes('voucher') && canSettingsTab('voucher') && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
+                {visited.includes('voucher') && canVoucher && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
                 {/* §7 ⑥b: 운영 도구 5종 — GTO 탭에서 이관(레지스트리는 ToolsPanel 재사용) */}
                 {visited.includes('optools') && canSettingsTab('optools') && box('optools', <StoreToolsPanelM />)}
                 {/* 위험 구역(IA1→IA3c) — 매장 영구 삭제. 설정의 전용 하위탭으로 격리(접근 2단계) */}
@@ -934,7 +944,7 @@ const SECTION_DESC: Partial<Record<Section | GameStep | SettingsTab, string>> = 
   ranking: '대회 순위 등록. 닉네임이 일치하는 회원에게 점수가 자동 반영됩니다',
   clock: '대회 타이머. 장부 연동 시 엔트리·생존이 자동 반영됩니다',
   attendance: '내 출퇴근 기록',
-  voucher: '매장이용권 발행·사용 내역 + 매장 QR(이용권·출석·가입) 인쇄',
+  voucher: '매장이용권 발행 · 사용 내역 · 잔여 한도 · 매장 QR(이용권·출석·가입) 인쇄',
   page: '손님 화면 탭 순서 · 내 매장 링크 · 시즌 · 순위 보드 · 칭호 · 기준 점수 · 포인트',
   partners: '연합 대회를 함께 열 매장 — 게시·신청·수락',
   // ⚠ 설명은 '이 화면에 실제로 있는 것'만 적는다 — 결제수단·할인 프리셋은 장부(세션 설정)에 있고
