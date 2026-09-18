@@ -963,6 +963,13 @@
      box-shadow 가 어차피 none 으로 강제되므로, 명시해서 두 모드의 결과를 같게 만든다. */
   @media (prefers-contrast: more) { .card-glow-hover:hover, .chip-aura { box-shadow: none; } }
   @media (forced-colors: active)  { .card-glow-hover:hover, .chip-aura { box-shadow: none; } }
+  /* 🔴 등급 배지의 글로우 — 인라인 style 로 두면 접근성 미디어에서 **안 꺼진다**(2026-09-18).
+     아우라 통일에서 잡은 것과 같은 부류다(인라인은 미디어쿼리가 못 이긴다).
+     색이 등급마다 달라 값 자체는 호출부가 정해야 하므로, **변수로 받아** 여기서 끈다 —
+     그래야 `!important` 없이 고대비·강제색에서 물러난다. */
+  .tier-chip { box-shadow: var(--tier-glow, none); }
+  @media (prefers-contrast: more) { .tier-chip { box-shadow: none; } }
+  @media (forced-colors: active)  { .tier-chip { box-shadow: none; } }
 
   .chip-aura { background-color: rgb(99 102 241 / 0.10); border: 1px solid rgb(99 102 241 / 0.22); color: rgb(var(--accent-200)); }
   /* 🔴 홈 퀴액션 카드 배경 (2026-09-18 오너 지시: "출석체크, 제휴혜택 뒤에는 이미지 넣어줘")

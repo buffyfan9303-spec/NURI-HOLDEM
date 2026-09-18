@@ -179,7 +179,9 @@ export default function HomeTab({
   onExplore: () => void;
   onLive: () => void;
   /** 이벤트 **별도 페이지**로 (오너 2026-09-06: 게시판 안에 넣지 말 것) */
-  onEvent: () => void;
+  /** slug 를 주면 **그 판**으로, 안 주면 이벤트 목록으로(2026-09-18 오너 지시).
+   *  배너는 특정 캠페인을 광고하므로 slug 를 준다 — 광고한 것을 눌렀는데 목록이 뜨면 약속을 어긴 것이다. */
+  onEvent: (slug?: string) => void;
   /** 같은 문서 안에서 열 수 있는 내부 링크면 앱 안에서 열고 true — 못 열면 false(그때만 주소창 이동). */
   onInternalLink?: (u: URL) => boolean;
 }) {
@@ -294,16 +296,24 @@ export default function HomeTab({
    *  · 관리자 배너가 **우리가 열 그 캠페인**으로 가면 슬라이드를 넣지 않는다(§7.1-3 중복 제거 — 진입은 그 배너가 맡는다).
    *    다른 캠페인 배너는 중복이 아니다 — 그렇게 보던 예전 판정이 진행 중인 이벤트의 진입을 지웠다(2026-09-15).
    *  · 참여권·남은 카드 수는 조회 성공(live)일 때만 쓴다(§7.1-7). */
+  // ⚠ 슬라이드의 onClick 은 **인자 없이** 부른다 — `onClick: onEvent` 로 두면
+  //   마우스 이벤트 객체가 slug 자리로 넘어가 목록이 안 열린다.
+  //   EventSlide.onClick 의 타입이 `() => void` 라 **tsc 가 조용히 통과시켰다**(퀴액션 버튼은 잡혔다).
+  //   e2e 8건이 이것 하나로 빨개졌다(2026-09-18).
   const eventSlide = useMemo<EventSlide | null>(() => {
     // ⚠ '이벤트 링크가 있으면' 이 아니라 '**같은 캠페인**으로 가면' 이다 — 판정 근거는 bannerCoversEvent 주석.
     if (bannerCoversEvent(banners.map((b) => b.linkUrl), event?.slug, eventShown === 'pending')) return null;
-    if (eventShown === 'pending') return { title: '이벤트', sub: '불러오는 중…', alt: '이벤트 — 불러오는 중', testId: 'home-event-menu', live: false, pending: true, onClick: onEvent };
+    if (eventShown === 'pending') return { title: '이벤트', sub: '불러오는 중…', alt: '이벤트 — 불러오는 중', testId: 'home-event-menu', live: false, pending: true, onClick: () => onEvent() };
     if (eventShown === 'banner' && event) {
       const sub = event.myTickets > 0 ? `참여권 ${event.myTickets}장 · 남은 카드 ${eventRemain}장` : `매장 출석하면 참여권 1장 · 남은 카드 ${eventRemain}장`;
-      return { title: event.title, sub, alt: `이벤트 · ${event.title} · ${sub}`, testId: 'home-event-banner', live: true, onClick: onEvent };
+      // ⚠ 이 슬라이드는 **이 캠페인**을 이름까지 걸고 광고한다 → 목록이 아니라 그 판으로 간다.
+      //   (2026-09-18 이벤트 탭이 목록으로 바뀌면서 여기까지 목록으로 새고 있었다 —
+      //    홈이 미리 받아 둔 보드 씨앗도 함께 끊겨 진입에 스켈레톤이 돌아왔다. e2e/event-enter 가 잡았다.)
+      const slug = event.slug;
+      return { title: event.title, sub, alt: `이벤트 · ${event.title} · ${sub}`, testId: 'home-event-banner', live: true, onClick: () => onEvent(slug) };
     }
     const sub = eventMenuSubtitle(eventLoaded, eventFailed, event, eventState);
-    return { title: '매장 이벤트', sub, alt: `매장 이벤트 · ${sub}`, testId: 'home-event-menu', live: false, onClick: onEvent };
+    return { title: '매장 이벤트', sub, alt: `매장 이벤트 · ${sub}`, testId: 'home-event-menu', live: false, onClick: () => onEvent() };
   }, [banners, eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
 
   /** 퀵액션 '제휴 혜택' 칸의 설명 한 줄 — 배지를 뺀 자리에 **사실**을 놓는다.
@@ -459,7 +469,7 @@ export default function HomeTab({
               </span>
             </button>
 
-            <button type="button" onClick={onEvent} data-testid="home-quick-event"
+            <button type="button" onClick={() => onEvent()} data-testid="home-quick-event"
               data-aura data-aura-level="micro" data-aura-variant="amber"
               className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:border-gold-300/40">
               <span aria-hidden className="quick-blob quick-blob-gold" />

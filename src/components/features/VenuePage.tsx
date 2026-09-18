@@ -263,7 +263,13 @@ export default function VenuePage({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if ((navigator as any).share) await (navigator as any).share({ title: venue.name, text: `${venue.name} · 홀덤펍`, url });
       else { await navigator.clipboard.writeText(url); toast.show('매장 링크를 복사했습니다', 'success'); }
-    } catch { /* 사용자 취소 */ }
+    } catch (e) {
+      // ⚠ 예전엔 전부 조용히 삼켰다 — 사용자가 취소한 것과 **클립보드 권한이 거부된 것**을 구별하지 않았다.
+      //   후자는 눌러도 토스트조차 없어 '죽은 버튼' 으로 보인다(2026-09-18 연동성 크롤이 이 자리를 짚었다).
+      //   취소(AbortError)만 조용히 넘기고, 나머지는 주소를 직접 보여 준다 — 복사가 막혀도 공유는 되게.
+      if (e instanceof Error && e.name === 'AbortError') return;   // 사용자가 공유 시트를 닫았다
+      toast.show(`링크 복사가 막혔어요 · ${url}`, 'error');
+    }
   };
 
   return (

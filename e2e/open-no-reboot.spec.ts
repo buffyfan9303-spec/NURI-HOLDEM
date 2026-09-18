@@ -83,11 +83,14 @@ const ROWS: Row[] = [
     arrive: '[data-tab="live"]',
   },
   {
-    name: '이벤트 판 — PC GNB 이벤트 칸',
-    lazy: 'EventPage',
+    // 2026-09-18 오너 지시로 **이벤트 탭은 목록을 연다**(딥링크만 보드 직행).
+    //   그래서 이 행의 도착지가 보드 다이얼로그 → 목록 다이얼로그로 바뀐다.
+    //   보드로 바로 가는 경로는 위 '홈 배너의 내부 링크' 행이 계속 지킨다(그 축은 안 바뀌었다).
+    name: '이벤트 목록 — PC GNB 이벤트 칸',
+    lazy: 'EventListPage',
     setup: async (page) => { await page.setViewportSize({ width: 1280, height: 900 }); await page.goto('/'); await dismissOverlays(page); },
     open: async (page) => { await page.locator('[data-stack-tabbar]').getByRole('tab', { name: /이벤트/ }).first().click(); },
-    arrive: '[role="dialog"][aria-label="이벤트"]',
+    arrive: '[data-testid="event-list-page"]',
   },
   {
     name: '로그인 창',

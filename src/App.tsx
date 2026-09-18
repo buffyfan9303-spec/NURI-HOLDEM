@@ -3614,7 +3614,7 @@ export default function App() {
                1회차에 283ms 빈 화면이 그대로 남았다(실측 2026-09-08: 그 구간에 긴 프레임 0 · 네트워크 0 —
                계산도 대기도 아닌 순수 스로틀이었다). 트랜지션이면 폴백 자체를 건너뛴다. */
             /* 인자 없이 부른다 — onClick 이 넘기는 MouseEvent 가 slug 자리에 들어가지 않게 */
-            onEvent={() => openEvent()}
+            onEvent={(slug) => openEvent(slug)}
             onInternalLink={openInternalLink}
           />
         </main>

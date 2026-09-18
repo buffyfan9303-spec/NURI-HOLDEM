@@ -191,14 +191,15 @@ export default function TierBadge({ points, showLabel = false, size = 14, admin 
         color: '#1a1200',
         border: '1px solid #FFE680',
         background: 'linear-gradient(135deg, #FFF1A8 0%, #FFD100 50%, #E0A500 100%)',
-        boxShadow: '0 0 8px rgba(255,209,0,0.85)',
+        // 값은 여기서 정하고 **끄는 것은 CSS**(.tier-chip) 가 한다 — 인라인이면 고대비에서 안 꺼진다.
+        ['--tier-glow' as string]: '0 0 8px rgba(255,209,0,0.85)',
       }
     : {
         height: size, minWidth: size, padding: '0 2px', fontSize,
         color: tierCss(inkVar),
         border: `1px solid ${tierCss(vividVar, 0.4)}`,
         background: 'rgb(var(--surface-base) / 0.9)', // 토큰 — 라이트 모드에서도 자동 대응
-        boxShadow: glow ? `0 0 6px ${tierCss(vividVar, 0.6)}` : undefined,
+        ['--tier-glow' as string]: glow ? `0 0 6px ${tierCss(vividVar, 0.6)}` : 'none',
       };
 
   return (
@@ -213,7 +214,7 @@ export default function TierBadge({ points, showLabel = false, size = 14, admin 
       }
     >
       <span
-        className="inline-flex items-center justify-center rounded-[3px] font-extrabold leading-none tracking-tight tabular-nums"
+        className="tier-chip inline-flex items-center justify-center rounded-[3px] font-extrabold leading-none tracking-tight tabular-nums"
         style={chip}
       >
         {label}

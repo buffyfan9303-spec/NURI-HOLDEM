@@ -98,15 +98,15 @@ test('🔴 ③ 참여 가능(live): banner 슬라이드 제목·남은 카드 2�
   await expect(banner).toContainText('참여권 2장');
   await expect(banner).toContainText('남은 카드 2장');
   await banner.click();
-  // 2026-09-18: 배너도 목록을 먼저 연다 — 목록 열림 확인 → event-list-item 클릭 → 보드 확인.
-  const list = page.locator(LIST);
-  await expect(list, '배너를 눌렀는데 목록이 안 열린다').toBeVisible({ timeout: 15_000 });
-  await list.getByTestId('event-list-item').first().click();
-  await expect(page.locator(DIALOG), '목록에서 캠페인을 골랐는데 보드가 안 열린다').toBeVisible({ timeout: 15_000 });
-  await page.keyboard.press('Escape'); // 보드 닫기
+  // 🔴 2026-09-18: **배너는 목록을 거치지 않는다.** 이 슬라이드는 캠페인 이름을 걸고 그 판을 광고하므로
+  //   누르면 광고한 바로 그 판이 열려야 한다(오너 지시의 '이벤트 탭 → 목록' 은 내비 탭·퀵액션 이야기다).
+  //   중간에 목록을 끼우면 두 가지가 같이 깨진다: ① 약속 위반(광고한 것을 눌렀는데 다른 화면)
+  //   ② 홈이 미리 받아 둔 보드 씨앗이 끊겨 진입에 스켈레톤이 돌아온다(e2e/event-enter 가 그걸 잡는다).
+  //   목록으로 가는 경로는 같은 파일의 ① menu 슬라이드 테스트가 지킨다 — 거긴 열 '그 판'이 없기 때문이다.
+  await expect(page.locator(DIALOG), '배너를 눌렀는데 광고한 판이 안 열린다').toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(LIST), '배너인데 목록이 끼어들었다').toBeHidden();
+  await page.keyboard.press('Escape'); // 보드 닫기 — 아래부터는 순수 홈 화면을 본다
   await expect(page.locator(DIALOG)).toBeHidden({ timeout: 15_000 });
-  await page.keyboard.press('Escape'); // 목록까지 닫기 — 아래부터는 순수 홈 화면을 본다
-  await expect(list).toBeHidden({ timeout: 15_000 });
   // soldout — 카드 전부 열림
   await page.unroute(EVENT_RPC);
   await page.route(EVENT_RPC, (r) => j(r, liveBoard({ cards: [{ idx: 0, opened: true }, { idx: 1, opened: true }] })));
