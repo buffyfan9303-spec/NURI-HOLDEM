@@ -463,7 +463,11 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
                 <span className={`text-2xs font-bold leading-none tabular-nums ${g.running ? 'text-accent-200' : 'text-amber-400'}`}>{mm}:{ss}</span>
               </span>
             </p>
-            <p className="flex min-w-0 items-center gap-1 overflow-hidden leading-none">
+            {/* ⚠ overflow-hidden + 배지 ml-auto 조합이라 좁아지면 **블라인드 값이 0px 로 접히고**
+                배지가 잘린다(실측 2026-09-18 · 390·200%: 폭 109.5 / scrollWidth 166, 배지 110.5 중 57 잘림).
+                줄바꿈을 허용해 값과 배지가 둘 다 살아남게 한다 — 이 줄은 '지금 얼마짜리 판인가' 라
+                잘라서는 안 되는 정보다(§5: 이름은 줄여도 금액·마감은 안 자른다). */}
+            <p className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 leading-none">
               {isBreak ? (
                 <span className="shrink-0 text-2xs font-bold leading-none text-sky-300">BREAK</span>
               ) : lv ? (

@@ -911,6 +911,25 @@ export default function App() {
       return 'home';
     } catch { return 'home'; }
   });
+  /** 🔴 `?tab=` 이 가리킨 탭이 **권한이 도착한 뒤에야 생기는** 경우를 위한 기억 (2026-09-18).
+   *
+   *  실측한 증상: 업주 세션으로 `/?tab=my-store` 에 들어가도 **홈이 떴다**(URL 도 `/` 로 재작성).
+   *  원인은 아래 2290행대 가드다 — 탭 목록에 없는 탭이면 홈으로 되돌리는데, 그 홀드 조건이
+   *  `authLoading` 하나뿐이다. auth 는 끝났는데 `profiles` 가 아직 안 와 `user.role` 이 비어 있는
+   *  **그 한 창**에서 tabs 에 'my-store' 가 없어 홈으로 튕기고, 뒤늦게 탭이 생겨도 돌아오지 않는다.
+   *  (그 뒤 '내 매장' 탭 자체는 정상으로 뜬다 — clock-visual 스펙이 실제로 눌러서 연다.)
+   *
+   *  타이밍 조건을 더 정교하게 맞추는 대신 **의도를 기억**한다: 그 탭이 생기는 순간 한 번 적용하고
+   *  기억을 버린다. 어느 쪽이 먼저 도착하든 결과가 같다.
+   *  ⚠ 사용자가 그 사이에 다른 탭을 직접 누르면 기억을 버린다 — 손으로 고른 것을 되돌리면 안 된다.
+   *  ⚠ 8초가 지나도 안 생기면 포기한다(권한이 정말 없는 경우 — 그때는 홈이 맞다). */
+  const pendingDeepTab = useRef<TabId | null>(null);
+  if (pendingDeepTab.current === null) {
+    try {
+      const t0 = new URLSearchParams(window.location.search).get('tab');
+      if (t0 === 'my-store' || t0 === 'admin') pendingDeepTab.current = t0;
+    } catch { /* noop */ }
+  }
   // `?tab=` 은 **1회성 진입**이다 — v/venue 딥링크와 같은 문법(아래 1780행대).
   // 이걸 안 지우면 PWA 바로가기·알림 패널(NotificationPanel)로 들어온 사용자는 URL 에 ?tab= 이 박힌 채
   // 남아, 새로고침·복귀 때마다 계속 그 탭으로 부팅된다 — 위 '항상 홈' 규칙이 그 사용자에게만 무력화된다.
@@ -1011,7 +1030,13 @@ export default function App() {
 
   // 하단 '내 매장' 탭을 누른 횟수 — VenueManageTab 이 이 값이 바뀔 때마다 대시보드로 돌아간다(재탭 포함).
   const [myStoreHomeNonce, setMyStoreHomeNonce] = useState(0);
+  /** 가드가 자동으로 탭을 되돌리는 동안만 true — 그 이동은 사용자 선택이 아니다. */
+  const autoTabBounce = useRef(false);
   const changeTab = useCallback((t: TabId) => {
+    // 손으로 고른 탭이 딥링크 기억을 이긴다(아래 pendingDeepTab 참고).
+    // ⚠ 단 **가드가 자동으로 되돌리는 것은 사용자 선택이 아니다** — 그것까지 선택으로 세면
+    //   기억이 그 자리에서 지워져 다시 살릴 수 없다(2026-09-18 실측: 내가 이 분기를 빼먹어 수정이 안 듣는 것처럼 보였다).
+    if (!autoTabBounce.current && pendingDeepTab.current && pendingDeepTab.current !== t) pendingDeepTab.current = null;
     // 탭 이동은 '화면 전환' — 떠 있는 매장 페이지 오버레이는 닫는다(탭을 눌렀는데 그대로 보이는 혼란 방지)
     closeOverlaysRef.current?.();
     if (t === 'my-store') setMyStoreHomeNonce((v) => v + 1); // 다른 탭에서 넘어와도 대시보드부터
@@ -2287,10 +2312,29 @@ export default function App() {
   useEffect(() => {
     if (!tabs.find((t) => t.id === activeTab)) {
       if (authLoading && (activeTab === 'my-store' || activeTab === 'admin')) return;
+      autoTabBounce.current = true;
       changeTab('home');
+      autoTabBounce.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, activeTab, authLoading]);
+
+  // 위 가드가 홈으로 되돌린 **뒤에라도** 권한이 도착해 그 탭이 생기면 딥링크 의도를 한 번 살린다.
+  //   (근거는 pendingDeepTab 선언부 주석 — 실측된 회귀다.)
+  useEffect(() => {
+    const want = pendingDeepTab.current;
+    if (!want) return;
+    if (tabs.find((t) => t.id === want)) {
+      pendingDeepTab.current = null;
+      if (activeTab !== want) changeTab(want);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs]);
+  // 권한이 끝내 안 오면 포기한다 — 기억을 들고 있다가 한참 뒤에 화면을 바꿔 버리면 더 나쁘다.
+  useEffect(() => {
+    const id = window.setTimeout(() => { pendingDeepTab.current = null; }, 8000);
+    return () => window.clearTimeout(id);
+  }, []);
 
   // ⚠ '팔로우 매장만' 필터가 2026-08-27(f2e1d0b) 에 화면에서 빠진 뒤로, App 이 들고 있던
   //   팔로우 목록(followedIds)은 소비자가 0 이었다 — 로그인할 때마다 쓰지 않는 조회를 한 번 더 하고 있었다.

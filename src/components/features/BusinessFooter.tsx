@@ -90,8 +90,13 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
             위 dt 와 같은 이유로 투명도를 걷어내고 불투명 `text-ink-muted` 로 (재측정: 라이트 4.99:1·다크 5.28:1). */}
         <p className="t-desc text-ink-muted">
           NURI HOLDEM은 「국민체육진흥법」상 마인드 스포츠인 홀덤의 합법적 토너먼트 정보 제공 플랫폼이며, 어떠한 형태의 도박·환전·사행행위와도 무관합니다.
-          {/* ⚠ 320 에서 '1336(24시간·무료)' 만 마지막 줄에 혼자 떨어졌다 — 법정 고지라 한 덩어리로 읽혀야 한다(2026-09-16 실측). */}
-          <br />만 19세 미만은 이용할 수 없습니다 · <span className="whitespace-nowrap">도박문제 상담 1336(24시간·무료)</span>
+          {/* ⚠ 두 번 부딪혀 가운데를 찾은 자리다.
+              2026-09-16: '1336(24시간·무료)' 만 마지막 줄에 혼자 떨어져 nowrap 을 문장 전체에 걸었다.
+              2026-09-18 실측: 그 nowrap 이 **345.84px 짜리 안 끊기는 토큰**이 돼 390·200% 에서
+                안폭 322 를 23.84px 넘쳤다 — 문서 폭은 안 늘어 오른쪽 끝에 ')' 가 닿은 채 도달이 안 된다.
+              → 문장은 끊기게 두고 **전화번호+괄호만** 묶는다. 둘을 동시에 푸는 유일한 지점이다
+                (마지막 줄에 번호만 남는 것도 막고, 전체 넘침도 막는다). 법정 고지라 도달이 우선이다. */}
+          <br />만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 <span className="whitespace-nowrap">1336(24시간·무료)</span>
           {/* 약관 개정 사전 고지 — 비로그인 방문자에게도 보여야 '서비스 내 공지'가 성립한다. */}
           {/* ⚠ 날짜가 내부 공백에서 끊겨 '2026년 9월' / '29일' 로 갈라졌다(412 실측). 상수는 그대로 — textContent 불변이라 legalVersion 검사에 영향 없다. */}
           <br />약관·개인정보처리방침 개정 안내: <span className="whitespace-nowrap">{LEGAL_NOTICE_DATE}</span> 공지 · <span className="whitespace-nowrap">{LEGAL_EFFECTIVE_DATE}</span> 시행 (시행 전까지는 <span className="whitespace-nowrap">{LEGAL_PREV_EFFECTIVE_DATE}</span> 시행판 적용)

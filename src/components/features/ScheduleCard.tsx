@@ -422,8 +422,11 @@ function ListCard({
           <span className="tabular-nums text-ink-muted">{d.monthDay}({d.dow})</span>
           <span className="text-sm font-extrabold tabular-nums tracking-tight text-ink-primary">{d.time || '—'}</span>
           <span className="text-ink-muted">시작</span>
-          {reg && <><span aria-hidden className="text-ink-muted">·</span><span className="font-semibold tabular-nums">{reg}</span></>}
-          {soon && <><span aria-hidden className="text-ink-muted">·</span><span className="font-bold text-accent-200">{soon}</span></>}
+          {/* ⚠ 가운뎃점과 값을 **한 항목**으로 묶는다 — 따로 두면 '·' 가 독립 flex 항목이라
+              줄 끝에 홀로 남고 값이 혼자 다음 줄로 떨어진다(고아줄).
+              실측 2026-09-18(390·100%): 자식 48/42/22/3/72 가 컨테이너 166 에 4+1 로 접혔다. */}
+          {reg && <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap"><span aria-hidden className="text-ink-muted">·</span><span className="font-semibold tabular-nums">{reg}</span></span>}
+          {soon && <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap"><span aria-hidden className="text-ink-muted">·</span><span className="font-bold text-accent-200">{soon}</span></span>}
         </p>
 
         {/* 매장 · 지역 ♥ — 지역은 오너가 "가능하면" 이라 한 값이고 VenueLink 가 이미 함께 그린다. */}

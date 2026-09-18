@@ -414,7 +414,9 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
             <button type="button" onClick={() => goTab('settings')}
               className="rounded-aura border card-aura px-3 py-2.5 text-left">
               <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad"><Icon name="user" size={13} /></span> 프로필 관리</span>
-              <span className="block text-2xs text-ink-muted mt-0.5">닉네임 · {idOn ? '본인인증 · ' : ''}알림 설정</span>
+              {/* ⚠ '알림 설정' 을 통째로 묶는다 — 안 묶으면 360·100% 에서 마지막 줄에 '설정' 2자만
+                  남는다(고아줄, 실측 칸 131px). text-pretty 는 크로미움 한글에서 효과가 고르지 않다. */}
+              <span className="block text-2xs text-ink-muted mt-0.5">닉네임 · {idOn ? '본인인증 · ' : ''}<span className="whitespace-nowrap">알림 설정</span></span>
             </button>
             {onOpenMarket && (
               <button type="button" onClick={onOpenMarket}
