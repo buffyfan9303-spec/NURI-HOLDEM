@@ -71,14 +71,21 @@ export default function InstallBanner() {
       <div data-aura data-aura-level="micro" data-aura-variant="violet"
         className="relative flex items-center gap-2.5 overflow-hidden rounded-card border border-accent-400/40 bg-surface-float/95 px-3 py-1.5 shadow-dialog backdrop-blur">
         <span aria-hidden className="quick-blob quick-blob-violet" />
-        <img src="/brand/nuri-holdem-symbol.svg" alt="" aria-hidden width={34} height={34}
-          className="relative z-10 h-[34px] w-[34px] shrink-0 rounded-input bg-accent-300/12 p-1" />
+        {/* 앱 아이콘 타일 — 휴대폰 홈화면의 아이콘처럼 **둔덕한 사각 테두리**를 두른다(2026-09-18 오너).
+            '이걸 홈에 놓는다' 를 그림으로 말해 주는 장치라 테두리가 있어야 아이콘으로 읽힌다. */}
+        <span aria-hidden className="relative z-10 grid h-[36px] w-[36px] shrink-0 place-items-center rounded-[10px] border border-border-strong bg-surface-high shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]">
+          <img src="/brand/nuri-holdem-symbol.svg" alt="" width={24} height={24} className="h-[24px] w-[24px]" />
+        </span>
         <div className="relative z-10 min-w-0 flex-1 leading-tight">
           <p className="truncate text-xs font-extrabold text-ink-primary">홈 화면에 추가</p>
           {/* 설명줄은 오너 지시(2026-09-18)로 없다. 제목 한 줄로 충분하다. */}
         </div>
         {/* 보이는 높이 30px, 누르는 높이는 tap-y-44 가 위아래 7px 씩 보태 44px. */}
+        {/* 설치 버튼 뒤 LED — 이 띄우개에서 지금 눌러야 할 것은 이것 하나다(2026-09-18 오너).
+            발광을 주는 자리는 화면당 한·두 곳이고, 여기가 바로 그 자리다.
+            기존 유틸([data-aura])을 쓴다 — 새 그림자를 만들지 않고, 고대비·강제색에서 자동으로 물러난다. */}
         <button type="button" onClick={install}
+          data-aura data-aura-level="micro" data-aura-variant="violet"
           className="tap-y-44 relative z-10 inline-flex h-[30px] shrink-0 items-center rounded-[8px] bg-accent-300 px-3 text-2xs font-bold leading-none text-white transition-colors hover:bg-accent-400">
           설치
         </button>

@@ -4,7 +4,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { promptLogin } from '../../lib/requireLogin';
 import Avatar from '../atoms/Avatar';
-import TitleChip from '../atoms/TitleChip';
 import { useTitlePoints } from '../../lib/useTitles';
 import { getEquippedMarks, getNickColors } from '../../api/community';
 import { tierCss } from '../atoms/TierBadge';
@@ -165,7 +164,7 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
                   style={nickColorVar(nickTokens[comment.userId]) ? { color: tierCss(nickColorVar(nickTokens[comment.userId])!) } : undefined}>
               {marks[comment.userId] ?? ''}{comment.userName}
             </span>
-            <TitleChip points={titleOf?.(comment.userId)} />
+            {/* 칭호 칩 미노출 — 목록과 같은 이유(2026-09-18 오너 지시). PostRowCard 주석 참고. */}
             {comment.isOwner && (
               <span className="shrink-0 rounded-badge border border-accent-300/50 px-1.5 py-0.5 text-2xs font-semibold leading-none text-accent-200">매장 답글</span>
             )}

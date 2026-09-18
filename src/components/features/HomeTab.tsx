@@ -45,6 +45,7 @@ import { bannerCoversEvent } from '../../lib/eventSlug';
 import { readSnap, writeSnap } from '../../lib/snapshot';
 // 상단 '오늘 안내' 한 줄(순수 함수). 왜 이 문장인지는 lib/homeRail.ts 머리말.
 import { todayLine } from '../../lib/homeRail';
+import { GTO_TOOL_COUNT } from '../../lib/gtoToolCount';
 import type { ClockState } from '../../api/clock';
 import type { VisitedVenue } from '../../api/vouchers';
 import type { MyReservationRow } from '../../api/reservations';
@@ -215,11 +216,8 @@ export default function HomeTab({
     [schedules, today, tomorrow],
   );
 
-  // 오늘 열리는 대회 수 — '오늘 안내'에 적는 **사실**. 끝난 대회는 세지 않는다(위와 같은 규칙).
-  const todayCount = useMemo(
-    () => schedules.filter((s) => s.approved && s.date === today && scheduleStatus(s.date, s.startTime) !== 'ended').length,
-    [schedules, today],
-  );
+  // 2026-09-18: 홈 첫 줄이 '오늘 대회 N개' 를 안 말하게 되면서 이 수치의 유일한 소비자가 없어졌다.
+  //   다시 필요해지면 같은 조리법으로 되살리면 된다(승인된 것 · 오늘 · 끝나지 않은 것).
 
   /** 가 본 매장 → 방문 횟수. 상단 '오늘 안내' 문장(todayLine)이 '내가 가 본 매장에 오늘 대회가 있나'를
    *  판정하는 데 쓴다. (2026-09-18 추천 대회 레일을 지우면서 레일 전용 필드는 같이 없앴다 —
@@ -372,16 +370,23 @@ export default function HomeTab({
             <p data-testid="home-today-line" className="mt-0.5 h-[26px] whitespace-nowrap text-[18px] font-bold leading-[26px] text-ink-primary md:h-[30px] md:text-[22px] md:leading-[30px]">
               {/* ⚠ 여기서 '오늘 대회 0개' 라고 적으면 그것은 **조회 실패를 사실로 위장**하는 것이다(§11).
                   수치는 '도착한 것만' 적는다는 이 줄의 원래 규칙에, 실패도 '미도착' 이라는 사실을 더한다. */}
+              {/* 🔴 2026-09-18 오너: "초반에는 매장이 많이 없을 예정이라 '지금 등록 가능 0개' 는 빼도 좋겠다.
+                  '오늘 대회 1개' 도 빼고 GTO 쪽을 강조해볼까? 무료 GTO 도구 20개 이런 식으로"
+
+                  숫자 나열을 GTO 가치 제안으로 바꾼다. 다만 **개인화 문장(personal)은 그대로 살린다** —
+                  그건 '내가 가 본 매장에 오늘 대회가 있다' 같은 그 사람만의 사실이라 광고 문구보다 세다.
+                  매장이 적은 초반에는 personal 이 대개 비어 GTO 줄이 뜨고, 이력이 쌓이면 그 사람 문장이 뜬다.
+                  ⚠ 숫자는 하드코딩이 아니다 — lib/gtoToolCount.ts + 계약 테스트가 ToolsPanel 원문을 세어
+                    이 값이 거짓이 되는 순간 빨개진다(화면 수치는 사실이어야 한다, §6-1).
+                  ⚠ 여기에 GTO 로 가는 링크를 달지 마라 — home-flow-fit 의 'GTO 진입은 홈에 한 곳뿐이다'
+                    계약이 있다. 진입은 아래 도구 줄 하나가 맡는다. */}
               {!loaded
                 ? <>오늘의 대회를 불러오는 중</>
                 : failed
                   ? <>오늘 대회 정보를 불러오지 못했어요</>
                   : personal
                     ? <Nums text={personal} />
-                    : <>오늘 대회 <span className="stat-pill font-extrabold tabular-nums text-accent-200" style={{ '--aura-led-rgb': '139 92 246' } as React.CSSProperties}>{todayCount}개</span></>}
-              {loaded && !failed && clocksLoaded && !personal && (
-                <> · 지금 등록 가능 <span className="stat-pill font-extrabold tabular-nums stat-emerald" style={{ '--aura-led-rgb': '52 211 153' } as React.CSSProperties}>{openAll.length}개</span></>
-              )}
+                    : <>무료 GTO 도구 <span className="stat-pill font-extrabold tabular-nums text-accent-200" style={{ '--aura-led-rgb': '139 92 246' } as React.CSSProperties}>{GTO_TOOL_COUNT}개</span></>}
             </p>
           </section>
 

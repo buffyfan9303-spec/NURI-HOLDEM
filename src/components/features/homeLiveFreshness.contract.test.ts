@@ -106,8 +106,14 @@ describe('🔴 §11 — 홈은 조회 실패를 "없어요" 로 위장하지 않
 
   it('🔴 실패했을 때 "오늘 대회 0개" 라고 말하지 않는다', () => {
     expect(HOME).toMatch(/failed\s*\n?\s*\? <>오늘 대회 정보를 불러오지 못했어요<\/>/);
-    expect(HOME, "실패 중에 '지금 등록 가능 N' 을 적으면 같은 거짓말이 한 줄 더 는다")
-      .toMatch(/\{loaded && !failed && clocksLoaded && !personal && \(/);
+    // 2026-09-18: 오너 지시로 홈 첫 줄에서 '오늘 대회 N개 · 지금 등록 가능 M개' 를 뺐다
+    //   ("초반에는 매장이 많이 없을 예정이라 0개를 보이는 것보다 GTO 를 강조하자").
+    //   그 줄이 사라졌으니 '실패 중에 그 숫자를 적지 마라' 는 게이트도 같이 빠진다.
+    //   대신 **대체 문구가 라이브 수치가 아니어야 한다**는 것을 잠근다 — GTO 도구 개수는
+    //   조회 결과가 아니라 정적 사실이라 실패 여부와 무관하게 말해도 거짓이 아니다.
+    //   (그 숫자 자체의 사실성은 src/lib/gtoToolCount.contract.test.ts 가 따로 지킨다.)
+    expect(HOME, '대체 문구가 라이브 조회 수치면 실패 중에도 거짓말을 하게 된다')
+      .toMatch(/무료 GTO 도구 <span[^>]*>\{GTO_TOOL_COUNT\}개<\/span>/);
     // 2026-09-17: 그 사람 문장(personal)도 같은 게이트 뒤에서만 만들어진다 — 실패·미도착에 이력 문장을 쓰면 같은 거짓말이다.
     expect(HOME).toMatch(/const personal = loaded && !failed\s*\n?\s*\? todayLine\(/);
   });

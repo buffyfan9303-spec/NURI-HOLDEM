@@ -13,7 +13,6 @@ import { memo } from 'react';
 import Icon from '../../atoms/Icon';
 import Avatar from '../../atoms/Avatar';
 import MarqueeText from '../../atoms/MarqueeText';
-import TitleChip from '../../atoms/TitleChip';
 import { MiniCard } from '../../atoms/HandCards';
 import { tierCss } from '../../atoms/TierBadge';
 import { nickColorVar } from '../../../lib/cosmetics';
@@ -30,7 +29,7 @@ const samePostProps = (a: PostRowData, b: PostRowData) =>
   a.post === b.post && a.selected === b.selected && a.mark === b.mark && a.titlePts === b.titlePts && a.hot === b.hot
   && a.promoted === b.promoted && a.adSlot === b.adSlot;
 
-export const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = false, mark = '', titlePts, promoted = false, adSlot }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number; /** 광고 슬롯에 승격된 글인가 — 배지 하나만 다르고 나머지는 일반 글과 완전히 같다 */ promoted?: boolean; adSlot?: number }) {
+export const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = false, mark = '', promoted = false, adSlot }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number; /** 광고 슬롯에 승격된 글인가 — 배지 하나만 다르고 나머지는 일반 글과 완전히 같다 */ promoted?: boolean; adSlot?: number }) {
   // 화면 밖 행은 브라우저가 렌더를 통째로 건너뛴다(content-visibility) — cv-row-* 는 index.css
   const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
   const { replay, hand } = parseAttachments(post.content);
@@ -99,7 +98,7 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
       {/* max-w+truncate: 작성자가 shrink-0 무제한이면 좁은 2-pane 목록·긴 닉네임에서
           flex-1 제목이 0px까지 뭉개진다 — 닉네임이 대신 말줄임(제목 우선, 에펨식 위계) */}
       <span className="shrink-0 max-w-[7rem] truncate text-xs text-ink-muted">{mark}{post.userName}</span>
-      <TitleChip points={titlePts} />
+      {/* 칭호 칩 미노출(2026-09-18 오너) — 아래 PostCard 주석 참고. 한 줄 행은 폭이 더 빠듯하다. */}
       <span className="hidden shrink-0 text-xs tabular-nums text-ink-muted sm:inline">{relativeTime(post.createdAt)}</span>
       {(post.viewCount ?? 0) > 0 && (
         <span className="shrink-0 inline-flex w-10 items-center justify-end gap-0.5 text-xs tabular-nums text-ink-muted" aria-label={`조회 ${post.viewCount}`}>
@@ -110,7 +109,7 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
   );
 }, samePostProps);
 
-export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', nickToken, titlePts, promoted = false, adSlot }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; /** 작성자가 장착한 닉네임 색의 등급 토큰명(--tier-<token>) */ nickToken?: string | null; titlePts?: number; /** 광고 슬롯에 승격된 글인가 — 배지 하나만 다르고 카드 높이·레이아웃은 일반 글과 같다 */ promoted?: boolean; adSlot?: number }) {
+export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', nickToken, promoted = false, adSlot }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; /** 작성자가 장착한 닉네임 색의 등급 토큰명(--tier-<token>) */ nickToken?: string | null; titlePts?: number; /** 광고 슬롯에 승격된 글인가 — 배지 하나만 다르고 카드 높이·레이아웃은 일반 글과 같다 */ promoted?: boolean; adSlot?: number }) {
   // Nightingale 카드 문법(§20.1) — 헤더(이름/시간 2줄 스택)·제목·본문 2줄 클램프·미디어·반응 푸터 순서 고정.
   // 미디어는 첫 장만 44px 썸네일(88px=레티나 2x 요청)로, 2장 이상은 장수 배지 — 목록에서 원본을 내려받지 않는다.
   const imgs = post.images ?? [];
@@ -180,7 +179,11 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
               </p>
               <p className="flex items-center gap-1 text-2xs leading-4 text-ink-muted">
                 <span className="shrink-0 tabular-nums">{relativeTime(post.createdAt)}</span>
-                <TitleChip points={titlePts} />
+                {/* 🔴 2026-09-18 오너: "우측에 뉴비, 홀덤입문 이런 부분 전량 미노출로 변경 아이디만 보이게".
+                    목록에서 칭호 칩이 닉네임 옆 폭을 먹어 **정작 글이 안 보였다**.
+                    컴포넌트(atoms/TitleChip)와 그 대비 계약(e2e/design-tokens '칭호 칩')은 **남겨 둔다** —
+                    프로필 등 밀도가 낮은 자리에서 다시 쓸 수 있고, 지우면 그 대비 근거도 같이 사라진다.
+                    장착 마크(mark)와 닉네임 색은 그대로다 — 오너가 "이모티콘은 보여도 됨" 이라고 했다. */}
                 {post.userRole === 'venue_owner' && <span className="shrink-0">· 매장</span>}
                 {post.userRole === 'admin' && <span className="shrink-0">· 운영자</span>}
               </p>
