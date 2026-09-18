@@ -956,6 +956,13 @@
     }
   }
   @media (prefers-reduced-motion: reduce) { .card-glow-hover:hover { transform: none; } }
+  /* 🔴 2026-09-18: 접근성 미디어 3종 세트를 맞춘다.
+     같은 '카드 후광' 계열인 .card-aura[data-aura] 는 이미 셋을 전부 처리하는데
+     .card-glow-hover 와 .chip-aura 만 빠져 있었다(전자는 reduced-motion 하나뿐, 후자는 없음).
+     고대비·강제색 모드에서는 발광을 빼는 것이 규칙이다 — MDN 기준 forced-colors 에선
+     box-shadow 가 어차피 none 으로 강제되므로, 명시해서 두 모드의 결과를 같게 만든다. */
+  @media (prefers-contrast: more) { .card-glow-hover:hover, .chip-aura { box-shadow: none; } }
+  @media (forced-colors: active)  { .card-glow-hover:hover, .chip-aura { box-shadow: none; } }
 
   .chip-aura { background-color: rgb(99 102 241 / 0.10); border: 1px solid rgb(99 102 241 / 0.22); color: rgb(var(--accent-200)); }
   /* 🔴 홈 퀴액션 카드 배경 (2026-09-18 오너 지시: "출석체크, 제휴혜택 뒤에는 이미지 넣어줘")
