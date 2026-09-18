@@ -5,9 +5,17 @@
 // 즉 거기서는 '모션이 없다'와 '모션이 안 도는 환경이다'를 구분할 수 없다.
 //
 // 무엇을 재나: 탭을 누른 직후 프레임마다 document.getAnimations() 를 훑어
-//   ① ::view-transition-old/new(<패널>) 이 vt-panel-* 키프레임으로 실제 애니메이트되고
-//   ② ::view-transition-old/new(root) 와 탭바 스냅샷은 애니메이트되지 **않는지**(제자리 고정)
+//   ① 하위 탭 전환에 View Transition 이 **한 번도 안 도는지**(expectNoViewTransition)
+//   ② 탭바·헤더가 1px 도 안 움직이는지(제자리 고정)
+//   ③ 알약이 중간 프레임을 거쳐 미끄러지는지(CSS FLIP 이 살아 있는지)
 // 를 확인한다. ②가 깨지면 헤더·히어로까지 통째로 밀리는 예전 회귀다.
+//
+// ⚠ 2026-09-18 정정 — 예전 머리말은 ①을 "`::view-transition-old/new(<패널>)` 이 vt-panel-* 키프레임으로
+//   **실제 애니메이트되는지**" 라고 적어 뒀다. 지금은 정반대다: 하위 탭 본문에서 VT 를 걷어냈고
+//   (`src/lib/subTabTransition.ts`, 이유는 아래 expectNoViewTransition JSDoc 의 1,300px 낙하)
+//   `vt-panel-*` 키프레임은 사용처 0 이 되어 `src/index.css` 에서 삭제했다.
+//   본문은 이미 새 판정으로 바뀌어 있었는데 **머리말만 옛 설계를 설명하고 있었다** — 읽는 사람이
+//   "이 스펙은 VT 가 돌기를 기대한다"고 거꾸로 이해하게 된다. 주석도 계약의 일부라 같이 고친다.
 import { test, expect } from './_fixtures';
 import { type Page, type Locator } from '@playwright/test';
 import { stabilizeBackstack, dismissOverlays, loginAs } from './_session';
@@ -142,7 +150,7 @@ function expectNoViewTransition(samples: string[], where: string) {
 // CI 러너(공유 vCPU)에서는 VT/스프링 프레임 타이밍이 흔들려 간헐 실패한다(2026-09-02 실측: 로컬 14/14 통과·CI 1회 실패 후 재실행 통과).
 // 임계는 그대로, 재시도만 CI 에서 2회 — perf.spec 과 같은 규약.
 test.describe.configure({ retries: process.env.CI ? 2 : 0 });
-test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
+test.describe('하위 탭 — VT 없이 알약만 움직인다', () => {
   test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 미설정 — 로그인 화면들을 잴 수 없다');
 
   async function boot(page: Page) {

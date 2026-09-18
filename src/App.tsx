@@ -2634,9 +2634,29 @@ export default function App() {
     }
     setOpenVenueId(venueId);
   }, [venues, toast]);
+  /** 상세 모달이 **한 번이라도 렌더된 적 있는가**. 청크를 받은 것과는 다르다 — 아래 참고. */
+  const schedEverOpenedRef = useRef(false);
   const handleScheduleSelect = useCallback((s: Schedule) => {
     // 포스터 상세는 전체화면 2열 모달(PC: 포스터 좌+정보 우)로 표시 — 좁은 패널보다 가독성↑
     // 마운트 비용을 스냅샷 뒤에서 치러 sheet-up 첫 프레임 드랍을 없앤다(미지원은 기존 경로)
+    if (!schedEverOpenedRef.current) {
+      schedEverOpenedRef.current = true;
+      // 🔴 첫 열림만 VT 를 쓰지 않는다 (2026-09-18 프레임 실측).
+      //   `lazyWithReload` 는 `lazy(async () => …)` 라 **청크가 이미 캐시에 있어도 첫 렌더는 반드시
+      //   한 번 서스펜드**한다. 그 서스펜드가 `flushSync` 안에서 일어나면 바깥 경계(App.tsx:4139
+      //   `<Suspense fallback={<OverlayFallback/>}>`)의 **불투명 전면 오버레이가 new 스냅샷**이 된다.
+      //   실측(프레임 캡처): 폴백이 화면에 있던 시간 390 CPU×4 ≈500ms · 390 CPU×1 ≈320ms ·
+      //   1280 CPU×1 ≈365ms. PC 에서는 헤더·GNB 만 남은 **빈 화면 + 스피너**였고, 그 뒤 내용이
+      //   1~3프레임에 툭 나타났다(모핑 없음).
+      //   ⚠ 네트워크가 아니다 — 같은 계측에서 청크 요청은 클릭 **3.7초 전**에 끝났고 클릭 뒤 요청 0이다
+      //     (App.tsx:1540 idle 프리워밍이 이미 받아 뒀다). 즉 '프리워밍했으니 warm' 은 틀렸다:
+      //     warm 은 **한 번 렌더된 뒤**부터다. 그래서 판정 기준이 '청크 유무' 가 아니라 이 ref 다.
+      //   트랜지션이면 리액트가 폴백을 커밋하지 않고 준비될 때까지 이전 화면(목록)을 유지한다.
+      //   같은 조리법의 전례가 셋 있다 — openLogin(1162) · openMeCb(3360) · openEvent.
+      setVtPosterId(s.id); // 이름은 그대로 붙인다 — **닫기 역모핑**은 첫 열림 뒤에도 돌아야 한다
+      startTransition(() => setOpenSchedule(s));
+      return;
+    }
     flushSync(() => setVtPosterId(s.id)); // 스냅샷 전에 카드에 이름 부여(모핑 페어의 old 쪽)
     withViewTransition(
       () => flushSync(() => setOpenSchedule(s)),

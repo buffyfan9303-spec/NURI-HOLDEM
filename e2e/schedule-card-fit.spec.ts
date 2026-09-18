@@ -139,6 +139,18 @@ const measure = (page: Page) => page.evaluate(() => {
   const doc = document.scrollingElement as HTMLElement;
   return {
     cards: cards.length, overflow, clamped, ellipsis, clippedValues, hiddenScroll,
+    // 🔴 3열이 **한 줄에 남아 있는가**. 잘림 검사로는 이걸 못 본다 —
+    //   열이 통째로 아래로 밀려도 글자는 하나도 안 잘리기 때문이다(2026-09-18 320px 사고).
+    cols: cards.map((c) => {
+      const pick = (k: string) => {
+        // 카드(article)의 **직계** 열만 본다 — 안쪽에 같은 유틸이 또 있어도 오판하지 않는다.
+        const el = c.querySelector<HTMLElement>(`:scope > [class*="${k}"]`);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { top: Math.round(r.top * 10) / 10, w: Math.round(r.width * 10) / 10 };
+      };
+      return { o1: pick('order-1'), o2: pick('order-2'), o3: pick('order-3') };
+    }),
     docScrollX: doc.scrollWidth - doc.clientWidth,
     cardH: cards.map((c) => Math.round(c.getBoundingClientRect().height)),
     // 화면에 실제로 그려진 문자열 — 반올림·거짓 배지 회귀를 같은 캡처에서 함께 본다
@@ -198,6 +210,8 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
           // 우회 금지 — 잴 것이 실제로 있는지 먼저 단정한다
           expect(r.cards, '일정 카드가 렌더되지 않았다 — 잴 것이 없으면 통과가 아니다').toBeGreaterThan(0);
           console.log(`[${w}/${theme}/${zoom ? 200 : 100}] cards=${r.cards} h=${r.cardH.join(',')} clamp=${r.clamped.length} ellip=${r.ellipsis.length}`);
+          // 열 기하를 **항상** 찍는다 — 접힘은 통과/실패보다 먼저 눈에 보여야 원인을 짚는다.
+          console.log(`  cols ${r.cols.map((c) => `[${c.o1?.top}/${c.o1?.w} ${c.o2?.top}/${c.o2?.w} ${c.o3?.top}/${c.o3?.w}]`).join(' ')}`);
           expect(r.clippedValues, `🔴 값이 잘렸다 — 이름은 줄여도 금액·등록 마감은 못 줄인다:\n${r.clippedValues.join('\n')}`).toEqual([]);
           expect(r.hiddenScroll, `등록 마감·참가비가 숨은 가로 스크롤 안에 있다:\n${r.hiddenScroll.join('\n')}`).toEqual([]);
           expect(
@@ -205,6 +219,27 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
             '카드 안에서 잘린 요소가 있다',
           ).toEqual([]);
           expect(r.docScrollX, '문서가 가로로 스크롤된다').toBeLessThanOrEqual(0);
+
+          // 🔴 3열 골격 — 오너가 스크린샷을 주며 두 차례 요구한 계약이다([시각][내용][참가비]).
+          // ⚠ 글자 100% 에서만 단언한다. 200% 에서 세로로 접히는 것은 **설계된 접근성 탈출구**다.
+          // ⚠ flex-wrap 은 **줄어들기 전 가상 크기**로 줄을 가른다. 1~2px 만 모자라도 가운데가
+          //   그만큼 줄어드는 게 아니라 **마지막 열이 통째로** 밀린다(행 113.8 → 176.8px).
+          if (!zoom) {
+            const broken = r.cols
+              .map((c, i) => ({ i, c }))
+              .filter(({ c }) => c.o1 && c.o3 && Math.abs(c.o1.top - c.o3.top) > 3)
+              .map(({ i, c }) => `${i + 1}번째 카드: 시각열 top ${c.o1!.top} vs 참가비열 top ${c.o3!.top}`);
+            expect(
+              broken,
+              `3열이 접혔다 — 참가비·GTD 가 오른쪽 끝이 아니라 아랫줄로 떨어진다:\n${broken.join('\n')}\n`
+              + '→ 한 값만 보지 말고 **폭 예산**을 다시 재라: '
+              + '좌 + gap + 가운데 basis + gap + 우 ≤ (카드 폭 − 좌우 패딩).',
+            ).toEqual([]);
+            expect(
+              r.cols.filter((c) => !c.o1 || !c.o2 || !c.o3).length,
+              '🔴 열을 못 찾았다 — order-1/2/3 마크업이 바뀌었으면 이 검사는 빈 통과다',
+            ).toBe(0);
+          }
         });
       }
     }

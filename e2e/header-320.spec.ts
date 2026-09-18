@@ -15,12 +15,26 @@
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack } from './_session';
 
-/** 탭 라벨 — 헤더의 '현재 위치' 로 그려지는 값. */
+/** 탭 라벨 — 헤더의 '현재 위치' 로 그려지는 값.
+ *
+ *  🔴 '일정 탐색' 이 여기 없는 이유(2026-09-18 실측으로 드러났다):
+ *    모바일 하단 탭바에는 browse 칸이 **없다**. MobileTabBar 가 `shown='home'` 으로 접기 때문이다
+ *    (App.tsx:765 부근 주석 참고). 그래서 `getByRole('button', {name: /일정|탐색/})` 이 0개였고,
+ *    스펙은 `continue` 로 조용히 넘어가 **가장 긴 라벨을 한 번도 안 재고 초록**이었다.
+ *    → 아래 별도 테스트에서 홈의 '전체 일정' 버튼으로 들어가 잰다(유저가 실제로 가는 길). */
 const TABS = [
   { name: /커뮤니티/, label: '커뮤니티' },
-  { name: /일정|탐색/, label: '일정 탐색' },
   { name: /라이브|실시간/, label: '라이브' },
 ];
+
+/** 헤더 '현재 위치' 한 줄 — 보이는 폭보다 필요한 폭이 크면 말줄임으로 잘린 것이다. */
+async function titleFit(page: import('@playwright/test').Page) {
+  const title = page.locator('[aria-current="page"]').filter({ visible: true }).first();
+  if (!(await title.count())) return null;
+  return title.evaluate((el) => ({
+    client: el.clientWidth, scroll: el.scrollWidth, text: (el.textContent ?? '').trim(),
+  }));
+}
 
 test.describe('헤더 — 320px 현재 위치 (U01)', () => {
   for (const width of [320, 360, 390]) {
@@ -29,26 +43,58 @@ test.describe('헤더 — 320px 현재 위치 (U01)', () => {
       await page.goto('/');
       await stabilizeBackstack(page);
 
+      // 🔴 실제로 잰 것을 센다. 아래 두 `continue` 는 탭·제목을 못 찾으면 조용히 넘어가므로,
+      //   셋 다 못 찾으면 **아무것도 안 재고 초록**이 된다(오늘 e2e 수집 사고와 같은 부류).
+      const measured: string[] = [];
+
+      const skipped: string[] = [];
+
       for (const t of TABS) {
         const tab = page.getByRole('button', { name: t.name }).filter({ visible: true }).first();
-        if (!(await tab.count())) continue;
+        if (!(await tab.count())) { skipped.push(`${t.label}: 탭 버튼 없음`); continue; }
         await tab.click({ timeout: 10_000 }).catch(() => {});
         await page.waitForTimeout(400);
 
-        const title = page.locator('[aria-current="page"]').filter({ visible: true }).first();
-        if (!(await title.count())) continue;
-
-        const m = await title.evaluate((el) => ({
-          client: el.clientWidth,
-          scroll: el.scrollWidth,
-          text: (el.textContent ?? '').trim(),
-        }));
+        const m = await titleFit(page);
+        if (!m) { skipped.push(`${t.label}: aria-current 없음`); continue; }
 
         expect(
           m.scroll,
           `${width}px 에서 "${m.text}" 가 잘린다 — 보이는 폭 ${m.client}px < 필요한 폭 ${m.scroll}px`,
         ).toBeLessThanOrEqual(m.client + 1);   // 소수점 반올림 여유 1px
+        measured.push(`${t.label}=${m.client}/${m.scroll}`);
       }
+
+      // 🔴 '하나라도 쟀으면 통과' 가 아니라 **전부 쟀는가**를 본다.
+      //   느슨하게 두면 탭 하나가 이름을 바꿔 사라져도 조용히 통과한다 — 그게 '일정 탐색' 에게 일어난 일이다.
+      expect(
+        skipped,
+        `🔴 ${width}px 에서 못 잰 탭이 있다. 통과가 아니라 **그만큼 검사가 없는 상태**다:\n${skipped.join('\n')}\n`
+        + '→ 라벨/접근성 이름이 바뀌었으면 여기 TABS 도 같은 커밋에서 고쳐라.',
+      ).toEqual([]);
+      console.log(`[헤더 ${width}] 잰 것 ${measured.join(' · ')}`);
+    });
+
+    // 🔴 '일정 탐색' — 라벨이 5글자로 **가장 길어 제일 먼저 잘리는데**, 하단 탭바에 칸이 없어
+    //   위 루프가 구조적으로 못 본다. 유저가 실제로 가는 길(홈 → '전체 일정')로 들어가 잰다.
+    test(`🔴 ${width}px — 가장 긴 라벨 '일정 탐색' 도 잘리지 않는다`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 720 });
+      await page.goto('/');
+      await stabilizeBackstack(page);
+
+      const go = page.getByRole('button', { name: '전체 일정', exact: false }).first();
+      await expect(go, '홈에서 일정 탐색으로 가는 진입점이 사라졌다').toBeVisible({ timeout: 15_000 });
+      await go.click({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+
+      const m = await titleFit(page);
+      expect(m, '헤더 현재 위치를 찾지 못했다 — 잴 것이 없으면 통과가 아니다').not.toBeNull();
+      expect(m!.text, `'전체 일정' 을 눌렀는데 헤더가 "${m!.text}" 다 — 이동 자체가 안 됐다`).toBe('일정 탐색');
+      console.log(`[헤더 ${width}] 일정 탐색=${m!.client}/${m!.scroll}`);
+      expect(
+        m!.scroll,
+        `${width}px 에서 "${m!.text}" 가 잘린다 — 보이는 폭 ${m!.client}px < 필요한 폭 ${m!.scroll}px`,
+      ).toBeLessThanOrEqual(m!.client + 1);
     });
   }
 
