@@ -44,7 +44,9 @@ describe('B. 파트너 매장 판 배선', () => {
     expect(vmt).toMatch(/if \(manageOk\) available\.push\(\{ id: 'partners', label: '파트너 매장'/);
   });
   it('판이 실제로 box() 에 달려 있고 VenueMatchPanel 을 렌더한다', () => {
-    expect(vmt).toMatch(/box\('partners',\s*<VenueMatchPanelM venueId=\{venueId\} canConfigure=\{manageOk\}/);
+    // S6-2(2026-09-19): 지역 Suspense 경계가 box(…) 와 VenueMatchPanelM 사이에 끼었다(첫 방문 lazy 청크
+    // 로딩이 App.tsx 최상위 폴백까지 번져 내 매장 전체가 사라지던 것을 막는 경계) — 그 한 겹은 허용.
+    expect(vmt).toMatch(/box\('partners',\s*(<Suspense fallback=\{[^}]*\}>\s*)?<VenueMatchPanelM venueId=\{venueId\} canConfigure=\{manageOk\}/);
     expect(vmt).toMatch(/import\('\.\/VenueMatchPanel'\)/);
     expect(vmt).toMatch(/partners:\s*'partners'/); // 알림 /my-store/partners 딥링크 alias
   });

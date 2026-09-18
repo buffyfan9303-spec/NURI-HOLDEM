@@ -437,7 +437,10 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
                   {b.period === 'season' && (
                     <button type="button" onClick={() => resetSeason(b.key)} className="shrink-0 rounded-chip border border-accent-400/40 px-1.5 py-0.5 text-[9px] font-bold text-accent-300 hover:bg-accent-300/10">시즌 리셋</button>
                   )}
-                  <button type="button" onClick={() => removeBoard(b.key)} aria-label="보드 삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={13} /></button>
+                  {/* 스윕③(2026-09-19): 패딩 없이 아이콘 글자 크기(13px)가 곧 히트박스였다. 실제 박스를
+                      44px 로 키운다(.hit 오버레이 대신 — 이 행은 space-y-1 로 촘촘히 쌓여 44px 오버레이가
+                      위아래 행의 삭제 버튼과 겹칠 수 있다. 삭제는 되돌릴 수 없는 동작이라 겹침 위험을 안 남긴다). */}
+                  <button type="button" onClick={() => removeBoard(b.key)} aria-label="보드 삭제" className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light"><Icon name="close" size={13} /></button>
                 </li>
               ))}
             </ul>
@@ -661,7 +664,8 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
                 <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-accent-300' : 'text-danger-light'].join(' ')}>
                   {r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}
                 </span>
-                <button type="button" onClick={() => del(r.id)} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
+                {/* 스윕③ — 같은 이유(위 removeBoard 주석 참고)로 실제 44px 박스 */}
+                <button type="button" onClick={() => del(r.id)} aria-label="삭제" className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
               </li>
             ))}
           </ul>
@@ -765,7 +769,8 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
                   <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{r.name}</span>
                   {r.reason && <span className="hidden max-w-[8rem] truncate text-2xs text-ink-muted sm:block">{r.reason}</span>}
                   <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-accent-300' : 'text-danger-light'].join(' ')}>{r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}</span>
-                  <button type="button" onClick={() => del(r.id)} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
+                  {/* 스윕③ — 같은 이유(위 removeBoard 주석 참고)로 실제 44px 박스 */}
+                  <button type="button" onClick={() => del(r.id)} aria-label="삭제" className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
                 </li>
               ))}
             </ul>

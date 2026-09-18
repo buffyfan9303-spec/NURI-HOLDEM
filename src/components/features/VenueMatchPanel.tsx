@@ -141,7 +141,10 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
         </section>
       )}
 
-      <section className="space-y-2">
+      {/* 스윕④(2026-09-19): 이 화면 안에서 위 '함께 열 매장 찾기'만 박스(rounded-aura border card-aura)였고
+          아래 세 섹션은 맨몸이라 <h3> 이 테두리 없이 떠 있었다 — 오너가 지적한 "매장이용권만 박스 밖" 과
+          같은 결함. 한 화면 안에서는 한 문법으로: 넷 다 같은 박스로 통일한다(안의 카드/행은 그대로 각자 박스). */}
+      <section className="rounded-aura border card-aura p-3 space-y-2">
         <h3 className="text-sm font-bold text-ink-primary">내 게시 <span className="text-ink-muted">{myPosts.length}</span></h3>
         {myPosts.length === 0 ? (
           <p className="py-4 text-center text-2xs text-ink-muted">게시한 대회가 없습니다</p>
@@ -183,7 +186,7 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
         })}
       </section>
 
-      <section className="space-y-2">
+      <section className="rounded-aura border card-aura p-3 space-y-2">
         <h3 className="text-sm font-bold text-ink-primary">다른 매장 게시 <span className="text-ink-muted">{others.length}</span></h3>
         {others.length === 0 ? (
           <p className="py-4 text-center text-2xs text-ink-muted">모집 중인 대회가 없습니다</p>
@@ -214,7 +217,7 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
         })}
       </section>
 
-      <section className="space-y-2">
+      <section className="rounded-aura border card-aura p-3 space-y-2">
         <h3 className="text-sm font-bold text-ink-primary">내 신청 <span className="text-ink-muted">{myResponses.length}</span></h3>
         {myResponses.length === 0 ? (
           <p className="py-4 text-center text-2xs text-ink-muted">보낸 신청이 없습니다</p>

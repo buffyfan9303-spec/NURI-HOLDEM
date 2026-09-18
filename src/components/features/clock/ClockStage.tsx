@@ -16,7 +16,7 @@
 //   폭·방향 분기도 같은 이유로 Tailwind 변형이 아니라 `.clk-*` 컨테이너 쿼리(src/index.css)를 쓴다.
 import { memo, useEffect, useState, type ReactNode } from 'react';
 import { effectiveLevel, type ClockState } from '../../../api/clock';
-import { clockPhase, CLOCK_PHASE_TV, gameLabel, levelNumberAt, msToNextBreak } from '../../../lib/clockLevel';
+import { clockPhase, gameLabel, levelNumberAt, msToNextBreak } from '../../../lib/clockLevel';
 import { msToRegClose } from '../../../lib/regStatus';
 import {
   PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, pickPrizeLayout, prizePlaceText, type PrizeRow,
@@ -56,8 +56,10 @@ function elapsedMs(s: ClockState, index: number, remaining: number): number {
 }
 
 
-/** 한국어 라벨 — 흐린 흰색·자간 살짝. 영문 대문자 관례는 ANTE 하나만(오너 지시) */
-const LABEL = 'font-bold tracking-[0.08em]';
+/** 지표 라벨 — 영문 대문자·흐린 흰색·자간 넓게.
+ *  2026-09-19 오너 지시 #1 "생존/엔트리, 리바이, 얼리, 등록마감 전부 영어로" — 보드의 지표·시간 라벨은 전부 영문 대문자다
+ *  (종전 "영문은 ANTE 하나만" 규칙을 이 지시가 뒤집었다). 손님 안내문(QR 캡션)과 대회명·매장명은 데이터라 그대로다. */
+const LABEL = 'font-bold uppercase tracking-[0.14em]';
 const DIM = { color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' } as const;
 const SOFT = { color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' } as const;
 
@@ -112,18 +114,18 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
   //   ⚠ 셋을 한 줄로 묶었던 직전 판은 리바이 숫자까지 2.8cqmin 으로 줄여 놨었다 —
   //     리바이는 가장 자주 바뀌는 수라 원래 크기로 되돌린다.
   const addonEarly = [
-    showAddon && { k: 'addon', label: '애드온', v: ls.addons ?? 0 },
-    showEarly && { k: 'early', label: '얼리', v: ls.earlies ?? 0 },
+    showAddon && { k: 'addon', label: 'ADDON', v: ls.addons ?? 0 },
+    showEarly && { k: 'early', label: 'EARLY', v: ls.earlies ?? 0 },
   ].filter(Boolean) as { k: string; label: string; v: number }[];
 
   return (
     <>
-      {/* ── 상태 바 — 좌: 매장·대회명 / 중앙: LEVEL + 진행 상태 / 우: 총 진행 + 호출처 슬롯 ──
+      {/* ── 상태 바 — 좌: 매장·대회명 / 우: 총 진행 + 호출처 슬롯 ──
           높이를 고정한다(h-[8cqmin]). 대회명이 길어도 두 번째 줄을 만들지 않고 말줄임 —
           예전엔 이 줄이 자라면 아래 타이머가 통째로 밀렸다.
-          3열 그리드 — 가운데 칸이 스테이지 정중앙이다. flex + ml-auto 로 하면 제목 길이에 따라
-          가운데가 좌우로 흔들린다(실측: 알약이 우측으로 밀려 있었다). */}
-      <header className="grid h-[8cqmin] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-[1.5cqmin] px-[3cqmin]">
+          2026-09-19 오너 지시 #9: 가운데 있던 알약 두 개('레벨 1' · 'READY')를 없앴다 — LEVEL 은 타이머 바로 위(LevelLine)로
+          내려가 큰 글자가 됐고, 진행 상태 단어는 보드에서 사라졌다(남은 신호는 아래 점의 색과 타이머 색). */}
+      <header className="flex h-[8cqmin] shrink-0 items-center justify-between gap-[1.5cqmin] px-[3cqmin]">
         <div className="flex min-w-0 items-center gap-[1.5cqmin]">
           <span className={`h-[1.2cqmin] w-[1.2cqmin] shrink-0 rounded-full ${g.running ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden />
           <p className="min-w-0 truncate text-[2.6cqmin] font-extrabold tracking-tight">
@@ -131,9 +133,6 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
             {(g.title || g.config?.title) && <span className="ml-[1.2cqmin] font-medium" style={SOFT}>{g.title || g.config?.title}</span>}
           </p>
         </div>
-
-        {/* 중앙 — LEVEL 과 상태만 알약. 나머지 정보는 알약으로 만들지 않는다. */}
-        <div className="flex justify-center"><StatusPills g={g} /></div>
 
         <div className="flex shrink-0 items-center justify-end gap-[1.6cqmin]">
           <RunningTime g={g} />
@@ -164,33 +163,42 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
             {/* 좌 — 프라이즈. 없으면 열 자체를 그리지 않는다(빈 칸을 남기지 않는다). */}
             {prizes.length > 0 ? <PrizeColumn prizes={prizes} totalPrize={totalPrize} mysteryBounty={g.config?.mysteryBounty ?? 0} /> : <span className="clk-wide-land" />}
 
-            {/* 중앙 — 타이머 히어로 + 블라인드. **스택 전체를 중앙 정렬**한다.
-                예전엔 히어로가 flex-1 로 남는 공간을 다 먹어서 타이머와 CURRENT/NEXT 사이에
-                죽은 띠가 생겼다(레퍼런스는 둘이 한 덩어리로 붙어 있다).
-                ⚠ 그래도 계약은 유지된다: 블라인드 행이 **고정 높이(22cqmin)** 라 ANTE 유무와 무관하게
-                   스택 총높이가 상수다 → 통째로 중앙 정렬해도 타이머 y 가 움직이지 않는다. */}
-            <div className="relative flex min-h-0 flex-col items-center justify-center gap-[2.5cqmin]">
-              {/* 2026-09-15 오너 지시 #12: 타이머·블라인드를 감싸던 이중 기하 프레임(NURI Aura Clock Frame)을 삭제했다.
-                  "클락 중앙에 네모 테두리 있는데 이거 삭제" — 1920x1080 캡처로 이 요소임을 확인한 뒤 지웠다.
-                  레이아웃 영향 0: 그 프레임은 `absolute inset-x-[7%] top-[13%] bottom-[14%]` 장식이라
-                  형제(CenterPanel·BlindsRow)의 폭·높이를 전혀 먹지 않았다(삭제 전후 타이머 rect 동일 — 실측).
-                  타이머 뒤 약한 radial bloom(CenterPanel 안)은 테두리가 아니라 남긴다. */}
+            {/* 중앙 — LEVEL / 타이머 히어로 / 블라인드.
+                2026-09-19 오너 지시 #3·#9: 카운트다운이 **본문의 세로 중앙**에 서고, LEVEL 은 알약이 아니라 큰 글자로
+                타이머 바로 위에, CURRENT|NEXT 는 그보다 조금 더 아래(종전 gap 2.5cqmin → 3cqmin)로 내려간다.
+                구조: [스페이서 1fr — LEVEL 을 바닥에] [타이머+진행률 shrink-0] [스페이서 1fr — 블라인드를 천장에].
+                두 스페이서(basis-0)가 남는 높이를 똑같이 나누므로 **타이머 중심 = 본문 중심**이고, 상태·ANTE 유무·
+                LEVEL/BREAK 글자와 무관하게 상수다(clock-visual.spec 의 '타이머 y 불변' 계약 유지).
+                ⚠ 두 함정을 실측으로 밟았다(2026-09-19, 운영자 전체화면 타이머가 중심에서 27px 위):
+                  ① 스페이서에 padding 을 주면 basis-0 이어도 **패딩만큼 기본 크기가 생겨** 비대칭이 된다(pt 3 vs pb 1.2 → 0.9cqmin 치우침).
+                     여백은 스페이서가 아니라 **자식의 margin** 으로 준다(블라인드 래퍼 mt · LEVEL 은 CenterPanel 의 pt 3.5cqmin 이 곧 간격).
+                  ② 타이머+진행률 블록의 중심은 타이머 중심이 아니다(아래 진행률 3.5cqmin). CenterPanel 에 같은 값의 pt 를 줘 대칭으로 만든다.
+                가로 보드는 본문이 항상 80cqmin(100 − 상태바 8 − 하단 12)이라 스페이서가 각 (80 − 33)/2 = 23.5cqmin 이고,
+                아래 스페이서에 mt 7 + 블라인드 내용 ≈14.5cqmin 이 들어간다(여유 2cqmin — 전부 cqmin 이라 어느 가로 비율에서도 같다).
+                2026-09-15 오너 지시 #12 로 지운 이중 기하 프레임은 여기 없다 — 타이머 뒤 약한 radial bloom(CenterPanel 안)만 남는다. */}
+            <div className="relative flex min-h-0 flex-col items-center">
+              <div className="flex min-h-0 w-full flex-1 basis-0 flex-col items-center justify-end">
+                <LevelLine g={g} />
+              </div>
               <CenterPanel g={g} />
-              <div className="h-[22cqmin] w-full shrink-0">
-                <BlindsRow g={g} />
+              <div className="flex min-h-0 w-full flex-1 basis-0 flex-col justify-start">
+                {/* 진행률 바 → CURRENT 라벨 간격 7cqmin(종전 실측 6.3cqmin) — 오너 #3 "살짝 아래로". 높이는 내용대로(타이머 y 와 무관). */}
+                <div className="mt-[7cqmin] w-full shrink-0">
+                  <BlindsRow g={g} />
+                </div>
               </div>
             </div>
 
             {/* 우 — 지표 세로 레일. 라벨 작게 위, 숫자 크게 아래(레퍼런스 공통 문법). */}
             <aside data-testid="clk-rails" className="clk-col min-h-0 flex-col justify-center gap-[1.5cqmin]">
-              <Rail label="생존 / 엔트리" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
+              <Rail label="Players / Entries" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
               {/* 리바이는 **자기 줄**(레퍼런스 보드와 같다). 애드온·얼리만 아래 한 줄로 묶는다.
                   줄을 무한정 늘리지 않는 이유는 그대로다: 이 열은 세로로 꽉 차 있어 줄이 늘면 clamp 가
                   글자를 줄이고, 10m 거리에서 가장 중요한 '생존 / 엔트리'까지 같이 작아진다(2026-09-11 사고).
                   그래서 늘리는 줄은 **하나**로 묶고, 그 안에서 각 값이 제 라벨을 갖는다. */}
-              {showRebuy && <Rail label="리바이" value={(ls.rebuys ?? 0).toLocaleString()} />}
+              {showRebuy && <Rail label="Rebuy" value={(ls.rebuys ?? 0).toLocaleString()} />}
               {addonEarly.length > 0 && <GroupRail items={addonEarly} />}
-              {buyIn > 0 && <Rail label="바인" value={buyIn.toLocaleString()} />}
+              {buyIn > 0 && <Rail label="Buy-in" value={buyIn.toLocaleString()} />}
               {/* 2026-09-11: 총 칩·평균 스택은 **하단 레일**로 내렸다(아래 BottomMetrics).
                   우측 열에 7줄이 몰려 글자가 작아지는 동안 화면 하단 중앙이 통째로 비어 있었다 —
                   레퍼런스 보드처럼 '칩 경제'는 아래 가로줄, '사람 수'는 오른쪽 세로줄로 나눈다. */}
@@ -202,19 +210,23 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
           {/* ── 하단 — QR · 스폰서 · Powered by. 지표가 우측 열로 올라가서 이 줄은 보조만 남는다. ── */}
           {/* 12cqmin: 하단이 이제 보조가 아니라 **지표 레일**이다(총 칩·평균 스택·다음 휴식).
               8cqmin 이면 clamp 대형 숫자가 눌려 잘린다 — 실측 후 올린 값이다. */}
-          <div className="flex h-[12cqmin] shrink-0 items-center gap-[2cqmin] border-t border-white/[0.07] px-[3cqmin]">
+          {/* 3열 그리드(좌 1fr · 중앙 auto · 우 1fr) — 중앙 칸이 **스테이지 정중앙**이다.
+              2026-09-19 오너 지시 #2 "총칩·평균스택·다음휴식 모두 중앙정렬": 예전 flex + flex-1 은 QR 블록과 Powered by 의 폭 차이만큼
+              중앙이 밀렸다(실측 1920×1080 TV −21px, 운영자 전체화면은 QR 이 없어 −107px). 좌우 칸을 minmax(0,1fr) 로 같게 두면
+              중앙 칸은 내용 폭 그대로 정중앙에 선다. 좌우 칸은 min-w-0 이라 세로 TV 에서 QR 캡션이 두 줄로 접힐 뿐 넘치지 않는다. */}
+          <div className="grid h-[12cqmin] shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-[2cqmin] border-t border-white/[0.07] px-[3cqmin]">
             {qr ? (
               <div className="flex min-w-0 items-center gap-[1cqmin]">
                 <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[0.6cqmin] bg-white" style={{ width: 'clamp(34px, 5cqmin, 78px)', height: 'auto' }} />
                 <div className="min-w-0">
-                  <p className={`${LABEL} text-[1.2cqmin]`} style={SOFT}>바인 QR</p>
+                  <p className={`${LABEL} text-[1.2cqmin]`} style={SOFT}>Buy-in QR</p>
                   <p className="text-[1.3cqmin] leading-snug" style={DIM}>찍으면 {gameLabel(g)} 바인 요청</p>
                 </div>
               </div>
             ) : <span />}
             {/* 하단 중앙 — 칩 경제 3종. QR(좌)·스폰서(우) 사이의 빈 폭을 실제 정보로 채운다. */}
             <BottomMetrics g={g} curBB={curBB} />
-            <div className="flex shrink-0 items-center gap-[2cqmin]">
+            <div className="flex shrink-0 items-center justify-self-end gap-[2cqmin]">
               {sponsor && <img src={sponsor} alt="스폰서" className="w-auto object-contain opacity-80" style={{ maxHeight: adSize === 'lg' ? '9cqmin' : adSize === 'md' ? '7.2cqmin' : '5.5cqmin' }} />}
               {/* 세로 화면에서는 접는다 — 장식이 총 칩·평균 스택의 폭을 뺏으면 숫자가 줄바꿈된다 */}
               <p className="clk-land-only shrink-0 text-[1.2cqmin] font-extrabold uppercase tracking-[0.18em]" style={DIM}>
@@ -301,7 +313,7 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
 
   return (
     <aside data-testid="clk-prizes" className="clk-col min-h-0 flex-col justify-center">
-      <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>총 상금</p>
+      <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>Prize Pool</p>
       <p className="mt-[0.3cqmin] font-black leading-none tabular-nums"
         style={{ fontSize: 'clamp(22px, 4.6cqmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
         {totalPrize.toLocaleString()}
@@ -332,7 +344,7 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
           설정 입력란(TournamentClock)은 그대로 남아 있어서, 없으면 '써도 아무 데도 안 나오는 죽은 컨트롤' 이 된다. */}
       {mysteryBounty > 0 && (
         <div data-testid="clk-mystery" className="mt-[1.2cqmin] border-t border-white/[0.08] pt-[1cqmin]">
-          <p className={`${LABEL} text-[1.4cqmin]`} style={SOFT}>미스터리 바운티</p>
+          <p className={`${LABEL} text-[1.4cqmin]`} style={SOFT}>Mystery Bounty</p>
           <p className="mt-[0.2cqmin] font-extrabold leading-none tabular-nums text-white" style={{ fontSize: 'clamp(16px, 2.6cqmin, 44px)' }}>
             {mysteryBounty.toLocaleString()}
           </p>
@@ -348,43 +360,24 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
 }
 
 /**
- * StatusPills — LEVEL 과 진행 상태만. 상태 바에서 알약을 쓰는 유일한 곳이다.
- * 초당 갱신이 필요 없다(레벨·running 은 g 가 바뀔 때만 변한다) — 부모 리렌더에 얹혀간다.
- * ⚠ '일시정지'를 여기에 둔 이유: 예전엔 타이머 **아래**에 붙어서, 일시정지 상태가 되면
- *    중앙 블록이 길어지고 세로 중앙 정렬 때문에 타이머가 30px 위로 올라갔다(실측).
+ * LevelLine — 타이머 바로 위의 "LEVEL n" 한 줄(브레이크는 "BREAK").
+ * 2026-09-19 오너 지시 #9 "PILL 삭제하고 READY 삭제, LEVEL 1 이런 식으로 가시성 확보. 중요한 정보다":
+ *   상태 바의 알약 두 개('레벨 1' 2.1cqmin · 'READY' 1.8cqmin)를 없애고, LEVEL 을 4.6cqmin 큰 글자로 타이머 위에 둔다.
+ *   알약 테두리·배경도, 진행 상태 단어(READY/RUNNING/PAUSED/FINISHED)도 여기엔 없다.
+ * ⚠ 사라진 정보: 상태 **단어**. 남은 신호 — ① 상태 바 점(진행 에메랄드 · 정지 앰버) ② 일시정지 = 타이머가 앰버(CenterPanel)
+ *   ③ 브레이크 = 이 줄과 타이머가 하늘색 + CURRENT 자리에 BREAK. '시작 전(READY)' 은 따로 표시하지 않는다(오너 지시).
+ * 초당 갱신이 필요 없다(레벨은 g 가 바뀔 때만 변한다) — 부모 리렌더에 얹혀간다.
+ * data-testid clk-level 은 e2e 앵커(clock-catchup 이 숫자를 읽는다) — 자리는 옮겼어도 id 는 유지한다.
  */
-function StatusPills({ g }: { g: ClockState }) {
+function LevelLine({ g }: { g: ClockState }) {
   const lvls = g.config?.levels ?? [];
   const eff = effectiveLevel(g);
-  const lv = lvls[eff.index];
-  const isBreak = lv?.kind === 'break';
-  // 2026-09-11: 운영자·리모컨과 **같은 파생**을 쓴다(lib/clockLevel.clockPhase).
-  //   예전엔 `g.running ? 'RUNNING' : 'PAUSED'` 라, 아직 시작 안 한 클락이 TV 에 'PAUSED'(일시정지)로 떴다.
-  //   이제 시작 전은 READY(중립 회색) — 진행(emerald)·브레이크(sky)·일시정지(amber)와 색으로도 갈린다.
-  const phase = clockPhase(g);
-  const state = CLOCK_PHASE_TV[phase];
-  const tone = phase === 'break'
-    ? { color: '#7dd3fc', bg: 'rgba(125,211,252,0.14)', bd: 'rgba(125,211,252,0.45)' }
-    : phase === 'running'
-      ? { color: '#6ee7b7', bg: 'rgba(110,231,183,0.12)', bd: 'rgba(110,231,183,0.40)' }
-      : phase === 'paused'
-        ? { color: '#fbbf24', bg: 'rgba(251,191,36,0.14)', bd: 'rgba(251,191,36,0.45)' }
-        : { color: 'rgba(255,255,255,0.62)', bg: 'rgba(255,255,255,0.07)', bd: 'rgba(255,255,255,0.22)' };
+  const isBreak = lvls[eff.index]?.kind === 'break';
   return (
-    <div className="flex shrink-0 items-center gap-[1.2cqmin]">
-      <span data-testid="clk-level" className="rounded-full border px-[2.2cqmin] py-[0.6cqmin] text-[2.1cqmin] font-extrabold tracking-[0.14em]"
-        style={{
-          color: 'var(--clk-accent, #818CF8)',
-          borderColor: 'color-mix(in srgb, var(--clk-accent, #818CF8) 55%, transparent)',
-          background: 'color-mix(in srgb, var(--clk-accent, #818CF8) 14%, transparent)',
-        }}>
-        {isBreak ? '휴식' : `레벨 ${levelNumberAt(lvls, eff.index)}`}
-      </span>
-      <span className="rounded-full border px-[1.8cqmin] py-[0.6cqmin] text-[1.8cqmin] font-extrabold tracking-[0.16em]"
-        style={{ color: tone.color, background: tone.bg, borderColor: tone.bd }}>
-        {state}
-      </span>
-    </div>
+    <p data-testid="clk-level" className="whitespace-nowrap font-black uppercase leading-none tracking-[0.18em]"
+      style={{ fontSize: 'clamp(18px, 4.6cqmin, 80px)', color: isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-accent, #818CF8)' }}>
+      {isBreak ? 'BREAK' : `LEVEL ${levelNumberAt(lvls, eff.index)}`}
+    </p>
   );
 }
 
@@ -399,7 +392,7 @@ function RunningTime({ g }: { g: ClockState }) {
   const run = elapsedMs(g, eff.index, eff.remainingMs);
   return (
     <p className="clk-wide-only shrink-0 text-right">
-      <span className={`${LABEL} block text-[1.3cqmin]`} style={DIM}>총 진행</span>
+      <span className={`${LABEL} block text-[1.5cqmin]`} style={DIM}>Total Time</span>
       <span className="text-[2.1cqmin] font-extrabold tabular-nums text-white">{hms(run)}</span>
     </p>
   );
@@ -420,7 +413,7 @@ function TimeRails({ g, regLevel }: { g: ClockState; regLevel: number }) {
   return (
     <>
       {reg !== null && (
-        <Rail label="등록 마감" value={reg === 0 ? '마감' : hms(reg)} sub={reg === 0 ? undefined : `Lv ${regLevel}`} danger={reg === 0} />
+        <Rail label="Reg Close" value={reg === 0 ? 'CLOSED' : hms(reg)} sub={reg === 0 ? undefined : `Lv ${regLevel}`} danger={reg === 0} />
       )}
     </>
   );
@@ -446,19 +439,20 @@ function BottomMetrics({ g, curBB }: { g: ClockState; curBB: number }) {
   //   숫자는 어떤 폭에서도 한 줄이어야 한다 — 줄이 바뀌면 자릿수를 잘못 읽는다.
   const cell = (label: string, value: string, sub?: string, tone?: string) => (
     <div className="min-w-0 text-center">
-      <p className={`${LABEL} text-[1.3cqmin]`} style={SOFT}>{label}</p>
+      <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>{label}</p>
       <p className="mt-[0.2cqmin] whitespace-nowrap leading-none">
         <span className="font-extrabold tabular-nums" style={{ fontSize: 'clamp(18px, 3.4cqmin, 70px)', color: tone ?? '#FFFFFF' }}>{value}</span>
         {sub && <span className="ml-[0.8cqmin] text-[1.7cqmin] font-semibold tabular-nums" style={DIM}>{sub}</span>}
       </p>
     </div>
   );
+  // flex-1 을 주지 않는다 — 부모 그리드의 auto 칸이라 내용 폭 그대로 정중앙에 선다(#2).
   return (
-    <div className="clk-metrics flex min-w-0 flex-1 items-center justify-center gap-[2.5cqmin]">
-      {cell('총 칩', num(ls?.totalStack))}
-      {cell('평균 스택', num(ls?.avgStack), ls?.avgStack && curBB > 0 ? `${Math.round(ls.avgStack / curBB)} BB` : undefined)}
+    <div className="clk-metrics flex min-w-0 items-center justify-center gap-[2.5cqmin]">
+      {cell('Total Chips', num(ls?.totalStack))}
+      {cell('Avg Stack', num(ls?.avgStack), ls?.avgStack && curBB > 0 ? `${Math.round(ls.avgStack / curBB)} BB` : undefined)}
       {/* 휴식이 없는 구성이면 칸을 만들지 않는다 — 빈 '—' 로 자리를 채우지 않는다 */}
-      {brk !== null && cell('다음 휴식', hms(brk), undefined, 'var(--clk-timer-break, #7dd3fc)')}
+      {brk !== null && cell('Next Break', hms(brk), undefined, 'var(--clk-timer-break, #7dd3fc)')}
     </div>
   );
 }
@@ -474,20 +468,20 @@ function HeaderTimes({ g, regLevel, compact }: { g: ClockState; regLevel: number
   const eff = effectiveLevel(g);
   const reg = regLevel > 0 ? msToRegClose(g, eff.index, eff.remainingMs) : null;
   const brk = msToNextBreak(g, eff.index, eff.remainingMs);
-  const regText = reg === null ? null : reg === 0 ? '마감' : `Lv ${regLevel} · ${hms(reg)}`;
+  const regText = reg === null ? null : reg === 0 ? 'CLOSED' : `Lv ${regLevel} · ${hms(reg)}`;
   if (compact) {
     return (
       <>
-        <MiniStat label="레지 마감" value={regText ?? '—'} tone={reg === 0 ? 'rose' : undefined} />
-        <MiniStat label="휴식까지" value={brk === null ? '—' : hms(brk)} tone={brk === null ? undefined : 'rose'} />
+        <MiniStat label="Reg Close" value={regText ?? '—'} tone={reg === 0 ? 'rose' : undefined} />
+        <MiniStat label="Next Break" value={brk === null ? '—' : hms(brk)} tone={brk === null ? undefined : 'rose'} />
       </>
     );
   }
   // 등록 마감이 아직 남아 있으면 그게 더 급하다. 마감됐거나 없으면 다음 휴식을 보여준다.
   const show: { label: string; text: string; urgent: boolean } | null =
-    regText !== null && reg !== 0 ? { label: '등록 마감', text: regText, urgent: false }
-      : brk !== null ? { label: '다음 휴식', text: hms(brk), urgent: false }
-        : regText !== null ? { label: '등록', text: regText, urgent: true }
+    regText !== null && reg !== 0 ? { label: 'Reg Close', text: regText, urgent: false }
+      : brk !== null ? { label: 'Next Break', text: hms(brk), urgent: false }
+        : regText !== null ? { label: 'Reg', text: regText, urgent: true }
           : null;
   if (!show) return null;
   return (
@@ -518,10 +512,14 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
   const totalMs = Math.max(1, (lv?.minutes ?? 0) * 60_000);
   const donePct = Math.min(1, Math.max(0, 1 - remaining / totalMs));
   const filled = Math.round(donePct * RAIL_SEGMENTS);
-  const timerColor = urgent ? 'var(--clk-timer-urgent, #fb7185)' : isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-timer, #FFFFFF)';
+  // 2026-09-19: 상태 알약(PAUSED)이 사라져(#9) 일시정지는 타이머 색으로 말한다 — 알약이 쓰던 앰버 그대로.
+  //   시작 전(idle)·종료(finished)는 물들이지 않는다(오너: READY 삭제 · 00:00 은 그 자체로 끝).
+  const paused = clockPhase(g) === 'paused';
+  const timerColor = urgent ? 'var(--clk-timer-urgent, #fb7185)' : isBreak ? 'var(--clk-timer-break, #7dd3fc)' : paused ? '#fbbf24' : 'var(--clk-timer, #FFFFFF)';
 
+  // pt-[3.5cqmin] = 아래 진행률(mt 2.4 + h 1.1) 과 같은 값 — 이 블록의 중심이 곧 타이머 중심이 되게 한다(ClockStage 중앙 열 주석 ②).
   return (
-    <div className="relative flex w-full flex-col items-center">
+    <div className="relative flex w-full shrink-0 flex-col items-center pt-[3.5cqmin]">
       {/* 타이머 뒤 아주 약한 radial bloom **한 겹**. 글자 자체에 네온 외곽선을 두르지 않는다. */}
       <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[46cqmin] w-[76cqmin] -translate-x-1/2 -translate-y-1/2"
         style={{ background: 'radial-gradient(closest-side, color-mix(in srgb, var(--clk-accent, #818CF8) 16%, transparent), transparent)' }} />
@@ -551,7 +549,7 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
 /**
  * BlindsRow — CURRENT | NEXT 좌우 대칭. CURRENT 는 밝고 크게, NEXT 는 한 단계 어둡고 작게.
  * 굵은 테두리로 나누지 않고 **여백과 미세한 surface 차이**로 구분한다.
- * 이 행은 부모가 고정 높이를 주고 여기서 세로 중앙 정렬한다 — ANTE 유무가 위 타이머를 밀지 않는다.
+ * 높이는 내용대로다 — 타이머는 위 스페이서 구조 덕에 이 행의 높이와 무관하므로 ANTE 유무가 타이머를 밀지 않는다.
  * 브레이크 중에는 CURRENT 자리에 BREAK 를, NEXT 자리에 다음 레벨을 둔다.
  */
 const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
@@ -586,30 +584,35 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
     const f = fit(em);
     return `clamp(min(${floor}, ${f}), min(${pref}, ${f}), ${ceil})`;
   };
+  // 2026-09-19 오너 지시 #5(줄간격): 두 칸을 **subgrid 3행(라벨 · 블라인드 · ANTE)** 으로 묶는다.
+  //   예전엔 칸마다 세로 중앙 정렬이라 CURRENT 쪽이 글자가 커서 라벨이 NEXT 라벨보다 13px 위에 떠 있었고(실측 1920×1080),
+  //   숫자 줄·ANTE 줄도 각각 어긋났다. 행을 공유하면 라벨은 같은 줄, 숫자·ANTE 는 아랫변이 맞는다(items-end).
   return (
-    <div className="grid h-full grid-cols-2 items-center gap-[2cqmin]">
+    <div className="grid grid-cols-2 grid-rows-[auto_auto_auto] gap-x-[2cqmin] gap-y-[0.8cqmin]">
       {/* CURRENT */}
       {/* 2026-09-11 오너 지적 — 카드 배경을 뺐다. 중앙 Aura 프레임(둥근 사각)이 들어오면서
           이 박스의 모서리와 프레임 선이 겹쳐 '사각 안의 사각'이 됐다. 레퍼런스 보드도 블라인드를
           맨 텍스트로 두고(§8 "불필요한 카드 박스가 없는 넓은 TV 레이아웃") 구분은 크기·색으로만 한다.
           가운데 세로 헤어라인 하나로 CURRENT|NEXT 를 가른다 — 면이 아니라 선이라 프레임과 싸우지 않는다. */}
-      <div className="flex h-full flex-col items-center justify-center border-r border-white/[0.07] px-[2cqmin]">
+      <div className="row-span-3 grid grid-rows-subgrid items-end justify-items-center border-r border-white/[0.07] px-[2cqmin]">
         <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>{isBreak ? 'BREAK' : 'CURRENT'}</p>
         {isBreak ? (
-          <p className="mt-[0.8cqmin] font-extrabold leading-none" style={{ fontSize: 'clamp(24px, 6.4cqmin, 108px)', color: 'var(--clk-timer-break, #7dd3fc)' }}>
-            {lv?.label || '휴식 시간'}
+          <p className="whitespace-nowrap font-extrabold leading-none" style={{ fontSize: 'clamp(24px, 6.4cqmin, 108px)', color: 'var(--clk-timer-break, #7dd3fc)' }}>
+            {lv?.label || 'BREAK'}
           </p>
         ) : (
           <>
             {/* whitespace-nowrap: 자릿수가 커져도 줄바꿈되지 않는다. '/' 는 숫자보다 작게. */}
-            <p className="mt-[0.6cqmin] whitespace-nowrap font-extrabold leading-none tabular-nums"
+            {/* data-testid: clock-blinds-fit.spec 앵커 — 예전엔 `.clk-cols .whitespace-nowrap` 의 0·1번째를 CURRENT·NEXT 로 잡았는데
+                2026-09-19 LevelLine(whitespace-nowrap)이 중앙 열에 들어오며 0번째가 LEVEL 이 되어 10건이 거짓 실패했다. */}
+            <p data-testid="clk-cur-blinds" className="whitespace-nowrap font-extrabold leading-none tabular-nums"
               style={{ fontSize: fitted('26px', '7.2cqmin', '128px', lv ? emOf(lv.sb, lv.bb) : 1), color: 'var(--clk-accent, #818CF8)' }}>
               {lv ? <>{num(lv.sb)}<span className="mx-[0.6cqmin] align-middle text-[0.5em] text-white/30">/</span>{num(lv.bb)}</> : '-'}
             </p>
             {/* ANTE 가 없으면 이 줄 자체를 그리지 않는다(빈 행을 남기지 않는다).
                 행 높이는 부모가 고정하므로 이 줄의 유무가 타이머를 밀지 않는다. */}
             {lv && lv.ante > 0 && (
-              <p className="mt-[0.8cqmin] flex items-baseline gap-[1cqmin] leading-none">
+              <p className="flex items-baseline gap-[1cqmin] leading-none">
                 <span className="text-[1.7cqmin] font-bold uppercase tracking-[0.18em]" style={DIM}>Ante</span>
                 <span className="font-extrabold tabular-nums text-white" style={{ fontSize: 'clamp(16px, 3.4cqmin, 60px)' }}>{num(lv.ante)}</span>
               </p>
@@ -619,23 +622,23 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
       </div>
 
       {/* NEXT — 한 단계 어둡고 작게 */}
-      <div className="flex h-full flex-col items-center justify-center px-[2cqmin]">
+      <div className="row-span-3 grid grid-rows-subgrid items-end justify-items-center px-[2cqmin]">
         <p className={`${LABEL} text-[1.5cqmin]`} style={DIM}>NEXT</p>
         {next ? (
           <>
-            <p className="mt-[0.6cqmin] whitespace-nowrap font-extrabold leading-none tabular-nums text-white/75"
+            <p data-testid="clk-next-blinds" className="whitespace-nowrap font-extrabold leading-none tabular-nums text-white/75"
               style={{ fontSize: fitted('20px', '5.4cqmin', '96px', emOf(next.sb, next.bb)) }}>
               {num(next.sb)}<span className="mx-[0.6cqmin] align-middle text-[0.5em] text-white/25">/</span>{num(next.bb)}
             </p>
             {next.ante > 0 && (
-              <p className="mt-[0.8cqmin] flex items-baseline gap-[1cqmin] leading-none">
+              <p className="flex items-baseline gap-[1cqmin] leading-none">
                 <span className="text-[1.7cqmin] font-bold uppercase tracking-[0.18em]" style={DIM}>Ante</span>
                 <span className="font-extrabold tabular-nums text-white/70" style={{ fontSize: 'clamp(14px, 2.8cqmin, 48px)' }}>{num(next.ante)}</span>
               </p>
             )}
           </>
         ) : (
-          <p className="mt-[0.6cqmin] text-[2.4cqmin] font-bold" style={DIM}>마지막 레벨</p>
+          <p className={`${LABEL} text-[2.4cqmin]`} style={DIM}>Last Level</p>
         )}
       </div>
     </div>
@@ -670,7 +673,7 @@ function GroupRail({ items }: { items: { k: string; label: string; v: number }[]
       <div className="flex items-end gap-[1.6cqmin]">
         {items.map((it) => (
           <div key={it.k} className="min-w-0 flex-1">
-            <p className={`${LABEL} text-[1.35cqmin]`} style={SOFT}>{it.label}</p>
+            <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>{it.label}</p>
             <p className="mt-[0.2cqmin] font-extrabold tabular-nums leading-none text-white"
                style={{ fontSize: `clamp(15px, ${size}, 48px)` }}>{it.v.toLocaleString()}</p>
           </div>

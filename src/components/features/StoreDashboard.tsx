@@ -1313,15 +1313,17 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
 
-        {/* 전주 대비(주간 비교) */}
-        <DashCard show={moreOpen && caps.manage} title="전주 대비" onClick={() => onGoto('stats')}
+        {/* 전주 대비(주간 비교) — 오너 2026-09-19 "칸이 많이 남잖아 절반을 기준으로 하던 해서 상하 XY축
+            줄간격 및 좌우 간격 조정": center(위 DashCard 참고)로 남는 높이를 받아 두 줄을 세로 중앙에 두고,
+            CompareRow 내부 간격도 늘렸다(space-y-2→-4, gap-2→-3). */}
+        <DashCard show={moreOpen && caps.manage} title="전주 대비" onClick={() => onGoto('stats')} center
           badge={<span className="text-2xs font-bold text-ink-muted">주간 비교</span>}>
           {loading ? <Skeleton /> : rangeErr ? (
             <LoadFailRow what="비교할 14일 장부" onRetry={reloadRange} />
           ) : (weekEntry === 0 && prevBuyins === 0) ? (
             <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>
           ) : (
-            <div className="space-y-2 py-0.5">
+            <div className="space-y-4 py-0.5">
               <CompareRow label="바인" now={weekEntry} prev={prevBuyins} delta={entryDelta} />
               <CompareRow label="매출" now={weekPaid} prev={prevPaid} delta={paidDelta} won />
             </div>
@@ -1586,18 +1588,27 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   );
 }
 
-function DashCard({ title, badge, onClick, children, show = true }: { title: string; badge?: ReactNode; onClick: () => void; children: ReactNode; show?: boolean }) {
+function DashCard({ title, badge, onClick, children, show = true, center = false }: {
+  title: string; badge?: ReactNode; onClick: () => void; children: ReactNode; show?: boolean;
+  /** S3(2026-09-19, 스윕): 이 카드의 콘텐츠가 형제 카드보다 짧으면(grid align-items:stretch 기본값이
+   *  행 높이를 가장 큰 형제에 맞춰 늘린다) 아래에 빈 칸만 남는다("전주 대비"가 "최근 7일 추세" 옆에서
+   *  이랬다). true 면 타이틀은 위에 고정, 본문은 남는 높이를 flex-1 로 받아 세로 중앙 정렬한다.
+   *  모바일(grid-cols-1)은 같은 행에 형제가 없어 늘어날 높이 자체가 없다 — flex-1 이 자연스럽게
+   *  0 으로 수렴해 폭별 분기 없이도 동작한다(실측 필요 없음, CSS 자체 성질). 기본 false — 다른 카드는
+   *  전부 지금 그대로다(공용 컴포넌트라 옵트인으로 격리했다). */
+  center?: boolean;
+}) {
   if (!show) return null;
   return (
-    <section className="rounded-aura border card-aura p-3">
-      <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-2 mb-2 group">
+    <section className={['rounded-aura border card-aura p-3', center && 'flex flex-col'].filter(Boolean).join(' ')}>
+      <button type="button" onClick={onClick} className={['flex w-full items-center justify-between gap-2 mb-2 group', center && 'shrink-0'].filter(Boolean).join(' ')}>
         <span className="flex items-center gap-2 text-sm font-bold text-ink-primary">{title}</span>
         <span className="flex items-center gap-1">
           {badge}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-ink-muted group-hover:text-accent-300 transition-colors" aria-hidden><polyline points="9 18 15 12 9 6" /></svg>
         </span>
       </button>
-      {children}
+      {center ? <div className="flex flex-1 flex-col justify-center">{children}</div> : children}
     </section>
   );
 }
@@ -1631,9 +1642,9 @@ function CompareRow({ label, now, prev, delta, won }: { label: string; now: numb
   const down = delta != null && delta < 0;
   const fmt = (n: number) => (won ? `${wonToMan(n)}만` : `${n}`);
   return (
-    <div className="flex items-center justify-between gap-2">
+    <div className="flex items-center justify-between gap-3">
       <span className="shrink-0 text-2xs text-ink-muted">{label}</span>
-      <span className="flex items-baseline gap-2 tabular-nums">
+      <span className="flex items-baseline gap-3 tabular-nums">
         <span className="text-sm font-bold text-ink-primary">{fmt(now)}</span>
         <span className="text-2xs text-ink-muted">전주 {fmt(prev)}</span>
         {delta != null && (

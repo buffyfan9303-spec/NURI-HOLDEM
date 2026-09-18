@@ -52,13 +52,17 @@ const fmtDate = (iso: string | null) => { if (!iso) return ''; const d = new Dat
 /** 매장 그룹 머리글 클래스 — 링크(button)와 평문(p) 두 껍데기가 같은 규격을 쓰도록 한 곳에 둔다. */
 const GROUP_HEAD_CLS = 'mb-2 flex items-start gap-1.5 text-sm font-bold text-ink-primary';
 
-export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }: {
+export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, boxed }: {
   /** 본인인증 화면으로 — 대시보드는 보안 탭, 시트는 내 정보를 연다. **안 넘기면 인증 CTA 를 그리지 않는다**(무반응 클릭 금지) */
   onNeedVerify?: () => void;
   /** 발급 매장으로 — 사슬 끝에서 막다른 길을 만들지 않는다. 안 넘기면 머리글은 평문 그대로다 */
   onVenue?: (venueId: string) => void;
   /** 시트처럼 좁은 면에서 쓸 때 자체 세로 리듬을 갖는다(대시보드에서는 페이지의 space-y 를 그대로 물려받아야 하므로 fragment) */
   compact?: boolean;
+  /** 섹션에 card-aura 박스를 씌울지 — compact(시트)와 별개다(2026-09-19).
+   *  안 넘기면 compact 값을 따른다(시트는 기존과 동일하게 boxed). 대시보드는 자기 세로 리듬(space-y)은
+   *  그대로 두면서(compact=false) 형제 섹션과 같은 박스만 원하므로 boxed 를 따로 true 로 넘긴다. */
+  boxed?: boolean;
 }) {
   const { user } = useAuth();
   const idOn = useIdentityEnabled();
@@ -166,12 +170,15 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
   //   [이용권·출석] 시트(compact)의 다른 두 섹션(QR · 자주 가는 매장 이용권)은
   //   `rounded-aura border card-aura p-3` 박스 **안에** 머리글이 들어 있는데 이 섹션만 맨몸이었다.
   //   머리글이 박스 밖에 뜨고 빈 상태 카드만 박스로 보여서 "혼자 밖에 있는" 모양이 됐다.
-  // ⚠ compact 일 때만 박스를 씌운다. 대시보드(내 정보)는 형제 섹션들도 전부 맨몸이라
-  //   거기서 박스를 씌우면 이 섹션만 혼자 튄다 — **같은 화면 안에서 같아 보이는 것**이 기준이다.
-  const boxed = compact;
+  // ⚠ 2026-09-19 후속(스윕 A) — 대시보드(내 정보)도 형제 섹션 5개를 전부 박스로 통일했다.
+  //   그래서 이 섹션도 대시보드에서 박스가 필요해졌다 — **같은 화면 안에서 같아 보이는 것**이 기준인 건
+  //   그대로고, 이제 두 화면 다 그 기준으로 박스다. compact(시트의 세로 여백 rhythm)와 boxed(박스 여부)는
+  //   서로 다른 축이라 분리한다 — 대시보드는 compact=false(페이지의 space-y-4 를 그대로 물려받음)면서
+  //   boxed=true(형제 섹션과 같은 카드)를 동시에 원한다.
+  const boxedResolved = boxed ?? compact;
   const body = (
     <>
-      <section className={boxed ? 'rounded-aura border card-aura p-3 space-y-2' : 'space-y-2'}>
+      <section className={boxedResolved ? 'rounded-aura border card-aura p-3 space-y-2' : 'space-y-2'}>
         <Head icon="ticket" tone="cyan" title="내 매장이용권" count={active.length} unit="장" />
         {/* 본인인증 게이트를 '사용 시점'이 아니라 '지갑을 여는 시점'에 알린다.
             왜: 서버 트리거(trg_voucher_verified)가 status='used' 전이를 막는데,
@@ -213,7 +220,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
             )}
             {/* ⚠ 박스 안에서는 빈 상태에 **또 박스를 두르지 않는다** — 테두리가 겹쳐 두 겹으로 보인다.
                 바로 위 '자주 가는 매장 이용권' 도 박스 안에서는 글 한 줄로만 비었음을 말한다(같은 문법). */}
-            {venueGroups.length === 0 ? (boxed
+            {venueGroups.length === 0 ? (boxedResolved
               ? <EmptyState icon={<Icon name="ticket" />} title="보유한 매장이용권이 없습니다." />
               : <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="ticket" />} title="보유한 매장이용권이 없습니다." /></div>)
             : <div className="space-y-3">{venueGroups.map((g) => {
@@ -330,8 +337,19 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
   /** V07 — remain 을 여기서 추측하지 않는다(단일 status 로 업무 상태·잔량을 억지 추론하지 않는다).
    *  부모(VoucherWallet)가 load() 로 재조회한 서버 정본에서 remain 을 센다. */
   onDone: (used: { title: string; venueName: string | null; venueId: string }) => void }) {
+  // [C] 닫는 모션 — 이 시트도 ImageLightbox 와 같은 문법(open prop 없이 부모가 그냥 마운트/언마운트).
+  //   onClose 를 바로 부르면 즉시 언마운트되어 진입(animate-sheet-up 0.26s)과 달리 퇴장은 0 프레임이었다.
+  //   먼저 슬라이드다운(0.2s, sheet-up 의 대칭)을 켜고, 그 길이만큼 뒤에 진짜 onClose 를 불러 부모가 그때 언마운트한다.
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (closeTimer.current != null) window.clearTimeout(closeTimer.current); }, []);
+  const startClose = () => {
+    if (closing) return;
+    setClosing(true);
+    closeTimer.current = window.setTimeout(onClose, 200);
+  };
   // 손제작 시트도 겹을 등록해야 뒤로가기가 이 시트만 닫는다 — 없으면 부모 Modal/대시보드가 통째로 닫힌다(점검 #7)
-  useBackClose(true, onClose, { escape: true }); // 시트는 ESC 대상 — 전역 ESC 는 backstack 최상단 한 겹만 닫는다(개별 리스너 금지)
+  useBackClose(true, startClose, { escape: true }); // 시트는 ESC 대상 — 전역 ESC 는 backstack 최상단 한 겹만 닫는다(개별 리스너 금지)
   const toast = useToast();
   const [mode, setMode] = useState<'menu' | 'qr' | 'phone'>('menu');
   const [phone, setPhone] = useState('');
@@ -368,12 +386,15 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
-      <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 overscroll-contain bg-black/70" />
-      <div className="relative w-full max-w-md space-y-3 rounded-t-dialog border border-border-default bg-surface-mid p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-sheet-up sm:rounded-dialog sm:pb-4">
+    // 🔴 2026-09-19 회귀(team-lead 실측, NotificationPanel 과 같은 부류) — 퇴장 애니 동안 이 풀스크린
+    // 오버레이(배경 버튼 포함)가 뒤 화면 클릭을 계속 가로챌 수 있다. closing 이 되는 즉시 pointer-events 를 끈다.
+    <div className={['fixed inset-0 z-[70] flex items-end justify-center sm:items-center', closing ? 'pointer-events-none' : ''].join(' ')}>
+      <button type="button" aria-label="닫기" onClick={startClose} className="absolute inset-0 overscroll-contain bg-black/70" />
+      <div className={['relative w-full max-w-md space-y-3 rounded-t-dialog border border-border-default bg-surface-mid p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:rounded-dialog sm:pb-4',
+        closing ? 'animate-slide-down' : 'animate-sheet-up'].join(' ')}>
         <div className="flex items-center justify-between gap-2">
           <p className="min-w-0 break-keep text-sm font-bold text-ink-primary [overflow-wrap:anywhere]">{voucherLineLabel(stack.title, stack.venueName)}</p>
-          <button type="button" onClick={onClose} aria-label="닫기" className="hit shrink-0 text-ink-muted"><Icon name="close" size={18} /></button>
+          <button type="button" onClick={startClose} aria-label="닫기" className="hit shrink-0 text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
         {mode === 'menu' && (<>
           {/* ⚠ '이 매장으로 바로 전송(사용)' 버튼을 내렸다(오너 승인 2026-09-07).

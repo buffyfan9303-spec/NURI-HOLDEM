@@ -48,9 +48,11 @@ async function measure(page: Page, blockFonts: boolean, levels: Level[], w: numb
   await page.waitForTimeout(600);
   return page.evaluate(() => {
     const rect = (el: Element): Box => { const b = el.getBoundingClientRect(); return { l: b.left, r: b.right, w: b.width, t: b.top }; };
-    const nw = Array.from(document.querySelectorAll('.clk-cols .whitespace-nowrap'));
+    // 2026-09-19: `.clk-cols .whitespace-nowrap` 의 0·1번째로 잡던 것을 testid 로 고정했다 — 중앙 열에 LEVEL 줄(whitespace-nowrap)이
+    //   들어오며 0번째가 LEVEL 이 되어 'CURRENT 와 NEXT 가 겹친다' 10건이 **코드는 멀쩡한데** 빨개졌다(선택자 결합의 거짓 실패).
     const one = (el: Element) => ({ box: rect(el), parent: rect(el.parentElement!), font: parseFloat(getComputedStyle(el).fontSize) });
-    const cur = one(nw[0]); const nxt = one(nw[1]);
+    const cur = one(document.querySelector('[data-testid="clk-cur-blinds"]')!);
+    const nxt = one(document.querySelector('[data-testid="clk-next-blinds"]')!);
     const x = (a: Box, b: Box) => Math.max(0, Math.min(a.r, b.r) - Math.max(a.l, b.l));
     const pz = document.querySelector('[data-testid="clk-prizes"]'); const rl = document.querySelector('[data-testid="clk-rails"]');
     return {

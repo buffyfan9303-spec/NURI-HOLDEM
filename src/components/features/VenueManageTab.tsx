@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, useRef, memo, useCallback, useMemo, startTransition } from 'react';
+import { useEffect, useState, type ReactNode, useRef, memo, useCallback, useMemo, startTransition, Suspense } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { goSubTab } from '../../lib/subTabTransition';
 import Icon, { type IconName } from '../atoms/Icon';
@@ -139,9 +139,10 @@ function SettingsTabBar({ tabs, active, onPick }: {
 // IA2 잔여(게임 선택 칩 바): 순위 입력에 전달하는 '오늘 게임 선택' 신호 — n 은 같은 게임 재선택도
 // 다시 적용되게 하는 단조 카운터, name 은 순위(이벤트명 기반) 칸 이름(''=메인 기본).
 type GameSel = { n: number; name: string };
-// IA1: 사용 빈도 기반 3그룹 — 매일 여는 것(오늘) / 주간(분석) / 가끔(관리)
-type NavGroup = '오늘' | '분석' | '관리';
-const NAV_GROUPS: readonly NavGroup[] = ['오늘', '분석', '관리'];
+// IA1: 사용 빈도 기반 3그룹 — 매일 여는 것(운영) / 주간(분석) / 가끔(관리)
+// 오너 2026-09-19: '오늘' → '운영'으로 개명(이용권·QR 이 이 그룹으로 들어오면서 '오늘' 만으로는 안 맞았다).
+type NavGroup = '운영' | '분석' | '관리';
+const NAV_GROUPS: readonly NavGroup[] = ['운영', '분석', '관리'];
 
 /** 내 매장 하위탭의 **진열 순서** — goSubTab 이 여기서 forward/back 을 뽑는다.
  *  사이드바 순서(오늘·분석·관리) 안에 게임 스텝과 설정 하위탭을 펼쳐 둔 한 줄짜리 목록이다.
@@ -295,6 +296,48 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (cur === 'settings') return settingsTabRef.current;
     return cur ?? 'dashboard';
   }, []);
+  // ── S6-1(2026-09-19): 섹션 전환 높이 예약 — "말려 올라감"(오너 리포트) 근본 원인 ──
+  // 판마다 데이터가 여러 파도로 도착해(예: 매장 설정 4단), 도착마다 높이가 계단식으로 바뀐다.
+  // 전환 직후 새 판이 '빈 채로' 서면 판이 순간 짧아지고, 전 화면 하단 상시인 BusinessFooter 가
+  // 그 자리로 올라왔다가 다음 파도가 밀어낸다 — 실측(다른 팀원, 4173·1440×900·CPU4배):
+  //   매장 설정 906→1022→3229→3585(LS 0.24) · 게임 진행 906→1174(스켈레톤)→1082(실제, LS 0.18)
+  // 전환 직전 판 높이를 min-height 로 예약해 두면 '빈 채로 서는' 프레임이 없어져 이동이 사라진다.
+  // secPanelRef=바깥(예약을 건다) / secInnerRef=안쪽(예약과 무관하게 **진짜 콘텐츠 높이**를 잰다) —
+  // 같은 노드에 예약을 걸고 그 노드로 재면, 예약이 바닥을 만들어 버려서 '따라잡았는지'를 못 잰다
+  // (min-height 가 걸린 노드는 콘텐츠가 그보다 짧은 동안 scrollHeight 도 항상 예약값을 돌려준다).
+  const secPanelRef = useRef<HTMLDivElement>(null);
+  const secInnerRef = useRef<HTMLDivElement>(null);
+  const [lockPx, setLockPx] = useState<number | null>(null);
+  /** 전환 직전에 부른다 — 지금 판 높이를 그대로 다음 판의 바닥으로 예약. */
+  const lockPane = useCallback(() => {
+    const h = secPanelRef.current?.getBoundingClientRect().height;
+    if (h && h > 0) setLockPx(h);
+  }, []);
+  useEffect(() => {
+    if (lockPx == null) return;
+    const inner = secInnerRef.current;
+    if (!inner) { setLockPx(null); return; }
+    // 콘텐츠 실제 높이가 예약 높이를 따라잡으면 그 순간부터 예약은 시각적 변화 없이 풀린다
+    // (그 지점부턴 콘텐츠가 이미 그 높이거나 더 크다 — CSS min-height 는 항상 max(예약,콘텐츠)를 그린다).
+    // ⚠ 2026-09-19 회귀 실측(e2e/mystore-transition-cls.spec.ts, 4173): "따라잡은 첫 순간"에 바로 풀면
+    //   부족했다(최소높이 396→554, 목표 649 — 여전히 빨간불). 원인: 게임 진행은 906→1174(스켈레톤,
+    //   예약보다 큼) → 1082(실제, 더 작음) 로 **한 번 넘쳤다가 줄어든다**(매장 설정처럼 단조 증가가 아니다).
+    //   스켈레톤이 예약을 넘긴 그 순간 풀어버리면, 그다음 실제 콘텐츠로 줄어들 때는 이미 예약이 없어
+    //   그 낙차가 그대로 보인다. 그래서 "넘겼다"를 본 즉시가 아니라 **잠잠해진 뒤**에만 푼다(디바운스) —
+    //   높이가 계속 바뀌는 동안은 아직 파도가 진행 중이라는 뜻이다.
+    const release = () => setLockPx(null);
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    const ro = new ResizeObserver(() => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        if (inner.getBoundingClientRect().height >= lockPx) release();
+      }, 160);
+    });
+    ro.observe(inner);
+    // 안전망 — 새로 연 판이 원래 예약보다 짧은 판일 수도 있다(영원히 못 따라잡음). 1.2s 뒤엔 그냥 푼다.
+    const t = setTimeout(release, 1200);
+    return () => { ro.disconnect(); clearTimeout(t); if (debounce) clearTimeout(debounce); };
+  }, [lockPx]);
   const goStep = useCallback((s: GameStep, opts?: { keepLedgerSeed?: boolean }) => {
     if (s === 'ledger' && !opts?.keepLedgerSeed) setLedgerSeed(null);
     // ⚠ from 은 **ref 를 고치기 전에** 읽어야 한다. 아래에서 gameStepRef 를 먼저 s 로 바꾸면
@@ -310,8 +353,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //   새 이징·duration·키프레임은 하나도 만들지 않았다 — index.css 의 mystore-sec 규칙이
     //   admin-sec 와 같은 vt-panel-* 를 탄다. goSubTab 은 VT 미지원·모션축소에서 commit 을
     //   그대로 부르므로, 전환이 실패해도 **이동은 반드시 일어난다.**
+    if (from !== s) lockPane(); // S6-1 — 실제로 판이 바뀔 때만 예약(같은 판 재확인은 예약 불필요)
     goSubTab('mystore-sec', MYSTORE_ORDER, from, s, () => { setGameStep(s); setSection('game'); });
-  }, [currentPane]);
+  }, [currentPane, lockPane]);
   // IA3c 하위탭 노출 판정의 **단일 지점** — 탭 목록·딥링크 착지·판(pane) 렌더가 서로 갈리면
   // "탭 바에는 없는 탭이 열려 있는" 빈 화면이 된다. 실제로 두 조합이 그랬다:
   //  ① 이용권 킬스위치 OFF 인데 알림 딥링크가 voucher 를 지정 → 제목만 '이용권·QR' 인 백지
@@ -332,11 +376,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     // 권한 밖 하위탭으로 착지 요청이 오면 백지 대신 '지금 열 수 있는 첫 탭'으로 흡수
     if (isSettingsTab(s)) {
       const to = canSettingsTab(s) ? s : firstSettingsTab();
+      if (from !== to) lockPane(); // S6-1
       goSubTab('mystore-sec', MYSTORE_ORDER, from, to, () => { setSettingsTab(to); setSection('settings'); });
       return;
     }
+    if (from !== s) lockPane(); // S6-1
     goSubTab('mystore-sec', MYSTORE_ORDER, from, s, () => setSection(s));
-  }, [goStep, canSettingsTab, firstSettingsTab, currentPane]);
+  }, [goStep, canSettingsTab, firstSettingsTab, currentPane, lockPane]);
 
   // ── memo 섹션에 넘기는 핸들러/객체 prop 을 참조 고정(재렌더 건너뛰기 조건 충족) ──
   // caps.voucher = '대시보드에 이용권 카드/단골 이용권 보내기를 그릴까' — 킬스위치가 그대로 반영된다.
@@ -572,12 +618,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //  · 업주만 가능한 섹션(포스터·통계·직원·POS)은 직원에게 아예 숨김.
   //  · 이용권은 볼 수 있는 사람에게만 — 발행매장이 아니면 영원히 안 열리는 '잠금'은 거짓 약속이라 아예 비노출.
   //  · 연합리그 제거(§12-A-1) — 잠금이 아니라 진입 경로 자체를 없앤다.
-  const available: { id: Section; label: string; group: NavGroup; locked?: boolean }[] = [{ id: 'dashboard', label: '대시보드', group: '오늘' }];
+  const available: { id: Section; label: string; group: NavGroup; locked?: boolean }[] = [{ id: 'dashboard', label: '대시보드', group: '운영' }];
   // IA2: 포스터·장부·클락·순위 = '게임 진행' 한 문(門)의 4단계 스텝(권한 없으면 잠금 노출 유지)
-  available.push({ id: 'game', label: '게임 진행', group: '오늘', locked: !ledgerOk && !canPosters });
+  available.push({ id: 'game', label: '게임 진행', group: '운영', locked: !ledgerOk && !canPosters });
   // 오너 지시(2026-09-04): 매장 보유자에게는 하단 탭 캘린더를 주지 않고 여기 넣는다.
   // 업주도 플레이어라 자기 예약·찜·수기 뱅크롤을 본다 — 매장 장부(매출·손님)와는 다른 축이다.
-  available.push({ id: 'calendar', label: '내 캘린더', group: '오늘' });
+  available.push({ id: 'calendar', label: '내 캘린더', group: '운영' });
   if (manageOk) available.push({ id: 'stats',  label: '매출·손님', group: '분석' });
   // ATT-FIX: '내 출퇴근 기록'이 장부 권한(ledgerOk)에 묶여 있어 장부 권한 없는 직원이
   // 자기 출퇴근을 못 보던 오게이팅 — 이 탭에 들어온 소속 구성원이면 누구나
@@ -585,9 +631,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   if (staffOk) available.push({ id: 'staff', label: '직원 관리', group: '관리' });
   // 연합 대회 파트너 매장(오너 2026-09-17: 옛 연합리그 자리에 '매칭만') — 업주만. 점수·정산 없음.
   if (manageOk) available.push({ id: 'partners', label: '파트너 매장', group: '관리' });
-  // 🔴 2026-09-18 오너 승격: 이용권은 '매장 설정 > 이용권·QR' 이 아니라 **관리 그룹의 독립 탭**이다.
+  // 🔴 2026-09-18 오너 승격: 이용권은 '매장 설정 > 이용권·QR' 이 아니라 **독립 탭**이다.
   //   조건은 종전 하위탭과 같다(canVoucher) — 발행매장이 아니면 영원히 안 열리는 '잠금'은 만들지 않는다.
-  if (canVoucher) available.push({ id: 'voucher', label: '이용권 · QR', group: '관리' });
+  // 🔴 2026-09-19 오너: 그룹을 '관리'가 아니라 '운영'(구 '오늘')으로 — 매일 여는 것 축에 둔다.
+  if (canVoucher) available.push({ id: 'voucher', label: '이용권 · QR', group: '운영' });
   // 🔴 2026-09-18 오너: "내 매장에 이벤트 만드는 란을 만들어줘 ... 이벤트 제안도 넣어줘 전부다 내 매장 안에".
   //   업주만(manageOk) — 신청은 매장을 대표하는 결정이고, 서버도 can_manage_pos 로 같은 선을 긋는다.
   if (manageOk) available.push({ id: 'event', label: '이벤트 신청', group: '관리' });
@@ -789,7 +836,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               </nav>
             </>)}
 
-          <div data-mystore-secpanel className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
+          {/* S6-1: 예약(min-height)은 바깥에, 실측(ResizeObserver)은 안쪽 래퍼에 — 위 lockPane 주석 참고. */}
+          <div data-mystore-secpanel ref={secPanelRef} className="mt-3 min-w-0 flex-1 lg:mt-0"
+            style={lockPx != null ? { minHeight: `${lockPx}px` } : undefined}>
+          <div ref={secInnerRef} className="space-y-3">
             {dItem?.locked && (
               <div className="space-y-2 rounded-aura border card-aura p-5 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-high text-ink-muted"><Icon name="lock" size={22} /></div>
@@ -814,6 +864,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               <GameStepBar steps={GAME_STEPS.filter((st) => (st.id === 'posters' ? canPosters : ledgerOk))}
                 onHome={() => gotoSection('dashboard')} progress={stepInfo}
                 active={renderSection === 'dashboard' ? 'dashboard' : renderGameStep}
+                showVoucher={canVoucher} onVoucher={() => gotoSection('voucher')}
                 /* '2. 장부' 는 파이프라인의 한 단계다 — **오늘(또는 지금 보고 있는) 장부 보드**를 뜻한다.
                    bare gotoSection 은 시드를 지워 장부가 목록(검색) 모드로 열렸고, 그래서 단계를 눌렀는데
                    "장부 탭으로 간 게 아니다"가 됐다(오너 2026-09-07). 목록이 필요하면 보드 상단
@@ -888,9 +939,16 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />
                   {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
+                {/* S6-2(2026-09-19): 지역 Suspense 경계 — 이게 없으면 이 셋(캘린더·파트너 매장·이벤트 신청)은
+                    첫 방문 시 lazy 청크를 기다리는 동안 **여기가 아니라 App.tsx 최상위 폴백**이 잡혀
+                    `<main data-tab="my-store">` 전체(사이드바·헤더까지)가 300~400ms 사라졌다(오너 "말려 올라감").
+                    가장 가까운 경계가 이 폴백을 흡수하게 만드는 것이 핵심 — 폴백도 빈 스피너가 아니라
+                    `.pane-reserve`(이 파일의 권한 로딩 셸과 같은 자리 예약, index.css:1734)로 높이를 유지한다. */}
                 {visited.includes('calendar') && box('calendar',
-                  <CalendarPanelM schedules={schedules} onSelect={onOpenSchedule ?? (() => {})}
-                    active={tabActive && renderSection === 'calendar'} />)}
+                  <Suspense fallback={<p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
+                    <CalendarPanelM schedules={schedules} onSelect={onOpenSchedule ?? (() => {})}
+                      active={tabActive && renderSection === 'calendar'} />
+                  </Suspense>)}
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
                   active={tabActive && renderSection === 'game' && renderGameStep === 'posters'}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
@@ -930,8 +988,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} venueName={venueName || undefined} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
                 {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
                 {visited.includes('staff') && staffOk && box('staff', <StaffHub venueId={venueId} />)}
-                {visited.includes('partners') && manageOk && box('partners', <VenueMatchPanelM venueId={venueId} canConfigure={manageOk} />)}
-                {visited.includes('event') && manageOk && box('event', <VenueEventRequestPanelM venueId={venueId} />)}
+                {visited.includes('partners') && manageOk && box('partners',
+                  <Suspense fallback={<p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
+                    <VenueMatchPanelM venueId={venueId} canConfigure={manageOk} />
+                  </Suspense>)}
+                {visited.includes('event') && manageOk && box('event',
+                  <Suspense fallback={<p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
+                    <VenueEventRequestPanelM venueId={venueId} />
+                  </Suspense>)}
                 {visited.includes('pos') && canSettingsTab('pos') && box('pos', <PosSettingsPanelM venueId={venueId} />)}
                 {visited.includes('voucher') && canVoucher && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
                 {/* §7 ⑥b: 운영 도구 5종 — GTO 탭에서 이관(레지스트리는 ToolsPanel 재사용) */}
@@ -940,6 +1004,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('danger') && canSettingsTab('danger') && venueId && box('danger', <KillSwitch venueId={venueId} />)}
               </>);
             })()}
+          </div>
           </div>
         </div>
         </>
@@ -1166,7 +1231,7 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
  * (2026-09-08 이전에는 정산만 판이 아니라 장부로 보내는 이동이었다).
  * 활성 칩은 레일 가운데로 끌어온다(가로만 — centerInRail 주석 참조).
  */
-function GameStepBar({ steps, active, onPick, onHome, progress }: {
+function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onVoucher }: {
   steps: readonly { id: GameStep; label: string }[];
   /** 'dashboard' = 요약 알약이 활성(= 대시보드를 보는 중). */
   active: GameStep | 'dashboard';
@@ -1175,6 +1240,9 @@ function GameStepBar({ steps, active, onPick, onHome, progress }: {
   onHome: () => void;
   /** 단계별 완료 여부(대시보드가 계산해 준다). 없으면 번호만 나온다 — 로딩 중엔 조용히. */
   progress?: StoreStepMap | null;
+  /** 오너 2026-09-19: '5. 정산' 우측에 매장이용권 칸 — 5단계 파이프라인의 번호는 아니라 progress 밖. */
+  showVoucher?: boolean;
+  onVoucher?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1218,6 +1286,19 @@ function GameStepBar({ steps, active, onPick, onHome, progress }: {
           </button>
         );
       })}
+      {/* 매장이용권 — 5단계 파이프라인의 다음 칸이 아니라 '5. 정산' 옆의 지름길이라 번호를 안 단다
+          (요약 칸과 같은 이유 — progress 는 GameStep 만 알고 voucher 는 모른다).
+          ⚠ 2026-09-19 실측(4173, mobile-chromium, 라벨 '매장이용권' 5자였을 때): 7칸째가 되면서
+            360/390/412 전부 scrollWidth > clientWidth 로 넘쳤다(각 11/9/7px) — 오너가 스팟에서 지적한
+            "우측으로 스크롤 해야지 끝까지 갈 수 있어" 와 같은 부류. '이용권'(3자, title 로 풀네임은 유지)
+            으로 줄였다 — 재빌드 후 재실측 필요(2자 이상 줄어드니 이론상 안 넘쳐야 하나 아직 확인 전). */}
+      {showVoucher && (
+        <button type="button" onClick={onVoucher} title="매장이용권" className={chip(false)}>
+          <span className="relative inline-flex items-center gap-1">
+            <Icon name="ticket" size={12} className="shrink-0 text-ink-muted" />이용권
+          </span>
+        </button>
+      )}
     </div>
   );
 }

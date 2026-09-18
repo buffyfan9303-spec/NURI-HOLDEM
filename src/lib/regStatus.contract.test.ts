@@ -158,10 +158,15 @@ describe('배선 — 클락 보드가 그 한 곳을 실제로 부른다(2026-09
   });
 
   // 왜 이 파일인가: 그 렌더는 03cd8bb 로 ClockStage 에 갔다 — 미니 보드는 null 을 먼저 거르고(표시 없음), 0 만 '마감'; TV 레일은 regLevel > 0 게이트 뒤라 null 이 못 들어온다.
-  it('🔴 ClockStage.tsx: null 은 "마감" 이 아니다 — 미니 보드 `reg === null ? null : reg === 0 ? \'마감\'` 1회 · 레일 `reg === 0 ? \'마감\'` 1회', () => {
-    expect(count(stage, /const regText = reg === null \? null : reg === 0 \? '마감'/)).toBe(1);
-    expect(count(stage, /value=\{reg === 0 \? '마감' : hms\(reg\)\}/)).toBe(1);
-    expect(count(stage, /reg === null \? '마감'|reg == null \? '마감'/), 'null 을 마감으로 그린다').toBe(0);
+  // ⚠ 클락 보드(ClockStage)만 영문 'CLOSED' 다 — 2026-09-19 오너 지시 1번("클락에 생존/엔트리, 리바이, 얼리, 등록마감 전부 영어로").
+  //   이 화면은 **매장 TV 송출**이라 손님이 멀리서 보는 사이니지이고, 한글/영문 혼용보다 영문 단일이 읽힌다.
+  //   **다른 화면(대회 상세·라이브 카드·장부)은 한글 '등록 마감' 그대로다** — 여기를 근거로 다른 화면까지 영문화하지 마라.
+  //   반대로 이 예외를 없애려면(보드를 다시 한글로) 오너에게 먼저 물어라. 아래 계약이 지키는 것은 어휘가 아니라
+  //   **분기 구조**(null 을 먼저 거른다)이며, 리터럴은 그 화면의 어휘를 따른다.
+  it('🔴 ClockStage.tsx: null 은 "CLOSED" 가 아니다 — 미니 보드 `reg === null ? null : reg === 0 ? \'CLOSED\'` 1회 · 레일 `reg === 0 ? \'CLOSED\'` 1회', () => {
+    expect(count(stage, /const regText = reg === null \? null : reg === 0 \? 'CLOSED'/)).toBe(1);
+    expect(count(stage, /value=\{reg === 0 \? 'CLOSED' : hms\(reg\)\}/)).toBe(1);
+    expect(count(stage, /reg === null \? 'CLOSED'|reg == null \? 'CLOSED'/), 'null 을 마감으로 그린다').toBe(0);
   });
 });
 

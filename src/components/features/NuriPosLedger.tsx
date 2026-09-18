@@ -1211,7 +1211,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         <div role="button" tabIndex={0} title="탭하면 정산 마감 버튼으로"
           onClick={pointAtSettle}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pointAtSettle(); } }}
-          className="sticky top-header-h z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur cursor-pointer sm:grid-cols-4">
+          className="sticky top-[var(--header-now)] z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur cursor-pointer sm:grid-cols-4">
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
           {(() => {

@@ -29,31 +29,37 @@ describe('전체화면은 조작 콘솔을 렌더하지 않는다', () => {
     }
   });
 
-  // ⚠ 2026-09-16 오너 지시로 **허용 범위가 한 번 넓어졌다** — '엔트리·생존 보정 둘'이 오버레이에 들어왔다.
-  //   오너: "클락 전체화면 최하단에는 직원들이 엔트리 플레이어등을 수동으로도 올릴 수 있도록 버튼이 있어야해."
-  //   2026-09-11 결정의 **핵심은 그대로다** — 타이머·레벨·시간 보정·초기화·종료·설정은 여전히 금지다.
+  // ⚠ 허용 범위는 오너 지시로 **두 번 넓어졌다**.
+  //   2026-09-16: "클락 전체화면 최하단에는 직원들이 엔트리 플레이어등을 수동으로도 올릴 수 있도록 버튼이 있어야해." → 엔트리·생존.
+  //   2026-09-19(#4): "전체화면에서 수동 조정이 가능한 부분에 일시정지·시작·리바인·얼리·애드온 모두 추가" → 시작/일시정지·리바이·얼리·애드온.
+  //   2026-09-11 결정의 **남은 핵심** — 레벨 이동·시간 보정·초기화·종료·설정은 여전히 금지다.
   //   (전체화면은 TV 송출 보드이고, 그 다섯은 화면을 덮고 오조작 피해도 크다.)
   //   손님 TV 라우트 ClockDisplay(`/?display=`)는 무인증이라 **그쪽엔 어떤 쓰기 버튼도 넣지 않는다** — 아래 별도 계약.
-  it('전체화면 오버레이 — 허용은 해제·음소거·엔트리/생존 보정뿐이다', () => {
+  it('전체화면 오버레이 — 허용은 해제·음소거·시작/일시정지·엔트리/생존/리바이/얼리/애드온 보정뿐이다', () => {
     const i = code.indexOf('data-testid="clk-fs-overlay"');
     expect(i, '전체화면 최소 오버레이가 없다 — 해제 수단이 사라졌다').toBeGreaterThan(-1);
     // ⚠ 예전에는 `slice(i, i + 1200)` 고정 창이었다. 버튼이 하나 늘자 toggleFs 가 창 밖으로 밀려
     //   **코드가 멀쩡한데도** 빨개졌다(2026-09-16). 창 크기가 계약이 되면 안 된다 —
-    //   다음 형제 요소가 시작되는 지점(풀스크린 16:9 박스 주석)까지를 블록으로 본다.
-    const end = code.indexOf('aspect-[16/9]', i);
-    expect(end, '오버레이 뒤의 16:9 박스를 못 찾았다 — 구조가 바뀌었으면 이 계약부터 다시 읽어라').toBeGreaterThan(i);
+    //   다음 형제 요소가 시작되는 지점까지를 블록으로 본다. 2026-09-19 부터 띠는 스테이지 박스 **안**(하단 레일 높이 12cqmin 을
+    //   쓰려고)에 있고 다음 형제는 <ClockStage> 다.
+    const end = code.indexOf('<ClockStage', i);
+    expect(end, '오버레이 뒤의 <ClockStage> 를 못 찾았다 — 구조가 바뀌었으면 이 계약부터 다시 읽어라').toBeGreaterThan(i);
     const block = code.slice(i, end);
 
-    for (const forbidden of ['toggleRun', 'setLevel', 'adjustTime', 'resetClock', 'handleEnd', 'onOpenSettings']) {
+    for (const forbidden of ['setLevel', 'adjustTime', 'resetClock', 'handleEnd', 'onOpenSettings']) {
       expect(block.includes(forbidden), `오버레이에 운영 조작(${forbidden})이 들어왔다 — 2026-09-11 결정은 이 다섯에 대해 유효하다`).toBe(false);
     }
     expect(block).toContain('toggleFs');    // 해제
     expect(block).toContain('toggleMute');  // 음량
     expect(block).toContain('aria-label');  // 키보드·스크린리더 접근
 
-    // 새로 허용한 둘 — '있어야 한다' 로 못박는다(지워지면 오너 요청이 조용히 사라진 것이다).
+    // 허용한 것들 — '있어야 한다' 로 못박는다(지워지면 오너 요청이 조용히 사라진 것이다).
     expect(block, '엔트리 보정 버튼이 없다(오너 2026-09-16)').toContain("adj('adjEntries'");
     expect(block, '생존(플레이어) 보정 버튼이 없다(오너 2026-09-16)').toContain('adjPlayer(');
+    expect(block, '시작/일시정지 버튼이 없다(오너 2026-09-19 #4)').toContain('toggleRun');
+    expect(block, '리바이 보정 버튼이 없다(오너 2026-09-19 #4)').toContain("adj('adjRebuys'");
+    expect(block, '얼리 보정 버튼이 없다(오너 2026-09-19 #4)').toContain('adjEarly(');
+    expect(block, '애드온 보정 버튼이 없다(오너 2026-09-19 #4)').toContain("adj('adjAddons'");
     // 🔴 권한 게이트 — 운영 권한 없이는 그리지 않는다.
     expect(block, '보정 버튼이 canManage 로 감싸여 있지 않다').toContain('canManage &&');
   });

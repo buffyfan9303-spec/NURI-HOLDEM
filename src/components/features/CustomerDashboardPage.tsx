@@ -16,6 +16,7 @@ import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { msgOf } from '../../lib/dbError';
 import { SkeletonList } from '../atoms/Skeleton';
+import { readSeenCount, writeSeenCount } from '../../lib/seenCount'; // 지난 방문 실제 행 수를 기억해 스켈레톤 CLS 를 줄인다(홈과 같은 조리법)
 import { goSubTab } from '../../lib/subTabTransition';
 import type { LegalDoc } from './LegalDocsModal';
 import { myVisitedVenues, myPlayHistory, type VisitedVenue, type PlayHistory } from '../../api/vouchers';
@@ -63,6 +64,27 @@ const ME_TABS: { key: MeTab; label: string }[] = [
   { key: 'settings',  label: '설정' },
   { key: 'security',  label: '보안' },
 ];
+
+// [F] 스켈레톤 CLS — 지난 방문에 각 목록이 몇 줄이었나 기억해 그만큼만 예약한다(홈의 upcomingSeenCount 와 같은 조리법).
+// 고정 3행이면 실제가 더 많을 때 도착 순간 아래가 밀리고, 더 적을 때는 그만큼 접히며 튄다.
+const ME_USAGE_SEEN = 'nuri:me-usage-seen';
+const ME_RESV_SEEN = 'nuri:me-resv-seen';
+const ME_RANKS_SEEN = 'nuri:me-ranks-seen';
+const meUsageSeenRows = () => readSeenCount(ME_USAGE_SEEN, { fallback: 3, min: 1, max: 15 });
+const meResvSeenRows = () => readSeenCount(ME_RESV_SEEN, { fallback: 3, min: 1, max: 15 });
+const meRanksSeenRows = () => readSeenCount(ME_RANKS_SEEN, { fallback: 3, min: 1, max: 15 });
+// '하이라이트 요약'은 데이터가 없으면 섹션 자체가 없다(높이 0) — 로딩 중엔 지난번에 있었을 때만 자리를 켠다.
+// 처음 방문(저장값 없음)은 기존과 같이 로딩 끝나고 나타난다 — 그 1회는 감수한다(예약할 근거가 없다).
+const ME_HILITE_SEEN = 'nuri:me-hilite-seen';
+const meHiliteSeen = () => readSeenCount(ME_HILITE_SEEN, { fallback: 0, min: 0, max: 1 }) > 0;
+// [F 후속, 2026-09-19 재실측] 하이라이트 요약·입상 기록은 목록 행수만 예약하고 그 옆/위에 조건부로 붙는
+// 덩어리(최다 참가 매장 카드 2장 · 전적 요약 카드 · 순위 추이 그래프)는 **하나도** 예약하지 않고 있었다
+// — 실측(localStorage 채운 뒤에도) 하이라이트 +181px · 입상 기록 +363px 가 그대로 튀었다(9월19일 실측).
+// 두 덩어리도 같은 조리법(지난 방문에 있었으면 그 자리를 켠다)으로 마저 잠근다.
+const ME_HILITE_CARDS_SEEN = 'nuri:me-hilite-cards-seen'; // 최다 참가 매장/참가비 매장 카드 쌍
+const meHiliteCardsSeen = () => readSeenCount(ME_HILITE_CARDS_SEEN, { fallback: 0, min: 0, max: 1 }) > 0;
+const ME_RANKS_CHART_SEEN = 'nuri:me-ranks-chart-seen'; // RecordSummary + RankTrendChart(ranks.length>0 일 때만 뜬다)
+const meRanksChartSeen = () => readSeenCount(ME_RANKS_CHART_SEEN, { fallback: 0, min: 0, max: 1 }) > 0;
 
 // ⚠ 이 페이지는 App 이 **상주**로 들고 있다(keep-alive — 한 번 열면 언마운트하지 않는다).
 //   그래서 닫혀 있는 동안에도 App 의 모든 리렌더가 이 1,000줄 트리를 다시 렌더했다.
@@ -246,6 +268,19 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   const topBuyins = [...usage].filter((u) => u.buyins > 0).sort((a, b) => b.buyins - a.buyins)[0] ?? null;
   const topAmount = [...usage].filter((u) => u.amount > 0).sort((a, b) => b.amount - a.amount)[0] ?? null;
   const fmtDate = (iso: string | null) => { if (!iso) return ''; const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  // [F] 이번에 실제로 그린 줄 수를 다음 로딩의 스켈레톤 행 수로 남긴다 — 실패한 조회는 값이 신뢰할 수 없어 건너뛴다.
+  if (!loading) {
+    if (usageErr == null) {
+      writeSeenCount(ME_USAGE_SEEN, usage.length, { min: 1, max: 15 });
+      writeSeenCount(ME_HILITE_SEEN, usage.length > 0 ? 1 : 0, { min: 0, max: 1 });
+      writeSeenCount(ME_HILITE_CARDS_SEEN, (topBuyins || topAmount) ? 1 : 0, { min: 0, max: 1 });
+    }
+    if (resvErr == null) writeSeenCount(ME_RESV_SEEN, resv.length, { min: 1, max: 15 });
+    if (ranksErr == null) {
+      writeSeenCount(ME_RANKS_SEEN, ranks.length, { min: 1, max: 15 });
+      writeSeenCount(ME_RANKS_CHART_SEEN, ranks.length > 0 ? 1 : 0, { min: 0, max: 1 });
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]" style={hidden ? { display: 'none' } : undefined}>
@@ -471,19 +506,41 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               ⚠ '보유 이용권' 통합 스탯 제거(오너 지시 #4, 2026-08-29):
                  이용권은 **매장마다 개별 매장이용권**만 존재한다. 매장을 가로질러 합산한 'N장'은
                  그 전제와 어긋나는 수치다(어느 매장에서 쓸 수 있는 N장인지 답이 없다).
-                 매장별 보유는 아래 '내 매장이용권' 섹션이 매장 단위로 그대로 보여 준다 — 정보 손실 0. */}
-          {!loading && usage.length > 0 && (
-            <section className="space-y-2">
-              <div className="grid grid-cols-3 gap-2">
-                <Stat label="방문 매장" value={`${usage.length}곳`} />
-                <Stat label="참가(바인)" value={`${totalBuyins}회`} />
-                <Stat label="누적 참가비" value={totalSpent ? wonToMan(totalSpent) + '만' : '-'} accent />
-              </div>
-              {(topBuyins || topAmount) && (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {topBuyins && <HiCard title="최다 참가 매장" name={topBuyins.name} detail={`참가 ${topBuyins.buyins}회 · 누적 참가비 ${topBuyins.amount ? wonToMan(topBuyins.amount) + '만' : '-'}`} />}
-                  {topAmount && <HiCard title="최다 참가비 매장" name={topAmount.name} detail={`${wonToMan(topAmount.amount)}만 · 참가 ${topAmount.buyins}회`} />}
-                </div>
+                 매장별 보유는 아래 '내 매장이용권' 섹션이 매장 단위로 그대로 보여 준다 — 정보 손실 0.
+              [A] 형제 섹션 5개가 전부 박스(card-aura)라 이 섹션만 맨몸이었다 — 박스로 맞춘다.
+              [F] 예전엔 `!loading && usage.length > 0` 조건이라 로딩 중엔 DOM 에 아예 없었고(높이 0),
+                  로딩이 끝나는 순간 섹션 전체(약 140px+)가 튀어나와 아래를 밀었다. 지난 방문에 이
+                  섹션이 있었으면(meHiliteSeen) 로딩 중에도 같은 박스 높이를 스켈레톤으로 미리 켜 둔다.
+              [F 후속, 2026-09-19 재실측] 스탯 3칸만 예약하고 그 아래 최다 참가 매장/참가비 매장
+                  카드 2장은 예약하지 않아 실측 +181px 가 그대로 남았다 — meHiliteCardsSeen 으로 마저 예약한다. */}
+          {(loading ? meHiliteSeen() : usage.length > 0) && (
+            <section className="rounded-aura border card-aura p-3">
+              <Head icon="trending-up" tone="violet" title="하이라이트 요약" />
+              {loading ? (
+                <>
+                  <div className="mt-2 grid grid-cols-3 gap-2" aria-hidden aria-busy="true">
+                    {[0, 1, 2].map((i) => <div key={i} className="skeleton h-14 rounded-input" />)}
+                  </div>
+                  {meHiliteCardsSeen() && (
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2" aria-hidden aria-busy="true">
+                      {[0, 1].map((i) => <div key={i} className="skeleton h-[70px] rounded-aura" />)}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <Stat label="방문 매장" value={`${usage.length}곳`} />
+                    <Stat label="참가(바인)" value={`${totalBuyins}회`} />
+                    <Stat label="누적 참가비" value={totalSpent ? wonToMan(totalSpent) + '만' : '-'} accent />
+                  </div>
+                  {(topBuyins || topAmount) && (
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {topBuyins && <HiCard title="최다 참가 매장" name={topBuyins.name} detail={`참가 ${topBuyins.buyins}회 · 누적 참가비 ${topBuyins.amount ? wonToMan(topBuyins.amount) + '만' : '-'}`} />}
+                      {topAmount && <HiCard title="최다 참가비 매장" name={topAmount.name} detail={`${wonToMan(topAmount.amount)}만 · 참가 ${topAmount.buyins}회`} />}
+                    </div>
+                  )}
+                </>
               )}
             </section>
           )}
@@ -494,46 +551,52 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               ⚠ open 게이트: 이 페이지는 keep-alive(언마운트 없이 display 토글)라 그냥 두면 다시 열어도
                  지갑이 처음 읽은 값에 머문다 — 닫는 순간 언마운트해서 재열림마다 새로 읽게 한다
                  (덤으로 진행 중이던 RedeemSheet·QR 카메라도 함께 정리된다. 예전 !open 이펙트와 같은 효과). */}
-          {open && <VoucherWallet onNeedVerify={() => goTab('security')} onVenue={onOpenVenue} />}
+          {/* [A] 형제 섹션과 같은 박스 문법 — VoucherWallet 은 compact(시트)와 다른 화면이라
+              `boxed` 를 따로 내려준다(compact 는 시트 전용 바깥 여백까지 바꾸므로 여기 그대로 쓰면 안 된다). */}
+          {open && <VoucherWallet onNeedVerify={() => goTab('security')} onVenue={onOpenVenue} boxed />}
 
-          <section className="space-y-2">
+          <section className="rounded-aura border card-aura p-3">
             <Head icon="store" tone="cyan" title="매장 이용·참가 내역" count={usage.length} unit="곳" />
-            {/* 확인 중 → 실패 → 빈 상태 → 목록. 스켈레톤 행 높이(h-14=56px)는 아래 실제 행과 맞춘다
-                (border 2 + py-2 16 + text-sm 20 + mt-1 4 + text-2xs 15 = 57px) — 한 줄짜리
-                "불러오는 중…"(63px)에서 목록(3행 180px)으로 바뀌며 아래 섹션이 통째로 밀리던 것을 없앤다. */}
-            {loading ? <SkeletonList rows={3} rowClassName="h-14" />
-              : usageErr != null ? <LoadErrorCard error={usageErr} what="매장 이용 내역" onRetry={reload} compact />
-              : usage.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="store" />} title="방문·참가 기록이 아직 없습니다." /></div>
-                : <ul className="space-y-1.5">{usage.map((u, i) => (
-                  <li key={i}>
-                  {/* 행 전체가 매장 페이지 링크 — 예전엔 눌러도 아무 일도 없는 막다른 골목이었다(연결 감사 A). 높이 그대로. */}
-                  <button type="button" data-testid="me-usage-venue" onClick={() => onOpenVenue?.(u.venueId)} disabled={!onOpenVenue}
-                    className="block w-full rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors enabled:hover:border-accent-400/40">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate text-sm font-semibold text-ink-primary">{u.name}</p>
-                      {u.lastAt && <span className="shrink-0 text-2xs text-ink-muted">최근 {fmtDate(u.lastAt)}</span>}
-                      {onOpenVenue && <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />}
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-muted">
-                      <span>방문 <b className="text-ink-secondary tabular-nums">{u.visits}</b>회</span>
-                      <span>참가 <b className="text-ink-secondary tabular-nums">{u.buyins}</b>회</span>
-                      <span>입상 <b className="text-ink-secondary tabular-nums">{rankCountByVenue.get(u.name) ?? 0}</b>회</span>
-                      <span>참가비 <b className="text-accent-300 tabular-nums">{u.amount ? wonToMan(u.amount) + '만' : '-'}</b></span>
-                    </div>
-                  </button>
-                  </li>
-                ))}</ul>}
+            {/* 확인 중 → 실패 → 빈 상태 → 목록. 스켈레톤 행 수는 지난 방문에 실제로 그린 행 수를 기억한다(meUsageSeenRows,
+                고정 3행이면 실제가 더 많거나 적을 때 도착 순간 아래가 튄다). 행 높이(h-14=56px)는 아래 실제 행과 맞춘다
+                (border 2 + py-2 16 + text-sm 20 + mt-1 4 + text-2xs 15 = 57px).
+                박스 안이라 빈 상태는 자기 테두리를 또 두르지 않는다(테두리 두 겹 금지). */}
+            <div className="mt-2">
+              {loading ? <SkeletonList rows={meUsageSeenRows()} rowClassName="h-14" />
+                : usageErr != null ? <LoadErrorCard error={usageErr} what="매장 이용 내역" onRetry={reload} compact />
+                : usage.length === 0 ? <EmptyState icon={<Icon name="store" />} title="방문·참가 기록이 아직 없습니다." />
+                  : <ul className="space-y-1.5">{usage.map((u, i) => (
+                    <li key={i}>
+                    {/* 행 전체가 매장 페이지 링크 — 예전엔 눌러도 아무 일도 없는 막다른 골목이었다(연결 감사 A). 높이 그대로. */}
+                    <button type="button" data-testid="me-usage-venue" onClick={() => onOpenVenue?.(u.venueId)} disabled={!onOpenVenue}
+                      className="block w-full rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors enabled:hover:border-accent-400/40">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate text-sm font-semibold text-ink-primary">{u.name}</p>
+                        {u.lastAt && <span className="shrink-0 text-2xs text-ink-muted">최근 {fmtDate(u.lastAt)}</span>}
+                        {onOpenVenue && <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-muted">
+                        <span>방문 <b className="text-ink-secondary tabular-nums">{u.visits}</b>회</span>
+                        <span>참가 <b className="text-ink-secondary tabular-nums">{u.buyins}</b>회</span>
+                        <span>입상 <b className="text-ink-secondary tabular-nums">{rankCountByVenue.get(u.name) ?? 0}</b>회</span>
+                        <span>참가비 <b className="text-accent-300 tabular-nums">{u.amount ? wonToMan(u.amount) + '만' : '-'}</b></span>
+                      </div>
+                    </button>
+                    </li>
+                  ))}</ul>}
+            </div>
           </section>
 
           {/* 대회 참가(예약) 내역 — 내가 예약했던 대회들 */}
-          <section className="space-y-2">
+          <section className="rounded-aura border card-aura p-3">
             <Head icon="calendar-check" tone="indigo" title="대회 참가 내역" count={resvErr !== null && resv.length === 0 ? undefined : resv.length} unit="건" desc="참가 예약 기준" />
             {/* ⚠ 여기서 실패를 '예약 없음'으로 보여주면 손님이 이미 잡아 둔 자리를 다시 예약하거나,
                 예약이 사라진 줄 알고 매장에 전화한다 — 실패는 실패로 말하고 재시도를 준다.
                 단 직전에 받아 둔 목록이 있으면 지우지 않는다(오프라인에서 내역이 사라지지 않게). */}
-            {loading ? <SkeletonList rows={3} rowClassName="h-14" />
+            <div className="mt-2">
+            {loading ? <SkeletonList rows={meResvSeenRows()} rowClassName="h-14" />
               : resvErr !== null && resv.length === 0 ? <LoadErrorCard error={resvErr} what="대회 참가 내역" onRetry={reload} compact />
-              : resv.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="calendar-check" />} title="아직 참가 예약한 대회가 없습니다." /></div>
+              : resv.length === 0 ? <EmptyState icon={<Icon name="calendar-check" />} title="아직 참가 예약한 대회가 없습니다." />
                 : <ul className="space-y-1.5">{resv.slice(0, 15).map((r) => {
                   const upcoming = r.date >= new Date().toLocaleDateString('en-CA');
                   return (
@@ -576,15 +639,30 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
             {resv.some((r) => r.date >= new Date().toLocaleDateString('en-CA')) && (
               <p className="mt-1 text-2xs text-ink-muted">예정 예약은 왼쪽으로 밀면(PC는 마우스 올리면) 취소할 수 있어요.</p>
             )}
+            </div>
           </section>
 
           {/* 내 입상 기록 — 매장 순위 등록에서 내 닉네임이 잡힌 이력. '내 전적' 버튼의 앵커. */}
-          <section ref={recordsRef} className="scroll-mt-4 space-y-2">
+          <section ref={recordsRef} className="scroll-mt-4 rounded-aura border card-aura p-3">
             <Head icon="trophy" tone="violet" title="내 입상 기록" count={ranks.length} unit="회" desc="매장 순위 등록 기준" />
-            {loading ? <SkeletonList rows={3} rowClassName="h-14" />
+            <div className="mt-2">
+            {/* [F 후속, 2026-09-19 재실측] 행 수만 예약하고 그 위 RecordSummary+RankTrendChart 는
+                예약하지 않아 실측 +363px 가 그대로 남았다 — meRanksChartSeen 으로 마저 예약한다
+                (둘 다 ranks.length>0 일 때만 함께 뜬다 — 한 조리법으로 묶는다). */}
+            {loading ? (
+              <>
+                {meRanksChartSeen() && (
+                  <div className="mb-2 space-y-2" aria-hidden aria-busy="true">
+                    <div className="skeleton h-24 rounded-aura" />
+                    <div className="skeleton h-40 rounded-aura" />
+                  </div>
+                )}
+                <SkeletonList rows={meRanksSeenRows()} rowClassName="h-14" />
+              </>
+            )
               : ranksErr != null ? <LoadErrorCard error={ranksErr} what="입상 기록" onRetry={reload} compact />
-              : !user?.nickname ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">아이디 설정하기</button>} /></div>
-              : ranks.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장에서 순위가 등록되면 자동으로 표시됩니다." /></div>
+              : !user?.nickname ? <EmptyState icon={<Icon name="trophy" />} title="프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">아이디 설정하기</button>} />
+              : ranks.length === 0 ? <EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장에서 순위가 등록되면 자동으로 표시됩니다." />
                 : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
                 <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => { const vid = onOpenVenue ? venueIdByName.get(r.venueName) : undefined; return (
                   <li key={i}>
@@ -603,6 +681,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                   </button>
                   </li>
                 ); })}</ul></>}
+            </div>
           </section>
         </div>
         )}
@@ -875,7 +954,8 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
   };
 
   return (
-    <div className="mb-2 rounded-aura border card-aura p-3">
+    // card-aura-sub — 부모(내 입상 기록)가 이미 card-aura 박스라 같은 카드를 또 두르지 않는다(카드 속 카드).
+    <div className="mb-2 rounded-aura border card-aura-sub p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="flex flex-wrap items-center gap-1 text-xs font-bold text-gold-300"><Icon name="trophy" size={13} /> 내 대회 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span>
           {percentile != null && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs text-accent-300" title="전국 대회 입상 횟수 기준">전국 상위 {percentile}%</span>}
@@ -915,7 +995,8 @@ function RankTrendChart({ rows }: { rows: MyRankingRow[] }) {
   const best = Math.min(...pts.map((p) => p.position));
   const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
   return (
-    <div className="mb-2 rounded-aura border card-aura p-3">
+    // card-aura-sub — RecordSummary 와 같은 이유(부모가 이미 card-aura 박스).
+    <div className="mb-2 rounded-aura border card-aura-sub p-3">
       <div className="flex items-baseline justify-between">
         <p className="text-xs font-bold text-ink-secondary">순위 추이 <span className="font-normal text-ink-muted">(최근 {pts.length}회 · 위로 갈수록 높은 순위)</span></p>
         <p className="text-2xs text-ink-muted">최고 <b className="text-accent-300">{best}위</b> · 평균 <b className="text-ink-secondary">{avg}위</b></p>
@@ -937,7 +1018,7 @@ function RankTrendChart({ rows }: { rows: MyRankingRow[] }) {
           <g key={i}>
             <circle cx={x(i)} cy={y(p.position)} r={p.position <= 3 ? 4.5 : 3.5}
               fill={p.position === 1 ? 'currentColor' : p.position <= 3 ? 'rgb(var(--ink-secondary))' : 'rgb(var(--border-strong))'}
-              stroke="rgb(var(--surface-low))" strokeWidth="1.5" />
+              stroke="rgb(var(--surface-mid))" strokeWidth="1.5" />
             {/* 라벨은 표본이 적을 때만 전부, 많으면 듬성듬성(겹침 방지) */}
             {(pts.length <= 8 || i % 2 === 0 || i === pts.length - 1) && (
               <text x={x(i)} y={H - 6} textAnchor="middle" fontSize="9.5" fill="rgb(var(--ink-muted))">{md(p.date)}</text>
@@ -963,8 +1044,10 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
 }
 
 function HiCard({ title, name, detail }: { title: string; name: string; detail: string }) {
+  // card-aura-sub(카드 속 카드, index.css) — 부모(하이라이트 요약)가 이미 card-aura 박스라
+  // 같은 두께의 테두리를 또 두르면(card-aura-in-card-aura) 겹쳐 보인다. 한 단계 밝은 면으로 낮춘다.
   return (
-    <div className="rounded-aura border card-aura p-3">
+    <div className="rounded-aura border card-aura-sub p-3">
       <p className="text-2xs font-bold stat-violet">{title}</p>
       <p className="mt-0.5 truncate text-sm font-bold text-ink-primary">{name}</p>
       <p className="text-2xs text-ink-muted">{detail}</p>

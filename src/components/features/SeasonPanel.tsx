@@ -84,8 +84,11 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
     </li>
   );
 
+  // 스윕④(2026-09-19): '매장 페이지' 탭에서 위(VenueCustomizePanel 섹션들)·아래(VenueRankHub)가 전부
+  // rounded-aura border card-aura 박스인데 이 패널만 맨몸이라 <h3> 이 테두리 없이 떠 있었다 —
+  // 오너가 지적한 "매장이용권만 박스 밖" 과 같은 결함(§ VenueMatchPanel 스윕④와 같은 이유).
   return (
-    <section className="space-y-3">
+    <section className="rounded-aura border card-aura p-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0 text-gold-300" />시즌 리그</h3>
         {canManage && !active && !creating && <button type="button" onClick={() => setCreating(true)} className="btn-primary px-3 py-1 text-2xs">+ 시즌 시작</button>}

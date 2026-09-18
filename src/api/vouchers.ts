@@ -37,9 +37,14 @@ export interface Voucher {
  */
 export const isHeldVoucher = (v: Pick<Voucher, 'status' | 'expiresAt'>, now = Date.now()): boolean =>
   v.status === 'active' && (!v.expiresAt || new Date(v.expiresAt).getTime() > now);
-/** 발급 근거(사유) — 서버 issue_voucher 가 같은 목록으로 검증한다. 순위·시상 사유는 목록에 없고 서버가 거절한다. */
-export type VoucherReason = 'welcome' | 'visit' | 'event' | 'service' | 'other';
+/** 발급 근거(사유) — 서버 issue_voucher 가 같은 목록으로 검증한다. 순위·시상 사유는 목록에 없고 서버가 거절한다.
+ *  'grant'(2026-09-19, 마이그레이션 20260919a) — 오너: "내역도 '이용권 지급'으로 보이게 해라".
+ *  이전엔 'welcome' 값에 '이용권 지급' 라벨을 임시로 덮어썼는데(VoucherManageModal.tsx ISSUE_PICKS),
+ *  그러면 진짜 사유 없이 준 발급도 나중에 '첫 방문 환영'으로 보여 데이터의 뜻이 섞였다 — 그래서 서버에
+ *  새 값을 추가했다. 오너가 "첫 PILL"이라고 했으니 이 배열 순서상 맨 앞에 둔다(픽 화면이 이 순서를 그대로 쓴다). */
+export type VoucherReason = 'welcome' | 'visit' | 'event' | 'service' | 'other' | 'grant';
 export const VOUCHER_REASONS: { value: VoucherReason; label: string; hint: string }[] = [
+  { value: 'grant', label: '이용권 지급', hint: '특정 사유 없이 지급' },
   { value: 'visit', label: '방문 감사', hint: '재방문·단골 감사' },
   { value: 'welcome', label: '첫 방문 환영', hint: '신규 손님 환영' },
   { value: 'event', label: '이벤트·프로모션', hint: '참가 인원 무관 이벤트' },

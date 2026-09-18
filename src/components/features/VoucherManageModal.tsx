@@ -10,12 +10,22 @@ import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
-import { listVenueVouchers, isHeldVoucher, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, requestVoucherQuota, myVoucherCreditRequests, type VoucherCreditRequest, VOUCHER_REASONS, voucherReasonLabel, type VoucherReason } from '../../api/vouchers';
+import { listVenueVouchers, isHeldVoucher, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, requestVoucherQuota, myVoucherCreditRequests, type VoucherCreditRequest, VOUCHER_REASONS, voucherReasonLabel, voucherHolderLabel, type VoucherReason } from '../../api/vouchers';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 import { loadVenueVoucherPanel } from '../../lib/venueVoucherLoad';
 import type { RequestStamp } from '../../lib/staleResponse';
 import { voucherGroupLabel, stripVenuePrefix } from '../../lib/voucherLabel'; // 손님 지갑 표기 규칙(오너 지시 #19)과 같은 함수로 미리보기
 import { kstToday } from '../../lib/kst'; // 유효기간 계산은 기기 로컬이 아니라 KST — 서버 판정과 같은 기준
+
+/** 발급 근거 픽 — 오너 지시(2026-09-19): '첫 방문 환영'·'방문 감사' 픽을 빼고 '이용권 지급'을 맨 앞에 둔다.
+ *  2026-09-19 2차(마이그레이션 20260919a, 오너 결정 "내역도 '이용권 지급'으로 보이게 해라") — 처음엔
+ *  서버 값을 안 늘리고 'welcome' 값에 '이용권 지급' 라벨만 임시로 덮어썼는데, 그러면 사유 없이 준
+ *  발급도 나중에 '첫 방문 환영'으로 보여 데이터의 뜻이 섞였다(리드 확인 요청 답변에서 지적됨).
+ *  그래서 서버에 진짜 값 'grant' 를 추가했고, 이제 라벨 오버라이드가 필요 없다 — welcome/visit 을
+ *  픽에서만 빼면 VOUCHER_REASONS 의 'grant' 가 이미 배열 맨 앞(api/vouchers.ts 순서)이라 그대로 첫 픽이 된다.
+ *  과거 welcome 발급분은 그대로 '첫 방문 환영'으로 보인다(voucherReasonLabel 이 원본 배열을 그대로 읽는다
+ *  — 값·라벨 조회 경로를 안 건드렸다. 소급 변환 없음, 새 값은 오늘 이후 발급분에만 붙는다). */
+const ISSUE_PICKS = VOUCHER_REASONS.filter((o) => o.value !== 'welcome' && o.value !== 'visit');
 
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '-';
@@ -44,7 +54,9 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   // 이 매장의 이름 — 이미 불러온 이용권 행의 조인 값에서 읽는다(추가 조회 0). 첫 발급 전에는 null 이라 미리보기를 내린다.
   const venueName = list.find((v) => v.venueName)?.venueName ?? null;
   const [title, setTitle] = useState('매장이용권');
-  const [reason, setReason] = useState<VoucherReason>('visit'); // 발급 근거(2026-09-05 정책) — 서버가 기록·검증
+  // 발급 근거(2026-09-05 정책) — 서버가 기록·검증. 기본값은 ISSUE_PICKS 첫 픽('이용권 지급' = 'grant', 2026-09-19
+  // 2차)과 맞춘다 — 예전엔 'visit'이 기본이자 픽 목록의 첫 칸이었는데, 2026-09-19에 그 칸을 뺐다.
+  const [reason, setReason] = useState<VoucherReason>('grant');
   const [reasonNote, setReasonNote] = useState('');
   const [count, setCount] = useState(1);
   // 만료일(선택) — 비우면 무기한. 서버는 KST 자정 직전으로 저장돼 그날까지 사용 가능.
@@ -117,13 +129,15 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
 
   // 이용 내역 피드 — 발급(보낸 것)·사용(들어온 것)을 한 줄씩, 최신순. 실시간 구독이 reload를 부르므로 자동 갱신.
   const feed = useMemo(() => {
-    // 보유자 표기: 실명(닉네임) 둘 다 — 닉네임만으론 동명이인 구분 불가
+    // 보유자 표기 — 정본은 voucherHolderLabel(api/vouchers.ts). 스윕①(2026-09-19): 여기·holderLabel·
+    // recentRecipients 세 곳이 각자 이 조합을 다시 구현하고 있었고, 그 복제 중 하나(아래 holderLabel)가
+    // 실명은 있는데 닉네임이 없는 보유자를 '홍길동/매장 보관'처럼 없는 값과 붙여 보여줬다 — 같은 사람이
+    // 이 창의 '이용 내역'과 '보유자별 상세'에서 다른 이름으로 보였다. '-' 는 정본의 '아무 정보 없음' 신호라
+    // 이 피드의 원래 빈 문자열 규약(└→ '매장 보관' 대체 문구)과 맞춰 준다.
     const whoOf = (v: Voucher) => {
       const p = v.holderUserId ? profileMap.get(v.holderUserId) : undefined;
-      if (p?.realName && p?.nickname) return `${p.realName}/${p.nickname}`;
-      if (p?.realName) return p.realName;
-      if (p?.nickname) return p.nickname;
-      return v.holderName ?? '';
+      const label = voucherHolderLabel({ realName: p?.realName, nickname: p?.nickname, holderName: v.holderName });
+      return label === '-' ? '' : label;
     };
     const ev: { t: 'issued' | 'used'; at: string; title: string; who: string }[] = [];
     for (const v of list) {
@@ -152,7 +166,8 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     for (const v of list) {
       if (!v.holderUserId) continue;
       const p = profileMap.get(v.holderUserId);
-      const display = (p?.realName && p?.nickname) ? `${p.realName}/${p.nickname}` : (p?.nickname || p?.realName || v.holderName || '회원');
+      const label = voucherHolderLabel({ realName: p?.realName, nickname: p?.nickname, holderName: v.holderName });
+      const display = label === '-' ? '회원' : label;
       const at = v.createdAt ?? '';
       const prev = seen.get(v.holderUserId);
       if (!prev || at > prev.at) seen.set(v.holderUserId, { display, at });
@@ -271,7 +286,10 @@ ${cards}
     for (const v of list) {
       if (v.status === 'revoked' || v.status === 'expired') continue;
       const key = v.holderUserId ?? (v.holderName ? `n:${v.holderName}` : '__store__');
-      const g = m.get(key) ?? { key, name: v.holderName ?? '매장 보관', isStore: !v.holderUserId && !v.holderName, active: [], used: [] };
+      // name 은 raw holderName 그대로 둔다('매장 보관' 대체 문구를 여기서 미리 넣지 않는다) — holderLabel 이
+      // isStore 를 이미 따로 처리하고, 여기서 채우면 "실명 있음+닉네임 없음" 경로가 그 대체 문구를 주워
+      // '홍길동/매장 보관'이 됐다(스윕①).
+      const g = m.get(key) ?? { key, name: v.holderName ?? '', isStore: !v.holderUserId && !v.holderName, active: [], used: [] };
       if (v.status === 'used') g.used.push(v); else if (isHeldVoucher(v)) g.active.push(v); // 만료분은 어느 쪽도 아니다
       m.set(key, g);
     }
@@ -279,12 +297,11 @@ ${cards}
       .sort((a, b) => (b.active.length - a.active.length) || (b.used.length - a.used.length));
   }, [list]);
   const holderCount = holders.filter((g) => !g.isStore && g.active.length > 0).length;
-  // 표기: 실명/닉네임. 실명이 없으면 닉네임만.
+  // 표기 — 정본 voucherHolderLabel(api/vouchers.ts). g.name 은 raw holderName(위 holders 참고).
   const holderLabel = (g: { key: string; name: string; isStore: boolean }) => {
     if (g.isStore) return '매장 보관';
     const p = profileMap.get(g.key);
-    if (p?.realName) return `${p.realName}/${p.nickname ?? g.name}`;
-    return p?.nickname ?? g.name;
+    return voucherHolderLabel({ realName: p?.realName, nickname: p?.nickname, holderName: g.name || null });
   };
   const hq = holderQuery.trim().toLowerCase();
   const shownHolders = hq ? holders.filter((g) => holderLabel(g).toLowerCase().includes(hq)) : holders;
@@ -374,7 +391,10 @@ ${cards}
       {canIssue ? (
         <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
           <button type="button" onClick={() => setIssueOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-xs font-bold text-accent-300">매장이용권 발급 <span className="font-normal text-ink-muted">· 업주 전용</span>{quota !== null && <span className={['ml-1.5 rounded-badge px-1.5 py-0.5 font-bold', quota < 50 ? 'bg-danger/15 text-danger-light' : 'bg-surface-high text-ink-secondary'].join(' ')}>잔여 한도 {quota.toLocaleString()}개</span>}</span>
+            <span className="text-xs font-bold text-accent-300">매장이용권 발급 <span className="font-normal text-ink-muted">· 업주 전용</span>{/* 스윕②(2026-09-19): 이 배지는 '개', 바로 아래 한도 증액 패널(QuotaRequestPanel)은 '장' — 같은
+                  quota 값이 한 스크롤 안에서 단위만 바뀌었다. '장'으로 통일(이용권은 '장' 으로 세는 물건 —
+                  발급 폼도 '개' 스테퍼가 아니라 옆에 '개'라고 적혀 있었을 뿐 실제 문구는 전부 장이다). */}
+                {quota !== null && <span className={['ml-1.5 rounded-badge px-1.5 py-0.5 font-bold', quota < 50 ? 'bg-danger/15 text-danger-light' : 'bg-surface-high text-ink-secondary'].join(' ')}>잔여 한도 {quota.toLocaleString()}장</span>}</span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', issueOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
           {issueOpen && (
@@ -396,10 +416,17 @@ ${cards}
                 </div>
               </div>
               {/* 발급 근거(2026-09-05 정책) — 모든 발급에 사유를 남긴다. 순위·시상 사유는 목록에 없고, 제목·비고에 적어도 서버가 거절한다. */}
-              {/* ⚠ 줄바꿈이 아니라 가로 스크롤(오너 2026-09-18 "한개가 또 떨어져 있어") — 칩 5개라 좁은 폭에서
-                  마지막 줄에 한두 개만 남는 **고아 줄**이 생기고, 고를 때마다 줄 수가 변해 아래가 튄다. */}
-              <div className="flex gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="발급 근거">
-                {VOUCHER_REASONS.map((o) => (
+              {/* ⚠ 2026-08-18엔 줄바꿈 대신 가로 스크롤을 썼다(그때 칩 5개, 마지막 줄에 한두 개만 남는
+                  고아 줄이 생기고 고를 때마다 줄 수가 변해 아래가 튀는 문제였다).
+                  2026-09-19: 오너 문장은 "이 부분이 끊켜있어" — 원한 건 "안 잘림" 이지 "스크롤 가능함을
+                  보여주는 것"이 아니다(스크롤+페이드로 처음 대응했더니 리드가 반려: 390px 에서 여전히
+                  +32px 넘쳐서 "스크롤할 수 있다"는 신호만 줄 뿐 안 잘리진 않았다). ISSUE_PICKS 를 4개로
+                  줄인 지금은 **2×2 로 깔끔하게 두 줄이 된다**(고아 줄 없음) — flex-wrap 으로 복귀하고
+                  가로 스크롤·페이드는 걷어냈다(스크롤이 없으니 페이드는 '더 있는데 가려졌다'는 거짓
+                  신호가 된다 — 리드 지적). 라벨(특히 '기타(비고 필수)')은 그대로 둔다 — '(비고 필수)'는
+                  "메모를 안 쓰면 발급이 안 된다"는 조건이라 줄이면 사용자가 왜 막히는지 모른다(§7). */}
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="발급 근거">
+                {ISSUE_PICKS.map((o) => (
                   <button key={o.value} type="button" onClick={() => setReason(o.value)} aria-pressed={reason === o.value} title={o.hint}
                     className={['min-h-9 shrink-0 whitespace-nowrap rounded-chip border px-2.5 text-2xs font-bold transition-colors',
                       reason === o.value ? 'border-transparent bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
@@ -673,7 +700,10 @@ ${cards}
                       </button>
                       <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-xs font-bold text-accent-300 tabular-nums">{g.active.length}</span>
                       {!g.isStore && <button type="button" onClick={() => setExpanded(open ? null : g.key)} className="btn-ghost shrink-0 px-2 text-2xs text-ink-secondary">{open ? '닫기' : '관리'}</button>}
-                      {(isAdmin || g.isStore) && canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup({ name: holderLabel(g), ids: g.active.map((v) => v.id), usedCount: g.used.length })} aria-label="삭제" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input text-ink-muted hover:text-danger-light disabled:opacity-50"><Icon name="trash" size={13} /></button>}
+                      {/* 스윕③(2026-09-19): h-9 w-9(38.25px) 뿐이라 히트박스가 아이콘 그림 크기였다. .hit 로
+                          44px 확장 — 형제와의 gap-2(8.5px) 가 오버행((44−38.25)/2≈2.9px) 보다 커서 옆(관리/닫기
+                          버튼)을 덮지 않는다(확인함). */}
+                      {(isAdmin || g.isStore) && canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup({ name: holderLabel(g), ids: g.active.map((v) => v.id), usedCount: g.used.length })} aria-label="삭제" className="hit flex h-9 w-9 shrink-0 items-center justify-center rounded-input text-ink-muted hover:text-danger-light disabled:opacity-50"><Icon name="trash" size={13} /></button>}
                     </div>
                     {open && !g.isStore && (
                       <div className="border-t border-border-subtle px-3 py-1.5">
@@ -780,18 +810,23 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
 
       {open && (
         <div className="mt-2 space-y-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-2xs font-semibold text-ink-secondary">몇 장이 더 필요하신가요?</span>
-            {[100, 300, 500, 1000, 3000].map((n) => (
-              <button key={n} type="button" aria-pressed={amount === n} onClick={() => setAmount(n)}
-                className={[
-                  'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold tabular-nums transition-colors',
-                  amount === n ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
-                               : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
-                ].join(' ')}>
-                {n.toLocaleString()}장
-              </button>
-            ))}
+          {/* 오너 2026-09-19: 라벨과 픽을 한 줄에 우겨넣지 말고 픽은 아랫줄로. '3000장' 삭제,
+              요청 상한은 5000장(서버 request_voucher_credit 은 100000까지 받아 — 이 5000은 클라 쪽
+              더 낮은 상한이라 서버 쪽은 손댈 게 없다). */}
+          <div className="space-y-1.5">
+            <span className="block text-2xs font-semibold text-ink-secondary">몇 장이 더 필요하신가요?</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[100, 300, 500, 1000, 5000].map((n) => (
+                <button key={n} type="button" aria-pressed={amount === n} onClick={() => setAmount(n)}
+                  className={[
+                    'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold tabular-nums transition-colors',
+                    amount === n ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
+                                 : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
+                  ].join(' ')}>
+                  {n.toLocaleString()}장
+                </button>
+              ))}
+            </div>
           </div>
           <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200}
             placeholder="필요한 이유 (선택) — 예) 주말 시리즈 3일 · 예상 참가 200명"

@@ -41,21 +41,18 @@ function ClockMiniFace({ vars, accent, em, cqw, className }: {
   return (
     <div className={`relative flex aspect-[16/9] flex-col overflow-hidden text-white ${className ?? ''}`}
       style={{ ...vars, fontSize: cqw ? `min(${em}px, ${cqw}cqw)` : `${em}px`, background: 'var(--clk-bg)' }} aria-hidden>
-      {/* 상단 — LEVEL · 상태 */}
+      {/* 상단 — 매장명만. LEVEL 알약·RUNNING 알약은 2026-09-19 오너 지시 #9 로 보드에서 사라졌다(ClockStage LevelLine). */}
       <div className="flex shrink-0 items-center gap-[0.4em] px-[0.7em] pt-[0.5em]">
         <span className="h-[0.3em] w-[0.3em] rounded-full bg-emerald-400" />
         <span className="truncate text-[0.5em] font-bold" style={{ color: 'var(--clk-ink-soft)' }}>NURI</span>
-        <span className="ml-auto rounded-full px-[0.5em] py-[0.1em] text-[0.42em] font-extrabold tracking-wider"
-          style={{ color: accent, background: `color-mix(in srgb, ${accent} 16%, transparent)` }}>LEVEL 5</span>
-        <span className="rounded-full px-[0.45em] py-[0.1em] text-[0.42em] font-extrabold tracking-wider"
-          style={{ color: '#6ee7b7', background: 'rgba(110,231,183,0.14)' }}>RUNNING</span>
       </div>
 
-      {/* 히어로 — 타이머 + 컬러별 아우라(강조색을 그대로 쓴 radial bloom 한 겹) + 진행률 레일 */}
+      {/* 히어로 — LEVEL(타이머 위 큰 글자) + 타이머 + 컬러별 아우라(강조색을 그대로 쓴 radial bloom 한 겹) + 진행률 레일 */}
       <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center">
         <span className="pointer-events-none absolute left-1/2 top-1/2 h-[3.4em] w-[6em] -translate-x-1/2 -translate-y-1/2"
           style={{ background: `radial-gradient(closest-side, color-mix(in srgb, ${accent} 22%, transparent), transparent)` }} />
-        <span className="relative text-[1.75em] font-black leading-none tabular-nums" style={{ color: 'var(--clk-timer)' }}>12:34</span>
+        <span className="relative text-[0.5em] font-black leading-none tracking-[0.18em]" style={{ color: accent }}>LEVEL 5</span>
+        <span className="relative mt-[0.12em] text-[1.75em] font-black leading-none tabular-nums" style={{ color: 'var(--clk-timer)' }}>12:34</span>
         <span className="relative mt-[0.35em] flex w-[70%] gap-[0.08em]">
           {Array.from({ length: RAIL }, (_, i) => (
             <span key={i} className="h-[0.16em] flex-1 rounded-[0.05em]"
@@ -78,8 +75,8 @@ function ClockMiniFace({ vars, accent, em, cqw, className }: {
 
       {/* 하단 metrics rail */}
       <div className="flex shrink-0 items-baseline gap-[0.8em] border-t border-white/[0.07] px-[0.7em] py-[0.3em]">
-        <span className="text-[0.38em]" style={{ color: 'var(--clk-ink-dim)' }}>생존 <b className="text-[1.3em] text-white">18</b>/42</span>
-        <span className="text-[0.38em]" style={{ color: 'var(--clk-ink-dim)' }}>평균 <b className="text-[1.3em] text-white">84,000</b></span>
+        <span className="text-[0.38em]" style={{ color: 'var(--clk-ink-dim)' }}>PLAYERS <b className="text-[1.3em] text-white">18</b>/42</span>
+        <span className="text-[0.38em]" style={{ color: 'var(--clk-ink-dim)' }}>AVG <b className="text-[1.3em] text-white">84,000</b></span>
         <span className="ml-auto text-[0.38em] font-bold" style={{ color: 'var(--clk-prize, #F5C451)' }}>550</span>
       </div>
     </div>

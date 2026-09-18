@@ -842,15 +842,18 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
    */
   const consoleUI = (
     <div className={['shrink-0 border-border-default bg-surface-mid px-2 py-2 dark:border-white/5 dark:bg-black/30', fs ? 'border-t' : 'rounded-card border'].join(' ')}>
-      {/* ① 주 조작 — 가장 크고, 항상 첫 화면에 */}
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={toggleRun} data-testid="clk-main-action"
-          className={['inline-flex flex-1 items-center justify-center gap-1.5 rounded-input px-4 py-3 text-sm font-bold transition-colors',
-            state.running ? 'bg-amber-500/90 text-ink-inverse hover:bg-amber-500' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>
-          {/* 버튼 문구도 phase 에서 나온다 — '시작 전'은 [시작], 일시정지는 [계속하기], 종료는 [다시 시작].
-              예전엔 running 하나로 갈라 '시작 전'과 '일시정지'가 똑같이 [시작]이었고, 바로 위 배지는 '일시정지'라 모순이었다. */}
-          <Icon name={state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{CLOCK_PHASE_ACTION[phase]}
-        </button>
+      {/* ① 주 조작 — 가장 크고, 항상 첫 화면에. 2026-09-19 오너 지시 #6 "시작이 맨 위에, 레벨을 아래로" —
+          시작 버튼이 한 줄을 통째로 쓰고, 예전에 그 옆에 붙어 있던 Level 스테퍼는 아랫줄(②)로 내려간다. */}
+      <button type="button" onClick={toggleRun} data-testid="clk-main-action"
+        className={['inline-flex w-full items-center justify-center gap-1.5 rounded-input px-4 py-3 text-sm font-bold transition-colors',
+          state.running ? 'bg-amber-500/90 text-ink-inverse hover:bg-amber-500' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>
+        {/* 버튼 문구도 phase 에서 나온다 — '시작 전'은 [시작], 일시정지는 [계속하기], 종료는 [다시 시작].
+            예전엔 running 하나로 갈라 '시작 전'과 '일시정지'가 똑같이 [시작]이었고, 바로 위 배지는 '일시정지'라 모순이었다. */}
+        <Icon name={state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{CLOCK_PHASE_ACTION[phase]}
+      </button>
+
+      {/* ② 레벨 — 시작 아래 자기 줄. 되돌리기는 이동 직후 6초만 옆에 뜬다. */}
+      <div data-testid="clk-level-row" className="mt-2 flex items-end gap-2">
         <Stepper label="Level" size="lg"
           plusDisabled={state.currentIndex >= cfg.levels.length - 1} minusDisabled={state.currentIndex <= 0}
           onPlus={() => setLevel(1)} onMinus={() => setLevel(-1)} />
@@ -860,7 +863,7 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
         )}
       </div>
 
-      {/* ② 시간 보정 */}
+      {/* ③ 시간 보정 */}
       <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2">
         <Stepper label="Min" onPlus={() => adjustTime(60_000)} onMinus={() => adjustTime(-60_000)} />
         <Stepper label="Sec" onPlus={() => adjustTime(1_000)} onMinus={() => adjustTime(-1_000)} />
@@ -896,8 +899,9 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
         </div>
       </div>
 
-      {/* ⑤ 위험군 — 주 버튼에서 떼어 맨 아래. 되돌릴 수 없는 것과 매번 누르는 것을 이웃시키지 않는다. */}
-      <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-border-default dark:border-white/[0.06] pt-2">
+      {/* ⑥ 위험군 — 주 버튼에서 떼어 맨 아래. 되돌릴 수 없는 것과 매번 누르는 것을 이웃시키지 않는다.
+          2026-09-19 오너 지시 #7 "초기화 · 토너 종료는 좌측으로" — justify-end → justify-start. */}
+      <div data-testid="clk-danger-row" className="mt-2 flex flex-wrap items-center justify-start gap-2 border-t border-border-default dark:border-white/[0.06] pt-2">
         <button type="button" onClick={resetClock}
           className="rounded-input border border-border-strong dark:border-border-default bg-surface-high dark:bg-white/10 px-3 py-2 text-2xs font-bold text-ink-secondary hover:bg-surface-float dark:hover:bg-white/15 hover:text-amber-300">↺ 초기화</button>
         {/* 콘솔은 이제 `!fs` 일 때만 렌더된다(아래 사용처) — 여기 있던 `fs ? 해제 : 토너 종료` 삼항은
@@ -912,53 +916,19 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
 
   return (
     <div ref={wrapRef} data-scroll-lock className={fs ? 'fixed inset-0 z-[70] bg-[#06080c] flex items-center justify-center overflow-hidden' : ''}>
-      {/* 전체화면 최소 오버레이 — 해제·음소거 + **엔트리·생존 보정 둘**(오너 2026-09-16).
-          2026-09-11 결정('전체화면에 조작 콘솔을 넣지 않는다')은 그대로다 — 타이머·레벨·시간·초기화·종료는
-          여전히 여기 없다. 오너 요청은 "직원들이 엔트리·플레이어를 수동으로도 올릴 수 있게" 딱 그 둘이었고,
-          노트북을 TV 에 직결한 매장에서 전체화면을 풀지 않고 접수를 반영하려면 이 둘이 필요하다.
-          ⚠ 운영 권한(canManage)이 있을 때만 그린다. 손님 TV 송출 라우트(ClockDisplay, `/?display=`)는
+      {/* 전체화면 조작 띠 — 해제·음소거 + 시작/일시정지 + **엔트리·생존·리바이·얼리·애드온 보정**.
+          이력: 2026-09-11 '전체화면에는 조작 콘솔을 넣지 않는다' → 09-16 오너가 엔트리·생존 둘을 허용 →
+          **2026-09-19 오너 지시 #4** "전체화면에서 수동 조정이 가능한 부분에 일시정지·시작·리바인·얼리·애드온 모두 추가".
+          여전히 없는 것: 레벨 이동·시간 보정·초기화·종료·설정(fullscreenContract.test 가 잠근다) — 화면을 덮고 오조작 피해가 큰 다섯이다.
+          모양: 예전 우하단 모서리 묶음은 버튼이 6 → 12 로 늘며 하단 지표(총 칩·평균 스택)를 절반쯤 덮게 되어,
+          **하단 레일 폭 전체를 덮는 띠**로 바꿨다(중앙 정렬 한 줄). 2.5초 잠잠하면 통째로 사라져 지표가 다시 보인다 —
+          송출 화면에 아무 버튼도 남지 않는 원칙은 그대로다. ESC 로도 해제된다(위 useBackClose).
+          ⚠ 운영 권한(canManage)이 있을 때만 조작 버튼을 그린다. 손님 TV 송출 라우트(ClockDisplay, `/?display=`)는
           무인증 공개 화면이라 **거기엔 넣지 않는다** — 넣으면 손님이 닿는 화면에서 대회 상태가 바뀐다.
-          모서리에 두어 대회명·지표를 가리지 않고,
-          2.5초 잠잠하면 사라져 송출 화면에 아무 버튼도 남지 않는다. ESC 로도 해제된다(위 useBackClose).
-          ⚠ 안의 bg-black/50·text-white/75 는 토큰화하지 않는다(2026-09-15 판정). 조작 패널(:816)과 달리
-          이 오버레이는 **항상 다크한 클락 보드 위에만** 떠서 테마를 타지 않는다 — 라이트에서도 지면이
+          ⚠ 안의 bg-black/55·text-white/75 는 토큰화하지 않는다(2026-09-15 판정). 조작 패널과 달리
+          이 띠는 **항상 다크한 클락 보드 위에만** 떠서 테마를 타지 않는다 — 라이트에서도 지면이
           어둠이라 하드코딩 알파가 정답이다. 같은 이유로 클락 보드 자체(아래 [container-type:size] div)도 그대로 둔다. */}
-      {fs && (
-        <div data-testid="clk-fs-overlay"
-          className={['absolute bottom-[2vmin] right-[2vmin] z-10 flex items-center gap-[1vmin] transition-opacity duration-300',
-            ctlOn ? 'opacity-100' : 'opacity-0 pointer-events-none'].join(' ')}>
-          {/* 엔트리·생존 보정 — 콘솔(:852)과 **같은 persist/adj 경로**를 재사용한다. 새 저장 경로를 만들지 않는다.
-              장부 연동 중이면 자동 반영분 **위에 얹는 보정**이라 aria-label 에 그 사실을 적는다
-              (비전체화면 캡션은 `!fs` 라 여기선 안 보인다). */}
-          {canManage && (
-            <div className="flex items-center gap-[1.2vmin] rounded-[1vmin] bg-black/50 px-[1.2vmin] py-[0.6vmin] backdrop-blur-sm">
-              {[
-                { k: 'e', label: '엔트리', value: liveStats.entries, plus: () => adj('adjEntries', 1), minus: () => adj('adjEntries', -1) },
-                { k: 'p', label: '생존', value: liveStats.alive, plus: () => adjPlayer(1), minus: () => adjPlayer(-1) },
-              ].map((it) => (
-                <div key={it.k} className="flex items-center gap-[0.5vmin]">
-                  <span className="text-[1.3vmin] font-semibold text-white/60">{it.label}</span>
-                  <button type="button" onClick={it.minus}
-                    aria-label={`${it.label} 1 줄이기${state.sessionDate ? ' (장부 자동 반영분 보정)' : ''}`}
-                    className="grid h-[4vmin] min-h-[44px] w-[4vmin] min-w-[44px] place-items-center rounded-[1vmin] bg-white/10 text-[2vmin] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">−</button>
-                  <span className="min-w-[3.4vmin] text-center text-[1.9vmin] font-bold tabular-nums text-white">{it.value}</span>
-                  <button type="button" onClick={it.plus}
-                    aria-label={`${it.label} 1 늘리기${state.sessionDate ? ' (장부 자동 반영분 보정)' : ''}`}
-                    className="grid h-[4vmin] min-h-[44px] w-[4vmin] min-w-[44px] place-items-center rounded-[1vmin] bg-white/10 text-[2vmin] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">+</button>
-                </div>
-              ))}
-            </div>
-          )}
-          <button type="button" onClick={toggleMute} aria-label={volume > 0 ? '음소거' : '음소거 해제'}
-            className="grid h-[4vmin] min-h-[36px] w-[4vmin] min-w-[36px] place-items-center rounded-[1vmin] bg-black/50 text-white/75 backdrop-blur-sm transition-colors hover:bg-black/70 hover:text-white">
-            <Icon name={volume > 0 ? 'volume' : 'volume-off'} size={16} />
-          </button>
-          <button type="button" onClick={toggleFs} aria-label="전체화면 해제"
-            className="rounded-[1vmin] bg-black/50 px-[1.6vmin] py-[0.9vmin] text-[1.6vmin] font-bold text-white/75 backdrop-blur-sm transition-colors hover:bg-black/70 hover:text-white">
-            ⤡ 해제
-          </button>
-        </div>
-      )}
+      {/* (조작 띠 자체는 아래 스테이지 박스 **안**에 그린다 — 하단 지표 레일과 같은 높이 12cqmin 을 쓰려면 컨테이너 안이어야 한다) */}
       {/* 풀스크린은 16:9 고정 박스(레터박스) + container-type:size — cqw/cqh로 모든 모니터(16:9·21:9·세로) 동일 비율 */}
       <div className={fs ? 'flex flex-col w-full aspect-[16/9] max-w-[177.78vh] max-h-screen [container-type:size]' : 'space-y-2'}>
       {/* 상단 바 */}
@@ -1021,11 +991,56 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
           글자 크기는 `fs ? cq단위 : 고정 Tailwind` 두 벌이라 미리보기와 TV 가 서로 닮지 않았다.
           두 모드가 같은 컨테이너 계약을 가지면 아래 cqw/cqh 한 벌이 양쪽에서 그대로 산다 —
           '운영자 미리보기 = TV 축소판'이 비로소 성립한다. */}
-      <div className={['overflow-hidden border border-white/[0.08] text-white shadow-[0_10px_50px_rgba(0,0,0,0.45)] [container-type:size]',
+      <div className={['relative overflow-hidden border border-white/[0.08] text-white shadow-[0_10px_50px_rgba(0,0,0,0.45)] [container-type:size]',
         fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'flex flex-col rounded-card aspect-[16/9]'].join(' ')}
         style={{ ...clkVars, background: 'var(--clk-bg, #06080F)' }}>
-        {/* 2026-09-02 v3 'NURI 아우라'(오너 승인) — TV(ClockDisplay)와 같은 정보 위계·색 체계. 라벨 한국어(ANTE 만 영문),
+        {/* 2026-09-02 v3 'NURI 아우라'(오너 승인) — TV(ClockDisplay)와 같은 정보 위계·색 체계. 라벨은 2026-09-19 부터 영문 대문자,
             골드는 프라이즈 금액에만, 레벨/블라인드 인디고, 타이머 순백. 조작부(아래 컨트롤 행)는 그대로. */}
+        {fs && (
+          <div data-testid="clk-fs-overlay"
+            className={['absolute inset-x-0 bottom-0 z-10 flex h-[12cqmin] flex-wrap items-center justify-center gap-x-[1.2cqmin] gap-y-[0.6cqmin] border-t border-white/10 bg-black/70 px-[2cqmin] backdrop-blur-md transition-opacity duration-300',
+              ctlOn ? 'opacity-100' : 'opacity-0 pointer-events-none'].join(' ')}>
+            {/* 시작/일시정지·보정 — 콘솔과 **같은 toggleRun/persist/adj 경로**를 재사용한다. 새 저장 경로를 만들지 않는다.
+                장부 연동 중이면 자동 반영분 **위에 얹는 보정**이라 aria-label 에 그 사실을 적는다
+                (비전체화면 캡션은 `!fs` 라 여기선 안 보인다).
+                높이 12cqmin = 하단 지표 레일과 같다 — 띠가 뜨는 동안 레일을 **통째로** 덮어 반쯤 가려진 숫자가 남지 않는다. */}
+            {canManage && (
+              <>
+                <button type="button" onClick={toggleRun} data-testid="clk-fs-main"
+                  className={['inline-flex h-[4.2cqmin] min-h-[44px] shrink-0 items-center gap-[0.6cqmin] rounded-[1cqmin] px-[1.6cqmin] text-[1.7cqmin] font-extrabold text-ink-inverse transition-colors',
+                    state.running ? 'bg-amber-400 hover:bg-amber-300' : 'bg-emerald-400 hover:bg-emerald-300'].join(' ')}>
+                  <Icon name={state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{CLOCK_PHASE_ACTION[phase]}
+                </button>
+                {[
+                  { k: 'e', label: '엔트리', value: liveStats.entries, plus: () => adj('adjEntries', 1), minus: () => adj('adjEntries', -1) },
+                  { k: 'p', label: '생존', value: liveStats.alive, plus: () => adjPlayer(1), minus: () => adjPlayer(-1) },
+                  { k: 'r', label: '리바이', value: liveStats.rebuys, plus: () => adj('adjRebuys', 1), minus: () => adj('adjRebuys', -1) },
+                  { k: 'y', label: '얼리', value: liveStats.earlies, plus: () => adjEarly(1), minus: () => adjEarly(-1) },
+                  { k: 'a', label: '애드온', value: liveStats.addons, plus: () => adj('adjAddons', 1), minus: () => adj('adjAddons', -1) },
+                ].map((it) => (
+                  <div key={it.k} className="flex shrink-0 items-center gap-[0.5cqmin]">
+                    <span className="text-[1.4cqmin] font-semibold text-white/60">{it.label}</span>
+                    <button type="button" onClick={it.minus}
+                      aria-label={`${it.label} 1 줄이기${state.sessionDate ? ' (장부 자동 반영분 보정)' : ''}`}
+                      className="grid h-[4.2cqmin] min-h-[44px] w-[4.2cqmin] min-w-[44px] place-items-center rounded-[1cqmin] bg-white/10 text-[2cqmin] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">−</button>
+                    <span className="min-w-[3.4cqmin] text-center text-[2cqmin] font-bold tabular-nums text-white">{it.value}</span>
+                    <button type="button" onClick={it.plus}
+                      aria-label={`${it.label} 1 늘리기${state.sessionDate ? ' (장부 자동 반영분 보정)' : ''}`}
+                      className="grid h-[4.2cqmin] min-h-[44px] w-[4.2cqmin] min-w-[44px] place-items-center rounded-[1cqmin] bg-white/10 text-[2cqmin] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">+</button>
+                  </div>
+                ))}
+              </>
+            )}
+            <button type="button" onClick={toggleMute} aria-label={volume > 0 ? '음소거' : '음소거 해제'}
+              className="grid h-[4.2cqmin] min-h-[36px] w-[4.2cqmin] min-w-[36px] shrink-0 place-items-center rounded-[1cqmin] bg-white/10 text-white/75 transition-colors hover:bg-white/20 hover:text-white">
+              <Icon name={volume > 0 ? 'volume' : 'volume-off'} size={16} />
+            </button>
+            <button type="button" onClick={toggleFs} aria-label="전체화면 해제"
+              className="shrink-0 rounded-[1cqmin] bg-white/10 px-[1.6cqmin] py-[0.9cqmin] text-[1.7cqmin] font-bold text-white/75 transition-colors hover:bg-white/20 hover:text-white">
+              ⤡ 해제
+            </button>
+          </div>
+        )}
 
         {/* 보드는 ClockStage 한 벌 — 매장 TV(ClockDisplay)와 **같은 마크업**이다(2026-09-11 물리적 단일화).
             예전엔 여기 별도 보드(작은 프라이즈 표 · 우측 Stat 열 · 하단 칩 스탯 2칸)가 따로 있었다.
@@ -1035,13 +1050,14 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
             · title     — 연동된 장부의 대회명이 우선
             · sponsor   — 운영자가 등록한 전체 클락 공통 광고. TV 는 이걸 하단 스폰서 자리에 건다. */}
         <ClockStage g={stageState} venueName={venueName} sponsor={adImg} adSize={adSize} />
-        {/* 🔴 2026-09-11 오너 지시로 뒤집은 결정 — 전체화면에는 **조작 콘솔을 넣지 않는다.**
+        {/* 🔴 2026-09-11 오너 지시로 뒤집은 결정 — 전체화면에는 **조작 콘솔(consoleUI)을 넣지 않는다.**
             예전 주석은 "전체화면에서는 컨트롤을 화면 안에 둔다 — 그 창이 곧 조작 창이다" 였고,
             그래서 시작·Level±·Min/Sec±·엔트리 5종±·볼륨 슬라이더·초기화·해제가 화면 하단 약 30%를 먹었다.
-            전체화면은 설정 화면이 아니라 **매장 TV·빔프로젝터에 띄우는 읽기 전용 토너먼트 보드**다 —
-            손님이 보는 화면에 운영 버튼이 있으면 정보가 밀리고 오조작도 난다.
-            조작은 (a) 전체화면을 풀고 하는 운영자 화면 (b) 휴대폰 리모컨(ClockRemote) 두 경로가 이미 있다.
-            해제·음소거만 아래 최소 오버레이로 남긴다(§7). */}
+            전체화면은 설정 화면이 아니라 **매장 TV·빔프로젝터에 띄우는 토너먼트 보드**다 —
+            항상 떠 있는 운영 버튼이 있으면 정보가 밀리고 오조작도 난다.
+            대신 마우스를 움직일 때만 2.5초 뜨는 조작 띠(위 clk-fs-overlay)가 있다 — 2026-09-19 오너 지시 #4 로
+            시작/일시정지·엔트리·생존·리바이·얼리·애드온까지 넓어졌고, 레벨·시간·초기화·종료·설정은 여전히 없다.
+            그 다섯은 (a) 전체화면을 풀고 하는 운영자 화면 (b) 휴대폰 리모컨(ClockRemote) 두 경로로 한다. */}
       </div>
       {/* 우측 콘솔(비전체화면) — 화면이 좁으면 그리드가 1열이 되어 아래로 흐른다 */}
       {canManage && !fs && consoleUI}

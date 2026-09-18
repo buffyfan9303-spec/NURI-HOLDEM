@@ -73,7 +73,8 @@ describe('배선 — 소비처가 그 한 곳을 실제로 부른다(2026-09-13 
 
   // 왜 이 파일인가: 03cd8bb 이후 TV·운영자 보드의 **단일 마크업**이 ClockStage 다 — 레벨 번호·휴식까지 계산이 전부 여기서 그려진다.
   it('🔴 ClockStage.tsx: import 1회 · levelNumberAt(lvls, eff.index) ×1 · msToNextBreak(g, eff.index, eff.remainingMs) ×2(레일·미니 보드)', () => {
-    expect(count(stage, /^import \{ clockPhase, CLOCK_PHASE_TV, gameLabel, levelNumberAt, msToNextBreak \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
+    // 2026-09-19: CLOCK_PHASE_TV 는 상태 알약과 함께 보드에서 빠졌다(오너 지시 #9) — clockPhase 는 일시정지 타이머 색에 남는다.
+    expect(count(stage, /^import \{ clockPhase, gameLabel, levelNumberAt, msToNextBreak \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
     expect(count(stage, /\blevelNumberAt\(lvls, eff\.index\)/)).toBe(1);
     expect(count(stage, /\bmsToNextBreak\(g, eff\.index, eff\.remainingMs\)/)).toBe(2);
     expect(count(stage, DEF_LNA), '상류 사본(levelNumberAt)이 되살아났다').toBe(0);
