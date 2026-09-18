@@ -14,7 +14,22 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const APP = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
+/**
+ * 🔴 **주석을 걷어내고 읽는다.** 2026-09-19 에 이것 때문에 거짓 실패가 났다.
+ *   아래 정규식은 파일 전체에서 **첫 매치**를 잡는데, 누군가 주석에
+ *   `<main data-tab="my-store">` 라는 리터럴을 설명용으로 적자 **실제 엘리먼트(4166행)보다
+ *   먼저 나오는 그 주석**이 잡혀 "tab-pane 클래스가 없다" 고 말했다. 코드는 멀쩡했다.
+ *   CLAUDE.md 가 기록한 "Tailwind content 는 평문 스캔이라 주석에 적은 클래스도 CSS 를 만든다 —
+ *   금지하려는 클래스명을 주석에 그대로 쓰지 마라" 와 **같은 부류**다.
+ *   주석을 못 쓰게 하는 대신 **검사가 코드만 보게** 고친다 — 사람이 조심하는 것보다 확실하다.
+ *   ⚠ 줄 수는 보존한다(줄번호를 보고할 수 있어야 한다 — lazyModalOpener 계약과 같은 조리법).
+ */
+const codeOnly = (input: string): string =>
+  input
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:])\/\/[^\n]*/gm, (m, p1: string) => p1 + ' '.repeat(m.length - p1.length));
+
+const APP = codeOnly(readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8'));
 
 /** keep-alive 로 렌더되는 최상위 탭 pane 들. 값은 `<main data-tab="…">` 의 탭 id. */
 const KEEP_ALIVE_PANES = ['my-store', 'admin'] as const;

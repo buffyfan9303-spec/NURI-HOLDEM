@@ -3,15 +3,15 @@
 //
 // 순서(§6-1):
 //   헤더(App) → 짧은 오늘 안내(날짜·실제 수치) → 작은 실제 배너 → 추천 대회(가로 레일)
-//   → 지금 등록 가능 → 진행 중인 이벤트 → 오늘·내일 일정 → GTO 도구
+//   → 지금 등록 가능 → 진행 중인 이벤트 → 오늘·내일 일정
 //
 // 바뀐 것과 이유
 //  · **거대한 GTO 히어로를 지웠다.** 24px 헤드라인 + 그라데이션 + 서브카피가 첫 화면의 절반을 먹어
 //    추천 콘텐츠를 아래로 밀었다(§6-2: "큰 인사말 때문에 추천 콘텐츠가 화면 아래로 밀리지 않게").
 //    그 자리를 **사실**(오늘 날짜 · 오늘 대회 수 · 지금 등록 가능 수)이 대신한다.
-//    GTO 진입은 **한 곳으로 합쳤다** — 화면 맨 아래 'GTO 도구' 한 줄(§6-1: 히어로와 대형 카드에
-//    같은 GTO 설명을 반복하지 않는다). 목적지(`onTools`)는 그대로라 사라진 길은 없다.
-//    같은 이유로 PosterCarousel 의 'GTO 도구' 브랜드 슬라이드도 뺐다.
+//    GTO 진입은 **홈에서 완전히 뺐다**(2026-09-19 오너: "홈 화면에 GTO 도구 있는 부분 삭제").
+//    하단 탭바의 GTO 탭이 같은 곳(onTools)으로 가므로 사라진 길은 없다 — 문이 둘이었을 뿐이다.
+//    같은 이유로 PosterCarousel 의 'GTO 도구' 브랜드 슬라이드도 예전에 뺐다.
 //  · **추천 대회 레일이 새로 생겼다.** 포스터 썸네일 + 정보 영역을 **구분**한 가로 카드다.
 //    예전에 배너 캐러셀이 돌리던 일정 포스터가 여기로 왔다 — 배너 비율(2.14:1)에 세로 포스터를
 //    우겨 넣던 크롭이 사라지고, 매장·참가비·상태를 이미지 **위가 아니라 아래**에서 읽는다.
@@ -134,13 +134,6 @@ function eventMenuSubtitle(loaded: boolean, failed: boolean, b: EventBoard | nul
  *  (읽기에도 좋고, 번들에서 같은 리터럴이 여러 벌 실리지 않는다). §5 역할표: 섹션 제목 18/26(PC 20/28). */
 const H3_CLS = 'font-display text-[18px] font-bold leading-[26px] tracking-tight text-ink-primary md:text-[20px] md:leading-[28px]';
 const MORE_CLS = 'flex items-center gap-0.5 py-2 -my-2 t-desc font-semibold text-ink-muted hover:text-ink-secondary';
-/** 진입 줄의 **크롬 치수는 px 고정**이다(rem 아님).
- *  왜: 200% 글자 확대 · 320~360px 에서 `gap-2.5`·`px-3`·`h-10 w-10` 이 전부 2배로 불어
- *  텍스트 칸이 **57px**(scroll 102)까지 쪼그라들어 'EVENT' 칩 하나도 못 들어갔다(실측).
- *  아이콘 타일·여백은 글자가 아니라 장식이므로 확대를 따라갈 이유가 없다 — 확대되어야 하는 것은
- *  글자다. 글자는 그대로 두고 **틀만 고정**해서 자리를 돌려줬다. */
-const ROW_CLS = 'flex w-full items-center gap-[10px] rounded-aura border card-aura px-[12px] py-[10px] text-left transition-colors hover:bg-surface-high/50 active:scale-[0.995]';
-const ROW_TILE_CLS = 'flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-input';
 
 /** 문장 속 숫자만 강조색 — 종전 '오늘 대회 <N>개' 의 색 계약을 문자열 한 줄에도 그대로 적용한다. */
 const Nums = ({ text }: { text: string }) => (
@@ -220,6 +213,26 @@ export default function HomeTab({
       .sort(compareByStartThenBoost)
       .slice(0, 8),
     [schedules, today, tomorrow],
+  );
+
+  /**
+   * 🔴 오늘·내일이 비었을 때 보여줄 **다음 일정** (2026-09-19 오너: "홈 화면에 일정이 안떠있어").
+   *
+   * 화면 고장이 아니었다 — 운영 DB 실측(2026-09-19 KST): 오늘 0건 · 내일 0건 ·
+   * 앞으로 통틀어 1건인데 그게 **9/21**이었다. 이 칸은 이름 그대로 2일짜리 창이라
+   * 이틀 뒤 대회는 창 밖으로 빠지고, 홈의 주된 칸이 통째로 비었다.
+   *
+   * ⚠ 제목('오늘·내일 일정')은 **바꾸지 않는다.** 그 문구에 e2e 6개가 묶여 있어
+   *   (smoke·click-paths·cache-first·perf ×3) 조건부로 바꾸면 오늘처럼 데이터가 빈 날
+   *   그 검사들이 통째로 빨개진다. 대신 목록 **안에서** 사실을 말한다 —
+   *   '오늘·내일은 없다' + 가장 가까운 일정. 사용자가 알아야 할 것은 그 둘 다다.
+   */
+  const nextUp = useMemo(
+    () => (schedules
+      .filter((s) => s.approved && s.date > tomorrow && scheduleStatus(s.date, s.startTime) !== 'ended')
+      .sort(compareByStartThenBoost)
+      .slice(0, 8)),
+    [schedules, tomorrow],
   );
 
   // 2026-09-18: 홈 첫 줄이 '오늘 대회 N개' 를 안 말하게 되면서 이 수치의 유일한 소비자가 없어졌다.
@@ -323,12 +336,15 @@ export default function HomeTab({
     return { title: '매장 이벤트', sub, alt: `매장 이벤트 · ${sub}`, testId: 'home-event-menu', live: false, onClick: () => onEvent() };
   }, [showEventSlide, banners, eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
 
-  /** 퀵액션 '제휴 혜택' 칸의 설명 한 줄 — 배지를 뺀 자리에 **사실**을 놓는다.
+  /** 퀵액션 '이벤트' 칸의 설명 한 줄 — 배지를 뺀 자리에 **사실**을 놓는다.
    *  진행 중이면 참여권 상태, 그 밖이면 eventMenuSubtitle(응답 전·실패·소진·시작 전·종료를 구분해 말한다).
-   *  ⚠ 남은 카드 수는 넣지 않는다 — 오너가 그 숫자를 이 칸에서 빼라고 했다(2026-09-18). */
+   *  ⚠ 남은 카드 수는 넣지 않는다 — 오너가 그 숫자를 이 칸에서 빼라고 했다(2026-09-18).
+   *  2026-09-19 오너: 참여권이 없을 때 문구를 '매장 출석하면 참여권 1장' → '진행 중인 이벤트 보기'.
+   *    ⚠ 참여권을 **가진** 사람에게는 보유 장수를 계속 말한다 — 그건 이 칸에서만 보이는 정보라
+   *      같이 지우면 기능이 소실된다(오너가 지목한 것은 0장일 때의 안내 문구다). */
   const quickEventDesc = useMemo(() => {
     if (eventShown === 'banner' && event) {
-      return event.myTickets > 0 ? `참여권 ${event.myTickets}장 보유` : '매장 출석하면 참여권 1장';
+      return event.myTickets > 0 ? `참여권 ${event.myTickets}장 보유` : '진행 중인 이벤트 보기';
     }
     return eventMenuSubtitle(eventLoaded, eventFailed, event, eventState);
   }, [eventShown, event, eventLoaded, eventFailed, eventState]);
@@ -498,7 +514,9 @@ export default function HomeTab({
               <span aria-hidden className="quick-art quick-art-event" />
               <span className="relative z-10 flex min-h-[1.5rem] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
                 <span className="min-w-0 t-desc font-extrabold text-ink-primary">
-                  <Icon name="gift" size={13} className="mr-1 inline-block align-[-1px] text-gold-300" />제휴 혜택
+                  {/* 2026-09-19 오너: "제휴 혜택 - 이벤트로 이름 변경". 목적지(onEvent)는 그대로다 —
+                      이 칸은 처음부터 이벤트로 갔고, '제휴 혜택' 이라는 이름만 그 사실을 가리고 있었다. */}
+                  <Icon name="gift" size={13} className="mr-1 inline-block align-[-1px] text-gold-300" />이벤트
                 </span>
                 {/* 2026-09-18 오너: "옆에 카드 30은 제거" — 남은 카드 수 배지를 뺐다.
                     같은 정보를 쓰는 다른 자리(캐러셀 이벤트 슬라이드)는 그대로다 — 오너가 지목한 것은 이 칸이다. */}
@@ -612,11 +630,11 @@ export default function HomeTab({
             /* 세 번째 갈래(§11) — '없음'이 아니라 '못 불러옴'. 카드·문구·재시도 버튼은 일정 탐색과
                같은 정본(LoadErrorCard)을 쓴다. compact: 홈에서는 이 섹션 하나가 화면을 다 먹으면 안 된다. */
             <LoadErrorCard compact error={schedulesError} what="대회 목록" onRetry={onRetrySchedules} />
-          ) : upcoming.length === 0 ? (
+          ) : upcoming.length === 0 && nextUp.length === 0 ? (
             <div className="rounded-aura border card-aura px-3 py-4">
-              {/* 빈 상태는 **무엇이 없고 지금 무엇을 할 수 있는지**를 말한다 — '오늘·내일'이라는 창이
-                  비었을 뿐 전체 일정에는 있을 수 있다는 것이 사용자가 알아야 할 사실이다. */}
-              <p className="t-body text-ink-muted">오늘·내일 예정 대회가 없어요</p>
+              {/* 빈 상태는 **무엇이 없고 지금 무엇을 할 수 있는지**를 말한다 — 이제 여기까지 오는 것은
+                  '오늘·내일도 없고 앞으로도 없다' 는 뜻이다(다음 일정이 하나라도 있으면 아래 갈래로 간다). */}
+              <p className="t-body text-ink-muted">예정된 대회가 없어요</p>
               <button type="button" onClick={onExplore}
                 className="mt-2 inline-flex items-center gap-1 rounded-badge bg-surface-high px-3 py-2 t-desc font-bold text-ink-secondary transition-colors hover:bg-surface-float/70">
                 전체 일정에서 찾아보기 <Icon name="chevron-right" size={13} />
@@ -624,7 +642,14 @@ export default function HomeTab({
             </div>
           ) : (
             <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
-              {upcoming.map((s, i) => (
+              {/* 🔴 다음 일정 갈래 — 제목은 '오늘·내일' 인데 목록은 그 뒤 것이다. 그 사실을 **먼저** 말한다.
+                  말 없이 9/21 대회만 놓으면 사용자는 그것을 오늘 대회로 읽는다(2026-09-19 오너 지시 반영). */}
+              {upcoming.length === 0 && (
+                <p data-testid="home-upcoming-fallback" className="bg-surface-high/40 px-3 py-2 text-2xs leading-tight text-ink-muted">
+                  오늘·내일은 예정 대회가 없어요 · <b className="font-bold text-accent-200">가장 가까운 일정</b>
+                </p>
+              )}
+              {(upcoming.length ? upcoming : nextUp).map((s, i) => (
                 <ScheduleCard key={s.id} mode="list" schedule={s}
                   venue={venueById?.get(s.venueId)}
                   regInfo={regInfoBySchedule.get(s.id)}
@@ -643,22 +668,11 @@ export default function HomeTab({
           )}
         </section>
 
-        {/* ── GTO 도구 — 홈의 **유일한** GTO 진입 ────────────────────────────
-            §6-1: 같은 GTO 설명을 거대한 히어로와 또 다른 대형 카드에서 반복하지 않는다.
-            정체성은 유지하되 한 줄이다(목적지 onTools — 예전 히어로·브랜드 슬라이드와 같은 곳). */}
-        <div className="px-page-x pt-5">
-          <button type="button" onClick={onTools} data-testid="home-gto-entry"
-            className={ROW_CLS}>
-            <span className={`${ROW_TILE_CLS} tile-grad`} aria-hidden>
-              <Icon name="brain" size={18} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate t-title text-ink-primary">GTO 도구</span>
-              {/* 2026-09-18 오너 지시로 설명줄 제거 — 오너가 예로 든 ToolsPanel 'desc' 와 같은 형태 — 제목 밑에 하위 기능을 나열만 하는 한 줄 */}
-            </span>
-            <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
-          </button>
-        </div>
+        {/* 🔴 2026-09-19 오너: "홈 화면에 GTO 도구 있는 부분 삭제".
+            여기 있던 'GTO 도구' 한 줄을 지웠다. **진입은 잃지 않는다** — 하단 탭바에 GTO 탭이
+            그대로 있고(App.tsx 탭 목록), 목적지도 같은 onTools 였다. 즉 같은 곳으로 가는 문이
+            한 화면에 둘이었고 오너가 그중 중복을 지운 것이다.
+            ⚠ onTools prop 자체는 남는다 — '전략 탐색' 등 다른 진입이 계속 쓴다. */}
       </div>
     </div>
   );

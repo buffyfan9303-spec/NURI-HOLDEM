@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode, type CSSProperties } from 'react';
 import DraggableList from './DraggableList';
 import VenueManagement from './VenueManagement';
 import ReportQueue from './ReportQueue';
@@ -1694,8 +1694,18 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
         같은 부류인 VenuePage·atoms/Modal 은 둘 다 role="dialog" 를 쓴다 — 여기만 사이에 빠져 있었다.
         실제로 문제가 됐다: 2026-09-18 연동성 크롤이 이 오버레이를 대화상자로 알아보지 못해
         관리자 패널 탐색이 그 지점에서 통째로 막혔다. 자동화가 막혔다는 것은 보조기술 사용자도
-        같은 곳에서 막힌다는 뜻이다(닫기·Escape 동작 자체는 멀줸했다). */
+        같은 곳에서 막힌다는 뜻이다(닫기·Escape 동작 자체는 멀줸했다).
+        🔴 --header-now 를 **이 오버레이 안에서 덮어쓴다**(2026-09-19 전수 스윕이 찾았다).
+        그 변수는 전역 헤더의 '지금 높이' 를 담고, 스크롤하면 60.5 → 47.75 로 줄어든다(src/index.css).
+        그런데 아래 이 오버레이의 헤더는 header-h + 안전영역으로 **고정이라 안 줄어든다.**
+        :root 변수는 상속되므로, 관리자가 이 창을 열기 **전에** 바깥을 스크롤해 뒀다면
+        축소값(46.75)이 그대로 내려와 안쪽 NuriPosLedger 의 sticky 요약 띠가
+        실제 헤더 바닥(60.5)이 아니라 46.75 를 겨냥한다 — **13.75px 어긋난다.**
+        여기서 자기 헤더의 실제 높이로 덮어 주면 하위 sticky 가 '자기가 속한 헤더' 를 본다.
+        ⚠ 3.5rem 은 tailwind.config.js 의 header-h 값 그대로다(인라인 style 은 theme() 를 못 쓴다) —
+          그 토큰을 바꾸면 여기도 같이 바꿔야 한다. */
     <div data-scroll-lock role="dialog" aria-modal="true" aria-label={`${venueName} 장부/통계`}
+      style={{ '--header-now': '3.5rem' } as CSSProperties}
       className="fixed inset-0 z-[60] bg-surface-base overflow-y-auto animate-fade-in">
       <header className="sticky top-0 z-10 h-[calc(theme(spacing.header-h)+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
         <button type="button" onClick={onClose} className="text-sm font-semibold text-ink-secondary hover:text-ink-primary">← 닫기</button>

@@ -21,14 +21,24 @@ const COMM = strip(readFileSync(join(__dirname, 'CommunityTab.tsx'), 'utf-8'));
 const APP = strip(readFileSync(join(__dirname, '..', '..', 'App.tsx'), 'utf-8'));
 
 describe('UI-02 · 전체화면 셸', () => {
-  it('🔴 PostDetailModal: page + read 폭 + compact + 스와이프 닫기 + keepViewport, inline 분기 없음', () => {
-    // 🔴 2026-09-19 오너 지시 둘을 반영해 계약을 뒤집었다.
-    //   ① "창이 내려가는 모션 살려줘" → `dragToClose={false}` 제거(page 변형의 기본값이 켜짐).
-    //   ② "밑으로 쭉 내려갔다 버벅이며 올라가" → `keepViewport` 로 배경 잠금 방식을 바꿈.
-    //      `html{overflow:hidden}` 은 문서를 스크롤 불가로 만들어 모바일 주소창을 도로 펼친다.
-    //   ⚠ keepViewport 가 빠지면 증상이 **조용히** 돌아온다 — 하네스에 주소창이 없어 브라우저
-    //      검사로는 영원히 못 잡는다. 그래서 소스 계약으로 잠근다(이 파일이 그 일을 하는 자리다).
-    expect(PD).toMatch(/<Modal open=\{open\} onClose=\{onClose\} title="커뮤니티 게시판" maxWidth=\{inline \? '2xl' : 'read'\} variant="page" inline=\{inline\} density="compact" keepViewport>/);
+  it('🔴 PostDetailModal: page + read 폭 + compact + 스와이프 닫기, keepViewport 는 **쓰지 않는다**', () => {
+    // 🔴 2026-09-19 — 이 계약을 **두 번 뒤집었다.** 두 번째가 지금 값이다.
+    //   ① "창이 내려가는 모션 살려줘" → `dragToClose={false}` 제거(page 변형의 기본값이 켜짐). 그대로다.
+    //   ② 같은 날 아침 "밑으로 쭉 내려갔다 버벅이며 올라가" 를 `keepViewport` 로 고쳤다고 적었는데,
+    //      **그게 원인이 아니었다.** 진짜 원인은 `SpotPostCard` 의 로딩 스켈레톤(144.75px)이
+    //      모든 글에 떴다 사라지며 아래가 −145px 튄 것이다(LayoutShift 0.0806).
+    //   ③ 그리고 `keepViewport` 는 **얻는 것 없이 흔들림만 더했다.** 같은 조건 실측(390×844):
+    //        keepViewport 켬 → 열 때 layout-shift **0.0153** · 닫을 때 스크롤 손실 0
+    //        keepViewport 끔 → 열 때 layout-shift **0**      · 닫을 때 스크롤 손실 **0**
+    //      문서를 접어 scrollY 를 0 으로 만드는 바람에 헤더 축소가 풀리고(47.75→60.5) 배경이 밀렸다.
+    //      짧은 문서에서는 0.0753 까지 나왔다.
+    //   ⚠ 주소창 가설은 하네스에 주소창이 없어 **영원히 검증 불가**다. 다만 두 모드 모두 문서를
+    //      스크롤 불가로 만든다는 것이 실측됐으므로(docH == innerHeight), 그 가설은 두 모드를
+    //      구별하지 못한다 — 즉 keepViewport 를 정당화하지 못한다.
+    //   ⇒ 되돌렸다. **다시 켜려면 위 숫자부터 다시 재라.** 근거 없이 켜지 마라.
+    expect(PD).toMatch(/<Modal open=\{open\} onClose=\{onClose\} title="커뮤니티 게시판" maxWidth=\{inline \? '2xl' : 'read'\} variant="page" inline=\{inline\} density="compact">/);
+    expect(PD, 'keepViewport 를 근거 없이 다시 켰다 — 실측으로 0.0153 의 흔들림만 더한다(위 주석)')
+      .not.toMatch(/keepViewport/);
     expect(PD, '스와이프 닫기를 다시 껐다 — 오너가 살리라고 한 모션이다').not.toMatch(/dragToClose=\{false\}/);
     expect(PD).not.toMatch(/inline \? 'sheet' : 'page'/);
   });

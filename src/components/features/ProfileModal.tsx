@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useBlocks } from '../../contexts/BlockContext';
 import { resizeImage } from '../../lib/storage';
-import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, checkNicknameAvailable, checkNameAvailable, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent, EMAIL_OTP_LENGTH } from '../../api/auth';
+import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, checkNicknameAvailable, checkNameAvailable, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent, getMyLegalConsents, type LegalConsentRecord, EMAIL_OTP_LENGTH } from '../../api/auth';
 import { PASSWORD_RULES, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER, validatePassword } from '../../lib/password';
 import { useAvailabilityCheck, availabilityHint } from '../atoms/AvailabilityField';
 import { isValidDisplayName } from '../../lib/displayName';
@@ -440,7 +440,13 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                 <button
                   type="button"
                   onClick={removeAvatar}
-                  className="absolute -top-1 -right-1 w-7 h-7 rounded-full
+                  // [B] 29.75px 미달 — `.hit` 를 추가했더니 실측(elementFromPoint)에서 실제로 깨졌다:
+                  //   `.hit{position:relative}` 가 같은 특이도의 `absolute` 유틸과 부딪혀 이겨버려
+                  //   `-top-1 -right-1` 배치가 깨지고 아바타 아래 버튼이 클릭을 가로챘다(ToolsPanel 별과
+                  //   같은 함정 — ImageLightbox.tsx:150 에 이미 기록돼 있었다). inline style 로 position
+                  //   을 최우선 순위로 못박아 `.hit` 의 확장(::after)은 그대로 살리고 배치만 되찾는다.
+                  style={{ position: 'absolute' }}
+                  className="hit -top-1 -right-1 w-7 h-7 rounded-full
                              bg-danger text-white flex items-center justify-center
                              hover:bg-danger-dark transition-colors focus:outline-none"
                   aria-label="사진 제거"
@@ -620,6 +626,14 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             </div>
           )}
         </div>}
+
+        {/* 개인정보 열람권(개인정보보호법 §35) — 오너 결정 2026-09-19, "내 정보 > 보안에 붙여라".
+            getMyLegalConsents 는 만들어져 있었는데 호출부가 없었다. API 가 주는 것(버전·시각·동의 항목)만
+            그대로 보여준다 — 제도 설명·법 문구는 화면에 새로 쓰지 않는다. */}
+        <div className="px-4 pt-4">
+          <LegalConsentHistory />
+        </div>
+
         <form onSubmit={handleConfirmChange} className="p-4 space-y-4">
 
           <div className="flex items-start gap-2 p-3 rounded-aura bg-surface-high border border-border-subtle">
@@ -729,6 +743,64 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
         />
       )}
     </>
+  );
+}
+
+// ── 개인정보 열람권(개인정보보호법 §35) — 내 약관 동의 이력 ─────────────────────
+// 오너 결정(2026-09-19): getMyLegalConsents(api/auth.ts) 가 만들어져 있었는데 화면이 없었다.
+// API 가 주는 필드(버전·시각·동의 항목·경로)만 그대로 보여준다 — 없는 필드를 추측해 채우지 않는다.
+// 항목 이름은 가입·재동의 화면(AuthModal.tsx LEGAL_TITLES · ConsentGateModal.tsx)이 이미 쓰는
+// 표기를 그대로 재사용한다 — 여기서 새 법 문구를 짓지 않는다.
+const CONSENT_CAT_LABEL: Record<'terms' | 'privacy' | 'antiGambling' | 'marketing', string> = {
+  terms: '서비스 이용약관', privacy: '개인정보처리방침',
+  antiGambling: '사행성 배제 및 건전 이용 공지', marketing: '마케팅 정보 수신 동의',
+};
+/** source 는 api/auth.ts updateMyConsent 가 쓰는 두 값('gate'|'settings') 만 안다 — 그 외 값은 원문 그대로 보여준다(추측 금지). */
+const CONSENT_SOURCE_LABEL: Record<string, string> = { gate: '재동의 화면', settings: '설정에서 변경' };
+
+function LegalConsentHistory() {
+  // null = 아직 조회 전(로딩) · [] = 조회는 성공했는데 이력이 없음 — err 로만 '실패'와 '없음'을 가른다.
+  const [items, setItems] = useState<LegalConsentRecord[] | null>(null);
+  const [err, setErr] = useState<unknown>(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    setErr(null);
+    getMyLegalConsents(20)
+      .then((rows) => { if (alive) setItems(rows); })
+      .catch((e: unknown) => { if (alive) setErr(e); }); // 실패 ≠ 없음 — items 를 [] 로 만들지 않는다
+    return () => { alive = false; };
+  }, [tick]);
+
+  return (
+    <div>
+      <p className="mb-1.5 text-sm font-semibold text-ink-primary">약관 동의 이력</p>
+      <p className="mb-2 text-2xs leading-relaxed text-ink-muted">언제 · 어떤 약관에 동의했는지(개인정보보호법 §35 열람권)</p>
+      {items === null && err == null ? (
+        <p className="rounded-aura border card-aura p-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
+      ) : err != null ? (
+        <LoadErrorCard error={err} what="약관 동의 이력" onRetry={() => setTick((t) => t + 1)} compact />
+      ) : items!.length === 0 ? (
+        <div className="rounded-aura border card-aura p-3 text-center text-2xs text-ink-muted">동의 이력이 없습니다.</div>
+      ) : (
+        <ul className="space-y-1.5">
+          {items!.map((r) => (
+            <li key={r.id} className="rounded-input border border-border-subtle bg-surface-low px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-ink-primary">약관 버전 {r.legalVersion}</span>
+                <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{new Date(r.agreedAt).toLocaleString('ko-KR')}</span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {(['terms', 'privacy', 'antiGambling', 'marketing'] as const).filter((k) => r[k]).map((k) => (
+                  <span key={k} className="rounded-badge bg-surface-high px-1.5 py-0.5 text-2xs text-ink-secondary">{CONSENT_CAT_LABEL[k]}</span>
+                ))}
+              </div>
+              <p className="mt-1 text-2xs text-ink-muted">{CONSENT_SOURCE_LABEL[r.source] ?? r.source}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

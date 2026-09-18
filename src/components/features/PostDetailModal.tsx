@@ -441,7 +441,7 @@ export default function PostDetailModal({
           댓글 입력 중에는 시작되지 않는다. 오너가 모션을 명시적으로 요구했으므로 되살린다.
         backdrop 클릭 닫기는 page 에 정의상 없다(리드 결정) — 닫는 길은 헤더 X(44px)·ESC·뒤로가기 셋이고 e2e/post-nav.spec.ts 가 셋 다 잠근다.
         진입 모션: sheet-up 0.26s → fade-in 0.16s(index.css 가 tailwind 값을 덮는다). */}
-    <Modal open={open} onClose={onClose} title="커뮤니티 게시판" maxWidth={inline ? '2xl' : 'read'} variant="page" inline={inline} density="compact" keepViewport>
+    <Modal open={open} onClose={onClose} title="커뮤니티 게시판" maxWidth={inline ? '2xl' : 'read'} variant="page" inline={inline} density="compact">
       {/* 리듬은 space-y-4 균등 간격이 아니라 **블록별 mt** 로 준다.
           균등 간격은 'ddd' 같은 짧은 글에서 제목·작성자·본문·반응이 전부 같은 거리로 떨어져
           섬 여섯 개처럼 흩어져 보였다(본문 45px < 반응 92px — 내용보다 버튼이 큰 화면).
@@ -546,7 +546,8 @@ export default function PostDetailModal({
               {/* 조회 — 오버라인에서 내려온 자리(§5-1). 시각과 같은 역할·같은 크기로 한 줄에 둔다. */}
               {(post.viewCount ?? 0) > 0 && (
                 <span className="inline-flex items-center gap-1 text-xs text-ink-secondary" aria-label={`조회 ${post.viewCount}`}>
-                  <Icon name="eye" size={13} strokeWidth={1.6} className="shrink-0" />
+                  {/* [E] 1.6 은 실효 0.87px — 화면 굵기 하한(1.1px) 미달. PostRowCard 목록과 같은 굵기로. */}
+                  <Icon name="eye" size={13} strokeWidth={2.2} className="shrink-0" />
                   <span className="tabular-nums">{post.viewCount}</span>
                 </span>
               )}
@@ -683,7 +684,9 @@ export default function PostDetailModal({
 
         {/* ── 게시판에 올라온 NURI SPOT — 투표(어태치먼트)보다 **위**.
             상황을 먼저 보여주고 그 다음에 고르게 한다. 스팟 글이 아니면 스스로 null 을 낸다. */}
-        {!hidden && <SpotPostCard postId={post.id} isAuthor={user?.id === post.userId} />}
+        {/* expectSpot: 스팟 글일 때만 자리를 예약한다 — 아니면 144.75px 빈 상자가 떴다 사라지며
+            아래가 통째로 −145px 튄다(2026-09-19 실측 LayoutShift 0.0806). SpotPostCard 머리말 참고. */}
+        {!hidden && <SpotPostCard postId={post.id} isAuthor={user?.id === post.userId} expectSpot={post.category === 'hand'} />}
 
         {/* ── 어태치먼트(핸드 결과·투표) — 본문 아래. 로딩 중엔 미표시(스켈레톤 금지). */}
         {!hidden && attachment && (
@@ -721,7 +724,8 @@ export default function PostDetailModal({
               onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; } onLike(post.id); }}
               className={reactionPill(!!post.liked)}
             >
-              <Icon name={post.liked ? 'heart-fill' : 'heart'} size={14} strokeWidth={1.8} className="shrink-0" />
+              {/* [E] 1.8 은 실효 1.05px — 화면 굵기 하한(1.1px) 미달 */}
+              <Icon name={post.liked ? 'heart-fill' : 'heart'} size={14} strokeWidth={2.0} className="shrink-0" />
               좋아요 <span className="tabular-nums min-w-[1.5ch] text-right">{post.likeCount}</span>
             </button>
             {/* 추천 / 비추천 (등급 점수에는 반영되지 않음) */}
@@ -755,7 +759,8 @@ export default function PostDetailModal({
               테두리 없는 보조 동작으로 두면 세 카운터가 한 가족으로 읽히고 폭도 남는다(실측 마진 +23px). */}
           <button type="button" onClick={copyLink} aria-label="링크 복사"
             className="hit -mr-1 ml-auto inline-flex shrink-0 items-center gap-1 rounded-input border border-transparent px-1 py-2 text-xs font-semibold leading-none text-ink-muted transition-colors hover:text-accent-200">
-            <Icon name="share" size={14} strokeWidth={1.8} className="shrink-0" />
+            {/* [E] 1.8 은 실효 1.05px — 화면 굵기 하한(1.1px) 미달 */}
+            <Icon name="share" size={14} strokeWidth={2.0} className="shrink-0" />
             공유
           </button>
         </div>

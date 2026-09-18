@@ -272,16 +272,22 @@ test('🔴 ⑧ 목록 이어받기가 비행 중일 때 연 마지막 글 — "�
 // ── 배경 스크롤 잠금 — 글을 열고 닫아도 목록 위치를 잃지 않는다 ─────────────────
 //
 // 🔴 2026-09-19 오너: "게시판 글 클릭하면 한번 밑으로 쭉 내려갔다가 버벅이면서 올라가. 다 그래."
-//   원인은 잠금 방식이었다. `html{overflow:hidden}` 으로 잠그면 문서가 스크롤 불가가 되고,
-//   모바일 브라우저는 그 순간 **접혀 있던 주소창을 도로 펼친다** — 뷰포트 높이가 바뀌면서
-//   `fixed inset-0` 셸이 다시 그려지는 것이 "쭉 내려갔다 올라오는" 움직임이다.
-//   → 게시글 상세만 `keepViewport` 로 바꿨다: body 를 `position:fixed; top:-Y` 로 붙잡고
-//     html 의 overflow 는 건드리지 않는다(브라우저가 보기에 문서는 계속 스크롤 가능).
+//
+// 이 검사는 **같은 날 두 번 뒤집혔다.** 처음에는 원인을 '잠금 방식' 으로 보고 `keepViewport`
+// (body position:fixed)를 켰는데, 실측이 그것을 뒤집었다:
+//   · 진짜 원인은 `SpotPostCard` 의 로딩 스켈레톤(144.75px)이 **모든 글에** 떴다 사라지며
+//     아래가 −145px 튄 것이었다(LayoutShift 0.0806). → `e2e/post-open-stability.spec.ts` 가 잠근다.
+//   · `keepViewport` 는 얻는 것 없이 흔들림만 더했다. 같은 조건(390×844 · 목록 y=387):
+//       켬 → 열 때 layout-shift **0.0153** · 닫을 때 스크롤 손실 0
+//       끔 → 열 때 layout-shift **0**      · 닫을 때 스크롤 손실 **0**
+//   ⇒ 되돌렸다. 그래서 이 검사도 **잠금 방식(무엇을 쓰는가)이 아니라 결과(무엇이 지켜지는가)** 를 본다.
+//     구현 방식을 단언하면 더 나은 구현으로 바꿀 때마다 검사가 거짓으로 빨개진다.
 //
 // ⚠ **주소창 흔들림 자체는 여기서 못 잰다.** 하네스(Pixel 7)에 주소창이 없어 dvh==svh==lvh 다
-//   (CLAUDE.md). 그래서 이 검사는 재현 가능한 쪽만 잠근다 — **위치 보존**과 **모드 선택**이다.
+//   (CLAUDE.md). 다만 **두 모드 모두 문서를 스크롤 불가로 만든다**(docH == innerHeight)는 것이
+//   실측됐으므로, 주소창 가설은 두 모드를 구별하지 못한다 — keepViewport 를 정당화하지 못한다.
 //   실기기 확인은 오너 몫이고, 그 사실을 숨기지 않는다.
-test('🔴 ⑨ 글을 열고 닫아도 목록 스크롤 위치가 그대로다 (배경 잠금 방식)', async ({ page }) => {
+test('🔴 ⑨ 글을 열고 닫아도 목록 위치가 그대로고, 여는 동안 배경이 밀리지 않는다', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await install(page);
   await openBoard(page);
@@ -289,23 +295,46 @@ test('🔴 ⑨ 글을 열고 닫아도 목록 스크롤 위치가 그대로다 (
   await page.waitForTimeout(400);
   const before = await page.evaluate(() => Math.round(window.scrollY));
 
-  await openFromList(page, '둘째 글 제목');
-  const open = await page.evaluate(() => ({
-    pos: document.body.style.position,
-    top: document.body.style.top,
-    htmlOv: document.documentElement.style.overflow,
-  }));
+  // 🔴 잴 것이 실제로 있어야 한다 — 목록이 맨 위면 '위치 보존' 은 아무것도 단언하지 않는다.
+  expect(before, '목록이 스크롤되지 않아 지킬 위치가 없다 — 픽스처가 짧아졌는지 보라(빈 검사 방지)')
+    .toBeGreaterThan(56);
 
-  if (before > 0) {
-    // 스크롤이 실제로 내려간 경우 — 새 방식(위치 고정)이어야 한다.
-    expect(open.pos, `목록이 ${before}px 내려가 있는데 body 를 고정하지 않았다 — 옛 방식이면 주소창이 흔들린다`).toBe('fixed');
-    expect(open.top, 'body.top 이 스크롤 위치의 음수가 아니다 — 화면이 맨 위로 튄다').toBe(`-${before}px`);
-    expect(open.htmlOv, 'html 의 overflow 를 건드렸다 — 문서가 스크롤 불가가 되면 주소창이 도로 펼쳐진다').not.toBe('hidden');
-  } else {
-    // 맨 위라 지킬 위치가 없다 — 설계상 **옛 방식으로 물러난다**(방어 원칙 ③).
-    expect(open.htmlOv, '맨 위에서는 옛 방식(html overflow hidden)으로 물러나야 한다').toBe('hidden');
-    expect(open.pos, '맨 위인데 body 를 고정했다 — 새 경로에 불필요하게 노출된다').not.toBe('fixed');
-  }
+  // 여는 동안 **배경이 그대로인가** — 재는 것은 `헤더 높이`와 `scrollY` 다. layout-shift 가 아니다.
+  //
+  // 🔴 왜 layout-shift 를 안 쓰나 — **두 번 틀렸다. 그 기록을 남긴다.**
+  //   1차: 전역 layout-shift 를 그대로 썼더니 0.0568 로 빨개졌다. 그런데 그건 배경이 아니라
+  //        **모달 자신의 댓글이 늦게 도착해 자라는 것**이었다(이 픽스처는 댓글을 목킹하지 않는다).
+  //        상관없는 것 때문에 빨개지는 검사는 곧 무시당한다.
+  //   2차: 그래서 출처가 모달 안인 것을 뺐다. 그러자 이번엔 **아무것도 못 잡았다** —
+  //        `keepViewport` 를 다시 켜고 돌렸는데 **그대로 통과했다**(음성 대조 실패).
+  //        즉 '아무것도 재지 않는 초록 검사' 를 내가 만든 것이다. 이 저장소 최다 함정을 그대로 밟았다.
+  //   ⇒ CLS 는 **여러 원인이 한 숫자로 뭉개지는 지표**라 이 용도에 안 맞는다.
+  //     기전을 직접 재라: keepViewport 는 문서를 접어 scrollY 를 0 으로 만들고, 그 스크롤 이벤트가
+  //     **헤더 축소를 풀어(47.75 → 60.5)** 배경 전체를 12.75px 내린다. 그 둘은 이진값이라 안 뭉개진다.
+  const before2 = await page.evaluate(() => {
+    const bell = document.querySelector('button[aria-label^="알림"]')!;
+    return { h: +bell.closest('header')!.getBoundingClientRect().height.toFixed(2), y: Math.round(window.scrollY) };
+  });
+  // 스크롤이 56 을 넘었으니 헤더는 **축소 상태**여야 한다. 아니면 이 검사의 전제가 무너진 것이다.
+  expect(before2.h, `열기 전 헤더가 축소 상태가 아니다(${before2.h}) — scrollY ${before2.y} 인데도 그렇다면`
+    + ' 헤더 축소 자체가 죽었다. 그 상태로는 아래 단언이 아무것도 재지 못한다.').toBeLessThan(55);
+
+  await page.evaluate(() => {
+    const el = [...document.querySelectorAll('*')].find((n) => n.children.length === 0 && n.textContent?.trim() === '둘째 글 제목');
+    (el?.closest('button,a,[role="button"]') as HTMLElement | null)?.click();
+  });
+  await expect(dialog(page)).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(900);
+  const during = await page.evaluate(() => {
+    const bell = document.querySelector('button[aria-label^="알림"]')!;
+    return { h: +bell.closest('header')!.getBoundingClientRect().height.toFixed(2), y: Math.round(window.scrollY) };
+  });
+  expect(during.h, `글을 여는 동안 배경 헤더 높이가 ${before2.h} → ${during.h} 로 바뀌었다`
+    + ' — 잠금 방식이 문서를 접어 scrollY 를 0 으로 만들고 헤더 축소를 풀었다'
+    + '(keepViewport 를 다시 켰거나 같은 성질의 것을 넣었나?). 배경이 그만큼 통째로 밀린다.')
+    .toBe(before2.h);
+  expect(during.y, `글을 여는 동안 배경 scrollY 가 ${before2.y} → ${during.y} 로 바뀌었다`)
+    .toBe(before2.y);
 
   await page.keyboard.press('Escape');
   await page.waitForTimeout(700);

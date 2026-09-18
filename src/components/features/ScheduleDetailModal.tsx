@@ -9,7 +9,7 @@ import { isScheduleLiked, toggleScheduleLike } from '../../api/calendar';
 import StatefulActionButton from '../atoms/StatefulActionButton';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 import { getMyReservation, createReservation, cancelMyReservation, getOwnerReservations, type Reservation, type OwnerReservation } from '../../api/reservations';
-import { prizeMainText, buyInText } from './ScheduleCard';
+import { prizeMainText, prizeParts, buyInText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import { scheduleStatus } from '../../lib/scheduleStatus';
 import { matchClockScheduleDetailed, msToRegClose, type RegInfo } from '../../lib/regStatus';
@@ -156,9 +156,10 @@ export default function ScheduleDetailModal({
         type="button"
         onClick={onClose}
         aria-label="닫기"
-        className="lg:hidden fixed top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-[60] w-9 h-9 flex items-center justify-center rounded-full bg-surface-base/80 backdrop-blur text-ink-primary hover:bg-surface-high transition-colors"
+        // [B] 44px 터치 표준 — 예전 w-9 h-9(38.25px)는 미달이었다. Modal.tsx 닫기 버튼과 같은 값(w-11 h-11)으로.
+        className="lg:hidden fixed top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-[60] w-11 h-11 flex items-center justify-center rounded-full bg-surface-base/80 backdrop-blur text-ink-primary hover:bg-surface-high transition-colors"
       >
-        <Icon name="close" size={15} />
+        <Icon name="close" size={18} />
       </button>
 
       {/* PC: 포스터(좌, 고정) + 정보(우, 스크롤) 2열 / 모바일: 세로 스택 */}
@@ -227,7 +228,8 @@ export default function ScheduleDetailModal({
                     : 'bg-danger text-white',
                 ].join(' ')}>
                   {status === 'ended' ? '종료'
-                    : regInfo && regInfo.msLeft === 0 ? '진행 중 · 레지 마감'
+                    // [D] '등록 마감' — 바로 옆 분기가 이미 '등록 가능'을 쓴다. 같은 배지 안에서 '레지'·'등록' 이 섞여 있었다.
+                    : regInfo && regInfo.msLeft === 0 ? '진행 중 · 등록 마감'
                     : regInfo && regInfo.msLeft !== null ? '진행 중 · 등록 가능'
                     : '진행 중'}
                 </span>
@@ -423,7 +425,10 @@ export default function ScheduleDetailModal({
             {/* 바이인 미입력(0)은 가격 정보가 아니다 — 카드·표와 같은 '—' 문법(§28은 실제 금액에만 적용) */}
             <SummaryCell label="참가비" value={buyInText(schedule.buyIn?.amount)} />
             <SummaryCell
-              label={schedule.guaranteed ? '상금 보장(GTD)' : '예상 상금'}
+              // [D] 하드코딩 금지 — 목록 카드(ScheduleCard)가 이미 prizeParts() 를 정본으로 쓴다. 여기만
+              //   따로 '상금 보장(GTD)' 를 적어 두 화면이 다른 문구를 말했다(오너 2026-09-18 은 'GTD' 로
+              //   통일했는데 이 파일만 반영이 안 됐다).
+              label={prizeParts(schedule)?.label ?? (schedule.guaranteed ? 'GTD' : '예상 상금')}
               value={prizeMainText(schedule)}
               accent
               badge={(schedule.prizePool || schedule.prizePercent) ? (
@@ -485,9 +490,11 @@ export default function ScheduleDetailModal({
             {schedule.structure?.startingChips != null && <InfoRow label="스타팅 칩" value={schedule.structure.startingChips.toLocaleString()} />}
             {schedule.structure?.rebuyStack != null && <InfoRow label="리바이 칩" value={schedule.structure.rebuyStack.toLocaleString()} />}
             {schedule.structure?.blindLevelMinutes != null && <InfoRow label="블라인드 타임" value={`${schedule.structure.blindLevelMinutes}분`} />}
-            <InfoRow label="레지 마감" value={schedule.regCloseTime ? `${schedule.regCloseTime} · 레이트 레지 마감` : '현장 안내'} />
+            {/* [D] '등록 마감' — 같은 schedule.regCloseTime 을 이 화면 안(요약 카드 442행)에서는 '등록 마감',
+                여기서는 '레지 마감'이라 부르고 있었다(2026-09-19 스윕 D). 같은 값 두 이름 금지 — '등록 마감'으로 통일. */}
+            <InfoRow label="등록 마감" value={schedule.regCloseTime ? `${schedule.regCloseTime} · 레이트 등록 마감` : '현장 안내'} />
             {/* ⚠ 2026-09-13: 이 줄은 `structure.lateRegLevels` 를 **날것으로** 찍어, 포스터가
-                `regCloseTime='16LV 00:12'` 와 `lateRegLevels=20` 을 함께 가지면 바로 위 '레지 마감'(16LV)과
+                `regCloseTime='16LV 00:12'` 와 `lateRegLevels=20` 을 함께 가지면 바로 위 '등록 마감'(16LV)과
                 같은 화면에서 20레벨이라고 말했다. 값은 regCloseLevelOf(정본=regCloseTime) 로 통일한다.
                 표시 조건은 건드리지 않는다 — 예전에 행이 뜨던 포스터에서만, 예전처럼 뜬다(0레벨 폴백 포함). */}
             {schedule.structure?.lateRegLevels !== undefined && (
@@ -616,7 +623,10 @@ export default function ScheduleDetailModal({
         <section className="overflow-hidden rounded-aura border border-border-subtle bg-surface-high">
           <div className="grid grid-cols-2 [&>div]:border-border-subtle [&>div:nth-child(even)]:border-l">
             <SummaryCell
-              label={schedule.guaranteed ? '상금 보장(GTD)' : '예상 상금'}
+              // [D] 하드코딩 금지 — 목록 카드(ScheduleCard)가 이미 prizeParts() 를 정본으로 쓴다. 여기만
+              //   따로 '상금 보장(GTD)' 를 적어 두 화면이 다른 문구를 말했다(오너 2026-09-18 은 'GTD' 로
+              //   통일했는데 이 파일만 반영이 안 됐다).
+              label={prizeParts(schedule)?.label ?? (schedule.guaranteed ? 'GTD' : '예상 상금')}
               value={prizeMainText(schedule)}
               accent
               badge={(schedule.prizePool || schedule.prizePercent) ? (
@@ -896,7 +906,8 @@ function LiveClockPanel({ schedule, regInfo, onSeePrize, onDisplay }: {
       'rounded-aura border p-2',
       running ? 'border-emerald-500/30 bg-emerald-500/[0.04]' : 'border-border-default bg-surface-high/40',
     ].join(' ')}>
-      {/* 헤더: ● LIVE ────────────── 레지 마감 · LV8 */}
+      {/* 헤더: ● LIVE ────────────── 등록 마감 · LV8
+          [D] '등록 마감' — 같은 화면(스크롤 위 InfoRow)과 이름을 맞춘다. 예전엔 여기만 '레지 마감'이었다. */}
       <div className="mb-2 flex items-center gap-2 px-1">
         <span className={['flex shrink-0 items-center gap-1 text-2xs font-bold leading-none',
           running ? LIVE_INK : 'text-ink-secondary'].join(' ')}>
@@ -904,12 +915,12 @@ function LiveClockPanel({ schedule, regInfo, onSeePrize, onDisplay }: {
         </span>
         <span className="ml-auto min-w-0 truncate text-2xs font-bold leading-none">
           {regMs === null ? (
-            <span className="text-ink-muted">레지 마감 · 현장 안내</span>
+            <span className="text-ink-muted">등록 마감 · 현장 안내</span>
           ) : regMs === 0 ? (
-            <span className="text-ink-muted">레지 마감{regLv > 0 ? ` · LV${regLv}` : ''} · 마감</span>
+            <span className="text-ink-muted">등록 마감{regLv > 0 ? ` · LV${regLv}` : ''} · 마감</span>
           ) : (
             <span className={regMs <= 5 * 60_000 ? URGENT_INK : LIVE_INK}>
-              레지 마감{regLv > 0 ? ` · LV${regLv}` : ''} · {minLabel(regMs)} 남음
+              등록 마감{regLv > 0 ? ` · LV${regLv}` : ''} · {minLabel(regMs)} 남음
             </span>
           )}
         </span>

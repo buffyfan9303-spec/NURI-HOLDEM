@@ -83,16 +83,39 @@ describe('상단 본인인증 유도 배너', () => {
     expect(BANNER, '닫기 버튼에 hit(44px 히트영역)가 없다 — 14px 아이콘은 손가락으로 못 누른다').toMatch(/className="hit /);
   });
 
-  it('🔴 ④ 닫기는 **계정별**로 기억한다 — 공용 PC 에서 다음 손님까지 감추면 안 된다', () => {
+  it('🔴 ③-b 자물쇠는 버튼 **안**이다 — 셸을 div 로 바꾸며 죽은 클릭 영역을 만들지 않는다', () => {
+    // 적대적 검토가 잡은 회귀: 옛 배너는 행 전체가 button 이라 자물쇠를 눌러도 인증으로 갔다.
+    // 중첩 button 을 피하려고 셸을 div 로 바꾸면서 아이콘을 형제로 빼자 그 자리가 죽었다.
+    const cta = BANNER.slice(BANNER.indexOf('<button'), BANNER.indexOf('</button>'));
+    expect(cta, "자물쇠 아이콘이 '인증하기' 버튼 밖에 있다 — 그 자리를 눌러도 아무 일도 안 일어난다")
+      .toMatch(/<Icon name="lock"/);
+  });
+
+  it('🔴 ③-c 닫기 히트존이 옆 버튼을 침범하지 않는다 — px-1 이면 2.25px 겹친다', () => {
+    // `.hit` 은 44px 를 **중앙에서 좌우로** 넓힌다. 닫기 박스가 px-1(=22.5px)이면 한쪽 오버행이
+    // (44-22.5)/2 = 10.75px 라 gap-2(8.5px)를 넘어 왼쪽 CTA 의 '→' 글리프 위를 덮는다.
+    // px-2(=31px)면 오버행 6.5px < 8.5px 라 겹치지 않는다. 숫자가 바뀌면 여기서 다시 계산해라.
+    const close = BANNER.slice(BANNER.indexOf('aria-label="본인인증 안내 닫기"'));
+    expect(close, '닫기 버튼이 px-1 로 돌아갔다 — 44px 히트존이 옆 CTA 화살표를 2.25px 덮어 오탭이 난다')
+      .toMatch(/className="hit relative shrink-0 px-2 /);
+  });
+
+  it('🔴 ④ 닫기는 **계정별 키**로 기억한다 — 한 기기에서 계정이 번갈아 들어도 서로를 덮지 않는다', () => {
     const i = APP.indexOf('const dismissVerifyNudge');
     expect(i, 'dismissVerifyNudge 가 없다').toBeGreaterThan(-1);
     const fn = APP.slice(i, i + 400);
-    // 값이 '1' 같은 플래그면 로그아웃 후 다른 계정이 로그인해도 배너가 안 뜬다(계정 간 누수).
-    expect(fn, "닫기 상태를 플래그로 저장한다 — 공용 PC 에서 다음 손님의 배너까지 꺼진다").not.toMatch(/setItem\('nuri:verify-nudge-off', '1'\)/);
-    expect(fn).toMatch(/const id = user\?\.id \?\? '';/);
-    expect(fn).toMatch(/setItem\('nuri:verify-nudge-off', id\)/);
-    // 표시 조건도 같은 계정 id 로 대조해야 짝이 맞는다.
-    expect(BANNER, '표시 조건이 계정 id 를 대조하지 않는다').toMatch(/verifyNudgeOffFor !== user\.id/);
+    // 🔴 전역 키 하나에 '닫은 계정 id' 를 넣는 방식은 적대적 검토가 무너뜨렸다:
+    //   logout() 은 setUser(null) 뿐이고 reload 가 없어 App 이 리마운트되지 않는다.
+    //   → A 닫기 → B 닫기(전역 키를 덮음) → 다시 A = A 의 배너가 되살아난다. 업주는 PC 99% 다.
+    expect(fn, '전역 키 하나에 계정 id 를 덮어쓴다 — 계정이 번갈아 들면 서로의 기록을 지운다')
+      .not.toMatch(/setItem\('nuri:verify-nudge-off',/);
+    expect(fn, '계정별 키가 아니다').toMatch(/setItem\(verifyNudgeKey, '1'\)/);
+    expect(APP).toMatch(/const verifyNudgeKey = user \? `nuri:verify-nudge-off:\$\{user\.id\}` : null;/);
+    // 읽기도 user 를 따라 다시 계산돼야 한다 — useState 초기화 함수는 마운트 때 한 번만 돈다.
+    const readIdx = APP.indexOf('const verifyNudgeOff = useMemo(');
+    expect(readIdx, '닫힘 상태를 useMemo 로 읽지 않는다 — 마운트 1회 읽기는 계정 전환을 못 따라간다').toBeGreaterThan(-1);
+    expect(APP.slice(readIdx, readIdx + 400)).toMatch(/\}, \[verifyNudgeKey, verifyNudgeTick\]\);/);
+    expect(BANNER, '표시 조건이 계정별 판정을 쓰지 않는다').toMatch(/!verifyNudgeOff/);
   });
 
   it('🔴 ⑤ 배너를 껐다고 인증이 면제되지는 않는다 — 게이트·진입점은 그대로', () => {

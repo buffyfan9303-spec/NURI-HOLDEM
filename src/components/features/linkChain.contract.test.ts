@@ -29,7 +29,7 @@ describe('A · 내 정보 → 매장(재방문 사슬)', () => {
     expect(APP).toMatch(/if \(!venuesRef\.current\.some\(\(v\) => v\.id === venueId\)\) \{/);
   });
   it('🔴 세 자리가 전부 이어진다 — 이용권 묶음(VoucherWallet onVenue) · 이용 내역 행 · 입상 행', () => {
-    expect(ME).toMatch(/<VoucherWallet onNeedVerify=\{\(\) => goTab\('security'\)\} onVenue=\{onOpenVenue\} \/>/);
+    expect(ME).toMatch(/<VoucherWallet onNeedVerify=\{\(\) => goTab\('security'\)\} onVenue=\{onOpenVenue\} boxed \/>/);
     expect(ME).toMatch(/data-testid="me-usage-venue" onClick=\{\(\) => onOpenVenue\?\.\(u\.venueId\)\}/);
     expect(ME).toMatch(/data-testid="me-rank-venue" onClick=\{\(\) => vid && onOpenVenue\?\.\(vid\)\}/);
     // 입상 행은 매장명뿐(getMyRankingHistory) — 전체 venues 로 이름→id 를 푼다

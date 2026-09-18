@@ -267,6 +267,12 @@ const AppHeader = memo(function AppHeader({
     // 판정은 lib/headerShrink 한 벌 — CommunityTab 의 섹션 스크롤 복원이 같은 판정으로 헤더 뒤집힘을 예측한다.
     setShrunk((prev) => nextHeaderShrunk(prev, y));
   }, []));
+  // 헤더 아래 매달린 sticky 들이 **같은 높이를 보게** 한다(`--header-now`, src/index.css 머리말).
+  // 안 하면 헤더만 줄고 서브탭·장부 요약 바·알림 패널은 옛 높이에 남아 3.25px 틈이 생긴다(2026-09-19 실측).
+  useEffect(() => {
+    const el = document.documentElement;
+    if (shrunk) el.dataset.headerShrunk = '1'; else delete el.dataset.headerShrunk;
+  }, [shrunk]);
 
   // 프로필 드롭다운: 바깥(다른 버튼 등)을 클릭/터치하면 자동으로 닫는다.
   useEffect(() => {
@@ -1136,16 +1142,24 @@ export default function App() {
   const dismissPushNudge = () => { setPushNudge(false); try { localStorage.setItem('nuri:push-nudge-dismissed', '1'); } catch { /* noop */ } };
 
   // 본인인증 유도 배너 닫기(2026-09-19 오너: "x 눌러서 끌 수도 있게").
-  // ⚠ 값에 **닫은 계정 id** 를 넣는다 — 플래그('1')로 두면 공용 PC 에서 다음 손님이 로그인해도
-  //   배너가 안 뜬다(같은 함정을 App 이 keep-alive 캐시에서 이미 한 번 겪었다: key=계정).
-  //   기능은 그대로다 — 민감 기능은 VerifyGateSheet 가 여전히 막고, 내 정보>보안에 진입점이 남는다.
-  const [verifyNudgeOffFor, setVerifyNudgeOffFor] = useState<string | null>(() => {
-    try { return localStorage.getItem('nuri:verify-nudge-off'); } catch { return null; }
-  });
+  //
+  // ⚠ **키를 계정별로 나눈다.** 처음엔 전역 키 하나에 '닫은 계정 id' 를 넣었는데, 적대적 검토가
+  //   이 저장소에 실제로 있는 조건에서 무너뜨렸다: `logout()` 은 `setUser(null)` 뿐이고
+  //   reload 가 없어 **App 이 리마운트되지 않는다**(AuthContext.tsx). 그래서 새로고침 없이
+  //   A 닫기 → B 로그인 → B 닫기(전역 키를 B 로 덮어씀) → 다시 A 로그인 하면
+  //   A 가 이미 닫은 배너가 되살아난다. 업주는 PC 99% 라 한 기기에서 계정이 번갈아 든다.
+  //   키를 나누면 서로를 덮지 않고, 읽기도 user 를 따라 다시 계산된다(마운트 1회 읽기 금지).
+  // 기능은 그대로다 — 민감 기능은 VerifyGateSheet 가 여전히 막고, 내 정보>보안에 진입점이 남는다.
+  const verifyNudgeKey = user ? `nuri:verify-nudge-off:${user.id}` : null;
+  const [verifyNudgeTick, setVerifyNudgeTick] = useState(0);
+  const verifyNudgeOff = useMemo(() => {
+    void verifyNudgeTick; // 닫기 직후 같은 프레임에서 다시 읽게 하는 신호
+    if (!verifyNudgeKey) return false;
+    try { return localStorage.getItem(verifyNudgeKey) === '1'; } catch { return false; }
+  }, [verifyNudgeKey, verifyNudgeTick]);
   const dismissVerifyNudge = () => {
-    const id = user?.id ?? '';
-    setVerifyNudgeOffFor(id);
-    try { localStorage.setItem('nuri:verify-nudge-off', id); } catch { /* noop */ }
+    if (verifyNudgeKey) { try { localStorage.setItem(verifyNudgeKey, '1'); } catch { /* noop */ } }
+    setVerifyNudgeTick((n) => n + 1);
   };
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   useEffect(() => {
@@ -1250,7 +1264,7 @@ export default function App() {
         const fire = streak >= 2 ? ` · ${streak}일 연속` : '';
         toast.show(`${name || '매장'} 출석 완료!${points > 0 ? ` 출석 +${points}점` : ''}${fire}`, 'success');
         // 매장 QR 스캔은 '그 매장에 와 있다'는 뜻 — 홈이 아니라 그 매장 페이지(오늘 대회·내 활동)에 착지
-        setOpenVenueId(cv);
+        startTransition(() => setOpenVenueId(cv));
       })
       .catch((e) => toast.show(e instanceof Error ? e.message : '출석 실패', 'error'))
       .finally(() => {
@@ -1318,7 +1332,7 @@ export default function App() {
         window.dispatchEvent(new Event('nuri:event-board-refresh'));
         window.dispatchEvent(new Event('nuri:checkin-done')); // 홈 '이어서 하기'·'가 본 매장'(visitedVenues) 재조회
           toast.show(`${name || '매장'} 출석 완료!${points > 0 ? ` 출석 +${points}점` : ''}${streak >= 2 ? ` · ${streak}일 연속` : ''}`, 'success');
-          setOpenVenueId(it.venueId);
+          startTransition(() => setOpenVenueId(it.venueId));
         })
         .catch((e) => toast.show(e instanceof Error ? e.message : '출석 실패', 'error'));
     } else {
@@ -1564,9 +1578,20 @@ export default function App() {
         //   실측(라이브 프로덕션 · 390×844 · 로그아웃): 첫 진입 **261ms** vs 라이브 18ms · 커뮤니티 21ms.
         //   ⚠ 긴 작업 0 · 최장 프레임 9ms 였다 — CPU 가 버벅인 게 아니라 **청크 왕복 동안 화면이 멈춘 것**이다.
         //   판별: 같은 청크가 캐시에 있는 두 번째 방문은 **17ms**(transferSize 0) → 스로틀이 아니라 네트워크.
-        //   업주·직원·관리자에게는 내려보내지 않는다 — 그들에겐 이 칸이 '내 매장'이라 캘린더 판 자체가 없다
-        //   (위 VenueManageTab 주석이 기록한 '게이트를 무력화해 손님에게 내려보낸' 사고의 반대 방향 적용).
-        ...(!(isOwner || isAdmin || user?.role === 'venue_staff') ? [import('./components/features/CalendarPanel')] : []),
+        //   🔴 2026-09-19 정정: 여기 "업주·직원·관리자에게는 내려보내지 않는다 — 그들에겐 이 칸이
+        //     '내 매장'이라 캘린더 판 자체가 없다" 고 적혀 있었는데 **사실이 아니었다.**
+        //     업주의 '내 매장 > 내 캘린더' 가 바로 이 컴포넌트다(VenueManageTab.tsx:198 `CalendarPanelM`).
+        //     그래서 업주에게는 이 청크가 **항상 cold** 였고, 그 섹션을 누르면 App 의 LazyFallback 이
+        //     300~400ms 동안 `<main data-tab="my-store">` 를 통째로 덮었다 — 사이드바까지 사라진다.
+        //     오너가 "내 매장 모든 부분이 페이지가 변경되며 말려 올라간다" 고 한 증상의 절반이 이것이다
+        //     (나머지 절반은 섹션이 빈 판으로 먼저 서는 것 — VenueManageTab 쪽에서 자리 예약으로 막는다).
+        //     ⇒ **역할 게이트를 없애지 않고 양쪽 다 데운다.** 손님에게 업주 스위트를 내려보내는 것과는
+        //       방향이 반대다 — 이건 이미 업주가 열게 되어 있는 화면의 청크다.
+        import('./components/features/CalendarPanel'),
+        //   같은 이유로 내 매장의 나머지 lazy 섹션 둘도 데운다(둘 다 가벼운 청크다).
+        ...((isOwner || isAdmin || user?.role === 'venue_staff')
+          ? [import('./components/features/VenueMatchPanel'), import('./components/features/VenueEventRequestPanel')]
+          : []),
         // 이용권 시트 — 헤더 상시 진입점 중 **유일하게 cold** 였다(오너 2026-09-17: "이용권 아이콘을 누르면 딜레이가 걸려").
         //   여는 경로가 startTransition(아래 onOpenVoucher) + `<Suspense fallback={null}>` 조합이라
         //   청크가 도착할 때까지 **스피너조차 없이 이전 화면이 그대로** 있다 — 왕복 시간이 그대로 체감 딜레이다.
@@ -1756,7 +1781,7 @@ export default function App() {
     if (!a) return;
     if (a.open === 'post') setPendingPostId(a.id);          // 기존 딥링크 경로가 단건 조회까지 처리한다
     else if (a.open === 'schedule') openScheduleById(a.id);
-    else if (a.open === 'venue') setOpenVenueId(a.id);
+    else if (a.open === 'venue') startTransition(() => setOpenVenueId(a.id));
     // 이벤트는 **판을 여는 데까지**다. 고르던 카드는 담지도 않고 열지도 않는다 —
     // 로그인했더니 참여권이 한 장 줄어 있으면 그건 복원이 아니라 사용자가 지시하지 않은 쓰기다.
     else if (a.open === 'event') openEvent(a.id);
@@ -1841,7 +1866,7 @@ export default function App() {
       //   그 해시가 되살아나 hashchange → 패널이 즉시 다시 열린다(닫히지 않는 것처럼 보인다).
       //   공유 링크는 이 해시를 읽지 않고 스팟 상태로 새로 만든다(GtoDeepPanel) — 지워도 무해.
       try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch { /* noop */ }
-      setGtoInit({ hero, villain, board });
+      startTransition(() => setGtoInit({ hero, villain, board }));
     };
     apply();
     window.addEventListener('hashchange', apply);
@@ -2496,6 +2521,8 @@ export default function App() {
     // 스냅샷 전에 동기적으로 — 매장 페이지도 전면 오버레이라 크롬 스냅샷이 위에 얹힌다(openMeCb 와 같은 이유).
     document.documentElement.setAttribute('data-overlay', '');
     // 풀페이지 마운트(지도 임베드 포함)를 스냅샷 뒤에서 끝낸다 — 포스터→매장 전환도 크로스페이드
+    // ⚠ 여기만 startTransition 을 쓰지 않는다 — 포스터 모핑(VT)이 **동기 커밋**을 요구한다.
+    //   '일관성' 을 이유로 감싸지 마라. 감싸면 스냅샷 뒤에서 커밋되지 않아 모핑이 깨진다.
     withViewTransition(() => flushSync(() => {
       setOpenSchedule(null);   // 일정 모달이 열려있으면 닫고 매장으로 전환
       setOpenVenueId(venueId);
@@ -2515,7 +2542,7 @@ export default function App() {
     // 스냅샷에 없어도 네트워크 목록이 아직이면 판정을 미룬다 — 로드가 끝나면 venuesLoaded 가 바뀌어 다시 돈다.
     if (!target && !venuesLoaded) return;
     deepLinked.current = true;
-    if (target) setOpenVenueId(target.id);
+    if (target) startTransition(() => setOpenVenueId(target.id));
     // 목록에 없으면(문 닫음·주소 변경) 조용히 홈을 띄우지 않는다 — /s/<코드>(?vnf=) 와 같은 안내.
     else toast.show('그 주소의 매장을 찾을 수 없어요. 링크가 바뀌었거나 문을 닫았을 수 있습니다', 'error');
     // URL 에서 v/venue 파라미터 제거 → 매장을 닫고 앱을 둘러보다 새로고침해도
@@ -2608,10 +2635,10 @@ export default function App() {
     displayDeepLinked.current = true;
     const sp = new URLSearchParams(window.location.search);
     const vid = sp.get('display');
-    if (vid) setDisplayTarget({ venueId: vid, gameSeq: Number(sp.get('g') || '1') || 1 });
+    if (vid) startTransition(() => setDisplayTarget({ venueId: vid, gameSeq: Number(sp.get('g') || '1') || 1 }));
     // ?remote=<venueId>&g=<seq> — 휴대폰 리모컨(오너 #6 2026-09-02). 같은 파싱 규칙, 다른 화면.
     const rid = sp.get('remote');
-    if (rid) setRemoteTarget({ venueId: rid, gameSeq: Number(sp.get('g') || '1') || 1 });
+    if (rid) startTransition(() => setRemoteTarget({ venueId: rid, gameSeq: Number(sp.get('g') || '1') || 1 }));
   }, []);
   const [remoteTarget, setRemoteTarget] = useState<{ venueId: string; gameSeq: number } | null>(null);
   const closeRemote = useCallback(() => {
@@ -2621,7 +2648,9 @@ export default function App() {
   useBackClose(remoteTarget !== null, closeRemote);
 
   // 관전 디스플레이 열기(라이브 카드/운영자 클락에서) — 같은 탭에서 풀스크린 오버레이로
-  const openDisplay = useCallback((venueId: string, gameSeq = 1) => setDisplayTarget({ venueId, gameSeq }), []);
+  // startTransition: ClockDisplay 는 lazyWithReload 라 청크가 캐시에 있어도 첫 렌더에 한 번 서스펜드한다.
+  //   감싸지 않으면 불투명 OverlayFallback 이 최소 ~300ms 화면을 덮는다("한 번 번쩍").
+  const openDisplay = useCallback((venueId: string, gameSeq = 1) => startTransition(() => setDisplayTarget({ venueId, gameSeq })), []);
   const closeDisplay = useCallback(() => {
     setDisplayTarget(null);
     try { const url = new URL(window.location.href); url.searchParams.delete('display'); url.searchParams.delete('g'); window.history.replaceState(null, '', url.pathname + url.search + url.hash); } catch { /* ignore */ }
@@ -2645,7 +2674,7 @@ export default function App() {
       toast.show('매장 목록을 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요', 'error');
       return;
     }
-    setOpenVenueId(venueId);
+    startTransition(() => setOpenVenueId(venueId));
   }, [venues, toast]);
   /** 상세 모달이 **한 번이라도 렌더된 적 있는가**. 청크를 받은 것과는 다르다 — 아래 참고. */
   const schedEverOpenedRef = useRef(false);
@@ -2835,7 +2864,7 @@ export default function App() {
     if (sm) { openScheduleById(sm[1], opts); return; }
     // /community/:venueId
     const cm = link.match(/^\/community\/(.+)$/);
-    if (cm) { setOpenVenueId(cm[1]); return; }
+    if (cm) { startTransition(() => setOpenVenueId(cm[1])); return; }
     // /posts/:id → 커뮤니티 탭 이동 + 해당 게시글 열기
     const pm = link.match(/^\/posts\/(.+)$/);
     if (pm) {
@@ -3545,7 +3574,11 @@ export default function App() {
               : <>예약한 대회 <b className="text-accent-300">1시간 전 리마인더</b>와 이용권 도착을 폰으로 받으세요.</>}
           </p>
           <button type="button" onClick={doEnablePush} className="btn-primary shrink-0 px-3 py-1.5 text-2xs">알림 켜기</button>
-          <button type="button" onClick={dismissPushNudge} aria-label="닫기" className="hit relative shrink-0 px-1 text-ink-muted hover:text-ink-secondary"><Icon name="close" size={14} /></button>
+          {/* px-2 인 이유는 바로 아래 본인인증 배너 주석과 같다 — `.hit` 은 44px 를 **중앙에서 좌우로**
+              넓히므로 px-1(박스 22.5px)이면 한쪽 오버행이 10.75px 라 gap-2(8.5px)를 넘어
+              왼쪽 '알림 켜기' 버튼을 2.25px 덮는다. 그 자리를 노려 누르면 켜는 대신 배너가 닫힌다.
+              (2026-09-19 전수 스윕이 이 자리를 찾아냈다 — 같은 공식이 같은 파일 안에 두 번 있었다.) */}
+          <button type="button" onClick={dismissPushNudge} aria-label="닫기" className="hit relative shrink-0 px-2 text-ink-muted hover:text-ink-secondary"><Icon name="close" size={14} /></button>
         </div>
       )}
 
@@ -3558,16 +3591,24 @@ export default function App() {
             중첩된 쪽 클릭이 브라우저마다 갈린다. 위 푸시 배너와 같은 문법(div + 형제 버튼 둘)으로 맞춘다.
           ⚠ `truncate` 는 장식이 아니라 **한 줄 보증**이다. 문구가 길어지면 말줄임으로 끝나고
             줄이 늘지 않는다(고아줄이 구조적으로 불가능해진다). */}
-      {user && !user.verified && PORTONE_CONFIGURED && verifyNudgeOffFor !== user.id && (
+      {user && !user.verified && PORTONE_CONFIGURED && !verifyNudgeOff && (
         <div className="flex items-center gap-2 border-b border-accent-400/30 bg-accent-300/[0.08] px-page-x py-2">
-          <span className="shrink-0 text-accent-300" aria-hidden><Icon name="lock" size={14} /></span>
+          {/* ⚠ 자물쇠는 **버튼 안**에 둔다. 셸을 div 로 바꾸면서 이걸 형제로 뺐더니
+              예전엔 눌리던 아이콘 자리가 죽은 영역이 됐다(적대적 검토가 잡았다).
+              셸 전체를 클릭으로 되돌릴 수는 없다 — 안에 닫기 버튼이 있어 중첩 button 이 된다. */}
           <button type="button" onClick={() => openMeCb('security')}
-            className="flex min-w-0 flex-1 items-center gap-2 text-left transition-opacity hover:opacity-80">
+            title="휴대폰 본인인증이 필요합니다"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-input py-0.5 text-left transition-opacity hover:opacity-80">
+            <span className="shrink-0 text-accent-300" aria-hidden><Icon name="lock" size={14} /></span>
             <span className="min-w-0 flex-1 truncate text-2xs text-accent-300">휴대폰 본인인증이 필요합니다</span>
             <span className="shrink-0 text-2xs font-bold text-accent-300">인증하기 →</span>
           </button>
+          {/* ⚠ px-1 이 아니라 px-2 다. `.hit` 은 44px 를 **중앙에서 좌우로** 넓히는데,
+              px-1(박스 22.5px)이면 한쪽 오버행이 10.75px 라 gap-2(8.5px)를 넘어 왼쪽 CTA 의
+              '→' 글리프 위를 2.25px 덮는다 — 화살표 끝을 노려 누르면 배너가 닫혔다.
+              px-2(박스 31px)면 오버행 6.5px < 8.5px 라 겹치지 않는다. */}
           <button type="button" onClick={dismissVerifyNudge} aria-label="본인인증 안내 닫기"
-            className="hit relative shrink-0 px-1 text-ink-muted transition-colors hover:text-ink-secondary">
+            className="hit relative shrink-0 px-2 text-ink-muted transition-colors hover:text-ink-secondary">
             <Icon name="close" size={14} />
           </button>
         </div>

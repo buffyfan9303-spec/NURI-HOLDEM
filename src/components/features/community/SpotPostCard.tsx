@@ -23,7 +23,11 @@ import { fetchPostSpot, revealPostSpot, type PostSpot } from '../../../api/spots
 
 type State = 'loading' | 'none' | 'error' | 'ok';
 
-export default function SpotPostCard({ postId, isAuthor }: { postId: string; isAuthor: boolean }) {
+/**
+ * @param expectSpot 이 글이 **스팟 글일 것으로 아는가**. 로딩 중 자리를 예약할지를 정한다.
+ *   기본 false — 모르면 자리를 잡지 않는다. 잘못 예약한 자리는 사라질 때 아래를 통째로 튀게 한다.
+ */
+export default function SpotPostCard({ postId, isAuthor, expectSpot = false }: { postId: string; isAuthor: boolean; expectSpot?: boolean }) {
   const toast = useToast();
   const [ps, setPs] = useState<PostSpot | null>(null);
   const [state, setState] = useState<State>('loading');
@@ -44,8 +48,20 @@ export default function SpotPostCard({ postId, isAuthor }: { postId: string; isA
 
   // 스팟 글이 아니면 자리를 차지하지 않는다 — 일반 글·레거시 리플레이 글이 여기 걸린다.
   if (state === 'none') return null;
-  // 스켈레톤 높이를 실제 카드와 맞춘다(CLS) — 값이 들어올 때 댓글이 밀려 내려가지 않게.
-  if (state === 'loading') return <div className="mt-3 h-[132px] animate-pulse rounded-aura bg-surface-high" />;
+  // 🔴 2026-09-19 오너: "게시판 글을 누르면 아직도 로드가 느린건지 지지직 하면서 올라가".
+  //   근본원인이 **이 스켈레톤이었다.** 132px + mt-3 12.75 = 144.75px 짜리 빈 상자를
+  //   PostDetailModal 이 **모든 글에** 무조건 그렸고, 스팟이 아니면(=운영의 전 글) null 로 사라지면서
+  //   반응행·댓글·이전/다음이 통째로 위로 튀었다.
+  //   실측(390×844 · CPU 4배): 첫 페인트 article 740px → ~310ms 에 613px,
+  //   [data-pd-comments] top 516→371(**−145px**), LayoutShift **0.0806**.
+  //   페이드인(160ms)이 **끝난 뒤**에 일어나 그대로 보인다. 운영 post_spots 는 0행이라 전 글이 이 경로다.
+  //   오너의 "로드가 느린건지" 가 정확히 이 pulse 박스였다.
+  //   ⚠ 자리 예약 자체는 옳다 — **스팟 글일 때만** 예약해야 한다. 그래서 자리를 지우지 않고
+  //     '스팟일 것 같은가'(expectSpot)를 호출부에서 받는다. 카테고리는 서버가 보장하는 선행 신호다
+  //     (api/spots.ts 의 share_spot_post 는 항상 p_category:'hand' 로 쓴다).
+  if (state === 'loading') {
+    return expectSpot ? <div className="mt-3 h-[132px] animate-pulse rounded-aura bg-surface-high" /> : null;
+  }
   if (state === 'error' || !ps) {
     return (
       <p className="mt-3 rounded-aura border card-aura px-3 py-2.5 text-2xs text-ink-muted">
@@ -80,7 +96,7 @@ export default function SpotPostCard({ postId, isAuthor }: { postId: string; isA
     <section data-spot-post className="mt-3 rounded-aura border card-aura p-3">
       <header className="flex flex-wrap items-center gap-1.5">
         <span className="inline-flex items-center gap-1 rounded-badge border border-border-default bg-surface-high px-2 py-0.5 text-2xs font-semibold text-ink-secondary">
-          <Icon name="spade" size={11} aria-hidden />NURI SPOT
+          <Icon name="cards" size={11} aria-hidden />NURI SPOT
         </span>
         <span data-spot-coverage={ps.coverageKind}
           className="rounded-badge bg-surface-high px-1.5 py-px text-2xs font-semibold text-ink-muted">
@@ -94,6 +110,13 @@ export default function SpotPostCard({ postId, isAuthor }: { postId: string; isA
         <Cards label="내 카드" ids={spot.hero} />
         {spot.board.length > 0 && <Cards label={streetLabel(spot.street)} ids={spot.board} />}
         {ps.revealVillain && spot.villain.length > 0 && <Cards label="상대" ids={spot.villain} />}
+        {/* 빌런 B~E (2026-09-19 멀티웨이). A 라벨은 '상대' 그대로 둔다 —
+            `e2e/nuri-spot-board.spec.ts` 가 `getByLabel('상대')` 로 잡는데, 여기서 A 까지
+            '상대 A' 로 바꾸면 그 셀렉터가 빗나간다. 라벨을 바꿀 거면 같은 작업에서 그 스펙도 고쳐라.
+            ⚠ `revealVillain` 게이트 밖으로 내보내지 마라 — 상대 카드는 서버가 가려 주는 값이다. */}
+        {ps.revealVillain && spot.extra.map((v, i) => (
+          v.cards.length > 0 ? <Cards key={v.pos} label={`상대 ${'BCDE'[i]} (${v.pos})`} ids={v.cards} /> : null
+        ))}
       </div>
 
       {/* 글쓴이의 선택은 결과가 열린 뒤에만. 먼저 보이면 "당신이라면?" 투표가 그 값에

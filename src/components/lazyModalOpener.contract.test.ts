@@ -18,6 +18,15 @@
 //   · 2026-09-15 "공지 열 때 멈칫"                                          → 공지 상세·장터 상세
 //   같은 부류가 **세 번** 다른 얼굴로 돌아왔다. 그래서 소스에서 막는다.
 //
+// 🔴 2026-09-19 — **네 번째다. 그리고 이 검사가 그때 통과하고 있었다.**
+//   전수 스윕이 `setOpenVenueId` 오프너 6곳을 찾아냈는데 여기는 초록이었다. 탐지 정규식이
+//   `게이트 && <컴포넌트` 형태만 봤기 때문이다. 실제 코드는 사이에 **IIFE 와 `<Suspense>`** 가 끼어 있었다:
+//     `{openVenueId !== null && (() => { … return (<Suspense><VenuePageM/></Suspense>); })()}`
+//   구멍을 메우자(게이트 뒤 14줄 안에서 lazy 이름을 찾는다) **4곳이 더** 나왔다 —
+//   `setGtoInit` · `setDisplayTarget` ×2 · `setRemoteTarget`. 전부 같은 Suspense 뒤에 숨어 있었다.
+//   ⇒ 교훈: **검사가 초록인 것과 결함이 없는 것은 다르다.** 탐지 범위를 좁게 잡으면
+//     그 바깥은 영원히 안 보인다. 새 게이트 문법이 생기면 이 탐지부터 넓혀라.
+//
 // ⚠ 이 검사가 **일부러 좁은** 곳
 //   1. **App.tsx 안으로 한정한다.** setter 이름은 파일마다 겹친다 — 실제로 조사 중
 //      `DealerCommunity.tsx` 의 **동명이인 로컬 상태**(lazy 아닌 평범한 Modal)를 잘못 지목한 적이 있다.
@@ -76,6 +85,23 @@ describe('lazy 오버레이는 트랜지션으로 연다 — 안 그러면 폴�
   }
   for (const m of src.matchAll(/<(\w+)\s+open=\{([A-Za-z_$][\w$]*)\}/g)) note(m[2], m[1], 'truthy');
 
+  // 🔴 2026-09-19 — 위 두 규칙에 **구멍이 있었다.** 전수 스윕이 찾아냈다.
+  //   `setOpenVenueId` 오프너 6곳이 `startTransition` 없이 있었는데 이 검사가 통과했다.
+  //   이유: 게이트가 `<컴포넌트` 로 바로 이어지지 않았다 —
+  //     `{openVenueId !== null && (() => { … return (<Suspense><VenuePageM/></Suspense>); })()}`
+  //   처럼 **IIFE** 나 `<Suspense>` 가 사이에 끼면 `&&` 바로 뒤의 `<(\w+)` 가 `Suspense`(또는 아무것도)
+  //   를 잡아 `lazies` 에 없으므로 게이트 자체가 등록되지 않았다.
+  //   ⇒ 게이트 뒤 **몇 줄 안**에 lazy 이름이 나오면 그 게이트로 친다. 넓지만 정확하다:
+  //     lazy 컴포넌트 이름은 App.tsx 안에서 유일하고, 게이트와 붙어 있어야만 참이기 때문이다.
+  const LOOKAHEAD = 14;
+  const srcLines = src.split('\n');
+  srcLines.forEach((line, i) => {
+    const g = /\{\s*([A-Za-z_$][\w$]*)\s*(!==\s*null|!==\s*undefined)?\s*&&/.exec(line);
+    if (!g) return;
+    const block = srcLines.slice(i, i + LOOKAHEAD).join('\n');
+    for (const lm of block.matchAll(/<(\w+)/g)) note(g[1], lm[1], g[2] ? 'notnull' : 'truthy');
+  });
+
   /** setter -> 상태 */
   const setters = new Map<string, string>();
   for (const st of gates.keys()) {
@@ -102,7 +128,11 @@ describe('lazy 오버레이는 트랜지션으로 연다 — 안 그러면 폴�
             : /^\s*(null|false|undefined)\s*\)/;
           if (close.test(arg)) continue;        // 닫기 — 무엇이 닫기인지는 게이트 형태가 정한다(위 주석)
           if (/^\s*\(/.test(arg)) continue;     // 함수형 갱신 — 여는 코드가 아니다
-          const ctx = (lines[i - 1] ?? '') + line;
+          // 🔴 되돌아보기는 **3줄**이다. 1줄이면 거짓 양성이 난다 —
+          //   `withViewTransition(() => flushSync(() => {` 다음에 다른 setState 가 한 줄 끼면
+          //   바로 윗줄에 flushSync 가 없어 '감싸지 않았다' 고 잘못 말한다(2026-09-19 실제로 그랬다).
+          //   3줄이면 그 패턴을 덮고, 그 이상 떨어진 곳은 사람이 읽어도 한 덩어리로 안 보인다.
+          const ctx = (lines[i - 3] ?? '') + (lines[i - 2] ?? '') + (lines[i - 1] ?? '') + line;
           if (/startTransition|flushSync|startTabTransition/.test(ctx)) continue;
           offenders.push(`App.tsx:${i + 1}  (${setter} → ${st})  ${line.trim().slice(0, 100)}`);
         }

@@ -100,8 +100,26 @@ describe('🔴 §11 — 홈은 조회 실패를 "없어요" 로 위장하지 않
     expect(HOME, '실패 판정이 없다').toMatch(/const failed = !!schedulesError && schedules\.length === 0;/);
     expect(HOME, "실패 갈래가 '오늘·내일 일정' 섹션에 없다 — 0건 빈 상태가 실패를 삼킨다")
       .toMatch(/\) : failed \? \(\s*\n[\s\S]{0,400}?<LoadErrorCard compact error=\{schedulesError\} what="대회 목록" onRetry=\{onRetrySchedules\} \/>/);
+    // 🔴 2026-09-19: 빈 갈래의 조건이 `upcoming.length === 0` → `upcoming.length === 0 && nextUp.length === 0`
+    //   으로 바뀌었다(오너: "없으면 다음 일정을 보여준다"). **이 검사가 지키는 것은 조건식이 아니라 순서**다 —
+    //   실패 갈래가 빈 갈래보다 뒤에 있으면 영원히 도달하지 않는다. 그래서 앵커만 느슨하게 하고
+    //   순서 단언은 그대로 둔다. 조건식 자체는 아래 별도 단언이 잠근다.
     expect(HOME, '세 번째 갈래가 빈 상태보다 **뒤에** 있으면 영원히 도달하지 않는다')
-      .toMatch(/failed \? \([\s\S]*?\) : upcoming\.length === 0 \? \(/);
+      .toMatch(/failed \? \([\s\S]*?\) : upcoming\.length === 0[^?]*\? \(/);
+  });
+
+  it('🔴 빈 상태는 **다음 일정까지 없을 때만** 나온다 — 있는데 "없어요" 라고 하지 않는다', () => {
+    // 오너(2026-09-19): "홈 화면에 일정이 안떠있어". 운영 실측으로 오늘 0 · 내일 0 · 이틀 뒤 1건이었다.
+    // 이틀 창 밖이라는 이유로 "없어요" 라고 말하던 자리다. 세 갈래가 각각 살아 있는지는
+    // e2e/home-upcoming-fallback.spec.ts 가 실제 화면으로 잰다(여기는 배선만 본다).
+    expect(HOME, '다음 일정 폴백이 없다 — 이틀 창이 비면 다시 빈 칸이 된다')
+      .toMatch(/const nextUp = useMemo\(/);
+    expect(HOME, '빈 상태가 nextUp 을 보지 않는다 — 보여줄 일정이 있는데 "없어요" 라고 말한다')
+      .toMatch(/upcoming\.length === 0 && nextUp\.length === 0 \? \(/);
+    expect(HOME, '목록이 폴백을 그리지 않는다')
+      .toMatch(/\(upcoming\.length \? upcoming : nextUp\)\.map\(/);
+    expect(HOME, '폴백일 때 그 사실을 말하지 않으면 사용자는 다음 일정을 오늘 것으로 읽는다')
+      .toMatch(/data-testid="home-upcoming-fallback"/);
   });
 
   it('🔴 실패했을 때 "오늘 대회 0개" 라고 말하지 않는다', () => {

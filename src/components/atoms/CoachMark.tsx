@@ -6,7 +6,7 @@
 // 그대로 따르므로 어떤 화면 폭에서도 깨질 수 없다.
 //
 // 노출 기록: localStorage `nuri:seen:<id>` — [확인] 을 누르면 영구 미노출.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from './Icon';
 
 const seenKey = (id: string) => `nuri:seen:${id}`;
@@ -15,17 +15,26 @@ export default function CoachMark({ id, children }: { id: string; children: Reac
   const [visible, setVisible] = useState(() => {
     try { return !localStorage.getItem(seenKey(id)); } catch { return false; }
   });
+  // [C, 낮은 우선순위] 닫는 모션 — 예전엔 [확인] 을 누르면 바로 return null 이라 여는 fade-in(0.16s)과
+  // 달리 사라짐이 0 프레임이었다. ImageLightbox 와 같은 문법: 이 컴포넌트는 open prop 없이 스스로
+  // 마운트 상태를 들고 있으므로, 먼저 fade-out 을 켜고 그 길이만큼 뒤에 진짜 visible=false 로 넘어간다.
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (closeTimer.current != null) window.clearTimeout(closeTimer.current); }, []);
   if (!visible) return null;
   const dismiss = () => {
+    if (closing) return;
     try { localStorage.setItem(seenKey(id), '1'); } catch { /* noop */ }
-    setVisible(false);
+    setClosing(true);
+    closeTimer.current = window.setTimeout(() => setVisible(false), 180); // animate-fade-out 과 같은 길이(index.css)
   };
   return (
     // ⚠ 교차검증 실측(2026-08-29 다크): 아이콘·[확인] 의 `text-accent-300` 이 #805FDA on surface-base
     //   = **4.0:1** 로 AA 미달이었다. `text-accent-200` 은 테마 인지 토큰 — 다크 #BCA9F0(6.94:1),
     //   라이트는 index.css 오버라이드로 #6946C8 이라 **라이트 accent-300 과 값이 같다**(라이트 렌더 불변).
     //   배경 `bg-accent-300/[0.08]` 과 보더는 텍스트가 아니므로 그대로 둔다.
-    <div role="note" className="flex items-start gap-2 rounded-card border border-accent-400/40 bg-accent-300/[0.08] px-3 py-2 animate-fade-in">
+    <div role="note" className={['flex items-start gap-2 rounded-card border border-accent-400/40 bg-accent-300/[0.08] px-3 py-2',
+      closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
       <Icon name="lightbulb" size={15} className="mt-0.5 shrink-0 text-accent-200" />
       <p className="min-w-0 flex-1 text-xs leading-5 text-ink-secondary">{children}</p>
       <button type="button" onClick={dismiss}

@@ -87,9 +87,30 @@ describe('탭 청크 프리워밍 계약', () => {
       const line = warm.slice(warm.lastIndexOf('\n', i) + 1, i);
       expect(line.includes('...('), `${chunk} 가 무조건 프리로드되고 있다 — 역할 게이트가 사라졌다`).toBe(true);
     }
-    // 캘린더는 반대 방향 게이트다 — 매장 보유자에겐 이 칸이 '내 매장'이라 캘린더 판 자체가 없다.
+    // 🔴 2026-09-19 — 여기 있던 단언을 **뒤집었다.**
+    //   종전: "캘린더는 반대 방향 게이트다 — 매장 보유자에겐 이 칸이 '내 매장'이라 캘린더 판 자체가 없다."
+    //   그 전제가 **사실이 아니었다.** 업주의 '내 매장 > 내 캘린더' 가 바로 그 컴포넌트다
+    //   (`VenueManageTab.tsx` 의 `CalendarPanelM = memo(lazyWithReload(() => import('./CalendarPanel')))`).
+    //   그래서 업주에게는 이 청크가 **항상 cold** 였고, 그 섹션을 누르면 App 최상위 `LazyFallback` 이
+    //   300~400ms 동안 `<main data-tab="my-store">` 를 통째로 덮었다 — 사이드바까지 사라진다.
+    //   오너가 "내 매장 모든 부분이 페이지가 변경되며 말려 올라간다" 고 한 증상의 절반이 이것이었다.
+    //   ⇒ 이제 **양쪽 다** 데운다. 이건 '손님에게 업주 스위트를 내려보내는 것' 과 방향이 반대다 —
+    //     업주가 이미 열게 되어 있는 화면의 청크이고, 손님도 5번째 탭에서 같은 판을 쓴다.
     const ci = warm.indexOf("features/CalendarPanel'");
+    expect(ci, '캘린더가 프리워밍 목록에서 빠졌다 — 두 역할 모두에게 cold 가 된다').toBeGreaterThan(-1);
     const cline = warm.slice(warm.lastIndexOf('\n', ci) + 1, ci);
-    expect(cline.includes('...('), '캘린더가 업주·직원·관리자에게도 내려가고 있다').toBe(true);
+    expect(cline.includes('...('), '캘린더가 다시 역할 게이트 뒤로 들어갔다 — 업주의 내 매장 > 내 캘린더가 cold 가 된다')
+      .toBe(false);
+
+    // 같은 이유로 내 매장의 나머지 lazy 섹션 둘도 데운다. 이쪽은 **업주 전용 화면**이라 게이트가 맞다.
+    // ⚠ 게이트가 **여러 줄에 걸칠 수 있다**(조건이 길면 `...(cond\n ? [a, b]\n : [])` 로 접힌다).
+    //   같은 줄만 보면 그 형태를 '게이트 없음' 으로 잘못 읽는다 — 앞 3줄까지 본다.
+    for (const chunk of ['VenueMatchPanel', 'VenueEventRequestPanel']) {
+      const i = warm.indexOf(`features/${chunk}'`);
+      expect(i, `${chunk} 가 프리워밍 목록에 없다 — 그 섹션을 누를 때 판이 통째로 사라진다`).toBeGreaterThan(-1);
+      const win = warm.slice(Math.max(0, i - 400), i);
+      const near = win.split('\n').slice(-4).join('\n');
+      expect(near.includes('...('), `${chunk} 가 손님에게도 내려가고 있다 — 업주 전용 화면이다`).toBe(true);
+    }
   });
 });

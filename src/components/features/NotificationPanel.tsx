@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
 import { markAllNotificationsRead, markNotificationsRead } from '../../api/notifications';
@@ -69,6 +69,28 @@ export default function NotificationPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+
+  // [C] 닫는 모션 — Modal.tsx 의 render/closing + 지연 unmount 패턴(같은 문법, 새 문법을 만들지 않는다).
+  //   예전엔 `if (!open) return null` 이라 열 때(fade-in + slide-up 0.32s)와 달리 닫을 때는 0 프레임이었다.
+  //   패널은 시트가 아니라 뜨는 카드(popover)라 반대 방향 slide 대신 대칭인 fade-out(0.18s)을 쓴다.
+  const [render, setRender] = useState(open);
+  const [closing, setClosing] = useState(false);
+  // 🔴 2026-09-19 회귀 근본 원인(team-lead 실측 + 직접 재현·console 계측으로 확인) — Modal.tsx 의 패턴을
+  //   `useEffect` 로 그대로 옮겼더니, 여는 방향에도 **원치 않는 한 틱 지연**이 생겼다: `useEffect` 는
+  //   커밋 뒤 페인트가 지나간 다음에 돈다 — `open` 이 true 로 바뀐 첫 렌더는 아직 `render=false`(과거 값)
+  //   라 패널이 안 그려진 채로 한 프레임 페인트되고, 그다음 렌더에서야 실제로 나타난다.
+  //   재현: 벨 클릭 직후(중간에 콘텐츠를 기다리지 않고) 같은 자리를 즉시 다시 클릭하면, 그 클릭이
+  //   아직 안 그려진 스크림/패널을 통과해 **뒤 화면(예: 헤더 계정 메뉴)에 그대로 꽂혔다**
+  //   (account-isolation.spec.ts 의 '쪽지 패널' 케이스 — 응답을 hold 시켜 콘텐츠 대기가 없는 경로에서만 드러났다).
+  //   `useLayoutEffect` 로 바꾸면 브라우저가 페인트하기 **전에** 동기적으로 `render` 를 맞춰 넣어
+  //   그 한 프레임이 아예 생기지 않는다. 닫힘(지연 unmount)에는 이 문제가 없다 — 그쪽은 "그려진 채로
+  //   너무 오래 남는" 문제라 위 scrim/panel 의 pointer-events 분기로 따로 막는다.
+  useLayoutEffect(() => {
+    if (open) { setRender(true); setClosing(false); return; }
+    setClosing(true);
+    const t = window.setTimeout(() => setRender(false), 180); // animate-fade-out 과 같은 길이(index.css)
+    return () => window.clearTimeout(t);
+  }, [open]);
 
   // ── 쪽지/알림 모드 — 헤더 아이콘이 메시지가 됐으므로 쪽지가 기본 ──
   const [mode, setMode] = useState<'messages' | 'notifs'>('messages');
@@ -295,7 +317,7 @@ export default function NotificationPanel({
     markAllNotificationsRead().catch(() => {}); // 실패해도 onMarkRead 경로가 보이는 50건은 커밋
   }, [notifications, onMarkRead]);
 
-  if (!open) return null;
+  if (!render) return null;
 
   const visible = filter === 'unread'
     ? notifications.filter((n) => !n.read)
@@ -305,9 +327,15 @@ export default function NotificationPanel({
 
   return (
     <>
-      {/* 모바일에서만 배경 dim (탭하면 닫힘) */}
+      {/* 모바일에서만 배경 dim (탭하면 닫힘).
+          🔴 2026-09-19 회귀(team-lead 실측, e2e/account-isolation.spec.ts) — 퇴장 애니를 넣으면서
+          "시각적으로 사라지는 시점"과 "입력을 막는 시점"을 같이 묶어 버렸다. 그 결과 스크림이 화면
+          전체(z-40 fixed inset-0)를 계속 가로채 뒤 화면(예: 헤더 계정 메뉴)이 안 눌리는 정지 상태가 됐다.
+          닫기는 `open` prop 이 false 가 되는 즉시(지연 없이) 확정된 사실이다 — 애니메이션용 파생 상태
+          (closing/render)에 기대지 않고 `open` 그 자체로 pointer-events 를 끈다. 시각적 퇴장(느림)과
+          입력 차단 해제(즉시)는 다른 시점이어야 한다는 것이 이 부류의 핵심이다. */}
       <div
-        className="fixed inset-0 z-40 bg-black/30 sm:hidden animate-fade-in"
+        className={['fixed inset-0 z-40 bg-black/30 sm:hidden', open ? 'pointer-events-auto' : 'pointer-events-none', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}
         onClick={handleClose}
         aria-hidden
       />
@@ -318,14 +346,21 @@ export default function NotificationPanel({
         aria-label="알림"
         className={[
           // 모바일: 화면 우측 1rem 안쪽으로 고정, 헤더 바로 아래(노치 safe-area만큼 헤더가 늘어나므로 포함)
-          'fixed top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)+0.5rem)] right-page-x',
+          'fixed top-[calc(var(--header-now)+env(safe-area-inset-top)+0.5rem)] right-page-x',
           'left-page-x sm:left-auto',
           // 데스크톱: 우측에 380px 카드
           'sm:w-[380px] sm:right-page-x-md',
-          // 공통
+          // 공통 — 모바일은 폭이 거의 화면 전체(right/left-page-x)라 패널 자신도 닫히는 동안은
+          // 뒤 화면을 가리지 않게 pointer-events 를 끈다(위 스크림과 같은 이유).
           'z-50 bg-surface-mid border border-border-default rounded-card shadow-dialog',
-          'animate-slide-up',
-          'max-h-[calc(100vh-theme(spacing.header-h)-env(safe-area-inset-top)-1rem)] flex flex-col overflow-hidden',
+          open ? 'pointer-events-auto' : 'pointer-events-none',
+          closing ? 'animate-fade-out' : 'animate-slide-up',
+          // [high, 스윕 추가] 모바일 하단 탭바(플로팅 알약) 자리를 안 빼서 DM 서브뷰의 입력창·보내기 버튼이
+          // 탭바에 가려지거나 탭이 가로채였다(장부 버튼과 같은 부류). --tabbar-safe 는 탭바 회피 단일 소스
+          // (index.css) — 모바일만 뺀다. 탭바가 없는 sm 이상은 종전 값 그대로.
+          'max-h-[calc(100vh-var(--header-now)-env(safe-area-inset-top)-var(--tabbar-safe))]',
+          'sm:max-h-[calc(100vh-var(--header-now)-env(safe-area-inset-top)-1rem)]',
+          'flex flex-col overflow-hidden',
         ].join(' ')}
       >
         {/* 헤더 — 좌: [쪽지|알림] 세그먼트(서브 화면에선 뒤로+제목) / 우: 모드별 액션 */}
@@ -508,7 +543,8 @@ export default function NotificationPanel({
                 onClick={handleSend}
                 disabled={sending || !draft.trim()}
                 aria-label="보내기"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-300 text-white transition-opacity disabled:opacity-40"
+                // [B] 34×34px 미달 — .hit 로 44px 확보(옆 textarea 와 gap-2=8.5px > 오버행 5px, 안전)
+                className="hit flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-300 text-white transition-opacity disabled:opacity-40"
               >
                 <Icon name="send" size={14} />
               </button>

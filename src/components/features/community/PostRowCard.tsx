@@ -254,7 +254,9 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
           <div className="mt-2 flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border-subtle pt-1.5 text-2xs text-ink-muted">
             {(post.viewCount ?? 0) > 0 && (
               <span className="inline-flex items-center gap-1" aria-label={`조회 ${post.viewCount}`}>
-                <Icon name="eye" size={13} strokeWidth={1.6} className="shrink-0" />
+                {/* [E] 1.6 은 옆 볼드 숫자·같은 줄 chevron(2.2)보다 눈에 띄게 가늘었다 — 화면 굵기 하한(1.1px)
+                    밴드 안에서 chevron 과 맞춘다. */}
+                <Icon name="eye" size={13} strokeWidth={2.2} className="shrink-0" />
                 <span className="tabular-nums">{post.viewCount}</span>
               </span>
             )}
@@ -265,11 +267,11 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
               onClick={(e) => { e.stopPropagation(); onLike(); }}
               className={`hit inline-flex items-center gap-1 transition-colors ${post.liked ? 'text-danger-light' : 'hover:text-danger-light'}`}
             >
-              <Icon name={post.liked ? 'heart-fill' : 'heart'} size={13} strokeWidth={1.6} className="shrink-0" />
+              <Icon name={post.liked ? 'heart-fill' : 'heart'} size={13} strokeWidth={2.2} className="shrink-0" />
               <span className="tabular-nums">{post.likeCount}</span>
             </button>
             <span className="inline-flex items-center gap-1" aria-label={`댓글 ${post.commentCount}`}>
-              <Icon name="comment" size={13} strokeWidth={1.6} className="shrink-0" />
+              <Icon name="comment" size={13} strokeWidth={2.2} className="shrink-0" />
               <span className="tabular-nums">{post.commentCount}</span>
             </span>
             {((post.goodrunCount ?? 0) > 0 || (post.badbeatCount ?? 0) > 0) && (

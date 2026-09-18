@@ -307,8 +307,9 @@ export default function Modal({
               compact ? 'text-xs font-semibold text-ink-secondary' : 'text-base font-bold text-ink-primary'].join(' ')}>{title}</h2>
             <div className="flex shrink-0 items-center gap-1">
               {headerAction}
-              <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
-                <Icon name="close" size={14} />
+              {/* [B] inline(2-pane) 변형만 34px 였다 — sheet/page 변형과 같은 w-11 h-11 로 통일(-mr-2 로 시각 여백 상쇄) */}
+              <button type="button" onClick={onClose} aria-label="닫기" className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                <Icon name="close" size={18} />
               </button>
             </div>
           </header>

@@ -311,13 +311,21 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
     expect(r!.text, '근거 없는 긴박감 문구가 붙었다').not.toMatch(/마감 임박|급상승|인기 급등/);
   });
 
-  test('🔴 GTO 진입은 홈에 **한 곳**뿐이다 · 배너 점 제어는 여러 장일 때만 나온다', async ({ page }) => {
+  test('🔴 GTO 진입은 홈에 **없고** 탭바에 있다 · 배너 점 제어는 여러 장일 때만 나온다', async ({ page }) => {
     const external: string[] = [];
     await mockAll(page, external);
     await openHome(page, 390, 'dark', false);
     const r = await measure(page);
     expect(r).not.toBeNull();
-    expect(r!.gtoEntries, 'GTO 진입 칸이 하나가 아니다 — 히어로와 카드에서 같은 설명을 반복하고 있다').toBe(1);
+    // 🔴 2026-09-19 오너: "홈 화면에 GTO 도구 있는 부분 삭제".
+    //   종전 계약은 '홈에 정확히 하나'(히어로와 카드에서 같은 설명을 반복하지 말 것)였다.
+    //   이제 홈에는 0 이다 — 같은 곳으로 가는 문이 탭바에 이미 있었기 때문이다.
+    expect(r!.gtoEntries, 'GTO 진입 칸이 홈에 다시 생겼다 — 오너가 지운 자리다').toBe(0);
+    // ⚠ 0 만 단언하면 '진입을 통째로 잃은 것' 과 구별되지 않는다.
+    //   길이 남아 있는지를 **같은 검사에서** 확인한다(기능 소실 방지 — 이 저장소의 3대 불문율).
+    const gtoTab = page.getByRole('button', { name: 'GTO' });
+    await expect(gtoTab.first(), '홈에서도 탭바에서도 GTO 로 갈 길이 없다 — 진입을 통째로 잃었다')
+      .toBeVisible();
     expect(r!.dots, '배너가 여러 장인데 점 제어가 없다').toBe(true);
     // 점 하나하나가 터치 대상이어야 한다(작은 점 자체만 눌리게 두지 않는다)
     const dot = page.getByRole('button', { name: '1번째 배너' });

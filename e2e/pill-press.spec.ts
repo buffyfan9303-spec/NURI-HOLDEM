@@ -45,11 +45,18 @@ test('🔴 손가락으로 누르고 있다 뗀 탭 — 알약이 첫 칸으로 
 
   const seq = ['live', 'rank', 'board', 'dealer', 'venues', 'market']; // SectionTab data-testid=sec-tab-<id>
   const failures: string[] = [];
+  // 🔴 건너뛴 탭을 **센다**. 종전에는 `continue` 만 하고 넘어가서 6개가 전부 없어도 초록이었다
+  //   (2026-09-19 전수 스윕이 찾아냈다). 이 저장소에서 같은 부류가 반복해서 나왔다 —
+  //   `header-320` 은 `if (!count) continue` 가 가장 긴 라벨을 조용히 건너뛰어 넘침을 놓쳤다.
+  //   셀렉터가 바뀌거나 화면 구조가 달라지면 **빨개져야 한다**. 조용히 통과하면 그때부터 이 파일은
+  //   PILL-06(알약이 첫 칸으로 새는 회귀)을 영원히 못 잡는다.
+  const skipped: string[] = [];
+  const measured: string[] = [];
   for (const name of seq) {
     const btn = bar.getByTestId(`sec-tab-${name}`);
-    if (await btn.count() === 0) continue;
+    if (await btn.count() === 0) { skipped.push(`${name}(없음)`); continue; }
     const box = await btn.boundingBox();
-    if (!box) continue;
+    if (!box) { skipped.push(`${name}(보이지 않음)`); continue; }
     const before = (await page.evaluate(SAMPLE)) as Sample | null;
     expect(before, '알약·활성 탭을 찾지 못했다').not.toBeNull();
     const target = await btn.locator('span').first().boundingBox();
@@ -79,6 +86,13 @@ test('🔴 손가락으로 누르고 있다 뗀 탭 — 알약이 첫 칸으로 
       if (at >= 500 && s.active === name && s.dx >= 3) failures.push(`${name}: +${at}ms 에도 알약이 활성 탭에서 ${s.dx}px 떨어져 있다`);
     }
     test.info().annotations.push({ type: name, description: rows.join(' | ') });
+    measured.push(name);
   }
+  // 🔴 잴 것이 실제로 있었는가 — 이 두 줄이 없으면 위 루프 전체가 빈 통과다.
+  expect(skipped, `건너뛴 탭이 있다: ${skipped.join(', ')} — data-testid=sec-tab-* 가 바뀌었는지,`
+    + ' 섹션바가 이 폭에서 안 그려지는지 확인해라. 조용히 넘어가면 PILL-06 회귀를 영영 못 잡는다.')
+    .toEqual([]);
+  expect(measured.length, '탭을 하나도 재지 못했다 — 이 검사는 아무것도 보고 있지 않다')
+    .toBe(seq.length);
   expect(failures, failures.join('\n')).toEqual([]);
 });

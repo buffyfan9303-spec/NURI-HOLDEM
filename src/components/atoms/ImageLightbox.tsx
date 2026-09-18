@@ -1,6 +1,6 @@
 // 이미지 라이트박스 — 포스터 풀스크린 확대. 핀치줌(모바일)·더블탭 줌·드래그 팬·휠줌(PC).
 // 리렌더 없이 ref로 transform을 직접 조작해 60fps 제스처를 유지한다.
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 
@@ -13,8 +13,20 @@ interface Props {
 const MIN = 1, MAX = 5;
 
 export default function ImageLightbox({ src, alt, onClose }: Props) {
+  // [C] 닫는 모션 — 이 컴포넌트는 open prop 없이 부모가 그냥 마운트/언마운트한다(Modal 과 다른 문법).
+  //   그래서 onClose 를 바로 부르면 즉시 언마운트되어 fade-out 이 0 프레임이었다. Modal.tsx 의
+  //   'render/closing + 지연 unmount' 를 그대로 이식하는 대신, 여기서는 언마운트를 부모가 쥐고 있으므로
+  //   **먼저 fade-out 을 켜고, CSS 애니 길이(0.18s)만큼 뒤에 진짜 onClose 를 불러 부모가 그때 언마운트**하게 한다.
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (closeTimer.current != null) window.clearTimeout(closeTimer.current); }, []);
+  const startClose = () => {
+    if (closing) return; // 중복 트리거(빠른 연타·ESC+클릭) 방지
+    setClosing(true);
+    closeTimer.current = window.setTimeout(onClose, 180);
+  };
   // 뒤로가기·ESC → 라이트박스만 닫기. ESC 를 여기서 직접 들으면 아래 포스터 상세까지 같이 닫힌다(MODAL-01).
-  useBackClose(true, onClose, { escape: true });
+  useBackClose(true, startClose, { escape: true });
   const imgRef = useRef<HTMLImageElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -122,17 +134,21 @@ export default function ImageLightbox({ src, alt, onClose }: Props) {
       ref={rootRef}
       // data-scroll-lock: 스크롤 잠금 소유자 표식(scrollLock.ts 의 sweep 이 미아 잠금을 골라낸다)
       data-scroll-lock
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 animate-fade-in"
+      // 🔴 2026-09-19 (추론으로 넣은 방어 — 이 파일에서 실제로 재현하지는 않았다) — 퇴장 애니 동안 이 풀스크린
+      // 오버레이가 뒤 화면 클릭을 계속 가로챌 수 있다. closing 이 되는 즉시(시각적 퇴장은 느려도)
+      // pointer-events 를 꺼서 입력 차단은 바로 풀리게 한다.
+      className={['fixed inset-0 z-[100] flex items-center justify-center bg-black/95',
+        closing ? 'pointer-events-none animate-fade-out' : 'animate-fade-in'].join(' ')}
       role="dialog" aria-modal="true" aria-label={`${alt} 확대 보기`}
       onWheel={onWheel}
       // 배경 탭 닫기 — 이미지 제스처(포인터 캡처)와 충돌하지 않게 배경 자신을 탭했을 때만
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) startClose(); }}
       // 포커스 가능 요소가 닫기 하나뿐 — Tab/Shift+Tab 은 제자리(브라우저 UI 로 빠져나가면 focusin 이 안 와 되잡지 못한다)
       onKeyDown={(e) => { if (e.key === 'Tab') { e.preventDefault(); closeRef.current?.focus(); } }}
     >
       <button
         ref={closeRef}
-        type="button" onClick={onClose} aria-label="닫기"
+        type="button" onClick={startClose} aria-label="닫기"
         /* top-[calc(...)]: 노치·상태바 아래로 내린다. 사진을 열었을 때 **닫을 방법**이
            상태바에 가리면 빠져나갈 길이 없다(전체화면이라 뒤 크롬도 안 보인다).
            h-11 w-11: 44px 터치 표준. `hit` 토큰은 position:relative 라 이 absolute 배치를 깨뜨려 실제 크기를 키운다. */
