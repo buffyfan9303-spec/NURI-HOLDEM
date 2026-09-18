@@ -336,7 +336,17 @@ export default function ScheduleDetailModal({
           조금만 스크롤하면 탭바(높이 40px 남짓)의 12~48px 구간에 닫기 버튼이 그대로 겹쳐 앉는다 —
           5번째 칸(Q&A)의 탭 영역 대부분이 닫기 버튼에 먹혔다(360px 기준 x=312~348 ⊂ Q&A 칸 288~360).
           PC 에서 같은 이유로 이미 lg:pr-[4.25rem] 을 두고 있다 — 모바일에도 같은 해법(48px 버튼 자리 + 4px). */}
-      <div data-sched-tabbar="" role="tablist" className="relative grid grid-cols-5 border-b border-border-subtle sticky top-0 bg-surface-base z-10 pr-[3.25rem] lg:pr-[4.25rem]">
+      {/* 🔴 2026-09-18 전수 점검: 루트 글자 **200% 확대에서 다섯 탭이 전부 첫 글자+말줄임**이 됐다
+          ('메인'→'메…', '매장정보'→'매…'). 하필 '메'와 '매'라 확대가 필요한 저시력 유저일수록 더 헷갈린다.
+          원인은 `grid-cols-5` — 칸 수가 고정이라 글자가 커져도 칸이 안 늘고, 안쪽 truncate 가 글자를 지운다.
+        → 순위 탭바가 이미 쓰는 **검증된 2상태 레시피**로 바꾼다(TierLeaderboard.tsx:943):
+            바깥 = `overflow-x-auto` 레일 / 안쪽 = `inline-grid min-w-full grid-flow-col auto-cols-fr shrink-0`
+          · 들어갈 만큼 넓으면 → `min-w-full` 이 레일을 채워 **5칸 동일 폭**(종전과 같은 그림).
+          · 좁으면 → 안쪽 그리드의 max-content 폭이 레일보다 커지고 `shrink-0` 이 줄어들기를 막아 **가로 스크롤**.
+        ⚠ SlidingPill 은 `[data-pill-active]` 상자를 재므로 레일(=offsetParent)이 바뀌면 안 된다 —
+          `relative` 를 바깥 레일에 그대로 두고 알약도 레일의 직계로 남긴다.
+        ⚠ pr 은 레일에 둔다(닫기 버튼 자리). 안쪽 그리드에 주면 스크롤 폭 계산이 그만큼 어긋난다. */}
+      <div data-sched-tabbar="" role="tablist" className="relative flex border-b border-border-subtle sticky top-0 bg-surface-base z-10 overflow-x-auto scrollbar-none pr-[3.25rem] lg:pr-[4.25rem]">
         <SlidingPill activeKey={tab} underline className="rounded-full bg-accent-300" />
         {/* PC 닫기 — 정보 영역 우상단(항상 보이는 sticky 탭바, 손 닿는 위치) */}
         <button
@@ -348,6 +358,7 @@ export default function ScheduleDetailModal({
           <Icon name="close" size={14} />
           <span className="text-xs font-bold">닫기</span>
         </button>
+        <div className="inline-grid min-w-full shrink-0 grid-flow-col auto-cols-fr">
         {TABS.map(({ key, label }) => {
           const active = tab === key;
           return (
@@ -382,6 +393,7 @@ export default function ScheduleDetailModal({
             </button>
           );
         })}
+        </div>
       </div>
 
       {/* ── 본문 — 탭 5개가 같은 패딩 컨테이너를 공유(탭 전환에 좌우 여백이 흔들리지 않게) ──

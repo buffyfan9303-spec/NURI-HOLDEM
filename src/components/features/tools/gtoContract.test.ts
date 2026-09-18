@@ -73,7 +73,7 @@ describe('GTO 탭 — 실사용 흐름 4갈래 IA', () => {
   });
 
   it("'오늘의 드릴' 은 GTO 카탈로그·검색·즐겨찾기에서 빠졌다 — 딥링크 키는 남는다(2026-09-14 오너 지시)", () => {
-    expect(TOOLS_PANEL).toContain("const HIDDEN_SET = new Set<ToolKey>([...STORE_SET, 'drill'])");
+    expect(TOOLS_PANEL).toContain("const HIDDEN_SET = new Set<ToolKey>([...STORE_SET, 'drill', 'deal'])");
     expect(TOOLS_PANEL).toContain('t.cat === l.id && !HIDDEN_SET.has(t.key)');   // 카탈로그 섹션
     expect(TOOLS_PANEL).toContain('!HIDDEN_SET.has(t.key) && (t.name');            // 검색
     expect(TOOLS_PANEL).not.toContain("open('drill')");                            // 상단 카드 진입 없음
@@ -300,7 +300,7 @@ describe('NURI SPOT — GTO 홈 통합', () => {
     it('두 줄을 합치면 원래 이름과 같다 — 제목이 조용히 바뀌면 안 된다', () => {
       const names = namesOf(); const lines = linesOf();
       expect(names.size, 'TOOLS 이름을 못 읽었다 — 정규식이 낡았다').toBeGreaterThan(25);
-      expect(lines.size, 'TITLE_LINES 를 못 읽었다 — 정규식이 낡았다').toBeGreaterThan(25);
+      expect(lines.size, 'TITLE_LINES 를 못 읽었다 — 정규식이 낡았다').toBeGreaterThan(5);
       const bad: string[] = [];
       for (const [k, [a, b]] of lines) {
         const full = names.get(k);
@@ -319,6 +319,42 @@ describe('NURI SPOT — GTO 홈 통합', () => {
       expect(card![0], 'desc 를 버리면 안 된다 — PC 호버 툴팁으로는 남긴다').toMatch(/title=\{desc\}/);
       expect(card![0], '두 줄로 쪼갠 제목이 보조기기에서 한 낱말로 읽히려면 aria-label 이 필요하다')
         .toMatch(/aria-label=\{name\}/);
+    });
+
+    // 2026-09-18 오너 2차 지시 "굳이 두 줄이 아니어도 되는 부분은 한 줄로(예: 누리 스팟·홀덤 족보)".
+    // 실측(4174 프로덕션 빌드, 360px 2열 제목 칸 70px): 70px 에 한 줄로 들어가는 이름은 표에서 뺀다 — 표에 있으면 강제로 두 줄이 된다.
+    it('70px 에 한 줄로 들어가는 이름은 줄바꿈표에 없다 · 안 들어가는 세 토막 이름은 있다', () => {
+      const lines = linesOf();
+      // 360px 실측 한 줄 폭: 누리 스팟 47 · 홀덤 족보 47 · 오답 노트 47 · EV 52.7 · 콤보 58 · M존 58.3 · ICM 59.9 · SPR 60 · 아웃츠 65.7 · 용어사전 69.1 · 어그레션 69.1
+      for (const k of ['spot', 'handrank', 'wrongnote', 'ev', 'combo', 'mzone', 'icm', 'spr', 'outs', 'glossary', 'aggro', 'mdf', 'deal']) {
+        expect(lines.has(k), `${k} 는 360px 에서 한 줄에 들어간다 — 표에 있으면 강제 두 줄이 된다`).toBe(false);
+      }
+      // 105.1 · 102.1 · 86.1 · 85.9 — 70px 을 넘고 세 토막이라 폭마다 다른 데서 꺾인다. 표가 지점을 고정한다.
+      for (const k of ['range', 'postflop', 'rvr', 'tda']) {
+        expect(lines.has(k), `${k} 는 70px 을 넘는다 — 줄바꿈 지점을 표가 정해야 열이 맞는다`).toBe(true);
+      }
+    });
+
+    it("'MDF · 블러프 계산기' 는 'MDF 계산기' 로 줄었다 — 어느 두 줄로 쪼개도 70px 을 넘어 360px 에서 3줄이었다", () => {
+      const names = namesOf();
+      expect(names.get('mdf')).toBe('MDF 계산기');
+      // 옛 이름으로도 검색돼야 한다(keywords)
+      expect(PANEL).toMatch(/key: 'mdf'[^\n]*keywords: '[^']*MDF · 블러프 계산기/);
+    });
+
+    // 2026-09-18 오너 지시 "딜 메이킹과 ICM 계산기의 차이를 모르겠어 … ICM 계산기 쪽으로 합쳐".
+    // 옛 딜 계산기의 표(스택·ICM 딜·칩찹·차이)는 ICM 계산기의 '딜 비교' 모드다. 기능 소실 0 — 표의 네 열과 두 안내문, 상금>인원 안내가 남아야 한다.
+    it("딜 계산기는 ICM 계산기의 '딜 비교' 모드로 병합됐다 — 카탈로그에서 숨고, #tool=deal 은 그 모드로 열린다", () => {
+      const ICM = readFileSync(join(ROOT, 'src/components/features/ICMCalculator.tsx'), 'utf-8');
+      expect(ICM).toContain("{ key: 'deal', label: '딜 비교' }");
+      for (const col of ['>ICM 딜<', '>칩찹<', '>차이<', '>스택<']) expect(ICM, `딜 비교 표의 ${col} 열이 사라졌다`).toContain(col);
+      expect(ICM).toContain('ICM 딜은 순위 확률 기반');
+      expect(ICM).toContain('보통 숏스택이 ICM 딜에서 더 받습니다');
+      expect(ICM).toContain('개만 분배에 반영됩니다');
+      expect(ICM, '칩찹은 lib/icm 단일 소스(chipChop)').toMatch(/import \{[^}]*chipChop[^}]*\} from '\.\.\/\.\.\/lib\/icm'/);
+      expect(PANEL).toContain('case \'deal\': return <ICMCalculator initialMode="deal" />');
+      expect(PANEL, '옛 DealCalc 를 다시 그리면 두 화면이 갈린다').not.toContain('DealCalc');
+      expect(PANEL, "'딜' 검색이 ICM 계산기에 닿아야 한다").toMatch(/key: 'icm'[^\n]*keywords: '[^']*딜 계산기/);
     });
 
     it('제목 칸이 2줄 자리를 늘 예약한다 — 한 줄짜리가 섞여도 열이 맞는다', () => {

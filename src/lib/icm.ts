@@ -55,6 +55,18 @@ export function icmEquity(stacks: number[], prizes: number[]): number[] {
   return result;
 }
 
+/**
+ * 칩찹(chip chop) — 스택 비례 단순 분배. ICM 딜과 나란히 놓는 비교 열(ICM 계산기 '딜 비교' 모드).
+ * ICM 은 상위 stacks.length 개 상금만 배분하므로 칩찹도 **같은 풀**(상위 n개 합)을 나눠야 두 열의 합이 같다.
+ * 0 이하·NaN 스택은 0 으로 본다(icmEquity 와 같은 정제).
+ */
+export function chipChop(stacks: number[], prizes: number[]): number[] {
+  const s = stacks.map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
+  const total = s.reduce((a, b) => a + b, 0);
+  const pool = prizes.slice(0, s.length).reduce((a, b) => a + (Number.isFinite(b) && b > 0 ? b : 0), 0);
+  return s.map((v) => (total > 0 ? (v / total) * pool : 0));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 콜 압박 (버블·파이널 테이블) — 리스크 프리미엄
 //

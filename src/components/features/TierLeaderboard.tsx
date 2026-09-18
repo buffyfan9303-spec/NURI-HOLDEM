@@ -626,6 +626,32 @@ export default function TierLeaderboard() {
   // 머니인(대회 입상 경력) — 기간별 캐시. CareerBoard 의 local state 였던 것을 올렸다(D-moneyin, 위 CareerBoard 주석).
   const [careerPeriod, setCareerPeriod] = useState<CareerPeriod>('all');
   const [career, setCareer] = useState<Partial<Record<CareerPeriod, GlobalRankingTotal[]>>>({});
+  // ── 공개 보드 예열(2026-09-18, 오너 "하단 메뉴 이동할 때 깜빡이면서 화면전환 — 처음 한 번만") ──────────
+  //   원인은 전환이 아니라 **첫 방문 보드의 스켈레톤 섬광**이었다. 보드 데이터는 그 보드가 처음 켜질 때 비로소 조회되고,
+  //   응답이 올 때까지(운영 실측 50~240ms · 명예의 전당은 조회 2회 직렬) pulse 스켈레톤을 그렸다가 콘텐츠로 갈아 끼운다.
+  //   실측(운영 390px anon, 클릭 뒤 연속 프레임 픽셀 변화율): 첫 클릭은 30~36% → 다시 29~33%(두 번) · 두 번째 클릭은 한 번뿐.
+  //   VT·Suspense·애니메이션은 반증됐다(startViewTransition 호출 0 · getAnimations 에 스켈레톤 pulse 외 없음).
+  //   높이 예약(스켈레톤 행수 기억)은 이 섬광을 못 막는다 — 높이가 같아도 블록→글자로 **그림이 바뀌는 것** 자체가 깜빡임이다.
+  //   → 레일이 처음 화면에 보이면 한가한 틈에 머니인·명예의 전당·국내 순위를 미리 받아 첫 클릭도 두 번째와 같게 한다.
+  //     IntersectionObserver 로 '보일 때'를 잡는 이유: CommunityTab 은 섹션을 숨긴 채 프리마운트하므로 마운트 시점에 태우면
+  //     순위를 열지도 않은 커뮤니티 방문자에게 조회 4건이 나간다(CommunityTab 프리마운트 주석의 원칙과 같다).
+  //     개인 보드(인증·상점)는 예열하지 않는다 — 스켈레톤이 없어 섬광이 없고, 상점은 RPC 9건이다.
+  const [warm, setWarm] = useState(false);
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    let alive = true;
+    const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      io.disconnect();
+      const go = () => { if (alive) setWarm(true); };
+      if (w.requestIdleCallback) w.requestIdleCallback(go, { timeout: 2000 });
+      else window.setTimeout(go, 300);
+    });
+    io.observe(rail);
+    return () => { alive = false; io.disconnect(); };
+  }, []);
   const [claiming, setClaiming] = useState<string | null>(null);
   // 계정 경계(UI-08-1): 로그인/로그아웃/계정 전환마다 스탬프를 올리고 **개인 상태만** 비운다 — 공개 보드(rows·domestic·hall)는 남긴다.
   //   예전엔 A 가 채운 badgeStats·missions·myVerifs·equippedMark 의 `=== null/undefined` 가드가 B 로는 영영 다시 안 불러 B 가 A 의 것을 봤다.
@@ -651,13 +677,14 @@ export default function TierLeaderboard() {
     }
     // 명예의 전당 — 예전 `.catch(() => setHall({ label: '', rows: [], source: 'auto' }))` 는 장애를 '기록 없음' 으로 그렸고, 빈 라벨 문장까지 만들었다.
     //   getMonthlyHall 이 던지게 된 것과 **같은 커밋**에서 폴백을 걷었다(둘 중 하나만 하면 빈 라벨이 더 자주 난다).
-    if (board === 'hall' && hall === null && boardErr.hall == null) scopedLoad(scopeRef, getHallOfFame(), setHall, fail('hall'));
+    // `|| warm` 세 곳 = 공개 보드 예열(위 warm 주석). 가드(=== null · 오류 없음)는 그대로라 예열 뒤 방문은 재조회 0.
+    if ((board === 'hall' || warm) && hall === null && boardErr.hall == null) scopedLoad(scopeRef, getHallOfFame(), setHall, fail('hall'));
     // 머니인 — 기간별 캐시(D-moneyin). 웜 방문·기간 되돌리기는 재조회 없음, 늦게 온 응답도 제 기간 칸에만 들어간다.
-    if (board === 'moneyin' && career[careerPeriod] === undefined && boardErr.career == null) {
+    if ((board === 'moneyin' || warm) && career[careerPeriod] === undefined && boardErr.career == null) {
       const p = careerPeriod;
       scopedLoad(scopeRef, getGlobalRankingTotals(p), (r) => { setCareer((prev) => ({ ...prev, [p]: r })); rememberMoneyinRowCount(r.length); }, fail('career'));
     }
-    if (board === 'domestic' && domestic === null && domesticErr == null) {
+    if ((board === 'domestic' || warm) && domestic === null && domesticErr == null) {
       scopedLoad(scopeRef, getDomesticRankings(30),
         (d) => { setDomestic(d); rememberDomesticRowCount(d.length); },
         (e) => setDomesticErr(e ?? new Error('불러오기 실패')));
@@ -680,7 +707,7 @@ export default function TierLeaderboard() {
     }
     // 오류 상태가 지워지면(다시 시도) 같은 분기가 다시 돈다 — 그래서 의존성에 넣는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, user?.id, missionsErr, domesticErr, boardErr, careerPeriod]);
+  }, [board, warm, user?.id, missionsErr, domesticErr, boardErr, careerPeriod]);
   const handleClaim = async (key: string) => {
     setClaiming(key);
     try {

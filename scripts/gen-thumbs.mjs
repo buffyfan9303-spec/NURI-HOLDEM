@@ -18,32 +18,38 @@ import { readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 
-const DIR = 'public/banners';
+// 2026-09-18: `public/venues` 추가(매장 로고). 짝이 되는 `src/lib/imageUrl.ts` 의 localVariant
+// 정규식도 같은 폴더 목록을 본다 — **둘은 항상 같이 고쳐야 한다.**
+const DIRS = ['public/banners', 'public/venues'];
 export const WIDTHS = [64, 128, 256, 400, 800, 960];
 const QUALITY = 72;
 
-if (!existsSync(DIR)) {
-  console.log('gen-thumbs: public/banners 없음 — 건너뜀');
+const PRESENT = DIRS.filter((d) => existsSync(d));
+if (PRESENT.length === 0) {
+  console.log(`gen-thumbs: ${DIRS.join(' / ')} 없음 — 건너뜀`);
   process.exit(0);
 }
 
 // 이미 생성된 변형본(-숫자.webp)은 원본으로 취급하지 않는다.
 const isVariant = (f) => /-\d+\.webp$/i.test(f);
-const sources = readdirSync(DIR).filter((f) => /\.webp$/i.test(f) && !isVariant(f));
 
-let made = 0, skipped = 0;
-for (const f of sources) {
-  const src = join(DIR, f);
-  const srcMtime = statSync(src).mtimeMs;
-  const meta = await sharp(src).metadata();
-  for (const w of WIDTHS) {
-    // 원본보다 큰 폭은 만들지 않는다(확대는 바이트만 늘린다).
-    if (meta.width && w >= meta.width) { skipped++; continue; }
-    const out = join(DIR, f.replace(/\.webp$/i, `-${w}.webp`));
-    // 원본이 더 낡았으면 다시 만들지 않는다(빌드마다 재인코딩하면 느리고 diff 가 흔들린다).
-    if (existsSync(out) && statSync(out).mtimeMs >= srcMtime) { skipped++; continue; }
-    await sharp(src).resize({ width: w, withoutEnlargement: true }).webp({ quality: QUALITY }).toFile(out);
-    made++;
+let made = 0, skipped = 0, total = 0;
+for (const DIR of PRESENT) {
+  const sources = readdirSync(DIR).filter((f) => /\.webp$/i.test(f) && !isVariant(f));
+  total += sources.length;
+  for (const f of sources) {
+    const src = join(DIR, f);
+    const srcMtime = statSync(src).mtimeMs;
+    const meta = await sharp(src).metadata();
+    for (const w of WIDTHS) {
+      // 원본보다 큰 폭은 만들지 않는다(확대는 바이트만 늘린다).
+      if (meta.width && w >= meta.width) { skipped++; continue; }
+      const out = join(DIR, f.replace(/\.webp$/i, `-${w}.webp`));
+      // 원본이 더 낡았으면 다시 만들지 않는다(빌드마다 재인코딩하면 느리고 diff 가 흔들린다).
+      if (existsSync(out) && statSync(out).mtimeMs >= srcMtime) { skipped++; continue; }
+      await sharp(src).resize({ width: w, withoutEnlargement: true }).webp({ quality: QUALITY }).toFile(out);
+      made++;
+    }
   }
 }
-console.log(`gen-thumbs: 원본 ${sources.length}개 · 생성 ${made} · 최신 ${skipped}`);
+console.log(`gen-thumbs: 폴더 ${PRESENT.length} · 원본 ${total}개 · 생성 ${made} · 최신 ${skipped}`);

@@ -512,6 +512,9 @@ ${cards}
                 </div>
               ) : (
                 <div className="space-y-1">
+                  {/* 2026-09-18 오너 확인: "전화번호 닉네임 둘다 가능" — 두 갈래를 **둘 다 유지**한다.
+                      (처음 지시는 "닉네임으로만" 이었는데, 전화번호 경로가 이미 있다는 걸 알리고 확인받았다.
+                       있던 기능을 말없이 없애지 않는다 — CLAUDE.md 기능 보존.) */}
                   <p className="text-2xs font-semibold text-ink-secondary">받는 손님 <span className="text-danger-light">필수</span></p>
                   <div className="flex gap-1.5">
                     <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs"><Icon name="user" size={12} /> 아이디(닉네임)로 지정</button>
@@ -522,7 +525,17 @@ ${cards}
               <button type="button" disabled={busy || !recvUserId || (!isAdmin && (!approved || approvedErr != null))} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : recvUserId ? `+ ${count}개 발급 → ${recvDisplay}` : '받는 손님을 먼저 지정하세요'}</button>
               {/* 오너 결정(2026-09-14): 손님 미지정 발급은 나중에 배정할 방법이 없어 영원히 못 쓰는 표가 된다 —
                   '미지정이면 매장 보관용'은 더 이상 사실이 아니라 지웠다. 본인인증을 마친 회원 계정에만 발급되는 이유를 남긴다. */}
-              <p className="text-2xs text-ink-muted">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 발급됩니다(받는 손님 지정 필수). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
+              {/* 🔴 법적 고지 — 오너 지시로 **필수**다(2026-09-18: "하단에 매장 업주에게만 가능 이라는 문구
+                  필수 법적인 문제 때문에"). 지우지 마라. 문구를 바꿔야 하면 오너 확인을 받아라.
+                  왜 여기인가: 이 화면이 **실제로 이용권을 만들어 내보내는 유일한 자리**다. 발급 버튼 바로 아래에
+                  두어야 누르기 직전에 읽힌다 — 화면 맨 끝에 두면 스크롤 밖에 남는다(실측 대상 아님, 배치 원칙).
+                  ⚠ 같은 취지의 문구가 출석 명단(CheckinModal)에도 있다. 거기도 이용권을 **보내는** 자리라서다.
+                    두 곳의 문구가 갈리면 안 된다 — 한쪽을 고치면 다른 쪽도 같이 고쳐라. */}
+              <p className="rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs leading-relaxed text-ink-secondary">
+                <b className="text-ink-primary">매장이용권 발급은 인증된 매장 업주에게만 가능합니다.</b><br />
+                손님끼리 주고받을 수 없으며, <b className="text-ink-primary">금전적 가치가 없습니다</b>(현금·상품권으로 교환·환불되지 않습니다).
+              </p>
+              <p className="text-2xs text-ink-muted">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 발급됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">아이디(닉네임) 또는 전화번호</b>로 지정합니다. 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
 
               {/* 🔴 2026-09-18 오너: "매장이용권 발행 한도 늘리는 요청(관리자에게)부터 시작해서 더 편하게",
                   "이용권 한도는 한도 증액 문구를 사용해서 전혀 금전적인게 없게".

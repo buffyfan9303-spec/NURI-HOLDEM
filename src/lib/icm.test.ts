@@ -3,7 +3,7 @@
 // 2) 독립 구현(순열 전수) 대조 — 비트마스크 메모이제이션이 맞는지 다른 알고리즘으로 검산
 // 3) 압박 계산 손계산 대조 + 항등식
 import { describe, it, expect } from 'vitest';
-import { icmEquity, callPressure, handLadder, verdictLine, SHOVE_RANGES, BENCH_HANDS } from './icm';
+import { icmEquity, chipChop, callPressure, handLadder, verdictLine, SHOVE_RANGES, BENCH_HANDS } from './icm';
 
 const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) <= eps * Math.max(1, Math.abs(a), Math.abs(b));
 
@@ -44,6 +44,20 @@ describe('icmEquity', () => {
 
     const dealScreen = icmEquity([500000, 300000, 200000], [500, 300, 200]);
     expect(dealScreen.map((v) => Math.round(v))).toEqual([384, 328, 289]);
+  });
+
+  // 딜 비교(옛 tools/DealCalc.tsx → ICM 계산기 병합, 2026-09-18) — 칩찹 열은 ICM 딜 열과 같은 풀을 나눈다.
+  it('chipChop — 스택 비례 · 상위 n개 상금 풀 · ICM 합과 같다', () => {
+    const chop = chipChop([500000, 300000, 200000], [500, 300, 200]);
+    expect(chop.map((v) => Math.round(v))).toEqual([500, 300, 200]);
+    // 상금 자리가 인원보다 많으면 상위 n개만 — ICM(icmEquity)도 같은 풀을 배분하므로 합이 일치해야 한다
+    const s = [5000, 3000, 2000]; const p = [40, 24, 15, 10, 7, 4];
+    const icmSum = icmEquity(s, p).reduce((a, b) => a + b, 0);
+    const chopSum = chipChop(s, p).reduce((a, b) => a + b, 0);
+    expect(near(icmSum, 79)).toBe(true);
+    expect(near(chopSum, icmSum)).toBe(true);
+    // 0·음수·NaN 스택은 0 — 총합 0 이면 전부 0
+    expect(chipChop([0, -1, NaN], [100])).toEqual([0, 0, 0]);
   });
 
   it('손계산 대조 · 5000/3000/2000, 상금 40/24/15', () => {

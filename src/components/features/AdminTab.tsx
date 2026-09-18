@@ -34,7 +34,7 @@ import {
   MISSIONS, adminListCustomMissions, adminSaveCustomMission, adminDeleteCustomMission,
   type CustomMissionRow, type MissionGoalType,
 } from '../../lib/loyalty';
-import { isVoucherIssueApproved, setVoucherIssueApproval, adminListVoucherCreditRequests, adminDecideVoucherCredit, getVoucherQuota, adminGrantVoucherQuota, type AdminCreditRequest } from '../../api/vouchers';
+import { isVoucherIssueApproved, setVoucherIssueApproval, adminListVoucherCreditRequests, adminDecideVoucherQuota, getVoucherQuota, adminGrantVoucherQuota, type AdminCreditRequest } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import { REGION_CHIPS } from './IntegratedSearchBar';
@@ -192,28 +192,48 @@ function VoucherQuotaAdminCard() {
   const decide = async (r: AdminCreditRequest, approve: boolean) => {
     setBusy(r.id);
     try {
-      await adminDecideVoucherCredit(r.id, approve);
-      toast.show(approve ? `${r.venueName} 한도 ${r.amount.toLocaleString()}개 충전 완료` : '요청을 거절했습니다', approve ? 'success' : 'info');
+      // 🔴 2026-09-18 — **승인은 새 함수**를 쓴다(admin_decide_voucher_quota).
+      //   옛 adminDecideVoucherCredit 은 §12-A-2 로 approve=true 가 서버에서 raise 되는 **유상 충전** 경로다.
+      //   새 경로는 무상 '한도 증액'이고, 실제 증액은 심사가 존치시킨 admin_grant_voucher_quota 가 한다.
+      // ⚠ 반려도 새 함수로 보낸다 — 한 대기열을 두 함수가 나눠 처리하면 어느 쪽이 status 를 바꿨는지
+      //   추적할 수 없다. 옛 함수는 호출부 0곳이 되지만 **지우지 않는다**(구 번들이 아직 부를 수 있다).
+      const left = await adminDecideVoucherQuota(r.id, approve);
+      toast.show(
+        approve
+          ? `${r.venueName} 발행 한도를 ${r.amount.toLocaleString()}장 늘렸습니다${left != null ? ` · 잔여 ${left.toLocaleString()}장` : ''}`
+          : '요청을 반려했습니다',
+        approve ? 'success' : 'info',
+      );
       load();
     } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
     setBusy(null);
   };
   // 실패 시에는 카드를 남긴다(위 공동 업주 카드와 같은 이유 — 사라지면 대기열의 존재 자체가 숨는다)
   if (err == null && reqs.length === 0) return null;
-  // W2-1 VCH-1(§12-A-2): 유상 충전 승인 경로 폐쇄 — 서버(admin_decide approve)도 raise.
-  // 잔여 pending 은 반려(정리)만 가능. 한도 조정이 필요하면 admin_grant_voucher_quota(수동 레버).
+  // 🔴 2026-09-18 — **승인 경로를 되살렸다.** 단, 되살린 것은 '유상 충전'이 아니라 **무상 한도 증액**이다.
+  //   §12-A-2 가 봉쇄한 것은 돈이 오가는 충전이고, 같은 심사가 admin_grant_voucher_quota 는
+  //   "금전 수수와 무관한 운영 도구"라며 존치시켰다. 이 카드는 그 레버에 '요청 대기열'을 붙일 뿐이다.
+  //   봉쇄된 옛 함수(request_voucher_credit · admin_decide_voucher_credit)는 **그대로 둔다.**
+  // ⚠ 전수 점검(2026-09-18)이 잡은 결함이다: 업주 요청 화면만 만들고 여기를 안 채워서,
+  //   요청이 '검토 중'에서 영원히 멈추는 막다른 길이었다. 요청을 받는 화면과 처리하는 화면은
+  //   **반드시 같은 작업에서** 만들어야 한다.
   return (
     <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
-      <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="cart" size={15} className="shrink-0" />이용권 충전 요청 <span className="text-2xs font-normal text-danger-light">· 유상 충전 폐쇄(§12-A) · 반려만 가능</span></h3>
-      {err != null ? <LoadErrorCard error={err} what="이용권 충전 요청" onRetry={load} compact /> : (
+      <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="ticket" size={15} className="shrink-0" />이용권 발행 한도 증액 요청 <span className="text-2xs font-normal text-ink-muted">· 비용 없음 · 승인하면 즉시 반영</span></h3>
+      {err != null ? <LoadErrorCard error={err} what="한도 증액 요청" onRetry={load} compact /> : (
       <ul className="space-y-1.5">
         {reqs.map((r) => (
           <li key={r.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-ink-primary truncate">{r.venueName} <span className="text-accent-300">+{r.amount.toLocaleString()}개</span></p>
+              <p className="text-xs font-bold text-ink-primary truncate">{r.venueName} <span className="text-accent-300">+{r.amount.toLocaleString()}장</span></p>
               <p className="text-2xs text-ink-muted truncate">{r.requester}{r.note ? ` · ${r.note}` : ''} · {new Date(r.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
             </div>
-            <button type="button" disabled={busy === r.id} onClick={() => decide(r, false)} className="btn-ghost shrink-0 px-2 py-1.5 text-2xs hover:text-danger-light">반려(정리)</button>
+            {/* 승인이 먼저다 — 대기열의 기본 동작은 '들어준다' 이고 반려가 예외다. */}
+            <button type="button" disabled={busy === r.id} onClick={() => decide(r, true)}
+              className="shrink-0 rounded-input border border-emerald-500/50 px-2.5 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40">
+              {busy === r.id ? '처리 중…' : '승인'}
+            </button>
+            <button type="button" disabled={busy === r.id} onClick={() => decide(r, false)} className="btn-ghost shrink-0 px-2 py-1.5 text-2xs hover:text-danger-light">반려</button>
           </li>
         ))}
       </ul>

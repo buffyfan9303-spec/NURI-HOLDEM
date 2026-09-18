@@ -81,14 +81,24 @@ export function NoticeRow({ notice, onSelect, reserveMarker }: {
           전체 제목은 접근성 이름(aria-label)·title 툴팁·상세 화면에 그대로 있다. 애니메이션·translate 없음. */}
       {/* truncate(nowrap) 가 아니라 line-clamp-1 이다 — 보이는 결과는 같지만 nowrap 은 scrollWidth 를
           한 줄 전체 길이로 부풀려 '제목이 가로로 넘치는가' 가드를 무의미하게 만든다(2026-09-10 실측 652px). */}
+      {/* 🔴 2026-09-18 전수 점검: 루트 글자 **200% 확대에서 이 제목이 폭 0~4px 로 찌부러져
+          완전히 안 보였다**(날짜 배지만 남아 빈 줄처럼 보임). 원인은 이 span 만 `min-w-0 flex-1` 이고
+          형제(마커·날짜·펼치기·작성 버튼)는 전부 `shrink-0` 이라, 글자가 커지면 **줄어들 수 있는 것이
+          제목뿐**이라서다. 공지 목록에서 제목은 유일한 내용이다 — 그게 0이 되면 이 줄은 의미가 없다.
+        ⚠ 최소 폭을 **rem** 으로 준다. px 로 주면 글자만 커질 때 따라 크지 않아 같은 일이 다시 난다.
+        ⚠ 부모 줄을 flex-wrap 으로 열어 둔다 — 그래야 폭이 모자랄 때 **날짜가 아랫줄로 내려가고**
+          제목이 자리를 지킨다. 들어갈 땐 안 감싸므로 100% 화면은 종전 그대로 한 줄이다
+          (오너 2026-09-10 "공지사항이 한 줄 이상 되지 않게" 는 100% 기준 요구였다.
+           글자를 2배로 키운 화면에서 '한 줄'을 지키는 유일한 방법은 글자를 지우는 것뿐이고,
+           그건 요구를 지킨 게 아니라 기능을 없앤 것이다). */}
       <span title={notice.title}
-        className="min-w-0 flex-1 break-words text-sm font-semibold text-ink-primary line-clamp-1">
+        className="min-w-[6rem] flex-1 break-words text-sm font-semibold text-ink-primary line-clamp-1">
         {notice.title}
       </span>
       <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{when}</span>
     </>
   );
-  const cls = 'flex w-full min-h-[var(--row-h-sm)] items-center gap-2.5 rounded-input px-2.5 py-2 text-left transition-colors';
+  const cls = 'flex w-full min-h-[var(--row-h-sm)] flex-wrap items-center gap-2.5 rounded-input px-2.5 py-2 text-left transition-colors';
   return (
     <li>
       {onSelect ? (

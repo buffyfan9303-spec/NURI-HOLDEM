@@ -1,26 +1,31 @@
 // src/components/features/ICMCalculator.tsx
-// ICM 계산기 — 두 모드를 한 화면에서 전환한다.
+// ICM 계산기 — 세 모드를 한 화면에서 전환한다.
 //   기대 지분 : 스택 + 상금 → 각자의 상금 지분(기존 화면, 그대로 보존)
 //   콜 압박   : 위 입력 + 내 자리·올인한 상대·깔린 팟 → 콜에 필요한 승률(리스크 프리미엄)
-// 스택·상금 입력은 두 모드가 공유한다 — 같은 테이블을 두 번 입력시키지 않기 위해서다.
-// 계산(Malmuth-Harville · 리스크 프리미엄)은 src/lib/icm.ts 단일 소스. 예전엔 이 파일과
+//   딜 비교   : 위 입력 → ICM 딜(=기대 지분) 과 칩찹(스택 비례) 을 한 표에서 비교
+//     (2026-09-18 오너 "딜 메이킹과 ICM 계산기의 차이를 모르겠어 … ICM 계산기 쪽으로 합쳐" — 옛 tools/DealCalc.tsx 는
+//      같은 icmEquity 에 칩찹 열 하나를 더한 화면이었다. 그 표·스택 비율·안내문을 이 모드로 옮기고 파일은 지웠다.)
+// 스택·상금 입력은 세 모드가 공유한다 — 같은 테이블을 두 번 입력시키지 않기 위해서다.
+// 계산(Malmuth-Harville · 리스크 프리미엄 · 칩찹)은 src/lib/icm.ts 단일 소스. 예전엔 이 파일과
 // tools/DealCalc.tsx 에 icmEquity 가 두 벌로 복제돼 있었다.
 import { useMemo, useState } from 'react';
 import { CalcCard } from './tools/calcUi';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import {
-  icmEquity, callPressure, handLadder, verdictLine,
+  icmEquity, chipChop, callPressure, handLadder, verdictLine,
   SHOVE_RANGES, ICM_MAX_PLAYERS, type ShoveRangeId,
 } from '../../lib/icm';
 
-type Mode = 'equity' | 'pressure';
+type Mode = 'equity' | 'pressure' | 'deal';
 
 const MODES: { key: Mode; label: string }[] = [
   { key: 'equity', label: '기대 지분' },
   { key: 'pressure', label: '콜 압박' },
+  { key: 'deal', label: '딜 비교' },
 ];
 
 const num = (v: number) => v.toLocaleString('ko-KR');
+const fmt = (n: number) => Math.round(n).toLocaleString('ko-KR');
 
 /** 기대 지분 모드에서 압박 계산을 건너뛸 때 쓰는 자리표시자(렌더되지 않는다) */
 const IDLE_PRESSURE = callPressure({ stacks: [], prizes: [], heroIndex: 0, villainIndex: 0, pot: 0 });
@@ -41,8 +46,9 @@ function SeatBtn({ on, tone, label, onClick }: { on: boolean; tone: 'hero' | 'vi
   );
 }
 
-export default function ICMCalculator() {
-  const [mode, setMode] = useState<Mode>('equity');
+/** initialMode — `#tool=deal` 옛 딥링크가 딜 비교 모드로 바로 열리게(ToolsPanel renderTool). 기본은 기대 지분. */
+export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?: Mode } = {}) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [stacks, setStacks] = useState<number[]>([5000, 3000, 2000]);
   const [prizes, setPrizes] = useState<number[]>([40, 24, 15, 10, 7, 4]);
   // 압박 모드 입력 — 기본값은 '중간 스택이 칩리더의 올인을 받는' 대표적 버블 자리(결과 먼저 원칙)
@@ -61,6 +67,9 @@ export default function ICMCalculator() {
   // 상금 입력 단위 안내 — 합계가 100±1 이면 % 구조로, 아니면 금액 그대로 해석된다는 캡션.
   const prizeSum = prizes.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
   const looksPct = Math.abs(prizeSum - 100) <= 1;
+  // 딜 비교 — 칩찹(스택 비례). ICM 은 상위 n개 상금만 배분하므로 칩찹도 같은 풀을 나눠야 두 열의 합이 같다(lib/icm chipChop).
+  const totalStack = stacks.reduce((a, b) => a + (Number.isFinite(b) && b > 0 ? b : 0), 0);
+  const chop = useMemo(() => (mode === 'deal' ? chipChop(stacks, prizes) : []), [mode, stacks, prizes]);
 
   // 인원을 줄이면 저장된 자리 인덱스가 범위를 벗어난다 — 표시 직전에 좁혀서 쓴다(effect 불필요).
   const n = stacks.length;
@@ -101,7 +110,8 @@ export default function ICMCalculator() {
     <div className="flex items-center justify-between mb-1.5">
       <span className="text-2xs font-semibold text-ink-secondary">상금 구조</span>
       <div className="inline-flex items-center gap-1.5">
-        <button type="button" aria-label="상금 자리 줄이기" onClick={() => setPrizes((p) => p.slice(0, -1))} disabled={prizes.length <= 2}
+        {/* 하한 1자리 — 옛 딜 계산기가 허용하던 '남은 상금 한 자리'(예: 헤즈업 우승 상금만 남음)를 잃지 않는다. 압박 모드도 1자리면 계산한다. */}
+        <button type="button" aria-label="상금 자리 줄이기" onClick={() => setPrizes((p) => p.slice(0, -1))} disabled={prizes.length <= 1}
           className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold text-ink-secondary leading-none disabled:opacity-30">−</button>
         <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{prizes.length}명</span>
         <button type="button" aria-label="상금 자리 늘리기" onClick={() => setPrizes((p) => [...p, 0])} disabled={prizes.length >= 20}
@@ -121,13 +131,16 @@ export default function ICMCalculator() {
     <p className="mt-1 text-2xs text-ink-muted">
       {looksPct ? '합계 ≈100 · % 상금 구조로 입력됨(결과도 % 단위)' : '합계가 100이 아니므로 금액 단위 그대로 계산됩니다'}
     </p>
+    {mode === 'deal' && prizes.length > stacks.length && (
+      <p className="mt-1 text-2xs text-ink-muted">남은 인원({stacks.length}명)보다 많은 상금 자리는 상위 {stacks.length}개만 분배에 반영됩니다.</p>
+    )}
   </div>
   );
   const stackBlock = ( // 스택 + (기대 지분 모드) 결과 / (압박 모드) 자리 지정
   <div>
     <div className="flex items-center justify-between mb-1.5">
       <span className="text-2xs font-semibold text-ink-secondary">
-        {mode === 'equity' ? '플레이어 스택' : '남은 스택 · 자리 지정'}
+        {mode === 'equity' ? '플레이어 스택' : mode === 'deal' ? '남은 인원 스택 (칩)' : '남은 스택 · 자리 지정'}
       </span>
       <div className="inline-flex items-center gap-1.5">
         <button type="button" aria-label="플레이어 줄이기"
@@ -155,6 +168,11 @@ export default function ICMCalculator() {
                 </span>
               )}
             </span>
+          ) : mode === 'deal' ? (
+            // 딜 비교: 스택 점유율(옛 딜 계산기의 행 오른쪽 %)
+            <span className="w-14 shrink-0 text-right text-2xs tabular-nums text-ink-muted">
+              {totalStack > 0 ? `${((v / totalStack) * 100).toFixed(1)}%` : '—'}
+            </span>
           ) : (
             <span className="inline-flex shrink-0 gap-1">
               <SeatBtn on={hero === i} tone="hero" label="나" onClick={() => pickHero(i)} />
@@ -165,6 +183,46 @@ export default function ICMCalculator() {
       ))}
     </ul>
   </div>
+  );
+
+  // 딜 비교 표 — 스택 | ICM 딜 | 칩찹 | 차이 (옛 tools/DealCalc.tsx 의 표 그대로. ICM 딜 열 = 기대 지분 모드의 값)
+  //   옛 딜 계산기는 금액 입력만 상정해 정수로 반올림했다. 여기서는 상금 입력을 기대 지분 모드와 공유하므로
+  //   % 구조(합계 ≈100)일 때는 소수 1자리 — 정수로 깎으면 30.55 가 31 이 돼 기대 지분 모드의 값과 어긋나 보인다.
+  const money = (n: number) => (looksPct ? n.toFixed(1) : fmt(n));
+  const dealTable = (
+    <>
+      <div className="overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60">
+        <table className="w-full text-xs tabular-nums">
+          <thead>
+            <tr className="border-b border-border-subtle text-2xs text-ink-muted">
+              <th scope="col" className="px-2 py-1.5 text-left font-semibold">플레이어</th>
+              <th scope="col" className="px-2 py-1.5 text-right font-semibold">스택</th>
+              <th scope="col" className="px-2 py-1.5 text-right font-semibold">ICM 딜</th>
+              <th scope="col" className="px-2 py-1.5 text-right font-semibold">칩찹</th>
+              <th scope="col" className="px-2 py-1.5 text-right font-semibold">차이</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-subtle">
+            {stacks.map((v, i) => {
+              const diff = (equities[i] ?? 0) - (chop[i] ?? 0);
+              return (
+                <tr key={i}>
+                  <td className="px-2 py-1.5 font-bold text-ink-secondary">P{i + 1}</td>
+                  <td className="px-2 py-1.5 text-right text-ink-secondary">{fmt(v)}</td>
+                  <td className="px-2 py-1.5 text-right font-extrabold text-accent-300">{money(equities[i] ?? 0)}</td>
+                  <td className="px-2 py-1.5 text-right font-bold text-ink-primary">{money(chop[i] ?? 0)}</td>
+                  <td className={`px-2 py-1.5 text-right font-bold ${diff > 0.5 ? 'text-emerald-400' : diff < -0.5 ? 'text-danger-light' : 'text-ink-muted'}`}>
+                    {diff > 0.5 ? `+${money(diff)}` : diff < -0.5 ? `−${money(-diff)}` : '0'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-2xs text-ink-muted">ICM 딜은 순위 확률 기반(기대 지분과 같은 값), 칩찹은 스택 비례 단순 분배입니다.</p>
+      <p className="text-2xs text-ink-muted">차이(+)는 칩찹보다 ICM 딜이 유리한 플레이어. 보통 숏스택이 ICM 딜에서 더 받습니다.</p>
+    </>
   );
 
   // 압박 모드 전용 입력 — 스택·자리 바로 아래(결론에서 가장 가깝게)
@@ -208,7 +266,9 @@ export default function ICMCalculator() {
     // 제목은 전체화면 헤더(도구 런처)가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
     <CalcCard desc={mode === 'equity'
       ? '스택과 상금을 입력하면 각 플레이어의 기대 상금(ICM)을 계산합니다.'
-      : '상대가 올인했을 때, 콜하려면 칩 기준 승률이 몇 % 필요한지 계산합니다.'}>
+      : mode === 'deal'
+        ? '남은 스택과 남은 상금을 입력하면 ICM 딜과 칩찹 분배액을 비교합니다.'
+        : '상대가 올인했을 때, 콜하려면 칩 기준 승률이 몇 % 필요한지 계산합니다.'}>
       {/* flex-wrap: 320px 에서 탭(130px)+버블 버튼이 한 줄에 못 들어가 탭이 4px 잘렸다(실측) — 좁으면 버블 버튼이 다음 줄로 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SegmentedTabs items={MODES} value={mode} onChange={setMode} />
@@ -288,7 +348,10 @@ export default function ICMCalculator() {
         </div>
       )}
 
-      {mode === 'pressure' ? <>{stackBlock}{pressureInputs}{prizeBlock}</> : <>{prizeBlock}{stackBlock}</>}
+      {/* 딜 비교는 옛 딜 계산기 순서(상금 → 스택 → 표)를 그대로 따른다 */}
+      {mode === 'pressure' ? <>{stackBlock}{pressureInputs}{prizeBlock}</>
+        : mode === 'deal' ? <>{prizeBlock}{stackBlock}{dealTable}</>
+        : <>{prizeBlock}{stackBlock}</>}
 
       <p className="text-2xs text-ink-muted">
         칩 2배 ≠ 상금 2배 — 칩이 쌓일수록 칩 1개의 상금 가치는 줄어듭니다(ICM의 핵심).

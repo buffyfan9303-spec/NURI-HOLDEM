@@ -331,9 +331,6 @@ function soonText(schedule: Schedule, status: ReturnType<typeof scheduleStatus>)
   return `${h > 0 ? `${h}시간 ` : ''}${m}분 후`;
 }
 
-const gradeLabel = (g: Schedule['grade']) =>
-  g === 'daily' ? '데일리' : g === 'satellite' ? '새틀' : g === 'series' ? '시리즈' : null;
-
 function ListCard({
   schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, regInfo, vtActive,
   favorited = false, onToggleFavorite, venue,
@@ -356,7 +353,9 @@ function ListCard({
   const soon = soonText(schedule, status);
   const reg = regCloseText(schedule);
   const sub = prizeText(schedule);
-  const meta = [schedule.format, gradeLabel(schedule.grade), schedule.buyIn?.gameType].filter(Boolean).join(' · ');
+  // (2026-09-18 3차) 목록 줄에서 형식·등급·게임종류 표기를 뺐다(오너 지시) — 이 값은 상세 화면이 보여 준다.
+  //   계산 자체를 지우지 않고 남겨 둔다면 죽은 코드가 되므로 제거한다. 되살릴 때는 아래 GridCard 의
+  //   같은 줄을 복사해 오면 된다(포맷이 갈리지 않게 **그쪽이 정본**이다).
 
   return (
     <article
@@ -412,8 +411,31 @@ function ListCard({
            글자 200% 확대에서는 42 안에 87px 가 들어가 통째로 잘린다(실측 42/87).
            → **최소 폭만** 주고 내용이 필요한 만큼 넓어지게 둔다. 확대되면 이 열이 넓어지고
              가운데 열의 rem basis 가 스스로 줄을 내려 해결한다(그게 접근성 축이다). */}
+      {/* 🔴 2026-09-18(3차) 오너: "예정 18:00 있는 쪽에는 매장 로고 넣으라고 했잖아".
+          매장 로고를 매장명 옆(가운데 열)에서 **이 왼쪽 열 맨 위**로 옮겼다.
+          왜 이게 더 나은가 — 왼쪽 열은 폭이 고정이라 로고를 **줄마다 같은 자리·같은 크기**로
+          세울 수 있다. 매장명 옆에 있을 때는 이름 길이에 따라 로고의 x 가 줄마다 달라 눈이 훑기 어려웠다.
+        ⚠ 18px → 28px 로 키웠다. 18px 에서는 한글 대체 글자가 타일을 넘쳐 잘렸고(실측 18/20),
+          로고라고 알아볼 수도 없었다. 왼쪽 열 최소폭(42/52)이 28px 를 이미 감당한다.
+        ⚠ vt-poster(카드→상세 모핑)의 출발점이 이 로고다 — 자리를 옮겨도 이름은 그대로 둔다.
+          이름을 빼면 모핑이 조용히 사라진다(index.css 는 그대로 초록이라 아무도 모른다). */}
       <div className="order-1 min-w-[42px] shrink-0 min-[360px]:min-w-[52px]">
-        <StatusPill b={badge} />
+        <PosterArea
+          posterUrl={venue?.imageUrl}
+          posterColor={venue?.themeColor ?? schedule.posterColor}
+          fallbackText={venueInitial(schedule.pubName)}
+          title={schedule.pubName}
+          className="mb-0.5 h-[28px] w-[28px] rounded-[7px]"
+          thumbWidth={64}
+          priority={priority}
+          compact
+          vtName={vtActive ? 'vt-poster' : undefined}
+        />
+        {/* ⚠ StatusPill 은 inline-flex 라 **줄상자(line box)** 를 만든다 — 그 자체로 6.9px 의
+            여백이 위에 붙었다(실측 390: 로고 하단 32.3 vs 알약 상단 39.1). 블록 flex 로 감싸면
+            줄상자가 사라진다. 로고가 들어오면서 이 열이 가장 높은 열이 됐으므로(104.2 vs 가운데 78.4)
+            여기서 아끼는 px 가 곧 **모든 줄의 높이**다. */}
+        <div className="flex"><StatusPill b={badge} /></div>
         <p className="mt-0.5 text-base font-extrabold tabular-nums leading-tight tracking-tight text-ink-primary min-[360px]:text-lg">
           {d.time || '—'}
         </p>
@@ -430,18 +452,9 @@ function ListCard({
 
       {/* ② 가운데 — 매장 / 대회명 / 등록·유형 */}
       <div className="order-2 min-w-0 flex-[1_1_7rem]">
+        {/* 로고는 왼쪽 열로 갔다(위 주석). 여기는 TOP 배지 + 매장명 + 지역 + 즐겨찾기만 남는다 —
+            그만큼 매장명이 쓸 폭이 늘었다(실측 18px 로고 + gap 4px = 22px 회수). */}
         <div className="flex min-w-0 items-center gap-1">
-          <PosterArea
-            posterUrl={venue?.imageUrl}
-            posterColor={venue?.themeColor ?? schedule.posterColor}
-            fallbackText={venueInitial(schedule.pubName)}
-            title={schedule.pubName}
-            className="h-[18px] w-[18px] shrink-0 rounded-[5px]"
-            thumbWidth={48}
-            priority={priority}
-            compact
-            vtName={vtActive ? 'vt-poster' : undefined}
-          />
           {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
           <VenueLink
             pubName={schedule.pubName}
@@ -471,7 +484,12 @@ function ListCard({
         <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs leading-tight text-ink-muted">
           {reg && <span className="font-semibold tabular-nums text-ink-secondary">{reg}</span>}
           {soon && <span className="font-bold text-accent-200">{soon}</span>}
-          <span className="break-keep">{meta || '—'}</span>
+          {/* 🔴 2026-09-18(3차) 오너: "14분 후 오른쪽 mtt gtd 삭제".
+              여기 있던 `{meta}`(형식 · 등급 · 게임종류, 예: "MTT · gtd")를 뺐다.
+            ⚠ 사라진 정보를 숨기지 않고 적는다 — **형식(MTT/SNG/PKO)과 게임 종류(NLH/PLO)가
+              목록 줄에서 안 보이게 된다.** 등급(gtd)은 오른쪽 GTD 칸과 중복이라 잃는 것이 없지만,
+              앞의 둘은 중복이 아니다. 지금은 상단 필터 칩(MTT·GTD)과 **상세 화면**이 그 역할을 한다.
+              다시 필요해지면 이 줄이 아니라 매장 줄 끝에 작게 붙이는 편이 낫다(여기는 이미 5개가 경쟁한다). */}
           {rating && rating.count > 0 && (
             <span className="shrink-0 tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
               ★{rating.avg.toFixed(1)}
@@ -482,17 +500,21 @@ function ListCard({
         </div>
       </div>
 
-      {/* ③ 참가비 · GTD — §28 상품 가격 정보라 표시를 유지한다.
-             ⚠ title 에 원 단위 금액을 남긴다 — 목록은 요약이고 정확한 가격은 상세가 보여 주지만,
-               T 가 무엇인지 모르는 첫 방문자를 위해 여기서도 확인할 수 있어야 한다. */}
+      {/* ③ GTD · 참가비 — §28 상품 가격 정보라 표시를 유지한다.
+          🔴 2026-09-18(3차) 오너: "10T 아래에 GTD 1000만 있는데 GTD를 위로 올리고 10T를 밑으로".
+             순서를 뒤집었다. 상금(GTD)이 위, 참가비가 아래다 — 유저가 목록에서 먼저 보는 것은
+             '얼마를 걸고 얼마를 받나' 중 **받는 쪽**이라는 판단이다.
+           ⚠ '참가비' 라벨은 금액 **바로 위**에 붙여 둔다. 라벨을 맨 위로 올리면 그게 GTD 를 가리키는
+             것처럼 읽혀 '참가비 1,000만' 으로 오독된다 — 금액 오독은 §28 이 막으려는 바로 그 사고다.
+           ⚠ title 에 원 단위 금액을 남긴다 — T 가 무엇인지 모르는 첫 방문자가 확인할 수 있어야 한다. */}
       <div className="order-3 w-[68px] shrink-0 text-right min-[360px]:w-[80px]">
-        <p className="text-[10px] font-bold uppercase leading-tight tracking-wide text-ink-muted">참가비</p>
+        <p className={`break-keep text-2xs font-bold tabular-nums leading-tight ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
+          {sub ?? '—'}
+        </p>
+        <p className="mt-1 text-[10px] font-bold uppercase leading-tight tracking-wide text-ink-muted">참가비</p>
         <p className="text-base font-extrabold tabular-nums leading-tight text-ink-primary min-[360px]:text-lg"
           title={schedule.buyIn?.amount ? `${schedule.buyIn.amount.toLocaleString()}원` : undefined}>
           {buyInText(schedule.buyIn?.amount)}
-        </p>
-        <p className={`mt-0.5 break-keep text-2xs font-bold tabular-nums leading-tight ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
-          {sub ?? '—'}
         </p>
       </div>
    </article>

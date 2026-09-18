@@ -15,9 +15,14 @@
 // 그래서 **원본이 그대로** 내려갔다(실측: 홈 목록 64px 썸네일이 118KB 원본을 받음).
 // scripts/gen-thumbs.mjs 가 빌드 때 폭별 변형본을 만들고 여기서 그걸 가리킨다(64px → 3KB).
 // 변형본이 없어도 ScheduleCard 의 onError 폴백이 원본으로 되돌아가 화면은 깨지지 않는다.
+// 2026-09-18: `/venues/` 추가 — 매장 로고는 일정 목록의 **모든 줄**에 18px 로 그려진다.
+// 원본 하나(16KB)를 줄 수만큼 곱해 내려받던 것을 변형본(64px ≈ 1~2KB)으로 바꾼다.
+// ⚠ 폴더를 늘렸으면 `scripts/gen-thumbs.mjs` 의 DIRS 도 같이 늘려야 한다 — 한쪽만 고치면
+//   여기서는 `-64.webp` 를 가리키는데 그 파일이 없어 404 → onError 폴백으로 원본이 다시 내려간다
+//   (화면은 안 깨지고 **느려지기만 해서** 아무도 눈치채지 못한다).
 const LOCAL_WIDTHS = [64, 128, 256, 400, 800, 960];
 const localVariant = (url: string, width: number): string | undefined => {
-  if (!/\/banners\/[^/]+\.webp$/i.test(url)) return undefined;
+  if (!/\/(banners|venues)\/[^/]+\.webp$/i.test(url)) return undefined;
   const w = LOCAL_WIDTHS.find((x) => x >= width);
   if (!w) return undefined;              // 요청 폭이 최대 변형본보다 크면 원본이 맞다
   return url.replace(/\.webp$/i, `-${w}.webp`);

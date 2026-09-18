@@ -530,7 +530,7 @@ export async function adminListVoucherCreditRequests(): Promise<AdminCreditReque
   return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, venueName: r.venue_name ?? '(매장)', amount: r.amount, note: r.note ?? null, requester: r.requester ?? '', createdAt: r.created_at }));
 }
 
-/** (운영자) 충전 요청 승인/거절 — 승인 시 매장 한도 자동 충전 */
+/** (운영자) 충전 요청 승인/거절 — ⚠ **화면 호출부 0곳**(2026-09-18). — 승인 시 매장 한도 자동 충전 */
 export async function adminDecideVoucherCredit(requestId: string, approve: boolean, adminNote?: string): Promise<void> {
   const { error } = await supabase.rpc('admin_decide_voucher_credit', { p_request_id: requestId, p_approve: approve, p_admin_note: adminNote ?? null });
   if (error) throw new Error(error.message);

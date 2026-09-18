@@ -24,7 +24,6 @@ import PostflopTrainer from './tools/PostflopTrainer';
 import BlindBuilder from './tools/BlindBuilder';
 import GlossaryPanel from './tools/GlossaryPanel';
 import HandRankPanel from './tools/HandRankPanel';
-import DealCalc from './tools/DealCalc';
 import DailyDrill from './tools/DailyDrill';
 import WrongNote, { type PushJump, type RangeJump } from './tools/WrongNote';
 
@@ -86,38 +85,27 @@ type ToolCat = 'explore' | 'train' | 'review' | 'rules' | 'ops' | 'money';
  *   정규식으로 검사하고 있어(항목 포맷·개수) 배열 모양을 건드리면 그 계약이 흔들린다.
  * ⚠ 여기 없는 키는 **한 줄**로 그린다. 그래도 칸 높이는 맞는다 — 제목 칸이 2줄 자리를 늘 예약한다.
  * ⚠ 두 줄을 합치면 반드시 `name` 과 같아야 한다(공백 하나). 아래 계약 테스트가 그걸 잠근다.
+ *
+ * 🔴 2026-09-18 오너 2차 지시 "굳이 두 줄이 아니어도 되는 부분은 한 줄로(예: 누리 스팟·홀덤 족보)":
+ *   **가장 좁은 제목 칸(360px·2열 = 70px)에 한 줄로 들어가는 이름은 표에서 뺀다.** 실측(4174 프로덕션 빌드, text-xs 굵게):
+ *   들어감 — 누리 스팟 47 · 홀덤 족보 47 · 오답 노트 47 · EV 52.7 · 콤보 58 · M존 58.3 · ICM 59.9 · SPR 60 · 아웃츠 / 확률 65.7 ·
+ *   홀덤 용어사전 69.1 · 어그레션 차트 69.1 / 안 들어감 — 팟 오즈 계산기 72 · GTO 핸드 분석 76.3 · 푸시 · 폴드 차트 78.6 ·
+ *   핸드 리플레이어 80.1 · 2026 TDA 규칙 85.9 · 레인지 vs 레인지 86.1 · 프리플랍 트레이너 91.1 · 포스트플랍 트레이너 102.1 ·
+ *   프리플랍 레인지 차트 105.1. 320px 에서는 제목이 아이콘 아래로 내려가 칸이 92px 라 더 넉넉하다 — 360 이 최악이다.
+ *   두 낱말 이름은 어차피 자연 줄바꿈 지점 = 의미 지점이라 표가 없어도 같은 자리에서 꺾인다. 표가 필요한 건
+ *   **세 토막 이상**(폭마다 다른 데서 꺾이는 것)뿐이다. 이관·숨김 도구는 이 표를 안 읽는다(StoreToolsPanel 은 t.name).
+ *   'MDF · 블러프 계산기' 는 어느 두 줄로 쪼개도 70px 을 넘어 360 에서 **3줄**이 됐고(핸드 리뷰 갈래만 칸 69px), 'MDF 계산기' 로 줄였다.
  */
 const TITLE_LINES: Partial<Record<ToolKey, readonly [string, string]>> = {
   tda:       ['2026', 'TDA 규칙'],
-  drill:     ['오늘의', '드릴'],
   range:     ['프리플랍', '레인지 차트'],
   pushfold:  ['푸시 · 폴드', '차트'],
   trainer:   ['프리플랍', '트레이너'],
   postflop:  ['포스트플랍', '트레이너'],
-  wrongnote: ['오답', '노트'],
-  aggro:     ['어그레션', '차트'],
-  glossary:  ['홀덤', '용어사전'],
-  handrank:  ['홀덤', '족보'],
-  spot:      ['누리', '스팟'],
   replay:    ['핸드', '리플레이어'],
   gto:       ['GTO', '핸드 분석'],
   rvr:       ['레인지', 'vs 레인지'],
   pot:       ['팟 오즈', '계산기'],
-  outs:      ['아웃츠 /', '확률'],
-  mdf:       ['MDF · 블러프', '계산기'],
-  icm:       ['ICM', '계산기'],
-  deal:      ['딜', '계산기'],
-  spr:       ['SPR', '계산기'],
-  ev:        ['EV', '계산기'],
-  combo:     ['콤보', '계산기'],
-  mzone:     ['M존', '계산기'],
-  bankroll:  ['뱅크롤', '관리'],
-  variance:  ['분산', '시뮬'],
-  chip:      ['칩', '분배기'],
-  sim:       ['구조', '시뮬'],
-  blindgen:  ['블라인드', '생성기'],
-  payout:    ['상금', '분배'],
-  endtime:   ['종료시간', '예측'],
 };
 
 const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?: string; icon: IconName }[] = [
@@ -147,8 +135,12 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   // ── 계산기 — 수치 판단 ──
   { key: 'pot', cat: 'review', name: '팟 오즈 계산기', desc: '콜에 필요한 최소 승률', keywords: '콜에 필요한 승률 계산', icon: 'percent' },
   { key: 'outs', cat: 'review', name: '아웃츠 / 확률', desc: '카드만 넣으면 완성될 확률', keywords: '카드만 넣으면 아웃 자동 계산', icon: 'dice' },
-  { key: 'mdf', cat: 'review', name: 'MDF · 블러프 계산기', desc: '벳 크기별 최소 방어 비율', keywords: '수비 빈도·블러프 비율', icon: 'shield-check' },
-  { key: 'icm', cat: 'rules', name: 'ICM 계산기', desc: '지금 내 칩의 상금 가치', keywords: '토너먼트 기대 상금', icon: 'trophy' },
+  // 2026-09-18 'MDF · 블러프 계산기' → 'MDF 계산기'(TITLE_LINES 주석 참고 — 360px 에서 3줄). 옛 이름은 keywords 로 검색된다.
+  { key: 'mdf', cat: 'review', name: 'MDF 계산기', desc: '벳 크기별 최소 방어 비율', keywords: 'MDF · 블러프 계산기 수비 빈도·블러프 비율', icon: 'shield-check' },
+  // 2026-09-18 오너 지시 "딜 메이킹과 ICM 계산기의 차이를 모르겠어 … ICM 계산기 쪽으로 합쳐": 딜 계산기의 표(ICM 딜 vs 칩찹)는
+  //   ICM 계산기의 '딜 비교' 모드가 됐다(같은 스택·상금 입력을 두 번 치지 않는다). 옛 검색어는 keywords 로 남긴다.
+  { key: 'icm', cat: 'rules', name: 'ICM 계산기', desc: '내 칩의 상금 가치 · 딜 비교', keywords: '토너먼트 기대 상금 딜 계산기 딜 메이킹 딜메이킹 ICM 딜 vs 칩찹 분배 비교 남은 사람끼리 상금 분배', icon: 'trophy' },
+  // 'deal' 은 카탈로그에서 숨긴다(HIDDEN_SET) — #tool=deal 딥링크·공유 링크는 ICM 계산기의 딜 비교 모드로 도착한다.
   { key: 'deal', cat: 'rules', name: '딜 계산기', desc: '남은 사람끼리 상금 분배', keywords: 'ICM 딜 vs 칩찹 분배 비교', icon: 'handshake' },
   { key: 'spr', cat: 'review', name: 'SPR 계산기', desc: '팟 대비 내 칩 비율', keywords: '스택 대 팟 비율', icon: 'scale' },
   { key: 'ev', cat: 'review', name: 'EV 계산기', desc: '이 선택의 장기 기대값', keywords: '기대값 손익 판단', icon: 'sigma' },
@@ -185,9 +177,10 @@ export const STORE_TOOL_KEYS = ['chip', 'sim', 'blindgen', 'payout', 'endtime'] 
 // eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유
 export const CALENDAR_TOOL_KEYS = ['bankroll', 'variance'] as const;
 const STORE_SET = new Set<ToolKey>([...STORE_TOOL_KEYS, ...CALENDAR_TOOL_KEYS]);
-/** GTO 탭 카탈로그·검색·즐겨찾기에서 숨기는 도구 = 이관 도구 + '오늘의 드릴'(오너 지시 2026-09-14: GTO 탭에서 삭제).
- *  같은 조리법 — TOOLS/renderTool 에는 남겨 #tool=drill 딥링크와 gtoContract LEGACY_KEYS 계약을 지킨다. */
-const HIDDEN_SET = new Set<ToolKey>([...STORE_SET, 'drill']);
+/** GTO 탭 카탈로그·검색·즐겨찾기에서 숨기는 도구 = 이관 도구 + '오늘의 드릴'(오너 지시 2026-09-14: GTO 탭에서 삭제)
+ *  + '딜 계산기'(오너 지시 2026-09-18: ICM 계산기에 병합 — 딜 비교 모드).
+ *  같은 조리법 — TOOLS/renderTool 에는 남겨 #tool=drill·#tool=deal 딥링크와 gtoContract LEGACY_KEYS 계약을 지킨다. */
+const HIDDEN_SET = new Set<ToolKey>([...STORE_SET, 'drill', 'deal']);
 /** '자주 쓰는 도구' 4개(오너 지시 2026-09-14: "스팟, 차트류의 GTO 등 잘 만들어 둔 좋은 툴 4개를 상단으로") — 순서가 곧 진열 순서.
  *  '전체' 보기에서만 위 섹션으로 빼고 카탈로그에서는 뺀다(같은 카드를 두 번 그리지 않는다). 갈래를 고르거나 검색하면 이 섹션은
  *  사라지고 그 갈래·검색 결과에 제 자리로 돌아온다 — "필터를 걸었는데 관계없는 도구가 위에 떠 있는" 상태를 만들지 않기 위해서다.
@@ -249,7 +242,8 @@ function renderTool(k: ToolKey): ReactNode {
     case 'blindgen': return <BlindBuilder />;
     case 'glossary': return <GlossaryPanel />;
     case 'handrank': return <HandRankPanel />;
-    case 'deal': return <DealCalc />;
+    // 딜 계산기는 ICM 계산기에 병합됐다(2026-09-18) — 옛 딥링크는 딜 비교 모드로 연다.
+    case 'deal': return <ICMCalculator initialMode="deal" />;
     default: return null;
   }
 }
@@ -659,8 +653,12 @@ function ToolCard({ name, lines, desc, icon, onClick, fav, onToggleFav, testId, 
       {/* 🔴 2026-09-18 오너 지시로 **가로 배치**가 됐다 — 아이콘 왼쪽, 제목 오른쪽, 설명줄 없음.
           예전 주석(세로 타일·설명 ≤13자)은 그 지시로 폐기됐다. 남은 계약은 이것뿐이다:
             · 제목 칸은 **늘 2줄 자리를 예약**한다(min-h-[2.5em] + leading-tight) — 그래야 한 줄짜리 제목이
-              섞여도 같은 행의 카드들이 **같은 높이·같은 기준선**이 된다(오너: "열을 맞춰서 정렬").
-            · 줄바꿈 지점은 CSS 자동이 아니라 TITLE_LINES 가 정한다(카드 폭이 폭마다 2배 차이).
+              섞여도 같은 행의 카드들이 **같은 높이**가 된다(오너: "열을 맞춰서 정렬").
+              2026-09-18 2차(한 줄 제목 허용) 뒤로는 예약 칸 안에서 **세로 가운데**(flex-col justify-center) —
+              한 줄 제목이 예약 칸 위에 붙으면 아이콘보다 7px 높이 떠 보였고 아래가 빈 줄로 남았다(360 실측 스크린샷).
+              두 줄 제목은 2.5em 을 꽉 채우므로 가운데 정렬로 위치가 바뀌지 않는다.
+            · 줄바꿈 지점은 CSS 자동이 아니라 TITLE_LINES 가 정한다(카드 폭이 폭마다 2배 차이) — 단 **70px 에 한 줄로
+              들어가는 이름은 표에 없다**(TITLE_LINES 주석의 실측표). 그 이름들은 한 줄이다.
             · 오른쪽 `pr-7` 은 우상단 즐겨찾기 별(h-8 w-8 · right-1)을 피하는 자리다.
           ⚠ `flex-wrap` + 제목 칸 `flex-[1_1_5rem]` — **rem basis 라 루트 글자 200% 확대를 그대로 탄다.**
             확대되면 아이콘(h-8 = 2rem → 68px)과 별 회피 여백이 카드를 다 먹어 제목이 들어갈 자리가 없어진다.
@@ -673,7 +671,7 @@ function ToolCard({ name, lines, desc, icon, onClick, fav, onToggleFav, testId, 
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
           <Icon name={icon} size={16} strokeWidth={1.8} aria-hidden />
         </span>
-        <span className="block min-h-[2.5em] min-w-0 flex-[1_1_4rem] text-xs font-bold leading-tight text-ink-primary">
+        <span className="flex min-h-[2.5em] min-w-0 flex-[1_1_4rem] flex-col justify-center text-xs font-bold leading-tight text-ink-primary">
           {(lines ?? [name]).map((l) => (
             <span key={l} className="block [overflow-wrap:anywhere]">{l}</span>
           ))}
