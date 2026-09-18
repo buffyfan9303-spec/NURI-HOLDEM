@@ -1,6 +1,6 @@
 // 연합 대회 파트너 매장 — 게시 → 신청 → 수락/거절 → 서로 연락처. 점수·상금·정산·순위 없음(§10 계층1 #3).
 // 카드 문법은 DealerCommunity(구인·지원)를 본떴다. 버튼 라벨은 4~6자 + nowrap(375·320 한 줄).
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import Icon from '../atoms/Icon';
 import { SkeletonList } from '../atoms/Skeleton';
@@ -20,6 +20,16 @@ const BTN_OK = `${BTN} border-emerald-500/50 text-emerald-300 hover:bg-emerald-5
 const BTN_NO = `${BTN} border-danger/40 text-danger-light hover:bg-danger/10`;
 const BTN_MUTE = `${BTN} border-border-default text-ink-secondary hover:bg-surface-high`;
 const dateLabel = (d: string | null) => (d ? d.slice(5).replace('-', '/') : '날짜 미정');
+/** 파트너 모집 조건 — **한 칸 자유 문장 대신 항목별로** 받는다(오너 2026-09-18).
+ *  순서가 곧 상대 화면에 보이는 순서다. 항목을 더하면 여기만 고치면 된다. */
+const MATCH_FIELDS = [
+  { key: 'buyIn', label: '참가비',  ph: '예) 10만원 / 5만 리바인' },
+  { key: 'seats', label: '좌석',    ph: '예) 9테이블 81석' },
+  { key: 'format', label: '형식',   ph: '예) MTT · 딥스택 · PKO' },
+  { key: 'region', label: '지역',   ph: '예) 서울 강남 / 수도권' },
+] as const;
+type CondKey = (typeof MATCH_FIELDS)[number]['key'];
+const EMPTY_COND: Record<CondKey, string> = { buyIn: '', seats: '', format: '', region: '' };
 const msgOf = (e: unknown, fb: string) => (e instanceof Error ? e.message : fb);
 
 function VenueChip({ name, region }: { name: string; region?: string }) {
@@ -41,6 +51,7 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
   const [received, setReceived] = useState<Record<string, MatchResponse[]>>({});
   const [date, setDate] = useState('');
   const [note, setNote] = useState('');
+  const [cond, setCond] = useState<Record<CondKey, string>>(EMPTY_COND);
   const [busy, setBusy] = useState(false);
   const [applyId, setApplyId] = useState<string | null>(null);
   const [applyMsg, setApplyMsg] = useState('');
@@ -62,6 +73,19 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
     finally { setBusy(false); }
   };
 
+  /** 항목 입력 → 서버로 보낼 한 칸(note) 조립.
+   *  ⚠ 빈 항목은 줄 자체를 만들지 않는다 — '참가비: ' 같은 빈 라벨이 상대 화면에 남으면
+   *    '적었는데 안 보인다' 로 읽힌다. 500자는 DB check 제약(1~500)이라 여기서 잘라 보낸다. */
+  const composedNote = useMemo(() => {
+    const lines = MATCH_FIELDS
+      .map((f) => [f.label, cond[f.key].trim()] as const)
+      .filter(([, v]) => v)
+      .map(([label, v]) => `ㆍ${label}: ${v}`);
+    const extra = note.trim();
+    if (extra) lines.push(extra);
+    return lines.join('\n').slice(0, 500);
+  }, [cond, note]);
+
   const others = openPosts.filter((p) => p.venue.id !== venueId);
   const sentByPost = new Map(myResponses.map((r) => [r.postId, r]));
 
@@ -78,14 +102,42 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
       {canConfigure && (
         <section className="rounded-aura border card-aura p-3 space-y-2">
           <h3 className="text-sm font-bold text-ink-primary">함께 열 매장 찾기</h3>
-          <div className="flex flex-wrap gap-1.5">
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="대회 날짜" className="input w-40 text-sm" />
-            <button type="button" disabled={busy || !note.trim()}
-              onClick={() => run(() => createMatchPost(venueId, { eventDate: date || null, note }).then(() => { setDate(''); setNote(''); }), '게시했습니다', '게시 실패')}
-              className="btn-primary shrink-0 whitespace-nowrap px-3 text-xs disabled:opacity-50">게시하기</button>
+          {/* 🔴 2026-09-18 오너: "조건- 이러면서 이걸 적게 되어 있는데 이거 전체 삭제 한개한개 따로 적게 해줘야해".
+              종전엔 참가비·좌석·형식·지역을 **한 칸에 자유 문장**으로 적게 했다. 업주마다 적는 순서와
+              단위가 달라 상대 매장이 비교를 못 했다.
+            ⚠ 저장은 여전히 `venue_match_posts.note`(text 1~500) 한 칸이다 — 컬럼을 쪼개려면
+              마이그레이션이 필요하고 라이브 DB 변경은 오너 승인 사항이라, 지금은 **입력만** 항목별로 받고
+              서버로 보낼 때 'ㆍ참가비: …' 줄로 조립한다. 읽는 쪽(공개 게시판·내 게시)은 whitespace-pre-wrap
+              이라 줄바꿈이 그대로 보인다.
+            ⚠ 이 방식의 한계는 숨기지 않는다: 항목별 **검색·정렬·집계는 안 된다**(문자열이라서).
+              그게 필요해지면 컬럼 분리 마이그레이션이 정답이다. */}
+          <div className="grid gap-1.5 sm:grid-cols-2">
+            <label className="text-2xs font-semibold text-ink-secondary">
+              대회 날짜
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input mt-0.5 w-full text-sm" />
+            </label>
+            {MATCH_FIELDS.map((f) => (
+              <label key={f.key} className="text-2xs font-semibold text-ink-secondary">
+                {f.label}
+                <input value={cond[f.key]} onChange={(e) => setCond((c) => ({ ...c, [f.key]: e.target.value }))}
+                  maxLength={80} placeholder={f.ph} className="input mt-0.5 w-full text-sm" />
+              </label>
+            ))}
           </div>
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2}
-            placeholder="조건 — 참가비·좌석·형식·지역" className="input w-full resize-none text-sm" />
+          <label className="block text-2xs font-semibold text-ink-secondary">
+            그 밖의 조건 · 선택
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} rows={2}
+              placeholder="예) 딜러 2명 지원 가능 · 방송 장비 있음" className="input mt-0.5 w-full resize-none text-sm" />
+          </label>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={busy || !composedNote.trim()}
+              onClick={() => run(() => createMatchPost(venueId, { eventDate: date || null, note: composedNote })
+                .then(() => { setDate(''); setNote(''); setCond(EMPTY_COND); }), '게시했습니다', '게시 실패')}
+              className="btn-primary shrink-0 whitespace-nowrap px-3 text-xs disabled:opacity-50">게시하기</button>
+            <span className="text-2xs text-ink-muted">
+              {composedNote.trim() ? `${composedNote.length}/500자` : '한 항목 이상 적어야 게시할 수 있습니다'}
+            </span>
+          </div>
         </section>
       )}
 

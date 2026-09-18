@@ -161,6 +161,15 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
         배너의 '프로필에서 본인인증하기' 를 눌러도 시트가 뒤에 그려져 **아무 일도 안 나는 것처럼 보인다**
         (그다음 뒤로가기 한 번은 보이지 않는 시트를 닫느라 먹힌다). 2026-09-17 스윕에서 확인. */
     <div className="fixed inset-0 z-[55] overflow-y-auto bg-surface-base" role="dialog" aria-modal="true" aria-label="이벤트">
+      {/* 🔴 2026-09-18 오너: "PC 버젼에서 모든 탭이 제대로 잘 움직이다가 이벤트만 가면 갑자기
+          전체화면으로 바뀌면서 지혼자서 이상하게 돼 이 부분도 수정 다른 탭들처럼".
+          원인: 이 화면은 탭 pane 이 아니라 `fixed inset-0` 오버레이인데(App.tsx 의 'event' 는 pane 이 없다)
+          안에 폭 제한이 하나도 없어 1440px 에서 **혼자만 풀블리드**로 펼쳐졌다.
+          다른 탭은 전부 App.tsx:3450 의 셸(`mx-auto w-full max-w-6xl xl:border-x`) 안에서 그려진다.
+          → 오버레이 **본문에 같은 셸**을 씌운다. 오버레이 자체는 inset-0 그대로 둔다 —
+            배경이 화면을 덮어야 뒤 탭이 비쳐 보이지 않고, 뒤로가기 계약(useBackClose)도 그대로다.
+          ⚠ `min-h-full` 이 필요하다. 없으면 xl 의 세로 테두리가 내용 높이에서 끊겨 셸이 반만 그려진다. */}
+      <div className="mx-auto w-full max-w-6xl xl:min-h-full xl:border-x xl:border-border-subtle">
       {/* 상단 안전영역 — 이 오버레이는 `fixed inset-0` 이고 index.html 의 viewport 가 `viewport-fit=cover` 라
           노치 아이폰·설치형(PWA, status-bar-style=black-translucent)에서 **내용이 상태바 밑으로 들어간다.**
           실측(2026-09-15, 강제 inset top=47 로 만든 사본): 닫기 버튼이 11~53 에 그대로 있어 47px 아래
@@ -226,6 +235,7 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
           voucherTitle={board?.voucherTitle ?? '매장이용권'}
           onOpen={doOpen} onClose={closeSheet} />
       )}
+      </div>
     </div>
   );
 }

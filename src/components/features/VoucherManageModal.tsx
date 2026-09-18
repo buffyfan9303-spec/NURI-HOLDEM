@@ -15,6 +15,7 @@ import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·�
 import { loadVenueVoucherPanel } from '../../lib/venueVoucherLoad';
 import type { RequestStamp } from '../../lib/staleResponse';
 import { voucherGroupLabel, stripVenuePrefix } from '../../lib/voucherLabel'; // 손님 지갑 표기 규칙(오너 지시 #19)과 같은 함수로 미리보기
+import { kstToday } from '../../lib/kst'; // 유효기간 계산은 기기 로컬이 아니라 KST — 서버 판정과 같은 기준
 
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '-';
@@ -420,19 +421,39 @@ ${cards}
                   <span className="min-w-0 break-keep">손님 지갑에는 <b className="text-ink-primary">{voucherGroupLabel(venueName)}</b> 묶음 안에 <b className="text-ink-primary">{stripVenuePrefix(title, venueName)}</b> 로 보입니다. 이름에 매장명을 다시 넣지 않아도 됩니다.</span>
                 </p>
               )}
-              {/* 유효기간(선택) — 비우면 무기한. 만료 이용권은 사용 RPC 가 서버에서 거부하고
-                  손님 지갑에서도 자동 제외된다(스키마 확장 2026-08-17). */}
-              <label className="flex items-center gap-2 text-2xs text-ink-secondary">
-                <span className="shrink-0 font-semibold">유효기간</span>
-                <input type="date" value={expiry} min={new Date(Date.now() + 86400000).toLocaleDateString('en-CA')}
-                  onChange={(e) => setExpiry(e.target.value)}
-                  className="input h-9 w-40 text-sm tabular-nums" aria-label="이용권 만료일(선택)" />
-                {expiry ? (
-                  <button type="button" onClick={() => setExpiry('')} className="hit shrink-0 text-2xs text-ink-muted hover:text-danger-light">지우기</button>
-                ) : (
-                  <span className="text-ink-muted">비우면 무기한</span>
-                )}
-              </label>
+              {/* 유효기간 — 만료 이용권은 사용 RPC 가 서버에서 거부하고 손님 지갑에서도 자동 제외된다(2026-08-17).
+                🔴 2026-09-18 오너: "유효기간은 날짜를 직접 설정하게 하지말고 1일 3일 이런식으로 선택하게 제작".
+                  달력 입력을 **기간 선택**으로 바꿨다. 업주는 발급할 때마다 달력을 열어 날짜를 세지 않는다.
+                ⚠ 저장 형식은 그대로다 — `expiry`(YYYY-MM-DD) 문자열에 계산 결과를 넣을 뿐,
+                  issueVoucher 로 가는 `${expiry}T23:59:59+09:00` 도, DB(store_vouchers.expires_at)도 안 바뀐다.
+                ⚠ 'N일' 의 뜻을 화면에 **날짜로 적어** 둔다. 'N일' 만 적으면 발급 당일 자정인지 N일 뒤인지가
+                  사람마다 다르게 읽히고, 그 차이로 손님이 못 쓰는 표가 나온다.
+                  여기 규칙: N일 = **KST 오늘 + N일의 23:59:59** (1일 = 내일 밤까지). 종전 달력의 min 이
+                  '내일'이었던 것과 같은 하한이라 당일 몇 시간짜리 표가 생기지 않는다. */}
+              <div className="text-2xs text-ink-secondary">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="shrink-0 font-semibold">유효기간</span>
+                  {EXPIRY_PRESETS.map((d) => {
+                    const val = d === 0 ? '' : addKstDays(d);
+                    const on = expiry === val;
+                    return (
+                      <button key={d} type="button" aria-pressed={on} onClick={() => setExpiry(val)}
+                        className={[
+                          'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold transition-colors',
+                          on ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
+                             : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
+                        ].join(' ')}>
+                        {d === 0 ? '무기한' : `${d}일`}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-ink-muted">
+                  {expiry
+                    ? <>선택한 기간의 마지막 날은 <b className="tabular-nums text-ink-secondary">{expiry}</b> 입니다 — 그날 <b className="text-ink-secondary">밤 11시 59분</b>까지 쓸 수 있습니다.</>
+                    : '무기한 — 만료일 없이 발급합니다.'}
+                </p>
+              </div>
               {/* 받는 손님 지정 — 아이디(닉네임)로 지정 */}
               {recvUserId ? (
                 <div className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1.5">
@@ -679,6 +700,14 @@ ${cards}
     </div>
   );
 }
+
+/** 유효기간 선택지(일). 0 = 무기한.
+ *  🔴 오너 2026-09-18: "1일 3일 이런식으로 선택하게". 달력 직접 입력은 없앴다. */
+const EXPIRY_PRESETS = [0, 1, 3, 7, 30] as const;
+/** KST 오늘 + n일 → 'YYYY-MM-DD'.
+ *  ⚠ 기기 로컬 날짜가 아니라 KST 로 센다 — 서버 판정(now() at time zone 'Asia/Seoul')과 기준이 갈리면
+ *    해외·시계 오설정 기기에서 하루가 어긋난 표가 발급된다(src/lib/kst.ts 와 같은 이유). */
+const addKstDays = (n: number, now: number = Date.now()): string => kstToday(now + n * 86_400_000);
 
 export default function VoucherManageModal({ open, onClose, venueId, prefillReceiver }: { open: boolean; onClose: () => void; venueId: string; prefillReceiver?: string }) {
   return (

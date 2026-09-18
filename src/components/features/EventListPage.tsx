@@ -58,6 +58,15 @@ export default function EventListPage({ open, onClose, onSelect }: {
     // 보드를 닫으면 이 화면이 그대로 드러난다. z-[60]은 쓰지 않는다(Modal.tsx 의 시트·모달 층이라 겹치면
     // 안내 시트가 뒤에 깔린다 — EventPage 머리말 참고).
     <div data-testid="event-list-page" className="fixed inset-0 z-[55] overflow-y-auto bg-surface-base" role="dialog" aria-modal="true" aria-label="이벤트 목록">
+      {/* 🔴 2026-09-18 오너: "PC 버젼에서 모든 탭이 제대로 잘 움직이다가 이벤트만 가면 갑자기
+          전체화면으로 바뀌면서 지혼자서 이상하게 돼 이 부분도 수정 다른 탭들처럼".
+          원인: 이 화면은 탭 pane 이 아니라 `fixed inset-0` 오버레이인데(App.tsx 의 'event' 는 pane 이 없다)
+          안에 폭 제한이 하나도 없어 1440px 에서 **혼자만 풀블리드**로 펼쳐졌다.
+          다른 탭은 전부 App.tsx:3450 의 셸(`mx-auto w-full max-w-6xl xl:border-x`) 안에서 그려진다.
+          → 오버레이 **본문에 같은 셸**을 씌운다. 오버레이 자체는 inset-0 그대로 둔다 —
+            배경이 화면을 덮어야 뒤 탭이 비쳐 보이지 않고, 뒤로가기 계약(useBackClose)도 그대로다.
+          ⚠ `min-h-full` 이 필요하다. 없으면 xl 의 세로 테두리가 내용 높이에서 끊겨 셸이 반만 그려진다. */}
+      <div className="mx-auto w-full max-w-6xl xl:min-h-full xl:border-x xl:border-border-subtle">
       {/* 헤더 구조는 EventPage 와 동일 — 노치 안전영역·히트영역 계약을 그대로 따른다. */}
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-surface-base/95 px-page-x pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] backdrop-blur">
         <button type="button" onClick={onClose} aria-label="닫기"
@@ -105,6 +114,7 @@ export default function EventListPage({ open, onClose, onSelect }: {
             })}
           </ul>
         )}
+      </div>
       </div>
     </div>
   );

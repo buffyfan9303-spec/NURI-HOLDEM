@@ -28,7 +28,7 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   getLastClosedRound, type LastClosedRound,
   discountsAppendOnly,
 } from '../../api/ledger';
-import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
+import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
@@ -206,6 +206,26 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       .catch((e: unknown) => { if (alive) setStaffLoadError(e); });
     return () => { alive = false; };
   }, [accessTick]);
+  // 금일 딜러 칩의 후보 명부 — 계정 직원(venue_staff)만으로는 **비회원 딜러가 통째로 빠진다**.
+  // StaffSchedule.tsx 가 쓰는 것과 **같은 두 출처**를 합친다(명부가 두 벌이 되면 어느 화면이 맞는지 알 수 없다).
+  // ⚠ 실패해도 조용히 빈 배열로 둔다 — 명부가 없으면 칩만 안 뜨고 직접 입력은 그대로다(장부를 막지 않는다).
+  const [wageNames, setWageNames] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getStaffWages(venueId).then((ws) => { if (alive) setWageNames(ws.map((w) => w.name)); }).catch(() => {});
+    return () => { alive = false; };
+  }, [venueId]);
+  const dealerOptions = useMemo(() => {
+    const seen = new Set<string>(), out: string[] = [];
+    const add = (n?: string | null) => {
+      const v = (n ?? '').trim();
+      if (!v || seen.has(v)) return;
+      seen.add(v); out.push(v);
+    };
+    staff.forEach((x) => add(x.name ?? x.nickname));
+    wageNames.forEach(add);
+    return out;
+  }, [staff, wageNames]);
   useEffect(() => {
     let alive = true;
     setAccessLoad({ status: 'loading' });
@@ -822,10 +842,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       // 담당 직원(본인 제외)에게 장부 시작 알림 — 실패해도 장부 흐름엔 영향 없음
       const others = (s.operators ?? []).filter((id) => id && id !== user?.id);
       if (others.length) notifyLedgerOpen(venueId, s.title ?? '', others).catch(() => {});
-      // 포스터→장부→클락 원클릭 체인: 시작 직후 클락도 이어서 켤지 한 번만 묻는다
-      if (onOpenClock && window.confirm('장부를 시작했습니다.\n클락(대회 타이머)도 같이 켤까요?')) {
-        onOpenClock(s.sessionDate, s.gameSeq ?? MAIN_GAME_SEQ);
-      }
+      // 🔴 2026-09-18 오너: "장부를 다 작성하면 바로 클락으로 이동하지 말고 장부를 켜줘 클락은 알아서 사람들이 킬꺼야".
+      //   여기 있던 confirm('…클락도 같이 켤까요?') 을 지웠다. 시작하면 **장부 화면에 그대로 머문다.**
+      //   기능 소실 아님 — 클락은 장부 상단 '클락' 버튼과 ClockRemoteBar 로 언제든 켠다.
+      //   ⚠ 되살릴 일이 있어도 confirm 이 아니라 화면 안 배너로 해라 — 모달 대화상자는 그동안
+      //     다른 조작을 전부 막고, 브라우저 자동화에서는 세션이 통째로 멈춘다.
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '시작 실패', 'error'); }
   };
@@ -1141,7 +1162,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             base={{ ...session, ...(prefill ?? {}) }} mode="open" operatorName={operatorName}
             prefilled={!!prefill} schedules={venueSchedules} operatorOptions={operatorOptions}
             operatorOptionsError={operatorOptionsError} onRetryOperatorOptions={reloadAccessIds} operatorOptionsPartial={!fullAccess}
-            presets={presets} scheduledDealers={scheduledNames} copyMain={copyMain}
+            presets={presets} scheduledDealers={scheduledNames} dealerOptions={dealerOptions} copyMain={copyMain}
             lastRound={lastRound} autoApplyLast={autoApplyLast} onLastApplied={() => setAutoApplyLast(false)}
             onSubmit={handleOpen}
           />
@@ -1777,7 +1798,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {/* 세션 정보 수정 */}
       {editOpen && (
         <Overlay onClose={() => setEditOpen(false)} title="세션 정보 수정">
-          <SessionForm base={session} mode="edit" lockPricing={buyins.length > 0} operatorName={operatorName} schedules={venueSchedules} operatorOptions={operatorOptions} operatorOptionsError={operatorOptionsError} onRetryOperatorOptions={reloadAccessIds} operatorOptionsPartial={!fullAccess} scheduledDealers={scheduledNames} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
+          <SessionForm base={session} mode="edit" lockPricing={buyins.length > 0} operatorName={operatorName} schedules={venueSchedules} operatorOptions={operatorOptions} operatorOptionsError={operatorOptionsError} onRetryOperatorOptions={reloadAccessIds} operatorOptionsPartial={!fullAccess} scheduledDealers={scheduledNames} dealerOptions={dealerOptions} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
         </Overlay>
       )}
 
@@ -2121,10 +2142,14 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
 }
 
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
-function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], operatorOptionsError = null, onRetryOperatorOptions, operatorOptionsPartial = false, presets = [], scheduledDealers = [], copyMain = null, lastRound = null, autoApplyLast, onLastApplied, lockPricing = false }: {
+function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], operatorOptionsError = null, onRetryOperatorOptions, operatorOptionsPartial = false, presets = [], scheduledDealers = [], dealerOptions = [], copyMain = null, lastRound = null, autoApplyLast, onLastApplied, lockPricing = false }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
   onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
   schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[]; presets?: LedgerPreset[]; scheduledDealers?: string[]; copyMain?: LedgerSession | null;
+  /** 이 매장에 등록된 딜러/직원 이름 — 금일 딜러 명단을 **적는 대신 고르게** 한다(오너 2026-09-18).
+   *  venue_staff(계정 직원) ∪ staff_wage(비회원 포함 인건비 명부). 비어 있으면 칩 줄을 그리지 않고
+   *  종전처럼 직접 입력만 남는다 — 명부가 없다고 입력까지 막지 않는다. */
+  dealerOptions?: string[];
   /** P02: 권한 직원 조회가 실패했으면 그 오류 — 후보가 '나' 뿐인 것이 실제 0명인지 못 불러온 것인지 폼이 갈라 말한다 */
   operatorOptionsError?: unknown; onRetryOperatorOptions?: () => void;
   /** F4(2026-09-13): 후보 목록이 **완전하지 않을 수 있다** — ledger_access 직접 SELECT 는 RLS(la_select) 때문에 POS 권한 없는
@@ -2156,6 +2181,21 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [accrualPerBin] = useState<number>(base.voucherAccrualPerBin ?? 0);
   const [event, setEvent]     = useState(base.eventMemo ?? '');
   const [dealers, setDealers] = useState(base.dealers ?? (scheduledDealers.length ? scheduledDealers.join('\n') : ''));
+  /** 지금 명단에 든 이름(공백 줄 제외). 칩의 켜짐 판정과 토글이 **같은 문자열**을 본다 —
+   *  두 벌로 만들면 "칩은 켜졌는데 저장은 안 됨" 이 난다. */
+  const dealerSet = useMemo(
+    () => new Set(dealers.split('\n').map((x) => x.trim()).filter(Boolean)),
+    [dealers],
+  );
+  const toggleDealer = useCallback((name: string) => {
+    setDealers((prev) => {
+      const lines = prev.split('\n').map((x) => x.trim()).filter(Boolean);
+      const i = lines.indexOf(name);
+      // ⚠ 뺄 때는 **첫 항목만** 지운다 — 동명이인을 두 줄로 적어 둔 명부를 칩 한 번에 통째로 날리지 않는다.
+      if (i >= 0) lines.splice(i, 1); else lines.push(name);
+      return lines.join('\n');
+    });
+  }, []);
   const [schedId, setSchedId] = useState<string>(base.scheduleId ?? '');
   const [operIds, setOperIds] = useState<string[]>(
     base.operators && base.operators.length ? base.operators
@@ -2735,8 +2775,38 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <textarea value={event} onChange={(e) => setEvent(e.target.value)} rows={2} placeholder="예) 1만원 추가 = 1스택 추가" maxLength={200} className="input w-full text-sm resize-none" />
       </Field>
 
+      {/* 🔴 2026-09-18 오너: "금일 딜러를 지금 가게에 등록되어 있는 딜러 리스트를 선택하게 만들어줘야지
+          이걸 적게 만들면 안돼 ... 첫째줄에는 딜러를 선택하고 둘째 줄에는 딜러를 적을 수 있게".
+          첫 줄 = 등록 딜러 토글 칩 / 둘째 줄 = 직접 입력(비회원·대타 등 명부에 없는 사람).
+        ⚠ 저장 형식은 **줄바꿈 구분 문자열 그대로**다(ledger_sessions.dealers text).
+          바꾸면 game_presets.dealers · gameInherit(프리셋↔세션) · syncDealersToSchedule 세 곳이 동시에 깨진다.
+          칩은 그 문자열을 편집하는 또 하나의 손잡이일 뿐이다. */}
       <Field label="금일 딜러 명단 · 선택">
-        <textarea value={dealers} onChange={(e) => setDealers(e.target.value)} rows={2} placeholder="한 줄에 한 명" maxLength={300} className="input w-full text-sm resize-none" />
+        {dealerOptions.length > 0 && (
+          <div className="mb-1.5 flex flex-wrap gap-1.5">
+            {dealerOptions.map((name) => {
+              const on = dealerSet.has(name);
+              return (
+                <button key={name} type="button" aria-pressed={on} onClick={() => toggleDealer(name)}
+                  className={[
+                    'min-h-[32px] rounded-full border px-2.5 text-xs font-bold transition-colors',
+                    on ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
+                       : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
+                  ].join(' ')}>
+                  {on && <span aria-hidden className="mr-1">✓</span>}{name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <textarea value={dealers} onChange={(e) => setDealers(e.target.value)} rows={2}
+          placeholder={dealerOptions.length > 0 ? '명부에 없는 딜러는 여기에 한 줄에 한 명' : '한 줄에 한 명'}
+          maxLength={300} className="input w-full text-sm resize-none" />
+        <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
+          {dealerOptions.length > 0
+            ? <>위 칩은 <b className="text-ink-secondary">매장에 등록된 직원·딜러</b>입니다(직원 관리 · 인건비 명부). 눌러서 넣고 뺍니다.</>
+            : '등록된 직원·딜러가 없어 목록이 비었습니다 — 내 매장 › 직원에서 등록하면 여기서 고를 수 있습니다.'}
+        </p>
       </Field>
 
       {/* sticky — 필드 15+ 폼이라 실행 버튼이 화면 밖으로 밀렸다. 매일 반복하는 화면이니 항상 보이게 */}
