@@ -5,9 +5,40 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { listVenueCheckins, subscribeCheckins, checkinUrl, type Checkin } from '../../api/checkins';
 import { getVenueVisitorStats } from '../../api/crm';
+import { issueVoucher } from '../../api/vouchers';
 
-export default function CheckinModal({ open, onClose, venueId, venueName }: { open: boolean; onClose: () => void; venueId: string; venueName?: string }) {
+/**
+ * 🔴 2026-09-18 오너: "홈 화면에 출석체크를 매장이용권도 추가해줘 어차피 매장이용권을 보낼 때
+ * QR로 보낼텐데 그럼 출석체크하고 같으니까 ... 닉네임으로 보낼 수 있게 ...
+ * 하단에 '매장 업주에게만 가능' 이라는 문구 필수 법적인 문제 때문에"
+ *
+ * 여기가 그 둘이 실제로 만나는 자리다. 오늘 출석한 손님 명단은 **이미 user_id 를 들고 있어서**
+ * 닉네임을 다시 검색할 필요가 없다 — 그 자리에서 바로 보낸다(종전엔 이 명단을 보고
+ * 이용권 모달을 따로 열어 같은 사람을 닉네임으로 다시 찾아야 했다).
+ *
+ * ⚠ 권한은 화면이 아니라 **서버가** 막는다. `issue_voucher` 가 첫 줄에서 `can_manage_pos`(소유자·
+ *   승인 공동운영자·운영자)를 보고, 그다음 `venues.voucher_issue_approved`(운영자 승인),
+ *   받는 사람 `is_ci_verified`(본인인증), 발급 한도, 킬스위치를 차례로 본다.
+ *   아래 `canIssue` 는 **버튼을 그릴지 말지**일 뿐이고 권한이 아니다.
+ */
+export default function CheckinModal({ open, onClose, venueId, venueName, canIssue = false }: { open: boolean; onClose: () => void; venueId: string; venueName?: string; canIssue?: boolean }) {
   const toast = useToast();
+  /** 지금 이용권을 보낼 손님(체크인 행 id). null 이면 아무 행도 안 펼쳐져 있다. */
+  const [sendTo, setSendTo] = useState<string | null>(null);
+  const [sendBusy, setSendBusy] = useState(false);
+  const send = async (c: Checkin, count: number) => {
+    setSendBusy(true);
+    try {
+      // 발급 근거 'visit' — 이 경로는 정의상 '오늘 방문한 손님' 이다(서버가 근거를 기록·검증한다).
+      await issueVoucher(venueId, { title: '매장이용권', count, holderUserId: c.userId, holderName: c.displayName ?? undefined, reason: 'visit' });
+      toast.show(`${c.displayName ?? '회원'}님께 매장이용권 ${count}장을 보냈습니다`, 'success');
+      setSendTo(null);
+    } catch (e) {
+      // 서버 거절 문구를 그대로 보여 준다 — '승인 전 매장'·'한도 부족'·'본인인증 안 된 손님' 이
+      //   각각 다른 조치를 요구하는데 '실패' 로 뭉개면 업주가 무엇을 해야 할지 알 수 없다.
+      toast.show(e instanceof Error ? e.message : '보내지 못했습니다', 'error');
+    } finally { setSendBusy(false); }
+  };
   const [list, setList] = useState<Checkin[]>([]);
   const [visits, setVisits] = useState<Record<string, number>>({}); // user_id→누적 방문횟수(CRM 단골/첫방문 배지)
   const [qr, setQr] = useState(''); // #15 로컬 생성(외부 api.qrserver.com 의존 제거 — 가용성·프라이버시)
@@ -42,7 +73,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName }: { op
           <p className="mb-1 text-2xs font-bold text-ink-secondary">오늘 방문 {list.length}명</p>
           {list.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">아직 출석한 손님이 없습니다.</p>
             : <ul className="space-y-1">{list.map((c) => (
-              <li key={c.id} className="flex items-center justify-between rounded-input border border-border-subtle bg-surface-low px-3 py-1.5">
+              <li key={c.id} className="flex flex-wrap items-center justify-between rounded-input border border-border-subtle bg-surface-low px-3 py-1.5">
                 <span className="min-w-0 flex-1 truncate text-sm text-ink-primary">{c.displayName ?? '회원'}</span>
                 {(() => {
                   const v = visits[c.userId] ?? 0;
@@ -51,8 +82,35 @@ export default function CheckinModal({ open, onClose, venueId, venueName }: { op
                   return <span className={`mr-2 shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold ${cls}`}>{label}</span>;
                 })()}
                 <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{fmt(c.createdAt)}</span>
+                {canIssue && (
+                  <button type="button" onClick={() => setSendTo((v) => (v === c.id ? null : c.id))}
+                    aria-expanded={sendTo === c.id}
+                    className="ml-2 min-h-[32px] shrink-0 whitespace-nowrap rounded-input border border-accent-400/40 px-2 text-2xs font-bold text-accent-200 hover:bg-accent-500/10">
+                    {sendTo === c.id ? '닫기' : '이용권'}
+                  </button>
+                )}
+                {canIssue && sendTo === c.id && (
+                  <span className="mt-1.5 flex w-full flex-wrap items-center gap-1.5 border-t border-border-subtle pt-1.5">
+                    <span className="text-2xs text-ink-muted">몇 장 보낼까요?</span>
+                    {[1, 2, 3, 5].map((n) => (
+                      <button key={n} type="button" disabled={sendBusy} onClick={() => send(c, n)}
+                        className="min-h-[32px] rounded-input border border-border-default bg-surface-high px-2.5 text-2xs font-bold text-ink-secondary hover:bg-surface-float/60 disabled:opacity-50">
+                        {sendBusy ? '…' : `${n}장`}
+                      </button>
+                    ))}
+                  </span>
+                )}
               </li>
             ))}</ul>}
+          {/* 🔴 법적 고지 — 오너 지시로 **필수**다. 지우지 마라.
+              매장이용권은 매장이 자기 손님에게 주는 것이고, 유저끼리 주고받는 물건이 아니다.
+              그 사실을 발급 화면에 적어 두는 것이 이 문구의 목적이다. */}
+          {canIssue && (
+            <p className="mt-2 rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs leading-relaxed text-ink-muted">
+              매장이용권 발급은 <b className="text-ink-secondary">인증된 매장 업주에게만 가능</b>합니다.
+              손님끼리 주고받을 수 없고, <b className="text-ink-secondary">금전적 가치가 없습니다</b>.
+            </p>
+          )}
         </div>
       </div>
     </Modal>

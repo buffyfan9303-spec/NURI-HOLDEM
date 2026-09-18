@@ -701,7 +701,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         onSendVoucher={caps.voucher ? (name) => { setRegOpen(false); setVoucherPrefill(name); setVoucherOpen(true); } : undefined} />
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
       <VoucherManageModal open={voucherOpen} onClose={() => { setVoucherOpen(false); setVoucherPrefill(''); }} venueId={venueId} prefillReceiver={voucherPrefill} />
-      <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} />
+      {/* canIssue: 출석 명단에서 바로 이용권을 보낼 수 있게 한다(오너 2026-09-18). 권한 최종 판정은 서버(issue_voucher). */}
+      <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} canIssue={caps.voucher} />
       <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
 
       {/* ① 공지 스트립 — 업주 운영 가이드(전폭·dismissible). 슬라이드(새 탭)·PDF. 닫으면 기억(IA3a) */}

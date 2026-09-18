@@ -150,7 +150,7 @@ const Nums = ({ text }: { text: string }) => (
 
 export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
-  onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], showEventSlide = true, showBrandSlides = true, onInternalLink,
+  onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], showEventSlide = true, showBrandSlides = true, eventMenuVisible = true, onInternalLink,
   visitedVenues = [], myTodayRes = [], venueById, onOpenVoucher,
 }: {
   /** 매장 대표 이미지·테마색 조회용 — 목록 줄 왼쪽 **매장 로고** 자리가 쓴다(2026-09-18).
@@ -177,6 +177,9 @@ export default function HomeTab({
   /** 노출관리 스위치 — 캐러셀의 이벤트 슬라이드/브랜드 슬라이드. 기본은 둘 다 켜기. */
   showEventSlide?: boolean;
   showBrandSlides?: boolean;
+  /** 관리자 '사이트 이벤트 메뉴 표시'(app_settings.event_menu_visible). false 면 이벤트 **진입점**을 숨긴다.
+   *  ⚠ 진행 중인 캠페인과 `?event=` 딥링크는 그대로 산다 — 메뉴만 숨기는 스위치다(settings.ts §8-2). */
+  eventMenuVisible?: boolean;
   regInfoBySchedule: ReadonlyMap<string, RegInfo>;
   onSelect: (s: Schedule) => void;
   onVenue: (venueId: string) => void;
@@ -451,7 +454,8 @@ export default function HomeTab({
             ⚠ 글로우는 여기 둘에만 준다(micro). 화면에서 '지금 여기를 눌러라' 가 이 둘뿐이기 때문이다 —
               목록 줄처럼 반복되는 자리에 같은 빛을 주면 강조가 아니라 소음이 된다. */}
         <section className="px-page-x pt-3" data-testid="home-quick">
-          <div className="grid grid-cols-2 gap-2.5">
+          {/* 이벤트 메뉴 스위치가 꺼져 있으면 칸이 하나다 — 2열 격자에 빈 칸을 남기지 않는다. */}
+          <div className={eventMenuVisible ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1 gap-2.5'}>
             <button type="button" onClick={onOpenVoucher} data-testid="home-quick-checkin"
               data-aura data-aura-level="micro" data-aura-variant="violet"
               className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
@@ -460,7 +464,12 @@ export default function HomeTab({
               <span aria-hidden className="quick-art quick-art-checkin" />
               <span className="relative z-10 flex min-h-[1.5rem] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
                 <span className="min-w-0 t-desc font-extrabold text-ink-primary">
-                  <Icon name="sparkles" size={13} className="mr-1 inline-block align-[-1px] text-accent-300" />출석 체크
+                  {/* 🔴 2026-09-18 오너: "홈 화면에 출석체크를 매장이용권도 추가해줘 어차피 매장이용권을
+                      보낼 때 QR로 보낼텐데 그럼 출석체크하고 같으니까".
+                      이 버튼이 여는 시트는 **처음부터** 이용권 지갑 + 출석 QR 둘 다였는데(헤더 [이용권·출석]과
+                      같은 시트), 홈에서는 '출석 체크' 라고만 불러서 이용권이 거기 있다는 걸 알 길이 없었다.
+                      기능을 더한 게 아니라 **이름이 기능을 다 말하게** 고친 것이다. */}
+                  <Icon name="ticket" size={13} className="mr-1 inline-block align-[-1px] text-accent-300" />이용권 · 출석
                 </span>
                 {eventShown === 'banner' && event && event.myTickets > 0 && (
                   <span className="min-w-0 rounded-badge border border-accent-400/40 bg-surface-high px-1.5 py-0.5 text-2xs font-bold tabular-nums text-accent-200">
@@ -471,16 +480,17 @@ export default function HomeTab({
               {/* 설명줄 — 시안 'QR 출석 = 매일 1회'. 기능을 사실대로 말하는 한 줄이라 남긴다.
                   ⚠ min-h 로 자리를 고정한다: 두 칸의 설명 길이가 달라도 아래 섹션이 안 밀린다. */}
               <p className="relative z-10 mt-1 min-h-[1.15rem] text-2xs font-medium leading-tight text-ink-secondary">
-                QR 출석 = 매일 1회
+                내 이용권 · QR 출석 매일 1회
               </p>
               <span className="relative z-10 mt-2 flex flex-wrap items-center justify-between gap-x-1 border-t border-border-subtle pt-1.5">
                 <span className="inline-flex min-w-0 items-center gap-1 text-2xs font-bold text-emerald-300">
-                  <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />매장 QR 열기
+                  <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />매장 QR 스캔
                 </span>
                 <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" />
               </span>
             </button>
 
+            {eventMenuVisible && (
             <button type="button" onClick={() => onEvent()} data-testid="home-quick-event"
               data-aura data-aura-level="micro" data-aura-variant="amber"
               className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:border-gold-300/40">
@@ -503,6 +513,7 @@ export default function HomeTab({
                 <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" />
               </span>
             </button>
+            )}
           </div>
         </section>
 

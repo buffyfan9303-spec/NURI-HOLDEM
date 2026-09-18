@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, use
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { flushSync } from 'react-dom';
 import { withViewTransition, type VTDirection } from './lib/viewTransition';
-import { getAppSetting } from './api/settings';
+import { getAppSetting, loadEventMenuVisibility } from './api/settings';
 // ⚠ `api/events` 가 아니라 `lib/eventSlug` 에서 받는다 — 둘은 같은 값이지만(그쪽이 재수출한다),
 //   api/events 를 정적으로 물면 TIER_META·oddsRows 까지 첫 화면 임계 경로로 딸려 온다(실측 2026-09-13).
 import { isEventSlug } from './lib/eventSlug';
@@ -1953,6 +1953,16 @@ export default function App() {
     getActiveHomeBanners().then((v) => { setHomeBanners(v); writeSnap('home-banners', v); }).catch(() => {});
   }, []);
   useEffect(() => { reloadHomeBanners(); }, [reloadHomeBanners]);
+  /** 🔴 죽어 있던 스위치를 살린다(2026-09-18 실측).
+   *  관리자 '이벤트 관리 → 사이트 이벤트 메뉴 표시'(EventOpsAdmin) 는 app_settings.event_menu_visible 을
+   *  **저장만** 하고 있었고, 그 값을 읽는 곳이 앱 전체에 **0곳**이었다 — 관리자가 껐다 켜도 손님 화면은
+   *  아무것도 달라지지 않았다. 오너가 "이런거 연동성 보고 제대로 나오게 수정하고" 라고 한 바로 그 부류다.
+   *  ⚠ 조회 실패를 '숨김' 으로 읽지 않는다(loadEventMenuVisibility 가 기본 true 를 돌려준다) —
+   *    진입 경로를 네트워크 사정으로 잠그면 안 된다.
+   *  ⚠ 이 스위치는 **메뉴(진입점)만** 숨긴다. 진행 중인 캠페인은 계속 돌고, `?event=` 딥링크도 그대로 열린다
+   *    (settings.ts §8-2 의 세 갈래 구분 — 메뉴 / 개별 캠페인 숨김 / 행사 종료). */
+  const [eventMenuOn, setEventMenuOn] = useState(true);
+  useEffect(() => { void loadEventMenuVisibility().then(({ visible }) => setEventMenuOn(visible)); }, []);
 
   // 공개 데이터 초기 로드 — **첫 화면(일정탐색)에 필요한 것만** 즉시 받는다.
   // 예전엔 게시글·댓글·장터까지 6종을 부팅과 동시에 쐈다. 사용자가 기다리는 건 대회 목록인데
@@ -3260,8 +3270,10 @@ export default function App() {
   //   눌러 들어가는 곳은 이제 목록이다(오너 2026-09-18) — 캠페인이 하나도 없으면 목록이 그 사실을 말한다.
   //   하단 5칸은 건드리지 않는다 — MobileTabBar 가 mappedActive 로 홈에 접는다(browse 선례).
   const pcTabs = useMemo(
-    () => [...tabs.filter((t) => t.id !== 'market'), { id: 'event' as TabId, label: TAB_LABEL.event }],
-    [tabs],
+    () => (eventMenuOn
+      ? [...tabs.filter((t) => t.id !== 'market'), { id: 'event' as TabId, label: TAB_LABEL.event }]
+      : tabs.filter((t) => t.id !== 'market')),
+    [tabs, eventMenuOn],
   );
   /** GNB 에서 이벤트 칸을 눌렀을 때만 오버레이로 빠진다 — 나머지는 평소의 탭 전환. */
   const gotoTabOrEvent = useCallback((t: TabId) => { if (t === 'event') openEvent(); else changeTab(t); }, [changeTab, openEvent]);
@@ -3608,7 +3620,8 @@ export default function App() {
             myTodayRes={myTodayRes}
             onTools={() => changeTab('tools')}
             banners={homeBanners.banners}
-            showEventSlide={homeBanners.showEvent !== false}
+            showEventSlide={homeBanners.showEvent !== false && eventMenuOn}
+            eventMenuVisible={eventMenuOn}
             showBrandSlides={homeBanners.showBrand !== false}
             onSelect={handleScheduleSelect}
             onVenue={handleVenueClick}

@@ -98,6 +98,10 @@ const measure = (page: Page) => page.evaluate(() => {
     .filter((c) => c.getBoundingClientRect().height > 0);
   const overflow: Overflow[] = [];
   const clamped: string[] = [];
+  /** `text-overflow: ellipsis` 로 **설계된** 줄임(매장명·지역 → 상세로 연결). 값이 아니라 이름에만 쓴다. */
+  const ellipsis: string[] = [];
+  /** 🔴 값이 잘린 것 — 이름과 달리 **절대 허용하지 않는다.** */
+  const clippedValues: string[] = [];
   const hiddenScroll: string[] = [];
   for (const card of cards) {
     for (const el of [card, ...card.querySelectorAll<HTMLElement>('*')]) {
@@ -106,11 +110,25 @@ const measure = (page: Page) => page.evaluate(() => {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) continue;
       const text = (el.textContent || '').trim().slice(0, 40);
-      if (s.webkitLineClamp && s.webkitLineClamp !== 'none') { clamped.push(text); continue; }
       if (/auto|scroll/.test(s.overflowX)) hiddenScroll.push(`${text} :: overflow-x:${s.overflowX}`);
       const dx = el.scrollWidth - el.clientWidth;
       const dy = el.scrollHeight - el.clientHeight;
-      if (dx > 1 || dy > 1) {
+      const cut = dx > 1 || dy > 1;
+      // 🔴 순서가 계약이다 — `home-flow-fit.spec.ts` 와 **같은 3단계**를 쓴다(두 스펙이 다른 규칙을
+      //   쓰면 한쪽에서만 잡히는 구멍이 생긴다. 실제로 그랬다: 매장명이 길어진 날 이쪽만 25건 빨개졌다).
+      //  ① line-clamp 는 설계된 요약이다(대회명 2줄) — 먼저 빼지 않으면 제목이 값 잘림으로 오판된다.
+      //  ② 그다음 **값**을 본다. ellipsis 보다 **먼저** 봐야 한다 — `truncate` 로 '등록 마감'을 지워 놓고
+      //     "말줄임은 설계"라고 넘어가면 이 검사는 아무것도 못 잡는다.
+      //  ③ 나머지 말줄임(이름)은 설계로 인정한다 — 전체 이름은 상세에서 보인다(§5).
+      //     ⚠ 이건 게이트를 푸는 것이 아니다. '…'이 보이는 줄임은 유저가 잘렸다는 걸 **안다**.
+      //       위험한 것은 `overflow:hidden` 만 걸려 **말없이** 사라지는 쪽이고, 그건 아래 overflow 가 그대로 잡는다.
+      if (s.webkitLineClamp && s.webkitLineClamp !== 'none') { clamped.push(text); continue; }
+      if (cut && /마감까지|등록 마감|참가비 ?[\d—]|GTD|예상 상금/.test(text)) {
+        clippedValues.push(`${text} ${el.clientWidth}/${el.scrollWidth} × ${el.clientHeight}/${el.scrollHeight}`);
+        continue;
+      }
+      if (s.textOverflow === 'ellipsis') { ellipsis.push(text); continue; }
+      if (cut) {
         overflow.push({
           tag: el.tagName.toLowerCase(), text, cls: el.className.toString().slice(0, 90),
           clientW: el.clientWidth, scrollW: el.scrollWidth, clientH: el.clientHeight, scrollH: el.scrollHeight,
@@ -120,7 +138,7 @@ const measure = (page: Page) => page.evaluate(() => {
   }
   const doc = document.scrollingElement as HTMLElement;
   return {
-    cards: cards.length, overflow, clamped, hiddenScroll,
+    cards: cards.length, overflow, clamped, ellipsis, clippedValues, hiddenScroll,
     docScrollX: doc.scrollWidth - doc.clientWidth,
     cardH: cards.map((c) => Math.round(c.getBoundingClientRect().height)),
     // 화면에 실제로 그려진 문자열 — 반올림·거짓 배지 회귀를 같은 캡처에서 함께 본다
@@ -179,7 +197,8 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
           const r = await measure(page);
           // 우회 금지 — 잴 것이 실제로 있는지 먼저 단정한다
           expect(r.cards, '일정 카드가 렌더되지 않았다 — 잴 것이 없으면 통과가 아니다').toBeGreaterThan(0);
-          console.log(`[${w}/${theme}/${zoom ? 200 : 100}] cards=${r.cards} h=${r.cardH.join(',')} clamp=${r.clamped.length}`);
+          console.log(`[${w}/${theme}/${zoom ? 200 : 100}] cards=${r.cards} h=${r.cardH.join(',')} clamp=${r.clamped.length} ellip=${r.ellipsis.length}`);
+          expect(r.clippedValues, `🔴 값이 잘렸다 — 이름은 줄여도 금액·등록 마감은 못 줄인다:\n${r.clippedValues.join('\n')}`).toEqual([]);
           expect(r.hiddenScroll, `등록 마감·참가비가 숨은 가로 스크롤 안에 있다:\n${r.hiddenScroll.join('\n')}`).toEqual([]);
           expect(
             r.overflow.map((o) => `${o.tag} "${o.text}" ${o.clientW}/${o.scrollW} × ${o.clientH}/${o.scrollH} :: ${o.cls}`),
@@ -204,8 +223,13 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
     const r = await measure(page);
     const all = r.texts.join(' | ');
     expect(r.cards).toBeGreaterThan(0);
-    expect(all, '참가비 55,000원이 반올림됐다').toContain('55,000원');
-    expect(all, '참가비 1,234,567원이 반올림됐다').toContain('1,234,567원');
+    // 2026-09-18 오너: "참가비 100,000 이거 빼 10T 이런식으로 변경".
+    //   55,000원은 1T=10,000원으로 **정확히 5.5T** 라 T 로 적는다 — 이건 축약이지 반올림이 아니다.
+    //   이 검사의 요지(가격을 바꿔 적지 않는다)는 아래 1,234,567원이 지킨다: T 로 정확히 떨어지지
+    //   않는 금액은 원 단위 전액 그대로여야 한다. 그래서 **둘 다** 본다 — 하나만 보면 반쪽이다.
+    expect(all, '5.5T 로 정확히 떨어지는 참가비가 T 로 안 적혔다').toContain('5.5T');
+    expect(all, '🔴 참가비 1,234,567원이 T 로 반올림됐다 — 가격을 바꿔 적으면 안 된다').toContain('1,234,567원');
+    expect(all, 'T 로 안 떨어지는 금액에 T 가 붙었다').not.toMatch(/12[0-9.]*T/);
     // 라벨 '상금 보장' → 'GTD'(2026-09-18 오너). 금액 표시 유지라는 요지는 그대로.
     expect(all, 'GTD 1,000만이 안 보인다(§28 가격 정보는 표시 유지)').toContain('GTD 1,000만');
     expect(all, '예약 12명은 정원 근거가 없다 — "마감 임박"으로 부풀리면 안 된다').not.toContain('마감 임박');
@@ -340,7 +364,10 @@ for (const w of [1280, 1440]) {
     });
     expect(r, '표가 렌더되지 않았다').not.toBeNull();
     expect(r!.text, '참가비 열 머리말이 없다').toContain('참가비');
-    expect(r!.text, '참가비 금액이 반올림됐다').toContain('55,000원');
+    // 표도 카드와 **같은 buyInText** 를 쓴다(정본 하나) — 55,000원은 정확히 5.5T 다.
+    //   요지는 '반올림하지 않는다' 이므로, T 로 안 떨어지는 금액이 원 단위 전액인지를 함께 본다.
+    expect(r!.text, '표의 참가비가 T 표기가 아니다 — 카드와 표가 다른 문법을 쓰면 안 된다').toContain('5.5T');
+    expect(r!.text, '🔴 표의 참가비 1,234,567원이 반올림됐다').toContain('1,234,567원');
     expect(r!.text, '상금이 반올림됐다(1,000만 보장이어야 한다)').toContain('1,000만');
     expect(r!.text, '등록 마감 배지가 카드와 같은 어휘가 아니다').toContain('등록 마감 14레벨');
     expect(r!.over, '표에서 잘린 칸이 있다').toEqual([]);

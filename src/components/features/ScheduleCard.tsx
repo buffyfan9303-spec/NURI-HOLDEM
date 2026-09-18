@@ -417,7 +417,15 @@ function ListCard({
         <p className="mt-0.5 text-base font-extrabold tabular-nums leading-tight tracking-tight text-ink-primary min-[360px]:text-lg">
           {d.time || '—'}
         </p>
-        <p className="text-2xs leading-tight text-ink-muted">시작</p>
+        {/* 🔴 날짜를 되돌린다(2026-09-18). 3열로 다시 짤 때 `{d.monthDay}({d.dow})` 가 통째로 빠졌고
+            e2e(theme-tokens-v7 ⑦)가 "9/18 일정 행이 한 장도 안 보인다" 로 잡았다.
+            이 목록은 **여러 날짜가 한 줄로 섞여 있는 평면 목록**이라(일정 탐색) 날짜가 없으면
+            유저가 어느 날 대회인지 알 방법이 없다 — 레퍼런스 스크린샷은 날짜별로 묶인 화면이라
+            행에 날짜가 없어도 됐던 것이고, 우리 화면은 그 전제가 다르다.
+          ⚠ 자리를 만들려고 '시작' 을 뺐다. '시작' 은 모든 줄에 똑같이 적히는 **고정 낱말**이라
+            정보가 0이고, 날짜는 줄마다 다른 **데이터**다. 굵은 시각 + 상태 알약이 이미 '시작 시각'
+            이라는 뜻을 전한다. 기능이 아니라 장식을 뺀 것이다. */}
+        <p className="text-2xs leading-tight text-ink-muted tabular-nums">{d.monthDay}({d.dow})</p>
       </div>
 
       {/* ② 가운데 — 매장 / 대회명 / 등록·유형 */}

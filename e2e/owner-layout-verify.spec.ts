@@ -138,27 +138,45 @@ test.describe('오너 지적 레이아웃 — 실제 앱 실측(목킹 업주 ·
       // StatCard 한 행 = '총 바이인 / 할인 바인 / 총 할인액'
       const head = document.querySelector('p[data-testid="stat-total-buyins"]');
       const row = head?.closest('.grid');
-      const statVals = row ? [...row.querySelectorAll(':scope > div > p.text-lg')].map((e) => Math.round(e.getBoundingClientRect().bottom)) : [];
+      // 🔴 셀렉터를 클래스에서 data-testid 로 바꿨다(2026-09-18).
+      //   종전 `p.text-lg` 는 값 글자 크기가 `text-base sm:text-lg` 로 바뀌자 **모바일 폭에서 0개**가 됐고,
+      //   이 검사는 "통계 화면이 아니다" 로 거짓 실패했다. 글자 크기는 디자인이라 앞으로도 바뀐다 —
+      //   게이트가 디자인 토큰에 매달려 있으면 안 된다.
+      // ⚠ 통계 KPI 는 이제 `grid-cols-2 sm:grid-cols-3` 이라 좁은 폭에서 **여러 줄**이다.
+      //   전부를 한 묶음으로 비교하면 줄 간격(195px)이 '어긋남' 으로 잡힌다 — 그건 결함이 아니라 격자다.
+      //   재야 하는 것은 **같은 줄 안에서** 숫자 밑변이 맞는가다. 카드의 top 으로 줄을 갈라 비교한다.
+      const statTiles = row ? [...row.querySelectorAll(':scope > div')] : [];
+      const byLine = new Map();
+      for (const t of statTiles) {
+        const v = t.querySelector('[data-testid="stat-card-value"]');
+        if (!v) continue;
+        const line = Math.round(t.getBoundingClientRect().top);
+        if (!byLine.has(line)) byLine.set(line, []);
+        byLine.get(line).push(Math.round(v.getBoundingClientRect().bottom));
+      }
+      // 줄마다의 어긋남 중 **최댓값** — 한 줄이라도 어긋나면 잡힌다.
+      const statVals = [...byLine.values()].flat();
+      const statLineSpread = Math.max(-1, ...[...byLine.values()].map((a) => sp(a)));
 
-      // Mini 한 행 — text-base 값
+      // Mini 한 행 — 값 3개 이상인 그리드
       const miniRow = [...document.querySelectorAll('.grid')].find((g) =>
-        g.querySelectorAll(':scope > div > p.text-base').length >= 3);
+        g.querySelectorAll(':scope > div > [data-testid="mini-value"]').length >= 3);
       const miniLefts = miniRow
         ? [...miniRow.querySelectorAll(':scope > div')].map((tile) => {
-            const v = tile.querySelector('p.text-base');
+            const v = tile.querySelector('[data-testid="mini-value"]');
             return v ? Math.round(txtRect(v).left - tile.getBoundingClientRect().left) : NaN;
           }).filter((n) => !Number.isNaN(n))
         : [];
 
-      return { statCount: statVals.length, statBottomSpread: sp(statVals), miniCount: miniLefts.length, miniLeftSpread: sp(miniLefts), miniLefts };
+      return { statCount: statVals.length, statBottomSpread: statLineSpread, statLines: byLine.size, miniCount: miniLefts.length, miniLeftSpread: sp(miniLefts), miniLefts };
     });
-    console.log('[A StatCard]', JSON.stringify({ n: m.statCount, 밑변어긋남: m.statBottomSpread }));
+    console.log('[A StatCard]', JSON.stringify({ n: m.statCount, 줄수: m.statLines, 줄안밑변어긋남: m.statBottomSpread }));
     console.log('[B Mini]', JSON.stringify({ n: m.miniCount, 시작점어긋남: m.miniLeftSpread, lefts: m.miniLefts }));
 
     // 🔴 조건부였다 — 화면이 LoadErrorCard 로 빠져 칸이 0개여도 **조용히 통과**했다.
     //   잴 대상이 있다는 것부터 단언하고, 그 다음에 기하를 잰다.
     expect(m.statCount, 'StatCard 행을 못 찾았다 — 통계 화면이 아니거나 오류 카드다').toBeGreaterThanOrEqual(2);
-    expect(m.statBottomSpread, 'StatCard 숫자 밑변이 어긋난다(하네스에선 18→0 이었다)').toBe(0);
+    expect(m.statBottomSpread, 'StatCard 숫자 밑변이 **같은 줄 안에서** 어긋난다(하네스에선 18→0 이었다)').toBe(0);
     expect(m.miniCount, 'Mini 타일 행을 못 찾았다').toBeGreaterThanOrEqual(2);
     expect(m.miniLeftSpread, 'Mini 숫자 시작점이 어긋난다(하네스에선 34→0 이었다)').toBe(0);
   });

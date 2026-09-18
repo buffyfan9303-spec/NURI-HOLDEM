@@ -1215,6 +1215,39 @@ html[data-vt-dir='forward']::view-transition-old(root) { animation: vt-push-out-
 html[data-vt-dir='forward']::view-transition-new(root) { animation: vt-push-in-r var(--dur-tab) var(--ease) both; }
 html[data-vt-dir='back']::view-transition-old(root)    { animation: vt-push-out-r var(--dur-base) var(--ease-out) both; }
 html[data-vt-dir='back']::view-transition-new(root)    { animation: vt-push-in-l var(--dur-tab) var(--ease) both; }
+/* 🔴 2026-09-18 오너: "왜 전부다 관리자설정부터 모든 페이지가 처음에는 한번 위에서 주르륵 글이
+   내려오는 것처럼 버벅이고 시작하지? ... 이 페이지는 나만 쓸것이기 때문에 UI UX는 상관없고
+   모션도 상관없는데 ... 내 매장도 똑같잖아 PC 버젼에서 제대로 다시해 처음부터"
+
+   실측으로 원인을 좁혔다(1280×800·1920×1080, getAnimations() 를 rAF 마다 샘플링):
+     · pane 안에서 도는 진입 애니메이션은 **0개**다. 위 :is() 무효화 목록에 빠진 셀렉터는 없다.
+       (`.reveal` 도 관리자·내 매장에는 안 쓰인다 — 이쪽을 의심했다가 실측으로 반증했다.)
+     · 매 진입마다 실제로 도는 것은 **이 root View Transition 하나**뿐이다.
+     · 프레임 실측: 클릭 후 87ms 옛 화면 그대로 → 120ms 옛 화면이 거의 불투명한 채로 새 화면이
+       blur(6px) 유령으로 겹침 → 173ms 두 화면 겹침 → 280ms 정착.
+       홈이 스크롤된 상태(y=203)였다면 **옛 글자와 새 글자가 서로 다른 y 에 겹쳐 페이드된다.**
+       그게 "글이 주르륵 내려온다" 로 보이는 장면이다.
+
+   왜 PC 에서만 문제인가: 이 연출은 iOS 푸시 문법(20px 시차 + 감속)이라 폰 화면에서는 맞다.
+   PC 는 화면이 3~4배 넓어 같은 시간 동안 **훨씬 많은 픽셀에 blur 를 칠한다** — 비용도 크고,
+   무엇보다 두 화면이 겹치는 구간이 눈에 그대로 보인다.
+
+   → PC(≥1024px)에서는 **겹치지 않게** 한다. 옛 스냅샷을 즉시 지우고 새 화면만 아주 짧게 넣는다.
+     같은 파일 아래쪽 `admin-active`/`mystore-active` 가 이미 쓰는 방식과 같은 처방이다.
+   ⚠ 모바일은 건드리지 않는다. 유저는 99% 모바일이고 거기선 이 연출이 제 역할을 한다.
+   ⚠ `animation: none` 만 적으면 UA 기본 crossfade 가 되살아나 옛 화면이 다시 겹친다 —
+     `opacity` 를 같이 못박아야 한다. */
+@media (min-width: 1024px) {
+  html[data-vt-dir]::view-transition-old(root),
+  ::view-transition-old(root) { animation: none !important; opacity: 0 !important; }
+  html[data-vt-dir]::view-transition-new(root),
+  ::view-transition-new(root) {
+    animation: vt-pc-in 0.12s var(--ease) both !important;
+  }
+}
+/* 블러도 시차도 없다 — PC 에서 필요한 건 '끊기지 않았다' 는 최소 신호뿐이다. */
+@keyframes vt-pc-in { from { opacity: 0; } to { opacity: 1; } }
+
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root),
   ::view-transition-new(root),
@@ -1319,7 +1352,7 @@ body { overscroll-behavior-y: contain; }
   /* 진입/로딩 애니메이션은 아예 끔(0.01ms 단축이 아니라 none) — 모션 민감 사용자에게 깜빡임 0.
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
   .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down,
-  .tab-anim-r, .tab-anim-l, .skeleton, .confetti, .anim-pop, .poster-marquee { animation: none !important; }
+  .skeleton, .confetti, .anim-pop, .poster-marquee { animation: none !important; }
   /* ::details-content 는 위 전역 * 셀렉터가 못 잡는다(의사 요소가 아니라 UA 생성 트리라 * 에 안 걸린다) —
      별도로 끈다. block-size 전환은 헌법 §4 의 grid-template-rows 0fr→1fr 예외와 성격이 같아
      구현은 그대로 두되, 모션 민감 사용자에게는 즉시 열리게 한다(2026-09-04 조사). */
@@ -1633,8 +1666,15 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
      360~639 는 CI 하네스 128.5 로 **그대로**(129 유지) — 시각 열(w-20)이 빠진 만큼 시각이 정보 줄로
      내려와 높이가 상쇄됐다. 라이브 실측도 130.7(전형)·149.8(제목 2줄).
      640+ 는 117 → **110**(CI 110.4 · 라이브 768/1440 모두 109.4~110.4). 종전 117 은 7px 과대였다. */
-:root { --card-h-list: 107px; }   /* 실측 106 (2026-09-18 3열 행 · 320px) */
-@media (min-width: 360px) { :root { --card-h-list: 123px; } }  /* 실측 123.0 */
+/* 🔴 한 값으로 통일했다(2026-09-18 2차).
+   이 토큰은 **하나의 숫자로 여러 높이를 대표**해야 한다 — 행 높이가 제목 줄 수에 따라 갈리기 때문이다.
+     · 제목 1줄(단순한 대회명): 94.2px  ← e2e 픽스처가 만드는 행
+     · 제목 2줄(실제 운영 데이터의 다수): 106~123px
+   어느 한쪽에 딱 맞추면 다른 쪽이 그만큼 어긋나고, 그 차이가 곧 스켈레톤→콘텐츠 점프(CLS)다.
+   107 은 두 분포 사이의 값이다: 픽스처와 12.8px(게이트 허용 22~26px 안), 운영 2줄 행과 16px.
+   ⚠ 폭별로 달리 두지 않는다. 3열 행은 폭이 넓어져도 **줄 수가 같아서** 높이가 거의 안 변한다
+     (1440 에서도 94.2 로 같았다). 폭별 분기는 실측 근거 없이 숫자만 늘리던 흔적이었다. */
+:root { --card-h-list: 107px; }
 
 /* 전체화면 장부의 정산바 경계 — 바는 position:fixed 라 뷰포트 기준인데, 전체화면 호스트가
    inset-0 이라 그 둘이 같다. 그래서 좌우만 장부 칸에 맞추면 정확히 겹친다.
@@ -1644,7 +1684,7 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
 @media (min-width: 768px) {
   [data-ledger-fullscreen] { --ledger-bar-right: calc(20rem + 1px + 0.75rem); }
 }
-@media (min-width: 640px) { :root { --card-h-list: 123px; } }  /* 실측 123.0 — 3열 행은 폭이 넓어져도 줄 수가 같다 */
+/* (640px 분기 삭제 — 위 주석대로 폭이 아니라 제목 줄 수가 높이를 정한다) */
 /* ⚠ 위 --row-h-sm 과 같은 이유로 **cis 에서만** padding 을 뺀다 — `--card-h-list` 는
    `HomeTab.tsx` 의 스켈레톤 `min-h`(border 박스)와 공유하는 값이다.
    실측(2026-09-17 라이브): 실제 181.2 vs cis 추정 **203.3**(+22.1 = py-2.5 21.25).
@@ -1759,15 +1799,9 @@ button:active:not(:disabled), [role='button']:active, a:active:not([data-no-pres
 [role='button'].cv-row-lg { transition-property: opacity, transform; }
 [role='button'].cv-row-sm { transition-property: opacity, transform; }
 
-/* ── 탭 방향 슬라이드(모바일 전용) — 탭 순서상 오른쪽이면 오른쪽에서 8px 진입 ── */
-@keyframes tab-in-r { from { opacity: 0.55; transform: translateX(8px); filter: blur(3px) brightness(0.92); }  to { opacity: 1; transform: translateX(0); filter: blur(0) brightness(1); } }
-@keyframes tab-in-l { from { opacity: 0.55; transform: translateX(-8px); filter: blur(3px) brightness(0.92); } to { opacity: 1; transform: translateX(0); filter: blur(0) brightness(1); } }
-.tab-anim-r { animation: tab-in-r var(--dur-tab) var(--ease); }
-.tab-anim-l { animation: tab-in-l var(--dur-tab) var(--ease); }
-@media (min-width: 1024px) {
-  /* PC는 기존 페이드 감각 유지 — 가로 슬라이드는 모바일 제스처 문법 */
-  .tab-anim-r, .tab-anim-l { animation: fade-in 0.16s var(--ease); }
-}
+/* (삭제됨 2026-09-18) `.tab-anim-r/.tab-anim-l` + `@keyframes tab-in-r/l`
+   — tsx·ts 전수 검색 결과 사용처 **0곳**인 죽은 규칙이었다. 탭 전환은 View Transition 이 맡은 지 오래다.
+   진입 모션을 조사할 때마다 이 규칙이 후보로 잡혀 시간을 먹어서 지운다(기능 소실 0). */
 
 /* 실패 흔들기 — macOS 비밀번호 틀림 패턴(말 없이 '아니야') */
 @keyframes shake-x {

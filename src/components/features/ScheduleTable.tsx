@@ -85,8 +85,11 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
                     )}
                   </span>
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-right align-top tabular-nums font-semibold text-ink-primary">
-                  {/* 참가비 미입력(0)은 '0원'·'무료'가 아니라 정보 없음 — 카드와 같은 '—' 문법 */}
+                {/* 참가비 미입력(0)은 '0원'·'무료'가 아니라 정보 없음 — 카드와 같은 '—' 문법.
+                    ⚠ title 에 원 단위 전액을 남긴다 — 2026-09-18 부터 이 값은 T 표기(예: 5.5T)라
+                      'T 가 얼마인지' 를 모르는 첫 방문자가 확인할 길이 필요하다. 카드 줄도 같은 처방이다. */}
+                <td className="whitespace-nowrap px-3 py-2 text-right align-top tabular-nums font-semibold text-ink-primary"
+                  title={s.buyIn?.amount ? `${s.buyIn.amount.toLocaleString()}원` : undefined}>
                   {buyInText(s.buyIn?.amount)}
                 </td>
                 {/* 상금은 골드 하나(스파인 컬러 예산: 상금·트로피=골드) — 카드·상세와 같은 색 역할.

@@ -18,10 +18,19 @@ test('🔴 전환 중 구조된 클릭은 한 번만 전달된다 — 정상 클
   await stabilizeBackstack(page);
   await page.goto('/');
   await dismissOverlays(page);
-  await page.locator('nav').getByRole('button', { name: 'GTO', exact: true }).first().click();
-  const bar = page.locator('[data-tools-lanebar]');
-  await expect(bar).toBeVisible({ timeout: 15_000 });
-  await bar.locator('[data-lane="rules"]').click();   // goSubTab → withViewTransition → rescue 설치
+  // 🔴 2026-09-18 — rescue 설치 경로가 바뀌었다. 종전엔 하위 탭 클릭(goSubTab)이
+  //   withViewTransition 을 타서 ensureInputRescue 를 설치했는데, 하위 탭에서 View Transition 을
+  //   걷어내면서(알약 1,300px 낙하의 근본 원인) 그 경로가 사라졌다.
+  //   ⚠ rescue 자체는 멀쩡하다 — **VT 를 쓰는 경로**(최상위 탭 전환)에서는 그대로 설치되고 동작한다.
+  //     바뀐 것은 '어디서 설치되는가' 뿐이라 검사도 그 경로로 옮긴다.
+  //   ⚠ 최상위 탭도 **재방문일 때만** VT 를 탄다(App.tsx: `if (visitedTabs.has(t))`).
+  //     첫 방문은 lazy 청크 때문에 startTransition 경로다 — 그래서 GTO 를 두 번 들어간다.
+  const nav = page.locator('nav');
+  await nav.getByRole('button', { name: 'GTO', exact: true }).first().click();
+  await expect(page.locator('[data-tools-lanebar]')).toBeVisible({ timeout: 15_000 });
+  await nav.getByRole('button', { name: '홈', exact: true }).first().click();
+  await page.waitForTimeout(400);
+  await nav.getByRole('button', { name: 'GTO', exact: true }).first().click();  // 재방문 → withViewTransition → rescue 설치
   await page.waitForTimeout(700);                     // 이번 전환이 끝난 뒤에 잰다(전환 중 클릭과 섞지 않는다)
 
   const counts = await page.evaluate(async () => {

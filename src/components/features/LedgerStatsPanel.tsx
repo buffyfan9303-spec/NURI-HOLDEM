@@ -725,7 +725,10 @@ function StatCard({ label, value, sub, icon, danger, emerald, gold, testId }: { 
       </div>
       {/* sm 미만은 한 단계 작게(17px) — 2열 카드 안폭 124px(360) 에 '149,957,958' 이 19px 로는 127px 라
           숫자 한가운데서 꺾였다(overflow-wrap 이 숫자를 보호하지 않는다). 17px 이면 113px 로 들어가고 '원'만 내려간다. */}
-      <p className={['mt-auto pt-2 text-base font-extrabold leading-none tabular-nums sm:text-lg', c].join(' ')}>{value}</p>
+      {/* data-testid: e2e 가 이 값을 **클래스가 아니라 이름으로** 찾게 한다.
+          종전엔 `p.text-lg` 로 찾았는데, 좁은 폭 대응으로 `text-base sm:text-lg` 가 되자
+          모바일 하네스에서 0개가 됐다(게이트가 거짓 실패). 글자 크기는 앞으로도 바뀐다. */}
+      <p data-testid="stat-card-value" className={['mt-auto pt-2 text-base font-extrabold leading-none tabular-nums sm:text-lg', c].join(' ')}>{value}</p>
       {/* ⚠ 보조 줄은 **반드시 한 줄**이어야 한다. 자리만 예약하고 줄 수를 안 묶으면, 실제 폭
           (412px 3칸 = 카드 111px)에서 '전체 바인 중 0.0%' 가 두 줄로 접혀 그 카드만 값이 14px 올라간다
           — 로그인 화면 실측에서 잡았다(2026-09-06). 넓은 하네스에서는 안 접혀 안 보이던 결함이다.
@@ -751,7 +754,7 @@ function Mini({ label, value, hint, tone = 'default' }: { label: string; value: 
   return (
     <div className="rounded-input border border-border-default bg-surface-high px-2 py-2">
       <p className="truncate text-[11px] leading-tight text-ink-muted" title={label}>{label}</p>
-      <p className={['mt-1 text-base font-bold leading-none tabular-nums', MINI_TONE[tone]].join(' ')}>{value}</p>
+      <p data-testid="mini-value" className={['mt-1 text-base font-bold leading-none tabular-nums', MINI_TONE[tone]].join(' ')}>{value}</p>
       {hint && <p className="mt-1 text-[10px] leading-tight text-ink-muted/70">{hint}</p>}
     </div>
   );
