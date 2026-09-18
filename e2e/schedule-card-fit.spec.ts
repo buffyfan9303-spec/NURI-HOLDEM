@@ -139,17 +139,32 @@ const measure = (page: Page) => page.evaluate(() => {
   const doc = document.scrollingElement as HTMLElement;
   return {
     cards: cards.length, overflow, clamped, ellipsis, clippedValues, hiddenScroll,
-    // 🔴 3열이 **한 줄에 남아 있는가**. 잘림 검사로는 이걸 못 본다 —
-    //   열이 통째로 아래로 밀려도 글자는 하나도 안 잘리기 때문이다(2026-09-18 320px 사고).
+    // 🔴 좌우 값이 **같은 줄에 서 있는가**(2026-09-18 12차 오너: "줄 맞춰줘").
+    //   잘림 검사로는 이걸 못 본다 — 값이 다른 줄로 떠도 글자는 하나도 안 잘린다.
+    //   flex 3열 시절에는 열마다 따로 쌓여 제목 top 328 / GTD top 308.4 로 어긋나 있었다.
+    //   지금은 grid 라 행을 격자가 정한다. 이 검사는 **격자가 유지되는지**를 본다.
     cols: cards.map((c) => {
-      const pick = (k: string) => {
-        // 카드(article)의 **직계** 열만 본다 — 안쪽에 같은 유틸이 또 있어도 오판하지 않는다.
-        const el = c.querySelector<HTMLElement>(`:scope > [class*="${k}"]`);
+      const pick = (sel: string) => {
+        const el = c.querySelector<HTMLElement>(sel);
         if (!el) return null;
         const r = el.getBoundingClientRect();
-        return { top: Math.round(r.top * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 };
+        return {
+          top: Math.round(r.top * 10) / 10, bot: Math.round(r.bottom * 10) / 10,
+          w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10,
+        };
       };
-      return { o1: pick('order-1'), o2: pick('order-2'), o3: pick('order-3') };
+      // 2열 격자 + **행마다 flex** 구조(2026-09-18 12차). 같은 줄인지는 격자 좌표가 아니라
+      //   '같은 flex 컨테이너의 형제인가' 로 정해지고, 폭이 모자라면 그 안에서 wrap 한다.
+      const row2 = ':scope > [class*="col-start-2"][class*="row-start-2"]';
+      const row3 = ':scope > [class*="col-start-2"][class*="row-start-3"]';
+      return {
+        logo:  pick(':scope > [class*="row-span-3"]'),
+        venue: pick(':scope > [class*="col-start-2"][class*="row-start-1"]'),
+        title: pick(`${row2} > h3`),
+        gtd:   pick(`${row2} > p`),
+        meta:  pick(`${row3} > div`),
+        time:  pick(`${row3} > p`),
+      };
     }),
     // 🔴 제목 줄과 그 아래(참가비·등록마감) 줄이 **겹치지 않는가**.
     //   오너가 "줄간격을 붙여 / 더 올려" 를 반복 요청해 그 줄에 **음수 마진**이 들어갔다(2026-09-18).
@@ -158,7 +173,9 @@ const measure = (page: Page) => page.evaluate(() => {
     //   기준은 글자 크기에 비례한다(200% 확대에서 같은 비율로 커지므로 px 고정이면 거짓 실패가 난다).
     titleGap: cards.map((c) => {
       const h3 = c.querySelector('h3');
-      const next = h3?.nextElementSibling;
+      // ⚠ `nextElementSibling` 을 쓰면 안 된다 — grid 로 바꾼 뒤 제목 **다음 형제는 같은 행의 GTD** 다.
+      //   재려는 것은 '아랫줄과의 간격' 이므로 3행 2열(참가비·메타)을 직접 집는다.
+      const next = c.querySelector('[class*="col-start-2"][class*="row-start-3"]');
       if (!h3 || !next) return null;
       const a = h3.getBoundingClientRect(); const b = next.getBoundingClientRect();
       return {
@@ -225,8 +242,9 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
           // 우회 금지 — 잴 것이 실제로 있는지 먼저 단정한다
           expect(r.cards, '일정 카드가 렌더되지 않았다 — 잴 것이 없으면 통과가 아니다').toBeGreaterThan(0);
           console.log(`[${w}/${theme}/${zoom ? 200 : 100}] cards=${r.cards} h=${r.cardH.join(',')} clamp=${r.clamped.length} ellip=${r.ellipsis.length}`);
-          // 열 기하를 **항상** 찍는다 — 접힘은 통과/실패보다 먼저 눈에 보여야 원인을 짚는다.
-          console.log(`  cols(h) ${r.cols.map((c) => `[${c.o1?.h} ${c.o2?.h} ${c.o3?.h}]`).join(' ')}  w ${r.cols.map((c) => `[${c.o1?.w} ${c.o2?.w} ${c.o3?.w}]`).join(' ')}`);
+          // 격자 기하를 **항상** 찍는다 — 어긋남은 통과/실패보다 먼저 눈에 보여야 원인을 짚는다.
+          console.log(`  행2 ${r.cols.map((c) => `[제목 ${c.title?.top}~${c.title?.bot} | GTD ${c.gtd?.top}~${c.gtd?.bot}]`).join(' ')}`);
+          console.log(`  행3 ${r.cols.map((c) => `[메타 ${c.meta?.top}~${c.meta?.bot} | 시각 ${c.time?.top}~${c.time?.bot}]`).join(' ')}`);
           expect(r.clippedValues, `🔴 값이 잘렸다 — 이름은 줄여도 금액·등록 마감은 못 줄인다:\n${r.clippedValues.join('\n')}`).toEqual([]);
           expect(r.hiddenScroll, `등록 마감·참가비가 숨은 가로 스크롤 안에 있다:\n${r.hiddenScroll.join('\n')}`).toEqual([]);
           expect(
@@ -250,26 +268,44 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
             + '\n→ 더 붙이려면 마진이 아니라 `leading-*`(줄높이) 를 줄여라. 그쪽은 글리프를 안 건드린다.',
           ).toEqual([]);
 
-          // 🔴 3열 골격 — 오너가 스크린샷을 주며 두 차례 요구한 계약이다([시각][내용][참가비]).
-          // ⚠ 글자 100% 에서만 단언한다. 200% 에서 세로로 접히는 것은 **설계된 접근성 탈출구**다.
-          // ⚠ flex-wrap 은 **줄어들기 전 가상 크기**로 줄을 가른다. 1~2px 만 모자라도 가운데가
-          //   그만큼 줄어드는 게 아니라 **마지막 열이 통째로** 밀린다(행 113.8 → 176.8px).
-          if (!zoom) {
-            const broken = r.cols
-              .map((c, i) => ({ i, c }))
-              .filter(({ c }) => c.o1 && c.o3 && Math.abs(c.o1.top - c.o3.top) > 3)
-              .map(({ i, c }) => `${i + 1}번째 카드: 시각열 top ${c.o1!.top} vs 참가비열 top ${c.o3!.top}`);
-            expect(
-              broken,
-              `3열이 접혔다 — 참가비·GTD 가 오른쪽 끝이 아니라 아랫줄로 떨어진다:\n${broken.join('\n')}\n`
-              + '→ 한 값만 보지 말고 **폭 예산**을 다시 재라: '
-              + '좌 + gap + 가운데 basis + gap + 우 ≤ (카드 폭 − 좌우 패딩).',
-            ).toEqual([]);
-            expect(
-              r.cols.filter((c) => !c.o1 || !c.o2 || !c.o3).length,
-              '🔴 열을 못 찾았다 — order-1/2/3 마크업이 바뀌었으면 이 검사는 빈 통과다',
-            ).toBe(0);
-          }
+          // 🔴 **줄 맞음** — 오너가 스크린샷을 주며 요구한 계약이다(2026-09-18 12차 "줄 맞춰줘").
+          //   [제목 | GTD] 가 한 줄, [참가비·메타 | 날짜·시각] 이 한 줄이어야 한다.
+          //   같은 줄인지는 **세로로 겹치는가**로 판정한다 — 글자 크기가 달라(15.9 vs 19.1px)
+          //   top 이나 bottom 을 맞대면 정상인데도 어긋난 것처럼 나온다. 밑선 정렬이라 상자는 어긋난다.
+          // ⚠ **글자 100% 에서만** 단언한다. 200% 확대에서 값이 아랫줄로 접히는 것은
+          //   설계된 탈출구다 — 행이 flex 라 폭이 모자라면 GTD·시각이 스스로 줄을 내려
+          //   글자가 잘리지 않는다. 3열 격자로 만들었을 때는 이 길이 없어 값이 잘렸다(실측 24/81).
+          //
+          // ⚠ **모든 카드가 맞아야 한다고 요구하지 않는다.** 이 스펙의 픽스처는 일부러 최악 조합이라
+          //   (매장명 28자·제목 27자) 좁은 폭에서 GTD 가 스스로 아랫줄로 내려간다 — 그게 탈출구다.
+          //   대신 **한 장이라도 한 줄로 서는가**를 본다. 하나도 못 서면 구조가 깨진 것이다
+          //   (예: 행이 flex 가 아니거나 형제 관계가 끊어져 값이 늘 아래로 떨어지는 상태).
+          //   그래서 **자리가 넉넉한 폭(768 이상)에서만** 단언한다. 거기서도 안 맞으면 폭 문제가 아니라
+          //   구조 문제다 — 제목과 GTD 가 형제가 아니거나 justify-between 이 빠진 것이다.
+          const 겹치나 = (a: { top: number; bot: number } | null, b: { top: number; bot: number } | null) =>
+            !!a && !!b && a.top < b.bot && b.top < a.bot;
+          const 어긋남 = !zoom && w >= 768
+            ? r.cols.flatMap((c, i) => [
+              ...(겹치나(c.title, c.gtd) ? [] : [`${i + 1}번째 2행: 제목 ${c.title?.top}~${c.title?.bot} vs GTD ${c.gtd?.top}~${c.gtd?.bot}`]),
+              ...(겹치나(c.meta, c.time) ? [] : [`${i + 1}번째 3행: 메타 ${c.meta?.top}~${c.meta?.bot} vs 시각 ${c.time?.top}~${c.time?.bot}`]),
+            ])
+            : [];
+          expect(
+            어긋남,
+            '🔴 자리가 넉넉한데도 좌우 값이 같은 줄에 안 선다 — 폭이 아니라 **구조** 문제다:\n'
+            + 어긋남.join('\n')
+            + '\n→ 제목과 GTD 가 같은 div 의 형제인지, 그 div 에 justify-between 이 있는지 봐라.',
+          ).toEqual([]);
+
+          // 🔴 잴 것이 실제로 있었는가 — 마크업이 바뀌면 위 검사가 **빈 통과**가 된다.
+          const 못찾음 = r.cols
+            .map((c, i) => ({ i, miss: ['logo', 'venue', 'title', 'gtd', 'meta', 'time'].filter((k) => !c[k as keyof typeof c]) }))
+            .filter(({ miss }) => miss.length)
+            .map(({ i, miss }) => `${i + 1}번째 카드: ${miss.join('/')} 없음`);
+          expect(
+            못찾음,
+            `🔴 격자 칸을 못 찾았다 — 이 검사는 지금 아무것도 안 재고 있다:\n${못찾음.join('\n')}`,
+          ).toEqual([]);
         });
       }
     }

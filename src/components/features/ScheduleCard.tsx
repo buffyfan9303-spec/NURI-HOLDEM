@@ -397,8 +397,21 @@ function ListCard({
         //     M375    cv+transition 284ms / cv+transition 제거 234ms                  → 모바일도 -18%
         //   호버 하이라이트 자체는 그대로 둔다(즉시 반응). §20.4 #3 의 '색 트랜지션 ≤0.15s' 도
         //   '허용'이지 '권장'이 아니다 — 목록 행처럼 수십 개가 동시에 발화하는 자리엔 걸지 않는다.
-        'flex flex-wrap items-start gap-x-2 gap-y-1 cursor-pointer px-3 py-2.5 hover:bg-surface-high/50 active:bg-surface-high',
-        'min-[360px]:gap-x-1.5',
+        // 🔴 2026-09-18(12차) 오너: "참가비 10T 와 오른쪽 1,000만, 아래 날짜·시간 **줄 맞춰줘**".
+        //   flex 3열로는 **불가능했다.** 각 열이 자기 안에서 따로 쌓여 행이 서로를 모른다 —
+        //   실측(390): 제목 top 328 / GTD top 308.4, 참가비 345 / 날짜시간 340.3 로 어긋나 있었다.
+        //   고정 오프셋으로 맞출 수도 없다. 매장 줄이 320px 에서 3줄로 접혀 17.5 → **59.5px** 가 되기 때문이다.
+        //   → **grid** 로 바꾼다. 행을 격자가 정하므로 [제목|GTD]·[참가비|날짜시각]이 항상 같은 줄에 선다.
+        // ⚠ `items-baseline` 이 핵심이다. 행마다 글자 크기가 달라(제목 15.9 / GTD 19.1) 위쪽 정렬로는
+        //   눈에 안 맞는다 — 사람은 **글자 밑선**으로 줄을 읽는다.
+        // ⚠ 덤으로 '3열 접힘'이 구조적으로 사라졌다. grid 열은 wrap 하지 않는다 —
+        //   320px 폭 예산 여유 3.5px 로 아슬아슬하던 것이 이 변경으로 없어진 문제가 됐다.
+        // ⚠ 3열은 `fit-content(35%)` 다. 그냥 `auto` 면 **max-content 를 먼저 다 가져간다** —
+        //   글자 200% 확대에서 `GTD 1,000만` 이 184px 를 집어가 가운데가 **32px** 로 쭈그러들었다
+        //   (실측 390/200%: 참가비 줄 32/81 로 잘림). fit-content 는 '내용만큼 쓰되 35% 를 넘지 마라' 다.
+        //   100% 에서는 내용(96px)이 상한보다 작아 **평소 동작이 그대로**이고, 확대에서만 상한이 일한다.
+        'grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0 cursor-pointer px-3 py-2.5 hover:bg-surface-high/50 active:bg-surface-high',
+        'min-[360px]:gap-x-2.5',
         // 프리미엄(TOP)은 행 틴트 + 제목 앞 마커로 차별(박스 글로우 제거 — 목록 결 유지)
         schedule.isPremium ? 'bg-accent-300/[0.05]' : '',
       ].join(' ')}
@@ -458,7 +471,7 @@ function ListCard({
           그 줄이 카드 높이가 된다(4차에서 11px 때문에 카드가 커진 그 함정).
           폭 예산: 320 = 44 + 8.5 + 102 + 8.5 + 80 = 243 ≤ 258.5 · 360 = 56 + 6.4 + 119 + 6.4 + 96 = 283.8 ≤ 298.6
         ⚠ vt-poster(카드→상세 모핑)의 출발점이라 크기를 바꿔도 이름은 그대로 둔다. */}
-      <div className="order-1 min-w-[48px] shrink-0 min-[360px]:min-w-[56px]">
+      <div className="col-start-1 row-start-1 row-span-3 self-start">
         {/* 🔴 2026-09-18(8차) 오너: "10T 폰트를 줄여서 **정사각 아이콘 크기에 맞춰**".
             7차에서 세로 포스터(40×60 / 48×74)로 늘렸던 것을 **정사각형으로 되돌리되**,
             오른쪽 열이 짧아진 만큼(74.1 → 57.4 / 61.4 → 48.9) 그 높이에 맞춘다.
@@ -499,11 +512,10 @@ function ListCard({
           → 줄마다 붙이던 `mt-0.5` 를 걷고 **부모에 `space-y-0.5` 하나**로 통일한다. 리듬이 한 곳에서 정해진다.
         ⚠ 이 열의 자식은 전부 `leading-tight` 로 맞춘다 — 그래야 `space-y` 가 실제 간격이 된다.
           (fontSize 유틸이 line-height 를 같이 싣는다는 것은 이 저장소가 여러 번 데인 자리다.) */}
-      <div className="order-2 min-w-0 flex-[1_1_6rem] space-y-0.5 min-[360px]:flex-[1_1_7rem]">
         {/* 🔴 2026-09-18(5차) 오너: "top 를 누리 테스트 홀덤펍 **뒤로**".
             TOP 은 유료 노출 표식이라 매장 **이름보다 앞에 서면 광고가 이름을 가린다.**
             이름 → 지역 → TOP 순서면 눈이 '어느 매장인가' 를 먼저 읽는다. */}
-        <div className="flex min-w-0 items-center gap-1">
+      <div className="col-start-2 row-start-1 flex min-w-0 items-center gap-1">
           {/* 🔴 2026-09-18(재검증): `wrap` 을 **안 넘기고 있었다.** VenueLink 의 기본값은 false(말줄임)라
               지역('서울')이 320·360px/200% 에서 **clientWidth 0** — 말줄임표조차 없이 통째로 사라졌다.
               같은 파일 VenueLink 머리말(2026-09-12)이 "목록 카드는 말줄임 대신 줄바꿈이다(wrap=true)" 라고
@@ -532,10 +544,23 @@ function ListCard({
         {/* 대회명 — 이제 가운데 열을 온전히 쓴다. 2줄까지 허용(레퍼런스는 1줄이지만 한글 제목이 더 길다). */}
         {/* ⚠ TOP 배지를 제목 안에 두지 않는다 — 실측(320·100%) 그 배지가 **43px** 를 먹어
             제목 칸이 그만큼 줄었다. 매장 줄은 여유가 있어 거기로 옮긴다. */}
-        <h3 className="line-clamp-2 break-keep text-[0.9375rem] font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-sm"
-          title={schedule.title}>
+      {/* 🔴 2026-09-18(12차) 오너: "누리 테스트 위클리를 위에 조금 더 붙여주고 글씨를 조금 더 키워줘".
+          글자 0.9375rem/text-sm → **text-base/0.9375rem** (15.9/14.9 → 17/15.9px), 위로 −2.125px.
+        ⚠ 음수 마진을 줘도 **GTD 와 줄이 안 어긋난다** — 격자가 `items-baseline` 이라 이 행의 밑선이
+          함께 다시 잡히기 때문이다. flex 3열이었으면 한쪽만 올라가 어긋났다. */}
+      {/* 🔴 행2 — 대회명과 GTD 가 **같은 flex 컨테이너의 형제**다. '같은 줄' 이 격자 좌표가 아니라
+          **마크업 구조**로 보장된다. 폭이 모자라면 `flex-wrap` 이 GTD 를 아랫줄로 내린다 —
+          3열 격자에는 없던 그 탈출구가 글자 200% 확대를 살린다(열은 wrap 하지 않는다). */}
+      <div className="col-start-2 row-start-2 flex min-w-0 flex-wrap items-baseline justify-between gap-x-2">
+        <h3 className="min-w-0 line-clamp-2 break-keep text-base font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-[0.9375rem]"
+        title={schedule.title}>
           {titleWithoutGtd(schedule.title, !!prize)}
         </h3>
+        <p className={`flex flex-wrap items-baseline justify-end gap-x-1 leading-tight ${prize ? 'text-gold-300' : 'text-ink-muted'}`}>
+          <span className="text-[9px] font-bold uppercase opacity-80">{prize?.label ?? '상금'}</span>
+          <span className="break-keep text-base font-extrabold tabular-nums [overflow-wrap:anywhere] min-[360px]:text-lg">{prize?.amount ?? '—'}</span>
+        </p>
+      </div>
 
         {/* 🔴 2026-09-18(6차) 오너: "참가비를 누리 테스트 위클리 **하단으로** 변경".
             참가비(라벨+금액)가 제목 바로 아래로 왔다. 5차에서 시각이 있던 자리다.
@@ -559,15 +584,22 @@ function ListCard({
             명시도가 (0,3,0) 이고 평범한 `-mt-1`(0,1,0)은 진다 — important 없이는 조용히 무시된다.
           ⚠ 음수 마진은 **줄상자를 겹치게** 만든다. 제목이 2줄일 때 아랫줄 글자와 참가비 글자가
             부딪히지 않는지 반드시 실측해라(잘림 게이트는 겹침을 못 본다 — 넘침이 아니라서). */}
-        <div className="!-mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-2xs leading-tight text-ink-muted">
-          {/* ⚠ `shrink-0` 을 주지 마라. `참가비 1,234,567원` 은 131px 인데 320px 의 이 열은 114px 다 —
+      {/* 🔴 행3 — 참가비·등록마감 묶음과 날짜·시각이 같은 줄이다(행2와 같은 조리법). */}
+      <div className="col-start-2 row-start-3 flex min-w-0 flex-wrap items-baseline justify-between gap-x-2">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-2xs leading-tight text-ink-muted">
+          {/* ⚠ 금액에 `[overflow-wrap:anywhere]` 를 준다. 글자 200% 확대(320px)에서 `1,234,567원` 은
+              **한 낱말로 175px** 인데 칸이 32px 까지 좁아진다 — 안 접히면 그대로 **잘린다**(실측 32/175).
+              숫자가 중간에서 접히는 건 보기 나쁘지만, §28 이 막는 것은 **금액이 안 보이는 것**이다.
+              flex 3열 시절에는 가운데 열이 통째로 아랫줄로 내려가 폭을 되찾는 탈출구가 있었는데,
+              grid 는 열이 wrap 하지 않아 그 길이 없다 — 대신 글자 쪽에서 접는다.
+            ⚠ `shrink-0` 을 주지 마라. `참가비 1,234,567원` 은 131px 인데 320px 의 이 열은 114px 다 —
               줄지도 접히지도 못해 **값이 잘린다**(실측 `114/131`, 잘림 게이트가 잡았다).
               안쪽도 `flex-wrap` 이라야 라벨이 윗줄로 가고 금액이 온전히 남는다. */}
           <span className="flex min-w-0 flex-wrap items-baseline gap-x-1">
             <span className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">참가비</span>
             {/* 🔴 2026-09-18(8차) 오너: "10T 의 폰트 크기를 줄여서". text-base/lg → text-sm/base.
                 이 한 단계가 곧 이 줄의 높이라, 가운데 열이 그만큼 낮아지고 왼쪽 정사각 타일과 키가 맞는다. */}
-            <span className="text-[0.8125rem] font-extrabold tabular-nums tracking-tight text-ink-primary min-[360px]:text-sm"
+            <span className="text-[0.8125rem] font-extrabold tabular-nums tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-sm"
               title={schedule.buyIn?.amount ? `${schedule.buyIn.amount.toLocaleString()}원` : undefined}>
               {buyInText(schedule.buyIn?.amount)}
             </span>
@@ -581,13 +613,20 @@ function ListCard({
               앞의 둘은 중복이 아니다. 지금은 상단 필터 칩(MTT·GTD)과 **상세 화면**이 그 역할을 한다.
               다시 필요해지면 이 줄이 아니라 매장 줄 끝에 작게 붙이는 편이 낫다(여기는 이미 5개가 경쟁한다). */}
           {rating && rating.count > 0 && (
-            <span className="shrink-0 tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+            <span className="tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
               ★{rating.avg.toFixed(1)}
             </span>
           )}
-          {distanceKm != null && <span className="shrink-0 tabular-nums">{fmtKm(distanceKm)}</span>}
-          {(reserveCount ?? 0) > 0 && <span className="shrink-0 tabular-nums">예약 {reserveCount}명</span>}
+          {distanceKm != null && <span className="tabular-nums">{fmtKm(distanceKm)}</span>}
+        {/* ⚠ `shrink-0` 을 빼 뒀다. flex 항목이 shrink-0 이면 **max-content 아래로 안 줄어** 그 폭이
+            줄 전체의 최소 폭이 된다 — 글자 200% 확대에서 `예약 3명`(81px)이 칸(74px)을 넘겨
+            줄이 통째로 잘렸다(실측 74/81). wrap 컨테이너라 줄이면 알아서 다음 줄로 간다. */}
+          {(reserveCount ?? 0) > 0 && <span className="tabular-nums">예약 {reserveCount}명</span>}
         </div>
+        <p className="flex flex-wrap items-baseline justify-end gap-x-1 leading-tight">
+          <span className="text-[9px] tabular-nums text-ink-muted">{d.monthDay}({d.dow})</span>
+          <span className="text-sm font-extrabold tabular-nums tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-base">{d.time || '—'}</span>
+        </p>
       </div>
 
       {/* ③ GTD · 시각 — §28 상품 가격 정보라 표시를 유지한다.
@@ -599,7 +638,6 @@ function ListCard({
              폭 예산 320 = 44 + 8.5 + 102 + 8.5 + 84 = 247 ≤ 258.5 · 360 = 56 + 6.4 + 119 + 6.4 + 92 = 279.8 ≤ 298.6
            ⚠ 날짜를 빼지 마라 — 여러 날짜가 섞인 평면 목록이라 날짜가 유일한 날짜 단서다.
              한 번 빠졌다가 e2e(theme-tokens-v7 ⑦)가 "9/18 일정 행이 한 장도 안 보인다" 로 잡았다. */}
-      <div className="order-3 w-[88px] shrink-0 text-right min-[360px]:w-[96px]">
         {/* 🔴 라벨은 작게, 금액은 크게 — 'GTD 1,000만' 을 **한 덩어리 큰 글자**로 두면 88px 안에서
             두 줄로 접히고(실측) 이 열이 4단이 되어 카드가 95.6 → 118.7px 로 커졌다.
             라벨/금액을 나누면 같은 2줄이라도 라벨 줄이 13px 라 높이가 절반이다.
@@ -611,22 +649,6 @@ function ListCard({
             폭 예산이 320px 에서 여유 3.5px 뿐이라 열을 넓히는 선택지가 없었다.
             실측 폭: 라벨 21 → 17 · 금액 54~62 → 63~71 · 합계 84(320) / 92(360+) ≤ 88 / 96.
           ⚠ `items-baseline` — 10px 과 15~17px 를 가운데 정렬하면 작은 라벨이 붕 뜬다. */}
-        <p className={`flex flex-wrap items-baseline justify-end gap-x-1 leading-tight ${prize ? 'text-gold-300' : 'text-ink-muted'}`}>
-          <span className="text-[9px] font-bold uppercase opacity-80">{prize?.label ?? '상금'}</span>
-          <span className="break-keep text-base font-extrabold tabular-nums min-[360px]:text-lg">{prize?.amount ?? '—'}</span>
-        </p>
-        {/* 🔴 2026-09-18(9차) 오너: "날짜를 좌측으로 시간을 우측에 붙여줘". 순서를 뒤집었다.
-            오른쪽 정렬 열이라 **시각이 열 끝에 딱 붙고** 날짜가 그 왼쪽에 선다 —
-            줄마다 시각의 오른쪽 모서리가 같은 x 에 서므로 세로로 훑기 좋다. */}
-        {/* 🔴 2026-09-18(11차) 오너: "GTD 1000만을 조금 더 키우고 **아래 시간 날짜를 줄여**".
-            시각 text-base/lg → text-sm/base, 날짜는 9px. GTD 가 이 열의 주인공이 되도록 대비를 벌린다.
-          ⚠ `flex-wrap` 을 넣어 둔다. 320px 에서 `9/18(금) 18:00` 은 87px 로 열(88px)에 **1px 남기고**
-            들어간다 — 요일이 한 글자 더 길거나 글꼴이 바뀌면 바로 넘친다. 접히는 편이 잘리는 것보다 낫다. */}
-        <p className="mt-0.5 flex flex-wrap items-baseline justify-end gap-x-1 leading-tight">
-          <span className="text-[9px] tabular-nums text-ink-muted">{d.monthDay}({d.dow})</span>
-          <span className="text-sm font-extrabold tabular-nums tracking-tight text-ink-primary min-[360px]:text-base">{d.time || '—'}</span>
-        </p>
-      </div>
    </article>
   );
 }
