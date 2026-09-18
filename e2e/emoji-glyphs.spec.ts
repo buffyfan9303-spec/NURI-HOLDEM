@@ -1,5 +1,11 @@
-// 이모지 규약의 **런타임 짝** — 소스 게이트(src/lib/emojiPolicy.test.ts)가 "새로 안 들어왔다"를
-// 보증한다면, 여기는 "남겨둔 예외가 실제로 글자로 그려지는가"를 렌더해서 잰다.
+// 화면에 **글자로 그려지는 기호**가 그 기기에서 두부(□)로 떨어지지 않는지 렌더해서 잰다.
+//
+// ⚠ 예전엔 이 파일이 소스 게이트(삭제된 src/lib/emojiPolicy.test.ts)의 '런타임 짝' 이었다.
+//   2026-09-18 오너 지시로 이모지 금지 규약은 없어졌지만 **두부 검사는 취향이 아니라 사실 검사**라 남긴다:
+//   카드 수트와 상점 마크는 지금도 글자로 그려지고, 폰트가 없는 기기에서는 □ 가 된다.
+//   ⚠ 그때 emojiPolicy.ts 를 통째로 지우면서 이 파일이 쓰던 **예외 목록까지 사라졌고**,
+//     Playwright 는 수집 단계에서 멈추므로 **E2E 스위트 전체가 한 줄도 안 돌았다.**
+//     목록은 src/lib/glyphProbe.ts 로 옮겼다(상점 마크는 SHOP_MARKS 에서 뽑아 사본이 낡지 않게).
 //
 // 재는 법(추측하지 않는다):
 //   · 두부 판정 — 존재할 수 없는 코드포인트(U+10FFFF)를 같은 폰트로 그려 **픽셀 해시**를 기준선으로
@@ -9,7 +15,7 @@
 //     수백 가지 색을 쓰고, 단색 기호 폰트에서 온 글리프는 1가지다. 후자는 OS 마다 그 폰트가
 //     있고 없고가 갈려 두부 위험이 크다(🂠 U+1F0A0 가 정확히 그래서 걷혔다).
 import { test, expect } from './_fixtures';
-import { SUIT_CP, SHOP_MARK_CP } from '../src/lib/emojiPolicy';
+import { SUIT_CP, SHOP_MARK_CP } from '../src/lib/glyphProbe';
 
 const CP = (s: ReadonlySet<number>) => [...s];
 
