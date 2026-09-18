@@ -355,8 +355,25 @@ export default function VenuePage({
               72→64px: 375×667 실측에서 Tier1 행동 행이 하단 탭바에 덮여 있었다(아래 주석 참조). */}
           <div className="relative -mt-8 mb-1.5 flex justify-center">
             <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border-4 border-surface-base bg-surface-high shadow-dialog">
+              {/* ⚠ 변형본이 없을 때를 대비한 폴백 — 없으면 **깨진 이미지 아이콘**이 된다.
+                  2026-09-19 오너 리포트("프로필 카드가 깨졌어")의 실제 원인이 여기였다:
+                  144px 요청 → `-256.webp` 를 가리키는데 그 파일이 없어 SPA 폴백이
+                  index.html 을 **200(text/html, 24KB)** 으로 돌려줬고 img 가 디코드에 실패했다.
+                  404 였으면 그나마 티가 났을 텐데 200 이라 더 조용하고 더 나빴다.
+                  gen-thumbs 쪽에서 모든 폭을 만들게 고쳤지만, 폴백은 **그래도** 둔다 —
+                  새 파일을 올리고 스크립트를 안 돌린 빌드가 언제든 다시 나올 수 있다.
+                ⚠ 이 주석을 삼항 분기 **안**에 두지 마라. `? (` 바로 뒤의 JSX 주석은 자식이 둘이 되어
+                  컴파일이 깨진다 — 오늘만 네 번째다. 주석은 분기 밖, 이 자리에 둔다.
+                ⚠ 그리고 주석 본문에 JSX 주석 닫는 기호를 글자로 쓰지 마라 — 주석이 거기서 끝나
+                  뒤쪽이 마크업으로 읽힌다. 방금 이 주석이 그것 때문에 한 번 깨졌다. */}
               {venue.imageUrl ? (
-                <img src={thumbUrl(venue.imageUrl, 144) ?? venue.imageUrl} alt="" className="h-full w-full object-cover" />
+                <img src={thumbUrl(venue.imageUrl, 144) ?? venue.imageUrl} alt="" className="h-full w-full object-cover"
+                    onError={(e) => {
+                      const el = e.currentTarget;
+                      if (el.dataset.fb) return;
+                      el.dataset.fb = '1';
+                      el.src = venue.imageUrl!;
+                    }} />
               ) : (
                 <span className="flex h-full w-full items-center justify-center text-2xl font-bold text-ink-secondary">{venue.name[0]}</span>
               )}

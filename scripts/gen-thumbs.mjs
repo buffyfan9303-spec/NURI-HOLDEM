@@ -42,8 +42,15 @@ for (const DIR of PRESENT) {
     const srcMtime = statSync(src).mtimeMs;
     const meta = await sharp(src).metadata();
     for (const w of WIDTHS) {
-      // 원본보다 큰 폭은 만들지 않는다(확대는 바이트만 늘린다).
-      if (meta.width && w >= meta.width) { skipped++; continue; }
+      // 🔴 2026-09-19 — 예전엔 `if (w >= meta.width) continue` 로 **건너뛰었다.** 그게 화면을 깨뜨렸다.
+      //   `thumbUrl` 은 고정 목록(LOCAL_WIDTHS)에서 폭을 고르지 사용 가능한 변형본을 모른다.
+      //   원본이 256px 인 매장 로고에 VenuePage 가 144px 를 요구하면 `-256.webp` 를 가리키는데
+      //   그 파일이 없다 → SPA 폴백이 **index.html 을 200 으로** 돌려준다(Content-Type: text/html, 24KB).
+      //   `<img>` 는 그걸 디코드 못 해 **깨진 이미지 아이콘**이 된다(오너 리포트: "프로필 카드가 깨졌어").
+      //   404 였으면 onError 라도 탔을 텐데, 200 이라 더 조용하고 더 나쁘다.
+      // → 이제 **목록의 모든 폭을 만든다.** `withoutEnlargement` 가 있어 원본보다 커지지 않으므로
+      //   큰 폭 파일은 원본과 같은 픽셀이고 바이트도 늘지 않는다(재인코딩으로 오히려 조금 작다).
+      //   '이름이 가리키는 파일은 항상 있다' 가 이 스크립트와 thumbUrl 사이의 계약이다.
       const out = join(DIR, f.replace(/\.webp$/i, `-${w}.webp`));
       // 원본이 더 낡았으면 다시 만들지 않는다(빌드마다 재인코딩하면 느리고 diff 가 흔들린다).
       if (existsSync(out) && statSync(out).mtimeMs >= srcMtime) { skipped++; continue; }
