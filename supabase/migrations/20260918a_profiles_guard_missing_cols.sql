@@ -1,6 +1,14 @@
 -- 20260918a — profiles 의 '보호되지 않은 컬럼' 11개를 트리거 가드에 넣는다.
 --
--- ⛔ 아직 적용하지 않았다. 오너 승인 대기(라이브 DB 적용은 위임 범위 밖).
+-- ✅ 적용 완료 2026-09-18 (오너 승인) — 라이브 실측
+--   적용 전 음성 대조: 일반 유저(role=user) 세션으로 자기 행의
+--     `shadowbanned=true, checkin_streak=999` UPDATE 가 **통과했다**(취약 확인, rollback).
+--   적용 후 음성 대조: 같은 시도가 예외로 막힘 → negative-control OK.
+--   적용 후 양성 대조 3종 전부 통과(rollback):
+--     ① 관리자 세션의 status/approved/shadowbanned 직접 update (관리자 화면 경로)
+--     ② 일반 유저의 허용 필드(name·avatar_color) update
+--     ③ SECURITY DEFINER 경로(소유자 권한이라 가드를 안 탄다)
+--   → 기능 회귀 0. 음성만 보면 '아무도 못 지나가는 고장'을 못 잡으므로 양성을 같이 쟀다.
 --
 -- ── 무엇이 문제인가 (2026-09-18 보안 감사 · 라이브 실측) ─────────────────────
 -- 정책 `profiles_update_self` 는 **행 단위**로만 통과시키고(WITH CHECK 없음),
