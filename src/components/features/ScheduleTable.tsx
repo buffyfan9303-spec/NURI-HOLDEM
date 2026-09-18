@@ -18,7 +18,7 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
   onVenueClick: (venueId: string) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-card border border-border-default bg-surface-low">
+    <div className="overflow-hidden rounded-aura border card-aura">
       {/* 열 폭 — **자동 레이아웃**이다(table-fixed 를 쓰지 않는다).
           한 번 table-fixed + colgroup 으로 폭을 못 박아 봤는데, 1280px 에서 게임 열이 90px 로 눌려
           '등록 마감 14레벨' 배지(105px)가 칸 밖으로 밀렸다(실측 client 90 / scroll 105).

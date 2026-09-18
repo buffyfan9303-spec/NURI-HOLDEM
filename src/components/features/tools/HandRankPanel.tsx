@@ -18,7 +18,7 @@ export default function HandRankPanel() {
     <div className="space-y-3">
       <p className="text-2xs text-ink-muted">강한 순서. 빈도는 내 2장 + 보드 5장(7장)에서 최선 5장이 그 족보가 될 확률입니다.</p>
 
-      <ol className="rounded-card border border-border-default bg-surface-low divide-y divide-border-subtle" aria-label="홀덤 족보 — 강한 순서">
+      <ol className="rounded-aura border card-aura divide-y divide-border-subtle" aria-label="홀덤 족보 — 강한 순서">
         {HAND_RANKS.map((h, i) => (
           <li key={h.key} className="px-3.5 py-2.5">
             <div className="flex items-baseline gap-2">
@@ -40,7 +40,7 @@ export default function HandRankPanel() {
 
       <section className="space-y-2" aria-labelledby="handrank-notes">
         <h3 id="handrank-notes" className="text-sm font-bold text-ink-primary">자주 틀리는 것</h3>
-        <ul className="rounded-card border border-border-default bg-surface-low divide-y divide-border-subtle">
+        <ul className="rounded-aura border card-aura divide-y divide-border-subtle">
           {HAND_RANK_NOTES.map((n) => (
             <li key={n.title} className="px-3.5 py-2.5">
               <p className="text-xs font-semibold text-ink-primary">{n.title}</p>

@@ -37,7 +37,7 @@ export default function VenueVerificationCard() {
   }
 
   return (
-    <div className="space-y-1 rounded-card border border-border-default bg-surface-low p-3">
+    <div className="space-y-1 rounded-aura border card-aura p-3">
       <span className="inline-block rounded-badge bg-surface-float px-2 py-0.5 text-2xs font-bold text-ink-secondary">비인증 매장</span>
       {/* 12.75px 설명문의 행간 정본은 t-desc(19.13 = 1.5배) 하나다 — leading-relaxed 는 20.72 라
           같은 크기 설명문이 두 리듬으로 갈렸다(SectionHeader 가 이미 같은 이유로 t-desc 로 통일돼 있다). */}

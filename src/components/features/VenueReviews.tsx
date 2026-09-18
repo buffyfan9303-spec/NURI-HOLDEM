@@ -165,7 +165,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
       ) : (
         <ul className="space-y-1.5">
           {reviews.map((r) => (
-            <li key={r.id} className="rounded-card border border-border-subtle bg-surface-high p-2.5">
+            <li key={r.id} className="rounded-aura border card-aura p-2.5">
               <div className="flex items-center gap-1.5">
                 <Stars value={r.rating} size={12} />
                 <span className="text-xs font-bold text-ink-primary">{r.nickname}</span>

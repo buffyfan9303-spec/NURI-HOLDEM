@@ -157,7 +157,7 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
     <Modal open={open} onClose={onClose} title={accept === 'both' ? 'QR 스캔' : '출석 QR'} maxWidth="sm" variant="sheet">
       <div className="space-y-3 p-4 pb-6">
         {(phase === 'unsupported' || phase === 'denied') ? (
-          <div className="flex flex-col items-center gap-3 rounded-card border border-border-subtle bg-surface-low px-4 py-8 text-center">
+          <div className="flex flex-col items-center gap-3 rounded-aura border card-aura px-4 py-8 text-center">
             <Icon name="qr" size={28} className="text-ink-muted" />
             <p className="text-sm font-semibold text-ink-primary">
               {phase === 'denied' ? '카메라를 사용할 수 없어요' : '이 브라우저는 카메라 스캔을 지원하지 않아요'}

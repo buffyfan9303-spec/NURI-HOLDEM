@@ -594,7 +594,8 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
       data-testid="spot-hero"
       className="relative rounded-card border border-accent-400/30 bg-surface-mid p-3"
       // 히어로에만 강한 LED. 아래 도구 카드들은 이 빛을 반복하지 않는다(광량 단계).
-      style={{ boxShadow: '0 0 28px rgb(139 92 246 / 0.26), 0 0 52px rgb(34 211 238 / 0.10)' }}
+      // 2026-09-18: 인라인 rgb 글로우 → 토큰 LED([data-aura] hero). 라이트에서 약해지고 고대비·강제색에서 꺼진다.
+      data-aura data-aura-level="hero" data-aura-variant="violet"
       aria-label="NURI SPOT"
     >
       {/* ⚠ U/§7 P0-2(2026-09-12 실측): 200% 텍스트 확대 · 390px 에서 이 행의 텍스트 칸이

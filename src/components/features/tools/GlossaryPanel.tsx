@@ -66,7 +66,7 @@ export default function GlossaryPanel() {
       </div>
 
       {/* 용어 리스트 */}
-      <div className="rounded-card border border-border-default bg-surface-low">
+      <div className="rounded-aura border card-aura">
         {filtered.length === 0 ? (
           <p className="py-6 text-center text-2xs text-ink-muted">검색 결과가 없습니다</p>
         ) : (

@@ -217,7 +217,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
 
         {/* 문의 안내 — 판매자와의 대화는 1:1 채팅으로 일원화.
             (이전엔 목업 댓글창이라 남겨도 저장·전달되지 않아 "문의했는데 답이 없다"는 오해를 만들었다) */}
-        <section id="listing-comments" className="rounded-card border border-border-subtle bg-surface-low p-3 text-center">
+        <section id="listing-comments" className="rounded-aura border card-aura p-3 text-center">
           <p className="text-xs font-bold text-ink-primary">궁금한 점이 있으신가요?</p>
           <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
             가격 협상·상태 문의는 아래 <b className="text-accent-300">판매자에게 문의</b> 버튼으로<br />1:1 채팅에서 바로 대화할 수 있어요.

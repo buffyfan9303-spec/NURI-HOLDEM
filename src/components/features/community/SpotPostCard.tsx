@@ -45,10 +45,10 @@ export default function SpotPostCard({ postId, isAuthor }: { postId: string; isA
   // 스팟 글이 아니면 자리를 차지하지 않는다 — 일반 글·레거시 리플레이 글이 여기 걸린다.
   if (state === 'none') return null;
   // 스켈레톤 높이를 실제 카드와 맞춘다(CLS) — 값이 들어올 때 댓글이 밀려 내려가지 않게.
-  if (state === 'loading') return <div className="mt-3 h-[132px] animate-pulse rounded-card bg-surface-high" />;
+  if (state === 'loading') return <div className="mt-3 h-[132px] animate-pulse rounded-aura bg-surface-high" />;
   if (state === 'error' || !ps) {
     return (
-      <p className="mt-3 rounded-card border border-border-default bg-surface-mid px-3 py-2.5 text-2xs text-ink-muted">
+      <p className="mt-3 rounded-aura border card-aura px-3 py-2.5 text-2xs text-ink-muted">
         스팟을 불러오지 못했습니다. 글 내용은 그대로입니다.
       </p>
     );
@@ -77,7 +77,7 @@ export default function SpotPostCard({ postId, isAuthor }: { postId: string; isA
   };
 
   return (
-    <section data-spot-post className="mt-3 rounded-card border border-border-default bg-surface-mid p-3">
+    <section data-spot-post className="mt-3 rounded-aura border card-aura p-3">
       <header className="flex flex-wrap items-center gap-1.5">
         <span className="inline-flex items-center gap-1 rounded-badge border border-border-default bg-surface-high px-2 py-0.5 text-2xs font-semibold text-ink-secondary">
           <Icon name="spade" size={11} aria-hidden />NURI SPOT

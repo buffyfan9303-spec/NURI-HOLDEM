@@ -116,7 +116,7 @@ function EventMenuCard() {
 
   const saving = save.kind === 'saving';
   return (
-    <section data-testid="event-menu-card" className="rounded-card border border-border-subtle bg-surface-low p-3 space-y-2">
+    <section data-testid="event-menu-card" className="rounded-aura border card-aura p-3 space-y-2">
       <h3 className="text-sm font-bold text-ink-primary">사이트 이벤트 메뉴 표시</h3>
       <p className="text-2xs leading-relaxed text-ink-secondary">
         홈과 내비게이션에 <strong className="text-ink-primary">이벤트 진입점</strong>을 보여줍니다.
@@ -281,12 +281,12 @@ export default function EventOpsAdmin({ venues }: { venues: Venue[] }) {
 
       {/* 0건과 조회 실패를 구분한다 — 실패는 위 카드가 말하고, 여기는 정말 0건일 때만 */}
       {err == null && !loading && rows.length === 0 && (
-        <p className="rounded-card border border-border-subtle bg-surface-low px-3 py-6 text-center text-2xs text-ink-muted">
+        <p className="rounded-aura border card-aura px-3 py-6 text-center text-2xs text-ink-muted">
           아직 만든 이벤트가 없습니다. ‘새 이벤트’로 초안을 만들어 보세요.
         </p>
       )}
       {err == null && !loading && rows.length > 0 && shown.length === 0 && (
-        <p className="rounded-card border border-border-subtle bg-surface-low px-3 py-6 text-center text-2xs text-ink-muted">
+        <p className="rounded-aura border card-aura px-3 py-6 text-center text-2xs text-ink-muted">
           검색·필터 조건에 맞는 이벤트가 없습니다 (전체 {rows.length}건).
         </p>
       )}
@@ -324,7 +324,7 @@ function EventRow({ c, open, visibilityKnown, onToggle, onCopy, onChanged, onNex
   if (phase === 'expired') alerts.push('기간 종료 — 새 참여가 끝났습니다. 목록을 정리하려면 ‘행사 종료’를 누르세요');
 
   return (
-    <li className="rounded-card border border-border-subtle bg-surface-low">
+    <li className="rounded-aura border card-aura">
       <div className="flex flex-wrap items-center gap-2 p-2.5">
         <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
           <p className="flex flex-wrap items-center gap-1.5">

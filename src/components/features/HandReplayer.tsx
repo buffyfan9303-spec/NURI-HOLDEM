@@ -124,7 +124,7 @@ export default function HandReplayer({ replay }: { replay: ReplayData }) {
   const outsIsHero = !!(cur && cur.hero < 0.5);
 
   return (
-    <div className="w-full max-w-md rounded-card border border-border-subtle bg-surface-low p-3 space-y-3 sm:p-4">
+    <div className="w-full max-w-md rounded-aura border card-aura p-3 space-y-3 sm:p-4">
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1 text-2xs font-extrabold text-accent-300"><Icon name="clapperboard" size={12} className="shrink-0" />핸드 리뷰</span>
         <span className="flex items-center gap-2">

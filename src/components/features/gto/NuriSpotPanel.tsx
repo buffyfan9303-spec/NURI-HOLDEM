@@ -184,19 +184,8 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
 function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void }) {
   return (
     <div className="relative overflow-visible">
-      {/* 뒤에서 새어 나오는 LED — 장식 레이어는 클릭·포커스를 가로채지 않는다 */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -inset-x-4 -top-6 -bottom-2 -z-10"
-        style={{
-          background:
-            'radial-gradient(closest-side, rgb(139 92 246 / 0.22), transparent 72%),'
-            + 'radial-gradient(closest-side, rgb(34 211 238 / 0.12), transparent 74%)',
-          backgroundPosition: '18% 20%, 78% 60%',
-          backgroundSize: '58% 88%, 46% 70%',
-          backgroundRepeat: 'no-repeat',
-        }}
-      />
+      {/* 2026-09-18: 헤더 뒤 광역 블룸(인라인 radial-gradient 2겹)을 뺐다 — html.light·prefers-contrast·forced-colors 어디서도
+          못 끄는 인라인 색이었고, 같은 헤더의 SpadeMark 가 이미 토큰 LED([data-aura] hero)를 갖는다. 발광은 한 곳이면 된다. */}
       <div className="flex items-center gap-3">
         <SpadeMark />
         <div className="min-w-0 flex-1">
@@ -238,10 +227,8 @@ function SpadeMark() {
   return (
     // h-10(42.5px): 소개 행 높이를 정하는 요소다 — 상단이 첫 화면의 23% 를 먹어(design 실측, 콘텐츠 시작 y=192.6) 한 단 줄였다.
     <span className="relative grid h-10 w-10 shrink-0 place-items-center" aria-hidden>
-      <span
-        className="pointer-events-none absolute inset-0 rounded-full"
-        style={{ boxShadow: '0 0 18px rgb(139 92 246 / 0.42), 0 0 34px rgb(34 211 238 / 0.18)' }}
-      />
+      {/* LED 는 토큰([data-aura] hero)으로 — 인라인 rgb 는 라이트·고대비·강제색에서 못 껐다(2026-09-18) */}
+      <span data-aura data-aura-level="hero" data-aura-variant="violet" className="pointer-events-none absolute inset-0 rounded-full" />
       <span
         className="grid h-10 w-10 place-items-center rounded-full border border-white/12"
         style={{ background: 'radial-gradient(120% 120% at 50% 0%, #242B48 0%, #141930 58%, #0A0D1B 100%)' }}
@@ -398,7 +385,7 @@ function Pick<T extends string | number>({ value, options, onChange, fmt }: {
 
 function GameStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotReview>) => void }) {
   return (
-    <div className="rounded-card border border-border-default bg-surface-mid p-3">
+    <div className="rounded-aura border card-aura p-3">
       <Row label="형식">
         <Pick value={spot.format} options={['mtt', 'cash'] as const}
           onChange={(v) => patch({ format: v })} fmt={(v) => (v === 'mtt' ? '대회' : '캐시')} />
@@ -427,7 +414,7 @@ function GameStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
 function SeatStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotReview>) => void }) {
   const seats = positionsFor(spot.tableSize);
   return (
-    <div className="rounded-card border border-border-default bg-surface-mid p-3">
+    <div className="rounded-aura border card-aura p-3">
       <Row label="내 자리">
         <Pick value={spot.heroPos} options={seats} onChange={(v) => patch({ heroPos: v as SpotPosition })} />
       </Row>
@@ -479,7 +466,7 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
     .filter((g) => g.rows.length > 0);
 
   return (
-    <div className="rounded-card border border-border-default bg-surface-mid p-3">
+    <div className="rounded-aura border card-aura p-3">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <p className="text-xs font-bold text-ink-primary">액션 순서</p>
         <p className="text-2xs tabular-nums text-ink-muted">팟 {potBb(spot)}BB</p>
@@ -558,7 +545,7 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
 function ChoiceStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotReview>) => void }) {
   const sized = spot.heroAction === 'call' || spot.heroAction === 'bet' || spot.heroAction === 'raise';
   return (
-    <div className="rounded-card border border-border-default bg-surface-mid p-3">
+    <div className="rounded-aura border card-aura p-3">
       <Row label="그때 나는">
         <Pick value={spot.heroAction ?? ('' as SpotActionType)} options={ACTION_TYPES}
           onChange={(v) => patch({ heroAction: v })} fmt={actionLabel} />

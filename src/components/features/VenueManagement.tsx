@@ -150,7 +150,7 @@ export default function VenueManagement() {
         // 검색 중: 순서 변경 없이 일반 목록
         <ul className="space-y-1.5">
           {filtered.map((v) => (
-            <li key={v.id} className="rounded-card border border-border-default bg-surface-low p-2.5 space-y-2">
+            <li key={v.id} className="rounded-aura border card-aura p-2.5 space-y-2">
               <RowContent venue={v} order={venues.findIndex((x) => x.id === v.id) + 1} handlers={handlers} />
             </li>
           ))}
@@ -190,8 +190,9 @@ function SortableVenueRow({ venue, order, handlers }: { venue: Venue; order: num
       ref={setNodeRef}
       style={style}
       className={[
-        'rounded-card border bg-surface-low p-2.5 space-y-2',
-        isDragging ? 'border-accent-400 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] opacity-90 z-10' : 'border-border-default',
+        'rounded-aura border card-aura p-2.5 space-y-2',
+        // 드래그 중엔 accent 테두리 + 링(유틸이 card-aura 의 테두리·그림자를 이긴다). 평소 테두리는 card-aura 몫.
+        isDragging ? 'border-accent-400 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] opacity-90 z-10' : '',
       ].join(' ')}
     >
       <RowContent

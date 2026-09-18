@@ -265,12 +265,13 @@ function AuraSpade({ size }: { size: number }) {
           `inset 0 0 ${size * 0.26}px rgb(232 201 124 / 0.13)`,          // 골드 내부광
           '0 0 0 1px rgb(255 255 255 / 0.10)',                            // 하이라이트 링
           `0 ${size * 0.09}px ${size * 0.3}px rgb(0 0 0 / 0.55)`,          // ④ 접지 그림자
-          `0 0 ${size * 0.40}px rgb(139 92 246 / 0.44)`,                   // violet
-          `0 0 ${size * 0.80}px rgb(99 102 241 / 0.26)`,                   // indigo
-          `0 0 ${size * 1.25}px rgb(34 211 238 / 0.15)`,                   // cyan
         ].join(', '),
       }}
     >
+      {/* ④ 바깥 블룸 — 인라인 rgb 3겹(violet·indigo·cyan)이었는데 html.light·prefers-contrast·forced-colors 어디서도
+          못 끄는 접근성 결함이었다(2026-09-18). 토큰 LED([data-aura] hero)로 옮긴다 — 라이트에서 약해지고 고대비·강제색에서 꺼진다.
+          구의 입체(①②③·접지)는 위 inline 에 그대로 둔다: 브랜드 마크라 테마와 무관하게 같은 모습이어야 한다. */}
+      <span aria-hidden data-aura data-aura-level="hero" data-aura-variant="violet" className="pointer-events-none absolute inset-0 rounded-full" />
       <img
         src="/brand/nuri-holdem-symbol.svg" alt=""
         width={Math.round(size * 0.46)} height={Math.round(size * 0.46)}

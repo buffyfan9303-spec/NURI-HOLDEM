@@ -117,8 +117,8 @@ export function PreflopQuizCard({ quiz, result, onAnswer, banner, footer }: {
 
   return (
     <>
-      {/* 문제 카드 */}
-      <div className="rounded-card border border-border-default bg-surface-low p-4 text-center space-y-3">
+      {/* 문제 카드 — 호스트(PreflopTrainer·DailyDrill·WrongNote)가 전부 CalcCard(card-aura)라 카드 속 카드 = card-aura-sub */}
+      <div className="rounded-input border card-aura-sub p-4 text-center space-y-3">
         <p className="text-2xs font-bold text-ink-muted">{quiz.situ}</p>
         <p className="text-2xl font-extrabold text-accent-200 leading-none">{quiz.posLabel}</p>
         <div className="flex items-center justify-center gap-2 pt-1">

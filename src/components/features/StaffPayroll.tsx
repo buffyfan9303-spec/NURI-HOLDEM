@@ -199,7 +199,7 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
             <p className="text-[11px] text-ink-muted tabular-nums">직원 {staffPay.toLocaleString()} · 딜러 {dealerPay.toLocaleString()}</p>
           )}
         </div>
-        <div className="rounded-card border border-border-subtle bg-surface-base p-2.5 text-center">
+        <div className="rounded-card border card-aura-sub p-2.5 text-center">
           <p className="text-2xs text-ink-muted">총 근무시간</p>
           {shiftErr || dealerErr
             ? <p className="text-base font-extrabold text-danger-light">—</p>
@@ -352,7 +352,7 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
   };
   const sorted = [...shifts].sort((a, b) => (a.date < b.date ? 1 : -1));
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
+    <section className="rounded-aura border card-aura p-3 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-primary">내 출근 관리 (출퇴근 기록)</h3>
         <div className="flex items-center gap-1">

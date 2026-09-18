@@ -81,7 +81,7 @@ function IdentityVoucherSwitch() {
   const drift = known && saved !== live;
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-mid p-3 space-y-2" data-testid="switch-identity">
+    <section className="rounded-aura border card-aura p-3 space-y-2" data-testid="switch-identity">
       <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary">
         <Icon name="shield" size={15} className="shrink-0" />본인인증 · 매장이용권
       </p>
@@ -205,7 +205,7 @@ function ClockAdCard() {
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-mid p-3 space-y-2" data-testid="switch-clock-ad">
+    <section className="rounded-aura border card-aura p-3 space-y-2" data-testid="switch-clock-ad">
       <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary">
         <Icon name="image" size={15} className="shrink-0" />클락 광고 <span className="text-2xs font-semibold text-ink-muted">전 매장 공통</span>
       </p>

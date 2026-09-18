@@ -88,7 +88,7 @@ export default function MySpotList({ onOpen, onShare, onNew }: {
   return (
     <ul className="space-y-2">
       {rows.map((r) => (
-        <li key={r.id} className="rounded-card border border-border-default bg-surface-mid p-2.5">
+        <li key={r.id} className="rounded-aura border card-aura p-2.5">
           <div className="flex items-start gap-2">
             <div className="flex shrink-0 gap-0.5" aria-label="내 카드">
               {r.spot.hero.length > 0
@@ -137,7 +137,7 @@ function Empty({ icon, title, desc, action }: {
   icon: 'lock' | 'bookmark' | 'alert'; title: string; desc: string; action?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-card border border-border-default bg-surface-mid px-4 py-6 text-center">
+    <div className="rounded-aura border card-aura px-4 py-6 text-center">
       <Icon name={icon} size={22} className="mx-auto mb-2 text-ink-muted" aria-hidden />
       <p className="text-sm font-bold text-ink-primary">{title}</p>
       <p className="mx-auto mt-1 max-w-[22rem] text-2xs leading-relaxed text-ink-muted break-keep">{desc}</p>

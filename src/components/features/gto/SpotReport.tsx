@@ -25,12 +25,13 @@ import { gotoBoardPost } from '../../../lib/spotNav';
 import { buildShareBody, spotWithNote } from './spotShareBody';
 
 /** 등급별 색 — **색만으로 의미를 전하지 않는다.** 항상 라벨·아이콘과 함께 쓴다. */
-const COVERAGE_TONE: Record<CoverageKind, { ring: string; text: string; icon: 'microscope' | 'table' | 'scale' | 'sigma' | 'info' }> = {
-  exact_solver:         { ring: 'rgb(139 92 246 / 0.34)', text: 'text-accent-200', icon: 'microscope' },
-  chart_nash:           { ring: 'rgb(34 211 238 / 0.30)', text: 'text-aura-300',   icon: 'table' },
-  normalized_reference: { ring: 'rgb(251 191 36 / 0.26)', text: 'text-amber-200',  icon: 'scale' },
-  math_only:            { ring: 'rgb(251 191 36 / 0.22)', text: 'text-amber-200',  icon: 'sigma' },
-  unsupported:          { ring: 'rgb(148 163 184 / 0.18)', text: 'text-ink-muted', icon: 'info' },
+/** led = [data-aura-variant](index.css) — 인라인 rgb 링은 라이트·고대비·강제색에서 못 껐다(2026-09-18). unsupported 는 LED 없음. */
+const COVERAGE_TONE: Record<CoverageKind, { led: 'violet' | 'cyan' | 'amber' | null; text: string; icon: 'microscope' | 'table' | 'scale' | 'sigma' | 'info' }> = {
+  exact_solver:         { led: 'violet', text: 'text-accent-200', icon: 'microscope' },
+  chart_nash:           { led: 'cyan',   text: 'text-aura-300',   icon: 'table' },
+  normalized_reference: { led: 'amber',  text: 'text-amber-200',  icon: 'scale' },
+  math_only:            { led: 'amber',  text: 'text-amber-200',  icon: 'sigma' },
+  unsupported:          { led: null,     text: 'text-ink-muted',  icon: 'info' },
 };
 
 const VERDICT_TONE: Record<Verdict, string> = {
@@ -140,9 +141,12 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
 
   return (
     <section
-      className="relative rounded-card border border-border-default bg-surface-mid p-3"
+      className="relative rounded-aura border card-aura p-3"
       // 결과 카드 뒤에만 등급 색 LED — 입력 카드에는 이 빛을 반복하지 않는다.
-      style={{ boxShadow: `0 0 26px ${tone.ring}` }}
+      // .card-aura[data-aura] 가 접촉 그림자 + LED 를 합성한다(index.css). 인라인 box-shadow 로 덮으면 그 합성이 통째로 사라진다.
+      data-aura={tone.led ? '' : undefined}
+      data-aura-level={tone.led ? 'hero' : undefined}
+      data-aura-variant={tone.led ?? undefined}
       aria-label="스팟 리포트"
     >
       {/* ① 먼저 보이는 것 */}

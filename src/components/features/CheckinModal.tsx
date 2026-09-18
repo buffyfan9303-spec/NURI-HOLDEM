@@ -31,7 +31,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName }: { op
   return (
     <Modal open={open} onClose={onClose} title="예약·출석" maxWidth="md" variant="sheet" dragToClose>
       <div className="space-y-3 p-4">
-        <div className="flex flex-col items-center gap-2 rounded-card border border-border-subtle bg-surface-low p-4">
+        <div className="flex flex-col items-center gap-2 rounded-aura border card-aura p-4">
           {qr
             ? <img src={qr} alt="출석 QR" width={200} height={200} className="rounded-lg bg-white p-2" />
             : <div className="h-[200px] w-[200px] animate-pulse rounded-lg bg-ink-primary/10" aria-label="QR 생성 중" />}
