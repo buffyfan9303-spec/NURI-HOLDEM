@@ -300,8 +300,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
         // 뼈대 높이를 실제 카드(StatCard min-h-[5.25rem] · Mini ≈ 3.1rem)와 맞춘다 —
         // '불러오는 중…' 한 줄이던 자리에 수백 px 통계가 들어오면서 화면이 아래로 주르륵 밀렸다.
         <div className="space-y-2" aria-busy="true">
-          <div className="grid grid-cols-3 gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[5.25rem]" />)}</div>
-          <div className="grid grid-cols-3 gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[5.25rem]" />)}</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[5.25rem]" />)}</div>
           {/* 3.1rem(52.7px) 은 hint 없는 타일 기준이라 실제 첫 줄(객단가 hint 포함 71px)보다 18px 짧았다 —
               데이터가 들어오는 순간 그만큼 아래가 밀렸다. 880px 실측값으로 맞춘다. */}
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[4.2rem]" />)}</div>
@@ -358,12 +357,13 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
           {/* 2026-09-11: '총 엔트리' 는 소수가 될 수 없다 — 첫 바인·리바인으로 나눠 뜻을 분명히 한다.
               '할인 전 매출' 은 결제수단을 보지 않는 discountWon 을 더해 이용권·지원 할인까지 얹혔었다 →
               정상가 합계(grossSum)를 그대로 쓴다. */}
-          <div className="grid grid-cols-3 gap-2">
+          {/* 6장 한 그리드 — sm 미만은 2열(3행), sm+ 는 종전 그대로 3열(2행).
+              3열을 폰까지 끌고 가면 카드 폭 94~104px 에 '149,957,958 원' 이 2~3줄로 쪼개졌다(360/390 실측 2026-09-18).
+              3장씩 두 그리드로 두면 2열에서 셋째 장이 고아가 되므로 한 그리드로 합친다. */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <StatCard testId="stat-total-buyins" label="총 바인" value={`${m.buyinCount.toLocaleString()}회`} sub={`첫 ${m.firstBuyins} · 리바인 ${m.rebuys}`} icon="users" />
             <StatCard label="할인 바인" value={`${m.discountCnt}건`} sub={`바인 중 ${m.discountRatio.toFixed(1)}%`} icon="down" />
             <StatCard label="총 할인액" value={`${m.discountWon.toLocaleString()} 원`} sub={m.grossSum > 0 ? `정상가 ${wonToMan(m.grossSum)}만원` : '할인 없음'} icon="percent" gold />
-          </div>
-          <div className="grid grid-cols-3 gap-2">
             {/* 2026-09-14: 3열 타일 폭 55px 에서 이 라벨만 `완납`/`매출액` 두 줄이었다(옆 타일은 1줄). */}
             <StatCard label="완납액" value={`${m.revenue.toLocaleString()} 원`} icon="wallet" emerald />
             <StatCard label="미수 금액" value={`${m.unpaid.toLocaleString()} 원`} icon="alert" danger={m.unpaid > 0} />
@@ -723,7 +723,9 @@ function StatCard({ label, value, sub, icon, danger, emerald, gold, testId }: { 
         <p data-testid={testId} className="text-xs font-medium leading-tight text-ink-secondary">{label}</p>
         <StatIcon name={icon} className="shrink-0 text-ink-muted" />
       </div>
-      <p className={['mt-auto pt-2 text-lg font-extrabold leading-none tabular-nums', c].join(' ')}>{value}</p>
+      {/* sm 미만은 한 단계 작게(17px) — 2열 카드 안폭 124px(360) 에 '149,957,958' 이 19px 로는 127px 라
+          숫자 한가운데서 꺾였다(overflow-wrap 이 숫자를 보호하지 않는다). 17px 이면 113px 로 들어가고 '원'만 내려간다. */}
+      <p className={['mt-auto pt-2 text-base font-extrabold leading-none tabular-nums sm:text-lg', c].join(' ')}>{value}</p>
       {/* ⚠ 보조 줄은 **반드시 한 줄**이어야 한다. 자리만 예약하고 줄 수를 안 묶으면, 실제 폭
           (412px 3칸 = 카드 111px)에서 '전체 바인 중 0.0%' 가 두 줄로 접혀 그 카드만 값이 14px 올라간다
           — 로그인 화면 실측에서 잡았다(2026-09-06). 넓은 하네스에서는 안 접혀 안 보이던 결함이다.

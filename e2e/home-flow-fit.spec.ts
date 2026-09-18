@@ -170,7 +170,7 @@ const measure = (page: Page) => page.evaluate(() => {
     //     지워 놓고 "말줄임은 설계"라고 넘어가면 이 검사는 아무것도 못 잡는다(실제로 그 구멍이 났다).
     //  ③ 나머지 말줄임(이름)은 설계로 인정한다 — 전체 이름은 상세에서 보인다(§5).
     if (s.webkitLineClamp && s.webkitLineClamp !== 'none') { clamped.push(text); continue; }
-    if (cut && /마감까지|등록 마감|참가비 [\d—]|상금 보장/.test(text)) {
+    if (cut && /마감까지|등록 마감|참가비 [\d—]|GTD/.test(text)) {
       clippedValues.push(`${text} ${el.clientWidth}/${el.scrollWidth} × ${el.clientHeight}/${el.scrollHeight}`);
       continue;
     }
@@ -294,7 +294,9 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
     //   이 검사의 요지는 **6자리를 반올림·축약하지 않는다** 이므로 금액만 집는다(게이트를 푸는 것이 아니다).
     expect(r!.text, '참가비 6자리가 반올림·축약됐다').toContain('1,234,567원');
     expect(r!.text, '참가비 미입력이 "무료"로 둔갑했다').toContain('참가비—');
-    expect(r!.text, '상금 보장 금액이 반올림됐다').toContain('상금 보장 1,000만');
+    // 2026-09-18 오너 지시로 라벨이 '상금 보장' → 'GTD' 로 바뀌었다. 이 검사의 요지는 라벨이 아니라
+    //   **금액이 반올림·축약되지 않는 것**이므로 그 부분은 그대로 본다.
+    expect(r!.text, 'GTD 금액이 반올림됐다').toContain('GTD 1,000만');
     expect(r!.text, '근거 없는 긴박감 문구가 붙었다').not.toMatch(/마감 임박|급상승|인기 급등/);
   });
 

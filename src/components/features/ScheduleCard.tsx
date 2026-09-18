@@ -7,6 +7,7 @@ import { regCloseLevelFromText } from '../../lib/regClose';
 import { fmtKm } from '../../lib/geo';
 import type { Schedule } from '../../api/schedules';
 import type { ViewMode } from '../atoms/ViewModeToggle';
+import { TICKET_WON } from '../../lib/units';
 
 // ── 유틸 ─────────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,23 @@ export function prizeMainText(s: { guaranteed: boolean; prizePool?: number; priz
  *  미입력(0)은 가격 정보가 아니라 '정보 없음'이라 '—'. 금액은 원 단위 전액(반올림 없음). */
 // eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
 export function buyInText(amount: number | undefined): string {
-  return amount && amount > 0 ? `${amount.toLocaleString()}원` : '—';
+  if (!amount || amount <= 0) return '—';
+  // 🔴 2026-09-18 오너: "참가비 100,000 이거 빼 10T 이런식으로 변경".
+  //   T 는 이 앱의 단위다(1T = 1만원 — 이용권·장부가 이미 이 단위를 쓴다).
+  //
+  //   ⚠ 다만 **가격을 반올림하지 않는다**. §28 은 참가비를 상품 가격 정보로 보고 표시를 유지하라고 하고,
+  //     e2e 두 곳(home-flow-fit · schedule-card-fit)이 `1,234,567원` 이 축약되지 않는지 지킨다.
+  //     123.5T 로 적으면 그건 **가격을 바꿔 적는 것**이다.
+  //   → T 로 **정확히 표현되는 금액만** T 로 적고(0.1T = 1,000원 단위까지), 나머지는 원 그대로.
+  //        100,000 → 10T     55,000 → 5.5T     5,000 → 0.5T
+  //        1,234,567 → 1,234,567원 (T 로 깎이지 않는다)
+  //   ⚠ 1만원을 직접 박지 않는다 — T 의 정본은 lib/units 의 TICKET_WON 하나다
+  //     (rankverify.test 가 'T 표시는 TICKET_WON 으로만' 을 잠그고 있다).
+  if (amount % (TICKET_WON / 10) === 0) {
+    const t = amount / TICKET_WON;
+    return `${Number.isInteger(t) ? t : t.toFixed(1)}T`;
+  }
+  return `${amount.toLocaleString()}원`;
 }
 
 /** 등록 마감(구 'REG') 표시 정본 — 쉬운 한국어(§9). 데이터가 있을 때만 문자열을 돌려준다.
@@ -78,7 +95,10 @@ export function regCloseText(s: Pick<Schedule, 'regCloseTime' | 'structure'>): s
 // eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
 export function prizeText(s: Schedule): string | null {
   if (!s.prizePool && !s.prizePercent) return null;
-  return `${s.guaranteed ? '상금 보장' : '예상 상금'} ${prizeMainText(s)}`;
+  // 2026-09-18 오너: "'상금 보장' 이라는 문구도 GTD로 변경".
+  //   ⚠ '예상 상금'(엔트리 비례)은 그대로 둔다 — GTD 는 **보장**이라는 뜻이라 둘을 같은 말로 적으면
+  //     보장되지 않은 금액을 보장처럼 말하게 된다(이 함수 머리말의 '의미를 섞지 않는다'가 그 뜻이다).
+  return `${s.guaranteed ? 'GTD' : '예상 상금'} ${prizeMainText(s)}`;
 }
 
 // ── 서브: 포스터 영역 ───────────────────────────────────────────────────────
@@ -139,7 +159,9 @@ function PosterArea({
         // ⚠ `leading-none`(line-height = font-size) 은 **한글 글리프를 담지 못한다** — 200% 확대에서
         //   span 이 34px 인데 글자가 37px 를 요구해 잘림 검사에 걸렸다(CI 실측 320px/200%: 34/37).
         //   글자 크기는 그대로 두고 줄 상자만 넉넉히 준다(부모가 flex 중앙정렬이라 위치는 그대로).
-        ? <span className="relative select-none text-base font-extrabold leading-tight text-white/85" aria-hidden>{fallbackText}</span>
+        // ⚠ 글자 크기를 타일 크기에 맞춘다 — compact(18px 인라인 로고)에서 text-base 를 쓰면
+        //   한글 글리프가 20px 를 요구해 18px 타일 안에서 잘린다(실측 2026-09-18: 18/20).
+        ? <span className={`relative select-none font-extrabold leading-tight text-white/85 ${compact ? 'text-[10px]' : 'text-base'}`} aria-hidden>{fallbackText}</span>
         : <span className={`relative select-none opacity-25 ${compact ? 'text-sm' : 'text-4xl'}`} aria-hidden>♠</span>}
     </div>
   );
@@ -366,76 +388,57 @@ function ListCard({
         schedule.isPremium ? 'bg-accent-300/[0.05]' : '',
       ].join(' ')}
     >
-      {/* ── ① 매장 로고 ────────────────────────────────────────────────────
-             2026-09-18 오너 레퍼런스: "좌측에 매장 로고, 우측에 게임이름·GTD·참가비·시작 시간·
-             레지 마감·가능하면 지역". 예전 이 자리는 **시각 열(w-20)** 이었고 시각은 아래 정보 줄로 갔다.
-             왜 로고인가: 목록을 세로로 훑을 때 같은 매장의 대회가 **같은 그림으로 묶여** 보인다.
-             소스는 `venues.image_url` · 없으면 `theme_color` 바탕에 매장 이름 첫 글자(오너 선택).
-             ⚠ 여기가 카드→상세 모핑(vt-poster)의 출발점이다. 예전엔 매장명 옆 28px 포스터 썸네일이
-               그 역할이었는데 이 줄에서 사라졌다 — 이름을 안 옮기면 **모핑이 통째로 없어진다**. */}
-      <PosterArea
-        posterUrl={venue?.imageUrl}
-        posterColor={venue?.themeColor ?? schedule.posterColor}
-        fallbackText={venueInitial(schedule.pubName)}
-        title={schedule.pubName}
-        className="order-1 h-12 w-12 shrink-0 rounded-input min-[360px]:h-14 min-[360px]:w-14"
-        thumbWidth={128}
-        priority={priority}
-        compact
-        vtName={vtActive ? 'vt-poster' : undefined}
-      />
+      {/* ── 오너 레퍼런스(2026-09-18, 스크린샷 2장)대로 **3열 고정 행**으로 다시 짰다 ──────
+             참조한 구조(두 이미지가 같은 골격이다):
+               [상태·시각 고정]  [매장 / 대회명 / 등록정보]  [참가비 라벨 / 금액 / GTD]
+             오너가 지적한 네 가지를 이 골격이 한 번에 푼다:
+               ① 타이틀 잘림 — 제목이 로고와 금액 사이에 끼지 않고 **가운데 열을 통째로** 쓴다.
+               ② 메트릭 분산 — 시각은 왼쪽 끝, 금액은 오른쪽 끝에 **고정 열**이라 시선이 위아래로만 움직인다.
+                 (예전엔 시각이 가운데 중단, 금액이 우측 상단이라 지그재그였다.)
+               ③ 태그 그룹핑 — 운영 상태(예정·TOP)는 시각 열 위, 매장·지역은 한 줄, 룰·별점·거리는 마지막 줄.
+               ④ 클릭 영역 — 행 전체가 role="button" 하나다(종전과 같다).
+             ⚠ 매장 로고는 48px 타일 → **18px 인라인 아이콘**으로 줄여 매장명 앞에 붙인다.
+               레퍼런스가 그렇고, 그래야 가운데 열 폭이 대회명에게 돌아간다.
+               대신 매장 식별은 **로고 + 이름 + 지역**이 한 줄에 같이 있어 오히려 또렷하다.
+             ⚠ vt-poster(카드→상세 모핑)의 출발점이 이 로고다 — 크기가 줄어도 이름은 그대로 둔다.
+               이름을 빼면 모핑이 통째로 사라진다.
+             ⚠ 폭 계산(320px·글자 100%): 좌우 패딩 25.5 → 가용 294.5.
+               좌 46 + 우 74 + gap 12 = 132 → 가운데 162.5px 가 대회명 몫이다(종전 약 100px).
+             ⚠ 200% 확대: 가운데 열의 basis 를 rem 으로 둔다 — px 미디어쿼리는 글자 확대를 못 잡는다.
+               폭이 모자라면 가운데 열이 **스스로 아래로 내려가** 좌/우 열은 첫 줄에 남는다. */}
 
-      {/* ── ③ 참가비·상금 — §28 참가비·GTD 는 상품 가격 정보라 표시 유지.
-             `order-2` 로 **로고 바로 다음**에 둔다(DOM 순서는 로고→금액→내용). 화면에서는 flex 가
-             `ml-auto` 로 오른쪽 끝에 붙이고, 내용 블록이 `order-3` 으로 가운데를 차지한다.
-             이 순서여야 폭이 모자랄 때 **내용 블록만** 다음 줄로 내려가고 금액은 첫 줄에 남는다. */}
-      <div className="order-2 ml-auto shrink-0 pt-0.5 text-right min-[360px]:order-3 min-[360px]:ml-0">
-        <p className="text-2xs font-bold leading-tight text-ink-muted">참가비</p>
-        <p className="mt-0.5 text-sm font-extrabold tabular-nums leading-tight text-ink-primary min-[360px]:text-base">
-          {buyInText(schedule.buyIn?.amount)}
+      {/* ① 상태 · 시각 — 레퍼런스의 왼쪽 기준점 */}
+      {/* ⚠ 폭을 고정(w-42px)하면 상태 알약이 2px 넘치고(실측 320px: 42/44),
+           글자 200% 확대에서는 42 안에 87px 가 들어가 통째로 잘린다(실측 42/87).
+           → **최소 폭만** 주고 내용이 필요한 만큼 넓어지게 둔다. 확대되면 이 열이 넓어지고
+             가운데 열의 rem basis 가 스스로 줄을 내려 해결한다(그게 접근성 축이다). */}
+      <div className="order-1 min-w-[42px] shrink-0 min-[360px]:min-w-[52px]">
+        <StatusPill b={badge} />
+        <p className="mt-0.5 text-base font-extrabold tabular-nums leading-tight tracking-tight text-ink-primary min-[360px]:text-lg">
+          {d.time || '—'}
         </p>
-        {/* tabular-nums: 같은 열의 '1,000만 GTD'·'500만 GTD' 자릿수를 세로로 맞춘다. */}
-        <p className={`mt-1 break-keep text-2xs font-bold tabular-nums leading-tight ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
-          {sub ?? '—'}
-        </p>
+        <p className="text-2xs leading-tight text-ink-muted">시작</p>
       </div>
 
-      {/* ── ② 내용 — 게임 이름 / 시각·마감 / 매장·지역 / 유형 ─────────────────
-             `w-full` + `order-3` 이라 로고·금액 다음 줄을 통째로 쓴다… 가 아니라, 아래
-             `min-[360px]` 에서 `flex-1` 로 **가운데 열**이 된다. 359px 이하에서만 아래로 접힌다.
-             ⚠ basis 를 rem 으로 두는 이유는 종전과 같다 — 루트 글자 200% 확대(17→34px)에서
-               이 블록이 **스스로 줄을 내리는** 접근성 축이 여기 달려 있다(px 미디어쿼리는 못 잡는다). */}
-      <div className="order-3 w-full min-w-0 min-[360px]:order-2 min-[360px]:w-auto min-[360px]:flex-[1_1_6rem]">
-        {/* 게임 이름 — 목록은 최대 2줄, 전문은 상세에서. break-keep 은 한글을 어절 단위로 접는다. */}
-        <h3 className="flex items-start gap-1 text-[0.9375rem] font-bold leading-snug tracking-tight text-ink-primary min-[360px]:text-sm">
-          <StatusPill b={badge} />
-          <span className="line-clamp-2 break-keep [overflow-wrap:anywhere]">
-            {schedule.isPremium && <span className="mr-1 align-middle text-2xs font-extrabold text-accent-200">TOP</span>}
-            {schedule.title}
-          </span>
-        </h3>
-
-        {/* 시각 줄 — 오너 요청의 '게임 스타트 시간 + 레지 마감 시간'. 날짜는 레퍼런스와 같이 앞에 둔다.
-            시작 시각만 **굵게** — 목록을 훑을 때 가장 먼저 찾는 값이다.
-            남은 시간(24시간 이내)은 배지가 아니라 텍스트다(§20.2 시각 노이즈 감소). */}
-        <p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs leading-tight text-ink-secondary">
-          <span className="tabular-nums text-ink-muted">{d.monthDay}({d.dow})</span>
-          <span className="text-sm font-extrabold tabular-nums tracking-tight text-ink-primary">{d.time || '—'}</span>
-          <span className="text-ink-muted">시작</span>
-          {/* ⚠ 가운뎃점과 값을 **한 항목**으로 묶는다 — 따로 두면 '·' 가 독립 flex 항목이라
-              줄 끝에 홀로 남고 값이 혼자 다음 줄로 떨어진다(고아줄).
-              실측 2026-09-18(390·100%): 자식 48/42/22/3/72 가 컨테이너 166 에 4+1 로 접혔다. */}
-          {reg && <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap"><span aria-hidden className="text-ink-muted">·</span><span className="font-semibold tabular-nums">{reg}</span></span>}
-          {soon && <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap"><span aria-hidden className="text-ink-muted">·</span><span className="font-bold text-accent-200">{soon}</span></span>}
-        </p>
-
-        {/* 매장 · 지역 ♥ — 지역은 오너가 "가능하면" 이라 한 값이고 VenueLink 가 이미 함께 그린다. */}
-        <div className="mt-1 flex items-center gap-1">
+      {/* ② 가운데 — 매장 / 대회명 / 등록·유형 */}
+      <div className="order-2 min-w-0 flex-[1_1_7rem]">
+        <div className="flex min-w-0 items-center gap-1">
+          <PosterArea
+            posterUrl={venue?.imageUrl}
+            posterColor={venue?.themeColor ?? schedule.posterColor}
+            fallbackText={venueInitial(schedule.pubName)}
+            title={schedule.pubName}
+            className="h-[18px] w-[18px] shrink-0 rounded-[5px]"
+            thumbWidth={48}
+            priority={priority}
+            compact
+            vtName={vtActive ? 'vt-poster' : undefined}
+          />
+          {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
           <VenueLink
             pubName={schedule.pubName}
             region={schedule.region}
             sizeCls="text-[0.8125rem] min-[360px]:text-xs"
-            wrap
             onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
           />
           {onToggleFavorite && schedule.venueId && (
@@ -447,11 +450,19 @@ function ListCard({
           )}
         </div>
 
-        {/* 메타 — 유형·등급·게임종류 · 별점 · 거리 · 예약.
-            ⚠ 가로 스크롤에 넣지 않는다 — 예전에 등록 마감·유형이 **숨은 가로 스크롤** 안으로 사라져
-              유저가 그 정보가 없는 대회로 오해했다(§6-1). 줄바꿈으로 전부 보인다.
-            ⚠ '예약 N명'은 **사실**이다 — 정원·마감 데이터가 없으므로 '마감 임박'을 만들지 않는다. */}
-        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-tight text-ink-muted">
+        {/* 대회명 — 이제 가운데 열을 온전히 쓴다. 2줄까지 허용(레퍼런스는 1줄이지만 한글 제목이 더 길다). */}
+        {/* ⚠ TOP 배지를 제목 안에 두지 않는다 — 실측(320·100%) 그 배지가 **43px** 를 먹어
+            제목 칸이 그만큼 줄었다. 매장 줄은 여유가 있어 거기로 옮긴다. */}
+        <h3 className="mt-0.5 line-clamp-2 break-keep text-[0.9375rem] font-bold leading-snug tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-sm">
+          {schedule.title}
+        </h3>
+
+        {/* 등록 마감 · 유형 · 별점 · 거리 · 예약 — 레퍼런스의 'REG ~ Lv16' 줄에 해당한다.
+            ⚠ 가로 스크롤에 넣지 않는다 — 예전에 등록 마감이 숨은 스크롤 안으로 사라져
+              유저가 그 정보가 없는 대회로 오해했다(§6-1). */}
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs leading-tight text-ink-muted">
+          {reg && <span className="font-semibold tabular-nums text-ink-secondary">{reg}</span>}
+          {soon && <span className="font-bold text-accent-200">{soon}</span>}
           <span className="break-keep">{meta || '—'}</span>
           {rating && rating.count > 0 && (
             <span className="shrink-0 tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
@@ -462,7 +473,21 @@ function ListCard({
           {(reserveCount ?? 0) > 0 && <span className="shrink-0 tabular-nums">예약 {reserveCount}명</span>}
         </div>
       </div>
-    </article>
+
+      {/* ③ 참가비 · GTD — §28 상품 가격 정보라 표시를 유지한다.
+             ⚠ title 에 원 단위 금액을 남긴다 — 목록은 요약이고 정확한 가격은 상세가 보여 주지만,
+               T 가 무엇인지 모르는 첫 방문자를 위해 여기서도 확인할 수 있어야 한다. */}
+      <div className="order-3 w-[68px] shrink-0 text-right min-[360px]:w-[80px]">
+        <p className="text-[10px] font-bold uppercase leading-tight tracking-wide text-ink-muted">참가비</p>
+        <p className="text-base font-extrabold tabular-nums leading-tight text-ink-primary min-[360px]:text-lg"
+          title={schedule.buyIn?.amount ? `${schedule.buyIn.amount.toLocaleString()}원` : undefined}>
+          {buyInText(schedule.buyIn?.amount)}
+        </p>
+        <p className={`mt-0.5 break-keep text-2xs font-bold tabular-nums leading-tight ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
+          {sub ?? '—'}
+        </p>
+      </div>
+   </article>
   );
 }
 

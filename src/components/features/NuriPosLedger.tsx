@@ -1214,12 +1214,17 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         <div className="rounded-card border border-sky-500/40 bg-sky-500/[0.06] p-2.5 space-y-2">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="inline-flex items-center gap-1 text-2xs font-bold text-sky-300"><Icon name="hand" size={12} className="shrink-0" />손님 바인 요청 {pendingReqs.length}건</span>
+            {/* 게임별 건수·안내문은 sm 미만에서 **자기 줄**(basis-full·order-last)로 내린다 — 종전엔 [전체 승인](ml-auto)이
+                360px 에서 안내문 다음 셋째 줄에 혼자 남아 왼쪽 238px 이 비었다(2026-09-18 실측).
+                sm+ 는 contents 로 감싸개가 사라져 종전과 같은 한 줄이다. */}
+            <span className="order-last flex basis-full flex-wrap items-center gap-x-2 gap-y-0.5 sm:contents">
             {(() => {
               const cnt = pendingReqs.reduce((mm, r) => { const k = r.requestedGameSeq ?? 0; mm[k] = (mm[k] || 0) + 1; return mm; }, {} as Record<number, number>);
               const parts = Object.entries(cnt).sort((a, b) => Number(a[0]) - Number(b[0])).map(([k, n]) => `${Number(k) === 0 ? '미지정' : Number(k) === MAIN_GAME_SEQ ? '메인' : '사이드' + (Number(k) - 1)} ${n}`);
               return <span className="text-2xs font-semibold text-sky-300">{parts.join(' · ')}</span>;
             })()}
             <span className="text-2xs text-ink-muted">· 승인 시 각자 원한 게임에 추가(미지정은 현재 {gLabel(gameSeq)})</span>
+            </span>
             {pendingReqs.length > 1 && <button type="button" onClick={bulkApprove} className="ml-auto shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1.5 min-h-[2.25rem] text-2xs font-bold text-ink-inverse hover:bg-emerald-500">전체 승인</button>}
           </div>
           <ul className="space-y-1.5">

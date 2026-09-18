@@ -1154,7 +1154,13 @@ function PlatformStatsCard() {
   );
 }
 
-/** 💰 Supabase 무료 한도 사용률 — 70% 주의·90% 위험. 넘기 전에 최적화, 그래도 넘으면 요금제 상향 */
+/** 💰 Supabase 사용량 — 70% 주의·90% 위험. 넘기 전에 최적화, 그래도 넘으면 요금제 상향.
+ *  🔴 2026-09-18 오너: "pro 사용중인데 왜 무료라고 나와".
+ *    서버 RPC(free_plan_usage)는 **이미 Pro 기준**으로 계산하고 있었다 —
+ *    metric 문자열이 'DB 용량(MB · Pro 8GB)' · '스토리지(MB · Pro 100GB)' · 'MAU(30일 로그인 · Pro 10만)' 다.
+ *    틀린 것은 **이 카드의 제목과 각주**뿐이었다(무료 요금제 시절 문구가 남아 있었다).
+ *    ⚠ 함수 이름(free_plan_usage)도 옛 이름이라 헷갈린다 — 이름을 바꾸려면 마이그레이션이 필요해
+ *      지금은 화면 문구만 고치고 이 사실을 여기 적어 둔다. */
 function PlanUsageCard() {
   const [rows, setRows] = useState<PlanUsageRow[]>([]);
   useEffect(() => { getFreePlanUsage().then(setRows).catch(() => {}); }, []);
@@ -1163,7 +1169,7 @@ function PlanUsageCard() {
   return (
     <section className="rounded-aura border card-aura p-3">
       <header className="mb-2 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-xs font-bold text-ink-primary"><Icon name="banknote" size={14} className="shrink-0" />Supabase 무료 한도</span>
+        <span className="flex items-center gap-1.5 text-xs font-bold text-ink-primary"><Icon name="banknote" size={14} className="shrink-0" />Supabase 사용량</span>
         <span className={['text-2xs font-bold', worst >= 90 ? 'text-danger-light' : worst >= 70 ? 'text-amber-300' : 'text-emerald-400'].join(' ')}>
           {worst >= 90 ? '상향 검토' : worst >= 70 ? '최적화 필요' : '여유'}
         </span>
@@ -1185,7 +1191,8 @@ function PlanUsageCard() {
         ))}
       </ul>
       <p className="mt-2 text-2xs leading-relaxed text-ink-muted">
-        70% 도달 시 운영자 알림이 하루 1회 발송됩니다. Egress(월 5GB)·MAU 정확값은 Supabase 대시보드에서 확인하세요.
+        70% 도달 시 운영자 알림이 하루 1회 발송됩니다. 한도는 각 항목에 적힌 현재 요금제 기준이고,
+        Egress·MAU 의 정확한 과금 값은 Supabase 대시보드에서 확인하세요.
       </p>
     </section>
   );

@@ -206,7 +206,8 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
     expect(r.cards).toBeGreaterThan(0);
     expect(all, '참가비 55,000원이 반올림됐다').toContain('55,000원');
     expect(all, '참가비 1,234,567원이 반올림됐다').toContain('1,234,567원');
-    expect(all, '상금 보장 1,000만이 안 보인다(§28 가격 정보는 표시 유지)').toContain('상금 보장 1,000만');
+    // 라벨 '상금 보장' → 'GTD'(2026-09-18 오너). 금액 표시 유지라는 요지는 그대로.
+    expect(all, 'GTD 1,000만이 안 보인다(§28 가격 정보는 표시 유지)').toContain('GTD 1,000만');
     expect(all, '예약 12명은 정원 근거가 없다 — "마감 임박"으로 부풀리면 안 된다').not.toContain('마감 임박');
     expect(all, '예약 인원은 사실 그대로 표시한다').toContain('예약 12명');
     // 참가비 미입력(0)을 '무료'·'0원'으로 만들지 않는다

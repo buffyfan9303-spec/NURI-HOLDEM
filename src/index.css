@@ -1633,8 +1633,8 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
      360~639 는 CI 하네스 128.5 로 **그대로**(129 유지) — 시각 열(w-20)이 빠진 만큼 시각이 정보 줄로
      내려와 높이가 상쇄됐다. 라이브 실측도 130.7(전형)·149.8(제목 2줄).
      640+ 는 117 → **110**(CI 110.4 · 라이브 768/1440 모두 109.4~110.4). 종전 117 은 7px 과대였다. */
-:root { --card-h-list: 167px; }
-@media (min-width: 360px) { :root { --card-h-list: 129px; } }
+:root { --card-h-list: 107px; }   /* 실측 106 (2026-09-18 3열 행 · 320px) */
+@media (min-width: 360px) { :root { --card-h-list: 123px; } }  /* 실측 123.0 */
 
 /* 전체화면 장부의 정산바 경계 — 바는 position:fixed 라 뷰포트 기준인데, 전체화면 호스트가
    inset-0 이라 그 둘이 같다. 그래서 좌우만 장부 칸에 맞추면 정확히 겹친다.
@@ -1644,7 +1644,7 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
 @media (min-width: 768px) {
   [data-ledger-fullscreen] { --ledger-bar-right: calc(20rem + 1px + 0.75rem); }
 }
-@media (min-width: 640px) { :root { --card-h-list: 110px; } }  /* 실측 109.4~110.4 (2026-09-18 새 줄) */
+@media (min-width: 640px) { :root { --card-h-list: 123px; } }  /* 실측 123.0 — 3열 행은 폭이 넓어져도 줄 수가 같다 */
 /* ⚠ 위 --row-h-sm 과 같은 이유로 **cis 에서만** padding 을 뺀다 — `--card-h-list` 는
    `HomeTab.tsx` 의 스켈레톤 `min-h`(border 박스)와 공유하는 값이다.
    실측(2026-09-17 라이브): 실제 181.2 vs cis 추정 **203.3**(+22.1 = py-2.5 21.25).

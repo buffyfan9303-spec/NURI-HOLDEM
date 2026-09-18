@@ -208,9 +208,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
            — PosterCarousel.tsx:153 은 `[...posters, ...brands, ...dyn]` 이라 **앞에 붙을 뿐** 대체하지 않는다.
            오너가 이 문구를 믿으면 등록 후에도 브랜드 슬라이드가 남는 것을 '연동 실패' 로 읽는다. */
         <p className="py-4 text-center text-xs leading-relaxed text-ink-muted">
-          등록된 배너가 없습니다.<br />
-          지금 홈 캐러셀에는 <span className="text-ink-secondary">브랜드 슬라이드 3장과 예정 대회 포스터</span>가 돕니다 —
-          여기에 등록하면 그 <b className="text-ink-secondary">맨 앞에</b> 추가됩니다(브랜드 슬라이드는 그대로 남습니다).
+          등록된 배너가 없습니다. 여기에 등록하면 캐러셀 <b className="text-ink-secondary">맨 앞에</b> 추가됩니다.
         </p>
       ) : (
         <ul className="space-y-1.5">
@@ -249,7 +247,20 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
             );
           })}
         </ul>
-      )}
+      )}
+      {/* 🔴 2026-09-18 오너: "배너가 3개인데 왜 1개만 나와".
+          홈 캐러셀은 세 종류가 이어 붙는다(PosterCarousel.tsx:115 slides):
+            ① 여기서 관리하는 DB 배너   ② 이벤트 슬라이드(진행 중일 때 자동)   ③ 브랜드 슬라이드(코드 고정)
+          그런데 이 화면은 ①만 보여 주고, 나머지 설명은 **목록이 비었을 때만** 떴다.
+          그래서 배너를 하나 등록한 순간부터 "화면엔 3장인데 관리 화면엔 1개" 가 된다.
+          → 이제 **항상** 캐러셀 전체를 설명한다. 관리 화면이 화면의 일부만 설명하면 오너가 화면을 못 믿는다.
+          ⚠ ②③ 은 여기서 끄고 켤 수 없다(코드·이벤트 상태가 정한다). 그 사실을 숨기지 않고 적는다. */}
+      <p className="mt-2 rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs leading-relaxed text-ink-muted">
+        홈 캐러셀에는 여기서 관리하는 배너 <b className="text-ink-secondary tabular-nums">{list.length}장</b> 뒤에
+        <span className="text-ink-secondary">진행 중인 이벤트 슬라이드</span>(있을 때만)와
+        <span className="text-ink-secondary">브랜드 슬라이드 2장</span>(오늘의 NURI MIND · NURI HOLDEM)이 이어집니다.
+        뒤의 둘은 이 화면에서 끄고 켤 수 없습니다 — 화면에 보이는 장수가 여기 목록보다 많은 것은 그 때문입니다.
+      </p>
       <button type="button" onClick={purge} disabled={busy === 'purge'}
         className="btn-ghost w-full py-1.5 text-xs disabled:opacity-60">만료 후 7일 지난 배너 정리</button>
     </section>

@@ -41,9 +41,19 @@ describe('buyInText — 참가비는 "알 수 없음"과 "0/무료"를 구분한
     expect(buyInText(0)).toBe('—');
     expect(buyInText(undefined)).toBe('—');
   });
-  it('금액은 원 단위 전액 + 단위', () => {
-    expect(buyInText(55_000)).toBe('55,000원');
-    expect(buyInText(60_000)).toBe('60,000원');
+  // 🔴 2026-09-18 오너: "참가비 100,000 이거 빼 10T 이런식으로 변경". 1T = 1만원.
+  //   ⚠ 핵심은 **가격을 반올림하지 않는 것**이다 — §28 은 참가비를 상품 가격 정보로 본다.
+  //     T 로 정확히 떨어지는 금액만 T 로 적고, 나머지는 원 그대로 둔다.
+  it('T 로 정확히 표현되는 금액은 T 로 적는다', () => {
+    expect(buyInText(100_000)).toBe('10T');
+    expect(buyInText(60_000)).toBe('6T');
+    expect(buyInText(55_000)).toBe('5.5T');   // 0.1T = 1,000원까지는 정확하다
+    expect(buyInText(5_000)).toBe('0.5T');
+  });
+  it('🔴 T 로 깎이는 금액은 원 단위 전액을 그대로 적는다 — 가격을 바꿔 적지 않는다', () => {
+    // 123.5T 로 적으면 그건 1,234,567원이 아니다. 반올림은 가격 고지 위반이다.
+    expect(buyInText(1_234_567)).toBe('1,234,567원');
+    expect(buyInText(55_500)).toBe('55,500원');
   });
 });
 
@@ -57,8 +67,11 @@ describe('regCloseText — 쉬운 한국어 "등록 마감"', () => {
 });
 
 describe('prizeText — 상금 보장과 예상 상금의 의미를 섞지 않는다', () => {
-  it('GTD 는 "상금 보장", 엔트리 비례는 "예상 상금"', () => {
-    expect(prizeText({ ...base, guaranteed: true, prizePool: 10_000_000 })).toBe('상금 보장 1,000만');
+  // 2026-09-18 오너: "'상금 보장' 이라는 문구도 GTD로 변경".
+  //   ⚠ '예상 상금'은 **그대로 둔다** — GTD 는 '보장'이라는 뜻이라, 엔트리 비례 금액까지 GTD 로 적으면
+  //     보장되지 않은 금액을 보장처럼 말하게 된다. 두 말의 의미를 섞지 않는 것이 이 함수의 존재 이유다.
+  it('보장은 "GTD", 엔트리 비례는 "예상 상금" — 의미를 섞지 않는다', () => {
+    expect(prizeText({ ...base, guaranteed: true, prizePool: 10_000_000 })).toBe('GTD 1,000만');
     expect(prizeText({ ...base, guaranteed: false, prizePercent: 50 })).toBe('예상 상금 50%');
   });
   it('데이터가 없으면 null — 0 이나 확정값을 만들지 않는다', () => {

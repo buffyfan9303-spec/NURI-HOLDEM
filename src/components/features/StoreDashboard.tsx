@@ -714,7 +714,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           · 닫기 ✕ 는 액션 버튼들과 같은 줄에서 경쟁했다 — 성격이 다른 버튼이라 제목 줄 오른쪽으로 올린다.
           · order 로 순서만 바꿔 마크업은 하나로 둔다(버튼을 두 벌 그리지 않는다).
             모바일: 제목 ─ ✕ / 버튼 3개가 다음 줄을 꽉 채움(flex-1 로 등간격)
-            sm+   : 제목 ─ 버튼 3개 ─ ✕ 한 줄(종전과 동일) */}
+            sm+   : 제목 ─ 버튼 3개 ─ ✕ 한 줄(종전과 동일)
+          · 2026-09-18 오너 스크린샷: 모바일 첫 줄이 '운영 가이드 ……… ✕' 로 **38px 높이의 빈 줄**처럼 보였다
+            (설명 span 은 sm 미만에서 원래 안 그려지고, ✕ 의 h-9 상자가 첫 줄 높이를 정했다 — 실측 첫 줄 38.3px 중 라벨 17px).
+            ✕ 에 -my-2 로 세로 여백을 상쇄해 첫 줄을 라벨 캡션 높이로 접는다(히트 상자 38px 는 그대로,
+            카드 py-2 안에서만 겹친다). sm+ 는 한 줄이라 my-0 으로 되돌린다. */}
       {!guideHidden && (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
         <span className="order-1 flex min-w-0 flex-1 items-center gap-2 text-xs text-ink-secondary">
@@ -722,7 +726,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           <b className="text-ink-primary">운영 가이드</b><span className="hidden sm:inline">포스터→장부→클락→순위→정산 한눈에</span>
         </span>
         <button type="button" onClick={dismissGuide} aria-label="가이드 배너 닫기"
-          className="order-2 grid h-9 w-9 shrink-0 place-items-center rounded-input text-ink-muted transition-colors hover:bg-surface-float/60 hover:text-ink-primary sm:order-3">
+          className="order-2 -my-2 grid h-9 w-9 shrink-0 place-items-center rounded-input text-ink-muted transition-colors hover:bg-surface-float/60 hover:text-ink-primary sm:order-3 sm:my-0">
           <Icon name="close" size={14} strokeWidth={2.4} />
         </button>
         {/* min-h-9(36px): 종전 py-1 은 26px 라 손가락 표적이 작았다. sm+ 에서는 내용 폭 그대로. */}
@@ -1493,8 +1497,10 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           실패했으면 섹션을 남기고 이유·재시도를 보인다. 실패했는데 옛 행이 남아 있으면 개수는 '—'다. */}
       {caps.ledger && (todayGames.length > 0 || !!rangeErr) && (
         <section className="rounded-aura border card-aura p-3" aria-labelledby="today-games-h">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p id="today-games-h" className="flex items-center gap-1.5 text-sm font-bold text-ink-primary">
+          {/* 제목은 안 쪼개지고(shrink-0), 안내문(274px)은 폭이 모자라면 아랫줄로 내린다(flex-wrap).
+              종전엔 제목 p 가 안내문에 밀려 390px 에서 '오늘/게임/· 4개' 세 줄로 찢어졌다(2026-09-18 실측). */}
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <p id="today-games-h" className="flex shrink-0 items-center gap-1.5 text-sm font-bold text-ink-primary">
               <Icon name="layers" size={14} className="shrink-0 text-ink-muted" />오늘 게임
               <span className="text-2xs font-normal text-ink-muted">· {rangeErr ? '—' : `${todayGames.length}개`}</span>
             </p>
