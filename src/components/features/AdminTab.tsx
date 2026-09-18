@@ -34,6 +34,7 @@ import {
   MISSIONS, adminListCustomMissions, adminSaveCustomMission, adminDeleteCustomMission,
   type CustomMissionRow, type MissionGoalType,
 } from '../../lib/loyalty';
+import VenueEventAdminCard from './VenueEventAdminCard';
 import { isVoucherIssueApproved, setVoucherIssueApproval, adminListVoucherCreditRequests, adminDecideVoucherQuota, getVoucherQuota, adminGrantVoucherQuota, type AdminCreditRequest } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
@@ -1278,6 +1279,10 @@ export default function AdminTab({
                     <BoostContactCard />
                     <VenueOwnerRequestsCard />
                     <VoucherQuotaAdminCard />
+                    {/* 🔴 매장 이벤트 신청·제안 대기열(2026-09-18).
+                        업주 쪽 신청 화면(VenueEventRequestPanel)과 **같은 커밋**에 넣는다 —
+                        오늘 한도 증액에서 요청 화면만 만들어 막다른 길을 낸 실수를 반복하지 않는다. */}
+                    <VenueEventAdminCard />
                     <RankVerifyAdminCard />
                     <MissionsAdminCard />
                     <HallOfFameAdminCard />

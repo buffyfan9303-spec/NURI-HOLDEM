@@ -341,19 +341,27 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
   const levelMs = (lv?.minutes ?? 0) * 60_000;
   const progress = levelMs > 0 ? Math.min(100, Math.max(0, 100 - (remain / levelMs) * 100)) : 0;
 
-  // REG 배지 — APIS 는 '마감 레벨'을 말하고 우리는 '남은 분'을 말해 왔다. 둘 다 산다:
-  //   1시간 밖이면 구조적 사실(REG ~ Lv8), 1시간 안이면 행동 가능한 사실(REG 45분)로 자동 전환.
-  //   두 문자열의 폭이 비슷해 카드 폭이 흔들리지 않는다.
+  // 등록 마감 배지 — 1시간 밖이면 구조적 사실(레벨), 1시간 안이면 행동 가능한 사실(남은 분)로 자동 전환.
+  //
+  // 🔴 2026-09-18 오너 결정: 표기를 **일정 목록 쪽으로 통일**한다.
+  //   종전에는 라이브가 `REG ~ Lv12` · `REG 45분` · `CLOSED`, 일정 목록이 `등록 마감 14레벨` 이었다 —
+  //   **같은 대회의 같은 정보인데 화면마다 다른 말**이었고, 그게 오너가 반복해서 지적한 연동성 결함이다.
+  //   라이브 쪽 영문 표기는 2026-08-28 에 오너가 지정한 것이라 임의로 바꾸지 않고 결정을 받았다.
+  // ⚠ 'CLOSED' → '등록 마감' 으로 바뀌면서 **접두어 없는 상태 문구**가 됐다. 그래서 진행형('등록 마감 12레벨')과
+  //   완료형('등록 마감')이 같은 낱말로 시작하는데, 색(danger)과 문장 길이로 구분된다 —
+  //   색만으로 구분하지 않도록 완료형은 '등록 마감됨' 으로 적는다(색각 이상·흑백 인쇄).
+  // ⚠ 글자가 길어져 좁은 폭에서 카드가 흔들릴 수 있다 — 이 배지는 `whitespace-nowrap` 이 아니라
+  //   줄바꿈 가능한 자리에 있다(아래 렌더부). 폭 실측은 커밋 메시지에 남긴다.
   const regLevel = g.config?.regCloseLevel ?? 0;
   // regCloseLevel 0 = '설정 안 함'인데 msToRegClose 는 이를 0(이미 마감)으로 돌려준다 —
-  // 미설정 클락에 CLOSED 를 박으면 등록 가능한 대회를 마감으로 오인시킨다. 미설정은 배지 생략.
+  // 미설정 클락에 마감을 박으면 등록 가능한 대회를 마감으로 오인시킨다. 미설정은 배지 생략.
   const regMs = regLevel > 0 ? msToRegClose(g, eff.index, eff.remainingMs) : null;
   const regClosed = regMs === 0;
   const regUrgent = regMs !== null && regMs > 0 && regMs <= 5 * 60_000;
   const regText = regLevel <= 0 ? null
-    : regClosed ? 'CLOSED'
-      : regMs !== null && regMs < 60 * 60_000 ? `REG ${regMinLabel(regMs)}`
-        : `REG ~ Lv${regLevel}`;
+    : regClosed ? '등록 마감됨'
+      : regMs !== null && regMs < 60 * 60_000 ? `등록 마감 ${regMinLabel(regMs)}`
+        : `등록 마감 ${regLevel}레벨`;
 
   // 우측 열 — 시작시각·참가비·부가(§28: 참가비·GTD·이용권은 가격 정보라 표시 유지)
   const startTime = sched?.startTime || '';

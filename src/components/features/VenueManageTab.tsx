@@ -59,7 +59,7 @@ import { loadRankingsEffect } from '../../lib/rankingsLoad';
 //   'voucher' 를 **매장 설정 하위탭에서 '관리' 그룹의 최상위 섹션으로 승격**했다.
 //   하루에 몇 번씩 쓰는 기능이 설정 → 하위탭 2단계 뒤에 있으면 그게 곧 마찰이다.
 //   ⚠ 딥링크·구 알림은 그대로 산다 — DEEP_SECTION_ALIAS.voucher 가 이제 Section 'voucher' 를 가리킨다.
-type Section = 'dashboard' | 'game' | 'calendar' | 'stats' | 'staff' | 'attendance' | 'partners' | 'voucher' | 'settings';
+type Section = 'dashboard' | 'game' | 'calendar' | 'stats' | 'staff' | 'attendance' | 'partners' | 'voucher' | 'event' | 'settings';
 type GameStep = 'posters' | 'ledger' | 'clock' | 'ranking' | 'settle';
 type SettingsTab = 'page' | 'presets' | 'pos' | 'optools' | 'danger';
 /** keep-alive box()·visited 의 단위 — 섹션 / 게임 스텝 / 설정 하위탭 */
@@ -149,7 +149,7 @@ const NAV_GROUPS: readonly NavGroup[] = ['오늘', '분석', '관리'];
 const MYSTORE_ORDER: readonly string[] = [
   'dashboard',
   'game', 'posters', 'ledger', 'clock', 'ranking', 'settle',
-  'calendar', 'stats', 'staff', 'attendance', 'partners', 'voucher',
+  'calendar', 'stats', 'staff', 'attendance', 'partners', 'voucher', 'event',
   'settings', 'page', 'presets', 'pos', 'optools', 'danger',
 ];
 
@@ -186,6 +186,7 @@ const VenueRankHubM = memo(VenueRankHub);
 const PosSettingsPanelM = memo(PosSettingsPanel);
 const StaffSelfAttendanceM = memo(StaffSelfAttendance);
 const VenueMatchPanelM = memo(lazyWithReload(() => import('./VenueMatchPanel')));
+const VenueEventRequestPanelM = memo(lazyWithReload(() => import('./VenueEventRequestPanel')));
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 // PC 밀도 규약(오너 #5, 2026-08-30) — 내 매장 셸(사이드바·섹션 헤더·라이브 바·순위 입력·직원 허브)의
@@ -587,6 +588,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 🔴 2026-09-18 오너 승격: 이용권은 '매장 설정 > 이용권·QR' 이 아니라 **관리 그룹의 독립 탭**이다.
   //   조건은 종전 하위탭과 같다(canVoucher) — 발행매장이 아니면 영원히 안 열리는 '잠금'은 만들지 않는다.
   if (canVoucher) available.push({ id: 'voucher', label: '이용권 · QR', group: '관리' });
+  // 🔴 2026-09-18 오너: "내 매장에 이벤트 만드는 란을 만들어줘 ... 이벤트 제안도 넣어줘 전부다 내 매장 안에".
+  //   업주만(manageOk) — 신청은 매장을 대표하는 결정이고, 서버도 can_manage_pos 로 같은 선을 긋는다.
+  if (manageOk) available.push({ id: 'event', label: '이벤트 신청', group: '관리' });
   // IA3c: 프리셋·매장랭킹·매장꾸미기·POS 가 '매장 설정' 하위탭으로 통합
   if (staffOk) available.push({ id: 'settings', label: '매장 설정', group: '관리' });
   // IA3d: nav 노출용 목록 — 성숙도 미달 항목 비노출(운영자·전체보기·직원 계정은 게이팅 없음).
@@ -916,6 +920,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
                 {visited.includes('staff') && staffOk && box('staff', <StaffHub venueId={venueId} />)}
                 {visited.includes('partners') && manageOk && box('partners', <VenueMatchPanelM venueId={venueId} canConfigure={manageOk} />)}
+                {visited.includes('event') && manageOk && box('event', <VenueEventRequestPanelM venueId={venueId} />)}
                 {visited.includes('pos') && canSettingsTab('pos') && box('pos', <PosSettingsPanelM venueId={venueId} />)}
                 {visited.includes('voucher') && canVoucher && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
                 {/* §7 ⑥b: 운영 도구 5종 — GTO 탭에서 이관(레지스트리는 ToolsPanel 재사용) */}
@@ -945,6 +950,7 @@ const SECTION_DESC: Partial<Record<Section | GameStep | SettingsTab, string>> = 
   clock: '대회 타이머. 장부 연동 시 엔트리·생존이 자동 반영됩니다',
   attendance: '내 출퇴근 기록',
   voucher: '매장이용권 발행 · 사용 내역 · 잔여 한도 · 매장 QR(이용권·출석·가입) 인쇄',
+  event: '이용권을 걸고 여는 이벤트 신청 · 하고 싶은 이벤트 제안 — 승인되면 운영자가 7일 이내에 엽니다',
   page: '손님 화면 탭 순서 · 내 매장 링크 · 시즌 · 순위 보드 · 칭호 · 기준 점수 · 포인트',
   partners: '연합 대회를 함께 열 매장 — 게시·신청·수락',
   // ⚠ 설명은 '이 화면에 실제로 있는 것'만 적는다 — 결제수단·할인 프리셋은 장부(세션 설정)에 있고
@@ -960,6 +966,8 @@ const ic = (children: ReactNode) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
 );
 const SECTION_ICON: Record<Section | GameStep | SettingsTab, ReactNode> = {
+  // 이벤트 신청 — 반짝임(제안·기획). voucher(티켓)·partners(악수)와 한눈에 구분되는 형태여야 한다.
+  event: ic(<><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /><circle cx="12" cy="12" r="3.2" /></>),
   game: ic(<><polygon points="6 4 20 12 6 20 6 4" /></>),
   calendar: ic(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>),
   dashboard: ic(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></>),

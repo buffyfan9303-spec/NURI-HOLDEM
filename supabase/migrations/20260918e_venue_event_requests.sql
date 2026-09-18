@@ -23,8 +23,13 @@
 --   '검토 중'에서 영원히 멈추는 막다른 길을 만들었다(전수 점검이 잡았다). 같은 실수를 반복하지 않는다.
 --
 -- ══ 적용 상태 ═════════════════════════════════════════════════════════════════
--- ⏳ **아직 라이브에 적용하지 않았다.** 리허설은 13/13 통과했다(아래 "리허설 기록").
---    라이브 DB 변경은 오너 승인 사항이라 여기서 멈춘다.
+-- ✅ **2026-09-18 라이브 적용 완료** (오너 승인: "적용해"). MCP execute_sql 로 직접 적용.
+--    적용 직후 실측 12항목 — 전부 정상:
+--      표 1개 · 함수 4개 · RLS 켜짐 · **RLS 정책 0개**(RPC 전용이 실제로 지켜짐)
+--      anon 실행권 4개(request·decide·my목록·admin목록) **전부 막힘**
+--      authenticated 실행권 request 있음(정상) · search_path 고정 **4/4**
+--      생성된 행 0 · 테스트 매장 한도 0(불변) — 적용이 데이터를 만들지 않았다
+--    ⚠ 화면도 **같은 커밋**에 있다: 업주 VenueEventRequestPanel.tsx · 운영자 VenueEventAdminCard.tsx
 
 create table if not exists public.venue_event_requests (
   id            uuid primary key default gen_random_uuid(),
