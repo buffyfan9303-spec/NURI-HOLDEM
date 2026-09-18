@@ -104,13 +104,17 @@ type Slide = {
   event?: EventSlide;
 };
 
-export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, eventSlide = null }: {
+export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, eventSlide = null, showBrand = true }: {
   onBanner: (action: BannerAction) => void;
   /** 관리자 등록 배너(home_banners) 중 **지금 게재 중인 것**. 비어 있으면 브랜드 슬라이드만 돈다(폴백 없음). */
   banners?: HomeBanner[];
   onBannerUrl?: (url: string) => void;
   /** N06: 이벤트 진입 슬라이드 — 관리자 배너 뒤·브랜드 슬라이드 앞(§7.1-3: 관리자/광고 순서는 그대로). null 이면 없음. */
   eventSlide?: EventSlide | null;
+  /** 관리자 스위치(app_settings.home_slide_brand). false 면 브랜드 2장을 빼고 돈다.
+   *  🔴 2026-09-18 오너 요청 — 종전엔 코드 고정이라 노출관리에서 끌 수 없었다.
+   *  ⚠ 기본 true. 세 종류가 전부 꺼지면 슬라이드가 0장이고, 그때 이 컴포넌트는 **자리까지** 비운다(n===0 → null). */
+  showBrand?: boolean;
 }) {
   const slides = useMemo<Slide[]>(() => {
     // 관리자 배너가 앞에 선다 — 등록 순서(sort_order)·활성·기간 판정은 api/homeBanners 가 이미 걸렀다.
@@ -121,11 +125,11 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
       onClick: b.linkUrl ? () => onBannerUrl?.(b.linkUrl) : undefined,
     }));
     const events: Slide[] = eventSlide ? [{ key: 'ev:home', alt: eventSlide.alt, event: eventSlide, onClick: eventSlide.onClick }] : [];
-    const brands = BRAND_SLIDES.map((b): Slide => ({
+    const brands = showBrand ? BRAND_SLIDES.map((b): Slide => ({
       key: `b:${b.key}`, alt: b.alt, brand: b, onClick: () => onBanner(b.action),
-    }));
+    })) : [];
     return [...posters, ...events, ...brands];
-  }, [onBanner, banners, onBannerUrl, eventSlide]);
+  }, [onBanner, banners, onBannerUrl, eventSlide, showBrand]);
 
   const n = slides.length;
   const multi = n > 1;

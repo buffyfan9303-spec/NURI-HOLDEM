@@ -5,7 +5,7 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { mustAffect } from './_mustAffect';
 import { kstToday } from '../lib/kst';
-import { getAppSetting } from './settings';
+import { getAppSetting, HOME_SLIDE_EVENT_KEY, HOME_SLIDE_BRAND_KEY, parseSlideOn } from './settings';
 
 /** app_settings 킬스위치 — 'off' 면 코드에 박힌 기본 배너(PosterCarousel POSTER_SLIDES)를 **어느 역할에게도** 띄우지 않는다.
  *  왜 스위치인가: 20260904g 이후 비관리자에게는 RLS 가 '게재 중인 행'만 돌려주므로, 클라이언트는
@@ -61,26 +61,44 @@ export interface HomeBannerFeed {
    *  기본 배너가 되살아났다(관리자 화면은 빈 캐러셀 — 서로 다른 화면). 지금은
    *  게재 중인 배너가 있거나, 킬스위치(HOME_BANNER_FALLBACK_KEY='off')가 켜져 있으면 true. */
   configured: boolean;
+  /** 이벤트 슬라이드를 캐러셀에 넣을지(관리자 스위치, 기본 켜기) */
+  showEvent: boolean;
+  /** 브랜드 슬라이드 2장을 캐러셀에 넣을지(관리자 스위치, 기본 켜기) */
+  showBrand: boolean;
 }
 
 /** 조회 결과 → 노출 목록·폴백 판정. 순수 함수(테스트는 여기만 본다). */
-export function homeBannerFeed(rows: HomeBanner[], t: string, fallbackOff: boolean): HomeBannerFeed {
+export function homeBannerFeed(
+  rows: HomeBanner[], t: string, fallbackOff: boolean,
+  slides: { showEvent?: boolean; showBrand?: boolean } = {},
+): HomeBannerFeed {
   const banners = rows.filter((b) =>
     b.active && b.imageUrl.trim()
     && (!b.startsAt || b.startsAt <= t)
     && (!b.endsAt || b.endsAt >= t));
-  return { banners, configured: banners.length > 0 || fallbackOff };
+  return {
+    banners,
+    configured: banners.length > 0 || fallbackOff,
+    // ⚠ 기본 true — 인자를 빼고 부르는 곳(테스트·목)이 슬라이드를 잃지 않게 한다.
+    showEvent: slides.showEvent ?? true,
+    showBrand: slides.showBrand ?? true,
+  };
 }
 
 export async function getActiveHomeBanners(): Promise<HomeBannerFeed> {
-  if (IS_MOCK) return { banners: [], configured: false };
-  const [{ data, error }, fallback] = await Promise.all([
+  if (IS_MOCK) return { banners: [], configured: false, showEvent: true, showBrand: true };
+  const [{ data, error }, fallback, slideEvent, slideBrand] = await Promise.all([
     supabase.from('home_banners').select('*').order('sort_order').order('created_at'),
     // 스위치 조회 실패는 '스위치 없음'과 같게 — 배너 조회만이 이 함수의 성패다.
     getAppSetting(HOME_BANNER_FALLBACK_KEY).catch(() => null),
+    getAppSetting(HOME_SLIDE_EVENT_KEY).catch(() => null),
+    getAppSetting(HOME_SLIDE_BRAND_KEY).catch(() => null),
   ]);
   if (error) throw error;   // 조회 실패를 '등록 전'으로 오인해 기본 배너를 띄우지 않는다
-  return homeBannerFeed((data ?? []).map(rowToBanner), today(), fallback === 'off');
+  return homeBannerFeed((data ?? []).map(rowToBanner), today(), fallback === 'off', {
+    showEvent: parseSlideOn(slideEvent),
+    showBrand: parseSlideOn(slideBrand),
+  });
 }
 
 /** 관리자: 전체 목록(꺼진 것·만료된 것 포함).

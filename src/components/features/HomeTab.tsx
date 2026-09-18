@@ -150,7 +150,7 @@ const Nums = ({ text }: { text: string }) => (
 
 export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
-  onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], onInternalLink,
+  onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], showEventSlide = true, showBrandSlides = true, onInternalLink,
   visitedVenues = [], myTodayRes = [], venueById, onOpenVoucher,
 }: {
   /** 매장 대표 이미지·테마색 조회용 — 목록 줄 왼쪽 **매장 로고** 자리가 쓴다(2026-09-18).
@@ -174,6 +174,9 @@ export default function HomeTab({
   onTools: () => void;
   /** 관리자 등록 홈 배너(home_banners) 중 지금 게재 중인 것 — 비면 고정 포스터 자리가 없다(하드코딩 폴백 제거, 2026-09-10) */
   banners?: HomeBanner[];
+  /** 노출관리 스위치 — 캐러셀의 이벤트 슬라이드/브랜드 슬라이드. 기본은 둘 다 켜기. */
+  showEventSlide?: boolean;
+  showBrandSlides?: boolean;
   regInfoBySchedule: ReadonlyMap<string, RegInfo>;
   onSelect: (s: Schedule) => void;
   onVenue: (venueId: string) => void;
@@ -299,6 +302,9 @@ export default function HomeTab({
   //   EventSlide.onClick 의 타입이 `() => void` 라 **tsc 가 조용히 통과시켰다**(퀴액션 버튼은 잡혔다).
   //   e2e 8건이 이것 하나로 빨개졌다(2026-09-18).
   const eventSlide = useMemo<EventSlide | null>(() => {
+    // 관리자 스위치(app_settings.home_slide_event)로 끈 경우 — 캐러셀에서만 빼고 이벤트 기능 자체는 그대로다.
+    // ⚠ 퀵액션 '제휴 혜택' 칸은 이 스위치와 무관하다(진입 경로를 통째로 잠그는 것은 event_menu_visible 쪽이다).
+    if (!showEventSlide) return null;
     // ⚠ '이벤트 링크가 있으면' 이 아니라 '**같은 캠페인**으로 가면' 이다 — 판정 근거는 bannerCoversEvent 주석.
     if (bannerCoversEvent(banners.map((b) => b.linkUrl), event?.slug, eventShown === 'pending')) return null;
     if (eventShown === 'pending') return { title: '이벤트', sub: '불러오는 중…', alt: '이벤트 — 불러오는 중', testId: 'home-event-menu', live: false, pending: true, onClick: () => onEvent() };
@@ -312,7 +318,7 @@ export default function HomeTab({
     }
     const sub = eventMenuSubtitle(eventLoaded, eventFailed, event, eventState);
     return { title: '매장 이벤트', sub, alt: `매장 이벤트 · ${sub}`, testId: 'home-event-menu', live: false, onClick: () => onEvent() };
-  }, [banners, eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
+  }, [showEventSlide, banners, eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
 
   /** 퀵액션 '제휴 혜택' 칸의 설명 한 줄 — 배지를 뺀 자리에 **사실**을 놓는다.
    *  진행 중이면 참여권 상태, 그 밖이면 eventMenuSubtitle(응답 전·실패·소진·시작 전·종료를 구분해 말한다).
@@ -395,6 +401,7 @@ export default function HomeTab({
             <PosterCarousel
               banners={banners}
               eventSlide={eventSlide}
+              showBrand={showBrandSlides}
               onBannerUrl={(url) => {
                 // 관리자가 넣은 링크. 외부는 새 탭(noopener — opener 를 통한 탭내빙 차단),
                 // 내부 경로는 같은 탭. javascript: 같은 스킴은 애초에 열지 않는다.

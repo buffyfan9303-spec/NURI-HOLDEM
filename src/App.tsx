@@ -1948,7 +1948,7 @@ export default function App() {
   const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); setNoticesErr(null); writeSnap('notices', v); setNoticesLoaded(true); }).catch((e: unknown) => setNoticesErr(e)); }, []);
   // 홈 상단 배너(home_banners) — 관리자가 등록한 것만. 비면 PosterCarousel 이 기존 하드코딩으로 폴백한다.
   // 스냅샷 캐시를 쓰는 이유: 첫 화면 최상단이라 늦게 도착하면 캐러셀이 통째로 밀린다(CLS).
-  const [homeBanners, setHomeBanners] = useState<HomeBannerFeed>(() => readSnap<HomeBannerFeed>('home-banners') ?? { banners: [], configured: false });
+  const [homeBanners, setHomeBanners] = useState<HomeBannerFeed>(() => readSnap<HomeBannerFeed>('home-banners') ?? { banners: [], configured: false, showEvent: true, showBrand: true });
   const reloadHomeBanners = useCallback(() => {
     getActiveHomeBanners().then((v) => { setHomeBanners(v); writeSnap('home-banners', v); }).catch(() => {});
   }, []);
@@ -3608,6 +3608,8 @@ export default function App() {
             myTodayRes={myTodayRes}
             onTools={() => changeTab('tools')}
             banners={homeBanners.banners}
+            showEventSlide={homeBanners.showEvent !== false}
+            showBrandSlides={homeBanners.showBrand !== false}
             onSelect={handleScheduleSelect}
             onVenue={handleVenueClick}
             onExplore={() => changeTab('browse')}

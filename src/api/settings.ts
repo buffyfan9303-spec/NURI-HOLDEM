@@ -72,6 +72,17 @@ export async function loadEventMenuVisibility(): Promise<{ visible: boolean; err
   }
 }
 
+// ── 홈 캐러셀 슬라이드 스위치 ───────────────────────────────────────────────
+// 🔴 2026-09-18 오너: "뒤의 둘은 여기서 끌 수 없습니다 — 이것도 끌 수 있게 만들어줘".
+//   캐러셀은 ①DB 배너 ②이벤트 슬라이드 ③브랜드 슬라이드 2장이 이어 붙는다. ①만 관리 가능했다.
+//   새 표를 만들지 않고 app_settings 를 쓴다 — 읽기 공개·쓰기 운영자(set_app_setting)가 이미 있다.
+// ⚠ 기본은 **켜기**다. 조회 실패·미설정을 '꺼짐'으로 읽으면 네트워크가 한 번 흔들릴 때
+//   홈 배너가 통째로 사라진다(home_banner_fallback 이 같은 이유로 'off' 일 때만 동작한다).
+export const HOME_SLIDE_EVENT_KEY = 'home_slide_event';
+export const HOME_SLIDE_BRAND_KEY = 'home_slide_brand';
+/** 저장값 → 노출 여부. **'off' 일 때만 끈다.** */
+export const parseSlideOn = (v: string | null | undefined): boolean => v !== 'off';
+
 // 게시판 광고 빈도 — '글 N개마다 광고 1줄'(기본 4, 2~10). 관리자 → 노출 관리 → 광고
 export const COMMUNITY_ADS_EVERY_KEY = 'community_ads_every';
 export const COMMUNITY_ADS_EVERY_DEFAULT = 4;

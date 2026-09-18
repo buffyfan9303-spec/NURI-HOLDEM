@@ -17,6 +17,10 @@ import {
   getAllHomeBanners, saveHomeBanner, deleteHomeBanner, reorderHomeBanners,
   purgeExpiredHomeBanners, type HomeBanner,
 } from '../../api/homeBanners';
+import {
+  getAppSetting, setAppSetting, parseSlideOn,
+  HOME_SLIDE_EVENT_KEY, HOME_SLIDE_BRAND_KEY,
+} from '../../api/settings';
 
 const EMPTY: Omit<HomeBanner, 'id'> = {
   title: '', subtitle: '', imageUrl: '', linkUrl: '', sortOrder: 999,
@@ -248,21 +252,94 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
           })}
         </ul>
       )}
-      {/* 🔴 2026-09-18 오너: "배너가 3개인데 왜 1개만 나와".
-          홈 캐러셀은 세 종류가 이어 붙는다(PosterCarousel.tsx:115 slides):
-            ① 여기서 관리하는 DB 배너   ② 이벤트 슬라이드(진행 중일 때 자동)   ③ 브랜드 슬라이드(코드 고정)
-          그런데 이 화면은 ①만 보여 주고, 나머지 설명은 **목록이 비었을 때만** 떴다.
-          그래서 배너를 하나 등록한 순간부터 "화면엔 3장인데 관리 화면엔 1개" 가 된다.
-          → 이제 **항상** 캐러셀 전체를 설명한다. 관리 화면이 화면의 일부만 설명하면 오너가 화면을 못 믿는다.
-          ⚠ ②③ 은 여기서 끄고 켤 수 없다(코드·이벤트 상태가 정한다). 그 사실을 숨기지 않고 적는다. */}
-      <p className="mt-2 rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs leading-relaxed text-ink-muted">
-        홈 캐러셀에는 여기서 관리하는 배너 <b className="text-ink-secondary tabular-nums">{list.length}장</b> 뒤에
-        <span className="text-ink-secondary">진행 중인 이벤트 슬라이드</span>(있을 때만)와
-        <span className="text-ink-secondary">브랜드 슬라이드 2장</span>(오늘의 NURI MIND · NURI HOLDEM)이 이어집니다.
-        뒤의 둘은 이 화면에서 끄고 켤 수 없습니다 — 화면에 보이는 장수가 여기 목록보다 많은 것은 그 때문입니다.
+      {/* 🔴 2026-09-18 오너 2건이 여기서 만난다.
+          ① "배너가 3개인데 왜 1개만 나와" — 홈 캐러셀은 세 종류가 이어 붙는데(PosterCarousel slides)
+             이 화면은 DB 배너만 보여 주고 나머지 설명은 목록이 비었을 때만 떴다.
+          ② "이것도 끌 수 있게 만들어줘" — 그래서 이제 **설명이 아니라 스위치**다.
+          ⚠ 스위치는 캐러셀 노출만 끊는다. 이벤트 기능 자체를 잠그는 것은 관리자설정의
+             '이벤트 메뉴 표시'(event_menu_visible) 쪽이다 — 셋을 헷갈리지 말 것(settings.ts §8-2). */}
+      <p className="mt-3 flex items-center gap-1.5 text-xs font-bold text-ink-primary">
+        <Icon name="layers" size={14} className="shrink-0 text-ink-muted" />홈 캐러셀 구성
       </p>
+      <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">
+        손님 홈에는 여기서 관리하는 배너 <b className="text-ink-secondary tabular-nums">{list.length}장</b>이 먼저 돌고,
+        그 뒤에 아래 두 장이 이어집니다. 화면에 보이는 장수가 위 목록보다 많은 것은 그 때문입니다.
+      </p>
+      <div className="mt-1.5 space-y-1.5">
+        <SlideSwitch settingKey={HOME_SLIDE_EVENT_KEY} label="이벤트 슬라이드" onChanged={onChanged}
+          desc="진행 중인 매장 이벤트로 가는 한 장. 진행 중인 이벤트가 없으면 켜 두어도 안내 문구만 뜹니다." />
+        <SlideSwitch settingKey={HOME_SLIDE_BRAND_KEY} label="브랜드 슬라이드 2장" onChanged={onChanged}
+          desc="오늘의 NURI MIND · NURI HOLDEM. 끄면 등록한 배너와 이벤트 슬라이드만 돕니다." />
+      </div>
       <button type="button" onClick={purge} disabled={busy === 'purge'}
         className="btn-ghost w-full py-1.5 text-xs disabled:opacity-60">만료 후 7일 지난 배너 정리</button>
     </section>
+  );
+}
+
+/**
+ * 캐러셀 슬라이드 하나를 켜고 끈다(app_settings).
+ *
+ * 🔴 2026-09-18 오너: "뒤의 둘은 여기서 끌 수 없습니다 — 이것도 끌 수 있게 만들어줘".
+ * ⚠ 저장했다고 믿지 않고 **되읽는다** — set_app_setting 은 관리자가 아니면 거절하는데,
+ *   그 거절을 낙관적 UI 로 덮으면 '껐다 켰다' 가 이 화면에서만 일어나고 홈은 그대로다
+ *   (SystemSwitchesCard 가 같은 이유로 같은 절차를 쓴다).
+ * ⚠ 기본은 켜기다. 못 읽었을 때(loadErr) 스위치는 **켜짐으로 두고** 조작만 막는다 —
+ *   조회 실패를 '꺼짐'으로 그리면 오너가 '누가 껐지?' 로 읽는다.
+ */
+function SlideSwitch({ settingKey, label, desc, onChanged }: {
+  settingKey: string; label: string; desc: string; onChanged?: () => void;
+}) {
+  const toast = useToast();
+  const [server, setServer] = useState<string | null | undefined>(undefined);
+  const [loadErr, setLoadErr] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    setLoadErr(null);
+    setServer(undefined);
+    getAppSetting(settingKey).then(setServer).catch(setLoadErr);
+  }, [settingKey]);
+  useEffect(() => { load(); }, [load]);
+
+  const on = parseSlideOn(server);
+  const known = server !== undefined;
+
+  const apply = async () => {
+    const next = !on;
+    setBusy(true);
+    try {
+      await setAppSetting(settingKey, next ? 'on' : 'off');
+      setServer(await getAppSetting(settingKey));
+      onChanged?.();   // 홈 배너 피드를 다시 불러 화면이 바로 따라오게 한다
+      toast.show(next ? `${label} 노출을 켰습니다` : `${label} 노출을 껐습니다`, 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '변경하지 못했습니다', 'error');
+      load();
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="flex items-start gap-2.5 rounded-input border border-border-subtle bg-surface-high/40 p-2">
+      <button
+        type="button" role="switch" aria-checked={on} aria-label={label}
+        disabled={busy || !known || loadErr != null} onClick={apply}
+        data-testid={`slide-switch-${settingKey}`}
+        className={[
+          'relative mt-0.5 inline-flex h-[24px] w-[44px] shrink-0 items-center rounded-full transition-colors disabled:opacity-50',
+          on ? 'bg-emerald-500' : 'bg-surface-high border border-border-default',
+        ].join(' ')}>
+        <span className={['inline-block h-[18px] w-[18px] rounded-full bg-white transition-transform', on ? 'translate-x-[23px]' : 'translate-x-[3px]'].join(' ')} />
+      </button>
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-ink-primary">
+          {label}
+          <span className={`ml-1.5 text-2xs font-bold ${known && !loadErr ? (on ? 'text-emerald-300' : 'text-ink-muted') : 'text-ink-muted'}`}>
+            {loadErr != null ? '상태 확인 실패' : !known ? '불러오는 중…' : on ? '노출 중' : '숨김'}
+          </span>
+        </p>
+        <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">{desc}</p>
+      </div>
+    </div>
   );
 }
