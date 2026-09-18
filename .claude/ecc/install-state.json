@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "ecc.install.v1",
+  "installedAt": "2026-09-17T23:45:47.501Z",
+  "target": {
+    "id": "claude-project",
+    "target": "claude-project",
+    "kind": "project",
+    "root": "C:\\Users\\buffy\\OneDrive\\바탕 화면\\누리홀덤\\.claude",
+    "installStatePath": "C:\\Users\\buffy\\OneDrive\\바탕 화면\\누리홀덤\\.claude\\ecc\\install-state.json"
+  },
+  "request": {
+    "profile": null,
+    "modules": [],
+    "includeComponents": [
+      "skill:browser-qa",
+      "skill:click-path-audit",
+      "skill:frontend-a11y"
+    ],
+    "excludeComponents": [],
+    "legacyLanguages": [],
+    "legacyMode": false,
+    "hookConsent": null
+  },
+  "resolution": {
+    "selectedModules": [
+      "skill-browser-qa",
+      "skill-click-path-audit",
+      "skill-frontend-a11y"
+    ],
+    "skippedModules": []
+  },
+  "source": {
+    "repoVersion": "2.2.1",
+    "repoCommit": null,
+    "manifestVersion": 1
+  },
+  "operations": [
+    {
+      "kind": "copy-file",
+      "moduleId": "skill-browser-qa",
+      "sourcePath": "C:\\Users\\buffy\\AppData\\Local\\npm-cache\\_npx\\1364667e9cc171a1\\node_modules\\ecc-universal\\skills\\browser-qa\\SKILL.md",
+      "sourceRelativePath": "skills\\browser-qa\\SKILL.md",
+      "destinationPath": "C:\\Users\\buffy\\OneDrive\\바탕 화면\\누리홀덤\\.claude\\skills\\browser-qa\\SKILL.md",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "c501257d2c9ca711342b56d7adfb04897f17c6946dc6cdb88a5c75c87e4aa951"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "skill-click-path-audit",
+      "sourcePath": "C:\\Users\\buffy\\AppData\\Local\\npm-cache\\_npx\\1364667e9cc171a1\\node_modules\\ecc-universal\\skills\\click-path-audit\\SKILL.md",
+      "sourceRelativePath": "skills\\click-path-audit\\SKILL.md",
+      "destinationPath": "C:\\Users\\buffy\\OneDrive\\바탕 화면\\누리홀덤\\.claude\\skills\\click-path-audit\\SKILL.md",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "662fc5d02483bcd8ff799d6d3109a38da673182341cfc14445e9076fcd920162"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "skill-frontend-a11y",
+      "sourcePath": "C:\\Users\\buffy\\AppData\\Local\\npm-cache\\_npx\\1364667e9cc171a1\\node_modules\\ecc-universal\\skills\\frontend-a11y\\SKILL.md",
+      "sourceRelativePath": "skills\\frontend-a11y\\SKILL.md",
+      "destinationPath": "C:\\Users\\buffy\\OneDrive\\바탕 화면\\누리홀덤\\.claude\\skills\\frontend-a11y\\SKILL.md",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "62afdfd4e616ed21bf9037d47f771f3504d21838c898b9e9de8ac0da9b0bf3f7"
+    }
+  ]
+}

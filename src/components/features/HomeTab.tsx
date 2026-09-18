@@ -29,8 +29,7 @@ import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import PosterCarousel, { type EventSlide } from './PosterCarousel';
 import type { HomeBanner } from '../../api/homeBanners';
-import ScheduleCard, { buyInText } from './ScheduleCard';
-import { thumbUrl } from '../../lib/imageUrl';
+import ScheduleCard from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { RegInfo } from '../../lib/regStatus';
 import { compareByStartThenBoost } from '../../lib/scheduleSort';
@@ -44,8 +43,8 @@ import type { EventBoard } from '../../api/events';
 // slug 판정만 담은 순수 모듈(런타임 의존 0) — 중복 제거가 **어느 캠페인인지** 보게 하려고 여기서만 정적으로 받는다.
 import { bannerCoversEvent } from '../../lib/eventSlug';
 import { readSnap, writeSnap } from '../../lib/snapshot';
-// 추천 레일의 순서·근거 한 줄(순수 함수). 왜 이 근거인지는 lib/homeRail.ts 머리말.
-import { buildLiveFactMap, rankRail, railFact, todayLine } from '../../lib/homeRail';
+// 상단 '오늘 안내' 한 줄(순수 함수). 왜 이 문장인지는 lib/homeRail.ts 머리말.
+import { todayLine } from '../../lib/homeRail';
 import type { ClockState } from '../../api/clock';
 import type { VisitedVenue } from '../../api/vouchers';
 import type { MyReservationRow } from '../../api/reservations';
@@ -55,8 +54,6 @@ const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 /** 목록에 실제로 그리는 '지금 등록 가능' 줄 수(§6-1: 3~5개). 스켈레톤 예약도 같은 값을 쓴다. */
 const OPEN_NOW_ROWS = 5;
-/** 추천 레일 장수 — 모바일은 가로 스크롤, PC 는 4~6장이 한눈에 들어온다(§6-4). */
-const RAIL_MAX = 8;
 
 const UPCOMING_SEEN = 'nuri:upcoming-seen';
 /** 지난 방문에 '오늘·내일 일정'이 **몇 줄**이었나(1~8). 스켈레톤을 4행 고정으로 그리면 실제가 8행일 때
@@ -64,14 +61,6 @@ const UPCOMING_SEEN = 'nuri:upcoming-seen';
  *  '툭'의 최대 단일 원인으로 지목). 첫 방문 기본값은 종전과 같은 4. openNow 와 같은 조리법이다. */
 // 조리법은 `src/lib/seenCount.ts` 한 곳에 있다 — 일정 탐색도 같은 함수를 쓴다(2026-09-17 통합).
 const upcomingSeenCount = () => readSeenCount(UPCOMING_SEEN, { fallback: 4, min: 1, max: 8 });
-const RAIL_SEEN = 'nuri:rail-seen';
-/** 지난 방문에 '추천 대회' 레일이 **몇 장**이었나(0~6). 레일은 `rail.length > 0` 일 때만 그려서
- *  로딩 중 자리가 **0** 이었다 — 실측(2026-09-17): 스켈레톤 0 vs 실제 274.8px 로, 데이터가 오면
- *  아래 섹션이 통째로 밀렸다(홈 CLS 0.32 의 큰 몫). 저장값 '0' 은 '지난번엔 없었다'는 뜻이라 그대로 0. */
-const railSeenCount = () => {
-  try { if (localStorage.getItem(RAIL_SEEN) === '0') return 0; } catch { return 0; }
-  return readSeenCount(RAIL_SEEN, { fallback: 0, min: 1, max: 6 });
-};
 const OPENNOW_SEEN = 'nuri:opennow-seen';
 /** 지난 방문에 '지금 등록 가능'이 **몇 줄**이었나(0~5). 예전엔 '1'/'0' 만 저장해 한 줄만 예약했고,
  *  실제로 서너 줄이 오면 그 차이만큼 아래가 통째로 밀렸다. 옛 값('1')도 한 줄로 읽어 하위호환. */
@@ -139,16 +128,6 @@ function eventMenuSubtitle(loaded: boolean, failed: boolean, b: EventBoard | nul
   return b.title;
 }
 
-/** 추천 카드·레일의 상태 칩 — ScheduleCard 의 statusBadge 와 **같은 라벨·같은 색 계약**이다.
- *  ⚠ 그쪽은 export 되어 있지 않다(매장 팀 편집 직후라 열지 않았다). 문구가 갈리면 안 되므로
- *     '등록 가능 / 진행 중 / 예정' 세 갈래만 그대로 복제했고, 근거 없는 '마감 임박' 류는 없다.
- *     정본 하나로 합치려면 ScheduleCard 에서 statusBadge·StatusPill 을 export 하면 된다(후속). */
-function railBadge(s: Schedule, reg: RegInfo | undefined): { text: string; cls: string } {
-  const open = (reg?.msLeft ?? 0) > 0;
-  if (open) return { text: '등록 가능', cls: 'bg-emerald-700 text-white' };
-  if (scheduleStatus(s.date, s.startTime) === 'live') return { text: '진행 중', cls: 'bg-danger-dark text-white' };
-  return { text: '예정', cls: 'bg-surface-high text-ink-secondary' };
-}
 
 /** 섹션 제목·'더 보기' 버튼·진입 줄은 홈에서 3~4번 반복된다 — 문자열을 한 벌로 둔다
  *  (읽기에도 좋고, 번들에서 같은 리터럴이 여러 벌 실리지 않는다). §5 역할표: 섹션 제목 18/26(PC 20/28). */
@@ -167,15 +146,11 @@ const Nums = ({ text }: { text: string }) => (
   <>{text.split(/(\d+)/).map((t, i) => (i % 2 ? <span key={i} className="tabular-nums text-accent-300">{t}</span> : t))}</>
 );
 
-const dayLabel = (date: string) => {
-  const d = new Date(`${date}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? date : `${d.getMonth() + 1}/${d.getDate()}(${DAYS_KO[d.getDay()]})`;
-};
 
 export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
   onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], onInternalLink,
-  liveClocks = [], visitedVenues = [], myTodayRes = [], venueById, onOpenVoucher,
+  visitedVenues = [], myTodayRes = [], venueById, onOpenVoucher,
 }: {
   /** 매장 대표 이미지·테마색 조회용 — 목록 줄 왼쪽 **매장 로고** 자리가 쓴다(2026-09-18).
    *  App 이 이미 들고 있는 `venueById` 를 그대로 받는다(새 조회 0). 없으면 이니셜만 보인다. */
@@ -244,26 +219,18 @@ export default function HomeTab({
     [schedules, today],
   );
 
-  // 추천 대회 — 오늘 이후의 승인된 대회를 부스트 → 시작 순으로. **0개면 레일 자체를 그리지 않는다**
-  // (§6-3: 추천 0개면 레일을 생략하고 다음 실제 콘텐츠를 앞당긴다).
-  // 같은 포스터의 연속 회차(기간제 게임)는 첫 회차 1장만 — 레일에 동일 카드 도배 방지.
-  // 순서: 부스트 → 내 예약 → 가 본 매장 → 지금 뛰는 판 → 시작 순(lib/homeRail). 근거는 카드 한 줄로 말한다.
-  // ⚠ regNow 는 여기 안 받는다 — 레벨 번호는 30초 틱으로 깎을 값이 아니고(레벨은 분 단위), 클락 재조회가 갱신한다.
-  const railCtx = useMemo(() => ({
-    today,
-    visitsByVenue: new Map(visitedVenues.map((v) => [v.venueId, v.visits])),
-    reservedIds: new Set(myTodayRes.map((r) => r.scheduleId)),
-    live: buildLiveFactMap(liveClocks, schedules),
-    isEnded: (s: Schedule) => scheduleStatus(s.date, s.startTime) === 'ended',
-  }), [today, visitedVenues, myTodayRes, liveClocks, schedules]);
-  const rail = useMemo(() => rankRail(schedules, railCtx, RAIL_MAX), [schedules, railCtx]);
+  /** 가 본 매장 → 방문 횟수. 상단 '오늘 안내' 문장(todayLine)이 '내가 가 본 매장에 오늘 대회가 있나'를
+   *  판정하는 데 쓴다. (2026-09-18 추천 대회 레일을 지우면서 레일 전용 필드는 같이 없앴다 —
+   *  reservedIds·live·isEnded 는 rankRail·railFact 말고 소비처가 없었다.) */
+  const visitsByVenue = useMemo(
+    () => new Map(visitedVenues.map((v) => [v.venueId, v.visits])), [visitedVenues]);
 
   // 오늘 안내 — 이력이 있으면 **그 사람** 문장(lib/homeRail.todayLine), 없으면 '' 라 아래 JSX 가 종전 문구로 떨어진다.
   // 조회 전·실패는 문장을 만들지 않는다(§11 — 없는 숫자로 문장을 쓰지 않는다).
   const personal = loaded && !failed
     ? todayLine({
       visitedCount: visitedVenues.length,
-      todayAtVisited: schedules.filter((s) => s.approved && s.date === today && railCtx.visitsByVenue.has(s.venueId)
+      todayAtVisited: schedules.filter((s) => s.approved && s.date === today && visitsByVenue.has(s.venueId)
         && scheduleStatus(s.date, s.startTime) !== 'ended').length,
       reservedToday: myTodayRes.length,
       openNow: clocksLoaded ? openAll.length : null,
@@ -339,6 +306,16 @@ export default function HomeTab({
     return { title: '매장 이벤트', sub, alt: `매장 이벤트 · ${sub}`, testId: 'home-event-menu', live: false, onClick: onEvent };
   }, [banners, eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
 
+  /** 퀵액션 '제휴 혜택' 칸의 설명 한 줄 — 배지를 뺀 자리에 **사실**을 놓는다.
+   *  진행 중이면 참여권 상태, 그 밖이면 eventMenuSubtitle(응답 전·실패·소진·시작 전·종료를 구분해 말한다).
+   *  ⚠ 남은 카드 수는 넣지 않는다 — 오너가 그 숫자를 이 칸에서 빼라고 했다(2026-09-18). */
+  const quickEventDesc = useMemo(() => {
+    if (eventShown === 'banner' && event) {
+      return event.myTickets > 0 ? `참여권 ${event.myTickets}장 보유` : '매장 출석하면 참여권 1장';
+    }
+    return eventMenuSubtitle(eventLoaded, eventFailed, event, eventState);
+  }, [eventShown, event, eventLoaded, eventFailed, eventState]);
+
   useEffect(() => {
     if (!eventLoaded || !esm) return;
     try { localStorage.setItem(EVENT_SEEN, eventState === 'live' ? '1' : '0'); } catch { /* noop */ }
@@ -350,7 +327,6 @@ export default function HomeTab({
   };
   if (clocksLoaded) {
     writeSeenCount(OPENNOW_SEEN, openAll.length, { min: 0, max: OPEN_NOW_ROWS });
-    writeSeenCount(RAIL_SEEN, rail.length, { min: 0, max: 6 });
   }
   // 다음 방문의 스켈레톤 행 수 — 같은 기기는 대개 비슷한 줄 수를 본다.
   if (loaded) {
@@ -392,9 +368,9 @@ export default function HomeTab({
                   ? <>오늘 대회 정보를 불러오지 못했어요</>
                   : personal
                     ? <Nums text={personal} />
-                    : <>오늘 대회 <span className="stat-glow tabular-nums text-accent-300" style={{ '--aura-led-rgb': '139 92 246' } as React.CSSProperties}>{todayCount}</span>개</>}
+                    : <>오늘 대회 <span className="stat-pill font-extrabold tabular-nums text-accent-200" style={{ '--aura-led-rgb': '139 92 246' } as React.CSSProperties}>{todayCount}개</span></>}
               {loaded && !failed && clocksLoaded && !personal && (
-                <> · 지금 등록 가능 <span className="stat-glow tabular-nums stat-emerald" style={{ '--aura-led-rgb': '52 211 153' } as React.CSSProperties}>{openAll.length}</span>개</>
+                <> · 지금 등록 가능 <span className="stat-pill font-extrabold tabular-nums stat-emerald" style={{ '--aura-led-rgb': '52 211 153' } as React.CSSProperties}>{openAll.length}개</span></>
               )}
             </p>
           </section>
@@ -456,131 +432,57 @@ export default function HomeTab({
           <div className="grid grid-cols-2 gap-2.5">
             <button type="button" onClick={onOpenVoucher} data-testid="home-quick-checkin"
               data-aura data-aura-level="micro" data-aura-variant="violet"
-              className="flex min-h-[44px] flex-col rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
-              <span className="flex min-h-[1.5rem] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
-                <span className="min-w-0 t-desc font-extrabold text-ink-primary">출석 체크</span>
+              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
+              {/* 배경 — 시안의 우상단 블러 원 + 직접 제작한 QR 모티프(public/art/). 조리법은 index.css. */}
+              <span aria-hidden className="quick-blob quick-blob-violet" />
+              <span aria-hidden className="quick-art quick-art-checkin" />
+              <span className="relative z-10 flex min-h-[1.5rem] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
+                <span className="min-w-0 t-desc font-extrabold text-ink-primary">
+                  <Icon name="sparkles" size={13} className="mr-1 inline-block align-[-1px] text-accent-300" />출석 체크
+                </span>
                 {eventShown === 'banner' && event && event.myTickets > 0 && (
                   <span className="min-w-0 rounded-badge border border-accent-400/40 bg-surface-high px-1.5 py-0.5 text-2xs font-bold tabular-nums text-accent-200">
                     참여권 {event.myTickets}
                   </span>
                 )}
               </span>
-              <span className="mt-2 flex flex-wrap items-center justify-between gap-x-1 border-t border-border-subtle pt-1.5">
-                <span className="min-w-0 text-2xs font-bold text-emerald-300">매장 QR 열기</span>
-                <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted" />
+              {/* 설명줄 — 시안 'QR 출석 = 매일 1회'. 기능을 사실대로 말하는 한 줄이라 남긴다.
+                  ⚠ min-h 로 자리를 고정한다: 두 칸의 설명 길이가 달라도 아래 섹션이 안 밀린다. */}
+              <p className="relative z-10 mt-1 min-h-[1.15rem] text-2xs font-medium leading-tight text-ink-secondary">
+                QR 출석 = 매일 1회
+              </p>
+              <span className="relative z-10 mt-2 flex flex-wrap items-center justify-between gap-x-1 border-t border-border-subtle pt-1.5">
+                <span className="inline-flex min-w-0 items-center gap-1 text-2xs font-bold text-emerald-300">
+                  <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />매장 QR 열기
+                </span>
+                <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" />
               </span>
             </button>
 
             <button type="button" onClick={onEvent} data-testid="home-quick-event"
               data-aura data-aura-level="micro" data-aura-variant="amber"
-              className="flex min-h-[44px] flex-col rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:border-gold-300/40">
-              <span className="flex min-h-[1.5rem] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
-                <span className="min-w-0 t-desc font-extrabold text-ink-primary">제휴 혜택</span>
-                {eventShown === 'banner' && eventRemain > 0 && (
-                  <span className="min-w-0 rounded-badge border border-gold-300/40 bg-surface-high px-1.5 py-0.5 text-2xs font-bold tabular-nums text-gold-300">
-                    카드 {eventRemain}
-                  </span>
-                )}
+              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:border-gold-300/40">
+              <span aria-hidden className="quick-blob quick-blob-gold" />
+              <span aria-hidden className="quick-art quick-art-event" />
+              <span className="relative z-10 flex min-h-[1.5rem] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
+                <span className="min-w-0 t-desc font-extrabold text-ink-primary">
+                  <Icon name="gift" size={13} className="mr-1 inline-block align-[-1px] text-gold-300" />제휴 혜택
+                </span>
+                {/* 2026-09-18 오너: "옆에 카드 30은 제거" — 남은 카드 수 배지를 뺐다.
+                    같은 정보를 쓰는 다른 자리(캐러셀 이벤트 슬라이드)는 그대로다 — 오너가 지목한 것은 이 칸이다. */}
               </span>
-              <span className="mt-2 flex flex-wrap items-center justify-between gap-x-1 border-t border-border-subtle pt-1.5">
+              {/* 설명줄 — **실제 값**이다(시안의 '강남 라운지 무료 바이인'은 예시 문구라 그대로 쓰지 않는다).
+                  진행 중이면 참여권 상태, 아니면 eventMenuSubtitle 이 사실대로 말한다(§6-1 허위 문구 금지). */}
+              <p className="relative z-10 mt-1 min-h-[1.15rem] truncate text-2xs font-medium leading-tight text-ink-secondary">
+                {quickEventDesc}
+              </p>
+              <span className="relative z-10 mt-2 flex flex-wrap items-center justify-between gap-x-1 border-t border-border-subtle pt-1.5">
                 <span className="min-w-0 text-2xs font-bold text-gold-300">이벤트 보기</span>
-                <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted" />
+                <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" />
               </span>
             </button>
           </div>
         </section>
-
-        {/* ── 추천 대회 ────────────────────────────────────────────────────────
-            §6-3. 가로 스크롤은 **레일 안에서만** 일어난다 — 레일은 px-page-x 만큼의 안쪽 여백을
-            자기 패딩으로 갖고(문서 좌우 여백과 같은 선에서 시작), 넘치는 것은 레일의 overflow-x 다.
-            카드 폭 164px + 간격 10px → 390px 에서 2장 + 다음 카드 일부가 보인다(스크롤 가능성 신호). */}
-        {/* 로딩 중 자리 예약 — **실제 레일과 같은 박스 모델**로 그 장수만큼(아래 '지금 등록 가능'과 같은 조리법).
-            높이를 숫자로 베끼지 않는다: 포스터 78px + 정보 영역(gap-1 px-2.5 py-2.5) 골격을 그대로 복제한다. */}
-        {!loaded && rail.length === 0 && railSeenCount() > 0 && (
-          <section className="pt-5" aria-hidden>
-            <header className="flex items-baseline justify-between px-page-x pb-2.5">
-              <div className="skeleton h-[26px] w-28" />
-            </header>
-            <ul className="scrollbar-none flex snap-x gap-2.5 overflow-x-auto px-page-x pb-1">
-              {Array.from({ length: railSeenCount() }).map((_, i) => (
-                <li key={i} className="w-[164px] shrink-0 lg:w-[184px]">
-                  <div className="flex h-full w-full flex-col overflow-hidden rounded-card border card-aura">
-                    <div className="skeleton h-[78px] w-full rounded-none" />
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 px-2.5 py-2.5">
-                      <div className="skeleton h-[17px] w-2/3" />
-                      <div className="skeleton h-[16px] w-3/4" />
-                      <div className="skeleton h-[17px] w-1/2" />
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-        {rail.length > 0 && (
-          <section className="pt-5" data-testid="home-rail">
-            <header className="flex items-baseline justify-between px-page-x pb-2.5">
-              <h3 className={H3_CLS}>
-                추천 대회 <span className="t-desc font-semibold tabular-nums text-ink-muted">{rail.length}</span>
-              </h3>
-              <button type="button" onClick={onExplore} className={MORE_CLS}>
-                전체 일정 <Icon name="chevron-right" size={13} />
-              </button>
-            </header>
-            <ul data-testid="home-rail-track" className="scrollbar-none flex snap-x gap-2.5 overflow-x-auto px-page-x pb-1">
-              {rail.map((s) => {
-                const badge = railBadge(s, regInfoBySchedule.get(s.id));
-                return (
-                  <li key={s.id} className="w-[164px] shrink-0 snap-start lg:w-[184px]">
-                    {/* 카드 주 동작 = 그 대회의 공식 상세/포스터. 겹치는 보조 버튼을 두지 않는다(§6-3). */}
-                    <button type="button" onClick={() => onSelect(s)}
-                      className="flex h-full w-full flex-col overflow-hidden rounded-card border card-aura text-left">
-                      {/* 포스터 썸네일 — 정보 영역과 **분리**한다. 이미지 위에 글자를 얹지 않는다. */}
-                      <span className="relative block h-[78px] w-full shrink-0 overflow-hidden bg-surface-high">
-                        {s.posterUrl ? (
-                          <img src={thumbUrl(s.posterUrl, 400) ?? s.posterUrl} alt="" loading="lazy" decoding="async"
-                            className="h-full w-full object-cover" />
-                        ) : (
-                          /* 포스터가 없으면 **실제 매장명·날짜**로 만든 간결한 대체 표면 — 장식 이미지를 만들지 않는다. */
-                          <span className="flex h-full w-full items-center justify-center px-2 text-center">
-                            <span className="line-clamp-2 break-keep t-desc font-bold text-ink-secondary">{s.pubName}</span>
-                          </span>
-                        )}
-                      </span>
-                      {/* 정보 영역 — 상태 → 매장명 → 대회명 → 참가비. 줄간격은 §5 역할표. */}
-                      <span className="flex min-w-0 flex-1 flex-col gap-1 px-2.5 py-2.5">
-                        {/* ⚠ 상태칩 + 날짜 + 시각을 한 줄에 다 넣었더니 164px 에서 **줄바꿈이 나** 카드가
-                            232.6px 로 커졌다(실측). 시각은 매장명 줄로 내린다 — 값은 하나도 안 버렸고
-                            카드는 212.4px 로 돌아온다. */}
-                        <span className="flex flex-wrap items-center gap-1">
-                          <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-badge px-1.5 py-0.5 t-meta font-bold ${badge.cls}`}>{badge.text}</span>
-                          <span className="t-meta tabular-nums text-ink-muted">{dayLabel(s.date)}</span>
-                        </span>
-                        <span className="truncate t-desc text-ink-muted">
-                          {s.startTime ? `${s.startTime} · ` : ''}{s.pubName}
-                        </span>
-                        {/* 대회명은 자르지 않고 두 줄까지 — 어절 유지(break-keep), 긴 영문 한 덩어리는 비상 줄바꿈 */}
-                        <span className="line-clamp-2 break-keep text-[13px] font-bold leading-[19px] text-ink-primary">{s.title}</span>
-                        {/* §6-3 이 열거한 것만 둔다(상태 → 매장명 → 대회명/참가비). 상금은 바로 아래
-                            '오늘·내일 일정' 카드와 상세가 말한다 — 같은 값을 카드마다 겹쳐 쌓지 않는다.
-                            참가비는 **줄이지 않는다**: 6자리도 원 단위 전액 그대로다. */}
-                        <span className="mt-auto pt-0.5 text-[13px] font-semibold leading-[19px] tabular-nums text-ink-secondary">
-                          참가비 {buyInText(s.buyIn?.amount)}
-                        </span>
-                        {/* 추천 **근거** 한 줄 — "지금 12명 · Lv 8" · "내 예약" · "3번 가 본 매장". 정보 나열 사이트가 못 적는 줄이다.
-                            ⚠ 근거가 없어도 줄은 남는다(h 고정): 클락·방문 응답은 일정보다 **늦게** 오므로, 줄이 나중에
-                            생기면 레일 전체 높이가 밀린다(CLS 게이트). 글자만 비운다. */}
-                        {(() => { const f = railFact(s, railCtx); return (
-                          <span data-testid="home-rail-fact" className="block h-[15px] truncate t-meta font-semibold tabular-nums text-accent-300">{f}</span>
-                        ); })()}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
 
         {/* ── 지금 등록 가능 ──────────────────────────────────────────────────
             라이브 실측이 열려 있을 때만. 지난 방문에 열린 대회가 있던 기기는 클락 도착 '전'까지
@@ -646,7 +548,14 @@ export default function HomeTab({
             ⚠ '오늘·내일 일정'·'전체 일정' 문구는 e2e 셀렉터가 잡는다(click-paths·smoke·perf). 유지. */}
         <section className="px-page-x pt-5">
           <header className="flex items-baseline justify-between pb-2.5">
-            <h3 className={H3_CLS}>오늘·내일 일정</h3>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <h3 className={H3_CLS}>오늘·내일 일정</h3>
+              {/* 시안(code.html:164)의 영문 보조 배지. 장식이 아니라 **같은 말의 영문 표기**라
+                  스크린리더에는 중복이므로 aria-hidden. 좁은 폭에서는 숨긴다(360 에서 '전체 일정'과 부딪친다). */}
+              <span aria-hidden className="hidden shrink-0 rounded-badge border border-accent-400/25 bg-accent-300/10 px-1.5 py-0.5 text-[10px] font-bold tracking-tight text-accent-200 min-[390px]:inline-block">
+                Upcoming Tournaments
+              </span>
+            </span>
             <button type="button" onClick={onExplore} className={MORE_CLS}>
               전체 일정 <Icon name="chevron-right" size={13} />
             </button>

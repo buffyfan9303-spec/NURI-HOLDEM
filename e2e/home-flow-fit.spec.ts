@@ -148,7 +148,8 @@ const measure = (page: Page) => page.evaluate(() => {
   const clippedValues: string[] = [];
   /** 의도한 가로 스크롤러(배너·추천 레일) 밖에서 숨은 가로 스크롤이 생기면 정보가 사라진다. */
   const hiddenScroll: string[] = [];
-  const ALLOWED = '[data-testid="home-banner-viewport"],[data-testid="home-rail-track"]';
+  // 2026-09-18: home-rail-track 은 추천 대회 레일을 지우면서 같이 없어졌다.
+  const ALLOWED = '[data-testid="home-banner-viewport"]';
   for (const el of home.querySelectorAll<HTMLElement>('*')) {
     const s = getComputedStyle(el);
     if (s.display === 'none' || s.visibility === 'hidden') continue;
@@ -187,8 +188,10 @@ const measure = (page: Page) => page.evaluate(() => {
     const r = el.getBoundingClientRect();
     return { w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 };
   };
-  const railCards = [...home.querySelectorAll<HTMLElement>('[data-testid="home-rail"] li')];
-  const smallest = [...home.querySelectorAll<HTMLElement>('[data-testid="home-rail"] li span')]
+  // 2026-09-18 추천 대회 레일 삭제 — 그 자리를 **퀵액션 2칸**이 대신 지킨다.
+  //   이 파일의 요지(잘림·최소 글자 크기)는 대상만 바뀔 뿐 그대로 재야 한다.
+  const railCards = [...home.querySelectorAll<HTMLElement>('[data-testid="home-quick"] button')];
+  const smallest = [...home.querySelectorAll<HTMLElement>('[data-testid="home-quick"] span')]
     .map((e) => parseFloat(getComputedStyle(e).fontSize))
     .filter((n) => Number.isFinite(n) && n > 0);
   const doc = document.scrollingElement as HTMLElement;
@@ -223,7 +226,7 @@ async function openHome(page: Page, w: number, theme: 'dark' | 'light', zoom: bo
   await page.setViewportSize({ width: w, height: 900 });
   await page.goto('/');
   await page.waitForLoadState('networkidle');
-  await page.getByTestId('home-rail').waitFor({ timeout: 20_000 });
+  await page.getByTestId('home-quick').waitFor({ timeout: 20_000 });
   await page.waitForTimeout(500);
 }
 
@@ -259,8 +262,8 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
           expect(r, '홈 판이 렌더되지 않았다 — 잴 것이 없으면 통과가 아니다').not.toBeNull();
           expect(r!.today, '오늘 안내가 없다').not.toBeNull();
           expect(r!.banner, '배너가 없다').not.toBeNull();
-          expect(r!.railCount, '추천 레일 카드가 0장이다').toBeGreaterThan(0);
-          console.log(`[${w}/${theme}/${zoom ? 200 : 100}] today=${r!.today!.h} banner=${r!.banner!.w}×${r!.banner!.h} railW=${r!.railCardW[0]} railH=${r!.railCardH.join(',')} minFont=${r!.railMinFont}`);
+          expect(r!.railCount, '퀵액션 칸이 2개가 아니다 — 출석 체크·제휴 혜택 두 칸은 항상 있어야 한다').toBe(2);
+          console.log(`[${w}/${theme}/${zoom ? 200 : 100}] today=${r!.today!.h} banner=${r!.banner!.w}×${r!.banner!.h} quickW=${r!.railCardW[0]} quickH=${r!.railCardH.join(',')} minFont=${r!.railMinFont}`);
 
           expect(r!.hiddenScroll, `레일 밖에 숨은 가로 스크롤이 있다:\n${r!.hiddenScroll.join('\n')}`).toEqual([]);
           expect(
@@ -270,7 +273,7 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
           expect(r!.clippedValues, `값이 잘렸다 — 이름은 줄여도 금액·등록 마감은 못 줄인다:\n${r!.clippedValues.join('\n')}`).toEqual([]);
           expect(r!.docScrollX, '문서가 가로로 스크롤된다 — 가로 스크롤은 레일 안에서만 일어나야 한다').toBeLessThanOrEqual(0);
           // 글자를 줄여서 통과하는 우회를 막는다(§5: 중요한 정보에 9~10px 금지)
-          expect(r!.railMinFont, '추천 카드 글자가 11px 미만이다 — 압축으로 맞추지 않는다').toBeGreaterThanOrEqual(11);
+          expect(r!.railMinFont, '퀵액션 칸 글자가 11px 미만이다 — 압축으로 맞추지 않는다').toBeGreaterThanOrEqual(11);
         });
       }
     }
@@ -286,8 +289,11 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
     expect(r!.text, '오늘 대회 수가 실제 조회 결과와 다르다').toContain('오늘 대회 2개');
     // 클락이 열린 대회는 1건뿐이다
     expect(r!.text, '지금 등록 가능 수가 실제 조회 결과와 다르다').toContain('지금 등록 가능 1개');
-    expect(r!.text, '참가비 6자리가 반올림·축약됐다').toContain('참가비 1,234,567원');
-    expect(r!.text, '참가비 미입력이 "무료"로 둔갑했다').toContain('참가비 —');
+    // 2026-09-18: 예전에는 추천 레일 카드의 buyInText 가 '참가비 1,234,567원' 을 한 덩어리로 만들었다.
+    //   레일을 지우면서 남은 것은 목록 줄이고, 거기서는 라벨과 금액이 별도 요소라 공백 없이 이어진다.
+    //   이 검사의 요지는 **6자리를 반올림·축약하지 않는다** 이므로 금액만 집는다(게이트를 푸는 것이 아니다).
+    expect(r!.text, '참가비 6자리가 반올림·축약됐다').toContain('1,234,567원');
+    expect(r!.text, '참가비 미입력이 "무료"로 둔갑했다').toContain('참가비—');
     expect(r!.text, '상금 보장 금액이 반올림됐다').toContain('상금 보장 1,000만');
     expect(r!.text, '근거 없는 긴박감 문구가 붙었다').not.toMatch(/마감 임박|급상승|인기 급등/);
   });

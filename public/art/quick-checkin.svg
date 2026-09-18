@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="#000" aria-hidden="true">
+  <!-- 출석 체크 = 매장 QR. QR 파인더 패턴 한 개 + 흩어진 모듈.
+       마스크로 쓰므로 색은 CSS 가 정한다(fill 은 알파 1 이면 된다). -->
+  <path d="M62 14h20v20H62zM66 18v12h12V18z"/>
+  <rect x="69" y="21" width="6" height="6"/>
+  <path d="M88 14h6v6h-6zM100 14h6v6h-6zM94 20h6v6h-6zM88 26h6v6h-6zM106 26h6v6h-6z"/>
+  <path d="M62 40h6v6h-6zM74 40h6v6h-6zM86 40h6v6h-6zM104 40h6v6h-6zM68 46h6v6h-6zM92 46h6v6h-6zM62 52h6v6h-6zM80 52h6v6h-6zM98 52h6v6h-6zM110 52h6v6h-6z"/>
+  <path d="M86 58h6v6h-6zM68 58h6v6h-6z"/>
+</svg>

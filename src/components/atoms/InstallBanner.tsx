@@ -56,20 +56,35 @@ export default function InstallBanner() {
     //   4.5rem 로 낮추면 bottom≈755.5px(탭바까지 14.25px 여백) — 탭 버튼 히트 영역(top 770.75px)과
     //   14px 넘게 떨어져 있어 덮지 않는다. "조금 더"의 상한("탭바 바로 위에 붙는 정도")을 넘지 않는 선.
     <div className="fixed bottom-[calc(4.5rem_+_var(--tabbar-lift)_+_max(env(safe-area-inset-bottom),12px))] lg:bottom-3 left-1/2 z-[60] w-[min(92%,28rem)] -translate-x-1/2 animate-slide-up">
-      <div className="flex items-center gap-3 rounded-card border border-accent-400/40 bg-surface-float/95 px-3 py-2.5 shadow-dialog backdrop-blur">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M12 3v11" /><path d="M8 10l4 4 4-4" /><rect x="4" y="18" width="16" height="3" rx="1" />
-          </svg>
+      {/* 🔴 2026-09-18 오너: "저부분은 도대체 그냥 UI/UX가 없잖아 그리고 너무 커 위아래로
+          설치 위아래 갭도 크고 아이콘도 이상하고"
+
+          직접 재서 원인을 찾았다(루트 17px):
+            · 높이를 끌어올리던 것은 '설치' 버튼이다 — `.btn` 의 `min-h-[2.4rem]` = **40.8px**.
+              배너 전체 높이 ≈ 40.8 + py-2.5(21.25) + 테두리 2 = **약 64px**.
+              이 자리는 본문을 덮는 띄우개라 폼 버튼의 44px 규칙을 그대로 쓸 자리가 아니다 —
+              대신 버튼의 **세로 탭 영역을 tap-y-44 로 보태다**(보이는 높이 30px · 누르는 높이 44px).
+            · 아이콘은 일반 '다운로드 트레이' 글리프였다. 설치 안내는 **무엇을** 설치하는지가 요점이라
+              iOS·Android 의 설치 시트도 앱 아이콘을 보여 준다 → **본래 심볼**(public/brand/)로 바꿈.
+            · 아우라를 입혀 띄우개만 떠 보이게 했다(data-aura micro · 우상단 블러 원).
+          ⚠ 위치 계산(bottom calc)은 그대로다 — InstallBanner.position.test.ts 가 잠그고 있다. */}
+      <div data-aura data-aura-level="micro" data-aura-variant="violet"
+        className="relative flex items-center gap-2.5 overflow-hidden rounded-card border border-accent-400/40 bg-surface-float/95 px-3 py-1.5 shadow-dialog backdrop-blur">
+        <span aria-hidden className="quick-blob quick-blob-violet" />
+        <img src="/brand/nuri-holdem-symbol.svg" alt="" aria-hidden width={34} height={34}
+          className="relative z-10 h-[34px] w-[34px] shrink-0 rounded-input bg-accent-300/12 p-1" />
+        <div className="relative z-10 min-w-0 flex-1 leading-tight">
+          <p className="truncate text-xs font-extrabold text-ink-primary">홈 화면에 추가</p>
+          {/* 설명줄은 오너 지시(2026-09-18)로 없다. 제목 한 줄로 충분하다. */}
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold text-ink-primary">홈 화면에 추가</p>
-          {/* 2026-09-18 오너 지시로 설명줄 제거 — 홈 화면 추가의 이점은 이미 널리 알려진 통념 — 뻔한 마케팅 카피, 제목 '홈 화면에 추가'만으로 충분. */}
-        </div>
-        <button type="button" onClick={install} className="btn-primary shrink-0 px-3 py-1.5 text-xs">설치</button>
-        {/* 34x34 + 세로 보탬(tap-y-44). ⚠ .hit 는 금지 — 44x44 가 왼쪽 '설치' 버튼 위로 번져
+        {/* 보이는 높이 30px, 누르는 높이는 tap-y-44 가 위아래 7px 씩 보태 44px. */}
+        <button type="button" onClick={install}
+          className="tap-y-44 relative z-10 inline-flex h-[30px] shrink-0 items-center rounded-[8px] bg-accent-300 px-3 text-2xs font-bold leading-none text-white transition-colors hover:bg-accent-400">
+          설치
+        </button>
+        {/* 34x34 + 세로 보태(tap-y-44). ⚠ .hit 는 금지 — 44x44 가 왼쪽 '설치' 버튼 위로 번져
             설치를 누르려다 배너가 닫힌다. 가로는 실제 패딩으로만 넓힌다. */}
-        <button type="button" onClick={dismiss} aria-label="닫기" className="tap-y-44 shrink-0 -mr-1 p-2.5 text-ink-muted hover:text-ink-primary">
+        <button type="button" onClick={dismiss} aria-label="닫기" className="tap-y-44 relative z-10 -mr-1 shrink-0 p-2 text-ink-muted hover:text-ink-primary">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
         </button>
       </div>

@@ -74,11 +74,10 @@ describe('②③ 목록 스켈레톤은 개수와 높이를 둘 다 실제와 �
       .toMatch(/writeSeenCount\(BROWSE_SEEN/);
   });
 
-  it('홈 추천 레일도 로딩 중 자리를 잡는다', () => {
-    expect(HOME, '레일이 rail.length>0 일 때만 그려지면 로딩 중 예약이 0 이다')
-      .toMatch(/railSeenCount\(\) > 0/);
-    expect(HOME).toMatch(/writeSeenCount\(RAIL_SEEN/);
-  });
+  // 2026-09-18: '홈 추천 레일도 로딩 중 자리를 잡는다' 항목을 지웠다 — 오너 지시로 **추천 대회 레일 자체를 삭제**했다
+  //   (오너 레퍼런스 code.html 의 FeaturedTournamentsSection 도 비어 있다).
+  //   예약할 자리가 없어졌으므로 계약도 함께 빠진다. 다시 넣으면 이 계약도 같이 살려라.
+
 
   it('줄 수 조리법이 한 곳에 있다 — 홈과 일정 탐색이 같은 함수를 쓴다', () => {
     // 두 벌이 되면 한쪽만 고쳐지는 날이 온다(nuri-single-source).
