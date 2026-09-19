@@ -7,7 +7,7 @@
 //  ④ 화면 문구에 'GTO 정답 · 최선의 선택 · 실계산 · EV 손실' 같은 근거 없는 정밀함이 없다.
 //  ⑤ 프리플랍 전략의 단일 소스가 차트(ranges.data)다 — Chen 근사가 화면으로 되돌아오지 않는다.
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '..', '..', '..', '..');
@@ -142,12 +142,22 @@ describe('GTO 데이터 — 출처를 속이지 않는다', () => {
     }
   });
 
-  it('nash 데이터가 재현 불가임을 소스와 화면 양쪽에 적어 두었다', () => {
+  it('nash 데이터의 재현 가능 여부를 소스와 화면이 **같은 말로** 적어 두었다', () => {
+    // 2026-09-19 갱신: 예전엔 "재현 불가 / 생성 스크립트가 저장소에 없다" 를 강제했다. 그건 그때 사실이었지만
+    //   이제 생성기가 저장소에 있고(`scripts/gen-nash/`) 화면이 읽는 빅 앤티 표는 **전부 그것으로 재현된다**.
+    //   계약의 목적은 "재현 불가라고 적어라" 가 아니라 **출처를 속이지 않는 것**이라 기준을 사실 쪽으로 옮긴다.
     const nash = readFileSync(join(ROOT, 'src/lib/nash.data.ts'), 'utf-8');
-    expect(nash).toContain('재현 불가');
-    expect(nash, '없는 생성 스크립트를 있다고 적어 두면 다음 사람이 헛수고한다').toContain('저장소에 없다');
+    expect(nash, '생성기 경로를 안 적으면 다음 사람이 다시 찾아 헤맨다').toContain('scripts/gen-nash/');
+    // 노앤티 k≥2 는 아직 옛 값이다 — 섞여 있다는 사실을 파일이 스스로 말해야 한다(안 적으면 한 덩어리로 오해한다)
+    expect(nash, '두 세대 값이 섞여 있다는 경고가 사라졌다').toContain('독립 재현 안 됨');
+    // 생성기가 있다고 적어 놓고 실제로 없으면 위 문장이 거짓말이 된다 — 파일 존재까지 본다
+    for (const f of ['solve.mjs', 'emit.mjs', 'check.mjs', 'equity169.mjs', 'README.md']) {
+      expect(existsSync(join(ROOT, 'scripts/gen-nash', f)), `scripts/gen-nash/${f} 가 없는데 소스는 있다고 말한다`).toBe(true);
+    }
     const chart = readFileSync(join(ROOT, 'src/components/features/tools/PushFoldChart.tsx'), 'utf-8');
-    expect(chart).toContain('생성기 재현 필요');
+    // 렌더되는 마크업으로 본다 — 주석에 옛 문구를 기록해 둔 줄까지 잡으면 이력을 못 남긴다
+    expect(chart, '화면이 소스와 다른 말을 한다').toContain('<b>재산출 가능</b>');
+    expect(chart, "화면에 '생성기 재현 필요' 가 렌더된다 — 이제 거짓이다").not.toContain('<b>생성기 재현 필요</b>');
   });
 
   it('화면 문구에 근거 없는 정밀함이 없다', () => {

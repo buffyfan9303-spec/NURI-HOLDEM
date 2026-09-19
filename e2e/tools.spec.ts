@@ -87,7 +87,10 @@ test.describe('도구 탭 — 전체화면 실행', () => {
       const t = await dialog.locator('text=/올인 [0-9.]+%/').first().textContent();
       return Number((t ?? '').match(/올인 ([0-9.]+)%/)?.[1] ?? 0);
     };
-    // 기본 BTN 10bb — 상식 범위(20~45%)
+    // 기본 BTN **12bb** — 상식 범위(아래 단언은 15~50).
+    // ⚠ 2026-09-19: 기본 깊이가 10 → 12 로 바뀌었다(10bb 이하 k≥2 가 격리되면서 기본 화면이
+    //   빈 상자가 됐기 때문이다 — PushFoldChart.tsx:41 참고). **이 단언들은 손대지 않았다.**
+    //   바뀐 건 제품이고, 이 검사는 "기본 화면에 표가 실제로 그려진다" 를 그대로 잡고 있다.
     const btn10 = await pctOf();
     expect(btn10).toBeGreaterThan(15);
     expect(btn10).toBeLessThan(50);

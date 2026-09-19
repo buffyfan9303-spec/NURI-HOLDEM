@@ -19,18 +19,20 @@ const seed = (srs: SrsMap, wrong: string[] = []) => {
   localStorage.setItem(PREFLOP_STAT_KEY, JSON.stringify({ total: 0, correct: 0, streak: 0, best: 0, wrong }));
 };
 const [s0, s1, s2, s3, s4] = SCENARIOS.map((s) => s.id);
+// ⚠ 푸시 픽스처는 **게시 중인 깊이**여야 한다 — 격리된 조합(빅앤티 k≥2 의 2~10bb)은 makeQuiz 가 복원을 거부해서
+//   이 계약이 "복원 안 되는 키" 쪽으로 새어 나간다. 2026-09-19 에 10bb → 15bb 로 옮겼다(nash.data.ts 의 NASH_ANTE_QUARANTINE).
 
 describe('composePlan · 간격 반복 우선', () => {
   it('오늘 due 인 복습이 오래된 순으로 앞에 서고, 내일 due 는 빠진다', () => {
     seed({
       [`post|${s0}`]: { box: 1, due: '2026-09-02' },
-      'push|2-10|A5s': { box: 0, due: '2026-08-30' },
+      'push|2-15|A5s': { box: 0, due: '2026-08-30' },
       [`post|${s1}`]: { box: 0, due: TODAY },
       [`post|${s2}`]: { box: 0, due: '2026-09-04' },
     });
     const p = composePlan(TODAY);
     expect(p.items.slice(0, 3)).toEqual([
-      { kind: 'preflop', key: 'push|2-10|A5s', reason: '복습 · 5일 만에', review: true },
+      { kind: 'preflop', key: 'push|2-15|A5s', reason: '복습 · 5일 만에', review: true },
       { kind: 'postflop', id: s0, reason: '복습 · 4일 만에', review: true },
       { kind: 'postflop', id: s1, reason: '복습 · 1일 만에', review: true },
     ]);
@@ -48,9 +50,9 @@ describe('composePlan · 간격 반복 우선', () => {
   });
 
   it('복습 다음은 프리플랍 오답 큐(최근 것부터, 복습에 든 키 제외) → 나머지는 포스트플랍', () => {
-    seed({ 'push|2-10|A5s': { box: 0, due: '2026-09-01' } }, ['push|1-5|K9o', 'push|2-10|A5s', 'push|3-12|QJs']);
+    seed({ 'push|2-15|A5s': { box: 0, due: '2026-09-01' } }, ['push|1-5|K9o', 'push|2-15|A5s', 'push|3-12|QJs']);
     const p = composePlan(TODAY);
-    expect(p.items[0]).toMatchObject({ kind: 'preflop', key: 'push|2-10|A5s', review: true });
+    expect(p.items[0]).toMatchObject({ kind: 'preflop', key: 'push|2-15|A5s', review: true });
     // 프리플랍 슬롯 2 중 1 은 복습이 썼다 → 큐에서 1개(최근 것)만
     expect(p.items[1]).toEqual({ kind: 'preflop', key: 'push|3-12|QJs', reason: '오답 노트 · 틀렸던 핸드' });
     expect(p.items.slice(2).every((it) => it.kind === 'postflop')).toBe(true);

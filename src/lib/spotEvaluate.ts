@@ -17,7 +17,8 @@
 // ── 왜 exact_solver 가 도달 불가인가(2026-09-11 확인) ───────────────────────
 // 저장소의 전략 데이터는 셋뿐이고 어느 것도 검증된 포스트플랍 솔버 산출이 아니다:
 //   · src/lib/ranges.data.ts   사람이 만든 100bb 학습용 프리플랍 차트
-//   · src/lib/nash.data.ts     자체 fictitious play 푸시/폴드(2~20bb) — 생성기 유실로 재현 불가
+//   · src/lib/nash.data.ts     자체 fictitious play 푸시/폴드(2~20bb) — 생성기는 `scripts/gen-nash/` 에 있고
+//                              k=1 전 깊이·빅앤티 k≥2 12bb+ 는 재현된다(노앤티 k≥2 는 아직 옛 값). 그래도 솔버 산출은 아니다.
 //   · gto.deep.data.ts         **사람이 쓴 설명문에 빈도를 적어 넣은 예시** — 솔버 산출 아님
 // 그래서 이 파일은 exact_solver 를 반환하는 경로를 아예 갖지 않는다.
 // 나중에 검증된 데이터가 들어오면 evaluateSpot 안의 `lookupSolver` 자리 한 곳만 채우면 된다.
@@ -505,7 +506,8 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   const stack = exact ?? NASH_STACKS.find((v) => Math.abs(v - s.effectiveBb) <= 1);
   if (stack === undefined) return null;
 
-  // 🔴 격리 구간(빅 앤티 4~6BB)은 표 값이 틀렸다 — `nash.data.ts` 의 `NASH_ANTE_QUARANTINE` 참고.
+  // 🔴 격리 구간(빅 앤티 k≥2 의 2~10BB · 2026-09-19 재산출로 4~6BB 에서 넓어졌다)은 표 값을 못 믿는다 —
+  //   범위는 `nash.data.ts` 의 `NASH_ANTE_QUARANTINE` 한 곳만 본다(여기에 다시 적으면 또 어긋난다).
   //   여기서 null 을 돌려주면 이 스팟은 **수학 참고(math_only)** 로 떨어진다. 틀린 차트로 "개선 필요" 라고
   //   말하는 것보다 "차트 없음 + 팟오즈만" 이 정직하다. ⚠ `nashRange` 를 그냥 부르면 격리 표는 **전부 0**
   //   (= 전부 폴드)이라 그것도 거짓말이 된다 — 그래서 읽기 전에 막는다.

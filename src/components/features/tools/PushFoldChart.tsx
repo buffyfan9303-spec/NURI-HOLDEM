@@ -38,7 +38,10 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
   initialK?: number; initialStack?: number; initialAnte?: boolean; initialView?: View; highlight?: string;
 } = {}) {
   const [k, setK] = useState(POSITIONS.some((p) => p.k === initialK) ? initialK! : 2); // BTN 기본 — 가장 자주 찾는 자리
-  const [stack, setStack] = useState((NASH_STACKS as readonly number[]).includes(initialStack ?? -1) ? initialStack! : 10);
+  // 기본 12bb — **격리 구간을 피한 가장 얕은 깊이**다(빅앤티 k≥2 는 2~10bb 가 격리라 기본 BTN 10bb 면 첫 화면이
+  //   빈 상자가 된다: 오너가 원래 항의한 그 증상이 기본값이 되는 것). 격리 하한이 바뀌면 여기도 같이 봐라 —
+  //   `nash.data.ts` 의 NASH_ANTE_QUARANTINE. 실측 BTN 12bb 39.0%(2026-09-19).
+  const [stack, setStack] = useState((NASH_STACKS as readonly number[]).includes(initialStack ?? -1) ? initialStack! : 12);
   const [view, setView] = useState<View>(initialView ?? 'shove');
   const pos = POSITIONS.find((p) => p.k === k)!;
   const stackIdx = (NASH_STACKS as readonly number[]).indexOf(stack);
@@ -95,8 +98,8 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
           onChange={(e) => setStack(NASH_STACKS[Number(e.target.value)])}
           aria-label="스택 깊이(bb)" aria-valuetext={`${stack}bb${hasData ? '' : ' — 이 자리는 데이터 없음'}`}
           className="block w-full h-[44px] accent-accent-300 cursor-pointer" />
-        {/* 눈금 — 2026-09-19 오너 "10BB 이하로 내려가면 차트가 색이 아무것도 채워져 있지 않아": 격리 구간(2~6bb · 뒤 2명+)의
-            눈금이 7~20 과 똑같이 생겨 **고르기 전에는** 데이터가 없는 줄 알 수 없었다. 현재 자리·보기 기준으로 표가 없는 눈금을
+        {/* 눈금 — 2026-09-19 오너 "10BB 이하로 내려가면 차트가 색이 아무것도 채워져 있지 않아": 격리 구간의
+            눈금이 나머지와 똑같이 생겨 **고르기 전에는** 데이터가 없는 줄 알 수 없었다. 현재 자리·보기 기준으로 표가 없는 눈금을
             흐리게 + 점선 밑줄로 미리 구분한다(SB 는 2bb 부터 정상이라 자리를 바꾸면 표시도 바뀐다).
             ⚠ 누르지 못하게 막지 않는다 — 눌러야 '왜 없는지' 를 읽는다.
             ⚠ aria-disabled 를 **붙이지 않는다**(실측 2026-09-19): Playwright 의 click 이 aria-disabled 를 '비활성' 으로 보고
@@ -137,8 +140,14 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
         : (
           // 왜 비었는지가 **첫 줄**이다(2026-09-19 리드): 예전엔 회색 점선 '빈 상태' 모양에 이유가 둘째 문단이라
           // 오너가 "색이 아무것도 없다" 로만 읽었다. 정보 톤(빨강 아님 — 사용자 잘못이 아니다)으로 올린다.
-          // 2~6BB 의 뒤 인원 2명 이상은 값이 틀린 것이 확인돼(포지션 단조성 역전) 2026-09-18 에 내렸다 —
-          // 틀린 조언보다 빈 칸이 낫다는 판단이다. `nash.data.ts` 의 NASH_ANTE_QUARANTINE 참고.
+          // 막힌 범위는 **여기 적지 않는다** — `nash.data.ts` 의 NASH_ANTE_QUARANTINE 한 곳만 보고,
+          // 화면 문구는 hasNashRange 로 그때그때 계산한다(2026-09-18 '2~6BB' → 2026-09-19 '2~10BB' 로 넓어졌고,
+          // 그때 이 주석만 옛 범위를 말하고 있었다. 범위를 주석에 박으면 다음 변경 때 또 어긋난다).
+          // 🔴 아래 else 갈래("이 깊이는 데이터가 없습니다")는 **지금 조건으로는 도달하지 않는다.**
+          // (구조적 빈칸인 callSB k=1 은 위 `effView` 가 callBB 로 바꿔 버리고, 나머지 빈칸은 전부 격리라
+          //  왼쪽 갈래로 간다. 2026-09-19 검증 — 이번 변경 이전에도 같았으니 회귀가 아니다.)
+          // **그래도 지우지 마라** — 표가 비는 조합이 생기는 날(깊이 추가·격리 해제·표 유실)의 폴백이다.
+          // 도달 불가를 '죽은 코드' 로 읽고 지우면 그날 빈 행렬(전부 0 = 전부 폴드)이 조언으로 나간다.
           <div role="status" data-testid="pushfold-no-data" className="rounded-input border border-aura-300/40 bg-aura-300/10 px-3 py-3 text-left text-xs text-ink-primary">
             {isNashQuarantined(stack, NASH_BIG_ANTE, k, effView) ? (
               <>
@@ -155,10 +164,12 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
           </div>
         )}
 
-      {/* 손님용 한 줄만 남긴다(리드 2026-09-19: 알고리즘·에퀴티 회수는 개발자용 설명). '생성기 재현 필요' 는
-          e2e(gto-tab-verify)·gtoContract 가 화면에서 보는 문구라 그대로 둔다 — 근거 상세는 nash.data.ts 머리말. */}
+      {/* 손님용 한 줄만 남긴다(리드 2026-09-19: 알고리즘·에퀴티 회수는 개발자용 설명).
+          '재산출 가능' 은 e2e(gto-tab-verify)·gtoContract 가 화면에서 보는 문구다 — 근거 상세는 nash.data.ts 머리말.
+          ⚠ 2026-09-19 까지는 '생성기 재현 필요' 였다. 생성기가 유실돼 사실이었지만 이제 `scripts/gen-nash/` 로
+            **이 화면이 읽는 빅 앤티 표는 전부 다시 만들 수 있다** — 그대로 두면 거짓 고지가 된다. */}
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
-        ※ 자체 계산 Nash(첫 진입 올인 · 단일 콜러) · 빅 앤티 기준 · 부분 채움 셀 = 그 빈도만큼 올인 · <b>생성기 재현 필요</b>
+        ※ 자체 계산 Nash(첫 진입 올인 · 단일 콜러) · 빅 앤티 기준 · 부분 채움 셀 = 그 빈도만큼 올인 · <b>재산출 가능</b>
       </p>
     </CalcCard>
   );

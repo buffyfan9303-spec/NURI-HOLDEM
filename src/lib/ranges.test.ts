@@ -1,7 +1,7 @@
 // 레인지 파서·콤보 가중·Nash 데이터 정합 검증
 import { describe, it, expect } from 'vitest';
 import { expandRange, buildFreq, comboCount, rangeComboPct, gridName, freqFromArray, R_CH, R_VAL } from './ranges';
-import { HAND_ORDER, NASH_STACKS, NASH_KS, nashRange, hasNashRange, isNashQuarantined } from './nash.data';
+import { HAND_ORDER, NASH_STACKS, NASH_KS, NASH_CALLBB_QUARANTINE, nashRange, hasNashRange, isNashQuarantined } from './nash.data';
 import { RANGE_SCENARIOS } from './ranges.data';
 
 describe('expandRange 표기 파서', () => {
@@ -135,22 +135,51 @@ describe('nash.data 정합', () => {
     expect(broken, `뒤 인원이 많은데 레인지가 더 넓다 — 표가 깨졌다:\n${broken.join('\n')}`).toEqual([]);
   });
 
-  it('🔴 빅 앤티 4~6BB 는 격리돼 있다 — 데이터를 안 고치고 되살리면 여기서 걸린다', () => {
-    // 이 계약이 없으면 `NASH_ANTE_QUARANTINE` 을 비우는 한 줄로 거짓 조언이 조용히 돌아온다.
-    // 막는 것: 빅엔티 2~6BB 의 **k≥2 열**. UTG(k=8) 손익분기(2BB 44.4% · 3BB 46.2%)를 못 넘는 핸드를
-    //   100% 잼이라고 말하던 자리다.
-    for (const s of [2, 3, 4, 5, 6]) for (const k of [2, 5, 8]) {
-      expect(hasNashRange('shove', k, s, true), `${s}bb k=${k} 빅엔티가 격리에서 풀렸다`).toBe(false);
-      expect(isNashQuarantined(s, true, k)).toBe(true);
+  it('🔴 스택 단조성 — 같은 자리에서 **스택이 줄면 레인지가 넓어져야** 한다 (셔브·BB 콜·SB 콜 전부)', () => {
+    // 왜 이 계약이 생겼나(2026-09-19): 지금까지 단조성 계약은 **k 방향(자리)** 만 봤다. 스택 방향은 아무도 안 봤고,
+    //   그래서 **옛 값과 새 값을 한 열 안에서 이어 붙인 자리**가 조용히 통과했다 —
+    //   빅앤티 셔브 SB 열에 옛 2~6bb 뒤로 새 7bb+ 를 붙이면 **6bb 64.6 → 7bb 77.3 (+12.6%p)**,
+    //   즉 스택이 줄었는데 레인지가 **좁아지는** 표가 된다. 그건 포커가 아니라 두 모델을 반씩 섞은 것이다.
+    //   지금 nash.data.ts 에는 실제로 두 세대 값이 섞여 있다(머리말 ①②③) — 이 계약이 그 경계를 지킨다.
+    // 원리: 스택이 얕을수록 (a) 블라인드·앤티가 스택 대비 커지고 (b) 콜당해도 잃을 것이 적다 →
+    //   첫 진입 올인도, 그걸 받는 콜도 넓어진다. kind 와 무관하다.
+    // 허용오차 1.0%p — k 단조성 계약과 같은 이유(0~8 양자화). 실측 여유: 지금 데이터는 **역방향 증가가 0.00%p**
+    //   (한 칸도 안 늘어난다)라 1.0 은 전부 여유다. ⚠ 이 값을 올려서 실패를 없애지 마라.
+    const broken: string[] = [];
+    for (const kind of ['shove', 'callBB', 'callSB'] as const) for (const ante of [false, true]) for (const k of NASH_KS) {
+      // 살아 있는 깊이끼리만 — 격리된 깊이를 끌어들이면 '없는 값'(전부 0)으로 판정하게 된다.
+      const live = NASH_STACKS.filter((s) => hasNashRange(kind, k, s, ante));
+      for (let i = 0; i + 1 < live.length; i++) {
+        const shallow = live[i], deep = live[i + 1];
+        const wide = rangeComboPct(freqFromArray(nashRange(kind, k, shallow, ante), HAND_ORDER));
+        const narrow = rangeComboPct(freqFromArray(nashRange(kind, k, deep, ante), HAND_ORDER));
+        if (!(wide >= narrow - 1.0)) broken.push(`${kind} k${k} ante=${ante}: ${shallow}bb=${wide.toFixed(1)} < ${deep}bb=${narrow.toFixed(1)}`);
+      }
     }
-    // 살리는 것 ①: **SB(k=1)** — 임계 (S−0.5)/2S 는 2BB 37.5%·3BB 41.7% 로 낮고 표와 정합한다(역산 확인).
-    for (const s of [2, 3, 4, 5, 6]) {
-      expect(hasNashRange('shove', 1, s, true), `${s}bb SB 열까지 막혔다 — 이 열은 맞는 값이다`).toBe(true);
+    expect(broken, `스택이 줄었는데 레인지가 좁아진다 — 옛 표와 새 표가 한 열 안에서 이어 붙었을 때 나오는 서명이다:\n${broken.join('\n')}`).toEqual([]);
+  });
+
+  it('🔴 빅 앤티 2~10BB 의 k≥2 는 격리돼 있다 — 데이터를 안 고치고 되살리면 여기서 걸린다', () => {
+    // 이 계약이 없으면 `NASH_ANTE_QUARANTINE` 을 비우는 한 줄로 거짓 조언이 조용히 돌아온다.
+    // 막는 것: 빅앤티 2~10BB 의 **k≥2 열 · 모든 kind**. 단일 콜러 근사가 깨지는 구간이고(P(2명+ 콜) k8: 7bb 47.7% ·
+    //   10bb 17.9% · 12bb 11.8%), 오차가 '실제보다 넓게' 쏠려 해로운 쪽이다. **오너 승인 2026-09-19**
+    //   (화면에서 63칸이 내려가 CLAUDE.md 3번 기능·데이터 보존에 걸리는 결정이라 오너 확인을 받았다).
+    for (const s of [2, 3, 4, 5, 6, 7, 8, 9, 10]) for (const k of [2, 5, 8]) for (const kind of ['shove', 'callBB', 'callSB'] as const) {
+      expect(hasNashRange(kind, k, s, true), `${kind} ${s}bb k=${k} 빅앤티가 격리에서 풀렸다`).toBe(false);
+      expect(isNashQuarantined(s, true, k, kind)).toBe(true);
+    }
+    // 살리는 것 ①: **SB(k=1) 전 깊이** — 상대가 하나뿐이라 단일 콜러 근사가 정확하다(2026-09-19 재산출).
+    for (const s of NASH_STACKS) {
+      expect(hasNashRange('shove', 1, s, true), `${s}bb SB 열까지 막혔다 — k=1 은 전 깊이 살아 있어야 한다`).toBe(true);
+      expect(hasNashRange('callBB', 1, s, true), `${s}bb BB 콜 SB 열까지 막혔다`).toBe(true);
       expect(isNashQuarantined(s, true, 1)).toBe(false);
     }
-    // 살리는 것 ②: 노앤티 전 구간 · 빅엔티 7BB 이상. 기능을 통째로 죽이는 것이 아니다.
-    for (const s of [2, 4, 6]) expect(hasNashRange('shove', 8, s, false), `${s}bb 노앤티까지 막혔다`).toBe(true);
-    for (const s of [7, 8, 10]) expect(hasNashRange('shove', 8, s, true), `${s}bb 빅엔티가 잘못 막혔다`).toBe(true);
+    // 살리는 것 ②: 노앤티 전 구간(3bb BB 콜 제외) · 빅앤티 12BB 이상. 기능을 통째로 죽이는 것이 아니다.
+    for (const s of [2, 4, 6, 10, 20]) expect(hasNashRange('shove', 8, s, false), `${s}bb 노앤티까지 막혔다`).toBe(true);
+    for (const s of [12, 15, 20]) expect(hasNashRange('shove', 8, s, true), `${s}bb 빅앤티가 잘못 막혔다`).toBe(true);
+    // 🔴 경계 — 눈금 하나 차이(10bb ↔ 12bb)로 갈린다. 화면이 그 선을 그대로 보여 준다.
+    expect(hasNashRange('shove', 2, 10, true), '10bb 빅앤티 k≥2 가 살아 있다 — 격리 하한이 밀렸다').toBe(false);
+    expect(hasNashRange('shove', 2, 12, true), '12bb 빅앤티 k≥2 가 막혔다 — 격리 상한이 밀렸다').toBe(true);
     // k 를 안 넘기면 보수적으로 격리 — '모르면 덜 말한다'
     expect(isNashQuarantined(3, true)).toBe(true);
   });
@@ -158,6 +187,11 @@ describe('nash.data 정합', () => {
   it('🔴 콜 표(callBB·callSB)도 전 깊이 × 앤티 유무 단조성 — 셔브 표에만 있던 계약이라 BB 콜 7~9bb 역전이 새어 나갔다(2026-09-19)', () => {
     // 상대가 좁고 강한 레인지로 셔브할수록(k↑) 콜 레인지는 좁아야 한다 — 셔브 표와 같은 원리, 같은 허용오차(1.0%p).
     // 격리된 조합은 hasNashRange 가 false 라 자동으로 빠진다 — 격리를 풀면 이 계약이 판정한다.
+    // ⚠ **알려진 규칙 불일치(2026-09-19 기록, 일부러 안 고쳤다)**: 이 사슬은 `NASH_KS` 전부(k=1 포함)를 넣는데,
+    //   `scripts/gen-nash/check.mjs` 의 같은 검사는 **k≥2 만** 넣는다. check.mjs 쪽 논리가 맞다 —
+    //   k=1 은 SB 가 히어로라 SB 의 0.5 가 데드머니가 아니고 BB 팟오즈가 달라 k≥2 와 사과-배다.
+    //   지금은 k1↔k2 역전이 전부 격리 깊이에 있어 통과하지만, **격리를 풀면 여기서 거짓 빨강이 날 수 있다.**
+    //   지금 좁히면 계약을 무르게 하는 모양이라 넘긴다 — 격리를 푸는 사람이 그때 함께 판단해라(README 참고).
     const broken: string[] = [];
     for (const kind of ['callBB', 'callSB'] as const) for (const ante of [false, true]) for (const stack of NASH_STACKS) {
       const live = NASH_KS.filter((k) => hasNashRange(kind, k, stack, ante));
@@ -171,22 +205,20 @@ describe('nash.data 정합', () => {
     expect(broken, `상대 레인지가 더 강한데 콜이 더 넓다 — 표가 깨졌다:\n${broken.join('\n')}`).toEqual([]);
   });
 
-  it('🔴 BB 콜 표 격리 — 빅앤티 7·8·9bb · 노앤티 3bb 의 k≥2 열만 막고, k=1 과 셔브·SB 콜 표는 살린다', () => {
-    // 막는 것: 실측 역전(빅앤티 7bb k1=76.4 → k2=92.2 · 8bb 66.0→78.6 · 9bb 59.0→64.4 · 노앤티 3bb 93.6→99.2)
-    for (const s of [7, 8, 9]) for (const k of [2, 5, 8]) {
-      expect(hasNashRange('callBB', k, s, true), `callBB ${s}bb k=${k} 빅앤티가 격리에서 풀렸다`).toBe(false);
-      expect(isNashQuarantined(s, true, k, 'callBB')).toBe(true);
+  it('🔴 BB 콜 표 전용 격리 — 노앤티 3bb 의 k≥2 열만 막고, 같은 깊이의 셔브·SB 콜 표와 k=1 은 살린다', () => {
+    // 막는 것: 실측 역전(노앤티 3bb k1=93.6 → k2=99.2). 노앤티 k≥2 는 2026-09-19 재산출 대상이 아니라 옛 값 그대로다.
+    for (const k of [2, 5, 8]) {
+      expect(hasNashRange('callBB', k, 3, false), `callBB 3bb k=${k} 노앤티가 격리에서 풀렸다`).toBe(false);
+      expect(isNashQuarantined(3, false, k, 'callBB')).toBe(true);
     }
-    for (const k of [2, 5, 8]) expect(hasNashRange('callBB', k, 3, false), `callBB 3bb k=${k} 노앤티가 격리에서 풀렸다`).toBe(false);
-    // 살리는 것: k=1 열(6→7→8→9→10bb 로 매끈: 89.0·76.4·66.0·59.0·54.0) · 같은 깊이의 셔브·SB 콜 표 · 10bb 이상
-    for (const s of [7, 8, 9]) {
-      expect(hasNashRange('callBB', 1, s, true), `callBB ${s}bb SB 열까지 막혔다`).toBe(true);
-      expect(hasNashRange('shove', 5, s, true), `shove ${s}bb 가 콜 표 격리에 휩쓸렸다 — kind 별 격리가 깨졌다`).toBe(true);
-      expect(hasNashRange('callSB', 5, s, true), `callSB ${s}bb 가 콜 표 격리에 휩쓸렸다`).toBe(true);
-    }
-    for (const s of [10, 12, 20]) expect(hasNashRange('callBB', 5, s, true), `callBB ${s}bb 가 잘못 막혔다`).toBe(true);
-    // kind 를 안 넘기면 셔브 기준이다 — 예전 호출부가 콜 표 격리를 모르는 채 통과하면 안 되는 자리는 위 호출부 계약이 잡는다
-    expect(isNashQuarantined(7, true, 5)).toBe(false);
+    // 살리는 것: 같은 깊이의 셔브·SB 콜 표(kind 별 격리) · 노앤티 k=1
+    expect(hasNashRange('shove', 5, 3, false), 'shove 3bb 노앤티가 콜 표 격리에 휩쓸렸다 — kind 별 격리가 깨졌다').toBe(true);
+    expect(hasNashRange('callSB', 5, 3, false), 'callSB 3bb 노앤티가 콜 표 격리에 휩쓸렸다').toBe(true);
+    expect(hasNashRange('callBB', 1, 3, false), 'callBB 3bb 노앤티 SB 열까지 막혔다').toBe(true);
+    // 🔴 빅앤티 7·8·9bb 는 **여기서** 막지 않는다 — 그 깊이는 NASH_ANTE_QUARANTINE 이 kind 를 가리지 않고 통째로 막는다.
+    //   두 목록이 같은 깊이를 말하면 다음 편집이 어느 쪽을 믿을지 모른다(2026-09-19 단일 출처 정리).
+    expect(NASH_CALLBB_QUARANTINE.ante, '빅앤티 깊이가 콜 표 목록에 되살아났다 — 격리 출처가 둘이 된다').toEqual([]);
+    for (const s of [7, 8, 9]) expect(isNashQuarantined(s, true, 5, 'callBB'), `${s}bb 빅앤티 k≥2 가 안 막혔다`).toBe(true);
   });
   it('안테가 있으면 셔브가 넓어진다 (SB 10bb)', () => {
     const noA = rangeComboPct(freqFromArray(nashRange('shove', 1, 10, false), HAND_ORDER));

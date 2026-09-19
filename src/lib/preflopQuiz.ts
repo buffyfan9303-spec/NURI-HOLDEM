@@ -37,10 +37,12 @@ export const PUSH_POS: { k: number; label: string }[] = [
 export const PUSH_STACKS = [5, 7, 8, 10, 12, 15]; // 실전 빈발 구간
 /** 드릴이 실제로 낼 수 있는 깊이 — **격리 구간을 뺀 것**.
  *
- *  왜 따로 두나: 빅 앤티 4~6BB 표는 값이 틀려 격리됐다(`nash.data.ts` 의 `NASH_ANTE_QUARANTINE`).
- *  격리된 조합을 `nashRange` 로 읽으면 **전부 0** 이 돌아오는데, 드릴은 그걸 "전부 폴드가 정답" 으로
+ *  왜 따로 두나: 격리된 조합을 `nashRange` 로 읽으면 **전부 0** 이 돌아오는데, 드릴은 그걸 "전부 폴드가 정답" 으로
  *  채점한다 — 틀린 조언이 채점 기준이 되는 것이라 차트에 "데이터 없음" 을 띄우는 것보다 나쁘다.
- *  ⚠ `PUSH_STACKS` 자체는 그대로 둔다 — 표를 재산출해 격리를 풀면 이 목록이 자동으로 되살아난다. */
+ *  ⚠ 지금 격리는 **빅앤티 k≥2 의 2~10BB** 다(`nash.data.ts` 의 `NASH_ANTE_QUARANTINE`). k=1(SB)은 전 깊이
+ *    살아 있으므로 이 필터는 **깊이를 하나도 못 뺀다** — 깊이별로 자리가 줄 뿐이다. 실제로 자리를 고르는 것은
+ *    `seatsFor`·`pushQuiz` 의 격리 판정이고, 이 목록은 "그 깊이에 낼 문제가 아예 없나" 만 본다.
+ *  ⚠ `PUSH_STACKS` 자체는 그대로 둔다 — 표를 재산출해 격리를 풀면 자리가 자동으로 되살아난다. */
 export const PUSH_STACKS_AVAILABLE = PUSH_STACKS.filter((s) => PUSH_POS.some((p) => !isNashQuarantined(s, NASH_BIG_ANTE, p.k)));
 /** 올인 콜 자리 — SB 콜 레인지는 셔버가 SB 가 아닌 k≥2 에서만 존재(nash.data) */
 const CALL_SEATS = [{ id: 'bb', kind: 'callBB' as const, label: 'BB', minK: 1 }, { id: 'sb', kind: 'callSB' as const, label: 'SB', minK: 2 }];

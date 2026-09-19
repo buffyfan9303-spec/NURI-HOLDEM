@@ -133,11 +133,13 @@ test.describe('GTO 도구 — 출처 배지가 눈에 보인다', () => {
     });
   }
 
-  test('🔴 푸시·폴드 차트는 자체 데이터가 재현 불가임을 화면에 적어 둔다', async ({ page }) => {
+  test('🔴 푸시·폴드 차트는 자체 데이터의 재현 가능 여부를 화면에 적어 둔다', async ({ page }) => {
+    // 2026-09-19: 생성기(`scripts/gen-nash/`)가 저장소에 들어오면서 이 화면이 읽는 빅 앤티 표는 전부 재현된다 —
+    //   문구가 '생성기 재현 필요' → '재산출 가능' 으로 바뀌었다. 소스 쪽 짝은 gtoContract.test.ts 가 잠근다.
     await openTools(page, '#tool=pushfold');
     const dialog = page.getByRole('dialog').first();
     await expect(dialog).toBeVisible({ timeout: 20_000 });
-    await expect(dialog.getByText('생성기 재현 필요').first()).toBeVisible({ timeout: 15_000 });
+    await expect(dialog.getByText('재산출 가능').first()).toBeVisible({ timeout: 15_000 });
   });
 
   test('🔴 레인지 차트 배지가 100bb 기준임을 함께 말한다', async ({ page }) => {
