@@ -66,6 +66,15 @@ describe('composePlan · 간격 반복 우선', () => {
     expect(Object.keys(JSON.parse(localStorage.getItem(SRS_KEY)!))).toEqual([`post|${s0}`]);
   });
 
+  it('복원 안 되는 오답 큐 키(격리 구간)는 건너뛰고 오답 큐 저장소에서도 지운다', () => {
+    // push|2-5|A5s: 빅앤티 k=2 · 5bb — NASH_ANTE_QUARANTINE 격리 구간이라 makeQuiz 가 복원을 거부한다.
+    seed({}, ['push|2-5|A5s', 'push|3-12|QJs']);
+    const p = composePlan(TODAY);
+    const preflopKeys = p.items.filter((it) => it.kind === 'preflop').map((it) => (it as { key: string }).key);
+    expect(preflopKeys).not.toContain('push|2-5|A5s');
+    expect(JSON.parse(localStorage.getItem(PREFLOP_STAT_KEY)!).wrong).toEqual(['push|3-12|QJs']);
+  });
+
   it('SRS 가 비면 예전 편성 그대로(프리플랍 1 + 포스트플랍 4, 같은 날 같은 결과)', () => {
     seed({});
     const a = composePlan(TODAY);

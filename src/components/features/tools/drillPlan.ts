@@ -19,7 +19,7 @@
 //
 // 편성 결과는 그날 하루 고정이다(새로고침해도 같은 5문제) — 도중에 나갔다 와도 이어서 푼다.
 import { awardXp, todayStr } from '../../../lib/trainerProgress';
-import { MODES, loadPreflopStats, makeQuiz, modeOfKey } from '../../../lib/preflopQuiz';
+import { MODES, loadPreflopStats, makeQuiz, modeOfKey, savePreflopStats } from '../../../lib/preflopQuiz';
 import { daysSinceAnswered, dropSrs, dueKeys, loadSrs } from '../../../lib/srs';
 import { ALL_CATS, CAT_LABEL, SCENARIOS, loadPostflopStats, type Category } from './postflop.data';
 import { useSyncExternalStore } from 'react';
@@ -109,7 +109,16 @@ export function composePlan(date: string): DrillPlan {
 
   // ① 프리플랍 — 오답 큐 우선(복습으로 이미 든 키는 제외, 슬롯도 그만큼 줄인다)
   const taken = new Set(items.flatMap((it) => (it.kind === 'preflop' ? [it.key] : [])));
-  const queue = [...loadPreflopStats().wrong].reverse().filter((k) => modeOfKey(k) && !taken.has(k)); // 최근 오답부터
+  const preStats = loadPreflopStats();
+  const wrongGone: string[] = []; // 복원 안 되는 키(격리·시나리오 삭제) — SRS(⓪)와 같은 이유로 큐에서도 떨군다
+  const queue = [...preStats.wrong].reverse().filter((k) => { // 최근 오답부터
+    if (taken.has(k)) return false;
+    const mode = modeOfKey(k);
+    const ok = !!mode && makeQuiz(mode, k).key === k;
+    if (!ok) wrongGone.push(k);
+    return ok;
+  });
+  if (wrongGone.length) savePreflopStats({ ...preStats, wrong: preStats.wrong.filter((k) => !wrongGone.includes(k)) });
   const preSlots = Math.min(DRILL_SIZE - items.length, Math.max(0, (queue.length >= 2 ? 2 : 1) - taken.size));
   for (let i = 0; i < preSlots; i++) {
     const key = queue[i];

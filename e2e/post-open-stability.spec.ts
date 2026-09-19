@@ -81,10 +81,24 @@ async function driftAcrossLoad(page: Page, settleMs: number) {
       const el = document.querySelector(sel);
       return el ? +el.getBoundingClientRect().top.toFixed(2) : null;
     };
+    // 🔴 2026-09-20: 예전엔 **페이지 전체**의 layout-shift 합을 셌다. 그래서 다이얼로그와 무관한
+    //   이동(폰트 교체·뒤 화면 이미지 등)까지 섞여 들어와 **CI 에서만 빨개졌다**
+    //   (실측 CI 0.0568 vs 로컬 5/5 통과 · 1차 배포 때도 재시도로 겨우 넘어갔다).
+    //   CLAUDE.md: "CLS 는 여러 원인이 뭉개지는 지표 — 기전을 직접 재는 편이 낫다."
+    //   → `sources` 로 **이동을 일으킨 노드가 이 다이얼로그 안인지** 보고 그것만 센다.
+    //   ⚠ 기준(0.02)은 그대로다. 무르게 한 것이 아니라 **재는 대상을 좁힌 것**이다 —
+    //     원래 잡으려던 버그(SpotPostCard 스켈레톤)는 다이얼로그 안에서 나므로 그대로 걸린다.
+    //   ⚠ 귀속이 안 되는 엔트리(sources 가 빈 경우)는 세지 않는다. 그걸 세면 잡음이 도로 들어온다 —
+    //     대신 위의 `drift`(댓글 섹션 top 이동)가 기전을 직접 재고 있어 빈 검사가 되지 않는다.
     let shift = 0;
+    const dlg = () => document.querySelector('[role="dialog"]');
     const po = new PerformanceObserver((list) => {
-      for (const e of list.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) {
-        if (!e.hadRecentInput) shift += e.value;
+      for (const e of list.getEntries() as unknown as
+           { value: number; hadRecentInput: boolean; sources?: { node?: Node }[] }[]) {
+        if (e.hadRecentInput) continue;
+        const d = dlg();
+        const inDialog = (e.sources ?? []).some((src) => src.node && d && d.contains(src.node));
+        if (inDialog) shift += e.value;
       }
     });
     po.observe({ type: 'layout-shift', buffered: false });

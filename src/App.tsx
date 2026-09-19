@@ -26,10 +26,28 @@ import type { ViewMode } from './components/atoms/ViewModeToggle';
 import IntegratedSearchBar, { expandRegions } from './components/features/IntegratedSearchBar';
 import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
+// ⚠ ScheduleTable 을 lazy 로 돌리지 마라 — 2026-09-20 에 해 보고 **되돌렸다.**
+//   실측: 임계 경로 −0.67KB gz 를 얻는 대신 JS 전체 +0.50KB gz(분할 오버헤드) = **1.3 : 1.**
+//   같은 날 같이 뺀 api/rankings 는 12.5:1 · reservations 10.2:1 · reviews 4.5:1 이었다.
+//   게다가 `lazyWithReload` 는 청크가 캐시에 있어도 첫 렌더에 한 번 서스펜드해 폴백을 ~300ms 붙잡아
+//   표 전환에 없던 Suspense 경계·스켈레톤 폴백·warm() 프리워밍이 **전부 새로 필요해졌다.**
+//   0.67KB 에 그 값을 치르지 않는다. 판단 근거는 docs/HANDOFF.md 의 번들 절.
 import ScheduleTable from './components/features/ScheduleTable';
-import { getRankingsBulk, type RankingEntry } from './api/rankings';
-import { getReservationCounts, getMyReservations, type MyReservationRow } from './api/reservations';
-import { getVenueRatings } from './api/reviews';
+/**
+ * 첫 화면 임계 경로에서 뺀 조회 모듈 3종 — 위 `ledgerMod`·아래 `clockMod` 와 같은 조리법이다.
+ * 셋 다 **호출부가 이펙트 안 1~2곳뿐**이라 첫 페인트에는 실행되지 않는데, 정적 import 는
+ * 코드를 index 청크(= '최대 청크' 예산의 병목이자 임계 경로의 절반)에 통째로 싣는다.
+ *   · rankings     — 일정 탐색 하단 '지난 대회' 아카이브(PastTournaments)가 마운트된 뒤에만
+ *   · reservations — browse pane 게이트(resCountsWanted) + '오늘 예약한 대회'
+ *   · reviews      — loadDeferred(유휴 또는 커뮤니티 탭 진입) 배치
+ * ⚠ `ScheduleCard` 는 여기 넣어도 소용없다 — **HomeTab 이 정적으로 물고 있어** 어차피 임계 경로다(실측).
+ * 타입은 `import type` 이라 런타임 코드를 만들지 않는다 — 지연되는 것은 값뿐이다.
+ */
+const rankingsMod     = () => import('./api/rankings');
+const reservationsMod = () => import('./api/reservations');
+const reviewsMod      = () => import('./api/reviews');
+import type { RankingEntry } from './api/rankings';
+import type { MyReservationRow } from './api/reservations';
 import NotificationPanel from './components/features/NotificationPanel';
 import VerifyGateSheet from './components/features/VerifyGateSheet';
 import { NoticeRow } from './components/features/NoticeSection';
@@ -1671,7 +1689,7 @@ export default function App() {
   useEffect(() => {
     if (!resCountsWanted) return;   // 아직 소비처가 없다 — 화면에 그려지는 값이 없으므로 비울 것도 없다
     if (!resIdsKey) { setBrowseResCounts({}); return; }
-    getReservationCounts(resIdsKey.split('|')).then(setBrowseResCounts).catch(() => {});
+    reservationsMod().then((m) => m.getReservationCounts(resIdsKey.split('|'))).then(setBrowseResCounts).catch(() => {});
     // resVersion: 내가 예약/취소한 직후 '예약 N'·'마감 임박'이 낡은 채 남지 않게 한 번 더 읽는다
   }, [resCountsWanted, resIdsKey, resVersion]);
   const [venues,        setVenues]        = useState<Venue[]>(() => readSnap<Venue[]>('venues') ?? []);
@@ -2079,7 +2097,7 @@ export default function App() {
     if (deferredLoadedRef.current) return;
     deferredLoadedRef.current = true;
     // 5개 응답을 한 콜백에서 일괄 반영(5렌더→1렌더) — 부팅 리렌더 폭풍 계측의 직접 조치
-    Promise.allSettled([getPosts(), getComments({}), getListings(), getVenueRatings()])
+    Promise.allSettled([getPosts(), getComments({}), getListings(), reviewsMod().then((m) => m.getVenueRatings())])
       .then(([pr, cr, lr, rr]) => {
         if (pr.status === 'fulfilled') { setPosts(pr.value); setPostsErr(null); writeSnap('posts', pr.value); }
         else setPostsErr(pr.reason);
@@ -2501,7 +2519,7 @@ export default function App() {
     if (!user) { setMyTodayRes([]); setMyTodayResErr(null); return; }
     setMyTodayResErr(null);
     const today = new Date().toLocaleDateString('en-CA');
-    getMyReservations(30)
+    reservationsMod().then((m) => m.getMyReservations(30))
       .then((list) => { setMyTodayRes(list.filter((r) => r.date === today)); setMyTodayResErr(null); })
       .catch((e) => setMyTodayResErr(e)); // 직전 성공 목록은 지우지 않는다
     // resVersion: 상세 모달·'내 정보' 어느 쪽에서 예약/취소해도 홈 '오늘 예약한 대회'가 따라온다(F06)
@@ -4540,7 +4558,7 @@ const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: {
     if (pairs.length === 0) return;
     let alive = true;
     // 항목마다 1건씩 쏘던 것을 한 번에 — 5요청 → 1요청(데이터가 0행이어도 5건이 나가던 구조였다)
-    getRankingsBulk(pairs)
+    rankingsMod().then((m) => m.getRankingsBulk(pairs))
       .then((byKey) => {
         if (!alive) return;
         const next: Record<string, RankingEntry[]> = {};

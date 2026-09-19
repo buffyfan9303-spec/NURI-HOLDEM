@@ -1973,7 +1973,20 @@ html:not([data-overlay]) footer { view-transition-name: app-footer; }
      새 자리로 미끄러지는 것이 존재 이유다(라벨 그룹은 이미 따로 얼려져 있다). */
 ::view-transition-group(app-header),
 ::view-transition-group(app-tabbar),
-::view-transition-group(app-gnb) { animation: none; }
+::view-transition-group(app-gnb),
+/* 🔴 2026-09-20 오너 리포트: "메인 메뉴가 이동하면 **찌그러졌다가** 다시 화면으로 가."
+   위 1925~1926 에서 `.aura-bg`·`footer` 에 이름만 주고 **그룹을 안 얼렸다**(어제 내가 넣은 것).
+   바로 위 주석이 경고하는 그 함정에 내가 그대로 걸렸다 — old/new 는 '그림', 그룹은 '박스'다.
+   이 둘은 헤더·탭바와 달리 **박스 크기 자체가 탭마다 변한다**: 아우라 배경과 푸터는 문서 높이를 따라가는데
+   탭마다 본문 길이가 달라 높이가 통째로 바뀐다. UA 그룹 애니가 그 높이를 보간하니 화면이 세로로
+   눌렸다 펴진다 — 그게 오너가 본 '찌그러짐' 이다.
+   실측(라이브 nuriholdem.com · Pixel 7 · 전환 3s 로 늘려 +200ms 에 getAnimations()):
+     돌고 있던 그룹 = root · **app-chrome-bg · app-footer** (박스 y −76 / h 996.1, 뷰포트 915)
+     안 돌던 그룹  = app-header · app-tabbar · app-gnb  ← 이미 얼려 둔 셋. 이게 이 판정의 대조군이다.
+   ⚠ 이름 자체를 PC 전용으로 가두는 방법도 있지만 그러면 모바일에서 옛 깜빡임이 되돌아온다.
+     이름은 두고 **그룹까지 얼려** 완전 정지시키는 쪽이 두 화면 모두에서 맞다. */
+::view-transition-group(app-chrome-bg),
+::view-transition-group(app-footer) { animation: none; }
 
 /* 🔴 여기 있던 `html[data-vt-scope='rank-tab']::view-transition-group(rank-tabbar) { z-index: 1 }` 를 **지웠다**(2026-09-18).
    내가 같은 날 넣은 규칙이고, geometry 만 보고 "무해" 라고 판정한 것이 **오판**이었다.
