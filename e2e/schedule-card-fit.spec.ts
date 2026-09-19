@@ -123,7 +123,17 @@ const measure = (page: Page) => page.evaluate(() => {
       //     ⚠ 이건 게이트를 푸는 것이 아니다. '…'이 보이는 줄임은 유저가 잘렸다는 걸 **안다**.
       //       위험한 것은 `overflow:hidden` 만 걸려 **말없이** 사라지는 쪽이고, 그건 아래 overflow 가 그대로 잡는다.
       if (s.webkitLineClamp && s.webkitLineClamp !== 'none') { clamped.push(text); continue; }
-      if (cut && /마감까지|등록 마감|참가비 ?[\d—]|GTD|예상 상금/.test(text)) {
+      // 🔴 2026-09-20 — 값 판정을 **글자에서 구조로** 옮긴다. 새 카드에서 지표는 `<Metric>` 이라
+      //   라벨('참가비')과 값('10T')이 **다른 요소**로 쪼개졌다. 옛 정규식 `참가비 ?[\d—]` 는
+      //   둘이 한 덩어리일 때만 맞으므로, 그대로 두면 **값이 잘려도 안 잡힌다**(라벨만 있는 요소에는
+      //   숫자가 없고, 값만 있는 요소에는 '참가비' 가 없다). 라벨이 '등록 마감' → '레지마감' 으로
+      //   바뀐 것도 같은 구멍이다. `[data-metrics]` 안은 **전부 값 취급**한다 — 이름이 아니라 수치다.
+      const 지표안 = !!el.closest('[data-metrics]');
+      // ⚠ 새 라벨('레지마감')을 이 정규식에 **넣지 마라.** `textContent` 는 자손 글자를 다 포함해서
+      //   카드 전체·가운데 덩어리 같은 **조상**까지 걸린다(실측: 한 번 넣었다가 10건이 거짓 실패했다).
+      //   지표 칸은 위 `지표안` 이 **구조로** 이미 덮는다 — 이름으로 다시 잡을 필요가 없다.
+      //   아래 이름들은 지표 줄 **밖**(PC 표 ScheduleTable·그리드 카드)에서 쓰는 말이라 남긴다.
+      if (cut && (지표안 || /마감까지|등록 마감|GTD|예상 상금/.test(text))) {
         clippedValues.push(`${text} ${el.clientWidth}/${el.scrollWidth} × ${el.clientHeight}/${el.scrollHeight}`);
         continue;
       }
@@ -153,17 +163,24 @@ const measure = (page: Page) => page.evaluate(() => {
           w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10,
         };
       };
-      // 2열 격자 + **행마다 flex** 구조(2026-09-18 12차). 같은 줄인지는 격자 좌표가 아니라
-      //   '같은 flex 컨테이너의 형제인가' 로 정해지고, 폭이 모자라면 그 안에서 wrap 한다.
-      const row2 = ':scope > [class*="col-start-2"][class*="row-start-2"]';
-      const row3 = ':scope > [class*="col-start-2"][class*="row-start-3"]';
+      // 🔴 2026-09-20 — 카드 구조가 바뀌었다(오너 목업). 격자(`col-start-*`/`row-start-*`)가 아니라
+      //   `[로고] [매장 / 제목 / 지표3칸] [시작+시각]` 의 flex 다. 옛 셀렉터는 **전부 null 이 되어**
+      //   아래 단언들이 조용히 빈손이 된다 — 그래서 손잡이를 새 구조로 옮긴다(단언은 안 푼다).
+      //   `[data-metrics]` 는 그 용도로 카드에 일부러 박아 둔 계측 손잡이다.
+      const metrics = c.querySelector('[data-metrics]');
+      const cell = (n: number) => {
+        const box = metrics?.children[n] as HTMLElement | undefined;
+        if (!box) return null;
+        const r = box.getBoundingClientRect();
+        return { top: Math.round(r.top * 10) / 10, bot: Math.round(r.bottom * 10) / 10,
+                 w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 };
+      };
       return {
-        logo:  pick(':scope > [class*="row-span-3"]'),
-        venue: pick(':scope > [class*="col-start-2"][class*="row-start-1"]'),
-        title: pick(`${row2} > h3`),
-        gtd:   pick(`${row2} > p`),
-        meta:  pick(`${row3} > div`),
-        time:  pick(`${row3} > p`),
+        title: pick('h3'),
+        // 지표 3칸 — 이 셋이 **한 줄에 서는가**가 오너가 목업으로 요구한 계약이다.
+        m1: cell(0), m2: cell(1), m3: cell(2),
+        metricsN: metrics ? metrics.children.length : 0,
+        time:  pick(':scope > div:last-of-type'),
       };
     }),
     // 🔴 제목 줄과 그 아래(참가비·등록마감) 줄이 **겹치지 않는가**.
@@ -175,7 +192,9 @@ const measure = (page: Page) => page.evaluate(() => {
       const h3 = c.querySelector('h3');
       // ⚠ `nextElementSibling` 을 쓰면 안 된다 — grid 로 바꾼 뒤 제목 **다음 형제는 같은 행의 GTD** 다.
       //   재려는 것은 '아랫줄과의 간격' 이므로 3행 2열(참가비·메타)을 직접 집는다.
-      const next = c.querySelector('[class*="col-start-2"][class*="row-start-3"]');
+      // 🔴 2026-09-20 — 제목 아랫줄은 이제 지표 3칸이다(옛 `row-start-3` 은 존재하지 않아
+      //   null 이 되고, 그러면 이 카드가 통째로 검사에서 빠져 **겹침을 못 잡는다**).
+      const next = c.querySelector('[data-metrics]');
       if (!h3 || !next) return null;
       const a = h3.getBoundingClientRect(); const b = next.getBoundingClientRect();
       return {
@@ -243,8 +262,9 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
           expect(r.cards, '일정 카드가 렌더되지 않았다 — 잴 것이 없으면 통과가 아니다').toBeGreaterThan(0);
           console.log(`[${w}/${theme}/${zoom ? 200 : 100}] cards=${r.cards} h=${r.cardH.join(',')} clamp=${r.clamped.length} ellip=${r.ellipsis.length}`);
           // 격자 기하를 **항상** 찍는다 — 어긋남은 통과/실패보다 먼저 눈에 보여야 원인을 짚는다.
-          console.log(`  행2 ${r.cols.map((c) => `[제목 ${c.title?.top}~${c.title?.bot} | GTD ${c.gtd?.top}~${c.gtd?.bot}]`).join(' ')}`);
-          console.log(`  행3 ${r.cols.map((c) => `[메타 ${c.meta?.top}~${c.meta?.bot} | 시각 ${c.time?.top}~${c.time?.bot}]`).join(' ')}`);
+          console.log(`  제목 ${r.cols.map((c) => `${c.title?.top}~${c.title?.bot}`).join(' ')}`);
+          console.log(`  지표3칸 ${r.cols.map((c) => `[${c.m1?.top}~${c.m1?.bot} | ${c.m2?.top}~${c.m2?.bot} | ${c.m3?.top}~${c.m3?.bot}] n=${c.metricsN}`).join(' ')}`);
+          console.log(`  시각 ${r.cols.map((c) => `${c.time?.top}~${c.time?.bot}`).join(' ')}`);
           expect(r.clippedValues, `🔴 값이 잘렸다 — 이름은 줄여도 금액·등록 마감은 못 줄인다:\n${r.clippedValues.join('\n')}`).toEqual([]);
           expect(r.hiddenScroll, `등록 마감·참가비가 숨은 가로 스크롤 안에 있다:\n${r.hiddenScroll.join('\n')}`).toEqual([]);
           expect(
@@ -284,27 +304,43 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
           //   구조 문제다 — 제목과 GTD 가 형제가 아니거나 justify-between 이 빠진 것이다.
           const 겹치나 = (a: { top: number; bot: number } | null, b: { top: number; bot: number } | null) =>
             !!a && !!b && a.top < b.bot && b.top < a.bot;
-          const 어긋남 = !zoom && w >= 768
-            ? r.cols.flatMap((c, i) => [
-              ...(겹치나(c.title, c.gtd) ? [] : [`${i + 1}번째 2행: 제목 ${c.title?.top}~${c.title?.bot} vs GTD ${c.gtd?.top}~${c.gtd?.bot}`]),
-              ...(겹치나(c.meta, c.time) ? [] : [`${i + 1}번째 3행: 메타 ${c.meta?.top}~${c.meta?.bot} vs 시각 ${c.time?.top}~${c.time?.bot}`]),
-            ])
-            : [];
+          // 🔴 2026-09-20 — 계약의 **대상**이 바뀌었다. [제목|GTD]·[메타|시각] 짝은 구조에서 사라졌고
+          //   (GTD 가 지표 줄로 갔다), 오너가 목업으로 요구한 '한 줄' 은 이제 **지표 3칸**이다.
+          //   단언을 없애는 게 아니라 같은 성질(줄 맞음)을 지금 있는 대상에 건다.
+          //   ⚠ **모든 카드가 한 줄이어야 한다고 요구하지 않는다.** 바로 위 옛 단언이 쓰던 판정과 같다 —
+          //     이 스펙의 픽스처는 일부러 최악 조합이라(참가비 `1,234,567원`) 390px 에서도 마지막 칸이
+          //     스스로 아랫줄로 내려간다. 그게 **설계된 탈출구**다(2026-09-20: 그 탈출구가 없어서
+          //     레지마감 칸이 30/33 으로 잘리고 있었다 → `flex-wrap` 을 넣어 고쳤다).
+          //     대신 **한 장이라도 3칸이 한 줄로 서는가**를 본다. 하나도 못 서면 구조가 깨진 것이다
+          //     (예: 균등 3등분으로 바뀌어 늘 접히는 상태).
+          //   ⚠ 200% 확대는 뺀다 — 글자가 2배면 전부 접히는 것이 정상이다.
+          const 칸수틀림 = r.cols
+            .map((c, i) => ({ i, n: c.metricsN }))
+            .filter(({ n }) => n !== 3)
+            .map(({ i, n }) => `${i + 1}번째 카드: 지표 칸이 3개가 아니라 ${n}개다`);
+          expect(칸수틀림, `🔴 지표 칸 수가 3이 아니다 — 칸을 지우면 구분선도 같이 사라진다:\n${칸수틀림.join('\n')}`)
+            .toEqual([]);
+
+          const 한줄인카드 = zoom ? 1 : r.cols.filter((c) => 겹치나(c.m1, c.m2) && 겹치나(c.m2, c.m3)).length;
           expect(
-            어긋남,
-            '🔴 자리가 넉넉한데도 좌우 값이 같은 줄에 안 선다 — 폭이 아니라 **구조** 문제다:\n'
-            + 어긋남.join('\n')
-            + '\n→ 제목과 GTD 가 같은 div 의 형제인지, 그 div 에 justify-between 이 있는지 봐라.',
-          ).toEqual([]);
+            한줄인카드,
+            '🔴 지표 3칸(상금·참가비·레지마감)이 **한 장도** 한 줄로 안 선다 — 오너 목업의 핵심 계약이다.\n'
+            + `  잰 카드 ${r.cols.length}장: `
+            + r.cols.map((c) => `[${c.m1?.top}~${c.m1?.bot}|${c.m2?.top}~${c.m2?.bot}|${c.m3?.top}~${c.m3?.bot}]`).join(' ')
+            + '\n→ 칸에 균등분할(3등분)이 들어갔는지 봐라. 320px 에서 칸이 44px 가 되어 `1,000만`(47px)이 **항상** 접힌다.'
+            + '\n  내용 폭 flex 로 두면 320px 에서도 129px 로 한 줄에 선다.',
+          ).toBeGreaterThan(0);
 
           // 🔴 잴 것이 실제로 있었는가 — 마크업이 바뀌면 위 검사가 **빈 통과**가 된다.
           const 못찾음 = r.cols
-            .map((c, i) => ({ i, miss: ['logo', 'venue', 'title', 'gtd', 'meta', 'time'].filter((k) => !c[k as keyof typeof c]) }))
+            .map((c, i) => ({ i, miss: ['title', 'm1', 'm2', 'm3', 'time'].filter((k) => !c[k as keyof typeof c]) }))
             .filter(({ miss }) => miss.length)
             .map(({ i, miss }) => `${i + 1}번째 카드: ${miss.join('/')} 없음`);
           expect(
             못찾음,
-            `🔴 격자 칸을 못 찾았다 — 이 검사는 지금 아무것도 안 재고 있다:\n${못찾음.join('\n')}`,
+            '🔴 카드 손잡이를 못 찾았다 — 이 검사는 지금 아무것도 안 재고 있다'
+            + '(마크업이 바뀌었으면 셀렉터를 옮겨라. 단언을 지우지 마라):\n'
+            + `${못찾음.join('\n')}`,
           ).toEqual([]);
         });
       }
@@ -391,7 +427,13 @@ for (const theme of ['dark', 'light'] as const) {
     expect(rows.length, '잎 텍스트를 하나도 못 찾았다 — 측정이 안 된 것이다').toBeGreaterThan(4);
     console.log(`[대비 ${theme}]`, rows.map((r) => `${r.text}=${r.ratio}(${r.size})`).join(' · '));
     // 읽어야 값인 것들: 참가비 금액 · 상금 · 등록 마감 · 예약 인원 · 대회명 · 매장명
-    const key = rows.filter((r) => /원$|^상금|^등록 마감|^예약|토요일|누리홀덤/.test(r.text));
+    // 🔴 2026-09-20 — 카드가 재설계되면서 **읽어야 할 글자의 이름이 전부 바뀌었다.**
+    //   옛 목록(`^상금`·`^등록 마감`·`토요일`)으로는 3개도 못 찾아 이 검사가 빈손이 됐다(실측 2개).
+    //   바뀐 것: 라벨이 `상금`/`예상 상금`·`참가비`·`레지마감`·`시작` 으로 쪼개졌고(값은 따로 leaf),
+    //   날짜(`토요일`·`9/18(금)`)는 화면에서 **빠졌다**(오너 지시).
+    //   ⚠ `^상금` 만 두면 '예상 상금'(엔트리 비례 표기)이 빠진다 — 둘은 다른 말이라 둘 다 적는다.
+    //   ⚠ 값 쪽도 같이 본다: `원$`(1,234,567원) · `T$`(10T) · `만$`(1,000만) · 시각(`\d:\d`).
+    const key = rows.filter((r) => /원$|T$|만$|^\d{1,2}:\d{2}$|상금|^참가비|^등록 마감|^레지마감|^시작|^예약|누리홀덤/.test(r.text));
     expect(key.length, '핵심 값이 화면에 없다').toBeGreaterThan(3);
     const bad = key.filter((r) => r.ratio < 4.5).map((r) => `${r.text} ${r.ratio}:1 (${r.fg} on ${r.bg})`);
     expect(bad, `AA(4.5:1) 미달:\n${bad.join('\n')}`).toEqual([]);

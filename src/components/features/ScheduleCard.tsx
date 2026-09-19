@@ -90,6 +90,24 @@ export function regCloseText(s: Pick<Schedule, 'regCloseTime' | 'structure'>): s
   return null;
 }
 
+/** 목록 카드 '레지마감' 칸의 값 — **저장된 값을 그대로** 돌려준다(오너 2026-09-20: "계산하지 마라").
+ *
+ *  왜 위 `regCloseText` 를 안 쓰나: 그쪽은 '16LV 00:12' 를 '등록 마감 16레벨' 로 **다시 쓴다**.
+ *  업주가 '레벨 8' 이라 적었든 '22:30' 이라 적었든 유저에게는 업주가 적은 문장이 그대로 보여야 한다.
+ *  라벨('레지마감')이 이미 무슨 값인지 말하므로 접두사도 붙이지 않는다.
+ *
+ *  ⚠ `regCloseText` 는 지우지 않는다 — PC 표(ScheduleTable)와 아래 GridCard 가 그 어휘를 쓴다.
+ *    두 함수가 같은 필드를 다르게 읽는 것이 아니라, **같은 값을 자리에 맞게 다르게 적는 것**이다.
+ *  ⚠ `structure.lateRegLevels` 폴백은 유지한다. 실데이터에는 거의 없지만(lib/regClose 주석 참조)
+ *    regCloseTime 이 빈 옛 포스터가 이 값을 쓰고 있어, 빼면 그 포스터에서 정보가 통째로 사라진다.
+ *    숫자만 찍으면 무슨 숫자인지 알 수 없으므로 그때만 '레벨' 을 붙인다. */
+function regCloseRaw(s: Pick<Schedule, 'regCloseTime' | 'structure'>): string | null {
+  const rc = String(s.regCloseTime ?? '').trim();
+  if (rc) return rc;
+  const n = s.structure?.lateRegLevels;
+  return n != null && n > 0 ? `${n}레벨` : null;
+}
+
 /** 상금 표시 정본 — '상금 보장'(GTD)과 '예상 상금'(엔트리 비례)의 **의미를 섞지 않는다**.
  *  데이터가 없으면 null 이다(0 이나 확정값처럼 적지 않는다). */
 // eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
@@ -207,16 +225,27 @@ function VenueLink({
   //    어떤 배치로도 한 줄에 안 들어간다. 실측: client 153 / scroll 192, 지역은 4/68 로 **사실상 소멸**.
   //    잘라 숨기는 대신 어절 단위로 접는다(긴 매장명은 비상 줄바꿈 허용). 카드가 그만큼 길어질 뿐이다.
   //    그리드 카드는 포스터가 식별을 대신하고 별점이 같은 줄에 있어 기존 말줄임 동작을 유지한다.
-  const wrapCls = wrap ? 'flex-wrap' : '';
+  // 🔴 2026-09-20: wrap 모드를 **flex 에서 글 흐름(block)으로** 바꿨다.
+  //   flex 로 두면 매장명 span 이 **flex 줄을 통째로** 차지한다 — 이름이 한 줄을 넘는 순간
+  //   `·`·지역이 **항상 다음 줄**로 밀린다. 남는 자리가 있어도 그렇다(flex 줄바꿈 규칙).
+  //   실측(3열 재구성 후, 매장 줄 높이): 320px 59.5px(3줄) · 360px 37.2px(2줄).
+  //   인라인으로 흘리면 지역이 이름 **마지막 줄 끝에** 붙는다 → 320px 39.7px(2줄) · 360px 18.6px(1줄).
+  //   목록에서 이 한 줄이 카드 높이의 20~37% 였다.
+  // ⚠ 비-wrap(그리드 카드)는 손대지 않는다 — 거기선 별점이 같은 줄에 있어 flex 정렬이 필요하다.
+  const rootCls = wrap
+    ? `block min-w-0 max-w-full ${sizeCls} text-ink-muted text-left`
+    : `inline-flex min-w-0 items-baseline gap-0.5 ${sizeCls} text-ink-muted max-w-full text-left`;
   const nameCls = wrap
-    ? 'min-w-0 break-keep [overflow-wrap:anywhere] font-semibold text-ink-secondary'
+    ? 'break-keep [overflow-wrap:anywhere] font-semibold text-ink-secondary'
     : 'min-w-0 truncate font-semibold text-ink-secondary';
-  const regionCls = wrap ? 'min-w-0 break-keep' : (regionShrinks ? 'min-w-0 flex-1 truncate' : 'shrink-0');
+  // flex 가 아니면 gap 이 안 먹는다 — 구분점 좌우 여백을 padding 으로 준다(flex 쪽은 종전 gap 그대로).
+  const dotCls = wrap ? 'px-0.5 text-border-strong' : 'shrink-0 text-border-strong';
+  const regionCls = wrap ? 'break-keep' : (regionShrinks ? 'min-w-0 flex-1 truncate' : 'shrink-0');
   if (!onClick) {
     return (
-      <span className={`inline-flex min-w-0 items-baseline gap-0.5 ${wrapCls} ${sizeCls} text-ink-muted max-w-full`}>
+      <span className={rootCls}>
         <span className={nameCls}>{pubName}</span>
-        <span className="shrink-0 text-border-strong">·</span>
+        <span className={dotCls}>·</span>
         <span className={regionCls}>{region}</span>
       </span>
     );
@@ -225,12 +254,12 @@ function VenueLink({
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
-      className={`group inline-flex min-w-0 items-baseline gap-0.5 ${wrapCls} ${sizeCls} text-ink-muted hover:text-accent-300 transition-colors max-w-full text-left`}
+      className={`group ${rootCls} hover:text-accent-300 transition-colors`}
     >
       <span className={`${nameCls} underline decoration-dotted underline-offset-2 group-hover:text-accent-300`}>
         {pubName}
       </span>
-      <span className="shrink-0 text-border-strong">·</span>
+      <span className={dotCls}>·</span>
       <span className={regionCls}>{region}</span>
     </button>
   );
@@ -334,44 +363,49 @@ interface CardProps {
   venue?: { imageUrl?: string; themeColor?: string };
 }
 
-/** 시작까지 남은 시간(24시간 이내) — 배지가 아니라 텍스트(§20.2 시각 노이즈 감소) */
-function soonText(schedule: Schedule, status: ReturnType<typeof scheduleStatus>): string | null {
-  if (status !== 'upcoming') return null;
-  const ms = new Date(`${schedule.date}T${schedule.startTime || '19:00'}:00+09:00`).getTime() - Date.now();
-  if (ms <= 0 || ms > 24 * 3600_000) return null;
-  const h = Math.floor(ms / 3600_000), m = Math.floor((ms % 3600_000) / 60_000);
-  return `${h > 0 ? `${h}시간 ` : ''}${m}분 후`;
+/* 🔴 2026-09-20 오너: 목록 카드에서 **날짜와 카운트다운을 뺀다.**
+ *   여기 있던 `soonText()`('12시간 49분 후')를 지웠다 — 유일한 소비처가 이 카드였다.
+ * ⚠ 잃은 것 두 가지를 숨기지 않고 적는다:
+ *   ① **날짜** — 일정 탐색 목록은 날짜 그룹 머리말이 없는 **평면 목록**이라(App.tsx `visibleSchedules.map`)
+ *      카드에서 `9/20(일)` 이 빠지면 여러 날짜가 섞인 줄에서 날짜 단서가 상단 날짜 스트립뿐이다.
+ *      홈 탭('오늘·내일' 두 날짜를 한 목록에 섞어 보여 준다)에서는 두 날이 구분되지 않는다.
+ *   ② **시작까지 남은 시간** — '곧 시작'을 알아볼 단서가 없어진다.
+ *   되살리려면 git 이력의 `soonText` 를 가져와 시각 아래에 붙이면 된다(열 폭은 그대로 쓴다).
+ * ⚠ `scheduleStatus` import 는 그대로 둔다 — 아래 GridCard 가 쓴다. */
+
+/** 대회 등급 배지 — 오너 목업의 제목 오른쪽 `[SPECIAL]` 칸.
+ *  어휘는 상단 필터 칩(App.tsx)·포스터 입력(PosterFormModal)과 **같은 말**을 쓴다.
+ *  같은 대회를 화면마다 다른 이름으로 부르면 필터로 고른 것과 카드에 적힌 것이 달라 보인다.
+ *  ⚠ `grade` 가 없으면(일반 대회) 배지를 렌더하지 않는다 — 빈 배지는 제목 폭만 먹는다.
+ *  ⚠ TOP(유료 노출)을 여기 두지 않는다. 2026-09-18(5차) 오너가 "top 를 누리 테스트 홀덤펍 뒤로"
+ *    라고 지정해 매장 줄로 옮긴 자리이고, 제목 안에 두면 320px 에서 43px 를 먹는다(그때 실측). */
+const GRADE_BADGE: Record<string, string> = { daily: '데일리', satellite: '새틀', series: '시리즈' };
+
+/** 지표 한 칸 — 위에 작은 라벨 / 아래에 값. 3칸이 **한 줄에 서야 하므로** 이 칸은 자기 내용만큼만
+ *  차지하고(basis auto), 폭이 모자라면 `min-w-0` 으로 줄어든다. 줄어들면 글자가 접힐 뿐 잘리지 않는다
+ *  — `[overflow-wrap:anywhere]` 가 그 탈출구다(§28: 막으려는 것은 '금액이 안 보이는 것'이다).
+ *  ⚠ `flex-1`(균등 3등분)로 하지 마라. 320px 에서 칸이 44px 인데 `1,000만` 이 47px 라 반드시 접힌다. */
+function Metric({ label, value, tone, title }: { label: string; value: string; tone?: string;
+  /** 값의 원문(마우스 오버·보조기기용). 참가비 `10T` 는 이 저장소의 단위라 **첫 방문자가 확인할 길**이 필요하다. */
+  title?: string }) {
+  return (
+    <div className="min-w-0 sm:min-w-[4.5rem]" title={title}>
+      <div className="text-[9px] font-bold uppercase leading-tight text-ink-muted [overflow-wrap:anywhere] min-[360px]:text-[10px]">{label}</div>
+      <div className={`text-xs font-extrabold leading-tight tracking-tight tabular-nums [overflow-wrap:anywhere] min-[360px]:text-[0.8125rem] ${tone ?? 'text-ink-primary'}`}>{value}</div>
+    </div>
+  );
 }
 
-// ⚠ `regInfo`(실측 레지 상태)를 더 이상 받지 않는다 — 5차에서 상태 표시를 없애며 유일한 소비처가
-//   사라졌다. **prop 자체는 CardProps 에 남는다**(GridCard 가 아직 배지로 쓴다).
-//   목록 줄에서 잃은 것: 서버가 실측한 '등록 마감/등록 가능'. 남은 단서는 메타 줄의
-//   `등록 마감 N레벨`(포스터에 적힌 정적 값)과 `N분 후`뿐이다. 되살리려면 여기서 다시 받으면 된다.
 function ListCard({
   schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, vtActive,
   favorited = false, onToggleFavorite, venue,
 }: CardProps) {
-  const d = formatDate(schedule.date, schedule.startTime);
-  const status = scheduleStatus(schedule.date, schedule.startTime);
-
-  // [DS] 2026-09-12 §6-1 — **좁은 화면에 3열을 강요하지 않는다.**
-  //   sm(640px) 이상: 종전 3열 골격 그대로(오너 지시 2026-08-28) —
-  //     좌(w-20) 상태·날짜·시각 / 중앙 제목·매장·메타 / 우 참가비·상금. 행 간 가격 비교가 세로 훑기 한 번.
-  //   sm 미만: flex-wrap + order 로 **같은 DOM 을 내용 중심 여러 행**으로 접는다.
-  //     1행(전체 폭 보조행) [예정] 9/12(토) 18:00 2시간 후 ……… 참가비 60,000원
-  //     2행 대회 제목(최대 2줄) / 3행 매장 · 지역 ♥ / 4행 등록 마감 · 상금 보장 / 5행 유형 · 별점 · 거리 · 예약
-  //     320px 에서 1행이 안 들어가면 wrap 이 참가비를 **자동으로 다음 줄**로 내린다(숨은 가로 스크롤 없음).
-  //   왜 DOM 을 안 나누나: 열리는 카드의 view-transition(vt-poster)·키보드 포커스 순서가 한 벌이어야 한다.
-  // 실측 근거(진단 P1-C): home 320 에서 매장명이 client 52 / scroll 205 — 25% 만 보였다.
-  //   중앙 열이 85px 짜리 시각 열과 안 줄어드는 가격 열 사이에 끼어 ~170px 밖에 못 받았기 때문이다.
-  // 유지: §28(참가비·GTD 는 상품 가격 → 표시 유지) · 배지 예산 1개 · 빈 값은 '—'로 자리 보존.
-  const soon = soonText(schedule, status);
-  const reg = regCloseText(schedule);
   // 목록 카드만 라벨·금액을 따로 그린다(라벨 작게·금액 크게) — 계산은 정본 하나(prizeParts).
   const prize = prizeParts(schedule);
-  // (2026-09-18 3차) 목록 줄에서 형식·등급·게임종류 표기를 뺐다(오너 지시) — 이 값은 상세 화면이 보여 준다.
-  //   계산 자체를 지우지 않고 남겨 둔다면 죽은 코드가 되므로 제거한다. 되살릴 때는 아래 GridCard 의
-  //   같은 줄을 복사해 오면 된다(포맷이 갈리지 않게 **그쪽이 정본**이다).
+  // 레지마감은 **저장된 값 그대로**다(오너 2026-09-20: "계산하지 마라") — regCloseText 의 가공('등록 마감 N레벨')을
+  // 거치지 않는다. 그 함수는 그대로 남는다(PC 표 ScheduleTable·아래 GridCard 가 쓴다).
+  const reg = regCloseRaw(schedule);
+  const grade = schedule.grade ? GRADE_BADGE[schedule.grade] : undefined;
 
   return (
     <article
@@ -379,6 +413,10 @@ function ListCard({
       // 키보드·보조기기 접근 (2026-09-11) — 종전엔 role·tabIndex·onKeyDown 이 없어 **클릭으로만** 열렸다.
       //   부스트·프리미엄으로 상단에 고정된 유료 노출(TOP) 카드도 같은 컴포넌트라, 돈을 받고 최상단에
       //   올린 항목이 키보드 사용자에게는 열 수 없는 요소였다. 커뮤니티 PostRow 와 같은 패턴으로 맞춘다.
+      // 🔴 2026-09-20: 오너 지시로 화면에서 날짜를 뺐다. 대신 `data-date` 로 남긴다 —
+      //   e2e(theme-tokens-v7 ⑦)가 '오늘·내일 행이 둘 다 렌더되는가'를 카드 **글자**로 확인하고 있어
+      //   글자만 빼면 그 게이트가 빈손이 된다(전에 한 번 걸렸던 자리다). 게이트가 볼 값을 남겨 둔다.
+      data-date={schedule.date}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
@@ -395,261 +433,164 @@ function ListCard({
         //   실측(2026-08-28, 프로덕션 빌드·120건·CPU 4x·실제 휠 스크롤 40회, 5회 중앙값 잰크 합):
         //     PC1440  cv+transition 401ms / cv+transition 제거 252ms / cv 이전 238ms  → 제거해야 본전
         //     M375    cv+transition 284ms / cv+transition 제거 234ms                  → 모바일도 -18%
-        //   호버 하이라이트 자체는 그대로 둔다(즉시 반응). §20.4 #3 의 '색 트랜지션 ≤0.15s' 도
-        //   '허용'이지 '권장'이 아니다 — 목록 행처럼 수십 개가 동시에 발화하는 자리엔 걸지 않는다.
-        // 🔴 2026-09-18(12차) 오너: "참가비 10T 와 오른쪽 1,000만, 아래 날짜·시간 **줄 맞춰줘**".
-        //   flex 3열로는 **불가능했다.** 각 열이 자기 안에서 따로 쌓여 행이 서로를 모른다 —
-        //   실측(390): 제목 top 328 / GTD top 308.4, 참가비 345 / 날짜시간 340.3 로 어긋나 있었다.
-        //   고정 오프셋으로 맞출 수도 없다. 매장 줄이 320px 에서 3줄로 접혀 17.5 → **59.5px** 가 되기 때문이다.
-        //   → **grid** 로 바꾼다. 행을 격자가 정하므로 [제목|GTD]·[참가비|날짜시각]이 항상 같은 줄에 선다.
-        // ⚠ `items-baseline` 이 핵심이다. 행마다 글자 크기가 달라(제목 15.9 / GTD 19.1) 위쪽 정렬로는
-        //   눈에 안 맞는다 — 사람은 **글자 밑선**으로 줄을 읽는다.
-        // ⚠ 덤으로 '3열 접힘'이 구조적으로 사라졌다. grid 열은 wrap 하지 않는다 —
-        //   320px 폭 예산 여유 3.5px 로 아슬아슬하던 것이 이 변경으로 없어진 문제가 됐다.
-        // ⚠ 3열은 `fit-content(35%)` 다. 그냥 `auto` 면 **max-content 를 먼저 다 가져간다** —
-        //   글자 200% 확대에서 `GTD 1,000만` 이 184px 를 집어가 가운데가 **32px** 로 쭈그러들었다
-        //   (실측 390/200%: 참가비 줄 32/81 로 잘림). fit-content 는 '내용만큼 쓰되 35% 를 넘지 마라' 다.
-        //   100% 에서는 내용(96px)이 상한보다 작아 **평소 동작이 그대로**이고, 확대에서만 상한이 일한다.
-        'grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0 cursor-pointer px-3 py-2.5 hover:bg-surface-high/50 active:bg-surface-high',
-        'min-[360px]:gap-x-2.5',
-        // 프리미엄(TOP)은 행 틴트 + 제목 앞 마커로 차별(박스 글로우 제거 — 목록 결 유지)
+        //   호버 하이라이트 자체는 그대로 둔다(즉시 반응).
+        // 🔴 2026-09-20 오너 목업 — **3덩어리 한 줄**이다.
+        //     [정사각 로고] [매장·지역 / 대회명+등급 / 3칸 지표] [시작 라벨·큰 시각 + 꺾쇠]
+        // ⚠ grid 3열(auto · 1fr · auto)로 먼저 짰다가 **글자 200% 확대에서 무너져** 되돌렸다.
+        //   ⚠ 그 클래스명을 여기 **그대로 적지 마라** — Tailwind content 는 주석도 평문 스캔이라
+        //     쓰지도 않는 규칙이 라이브 CSS 에 실린다(2026-09-20 실측: 이 주석 한 줄이
+        //     `.grid-cols-\[auto_1fr_auto\]{grid-template-columns:auto 1fr auto}` 를 만들고 있었다).
+        //   격자 열은 wrap 하지 않아서, 양끝 `auto` 열이 max-content(로고 44 + 시각 113)를 먼저 가져가고
+        //   `minmax(0,1fr)` 인 가운데가 **25px** 까지 쭈그러들었다 — 제목이 한 글자씩 17~25줄로 흘러
+        //   카드가 953~1008px 이 됐다(실측 320/200%. 같은 조건 수정 전 빌드는 413~488px).
+        // → **flex-wrap + rem basis** 로 짠다. 폭이 모자라면 시각 덩어리가 **스스로 다음 줄**로 내려가
+        //   가운데가 폭을 되찾는다(실측 320/200%: 가운데 25 → 224.5px). 이 저장소가 여러 번 쓴 탈출구다.
+        //   basis 를 rem 으로 두는 것이 핵심이다 — px 미디어쿼리는 **글자 확대를 못 본다**.
+        // ⚠ 12차에 "flex 로는 줄이 안 맞아 grid 로 갔다" 는 기록이 있는데, 그건 [제목|GTD]처럼
+        //   **좌우 열의 행끼리 밑선을 맞춰야 했을 때** 이야기다. 이 목업은 가운데가 자기 안에서만
+        //   쌓이고 시각은 통째로 한 덩어리라 맞출 행 자체가 없다.
+        // ⚠ 폭 예산(100%). 가용 = 카드 폭 − 패딩 25.5. 한 줄에 서려면 로고+basis+시각+gap ≤ 가용:
+        //     320 → 258.5 ≥ 44 + 4.25 + 102 + 4.25 + 63.5 = 218      (여유 40.5 → 가운데 142.5)
+        //     360 → 298.5 ≥ 56 + 8.5 + 102 + 8.5 + 72.5 = 247.5      (여유 51   → 가운데 153)
+        //     390 → 328.5 ≥ (같음)                                    (여유 81   → 가운데 183)
+        //   가운데가 3칸 지표의 자연 폭(320:110 / 360:127)보다 넓어야 지표가 한 줄로 선다.
+        //   **로고·시각 글자·gap 중 무엇이든 키우면 지표 줄이 먼저 접힌다** — 바꾸기 전에 다시 재라.
+        'flex flex-wrap items-center gap-x-1 gap-y-1 cursor-pointer px-3 py-2.5 hover:bg-surface-high/50 active:bg-surface-high',
+        'min-[360px]:gap-x-2',
+        // 프리미엄(TOP)은 행 틴트 + 매장 줄 마커로 차별(박스 글로우 제거 — 목록 결 유지)
         schedule.isPremium ? 'bg-accent-300/[0.05]' : '',
       ].join(' ')}
     >
-      {/* ── 오너 레퍼런스(2026-09-18, 스크린샷 2장)대로 **3열 고정 행**으로 다시 짰다 ──────
-             참조한 구조(두 이미지가 같은 골격이다):
-               [상태·시각 고정]  [매장 / 대회명 / 등록정보]  [참가비 라벨 / 금액 / GTD]
-             오너가 지적한 네 가지를 이 골격이 한 번에 푼다:
-               ① 타이틀 잘림 — 제목이 로고와 금액 사이에 끼지 않고 **가운데 열을 통째로** 쓴다.
-               ② 메트릭 분산 — 시각은 왼쪽 끝, 금액은 오른쪽 끝에 **고정 열**이라 시선이 위아래로만 움직인다.
-                 (예전엔 시각이 가운데 중단, 금액이 우측 상단이라 지그재그였다.)
-               ③ 태그 그룹핑 — 운영 상태(예정·TOP)는 시각 열 위, 매장·지역은 한 줄, 룰·별점·거리는 마지막 줄.
-               ④ 클릭 영역 — 행 전체가 role="button" 하나다(종전과 같다).
-             ⚠ 매장 로고는 48px 타일 → **18px 인라인 아이콘**으로 줄여 매장명 앞에 붙인다.
-               레퍼런스가 그렇고, 그래야 가운데 열 폭이 대회명에게 돌아간다.
-               대신 매장 식별은 **로고 + 이름 + 지역**이 한 줄에 같이 있어 오히려 또렷하다.
-             ⚠ vt-poster(카드→상세 모핑)의 출발점이 이 로고다 — 크기가 줄어도 이름은 그대로 둔다.
-               이름을 빼면 모핑이 통째로 사라진다.
-             ⚠ 폭 계산(320px·글자 100%): 좌우 패딩 25.5 → 가용 294.5.
-               좌 46 + 우 74 + gap 12 = 132 → 가운데 162.5px 가 대회명 몫이다(종전 약 100px).
-             ⚠ 200% 확대: 가운데 열의 basis 를 rem 으로 둔다 — px 미디어쿼리는 글자 확대를 못 잡는다.
-               폭이 모자라면 가운데 열이 **스스로 아래로 내려가** 좌/우 열은 첫 줄에 남는다. */}
-
-      {/* ① 상태 · 시각 — 레퍼런스의 왼쪽 기준점 */}
-      {/* ⚠ 폭을 고정(w-42px)하면 상태 알약이 2px 넘치고(실측 320px: 42/44),
-           글자 200% 확대에서는 42 안에 87px 가 들어가 통째로 잘린다(실측 42/87).
-           → **최소 폭만** 주고 내용이 필요한 만큼 넓어지게 둔다. 확대되면 이 열이 넓어지고
-             가운데 열의 rem basis 가 스스로 줄을 내려 해결한다(그게 접근성 축이다). */}
-      {/* 🔴 2026-09-18(3차) 오너: "예정 18:00 있는 쪽에는 매장 로고 넣으라고 했잖아".
-          매장 로고를 매장명 옆(가운데 열)에서 **이 왼쪽 열 맨 위**로 옮겼다.
-          왜 이게 더 나은가 — 왼쪽 열은 폭이 고정이라 로고를 **줄마다 같은 자리·같은 크기**로
-          세울 수 있다. 매장명 옆에 있을 때는 이름 길이에 따라 로고의 x 가 줄마다 달라 눈이 훑기 어려웠다.
-        ⚠ 18px → 28px 로 키웠다. 18px 에서는 한글 대체 글자가 타일을 넘쳐 잘렸고(실측 18/20),
-          로고라고 알아볼 수도 없었다. 왼쪽 열 최소폭(42/52)이 28px 를 이미 감당한다.
-        ⚠ vt-poster(카드→상세 모핑)의 출발점이 이 로고다 — 자리를 옮겨도 이름은 그대로 둔다.
-          이름을 빼면 모핑이 조용히 사라진다(index.css 는 그대로 초록이라 아무도 모른다). */}
-      {/* 🔴 2026-09-18(4차) 오너: "진행중하고 18:00을 다른데로 이동시키던지 해서 **칸 줄여**".
-          상태 알약이 이 열에서 **한 줄을 통째로** 쓰고 있었고, 이 열이 4단(로고·알약·시각·날짜)이라
-          카드 높이를 혼자 정하고 있었다. 실측(390·다크·100%, 세 열 높이):
-            o1 **92.5** / o2 114.5·57.1·82.9 / o3 61.1·90.9·61.1
-          → 알약을 로고 모서리로 겹쳐 **줄 하나를 없앴다**(아래 StatusDot).
-
-        🔴 **옮길 곳 세 군데를 전부 실측해서 골랐다.** 나머지 둘은 옮긴 자리가 새 병목이 되어
-           카드가 **오히려 커졌다** (390 카드3장 높이 / 괄호는 320px):
-             옮기기 전            136 · 115 · 115   (206 · 111 · 135)
-             가운데 매장 줄로      137 · 113 · 123   (183 · 125 · 153)  ← 긴 매장명이 접혀 +8
-             오른쪽 열 맨 위로     136 · 131 · 105   (165 · 129 · 135)  ← 긴 금액과 겹쳐 +16
-             시각 옆 인라인 점     136 · 113 · 105   (206 · **123** · 135) ← 열 폭 +11px 이 가운데를 뺏어 +12
-             로고 모서리(채택)     아래 실측
-           ⚠ 배운 것: 이 3열에서는 **폭이 곧 높이다.** 왼쪽 열을 11px 넓히면 가운데 basis 가 그만큼
-             줄어 제목이 한 줄 더 접히고, 그 줄이 카드 높이가 된다. 그래서 겹치는(absolute) 배치만이
-             폭·높이 어느 쪽도 안 건드린다.
-        ⚠ vt-poster(카드→상세 모핑)의 출발점이 이 로고다 — 점을 얹어도 PosterArea 와 vtName 은 그대로다. */}
-      {/* 🔴 2026-09-18(6차) 오너: "좌측 '누' 아이콘 크기를 키워서 **공란을 좀 줄여**".
-          로고가 28px 이라 그 아래 60px 가 빈 채로 남아 있었다(카드 95.6px). 44/56px 로 키워 메운다.
-        ⚠ 무한정 키울 수 없다 — 이 열이 넓어지면 가운데 basis 가 그만큼 줄어 제목이 접히고,
-          그 줄이 카드 높이가 된다(4차에서 11px 때문에 카드가 커진 그 함정).
-          폭 예산: 320 = 44 + 8.5 + 102 + 8.5 + 80 = 243 ≤ 258.5 · 360 = 56 + 6.4 + 119 + 6.4 + 96 = 283.8 ≤ 298.6
-        ⚠ vt-poster(카드→상세 모핑)의 출발점이라 크기를 바꿔도 이름은 그대로 둔다. */}
-      <div className="col-start-1 row-start-1 row-span-3 self-start">
-        {/* 🔴 2026-09-18(8차) 오너: "10T 폰트를 줄여서 **정사각 아이콘 크기에 맞춰**".
-            7차에서 세로 포스터(40×60 / 48×74)로 늘렸던 것을 **정사각형으로 되돌리되**,
-            오른쪽 열이 짧아진 만큼(74.1 → 57.4 / 61.4 → 48.9) 그 높이에 맞춘다.
-              320px: 48×48  vs 오른쪽 48.9   ·   360px+: 56×56  vs 오른쪽 57.4
-          ⚠ 폭 예산이 빠듯하다 — 320px: 48 + 8.5 + basis 102 + 8.5 + 88 = 255 ≤ 258.5 (**여유 3.5px**).
-            여기서 왼쪽이나 오른쪽을 조금만 더 키우면 3열이 무너진다. 바꾸기 전에 반드시 다시 재라
-            (e2e schedule-card-fit 의 '3열이 접혔다' 단언이 잡는다).
-          ⚠ vt-poster(카드→상세 모핑)의 출발점 — 비율을 바꿔도 이름은 그대로 둔다. */}
+      {/* ① 매장 로고 — 정사각 타일. 줄마다 같은 자리·같은 크기라 눈이 세로로 훑기 좋다.
+          ⚠ vt-poster(카드→상세 모핑)의 출발점이 이 로고다 — 크기를 바꿔도 `vtName` 은 그대로 둔다.
+            이름을 빼면 모핑이 조용히 사라진다(index.css 는 그대로 초록이라 아무도 모른다).
+          ⚠ 48/56 을 키우지 마라. 이 3열에서는 **폭이 곧 높이다** — 왼쪽이 넓어지면 가운데가 줄어
+            제목이 한 줄 더 접히고 그 줄이 카드 높이가 된다(2026-09-18 4차에 11px 로 겪었다). */}
+      <div className="shrink-0">
         <PosterArea
           posterUrl={venue?.imageUrl}
           posterColor={venue?.themeColor ?? schedule.posterColor}
           fallbackText={venueInitial(schedule.pubName)}
           title={schedule.pubName}
-          className="h-[48px] w-[48px] rounded-[11px] min-[360px]:h-[56px] min-[360px]:w-[56px]"
+          className="h-[44px] w-[44px] rounded-[10px] min-[360px]:h-[56px] min-[360px]:w-[56px] min-[360px]:rounded-[11px]"
           thumbWidth={128}
           priority={priority}
           vtName={vtActive ? 'vt-poster' : undefined}
         />
       </div>
 
-      {/* ② 가운데 — 매장 / 대회명 / 등록·유형 */}
-      {/* 🔴 2026-09-18(재검증): **320px 에서 3열이 무너져 있었다.** 참가비·GTD 열이 통째로
-          둘째 줄 좌측에 떨어지고 행 높이가 113.8 → 176.8px(+55%) 였다(다크·라이트 동일).
-          원인은 오늘 3차 개정에서 **28px 로고를 왼쪽 열에 넣으며** 그 열의 실렌더 폭이
-          46 → 56.4px 로 커진 것이다. 같은 파일 위쪽 폭 계산 주석은 옮기기 **전** 값(46)을
-          그대로 두고 있었다 — 수치를 안 맞춘 게 아니라 **옮긴 사람이 예산을 다시 안 잰 것**이다.
-          실측(320px): 가용 258.5 = 284 − 패딩 25.5
-            좌 56.4 + gap 8.5 + 가운데 basis 7rem(119) + gap 8.5 + 우 68 = 260.4 → **1.9px 초과**.
-        ⚠ flex-wrap 은 **줄어들기 전 가상 크기**로 줄을 가른다 — 1.9px 모자라도 가운데 열이
-          그만큼 줄어드는 게 아니라 **마지막 항목이 통째로** 다음 줄로 밀린다. 그래서 2px 가 55% 가 된다.
-        ⚠ 360px 부터는 좌 52·우 80·gap 6 으로 예산이 달라 멀쩡했다 — 320 만의 문제라 이 구간만 낮춘다.
-          6rem(102px)이면 260.4 → 243.4 로 15px 여유가 생긴다.
-        ⚠ 원래 의도했던 접힘은 '가운데 열이 스스로 내려가고 좌·우는 첫 줄에 남는' 것이었다(위 주석).
-          실제 CSS 는 반대로 동작했다 — 주석의 기대와 브라우저 동작이 다르면 **브라우저가 맞다.** */}
-      {/* 🔴 2026-09-18(5차) 오너: "누리 테스트 홀덤펍과 누리 테스트 위클리의 **간격을 맞춰**".
-          종전엔 줄마다 `mt-0.5` 를 따로 붙여 놨는데, 각 줄의 글자 크기가 달라(매장 13px · 제목 15px ·
-          시각 17px) **내장 line-height 가 줄마다 다른 여백**을 만들었다. 눈에는 그게 '간격이 안 맞는' 것이다.
-          → 줄마다 붙이던 `mt-0.5` 를 걷고 **부모에 `space-y-0.5` 하나**로 통일한다. 리듬이 한 곳에서 정해진다.
-        ⚠ 이 열의 자식은 전부 `leading-tight` 로 맞춘다 — 그래야 `space-y` 가 실제 간격이 된다.
-          (fontSize 유틸이 line-height 를 같이 싣는다는 것은 이 저장소가 여러 번 데인 자리다.) */}
-        {/* 🔴 2026-09-18(5차) 오너: "top 를 누리 테스트 홀덤펍 **뒤로**".
-            TOP 은 유료 노출 표식이라 매장 **이름보다 앞에 서면 광고가 이름을 가린다.**
-            이름 → 지역 → TOP 순서면 눈이 '어느 매장인가' 를 먼저 읽는다. */}
-      <div className="col-start-2 row-start-1 flex min-w-0 items-center gap-1">
-          {/* 🔴 2026-09-18(재검증): `wrap` 을 **안 넘기고 있었다.** VenueLink 의 기본값은 false(말줄임)라
-              지역('서울')이 320·360px/200% 에서 **clientWidth 0** — 말줄임표조차 없이 통째로 사라졌다.
-              같은 파일 VenueLink 머리말(2026-09-12)이 "목록 카드는 말줄임 대신 줄바꿈이다(wrap=true)" 라고
-              적어 두고 있었는데, 3열로 다시 짜면서 호출부에서 이 prop 을 흘렸다.
-            ⚠ 주석이 의도를 적어 둬도 **호출부가 안 넘기면 기본값이 이긴다.** 기본값이 '안전하지 않은 쪽'
-              (말줄임)인 prop 은 이렇게 조용히 사라진다.
-            ⚠ 그리드 카드(GridCard)의 호출부는 그대로 둔다 — 거기선 포스터가 식별을 대신하고
-              별점이 같은 줄에 있어 말줄임이 의도된 동작이다. */}
-          <VenueLink
-            pubName={schedule.pubName}
-            region={schedule.region}
-            wrap
-            sizeCls="text-[0.75rem] min-[360px]:text-[0.6875rem]"
-            onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
-          />
-          {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
-          {onToggleFavorite && schedule.venueId && (
-            <FavoriteButton
-              pubName={schedule.pubName}
-              on={favorited}
-              onToggle={() => onToggleFavorite(schedule.venueId)}
-            />
-          )}
-        </div>
-
-        {/* 대회명 — 이제 가운데 열을 온전히 쓴다. 2줄까지 허용(레퍼런스는 1줄이지만 한글 제목이 더 길다). */}
-        {/* ⚠ TOP 배지를 제목 안에 두지 않는다 — 실측(320·100%) 그 배지가 **43px** 를 먹어
-            제목 칸이 그만큼 줄었다. 매장 줄은 여유가 있어 거기로 옮긴다. */}
-      {/* 🔴 2026-09-18(12차) 오너: "누리 테스트 위클리를 위에 조금 더 붙여주고 글씨를 조금 더 키워줘".
-          글자 0.9375rem/text-sm → **text-base/0.9375rem** (15.9/14.9 → 17/15.9px), 위로 −2.125px.
-        ⚠ 음수 마진을 줘도 **GTD 와 줄이 안 어긋난다** — 격자가 `items-baseline` 이라 이 행의 밑선이
-          함께 다시 잡히기 때문이다. flex 3열이었으면 한쪽만 올라가 어긋났다. */}
-      {/* 🔴 행2 — 대회명과 GTD 가 **같은 flex 컨테이너의 형제**다. '같은 줄' 이 격자 좌표가 아니라
-          **마크업 구조**로 보장된다. 폭이 모자라면 `flex-wrap` 이 GTD 를 아랫줄로 내린다 —
-          3열 격자에는 없던 그 탈출구가 글자 200% 확대를 살린다(열은 wrap 하지 않는다). */}
-      <div className="col-start-2 row-start-2 flex min-w-0 flex-wrap items-baseline justify-between gap-x-2">
-        <h3 className="min-w-0 line-clamp-2 break-keep text-base font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-[0.9375rem]"
-        title={schedule.title}>
-          {titleWithoutGtd(schedule.title, !!prize)}
-        </h3>
-        <p className={`flex flex-wrap items-baseline justify-end gap-x-1 leading-tight ${prize ? 'text-gold-300' : 'text-ink-muted'}`}>
-          <span className="text-[9px] font-bold uppercase opacity-80">{prize?.label ?? '상금'}</span>
-          <span className="break-keep text-base font-extrabold tabular-nums [overflow-wrap:anywhere] min-[360px]:text-lg">{prize?.amount ?? '—'}</span>
-        </p>
-      </div>
-
-        {/* 🔴 2026-09-18(6차) 오너: "참가비를 누리 테스트 위클리 **하단으로** 변경".
-            참가비(라벨+금액)가 제목 바로 아래로 왔다. 5차에서 시각이 있던 자리다.
-          ⚠ 라벨과 금액은 **한 덩어리**로 붙여 둔다. 떼어 놓으면 라벨이 옆 금액(GTD)을 가리키는 것처럼
-            읽혀 '참가비 1,000만' 으로 오독된다 — 금액 오독은 §28 이 막으려는 바로 그 사고다.
-          ⚠ title 에 원 단위 금액을 남긴다 — T 가 무엇인지 모르는 첫 방문자가 확인할 수 있어야 한다. */}
-        {/* 참가비 + 등록 마감 · 별점 · 거리 · 예약 — **한 줄**이다.
-            🔴 2026-09-18(7차) 오너 선택: 참가비를 등록 마감 줄과 합쳐 가운데 열을 한 단 줄인다.
-               합치기 전 이 열은 4단(매장 / 제목 / 참가비 / 메타)이라 일정 탐색의 정보 많은 줄이
-               390px 에서 136 → 168px 로 커져 있었다. 합치면 참가비 줄(24px)이 메타 줄에 흡수된다.
-             ⚠ `items-baseline` 이다(`items-center` 아님). 참가비 금액은 17~19px, 나머지는 10.6px 라
-               가운데 정렬하면 작은 글자들이 붕 뜬다 — 글자 밑선을 맞춰야 한 줄로 읽힌다.
-             ⚠ `flex-wrap` 은 그대로 둔다. 320px 에서 `참가비 1,234,567원`(133px) 하나가 이미
-               열 폭(113.5px)을 넘는다 — 접혀야 금액이 온전히 남는다(§28 반올림 금지).
-               즉 좁은 폭에서는 두 줄로 돌아가지만 **잘리지는 않는다.** 넓은 폭에서 버는 구조다.
-             ⚠ 가로 스크롤에 넣지 않는다 — 예전에 등록 마감이 숨은 스크롤 안으로 사라져
-               유저가 그 정보가 없는 대회로 오해했다(§6-1). */}
-        {/* 🔴 2026-09-18(9차) 오너: "참가비 10T 에서 **위로 줄간격을 붙여**" → 10차 "**조금 더 올려줘**".
-            부모의 `space-y-0.5`(+2.125px)를 0 으로 되돌린 뒤, 한 번 더 요청이 와서 **−4.25px** 로 당겼다.
-          ⚠ `!` 가 필수다. `space-y-*` 는 `.space-y-0\.5 > :not([hidden]) ~ :not([hidden])` 라
-            명시도가 (0,3,0) 이고 평범한 `-mt-1`(0,1,0)은 진다 — important 없이는 조용히 무시된다.
-          ⚠ 음수 마진은 **줄상자를 겹치게** 만든다. 제목이 2줄일 때 아랫줄 글자와 참가비 글자가
-            부딪히지 않는지 반드시 실측해라(잘림 게이트는 겹침을 못 본다 — 넘침이 아니라서). */}
-      {/* 🔴 행3 — 참가비·등록마감 묶음과 날짜·시각이 같은 줄이다(행2와 같은 조리법). */}
-      <div className="col-start-2 row-start-3 flex min-w-0 flex-wrap items-baseline justify-between gap-x-2">
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-2xs leading-tight text-ink-muted">
-          {/* ⚠ 금액에 `[overflow-wrap:anywhere]` 를 준다. 글자 200% 확대(320px)에서 `1,234,567원` 은
-              **한 낱말로 175px** 인데 칸이 32px 까지 좁아진다 — 안 접히면 그대로 **잘린다**(실측 32/175).
-              숫자가 중간에서 접히는 건 보기 나쁘지만, §28 이 막는 것은 **금액이 안 보이는 것**이다.
-              flex 3열 시절에는 가운데 열이 통째로 아랫줄로 내려가 폭을 되찾는 탈출구가 있었는데,
-              grid 는 열이 wrap 하지 않아 그 길이 없다 — 대신 글자 쪽에서 접는다.
-            ⚠ `shrink-0` 을 주지 마라. `참가비 1,234,567원` 은 131px 인데 320px 의 이 열은 114px 다 —
-              줄지도 접히지도 못해 **값이 잘린다**(실측 `114/131`, 잘림 게이트가 잡았다).
-              안쪽도 `flex-wrap` 이라야 라벨이 윗줄로 가고 금액이 온전히 남는다. */}
-          <span className="flex min-w-0 flex-wrap items-baseline gap-x-1">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">참가비</span>
-            {/* 🔴 2026-09-18(8차) 오너: "10T 의 폰트 크기를 줄여서". text-base/lg → text-sm/base.
-                이 한 단계가 곧 이 줄의 높이라, 가운데 열이 그만큼 낮아지고 왼쪽 정사각 타일과 키가 맞는다. */}
-            <span className="text-[0.8125rem] font-extrabold tabular-nums tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-sm"
-              title={schedule.buyIn?.amount ? `${schedule.buyIn.amount.toLocaleString()}원` : undefined}>
-              {buyInText(schedule.buyIn?.amount)}
-            </span>
+      {/* ② 가운데 덩어리 — 매장 / 대회명 / 3칸 지표. 세 줄은 여기 **안에서만** 쌓인다.
+          ⚠ `basis-[6rem]`(=102px @100%, 204px @200%)가 줄바꿈 문턱이다. flex 는 **줄이기 전의
+            가상 크기**로 줄을 가르므로, 확대되면 이 덩어리가 커져 시각 덩어리를 아랫줄로 민다.
+          ⚠ `min-w-0` 이 없으면 안쪽 긴 글자가 이 덩어리를 밀어 카드가 가로로 넘친다. */}
+      <div className="min-w-0 grow basis-[6rem]">
+      {/* ② 1행 — 매장 · 지역 (+ TOP · 별점 · 거리 · 예약 · ♥)
+          🔴 목업에는 매장명만 그려져 있지만 **지우지 않는다.** TOP(유료 노출)·별점·거리·예약·♥ 는
+            지금 카드가 가진 기능이고, 3칸 지표 줄이 옛 메타 줄의 자리를 가져갔으므로 이 줄로 옮긴다.
+            (같은 파일 옛 주석의 제안대로다: "다시 필요해지면 매장 줄 끝에 작게 붙이는 편이 낫다".)
+          ⚠ `flex-wrap` — 다섯이 다 붙는 최악 조합에서 320px 을 넘기면 통째로 잘리는 대신 접힌다.
+          ⚠ 부가 항목에 `shrink-0` 을 주지 마라. 200% 확대에서 `예약 3명`(81px)이 칸(74px)을 넘겨
+            줄이 통째로 잘린 적이 있다(실측 74/81) — 줄어들 수 있어야 wrap 이 일한다. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0">
+        {/* ⚠ `wrap` 을 반드시 넘긴다. VenueLink 의 기본값은 말줄임이라 320·360px/200% 에서
+            지역('서울')이 clientWidth 0 으로 **말줄임표조차 없이 사라진다**(2026-09-18 실측). */}
+        <VenueLink
+          pubName={schedule.pubName}
+          region={schedule.region}
+          wrap
+          sizeCls="text-[0.75rem] min-[360px]:text-[0.6875rem]"
+          onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
+        />
+        {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
+        {rating && rating.count > 0 && (
+          <span className="text-[10px] tabular-nums leading-tight text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+            ★{rating.avg.toFixed(1)}
           </span>
-          {reg && <span className="font-semibold tabular-nums text-ink-secondary">{reg}</span>}
-          {soon && <span className="font-bold text-accent-200">{soon}</span>}
-          {/* 🔴 2026-09-18(3차) 오너: "14분 후 오른쪽 mtt gtd 삭제".
-              여기 있던 `{meta}`(형식 · 등급 · 게임종류, 예: "MTT · gtd")를 뺐다.
-            ⚠ 사라진 정보를 숨기지 않고 적는다 — **형식(MTT/SNG/PKO)과 게임 종류(NLH/PLO)가
-              목록 줄에서 안 보이게 된다.** 등급(gtd)은 오른쪽 GTD 칸과 중복이라 잃는 것이 없지만,
-              앞의 둘은 중복이 아니다. 지금은 상단 필터 칩(MTT·GTD)과 **상세 화면**이 그 역할을 한다.
-              다시 필요해지면 이 줄이 아니라 매장 줄 끝에 작게 붙이는 편이 낫다(여기는 이미 5개가 경쟁한다). */}
-          {rating && rating.count > 0 && (
-            <span className="tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
-              ★{rating.avg.toFixed(1)}
-            </span>
-          )}
-          {distanceKm != null && <span className="tabular-nums">{fmtKm(distanceKm)}</span>}
-        {/* ⚠ `shrink-0` 을 빼 뒀다. flex 항목이 shrink-0 이면 **max-content 아래로 안 줄어** 그 폭이
-            줄 전체의 최소 폭이 된다 — 글자 200% 확대에서 `예약 3명`(81px)이 칸(74px)을 넘겨
-            줄이 통째로 잘렸다(실측 74/81). wrap 컨테이너라 줄이면 알아서 다음 줄로 간다. */}
-          {(reserveCount ?? 0) > 0 && <span className="tabular-nums">예약 {reserveCount}명</span>}
-        </div>
-        <p className="flex flex-wrap items-baseline justify-end gap-x-1 leading-tight">
-          <span className="text-[9px] tabular-nums text-ink-muted">{d.monthDay}({d.dow})</span>
-          <span className="text-sm font-extrabold tabular-nums tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-base">{d.time || '—'}</span>
-        </p>
+        )}
+        {distanceKm != null && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
+        {(reserveCount ?? 0) > 0 && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}
+        {onToggleFavorite && schedule.venueId && (
+          <FavoriteButton
+            pubName={schedule.pubName}
+            on={favorited}
+            onToggle={() => onToggleFavorite(schedule.venueId)}
+          />
+        )}
       </div>
 
-      {/* ③ GTD · 시각 — §28 상품 가격 정보라 표시를 유지한다.
-          🔴 2026-09-18(6차) 오너: "GTD 1000만 **크기를 키우고** 참가비 있는 쪽으로 변경 /
-             시간과 날짜를 GTD 1000만 쪽으로". 참가비가 가운데 열로 갔고(위) 이 열은 GTD·시각이 됐다.
-             GTD 는 text-2xs(10.6px) → text-sm/base 로 키웠다.
-           ⚠ 열 폭을 80 → 92px 로 같이 넓혔다. 안 넓히면 커진 GTD 가 두 줄로 접혀 이 열이 새 병목이 된다
-             (4차에 오른쪽 열로 옮겼다가 카드가 +16px 커진 그 자리다).
-             폭 예산 320 = 44 + 8.5 + 102 + 8.5 + 84 = 247 ≤ 258.5 · 360 = 56 + 6.4 + 119 + 6.4 + 92 = 279.8 ≤ 298.6
-           ⚠ 날짜를 빼지 마라 — 여러 날짜가 섞인 평면 목록이라 날짜가 유일한 날짜 단서다.
-             한 번 빠졌다가 e2e(theme-tokens-v7 ⑦)가 "9/18 일정 행이 한 장도 안 보인다" 로 잡았다. */}
-        {/* 🔴 라벨은 작게, 금액은 크게 — 'GTD 1,000만' 을 **한 덩어리 큰 글자**로 두면 88px 안에서
-            두 줄로 접히고(실측) 이 열이 4단이 되어 카드가 95.6 → 118.7px 로 커졌다.
-            라벨/금액을 나누면 같은 2줄이라도 라벨 줄이 13px 라 높이가 절반이다.
-          ⚠ 라벨과 금액은 **정본 하나**(prizeParts)에서 온다 — 문자열을 다시 쪼개 쓰지 마라. */}
-        {/* 🔴 2026-09-18(8차) 오너: "GTD 와 아래 1000만을 **한 줄로 합치고**".
-            라벨과 금액을 한 줄에 둔다 — 이 열이 3단 → 2단이 되어 카드가 그만큼 낮아진다.
-          ⚠ 11차에서 금액을 한 단계 키우며(text-sm/base → text-base/lg) **라벨을 10 → 9px 로 줄이고
-            `tracking-wide` 를 뺐다.** 열 폭을 안 건드리고 금액에 줄 자리를 라벨에서 번 것이다 —
-            폭 예산이 320px 에서 여유 3.5px 뿐이라 열을 넓히는 선택지가 없었다.
-            실측 폭: 라벨 21 → 17 · 금액 54~62 → 63~71 · 합계 84(320) / 92(360+) ≤ 88 / 96.
-          ⚠ `items-baseline` — 10px 과 15~17px 를 가운데 정렬하면 작은 라벨이 붕 뜬다. */}
-   </article>
+      {/* ② 2행 — 대회명(굵고 밝게) + 등급 배지
+          ⚠ 2줄까지 허용한다. 레퍼런스는 1줄이지만 한글 제목은 더 길고, 대회 식별이 1차 정보다
+            — 1줄로 강제해 말줄임하면 '누리 테스트 위클리 메인 1000만…' 에서 정작 무슨 대회인지가 사라진다.
+          ⚠ 제목 끝의 GTD 표기는 화면에서만 뗀다 — 아래 지표 줄의 GTD 칸이 같은 값을 숫자에서 계산해
+            보여 주기 때문이다(정본 하나). `title` 속성에는 원문을 남긴다. */}
+      {/* ⚠ 줄 수 상한이 폭에 따라 다르다. 390px(오너 레퍼런스 폭)에서는 목업대로 **2줄**이지만,
+          그 아래에서는 가운데가 30~50px 좁아져 같은 제목이 3줄을 요구한다 — 거기서 2줄로 자르면
+          대회명 꼬리가 통째로 사라진다(실측 320: 필요 3줄 / 보임 2줄, 제목 칸 142.5px).
+          "1줄로 강제해 말줄임하지 마라"(오너)의 뜻을 좁은 폭에서도 지키려면 **줄을 하나 더 주는 쪽**이 맞다.
+          대신 카드가 그만큼 길어진다(320: 3줄 카드 +21px).
+        ⚠ 등급 배지는 **h3 안의 인라인**이다. 형제로 빼면 제목이 2줄일 때 배지가 통째로 아랫줄로 밀려
+          '제목 오른쪽'(목업)이 아니라 별도 줄이 된다(실측 320·360: 카드 +18px). 인라인이면 마지막 줄 끝에 붙는다. */}
+      <h3 className="min-w-0 line-clamp-3 break-keep text-base font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-[0.9375rem] min-[390px]:line-clamp-2"
+        title={schedule.title}>
+        {titleWithoutGtd(schedule.title, !!prize)}
+        {grade && (
+          <span className="ml-1 inline-block rounded-badge bg-surface-high px-1 align-middle text-[10px] font-extrabold leading-none text-ink-secondary">{grade}</span>
+        )}
+      </h3>
+
+      {/* ② 3행 — 3칸 지표(GTD · 참가비 · 레지마감). 칸 사이는 가는 세로 구분선.
+          🔴 `flex` 다(`grid grid-cols-3` 아님). 균등 3등분이면 320px 에서 칸이 44px 인데
+            `1,000만` 이 47px 라 **항상** 접힌다. 내용 폭으로 두면 320px 에서도 129px 로 한 줄에 선다.
+          ⚠ 3칸은 **wrap 하지 않는다**(flex 기본 nowrap). 폭이 모자라면 칸이 줄고 그 안의 글자가 접힌다.
+          ⚠ `divide-x` 는 `> * + *` 에 border-left 를 준다 — 칸을 지우면 구분선도 같이 사라진다.
+          ⚠ `data-metrics` 는 계측용 손잡이다(3칸이 한 줄인지 실측할 때 집는다). 지우지 마라. */}
+      <div
+        data-metrics
+        className={[
+          // 🔴 2026-09-20 2차 — `flex-wrap` 을 **넣었다**. 넣기 전에는 nowrap 이라 폭이 모자라면
+          //   칸이 쭈그러들고 그 안의 **값이 잘렸다**. e2e 실측(320px·글자 200%):
+          //     레지마감 칸 clientWidth 30 / scrollWidth 33 · 값('—') 21/24 — 3px 씩 잘려 나갔다.
+          //   이 저장소의 계약은 "이름은 줄여도 **값은 못 줄인다**" 다(§7·schedule-card-fit).
+          //   wrap 이 있으면 자리가 없을 때 칸이 아랫줄로 내려가 값이 온전히 남는다 — 시각 덩어리가
+          //   쓰는 것과 **같은 탈출구**다. 100% 에서는 폭이 남아 wrap 이 일어나지 않아 3칸 한 줄 그대로다
+          //   (그 '한 줄' 은 `e2e/schedule-card-fit.spec.ts` 가 확대 100% 에서만 단언한다).
+          // ⚠ `gap-y-0.5` 로 접힌 줄 사이만 띄운다 — 한 줄일 때는 아무 영향이 없다.
+          'flex min-w-0 flex-wrap items-start gap-y-0.5 divide-x divide-border-subtle',
+          '[&>*]:px-1 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0 min-[360px]:[&>*]:px-1.5',
+        ].join(' ')}
+      >
+        {/* 상금 — 값에만 색을 준다(지금 GTD 가 쓰던 gold-300 그대로).
+            ⚠ 라벨·금액 둘 다 정본 하나(prizeParts)에서 온다. 'GTD'(보장)와 '예상 상금'(엔트리 비례)은
+              뜻이 달라 같은 말로 적으면 보장되지 않은 금액을 보장처럼 말하게 된다.
+            ⚠ 상금이 없으면 라벨 '상금' + 값 '—'(오너 지시). 0 이나 확정값처럼 적지 않는다. */}
+        <Metric label={prize?.label ?? '상금'} value={prize?.amount ?? '—'} tone={prize ? 'text-gold-300' : 'text-ink-muted'} />
+        {/* 참가비 — §28 상품 가격 정보라 표시를 유지한다. T 로 정확히 떨어지는 금액만 T, 나머지는 원 그대로. */}
+        <Metric label="참가비" value={buyInText(schedule.buyIn?.amount)}
+          title={schedule.buyIn?.amount ? `${schedule.buyIn.amount.toLocaleString()}원` : undefined} />
+        {/* 레지마감 — 저장된 값 그대로('16LV 00:12'·'레벨 8'·'22:00' 무엇이든).
+            🔴 값이 없을 때 **빈칸이 아니라 '—'** 로 둔다. 근거: 이 줄은 구분선으로 칸을 가르는 3칸 격자라
+              가운데·끝 칸이 비면 눈이 옆 칸 값을 이 칸 것으로 읽는다(금액 오독은 §28 이 막으려는 사고다).
+              그리고 '—' 는 이 카드가 이미 쓰는 어휘다 — 참가비 미입력·상금 미입력이 같은 '—' 다. */}
+        <Metric label="레지마감" value={reg ?? '—'} />
+      </div>
+      </div>
+
+      {/* ③ 시작 시각 + 꺾쇠 — 레퍼런스의 오른쪽 기준점.
+          ⚠ 꺾쇠를 이 덩어리 **안에** 둔다(형제 flex 항목으로 빼지 않는다). 항목을 하나 더 만들면
+            바깥 gap 이 하나 더 생겨 320px 예산에서 4.25px 를 그냥 잃는다 — 그게 지표 3칸의 여유다.
+          ⚠ 시각 글자를 더 키우지 마라. 이 덩어리 폭이 곧 가운데의 손해다(위 폭 예산).
+          ⚠ `shrink-0` 이라 줄지 않는다 — 대신 폭이 모자라면 flex-wrap 이 이 덩어리를 통째로 아랫줄로
+            내린다(그게 200% 확대의 탈출구다). */}
+      <div className="flex shrink-0 items-center gap-1">
+        <p className="flex min-w-0 flex-col items-end leading-tight">
+          <span className="text-[9px] font-bold leading-tight text-ink-muted min-[360px]:text-[10px]">시작</span>
+          <span className="text-[0.9375rem] font-extrabold leading-tight tracking-tight tabular-nums text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-lg">
+            {schedule.startTime || '—'}
+          </span>
+        </p>
+        <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
+      </div>
+    </article>
   );
 }
 

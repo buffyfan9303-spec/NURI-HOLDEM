@@ -3,6 +3,7 @@ import { getEquippedMarks, getNickColors } from '../../api/community';
 import { tierCss } from '../atoms/TierBadge';
 import { nickColorVar } from '../../lib/cosmetics';
 import Modal from '../atoms/Modal';
+import { SkeletonList } from '../atoms/Skeleton';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { useToast } from '../atoms/Toast';
@@ -813,6 +814,22 @@ export default function PostDetailModal({
           <h3 className="text-sm font-bold text-ink-primary">댓글 <span className="tabular-nums text-ink-secondary">{replies?.length ?? ''}</span></h3>
           {/* 실패 카드는 스레드 **위에** 얹는다 — 작성 폼은 남겨 둔다(기능 보존). replies 가 null 로 남아 빈 문구도 안 뜬다. */}
           {cErr != null && <LoadErrorCard error={cErr} what="댓글" onRetry={() => setCReload((k) => k + 1)} compact />}
+          {/* 🔴 2026-09-20 — 댓글이 도착하며 목록이 늘어나 **아래 이전/다음 내비게이션이 밀렸다.**
+              e2e(post-open-stability ①)가 CI 에서 세 번 이 커밋을 죽였고, 원인을 CPU 8x 로 조여
+              재현해 노드 이름까지 찍어서 확정했다 — `div.space-y-4` · `nav[data-pd-nav]` 가 +0.0568.
+              (댓글 섹션 **자기 top** 은 안 움직였다. 그래서 `drift` 단언만으로는 못 잡았다.)
+            🔴 몇 줄을 예약할지 **추측하지 않는다.** `post.commentCount` 는 DB 트리거가 유지하는
+              실제 개수라 목록이 오기 전에 이미 정확한 수를 알고 있다 — 그 수만큼만 예약한다.
+              ⚠ 그래서 0개인 글에서는 아무것도 예약하지 않는다(예약했다가 비우면 그게 또 이동이다).
+              ⚠ 상한 4줄 — 댓글 50개짜리 글에 50줄을 예약하면 화면이 스켈레톤으로 가득 찬다.
+                4줄이면 첫 화면에 보이는 범위를 덮고, 그 아래는 어차피 스크롤 밖이라 이동이 안 보인다.
+              ⚠ `h-12`(51px @17px 루트)는 SkeletonList 기본값이다. 실제 댓글 줄과의 오차는 남지만
+                예약 0 일 때의 이동(0.0568)보다 훨씬 작다 — 정확도가 아니라 **방향**이 요점이다. */}
+          {replies === null && post.commentCount > 0 && (
+            <div aria-hidden className="space-y-2">
+              <SkeletonList rows={Math.min(4, post.commentCount)} rowClassName="h-12" />
+            </div>
+          )}
           <CommentThread
             /* UI-04 §7.4: 댓글 초안은 postId 단위로 분리한다 — 컨테이너(Modal)는 유지하고 스레드만 글별로 갈아끼운다
                (초안은 CommentThread 의 컴포넌트 상태뿐이라 다른 글에 붙지 않게 하는 것이 먼저다. 저장소 정책이 없어 예고 없는 폐기는 남는다). */

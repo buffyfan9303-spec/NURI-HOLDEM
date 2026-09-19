@@ -83,8 +83,14 @@ const meHiliteSeen = () => readSeenCount(ME_HILITE_SEEN, { fallback: 0, min: 0, 
 // 두 덩어리도 같은 조리법(지난 방문에 있었으면 그 자리를 켠다)으로 마저 잠근다.
 const ME_HILITE_CARDS_SEEN = 'nuri:me-hilite-cards-seen'; // 최다 참가 매장/참가비 매장 카드 쌍
 const meHiliteCardsSeen = () => readSeenCount(ME_HILITE_CARDS_SEEN, { fallback: 0, min: 0, max: 1 }) > 0;
-const ME_RANKS_CHART_SEEN = 'nuri:me-ranks-chart-seen'; // RecordSummary + RankTrendChart(ranks.length>0 일 때만 뜬다)
+// ⚠ [2026-09-20 재실측] RecordSummary(ranks.length>0 이면 뜬다)와 RankTrendChart(rows.length>=2 여야
+//   뜬다 — 1건뿐이면 추세가 없어 null)는 **뜨는 조건이 다르다.** 예전엔 한 플래그로 묶어서, 입상이 딱
+//   1건인 사람은 방문마다 차트 스켈레톤(h-40)만큼 영구히 과다 예약됐다(실측: 로딩 280.5px 대 실제 244.4px,
+//   차 −36px 가 매번 반복). 두 플래그로 쪼갠다.
+const ME_RANKS_CHART_SEEN = 'nuri:me-ranks-chart-seen'; // RecordSummary — ranks.length>0
 const meRanksChartSeen = () => readSeenCount(ME_RANKS_CHART_SEEN, { fallback: 0, min: 0, max: 1 }) > 0;
+const ME_RANKS_TREND_SEEN = 'nuri:me-ranks-trend-seen'; // RankTrendChart — ranks.length>=2
+const meRanksTrendSeen = () => readSeenCount(ME_RANKS_TREND_SEEN, { fallback: 0, min: 0, max: 1 }) > 0;
 
 // ⚠ 이 페이지는 App 이 **상주**로 들고 있다(keep-alive — 한 번 열면 언마운트하지 않는다).
 //   그래서 닫혀 있는 동안에도 App 의 모든 리렌더가 이 1,000줄 트리를 다시 렌더했다.
@@ -279,6 +285,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
     if (ranksErr == null) {
       writeSeenCount(ME_RANKS_SEEN, ranks.length, { min: 1, max: 15 });
       writeSeenCount(ME_RANKS_CHART_SEEN, ranks.length > 0 ? 1 : 0, { min: 0, max: 1 });
+      writeSeenCount(ME_RANKS_TREND_SEEN, ranks.length > 1 ? 1 : 0, { min: 0, max: 1 }); // RankTrendChart 조건과 동일
     }
   }
 
@@ -646,17 +653,17 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
           <section ref={recordsRef} className="scroll-mt-4 rounded-aura border card-aura p-3">
             <Head icon="trophy" tone="violet" title="내 입상 기록" count={ranks.length} unit="회" desc="매장 순위 등록 기준" />
             <div className="mt-2">
-            {/* [F 후속, 2026-09-19 재실측] 행 수만 예약하고 그 위 RecordSummary+RankTrendChart 는
-                예약하지 않아 실측 +363px 가 그대로 남았다 — meRanksChartSeen 으로 마저 예약한다
-                (둘 다 ranks.length>0 일 때만 함께 뜬다 — 한 조리법으로 묶는다). */}
+            {/* [F 후속, 2026-09-20 재실측 — 390×844·프로필+venue_rankings 목킹, 상태 3종(1행·2행·15행) + 360px 대조]
+                이전엔 h-24(102px)+h-40(170px) 고정값이었다. 실측:
+                · RecordSummary 실제 244.4~245.1px(매장명 짧을 때) — **자주 입상 매장명이 길어 줄바꿈되면 260.4~261.0px**
+                  까지 늘어난다(360/390 둘 다, 너비가 아니라 글자 수가 원인 — verylong 상태로 확인). 대표 단일값이 안 되는
+                  경우라 **긴 경우 쪽으로 안전하게** 예약한다.
+                · RankTrendChart 실제 135.6px(390) / 128.7px(360) — 포인트 수(2~15)와 무관하게 고정(SVG 고정폭).
+                두 블록은 **뜨는 조건이 다르다**(ranks.length>0 대 >=2 — 위 ME_RANKS_TREND_SEEN 주석) — 따로 예약한다. */}
             {loading ? (
               <>
-                {meRanksChartSeen() && (
-                  <div className="mb-2 space-y-2" aria-hidden aria-busy="true">
-                    <div className="skeleton h-24 rounded-aura" />
-                    <div className="skeleton h-40 rounded-aura" />
-                  </div>
-                )}
+                {meRanksChartSeen() && <div className="skeleton mb-2 h-[261px] rounded-aura" aria-hidden aria-busy="true" />}
+                {meRanksTrendSeen() && <div className="skeleton mb-2 h-[136px] rounded-aura" aria-hidden aria-busy="true" />}
                 <SkeletonList rows={meRanksSeenRows()} rowClassName="h-14" />
               </>
             )

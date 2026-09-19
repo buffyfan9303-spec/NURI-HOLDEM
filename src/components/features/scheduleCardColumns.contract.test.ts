@@ -1,90 +1,109 @@
-// 일정 목록 줄의 **격자 골격** 재발 방지 계약
-// (2026-09-17 신설 · 09-18 2차 개정 · 09-18 3차 개정에서 flex 3열 → grid 로 갈아탐)
+// 일정 목록 줄의 **골격** 재발 방지 계약
+// (2026-09-17 신설 · 09-18 2·3차 개정 · **2026-09-20 4차 개정: 오너 목업으로 재설계**)
 //
 // 무엇을 막는가
 //   ① 정보가 한쪽에 몰리고 반대쪽이 비는 것 — 오너 리포트(2026-09-17):
 //      "공백이 너무 많고 좌측에는 정보가 너무 많아 일부러 이렇게 해놓은거야?"
-//   ② 좌우 값이 **서로 다른 줄에 떠 있는 것** — 오너 리포트(2026-09-18 12차):
-//      "참가비 10T 와 오른쪽 1,000만 하고 아래줄 날짜·시간쪽 줄 맞춰줘".
+//   ② 좁은 폭·글자 확대에서 골격이 무너지는 것 — 이 파일이 세 번 고쳐 온 부류다.
+//   ③ 리디자인이 **기능을 조용히 떨어뜨리는 것**(TOP·별점·거리·예약·♥·모핑). 전 게이트가
+//      초록인 채로 기능이 사라지는 부류라, 여기서 이름으로 붙잡는다.
 //
-// 🔴 왜 flex 를 버렸나 (2026-09-18 3차 개정)
-//   flex 3열은 **열마다 따로 쌓인다** — 행이라는 개념이 없어서 좌우 값이 같은 줄에 설 보장이 없다.
-//   실측(390): 제목 top 328 / GTD top 308.4 · 참가비 345 / 날짜·시각 340.3 로 어긋나 있었다.
-//   고정 오프셋으로 맞추는 것도 불가능했다 — 매장 줄이 320px 에서 3줄로 접혀 17.5 → **59.5px** 가 된다.
-//   grid 는 행을 격자가 정하므로 [제목|GTD]·[참가비·메타|날짜·시각]이 **항상** 같은 줄에 선다.
+// 🔴 4차 개정에서 바뀐 것 — 옛 계약은 `grid grid-cols-[auto_minmax(0,1fr)]` 3행 격자를 잠그고 있었다.
+//   오너 목업(2026-09-20)이 골격을 **3덩어리 한 줄**로 바꿨다:
+//     [정사각 로고] [매장·지역 / 대회명+등급 / 3칸 지표] [시작 라벨·큰 시각 + 꺾쇠]
+//   옛 단언을 지운 것이 아니라 **같은 목적을 새 골격에 다시 걸었다.** 구조가 바뀌면 계약도
+//   같이 옮기는 것이지, 느슨하게 푸는 것이 아니다(푸는 순간 이 파일은 존재 이유가 없다).
 //
-//   덤으로 '3열 접힘'이라는 사고 부류가 통째로 사라졌다. flex-wrap 은 1.9px 만 모자라도 마지막 열을
-//   통째로 다음 줄로 내렸고(2026-09-18 실측: 행 113.8 → 176.8px), 그걸 피하려고 320px 폭 예산 여유
-//   3.5px 를 손으로 관리하고 있었다. **grid 열은 wrap 하지 않는다.**
-//
-// 지금 골격
-//   행1  [로고]  매장명 · 지역 · TOP        (2·3열을 가로지름)
-//   행2  [로고]  대회명            |  GTD 1,000만
-//   행3  [로고]  참가비 · 등록마감 … |  9/18(금) 18:00
-//   로고는 1열에서 3행을 세로로 관통한다(row-span-3).
+// ⚠ 이 파일은 `src/` 안이라 **Tailwind content 스캔 대상**이다. 금지하려는 클래스명을 그대로 적으면
+//   라이브 CSS 에 죽은 규칙이 실린다(CLAUDE.md 참고 메모). 그래서 금지 이름은 **쪼개서** 쓴다.
 //
 // 이 검사가 못 보는 것: 실제 렌더 폭·줄 맞음 여부(브라우저 실측 몫).
-//   **줄이 실제로 맞는지는 `e2e/schedule-card-fit.spec.ts` 가 밑선으로 잰다.** 여기서는 구조만 잠근다.
+//   **지표 3칸이 실제로 한 줄인지는 `e2e/schedule-card-fit.spec.ts` 가 실측으로 잰다.** 여기서는 구조만 잠근다.
 // 실행: npx vitest run src/components/features/scheduleCardColumns.contract.test.ts
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SRC = readFileSync(join(__dirname, 'ScheduleCard.tsx'), 'utf8');
+/** 목록 카드(ListCard) 본문만 — 아래 GridCard 는 포스터 골격이라 규칙이 다르다. */
+const LIST = SRC.slice(0, SRC.indexOf('function GridCard'));
 
-describe('일정 목록 줄 — 격자 골격', () => {
-  it('카드가 3열 격자다 — 가운데만 늘어나고 좌우는 내용 크기', () => {
-    expect(SRC, '격자 선언이 없다 — flex 로 되돌아갔다면 좌우 값이 다시 어긋난다')
-      .toMatch(/grid grid-cols-\[auto_minmax\(0,1fr\)\]/);
-    // minmax(0,1fr): 가운데가 **0까지 줄 수 있어야** 긴 제목이 격자를 밀어내지 않는다.
-    //   1fr 만 쓰면 최소 크기가 auto 라 긴 한글 제목이 열을 부풀려 오른쪽 값을 밀어낸다.
-    expect(SRC, '가운데 열이 0까지 줄지 못한다 — 긴 제목이 오른쪽 값을 밀어낸다')
-      .toContain('minmax(0,1fr)');
+describe('일정 목록 줄 — 골격', () => {
+  it('가운데 덩어리가 0까지 줄 수 있다 — 긴 제목이 카드를 가로로 밀어내지 않는다', () => {
+    // `min-w-0` 이 없으면 flex 항목의 최소 크기가 auto 라 긴 한글 낱말이 덩어리를 부풀리고,
+    // 카드가 통째로 가로 넘침이 된다(그 상태로도 '잘림 0' 은 통과할 수 있어 여기서 못 박는다).
+    expect(LIST, '가운데 덩어리에 min-w-0 + basis 가 없다 — 긴 제목이 카드를 밀어낸다')
+      .toMatch(/min-w-0 grow basis-\[\d+rem\]/);
   });
 
-  it('🔴 밑선 정렬이다 — 행마다 글자 크기가 달라 위쪽 정렬로는 눈에 안 맞는다', () => {
-    // 제목 15.9px vs GTD 19.1px. 사람은 글자 **밑선**으로 줄을 읽는다.
-    expect(SRC, '격자가 items-baseline 이 아니다 — 줄이 맞아 보이지 않는다')
-      .toMatch(/grid grid-cols-\[[^\]]+\] items-baseline/);
+  it('🔴 폭이 모자라면 시각 덩어리가 아랫줄로 내려간다 — 격자로 되돌아가면 200% 확대가 무너진다', () => {
+    // 실측(320px · 글자 200%): `grid` 3열이면 양끝 auto 열이 max-content 를 먼저 가져가
+    //   가운데가 **25px** 로 쭈그러들어 제목이 한 글자씩 17~25줄로 흐르고 카드가 953~1008px 이 됐다.
+    //   flex-wrap 이면 시각 덩어리가 스스로 내려가 가운데가 224.5px 을 되찾는다.
+    const 격자 = 'grid-cols' + '-[auto_1fr_auto]';
+    expect(LIST, `카드 골격이 ${격자} 로 되돌아갔다 — 320px/200% 에서 제목이 세로로 흐른다`)
+      .not.toContain(격자);
+    expect(LIST, '카드 골격에 flex-wrap 이 없다 — 글자 확대에서 탈출구가 사라진다')
+      .toMatch(/flex-wrap/);
   });
 
-  it('🔴 좌우가 **같은 flex 컨테이너의 형제**다 — 제목↔GTD · 메타↔날짜시각', () => {
-    // 🔴 여기가 이 계약의 핵심이다. 3열 격자로 나란히 두는 방법도 써 봤는데, 그건 글자 200% 확대에서
-    //   **탈출구가 없었다** — grid 열은 wrap 하지 않아 오른쪽 값이 가운데를 24~57px 까지 쥐어짜
-    //   값이 잘렸다(실측). 행을 각자 flex 컨테이너로 만들면 폭이 모자랄 때 값이 아랫줄로 내려간다.
-    // 두 행 모두 `justify-between` 이라야 값이 오른쪽 끝에 붙어 줄끼리 세로로도 맞는다.
-    const rows = [...SRC.matchAll(/col-start-2 row-start-([23]) ([^"]*)/g)];
-    expect(rows.length, '2·3행 컨테이너를 못 찾았다 — 격자 배치가 바뀌었으면 계약도 같이 고쳐라').toBe(2);
-    for (const m of rows) {
-      expect(m[2], `${m[1]}행이 flex 가 아니다 — 좌우가 같은 줄에 설 수 없다`).toContain('flex');
-      expect(m[2], `${m[1]}행에 justify-between 이 없다 — 값이 오른쪽 끝에 안 붙는다`).toContain('justify-between');
-      expect(m[2], `${m[1]}행이 items-baseline 이 아니다 — 크기가 다른 글자가 눈에 안 맞는다`).toContain('items-baseline');
-      expect(m[2], `${m[1]}행에 flex-wrap 이 없다 — 200% 확대에서 값이 잘린다(탈출구 상실)`).toContain('flex-wrap');
-    }
+  it('🔴 지표 3칸이 내용 폭 flex 다 — 균등 3등분이면 320px 에서 항상 접힌다', () => {
+    const m = LIST.match(/data-metrics[\s\S]{0,400}?className=\{\[([\s\S]*?)\]\.join/);
+    expect(m, 'data-metrics 줄을 못 찾았다 — 손잡이가 사라졌으면 e2e 3건이 같이 빈손이 된다').not.toBeNull();
+    const cls = m![1];
+    expect(cls, '지표 줄이 flex 가 아니다').toContain('flex');
+    // 균등 3등분 금지: 320px 에서 칸이 44px 인데 `1,000만` 이 47px 라 **항상** 접힌다(실측).
+    const 균등 = 'grid-cols' + '-3';
+    expect(cls, `지표 줄이 ${균등} 다 — 320px 에서 금액이 항상 접힌다. 내용 폭(flex)으로 둬라`)
+      .not.toContain(균등);
+    // 칸 사이 구분선. 없으면 값 셋이 붙어 읽혀 금액 오독이 난다(§28 이 막으려는 사고).
+    expect(cls, '칸 사이 구분선이 없다 — 세 값이 붙어 읽힌다').toMatch(/divide-x/);
   });
 
-  it('매장 줄이 내용 열 전체를 쓴다 — 좁은 폭에서 매장명이 세 줄로 접히던 자리다', () => {
-    // 320px 실측: 좁은 가운데 열에 갇혔을 때 59.5px(3줄) → 열 전체를 쓰면 19.1px(1줄).
-    expect(SRC, '매장 줄이 1행 2열이 아니다').toMatch(/col-start-2 row-start-1/);
-  });
-
-  it('로고가 1열에서 3행을 관통한다 — 줄마다 같은 자리·같은 크기', () => {
-    expect(SRC, '로고 칸이 row-span-3 이 아니다').toMatch(/col-start-1 row-start-1 row-span-3/);
+  it('🔴 계측 손잡이 둘이 살아 있다 — 사라지면 e2e 가 아무것도 안 재고 통과한다', () => {
+    // 이 둘은 화면에 안 보이지만 **게이트가 보는 값**이다. 지우면 검사가 빈손이 되고,
+    // 빈손인 검사는 초록이라 아무도 눈치채지 못한다(2026-09-20 에 실제로 그런 일이 있었다).
+    expect(LIST, 'data-metrics 가 없다 — schedule-card-fit 의 3칸 단언이 빈손이 된다')
+      .toContain('data-metrics');
+    expect(LIST, 'data-date 가 없다 — theme-tokens-v7 ⑦ 의 날짜 단언이 빈손이 된다')
+      .toMatch(/data-date=\{schedule\.date\}/);
   });
 
   it('🔴 대회명이 자기 줄을 온전히 쓴다 — 좌우 값 사이에 끼지 않는다', () => {
-    // 오너가 지적한 ①번(타이틀 잘림)의 근본이다. 제목이 값들과 **같은 칸**에 있으면 폭이 사라진다.
-    expect(SRC, '제목이 2줄 클램프가 아니다 — 한글 제목은 한 줄로는 자주 잘린다')
-      .toMatch(/<h3[^>]*line-clamp-2/);
-    // 격자 칸은 기본 min-width:auto 라 긴 낱말이 칸을 부풀린다 — 제목 쪽에서 막는다.
-    expect(SRC, '제목에 [overflow-wrap:anywhere] 가 없다 — 긴 낱말이 칸을 부풀린다')
+    expect(LIST, '제목이 줄 클램프가 아니다 — 한글 제목은 한 줄로는 자주 잘린다')
+      .toMatch(/<h3[^>]*line-clamp-\d/);
+    // 칸은 기본 min-width:auto 라 긴 낱말이 칸을 부풀린다 — 제목 쪽에서 막는다.
+    expect(LIST, '제목에 [overflow-wrap:anywhere] 가 없다 — 긴 낱말이 칸을 부풀린다')
       .toMatch(/<h3[^>]*\[overflow-wrap:anywhere\]/);
+  });
+
+  it('등급 배지가 제목 안의 인라인이다 — 형제로 빼면 제목 2줄에서 배지가 아랫줄로 밀린다', () => {
+    // 실측(320·360): 형제로 두면 카드가 +18px 이 되고 목업의 '제목 오른쪽' 이 아니라 별도 줄이 된다.
+    const h3 = LIST.match(/<h3[\s\S]*?<\/h3>/);
+    expect(h3, '제목(h3)을 못 찾았다').not.toBeNull();
+    expect(h3![0], '등급 배지가 제목 안에 없다 — 형제로 빠지면 줄이 하나 더 생긴다')
+      .toMatch(/\{grade &&/);
+  });
+
+  it('🔴 리디자인이 기능을 떨어뜨리지 않았다 — TOP·별점·거리·예약·♥', () => {
+    // 🔴 §8.1 기능 보존. 목업에는 매장명만 그려져 있어 **지우기 쉬운 자리**다.
+    //   TOP 은 유료 노출(돈을 받은 자리)이고 나머지는 이미 있던 기능이다.
+    //   리팩터 손실은 삭제된 diff 로만 보이는 부류라, 이름으로 붙잡아 둔다.
+    for (const [needle, what] of [
+      ['isPremium', 'TOP 배지(유료 노출)'],
+      ['rating.avg', '별점'],
+      ['fmtKm(distanceKm)', '거리'],
+      ['reserveCount', '예약 인원'],
+      ['FavoriteButton', '즐겨찾기 하트'],
+    ] as const) {
+      expect(LIST, `${what} 가 카드에서 사라졌다 — 목업에 없다고 지우면 안 된다(§8.1)`).toContain(needle);
+    }
   });
 
   it('카드→상세 모핑의 출발점(vt-poster)이 매장 로고에 남아 있다', () => {
     // 로고를 옮기거나 크기를 바꿀 때 **이름을 흘리기 쉬운 자리**다.
     // 이름이 사라지면 모핑이 조용히 없어진다(index.css 는 그대로 초록이라 아무도 모른다).
-    const logo = SRC.match(/<PosterArea[\s\S]{0,900}?\/>/);
+    const logo = LIST.match(/<PosterArea[\s\S]{0,900}?\/>/);
     expect(logo, 'PosterArea(매장 로고)를 못 찾았다').not.toBeNull();
     expect(logo![0], 'vt-poster 가 매장 로고에 없다 — 카드→상세 모핑이 사라진다')
       .toMatch(/vtName=\{vtActive \? 'vt-poster' : undefined\}/);

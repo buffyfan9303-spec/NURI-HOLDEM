@@ -266,7 +266,11 @@ for (const { w, tol } of [{ w: 390, tol: 26 }, { w: 1440, tol: 22 }]) {
       hs.forEach((h) => { cnt[h] = (cnt[h] || 0) + 1; });
       const mode = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
       return { n: cards.length, mode: mode ? +mode[0] : null,
-               text: cards.map((c) => c.textContent || '').join(' '),
+               // 🔴 2026-09-20 — 전에는 카드 **글자**에서 '9/20' 을 찾았다. 오너 지시로 카드에서 날짜 표기를
+               //   뺐으므로(ScheduleCard.tsx) 글자로는 더 못 본다. **계약은 그대로 두고 손잡이만 옮긴다** —
+               //   `data-date` 는 그 게이트가 볼 값으로 카드에 일부러 남겨 둔 것이다.
+               //   느슨하게 푸는 것(단언 삭제·부분일치 완화)이 아니라 같은 것을 다른 경로로 본다.
+               dates: cards.map((c) => c.getAttribute('data-date')).filter(Boolean) as string[],
                token: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-h-list')) };
     });
     console.log(`CARD-H ${w} ` + JSON.stringify({ n: m.n, mode: m.mode, token: m.token }));
@@ -276,11 +280,14 @@ for (const { w, tol } of [{ w: 390, tol: 26 }, { w: 1440, tol: 22 }]) {
     //   픽스처가 UTC 날짜를 쓰던 시절 KST 05:00~09:00 구간에 hideEnded 가 '오늘' 행을 전부 지웠는데
     //   카드가 여전히 8개라 아무도 눈치채지 못했다. 그래서 **두 날짜가 다 보이는지**를 직접 본다.
     //   (카드 개수로 세지 않는 이유: 일정 1건이 `.cv-card-list` 를 2개 렌더해 개수는 구현 세부사항이다.)
+    // 🔴 손잡이 자체가 사라지면 아래 루프가 **아무것도 못 보고 통과**한다 — 그걸 먼저 막는다.
+    expect(m.dates.length,
+      '카드에 `data-date` 가 하나도 없다 — 손잡이가 사라졌다면 아래 날짜 단언은 빈 검사다'
+      + ' (ScheduleCard.tsx 의 `data-date={schedule.date}` 를 확인하라)').toBeGreaterThan(0);
     for (const off of [0, 1]) {
       const iso = kstToday(Date.now() + off * 86_400_000);
-      const label = `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}`;
-      expect(m.text, `${label} 일정 행이 한 장도 안 보인다 — 픽스처 날짜가 KST 기준이 아니거나 hideEnded 에 걸렸다`)
-        .toContain(label);
+      expect(m.dates, `${iso} 일정 행이 한 장도 안 보인다 — 픽스처 날짜가 KST 기준이 아니거나 hideEnded 에 걸렸다`
+        + ` (렌더된 날짜: ${JSON.stringify([...new Set(m.dates)])})`).toContain(iso);
     }
     expect(Math.abs(m.mode! - m.token),
       `--card-h-list(${m.token}) 가 실제 카드 높이(${m.mode})와 ${Math.abs(m.mode! - m.token).toFixed(1)}px 어긋난다`)
