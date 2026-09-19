@@ -528,12 +528,36 @@ E2E_BASE_URL=http://localhost:4273 npx playwright test --grep-invert @boot --wor
 |---|---|---|---|
 | `cebe0f9` | ❌ 실패 | **false** | `post-open-stability` CLS 0.0806 |
 | `a363e17` | ❌ 실패 | **false** | 같은 스펙 — 0.0568 + `element(s) not found` ×2 |
-| `aa35d60` | 확인 중 | — | 목킹 누락을 고친 뒤 |
+| `aa35d60` | ⚠️ 부분성공 | **false** | **`build-and-e2e` ✅ 성공** — 세 커밋을 죽이던 E2E 문제는 해결됨.
+  대신 `security` 잡이 죽었는데 **취약점이 아니다** — 아래 참고 |
 
 **같은 스펙 하나가 커밋 두 개를 죽였고, 나는 두 번 다 엉뚱한 곳을 고쳤다.**
 진짜 원인은 그 스펙이 `comments` 를 목킹하지 않아 **운영에 나가고 있었던 것**이다(0-a12 §1).
 
 그 밖에: `236b4d3` 의 **DB Backup 워크플로 실패**는 11일째 계속 중이다(오너 몫, R2 키).
+
+🔴 **`aa35d60` 의 `security` 잡 — 내 코드가 아니라 npm 레지스트리 변경이다**
+
+```
+npm notice This endpoint is being retired. Use the bulk advisory endpoint instead.
+npm error audit endpoint returned an error  statusCode: 400
+  message: 'Invalid package tree, run npm install to rebuild your package-lock.json'
+```
+
+⚠ 저 메시지는 **거짓 단서**다 — 잠금파일은 멀줦했고, 같은 트리로 로컬은 통과한다.
+"`npm install` 로 재생성하라" 를 그대로 따르면 **없는 문제를 고치려고 잠금파일을 흔들게 된다.**
+
+실측 대조(2026-09-20):
+
+| | npm | 엔드포인트 | 결과 |
+|---|---|---|---|
+| 로컬 | 11.12.1 | `security/advisories/bulk` | **200** · found 0 vulnerabilities |
+| CI (node 22) | 10.x | `security/audits/quick` | **400** — 폐기 중 |
+
+→ `npm audit` 직전에만 `npm i -g npm@11` 을 넣었다(`npm ci` 는 이미 끝난 뒤라 설치 결과는 안 바뀜다).
+⚠ 기준(`--audit-level=high`)은 그대로다 — 게이트를 무르게 한 것이 아니다.
+🟡 **근본 원인은 CI node 22 ≠ 개발환경 node 24 분기다.** 이번같은 '로컬은 되는데 CI 만 죽는다'
+부류가 또 나온다. 맞추는 것은 빌드·E2E 까지 건드리는 일이라 따로 잡는다(미해결 목록에 넣었다).
 
 ---
 
@@ -582,6 +606,11 @@ GTO 도구 타일  : 글자 17px   · 세로 여백 21.3px · 상자 57.3px
 **④ 날짜 그룹 머리말이 없다**
 카드에서 날짜를 뺐는데(지시) 목록에 날짜 구분이 없다. 홈 3장이 `9/20, 9/20, 9/21` 인데 화면상 구분이 없다.
 `data-date` 가 남아 있어 머리말 추가는 쉽다.
+
+**⑧ CI 의 node 22 와 개발환경 node 24 가 갈려 있다**
+2026-09-20 에 이것 때문에 배포가 한 번 더 밀렸다(npm 10 이 폐기된 audit 엔드포인트를 써서 400).
+지금은 audit 단계에서만 npm 을 올려 막아 둔 **국소 처방**이다.
+같은 부류('로컬은 되는데 CI 만 죽는다')가 또 나온다 — 빌드·E2E 까지 포함해 node 버전을 맞추는 일을 따로 잡아라.
 
 **⑤ no-ante k≥2 3~6bb 불일치** — 푸시폴드 표에서 아직 설명 못 한 구간.
 

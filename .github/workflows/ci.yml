@@ -120,8 +120,26 @@ jobs:
         run: npm ci --ignore-scripts
       - name: secretlint (작업 트리)
         run: npm run secrets
+      # 🔴 2026-09-20 — 이 단계가 **취약점이 아니라 레지스트리 변경**으로 죽었다(aa35d60).
+      #   node 22 가 데려오는 npm 10 은 `POST /-/npm/v1/security/audits/quick` 을 쓰는데,
+      #   그 엔드포인트가 폐기 중이라 400 을 돌려준다:
+      #     npm notice This endpoint is being retired. Use the bulk advisory endpoint instead.
+      #     npm error audit endpoint returned an error  statusCode: 400
+      #     message: 'Invalid package tree, run npm install to rebuild your package-lock.json'
+      #   ⚠ 저 메시지는 **거짓 단서**다. 잠금파일은 멀쩡했다 — 같은 트리로 로컬은 통과했다.
+      #   실측 대조(2026-09-20):
+      #     로컬 npm 11.12.1 → POST security/advisories/bulk  → **200**  · found 0 vulnerabilities
+      #     CI   npm 10.x    → POST security/audits/quick     → **400**
+      #   → audit 직전에만 npm 을 올린다. `npm ci` 는 위에서 이미 끝났으므로 설치 결과는 안 바뀌고,
+      #     이 단계만 bulk 엔드포인트를 쓰는 npm 으로 돈다(영향 범위 최소).
+      #   ⚠ 게이트를 무르게 한 것이 아니다 — `--audit-level=high` 기준은 그대로다.
+      #   🟡 근본적으로는 CI 의 node 22 와 개발 환경의 node 24 가 갈려 있는 것이 문제다.
+      #     맞추는 것은 빌드·E2E 까지 건드리는 일이라 따로 잡는다(HANDOFF §11-5 참고).
       - name: npm audit (런타임, high 이상)
-        run: npm audit --omit=dev --audit-level=high
+        run: |
+          npm i -g npm@11
+          npm --version
+          npm audit --omit=dev --audit-level=high
 
   # semgrep 은 공식 컨테이너로(액션 이름 변동에 안 흔들린다). --error 로 finding 이 있으면 실패.
   semgrep:
