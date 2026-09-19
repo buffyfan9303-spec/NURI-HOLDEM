@@ -46,7 +46,21 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # 2026-09-20 — node 22→24 (HANDOFF §11-5-⑧). CI 만 22 였고 로컬 개발환경은
+          #   24.15.0(`node -v` 실측) — 같은 코드를 매일 이 버전으로 돌리고 있었다는 뜻이라
+          #   빌드 게이트치고 위험이 낮다.
+          #   package-lock.json 실측(2026-09-20): vite 8.2.2(engines >=22.12.0)·
+          #   vitest 4.1.11(24.0.0 명시 지원)·playwright 1.62.1(>=20)·sharp 0.35.4(>=20.9.0)·
+          #   eslint 10.9.1(>=24 명시) 전부 node 24 허용. actions/setup-node v7.0.0 README(태그
+          #   직접 확인)가 node-version: 24 를 공식 예시로 문서화.
+          #   ✅ Vercel 운영 빌드도 **node 24.x** 다 — 2026-09-20 API 실측:
+          #     GET /v9/projects → nuri-holdem.nodeVersion = "24.x".
+          #     (package.json 에 engines.node 없고 vercel.json 에도 지정이 없어 소스만 봐서는
+          #      알 수 없다 — 대시보드 설정값이라 API 로 확인해야 한다.)
+          #   즉 **운영도 24 · 로컬도 24 · CI 만 22** 였다. 이 변경은 CI 를 나머지 둘에 맞추는 것이고,
+          #   그 분기 자체가 2026-09-20 배포를 한 번 막았다(audit 400 — 아래 security 잡 참조).
+          #   되돌리려면 node-version 을 22 로.
+          node-version: 24
           cache: npm
 
       - name: Install deps
@@ -114,7 +128,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # 2026-09-20 — node 22→24. 근거는 위 build-and-e2e 잡의 setup-node 주석과
+          #   동일(중복 생략). 이 잡에서는 추가로: node 24 는 npm 11.x 를 번들한다
+          #   (nodejs.org/dist/index.json 실측, 2026-09-20 — v24.21.0→npm 11.19.0 ·
+          #   v22.23.2→npm 10.9.8). 아래 npm audit 스텝이 npm 10 전용 폐기 엔드포인트
+          #   문제였으므로, 24 로 올리면 번들 npm 이 이미 11 이라 국소 처방(수동
+          #   `npm i -g npm@11`)이 불필요해져 제거함(아래 npm audit 스텝 주석 참조).
+          node-version: 24
           cache: npm
       - name: Install deps
         run: npm ci --ignore-scripts
@@ -133,13 +153,14 @@ jobs:
       #   → audit 직전에만 npm 을 올린다. `npm ci` 는 위에서 이미 끝났으므로 설치 결과는 안 바뀌고,
       #     이 단계만 bulk 엔드포인트를 쓰는 npm 으로 돈다(영향 범위 최소).
       #   ⚠ 게이트를 무르게 한 것이 아니다 — `--audit-level=high` 기준은 그대로다.
-      #   🟡 근본적으로는 CI 의 node 22 와 개발 환경의 node 24 가 갈려 있는 것이 문제다.
-      #     맞추는 것은 빌드·E2E 까지 건드리는 일이라 따로 잡는다(HANDOFF §11-5 참고).
+      #   ✅ 2026-09-20 후속 — 근본 원인(node 22≠24)을 위 setup-node 에서 24 로 맞춰 해결.
+      #     `npm i -g npm@11` 국소 처방은 이제 불필요해 제거했다: node 24 는 npm 11.x 를
+      #     번들한다(nodejs.org/dist/index.json 실측 — v24.21.0 → npm 11.19.0). 번들 npm 이
+      #     이미 bulk 엔드포인트를 쓰므로 이 스텝은 손대지 않아도 된다.
+      #   되돌리는 법: 다시 400 이 나면 이 스텝 위에 `npm i -g npm@11` 을 되살리거나
+      #     setup-node 의 node-version 을 22 로 내려라(그러면 이 처방이 다시 필요해진다).
       - name: npm audit (런타임, high 이상)
-        run: |
-          npm i -g npm@11
-          npm --version
-          npm audit --omit=dev --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
 
   # semgrep 은 공식 컨테이너로(액션 이름 변동에 안 흔들린다). --error 로 finding 이 있으면 실패.
   semgrep:

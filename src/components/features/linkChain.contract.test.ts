@@ -86,8 +86,18 @@ describe('D · 알림의 쿼리·해시 링크는 앱 안에서 연다(전체 �
 });
 
 describe('E · 상태가 따라온다', () => {
-  it('🔴 라이브 탭 팔로우 하트는 탭이 보일 때마다 다시 읽는다(keep-alive 1회 조회 금지)', () => {
-    expect(LIVE).toMatch(/useEffect\(\(\) => \{\s*if \(!active\) return;\s*let alive = true;\s*getMyFollowedVenueIds\(\)[\s\S]{0,200}?\}, \[active\]\);/);
+  it('🔴 팔로우 하트는 탭이 보일 때마다 다시 읽는다(keep-alive 1회 조회 금지)', () => {
+    // 🔴 2026-09-20 — 이 조리법이 `LiveGamesTab` 안에 있다가 `src/lib/useFavoriteVenues.ts` 로 **옮겨졌다.**
+    //   같은 날 오너 지시로 일정 카드의 ♥ 를 살리면서 홈·일정탐색도 같은 집합이 필요해졌는데,
+    //   세 탭이 각자 구현하면 그중 하나는 반드시 이 '1회 조회' 함정을 다시 밟기 때문이다
+    //   (2026-09-17 에 라이브 탭에서 실제로 밟았다 — 매장 페이지에서 팔로우하고 돌아와도 하트가 영원히 안 붙었다).
+    // ⚠ 계약을 **없앤 것이 아니라 옮긴 것**이다. 조리법이 사는 곳에 그대로 건다.
+    const HOOK = readFileSync(join(__dirname, '../../lib/useFavoriteVenues.ts'), 'utf8');
+    expect(HOOK, '훅이 active 를 의존성으로 다시 읽지 않는다 — keep-alive 탭에서 하트가 영원히 안 갱신된다')
+      .toMatch(/useEffect\(\(\) => \{\s*if \(!active\) return;[\s\S]{0,400}?getMyFollowedVenueIds\(\)[\s\S]{0,400}?\}, \[active\]\);/);
+    // 소비처 셋이 **그 훅을 실제로 쓰는지**까지 본다 — 훅만 있고 아무도 안 쓰면 빈 계약이다.
+    expect(LIVE, '라이브 탭이 공유 훅을 안 쓴다').toMatch(/useFavoriteVenues\(active/);
+    expect(APP, 'App(홈·일정탐색)이 공유 훅을 안 쓴다').toMatch(/useFavoriteVenues\(/);
   });
   it('🔴 체크인 성공 3경로가 nuri:checkin-done 을 쏘고 App 이 visitedVenues 를 다시 읽는다', () => {
     expect((APP.match(/new Event\('nuri:checkin-done'\)/g) ?? []).length).toBe(2);

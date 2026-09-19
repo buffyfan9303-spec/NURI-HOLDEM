@@ -170,8 +170,11 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
           {actError ? (
             <LoadErrorCard error={actError} what="활동 내역" compact onRetry={loadAct} />
           ) : !act ? (
-            // 아래 지표 격자(2행 × 2.6rem)와 같은 높이 — 도착하는 순간 카드가 아래로 밀리지 않게.
-            <SkeletonList rows={2} rowClassName="h-[2.6rem]" />
+            // 아래 지표 격자(176-187행)와 같은 높이 — 도착하는 순간 카드가 아래로 밀리지 않게.
+            // grid-cols-3 에 셀 9개라 실제는 3행인데 예전엔 2행으로 예약해 -55px 밀렸다(2026-09-20 실측,
+            // 프로덕션 프리뷰 4273 에 합성 DOM 삽입·getBoundingClientRect: 실제 149.8125px vs 예전 예약 94.75px).
+            // 2.6875rem = (149.8125 − 갭 2×0.375rem) ÷ 3행 — 실측값 역산.
+            <SkeletonList rows={3} rowClassName="h-[2.6875rem]" />
           ) : (
             <div className="grid grid-cols-3 gap-1.5">
               <Cell label="바인" v={`${act.buyins}회`} />

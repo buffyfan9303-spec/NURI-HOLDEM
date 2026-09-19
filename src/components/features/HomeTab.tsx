@@ -24,12 +24,13 @@
 //
 // 유지: 탭 keep-alive(App 의 visitedTabs + display 토글) 전제 — 이벤트 보드는 마운트 1회로 끝내지
 //       않고 visibilitychange·체크인 신호로 다시 받는다. 스켈레톤 자리 예약(localStorage)도 그대로.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, Fragment } from 'react';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import PosterCarousel, { type EventSlide } from './PosterCarousel';
 import type { HomeBanner } from '../../api/homeBanners';
 import ScheduleCard from './ScheduleCard';
+import { dateHeaderAt } from '../../lib/scheduleDateGroups';
 import type { Schedule } from '../../api/schedules';
 import type { RegInfo } from '../../lib/regStatus';
 import { compareByStartThenBoost } from '../../lib/scheduleSort';
@@ -145,6 +146,7 @@ export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
   onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], showEventSlide = true, showBrandSlides = true, eventMenuVisible = true, onInternalLink,
   visitedVenues = [], myTodayRes = [], venueById, onOpenVoucher,
+  favVenueIds, onToggleFavorite,
 }: {
   /** 매장 대표 이미지·테마색 조회용 — 목록 줄 왼쪽 **매장 로고** 자리가 쓴다(2026-09-18).
    *  App 이 이미 들고 있는 `venueById` 를 그대로 받는다(새 조회 0). 없으면 이니셜만 보인다. */
@@ -152,6 +154,12 @@ export default function HomeTab({
   /** 출석 체크 퀵액션 — 헤더 [이용권·출석] 과 **같은 시트**를 연다(App 이 로그인 여부까지 판단한다).
    *  같은 목적지에 서로 다른 경로를 새로 만들지 않는다 — 헤더 진입점은 그대로 둔다(오너: 헤더는 유지). */
   onOpenVoucher?: () => void;
+  /** ♥ 즐겨찾기 — App 이 들고 있는 집합을 그대로 받는다(새 조회 0).
+   *  홈이 자기 조회를 따로 하면 '탭 재방문 시 하트가 안 갱신' 함정을 다시 밟는다(lib/useFavoriteVenues.ts 주석).
+   *  안 넘기면 하트가 안 보인다 — 무반응 클릭을 만들지 않는 기존 게이트 그대로다. */
+  favVenueIds?: ReadonlySet<string>;
+  onToggleFavorite?: (venueId: string) => void;
+
   /** 추천 근거(2026-09-17) — 셋 다 App 이 **이미 받아 둔** 응답이다(새 조회 0). 안 넘기면 종전 정렬 그대로다. */
   liveClocks?: ClockState[];
   visitedVenues?: VisitedVenue[];
@@ -613,6 +621,13 @@ export default function HomeTab({
           </header>
           {!loaded ? (
             <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura" aria-busy="true">
+              {/* 🔴 날짜 머리말 자리 예약(2026-09-20) — 목록에 날짜 그룹 머리말을 넣으면서
+                  스켈레톤이 그만큼 적게 예약해 데이터 도착 시 아래가 밀렸다(CLS).
+                  ⚠ **몇 개**가 붙을지는 데이터 전에 모른다(그룹 수는 배열을 봐야 나온다).
+                    다만 **첫 항목에는 항상 하나 붙는다**(lib/scheduleDateGroups 의 i===0 분기) —
+                    확실한 그 하나만 예약한다. 추측으로 더 넣으면 반대로 과다예약이 된다.
+                  실측: 진짜 머리말 27.4px · 이 예약 27.6px(py-1.5 12.75 + h-3.5 14.875). */}
+              <div className="bg-surface-high/40 px-3 py-1.5"><div className="skeleton h-3.5 w-16" /></div>
               {Array.from({ length: upcomingSeenCount() }).map((_, i) => (
                 /* min-h: 실제 카드 행과 같은 높이를 예약한다(--card-h-list — 카드가 바뀌면 그 토큰만 고친다). */
                 <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-2.5">
@@ -650,12 +665,27 @@ export default function HomeTab({
                 </p>
               )}
               {(upcoming.length ? upcoming : nextUp).map((s, i) => (
-                <ScheduleCard key={s.id} mode="list" schedule={s}
+                <Fragment key={s.id}>
+                {(() => {
+                  // 날짜 머리말 — 일정탐색과 **같은 정본**(lib/scheduleDateGroups).
+                  //   홈은 '오늘·내일' 이라 보통 그룹이 1~2개다 — 그래도 그 둘이 안 갈리던 것이
+                  //   이번 지시의 발단이다(실측: 9/20·9/20·9/21 이 구분 없이 나열됨).
+                  // ⚠ 홈은 거리 정렬이 없다 — 항상 날짜순이라 끄는 조건이 필요 없다.
+                  const h = dateHeaderAt(upcoming.length ? upcoming : nextUp, i);
+                  return h ? (
+                    <p data-date-header={s.date}
+                      className="bg-surface-high/40 px-3 py-1.5 text-2xs font-bold leading-tight text-ink-secondary">{h}</p>
+                  ) : null;
+                })()}
+                <ScheduleCard mode="list" schedule={s}
                   venue={venueById?.get(s.venueId)}
                   regInfo={regInfoBySchedule.get(s.id)}
                   onVenueClick={onVenue}
                   onSelect={onSelect}
-                  priority={i < 4} />
+                  priority={i < 4}
+                  favorited={!!favVenueIds?.has(s.venueId)}
+                  onToggleFavorite={onToggleFavorite} />
+                </Fragment>
               ))}
               {/* 목록 끝의 '전체 일정' — 시안(첨부 HTML 271행 'See All Tournaments')의 자리.
                   헤더에도 같은 링크가 있지만, 목록을 다 훑고 난 **그 자리**에서 이어 가게 하는 것이 요점이다

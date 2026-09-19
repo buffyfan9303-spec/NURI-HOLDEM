@@ -278,7 +278,17 @@ function FavoriteButton({
       aria-label={`${pubName} 단골 ${on ? '해제' : '등록'}`}
       onClick={(e) => { e.stopPropagation(); onToggle(); }}
       className={[
-        'hit -my-1 grid h-7 w-7 shrink-0 place-items-center rounded-full',
+        // 🔴 2026-09-20 — `.hit` 을 빼고 **실제 박스를 44px 로 키웠다.** `.hit::after` 는
+        //   `max(100%, 44px)` 를 중앙에서 펼치는데, 이 버튼이 오른쪽 열 **맨 끝**에 있어서
+        //   그 7.1px 오버행이 부모 밖으로 나가 `scrollWidth` 를 늘렸다 —
+        //   잘림 게이트가 `div "시작18:00" 73/80` · `button 30/37` 로 **10건을 잡았다**(실측).
+        //   `src/index.css` 의 `.hit` 함정 주석이 이 경우의 해법을 이미 적어 뒀다:
+        //   "이미 위치가 잡힌 요소는 `.hit` 대신 **실제 박스를 키워라**(`h-11 w-11`)".
+        // ⚠ 배경이 없는 아이콘 버튼이라 박스를 키워도 **화면에는 아무 변화가 없다**(♥ 14px 그대로).
+        //   오너가 지적한 '버튼이 쓸데없이 커 보이는 것' 과 무관하다 — 보이는 것은 아이콘뿐이다.
+        // ⚠ `h-11`(46.75px @루트 17px) ≥ 44 라 오버행이 0 이 된다. 44px 를 직접 박지 않는 이유는
+        //   루트 폰트가 17px 이라 rem 유틸이 6.25% 크기 때문이다(CLAUDE.md).
+        '-my-1 grid h-11 w-11 shrink-0 place-items-center rounded-full',
         'transition-[color,transform] active:scale-90',
         on ? 'text-danger-light' : 'text-ink-muted hover:text-ink-secondary',
       ].join(' ')}
@@ -509,13 +519,6 @@ function ListCard({
         )}
         {distanceKm != null && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
         {(reserveCount ?? 0) > 0 && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}
-        {onToggleFavorite && schedule.venueId && (
-          <FavoriteButton
-            pubName={schedule.pubName}
-            on={favorited}
-            onToggle={() => onToggleFavorite(schedule.venueId)}
-          />
-        )}
       </div>
 
       {/* ② 2행 — 대회명(굵고 밝게) + 등급 배지
@@ -581,14 +584,35 @@ function ListCard({
           ⚠ 시각 글자를 더 키우지 마라. 이 덩어리 폭이 곧 가운데의 손해다(위 폭 예산).
           ⚠ `shrink-0` 이라 줄지 않는다 — 대신 폭이 모자라면 flex-wrap 이 이 덩어리를 통째로 아랫줄로
             내린다(그게 200% 확대의 탈출구다). */}
-      <div className="flex shrink-0 items-center gap-1">
-        <p className="flex min-w-0 flex-col items-end leading-tight">
-          <span className="text-[9px] font-bold leading-tight text-ink-muted min-[360px]:text-[10px]">시작</span>
-          <span className="text-[0.9375rem] font-extrabold leading-tight tracking-tight tabular-nums text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-lg">
-            {schedule.startTime || '—'}
-          </span>
-        </p>
-        <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
+      {/* 🔴 2026-09-20 2차 — ♥ 를 **여기**(오른쪽 덩어리 위)에 둔다. 매장 줄에 먼저 넣어 봤다가 옮겼다.
+          왜 매장 줄이 아닌가 — 실측으로 확인한 두 가지다:
+            ① **폭 경쟁.** 매장 줄에 넣으면 ♥(29.75) + gap(4.25) = 34px 를 매장명에서 빼앗는다.
+               390px 에서 '누리 테스트 홀덤펍 강남 센텀점 · 서울' 은 172px 이 필요한데 래퍼가 149px 로
+               줄어 **`· 서울` 이 아랫줄로 밀렸다** — 2026-09-20 에 `block` 흐름으로 고친 바로 그 증상이
+               되돌아온다. 카드 높이 108.4 → **125.9px**(실측).
+            ② **오탭.** ♥ 의 `.hit` 오버행 7.1px 이 바로 옆 매장명 링크 위에 얹힌다(같은 줄이라).
+          여기로 옮기면 둘 다 사라진다 — 이 덩어리는 `shrink-0` 이고 **가로 폭이 안 늘어난다**
+          (♥ 29.75 < 시각 덩어리 폭). 세로로만 쌓이는데 가운데 열이 이미 3줄이라 카드 높이도 그대로다.
+          ⚠ 바깥 flex 의 **항목 수는 그대로 2개**다(로고·가운데·이 덩어리) — 위 주석이 경고한
+            '항목을 하나 더 만들면 gap 이 하나 더 생긴다' 에 걸리지 않는다. 이 안에서만 세로로 나눈다.
+          ⚠ ♥ 가 없을 때(비배선 화면)는 렌더되지 않아 종전 레이아웃과 **완전히 동일**하다. */}
+      <div className="flex shrink-0 flex-col items-end justify-center gap-0.5">
+        {onToggleFavorite && schedule.venueId && (
+          <FavoriteButton
+            pubName={schedule.pubName}
+            on={favorited}
+            onToggle={() => onToggleFavorite(schedule.venueId)}
+          />
+        )}
+        <div className="flex items-center gap-1">
+          <p className="flex min-w-0 flex-col items-end leading-tight">
+            <span className="text-[9px] font-bold leading-tight text-ink-muted min-[360px]:text-[10px]">시작</span>
+            <span className="text-[0.9375rem] font-extrabold leading-tight tracking-tight tabular-nums text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-lg">
+              {schedule.startTime || '—'}
+            </span>
+          </p>
+          <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
+        </div>
       </div>
     </article>
   );

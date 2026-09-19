@@ -23,7 +23,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # 2026-09-20 — node 22→24. 근거는 ci.yml 의 setup-node 주석 참조(같은 조사,
+          #   중복 생략). 이 워크플로는 주간·비차단이라 위험이 가장 낮은 자리부터 올렸다.
+          node-version: 24
           cache: npm
       - name: Install deps
         run: npm ci

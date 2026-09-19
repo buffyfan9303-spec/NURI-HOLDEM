@@ -22,7 +22,9 @@ const LIVE_SORT_ORDER = ['default', 'players', 'time', 'distance'] as const;
 const LIVE_SORT_LABEL: Record<(typeof LIVE_SORT_ORDER)[number], string> = {
   default: '기본', players: '인원', time: '시간', distance: '거리',
 };
-import { getMyFollowedVenueIds, type Venue } from '../../api/community';
+import { type Venue } from '../../api/community';
+import { useFavoriteVenues } from '../../lib/useFavoriteVenues';
+import { promptLogin } from '../../lib/requireLogin';
 import type { Schedule } from '../../api/schedules';
 // 참가비·상금 문자열과 '오늘 곧 시작' 줄은 일정 목록 카드의 정본을 그대로 쓴다(두 벌 계산·두 문법 금지, 2026-09-18).
 import ScheduleCard, { buyInText, prizeText } from './ScheduleCard';
@@ -104,16 +106,13 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (!active) return; return subscribeRunningClocks(load); }, [active]); // 레벨 전환·통계 즉시 반영
 
-  // ♥ 즐겨찾기(매장 팔로우) — APIS 카드의 하트 자리. 비로그인은 빈 배열이라 그냥 아무 카드에도 하트가 안 붙는다(에러 표면 없음).
+  // ♥ 즐겨찾기(매장 팔로우) — APIS 카드의 하트 자리. 비로그인은 빈 집합이라 아무 카드에도 하트가 안 붙는다(에러 표면 없음).
   // ⚠ '1회 조회' 였다(연결 감사 E, 2026-09-17): 이 탭은 keep-alive 라 마운트가 한 번뿐이고, 매장 페이지에서
-  //   팔로우하고 돌아와도 하트가 영원히 안 붙었다. CalendarPanel ② 와 같은 조리법 — 탭이 **보이게 될 때마다** 다시 읽는다.
-  const [favIds, setFavIds] = useState<ReadonlySet<string>>(() => new Set());
-  useEffect(() => {
-    if (!active) return;
-    let alive = true;
-    getMyFollowedVenueIds().then((ids) => { if (alive) setFavIds(new Set(ids)); }).catch(() => { /* 표시 보조 — 실패는 무시 */ });
-    return () => { alive = false; };
-  }, [active]);
+  //   팔로우하고 돌아와도 하트가 영원히 안 붙었다. 탭이 **보이게 될 때마다** 다시 읽어야 한다.
+  // 🔴 2026-09-20 — 그 조리법을 `lib/useFavoriteVenues.ts` 로 옮겼다. 여기서 직접 구현하지 않는다.
+  //   같은 날 일정 카드의 ♥ 를 살리면서 홈·일정탐색도 같은 집합이 필요해졌는데, 탭마다 각자 구현하면
+  //   그중 하나는 반드시 위 '1회 조회' 함정을 다시 밟는다. **읽기만 하던 것이 이제 토글도 한다.**
+  const { ids: favIds, toggle: toggleFav } = useFavoriteVenues(active, promptLogin);
 
   // [DS] MO-9B①: venues.find 선형 탐색 제거 — Map 조회(O(게임수×매장수) → O(게임수))
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
@@ -188,7 +187,21 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                 ))}
               </div>
             )}
-            <button type="button" onClick={load} className="btn-ghost px-3 text-xs">새로고침</button>
+            {/* 🔴 2026-09-20 오너 지시("버튼 안 글씨 위아래 공백이 너무 커서 버튼이 쓸데없이 커진다").
+                전수 측정에서 **글자만 있는 버튼 중 유일하게 실결함**으로 남은 자리다
+                (커뮤니티 서브탭·필터칩은 44px 가 투명 히트박스이고 보이는 알약은 32px — 오탐이었다).
+                원인: `text-xs` 로 글자만 줄이고 `.btn` 의 바닥값 `min-h-[2.4rem]`(40.8px)은 그대로 둬서
+                  글자(12.75px) 대비 위아래 여백이 과했다. 크기 사다리에 `text-xs` 짝인 `.btn-sm`
+                  (`min-h-[2rem]`=34px · `leading-[1.0625rem]`)이 이미 있는데 안 쓰고 있었다.
+                  → `btn-sm` 을 쓴다. `text-xs` 는 `btn-sm` 이 이미 포함하므로 뺀다(두 벌 방지).
+                  `px-3` 은 유틸이라 `btn-sm` 의 `px-2.5` 를 이기고 기존 가로 폭이 유지된다.
+                🔴 `.hit` 을 같이 붙인다 — 이건 **줄이는 김에 얹는 것이 아니라 고치는 것**이다.
+                  종전 40.8px 는 애초에 터치 최소치 44px 에 **미달**이었다. `.hit::after` 가
+                  보이는 상자는 그대로 두고 터치만 44px 로 넓힌다(34 → 유효 44).
+                ⚠ `.hit` 함정 ②(오버행이 옆을 덮는다): 세로 오버행 (44−34)/2 = **5px**.
+                  가로는 이 버튼 폭이 44px 를 넘어 오버행 0 이다. 적용 후 `elementFromPoint` 로
+                  그 좌표가 정말 이 버튼을 돌려주는지 실측했다(아래 커밋 메시지에 수치). */}
+            <button type="button" onClick={load} className="btn-ghost btn-sm hit px-3">새로고침</button>
           </div>
         </div>
 
@@ -302,7 +315,8 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                 320px 에서는 제목이 잘렸다(실측 134/190). 컨테이너 클래스는 App 의 일정 목록과 같다. */}
             <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
               {upcoming.map((s) => (
-                <ScheduleCard key={s.id} mode="list" schedule={s} venue={venueById.get(s.venueId)} onSelect={onSchedule} onVenueClick={onVenue} />
+                <ScheduleCard key={s.id} mode="list" schedule={s} venue={venueById.get(s.venueId)} onSelect={onSchedule} onVenueClick={onVenue}
+                  favorited={favIds.has(s.venueId)} onToggleFavorite={toggleFav} />
               ))}
             </div>
           </div>

@@ -100,6 +100,56 @@ describe('일정 목록 줄 — 골격', () => {
     }
   });
 
+  it('🔴 ♥ 가 **실제로 배선돼 있다** — 컴포넌트만 있고 prop 을 안 넘기면 화면에 안 뜬다', () => {
+    // 🔴 이 검사가 있는 이유. 바로 위 '기능 보존' 검사는 `ScheduleCard.tsx` 소스에
+    //   `FavoriteButton` 이라는 **글자가 있는지**만 본다. 그런데 2026-08-28 ~ 2026-09-20 까지
+    //   **호출부 4곳 전부가 `onToggleFavorite` 를 안 넘겨서 하트가 어느 화면에도 안 떴다.**
+    //   그 20일 내내 이 파일의 검사는 **초록**이었다 — 회귀를 못 잡는 계약이었던 것이다.
+    //   (회귀가 아니라 미완성이었다: `git log -S FavoriteButton` 이 커밋 하나만 돌려준다.)
+    // → 컴포넌트 존재가 아니라 **호출부가 실제로 넘기는지**를 본다.
+    const sites = [
+      ['../../App.tsx', 'App(일정 탐색 리스트·그리드 / 표모드 모바일 대체)'],
+      ['./HomeTab.tsx', '홈(오늘·내일 일정)'],
+      ['./LiveGamesTab.tsx', '라이브(오늘 곧 시작)'],
+    ] as const;
+    for (const [rel, label] of sites) {
+      const src = readFileSync(join(__dirname, rel), 'utf8');
+      expect(src, `${label} 가 ScheduleCard 에 onToggleFavorite 을 안 넘긴다 — 하트가 그 화면에서 사라진다`)
+        .toMatch(/onToggleFavorite=\{/);
+      expect(src, `${label} 가 favorited 를 안 넘긴다 — 눌러도 채워진 하트로 안 바뀐다`)
+        .toMatch(/favorited=\{/);
+    }
+    // 세 화면이 **같은 집합**을 봐야 한다 — 각자 조회하면 '탭 재방문 시 하트가 안 갱신됨' 함정을
+    // 다시 밟는다(lib/useFavoriteVenues.ts 주석에 2026-09-17 실제 사례 기록).
+    for (const [rel, label] of sites) {
+      const src = readFileSync(join(__dirname, rel), 'utf8');
+      expect(src, `${label} 가 useFavoriteVenues 를 안 쓴다 — 탭마다 따로 조회하면 하트가 어긋난다`)
+        .toMatch(/useFavoriteVenues/);
+    }
+  });
+
+  it('🔴 날짜 그룹 머리말이 **세 목록 모두에** 배선돼 있다', () => {
+    // 오너 지시(2026-09-20): 카드에서 날짜를 뺀 뒤 목록에 날짜 구분이 없어졌다 → 그룹 머리말 추가.
+    // ⚠ 한 곳만 배선하면 같은 대회가 화면마다 다르게 보인다 — 이 저장소가 반복해 밟은 '정본 두 벌' 부류다.
+    for (const [rel, label] of [
+      ['../../App.tsx', 'App(일정탐색 리스트 · 표모드 모바일 대체)'],
+      ['./HomeTab.tsx', '홈(오늘·내일 일정)'],
+    ] as const) {
+      const src = readFileSync(join(__dirname, rel), 'utf8');
+      expect(src, `${label} 가 dateHeaderAt 을 안 쓴다 — 그 화면만 날짜 구분이 없어진다`)
+        .toMatch(/dateHeaderAt\(/);
+      expect(src, `${label} 에 data-date-header 손잡이가 없다 — e2e 가 머리말을 못 찾는다`)
+        .toMatch(/data-date-header=/);
+    }
+    // 🔴 '가까운 순'에서는 꺼야 한다 — 거리 우선 정렬은 날짜를 비단조로 만들어 머리말이 반복된다.
+    const APP = readFileSync(join(__dirname, '../../App.tsx'), 'utf8');
+    expect(APP, "일정탐색이 nearSort 에서 머리말을 안 끈다 — 같은 날짜 머리말이 목록 중간에 반복된다")
+      .toMatch(/dateHeaderAt\([^)]*!nearSort/);
+    // 그리드 모드에서도 꺼야 한다 — CSS grid 칸 안에 전폭 머리말을 넣으면 칸이 깨진다.
+    expect(APP, "그리드 모드에서 머리말을 안 끈다 — CSS grid 칸이 깨진다")
+      .toMatch(/viewMode === 'list'/);
+  });
+
   it('카드→상세 모핑의 출발점(vt-poster)이 매장 로고에 남아 있다', () => {
     // 로고를 옮기거나 크기를 바꿀 때 **이름을 흘리기 쉬운 자리**다.
     // 이름이 사라지면 모핑이 조용히 없어진다(index.css 는 그대로 초록이라 아무도 모른다).

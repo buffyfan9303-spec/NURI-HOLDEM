@@ -1125,10 +1125,13 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   }
 
   // (B1) 전체를 한 줄 텍스트로 치환하던 것 → 표 골격을 유지하는 스켈레톤(레이아웃 점프 방지)
+  // 행 높이는 실제 바인 표 본문 행(1544-1650행, w-12 h-12 셀)과 맞춘다 — h-10(42.5px)이던 것이
+  // 실제 h-12 행(51px)보다 6행 합쳐 -51px 작았다(2026-09-20 실측, 프로덕션 프리뷰 4273 합성 DOM: h-12 셀
+  // 클래스를 그대로 쓴 1행 rect.height=51px, h-10=42.5px). 같은 h-12 클래스를 그대로 재사용해 맞춘다.
   if (loading) return (
     <div className="space-y-3">
       <div className="h-9 animate-pulse rounded-input bg-surface-high" />
-      <SkeletonList rows={6} rowClassName="h-10" />
+      <SkeletonList rows={6} rowClassName="h-12" />
     </div>
   );
 

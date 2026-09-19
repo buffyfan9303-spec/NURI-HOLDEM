@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, type ReactNode } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, Fragment, type ReactNode } from 'react';
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { flushSync } from 'react-dom';
 import { withViewTransition, type VTDirection } from './lib/viewTransition';
@@ -66,6 +66,8 @@ import StaffInviteBanner from './components/features/StaffInviteBanner';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
 import { promptLogin, REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, ensureLogin } from './lib/requireLogin';
+import { useFavoriteVenues } from './lib/useFavoriteVenues';
+import { dateHeaderAt } from './lib/scheduleDateGroups';
 import { tierCss, tierOf, ADMIN_VIVID_VAR } from './components/atoms/TierBadge';
 
 /**
@@ -1081,6 +1083,13 @@ export default function App() {
   }, [activeTab]);
 
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
+  // ♥ 즐겨찾기(매장 팔로우) — 홈·일정탐색이 **같은 집합**을 본다.
+  // 🔴 2026-09-20 오너 지시로 살렸다. `ScheduleCard` 의 `onToggleFavorite` 은 2026-08-28 에 만들어지고
+  //   **호출부 4곳 전부 0건 전달** 이라 하트가 어느 화면에도 안 뜼던 자리다(회귀가 아니라 미완성).
+  // ⚠ `active` 를 홈·일정탐색 **둘 다**로 둔다 — 둘은 keep-alive 로 같이 살아 있고 한 집합을 공유한다.
+  //   라이브 탭은 자기 `active` 로 따로 든다(보일 때마다 다시 읽어 스스로 따라잡는다).
+  const { ids: favVenueIds, toggle: toggleFavVenue } = useFavoriteVenues(
+    activeTab === 'home' || activeTab === 'browse', promptLogin);
   const [visitedTabs] = useState(() => new Set<TabId>(['home']));
   useEffect(() => { visitedTabs.add(activeTab); }, [activeTab, visitedTabs]);
   // keep-alive 의 대가 — 오버레이(Modal·ImageLightbox)는 포털을 안 써서 자기 탭 pane 안에 렌더된다.
@@ -3713,6 +3722,8 @@ export default function App() {
           <HomeTab
             schedules={schedules}
             venueById={venueById}
+            favVenueIds={favVenueIds}
+            onToggleFavorite={toggleFavVenue}
             /* 홈 퀵액션 '출석 체크' — 헤더 [이용권·출석] 과 **같은 시트·같은 조리법**(startTransition +
                선마운트 Suspense). 비로그인은 시트 대신 로그인부터 — 무반응 클릭을 만들지 않는다. */
             onOpenVoucher={() => (user ? startTransition(() => setVoucherSheetOpen(true)) : openLoginCb())}
@@ -3958,8 +3969,23 @@ export default function App() {
                       : 'divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura',
                   ].join(' ')}>
                     {visibleSchedules.map((s, i) => (
+                      <Fragment key={s.id}>
+                      {(() => {
+                        // 🔴 날짜 머리말 — **평면으로** 끼운다(그룹 래퍼 금지).
+                        //   래퍼<div>로 묶으면 이 컨테이너의 `divide-y`(= `> * + *` border-top)가
+                        //   **래퍼 사이에만** 걸려 같은 그룹 안 카드끼리 구분선이 사라진다(반증 지적).
+                        //   직계 자식으로 두면 머리말 위에도 선이 생겨 그것이 그대로 그룹 경계가 된다.
+                        // ⚠ '가까운 순'(nearSort) 에서는 끄다 — 거리 우선 정렬은 날짜를 비단조로 만들어
+                        //   같은 날짜 머리말이 중간에 여러 번 반복된다.
+                        // ⚠ 그리드 모드에서도 끄다 — CSS grid 칸 안에 전폭 <p> 를 넣으면 칸이 깨진다.
+                        //   그리드 카드는 **지금도 날짜를 보여 준다**(ScheduleCard 의 GridCard 하단 오버레이).
+                        const h = dateHeaderAt(visibleSchedules, i, !nearSort && viewMode === 'list');
+                        return h ? (
+                          <p key={`h-${s.date}`} data-date-header={s.date}
+                            className="bg-surface-high/40 px-3 py-1.5 text-2xs font-bold leading-tight text-ink-secondary">{h}</p>
+                        ) : null;
+                      })()}
                       <ScheduleCard
-                        key={s.id}
                         mode={viewMode}
                         schedule={s}
                         venue={venueById.get(s.venueId)}
@@ -3973,7 +3999,10 @@ export default function App() {
                         // ⚡ 첫 화면에 보이는 상단 카드만 포스터를 즉시 로드(LCP 단축).
                         //    그리드는 한 화면에 더 많이 보이므로 6장, 리스트는 4장.
                         priority={i < (viewMode === 'grid' ? 6 : 4)}
+                        favorited={favVenueIds.has(s.venueId)}
+                        onToggleFavorite={toggleFavVenue}
                       />
+                      </Fragment>
                     ))}
                   </div>
                 )}
@@ -3981,7 +4010,18 @@ export default function App() {
                 {viewMode === 'table' && !isMdUp && visibleSchedules.length > 0 && (
                   <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura md:hidden">
                     {visibleSchedules.map((s, i) => (
-                      <ScheduleCard key={s.id} mode="list" schedule={s} venue={venueById.get(s.venueId)} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} />
+                      <Fragment key={s.id}>
+                      {(() => {
+                        // 날짜 머리말 — 위 리스트와 **같은 정본**(lib/scheduleDateGroups)을 쓴다.
+                        //   이 자리는 표 모드의 모바일 대체 목록이라 항상 list 문법이다(viewMode 가드 불필요).
+                        const h = dateHeaderAt(visibleSchedules, i, !nearSort);
+                        return h ? (
+                          <p data-date-header={s.date}
+                            className="bg-surface-high/40 px-3 py-1.5 text-2xs font-bold leading-tight text-ink-secondary">{h}</p>
+                        ) : null;
+                      })()}
+                      <ScheduleCard mode="list" schedule={s} venue={venueById.get(s.venueId)} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} favorited={favVenueIds.has(s.venueId)} onToggleFavorite={toggleFavVenue} />
+                      </Fragment>
                     ))}
                   </div>
                 )}
@@ -4716,6 +4756,15 @@ function ScheduleSkeletonGrid({ viewMode, rows }: { viewMode: 'grid' | 'list' | 
   const n = grid ? 10 : (rows ?? 6);
   return (
     <div className={[grid ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low'].join(' ')} aria-busy="true">
+      {/* 🔴 날짜 머리말 자리 예약(2026-09-20) — 목록에 날짜 그룹 머리말을 넣으면서
+          스켈레톤이 그만큼 적게 예약해 데이터 도착 시 아래가 밀렸다(CLS).
+          ⚠ **몇 개**가 붙을지는 데이터 전에 모른다(그룹 수는 배열을 봐야 나온다).
+            다만 **첫 항목에는 항상 하나 붙는다**(lib/scheduleDateGroups 의 i===0 분기) —
+            확실한 그 하나만 예약한다. 추측으로 더 넣으면 반대로 과다예약이 된다.
+          실측: 진짜 머리말 27.4px · 이 예약 27.6px(py-1.5 12.75 + h-3.5 14.875). */}
+      {!grid && (
+      <div className="bg-surface-high/40 px-3 py-1.5"><div className="skeleton h-3.5 w-16" /></div>
+      )}
       {Array.from({ length: n }).map((_, i) =>
         grid ? (
           // GridCard 골격: 포스터 3/4 + 본문(p-2.5 gap-1.5: 제목 2줄 + 매장 1줄 + 구분선 + 바인 1줄)

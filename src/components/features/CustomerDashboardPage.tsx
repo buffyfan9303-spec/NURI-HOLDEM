@@ -659,12 +659,15 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                   까지 늘어난다(360/390 둘 다, 너비가 아니라 글자 수가 원인 — verylong 상태로 확인). 대표 단일값이 안 되는
                   경우라 **긴 경우 쪽으로 안전하게** 예약한다.
                 · RankTrendChart 실제 135.6px(390) / 128.7px(360) — 포인트 수(2~15)와 무관하게 고정(SVG 고정폭).
-                두 블록은 **뜨는 조건이 다르다**(ranks.length>0 대 >=2 — 위 ME_RANKS_TREND_SEEN 주석) — 따로 예약한다. */}
+                두 블록은 **뜨는 조건이 다르다**(ranks.length>0 대 >=2 — 위 ME_RANKS_TREND_SEEN 주석) — 따로 예약한다.
+                · 아래 입상 행(674-689행) 실제 56.19px(border 2 + h-6 배지 정렬 + text-sm/text-2xs 두 줄) —
+                  h-14(59.5px, 루트폰트 17px 기준)로 예약해 15행이면 +49.7px 과다 예약이라 도착 순간 위로 튀었다.
+                  h-[56px]로 실측값에 맞춘다(2026-09-20, 프로덕션 프리뷰 4273 합성 DOM 실측). */}
             {loading ? (
               <>
                 {meRanksChartSeen() && <div className="skeleton mb-2 h-[261px] rounded-aura" aria-hidden aria-busy="true" />}
                 {meRanksTrendSeen() && <div className="skeleton mb-2 h-[136px] rounded-aura" aria-hidden aria-busy="true" />}
-                <SkeletonList rows={meRanksSeenRows()} rowClassName="h-14" />
+                <SkeletonList rows={meRanksSeenRows()} rowClassName="h-[56px]" />
               </>
             )
               : ranksErr != null ? <LoadErrorCard error={ranksErr} what="입상 기록" onRetry={reload} compact />
