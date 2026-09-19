@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
@@ -110,7 +110,17 @@ export default function Modal({
   // 열기/닫기 애니메이션: 닫힐 때 잠깐 더 렌더링하여 시트가 아래로 슬라이드되며 사라지게 한다.
   const [render, setRender] = useState(open);
   const [closing, setClosing] = useState(false);
-  useEffect(() => {
+  // 🔴 `useEffect` 가 아니라 `useLayoutEffect` 다. 2026-09-19 실측으로 재현한 결함:
+  //   `open` 이 true 로 바뀐 **첫 렌더**는 이 effect 가 아직 안 돌아 `render` 가 과거 값(false)이다.
+  //   → 모달이 `null` 을 반환한 채로 **한 프레임(16~18ms) 페인트**된다. 스크림도 다이얼로그도 DOM 에 없다.
+  //   그 프레임에 들어온 클릭은 **뒤 화면 요소에 그대로 꽂힌다**(`document.elementFromPoint` 로 확인 —
+  //   클릭 직전 뷰포트 중앙에 잡히는 것이 스크림이 아니라 배경 섹션이었다).
+  //   같은 결함을 `NotificationPanel.tsx:88` 에서 먼저 찾아 같은 처방으로 고쳤다 — 여기가 그 형제다.
+  //   `useLayoutEffect` 는 페인트 **전에** 동기 실행되므로 '아무것도 없는 프레임' 자체가 생기지 않는다.
+  //   ⚠ 닫힘 쪽 200ms 타이머는 그대로 둔다 — 퇴장 애니메이션은 그 지연으로 산다.
+  //   ⚠ 평범한 Playwright click 으로는 잘 안 난다. 콘텐츠를 기다리는 단언(`toBeVisible`)이 끼면
+  //     그 프레임이 지나가 버린다 — 응답을 hold 시켜 대기 없는 경로를 만들어야 재현된다.
+  useLayoutEffect(() => {
     if (open) { setRender(true); setClosing(false); return; }
     setClosing(true);
     const t = window.setTimeout(() => setRender(false), 200);
