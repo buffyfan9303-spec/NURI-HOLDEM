@@ -901,7 +901,6 @@ export default function App() {
   //   직전 탭으로 시작시켰고, 마지막이 홈이었던 날만 홈이 떠서 **간헐적으로 보였을 뿐 결정적**이었다.
   //   옛 온보딩 잔재(`nuri:persona === 'gto'` → 도구 탭)도 같은 증상을 냈다.
   //   둘 다 제거하고 진입점을 홈 하나로 고정한다. 딥링크(?tab=)만 예외다.
-  //   탭별 스크롤 복원(tabScrollRef)은 세션 메모리라 이 변경과 무관하게 그대로 동작한다.
   const [activeTab, setActiveTab]     = useState<TabId>(() => {
     try {
       const t = new URLSearchParams(window.location.search).get('tab');
@@ -960,8 +959,12 @@ export default function App() {
   // 탭 전환은 즉시 스왑(인스타·유튜브 문법) — 컨텐츠 페이드·슬라이드는 큰 면적에서 '깜빡임'으로 인지돼 전부 제거.
   // 모션은 알약 인디케이터(layoutId)가 전담한다.
   // 탭별 스크롤 위치 — keep-alive 로 DOM 은 남지만 스크롤러가 window(html) 하나라
-  // 탭을 오가면 위치가 섞였다. 떠날 때 저장하고 도착하면 되돌린다.
-  const tabScrollRef = useRef(new Map<TabId, number>());
+  // 🔴 2026-09-19 오너 지시: **"모든 메인메뉴 탭이 메뉴 이동시 중간부터 나오는 경우도 있어."**
+  //   → 탭을 누르면 **항상 맨 위**에서 시작한다. 예전엔 탭별로 떠날 때 위치를 저장했다가
+  //   도착하면 되돌렸는데(세션 메모리), 그게 '중간부터 나온다' 의 정체였다.
+  //   ⚠ 되살리고 싶어지면 먼저 오너에게 물어라 — 기능이 아니라 **지시로 뺀 것**이다.
+  //   ⚠ 뒤로가기로 돌아오는 경로(commitTab(t,'back'))도 같은 규칙을 탄다. 오너가 '항상 맨 위' 를
+  //     골랐고 '탭바 직접 누를 때만 맨 위' 는 고르지 않았다.
   const activeTabRef = useRef<TabId>('home');
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   /**
@@ -970,7 +973,6 @@ export default function App() {
    */
   const commitTab = useCallback((t: TabId, dir?: VTDirection) => {
     if (t === activeTabRef.current) return;
-    tabScrollRef.current.set(activeTabRef.current, window.scrollY);
     // 메이저 사이트의 '부드러움'은 전환 커밋 비용이 0이라서가 아니라, 스냅샷 크로스페이드가
     // 무거운 프레임을 가리기 때문이다(View Transition). 재방문 탭(keep-alive)은 동기 커밋이
     // 가능하므로 flushSync 를 트랜지션 콜백 안에서 돌려 display 토글·스크롤 복원 비용 전부를
@@ -1052,10 +1054,12 @@ export default function App() {
     if (t === 'live') refreshClocksRef.current?.();
     commitTab(t);
   }, [clearTabTrail, commitTab]);
-  // 복원은 layout 단계에서 — 페인트 전에 위치를 잡아야 '맨 위가 번쩍했다가 내려가는' 깜빡임이 없다.
-  // keep-alive 라 재방문 탭의 DOM 높이는 이미 존재한다(복원 위치가 잘릴 일 없음).
+  // 탭이 바뀌면 **항상 맨 위**로. layout 단계에서 잡는다 — 페인트 전에 위치를 정해야
+  // '옛 위치로 한 번 그려졌다가 튀는' 프레임이 안 생긴다(실측: 전환은 한 프레임에 원자적이다).
+  // ⚠ `behavior: 'instant'` 를 'smooth' 로 바꾸지 마라 — 탭 전환에 스크롤 애니메이션이 겹치면
+  //   View Transition 크로스페이드와 싸워 화면이 두 번 움직이는 것처럼 보인다.
   useLayoutEffect(() => {
-    window.scrollTo({ top: tabScrollRef.current.get(activeTab) ?? 0, behavior: 'instant' as ScrollBehavior });
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   }, [activeTab]);
 
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
@@ -2836,7 +2840,6 @@ export default function App() {
     setOpenPost(null); setPostNav(null);
     setPosterFormTarget(null);
     setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null, budget: null });
-    tabScrollRef.current.set('browse', 0); // 홈 = 처음부터 — 복원 로직이 옛 위치로 되돌리지 않게
     window.scrollTo({ top: 0, behavior: 'smooth' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

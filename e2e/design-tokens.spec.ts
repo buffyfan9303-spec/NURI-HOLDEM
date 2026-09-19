@@ -167,13 +167,36 @@ test.describe('손이 닿는 곳의 정밀도', () => {
     await page.waitForTimeout(1200);
     const small = await page.evaluate(() => {
       const out: { label: string; w: number; h: number }[] = [];
+      // 🔴 2026-09-20: 예전엔 `getBoundingClientRect()` 만 봤다 — **그건 보이는 상자지 히트영역이 아니다.**
+      //   이 저장소는 `.hit`(::after)·`.tap-y-44`(::before)로 **보이는 크기는 그대로 두고 누를 수 있는 범위만**
+      //   넓히는 패턴을 쓴다. 그걸 못 보면 제대로 넓혀 둔 버튼도 '너무 작다'고 빨개진다(실제로 그랬다).
+      //   → 의사요소의 실제 박스까지 합쳐 **유효 히트영역**을 잰다.
+      const effective = (el: HTMLElement, r: DOMRect) => {
+        let w = r.width, h = r.height;
+        for (const pe of ['::before', '::after'] as const) {
+          const cs = getComputedStyle(el, pe);
+          if (cs.content === 'none') continue;
+          const pw = parseFloat(cs.width), ph = parseFloat(cs.height);
+          if (Number.isFinite(pw) && pw > w) w = pw;
+          if (Number.isFinite(ph) && ph > h) h = ph;
+          // inset 음수(예: tap-y-44 의 `inset: -6px 0`)는 그만큼 밖으로 나간다
+          const t = parseFloat(cs.top), b = parseFloat(cs.bottom);
+          const l = parseFloat(cs.left), rt = parseFloat(cs.right);
+          if (cs.position === 'absolute') {
+            if (Number.isFinite(t) && Number.isFinite(b) && t < 0 && b < 0) h = Math.max(h, r.height - t - b);
+            if (Number.isFinite(l) && Number.isFinite(rt) && l < 0 && rt < 0) w = Math.max(w, r.width - l - rt);
+          }
+        }
+        return { w, h };
+      };
       for (const el of document.querySelectorAll<HTMLElement>('button, [role="button"]')) {
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) continue;          // 숨김
         if (r.bottom < 0 || r.top > innerHeight) continue;       // 화면 밖
+        const e = effective(el, r);
         // 인라인 텍스트 링크형(높이만 작은 것)은 제외하고, 아이콘형 작은 버튼만 잡는다
-        if (r.height < 40 && r.width < 120) {
-          out.push({ label: (el.textContent || el.getAttribute('aria-label') || '?').trim().slice(0, 18), w: Math.round(r.width), h: Math.round(r.height) });
+        if (e.h < 40 && e.w < 120) {
+          out.push({ label: (el.textContent || el.getAttribute('aria-label') || '?').trim().slice(0, 18), w: Math.round(e.w), h: Math.round(e.h) });
         }
       }
       return out;

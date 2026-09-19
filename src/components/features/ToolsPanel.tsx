@@ -598,14 +598,15 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
           그래서 글자를 줄이는 대신 **배지를 아래 줄로 흘려보낸다**(§7: 중요한 정보를 작게 줄여 박스에 넣지 마라).
           100% 에서는 폭이 남아 줄바꿈이 일어나지 않아 현재 화면은 그대로다. */}
       <div className="flex flex-wrap items-center gap-2.5">
-        {/* 🔴 2026-09-19 오너: "GTO 탭에 누리스팟 이모티콘 변경".
-            여기 있던 것은 `/brand/nuri-holdem-symbol.svg` — **앱 로고 심볼 그 자체**였다.
-            같은 화면 맨 위 헤더에 똑같은 마크가 있어서 NURI SPOT 이 '도구' 가 아니라
-            '앱 이름' 처럼 읽혔다. 도구 카탈로그 타일과 커뮤니티의 NURI SPOT 배지까지
-            **같은 마크 하나**(cards)로 맞춘다 — 한 기능에 마크가 셋이면 그게 버그다. */}
-        <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12 text-accent-200"
+        {/* 🔴 2026-09-19 (2차) 오너 지시: **"누리스팟 최상단 배너 아이콘은 기존 아이콘으로 변경,
+            gto 내에 있는 아이콘은 지금 그대로 유지."** → 이 배너만 앱 로고 심볼로 되돌린다.
+            같은 날 1차에서 내가 `cards` 로 바꿨던 자리다(이유: 헤더에 같은 마크가 있어 '앱 이름'처럼
+            읽힌다고 봤다). 오너가 화면을 보고 아니라고 했으니 배너는 원래대로 간다.
+            ⚠ **도구 카탈로그 타일(이 파일 위쪽 TOOLS 의 `icon: 'cards'`)은 건드리지 마라** —
+              그게 "gto 내에 있는 아이콘" 이고 지금 그대로 유지가 지시다. 둘을 같이 맞추려 들지 마라. */}
+        <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12"
           style={{ background: 'radial-gradient(120% 120% at 50% 0%, #242B48 0%, #141930 58%, #0A0D1B 100%)' }} aria-hidden>
-          <Icon name="cards" size={20} />
+          <img src="/brand/nuri-holdem-symbol.svg" alt="" width={20} height={20} draggable={false} />
         </span>
         <div className="min-w-0 flex-[1_1_3.5rem]">
           <p className="text-sm font-extrabold tracking-tight text-ink-primary">NURI SPOT</p>
