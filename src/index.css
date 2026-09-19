@@ -1723,7 +1723,18 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
   :root[data-header-shrunk='1'] { --header-now: 2.75rem; } /* h-11 = 46.75px */
 }
 
-:root { --card-h-list: 84px; }
+/* 🔴 2026-09-19: 84 → **95**. 84 는 이 파일 자신이 적어 둔 실측(제목 1줄 94.2px)보다도 10px 작았다.
+   게이트(`e2e/theme-tokens-v7.spec.ts` ⑦)가 잡았고, 잡힌 방식이 이 값의 함정을 그대로 보여준다:
+     · 390px 에서 카드가 두 무리로 갈린다 — **오늘 일정 95px · 내일 일정 116.3px**.
+       차이는 내일 일정에만 붙는 카운트다운(`N시간 M분 후`, ScheduleCard.tsx:343)이 만드는 한 줄이다.
+     · 그 문구 길이가 **시각에 따라 변해서** 어느 무리가 최빈값이 되는지가 하루 중에 바뀐다.
+       08:36 에는 95(통과) · 13:15 에는 116.3(실패) — 코드를 한 줄도 안 바꿨는데 빨개진다.
+   84 → 95 로 올리면 두 무리가 **둘 다** 허용오차(±26) 안에 들어와 시각 의존이 사라진다
+   (오늘 |95−95|=0 · 내일 |116.3−95|=21.3 · 1440px |95−95|=0).
+   ⚠ 허용오차를 늘려서 통과시키지 않았다. 틀린 쪽은 검사가 아니라 이 숫자였다 —
+     스켈레톤이 실제보다 작으면 데이터가 도착할 때 아래가 그만큼 **아래로 밀린다**(CLS).
+   ⚠ **카드 레이아웃을 바꾸면 이 토큰을 같이 재라** — 둘은 한 쌍이다(위 이력 참고). */
+:root { --card-h-list: 95px; }
 
 /* 전체화면 장부의 정산바 경계 — 바는 position:fixed 라 뷰포트 기준인데, 전체화면 호스트가
    inset-0 이라 그 둘이 같다. 그래서 좌우만 장부 칸에 맞추면 정확히 겹친다.
@@ -1899,6 +1910,20 @@ html:not([data-overlay]) [data-stack-header] { view-transition-name: app-header;
 html:not([data-overlay]) nav[aria-label="하단 내비게이션"] { view-transition-name: app-tabbar; }
 /* PC 상단 GNB(sticky 탭 스트립)도 상시 크롬 — 빠져 있어서 전환에 딸려 옆으로 밀렸다(오너 리포트) */
 html:not([data-overlay]) [data-stack-tabbar] { view-transition-name: app-gnb; }
+/* 🔴 2026-09-19 오너 리포트: "PC 에서 대메뉴를 왔다갔다 할 때 **좌우에 빈 공간을 매꾸기 위해
+   채워놓은 공간들**, 거기가 깜빡거려. header·footer 처럼 동일한 게 계속 표기되는 부분은 고정해도 되지 않아?"
+   → 원인은 리렌더가 아니라 **View Transition** 이었다. 위 1240행대가 PC 에서 `::view-transition-old(root)`
+     를 `opacity:0` 으로 죽이고 새 스냅샷을 0.12s 페이드인하는데, 이름이 붙은 건 헤더·탭바·GNB **셋뿐**이라
+     나머지가 전부 root 스냅샷에 묶인다. 그 '나머지' 에 **콘텐츠 열(max-w-6xl) 바깥 좌우 채움 여백과
+     그 위의 `.aura-bg` 장식 배경**, 그리고 **사업자 푸터**가 들어간다 — 내용은 하나도 안 바뀌는데 화면만 깜빡인다.
+     실측: 1440 뷰포트에서 콘텐츠 열은 1224px 이라 좌우 여백이 216px · 1920 에서는 696px — **넓을수록 더 크게 보인다.**
+     푸터는 홈 첫 로드에 이미 top=769px(뷰포트 900) 이라 **스크롤 없이도 보인다.**
+   ⚠ `memo` 로는 안 멈춘다. 그건 리렌더를 줄이는 것이고 이건 스냅샷 크로스페이드다 — 층이 다르다.
+   ⚠ 모바일은 그대로 둔다. 위 규칙이 `min-width:1024px` 안에서만 도니 여기도 PC 에서만 의미가 있고,
+     이름을 상시로 주면 아래 community-secbar 주석이 경고하는 'old-only 잔상' 함정에 걸릴 수 있어
+     헤더·GNB 와 **똑같이** `html:not([data-overlay])` 조건을 그대로 따른다. */
+html:not([data-overlay]) .aura-bg { view-transition-name: app-chrome-bg; }
+html:not([data-overlay]) footer { view-transition-name: app-footer; }
 /* ⚠ 2026-09-18 삭제 — 하위 탭 본문의 가로 푸시 키프레임 `vt-panel-out-l/out-r/in-r/in-l` 이 여기 있었다.
    하위 탭에서 VT 를 걷어내면서(`src/lib/subTabTransition.ts` · 이유는 e2e/subtab-motion.spec.ts 의
    1,300px 낙하 기록) 사용처가 0 이 됐다. 남겨 두면 "이건 왜 안 돌지" 를 다시 파게 된다.
@@ -1907,7 +1932,11 @@ html:not([data-overlay]) [data-stack-tabbar] { view-transition-name: app-gnb; }
    반투명으로 만들면 2026-08-29 에 고친 '글자가 두 벌로 겹쳐 보이는' 문제가 돌아온다(배경 불투명이 해법이었다). */
 ::view-transition-old(app-header), ::view-transition-new(app-header),
 ::view-transition-old(app-tabbar), ::view-transition-new(app-tabbar),
-::view-transition-old(app-gnb), ::view-transition-new(app-gnb) { animation: none; }
+::view-transition-old(app-gnb), ::view-transition-new(app-gnb),
+/* 좌우 채움 배경과 사업자 푸터 — 위 오너 리포트. 이름만 주고 여기서 안 막으면 UA 기본 crossfade 가
+   살아나 결국 똑같이 깜빡인다(바로 위 1240행대 주석이 같은 함정을 이미 경고한다). */
+::view-transition-old(app-chrome-bg), ::view-transition-new(app-chrome-bg),
+::view-transition-old(app-footer), ::view-transition-new(app-footer) { animation: none; }
 
 /* notif-panel 은 가로 푸시(vt-panel-in-r/out-l 등, ±18px translateX)를 쓰지 않는다(2026-09-14 오너 리포트:
    "쪽지·알림 왔다갔다 할 때 박스가 팝업 밖으로 왼쪽/오른쪽으로 갔다가 온다").

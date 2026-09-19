@@ -178,6 +178,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
                 2026-09-15 오너 지시 #12 로 지운 이중 기하 프레임은 여기 없다 — 타이머 뒤 약한 radial bloom(CenterPanel 안)만 남는다. */}
             <div className="relative flex min-h-0 flex-col items-center">
               <div className="flex min-h-0 w-full flex-1 basis-0 flex-col items-center justify-end">
+                <PausedLabel g={g} />
                 <LevelLine g={g} />
               </div>
               <CenterPanel g={g} />
@@ -360,12 +361,34 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
 }
 
 /**
+ * PausedLabel — LEVEL **바로 위**에 붙는 큰 PAUSED 글자. 2026-09-19 밤 오너 지시, 두 번 만들었다:
+ *   1차는 타이머 위에 **겹쳐서**(absolute overlay, 반투명 배경 또는 속이 빈 윤곽선) 그렸다. 그런데 실측
+ *   스크린샷을 25%로 축소해 TV 시청 거리를 흉내 내 보니 숫자 획과 PAUSED 획이 같은 자리를 지나며
+ *   "08:12"·"PAUSED" 가 **동시에** 흐려졌다 — 겹치는 한 투명도를 아무리 조절해도 둘 다 못 살렸다.
+ *   → 겹치지 않게 옮겼다. LEVEL 위 여백(아래 스페이서, 1920 기준 200px+·1280 기준 150px+)이 이미 비어 있어
+ *   그 자리를 썼다 — 새 공간을 만들지 않는다. 크기는 타이머의 절반(13cqmin)으로 "크게" 를 지킨다.
+ * 레이아웃 불변: 이 스페이서는 `flex-1 basis-0`(ClockStage 중앙 열 주석 참고)이라 **콘텐츠 크기와 무관하게**
+ *   높이가 고정된다(`min-h-0` 도 걸려 있다) — PAUSED 유무가 LEVEL·타이머·진행바 위치를 밀지 않는다.
+ * data-testid clk-paused 는 계약(clockBoard.contract.test.ts) 앵커.
+ */
+function PausedLabel({ g }: { g: ClockState }) {
+  if (clockPhase(g) !== 'paused') return null;
+  return (
+    <p data-testid="clk-paused" className="mb-[1.2cqmin] whitespace-nowrap font-black uppercase leading-none tracking-[0.3em] text-white"
+      style={{ fontSize: 'clamp(36px, 13cqmin, 180px)', textShadow: '0 0.3cqmin 1.2cqmin rgba(0,0,0,0.55)' }}>
+      PAUSED
+    </p>
+  );
+}
+
+/**
  * LevelLine — 타이머 바로 위의 "LEVEL n" 한 줄(브레이크는 "BREAK").
  * 2026-09-19 오너 지시 #9 "PILL 삭제하고 READY 삭제, LEVEL 1 이런 식으로 가시성 확보. 중요한 정보다":
  *   상태 바의 알약 두 개('레벨 1' 2.1cqmin · 'READY' 1.8cqmin)를 없애고, LEVEL 을 4.6cqmin 큰 글자로 타이머 위에 둔다.
- *   알약 테두리·배경도, 진행 상태 단어(READY/RUNNING/PAUSED/FINISHED)도 여기엔 없다.
- * ⚠ 사라진 정보: 상태 **단어**. 남은 신호 — ① 상태 바 점(진행 에메랄드 · 정지 앰버) ② 일시정지 = 타이머가 앰버(CenterPanel)
- *   ③ 브레이크 = 이 줄과 타이머가 하늘색 + CURRENT 자리에 BREAK. '시작 전(READY)' 은 따로 표시하지 않는다(오너 지시).
+ *   알약 테두리·배경도, READY/RUNNING/FINISHED 단어도 여기엔 없다 — **PAUSED 만** 같은 날 밤 늦게 예외로
+ *   되살아나 바로 위(PausedLabel)에 선다(#9 가 지운 걸 오너가 그날 안에 뒤집은 유일한 항목).
+ * ⚠ 사라진 정보: READY/RUNNING/FINISHED **단어**. 남은 신호 — ① 상태 바 점(진행 에메랄드 · 정지 앰버)
+ *   ② 일시정지 = 타이머가 앰버(CenterPanel) + PAUSED 글자(위) ③ 브레이크 = 이 줄과 타이머가 하늘색 + CURRENT 자리에 BREAK.
  * 초당 갱신이 필요 없다(레벨은 g 가 바뀔 때만 변한다) — 부모 리렌더에 얹혀간다.
  * data-testid clk-level 은 e2e 앵커(clock-catchup 이 숫자를 읽는다) — 자리는 옮겼어도 id 는 유지한다.
  */
@@ -512,7 +535,9 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
   const totalMs = Math.max(1, (lv?.minutes ?? 0) * 60_000);
   const donePct = Math.min(1, Math.max(0, 1 - remaining / totalMs));
   const filled = Math.round(donePct * RAIL_SEGMENTS);
-  // 2026-09-19: 상태 알약(PAUSED)이 사라져(#9) 일시정지는 타이머 색으로 말한다 — 알약이 쓰던 앰버 그대로.
+  // 2026-09-19 밤 #9: 상태 알약이 사라져 일시정지는 타이머 색만으로 말했다 — 알약이 쓰던 앰버 그대로.
+  //   같은 날 늦게 오너가 "PAUSED 만 넣어줘" — 큰 PAUSED 글자는 LevelLine 자리(타이머 바로 위)에 둔다(아래 참고).
+  //   여기 앰버는 그대로 둔다 — 상태 바 점이 이미 진행=emerald·정지=amber 라 지우면 그 신호와 어긋난다.
   //   시작 전(idle)·종료(finished)는 물들이지 않는다(오너: READY 삭제 · 00:00 은 그 자체로 끝).
   const paused = clockPhase(g) === 'paused';
   const timerColor = urgent ? 'var(--clk-timer-urgent, #fb7185)' : isBreak ? 'var(--clk-timer-break, #7dd3fc)' : paused ? '#fbbf24' : 'var(--clk-timer, #FFFFFF)';

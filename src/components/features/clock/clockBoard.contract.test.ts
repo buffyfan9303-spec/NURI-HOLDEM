@@ -50,6 +50,37 @@ describe('#8·#9 알약과 헤어라인이 없다 · LEVEL 은 큰 글자다', (
   });
 });
 
+describe('PAUSED 복원 — 2026-09-19 밤 오너 지시, 두 번째 반려 반영(#9 다음, PAUSED 만 예외)', () => {
+  it('PausedLabel 은 LEVEL 바로 위(같은 스페이서)에 서고, 타이머와 겹치는 자리(clk-timer 근처)에는 없다', () => {
+    // 1차 시도는 clk-timer 를 absolute 로 덮는 오버레이였다 — 실측 스크린샷에서 숫자가 묻혀 반려됐다(팀리드 확인).
+    // 되돌아오면 안 되는 모양: clk-timer 정의 바로 옆에 PAUSED/clk-paused 가 다시 나타나는 것.
+    const t = stage.indexOf('data-testid="clk-timer"');
+    expect(t).toBeGreaterThan(-1);
+    const nearTimer = stage.slice(Math.max(0, t - 200), t + 400);
+    expect(nearTimer, 'PAUSED 가 clk-timer 오버레이로 되돌아왔다(팀리드가 반려한 1차 설계)').not.toContain('PAUSED');
+    expect(nearTimer, 'clk-paused 가 clk-timer 옆(오버레이 자리)에 다시 있다').not.toContain('clk-paused');
+
+    // 있어야 할 자리: PausedLabel 이 LevelLine 바로 앞(같은 스페이서, DOM 순서로 위)에서 g 로 판정한다.
+    const p = stage.indexOf('function PausedLabel');
+    expect(p, 'PausedLabel 컴포넌트가 없다').toBeGreaterThan(-1);
+    const body = stage.slice(p, p + 400);
+    expect(body, 'clockPhase(g) !== ' + "'paused'" + ' 가드가 없다 — paused 아닐 때 null 을 안 돌려준다').toContain("clockPhase(g) !== 'paused'");
+    expect(body, 'data-testid="clk-paused" 앵커가 없다').toContain('data-testid="clk-paused"');
+    expect(body, 'PAUSED 문구가 없다').toMatch(/>\s*PAUSED\s*</);
+
+    const callSite = stage.indexOf('<PausedLabel g={g} />');
+    const levelCallSite = stage.indexOf('<LevelLine g={g} />');
+    expect(callSite, 'PausedLabel 호출부가 없다').toBeGreaterThan(-1);
+    expect(levelCallSite, 'PausedLabel 이 LevelLine 보다 뒤(아래)에 있다 — LEVEL 위가 아니라 아래로 갔다').toBeGreaterThan(callSite);
+    expect(levelCallSite - callSite, 'PausedLabel 과 LevelLine 사이에 다른 마크업이 끼어들었다(같은 스페이서 형제여야 한다)').toBeLessThan(80);
+  });
+  it('READY·RUNNING 단어·상태 알약 조회(CLOCK_PHASE_TV)는 여전히 없다 — 되살아난 건 PAUSED 하나뿐', () => {
+    expect(stage.includes('READY'), 'READY 가 돌아왔다').toBe(false);
+    expect(stage.includes('RUNNING'), 'RUNNING 이 돌아왔다').toBe(false);
+    expect(stage.includes('CLOCK_PHASE_TV'), 'CLOCK_PHASE_TV 조회로 상태 알약이 돌아왔다').toBe(false);
+  });
+});
+
 describe('#2·#3 하단 지표 중앙 · 타이머 중앙 구조', () => {
   it('하단 레일은 [1fr_auto_1fr] 그리드 — 중앙 칸이 스테이지 정중앙', () => {
     expect(stage).toContain('grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]');

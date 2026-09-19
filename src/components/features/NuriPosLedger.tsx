@@ -2087,8 +2087,13 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 function DateBar({ date, setDate, onBack }: { date: string; setDate: (d: string) => void; onBack?: () => void }) {
   return (
     <div className="flex items-center gap-2">
+      {/* 크기 사다리 .btn-sm(34px) 을 쓴다 — text-xs(12.75px) 라벨인데 .btn 기본 하한(min-h 2.4rem=40.8px)을
+          그대로 받아 필요보다 6.8px 컸다(오너: "글씨에 비해 버튼이 쓸데없이 커져"). 실측 55.8×40.8 → 34px.
+          ⚠ 색 변형 뒤에 크기 변형이 와야 한다(index.css §B1 선언 순서).
+          ⚠ 이 주석을 아래 조건부 렌더 **안쪽**으로 옮기지 마라 — 거기는 표현식 자리라 JSX 주석이 구문 오류다.
+             (2026-09-19 에 실제로 한 번 깨뜨렸다. 중괄호를 주석에 쓰는 것도 같은 이유로 안 된다.) */}
       {onBack && (
-        <button type="button" onClick={onBack} className="btn-ghost text-xs px-2 shrink-0" aria-label="목록으로">← 목록</button>
+        <button type="button" onClick={onBack} className="btn-ghost btn-sm px-2 shrink-0" aria-label="목록으로">← 목록</button>
       )}
       {/* data-testid: '어느 날짜 장부에 착지했는가' 를 재는 유일한 안정 지점(clk-timer 와 같은 규약). */}
       <input data-testid="ledger-date" aria-label="장부 날짜" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input flex-1 text-sm" />

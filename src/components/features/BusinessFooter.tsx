@@ -1,5 +1,6 @@
 // src/components/features/BusinessFooter.tsx
 // 전 화면 하단 상시 노출 푸터 — 사업자 정보(전자상거래법 표시의무) + 약관/정책 링크 + 사행성 배제 고지.
+import { memo } from 'react';
 import type { LegalDoc } from './LegalDocsModal';
 // 약관 시행일은 src/lib/legalVersion.ts 단일 소스 — 푸터에 날짜를 박으면 개정 때 여기만 남는다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
@@ -23,7 +24,15 @@ const BIZ_EXTRA: [string, string][] = [
   ['호스팅 제공자', 'Vercel Inc.'],
 ];
 
-export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenLegal?: (d: LegalDoc) => void; onOpenSupport?: () => void }) {
+// 🔴 memo — 이 푸터는 `.tab-pane` keep-alive **바깥**에 있어 앱 전역에 딱 한 번 렌더되는데,
+//   App.tsx(상태 수십 개)가 재렌더될 때마다(탭 전환·모달 개폐·라이브 갱신) 매번 조정 대상이 됐다.
+//   출력이 상태와 무관한데(받는 것은 안정 콜백 둘 + 모듈 상수) 계속 다시 도는 자리다.
+//   ⚠ 이게 먹으려면 `onOpenLegal`/`onOpenSupport` 가 **안정 참조**여야 한다 —
+//     지금은 App.tsx:1798-1799 에서 `useCallback(..., [])` 이라 충족된다.
+//     나중에 누가 저걸 인라인 화살표(`onOpenLegal={(d) => ...}`)로 바꾸면 **에러 없이 조용히 무효가 된다.**
+//   같은 이유로 AppHeader·MobileTabBar 는 이미 memo 다(App.tsx:230, :617). 여기만 빠져 있었다.
+//   근거: docs/render-perf-checklist.md §5(무프롭 무거운 컴포넌트 → memo).
+function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenLegal?: (d: LegalDoc) => void; onOpenSupport?: () => void }) {
   return (
     <footer className="mt-6 border-t border-border-subtle px-page-x pt-5 pb-[calc(var(--tabbar-safe)+0.5rem)] lg:pb-8">
       <div className="mx-auto w-full max-w-5xl space-y-3">
@@ -106,3 +115,5 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
     </footer>
   );
 }
+
+export default memo(BusinessFooter);

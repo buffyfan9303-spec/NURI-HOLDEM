@@ -180,6 +180,68 @@ jobs:
           fi
           echo "::notice::백업 업로드 완료 — s3://$BUCKET/db/$FILE ($SIZE bytes)"
 
+      # 🔴 보관 정책 — Cloudflare **무료 한도**(R2 저장 10GB)를 넘지 않게 한다. 오너 지시 2026-09-19.
+      #   왜 필요했나: 이 워크플로에는 **지우는 코드가 없었다.** 8/26~9/9 에 15번 성공하는 동안 계속
+      #   쌓기만 했고, 그대로 두면 덤프 하나가 수십~수백 MB 라 몇 달 안에 10GB 를 넘어 **과금으로 넘어간다.**
+      #   ⚠ 이 단계는 반드시 **위 '객체 존재·크기 검증' 뒤**에 있어야 한다. 오늘 백업이 R2 에 실제로
+      #     있는 것을 확인한 **다음에만** 옛것을 지운다 — 순서를 바꾸면 업로드가 실패한 날
+      #     옛 백업까지 같이 사라져서 **백업이 통째로 없어진다.** 이 줄을 옮기지 마라.
+      #   ⚠ 무료 한도에서 우리가 넘길 수 있는 것은 **저장 용량뿐**이다. Class A(쓰기·목록) 1M/월 ·
+      #     Class B(읽기) 10M/월 · 송신(egress) 무료 — 하루 1회 실행으로는 근처도 못 간다.
+      - name: 옛 백업 정리(무료 한도 유지)
+        if: success()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          EP="${EP:-$ENDPOINT}"
+          KEEP=14                       # 최근 14개(약 2주치)
+          CAP=$((6 * 1024 * 1024 * 1024))   # 총합 6GB — 무료 10GB 에 여유를 둔다
+          FLOOR=3                       # 무슨 일이 있어도 이만큼은 남긴다
+
+          # 오래된 것부터 정렬. 비어 있으면 빈 문자열(파싱 실패로 죽지 않게).
+          list() {
+            aws s3api list-objects-v2 --bucket "$BUCKET" --prefix db/ --endpoint-url "$EP" \
+              --query 'sort_by(Contents,&LastModified)[].[Key,Size]' --output text 2>/dev/null \
+              | grep -v '^None' | grep -v '^$' || true
+          }
+          total() { list | awk '{s += $2} END {print s + 0}'; }
+          count() { list | grep -c . || true; }
+
+          echo "정리 전: $(count)개 · $(( $(total) / 1024 / 1024 ))MB"
+
+          # ① 개수 상한
+          C=$(count)
+          if [ "$C" -gt "$KEEP" ]; then
+            list | head -n "$((C - KEEP))" | cut -f1 | while read -r k; do
+              [ -n "$k" ] && aws s3 rm "s3://$BUCKET/$k" --endpoint-url "$EP" >/dev/null && echo "삭제(개수): $k"
+            done
+          fi
+
+          # ② 용량 상한 — 오래된 것부터 하나씩. FLOOR 아래로는 절대 안 내려간다.
+          while [ "$(total)" -gt "$CAP" ] && [ "$(count)" -gt "$FLOOR" ]; do
+            k="$(list | head -n1 | cut -f1)"
+            [ -z "$k" ] && break
+            aws s3 rm "s3://$BUCKET/$k" --endpoint-url "$EP" >/dev/null && echo "삭제(용량): $k"
+          done
+
+          T=$(total)
+          echo "정리 후: $(count)개 · $(( T / 1024 / 1024 ))MB  (무료 한도 10240MB)"
+          if [ "$T" -gt $((9 * 1024 * 1024 * 1024 + 512 * 1024 * 1024)) ]; then
+            # 🔴 여기서는 **빨갛게 죽인다.** 오너 지시: 무료 한도를 넘겨 과금으로 넘어가지 않게 한다.
+            #   경고만 띄우면 아무도 안 본다 — 2026-09-19 에 이 워크플로가 10일간 빨간 채로 방치됐다.
+            #   백업 자체는 이미 올라갔고 검증도 끝났다. 이 실패는 "곧 돈이 나간다"는 신호다.
+            #   덤프 하나가 2GB 를 넘어 최소 보관분(3개)만으로도 한도에 닿는 경우가 여기에 걸린다.
+            echo "::error::R2 사용량 $(( T / 1024 / 1024 ))MB — 무료 한도(10240MB)에 9.5GB 넘게 근접했다."
+            echo "::error::덤프가 커졌다는 뜻이다. FLOOR(최소 보관 개수)를 줄이거나 덤프를 더 압축해라. 백업 자체는 성공했다."
+            exit 1
+          elif [ "$T" -gt $((8 * 1024 * 1024 * 1024)) ]; then
+            echo "::warning::R2 사용량이 8GB 를 넘었다 — 무료 한도(10GB)가 가깝다. KEEP 나 CAP 를 줄여라."
+          fi
+
       # (선택) 하트비트 — Healthchecks.io URL을 secret으로 넣으면 활성. 성공했을 때만 친다(실패는 알림으로 드러나야 한다).
       - name: Heartbeat ping(선택)
         if: success()
