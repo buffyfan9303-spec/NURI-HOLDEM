@@ -41,8 +41,13 @@ export async function checkIn(venueId: string): Promise<CheckInResult> {
 
 export async function listVenueCheckins(venueId: string, sinceIso: string): Promise<Checkin[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.from('checkins').select('*')
+  const { data, error } = await supabase.from('checkins').select('*')
     .eq('venue_id', venueId).gte('created_at', sinceIso).order('created_at', { ascending: false });
+  // 🔴 2026-09-20 (R1-3) — `error` 를 버리고 `data ?? []` 를 돌려주면 **조회 실패가 '오늘 출석 0명'** 으로
+  //   보인다. 업주는 아무도 안 왔다고 읽는다. 같은 폴더의 다른 api 들은 전부 `if (error) throw` 관례다
+  //   (staffAccess.errorPropagation.test.ts 가 그 형제들을 이미 잠그고 있다) — 여기만 빠져 있었다.
+  //   화면이 '실패'와 '0건'을 구별할 수 있어야 재시도 UI 를 띄울 수 있다.
+  if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, userId: r.user_id, displayName: r.display_name ?? null, createdAt: r.created_at }));
 }

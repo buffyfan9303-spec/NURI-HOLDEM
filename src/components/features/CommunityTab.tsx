@@ -1214,12 +1214,17 @@ function VenuesSection({
               접히는 편이 사라지는 편보다 낫다 — 접을 수 있게 풀어 준다. */}
           <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5 text-2xs text-ink-muted">
             <span>정렬:</span>
+            {/* 🔴 2026-09-20 — 화살표에 `text-border-strong`(테두리용 토큰)을 글자색으로 쓰고 있었다.
+                실측(390, 실제 지면 위): 다크 3.2:1 · 라이트 3.16:1 로 **AA(4.5) 미달**.
+                바로 옆 '인증'·'유료광고'는 이미 대비를 맞춰 뒀는데(accent-200 주석 참고) 화살표만 남아 있었다.
+                `text-ink-muted` 로 바꾼다 — 다크 6.41 · 라이트 4.99 로 둘 다 통과하고 레이아웃 변화는 0이다.
+                ⚠ 이 화살표는 정렬 **순서**를 말하는 의미 있는 기호다. 장식이 아니라 `aria-hidden` 대상이 아니다. */}
             <span className="text-accent-300 font-semibold">인증</span>
-            <span className="text-border-strong">→</span>
+            <span className="text-ink-muted">→</span>
             {/* accent-300 은 다크 지면(surface-base)에서 3.6:1 로 AA(4.5) 미달이다 — accent-200 은 6.94:1.
                 대비는 순백이 아니라 **실제 지면**으로 잰다(.cursor/rules/30-traps.mdc). */}
             <span className="text-accent-200 font-semibold">유료광고</span>
-            <span className="text-border-strong">→</span>
+            <span className="text-ink-muted">→</span>
             <span className="text-ink-secondary">팔로워순</span>
           </span>
         </div>

@@ -52,7 +52,13 @@ export default function GlobalSearchModal({ open, onClose, venues, schedules, po
     if (!query) return { v: [] as Venue[], s: [] as Schedule[], p: [] as CommunityPost[], l: [] as MarketplaceListing[], n: [] as MarketplaceNotice[] };
     const has = (t?: string | null) => (t ?? '').toLowerCase().includes(query);
     return {
-      s: schedules.filter((x) => has(x.title) || has(x.pubName) || has(x.region)).slice(0, 8),
+      // 🔴 2026-09-20 (R1-C) — `schedules` 를 그리는 **여섯 소비처 중 여기만** `approved` 필터가 없었다.
+      //   업주가 올리고 아직 관리자 승인 전인 포스터가 통합검색에 그대로 떴다(홈·일정 탐색·캘린더·매장
+      //   페이지는 전부 승인된 것만 그린다). 승인 전 비공개는 이 서비스의 기본 계약이다.
+      //   ⚠ RLS 가 막아 줄 거라고 가정하지 않는다 — 업주·관리자 자신은 자기 미승인 포스터를 **읽을 수 있어서**
+      //     같은 브라우저의 검색 결과에 섞여 들어온다. 화면 필터와 서버 필터는 따로 검증한다.
+      //   ⚠ 관리자 대기열과 업주 '내 포스터' 는 별도 화면이라 이 필터의 영향을 받지 않는다.
+      s: schedules.filter((x) => x.approved && (has(x.title) || has(x.pubName) || has(x.region))).slice(0, 8),
       v: venues.filter((x) => has(x.name) || has(x.region)).slice(0, 6),
       p: posts.filter((x) => has(x.title) || has(x.content)).slice(0, 8),
       l: listings.filter((x) => has(x.title) || has(x.description) || has(x.sellerName)).slice(0, 6),

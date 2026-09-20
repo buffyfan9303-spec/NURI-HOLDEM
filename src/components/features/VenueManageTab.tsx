@@ -386,8 +386,26 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 
   // ── memo 섹션에 넘기는 핸들러/객체 prop 을 참조 고정(재렌더 건너뛰기 조건 충족) ──
   // caps.voucher = '대시보드에 이용권 카드/단골 이용권 보내기를 그릴까' — 킬스위치가 그대로 반영된다.
-  const caps = useMemo(() => ({ ledger: ledgerOk, manage: manageOk, voucher: idOn && (manageOk || voucherView), posters: canPosters, staff: staffOk }),
-    [ledgerOk, manageOk, voucherView, canPosters, staffOk, idOn]);
+  //
+  // 🔴 2026-09-20 (E2-E/F) — **열람권과 발급권을 갈랐다.**
+  //   종전에는 `caps.voucher`(열람 OR 관리) 하나로 카드 노출과 **발급 액션**을 둘 다 게이트했다.
+  //   그래서 `voucherView` 만 가진 직원에게 출석 명단의 '이용권 보내기' 와 CRM 보내기가 보였고,
+  //   누르면 서버가 거절했다 — 누를 수 있는 척하는 죽은 버튼이다.
+  //
+  //   발급의 **서버 정본**을 라이브에서 직접 확인했다(pg_proc 조회, 2026-09-20):
+  //     issue_voucher 첫 줄 = `if not can_manage_pos(p_venue_id) then raise exception ...`
+  //     can_manage_pos = admin ∪ venues.owner_id ∪ venue_owners(status='approved')  ← **승인 공동운영자 포함**
+  //   `manageOk` 가 바로 그 `canManagePos(venueId)` 결과다(:590). 그래서 발급 게이트는 `idOn && manageOk`.
+  //
+  //   ⚠ 오너 결정(2026-09-20): "공동운영자에게 발급 줘. UI도 이에 맞춰서."
+  //     → 서버가 정본이고 UI 를 **서버에 맞춘다**. 서버를 좁히지 않는다.
+  //   ⚠ 클라이언트 게이트는 인가가 아니다. 서버 issue_voucher 가 최종 판정이고 여기는 '죽은 버튼을 안 그린다' 뿐이다.
+  const caps = useMemo(() => ({
+    ledger: ledgerOk, manage: manageOk,
+    voucher: idOn && (manageOk || voucherView),   // 열람: 카드·목록을 그릴까
+    issueVoucher: idOn && manageOk,               // 발급: 액션 버튼을 그릴까(서버 can_manage_pos 와 같은 선)
+    posters: canPosters, staff: staffOk,
+  }), [ledgerOk, manageOk, voucherView, canPosters, staffOk, idOn]);
   const onGotoStore = useCallback((d: string | StoreDest) => {
     // StoreDashboard·라이브바가 보내는 id — LINK-MAP 정규화로 구 id(page·venueRank·settings 등)도 흡수.
     // 객체로 오면 날짜·게임·event·정산 문맥을 **기존 시드 상태에 그대로** 앉힌다(라우터 신설 0).
@@ -997,7 +1015,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     <VenueEventRequestPanelM venueId={venueId} />
                   </Suspense>)}
                 {visited.includes('pos') && canSettingsTab('pos') && box('pos', <PosSettingsPanelM venueId={venueId} />)}
-                {visited.includes('voucher') && canVoucher && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
+                {visited.includes('voucher') && canVoucher && box('voucher', <VoucherManagePanelM venueId={venueId} canIssue={caps.issueVoucher} />)}
                 {/* §7 ⑥b: 운영 도구 5종 — GTO 탭에서 이관(레지스트리는 ToolsPanel 재사용) */}
                 {visited.includes('optools') && canSettingsTab('optools') && box('optools', <StoreToolsPanelM />)}
                 {/* 위험 구역(IA1→IA3c) — 매장 영구 삭제. 설정의 전용 하위탭으로 격리(접근 2단계) */}

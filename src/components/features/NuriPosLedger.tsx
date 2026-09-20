@@ -46,8 +46,12 @@ import LoadErrorCard from '../atoms/LoadErrorCard';
 import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import { SkeletonList } from '../atoms/Skeleton';
+import { kstToday } from '../../lib/kst';
 
-const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
+// 🔴 2026-09-20 (E2-C/F5) — 여기만 **기기 로컬 날짜**를 썼다. 서버 RPC(request_buyin·check_in)와
+//   앱의 나머지(kstToday)는 전부 **KST** 기준이라, 해외·시계 오설정 기기에서 새 장부의 기본 날짜와
+//   당일 포스터 자동 연동이 하루 어긋났다. 같은 기준으로 맞춘다(src/lib/kst.ts 가 정본).
+const today = () => kstToday();
 const shiftDays = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
 
 // 얼리 설정용 숫자 입력(라벨 + 접미사)

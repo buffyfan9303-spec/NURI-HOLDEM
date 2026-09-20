@@ -62,7 +62,11 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
 
   const toggle = (
     <button type="button" onClick={full ? exit : enter}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs font-bold text-ink-secondary transition-colors hover:border-accent-400/40 hover:text-accent-300">
+      // 🔴 2026-09-20 — 유효 표적이 30.7px 였다(WCAG AA 24 는 통과하나 이 저장소 기준 44 미달).
+      //   `tap-y-44`(::before inset -6px 0)는 조상에 overflow 가 없고 세로 이웃과 12px 이상 떨어져 있어
+      //   여기서는 안전하게 동작한다(단계 바처럼 잘리는 자리가 아니다 — 실측으로 확인).
+      //   박스 크기를 키우지 않아 헤더 줄 배치가 그대로다.
+      className="tap-y-44 inline-flex shrink-0 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs font-bold text-ink-secondary transition-colors hover:border-accent-400/40 hover:text-accent-300">
       <Icon name={full ? 'minimize' : 'maximize'} size={13} className="shrink-0" />
       {full ? '전체화면 끄기' : '전체화면'}
     </button>

@@ -40,13 +40,18 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
     } finally { setSendBusy(false); }
   };
   const [list, setList] = useState<Checkin[]>([]);
+  // 🔴 2026-09-20 (R1-3) — '조회 실패' 와 '진짜 0명' 을 구별한다. 종전엔 `.catch(() => {})` 로 오류를
+  //   삼켜 실패해도 '아직 출석한 손님이 없습니다' 가 떴다 — 업주는 아무도 안 온 줄 안다.
+  const [listErr, setListErr] = useState(false);
   const [visits, setVisits] = useState<Record<string, number>>({}); // user_id→누적 방문횟수(CRM 단골/첫방문 배지)
   const [qr, setQr] = useState(''); // #15 로컬 생성(외부 api.qrserver.com 의존 제거 — 가용성·프라이버시)
   useEffect(() => { QRCode.toDataURL(checkinUrl(venueId), { width: 240, margin: 2 }).then(setQr).catch(() => setQr('')); }, [venueId]);
 
   const reload = () => {
     const s = new Date(); s.setHours(0, 0, 0, 0);
-    listVenueCheckins(venueId, s.toISOString()).then(setList).catch(() => {});
+    listVenueCheckins(venueId, s.toISOString())
+      .then((r) => { setList(r); setListErr(false); })
+      .catch(() => setListErr(true));
     getVenueVisitorStats(venueId).then(setVisits).catch(() => {});
   };
   useEffect(() => {
@@ -70,8 +75,10 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
           <button type="button" onClick={copy} className="btn-ghost px-3 text-2xs">출석 링크 복사</button>
         </div>
         <div>
-          <p className="mb-1 text-2xs font-bold text-ink-secondary">오늘 방문 {list.length}명</p>
-          {list.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">아직 출석한 손님이 없습니다.</p>
+          <p className="mb-1 text-2xs font-bold text-ink-secondary">오늘 방문 {listErr ? '—' : `${list.length}명`}</p>
+          {listErr ? (
+            <p className="py-3 text-center text-2xs text-danger-light">출석 명단을 불러오지 못했습니다. 잠시 후 다시 열어 주세요.</p>
+          ) : list.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">아직 출석한 손님이 없습니다.</p>
             : <ul className="space-y-1">{list.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center justify-between rounded-input border border-border-subtle bg-surface-low px-3 py-1.5">
                 <span className="min-w-0 flex-1 truncate text-sm text-ink-primary">{c.displayName ?? '회원'}</span>
@@ -107,7 +114,13 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
               그 사실을 발급 화면에 적어 두는 것이 이 문구의 목적이다. */}
           {canIssue && (
             <p className="mt-2 rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs leading-relaxed text-ink-muted">
-              매장이용권 발급은 <b className="text-ink-secondary">인증된 매장 업주에게만 가능</b>합니다.
+              {/* 🔴 2026-09-20 — '인증된 매장 업주에게만' 은 **서버와 어긋난 문구**였다.
+                  라이브 `issue_voucher` 는 `can_manage_pos` 를 쓰고 그 함수는
+                  admin ∪ venues.owner_id ∪ venue_owners(status='approved') 다 — **승인 공동운영자를 포함**한다
+                  (pg_proc 직접 조회, 2026-09-20). 게다가 같은 함수가 `venues.voucher_issue_approved` 도 요구한다.
+                  오너 결정(2026-09-20): "공동운영자에게 발급 줘. UI도 이에 맞춰서." → 문구를 서버에 맞춘다.
+                  ⚠ 아래 '손님끼리 주고받을 수 없다 / 금전적 가치 없음' 은 **법적 고지라 지우지 마라.** */}
+              매장이용권 발급은 <b className="text-ink-secondary">운영자 승인을 받은 매장의 업주·공동운영자만 가능</b>합니다.
               손님끼리 주고받을 수 없고, <b className="text-ink-secondary">금전적 가치가 없습니다</b>.
             </p>
           )}

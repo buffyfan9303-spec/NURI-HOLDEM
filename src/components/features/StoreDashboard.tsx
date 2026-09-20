@@ -71,7 +71,16 @@ const hhmm = (s?: string | null) => { if (!s) return null; const [h, m] = s.spli
 //  text-[8px]/[9px]/[11px] 같은 사다리 밖 임의 px 금지(§T1 규칙 2).
 //  예외 1가지: rounded-badge 의 내부 패딩(px-1.5 py-0.5)은 뱃지 토큰이라 이 4단의 대상이 아니다
 //  — 블록 사이·카드 패딩만 4단으로 통제한다.
-export interface DashCaps { ledger: boolean; manage: boolean; voucher: boolean; posters: boolean; staff: boolean }
+export interface DashCaps {
+  ledger: boolean; manage: boolean;
+  /** 이용권 **열람** — 카드·목록을 그릴까(업주 또는 열람권 직원). */
+  voucher: boolean;
+  /** 🔴 이용권 **발급** — 액션 버튼을 그릴까. 서버 `can_manage_pos` 와 같은 선이다
+   *  (라이브 pg_proc 확인 2026-09-20: admin ∪ 소유자 ∪ **승인 공동운영자**).
+   *  ⚠ 열람권(`voucher`)으로 발급을 게이트하면 열람만 가진 직원에게 **죽은 버튼**이 보인다. */
+  issueVoucher: boolean;
+  posters: boolean; staff: boolean;
+}
 
 interface Props {
   venueId: string;
@@ -367,9 +376,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     (a, b) => {
       if (!session) return a;
       const f = buyinFinance(b, session);
-      // 회수 '장' = 티켓을 쓴 바인 **건수**(발행 N장과 같은 척도). ticketPaid 는 이제 T(1만원) 단위라
-      // 그대로 더하면 '발행 2장 / 회수 20장' 처럼 단위가 갈린다(2026-09-05 감사).
-      a.paid += f.paid; a.unpaid += f.unpaid; a.entry += f.entry; a.ticket += f.ticketPaid > 0 ? 1 : 0;
+      // 🔴 2026-09-20 오너 결정으로 **T 합계**로 돌린다.
+      //   오너 원문: "티켓 바인 건수면 티켓으로 바이인한 횟수인데 예를 들어 10만원짜리 3건이면 30T 잖아. T로 표기해."
+      //   종전(2026-09-05 감사)은 '발행 N장' 과 척도를 맞추려고 `ticketPaid > 0 ? 1 : 0` 로 **건수**를 셌다.
+      //   그래서 20T 짜리 바인 1건이 화면에 `1T` 로 나왔다 — 라벨은 T 인데 값은 건수였다.
+      //   ⚠ 아래 `weekTicket`(:641 부근)도 **같이** 바꿔야 한다. 한쪽만 바꾸면 같은 화면의 '오늘 회수'와
+      //     '7일 회수'가 서로 다른 척도가 되어 2026-09-18 에 고쳤던 '같은 라벨 다른 척도' 버그가 되돌아온다.
+      a.paid += f.paid; a.unpaid += f.unpaid; a.entry += f.entry; a.ticket += f.ticketPaid;
       return a;
     },
     { paid: 0, unpaid: 0, entry: 0, ticket: 0 },
@@ -638,7 +651,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     if (!days.includes(b.sessionDate)) continue;
     // 분납 티켓도 buyinFinance가 ticketPaid에 포함해 반환한다(과거엔 대시보드만 누락)
     const s = sessByGame.get(`${b.sessionDate}#${b.gameSeq}`);
-    if (s) weekTicket += buyinFinance(b, s).ticketPaid > 0 ? 1 : 0; // 건수(발행 장수와 같은 척도)
+    if (s) weekTicket += buyinFinance(b, s).ticketPaid; // T 합계 — 위 fin.ticket 과 **같은 척도**여야 한다(2026-09-20 오너 결정)
   }
   // 매장이용권 발행/시상(세션 입력값) — 7일 / 오늘
   let weekVoucher = 0;
@@ -698,11 +711,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* 고객·단골(CRM). 이용권 보내기는 권한이 있을 때만 넘긴다 — 없으면 버튼 자체가 그려지지 않는다.
           모달을 겹치지 않고 교체한다: 시트 위 시트는 뒤로가기 스택이 꼬이고 반투명이 두 겹 쌓인다. */}
       <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]}
-        onSendVoucher={caps.voucher ? (name) => { setRegOpen(false); setVoucherPrefill(name); setVoucherOpen(true); } : undefined} />
+        onSendVoucher={caps.issueVoucher ? (name) => { setRegOpen(false); setVoucherPrefill(name); setVoucherOpen(true); } : undefined} />
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
-      <VoucherManageModal open={voucherOpen} onClose={() => { setVoucherOpen(false); setVoucherPrefill(''); }} venueId={venueId} prefillReceiver={voucherPrefill} />
-      {/* canIssue: 출석 명단에서 바로 이용권을 보낼 수 있게 한다(오너 2026-09-18). 권한 최종 판정은 서버(issue_voucher). */}
-      <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} canIssue={caps.voucher} />
+      <VoucherManageModal open={voucherOpen} onClose={() => { setVoucherOpen(false); setVoucherPrefill(''); }} venueId={venueId} prefillReceiver={voucherPrefill} canIssue={caps.issueVoucher} />
+      {/* canIssue: 출석 명단에서 바로 이용권을 보낼 수 있게 한다(오너 2026-09-18). 권한 최종 판정은 서버(issue_voucher).
+          🔴 2026-09-20 — 종전엔 `caps.voucher`(**열람권 포함**)였다. 열람만 가진 직원에게 발급 버튼이 보이고
+             누르면 서버가 거절했다 — 누를 수 있는 척하는 죽은 버튼. `caps.issueVoucher`(= 서버 can_manage_pos)로 바꾼다. */}
+      <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} canIssue={caps.issueVoucher} />
       <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
 
       {/* ① 공지 스트립 — 업주 운영 가이드(전폭·dismissible). 슬라이드(새 탭)·PDF. 닫으면 기억(IA3a) */}
@@ -1138,7 +1153,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             ? { icon: 'cards', title: `게임 진행 중 · 바인 ${cnt.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
             : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `바인 ${cnt.totalBuyins}회 · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
         } else if (caps.ledger && !started && todayPoster) {
-          todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto('ledger'), tone: 'gold' };
+          todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto({ section: 'ledger', date: d }), tone: 'gold' }; // 🔴 2026-09-20 (E2-A): 맨 문자열이라 '포스터 정보 그대로' 문구와 달리 오늘 장부 **목록**으로만 갔다 — 날짜 시드를 실어 보낸다
         } else if (caps.ledger && !started && !todayPoster && lastRound) {
           // PL3①: 매일 같은 게임을 여는 매장의 기본 동선 — 지난 회차(장부+클락 설정)를 1탭으로 그대로
           const lr = lastRound.session;
@@ -1445,7 +1460,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 <Stat label="오늘 회수" value={`${fin.ticket}`} unit="T" />
               </div>
               {!!rangeErr && <div className="mt-2"><LoadFailRow what="최근 7일 이용권" onRetry={reloadRange} /></div>}
-              <p className="mt-2 t-desc break-keep text-ink-muted">발행 = 장부 발급·시상 · 회수 = 티켓 바인 건수</p>
+              <p className="mt-2 t-desc break-keep text-ink-muted">발행 = 장부에 적은 발급·시상 장수 · 회수 = 티켓으로 낸 바인 금액(T)</p>
             </>
           )}
         </DashCard>

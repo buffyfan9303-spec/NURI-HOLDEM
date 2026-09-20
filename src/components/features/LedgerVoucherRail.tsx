@@ -17,6 +17,7 @@ import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { listVenueVouchers, subscribeVenueVouchers, type Voucher } from '../../api/vouchers';
 import { toFeedRows, summarizeFor } from '../../lib/voucherFeed';
+import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 
 const POLL_MS = 30_000;
 
@@ -39,15 +40,32 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
   const [at, setAt] = useState<number | null>(null); // 마지막으로 받아온 시각
   const alive = useRef(true);
 
+  // 🔴 2026-09-20 (R2-A) — `alive.current` 는 **컴포넌트가 살아 있는가**만 본다. 매장 A 를 보다가
+  //   B 로 옮기면 A 로 나간 조회가 늦게 도착해 **B 화면에 A 의 이용권이 그려졌다**(실측 재현).
+  //   같은 매장에서도 실시간·30초 폴링·수동 새로고침이 겹치면 응답 순서가 뒤집힐 수 있다.
+  //   이미 이 저장소에 있는 계약을 그대로 쓴다 — `src/lib/staleResponse.ts` 의 seq+owner 도장.
+  //   (`src/lib/venueVoucherLoad.ts` 가 이용권 관리 패널에서 같은 방식으로 이미 쓰고 있다. 새로 만들지 않는다.)
+  //   ⚠ 클라이언트 표시 격리일 뿐 RLS 대체가 아니다 — 서버는 어차피 제 매장 것만 준다.
+  const stampRef = useRef<RequestStamp<string>>({ seq: 0, owner: venueId });
+
   const load = useCallback(async (manual = false) => {
     if (manual) setBusy(true);
+    const stamp: RequestStamp<string> = { seq: stampRef.current.seq + 1, owner: venueId };
+    stampRef.current = stamp;
+    const stale = () => !alive.current || isStaleResponse(stamp, stampRef.current);
     try {
       const rows = await listVenueVouchers(venueId);
-      if (!alive.current) return;
+      if (stale()) return;
       setVs(rows); setErr(null); setAt(Date.now());
     } catch (e) {
-      if (alive.current) setErr(e);
-    } finally { if (alive.current) setBusy(false); }
+      if (!stale()) setErr(e);
+    } finally { if (!stale()) setBusy(false); }
+  }, [venueId]);
+
+  // 매장이 바뀌면 **즉시** 이전 매장 데이터를 지운다 — 새 응답이 오기까지 A 의 목록이 남아 있으면 안 된다.
+  useEffect(() => {
+    stampRef.current = { seq: stampRef.current.seq + 1, owner: venueId };
+    setVs(null); setErr(null); setAt(null); setQ('');
   }, [venueId]);
 
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);

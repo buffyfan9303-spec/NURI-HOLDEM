@@ -2274,6 +2274,14 @@ export default function App() {
         // 홈 배너 — 홈 탭은 언마운트되지 않아(display 토글) 재조회가 없으면 부팅 때 받은 목록을
         // 계속 쓴다. 게재창(starts_at·ends_at)도 그 시점의 KST 판정에 묶인다.
         reloadHomeBanners();
+        // 🔴 2026-09-20 (R1-A) — 일정도 같은 이유로 재조회한다. 홈의 '오늘·내일 일정'은 `schedules` 를
+        //   그대로 그리는데 여기 재조회가 없어, 숨김→복귀 사이에 놓친 구독 이벤트가 영영 회복되지 않았다.
+        reloadSchedules();
+        break;
+      case 'calendar':
+        // 🔴 2026-09-20 (R1-A) — `case 'calendar'` 자체가 없어 default 로 빠졌다(= 아무것도 안 함).
+        //   캘린더는 `schedules` 로 달력을 그리므로 복귀 시 정본을 다시 읽어야 한다.
+        reloadSchedules();
         break;
       case 'browse':
       case 'live':
@@ -2326,8 +2334,14 @@ export default function App() {
   // #7 일정 실시간 — 700ms 디바운스로 변경 폭주 시 전체 refetch 를 1회로 합침(동시접속 팬아웃 완화).
   // ⚡ 트래픽 대비: 일정이 실제로 보이는 화면(일정탐색·라이브·내매장/관리자·대회상세)에서만 구독.
   //    커뮤니티·장터·도구만 보는 사용자는 채널을 열지 않는다.
-  const wantScheduleRealtime = activeTab === 'browse' || activeTab === 'live'
-    || activeTab === 'my-store' || activeTab === 'admin' || openSchedule !== null;
+  // 🔴 2026-09-20 (R1-A) — `home` 과 `calendar` 가 빠져 있었다. 두 탭 모두 같은 `schedules` 를 그리는데
+  //   (HomeTab 의 오늘·내일 목록, CalendarPanel 의 달력) 구독이 안 열려서, 손님이 홈이나 캘린더를
+  //   **열어 둔 채로** 다른 세션에서 포스터가 승인/수정/삭제돼도 수동 새로고침 전까지 옛 목록을 봤다.
+  //   ⚠ 여기 추가하는 것으로 충분하다 — 새 채널을 자식마다 만들지 않는다(구독은 이 App 하나가 공유한다).
+  //   ⚠ `subscribeSchedules` 의 `view_count` 만 바뀐 UPDATE 무시(api/schedules.ts)와 700ms 디바운스가
+  //     그대로 남아 이벤트 폭주를 막는다. 탭을 떠나면 unsub 되므로 연결 예산도 종전과 같다.
+  const wantScheduleRealtime = activeTab === 'home' || activeTab === 'browse' || activeTab === 'live'
+    || activeTab === 'calendar' || activeTab === 'my-store' || activeTab === 'admin' || openSchedule !== null;
   useEffect(() => {
     if (!wantScheduleRealtime) return;
     let t: ReturnType<typeof setTimeout> | null = null;

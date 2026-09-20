@@ -26,8 +26,14 @@ export function matchClockScheduleDetailed(
   // ⚠ 제목 검사를 **개수보다 먼저** 한다. 예전에는 `sameDay.length === 1` 조기 반환이 위에 있어
   //   포스터가 하나뿐인 것처럼 보이는 호출(상세 패널이 1건짜리 스텁을 넘긴다)에서 **제목 비교가 아예 실행되지 않았다**.
   const t = (g.title || g.config?.title || '').trim();
-  const exact = t ? sameDay.find((s) => (s.title ?? '').trim() === t) : undefined;
-  if (exact) return { schedule: exact, quality: 'title' };
+  // 🔴 2026-09-20 (R1-D) — 제목이 **같은 날 두 번 이상** 나오면 `find` 는 그냥 배열의 첫 번째를 고른다.
+  //   그런데 종전에는 그 결과에 `quality: 'title'`(가장 높은 확신도) 를 붙였다. 소비처는 그 라벨을 보고
+  //   '이 포스터가 맞다' 로 취급하므로, 동명 대회가 2개인 날에는 **틀린 포스터를 사실처럼** 열 수 있었다.
+  //   고른 값은 그대로 두고(다른 매칭 규칙을 새로 만들지 않는다) **라벨만 정직하게** 낮춘다 —
+  //   `fallback` 은 '확신 없음' 이라는 뜻이고 소비처가 이미 그렇게 다룬다.
+  const titled = t ? sameDay.filter((s) => (s.title ?? '').trim() === t) : [];
+  if (titled.length === 1) return { schedule: titled[0], quality: 'title' };
+  if (titled.length > 1) return { schedule: titled[0], quality: 'fallback' };
   if (sameDay.length === 1) return { schedule: sameDay[0], quality: 'only' };
   return { schedule: sameDay[0], quality: 'fallback' };
 }

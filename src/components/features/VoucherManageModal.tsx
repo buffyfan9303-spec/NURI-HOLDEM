@@ -34,7 +34,19 @@ function fmtDateTime(iso: string | null): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: string; prefillReceiver?: string }) {
+export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssueProp }: {
+  venueId: string;
+  prefillReceiver?: string;
+  /** 🔴 2026-09-20 (E2-F) — 발급 권한은 **서버 판정을 받아서 넣는다**(`canManagePos` 결과).
+   *  종전에는 이 파일 안에서 `user.role === 'venue_owner' && user.venueId === venueId` 로 직접 판정했고,
+   *  그건 서버보다 **좁았다**: 라이브 `issue_voucher` 는 `can_manage_pos` 를 쓰고 그 함수는
+   *  admin ∪ venues.owner_id ∪ venue_owners(status='approved') — 즉 **승인 공동운영자를 포함**한다
+   *  (라이브 pg_proc 직접 조회로 확인, 2026-09-20). 공동운영자는 서버가 허용하는데 화면이 안 보여 줬다.
+   *  ⚠ 오너 결정(2026-09-20): "공동운영자에게 발급 줘. UI도 이에 맞춰서."
+   *  ⚠ 안 주면 **닫힘(false)** 이다 — 모르면 막는 쪽이 안전하다. 클라이언트 게이트는 인가가 아니고
+   *    최종 판정은 언제나 서버 `issue_voucher` 다. */
+  canIssue?: boolean;
+}) {
   const toast = useToast();
   const { user } = useAuth();
   // 킬스위치(2026-08-29) — 진입점은 전부 위에서 숨겼지만, 마지막 문(門)에서도 한 번 더 막는다.
@@ -42,7 +54,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   // 이용권 목록·보유자 프로필·실시간 구독까지 자동으로 열린다(꺼진 기능이 조용히 네트워크를 쓰는 상태).
   const idOn = useIdentityEnabled();
   const isAdmin = user?.role === 'admin';
-  const canIssue = isAdmin || (user?.role === 'venue_owner' && user?.venueId === venueId);
+  const canIssue = isAdmin || canIssueProp === true;
 
   const [list, setList] = useState<Voucher[]>([]);
   // "아직 내역이 없습니다"를 먼저 보여주면 업주가 발급이 실패한 줄 알고 **다시 발급**한다
@@ -391,7 +403,7 @@ ${cards}
       {canIssue ? (
         <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
           <button type="button" onClick={() => setIssueOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-xs font-bold text-accent-300">매장이용권 발급 <span className="font-normal text-ink-muted">· 업주 전용</span>{/* 스윕②(2026-09-19): 이 배지는 '개', 바로 아래 한도 증액 패널(QuotaRequestPanel)은 '장' — 같은
+            <span className="text-xs font-bold text-accent-300">매장이용권 발급 <span className="font-normal text-ink-muted">· 업주 · 공동운영자</span>{/* 스윕②(2026-09-19): 이 배지는 '개', 바로 아래 한도 증액 패널(QuotaRequestPanel)은 '장' — 같은
                   quota 값이 한 스크롤 안에서 단위만 바뀌었다. '장'으로 통일(이용권은 '장' 으로 세는 물건 —
                   발급 폼도 '개' 스테퍼가 아니라 옆에 '개'라고 적혀 있었을 뿐 실제 문구는 전부 장이다). */}
                 {quota !== null && <span className={['ml-1.5 rounded-badge px-1.5 py-0.5 font-bold', quota < 50 ? 'bg-danger/15 text-danger-light' : 'bg-surface-high text-ink-secondary'].join(' ')}>잔여 한도 {quota.toLocaleString()}장</span>}</span>
@@ -559,7 +571,12 @@ ${cards}
                   ⚠ 같은 취지의 문구가 출석 명단(CheckinModal)에도 있다. 거기도 이용권을 **보내는** 자리라서다.
                     두 곳의 문구가 갈리면 안 된다 — 한쪽을 고치면 다른 쪽도 같이 고쳐라. */}
               <p className="rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs leading-relaxed text-ink-secondary">
-                <b className="text-ink-primary">매장이용권 발급은 인증된 매장 업주에게만 가능합니다.</b><br />
+                {/* 🔴 2026-09-20 — '인증된 매장 업주에게만' 은 서버와 어긋난 문구였다. 라이브 `issue_voucher` 는
+                    `can_manage_pos`(admin ∪ 소유자 ∪ **승인 공동운영자**)를 보고, 그다음 `venues.voucher_issue_approved`
+                    (운영자 승인)를 본다 — pg_proc 직접 조회로 확인(2026-09-20).
+                    오너 결정: "공동운영자에게 발급 줘. UI도 이에 맞춰서." → 실제 범위를 그대로 적는다.
+                    ⚠ 위 주석대로 CheckinModal 의 같은 문구와 **갈리면 안 된다** — 둘 다 같이 고쳤다. */}
+                <b className="text-ink-primary">매장이용권 발급은 운영자 승인을 받은 매장의 업주·공동운영자만 가능합니다.</b><br />
                 손님끼리 주고받을 수 없으며, <b className="text-ink-primary">금전적 가치가 없습니다</b>(현금·상품권으로 교환·환불되지 않습니다).
               </p>
               <p className="text-2xs text-ink-muted">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 발급됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">아이디(닉네임) 또는 전화번호</b>로 지정합니다. 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
@@ -862,10 +879,10 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
   );
 }
 
-export default function VoucherManageModal({ open, onClose, venueId, prefillReceiver }: { open: boolean; onClose: () => void; venueId: string; prefillReceiver?: string }) {
+export default function VoucherManageModal({ open, onClose, venueId, prefillReceiver, canIssue }: { open: boolean; onClose: () => void; venueId: string; prefillReceiver?: string; canIssue?: boolean }) {
   return (
     <Modal open={open} onClose={onClose} title="매장이용권 관리" maxWidth="md" variant="sheet">
-      <div className="p-4"><VoucherManagePanel venueId={venueId} prefillReceiver={prefillReceiver} /></div>
+      <div className="p-4"><VoucherManagePanel venueId={venueId} prefillReceiver={prefillReceiver} canIssue={canIssue} /></div>
     </Modal>
   );
 }
