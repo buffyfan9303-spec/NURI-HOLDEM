@@ -3,7 +3,7 @@
 > **다른 Claude Code 계정·다른 컴퓨터에서 이어서 작업할 때 이 파일 하나만 읽으면 된다.**
 > 한도가 끊기거나 계정을 바꿔도 이 파일은 git 에 있으므로 `git pull` 이면 따라온다.
 >
-> 마지막 갱신: **2026-09-20 밤(claude-4a)** · H1·S1·C1 배포 완료 + **GTO 감사 G1~G14**(§2-C) + **키별 21줄 판정표**(§2-D)
+> 마지막 갱신: **2026-09-20 (Codex)** · 모바일 대메뉴 스냅샷 제거·독립 검증(§0-a13). 기존 GTO 감사 G1~G14(§2-C)·키별 21줄 판정표(§2-D)는 유지.
 >
 > ⛔ **정정**: 여기 오래 적혀 있던 "보안 마이그레이션 2건 보류" 는 **사실이 아니었다.**
 > 라이브를 직접 조회해 보니 **2026-09-18 에 이미 적용**돼 있었고, 파일에 표시만 빠져 있었다.
@@ -81,7 +81,23 @@ npx tsc -b --force                # rc=0 이어야 한다
 ---
 
 
-## 0-a12. 🔴 **2026-09-20 · claude-4a — 여기가 가장 최신이다**
+## 0-a13. 2026-09-20 · 모바일 대메뉴 압축·반짝임 수정 (Codex)
+
+- **요청/편집권:** 오너가 삼성 브라우저 본문 압축과 Chrome 반짝임을 이번에는 직접 수정하라고 지시했다. 기준선 `ea170b6`; 단독 편집자는 Codex, 두 검토 에이전트는 읽기 전용. 기존 설정·미추적 작업은 보존했다.
+- **확인한 현상:** 사용자 사진의 GTO 본문은 가로가 같고 세로만 약 0.838배다. 헤더·하단바는 그대로다. Chrome에서는 document View Transition의 중첩 캡처/opacity 전환이 밝기를 바꾸는 경로를 확인했다. 삼성 GPU 내부 원인은 실기기 trace 없이 확정하지 않는다.
+- **수정:** `src/App.tsx`의 공통 `commitTab`에서 현재 너비가 1024px 미만이고 방문한 탭이면 일반 `setActiveTab`으로 즉시 전환한다. document 스냅샷을 만들지 않는다. 이 분기를 stale-ref 무변경 가드보다 앞에 두어 같은 배치의 마지막 탭 선택을 보존했다. auth effect에서도 호출되므로 이 분기에 `flushSync`를 넣지 않는다. PC(1024px 이상), 첫 방문 lazy 처리, 개별 overlay 전환은 기존 경로다.
+- **회귀 검사:** `e2e/mobile-tab-transition.spec.ts` 추가. 390/1023/1024px, CDP 130ms 누름, 재방문·뒤로가기·연속 입력·모바일↔PC resize 검사. 수정 전 390px는 VT 호출 예상 0/실제 2로 실패했고 수정 후 통과했다. 삼성 렌더러를 에뮬레이션하는 테스트는 아니다.
+- **로컬 게이트:** lint 오류 0(기존 warning 464), unit 253파일/2753개 통과, build/bundle 통과. gzip 초기 259.1/267KB, 총 JS 1010.5/1014KB, CSS 31.1/34KB. sitemap 원본 바이트 복원 및 SHA256 `B16D9438156860BDE205E905D93E89E61ECAB11D436FF6868B5A0F7ACE28BA69` 일치.
+- **프로덕션 빌드 E2E:** 새 preview 4173의 `assets/index-DMvj0yAd.js`를 확인한 뒤 `mobile-tab-transition`, `nav-stability`, `subtab-motion`, `gto-tab-verify` 4개 spec: **54 passed / 2 skipped**. 전체 CI E2E와 구분한다. 내비게이션 보고서 유실 탭 0·도착 오류 0/14.
+- **독립 검증:** 별도 Chromium 390/412px × dark/light에서 VT 0회, 43 rAF 프레임의 root 새 이미지 opacity 1, SPOT 원형 42.5×42.5px 고정. 본문 첫 표시와 +450ms 픽셀 차이 0. 1440px PC는 VT 실행 유지. 별도 입력 경합/뒤로가기 검사 통과, React 관련 콘솔 경고 0. 외부 HTTP를 차단한 검사는 차단에 따른 네트워크 오류를 앱 오류와 구분했다.
+- **증거:** 로컬 로그 `%TEMP%/nuri-nav-fix-afeb0507969442ee9c6fdda4e47eb73e/{lint,unit,build,bundle,e2e}.log`; 시각 자료 `%TEMP%/navfix-{390,412}-{dark,light}-{first,settled}.png`.
+- **재실행:** sitemap 보호 절차대로 fresh build/preview를 만든 뒤 PowerShell에서 `$env:E2E_BASE_URL='http://localhost:4173'; npx playwright test e2e/mobile-tab-transition.spec.ts e2e/nav-stability.spec.ts e2e/subtab-motion.spec.ts e2e/gto-tab-verify.spec.ts --workers=2 --reporter=line`.
+- **배포 상태:** 로컬 구현·독립 검증 완료. 이 수정의 커밋/CI/production alias/운영 DOM 확인은 아래에 결과를 갱신한다. 기존 `e8d89ae`·`27de127`·`e11b1a2` 작업이나 라이브 DB 적용을 다시 수행하지 않았다.
+- **남은 실기기 확인:** 삼성 S26의 실제 Samsung Internet/Chrome, 주소창 확장·축소 중 연속 탭, 실제 스크린 녹화. 로컬 Chromium 검증으로 실기기 해결을 확정하지 않는다. 기기 확인 전 스냅샷 경로를 모바일에 다시 켜지 않는다.
+
+---
+
+## 0-a12. 2026-09-20 · claude-4a — 이전 세션 배포·GTO 기록
 
 이 섹션은 길다. **오너가 "인수인계 데이터는 모두 상세하게 작성해야돼" 라고 지시했다**(2026-09-20).
 읽는 순서: ① 먼저 아래 "배포 상태" 를 보고 지금 라이브가 어디인지 확인한다 → ② "세 번 죽은 CI" 를

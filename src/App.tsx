@@ -1015,6 +1015,13 @@ export default function App() {
    * 뒤로가기로 되돌아오는 경로도 이 함수를 쓰므로 여기서 이력을 건드리면 안 된다.
    */
   const commitTab = useCallback((t: TabId, dir?: VTDirection) => {
+    // Mobile page snapshots compress in Samsung Internet and flash in Chromium.
+    // Warm panes need only an urgent state update (also safe from auth effects).
+    // Run before the stale-ref guard so the last choice in a batch always wins.
+    if (visitedTabs.has(t) && !window.matchMedia('(min-width: 1024px)').matches) {
+      setActiveTab(t);
+      return;
+    }
     if (t === activeTabRef.current) return;
     // 메이저 사이트의 '부드러움'은 전환 커밋 비용이 0이라서가 아니라, 스냅샷 크로스페이드가
     // 무거운 프레임을 가리기 때문이다(View Transition). 재방문 탭(keep-alive)은 동기 커밋이
