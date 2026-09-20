@@ -91,7 +91,45 @@ npx tsc -b --force                # rc=0 이어야 한다
 ---
 
 
-## 0-a16. 🔴 2026-09-21 낮 · Opus 5 — **팀 개편(역할·모델·기억)** (여기가 가장 최신)
+## 0-a17. 2026-09-21 낮 · Opus 5 팀 — **번들 감량 조사 + 배포** (여기가 가장 최신)
+
+### 번들 조사 — 팀원 2명이 읽기 전용으로 실측
+
+`capability-steward`(haiku, 관찰 모델 `claude-haiku-4-5-20251001`) · `home-team`(sonnet, `claude-sonnet-5`).
+Fable 0회.
+
+**가장 큰 발견: `esm-uqe9SXw8.js` 의 정체는 `html5-qrcode` 이고 gzip 104.6KB 다** — 전체 1,014KB 의 **10%**.
+근거: 번들 안의 `e.GITHUB_PROJECT_URL='https://github.com/mebjas/html5-qrcode'`.
+
+gzip 상위(실측): `index 114.5` · **`html5-qrcode 104.6`** · `VenueManageTab 102.4` · `vendor-react 58.9` ·
+`AdminTab 58.5` · `vendor-supabase 52.0` · `ToolsPanel 51.6` · `LedgerStatsPanel 48.9`.
+
+🔴 **그런데 줄일 수 있는 큰 레버가 없다.** 이유를 남긴다(다음 사람이 같은 길을 다시 파지 않게).
+
+| 후보 | 왜 안 되나 |
+|---|---|
+| `html5-qrcode` 제거 | **첫 화면에 없다**(`dist/index.html` 참조 0 — 직접 확인). 이미 lazy 다. 그리고 이건 `BarcodeDetector` **폴백**이라 빼면 구형 브라우저에서 QR 스캔이 죽는다 → 기능 보존 위반 |
+| `VenueManageTab`·`AdminTab`·`LedgerStatsPanel` | **이미 lazy**(`App.tsx:166,172` · `VenueManageTab.tsx:23`). 과거 세션이 이미 처리했다 |
+| `vendor-react`·`vendor-supabase` | 버전 교체 수준이라 사실상 레버가 아니다 |
+| 예산 상향 | **오너 결정 사항**이고 이미 대기 중이다. 과거 기록이 못박았다: "예산 숫자를 올려서 통과시키는 것은 마지막 수단 … 임의로 올리지 마라"(`HANDOFF.md:1936`), **`--update` 금지**(여유 9%가 얹혀 게이트가 헐거워진다) |
+
+👉 **예산 구조를 알아야 한다: `totalJsGzipKb` 는 `dist/assets/*.js` 의 gzip 합이라 lazy 여도 예산을 먹는다**
+(`scripts/bundle-budget.mjs:56-62`). 그래서 "lazy 로 빼기"는 `entryGzipKb`(임계 경로)만 낮추고 총합은 그대로다.
+총합을 줄이려면 **코드를 실제로 지우거나 의존성을 바꿔야** 한다.
+남은 실질 후보는 `index` 청크(App.tsx 정적 그래프) 하나뿐이고, 과거 기록이 후보 2개
+(`api/community.ts` 분할 · `NotificationPanel`+`api/vouchers` lazy)와 각각의 위험을 이미 적어 뒀다
+(`home-team/critical-path-bundle-0920.md`). **둘 다 실제 ms 측정이 선행 조건**이다.
+
+⚠ 과거에 `ScheduleTable` lazy 는 **되돌렸다** — 0.67KB 아끼려고 Suspense 경계·스켈레톤·프리워밍이 새로 필요해졌다.
+`criticalPathGraph.contract.test.ts` 가 그걸 다시 넣지 못하게 잠그고 있다.
+
+### 배포
+
+아래 §6 절차대로 진행했다. 결과는 이 절 맨 아래 "배포 결과" 에 적는다.
+
+---
+
+## 0-a16. 2026-09-21 낮 · Opus 5 — **팀 개편(역할·모델·기억)** (최신은 위 §0-a17)
 
 실행문서: `.claude/handoff/팀-개편-설계서.md`(git 미추적).
 **제품 소스는 한 줄도 바꾸지 않았다**(검증 게이트 '제품보존' PASS). 푸시·Vercel·운영 DB 변경 없음.
