@@ -145,13 +145,46 @@ function handleEscape(e: KeyboardEvent) {
   }
 }
 
+// 🔴 H1 후속(2026-09-20 실측) — 브라우저 스크롤 복원을 끈다.
+//
+//  무엇이 문제였나: 뒤로가기로 대메뉴가 바뀔 때 헤더가 **한 프레임 눌렸다 폈다**.
+//  버튼으로 탭을 옮길 때는 안 그런다. 이벤트 순서를 직접 찍어 원인을 확정했다(390×844):
+//    t=1.0ms  popstate (scrollY=132)
+//    t=17.2ms 첫 rAF — **scrollY 는 이미 0**(브라우저가 복원함)인데 헤더는 47.75px·shrunk=1
+//    t=21.7ms App 의 탭 커밋 layout effect 가 scrollTo(0)·notifyScrollNow 를 부른다(이미 0)
+//    t=50.4ms scroll 이벤트가 그제서야 도착
+//  즉 **브라우저가 React 커밋보다 먼저 스크롤을 옮겨** 그 한 프레임을 만든다. 탭 커밋은
+//  View Transition 콜백 안에서 도는 탓에 popstate 와 같은 프레임이 아니다 — 그래서
+//  `notifyScrollNow` 가 있어도 그 프레임을 되돌릴 수 없다(이미 그려진 뒤다).
+//
+//  왜 이 처방인가: 이 앱은 **탭이 바뀌면 언제나 맨 위**다(App.tsx 탭 커밋 effect · 오너 지시).
+//  그러니 브라우저의 복원은 **앱이 곧바로 덮어쓸 값을 한 프레임 먼저 그리는 간섭**일 뿐이다.
+//
+//  🔴 **모듈 최상위에서 한 번**(2026-09-20 독립 검증 F1). 처음에는 `init()` 안에 뒀는데,
+//    `init()` 은 **첫 `pushLayer()` 때만** 돈다. 검증자가 실측으로 잡았다:
+//      · 부팅 직후~t+3000ms 까지 `scrollRestoration` 이 `auto` 그대로
+//      · 레이어를 한 번도 안 민 상태의 F5: y=387 → 374 (**복원이 일어난다**)
+//      · 탭을 한 번 옮긴 뒤: `manual` 로 바뀌고 새로고침을 넘어 유지 → F5 에서 y=97 → 0
+//    즉 같은 앱이 세션 상태에 따라 "어떨 땐 제자리, 어떨 땐 맨 위" 로 갈렸다. 부팅부터 일관되게 한다.
+//
+//  ⚠ 무엇을 잃나: 전체 새로고침(F5)·외부에서 돌아올 때의 **브라우저** 자동 스크롤 복원.
+//    ⚠ "탭마다 위치를 저장하지 않는다" 고 적었던 것은 **부정확했다**(같은 검증 F1) —
+//      `CommunityTab` 은 섹션별 scrollY 를 저장했다 `window.scrollTo` 로 **앱이 직접** 복원한다.
+//      그 경로는 `manual` 의 영향을 받지 않는다(오히려 브라우저 복원과의 경합이 사라진다).
+//    되살리고 싶으면 오너에게 먼저 물어라 — 앱 전역 동작 변경이다.
+//  ⚠ 여기(backstack)가 맞는 자리다 — 이 모듈이 history 를 단독 소유한다(popstate·replaceState 래핑).
+if (typeof window !== 'undefined') {
+  try {
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
+  } catch { /* 일부 브라우저/샌드박스는 setter 를 막는다 — 없으면 종전 동작 그대로다 */ }
+}
+
 function init() {
   if (initialized || typeof window === 'undefined') return;
   initialized = true;
   window.addEventListener('popstate', handlePop);
   window.addEventListener('keydown', handleEscape);
 
-  // 🔴 H1 후속(2026-09-20 실측) — 브라우저 스크롤 복원을 끈다.
   //
   //  무엇이 문제였나: 뒤로가기로 대메뉴가 바뀔 때 헤더가 **한 프레임 눌렸다 폈다**.
   //  버튼으로 탭을 옮길 때는 안 그런다. 이벤트 순서를 직접 찍어 원인을 확정했다(390×844):
@@ -168,14 +201,6 @@ function init() {
   //  명시한다. 그러니 브라우저의 복원은 **앱이 곧바로 덮어쓸 값을 한 프레임 먼저 그리는 간섭**일 뿐이다.
   //  끄면 스크롤을 움직이는 주체가 앱 하나가 되어 그 프레임이 사라진다.
   //
-  //  ⚠ 무엇을 잃나: 전체 새로고침(F5)·다른 사이트에서 뒤로 돌아올 때의 자동 스크롤 복원.
-  //    이 앱은 어차피 부팅을 맨 위에서 시작하고(lazy 청크·스냅샷), 탭마다 위치를 저장하지 않는다
-  //    (그 기능은 오너가 명시적으로 뺐다 — App.tsx 참고). 되살리고 싶으면 오너에게 먼저 물어라.
-  //  ⚠ 여기(backstack)가 맞는 자리다 — 이 모듈이 history 를 단독 소유한다(popstate·replaceState 래핑).
-  try {
-    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
-  } catch { /* 일부 브라우저/샌드박스는 setter 를 막는다 — 없으면 종전 동작 그대로다 */ }
-
   // ⓑ __layer 토큰 보존 — 딥링크 정리(`replaceState({}, '', url)`)가 현재 항목의 토큰을
   //   지우면 위치가 루트로 오인되어 다음 뒤로가기가 열린 겹을 전부 닫는다('홈으로 튐').
   //   호출자가 __layer 를 직접 주지 않는 한, 지금 항목의 토큰을 그대로 얹어 준다.

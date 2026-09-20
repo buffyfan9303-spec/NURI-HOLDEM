@@ -176,10 +176,25 @@ export default function TdaRulesTool() {
         </ul>
       </section>
 
-      {/* 출처 — 원문 권리는 Poker TDA. 한글은 누리홀덤이 쓴 해설이라 번역 크레딧이 없다(2026-09-17, 제3자 번역본 제거). */}
+      {/* 출처 — 원문 권리는 Poker TDA. 한글은 누리홀덤이 쓴 해설이라 번역 크레딧이 없다(2026-09-17, 제3자 번역본 제거).
+          🔴 G10(2026-09-20) — Poker TDA 공식 페이지는 규칙을 쓰는 곳에 **지정된 허가·저작권 문구를
+          같은 화면에 눈에 띄게** 두고 공식 사이트를 **실제 클릭 가능한 링크**로 걸 것을 요구한다.
+          종전에는 자체 축약 문구와 평문 `PokerTDA.com` 뿐이었다 — 원문 문장을 그대로 싣고 링크를 건다.
+          ⚠ 문구를 번역하거나 줄이지 않는다(허가 조건 자체가 그 문장이다). 한글 안내는 그 아래 별도 문단. */}
       <p className="px-1 text-[10px] leading-relaxed text-ink-muted">
-        출처: Poker TDA 2026 규칙 {data.version} · © 2026 Poker TDA (use policy: PokerTDA.com)<br />
-        한글 해설은 누리홀덤이 작성했습니다. 최종 판단은 언제나 플로어(토너먼트 디렉터)의 재량입니다.
+        TDA rules used by permission of the Poker TDA, Copyright 2026,{' '}
+        <a href="http://www.pokertda.com" target="_blank" rel="noopener noreferrer"
+          className="underline decoration-dotted underline-offset-2 hover:text-accent-200">
+          http://www.pokertda.com
+        </a>
+        , All rights reserved.
+      </p>
+      <p className="px-1 text-[10px] leading-relaxed text-ink-muted">
+        출처: Poker TDA 2026 규칙 {data.version}<br />
+        한글 해설은 누리홀덤이 작성했습니다. 최종 판단은 언제나 플로어(토너먼트 디렉터)의 재량입니다.<br />
+        {/* TDA Rule 5D — 테이블에서의 전략 도구 사용은 제한된다. 이 화면은 학습·복기용이라는 맥락을 분명히 한다. */}
+        이 도구는 <b>학습·복기용</b>입니다. 실제 테이블에서의 전자기기·전략 도구 사용은 대회 규칙(TDA Rule 5D)과
+        매장 규정에 따라 제한될 수 있습니다.
       </p>
     </div>
   );

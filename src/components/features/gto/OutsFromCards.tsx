@@ -17,7 +17,7 @@ import { MiniCard } from '../../atoms/HandCards';
 import Icon from '../../atoms/Icon';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { equityAsync, outsAsync } from './equityClient';
-import type { OutsResult } from './equityEngine';
+import type { OutsResult, Standing } from './equityEngine';
 import HandBoardPicker from './HandBoardPicker';
 import { useHandBoard, type HandBoardInit } from './useHandBoard';
 import { cardId } from './useDeepGto';
@@ -53,6 +53,8 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
   const [heroEquity, setHeroEquity] = useState<number | null>(null);
   const [outs, setOuts] = useState<OutsResult | null>(null);
   const [mine, setMine] = useState(true); // true=내 아웃츠(뒤지는 중) / false=상대 아웃츠(앞서는 중)
+  // 🔴 G2(2026-09-20) — **현재 패 우열**. 종전에는 이 값이 없어 미래 지분(`eq.hero < 0.5`)으로 대신했다.
+  const [standing, setStanding] = useState<Standing>('behind');
 
   // 마지막 입력 보존 — 재방문 시 빈 폼이 아니라 '그 핸드'로 돌아온다(GTO 패널과 같은 스냅샷 문법)
   useEffect(() => {
@@ -72,10 +74,18 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
       outsAsync(villain, hero, board),
     ]).then(([eq, ho, vo]) => {
       if (!alive) return;
-      const behind = eq.hero < 0.5;
-      const picked = behind ? ho : vo;
+      // 🔴 G2(2026-09-20) — **현재 우열은 현재 패로 판단한다.** 종전 `eq.hero < 0.5` 는
+      //   '리버까지의 지분'이라 완전히 다른 값이다. 외부 평가기로 확인한 반례:
+      //   A♥K♥ vs 9♣9♦ / Q♥J♠2♥ 는 **지금 9 페어가 앞서는데** 지분이 63.2% 라
+      //   `behind=false` 가 되어 화면이 "이미 내가 앞서 있습니다" 라고 거짓 안내했다.
+      const st: Standing = ho?.standing ?? 'tied';
+      // 동률은 별도 상태다 — '앞선다'로 접으면 상대 아웃(위험 카드)을 보여 주게 되어 뜻이 뒤집힌다.
+      //   동률일 때 알고 싶은 것은 "무엇이 뜨면 내가 이기나" 이므로 내 아웃을 센다.
+      const showMine = st !== 'ahead';
+      const picked = showMine ? ho : vo;
       setHeroEquity(eq.hero);
-      setMine(behind);
+      setStanding(st);
+      setMine(showMine);
       setOuts(picked);
       setBusy(false);
       // 직접 입력 모드로 그대로 이어지게 개수와 시점을 함께 넘긴다(보드 3장=플랍, 4장=턴)
@@ -147,8 +157,13 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
             <p className={['flex items-center gap-1 text-2xs font-bold', goodNews ? 'text-emerald-700 dark:text-emerald-300' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
               <Icon name={goodNews ? 'target' : 'alert'} size={12} className="shrink-0" />
               {mine
-                ? (o === 0 ? '역전 카드가 없습니다. 드로잉 데드입니다' : '이 카드가 뜨면 내가 앞섭니다')
-                : (o === 0 ? '이미 앞서 있고, 다음 카드로는 뒤집히지 않습니다' : '이미 내가 앞서 있습니다. 이 카드가 뜨면 역전당합니다')}
+                /* 🔴 G2 — 이 카드 목록은 `computeOuts` 의 정의상 **"뜨면 리버까지 승률이 50%를 넘는"**
+                   카드다. "뜨면 그 순간 앞선다" 가 아니다 — 둘은 플랍에서 다르다(아래 즉시 역전 줄 참고).
+                   종전 문구가 그 둘을 한 문장으로 합쳐 뜻이 어긋났다. */
+                ? (o === 0
+                  ? (standing === 'tied' ? '비긴 상태이고, 다음 카드로 유리해지는 카드가 없습니다' : '역전 카드가 없습니다. 드로잉 데드입니다')
+                  : '이 카드가 뜨면 리버까지 승률이 50%를 넘습니다')
+                : (o === 0 ? '이미 앞서 있고, 다음 카드로는 뒤집히지 않습니다' : '이미 내가 앞서 있습니다. 이 카드가 뜨면 상대 승률이 50%를 넘습니다')}
             </p>
             {o > 0 && (
               <div className="flex flex-wrap gap-1">
@@ -158,13 +173,34 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
             )}
           </div>
 
+          {/* 🔴 G2(2026-09-20) — **지금 누가 앞서는가**를 별도 줄로 못박는다.
+              종전에는 이 값이 화면 어디에도 없었고, 미래 지분(`내 승률`)이 그 자리를 대신해
+              "이미 내가 앞서 있습니다" 라는 거짓 문장을 만들었다. 두 축을 나란히 둔다. */}
+          <Result label="지금 패 우열"
+            value={standing === 'ahead' ? '내가 앞섬' : standing === 'behind' ? '내가 뒤짐' : '동률'}
+            good={standing === 'ahead'} bad={standing === 'behind'}
+            desc="남은 카드를 한 장도 보지 않고 지금 보드까지의 패만 비교한 값입니다 — 위 '내 승률'과 방향이 다를 수 있습니다" />
+
+          {/* 🔴 G2 — **즉시 역전 카드**는 위 목록(승률 50% 초과)과 다른 집합이다.
+              플랍에서 강한 드로는 "유리해지는 카드"에는 들어가지만 그 순간 패가 앞서지는 않는다.
+              수가 같으면 줄을 만들지 않는다(같은 말을 두 번 하지 않는다 — 턴에서는 쇼다운이라 항상 같다). */}
+          {outs.immediateOuts !== o && (
+            <Result label={`다음 1장에 ${mine ? '내가 바로 앞서는' : '상대가 바로 앞서는'} 카드`}
+              value={`${outs.immediateOuts}장 · ${(outs.immediateProb * 100).toFixed(1)}%`}
+              desc={`위 ${o}장은 '뜨면 리버까지 승률이 50%를 넘는' 카드이고, 이 ${outs.immediateOuts}장은 '뜨는 순간 패 자체가 앞서는' 카드입니다`} />
+          )}
+
           {/* 팟 오즈·4·2 법칙은 '내가 드로우를 쫓을 때'의 도구다. 내가 이미 앞선 상황에 그대로 띄우면
               무엇에 대한 확률인지 뒤집혀 읽힌다 — 앞선 쪽에선 역전 확률만 남긴다. */}
           {mine ? (
             <>
               <div className="grid grid-cols-2 gap-2">
                 <Result label={`다음 ${outs.next === 'river' ? '리버' : '턴'} 1장 확률`} value={`${(oneCard * 100).toFixed(1)}%`} />
-                <Result label="간이 (4·2 법칙)" value={`≈${rule}%`} />
+                {/* 🔴 G2 — 4·2 근사의 **전제**를 결과 옆에 적는다. 이 `o` 는 '뜨면 리버까지 승률이
+                    50%를 넘는' 카드 수이고, 4·2 법칙의 원래 전제는 '뜨면 이기는 카드'다. 두 전제가
+                    같지 않으므로 근사값을 단독 수치처럼 두지 않는다(정확값은 바로 아래에 있다). */}
+                <Result label="간이 (4·2 법칙)" value={`≈${rule}%`}
+                  desc={`아웃 ${o}장에 ${onFlop ? '4' : '2'}를 곱한 암산용 근사입니다 — 그 ${o}장은 '뜨면 이기는 카드'가 아니라 '뜨면 리버까지 승률 50% 초과'라 전제가 다릅니다`} />
               </div>
               {onFlop && (
                 <Result label="턴+리버까지 이길 확률" value={`${((heroEquity ?? 0) * 100).toFixed(1)}%`}

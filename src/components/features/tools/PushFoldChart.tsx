@@ -93,7 +93,10 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
           아래 눈금은 데이터가 실제로 있는 깊이(NASH_STACKS)만 — 눈금도 눌러서 바로 갈 수 있다(flex-1: 375px 에서 26px, 320px 에서 21.6px — 주 과녁은 44px 슬라이더다. min-w-[24px] 는 320px 에서 288>259 로 넘쳤다). */}
       <div className="space-y-1" data-testid="pushfold-stack-picker">
         <div className="flex items-baseline justify-between">
-          <p className="text-2xs font-bold text-ink-secondary">내 스택 <span className="font-normal text-ink-muted">(빅블라인드 몇 개분)</span></p>
+          {/* 🔴 G5(2026-09-20) — **언제 기준의 스택인가**를 결과 가까이에 못박는다.
+              푸시·폴드 표는 '앤티·블라인드를 낸 뒤 남은 스택' 기준이라, 그것을 안 적으면 사용자가
+              내기 전 스택으로 읽어 한 칸 위 표를 본다(같은 핸드가 셔브/폴드로 갈리는 경계에서 결과가 뒤집힌다). */}
+          <p className="text-2xs font-bold text-ink-secondary">내 스택 <span className="font-normal text-ink-muted">(앤티·블라인드를 낸 뒤 남은 빅블라인드 개수)</span></p>
           <p className="text-sm font-bold tabular-nums text-ink-primary" aria-live="polite">{stack}<span className="text-2xs text-ink-muted"> bb</span></p>
         </div>
         <input type="range" min={0} max={NASH_STACKS.length - 1} step={1} value={stackIdx}

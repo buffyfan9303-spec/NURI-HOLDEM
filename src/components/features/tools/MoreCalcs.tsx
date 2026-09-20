@@ -153,23 +153,63 @@ export function EndTimeCalc() {
 
 // ── 콤보 계산기 ──────────────────────────────────────────────────────────────
 // 핸드 표기(AA·AKs·AKo·AK)로 가능한 콤보 수 계산. 레인지 합산(쉼표 구분)도 지원.
-function handCombos(raw: string): { label: string; n: number } | null {
+// 🔴 G13(2026-09-20) — 종전에는 **입력 토큰 수를 그냥 더했다.** 실측 반례:
+//   `AKs,AKs` → 8(고유 4) · `AK,AKs` → 20(합집합 16) · `AKs,KAs` → 8(같은 핸드인데 4가 아님) ·
+//   `AKs,XYZ` → 잘못된 토큰을 경고 칩으로만 보이고 **4 를 확정 결과로** 냈다 · `AAo` 도 페어 6으로 받았다.
+//   레인지는 **집합**이라 같은 핸드를 두 번 적어도 콤보가 늘지 않는다.
+// ⚠ `ranges.ts` 의 `buildFreq` 로 대체하지 않는다 — 그쪽은 무접미 표기의 뜻이 달라 결과가 바뀐다.
+const RANK_ORDER = '23456789TJQKA';
+
+/** 한 토큰이 뜻하는 **핸드 단위 집합**. `AK`(무접미)는 기존 UI 계약대로 수딧+오프 둘로 펼친다. */
+// eslint-disable-next-line react-refresh/only-export-components -- 순수 함수를 테스트가 직접 검증한다(저장소 관행: CommentThread.groupThreads)
+export function handUnits(raw: string): { units: string[]; label: string } | null {
   const s = raw.trim().toUpperCase().replace(/10/g, 'T');
   const m = s.match(/^([2-9TJQKA])([2-9TJQKA])(S|O)?$/);
   if (!m) return null;
   const [, a, b, t] = m;
-  if (a === b) return { label: '페어', n: 6 };
-  if (t === 'S') return { label: '수딧', n: 4 };
-  if (t === 'O') return { label: '오프수트', n: 12 };
-  return { label: '수딧+오프', n: 16 };
+  // 페어에 s/o 접미는 존재할 수 없다(`AAo`) — 조용히 6 으로 받으면 오답을 확정하게 된다.
+  if (a === b) return t ? null : { units: [a + b], label: '페어' };
+  // 랭크 순서를 높은 쪽 먼저로 정규화한다 — `AKs` 와 `KAs` 는 같은 핸드다.
+  const [hi, lo] = RANK_ORDER.indexOf(a) >= RANK_ORDER.indexOf(b) ? [a, b] : [b, a];
+  if (t === 'S') return { units: [`${hi}${lo}S`], label: '수딧' };
+  if (t === 'O') return { units: [`${hi}${lo}O`], label: '오프수트' };
+  return { units: [`${hi}${lo}S`, `${hi}${lo}O`], label: '수딧+오프' };
+}
+
+/** 핸드 단위 하나의 콤보 수. 페어 6 · 수딧 4 · 오프수트 12. */
+// eslint-disable-next-line react-refresh/only-export-components -- 위와 같은 이유
+export const unitCombos = (u: string): number => (u.length === 2 ? 6 : u.endsWith('S') ? 4 : 12);
+
+/** 🔴 G13 — 입력 문자열 하나의 **합집합 콤보 수**. 읽을 수 없는 토큰이 하나라도 있으면 `null`(보류). */
+// eslint-disable-next-line react-refresh/only-export-components -- 위와 같은 이유
+export function comboTotal(input: string): number | null {
+  const parts = input.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+  const union = new Set<string>();
+  for (const p of parts) {
+    const u = handUnits(p);
+    if (!u) return null;
+    for (const x of u.units) union.add(x);
+  }
+  return [...union].reduce((sum, u) => sum + unitCombos(u), 0);
 }
 
 export function ComboCalc() {
   const [hand, setHand] = useState('AKs');
   const parts = hand.split(/[,\s]+/).map((p) => p.trim()).filter(Boolean);
-  const parsed = parts.map((p) => ({ p, r: handCombos(p) }));
-  const total = parsed.reduce((sum, x) => sum + (x.r?.n ?? 0), 0);
-  const valid = parsed.some((x) => x.r);
+  const parsed = parts.map((p) => {
+    const u = handUnits(p);
+    return { p, r: u ? { label: u.label, n: u.units.reduce((sum, x) => sum + unitCombos(x), 0), units: u.units } : null };
+  });
+  // 🔴 G13 — **합집합**을 센다. 같은 핸드를 두 번 써도 콤보가 늘지 않는다.
+  const union = new Set<string>();
+  for (const x of parsed) if (x.r) for (const u of x.r.units) union.add(u);
+  const total = [...union].reduce((sum, u) => sum + unitCombos(u), 0);
+  // 🔴 G13 — 잘못된 토큰이 하나라도 있으면 **총계를 확정하지 않는다.**
+  //   경고 칩만 띄우고 숫자를 내면 사용자는 그 숫자를 자기 입력 전체의 답으로 읽는다.
+  const bad = parsed.filter((x) => !x.r).map((x) => x.p);
+  const valid = bad.length === 0 && union.size > 0;
+  const dedup = parsed.reduce((sum, x) => sum + (x.r?.n ?? 0), 0) - total;
 
   return (
     <CalcCard title="콤보 계산기" desc="핸드 표기로 콤보 수 계산 (AA·AKs·AKo / 쉼표로 레인지)">
@@ -182,8 +222,13 @@ export function ComboCalc() {
           className="input w-full text-sm"
         />
       </Field>
-      <Result label="총 콤보 수" value={valid ? `${total} 콤보` : '-'} accent />
-      {valid && parts.length > 1 && (
+      <Result label="총 콤보 수" value={valid ? `${total} 콤보` : '-'} accent
+        desc={bad.length > 0
+          ? `읽을 수 없는 표기가 있어 총계를 내지 않았습니다: ${bad.join(', ')}`
+          : dedup > 0
+            ? `겹치는 핸드 ${dedup}콤보를 뺀 합집합입니다 — 같은 핸드를 두 번 적어도 콤보는 늘지 않습니다`
+            : undefined} />
+      {parts.length > 1 && (
         <ul className="flex flex-wrap gap-1.5">
           {parsed.map((x, i) => (
             <li key={i} className={['rounded-badge border px-2 py-0.5 text-2xs', x.r ? 'border-border-default bg-surface-high text-ink-secondary' : 'border-danger/40 bg-danger/10 text-danger-light'].join(' ')}>

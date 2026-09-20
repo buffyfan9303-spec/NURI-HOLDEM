@@ -37,7 +37,7 @@ import SlidingPill from '../atoms/SlidingPill';
 import { useIsDesktop } from '../../lib/responsive';
 import { BOARD_FILTER_CATEGORIES } from '../../lib/postCategory';
 import { relativeTime } from '../../lib/relativeTime';
-import { markProgrammaticScroll } from '../../lib/useScrollY';
+import { markProgrammaticScroll, notifyScrollNow } from '../../lib/useScrollY';
 import { restoreScrollTop } from '../../lib/headerShrink';
 
 interface CommunityTabProps {
@@ -205,6 +205,11 @@ function CommunityTab({
       // 이 점프는 손짓이 아니다 — 알리지 않으면 하단 탭바 자동숨김이 '확 긁었다'로 읽어 깜빡인다.
       markProgrammaticScroll();
       window.scrollTo({ top: restoreScrollTop(pending.restore, headerH(), maxScroll), behavior: 'instant' as ScrollBehavior });
+      // 🔴 2026-09-20 — **옮긴 값을 직접 알린다.** 종전에는 `markProgrammaticScroll()` 만 부르고
+      //   값을 안 알려, 헤더가 이 이동을 브라우저 스크롤로만 알게 됐다(한 프레임 늦거나, 앱이
+      //   '프로그램 스크롤 창' 안의 브라우저 이벤트를 무시하면 아예 못 봤다).
+      //   같은 프레임에 헤더 상태가 확정돼야 복원 위치가 헤더 높이 변화로 밀리지 않는다.
+      notifyScrollNow(window.scrollY);
     } else if (pending.keep > maxScroll) {
       // 첫 방문인데 새 섹션이 짧다 — 스크롤은 부르지 않는다. 브라우저가 maxScroll 로 클램프한 점프만 손짓이 아님을 알린다.
       markProgrammaticScroll();

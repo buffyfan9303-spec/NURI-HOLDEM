@@ -422,9 +422,14 @@ function MathBlock({ math, boardCount, meta }: { math: SpotEvaluation['math']; b
   const half = meta ? equityHalfWidthPct(meta) : null;   // 95% 구간 반폭(%p) — 오차를 숨기지 않는다(리드 결정)
   const eq = math.heroEquityPct;
   const vs = meta && meta.villains > 1 ? ` · 상대 ${meta.villains}명` : '';
+  // 🔴 G1(2026-09-20) — `null` 은 **0 이 아니라 '계산하지 않았다'** 는 뜻이다(막힌 원장·사이드팟).
+  //   종전에는 `math.potBb` 를 그대로 문자열에 끼워 `nullBB` 가 나가거나, blocker 가 있는데도
+  //   팟·콜·필요 승률이 그려져 "입력에 고칠 점이 있습니다" 옆에 그럴듯한 숫자가 서 있었다.
+  //   숫자가 없으면 **줄을 만들지 않고**, 대신 왜 없는지는 리포트의 notes 가 말한다.
   const rows: [string, string, string?][] = [
-    ['팟', `${math.potBb}BB`],
-    ...(math.toCallBb > 0 ? [['콜 금액', `${math.toCallBb}BB`] as [string, string]] : []),
+    ...(math.potBb !== null ? [['팟', `${math.potBb}BB`] as [string, string]] : []),
+    ...(math.toCallBb !== null && math.toCallBb > 0 ? [['콜 금액', `${math.toCallBb}BB`] as [string, string]] : []),
+    ...(math.uncalledBb > 0 ? [['돌려받는 돈', `${math.uncalledBb}BB`, '유효 스택을 넘어 아무도 콜할 수 없는 금액 — 팟에서 뺐습니다'] as [string, string, string]] : []),
     ...(math.neededEquityPct !== null ? [['필요 승률', `${math.neededEquityPct}%`, '이 승률보다 높아야 콜이 손해가 아닙니다'] as [string, string, string]] : []),
     ...(eq !== null ? [sampled
       ? [`내 승률(추정)${vs}`, `약 ${Math.round(eq)}%${half ? ` ±${half}%p` : ''}`,

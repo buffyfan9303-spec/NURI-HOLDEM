@@ -378,6 +378,25 @@ describe('NURI SPOT — GTO 홈 통합', () => {
     });
   });
 
+  // 🔴 G14(2026-09-20) — 카탈로그가 말하는 항목 수가 **데이터와 같아야 한다.**
+  //   `glossary.data.ts` 는 79개인데 카탈로그 설명·검색 키워드는 "74개" 였다. 화면에 적는 수치는
+  //   사실이어야 한다(§6-1) — 그리고 사람이 손으로 맞추면 또 어긋나므로 계약으로 묶는다.
+  //   ⚠ 숫자를 세려고 새 런타임 로더를 만들지 않는다. 원문에서 항목 수를 직접 센다
+  //     (`gtoToolCount.contract.test.ts` 와 같은 조리법 — lazy 청크를 홈 번들로 끌어오지 않는다).
+  it('🔴 용어사전 카탈로그 카피의 개수가 실제 데이터 항목 수와 같다', () => {
+    const GLOSSARY = readFileSync(join(ROOT, 'src/components/features/tools/glossary.data.ts'), 'utf-8');
+    // 항목 하나는 `{ term: '...'` 로 시작한다.
+    const n = (GLOSSARY.match(/\{\s*term:\s*'/g) ?? []).length;
+    expect(n, 'GLOSSARY_TERMS 를 못 읽었다 — 파싱 방식이 깨졌다').toBeGreaterThan(50);
+    const row = TOOLS_PANEL.split('\n').find((l) => l.includes("{ key: 'glossary',"));
+    expect(row, '카탈로그의 glossary 줄을 못 찾았다').toBeTruthy();
+    const said = [...row!.matchAll(/(\d+)개/g)].map((m) => Number(m[1]));
+    expect(said.length, '카탈로그 카피에 개수 표기가 없다 — 이 검사가 빈 검사가 됐다').toBeGreaterThan(0);
+    for (const v of said) {
+      expect(v, `카탈로그는 ${v}개라고 하는데 데이터는 ${n}개다 — 둘 중 하나가 거짓이다`).toBe(n);
+    }
+  });
+
   it('스팟 저장·공유는 전용 API 를 쓴다 — 게시글 재조회 경로가 없다', () => {
     const SPOTS_API = readFileSync(join(ROOT, 'src/api/spots.ts'), 'utf-8');
     expect(SPOTS_API).toContain('share_spot_post');

@@ -164,6 +164,8 @@ export function RangeMatrix() {
   const [a, setA] = useState(2); // 와이드 오픈(BTN)
   const [b, setB] = useState(4); // BB 수비콜
   const [, setTick] = useState(0); // 캐시 갱신 리렌더 트리거
+  /** 🔴 G9 — 엔진이 실제로 집계한 표본 수의 범위. 설정 횟수(MATRIX_ITER)와 다를 수 있다. */
+  const [accepted, setAccepted] = useState<{ min: number; max: number } | null>(null);
 
   // 대각선은 대칭이라 정확히 50, 하삼각은 상삼각의 보수(100-x) — 15쌍만 계산하면 된다.
   const getEq = (i: number, j: number): number | null => {
@@ -199,6 +201,12 @@ export function RangeMatrix() {
         //   그때도 hero 는 0.5 다(호출부 하위 호환). `kind` 를 안 보면 **'반반'이라는 거짓 숫자**가 표에 박힌다.
         //   지금 프리셋 조합에는 걸리는 것이 없지만, 프리셋이 바뀌면 조용히 회귀한다 — 여기서 막는다.
         if (r.kind === 'no_legal_combinations') { step(); return; }
+        // 🔴 G9(2026-09-20) — **설정 횟수와 실제 집계 표본은 다르다.** 카드가 겹치는 쌍은 버려지므로
+        //   `accepted` 가 `MATRIX_ITER` 보다 작을 수 있다. 화면이 오차를 말하려면 이 수를 알아야 한다.
+        if (typeof r.accepted === 'number') {
+          const n = r.accepted;
+          setAccepted((p) => (p ? { min: Math.min(p.min, n), max: Math.max(p.max, n) } : { min: n, max: n }));
+        }
         eqCache.set(key, r.hero * 100);
         setTick((t) => t + 1);
         step();
@@ -279,7 +287,21 @@ export function RangeMatrix() {
           </tbody>
         </table>
       </div>
-      <p className="text-2xs text-ink-muted">※ 몬테카를로 추정(쌍마다 {MATRIX_ITER.toLocaleString()}회, ±1%p 오차). 레인지가 넓을수록 보드 의존도가 커집니다.</p>
+      {/* 🔴 G9(2026-09-20) — "±1%p 오차" 라는 **보증 문구를 뺐다.**
+          그 수치는 `n=2500` · 서로 독립인 베르누이 · `p=0.5` 라는 **가정**에서 나온 1 표준오차이고
+          (양측 95% 는 약 ±1.96%p 다), 이 화면의 실제 값은 그 가정을 셋 다 만족하지 않는다:
+            ① 지분이 승 1 · 무 0.5 · 패 0 이라 0/1 이항 비율이 아니다(NIST 의 비율 구간을 그대로 못 붙인다).
+            ② 카드가 겹치는 쌍은 버려져 **실제 집계 표본이 설정 횟수보다 적다**(아래 실측 수).
+            ③ 같은 런아웃을 공유하는 표본 사이에 의존이 있다.
+          그래서 **방법과 실제 표본 수만** 적는다 — 구간 추정은 조건을 보장할 수 있을 때만 붙인다. */}
+      <p className="text-2xs leading-relaxed text-ink-muted">
+        ※ 몬테카를로 추정 — 쌍마다 {MATRIX_ITER.toLocaleString()}회로 설정했고
+        {accepted
+          ? ` 실제 집계 표본은 ${accepted.min.toLocaleString()}${accepted.max !== accepted.min ? `~${accepted.max.toLocaleString()}` : ''}개입니다.`
+          : ' 카드가 겹치는 쌍은 집계에서 빠집니다.'}
+        {' '}오차 범위는 표시하지 않습니다(무승부를 0.5로 세는 지분이라 이항 비율 구간을 그대로 쓸 수 없습니다).
+        레인지가 넓을수록 보드 의존도가 커집니다.
+      </p>
       {/* 중복 인지 제거 — 특정 핸드 vs 레인지는 GTO 핸드 분석으로(딥링크) */}
       <a href="#tool=gto" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
         특정 핸드 vs 레인지는 「GTO 핸드 분석」에서 →

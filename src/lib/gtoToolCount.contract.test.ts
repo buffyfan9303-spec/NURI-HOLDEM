@@ -28,7 +28,14 @@ describe('홈의 "무료 GTO 도구 N개" 는 사실이어야 한다', () => {
     const calendar = countKeys('CALENDAR_TOOL_KEYS');
     expect(store, 'STORE_TOOL_KEYS 를 못 읽었다').toBeGreaterThan(0);
     expect(calendar, 'CALENDAR_TOOL_KEYS 를 못 읽었다').toBeGreaterThan(0);
-    const hiddenExtra = /HIDDEN_SET[^;]*'drill'/.test(SRC) ? 1 : 0;
+    // 🔴 G6(2026-09-20) — 종전에는 `'drill'` **한 단어만** 찾아 1 로 셌다. 그런데 2026-09-18 에
+    //   `'deal'`(ICM 계산기로 병합)이 같은 `HIDDEN_SET` 에 더해졌는데도 이 식은 여전히 1 이라,
+    //   실제로는 21개인 카탈로그를 22개라고 말하는 상태가 **이 테스트를 초록으로 통과**했다.
+    //   이름을 박아 세지 말고 **그 집합의 리터럴 키를 전부** 읽는다 — 다음에 하나 더 숨겨도 따라온다.
+    const hidden = SRC.match(/HIDDEN_SET\s*=\s*new Set<ToolKey>\(\[([^\]]*)\]\)/);
+    expect(hidden, 'HIDDEN_SET 을 못 읽었다 — 선언 형식이 바뀌었는지 확인하라').not.toBeNull();
+    const hiddenExtra = (hidden![1].match(/'[a-z-]+'/g) ?? []).length;
+    expect(hiddenExtra, 'HIDDEN_SET 의 추가 숨김 키를 하나도 못 읽었다 — 이 검사가 빈 검사가 됐다').toBeGreaterThan(0);
 
     const visible = total - store - calendar - hiddenExtra;
     expect(GTO_TOOL_COUNT,

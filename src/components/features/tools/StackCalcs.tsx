@@ -8,7 +8,8 @@ import Term from './Term';
 export function SprCalc() {
   const [stack, setStack] = useState(100000);
   const [pot, setPot] = useState(20000);
-  const spr = pot > 0 ? stack / pot : 0;
+  // 🔴 G7 — 팟 0 에서는 나눗셈 값을 내지 않는다(Infinity 금지). 유한·비음수만 계산한다.
+  const spr = Number.isFinite(stack) && Number.isFinite(pot) && stack >= 0 && pot > 0 ? stack / pot : 0;
   const guide = spr <= 0 ? '-'
     : spr < 3 ? '커밋 구간 · 강한 탑페어+ 면 올인 각오'
     : spr < 6 ? '중간 · 오버페어·강한 드로우로 스택 투입 고려'
@@ -22,8 +23,13 @@ export function SprCalc() {
         <p className="text-2xs text-ink-muted mt-0.5">유효 스택 ÷ 팟 = 커밋 판단 기준</p>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <Field label="유효 스택"><NumIn value={stack} onChange={setStack} /></Field>
-        <Field label="현재 팟"><NumIn value={pot} onChange={setPot} /></Field>
+        {/* 🔴 G7(2026-09-20) — `decimal` 을 준다. 기본 `NumIn` 은 `parseInt` 라 **소수를 잘라 버린다**:
+            스택 2.5 / 팟 1 을 넣으면 화면이 2 대 1 로 계산했다(실측). SPR 은 비율이라 2.5 · 0.5 같은
+            입력이 정상이다.
+            ⚠ 칩 개수처럼 정수만 뜻이 있는 입력(M존의 스택·블라인드·앤티)은 그대로 둔다 —
+              `decimal` 을 전역으로 켜면 '칩 1.5개' 같은 무의미한 입력을 허용하게 된다. */}
+        <Field label="유효 스택"><NumIn value={stack} onChange={setStack} decimal /></Field>
+        <Field label="현재 팟"><NumIn value={pot} onChange={setPot} decimal /></Field>
       </div>
       <Result label="SPR" value={spr ? spr.toFixed(1) : '-'} accent />
       <p className="text-2xs leading-relaxed text-ink-muted">{guide}</p>

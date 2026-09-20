@@ -286,6 +286,41 @@ export function validateSpot(s: SpotReview): SpotIssue[] {
     }
   });
 
+  // 🔴 G1(2026-09-20) — **히어로의 누적 투입액**이 유효 스택을 넘을 수 없다.
+  //
+  //  종전에는 액션 **한 번의 증분**만 `effectiveBb` 와 비교했다. 그래서 BTN 100BB 가 `raise +80`
+  //  한 뒤 플랍에 `bet +30`(누적 110) 을 넣어도 `validateSpot` 이 빈 배열을 돌려주고, 그 위에서
+  //  팟 190.5·콜 30·필요 지분 13.6054% 라는 **그럴듯한 거짓 수치**가 그대로 화면에 나갔다.
+  //
+  //  ⚠ 상대(빌런)에게는 같은 차단을 걸지 않는다. `effectiveBb` 는 **두 사람 중 작은 쪽**이라
+  //    상대가 더 깊으면 그 초과 베팅 자체는 합법이다(NLHE 는 자기 칩 전부까지 벳 가능).
+  //    넘은 금액은 아무도 콜할 수 없어 돌려받을 뿐이다(TDA Rule 16B/67A) — 그 처리는
+  //    `spotEvaluate.ts` 의 `contestableMath` 가 팟에서 덜어내는 것으로 한다. 여기서 막으면
+  //    합법적인 오버벳 기록까지 '입력 오류' 가 된다.
+  //
+  //  ⚠ 히어로는 정의상 `effectiveBb` 를 넘을 수 없다 — 유효 스택이 두 사람 중 작은 쪽이므로
+  //    히어로의 실제 스택은 언제나 `effectiveBb` 이상이지만, 넘겨 봐야 상대가 커버하지 못한다.
+  //    즉 "히어로가 100 을 넘게 넣었다" 는 원장은 어떤 스택 조합으로도 성립하지 않는다.
+  if (finite(s.effectiveBb) && s.effectiveBb > 0) {
+    let heroIn = s.heroPos === 'BB' ? 1 + (finite(s.anteBb) ? s.anteBb : 0)
+      : s.heroPos === 'SB' ? (finite(s.sbBb) ? s.sbBb : 0) : 0;
+    for (const a of s.actions) {
+      if (!SIZED.has(a.type)) continue;
+      const pos = a.actor === 'hero' ? s.heroPos : (a.pos ?? s.villainPos);
+      if (pos !== s.heroPos) continue;
+      heroIn += finite(a.sizeBb) ? (a.sizeBb as number) : 0;
+    }
+    if (s.heroAction && SIZED.has(s.heroAction) && finite(s.heroActionSizeBb)) {
+      heroIn += s.heroActionSizeBb as number;
+    }
+    if (heroIn > s.effectiveBb + 1e-9) {
+      out.push({
+        field: 'actions', level: 'blocker',
+        message: `내가 넣은 금액의 합(${Math.round(heroIn * 100) / 100}BB)이 유효 스택(${s.effectiveBb}BB)을 넘습니다 — 이 원장은 성립하지 않습니다.`,
+      });
+    }
+  }
+
   // 히어로 선택 액션
   if (s.heroAction && SIZED.has(s.heroAction)) {
     if (!finite(s.heroActionSizeBb) || (s.heroActionSizeBb as number) < 0) {

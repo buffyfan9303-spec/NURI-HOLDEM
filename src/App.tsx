@@ -283,9 +283,29 @@ const AppHeader = memo(function AppHeader({
   // MO-3: 높이 전환이 즉시가 되면서 단일 임계값(48)은 그 부근 미세 스크롤에서
   // 축소↔복원이 덜덜 떨린다 → 히스테리시스 밴드(내릴 때 56 넘어야 축소, 올릴 때 40 밑이어야 복원)
   const [shrunk, setShrunk] = useState(false);
-  useScrollY(useCallback((y: number) => {
+  useScrollY(useCallback((y: number, fromApp: boolean) => {
+    // 🔴 H1 후속(2026-09-20 오너 실기기 제보 "아직도 메뉴 이동시 줄었다가 늘어나")
+    //
+    //  왜 하네스에서 못 잡았나: `mobile-chromium`(Pixel 7)에는 **주소창 접힘이 없다**(CLAUDE.md).
+    //  실기기(삼성·하단 주소창)는 스크롤에 따라 툴바가 열리고 닫히며 **진짜 scroll 이벤트**를 만든다.
+    //  탭을 옮기는 순간 앱은 `scrollTo(0)` 로 맨 위를 강제하는데, 그 직후 툴바가 다시 열리면서
+    //  레이아웃 뷰포트가 바뀌고 브라우저가 스크롤을 클램프한다 → `y > 56` 한 프레임 → 헤더가 접힌다
+    //  → 곧 0 이 도착해 다시 펴진다. 그것이 "줄었다가 늘어나" 다.
+    //
+    //  근거는 이 파일 안에 이미 있었다: **하단 탭바**는 같은 부류를 이미 막고 있다(아래 자동숨김 핸들러의
+    //  `if (isProgrammaticScroll()) …` 와 "고무줄·툴바 개폐 클램프 흡수" 주석). 헤더만 그 방어가 없었다.
+    //  같은 처방을 여기에도 준다 — 새 장치를 만들지 않고 있던 표식을 쓴다.
+    //
+    //  ⚠ **앱이 직접 보낸 값(`fromApp`)은 언제나 통과시킨다.** 처음에는 `y > 0` 이면 무시하도록
+    //    썼는데, 그러면 커뮤니티 하위탭의 **위치 복원**(0 이 아닌 y 로 이동)까지 막혀 헤더가 접힌 채
+    //    남고 문서가 12.75px 밀렸다 — `rank-scroll-slots` 가 30 → 17 로 잡아냈다(단독 재실행에서도 실패).
+    //    구별해야 하는 것은 '값이 0인가'가 아니라 **누가 보냈는가**다.
+    //  ⚠ 클램프도 탭바와 같은 식으로 흡수한다 — 고무줄 오버스크롤의 음수/초과 y 로 판정하지 않는다.
+    if (!fromApp && isProgrammaticScroll()) return;
+    const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const cy = Math.min(Math.max(y, 0), max);
     // 판정은 lib/headerShrink 한 벌 — CommunityTab 의 섹션 스크롤 복원이 같은 판정으로 헤더 뒤집힘을 예측한다.
-    setShrunk((prev) => nextHeaderShrunk(prev, y));
+    setShrunk((prev) => nextHeaderShrunk(prev, cy));
   }, []));
   // 헤더 아래 매달린 sticky 들이 **같은 높이를 보게** 한다(`--header-now`, src/index.css 머리말).
   // 안 하면 헤더만 줄고 서브탭·장부 요약 바·알림 패널은 옛 높이에 남아 3.25px 틈이 생긴다(2026-09-19 실측).
@@ -1092,7 +1112,12 @@ export default function App() {
     //   ⚠ 새 effect 를 하나 더 달아 순서를 갈라 놓지 않는다 — 한 프레임 안에서 끝나야 한다.
     markProgrammaticScroll();
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-    notifyScrollNow(window.scrollY);
+    // 🔴 2026-09-20 독립 검증 F2 — **`window.scrollY` 를 다시 읽지 않는다.**
+    //   바로 윗줄이 `top: 0` 을 확정했으므로 값은 0 이다. 이 훅은 `useLayoutEffect`(커밋 직후,
+    //   레이아웃이 가장 오염된 시점)라 여기서 `scrollY` 를 읽으면 **문서 전체 레이아웃이 강제**된다 —
+    //   이 파일 :678-688 이 정확히 그 패턴을 없앤 기록이다(모바일 콜드 마운트 207ms · 탭 전환 회당 27ms).
+    //   오너가 "눌림" 을 지적한 바로 그 프레임이라 비용을 되돌려 놓을 이유가 없다.
+    notifyScrollNow(0);
   }, [activeTab]);
 
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)

@@ -66,10 +66,15 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
 export interface ActionMix { fold: number; call: number; raise: number }
 
 export interface MathFacts {
-  /** 결정 지점의 팟(BB) — 액션 합산값 */
-  potBb: number;
-  /** 콜에 필요한 금액(BB). 앞에 벳/레이즈가 없으면 0 */
-  toCallBb: number;
+  /** 결정 지점의 **다툴 수 있는** 팟(BB) — 유효 스택을 넘어 돌려받을 돈은 뺀다.
+   *  🔴 G1: 개별 스택을 모르는 멀티웨이 사이드팟이면 `null`(수치를 지어내지 않는다). */
+  potBb: number | null;
+  /** 콜에 필요한 금액(BB) — 히어로 잔여(`effectiveBb − 누적 투입`)를 넘지 않는다.
+   *  앞에 벳/레이즈가 없으면 0, 판정 불가면 `null`. */
+  toCallBb: number | null;
+  /** 🔴 G1: 유효 스택을 넘어 **아무도 콜할 수 없어 돌려받는** 금액(BB). 없으면 0.
+   *  화면이 "왜 팟이 원장 합계보다 작은가" 를 설명할 수 있어야 한다. */
+  uncalledBb: number;
   /** 팟오즈 — 콜 금액이 (팟+콜) 에서 차지하는 비율 % */
   potOddsPct: number | null;
   /** 손익분기 승률 % — 이 승률보다 높으면 콜이 이득 */
@@ -265,6 +270,27 @@ export function investedByPos(s: SpotReview, pos: SpotPosition): number {
     invested += Number.isFinite(a.sizeBb) ? (a.sizeBb as number) : 0;
   }
   return invested;
+}
+
+/**
+ * 🔴 G1(2026-09-20) — 이 사람이 **이 핸드에 지금까지 넣은 총액**(모든 스트리트 + 블라인드 + BB앤티).
+ *
+ * `investedByPos` 는 **이번 스트리트**만 센다(콜 금액 계산용). 유효 스택을 넘겼는지는
+ * 핸드 전체 누적으로만 알 수 있다 — 그래서 별도 함수다. 둘을 합치면 콜 금액이 깨진다.
+ *
+ * ⚠ BB앤티는 `potBb`(spot.ts)가 `s.anteBb` 를 **총액 한 번**만 더한다(인원을 곱하지 않는다).
+ *   그 규약을 그대로 따라 BB 자리에 귀속시킨다 — 두 곳의 정의가 어긋나면 팟이 안 맞는다.
+ */
+export function investedTotalByPos(s: SpotReview, pos: SpotPosition): number {
+  let v = 0;
+  if (pos === 'BB') v += 1 + (Number.isFinite(s.anteBb) ? s.anteBb : 0);
+  else if (pos === 'SB') v += Number.isFinite(s.sbBb) ? s.sbBb : 0;
+  for (const a of s.actions) {
+    if (!SIZED_ACTION.has(a.type)) continue;
+    if (actorPos(s, a) !== pos) continue;
+    v += Number.isFinite(a.sizeBb) ? (a.sizeBb as number) : 0;
+  }
+  return Math.round(v * 100) / 100;
 }
 
 /**
@@ -503,7 +529,15 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   if (idx < 0) return null;
 
   const exact = NASH_STACKS.find((v) => Math.abs(v - s.effectiveBb) < 0.01);
-  const stack = exact ?? NASH_STACKS.find((v) => Math.abs(v - s.effectiveBb) <= 1);
+  // 🔴 G4(2026-09-20) — `find` 는 **배열 순서상 처음** 조건을 만족하는 값을 준다. `NASH_STACKS` 가
+  //   오름차순이라 9.8BB 는 |9−9.8|=0.8 ≤1 인 **9BB** 표를 골랐다. 10BB(|10−9.8|=0.2)가 더 가깝다.
+  //   ±1BB 허용 범위와 "보간하지 않는다" 는 원칙은 그대로 두고, 그 안에서 **가장 가까운** 표를 고른다.
+  //   동률(정확히 중간, 예 9.5BB)은 **작은 쪽**으로 고정한다 — 규칙이 없으면 배열 순서에 따라
+  //   조용히 바뀌고, 낮은 스택 표가 더 보수적(셔브 빈도가 낮다)이라 안전한 쪽이다.
+  const near = NASH_STACKS
+    .filter((v) => Math.abs(v - s.effectiveBb) <= 1)
+    .sort((a, b) => Math.abs(a - s.effectiveBb) - Math.abs(b - s.effectiveBb) || a - b)[0];
+  const stack = exact ?? near;
   if (stack === undefined) return null;
 
   // 🔴 격리 구간(빅 앤티 k≥2 의 2~10BB · 2026-09-19 재산출로 4~6BB 에서 넓어졌다)은 표 값을 못 믿는다 —
@@ -541,17 +575,58 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
 
 // ── 수학 ──────────────────────────────────────────────────────────────────────
 
+/**
+ * 🔴 G1(2026-09-20) — **다툴 수 있는 팟과 실제로 낼 수 있는 콜.**
+ *
+ * 무엇이 틀렸었나(실측 재현): BTN Hero 100BB `raise +80` → BB Villain `call +79`(기납 1, 총 80)
+ * → 플랍 Villain `bet +30` 원장에서 `validateSpot=[]`·`potBb=190.5`·`콜=30`·필요 지분 **13.6054%**
+ * 가 그대로 나왔다. Hero 는 총 80 을 넣어 **20 밖에 안 남았는데** 30 을 콜해야 하는 것처럼 보였다.
+ *
+ * 왜 "30 베팅"을 불법으로 막으면 안 되나: `effectiveBb` 는 **두 사람 중 작은 쪽**이다. 상대가
+ * 더 깊으면(예: 150BB) 상대의 30 베팅 자체는 합법이다(NLHE 는 자기 칩 전부까지 벳 가능).
+ * 다만 `effectiveBb` 를 넘는 부분은 **아무도 콜할 수 없어 돌려받는다**(TDA Rule 16B/67A 미매칭 반환).
+ * 그래서 액션을 막는 대신 **다툴 수 있는 팟에서 덜어낸다.**
+ *
+ * 계약:
+ *  · 각 상대의 누적 투입액 중 `effectiveBb` 초과분은 `uncalled` 로 빼고 팟에서 제외한다.
+ *  · 히어로의 콜은 `effectiveBb − 히어로 누적` 이상 나올 수 없다.
+ *  · **멀티웨이에서 상한이 실제로 걸리면 사이드팟 모델이 필요하다** — 개별 시작 스택이 스키마에
+ *    없으므로 그 경우 팟오즈를 내지 않는다(수치를 지어내지 않는다).
+ *
+ * 위 반례의 결과: 팟 190.5 − 미매칭 10 = **180.5**, 콜 min(30, 100−80) = **20**,
+ * 필요 지분 20/(180.5+20) = **9.9751%**.
+ */
+function contestableMath(s: SpotReview): { pot: number; toCall: number; uncalled: number; blocked: boolean } {
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const eff = Number.isFinite(s.effectiveBb) && s.effectiveBb > 0 ? s.effectiveBb : Infinity;
+  const villainSeats = [...new Set([s.villainPos, ...s.extra.map((v) => v.pos)])];
+  const uncalled = villainSeats.reduce((sum, p) => sum + Math.max(0, investedTotalByPos(s, p) - eff), 0);
+  const heroIn = investedTotalByPos(s, s.heroPos);
+  const room = Math.max(0, eff - heroIn);
+  const raw = amountToCall(s);
+  const toCall = Math.min(raw, room);
+  // 사이드팟이 생기는 멀티웨이는 개별 스택 없이 정확히 못 나눈다 → 수치 보류.
+  const blocked = s.extra.length > 0 && (uncalled > 1e-9 || toCall + 1e-9 < raw);
+  return { pot: r2(potBb(s) - uncalled), toCall: r2(toCall), uncalled: r2(uncalled), blocked };
+}
+
 function mathFacts(s: SpotReview, heroEquityPct: number | null): MathFacts {
-  const pot = potBb(s);
+  const c = contestableMath(s);
+  if (c.blocked) {
+    // 팟 자체도 사이드팟으로 갈리므로 숫자를 내지 않는다 — 비우는 것이 정직하다.
+    return { potBb: null, toCallBb: null, uncalledBb: c.uncalled, potOddsPct: null, neededEquityPct: null, heroEquityPct };
+  }
+  const pot = c.pot;
   // 빌런의 레이즈는 **총액**이라 히어로가 이미 낸 돈을 빼야 실제로 더 넣는 돈이 된다.
-  const toCall = amountToCall(s);
+  const toCall = c.toCall;
   if (toCall <= 0) {
-    return { potBb: pot, toCallBb: 0, potOddsPct: null, neededEquityPct: null, heroEquityPct };
+    return { potBb: pot, toCallBb: 0, uncalledBb: c.uncalled, potOddsPct: null, neededEquityPct: null, heroEquityPct };
   }
   const needed = toCall / (pot + toCall);
   return {
     potBb: pot,
     toCallBb: toCall,
+    uncalledBb: c.uncalled,
     potOddsPct: pct(needed),
     neededEquityPct: pct(needed),
     heroEquityPct,
@@ -595,8 +670,14 @@ export function evaluateSpot(s: SpotReview, options: EvaluateOptions = {}): Spot
   const base = { datasetVersion: DATASET_VERSION, issues: warns, math };
 
   if (hasBlocker(issues)) {
+    // 🔴 G1(2026-09-20) — 막힌 원장에서는 **수치를 내보내지 않는다.**
+    //   종전에는 blocker 가 있어도 `mathFacts` 가 그대로 실려 `SpotReport` 가 팟·콜·필요 승률을
+    //   그렸다. 사용자는 "입력에 고칠 점이 있다" 는 문장 옆에서 그럴듯한 숫자를 읽고 그것을 믿는다.
+    //   실패를 수치처럼 노출하지 않는다 — 입력한 스팟 자체는 그대로 남으므로 잃는 정보는 없다.
     return {
-      ...base, kind: 'unsupported', verdict: 'out_of_scope',
+      ...base,
+      math: { potBb: null, toCallBb: null, uncalledBb: math.uncalledBb, potOddsPct: null, neededEquityPct: null, heroEquityPct },
+      kind: 'unsupported', verdict: 'out_of_scope',
       reason: '입력에 고칠 점이 있어 분석하지 않았습니다.',
       notes: issues.filter((i) => i.level === 'blocker').map((i) => i.message),
     };
@@ -660,8 +741,15 @@ export function evaluateSpot(s: SpotReview, options: EvaluateOptions = {}): Spot
   } else {
     notes.push('이 앱에는 검증된 포스트플랍 솔버 데이터가 없습니다 — 에퀴티·팟오즈만 계산했습니다.');
   }
-  if (math.toCallBb > 0) {
+  // 🔴 G1: `toCallBb` 가 `null` 이면 **판정 불가**(멀티웨이 사이드팟)다 — 0 과 뜻이 다르다.
+  //   `null > 0` 은 false 라 예전 코드였다면 "앞에 벳이 없다" 는 **거짓 문장**이 나갔을 것이다.
+  if (math.toCallBb === null) {
+    notes.push('상대가 둘 이상인데 유효 스택을 넘는 베팅이 있어 사이드팟이 갈립니다 — 개별 시작 스택이 없어 팟오즈를 계산하지 않았습니다.');
+  } else if (math.toCallBb > 0) {
     notes.push(`${math.toCallBb}BB 를 콜하려면 승률이 ${math.neededEquityPct}% 보다 높아야 손해가 아닙니다.`);
+    if (math.uncalledBb > 0) {
+      notes.push(`상대의 베팅 중 ${math.uncalledBb}BB 는 유효 스택(${s.effectiveBb}BB)을 넘어 아무도 콜할 수 없습니다 — 그 돈은 돌려받으므로 팟에서 뺐습니다.`);
+    }
   } else {
     notes.push('앞에 벳이 없어 팟오즈는 계산하지 않았습니다.');
   }

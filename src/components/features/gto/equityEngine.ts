@@ -83,6 +83,58 @@ function best7(seven: NCard[]): number {
   return best;
 }
 
+/**
+ * 🔴 G2(2026-09-20) — **5·6·7장 공용** 최고 5장 점수.
+ *
+ * 왜 필요한가: `best7` 의 `COMBOS5` 는 인덱스 0~6 **고정**이다. 플랍의 현재 패는 2+3=5장,
+ * 턴은 2+4=6장이라 그대로 넘기면 없는 인덱스를 읽는다. 그런데 "지금 누가 앞서는가" 는
+ * **미래 지분과 전혀 다른 질문**이고(아래 `currentStanding` 주석의 반례), 그 답을 내려면
+ * 5·6장을 평가할 수 있어야 한다.
+ *
+ * ⚠ 점수 정본은 `score5` 하나다 — 새 족보 로직을 만들지 않는다(두 벌이면 한쪽만 고쳐지는 날이 온다).
+ *   5장이면 그대로, 6·7장이면 모든 5장 조합 중 최대를 쓴다.
+ */
+function bestOf(cs: NCard[]): number {
+  const n = cs.length;
+  if (n < 5 || n > 7) return -1;
+  if (n === 5) return score5(cs);
+  let best = -1;
+  for (let a = 0; a < n; a += 1)
+    for (let b = a + 1; b < n; b += 1)
+      for (let c = b + 1; c < n; c += 1)
+        for (let d = c + 1; d < n; d += 1)
+          for (let e = d + 1; e < n; e += 1) {
+            const s = score5([cs[a], cs[b], cs[c], cs[d], cs[e]]);
+            if (s > best) best = s;
+          }
+  return best;
+}
+
+/** 지금 보드까지의 **현재 패 우열**. 미래 지분(`computeEquity`)과 다른 값이다. */
+export type Standing = 'ahead' | 'behind' | 'tied';
+
+/**
+ * 🔴 G2 — **지금 이 순간** 누구의 패가 강한가. 남은 카드를 한 장도 보지 않는다.
+ *
+ * 무엇이 틀렸었나(외부 평가기 `phevaluator==0.6.0` 로 독립 재현):
+ *   A♥K♥ 대 9♣9♦, 플랍 Q♥J♠2♥ — **현재는 9 페어가 앞선다**(랭크 6193 vs 4533, 낮을수록 강함).
+ *   그런데 리버까지의 지분은 히어로 **63.23%**(990 런아웃 중 626승·0무·364패)다.
+ *   화면은 `behind = eq.hero < 0.5` 로 판단해 "이미 내가 앞서 있습니다" 라고 **거짓 안내**했다.
+ *   반대 방향 반례도 있다: 3♦8♦ 대 6♠7♣, 2♦J♣K♣2♣ — **현재는 히어로가 앞서는데**(6032 vs 6033)
+ *   리버 44장 전수 지분은 **45.45%**(10승·20무·14패)다.
+ *
+ * 즉 '앞선다'와 '이길 확률이 높다'는 서로 다른 축이다. 둘을 한 숫자로 합치면 둘 다 거짓말이 된다.
+ */
+export function currentStanding(hero: [Card, Card], villain: [Card, Card], board: Card[]): Standing | null {
+  if (board.length < 3 || board.length > 5) return null;
+  if (hasDuplicateCards(hero, villain, board)) return null;
+  const b = board.map(toN);
+  const h = bestOf([...hero.map(toN), ...b]);
+  const v = bestOf([...villain.map(toN), ...b]);
+  if (h < 0 || v < 0) return null;
+  return h > v ? 'ahead' : h < v ? 'behind' : 'tied';
+}
+
 /** 지정 키를 제외한 잔여 덱 생성 */
 function buildDeck(excludeKeys: ReadonlySet<number>): NCard[] {
   const deck: NCard[] = [];
@@ -434,10 +486,19 @@ export function computeEquityVsRange(
 export interface OutsResult {
   /** 'river' = 리버 1장 남음(히트=승리), 'turn' = 턴 1장 남음(히트=역전 우세) */
   next: 'turn' | 'river';
-  outs: number;   // 유리 전환 카드 수(클린 아웃)
+  /** **리버까지의 지분이 50%를 넘게 되는** 카드 수. 플랍에서는 "이 카드가 뜨면 유리해진다" 이지
+   *  "그 순간 앞선다" 가 아니다 — 둘을 같은 말로 쓰면 안 된다(아래 `immediateOuts` 참고). */
+  outs: number;
   total: number;  // 잔여 덱 크기
   prob: number;   // 다음 카드가 아웃일 확률(outs/total)
   cards: Card[];  // 아웃 카드 목록(랭크 내림차순)
+  /** 🔴 G2(2026-09-20) — **그 카드가 뜬 그 순간 패 자체가 앞서는** 카드 수(즉시 역전).
+   *  턴(=다음이 리버)에서는 쇼다운이라 `outs` 와 같아진다. 플랍에서는 다르다. */
+  immediateOuts: number;
+  immediateCards: Card[];
+  immediateProb: number;
+  /** 🔴 G2 — **지금** 히어로가 앞서는가. 미래 지분과 별개다. */
+  standing: Standing;
 }
 
 /**
@@ -452,18 +513,32 @@ export function computeOuts(hero: [Card, Card], villain: [Card, Card], board: Ca
   const known = new Set([...hero, ...villain, ...board].map((c) => keyOf(toN(c))));
   const deck = buildDeck(known);
   const cards: Card[] = [];
+  const immediate: Card[] = [];
+  // 🔴 G2 — 두 질문을 **따로** 센다.
+  //   ① `cards`  : 그 카드 뒤 **리버까지의 지분**이 50%를 넘는가(기존 정의 — 뜻을 바꾸지 않는다).
+  //   ② `immediate`: 그 카드가 뜬 **그 순간의 패**가 상대보다 강한가(즉시 역전).
+  //   플랍에서는 둘이 다르다. 예: 강한 드로는 ①에 들어가지만 턴에 드로가 완성되지 않으면 ②가 아니다.
+  //   반대로 약한 원페어 개선은 ②이면서 상대의 더 큰 드로 때문에 ①이 아닐 수 있다.
+  const sortCards = (a: Card, b: Card) => (RANK_VALUE[b.rank] - RANK_VALUE[a.rank]) || (SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit));
   for (const c of deck) {
     const nextCard = toCard(c);
-    const eq = computeEquity(hero, villain, [...board, nextCard]);
+    const nextBoard = [...board, nextCard];
+    const eq = computeEquity(hero, villain, nextBoard);
     if (eq.hero > 0.5) cards.push(nextCard);
+    if (currentStanding(hero, villain, nextBoard) === 'ahead') immediate.push(nextCard);
   }
-  cards.sort((a, b) => (RANK_VALUE[b.rank] - RANK_VALUE[a.rank]) || (SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit)));
+  cards.sort(sortCards);
+  immediate.sort(sortCards);
   return {
     next: board.length === 4 ? 'river' : 'turn',
     outs: cards.length,
     total: deck.length,
     prob: deck.length ? cards.length / deck.length : 0,
     cards,
+    immediateOuts: immediate.length,
+    immediateCards: immediate,
+    immediateProb: deck.length ? immediate.length / deck.length : 0,
+    standing: currentStanding(hero, villain, board) ?? 'tied',
   };
 }
 

@@ -37,7 +37,29 @@ export function icmEquity(stacks: number[], prizes: number[]): number[] {
     const prize = prizes[n - idx.length] ?? 0;
     // 1명만 남으면 다음 상금 차지
     if (idx.length === 1) { res[idx[0]] = prize; memo.set(mask, res); return res; }
-    if (sum <= 0) { memo.set(mask, res); return res; }
+    // 🔴 G3(2026-09-20) — **남은 사람이 전부 0칩**인 경우.
+    //
+    //  무엇이 틀렸었나: 여기서 그냥 0 배열을 돌려줬다. 그래서 `icmEquity([10,0,0],[50,30,20])`
+    //  이 `[50,0,0]` 이 되어 **총 100 중 50 이 증발**했다(직접 실행으로 확인).
+    //  1등이 확정된 순간 남은 두 자리(30·20)의 임자가 사라진 것이다.
+    //
+    //  어떤 규칙으로 나누나: 이 파일의 독립 대조 구현(`icm.test.ts` 의 `icmBrute`)이 이미
+    //  **`rem === 0` 이면 남은 인원에게 균등 확률**이라고 정의해 두었다. 칩이 같으면(=0 으로 같으면)
+    //  순위 확률도 같다는 것이 Malmuth-Harville 의 자연스러운 극한이고, 두 구현이 같은 규칙을
+    //  써야 그 테스트가 의미를 갖는다. 새 규칙을 발명하지 않고 **있던 정의를 여기로 맞춘다.**
+    //
+    //  ⚠ 단일 0칩 자리(예 `[40,54,0,10]`)의 기존 동작은 바뀌지 않는다 — 그 경우 `sum > 0` 이라
+    //    이 분기에 오지 않는다. 기존 계약(그 자리는 상금 밖 순위로 떨어진다)이 그대로다.
+    if (sum <= 0) {
+      const q = 1 / idx.length;
+      for (const i of idx) {
+        res[i] += q * prize;
+        const sub = solve(mask & ~(1 << i));
+        for (const k of idx) if (k !== i) res[k] += q * sub[k];
+      }
+      memo.set(mask, res);
+      return res;
+    }
     for (const i of idx) {
       const pFirst = stacks[i] / sum;
       if (pFirst <= 0) continue;

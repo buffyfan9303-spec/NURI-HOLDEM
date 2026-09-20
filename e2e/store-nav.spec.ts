@@ -531,6 +531,9 @@ test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 �
     // 전제 — 바 자체는 살아 있다. 아무것도 없으면 아래 '이용권 없음' 이 공허해진다.
     expect(vis.length, `보이는 칸이 ${vis.length}개다 — 요약+5단계 6칸이어야 한다`).toBe(6);
     expect(vis, '킬스위치가 꺼졌는데 이용권 칸이 있다').not.toContain('voucher');
-    expect(await page.locator('[data-pane="voucher"]').count(), '킬스위치가 꺼졌는데 이용권 판이 마운트됐다 — 꺼진 기능이 조용히 네트워크를 쓴다').toBe(0);
+    // 🔴 2026-09-20 독립 검증 F3 — 여기 있던 `[data-pane="voucher"] count === 0` 단언을 **지웠다**.
+    //   그 판은 `visited.includes('voucher') && canVoucher` 로만 렌더되고 `visited` 는 `[]` 로 시작한다.
+    //   이 테스트는 이용권을 **누르지 않으므로** 킬스위치가 ON 이어도 항상 0 이다 — 킬스위치를 전혀
+    //   구별하지 못하는 **빈 검사**였다. 위 두 단언(보이는 칸 6개 · voucher 없음)이 실제 계약을 잡는다.
   });
 });

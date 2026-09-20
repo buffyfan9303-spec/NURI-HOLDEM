@@ -4,7 +4,13 @@
 // 반복된다(헤더 축소의 rAF 가드 패턴을 전역 하나로 일반화). 구독 시 현재 값으로 1회 동기화.
 import { useEffect } from 'react';
 
-type Sub = (y: number) => void;
+/** 🔴 2026-09-20 — 두 번째 인자는 **이 값을 앱이 직접 보냈는가**(`notifyScrollNow`)이다.
+ *
+ *  왜 필요한가: 구독자가 "브라우저가 만든 스크롤"과 "앱이 옮긴 스크롤"을 구별할 방법이 없었다.
+ *  실기기(주소창 개폐)에서는 앱이 `scrollTo(0)` 한 **직후에도** 브라우저가 툴바를 여닫으며 진짜
+ *  scroll 이벤트를 만든다. 헤더가 그것을 사용자의 스크롤로 읽어 한 프레임 접혔다 폈다(오너 제보).
+ *  `isProgrammaticScroll()` 만으로는 못 가른다 — 그 창 안에는 두 종류가 **섞여서** 들어온다. */
+type Sub = (y: number, fromApp: boolean) => void;
 const subs = new Set<Sub>();
 let raf = 0;
 let attached = false;
@@ -23,7 +29,7 @@ let haveLastY = false;
 const flush = () => {
   raf = 0;
   const y = haveLastY ? lastY : window.scrollY;
-  subs.forEach((f) => f(y));
+  subs.forEach((f) => f(y, false));
 };
 const onScroll = () => {
   lastY = window.scrollY;
@@ -53,7 +59,7 @@ export function useScrollY(cb: Sub) {
       attached = true;
       window.addEventListener('scroll', onScroll, { passive: true });
     }
-    cb(readScrollYOncePerTask()); // 마운트 직후 1회 동기화(리스너들이 각자 하던 초기 호출을 대체)
+    cb(readScrollYOncePerTask(), false); // 마운트 직후 1회 동기화(리스너들이 각자 하던 초기 호출을 대체)
     return () => {
       subs.delete(cb);
       if (subs.size === 0 && attached) {
@@ -95,5 +101,5 @@ export function notifyScrollNow(y: number = window.scrollY) {
   haveLastY = true;
   // 예약된 옛 rAF 가 **옛 Y** 로 뒤늦게 방송하는 것을 막는다(이게 재발의 통로였다).
   if (raf) { cancelAnimationFrame(raf); raf = 0; }
-  subs.forEach((f) => f(y));
+  subs.forEach((f) => f(y, true));
 }

@@ -74,6 +74,15 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
   const [pot, setPot] = useState(1200);
   const [rangeId, setRangeId] = useState<ShoveRangeId>('mid');
 
+  /** 🔴 G3(2026-09-20) — 남은 참가자 중 **양수가 아닌 스택**이 있는가.
+   *
+   *  왜 막나: `icmEquity([10,0,0],[50,30,20])` 은 예전에 `[50,0,0]`(총 100 중 50 소실)이었다.
+   *  엔진은 고쳤지만(`icm.ts` 의 '남은 사람이 전부 0칩' 분기 = 균등 확률), **공개 계산기**에서
+   *  0칩 자리에 확정 금액을 그리는 것은 다른 문제다 — 이미 탈락한 사람인지, 아직 안 적은 칸인지,
+   *  동시 탈락인지 입력만으로 알 수 없기 때문이다. 그 셋은 상금 규칙이 서로 다르다.
+   *  → 숫자를 지어내지 말고 **무엇을 채워야 하는지** 말한다. 엔진의 내부 계약(단일 탈락자 0칩)은 그대로다. */
+  const hasNonPositive = stacks.some((v) => !(Number.isFinite(v) && v > 0));
+
   const equities = useMemo(() => {
     const s = stacks.map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
     if (s.reduce((a, b) => a + b, 0) <= 0) return stacks.map(() => 0);
@@ -137,11 +146,20 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
       <span className="text-2xs font-semibold text-ink-secondary">상금 구조</span>
       <div className="inline-flex items-center gap-1.5">
         {/* 하한 1자리 — 옛 딜 계산기가 허용하던 '남은 상금 한 자리'(예: 헤즈업 우승 상금만 남음)를 잃지 않는다. 압박 모드도 1자리면 계산한다. */}
+        {/* 🔴 G11(2026-09-20 모바일 실측) — 실제 누름 박스가 약 26×26px 였다(390px 기준).
+            버튼 **자체**를 44×44px 로 만들고 보이는 네모는 안쪽 span 이 그린다 — 모양은 그대로,
+            손가락이 닿는 면만 커진다. `.hit` 의사요소 확장을 쓰지 않은 이유: 두 버튼이 6px 간격이라
+            44px 확장끼리 겹쳐 어느 쪽이 눌렸는지 모호해진다(S1 에서 같은 함정을 실측으로 확인했다).
+            ⚠ 비활성·포커스 상태는 button 에 남는다(span 은 장식이라 포커스를 가져가지 않는다). */}
         <button type="button" aria-label="상금 자리 줄이기" onClick={() => setPrizes((p) => p.slice(0, -1))} disabled={prizes.length <= 1}
-          className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold text-ink-secondary leading-none disabled:opacity-30">−</button>
+          className="inline-flex h-[44px] w-[44px] items-center justify-center disabled:opacity-30">
+          <span className="flex h-7 w-7 items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold leading-none text-ink-secondary">−</span>
+        </button>
         <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{prizes.length}명</span>
         <button type="button" aria-label="상금 자리 늘리기" onClick={() => setPrizes((p) => [...p, 0])} disabled={prizes.length >= 20}
-          className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-accent-400/50 bg-accent-300/10 text-base font-bold text-accent-300 leading-none disabled:opacity-30">+</button>
+          className="inline-flex h-[44px] w-[44px] items-center justify-center disabled:opacity-30">
+          <span className="flex h-7 w-7 items-center justify-center rounded-input border border-accent-400/50 bg-accent-300/10 text-base font-bold leading-none text-accent-300">+</span>
+        </button>
       </div>
     </div>
     <div className="grid grid-cols-3 gap-1.5">
@@ -170,13 +188,18 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
         {mode === 'equity' ? '플레이어 스택' : mode === 'deal' ? '남은 인원 스택 (칩)' : '남은 스택 · 자리 지정'}
       </span>
       <div className="inline-flex items-center gap-1.5">
+        {/* 🔴 G11 — 위 상금 증감 버튼과 같은 처방(44×44 누름 박스 + 안쪽 28px 네모). */}
         <button type="button" aria-label="플레이어 줄이기"
           onClick={() => setStacks((p) => p.slice(0, -1))}
           disabled={stacks.length <= 2}
-          className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold text-ink-secondary leading-none disabled:opacity-30">−</button>
+          className="inline-flex h-[44px] w-[44px] items-center justify-center disabled:opacity-30">
+          <span className="flex h-7 w-7 items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold leading-none text-ink-secondary">−</span>
+        </button>
         <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{stacks.length}/{ICM_MAX_PLAYERS}명</span>
         <button type="button" aria-label="플레이어 늘리기" onClick={() => setStacks((p) => [...p, 1000])} disabled={stacks.length >= ICM_MAX_PLAYERS}
-          className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-accent-400/50 bg-accent-300/10 text-base font-bold text-accent-300 leading-none disabled:opacity-30">+</button>
+          className="inline-flex h-[44px] w-[44px] items-center justify-center disabled:opacity-30">
+          <span className="flex h-7 w-7 items-center justify-center rounded-input border border-accent-400/50 bg-accent-300/10 text-base font-bold leading-none text-accent-300">+</span>
+        </button>
       </div>
     </div>
     <ul className="space-y-1.5">
@@ -187,12 +210,19 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
             onChange={(e) => setStack(i, e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0))}
             className="input flex-1 text-sm tabular-nums" placeholder="스택" />
           {mode === 'equity' ? (
+            // 🔴 G3 — 0칩(또는 빈 칸)이 섞여 있으면 **어느 자리의 금액도 확정하지 않는다.**
+            //   한 자리만 '—' 로 두면 나머지 숫자는 맞는 것처럼 보이는데, 실제로는 그 한 자리 때문에
+            //   전체 순위 확률이 정의되지 않는다(상금 총합이 맞지 않는다).
             <span className="w-24 shrink-0 text-right text-base font-extrabold text-accent-300 tabular-nums">
-              {equities[i] !== undefined ? equities[i].toFixed(2) : '0'}
-              {awarded > 0 && (
-                <span className="ml-1 text-2xs font-normal text-ink-muted">
-                  ({((equities[i] / awarded) * 100 || 0).toFixed(1)}%)
-                </span>
+              {hasNonPositive ? <span className="text-ink-muted">—</span> : (
+                <>
+                  {equities[i] !== undefined ? equities[i].toFixed(2) : '0'}
+                  {awarded > 0 && (
+                    <span className="ml-1 text-2xs font-normal text-ink-muted">
+                      ({((equities[i] / awarded) * 100 || 0).toFixed(1)}%)
+                    </span>
+                  )}
+                </>
               )}
             </span>
           ) : mode === 'deal' ? (
@@ -209,6 +239,14 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
         </li>
       ))}
     </ul>
+    {/* 🔴 G3 — 왜 숫자가 없는지 말한다. 빈 자리는 '아직 안 적음' 일 수도, '탈락' 일 수도 있는데
+        둘의 상금 규칙이 달라 입력만으로 고를 수 없다. 규칙을 지어내는 대신 채우게 한다. */}
+    {hasNonPositive && mode !== 'pressure' && (
+      <p className="mt-1.5 text-2xs leading-relaxed text-amber-400">
+        남은 인원의 스택은 모두 <b>1 이상</b>이어야 계산합니다 — 0이거나 빈 칸이 있으면 순위 확률이 정해지지 않아
+        금액을 내지 않습니다. 이미 탈락한 자리는 위 <b>−</b> 버튼으로 빼 주세요.
+      </p>
+    )}
   </div>
   );
 
@@ -303,8 +341,9 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
       {/* flex-wrap: 320px 에서 탭(130px)+버블 버튼이 한 줄에 못 들어가 탭이 4px 잘렸다(실측) — 좁으면 버블 버튼이 다음 줄로 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SegmentedTabs items={MODES} value={mode} onChange={setMode} />
+        {/* 🔴 G11 — 실측 약 122×22px 였다. 폭은 충분하니 **높이만** 44px 로 올린다(줄바꿈·정렬 불변). */}
         <button type="button" onClick={applyBubble}
-          className="shrink-0 rounded-input border border-accent-400/50 bg-accent-300/10 px-2 py-1 text-2xs font-bold text-accent-300 leading-none">
+          className="inline-flex min-h-[44px] shrink-0 items-center rounded-input border border-accent-400/50 bg-accent-300/10 px-2 text-2xs font-bold leading-none text-accent-300">
           버블: 4명 · 3자리 시상
         </button>
       </div>

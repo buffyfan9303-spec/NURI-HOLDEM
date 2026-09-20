@@ -410,7 +410,12 @@ describe('콜 금액은 이미 낸 돈을 뺀 나머지다', () => {
   it('SB 는 자기가 낸 0.5 만 빠진다 — BB 보다 많이 넣어야 한다', () => {
     const e = evaluateSpot(open('SB', 2.5));
     expect(e.math.toCallBb).toBe(2);                   // 2.5 − 0.5
-    expect(e.math.toCallBb).toBeGreaterThan(evaluateSpot(open('BB', 2.5)).math.toCallBb);
+    // 🔴 G1(2026-09-20) 이후 `toCallBb` 는 `number | null` 이다(null = 사이드팟으로 판정 불가).
+    //   이 비교 대상은 **2인 프리플랍 정상 오픈**이라 절대 null 이 아니다 — 단언을 약화하지 않고
+    //   그 전제를 먼저 못박은 뒤 원래 비교를 그대로 유지한다.
+    const bb = evaluateSpot(open('BB', 2.5)).math.toCallBb;
+    expect(bb, '정상 오픈인데 콜 금액이 판정 불가로 나왔다').not.toBeNull();
+    expect(e.math.toCallBb).toBeGreaterThan(bb!);
   });
 
   it('블라인드를 안 낸 자리는 총액을 그대로 넣는다', () => {

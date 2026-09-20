@@ -1,7 +1,7 @@
 {
   "_주석": "번들 예산(gzip KB). 올릴 때는 왜 올리는지 커밋 메시지에 남길 것. --update 로 재작성.",
-  "_2026-09-20": "totalJsGzipKb 1007 → 1010. HEAD(6fdf032) 실측 1006.6 으로 여유가 0% 였고, H1·S1·C1 구현이 +1.28KB(청크별 실측: PostDetailModal +0.81 · CommentThread +0.30 · VenueManageTab +0.14 · index +0.03)라 1007.9 로 넘었다. --update 를 쓰지 않고 손으로 올렸다 — --update 는 현재값에 딱 맞춰 다시 여유 0% 를 만든다(그러면 다음 커밋이 또 터진다). 1010 은 실측보다 2.1KB 위다. 🔴 오너 결정 대기: 이 상향이 싫으면 되돌리고 대신 줄일 곳을 지정해 달라 — 줄이려면 기능을 빼야 한다(두 반응 UI 를 하나로 합치면 PC 알약 줄이 사라진다).",
-  "totalJsGzipKb": 1010,
+  "_2026-09-20": "totalJsGzipKb 1007 → 1010 → 1014. 하루에 두 번 올렸다. 🔴 오너 결정 대기: 계속 올릴지, 줄일 목표를 정할지. ① 1007→1010: H1·S1·C1 이 +1.28KB(PostDetailModal +0.81 · CommentThread +0.30 · VenueManageTab +0.14 · index +0.03). ② 1010→1014: GTO 감사 수리가 +2.86KB(ToolsPanel +0.83 · CardGridPicker +0.60 · spots +0.50 · OutsFromCards +0.40 · equity.worker +0.23 · ICMCalculator +0.23 · NuriSpotPanel +0.07). 늘어난 것은 대부분 **화면에 적는 한국어 문장**이다 — '계산할 수 없다'를 말로 설명하는 것이 이번 수리의 내용이라 지우면 결함이 되돌아온다. --update 는 쓰지 않았다(현재값에 딱 맞춰 여유 0% 를 재생산한다). 1014 는 실측 1010.8 보다 3.2KB 위다.",
+  "totalJsGzipKb": 1014,
   "totalCssGzipKb": 34,
   "entryGzipKb": 267,
   "largestChunkGzipKb": 117,

@@ -120,7 +120,7 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   // 오답 노트(2026-09-03, GKR-2 잔여분) — 두 트레이너의 오답 큐를 목록으로. 아이콘 = lucide book-x
   { key: 'wrongnote', cat: 'train', name: '오답 노트', desc: '틀린 핸드 모아 다시 풀기', keywords: '오답 목록 · 차트에서 보기 · 다시 풀기', icon: 'book-x' },
   { key: 'aggro', cat: 'explore', name: '어그레션 차트', desc: '포지션별 공격 권장 빈도', keywords: '포지션별 권장 빈도', icon: 'swords' },
-  { key: 'glossary', cat: 'rules', name: '홀덤 용어사전', desc: '74개 용어 검색과 뜻풀이', keywords: '용어 74개 · 한글 설명·검색', icon: 'book-a' },
+  { key: 'glossary', cat: 'rules', name: '홀덤 용어사전', desc: '79개 용어 검색과 뜻풀이', keywords: '용어 79개 · 한글 설명·검색', icon: 'book-a' },
   // 홀덤 족보(오너 지시 2026-09-17 "용어 있는 쪽에 탭 하나 더"). 아이콘 crown = 로열 플러시. 데이터는 tools/handRank.data.ts.
   { key: 'handrank', cat: 'rules', name: '홀덤 족보', desc: '10가지 족보 순서와 예시', keywords: '핸드 랭킹 족보 순위 로열 스트레이트 플러시 포카드 풀하우스 트리플 투페어 원페어 하이카드 키커 휠 스플릿', icon: 'crown' },
   // ── 분석 — 핸드·레인지 에퀴티 ──
@@ -194,12 +194,19 @@ const LANE_ORDER = ['all', ...LANES.map((l) => l.id)] as (ToolCat | 'all')[];
 // 트레이너류는 '퀴즈' 뉘앙스(맞히기), 나머지 계산기·차트류는 '도구' 뉘앙스로 라벨링.
 const QUIZ_KEYS = new Set<ToolKey>(['drill', 'range', 'pushfold', 'trainer', 'postflop', 'wrongnote']);
 
-function renderTool(k: ToolKey): ReactNode {
+/** 🔴 G8(2026-09-20) — 도구를 **어떤 의도로** 열었는가. 지금은 스팟의 시작 탭 하나뿐이다. */
+interface OpenIntent { spotTab?: 'analyze' | 'mine' }
+
+function renderTool(k: ToolKey, intent?: OpenIntent): ReactNode {
   switch (k) {
     case 'tda': return <TdaRulesTool />;
     // NURI SPOT — 직전 입력(tool:spot)이 있으면 그것으로, 없으면 기존 두 도구의 스냅샷에서 카드를 물려받는다.
     //   그래야 '핸드 분석에서 카드 고르다 스팟으로 넘어온' 사용자가 처음부터 다시 안 찍는다.
-    case 'spot': return <NuriSpotPanel init={spotInitFromSnapshots()} />;
+    // 🔴 G8 — '내 스팟' 버튼은 목록으로 가야 한다. 종전에는 두 버튼이 똑같이 `onOpen('spot')` 이라
+    //   `NuriSpotPanel` 의 기본 탭('analyze')으로 들어가 **뒤 버튼이 제 기능을 못 했다**.
+    //   `NuriSpotInit.tab` 은 이미 있던 통로다 — 새 상태를 만들지 않고 그것에 의도를 실어 보낸다.
+    //   ⚠ 의도가 없으면(`#tool=spot` 딥링크·카탈로그 타일) 종전대로 분석 탭이다.
+    case 'spot': return <NuriSpotPanel init={{ ...spotInitFromSnapshots(), ...(intent?.spotTab ? { tab: intent.spotTab } : {}) }} />;
     // '결과 먼저': 빈 폼 대신 직전 입력(스냅샷) 또는 대표 데모 핸드(AKs vs QQ)로 진입 즉시 결과.
     case 'gto': {
       const saved = readSnap<DeepGtoInit>('tool:gto');
@@ -287,17 +294,25 @@ export default function ToolsPanel() {
   //     확정 결과가 '비로그인' 이면 그때 로그인 시트를 띄운다(안내가 늦는 게 아니라 정확해진다).
   const { user, loading: authLoading } = useAuth();
   const pendingTool = useRef<ToolKey | null>(null);
-  const open = (k: ToolKey) => {
-    if (authLoading) { pendingTool.current = k; return; }   // 아직 모른다 — 결론을 미룬다
+  // 🔴 G8(2026-09-20) — 진입 의도. 로그인 대기 경로(`pendingTool`)를 지나도 **같이** 살아남아야
+  //   "로그인하고 돌아왔더니 분석 탭" 이 되지 않는다. 그래서 ref 와 state 를 짝으로 둔다.
+  const pendingIntent = useRef<OpenIntent | undefined>(undefined);
+  const [intent, setIntent] = useState<OpenIntent | undefined>(undefined);
+  const open = (k: ToolKey, opts?: OpenIntent) => {
+    if (authLoading) { pendingTool.current = k; pendingIntent.current = opts; return; }   // 아직 모른다 — 결론을 미룬다
     if (!user) { promptLogin(); return; }
+    setIntent(opts);
     setActive(k);
   };
   useEffect(() => {
     if (authLoading) return;
     const k = pendingTool.current;
     if (!k) return;
+    const i = pendingIntent.current;
     pendingTool.current = null;
+    pendingIntent.current = undefined;
     if (!user) { promptLogin(); return; }
+    setIntent(i);
     setActive(k);
   }, [authLoading, user]);
   const close = () => setActive(null);
@@ -558,7 +573,7 @@ export default function ToolsPanel() {
         <div className="px-page-x py-3 pb-8" onClick={swapToolOnLinkClick}>
           <Suspense fallback={<div className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
             {/* #tool= 딥링크로 비로그인 진입해도 게이트가 유지되게 실행 지점에서 한 번 더 확인 */}
-            {active ? (user ? renderTool(active) : (
+            {active ? (user ? renderTool(active, intent) : (
               <div className="flex flex-col items-center gap-3 py-14 text-center">
                 <p className="text-sm font-bold text-ink-primary">로그인하면 GTO 도구를 쓸 수 있어요</p>
                 <p className="text-2xs text-ink-muted">차트·트레이너·계산기 전부 무료입니다</p>
@@ -584,7 +599,7 @@ const LANE_TONE: Record<string, TileTone> = { chart: 'violet', learn: 'fuchsia',
  * 대신 **높이를 낮게 유지**한다 — 모바일 첫 화면에서 이 카드 아래로 검색창·레인 칩·차트/트레이너가
  * 바로 이어져야 한다(오너 지시 2: 첫 화면에서 새 스팟 분석·차트·트레이너 셋을 다 알아볼 수 있을 것).
  */
-function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
+function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => void }) {
   return (
     <section
       data-testid="spot-hero"
@@ -640,7 +655,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
         <button type="button" onClick={() => onOpen('spot')} className="btn-primary min-h-[44px] px-2 text-xs">
           새 스팟 분석
         </button>
-        <button type="button" onClick={() => onOpen('spot')} className="btn-ghost min-h-[44px] px-2 text-xs">
+        <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} className="btn-ghost min-h-[44px] px-2 text-xs">
           내 스팟
         </button>
       </div>
