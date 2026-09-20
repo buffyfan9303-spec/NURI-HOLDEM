@@ -52,11 +52,17 @@ const postRow = (over: Record<string, unknown> = {}) => ({
 
 const postsWith = (poster: string) => [postRow(), postRow({ id: 'pd-2', title: '세로 포스터가 붙은 글', content: '포스터 확인 부탁드립니다.', images: [poster] })];
 
-const COMMENTS = Array.from({ length: 6 }, (_, i) => ({
-  id: `pd-c${i}`, post_id: 'pd-1', parent_id: null, user_id: `pd-cu${i}`,
-  user_name: `댓글쓴이${i}`, user_role: 'user', is_owner: false,
-  content: `댓글 예시 ${i}`, created_at: '2026-09-12T09:30:00Z',
-}));
+const COMMENTS = [
+  ...Array.from({ length: 6 }, (_, i) => ({
+    id: `pd-c${i}`, post_id: 'pd-1', parent_id: null, user_id: `pd-cu${i}`,
+    user_name: `댓글쓴이${i}`, user_role: 'user', is_owner: false,
+    content: `댓글 예시 ${i}`, created_at: '2026-09-12T09:30:00Z',
+  })),
+  // P2(2026-09-21): 루트 댓글뿐 아니라 **답글 본문**도 14px 계약 대상이라 답글 1건을 픽스처에 둔다.
+  { id: 'pd-c-reply', post_id: 'pd-1', parent_id: 'pd-c0', user_id: 'pd-cu-reply',
+    user_name: '답글쓴이', user_role: 'user', is_owner: false,
+    content: '답글 예시', created_at: '2026-09-12T09:31:00Z' },
+];
 
 /** 세로 포스터(2:5) — 글이 이미지 안에 들어 있는 안내문 대역. 크롭되면 문장이 잘린다. */
 const POSTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="1000" viewBox="0 0 400 1000"><rect width="400" height="1000" fill="#1b1030"/><text x="200" y="120" fill="#fff" font-size="46" text-anchor="middle">맨 위 줄</text><text x="200" y="920" fill="#fff" font-size="46" text-anchor="middle">맨 아래 줄</text></svg>`;
@@ -136,22 +142,36 @@ async function topBlockHeight(page: Page) {
   });
 }
 
-/** 창(시트 또는 2-pane 패널) 안에서 **실제로 감춰진 채 넘친** 요소들 — 가로·세로 둘 다 본다. */
+/** 창(시트 또는 2-pane 패널) 안에서 **실제로 감춰진 채 넘친** 요소들 — 가로·세로 둘 다 본다.
+ *  P3(2026-09-21): `clippedNodes()`는 원래 의도한 CSS 말줄임도 결함으로 잡았다. `data-pd-nav-text`
+ *  (모바일 탐색 제목) **만** computed `overflow-x:hidden`·`white-space:nowrap`·`text-overflow:ellipsis`·
+ *  한 줄 높이와 실제 `scrollWidth>clientWidth` 가 **전부** 확인된 경우에 한해 `navEllipsis` 로 분리하고
+ *  결함 목록(`out`)에서 뺀다. 다른 노드·세로 잘림은 그대로 `out`에 남아 실패시킨다 — 예외 범위를
+ *  넓히지 않는다. */
 async function clippedNodes(page: Page) {
   return page.evaluate(() => {
     const article = document.querySelector('[data-pd-root]')!;
     const shell = article.closest('[role="dialog"]') ?? article.parentElement!;
     const out: { cls: string; ox: number; oy: number; t: string }[] = [];
+    const navEllipsis: { t: string; ox: number }[] = [];
     for (const el of Array.from(shell.querySelectorAll('*'))) {
       const cs = getComputedStyle(el);
       const ox = el.scrollWidth - el.clientWidth, oy = el.scrollHeight - el.clientHeight;
       const hidX = cs.overflowX === 'hidden' || cs.overflowX === 'clip';
       const hidY = cs.overflowY === 'hidden' || cs.overflowY === 'clip';
-      if ((hidX && ox > 1) || (hidY && oy > 1) || (cs.textOverflow === 'ellipsis' && ox > 1)) {
-        out.push({ cls: String((el as HTMLElement).className).slice(0, 60), ox, oy, t: (el.textContent ?? '').slice(0, 20) });
+      if (!((hidX && ox > 1) || (hidY && oy > 1) || (cs.textOverflow === 'ellipsis' && ox > 1))) continue;
+      if (el.hasAttribute('data-pd-nav-text')) {
+        const line = parseFloat(cs.lineHeight) || 0;
+        const oneLine = oy <= 1 && line > 0 && el.clientHeight <= line + 1;
+        const cssEllipsis = hidX && cs.whiteSpace === 'nowrap' && cs.textOverflow === 'ellipsis';
+        if (cssEllipsis && oneLine && ox > 1) {
+          navEllipsis.push({ t: (el.textContent ?? '').slice(0, 60), ox });
+          continue; // 의도한 가로 말줄임 — 결함이 아니다
+        }
       }
+      out.push({ cls: String((el as HTMLElement).className).slice(0, 60), ox, oy, t: (el.textContent ?? '').slice(0, 20) });
     }
-    return out;
+    return { out, navEllipsis };
   });
 }
 
@@ -214,7 +234,7 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
     expect(bLine / bSize).toBeLessThanOrEqual(1.75);
 
     // 긴 URL·띄어쓰기 없는 입력이 있어도 가로로 넘치지 않는다
-    expect(await clippedNodes(page), '잘린 요소가 있다').toEqual([]);
+    expect((await clippedNodes(page)).out, '잘린 요소가 있다').toEqual([]);
   });
 
   // 🔴 C1(2026-09-20 오너 시안) — **모바일은 두 개의 형제 카드**다(게시글 카드 / 댓글 카드).
@@ -245,13 +265,17 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
         const card = document.querySelector<HTMLElement>('[data-pd-post-card]');
         const comments = document.querySelector<HTMLElement>('[data-pd-comments]');
         const body = document.querySelector<HTMLElement>('[data-pd-body]');
+        const nav = document.querySelector<HTMLElement>('[data-pd-nav]');
         const article = document.querySelector<HTMLElement>('[data-pd-root]')!;
-        if (!card || !comments || !body) return null;
+        if (!card || !comments || !body || !nav) return null;
         const cs = getComputedStyle(card), ks = getComputedStyle(comments);
         const cr = card.getBoundingClientRect(), kr = comments.getBoundingClientRect();
         const input = comments.querySelector<HTMLElement>('textarea, input[type="text"], .input')
           ?? Array.from(comments.querySelectorAll<HTMLElement>('button')).find((b) => /로그인하면 댓글/.test(b.textContent ?? ''))
           ?? null;
+        // P2(2026-09-21): 루트 댓글/답글 본문 <p> — 답글은 `.border-l`(스레드 세로선) 안에 있다.
+        const replyP = comments.querySelector<HTMLElement>('.border-l p');
+        const rootP = Array.from(comments.querySelectorAll<HTMLElement>('p')).find((p) => p !== replyP) ?? null;
         return {
           카드display: cs.display,
           카드면: cs.backgroundColor, 댓글면: ks.backgroundColor,
@@ -268,15 +292,23 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
           //   (둘의 offsetParent 가 같아야 뺄셈이 성립한다 — 아래에서 함께 확인한다.)
           같은offsetParent: card.offsetParent === comments.offsetParent,
           카드간격: comments.offsetTop - (card.offsetTop + card.offsetHeight),
+          // P1(2026-09-21): 댓글→탐색(둘째 간격)도 같은 방식으로 — nav 는 `.reveal` transform 이 없지만
+          //   offsetTop/Height 는 애초에 transform 의 영향을 받지 않으므로 같은 계산이 그대로 맞다.
+          같은offsetParent2: comments.offsetParent === nav.offsetParent,
+          탐색간격: nav.offsetTop - (comments.offsetTop + comments.offsetHeight),
           본문이카드안: card.contains(body),
           댓글이카드안: card.contains(comments),
           // 모바일에서 보이는 독서 경계선 — 시안은 작성자↔본문 한 줄뿐이다(나머지는 max-lg:hidden).
           보이는선: Array.from(article.querySelectorAll<HTMLElement>('hr')).filter((h) => getComputedStyle(h).display !== 'none').length,
           입력면: input ? getComputedStyle(input).backgroundColor : '',
           문서가로넘침: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          // P2(2026-09-21): 본문 16px·루트 댓글/답글 본문 14px — 모바일 computed 값을 좁게 잰다.
+          본문글꼴: parseFloat(getComputedStyle(body).fontSize),
+          루트댓글글꼴: rootP ? parseFloat(getComputedStyle(rootP).fontSize) : -1,
+          답글글꼴: replyP ? parseFloat(getComputedStyle(replyP).fontSize) : -1,
         };
       });
-      expect(g, 'data-pd-post-card / data-pd-comments / data-pd-body 중 하나를 못 찾았다').not.toBeNull();
+      expect(g, 'data-pd-post-card / data-pd-comments / data-pd-body / data-pd-nav 중 하나를 못 찾았다').not.toBeNull();
       const m = g!;
       // ① 모바일에서는 카드가 **실체**다. `lg:contents` 가 모바일까지 새면 여기서 걸린다.
       expect(m.카드display, '모바일인데 게시글 카드가 display:contents 다 — 카드가 아예 안 그려진다').not.toBe('contents');
@@ -290,10 +322,17 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
       expect(m.좌차, `두 카드 왼쪽이 ${m.좌차}px 어긋났다`).toBeLessThanOrEqual(1);
       expect(m.우차, `두 카드 오른쪽이 ${m.우차}px 어긋났다`).toBeLessThanOrEqual(1);
       expect(Math.abs(m.카드반지름 - m.댓글반지름), '두 카드 모서리 반지름이 다르다').toBeLessThanOrEqual(1);
-      // ④ 세로 간격 — 시안 기준 약 16px. 0 이면 붙어서 한 덩어리로 읽히고, 너무 멀면 관계가 끊긴다.
+      // ④ 세로 간격 — P1(2026-09-21): 첫 간격(카드→댓글) 10~16px, 둘째 간격(댓글→탐색) 14~20px 로 좁게 잰다.
       expect(m.같은offsetParent, '두 카드의 offsetParent 가 달라 간격 뺄셈이 성립하지 않는다 — 이 단언이 무의미해졌다').toBe(true);
-      expect(m.카드간격, `두 카드 간격이 ${m.카드간격}px 다`).toBeGreaterThanOrEqual(10);
-      expect(m.카드간격, `두 카드 간격이 ${m.카드간격}px 다 — 너무 벌어지면 다른 글처럼 보인다`).toBeLessThanOrEqual(28);
+      expect(m.카드간격, `카드→댓글 간격이 ${m.카드간격}px 다 — P1 모바일 10~16px 계약 밖`).toBeGreaterThanOrEqual(10);
+      expect(m.카드간격, `카드→댓글 간격이 ${m.카드간격}px 다 — P1 모바일 10~16px 계약 밖`).toBeLessThanOrEqual(16);
+      expect(m.같은offsetParent2, '댓글과 탐색의 offsetParent 가 달라 간격 뺄셈이 성립하지 않는다').toBe(true);
+      expect(m.탐색간격, `댓글→탐색 간격이 ${m.탐색간격}px 다 — P1 모바일 14~20px 계약 밖`).toBeGreaterThanOrEqual(14);
+      expect(m.탐색간격, `댓글→탐색 간격이 ${m.탐색간격}px 다 — P1 모바일 14~20px 계약 밖`).toBeLessThanOrEqual(20);
+      // P2: 모바일 본문 16px·루트 댓글/답글 본문 14px.
+      expect(m.본문글꼴, `본문 글꼴이 ${m.본문글꼴}px 다 — P2 모바일 16px 계약 밖`).toBeCloseTo(16, 0);
+      expect(m.루트댓글글꼴, `루트 댓글 본문을 못 찾았거나 ${m.루트댓글글꼴}px 다 — P2 모바일 14px 계약 밖`).toBeCloseTo(14, 0);
+      expect(m.답글글꼴, `답글 본문을 못 찾았거나 ${m.답글글꼴}px 다 — P2 모바일 14px 계약 밖`).toBeCloseTo(14, 0);
       // ⑤ 두 카드가 **셸 위에 떠 보인다.** 카드가 지면과 같은 색이면 카드라는 사실 자체가 사라진다.
       //    ⚠ 라이트는 `surface-low == surface-mid == #FFFFFF` 라 이게 실제로 났었다(댓글 카드가 흰 지면에
       //      흡수). 두 카드끼리만 비교하는 단언으로는 **그때도 통과했다** — 그래서 셸 기준으로 잰다.
@@ -306,7 +345,7 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
       expect(m.입력면, '댓글 입력창을 못 찾았다').not.toBe('');
       expect(m.입력면, '댓글 입력창이 지면에 흡수됐다').not.toBe(m.댓글지면);
       expect(m.문서가로넘침, '카드를 넣으면서 문서가 가로로 넘쳤다').toBeLessThanOrEqual(0);
-      expect(await clippedNodes(page), `C1 ${theme} 모바일에서 잘린 요소가 있다`).toEqual([]);
+      expect((await clippedNodes(page)).out, `C1 ${theme} 모바일에서 잘린 요소가 있다`).toEqual([]);
     });
   }
 
@@ -388,7 +427,7 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
     await expect(body).toBeVisible();
     const bb = (await body.boundingBox())!;
     expect(bb.width, `2-pane 본문 읽기 폭 ${bb.width}px — 목록을 남긴 가용 폭을 쓰지 못한다`).toBeGreaterThanOrEqual(600);
-    expect(await clippedNodes(page), 'PC 2-pane 에서 잘린 요소가 있다').toEqual([]);
+    expect((await clippedNodes(page)).out, 'PC 2-pane 에서 잘린 요소가 있다').toEqual([]);
   });
 
   test('🔴 사진 한 장은 크롭하지 않는다 — 세로 포스터의 아래쪽이 잘리지 않는다', async ({ page, baseURL }) => {

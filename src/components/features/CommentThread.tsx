@@ -119,6 +119,7 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
   onDelete,
   canDelete,
   loggedIn,
+  postDetailMobile = false,
 }: {
   marks?: Record<string, string>;
   /** userId → 닉네임 색의 등급 토큰명(--tier-<token>). 상점 600점 · 20260830n */
@@ -136,6 +137,9 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
   /** (commentId) => 이 댓글을 삭제할 권한이 있는지 */
   canDelete: (comment: Comment) => boolean;
   loggedIn: boolean;
+  /** P2(2026-09-21): CommentThread 의 postDetailMobile 을 루트·답글 재귀 호출까지 그대로 내린다.
+   *  false(기본)면 매장 Q&A 등 다른 호출자와 완전히 동일한 렌더 — 폰트 분기는 max-lg: 로만 걸린다. */
+  postDetailMobile?: boolean;
 }) {
   const [showReplyBox, setShowReplyBox] = useState(false);
   const [replyContent, setReplyContent] = useState('');
@@ -183,7 +187,11 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
             )}
             <span className="text-2xs text-ink-muted">· {relativeTime(comment.createdAt)}</span>
           </div>
-          <p className="text-sm text-ink-primary leading-relaxed whitespace-pre-wrap break-words">
+          {/* P2(2026-09-21): 모바일 게시글 상세(postDetailMobile)에서만 14.9→14px. 다른 호출자는
+              text-sm 그대로 — 값을 두 갈래로 완전히 나눠 max-lg: 유틸로 매장 Q&A 등을 건드리지 않는다. */}
+          <p className={postDetailMobile
+            ? 'text-[14px] text-ink-primary leading-relaxed whitespace-pre-wrap break-words lg:text-sm'
+            : 'text-sm text-ink-primary leading-relaxed whitespace-pre-wrap break-words'}>
             {mention && <span className="font-semibold text-accent-200">@{mention} </span>}
             {comment.content}
           </p>
@@ -233,7 +241,7 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
       {replies.length > 0 && (
         <div className="ml-10 space-y-3 border-l border-border-strong pl-3">
           {replies.map(({ comment: r, mentionOf }) => (
-            <CommentItem key={r.id} marks={marks} nickTokens={nickTokens} titleOf={titleOf} comment={r} mention={mentionOf} replies={[]} composeParentId={composeParentId} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} />
+            <CommentItem key={r.id} marks={marks} nickTokens={nickTokens} titleOf={titleOf} comment={r} mention={mentionOf} replies={[]} composeParentId={composeParentId} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} postDetailMobile={postDetailMobile} />
           ))}
         </div>
       )}
@@ -367,6 +375,7 @@ export default function CommentThread({
               onDelete={onDelete}
               canDelete={canDelete}
               loggedIn={!!user}
+              postDetailMobile={postDetailMobile}
             />
             </div>
           ))}

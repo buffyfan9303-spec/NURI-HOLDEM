@@ -708,8 +708,10 @@ export default function PostDetailModal({
                 <div data-pd-body onDoubleClick={doubleLike}
                   /* 읽기 면: 문단·공백·링크·멘션은 renderMentions 가 그대로 보존한다(whitespace-pre-wrap).
                      행간 1.625 → 1.7(§5-2 의 1.65–1.75). 비율값이라 200% 확대에서도 같이 늘어난다.
-                     본문 밑에 광원·입자·노이즈를 넣지 않는다 — 배경은 창 지면 그대로다. */
-                  className="relative text-base leading-[1.7] text-ink-primary whitespace-pre-wrap break-words">
+                     본문 밑에 광원·입자·노이즈를 넣지 않는다 — 배경은 창 지면 그대로다.
+                     P2(2026-09-21): 모바일 본문 17→16px(text-base 는 루트 17px 기준이라 rem 대신
+                     고정 px). PC 는 lg:text-base 로 기존 17px 그대로 복원한다. */
+                  className="relative text-[16px] leading-[1.7] text-ink-primary whitespace-pre-wrap break-words lg:text-base">
                   {/* rose-500 은 팔레트 밖 기본 Tailwind 색이었다 — 토큰(danger)으로 교체.
                       상시 색이 아니라 250ms 만에 사라지는 피드백이라 색 예산에 잡히지 않는다. */}
                   {heartKey > 0 && (
@@ -942,9 +944,10 @@ export default function PostDetailModal({
         {!hidden && <hr className="border-t border-border-strong mt-4 max-lg:hidden" aria-hidden="true" />}
         {!hidden && (
         <section data-pd-comments className={[
-          'reveal mt-4 space-y-2 rounded-card border border-border-strong bg-surface-base p-3 ring-aura',
+          // P1(2026-09-21): 모바일 카드→댓글 간격 17px→13px(mt-3), PC 는 기존 mt-4(17px) 유지.
+          'reveal mt-3 space-y-2 rounded-card border border-border-strong bg-surface-base p-3 ring-aura lg:mt-4',
           // 🔴 C1 — 모바일은 게시글 카드와 **같은 좌우 경계·같은 반지름**의 독립 카드다.
-          //   간격 16px: `mt-4`(=1rem=17px, 루트 17px) 가 그 값이라 그대로 쓴다.
+          //   PC 간격 17px: `mt-4`(=1rem=17px, 루트 17px) 가 그 값이라 그대로 쓴다.
           // ⚠ 면은 테마마다 **반대 방향**으로 가야 한다(이 파일 `reactionPill` 의 면 계약과 같은 함정):
           //   라이트는 `surface-low == surface-mid == #FFFFFF` 라 셸과 **같은 흰색**이 되어 카드가
           //   통째로 사라진다(실측으로 잡았다 — 라이트 스크린샷에서 댓글 카드가 지면에 흡수됐다).
@@ -961,7 +964,8 @@ export default function PostDetailModal({
                 사실이 아닌 말이고, 그걸 보고 업주·작성자가 다시 쓰게 된다(이 저장소의 반복 결함 유형).
               ⚠ 우측 안내는 모바일에서만 — PC 2-pane 은 폭이 좁아 제목 줄이 두 줄로 접힌다. */}
           <div className="flex min-w-0 items-center justify-between gap-2">
-            <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-ink-primary">
+            {/* P2(2026-09-21): 모바일 "댓글" 제목 14.9→14px, PC lg:text-sm 로 기존 유지. */}
+            <h3 className="flex min-w-0 items-center gap-1.5 text-[14px] font-bold text-ink-primary lg:text-sm">
               <Icon name="comment" size={16} className="shrink-0 text-accent-200" aria-hidden />
               <span>댓글</span>
               {replies !== null && (
@@ -1007,7 +1011,10 @@ export default function PostDetailModal({
         {/* ── 이전 글 / 다음 글(UI-04, 실행문 §7.3·§7.4) — 열었던 목록의 실제 화면 순서(스냅샷) 기준. lib/postNav 가 이웃·끝·상한을 판정한다.
             새 hr 을 두지 않는다(독서 경계 구분선은 3곳 계약 — readingSurface.contract) — 탐색 행은 subtle 경계선 하나.
             UI-Aura(2026-09-14): 활성 카드만 border-transparent + ring-aura(헤어라인). 비활성은 그대로 둔다. */}
-        <nav aria-label="이전 글 · 다음 글" data-pd-nav className="mt-6 grid grid-cols-2 gap-2 border-t border-border-subtle pt-3">
+        {/* P1(2026-09-21): 모바일 댓글→탐색 공백(25.5px+12.75px)을 mt-4·pt-0·border-t-0 으로 좁힌다.
+            PC 는 기존 mt-6·border-t·pt-3 그대로 — 두 카드 사이가 곧 경계인 모바일과 달리
+            PC 2-pane 은 선 구분이 필요하다(§6 P1). */}
+        <nav aria-label="이전 글 · 다음 글" data-pd-nav className="mt-4 grid grid-cols-2 gap-2 border-t-0 border-border-subtle pt-0 lg:mt-6 lg:border-t lg:pt-3">
           {(['prev', 'next'] as const).map((dir) => {
             const side = dir === 'prev' ? neighbors.prev : neighbors.next;
             const isMore = dir === 'next' && side.edge === 'more';
@@ -1031,7 +1038,11 @@ export default function PostDetailModal({
                 <Icon name={dir === 'prev' ? 'chevron-left' : 'chevron-right'} size={14} className="shrink-0 text-ink-muted" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-2xs font-bold text-ink-muted">{label}</span>
-                  <span className={['block break-words text-xs leading-snug line-clamp-2', enabled && side.post ? 'text-ink-primary' : 'text-ink-muted'].join(' ')}>{reason}</span>
+                  {/* P2·P3(2026-09-21): 모바일은 12px·단일행 말줄임(data-pd-nav-text, min-w-0 +
+                      overflow-hidden/whitespace-nowrap/text-ellipsis). PC(lg)는 기존 12.75px·
+                      두 줄 line-clamp·break-words 그대로 복원한다. line-clamp 를 lg: 로만 걸어
+                      display:-webkit-box 가 모바일에 남지 않게 한다(Tailwind line-clamp 함정). */}
+                  <span data-pd-nav-text className={['block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] leading-snug lg:whitespace-normal lg:break-words lg:text-xs lg:line-clamp-2', enabled && side.post ? 'text-ink-primary' : 'text-ink-muted'].join(' ')}>{reason}</span>
                 </span>
               </button>
             );

@@ -17,6 +17,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29) — 새 판정을 만들지 않고 재사용
 import { ensureVerified } from '../../lib/requireLogin'; // 본인인증 안내 시트(VerifyGateSheet)를 여는 기존 진입점 재사용
+import { useDialogFocus } from '../atoms/useDialogFocus'; // U06 공유 포커스 트랩(VenuePage·EventListPage 와 같은 계약)
 import { cachedEventBoard,getEventBoard, lastEventCardCount, openEventCard, oddsRows, TIER_META,
   type EventBoard, type EventCard, type OpenResult,
 } from '../../api/events';
@@ -96,6 +97,11 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
   const tearTimer = useRef(0);
   useEffect(() => () => { if (tearTimer.current) window.clearTimeout(tearTimer.current); }, []);
 
+  // U06(2026-09-12) 공유 계약 — 이 화면도 Modal 을 쓰지 않는 풀스크린 dialog 오버레이라(VenuePage·GroupPage·
+  // EventListPage 와 같은 부류) 같은 포커스 트랩·복원을 쓴다. 새 로직을 만들지 않는다.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(open, dialogRef);
+
   const closeSheet = () => { setPick(null); setPhase('idle'); setResult(null); };
 
   const doOpen = async () => {
@@ -160,7 +166,7 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
         z-[60] 으로 두면 이 오버레이와 안내 시트가 **같은 층**이 되어 DOM 순서로 이 판이 이기고,
         배너의 '프로필에서 본인인증하기' 를 눌러도 시트가 뒤에 그려져 **아무 일도 안 나는 것처럼 보인다**
         (그다음 뒤로가기 한 번은 보이지 않는 시트를 닫느라 먹힌다). 2026-09-17 스윕에서 확인. */
-    <div className="fixed inset-0 z-[55] overflow-y-auto bg-surface-base" role="dialog" aria-modal="true" aria-label="이벤트">
+    <div ref={dialogRef} className="fixed inset-0 z-[55] overflow-y-auto bg-surface-base" role="dialog" aria-modal="true" aria-label="이벤트">
       {/* 🔴 2026-09-18 오너: "PC 버젼에서 모든 탭이 제대로 잘 움직이다가 이벤트만 가면 갑자기
           전체화면으로 바뀌면서 지혼자서 이상하게 돼 이 부분도 수정 다른 탭들처럼".
           원인: 이 화면은 탭 pane 이 아니라 `fixed inset-0` 오버레이인데(App.tsx 의 'event' 는 pane 이 없다)

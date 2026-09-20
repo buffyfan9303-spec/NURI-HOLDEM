@@ -350,3 +350,59 @@ test('🔴 ⑨ 글을 열고 닫아도 목록 위치가 그대로고, 여는 동
   expect(after.htmlOv, '닫았는데 html overflow 가 남았다').toBe('');
   expect(after.y, `목록 위치를 잃었다: ${before} → ${after.y}`).toBe(before);
 });
+
+// ── ⑩ 실제로 넘치는 이전/다음 제목 — 모바일은 한 줄 말줄임, 원문·목적지는 그대로 ────────────
+//
+// P3(2026-09-21, §6) — line-clamp-2 를 모바일 단일행 truncate 로 갈아탈 때 **실제로 넘치는 제목**으로
+// 재는 계약이 없으면 "짧은 제목만 넣고 통과"하는 빈 검사가 된다. computed CSS 로 확인해야 하는 이유:
+// Tailwind `line-clamp`가 `display:-webkit-box`를 남기면 소스만 봐서는 안 보인다.
+// ⚠ CSS 가 그리는 `…`은 DOM `textContent`에 없다 — `toContainText('…')`를 쓰지 않는다.
+const LONG_PREV_TITLE = '이전 글 제목이 정말로 매우 길어서 작은 버튼 칸 폭을 넘기고 반드시 한 줄을 넘치게 만드는 문장';
+const LONG_NEXT_TITLE = '다음글역시매우길고공백이거의없이한글자씩촘촘하게이어지는긴제목이라칸폭을반드시넘칩니다ABCDEFGHIJK';
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+test('🔴 ⑩ 실제로 넘치는 이전/다음 제목 — 모바일 한 줄 말줄임, DOM 원문·접근 가능한 이름·클릭 목적지는 그대로', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await install(page, [postRow('ov3', LONG_PREV_TITLE), postRow('ov2', '가운데 글'), postRow('ov1', LONG_NEXT_TITLE)]);
+  await openBoard(page);
+  await openFromList(page, '가운데 글');
+
+  for (const [dir, expected] of [['prev', LONG_PREV_TITLE], ['next', LONG_NEXT_TITLE]] as const) {
+    const btn = navBtn(page, dir);
+    const textEl = btn.locator('[data-pd-nav-text]');
+    await expect(textEl, `${dir} 탐색에 data-pd-nav-text 가 없다`).toHaveCount(1);
+
+    // DOM 원문은 새 JS 절단 없이 그대로 남는다.
+    expect((await textEl.textContent())?.trim()).toBe(expected);
+    // 시각적 …은 accessible name 계산에 들어가지 않는다 — 원문이 그대로 접근 가능한 이름에 남는다.
+    await expect(btn).toHaveAccessibleName(new RegExp(escapeRegExp(expected)));
+
+    // computed CSS 로 실제 한 줄 말줄임인지 확인한다(소스만 보고 판단하지 않는다).
+    const g = await textEl.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return {
+        overflowX: cs.overflowX, whiteSpace: cs.whiteSpace, textOverflow: cs.textOverflow,
+        display: cs.display, webkitLineClamp: cs.webkitLineClamp,
+        lineHeight: parseFloat(cs.lineHeight) || 0, height: el.clientHeight,
+        scrollWidth: el.scrollWidth, clientWidth: el.clientWidth,
+      };
+    });
+    expect(g.overflowX, `${dir} overflow-x 가 hidden 이 아니다(${g.overflowX})`).toBe('hidden');
+    expect(g.whiteSpace, `${dir} white-space 가 nowrap 이 아니다(${g.whiteSpace})`).toBe('nowrap');
+    expect(g.textOverflow, `${dir} text-overflow 가 ellipsis 가 아니다(${g.textOverflow})`).toBe('ellipsis');
+    // Tailwind line-clamp 잔재(display:-webkit-box)가 모바일에 남지 않았는지 computed 로 확인한다.
+    expect(g.display, `${dir} 에 -webkit-box(line-clamp 잔재)가 남았다`).not.toBe('-webkit-box');
+    expect(g.webkitLineClamp === 'none' || g.webkitLineClamp === '', `${dir} 에 line-clamp(${g.webkitLineClamp})가 걸렸다`).toBeTruthy();
+    expect(g.height, `${dir} 텍스트 높이 ${g.height}px — 한 줄(line-height ${g.lineHeight}px)을 넘었다(두 줄로 보임)`).toBeLessThanOrEqual(g.lineHeight + 1);
+    // 실제로 넘치지 않으면 이 계약 자체가 빈 검사다 — 픽스처 제목 길이가 짧아졌는지 여기서 드러난다.
+    expect(g.scrollWidth - g.clientWidth, `${dir} 실제로 넘치지 않았다 — 이 계약이 빈 검사가 됐다`).toBeGreaterThan(1);
+  }
+
+  // 클릭 목적지 — 각각 정확한 이웃 글로 이동한다(잘림은 시각적일 뿐 목적지는 원문 slug 그대로).
+  await navBtn(page, 'prev').click();
+  await expect(dialog(page).locator('[data-pd-title]').first()).toHaveText(LONG_PREV_TITLE, { timeout: 5_000 });
+  await navBtn(page, 'next').click(); // 가운데 글로 복귀
+  await expect(dialog(page).locator('[data-pd-title]').first()).toHaveText('가운데 글', { timeout: 5_000 });
+  await navBtn(page, 'next').click();
+  await expect(dialog(page).locator('[data-pd-title]').first()).toHaveText(LONG_NEXT_TITLE, { timeout: 5_000 });
+});

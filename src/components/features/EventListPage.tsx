@@ -8,12 +8,20 @@
 //   내려준 `state` 를 그대로 배지로만 옮긴다. 여기서 날짜를 다시 비교하면 홈·목록·상세가 다른 말을 한다.
 // ⚠ 부제는 서버 값이 있을 때만 그린다(오너: 불필요한 설명줄을 만들지 마라) — 빈 줄을 만들지 않는다.
 // ⚠ 글로우는 '진행 중' 에만(오너 2026-09-18) — 화면당 1곳 제한(구 v6)은 삭제되어 여러 칸에 걸어도 된다.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { listEvents, type EventListItem } from '../../api/events';
 import type { EventState } from '../../lib/eventState';
+import { useDialogFocus } from '../atoms/useDialogFocus';
+// 아래로 끌어 닫기(2026-09-21 추가 요구, 실행문 §5) — Modal.tsx 의 page 변형(bodyDrag)과 **같은 조리법**을
+// 그대로 재사용한다. 새 제스처 라이브러리를 넣지 않는다 — presentationY/springTo 는 atoms/Modal.tsx 가
+// 이미 실전에서 검증한 WAAPI 스프링이다(src/lib/spring.ts). 여기서는 판정 순서만 재구현한다.
+import { presentationY, project, releaseVelocity, rubberband, springTo, type VelSample } from '../../lib/spring';
+
+/** 텍스트를 편집 중인 컨트롤 — 여기서 시작한 손짓은 절대 '닫기'로 해석하지 않는다(Modal.tsx 와 같은 목록). */
+const EDITABLE_SEL = 'input,textarea,select,[contenteditable=""],[contenteditable="true"],[data-no-drag-close]';
 
 /** 목록 배지는 셋뿐이다(오너 지시) — 소진·기간종료 등 세부 상태는 '종료' 로 접는다.
  *  라벨 문구 자체는 `EVENT_STATE_LABEL`(lib/eventState)과 다르다 — 그건 상세 화면의 세부 사유고,
@@ -50,6 +58,119 @@ export default function EventListPage({ open, onClose, onSelect }: {
   // 열릴 때마다 새로 — 그 사이 캠페인이 새로 열리거나 끝났을 수 있다(EventPage.load 와 같은 이유).
   useEffect(() => { if (open) load(); }, [open]);
 
+  // U06(2026-09-12) 공유 계약 — Modal 을 쓰지 않는 풀스크린 오버레이(VenuePage·GroupPage 와 같은 부류)도
+  // 같은 포커스 트랩·복원을 쓴다. 루트 자체가 스크롤러이자 dialog 라 같은 ref 하나를 씌운다.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(open, rootRef);
+
+  // ── 아래로 끌어 닫기(E1·E2, 실행문 §5) ──────────────────────────────────────────
+  // 루트 스크롤러 자체가 [data-testid=event-list-page] 다(중첩 overflow 스크롤러 없음 — 이미 확정된 사실).
+  // React 합성 onTouchMove 는 passive 라 preventDefault 가 안 먹는다 → touchmove 만 네이티브 non-passive 로 건다.
+  const startX = useRef<number | null>(null);
+  const startY = useRef<number | null>(null);
+  const startOffset = useRef(0);
+  const samples = useRef<VelSample[]>([]);
+  const dragging = useRef(false); // 8px 히스테리시스를 넘겨 '드래그'로 확정됐는가
+  // 드래그 뒤 브라우저가 보내는 합성 click 이 카드를 여는 것을 막는다. 다음 onTouchStart 에서
+  // 무조건 다시 풀어준다 — click 이 끝내 안 오는 바운스백(원위치 복귀) 뒤에도 다음 탭이 영영 막히지 않게.
+  const suppressClick = useRef(false);
+
+  const resetGesture = () => {
+    startX.current = null; startY.current = null; samples.current = []; dragging.current = false;
+  };
+  /** 확정되지 않았거나 취소된 드래그를 제자리로. presentationY 가 이미 0 이면 아무 일도 안 한다. */
+  const cancelDrag = () => {
+    const el = rootRef.current;
+    resetGesture();
+    if (el && presentationY(el) !== 0) void springTo(el, 0, { damping: 1, response: 0.3 });
+  };
+
+  const onListTouchStart = (e: React.TouchEvent) => {
+    suppressClick.current = false;
+    if (window.innerWidth >= 1024) return;
+    const t = e.target as Element | null;
+    if (t?.closest?.(EDITABLE_SEL)) return; // 입력 컨트롤 위에서 시작한 손짓은 닫기가 아니다
+    if (e.touches.length > 1) return; // 멀티터치는 후보조차 아니다
+    const el = rootRef.current;
+    if (!el) return;
+    if (el.scrollTop > 1) return; // 목록이 맨 위가 아니면 스크롤에 양보
+    // ⚠ 순서 고정 — Modal.tsx 의 증명된 순서(먼저 읽고 그 다음 취소). 거꾸로 하면 WAAPI cancel() 이
+    //   동기적으로 효과를 제거해, 닫히는 애니메이션 도중 재터치 시 시작 오프셋을 엉뚱한 값으로 읽어 패널이 튄다.
+    const from = presentationY(el);
+    for (const a of el.getAnimations()) a.cancel();
+    startOffset.current = from;
+    if (from) el.style.transform = `translateY(${from}px)`; // 닫히는 중 다시 잡은 경우 — 보이는 값에서 이어받는다
+    startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+    samples.current = [{ t: e.timeStamp, y: from }];
+    dragging.current = false;
+  };
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const onMove = (e: TouchEvent) => {
+      if (startY.current == null) return;
+      const root = rootRef.current;
+      if (!root) return;
+      if (e.touches.length > 1) { cancelDrag(); return; }
+      const dx = e.touches[0].clientX - (startX.current ?? 0);
+      const dy = e.touches[0].clientY - startY.current;
+      if (!dragging.current) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return; // 히스테리시스 — 탭과 드래그를 가른다
+        // 가로 우세·위 방향·스크롤 중이면 닫지 않는다 — 스크롤에 양보(제자리 정리만 한다)
+        if (Math.abs(dx) > Math.abs(dy) || dy < 0 || root.scrollTop > 1) { cancelDrag(); return; }
+        dragging.current = true;
+        suppressClick.current = true; // 확정된 순간부터 합성 click 가드를 건다
+      }
+      e.preventDefault(); // 확정된 뒤에만 — 네이티브 스크롤·삼성 당겨 새로고침을 막는다
+      const y = startOffset.current + dy;
+      const shown = y < 0 ? rubberband(y, root.offsetHeight || window.innerHeight) : y; // 위로는 고무줄
+      root.style.transform = `translateY(${shown}px)`;
+      samples.current.push({ t: e.timeStamp, y });
+      if (samples.current.length > 8) samples.current.shift();
+    };
+    el.addEventListener('touchmove', onMove, { passive: false });
+    // 언마운트(X·브라우저 Back 이 App 의 onClose 로 이 컴포넌트를 즉시 걷어낸다) 시 남은 WAAPI 애니를
+    // 정리한다 — springTo 는 취소된 애니의 완료 Promise 를 resolve 하지 않으므로(spring.ts 불변식),
+    // 진행 중이던 닫기 애니의 옛 then(onClose) 가 나중에 되살아나 onClose 를 또 부르지 않는다.
+    // ⚠ `el` 은 이 effect 가 처음 돈 시점에 잡은 변수다 — cleanup 시점의 rootRef.current 를 다시 읽지
+    //   않는다(그때는 React 가 이미 ref 를 null 로 되돌렸을 수 있다).
+    return () => {
+      el.removeEventListener('touchmove', onMove);
+      for (const a of el.getAnimations()) a.cancel();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const onListTouchEnd = () => {
+    if (startY.current == null) return;
+    const el = rootRef.current;
+    const wasDragging = dragging.current;
+    const v = releaseVelocity(samples.current); // px/s — 아래가 양
+    resetGesture();
+    if (!el) return;
+    if (!wasDragging) {
+      // 짧은 터치·8px 미만도 되돌린다 — onListTouchStart 가 진행 중 애니를 취소하며 인라인 transform 으로
+      // 얼렸을 수 있어서, 그냥 두면 시트가 그 위치에 굳는다(Modal.tsx onSheetEnd 와 같은 이유).
+      if (presentationY(el) !== 0) void springTo(el, 0, { damping: 1, response: 0.3 });
+      return;
+    }
+    const y = presentationY(el);
+    const landing = y + project(v); // 투영 — 이 속도로 놓으면 어디까지 미끄러지나(Modal.tsx:269-290 조리법)
+    if (v > 600 || (v >= 0 && landing > 120)) {
+      const gone = y + (window.innerHeight - el.getBoundingClientRect().top) + 8;
+      void springTo(el, gone, { damping: 1, response: 0.3, velocity: Math.max(v, 300) }).then(onClose);
+      return;
+    }
+    void springTo(el, 0, { damping: Math.abs(v) > 400 ? 0.8 : 1, response: 0.35, velocity: v });
+  };
+  const onListTouchCancel = () => { if (startY.current != null) cancelDrag(); };
+  // 드래그로 확정된 뒤 브라우저가 보내는 합성 click 을 한 번만 삼킨다(카드가 저절로 열리는 것을 막는다).
+  const onListClickCapture = (e: React.MouseEvent) => {
+    if (!suppressClick.current) return;
+    suppressClick.current = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
   if (!open) return null;
 
   return (
@@ -57,7 +178,15 @@ export default function EventListPage({ open, onClose, onSelect }: {
     // 보드가 목록 위에서 이긴다(같은 z-index 는 DOM 순서가 이긴다) — 목록에서 카드를 고르면 보드가 덮고,
     // 보드를 닫으면 이 화면이 그대로 드러난다. z-[60]은 쓰지 않는다(Modal.tsx 의 시트·모달 층이라 겹치면
     // 안내 시트가 뒤에 깔린다 — EventPage 머리말 참고).
-    <div data-testid="event-list-page" className="fixed inset-0 z-[55] overflow-y-auto bg-surface-base" role="dialog" aria-modal="true" aria-label="이벤트 목록">
+    <div ref={rootRef} data-testid="event-list-page"
+      className="fixed inset-0 z-[55] overflow-y-auto overscroll-contain bg-surface-base"
+      role="dialog" aria-modal="true" aria-label="이벤트 목록"
+      onTouchStart={onListTouchStart} onTouchEnd={onListTouchEnd} onTouchCancel={onListTouchCancel}
+      onClickCapture={onListClickCapture}>
+      {/* 작은 드래그 그립 — 모바일에서만, 조작 가능성을 알린다(Modal.tsx page 변형의 그립과 같은 문법).
+          PC 는 onListTouchStart 가 1024px 이상에서 바로 return 해 드래그 자체가 없다 — 장식일 뿐이라 lg:hidden. */}
+      <div aria-hidden data-testid="event-list-drag-grip"
+        className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
       {/* 🔴 2026-09-18 오너: "PC 버젼에서 모든 탭이 제대로 잘 움직이다가 이벤트만 가면 갑자기
           전체화면으로 바뀌면서 지혼자서 이상하게 돼 이 부분도 수정 다른 탭들처럼".
           원인: 이 화면은 탭 pane 이 아니라 `fixed inset-0` 오버레이인데(App.tsx 의 'event' 는 pane 이 없다)
