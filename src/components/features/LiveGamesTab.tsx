@@ -173,7 +173,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         {/* items-start — 320~390px 에서는 설명 문구가 2줄이 되어 왼쪽 묶음이 62.8px, 버튼 그룹이 40.8px 가 된다.
             items-center 이면 버튼이 제목보다 11.0px 아래로 내려가 제목과 어긋난다(실측 375: 11.0 · 320: 10.83).
             1280 은 설명이 1줄이라 렌더가 변하지 않는다. */}
-        <div className="flex items-start justify-between gap-2">
+        <div data-main-enter className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-fluid-lg font-bold text-ink-primary text-grad-violet">진행 중 게임 {games ? <span className="text-accent-200 text-grad-keep">{games.length}</span> : null}</h2>
             {/* 2026-09-18 오너 지시로 설명줄 제거 — 제목 '진행 중 게임'이 이미 화면의 정체를 말하고, '블라인드·레지마감을 한눈에'는 바로 아래 카드 목록에 */}
@@ -208,7 +208,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         {/* 🎯 내 토너 — 바인 승인 후 참가자 시점이 어디에도 없던 격차. 승인된 내 게임이
             진행 중이면 블라인드·평균스택 + 스택 자가입력 → BB·평균 대비 %를 맨 위에. */}
         {myLive.length > 0 && (
-          <div className="space-y-card-gap">
+          <div data-main-enter className="space-y-card-gap">
             {/* v6.5: 실제로 뛰는 내 게임이 정확히 1장일 때만 글로우(주인공이 둘이면 아무도 빛나지 않는다 — CLAUDE.md 글로우 배치 규칙) */}
             {myLive.map(({ m, g }) => (
               <MyTournamentCard key={`${g.venueId}:${g.gameSeq ?? 0}`} g={g} venueName={m.venueName} hero={myLive.length === 1}
@@ -220,7 +220,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         )}
 
         {/* 진행 게임 목록 — 정렬 전환의 본문(방향성 푸시 대상). 위 헤더·정렬 바는 제자리. */}
-        <div data-live-panel="">
+        <div data-main-enter data-live-panel="">
         {games === null ? (
           loadErr != null ? (
             <LoadErrorCard error={loadErr} what="진행 중인 게임" onRetry={load} />

@@ -84,6 +84,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY, isProgrammaticScroll, markProgrammaticScroll, notifyScrollNow } from './lib/useScrollY';
+import { startTabEnter, cancelTabEnter } from './lib/tabEnter';
 import { nextHeaderShrunk } from './lib/headerShrink';
 // ⚠ lib/postNav 가 아니라 lib/postNavCtx 에서 받는다 — postNav 를 정적으로 물면 neighborsOf·appendPage(gz 2.1KB)까지
 //   첫 화면 임계 경로로 딸려 와 bundle:budget 257.1/256KB 초과(실측 2026-09-13). 위 api/events→lib/eventSlug 와 같은 함정.
@@ -826,18 +827,30 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
               // 접근성 이름을 버튼에 고정 — 배지 span 의 aria-label 이 DOM 순서상 라벨보다 앞이라 이름이
               // '진행 중 2게임 라이브' 로 뒤집혔다(게임이 돌 때마다 e2e /^라이브/ 가 깨지던 원인). 이름 = '라이브, 진행 중 2게임'.
               aria-label={tab && (count?.[tab] ?? 0) > 0 ? `${label}, 진행 중 ${count![tab]}게임` : label}
-              className="press-spring flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
+              // ⚠ 2026-09-21 press-spring 제거 — 실측(CDP 130ms 터치)상 특이도로 한 번도 이기지 못한
+              // 죽은 규칙이었다(전역 button:active(0,2,1) > .press-spring:active(0,2,0)). 대신
+              // data-main-tab 으로 하단바 전용 press 규칙을 index.css 에 특이도 우위로 건다.
+              // 부수 효과: .press-spring 의 will-change:transform 이 빠지며 이 버튼이 더 이상 상시
+              // offsetParent 가 아니게 된다(아래 필 주석 참고) — 이번 변경에서 노린 것은 아니지만 개선이다.
+              data-main-tab
+              className="flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
             >
-              {/* 아이콘 21px · 라벨 t-tab(12.75px) — 공백 줄이고 또렷하게 */}
-              <span className={['relative flex h-7 w-12 items-center justify-center rounded-full [&_svg]:relative [&_svg]:h-[21px] [&_svg]:w-[21px] transition-colors duration-[var(--dur-fast)]',
-                on ? 'text-white animate-tab-bounce' : 'text-ink-secondary'].join(' ')}>
+              {/* 아이콘 21px · 라벨 t-tab(12.75px) — 공백 줄이고 또렷하게
+                  ⚠ 2026-09-21 활성 아이콘 진입 바운스(0.4초, 최대 1.16배) 제거 — 손을 뗀 뒤에야
+                  반응하는 :active 부류와 달리 aria-current 는 React 상태라 즉시 바뀐다. 반응성은
+                  이제 index.css 의 nav 전용 [aria-current="page"] 필/아이콘 전환이 담당한다.
+                  (지운 유틸리티 클래스명은 여기 그대로 적지 않는다 — Tailwind content 스캔이
+                  주석의 평문도 읽어 죽은 CSS 규칙을 되살린다, index.css 참고.) */}
+              <span data-main-tab-icon className={['relative flex h-7 w-12 items-center justify-center rounded-full [&_svg]:relative [&_svg]:h-[21px] [&_svg]:w-[21px] transition-colors duration-[var(--dur-fast)]',
+                on ? 'text-white' : 'text-ink-secondary'].join(' ')}>
                 {/* 활성 알약(.pill-active 그라데이션 필 — OUTFLAME 필 내비 문법) — 각 칸이 자기 핀을 갖고
-                    opacity 만 토글(transform·layout 0). SlidingPill FLIP 은 이 탭바에선 불가:
-                    버튼의 .press-spring will-change:transform 이 버튼을 offsetParent 로 만들어
-                    캡슐 측정이 버튼 기준으로 틀어진다(실측 확인) — 크로스페이드 정적 필로 대체.
+                    opacity 만 토글(transform·layout 0). SlidingPill FLIP 은 이 탭바에선 여전히 안 쓴다
+                    (설계서 금지 — 정적 크로스페이드 필로 충분하고 새 측정 로직을 안 늘린다).
+                    press-spring 제거로 버튼이 상시 offsetParent 이던 문제 자체는 없어졌지만
+                    FLIP 을 새로 들일 이유가 되진 않는다.
                     아이콘은 그라데이션 필 위라 흰색으로 승격(다크 4.6:1 실측) */}
-                <span aria-hidden
-                  className={['pointer-events-none absolute inset-0 rounded-full pill-active transition-opacity duration-[var(--dur-base)]',
+                <span aria-hidden data-main-tab-pill
+                  className={['pointer-events-none absolute inset-0 rounded-full pill-active transition-opacity duration-[var(--dur-fast)]',
                     on ? 'opacity-100' : 'opacity-0'].join(' ')} />
                 {tab ? TAB_ICON[tab] : ME_ICON}
                 {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-accent-300" aria-hidden />}
@@ -1009,6 +1022,9 @@ export default function App() {
   //   ⚠ 뒤로가기로 돌아오는 경로(commitTab(t,'back'))도 같은 규칙을 탄다. 오너가 '항상 맨 위' 를
   //     골랐고 '탭바 직접 누를 때만 맨 위' 는 고르지 않았다.
   const activeTabRef = useRef<TabId>('home');
+  /** N1 진입 모션 — 앱 **최초 커밋**에는 재생하지 않는다(설계서: 앱 부팅에 재생 금지).
+   *  탭 커밋 effect 가 마운트에도 한 번 도는데, 그 첫 회만 건너뛰려고 둔다. */
+  const tabEnterBooted = useRef(false);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   /**
    * 탭 '커밋' 만 담당한다 — 이력(트레일) 관리는 아래 useEffect 가 맡는다.
@@ -1125,6 +1141,15 @@ export default function App() {
     //   이 파일 :678-688 이 정확히 그 패턴을 없앤 기록이다(모바일 콜드 마운트 207ms · 탭 전환 회당 27ms).
     //   오너가 "눌림" 을 지적한 바로 그 프레임이라 비용을 되돌려 놓을 이유가 없다.
     notifyScrollNow(0);
+    // 🔴 N1(2026-09-21 오너 정정) — **새 탭의 본문 콘텐츠가 한 번 들어온다.**
+    //   "부드럽지 않다" 고 한 대상은 하단바 필이 아니라 body 콘텐츠였다. 하단바만 움직이면 실패다.
+    //   여기가 맞는 자리인 이유: 바로 위 두 줄이 `scrollTo(0)` 과 헤더 동기화를 **이미 확정**했다.
+    //   진입 모션이 그보다 먼저 돌면 옛 스크롤 위치에서 움직이기 시작해 튄다.
+    //   ⚠ 앱 **최초 로드**에는 재생하지 않는다(설계서 금지) — 그래서 첫 커밋을 건너뛴다.
+    //   ⚠ 여기서 rect 를 읽지 않는다. 대상 수집·측정은 `startTabEnter` 가 **다음 프레임**에 한다
+    //     (이 훅에서 읽으면 위 F2 주석이 없앤 강제 레이아웃이 그대로 되살아난다).
+    if (tabEnterBooted.current) startTabEnter(activeTab);
+    else tabEnterBooted.current = true;
   }, [activeTab]);
 
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
@@ -1267,6 +1292,10 @@ export default function App() {
     startTransition(() => setAuthOpen(true));
   }, []);
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
+  // 🔴 N6 — 전면 오버레이(매장 페이지)가 덮으면 하단바가 `suppressed` 가 된다.
+  //   그때는 본문 진입도 **취소**한다: 사용자가 보는 것은 오버레이라 뒤에서 움직여 봐야 안 보이고,
+  //   오버레이를 닫는 순간 끝나 버린 모션의 잔재만 남는다.
+  useEffect(() => { if (openVenueId !== null) cancelTabEnter(); }, [openVenueId]);
   // changeTab(상단 선언)에서 TDZ 없이 오버레이를 닫기 위한 ref 바인딩
   closeOverlaysRef.current = () => setOpenVenueId(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);

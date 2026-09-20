@@ -227,7 +227,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
 
   if (!user) {
     return (
-      <div className="px-page-x py-section">
+      <div data-main-enter className="px-page-x py-section">
         <section className="rounded-aura border card-aura p-6 text-center">
           <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-input tile-grad" aria-hidden>
             <Icon name="calendar" size={20} />
@@ -250,7 +250,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   return (
     <div className="space-y-3 px-page-x py-section">
       {/* 월 이동 */}
-      <div className="flex items-center justify-between">
+      <div data-main-enter className="flex items-center justify-between">
         <button type="button" aria-label="이전 달" className="hit -my-1 p-1 text-ink-secondary hover:text-ink-primary"
           onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>
           <Icon name="chevron-left" size={20} />
@@ -285,7 +285,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
       {/* 2026-09-10 — '내 기록'은 무엇의 기록인지 말하지 않았다. '순손익'으로 바꾸되
           아래 카드의 '전체 누계 순손익'과 같은 낱말이 되므로 **sub 줄에 범위를 적는다**(§6 '범위가 문구로 구분됨').
           sub 는 이미 자리를 지키는 줄이라 높이 변화 0. */}
-      <div className="grid grid-cols-3 gap-1.5">
+      <div data-main-enter className="grid grid-cols-3 gap-1.5">
         <Stat testId="sum-reserve" label="예약" value={`${summary.reserveCount}건`} sub="이번 달" tone="cyan" />
         <Stat testId="sum-like" label="찜" value={`${summary.likeCount}개`} sub="이번 달" tone="gold" />
         <Stat testId="sum-net" label="순손익" value={`${summary.bankrollSum >= 0 ? '+' : ''}${won(summary.bankrollSum)}`} sub="이번 달" tone={summary.bankrollSum >= 0 ? 'emerald' : 'danger'} />
@@ -294,7 +294,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
       {/* 월 그리드 — 이 화면의 주인공 면이라 아우라 헤어라인(.ring-aura)을 준다.
           글로우(.ring-aura-glow)는 쓰지 않는다: 화면당 1곳 규칙의 '주인공'은 지금 진행 중인 무언가를
           가리키는 신호인데, 캘린더는 상시 화면이라 늘 빛나면 신호가 아니라 배경이 된다. */}
-      <section className="rounded-aura border card-aura ring-aura p-2">
+      <section data-main-enter className="rounded-aura border card-aura ring-aura p-2">
         <div className="grid grid-cols-7 pb-1">
           {DAYS_KO.map((d, i) => (
             <span key={d} className={['text-center text-2xs font-semibold', i === 0 ? 'text-danger-light' : i === 6 ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>{d}</span>
@@ -331,7 +331,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
       </section>
 
       {/* 선택한 날 */}
-      <section className="rounded-aura border card-aura p-3">
+      <section data-main-enter className="rounded-aura border card-aura p-3">
         <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
             <Icon name="calendar" size={14} />

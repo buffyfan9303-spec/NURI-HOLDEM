@@ -759,7 +759,7 @@ function FeedSection({
     // data-board-loaded: 서버 첫 페이지의 3상태(idle=아직 안 시작 · loading=진행 중 · done=커서 끝) — 화면은 그대로, e2e 계약용.
     //   post-nav ③(2026-09-13): 네트워크 응답을 봐도 serverDone 커밋 전에 글을 열면 스냅샷 done=false 라 마지막 글이 '더 불러오기'(정직)로 뜬다.
     //   테스트가 기다릴 DOM 신호가 없어서(:894 갈래는 목록이 비었을 때만 렌더) 상태를 속성으로 노출한다.
-    <div className="space-y-2" data-board-loaded={serverDone ? 'done' : serverLoading ? 'loading' : 'idle'}>
+    <div data-main-enter className="space-y-2" data-board-loaded={serverDone ? 'done' : serverLoading ? 'loading' : 'idle'}>
       {/* 글쓰기 — '글쓰기' 버튼 → 글쓰기 모달(카테고리·제목·내용·이미지) (Stage 2) */}
       {user ? (
         <button
@@ -1065,7 +1065,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
   };
 
   return (
-    <div className="rounded-aura border card-aura">
+    <div data-main-enter className="rounded-aura border card-aura">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="w-full flex items-center gap-2.5 rounded-aura px-3 py-2.5 text-left transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
@@ -1167,7 +1167,7 @@ function VenuesSection({
   return (
     <div className="space-y-3">
       {/* 검색 */}
-      <div className="relative">
+      <div data-main-enter className="relative">
         <input
           type="search" enterKeyHint="search"
           value={query}
@@ -1193,7 +1193,7 @@ function VenuesSection({
           활성은 액센트 색+굵기만으로 표시(정렬 안내줄과 같은 텍스트 문법). */}
       {/* 44px 탭 타깃(오너 승인 2026-09-03): 버튼 h-11, 레일 -my-2.5 로 원래 24px 행 높이 유지.
           부모 space-y-3 이 자식 margin 을 덮어쓰므로 h-6 래퍼 안에서 상쇄한다. */}
-      <div className="h-6">
+      <div data-main-enter className="h-6">
       <div className="-my-2.5 flex items-center gap-3 overflow-x-auto scrollbar-none -mx-page-x px-page-x">
         {VENUE_FILTERS.map((f) => (
           <button key={f.key} type="button" onClick={() => setKindFilter(f.key)}
@@ -1209,7 +1209,7 @@ function VenuesSection({
       </div>
 
       {/* 섹션 헤더 — GTO 레인 헤더 문법(ToolsPanel): 현재 필터 라벨 + N개 | 정렬 안내, 2행 설명. 카피 3종 원문 그대로 */}
-      <div className="border-b border-border-subtle pb-1.5">
+      <div data-main-enter className="border-b border-border-subtle pb-1.5">
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-bold text-ink-primary">{VENUE_FILTERS.find((f) => f.key === kindFilter)?.label ?? '전체'}</h2>
           <span className="text-2xs font-semibold tabular-nums text-ink-muted">{filtered.length}개</span>
@@ -1239,7 +1239,7 @@ function VenuesSection({
       {filtered.length === 0 ? (
         <EmptyState title="결과가 없습니다" hint="다른 검색어나 카테고리로 시도해 보세요" />
       ) : (
-        <ul className="space-y-2">
+        <ul data-main-enter className="space-y-2">
           {filtered.map(({ venue, commentCount, latest }) => (
             <li key={venue.id}>
               <button
@@ -1473,7 +1473,7 @@ function LiveWallSection({ visible }: { visible: boolean }) {
   };
 
   return (
-    <div className="space-y-2">
+    <div data-main-enter className="space-y-2">
       {user ? (
         <form onSubmit={send} className="flex items-center gap-2">
           <input

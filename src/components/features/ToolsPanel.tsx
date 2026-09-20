@@ -433,7 +433,7 @@ export default function ToolsPanel() {
       {/* 트레이너 진행 스트립(오늘 N/목표 · 스트릭 · XP · 목표까지 N문제).
           2026-09-14 오너 지시로 이 자리의 '오늘의 드릴' 카드는 뺐다(드릴 화면 자체는 #tool=drill 로 남는다).
           이 지표는 드릴이 아니라 트레이너 기록이라 그대로 둔다 — 없어진 정보 0. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
+      <div data-main-enter className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
         <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
           <span className="text-ink-muted">오늘 <b className="tabular-nums text-ink-primary">{prog.today}/{prog.goal}</b></span>
           <span className="inline-flex items-center gap-1 text-ink-muted">
@@ -451,7 +451,7 @@ export default function ToolsPanel() {
       {!hits && <SpotHeroCard onOpen={open} />}
 
       {/* 도구 검색 */}
-      <div className="relative">
+      <div data-main-enter className="relative">
         <Icon name="search" size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden />
         {/* type=search: 네이티브 지우기(×) 버튼 + 모바일 '검색' 키(enterKeyHint). .input[type=search] 가 12px 라운드·pl-10 을 준다 */}
         <input type="search" enterKeyHint="search" autoComplete="off" value={q} onChange={(e) => setQ(e.target.value)} placeholder="도구 검색 · 이름·기능"
@@ -468,7 +468,7 @@ export default function ToolsPanel() {
           ⚠ gap-y 가 gap-x 보다 큰 이유(2026-09-11 실측): gap-1.5(6.375px)는 위아래 줄의 6px 확장이 서로 겹치는 폭이라
             실효 터치 높이가 39px 로 줄었다. gap-y-3(12.75px) > 6+6 이면 두 줄 모두 46px 을 온전히 가진다. */}
       {!hits && (
-        <div data-tools-lanebar="" role="group" aria-label="도구 분류 필터"
+        <div data-main-enter data-tools-lanebar="" role="group" aria-label="도구 분류 필터"
           className="flex flex-wrap justify-center gap-x-1.5 gap-y-3">
           {([{ id: 'all' as const, label: '전체' }, ...LANES]).map((l) => {
             const on = lane === l.id;
@@ -489,7 +489,7 @@ export default function ToolsPanel() {
 
       {/* 즐겨찾기 — 레인과 무관하게 항상 보이는 내 도구 */}
       {!hits && favTools.length > 0 && (
-        <section className="space-y-2">
+        <section data-main-enter className="space-y-2">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
             <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
               <Icon name="star-fill" size={13} className="text-accent-300" aria-hidden /> 즐겨찾기
@@ -502,7 +502,7 @@ export default function ToolsPanel() {
 
       {/* 자주 쓰는 도구 — 즐겨찾기 아래, 카탈로그 위(오너 지시 2026-09-14). '전체' 보기에서만; 갈래·검색 중에는 제 자리로 돌아간다. */}
       {!hits && lane === 'all' && (
-        <section data-testid="tools-featured" className="space-y-2">
+        <section data-main-enter data-testid="tools-featured" className="space-y-2">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border-subtle pb-1.5">
             <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
               <Icon name="trophy" size={13} className="text-accent-300" aria-hidden /> 자주 쓰는 도구
@@ -517,7 +517,7 @@ export default function ToolsPanel() {
       {/* 도구 목록 — 레인 전환의 본문(방향성 푸시 대상).
           레인 사이는 space-y-4(17px): 섹션 안(헤더→그리드) 8.5px 의 2배라 밑줄 헤더가 자기 그리드 쪽으로 붙어 레인이 묶음으로 읽힌다
           (space-y-3 은 1.5배라 '계산기 N개' 헤더가 위 레인의 마지막 카드에 붙어 보였다). */}
-      <div data-tools-lanepanel="" className="space-y-4">
+      <div data-main-enter data-tools-lanepanel="" className="space-y-4">
       {hits ? (
         hits.length === 0
           ? <p className="py-8 text-center text-2xs text-ink-muted">'{q.trim()}' 에 맞는 도구가 없습니다</p>
@@ -602,6 +602,7 @@ const LANE_TONE: Record<string, TileTone> = { chart: 'violet', learn: 'fuchsia',
 function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => void }) {
   return (
     <section
+      data-main-enter
       data-testid="spot-hero"
       className="relative rounded-card border border-accent-400/30 bg-surface-mid p-3"
       // 히어로에만 강한 LED. 아래 도구 카드들은 이 빛을 반복하지 않는다(광량 단계).

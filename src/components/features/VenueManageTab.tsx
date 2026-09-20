@@ -778,7 +778,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
         <div className="lg:flex lg:gap-5">
           {available.length > 1 && (<>
               {/* 모바일: 아코디언 — 현재 메뉴만 보이고, 탭하면 그룹별 전체 펼침(위로 다 몰지 않게) */}
-              <div className="lg:hidden">
+              <div data-main-enter className="lg:hidden">
                 <button type="button" onClick={() => setNavOpen((v) => !v)} aria-expanded={navOpen}
                   className="flex w-full items-center gap-2 rounded-card border border-accent-400/30 bg-surface-high px-3 py-2.5">
                   <span className="shrink-0 text-accent-300" aria-hidden>{SECTION_ICON[section as Section]}</span>
@@ -891,7 +891,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   가르면 같은 1024 가 JS·CSS 두 곳에 생기고, 리사이즈 중 matchMedia 가 한 프레임
                   뒤처지는 순간 바가 있어야 할 자리에 아무것도 없게 된다. */}
             {(renderSection === 'game' || renderSection === 'dashboard' || renderSection === 'voucher') && !dItem?.locked && (
-              <div className={renderSection === 'voucher' ? 'lg:hidden' : undefined}>
+              <div data-main-enter className={renderSection === 'voucher' ? 'lg:hidden' : undefined}>
               <GameStepBar steps={GAME_STEPS.filter((st) => (st.id === 'posters' ? canPosters : ledgerOk))}
                 onHome={() => gotoSection('dashboard')} progress={stepInfo}
                 active={renderSection === 'dashboard' ? 'dashboard' : renderSection === 'voucher' ? 'voucher' : renderGameStep}
@@ -1168,6 +1168,7 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
        StoreDashboard 의 기존 라이브 KPI 글로우와는 같은 화면에 뜰 수 없다 —
        이 바는 renderSection !== 'dashboard' 게이트 안에만 있다(위 597행). */
     <div
+      data-main-enter
       data-aura=""
       data-aura-level="hero"
       data-aura-variant={mainRunning ? 'emerald' : 'amber'}

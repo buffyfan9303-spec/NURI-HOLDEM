@@ -436,7 +436,7 @@ export default function HomeTab({
         {/* ── 상단: 오늘 안내 + 배너 ──────────────────────────────────────────
             PC(lg~)는 5:7 두 칸(§6-4). 768~1023 은 **한 열 그대로** 쌓는다 — 중간 폭에서 성급히
             두 칸으로 쪼개면 가운데 열이 눌린다. 좁아지면 DOM 읽기 순서대로 쌓인다. */}
-        <div className="lg:grid lg:grid-cols-12 lg:items-center lg:gap-6 lg:pt-4">
+        <div data-main-enter className="lg:grid lg:grid-cols-12 lg:items-center lg:gap-6 lg:pt-4">
           {/* 오늘 안내 — 기본 48~60px(§6-2). 큰 인사말이 아니라 **사실**이다. */}
           <section data-testid="home-today" className="px-page-x pt-1.5 lg:col-span-5 lg:pt-0">
             <a
@@ -530,7 +530,7 @@ export default function HomeTab({
               배지가 아랫줄로 흐르게 두는 것이 글자를 줄이는 것보다 낫다(§7).
             ⚠ 글로우는 여기 둘에만 준다(micro). 화면에서 '지금 여기를 눌러라' 가 이 둘뿐이기 때문이다 —
               목록 줄처럼 반복되는 자리에 같은 빛을 주면 강조가 아니라 소음이 된다. */}
-        <section className="px-page-x pt-3" data-testid="home-quick">
+        <section data-main-enter className="px-page-x pt-3" data-testid="home-quick">
           {/* 이벤트 메뉴 스위치가 꺼져 있으면 칸이 하나다 — 2열 격자에 빈 칸을 남기지 않는다. */}
           <div className={eventMenuVisible ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1 gap-2.5'}>
             <button type="button" onClick={onOpenVoucher} data-testid="home-quick-checkin"
@@ -617,7 +617,7 @@ export default function HomeTab({
           </section>
         )}
         {openNow.length > 0 && (
-          <section className="px-page-x pt-5">
+          <section data-main-enter className="px-page-x pt-5">
             <header className="flex items-baseline justify-between pb-2.5">
               <h3 className={H3_CLS}>
                 지금 등록 가능 <span className="t-desc font-semibold tabular-nums stat-emerald">{openAll.length}</span>
@@ -662,7 +662,7 @@ export default function HomeTab({
               들어 있던 제목 '오늘·내일 일정' 으로 찾고 있었다. 제목을 바꾸면 매칭이 영영 실패해
               **드리프트가 0 으로 거짓 통과**한다. `describe()` 가 `#id` 를 직렬화하므로 여기로 옮긴다.
               (같은 이유로 이 id 를 지우거나 이름을 바꾸지 마라 — 지우면 그 게이트가 빈손이 된다.) */}
-        <section id="home-schedule" data-testid="home-schedule" className="px-page-x pt-5">
+        <section data-main-enter id="home-schedule" data-testid="home-schedule" className="px-page-x pt-5">
           {/* ① 날짜 레일 — 5칸 + 좌우 이동. 레퍼런스의 상단 레일.
               ⚠ 화살표에 `.hit` 을 쓰지 않는다 — `::after` 가 44px 를 중앙에서 펼치는데 이 둘은
                 레일의 **양 끝**이라 그 오버행이 컨테이너 밖으로 나가 `scrollWidth` 를 1px 늘렸다

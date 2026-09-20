@@ -102,9 +102,14 @@ test('① 하단 탭바 아이콘이 루트 확대를 따라간다 (알약과 �
   await page.setViewportSize({ width: 390, height: 844 });
   await boot(page, 'dark');
 
+  // ⚠ 2026-09-21 N2 로 선택 탭 아이콘에 상시 scale(1.04) 가 붙었다. 기본 진입 탭(홈)은 항상
+  // aria-current="page" 라 첫 매치를 그대로 쓰면 100% 렌더 크기가 21→21.84px 로 늘어난 걸 이
+  // 테스트가 "회귀"로 오판한다(허용오차 0.3px). 이 테스트가 원래 재려던 건 '루트 확대에 절대 px
+  // 로 안 굳는가'이지 선택 탭의 강조 배율이 아니므로, 허용오차를 넓히는 대신 **비활성 탭**으로
+  // 셀렉터를 좁힌다. 아이콘과 필(아이콘 래퍼)은 같은 버튼에서 함께 재야 비율이 맞는다.
   const read = () => page.evaluate(() => {
-    const icon = document.querySelector("nav[aria-label='하단 내비게이션'] button svg");
-    const pill = document.querySelector("nav[aria-label='하단 내비게이션'] button > span");
+    const icon = document.querySelector("nav[aria-label='하단 내비게이션'] button[data-main-tab]:not([aria-current='page']) svg");
+    const pill = document.querySelector("nav[aria-label='하단 내비게이션'] button[data-main-tab]:not([aria-current='page']) > span");
     if (!icon || !pill) return null;
     return { icon: icon.getBoundingClientRect().height, pill: pill.getBoundingClientRect().height,
              root: parseFloat(getComputedStyle(document.documentElement).fontSize) };
