@@ -12,13 +12,13 @@
 //
 // ⚠ 이 검사는 "이름이 붙어 있나" 를 소스에서 보지 않는다. 그건 CSS 가 실제로 적용됐는지를
 //   증명하지 못한다(미디어쿼리·우선순위·오버레이 조건에 걸릴 수 있다). **전환이 도는 동안
-//   실제 화면에서 그 요소가 계속 보이는지**를 프레임 단위로 잰다.
+//   애니메이션 의사요소가 생성되는지**를 프레임 단위로 잰다(픽셀 휘도 검사는 아니다).
+//   모바일의 VT 호출 0회는 mobile-tab-transition.spec.ts가 별도로 검증한다.
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack } from './_session';
 
-// ⚠ PC 전용이 아니다. 이름 규칙(`src/index.css` 1925~1926)은 미디어쿼리 **밖**에 있어
-//   모바일에서도 그대로 돌고, 2026-09-20 오너 리포트("메인 메뉴가 이동하면 찌그러졌다가")는
-//   **핸드폰**에서 나왔다. 두 폭 다 재다.
+// 2026-09-20: 모바일 대메뉴는 스냅샷 없이 전환하고, PC는 기존 VT를 유지한다.
+// 두 폭 모두 실제 목적지 도착과 공통 배경/푸터의 애니메이션 부재를 검사한다.
 const VIEWPORTS = [
   { width: 390, height: 844, label: '모바일' },
   { width: 1440, height: 900, label: 'PC' },
@@ -75,11 +75,12 @@ test(`🔴 ${PC.label} ${PC.width}px 대메뉴 전환 — 좌우 채움 배경�
   });
 
   expect(probe.ok, probe.why ?? '').toBe(true);
+  await expect(page.locator('.tab-pane[data-tab="live"]')).toBeVisible();
   const pseudos = probe.pseudos!;
 
-  // ① 전환이 **실제로 돌았나.** 안 돌았으면 아래 단언들이 공짜로 통과한다.
+  // ① 모바일은 VT 부재가 요구사항이고 PC는 VT 실행이 대조군이다.
   expect(pseudos.some((p) => p.includes('view-transition')),
-    `전환이 아예 안 돌았다 — 이 검사가 아무것도 재지 않았다. 잡힌 의사요소: ${JSON.stringify(pseudos)}`).toBe(true);
+    `${PC.label} 대메뉴의 스냅샷 경로가 잘못됐다: ${JSON.stringify(pseudos)}`).toBe(PC.width >= 1024);
 
   // ② 좌우 채움 배경과 푸터는 **애니메이션 대상이 아니어야 한다.**
   //    이름이 붙고 `animation:none` 이 먹으면 이 둘의 old/new 의사요소에는 애니메이션이 안 생긴다.
@@ -97,14 +98,13 @@ test(`🔴 ${PC.label} ${PC.width}px 대메뉴 전환 — 좌우 채움 배경�
       .toEqual([]);
   }
 
-  // ②-b 대조군 — 이미 얼려 둔 셋은 계속 안 돌아야 하고, `root` 는 **돌아야** 한다.
-  //     root 까지 멈췄다면 전환을 통째로 죽인 것이라 위 단언이 공허해진다.
+  // ②-b 공통 셸은 정지. root 애니메이션은 PC에서만 돌아야 한다.
   for (const name of ['app-header', 'app-tabbar', 'app-gnb']) {
     expect(pseudos.filter((p) => p.includes(`(${name})`)),
       `${name} 는 원래 얼려 둔 것인데 애니메이션이 살아났다`).toEqual([]);
   }
   expect(pseudos.some((p) => p.includes('(root)')),
-    'root 조차 안 돈다 — 전환을 통째로 죽였다는 뜻이고 위 단언들은 공허하다').toBe(true);
+    `${PC.label} root 애니메이션이 화면 크기별 전환 계약과 다르다`).toBe(PC.width >= 1024);
 
   // ③ 이름이 실제 화면에서 적용됐나(소스 문자열이 아니라 computed style 로 본다).
   expect(probe.vtNames!.bg, '.aura-bg 에 view-transition-name 이 안 붙었다').not.toBe('none');

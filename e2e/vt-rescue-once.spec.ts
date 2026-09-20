@@ -4,7 +4,7 @@
 //   target.click() 으로 다시 보낸다. 이 게이트가 없으면 "정상 전달된 클릭까지 되보내는" 회귀(버튼 1회 → 2회 실행)가
 //   조용히 들어온다 — 상점 구매·바인 승인처럼 돈이 걸린 버튼에서 치명적이다.
 // 무엇을 재나(앱 코드 무수정, 로그인 불필요):
-//   ① 하위 탭을 한 번 눌러 rescue 리스너가 설치된 상태를 만든다(withViewTransition 이 ensureInputRescue 를 부른다).
+//   ① PC 대메뉴를 재방문해 rescue 리스너가 설치된 상태를 만든다(withViewTransition → ensureInputRescue).
 //   ② 화면에 카운터 버튼을 만든다. 버튼 자신에게 click → 정확히 1회(되보내지 않는다).
 //   ③ 같은 좌표로 <html> 에 click(먹힌 클릭의 재현) → 정확히 +1회(구조는 되지만 두 번은 아니다).
 // 음성 대조(실측 2026-09-13): viewTransition.ts 의 `target.click();` 을 `target.click(); target.click();` 로 바꾸면 ③이 3회가 되어 실패한다.
@@ -16,6 +16,8 @@ import { stabilizeBackstack, dismissOverlays } from './_session';
 
 test('🔴 전환 중 구조된 클릭은 한 번만 전달된다 — 정상 클릭은 되보내지 않는다', async ({ page }) => {
   await stabilizeBackstack(page);
+  // 모바일 대메뉴는 이제 VT를 쓰지 않는다. 실제 VT가 남아 있는 PC 경로로 rescue를 검증한다.
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
   await dismissOverlays(page);
   // 🔴 2026-09-18 — rescue 설치 경로가 바뀌었다. 종전엔 하위 탭 클릭(goSubTab)이
@@ -25,12 +27,12 @@ test('🔴 전환 중 구조된 클릭은 한 번만 전달된다 — 정상 클
   //     바뀐 것은 '어디서 설치되는가' 뿐이라 검사도 그 경로로 옮긴다.
   //   ⚠ 최상위 탭도 **재방문일 때만** VT 를 탄다(App.tsx: `if (visitedTabs.has(t))`).
   //     첫 방문은 lazy 청크 때문에 startTransition 경로다 — 그래서 GTO 를 두 번 들어간다.
-  const nav = page.locator('nav');
-  await nav.getByRole('button', { name: 'GTO', exact: true }).first().click();
+  const nav = page.locator('[data-stack-tabbar]');
+  await nav.getByRole('tab', { name: 'GTO', exact: true }).click();
   await expect(page.locator('[data-tools-lanebar]')).toBeVisible({ timeout: 15_000 });
-  await nav.getByRole('button', { name: '홈', exact: true }).first().click();
+  await nav.getByRole('tab', { name: '홈', exact: true }).click();
   await page.waitForTimeout(400);
-  await nav.getByRole('button', { name: 'GTO', exact: true }).first().click();  // 재방문 → withViewTransition → rescue 설치
+  await nav.getByRole('tab', { name: 'GTO', exact: true }).click();  // 재방문 → withViewTransition → rescue 설치
   await page.waitForTimeout(700);                     // 이번 전환이 끝난 뒤에 잰다(전환 중 클릭과 섞지 않는다)
 
   const counts = await page.evaluate(async () => {
