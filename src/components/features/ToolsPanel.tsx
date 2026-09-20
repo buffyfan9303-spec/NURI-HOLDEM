@@ -427,7 +427,11 @@ export default function ToolsPanel() {
 
 
   return (
-    <div className="hero-aurora space-y-3">
+    // `data-main-enter-ready` — M1 cohort 준비 신호. 이 루트가 붙으면 hero·검색·레인칩·첫 도구 카드가
+    // 같은 커밋에 모두 있다(설계서: GTO 는 hero 뿐 아니라 검색·칩·첫 카드도 함께 움직여야 한다).
+    // ⚠ 이 요소 자체는 진입 대상이 아니다 — `.hero-aurora` 는 도구 모달의 **진짜 DOM 조상**이라
+    //   여기에 transform 이 걸리면 그 모달이 이 박스 안에 갇힌다(HANDOFF §4-(2) 의 실제 위험 자리 3곳).
+    <div data-main-enter-ready className="hero-aurora space-y-3">
       {/* 프리플랍 레인지 차트 대표 카드(2026-08-30 편입)는 2026-09-14 오너 결정으로 뺐다 — '자주 쓰는 도구'(FEATURED_KEYS 의 range)가
           그 역할을 대신한다. NURI SPOT 대표 카드는 '탭의 주인공'(2026-09-03 오너 결정)이라 남긴다. */}
       {/* 트레이너 진행 스트립(오늘 N/목표 · 스트릭 · XP · 목표까지 N문제).

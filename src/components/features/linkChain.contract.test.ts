@@ -100,7 +100,16 @@ describe('E · 상태가 따라온다', () => {
     expect(APP, 'App(홈·일정탐색)이 공유 훅을 안 쓴다').toMatch(/useFavoriteVenues\(/);
   });
   it('🔴 체크인 성공 3경로가 nuri:checkin-done 을 쏘고 App 이 visitedVenues 를 다시 읽는다', () => {
-    expect((APP.match(/new Event\('nuri:checkin-done'\)/g) ?? []).length).toBe(2);
+    // ⚠[갱신 2026-09-21, Q6] 예전 단언: `App.tsx` 안에 이 dispatch 가 **정확히 2번**.
+    //   그 2번은 `?checkin=` 딥링크 effect 와 '보류된 QR' effect 에 본문이 **복사돼 있었기** 때문이다.
+    //   Q6 에서 두 경로를 `runCheckin` **한 벌**로 합치면서 dispatch 도 1곳이 됐다 —
+    //   경로가 줄어든 게 아니라 **같은 코드를 공유**하게 된 것이다(오히려 한 곳만 고치면 둘 다 반영된다).
+    //   그래서 '개수' 가 아니라 **"두 경로가 그 한 벌을 실제로 부르는가"** 를 단언한다. 약화가 아니라 정확화다.
+    const helper = /const runCheckin = useCallback\(\(venueId: string\) => \{[\s\S]*?new Event\('nuri:checkin-done'\)/;
+    expect(APP, 'App 의 출석 성공 처리(runCheckin)가 nuri:checkin-done 을 쏘지 않는다').toMatch(helper);
+    // 두 경로 = ① QR 딥링크 단일 분기 ② 로그인 왕복 뒤의 '보류된 QR'. 둘 다 같은 함수를 부른다.
+    expect((APP.match(/runCheckin\((?!venueId: string)/g) ?? []).length,
+      'App 의 두 출석 경로(딥링크·보류 의도)가 runCheckin 을 각각 부르지 않는다').toBe(2);
     expect(VENUE).toMatch(/window\.dispatchEvent\(new Event\('nuri:checkin-done'\)\);/);
     expect(APP).toMatch(/window\.addEventListener\('nuri:checkin-done', load\);\s*return \(\) => window\.removeEventListener\('nuri:checkin-done', load\);/);
   });

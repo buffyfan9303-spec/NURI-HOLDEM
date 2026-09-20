@@ -169,7 +169,9 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   })();
   return (
     <main className="hero-aurora px-page-x pt-3 pb-section">
-      <div className="mx-auto w-full max-w-3xl space-y-3">
+      {/* `data-main-enter-ready` — M1 cohort 준비 신호. 이 루트가 붙으면 머리줄·목록·패널이 같은 커밋에 있다.
+          ⚠ 표식은 이 안의 블록들에만 있다. 이 컨테이너 자체를 움직이지 않는 이유는 `tabEnter.ts` 머리말 참고. */}
+      <div data-main-enter-ready className="mx-auto w-full max-w-3xl space-y-3">
         {/* items-start — 320~390px 에서는 설명 문구가 2줄이 되어 왼쪽 묶음이 62.8px, 버튼 그룹이 40.8px 가 된다.
             items-center 이면 버튼이 제목보다 11.0px 아래로 내려가 제목과 어긋난다(실측 375: 11.0 · 320: 10.83).
             1280 은 설명이 1줄이라 렌더가 변하지 않는다. */}

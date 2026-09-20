@@ -57,8 +57,23 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
   //   삼켜 실패해도 '아직 출석한 손님이 없습니다' 가 떴다 — 업주는 아무도 안 온 줄 안다.
   const [listErr, setListErr] = useState(false);
   const [visits, setVisits] = useState<Record<string, number>>({}); // user_id→누적 방문횟수(CRM 단골/첫방문 배지)
-  const [qr, setQr] = useState(''); // #15 로컬 생성(외부 api.qrserver.com 의존 제거 — 가용성·프라이버시)
-  useEffect(() => { QRCode.toDataURL(checkinUrl(venueId), { width: 240, margin: 2 }).then(setQr).catch(() => setQr('')); }, [venueId]);
+  // #15 로컬 생성(외부 api.qrserver.com 의존 제거 — 가용성·프라이버시)
+  // 🔴 Q5(2026-09-21) — 이미지에 **어느 매장 것인지**를 함께 들고 다닌다. 종전에는 `.then(setQr)` 뿐이라
+  //   관리자가 매장을 A→B 로 바꾸면 ① 전환 직후 A QR 이 B 라벨 아래 남고 ② 늦게 끝난 A 의 Promise 가
+  //   B 이미지를 덮을 수 있었다(이 컴포넌트는 key 가 없어 리마운트되지 않는다 — Q3 주석 참고).
+  //   손님이 그걸 찍으면 **다른 매장에 출석**한다. Q3 의 목록 가드는 이 이미지 상태를 보지 않는다.
+  const [qr, setQr] = useState<{ venueId: string; src: string } | null>(null);
+  const [qrFailed, setQrFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setQr(null); setQrFailed(false); // 매장이 바뀌는 즉시 이전 매장 이미지를 감춘다
+    QRCode.toDataURL(checkinUrl(venueId), { width: 240, margin: 2 })
+      .then((src) => { if (alive) setQr({ venueId, src }); })
+      .catch(() => { if (alive) setQrFailed(true); });
+    return () => { alive = false; }; // 늦게 도착한 앞 매장 응답은 화면에 반영하지 않는다
+  }, [venueId]);
+  /** 지금 매장의 것일 때만 내준다 — 렌더 단계의 2차 방어. */
+  const qrSrc = qr && qr.venueId === venueId ? qr.src : '';
 
   // Q3 — 모달 닫기·매장 변경 즉시: 출석 목록·방문 통계·선택 수신자·오류를 비우고 진행 중인 앞 매장
   //   요청을 전부 낡은 것으로 만든다(seq 증가). 아래 reload() 의 응답 격리와 별개로, 한 프레임도
@@ -127,9 +142,13 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
     <Modal open={open} onClose={onClose} title="예약·출석" maxWidth="md" variant="sheet" dragToClose>
       <div className="space-y-3 p-4">
         <div className="flex flex-col items-center gap-2 rounded-aura border card-aura p-4">
-          {qr
-            ? <img src={qr} alt="출석 QR" width={200} height={200} className="rounded-lg bg-white p-2" />
-            : <div className="h-[200px] w-[200px] animate-pulse rounded-lg bg-ink-primary/10" aria-label="QR 생성 중" />}
+          {/* Q5 — `qrSrc` 는 지금 매장의 것일 때만 값이 있다. 실패는 스켈레톤으로 위장하지 않는다
+              (영원히 도는 스켈레톤은 업주를 무한정 기다리게 만든다 — R1-3 과 같은 이유). */}
+          {qrSrc
+            ? <img src={qrSrc} alt="출석 QR" width={200} height={200} className="rounded-lg bg-white p-2" />
+            : qrFailed
+              ? <div className="flex h-[200px] w-[200px] items-center justify-center rounded-lg border border-border-subtle bg-surface-low text-2xs text-ink-muted">QR 을 만들지 못했어요</div>
+              : <div className="h-[200px] w-[200px] animate-pulse rounded-lg bg-ink-primary/10" aria-label="QR 생성 중" />}
           <p className="text-center text-2xs text-ink-muted"><b className="text-accent-300">고정 QR</b> · 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 출석 처리됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.</p>
           <button type="button" onClick={copy} className="btn-ghost px-3 text-2xs">출석 링크 복사</button>
         </div>

@@ -132,6 +132,22 @@
       radial-gradient(min(600px, 150vw) min(600px, 150vw) at 88% 10%, rgb(var(--bloom-1) / var(--aura-a2)) 0%, rgb(var(--bloom-1) / calc(var(--aura-a2) * .55)) 30%, rgb(var(--bloom-1) / calc(var(--aura-a2) * .2)) 60%, transparent 100%),
       radial-gradient(min(420px, 110vw) min(420px, 110vw) at 50% 96%, rgb(var(--bloom-3) / var(--aura-a3)) 0%, rgb(var(--bloom-3) / calc(var(--aura-a3) * .55)) 30%, rgb(var(--bloom-3) / calc(var(--aura-a3) * .2)) 60%, transparent 100%);
   }
+  /* 🔴 C1(2026-09-21) — 모바일 본문 진입 모션(N1) 중 커뮤니티 카드가 **중간에 어두웠다 종료에 밝아지는** 회귀.
+     원인: `tabEnter.ts` 가 `[data-main-enter]`(커뮤니티는 목록 `UL`)에 WAAPI transform 을 거는 동안
+     그 요소가 **새 stacking context** 가 되어 z-index:0 인 이 레이어 **위**로 올라간다. 애니메이션이 끝나면
+     (`fill:'none'`) transform 이 사라져 다시 아래로 내려가고, 그제서야 아우라 gradient 가 카드 위에 덮인다.
+     운영 390×844 실측: 카드 안 (300,350) 픽셀이 중간 rgb(14,19,34) → 종료 rgb(21,22,46). N1 을 끄거나
+     이 UL 만 제외하면 점프 0, UL 만 재생하면 재현 — transform 의 stacking 승격이 유일한 변수다.
+     ⚠ 모바일 document View Transition 은 호출 0회라 이번 밝기 회귀의 원인이 아니다(별건).
+
+     처방: 모바일에서만 이 레이어를 **음수 z** 로 내려 애니메이션 전·중·후의 쌓임 순서를 **같게** 만든다.
+     부모(`App.tsx` 앱 셸)는 `relative z-[1]` 로 stacking context 를 만들고 **배경을 칠하지 않으므로**
+     z:-1 이어도 아우라는 body 배경 위에 그대로 보인다(사라지지 않는다 — 수용 기준 '배경 aura 유지').
+     PC 의 z-index:0 은 건드리지 않는다: PC 는 N1 모션 경로가 아니라 이 회귀가 없고, 기존 계층을 바꿀 이유가 없다.
+     ⚠ 대안으로 `.tab-pane` 전체의 z-index 를 손대는 것은 **금지**다 — 그 안의 모달이 헤더 아래 갇힌다. */
+  @media (max-width: 1023px) {
+    .aura-bg { z-index: -1; }
+  }
   /* .subbar-aura — 페이지 위에 얹히는 **sticky 서브탭 바**의 바탕.
      오너 리포트(2026-09-07): "커뮤니티 하위 메뉴 탭은 주변 테두리와 백그라운드가 검게 처리돼 있어
      다른 카테고리들과 괴리감이 든다."

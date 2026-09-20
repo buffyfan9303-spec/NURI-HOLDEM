@@ -718,7 +718,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //     여기서 좌우 여백(px-page-x 17px×2)을 뺀 값이 1190 이다. 그래서 셸의 my-store 예외(xl:max-w-7xl)는
     //     테두리 기둥만 136px 넓히고 콘텐츠는 그대로여서 2026-09-15 에 제거했다(오너: "내 매장만 넓어 이질감").
     //     이 `xl:max-w-7xl` 은 남겨 둔다 — 지우면 xl 에서 1088 로 돌아가 **다른 탭보다 좁아진다.**
-    <div className="space-y-3 mx-auto w-full max-w-5xl xl:max-w-7xl">
+    // `data-main-enter-ready` — M1 cohort 준비 신호(`src/lib/tabEnter.ts` 의 `collect`).
+    //   ⚠ 이 요소 자체는 진입 대상이 **아니다.** 안쪽 `data-mystore-secpanel` 자손에 실재하는
+    //     `position:fixed`(`NuriPosLedger.tsx`·`LedgerWorkspace.tsx`)가 있어 여기에 transform 이 걸리면
+    //     그 고정 요소가 이 박스 안에 갇힌다(HANDOFF §4-(2) 의 위험 자리 3곳 중 하나).
+    <div data-main-enter-ready className="space-y-3 mx-auto w-full max-w-5xl xl:max-w-7xl">
       {/* 관리자만 보는 매장 고르개(`isAdmin` 게이트는 그대로 — 기능은 손대지 않는다).
           ⚠ 2026-09-15 오너 지시: '운영자 전체 접근' **표기**를 없앤다. 일반 업주에게는 원래 이 칸 자체가
             안 보이지만, 문구가 남아 있으면 관리자 화면에서 권한 등급이 그대로 읽힌다. 남기는 것은 '관리할 매장 선택' 하나. */}

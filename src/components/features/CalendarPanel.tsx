@@ -227,7 +227,8 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
 
   if (!user) {
     return (
-      <div data-main-enter className="px-page-x py-section">
+      // 비로그인 화면은 이 블록 하나가 곧 cohort 다 — 표식과 준비 신호를 같은 요소에 둔다.
+      <div data-main-enter data-main-enter-ready className="px-page-x py-section">
         <section className="rounded-aura border card-aura p-6 text-center">
           <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-input tile-grad" aria-hidden>
             <Icon name="calendar" size={20} />
@@ -248,7 +249,11 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   }
 
   return (
-    <div className="space-y-3 px-page-x py-section">
+    // `data-main-enter-ready` — M1 cohort 준비 신호. 로그인 캘린더의 진입 대상(월 이동·요약·카드들)이
+    // 이 루트와 같은 커밋에 들어온다.
+    // ⚠ 이 요소 자체는 진입 대상이 아니다 — 뒤 형제 `CalendarToolsPanel` 이 `Modal variant="page"` 를 연다
+    //   (HANDOFF §4-(2) 의 위험 자리). transform 을 여기 걸면 그 모달이 이 박스 안에 갇힌다.
+    <div data-main-enter-ready className="space-y-3 px-page-x py-section">
       {/* 월 이동 */}
       <div data-main-enter className="flex items-center justify-between">
         <button type="button" aria-label="이전 달" className="hit -my-1 p-1 text-ink-secondary hover:text-ink-primary"

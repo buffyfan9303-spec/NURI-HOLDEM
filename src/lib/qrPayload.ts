@@ -42,22 +42,55 @@ export function parseQr(raw: string, out?: QrRejectOut): QrHit | null {
   try { url = new URL(t); } catch { return reject('QR 형식을 알아볼 수 없어요'); }
   if (!isAllowedOrigin(url.origin)) return reject('허용되지 않은 주소의 QR이에요');
   const sp = url.searchParams;
-  const c = sp.get('checkin');
-  const b = sp.get('buyin');
-  const s = sp.get('signup');
   // 혼합 의도 거부 — 한 URL 에 두 용도 이상의 파라미터가 같이 실리면(예: checkin+buyin) 어느 쪽도 실행하지 않는다.
   // 예전엔 '출석이 이긴다'는 우선순위 규칙이 있었는데, A 매장 이용권 QR 오사용 사고(Q1)처럼
   // 섞인 입력을 조용히 한쪽으로 해석하는 규칙 자체가 위험하다고 판단해 거부로 바꿨다.
-  const intents = [c, b, s].filter((x) => !!x).length;
-  if (intents > 1) return reject('QR에 서로 다른 용도가 섞여 있어요');
-  if (c) return UUID_RE.test(c) ? { kind: 'checkin', venueId: c, gameSeq: null } : reject('매장 ID 형식이 올바르지 않아요');
-  if (b) {
-    if (!UUID_RE.test(b)) return reject('매장 ID 형식이 올바르지 않아요');
-    const g = parseInt(sp.get('game') ?? '', 10);
-    return { kind: 'buyin', venueId: b, gameSeq: Number.isFinite(g) && g > 0 ? g : null };
+  // 🔴 Q6(2026-09-21) — 경계를 `get()` 이 아니라 **`has`/`getAll`** 로 센다.
+  //   `get()` 은 빈 값(`?checkin=`)을 `''` 로 주고 falsy 라 "없음" 과 구별되지 않았고,
+  //   같은 키가 여러 번 실린 `?buyin=A&buyin=B` 도 앞의 것만 조용히 채택됐다.
+  const INTENT_KEYS = ['checkin', 'buyin', 'signup'] as const;
+  const present = INTENT_KEYS.filter((k) => sp.has(k));
+  for (const k of present) {
+    if (sp.getAll(k).length > 1) return reject('QR에 같은 값이 여러 번 실려 있어요');
   }
-  if (s) return { kind: 'signup', venueId: null, gameSeq: null };
-  return reject('QR을 알아볼 수 없어요');
+  if (present.length > 1) return reject('QR에 서로 다른 용도가 섞여 있어요');
+  if (sp.getAll('game').length > 1) return reject('QR에 같은 값이 여러 번 실려 있어요');
+  if (present.length === 0) {
+    // 단독 `?game=2` — 무엇을 할지가 없다. 무엇이 빠졌는지 말해 주는 편이 손님에게 쓸모 있다.
+    if (sp.has('game')) return reject('게임 번호만 있고 무엇을 할 QR인지가 없어요');
+    return reject('QR을 알아볼 수 없어요');
+  }
+
+  const only = present[0];
+  if (only === 'signup') {
+    // 가입 QR 은 고정 인쇄물이라 값이 정확히 `1` 이다(App 의 기존 판정과 같은 규칙).
+    if (sp.get('signup') !== '1') return reject('회원가입 QR 형식이 올바르지 않아요');
+    if (sp.has('game')) return reject('회원가입 QR에 게임 번호가 붙어 있어요');
+    return { kind: 'signup', venueId: null, gameSeq: null };
+  }
+
+  const v = sp.get(only) ?? '';
+  if (!v) return reject('매장 ID가 없어요');
+  if (!UUID_RE.test(v)) return reject('매장 ID 형식이 올바르지 않아요');
+  if (only === 'checkin') {
+    // `game` 은 바인 전용이다. 출석 QR 에 붙어 있으면 인쇄물이 잘못됐거나 손댄 주소다 — 조용히 무시하지 않는다.
+    if (sp.has('game')) return reject('출석 QR에 게임 번호가 붙어 있어요');
+    return { kind: 'checkin', venueId: v, gameSeq: null };
+  }
+  // buyin — `game` 은 **생략하거나 양의 정수 전체 문자열**만.
+  // ⚠ 종전에는 `parseInt(raw, 10)` 이라 `'12x'` → 12, `'1.5e3'` → 1 로 **조용히 통과**했다.
+  //   테이블 번호가 잘못 읽히면 손님이 **다른 테이블**에 참가 요청을 보낸다. 거부가 맞다.
+  //   (이 계약은 2026-09-21 오너 실행문서가 요구해 '통과' 에서 '거부' 로 **강화**됐다 —
+  //    약화가 아니라서 기존 단언을 갱신했다. qrPayload.test.ts 의 해당 it 참고.)
+  let gameSeq: number | null = null;
+  if (sp.has('game')) {
+    const g = sp.get('game') ?? '';
+    if (!/^[0-9]+$/.test(g)) return reject('게임 번호 형식이 올바르지 않아요');
+    const n = Number(g);
+    if (!Number.isSafeInteger(n) || n <= 0) return reject('게임 번호 형식이 올바르지 않아요');
+    gameSeq = n;
+  }
+  return { kind: 'buyin', venueId: v, gameSeq };
 }
 /** 알아봤지만 여기서 못 하는 QR — 실패로 끝내지 않고 **어디로 가야 하는지** 말해 준다.
  *  (매장은 이 넷을 한 장에 인쇄해 비치한다 — 손님이 옆 QR 을 비추는 건 실수가 아니라 정상이다.) */

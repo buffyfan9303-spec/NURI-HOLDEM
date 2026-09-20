@@ -85,10 +85,15 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [stats, setStats] = useState<VoucherHolderStats | null>(null);
   const [statsErr, setStatsErr] = useState<unknown>(null);
-  const [qr, setQr] = useState('');
-  const [signupQr, setSignupQr] = useState('');
-  const [checkinQr, setCheckinQr] = useState('');
-  const [buyinQr, setBuyinQr] = useState('');
+  // Q5 — 매장에 매인 QR 은 `{venueId, src}` 로 들고 다닌다(아래 생성 effect 주석 참고).
+  type VenueQr = { venueId: string; src: string } | null;
+  const [qr, setQr] = useState<VenueQr>(null);
+  const [signupQr, setSignupQr] = useState(''); // 고정 주소 — 매장과 무관해서 예외다
+  const [checkinQr, setCheckinQr] = useState<VenueQr>(null);
+  const [buyinQr, setBuyinQr] = useState<VenueQr>(null);
+  const [qrFailed, setQrFailed] = useState(false);
+  /** 지금 매장의 것일 때만 이미지를 내준다 — 늦은 응답·전환 잔재를 렌더 단계에서 한 번 더 막는다. */
+  const srcOf = (q: VenueQr) => (q && q.venueId === venueId ? q.src : '');
   const [approved, setApproved] = useState(true);
   // 승인 상태 조회 실패 — 삼키면 초기값 true 가 남아 '운영자 승인 필요' 경고가 사라진다(N04-A). 서버가 P0001 로 막긴 하지만 화면이 거짓말한다.
   const [approvedErr, setApprovedErr] = useState<unknown>(null);
@@ -142,10 +147,29 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   // ⚠ 킬스위치 OFF 에서는 채널을 열지 않는다 — Realtime 동시연결은 무료 한도의 실질 천장이라
   //   '안 보이는 화면'이 연결을 하나 차지하면 클락 TV 구독까지 같이 열화된다.
   useEffect(() => (idOn ? subscribeVenueVouchers(venueId, () => reload()) : undefined), [venueId, idOn]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 240, margin: 1 }).then(setQr).catch(() => {}); }, [venueId]);
+  // 🔴 Q5(2026-09-21) — QR 이미지는 **어느 매장 것인지**를 함께 들고 다닌다.
+  //   종전에는 `QRCode.toDataURL(...).then(setXxxQr)` 만 있어서, 관리자가 매장을 A→B 로 바꾸면
+  //   ① 전환 직후 잠깐 **A 의 QR 이 B 라벨 아래 그대로** 남고
+  //   ② 늦게 끝난 A 의 Promise 가 **B 이미지를 덮을** 수 있었다(이 컴포넌트는 key 가 없어 리마운트되지 않는다).
+  //   손님이 그 QR 을 찍으면 **다른 매장**에 출석·바인 요청이 들어간다 — 화면 문구로는 구별이 안 된다.
+  //   그래서 상태를 `{venueId, src}` 로 묶고, 렌더에서 **지금 매장과 같은 것만** 통과시킨다.
+  //   (Q3 의 목록 경합 가드는 이 이미지 상태와 별개다 — 그 가드는 이 자리를 보지 않았다.)
+  //   고정 회원가입 QR 은 매장에 매이지 않으므로 예외다.
+  useEffect(() => {
+    let alive = true;
+    setQr(null); setCheckinQr(null); setBuyinQr(null); // 매장이 바뀌는 **즉시** 이전 매장 이미지를 감춘다
+    setQrFailed(false);
+    const mk = (s: string) => QRCode.toDataURL(s, { width: 240, margin: 1 });
+    const own = (src: string) => ({ venueId, src });
+    Promise.all([mk(`NURIV-VENUE:${venueId}`), mk(checkinUrl(venueId)), mk(buyinRequestUrl(venueId))])
+      .then(([v, c, b]) => {
+        if (!alive) return; // 늦게 도착한 앞 매장 응답 — 지금 화면에 반영하지 않는다
+        setQr(own(v)); setCheckinQr(own(c)); setBuyinQr(own(b));
+      })
+      .catch(() => { if (alive) setQrFailed(true); });
+    return () => { alive = false; };
+  }, [venueId]);
   useEffect(() => { QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 240, margin: 1 }).then(setSignupQr).catch(() => {}); }, []);
-  useEffect(() => { QRCode.toDataURL(checkinUrl(venueId), { width: 240, margin: 1 }).then(setCheckinQr).catch(() => {}); }, [venueId]);
-  useEffect(() => { QRCode.toDataURL(buyinRequestUrl(venueId), { width: 240, margin: 1 }).then(setBuyinQr).catch(() => {}); }, [venueId]);
 
   // 이용 내역 피드 — 발급(보낸 것)·사용(들어온 것)을 한 줄씩, 최신순. 실시간 구독이 reload를 부르므로 자동 갱신.
   const feed = useMemo(() => {
@@ -247,8 +271,13 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   const printQr = async () => {
     const chosen = QR_DEFS.filter((q) => printSel[q.id]);
     if (chosen.length === 0) { toast.show('인쇄할 QR을 1개 이상 선택하세요', 'error'); return; }
+    // 🔴 Q5 — 인쇄도 **누른 순간의 매장**으로 끝나야 한다. `q.data()` 는 지금 venueId 로 만들지만
+    //   `await` 하는 동안 관리자가 매장을 바꾸면 라벨과 다른 매장의 QR 이 종이에 찍힌다.
+    //   비치용이라 한 번 잘못 인쇄되면 그 매장에 계속 붙어 있게 된다 — 화면보다 되돌리기 어렵다.
+    const forVenue = venueId;
     try {
       const imgs = await Promise.all(chosen.map((q) => q.data()));
+      if (forVenue !== venueId) { toast.show('인쇄 준비 중에 매장이 바뀌었습니다. 다시 눌러 주세요.', 'error'); return; }
       const w = window.open('', '_blank', 'width=480,height=860');
       if (!w) { toast.show('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 시도하세요.', 'error'); return; }
       const cards = chosen.map((q, i) => {
@@ -639,14 +668,21 @@ ${cards}
           {qrOpen && (
             <div className="px-3 pb-3">
               <div className="grid grid-cols-2 gap-3">
+                {/* 🔴 Q5 — `srcOf` 로 **지금 매장의 이미지만** 통과시킨다. 비면 빈칸으로 두지 않고
+                    '만드는 중 / 실패' 를 말한다 — 옛 매장 QR 을 그대로 두는 것보다 안전하고,
+                    아무것도 없는 칸은 업주가 "왜 안 나오지" 하고 기다리게 만든다. */}
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">이용권 사용 QR</p>
-                  <img src={qr} alt="매장 이용권 QR" width={130} height={130} className="rounded bg-white p-1.5" />
+                  {srcOf(qr)
+                    ? <img src={srcOf(qr)} alt="매장 이용권 QR" width={130} height={130} className="rounded bg-white p-1.5" />
+                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
                   <p className="text-center text-2xs leading-snug text-ink-muted">손님이 스캔해 사용 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">출석 QR</p>
-                  {checkinQr && <img src={checkinQr} alt="출석 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
+                  {srcOf(checkinQr)
+                    ? <img src={srcOf(checkinQr)} alt="출석 QR" width={130} height={130} className="rounded bg-white p-1.5" />
+                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
                   <p className="text-center text-2xs leading-snug text-ink-muted">손님 스캔 → 출석 · 출석왕 집계 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
@@ -656,7 +692,9 @@ ${cards}
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">바인 요청 QR</p>
-                  {buyinQr && <img src={buyinQr} alt="바인 요청 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
+                  {srcOf(buyinQr)
+                    ? <img src={srcOf(buyinQr)} alt="바인 요청 QR" width={130} height={130} className="rounded bg-white p-1.5" />
+                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
                   <p className="text-center text-2xs leading-snug text-ink-muted">손님 스캔 → 참가 요청 → 장부에서 승인</p>
                 </div>
               </div>

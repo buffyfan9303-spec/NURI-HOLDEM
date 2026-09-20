@@ -381,7 +381,11 @@ function CommunityTab({
       {/* 📣 외치기(오너 #8) — 활동점수로 산 한마디를 서브탭과 무관하게 같은 자리에 건다.
           어느 서브탭을 보든 보여야 '눈에 띄게'가 성립한다(게시판 피드 안에 넣으면 다른 탭에선 안 보인다).
           컴포넌트가 min-h 로 자리를 미리 잡아 도착 시 아래가 밀리지 않는다. */}
-      <div className="mx-auto w-full max-w-3xl">
+      {/* 🔴 M1(2026-09-21) — 이 래퍼에 표식이 없어서 **외치기만 정적으로 남았다**(오너가 본 '본문 1·2·3 분절').
+          래퍼에 붙이는 이유: `CommunityShoutBar` 의 내용은 비동기로 도착하지만 래퍼는 첫 커밋부터 있고
+          컴포넌트가 `min-h` 로 자리를 미리 잡아(위 주석) 도착 시 아래를 밀지 않는다 — 즉 cohort 에
+          안정적으로 들어온다. sticky 서브바·fixed·모달의 조상이 아니라 순수 일반 흐름 블록이다. */}
+      <div data-main-enter className="mx-auto w-full max-w-3xl">
         <CommunityShoutBar />
       </div>
 
@@ -759,7 +763,8 @@ function FeedSection({
     // data-board-loaded: 서버 첫 페이지의 3상태(idle=아직 안 시작 · loading=진행 중 · done=커서 끝) — 화면은 그대로, e2e 계약용.
     //   post-nav ③(2026-09-13): 네트워크 응답을 봐도 serverDone 커밋 전에 글을 열면 스냅샷 done=false 라 마지막 글이 '더 불러오기'(정직)로 뜬다.
     //   테스트가 기다릴 DOM 신호가 없어서(:894 갈래는 목록이 비었을 때만 렌더) 상태를 속성으로 노출한다.
-    <div data-main-enter className="space-y-2" data-board-loaded={serverDone ? 'done' : serverLoading ? 'loading' : 'idle'}>
+    // M1 cohort 준비 신호 — 이 블록이 이 화면의 유일한 진입 대상이라 표식과 같은 요소에 둔다.
+    <div data-main-enter data-main-enter-ready className="space-y-2" data-board-loaded={serverDone ? 'done' : serverLoading ? 'loading' : 'idle'}>
       {/* 글쓰기 — '글쓰기' 버튼 → 글쓰기 모달(카테고리·제목·내용·이미지) (Stage 2) */}
       {user ? (
         <button
@@ -1065,7 +1070,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
   };
 
   return (
-    <div data-main-enter className="rounded-aura border card-aura">
+    <div data-main-enter data-main-enter-ready className="rounded-aura border card-aura">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="w-full flex items-center gap-2.5 rounded-aura px-3 py-2.5 text-left transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
@@ -1165,7 +1170,11 @@ function VenuesSection({
   useEffect(() => { getVenueRatings().then(setRatings).catch(() => {}); }, []);
   const filtered = kindFilter === 'all' ? sortedVenues : sortedVenues.filter((x) => (x.venue.kind ?? 'venue') === kindFilter);
   return (
-    <div className="space-y-3">
+    // 🔴 M1(2026-09-21) `data-main-enter-ready` — **cohort 준비 신호**(`src/lib/tabEnter.ts` 의 `collect` 참고).
+    //   이 안의 표식 4개(검색·여백·필터·목록)는 **같은 커밋**에 들어오므로, 이 루트가 붙었다는 것은
+    //   곧 "이 화면의 진입 대상이 전부 모였다"는 뜻이다. 종전에는 표식 하나만 붙어도 재생해 버려서
+    //   외치기 하나만 움직이는 분절이 났다. 신호가 없으면 tabEnter 는 **아무것도 재생하지 않고 기다린다**.
+    <div data-main-enter-ready className="space-y-3">
       {/* 검색 */}
       <div data-main-enter className="relative">
         <input
@@ -1473,7 +1482,7 @@ function LiveWallSection({ visible }: { visible: boolean }) {
   };
 
   return (
-    <div data-main-enter className="space-y-2">
+    <div data-main-enter data-main-enter-ready className="space-y-2">
       {user ? (
         <form onSubmit={send} className="flex items-center gap-2">
           <input

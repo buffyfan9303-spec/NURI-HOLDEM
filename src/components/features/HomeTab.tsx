@@ -428,7 +428,9 @@ export default function HomeTab({
   }
 
   return (
-    <div className="pb-section">
+    // `data-main-enter-ready` — M1 cohort 준비 신호(`src/lib/tabEnter.ts` 의 `collect`).
+    // 이 루트가 붙으면 아래 진입 대상(상단 안내·빠른 메뉴·섹션들)이 같은 커밋에 모두 들어 있다.
+    <div data-main-enter-ready className="pb-section">
       {/* §6-4: 일반 컨테이너 최대 1200px, 좌우 최소 24px. 안쪽 섹션은 공용 px-page-x(17px)를 쓰므로
           md 이상에서 7px 를 더해 24px 를 만든다(index.css·tailwind.config 는 다른 팀 편집 중이라
           토큰을 새로 만들지 않았다 — 필요해지면 page-x-md 토큰을 쓰도록 보고). */}

@@ -39,7 +39,6 @@ type Pending = { gen: number; tab: string; deadline: number };
 
 let gen = 0;
 let pending: Pending | null = null;
-let raf = 0;
 let mo: MutationObserver | null = null;
 /** 이 모듈이 건 애니메이션만 취소하려고 따로 들고 있는다 — 남의 애니메이션을 끊지 않는다. */
 let playing: Animation[] = [];
@@ -59,8 +58,9 @@ function blocked(): boolean {
   return false;
 }
 
+/** 관찰 중단. 🔴 rAF 예약은 더 이상 없다 — M1(2026-09-21) 이후 `attempt` 는 항상 **동기로** 불린다
+ *  (`startTabEnter` 에서 한 번, 그 뒤 MutationObserver 콜백에서. 둘 다 페인트 전이다). */
 function clearWatch() {
-  if (raf) { cancelAnimationFrame(raf); raf = 0; }
   if (mo) { mo.disconnect(); mo = null; }
 }
 
@@ -76,6 +76,18 @@ export function cancelTabEnter() {
 /**
  * 대상 수집 — **판 안에서 `data-main-enter` 로 명시한 요소**만.
  *
+ * 🔴 M1(2026-09-21) — **cohort 준비 신호가 먼저다.**
+ *   종전에는 표식이 **한 개만 붙어도** 그 즉시 재생하고 observer 를 끊었다. 그래서 외치기가 먼저 붙고
+ *   검색·목록이 늦게 붙으면 **외치기 하나만 움직였다** — 그게 오너가 본 '본문 1·2·3 분절'이다.
+ *   이제는 판 안에 `data-main-enter-ready`(그 탭의 실제 콘텐츠 루트)가 **있을 때만** 대상을 모은다.
+ *   ready 가 붙는 커밋에는 그 안의 표식이 **모두 같이** 들어 있으므로 cohort 가 원자적으로 모인다.
+ *   표식 한 개 도착을 준비 완료로 해석하지 않는다. 준비가 기한 안에 안 오면 **전부 정적**으로 둔다
+ *   (`attempt` 의 deadline) — 부분 애니메이션은 대안이 아니다.
+ *
+ *   ⚠ 이 게이트가 **rect 를 읽기 전에** 끝나는 것이 중요하다. `attempt` 는 MutationObserver 콜백에서도
+ *     불리는데, 거기서 `getBoundingClientRect` 를 돌리면 DOM 이 바뀔 때마다 강제 레이아웃이 걸린다.
+ *     ready 가 없으면 여기서 즉시 빠져나가므로 그 비용이 안 생긴다.
+ *
  * 걸러내는 것:
  *  - 안 그려진 것(`offsetParent === null`): 숨은 판·`display:none` 서브탭. 여기에 재생하면 잔재가 남는다.
  *  - 첫 viewport 밖: 화면 아래 블록을 움직여 봐야 사용자는 못 본다. 비용만 든다.
@@ -83,6 +95,9 @@ export function cancelTabEnter() {
 function collect(tab: string): HTMLElement[] {
   const pane = document.querySelector<HTMLElement>(`[data-tab="${CSS.escape(tab)}"]`);
   if (!pane) return [];
+  // cohort 준비 신호 — 없으면 아직 '이 커밋' 이 아니다. rect 를 읽지 않고 돌아간다.
+  const ready = pane.querySelector<HTMLElement>('[data-main-enter-ready]');
+  if (!ready || ready.offsetParent === null) return [];
   const vh = window.innerHeight || 0;
   const out: HTMLElement[] = [];
   for (const el of Array.from(pane.querySelectorAll<HTMLElement>('[data-main-enter]'))) {
@@ -113,7 +128,6 @@ function play(targets: HTMLElement[]) {
 }
 
 function attempt() {
-  raf = 0;
   const p = pending;
   if (!p || p.gen !== gen) return;
   const targets = collect(p.tab);
@@ -130,7 +144,12 @@ function attempt() {
   if (!mo) {
     mo = new MutationObserver(() => {
       if (!pending || pending.gen !== gen) { clearWatch(); return; }
-      if (!raf) raf = requestAnimationFrame(attempt);
+      // 🔴 M1(2026-09-21) — 여기서 `requestAnimationFrame` 으로 미루지 않는다.
+      //   MutationObserver 콜백은 **그 변경을 만든 태스크의 마이크로태스크**로 돌아, 아직 페인트 전이다.
+      //   rAF 로 미루면 그 사이 한 프레임이 **정착 위치로 페인트**되고 다음 프레임에 +8 로 점프한다 —
+      //   첫 방문 lazy 콘텐츠에서 오너가 본 '0→+8 역행'이 정확히 이 경로였다.
+      //   즉시 부르면 붙은 그 커밋의 페인트 전에 애니메이션이 서서, 첫 프레임부터 +8→0 한 방향이다.
+      attempt();
     });
     mo.observe(document.body, { childList: true, subtree: true });
   }
@@ -149,9 +168,20 @@ export function startTabEnter(tab: string) {
   if (blocked()) return;
   gen += 1;
   pending = { gen, tab, deadline: Date.now() + WAIT_MS };
-  // 레이아웃이 확정된 다음 프레임에 잰다. 커밋 직후(useLayoutEffect)에 rect 를 읽으면
-  // 강제 레이아웃이 걸린다 — 이 파일 옆 `App.tsx` 가 정확히 그 비용을 없앤 기록이 있다.
-  raf = requestAnimationFrame(attempt);
+  // 🔴 M1(2026-09-21) — **다음 프레임으로 미루지 않는다. 지금, 페인트 전에 시작한다.**
+  //   종전에는 `requestAnimationFrame(attempt)` 였다. 호출부(`App.tsx` 의 `useLayoutEffect`)는 커밋 직후라
+  //   페인트 전인데, rAF 로 미루면 **그 한 프레임이 정착 위치로 페인트되고** 다음 프레임에 +8 로 점프한다.
+  //   390px 로컬 DOM 샘플에서 검색 y 가 `정착 → +8 → 정착` 순서로 나온 것이 그 증거다.
+  //   사용자에겐 "내려갔다 올라온다"(역행)로 보이고, 같은 화면의 다른 박스와 시작 시각도 어긋난다.
+  //   여기서 바로 부르면 첫 페인트가 곧 +8 이라 **첫 프레임부터 +8→0 한 방향**이다.
+  //
+  //   ⚠ 비용 균형: `collect` 가 `getBoundingClientRect` 를 읽어 이 시점에 레이아웃을 강제한다.
+  //     브라우저는 어차피 이 페인트 전에 레이아웃을 하므로 **없던 레이아웃이 새로 생기는 게 아니라 앞당겨진다.**
+  //     그리고 cohort 준비 신호(`collect` 머리말)가 rect 를 읽기 **전에** 거르므로, 콘텐츠가 아직
+  //     안 붙은 흔한 경우에는 측정 자체가 일어나지 않는다.
+  //     그래도 Long Animation Frame 이 늘거나 첫 페인트가 여전히 0→+8 이면, 같은 React 커밋에서
+  //     초기 위치를 CSS 로 주는 안으로 갈아타고 이 코드를 제거한다(설계서 B안 — 두 방식을 함께 두지 않는다).
+  attempt();
 }
 
 /** 테스트·검증용 — 선언값을 밖에서 확인할 수 있게 연다(계약 테스트가 이 숫자를 잠근다). */

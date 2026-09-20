@@ -85,6 +85,11 @@ import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY, isProgrammaticScroll, markProgrammaticScroll, notifyScrollNow } from './lib/useScrollY';
 import { startTabEnter, cancelTabEnter } from './lib/tabEnter';
+// Q6(2026-09-21) — URL 로 들어온 QR 도 **앱 안 스캐너와 같은 규칙**으로 읽는다(`parseQr` 단일 해석).
+import { parseQr, elsewhereMsg } from './lib/qrPayload';
+/** QR 이 URL 에 싣는 키 전부. 이 중 하나라도 있으면 QR 진입으로 보고, 처리 뒤에는 **이 키들만** 지운다
+ *  (`ref`·`tab` 같은 다른 쿼리와 hash·history state 는 그대로 둔다). */
+const QR_URL_KEYS = ['checkin', 'buyin', 'signup', 'game'] as const;
 import { nextHeaderShrunk } from './lib/headerShrink';
 // ⚠ lib/postNav 가 아니라 lib/postNavCtx 에서 받는다 — postNav 를 정적으로 물면 neighborsOf·appendPage(gz 2.1KB)까지
 //   첫 화면 임계 경로로 딸려 와 bundle:budget 257.1/256KB 초과(실측 2026-09-13). 위 api/events→lib/eventSlug 와 같은 함정.
@@ -810,7 +815,14 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
           "뒤쪽 배경이 보인다"(오너 2026-09-02 내 매장 모바일)로 읽혔다. */}
       <div aria-hidden className="absolute inset-0 glass-strong" />
       <div aria-hidden className="absolute inset-x-0 -top-3 h-3 bg-gradient-to-t from-surface-base/80 to-transparent" />
-      <div className="pointer-events-auto mx-2.5 mb-[calc(0.5rem+var(--tabbar-lift))] flex rounded-2xl border border-border-default bg-surface-mid shadow-dialog">
+      {/* 🔴 B1(2026-09-21) — 하단바 알약 **아래 여백**. 운영 390×844 실측에서 `nav` 는 bottom:0 · 높이 74.25 CSS px 인데
+          알약 아래가 8.5 CSS px 남아 "하단바가 너무 위에 떠 있다" 로 보였다(safe-area 0 환경).
+          ⚠ 루트 폰트가 **17px** 이라 0.5rem = 8.5px 다(16px 가정하면 계산이 틀린다 — 이 저장소 고유 함정).
+          0.25rem = 4.25px 로 **약 4.25px 만** 내린다. `nav` 의 `fixed bottom-0`·`env(safe-area-inset-bottom)`·
+          전역 `--tabbar-safe/--tabbar-float`·푸터 예약량은 **건드리지 않는다** — 안전영역과 콘텐츠 예약은 별개 계약이다.
+          PC 영향 0 은 구조가 보장한다: 이 `nav` 자체가 `lg:hidden` 이다.
+          S26 실기기에서 2~6 CSS px 범위로 미세조정할 여지를 남긴다(현재 값은 로컬·운영 Chromium 실측 기준). */}
+      <div className="pointer-events-auto mx-2.5 mb-[calc(0.25rem+var(--tabbar-lift))] flex rounded-2xl border border-border-default bg-surface-mid shadow-dialog">
         {items.map(({ key, tab, label }) => {
           const on = tab ? shown === tab : false;
           return (
@@ -1146,8 +1158,11 @@ export default function App() {
     //   여기가 맞는 자리인 이유: 바로 위 두 줄이 `scrollTo(0)` 과 헤더 동기화를 **이미 확정**했다.
     //   진입 모션이 그보다 먼저 돌면 옛 스크롤 위치에서 움직이기 시작해 튄다.
     //   ⚠ 앱 **최초 로드**에는 재생하지 않는다(설계서 금지) — 그래서 첫 커밋을 건너뛴다.
-    //   ⚠ 여기서 rect 를 읽지 않는다. 대상 수집·측정은 `startTabEnter` 가 **다음 프레임**에 한다
-    //     (이 훅에서 읽으면 위 F2 주석이 없앤 강제 레이아웃이 그대로 되살아난다).
+    //   🔴 M1(2026-09-21 정정) — `startTabEnter` 는 이제 **이 커밋에서, 페인트 전에** 대상을 재고 시작한다.
+    //     예전 주석은 "다음 프레임에 한다"였고 그게 바로 결함이었다: 미룬 한 프레임이 **정착 위치로 페인트**돼
+    //     사용자에게 0→+8 역행으로 보였다. 대신 콘텐츠가 아직 안 붙었으면 rect 를 읽기 전에 빠져나가므로
+    //     (`tabEnter.ts` 의 cohort 준비 신호) 흔한 경우의 측정 비용은 없다.
+    //     ⚠ 위 F2 의 `scrollY` 재읽기 금지는 그대로 유효하다 — 그건 **문서 전체** 레이아웃을 강제했다.
     if (tabEnterBooted.current) startTabEnter(activeTab);
     else tabEnterBooted.current = true;
   }, [activeTab]);
@@ -1335,28 +1350,16 @@ export default function App() {
   // 🎁 오픈 이벤트 배너(~2026-08-03 KST 자동 소멸) — 닫으면 localStorage 유지
   const [eventBannerHidden, setEventBannerHidden] = useState(() => { try { return localStorage.getItem('nuri:event-2607-hidden') === '1'; } catch { return false; } });
 
-  // ── QR 체크인 (?checkin=<venueId>) ─────────────────────────────────────
-  // QR엔 venue_id만(비민감). 로그인 회원만 기록(check_in RPC, 4시간 중복 방지). 미로그인 시 로그인 후 재진입에서 처리.
-  useEffect(() => {
-    const cv = new URLSearchParams(window.location.search).get('checkin');
-    if (!cv) return;
-    // ⚠ **세션이 복원되기 전에 판단하지 않는다.** 부팅 첫 커밋의 user 는 항상 null 이라
-    //   (AuthContext 가 프로필을 네트워크로 받아온다) 이 가드가 없으면 **이미 로그인한 손님**이
-    //   매장 QR 을 폰 카메라로 찍을 때마다 로그인 창이 먼저 뜬다. 게다가 그 창을 닫는 코드가 없어
-    //   잠시 뒤 체크인이 성공해도 손님은 '로그인 폼 위에 뜬 체크인 완료 토스트'를 본다(2026-09-06 감사).
-    if (authLoading) return;
-    if (!user) {
-      // 카카오·구글 로그인은 페이지를 떠났다 돌아오는데 그때 ?checkin= 이 사라진다 —
-      // 하려던 일을 적어 두고(30분 수명), 로그인 후 아래 '보류된 QR' effect 가 이어서 처리한다.
-      rememberQrIntent({ kind: 'checkin', venueId: cv, gameSeq: null });
-      openLogin();
-      return;
-    }
-    // 여기서 직접 처리하기로 정했으므로 보류 의도를 **지금** 버린다(2026-09-07).
-    // URL 정리는 아래 .finally 에서 비동기로 일어나므로, 그것에 기대면 아래 '보류된 QR' effect 가
-    // '아직 파라미터 있음'으로 보고 그냥 돌아가 의도가 남는다 → 30분 내 재실행에서 중복 체크인.
-    clearQrIntent();
-    checkIn(cv)
+  /** QR 출석 실행 — **딥링크와 보류 의도가 같은 코드를 쓴다.**
+   *  🔴 Q6(2026-09-21): 종전에는 이 본문이 `?checkin=` effect 와 '보류된 QR' effect 에 **두 벌**로
+   *    복사돼 있었고, 한쪽에만 있던 `nuri:checkin-done` 같은 후처리가 다른 쪽에서 빠져 두 경로의
+   *    결과가 달랐다(같은 출석인데 카카오 로그인으로 들어오면 홈이 갱신되지 않음). 한 벌로 합친다. */
+  /** 지금 떠 있는 로그인 창이 **QR 때문에** 열린 것인가. 사용자가 그 창을 명시적으로 닫으면
+   *  하려던 QR 의도도 같이 버린다 — 안 버리면 나중에 다른 이유로 로그인했을 때 되살아나
+   *  손님이 요청한 적 없는 출석·바인이 실행된다(30분 TTL 안). 아래 `closeLoginFromQr` 가 소비한다. */
+  const qrLoginPending = useRef(false);
+  const runCheckin = useCallback((venueId: string) => {
+    checkIn(venueId)
       .then(async ({ name, points, streak: served }) => {
         // 점수·연속일은 서버(check_in, 20260905k)가 단일 출처 — 같은 날 두 번째 체크인은 points 0 이라 '+N점' 을 붙이지 않는다.
         const streak = served ?? await getMyCheckinStreak().catch(() => 0);
@@ -1369,18 +1372,10 @@ export default function App() {
         const fire = streak >= 2 ? ` · ${streak}일 연속` : '';
         toast.show(`${name || '매장'} 출석 완료!${points > 0 ? ` 출석 +${points}점` : ''}${fire}`, 'success');
         // 매장 QR 스캔은 '그 매장에 와 있다'는 뜻 — 홈이 아니라 그 매장 페이지(오늘 대회·내 활동)에 착지
-        startTransition(() => setOpenVenueId(cv));
+        startTransition(() => setOpenVenueId(venueId));
       })
-      .catch((e) => toast.show(e instanceof Error ? e.message : '출석 실패', 'error'))
-      .finally(() => {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('checkin');
-        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-      });
-    // user '객체 참조'가 아닌 id 기준 — 로그인 직후 프로필 갱신으로 참조만 바뀌어도
-    // effect가 재실행되어 체크인 RPC가 중복 호출되던 문제 방지
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, authLoading]);
+      .catch((e) => toast.show(e instanceof Error ? e.message : '출석 실패', 'error'));
+  }, [toast, refreshProfile]);
 
   /** 바인(참가) 요청 시작 — 게임이 여럿이면 선택 모달, 하나(또는 지정)면 바로 전송.
    *  ?buyin= 딥링크와 이용권 시트의 QR 스캔이 **같은 함수**를 쓴다(선택 모달이 두 벌이 되지 않게). */
@@ -1396,53 +1391,93 @@ export default function App() {
     })();
   }, [toast]);
 
-  // ── QR 자가 바인요청 (?buyin=<venueId>) — 로그인 회원만, 운영자 승인 대기 ──
+  // ── 🔴 Q6(2026-09-21) QR 딥링크 — **한 번 파싱, 한 갈래만 실행** ───────────────────
+  //
+  // 무엇이 문제였나: `?checkin`·`?buyin`·`?signup` 을 **서로 다른 effect 세 개**가 각자 읽었다.
+  //   그래서 `src/lib/qrPayload.ts` 가 공들여 만든 '혼합 의도 거부' 가 **URL 진입에서는 통째로 우회**됐다 —
+  //   로그인 상태에서 `?checkin=A&buyin=B` 로 들어오면 두 변이 경로가 **둘 다** 시작됐고,
+  //   `?checkin=A&signup=1` 은 출석과 가입 모달을 같이 열었다. 미로그인에서는 두 effect 가 각각
+  //   `rememberQrIntent` 를 불러 **보류 의도를 덮어쓰고** 로그인 창을 두 번 열 수 있었다.
+  //   (앱 안 스캐너 `QrScanModal` 은 처음부터 `parseQr` 하나를 쓴다 — 카메라 경로만 안전했던 셈이다.)
+  //
+  // 이제 이 effect 하나가 **URL 을 한 번 파싱하고 한 갈래만** 실행한다.
+  //   ⚠ 이 자리는 `startBuyinRequest` 선언 **뒤**여야 한다(그 함수를 부른다).
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
-    const bv = sp.get('buyin');
-    if (!bv) return;
-    if (authLoading) return;              // ①과 같은 이유 — 세션 복원 전 판단 금지
-    const gmRaw = sp.get('game');
-    const gRaw = gmRaw ? parseInt(gmRaw, 10) : NaN;
+    // QR 관련 키가 하나라도 있으면 이 effect 의 관할이다. `game` 단독도 포함한다 —
+    // 그래야 "무엇을 할지가 없는 주소" 를 조용히 방치하지 않고 이유를 말해 줄 수 있다.
+    if (!QR_URL_KEYS.some((k) => sp.has(k))) return;
+    // ⚠ **세션이 복원되기 전에 판단하지 않는다.** 부팅 첫 커밋의 user 는 항상 null 이라
+    //   (AuthContext 가 프로필을 네트워크로 받아온다) 이 가드가 없으면 **이미 로그인한 손님**이
+    //   매장 QR 을 찍을 때마다 로그인 창이 먼저 뜬다(2026-09-06 감사).
+    if (authLoading) return;
+
+    // 🔴 새 QR 주소가 왔다 — **무효·혼합·가입까지 포함해** 옛 보류 의도를 먼저 버린다.
+    //   안 버리면 아래에서 URL 을 정리한 직후 '보류된 QR' effect 가 **옛** 출석/바인을 실행한다
+    //   (예: 30분 전 스캔한 A 매장 출석이 남은 채 `?signup=1` 로 들어오는 경우).
+    clearQrIntent();
+
+    /** QR 키만 지우고 나머지 query·hash·history state 는 보존한다. */
+    const stripQr = () => {
+      const url = new URL(window.location.href);
+      for (const k of QR_URL_KEYS) url.searchParams.delete(k);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    };
+
+    const out: { reason?: string } = {};
+    const hit = parseQr(window.location.href, out);
+    if (!hit) {
+      // 거부 — 출석·바인·가입·로그인 **모두 0회**, 설명은 **1회**.
+      stripQr();
+      toast.show(out.reason ?? 'QR을 알아볼 수 없어요', 'error');
+      return;
+    }
+    if (hit.kind === 'signup') {
+      stripQr();
+      if (!user) openLogin('signup-user');
+      else toast.show(elsewhereMsg('signup') ?? '이미 로그인되어 있어요', 'info');
+      return;
+    }
+    if (hit.kind === 'voucher' || !hit.venueId) {
+      // URL 로는 오지 않는 종류다(이용권은 토큰 QR). 그래도 조용히 흘리지 않는다.
+      stripQr();
+      toast.show(elsewhereMsg(hit.kind) ?? 'QR을 알아볼 수 없어요', 'error');
+      return;
+    }
+    // 여기부터 checkin·buyin — **변이 전에 URL 을 동기로 정리**한다.
+    //   비동기(`.finally`)로 미루면 '보류된 QR' effect 가 '아직 파라미터 있음' 으로 보고 그냥 돌아가
+    //   의도가 남고, 30분(TTL) 안에 앱을 다시 열면 출석이 한 번 더 찍힌다(2026-09-07 기록).
     if (!user) {
-      rememberQrIntent({ kind: 'buyin', venueId: bv, gameSeq: Number.isFinite(gRaw) && gRaw > 0 ? gRaw : null });
+      // 카카오·구글 로그인은 페이지를 떠났다 돌아오는데 그때 쿼리가 사라진다 —
+      // 하려던 일을 적어 두고(30분 수명), 아래 '보류된 QR' effect 가 이어서 처리한다.
+      rememberQrIntent({ kind: hit.kind === 'checkin' ? 'checkin' : 'buyin', venueId: hit.venueId, gameSeq: hit.gameSeq });
+      qrLoginPending.current = true; // 이 로그인 창은 QR 이 열었다 — 취소하면 의도도 버린다(아래 closeLoginFromQr)
+      stripQr();
       openLogin();
       return;
     }
-    // 이쪽은 URL 을 **동기로** 지운다 — 그러면 같은 커밋의 '보류된 QR' effect 가 '파라미터 없음'으로 보고
-    // 의도를 소비해 요청이 두 번 나간다. 지우기 전에 의도부터 버린다(2026-09-07).
-    clearQrIntent();
-    const url = new URL(window.location.href);
-    url.searchParams.delete('buyin'); url.searchParams.delete('game');
-    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    startBuyinRequest(bv, Number.isFinite(gRaw) && gRaw > 0 ? gRaw : null);
+    stripQr();
+    if (hit.kind === 'checkin') runCheckin(hit.venueId);
+    else startBuyinRequest(hit.venueId, hit.gameSeq);
+    // user '객체 참조'가 아닌 id 기준 — 로그인 직후 프로필 갱신으로 참조만 바뀌어도
+    // effect 가 재실행되어 출석 RPC 가 중복 호출되던 문제 방지.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading]);
+  }, [user?.id, authLoading]);
 
   // ── 보류된 QR 의도 — 로그인 왕복(카카오·구글)에서 쿼리가 사라진 뒤 이어서 처리 ──────
-  // URL 에 파라미터가 남아 있으면 위 두 effect 가 이미 처리하므로 여기서는 건드리지 않는다.
+  // URL 에 QR 키가 남아 있으면 위 단일 분기가 이미 처리하므로 여기서는 건드리지 않는다.
+  //   ⚠ 위 분기는 유효한 QR 을 **변이 전에 동기로** 지우므로, 여기까지 왔다는 것은
+  //     "쿼리가 사라진 로그인 왕복" 이거나 "그 분기가 이미 끝났다" 는 뜻이다.
   useEffect(() => {
     if (authLoading || !user) return;
     const sp = new URLSearchParams(window.location.search);
-    if (sp.get('checkin') || sp.get('buyin')) return;
+    if (QR_URL_KEYS.some((k) => sp.has(k))) return;
     const it = takeQrIntent();           // 읽으면서 지운다 — 두 번 소비되면 출석이 두 번 찍힌다
     if (!it) return;
-    if (it.kind === 'checkin') {
-      checkIn(it.venueId)
-        .then(async ({ name, points, streak: served }) => {
-          const streak = served ?? await getMyCheckinStreak().catch(() => 0);
-          await refreshProfile().catch(() => {});
-        // 출석 = 이벤트 참여권 1장. 홈 배너가 그 숫자를 들고 있으므로 갱신 신호를 쏜다
-        // (홈 탭은 언마운트되지 않아 마운트 1회 조회로는 영원히 낡는다 — HomeTab.tsx 주석).
-        window.dispatchEvent(new Event('nuri:event-board-refresh'));
-        window.dispatchEvent(new Event('nuri:checkin-done')); // 홈 '이어서 하기'·'가 본 매장'(visitedVenues) 재조회
-          toast.show(`${name || '매장'} 출석 완료!${points > 0 ? ` 출석 +${points}점` : ''}${streak >= 2 ? ` · ${streak}일 연속` : ''}`, 'success');
-          startTransition(() => setOpenVenueId(it.venueId));
-        })
-        .catch((e) => toast.show(e instanceof Error ? e.message : '출석 실패', 'error'));
-    } else {
-      startBuyinRequest(it.venueId, it.gameSeq);
-    }
+    qrLoginPending.current = false;      // 의도를 소비했다 — 이제 로그인 창을 닫아도 버릴 것이 없다
+    // 🔴 Q6 — 딥링크와 **같은 `runCheckin`** 을 쓴다. 예전엔 본문이 복사돼 있어 두 경로의 후처리가 달랐다.
+    if (it.kind === 'checkin') runCheckin(it.venueId);
+    else startBuyinRequest(it.venueId, it.gameSeq);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, authLoading]);
 
@@ -1524,18 +1559,12 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, [syncEventParam]);
 
-  // ── QR 회원가입 (?signup=1) — 매장 QR 옆 가입 QR 스캔 시 회원가입 모달 바로 열기 ──
-  useEffect(() => {
-    const sp = new URLSearchParams(window.location.search);
-    if (sp.get('signup') !== '1') return;
-    const url = new URL(window.location.href);
-    url.searchParams.delete('signup');
-    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    // deps 가 [] 이던 시절에는 이 `!user` 가 **언제나 참**이었다(첫 커밋의 user 는 항상 null) —
-    // 이미 가입한 단골이 카운터의 가입 QR 을 찍으면 가입 폼이 떴다(2026-09-06 감사).
-    if (!user) openLogin('signup-user');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, authLoading]);
+  // ── QR 회원가입 (?signup=1) ─────────────────────────────────────────────────
+  // 🔴 Q6(2026-09-21) — 이 effect 는 **위 'QR 딥링크' 단일 분기로 합쳐졌다.**
+  //   따로 두면 `?checkin=A&signup=1` 같은 혼합 주소에서 출석과 가입 모달이 **둘 다** 열린다 —
+  //   `parseQr` 의 혼합 거부를 우회하는 세 번째 통로였다. 동작(비로그인일 때만 가입 폼)은 그대로 옮겼고,
+  //   `signup` 값이 정확히 `1` 이어야 한다는 판정은 이제 `qrPayload.ts` 가 맡는다.
+  //   ⚠ `?ref=`(친구 초대)는 QR 이 아니라 **공유 링크**라 아래에 그대로 남는다 — 합치지 마라.
 
   // ── 친구 초대 (?ref=<추천코드>) — 코드 기억 + 비로그인 시 가입 유도 ──
   useEffect(() => {
@@ -2930,7 +2959,17 @@ export default function App() {
   useBackClose(openListing !== null, () => setOpenListing(null), ADOPT);
   useBackClose(openNotice !== null, () => setOpenNotice(null), ADOPT);
   useBackClose(posterFormTarget !== null, () => setPosterFormTarget(null), ADOPT);
-  useBackClose(authOpen, () => { setAuthOpen(false); setAuthMode('login'); }, ADOPT);
+  /** 🔴 Q6(2026-09-21) — 로그인 창을 **사용자가 명시적으로 닫는** 두 경로(뒤로가기 · X/시트 닫기)가
+   *  공유하는 정리. QR 이 연 창이었다면 하려던 의도를 **여기서 버린다.**
+   *  안 버리면 손님이 "안 할래" 하고 닫은 출석·바인이 localStorage 에 30분 남아, 나중에 **다른 이유로**
+   *  로그인하는 순간 '보류된 QR' effect 가 그걸 실행한다 — 손님은 요청한 적 없는 출석이 찍힌 것을 본다.
+   *  ⚠ 로그인 **성공**으로 창이 닫히는 경로는 여기를 타지 않는다(그때는 의도를 소비해야 하므로).
+   *    성공 시에는 '보류된 QR' effect 가 먼저 `qrLoginPending` 을 내린다. */
+  const closeLoginFromQr = useCallback(() => {
+    if (qrLoginPending.current) { qrLoginPending.current = false; clearQrIntent(); }
+    setAuthOpen(false); setAuthMode('login');
+  }, []);
+  useBackClose(authOpen, closeLoginFromQr, ADOPT);
   useBackClose(globalSearchOpen, () => setGlobalSearchOpen(false), ADOPT);
   useBackClose(postFormOpen, closePostForm, ADOPT);
   useBackClose(noticeFormOpen, () => { setNoticeFormOpen(false); setEditingNotice(null); }, ADOPT);
@@ -4466,8 +4505,14 @@ export default function App() {
           지금: 마운트 수명과 `open` 을 분리한다 — `open={authOpen}` 로 Modal 이 퇴장을 돌리고,
           `useDelayedUnmount` 가 220ms(Modal 200ms + 여유) 뒤에 내린다.
           ⚠ App 에 같은 모양의 lazy 오버레이가 14곳 더 있다 — 전부 퇴장이 죽어 있다. 순차로 같은 훅을 씌운다. */}
+      {/* Q6 — X·시트 닫기도 뒤로가기와 **같은 정리**(`closeLoginFromQr`)를 탄다.
+          두 경로 중 하나만 연결하면 QR 의도가 그 경로로만 살아남는다.
+          ⚠ 이 주석은 `{authMounted && (` **밖**에 있어야 한다 — 그 안은 식(expression) 자리라
+            중괄호로 감싼 JSX 주석을 넣으면 빈 객체 리터럴로 읽혀 파서가 무너진다(CLAUDE.md 의 그 함정).
+            그리고 그 형태를 **여기 예시로 적지도 마라**: 닫는 별표-슬래시가 이 주석을 조기 종료시킨다
+            (2026-09-21에 둘 다 밟았다. CLAUDE.md 가 같은 자리에서 유니코드 별표를 쓰는 이유다). */}
       {authMounted && (
-        <AuthModal key={authMode} open={authOpen} onClose={() => { setAuthOpen(false); setAuthMode('login'); }} initialMode={authMode} />
+        <AuthModal key={authMode} open={authOpen} onClose={closeLoginFromQr} initialMode={authMode} />
       )}
 
       {openSchedule !== null && (
