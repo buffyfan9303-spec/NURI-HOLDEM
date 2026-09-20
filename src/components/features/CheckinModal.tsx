@@ -1,11 +1,12 @@
 // src/components/features/CheckinModal.tsx — 업주/직원용: 체크인 QR 표시 + 오늘 체크인 명단(실시간).
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { listVenueCheckins, subscribeCheckins, checkinUrl, type Checkin } from '../../api/checkins';
 import { getVenueVisitorStats } from '../../api/crm';
-import { issueVoucher } from '../../api/vouchers';
+import { issueVoucher, VOUCHER_REASONS } from '../../api/vouchers';
+import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 
 /**
  * 🔴 2026-09-18 오너: "홈 화면에 출석체크를 매장이용권도 추가해줘 어차피 매장이용권을 보낼 때
@@ -21,24 +22,36 @@ import { issueVoucher } from '../../api/vouchers';
  *   받는 사람 `is_ci_verified`(본인인증), 발급 한도, 킬스위치를 차례로 본다.
  *   아래 `canIssue` 는 **버튼을 그릴지 말지**일 뿐이고 권한이 아니다.
  */
+/** Q3(2026-09-20) — 발급 직전 재검사(순수 함수, 렌더 없이 단위 테스트). `c` 는 늦게 도착한 다른
+ *  매장의 체크인 행일 수 있다 — 지금 보고 있는 venueId 와 같아야 하고, 권한·수신자·양의 정수 장수가
+ *  전부 있어야 '보낼 수 있다' 다. 하나라도 어긋나면 호출부는 issueVoucher 를 아예 부르지 않는다(변이 0회). */
+// 계약 테스트가 이 순수 가드를 직접 부른다. 별도 파일로 빼면 "발급 직전 재검사" 가 화면에서
+//   한 칸 멀어져 다음 사람이 호출을 빠뜨리기 쉽다 — `ToolsPanel.tsx` 도 같은 이유로 같은 예외를 쓴다.
+//   ⚠ 이 disable 주석은 **바로 다음 줄**에만 걸린다. 사이에 주석을 끼우면 무효다(2026-09-21에 실제로 겪었다).
+// eslint-disable-next-line react-refresh/only-export-components
+export function canSendVoucher(c: Pick<Checkin, 'venueId' | 'userId'>, venueId: string, canIssue: boolean, count: number): boolean {
+  return c.venueId === venueId && canIssue && !!c.userId && Number.isInteger(count) && count > 0;
+}
+
 export default function CheckinModal({ open, onClose, venueId, venueName, canIssue = false }: { open: boolean; onClose: () => void; venueId: string; venueName?: string; canIssue?: boolean }) {
   const toast = useToast();
   /** 지금 이용권을 보낼 손님(체크인 행 id). null 이면 아무 행도 안 펼쳐져 있다. */
   const [sendTo, setSendTo] = useState<string | null>(null);
+  const [customCount, setCustomCount] = useState('');
+  /** Q2(2026-09-20) — 최종 확인 대기 중인 발급(행 + 장수). null 이면 확인 단계가 아니다. */
+  const [confirm, setConfirm] = useState<{ c: Checkin; count: number } | null>(null);
   const [sendBusy, setSendBusy] = useState(false);
-  const send = async (c: Checkin, count: number) => {
-    setSendBusy(true);
-    try {
-      // 발급 근거 'visit' — 이 경로는 정의상 '오늘 방문한 손님' 이다(서버가 근거를 기록·검증한다).
-      await issueVoucher(venueId, { title: '매장이용권', count, holderUserId: c.userId, holderName: c.displayName ?? undefined, reason: 'visit' });
-      toast.show(`${c.displayName ?? '회원'}님께 매장이용권 ${count}장을 보냈습니다`, 'success');
-      setSendTo(null);
-    } catch (e) {
-      // 서버 거절 문구를 그대로 보여 준다 — '승인 전 매장'·'한도 부족'·'본인인증 안 된 손님' 이
-      //   각각 다른 조치를 요구하는데 '실패' 로 뭉개면 업주가 무엇을 해야 할지 알 수 없다.
-      toast.show(e instanceof Error ? e.message : '보내지 못했습니다', 'error');
-    } finally { setSendBusy(false); }
-  };
+
+  // Q3(2026-09-20) — 관리자가 이 모달을 연 채로 '관리할 매장' 을 A→B 로 바꿔도 이 컴포넌트는
+  //   리마운트되지 않는다(어디에도 key={venueId} 가 없다) — venueId prop 만 바뀐다. 그 사이 도착하는
+  //   A 매장 응답이 B 화면을 덮지 않게 lib/staleResponse 의 표준 가드(owner=venueId)를 쓴다
+  //   (VoucherManageModal 의 lib/venueVoucherLoad 와 같은 계약 — 새 패턴을 만들지 않는다).
+  // ⚠ reload() 전용(reqRef) 과 send() 전용(mountGenRef) 을 **분리**한다 — 하나를 같이 쓰면 send() 가
+  //   불일치를 만나 reload() 를 부를 때 그 reload() 자신의 seq 증가가 send() 의 '구세대' 판정을
+  //   오염시켜(실제 매장 전환이 없었는데도) sendBusy 가 영원히 true 로 남는다(2026-09-20 직접 재현).
+  const reqRef = useRef<RequestStamp<string>>({ seq: 0, owner: '' });
+  const mountGenRef = useRef<RequestStamp<string>>({ seq: 0, owner: '' });
+
   const [list, setList] = useState<Checkin[]>([]);
   // 🔴 2026-09-20 (R1-3) — '조회 실패' 와 '진짜 0명' 을 구별한다. 종전엔 `.catch(() => {})` 로 오류를
   //   삼켜 실패해도 '아직 출석한 손님이 없습니다' 가 떴다 — 업주는 아무도 안 온 줄 안다.
@@ -47,12 +60,25 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
   const [qr, setQr] = useState(''); // #15 로컬 생성(외부 api.qrserver.com 의존 제거 — 가용성·프라이버시)
   useEffect(() => { QRCode.toDataURL(checkinUrl(venueId), { width: 240, margin: 2 }).then(setQr).catch(() => setQr('')); }, [venueId]);
 
+  // Q3 — 모달 닫기·매장 변경 즉시: 출석 목록·방문 통계·선택 수신자·오류를 비우고 진행 중인 앞 매장
+  //   요청을 전부 낡은 것으로 만든다(seq 증가). 아래 reload() 의 응답 격리와 별개로, 한 프레임도
+  //   A 의 데이터가 B 화면에 남으면 안 된다.
+  useEffect(() => {
+    reqRef.current = { seq: reqRef.current.seq + 1, owner: venueId };
+    mountGenRef.current = { seq: mountGenRef.current.seq + 1, owner: venueId };
+    setList([]); setListErr(false); setVisits({});
+    setSendTo(null); setConfirm(null); setCustomCount(''); setSendBusy(false);
+  }, [open, venueId]);
+
   const reload = () => {
+    const stamp: RequestStamp<string> = { seq: reqRef.current.seq + 1, owner: venueId };
+    reqRef.current = stamp;
+    const stale = () => isStaleResponse(stamp, reqRef.current);
     const s = new Date(); s.setHours(0, 0, 0, 0);
     listVenueCheckins(venueId, s.toISOString())
-      .then((r) => { setList(r); setListErr(false); })
-      .catch(() => setListErr(true));
-    getVenueVisitorStats(venueId).then(setVisits).catch(() => {});
+      .then((r) => { if (stale()) return; setList(r); setListErr(false); })
+      .catch(() => { if (stale()) return; setListErr(true); });
+    getVenueVisitorStats(venueId).then((v) => { if (stale()) return; setVisits(v); }).catch(() => {});
   };
   useEffect(() => {
     if (!open) return;
@@ -61,8 +87,41 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, venueId]);
 
+  const send = async (c: Checkin, count: number) => {
+    // Q3 — 발급 직전 재검사: 매장·권한·수신자·장수가 지금도 유효해야 한다. 하나라도 어긋나면 변이 0회.
+    if (!canSendVoucher(c, venueId, canIssue, count)) { setConfirm(null); return; }
+    const gen = mountGenRef.current; // 지금 세대 — 응답 도착 시 세대가 바뀌었으면(매장 전환·모달 닫기) 성공·실패 모두 화면에 반영하지 않는다.
+    //   ⚠ reqRef 가 아니라 mountGenRef 를 쓴다 — 아래 mismatch 분기의 reload() 가 reqRef 를 또 bump 하는데,
+    //   그걸로 이 send() 를 stale 판정하면 매장 전환이 없었는데도 finally 의 setSendBusy(false) 가
+    //   영영 실행되지 않는다(위 ref 선언부 주석 참고).
+    setSendBusy(true);
+    try {
+      // 발급 근거 'visit' — 이 경로는 정의상 '오늘 방문한 손님' 이다(서버가 근거를 기록·검증한다).
+      const issued = await issueVoucher(venueId, { title: '매장이용권', count, holderUserId: c.userId, holderName: c.displayName ?? undefined, reason: 'visit' });
+      if (isStaleResponse(gen, mountGenRef.current)) return; // 구세대 성공 — 이미 다른 매장 화면이라 반영하지 않는다
+      if (issued === count) {
+        toast.show(`${c.displayName ?? '회원'}님께 매장이용권 ${count}장을 보냈습니다`, 'success');
+      } else {
+        // Q2 — 요청 장수와 실제 발급 수량이 다르면 자동 재시도하지 않는다(이미 서버에서 발급이 일어난
+        //   뒤일 수 있어, 다시 부르면 중복 발급이 된다). 목록을 다시 불러 실제 상태를 보여준다.
+        toast.show(`발급 결과 확인 필요 — 요청 ${count}장 · 실제 ${issued}장. 목록을 다시 확인하세요`, 'error');
+        reload();
+      }
+      setSendTo(null); setConfirm(null); setCustomCount('');
+    } catch (e) {
+      // 서버 거절 문구를 그대로 보여 준다 — '승인 전 매장'·'한도 부족'·'본인인증 안 된 손님' 이
+      //   각각 다른 조치를 요구하는데 '실패' 로 뭉개면 업주가 무엇을 해야 할지 알 수 없다.
+      if (!isStaleResponse(gen, mountGenRef.current)) toast.show(e instanceof Error ? e.message : '보내지 못했습니다', 'error');
+    } finally {
+      if (!isStaleResponse(gen, mountGenRef.current)) setSendBusy(false);
+    }
+  };
+
   const copy = async () => { try { await navigator.clipboard.writeText(checkinUrl(venueId)); toast.show('출석 링크를 복사했습니다', 'success'); } catch { /* noop */ } };
   const fmt = (iso: string) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  const openPicker = (id: string) => { setSendTo((v) => (v === id ? null : id)); setConfirm(null); setCustomCount(''); };
+  // Q2 — 방문 감사 사유 라벨·힌트를 정본(api/vouchers.ts VOUCHER_REASONS)에서 그대로 읽는다(복제 금지).
+  const visitReason = VOUCHER_REASONS.find((r) => r.value === 'visit');
 
   return (
     <Modal open={open} onClose={onClose} title="예약·출석" maxWidth="md" variant="sheet" dragToClose>
@@ -90,22 +149,53 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
                 })()}
                 <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{fmt(c.createdAt)}</span>
                 {canIssue && (
-                  <button type="button" onClick={() => setSendTo((v) => (v === c.id ? null : c.id))}
+                  <button type="button" onClick={() => openPicker(c.id)}
                     aria-expanded={sendTo === c.id}
-                    className="ml-2 min-h-[32px] shrink-0 whitespace-nowrap rounded-input border border-accent-400/40 px-2 text-2xs font-bold text-accent-200 hover:bg-accent-500/10">
+                    className="ml-2 min-h-[44px] shrink-0 whitespace-nowrap rounded-input border border-accent-400/40 px-2.5 text-2xs font-bold text-accent-200 hover:bg-accent-500/10">
                     {sendTo === c.id ? '닫기' : '이용권'}
                   </button>
                 )}
-                {canIssue && sendTo === c.id && (
+                {/* Q2 — 1단계: 장수 선택(버튼은 선택만, 발급 RPC 를 부르지 않는다) 또는 직접 입력 */}
+                {canIssue && sendTo === c.id && !(confirm && confirm.c.id === c.id) && (
                   <span className="mt-1.5 flex w-full flex-wrap items-center gap-1.5 border-t border-border-subtle pt-1.5">
                     <span className="text-2xs text-ink-muted">몇 장 보낼까요?</span>
                     {[1, 2, 3, 5].map((n) => (
-                      <button key={n} type="button" disabled={sendBusy} onClick={() => send(c, n)}
-                        className="min-h-[32px] rounded-input border border-border-default bg-surface-high px-2.5 text-2xs font-bold text-ink-secondary hover:bg-surface-float/60 disabled:opacity-50">
-                        {sendBusy ? '…' : `${n}장`}
+                      <button key={n} type="button" onClick={() => setConfirm({ c, count: n })}
+                        className="min-h-[44px] rounded-input border border-border-default bg-surface-high px-2.5 text-2xs font-bold text-ink-secondary hover:bg-surface-float/60">
+                        {n}장
                       </button>
                     ))}
+                    <span className="flex items-center gap-1">
+                      <input type="number" inputMode="numeric" min={1} step={1} value={customCount}
+                        onChange={(e) => setCustomCount(e.target.value)} placeholder="직접 입력" aria-label="직접 입력 장수"
+                        className="input h-[44px] w-16 text-sm tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+                      <button type="button" disabled={!(Number.isInteger(Number(customCount)) && Number(customCount) > 0)}
+                        onClick={() => { const n = Math.trunc(Number(customCount)); if (n > 0) setConfirm({ c, count: n }); }}
+                        className="min-h-[44px] rounded-input border border-accent-400/40 px-2.5 text-2xs font-bold text-accent-200 disabled:opacity-40">
+                        적용
+                      </button>
+                    </span>
                   </span>
+                )}
+                {/* Q2 — 2단계: 매장/받는 회원/장수/사유/만료 최종 확인. 실행 전 별도 확인, 취소 가능 —
+                    확인 내용이 바뀌거나(다른 장수 재선택) 매장이 바뀌면(위 clear effect) 이 단계 자체가 사라진다. */}
+                {canIssue && confirm && confirm.c.id === c.id && (
+                  <div className="mt-1.5 flex w-full flex-col gap-1 rounded-input border border-accent-400/40 bg-accent-300/[0.06] p-2 text-2xs">
+                    <p className="font-bold text-ink-secondary">발급 확인</p>
+                    <p>매장: <b className="text-ink-primary">{venueName ?? '우리 매장'}</b></p>
+                    <p>받는 회원: <b className="text-ink-primary">{c.displayName ?? '회원'}</b> · ID …{c.userId.slice(-6)}</p>
+                    <p>장수: <b className="text-ink-primary">{confirm.count}장</b></p>
+                    <p>사유: <b className="text-ink-primary">{visitReason?.label ?? '방문 감사'}</b>{visitReason?.hint ? ` (${visitReason.hint})` : ''}</p>
+                    <p>만료: <b className="text-ink-primary">무기한</b></p>
+                    <div className="mt-1 flex gap-1.5">
+                      <button type="button" onClick={() => setConfirm(null)}
+                        className="min-h-[44px] flex-1 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary">취소</button>
+                      <button type="button" disabled={sendBusy} onClick={() => send(c, confirm.count)}
+                        className="min-h-[44px] flex-1 rounded-input bg-accent-300 text-2xs font-bold text-white disabled:opacity-50">
+                        {sendBusy ? '보내는 중…' : `${confirm.count}장 발급`}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </li>
             ))}</ul>}

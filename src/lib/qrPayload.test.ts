@@ -64,11 +64,15 @@ describe('QR 분류 — 인쇄된 문자열 → 스캐너', () => {
     expect(parseQr(`\n  ${checkinUrl(VENUE)}  \t`)?.kind).toBe('checkin');
   });
 
-  it('⚠ 두 파라미터가 같이 있으면 **출석이 이긴다** — 순서에 흔들리지 않는 단일 규칙', () => {
-    // 어느 쪽이 이기든 상관없지만 '매번 같아야' 한다. 바인은 되돌리는 데 운영자 손이 필요하고
-    // 출석은 하루 한 번 무해하므로, 애매하면 덜 위험한 쪽으로 떨어뜨린다.
-    expect(parseQr(`${ORIGIN}/?checkin=${VENUE}&buyin=${VENUE}`)?.kind).toBe('checkin');
-    expect(parseQr(`${ORIGIN}/?buyin=${VENUE}&checkin=${VENUE}`)?.kind).toBe('checkin');
+  it('⚠[교체 2026-09-21, Q1] 혼합 의도(checkin+buyin)는 이제 통째로 거부한다', () => {
+    // 예전 계약(삭제하지 않고 방향만 뒤집음): "두 파라미터가 같이 있으면 출석이 이긴다"였다.
+    // 왜 위험했나 — '섞인 입력을 조용히 한쪽으로 해석'하는 규칙 자체가, VoucherWallet 의 중복
+    // parseVenueId 처럼 다른 의도의 QR 을 엉뚱하게 실행할 길을 열어 준다(A 매장 출석 QR → 이용권
+    // 사용으로 오인된 실사고, 이 파일이 지키는 대상). 같은 입력, 기대값만 null 로 뒤집는다.
+    const out: { reason?: string } = {};
+    expect(parseQr(`${ORIGIN}/?checkin=${VENUE}&buyin=${VENUE}`, out)).toBeNull();
+    expect(out.reason).toBeTruthy();
+    expect(parseQr(`${ORIGIN}/?buyin=${VENUE}&checkin=${VENUE}`)).toBeNull();
   });
 
   it('game 이 숫자가 아니거나 0·음수면 미지정으로 떨어진다 — 장부 게임번호는 1부터다', () => {
@@ -79,9 +83,33 @@ describe('QR 분류 — 인쇄된 문자열 → 스캐너', () => {
     }
   });
 
-  it('origin 이 달라도 파라미터만 본다 — 업주가 어느 주소에서 인쇄했든 매장 QR 은 매장 QR이다', () => {
+  it('허용 목록 origin(현재 실행 origin·운영 도메인·www)은 통과한다', () => {
+    // checkinUrl/buyinRequestUrl 은 window.location.origin 으로 찍는다(api/checkins.ts,
+    // api/ledger.ts) — 이 vitest 는 environment:'node' 라 location 이 없으므로 "현재 실행 origin"
+    // 분기는 여기서 검증되지 않는다(e2e 가 실브라우저에서 검증). 여기서는 운영 도메인 allowlist만 확인한다.
     expect(parseQr(`https://www.nuriholdem.com/?checkin=${VENUE}`)?.venueId).toBe(VENUE);
-    expect(parseQr(`http://localhost:4173/?buyin=${VENUE}&game=2`)?.gameSeq).toBe(2);
+    expect(parseQr(`${ORIGIN}/?checkin=${VENUE}`)?.venueId).toBe(VENUE); // https://nuriholdem.com (무 www)
+  });
+
+  it('⚠[교체 2026-09-21, Q1] 허용 목록 밖 origin은 이제 거부한다', () => {
+    // 예전 계약(삭제하지 않고 방향만 뒤집음): "origin 이 달라도 파라미터만 본다 — 업주가 어느 주소에서
+    // 인쇄했든 매장 QR 은 매장 QR이다"였다. 왜 위험했나 — venueId·checkin= 파라미터만 맞으면
+    // 어떤 origin 의 URL 도 통과했으므로, 똑같은 파라미터를 실은 가짜/복제 사이트 QR 도 그대로
+    // 실행됐다. 같은 입력을 그대로 두고(localhost:4173), 기대값만 null 로 뒤집는다.
+    const out: { reason?: string } = {};
+    expect(parseQr(`http://localhost:4173/?buyin=${VENUE}&game=2`, out)).toBeNull();
+    expect(out.reason).toBeTruthy();
+    expect(parseQr(`https://evil-clone.example/?checkin=${VENUE}`)).toBeNull();
+  });
+
+  it('NURIV-VENUE 뒤가 UUID 형식이 아니면 거부한다', () => {
+    expect(parseQr('NURIV-VENUE:not-a-uuid')).toBeNull();
+    expect(parseQr(`NURIV-VENUE:${VENUE}x`)).toBeNull(); // 자릿수 초과
+  });
+
+  it('checkin/buyin 의 venueId 도 UUID 형식이 아니면 거부한다', () => {
+    expect(parseQr(`${ORIGIN}/?checkin=not-a-uuid`)).toBeNull();
+    expect(parseQr(`${ORIGIN}/?buyin=12345`)).toBeNull();
   });
 
   it('빈 파라미터는 매장 없음 — venueId 가 빈 문자열로 흘러들면 안 된다', () => {

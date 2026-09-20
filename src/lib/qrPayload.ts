@@ -11,24 +11,53 @@ export type QrKind = 'checkin' | 'buyin' | 'voucher' | 'signup';
 export interface QrHit { kind: QrKind; venueId: string | null; gameSeq: number | null }
 /** 이 스캐너가 **실행**하는 종류. voucher·signup 은 알아보기만 하고 실행하지 않는다(각자 다른 화면 담당). */
 export const ACTIONABLE: QrKind[] = ['checkin', 'buyin'];
-export function parseQr(raw: string): QrHit | null {
+
+// venueId 는 항상 Postgres UUID 다(venues.id). 표준 8-4-4-4-12 형식만 통과시킨다 —
+// 예전엔 `NURIV-VENUE:` 뒤 아무 문자열이나 통과해, 손으로 조작한 문자열도 venueId 로 채택됐다.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// 인쇄 QR 은 checkinUrl/buyinRequestUrl 이 window.location.origin 으로 찍고, signup 만 이 상수로 고정 인쇄한다(VoucherManageModal.tsx:138,231).
+const PROD_ORIGINS = ['https://nuriholdem.com', 'https://www.nuriholdem.com'];
+
+function isAllowedOrigin(origin: string): boolean {
+  if (PROD_ORIGINS.includes(origin)) return true;
+  // 지금 실행 중인 origin(프리뷰 배포·로컬 dev/e2e 빌드가 여기 걸린다)도 허용한다.
+  // 테스트·SSR 처럼 location 이 아예 없는 환경에서는 이 분기를 건너뛴다 — 미검증 origin 을 허용하지 않는 안전 쪽으로 떨어진다.
+  try { return typeof location !== 'undefined' && location.origin === origin; } catch { return false; }
+}
+
+/** raw 를 거부했을 때 **왜**인지 담을 선택적 out-파라미터. 기존 `parseQr(raw)` 한 인자 호출부는
+ *  그대로 동작한다 — 이 인자를 넘긴 호출부만 사용자 안내에 이유를 쓸 수 있다. */
+export interface QrRejectOut { reason?: string }
+export function parseQr(raw: string, out?: QrRejectOut): QrHit | null {
+  const reject = (reason: string): null => { if (out) out.reason = reason; return null; };
   const t = raw.trim();
   // 매장이용권 QR 은 URL 이 아니라 접두어 토큰이다(VoucherWallet 과 같은 술어).
   if (t.startsWith('NURIV-VENUE:')) {
     const v = t.slice('NURIV-VENUE:'.length).trim();
-    return v ? { kind: 'voucher', venueId: v, gameSeq: null } : null;
+    if (!v) return reject('매장 ID가 없어요');
+    if (!UUID_RE.test(v)) return reject('매장 ID 형식이 올바르지 않아요');
+    return { kind: 'voucher', venueId: v, gameSeq: null };
   }
-  let sp: URLSearchParams;
-  try { sp = new URL(t).searchParams; } catch { return null; }
+  let url: URL;
+  try { url = new URL(t); } catch { return reject('QR 형식을 알아볼 수 없어요'); }
+  if (!isAllowedOrigin(url.origin)) return reject('허용되지 않은 주소의 QR이에요');
+  const sp = url.searchParams;
   const c = sp.get('checkin');
-  if (c) return { kind: 'checkin', venueId: c, gameSeq: null };
   const b = sp.get('buyin');
+  const s = sp.get('signup');
+  // 혼합 의도 거부 — 한 URL 에 두 용도 이상의 파라미터가 같이 실리면(예: checkin+buyin) 어느 쪽도 실행하지 않는다.
+  // 예전엔 '출석이 이긴다'는 우선순위 규칙이 있었는데, A 매장 이용권 QR 오사용 사고(Q1)처럼
+  // 섞인 입력을 조용히 한쪽으로 해석하는 규칙 자체가 위험하다고 판단해 거부로 바꿨다.
+  const intents = [c, b, s].filter((x) => !!x).length;
+  if (intents > 1) return reject('QR에 서로 다른 용도가 섞여 있어요');
+  if (c) return UUID_RE.test(c) ? { kind: 'checkin', venueId: c, gameSeq: null } : reject('매장 ID 형식이 올바르지 않아요');
   if (b) {
+    if (!UUID_RE.test(b)) return reject('매장 ID 형식이 올바르지 않아요');
     const g = parseInt(sp.get('game') ?? '', 10);
     return { kind: 'buyin', venueId: b, gameSeq: Number.isFinite(g) && g > 0 ? g : null };
   }
-  if (sp.get('signup')) return { kind: 'signup', venueId: null, gameSeq: null };
-  return null;
+  if (s) return { kind: 'signup', venueId: null, gameSeq: null };
+  return reject('QR을 알아볼 수 없어요');
 }
 /** 알아봤지만 여기서 못 하는 QR — 실패로 끝내지 않고 **어디로 가야 하는지** 말해 준다.
  *  (매장은 이 넷을 한 장에 인쇄해 비치한다 — 손님이 옆 QR 을 비추는 건 실수가 아니라 정상이다.) */

@@ -151,16 +151,24 @@ export async function listMyVouchers(): Promise<Voucher[]> {
   return rows;
 }
 
-export async function issueVoucher(venueId: string, input: { title: string; count?: number; holderName?: string; holderUserId?: string; note?: string; expiresAt?: string | null; reason: VoucherReason }): Promise<void> {
-  if (IS_MOCK) return;
+/** 실제 발급 수량(정수)을 돌려준다 — 서버(issue_voucher)가 1~1000 사이로 clamp 한 값이다(v_count, 라이브
+ *  정의 20260905i 확인). 호출부(VoucherManageModal·CheckinModal)는 요청한 count 와 대조해 불일치를 감지한다
+ *  (Q2, 2026-09-20). 예전엔 이 반환값을 버리고 Promise<void> 였다 — 서버가 요청보다 적게(한도 clamp 등)
+ *  발급해도 화면은 항상 '요청 수량만큼 성공'으로 표시했다. */
+export async function issueVoucher(venueId: string, input: { title: string; count?: number; holderName?: string; holderUserId?: string; note?: string; expiresAt?: string | null; reason: VoucherReason }): Promise<number> {
+  if (IS_MOCK) return input.count ?? 1;
   assertVoucherOn();
-  const { error } = await supabase.rpc('issue_voucher', {
+  const { data, error } = await supabase.rpc('issue_voucher', {
     p_venue_id: venueId, p_title: input.title, p_count: input.count ?? 1,
     p_holder_name: input.holderName ?? null, p_holder_user_id: input.holderUserId ?? null, p_note: input.note ?? null,
     p_expires_at: input.expiresAt ?? null,
     p_reason: input.reason, // 발급 근거 — 서버가 목록 검증·기록(20260905h). 순위·시상은 서버가 거절.
   });
   if (error) throw new Error(error.message);
+  // 구버전 RPC(정수 미반환)나 예상 밖 스키마는 0 으로 떨어뜨린다 — 요청 수량으로 조용히 대체하면
+  // 호출부의 '결과 확인 필요' 불일치 판정이 진짜 문제를 놓친다(0 은 항상 불일치로 잡힌다).
+  const n = typeof data === 'number' ? data : Number(data);
+  return Number.isFinite(n) ? n : 0;
 }
 
 // 발급 승인(운영자) 여부 / 토글

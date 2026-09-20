@@ -400,7 +400,7 @@ test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 �
   // → 2026-09-20 실측(격리 4273 · 프로덕션 빌드): 320/360/390/412/430 전부 칸폭합 244.4px,
   //   최소 clientWidth 284px(320) 이라 **한 줄로 충분**했다. 두 줄 그리드는 만들지 않았다.
   //   이 검사가 그 실측을 계약으로 굳힌다 — 라벨이 길어지거나 칸이 늘면 여기서 빨개진다.
-  for (const W of [320, 360, 390, 430] as const) {
+  for (const W of [320, 360, 390, 412, 430] as const) {
     test(`${W}px 킬스위치 ON — 7칸이 겹침 0 으로 한 줄에 들어온다`, async ({ page }) => {
       test.setTimeout(90_000);
       await openMobileStore(page, W, IDENTITY_ON);
@@ -423,6 +423,13 @@ test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 �
           const over = Math.max(0, br.left - sr.left) + Math.max(0, sr.right - br.right);
           return over > 0.5 ? `${b.dataset.step ?? '요약'}:${over.toFixed(1)}` : null;
         }).filter(Boolean);
+        // 🔴 2026-09-21 — "넘치지 않는다"만 보던 계약의 구멍: 라벨이 조금만 길어져도 넘치기
+        //   직전까지 조용히 빡빡해질 수 있었다. 실제 여유(clientWidth − 칸폭합 − 간격 합)를 잰다.
+        const cs = getComputedStyle(rail);
+        const 간격 = parseFloat(cs.columnGap || cs.gap || '0') || 0;
+        const 칸폭합 = vis.reduce((s, b) => s + b.getBoundingClientRect().width, 0);
+        const pill = rail.querySelector<HTMLElement>('[data-sliding-pill]');
+        const act = rail.querySelector<HTMLElement>('[data-pill-active]');
         return {
           보이는칸: vis.map((b) => b.dataset.step ?? (b.getAttribute('role') === 'tab' ? '요약' : '이용권PC')),
           role없는칸: vis.filter((b) => b.getAttribute('role') !== 'tab').length,
@@ -432,6 +439,11 @@ test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 �
           높이: vis.map((b) => +b.getBoundingClientRect().height.toFixed(1)),
           글꼴: vis.map((b) => parseFloat(getComputedStyle(b).fontSize)),
           활성수: rail.querySelectorAll('[role=tab][aria-selected="true"]').length,
+          칸폭합: +칸폭합.toFixed(1),
+          간격: +간격.toFixed(2),
+          여유: +(rail.clientWidth - (칸폭합 + (vis.length - 1) * 간격)).toFixed(1),
+          알약중심차: pill && act ? +Math.abs((pill.getBoundingClientRect().left + pill.getBoundingClientRect().right) / 2
+            - (act.getBoundingClientRect().left + act.getBoundingClientRect().right) / 2).toFixed(2) : null,
         };
       }, RAIL);
       console.log(`[S1 ${W}]`, JSON.stringify(m));
@@ -447,6 +459,16 @@ test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 �
       expect(m.넘침, `레일이 ${m.넘침}px 넘친다 — 마지막 칸이 잘려 그 칸이 있는 줄도 모른다`).toBeLessThanOrEqual(0);
       expect(m.문서가로넘침, '문서 전체가 가로로 넘친다').toBeLessThanOrEqual(0);
       expect(m.활성수, '활성 탭이 정확히 하나가 아니다').toBe(1);
+      // 🔴 2026-09-21 — 여유(slack) 하한. '넘치지 않는다'만으로는 라벨이 조금만 길어져도 넘치기
+      //   직전까지 조용히 빡빡해지는 것을 못 잡는다. 320px 실측(2026-09-21 격리 프로덕션 빌드):
+      //   레일 clientWidth 284px, 칸폭합 244.4 + 간격 6×2.13 = 257.2px → 여유 26.8px. 8px 는 그
+      //   26.8px 가 약 70% 깎여도 잡아내되, 서브픽셀 반올림 잡음(0.x px)엔 흔들리지 않는 하한이다.
+      expect(m.여유, `여유가 ${m.여유}px 로 좁아졌다(320px 기준 26.8px) — 라벨/칸이 늘었는지 보라`)
+        .toBeGreaterThanOrEqual(8);
+      // 알약 중심 오차 — 종전엔 390 전용 테스트와 PC 루프에만 있었다. 모바일 전 폭 루프에도 잠근다
+      // (실측 0.15px). 먼저 알약·활성 칸을 찾았는지부터 본다 — 못 찾으면 아래 단언이 빈 검사가 된다.
+      expect(m.알약중심차, '알약이나 활성 칸을 못 찾았다 — 이 단언이 빈 검사가 됐다').not.toBeNull();
+      expect(m.알약중심차!, '알약이 활성 탭 중심에서 벗어났다').toBeLessThanOrEqual(1);
       for (const h of m.높이) expect(h, `칸 높이가 ${h}px — 44px 유효 터치 계약 미달`).toBeGreaterThanOrEqual(44);
       // 글자를 줄여서 맞추는 것은 금지다(문서 §S1-4). 12.75px = t-desc 정본.
       for (const f of m.글꼴) expect(f, `칸 글자가 ${f}px 로 줄었다 — 폭을 글자 축소로 맞추지 않는다`).toBeGreaterThanOrEqual(12.5);

@@ -34,18 +34,14 @@ import {
 } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { isStaleResponse } from '../../lib/staleResponse';
+import { parseQr } from '../../lib/qrPayload'; // Q1(2026-09-21) — 매장 QR 해석은 이 한 곳뿐이어야 한다.
+// 이 파일에 따로 있던 parseVenueId 는 `?checkin=<venueId>` 도 이용권 QR로 받아들였다 — A 매장
+// 출석 QR을 지갑에서 스캔하면 이용권이 소모되는 실사고 경로였다(설계서 §1 Q1). 이제는 공용 parseQr 의
+// kind==='voucher' && UUID 형식만 통과시키고, checkin 은 여기서 즉시 걸러 안내만 하고 RPC 는 0회다.
 
 // venueName 이 nullable 인 이유: 매장명을 **모르는 상태**와 '기타 매장'이라는 이름을 구분해야
 // 머리글이 '기타 매장 매장이용권' 같은 가짜 매장명을 만들어 내지 않는다(voucherGroupLabel 참조).
 interface Stack { venueId: string; venueName: string | null; title: string; ids: string[]; expiries: (string | null)[] }
-
-function parseVenueId(text: string): string | null {
-  const t = text.trim();
-  if (t.startsWith('NURIV-VENUE:')) return t.slice('NURIV-VENUE:'.length).trim();
-  try { const u = new URL(t); const c = u.searchParams.get('checkin'); if (c) return c; } catch { /* not a url */ }
-  if (/^[0-9a-fA-F-]{36}$/.test(t)) return t;
-  return null;
-}
 
 const fmtDate = (iso: string | null) => { if (!iso) return ''; const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
 
@@ -351,18 +347,41 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
   // 손제작 시트도 겹을 등록해야 뒤로가기가 이 시트만 닫는다 — 없으면 부모 Modal/대시보드가 통째로 닫힌다(점검 #7)
   useBackClose(true, startClose, { escape: true }); // 시트는 ESC 대상 — 전역 ESC 는 backstack 최상단 한 겹만 닫는다(개별 리스너 금지)
   const toast = useToast();
-  const [mode, setMode] = useState<'menu' | 'qr' | 'phone'>('menu');
+  const [mode, setMode] = useState<'menu' | 'qr' | 'confirmQr' | 'notice' | 'phone'>('menu');
+  const [noticeMsg, setNoticeMsg] = useState<string | null>(null); // Q1 — checkin·오매장 QR 등 '실행하지 않는' 스캔 결과 안내
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const vid = stack.ids[0];
+  // 스캔 세션당 결과 처리는 1회 — QrScanner 자체에도 프레임 dedupe 가 있지만(html5-qrcode 콜백),
+  // '확정' 은 사용자 조작(더블탭)까지 막아야 해서 이 화면에서 한 겹 더 둔다.
+  const qrDoneRef = useRef(false);
+  const confirmDoneRef = useRef(false);
 
-  const doQr = async (text: string) => {
-    const venueId = parseVenueId(text);
-    if (!venueId) { toast.show('매장 QR이 아닙니다', 'error'); setMode('menu'); return; }
-    setBusy(true);
-    try { await redeemMyVoucherByQr(vid, venueId); onDone({ title: stack.title, venueName: stack.venueName, venueId: stack.venueId }); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '사용 실패', 'error'); setBusy(false); setMode('menu'); }
+  // 스캔 결과 → **실행하지 않고** 발급 매장·1장·잔여를 보여 준 뒤 사용자가 눌러야 다음 단계(확정)로 간다.
+  // 출석 QR 등 이용권이 아닌 결과는 카메라만 끄고(QrScanner 언마운트) RPC 0회로 안내한다.
+  const doQr = (text: string) => {
+    if (qrDoneRef.current) return;
+    qrDoneRef.current = true;
+    const out: { reason?: string } = {};
+    const hit = parseQr(text, out);
+    if (hit?.kind === 'checkin') { setNoticeMsg('출석 QR입니다. 이용권은 사용되지 않았어요'); setMode('notice'); return; }
+    if (hit?.kind === 'voucher' && hit.venueId === stack.venueId) { setMode('confirmQr'); return; }
+    if (hit?.kind === 'voucher') { setNoticeMsg('다른 매장의 이용권 QR이에요 — 발급 매장 QR을 스캔해 주세요'); setMode('notice'); return; }
+    setNoticeMsg(out.reason ?? '매장 QR이 아니에요'); setMode('notice');
   };
+  // 확정 화면에서 눌러야만 실제 RPC 를 호출한다(스캔 즉시 호출 금지, Q1). 취소/뒤로가기는 0회.
+  const confirmRedeem = async () => {
+    if (busy || confirmDoneRef.current) return;
+    confirmDoneRef.current = true;
+    setBusy(true);
+    try { await redeemMyVoucherByQr(vid, stack.venueId); onDone({ title: stack.title, venueName: stack.venueName, venueId: stack.venueId }); }
+    catch (e) {
+      toast.show(e instanceof Error ? e.message : '사용 실패', 'error');
+      setBusy(false); confirmDoneRef.current = false; setMode('menu');
+    }
+  };
+  const startQr = () => { qrDoneRef.current = false; setMode('qr'); };
+  const backToMenu = () => { qrDoneRef.current = false; setMode('menu'); };
   // 전화번호 경로 2단계(Phase 15-2/S6): 번호만 치고 원탭 전송하면 오타 = 오전송이다.
   // 1단계 조회로 받는 쪽(업주)을 확인 카드로 보여주고, 2단계에서만 실제 차감한다.
   const [phoneTarget, setPhoneTarget] = useState<TransferTarget | null>(null);
@@ -406,14 +425,36 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
               서버에서도 같은 커밋으로 redeem_my_voucher 실행 권한을 회수했다(20260907d) — UI 만 내리면
               콘솔에서 그대로 부를 수 있으므로 둘을 함께 막아야 한다. */}
           <p className="text-2xs text-ink-muted">발급 매장(<b className="text-ink-secondary">{stack.venueName ?? '확인 중'}</b>)에서만 사용됩니다.</p>
-          <button type="button" onClick={() => setMode('qr')} className="btn-primary inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="qr" size={16} /> 매장 QR 스캔해서 사용</button>
+          <button type="button" onClick={startQr} className="btn-primary inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="qr" size={16} /> 매장 QR 스캔해서 사용</button>
           <button type="button" onClick={() => setMode('phone')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="phone" size={16} /> 매장 업주 전화번호로 전송</button>
         </>)}
         {mode === 'qr' && (
           <div className="space-y-2">
-            <p className="text-2xs text-ink-muted">매장에 비치된 QR을 비춰 주세요. (카메라 권한 필요)</p>
-            <QrScanner onResult={doQr} onError={(m) => { toast.show(m, 'error'); setMode('menu'); }} />
-            <button type="button" onClick={() => setMode('menu')} className="btn-ghost w-full text-2xs">취소</button>
+            <p className="text-2xs text-ink-muted">매장에 비치된 <b className="text-ink-secondary">매장이용권 사용 QR</b>을 비춰 주세요. (카메라 권한 필요)</p>
+            <QrScanner onResult={doQr} onError={(m) => { toast.show(m, 'error'); backToMenu(); }} />
+            <button type="button" onClick={backToMenu} className="btn-ghost w-full text-2xs">취소</button>
+          </div>
+        )}
+        {/* Q1 — 스캔은 즉시 실행하지 않는다. 이용권 QR·발급 매장 일치까지 확인한 뒤에도
+            '매장명 · 이용권 제목 · 1장 · 사용 후 남는 장수'를 보여 주고 눌러야 RPC 가 나간다. */}
+        {mode === 'confirmQr' && (
+          <div className="space-y-2">
+            <div className="space-y-1 rounded-input border border-emerald-500/40 bg-emerald-500/[0.08] px-3 py-2.5">
+              <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="store" size={14} className="shrink-0 text-emerald-400" /> {stack.venueName ?? '발급 매장'}</p>
+              <p className="text-2xs text-ink-secondary">{stripVenuePrefix(stack.title, stack.venueName)}</p>
+              <p className="text-2xs font-bold text-emerald-400">1장 사용 · 사용 후 남는 장수 {stack.ids.length - 1}장</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" disabled={busy} onClick={backToMenu} className="btn-ghost flex-1 text-sm disabled:opacity-50">취소</button>
+              <button type="button" disabled={busy} onClick={confirmRedeem} className="btn-primary inline-flex flex-1 items-center justify-center gap-1 text-sm disabled:opacity-50">{busy ? '처리 중…' : <><Icon name="check" size={14} /> 이용권 1장 사용</>}</button>
+            </div>
+          </div>
+        )}
+        {/* Q1 — 출석 QR 등 이 스캐너가 실행하지 않는 QR 을 비췄을 때의 안내. RPC 0회, 카메라는 이미 언마운트로 꺼졌다. */}
+        {mode === 'notice' && (
+          <div className="space-y-2">
+            <p role="alert" className="rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2.5 text-sm font-semibold text-ink-primary">{noticeMsg}</p>
+            <button type="button" onClick={backToMenu} className="btn-ghost w-full text-sm">확인</button>
           </div>
         )}
         {mode === 'phone' && (

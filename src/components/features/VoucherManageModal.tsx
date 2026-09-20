@@ -80,6 +80,9 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   const [cands, setCands] = useState<TransferTarget[]>([]);
   const [activeIdx, setActiveIdx] = useState(-1); // 자동완성 키보드 하이라이트
   const [busy, setBusy] = useState(false);
+  /** Q2(2026-09-20) — 발급 실행 전 최종 확인 단계(매장/받는 회원/장수/사유/만료). 확인 내용이 바뀌거나
+   *  매장이 바뀌면 아래 effect 가 즉시 취소한다 — 다른 내용을 보여준 채로 실행되면 안 된다. */
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [stats, setStats] = useState<VoucherHolderStats | null>(null);
   const [statsErr, setStatsErr] = useState<unknown>(null);
   const [qr, setQr] = useState('');
@@ -128,7 +131,12 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
     setList([]); setListErr(null); setStats(null); setStatsErr(null); setProfileMap(new Map());
     setQuota(null); setApproved(true); setApprovedErr(null);
     setRecvUserId(null); setRecvDisplay(''); setCands([]); setActiveIdx(-1); setExpanded(null);
+    setConfirmOpen(false); // Q2 — 매장이 바뀌면 보여주던 확인 내용(매장·받는 회원 등)이 전부 낡은 것이라 취소한다
   }, [venueId]);
+  // Q2 — 확인 화면에 적힌 내용(장수·사유·만료·받는 회원) 이 하나라도 바뀌면 확인을 취소한다.
+  //   위와 별도 effect 인 이유: venueId 변경은 다른 상태들도 같이 지워야 하지만, 이 넷은 그대로 두고
+  //   확인 단계로 되돌아가기만 하면 된다.
+  useEffect(() => { setConfirmOpen(false); }, [count, reason, expiry, recvUserId]);
   useEffect(() => { reload(); }, [venueId, idOn]); // eslint-disable-line react-hooks/exhaustive-deps
   // 실시간: 이 매장 이용권이 들어오면(사용/발급/회수) 즉시 갱신 — 권한은 RLS로 자동 게이트.
   // ⚠ 킬스위치 OFF 에서는 채널을 열지 않는다 — Realtime 동시연결은 무료 한도의 실질 천장이라
@@ -276,14 +284,21 @@ ${cards}
     if (!recvUserId) { toast.show('받는 손님을 먼저 지정해 주세요', 'error'); return; }
     setBusy(true);
     try {
-      await issueVoucher(venueId, { title, count, holderUserId: recvUserId ?? undefined, holderName: recvDisplay || undefined, expiresAt: expiry ? `${expiry}T23:59:59+09:00` : null, reason, note: reason === 'other' ? reasonNote.trim() || undefined : undefined });
-      toast.show(`매장이용권 ${count}개를 ${recvDisplay ? recvDisplay + '님께 ' : ''}배포했습니다`, 'success');
+      const issued = await issueVoucher(venueId, { title, count, holderUserId: recvUserId ?? undefined, holderName: recvDisplay || undefined, expiresAt: expiry ? `${expiry}T23:59:59+09:00` : null, reason, note: reason === 'other' ? reasonNote.trim() || undefined : undefined });
+      if (issued === count) {
+        toast.show(`매장이용권 ${count}개를 ${recvDisplay ? recvDisplay + '님께 ' : ''}배포했습니다`, 'success');
+      } else {
+        // Q2 — 요청 장수와 실제 발급 수량이 다르면 자동 재시도하지 않는다(이미 서버에서 발급이 일어난
+        //   뒤일 수 있어, 다시 부르면 중복 발급이 된다). 바로 아래 reload/reloadQuota 가 실제 상태를 보여준다.
+        toast.show(`발급 결과 확인 필요 — 요청 ${count}개 · 실제 ${issued}개. 이용 내역에서 확인해 주세요`, 'error');
+      }
       setTitle('매장이용권'); setCount(1); setExpiry(''); setRecvUserId(null); setRecvDisplay(''); setRecvMode('none'); setCands([]); setReasonNote('');
       reload(); reloadQuota();
     } catch (e) {
       const msg = e instanceof Error ? e.message : '배포 실패';
       toast.show(msg, 'error');
       if (msg.includes('한도가 부족')) setIssueOpen(true); // 한도 안내 문구가 보이도록 발급 섹션만 펼침(유상 충전 UI 는 제거됨)
+      setConfirmOpen(false); // 실패 시 확인 화면에 머무르지 않고 조건을 다시 고칠 수 있게 되돌린다
       reloadQuota();
     }
     setBusy(false);
@@ -561,7 +576,27 @@ ${cards}
                   </div>
                 </div>
               )}
-              <button type="button" disabled={busy || !recvUserId || (!isAdmin && (!approved || approvedErr != null))} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : recvUserId ? `+ ${count}개 발급 → ${recvDisplay}` : '받는 손님을 먼저 지정하세요'}</button>
+              {/* Q2(2026-09-20) — 실행 전 매장/받는 회원/장수/사유/만료 최종 확인. 위 effect 가 내용이
+                  바뀌거나(count/reason/expiry/recvUserId) 매장이 바뀌면 이 단계를 즉시 취소한다. */}
+              {confirmOpen ? (
+                <div className="space-y-1.5 rounded-input border border-accent-400/50 bg-accent-300/[0.08] p-2.5 text-2xs">
+                  <p className="font-bold text-accent-300">발급 확인</p>
+                  <p>매장: <b className="text-ink-primary">{venueName ?? '우리 매장'}</b></p>
+                  <p>받는 회원: <b className="text-ink-primary">{recvDisplay || '회원'}</b>{recvUserId && <span className="text-ink-muted"> · ID …{recvUserId.slice(-6)}</span>}</p>
+                  <p>장수: <b className="text-ink-primary">{count}개</b></p>
+                  <p>사유: <b className="text-ink-primary">{voucherReasonLabel(reason)}</b>{reason === 'other' && reasonNote.trim() && <span className="text-ink-muted"> · {reasonNote.trim()}</span>}</p>
+                  <p>만료: <b className="text-ink-primary">{expiry || '무기한'}</b></p>
+                  <div className="flex gap-1.5 pt-0.5">
+                    <button type="button" onClick={() => setConfirmOpen(false)} className="min-h-[44px] flex-1 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary">취소</button>
+                    <button type="button" disabled={busy} onClick={issue} className="btn-primary min-h-[44px] flex-1 text-sm disabled:opacity-50">{busy ? '배포 중…' : `${count}개 발급 확정`}</button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" disabled={busy || !recvUserId || (!isAdmin && (!approved || approvedErr != null))}
+                  onClick={() => setConfirmOpen(true)} className="btn-primary min-h-[44px] w-full text-sm disabled:opacity-50">
+                  {recvUserId ? `+ ${count}개 발급 → ${recvDisplay}` : '받는 손님을 먼저 지정하세요'}
+                </button>
+              )}
               {/* 오너 결정(2026-09-14): 손님 미지정 발급은 나중에 배정할 방법이 없어 영원히 못 쓰는 표가 된다 —
                   '미지정이면 매장 보관용'은 더 이상 사실이 아니라 지웠다. 본인인증을 마친 회원 계정에만 발급되는 이유를 남긴다. */}
               {/* 🔴 법적 고지 — 오너 지시로 **필수**다(2026-09-18: "하단에 매장 업주에게만 가능 이라는 문구

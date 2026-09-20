@@ -455,21 +455,39 @@ test.describe('H1 — 스크롤된 대메뉴 전환에서 헤더가 첫 프레�
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
     await page.waitForSelector('[data-stack-header]', { timeout: 20_000 });
-    // 홈 → 라이브(이력 1칸). 돌아갈 곳이 있어야 뒤로가기가 탭 전환이 된다.
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'live' })));
-    await page.waitForTimeout(800);
-    await page.evaluate(() => window.scrollTo(0, 400));
-    await page.waitForTimeout(600);
 
-    const before = await page.evaluate(() => ({
-      y: Math.round(window.scrollY),
-      h: +(document.querySelector('[data-stack-header]') as HTMLElement).getBoundingClientRect().height.toFixed(2),
-      shrunk: document.documentElement.dataset.headerShrunk ?? null,
-      tab: document.querySelector('[data-tab]')?.getAttribute('data-tab') ?? null,
-    }));
-    // 전제 두 개 — 둘 중 하나라도 안 서면 이 검사는 아무것도 재지 않는다.
-    expect(before.y, '헤더가 접힐 만큼 안 내려갔다 — 결함 경로를 못 탔다').toBeGreaterThan(56);
-    expect(before.shrunk, '스크롤했는데 헤더가 축소 상태가 아니다 — 전제가 안 섰다').toBe('1');
+    // 🔴 2026-09-21 — 여기는 원래 **라이브 탭 고정**이었는데, 라이브 탭 길이는 그때그때의
+    //   **운영 데이터**(진행 중인 클락 수)가 정한다. 실측: 라이브 최대 스크롤 **55px** 인데
+    //   아래 전제는 56 초과를 요구한다 — **1px 차이로** 코드 변경 0 인데 빨개졌다
+    //   (CLAUDE.md: "코드를 안 바꿨는데 빨개지면 회귀보다 운영 데이터 변경을 먼저 의심하라").
+    //   → 탭을 **고정하지 않고**, 헤더를 실제로 접을 수 있는 첫 탭을 골라 그 경로를 검사한다.
+    //   ⚠ 느슨하게 푼 것이 아니다: **어느 탭도 전제를 못 세우면 아래에서 크게 실패**한다.
+    //     조용히 skip 하면 이 검사는 그날부터 아무것도 재지 않는다.
+    const CANDS = ['tools', 'browse', 'home', 'community', 'live'] as const;
+    const tried: string[] = [];
+    let before: { y: number; h: number; shrunk: string | null; tab: string | null } | null = null;
+    for (const t of CANDS) {
+      await page.goto('/');
+      await page.waitForSelector('[data-stack-header]', { timeout: 20_000 });
+      // 홈 → 대상 탭(이력 1칸). 돌아갈 곳이 있어야 뒤로가기가 탭 전환이 된다.
+      await page.evaluate((tab) => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: tab })), t);
+      await page.waitForTimeout(800);
+      await page.evaluate(() => window.scrollTo(0, 400));
+      await page.waitForTimeout(600);
+      const m = await page.evaluate(() => ({
+        y: Math.round(window.scrollY),
+        h: +(document.querySelector('[data-stack-header]') as HTMLElement).getBoundingClientRect().height.toFixed(2),
+        shrunk: document.documentElement.dataset.headerShrunk ?? null,
+        tab: document.querySelector('[data-tab]')?.getAttribute('data-tab') ?? null,
+      }));
+      tried.push(`${t}: y=${m.y} shrunk=${m.shrunk}`);
+      // ⚠ `m.tab` 은 `[data-tab]` **첫 요소**라 keep-alive 로 살아 있는 홈 판을 집는다 — 활성 탭이 아니다.
+      //   고른 탭 이름은 루프 변수 `t` 로 적는다(로그가 거짓말하면 다음 사람이 엉뚱한 탭을 본다).
+      if (m.y > 56 && m.shrunk === '1') { before = { ...m, tab: t }; break; }
+    }
+    // 전제 — 하나도 못 세우면 이 검사는 아무것도 재지 않는다. 그럴 땐 **크게 실패**한다.
+    expect(before, `어느 탭에서도 헤더를 접을 만큼 스크롤하지 못했다 — 결함 경로를 못 탄다: ${tried.join(' | ')}`).not.toBeNull();
+    console.log('[H1 back] 고른 탭:', before!.tab, '| 후보 실측:', tried.join(' | '));
 
     const frames = await page.evaluate(async () => {
       const out: { i: number; y: number; h: number; shrunk: string | null }[] = [];
@@ -492,7 +510,7 @@ test.describe('H1 — 스크롤된 대메뉴 전환에서 헤더가 첫 프레�
 
     const zero = frames.filter((f) => f.y === 0);
     expect(zero.length, '뒤로가기 뒤 scrollY 가 0 이 된 프레임이 없다 — 탭 전환 자체가 안 일어났다').toBeGreaterThan(0);
-    const bad = zero.filter((f) => f.shrunk === '1' || (f.h > 0 && f.h < before.h + 1));
+    const bad = zero.filter((f) => f.shrunk === '1' || (f.h > 0 && f.h < before!.h + 1));
     expect(bad,
       `뒤로가기 뒤 scrollY=0 인데 헤더가 아직 축소 상태인 프레임이 ${bad.length}개다: ${JSON.stringify(bad.slice(0, 3))}`)
       .toEqual([]);

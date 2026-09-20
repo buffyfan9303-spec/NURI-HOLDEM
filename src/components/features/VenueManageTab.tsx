@@ -1350,7 +1350,11 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
   //   `min-w-0 flex-1 basis-0` 이 칩을 콘텐츠보다 더 좁게 눌러서다. `overflow-x-auto` 는
   //   '버튼 안 글자 겹침' 을 해결하지 못한다 — 스크롤은 잘린 것만 옮길 뿐이다.
   //   → 모바일은 **콘텐츠 폭 아래로 안 줄이고**(`w-max shrink-0`) 라벨을 짧게 만든다.
-  //     그래도 안 맞는 폭이 있으면 아래 `twoRow` 가 4+3 두 줄로 바꾼다(글자를 줄이거나 칸을 숨기지 않는다).
+  //     한 줄 7칸으로 확정했다 — 이 저장소 전체에 `twoRow` 두 줄 폴백 코드는 없다(전수 grep, 2026-09-21).
+  //     2026-09-21 실측(격리 프로덕션 빌드)으로 320~1440 전 폭 통과: 칸폭합 244.4px · 320px 기준
+  //     여유(= clientWidth − 칸폭합 − 간격 합) 26.8px. 두 줄이 필요해지는 판별식은 그 여유가
+  //     **음수가 되는 폭이 나오는 것**이다 — 그때만 만들면 된다(e2e/store-nav.spec.ts 의 여유
+  //     하한 단언이 그 신호를 먼저 잡는다).
   //   ⚠ lg 이상은 종전 그대로다 — `lg:max-w-[9rem] lg:flex-1 lg:basis-0` 가 뒤에서 덮는다.
   const chip = (on: boolean) => ['relative inline-flex h-[44px] w-max shrink-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:px-3 lg:text-sm',
     on ? 'font-bold text-white' : 'font-semibold text-ink-muted hover:text-ink-secondary'].join(' ');
