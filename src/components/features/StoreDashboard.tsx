@@ -464,9 +464,20 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     const seq = session?.gameSeq;
     return {
       posters: { done: schedules.some((x) => x.venueId === venueId && x.date === d && x.approved), dest: 'posters' },
-      // 장부는 기본이 목록 모드다 — 시작 전이면 날짜를 싣지 않아 목록에서 고르게 두고,
-      // 시작했으면 그날 보드로 바로 들어간다.
-      ledger: { done: started, dest: { section: 'ledger', date: started ? d : undefined, gameSeq: seq } },
+      // 🔴 2026-09-20 — `date: started ? d : undefined` 였다. 즉 **오늘 장부를 아직 안 연 상태**
+      //   (하루 중 가장 흔한 시작 시점)에서는 날짜 없는 목적지를 줬다. 그 결과 두 가지가 깨졌다:
+      //   ① `VenueManageTab` 의 `onPick` 이 `if (fromDash) return onGotoStore(fromDash)` 로
+      //      **먼저 잡아채서**, 바로 아래 있는 `date: ledgerSeed?.date ?? kstToday()` 폴백을 건너뛴다.
+      //      그 폴백은 오너가 2026-09-07 에 "단계를 눌렀는데 장부 탭으로 간 게 아니다" 라고 지적해
+      //      넣은 것이다 — 대시보드 경로에서만 그 수정이 무력화돼 있었다(실측 재현).
+      //   ② 시드가 없으면 `goStep('ledger')` 이 `setLedgerSeed(null)` 만 하고, `NuriPosLedger` 의
+      //      시드 effect 는 `if (!seed) return` 이라 **아무것도 안 한다**. keep-alive 라 직전에 보던
+      //      **다른 날짜 보드가 그대로 남는다** — '오늘 장부' 를 눌렀는데 9/1 숫자를 보게 된다(실측 재현).
+      //      다른 날짜 데이터를 오늘 것으로 오인하는 건 단순 이동 버그가 아니다.
+      //   → 날짜를 **항상** 싣는다. 이 카드의 라벨('오늘 장부')·안내와도 그래야 맞는다.
+      //   ⚠ 종전 주석은 "시작 전이면 목록에서 고르게 둔다" 였는데, 목록은 보드 상단 DateBar 의
+      //     '← 목록' 으로 언제든 갈 수 있다. 오너 지적은 그 반대 방향이었다.
+      ledger: { done: started, dest: { section: 'ledger', date: d, gameSeq: seq } },
       clock: { done: clockActive || closed, dest: { section: 'clock', gameSeq: seq } },
       ranking: { done: hasRankToday === true, dest: { section: 'ranking', date: d, gameSeq: seq, title: session?.title } },
       // 정산은 별도 화면이 아니라 **장부의 마감**이다 — 미수가 남아 있으면 아직 끝난 게 아니다.
@@ -1388,7 +1399,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                   {/* CRM 행동 버튼 — 고객에게 바로 매장이용권 발급(받는 사람 자동 입력).
                       DashCard 의 children 은 헤더 <button> 밖이라 진짜 <button> 을 쓸 수 있다 —
                       span[role=button] 은 Space 키가 안 먹고 폼 의미도 없어서 흉내에 그친다. */}
-                  {caps.voucher && (
+                  {/* 🔴 2026-09-20 — 발급/열람 분리를 RegularsModal·CheckinModal 에는 적용했는데 **여기를 놓쳤다**.
+                      열람권만 가진 직원에게 '보내기' 가 보이고, 눌러도 발급 폼이 없는 모달만 열린다. */}
+                  {caps.issueVoucher && (
                     <button type="button" title={`${r.name}님에게 매장이용권 보내기`}
                       onClick={() => { setVoucherPrefill(r.name); setVoucherOpen(true); }}
                       className="inline-flex shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-1.5 py-0.5 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 active:opacity-80"

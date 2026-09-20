@@ -18,7 +18,7 @@ import { splitLedgerName } from '../../lib/rankingGame';
 import { uploadPoster } from '../../lib/storage';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
-import { type StoreStepMap,resolveDest, type StoreDest } from '../../lib/storeDestination'; // 이동 목적지 → 시드 패치(순수)
+import { type StoreStepMap,resolveDest, type StoreDest, type StoreGoto } from '../../lib/storeDestination'; // 이동 목적지 → 시드 패치(순수)
 import StoreToolsPanel from './StoreToolsPanel';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import LedgerSettlementPanel from './LedgerSettlementPanel';
@@ -768,8 +768,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 패널만 얼리면 알약이 여전히 허공에서 온다. 수직 이동 **자체**를 없애는 것이 근본이다.
             ⚠ 비용: 대시보드에 있는 동안 clock 구독이 하나 늘어난다(대시보드 위젯 + 이 바).
               채널 이름에 난수가 붙어 충돌은 없다(`api/clock.ts:452`). */}
+        {/* 🔴 2026-09-20 — `gotoSection` 은 문자열만 받는다. 문맥(날짜·게임)을 실으려면
+            `onGotoStore`(resolveDest 로 시드를 앉히는 쪽)를 넘겨야 한다 — 대시보드와 같은 경로다.
+            ⚠ 이 주석을 `{venueId && (` **안**에 두면 JSX 형제가 둘이 되어 빌드가 깨진다.
+              tsc 는 이걸 통과시키고 rolldown/eslint 만 잡는다(2026-09-20 실제로 당했다). */}
         {venueId && (
-          <StoreLiveBar venueId={venueId} active={tabActive} onGoto={gotoSection} />
+          <StoreLiveBar venueId={venueId} active={tabActive} onGoto={onGotoStore} />
         )}
         <div className="lg:flex lg:gap-5">
           {available.length > 1 && (<>
@@ -901,7 +905,16 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                        (대시보드도 이제 kstToday 를 쓴다 — 여기는 그 우회의 흔적이 아니라 같은 기준의 명시다.)
                        지금 보고 있는 장부(ledgerSeed)가 있으면 그것이 우선이다. */
                   if (st === 'settle') { setSettleDate(ledgerSeed?.date ?? kstToday()); return gotoSection('settle'); }
-                  if (fromDash) return onGotoStore(fromDash);
+                  /* 🔴 2026-09-20 — 종전엔 `if (fromDash)` 하나였다. 대시보드 목적지가 **날짜 없는**
+                     장부(`{ section:'ledger', date: undefined }`)여도 객체라서 truthy 였고, 그래서
+                     바로 아래 2026-09-07 폴백(`ledgerSeed?.date ?? kstToday()`)을 **건너뛰었다**.
+                     시드가 없으면 `goStep` 이 `setLedgerSeed(null)` 만 하는데 `NuriPosLedger` 의 시드
+                     effect 는 `if (!seed) return` 이라 아무것도 안 한다 → keep-alive 로 **직전에 보던
+                     다른 날짜 보드가 그대로** 남는다. StoreDashboard 쪽에서 날짜를 항상 싣도록 고쳤지만,
+                     여기도 같이 막는다 — 한쪽만 고치면 다른 호출부가 생길 때 또 샌다. */
+                  if (fromDash && !(st === 'ledger' && !(typeof fromDash === 'object' && fromDash.date))) {
+                    return onGotoStore(fromDash);
+                  }
                   return st === 'ledger'
                     ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame })
                     : gotoSection(st);
@@ -1089,7 +1102,10 @@ const SECTION_ICON: Record<Section | GameStep | SettingsTab, ReactNode> = {
 // 데이터·게이팅은 StoreDashboard의 검증된 배선을 그대로 승격: venue 스코프 조회 + active 게이트 구독
 // (전역 subscribeRunningClocks 금지 — §15.5 #9, venue 단위 채널만). 1초 틱은 이 컴포넌트로 국한.
 const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
-  venueId: string; active: boolean; onGoto: (s: Section | GameStep) => void;
+  venueId: string; active: boolean;
+  /** 🔴 2026-09-20 — 종전에는 `(s: Section | GameStep)` 이라 **문맥을 실을 수 없었다**.
+   *  '바인 대기 N건' 이 그 N 건이 있는 날짜로 가야 해서 대시보드가 이미 쓰는 `StoreGoto` 로 넓힌다. */
+  onGoto: StoreGoto;
 }) {
   const [clocks, setClocks] = useState<ClockState[]>([]);
   const [pending, setPending] = useState(0);
@@ -1155,8 +1171,13 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
           {live.length >= 2 && <span className="text-ink-muted">+{live.length - 1}게임</span>}
         </button>
       )}
+      {/* 🔴 2026-09-20 — 맨 문자열 `onGoto('ledger')` 라 **오늘 장부 목록**으로만 갔다. 이 배지가 세는
+          대기 건수는 `getPendingBuyinRequests(venueId, kstToday())` 의 **오늘치**이므로 그 날짜로 데려간다
+          (대시보드의 '장부에서 전체 관리 →' 와 같은 조리법). '대기 N건' 을 눌렀는데 목록이 뜨면
+          업주는 그 N 건을 다시 찾아야 한다.
+          ⚠ 주석을 `{pending > 0 && (` **안**에 두면 JSX 가 형제 둘로 읽혀 빌드가 깨진다 — 밖에 둔다. */}
       {pending > 0 && (
-        <button type="button" onClick={() => onGoto('ledger')}
+        <button type="button" onClick={() => onGoto({ section: 'ledger', date: kstToday() })}
           className="flex shrink-0 items-center gap-2 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
           바인 대기 <b className="tabular-nums">{pending}</b>건 →
         </button>
