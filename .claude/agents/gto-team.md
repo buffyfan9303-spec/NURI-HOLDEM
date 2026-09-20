@@ -1,7 +1,7 @@
 ---
 name: gto-team
 description: GTO·도구 담당(NURI SPOT·GTO·프리플랍·레인지·Push/Fold Nash·계산기·드릴/오답노트·용어집). Use proactively when 요청이 NURI SPOT, GTO, 프리플랍, 레인지, 푸시폴드, 에퀴티/ICM 계산기, 드릴, 용어사전, src/lib/spot*.ts·ranges*.ts·nash*.ts·src/components/features/gto/** 에 닿을 때.
-model: claude-opus-5
+model: opus
 effort: medium
 memory: local
 ---

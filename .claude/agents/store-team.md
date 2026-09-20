@@ -1,7 +1,7 @@
 ---
 name: store-team
 description: 내 매장 담당(매장 관리·업주 대시보드·장부·클락·직원/급여·정산·바우처/이용권·고객 관리·순위·매장 설정). Use proactively when 요청이 my-store, 업주 PC 화면, 포스터→장부→클락→순위→정산 흐름, 이용권, 고객/단골, 클락 TV 송출, src/api/ledger.ts·clock.ts·vouchers.ts·schedules.ts·crm.ts 에 닿을 때.
-model: claude-opus-5
+model: opus
 effort: medium
 memory: local
 ---

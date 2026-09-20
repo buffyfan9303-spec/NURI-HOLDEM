@@ -92,7 +92,58 @@ npx tsc -b --force                # rc=0 이어야 한다
 ---
 
 
-## 0-a17. 2026-09-21 낮 · Opus 5 팀 — **번들 감량 조사 + 배포** (여기가 가장 최신)
+## 0-a18. 🔴 2026-09-21 · **모델 불일치의 원인을 찾았다 — 전역 설정이 이긴다** (여기가 가장 최신)
+
+§0-a16 ⑥ 에서 "정의를 바꿔도 옛 모델로 돈다" 고 적었는데, **원인이 캐시가 아니었다.**
+
+### 1단계 — 환경 확인 (오너 지시 절차)
+
+| 확인 | 값 |
+|---|---|
+| 세션 cwd | `…\.claude\worktrees\handover-document-review-0851c5` |
+| `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` | **비어 있음**(proc/user/machine 전부) — 차단 조건 아님 |
+| `CLAUDE_CODE_SUBAGENT_MODEL` | 비어 있음 |
+| Opus 5 사용 가능 | ✅ (이 세션이 Opus 5) |
+| 🔴 **사용자 전역 `C:\Users\buffy\.claude\settings.json`** | **`model = fable[1m]`** |
+| 프로젝트 `.claude/settings.json` | `model` 없음 · `agent=nuri-lead` · `teammateMode=in-process` |
+| `critical-reviewer` 정의 중복 | **6곳**. 이 세션이 읽는 것과 루트는 SHA `52d0682556…`(opus), 다른 worktree 4곳은 `a731d8e0a6…`(fable) |
+
+### 2단계 — 같은 세션·같은 정의에서 호출 방식만 바꿔 관찰
+
+| 요청 모델 | 정의 파일의 model | **관찰 모델(agent JSONL)** | 사용한 정의 경로 |
+|---|---|---|---|
+| (미지정 — 정의에 맡김) | `claude-opus-5` | 🔴 **`claude-fable-5-1`** | `…\worktrees\handover-document-review-0851c5\.claude\agents\critical-reviewer.md` |
+| `model=opus` **명시** | `claude-opus-5` | ✅ **`claude-opus-5`** | 〃 (같은 파일) |
+
+관찰 경로: `C:\Users\buffy\.claude\projects\**\subagents\agent-<agentId>.jsonl` 의 `"model"` 필드.
+
+🔴 **결론: 정의 파일의 `model:` 이 무시되고 전역 `fable[1m]` 이 쓰인다. 도구 파라미터는 그걸 이긴다.**
+⚠ **이 명시 지정 성공을 "정의 파일 적용 성공" 으로 기록하지 않는다**(오너 지시).
+
+**왜 일부만 실패했나 — 유력한 가설**: `haiku` 와 `claude-sonnet-5` 는 정의대로 먹었는데 `claude-opus-5` 만 실패했다.
+그 문자열이 유효한 모델로 **인식되지 않아 전역 기본(fable)으로 떨어진** 것으로 보인다. 아직 **미증명**이다.
+
+### 조치
+
+1. 정의 5개(`store-team`·`gto-team`·`design-reviewer`·`root-cause-debugger`·`critical-reviewer`)의
+   `model: claude-opus-5` → **`model: opus`**(짧은 별칭). `haiku` 가 정의에서 이미 작동했고 도구 enum 도 짧은 이름이라
+   **최소한 나빠지지 않는다**. `nuri-lead`(메인 에이전트)는 현재 Opus 5 로 정상 동작 중이라 **건드리지 않았다**.
+2. `design-reviewer`·`root-cause-debugger` 본문에 남아 있던 **"처음부터 Fable 5.1" · "첫 재발부터 Fable 5.1"**
+   지시를 현행 정책(기본 Opus 5, Fable 은 리드만 조건부)으로 교체했다.
+
+### 🔴 다음 사람이 반드시 할 것 (3단계 — 이 세션에서는 구조적으로 불가)
+
+**새 Claude Code 세션**을 같은 저장소 경로에서 열고, **`model` 을 명시하지 않은 채** `critical-reviewer` 를 한 번 불러라.
+그 세션의 `agent-<id>.jsonl` 에서 `"model"` 이 `opus` 계열이면 정의가 먹은 것이고, 여전히 `fable` 이면
+**전역 `settings.json` 의 `model` 을 손대는 것 말고는 방법이 없다**(그건 오너 결정이다).
+Opus 가 확인된 **뒤에만** 다른 변경 역할(`design-reviewer`·`root-cause-debugger`·`store-team`·`gto-team`)을 차례로 시험하라.
+
+⚠ **그때까지는 이 세 역할을 `model` 명시 없이 부르지 마라 — Fable 이 조용히 소모된다.**
+당장 필요하면 **Agent 도구에 `model` 을 명시**하면 된다(위 표가 그게 먹는다는 증거다).
+
+---
+
+## 0-a17. 2026-09-21 낮 · Opus 5 팀 — **번들 감량 조사 + 배포** (최신은 위 §0-a18)
 
 ### 번들 조사 — 팀원 2명이 읽기 전용으로 실측
 

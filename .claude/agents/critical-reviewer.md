@@ -1,7 +1,7 @@
 ---
 name: critical-reviewer
 description: NURI의 인증·매장별 권한·개인정보·이용권 상태·RLS/RPC·GTO 계산을 독립적으로 검증하는 고위험 검토 팀원. 필요한 영역만 검토하며 기본은 읽기 전용이다.
-model: claude-opus-5
+model: opus
 memory: local
 effort: high
 ---
