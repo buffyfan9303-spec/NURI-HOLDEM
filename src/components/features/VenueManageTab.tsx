@@ -883,10 +883,18 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 "다른 페이지로 갔다"가 아니라 "이 페이지에서 판만 바뀌었다"로 읽힌다 — 예전엔 대시보드에
                 숫자 스트립, 게임 진행에 알약 바, 이렇게 **두 벌**이라 스트립을 누르면 알약 바가 있는
                 다른 화면으로 넘어가 거기서 또 눌러야 했다(오너 2026-09-07·09-08). 맨 앞 '요약'이 돌아오는 길. */}
-            {(renderSection === 'game' || renderSection === 'dashboard') && !dItem?.locked && (
+            {/* 🔴 S1(2026-09-20) — `voucher` 를 **모바일에서만** 더했다. 종전에는 이용권을 누르면
+                바가 통째로 사라져(이 조건에 voucher 가 없었다) 오너 사진처럼 "고르고 나면 아래에
+                아무것도 없는" 화면이 됐다. 돌아올 길이 바에 없으니 뒤로가기밖에 안 남는다.
+                PC 는 종전 그대로 — 이용권은 좌측 섹션 목록에서 가는 별도 판이라 바가 필요 없다.
+                ⚠ 숨기는 것은 **CSS 한 곳**(`lg:hidden`)으로만 한다. `useIsDesktop()` 으로 렌더를
+                  가르면 같은 1024 가 JS·CSS 두 곳에 생기고, 리사이즈 중 matchMedia 가 한 프레임
+                  뒤처지는 순간 바가 있어야 할 자리에 아무것도 없게 된다. */}
+            {(renderSection === 'game' || renderSection === 'dashboard' || renderSection === 'voucher') && !dItem?.locked && (
+              <div className={renderSection === 'voucher' ? 'lg:hidden' : undefined}>
               <GameStepBar steps={GAME_STEPS.filter((st) => (st.id === 'posters' ? canPosters : ledgerOk))}
                 onHome={() => gotoSection('dashboard')} progress={stepInfo}
-                active={renderSection === 'dashboard' ? 'dashboard' : renderGameStep}
+                active={renderSection === 'dashboard' ? 'dashboard' : renderSection === 'voucher' ? 'voucher' : renderGameStep}
                 showVoucher={canVoucher} onVoucher={() => gotoSection('voucher')}
                 /* '2. 장부' 는 파이프라인의 한 단계다 — **오늘(또는 지금 보고 있는) 장부 보드**를 뜻한다.
                    bare gotoSection 은 시드를 지워 장부가 목록(검색) 모드로 열렸고, 그래서 단계를 눌렀는데
@@ -919,6 +927,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame })
                     : gotoSection(st);
                 }} />
+              </div>
             )}
             {/* IA2 잔여 — 게임 선택 칩 바(원문: '상단에 게임 선택 칩 바, 아래에 4단계 스테퍼').
                 U1: 그 위에 스텝 공통 문맥 줄(매장 › 날짜 › 게임)이 항상 붙는다 — 칩 줄만 멀티게임 날에 나온다.
@@ -963,7 +972,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   : isSettingsTab(s)
                   ? renderSection === 'settings' && renderSettingsTab === s
                   : renderSection === s;
-                return <div key={s} style={shown && !dItem?.locked ? undefined : { display: 'none' }}>{node}</div>;
+                /* 🔴 S1(2026-09-20) — `data-pane` 을 붙였다. 판이 **실제로 열렸는지**를 검사가
+                   확인할 방법이 없어, 지금까지 '단계 바의 활성 알약'만 보고 통과시켜 왔다.
+                   알약만 보면 바는 옳은데 아래가 비어 있는 상태(오너 사진의 이용권이 정확히 그것)를
+                   초록으로 넘긴다. 판 자체를 짚을 수 있어야 그 구멍이 막힌다. */
+                return <div key={s} data-pane={s} style={shown && !dItem?.locked ? undefined : { display: 'none' }}>{node}</div>;
               };
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
@@ -1288,8 +1301,10 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
  */
 function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onVoucher }: {
   steps: readonly { id: GameStep; label: string }[];
-  /** 'dashboard' = 요약 알약이 활성(= 대시보드를 보는 중). */
-  active: GameStep | 'dashboard';
+  /** 'dashboard' = 요약 알약이 활성(= 대시보드를 보는 중).
+   *  🔴 S1(2026-09-20) — `'voucher'` 를 더했다. 모바일에서는 이용권도 **같은 바의 탭**이라
+   *  거기 서 있는 동안 바가 사라지면 안 된다(종전엔 이용권으로 가면 바가 통째로 없어졌다). */
+  active: GameStep | 'dashboard' | 'voucher';
   onPick: (s: GameStep) => void;
   /** 맨 앞 '요약' 알약 — 대시보드로. 이게 있어야 **이 바 안에서** 왕복이 된다. */
   onHome: () => void;
@@ -1331,7 +1346,13 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
   //   → 오버행 대신 **칩 자체를 44px** 로 만든다. 잘림도 이웃 가림도 없다.
   //     `h-11`(2.75rem)은 46.75px 이라 44 가 아니다 — 루트가 17px 이므로 `h-[44px]` 로 못박는다.
   //   바 높이: 모바일 44.3→50.3px · PC 48.8→50.3px. 가로 넘침은 그대로 0(세로만 바뀐다).
-  const chip = (on: boolean) => ['relative inline-flex h-[44px] min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:flex-none sm:basis-auto sm:px-3 lg:text-sm',
+  // 🔴 S1(2026-09-20 오너 사진) — 모바일에서 7칸이 **글자가 겹친 채** 줄어 있었다.
+  //   `min-w-0 flex-1 basis-0` 이 칩을 콘텐츠보다 더 좁게 눌러서다. `overflow-x-auto` 는
+  //   '버튼 안 글자 겹침' 을 해결하지 못한다 — 스크롤은 잘린 것만 옮길 뿐이다.
+  //   → 모바일은 **콘텐츠 폭 아래로 안 줄이고**(`w-max shrink-0`) 라벨을 짧게 만든다.
+  //     그래도 안 맞는 폭이 있으면 아래 `twoRow` 가 4+3 두 줄로 바꾼다(글자를 줄이거나 칸을 숨기지 않는다).
+  //   ⚠ lg 이상은 종전 그대로다 — `lg:max-w-[9rem] lg:flex-1 lg:basis-0` 가 뒤에서 덮는다.
+  const chip = (on: boolean) => ['relative inline-flex h-[44px] w-max shrink-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:px-3 lg:text-sm',
     on ? 'font-bold text-white' : 'font-semibold text-ink-muted hover:text-ink-secondary'].join(' ');
   return (
     <div ref={ref} data-mystore-rail=""
@@ -1357,19 +1378,48 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
           //   `lg:max-w-[9rem]`(=153px, 루트 17px) 상한이 핵심이다. 상한이 없으면 권한이 적어
           //   단계가 1개뿐일 때 그 칸 하나가 바 전체(약 700px)로 늘어난다(실측: '포스터만' 16%→100%).
           <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
+            data-step={st.id}
+            /* 🔴 S1(2026-09-20) — 완료 정보를 **잃지 않는다**. 모바일에서 인라인 번호·체크를 빼는 대신
+               보조기술이 읽는 이름에 상태를 넣는다. PC 는 인라인 표시가 그대로 남는다. */
+            aria-label={`${i + 1}. ${st.label}${progress?.[st.id]?.done ? ' (완료)' : ''}`}
             onClick={() => onPick(st.id)} className={[chip(on), 'lg:max-w-[9rem] lg:flex-1 lg:basis-0'].join(' ')}>
             {/* 완료 표시는 **번호 자리를 대신한다** — 칸을 넓히지 않고 상태를 얹는다(옛 숫자 스트립의 ✓ 승계). */}
             <span className="relative inline-flex items-center gap-px">
-              {/* ⚠ 2026-09-14 라이트 실측: 단계 번호가 `text-ink-muted/70` 이라 2.76:1 이었다(AA 4.5 미달).
-                  '지금 몇 번째인가'를 말하는 정보라 흐릴 이유가 없다 — 투명도를 빼고 토큰 그대로 둔다. */}
+              {/* 🔴 S1 — 모바일에서는 번호·체크를 **라벨 폭에서 뺀다**(`hidden lg:inline`). 7칸을 겹침 없이
+                  한 줄에 넣으려면 인라인 글리프가 라벨 폭을 더 쓰면 안 된다. 완료는 위 aria-label 과
+                  아래 비인라인 점 마커가 대신 말한다.
+                  ⚠ 2026-09-14 라이트 실측: 단계 번호가 `text-ink-muted/70` 이라 2.76:1 이었다(AA 4.5 미달).
+                    '지금 몇 번째인가'를 말하는 정보라 흐릴 이유가 없다 — 투명도를 빼고 토큰 그대로 둔다. */}
               {progress?.[st.id]?.done
-                ? <Icon name="check" size={12} className="shrink-0 text-emerald-400" />
-                : <span className={on ? undefined : 'text-ink-muted'}>{i + 1}.</span>}
+                ? <Icon name="check" size={12} className="hidden shrink-0 text-emerald-400 lg:inline" />
+                : <span className={['hidden lg:inline', on ? undefined : 'text-ink-muted'].filter(Boolean).join(' ')}>{i + 1}.</span>}
               {st.label}
+              {/* 완료 점 — 모바일 전용. `absolute` 라 라벨 폭을 차지하지 않는다(색만으로 말하지 않게
+                  위 aria-label 에 '(완료)' 가 함께 있다). */}
+              {progress?.[st.id]?.done && (
+                <span aria-hidden className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400 lg:hidden" />
+              )}
             </span>
           </button>
         );
       })}
+      {/* 🔴 S1(2026-09-20) — **모바일 전용 이용권 탭.** 종전에는 이용권이 tablist 밖 일반 버튼이라
+          모바일에서 누르면 `gotoSection('voucher')` 로 가면서 **단계 바가 통째로 사라졌다** —
+          오너 사진의 "이용권을 고르면 아래에 아무것도 없다" 가 그 장면이다.
+          모바일에서는 이용권도 같은 레일의 탭이라 바가 남고 그 아래 기존 이용권 판이 열린다.
+          ⚠ PC 는 종전 그대로 tablist **밖** 우측 별도 버튼이다(아래). 둘은 breakpoint 로 배타적이다.
+          ⚠ `active === 'voucher'` 는 **PC 에서 그려지지 않는다** — 호출부가 그 경우 바 전체를
+            `lg:hidden` 래퍼에 넣기 때문이다. 그래서 여기서 `useIsDesktop()` 으로 한 번 더 가르지 않는다
+            (같은 1024 를 CSS 와 JS 두 곳에 두면 리사이즈 중 한쪽이 뒤처져 알약이 사라진다).
+          ⚠ 티켓 아이콘을 뺐다 — 라벨 폭을 차지해 7칸 한 줄을 깨는 원인이었다(title 로 풀네임 유지). */}
+      {showVoucher && (
+        <button type="button" role="tab" aria-selected={active === 'voucher'}
+          data-pill-active={active === 'voucher' || undefined}
+          data-step="voucher" onClick={onVoucher} title="매장이용권"
+          className={[chip(active === 'voucher'), 'lg:hidden'].join(' ')}>
+          <span className="relative">이용권</span>
+        </button>
+      )}
       </div>
       {/* 매장이용권 — 5단계 파이프라인의 다음 칸이 아니라 '5. 정산' 옆의 지름길이라 번호를 안 단다
           (요약 칸과 같은 이유 — progress 는 GameStep 만 알고 voucher 는 모른다).
@@ -1381,8 +1431,11 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
           ARIA 위반이었다(실측: 다섯 권한 조합 전부 `role: null`). 시각적으로는 같은 바 안이고,
           lg 이상에서 `ml-auto` 로 오른쪽 끝에 서서 '단계'가 아니라 '지름길'로 읽힌다. */}
       {showVoucher && (
+        /* 🔴 S1(2026-09-20) — **PC 전용**으로 좁혔다. 모바일에서는 바로 위 tablist 안의 이용권 탭이
+           대신한다(거기서는 바가 남아야 하므로 탭이어야 한다). 둘이 동시에 보이면 한 화면에
+           같은 진입점이 두 번 생긴다. PC 배치·우측 별도 버튼·아이콘은 종전 그대로다. */
         <button type="button" onClick={onVoucher} title="매장이용권"
-          className={[chip(false), 'lg:ml-auto lg:shrink-0'].join(' ')}>
+          className={[chip(false), 'hidden lg:ml-auto lg:inline-flex lg:shrink-0'].join(' ')}>
           <span className="relative inline-flex items-center gap-1">
             <Icon name="ticket" size={12} className="shrink-0 text-ink-muted" />이용권
           </span>

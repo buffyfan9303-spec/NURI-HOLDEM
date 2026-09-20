@@ -76,3 +76,24 @@ export function useScrollY(cb: Sub) {
 let progUntil = 0;
 export function markProgrammaticScroll(ms = 300) { progUntil = performance.now() + ms; }
 export function isProgrammaticScroll() { return performance.now() < progUntil; }
+
+/** 🔴 H1(2026-09-20) — 프로그램 스크롤 **직후 현재 Y 를 구독자 전원에게 즉시** 알린다.
+ *
+ *  무엇이 문제였나(390×844 실측): 스크롤된 대메뉴에서 다른 대메뉴로 가면 헤더가 한 프레임
+ *  **눌렸다 펴졌다**. `App.tsx` 의 탭 커밋 `useLayoutEffect` 가 `scrollTo(0)` 을 즉시 부르는데,
+ *  헤더의 `shrunk` 는 이 파일의 **다음 rAF 방송**을 기다린다. 전환 직전 `scrollY≈387`·헤더 47.75px
+ *  였다가, 첫 새 화면 rAF 에서도 `scrollY=0` 인데 높이가 **47.75px 로 남고** 다음 rAF 에 60.5px 가 됐다.
+ *
+ *  왜 여기인가: 헤더 쪽에서 `setShrunk(false)` 만 부르면 **이미 예약된 옛 rAF** 가 뒤따라 도착해
+ *  다시 접을 수 있다. 그 예약을 취소할 수 있는 곳은 이 공용 경계 하나뿐이다.
+ *  같은 값을 하단 탭바·ScrollTop·검색 바 구독자도 함께 보게 되는 것도 이 자리라서 가능하다.
+ *
+ *  ⚠ 새 리스너·타이머·별도 상태를 만들지 않는다 — 기존 `subs`/`raf`/`lastY`/`haveLastY` 를 그대로 쓴다.
+ */
+export function notifyScrollNow(y: number = window.scrollY) {
+  lastY = y;
+  haveLastY = true;
+  // 예약된 옛 rAF 가 **옛 Y** 로 뒤늦게 방송하는 것을 막는다(이게 재발의 통로였다).
+  if (raf) { cancelAnimationFrame(raf); raf = 0; }
+  subs.forEach((f) => f(y));
+}

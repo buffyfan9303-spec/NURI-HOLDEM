@@ -20,6 +20,7 @@
 //   운영 Supabase 에 요청이 도달한다(2026-09-12 실사고). 그래서 _fixtures 의 test 를 쓰지 않고
 //   base test + 단일 핸들러를 쓴다 — 로컬(baseURL) 외의 어떤 요청도 continue 하지 않는다.
 import { test, expect, type Page, type Route } from '@playwright/test';
+import { SUPABASE_URL } from './_session';
 
 const LONG_URL = 'https://example.com/tournaments/2026/seoul-main-event-registration-and-schedule?utm_source=nuri&utm_campaign=verylongparam';
 const BODY = [
@@ -60,10 +61,27 @@ const COMMENTS = Array.from({ length: 6 }, (_, i) => ({
 /** 세로 포스터(2:5) — 글이 이미지 안에 들어 있는 안내문 대역. 크롭되면 문장이 잘린다. */
 const POSTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="1000" viewBox="0 0 400 1000"><rect width="400" height="1000" fill="#1b1030"/><text x="200" y="120" fill="#fff" font-size="46" text-anchor="middle">맨 위 줄</text><text x="200" y="920" fill="#fff" font-size="46" text-anchor="middle">맨 아래 줄</text></svg>`;
 
-async function install(page: Page, baseURL: string) {
+/** 🔴 C1(2026-09-20) — 로그인한 **남의 글** 독자. 신고·차단이 실제로 생기는 유일한 조건이라,
+ *  이게 없으면 `…` 메뉴 검사가 "메뉴가 없어도 통과"하는 빈 검사가 된다.
+ *  ⚠ 여전히 핸들러는 **하나**다(위 주석의 2026-09-12 실사고 — 여러 개를 겹치면 continue 가 실네트워크로 샌다). */
+const READER_UID = 'pd-reader-1';
+const b64u = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+const READER_SESSION = {
+  access_token: [b64u({ alg: 'HS256', typ: 'JWT' }), b64u({ sub: READER_UID, aud: 'authenticated', role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }), 'e2e'].join('.'),
+  refresh_token: 'e2e-fake', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
+  user: { id: READER_UID, aud: 'authenticated', role: 'authenticated', email: 'reader@example.com', app_metadata: {}, user_metadata: { name: '읽는사람' }, created_at: '2026-01-01T00:00:00Z' },
+};
+
+async function install(page: Page, baseURL: string, opts: { loggedIn?: boolean } = {}) {
   const ORIGIN = new URL(baseURL).origin;
   const POSTER = ORIGIN + POSTER_PATH;
   const j = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  if (opts.loggedIn) {
+    // 세션 키 형식은 `_mockOwner` 와 같은 출처(supabase-js v2: `sb-<ref>-auth-token`)를 쓴다.
+    const ref = new URL(SUPABASE_URL).hostname.split('.')[0];
+    await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* 저장소 차단 */ } },
+      [`sb-${ref}-auth-token`, JSON.stringify(READER_SESSION)] as [string, string]);
+  }
   await page.context().route('**/*', (route) => {
     const url = route.request().url();
     if (url.includes('__pd-fixture-poster.png')) return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: POSTER_SVG });
@@ -75,7 +93,17 @@ async function install(page: Page, baseURL: string) {
       { key: 'cheer', kind: 'cheer', label: '응원', descr: '', price: 30, duration_hours: 0, duration_seconds: 0, tier_rank: 1, sort: 1 },
       { key: 'bump', kind: 'bump', label: '끌올', descr: '', price: 100, duration_hours: 3, duration_seconds: 0, tier_rank: 1, sort: 2 },
     ]);
-    if (/\/auth\/v1\//.test(url)) return route.fulfill({ status: 400, contentType: 'application/json', body: '{}' });
+    if (opts.loggedIn && /\/rest\/v1\/profiles\?/.test(url) && route.request().method() === 'GET') {
+      return j(route, {
+        id: READER_UID, name: '읽는사람', nickname: '읽는사람', role: 'user', approved: false, status: 'active',
+        venue_id: null, activity_points: 0, created_at: '2026-01-01T00:00:00Z',
+      });
+    }
+    if (/\/auth\/v1\//.test(url)) {
+      return opts.loggedIn
+        ? j(route, READER_SESSION.user)
+        : route.fulfill({ status: 400, contentType: 'application/json', body: '{}' });
+    }
     return j(route, []);
   });
 }
@@ -163,8 +191,12 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
     await expect(title, '글 제목이 화면에 없다').toBeVisible();
     const tSize = await px(title, 'font-size');
     const tLine = await px(title, 'line-height');
-    expect(tSize, `제목 ${tSize}px — §5-2 모바일 20~22px 밖`).toBeGreaterThanOrEqual(20);
-    expect(tSize).toBeLessThanOrEqual(22.5);
+    // 🔴 C1(2026-09-20 오너 시안) — 20~22.5px → **24~28.5px**. 시안의 제목/본문 비가 약 1.7 인데
+    //   종전 구현은 1.25 라 "제목처럼" 읽히지 않았다(문서 C1-2-2 의 '390 기준 제목 26~28px').
+    //   지금은 `text-2xl` = 25.5px(루트 17px). 아래 행간 비(1.32~1.48)는 **그대로** 지킨다 —
+    //   크기만 올리고 행간 규격을 같이 푸는 것은 계약을 느슨하게 만드는 것이라 하지 않는다.
+    expect(tSize, `제목 ${tSize}px — C1 모바일 24~28.5px 밖`).toBeGreaterThanOrEqual(24);
+    expect(tSize).toBeLessThanOrEqual(28.5);
     expect(tLine / tSize, `제목 행간 ${(tLine / tSize).toFixed(2)} — 1.32~1.48 밖`).toBeGreaterThanOrEqual(1.32);
     expect(tLine / tSize).toBeLessThanOrEqual(1.48);
     // 최대 줄수로 자르지 않는다
@@ -185,9 +217,103 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
     expect(await clippedNodes(page), '잘린 요소가 있다').toEqual([]);
   });
 
+  // 🔴 C1(2026-09-20 오너 시안) — **모바일은 두 개의 형제 카드**다(게시글 카드 / 댓글 카드).
+  //   종전 이 자리의 계약은 "댓글은 본문과 같은 좌우 안쪽 선에 있는 우물" 이었는데, 그건 본문이
+  //   article 직속이던 시절의 수치다. 지금 본문은 카드 **안쪽**이라 좌우가 카드 패딩만큼 더 들어간다 —
+  //   옛 단언을 그대로 두면 정상 구현이 빨개진다. 느슨하게 푸는 대신 **새 구조를 더 강하게** 잠근다:
+  //     · 두 카드가 서로 **형제**다(댓글이 게시글 카드 안에 있으면 "한 카드 속 우물" = 문서가 못박은 실패)
+  //     · 두 카드의 좌우 경계와 반지름이 **같다**
+  //     · 두 면이 서로 **다르다**(구분이 없으면 카드가 두 개로 안 읽힌다)
+  //   PC 우물 계약은 아래 별도 테스트로 **그대로 남는다** — 이 변경은 모바일 전용이다.
   for (const theme of ['dark', 'light'] as const) {
-    test(`🔴 댓글 section 은 본문과 다른 지면(우물) + border-strong 경계선 + 입력창은 또 다른 면 (${theme})`, async ({ page, baseURL }) => {
+    test(`🔴 C1 모바일 — 게시글·댓글이 형제 카드고 면이 서로 다르다 (${theme})`, async ({ page, baseURL }) => {
       await page.setViewportSize({ width: 390, height: 844 });
+      await page.addInitScript((t) => { try { localStorage.setItem('nuri-theme', t as string); } catch { /* 저장소 차단 */ } }, theme);
+      await install(page, baseURL);
+      await openPost(page);
+
+      const g = await page.evaluate(() => {
+        const opaque = (el: Element | null): string => {
+          let n: Element | null = el;
+          while (n) {
+            const bg = getComputedStyle(n).backgroundColor;
+            if (bg && !/rgba\(0, 0, 0, 0\)|transparent/.test(bg)) return bg;
+            n = n.parentElement;
+          }
+          return '';
+        };
+        const card = document.querySelector<HTMLElement>('[data-pd-post-card]');
+        const comments = document.querySelector<HTMLElement>('[data-pd-comments]');
+        const body = document.querySelector<HTMLElement>('[data-pd-body]');
+        const article = document.querySelector<HTMLElement>('[data-pd-root]')!;
+        if (!card || !comments || !body) return null;
+        const cs = getComputedStyle(card), ks = getComputedStyle(comments);
+        const cr = card.getBoundingClientRect(), kr = comments.getBoundingClientRect();
+        const input = comments.querySelector<HTMLElement>('textarea, input[type="text"], .input')
+          ?? Array.from(comments.querySelectorAll<HTMLElement>('button')).find((b) => /로그인하면 댓글/.test(b.textContent ?? ''))
+          ?? null;
+        return {
+          카드display: cs.display,
+          카드면: cs.backgroundColor, 댓글면: ks.backgroundColor,
+          카드지면: opaque(card), 댓글지면: opaque(comments),
+          // 셸(창) 지면 — 두 카드가 **그 위에 떠 보이는가**가 진짜 계약이다.
+          //   두 카드끼리만 비교하면 안 된다: 라이트에서 둘 다 같은 톤인 것이 시안이고(오너 이미지),
+          //   그래도 페이지와 다르면 카드로 읽힌다. 반대로 카드가 셸과 같은 색이면 카드가 사라진다.
+          셸지면: opaque((document.querySelector('[data-pd-root]')!.closest('[role="dialog"]') ?? document.querySelector('[data-pd-root]')!.parentElement)),
+          카드테두리: cs.borderTopWidth, 카드반지름: parseFloat(cs.borderTopLeftRadius), 댓글반지름: parseFloat(ks.borderTopLeftRadius),
+          좌차: +Math.abs(cr.left - kr.left).toFixed(2), 우차: +Math.abs(cr.right - kr.right).toFixed(2),
+          // ⚠ 간격은 **rect 로 재면 안 된다.** 댓글 section 은 `.reveal`(스크롤 구동 애니메이션)이라
+          //   화면 아래에 있는 동안 `translateY(18px)` 가 걸려 있다 — rect 로는 17px 레이아웃 간격이
+          //   34px 로 보인다(실측). transform 을 타지 않는 `offsetTop/offsetHeight` 로 잰다.
+          //   (둘의 offsetParent 가 같아야 뺄셈이 성립한다 — 아래에서 함께 확인한다.)
+          같은offsetParent: card.offsetParent === comments.offsetParent,
+          카드간격: comments.offsetTop - (card.offsetTop + card.offsetHeight),
+          본문이카드안: card.contains(body),
+          댓글이카드안: card.contains(comments),
+          // 모바일에서 보이는 독서 경계선 — 시안은 작성자↔본문 한 줄뿐이다(나머지는 max-lg:hidden).
+          보이는선: Array.from(article.querySelectorAll<HTMLElement>('hr')).filter((h) => getComputedStyle(h).display !== 'none').length,
+          입력면: input ? getComputedStyle(input).backgroundColor : '',
+          문서가로넘침: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+      expect(g, 'data-pd-post-card / data-pd-comments / data-pd-body 중 하나를 못 찾았다').not.toBeNull();
+      const m = g!;
+      // ① 모바일에서는 카드가 **실체**다. `lg:contents` 가 모바일까지 새면 여기서 걸린다.
+      expect(m.카드display, '모바일인데 게시글 카드가 display:contents 다 — 카드가 아예 안 그려진다').not.toBe('contents');
+      expect(m.카드면, '게시글 카드가 스스로 면을 안 칠한다').not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+      expect(m.카드테두리, '게시글 카드에 윤곽이 없다').not.toBe('0px');
+      expect(m.카드반지름, `게시글 카드 반지름 ${m.카드반지름}px — 시안은 둥근 카드다`).toBeGreaterThanOrEqual(20);
+      // ② 두 카드는 **형제**다. 댓글이 카드 안에 들어가면 "한 카드 속 작은 우물"(문서가 실패로 못박음).
+      expect(m.본문이카드안, '본문이 게시글 카드 밖에 있다').toBe(true);
+      expect(m.댓글이카드안, '댓글이 게시글 카드 **안**에 있다 — 형제 카드가 아니라 우물이다').toBe(false);
+      // ③ 좌우 경계와 반지름이 맞는다.
+      expect(m.좌차, `두 카드 왼쪽이 ${m.좌차}px 어긋났다`).toBeLessThanOrEqual(1);
+      expect(m.우차, `두 카드 오른쪽이 ${m.우차}px 어긋났다`).toBeLessThanOrEqual(1);
+      expect(Math.abs(m.카드반지름 - m.댓글반지름), '두 카드 모서리 반지름이 다르다').toBeLessThanOrEqual(1);
+      // ④ 세로 간격 — 시안 기준 약 16px. 0 이면 붙어서 한 덩어리로 읽히고, 너무 멀면 관계가 끊긴다.
+      expect(m.같은offsetParent, '두 카드의 offsetParent 가 달라 간격 뺄셈이 성립하지 않는다 — 이 단언이 무의미해졌다').toBe(true);
+      expect(m.카드간격, `두 카드 간격이 ${m.카드간격}px 다`).toBeGreaterThanOrEqual(10);
+      expect(m.카드간격, `두 카드 간격이 ${m.카드간격}px 다 — 너무 벌어지면 다른 글처럼 보인다`).toBeLessThanOrEqual(28);
+      // ⑤ 두 카드가 **셸 위에 떠 보인다.** 카드가 지면과 같은 색이면 카드라는 사실 자체가 사라진다.
+      //    ⚠ 라이트는 `surface-low == surface-mid == #FFFFFF` 라 이게 실제로 났었다(댓글 카드가 흰 지면에
+      //      흡수). 두 카드끼리만 비교하는 단언으로는 **그때도 통과했다** — 그래서 셸 기준으로 잰다.
+      expect(m.셸지면, '셸 지면을 못 읽었다 — 이 단언이 빈 검사가 됐다').not.toBe('');
+      expect(m.카드지면, `게시글 카드 면(${m.카드지면})이 셸 지면(${m.셸지면})과 같다 — 카드가 안 보인다`).not.toBe(m.셸지면);
+      expect(m.댓글지면, `댓글 카드 면(${m.댓글지면})이 셸 지면(${m.셸지면})과 같다 — 카드가 안 보인다`).not.toBe(m.셸지면);
+      // ⑥ 모바일 경계선은 하나뿐 — 카드 경계가 이미 층을 말하므로 선을 더 그으면 중복이다.
+      expect(m.보이는선, `모바일에 보이는 구분선이 ${m.보이는선}개다 — 시안은 작성자↔본문 한 줄뿐이다`).toBe(1);
+      // ⑦ 입력창은 또 한 단계 다른 면(종전 계약 유지).
+      expect(m.입력면, '댓글 입력창을 못 찾았다').not.toBe('');
+      expect(m.입력면, '댓글 입력창이 지면에 흡수됐다').not.toBe(m.댓글지면);
+      expect(m.문서가로넘침, '카드를 넣으면서 문서가 가로로 넘쳤다').toBeLessThanOrEqual(0);
+      expect(await clippedNodes(page), `C1 ${theme} 모바일에서 잘린 요소가 있다`).toEqual([]);
+    });
+  }
+
+  // PC 계약은 **그대로 남는다** — 2-pane·1280 이상은 이번 시안의 대상이 아니다(문서 C1-1).
+  for (const theme of ['dark', 'light'] as const) {
+    test(`🔴 PC — 댓글 section 은 본문과 다른 지면(우물) + border-strong 경계선 3곳 (${theme})`, async ({ page, baseURL }) => {
+      await page.setViewportSize({ width: 1280, height: 900 });
       await page.addInitScript((t) => { try { localStorage.setItem('nuri-theme', t as string); } catch { /* 저장소 차단 */ } }, theme);
       await install(page, baseURL);
       await openPost(page);
@@ -275,5 +401,129 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
     expect(fit, `한 장짜리 첨부가 object-fit:${fit} — 세로 포스터의 글이 잘린다`).toBe('contain');
     // 전체 확인 경로(라이트박스) 는 살아 있다
     await expect(page.getByRole('button', { name: '첨부 사진 1 확대 보기' })).toBeVisible();
+  });
+
+  // 🔴 C1(2026-09-20 오너 시안) — 카드 맨 아래의 **외곽선 하나짜리 4등분 반응 트레이**.
+  //   시안이 없애려던 것: 셀마다 테두리가 있는 중복 pill · 본문/반응 사이의 군더더기 구분선.
+  //   이 검사가 잠그는 것: (a) 네 칸이 다 있다 (b) 서로 겹치지 않는다 (c) 각 칸이 44×44 이상이다
+  //   (d) PC 알약 줄과 **동시에** 보이지 않는다 (e) 숫자를 감추거나 글자를 줄여서 맞추지 않았다.
+  //   ⚠ `if (!tray) return` 같은 조용한 통로를 두지 않는다 — 트레이가 사라지면 실패여야 한다.
+  for (const W of [320, 360, 390, 430] as const) {
+    test(`🔴 C1 ${W}px — 반응 트레이 네 칸이 겹침 0·44px 이상이고 PC 알약과 동시에 안 뜬다`, async ({ page, baseURL }) => {
+      await page.setViewportSize({ width: W, height: 844 });
+      await install(page, baseURL!);
+      await openPost(page);
+
+      const m = await page.evaluate(() => {
+        const tray = document.querySelector<HTMLElement>('[aria-label="게시글 반응"]');
+        if (!tray) return null;
+        // ⚠ 히트 테스트 전에 트레이를 화면 안으로 끌어온다. `elementFromPoint` 는 **뷰포트 좌표**라
+        //   화면 밖이면 무조건 null 이고, 그러면 "유효 터치 미달" 이라는 **거짓 실패**가 난다
+        //   (320·360 에서 정확히 그랬다 — 폭이 좁을수록 본문이 길어져 트레이가 접힌 아래로 내려간다).
+        tray.scrollIntoView({ block: 'center' });
+        const cells = Array.from(tray.querySelectorAll<HTMLElement>('button'));
+        const 겹침: string[] = [];
+        for (let i = 0; i < cells.length; i++) {
+          for (let k = i + 1; k < cells.length; k++) {
+            const a = cells[i].getBoundingClientRect(), b = cells[k].getBoundingClientRect();
+            const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+            const oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+            if (ox > 0.5 && oy > 0.5) 겹침.push(`${cells[i].textContent?.trim()}↔${cells[k].textContent?.trim()}`);
+          }
+        }
+        // 글자가 자기 칸 밖으로 나갔는가 — 큰 카운트에서 충돌하면 여기서 보인다.
+        const 글자넘침 = cells.map((c) => {
+          const sp = c.querySelector('span');
+          if (!sp) return null;
+          const sr = sp.getBoundingClientRect(), br = c.getBoundingClientRect();
+          const over = Math.max(0, br.left - sr.left) + Math.max(0, sr.right - br.right);
+          return over > 0.5 ? `${c.textContent?.trim()}:${over.toFixed(1)}` : null;
+        }).filter(Boolean);
+        // 실제 히트 — 중심 ±21.5px 의 위·아래가 자기 칸을 맞히는가(높이만 재면 거짓 통과한다).
+        const 히트 = cells.map((c) => {
+          const r = c.getBoundingClientRect();
+          const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+          const at = (y: number) => { const el = document.elementFromPoint(cx, y); return !!el && (c.contains(el) || el === c); };
+          return { 칸: (c.textContent || '').trim().slice(0, 4), w: +r.width.toFixed(1), h: +r.height.toFixed(1), 위: at(cy - 21.5), 아래: at(cy + 21.5) };
+        });
+        // PC 알약 줄(같은 동작의 다른 모양) — 모바일에서 같이 보이면 한 화면에 두 번이다.
+        const pill = document.querySelector<HTMLElement>('[data-pd-post-card] .ring-aura.rounded-card');
+        return {
+          칸수: cells.length, 겹침, 글자넘침, 히트,
+          라벨: cells.map((c) => (c.textContent || '').replace(/\s+/g, ' ').trim()),
+          글꼴: cells.map((c) => parseFloat(getComputedStyle(c).fontSize)),
+          누름속성: cells.filter((c) => c.hasAttribute('aria-pressed')).length,
+          알약줄보임: !!pill && getComputedStyle(pill.parentElement!).display !== 'none',
+          문서가로넘침: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+      expect(m, '반응 트레이가 없다 — 모바일 독립 상세에는 반드시 있어야 한다').not.toBeNull();
+      const t = m!;
+      console.log(`[C1 tray ${W}]`, JSON.stringify(t));
+      expect(t.칸수, `트레이가 ${t.칸수}칸이다 — 좋아요·추천·비추천·공유 넷이어야 한다`).toBe(4);
+      // 숫자를 감추지 않았다: 좋아요 3(픽스처) 이 라벨에 그대로 있어야 한다.
+      expect(t.라벨.join('|'), `라벨에 실제 카운트가 없다: ${t.라벨.join('|')}`).toMatch(/좋아요\s*3/);
+      expect(t.누름속성, '좋아요·추천·비추천 셋은 aria-pressed 를 가져야 한다').toBe(3);
+      expect(t.겹침, `칸이 서로 겹친다: ${JSON.stringify(t.겹침)}`).toEqual([]);
+      expect(t.글자넘침, `라벨이 칸 밖으로 나갔다: ${JSON.stringify(t.글자넘침)}`).toEqual([]);
+      expect(t.알약줄보임, 'PC 알약 줄이 모바일에서도 보인다 — 같은 동작이 한 화면에 두 번이다').toBe(false);
+      expect(t.문서가로넘침, '트레이 때문에 문서가 가로로 넘쳤다').toBeLessThanOrEqual(0);
+      for (const h of t.히트) {
+        expect(h.w, `«${h.칸}» 칸 폭 ${h.w}px — 44px 미만`).toBeGreaterThanOrEqual(44);
+        expect(h.위 && h.아래, `«${h.칸}» 유효 터치 44px 미달(높이 ${h.h}px · 위 ${h.위} · 아래 ${h.아래})`).toBe(true);
+      }
+      // 폭을 글자 축소로 맞추지 않았다 — 320 에서도 같은 크기다.
+      for (const f of t.글꼴) expect(f, `트레이 글자가 ${f}px 로 줄었다`).toBeGreaterThanOrEqual(12.5);
+    });
+  }
+
+  // 🔴 C1 — 작성자 행의 `…` 메뉴. 모바일은 메뉴 하나로 모으고 PC 는 종전 가로 묶음이다.
+  //   ⚠ **로그인한 남의 글** 조건이어야 신고·차단이 생긴다. 비로그인으로 재면 메뉴가 없는 게 정상이라
+  //     "메뉴가 없어도 통과"하는 빈 검사가 된다(이 저장소 최다 함정).
+  test('🔴 C1 모바일 — 신고·차단이 `…` 메뉴 한 곳에 모이고 PC 가로 묶음은 모바일에서 안 보인다', async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await install(page, baseURL!, { loggedIn: true });
+    await openPost(page);
+
+    // ⚠ `getByRole('button')` 로 못 찾는다 — 이건 `<summary>` 이고 Chromium 은 그것을
+    //   `DisclosureTriangle` 로 노출한다(role=button 이 아니다). 실측으로 확인했다.
+    const menu = page.locator('summary[aria-label="게시글 메뉴"]');
+    await expect(menu, '`…` 메뉴가 없다 — 로그인한 남의 글이라 신고·차단이 있어야 한다').toHaveCount(1);
+    // 전제: 접힌 상태에서는 항목이 안 보인다(그래야 아래 '열면 보인다'가 의미를 가진다).
+    await expect(page.getByRole('button', { name: '신고', exact: true }).filter({ visible: true }), '메뉴를 열기도 전에 신고가 보인다')
+      .toHaveCount(0);
+    const box = (await menu.boundingBox())!;
+    expect(Math.min(box.width, box.height), `메뉴 버튼이 ${box.width}×${box.height} — 44px 계약 미달`).toBeGreaterThanOrEqual(44);
+
+    await menu.click();
+    const 신고 = page.getByRole('button', { name: '신고', exact: true }).filter({ visible: true });
+    const 차단 = page.getByRole('button', { name: '차단', exact: true }).filter({ visible: true });
+    await expect(신고, '메뉴를 열었는데 신고가 없다').toHaveCount(1);
+    await expect(차단, '메뉴를 열었는데 차단이 없다').toHaveCount(1);
+    // 같은 동작이 한 화면에 두 번 나오지 않는다 — PC 가로 묶음은 모바일에서 숨어 있어야 한다.
+    const dup = await page.evaluate(() => {
+      // ⚠ `getComputedStyle(b).display` 로 보면 안 된다 — PC 묶음의 `max-lg:hidden` 은 **부모 div** 에
+      //   걸려 있어 버튼 자신의 display 는 여전히 'inline-flex' 다(실측). 조상까지 반영되는
+      //   `getClientRects().length` 로 '실제로 그려졌는가' 를 본다.
+      const all = Array.from(document.querySelectorAll<HTMLElement>('[data-pd-post-card] button'))
+        .filter((b) => (b.textContent ?? '').trim() === '신고' && b.getClientRects().length > 0);
+      return all.length;
+    });
+    expect(dup, `'신고' 버튼이 화면에 ${dup}개 보인다 — 메뉴 안 하나여야 한다`).toBe(1);
+
+    // Escape 는 메뉴만 닫는다 — 글까지 닫히면 읽던 자리를 잃는다.
+    await page.keyboard.press('Escape');
+    await expect(신고, 'Escape 로 메뉴가 안 닫혔다').toHaveCount(0);
+    await expect(page.locator('[data-pd-root]'), 'Escape 가 메뉴를 넘어 글까지 닫았다').toBeVisible();
+  });
+
+  test('🔴 C1 — 비로그인·삭제 불가에서는 `…` 메뉴도 PC 묶음도 아예 없다(빈 메뉴를 만들지 않는다)', async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await install(page, baseURL!);
+    await openPost(page);
+    await expect(page.locator('summary[aria-label="게시글 메뉴"]'), '쓸 수 있는 동작이 없는데 메뉴 버튼이 떴다').toHaveCount(0);
+    const n = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('[data-pd-post-card] button'))
+      .filter((b) => /^(신고|차단|삭제)$/.test((b.textContent ?? '').trim())).length);
+    expect(n, `비로그인인데 관리 동작 버튼이 ${n}개 있다`).toBe(0);
   });
 });

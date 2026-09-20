@@ -341,3 +341,107 @@ test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도
     expect(got, '닫힌 오버레이가 유령 history 항목을 남겨 뒤로가기가 헛돌았다').toBe('tab:home');
   });
 });
+
+// ── H1(2026-09-20 오너 사진): 스크롤된 대메뉴에서 다른 대메뉴로 가면 헤더가 눌렸다 펴진다 ──────
+//
+// 🔴 원인(390×844 실측): `App.tsx` 의 탭 커밋 `useLayoutEffect` 는 `scrollTo(0)` 을 **즉시** 부르는데,
+//   헤더의 `shrunk` 는 `src/lib/useScrollY.ts` 의 **다음 rAF 방송**을 기다린다.
+//   전환 직전 scrollY≈387·헤더 47.75px → 첫 새 화면 rAF 에서 scrollY=0 인데 높이가 **47.75px 로 남고**
+//   → 다음 rAF 에 60.5px. `--header-now` 는 그보다 또 한 프레임 늦었다(일반 useEffect 였다).
+//
+// ⚠ 이 검사는 **클릭 전에** 프레임 기록기를 설치한다. Playwright `click()` 이 반환한 뒤에 만들면
+//   문제의 **첫 프레임을 놓친다** — 그게 이 버그가 오래 안 잡힌 이유다.
+// ⚠ 단순 '전환 끝나고 500ms 뒤' 검사는 이 버그를 못 잡는다. 최종 상태는 원래 정상이다.
+test.describe('H1 — 스크롤된 대메뉴 전환에서 헤더가 첫 프레임부터 펴져 있다', () => {
+  for (const to of ['live', 'community'] as const) {
+    test(`🔴 홈(스크롤됨) → ${to}: 첫 새 프레임부터 헤더가 축소 상태가 아니다`, async ({ page }) => {
+      test.setTimeout(120_000);
+      await stabilizeBackstack(page);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto('/');
+      await page.waitForSelector('[data-stack-header]', { timeout: 20_000 });
+
+      // keep-alive 경로를 만든다 — 전환 연출은 **이미 방문한 탭**으로 갈 때 돈다.
+      for (const t of [to, 'home']) {
+        await page.evaluate((x) => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: x })), t);
+        await page.waitForTimeout(700);
+      }
+      // 홈을 충분히 내려 헤더를 접는다.
+      await page.evaluate(() => window.scrollTo(0, 400));
+      await page.waitForTimeout(600);
+
+      const before = await page.evaluate(() => ({
+        y: Math.round(window.scrollY),
+        h: +(document.querySelector('[data-stack-header]') as HTMLElement).getBoundingClientRect().height.toFixed(2),
+        shrunk: document.documentElement.dataset.headerShrunk ?? null,
+        now: getComputedStyle(document.documentElement).getPropertyValue('--header-now').trim(),
+      }));
+      // 전제 — 실제 결함 경로를 탔는지 못박는다. 안 접혔으면 이 검사는 아무것도 재지 않는다.
+      expect(before.y, '헤더가 접힐 만큼 안 내려갔다 — 이 검사가 결함 경로를 못 탔다').toBeGreaterThan(56);
+      expect(before.shrunk, '스크롤했는데 헤더가 축소 상태가 아니다 — 전제가 안 섰다').toBe('1');
+
+      // 🔴 클릭 **전에** 기록기를 설치한다.
+      const frames = await page.evaluate(async (tab) => {
+        const out: { i: number; y: number; h: number; shrunk: string | null; now: string }[] = [];
+        let n = 0;
+        const snap = () => {
+          const el = document.querySelector('[data-stack-header]') as HTMLElement | null;
+          out.push({
+            i: n,
+            y: Math.round(window.scrollY),
+            h: el ? +el.getBoundingClientRect().height.toFixed(2) : -1,
+            shrunk: document.documentElement.dataset.headerShrunk ?? null,
+            now: getComputedStyle(document.documentElement).getPropertyValue('--header-now').trim(),
+          });
+        };
+        const tick = () => { snap(); if (++n < 14) requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+        window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: tab }));
+        await new Promise((r) => setTimeout(r, 900));
+        return out;
+      }, to);
+
+      console.log(`[H1 ${to}] 전:`, JSON.stringify(before));
+      console.log(`[H1 ${to}] 프레임:`, JSON.stringify(frames.slice(0, 6)));
+
+      // 스크롤이 0으로 간 뒤의 프레임은 **전부** 펴진 상태여야 한다.
+      const afterScrollZero = frames.filter((f) => f.y === 0);
+      expect(afterScrollZero.length, 'scrollY가 0이 된 프레임이 없다 — scrollTo(0) 이 안 돌았다').toBeGreaterThan(0);
+      const bad = afterScrollZero.filter((f) => f.shrunk === '1' || (f.h > 0 && f.h < before.h + 1));
+      expect(bad,
+        `scrollY=0 인데 헤더가 아직 축소 상태인 프레임이 ${bad.length}개다 — 이게 "눌렸다 펴짐" 으로 보인다: ${JSON.stringify(bad.slice(0, 3))}`)
+        .toEqual([]);
+
+      // `--header-now` 도 같은 프레임에서 따라와야 한다(서브바가 헤더와 같은 높이를 본다).
+      const nowMismatch = afterScrollZero.filter((f) => f.now === before.now && before.now !== '');
+      expect(nowMismatch,
+        `--header-now 가 축소 값(${before.now}) 그대로인 프레임이 있다 — 서브바가 헤더와 다른 높이를 본다`)
+        .toEqual([]);
+    });
+  }
+
+  test('🔴 빠른 연속 탭에도 옛 스크롤 값이 헤더를 다시 접지 않는다', async ({ page }) => {
+    test.setTimeout(120_000);
+    await stabilizeBackstack(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.waitForSelector('[data-stack-header]', { timeout: 20_000 });
+    for (const t of ['live', 'community', 'home']) {
+      await page.evaluate((x) => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: x })), t);
+      await page.waitForTimeout(600);
+    }
+    let shrunkSeen = 0;
+    for (let i = 0; i < 6; i++) {
+      await page.evaluate(() => window.scrollTo(0, 400));
+      await page.waitForTimeout(250);
+      const tab = i % 2 === 0 ? 'live' : 'home';
+      const after = await page.evaluate(async (t) => {
+        window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: t }));
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return { y: Math.round(window.scrollY), shrunk: document.documentElement.dataset.headerShrunk ?? null };
+      }, tab);
+      if (after.y === 0 && after.shrunk === '1') shrunkSeen += 1;
+    }
+    expect(shrunkSeen, `연속 탭 6회 중 ${shrunkSeen}회에서 scrollY=0 인데 헤더가 접혀 있었다 — 예약된 옛 rAF 가 살아 있다`).toBe(0);
+  });
+});

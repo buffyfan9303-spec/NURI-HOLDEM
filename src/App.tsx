@@ -83,7 +83,7 @@ import type { ReplayData } from './lib/hand';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
-import { useScrollY, isProgrammaticScroll } from './lib/useScrollY';
+import { useScrollY, isProgrammaticScroll, markProgrammaticScroll, notifyScrollNow } from './lib/useScrollY';
 import { nextHeaderShrunk } from './lib/headerShrink';
 // ⚠ lib/postNav 가 아니라 lib/postNavCtx 에서 받는다 — postNav 를 정적으로 물면 neighborsOf·appendPage(gz 2.1KB)까지
 //   첫 화면 임계 경로로 딸려 와 bundle:budget 257.1/256KB 초과(실측 2026-09-13). 위 api/events→lib/eventSlug 와 같은 함정.
@@ -289,7 +289,10 @@ const AppHeader = memo(function AppHeader({
   }, []));
   // 헤더 아래 매달린 sticky 들이 **같은 높이를 보게** 한다(`--header-now`, src/index.css 머리말).
   // 안 하면 헤더만 줄고 서브탭·장부 요약 바·알림 패널은 옛 높이에 남아 3.25px 틈이 생긴다(2026-09-19 실측).
-  useEffect(() => {
+  // 🔴 H1(2026-09-20) — 일반 `useEffect` 는 페인트 **뒤**라, 헤더 높이는 바뀌었는데 `--header-now`
+  //   (이 data 속성이 켜는 CSS 변수)가 한 프레임 늦게 따라왔다. 헤더 높이·data 속성·`--header-now` 가
+  //   **새 VT 스냅샷 전 같은 페인트에서** 함께 바뀌어야 서브바가 헤더와 같은 높이를 본다.
+  useLayoutEffect(() => {
     const el = document.documentElement;
     if (shrunk) el.dataset.headerShrunk = '1'; else delete el.dataset.headerShrunk;
   }, [shrunk]);
@@ -1079,7 +1082,17 @@ export default function App() {
   // ⚠ `behavior: 'instant'` 를 'smooth' 로 바꾸지 마라 — 탭 전환에 스크롤 애니메이션이 겹치면
   //   View Transition 크로스페이드와 싸워 화면이 두 번 움직이는 것처럼 보인다.
   useLayoutEffect(() => {
+    // 🔴 H1(2026-09-20) — 스크롤된 대메뉴에서 다른 대메뉴로 가면 헤더가 한 프레임 눌렸다 펴졌다.
+    //   여기서 `scrollTo(0)` 은 **즉시** 도는데, 헤더의 `shrunk` 는 `useScrollY` 의 **다음 rAF 방송**을
+    //   기다린다. 그래서 첫 새 화면 프레임에는 `scrollY=0` 인데 헤더가 아직 축소 높이로 남는다
+    //   (390×844 실측: 전환 직전 scrollY≈387·47.75px → 첫 rAF 에서 scrollY=0 인데 47.75px → 다음 rAF 60.5px).
+    //   → 옮긴 쪽이 직접 알린다. `markProgrammaticScroll` 은 하단 탭바 자동숨김이 이 이동을
+    //     '사용자가 확 긁었다' 로 읽지 않게 하는 기존 표식이고(2026-09-05), `notifyScrollNow` 는
+    //     **예약된 옛 rAF 를 취소하고** 지금 Y 를 구독자 전원에게 즉시 준다.
+    //   ⚠ 새 effect 를 하나 더 달아 순서를 갈라 놓지 않는다 — 한 프레임 안에서 끝나야 한다.
+    markProgrammaticScroll();
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+    notifyScrollNow(window.scrollY);
   }, [activeTab]);
 
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)

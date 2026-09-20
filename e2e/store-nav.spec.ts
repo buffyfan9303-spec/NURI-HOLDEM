@@ -186,9 +186,12 @@ test.describe('내 매장 — 이동 안정성(목킹 업주 · 계정 없이)',
       넘침: el.scrollWidth - el.clientWidth,
       // 🔴 칸은 **바 전체**에서 센다(탭 + 이용권 같은 비탭 지름길 포함). tablist 안에서만 세면
       //   탭이 아닌 칸이 늘어도 이 검사가 모른다 — 넘침을 만드는 건 '칸 개수'지 'role' 이 아니다.
-      칸: [...el.querySelectorAll<HTMLElement>('button')].map((b) => ({
-        글자: b.textContent?.trim() ?? '', 폭: Math.round(b.getBoundingClientRect().width),
-      })),
+      // 🔴 S1(2026-09-20) — **보이는 것만** 센다. 이제 이용권은 모바일 탭과 PC 버튼 두 벌이고
+      //   breakpoint 로 한쪽이 `display:none` 이다. 숨은 것까지 세면 모바일에서 칸이 하나 더
+      //   있는 것으로 읽혀 이 6칸 계약이 거짓 실패한다(반대로 둘 다 보이는 회귀는 아래에서 잡는다).
+      칸: [...el.querySelectorAll<HTMLElement>('button')]
+        .filter((b) => getComputedStyle(b).display !== 'none')
+        .map((b) => ({ 글자: b.textContent?.trim() ?? '', 폭: Math.round(b.getBoundingClientRect().width) })),
     }));
     console.log('[375 알약]', JSON.stringify(m, null, 1));
     // 🔴 칸 개수를 먼저 못박는다. '넘침 ≤ 0'·'폭 ≥ 28' 은 칸이 **줄수록 쉽게** 통과한다 —
@@ -354,5 +357,180 @@ test.describe('PC 단계 바 — 넓은 패널에서 단계가 읽히는 크기�
     console.log('[PC 1440 왕복 top]', JSON.stringify({ 요약: t0, 클락: t1, 요약복귀: t2 }));
     expect(Math.abs(t1 - t0), '단계로 갈 때 바가 세로로 움직인다').toBeLessThanOrEqual(4);
     expect(Math.abs(t2 - t0), '요약으로 돌아올 때 바가 세로로 움직인다').toBeLessThanOrEqual(4);
+  });
+});
+
+// ── S1: 모바일 단계 바 7칸 · 이용권이 같은 바의 탭 (2026-09-20 오너 사진) ──────────────
+//
+// 오너가 보낸 모바일 사진 두 장의 지적:
+//   ① 7개 항목의 **글자가 서로 겹친 채** 줄어 있었다. 원인은 `min-w-0 flex-1 basis-0` 이 칩을
+//      콘텐츠 최소 폭보다 더 눌러서다 — `overflow-x-auto` 는 '버튼 안 글자 겹침' 을 못 고친다.
+//   ② 이용권을 고르면 **아래에 아무것도 없었다.** 단계 바가 `dashboard|game` 에서만 렌더돼
+//      `gotoSection('voucher')` 로 가는 순간 바가 통째로 사라졌고, 돌아올 길이 뒤로가기뿐이었다.
+//
+// 🔴 이 블록이 잠그는 것은 셋이다: (a) 7칸이 겹침 0 으로 한 줄에 들어온다 (b) 이용권을 눌러도
+//   같은 바가 같은 자리에 남고 **판이 실제로 열린다** (c) 모바일 탭과 PC 버튼이 동시에 보이지 않는다.
+//
+// ⚠ '판이 실제로 열린다' 를 `data-pane="voucher"` 로 본다. 활성 알약만 보면 **바는 옳은데 아래가
+//   빈** 상태 — 즉 오너가 사진으로 보낸 바로 그 화면 — 이 초록으로 통과한다.
+// ⚠ 모바일은 PC 검사의 정규식(번호로 단계 찾기)을 쓰지 않는다. 모바일은 인라인 번호를 라벨 폭에서
+//   뺐고(`hidden lg:inline`) 완료 정보는 `aria-label` 과 비인라인 점으로 옮겼다 — 번호로 찾으면
+//   `textContent` 가 숨은 글자까지 읽어 '보이는 것' 과 어긋난다. `data-step` 과 role 로 찾는다.
+test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 바의 탭', () => {
+  const IDENTITY_ON = { identity_voucher_enabled: 'on' };
+
+  async function openMobileStore(page: Page, width: number, appSettings: Record<string, string>) {
+    await bootOwner(page, {
+      viewport: { width, height: 844 },
+      appSettings,
+      extra: async (p) => {
+        await p.route(/\/rest\/v1\/schedules\?/, (r) => (r.request().method() === 'GET'
+          ? r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([POSTER]) })
+          : r.fallback()));
+      },
+    });
+    await openMyStore(page);
+    await expect(page.locator('[data-tab="my-store"]'), '목킹 업주로 내 매장을 열지 못했다').toBeVisible({ timeout: 20_000 });
+    await expect(page.locator(RAIL)).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(2500); // 권한·킬스위치 RPC 가 늦게 도착하면 칸 수가 바뀐다
+  }
+
+  // 지원 폭 전부에서 잰다. 문서의 판별식은 `sum(칸 최소폭 + gap + padding) > clientWidth` 이고,
+  // 어느 폭에서든 넘치면 그 폭 이하만 4+3 두 줄로 가기로 돼 있었다.
+  // → 2026-09-20 실측(격리 4273 · 프로덕션 빌드): 320/360/390/412/430 전부 칸폭합 244.4px,
+  //   최소 clientWidth 284px(320) 이라 **한 줄로 충분**했다. 두 줄 그리드는 만들지 않았다.
+  //   이 검사가 그 실측을 계약으로 굳힌다 — 라벨이 길어지거나 칸이 늘면 여기서 빨개진다.
+  for (const W of [320, 360, 390, 430] as const) {
+    test(`${W}px 킬스위치 ON — 7칸이 겹침 0 으로 한 줄에 들어온다`, async ({ page }) => {
+      test.setTimeout(90_000);
+      await openMobileStore(page, W, IDENTITY_ON);
+
+      const m = await page.evaluate((sel) => {
+        const rail = document.querySelector<HTMLElement>(sel)!;
+        const vis = [...rail.querySelectorAll<HTMLElement>('button')]
+          .filter((b) => getComputedStyle(b).display !== 'none');
+        const 겹침: string[] = [];
+        for (let i = 0; i < vis.length - 1; i++) {
+          const a = vis[i].getBoundingClientRect(), c = vis[i + 1].getBoundingClientRect();
+          // 0.5px 여유 — 서브픽셀 반올림까지 겹침으로 세면 거짓 실패가 난다.
+          if (c.left < a.right - 0.5) 겹침.push(`${vis[i].dataset.step ?? '요약'}-${vis[i + 1].dataset.step ?? '요약'}`);
+        }
+        // 라벨 글리프가 자기 버튼 밖으로 나갔는가 — '겹침 0' 만으로는 잘림을 못 잡는다.
+        const 글자넘침 = vis.map((b) => {
+          const span = b.querySelector('span');
+          if (!span) return null;
+          const sr = span.getBoundingClientRect(), br = b.getBoundingClientRect();
+          const over = Math.max(0, br.left - sr.left) + Math.max(0, sr.right - br.right);
+          return over > 0.5 ? `${b.dataset.step ?? '요약'}:${over.toFixed(1)}` : null;
+        }).filter(Boolean);
+        return {
+          보이는칸: vis.map((b) => b.dataset.step ?? (b.getAttribute('role') === 'tab' ? '요약' : '이용권PC')),
+          role없는칸: vis.filter((b) => b.getAttribute('role') !== 'tab').length,
+          넘침: rail.scrollWidth - rail.clientWidth,
+          겹침, 글자넘침,
+          문서가로넘침: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          높이: vis.map((b) => +b.getBoundingClientRect().height.toFixed(1)),
+          글꼴: vis.map((b) => parseFloat(getComputedStyle(b).fontSize)),
+          활성수: rail.querySelectorAll('[role=tab][aria-selected="true"]').length,
+        };
+      }, RAIL);
+      console.log(`[S1 ${W}]`, JSON.stringify(m));
+
+      // 요약 + 5단계 + 이용권 = 7. 이용권이 빠지면 오너가 말한 '이용권 칸' 자체가 사라진 것이고,
+      // 8이면 모바일 탭과 PC 버튼이 동시에 보이는 것이다(배타여야 한다).
+      expect(m.보이는칸.length, `보이는 칸이 ${m.보이는칸.length}개다 — 요약+5단계+이용권 7칸이어야 한다: ${JSON.stringify(m.보이는칸)}`).toBe(7);
+      expect(m.보이는칸, '이용권이 모바일에서 탭(data-step="voucher")이 아니다').toContain('voucher');
+      // 모바일에서는 이용권도 같은 tablist 의 탭이라 role 없는 버튼이 보이면 PC 버튼이 샌 것이다.
+      expect(m.role없는칸, `모바일인데 role 없는 버튼이 ${m.role없는칸}개 보인다 — PC 전용 이용권 버튼이 안 숨었다`).toBe(0);
+      expect(m.겹침, `칸이 서로 겹친다: ${JSON.stringify(m.겹침)} — 오너 사진의 결함이 그대로다`).toEqual([]);
+      expect(m.글자넘침, `라벨이 자기 버튼 밖으로 나갔다: ${JSON.stringify(m.글자넘침)}`).toEqual([]);
+      expect(m.넘침, `레일이 ${m.넘침}px 넘친다 — 마지막 칸이 잘려 그 칸이 있는 줄도 모른다`).toBeLessThanOrEqual(0);
+      expect(m.문서가로넘침, '문서 전체가 가로로 넘친다').toBeLessThanOrEqual(0);
+      expect(m.활성수, '활성 탭이 정확히 하나가 아니다').toBe(1);
+      for (const h of m.높이) expect(h, `칸 높이가 ${h}px — 44px 유효 터치 계약 미달`).toBeGreaterThanOrEqual(44);
+      // 글자를 줄여서 맞추는 것은 금지다(문서 §S1-4). 12.75px = t-desc 정본.
+      for (const f of m.글꼴) expect(f, `칸 글자가 ${f}px 로 줄었다 — 폭을 글자 축소로 맞추지 않는다`).toBeGreaterThanOrEqual(12.5);
+
+      // 🔴 유효 터치는 박스 높이가 아니라 **실제 히트**로 본다. 이 레일은 `overflow-x-auto` 라
+      //   의사요소 오버행(`tap-y-44`)이 아래쪽에서 잘린다 — 높이만 재면 거짓 통과한다(2026-09-20 실측).
+      const tap = await page.evaluate((sel) => [...document.querySelectorAll<HTMLElement>(`${sel} button`)]
+        .filter((b) => getComputedStyle(b).display !== 'none')
+        .map((b) => {
+          const r = b.getBoundingClientRect();
+          const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+          const at = (y: number) => { const el = document.elementFromPoint(cx, y); return !!el && (b.contains(el) || el === b); };
+          return { 칸: b.dataset.step ?? '요약', 위: at(cy - 21.5), 아래: at(cy + 21.5) };
+        }), RAIL);
+      expect(tap.length, '잰 칸이 없다 — 이 검사가 아무것도 안 했다').toBe(7);
+      for (const t of tap) expect(t.위 && t.아래, `«${t.칸}» 유효 터치 44px 미달(위 ${t.위} · 아래 ${t.아래})`).toBe(true);
+    });
+  }
+
+  test('🔴 이용권을 눌러도 같은 바가 남고 이용권 판이 실제로 열린다(요약 왕복 포함)', async ({ page }) => {
+    test.setTimeout(120_000);
+    await openMobileStore(page, 390, IDENTITY_ON);
+    const rail = page.locator(RAIL);
+    const voucherTab = page.locator(`${RAIL} [role=tab][data-step="voucher"]`);
+    await expect(voucherTab, '모바일 이용권 탭이 없다 — 킬스위치 ON + 업주 권한인데 안 떴다').toHaveCount(1);
+
+    const topOf = async () => Math.round((await rail.boundingBox())!.y);
+    const tops = [await topOf()];
+    // 알약이 활성 칸을 실제로 따라오는가 — SlidingPill 은 `[data-pill-active]` 하나를 잰다.
+    const pillFit = () => page.evaluate((sel) => {
+      const r = document.querySelector<HTMLElement>(sel)!;
+      const pill = r.querySelector<HTMLElement>('[data-sliding-pill]');
+      const act = r.querySelector<HTMLElement>('[data-pill-active]');
+      if (!pill || !act) return null;
+      const p = pill.getBoundingClientRect(), a = act.getBoundingClientRect();
+      return { 중심차: +Math.abs((p.left + p.right) / 2 - (a.left + a.right) / 2).toFixed(2), 폭차: +Math.abs(p.width - a.width).toFixed(2) };
+    }, RAIL);
+
+    await voucherTab.click();
+    await page.waitForTimeout(1200);
+
+    // ⚠ 순서가 중요하다 — 바가 사라지면 `boundingBox()` 가 null 이라 아래 topOf() 가 먼저 터지고
+    //   실패 메시지가 "null 의 y" 가 된다. 무엇이 깨졌는지 말해 주는 단언을 **먼저** 세운다
+    //   (음성 대조로 확인: 렌더 게이트에서 voucher 를 빼면 정확히 이 줄에서 빨개진다).
+    await expect(rail, '이용권으로 가자 단계 바가 통째로 사라졌다 — 오너 사진의 결함이다').toBeVisible();
+    tops.push(await topOf());
+    await expect(voucherTab, '이용권을 눌렀는데 활성이 아니다').toHaveAttribute('aria-selected', 'true');
+    expect(await page.locator(`${RAIL} [role=tab][aria-selected="true"]`).count(), '활성 탭이 하나가 아니다').toBe(1);
+    // 🔴 바만 남고 아래가 비면 아무것도 고친 게 아니다 — 판 자체를 짚는다.
+    await expect(page.locator('[data-pane="voucher"]'), '이용권 판이 열리지 않았다 — 바는 옳은데 아래가 비었다')
+      .toBeVisible({ timeout: 15_000 });
+    const fitV = await pillFit();
+    console.log('[S1 이용권 알약]', JSON.stringify(fitV));
+    expect(fitV, '알약이나 활성 칸을 못 찾았다 — 이 단언이 빈 검사가 됐다').not.toBeNull();
+    expect(fitV!.중심차, '알약이 이용권 칸 중심에서 벗어났다').toBeLessThanOrEqual(1);
+    expect(fitV!.폭차, '알약 폭이 이용권 칸과 다르다').toBeLessThanOrEqual(1);
+
+    // 요약으로 되돌아오고, 다시 장부로 — 왕복 내내 바가 같은 자리에 있어야 '판만 바뀐다'로 읽힌다.
+    for (const step of ['요약', 'ledger'] as const) {
+      const t = step === '요약'
+        ? page.locator(`${RAIL} [role=tab]`).filter({ hasText: '요약' }).first()
+        : page.locator(`${RAIL} [role=tab][data-step="${step}"]`).first();
+      await expect(t, `«${step}» 칸이 없다`).toHaveCount(1);
+      await t.click();
+      await page.waitForTimeout(1200);
+      await expect(rail, `${step} 로 간 뒤 바가 사라졌다`).toBeVisible();
+      await expect(t, `${step} 를 눌렀는데 활성이 아니다`).toHaveAttribute('aria-selected', 'true');
+      tops.push(await topOf());
+    }
+    console.log('[S1 왕복 바 top]', JSON.stringify(tops));
+    const spread = Math.max(...tops) - Math.min(...tops);
+    expect(spread, `이용권 왕복 중 바가 ${spread}px 움직였다 — 같은 자리에 있어야 '판만 바뀐다'로 읽힌다`).toBeLessThanOrEqual(4);
+  });
+
+  test('킬스위치 OFF — 이용권 칸도, 이용권 판도 없다(진입 자체가 없다)', async ({ page }) => {
+    test.setTimeout(90_000);
+    await openMobileStore(page, 390, {}); // identity_voucher_enabled 없음 = 운영 기본값(꺼짐)
+    const vis = await page.evaluate((sel) => [...document.querySelectorAll<HTMLElement>(`${sel} button`)]
+      .filter((b) => getComputedStyle(b).display !== 'none')
+      .map((b) => b.dataset.step ?? '요약'), RAIL);
+    console.log('[S1 킬스위치 OFF]', JSON.stringify(vis));
+    // 전제 — 바 자체는 살아 있다. 아무것도 없으면 아래 '이용권 없음' 이 공허해진다.
+    expect(vis.length, `보이는 칸이 ${vis.length}개다 — 요약+5단계 6칸이어야 한다`).toBe(6);
+    expect(vis, '킬스위치가 꺼졌는데 이용권 칸이 있다').not.toContain('voucher');
+    expect(await page.locator('[data-pane="voucher"]').count(), '킬스위치가 꺼졌는데 이용권 판이 마운트됐다 — 꺼진 기능이 조용히 네트워크를 쓴다').toBe(0);
   });
 });

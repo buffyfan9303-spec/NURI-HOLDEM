@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { promptLogin } from '../../lib/requireLogin';
 import Avatar from '../atoms/Avatar';
+import Icon from '../atoms/Icon';
 import { useTitlePoints } from '../../lib/useTitles';
 import { getEquippedMarks, getNickColors } from '../../api/community';
 import { tierCss } from '../atoms/TierBadge';
@@ -20,6 +21,15 @@ interface CommentThreadProps {
   /** 이 영역(예: 본인 매장 커뮤니티)에서 모든 댓글을 관리(삭제)할 수 있는 권한자 — 업주 등 */
   moderator?: boolean;
   emptyText?: string;
+  /** 🔴 C1(2026-09-20) — **모바일 게시글 상세 전용** 표시 분기. 기본 false.
+   *
+   *  이 컴포넌트는 게시글 상세뿐 아니라 **매장 Q&A·요강 댓글**에도 쓰인다(공통 통로).
+   *  그래서 시안을 위해 스타일을 무조건 바꾸면 게시글과 무관한 화면 두 곳이 같이 변한다.
+   *  → 호출부를 늘리지 않고 **명시적 단일 분기** 하나만 둔다. 지금 true 를 넘기는 곳은
+   *    `PostDetailModal`(inline=false, 즉 모바일 독립 상세) 하나뿐이다.
+   *  ⚠ 값이 true 여도 실제 스타일 차이는 전부 `max-lg:` 로 걸려 **PC 에서는 종전 그대로**다
+   *    — 같은 컴포넌트가 breakpoint 마다 다른 DOM 을 만들지 않게 한다(2-pane 회귀 방지). */
+  postDetailMobile?: boolean;
 }
 
 
@@ -233,6 +243,7 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
 
 export default function CommentThread({
   comments, onSubmit, onDelete, moderator = false, emptyText = '아직 댓글이 없습니다.',
+  postDetailMobile = false,
 }: CommentThreadProps) {
   const { user } = useAuth();
   const { isBlocked } = useBlocks();
@@ -282,22 +293,45 @@ export default function CommentThread({
     <div className="space-y-4">
       {/* 입력창 */}
       {user ? (
-        <form onSubmit={submit} className="flex gap-2 py-2">
+        /* 🔴 C1(2026-09-20 시안) — 모바일 게시글 상세에서는 아바타·입력·보내기가 **둥근 한 면** 안에
+           들어간다(시안 두 번째 카드). 바뀌는 것은 겉면뿐이다: `submit`·`content`·`pending`·
+           disabled 조건·IME·placeholder 는 한 글자도 안 바꿨다(실패 후 초안 보존·동기 재진입 가드 포함).
+           ⚠ 비로그인 분기(`user ? … : 로그인 버튼`)는 그대로다 — 그걸 지우면 `user.name` 에서 크래시난다. */
+        <form onSubmit={submit} className={postDetailMobile
+          /* ⚠ 입력 면은 테마마다 **반대 방향**이다(PostDetailModal 의 카드 면 주석과 같은 함정).
+             라이트 팔레트는 high(#F0F1F4)가 가장 어둡고 mid/low 가 흰색이라, 댓글 카드가 high 를
+             쓰는 지금 입력까지 high 로 두면 **입력칸이 카드에 흡수된다**(실측으로 잡았다).
+             → 라이트는 흰색(mid)으로 띄우고, 다크는 종전대로 카드보다 밝은 high. */
+          ? 'flex gap-2 py-2 max-lg:items-center max-lg:gap-1.5 max-lg:rounded-[16px] max-lg:border max-lg:border-border-strong max-lg:bg-surface-mid max-lg:dark:bg-surface-high max-lg:p-1.5 max-lg:py-1.5'
+          : 'flex gap-2 py-2'}>
           <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} />
           <input
             type="text"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="댓글을 입력하세요…"
-            className="input flex-1"
+            className={postDetailMobile
+              ? 'input min-w-0 flex-1 max-lg:border-0 max-lg:bg-transparent max-lg:shadow-none max-lg:focus:ring-0'
+              : 'input flex-1'}
           />
-          <button type="submit" className="btn-primary px-4 shrink-0" disabled={!content.trim() || pending}>
-            등록
+          {/* 보내기 — 모바일은 시안대로 정사각 아이콘 버튼. 글자 라벨은 `sr-only` 로 **남긴다**
+              (아이콘만 남기고 이름을 지우면 보조기술에 이름 없는 버튼이 된다). 44px 계약:
+              루트가 17px 이라 `h-11` 은 46.75px — 44 이상이므로 통과한다(여기선 넉넉한 쪽이 맞다). */}
+          <button type="submit" aria-label={postDetailMobile ? '댓글 등록' : undefined}
+            className={postDetailMobile
+              ? 'btn-primary shrink-0 px-4 max-lg:flex max-lg:h-11 max-lg:w-11 max-lg:items-center max-lg:justify-center max-lg:rounded-[12px] max-lg:px-0'
+              : 'btn-primary px-4 shrink-0'}
+            disabled={!content.trim() || pending}>
+            {postDetailMobile && <Icon name="send" size={18} className="hidden max-lg:block" aria-hidden />}
+            <span className={postDetailMobile ? 'max-lg:sr-only' : undefined}>등록</span>
           </button>
         </form>
       ) : (
+        /* 🔴 C1 — 비로그인 CTA 도 입력창과 **같은 자리·같은 면**이다. 라이트에서 `bg-surface-high` 만
+           두면 댓글 카드(역시 high)에 흡수돼 버튼이 사라진다 — 위 form 과 같은 이유·같은 처방. */
         <button type="button" onClick={() => promptLogin()}
-          className="w-full rounded-input border border-border-strong bg-surface-high p-3 text-center text-xs text-ink-secondary transition-colors hover:border-accent-300/60 hover:text-ink-primary">
+          className={['w-full rounded-input border border-border-strong bg-surface-high p-3 text-center text-xs text-ink-secondary transition-colors hover:border-accent-300/60 hover:text-ink-primary',
+            postDetailMobile ? 'max-lg:bg-surface-mid max-lg:dark:bg-surface-high' : ''].join(' ')}>
           로그인하면 댓글을 작성할 수 있어요 — <b className="text-accent-200">로그인하기 →</b>
         </button>
       )}
@@ -311,8 +345,16 @@ export default function CommentThread({
           <p className="rounded-card border border-dashed border-border-default py-6 text-center text-xs text-ink-muted">{emptyText}</p>
         )
       ) : (
-        <div className="space-y-4">
+        /* 🔴 C1(2026-09-20 시안) — 모바일 게시글 상세에서는 **서로 다른 댓글 사이에만** 얇은 선을 둔다.
+           `divide-y` 는 첫 줄 위·마지막 줄 아래에 선을 만들지 않으므로 카드 안쪽에 중복 테두리가
+           생기지 않는다(시안의 두 번째 카드가 정확히 그 모양이다).
+           ⚠ 답글(대댓글) 안의 계층선·부모 ID·3레벨 평탄 수집은 `CommentItem` 안이라 **안 건드린다** —
+             루트 댓글만 감싼다. 여기를 답글까지 적용하면 답글마다 선이 생겨 계층이 뭉개진다. */
+        <div className={postDetailMobile
+          ? 'space-y-4 max-lg:space-y-0 max-lg:divide-y max-lg:divide-border-strong'
+          : 'space-y-4'}>
           {threads.map(({ root, replies }) => (
+            <div key={root.id} className={postDetailMobile ? 'max-lg:py-3 max-lg:first:pt-1' : undefined}>
             <CommentItem
               key={root.id}
               marks={marks}
@@ -326,6 +368,7 @@ export default function CommentThread({
               canDelete={canDelete}
               loggedIn={!!user}
             />
+            </div>
           ))}
         </div>
       )}

@@ -27,9 +27,17 @@ async function openVoucherPane(page: Page) {
   await expect(page.locator('[data-tab="my-store"]'), '내 매장을 못 열었다').toBeVisible({ timeout: 20_000 });
   await expect(page.locator(RAIL)).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(1500);
-  const btn = page.locator(`${RAIL} button`).filter({ hasText: '이용권' }).first();
-  if (!(await btn.count())) return false;
-  await btn.click();
+  // 🔴 S1(2026-09-20) 이후 이용권 진입점은 **두 벌**이다 — 모바일 탭(`lg:hidden`)과 PC 우측 버튼
+  //   (`hidden lg:inline-flex`). breakpoint 로 한쪽이 `display:none` 이라 `.first()` 로 잡으면
+  //   PC(1440)에서 **숨은 모바일 탭**을 집어 "element is not visible" 로 120초 타임아웃이 났다(실측).
+  //   → 지금 화면에서 **실제로 보이는** 것만 고른다. 보이는 것이 2개면 그것도 결함이므로 실패시킨다.
+  const all = page.locator(`${RAIL} button`).filter({ hasText: '이용권' });
+  const n = await all.count();
+  if (n === 0) return false;
+  const visible = all.filter({ visible: true });
+  const vn = await visible.count();
+  expect(vn, `이용권 진입점이 화면에 ${vn}개 보인다 — breakpoint 로 정확히 하나여야 한다`).toBe(1);
+  await visible.first().click();
   await page.waitForTimeout(2000);
   return true;
 }

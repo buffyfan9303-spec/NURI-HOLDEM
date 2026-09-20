@@ -75,12 +75,56 @@ describe('UI-03 · 아우라 구분선', () => {
   // 인접 면 대비가 1.00(구분 자체가 없음)이었다 — 그래서 댓글 section 에 **테두리 있는 우물**(article 좌우 여백
   // 안에 갇힌 카드, 창 폭을 꽉 채우지 않는다)을 다시 넣는다. §5-1 이 겪은 "화면을 가로지르는 검은 띠"는
   // full-bleed 음수 마진(-mx-4)이 원인이었다 — 그 마진만 없으면 같은 결함이 아니다(그래서 그것만 금지한다).
-  it('🔴 댓글 section 은 border-strong 테두리의 우물(bg-surface-base)이고, full-bleed 음수 마진은 없다', () => {
-    const c = POST.match(/<section data-pd-comments className="([^"]*)"/);
-    expect(c, '댓글 section 을 찾지 못했다').not.toBeNull();
+  // 🔴 C1(2026-09-20) — 모바일이 **두 개의 형제 카드**가 되면서 className 이 배열 join 으로 바뀌었다.
+  //   따옴표 리터럴만 찾던 옛 정규식은 이제 `null` 이라 "찾지 못했다"로 실패한다 — 계약을 느슨하게 푸는 게
+  //   아니라 **새 구조를 포함해 더 강하게** 다시 건다: PC 우물(종전)이 남아 있을 것 + 모바일 카드가 있을 것.
+  it('🔴 댓글 section 은 PC 우물(border-strong·bg-surface-base)이면서 모바일에서는 형제 카드다', () => {
+    const c = POST.match(/<section data-pd-comments className=\{\[([\s\S]*?)\]\.join\(' '\)\}/);
+    expect(c, '댓글 section 을 찾지 못했다 — className 구조가 또 바뀌었으면 이 정규식부터 고쳐라').not.toBeNull();
+    // PC 계약(2026-09-14 UI-Aura)은 한 글자도 안 바뀌었다.
     expect(c![1]).toMatch(/rounded-card border border-border-strong bg-surface-base p-3/);
     expect(c![1]).toMatch(/\bring-aura\b/);
+    // §5-1 이 겪은 full-bleed 검은 띠는 여전히 금지.
     expect(c![1]).not.toMatch(/-mx-4/);
+    // 모바일 형제 카드 — 게시글 카드와 같은 반지름 + **테마마다 반대 방향의 면**.
+    //   라이트에서 `surface-low` 만 쓰면 `low == mid == #FFFFFF` 라 흰 지면에 흡수된다(실측으로 잡았다).
+    //   그래서 기본은 high(라이트에서 유일하게 어두운 값), 다크만 low. 둘 다 있어야 통과다.
+    expect(c![1], '모바일 댓글 카드 스타일이 사라졌다').toMatch(/max-lg:rounded-\[24px\]/);
+    expect(c![1], '라이트에서 댓글 카드가 흰 지면에 흡수된다 — high(라이트)/low(다크) 두 값이 다 필요하다')
+      .toMatch(/max-lg:bg-surface-high[\s\S]*max-lg:dark:bg-surface-low/);
+  });
+
+  // 🔴 C1(2026-09-20 오너 시안) — 게시글 카드가 **댓글을 감싸지 않는다.** 이 계약이 없으면
+  //   누군가 `data-pd-post-card` 를 article 전체로 넓혀 "한 카드 속 작은 우물"로 되돌릴 수 있다
+  //   (문서가 명시적으로 실패라고 못박은 모양이다). 소스 순서로 그것을 막는다.
+  it('🔴 data-pd-post-card 는 PC 에서 lg:contents 이고, 댓글 section 은 그 카드 **밖**에 있다', () => {
+    const open = POST.indexOf('<div data-pd-post-card');
+    expect(open, 'data-pd-post-card 래퍼가 없다').toBeGreaterThan(-1);
+    // PC 는 박스를 없애 종전 배치를 그대로 쓴다 — 이게 빠지면 2-pane 이 카드 두 겹이 된다.
+    expect(POST.slice(open, open + 400)).toMatch(/'lg:contents'/);
+    const close = POST.indexOf('</div>{', open);
+    const comments = POST.indexOf('<section data-pd-comments');
+    expect(close, '게시글 카드를 닫는 자리를 못 찾았다').toBeGreaterThan(open);
+    expect(comments, '댓글 section 이 게시글 카드 안에 있다 — 형제 카드가 아니라 우물이 된다').toBeGreaterThan(close);
+    // 모바일 카드의 실체 — 둥근 모서리·테두리·면. 하나라도 빠지면 시안의 카드가 아니다.
+    const cls = POST.slice(open, close);
+    expect(cls).toMatch(/max-lg:rounded-\[24px\]/);
+    expect(cls).toMatch(/max-lg:border max-lg:border-border-strong/);
+    expect(cls).toMatch(/max-lg:bg-surface-high/);
+  });
+
+  // 🔴 C1 — 같은 동작이 한 화면에 두 번 나오지 않는다. 반응은 PC 알약 줄 / 모바일 4등분 트레이가
+  //   breakpoint 로 배타적이어야 하고, 관리 동작(신고·차단·삭제)은 **목록 한 벌**에서 두 모양으로 그려진다.
+  it('🔴 반응은 PC 알약/모바일 트레이가 배타적이고, 관리 동작 목록은 한 곳에서만 만들어진다', () => {
+    // 알약 줄: inline 이면 항상, 독립 상세면 lg 이상에서만.
+    expect(POST).toMatch(/className=\{inline \? 'mt-4 flex items-start gap-2' : 'mt-4 hidden items-start gap-2 lg:flex'\}/);
+    // 트레이: 독립 상세 전용 + lg 에서 숨김.
+    expect(POST).toMatch(/\{!hidden && !inline && \(/);
+    expect(POST).toMatch(/role="group" aria-label="게시글 반응"/);
+    expect(POST).toMatch(/grid-cols-2[^"]*min-\[380px\]:grid-cols-4[^"]*lg:hidden/);
+    // 권한 조건이 두 벌로 복사되지 않았다 — 각 조건이 소스에 한 번씩만 있다.
+    expect((POST.match(/acts\.push\(/g) ?? []).length, '관리 동작은 신고·차단·삭제 셋').toBe(3);
+    expect(POST).toMatch(/aria-label="게시글 메뉴"/);
   });
   it('입력창·표·focus ring 은 손대지 않는다 — .input 정의는 그대로다', () => {
     expect(CSS).toMatch(/\.input\s*\{/);

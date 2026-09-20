@@ -139,6 +139,27 @@ function reactionPill(active: boolean): string {
   ].join(' ');
 }
 
+/**
+ * 🔴 C1(2026-09-20 오너 시안) — 모바일 독립 상세의 4등분 반응 트레이 셀.
+ *
+ * 위 `reactionPill` 과 무엇이 다른가: 알약은 **테두리가 셀마다** 있고 가로로 늘어선다.
+ * 트레이는 **바깥 테두리 하나**에 네 칸이 나뉘어 들어가므로 셀에는 테두리를 주지 않는다 —
+ * 안 그러면 시안이 없애려던 '중복 내부 pill 테두리'가 그대로 남는다.
+ *
+ * 활성 표시는 알약과 **같은 규칙**이다(accent 한 색 · 채움 + 글자색). 여기서만 다른 색을
+ * 쓰면 같은 동작이 화면에 따라 다른 색으로 보인다.
+ *
+ * 높이: `min-h-16` = 68px(루트 17px) — 44px 계약을 넉넉히 넘기고, 위 아이콘·아래 라벨 두 줄이
+ * 들어갈 실제 공간이다. 숫자가 늘어도 `tabular-nums` 라 폭이 흔들리지 않는다.
+ */
+function trayCell(active: boolean): string {
+  return [
+    'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-[13px] px-1',
+    'text-xs font-semibold leading-none transition-colors active:scale-[0.98]',
+    active ? 'bg-accent-300/15 text-accent-200' : 'text-ink-secondary',
+  ].join(' ');
+}
+
 export default function PostDetailModal({
   post, open, onClose, onLike, onDelete, venues = [], onVenueClick, inline = false, nav = null, onNavigate,
 }: PostDetailModalProps) {
@@ -165,6 +186,21 @@ export default function PostDetailModal({
   const [navBusy, setNavBusy] = useState(false);
   const [navErr, setNavErr] = useState<unknown>(null);
   const articleRef = useRef<HTMLElement>(null);
+  /** 🔴 C1(2026-09-20) — 모바일 작성자 행의 `…` 메뉴(`<details>`).
+   *  `<details>` 는 바깥을 눌러도 스스로 닫히지 않는다 — 닫는 길을 셋 다 만든다:
+   *  바깥 pointerdown(여기) · 메뉴 안 항목 클릭 · Escape·blur(JSX 쪽).
+   *  ⚠ `open` 일 때만 리스너를 다는 것이 아니라 **모달이 열려 있는 동안**만 단다 —
+   *    닫힌 모달의 리스너가 살아 있으면 다른 화면의 클릭마다 이 콜백이 돈다. */
+  const actionMenuRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (e: PointerEvent) => {
+      const menu = actionMenuRef.current;
+      if (menu?.open && !menu.contains(e.target as Node)) menu.open = false;
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [open]);
   // 글이 바뀌면 **상세 내부 스크롤만** 새 글 시작점으로(배경 목록 스크롤은 건드리지 않는다 — page 는 fixed 라 문서 스크롤과 무관).
   useEffect(() => {
     if (!open || !post) return;
@@ -447,7 +483,21 @@ export default function PostDetailModal({
           균등 간격은 'ddd' 같은 짧은 글에서 제목·작성자·본문·반응이 전부 같은 거리로 떨어져
           섬 여섯 개처럼 흩어져 보였다(본문 45px < 반응 92px — 내용보다 버튼이 큰 화면).
           제목↔작성자는 한 덩어리라 좁게(12px), 내용 경계는 넓게(16px)로 위계를 준다. */}
-      <article ref={articleRef} data-pd-root className="p-4 sm:p-5 lg:p-6">
+      <article ref={articleRef} data-pd-root className="p-4 sm:p-5 lg:p-6 max-lg:px-[18px]">
+        {/* 🔴 C1(2026-09-20 오너 시안) — **모바일에서만** 게시글 내용(카테고리~끌올)을 둥근 카드
+            한 벌로 감싼다. 댓글은 이 카드 **밖**의 형제 카드다(아래).
+            왜 여기서 감싸나: `article` 자체를 카드로 만들면 댓글·이전/다음 내비게이션까지 같은 면에
+            들어가 "한 카드 속 작은 우물"이 된다 — 오너 시안은 **두 개의 형제 카드**다.
+            ⚠ PC 는 `lg:contents` 로 **박스를 없앤다** — article 의 padding·자식 배치·ref·스크롤이
+              종전 그대로 유지되고 2-pane 인상이 안 바뀐다(inline=true 경로도 같다).
+            ⚠ 고정 높이를 주지 않는다. 본문·사진·첨부가 늘면 카드가 따라 늘어야 한다. */}
+        <div data-pd-post-card className={[
+          'lg:contents',
+          'max-lg:rounded-[24px] max-lg:border max-lg:border-border-strong max-lg:bg-surface-high max-lg:p-6',
+          // 상단의 미세한 보라→청록 빛 — 시안의 카드 윗변 광. 기존 ring-aura 와 같은 계열의
+          // 헤어라인이라 새 색을 들이지 않는다(라이트 모드에서는 거의 안 보이게 alpha 가 낮다).
+          'max-lg:ring-aura',
+        ].join(' ')}>
         {/* ── 카테고리 · 조회수 · 제목 ─────────────────────────
             감사 P0: post.title 은 이 화면에서 두 번 쓰이는데 둘 다 화면 밖 용도였고
             (라이트박스 alt · 신고 summary), category/viewCount 는 0회였다 —
@@ -483,7 +533,13 @@ export default function PostDetailModal({
               break-words(overflow-wrap:break-word)가 긴 URL·띄어쓰기 없는 입력만 넘침 직전에 쪼갠다.
               최대 줄수로 자르지 않는다 — line-clamp 를 붙이지 말 것(§5-1). */}
           {post.title && (
-            <h3 data-pd-title className="text-xl sm:text-2xl font-bold text-ink-primary leading-snug tracking-tight break-words">{post.title}</h3>
+            /* 🔴 C1(2026-09-20 오너 시안) — 모바일 제목을 `text-xl`(21.25px) → `text-2xl`(25.5px)로 올렸다.
+               왜: 시안의 제목/본문 크기 비는 약 1.7 인데 종전은 **1.25** 였다 — 굵기만 다르고 크기는
+               거의 같아 "제목처럼" 읽히지 않는다(이 파일 위 2026-08 주석이 같은 이유로 18→20 을 했고,
+               같은 방향으로 한 단 더 간 것이다). 루트가 17px 이라 `text-2xl` 이 곧 25.5px 다.
+               행간은 `leading-snug`(1.375) 그대로 — §5-2 의 1.32~1.48 안이다.
+               ⚠ PC 는 종전과 같다(원래도 `sm:text-2xl`). 즉 이 변경은 모바일 한 단계뿐이다. */
+            <h3 data-pd-title className="text-2xl font-bold text-ink-primary leading-snug tracking-tight break-words">{post.title}</h3>
           )}
         </div>
         )}
@@ -554,38 +610,73 @@ export default function PostDetailModal({
               )}
             </div>
           </div>
-          {/* 관리 동작 묶음 — 셋 다 같은 급(작게·중립·hover 에서만 의도 색). */}
-          <div className="flex shrink-0 items-center gap-0.5">
-            {user && user.id !== post.userId && (
-              <button type="button" onClick={() => setReportOpen(true)}
-                className="hit shrink-0 rounded-input px-1.5 py-1 text-2xs text-ink-muted transition-colors hover:text-danger-light">
-                신고
-              </button>
-            )}
-            {user && user.id !== post.userId && (
-              <button type="button"
-                onClick={async () => {
-                  if (!confirm(`'${post.userName}'님을 차단할까요?\n이 사용자의 글·댓글이 보이지 않게 됩니다.`)) return;
-                  try { await block(post.userId, post.userName); toast.show('차단했습니다. 이 사용자의 글이 숨겨집니다', 'info'); onClose(); }
-                  catch (e) { toast.show(e instanceof Error ? e.message : '차단 실패', 'error'); }
-                }}
-                className="hit shrink-0 rounded-input px-1.5 py-1 text-2xs text-ink-muted transition-colors hover:text-danger-light">
-                차단
-              </button>
-            )}
-            {/* 삭제도 평상시엔 중립 — 파괴적 확인은 confirm() 이 이미 잡고 있고,
-                빨간 알약을 상시 띄우면 '읽어야 할 것'(제목·본문)보다 눈에 먼저 들어온다.
-                의도가 생긴 순간(hover)에만 danger 로 물든다. 굵기로 셋 중 위계는 유지. */}
-            {onDelete && (user?.role === 'admin' || user?.id === post.userId) && (
-              <button
-                type="button"
-                onClick={() => { if (confirm('이 게시글을 삭제하시겠습니까?')) onDelete(post.id); }}
-                className="hit shrink-0 rounded-input px-1.5 py-1 text-2xs font-semibold text-ink-secondary transition-colors hover:text-danger-light"
-              >
-                삭제
-              </button>
-            )}
-          </div>
+          {/* 관리 동작 묶음 — 셋 다 같은 급(작게·중립·hover 에서만 의도 색).
+              🔴 C1(2026-09-20 시안) — **권한 조건과 핸들러를 한 곳(`postActions`)에 모았다.**
+                모바일 `…` 메뉴와 PC 가로 묶음이 같은 목록을 두 모양으로 그린다. 종전처럼 JSX 를
+                두 벌 복사하면 한쪽에만 조건을 고치는 사고가 난다(이 저장소에서 실제로 났다 —
+                '한 화면만 고치는 것이 사고' · CLAUDE.md 연동 항목). 여기 목록이 유일한 출처다.
+              ⚠ 같은 동작을 한 화면에 두 번 노출하지 않는다: 모바일은 메뉴만(`lg:hidden`),
+                PC·2-pane 은 가로 묶음만(`max-lg:hidden`, inline 이면 항상). */}
+          {(() => {
+            const acts: { key: string; label: string; onClick: () => void; strong?: boolean }[] = [];
+            if (user && user.id !== post.userId) {
+              acts.push({ key: 'report', label: '신고', onClick: () => setReportOpen(true) });
+              acts.push({ key: 'block', label: '차단', onClick: async () => {
+                if (!confirm(`'${post.userName}'님을 차단할까요?\n이 사용자의 글·댓글이 보이지 않게 됩니다.`)) return;
+                try { await block(post.userId, post.userName); toast.show('차단했습니다. 이 사용자의 글이 숨겨집니다', 'info'); onClose(); }
+                catch (e) { toast.show(e instanceof Error ? e.message : '차단 실패', 'error'); }
+              } });
+            }
+            /* 삭제도 평상시엔 중립 — 파괴적 확인은 confirm() 이 이미 잡고 있고,
+               빨간 알약을 상시 띄우면 '읽어야 할 것'(제목·본문)보다 눈에 먼저 들어온다.
+               의도가 생긴 순간(hover)에만 danger 로 물든다. 굵기로 셋 중 위계는 유지. */
+            if (onDelete && (user?.role === 'admin' || user?.id === post.userId)) {
+              acts.push({ key: 'delete', label: '삭제', strong: true, onClick: () => { if (confirm('이 게시글을 삭제하시겠습니까?')) onDelete(post.id); } });
+            }
+            // 쓸 수 있는 동작이 하나도 없으면(비로그인·남의 글) 메뉴 버튼 자체를 안 그린다 —
+            // 열어도 빈 판이 나오는 버튼은 소음이다(끌올 주석과 같은 원칙).
+            if (acts.length === 0) return null;
+            return (<>
+              {!inline && (
+                <details ref={actionMenuRef} className="relative shrink-0 lg:hidden"
+                  onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Escape' || !actionMenuRef.current?.open) return;
+                    // ⚠ Escape 를 여기서 멈추지 않으면 Modal 까지 올라가 **글 자체가 닫힌다**.
+                    e.preventDefault(); e.stopPropagation();
+                    actionMenuRef.current.open = false;
+                    actionMenuRef.current.querySelector('summary')?.focus();
+                  }}>
+                  <summary aria-label="게시글 메뉴"
+                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-input text-lg leading-none text-ink-secondary transition-colors hover:text-ink-primary [&::-webkit-details-marker]:hidden">
+                    …
+                  </summary>
+                  {/* 메뉴를 누르는 동작이 본문 스와이프로 오발동하지 않게 — Modal 의 드래그는
+                      스크롤러가 맨 위일 때만 시작되지만, 여기서도 시작점을 끊어 둔다. */}
+                  <div data-drag-close="off"
+                    className="absolute right-0 top-full z-30 mt-2 min-w-32 rounded-input border border-border-strong bg-surface-high p-1 shadow-xl"
+                    onClick={() => { if (actionMenuRef.current) actionMenuRef.current.open = false; }}>
+                    {acts.map((a) => (
+                      <button key={a.key} type="button" onClick={a.onClick}
+                        className={['flex min-h-11 w-full items-center rounded-input px-3 text-left text-xs transition-colors hover:text-danger-light',
+                          a.strong ? 'font-semibold text-ink-secondary' : 'text-ink-muted'].join(' ')}>
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              )}
+              <div className={['flex shrink-0 items-center gap-0.5', inline ? '' : 'max-lg:hidden'].join(' ')}>
+                {acts.map((a) => (
+                  <button key={a.key} type="button" onClick={a.onClick}
+                    className={['hit shrink-0 rounded-input px-1.5 py-1 text-2xs transition-colors hover:text-danger-light',
+                      a.strong ? 'font-semibold text-ink-secondary' : 'text-ink-muted'].join(' ')}>
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            </>);
+          })()}
         </header>
         )}
         {/* UI-Aura(2026-09-14): divider-aura(peak 1.89:1, 양끝 0)는 사실상 안 보였다 — index.css 는 공용(NoticeDetailModal
@@ -709,8 +800,11 @@ export default function PostDetailModal({
 
             숫자: tabular-nums + min-w-[1.5ch] — 0→1 토글이나 8↔9 교체에서 알약 폭이
             흔들리지 않는다(두 자리까지 폭 고정, 세 자리부터만 늘어난다). */}
+        {/* 🔴 C1(2026-09-20) — 아래 알약 줄은 **PC·2-pane 전용**이 됐다. 모바일 독립 상세는 그 다음의
+            4등분 트레이를 쓴다(시안). 두 벌이 동시에 보이면 같은 동작이 한 화면에 두 번 생긴다 —
+            그래서 `inline` 이면 종전대로 항상 보이고, 독립 상세면 `lg` 이상에서만 보인다. */}
         {!hidden && (
-        <div className="mt-4 flex items-start gap-2">
+        <div className={inline ? 'mt-4 flex items-start gap-2' : 'mt-4 hidden items-start gap-2 lg:flex'}>
           {/* 알약 셋만 자기들끼리 접히는 그룹 — 공유는 바깥에 두어 폭이 어떻게 변해도
               항상 첫 줄 오른쪽에 고정된다. 한 통에 넣으면 좋아요가 4자리(1,284)가 되는 순간
               공유가 밀려 내려가 줄 수가 바뀐다(= 숫자 때문에 레이아웃이 흔들린다). */}
@@ -767,7 +861,44 @@ export default function PostDetailModal({
         </div>
         )}
 
-        {!hidden && <hr className="border-t border-border-strong mt-3" aria-hidden="true" />}
+        {/* 🔴 C1(2026-09-20 시안) — 모바일 독립 상세의 **외곽선 하나짜리 4등분 반응 트레이**.
+            위 아이콘 / 아래 라벨+숫자, 마지막 공유 셀만 차분한 보라 면.
+            ⚠ 핸들러·카운트·`aria-pressed`·로그인 유도는 **위 알약과 같은 것을 그대로 쓴다** —
+              새 상태도, 새 API 도 만들지 않는다(눌렀을 때의 서버 연동·롤백은 onLike/react 안에 있다).
+            ⚠ 320/360 은 2칸씩 두 줄, 380 이상부터 네 칸 — 숫자가 커져도 글자를 줄이지 않는다.
+              `min-[380px]` 은 임의 값이 아니라 **실측으로 정한다**(아래 e2e 가 겹침 0 을 잰다).
+            ⚠ `min-h-16`(=68px, 루트 17px)이라 셀 하나하나가 44px 계약을 넉넉히 넘는다. */}
+        {!hidden && !inline && (
+        <div role="group" aria-label="게시글 반응"
+          className="mt-4 grid grid-cols-2 overflow-hidden rounded-[18px] border border-border-strong bg-surface-low p-1 min-[380px]:grid-cols-4 lg:hidden">
+          <button type="button" aria-pressed={!!post.liked}
+            onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; } onLike(post.id); }}
+            className={trayCell(!!post.liked)}>
+            <Icon name={post.liked ? 'heart-fill' : 'heart'} size={17} strokeWidth={2.0} className="shrink-0" />
+            <span>좋아요 <span className="tabular-nums">{post.likeCount}</span></span>
+          </button>
+          <button type="button" aria-pressed={myReaction === 'goodrun'} onClick={() => react('goodrun')}
+            className={trayCell(myReaction === 'goodrun')}>
+            <Icon name="chevron-up" size={17} strokeWidth={2.2} className="shrink-0" />
+            <span>추천 <span className="tabular-nums">{gr}</span></span>
+          </button>
+          <button type="button" aria-pressed={myReaction === 'badbeat'} onClick={() => react('badbeat')}
+            className={trayCell(myReaction === 'badbeat')}>
+            <Icon name="chevron-down" size={17} strokeWidth={2.2} className="shrink-0" />
+            <span>비추천 <span className="tabular-nums">{bb}</span></span>
+          </button>
+          {/* 공유만 면을 깐다 — 숫자가 없는 동작이라 나머지 셋과 역할이 다르다는 표시다. */}
+          <button type="button" onClick={copyLink} aria-label="링크 복사"
+            className={[trayCell(false), 'bg-accent-300/10 text-accent-200'].join(' ')}>
+            <Icon name="share" size={17} strokeWidth={2.0} className="shrink-0" />
+            <span>공유</span>
+          </button>
+        </div>
+        )}
+
+        {/* 🔴 C1 — 반응 직후의 이 구분선은 PC 전용이다. 모바일에서는 트레이 자체가 카드 하단을
+            마감하므로 선을 하나 더 그으면 경계가 두 번 생긴다. */}
+        {!hidden && <hr className="border-t border-border-strong mt-3 max-lg:hidden" aria-hidden="true" />}
 
         {/* ── 끌올 — 작성자 본인에게만. 남의 글에서는 아예 그리지 않는다(살 수 없는 버튼은 소음이다). */}
         {user?.id === post.userId && (
@@ -804,14 +935,41 @@ export default function PostDetailModal({
             섹션이 **전부 투명**이라 인접 면 대비가 1.00(구분 자체가 없음)이었다. 그래서 **full-bleed 가 아닌
             테두리 있는 우물**(rounded-card, article 좌우 여백 안에 갇힘 — 창 폭을 꽉 채우지 않는다)로
             다시 도입한다 — §5-1 이 겪은 "화면을 가로지르는 검은 띠"와는 다른 모양이라 같은 결함이 아니다. */}
-        {!hidden && <hr className="border-t border-border-strong mt-4" aria-hidden="true" />}
+        </div>{/* /data-pd-post-card — 여기부터는 카드 밖(댓글·이전/다음)이다 */}
+
+        {/* 🔴 C1 — 이 구분선은 **PC 전용**이 됐다. 모바일에서는 두 카드 사이의 빈 공간이 곧 경계라
+            선까지 있으면 경계가 두 번 그려진다. PC(2-pane 포함)는 종전 그대로 선으로 끊는다. */}
+        {!hidden && <hr className="border-t border-border-strong mt-4 max-lg:hidden" aria-hidden="true" />}
         {!hidden && (
-        <section data-pd-comments className="reveal mt-4 space-y-2 rounded-card border border-border-strong bg-surface-base p-3 ring-aura">
+        <section data-pd-comments className={[
+          'reveal mt-4 space-y-2 rounded-card border border-border-strong bg-surface-base p-3 ring-aura',
+          // 🔴 C1 — 모바일은 게시글 카드와 **같은 좌우 경계·같은 반지름**의 독립 카드다.
+          //   간격 16px: `mt-4`(=1rem=17px, 루트 17px) 가 그 값이라 그대로 쓴다.
+          // ⚠ 면은 테마마다 **반대 방향**으로 가야 한다(이 파일 `reactionPill` 의 면 계약과 같은 함정):
+          //   라이트는 `surface-low == surface-mid == #FFFFFF` 라 셸과 **같은 흰색**이 되어 카드가
+          //   통째로 사라진다(실측으로 잡았다 — 라이트 스크린샷에서 댓글 카드가 지면에 흡수됐다).
+          //   그래서 라이트는 `surface-high`(#F0F1F4)로 **내려앉히고**, 다크만 셸보다 어두운 `surface-low`.
+          'max-lg:rounded-[24px] max-lg:bg-surface-high max-lg:dark:bg-surface-low max-lg:p-5',
+        ].join(' ')}>
           {/* 댓글 수는 화면에 실제로 불러온 목록(replies)만 신뢰한다.
               post.commentCount 는 DB 트리거가 같은 값을 넣어주는 컬럼이라 더하면 2배가 된다.
               (트리거 도입 전에는 항상 0이라 0+n 으로 우연히 맞아 보였을 뿐이다.
                App.tsx 가 posts 갱신마다 openPost 를 덮어쓰므로 리얼타임 갱신 때 반드시 드러난다.) */}
-          <h3 className="text-sm font-bold text-ink-primary">댓글 <span className="tabular-nums text-ink-secondary">{replies?.length ?? ''}</span></h3>
+          {/* 🔴 C1(시안 두 번째 카드 첫 행) — 말풍선 아이콘 · '댓글' · 작은 보라 수 배지 · 우측 안내.
+              ⚠ `replies === null`(아직 도착 전)에는 **수를 아예 안 그린다.** 종전 `?? ''` 와 같은 뜻인데,
+                배지는 '0' 을 보여주기 쉬운 모양이라 명시적으로 막는다 — 미확정 0 은 "댓글이 없다"는
+                사실이 아닌 말이고, 그걸 보고 업주·작성자가 다시 쓰게 된다(이 저장소의 반복 결함 유형).
+              ⚠ 우측 안내는 모바일에서만 — PC 2-pane 은 폭이 좁아 제목 줄이 두 줄로 접힌다. */}
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-ink-primary">
+              <Icon name="comment" size={16} className="shrink-0 text-accent-200" aria-hidden />
+              <span>댓글</span>
+              {replies !== null && (
+                <span className="shrink-0 rounded-badge bg-accent-300/20 px-1.5 py-0.5 text-2xs font-bold tabular-nums leading-none text-accent-200">{replies.length}</span>
+              )}
+            </h3>
+            <span className="shrink-0 text-2xs text-ink-muted lg:hidden">대화에 참여해 보세요</span>
+          </div>
           {/* 실패 카드는 스레드 **위에** 얹는다 — 작성 폼은 남겨 둔다(기능 보존). replies 가 null 로 남아 빈 문구도 안 뜬다. */}
           {cErr != null && <LoadErrorCard error={cErr} what="댓글" onRetry={() => setCReload((k) => k + 1)} compact />}
           {/* 🔴 2026-09-20 — 댓글이 도착하며 목록이 늘어나 **아래 이전/다음 내비게이션이 밀렸다.**
@@ -834,6 +992,9 @@ export default function PostDetailModal({
             /* UI-04 §7.4: 댓글 초안은 postId 단위로 분리한다 — 컨테이너(Modal)는 유지하고 스레드만 글별로 갈아끼운다
                (초안은 CommentThread 의 컴포넌트 상태뿐이라 다른 글에 붙지 않게 하는 것이 먼저다. 저장소 정책이 없어 예고 없는 폐기는 남는다). */
             key={post.id}
+            /* 🔴 C1 — 모바일 **독립 상세**에서만 시안 표시를 켠다. PC 2-pane(inline=true)과
+               매장 Q&A·요강 댓글 등 다른 호출부는 이 값을 안 받으므로 종전 그대로다. */
+            postDetailMobile={!inline}
             comments={replies ?? []}
             onSubmit={handleSubmitComment}
             onDelete={handleDeleteComment}
