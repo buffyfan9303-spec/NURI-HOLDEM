@@ -546,7 +546,9 @@ export default function ToolsPanel() {
         headerAction={active ? (
           <button type="button" onClick={() => share(active)}
             aria-label={`${activeTool?.name ?? '도구'} 링크 공유`}
-            className="inline-flex h-9 items-center gap-1.5 rounded-input px-2.5 text-2xs font-semibold text-ink-secondary transition-colors hover:bg-surface-high hover:text-ink-primary">
+            // tap-y-44: 보이는 박스(38.3px)는 그대로 두고 위아래 6px씩 눌림 영역만 확장(index.css:1005-1006).
+            // 헤더 행에는 overflow-x-auto 조상이 없어(오버행이 안 잘림) 실측 확인됨(2026-09-20).
+            className="tap-y-44 inline-flex h-9 items-center gap-1.5 rounded-input px-2.5 text-2xs font-semibold text-ink-secondary transition-colors hover:bg-surface-high hover:text-ink-primary">
             <Icon name="share" size={15} aria-hidden />
             <span className="hidden sm:inline">공유</span>
           </button>
@@ -627,13 +629,18 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey) => void }) {
           프리플랍 차트 · 수학
         </span>
       </div>
-      {/* `.btn` 이 `whitespace-nowrap leading-none` 이라 200% 확대에서 '새 스팟 분석'(137px)이
-          2열 칸(128px)을 넘쳤다. 라벨을 줄이지 않고 **두 줄을 허용**한다(높이는 min-h-[44px] 가 이미 예약). */}
+      {/* 🔴 2026-09-20 오너 지시: "그런 사람 없어 앞으로 200% 확대 다 빼" ·
+          "기존 작업에서도 200% 확대를 전제로 뭔가 둡다면 모든 기준은 100%".
+          종전 주석: "`.btn` 이 whitespace-nowrap 이라 **200% 확대에서** '새 스팟 분석'(137px)이
+          2열 칸(128px)을 넘쳐 두 줄을 허용했다" — **그 전제가 사라졌다.**
+          100% 에서는 한 줄에 들어가므로 `whitespace-normal`·`leading-tight` 를 걷어낸다.
+          ⚠ `min-h-[44px]` 는 **남긴다** — 그건 확대 대책이 아니라 손가락 터치 최소치다.
+          ⚠ 100% 에서 한 줄인지는 실측으로 확인했다(아래 커밋 메시지에 수치). */}
       <div className="mt-2.5 grid grid-cols-2 gap-1.5">
-        <button type="button" onClick={() => onOpen('spot')} className="btn-primary min-h-[44px] whitespace-normal px-2 text-xs leading-tight">
+        <button type="button" onClick={() => onOpen('spot')} className="btn-primary min-h-[44px] px-2 text-xs">
           새 스팟 분석
         </button>
-        <button type="button" onClick={() => onOpen('spot')} className="btn-ghost min-h-[44px] whitespace-normal px-2 text-xs leading-tight">
+        <button type="button" onClick={() => onOpen('spot')} className="btn-ghost min-h-[44px] px-2 text-xs">
           내 스팟
         </button>
       </div>

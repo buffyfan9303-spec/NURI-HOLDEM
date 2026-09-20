@@ -100,12 +100,16 @@ describe('🔴 §11 — 홈은 조회 실패를 "없어요" 로 위장하지 않
     expect(HOME, '실패 판정이 없다').toMatch(/const failed = !!schedulesError && schedules\.length === 0;/);
     expect(HOME, "실패 갈래가 '오늘·내일 일정' 섹션에 없다 — 0건 빈 상태가 실패를 삼킨다")
       .toMatch(/\) : failed \? \(\s*\n[\s\S]{0,400}?<LoadErrorCard compact error=\{schedulesError\} what="대회 목록" onRetry=\{onRetrySchedules\} \/>/);
+    // 🔴 2026-09-20: 오너 레퍼런스(날짜 레일)로 빈 갈래 조건이 다시 바뀌었다 —
+    //   `upcoming.length === 0 && nextUp.length === 0` → `daySchedules.length === 0 && !useFallback`.
+    //   **선택한 날짜**가 기준이 됐기 때문이다(고른 날이 비면 그 날의 빈 상태를 보여야 한다).
+    //   이 검사가 지키는 것은 여전히 **순서**다 — 조건식 이름이 아니라 '실패 갈래가 앞' 이라는 사실.
     // 🔴 2026-09-19: 빈 갈래의 조건이 `upcoming.length === 0` → `upcoming.length === 0 && nextUp.length === 0`
     //   으로 바뀌었다(오너: "없으면 다음 일정을 보여준다"). **이 검사가 지키는 것은 조건식이 아니라 순서**다 —
     //   실패 갈래가 빈 갈래보다 뒤에 있으면 영원히 도달하지 않는다. 그래서 앵커만 느슨하게 하고
     //   순서 단언은 그대로 둔다. 조건식 자체는 아래 별도 단언이 잠근다.
     expect(HOME, '세 번째 갈래가 빈 상태보다 **뒤에** 있으면 영원히 도달하지 않는다')
-      .toMatch(/failed \? \([\s\S]*?\) : upcoming\.length === 0[^?]*\? \(/);
+      .toMatch(/failed \? \([\s\S]*?\) : daySchedules\.length === 0[^?]*\? \(/);
   });
 
   it('🔴 빈 상태는 **다음 일정까지 없을 때만** 나온다 — 있는데 "없어요" 라고 하지 않는다', () => {
@@ -114,10 +118,17 @@ describe('🔴 §11 — 홈은 조회 실패를 "없어요" 로 위장하지 않
     // e2e/home-upcoming-fallback.spec.ts 가 실제 화면으로 잰다(여기는 배선만 본다).
     expect(HOME, '다음 일정 폴백이 없다 — 이틀 창이 비면 다시 빈 칸이 된다')
       .toMatch(/const nextUp = useMemo\(/);
-    expect(HOME, '빈 상태가 nextUp 을 보지 않는다 — 보여줄 일정이 있는데 "없어요" 라고 말한다')
-      .toMatch(/upcoming\.length === 0 && nextUp\.length === 0 \? \(/);
+    expect(HOME, '빈 상태가 폴백 여부를 보지 않는다 — 보여줄 일정이 있는데 "없어요" 라고 말한다')
+      .toMatch(/daySchedules\.length === 0 && !useFallback \? \(/);
+    // 🔴 폴백은 **오늘을 고른 기본 상태에서만** 쓴다. 다른 날짜를 골랐는데 그 날이 비었을 때
+    //   다음 일정을 섞으면 사용자가 그것을 **고른 날 대회**로 읽는다(2026-09-20 실행문 UI-2).
+    expect(HOME, '폴백 조건이 선택일을 안 본다 — 다른 날짜 카드가 고른 날 목록에 섞인다')
+      .toMatch(/useFallback = selectedDate === today && upcoming\.length === 0 && nextUp\.length > 0/);
     expect(HOME, '목록이 폴백을 그리지 않는다')
-      .toMatch(/\(upcoming\.length \? upcoming : nextUp\)\.map\(/);
+      .toMatch(/\(useFallback \? nextUp : dayVisible\)\.map\(/);
+    // 🔴 건수는 **자르기 전 전체 수**여야 한다. 화면에 8개만 그려도 숫자는 사실이어야 한다(§6-1).
+    expect(HOME, '건수가 자른 배열을 세고 있다 — 화면이 거짓 숫자를 말한다')
+      .toMatch(/총 \$\{daySchedules\.length\}개의 대회/);
     expect(HOME, '폴백일 때 그 사실을 말하지 않으면 사용자는 다음 일정을 오늘 것으로 읽는다')
       .toMatch(/data-testid="home-upcoming-fallback"/);
   });

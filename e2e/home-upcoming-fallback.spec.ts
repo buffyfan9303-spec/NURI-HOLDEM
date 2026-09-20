@@ -41,7 +41,7 @@ async function openHomeWith(page: Page, rows: unknown[]) {
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) }));
   await page.goto('/?tab=home');
   await page.waitForSelector('button[aria-label^="알림"]', { timeout: 20_000 });
-  await expect(page.getByText('오늘·내일 일정').first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('home-schedule-title')).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(1500);
 }
 

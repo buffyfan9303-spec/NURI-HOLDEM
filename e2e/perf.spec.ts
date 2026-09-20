@@ -126,14 +126,14 @@ function reportShifts(label: string, p: PerfBag, top = 4): void {
  */
 async function warmUpReservations(page: Page): Promise<void> {
   await page.goto('/');
-  await page.getByText('오늘·내일 일정').first().waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByTestId('home-schedule-title').waitFor({ state: 'visible', timeout: 30_000 });
   await page.waitForTimeout(3500); // 클락 도착까지 — 이때 앱이 seen 키를 쓴다
 }
 
 test('perf① 홈 콜드 진입 — CLS·롱프레임 기록 + 상한', async ({ page }) => {
   await warmUpReservations(page);
   await page.goto('/');
-  await expect(page.getByText('오늘·내일 일정').first()).toBeVisible();
+  await expect(page.getByTestId('home-schedule-title')).toBeVisible();
   await page.waitForTimeout(3500); // 배너·개인화 블록 도착분까지 CLS 에 포함
   const p = await readPerf(page);
   console.log(`[perf-baseline] browse-cold CLS=${p.cls.toFixed(3)} longFrames=${p.longFrames}`);
@@ -196,10 +196,14 @@ test('perf③ 커뮤니티 스크롤 — 스크롤 구간 CLS·롱프레임 상�
 // 응답을 조작하지 않고 **지연**시켜 재현한다 — payload 모양에 의존하지 않아 API 가 바뀌어도 이 게이트는 산다.
 const EVENT_RPC = /\/rest\/v1\/rpc\/event_board/;
 
-/** '오늘·내일 일정' 이 첫 페인트 이후 세로로 움직인 총량(px). 0 이어야 한다. */
+/** 홈 일정 섹션(`#home-schedule`)이 첫 페인트 이후 세로로 움직인 총량(px). 0 이어야 한다. */
 function scheduleDrift(p: PerfBag): number {
   let dy = 0;
-  for (const s of p.shifts) for (const src of s.sources) if (src.node.includes('오늘·내일 일정')) dy += Math.abs(src.dy);
+  // 🔴 2026-09-20 — 종전에는 제목 문자열('오늘·내일 일정')로 찾았다. 그 제목이 날짜 선택형으로
+  //   바뀌면서(레퍼런스 UI-2) 매칭이 영영 실패해 **드리프트가 0 으로 거짓 통과**하게 된다.
+  //   `describe()` 가 `#id` 를 직렬화하므로 안정적인 id 로 옮긴다(HomeTab 의 `id="home-schedule"`).
+  //   ⚠ 이 id 를 지우면 이 게이트가 빈손이 된다 — 아래 '무엇이든 잡혔나' 단언이 그걸 막는다.
+  for (const s of p.shifts) for (const src of s.sources) if (src.node.includes('#home-schedule')) dy += Math.abs(src.dy);
   return dy;
 }
 
@@ -231,7 +235,7 @@ for (const c of HOME_CASES) {
     }
     await c.route(page);
     await page.goto('/');
-    await expect(page.getByText('오늘·내일 일정').first()).toBeVisible();
+    await expect(page.getByTestId('home-schedule-title')).toBeVisible();
     await page.waitForTimeout(3500);
     // '이벤트 있음' 케이스는 진행 중인 이벤트가 실제로 있어야 성립한다(2026-09-10 런칭 정리로 오픈 이벤트가 삭제됐다).
     //   없으면 seen=1 로 예약한 칸이 '이벤트 없음' 응답에 접히는 게 정상 동작이라, 이 게이트의 전제가 아니다.
@@ -250,7 +254,7 @@ for (const c of HOME_CASES) {
     //   (단독 0.056 → 전체 스위트 0.139. 실제로 이 임계로 한 번 깨졌다).
     //   드리프트는 레이아웃 사실이라 부하와 무관하게 0 이거나 아니거나 둘 중 하나다 — 게이트는 이쪽이어야 한다.
     if (c.gate) {
-      expect(drift, `'오늘·내일 일정' 이 첫 페인트 뒤 ${drift}px 밀렸다 — 늦게 도착한 칸이 위에 삽입되고 있다`).toBe(0);
+      expect(drift, `홈 일정 섹션이 첫 페인트 뒤 ${drift}px 밀렸다 — 늦게 도착한 칸이 위에 삽입되고 있다`).toBe(0);
     }
   });
 }

@@ -87,7 +87,7 @@ const heroH = (page: Page) => page.evaluate(() => {
 });
 const schedSectionY = (page: Page) => page.evaluate(() => {
   const s = [...document.querySelectorAll('main.tab-pane section')]
-    .find((x) => (x.querySelector('h3')?.textContent || '').includes('오늘·내일'));
+    .find((x) => x.id === 'home-schedule' || !!x.querySelector('#home-schedule'));
   return s ? Math.round(s.getBoundingClientRect().y) : null;
 });
 

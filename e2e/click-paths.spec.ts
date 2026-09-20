@@ -13,7 +13,7 @@ const nav = (page: Page) => page.getByRole('navigation', { name: '하단 내비�
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText('오늘·내일 일정').first()).toBeVisible();
+  await expect(page.getByTestId('home-schedule-title')).toBeVisible();
 });
 
 test('하단 탭 5개 — 각 탭이 자기 판을 띄우고 나머지는 내린다', async ({ page }) => {
@@ -118,7 +118,7 @@ test('이벤트 닫기 — 홈으로 돌아온다(빈 화면에 갇히지 않는
   await expect(dlg).toBeVisible({ timeout: 15_000 });
   await dlg.getByRole('button', { name: '닫기' }).click();
   await expect(dlg).toBeHidden();
-  await expect(page.getByText('오늘·내일 일정').first()).toBeVisible();
+  await expect(page.getByTestId('home-schedule-title')).toBeVisible();
   // 닫으면 주소에서도 빠진다 — 남아 있으면 다음 새로고침에 혼자 다시 열린다
   await expect(page).toHaveURL((u) => !u.searchParams.has('event'));
 });

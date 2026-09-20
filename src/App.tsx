@@ -3284,14 +3284,22 @@ export default function App() {
       s.id === data.id
         ? { ...s, ...patch, posterUrl: data.posterUrl === undefined ? s.posterUrl : (data.posterUrl ?? undefined) }
         : s));
-      updateSchedule(data.id, patch)
+      // 🔴 2026-09-20 — **결과를 돌려준다.** 종전엔 `void` 라 폼이 서버 결과를 못 보고
+      //   '수정되었습니다' 를 띄운 뒤 닫혔다. 실패하면 성공 토스트 뒤에 실패 토스트가 겹쳐 뜨고
+      //   입력은 이미 사라진 상태였다(PosterFormModal 의 `PosterSubmitResult` 주석 참고).
+      return updateSchedule(data.id, patch)
         .then(reloadSchedules)
-        .catch(() => { toast.show('수정 저장에 실패했습니다', 'error'); reloadSchedules(); });
-      return;
+        .then(() => ({ ok: true, saved: 1, total: 1 }))
+        .catch(() => {
+          toast.show('수정 저장에 실패했습니다', 'error');
+          reloadSchedules();
+          return { ok: false, saved: 0, total: 1 };
+        });
     }
 
     // ── 신규 등록 ──
-    if (!user) return;
+    // 로그인이 풀린 상태 — 조용히 무시하면 폼이 '등록됐다' 고 닫힌다. 실패로 돌려준다.
+    if (!user) { toast.show('로그인이 풀렸습니다. 다시 로그인해 주세요.', 'error'); return { ok: false, saved: 0, total: 1 }; }
     const adminPosting = user.role === 'admin';
     // 관리자: 선택/직접입력한 홀덤펍 사용, 즉시 승인. 업주: 본인 매장, 승인 대기.
     const venueIdToUse = adminPosting ? (data.venueId || '') : (user.venueId ?? '');
@@ -3333,13 +3341,17 @@ export default function App() {
     const dates = Array.from({ length: weeks }, (_, i) => addDays(data.date, i * 7));
     // ⚠ 예전엔 `Promise.all` + `.catch` 였다 — 3주 중 1주만 실패하면 **성공한 2건이 서버에만 있고
     //   화면에는 없는** 상태로 끝났다(reload 가 성공 경로에만 걸려 있었다). 부분 성공은 실패가 아니다.
-    Promise.allSettled(dates.map((dt) => createSchedule(mkPayload(dt))))
+    // 🔴 2026-09-20 — 여기서 판정한 **부분 성공을 폼까지 돌려준다.** 판정 자체는 이미 정확했는데
+    //   폼이 그 결과를 안 기다려서 3주 중 1주만 성공해도 '등록되었습니다' 로 닫혔다.
+    return Promise.allSettled(dates.map((dt) => createSchedule(mkPayload(dt))))
       .then(async (rs) => {
         const ok = rs.filter((r) => r.status === 'fulfilled').length;
         if (ok > 0) await reloadSchedules();          // 하나라도 나갔으면 반드시 다시 읽는다
         if (ok === rs.length) { if (weeks > 1) toast.show(`${weeks}주 반복 일정이 등록되었습니다`, 'success'); }
         else if (ok === 0) toast.show('포스터 등록에 실패했습니다. 매장 승인 상태를 확인해 주세요.', 'error');
         else toast.show(`${rs.length}주 중 ${ok}주만 등록되었습니다. 나머지를 다시 시도해 주세요.`, 'error');
+        // 부분 성공은 **성공이 아니다** — 폼을 열어 둬 남은 주를 다시 시도할 수 있게 한다.
+        return { ok: ok === rs.length, saved: ok, total: rs.length };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, venues, toast, reloadSchedules]);

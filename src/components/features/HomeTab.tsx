@@ -243,6 +243,59 @@ export default function HomeTab({
     [schedules, tomorrow],
   );
 
+  // ── 🔴 날짜 레일(2026-09-20 레퍼런스 UI-1·UI-2) ───────────────────────────
+  //   오너 레퍼런스: 5칸 날짜 레일 + 좌우 이동 + "9월 20일 (일) 일정 / 총 N개의 토너먼트".
+  //   종전에는 '오늘·내일' 2일 창을 고정 제목으로 보여 줬다 — 날짜를 고를 수 없었다.
+  // ⚠ 날짜 경계는 **KST 기준**이다. 이 파일이 이미 쓰는 `toLocaleDateString('en-CA')` 를 그대로 쓴다
+  //   (playwright.config 가 Asia/Seoul 을 고정하고, 유저는 사실상 전원 한국이다).
+  //   `new Date(iso)` 는 UTC 자정으로 파싱돼 하루가 밀리므로 **쓰지 않는다** — 문자열/ms 로만 다룬다.
+  const isoAdd = useCallback(
+    (iso: string, days: number) => {
+      const [y, m, d] = iso.split('-').map(Number);
+      return new Date(y, m - 1, d + days).toLocaleDateString('en-CA');
+    },
+    [],
+  );
+  /** 레일에 보이는 5칸의 **첫 날**. 오너 레퍼런스처럼 오늘이 가운데(3번째)에 오게 시작한다. */
+  const [railStart, setRailStart] = useState(() => '');
+  const [selectedDate, setSelectedDate] = useState(() => '');
+  // 최초 1회만 오늘 기준으로 맞춘다(이후 사용자의 선택을 덮지 않는다 — 상세를 보고 돌아와도 유지).
+  useEffect(() => {
+    if (selectedDate) return;
+    setSelectedDate(today);
+    setRailStart(isoAdd(today, -2));
+  }, [today, selectedDate, isoAdd]);
+
+  const railDays = useMemo(
+    () => (railStart ? Array.from({ length: 5 }, (_, i) => isoAdd(railStart, i)) : []),
+    [railStart, isoAdd],
+  );
+
+  /** 선택한 날짜의 대회 — 종료된 것은 뺀다(위 `upcoming` 과 **같은 규칙**: 날짜만 보면 심야에 끝난 대회가 남는다). */
+  const daySchedules = useMemo(
+    () => (selectedDate
+      ? schedules
+        .filter((s) => s.approved && s.date === selectedDate && scheduleStatus(s.date, s.startTime) !== 'ended')
+        .sort(compareByStartThenBoost)
+      : []),
+    [schedules, selectedDate],
+  );
+  /** 화면에는 상한만큼만 그린다. 🔴 건수는 **자르기 전 전체 수**다(§6-1 — 화면이 거짓말하지 않게). */
+  const dayVisible = useMemo(() => daySchedules.slice(0, 8), [daySchedules]);
+
+  /** `2026-09-20` → `9월 20일 (일)`. 레퍼런스 표기 그대로. 시간대 영향 없이 문자열로 만든다. */
+  const dayTitle = useCallback((iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    if (!y || !m || !d) return iso;
+    const dow = ['일', '월', '화', '수', '목', '금', '토'][new Date(y, m - 1, d).getDay()];
+    return `${m}월 ${d}일 (${dow})`;
+  }, []);
+
+  /** 🔴 폴백은 **오늘을 고른 기본 상태에서만** 쓴다(실행문 UI-2).
+   *  다른 날짜를 직접 골랐는데 그 날 0건이면 그 날의 빈 상태를 보여야 한다 —
+   *  거기에 다른 날짜 카드를 섞으면 사용자가 그것을 고른 날 대회로 읽는다. */
+  const useFallback = selectedDate === today && upcoming.length === 0 && nextUp.length > 0;
+
   // 2026-09-18: 홈 첫 줄이 '오늘 대회 N개' 를 안 말하게 되면서 이 수치의 유일한 소비자가 없어졌다.
   //   다시 필요해지면 같은 조리법으로 되살리면 된다(승인된 것 · 오늘 · 끝나지 않은 것).
 
@@ -603,21 +656,72 @@ export default function HomeTab({
         {/* N06(2026-09-13, 실행문 §7.1): 여기 있던 독립 이벤트 카드(home-event-banner/menu)는 위 PosterCarousel 안의 이벤트 슬라이드로 옮겼다(eventSlide).
             세 갈래(응답 전 · 참여 가능 · 그 밖)는 그대로고 진입은 언제나 남는다 — 별도 카드를 다시 만들지 않는다. */}
 
-        {/* ── 오늘·내일 일정 ─────────────────────────────────────────────────
-            ⚠ '오늘·내일 일정'·'전체 일정' 문구는 e2e 셀렉터가 잡는다(click-paths·smoke·perf). 유지. */}
-        <section className="px-page-x pt-5">
-          <header className="flex items-baseline justify-between pb-2.5">
-            <span className="flex min-w-0 items-center gap-1.5">
-              <h3 className={H3_CLS}>오늘·내일 일정</h3>
-              {/* 시안(code.html:164)의 영문 보조 배지. 장식이 아니라 **같은 말의 영문 표기**라
-                  스크린리더에는 중복이므로 aria-hidden. 좁은 폭에서는 숨긴다(360 에서 '전체 일정'과 부딪친다). */}
-              <span aria-hidden className="hidden shrink-0 rounded-badge border border-accent-400/25 bg-accent-300/10 px-1.5 py-0.5 text-[10px] font-bold tracking-tight text-accent-200 min-[390px]:inline-block">
-                Upcoming Tournaments
-              </span>
-            </span>
-            <button type="button" onClick={onExplore} className={MORE_CLS}>
-              전체 일정 <Icon name="chevron-right" size={13} />
+        {/* ── 일정(오너 레퍼런스 2026-09-20) ────────────────────────────────
+            🔴 `id="home-schedule"` 는 **계측 손잡이**다. `e2e/perf.spec.ts` 의 `scheduleDrift` 가
+              LayoutShift `sources[].node` 를 문자열로 직렬화해 매칭하는데, 종전에는 그 문자열에
+              들어 있던 제목 '오늘·내일 일정' 으로 찾고 있었다. 제목을 바꾸면 매칭이 영영 실패해
+              **드리프트가 0 으로 거짓 통과**한다. `describe()` 가 `#id` 를 직렬화하므로 여기로 옮긴다.
+              (같은 이유로 이 id 를 지우거나 이름을 바꾸지 마라 — 지우면 그 게이트가 빈손이 된다.) */}
+        <section id="home-schedule" data-testid="home-schedule" className="px-page-x pt-5">
+          {/* ① 날짜 레일 — 5칸 + 좌우 이동. 레퍼런스의 상단 레일.
+              ⚠ 화살표에 `.hit` 을 쓰지 않는다 — `::after` 가 44px 를 중앙에서 펼치는데 이 둘은
+                레일의 **양 끝**이라 그 오버행이 컨테이너 밖으로 나가 `scrollWidth` 를 1px 늘렸다
+                (실측 client 354 / scroll 355 — 모든 폭에서). 이 저장소가 경계하는 '숨은 가로 스크롤' 이다.
+                `src/index.css` 의 `.hit` 함정 주석이 적어 둔 대로 **실제 박스를 44px 로** 키운다. */}
+          <div data-testid="home-date-rail" className="mb-2.5 flex items-stretch gap-1 rounded-aura border card-aura p-1">
+            <button type="button" aria-label="이전 날짜" data-testid="home-date-prev"
+              onClick={() => setRailStart((v) => isoAdd(v, -5))}
+              className="grid min-h-[44px] w-11 shrink-0 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-high hover:text-ink-secondary">
+              <Icon name="chevron-left" size={15} />
             </button>
+            {/* ⚠ 글자 200% 확대에서 화살표(`w-11`=rem)가 93.5px × 2 로 커져 칸을 19.8px 로 짓눌렀다
+                — 날짜 글자가 18/21 로 **잘렸다**(e2e home-flow-fit 이 잡았다).
+                이 저장소 기준은 "확대에서 2줄 되는 것은 실패가 아니고 **잘림**이 실패" 다.
+                → `flex-wrap` 으로 접히게 하고, 칸에서 `min-w-0` 을 **뺀다** — 그게 있으면
+                  flex 항목이 글자보다 작게 짓눌려 잘린다. 빼면 min-content 가 바닥이 돼 접힌다.
+                ⚠ 100% 에서는 폭이 남아 wrap 이 안 일어난다 — 5칸 한 줄 그대로다(실측으로 확인). */}
+            <div className="flex min-w-0 flex-1 flex-wrap">
+              {railDays.map((iso) => {
+                const [, mm, dd] = iso.split('-').map(Number);
+                const dow = ['일', '월', '화', '수', '목', '금', '토'][new Date(Number(iso.slice(0, 4)), mm - 1, dd).getDay()];
+                const on = iso === selectedDate;
+                return (
+                  <button key={iso} type="button" data-date-pill={iso} aria-pressed={on}
+                    aria-label={`${mm}월 ${dd}일 ${dow}요일 일정 보기`}
+                    onClick={() => setSelectedDate(iso)}
+                    className={[
+                      'flex min-h-[44px] flex-1 basis-[2.5rem] flex-col items-center justify-center rounded-[8px] px-0.5 leading-tight transition-colors',
+                      on
+                        // 선택일 강조 — 레퍼런스의 금색 테두리. 색만으로 구분하지 않게 테두리도 같이 준다(§접근성).
+                        // 🔴 2026-09-20 — 종전 `text-gold-300` 이었는데 **라이트 테마에서 대비 1.43:1** 이었다
+                        //   (e2e home-flow-fit 이 잡았다: `(일) 1.43:1 9px rgba(252,213,53,.8) on rgb(255,255,255)`).
+                        //   금색은 어두운 지면에서만 산다. 테두리·배경은 그대로 두고 **글자만** 본문색으로 돌린다
+                        //   — 선택 표시는 색 하나에 의존하지 않는다(색맹 고려 · `aria-pressed` 도 같이 준다).
+                        ? 'border border-gold-300/70 bg-gold-300/10 text-ink-primary'
+                        : 'border border-transparent text-ink-secondary hover:bg-surface-high',
+                    ].join(' ')}>
+                    <span className="text-[11px] font-bold tabular-nums">{mm}.{dd}</span>
+                    <span className={`text-[9px] ${on ? 'text-ink-secondary' : 'text-ink-muted'}`}>({dow})</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button type="button" aria-label="다음 날짜" data-testid="home-date-next"
+              onClick={() => setRailStart((v) => isoAdd(v, 5))}
+              className="grid min-h-[44px] w-11 shrink-0 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-high hover:text-ink-secondary">
+              <Icon name="chevron-right" size={15} />
+            </button>
+          </div>
+
+          {/* ② 선택일 제목 + 실제 건수 — 레퍼런스의 "9월 20일 (일) 일정 / 총 6개의 토너먼트".
+              ⚠ 건수는 **자르기 전 전체 수**(daySchedules)다. 화면에 8개만 그려도 숫자는 사실이어야 한다. */}
+          <header className="flex items-baseline justify-between gap-2 pb-2.5">
+            <h3 data-testid="home-schedule-title" className={H3_CLS}>
+              {selectedDate ? `${dayTitle(selectedDate)} 일정` : '일정'}
+            </h3>
+            <span data-testid="home-schedule-count" className="shrink-0 text-2xs text-ink-muted">
+              {useFallback ? '오늘·내일 예정 없음' : `총 ${daySchedules.length}개의 대회`}
+            </span>
           </header>
           {!loaded ? (
             <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura" aria-busy="true">
@@ -645,11 +749,15 @@ export default function HomeTab({
             /* 세 번째 갈래(§11) — '없음'이 아니라 '못 불러옴'. 카드·문구·재시도 버튼은 일정 탐색과
                같은 정본(LoadErrorCard)을 쓴다. compact: 홈에서는 이 섹션 하나가 화면을 다 먹으면 안 된다. */
             <LoadErrorCard compact error={schedulesError} what="대회 목록" onRetry={onRetrySchedules} />
-          ) : upcoming.length === 0 && nextUp.length === 0 ? (
+          ) : daySchedules.length === 0 && !useFallback ? (
             <div className="rounded-aura border card-aura px-3 py-4">
               {/* 빈 상태는 **무엇이 없고 지금 무엇을 할 수 있는지**를 말한다 — 이제 여기까지 오는 것은
                   '오늘·내일도 없고 앞으로도 없다' 는 뜻이다(다음 일정이 하나라도 있으면 아래 갈래로 간다). */}
-              <p className="t-body text-ink-muted">예정된 대회가 없어요</p>
+              {/* 🔴 어느 날짜가 비었는지 **말한다.** 종전 문구는 '예정된 대회가 없어요' 라
+                  날짜를 골라 둘러보는 화면에서는 '전체가 없다' 로 읽힌다. */}
+              <p data-testid="home-schedule-empty" className="t-body text-ink-muted">
+                {selectedDate ? `${dayTitle(selectedDate)}에는 예정된 대회가 없어요` : '예정된 대회가 없어요'}
+              </p>
               <button type="button" onClick={onExplore}
                 className="mt-2 inline-flex items-center gap-1 rounded-badge bg-surface-high px-3 py-2 t-desc font-bold text-ink-secondary transition-colors hover:bg-surface-float/70">
                 전체 일정에서 찾아보기 <Icon name="chevron-right" size={13} />
@@ -659,19 +767,20 @@ export default function HomeTab({
             <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
               {/* 🔴 다음 일정 갈래 — 제목은 '오늘·내일' 인데 목록은 그 뒤 것이다. 그 사실을 **먼저** 말한다.
                   말 없이 9/21 대회만 놓으면 사용자는 그것을 오늘 대회로 읽는다(2026-09-19 오너 지시 반영). */}
-              {upcoming.length === 0 && (
+              {useFallback && (
                 <p data-testid="home-upcoming-fallback" className="bg-surface-high/40 px-3 py-2 text-2xs leading-tight text-ink-muted">
                   오늘·내일은 예정 대회가 없어요 · <b className="font-bold text-accent-200">가장 가까운 일정</b>
                 </p>
               )}
-              {(upcoming.length ? upcoming : nextUp).map((s, i) => (
+              {(useFallback ? nextUp : dayVisible).map((s, i) => (
                 <Fragment key={s.id}>
                 {(() => {
-                  // 날짜 머리말 — 일정탐색과 **같은 정본**(lib/scheduleDateGroups).
-                  //   홈은 '오늘·내일' 이라 보통 그룹이 1~2개다 — 그래도 그 둘이 안 갈리던 것이
-                  //   이번 지시의 발단이다(실측: 9/20·9/20·9/21 이 구분 없이 나열됨).
-                  // ⚠ 홈은 거리 정렬이 없다 — 항상 날짜순이라 끄는 조건이 필요 없다.
-                  const h = dateHeaderAt(upcoming.length ? upcoming : nextUp, i);
+                  // 🔴 날짜 머리말은 **폴백 갈래에서만** 그린다(2026-09-20 레퍼런스 UI-2).
+                  //   일반 갈래는 **고른 날짜 하나**만 보여 주고 위 제목이 이미 그 날짜를 말하므로,
+                  //   머리말까지 둘면 화면에 날짜가 **두 번** 나온다(실행문이 명시한 금지).
+                  //   반대로 폴백은 여러 날짜가 섮여 있어 머리말이 **없으면** 다른 날 대회를 오늘 것으로 읽는다.
+                  // ⚠ 정본은 `lib/scheduleDateGroups` 하나다 — 일정탐색과 같은 함수를 쓴다.
+                  const h = dateHeaderAt(nextUp, i, useFallback);
                   return h ? (
                     <p data-date-header={s.date}
                       className="bg-surface-high/40 px-3 py-1.5 text-2xs font-bold leading-tight text-ink-secondary">{h}</p>

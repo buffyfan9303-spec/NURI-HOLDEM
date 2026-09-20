@@ -288,7 +288,11 @@ function FavoriteButton({
         //   오너가 지적한 '버튼이 쓸데없이 커 보이는 것' 과 무관하다 — 보이는 것은 아이콘뿐이다.
         // ⚠ `h-11`(46.75px @루트 17px) ≥ 44 라 오버행이 0 이 된다. 44px 를 직접 박지 않는 이유는
         //   루트 폰트가 17px 이라 rem 유틸이 6.25% 크기 때문이다(CLAUDE.md).
-        '-my-1 grid h-11 w-11 shrink-0 place-items-center rounded-full',
+        // ⚠ `-my-2`(−8.5px × 2) — 박스는 46.75px 로 두고 **레이아웃 몲만** 29.75px 로 줄인다.
+        //   2026-09-20 3차: 글자를 줄이고 대회명이 1줄이 되자 가운데 열이 챜챜해져
+        //   오른쪽 열(♥ + 시각)이 카드 높이를 정하기 시작했다(실측 +14.4px).
+        //   터치 영역 46.75px 는 그대로다 — 줄인 것은 주변 여백이지 누를 수 있는 면적이 아니다.
+        '-my-2 grid h-11 w-11 shrink-0 place-items-center rounded-full',
         'transition-[color,transform] active:scale-90',
         on ? 'text-danger-light' : 'text-ink-muted hover:text-ink-secondary',
       ].join(' ')}
@@ -400,8 +404,8 @@ function Metric({ label, value, tone, title }: { label: string; value: string; t
   title?: string }) {
   return (
     <div className="min-w-0 sm:min-w-[4.5rem]" title={title}>
-      <div className="text-[9px] font-bold uppercase leading-tight text-ink-muted [overflow-wrap:anywhere] min-[360px]:text-[10px]">{label}</div>
-      <div className={`text-xs font-extrabold leading-tight tracking-tight tabular-nums [overflow-wrap:anywhere] min-[360px]:text-[0.8125rem] ${tone ?? 'text-ink-primary'}`}>{value}</div>
+      <div className="text-[8.5px] font-bold uppercase leading-tight text-ink-muted [overflow-wrap:anywhere] min-[360px]:text-[9px]">{label}</div>
+      <div className={`text-[11px] font-extrabold leading-tight tracking-tight tabular-nums [overflow-wrap:anywhere] min-[360px]:text-xs ${tone ?? 'text-ink-primary'}`}>{value}</div>
     </div>
   );
 }
@@ -482,7 +486,7 @@ function ListCard({
           posterColor={venue?.themeColor ?? schedule.posterColor}
           fallbackText={venueInitial(schedule.pubName)}
           title={schedule.pubName}
-          className="h-[44px] w-[44px] rounded-[10px] min-[360px]:h-[56px] min-[360px]:w-[56px] min-[360px]:rounded-[11px]"
+          className="h-[42px] w-[42px] rounded-[9px] min-[360px]:h-[48px] min-[360px]:w-[48px] min-[360px]:rounded-[10px]"
           thumbWidth={128}
           priority={priority}
           vtName={vtActive ? 'vt-poster' : undefined}
@@ -533,7 +537,14 @@ function ListCard({
           대신 카드가 그만큼 길어진다(320: 3줄 카드 +21px).
         ⚠ 등급 배지는 **h3 안의 인라인**이다. 형제로 빼면 제목이 2줄일 때 배지가 통째로 아랫줄로 밀려
           '제목 오른쪽'(목업)이 아니라 별도 줄이 된다(실측 320·360: 카드 +18px). 인라인이면 마지막 줄 끝에 붙는다. */}
-      <h3 className="min-w-0 line-clamp-3 break-keep text-base font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-[0.9375rem] min-[390px]:line-clamp-2"
+      {/* 🔴 2026-09-20 3차 — 오너 목업 대조 후 **글자를 줄였다**("글자 크기 줄여서 잘 맞춰").
+          목업에서는 대회명이 **한 줄**에 서고 카드가 훨씬 납작하다(목업 ≈74px vs 종전 구현 109px).
+          종전: `text-base`(17px) + 390 미만 3줄 허용 → 더미 제목이 2줄을 먹어 카드가 길어졌다.
+          지금: 한 단계 낮춰 `text-[0.875rem]`(14.875px), 390+ 에서도 **2줄 상한은 유지**한다.
+          ⚠ 1줄로 **강제하지 않는다.** 오너가 2026-09-12 에 "1줄로 강제해 말줄임하면 정작 무슨
+            대회인지가 사라진다" 고 했다 — 글자를 줄여 대개 한 줄에 들어가게 하되, 긴 제목은 접힌다.
+          ⚠ 320px 미만에서만 3줄을 허용한다(가운데가 142.5px 라 2줄로 자르면 꼬리가 사라진다). */}
+      <h3 className="min-w-0 line-clamp-3 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-xs min-[360px]:line-clamp-2"
         title={schedule.title}>
         {titleWithoutGtd(schedule.title, !!prize)}
         {grade && (
@@ -606,8 +617,8 @@ function ListCard({
         )}
         <div className="flex items-center gap-1">
           <p className="flex min-w-0 flex-col items-end leading-tight">
-            <span className="text-[9px] font-bold leading-tight text-ink-muted min-[360px]:text-[10px]">시작</span>
-            <span className="text-[0.9375rem] font-extrabold leading-tight tracking-tight tabular-nums text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-lg">
+            <span className="text-[8.5px] font-bold leading-tight text-ink-muted min-[360px]:text-[9px]">시작</span>
+            <span className="text-[0.875rem] font-extrabold leading-tight tracking-tight tabular-nums text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-base">
               {schedule.startTime || '—'}
             </span>
           </p>

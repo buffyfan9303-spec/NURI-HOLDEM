@@ -32,7 +32,7 @@ test.describe('캐시 퍼스트 — 재방문 즉시 콘텐츠', () => {
     // React 마운트 완료(루트에 내용) 를 기다렸다가 — 그 첫 순간을 검사한다
     await page.waitForFunction(() => (document.querySelector('#root')?.children.length ?? 0) > 0);
     const upcomingSection = page
-      .getByRole('heading', { name: '오늘·내일 일정', exact: true })
+      .getByTestId('home-schedule-title')
       .locator('xpath=ancestor::section[1]');
     await expect(upcomingSection).toHaveCount(1);
     const busyAtMount = await upcomingSection.locator('[aria-busy="true"]').count();

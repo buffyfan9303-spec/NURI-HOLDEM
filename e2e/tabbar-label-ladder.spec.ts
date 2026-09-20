@@ -7,8 +7,6 @@
 //
 // ⚠ 크기 단언만으로는 부족하다 — `text-[12.75px]` 로 바꿔도 통과한다.
 //   그래서 **루트 폰트를 키워 라벨이 따라 커지는지**(= 진짜 rem 인지)를 함께 잰다. 이게 이 스펙의 핵심 계약이다.
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack } from './_session';
 
@@ -65,57 +63,7 @@ for (const width of [390, 320]) {
 }
 
 // 이 스펙의 핵심. 절대 px 로 되돌리면 **여기서만** 터진다.
-test('탭바 라벨·배지가 rem 이다 — 루트를 키우면 같이 커진다(200% 확대)', async ({ page }) => {
-  test.setTimeout(120_000);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
-  await stabilizeBackstack(page);
-  await page.locator(NAV).first().waitFor({ state: 'attached', timeout: 20_000 });
-
-  const before = await page.evaluate(readTabbar);
-  expect(before, '탭바를 못 찾았다').not.toBeNull();
-
-  await page.evaluate(() => { document.documentElement.style.fontSize = '34px'; });
-  await page.waitForTimeout(600);
-  const after = await page.evaluate(readTabbar);
-  console.log('ZOOM200 ' + JSON.stringify(after));
-  expect(after).not.toBeNull();
-
-  for (let i = 0; i < after!.rows.length; i++) {
-    const b = before!.rows[i], a = after!.rows[i];
-    // 루트가 17 → 34(정확히 2배)이므로 rem 이면 글자도 2배가 된다. 절대 px 이면 그대로다.
-    expect(a.fs, `"${b.text}" 라벨이 확대를 안 받는다 — 절대 px 이다 (${b.fs} → ${a.fs})`)
-      .toBeGreaterThan(b.fs * 1.5);
-  }
-  // 커진 라벨이 옆 칸을 덮지 않는지 — 확대는 받되 겹치면 내비가 못 읽힌다.
-  expect(after!.overlap, '200% 확대에서 라벨이 옆 칸과 겹친다').toBe(0);
-
-  // 배지도 같은 계약이지만 count>0 은 라이브 게임 데이터가 있어야 React 가 그린다.
-  // → **소스에서 실제 className 을 떠다가** 주입한다. 하드코딩하면 App.tsx 를 되돌려도
-  //   테스트가 그대로 통과해 계약이 아니게 된다(음성 대조로 확인했다).
-  const badgeClass = (() => {
-    const src = readFileSync(fileURLToPath(new URL('../src/App.tsx', import.meta.url)), 'utf8');
-    const hits = src.match(/className="([^"]*rounded-full bg-danger[^"]*)"/g) ?? [];
-    expect(hits.length, '탭바 배지 className 앵커가 1개가 아니다 — 대조 무효').toBe(1);
-    return /className="([^"]*)"/.exec(hits[0])![1];
-  })();
-  console.log('BADGE_CLASS ' + badgeClass);
-  expect(badgeClass, '탭바 배지가 사다리 밖 임의 px 로 돌아갔다(§T1 규칙 2)').not.toMatch(/text-\[\d+(\.\d+)?px\]/);
-
-  const badge = await page.evaluate((cls) => {
-    const host = document.querySelector('nav[aria-label="하단 내비게이션"] button > span');
-    if (!host) return null;
-    const s = document.createElement('span');
-    s.className = cls;
-    s.textContent = '99+';
-    host.appendChild(s);
-    const out = { fs: parseFloat(getComputedStyle(s).fontSize), clipped: s.scrollWidth > s.clientWidth + 1 };
-    s.remove();
-    return out;
-  }, badgeClass);
-  console.log('BADGE ' + JSON.stringify(badge));
-  if (badge) {
-    expect(badge.fs, `배지가 확대를 안 받는다 — 절대 px 이다 (${badge.fs}px @root 34px)`).toBeGreaterThan(17);
-    expect(badge.clipped, '배지 숫자가 두 자리에서 잘린다').toBe(false);
-  }
-});
+// 🔴 2026-09-20 오너 지시: "그런 사람 없어 앞으로 200% 확대 다 빼".
+//   루트 글자 17→34px 로 훌내 내던 200% 확대 케이스를 **전부 제거**했다.
+//   ⚠ 되살리지 마라 — 오너가 사용자 분포를 보고 내린 결정이다.
+//   ⚠ 100% 케이스는 그대로 둔다 — 긴 한글 이름에서 생기는 잘림·겹침은 거기서 계속 잡는다.

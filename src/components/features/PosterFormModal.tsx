@@ -17,11 +17,26 @@ import PresetPicker from './PresetPicker';
 import Icon from '../atoms/Icon';
 import { regCloseLevelFromText } from '../../lib/regClose';
 
+/** 포스터 저장의 **실제 결과**. 반복 등록이 있어 '성공/실패' 두 값으로는 부족하다 —
+ *  3주 중 2주만 나간 경우를 사용자가 구별할 수 있어야 한다(App 이 이미 그렇게 판정하고 있었다). */
+export interface PosterSubmitResult {
+  /** 요청한 것이 **전부** 저장됐나. 부분 성공은 false 다. */
+  ok: boolean;
+  /** 실제로 저장된 건수. */
+  saved: number;
+  /** 요청한 건수(반복 등록이면 주 수, 수정이면 1). */
+  total: number;
+}
+
 interface PosterFormModalProps {
   open: boolean;
   onClose: () => void;
   schedule?: Schedule | null;
-  onSubmit: (data: PosterFormData) => void;
+  /** 🔴 2026-09-20 — 결과를 **돌려줘야 한다**. 종전에는 `=> void` 라 모달이 서버 결과를 보기 전에
+   *  성공 토스트를 띄우고 닫아 버렸다(거짓 성공 + 입력 소실). 실제로는 App 이 `Promise.allSettled` 로
+   *  부분 성공까지 정확히 판정하고 있었는데 그 결과가 폼까지 오지 않았다.
+   *  `void` 반환도 계속 받는다 — 결과를 안 주면 종전대로 낙관 처리한다(기존 호출부 보호). */
+  onSubmit: (data: PosterFormData) => void | PosterSubmitResult | Promise<PosterSubmitResult>;
   /** 관리자 직접 등록 시 선택 가능한 홀덤펍 목록 */
   venues?: { id: string; name: string; region?: string }[];
   /** 신규 작성 시 "지난 포스터 불러오기" 후보(전체 일정 — 내부에서 내 것만 필터) */
@@ -117,6 +132,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   const [imgFile,    setImgFile]    = useState<File | null>(null);
   const [imgPreview, setImgPreview] = useState<string>('');
   const [uploading,  setUploading]  = useState(false);
+  /** 저장 진행 중 — 버튼을 잠가 **중복 제출로 포스터가 두 벌 생기는 것**을 막는다.
+   *  종전에는 결과를 안 기다리고 곧바로 닫혀서 이 상태가 있을 자리조차 없었다(그게 결함이었다). */
+  const [saving,     setSaving]     = useState(false);
   // 레지마감: 레벨/시간 분리 입력 (둘 중 하나 이상 필수). 저장 시 'NLV HH:MM' 형태로 합쳐 regCloseTime 에 반영
   const [regLevel,   setRegLevel]   = useState('');
   const [regTime,    setRegTime]    = useState('');
@@ -292,9 +310,28 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
       setUploading(false);
     }
 
-    onSubmit({ ...form, regCloseTime: regClose, posterUrl });
+    // 🔴 2026-09-20 — **결과를 기다린다.** 종전에는 `onSubmit(...)` 을 부르고 곧바로
+    //   성공 토스트 + `onClose()` 였다. 그래서 저장이 실패하면 업주는
+    //   ① '포스터가 등록되었습니다'(성공) → ② '포스터 등록에 실패했습니다'(실패) 를 연달아 보고,
+    //   그때 폼은 이미 닫혀 **입력이 통째로 사라진 뒤**였다. 3주 중 1주만 실패한 경우도 똑같이 '성공' 이었다.
+    //   App 쪽은 이미 `Promise.allSettled` 로 부분 성공까지 정확히 판정하고 있었다 —
+    //   그 결과가 폼까지 오지 않은 것이 결함이었다.
+    setSaving(true);
+    let res: PosterSubmitResult | void;
+    try {
+      res = await onSubmit({ ...form, regCloseTime: regClose, posterUrl });
+    } catch {
+      // onSubmit 이 던지는 경우까지 막는다 — 던져도 폼은 열린 채 남아야 한다.
+      res = { ok: false, saved: 0, total: 1 };
+    }
+    setSaving(false);
+    // 결과를 안 주는 호출부(구 계약)는 종전대로 낙관 처리한다.
+    const ok = res == null || res.ok;
+    if (!ok) return; // ⚠ 실패·부분 성공은 **닫지 않는다.** 구체적인 실패 문구는 App 이 이미 띄웠다.
+
     toast.show(isEdit ? '포스터가 수정되었습니다' : '포스터가 등록되었습니다', 'success');
-    // PL3: '이 설정을 프리셋으로도 저장' — 등록의 부산물로 프리셋이 쌓인다(실패해도 포스터 등록엔 영향 없음)
+    // PL3: '이 설정을 프리셋으로도 저장' — 등록의 부산물로 프리셋이 쌓인다(프리셋 실패는 포스터와 무관).
+    //   ⚠ 포스터가 **실제로 저장된 뒤**에만 만든다. 종전에는 저장 실패에도 프리셋이 남았다.
     if (alsoPreset && presetVenueId && form.title.trim()) {
       saveGamePreset(presetVenueId, form.title.trim(), presetFromPosterForm({ ...form, regCloseTime: regClose, posterUrl }))
         .then(() => toast.show('게임 프리셋으로도 저장했어요. 장부·클락에서 그대로 불러올 수 있어요', 'success'))
@@ -680,8 +717,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
         <div className="flex gap-2 pt-2">
           <button type="button" onClick={onClose} className="btn-ghost flex-1">취소</button>
-          <button type="submit" disabled={uploading} className="btn-primary flex-1 disabled:opacity-60">
-            {uploading ? '업로드 중…' : isEdit ? '수정 완료' : '등록하기'}
+          <button type="submit" disabled={uploading || saving} className="btn-primary flex-1 disabled:opacity-60">
+            {uploading ? '업로드 중…' : saving ? '저장 중…' : isEdit ? '수정 완료' : '등록하기'}
           </button>
         </div>
       </form>

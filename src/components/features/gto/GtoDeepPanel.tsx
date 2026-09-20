@@ -264,8 +264,10 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
               key={m}
               type="button"
               onClick={() => deep.setVillainMode(m)}
+              // h-7(29.8px)는 tap-y-44 오버행(±6px)을 더해도 41.75px로 44px에 못 미친다(2026-09-20 실측 확정).
+              // 오버행이 아니라 박스 자체를 44px로 키운다 — h-11(46.75px)이 아니라 정확히 h-[44px].
               className={[
-                'h-7 rounded-input px-3 text-2xs font-semibold transition-colors',
+                'h-[44px] rounded-input px-3 text-2xs font-semibold transition-colors',
                 deep.villainMode === m ? 'bg-accent-300 text-white' : 'border border-border-default bg-surface-high text-ink-secondary',
               ].join(' ')}
             >
@@ -331,14 +333,16 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
           같은 앱에서 카드를 고르는 방법이 둘이면 그게 버그다. 순서를 그쪽에 맞춘다. */}
       <CalcCard>
         <div className="flex items-center justify-between">
-          <div className="flex gap-1">
+          {/* data-testid: Section() 의 카드 슬롯 제목 버튼("Hero"/"Villain")과 텍스트가 같아 e2e에서 구분이 안 된다 */}
+          <div data-testid="gto-target-tabs" className="flex gap-1">
             {TARGET_TABS.filter(({ t }) => !(rangeMode && t === 'villain')).map(({ t, label }) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => deep.setTarget(t)}
+                // 위 빌런 모드 토글과 같은 이유로 h-[44px](오버행이 아니라 실제 박스).
                 className={[
-                  'h-7 rounded-input px-2.5 text-2xs font-semibold transition-colors',
+                  'h-[44px] rounded-input px-2.5 text-2xs font-semibold transition-colors',
                   deep.currentTarget === t ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary border border-border-default',
                 ].join(' ')}
               >

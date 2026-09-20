@@ -251,7 +251,12 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
 
   for (const w of [320, 360, 390, 412, 768, 1280, 1440]) {
     for (const theme of ['dark', 'light'] as const) {
-      for (const zoom of [false, true]) {
+      // 🔴 2026-09-20 오너 지시: "그런 사람 없어 앞으로 200% 확대 다 빼".
+      //   루트 글자 17→34px 로 흉내 내던 200% 확대 케이스를 **전부 제거**했다.
+      //   ⚠ 되살리지 마라 — 오너가 사용자 분포를 보고 내린 결정이다.
+      //   ⚠ 100% 케이스는 그대로 둔다. 긴 한글 이름에서 생기는 잘림·겹침은 거기서 계속 잡는다
+      //     (확대가 잡아주던 레이아웃 취약점의 상당수가 100%의 320·360 최악 데이터에도 나온다).
+      for (const zoom of [false]) {
         test(`${w}px · ${theme} · ${zoom ? '200%' : '100%'} — 가로·세로 잘림 0`, async ({ page }) => {
           test.setTimeout(60_000);
           const external: string[] = [];

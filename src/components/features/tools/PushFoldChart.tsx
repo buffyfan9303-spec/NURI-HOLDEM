@@ -73,12 +73,14 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
       {/* 포지션 */}
       <div className="space-y-1">
         <p className="text-2xs font-bold text-ink-secondary">내 자리</p>
-        <div className="grid grid-cols-4 gap-1">
+        <div data-testid="pushfold-positions" className="grid grid-cols-4 gap-1">
           {POSITIONS.map((p) => {
             const on = p.k === k;
             return (
+              // grid-cols-4 gap-1(4.25px) — 세로 이웃 간격이 tap-y-44 오버행(위아래 6px씩)보다 좁아
+              // 겹치면 아랫줄 버튼이 윗줄 버튼의 탭을 가로챌 수 있다(2026-09-20 실측 확정). 박스 자체를 44px로.
               <button key={p.k} type="button" onClick={() => setK(p.k)} aria-pressed={on} title={p.desc}
-                className={['h-8 rounded-input text-2xs font-bold leading-none whitespace-nowrap border transition-colors focus:outline-none',
+                className={['h-[44px] rounded-input text-2xs font-bold leading-none whitespace-nowrap border transition-colors focus:outline-none',
                   on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
                 {p.label}
               </button>

@@ -1256,12 +1256,38 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
   //   행간만 다르고(t-tab 1rem), 이 바가 대시보드에도 뜨는 순간 같은 크기에 행간이 둘이 된다
   //   — 눈으로는 2px 라 안 보이지만 문단 호흡이 어긋난다(store-rhythm 스펙이 잡는다).
   //   알약은 h-9 고정이라 행간을 올려도 높이는 그대로다(19 < 36). 굵기는 t-desc 가 400 이라 직접 명시.
-  const chip = (on: boolean) => ['relative inline-flex h-9 min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:flex-none sm:basis-auto sm:px-3',
+  // 🔴 2026-09-20 오너(PC 내 매장 단계 바 사진): "넓은 PC 패널에서 7항목이 작은 글씨로 왼쪽에 몰리고
+  //   이용권의 역할이 섞여 보인다." 실측(1024×900 · 업주 픽스처 · 권한 5종)으로 확인·정정했다:
+  //     · 넘침은 **0** 이다 — 이건 잘림 문제가 아니다. `overflow: 0` 이 다섯 조합 전부.
+  //     · 칩이 실제로 쓴 폭은 바(748px)의 **58%**(7칸)뿐이고 나머지 317px 가 빈다.
+  //       권한이 적으면 더 심하다 — '포스터만' 은 **16%**.
+  //     · 이용권 버튼의 `role` 은 **null** 인데 `role=tablist` 안에 있었다(ARIA 위반).
+  //   ⚠ 실행문의 A안(`lg:flex-1 lg:basis-0` 만)은 **실측으로 반증했다**: 단계가 1개뿐인 권한에서
+  //     그 한 칸이 16%→100% 로 늘어나 700px 짜리 버튼이 된다. 그래서 **폭 상한**을 같이 둔다.
+  //   → lg 이상에서만 단계 칩이 남는 폭을 나눠 갖되 `lg:max-w-[9rem]` 로 상한을 두고,
+  //     이용권은 tablist **밖**의 별도 버튼으로 오른쪽 끝(`lg:ml-auto`)에 세운다.
+  //   ⚠ 모바일·태블릿(<1024)의 기존 배치는 한 줄도 건드리지 않는다 — sm: 분기 그대로다.
+  // 🔴 2026-09-20 유효 터치 — 칩이 `h-9`(=38.25px, 루트 17px)라 **44px 계약 미달**이었다.
+  //   히트테스트로 확정했다(추정 아님): 중심 ±21.5px 지점이 위·아래 **둘 다 버튼에 안 닿았다.**
+  //   ⚠ `tap-y-44`(::before inset -6px 0)로 늘리려다 **반만 동작하는 것을 실측으로 잡았다** —
+  //     이 바는 `overflow-x-auto` 라 computed `overflow-y` 도 `auto` 가 되어 **아래쪽 오버행이 잘린다**
+  //     (주입 실측: 위 true / 아래 **false**. `overflow:visible` 로 풀면 둘 다 true).
+  //     클래스만 붙이고 넘어갔으면 '고쳤다' 면서 아래 절반은 그대로 안 닿는 상태로 나갔다.
+  //   → 오버행 대신 **칩 자체를 44px** 로 만든다. 잘림도 이웃 가림도 없다.
+  //     `h-11`(2.75rem)은 46.75px 이라 44 가 아니다 — 루트가 17px 이므로 `h-[44px]` 로 못박는다.
+  //   바 높이: 모바일 44.3→50.3px · PC 48.8→50.3px. 가로 넘침은 그대로 0(세로만 바뀐다).
+  const chip = (on: boolean) => ['relative inline-flex h-[44px] min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:flex-none sm:basis-auto sm:px-3 lg:text-sm',
     on ? 'font-bold text-white' : 'font-semibold text-ink-muted hover:text-ink-secondary'].join(' ');
   return (
-    <div ref={ref} role="tablist" aria-label="매장 단계 이동" data-mystore-rail=""
+    <div ref={ref} data-mystore-rail=""
       className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
       <SlidingPill containerRef={ref} activeKey={active} className="rounded-[6px] pill-active" />
+      {/* 탭인 것만 tablist 에 넣는다 — 요약과 1~5단계. 이용권은 '단계'가 아니라 다른 화면으로 가는
+          지름길이라 탭이 아니다(그래서 원래도 role 이 없었다). 시각적으로는 같은 바 안에 남는다.
+          ⚠ `display: contents` 로 감싸면 안 된다 — 박스가 없어져 `owner-layout-verify` 의
+            `toBeVisible` 이 빈 검사가 된다(실측으로 확인). 진짜 flex 박스로 감싼다. */}
+      <div role="tablist" aria-label="매장 단계 이동"
+        className="flex min-w-0 flex-1 items-center gap-0.5">
       {/* 요약(대시보드) — 번호가 없는 유일한 칸이라 '단계가 아니라 돌아가는 곳'으로 읽힌다.
           내용 폭(flex-none)이라 좁다: 6칸이 375 에 들어가는 건 이 칸이 40px 대이기 때문. */}
       <button type="button" role="tab" aria-selected={active === 'dashboard'} data-pill-active={active === 'dashboard' || undefined}
@@ -1272,8 +1298,11 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
       {steps.map((st, i) => {
         const on = active === st.id;
         return (
+          // 🔴 lg 이상에서만 단계 칩이 남는 폭을 나눠 갖는다 — `sm:flex-none` 을 되돌리는 것이다.
+          //   `lg:max-w-[9rem]`(=153px, 루트 17px) 상한이 핵심이다. 상한이 없으면 권한이 적어
+          //   단계가 1개뿐일 때 그 칸 하나가 바 전체(약 700px)로 늘어난다(실측: '포스터만' 16%→100%).
           <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
-            onClick={() => onPick(st.id)} className={chip(on)}>
+            onClick={() => onPick(st.id)} className={[chip(on), 'lg:max-w-[9rem] lg:flex-1 lg:basis-0'].join(' ')}>
             {/* 완료 표시는 **번호 자리를 대신한다** — 칸을 넓히지 않고 상태를 얹는다(옛 숫자 스트립의 ✓ 승계). */}
             <span className="relative inline-flex items-center gap-px">
               {/* ⚠ 2026-09-14 라이트 실측: 단계 번호가 `text-ink-muted/70` 이라 2.76:1 이었다(AA 4.5 미달).
@@ -1286,14 +1315,19 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
           </button>
         );
       })}
+      </div>
       {/* 매장이용권 — 5단계 파이프라인의 다음 칸이 아니라 '5. 정산' 옆의 지름길이라 번호를 안 단다
           (요약 칸과 같은 이유 — progress 는 GameStep 만 알고 voucher 는 모른다).
           ⚠ 2026-09-19 실측(4173, mobile-chromium, 라벨 '매장이용권' 5자였을 때): 7칸째가 되면서
             360/390/412 전부 scrollWidth > clientWidth 로 넘쳤다(각 11/9/7px) — 오너가 스팟에서 지적한
             "우측으로 스크롤 해야지 끝까지 갈 수 있어" 와 같은 부류. '이용권'(3자, title 로 풀네임은 유지)
             으로 줄였다 — 재빌드 후 재실측 필요(2자 이상 줄어드니 이론상 안 넘쳐야 하나 아직 확인 전). */}
+      {/* 🔴 2026-09-20 — tablist **밖**으로 나왔다. 원래도 role 이 없었는데 `role=tablist` 안에 있어
+          ARIA 위반이었다(실측: 다섯 권한 조합 전부 `role: null`). 시각적으로는 같은 바 안이고,
+          lg 이상에서 `ml-auto` 로 오른쪽 끝에 서서 '단계'가 아니라 '지름길'로 읽힌다. */}
       {showVoucher && (
-        <button type="button" onClick={onVoucher} title="매장이용권" className={chip(false)}>
+        <button type="button" onClick={onVoucher} title="매장이용권"
+          className={[chip(false), 'lg:ml-auto lg:shrink-0'].join(' ')}>
           <span className="relative inline-flex items-center gap-1">
             <Icon name="ticket" size={12} className="shrink-0 text-ink-muted" />이용권
           </span>

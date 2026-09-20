@@ -29,8 +29,11 @@ const VS_CAPTION: Record<RangeScenario['group'], string> = {
   vs3bet: '3벳한 상대',
 };
 
+// 이 칩은 전부 overflow-x-auto 가로 스크롤 행 안에 있다(아래 세 사용처) — 그 조상이
+// overflow-y 를 함께 auto 로 만들어 tap-y-44 의 위아래 오버행이 실측(2026-09-20)에서 잘렸다.
+// 그래서 오버행이 아니라 박스 자체를 44px 로 키운다(h-8=34px → h-[44px]).
 const chipCls = (on: boolean) =>
-  ['h-8 shrink-0 rounded-input px-2.5 text-2xs font-bold leading-none border transition-colors focus:outline-none',
+  ['h-[44px] shrink-0 rounded-input px-2.5 text-2xs font-bold leading-none border transition-colors focus:outline-none',
     on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ');
 
 const firstOfGroup = (g: RangeScenario['group']) => RANGE_SCENARIOS.find((s) => s.group === g)!;

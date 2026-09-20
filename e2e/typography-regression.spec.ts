@@ -12,40 +12,10 @@
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack } from './_session';
 
-test('§7 수정 확인 — 200% 확대 텍스트 소실 · 법정 고지 크기', async ({ page }) => {
-  test.setTimeout(180_000);
-
-  // ① 200% 확대에서 GTO 도구 카드 텍스트가 살아 있는가
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
-  await stabilizeBackstack(page);
-  await page.evaluate(() => { document.documentElement.style.fontSize = '34px'; });
-  const tools = page.getByRole('button', { name: /도구|GTO/ }).filter({ visible: true }).first();
-  if (await tools.count()) { await tools.click({ timeout: 10_000 }).catch(() => {}); await page.waitForTimeout(1200); }
-  const spot = await page.evaluate(() => {
-    const el = [...document.querySelectorAll('p')].find((p) => p.textContent?.trim() === 'NURI SPOT');
-    if (!el) return null;
-    return { client: el.clientWidth, scroll: el.scrollWidth, text: el.textContent };
-  });
-  console.log('ZOOM200 ' + JSON.stringify(spot));
-  if (spot) {
-    expect(spot.scroll, `200% 에서 "${spot.text}" 가 여전히 잘린다 (보이는 ${spot.client} < 필요 ${spot.scroll})`)
-      .toBeLessThanOrEqual(spot.client + 1);
-  }
-
-  // ② 법정 고지(사업자 정보)의 실제 크기·행간
-  await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
-  await page.waitForTimeout(600);
-  const biz = await page.evaluate(() => {
-    const el = [...document.querySelectorAll('dl,details,p')]
-      .find((n) => /사업자|대표|1336|통신판매/.test(n.textContent ?? ''));
-    if (!el) return null;
-    const cs = getComputedStyle(el);
-    return { fs: cs.fontSize, lh: cs.lineHeight };
-  });
-  console.log('BIZ ' + JSON.stringify(biz));
-  if (biz) expect(parseFloat(biz.fs), '법정 고지가 여전히 12px 미만이다').toBeGreaterThanOrEqual(12);
-});
+// 🔴 2026-09-20 오너 지시: "그런 사람 없어 앞으로 200% 확대 다 빼".
+//   루트 글자 17→34px 로 훌내 내던 200% 확대 케이스를 **전부 제거**했다.
+//   ⚠ 되살리지 마라 — 오너가 사용자 분포를 보고 내린 결정이다.
+//   ⚠ 100% 케이스는 그대로 둔다 — 긴 한글 이름에서 생기는 잘림·겹침은 거기서 계속 잡는다.
 
 // §7 P0-C(2026-09-12 실측) — BusinessFooter 5항목: 크기·대비·320px 줄바꿈.
 //   ① 약관·정책 링크가 11.69px 로, 이미 t-desc(12.75px)로 올라간 사업자 정보보다 작았다.
@@ -167,8 +137,6 @@ test('360px — NURI SPOT 설명이 말줄임으로 잘리지 않는다', async 
 //   실제로는 가로 잘림을 세로 잘림으로 옮겼을 뿐이고, 1차 수정이 정확히 그 상태로 남아 있었다
 //   (320px·100% 에서 'NURI SPOT' 설명이 clientHeight 32 / scrollHeight 48 로 이미 한 줄 잘려 있었다).
 for (const { w, root, label } of [
-  { w: 390, root: 34, label: '390px · 200% 확대' },
-  { w: 320, root: 34, label: '320px · 200% 확대' },
   { w: 320, root: 17, label: '320px · 100%' },
 ]) {
   test(`GTO 탭 — ${label} 에서 잘리는 글자가 없다`, async ({ page }) => {

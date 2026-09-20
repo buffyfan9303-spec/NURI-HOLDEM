@@ -260,3 +260,70 @@ test.describe('GTO 탭 — 뷰포트 매트릭스', () => {
     });
   }
 });
+
+test.describe('GTO 내부 도구 — 44px 미만 유효 표적 회귀 (2026-09-20)', () => {
+  // 2026-09-20 실측: 아래 4곳은 카탈로그(위 뷰포트 매트릭스가 보는 [data-tools-lanebar]/[data-testid^="tool-"])
+  // **밖**, 즉 도구를 연 뒤의 다이얼로그 안쪽이라 위 테스트가 못 본다. NURI SPOT 공유 버튼은 tap-y-44 오버행으로,
+  // GtoDeepPanel·RangeGuide·PushFoldChart 는 오버행이 잘리거나(overflow-x-auto 조상 / 좁은 grid gap) 부족해서
+  // 박스 자체를 h-[44px]로 키웠다. ⚠ RangeMatrix13 의 13×13=169셀(21px)은 **의도적으로 제외** — 360px 폭에
+  // 13칸을 다 넣어야 하는 격자라 44px가 물리적으로 불가능하다(구조적 사안, 별도 오너 결정 대기).
+  test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 360, height: 800 }); });
+
+  const effH = (loc: ReturnType<Page['locator']>) => loc.first().evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    if (r.height <= 0) return 0;
+    const x = Math.round(r.left + r.width / 2);
+    const hits = (y: number) => { const t = document.elementFromPoint(x, y); return !!t && (t === el || el.contains(t)); };
+    let top = r.top, bottom = r.bottom;
+    for (let d = 1; d <= 14; d++) { if (!hits(Math.round(r.top) - d)) break; top = r.top - d; }
+    for (let d = 1; d <= 14; d++) { if (!hits(Math.round(r.bottom) + d)) break; bottom = r.bottom + d; }
+    return Math.round(bottom - top);
+  });
+
+  test('🔴 공유 버튼(전 도구 공용)이 44px 유효 표적을 가진다', async ({ page }) => {
+    await openTools(page, '#tool=gto');
+    const dialog = page.getByRole('dialog').first();
+    const share = dialog.locator('button[aria-label*="링크 공유"]');
+    await expect(share).toBeVisible({ timeout: 15_000 });
+    expect(await effH(share), '공유 버튼 유효 표적이 44px 미만이다').toBeGreaterThanOrEqual(44);
+  });
+
+  test('🔴 딥 GTO 빌런 모드·카드 타깃 탭이 44px 유효 표적을 가진다', async ({ page }) => {
+    await openTools(page, '#tool=gto');
+    const dialog = page.getByRole('dialog').first();
+    for (const name of ['특정 핸드', '레인지 프리셋']) {
+      const btn = dialog.getByRole('button', { name, exact: true });
+      await expect(btn).toBeVisible({ timeout: 15_000 });
+      expect(await effH(btn), `모드 토글 '${name}' 유효 표적이 44px 미만이다`).toBeGreaterThanOrEqual(44);
+    }
+    // gto-target-tabs: Section() 카드 슬롯 제목 버튼("Hero"/"Villain")과 이름이 같아 컨테이너로 구분한다
+    const tabs = dialog.locator('[data-testid="gto-target-tabs"] button');
+    const n = await tabs.count();
+    expect(n, '카드 타깃 탭이 안 보인다').toBeGreaterThan(0);
+    for (let i = 0; i < n; i++) {
+      expect(await effH(tabs.nth(i)), `카드 타깃 탭 #${i} 유효 표적이 44px 미만이다`).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test('🔴 레인지 차트 상황 그룹 칩(가로 스크롤 행)이 44px 유효 표적을 가진다', async ({ page }) => {
+    await openTools(page, '#tool=range');
+    const dialog = page.getByRole('dialog').first();
+    const chips = dialog.locator('[data-testid="range-guide"] button');
+    const n = await chips.count();
+    expect(n, '상황 그룹 칩이 안 보인다').toBeGreaterThan(0);
+    for (let i = 0; i < n; i++) {
+      expect(await effH(chips.nth(i)), `상황 그룹 칩 #${i} 유효 표적이 44px 미만이다`).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test('🔴 푸시·폴드 포지션 그리드(세로 gap 4.25px)가 44px 유효 표적을 가진다', async ({ page }) => {
+    await openTools(page, '#tool=pushfold');
+    const dialog = page.getByRole('dialog').first();
+    const posBtns = dialog.locator('[data-testid="pushfold-positions"] button');
+    const n = await posBtns.count();
+    expect(n, '포지션 버튼이 안 보인다').toBeGreaterThan(0);
+    for (let i = 0; i < n; i++) {
+      expect(await effH(posBtns.nth(i)), `포지션 버튼 #${i} 유효 표적이 44px 미만이다`).toBeGreaterThanOrEqual(44);
+    }
+  });
+});
