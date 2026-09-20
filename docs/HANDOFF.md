@@ -2208,6 +2208,40 @@ Supabase 어드바이저 보안 ERROR 0 (INFO 1 · WARN 3, 전부 기존)
   헤더 상태를 단언한다). 24 passed / 2 skipped(선행 skip).
 - **미검증**: S26 실기기. 하네스(`Pixel 7`)에는 주소창 접힘이 없어 `dvh==svh==lvh` 다.
 
+### 배포 확인 — `26dd636` (2026-09-20 오후)
+
+| 확인 | 결과 |
+|---|---|
+| CI | `build-and-e2e` · `semgrep` · `security` 전부 success (run 35490435033) |
+| Vercel | `dpl_EqzVZNvWhpJuGtE4Lt4ZxqbphCtn` · state READY · `meta.githubCommitSha = 26dd636` |
+| alias 소유자 | `nuriholdem.com` · `www.nuriholdem.com` **둘 다** 그 배포. `GET /v4/aliases/<도메인>` 의 `deployment.id` 로 확인(자산 200·CSS 해시는 증거로 쓰지 않았다 — §6 의 두 번 오판 기록 참고) |
+| 손님 도메인 지문 | 양쪽 도메인에서 JS 청크 100개를 받아 문자열 검색: `data-pd-post-card` · `게시글 반응` · `게시글 메뉴` · `대화에 참여해 보세요` · `data-step` · `data-pane` **전부 존재**, 두 도메인이 같은 청크 해시(`PostDetailModal-Bbc2L_zO` · `VenueManageTab-Ct80mhej`) |
+| 배포 전 음성 대조 | 같은 검사를 alias 걸기 **전에** 돌려 새 표식이 **전부 없음**을 확인했다 — "원래 있던 것을 보고 통과" 를 배제한다 |
+
+⚠ H1 은 **문자열 지문이 없다**(함수명은 minify 되고 새 카피가 없다). 운영에서 H1 을 확인하려면
+프레임을 직접 재야 한다 — 아래 '남은 검증' 참고.
+
+### H1 후속 · **브라우저 뒤로가기 경로는 위 수정으로 안 고쳐졌다** (2026-09-20 오후 추가 발견)
+
+- 실행문이 H1 반례로 지정한 '브라우저 뒤로가기' 를 **실제로 재 보고** 찾았다. 버튼으로 탭을 옮길 때는
+  깨끗한데(`132/접힘 → 0/펴짐`), 뒤로가기는 여전히 `0/접힘` 프레임이 **하나 남았다.**
+- 이벤트 순서를 직접 찍어 원인을 확정했다(390×844 · 격리 4273):
+  ```
+  t= 1.0ms  popstate            scrollY=132
+  t=17.2ms  첫 rAF   scrollY=0 인데 헤더 47.75px·shrunk=1   ← 이 프레임이 '눌림'
+  t=21.7ms  App 탭 커밋 effect 가 scrollTo(0)·notifyScrollNow  (이미 0)
+  t=50.4ms  scroll 이벤트가 그제서야 도착
+  ```
+  **브라우저가 React 커밋보다 먼저 스크롤을 옮긴다.** 탭 커밋은 View Transition 콜백 안에서 돌아
+  popstate 와 같은 프레임이 아니므로, `notifyScrollNow` 로도 **이미 그려진 프레임**을 되돌릴 수 없다.
+- 처방: `src/lib/backstack.ts` 의 `init()` 에서 `history.scrollRestoration = 'manual'`.
+  이 앱은 탭이 바뀌면 언제나 맨 위라(오너 지시), 브라우저 복원은 앱이 곧바로 덮어쓸 값을
+  **한 프레임 먼저 그리는 간섭**일 뿐이다. history 를 단독 소유하는 모듈이라 여기가 맞는 자리다.
+- 적용 후 재측정: `132/접힘 → 132/접힘 → 0/펴짐` — **`y=0` 인데 접혀 있는 프레임이 0개**.
+- 🔴 **잃는 것**: 전체 새로고침(F5)·외부에서 돌아올 때의 자동 스크롤 복원. 이 앱은 어차피 맨 위에서
+  부팅하고 탭별 위치를 저장하지 않는다(그 기능은 오너가 명시적으로 뺐다). 되살리려면 오너 결정이다.
+- 검사: `e2e/nav-stability.spec.ts` 의 H1 블록에 뒤로가기 케이스 1건 추가.
+
 ### S1 · 모바일 내 매장 7칸 겹침 + 이용권 판 분리
 
 - **①(글자 겹침)**: `min-w-0 flex-1 basis-0` 이 칩을 **콘텐츠 최소 폭보다 더** 눌렀다.

@@ -444,4 +444,57 @@ test.describe('H1 — 스크롤된 대메뉴 전환에서 헤더가 첫 프레�
     }
     expect(shrunkSeen, `연속 탭 6회 중 ${shrunkSeen}회에서 scrollY=0 인데 헤더가 접혀 있었다 — 예약된 옛 rAF 가 살아 있다`).toBe(0);
   });
+
+  // 🔴 H1 반례(실행문이 지정한 것) — **브라우저 뒤로가기**로 탭이 바뀌는 경로.
+  //   버튼 클릭과 달리 뒤로가기는 popstate 로 `activeTab` 을 바꾼다. 같은 커밋 이펙트를 타므로
+  //   구조상 함께 고쳐지지만, "구조상 그럴 것" 은 증거가 아니다 — 실제로 프레임을 재서 못박는다.
+  //   (오너가 실제로 쓰는 경로이기도 하다: 라이브를 읽다가 뒤로가기로 홈에 돌아온다.)
+  test('🔴 브라우저 뒤로가기로 탭이 바뀔 때도 첫 프레임부터 헤더가 펴져 있다', async ({ page }) => {
+    test.setTimeout(120_000);
+    await stabilizeBackstack(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.waitForSelector('[data-stack-header]', { timeout: 20_000 });
+    // 홈 → 라이브(이력 1칸). 돌아갈 곳이 있어야 뒤로가기가 탭 전환이 된다.
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'live' })));
+    await page.waitForTimeout(800);
+    await page.evaluate(() => window.scrollTo(0, 400));
+    await page.waitForTimeout(600);
+
+    const before = await page.evaluate(() => ({
+      y: Math.round(window.scrollY),
+      h: +(document.querySelector('[data-stack-header]') as HTMLElement).getBoundingClientRect().height.toFixed(2),
+      shrunk: document.documentElement.dataset.headerShrunk ?? null,
+      tab: document.querySelector('[data-tab]')?.getAttribute('data-tab') ?? null,
+    }));
+    // 전제 두 개 — 둘 중 하나라도 안 서면 이 검사는 아무것도 재지 않는다.
+    expect(before.y, '헤더가 접힐 만큼 안 내려갔다 — 결함 경로를 못 탔다').toBeGreaterThan(56);
+    expect(before.shrunk, '스크롤했는데 헤더가 축소 상태가 아니다 — 전제가 안 섰다').toBe('1');
+
+    const frames = await page.evaluate(async () => {
+      const out: { i: number; y: number; h: number; shrunk: string | null }[] = [];
+      let n = 0;
+      const tick = () => {
+        const el = document.querySelector('[data-stack-header]') as HTMLElement | null;
+        out.push({
+          i: n, y: Math.round(window.scrollY),
+          h: el ? +el.getBoundingClientRect().height.toFixed(2) : -1,
+          shrunk: document.documentElement.dataset.headerShrunk ?? null,
+        });
+        if (++n < 14) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      history.back();
+      await new Promise((r) => setTimeout(r, 1200));
+      return out;
+    });
+    console.log('[H1 back] 전:', JSON.stringify(before), '프레임:', JSON.stringify(frames.slice(0, 6)));
+
+    const zero = frames.filter((f) => f.y === 0);
+    expect(zero.length, '뒤로가기 뒤 scrollY 가 0 이 된 프레임이 없다 — 탭 전환 자체가 안 일어났다').toBeGreaterThan(0);
+    const bad = zero.filter((f) => f.shrunk === '1' || (f.h > 0 && f.h < before.h + 1));
+    expect(bad,
+      `뒤로가기 뒤 scrollY=0 인데 헤더가 아직 축소 상태인 프레임이 ${bad.length}개다: ${JSON.stringify(bad.slice(0, 3))}`)
+      .toEqual([]);
+  });
 });
