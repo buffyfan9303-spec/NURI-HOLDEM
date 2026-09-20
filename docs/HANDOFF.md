@@ -1115,6 +1115,7 @@ GTO 도구 타일  : 글자 17px   · 세로 여백 21.3px · 상자 57.3px
 | **E2-A/F1** '장부 시작하기' | 문구는 "포스터 정보 그대로"인데 실제로는 맨 문자열 `onGoto('ledger')` 라 **빈 장부 목록**으로 갔다 | `StoreDashboard.tsx` — 날짜 시드 전달 | 전체 E2E |
 | **E2-C/F5** 장부 날짜 기준 | `NuriPosLedger` 만 **기기 로컬 날짜**를 썼다. 서버 RPC·앱 나머지는 전부 KST | `NuriPosLedger.tsx` → `kstToday()` | 전체 E2E |
 | **R2-A** 이용권 레일 경합 | 매장 A→B 전환 시 **A 의 늦은 응답이 B 화면에 그려졌다**(실측 재현). `alive.current` 는 컴포넌트 생존만 본다 | `LedgerVoucherRail.tsx` — 기존 `staleResponse` seq+owner 도장 재사용 + 매장 변경 시 즉시 초기화 | 전체 E2E |
+| **R1-2** 상시 게임 바 | 두 조회가 `.catch(() => {})` 로 실패를 삼켜 **조회 실패 시 바가 조용히 사라졌다**(업주는 '진행 중 게임 없음'으로 읽는다). 매장 A→B 전환 경합 가드도 없었다 | `VenueManageTab.tsx` `StoreLiveBar` — 같은 `staleResponse` 계약 + 매장 변경 시 즉시 초기화 | 매장 스펙 39건 |
 | 장부 전체화면 버튼 | 유효 표적 30.7px | `LedgerWorkspace.tsx` `tap-y-44` | — |
 | 커뮤니티 정렬 화살표 | 테두리용 토큰을 글자색으로 써 대비 3.16~3.2(AA 미달) | `CommunityTab.tsx` → `text-ink-muted` | 실측 6.41/4.99 |
 

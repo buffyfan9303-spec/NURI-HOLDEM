@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode, useRef, memo, useCallback, useMemo, startTransition, Suspense } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { goSubTab } from '../../lib/subTabTransition';
+import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 import Icon, { type IconName } from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
@@ -1093,9 +1094,24 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
   const [clocks, setClocks] = useState<ClockState[]>([]);
   const [pending, setPending] = useState(0);
   const [, setTick] = useState(0);
+  // 🔴 2026-09-20 (R1-2) — 두 조회가 `.catch(() => {})` 로 실패를 **완전히 삼켰다.** 조회가 죽으면
+  //   바가 조용히 사라져(아래 `if (!main && pending === 0) return null`) 업주는 '진행 중인 게임이 없다'
+  //   고 읽는다. 게다가 매장 A→B 로 옮기면 A 로 나간 응답이 늦게 도착해 **B 바에 A 의 클락**이 그려졌다.
+  //   같은 파일의 이용권 레일과 **같은 계약**(staleResponse seq+owner)을 쓴다 — 새 방식을 만들지 않는다.
+  const stampRef = useRef<RequestStamp<string>>({ seq: 0, owner: venueId });
   const reload = useCallback(() => {
-    getVenueClocks(venueId).then(setClocks).catch(() => {});
-    getPendingBuyinRequests(venueId, kstToday()).then((r) => setPending(r.length)).catch(() => {});
+    const stamp: RequestStamp<string> = { seq: stampRef.current.seq + 1, owner: venueId };
+    stampRef.current = stamp;
+    const stale = () => isStaleResponse(stamp, stampRef.current);
+    getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
+      .catch(() => { if (!stale()) setClocks([]); });
+    getPendingBuyinRequests(venueId, kstToday()).then((r) => { if (!stale()) setPending(r.length); })
+      .catch(() => { if (!stale()) setPending(0); });
+  }, [venueId]);
+  // 매장이 바뀌면 이전 매장 데이터를 **즉시** 비운다 — 새 응답이 올 때까지 A 의 클락이 남으면 안 된다.
+  useEffect(() => {
+    stampRef.current = { seq: stampRef.current.seq + 1, owner: venueId };
+    setClocks([]); setPending(0);
   }, [venueId]);
   useEffect(() => { if (active) reload(); }, [active, reload]);
   useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);
