@@ -3,7 +3,9 @@
 > **다른 Claude Code 계정·다른 컴퓨터에서 이어서 작업할 때 이 파일 하나만 읽으면 된다.**
 > 한도가 끊기거나 계정을 바꿔도 이 파일은 git 에 있으므로 `git pull` 이면 따라온다.
 >
-> 마지막 갱신: **2026-09-20 밤(claude-4a)** · §2-D 에 **배포 증거**를 채웠다 — 운영은 `370c0cf`, 두 alias 확인, 손님 도메인 지문 실측.
+> 🔴 **마지막 갱신: 2026-09-21 새벽(claude-4a) — 커밋했지만 푸시·배포하지 않은 작업이 2개 있다. 아래 §0-a14 를 먼저 읽어라.**
+>
+> 그 앞 갱신: **2026-09-20 밤(claude-4a)** · §2-D 에 **배포 증거**를 채웠다 — 운영은 `370c0cf`, 두 alias 확인, 손님 도메인 지문 실측.
 > 그 앞 갱신: **2026-09-20 (Codex)** · 모바일 대메뉴 스냅샷 제거·독립 검증(§0-a13). GTO 감사 G1~G14(§2-C)·키별 21줄 판정표(§2-D)는 유지.
 > ⚠ 이 둘은 **서로 다른 세션**이 같은 날 밤에 쓴 것이다. 같은 증상('메뉴 이동 때 눌림')을 양쪽이 각각 고쳤고
 > **원인 진단이 다르다** — claude-4a 는 헤더(주소창 개폐 scroll), Codex 는 본문(document VT 스냅샷 세로 0.838배).
@@ -85,6 +87,205 @@ npx tsc -b --force                # rc=0 이어야 한다
 ---
 
 
+## 0-a14. 🔴 2026-09-21 새벽 · claude-4a — **푸시 안 한 커밋 2개 + 남은 일 전부** (여기가 가장 최신)
+
+> **다른 Claude 계정(claude-A)이 이 파일만 읽고 이어서 할 수 있게 쓴 절이다.**
+> 읽는 순서: ① "지금 상태" → ② "제일 먼저 할 일(푸시·배포)" → ③ "남은 일" 순서대로.
+
+---
+
+### 1. 지금 상태 — 한눈에
+
+| 항목 | 값 |
+|---|---|
+| 로컬 `main` HEAD | **`79d0451`** (2026-09-21) |
+| `origin/main` | **`3b375d1`** — 로컬이 **2커밋 앞서 있다** |
+| 운영 배포(두 alias) | **`3b375d1`** = `dpl_ApuzdYGzRdyzhggfWtbkfPanJvgv` |
+| 라이브 DB | **`20260921a` 적용됨**(아래 3번) |
+
+🔴 **푸시 안 한 커밋: `79d0451` 한 개**(2026-09-21 03:40 기준 실측 `git rev-list --count origin/main..HEAD` = 1)
+
+```
+79d0451 feat(event,post): 이벤트 목록만 끌어 닫기(E1~E4) · 게시글 상세 밀도(P1~P4) · 발급 서버 가드 적용(Q4)
+```
+
+⚠ **이 표를 믿지 말고 `git log --oneline origin/main..HEAD` 로 직접 세라.**
+그 사이에 다른 세션이 푸시했을 수 있다 — 이 저장소에서 실제로 그런 일이 있었다.
+이 커밋은 **게이트를 전부 통과했다**(린트 0오류 · 단위 2,783 · E2E 624 통과/0 실패 · 번들 1013.8/1014 · sitemap 무변경).
+
+**왜 안 푸시했나**: 오너가 2026-09-21 새벽에 **"배포는 하지말고"** 라고 명시했다.
+이 저장소는 푸시하면 CI → Vercel 배포로 **자동으로 이어진다.** 그래서 커밋까지만 했다.
+
+---
+
+### 2. 제일 먼저 할 일 — 푸시·배포 (오너 허가를 받은 뒤에)
+
+⚠ **오너에게 "지금 배포해도 되나" 를 먼저 확인해라.** 위 지시가 아직 유효할 수 있다.
+
+허가를 받았으면:
+
+```bash
+cd "C:/Users/buffy/OneDrive/바탕 화면/누리홀덤"
+git log --oneline origin/main..HEAD        # 무엇이 나가는지 먼저 읽는다
+gh run list --limit 3                      # 🔴 진행 중 CI 가 0 인지 확인 (아래 함정 참고)
+git push origin main
+```
+
+🔴 **푸시 전에 반드시 `gh run list` 로 돌고 있는 CI 가 없는지 확인해라.**
+이 저장소는 **새 푸시가 돌던 CI 를 취소하고, CI 가 초록이 아니면 Vercel 이 도메인 별칭을 안 붙인다.**
+2026-09-20 밤에 두 세션이 5분 간격으로 푸시해 **커밋 2개의 CI 가 연달아 취소**됐다(§2-D 참고).
+그때는 마지막 커밋이 앞의 둘을 포함하는 자손이라 내용이 살아남았을 뿐이고, 다른 가지였으면 조용히 증발했다.
+
+배포 확인은 §6 절차대로:
+1. CI `build-and-e2e`·`semgrep`·`security` 전부 success
+2. `GET /v4/aliases/nuriholdem.com` 과 `www.nuriholdem.com` 의 **`deployment.id` 가 목표 배포인지**
+   — ⚠ **`READY` 만 보면 속는다.** 2026-09-21 에도 `c944fe7` 이 READY 인데 `aliasAssigned:false` 라
+   도메인이 옛 배포에 머물러 있어 **수동으로 POST** 해야 했다.
+3. 손님 도메인에서 **문자열 지문 실측**. 이번 커밋의 지문 후보:
+   `data-pd-nav-text`(P3) · `event-list-drag-grip`(E1) · `받는 회원을 지정해야`(Q4 는 서버라 번들에 없음 — 쓰지 마라)
+
+---
+
+### 3. ✅ 라이브 DB — **이미 적용했다. 다시 적용하지 마라**
+
+`supabase/migrations/20260921a_issue_voucher_require_holder.sql` — **2026-09-21 적용 완료**
+(오너가 그 건만 명시 승인: "2 적용"). 프로젝트 `idsxiqspecrucvfvtgbw`(PG 17.6), MCP `execute_sql` 2부 적용.
+
+무엇을 막았나: 서버 `issue_voucher` 가 **수신자(`p_holder_user_id`)가 NULL 이어도 발급하고 한도를 차감**했다.
+화면은 2026-09-14 오너 결정으로 이미 막혀 있었고 **서버만 안 막혀** 있었다(`grant execute … to authenticated` 라
+인증된 업주가 콘솔·REST 로 직접 RPC 를 부르면 통과). `p_count` 의 조용한 보정(−5 → 1장)도 거절로 바꿨다.
+
+실측(둘 다 `begin; … rollback;`):
+
+```
+적용 전: 양성(인증회원 2장)=2장 OK | 🔴 NULL수신자=1장 발급됨 | 🔴 p_count=-5 → 1장 조용히 보정됨
+적용 후: ✅ NULL·−5·1001·없는계정 전부 거절 | 거절 4회 뒤 quotaΔ0 rowsΔ0 notifΔ0
+        ✅ 양성 2장 반환 · quotaΔ−2 · rowsΔ2  (정상 발급·한도 차감 보존)
+보안 어드바이저 ERROR 0건 · 기존 holder NULL 행 0건
+```
+
+🔴 **다음 사람이 알아야 할 것**: 이 마이그레이션은 **저장소 파일을 덮지 않고 라이브 정의를 읽어 패치**한다.
+`20260919a` 가 먼저 같은 방식으로 라이브를 패치했기 때문에 **저장소 파일 텍스트는 라이브의 정본이 아니다.**
+`create or replace` 로 파일 본문을 덮으면 그 변경이 조용히 되돌아간다. 자가검사가 `20260919a` 의
+`'grant'` 사유가 살아 있는지 단언해 그것을 막는다. 재적용해도 안전하다(`[20260921a]` 표식이 있으면 건너뛴다).
+
+---
+
+### 4. 🔴 남은 일 — 우선순위대로
+
+#### (1) 이벤트 드래그 전용 E2E — **아직 없다** (가장 급함)
+
+E1~E4 구현은 끝났고 게이트도 통과했지만, **제스처 자체를 재는 검사가 없다.**
+설계서 `.claude/handoff/NURI-BOTTOM-NAV-SMOOTH-MOTION-NO-REGRESSION-2026-09-21.md` §5 '추가 회귀 계약' 의
+①~⑩ 을 새 스펙(`e2e/event-list-drag.spec.ts`)으로 만들어라.
+
+**선행 조건**: 기존 이벤트 fixture 는 캠페인 **1개뿐**이라 스크롤 반례를 못 만든다.
+`GET /rest/v1/event_campaigns` 를 `page.route` 로 목킹해 **뷰포트보다 긴 30개** 를 반환시켜라.
+
+셀렉터(전부 `data-testid` 기반 — 라벨 결합 없음):
+- 루트/스크롤러: `[data-testid="event-list-page"]` ← **이 요소 자체가 스크롤 루트다**(중첩 스크롤러 없음)
+- 카드: `[data-testid="event-list-page"] [data-testid="event-list-item"]`
+- 그립: `[data-testid="event-list-drag-grip"]`
+- 상세 판: `[role="dialog"][aria-label="이벤트"]`
+
+검사 ①~⑩: ① 맨 위 130ms 아래 드래그로 닫힘 ② 8px 미만·가로·위 방향 무동작 ③ `scrollTop>0` 에서 자연 스크롤
+④ 카드 탭으로 **그 slug 만** 열림(`?event=` 일치 + `event_board` 요청 slug 일치) ⑤ **카드 위에서 드래그한 뒤
+합성 click 이 상세를 열지 않음**(`event_board` 요청 **0회**) — 그리고 **같은 카드에 짧은 탭을 한 번 더** 보내
+정상적으로 열리는지(가드 리셋 확인)를 **같은 테스트에서** 이어라 ⑥ A/B 교차선택 ⑦ **상세 본문 스와이프 무닫힘**
+⑧ 상세 Back→목록→목록 스와이프 닫기 ⑨ 취소/빠른 Back/두 번째 터치 뒤 transform 0·URL 정합·늦은 `onClose` 0회
+⑩ 320/390/412·PC 1440(터치 보내도 transform 불변)·reduced-motion·포커스 복귀.
+
+⚠ **Playwright 의 `click`/`tap` 은 누름이 0ms 라 이 부류를 절대 재현 못 한다** —
+CDP `Input.dispatchTouchEvent` 로 touchStart→(≥130ms, 여러 스텝 이동)→touchEnd 를 보내라(`e2e/pill-press.spec.ts` 참고).
+
+**음성 대조**: (a) 드래그 확정 분기를 임시로 끄면 ①이 빨개짐 (b) `EventPage.tsx` 에 목록 핸들러를
+임시로 복사해 붙이면 ⑦이 빨개짐. 원복 뒤 재통과 확인.
+
+#### (2) N1 본문 모션이 **안 닿는 자리 3곳**
+
+`src/lib/tabEnter.ts` 는 `data-main-enter` 표식이 붙은 요소만 움직인다(현재 6파일 **22곳**).
+아래는 **편집 범위 밖 파일**이라 표식을 못 붙였다 — 그 화면에선 **그 블록만 정적으로 남아 '분절'** 로 보인다:
+
+| 자리 | 파일 | 왜 못 했나 |
+|---|---|---|
+| 커뮤니티 `rank` 서브탭 | `TierLeaderboard.tsx` | 당시 편집자의 6파일 목록 밖 |
+| 커뮤니티 `dealer` 서브탭 | `DealerCommunity.tsx` | 〃 |
+| 커뮤니티 `market` 서브탭 | 외부 `marketSlot` | 〃 · fixed/sticky 감사도 `NOT_RUN` |
+| venues 검색결과 0일 때 빈 상태 | `src/components/atoms/EmptyState.tsx` | props 를 spread 하지 않아 속성이 DOM 에 안 닿는다 |
+
+**절차**: 붙이기 전에 그 블록의 자손에 `fixed`/`sticky`/`Modal`/`createPortal` 이 없는지 **재귀적으로** 확인하고,
+있으면 더 좁은 블록으로 내려가라. `EmptyState` 는 `...rest` spread 를 주거나 호출부에서 감싸는 판단이 필요하다.
+
+🔴 **왜 조심해야 하나**: CSS `transform` 이 걸린 요소는 `position: fixed` 자손의 **컨테이닝 블록이 된다.**
+이 저장소가 실제로 밟았다(헤더 유리 효과 → 헤더 안 `fixed inset-0` 스크림이 68px 안에 갇혀 바깥 클릭이 안 닿음).
+2026-09-21 조사가 **실제 위험 자리 3곳**을 확인했으니 절대 조상에 붙이지 마라:
+- 캘린더 로그인 루트(`CalendarPanel.tsx:251`) → 뒤 형제 `CalendarToolsPanel:436` 이 `Modal variant="page"` 를 연다
+- GTO `.hero-aurora`(`ToolsPanel.tsx:429`) → 도구 모달이 `createPortal` 이 **아니라 진짜 DOM 자손**이다
+- 내 매장 `data-mystore-secpanel`(`VenueManageTab.tsx:863`) → `NuriPosLedger.tsx:1667`·`LedgerWorkspace.tsx:83` 에 **실재하는 `position:fixed`**
+
+#### (3) 오너 판단이 필요해 손대지 않은 것
+
+| 항목 | 현재 상태 | 물어볼 것 |
+|---|---|---|
+| **이벤트 오버레이 중 하단 탭** | 오버레이를 **안 닫고** 배경 탭만 조용히 바뀐다. 매장 오버레이(`openVenueId`)는 닫힌다 | 이벤트도 닫아야 하나? |
+| **N1 이동 거리 8px** | 설계서가 허용한 범위는 **6~10px** | 실기기에서 약하면 10, 과하면 6 |
+| **번들 예산** | `1013.8 / 1014KB gz` — **여유 0.2KB**. 오늘 1007→1010→1014 로 두 번 올렸다 | 계속 올릴지, 줄일 목표를 정할지 |
+| `scrollRestoration='manual'` | 새로고침 시 브라우저 자동 스크롤 복원을 잃는다 | 되살릴지 |
+| **44px 히트영역 20여 곳** | 일괄 확대가 오히려 오탭을 만든다 | 건별 판단표는 이 문서 아래에 있다 |
+| **라이브 더미데이터**(§0-a5) | `dddd0000-` 로 시작하는 행들 | 지울지 |
+| GTO **G12** 카드 격자 가로(14~23px) | 두 걸음 선택기가 3화면 공유 계약을 깨 되돌림 | 별도 작업으로 열지 |
+| GTO **G5** 빅앤티 Nash k≥2 2~10BB | 다인 독립 오라클 부재 → 격리(`BLOCKED`) | — |
+
+#### (4) 미검증(`NOT_RUN`) — PASS 로 바꿔 적지 마라
+
+- 🔴 **S26 삼성 인터넷/Chrome 실기기** — 하네스(`Pixel 7`)는 주소창 접힘도 없고 삼성 GPU 도 흉내 못 낸다.
+  **N1 본문 모션·헤더 눌림·본문 세로 눌림·Chrome 밝기 반짝임이 전부 여기 걸려 있다.**
+- 업주 실계정의 **내 매장** 첫 화면(권한 계정 없음)
+- GTO 21키 중 **6키**(`range`·`trainer`·`postflop`·`wrongnote`·`handrank`·`replay`) 수용 기준 — §2-D 참고
+- TDA 125항목 원문 전수 대조
+- `20260921a` **격리 컨테이너** 예행연습(Docker 데몬이 꺼져 있었다 — 라이브 rollback 예행연습은 했다)
+- 커뮤니티 `market` 서브탭의 fixed/sticky 감사
+
+---
+
+### 5. 이번에 새로 만든 것 — 다음 사람이 알아야 할 계약
+
+| 파일 | 무엇 |
+|---|---|
+| `src/lib/tabEnter.ts` | **N1 본문 진입 모션의 정본.** 상수 `TAB_ENTER = {DIST:8, DUR:170, EASE}` 를 export 한다 |
+| `e2e/mobile-tab-transition.spec.ts` | N1 계약 — **선언값과 실제 렌더를 같이** 본다 |
+| `e2e/store-nav.spec.ts` | 412px 추가 + **여유(slack) 하한** + 모바일 알약 중심 오차 |
+| `e2e/nav-stability.spec.ts` | 뒤로가기 검사가 **탭을 고정하지 않는다**(아래 함정 참고) |
+
+🔴 **N1 검사에서 반드시 기억할 것**: 기준선은 '첫 프레임' 이 아니라 **정착 y** 다.
+애니메이션은 탭 커밋 **몇 프레임 뒤**에 시작하므로 프레임 0 을 초기값으로 쓰면 이동량이 **0 으로 나온다**
+(2026-09-21 첫 시도에서 실제로 그렇게 나와 "모션이 없다" 고 오판할 뻔했다).
+그리고 rAF 샘플러는 **피크 프레임을 놓칠 수 있다**(`5.8ms:0 → 10.3ms:5.89`) — 그래서 관측 하한은 5.5px 로 두고
+**정확한 8px 은 `getAnimations()` 의 선언값으로** 잠근다.
+
+🔴 **운영 데이터에 게이트가 걸려 있던 사례**: `nav-stability.spec.ts` 의 뒤로가기 검사가 **라이브 탭 고정**이었는데,
+그 탭 길이는 진행 중인 클락 수가 정한다. 실측 최대 스크롤 **55px** 인데 전제는 56 초과 —
+**코드 변경 0 인데 1px 차이로 빨개졌다.** 지금은 "헤더를 접을 수 있는 첫 탭" 을 고르고,
+**어느 탭도 안 되면 크게 실패**하도록 고쳤다. 같은 부류를 만나면 이 패턴을 따라라.
+
+---
+
+### 6. 이 세션에서 비싸게 배운 것
+
+- **`tsc -b` 는 종료코드 0 인데 오류를 놓친다.** `npx tsc --noEmit -p tsconfig.app.json` 으로 직접 확인해라.
+  그리고 **`e2e/**` 는 어느 tsconfig 에도 들어 있지 않다**(`app`→`src`, `node`→`vite.config.ts`) — 타입 검사를 안 받는다.
+- **`eslint-disable-next-line` 은 바로 다음 줄에만 걸린다.** 사이에 주석을 끼우면 무효다(실제로 겪었다).
+- **파이썬으로 CRLF 파일을 매칭하면 조용히 빗나간다.** 이 저장소는 작업트리가 전부 CRLF 다. **Edit 도구**를 써라.
+- **`.reveal` 이 걸린 요소는 등장 중 `getBoundingClientRect()` 로 간격을 재면 거짓으로 커진다** —
+  레이아웃 간격은 `offsetTop/offsetHeight` 로 재라(`post-detail-read.spec.ts` 가 그렇게 한다).
+- **`Modal variant="page"` 로 치환하면 드래그-닫기가 기본으로 켜진다**(`Modal.tsx:81-85 resolveBodyDrag`).
+  "상세에는 스와이프 닫기 금지" 를 어기는 가장 쉬운 길이다.
+- **`springTo` 는 취소된 애니메이션의 완료 Promise 를 resolve 하지 않는다** — 이건 버그가 아니라
+  '두 번 안 닫힘' 보장이다. 그래서 언마운트 cleanup 에서 `cancel()` 하면 옛 `then(onClose)` 가 되살아나지 않는다.
+- **`presentationY` 를 먼저 읽고 `cancel()` 은 나중에.** 거꾸로 하면 애니메이션 도중 재터치 시 패널이 튄다.
+
+---
+
 ## 0-a13. 2026-09-20 · 모바일 대메뉴 압축·반짝임 수정 (Codex)
 
 - **요청/편집권:** 오너가 삼성 브라우저 본문 압축과 Chrome 반짝임을 이번에는 직접 수정하라고 지시했다. 기준선 `ea170b6`; 단독 편집자는 Codex, 두 검토 에이전트는 읽기 전용. 기존 설정·미추적 작업은 보존했다.
@@ -97,7 +298,10 @@ npx tsc -b --force                # rc=0 이어야 한다
 - **독립 검증:** 별도 Chromium 390/412px × dark/light에서 VT 0회, 43 rAF 프레임의 root 새 이미지 opacity 1, SPOT 원형 42.5×42.5px 고정. 본문 첫 표시와 +450ms 픽셀 차이 0. 1440px PC는 VT 실행 유지. 별도 입력 경합/뒤로가기 검사 통과, React 관련 콘솔 경고 0. 외부 HTTP를 차단한 검사는 차단에 따른 네트워크 오류를 앱 오류와 구분했다.
 - **증거:** 로컬 로그 `%TEMP%/nuri-nav-fix-afeb0507969442ee9c6fdda4e47eb73e/{lint,unit,build,bundle,e2e}.log`; 시각 자료 `%TEMP%/navfix-{390,412}-{dark,light}-{first,settled}.png`.
 - **재실행:** sitemap 보호 절차대로 fresh build/preview를 만든 뒤 PowerShell에서 `$env:E2E_BASE_URL='http://localhost:4173'; npx playwright test e2e/mobile-tab-transition.spec.ts e2e/nav-stability.spec.ts e2e/subtab-motion.spec.ts e2e/gto-tab-verify.spec.ts --workers=2 --reporter=line`.
-- **배포 상태:** 로컬 구현·독립 검증 완료. 이 수정의 커밋/CI/production alias/운영 DOM 확인은 아래에 결과를 갱신한다. 기존 `e8d89ae`·`27de127`·`e11b1a2` 작업이나 라이브 DB 적용을 다시 수행하지 않았다.
+- **배포 상태:** 제품 수정 `1862bb4` + 기존 테스트 정합 `370c0cf` push 완료. [CI 35514538904](https://github.com/buffyfan9303-spec/NURI-HOLDEM/actions/runs/35514538904) **success**(build-and-e2e/security/semgrep 모두 통과). main E2E **594 passed / 38 skipped / 2 flaky**, boot **2 passed**. flaky는 레인지 칩 count=0(`gto-tab-verify:313`)과 짧은 시트 드래그 후 gone(`sheet-spring:64`), 재시도 통과이며 원인 확정·수정 완료로 간주하지 않는다. 독립 소스 검토상 전자는 새 페이지의 도구 딥링크, 후자는 홈 첫 진입의 로그인 시트여서 새 warm-tab 분기를 직접 실행하지 않는다. 새 모바일/PC 전환 및 rescue 검사는 flaky 목록에 없다.
+- **운영 실증:** 배포 `dpl_HL4pWJe5nNHvmJcqonFt11Uv2b7s` READY, 소스 `370c0cfac18a62f6799105ec77f5505d69a3c8cd`. `/v4/aliases/nuriholdem.com`·`/v4/aliases/www.nuriholdem.com` **둘 다 그 deployment.id**를 반환했다. 이번에는 CI 성공 뒤 자동 연결돼 수동 alias POST는 불필요했다. 운영 HTML의 entry는 `index-q7S7EbLs.js` → `index-BbRu9Jvj.js`; 새 entry 200/application/javascript/386245B이고 `.has(e)&&!window.matchMedia(\`(min-width: 1024px)\`).matches` 분기 실재를 확인했다. 기존 `e8d89ae`·`27de127`·`e11b1a2` 작업이나 라이브 DB 적용을 다시 수행하지 않았다.
+- **운영 배포 전후 대조:** 이전 운영 배포(`3004871`)에서 390px dark 홈→GTO→홈→GTO의 VT 누적 호출은 **0→1→2**였다. 새 운영에서는 **390/412px × dark/light 4조건 모두 0→0→0**. 43~44 rAF 프레임에서 root group animation 0·root new opacity 1·SPOT 원형 42.5×42.5px(비율 1)·헤더/하단바 위치 고정. 첫 표시와 +450ms GTO 본문 픽셀 차이 0. 1440px PC dark/light는 기존 VT 누적 1→2 유지. 별도 에이전트가 실제 운영 URL에서 CDP 130ms 터치로 측정했고 브라우저를 닫았다. PNG는 `%TEMP%/navfix-live-{390,412}-{dark,light}-{first,settled}.png`; CI 원본 로그는 위 증거 폴더의 `ci-complete.log`다.
+- **동시 작업 체크포인트:** 검증 도중 다른 Claude 세션이 문서 전용 `defb44d`를 커밋했다. 해당 기록을 보존했고 `src`·`e2e`는 운영 `370c0cf`와 같다. 이 최종 QA/배포 기록의 로컬 diff는 후속 문서 체크포인트에서 함께 커밋한다. 진행 중인 문서 CI를 취소하려고 추가 push하지 않는다. 제품 수정은 이미 커밋·push·운영 반영 완료다.
 - **남은 실기기 확인:** 삼성 S26의 실제 Samsung Internet/Chrome, 주소창 확장·축소 중 연속 탭, 실제 스크린 녹화. 로컬 Chromium 검증으로 실기기 해결을 확정하지 않는다. 기기 확인 전 스냅샷 경로를 모바일에 다시 켜지 않는다.
 
 ---
@@ -2673,17 +2877,18 @@ npm run bundle:budget       # 통과 (여유 0~3%)
 
 ## 6. 배포하는 법 (오너가 상시 위임했다 — 물어보지 말고 해라)
 
-### 🔴 **빌드 READY ≠ 배포 완료.** 이 프로젝트는 도메인이 자동으로 안 따라온다
+### 🔴 **빌드 READY ≠ 배포 완료.** 도메인 소유 배포를 직접 확인한다
 2026-09-14 하루에 **세 번 연속** 같은 일이 났다. 푸시 → Vercel 이 production 으로 빌드 →
-**alias 만 안 붙음** → 손님은 옛날 화면을 본다. 그래서 **매번 alias 를 직접 건다.**
+**alias 만 안 붙음** → 손님은 옛날 화면을 본다. 다만 **2026-09-20 `370c0cf`는 CI 성공 후 두 도메인이 자동 연결됐다**(§0-a13). 먼저 현재 alias 소유자를 조회하고, 이미 목표 배포면 다시 연결하지 않는다.
 
 ```
 1) git push origin main
-2) Vercel API 로 그 커밋의 production 배포를 찾아 READY 까지 기다린다
-3) POST https://api.vercel.com/v2/deployments/<dplId>/aliases
+2) 해당 커밋의 CI success와 Vercel production 배포 READY를 확인한다
+3) GET /v4/aliases/nuriholdem.com 및 /v4/aliases/www.nuriholdem.com의 deployment.id를 목표 배포와 대조한다
+4) 다를 때만(더 최신 배포를 덮지 않는지 확인 후) POST https://api.vercel.com/v2/deployments/<dplId>/aliases
    Authorization: Bearer $VERCEL_TOKEN     body: {"alias":"nuriholdem.com"}
    → **nuriholdem.com 과 www.nuriholdem.com 둘 다** 건다
-4) 손님 도메인에서 **실측**한다(아래)
+5) 손님 도메인에서 **실측**한다(아래)
 ```
 토큰은 오너에게 받아 `VERCEL_TOKEN` 환경변수로만 쓴다. 프로젝트는 `nuri-holdem`.
 
