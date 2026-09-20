@@ -36,7 +36,9 @@ export function MdfCalc() {
       </p>
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1">
-          <span className="text-2xs font-semibold text-ink-secondary">팟 크기</span>
+          {/* 🔴 여기의 '팟' 은 **상대가 벳하기 전** 금액이다(MDF = pot/(pot+bet)). 팟오즈 계산기의 '현재 팟' 은
+              **벳이 들어간 뒤**라 같은 낱말이 반대 뜻이다 — 100/50 을 넣으면 여기는 66.7%, 저기는 33.3% 다. */}
+          <span className="text-2xs font-semibold text-ink-secondary">팟 크기(상대 벳 전)</span>
           <input type="number" inputMode="numeric" value={pot} onChange={(e) => setPot(e.target.value)} className="input w-full text-sm tabular-nums" />
         </label>
         <label className="space-y-1">

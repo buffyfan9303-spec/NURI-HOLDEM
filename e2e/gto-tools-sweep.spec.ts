@@ -198,3 +198,50 @@ test('🔴 PC 1280 도 52장 격자 한 벌이다 — 커뮤니티 글쓰기·PC
   // 같은 카드가 두 번 그려지면(두 벌 렌더) 화면·테스트가 어느 쪽을 집는지 모호해진다.
   expect(pc.고유, '52장 유일성이 깨졌다').toBe(52);
 });
+
+// 🔴 2026-09-20 · 설계서 §2 `pot` 키: "팟 입력이 상대 벳 포함 후인지 **라벨로 못 박아라**."
+//    라벨에 전제를 넣으면 글자가 길어진다 — 이 저장소에서 여러 번 났던 부류가 바로 **경계값 잘림**이다
+//    (오너가 "한 글자만 보인다" 고 한 자리는 글자 공간 27.75px 에 placeholder 29.75px 였다).
+//    ⚠ 소스 문자열 검사는 `gtoContract.test.ts` 가 한다. 여기는 **실제로 그려진 것**만 본다(둘은 다른 것을 잡는다).
+//
+//    🔴 처음에 `scrollWidth <= clientWidth` 로 썼다가 **빈 검사**를 만들었다(2026-09-20 실측):
+//      ① MDF 의 라벨은 **인라인** span 이라 `clientWidth` 가 **0** 이다 → `0 <= 1` 로 무조건 통과.
+//      ② 팟오즈의 라벨은 block 이라 글자가 길면 **잘리는 대신 줄바꿈**한다 → `scrollWidth` 가 `clientWidth` 를
+//         영영 안 넘는다. 두 경우 다 "넘쳤다" 를 잡을 수 없었다.
+//    그래서 **Range 의 line box 개수**로 잰다 — 한 줄이면 1, 줄바꿈하면 2 이상이다. 이건 실제로 빨개진다.
+for (const W of [320, 360]) {
+  test(`🔴 팟오즈·MDF 의 팟 라벨이 ${W}px 에서 넘치지 않는다`, async ({ page }) => {
+    test.setTimeout(180_000);
+    await bootOwner(page, { viewport: { width: W, height: 720 }, goto: false });
+    const rows: Record<string, unknown>[] = [];
+    for (const [key, needle] of [['pot', '상대 벳 포함'], ['mdf', '상대 벳 전']] as const) {
+      await page.goto(`/?tab=tools#tool=${key}`);
+      await page.waitForFunction((n: string) => {
+        const dlg = document.querySelector('[role="dialog"]');
+        return !!dlg && !/불러오는 중…/.test(dlg.textContent ?? '') && (dlg.textContent ?? '').includes(n);
+      }, needle, { timeout: 30_000 }).catch(() => { /* 아래 null 로 잡는다 */ });
+      const m = await page.evaluate((n: string) => {
+        const dlg = document.querySelector<HTMLElement>('[role="dialog"]');
+        const el = [...(dlg?.querySelectorAll<HTMLElement>('span') ?? [])]
+          .find((s) => (s.textContent ?? '').includes(n) && s.children.length === 0);
+        if (!el) return null;
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const lines = range.getClientRects().length;   // line box 개수 — 줄바꿈하면 2 이상
+        const 글자폭 = range.getBoundingClientRect().width;
+        const box = (el.closest('label') ?? el.parentElement) as HTMLElement | null;
+        return {
+          글자: (el.textContent ?? '').trim(), 줄: lines,
+          글자폭: +글자폭.toFixed(2), 칸폭: +(box?.clientWidth ?? -1).toFixed(2),
+          문서가로넘침: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      }, needle);
+      rows.push({ key, ...(m ?? { 없음: true }) });
+      expect(m, `${key}: '${needle}' 라벨을 화면에서 못 찾았다 — 이 검사가 빈 검사가 됐다`).not.toBeNull();
+      expect(m!.칸폭, `${key}: 라벨이 담긴 칸의 폭을 못 쟀다 — 이 검사가 빈 검사가 됐다`).toBeGreaterThan(0);
+      expect(m!.줄, `${key} 라벨이 ${m!.줄}줄로 접혔다(칸 ${m!.칸폭}px · 글자 ${m!.글자폭}px): ${m!.글자}`).toBe(1);
+      expect(m!.문서가로넘침, `${key}: 문서가 가로로 넘친다`).toBe(0);
+    }
+    console.log(`[팟 라벨 ${W}px]`, JSON.stringify(rows));
+  });
+}

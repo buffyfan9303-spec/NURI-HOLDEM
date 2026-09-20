@@ -406,4 +406,30 @@ describe('NURI SPOT — GTO 홈 통합', () => {
     expect(FORM, '본문 문자열로 글 id 를 되찾는 코드가 남아 있다').not.toMatch(/findCreatedPostId\s*\(/);
     expect(FORM, '글 id 를 찾으려 community_posts 를 다시 조회한다').not.toMatch(/from\(['"]community_posts['"]\)/);
   });
+
+  // 🔴 2026-09-20 · 설계서 §2 `pot` 키: "팟 입력이 **상대 벳 포함 후**인지 라벨로 못 박아
+  //    `call/(pot+call)` 의 단위를 분명히 한다."
+  //
+  //    같은 '팟' 이라는 낱말을 두 계산기가 **반대 뜻**으로 쓴다. 둘 다 100/50 을 받고 다른 답을 낸다:
+  //      · 팟오즈 `call/(pot+call)` = 50/150 = **33.3%**  ← 팟은 상대 벳이 **들어간 뒤**
+  //      · MDF    `pot/(pot+bet)`   = 100/150 = **66.7%** ← 팟은 상대 벳 **전**
+  //    전제를 안 적으면 사용자가 한쪽은 반드시 틀리게 넣는다. 수치가 맞는 것으로는 이 결함이 안 잡힌다.
+  //
+  //    ⚠ SPR 의 '현재 팟'(`StackCalcs.tsx`)은 **일부러 제외**했다 — 콜/벳 입력이 없어 같은 숫자가 두 답을
+  //      내는 구조가 아니고, 설계서의 `spr` 키 기준에도 없다. 넣을지는 오너 판단이다(HANDOFF §2-D).
+  it('팟오즈·MDF 의 팟 입력 라벨이 전제를 품는다 — 같은 낱말을 반대 뜻으로 쓰는 자리다', () => {
+    const POT = readFileSync(join(ROOT, 'src/components/features/tools/PotOddsCalc.tsx'), 'utf-8');
+    const ADV = readFileSync(join(ROOT, 'src/components/features/tools/AdvancedCalcs.tsx'), 'utf-8');
+
+    // 주석이 아니라 **화면에 나가는 라벨**을 본다(주석에 같은 말을 적어 두고 통과하는 것을 막는다).
+    const potLabel = POT.match(/<Field label="([^"]*팟[^"]*)"><NumIn value=\{pot\}/)?.[1];
+    expect(potLabel, '팟오즈 계산기의 팟 입력 라벨을 못 찾았다 — 이 검사가 빈 검사가 됐다').toBeTruthy();
+    expect(potLabel, `팟오즈의 팟 라벨에 '상대 벳 포함' 전제가 없다: ${potLabel}`).toContain('상대 벳 포함');
+
+    const mdfLabel = ADV.match(/text-ink-secondary">([^<]*팟[^<]*)<\/span>/)?.[1];
+    expect(mdfLabel, 'MDF 계산기의 팟 입력 라벨을 못 찾았다 — 이 검사가 빈 검사가 됐다').toBeTruthy();
+    expect(mdfLabel, `MDF 의 팟 라벨에 '상대 벳 전' 전제가 없다: ${mdfLabel}`).toContain('상대 벳 전');
+
+    expect(potLabel, '두 라벨이 같아졌다 — 반대 뜻인데 구별이 사라졌다').not.toBe(mdfLabel);
+  });
 });

@@ -22,7 +22,10 @@ export default function PotOddsCalc() {
         {'팟·콜 금액으로 콜에 필요한 승률('}<Term name="에퀴티">에쿼티</Term>{'). 콜 오즈를 계산합니다.'}
       </p>
       <div className="grid grid-cols-2 gap-2">
-        <Field label="현재 팟"><NumIn value={pot} onChange={setPot} placeholder="100000" /></Field>
+        {/* 🔴 라벨이 전제를 품어야 한다(2026-09-20). 식이 `call/(pot+call)` 이므로 이 '팟' 은 **상대 벳이 들어간 뒤**다.
+            바로 옆 도구인 MDF 계산기의 '팟' 은 **벳 전**이라 같은 낱말이 반대 뜻으로 쓰인다 —
+            둘 다 100/50 을 받고 33.3% 와 25.0% 라는 다른 답을 내므로, 전제를 안 적으면 한쪽은 반드시 틀리게 넣는다. */}
+        <Field label="현재 팟(상대 벳 포함)"><NumIn value={pot} onChange={setPot} placeholder="100000" /></Field>
         <Field label="콜 금액"><NumIn value={call} onChange={setCall} placeholder="50000" /></Field>
       </div>
       <div className="grid grid-cols-2 gap-2">
