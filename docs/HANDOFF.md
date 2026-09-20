@@ -3,9 +3,11 @@
 > **다른 Claude Code 계정·다른 컴퓨터에서 이어서 작업할 때 이 파일 하나만 읽으면 된다.**
 > 한도가 끊기거나 계정을 바꿔도 이 파일은 git 에 있으므로 `git pull` 이면 따라온다.
 >
-> 🔴 **마지막 갱신: 2026-09-21 낮 (Opus 5) — M1·C1·B1·Q5·Q6 구현 완료(§0-a15) + 이벤트 드래그 E2E(§0-a14 §4-(1)).
-> 푸시 안 한 커밋이 4개다. 배포는 여전히 오너 허가 대기. 🔴 번들 JS 여유가 **0** 이다.
-> §0-a15 → §0-a14 순서로 읽어라.**
+> 🔴 **마지막 갱신: 2026-09-21 낮 (Opus 5) — 팀 개편(§0-a16) · M1·C1·B1·Q5·Q6 구현(§0-a15) · 이벤트 드래그 E2E(§0-a14).
+> 푸시 안 한 커밋이 4개(+팀 개편분). 배포는 여전히 오너 허가 대기. 🔴 번들 JS 여유가 **0** 이다.
+> 🔴 **역할 정의의 `model` 을 고쳤지만 실행 중 세션에는 반영되지 않는다** — 새 세션에서 재확인해야 한다(§0-a16 ⑥).
+> §0-a16 → §0-a15 → §0-a14 순서로 읽어라. 팀·모델 정본은 `.claude/rules/nuri-team-capabilities.md`,
+> 공통 교훈은 `docs/TEAM-KNOWLEDGE.md`.**
 >
 > 그 앞 갱신: **2026-09-20 밤(claude-4a)** · §2-D 에 **배포 증거**를 채웠다 — 운영은 `370c0cf`, 두 alias 확인, 손님 도메인 지문 실측.
 > 그 앞 갱신: **2026-09-20 (Codex)** · 모바일 대메뉴 스냅샷 제거·독립 검증(§0-a13). GTO 감사 G1~G14(§2-C)·키별 21줄 판정표(§2-D)는 유지.
@@ -89,7 +91,125 @@ npx tsc -b --force                # rc=0 이어야 한다
 ---
 
 
-## 0-a15. 🔴 2026-09-21 낮 · Opus 5 — **M1·C1·B1·Q5·Q6 구현 완료** (여기가 가장 최신)
+## 0-a16. 🔴 2026-09-21 낮 · Opus 5 — **팀 개편(역할·모델·기억)** (여기가 가장 최신)
+
+실행문서: `.claude/handoff/팀-개편-설계서.md`(git 미추적).
+**제품 소스는 한 줄도 바꾸지 않았다**(검증 게이트 '제품보존' PASS). 푸시·Vercel·운영 DB 변경 없음.
+
+### ① 원본 백업 — 먼저 했다
+
+```
+경로   C:\Users\buffy\Documents\누리팀백업\20260921-061555-ba7578d5   (Git 밖 로컬 보관)
+결과   751 파일 / checkpoint_sha256 == archive_sha256 전건 일치 / 불일치 0 / 누락 0
+       디스크 실제 파일 수 751 == manifest 751
+표본   무작위 40건 재해시 — 불일치 0
+```
+
+`manifest.json` 에 `source_absolute_path · source_scope · worktree · agent_name · checkpoint_bytes ·
+checkpoint_mtime · checkpoint_sha256 · archive_relative_path · archive_sha256 · status` 를 기록했다.
+**checkpoint 해시는 불변 기준이다** — 개편 후 활성 파일 해시로 덮어쓰지 않았다.
+
+🔴 **설계서에 없던 원천 2곳을 더 찾아 포함했다**: `deployment-push-ready-8659fb`(agents 10개, **48,832 bytes 로 내용이 다르다**)
+와 temp 의 `gate-wt`(agents 10개). 그리고 **파일명에 `secret` 이 들어간 학습 메모**
+(`feedback_no_secret_rotation_nag.md`)가 1차 deny-list 에 걸렸는데, 내용을 검토해 **비밀값 0건**
+(JWT·토큰·PEM·base64 패턴 미검출)임을 확인하고 수동 포함했다. 이유는 manifest 의 `deny_list_review` 에 적었다.
+
+### ② 기억 — 덮어쓰지 않고 합집합
+
+| 대조 | 결과 |
+|---|---|
+| worktree 에만 있던 고유 파일 | **28건** → 루트로 합류(해시 전건 일치, **덮어쓴 파일 0**) |
+| 동명인데 내용이 다른 파일 | **16건** — 덮지 않고 양쪽 원본을 백업에 출처별로 보존 |
+| 색인에 이름이 없던 상세 파일 | **1건**(`nuri-lead/project_ci_only_flake_cpu_throttle.md`) → 색인에 연결 |
+| 루트 기억 | 164 → **194 파일** (합류 28 + 새 색인 2) |
+
+`critical-reviewer` · `capability-steward` 에 **새로 `memory: local`** 을 주고 색인을 만들었다.
+두 색인은 **원문을 복제하지 않고** 검증된 과거 원천만 링크한다 — 끊어진 링크 **0건**.
+
+### ③ 역할 정의 11개 — 변경표
+
+| 역할 | model 전 → 후 | 그 밖 |
+|---|---|---|
+| `nuri-lead` | `claude-opus-5` (유지) | 2·3장의 **낡은 모델 표 제거** → 정본 포인터 |
+| `Explore` | `haiku` (유지) | `omitClaudeMd` **제거**(CLI 2.1.270 은 공식 지원 v2.1.271+ 밖) |
+| `capability-steward` | `haiku` (유지) | **`memory: local` 신규** |
+| `home-team` · `community-team` | `claude-sonnet-5` (유지) | 운영 계약 절 |
+| `store-team` · `gto-team` | `claude-sonnet-5` → **`claude-opus-5`** | 〃 |
+| `design-reviewer` · `root-cause-debugger` | `claude-fable-5-1` → **`claude-opus-5`** | 〃 |
+| `critical-reviewer` | `claude-fable-5-1` → **`claude-opus-5`** | **`memory: local` 신규** |
+| `verifier` | `claude-sonnet-5` (유지) | 운영 계약 절 |
+
+결과: opus 6 · sonnet 3 · haiku 2 · **fable 0**. `name` 은 11개 전부 그대로다(바꾸면 기억 경로가 끊긴다).
+기존 본문의 고유 함정·검증 명령은 **지우지 않고** 뒤에 짧은 운영 계약 절만 덧붙였다.
+
+### ④ 라우팅 정본 일원화
+
+`.claude/rules/nuri-team-capabilities.md` 가 **단일 정본**이다. 중복돼 있던 세 곳을 포인터로 바꿨다:
+`AGENTS.md`(모델 표 + 라우팅 절) · `.claude/agents/nuri-lead.md`(2·3장) ·
+`.claude/skills/nuri-capability-gate/SKILL.md`. `CLAUDE.md` 는 라우팅 중복이 없어 **건드리지 않았다**.
+`.claude/settings.json` 과 `.codex/**` 도 손대지 않았다(다른 사용자의 미커밋 변경이 있다).
+
+`.claude/handoff/current.md`(2,060줄)는 **역사본을 같은 폴더에 남기고**(`current.historical-2026-09-21.md`,
+해시 일치 확인) 본문은 포인터로 교체했다. 새로 `docs/TEAM-KNOWLEDGE.md` 를 만들어 공통 교훈 11개(K-01~K-11)와
+`historical` 표(되살리면 안 되는 옛 지침)를 원천 경로와 함께 연결했다.
+
+### ⑤ 검증 게이트 — 14/14 PASS
+
+```
+원본보존 751건 불일치0 · 보존표본 40건 재해시 불일치0 · 정의개수 11 · name고유 11
+frontmatter 실패0 · 모델ID 허용밖0 · 운영계약 11/11 · memory설정 10(Explore 제외)
+기억경로 누락0 · agents하위 0 · 학습검색 링크208건 끊김0 · 색인밖파일 0
+제품보존 0건(HEAD 4d017b3) · 복구시험 11개 복원 해시불일치0
+```
+
+### 🔴 ⑥ 실제 호출 시험 — **여기서 진짜 문제가 나왔다**
+
+4명을 실제로 위임하고(Fable 을 **테스트 목적으로 부르지 않았다**), 모델은 자기 보고가 아니라
+**세션 로그(`~/.claude/projects/**/agent-<id>.jsonl` 의 `"model"` 필드)** 로 관찰했다.
+
+| 역할 | 정의의 model | **관찰된 실제 모델** | 일치 | 시험 내용 |
+|---|---|---|---|---|
+| `capability-steward` | `haiku` (변경 없음) | `claude-haiku-4-5-20251001` | ✅ | 새 색인에서 원천 탐색 · 색인 밖 파일 확인 |
+| `verifier` | `claude-sonnet-5` (변경 없음) | `claude-sonnet-5` | ✅ | sitemap 보호·금지 명령 · 음성 대조 인용 |
+| `critical-reviewer` | `claude-opus-5` (**이번에 변경**) | **`claude-fable-5-1`** | ❌ | 혼합 QR URL 의 RPC 0회 판정 |
+| `Explore` | `haiku` | **`claude-opus-5`** | ❌ | `startTabEnter` 호출부 탐색 |
+
+🔴 **정의의 `model` 을 바꾼 역할만 옛 값으로 실행됐다.** 안 바꾼 둘은 정의대로 돌았다.
+즉 **파일을 고쳐도 실행 중인 세션에는 반영되지 않는다** — 설계서가 "다음 위임부터 반영될 수 있다"고 한 것보다
+캐싱이 강하다. `Explore` 는 프로젝트 정의 대신 **빌트인 Explore 타입**이 쓰인 것으로 보인다(부모 모델 상속).
+
+⚠ **그 결과 Fable 이 의도치 않게 1회 호출됐다**(정책은 개편 중 0회). 확증을 위해 Fable 을 다시 부르지 않았다.
+👉 **다음 사람이 할 일: 새 세션에서 `critical-reviewer`·`design-reviewer`·`root-cause-debugger`·`store-team`·`gto-team`
+을 한 번씩 불러 관찰 모델이 정의대로인지 확인하라.** 위 로그 경로에서 `"model"` 필드를 읽으면 된다.
+
+시험 **내용**은 넷 다 정확했다(원문 경로까지 대조함). 특히 `critical-reviewer` 는 묻지 않은 것까지 잡아냈다 —
+자기 정의가 미커밋 상태이고 HEAD 는 아직 `fable` 이라는 점, 그리고 **새 색인이 루트에만 있어 워크트리 세션은
+못 읽는다**는 점. 후자는 지적받고 바로 고쳤다(양쪽 194파일로 동기화).
+
+### 이번에 내가 낸 사고와 복구
+
+🔴 **`AGENTS.md` 를 한 줄 덮어썼다.** PowerShell `$lines` 는 0-기반인데 1-기반 줄 번호를 그대로 넣어
+헤더가 중복되고 "사용자가 요청한 팀은 대화형 네이티브 팀으로 실행한다" 줄이 사라졌다.
+**백업에서 복구**했고(해시가 checkpoint 와 일치), 이후에는 인덱스 산술 대신 **줄 내용으로 찾아** 교체했다.
+👉 백업을 먼저 만든 것이 그대로 값을 했다. 순서를 바꾸지 마라.
+
+⚠ 그 직후 만든 '소실 검사'가 **4건 전부 LOST 로 거짓 실패**했다 —
+`[regex]::Escape()` 로 이스케이프한 문자열을 `-SimpleMatch` 로 찾았기 때문이다(리터럴로 `\*\*Codex\*\*` 를 찾았다).
+검사 코드가 틀려 멀쩡한 파일을 사고로 오판할 뻔했다. **검사도 검사해야 한다.**
+
+### NOT_RUN / 남은 것
+
+- **새 세션에서의 모델 재확인** — 위 ⑥. 이번 세션에서는 구조적으로 확인 불가.
+- **`design-reviewer`·`root-cause-debugger`·`store-team`·`gto-team`·`home-team`·`community-team`·`nuri-lead` 인계 시험**
+  — 설계서의 "총 4명 이하" 를 지켜 4명만 했다.
+- **다른 checkout 의 활성 설정** — 설계서 지시대로 동시 수정하지 않았다(`account-handover`·`deployment-push-ready`·
+  `suspicious-hertz`·temp `gate-wt` 의 `.claude/agents` 는 **낡은 상태 그대로**다. 백업에는 들어 있다).
+- **`.codex/**`** — 범위 밖이라 읽기만 했다.
+- 팀 개편은 설정·기억·문서 변경이라 **제품 build/E2E 를 돌리지 않았다**(설계서 §8 지시).
+
+---
+
+## 0-a15. 2026-09-21 낮 · Opus 5 — **M1·C1·B1·Q5·Q6 구현 완료** (최신은 위 §0-a16)
 
 실행문서: `.claude/handoff/NURI-MOBILE-BODY-MOTION-COMMUNITY-QR-NAV-REPAIR-2026-09-21.md`(git 미추적).
 **푸시·배포·운영 DB 변경은 하지 않았다** — 오너의 "배포는 하지말고" 지시가 유효하다.
