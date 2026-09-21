@@ -21,6 +21,32 @@ node scripts/gen-nash/emit.mjs /tmp/solved.json src/lib/nash.data.ts ante 12,15,
 npx vitest run src/lib/ranges.test.ts src/lib/nash.data.test.ts src/lib/preflopQuiz.test.ts
 ```
 
+## 🔴 2026-09-21 추가 — 빅앤티 k≥2 **2~10bb 를 '추정' 등급으로 채웠다** (`solve-multi.mjs`)
+
+오너 결정 2026-09-21 "근사 계산 — 오늘 안에"(선택지: 정확 계산=3인 에퀴티 169³ 산출 하루 단위 / 근사 / 옛 값 / 유지).
+
+- 모델 차이는 하나: **두 번째 콜러(오버콜)까지 본다.** 세 번째 이후는 접는다고 본다.
+  3인 에퀴티는 2인 행렬의 **곱 정규화 근사** `Eq3(h;x,y) = e_hx·e_hy / (e_hx·e_hy + e_xh·e_xy + e_yh·e_yx)`,
+  3인 카드 제거는 `N[h][y]·N[x][y]` 정규화. 전략은 셔브 H · 첫 콜 C_m · 오버콜 O_m 셋이고, 3인 항(169³·k)은
+  바깥 라운드마다 캐시(V_m·U_m)하고 안쪽 fictitious play 는 캐시로 돈다(바깥 30 × 안쪽 300).
+- 산출물의 등급은 **추정**이다: `nash.data.ts` 의 `NASH_ANTE_APPROX`(2~10) · `isNashApprox()` · `hasNashRange/nashRange(..., allowApprox)`.
+  격리(`NASH_ANTE_QUARANTINE`)는 **그대로** 라 드릴·스팟 분석은 이 값을 쓰지 않고, 차트만 '추정' 배지를 달고 읽는다.
+- 스모크(300회 에퀴티, 바깥 6·안쪽 100)에서 방향 확인: k8 5bb 셔브 48.4% → **26.7%**(K2o 100% → 17%) · k8 10bb 18.8 → 12.8 ·
+  k2 5bb 59.2 → 49.6 · k2 10bb 43.8 → 42.7(BTN 은 오버콜러가 BB 하나라 변화가 작다). 오버콜 빈도 BB 20~38%.
+- 실행(저장소 루트):
+
+```bash
+node scripts/gen-nash/equity169.mjs 12000 /tmp/equity169.json                 # 2026-09-21 은 12,000회(≈20분) — 40,000회면 80분
+node scripts/gen-nash/solve-multi.mjs /tmp/equity169.json /tmp/multi.json 30 300   # 63표(k2~8 × 2~10bb, 빅앤티), 워커 CPU-1
+node <scratch>/merge-check.mjs src/lib/nash.data.ts /tmp/multi.json /tmp/merged.json   # 게시 표 위에 덮어 check.mjs 형식으로
+node scripts/gen-nash/check.mjs /tmp/merged.json 1 "" 2                       # 단조성·상식·교차 — 위반은 아래 표에 기록
+node scripts/gen-nash/emit.mjs /tmp/multi.json src/lib/nash.data.ts ante 2,3,4,5,6,7,8,9,10 2,3,4,5,6,7,8
+npx vitest run src/lib/ranges.test.ts src/lib/nash.data.test.ts src/lib/preflopQuiz.test.ts
+```
+
+- ⚠ **이 값은 검증된 값이 아니라 추정이다.** 독립 기준점(다인 푸시/폴드 공표 표)이 없다. 진짜 3인 에퀴티(169³ 몬테카를로)로
+  다시 풀면 `NASH_ANTE_APPROX` 와 `NASH_ANTE_QUARANTINE` 에서 그 깊이를 **함께** 빼고 배지를 내려라.
+- 결과 요약·check.mjs 위반 목록은 `docs/HANDOFF.md` §0-a23 에 적었다.
 ## 🔴 지금 저장소에 실린 범위 (2026-09-19)
 
 | 열 | 실린 값 | 왜 |

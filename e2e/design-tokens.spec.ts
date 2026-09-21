@@ -194,8 +194,15 @@ test.describe('손이 닿는 곳의 정밀도', () => {
         if (r.width === 0 || r.height === 0) continue;          // 숨김
         if (r.bottom < 0 || r.top > innerHeight) continue;       // 화면 밖
         const e = effective(el, r);
-        // 인라인 텍스트 링크형(높이만 작은 것)은 제외하고, 아이콘형 작은 버튼만 잡는다
-        if (e.h < 40 && e.w < 120) {
+        // 인라인 텍스트 링크형(높이만 작은 것)은 제외하고, 아이콘형 작은 버튼만 잡는다.
+        // 🔴 2026-09-21: 폭 120px 휴리스틱만으로는 **짧은 이름의 글자 링크**(일정 카드 매장명 '누리 테스트 홀덤펍·서울' 114×18px)가
+        //   아이콘 버튼으로 잡혔다 — 더미 일정이 홈에 다시 뜨자 드러났다(일정 0건이던 동안은 잴 대상이 없었다).
+        //   오버행(tap-y-44)으로 키우면 home-flow-fit 의 잘림 게이트가 그 의사요소를 잘림으로 세고(CI f966f44 빨강),
+        //   실제 패딩으로 키우면 카드 높이(--card-h-list 예약)가 어긋난다. 그래서 글자 링크는 의도대로 제외한다:
+        //   svg/img 가 없고 글자가 4자 이상이며 한 줄(24px 미만)이면 글자 링크다. 카드 자체가 1차 표적이라 보조 표적이다.
+        //   ⚠ 아이콘 버튼·2~3자 글자 버튼(✕·닫기·더보기)은 그대로 잡는다 — 게이트가 느슨해진 게 아니라 분류가 의도에 맞춰진 것이다.
+        const textLink = !el.querySelector('svg, img') && (el.textContent || '').trim().length >= 4 && e.h < 24;
+        if (e.h < 40 && e.w < 120 && !textLink) {
           out.push({ label: (el.textContent || el.getAttribute('aria-label') || '?').trim().slice(0, 18), w: Math.round(e.w), h: Math.round(e.h) });
         }
       }

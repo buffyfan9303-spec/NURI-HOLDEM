@@ -1,7 +1,7 @@
 // 레인지 파서·콤보 가중·Nash 데이터 정합 검증
 import { describe, it, expect } from 'vitest';
 import { expandRange, buildFreq, comboCount, rangeComboPct, gridName, freqFromArray, R_CH, R_VAL } from './ranges';
-import { HAND_ORDER, NASH_STACKS, NASH_KS, NASH_CALLBB_QUARANTINE, nashRange, hasNashRange, isNashQuarantined } from './nash.data';
+import { HAND_ORDER, NASH_STACKS, NASH_KS, NASH_CALLBB_QUARANTINE, nashRange, hasNashRange, isNashQuarantined, isNashApprox, type NashKind } from './nash.data';
 import { RANGE_SCENARIOS } from './ranges.data';
 
 describe('expandRange 표기 파서', () => {
@@ -182,6 +182,30 @@ describe('nash.data 정합', () => {
     expect(hasNashRange('shove', 2, 12, true), '12bb 빅앤티 k≥2 가 막혔다 — 격리 상한이 밀렸다').toBe(true);
     // k 를 안 넘기면 보수적으로 격리 — '모르면 덜 말한다'
     expect(isNashQuarantined(3, true)).toBe(true);
+  });
+
+  it('🔴 추정 구간(빅앤티 2~10BB k≥2) — 차트만 allowApprox 로 읽고, 기본 경로(드릴·스팟)는 여전히 격리다 (2026-09-21)', () => {
+    // 오너 결정 2026-09-21 "근사 계산 — 오늘 안에": 격리 구간을 다인 콜 근사 값으로 채우되 등급은 '추정' 이다.
+    // 이 계약이 없으면 ① 추정값이 드릴 채점에 새거나 ② 추정 표가 전부 0(=전부 폴드)인 채로 차트에 나갈 수 있다.
+    for (const s of [2, 3, 4, 5, 6, 7, 8, 9, 10]) for (const k of [2, 5, 8]) for (const kind of ['shove', 'callBB', 'callSB'] as const) {
+      expect(isNashApprox(s, true, k)).toBe(true);
+      expect(hasNashRange(kind, k, s, true), `${kind} ${s}bb k=${k} 기본 경로가 추정값을 내보낸다 — 드릴·스팟에 샌다`).toBe(false);
+      expect(hasNashRange(kind, k, s, true, true), `${kind} ${s}bb k=${k} 추정값이 없다`).toBe(true);
+      expect(Array.from(nashRange(kind, k, s, true, true)).some((f) => f > 0), `${kind} ${s}bb k=${k} 추정 표가 전부 0(=전부 폴드)이다`).toBe(true);
+    }
+    expect(isNashApprox(12, true, 2), '12bb 는 정식 등급이다').toBe(false);
+    expect(isNashApprox(5, false, 2), '노앤티는 추정 구간이 아니다').toBe(false);
+    expect(isNashApprox(5, true, 1), 'SB(k=1)는 정확값이다').toBe(false);
+    expect(isNashApprox(5, true), 'k 를 모르면 추정이라고 말하지 않는다').toBe(false);
+    // 추정 표도 k 단조(뒤 인원↑ → 좁아짐)·스택 단조(얕을수록 넓음)를 지킨다. 허용 1.0%p — 8단 양자화.
+    //   10↔12bb 경계는 모델이 갈리는 자리(다인 콜 근사 ↔ 단일 콜러)라 여기서 단조를 강제하지 않는다 — check.mjs 가 참고로 센다.
+    const pct = (kind: NashKind, k: number, s: number) => rangeComboPct(freqFromArray(nashRange(kind, k, s, true, true), HAND_ORDER));
+    const broken: string[] = [];
+    for (const kind of ['shove', 'callBB', 'callSB'] as const) {
+      for (const s of [2, 3, 4, 5, 6, 7, 8, 9, 10]) for (const [a, b] of [[2, 5], [5, 8]]) if (pct(kind, a, s) < pct(kind, b, s) - 1.0) broken.push(`${kind} ${s}bb k${a}(${pct(kind, a, s).toFixed(1)}) < k${b}(${pct(kind, b, s).toFixed(1)})`);
+      for (const k of [2, 5, 8]) for (const [sh, dp] of [[2, 3], [3, 5], [5, 7], [7, 10]]) if (pct(kind, k, sh) < pct(kind, k, dp) - 1.0) broken.push(`${kind} k${k} ${sh}bb(${pct(kind, k, sh).toFixed(1)}) < ${dp}bb(${pct(kind, k, dp).toFixed(1)})`);
+    }
+    expect(broken, `추정 표 단조성 위반: ${broken.join(' · ')}`).toEqual([]);
   });
 
   it('🔴 콜 표(callBB·callSB)도 전 깊이 × 앤티 유무 단조성 — 셔브 표에만 있던 계약이라 BB 콜 7~9bb 역전이 새어 나갔다(2026-09-19)', () => {

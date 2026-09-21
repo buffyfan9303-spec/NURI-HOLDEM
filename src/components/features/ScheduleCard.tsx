@@ -251,14 +251,15 @@ function VenueLink({
     );
   }
   return (
-    // 🔴 2026-09-21 — 이 링크의 실제 박스는 18px(글줄 하나)이다. 더미 일정 5건이 홈에 다시 뜨자 design-tokens 의
-    //   '28px 미만 히트영역' 게이트가 이 자리를 잡았다(코드 변경 0 — 일정이 0건이던 동안 잴 대상이 없어 조용히 통과했다).
-    //   tap-y-44(::before, 위아래 6px 오버행) 로 30px. `.hit`(44px 중앙 오버레이)는 아래 제목 줄을 13px 덮어
-    //   카드 탭을 매장 링크가 가로채므로 쓰지 않는다. 카드 높이(--card-h-list)는 그대로다.
+    // ⚠ 2026-09-21 — 이 링크의 실제 박스는 18px(글줄 하나)이다. 더미 일정이 홈에 다시 뜨자 design-tokens 의
+    //   '28px 미만 히트영역' 게이트가 이 자리를 잡았고, `tap-y-44`(::before 오버행)로 키웠더니 이번엔 home-flow-fit 의
+    //   잘림 게이트(scrollHeight > clientHeight)가 그 의사요소를 '잘림' 으로 세어 CI 가 빨개졌다(f966f44).
+    //   실제 패딩으로 키우면 카드 높이가 `--card-h-list` 예약과 어긋난다(HomeTab 스켈레톤·CLS). 그래서 **키우지 않는다** —
+    //   카드 전체가 1차 표적이고 이 링크는 보조 표적이다. design-tokens 는 글자 링크를 문서된 의도대로 제외한다(§0-a23).
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
-      className={`group tap-y-44 ${rootCls} hover:text-accent-300 transition-colors`}
+      className={`group ${rootCls} hover:text-accent-300 transition-colors`}
     >
       <span className={`${nameCls} underline decoration-dotted underline-offset-2 group-hover:text-accent-300`}>
         {pubName}

@@ -114,6 +114,25 @@ npx tsc -b --force                # rc=0 이어야 한다
 · 실패 1 = `design-tokens` '28px 미만 히트영역': 일정 카드의 **매장명 링크(`VenueLink`, 18px)** — 코드가 아니라 **더미 일정이 홈에 다시 뜨면서** 드러났다(일정 0건이던 동안은 잴 대상이 없어 조용히 통과). `ScheduleCard.tsx` 링크에 `tap-y-44`(30px) → 재실행 **PASS**(design-tokens·first-screen·tools 27 passed).
 · flaky 1 = `mystore-transition-cls` PC 1440 A(재시도 통과 — 종전에도 흔들리던 스펙).
 
+### 🔴 이어서(같은 밤) — 푸시·폴드 2~10bb '닫힌 부분' = 격리 구간 → **다인 콜 근사 '추정' 값으로 채움** + CI 빨강 1건 정정
+
+오너 정정: "푸쉬폴드 2bb~10bb 까지 닫혀있는 부분 말하는건데" — 내가 위 ⑤에서 히트영역으로 잘못 읽었다. 닫힌 부분 = `NASH_ANTE_QUARANTINE`(빅앤티 k≥2 2~10bb, 2026-09-19 오너 승인 격리).
+오너 결정(AskUserQuestion, 2026-09-21 밤): **근사 계산 — 오늘 안에**. 선택지는 정확 계산(3인 에퀴티 169³ 산출, 6~14시간) / 근사 / 옛 값+경고 / 유지 였다.
+
+| 단계 | 한 것 | 증거 |
+|---|---|---|
+| 에퀴티 | `equity169.mjs` 12,000회/쌍(캐시 없음 → 재산출 ≈ 20분) | scratchpad `equity169.json` 470KB · 재현: 쌍 번호 seed |
+| 솔버 | **새 파일** `scripts/gen-nash/solve-multi.mjs` — 두 번째 콜러(오버콜)까지, 3인 에퀴티는 2인 곱 정규화 근사, 3인 항은 바깥 라운드 캐시(30×300) | 63표(k2~8 × 2~10bb) 76초(11워커) |
+| 검사 | 게시 표에 덮어 `check.mjs`: **단조성·상식 위반 0**(k=1↔2·10↔12bb 경계 포함). ⑤ 빅앤티≥노앤티 교차 검사 **위반 40건** — 전부 2~5bb k≥2 셔브·callSB(예: k8 2bb 42.9 < 노앤티 76.5) | 비교 대상 '모델노앤티' 는 **단일 콜러 모델**(격리 사유 그 자체)이라 다른 모델끼리의 비교다. 얕을수록 오버콜이 잦아 근사가 더 좁은 것이 그 격차의 방향이다 — 앤티 회계 오류 징후가 아니라고 판단(독립 검토 워크플로 결과는 아래) |
+| 값 | 셔브 k2(BTN) 2bb 61.4 → 10bb 42.3 · k5 47.3 → 22.3 · k8(UTG9) 44.0 → 14.6 · **k8 5bb K2o 3%**(옛 격리 값 100%) | `check.log` 요약표 · 12bb 정식 값(k8 12.3)과 이어짐 |
+| 게시 | `emit.mjs ante 2~10 k2~8` → `nash.data.ts` 189 문자열 교체. 등급은 **추정**: `NASH_ANTE_APPROX`·`isNashApprox()`·`hasNashRange/nashRange(..., allowApprox)`. **격리(`isNashQuarantined`)는 유지** → 드릴·스팟 분석은 추정값을 안 쓴다. 차트만 `allowApprox=true` + 배지 '다인 콜 근사(추정)' (`data-testid=pushfold-source data-approx`) | `ranges.test.ts` 추정 계약(기본 경로 격리 유지·추정 표 비어 있지 않음·k/스택 단조) · `nash.data.test.ts` 소스 계약 3건을 5번째 인자에 맞게 정정 · `pushfold-ticks.spec.ts` 를 '없음' 계약에서 '추정 등급' 계약으로 개정 |
+
+⚠ **이 값은 추정이다.** 독립 기준점(다인 푸시/폴드 공표 표)이 없다. 진짜 3인 에퀴티로 다시 풀면 `NASH_ANTE_APPROX`·`NASH_ANTE_QUARANTINE` 에서 그 깊이를 **함께** 빼라(README '2026-09-21 추가').
+
+**CI f966f44 빨강(첫 커밋)** — `home-flow-fit` 320/360: 일정 카드 매장명 링크(`VenueLink`)에 넣은 `tap-y-44` 의 ::before 오버행을 잘림 게이트(scrollHeight>clientHeight)가 '잘림' 으로 셌다(버튼 38/44 · 부모 행 57/63). **내 실수**: 마지막 수정 뒤 design-tokens·first-screen·tools 만 재실행하고 같은 카드를 읽는 home-flow-fit 을 안 돌렸다.
+→ 오버행 **되돌림**. 실제 패딩으로 키우면 `--card-h-list` 예약(HomeTab 스켈레톤·CLS)과 어긋나므로 키우지 않고, design-tokens 의 글자 링크 제외를 문서된 의도대로 정밀화(svg/img 없음 · 4자 이상 · 24px 미만 = 글자 링크). 카드 전체가 1차 표적, 매장명은 보조 표적 — **오너가 매장명 링크도 44px 로 원하면 카드 행 높이 결정이 필요하다(미결)**.
+
+게이트(추정 표 반영 빌드, 4173 · `--retries=2`): tsc 0 · eslint 0 · lint 0 · vitest **267 파일 / 2912 통과** · 전체 e2e **669 passed / 0 failed / 1 flaky(nuri-spot-board, 재시도 통과) / 11 skipped** · 대상 6스펙(pushfold-ticks·gto-tab-verify·tools·home-flow-fit·design-tokens·first-screen) 71 passed · 사이트맵 md5 보존. 독립 검토 워크플로(모델 회계·수치 타당성 → 반증): 커밋 시점에 진행 중 — 결과는 이 절 다음 갱신에 적는다.
 🔴 배운 것: ① 운영 화면에서 "빈 공간" 으로 보이는 자리는 **먼저 그 자리에 무엇이 그려져 있어야 하는지** 부터 본다 — 라벨은 DOM·색·opacity 전부 정상이었고 페인트 순서만 틀렸다(static 블록 vs absolute 형제). ② 히트 측정은 대상이 화면 안에 있을 때만 의미가 있다(가로 스크롤 행의 끝 칩). ③ 라이브에 `approved` 를 세우려면 admin JWT 가 있어야 한다 — MCP 로 세우려면 트리거 우회가 필요하고 그때 알림 트리거도 같이 꺼진다(더미엔 오히려 맞다).
 
 되돌리기: 더미 일정 → `update schedules set approved=false where id::text like 'dddd0000-0000-4000-8000-00000000012%'`(8-ⓓ 와 같은 방식; 트리거가 false 로 내리는 건 막지 않는다) 또는 delete.

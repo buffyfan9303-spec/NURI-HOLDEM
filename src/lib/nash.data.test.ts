@@ -35,7 +35,8 @@ describe('PushFoldChart 화면 계약(소스)', () => {
   const src = readFileSync(join(__dirname, '../components/features/tools/PushFoldChart.tsx'), 'utf-8');
 
   it('표가 없는 조합에서 행렬 대신 "데이터가 없습니다" 를 그린다', () => {
-    expect(src).toMatch(/const hasData = hasNashRange\(effView, k, stack, NASH_BIG_ANTE\)/);
+    // 2026-09-21: 5번째 인자 `true` 는 allowApprox(추정 구간 표시 허용)다 — 앤티 리터럴이 아니다(nash.data.ts NASH_ANTE_APPROX).
+    expect(src).toMatch(/const hasData = hasNashRange\(effView, k, stack, NASH_BIG_ANTE, true\)/);
     expect(src).toMatch(/\{hasData\s*\?\s*<RangeMatrix13/);
     expect(src).toContain('데이터가 없습니다');
   });
@@ -76,7 +77,7 @@ describe('PushFoldChart 화면 계약(소스)', () => {
   it('③ 빅 앤티 고정 — 앤티 토글·상태가 없고 데이터는 ante=on 만 읽는다 · ④ "앤티 = …" 설명이 없다', () => {
     expect(NASH_BIG_ANTE).toBe(true);
     expect(src).not.toMatch(/const BIG_ANTE\b/);                        // 화면 안 사본 금지 — 공용 상수만
-    expect(src).toMatch(/nashRange\(effView, k, stack, NASH_BIG_ANTE\)/);
+    expect(src).toMatch(/nashRange\(effView, k, stack, NASH_BIG_ANTE, true\)/);   // 5번째 true = allowApprox(2026-09-21)
     expect(src).not.toMatch(/useState[^\n]*[Aa]nte/);   // const [ante, setAnte] 금지
     expect(src).not.toContain("'없음'");                 // 앤티 '없음' 선택지 금지
     expect(src).not.toContain('앤티 = ');                // 부가설명 제거
@@ -90,8 +91,9 @@ describe('차트와 드릴은 같은 Nash 표(공용 NASH_BIG_ANTE)를 읽는다
 
   it('두 소스 어디에도 ante 리터럴(true/false)로 nashRange 를 부르는 곳이 없다', () => {
     for (const [name, s] of [['preflopQuiz.ts', quizSrc], ['PushFoldChart.tsx', chartSrc]] as const) {
-      expect(s, `${name} 가 ante 리터럴로 표를 읽는다`).not.toMatch(/nashRange\([^)]*,\s*(true|false)\s*\)/);
-      expect(s, `${name} 가 공용 상수를 안 쓴다`).toMatch(/nashRange\([^)]*NASH_BIG_ANTE\)/);
+      // 4번째 인자(ante)가 리터럴이면 안 된다. 5번째 인자(allowApprox, 2026-09-21)는 리터럴 true 가 맞다 — 그래서 4번째 자리만 본다.
+      expect(s, `${name} 가 ante 리터럴로 표를 읽는다`).not.toMatch(/nashRange\(\s*[^,()]+,\s*[^,()]+,\s*[^,()]+,\s*(true|false)\s*[,)]/);
+      expect(s, `${name} 가 공용 상수를 안 쓴다`).toMatch(/nashRange\([^)]*NASH_BIG_ANTE(, true)?\)/);
     }
   });
 

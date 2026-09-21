@@ -4,7 +4,7 @@ import RangeMatrix13, { type MatrixAction } from './RangeMatrix13';
 import SourceBadge from './SourceBadge';
 import { ACTION_COLORS } from '../../../lib/ranges.data';
 import { freqFromArray } from '../../../lib/ranges';
-import { HAND_ORDER, NASH_BIG_ANTE, NASH_STACKS, hasNashRange, nashRange, isNashQuarantined } from '../../../lib/nash.data';
+import { HAND_ORDER, NASH_BIG_ANTE, NASH_STACKS, hasNashRange, nashRange, isNashQuarantined, isNashApprox } from '../../../lib/nash.data';
 import SegmentedTabs from '../../atoms/SegmentedTabs';
 
 // 푸시·폴드 차트 — 자체 계산 Nash 균형(fictitious play)로 전면 교체.
@@ -41,6 +41,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
   // 기본 12bb — **격리 구간을 피한 가장 얕은 깊이**다(빅앤티 k≥2 는 2~10bb 가 격리라 기본 BTN 10bb 면 첫 화면이
   //   빈 상자가 된다: 오너가 원래 항의한 그 증상이 기본값이 되는 것). 격리 하한이 바뀌면 여기도 같이 봐라 —
   //   `nash.data.ts` 의 NASH_ANTE_QUARANTINE. 실측 BTN 12bb 39.0%(2026-09-19).
+  //   2026-09-21 부터 2~10bb 는 추정값(NASH_ANTE_APPROX)으로 열렸지만 기본은 여전히 12bb — 첫 화면은 정식 등급 표다.
   const [stack, setStack] = useState((NASH_STACKS as readonly number[]).includes(initialStack ?? -1) ? initialStack! : 12);
   const [view, setView] = useState<View>(initialView ?? 'shove');
   const pos = POSITIONS.find((p) => p.k === k)!;
@@ -49,10 +50,13 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
   // SB 콜 레인지는 SB 가 콜러인 상황(k>=2)에서만 존재(k=1 은 SB 가 셔버 본인)
   const effView: View = view === 'callSB' && k < 2 ? 'callBB' : view;
   // 표가 없는 조합은 행렬을 그리지 않는다 — 빈 표를 decode 하면 전부 0(=전부 폴드)이라 틀린 조언이 된다.
-  const hasData = hasNashRange(effView, k, stack, NASH_BIG_ANTE);
+  // 🔴 2026-09-21 오너 "2bb~10bb 닫혀 있는 부분 계산해서 적용" → 다인 콜 **근사** 값(NASH_ANTE_APPROX)을 차트만 읽는다
+  //   (`allowApprox=true`). 드릴·스팟 분석은 여전히 격리다. 추정 구간은 아래 배지가 '추정' 이라고 말한다.
+  const hasData = hasNashRange(effView, k, stack, NASH_BIG_ANTE, true);
+  const approx = isNashApprox(stack, NASH_BIG_ANTE, k);
 
   const actions = useMemo<MatrixAction[]>(() => {
-    const arr = nashRange(effView, k, stack, NASH_BIG_ANTE);
+    const arr = nashRange(effView, k, stack, NASH_BIG_ANTE, true);
     return [{
       key: effView,
       label: effView === 'shove' ? '올인' : '콜',
@@ -117,7 +121,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
         <div className="flex justify-between" aria-hidden="true">
           {NASH_STACKS.map((s) => {
             const on = s === stack;
-            const has = hasNashRange(effView, k, s, NASH_BIG_ANTE);
+            const has = hasNashRange(effView, k, s, NASH_BIG_ANTE, true);
             return (
               <button key={s} type="button" tabIndex={-1} onClick={() => setStack(s)}
                 data-stack={s} data-has-data={has ? 'true' : 'false'}
@@ -143,7 +147,10 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
       </p>
 
       {/* 자체 산출 Nash 다 — 상용 솔버 표가 아니라는 것이 결과 옆에서 바로 보여야 한다. */}
-      <div className="flex justify-center"><SourceBadge kind="nash" note="빅 앤티 · first-in" /></div>
+      {/* 추정 구간(빅앤티 2~10bb · 뒤 2명+)은 배지 문구로 등급을 가른다 — e2e/pushfold-ticks 가 '추정' 유무를 본다. */}
+      <div className="flex justify-center" data-testid="pushfold-source" data-approx={approx ? 'true' : 'false'}>
+        <SourceBadge kind="nash" note={approx ? '빅 앤티 · first-in · 다인 콜 근사(추정)' : '빅 앤티 · first-in'} />
+      </div>
       {hasData
         ? <RangeMatrix13 actions={actions} initialSel={highlight} />
         : (
@@ -163,8 +170,8 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
                 <p className="font-bold break-keep">{pos.label} · {stack}bb — 이 표는 값이 틀린 것이 확인돼 <b className="text-aura-300">일시적으로 내렸습니다</b>.</p>
                 <p className="mt-1 text-2xs leading-relaxed text-ink-secondary break-keep">
                   가까운 깊이로 대체하지 않습니다. 눈금에서 점선으로 표시된 깊이(
-                  {NASH_STACKS.filter((s) => !hasNashRange(effView, k, s, NASH_BIG_ANTE)).join('·')}bb)가 그 구간이고,
-                  <b> SB(뒤 1명)</b>와 <b>{NASH_STACKS.find((s) => hasNashRange(effView, k, s, NASH_BIG_ANTE)) ?? 7}bb 이상</b>은 그대로 쓰실 수 있어요. 표를 다시 만들면 돌아옵니다.
+                  {NASH_STACKS.filter((s) => !hasNashRange(effView, k, s, NASH_BIG_ANTE, true)).join('·')}bb)가 그 구간이고,
+                  <b> SB(뒤 1명)</b>와 <b>{NASH_STACKS.find((s) => hasNashRange(effView, k, s, NASH_BIG_ANTE, true)) ?? 7}bb 이상</b>은 그대로 쓰실 수 있어요. 표를 다시 만들면 돌아옵니다.
                 </p>
               </>
             ) : (
@@ -178,7 +185,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
           ⚠ 2026-09-19 까지는 '생성기 재현 필요' 였다. 생성기가 유실돼 사실이었지만 이제 `scripts/gen-nash/` 로
             **이 화면이 읽는 빅 앤티 표는 전부 다시 만들 수 있다** — 그대로 두면 거짓 고지가 된다. */}
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
-        ※ 자체 계산 Nash(첫 진입 올인 · 단일 콜러) · 빅 앤티 기준 · 부분 채움 셀 = 그 빈도만큼 올인 · <b>재산출 가능</b>
+        ※ 자체 계산 Nash(첫 진입 올인 · {approx ? '콜러 2명까지 근사' : '단일 콜러'}) · 빅 앤티 기준 · 부분 채움 셀 = 그 빈도만큼 올인 · <b>재산출 가능</b>
       </p>
     </CalcCard>
   );
