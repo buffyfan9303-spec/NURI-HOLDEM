@@ -52,7 +52,21 @@ const BANNED: { re: RegExp; why: string }[] = [
 ];
 
 describe('운영 분석 표면 — 인력 판단·추천은 어디에도 만들지 않는다', () => {
-  const files = [...walk(SRC), ...walk(FUNCS)].filter((p) => !p.endsWith('opsAnalysisSurface.test.ts'));
+  const srcFiles = walk(SRC);
+  const funcFiles = walk(FUNCS);
+  const files = [...srcFiles, ...funcFiles].filter((p) => !p.endsWith('opsAnalysisSurface.test.ts'));
+
+  // 🔴 2026-09-21 — 이 검사가 **조용히 꺼질 수 있었다.** `walk` 는 `try { readdirSync } catch { return out }`
+  //   라서 경로가 사라지면 오류 없이 빈 배열을 돌려준다. 그러면 아래 `toEqual([])` 들이
+  //   **아무것도 안 훑은 채 통과**한다 — 지키는 것이 오너 지시(2026-09-11)인데 말이다.
+  //   ⚠ 총 개수 바닥 하나로는 못 막는다: src 615 + functions 0 = 615 라 어떤 바닥도 통과한다.
+  //     **경로별로** 단언해야 supabase/functions 가 빠진 것을 잡는다.
+  it('스캔 대상이 실제로 있다 — 경로가 바뀌면 이 계약이 조용히 꺼진다', () => {
+    expect(srcFiles.length, 'src 를 한 파일도 못 읽었다 — walk 의 catch 가 삼켰거나 경로가 바뀌었다')
+      .toBeGreaterThan(100);
+    expect(funcFiles.length, 'supabase/functions 를 한 파일도 못 읽었다 — 엣지 함수 쪽 계약이 통째로 꺼져 있다')
+      .toBeGreaterThan(0);
+  });
 
   it('src 와 엣지 함수 전체에 인력 부족·과다·증원 추천 문구가 없다', () => {
     const hits: string[] = [];

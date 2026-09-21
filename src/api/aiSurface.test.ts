@@ -84,7 +84,10 @@ describe('외부 생성형 AI 표면 — TDA 규칙 질의 하나만 남는다',
   });
 
   it('엣지 함수 중 Gemini 를 부르는 것은 tda-assist 뿐이고, 옛 gemini 함수는 거절 스텁이다', () => {
-    if (!existsSync(FUNCS)) return;
+    // 🔴 2026-09-21 — 예전엔 `if (!existsSync(FUNCS)) return;` 이었다. 경로가 사라지면
+    //   이 계약이 **통째로 조용히 꺼진다**(아래 toEqual(['tda-assist']) 까지 같이 안 돈다).
+    //   없으면 건너뛸 게 아니라 **크게 실패**해야 한다 — 엣지 함수는 사라질 물건이 아니다.
+    expect(existsSync(FUNCS), 'supabase/functions 가 없다 — Gemini 호출 계약이 통째로 꺼진다').toBe(true);
     const callers: string[] = [];
     for (const dir of readdirSync(FUNCS)) {
       const idx = join(FUNCS, dir, 'index.ts');
