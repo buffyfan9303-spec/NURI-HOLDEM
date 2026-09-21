@@ -2853,9 +2853,10 @@ export default function App() {
   const handleScheduleSelect = useCallback((s: Schedule) => {
     // 포스터 상세는 전체화면 2열 모달(PC: 포스터 좌+정보 우)로 표시 — 좁은 패널보다 가독성↑
     // 마운트 비용을 스냅샷 뒤에서 치러 sheet-up 첫 프레임 드랍을 없앤다(미지원은 기존 경로)
-    if (!schedEverOpenedRef.current) {
+    if (!schedEverOpenedRef.current || !window.matchMedia('(min-width: 1024px)').matches) {
       schedEverOpenedRef.current = true;
-      // 🔴 첫 열림만 VT 를 쓰지 않는다 (2026-09-18 프레임 실측).
+      // Mobile poster navigation stays on live DOM, like the main tabs (avoid overlapping page snapshots).
+      // Desktop still skips VT on the first mount (2026-09-18 frame measurement).
       //   `lazyWithReload` 는 `lazy(async () => …)` 라 **청크가 이미 캐시에 있어도 첫 렌더는 반드시
       //   한 번 서스펜드**한다. 그 서스펜드가 `flushSync` 안에서 일어나면 바깥 경계(App.tsx:4139
       //   `<Suspense fallback={<OverlayFallback/>}>`)의 **불투명 전면 오버레이가 new 스냅샷**이 된다.
@@ -2867,7 +2868,7 @@ export default function App() {
       //     warm 은 **한 번 렌더된 뒤**부터다. 그래서 판정 기준이 '청크 유무' 가 아니라 이 ref 다.
       //   트랜지션이면 리액트가 폴백을 커밋하지 않고 준비될 때까지 이전 화면(목록)을 유지한다.
       //   같은 조리법의 전례가 셋 있다 — openLogin(1162) · openMeCb(3360) · openEvent.
-      setVtPosterId(s.id); // 이름은 그대로 붙인다 — **닫기 역모핑**은 첫 열림 뒤에도 돌아야 한다
+      setVtPosterId(s.id); // PC로 크기를 바꾼 뒤 닫아도 역모핑할 수 있게 이름은 유지한다
       startTransition(() => setOpenSchedule(s));
       return;
     }
@@ -2886,6 +2887,11 @@ export default function App() {
     const backToMe = meReturnRef.current;
     meReturnRef.current = false;
     const commit = () => { setOpenSchedule(null); if (backToMe) setVoucherWalletOpen(true); };
+    if (!window.matchMedia('(min-width: 1024px)').matches) {
+      commit();
+      setVtPosterId(null);
+      return;
+    }
     withViewTransition(
       () => flushSync(commit), // new 쪽: 카드가 이름을 되찾아 역모핑
       commit,

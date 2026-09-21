@@ -5,6 +5,7 @@
 // Run against a fresh preview: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/mobile-tab-transition.spec.ts
 import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack } from './_session';
+import { mockSchedules } from './_schedules';
 
 // 🔴 2026-09-21 실측 — 여기 있던 `test.use({ reducedMotion: 'no-preference' })` 를 지웠다.
 //   **런타임에 아무것도 하지 않는다**: `reducedMotion` 은 playwright-core 의 *브라우저 컨텍스트* 옵션이고
@@ -93,6 +94,72 @@ for (const width of [390, 1023, 1024]) {
     await cdp.detach();
   });
 }
+
+// Samsung Internet: poster return must use the live home on mobile, too.
+// Negative control: the pre-fix production build creates one VT on the first close.
+test.describe('schedule detail return snapshots', () => {
+  test.use({ contextOptions: { reducedMotion: 'no-preference' } });
+  for (const width of [390, 1024]) {
+    test(`home poster X/back and resize at ${width}px`, async ({ page }) => {
+      test.setTimeout(60_000);
+      await stabilizeBackstack(page);
+      await mockSchedules(page);
+      await page.setViewportSize({ width, height: 844 });
+      await page.addInitScript(() => {
+        const native = document.startViewTransition.bind(document);
+        let calls = 0;
+        Object.defineProperty(window, '__scheduleVtCalls', { get: () => calls });
+        document.startViewTransition = (...args) => { calls += 1; return native(...args); };
+      });
+      await page.goto('/');
+      await dismissOverlays(page);
+      const home = page.locator('.tab-pane[data-tab="home"]');
+      const card = home.getByRole('button').filter({ hasText: '목킹 데일리 A' });
+      const detail = page.getByRole('dialog', { name: '전체화면 보기', exact: true });
+      const count = () => page.evaluate(() => Reflect.get(window, '__scheduleVtCalls') as number);
+      const settle = () => page.waitForFunction(() => !document.getAnimations().some((a) =>
+        (a.effect as KeyframeEffect | null)?.pseudoElement?.startsWith('::view-transition')));
+      await expect(card).toBeVisible();
+      await page.evaluate(() => window.scrollTo(0, 140));
+      // Let the scroll-compressed header settle before measuring the return position.
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+      for (const back of [false, true]) {
+        await card.click();
+        await expect(detail).toBeVisible();
+        await expect(detail.getByRole('heading', { name: '목킹 데일리 A', exact: true })).toBeVisible();
+        await settle();
+        const y = await page.evaluate(() => window.scrollY);
+        const before = await home.boundingBox();
+        const calls = await count();
+        if (back) await page.evaluate(() => history.back());
+        else await detail.locator('button[aria-label="닫기"]:visible').first().click();
+        await expect(detail).toHaveCount(0);
+        await expect(card).toBeVisible();
+        await settle();
+        expect(await count(), 'mobile poster return created a page snapshot').toBe(calls + (width < 1024 ? 0 : 1));
+        if (width < 1024) expect(await count(), 'mobile poster reopen created a page snapshot').toBe(0);
+        expect(Math.abs(await page.evaluate(() => window.scrollY) - y)).toBeLessThanOrEqual(1);
+        const after = await home.boundingBox();
+        expect(after!.width).toBeCloseTo(before!.width, 1);
+        expect(after!.height).toBeCloseTo(before!.height, 1);
+      }
+      expect(await count()).toBe(width < 1024 ? 0 : 3);
+
+      // Select the path at interaction time, including a resize while detail is open.
+      await card.click();
+      await expect(detail).toBeVisible();
+      await settle();
+      const calls = await count();
+      await page.setViewportSize({ width: width < 1024 ? 1024 : 390, height: 844 });
+      await detail.locator('button[aria-label="닫기"]:visible').first().click();
+      await expect(detail).toHaveCount(0);
+      await expect(card).toBeVisible();
+      await settle();
+      expect(await count()).toBe(calls + (width < 1024 ? 1 : 0));
+    });
+  }
+});
 
 // ── N1: 하단 대메뉴로 옮긴 뒤 **새 탭의 본문 콘텐츠가 한 번 들어온다** ────────────────
 //
