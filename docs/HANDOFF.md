@@ -258,6 +258,35 @@ GTO(`ToolsPanel`)가 같은 방식으로 정상이었던 것도 ready 가 1개�
 
 ---
 
+### ✅ 배포 완료 — 라이브 지문 6종 실측
+
+| 항목 | 값 |
+|---|---|
+| 커밋 | `8616f39` (19파일 · +809/−76) |
+| CI | [35549346821](https://github.com/buffyfan9303-spec/NURI-HOLDEM/actions/runs/35549346821) **success** — `security`·`semgrep`·`build-and-e2e` 전부 |
+| 손님 alias | `nuriholdem.com` · `www.nuriholdem.com` **둘 다** `assets/index-Dw2FUNrG.js` + `assets/index-CnPW1led.css` |
+| CSS 바이트 | 로컬 빌드와 **SHA-256 완전 일치** `c4e9442a077f2415` |
+
+라이브에서 직접 받아 확인한 지문(`READY` 나 해시 일치만으로 동작을 인정하지 않는다):
+
+| 요구 키 | 지문 | 어디서 |
+|---|---|---|
+| `FINAL-UX#MOTION-LIVE` | ``translateX(${Ff}px)`},{transform:`` | entry |
+| `FINAL-UX#MOTION-COMMUNITY` | ``for(let e of Array.from(t.querySelectorAll(`[data-main-enter-ready]`)))if(e.offsetParent!==null){n=e;break}`` — **로컬과 바이트 동일** | entry |
+| `FINAL-UX#NAV-GAP` | `.125rem + var(--tabbar-lift)` | css |
+| `FINAL-QR#CHECKIN-REFRESH` | `nuri:checkin-done` | entry |
+| `FINAL-QR#PRINT-A-B` | `인쇄 준비 중에 매장이 바뀌었습니다` | `VenueManageTab-COQrrBQK.js` |
+| `FINAL-UX#SHEET` | `data-no-drag-close` | `EventListPage-PUmbNyA4.js` |
+
+🔴 **지문을 만들 때 주의** — 이번에 두 번 헛짚었다:
+1. **JS 파일명 해시는 로컬과 라이브가 다르다**(CI 빌드 비결정성). 로컬 `index-Cvf7Ksss.js` vs 라이브 `index-Dw2FUNrG.js`.
+   **파일명이 아니라 내용 지문이 정본이다.** CSS 는 이번에 같았지만 그건 우연으로 취급해라.
+2. **미니파이어는 백틱을 쓴다.** `querySelectorAll("[data-main-enter-ready]")` 로 찾으면 안 잡히고
+   `` querySelectorAll(`[data-main-enter-ready]`) `` 로 찾아야 한다. 상수도 인라인되지 않고
+   `` translateX(${vf}px) `` 처럼 **변수명이 남으며 그 이름은 빌드마다 바뀐다**(로컬 `vf` / 라이브 `Ff`).
+   → 지문은 **로컬 dist 에서 실제 미니파이 형태를 뽑아** 쓰고, 변수명 부분은 빼고 대조해라.
+3. `ls dist/assets/*.js | head -60` 으로 자르지 마라 — 이 빌드는 **102개**다. 잘라서 거짓 ❌ 가 두 번 났다.
+
 ## 0-a18. 🔴 2026-09-21 · **모델 불일치의 원인을 찾았다 — 전역 설정이 이긴다** (최신은 위 §0-a19)
 
 §0-a16 ⑥ 에서 "정의를 바꿔도 옛 모델로 돈다" 고 적었는데, **원인이 캐시가 아니었다.**
