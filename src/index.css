@@ -1804,8 +1804,10 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
    ⚠ 390 미만 값 110 은 그 구간의 두 부류(118.5 / 102.4) 사이를 반복한 값이다 — 오차 ±8px 안쪽.
      한 쪽에 맞추면 다른 쪽이 27px 틀린다. 실제 일정이 쌓이면 `CARD-H` 로그의 mode 로 다시 재라.
    ⚠ 경계를 **390** 으로 둔다(768 아니다). 카드가 실제로 갈리는 지점이 거기다. */
-:root { --card-h-list: 110px; }
-@media (min-width: 390px) { :root { --card-h-list: 91px; } }
+/* 🔴 2026-09-22 오너 "카드 위아래 폭 줄여줘" — 카드 py-2.5→py-1.5(−8.5px). 실측(프로덕션 빌드 4173, 아래 HANDOFF §0-a23):
+   390·1440 → 81.4 · 320/360 두 부류 110/94 → 사이값 102. 토큰 91→82, 110→102. */
+:root { --card-h-list: 102px; }
+@media (min-width: 390px) { :root { --card-h-list: 82px; } }
 
 /* 전체화면 장부의 정산바 경계 — 바는 position:fixed 라 뷰포트 기준인데, 전체화면 호스트가
    inset-0 이라 그 둘이 같다. 그래서 좌우만 장부 칸에 맞추면 정확히 겹친다.
@@ -1820,7 +1822,8 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
    `HomeTab.tsx` 의 스켈레톤 `min-h`(border 박스)와 공유하는 값이다.
    실측(2026-09-17 라이브): 실제 181.2 vs cis 추정 **203.3**(+22.1 = py-2.5 21.25).
    같은 날 토큰을 129 로 맞췄지만 cis 쪽은 150 으로 잡히고 있었다 — 반쪽만 맞은 것이었다. */
-.cv-card-list { content-visibility: auto; contain-intrinsic-size: auto calc(var(--card-h-list) - 1.25rem); }
+/* 2026-09-22: 카드 패딩이 py-1.5 가 되어 빼는 값도 0.75rem(= 2 × 0.375rem)이다. */
+.cv-card-list { content-visibility: auto; contain-intrinsic-size: auto calc(var(--card-h-list) - 0.75rem); }
 
 /* 🔴 판(pane)이 도착하기 전 **같은 자리**를 잡아 둔다 — 값이 한 곳에만 있어야 한다.
    쓰는 곳 셋: `App.tsx` 의 LazyFallback · 내 매장 역할 게이트가 false 인 구간 · VenueManageTab 권한 로딩 셸.

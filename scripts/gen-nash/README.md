@@ -27,18 +27,27 @@ npx vitest run src/lib/ranges.test.ts src/lib/nash.data.test.ts src/lib/preflopQ
 
 - 모델 차이는 하나: **두 번째 콜러(오버콜)까지 본다.** 세 번째 이후는 접는다고 본다.
   3인 에퀴티는 2인 행렬의 **곱 정규화 근사** `Eq3(h;x,y) = e_hx·e_hy / (e_hx·e_hy + e_xh·e_xy + e_yh·e_yx)`,
-  3인 카드 제거는 `N[h][y]·N[x][y]` 정규화. 전략은 셔브 H · 첫 콜 C_m · 오버콜 O_m 셋이고, 3인 항(169³·k)은
-  바깥 라운드마다 캐시(V_m·U_m)하고 안쪽 fictitious play 는 캐시로 돈다(바깥 30 × 안쪽 300).
+  3인 카드 제거는 `N[h][y]·N[x][y]/COMBO[y]` 정규화(2026-09-22 정정 — `/COMBO[y]` 가 빠져 콤보² 과가중이었다). 전략은 셔브 H · 첫 콜 C_m · 오버콜 O_m 셋이고, 3인 항(169³·k)은
+  바깥 라운드마다 캐시(V_m·U_m)하고 안쪽 fictitious play 는 캐시로 돈다(바깥 120 × 안쪽 300, 앞 40회차는 burn-in — 그 뒤 평균을 새로 시작).
 - 산출물의 등급은 **추정**이다: `nash.data.ts` 의 `NASH_ANTE_APPROX`(2~10) · `isNashApprox()` · `hasNashRange/nashRange(..., allowApprox)`.
   격리(`NASH_ANTE_QUARANTINE`)는 **그대로** 라 드릴·스팟 분석은 이 값을 쓰지 않고, 차트만 '추정' 배지를 달고 읽는다.
-- 스모크(300회 에퀴티, 바깥 6·안쪽 100)에서 방향 확인: k8 5bb 셔브 48.4% → **26.7%**(K2o 100% → 17%) · k8 10bb 18.8 → 12.8 ·
-  k2 5bb 59.2 → 49.6 · k2 10bb 43.8 → 42.7(BTN 은 오버콜러가 BB 하나라 변화가 작다). 오버콜 빈도 BB 20~38%.
+- 게시 값(2026-09-22, 12,000회 에퀴티 · 120×300 · burn 40): 셔브 콤보% k2/k5/k8 — 2bb 59.0/36.3/27.6 · 5bb 50.8/29.9/20.2 ·
+  10bb 41.5/22.8/14.3(12bb 정식 값 39.0/20.2/12.3 과 이어짐). k8 5bb K2o·A2o 0%, 22 87%. 오버콜(BB) k2 2bb 87% → 10bb 18%.
+- **수렴 증거**: 같은 조건 80×300 대비 2단계+ 움직인 셀 **2 / 31,941** · 집계 최대 Δ **0.34%p**(scratchpad `conv-cmp.mjs`).
+  보정 전 30×300 게시값 대비는 1,180셀·최대 15.4%p(k8 2bb 42.9 → 27.6) — 그 값은 과도기였다.
+- **check.mjs**(게시 표 위에 덮어서): 단조성·상식 위반 0 · ⑤ 빅앤티≥노앤티 교차 검사 **같은 모델 노앤티**(ante=both 산출, 검사 전용) 기준 위반 0.
+- **독립 검토(2026-09-22 워크플로, 검토 2 + 반증 12)** 에서 확정된 것과 조치:
+  · `/COMBO[y]` 누락(콤보² 과가중) → 고침 · 수렴 미확인(회차 1 단일 콜러 BR 잔상) → burn-in + 4배 회차 · ⑤ 기준이 옛 노앤티 표 → 같은 모델 노앤티 산출.
+  · **남는 한계(근사 자체)**: 곱 정규화 3인 에퀴티가 손별 ±10%p 편향(페어·Ax 과대, 수딧 커넥터·브로드웨이 오프수트 과소) ·
+    3번째 콜러 절단이 2~3bb 에서 질량 30~91% 를 버려 2bb 행이 k 에 둔감 · 10↔12bb callSB 이음새(12bb+ 단일 콜러가 BB 오버콜을 무시해 1~5%p 넓음) ·
+    에퀴티 표본 12k(2~10bb) vs 40k(12bb+). 전부 **진짜 3인 에퀴티 + 12bb+ 재산출**로 사라지는 것들이다.
+  · 기각 1: 오버콜 BR 의 평균장 근사(π_m) — 영향이 재실행 잡음 이하.
 - 실행(저장소 루트):
 
 ```bash
 node scripts/gen-nash/equity169.mjs 12000 /tmp/equity169.json                 # 2026-09-21 은 12,000회(≈20분) — 40,000회면 80분
-node scripts/gen-nash/solve-multi.mjs /tmp/equity169.json /tmp/multi.json 30 300   # 63표(k2~8 × 2~10bb, 빅앤티), 워커 CPU-1
-node <scratch>/merge-check.mjs src/lib/nash.data.ts /tmp/multi.json /tmp/merged.json   # 게시 표 위에 덮어 check.mjs 형식으로
+node scripts/gen-nash/solve-multi.mjs /tmp/equity169.json /tmp/multi.json 120 300 2,3,4,5,6,7,8,9,10 2,3,4,5,6,7,8 11 both 40   # 126표(빅앤티 + 검사용 노앤티) ≈ 7분
+node <scratch>/merge-check.mjs src/lib/nash.data.ts /tmp/multi.json /tmp/merged.json   # 게시 표 위에 ante+no 를 덮어 check.mjs 형식으로(⑤가 같은 모델끼리 비교되게)
 node scripts/gen-nash/check.mjs /tmp/merged.json 1 "" 2                       # 단조성·상식·교차 — 위반은 아래 표에 기록
 node scripts/gen-nash/emit.mjs /tmp/multi.json src/lib/nash.data.ts ante 2,3,4,5,6,7,8,9,10 2,3,4,5,6,7,8
 npx vitest run src/lib/ranges.test.ts src/lib/nash.data.test.ts src/lib/preflopQuiz.test.ts

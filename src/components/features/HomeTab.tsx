@@ -736,7 +736,7 @@ export default function HomeTab({
               <div className="bg-surface-high/40 px-3 py-1.5"><div className="skeleton h-3.5 w-16" /></div>
               {Array.from({ length: upcomingSeenCount() }).map((_, i) => (
                 /* min-h: 실제 카드 행과 같은 높이를 예약한다(--card-h-list — 카드가 바뀌면 그 토큰만 고친다). */
-                <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-2.5">
+                <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-1.5">
                   <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <div className="skeleton h-3.5 w-1/3" />

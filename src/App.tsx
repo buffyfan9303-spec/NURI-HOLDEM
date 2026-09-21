@@ -4949,7 +4949,7 @@ function ScheduleSkeletonGrid({ viewMode, rows }: { viewMode: 'grid' | 'list' | 
           </div>
         ) : (
           // ListCard 골격: 4줄 행 문법 복제(시간/제목/매장/가격 — 재문법과 높이 동조)
-          <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-2.5">
+          <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-1.5">
             <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="skeleton h-3.5 w-1/3" />

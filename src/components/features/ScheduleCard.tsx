@@ -483,7 +483,11 @@ function ListCard({
         //     390 → 328.5 ≥ (같음)                                    (여유 81   → 가운데 183)
         //   가운데가 3칸 지표의 자연 폭(320:110 / 360:127)보다 넓어야 지표가 한 줄로 선다.
         //   **로고·시각 글자·gap 중 무엇이든 키우면 지표 줄이 먼저 접힌다** — 바꾸기 전에 다시 재라.
-        'flex flex-wrap items-center gap-x-1 gap-y-1 cursor-pointer px-3 py-2.5 hover:bg-surface-high/50 active:bg-surface-high',
+        // 🔴 2026-09-22 오너: "파란 점선(카드) 박스 위아래 폭을 줄여줘" — py-2.5(10.6px) → py-1.5(6.4px). 카드 −8.5px.
+        //   같이 바꾼 것: `--card-h-list`(index.css) 91→82 · 110→102, `.cv-card-list` cis 의 패딩 보정 1.25rem→0.75rem,
+        //   HomeTab·App 스켈레톤 행의 py-2.5→py-1.5(스켈레톤 로고 h-16 + 패딩이 카드 높이와 같아야 데이터 도착 때 안 밀린다).
+        //   매장명 링크(빨간 상자)는 그대로다. e2e/theme-tokens-v7 ⑦ 이 실제 높이 vs 토큰을 잰다.
+        'flex flex-wrap items-center gap-x-1 gap-y-1 cursor-pointer px-3 py-1.5 hover:bg-surface-high/50 active:bg-surface-high',
         'min-[360px]:gap-x-2',
         // 프리미엄(TOP)은 행 틴트 + 매장 줄 마커로 차별(박스 글로우 제거 — 목록 결 유지)
         schedule.isPremium ? 'bg-accent-300/[0.05]' : '',

@@ -5,19 +5,25 @@
 //    (nash.data.ts NASH_ANTE_QUARANTINE 이력). 오버콜을 넣으면 그 방향의 오차가 줄어든다.
 //  · 3인 에퀴티는 **2인 행렬의 곱 정규화 근사**: Eq3(h; x, y) = e_hx·e_hy / (e_hx·e_hy + e_xh·e_xy + e_yh·e_yx).
 //    진짜 3인 에퀴티는 169³ 조합의 몬테카를로(하루 단위)가 필요해 오늘은 근사다 — 그래서 산출물은 '추정' 등급이다.
-//  · 3인 카드 제거는 N[h][y]·N[x][y] 로 근사(정규화). 오버콜러의 손은 첫 콜러가 누구든 같은 분포로 본다.
+//    ⚠ 독립 검토(2026-09-22 워크플로)로 잰 이 근사의 손별 편향: 페어·Ax 를 +2~7%p 과대, 수딧 커넥터·브로드웨이 오프수트를
+//      −7~10%p 과소. 집계(레인지 %)보다 손 구성이 더 틀린다. 진짜 3인 에퀴티로 바꾸면 사라지는 오차다.
+//  · 3인 카드 제거는 N[h][y]·N[x][y]/COMBO[y] 로 근사(정규화). ⚠ 2026-09-22 정정: /COMBO[y] 가 빠져 있어 콤보²로 과가중됐다
+//    (검토 실측: 페어 질량 3.6% vs 정확 5.9%, 오프수트 86.8% vs 70.7%). 고친 뒤 셔브 −0.2~0.7 · callSB −1.5~2.7%p(좁아짐).
 //  · 전략 셋: 히어로 셔브 H · 상대 m 의 첫 콜 C_m(앞에 콜러 없음) · 오버콜 O_m(앞에 콜러 정확히 한 명).
 //  · 3인 항(169³·k)은 비싸므로 **바깥 라운드**마다 갱신해 캐시(V_m·U_m)하고, **안쪽 FP**(히어로·첫 콜)는 캐시로 돈다.
-//    오버콜 O_m 은 바깥 라운드마다 최선 응답을 1/r 로 섞는다(바깥 FP).
+//    오버콜 O_m 은 바깥 라운드마다 최선 응답을 평균한다(바깥 FP).
+//  · 🔴 burn-in(2026-09-22): 첫 `burn` 회차는 워밍업이다 — 그 뒤 평균 계수(T·r)를 **한 번 리셋**해, 오버콜이 0 이던 초기 회차의
+//    최선응답(단일 콜러 모델)이 최종 평균에 남지 않게 한다. 검토 실측: 30×300 게시값은 과도기였다(k8 5bb callBB 50.0 → 60회차 46.0).
 //  · 돈·역할·앤티 규약은 solve.mjs 와 같다(S = 앤티 낸 뒤 남은 스택 · BB 앤티 총 1bb · 낸 돈은 매몰).
-// 실행: node solve-multi.mjs <equity.json> <out.json> [outer=30] [inner=300] [stacks=2,3,4,5,6,7,8,9,10] [ks=2,3,4,5,6,7,8] [workers=CPU-1]
+// 실행: node solve-multi.mjs <equity.json> <out.json> [outer=120] [inner=300] [stacks=2,...,10] [ks=2,...,8] [workers=CPU-1] [ante=ante|no|both] [burn=40]
+//   ante=both 는 ⑤ 교차 검사(빅앤티 ≥ 노앤티)를 **같은 모델끼리** 하기 위한 것이다 — 노앤티 표는 게시하지 않는다(emit 은 ante 만).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { cpus } from 'node:os';
 
 const R = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
 const n = 169; const TOTAL = 1225;
-let ORDER; let E; let N; let Z; let W2; let ITER_EQ;
+let ORDER; let E; let N; let Z; let W2; let COMBO_G; let ITER_EQ;
 
 function combosOf(name) {
   const a = R.indexOf(name[0]); const b = R.indexOf(name[1]); const out = [];
@@ -30,6 +36,7 @@ export function init(file) {
   const EQ = JSON.parse(readFileSync(file, 'utf-8'));
   ORDER = EQ.order; E = Float64Array.from(EQ.matrix); ITER_EQ = EQ.iterations;
   const COMBOS = ORDER.map(combosOf);
+  COMBO_G = Float64Array.from(COMBOS.map((c) => c.length));   // 6 · 4 · 12
   N = new Float64Array(n * n); W2 = new Float64Array(n * n);
   for (let h = 0; h < n; h++) {
     const H = COMBOS[h];
@@ -39,13 +46,13 @@ export function init(file) {
       N[h * n + x] = cnt / H.length; W2[h * n + x] = cnt / H.length / TOTAL;
     }
   }
-  // Z[h][x] = Σ_y N[h][y]·N[x][y] — 3인 카드 제거 근사의 정규화 상수
+  // Z[h][x] = Σ_y N[h][y]·N[x][y]/COMBO[y] — 3인 카드 제거 근사의 정규화 상수(독립 근사의 올바른 형태)
   Z = new Float64Array(n * n);
-  for (let h = 0; h < n; h++) for (let x = 0; x < n; x++) { let z = 0; for (let y = 0; y < n; y++) z += N[h * n + y] * N[x * n + y]; Z[h * n + x] = z; }
+  for (let h = 0; h < n; h++) for (let x = 0; x < n; x++) { let z = 0; for (let y = 0; y < n; y++) z += N[h * n + y] * N[x * n + y] / COMBO_G[y]; Z[h * n + x] = z; }
 }
 
 /** (k≥2, S, ante) 한 조합. 돌려주는 것: shove[169], callBB[169], callSB[169], overcall 평균 콜 빈도(참고). */
-export function solveMulti(k, S, ante, outer = 30, inner = 300) {
+export function solveMulti(k, S, ante, outer = 120, inner = 300, burn = 40) {
   if (k < 2) throw new Error('k>=2 전용 — k=1 은 solve.mjs(정확)');
   const A = ante ? 1 : 0;
   const heroCost = S;                                     // k≥2: 히어로는 블라인드가 아니다
@@ -55,7 +62,7 @@ export function solveMulti(k, S, ante, outer = 30, inner = 300) {
   const pot3 = (m, j) => 3 * S + A + 1.5 - blind(roles[m]) - blind(roles[j]);
   const callCost = (m) => S - blind(roles[m]);
   const deadIfAllFold = 1.5 + A;
-  const COMBO = ORDER.map((h) => (h.length === 2 ? 6 : h[2] === 's' ? 4 : 12));
+  const COMBO = Array.from(COMBO_G);
 
   const H = new Float64Array(n).fill(1);                 // 히어로 평균 셔브(시작: 전부 올인)
   const C = roles.map(() => new Float64Array(n));        // 첫 콜 평균(시작: 전부 폴드)
@@ -66,11 +73,12 @@ export function solveMulti(k, S, ante, outer = 30, inner = 300) {
   const V = roles.map(() => new Float64Array(n * n));    // 히어로 h 가 첫 콜러 m(손 x)을 만났을 때 기대 순이익(오버콜 포함)
   const U = roles.map(() => new Float64Array(n * n));    // 첫 콜러 m(손 y)이 히어로 h 를 콜했을 때 기대 순이익(오버콜 포함)
 
-  let T = 0;
+  let T = 0; let rBase = 1;                              // rBase: 오버콜 평균의 기준 회차(burn 뒤 리셋)
   for (let r = 1; r <= outer; r++) {
+    if (r === burn + 1 && burn > 0) { T = 0; rBase = r; }  // 워밍업 끝 — 평균을 새로 시작(현재 전략은 출발점으로 유지)
     // ── ① 오버콜 최선 응답(바깥 FP) — 첫 콜러가 앞의 누구든 '첫 콜 레인지 혼합' 을 상대한다 ──
     if (r > 1) {
-      // π_m: m 이 첫 콜러가 될 상대 확률(히어로 레인지에 무관한 콤보 가중 평균 콜 빈도로 근사)
+      // π_m: m 이 첫 콜러가 될 상대 확률(히어로 레인지에 무관한 콤보 가중 평균 콜 빈도로 근사 — 검토 결과 영향은 잡음 이하)
       const cbar = C.map((Cm) => { let s = 0; for (let x = 0; x < n; x++) s += Cm[x] * COMBO[x]; return s / 1326; });
       const pi = []; let pf = 1; for (let m = 0; m < k; m++) { pi.push(pf * cbar[m]); pf *= (1 - cbar[m]); }
       for (let j = 1; j < k; j++) {
@@ -89,7 +97,7 @@ export function solveMulti(k, S, ante, outer = 30, inner = 300) {
             let inner_num = 0; let inner_den = 0;
             for (let x = 0; x < n; x++) {
               const mx = M[x]; if (mx <= 0) continue;
-              const w3 = N[z * n + x] * N[h * n + x] / zh * mx; if (w3 <= 0) continue;
+              const w3 = N[z * n + x] * N[h * n + x] / COMBO_G[x] / zh * mx; if (w3 <= 0) continue;
               const e_zx = E[z * n + x]; const e_hx = E[h * n + x]; const e_xz = E[x * n + z]; const e_xh = E[x * n + h];
               const pz = e_zh * e_zx; const ph = e_hz * e_hx; const px = e_xz * e_xh;
               const eq3 = pz / (pz + ph + px);
@@ -99,7 +107,7 @@ export function solveMulti(k, S, ante, outer = 30, inner = 300) {
           }
           br[z] = den > 0 && num / den > 0 ? 1 : 0;
         }
-        const a = 1 / (r - 1);                           // 바깥 FP 평균(r=2 에서 BR 그대로)
+        const a = 1 / Math.max(1, r - rBase);            // 바깥 FP 평균(리셋 직후 회차는 BR 그대로)
         for (let z = 0; z < n; z++) O[j][z] += a * (br[z] - O[j][z]);
       }
     }
@@ -114,7 +122,7 @@ export function solveMulti(k, S, ante, outer = 30, inner = 300) {
         let q = 0; let f = 0;
         for (let y = 0; y < n; y++) {
           const oy = Oj[y]; if (oy <= 0) continue;
-          const w3 = N[a * n + y] * N[b * n + y] / zab * oy; if (w3 <= 0) continue;
+          const w3 = N[a * n + y] * N[b * n + y] / COMBO_G[y] / zab * oy; if (w3 <= 0) continue;
           const e_ay = E[a * n + y]; const e_by = E[b * n + y]; const e_ya = E[y * n + a]; const e_yb = E[y * n + b];
           const pa = e_ab * e_ay; const pb = e_ba * e_by; const py = e_ya * e_yb;
           q += w3; f += w3 * (pa / (pa + pb + py));
@@ -127,12 +135,11 @@ export function solveMulti(k, S, ante, outer = 30, inner = 300) {
       const p2 = pot2(m); const cm = callCost(m); const Vm = V[m]; const Um = U[m];
       for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) {
         const i = a * n + b;
-        // 히어로 a · 첫 콜러 b (V) — 오버콜은 m 뒤의 j 가 순서대로 시도
         let pno = 1; let v = 0; let u = 0;
         for (let j = m + 1; j < k; j++) {
           const q = Q[j][i]; const p3 = pot3(m, j);
-          v += pno * (F[j][i] * p3 - q * heroCost);        // 히어로 순이익: Eq3·pot3 − S (콜된 경우)
-          u += pno * (F[j][i] * p3 - q * cm);              // 첫 콜러(a 가 콜러일 때 같은 식) — 아래에서 a=y, b=h 로 읽는다
+          v += pno * (F[j][i] * p3 - q * heroCost);        // 히어로(a) 순이익: Eq3·pot3 − S (콜된 경우)
+          u += pno * (F[j][i] * p3 - q * cm);              // 첫 콜러(a=y, b=h 로 읽는다) 순이익
           pno *= (1 - q);
         }
         Vm[i] = pno * (E[i] * p2 - heroCost) + v;
@@ -179,19 +186,20 @@ export const q8 = (f) => Math.max(0, Math.min(8, Math.round(f * 8)));
 export const encode = (arr) => Array.from(arr).map((f) => String(q8(f))).join('');
 
 if (!isMainThread) {
-  const { eqFile, k, S, ante, outer, inner } = workerData;
+  const { eqFile, k, S, ante, outer, inner, burn } = workerData;
   init(eqFile);
   const t0 = Date.now();
-  const r = solveMulti(k, S, ante, outer, inner);
+  const r = solveMulti(k, S, ante, outer, inner, burn);
   parentPort.postMessage({ k, S, ante, shove: Array.from(r.shove), callBB: Array.from(r.callBB), callSB: Array.from(r.callSB), overcallPct: r.overcallPct, ms: Date.now() - t0 });
 } else {
-  const [, , eqFile, outFile, outerArg, innerArg, stacksArg, ksArg, workersArg] = process.argv;
-  const outer = Number(outerArg ?? 30); const inner = Number(innerArg ?? 300);
+  const [, , eqFile, outFile, outerArg, innerArg, stacksArg, ksArg, workersArg, anteArg, burnArg] = process.argv;
+  const outer = Number(outerArg ?? 120); const inner = Number(innerArg ?? 300); const burn = Number(burnArg ?? 40);
   const STACKS = (stacksArg ?? '2,3,4,5,6,7,8,9,10').split(',').map(Number);
   const KS = (ksArg ?? '2,3,4,5,6,7,8').split(',').map(Number);
   const NW = Math.max(1, Number(workersArg ?? (cpus().length - 1)));
+  const ANTES = (anteArg ?? 'ante') === 'both' ? [true, false] : [(anteArg ?? 'ante') !== 'no'];
   init(eqFile);
-  const jobs = []; for (const k of KS) for (const S of STACKS) jobs.push({ k, S, ante: true });
+  const jobs = []; for (const ante of ANTES) for (const k of KS) for (const S of STACKS) jobs.push({ k, S, ante });
   const tables = { shove: { no: {}, ante: {} }, callBB: { no: {}, ante: {} }, callSB: { no: {}, ante: {} } };
   const raw = {}; const meta = {};
   const t0 = Date.now(); let next = 0; let done = 0;
@@ -199,21 +207,21 @@ if (!isMainThread) {
     const spawn = () => {
       if (next >= jobs.length) return;
       const job = jobs[next++];
-      const w = new Worker(new URL(import.meta.url), { workerData: { eqFile, ...job, outer, inner } });
+      const w = new Worker(new URL(import.meta.url), { workerData: { eqFile, ...job, outer, inner, burn } });
       w.on('message', (r) => {
-        const key = 'ante';
+        const key = r.ante ? 'ante' : 'no';
         (tables.shove[key][r.k] ??= {})[r.S] = encode(r.shove);
         (tables.callBB[key][r.k] ??= {})[r.S] = encode(r.callBB);
         (tables.callSB[key][r.k] ??= {})[r.S] = encode(r.callSB);
         raw[`shove|${key}|${r.k}|${r.S}`] = r.shove; raw[`callBB|${key}|${r.k}|${r.S}`] = r.callBB; raw[`callSB|${key}|${r.k}|${r.S}`] = r.callSB;
-        meta[`${r.k}|${r.S}`] = { overcallPct: r.overcallPct.map((x) => +x.toFixed(1)), ms: r.ms };
-        done += 1; process.stdout.write(`k${r.k} ${r.S}bb ${(r.ms / 1000).toFixed(1)}s (${done}/${jobs.length})\n`);
+        meta[`${key}|${r.k}|${r.S}`] = { overcallPct: r.overcallPct.map((x) => +x.toFixed(1)), ms: r.ms };
+        done += 1; process.stdout.write(`${key} k${r.k} ${r.S}bb ${(r.ms / 1000).toFixed(1)}s (${done}/${jobs.length})\n`);
         spawn(); if (done === jobs.length) resolve();
       });
       w.on('error', reject);
     };
     for (let i = 0; i < NW; i++) spawn();
   });
-  writeFileSync(outFile, JSON.stringify({ model: 'multi-caller-approx(product-eq3, <=2 callers)', outer, inner, equityIterations: ITER_EQ, order: ORDER, tables, raw, meta }));
+  writeFileSync(outFile, JSON.stringify({ model: 'multi-caller-approx(product-eq3, <=2 callers, w3/COMBO, burn-in)', outer, inner, burn, equityIterations: ITER_EQ, order: ORDER, tables, raw, meta }));
   console.log(`solved ${jobs.length} tables in ${Math.round((Date.now() - t0) / 1000)}s → ${outFile}`);
 }
