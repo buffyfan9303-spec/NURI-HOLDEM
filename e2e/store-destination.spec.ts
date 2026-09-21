@@ -9,39 +9,38 @@
 // 운영 데이터 안전: _fixtures 가 POST/PATCH/DELETE 와 변이 RPC 를 네트워크 단에서 끊는다.
 //   이 스펙은 거기에 더해 '미마감 지난 장부' 조회 **응답만** 갈아끼운다 — 쓰기는 하지 않는다.
 import { test, expect } from './_fixtures';
-import { kstToday } from '../src/lib/kst';
-import { type Page, type Route } from '@playwright/test';
-import { loginAs } from './_session';
-
-const EMAIL = process.env.E2E_EMAIL;
-const PASSWORD = process.env.E2E_PASSWORD;
+import { bootOwner as bootMockOwner, openMyStore as openMockStore } from './_mockOwner';
 
 // 오늘과 확실히 다른 과거 + 사이드2. 메인(1)으로 뭉개지거나 오늘로 떨어지면 즉시 드러난다.
 const STALE_DATE = '2026-08-11';
 const STALE_GAME = 3;
 
+// ⚠ 2026-09-21: 예전엔 여기서 `loginAs(EMAIL, PASSWORD)` 로 실계정 로그인을 했다.
+// 그 계정은 2026-09-10 오너 결정으로 은퇴해 이 describe 전체가 상시 test.skip 이었다
+// (E2E_EMAIL/E2E_PASSWORD 없음 → 커밋을 얼마나 쌓아도 이 파일은 한 번도 안 돌았다).
+// `_mockOwner.ts` 의 bootOwner(계정 없이 목킹 업주로 부팅)로 갈아탄다 — 조리법은
+// pc-store-regression.spec.ts 와 같다. `extra` 는 bootOwner 의 기본 라우트보다 **나중에** 걸려
+// 이 스펙이 갈아끼우려는 특정 질의(closed=eq.false / session_date=eq.<오늘>)만 덮어쓰고,
+// 나머지는 bootOwner 의 안전한 기본값(빈 목록)이 그대로 응답한다.
 test.describe('대시보드 → 게임 판 착지', () => {
-  test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 없음 — 내 매장은 로그인해야 열린다');
-
   test('🔴 지난 미마감 장부 CTA 는 그 날짜·그 게임의 장부로 착지한다', async ({ page }) => {
+    test.setTimeout(90_000);
     // listStaleOpenSessions 의 조회만 결정적으로 만든다(closed=eq.false 가 이 쿼리의 지문).
-    await page.route(
-      (url) => url.pathname.endsWith('/rest/v1/ledger_sessions') && url.search.includes('closed=eq.false'),
-      (route) => route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([{ session_date: STALE_DATE, game_seq: STALE_GAME, title: 'E2E 사이드' }]),
-      }),
-    );
+    await bootMockOwner(page, {
+      extra: async (p) => {
+        await p.route(
+          (url) => url.pathname.endsWith('/rest/v1/ledger_sessions') && url.search.includes('closed=eq.false'),
+          (route) => route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([{ session_date: STALE_DATE, game_seq: STALE_GAME, title: 'E2E 사이드' }]),
+          }),
+        );
+      },
+    });
 
-    await loginAs(page, EMAIL!, PASSWORD!);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-
-    const store = page.getByRole('tab', { name: /내 매장/ }).or(page.getByRole('button', { name: /^내 매장/ }));
-    test.skip(await store.count() === 0, '이 계정에는 내 매장 탭이 없다');
-    await store.first().click();
-    await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
+    await openMockStore(page);
+    await expect(page.locator('[data-tab="my-store"]'), '목킹 업주로 내 매장을 열지 못했다').toBeVisible({ timeout: 20_000 });
 
     // '지금 할 일' 은 미마감 장부가 있으면 그것을 최우선으로 고른다(StoreDashboard 우선순위).
     const cta = page.getByTestId('todo-cta');
@@ -61,50 +60,65 @@ test.describe('대시보드 → 게임 판 착지', () => {
   });
 
   test('정산 이동은 스크롤이 아니라 정산 마감 버튼을 지목한다', async ({ page }) => {
-    // 오늘 '열린' 장부가 있어야 정산 마감 버튼이 그려진다. 라이브 DB 에 장부를 만드는 것은 쓰기라
-    // 할 수 없으므로 **오늘 세션 조회만** 픽스처로 바꾼다(session_date=eq.<오늘> 인 질의만 가로챈다 —
-    // 미마감 지난 장부 조회(closed=eq.false)는 그대로 통과시켜야 다른 화면이 정상 동작한다).
-    // ⚠ 2026-09-13: **KST** 기준이어야 한다. 앱은 `kstToday` 로 조회하므로 Node 로컬(UTC 러너)로 만들면
-    //   라우트가 안 잡혀 픽스처가 통째 무효가 된다(아래 Honolulu 테스트의 구분력이 사라진다).
-    const today = kstToday();
-    await page.route(
-      (url) => url.pathname.endsWith('/rest/v1/ledger_sessions') && url.search.includes(`session_date=eq.${today}`),
-      (route) => {
-        const single = (route.request().headers()['accept'] ?? '').includes('pgrst.object');
-        const row = {
-          venue_id: null, session_date: today, game_seq: 1, title: 'E2E 정산 확인용',
-          buyin_amount: 100000, card_amount: null, game_type: 'gtd', target_entries: 0, max_entries: 0,
-          is_addon: false, addon_stack: 0, reg_closed: false, closed: false, discounts: [],
-          opened_at: new Date(Date.now() - 3600_000).toISOString(), // '시작된' 장부여야 보드(정산바)가 뜬다
-          early_double_min: 0, early_single_min: 0, tournament_start: null, schedule_id: null,
-        };
-        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(single ? row : [row]) });
+    test.setTimeout(90_000);
+    // ⚠ 2026-09-21 재조사: 이 스펙은 2026-09-07 에 쓰였다. 그때는 GameStepBar 의 '5. 정산' 탭을 누르면
+    //   `settle:true` 시드가 실려 장부 판의 고정 정산바(마감 버튼)를 스크롤 없이 포커스했다.
+    //   그런데 2026-09-08 오너 결정으로 '정산' 이 **독립 결산 판**(LedgerSettlementPanel, 전 게임
+    //   합산 · '미마감 N게임' 배지)으로 승격됐다(VenueManageTab.tsx:73-75 주석). 지금 그 탭을 누르면
+    //   `gotoSection('settle')` 로 완전히 다른 화면이 열린다(VenueManageTab.tsx:919) — role 도
+    //   button 이 아니라 tab 이고, `getByTestId('ledger-settle')` 는 그 화면에 없다(실측: 정산 판은
+    //   '이 날짜에 연 장부가 없습니다' 아니면 결산 리포트만 그린다).
+    //   `settle:true`(resolveDest, storeDestination.ts:73) 는 죽지 않았다 — 지금 유일한 생산자는
+    //   '지금 할 일' 카드의 '마감하기' CTA(미마감 장부 최우선, StoreDashboard.tsx:1159)뿐이다.
+    //   같은 시드를 만드는 test 1 과 같은 조리법(미마감 장부 1건)으로 재현하고, 이번엔 그 CTA 가
+    //   실제로 정산바를 스크롤 없이 포커스하는지를 잰다 — 이게 이 스펙의 원래 계약이다.
+    // ⚠ '마감하기' CTA 를 누르면 장부 판이 **그 날짜·게임의 기존 세션**을 다시 조회한다
+    //   (getLedgerSession · `session_date=eq.<날짜>&game_seq=eq.<게임>`.maybeSingle()). listStaleOpenSessions
+    //   응답(closed=eq.false)만 갈아끼우면 이 두 번째 조회가 bootOwner 기본값(빈 결과)으로 떨어져
+    //   '기존 장부' 가 아니라 '장부 시작 설정' 화면이 열린다(실측) — 두 질의를 다 갈아끼운다.
+    const staleRow = {
+      venue_id: null, session_date: STALE_DATE, game_seq: 1, title: 'E2E 정산 확인용',
+      buyin_amount: 100000, card_amount: null, game_type: 'gtd', target_entries: 0, max_entries: 0,
+      is_addon: false, addon_stack: 0, reg_closed: false, closed: false, discounts: [],
+      opened_at: new Date(Date.now() - 3600_000).toISOString(), // '시작된' 장부여야 정산바가 뜬다
+      early_double_min: 0, early_single_min: 0, tournament_start: null, schedule_id: null,
+    };
+    await bootMockOwner(page, {
+      extra: async (p) => {
+        await p.route(
+          (url) => url.pathname.endsWith('/rest/v1/ledger_sessions')
+            && (url.search.includes('closed=eq.false') || url.search.includes(`session_date=eq.${STALE_DATE}`)),
+          (route) => {
+            if (route.request().url().includes('closed=eq.false')) {
+              return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify([{ session_date: STALE_DATE, game_seq: 1, title: 'E2E 정산 확인용' }]),
+              });
+            }
+            const single = (route.request().headers()['accept'] ?? '').includes('pgrst.object');
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(single ? staleRow : [staleRow]) });
+          },
+        );
       },
-    );
-    await loginAs(page, EMAIL!, PASSWORD!);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    });
 
-    const store = page.getByRole('tab', { name: /내 매장/ }).or(page.getByRole('button', { name: /^내 매장/ }));
-    test.skip(await store.count() === 0, '이 계정에는 내 매장 탭이 없다');
-    await store.first().click();
-    await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
+    await openMockStore(page);
+    await expect(page.locator('[data-tab="my-store"]'), '목킹 업주로 내 매장을 열지 못했다').toBeVisible({ timeout: 20_000 });
 
-    // 게임 스텝 바의 '정산' — 장부가 열려 있어야 마감 버튼이 존재한다.
-    const settleStep = page.getByRole('button', { name: '정산' }).first();
-    test.skip(await settleStep.count() === 0, '이 계정/화면에 정산 스텝이 없다');
+    // '지금 할 일' 은 미마감 장부가 있으면 그것을 최우선으로 고르고, cta 라벨은 '마감하기' —
+    // onClick 이 dest.settle=true 를 싣는다(StoreDashboard.tsx:1159).
+    const cta = page.getByTestId('todo-cta');
+    await expect(cta, '"지금 할 일" CTA 가 없다 — 미마감 장부가 최우선으로 안 읽혔다').toBeVisible({ timeout: 20_000 });
+    await expect(cta, '"마감하기" CTA 가 아니다 — settle:true 목적지를 만드는 카드가 아니다').toContainText('마감하기');
 
     const before = await page.evaluate(() => window.scrollY);
-    await settleStep.click();
-    await page.waitForTimeout(4000); // 장부 판 마운트 + 세션 로드
+    await cta.click();
 
+    // 장부 판 마운트 + 시드 반영. 데이터는 전부 목킹돼 결정적이므로 0건은 '데이터 없음'이 아니라 결함이다
+    // — 예전(실계정)처럼 count()===0 이면 skip 하지 않고, 안 뜨면 크게 실패한다.
     const settleBtn = page.getByTestId('ledger-settle');
-    if (await settleBtn.count() === 0) {
-      // 장부 '보드'(정산바가 있는 화면)는 세션 한 건만으로 뜨지 않는다 — 게임 목록·바인 조회가 함께 걸려 있어
-      // 픽스처로 재현하려면 결합된 질의 여러 개를 동시에 갈아끼워야 한다. 그 표면을 넓히는 대신 여기서 멈춘다.
-      // ⇒ 정산 포커스 동작은 **실계정·실장부에서 수동 확인이 남아 있다**(숨기지 않고 skip 으로 남긴다).
-      test.skip(true, '오늘 장부 보드가 열리지 않았다 — 정산 마감 버튼이 없어 지목 대상이 없다(실계정 확인 필요)');
-    }
+    await expect(settleBtn, '정산 마감 버튼이 없다 — settle:true 신호가 장부 판까지 오지 않았다').toBeVisible({ timeout: 20_000 });
     await expect(settleBtn).toBeFocused({ timeout: 10_000 });
 
     // 문서 맨 아래로 끌고 가는 예전 동작이 남아 있지 않은지 — 정산바는 fixed 라 스크롤할 이유가 없다.
