@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import OverlayShell from '../atoms/OverlayShell'; // PC 폭 계약 정본 — EventPage 와 같은 셸을 쓴다(복제 금지)
 import { listEvents, type EventListItem } from '../../api/events';
 import type { EventState } from '../../lib/eventState';
 import { useDialogFocus } from '../atoms/useDialogFocus';
@@ -187,15 +188,9 @@ export default function EventListPage({ open, onClose, onSelect }: {
           PC 는 onListTouchStart 가 1024px 이상에서 바로 return 해 드래그 자체가 없다 — 장식일 뿐이라 lg:hidden. */}
       <div aria-hidden data-testid="event-list-drag-grip"
         className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
-      {/* 🔴 2026-09-18 오너: "PC 버젼에서 모든 탭이 제대로 잘 움직이다가 이벤트만 가면 갑자기
-          전체화면으로 바뀌면서 지혼자서 이상하게 돼 이 부분도 수정 다른 탭들처럼".
-          원인: 이 화면은 탭 pane 이 아니라 `fixed inset-0` 오버레이인데(App.tsx 의 'event' 는 pane 이 없다)
-          안에 폭 제한이 하나도 없어 1440px 에서 **혼자만 풀블리드**로 펼쳐졌다.
-          다른 탭은 전부 App.tsx:3450 의 셸(`mx-auto w-full max-w-6xl xl:border-x`) 안에서 그려진다.
-          → 오버레이 **본문에 같은 셸**을 씌운다. 오버레이 자체는 inset-0 그대로 둔다 —
-            배경이 화면을 덮어야 뒤 탭이 비쳐 보이지 않고, 뒤로가기 계약(useBackClose)도 그대로다.
-          ⚠ `min-h-full` 이 필요하다. 없으면 xl 의 세로 테두리가 내용 높이에서 끊겨 셸이 반만 그려진다. */}
-      <div className="mx-auto w-full max-w-6xl xl:min-h-full xl:border-x xl:border-border-subtle">
+      {/* PC 폭 계약(1440 에서 혼자 풀블리드였던 결함)은 `atoms/OverlayShell` 한 곳이다 — 왜·실측은 그 파일 머리말.
+          여기에 클래스를 다시 적지 마라: 이 처방이 EventPage 와 두 벌이던 동안 회귀 스펙이 거짓 통과했다(2026-09-21). */}
+      <OverlayShell>
       {/* 헤더 구조는 EventPage 와 동일 — 노치 안전영역·히트영역 계약을 그대로 따른다. */}
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-surface-base/95 px-page-x pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] backdrop-blur">
         <button type="button" onClick={onClose} aria-label="닫기"
@@ -244,7 +239,7 @@ export default function EventListPage({ open, onClose, onSelect }: {
           </ul>
         )}
       </div>
-      </div>
+      </OverlayShell>
     </div>
   );
 }
