@@ -3,8 +3,10 @@
 > **다른 Claude Code 계정·다른 컴퓨터에서 이어서 작업할 때 이 파일 하나만 읽으면 된다.**
 > 한도가 끊기거나 계정을 바꿔도 이 파일은 git 에 있으므로 `git pull` 이면 따라온다.
 >
-> ✅ **마지막 갱신: 2026-09-21 오후 (Opus 5) — 오너 결정 29건 실행·배포 완료(§0-a21) + 게이트 4개 깨움(§0-a22).**
-> 운영은 `ce0cbb1` 다(2026-09-21 오후 기준 네 번째 배포). 라이브 DB 변경 3건 적용됨(§0-a20).
+> ✅ **마지막 갱신: 2026-09-21 저녁 (Opus 5) — §0-a22 가 오늘의 정본이다.**
+> 오너 결정 29건 실행·배포(§0-a21) 뒤, **게이트 12개를 깨우고** 계약 테스트·타입·뮤테이션의 사각지대를 닫았다.
+> 운영은 `c701dc6` 다(오늘 11커밋 푸시·CI 전부 초록). 라이브 DB 변경 3건 적용됨(§0-a20).
+> 오너 결정 6종이 **운영 번들에 닿은 것을 실측으로 확인**했다(§0-a22 '배포 실측 절차').
 > 🔴 번들 JS 여유가 **0** 이다 — 다음 커밋이 CI 를 터뜨릴 수 있다(§0-a17 에 조사 결과와 이유).
 > 🔴 **역할 정의의 `model` 을 고쳤지만 실행 중 세션에는 반영되지 않는다** — 새 세션에서 재확인해야 한다(§0-a16 ⑥).
 > §0-a22 → §0-a21 → §0-a20 순서로 읽어라. 팀·모델 정본은 `.claude/rules/nuri-team-capabilities.md`,
@@ -321,6 +323,75 @@ gto-team 이 18-ⓐ 를 "열 수 축소만으로는 닿지 않는다 → '입력
 
 🔴 **덤으로 알아낸 것**: `window.scrollTo(0, 큰값)` 이 **383 에서 멈춘다** — 이 앱은 `window` 가 아니라
 **안쪽 컨테이너가 스크롤**한다. 스크롤을 전제로 하는 측정은 그 컨테이너를 찾아서 움직여야 한다.
+
+
+### 🔴 뮤테이션 검증 — **돈·권한 모듈이 대상에서 통째로 빠져 있었다**
+
+`scripts/mutation-check.mjs`(주 1회 `mutation.yml`)는 소스에 작은 변이를 심고 그 파일의 테스트를 돌린다.
+테스트가 통과하면 = **그 줄은 아무도 안 보고 있다**(뮤턴트 생존). 스크립트가 적은 기준은 이거다 —
+*"**금액 계산·권한·순서 판정**에서 생존자가 나오면 그건 진짜 구멍이다."*
+
+#### 도구가 지키려던 것을 정작 안 보고 있었다
+
+`pairs()` 가 `foo.test.ts` → `foo.ts` **한 짝**만 봤다. 그런데 이 저장소는 테스트를 주제별로 쪼갠다
+(`ledger.early.test.ts` · `auth.social.test.ts` · `clock.level.test.ts` …).
+그래서 **`ledger.test.ts` 가 없는 `ledger.ts` 는 아예 대상이 아니었다.**
+
+고친 뒤 대상이 **75 → 94개 소스(+19)** 로 늘었고, 새로 들어온 19개가 하필 이것들이다:
+
+| 범주 | 새로 대상이 된 모듈 |
+|---|---|
+| 💰 돈 | `ledger` · `vouchers` · `ads` · `marketplace` · `loyalty` |
+| 🔐 권한 | `auth` · `blocks` |
+| ⏱ 순서·시각 | `clock` · `clockLevel` |
+| 그 밖 | `community` · `checkins` · `events` · `rankings` · `reservations` · `reviews` · `dealerShifts` · `equityEngine` · `gtoToolCount` · `supabase` |
+
+전체 재측정: **376개 중 236 사살 · 140 생존 (63%)** (예전 기준 296개 · 81생존 — **숫자를 직접 비교하지 마라, 기준이 바뀌었다**).
+
+#### 막은 것 둘 (둘 다 재측정으로 사살 확인)
+
+**① `src/api/ledger.ts` — 이용권 바인이 매출로 샐 수 있었다** (1/6 → **2/6**)
+`if (method !== 'cash' && method !== 'card' && method !== 'transfer') return z;` 를 `===` 로 뒤집어도 통과했다.
+`PaymentMethod` 는 `'ticket' | 'cash' | 'transfer' | 'card' | 'support'` 이고,
+**이용권·가게지원은 돈이 오가지 않으므로 금액 칸이 전부 0 이어야 한다.**
+뒤집히면 이용권 바인이 현금 금액으로 기록돼 **장부 매출이 부풀려진다.**
+기존 `ledger.money.test.ts` 는 `'card'`·`'cash'` 만 보고 있었다.
+→ ticket·support 가 `{cash:0, card:0, transfer:0}` 인 계약 + **양성 대조**(정상 수단은 실제로 들어간다)를 넣었다.
+
+**② `src/api/rankings.ts` — 두 글자 실명이 그대로 공개될 수 있었다** (0/6 → **1/6**)
+`maskRealName` 은 순위표에 이름을 내보내기 전 **마지막 관문**인데(`rankings.ts:57-58`) **테스트가 하나도 없었다.**
+`n.length === 2` 를 뒤집으면 `'나리'` → else 로 떨어져 `나` + `*`.repeat(0) + `리` = **`'나리'`(마스킹 해제)**,
+`'홍길동'` → `'홍*'`(과잉 마스킹). 2026-09-15 에 실명 마스킹이 **서버 쪽에서** 풀려 있던 사고가 있었는데,
+같은 자산을 지키는 **클라이언트 관문에는 테스트가 0개**였다.
+
+#### 다음 사람이 이어받을 것 — 사살률 낮은 순 (수정 전 기준선)
+
+| 사살률 | 파일 | 판단 |
+|---|---|---|
+| 0% | `api/blocks.ts` (0/1) | 자기 자신 차단 가드. 한 줄이라 테스트도 한 줄 |
+| 0% | `api/marketplace.ts` (0/6) | 💰 장터 필터(`category`·`status`·`region`) 전부 생존 |
+| 0% | `lib/loyalty.ts` (0/6) | 💰 적립·등급 |
+| 0% | `lib/imageUrl.ts` (0/1) | 낮음 |
+| 17% | `api/auth.ts` (1/6) | 🔐 `u.role === 'venue_owner'` · `agreed_to_terms === true`(법적 동의) |
+| 17% | `api/vouchers.ts` (1/6) | 💰 이용권 |
+| 17% | `api/ledger.ts` (1/6 → 2/6) | 💰 남은 4: 목록 자르기 · `game_type` 매핑 · 미수 이용권 `&&` · 우세 결제수단 `&&` |
+| 17% | `api/events.ts` · `api/reservations.ts` · `lib/clockLevel.ts` | 중간 |
+| 33% | `api/community.ts` · `lib/hand.ts` · `lib/supabase.ts` | 중간 |
+
+🔴 **권장 순서: `auth.ts`(권한·법적 동의) → `marketplace.ts`·`vouchers.ts`·`loyalty.ts`(돈) → `blocks.ts`(한 줄).**
+
+#### 재현 방법
+
+```bash
+node scripts/mutation-check.mjs --file src/api/auth.ts --max 6   # 한 파일만
+node scripts/mutation-check.mjs                                   # 전체(수 분)
+```
+
+⚠ **이 스크립트는 소스에 변이를 직접 써넣었다 되돌린다.** 도는 동안 `git add`/`commit` 을 하면
+**변이된 파일을 커밋**할 수 있다. 실행 전후로 `git hash-object <파일>` 을 비교해라(나는 매번 확인했고 전부 복원됐다).
+
+⚠ **`mutation.yml` 은 `--ci` 없이 돌아 생존자가 있어도 실패시키지 않는다**(정보 제공용, 의도된 설계).
+즉 **"success" 배지는 '생존자가 없다' 는 뜻이 아니다.** 숫자는 로그를 열어야 보인다.
 
 
 ### `storage-backup.yml` 을 **6일 앞당겨 검증했다** — 오너가 설정할 secret 은 4개가 아니라 **2개**다
