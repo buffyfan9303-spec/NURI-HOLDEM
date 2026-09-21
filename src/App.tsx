@@ -818,11 +818,12 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
       {/* 🔴 B1(2026-09-21) — 하단바 알약 **아래 여백**. 운영 390×844 실측에서 `nav` 는 bottom:0 · 높이 74.25 CSS px 인데
           알약 아래가 8.5 CSS px 남아 "하단바가 너무 위에 떠 있다" 로 보였다(safe-area 0 환경).
           ⚠ 루트 폰트가 **17px** 이라 0.5rem = 8.5px 다(16px 가정하면 계산이 틀린다 — 이 저장소 고유 함정).
-          0.25rem = 4.25px 로 **약 4.25px 만** 내린다. `nav` 의 `fixed bottom-0`·`env(safe-area-inset-bottom)`·
+          0.25rem = 4.25px 로 좁혔고, FINAL-UX#NAV-GAP(2026-09-21)에서 0.125rem = **2.125px** 로 한 번 더 좁혔다
+          (버튼 `pb-1.5`→`pb-1` 와 합쳐 라벨 하단→nav 하단 11.625px → 약 7.4px). `nav` 의 `fixed bottom-0`·`env(safe-area-inset-bottom)`·
           전역 `--tabbar-safe/--tabbar-float`·푸터 예약량은 **건드리지 않는다** — 안전영역과 콘텐츠 예약은 별개 계약이다.
           PC 영향 0 은 구조가 보장한다: 이 `nav` 자체가 `lg:hidden` 이다.
           S26 실기기에서 2~6 CSS px 범위로 미세조정할 여지를 남긴다(현재 값은 로컬·운영 Chromium 실측 기준). */}
-      <div className="pointer-events-auto mx-2.5 mb-[calc(0.25rem+var(--tabbar-lift))] flex rounded-2xl border border-border-default bg-surface-mid shadow-dialog">
+      <div className="pointer-events-auto mx-2.5 mb-[calc(0.125rem+var(--tabbar-lift))] flex rounded-2xl border border-border-default bg-surface-mid shadow-dialog">
         {items.map(({ key, tab, label }) => {
           const on = tab ? shown === tab : false;
           return (
@@ -845,7 +846,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
               // 부수 효과: .press-spring 의 will-change:transform 이 빠지며 이 버튼이 더 이상 상시
               // offsetParent 가 아니게 된다(아래 필 주석 참고) — 이번 변경에서 노린 것은 아니지만 개선이다.
               data-main-tab
-              className="flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
+              className="flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1 pt-2 touch-manipulation focus:outline-none"
             >
               {/* 아이콘 21px · 라벨 t-tab(12.75px) — 공백 줄이고 또렷하게
                   ⚠ 2026-09-21 활성 아이콘 진입 바운스(0.4초, 최대 1.16배) 제거 — 손을 뗀 뒤에야

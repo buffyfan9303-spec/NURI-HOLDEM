@@ -25,7 +25,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 import { stripVenuePrefix, voucherGroupLabel, voucherLineLabel } from '../../lib/voucherLabel'; // "어느 매장이 준 것인가" 표기 규칙(오너 지시 #19)
-import type { Html5Qrcode } from 'html5-qrcode'; // 타입만(런타임 번들 제외) — 실제 라이브러리는 스캐너 열 때 동적 로드
+import type { Html5Qrcode } from 'html5-qrcode/es2015/html5-qrcode'; // 타입만(런타임 번들 제외) — 실제 라이브러리는 스캐너 열 때 동적 로드
 import {
   listMyVouchers, subscribeMyVouchers,
   redeemMyVoucherByQr, redeemMyVoucherByPhone,
@@ -297,6 +297,22 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
       {redeem && <RedeemSheet stack={redeem} onClose={() => setRedeem(null)}
         onDone={(used) => {
           setRedeem(null);
+          // FINAL-QR#CHECKIN-REFRESH(2026-09-21) — 1장 사용은 **직접 출석이 아니다**. 화면에 '출석 완료'나
+          // 점수 증가를 단정하지 않는다(아래 redeemDone 문구는 '사용 요청 전송'이다).
+          //
+          // 🔴 라이브 트리거 `trg_voucher_used_checkin`(md5 6c2c4081…) 실측 — 출석 행은 **네 조건이 전부 참일 때만** 생긴다:
+          //   status→'used' 전이 · 직전이 'used' 아님 · holder_user_id NOT NULL ·
+          //   같은 매장에 **최근 4시간 출석이 없을 것**. 그리고 `_apply_checkin` 의 +3점은 그 매장 KST 오늘
+          //   출석 수가 0일 때만이다. 즉 **생길 수도, 안 생길 수도 있고 점수는 0일 수도 있다.**
+          //   게다가 `redeem_my_voucher_by_qr`/`_by_phone` 의 반환은 `text`(매장 이름)뿐이라
+          //   **클라이언트는 출석이 생겼는지 알 방법이 자체가 없다.**
+          // → 그래서 `nuri:checkin-done` 은 **여기서 쏘지 않는다.** 그 신호의 뜻은 '출석이 생겼다'인데
+          //   4시간 창에 걸리면 거짓이 된다. 거짓 출석 표시 0회가 홈 목록 즉시 갱신보다 우선이다.
+          //   (반환 타입을 jsonb 로 넓히는 안은 금지 — 반환 타입 변경은 DROP+재생성이라 ACL 이 초기화돼
+          //    anon 실행이 열린다. DB 변경은 리드 조정 + nuri-migration 게이트다.)
+          // 남기는 것은 **순수 재조회 하나**뿐이다(HomeTab.tsx:330 getEventBoard — 변이 RPC 0회).
+          // 이용권 사용은 그 자체로 이벤트 참여 현황을 바꿀 수 있고, 안 바뀌었으면 같은 값이 다시 온다.
+          window.dispatchEvent(new Event('nuri:event-board-refresh'));
           // V07 — remain 은 재조회한 서버 정본에서 센다. load() 가 끝나기 전엔 아직 방금 요청을
           // 만든 그 장이 vouchers 에 active 로 남아 있을 수 있어(리렌더 타이밍), 반드시 fresh 를 기다린다.
           load().then((fresh) => {
@@ -309,7 +325,8 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
           실제 사용 장면이다. 큰 체크 + 수량 + 남은 잔량, 3초 뒤 자동 닫힘.
           ⚠ '사용 완료'라고 단정하지 않는다 — 운영자 승인 전까지는 대기 상태고, 거절되면 지갑으로 돌아온다. */}
       {redeemDone && (
-        <div role="status" className="fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 bg-emerald-600 px-6 text-white animate-fade-in"
+        // FINAL-UX#SHEET — 위 RedeemSheet 와 같은 이유(부모 시트 본문 드래그 차단). 3초 대기 중 오닫힘 방지.
+        <div role="status" data-no-drag-close className="fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 bg-emerald-600 px-6 text-white animate-fade-in"
           onClick={() => setRedeemDone(null)}>
           <svg width="88" height="88" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="12" cy="12" r="10" opacity="0.35" /><path d="M7 12.5l3.2 3.2L17 9" />
@@ -407,7 +424,12 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
   return (
     // 🔴 2026-09-19 회귀(team-lead 실측, NotificationPanel 과 같은 부류) — 퇴장 애니 동안 이 풀스크린
     // 오버레이(배경 버튼 포함)가 뒤 화면 클릭을 계속 가로챌 수 있다. closing 이 되는 즉시 pointer-events 를 끈다.
-    <div className={['fixed inset-0 z-[70] flex items-end justify-center sm:items-center', closing ? 'pointer-events-none' : ''].join(' ')}>
+    // 🔴 FINAL-UX#SHEET(2026-09-21) — `data-no-drag-close`. 이 지갑은 손님 시트(MyVoucherSheet)의 Modal **본문 안**에서도
+    // 렌더된다. 그 Modal 이 본문 끌어닫기를 켜면서, 이 풀스크린 시트 위의 손짓이 React 합성 이벤트로 본문
+    // 핸들러까지 올라가 **부모 시트가 통째로 내려가고 사용 확인/QR/전화번호가 날아갈** 수 있게 됐다.
+    // 부모는 이 컴포넌트의 내부 상태(`redeem`)를 모르므로 prop 으로 끌 수 없다 — Modal 이 이미 가진
+    // 옵트아웃 속성(Modal.tsx:56 EDITABLE_SEL 의 `[data-no-drag-close]`)을 쓴다. `closest()` 판정이라 자손 전부 덮는다.
+    <div data-no-drag-close className={['fixed inset-0 z-[70] flex items-end justify-center sm:items-center', closing ? 'pointer-events-none' : ''].join(' ')}>
       <button type="button" aria-label="닫기" onClick={startClose} className="absolute inset-0 overscroll-contain bg-black/70" />
       <div className={['relative w-full max-w-md space-y-3 rounded-t-dialog border border-border-default bg-surface-mid p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:rounded-dialog sm:pb-4',
         closing ? 'animate-slide-down' : 'animate-sheet-up'].join(' ')}>
@@ -492,7 +514,8 @@ function QrScanner({ onResult, onError }: { onResult: (text: string) => void; on
     const stop = () => { const s = scanner; scanner = null; if (s) { s.stop().then(() => s.clear()).catch(() => {}); } };
     (async () => {
       try {
-        const { Html5Qrcode: QrLib } = await import('html5-qrcode'); // 동적 로드 — 스캐너를 열 때만 다운로드(초기 번들 제외)
+        // 같은 스캐너의 ES2015 진입점: 미사용 Scanner UI와 ES5 변환 코드를 싣지 않는다.
+        const { Html5Qrcode: QrLib } = await import('html5-qrcode/es2015/html5-qrcode'); // 동적 로드 — 스캐너를 열 때만 다운로드(초기 번들 제외)
         scanner = new QrLib('nuri-qr-reader');
         await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 220 },
           (text) => { if (!done) { done = true; const r = text; stop(); onResult(r); } },

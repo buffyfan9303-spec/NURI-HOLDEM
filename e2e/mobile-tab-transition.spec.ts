@@ -98,11 +98,15 @@ for (const width of [390, 1023, 1024]) {
 //   ② **실제 렌더된 rect 변위**(첫/중간/정착) — "선언은 맞는데 안 그려진다" 를 잡는다.
 //
 // ⚠ rAF 샘플러는 **피크 프레임을 놓칠 수 있다.** 실측(2026-09-21 · 격리 프로덕션 빌드 · 390×844):
-//   `5.8ms:0 → 10.3ms:5.89` 처럼 8px 피크가 두 샘플 사이에 들어간 전환이 있었다.
-//   그래서 관측 최대값 하한은 5.5px 로 두고, **정확한 8px 은 선언값으로 잠근다.**
+//   `5.8ms:0 → 10.3ms:5.89` 처럼 피크가 두 샘플 사이에 들어간 전환이 있었다.
+//   그래서 관측 최대값 하한은 선언값보다 낮게 두고(6px 선언 → 3.5px 하한), **정확한 6px 은 선언값으로 잠근다.**
+//
+// 🔴 FINAL-UX#MOTION-LIVE(2026-09-21) — 축이 y 에서 **x** 로 바뀌었다. 그래서 여기서 재는 변위도
+//    `rect.top` 이 아니라 `rect.left` 다. y 는 이제 **고정**이어야 하고(라이브 상단 카드의 아래→위
+//    움직임이 오너가 지적한 그것), 그 고정을 아래 ③ 에서 따로 단언한다.
 //
 // 음성 대조: `src/lib/tabEnter.ts` 의 `startTabEnter` 호출을 `App.tsx` 에서 빼면 이 검사가 빨개진다.
-test('🔴 N1 — 새 탭 본문이 8px 아래에서 170ms 동안 제자리로 들어온다 (첫·중간·정착)', async ({ page }) => {
+test('🔴 N1 — 새 탭 본문이 오른쪽 6px 에서 170ms 동안 제자리로 들어온다 (첫·중간·정착)', async ({ page }) => {
   test.setTimeout(180_000);
   await stabilizeBackstack(page);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -119,7 +123,7 @@ test('🔴 N1 — 새 탭 본문이 8px 아래에서 170ms 동안 제자리로 �
     const dest = 'tools';
     const pick = () => Array.from(document.querySelectorAll<HTMLElement>(`[data-tab="${dest}"] [data-main-enter]`))
       .filter((e) => e.offsetParent !== null && e.getBoundingClientRect().height > 0 && e.getBoundingClientRect().top < window.innerHeight);
-    const rows: { t: number; ys: number[]; mats: string[]; ops: number[] }[] = [];
+    const rows: { t: number; ys: number[]; tops: number[]; mats: string[]; ops: number[] }[] = [];
     const hdr = () => document.querySelector<HTMLElement>('[data-stack-header]')?.getBoundingClientRect().height ?? -1;
     const nav = () => document.querySelector<HTMLElement>('nav[aria-label="하단 내비게이션"]')?.getBoundingClientRect().top ?? -1;
     const hdrs: number[] = []; const navs: number[] = [];
@@ -129,7 +133,8 @@ test('🔴 N1 — 새 탭 본문이 8px 아래에서 170ms 동안 제자리로 �
       const tick = () => {
         const el = performance.now() - t0;
         const els = pick();
-        rows.push({ t: +el.toFixed(1), ys: els.map((e) => +e.getBoundingClientRect().top.toFixed(2)),
+        rows.push({ t: +el.toFixed(1), ys: els.map((e) => +e.getBoundingClientRect().left.toFixed(2)),
+          tops: els.map((e) => +e.getBoundingClientRect().top.toFixed(2)),
           mats: els.map((e) => getComputedStyle(e).transform), ops: els.map((e) => Number(getComputedStyle(e).opacity)) });
         hdrs.push(hdr()); navs.push(nav());
         if (el < 420) requestAnimationFrame(tick); else res();
@@ -155,12 +160,12 @@ test('🔴 N1 — 새 탭 본문이 8px 아래에서 170ms 동안 제자리로 �
 
   // ① 선언값
   expect(r.animCount, '진입 애니메이션 객체가 없다').toBeGreaterThan(0);
-  expect(r.kfFrom, '시작 keyframe').toBe('translateY(8px)');
-  expect(r.kfTo === 'translateY(0px)' || r.kfTo === 'translateY(0)', `끝 keyframe: ${r.kfTo}`).toBe(true);
+  expect(r.kfFrom, '시작 keyframe').toBe('translateX(6px)');
+  expect(r.kfTo === 'translateX(0px)' || r.kfTo === 'translateX(0)', `끝 keyframe: ${r.kfTo}`).toBe(true);
   expect(r.dur, 'duration').toBe(170);
   expect(r.fill, 'fill 은 none 이어야 정착 뒤 transform 잔재가 안 남는다').toBe('none');
 
-  // ② 실제 렌더 — 기준선은 **정착 y**(애니메이션이 커밋 몇 프레임 뒤에 시작하므로 프레임 0 은 초기값이 아니다).
+  // ② 실제 렌더 — 기준선은 **정착 x**(애니메이션이 커밋 몇 프레임 뒤에 시작하므로 프레임 0 은 초기값이 아니다).
   const settled = r.rows[r.rows.length - 1];
   const disp = r.rows.map((f) => ({ t: f.t, d: f.ys.map((y, i) => +(y - (settled.ys[i] ?? y)).toFixed(2)) }));
   const peak = disp.reduce((a, b) => (Math.max(...b.d) > Math.max(...a.d) ? b : a));
@@ -168,8 +173,8 @@ test('🔴 N1 — 새 탭 본문이 8px 아래에서 170ms 동안 제자리로 �
   console.log('[N1] 곡선#0:', disp.map((x) => `${x.t}:${x.d[0]}`).join(' '));
 
   for (let i = 0; i < n; i++) {
-    expect(peak.d[i], `대상#${i} 관측 최대 변위 ${peak.d[i]}px — 본문이 정적이다`).toBeGreaterThanOrEqual(5.5);
-    expect(peak.d[i], `대상#${i} 변위가 과하다`).toBeLessThanOrEqual(10);
+    expect(peak.d[i], `대상#${i} 관측 최대 x 변위 ${peak.d[i]}px — 본문이 정적이다`).toBeGreaterThanOrEqual(3.5);
+    expect(peak.d[i], `대상#${i} 변위가 과하다`).toBeLessThanOrEqual(8);
   }
   // 동시 진행 — 같은 프레임에서 서로 1px 이내(제각각 낙하 금지 = 오너가 말한 '분절').
   expect(+(Math.max(...peak.d) - Math.min(...peak.d)).toFixed(2),
@@ -178,14 +183,23 @@ test('🔴 N1 — 새 탭 본문이 8px 아래에서 170ms 동안 제자리로 �
   for (let i = 0; i < n; i++) expect(mid!.d[i], `대상#${i} 중간 변위가 [0, ${peak.d[i]}] 밖`).toBeLessThan(peak.d[i]);
   for (const m of settled.mats) expect(m, '정착 뒤 transform 잔재').toBe('none');
 
-  // ③ 삼성 눌림 재발 — 순수 y 이동만. scale/skew 가 섞이면 본문이 '눌린' 것이다.
+  // ③ 삼성 눌림 재발 — 순수 x 이동만. scale/skew 가 섞이면 본문이 '눌린' 것이고,
+  //    ty 가 0 이 아니면 오너가 지적한 **아래→위 세로 움직임**이 되살아난 것이다.
   for (const f of r.rows) for (const m of f.mats) {
     if (m === 'none') continue;
     const v = m.match(/matrix\(([^)]+)\)/);
     expect(v, `예상 밖 transform: ${m}`).toBeTruthy();
-    const [a, b, c, d] = v![1].split(',').map((x) => Number(x.trim()));
+    const [a, b, c, d, , ty] = v![1].split(',').map((x) => Number(x.trim()));
     expect(Math.abs(a - 1) < 0.001 && Math.abs(d - 1) < 0.001 && Math.abs(b) < 0.001 && Math.abs(c) < 0.001,
-      `순수 y 이동이 아니다(scale/skew): ${m}`).toBe(true);
+      `순수 이동이 아니다(scale/skew): ${m}`).toBe(true);
+    expect(Math.abs(ty), `세로 이동이 섞였다(y 는 고정이어야 한다): ${m}`).toBeLessThan(0.001);
+  }
+  // ③-b y 고정 — transform 뿐 아니라 **렌더된 top** 도 첫 프레임부터 정착까지 같아야 한다(허용 1px).
+  for (let i = 0; i < n; i++) {
+    const tops = r.rows.map((f) => f.tops[i]).filter((x) => typeof x === 'number');
+    expect(+(Math.max(...tops) - Math.min(...tops)).toFixed(2),
+      `대상#${i} 의 y 가 모션 중 ${Math.min(...tops)}→${Math.max(...tops)} 로 움직였다 — x 이동만 해야 한다`)
+      .toBeLessThanOrEqual(1);
   }
   // ④ Chrome 반짝임 재발 — 대상 opacity 를 건드리지 않는다.
   for (const f of r.rows) for (const o of f.ops) expect(o, '대상 opacity 가 1 이 아니다 — 페이드는 금지다').toBeCloseTo(1, 3);
@@ -204,12 +218,25 @@ test('🔴 N1 — 새 탭 본문이 8px 아래에서 170ms 동안 제자리로 �
 //      뒤 다음 프레임에 +8 로 점프했다 — 사용자에겐 0→+8 **역행**으로 보인다.
 //
 // 그래서 여기서는 위 검사가 안 보는 두 가지를 본다:
-//   (a) 대상이 **처음 보이는 프레임**에서 이미 +8 쪽인가 (역행 금지)
+//   (a) 대상이 **처음 보이는 프레임**에서 이미 +6(x) 쪽인가 (역행 금지)
 //   (b) 모든 프레임에서 대상들의 값이 **서로 같은가** (분절 금지 — 피크 한 프레임만 보면 놓친다)
 //
 // 음성 대조(둘 다 확인함):
 //   · `tabEnter.ts` 의 `attempt()` 를 `requestAnimationFrame(attempt)` 로 되돌리면 (a) 가 빨개진다.
 //   · 외치기 래퍼의 `data-main-enter` 를 떼면 대상 수가 줄어 cohort 단언이 빨개진다.
+//
+// 🔴 FINAL-UX#MOTION-COMMUNITY(2026-09-21) — 이 검사는 종전에 **게시판(board)** 상태에서 돌았다.
+//    오너가 정적이라고 본 화면은 커뮤니티 **기본 서브탭(venues)** 이고, 그 상태에서는 `collect()` 가
+//    DOM 순서상 앞에 있는 **숨은** ready(live/board)를 골라 `offsetParent === null` → `return []` 로
+//    전부 정적이 되고 있었다. 그래서 아래 검사는 서브탭을 건드리지 않고 **기본 상태 그대로** 재현한다.
+//    음성 대조: `collect()` 를 `querySelector` 한 개로 되돌리거나, 보이는 ready 앞에 숨은 ready 를
+//    하나 삽입하면 이 검사가 빨개져야 한다.
+//
+// 🔴 이 검사가 **첫 방문에서는 아무것도 재지 않았다**(2026-09-21 음성 대조 실측).
+//    커뮤니티 **첫 방문 순간**에는 판 안에 ready 가 기본 섹션(venues) **하나뿐**이라 종전 코드도 통과한다.
+//    숨은 live/board 는 `CommunityTab` 의 **유휴 프리마운트**가 나중에 붙이고, 그때부터 DOM 순서상
+//    앞자리를 차지한다. 그래서 아래 검사는 **프리마운트가 끝난 뒤의 재방문**을 잰다 —
+//    실측: 되돌린 빌드에서 첫 방문 경로는 통과(거짓 통과), 재방문 경로는 실패.
 test('🔴 M1 — 커뮤니티 본문 cohort 가 첫 프레임부터 같은 값으로 함께 들어온다 (역행·분절 금지)', async ({ page }) => {
   test.setTimeout(180_000);
   await stabilizeBackstack(page);
@@ -226,6 +253,24 @@ test('🔴 M1 — 커뮤니티 본문 cohort 가 첫 프레임부터 같은 값�
     .getByRole('button', { name: /커뮤니티/ });
   await expect(navBtn, '하단바에 커뮤니티 칸이 없다').toBeVisible({ timeout: 15_000 });
 
+  // 🔴 프리마운트를 끝낸 **재방문** 상태로 만든다(위 주석). 여기가 실제 결함 조건이다.
+  await navBtn.click();
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-tab="community"] [data-main-enter-ready]').length >= 2,
+    undefined, { timeout: 20_000 });
+  const readyMap = await page.evaluate(() => Array.from(
+    document.querySelectorAll('[data-tab="community"] [data-main-enter-ready]'))
+    .map((el) => ({ sec: el.closest('[data-sec]')?.getAttribute('data-sec') ?? '(밖)',
+      hidden: (el as HTMLElement).offsetParent === null })));
+  console.log('[M1] ready 목록(DOM 순서):', JSON.stringify(readyMap));
+  // 잴 것이 실제로 결함 조건인가 — **보이는 ready 앞에 숨은 ready 가 있어야** 이 검사가 의미를 갖는다.
+  const firstVisible = readyMap.findIndex((x) => !x.hidden);
+  expect(firstVisible, `숨은 ready 가 앞에 없다(ready 목록 ${JSON.stringify(readyMap)}) — ` +
+    '프리마운트가 아직 안 돌았다면 이 검사는 결함을 재지 못한다').toBeGreaterThan(0);
+  await page.getByRole('navigation', { name: '하단 내비게이션' })
+    .getByRole('button', { name: /^홈/ }).click();
+  await page.waitForTimeout(800);
+
   // 샘플러를 **먼저** 걸어 두고 그 다음에 누른다 — 첫 프레임을 놓치면 역행 검사가 성립하지 않는다.
   await page.evaluate(() => {
     const w = window as unknown as Record<string, unknown>;
@@ -234,18 +279,23 @@ test('🔴 M1 — 커뮤니티 본문 cohort 가 첫 프레임부터 같은 값�
       const els = Array.from(document.querySelectorAll<HTMLElement>('[data-tab="community"] [data-main-enter]'))
         .filter((e) => e.offsetParent !== null && e.getBoundingClientRect().height > 0
           && e.getBoundingClientRect().top < window.innerHeight);
+      // matrix 의 index 4 = tx(x 이동), 5 = ty. y 는 0 이어야 하므로 같이 들고 단언한다.
       const ys = els.map((e) => {
+        const m = /matrix\(([^)]+)\)/.exec(getComputedStyle(e).transform);
+        return m ? +Number(m[1].split(',')[4]).toFixed(2) : 0;
+      });
+      const tys = els.map((e) => {
         const m = /matrix\(([^)]+)\)/.exec(getComputedStyle(e).transform);
         return m ? +Number(m[1].split(',')[5]).toFixed(2) : 0;
       });
-      (w.__m1rows as unknown[]).push({ t: +performance.now().toFixed(1), ys });
+      (w.__m1rows as unknown[]).push({ t: +performance.now().toFixed(1), ys, tys });
       if ((w.__m1rows as unknown[]).length < 60) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
   });
   await navBtn.click();
   await page.waitForTimeout(1_500);
-  const r = await page.evaluate(() => (window as unknown as Record<string, unknown>).__m1rows) as { t: number; ys: number[] }[];
+  const r = await page.evaluate(() => (window as unknown as Record<string, unknown>).__m1rows) as { t: number; ys: number[]; tys: number[] }[];
 
   // 🔴 **대상이 화면에 나타난 첫 프레임**부터 본다. '움직이는 프레임만' 으로 거르면 안 된다 —
   //   역행의 정체가 바로 "보이는데 아직 안 움직인(=정착 위치로 페인트된) 프레임" 이라, 그걸 걸러내면
@@ -256,13 +306,18 @@ test('🔴 M1 — 커뮤니티 본문 cohort 가 첫 프레임부터 같은 값�
     .toBeGreaterThan(2);
 
   const first = appeared[0];
-  // (a) 역행 금지 — 대상이 **보이기 시작한 그 프레임**에서 이미 +8 쪽이어야 한다.
+  // (a) 역행 금지 — 대상이 **보이기 시작한 그 프레임**에서 이미 +6(x) 쪽이어야 한다.
   //   한 프레임이라도 정착(0)으로 먼저 그려지면 사용자 눈에는 "내려갔다 올라온다"로 보인다.
   expect(Math.max(...first.ys),
-    `대상이 보이기 시작한 첫 프레임의 변위가 ${Math.max(...first.ys)}px 다 — 정착 위치로 한 번 그려진 뒤 ` +
-    `튀어 올랐다(0→+8 역행). 시퀀스: ${appeared.slice(0, 6).map((f) => `${f.t}:${f.ys[0]}`).join(' ')}`)
-    .toBeGreaterThanOrEqual(5.5);
-  expect(Math.max(...first.ys), '첫 프레임 변위가 과하다').toBeLessThanOrEqual(10);
+    `대상이 보이기 시작한 첫 프레임의 x 변위가 ${Math.max(...first.ys)}px 다 — 정착 위치로 한 번 그려진 뒤 ` +
+    `튀었다(0→+6 역행). 시퀀스: ${appeared.slice(0, 6).map((f) => `${f.t}:${f.ys[0]}`).join(' ')}`)
+    .toBeGreaterThanOrEqual(3.5);
+  expect(Math.max(...first.ys), '첫 프레임 변위가 과하다').toBeLessThanOrEqual(8);
+  // y 는 어느 프레임에서도 움직이지 않는다 — 라이브 카드의 아래→위 움직임 재발 방지.
+  for (const f of appeared) {
+    expect(Math.max(...f.tys.map((v) => Math.abs(v))),
+      `t=${f.t} 에서 세로 이동이 섞였다: ${JSON.stringify(f.tys)}`).toBeLessThanOrEqual(0.01);
+  }
   const moving = appeared;
 
   // 🔴 cohort — 외치기 래퍼까지 들어와야 한다. 검색·여백·필터·목록 4개 + 외치기 = 5.
@@ -324,7 +379,7 @@ test('🔴 C1 — 본문 진입 모션의 중간과 종료에서 카드 픽셀 �
       if (!eff?.getKeyframes) continue;
       if (eff.getTiming().duration !== 170) continue;
       const kf = eff.getKeyframes() as { transform?: string }[];
-      if (!kf.some((f) => typeof f.transform === 'string' && f.transform.includes('translateY(8px)'))) continue;
+      if (!kf.some((f) => typeof f.transform === 'string' && f.transform.includes('translateX(6px)'))) continue;
       a.pause(); a.currentTime = 85; n += 1;
     }
     return n;
@@ -363,10 +418,13 @@ test('🔴 C1 — 본문 진입 모션의 중간과 종료에서 카드 픽셀 �
 //
 // 오너: 하단바가 화면 아래에서 너무 떠 보인다. 운영 390×844(safe-area 0) 실측에서 `nav` 는 bottom:0 인데
 // 알약 아래가 8.5 CSS px 남아 있었다(`App.tsx` 의 `mb-[calc(0.5rem+var(--tabbar-lift))]`, 루트 폰트 17px).
-// 4.25px 로 좁혔다. 이 검사는 **그 값이 다시 벌어지는 것**과 **안전영역 계약이 깨지는 것**을 같이 잡는다.
+// 4.25px 로 좁혔고, FINAL-UX#NAV-GAP(2026-09-21)에서 **2.125px**(0.125rem)로 한 번 더 좁혔다.
+// 여기에 버튼 `pb-1.5 → pb-1`(6.375 → 4.25px)을 더해 라벨 하단→nav 하단이 11.625 → 약 7.4px 다.
+// 이 검사는 **그 값이 다시 벌어지는 것**과 **안전영역·터치 표적 계약이 깨지는 것**을 같이 잡는다.
 //
-// 음성 대조: `mb-[calc(0.25rem+…)]` 을 `0.5rem` 으로 되돌리면 gap 이 8.5 가 되어 상한(6)을 넘는다.
-test('🔴 B1 — 하단바 알약 아래 여백이 2~6px 이고 안전영역 계약은 그대로다', async ({ page }) => {
+// 음성 대조: `mb-[calc(0.125rem+…)]` 을 `0.25rem` 으로 되돌리면 gap 이 4.25 가 되어 상한(3)을 넘고,
+//   버튼 `pb-1` 을 `pb-1.5` 로 되돌리면 라벨 하단→nav 하단이 9.5px 가 되어 상한(8)을 넘는다.
+test('🔴 B1 — 하단바 알약 아래 여백과 라벨 하단 여백이 목표 범위이고 안전영역 계약은 그대로다', async ({ page }) => {
   await stabilizeBackstack(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
@@ -381,19 +439,47 @@ test('🔴 B1 — 하단바 알약 아래 여백이 2~6px 이고 안전영역 �
     const nr = nav.getBoundingClientRect(), ir = inner.getBoundingClientRect();
     const cs = getComputedStyle(nav);
     const btn = inner.querySelector('button');
+    const btns = Array.from(inner.querySelectorAll('button'));
     return {
       // 안전영역을 뺀 순수 여백 — 기기에 safe-area 가 있어도 같은 값이 나와야 한다.
       gap: +(nr.bottom - ir.bottom - (parseFloat(cs.paddingBottom) || 0)).toFixed(2),
       navBottomOffset: +(window.innerHeight - nr.bottom).toFixed(2), // fixed bottom:0 계약
       position: cs.position,
       btnH: btn ? +btn.getBoundingClientRect().height.toFixed(2) : -1,
+      // 오너가 본 '떠 있음' 의 실체 — **라벨 글자 하단**에서 nav 하단(=화면 바닥)까지. **모든 칸**을 잰다:
+      // 배지가 붙은 라이브·커뮤니티 칸만 값이 달라지는 부류를 첫 칸만 보면 놓친다.
+      // 🔴 라벨 요소는 버튼의 **마지막 자식**이다. `span:last-child` 로 고르면 배지 span 도 잡혀 41~47px 로 오측된다(실측).
+      labelGaps: btns.map((b2) => {
+        const label = b2.lastElementChild as HTMLElement | null;
+        return label ? +(nr.bottom - label.getBoundingClientRect().bottom).toFixed(2) : -1;
+      }),
+      // 라벨이 칸 밖으로 잘렸는가(여백을 줄이며 세로로 눌렸는지) — 0 이어야 한다.
+      clipped: btns.filter((b2) => {
+        const label = b2.lastElementChild as HTMLElement | null;
+        return !!label && label.scrollHeight > label.clientHeight + 0.5;
+      }).length,
+      minBtnH: +Math.min(...btns.map((b2) => b2.getBoundingClientRect().height)).toFixed(2),
+      iconTopGaps: btns.map((b2) => {
+        const icon = b2.querySelector('[data-main-tab-icon]') as HTMLElement | null;
+        return icon ? +(icon.getBoundingClientRect().top - b2.getBoundingClientRect().top).toFixed(2) : -1;
+      }),
     };
   });
   expect(m, '하단바 구조를 못 찾았다').not.toBeNull();
   expect(m!.position, '하단바가 fixed 가 아니다').toBe('fixed');
   expect(m!.navBottomOffset, '하단바가 화면 바닥에 붙어 있지 않다 — bottom:0 계약이 깨졌다').toBeLessThanOrEqual(0.5);
-  expect(m!.gap, `알약 아래 여백이 ${m!.gap}px 다 — 2~6px 범위를 벗어났다`).toBeGreaterThanOrEqual(2);
-  expect(m!.gap, `알약 아래 여백이 ${m!.gap}px 다 — 너무 떠 있다(종전 8.5px 회귀)`).toBeLessThanOrEqual(6);
+  expect(m!.gap, `알약 아래 여백이 ${m!.gap}px 다 — 1.5~3px 범위를 벗어났다`).toBeGreaterThanOrEqual(1.5);
+  expect(m!.gap, `알약 아래 여백이 ${m!.gap}px 다 — 너무 떠 있다(4.25px/8.5px 회귀)`).toBeLessThanOrEqual(3);
+  // FINAL-UX#NAV-GAP 수용 기준 — **모든 칸**의 라벨 하단→nav 하단 6~8px(safe-area 0).
+  expect(m!.labelGaps.length, '하단바 칸을 못 찾았다').toBeGreaterThanOrEqual(4);
+  expect(Math.min(...m!.labelGaps), `라벨 하단→nav 하단 최소 ${Math.min(...m!.labelGaps)}px — 6~8px 범위를 벗어났다: ${JSON.stringify(m!.labelGaps)}`)
+    .toBeGreaterThanOrEqual(6);
+  expect(Math.max(...m!.labelGaps), `라벨 하단→nav 하단 최대 ${Math.max(...m!.labelGaps)}px — 너무 떠 있다(종전 11.625px 회귀): ${JSON.stringify(m!.labelGaps)}`)
+    .toBeLessThanOrEqual(8);
+  // 아이콘 상단 간격은 변화 0 이어야 한다(pt-2 는 안 건드렸다) — 여백을 위에서 훔쳐오지 않았다는 증거.
+  for (const g of m!.iconTopGaps) expect(g, `아이콘 상단 간격이 ${g}px 다 — pt-2(8.5px)가 아니다`).toBeCloseTo(8.5, 1);
+  expect(m!.clipped, '라벨이 세로로 잘린 칸이 있다').toBe(0);
+  expect(m!.minBtnH, `가장 낮은 하단바 버튼이 ${m!.minBtnH}px 로 44px 미만이다`).toBeGreaterThanOrEqual(44);
   // 여백을 줄이면서 터치 표적을 깎지 않았는지 — 44px 계약은 별개다.
   expect(m!.btnH, `하단바 버튼 높이가 ${m!.btnH}px 로 44px 미만이다`).toBeGreaterThanOrEqual(44);
 });

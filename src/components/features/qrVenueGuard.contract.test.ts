@@ -16,7 +16,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 
-const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf-8');
+// ⚠ **주석을 지우고** 읽는다(linkChain.contract.test.ts 와 같은 조리법). 이 파일에는 '이 모양으로
+//   되돌아가면 안 된다' 는 **부정 단언**이 있는데, 고친 코드 옆에 그 옛 모양을 설명으로 적어 두는 일이
+//   흔하다. 주석째 읽으면 그 설명 문장이 부정 단언을 빨갛게 만든다(2026-09-21 실제로 걸렸다).
+//   코드 계약은 코드만 본다.
+const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const read = (p: string) => strip(readFileSync(new URL(p, import.meta.url), 'utf-8'));
 
 describe('Q5 — 매장에 매인 QR 이미지의 경합 가드', () => {
   const files = [
@@ -52,11 +57,51 @@ describe('Q5 — 매장에 매인 QR 이미지의 경합 가드', () => {
     });
   }
 
-  it('VoucherManageModal — 인쇄도 누른 순간의 매장으로 끝난다', () => {
+  // ── 인쇄(FINAL-QR#PRINT-A-B) ─────────────────────────────────────────────────────────────
+  // 🔴 2026-09-21 — 여기 있던 단언은 **거짓 초록이었다**:
+  //     expect(src).toMatch(/forVenue\s*!==\s*venueId/)
+  //   실제 코드는 `const forVenue = venueId; await …; if (forVenue !== venueId)` 였고, 두 피연산자가
+  //   **한 렌더 클로저의 같은 값**이라 A→B 전환 뒤에도 비교가 영원히 거짓 — 0건도 못 막았다.
+  //   그런데 검사는 '그 문자열이 있는가' 뿐이라 통과했다. 가드가 있다는 것과 가드가 막는다는 것은 다르다.
+  //   경합 자체의 **행동 검증**은 venueQrPrint.test.ts(역순 deferred resolve 7건)로 옮겼다.
+  //   여기 남은 일은 하나: **컴포넌트가 그 판정자를 실제로 쓰고, 창을 여는 순서가 맞는가**.
+  it('VoucherManageModal — 인쇄 가드가 옛 클로저 비교로 되돌아가지 않았다', () => {
     const src = files[1].src;
-    // 비치용 인쇄는 한 번 잘못 나가면 그 매장에 계속 붙어 있는다 — 화면보다 되돌리기 어렵다.
-    expect(src, '인쇄 준비 중 매장 전환을 검사하지 않는다 — 라벨과 다른 매장 QR 이 종이에 찍힌다')
-      .toMatch(/forVenue\s*!==\s*venueId/);
+    // 되돌아가면 안 되는 정확한 모양. 주석은 strip 되지 않으므로(read 가 원본을 읽는다) 코드 형태로 본다.
+    expect(src, '클로저 변수끼리 비교하는 옛 가드가 되살아났다 — 이 비교는 항상 거짓이라 0건을 막는다')
+      .not.toMatch(/if\s*\(\s*forVenue\s*!==\s*venueId\s*\)/);
+  });
+
+  it('VoucherManageModal — `await` 뒤 판정을 buildQrForVenue 에 **getter** 로 넘긴다', () => {
+    const src = files[1].src;
+    // 값(string)으로 넘기면 옛 버그가 그대로 재현된다 — 반드시 호출 시점에 평가되는 함수여야 한다.
+    expect(src, 'buildQrForVenue 에 최신 ref 를 읽는 getter 를 넘기지 않는다')
+      .toMatch(/buildQrForVenue\(\s*forVenue\s*,\s*\(\)\s*=>\s*venueIdRef\.current\s*,/);
+  });
+
+  it('VoucherManageModal — venueIdRef 가 매장 변경과 언마운트를 모두 따라간다', () => {
+    const src = files[1].src;
+    // 매장이 바뀌면 새 값, 언마운트되면 null. cleanup 이 없으면 닫힌 창의 인쇄가 통과한다.
+    expect(src, 'venueIdRef 가 venueId effect 로 갱신되지 않는다 — await 뒤 값이 영원히 첫 매장이다')
+      .toMatch(/venueIdRef\.current\s*=\s*venueId;\s*return\s*\(\)\s*=>\s*\{\s*venueIdRef\.current\s*=\s*null;\s*\};\s*\}\s*,\s*\[venueId\]\)/);
+  });
+
+  it('VoucherManageModal — 창은 `await` **앞** 동기 구간에서 열고, 낡으면 닫는다', () => {
+    const src = files[1].src;
+    const print = src.slice(src.indexOf('const printQr'), src.indexOf('const issue = async'));
+    expect(print.length, 'printQr 본문을 못 찾았다 — 아래 순서 단언이 빈 문자열을 검사하게 된다').toBeGreaterThan(200);
+    const open = print.indexOf('window.open(');
+    const wait = print.indexOf('await buildQrForVenue');
+    expect(open, 'printQr 에 window.open 이 없다').toBeGreaterThan(-1);
+    expect(wait, 'printQr 에 buildQrForVenue await 가 없다').toBeGreaterThan(-1);
+    // `await` 를 지나면 사용자 제스처가 소모돼 팝업 차단에 걸린다(차단은 throw 가 아니라 null 반환).
+    // 같은 저장소의 VenueManageTab.printPaperForm 이 이미 이 순서다 — 빈 창 먼저, 내용 나중.
+    expect(open, 'window.open 이 await 뒤에 있다 — 팝업 차단으로 정상 인쇄가 조용히 죽는다').toBeLessThan(wait);
+    expect(print, '팝업 차단(null 반환)을 안 본다').toMatch(/if\s*\(\s*!w\s*\)/);
+    // 낡은 세대에서는 이미 열어 둔 빈 창을 닫는다 — about:blank 를 인쇄물로 오인하지 않게.
+    expect(print, '매장이 바뀐 경로에서 열어 둔 창을 닫지 않는다 — 빈 about:blank 가 남는다')
+      .toMatch(/if\s*\(\s*!imgs\s*\)\s*\{\s*w\.close\(\);/);
+    expect(print, 'QR 생성 실패 경로에서도 창을 닫아야 한다').toMatch(/catch\s*\([^)]*\)\s*\{\s*w\.close\(\);/);
   });
 
   it('회원가입 QR 은 매장에 매이지 않으므로 이 가드에서 제외된다', () => {

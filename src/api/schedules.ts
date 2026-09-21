@@ -141,7 +141,8 @@ export async function bumpScheduleView(id: string): Promise<void> {
 
 // ── 전체 조회 ─────────────────────────────────────────────────────────────────
 export async function getSchedules(): Promise<Schedule[]> {
-  if (IS_MOCK) {
+  // IS_MOCK와 같은 조건을 직접 써야 Vite가 그래프 생성 전에 Mock 청크를 제외한다.
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     const { MOCK_SCHEDULES } = await import('../mock/data');
     return MOCK_SCHEDULES;
   }
@@ -168,7 +169,7 @@ export async function getSchedules(): Promise<Schedule[]> {
 // ⚠ null 은 '없음/볼 권한 없음' 만 뜻한다. 조회 **실패**(오프라인·5xx)는 throw 로 드러낸다 —
 //   실패를 null 로 뭉개면 살아 있는 포스터가 '내려간 포스터' 로 안내된다(F09).
 export async function getScheduleById(id: string): Promise<Schedule | null> {
-  if (IS_MOCK) {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     const { MOCK_SCHEDULES } = await import('../mock/data');
     return MOCK_SCHEDULES.find((s) => s.id === id) ?? null;
   }

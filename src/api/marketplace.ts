@@ -55,7 +55,8 @@ const rowToNotice = (r: any): MarketplaceNotice => ({
 export async function getListings(opts?: {
   category?: ListingCategory; status?: ListingStatus; region?: string;
 }): Promise<MarketplaceListing[]> {
-  if (IS_MOCK) {
+  // IS_MOCK와 같은 조건을 직접 써야 Vite가 그래프 생성 전에 Mock 청크를 제외한다.
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     const { MOCK_LISTINGS } = await import('../mock/data');
     return MOCK_LISTINGS.filter((l) =>
       (!opts?.category || l.category === opts.category) &&
@@ -177,7 +178,7 @@ export async function getMyLikedListings(): Promise<MarketplaceListing[]> {
 
 // ── Notices ───────────────────────────────────────────────────────────────────
 export async function getNotices(): Promise<MarketplaceNotice[]> {
-  if (IS_MOCK) {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     const { MOCK_NOTICES } = await import('../mock/data');
     return MOCK_NOTICES;
   }

@@ -151,10 +151,17 @@ export async function listMyVouchers(): Promise<Voucher[]> {
   return rows;
 }
 
-/** 실제 발급 수량(정수)을 돌려준다 — 서버(issue_voucher)가 1~1000 사이로 clamp 한 값이다(v_count, 라이브
- *  정의 20260905i 확인). 호출부(VoucherManageModal·CheckinModal)는 요청한 count 와 대조해 불일치를 감지한다
- *  (Q2, 2026-09-20). 예전엔 이 반환값을 버리고 Promise<void> 였다 — 서버가 요청보다 적게(한도 clamp 등)
- *  발급해도 화면은 항상 '요청 수량만큼 성공'으로 표시했다. */
+/** 실제 발급 수량(정수)을 돌려준다.
+ *
+ *  🔴 2026-09-21 정정 — 여기 있던 "서버가 1~1000 사이로 **clamp** 한다(20260905i)" 는 **더 이상 사실이 아니다.**
+ *    라이브 `issue_voucher`(md5 `3797a03df616b28cddb894863a05f938`, 본문에 `[20260921a]` 표식)는 범위 밖 장수를
+ *    **거절**한다: `if p_count < 1 or p_count > 1000 then raise exception '발급 장수는 1~1000 사이여야 합니다 …'`.
+ *    옛 `least(greatest(...))` clamp 은 사라졌다. 이 주석을 근거로 수용 기준을 clamp 쪽으로 되돌리면 회귀다
+ *    (1001장을 넣으면 1000장이 발급되는 게 아니라 **0장 + 오류**다).
+ *
+ *  그래도 반환값을 버리지 않는 이유는 그대로다: 한도(quota) 부족처럼 **요청보다 적게** 발급되는 경로가 남아 있다.
+ *  호출부(VoucherManageModal·CheckinModal)는 요청한 count 와 대조해 불일치를 감지한다(Q2, 2026-09-20).
+ *  예전엔 이 반환값을 버리고 Promise<void> 였다 — 적게 발급돼도 화면은 항상 '요청 수량만큼 성공'으로 표시했다. */
 export async function issueVoucher(venueId: string, input: { title: string; count?: number; holderName?: string; holderUserId?: string; note?: string; expiresAt?: string | null; reason: VoucherReason }): Promise<number> {
   if (IS_MOCK) return input.count ?? 1;
   assertVoucherOn();

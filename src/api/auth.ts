@@ -426,7 +426,8 @@ let lastUsersTruncated = false;
 /** 직전 listAllUsers() 가 상한에 닿았는가 — 닿았으면 화면이 '전체' 라고 말하면 안 된다. */
 export const usersTruncated = (): boolean => lastUsersTruncated;
 export async function listAllUsers(): Promise<User[]> {
-  if (IS_MOCK) {
+  // IS_MOCK와 같은 조건을 직접 써야 Vite가 그래프 생성 전에 Mock 청크를 제외한다.
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     const { MOCK_USERS } = await import('../mock/data');
     return MOCK_USERS;
   }

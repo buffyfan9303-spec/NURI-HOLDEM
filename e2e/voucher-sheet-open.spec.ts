@@ -94,15 +94,26 @@ test('🔴 티켓 아이콘 — 한 번의 클릭으로 이용권·출석 시트
 //  ③ 체크박스를 켜기 전에는 보내기 버튼이 **비활성**이다(더블체크).
 const VENUE_A = '11111111-1111-4111-8111-11111111aaaa';
 /** ⚠ 만료일을 일부러 뒤섞는다. listMyVouchers 는 **발급 최신순**으로 오므로, 화면이 그 순서를
- *  그대로 쓰면 만료 임박분이 남아 소멸한다. 여기서는 i=0 이 가장 최근 발급이고 만료는 가장 늦다. */
-const EXP = [null, '2026-12-31', '2026-09-30', null, '2026-09-20'] as (string | null)[];
+ *  그대로 쓰면 만료 임박분이 남아 소멸한다. 여기서는 i=0 이 가장 최근 발급이고 만료는 가장 늦다.
+ *
+ *  🔴 2026-09-21 — 종전에는 **절대 날짜**('2026-12-31','2026-09-30','2026-09-20')를 박아 뒀다.
+ *     그중 2026-09-20T23:59:59Z(= 09-21 08:59:59 KST)가 지나면서 **코드를 한 줄도 안 바꿨는데 빨개졌다** —
+ *     isHeldVoucher(src/api/vouchers.ts:38)가 만료분을 정상적으로 걸러 보유 5장이 4장이 됐고
+ *     toContainText('5') 가 '누리홀덤 강남점4T' 를 받았다. **앱은 정상이고 픽스처가 썩은 것이다.**
+ *     마지막으로 통과한 E2E CI 는 35542119074(2026-09-20T22:34Z · 만료 전)였다.
+ *     → **지금 기준 상대값**으로 바꾼다. 날짜가 지나도 다시는 터지지 않는다.
+ *  ⚠ 순서 계약은 그대로다 — 아래 '만료 임박순' 단언이 이 순서에 의존한다:
+ *     i=4 가 가장 임박 → i=2 → i=1, i=0·i=3 은 무기한. 값을 바꾸면 그 단언을 같이 봐라. */
+const DAY_MS = 86_400_000;
+const inDays = (d: number) => new Date(Date.now() + d * DAY_MS).toISOString();
+const EXP = [null, inDays(100), inDays(30), null, inDays(3)] as (string | null)[];
 const voucherRow = (i: number) => ({
   id: `bbbbbbbb-0000-4000-8000-${String(i).padStart(12, '0')}`,
   venue_id: VENUE_A, venue: { name: '누리홀덤 강남점' }, used_venue: null,
   issued_by: VENUE_A, holder_user_id: FAKE.user.id, holder_name: 'E2E',
   title: '웰컴 이용권', status: 'active', used_venue_id: null, used_at: null,
   created_at: new Date(Date.now() - i * 60_000).toISOString(),
-  expires_at: EXP[i] ? `${EXP[i]}T23:59:59Z` : null, issue_reason: 'welcome',
+  expires_at: EXP[i], issue_reason: 'welcome',
 });
 
 test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전엔 못 보낸다', async ({ page }) => {

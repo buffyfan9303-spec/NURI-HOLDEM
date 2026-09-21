@@ -183,7 +183,8 @@ export async function getPostsByUser(userId: string, limit = 20): Promise<{ post
 
 /** 단건 게시글 — 공유 딥링크·알림 링크가 목록(최근 50건) 밖의 글을 가리킬 때 사용 */
 export async function getPostById(postId: string): Promise<CommunityPost | null> {
-  if (IS_MOCK) {
+  // IS_MOCK와 같은 조건을 직접 써야 Vite가 그래프 생성 전에 Mock 청크를 제외한다.
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     const { MOCK_COMMUNITY_POSTS } = await import('../mock/data');
     return MOCK_COMMUNITY_POSTS.find((p) => p.id === postId) ?? null;
   }
@@ -218,7 +219,7 @@ export async function adminSetPostPinned(postId: string, pinned: boolean): Promi
 
 // ── Venues ────────────────────────────────────────────────────────────────────
 export async function getVenues(): Promise<Venue[]> {
-  if (IS_MOCK) {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     const { MOCK_VENUES } = await import('../mock/data');
     return MOCK_VENUES;
   }
@@ -326,7 +327,7 @@ export async function getVenueContactInfo(
 
 // ── Comments ──────────────────────────────────────────────────────────────────
 export async function getComments(filter: { scheduleId?: string; venueId?: string; postId?: string }): Promise<Comment[]> {
-  if (IS_MOCK) {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     const { MOCK_COMMENTS } = await import('../mock/data');
     // postId 필터 누락 시 목 모드에서 '남의 글 댓글'이 전부 딸려온다 — 실서버 동작과 맞춘다.
     return MOCK_COMMENTS.filter((c) =>
@@ -392,7 +393,7 @@ export async function getActivityPointsMap(userIds: string[]): Promise<Record<st
 
 // ── Community Posts ────────────────────────────────────────────────────────────
 export async function getPosts(): Promise<CommunityPost[]> {
-  if (IS_MOCK) {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     const { MOCK_COMMUNITY_POSTS } = await import('../mock/data');
     return MOCK_COMMUNITY_POSTS;
   }
@@ -640,7 +641,7 @@ export async function searchPosts(params: SearchPostsParams): Promise<SearchPost
   const limit = params.limit ?? 15;
   const kw = (params.q ?? '').trim();
   const popular = params.order === 'popular';
-  if (IS_MOCK) {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     const { MOCK_COMMUNITY_POSTS } = await import('../mock/data');
     let list = (MOCK_COMMUNITY_POSTS as CommunityPost[]).filter((p) => {
       if (params.category && params.category !== 'all' && (p.category ?? 'free') !== params.category) return false;
@@ -687,7 +688,7 @@ export async function searchPosts(params: SearchPostsParams): Promise<SearchPost
 // ── 관리자: 매장 상태 관리 (게시물 관리) ───────────────────────────────────────
 // 관리자용 전체 매장 조회(미승인·숨김·정지 포함). RLS가 admin에 전체 SELECT 허용.
 export async function getAllVenues(): Promise<Venue[]> {
-  if (IS_MOCK) {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     const { MOCK_VENUES } = await import('../mock/data');
     return MOCK_VENUES;
   }

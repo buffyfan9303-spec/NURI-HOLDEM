@@ -15,6 +15,7 @@ import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·�
 import { loadVenueVoucherPanel } from '../../lib/venueVoucherLoad';
 import type { RequestStamp } from '../../lib/staleResponse';
 import { voucherGroupLabel, stripVenuePrefix } from '../../lib/voucherLabel'; // 손님 지갑 표기 규칙(오너 지시 #19)과 같은 함수로 미리보기
+import { buildQrForVenue } from './venueQrPrint'; // FINAL-QR#PRINT-A-B — `await` 뒤 '지금 매장' 판정의 단일 출처
 import { kstToday } from '../../lib/kst'; // 유효기간 계산은 기기 로컬이 아니라 KST — 서버 판정과 같은 기준
 
 /** 발급 근거 픽 — 오너 지시(2026-09-19): '첫 방문 환영'·'방문 감사' 픽을 빼고 '이용권 지급'을 맨 앞에 둔다.
@@ -131,6 +132,13 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   };
   // 매장이 바뀌면 앞 매장의 데이터를 **즉시** 지운다(지갑의 V04 와 같다) — 응답 격리와 별개로 한 프레임이라도 A 의 목록이 B 로 보이면 안 된다.
   //   받는 손님 선택도 A 화면에서 고른 것이라 함께 비운다(발급이 B 매장으로 나가면 안 된다).
+  // FINAL-QR#PRINT-A-B — '지금 관리 중인 매장' 의 **살아 있는** 사본. `await` 뒤에서 클로저 변수를 보면
+  //   항상 요청 당시 값이라 아무것도 못 막는다(printQr 주석 참고). 커밋된 매장만 반영되도록 effect 에서 쓰고,
+  //   같은 cleanup 이 **언마운트도 처리**한다(null = '지금 매장 없음' → 인쇄 차단).
+  //   ⚠ voucherReq 를 재사용하지 않는 이유: 저 ref 의 seq 는 목록 reload 마다 올라가서, 매장이 그대로인데도
+  //     인쇄를 낡은 것으로 판정한다. 여기서 필요한 축은 **owner(매장) 하나**다.
+  const venueIdRef = useRef<string | null>(venueId);
+  useEffect(() => { venueIdRef.current = venueId; return () => { venueIdRef.current = null; }; }, [venueId]);
   useEffect(() => {
     voucherReq.current = { seq: voucherReq.current.seq + 1, owner: venueId };   // 진행 중인 앞 매장 응답을 전부 stale 로
     setList([]); setListErr(null); setStats(null); setStatsErr(null); setProfileMap(new Map());
@@ -271,15 +279,28 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   const printQr = async () => {
     const chosen = QR_DEFS.filter((q) => printSel[q.id]);
     if (chosen.length === 0) { toast.show('인쇄할 QR을 1개 이상 선택하세요', 'error'); return; }
-    // 🔴 Q5 — 인쇄도 **누른 순간의 매장**으로 끝나야 한다. `q.data()` 는 지금 venueId 로 만들지만
-    //   `await` 하는 동안 관리자가 매장을 바꾸면 라벨과 다른 매장의 QR 이 종이에 찍힌다.
+    // 🔴 Q5 / FINAL-QR#PRINT-A-B — 인쇄는 **누른 순간의 매장**으로 끝나야 한다. `q.data()` 는 지금 venueId 로
+    //   만들지만 `await` 하는 동안 관리자가 매장을 바꾸면 라벨과 다른 매장의 QR 이 종이에 찍힌다.
     //   비치용이라 한 번 잘못 인쇄되면 그 매장에 계속 붙어 있게 된다 — 화면보다 되돌리기 어렵다.
+    //
+    //   ⚠ 2026-09-21 정정: 종전 가드 `const forVenue = venueId; … if (forVenue !== venueId)` 는
+    //     **한 렌더 클로저의 같은 값 두 개**를 비교해 A→B 전환 뒤에도 항상 거짓이었다 — 0건도 못 막았다.
+    //     `await` 뒤에 '지금 매장'을 볼 유일한 길은 렌더/언마운트를 따라가는 **ref 를 읽는 getter** 다.
+    //     판정은 venueQrPrint.buildQrForVenue 한 곳에만 있고, 거기서만 getter 를 부른다.
+    //   ⚠ 가입 QR 은 매장 무관이지만 선택 묶음에 매장 QR 이 하나라도 있으면 **묶음 전체를 한 매장 세대**로
+    //     다룬다(종이 한 장에 같이 찍히므로 A 세대의 가입 QR 만 살려 둘 이유가 없다).
+    //   ⚠ 창은 **`await` 앞, 클릭의 동기 구간에서** 연다. `await` 를 하나라도 지나면 사용자 제스처가
+    //     소모돼 Chrome/Samsung 이 팝업으로 차단한다(차단은 throw 가 아니라 **null 반환**이라 try/catch 가
+    //     안 잡는다). 같은 저장소의 `VenueManageTab.tsx:1568-1580 printPaperForm` 이 이미 이 순서다 —
+    //     빈 창을 먼저 열고 내용을 나중에 채운다. QR 을 미리 구워 버튼을 잠그는 쪽보다 diff 도 비용도 작다.
     const forVenue = venueId;
+    const w = window.open('', '_blank', 'width=480,height=860');
+    if (!w) { toast.show('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 시도하세요.', 'error'); return; }
     try {
-      const imgs = await Promise.all(chosen.map((q) => q.data()));
-      if (forVenue !== venueId) { toast.show('인쇄 준비 중에 매장이 바뀌었습니다. 다시 눌러 주세요.', 'error'); return; }
-      const w = window.open('', '_blank', 'width=480,height=860');
-      if (!w) { toast.show('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 시도하세요.', 'error'); return; }
+      const imgs = await buildQrForVenue(forVenue, () => venueIdRef.current, chosen.map((q) => q.data));
+      // null = 준비 중에 매장이 바뀌었거나 이 창이 언마운트됐다. A 결과는 폐기하고 **열어 둔 빈 창도 닫는다** —
+      // 빈 about:blank 를 남기면 업주가 그걸 인쇄물로 오인하거나 A 라벨을 기다리며 서 있게 된다.
+      if (!imgs) { w.close(); toast.show('인쇄 준비 중에 매장이 바뀌었습니다. 다시 눌러 주세요.', 'error'); return; }
       const cards = chosen.map((q, i) => {
         const tbl = q.id.startsWith('buyinG') && q.title.includes('·') ? `<div class="table">${q.title.split('·')[1].trim()} 테이블</div>` : '';
         return `  <div class="card"><h2>${q.title}</h2>${tbl}<img src="${imgs[i]}" alt="${q.title} QR"/><p>${q.desc}</p></div>`;
@@ -304,7 +325,8 @@ ${cards}
 <script>window.onload=function(){setTimeout(function(){window.print();},350);};</script>
 </body></html>`);
       w.document.close();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '인쇄 준비 실패', 'error'); }
+      // QR 생성 실패도 빈 창을 남기지 않는다 — 먼저 열어 둔 대가다.
+    } catch (e) { w.close(); toast.show(e instanceof Error ? e.message : '인쇄 준비 실패', 'error'); }
   };
   const issue = async () => {
     if (reason === 'other' && !reasonNote.trim()) { toast.show('기타 사유는 비고에 발급 이유를 적어 주세요', 'error'); return; }

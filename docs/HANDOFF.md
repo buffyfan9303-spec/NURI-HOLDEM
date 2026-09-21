@@ -92,7 +92,173 @@ npx tsc -b --force                # rc=0 이어야 한다
 ---
 
 
-## 0-a18. 🔴 2026-09-21 · **모델 불일치의 원인을 찾았다 — 전역 설정이 이긴다** (여기가 가장 최신)
+## 0-a19. 2026-09-21 낮 · Opus 5 팀 — **FINAL-UX 4건 · FINAL-QR 3건 구현 + 배포** (여기가 가장 최신)
+
+원천: `.claude/handoff/NURI-OPUS5-FINAL-UX-QR-CONNECTION-EXECUTION-2026-09-21.md`(미추적 — 위 절대 경로에 실재).
+기준 HEAD `5d09d86`. 요구 키는 그 문서의 `FINAL-UX#*` · `FINAL-QR#*` 다.
+
+🔴 **요구 키를 짧은 ID 로 줄이지 마라.** 실측: `M1` 이 **6개 문서**, `C1` 이 5개, `S1` 이 4개, `Q5`·`B1` 이 3개 문서에서 **서로 다른 뜻**으로 쓰인다. 반드시 `문서경로#ID` 로 적어라.
+
+### 요구별 결과
+
+| 요구 키 | 원인 | 수정 파일 | 명령·종료코드 | 판정 |
+|---|---|---|---|---|
+| `FINAL-UX#MOTION-LIVE` | 진입 모션이 `translateY` 라 라이브 상단 카드가 아래→위로 보였다 | `src/lib/tabEnter.ts:38,134`(`DIST 8→6`, `translateY→translateX`) | tsc 0 · vitest 0 · N1 e2e 7 passed | **PASS**(로컬) |
+| `FINAL-UX#MOTION-COMMUNITY` | 🔴 아래 "근본 원인" 참고 | `src/lib/tabEnter.ts:108-125` | 음성 대조 2건 빨강 확인 | **PASS**(로컬) |
+| `FINAL-UX#NAV-GAP` | 라벨 하단→nav 하단 11.625px | `src/App.tsx:826,849`(`mb 0.25→0.125rem`, `pb-1.5→pb-1`) | 전 칸 **7.38px**(목표 6~8) · 아이콘 간격 변화 0 · btnH 61.63(≥44) | **PASS**(로컬) |
+| `FINAL-UX#SHEET` | `resolveBodyDrag('sheet', undefined)=false` 라 그립만 잡혔다 | `MyVoucherSheet.tsx:153` · `VoucherWallet.tsx:318,413` | 음성 대조 4건 빨강 | **PASS**(소스 계약) · 실제 제스처 **NOT_RUN** |
+| `FINAL-QR#PRINT-A-B` | `const forVenue = venueId; … if (forVenue !== venueId)` 가 **같은 클로저 값 비교**라 0건 차단 | `venueQrPrint.ts`(신규) · `VoucherManageModal.tsx:18,139-145,296-311,321` | 행동 검증 **7건** · 음성 대조 5/7 빨강 | **PASS**(행동 검증) · 실인쇄 **NOT_RUN** |
+| `FINAL-QR#CHECKIN-REFRESH` | 인앱 출석이 `nuri:checkin-done` 을 안 보냈다 | `MyVoucherSheet.tsx:131,268` · `VoucherWallet.tsx:298-311` | 음성 대조 2건 빨강 | **PASS**(소스 계약) · 서버 실동작 **NOT_RUN** |
+| QR 출석 × 이용권 자동출석 **경합** | 잠금 비대칭 | 읽기 전용 조사만 | 운영 `SELECT` 17회 · 쓰기 0 | **INCONCLUSIVE** |
+
+### 🔴 MOTION-COMMUNITY 의 근본 원인 — `CommunityTab` 이 아니라 `tabEnter.ts` 였다
+
+`collect()` 가 `pane.querySelector('[data-main-enter-ready]')` 로 **DOM 순서상 첫 ready 하나**만 봤다.
+커뮤니티 6서브탭은 keep-alive 라 `CommunityTab.tsx:395~481` 에서 **전부 DOM 에 남고 `display:none` 만 토글**된다
+(DOM 순서 live → board → venues → rank → dealer → market). 그래서 기본 `venues` 에 있어도 **숨은 live 의 ready 가 먼저 잡혀**
+`offsetParent === null` → `return []` → `play()` 미호출 → transform 이 끝까지 `none`.
+
+수정 전 실측(390×844 · 프로덕션 빌드 · 커뮤니티 기본):
+```json
+{"readyList":[{"sec":"live","hidden":true},{"sec":"board","hidden":true},{"sec":"venues","hidden":false}],
+ "oldReadyIndex":0,"oldGatePasses":false,"newReadyIndex":2,"visibleMarkerCount":5}
+```
+
+🔴 **결정적 변수는 첫 방문/재방문이다.** 첫 방문에는 ready 가 기본 섹션 하나뿐이라 **옛 코드도 정상 동작한다.**
+숨은 live/board 의 ready 는 `CommunityTab` 의 **유휴 프리마운트**가 나중에 붙이고 그때부터 DOM 앞자리를 차지한다.
+→ 결함은 **프리마운트 이후의 재방문에서만** 난다.
+
+**§0-a15 의 미해결(NOT_RUN) 관찰이 이것으로 해소됐다** — "커뮤니티는 대상 5개가 잡히는데 transform 이 끝까지 `none`".
+그 "5개"는 콘솔에서 직접 센 수(`visibleMarkerCount:5`)이고 `collect()` 는 그 앞 게이트에서 `[]` 를 반환하고 있었다.
+GTO(`ToolsPanel`)가 같은 방식으로 정상이었던 것도 ready 가 1개뿐이라 앞뒤가 맞는다.
+
+⚠ 새 계약: `collect()` 는 `offsetParent !== null` 인 **첫 ready** 를 고른다. `offsetParent` 는 `display:none` 뿐 아니라
+**`position:fixed`** 에서도 null 이다 — **ready 표식을 fixed 요소에 붙이면 이 게이트가 조용히 꺼진다.** 붙이지 마라.
+
+### 🔴 오너 결정 (2026-09-21)
+
+오너 질문: *"출석 QR 하고 바이인 QR 하고 다를텐데 왜 이용권 사용이 출석완료야, 이건 다른거야."*
+
+서버 확인 결과 **QR 은 전부 올바르게 분리돼 있다.** `insert into checkins` 를 하는 함수는 `_apply_checkin` **하나뿐**이고
+부르는 곳이 둘이다 — `check_in()`(출석 QR)과 `_voucher_used_checkin()`(이용권 사용 트리거). **바인 QR·가입 QR 은 출석을 안 만든다.**
+섞이는 자리는 **트리거 한 곳**이고 2026-06-23c 부터 의도된 동작이었다(2026-09-05k 에서 오히려 강화).
+
+**결정: ① 이용권 사용은 '방문 기록'만 남긴다(출석·점수·연속·참여권은 출석 QR 전용) ② 설계만 남기고 지금은 적용하지 않는다.**
+
+설계안 전문(음성/양성 대조 8건 + 롤백 포함): `%TEMP%\claude\…\scratchpad\design-voucher-visit-not-checkin.sql`
+핵심은 `_apply_venue_visit(venue, uid)` 를 새로 두고 트리거가 그것만 부르게 하는 것이다.
+
+🔴 **이 결정이 위 P0 경합을 통째로 없앤다.** 미보호 경합 쌍 두 개(`check_in × 트리거`, `트리거 × 트리거`)는 둘 다
+"트리거가 checkins 에 행을 넣는다"에서 나온다. 트리거가 출석을 안 만들면 쌍이 사라지고 advisory 잠금 패치가 불필요해진다.
+**잠금을 추가하는 안보다 이 안을 먼저 검토하라 — diff 가 작고 더 근본적이다.**
+
+그리고 지금 라이브에는 이런 피해가 있다: 라이브 `check_in` 은 4시간 내 출석이 있으면 `raise exception '이미 체크인했습니다'`
+로 **거절**한다. 즉 **이용권을 쓴 손님이 그 뒤 출석 QR 을 찍으면 "이미 체크인했습니다" 오류를 본다** — 본인은 찍은 적이 없는데도.
+
+### 서버 판정 (critical-reviewer · 운영 `SELECT` 만, 쓰기 0)
+
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| 함수 해시 드리프트 | **PASS** | `check_in` `c8ec9b7b…` · `_apply_checkin` `ead0256e…` · `_voucher_used_checkin` `6c2c4081…` — 문서 표기와 **전부 일치** |
+| ACL · `search_path` · SECDEF | **PASS** | 보안표준 3번 위반 0. 내부 `_` 함수 2개는 `authenticated` 도 회수됨 |
+| 출석 writer 전이 폐쇄 | **PASS** | `insert into checkins` 는 `_apply_checkin` **단 1개**, 호출자 2개. `checkins` INSERT 정책 0개라 직접 쓰기는 RLS 차단 |
+| **발급 수량 정본** | **PASS — `clamp` 이 아니라 `거절`** | 라이브 `issue_voucher` md5 `3797a03d…` 에 `[20260921a]` 표식 + `raise exception '발급 장수는 1~1000 사이여야 합니다'`. 옛 `least(greatest(...))` 완전 소멸. 낡은 주석 `src/api/vouchers.ts:154,156` 은 이번에 정정했다 |
+| 이용권 사용 → 자동 출석 | **FAIL(UI 단정 불가)** | 4조건 전부 참일 때만 생긴다. **4시간 내 기존 출석이 있으면 출석 0행인데 사용은 성공**하고, `redeem_my_voucher_by_qr` 반환이 `text` 뿐이라 **클라가 구분 불가** |
+| 경합 재현 | **NOT_RUN** | 운영 `checkins` 전체 **2행**, `store_vouchers` **1행/used 0** — 운영 이력은 **검정력이 없다**. 격리 컨테이너 미보유 |
+
+### 🆕 이번에 새로 찾은 것 (오늘 고치지 않음 — 별건)
+
+1. 🔴 **`can_manage_pos` 가 `can_manage_venue` 보다 헐겁다**(리드가 라이브 정의로 직접 대조).
+   `can_manage_venue` 는 `profiles.status='active'` **와** `approved` 를 보는데 `can_manage_pos` 는 **둘 다 안 본다**
+   → **정지된 계정·미승인 업주가 통과**한다. 발급은 `venues.voucher_issue_approved` 가 한 겹 더 막지만
+   **`can_manage_pos` 를 쓰는 모든 소비자가 이 차이를 상속**한다. 보안표준 2번(전이 폐쇄) 부류 — 전수 점검 필요.
+2. **`accrue_voucher` 에 20260921a 가 적용되지 않았다** — 옛 `clamp` + NULL 보유자 구멍 잔존.
+   **현재는 닫혀 있다**(`proacl` 이 `service_role` 만, UI 호출부 0곳). 누가 `grant execute … to authenticated` 를
+   되돌리면 두 구멍이 동시에 열린다. 2026-09-15 교훈의 거울상이다.
+3. **`AdminTab.tsx:278`** — `window.open(await signedVerifyUrl(path), …)`. 팝업 차단은 throw 가 아니라 **null 반환**이라
+   `catch` 가 안 걸린다 → **조용한 실패**(관리자 전용).
+4. **Dependabot PR 은 구조적으로 항상 빨갛다.** `src/pages/legal/licensesNotice.test.ts` 가 `gen-licenses.mjs --check` 를
+   물고 있는데 Dependabot 은 `npm run licenses` 를 돌려 커밋할 수 없다. CI 35547187872: 2792 passed / **1 failed** 이 한 건뿐.
+5. **es2015 번들에 `Html5QrcodeScanner` 심볼 27건 잔존** — "미사용 Scanner UI 를 안 싣는다"는 전제가 완전히는 성립하지 않을 수 있다.
+
+### 🔴 테스트 픽스처의 시한폭탄 — 코드를 안 바꿔도 CI 가 빨개진다
+
+`e2e/voucher-sheet-open.spec.ts:98` 이 만료일을 **절대 날짜**로 박아 뒀다: `[null,'2026-12-31','2026-09-30',null,'2026-09-20']`.
+`2026-09-20T23:59:59Z`(= 09-21 08:59:59 KST)가 지나면서 `isHeldVoucher`(`src/api/vouchers.ts:38`)가 만료분을 **정상적으로** 걸러
+보유 5장이 4장이 됐고 `toContainText('5')` 가 `누리홀덤 강남점4T` 를 받았다. **앱은 정상, 픽스처가 썩은 것이다.**
+마지막으로 통과한 E2E CI 는 35542119074(2026-09-20T22:34Z · 만료 전)였다.
+→ **지금 기준 상대값**(`inDays(100)/(30)/(3)`)으로 바꿨다. 순서 계약(`:176` 만료 임박순)은 그대로 유지했다.
+
+⚠ **같은 부류가 더 있다.** 2026-10-31 이전에 지나는 절대 날짜: `e2e/partners-fit.spec.ts:20,21,29` ·
+`src/api/ads.slots.test.ts:66,68` · `src/api/dealerShifts.errorPropagation.test.ts:40,47,54,60` ·
+`src/api/adminEventOps.migration.test.ts:140,154,156` · `src/lib/srs.test.ts:23` · `src/lib/scheduleDateGroups.test.ts:14,34,54` ·
+`src/lib/legalVersion.ts:30`·`legalVersion.test.ts:39`(법적 시행일이라 별개일 수 있다).
+**터지기 전에 상대값으로 바꿔라.** 이번에는 실제로 빨간 하나만 고쳤다.
+
+### 팀 · 관찰 모델
+
+| 역할 | 요청 | **관찰**(`agent-<id>.jsonl` 의 `"model"`) | 편집 |
+|---|---|---|---|
+| `home-team` | `opus` | **`claude-opus-5`** | `tabEnter.ts` `App.tsx` `mobile-tab-transition.spec.ts` |
+| `store-team` | `opus` | **`claude-opus-5`** | `MyVoucherSheet` `VoucherManageModal` `VoucherWallet` `qrVenueGuard` `venueQrPrint*` `vouchers.ts` |
+| `critical-reviewer` | `opus` | **`claude-opus-5`** | 없음(읽기 전용) |
+| `Explore` | `haiku` | (범위 초과로 리드에 인계) | 없음 |
+
+**`claude-fable-5-1` 호출 0회.** 정본 3장의 세 조건에 해당하는 충돌이 없었다 — 막힌 것은 기준 충돌이 아니라 **자료 부재**(격리 컨테이너)다.
+정의 파일의 `model:` 은 이번에도 무시됐고 **Agent 도구의 명시 `model` 이 이겼다**(§0-a18 과 일치).
+
+### 🔴 다음 사람이 반드시 알아야 할 하네스 제약
+
+**서브에이전트는 base 체크아웃(`누리홀덤/`)에 Edit/Write 를 할 수 없다.** 워크트리 세션이면 하네스가 거부한다
+(리드의 Edit 도구도 거부당했다 — Bash 로만 쓸 수 있다). 그래서:
+- 워크트리 세션에서 팀을 돌리면 팀원은 **워크트리 쪽을 편집**하게 된다. 워크트리에는 `node_modules`·`.env.local` 이 없다.
+- store-team 은 PowerShell `New-Item -ItemType Junction` 으로 `node_modules` 를 걸어 검증을 돌렸다.
+  ⚠ `mklink /J` 는 **한글 경로에서 `C:\C:\…` 로 깨진 링크**를 만든다 — PowerShell 쪽을 써라.
+- 이식할 때 **워크트리 HEAD 가 main 보다 뒤처져 있으면 `git diff` 전량 패치를 쓰면 안 된다**(다른 변경분이 섞인다).
+  파일별로 "통째 복사 가능한 것"과 "패치만 얹을 것"을 갈라라.
+
+### 게이트 (2026-09-21 낮 실측)
+
+| 게이트 | 결과 |
+|---|---|
+| eslint | **0** |
+| `npx tsc --noEmit -p tsconfig.app.json` | **0** (⚠ `tsc -b` 는 JSX 주석 오류를 놓친다) |
+| `npx vitest run` | **260 파일 / 2822 통과** |
+| `npm run bundle:budget` | **통과** — entry 260.6/267 · **JS 996.8/1014** · CSS 31.3/34 · 최대청크 114.8/117 (전부 여유 2%+) |
+| 보호 파일 | sitemap `5b5953aa…` → 빌드 → 복원 → **`5b5953aa…` 동일** · `public/` 변경 0줄 |
+| E2E(프로덕션 4173) | **658 passed / 16 skipped / 1 실패** · `@boot` 2 passed |
+
+**실패 1건 = `e2e/home-flow-fit.spec.ts:377`(배너 양방향 랩).** 단독 재실행 **3/3 통과(4.5초)** → 전량 병렬 부하 플레이크.
+로컬은 `retries: 0`, **CI 는 `retries: 2`**(`playwright.config.ts:32`)라 CI 에서는 재시도로 걷힌다
+(직전 main CI 35542119074 도 `636 passed / 1 flaky`).
+
+⚠ **내가 게이트 스크립트에서 또 밟은 함정**: `npx playwright … | tail -30` 으로 파이프에 물려 `$?` 가 playwright 가 아니라
+`tail` 의 종료코드를 잡았다 → `rc=0` 이 **거짓**이었다. `nuri-e2e` SKILL 이 경고한 바로 그것이다. 파이프에 물리려면 `PIPESTATUS[0]` 를 써라.
+
+### 번들 — 오너 결정 대기가 **해소**됐다
+
+`totalJs` 를 1025 로 올리는 안은 **불필요해졌다.** Codex 의 두 변경이 1010.8 → **996.8** 로 내렸다(여유 0.3% → 2%):
+- `import('html5-qrcode')` → `import('html5-qrcode/es2015/html5-qrcode')` (미사용 Scanner UI·ES5 변환 제외)
+- `if (IS_MOCK)` → `if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY)`
+  — Vite 는 `import.meta.env.*` 를 빌드 시각 리터럴로 치환하지만 **다른 모듈을 거친 변수는 정적 평가를 못 한다.**
+  조건을 그 자리에 직접 써야 mock 청크가 통째로 떨어진다. 가드는 `src/api/mockReads.test.ts`(신규).
+
+**예산은 1014 그대로 둔다.** `--update` 를 쓰지 마라(현재값에 딱 맞춰 여유 0% 를 재생산한다).
+
+### NOT_RUN — PASS 로 바꿔 적지 마라
+
+- 🔴 **S26 삼성 인터넷/Chrome 실기기** — x 6px 체감, 밝기, safe-area 가 전부 여기 걸려 있다. 어색하면 설계서 §1 경계대로
+  **진입 거리 0(전체 정적)** 이 폴백이다. Pixel 7 Chromium 하네스는 대체가 아니다.
+- **시트 드래그 실제 제스처** — CDP `Input.dispatchTouchEvent`(130ms+)가 필요한데 로그인 세션이 있어야 한다.
+- **인쇄 실제 팝업·미리보기·디코드** — 2매장 실업주 계정 + 실제 프린터.
+- **이용권 사용 → 서버 자동 출석 실동작** — 격리 DB 2세션 하네스.
+- **`BarcodeDetector` 비활성 런타임 폴백** — 번들 해상도는 PASS(격리 `vite build` 프로브로 확인), 런타임은 미확인.
+- **컴포넌트 렌더 테스트** — `@testing-library/react`·`jsdom` 전부 미설치, vitest `environment:'node'`. 설치는 안 했다.
+- **클릭 경로 전수 분모** — 18개 화면 중 정적 수집으로 닿은 것은 일부. Haiku 가 범위 초과를 보고했고 런타임 감사가 필요하다.
+
+---
+
+## 0-a18. 🔴 2026-09-21 · **모델 불일치의 원인을 찾았다 — 전역 설정이 이긴다** (최신은 위 §0-a19)
 
 §0-a16 ⑥ 에서 "정의를 바꿔도 옛 모델로 돈다" 고 적었는데, **원인이 캐시가 아니었다.**
 

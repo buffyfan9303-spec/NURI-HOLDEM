@@ -84,7 +84,8 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
       let lib: { stop: () => Promise<void>; clear: () => void } | null = null;
       (async () => {
         try {
-          const { Html5Qrcode } = await import('html5-qrcode');
+          // 같은 스캐너의 ES2015 진입점: 미사용 Scanner UI와 ES5 변환 코드를 싣지 않는다.
+          const { Html5Qrcode } = await import('html5-qrcode/es2015/html5-qrcode');
           if (!alive) return;
           // Modal 이 한 프레임 뒤에 본문을 붙이므로 host 가 생길 때까지 기다린다.
           for (let i = 0; i < 30 && alive && !document.getElementById(LIB_HOST); i++) {

@@ -123,6 +123,12 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
       await refreshProfile().catch(() => {});
       // 출석 = 이벤트 참여권 1장 — 홈 배너가 들고 있는 숫자를 갱신시킨다(App.tsx 딥링크 경로와 동일 신호).
       window.dispatchEvent(new Event('nuri:event-board-refresh'));
+      // FINAL-QR#CHECKIN-REFRESH(2026-09-21) — 여기만 이 신호가 빠져 있었다. 딥링크(App.tsx runCheckin)와
+      // 매장 페이지(VenuePage.tsx:255)는 둘 다 쏘고, App.tsx:2201-2205 가 받아 홈 '가 본 매장'(visitedVenues)을
+      // 다시 읽는다. 인앱 카메라로 출석한 사람만 홈이 안 따라오는 건 경로별 결과가 다른 것이다.
+      // ⚠ **직접 출석 성공 뒤 한 번만.** 위 try 안이라 실패·취소는 여기 오지 않고, 바인(hit.kind==='buyin')은
+      //   이 함수 앞쪽에서 이미 return 했다.
+      window.dispatchEvent(new Event('nuri:checkin-done'));
       toast.show(`${name || '매장'} 출석 완료${streak >= 2 ? ` · ${streak}일 연속` : ''}`, 'success');
       onClose();
       onVenue?.(venueId);
@@ -133,7 +139,18 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
 
   return (
     <>
-      <Modal open={open} onClose={onClose} title="이용권 · 출석">
+      {/* FINAL-UX#SHEET(2026-09-21) — 손님용 시트도 본문을 끌어 닫는다. 업주 CheckinModal:142 는 이미 켜져 있었고,
+          여기만 `dragToClose` 를 안 넘겨서(=undefined) `resolveBodyDrag('sheet', undefined)` 가 false 를 주어
+          좁은 그립(Modal.tsx:447-456)만 잡혔다.
+          ⚠ **조회 상태에서만** 켠다. 값을 잃을 수 있는 표면은 셋이고 **표면당 보호 수단은 하나**다:
+            · `plan` — 보내기(장수/업주번호/최종확인). SendVouchersSheet 는 이 Modal 의 **자식**이라 그 위의
+              손짓이 React 합성 이벤트로 본문 핸들러까지 올라온다. prop 으로 끌 수 있으니 여기서 끈다.
+            · `scanOpen` — QrScanModal 은 이 Modal 의 형제(별도 Modal)라 터치가 올라오지 않지만,
+              '스캔 중에는 부모가 안 닫힌다'를 소스에서 읽히게 명시로 남긴다.
+            · VoucherWallet 의 사용 시트(RedeemSheet)·완료 오버레이는 **자식 컴포넌트 내부 상태**라 여기서
+              prop 으로 끌 길이 없다 → 그쪽은 Modal 이 이미 가진 `[data-no-drag-close]` 옵트아웃을 쓴다
+              (Modal.tsx:56 EDITABLE_SEL). 같은 표면을 두 수단으로 겹쳐 막지 않는다. */}
+      <Modal open={open} onClose={onClose} title="이용권 · 출석" dragToClose={!scanOpen && !plan}>
         {/* Modal 본문(flex-1 overflow-y-auto)은 패딩을 주지 않는다 — 소비자가 넣는 규약이다.
             이 파일만 빠뜨려 카드가 시트 모서리에 붙어 있었다(2026-09-05 검증). */}
         <div className="space-y-3 p-4">
@@ -235,7 +252,15 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
               onCancel={() => setPlan(null)}
               /** 이용권 없이 요청만 — 바인 QR 경로에서만 나온다(수동에는 '요청' 개념이 없다) */
               onPlainBuyin={() => { const p = plan; setPlan(null); onClose(); onBuyin?.(p.venueId, p.gameSeq); }}
-              onDone={(msg, ok) => { setPlan(null); reloadHeld(); toast.show(msg, ok ? 'success' : 'error'); onClose(); }}
+              onDone={(msg, ok) => {
+                setPlan(null); reloadHeld(); toast.show(msg, ok ? 'success' : 'error'); onClose();
+                // FINAL-QR#CHECKIN-REFRESH — 다장 보내기도 **직접 출석이 아니다**. 근거와 판단은 VoucherWallet 의
+                // 같은 자리 주석에 있다(라이브 트리거 4조건 · 4시간 창 · 반환이 text 뿐이라 클라가 구분 불가).
+                // 그래서 `nuri:checkin-done` 은 **여기서 쏘지 않는다** — 거짓 출석 표시 0회가 우선이다.
+                // 남기는 것은 순수 재조회 하나(HomeTab.tsx:330 getEventBoard, 변이 RPC 0회).
+                // onDone 은 `r.ok > 0`(최소 1장 성공)일 때만 불린다 — 전량 실패는 여기 오지 않는다.
+                window.dispatchEvent(new Event('nuri:event-board-refresh'));
+              }}
             />
           )}
 

@@ -7,9 +7,18 @@
 // 계약(실행 설계서 §0·N1):
 //  - 모바일(<1024px) 에서만. PC 는 기존 View Transition 경로 그대로.
 //  - 첫 viewport 에 **함께 보이는 주요 일반 흐름 블록 전부**가 **같은 타이밍**에
-//    `translateY(8px) → 0` 을 약 170ms 감속으로 **한 번** 움직인다.
+//    `translateX(6px) → 0` 을 약 170ms 감속으로 **한 번** 움직인다.
 //    일부만 움직여 분절되면 실패다 — 그래서 대상을 한 프레임에 모아 **같은 시각에** 시작한다.
-//  - `opacity` 는 1 고정, `filter`·`scale` 없음. **순수 y 이동만** 한다.
+//  - `opacity` 는 1 고정, `filter`·`scale` 없음. **순수 x 이동만** 한다.
+//
+// 🔴 왜 y 가 아니라 x 인가 (FINAL-UX#MOTION-LIVE · 2026-09-21)
+//    y 이동은 세로 스크롤 흐름과 같은 축이라 '카드가 아래에서 솟는' 것으로 읽혔다 —
+//    라이브 상단 카드에서 오너가 본 아래→위 움직임이 그것이다(운영 390×844 실측 y=128→120).
+//    탭 이동은 가로 이동이므로 x 로 맞춘다. 라이브 패널만 예외로 빼면 **새 분절**이 생기므로
+//    예외를 만들지 않는다 — 보이는 cohort 전원이 같은 프레임에 같은 축으로 움직인다.
+//    ⚠ +x 는 문서 오른쪽으로 삐져나가 가로 스크롤을 만들 수 있는 방향이다. 여기서는
+//      `src/index.css:655,660` 의 html·body `overflow-x: clip` 이 문서 레벨에서 막는다 —
+//      그 선언을 지우면 진입 170ms 동안 가로 스크롤이 생긴다.
 //
 // 🔴 왜 `.tab-pane` 전체를 움직이지 않는가
 //    CSS `transform` 이 걸린 요소는 `position: fixed` 자손의 **컨테이닝 블록이 된다.**
@@ -25,8 +34,8 @@
 //    모바일 재방문 탭의 document VT 는 `App.tsx` 의 `commitTab` 가드로 이미 제거됐고(호출 0회 실측),
 //    이 모듈은 그 계약을 **되살리지 않는다** — 스냅샷을 만들지 않고 실제 DOM 요소만 움직인다.
 
-/** 시작 오프셋(px). 설계서가 허용한 조정 범위는 6~10px 다. */
-const DIST = 8;
+/** 시작 오프셋(px). **가로(x)** 방향이다. 설계서 FINAL-UX#MOTION-LIVE 선언값 6px. */
+const DIST = 6;
 /** 지속(ms). 설계서 선언값. */
 const DUR = 170;
 /** 감속 곡선 — `src/index.css:43` 의 `--ease` 와 같은 값이다. */
@@ -79,7 +88,7 @@ export function cancelTabEnter() {
  * 🔴 M1(2026-09-21) — **cohort 준비 신호가 먼저다.**
  *   종전에는 표식이 **한 개만 붙어도** 그 즉시 재생하고 observer 를 끊었다. 그래서 외치기가 먼저 붙고
  *   검색·목록이 늦게 붙으면 **외치기 하나만 움직였다** — 그게 오너가 본 '본문 1·2·3 분절'이다.
- *   이제는 판 안에 `data-main-enter-ready`(그 탭의 실제 콘텐츠 루트)가 **있을 때만** 대상을 모은다.
+ *   이제는 판 안에 `data-main-enter-ready`(그 탭의 실제 콘텐츠 루트)가 **보일 때만** 대상을 모은다.
  *   ready 가 붙는 커밋에는 그 안의 표식이 **모두 같이** 들어 있으므로 cohort 가 원자적으로 모인다.
  *   표식 한 개 도착을 준비 완료로 해석하지 않는다. 준비가 기한 안에 안 오면 **전부 정적**으로 둔다
  *   (`attempt` 의 deadline) — 부분 애니메이션은 대안이 아니다.
@@ -96,8 +105,24 @@ function collect(tab: string): HTMLElement[] {
   const pane = document.querySelector<HTMLElement>(`[data-tab="${CSS.escape(tab)}"]`);
   if (!pane) return [];
   // cohort 준비 신호 — 없으면 아직 '이 커밋' 이 아니다. rect 를 읽지 않고 돌아간다.
-  const ready = pane.querySelector<HTMLElement>('[data-main-enter-ready]');
-  if (!ready || ready.offsetParent === null) return [];
+  //
+  // 🔴 FINAL-UX#MOTION-COMMUNITY(2026-09-21) — **첫 번째가 아니라 '보이는 첫 번째'** 다.
+  //   종전에는 `querySelector` 로 DOM 순서상 맨 앞 ready 하나만 봤다. 그런데 커뮤니티 6서브탭은
+  //   keep-alive 라 전부 DOM 에 남고 `display:none` 만 토글된다(`CommunityTab.tsx` 의 `data-sec`).
+  //   DOM 순서는 live → board → venues … 이고 유휴 프리마운트가 미방문 섹션을 미리 붙이므로,
+  //   기본 `venues` 를 보고 있어도 **숨은 live/board 의 ready 가 먼저 잡혀** `offsetParent === null`
+  //   → `return []` → 커뮤니티 전체가 정적이었다. 그래서 보이는 후보를 찾을 때까지 넘긴다.
+  //   보이는 ready 가 하나도 없으면 종전대로 **전부 정적**이다(부분 재생은 분절이라 금지).
+  let ready: HTMLElement | null = null;
+  for (const cand of Array.from(pane.querySelectorAll<HTMLElement>('[data-main-enter-ready]'))) {
+    // `offsetParent === null` 이면 자기 또는 조상이 `display:none` 이다(이 표식들은 fixed 가 아니다).
+    if (cand.offsetParent === null) continue;
+    ready = cand;
+    break;
+  }
+  // `getClientRects` 는 **고른 하나**에만 쓴다 — 후보 전체에 돌리면 레이아웃 비용이 후보 수만큼 든다.
+  // (`visibility:hidden`·크기 0 처럼 offsetParent 로는 안 걸리는 경우를 여기서 한 번 더 거른다.)
+  if (!ready || ready.getClientRects().length === 0) return [];
   const vh = window.innerHeight || 0;
   const out: HTMLElement[] = [];
   for (const el of Array.from(pane.querySelectorAll<HTMLElement>('[data-main-enter]'))) {
@@ -114,7 +139,7 @@ function play(targets: HTMLElement[]) {
   // 같은 프레임에 한꺼번에 시작한다 — 이래야 카드들이 제각각 낙하하지 않는다.
   for (const el of targets) {
     const a = el.animate(
-      [{ transform: `translateY(${DIST}px)` }, { transform: 'translateY(0)' }],
+      [{ transform: `translateX(${DIST}px)` }, { transform: 'translateX(0)' }],
       // `fill: 'none'` — 끝나면 인라인 효과를 남기지 않는다. 잔재 transform 이 남으면
       // 그 요소가 계속 fixed 자손의 컨테이닝 블록이 된다.
       { duration: DUR, easing: EASE, fill: 'none' },
