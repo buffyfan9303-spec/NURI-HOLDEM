@@ -25,6 +25,7 @@
 //   ③ 뒤로가기 한 번이 그 오버레이만 닫고 열기 전 화면으로 되돌린다
 import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack } from './_session';
+import { mockSchedules } from './_schedules';
 import { installNavProbe, currentScreen } from './_navprobe';
 
 /** 로그인 모달(이메일 입력칸을 가진 다이얼로그) */
@@ -38,6 +39,7 @@ async function openLogin(page: import('@playwright/test').Page) {
 
 test.describe('뒤로가기 스택', () => {
   test.beforeEach(async ({ page }) => {
+    await mockSchedules(page);      // 라이브 일정 0건인 날에도 포스터 상세 케이스가 꺼지지 않게 한다
     await stabilizeBackstack(page); // 새 탭은 history.length=1 이라 back 이 앱을 벗어난다
     await page.goto('/');
     await dismissOverlays(page);
@@ -123,10 +125,17 @@ const CASES: OverlayCase[] = [
   },
   {
     name: '포스터 상세',
-    // 데이터 의존: 홈 '오늘·내일' 카드(article)가 0건인 날엔 열 것이 없다 — 실패가 아니라 skip(CI 가 이걸로 상시 빨갛던 2026-08-30~09-02)
     open: async (p) => {
       const card = p.locator('[data-tab="home"] article').first();
-      if (await card.count() === 0) test.skip(true, '홈에 오늘·내일 일정 카드 0건 — 라이브 데이터 의존');
+      // ⚠ 2026-09-21: 예전엔 0건이면 test.skip 이었다. 오너 결정 8-ⓓ 로 더미 일정을 내리자
+      //   라이브 schedules 가 0건이 돼 **이 계약이 빨개지지 않고 꺼졌다**(통과 → 건너뜀).
+      //   beforeEach 의 mockSchedules 가 카드를 보장하므로, 0건은 이제 **결함**이다.
+      // 🔴 단 **고정 시점 count 는 경합이다.** 카드는 일정 조회가 끝난 뒤 붙는데
+      //   beforeEach 는 `[data-tab="home"]` 만 기다린다 — 그 시점엔 0장이다(2026-09-21 실측).
+      //   예전 test.skip 은 이 경합까지 조용히 삼켰다. 나타날 때까지 기다리되,
+      //   끝내 안 나타나면 **크게 실패**한다(건너뛰지 않는다).
+      await expect(card, '홈에 일정 카드가 0건 — 목킹이 안 먹혔거나 홈 목록 렌더가 깨졌다')
+        .toBeVisible({ timeout: 15_000 });
       await card.click();
     },
     marker: (p) => p.locator('[role="dialog"][aria-label="전체화면 보기"]'),
@@ -170,6 +179,7 @@ const layerOf = (p: import('@playwright/test').Page) => p.evaluate(() => {
 
 test.describe('오버레이별 뒤로가기 균형 — 전수', () => {
   test.beforeEach(async ({ page }) => {
+    await mockSchedules(page);
     await installNavProbe(page);
     await stabilizeBackstack(page);
     await page.goto('/');

@@ -10,10 +10,13 @@
 // resize 도 발화하지 않는 환경이 있었다(2026-08-28 실측) — 그런 환경에서는 이 결함이 안 보인다.
 // Playwright 의 setViewportSize 는 실제로 이벤트를 발생시키므로 여기서만 정직하게 잡힌다.
 import { test, expect } from './_fixtures';
+import { mockSchedules } from './_schedules';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
 test('표 모드 — 1440/900/375 어디서도 일정이 화면에 보인다', async ({ page }) => {
+  // 라이브 일정 0건이면 '행이 사라졌는가' 를 잴 수 없다 — 고정 픽스처로 전제를 만든다(2026-09-21).
+  await mockSchedules(page);
   await page.goto('/?tab=browse');
   await page.locator('button[aria-label^="알림"]').first().waitFor({ timeout: 30_000 });
 
@@ -31,8 +34,9 @@ test('표 모드 — 1440/900/375 어디서도 일정이 화면에 보인다', a
     }
     return seen.size;
   });
-  // 데이터 의존: 예정 대회가 0건인 날엔 '행이 사라졌는가' 를 잴 수 없다 — 시작 폭에서 0행이면 skip(실패가 아니라 전제 미충족)
-  if ((await countRows()) === 0) test.skip(true, '표시할 일정 0건 — 라이브 데이터 의존');
+  // 예전엔 0행이면 test.skip 이었다 — 라이브 일정이 0건이 되자 게이트가 조용히 꺼졌다(2026-09-21).
+  //   mockSchedules 가 행을 보장하므로 0행은 이제 **결함**이다.
+  expect(await countRows(), '표 모드 시작 폭(1440)에서 일정 행이 0개 — 목킹이 안 먹혔거나 표가 안 그려졌다').toBeGreaterThan(0);
   for (const w of [1440, 900, 375, 1200, 375]) {
     await page.setViewportSize({ width: w, height: 820 });
     await page.waitForTimeout(500);

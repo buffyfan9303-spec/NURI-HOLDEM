@@ -1042,7 +1042,18 @@ function LogoutSection({ onDone }: { onDone: () => void }) {
         className="flex w-full items-center gap-2 rounded-aura border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-danger/40 disabled:opacity-50"
       >
         <Icon name="log-out" size={16} className="shrink-0 text-ink-muted" />
-        <span className="flex-1 text-sm font-semibold text-ink-primary">{busy ? '로그아웃 중…' : '로그아웃'}</span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold text-ink-primary">{busy ? '로그아웃 중…' : '로그아웃'}</span>
+          {/* 🔴 24(2026-09-21) — 범위를 사실대로 고지한다.
+              `src/api/auth.ts:376-379` 의 signOut() 은 scope 를 안 넘기고, 설치본
+              @supabase/auth-js 2.112.3 의 기본값이 `{ scope: 'global' }` 이다
+              (GoTrueClient.js:3365 주석: "the default scope is 'global'. This signs the user out of
+              every device they are currently signed in on"). 즉 **지금도 전 기기가 끊긴다.**
+              바로 옆 AutoLoginCheckbox 는 "이 브라우저에서 다음부터 자동으로 로그인됩니다" 라고
+              약속하고 있어, 고지가 없으면 손님은 이 버튼을 "이 기기만" 으로 읽는다.
+              ⚠ scope 를 local 로 내리기로 정하면 이 문장도 같이 바꿔야 한다 — 한쪽만 바꾸면 다시 어긋난다. */}
+          <span className="mt-0.5 block text-2xs leading-relaxed text-ink-muted">다른 기기에서도 함께 로그아웃됩니다</span>
+        </span>
       </button>
     </div>
   );

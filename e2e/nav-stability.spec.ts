@@ -18,6 +18,7 @@
 import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack } from './_session';
 import { installNavProbe, aimProbeAtTab, resetProbe, readProbe, currentScreen } from './_navprobe';
+import { mockSchedules } from './_schedules';
 
 // 특정 매장 이름에 의존하지 않고 매장 페이지를 연다 — 커뮤니티 '홀덤펍' 목록의 첫 카드를
   // 누른다(딥링크는 공개 매장 목록에서만 대상을 찾으므로 비공개 E2E 매장으로는 열리지 않는다).
@@ -49,7 +50,13 @@ const TAB_INDEX = { home: 0, live: 1, community: 2, tools: 3, calendar: 4 } as c
 type TabKey = keyof typeof TAB_INDEX;
 
 test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도착 100%', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    // 포스터 상세 케이스가 라이브 일정 0건으로 skip 되던 것을 막는다(2026-09-21).
+    // 🔴 **포스터 케이스에만 건다.** 파일 전체에 걸었더니 홈이 카드를 그리느라 렌더 부담이 늘어
+    //   시간에 민감한 검사가 러너 부하에서 흔들렸다 — 실측(2026-09-21):
+    //   '로그인 모달 열고 0ms 뒤 back' 이 **전체 실행에서만 두 번** 떨어졌고,
+    //   단독 5회 반복은 5/5 통과했다. 로그인·매장 케이스는 일정이 필요 없다.
+    if (/포스터/.test(testInfo.title)) await mockSchedules(page);
     await installNavProbe(page);
     await stabilizeBackstack(page);
     await page.goto('/');
@@ -187,8 +194,11 @@ test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도
         const needHome = ov.id === 'poster' || ov.id === 'venue';
         if (needHome) { await tap(page, pts, 'home'); await page.waitForTimeout(700); }
         if (ov.id === 'poster') {
-          const cards = await page.locator('[data-tab="home"] article.cv-card-list').count();
-          test.skip(cards === 0, '홈에 일정 카드가 없다(운영 일정 0건) — 포스터 상세를 열 수 없어 잴 것이 없다');
+          // 예전엔 0건이면 test.skip 이었다 — 라이브 일정이 비면 이 게이트가 조용히 꺼졌다(2026-09-21).
+          //   beforeEach 의 mockSchedules 가 카드를 보장하므로 0건은 이제 **결함**이다.
+          // 🔴 고정 시점 count 는 경합이다(카드는 일정 조회 후에 붙는다) — 나타날 때까지 기다린다.
+          await expect(page.locator('[data-tab="home"] article.cv-card-list').first(),
+            '홈에 일정 카드가 0건 — 목킹이 안 먹혔거나 홈 목록 렌더가 깨졌다').toBeVisible({ timeout: 15_000 });
         }
         const baseline = await currentScreen(page);
         await resetProbe(page);
