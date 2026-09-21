@@ -75,15 +75,28 @@ jobs:
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          # 고지 산출물만 본다 — package.json/lock 은 Dependabot 것이라 우리가 다시 커밋하지 않는다.
-          git checkout HEAD -- package.json package-lock.json
-          if git diff --quiet; then
+          set -euo pipefail
+          OUT=public/legal/licenses.html
+          # 🔴 2026-09-21 실측 — 여기가 깨져 있었다.
+          #   공급망 방어를 위해 **base 만 체크아웃**해 놓고, 그 위에 커밋해서
+          #   **PR head 브랜치로 밀고** 있었다. 두 역사가 갈라져 있어(head 에는 의존성
+          #   범프 커밋이 있고 base 에는 없다) **non-fast-forward 로 거부**된다:
+          #   `error: failed to push some refs` (run 35558371834).
+          #   → 산출물을 들고 **head 로 옮겨타서** 그 위에 커밋한다.
+          #   ⚠ 브랜치 전환은 head 의 코드를 **실행하지 않는다** — 방어는 그대로다.
+          #     설치·생성은 이미 끝났고, 이후로는 git 명령만 돌린다.
+          cp "$OUT" "$RUNNER_TEMP/licenses.html"
+          git checkout -- .                      # 작업트리를 base 상태로 (산출물은 복사해 둑다)
+          git checkout -B pr-head "origin/$HEAD_REF"
+          cp "$RUNNER_TEMP/licenses.html" "$OUT"
+          if git diff --quiet -- "$OUT"; then
             echo "고지에 변화 없음 — 커밋하지 않는다"
             exit 0
           fi
-          git --no-pager diff --stat
+          git --no-pager diff --stat -- "$OUT"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          # 이 파일 하나만 올린다 — `git add -A` 는 이 저장소 규칙상 쓰지 않는다.
+          git add -- "$OUT"
           git commit -m "chore(deps): 라이선스 고지 재생성 (gen-licenses)"
           git push origin "HEAD:$HEAD_REF"
