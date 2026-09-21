@@ -1,0 +1,89 @@
+name: Dependabot — 라이선스 고지 재생성
+
+# 26-ⓐ 오너 결정(2026-09-21).
+#
+# 문제: src/pages/legal/licensesNotice.test.ts 가 scripts/gen-licenses.mjs --check 를 물고 있어
+#   의존성이 바뀌면 커밋된 고지가 **반드시** 어긋난다. Dependabot 은 npm run licenses 를 돌려
+#   커밋할 수 없으므로 **모든 Dependabot PR 이 이 한 건으로 항상 빨갛다**(실측: PR #10·#11 이 26일째 열려 있음).
+#
+# 🔴 왜 pull_request 가 아니라 pull_request_target 인가
+#   Dependabot 이 띄운 pull_request 워크플로의 GITHUB_TOKEN 은 permissions 블록과 무관하게
+#   **읽기 전용으로 내려간다**(GitHub 2021 정책). 그래서 브랜치에 커밋을 못 한다.
+#
+# 🔴 pull_request_target 의 위험과 이 파일이 그것을 막는 방법
+#   pull_request_target 은 base 의 워크플로를 **쓰기 권한과 함께** 실행한다. 여기서 PR head 를
+#   통째로 체크아웃해 빌드하면 새 의존성의 install 스크립트가 쓰기 토큰과 함께 돌아간다 —
+#   전형적인 공급망 상승 경로다. 이 파일은 세 겹으로 막는다:
+#     ① 체크아웃은 **base(ref: 기본 브랜치)** 만 한다 → 워크플로·스크립트·설정이 전부 신뢰된 코드다.
+#     ② PR 에서 가져오는 것은 **package.json · package-lock.json 두 파일뿐**이다.
+#        Dependabot PR 이 바꾸는 것이 정확히 그 둘이고, 그 둘은 실행되지 않는 데이터다.
+#     ③ 설치는 **npm ci --ignore-scripts** — preinstall/postinstall 을 실행하지 않는다.
+#   그리고 actor 를 dependabot[bot] 으로, head 저장소를 같은 저장소로 제한한다(포크 차단).
+#
+# ⚠ 이 워크플로는 secret 을 하나도 쓰지 않는다. 앞으로도 추가하지 마라 —
+#   pull_request_target 에서 secret 을 노출하는 순간 위 ①~③ 의 방어가 의미를 잃는다.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: write        # PR 브랜치에 고지 재생성 결과를 커밋하기 위한 최소 권한
+
+concurrency:
+  group: dependabot-licenses-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    # 포크 PR·사람 PR 은 대상이 아니다. 둘 다 아니면 잡 자체가 돌지 않는다.
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: base 체크아웃 (신뢰된 코드만)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      - name: PR 에서 의존성 파일 두 개만 가져온다
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git fetch origin "$HEAD_REF"
+          # 🔴 두 파일만. 워크플로·스크립트·소스는 base 것을 그대로 쓴다.
+          git checkout "origin/$HEAD_REF" -- package.json package-lock.json
+          git --no-pager diff --stat HEAD -- package.json package-lock.json || true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: 설치 — install 스크립트 실행 금지
+        run: npm ci --ignore-scripts
+
+      - name: 라이선스 고지 재생성
+        run: npm run licenses
+
+      - name: 바뀐 게 있으면 PR 브랜치에 커밋
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # 고지 산출물만 본다 — package.json/lock 은 Dependabot 것이라 우리가 다시 커밋하지 않는다.
+          git checkout HEAD -- package.json package-lock.json
+          if git diff --quiet; then
+            echo "고지에 변화 없음 — 커밋하지 않는다"
+            exit 0
+          fi
+          git --no-pager diff --stat
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore(deps): 라이선스 고지 재생성 (gen-licenses)"
+          git push origin "HEAD:$HEAD_REF"

@@ -29,7 +29,12 @@ export function SprCalc() {
             ⚠ 칩 개수처럼 정수만 뜻이 있는 입력(M존의 스택·블라인드·앤티)은 그대로 둔다 —
               `decimal` 을 전역으로 켜면 '칩 1.5개' 같은 무의미한 입력을 허용하게 된다. */}
         <Field label="유효 스택"><NumIn value={stack} onChange={setStack} decimal /></Field>
-        <Field label="현재 팟"><NumIn value={pot} onChange={setPot} decimal /></Field>
+        {/* 🔴 29-ⓐ(2026-09-21) — SPR 의 '팟' 은 **이번 스트리트 베팅이 들어가기 전** 금액이다.
+            팟오즈의 '현재 팟(상대 벳 포함)' 을 그대로 베끼면 전제가 **반대로** 적힌다 —
+            상대 벳을 더해 넣으면 SPR 이 실제보다 작게 나와 커밋 판단이 뒤집힌다(스택 100·팟 20 → SPR 5,
+            상대가 20 벳한 걸 더해 40 을 넣으면 SPR 2.5 로 '커밋 구간'). 내 벳도 아직 안 들어간 값이라
+            MDF 의 '상대 벳 전' 이 아니라 '이번 벳 전' 으로 적는다. */}
+        <Field label="현재 팟(이번 벳 전)"><NumIn value={pot} onChange={setPot} decimal /></Field>
       </div>
       <Result label="SPR" value={spr ? spr.toFixed(1) : '-'} accent />
       <p className="text-2xs leading-relaxed text-ink-muted">{guide}</p>

@@ -415,9 +415,10 @@ describe('NURI SPOT — GTO 홈 통합', () => {
   //      · MDF    `pot/(pot+bet)`   = 100/150 = **66.7%** ← 팟은 상대 벳 **전**
   //    전제를 안 적으면 사용자가 한쪽은 반드시 틀리게 넣는다. 수치가 맞는 것으로는 이 결함이 안 잡힌다.
   //
-  //    ⚠ SPR 의 '현재 팟'(`StackCalcs.tsx`)은 **일부러 제외**했다 — 콜/벳 입력이 없어 같은 숫자가 두 답을
-  //      내는 구조가 아니고, 설계서의 `spr` 키 기준에도 없다. 넣을지는 오너 판단이다(HANDOFF §2-D).
-  it('팟오즈·MDF 의 팟 입력 라벨이 전제를 품는다 — 같은 낱말을 반대 뜻으로 쓰는 자리다', () => {
+  //    🔴 2026-09-21 요구 29-ⓐ — 오너가 SPR 도 전제를 붙이기로 결정했다(HANDOFF §2-D 의 보류 해제).
+  //      다만 SPR = 유효스택 ÷ **이번 스트리트 베팅 전** 팟이라 팟오즈의 '상대 벳 포함' 을 베끼면
+  //      전제가 반대로 적힌다. 세 라벨이 서로 달라야 하고, SPR 라벨에 '포함' 이 들어가면 안 된다.
+  it('팟오즈·MDF·SPR 의 팟 입력 라벨이 전제를 품는다 — 같은 낱말을 반대 뜻으로 쓰는 자리다', () => {
     const POT = readFileSync(join(ROOT, 'src/components/features/tools/PotOddsCalc.tsx'), 'utf-8');
     const ADV = readFileSync(join(ROOT, 'src/components/features/tools/AdvancedCalcs.tsx'), 'utf-8');
 
@@ -430,6 +431,14 @@ describe('NURI SPOT — GTO 홈 통합', () => {
     expect(mdfLabel, 'MDF 계산기의 팟 입력 라벨을 못 찾았다 — 이 검사가 빈 검사가 됐다').toBeTruthy();
     expect(mdfLabel, `MDF 의 팟 라벨에 '상대 벳 전' 전제가 없다: ${mdfLabel}`).toContain('상대 벳 전');
 
+    const STACK = readFileSync(join(ROOT, 'src/components/features/tools/StackCalcs.tsx'), 'utf-8');
+    const sprLabel = STACK.match(/<Field label="([^"]*팟[^"]*)"><NumIn value=\{pot\} onChange=\{setPot\} decimal/)?.[1];
+    expect(sprLabel, 'SPR 계산기의 팟 입력 라벨을 못 찾았다 — 이 검사가 빈 검사가 됐다').toBeTruthy();
+    expect(sprLabel, `SPR 의 팟 라벨에 '벳 전' 전제가 없다: ${sprLabel}`).toContain('벳 전');
+    // SPR 은 벳이 들어가기 전 팟이다 — 팟오즈의 '포함' 전제를 베껴 오면 계산 전제가 반대가 된다.
+    expect(sprLabel, `SPR 라벨이 '포함' 전제를 달고 있다 — SPR 팟은 벳 전이다: ${sprLabel}`).not.toContain('포함');
+
     expect(potLabel, '두 라벨이 같아졌다 — 반대 뜻인데 구별이 사라졌다').not.toBe(mdfLabel);
+    expect(sprLabel, 'SPR 과 팟오즈 라벨이 같아졌다 — 시점이 반대인데 구별이 사라졌다').not.toBe(potLabel);
   });
 });

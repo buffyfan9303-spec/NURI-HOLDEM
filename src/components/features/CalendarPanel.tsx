@@ -612,7 +612,8 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
       {/* ── 전체 누계 ────────────────────────────────────────────────────────────
           범위: 불러온 행 전체(필터 무시). 아래 '선택 기간 분석'과 **모집단이 다르다** —
           그래서 두 구획을 제목으로 갈라 놓는다(§6). 순손익 하나를 주 지표로 키우고
-          수익·손실은 그 아래 한 줄로 내린다: 예전 3칸은 셋 다 같은 무게라 무엇이 결론인지 없었다.
+          플러스·마이너스는 그 아래 한 줄로 내린다: 예전 3칸은 셋 다 같은 무게라 무엇이 결론인지 없었다.
+          (§28 카피 원칙 — '수익·손실'은 환전 프레이밍으로 읽혀 금지어라 화면이 이미 쓰는 '플러스·마이너스'로 맞췄다, 2026-09-21.)
           LED 는 여기 한 곳뿐이다(§6 뱅크롤 Aura) — 카드 전체를 칠하지 않는다. */}
       <p className="mt-2 text-2xs font-bold text-ink-muted">전체 누계</p>
       <div
@@ -630,7 +631,7 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
         {/* 한 줄로 자리를 항상 지킨다 — 조건부로 빼면 도착할 때 아래가 밀린다(CLS) */}
         {/* 줄은 접히되 **숫자는 안 꺾인다** — 200% 확대에서 nowrap 이면 카드 밖으로 넘쳐 가로 스크롤이 생겼다(2026-09-10 실측). */}
         <p className="mt-1.5 text-2xs tabular-nums text-ink-secondary">
-          {heroNote ?? (<><span className="whitespace-nowrap">수익 <b className="stat-emerald">+{won(plus)}</b></span> · <span className="whitespace-nowrap">손실 <b className="text-danger-deep dark:text-danger-light">{won(minus)}</b></span></>)}
+          {heroNote ?? (<><span className="whitespace-nowrap">플러스 <b className="stat-emerald">+{won(plus)}</b></span> · <span className="whitespace-nowrap">마이너스 <b className="text-danger-deep dark:text-danger-light">{won(minus)}</b></span></>)}
         </p>
       </div>
 
@@ -659,7 +660,7 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
         </select>
       </div>
       {/* 핵심 3 — 순손익·ROI·ITM. '무엇을 보고 판단하는가'가 이 줄이다.
-          ⚠ 라벨을 바꿨으므로(참가→참가 횟수, 결과→총 회수액, 순결과→순손익) e2e 셀렉터를
+          ⚠ 라벨을 바꿨으므로(참가→참가 횟수, 결과→회수, 순결과→순손익) e2e 셀렉터를
             같은 커밋에서 data-stat 으로 교체했다(CLAUDE.md: 라벨 결합 셀렉터는 느슨하게 풀지 않는다). */}
       <div className="mt-1.5 grid grid-cols-3 gap-1.5" data-testid="roi-stats">
         <Stat testId="net" label="순손익" value={`${stats.net >= 0 ? '+' : ''}${won(stats.net)}`} sub=" " tone={stats.net >= 0 ? 'emerald' : 'danger'} />

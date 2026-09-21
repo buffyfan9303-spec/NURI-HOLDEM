@@ -76,7 +76,7 @@ export const GLOSSARY_TERMS: GlossaryEntry[] = [
   { term: 'MDF', en: 'Minimum Defense Frequency', cat: '수치', desc: '상대의 블러프가 자동으로 이득이 되지 않게 하기 위해 지켜야 하는 최소 수비 빈도.' },
   { term: 'EV', en: 'Expected Value', cat: '수치', desc: '한 액션을 무한히 반복했을 때의 평균 기대값. +EV 결정을 쌓는 것이 홀덤 실력의 본질이다.' },
   { term: 'ICM', en: 'Independent Chip Model', cat: '수치', desc: '토너먼트 칩을 상금 기대값으로 환산하는 모델. 칩 2배가 상금 기대값 2배는 아니라는 점을 설명한다.' },
-  { term: 'SPR', en: 'Stack-to-Pot Ratio', cat: '수치', desc: '팟 대비 남은 스택의 비율. 낮을수록 커밋 기준이 낮아져 탑 페어로도 스택이 들어간다.' },
+  { term: 'SPR', en: 'Stack-to-Pot Ratio', cat: '수치', desc: '이번 벳이 들어가기 전 팟 대비 남은 스택의 비율. 낮을수록 커밋 기준이 낮아져 탑 페어로도 스택이 들어간다.' },
   { term: 'M존', en: 'M-ratio', cat: '수치', desc: '블라인드·앤티 한 바퀴 비용으로 스택을 나눈 값. M이 낮아질수록 푸시/폴드 위주로 전환해야 한다.' },
   { term: '아우츠', en: 'Outs', cat: '수치', desc: '내 핸드를 승리 족보로 완성시켜 주는 남은 카드 수. 아우츠×2(턴)·×4(플랍) 근사로 에퀴티를 어림한다.' },
   { term: 'VPIP', en: 'Voluntarily Put In Pot', cat: '수치', desc: '자발적으로 팟에 참여한 핸드 비율. 플레이어의 루즈·타이트 성향을 보여 주는 대표 지표.' },

@@ -462,7 +462,7 @@ const AppHeader = memo(function AppHeader({
                   //   라이트에서 이 링이 지면에 묻혔다. 이 링은 별도 배지 없이 **등급을 알리는 유일한 표시**라
                   //   안 보이면 기능이 사라진 것과 같다 → 장식용 --tier-*-vivid 토큰(테마별 정의)으로 직접 참조.
                   style={{ boxShadow: `0 0 0 2px ${tierCss(ringVarOf(user))}, 0 0 10px ${tierCss(ringVarOf(user), 0.667)}` }}
-                  title="내 등급"
+                  title="내 활동 등급"
                 >
                   {/* 2026-09-04: 이니셜 위에 img 를 absolute 로 얹던 패턴 제거 — contain 이미지(로고형)에서
                       이니셜 글자가 이미지 뒤로 비쳤다(오너 지적). Avatar 아톰은 이미지·이니셜 중 하나만 그린다. */}

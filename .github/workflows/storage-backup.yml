@@ -1,0 +1,148 @@
+name: Storage Backup to R2
+
+# 22-ⓐ 오너 결정(2026-09-21) — Supabase Storage 버킷을 주 1회 R2 로 복사한다.
+#
+# 🔴 이 워크플로의 철학은 backup.yml 과 같다: **"secret 없으면 우아하게 스킵"을 쓰지 않는다.**
+#   backup.yml 머리말에 기록된 사고 — 2026-08-24 이후 매일 03:00 KST 에 초록불이 켜졌는데
+#   실제 백업은 **0건**이었다. secret 누락을 스킵으로 처리하고 success 로 보고했기 때문이다.
+#   백업이 없는 상태를 초록으로 위장하는 것이 가장 위험한 실패 모드라, 여기서도 **누락은 실패**다.
+#   오너가 키를 넣기 전까지 주 1회 빨갛게 뜬다 — 그게 의도한 신호다.
+#
+# 🔴 오너가 직접 해야 하는 것 (에이전트에게 값을 주지 마라)
+#     gh secret set SUPABASE_SERVICE_ROLE_KEY    # Supabase 대시보드 → Project Settings → API → service_role
+#     gh secret set SUPABASE_PROJECT_URL         # https://<ref>.supabase.co
+#   R2 5종(R2_ACCESS_KEY_ID·R2_SECRET_ACCESS_KEY·R2_ENDPOINT·R2_ACCOUNT_ID·R2_BUCKET)은 이미 설정돼 있다.
+#
+# 🔴 service_role 키는 RLS 를 전부 우회한다. 그래서 이 워크플로는:
+#   · schedule + workflow_dispatch 로만 돈다. **pull_request 계열에 절대 붙이지 마라** —
+#     붙는 순간 PR 에서 이 키에 닿을 수 있게 된다.
+#   · 값을 어디에도 출력하지 않는다(길이·모양만).
+#   · 🔴 **Actions 아티팩트로 업로드하지 않는다.** 이 저장소는 공개라 아티팩트를 누구나 받는다
+#     (docs/HANDOFF.md §9-1 경고). 산출물은 R2 로만 나간다.
+#   · permissions 는 contents: read 만. 저장소에 아무것도 쓰지 않는다.
+
+on:
+  schedule:
+    - cron: '30 18 * * 0'   # 일 18:30 UTC = 월 03:30 KST (DB 백업 18:00 과 30분 어긋나게)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: storage-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard — 필수 secret 확인(하나라도 없으면 실패 · 값은 출력하지 않는다)
+        env:
+          SR_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SB_URL: ${{ secrets.SUPABASE_PROJECT_URL }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          shape() { printf '%s' "$1" | grep -Eq "$2" && echo "OK" || echo "다름"; }
+          echo "SUPABASE_PROJECT_URL: 길이 ${#SB_URL} · https://<ref>.supabase.co 모양=$(shape "$SB_URL" '^https://[a-z0-9]+\.supabase\.co/?$')"
+          echo "SUPABASE_SERVICE_ROLE_KEY: 길이 ${#SR_KEY} (JWT 면 보통 200+)"
+          echo "R2_ACCOUNT_ID: 길이 ${#R2_ACCOUNT_ID} · 32자리 16진수=$(shape "$R2_ACCOUNT_ID" '^[0-9a-f]{32}$')"
+          echo "R2_BUCKET: 길이 ${#R2_BUCKET}"
+          missing=""
+          [ -z "$SR_KEY" ]               && missing="$missing SUPABASE_SERVICE_ROLE_KEY"
+          [ -z "$SB_URL" ]               && missing="$missing SUPABASE_PROJECT_URL"
+          [ -z "$R2_ACCESS_KEY_ID" ]     && missing="$missing R2_ACCESS_KEY_ID"
+          [ -z "$R2_SECRET_ACCESS_KEY" ] && missing="$missing R2_SECRET_ACCESS_KEY"
+          [ -z "$R2_ACCOUNT_ID" ]        && missing="$missing R2_ACCOUNT_ID"
+          [ -z "$R2_BUCKET" ]            && missing="$missing R2_BUCKET"
+          if [ -n "$missing" ]; then
+            echo "::error::Storage 백업 실행 불가 — 필수 secret 누락:$missing. 오너가 'gh secret set <이름>' 으로 설정해야 한다. 값은 여기 출력하지 않는다."
+            exit 1
+          fi
+          echo "필수 secret 6개 확인 완료(이름·모양만 검사)"
+
+      - name: 버킷·객체 목록 → 내려받기
+        env:
+          SR_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SB_URL: ${{ secrets.SUPABASE_PROJECT_URL }}
+        run: |
+          set -euo pipefail
+          BASE="${SB_URL%/}/storage/v1"
+          OUT="storage-dump"; mkdir -p "$OUT"
+          # -sS: 조용하되 오류는 보인다. 헤더의 키는 curl 이 출력하지 않는다.
+          api() { curl -sS -f -H "Authorization: Bearer $SR_KEY" -H "apikey: $SR_KEY" "$@"; }
+
+          api "$BASE/bucket" > buckets.json
+          BUCKETS="$(jq -r '.[].name' buckets.json)"
+          if [ -z "$BUCKETS" ]; then
+            echo "::error::버킷이 0개다 — 키 권한이나 프로젝트 URL 을 확인해야 한다(값은 출력하지 않는다)."
+            exit 1
+          fi
+          echo "버킷: $(echo "$BUCKETS" | tr '\n' ' ')"
+
+          TOTAL=0
+          for B in $BUCKETS; do
+            mkdir -p "$OUT/$B"
+            OFFSET=0
+            while :; do
+              api -X POST -H "Content-Type: application/json" \
+                  -d "{\"prefix\":\"\",\"limit\":1000,\"offset\":$OFFSET,\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+                  "$BASE/object/list/$B" > page.json
+              N="$(jq 'length' page.json)"
+              [ "$N" -eq 0 ] && break
+              # id 가 null 인 항목은 '폴더'라 내려받지 않는다.
+              jq -r '.[] | select(.id != null) | .name' page.json > names.txt || true
+              while IFS= read -r NAME; do
+                [ -z "$NAME" ] && continue
+                DEST="$OUT/$B/$NAME"; mkdir -p "$(dirname "$DEST")"
+                # 경로에 공백·한글이 있을 수 있다 — --data-urlencode 대신 --get 으로 안전하게.
+                if curl -sS -f -H "Authorization: Bearer $SR_KEY" -H "apikey: $SR_KEY" \
+                        --get --data-urlencode "" "$BASE/object/$B/$NAME" -o "$DEST"; then
+                  TOTAL=$((TOTAL+1))
+                else
+                  echo "::warning::내려받기 실패: $B/$NAME"
+                fi
+              done < names.txt
+              OFFSET=$((OFFSET+N))
+              [ "$N" -lt 1000 ] && break
+            done
+          done
+          echo "내려받은 객체: $TOTAL 개"
+          # 🔴 0 개면 실패로 본다. '빈 백업을 초록으로 보고하지 않는다'가 이 파일의 요점이다.
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "::error::객체를 하나도 내려받지 못했다. 빈 백업을 성공으로 보고하지 않는다."
+            exit 1
+          fi
+          STAMP="$(date -u +%Y%m%d-%H%M)"
+          tar -czf "nuri-storage-$STAMP.tar.gz" "$OUT"
+          echo "FILE=nuri-storage-$STAMP.tar.gz" >> "$GITHUB_ENV"
+          ls -lh "nuri-storage-$STAMP.tar.gz"
+          rm -f buckets.json page.json names.txt
+
+      - name: R2 업로드(S3)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          # 엔드포인트는 계정 ID 로 만든 정본을 쓴다 — backup.yml 이 R2_ENDPOINT 값으로 TLS 핸드셰이크에
+          # 세 번 실패한 기록이 있어 같은 함정을 피한다.
+          EP="https://${ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3 cp "$FILE" "s3://$BUCKET/storage/$FILE" --endpoint-url "$EP" --only-show-errors
+          echo "업로드 완료: s3://$BUCKET/storage/$FILE"
+          # 되읽어 크기를 대조한다 — 업로드가 조용히 0바이트로 끝나는 것을 막는다.
+          REMOTE=$(aws s3api head-object --bucket "$BUCKET" --key "storage/$FILE" \
+                    --endpoint-url "$EP" --query ContentLength --output text)
+          LOCAL=$(stat -c %s "$FILE")
+          echo "원격 ${REMOTE}B / 로컬 ${LOCAL}B"
+          [ "$REMOTE" = "$LOCAL" ] || { echo "::error::업로드 크기 불일치"; exit 1; }
+
+      - name: 흔적 정리
+        if: always()
+        run: rm -rf storage-dump nuri-storage-*.tar.gz

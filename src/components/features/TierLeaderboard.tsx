@@ -843,7 +843,7 @@ export default function TierLeaderboard() {
             <div className="flex items-center gap-3">
               <TierBadge points={user.activityPoints ?? 0} size={30} admin={isAdmin} overallRank={myRank} />
               <div>
-                <p className="text-2xs text-ink-muted">내 등급</p>
+                <p className="text-2xs text-ink-muted">내 활동 등급</p>
                 <p className="text-lg font-extrabold text-ink-primary leading-tight">
                   {isAdmin ? 'SS' : myIsAce ? 'AA' : myProg.current.label}
                   <span className="ml-1.5 text-xs font-semibold text-ink-muted">등급</span>

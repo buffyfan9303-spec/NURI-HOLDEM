@@ -305,12 +305,21 @@ function FavoriteButton({
 // ── 서브: 상태 배지(행당 1개) ───────────────────────────────────────────────
 
 
-/** 실측 레지 상태 → 배지 텍스트·톤. regInfo 없으면 기존 추정('진행 중') 유지.
+/** 실측 레지 상태 → 배지 텍스트·톤.
  *  §9 쉬운 한국어: 'LIVE' → '진행 중', '레지마감' → '등록 마감'. */
-function liveBadge(regInfo: RegInfo | undefined): { text: string; closed: boolean } {
+// eslint-disable-next-line react-refresh/only-export-components -- 순수 판정 함수를 단위 테스트에 노출(titleWithoutGtd 와 같은 이유)
+export function liveBadge(regInfo: RegInfo | undefined): { text: string; closed: boolean } {
   if (regInfo && regInfo.msLeft === 0) return { text: '등록 마감', closed: true };
   if (regInfo && regInfo.msLeft !== null) return { text: '등록 가능', closed: false };
-  return { text: '진행 중', closed: false };
+  // 🔴 15-ⓐ(2026-09-21 오너 결정): **실측 근거가 있을 때만 '진행 중'이라 부른다.**
+  //   여기까지 온 regInfo 는 `msLeft === null`(= 등록 마감 레벨 미설정) 뿐이다.
+  //   클락이 이 포스터에 실제로 매칭돼 돌고 있다는 것은 **잰 사실**이고, 모르는 것은 등록 가능 여부뿐이다.
+  if (regInfo) return { text: '진행 중', closed: false };
+  // regInfo 가 아예 없다 = 매칭되는 클락이 없다. 이때 아는 것은 `scheduleStatus` 가 준
+  //   '예정 시작 시각이 지났고 +10시간 안이다' 뿐이다 — 대회가 실제로 돌고 있는지는 **모른다**.
+  //   ⚠ '종료' 같은 단정으로 바꾸지 마라. 모르는 것을 반대 방향으로 단정하면 지금보다 나빠진다
+  //     (클락을 안 쓰는 매장에서는 이 배지가 '지금 열려 있다'는 유일한 신호다 — HANDOFF R3-1).
+  return { text: '시작 시각 지남', closed: false };
 }
 
 /** 제목 끝의 GTD 표기를 **화면에서만** 뗀다 — 오른쪽 열이 같은 값을 이미 보여준다.
@@ -635,6 +644,10 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
   // 그리드는 포스터가 주인공이라 골격(포스터·TOP·상태·하단 날짜 오버레이)을 그대로 둔다.
   // 하단 메타만 목록 카드와 같은 어휘로 정리 — '참가비' 라벨 + 금액, 골드 부가(상금 보장), 등록 마감 배지.
   const reg = regCloseText(schedule);
+  // 배지는 한 번만 판정한다(종전엔 같은 JSX 에서 liveBadge 를 3번 불렀다).
+  const badge = liveBadge(regInfo);
+  /** 클락 실측이 없어 '시작 시각 지남' 으로 떨어진 경우 — 추론이므로 경고색(빨강)을 쓰지 않는다. */
+  const inferred = !regInfo;
   const sub = prizeText(schedule);
   const meta = [schedule.format, schedule.duration, schedule.buyIn?.gameType].filter(Boolean).join(' · ');
 
@@ -692,11 +705,13 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
           {status !== 'upcoming' && (
             <span className={[
               'shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold leading-none',
-              status === 'ended' || liveBadge(regInfo).closed ? 'bg-black/70 text-white/80'
-                : liveBadge(regInfo).text === '등록 가능' ? 'bg-emerald-700 text-white'
+              status === 'ended' || badge.closed ? 'bg-black/70 text-white/80'
+                : badge.text === '등록 가능' ? 'bg-emerald-700 text-white'
+                // 추론 배지는 흰 바탕·검은 글자(중립). 빨강은 '지금 뛰고 있다'는 실측에만 남긴다.
+                : inferred ? 'bg-white/85 text-black'
                 : 'bg-danger-dark text-white',
             ].join(' ')}>
-              {status === 'ended' ? '종료' : liveBadge(regInfo).text}
+              {status === 'ended' ? '종료' : badge.text}
             </span>
           )}
         </div>

@@ -1705,7 +1705,15 @@ function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => vo
         <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.06] p-3 space-y-2">
           <p className="text-sm font-bold text-accent-300">이런 효과가 있어요</p>
           <ul className="space-y-1 text-sm leading-relaxed text-ink-secondary">
-            <li>· 내 포스터가 일정탐색 <b className="text-ink-primary">맨 위에 고정</b>됩니다</li>
+            <li>· 같은 시간대 일정 중에서 <b className="text-ink-primary">맨 앞</b>에 표시됩니다</li>
+            {/* 🔴 2026-09-21 — 문구를 사실에 맞췄다. 종전 "일정탐색 맨 위에 고정" 은 거짓이었다:
+                `src/lib/scheduleSort.ts:15-16` 의 `compareByStartThenBoost` 는
+                  (a.date + a.startTime).localeCompare(...) || Number(b.isPremium) - Number(a.isPremium)
+                이라 부스트는 **날짜·시각이 완전히 같을 때의 동점 처리**일 뿐이다.
+                다음 주 부스트 포스터는 오늘 게임 아래에 그대로 남는다.
+                문의를 열기 전에 먼저 고친다 — 돈을 받으면 과다·허위 고지가 되기 때문이다
+                (src/lib/thirdPartyDisclosure.test.ts:44 "과다 고지도 위법 소지다" · 전자상거래법 §21①1).
+                진짜 "맨 위 고정" 을 팔려면 정렬 계약부터 바꿔야 한다 — 그건 별도 요구 키다. */}
             <li>· 제목에 <b className="text-accent-300">TOP 뱃지</b>가 붙어 눈에 띕니다</li>
             <li>· 기간은 <b className="text-ink-primary">3 / 7 / 14 / 30일</b> 중 선택, 끝나면 자동 해제</li>
           </ul>

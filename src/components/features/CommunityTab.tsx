@@ -1202,11 +1202,11 @@ function VenuesSection({
           활성은 액센트 색+굵기만으로 표시(정렬 안내줄과 같은 텍스트 문법). */}
       {/* 44px 탭 타깃(오너 승인 2026-09-03): 버튼 h-11, 레일 -my-2.5 로 원래 24px 행 높이 유지.
           부모 space-y-3 이 자식 margin 을 덮어쓰므로 h-6 래퍼 안에서 상쇄한다. */}
-      <div data-main-enter className="h-6">
-      <div className="-my-2.5 flex items-center gap-3 overflow-x-auto scrollbar-none -mx-page-x px-page-x">
+      <div data-main-enter className="relative z-10 h-6">
+      <div className="-my-2.5 flex items-center gap-0.5 overflow-x-auto scrollbar-none -mx-page-x px-page-x">
         {VENUE_FILTERS.map((f) => (
           <button key={f.key} type="button" onClick={() => setKindFilter(f.key)}
-            className={['shrink-0 inline-flex h-11 items-center whitespace-nowrap text-xs transition-colors',
+            className={['shrink-0 inline-flex h-11 min-w-[44px] items-center justify-center whitespace-nowrap text-xs transition-colors',
               kindFilter === f.key ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-primary'].join(' ')}>
             {f.label}
           </button>

@@ -9,7 +9,7 @@ import { isScheduleLiked, toggleScheduleLike } from '../../api/calendar';
 import StatefulActionButton from '../atoms/StatefulActionButton';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 import { getMyReservation, createReservation, cancelMyReservation, getOwnerReservations, type Reservation, type OwnerReservation } from '../../api/reservations';
-import { prizeMainText, prizeParts, buyInText } from './ScheduleCard';
+import { prizeMainText, prizeParts, buyInText, liveBadge } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import { scheduleStatus } from '../../lib/scheduleStatus';
 import { matchClockScheduleDetailed, msToRegClose, type RegInfo } from '../../lib/regStatus';
@@ -148,6 +148,10 @@ export default function ScheduleDetailModal({
   // 내려온다 — 즉 클락이 실재한다는 증거다. 이걸 전제로 삼아야 (a) 포스터를 열 때마다 clock 조회를
   // 날리지 않고 (b) 패널을 첫 페인트부터 그려 '요약 → 패널' 교체 CLS 가 아예 생기지 않는다.
   const liveShown = !!regInfo && !!schedule.venueId && status !== 'ended';
+  // 🔴 15-ⓐ(2026-09-21) — 배지 문구는 ScheduleCard 의 liveBadge() 가 정본이다.
+  //   그전까지 이 모달은 클락 매칭이 없어도 '진행 중' 이라 단정했고, 같은 대회를 그리드 카드는
+  //   '시작 시각 지남' 으로 불러 **두 화면이 서로 다르게 말했다.** 판정을 한 곳으로 모은다.
+  const badge = liveBadge(regInfo);
 
   return (
     <Modal open={open} onClose={onClose} maxWidth="6xl" variant="page" inline={inline}>
@@ -223,15 +227,16 @@ export default function ScheduleDetailModal({
               {status !== 'upcoming' && (
                 <span className={[
                   'rounded-badge px-2 py-0.5 text-xs font-bold leading-none',
-                  status === 'ended' || (regInfo && regInfo.msLeft === 0) ? 'bg-black/70 text-white/85'
-                    : regInfo && regInfo.msLeft !== null ? 'bg-emerald-600 text-white'
+                  status === 'ended' || badge.closed ? 'bg-black/70 text-white/85'
+                    : !regInfo ? 'bg-white/85 text-black'
+                    : badge.text === '등록 가능' ? 'bg-emerald-600 text-white'
                     : 'bg-danger text-white',
                 ].join(' ')}>
                   {status === 'ended' ? '종료'
                     // [D] '등록 마감' — 바로 옆 분기가 이미 '등록 가능'을 쓴다. 같은 배지 안에서 '레지'·'등록' 이 섞여 있었다.
-                    : regInfo && regInfo.msLeft === 0 ? '진행 중 · 등록 마감'
-                    : regInfo && regInfo.msLeft !== null ? '진행 중 · 등록 가능'
-                    : '진행 중'}
+                    : !regInfo ? badge.text
+                    : badge.text === '진행 중' ? '진행 중'
+                    : `진행 중 · ${badge.text}`}
                 </span>
               )}
               {schedule.isPremium && (
