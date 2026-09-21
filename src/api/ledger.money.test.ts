@@ -59,6 +59,26 @@ describe('단순 결제 · 할인 없음', () => {
     expect(nonSplitSnapshot('card', 0, SESSION).card_amount).toBe(100_000);
   });
 
+  // 🔴 2026-09-21 뮤테이션 생존자 — `ledger.ts` 의
+  //   `if (method !== 'cash' && method !== 'card' && method !== 'transfer') return z;` 를
+  //   `===` 로 뒤집어도 **테스트가 전부 통과했다**. 여기서 잠근다.
+  //   PaymentMethod 는 'ticket' | 'cash' | 'transfer' | 'card' | 'support' 다 —
+  //   **이용권·가게지원 바인은 돈이 오가지 않으므로 금액 칸이 전부 0 이어야 한다.**
+  //   가드가 뒤집히면 이용권 바인이 현금 금액으로 기록돼 **장부 매출이 부풀려진다.**
+  it('🔴 이용권·가게지원 바인은 금액 스냅샷이 전부 0 이다(매출로 새지 않는다)', () => {
+    for (const m of ['ticket', 'support'] as const) {
+      const snap = nonSplitSnapshot(m, 0, SESSION);
+      expect(snap, `${m} 바인이 금액을 기록했다 — 장부 매출이 부풀려진다`)
+        .toEqual({ cash_amount: 0, card_amount: 0, transfer_amount: 0 });
+    }
+  });
+
+  it('양성 대조 — 현금·카드·계좌이체는 금액이 실제로 들어간다(가드가 과하게 막지 않는다)', () => {
+    expect(nonSplitSnapshot('cash', 0, SESSION).cash_amount).toBe(100_000);
+    expect(nonSplitSnapshot('card', 0, SESSION).card_amount).toBe(100_000);
+    expect(nonSplitSnapshot('transfer', 0, SESSION).transfer_amount).toBe(100_000);
+  });
+
   it('가게지원 = 매출·미수 0이지만 엔트리 1 (참가로 집계)', () => {
     const f = buyinFinance(buyin({ paymentMethod: 'support' }), SESSION);
     expect(f).toMatchObject({ paid: 0, unpaid: 0, entry: 1, support: 1 });
