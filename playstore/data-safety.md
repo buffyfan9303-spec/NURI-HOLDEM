@@ -6,7 +6,7 @@
 
 ## 결론
 
-코드 실측 결과, 이 앱은 Play 데이터 보안 14개 카테고리 중 7개(개인 정보·메시지·사진 및 동영상·앱 활동·앱 정보 및 성능·기기 또는 기타 ID·금융 정보 일부)에서 '수집함'이고, 그중 3개는 서드파티 전송(=Play 정의의 '공유')이 실제로 일어난다(Google Analytics G-9T7JZNEQE8 · Sentry · Resend · Gemini). 중요한 정정 두 가지: (1) 앱 안에 실제 결제 호출이 0건이다 — PortOne 은 `requestIdentityVerification` 본인인증 전용이고 `requestPayment` 는 코드 전체에 없다. 포인트 상점(buy_mark·buy_shout 등)은 활동 점수 소비라 '결제 정보'는 수집하지 않는다. (2) 위치는 `navigator.geolocation` 을 읽지만 좌표가 기기 밖으로 나가지 않는다(하버사인 거리 계산이 전부 클라이언트) — Play 정의상 '수집 안 함'이다. 다만 GA4 가 IP 로 대략적 위치를 파생시키므로 그 한 줄은 오너 판단이 필요하다. 양식 통과의 실제 병목은 데이터 유형이 아니라 삭제 요건이다: 인앱 탈퇴(`withdraw_my_account`)는 구현돼 있으나 앱 설치 없이 접근 가능한 **웹 계정 삭제 요청 URL 이 없다** — Play 는 이 URL 을 별도 입력란으로 요구하고 미제출 시 반려된다. 부수적으로 주간 이메일 발송 대상 SQL 이 마케팅 수신 동의를 전혀 보지 않아, 이미 라이브인 개인정보처리방침의 '수신 동의자 한정' 문구와 코드가 어긋나 있다.
+코드 실측 결과, 이 앱은 Play 데이터 보안 14개 카테고리 중 7개(개인 정보·메시지·사진 및 동영상·앱 활동·앱 정보 및 성능·기기 또는 기타 ID·금융 정보 일부)에서 '수집함'이고, 그중 3개는 서드파티 전송(=Play 정의의 '공유')이 실제로 일어난다(Google Analytics G-VKG80J56CG · Sentry · Resend · Gemini). 중요한 정정 두 가지: (1) 앱 안에 실제 결제 호출이 0건이다 — PortOne 은 `requestIdentityVerification` 본인인증 전용이고 `requestPayment` 는 코드 전체에 없다. 포인트 상점(buy_mark·buy_shout 등)은 활동 점수 소비라 '결제 정보'는 수집하지 않는다. (2) 위치는 `navigator.geolocation` 을 읽지만 좌표가 기기 밖으로 나가지 않는다(하버사인 거리 계산이 전부 클라이언트) — Play 정의상 '수집 안 함'이다. 다만 GA4 가 IP 로 대략적 위치를 파생시키므로 그 한 줄은 오너 판단이 필요하다. 양식 통과의 실제 병목은 데이터 유형이 아니라 삭제 요건이다: 인앱 탈퇴(`withdraw_my_account`)는 구현돼 있으나 앱 설치 없이 접근 가능한 **웹 계정 삭제 요청 URL 이 없다** — Play 는 이 URL 을 별도 입력란으로 요구하고 미제출 시 반려된다. 부수적으로 주간 이메일 발송 대상 SQL 이 마케팅 수신 동의를 전혀 보지 않아, 이미 라이브인 개인정보처리방침의 '수신 동의자 한정' 문구와 코드가 어긋나 있다.
 
 
 
@@ -15,7 +15,7 @@
 - **[blocker]** Play 는 계정 생성이 가능한 앱에 대해 '앱 설치 없이 접근 가능한 웹 계정·데이터 삭제 요청 URL' 을 데이터 보안 양식에 반드시 입력하게 한다. 이 저장소의 public/legal 에는 anti-gambling·marketing·privacy·refund·terms 5종만 있고 삭제 요청 페이지가 없다. 인앱 탈퇴만으로는 요건을 못 채운다.
   · 출처: `public/legal/ 디렉터리 목록(5개 html) · grep 'delete-account|account-deletion|계정 삭제' → 앱 코드에 라우트 0건 · PLAYSTORE.md:45`
 
-- **[high]** Google Analytics 4(측정 ID G-9T7JZNEQE8)가 조건 없이 로드된다. GA4 는 IP 로부터 대략적 위치(국가·도시)와 클라이언트 ID(기기 식별자)를 파생시키므로, 최소한 '기기 또는 기타 ID'와 '앱 활동 > 앱 상호작용'은 수집+공유(분석 목적)로 기재해야 한다. 사용자 옵트아웃 UI 는 앱에 없다(브라우저 쿠키 차단만 안내).
+- **[high]** Google Analytics 4(측정 ID G-VKG80J56CG)가 조건 없이 로드된다. GA4 는 IP 로부터 대략적 위치(국가·도시)와 클라이언트 ID(기기 식별자)를 파생시키므로, 최소한 '기기 또는 기타 ID'와 '앱 활동 > 앱 상호작용'은 수집+공유(분석 목적)로 기재해야 한다. 사용자 옵트아웃 UI 는 앱에 없다(브라우저 쿠키 차단만 안내).
   · 출처: `src/main.tsx:77 (googletagmanager 스크립트 주입) · index.html:28-31 (gtag config) · src/pages/legal/PrivacyPolicy.tsx:109,271`
 
 - **[high]** Sentry 는 VITE_SENTRY_DSN 이 설정된 경우에만 동적 로드되며, 켜져 있으면 오류 스택·브라우저 정보·IP 가 미국 Sentry 로 전송된다. 세션 리플레이는 0으로 꺼져 있다. 실제 프로덕션에서 DSN 이 설정돼 있는지는 코드로 확인 불가 — 오너가 Vercel 환경변수에서 확인해야 양식의 '공유' 체크가 정확해진다.
@@ -197,7 +197,7 @@
 | 전송처 | 무엇을 보내는가 | 근거 |
 |---|---|---|
 | Supabase (AWS 서울 ap-northeast-2) | 1차 저장소 — 서드파티 '공유'가 아니라 처리 위탁(인프라). Play 양식에서는 공유로 세지 않음 | PrivacyPolicy.tsx:172 |
-| Google Analytics 4 (`G-9T7JZNEQE8`) | 앱 상호작용 이벤트, 클라이언트 ID, IP 파생 대략 위치 | main.tsx:77 · index.html:28-31 |
+| Google Analytics 4 (`G-VKG80J56CG`) | 앱 상호작용 이벤트, 클라이언트 ID, IP 파생 대략 위치 | main.tsx:77 · index.html:28-31 |
 | Google Gemini | 순위 인증 **증빙** 이미지(신분증 제외), 핸드 분석 텍스트, 매장 주간 요약 | gemini/index.ts:70 · rankverify.ts:148-175 |
 | Sentry (미국) | 오류 스택·브라우저 정보·IP. **DSN 설정 시에만** | monitoring.ts:12,60-70 |
 | Resend (미국) | 이메일 주소·닉네임(주간 다이제스트·제재 안내) | weekly-email-digest/index.ts:44 · notify-sanction/index.ts:89 |

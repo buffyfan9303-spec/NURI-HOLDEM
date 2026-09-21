@@ -105,7 +105,7 @@ createRoot(document.getElementById('root')!).render(
 //    수동 <ins class="adsbygoogle"> 슬롯으로 넣을 것. (누리 마인드 AdSlot 패턴 참고)
 function loadThirdParty() {
   const srcs = [
-    'https://www.googletagmanager.com/gtag/js?id=G-9T7JZNEQE8',
+    'https://www.googletagmanager.com/gtag/js?id=G-VKG80J56CG',
   ];
   for (const src of srcs) {
     if (document.querySelector(`script[src="${src}"]`)) continue;

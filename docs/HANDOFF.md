@@ -92,7 +92,107 @@ npx tsc -b --force                # rc=0 이어야 한다
 ---
 
 
-## 0-a19. 2026-09-21 낮 · Opus 5 팀 — **FINAL-UX 4건 · FINAL-QR 3건 구현 + 배포** (여기가 가장 최신)
+## 0-a20. 2026-09-21 오후 · Opus 5 — **오너 결정 33건 수집·반증 → 보안·DB 묶음 적용** (여기가 가장 최신)
+
+오너 요구: "결정이 필요한 모든 부분 줘 — 반증도 같이". 워크플로로 6개 출처를 병렬로 훑어
+**55건 수집 → 의미 중복 제거 33건 → 검증자가 '지금도 열려 있는가'를 재판정(6건은 이미 해결이라 제외)**.
+각 항목에 권고와 **그 권고가 틀릴 수 있는 이유(반증)** 를 붙였다. 반증 강함 8건.
+
+문항지(라디오 + 답 문자열 복사): claude.ai 아티팩트 `누리홀덤 결정 문항지`
+결정 원본 데이터: `%TEMP%\claude\…\scratchpad\merged.json`(33건 전문) · `quiz.json`
+
+### 오너가 답한 33건 — 전부 `docs/plans/BLOCKED.md` 해당 행에 반영했다
+
+제 권고와 **다른 선택 5건**(오너 판단이 더 나았던 것 포함):
+
+| # | 오너 | 내 권고 | 왜 다른가 |
+|---|---|---|---|
+| 3 로티아레나 | ⓒ 캡처 규칙만 | ⓐ 서면 허락 | 내 반증을 채택 — 공개 저장소라 로고가 커밋 이력에 영구히 박혀 있어, 메일은 "모르고 넘어갈 상태"를 "제거 요구가 가능한 상태"로 바꾼다 |
+| 8 더미데이터 | ⓓ 유지+숨김 | ⓐ 일정만 삭제 | 내 반증을 채택 — 지우면 게이트가 조용히 꺼진다 (⚠ 아래 참고: **숨겨도 꺼졌다**) |
+| 22 Storage 백업 | ⓐ service_role 자동 | ⓑ 수동 | 보안 강화 필요 — 아래 경계 참고 |
+| 25 부스트 연락처 | ⓐ 값 넣어 연다 | ⓑ 버튼 숨김 | 4-ⓐ와 짝. 사업자 정보의 연락처를 쓰기로 함 |
+| 26 라이선스 게이트 | ⓐ CI 자동 커밋 | ⓑ 수동 | 내 반증을 채택 — 수동은 26일간 안 돌아간 전례가 있다 |
+
+### ✅ 이번에 적용한 것 (보안·DB 묶음)
+
+| 요구 | 내용 | 증거 |
+|---|---|---|
+| **7 can_manage_pos** | 제재 deny-list 한 절 추가 | md5 `37ac7f47…` → **`e72e0404…`** · `20260921c_pos_sanction_gate.sql` |
+| **7-ⓐ accrue_voucher** | 옛 clamp 제거 · NULL 보유자 거절 · 범위 거절 | md5 `6c8b4df8…` → **`71feb09e…`** · `20260921d_accrue_voucher_guards.sql` |
+| **8-ⓓ 더미 일정** | 7행 보존, 승인 0건으로 내림 | `UPDATE` 한 번으로 복구 가능 |
+| **GA** | 측정 ID `G-9T7JZNEQE8` → `G-VKG80J56CG` | `index.html:31` · `src/main.tsx:108` · `playstore/data-safety.md` |
+| **12-ⓑ** | 이용권→방문 분리 설계 SQL 커밋 | `20260921b_…sql` **⛔ 미적용 표기** |
+| **1·2 (BLOCKED #1·#18)** | 유권해석 의뢰 초안 | `docs/legal/유권해석-의뢰-2026-09-21.md` |
+
+`can_manage_pos` 리허설 실측(라이브 `begin;…rollback;`) — **음성 대조가 패치 전에 빨간 것을 확인했다**:
+
+| 상태 | 패치 전 pos | 패치 후 pos |
+|---|---|---|
+| active | true | true |
+| **banned** | **true** | **false** |
+| **suspended** | **true** | **false** |
+| **withdrawn** | **true** | **false** |
+| suspended(기간 지남) | true | true |
+| pending(승인 대기) | true | true ← 제재가 아니므로 의도적으로 통과 |
+| admin · 로티업주(양성) | true | **true** |
+| 비로그인 | false | false |
+
+ACL 보존 확인: `{=X/postgres, postgres=X, authenticated=X, service_role=X}` — RLS 정책 29개가 이 함수를 부르므로
+**회수하면 안 된다.** `accrue_voucher` 는 반대로 `{postgres=X, service_role=X}` 유지(anon·authenticated 실행 불가).
+보안 어드바이저: 총 4건 · **ERROR 0**.
+
+### 🔴 8-ⓓ 의 실측 결과 — 숨겨도 게이트는 꺼졌다
+
+오너가 ⓓ(삭제 대신 숨김)를 고른 이유는 "지우면 게이트가 조용히 꺼진다"였다. **그런데 같은 일이 났다.**
+라이브 실측: `schedules` 7행이 **전부 더미**이고 실제 일정은 0건이라, 삭제든 숨김이든 손님 화면은 0건이 된다.
+
+게이트 전후 비교(같은 커밋, 같은 스펙):
+```
+직전  658 passed / 16 skipped
+이번  655 passed / 20 skipped   ← 4건이 통과 → 건너뜀
+```
+**게이트는 빨개지지 않고 조용히 줄어든다.** ⓓ가 ⓐ보다 나은 점은 남아 있다(행이 보존돼 되돌릴 수 있고
+`--card-h-list` 높이 근거가 살아 있다). 하지만 **게이트 문제는 별개로 고쳐야 한다** —
+라이브 데이터에 의존하는 그 4개 스펙을 `page.route` 목킹으로 독립시키는 것이 8번 결정의 진짜 마무리다.
+
+### 🔴 MCP 로 데이터를 쓰면 조용히 되돌려진다 (오늘 두 번 당했다)
+
+`UPDATE`가 "6행 변경"을 보고했는데 다시 조회하면 그대로였다. **오류 없음.**
+원인은 `schedules` 의 BEFORE 트리거 `prevent_self_approve_poster()`:
+```sql
+if public.my_role() is distinct from 'admin'::user_role then
+  new.approved := old.approved;   -- raise 가 아니라 조용히 되돌린다
+```
+MCP 연결은 `postgres`(`rolbypassrls=true`, 읽기전용 아님)지만 **JWT 가 없어 `auth.uid()` 가 NULL**
+→ `my_role()` 이 NULL → `NULL is distinct from 'admin'` 이 **참** → 가드 발동.
+
+**대처**: 같은 문장 배치(DO 블록) 안에서 `set_config('request.jwt.claims', …, true)` 로 관리자 가장.
+그리고 **쓰기 뒤에는 반드시 별도 호출로 다시 읽어라** — 같은 문장 안의 `select` 는 문장 시작 스냅샷이라
+변경 전 값을 보여 준다(이것도 같은 날 헷갈렸다). DDL 은 되는데 DML 만 안 되면 **트리거를 먼저 의심해라.**
+
+### 남은 것 — 다음 사람이 이어받을 순서
+
+1. **UX 문구 5건**(6·14·15·19·29) — 팀 위임 예정.
+   ⚠ **15번은 grep 만 보고 고치지 마라.** `ScheduleCard.tsx:313` 의 `'진행 중'` 은 클락 추론이 아니라
+   **`regInfo` 부재 시 폴백**이다. 문구를 바꾸면 등록 정보가 없는 **모든 정상 카드**의 뜻이 바뀐다.
+   ⚠ **29번은 문자 그대로 하면 틀린다.** SPR 의 팟은 '상대 벳 포함'이 아니다(스트리트 시작 기준).
+   팟오즈 문구를 복사하면 계산 전제가 반대로 적힌다 → `현재 팟(벳 전)` 쪽이 맞다.
+   ⚠ **6번의 문자 그대로의 대상('총 회수액')은 화면에 없다** — 주석에만 있다.
+   실제 §28 위반은 `CalendarPanel.tsx:633` 의 **'수익'** 하나다(§28 카피 원칙이 이름으로 금지한 낱말).
+2. **인프라 3건** — 20(Tailwind 3.4 고정) · 22(Storage 백업) · 26(Dependabot 라이선스)
+   🔴 **22·26 은 공개 저장소라 위험이 실재한다.**
+   · 22: `service_role` 은 **오너가 직접** `gh secret set`(값을 에이전트에게 주지 마라).
+     워크플로는 `schedule`+`workflow_dispatch` 전용, `pull_request` 에 붙이지 않는다.
+     **Actions 아티팩트 업로드 금지**(§9-1 — 공개 저장소라 누구나 받는다). R2 로만.
+   · 26: Dependabot PR 에 `contents: write` 를 주면 **새 의존성의 install 스크립트가 쓰기 토큰과 함께 실행**된다.
+     `npm ci --ignore-scripts` + 같은 저장소 브랜치 + `dependabot[bot]` 조건으로 좁혀라.
+3. **10-ⓑ** `gto-explain` 410 스텁 — **배포 본문을 저장소에 먼저 보존**한 뒤에.
+4. **측정 먼저 4건** — 16(PC E2E) · 18(G12 열 수 실측) · 23(이용권 레일 한계 실측) · 24(로그아웃 범위)
+5. **오너 몫** — Sentry DSN(`VITE_SENTRY_DSN`) · 유권해석 의뢰서 검토·발송 · 22번 secret
+
+---
+
+## 0-a19. 2026-09-21 낮 · Opus 5 팀 — **FINAL-UX 4건 · FINAL-QR 3건 구현 + 배포** (최신은 위 §0-a20)
 
 원천: `.claude/handoff/NURI-OPUS5-FINAL-UX-QR-CONNECTION-EXECUTION-2026-09-21.md`(미추적 — 위 절대 경로에 실재).
 기준 HEAD `5d09d86`. 요구 키는 그 문서의 `FINAL-UX#*` · `FINAL-QR#*` 다.
