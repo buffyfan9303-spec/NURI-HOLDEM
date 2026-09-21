@@ -1,0 +1,15 @@
+{
+  // 🔴 2026-09-21 신설 — e2e/ 는 **어떤 타입 검사도 받지 않고 있었다.**
+  //   tsconfig.app.json 은 `include: ["src"]`, tsconfig.node.json 은 vite.config.ts 뿐이라
+  //   `tsc -b` 가 e2e 를 아예 안 봤다. eslint 는 타입 검사를 안 하고, Playwright 는 타입을 지우고 실행한다.
+  //   그래서 `import { type Page, type Route }` 가 통째로 사라진 파일이 main 에 들어가고 CI 도 초록이었다.
+  //   → 이 파일을 tsconfig.json 의 references 에 넣어 **기존 `tsc -b` 게이트를 그대로 타게** 한다
+  //     (CI 에 새 단계를 추가하지 않는다 — npm run build 가 이미 tsc -b 를 돈다).
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    // Playwright 스펙은 Node 에서 돈다(Buffer·process). page.evaluate 안은 DOM 이라 app 의 lib 를 그대로 쓴다.
+    "types": ["node"],
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo"
+  },
+  "include": ["e2e"]
+}

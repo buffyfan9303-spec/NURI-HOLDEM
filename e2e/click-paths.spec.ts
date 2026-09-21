@@ -1,4 +1,6 @@
-import { test, expect, type Page } from './_fixtures';
+import { test, expect } from './_fixtures';
+// `_fixtures` 는 test·expect·READ_ONLY_RPCS·isAllowedRequest 만 export 한다 — 타입은 원본에서 받는다.
+import { type Page } from '@playwright/test';
 
 // 클릭 경로 감사 — "눌렀을 때 **의도한 화면**으로 가는가"(오너 지시 2026-09-06).
 //

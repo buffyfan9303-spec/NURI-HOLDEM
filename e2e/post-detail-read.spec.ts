@@ -78,7 +78,11 @@ const READER_SESSION = {
   user: { id: READER_UID, aud: 'authenticated', role: 'authenticated', email: 'reader@example.com', app_metadata: {}, user_metadata: { name: '읽는사람' }, created_at: '2026-01-01T00:00:00Z' },
 };
 
-async function install(page: Page, baseURL: string, opts: { loggedIn?: boolean } = {}) {
+async function install(page: Page, baseURL: string | undefined, opts: { loggedIn?: boolean } = {}) {
+  // Playwright 픽스처의 baseURL 은 `string | undefined` 다. 예전엔 `string` 으로 받아
+  //   호출부 6곳이 전부 타입 오류였는데 **e2e 는 tsc 대상이 아니라 아무도 못 봤다**(§0-a22).
+  //   없으면 `new URL(undefined)` 가 알 수 없는 TypeError 를 던진다 — 여기서 크게, 말이 되게 실패시킨다.
+  if (!baseURL) throw new Error('baseURL 이 없다 — playwright.config 의 use.baseURL 또는 E2E_BASE_URL 을 확인해라');
   const ORIGIN = new URL(baseURL).origin;
   const POSTER = ORIGIN + POSTER_PATH;
   const j = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });

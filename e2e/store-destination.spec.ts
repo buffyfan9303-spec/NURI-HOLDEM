@@ -10,6 +10,11 @@
 //   이 스펙은 거기에 더해 '미마감 지난 장부' 조회 **응답만** 갈아끼운다 — 쓰기는 하지 않는다.
 import { test, expect } from './_fixtures';
 import { bootOwner as bootMockOwner, openMyStore as openMockStore } from './_mockOwner';
+// 🔴 2026-09-21 — 이 줄이 목킹 전환 중에 지워져 파일 안 지역 bootOwner 의 `Page`·`Route` 가
+//   **미정의 이름**이 됐다. 그런데 어떤 게이트도 안 잡았다: `tsc -b` 는 tsconfig 가
+//   `src` 만 include 해서 e2e 를 **아예 안 본다**, eslint 는 타입 검사를 안 한다,
+//   Playwright 는 타입을 지우고 실행한다. → docs/HANDOFF.md §0-a22 의 'e2e 타입 사각지대'.
+import { type Page, type Route } from '@playwright/test';
 
 // 오늘과 확실히 다른 과거 + 사이드2. 메인(1)으로 뭉개지거나 오늘로 떨어지면 즉시 드러난다.
 const STALE_DATE = '2026-08-11';

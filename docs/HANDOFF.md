@@ -323,6 +323,53 @@ gto-team 이 18-ⓐ 를 "열 수 축소만으로는 닿지 않는다 → '입력
 **안쪽 컨테이너가 스크롤**한다. 스크롤을 전제로 하는 측정은 그 컨테이너를 찾아서 움직여야 한다.
 
 
+### 🔴 e2e 타입 사각지대 — **`e2e/` 는 어떤 타입 검사도 받지 않고 있었다**
+
+오늘 마지막에 드러났다. `store-destination.spec.ts` 를 목킹으로 전환하며
+`import { type Page, type Route } from '@playwright/test';` 가 통째로 지워졌는데,
+파일 안 지역 `bootOwner` 헬퍼가 그 두 타입을 쓴다. **그런데 아무 게이트도 안 잡았다:**
+
+| 게이트 | 결과 | 왜 못 잡나 |
+|---|---|---|
+| `npx tsc -b --force` | **rc=0** | `tsconfig.app.json` 은 `include: ["src"]`, `tsconfig.node.json` 은 `vite.config.ts` 뿐 — **e2e 를 아예 안 본다** |
+| `npx eslint` | rc=0 | 타입 검사를 하지 않는다 |
+| `playwright test` | 5 passed | 타입을 **지우고** 실행한다 |
+| CI (`build-and-e2e`) | success | 위 셋의 합이다 |
+
+🔴 **그래서 오늘 store-team 의 "tsc RC=0" 도, 스펙을 고친 뒤 내가 돌린 "tsc rc=0" 도 전부 공허했다.**
+그 파일을 **한 번도 검사한 적이 없다.** 하루 종일 '아무것도 안 재는 게이트' 를 찾았는데
+**내 검증 절차 자체가 그것이었다.**
+(CLAUDE.md 에 이미 같은 부류가 적혀 있다: *"`npx tsc --noEmit` 이 루트 tsconfig `files: []` 때문에
+0개를 검사하고 exit 0 을 준 적이 있다"* — 그때는 src 였고 이번엔 e2e 다.)
+
+### 고친 것
+
+실측하니 e2e 전체 타입 오류는 **16건 · 4파일**뿐이라 정리할 만했다.
+
+| 파일 | 건수 | 내용 |
+|---|---|---|
+| `store-destination.spec.ts` | 8 | **오늘 생긴 회귀** — 사라진 `type Page`·`type Route` import 복구 |
+| `post-detail-read.spec.ts` | 6 | `baseURL` 은 Playwright 픽스처상 `string \| undefined` 다. `install()` 시그니처 한 곳을 고쳐 6건 해소 + 없을 때 **말이 되는 오류**를 던지게 했다(예전엔 `new URL(undefined)` 가 알 수 없는 TypeError) |
+| `click-paths.spec.ts` | 1 | `type Page` 를 `./_fixtures` 에서 import — 그 모듈은 `test`·`expect`·`READ_ONLY_RPCS`·`isAllowedRequest` 만 export 한다 |
+| `mobile-tab-transition.spec.ts` | 1 | 아래 ⚠ |
+
+⚠ **`test.use({ reducedMotion: 'no-preference' })` 는 런타임에 아무것도 하지 않는다(실측).**
+`reducedMotion` 은 `playwright-core` 의 **브라우저 컨텍스트** 옵션이고 `playwright/types/test.d.ts` 의
+테스트 옵션에는 없다. 실험으로 확정했다 — `'reduce'` 를 줘도
+`matchMedia('(prefers-reduced-motion: reduce)').matches` 가 **false**(기본값과 동일)였다.
+즉 스펙은 "모션 설정을 고정했다" 고 믿었지만 **고정한 적이 없다.** 기본값이 마침 no-preference 라 동작은 그대로였다.
+→ 죽은 줄을 지우고 이유를 적었다. **나중에 `reduce` 가 정말 필요하면** `test.use` 말고
+config 의 `contextOptions` 나 `browser.newContext({ reducedMotion: 'reduce' })` 로 줘야 한다.
+
+### 게이트를 세웠다 — **CI 에 새 단계는 0개**
+
+`tsconfig.e2e.json` 을 만들고 `tsconfig.json` 의 `references` 에 한 줄 더했다.
+`npm run build` 가 이미 `tsc -b` 를 돌고 **CI 가 그 build 를 돌므로**, e2e 가 기존 게이트를 그대로 탄다.
+
+**음성 대조**: 방금 고친 import 를 다시 지우니 `tsc -b --force` 가 **rc=2 · 8오류**로
+`e2e/store-destination.spec.ts(182,32): Cannot find name 'Page'` 를 정확히 가리켰다. 복원 후 바이트 동일 확인.
+
+
 ### 배포 실측 절차 — **"CI 초록"도 "Vercel READY"도 배포 완료가 아니다**
 
 오늘 오너 결정 6종이 운영에 닿았는지 확인하며 세 번 반복한 절차다. 다음 사람은 그냥 따라 하면 된다.

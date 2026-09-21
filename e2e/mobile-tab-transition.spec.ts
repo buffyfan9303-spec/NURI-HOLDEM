@@ -6,7 +6,13 @@
 import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack } from './_session';
 
-test.use({ reducedMotion: 'no-preference' });
+// 🔴 2026-09-21 실측 — 여기 있던 `test.use({ reducedMotion: 'no-preference' })` 를 지웠다.
+//   **런타임에 아무것도 하지 않는다**: `reducedMotion` 은 playwright-core 의 *브라우저 컨텍스트* 옵션이고
+//   `playwright/types/test.d.ts` 의 테스트 옵션에는 없다. 실험: `'reduce'` 를 줘도
+//   `matchMedia('(prefers-reduced-motion: reduce)').matches` 가 **false** 였다(기본값과 동일).
+//   즉 '모션 설정을 고정했다' 고 믿게 만드는 죽은 줄이었다. 기본값이 마침 no-preference 라 동작은 그대로다.
+//   ⚠ 나중에 `reduce` 가 정말 필요하면 `test.use` 말고 config 의 contextOptions 나
+//     `browser.newContext({ reducedMotion: 'reduce' })` 로 줘야 한다.
 
 for (const width of [390, 1023, 1024]) {
   test(`main tab snapshots at ${width}px: mobile stays live, desktop keeps transitions`, async ({ page }) => {
