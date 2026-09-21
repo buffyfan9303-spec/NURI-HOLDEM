@@ -4061,7 +4061,7 @@ export default function App() {
                   // P0-2(오너 진단): 0건 빈 일러스트가 화면 중앙을 차지하던 것 → 슬림 안내 1줄 +
                   // '지금 진행 중' 콘텐츠 승격. 아래 지난 대회·공지가 그 자리로 올라온다.
                   <div className="space-y-2">
-                    <p className="px-1 py-3 text-sm text-ink-muted">예정된 대회가 아직 없어요. 아래에서 지난 대회 결과를 볼 수 있어요.</p>
+                    <p data-testid="schedules-empty" className="px-1 py-3 text-sm text-ink-muted">예정된 대회가 아직 없어요. 아래에서 지난 대회 결과를 볼 수 있어요.</p>
                     {liveClocks.length > 0 && (
                       <button type="button" onClick={() => changeTab('live')}
                         className="flex w-full items-center gap-2.5 rounded-aura bg-surface-high px-3 py-3 text-left transition-colors hover:bg-surface-float/70">
@@ -4953,7 +4953,7 @@ function EmptyState({ filtered, onClearFilters, upcoming, filterSummary }: {
   filterSummary?: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center py-14 gap-3 text-ink-muted">
+    <div data-testid="schedules-empty" className="flex flex-col items-center justify-center py-14 gap-3 text-ink-muted">
       <svg width="48" height="48" viewBox="0 0 48 48" fill="none"
         stroke="currentColor" strokeWidth="1.5" aria-hidden>
         <circle cx="22" cy="22" r="14" />

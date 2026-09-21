@@ -1253,6 +1253,7 @@ function VenuesSection({
             <li key={venue.id}>
               <button
                 type="button"
+                data-testid="venue-card"
                 onClick={() => onSelectVenue(venue.id)}
                 className={[
                   'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-aura border transition-colors duration-[var(--dur-fast)] cursor-pointer active:bg-surface-high',

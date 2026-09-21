@@ -80,8 +80,12 @@ test.describe('첫 화면 — 앱을 막 켠 사람이 보는 것', () => {
 
     const body = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
     // 전제: 빈 화면이 실제로 나왔다. 안 나오면 아래 검사는 아무것도 재지 않는다.
-    const isEmpty = /대회가 (?:아직 )?없어요|예정 대회가 없어요/.test(body);   // ⚠ App.tsx:4064 는 '아직' 이 들어간다(2026-08-27 cd8ec73) — 이 낱말 하나로 검사가 25일간 잠들어 있었다
-    expect(isEmpty, `일정 0건으로 목킹했는데 빈 상태 문구가 없다 — 목킹이 안 걸렸거나 문구가 바뀌었다:\n${body.slice(0, 400)}`).toBe(true);
+    // 🔴 문구로 재지 않는다. 예전 정규식은 '예정된 대회가 없어요' 였는데 실제 문구엔 '아직' 이
+    //   들어가 있어(2026-08-27 cd8ec73) **낱말 하나로 이 검사가 25일간 잠들어 있었다.**
+    //   카피는 앞으로도 바뀐다 — 그래서 data-testid="schedules-empty" 로 잠근다(CLAUDE.md 처방).
+    await expect(page.getByTestId('schedules-empty').first(),
+      `일정 0건으로 목킹했는데 빈 상태가 안 나왔다 — 목킹이 안 걸렸거나 빈 상태가 사라졌다:\n${body.slice(0, 400)}`)
+      .toBeVisible({ timeout: 15_000 });
     // 빈 상태라면 반드시 (a) 다음 행동 버튼이 있거나 (b) 지난 대회로 안내해야 한다
     const hasWayOut = /조건 초기화|전체 매장 보기|지난 대회/.test(body);
     expect(hasWayOut, `빈 화면에 다음 행동이 없다 — 막다른 길:\n${body.slice(0, 500)}`).toBe(true);

@@ -25,20 +25,31 @@ import { mockSchedules } from './_schedules';
   // 매장이 하나도 없으면 이 검사는 성립하지 않으므로 호출부가 skip 한다.
   const openVenue = async (p: import('@playwright/test').Page): Promise<boolean> => {
     // 특정 매장 이름에 의존하지 않는다 — 커뮤니티 '홀덤펍' 목록의 첫 카드를 누른다.
-    // 진입 자체가 데이터(공개 매장 유무)에 좌우되므로 **어떤 단계가 막혀도 던지지 않고**
-    // false 를 돌려 호출부가 skip 하게 한다(게이트를 데이터로 빨갛게 만들지 않는다).
-    try {
-      const nav = p.getByRole('navigation', { name: '하단 내비게이션' });
-      await nav.getByRole('button', { name: '커뮤니티', exact: true }).click({ timeout: 5_000 });
-      await p.waitForTimeout(900);
-      const tab = p.getByRole('button', { name: '홀덤펍', exact: true }).first();
-      if (await tab.count()) { await tab.click({ timeout: 5_000 }); await p.waitForTimeout(900); }
-      const card = p.locator('[data-sec="venues"] button').first();
-      if (!(await card.count())) return false;
-      await card.click({ timeout: 5_000 });
-      await p.waitForTimeout(900);
-      return (await p.locator('[role="dialog"][aria-label*="매장 페이지"]').count()) > 0;
-    } catch { return false; }
+    // 🔴 2026-09-21 — 예전엔 전체를 try/catch 로 감싸 **어떤 단계가 막혀도 false** 를 돌렸다.
+    //   그러면 셀렉터가 낡아도 호출부가 '공개 매장이 없다' 며 데이터 탓을 하고 조용히 skip 한다.
+    //   이 저장소가 제일 자주 밟는 함정이다(`if (!count) return` 부류 — docs/HANDOFF.md §0-a22).
+    //   → **경로가 살아 있는지는 단언으로 잠그고**, '매장 수 0' 만 false 로 돌린다.
+    //   셀렉터도 라벨('홀덤펍') 대신 data-testid 로 좁힌다 — '홀덤펍' 은 **섹션 탭과 분류 칩**
+    //   두 곳에 있어 .first() 가 엉뚱한 것을 누를 수 있다(CommunityTab.tsx:372 · :1153).
+    const nav = p.getByRole('navigation', { name: '하단 내비게이션' });
+    await nav.getByRole('button', { name: '커뮤니티', exact: true }).click({ timeout: 10_000 });
+    const tab = p.getByTestId('sec-tab-venues');
+    await expect(tab, "커뮤니티 '홀덤펍' 섹션 탭이 없다 — data-testid=sec-tab-venues 가 사라졌다")
+      .toBeVisible({ timeout: 15_000 });
+    await tab.click();
+    const sec = p.locator('[data-sec="venues"]');
+    await expect(sec, "'홀덤펍' 섹션이 안 열렸다 — 탭을 눌렀는데 판이 안 바뀌었다").toBeVisible({ timeout: 15_000 });
+    // 여기까지 왔으면 경로는 살아 있다. 이제만 '매장 0곳' 을 데이터 조건으로 인정한다.
+    // 🔴 `sec.locator('button')` 은 쓰면 안 된다 — 이 섹션 맨 위에 분류 칩 5개
+    //   (전체·홀덤펍·딜러팀·동호회·유튜버, 44×47px)가 있어 .first() 가 '전체' 칩을 누른다.
+    //   2026-09-21 실측: 공개 매장은 3곳이나 있었는데, 칩을 누르니 매장 페이지가 안 열리고
+    //   옛 코드의 catch 가 false 를 돌려 **'공개 매장이 없다'로 위장**됐다. 게이트 2개가 그렇게 잠들었다.
+    const cards = sec.getByTestId('venue-card');
+    if ((await cards.count()) === 0) return false;
+    await cards.first().click({ timeout: 10_000 });
+    await expect(p.locator('[role="dialog"][aria-label*="매장 페이지"]'),
+      '매장 카드를 눌렀는데 매장 페이지가 안 열렸다').toHaveCount(1, { timeout: 15_000 });
+    return true;
   };
 
 
@@ -255,9 +266,13 @@ test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도
       }
     }
     await back(page);
-    const home = await currentScreen(page);
-    record({ id: 'E-2', scenario: '매장 페이지에서 back', expected: 'tab:home', got: home, blockedMs: 0, lost: 0, ok: home === 'tab:home' });
-    expect(home).toBe('tab:home');
+    const afterBack = await currentScreen(page);
+    // 🔴 2026-09-21 — 예전 기대값은 'tab:home' 이었고 변수 이름도 `home` 이었다. **틀렸다.**
+    //   openVenue 는 홈 → **커뮤니티** → 매장 페이지로 들어간다. 한 겹만 벗기면 커뮤니티다.
+    //   'tab:home' 을 기대하는 것은 back 이 두 겹을 닫으라는 뜻이라 **이 테스트 제목과 정면으로 모순**이었다.
+    //   이 검사는 셀렉터 문제로 계속 skip 돼 있어 그 모순이 드러난 적이 없었다(§0-a22).
+    record({ id: 'E-2', scenario: '매장 페이지에서 back', expected: 'tab:community', got: afterBack, blockedMs: 0, lost: 0, ok: afterBack === 'tab:community' });
+    expect(afterBack, 'back 이 매장 페이지 한 겹만 벗기지 않았다 — 들어온 커뮤니티로 돌아와야 한다').toBe('tab:community');
   });
 
   // ── ⑤ 전환 중 다른 탭 클릭 ─────────────────────────────────────────────
@@ -335,6 +350,17 @@ test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도
 
   // ── ⑧ 오버레이가 떠 있을 때 탭 이동 → 뒤로가기 ─────────────────────────
   test('매장 페이지를 연 채 다른 탭으로 이동한 뒤 back — 유령 항목 없이 직전 탭으로', async ({ page }) => {
+    // 🔴 2026-09-21 — **이 시나리오는 지금 제품에서 성립하지 않는다.** 측정으로 확인했다:
+    //   ① openVenue 는 **커뮤니티 탭을 거쳐** 매장 페이지로 들어간다. 그래서 여기서 '커뮤니티' 로
+    //      가는 것은 '다른 탭' 이 아니다(이 검사가 쓰였을 땐 홈에서 바로 열었다).
+    //   ② 매장 페이지는 `[0,0,412,839]` **전체 화면 다이얼로그라 하단 탭바를 덮는다.**
+    //      탭바 중심(206,805)의 elementFromPoint 가 다이얼로그 안의 SECTION 이다
+    //      — nav 의 z-index 50 이 dialog 40 보다 큰데도 그렇다(z-index 는 같은 쌓임 맥락에서만 겨룬다).
+    //      즉 `tap()` 의 좌표 누름이 탭바에 **닿지 않는다.**
+    //   그동안 이 모순이 안 드러난 이유는 openVenue 의 셀렉터 결함으로 **계속 skip** 돼 있었기 때문이다.
+    //   ⚠ 기대값만 고쳐 초록으로 만들면 '유령 history 항목' 이라는 **잡으려던 결함을 안 잡는 검사**가 된다.
+    //      시나리오를 다시 설계해야 한다 — docs/HANDOFF.md §0-a22 의 오너 결정 대기 항목.
+    test.fixme(true, '시나리오가 낡았다 — 탭바가 매장 오버레이에 덮여 좌표 누름이 닿지 않는다(측정 첨부)');
     const pts = await tabPoints(page);
     await tap(page, pts, 'live'); await page.waitForTimeout(600);
     await tap(page, pts, 'home'); await page.waitForTimeout(600);
