@@ -283,34 +283,25 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
           ) : (
             <div>
               <p className="mb-1 text-2xs font-bold uppercase tracking-wider text-ink-muted">Villain</p>
-              <div className="flex h-12 items-center rounded-input border border-border-strong bg-surface-high px-3">
-                <span className="text-xs font-bold text-ink-primary">{deep.villainRange.label}</span>
-                <span className="ml-1.5 text-2xs tabular-nums text-ink-muted">
-                  {Math.round(deep.villainRange.combos.reduce((s, c) => s + c.weight, 0))}콤보
-                </span>
-              </div>
+              {/* 🔴 2026-09-21 오너: 프리셋 칩 6개가 wrap 되며 'BB 수비콜' 하나만 둘째 줄에 고아로 떨어졌다
+                  ("선택 부분 클릭하면 리스트업 되서 거기서 고를 수 있게"). 칩 구름 대신 **네이티브 select** —
+                  종전의 표시 상자(라벨 · N콤보)가 그대로 선택 상자가 되고, 누르면 OS 목록(모바일은 바텀시트/휠)이
+                  뜬다. wrap 고아 문제가 구조적으로 사라지고 새 드롭다운 코드도 0 이다. 콤보 수는 옵션 글에 같이 싣는다. */}
+              <select
+                value={deep.villainRange.id}
+                onChange={(e) => deep.selectVillainRange(e.target.value)}
+                aria-label="Villain 레인지 프리셋"
+                className="input h-12 w-auto min-w-[10rem] text-xs font-bold"
+              >
+                {deep.villainRanges.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.label} · {Math.round(r.combos.reduce((s, c) => s + c.weight, 0))}콤보
+                  </option>
+                ))}
+              </select>
             </div>
           )}
         </div>
-        {deep.villainMode === 'range' && (
-          <div className="flex flex-wrap justify-center gap-1.5">
-            {deep.villainRanges.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => deep.selectVillainRange(r.id)}
-                className={[
-                  'rounded-badge border px-2 py-1 text-2xs font-bold transition-colors',
-                  deep.villainRange.id === r.id
-                    ? 'border-accent-400/60 bg-accent-300/15 text-accent-300'
-                    : 'border-border-default bg-surface-high text-ink-secondary hover:text-accent-300',
-                ].join(' ')}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        )}
         <div className="flex justify-center">
           <Section title="Board (선택)" target="board" cards={deep.board} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
         </div>

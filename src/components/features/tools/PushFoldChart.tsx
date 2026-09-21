@@ -110,6 +110,10 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
             ⚠ aria-disabled 를 **붙이지 않는다**(실측 2026-09-19): Playwright 의 click 이 aria-disabled 를 '비활성' 으로 보고
               60초 동안 기다리다 죽었다 — 자동화·보조기기가 같은 해석을 한다. 이 눈금은 aria-hidden 컨테이너 안의 장식이고
               보조기기용 상태는 위 슬라이더의 aria-valuetext("… 데이터 없음")가 이미 말한다. */}
+        {/* 🔴 2026-09-21 오너 "푸시 폴드 차트도 닫힌 부분 계산해서 적용" — elementFromPoint 9점+세로 스캔 실측(390·320):
+            셀 169·눈금 12·자리 8 중 다른 층에 가려진 것 0, 자리 44px, 셀 23.4/18px(13×13 격자 고유), **눈금 25.5px(h-6)** 만 미달.
+            → h-8(34px) + tap-y-44(±6px) = 46px. 이 행은 overflow 가 없어 오버행이 안 잘리고, 위 슬라이더 바닥 6px 만
+            눈금이 가져간다(슬라이더 주 과녁은 가운데 썸이라 영향 없음). e2e/gto-tab-verify.spec.ts 가 잠근다. */}
         <div className="flex justify-between" aria-hidden="true">
           {NASH_STACKS.map((s) => {
             const on = s === stack;
@@ -118,7 +122,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
               <button key={s} type="button" tabIndex={-1} onClick={() => setStack(s)}
                 data-stack={s} data-has-data={has ? 'true' : 'false'}
                 title={has ? undefined : `${s}bb — 이 자리(${pos.label})는 데이터가 없습니다. 눌러서 이유 보기`}
-                className={['h-6 flex-1 min-w-0 rounded-[6px] text-2xs tabular-nums leading-none whitespace-nowrap transition-colors',
+                className={['h-8 tap-y-44 flex-1 min-w-0 rounded-[6px] text-2xs tabular-nums leading-none whitespace-nowrap transition-colors',
                   on ? 'font-bold text-accent-300'
                     : has ? 'text-ink-muted hover:text-ink-secondary'
                       : 'text-ink-muted/45 underline decoration-dotted underline-offset-2 hover:text-ink-muted'].join(' ')}>

@@ -251,10 +251,14 @@ function VenueLink({
     );
   }
   return (
+    // 🔴 2026-09-21 — 이 링크의 실제 박스는 18px(글줄 하나)이다. 더미 일정 5건이 홈에 다시 뜨자 design-tokens 의
+    //   '28px 미만 히트영역' 게이트가 이 자리를 잡았다(코드 변경 0 — 일정이 0건이던 동안 잴 대상이 없어 조용히 통과했다).
+    //   tap-y-44(::before, 위아래 6px 오버행) 로 30px. `.hit`(44px 중앙 오버레이)는 아래 제목 줄을 13px 덮어
+    //   카드 탭을 매장 링크가 가로채므로 쓰지 않는다. 카드 높이(--card-h-list)는 그대로다.
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
-      className={`group ${rootCls} hover:text-accent-300 transition-colors`}
+      className={`group tap-y-44 ${rootCls} hover:text-accent-300 transition-colors`}
     >
       <span className={`${nameCls} underline decoration-dotted underline-offset-2 group-hover:text-accent-300`}>
         {pubName}

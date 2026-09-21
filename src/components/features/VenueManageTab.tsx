@@ -1361,7 +1361,13 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
   //     **음수가 되는 폭이 나오는 것**이다 — 그때만 만들면 된다(e2e/store-nav.spec.ts 의 여유
   //     하한 단언이 그 신호를 먼저 잡는다).
   //   ⚠ lg 이상은 종전 그대로다 — `lg:max-w-[9rem] lg:flex-1 lg:basis-0` 가 뒤에서 덮는다.
-  const chip = (on: boolean) => ['relative inline-flex h-[44px] w-max shrink-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:px-3 lg:text-sm',
+  // 🔴 2026-09-21 오너: "우측 공백이 많으니 칸을 채워 7개 칸으로 저 줄을 나눠서". `w-max shrink-0` 는
+  //   글자 겹침(S1)은 막았지만 칸이 내용 폭에 고정돼 오른쪽이 빈다(실측 320: 26.8px · 390: 약 27%).
+  //   → `min-w-max flex-1 basis-0`: 남는 폭을 칸이 **균등하게** 나눠 갖되 `min-w-max` 가 내용 폭 아래로는
+  //     절대 안 줄여 S1 겹침이 되살아나지 않는다. 요약·PC 이용권의 '내용 폭 고정'은 `lg:` 에서만 남긴다.
+  //   e2e/store-nav.spec.ts S1 절이 두 가지를 같이 잠근다 — 콘텐츠 여유(라벨이 늘어 넘치기 직전인가)와
+  //   실제 남는 폭(≤ 레일 패딩, 즉 우측 공백 0).
+  const chip = (on: boolean) => ['relative inline-flex h-[44px] min-w-max flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:px-3 lg:text-sm',
     on ? 'font-bold text-white' : 'font-semibold text-ink-muted hover:text-ink-secondary'].join(' ');
   return (
     <div ref={ref} data-mystore-rail=""
@@ -1377,7 +1383,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
           내용 폭(flex-none)이라 좁다: 6칸이 375 에 들어가는 건 이 칸이 40px 대이기 때문. */}
       <button type="button" role="tab" aria-selected={active === 'dashboard'} data-pill-active={active === 'dashboard' || undefined}
         onClick={onHome} title="매장 대시보드(요약)"
-        className={[chip(active === 'dashboard'), '!flex-none !basis-auto !px-2 sm:!px-3'].join(' ')}>
+        className={[chip(active === 'dashboard'), 'lg:flex-none lg:basis-auto !px-2 sm:!px-3'].join(' ')}>
         <span className="relative">요약</span>
       </button>
       {steps.map((st, i) => {
@@ -1444,7 +1450,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
            대신한다(거기서는 바가 남아야 하므로 탭이어야 한다). 둘이 동시에 보이면 한 화면에
            같은 진입점이 두 번 생긴다. PC 배치·우측 별도 버튼·아이콘은 종전 그대로다. */
         <button type="button" onClick={onVoucher} title="매장이용권"
-          className={[chip(false), 'hidden lg:ml-auto lg:inline-flex lg:shrink-0'].join(' ')}>
+          className={[chip(false), 'hidden lg:ml-auto lg:inline-flex lg:flex-none lg:basis-auto'].join(' ')}>
           <span className="relative inline-flex items-center gap-1">
             <Icon name="ticket" size={12} className="shrink-0 text-ink-muted" />이용권
           </span>

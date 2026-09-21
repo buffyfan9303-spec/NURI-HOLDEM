@@ -30,10 +30,16 @@ const VS_CAPTION: Record<RangeScenario['group'], string> = {
 };
 
 // 이 칩은 전부 overflow-x-auto 가로 스크롤 행 안에 있다(아래 세 사용처) — 그 조상이
-// overflow-y 를 함께 auto 로 만들어 tap-y-44 의 위아래 오버행이 실측(2026-09-20)에서 잘렸다.
-// 그래서 오버행이 아니라 박스 자체를 44px 로 키운다(h-8=34px → h-[44px]).
+// overflow-y 를 함께 auto 로 만들어 tap-y-44 의 위아래 오버행이 실측(2026-09-20)에서 잘렸고,
+// 그래서 한동안 박스 자체를 44px 로 키웠다(h-8 → h-[44px]).
+// 🔴 2026-09-21 오너: "버튼 pill 위아래 공백 조절" — 11.7px 글자에 44px 박스는 위아래가 16px 씩 비어 보였다.
+//   박스를 34px(h-8)로 되돌리고 44px 터치는 다시 오버행(tap-y-44, ±6px)이 맡는다. 잘림은 **레일 쪽**에서 푼다:
+//   레일에 `py-1.5 -my-1.5`(6.375px ≥ 6px) — 오버행이 스크롤 컨테이너의 패딩 박스 안에 들어와 안 잘리고,
+//   음수 마진이 그만큼 되물려 바깥 레이아웃(캡션 간격·space-y)은 종전과 같다. 레일 ① 은 CalcCard 의
+//   `space-y-3`(특이도 0,3,0 — 자식 margin 을 덮어쓴다) 직계라 래퍼 div 로 한 겹 감싼다(마진 상쇄로 12.75px 유지).
+//   e2e/gto-tab-verify.spec.ts '상황 그룹 칩 44px 유효 표적' 이 elementFromPoint 로 오버행까지 잰다.
 const chipCls = (on: boolean) =>
-  ['h-[44px] shrink-0 rounded-input px-2.5 text-2xs font-bold leading-none border transition-colors focus:outline-none',
+  ['h-8 tap-y-44 shrink-0 rounded-input px-2.5 text-2xs font-bold leading-none border transition-colors focus:outline-none',
     on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ');
 
 const firstOfGroup = (g: RangeScenario['group']) => RANGE_SCENARIOS.find((s) => s.group === g)!;
@@ -86,12 +92,14 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
           5개가 한 줄에 안 들어가면 wrap 은 마지막 하나만 아래로 떨어뜨려 **4+1 고아**를 만들고,
           그룹을 누를 때마다 줄 수가 변해 카드 높이가 튄다(이 파일이 2026-08-30 에 이미 겪은 문제다).
           아래 '내 포지션'·'상대' 두 줄이 쓰는 방식과 같게 맞춘다 — 넘치면 옆으로 민다. */}
-      <div data-testid="range-guide" className="flex gap-1 overflow-x-auto scrollbar-none">
-        {RANGE_GROUPS.map((g) => (
-          <button key={g.id} type="button" onClick={() => pickGroup(g.id)} aria-pressed={g.id === group} className={chipCls(g.id === group)}>
-            {g.label}
-          </button>
-        ))}
+      <div>
+        <div data-testid="range-guide" className="-my-1.5 flex gap-1 overflow-x-auto py-1.5 scrollbar-none">
+          {RANGE_GROUPS.map((g) => (
+            <button key={g.id} type="button" onClick={() => pickGroup(g.id)} aria-pressed={g.id === group} className={chipCls(g.id === group)}>
+              {g.label}
+            </button>
+          ))}
+        </div>
       </div>
       {/* 그룹 설명(전구 팁)은 뺐다(오너 2026-09-17 "쓸데없는 부연설명 빼") — 자리·상대는 아래 칩 행이, 기준(100bb)은 출처 배지가 이미 말한다.
           320px 에서 '오픈 (9인)' 만 두 줄이라 그룹을 누를 때마다 높이가 튀었다(실측). */}
@@ -99,7 +107,7 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
       {/* ② 내 포지션 — 한 행 5개 이하라 375px 에서도 접히지 않는다(넘치면 가로 스크롤) */}
       <div>
         <span className="mb-1 block text-2xs font-semibold text-ink-secondary">내 포지션</span>
-        <div className="flex gap-1 overflow-x-auto scrollbar-none" role="group" aria-label="내 포지션">
+        <div className="-my-1.5 flex gap-1 overflow-x-auto py-1.5 scrollbar-none" role="group" aria-label="내 포지션">
           {heroes.map((h) => (
             <button key={h} type="button" onClick={() => pickHero(h)} aria-pressed={h === scen.hero} className={chipCls(h === scen.hero)}>
               {h}
@@ -112,7 +120,7 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
       {hasVsRow && (
         <div>
           <span className="mb-1 block text-2xs font-semibold text-ink-secondary">{VS_CAPTION[group]}</span>
-          <div className="flex gap-1 overflow-x-auto scrollbar-none" role="group" aria-label={VS_CAPTION[group]}>
+          <div className="-my-1.5 flex gap-1 overflow-x-auto py-1.5 scrollbar-none" role="group" aria-label={VS_CAPTION[group]}>
             {matchups.map((s) => (
               <button key={s.id} type="button" onClick={() => setScenId(s.id)} aria-pressed={s.id === scen.id} className={chipCls(s.id === scen.id)}>
                 {s.vs ? `vs ${s.vs}` : '상대 미지정'}

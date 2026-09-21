@@ -269,7 +269,9 @@ test.describe('GTO 내부 도구 — 44px 미만 유효 표적 회귀 (2026-09-2
   // 13칸을 다 넣어야 하는 격자라 44px가 물리적으로 불가능하다(구조적 사안, 별도 오너 결정 대기).
   test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 360, height: 800 }); });
 
-  const effH = (loc: ReturnType<Page['locator']>) => loc.first().evaluate((el) => {
+  // ⚠ 화면 밖(가로 스크롤 행의 끝 칩 등) 요소는 elementFromPoint 가 못 본다 — 재기 전에 먼저 보이게 한다.
+  //   2026-09-21 실측: 레인지 상황 칩 #4('vs 3벳')가 390px 에서 오른쪽에 반쯤 잘려 있어 오버행이 '없다' 로 읽혔다.
+  const effH = async (loc: ReturnType<Page['locator']>) => { await loc.first().scrollIntoViewIfNeeded(); return loc.first().evaluate((el) => {
     const r = el.getBoundingClientRect();
     if (r.height <= 0) return 0;
     const x = Math.round(r.left + r.width / 2);
@@ -278,7 +280,7 @@ test.describe('GTO 내부 도구 — 44px 미만 유효 표적 회귀 (2026-09-2
     for (let d = 1; d <= 14; d++) { if (!hits(Math.round(r.top) - d)) break; top = r.top - d; }
     for (let d = 1; d <= 14; d++) { if (!hits(Math.round(r.bottom) + d)) break; bottom = r.bottom + d; }
     return Math.round(bottom - top);
-  });
+  }); };
 
   test('🔴 공유 버튼(전 도구 공용)이 44px 유효 표적을 가진다', async ({ page }) => {
     await openTools(page, '#tool=gto');
@@ -324,6 +326,20 @@ test.describe('GTO 내부 도구 — 44px 미만 유효 표적 회귀 (2026-09-2
     expect(n, '포지션 버튼이 안 보인다').toBeGreaterThan(0);
     for (let i = 0; i < n; i++) {
       expect(await effH(posBtns.nth(i)), `포지션 버튼 #${i} 유효 표적이 44px 미만이다`).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  // 🔴 2026-09-21 오너 "푸시 폴드 차트도 닫힌 부분 계산해서 적용" — 같은 elementFromPoint 계산으로 잰 결과
+  //   셀 169·눈금 12·자리 8 중 다른 층에 가려진 것은 0 이었고, 눈금만 유효 높이 25.5px(h-6)였다. 눈금은
+  //   슬라이더의 보조 과녁이지만 '눌러서 이유를 읽는' 경로라 44px 계약을 건다(h-8 + tap-y-44 = 46px).
+  test('🔴 푸시·폴드 스택 눈금(슬라이더 아래 숫자)이 44px 유효 표적을 가진다', async ({ page }) => {
+    await openTools(page, '#tool=pushfold');
+    const dialog = page.getByRole('dialog').first();
+    const ticks = dialog.locator('[data-testid="pushfold-stack-picker"] button');
+    const n = await ticks.count();
+    expect(n, '스택 눈금이 안 보인다').toBeGreaterThan(0);
+    for (let i = 0; i < n; i++) {
+      expect(await effH(ticks.nth(i)), `스택 눈금 #${i} 유효 표적이 44px 미만이다`).toBeGreaterThanOrEqual(44);
     }
   });
 });

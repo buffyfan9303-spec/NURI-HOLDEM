@@ -807,7 +807,20 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
       className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none transition-transform duration-[var(--dur-panel)]',
         hidden ? 'translate-y-[120%]' : 'translate-y-0',
         suppressed ? 'invisible pointer-events-none' : ''].join(' ')}
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)', transitionTimingFunction: 'var(--ease)' }}
+      // 🔴 B2(2026-09-21 오너) — 실기기에서 **알약 아래만 크게 벌어진다.** 실측(운영 375×812 에
+      //   safe-area 34px 를 주입해 재현): 레일 위 0px vs 레일 아래 **36.13px**, 알약 위 9.5 vs 아래 **60.5px**.
+      //   🔴 오늘 두 번(4d017b3 → 8616f39) 좁힌 `mb` 는 전부 **safe-area 0 환경**에서 잰 값이라
+      //     이 증상을 못 봤다 — 좁힐수록 실기기 불균형은 오히려 커진다(mb 는 이미 2.125px 로 바닥이다).
+      //   아래를 벌리는 **지배항은 여기 `env(safe-area-inset-bottom)`** 하나다. 그래서 값을 없애지 않고 **상한**만 씌운다.
+      //     safe-area 0(하네스·브라우저 모드): `min(0, 8.5) = 0` → **오늘과 완전히 동일**. 기존 계약 무손상.
+      //     safe-area 24~34px(설치형 PWA·홈 인디케이터): 8.5px 로 고정 → 알약 아래 총 `mb 2.125 + 8.5 = 10.625px`.
+      //     이 값은 레일 좌우 여백 `mx-2.5`(10.625px)와 **정확히 같고** 알약 위(9.5px)와 1px 차다 — '위랑 맞춰' 가 이 지점이다.
+      //   ⚠ 대가: 라벨 행이 홈 인디케이터 예약구간 안으로 들어간다(아이콘·터치 표적 대부분은 바깥).
+      //     실기기에서 답답하면 **이 상한만** 키워라(`0.75rem`=12.75px · `1.25rem`=21.25px). 다른 곳은 손대지 마라.
+      //   ⚠ `--tabbar-safe`/`--tabbar-float`(index.css:65-66)는 푸터·토스트·FAB·알림패널·정산바가 공유하는
+      //     단일 소스다. 그건 **건드리지 않는다** — 여기는 `nav` 자기 padding 뿐이라 그 변수들과 무관하다.
+      //   ⚠ 하네스(Pixel 7)는 safe-area 0 이라 이 증상도 수정 효과도 **재현되지 않는다**(재현 못 함 ≠ 없음).
+      style={{ paddingBottom: 'min(env(safe-area-inset-bottom), 0.5rem)', transitionTimingFunction: 'var(--ease)' }}
       aria-label="하단 내비게이션"
     >
       {/* 탭바 밖(좌우·아래) 틈으로 스크롤 컨텐츠가 비치지 않게 — 알약 뒤는 **불투명** 커튼, 그 위 12px 만 짧게 페이드.
@@ -821,9 +834,19 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
           0.25rem = 4.25px 로 좁혔고, FINAL-UX#NAV-GAP(2026-09-21)에서 0.125rem = **2.125px** 로 한 번 더 좁혔다
           (버튼 `pb-1.5`→`pb-1` 와 합쳐 라벨 하단→nav 하단 11.625px → 약 7.4px). `nav` 의 `fixed bottom-0`·`env(safe-area-inset-bottom)`·
           전역 `--tabbar-safe/--tabbar-float`·푸터 예약량은 **건드리지 않는다** — 안전영역과 콘텐츠 예약은 별개 계약이다.
+          🔴 2026-09-21 정정(B2) — 위 문장 중 `env(safe-area-inset-bottom)` 만은 **상한을 씌웠다**(위 style 주석 참고).
+            이 B1 값들은 전부 safe-area **0** 에서 잰 것이라, 실기기에서 아래가 36px 벌어지는 것을 설명하지 못했다.
+            `--tabbar-safe/--tabbar-float`·푸터 예약량은 **여전히 건드리지 않았다.**
           PC 영향 0 은 구조가 보장한다: 이 `nav` 자체가 `lg:hidden` 이다.
           S26 실기기에서 2~6 CSS px 범위로 미세조정할 여지를 남긴다(현재 값은 로컬·운영 Chromium 실측 기준). */}
-      <div className="pointer-events-auto mx-2.5 mb-[calc(0.125rem+var(--tabbar-lift))] flex rounded-2xl border border-border-default bg-surface-mid shadow-dialog">
+      {/* 🔴 2026-09-21 오너 사진 "아이콘 아래가 너무 넓다" 의 진짜 원인 — 라벨이 **없어 보였다.**
+          운영 375×812 실측: 라벨 색 rgb(154,170,194)·opacity 1 로 정상인데, 위 `glass-strong` 커튼
+          (`absolute inset-0`, rgba(6,8,15,.82))이 이 레일 위에 그려졌다. 레일이 `static` 이라 in-flow 블록
+          단계에서 먼저 칠해지고, absolute 커튼은 그 뒤에 칠해진다. 아이콘 칸은 `relative` 라 커튼 위에
+          남았고 라벨 span 만 82% 가려져 "아이콘 아래 빈 공간" 으로 보였다(아이콘 위 9.5px vs 아래 24.4px).
+          → `relative` 한 단어. 이제 레일 전체(배경·테두리·라벨)가 커튼 위에 그려진다 — 커튼의 설계 의도
+          ('알약 **뒤**는 불투명 커튼')가 비로소 맞는다. 라벨이 보이면 아래 24.4px 는 빈 공간이 아니라 라벨 행이다. */}
+      <div className="pointer-events-auto relative mx-2.5 mb-[calc(0.125rem+var(--tabbar-lift))] flex rounded-2xl border border-border-default bg-surface-mid shadow-dialog">
         {items.map(({ key, tab, label }) => {
           const on = tab ? shown === tab : false;
           return (

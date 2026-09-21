@@ -3,13 +3,13 @@
 > **다른 Claude Code 계정·다른 컴퓨터에서 이어서 작업할 때 이 파일 하나만 읽으면 된다.**
 > 한도가 끊기거나 계정을 바꿔도 이 파일은 git 에 있으므로 `git pull` 이면 따라온다.
 >
-> ✅ **마지막 갱신: 2026-09-21 저녁 (Opus 5) — §0-a22 가 오늘의 정본이다.**
+> ✅ **마지막 갱신: 2026-09-21 밤 (Fable 5.1) — §0-a23 가 오늘의 정본이다(§0-a22 는 그 앞).**
 > 오너 결정 29건 실행·배포(§0-a21) 뒤, **게이트 12개를 깨우고** 계약 테스트·타입·뮤테이션의 사각지대를 닫았다.
 > 운영은 `c701dc6` 다(오늘 11커밋 푸시·CI 전부 초록). 라이브 DB 변경 3건 적용됨(§0-a20).
 > 오너 결정 6종이 **운영 번들에 닿은 것을 실측으로 확인**했다(§0-a22 '배포 실측 절차').
 > 🔴 번들 JS 여유가 **0** 이다 — 다음 커밋이 CI 를 터뜨릴 수 있다(§0-a17 에 조사 결과와 이유).
 > 🔴 **역할 정의의 `model` 을 고쳤지만 실행 중 세션에는 반영되지 않는다** — 새 세션에서 재확인해야 한다(§0-a16 ⑥).
-> §0-a22 → §0-a21 → §0-a20 순서로 읽어라. 팀·모델 정본은 `.claude/rules/nuri-team-capabilities.md`,
+> §0-a23 → §0-a22 → §0-a21 순서로 읽어라. 팀·모델 정본은 `.claude/rules/nuri-team-capabilities.md`,
 > 공통 교훈은 `docs/TEAM-KNOWLEDGE.md`.**
 >
 > 그 앞 갱신: **2026-09-20 밤(claude-4a)** · §2-D 에 **배포 증거**를 채웠다 — 운영은 `370c0cf`, 두 alias 확인, 손님 도메인 지문 실측.
@@ -94,6 +94,33 @@ npx tsc -b --force                # rc=0 이어야 한다
 ---
 
 
+## 0-a23. 2026-09-21 밤 · Fable 5.1 — **오너 사진 3장(탭바 라벨·레인지 칩·빌런 프리셋) + 더미 일정 5일 + 푸시폴드 히트 실측** (여기가 가장 최신)
+
+요구 키: 오너 채팅 2026-09-21 밤(사진 3장) · "일정 더미데이터 5일치 추가 금일기준" · 직전 ①~⑤(§0-a22 끝의 미완).
+모델: 오너 지시 "Fable5로 실행" → `claude-fable-5-1` 로 **리드가 직접** 수행(팀원 스폰 0 — 직전에 Opus 5·Fable 팀원이 주간 한도로 잇달아 죽었다).
+
+| # | 요구 | 진짜 원인 / 실측 | 실제 diff | 게이트 |
+|---|---|---|---|---|
+| 1 | 탭바 "아이콘 아래가 너무 넓다 — 위 간격에 맞춰" | **라벨이 안 보였다.** 운영 375×812: 라벨 색 `rgb(154,170,194)`·opacity 1 정상인데 `glass-strong` 커튼(`absolute inset-0`, rgba(6,8,15,.82))이 **static 레일 위**에 페인트됐다. 아이콘 칸은 `relative` 라 위에 남고 라벨만 82% 가려짐(아이콘 위 9.5 / 아래 24.4px). 커튼은 2026-09-02 `46c1938` 부터 있었다 | `App.tsx` 레일 div 에 `relative` 한 단어 | 수정 후 실측: railPos relative · 라벨 중심 elementFromPoint = 라벨 · 위 9.5 / 아이콘→라벨 2.1 / 라벨→바닥 5.3 |
+| 2 | 레인지 차트 "버튼 pill 위아래 공백 조절" | 11.7px 글자에 `h-[44px]` 박스(위아래 16px 씩 빈다). 2026-09-20 에 오버행이 잘려 박스를 키웠던 자리 | `RangeGuide.tsx` 칩 `h-8 tap-y-44`(34+12=46) · 레일 3곳 `py-1.5 -my-1.5`(스크롤 컨테이너 패딩 안으로 오버행) · 레일① 래퍼 div(`space-y-3` 특이도 0,3,0 이 자식 margin 을 덮어서) | `gto-tab-verify` 상황 칩 44 계약 PASS. ⚠ 1차 빨강: effH 가 화면 밖 칩(#4 'vs 3벳', 390 에서 오른쪽 반 잘림)을 못 재서 34 로 읽음 → `scrollIntoViewIfNeeded` 후 측정 |
+| 3 | 빌런 프리셋 "고아 필 — 선택 누르면 리스트" | 칩 6개 `flex-wrap` 에서 'BB 수비콜' 1개가 둘째 줄 고아 | `GtoDeepPanel.tsx` 표시 상자 → **네이티브 `<select>`**(`.input`, 옵션에 'N콤보' 병기), 칩 블록 삭제 | tsc·lint 0 · `a11y-modal`·`tools` PASS |
+| 4 | 단계 바 7칸(직전 ①) | Fable 팀원 편집이 **착지해 있었다**(`min-w-max flex-1 basis-0`, 요약·PC 이용권은 `lg:` 한정). 실측 남는 폭 **4.3px = 레일 패딩**(clientWidth 포함) | `store-nav.spec.ts` 여유 계약을 둘로: 콘텐츠여유 ≥ 8(라벨 글자폭+패딩 기준) · 남는폭 ≤ 레일패딩+1 | 320/360/390/412/430 PASS(1차: `≤1` 로 4.3 이 빨감 → 패딩 기준으로 정정) |
+| 5 | "푸시 폴드 차트도 닫힌 부분 계산해서 적용" | elementFromPoint 9점+세로 스캔(390·320, stubLogin): 셀 169·눈금 12·자리 8 중 **다른 층에 가려진 것 0**, 자리 44, 셀 23.4/18(13×13 격자 고유), **눈금 25.5px(h-6) 만 미달** | `PushFoldChart.tsx` 눈금 `h-8 tap-y-44` → 45px · `gto-tab-verify` 눈금 44 계약 1건 추가 | 재실측 tickEffH 45 · `pushfold-ticks` PASS. 프로브 원본은 커밋하지 않았다(scratchpad `_probe_pushfold.spec.ts`) |
+| 6 | 더미 일정 5일치(금일 기준) | 라이브 `schedules` 는 실제 일정 0건(8-ⓓ). INSERT 는 `trg_auto_approve_poster`, UPDATE 는 `trg_prevent_self_approve`(`my_role()` ≠ admin) 가 `approved` 를 false 로 되돌린다 — MCP 세션엔 auth.uid 가 없다 | 라이브 INSERT 5행 `dddd…0121~0125`(9/21 21:00 · 9/22 19:00 · 9/23 19:00 · 9/24 20:00 · 9/25 18:00, 테스트 매장 `dddd…0001`, 기존 더미와 같은 모양) → `set local session_replication_role = replica` 로 **트리거를 우회해** UPDATE approved=true(알림 트리거도 같이 건너뜀 — 팔로워·관리자 알림 0건) | 운영 홈 실측 "9월 21일 (월) 일정 · 총 1개" · 라이브 탭 "오늘 곧 시작 1 · 21:00" |
+| 7 | 직전 ②③(미커밋이던 것) | B2 safe-area 상한 `min(env(safe-area-inset-bottom), 0.5rem)` · 시트 헤더 드래그(`Modal.tsx` `compact \|\| bodyDrag`) | 이 커밋에 포함 | `drag-close`·`notif-panel-tabbar-safe`·`mobile-tab-transition`·`pill-press` PASS |
+
+게이트(4173 프리뷰 = 이 diff 의 빌드, `E2E_BASE_URL` — `reuseExistingServer:false` 라 재빌드 대신 이 경로): 대상 10스펙 1차 57 passed/6 failed(위 ②④의 측정 결함) → 정정 후 **50 passed / 0 failed** · tsc 0 · eslint 0 · 사이트맵 md5 `0a87cebf…` 두 번 보존.
+전체 게이트(같은 프리뷰, `--retries=2`): lint 0 · vitest **267 파일 / 2911 통과** · e2e **668 passed / 1 failed / 1 flaky / 11 skipped**(6.0분).
+· 실패 1 = `design-tokens` '28px 미만 히트영역': 일정 카드의 **매장명 링크(`VenueLink`, 18px)** — 코드가 아니라 **더미 일정이 홈에 다시 뜨면서** 드러났다(일정 0건이던 동안은 잴 대상이 없어 조용히 통과). `ScheduleCard.tsx` 링크에 `tap-y-44`(30px) → 재실행 **PASS**(design-tokens·first-screen·tools 27 passed).
+· flaky 1 = `mystore-transition-cls` PC 1440 A(재시도 통과 — 종전에도 흔들리던 스펙).
+
+🔴 배운 것: ① 운영 화면에서 "빈 공간" 으로 보이는 자리는 **먼저 그 자리에 무엇이 그려져 있어야 하는지** 부터 본다 — 라벨은 DOM·색·opacity 전부 정상이었고 페인트 순서만 틀렸다(static 블록 vs absolute 형제). ② 히트 측정은 대상이 화면 안에 있을 때만 의미가 있다(가로 스크롤 행의 끝 칩). ③ 라이브에 `approved` 를 세우려면 admin JWT 가 있어야 한다 — MCP 로 세우려면 트리거 우회가 필요하고 그때 알림 트리거도 같이 꺼진다(더미엔 오히려 맞다).
+
+되돌리기: 더미 일정 → `update schedules set approved=false where id::text like 'dddd0000-0000-4000-8000-00000000012%'`(8-ⓓ 와 같은 방식; 트리거가 false 로 내리는 건 막지 않는다) 또는 delete.
+미검증: 실기기 safe-area(하네스 0) · iOS `<select>` 외관 · 탭바 라벨이 보이게 된 뒤 오너가 말한 "아래 간격" 이 라벨 행으로 채워지는 게 원하던 답인지(**오너 확인 필요** — 아이콘만 남기는 것은 별도 결정) · 더미 일정이 손님 화면에 보이는 상태가 8-ⓓ 취지와 맞는지(오너 요청대로 보이게 했다).
+남은 것: 20260921b 미적용(오너 12-ⓑ) · QR 4×3 표 부분·로그인 축 · 오너 secret 2개 · gto-explain 410 BLOCKED · `.claude/settings.json`·`.codex/config.toml` 오너 변경분은 손대지 않았다(§0-a22).
+
+---
 ## 0-a22. 2026-09-21 오후 · Opus 5 — **잠들어 있던 게이트 4개를 깨웠다 + 로그아웃 범위 고지** (여기가 가장 최신)
 
 §0-a21 의 남은 과제였던 **8번 결정의 진짜 마무리**("라이브 데이터에 의존하는 스펙을 목킹으로 독립시킨다")를 했다.

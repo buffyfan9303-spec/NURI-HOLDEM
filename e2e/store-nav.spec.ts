@@ -424,10 +424,19 @@ test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 �
           return over > 0.5 ? `${b.dataset.step ?? '요약'}:${over.toFixed(1)}` : null;
         }).filter(Boolean);
         // 🔴 2026-09-21 — "넘치지 않는다"만 보던 계약의 구멍: 라벨이 조금만 길어져도 넘치기
-        //   직전까지 조용히 빡빡해질 수 있었다. 실제 여유(clientWidth − 칸폭합 − 간격 합)를 잰다.
+        //   직전까지 조용히 빡빡해질 수 있었다. 두 가지를 **따로** 잰다:
+        //   · 콘텐츠여유 = clientWidth − (라벨 글자폭 + 좌우 패딩)합 − 간격합 → 라벨이 늘어 넘치기 직전인가
+        //   · 여유       = clientWidth − 실제 칸폭합 − 간격합            → 칸이 남는 폭을 다 채웠는가(오너 "우측 공백")
+        //   칸이 `flex-1 basis-0` 로 남는 폭을 나눠 갖게 된 뒤(오너 2026-09-21 "7개 칸으로 나눠서")로는
+        //   실제 칸폭합이 항상 레일 폭과 같아져, 그것으로는 콘텐츠 여유를 알 수 없다.
         const cs = getComputedStyle(rail);
         const 간격 = parseFloat(cs.columnGap || cs.gap || '0') || 0;
         const 칸폭합 = vis.reduce((s, b) => s + b.getBoundingClientRect().width, 0);
+        const 콘텐츠폭합 = vis.reduce((s, b) => {
+          const bs = getComputedStyle(b);
+          const span = b.querySelector('span');
+          return s + (span ? span.getBoundingClientRect().width : 0) + parseFloat(bs.paddingLeft) + parseFloat(bs.paddingRight);
+        }, 0);
         const pill = rail.querySelector<HTMLElement>('[data-sliding-pill]');
         const act = rail.querySelector<HTMLElement>('[data-pill-active]');
         return {
@@ -441,7 +450,10 @@ test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 �
           활성수: rail.querySelectorAll('[role=tab][aria-selected="true"]').length,
           칸폭합: +칸폭합.toFixed(1),
           간격: +간격.toFixed(2),
+          레일패딩: +(parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)).toFixed(2),
           여유: +(rail.clientWidth - (칸폭합 + (vis.length - 1) * 간격)).toFixed(1),
+          콘텐츠폭합: +콘텐츠폭합.toFixed(1),
+          콘텐츠여유: +(rail.clientWidth - (콘텐츠폭합 + (vis.length - 1) * 간격)).toFixed(1),
           알약중심차: pill && act ? +Math.abs((pill.getBoundingClientRect().left + pill.getBoundingClientRect().right) / 2
             - (act.getBoundingClientRect().left + act.getBoundingClientRect().right) / 2).toFixed(2) : null,
         };
@@ -459,12 +471,18 @@ test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 �
       expect(m.넘침, `레일이 ${m.넘침}px 넘친다 — 마지막 칸이 잘려 그 칸이 있는 줄도 모른다`).toBeLessThanOrEqual(0);
       expect(m.문서가로넘침, '문서 전체가 가로로 넘친다').toBeLessThanOrEqual(0);
       expect(m.활성수, '활성 탭이 정확히 하나가 아니다').toBe(1);
-      // 🔴 2026-09-21 — 여유(slack) 하한. '넘치지 않는다'만으로는 라벨이 조금만 길어져도 넘치기
-      //   직전까지 조용히 빡빡해지는 것을 못 잡는다. 320px 실측(2026-09-21 격리 프로덕션 빌드):
+      // 🔴 2026-09-21 — 콘텐츠 여유(slack) 하한. '넘치지 않는다'만으로는 라벨이 조금만 길어져도 넘치기
+      //   직전까지 조용히 빡빡해지는 것을 못 잡는다. 320px 실측(2026-09-21 격리 프로덕션 빌드, 칸이 내용 폭이던 때):
       //   레일 clientWidth 284px, 칸폭합 244.4 + 간격 6×2.13 = 257.2px → 여유 26.8px. 8px 는 그
       //   26.8px 가 약 70% 깎여도 잡아내되, 서브픽셀 반올림 잡음(0.x px)엔 흔들리지 않는 하한이다.
-      expect(m.여유, `여유가 ${m.여유}px 로 좁아졌다(320px 기준 26.8px) — 라벨/칸이 늘었는지 보라`)
+      //   칸이 남는 폭을 나눠 갖게 된 뒤로는 **콘텐츠 폭** 기준이다(실제 칸폭합은 늘 레일 폭이라 무의미).
+      expect(m.콘텐츠여유, `콘텐츠 여유가 ${m.콘텐츠여유}px 로 좁아졌다(320px 기준 26.8px) — 라벨/칸이 늘었는지 보라`)
         .toBeGreaterThanOrEqual(8);
+      // 🔴 오너 2026-09-21 "우측 공백이 많으니 칸을 채워 7개 칸으로" — 칸이 레일 폭을 다 써야 한다(남는 폭 ≤ 1px).
+      //   `flex-1 basis-0` 가 빠지면 여기서 빨개진다(종전 w-max 는 320 에서 26.8px 가 비었다).
+      //   clientWidth 는 레일 패딩을 포함하므로 남는 폭의 상한은 패딩 합이다(실측 2026-09-21: 전 폭 4.3px = 패딩).
+      expect(m.여유, `레일 오른쪽에 ${m.여유}px 가 빈다(패딩 ${m.레일패딩}px) — 칸이 남는 폭을 나눠 갖지 않는다`)
+        .toBeLessThanOrEqual(m.레일패딩 + 1);
       // 알약 중심 오차 — 종전엔 390 전용 테스트와 PC 루프에만 있었다. 모바일 전 폭 루프에도 잠근다
       // (실측 0.15px). 먼저 알약·활성 칸을 찾았는지부터 본다 — 못 찾으면 아래 단언이 빈 검사가 된다.
       expect(m.알약중심차, '알약이나 활성 칸을 못 찾았다 — 이 단언이 빈 검사가 됐다').not.toBeNull();
