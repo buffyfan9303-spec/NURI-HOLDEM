@@ -323,6 +323,52 @@ gto-team 이 18-ⓐ 를 "열 수 축소만으로는 닿지 않는다 → '입력
 **안쪽 컨테이너가 스크롤**한다. 스크롤을 전제로 하는 측정은 그 컨테이너를 찾아서 움직여야 한다.
 
 
+### `storage-backup.yml` 을 **6일 앞당겨 검증했다** — 오너가 설정할 secret 은 4개가 아니라 **2개**다
+
+오늘 만든 이 워크플로는 cron 이 **주 1회(일 18:30 UTC)** 라 다음 실행이 9/27 이었다.
+즉 **6일간 한 번도 안 돌아 본 채** main 에 있었을 것이다 — 문법 오류가 있어도 그때까지 모른다.
+→ `gh workflow run storage-backup.yml` 로 손수 돌려 **의도한 이유로 실패하는지** 확인했다(run 35571190959).
+
+```
+SUPABASE_PROJECT_URL: 길이 0 · https://<ref>.supabase.co 모양=다름
+SUPABASE_SERVICE_ROLE_KEY: 길이 0 (JWT 면 보통 200+)
+R2_ACCOUNT_ID: 길이 32 · 32자리 16진수=OK     ← 이미 설정돼 있다
+R2_BUCKET: 길이 10                            ← 이미 설정돼 있다
+::error::Storage 백업 실행 불가 — 필수 secret 누락: SUPABASE_SERVICE_ROLE_KEY SUPABASE_PROJECT_URL
+```
+
+✅ 파싱된다 · 값을 **출력하지 않고 길이·모양만** 찍는다 · 누락 이름을 대며 **크게 실패**한다.
+🔴 **그리고 R2 쪽 secret 은 이미 있다**(DB 백업이 쓰던 것). 오너가 넣을 것은 **2개뿐**이다:
+```bash
+gh secret set SUPABASE_SERVICE_ROLE_KEY
+gh secret set SUPABASE_PROJECT_URL
+```
+(⚠ 값을 에이전트에게 주지 마라. `service_role` 은 RLS 를 전부 우회한다.)
+
+### DB 백업(`backup.yml`)은 건강하다 — 확인했다
+
+2026-09-19 까지 4회 연속 실패였고 **2026-09-20 부터 성공**한다(원인은 만료된 R2 토큰).
+성공한 실행이 **실제로 파일을 올렸는지**까지 봤다:
+```
+-rw-r--r-- 1 runner runner 1.6M  nuri-20260920-2023.dump.gz
+R2 객체 크기: 1632686 bytes / 로컬: 1632686 bytes        ← head-object 로 원격 대조
+::notice::백업 업로드 완료 — s3://***/db/nuri-20260920-2023.dump.gz (1632686 bytes)
+```
+업로드 뒤 `head-object` 로 **원격 크기와 로컬을 바이트 단위로 대조**하고 다르거나 0이면 실패한다.
+`pg_dump` 버전도 17 로 못 박는다(러너의 16 이 PATH 를 가로채던 함정). 스킵·권한 경고 0건.
+객체가 2개뿐인 것은 보존 정책 문제가 아니라 **20일부터 성공하기 시작해서**다(`KEEP=14`).
+👉 34일 사고("초록불인데 백업 0건")의 교훈이 실제로 반영돼 있다. **조치 불필요.**
+
+### ⚠ 내 감시 장치가 엉뚱한 것을 보고 있었다
+
+CI 완료를 기다리는 백그라운드 감시를 `gh run list --branch main --limit 1` 로 걸었다.
+그런데 내가 `storage-backup` 을 손수 돌리자 **그게 'main 의 가장 최근 실행'** 이 되어,
+감시가 **"b49f043 failure"** 라고 보고했다. 실제로는 그 커밋의 CI 는 **진행 중**이었고,
+failure 는 의도된 storage-backup 실패였다.
+👉 **워크플로를 지정해라**: `gh run list --workflow=ci.yml --branch main --limit 1`.
+  오늘 내내 고친 '엉뚱한 것을 재는 검사' 를 **내 감시 장치가** 하고 있었다.
+
+
 ### 🔴 e2e 타입 사각지대 — **`e2e/` 는 어떤 타입 검사도 받지 않고 있었다**
 
 오늘 마지막에 드러났다. `store-destination.spec.ts` 를 목킹으로 전환하며
