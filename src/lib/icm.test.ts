@@ -187,3 +187,39 @@ describe('판정 예시', () => {
     }
   });
 });
+
+// ── 🔴 경계값 가드 (2026-09-21 뮤테이션 생존자 3건) ──────────────────────────────
+// `node scripts/mutation-check.mjs --file src/lib/icm.ts` 에서 아래 세 줄의 `<=`·`>=` 를
+// `<`·`>` 로 바꿔도 **테스트가 전부 통과했다** = '정확히 경계인 입력' 을 아무도 안 보고 있었다.
+// 여기는 상금 분배 계산이라 진짜 구멍이다(스크립트 자신도 '금액 계산에서 생존자가 나오면 진짜 구멍' 이라고 적는다).
+// 가드가 한 칸 밀리면 합계 0 입력이 가드를 통과해 0 으로 나누고 NaN 이 상금으로 나간다.
+describe('경계값 가드 — 정확히 0·정확히 n', () => {
+  it('스택 합계가 **정확히 0** 이면 지분은 전원 0 이다 (icm.ts `stacks.reduce(...) <= 0`)', () => {
+    const out = icmEquity([0, 0, 0], [100, 50, 25]);
+    expect(out).toEqual([0, 0, 0]);
+    expect(out.every((x) => Number.isFinite(x)), '합계 0 에서 NaN 이 나왔다 — 0 으로 나눈 것이다').toBe(true);
+  });
+
+  it('내 좌석이 **정확히 n** 이면 seat 오류다 (icm.ts `h >= n`)', () => {
+    const stacks = [1000, 1000, 1000];
+    const r = callPressure({ stacks, prizes: [100, 50, 25], heroIndex: stacks.length, villainIndex: 1, pot: 0 });
+    expect(r.ok, '범위를 벗어난 좌석이 통과했다 — stacks[h] 가 undefined 라 뒤가 전부 NaN 이 된다').toBe(false);
+    expect(r.reason).toBe('seat');
+  });
+
+  it('상대 좌석이 **정확히 n** 이어도 seat 오류다 (icm.ts `v >= n`)', () => {
+    const stacks = [1000, 1000, 1000];
+    const r = callPressure({ stacks, prizes: [100, 50, 25], heroIndex: 0, villainIndex: stacks.length, pot: 0 });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('seat');
+  });
+
+  it('상금 합계가 **정확히 0** 이면 prizes 오류다 (icm.ts `p.reduce(...) <= 0`)', () => {
+    // 0 과 음수는 위에서 0 으로 정규화되므로, 둘 다 합계 0 이라는 같은 경계에 도달한다.
+    for (const prizes of [[0, 0], [-5, 0]]) {
+      const r = callPressure({ stacks: [1000, 1000], prizes, heroIndex: 0, villainIndex: 1, pot: 0 });
+      expect(r.ok, `상금 ${JSON.stringify(prizes)} 가 통과했다 — 총상금 0 으로 나누게 된다`).toBe(false);
+      expect(r.reason).toBe('prizes');
+    }
+  });
+});

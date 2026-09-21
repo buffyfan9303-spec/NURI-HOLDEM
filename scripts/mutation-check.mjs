@@ -84,19 +84,36 @@ function mutantsOf(src) {
 }
 
 // ── 대상: 테스트가 있는 소스만 ──────────────────────────────────────────────
+// 🔴 2026-09-21 — 예전엔 `foo.test.ts` -> `foo.ts` **한 짝**만 봤다. 그래서 같은 소스를 지키는
+//   형제 테스트(`foo.session.test.ts`·`foo.mapRow.test.ts` 등)가 **한 번도 안 돌았고**,
+//   그 파일들이 잡는 뮤턴트까지 '생존' 으로 셌다 — 사살률이 '우리 테스트가 잡는가' 가 아니라
+//   '그 한 파일이 잡는가' 였다(과소보고).
+//   실측: rankverify 의 mapRow 계약을 새 파일에 넣었더니 테스트는 통과하는데 0/2 생존 그대로였다.
+//   -> 이제 `foo.ts` 에 대해 `foo.test.ts` 와 `foo.<무엇>.test.ts` 를 **모두** 돌린다.
 function pairs() {
-  const found = [];
+  const bySrc = new Map();
   const walk = (dir) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const p = join(dir, e.name);
       if (e.isDirectory()) { walk(p); continue; }
       if (!e.name.endsWith('.test.ts')) continue;
-      const src = p.replace(/\.test\.ts$/, '.ts');
-      if (existsSync(src)) found.push({ src: src.replace(/\\/g, '/'), test: p.replace(/\\/g, '/') });
+      const test = p.split('\\').join('/');
+      // `foo.test.ts` -> foo · `foo.bar.test.ts` -> foo (첫 점까지가 소스 이름이다)
+      const base = e.name.slice(0, -('.test.ts'.length)).split('.')[0];
+      const src = join(dir, base + '.ts').split('\\').join('/');
+      if (!existsSync(src)) continue;
+      if (!bySrc.has(src)) bySrc.set(src, []);
+      bySrc.get(src).push(test);
     }
   };
   walk('src');
-  return ONLY_FILE ? found.filter((x) => x.src === ONLY_FILE.replace(/\\/g, '/')) : found;
+  // 이름이 정확히 일치하는 테스트를 앞에 둔다(보통 제일 빠르고, 실패하면 거기서 끝난다).
+  const exact = (src) => src.slice(0, -('.ts'.length)) + '.test.ts';
+  const found = [...bySrc].map(([src, tests]) => ({
+    src,
+    tests: [...tests].sort((a, b) => (b === exact(src) ? 1 : 0) - (a === exact(src) ? 1 : 0)),
+  }));
+  return ONLY_FILE ? found.filter((x) => x.src === ONLY_FILE.split('\\').join('/')) : found;
 }
 
 // 결정적 표본 — 파일마다 같은 뮤턴트를 고르게 해 실행 간 결과가 흔들리지 않게 한다.
@@ -106,11 +123,12 @@ const spread = (arr, n) => {
   return Array.from({ length: n }, (_, i) => arr[Math.floor(i * step)]);
 };
 
-const runTest = (testFile) => {
+const runTest = (testFiles) => {
+  const list = Array.isArray(testFiles) ? testFiles : [testFiles];
   try {
-    execSync(`npx vitest run ${testFile} --reporter=dot`, { stdio: 'pipe', timeout: 120_000 });
+    execSync(`npx vitest run ${list.join(' ')} --reporter=dot`, { stdio: 'pipe', timeout: 180_000 });
     return true;   // 통과 = 뮤턴트 생존
-  } catch { return false; }   // 실패 = 뮤턴트 사살
+  } catch { return false; }   // 실패 = 뮤턴트 사살(형제 파일 중 어느 하나가 잡아도 사살이다)
 };
 
 const targets = pairs();
@@ -120,7 +138,7 @@ console.log(`뮤테이션 검증 — 대상 ${targets.length}개 파일, 파일�
 const survivors = [];
 let killed = 0, total = 0;
 
-for (const { src, test } of targets) {
+for (const { src, tests } of targets) {
   const original = readFileSync(src, 'utf8');
   const picks = spread(mutantsOf(original), MAX_PER_FILE);
   if (!picks.length) { console.log(`- ${src}  (변이 지점 없음)`); continue; }
@@ -130,7 +148,7 @@ for (const { src, test } of targets) {
     for (const m of picks) {
       writeFileSync(src, m.mutated);
       total++;
-      if (runTest(test)) local.push(m); else { k++; killed++; }
+      if (runTest(tests)) local.push(m); else { k++; killed++; }
     }
   } finally {
     writeFileSync(src, original);   // 무슨 일이 있어도 되돌린다
