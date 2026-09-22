@@ -39,8 +39,10 @@ describe('A · 내 정보 → 매장(재방문 사슬)', () => {
 
 describe('B · 포스터 상세(라이브 중) → 관전 클락', () => {
   it('🔴 RegInfo 가 gameSeq 를 싣고, 상세는 App.openDisplay 를 받아 같은 클락을 연다', () => {
-    expect(REG).toMatch(/export interface RegInfo \{[\s\S]*?gameSeq: number;\s*\}/);
-    expect(REG).toMatch(/running: g\.running, gameSeq: g\.gameSeq \}\);/);
+    // 🔴 2026-09-22 — RegInfo 에 필드 현황(alive/entries/hasField)이 더해졌다. 이 단언이 지키는 것은
+    //   '무엇이 더 있나'가 아니라 **gameSeq 가 실려 상세가 같은 클락을 연다**는 것이다.
+    expect(REG).toMatch(/export interface RegInfo \{[\s\S]*?gameSeq: number;/);
+    expect(REG).toMatch(/running: g\.running, gameSeq: g\.gameSeq[,\s]/);
     expect(APP).toMatch(/<ScheduleDetailModal[\s\S]{0,400}?onDisplay=\{openDisplay\}/);
     expect(SDM).toMatch(/<LiveClockPanel schedule=\{schedule\} regInfo=\{regInfo\}[^\n]*onDisplay=\{onDisplay\} \/>/);
     expect(SDM).toMatch(/data-testid="sched-live-display" onClick=\{\(\) => onDisplay\(venueId, clock\?\.gameSeq \?\? regInfo\?\.gameSeq \?\? 1\)\}/);

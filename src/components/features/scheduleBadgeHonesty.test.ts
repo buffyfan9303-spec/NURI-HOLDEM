@@ -9,7 +9,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { liveBadge } from './ScheduleCard';
 
-const reg = (msLeft: number | null) => ({ msLeft, running: true, gameSeq: 1 });
+// 🔴 2026-09-22 — `RegInfo` 에 필드 현황(생존/엔트리)이 더해졌다(일정 카드가 시각 아래에 적는다).
+//   이 스펙이 보는 것은 **배지 문구**뿐이라 필드 값은 배지 판정에 영향이 없어야 한다 — 0 으로 둔다.
+//   (값을 넣어도 문구가 바뀌면 그건 결함이다. 그 경계는 아래 배지 단언들이 그대로 지킨다.)
+const reg = (msLeft: number | null) => ({ msLeft, running: true, gameSeq: 1, alive: 0, entries: 0, hasField: false });
 
 describe('liveBadge — 실측과 추론을 같은 문구로 부르지 않는다', () => {
   it('클락 실측이 없으면 "진행 중"이라 말하지 않는다', () => {

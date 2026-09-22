@@ -58,7 +58,9 @@ const VENUE_ROW = {
 };
 
 /** 단일 핸들러 — 외부로 나가는 모든 요청이 여기를 지난다(실네트워크 0). */
-async function mockAll(page: Page, live: boolean) {
+// 🔴 `entries` — '클락은 도는데 아직 아무도 안 들어온 게임' 을 만들 수 있게 열어 둔다(기본은 픽스처 값).
+//   그 상태에서 카드가 `0 / 0` 을 그리면 '아무도 없다' 로 읽혀 틀린 정보가 된다 — 아래 계약이 그걸 잡는다.
+async function mockAll(page: Page, live: boolean, entries?: number) {
   await page.route('**/*', async (route) => {
     const url = route.request().url();
     if (/^http:\/\/(localhost|127\.0\.0\.1)/.test(url) || url.startsWith('data:') || url.startsWith('blob:')) {
@@ -66,7 +68,9 @@ async function mockAll(page: Page, live: boolean) {
     }
     const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     if (/\/rest\/v1\/schedules/.test(url)) return json(ROWS);
-    if (/\/rest\/v1\/clock_states/.test(url)) return json(live ? [CLOCK_ROW] : []);
+    if (/\/rest\/v1\/clock_states/.test(url)) {
+      return json(live ? [entries === undefined ? CLOCK_ROW : { ...CLOCK_ROW, adj_entries: entries, eliminations: 0 }] : []);
+    }
     if (/\/rest\/v1\/venues/.test(url)) return json([VENUE_ROW]);
     if (/\/rest\/v1\/rpc\//.test(url)) return json([]);
     if (/\/rest\/v1\//.test(url)) return json([]);
@@ -75,11 +79,11 @@ async function mockAll(page: Page, live: boolean) {
   });
 }
 
-async function openBrowse(page: Page, live: boolean) {
+async function openBrowse(page: Page, live: boolean, entries?: number) {
   await page.addInitScript(() => {
     try { localStorage.setItem('nuri-theme', 'dark'); } catch { /* 저장소 차단 환경 */ }
   });
-  await mockAll(page, live);
+  await mockAll(page, live, entries);
   await page.setViewportSize({ width: 390, height: 900 });
   await page.goto('/');
   await page.waitForLoadState('networkidle');
@@ -153,4 +157,60 @@ test.describe('일정 줄의 세 갈래 클릭', () => {
     await expect(panel).toBeVisible({ timeout: 15_000 });
     await expect(panel, '클락이 없는데 라이브 문구가 보인다').not.toContainText('남은 시간');
   });
+});
+
+// ── 일정 카드 우측 열의 `생존/엔트리` (2026-09-22 오너 2차) ────────────────────────
+//
+// 오너: "게임이 시작된 경우 19:00 아래에 라이브인 경우 19/21(21명 등록 19명 생존) 이런식으로".
+// 이 스펙에 붙이는 이유: **라이브 클락 픽스처가 여기에만 있다.** `schedule-card-fit` 의 픽스처에는
+//   클락이 없어 그 줄이 아예 안 그려진다 — 거기서 재면 '0건이라 통과' 하는 빈 검사가 된다.
+// 값의 정본은 `fieldCounts()`(src/lib/clockLevel.ts) 하나다. 여기 픽스처는
+//   `adj_entries: 24` · `eliminations: 6` · liveStats 없음 → 엔트리 24, 생존 18 이어야 한다.
+test.describe('일정 카드 — 라이브 필드 현황', () => {
+  test('🔴 클락이 도는 대회 카드의 시각 아래에 `생존/엔트리` 가 실측값으로 뜬다', async ({ page }) => {
+    const card = await openBrowse(page, true);
+    const field = card.getByTestId('schedule-field-count');
+    await expect(field, '라이브인데 생존/엔트리 줄이 없다').toBeVisible({ timeout: 15_000 });
+    // 🔴 **보이는 텍스트만** 잰다. `textContent` 에는 `sr-only` 안내말이 섞여 들어와
+    //   ("생존 18/명, 엔트리 24명") 화면에 뭐가 보이는지를 말해 주지 못한다.
+    //   보이는 것은 숫자와 슬래시뿐이어야 한다 — 픽스처의 24 엔트리 · 6 아웃 = 생존 18.
+    const visible = await field.evaluate((el) => {
+      const clone = el.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll('.sr-only').forEach((n) => n.remove());
+      return (clone.textContent ?? '').replace(/\s+/g, '');
+    });
+    expect(visible, '화면에 보이는 생존/엔트리 값이 클락 실측과 다르다').toBe('18/24');
+    // 보조기술은 숫자만으로 무슨 비율인지 알 수 없다 — 말로 읽어 주는지 따로 확인한다.
+    //   ('/' 는 aria-hidden 이라 낭독에서 빠지고 "생존 18명, 엔트리 24명" 으로 읽힌다.)
+    const full = (await field.textContent()) ?? '';
+    expect(full, '접근성 안내말(생존/엔트리)이 없다').toMatch(/생존[\s\S]*18[\s\S]*엔트리[\s\S]*24/);
+    // 오른쪽 모서리가 시각과 같아야 한다(우측 정렬 계약이 이 줄에도 걸린다).
+    const spread = await card.evaluate((c) => {
+      const R = (sel: string) => {
+        const el = c.querySelector<HTMLElement>(sel);
+        return el ? +el.getBoundingClientRect().right.toFixed(2) : null;
+      };
+      const t = R('[data-testid="schedule-start-time"]'); const f = R('[data-testid="schedule-field-count"]');
+      return t !== null && f !== null ? +Math.abs(t - f).toFixed(2) : null;
+    });
+    expect(spread, `필드 현황 줄의 오른쪽 모서리가 시각과 ${spread}px 어긋났다`).toBeLessThanOrEqual(1);
+  });
+
+  test('🔴 대조 — 클락이 없으면 그 줄이 아예 없다(시작 전 `0 / 0` 금지)', async ({ page }) => {
+    const card = await openBrowse(page, false);
+    await expect(card.getByTestId('schedule-start-time'), '시각이 없다 — 대조가 대상에 도달 못 했다').toBeVisible();
+    await expect(card.getByTestId('schedule-field-count'),
+      '클락이 없는데 필드 현황이 떴다 — 시작 전 0/0 은 "아무도 없다" 로 읽힌다').toHaveCount(0);
+  });
+});
+
+// 🔴 `hasField` 가 실제로 무언가를 막는지 — **클락은 도는데 엔트리 0** 인 상태.
+//   이 대조가 없으면 위 '클락 없음' 검사만으로는 가드가 있는지 없는지 구분할 수 없다
+//   (클락이 아예 없으면 `regInfo` 자체가 undefined 라 어떤 가드든 통과한다).
+test('🔴 클락은 도는데 엔트리가 0이면 그 줄을 그리지 않는다 (0/0 금지)', async ({ page }) => {
+  const card = await openBrowse(page, true, 0);
+  // 대조가 대상에 도달했는지 — 클락이 실제로 매칭됐다는 증거를 먼저 잡는다.
+  await expect(card.getByTestId('schedule-start-time'), '시각이 없다 — 대조가 대상에 도달 못 했다').toBeVisible();
+  await expect(card.getByTestId('schedule-field-count'),
+    '엔트리 0 인데 필드 현황을 그렸다 — `0 / 0` 은 "아무도 없다" 로 읽힌다').toHaveCount(0);
 });

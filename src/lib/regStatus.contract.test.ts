@@ -50,7 +50,9 @@ describe('msToRegClose — 정의는 src/lib/regStatus.ts 하나뿐이다', () =
 
   it('regStatus.ts 는 effectiveLevel 을 lib/clockLevel 에서 가져오고, api/clock 은 타입으로만 본다(임계 경로 보호)', () => {
     const code = strip(readFileSync(join(SRC, 'lib', 'regStatus.ts'), 'utf-8'));
-    expect(count(code, /^import \{ effectiveLevel \} from '\.\/clockLevel';$/m)).toBe(1);
+    // 🔴 2026-09-22 — 같은 줄에 `fieldCounts` 가 더해졌다(생존/엔트리 정본도 같은 이유로 여기 있다).
+    //   이 단언이 지키는 것은 member 목록이 아니라 **방향**이다: effectiveLevel 은 lib/clockLevel 에서 온다.
+    expect(count(code, /^import \{ effectiveLevel(?:, [A-Za-z0-9_, ]+)? \} from '\.\/clockLevel';$/m)).toBe(1);
     expect(count(code, /^import type \{ ClockState \} from '\.\.\/api\/clock';$/m)).toBe(1);
     expect(code, 'api/clock 에서 값을 가져오면 api/ledger 가 첫 화면에 딸려 온다').not.toMatch(/^import \{[^}]*\} from '\.\.\/api\/clock';$/m);
   });

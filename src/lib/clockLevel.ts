@@ -61,6 +61,37 @@ export function effectiveLevel(s: ClockLevelInput, nowMs = Date.now()): ClockEff
 //   반면 일시정지는 '지금까지 흐른 뒤 남은 시간'이라 반드시 그보다 **작다**(같은 ms 에 시작·정지해야 같아지는데,
 //   그 사이에 네트워크 왕복 두 번이 있어 실제로 불가능하다). 그래서 `remainingMs >= 1레벨 전체` 가 '아직 안 돌았다'의 증거다.
 //   이 판정은 등호가 아니라 부등호라, 운영자가 [시간 +] 로 늘려 둔 경우에도 '시작 전'으로 남는다(맞는 동작).
+/** 필드 현황 계산에 필요한 최소 형태 — api/clock 의 `ClockState` 가 구조적으로 만족한다.
+ *  (이 모듈의 다른 입력 타입들과 같은 규칙: `ClockState` 를 import 하지 않는다 — 그러면 사슬이 되살아난다.) */
+export interface ClockFieldInput {
+  adjEntries: number;
+  eliminations: number;
+  liveStats?: { alive: number; entries: number } | null;
+}
+
+/**
+ * 필드 현황 — **생존 / 엔트리**. 라이브 화면과 일정 카드가 같은 값을 말하게 하는 단일 정본이다.
+ *
+ * 🔴 왜 헬퍼로 뽑았나: 같은 식이 2026-09-22 기준 **세 곳**에 복사돼 있었다
+ *   (LiveGamesTab 정렬용·카드용, 그리고 새로 필요해진 일정 카드). 장부의 세 수(바이인 횟수·엔트리·얼리)는
+ *   뭉치거나 갈리면 반드시 틀린다 — 이 저장소가 반복해 밟은 '정본 두 벌' 자리다.
+ * 🔴 왜 `api/clock.ts` 가 아니라 여기인가: 거기에 두면 `regStatus.ts` 가 **값**을 import 하게 되고,
+ *   그 순간 이 파일 머리말이 끊어 놓은 사슬(App → regStatus → api/clock → api/ledger)이 되살아나
+ *   업주 전용 장부 청크가 비로그인 손님의 첫 화면에 다시 딸려 온다. 그 계약은
+ *   `src/lib/regStatus.contract.test.ts` 가 잠그고 있다.
+ *
+ * · `liveStats` 스냅샷이 있으면 **그것이 정답**이다(장부 파생값을 보드가 저장해 둔 것).
+ * · 없으면 보정값으로 근사한다: 엔트리=`adjEntries`, 생존=`adjEntries − eliminations`(음수 방지).
+ * · `hasField` 는 '필드 숫자를 보여 줄 만한가' — 스냅샷이 있거나 엔트리가 1 이상일 때만 참이다.
+ *   시작 전(엔트리 0)에 `0 / 0` 을 띄우면 '아무도 없다' 로 읽혀 오히려 틀린 정보가 된다.
+ */
+export function fieldCounts(g: ClockFieldInput): { alive: number; entries: number; hasField: boolean } {
+  const ls = g.liveStats;
+  const entries = ls?.entries ?? g.adjEntries;
+  const alive = ls?.alive ?? Math.max(0, g.adjEntries - g.eliminations);
+  return { alive, entries, hasField: !!ls || entries > 0 };
+}
+
 export type ClockPhase = 'idle' | 'running' | 'break' | 'paused' | 'finished';
 
 /** phase 판정에 필요한 최소 형태 — ClockState 가 구조적으로 만족한다. */

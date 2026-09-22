@@ -4,7 +4,7 @@
 // ⚠ effectiveLevel 은 **반드시 lib/clockLevel 에서** 가져온다.
 //   '../api/clock' 에서 가져오면 그 모듈이 api/ledger 를 물고 있어 업주 전용 장부 청크가
 //   첫 화면 임계 경로로 딸려 온다(실측으로 잡은 회귀). ClockState 는 타입이라 안전하다.
-import { effectiveLevel } from './clockLevel';
+import { effectiveLevel, fieldCounts } from './clockLevel';
 import type { ClockState } from '../api/clock';
 import type { Schedule } from '../api/schedules';
 
@@ -69,6 +69,12 @@ export interface RegInfo {
   running: boolean;
   /** 이 판정을 만든 클락의 game_seq — 포스터 상세가 '관전 클락' 을 **같은 클락**으로 연다(2026-09-17 연결 감사 B). */
   gameSeq: number;
+  /** 필드 현황(2026-09-22 오너) — 일정 카드가 시각 아래에 `생존/엔트리` 를 적는다.
+   *  값은 `fieldCounts()` 단일 정본이 만든다 — 여기서 다시 계산하지 마라. */
+  alive: number;
+  entries: number;
+  /** 필드 숫자를 보여 줄 만한가(시작 전 `0 / 0` 방지). */
+  hasField: boolean;
 }
 
 /** 확신도 순위 — 높을수록 강하다. */
@@ -99,7 +105,7 @@ export function buildRegInfoMap(clocks: ClockState[], schedules: Schedule[], now
     if (prev && (rank < prev.rank || (rank === prev.rank && g.gameSeq >= prev.gameSeq))) continue;
     const eff = effectiveLevel(g, nowMs);
     won.set(m.schedule.id, { rank, gameSeq: g.gameSeq });
-    map.set(m.schedule.id, { msLeft: msToRegClose(g, eff.index, eff.remainingMs), running: g.running, gameSeq: g.gameSeq });
+    map.set(m.schedule.id, { msLeft: msToRegClose(g, eff.index, eff.remainingMs), running: g.running, gameSeq: g.gameSeq, ...fieldCounts(g) });
   }
   return map;
 }

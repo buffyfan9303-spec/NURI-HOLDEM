@@ -5,7 +5,7 @@
 //   우 = 시작시각 / GTD·상금(골드) / 참가비 라벨·금액 / 이용권 — 일정 목록 카드(ScheduleCard ③열)와 같은 순서·어휘·정본
 // 상세(리바인·평균스택·다음브레이크 등)는 카드 탭 → 관전 클락에서 그대로 제공(표면 간소화, 기능 보존).
 import { useEffect, useMemo, useState } from 'react';
-import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockState } from '../../api/clock';
+import { getRunningClocks, subscribeRunningClocks, effectiveLevel, fieldCounts, type ClockState } from '../../api/clock';
 import { matchClockSchedule as matchSchedule, msToRegClose } from '../../lib/regStatus';
 import { levelNumberAt } from '../../lib/clockLevel';
 import { EmptyState } from '../atoms/Skeleton';
@@ -321,6 +321,9 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
               {upcoming.map((s) => (
                 // 🔴 2026-09-22 요구 C — 목록 카드의 하트는 뺐다(등급 배지가 그 자리로 왔다).
                 //   ⚠ 위 진행 게임 줄(285·296행)의 `favIds` 단골 표시는 **그대로 살아 있다** — 같은 훅을 계속 쓴다.
+                // ⚠ `regInfo` 를 **일부러 안 넘긴다.** 이 목록은 바로 위 제목대로 '오늘 곧 시작 · 아직 클락 전'
+                //   이라 매칭되는 클락이 없다 — 넘겨 봐야 항상 undefined 다. 카드의 `생존/엔트리` 줄도
+                //   그래서 여기서는 원래 안 그려진다(진행 중 게임은 이 목록이 아니라 위 라이브 줄에 있다).
                 <ScheduleCard key={s.id} mode="list" schedule={s} venue={venueById.get(s.venueId)} onSelect={onSchedule} onVenueClick={onVenue} />
               ))}
             </div>
@@ -349,10 +352,9 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
   const levelNo = levelNumberAt(lvls, eff.index);
   const isBreak = lv?.kind === 'break';
   const ls = g.liveStats;
-  const alive = ls?.alive ?? Math.max(0, g.adjEntries - g.eliminations);
-  const entries = ls?.entries ?? g.adjEntries;
+  // 🔴 2026-09-22 — 같은 식이 세 곳에 복사돼 있어 `fieldCounts()` 단일 정본으로 모았다(src/api/clock.ts).
   // 장부 미연동이면 '0/0'은 정보가 아니라 오정보다 — 좌측 열을 통째로 생략한다(기존 규약 유지).
-  const hasPlayers = !!ls || entries > 0;
+  const { alive, entries, hasField: hasPlayers } = fieldCounts(g);
   const remain = Math.max(0, eff.remainingMs);
   const mm = String(Math.floor(remain / 60_000)).padStart(2, '0');
   const ss = String(Math.floor((remain % 60_000) / 1000)).padStart(2, '0');

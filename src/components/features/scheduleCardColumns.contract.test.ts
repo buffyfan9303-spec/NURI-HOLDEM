@@ -103,17 +103,26 @@ describe('일정 목록 줄 — 골격', () => {
   // 🔴 R8(2026-09-22) — 모바일 중심축 정렬의 **구조**를 잠근다.
   //   기하(centerX 편차 1px 이하)는 `e2e/schedule-card-fit.spec.ts` 가 실측으로 재고,
   //   여기서는 그 기하를 성립시키는 전제가 조용히 사라지지 않게 막는다.
-  it('우측 묶음이 2열 grid 이고 모바일은 중앙·PC 는 우측 정렬이다', () => {
+  // 🔴 2026-09-22(2차 오너) — 1차의 '중앙 정렬' 계약을 **우측 정렬**로 교체했다.
+  //   오너가 실제 화면을 보고 "화살표 기준으로 우측정렬해서 우측에 붙여" 라고 다시 정했다.
+  //   구조(2열 grid)는 그대로라 구조 단언은 유지하고 정렬 단언만 뒤집는다.
+  it('우측 묶음이 2열 grid 이고 시간열은 chevron 기준 우측 정렬이다', () => {
     const right = LIST.match(/<div className="grid shrink-0 grid-cols-\[auto_auto\][\s\S]*?<\/div>\s*<\/article>/);
     expect(right, '우측 2열 grid 를 못 찾았다').not.toBeNull();
     const R = right![0];
-    // 시간열과 chevron 이 **다른 열**이어야 세 텍스트의 중심이 chevron 에 오염되지 않는다.
-    expect(R, '시작/시간 묶음이 1열에 있지 않다').toMatch(/data-testid="schedule-start-group"[\s\S]*?col-start-1/);
-    expect(R, 'chevron 이 2열의 별도 칸이 아니다 — 중심 계산에 섞인다').toMatch(/chevron-right[\s\S]*?col-start-2/);
-    // 모바일 중앙 / PC 우측 — 둘 다 있어야 한다. 하나라도 빠지면 한쪽이 회귀한다.
-    expect(R, '모바일에서 시작/시간이 중앙 정렬이 아니다').toMatch(/schedule-start-group[\s\S]*?items-center/);
-    expect(R, 'PC 우측 정렬(md:items-end)이 사라졌다 — PC 카드가 같이 바뀐다').toMatch(/md:items-end/);
-    expect(R, 'PC 에서 배지가 두 열을 span 해 우측에 서지 않는다').toMatch(/md:col-span-2[\s\S]*?md:justify-self-end/);
+    // 시간열과 chevron 이 **다른 열**이어야 텍스트가 화살표 왼쪽에 붙는다(화살표가 정렬에 안 섞인다).
+    expect(R, '시간 묶음이 1열에 있지 않다').toMatch(/data-testid="schedule-start-group"[\s\S]*?col-start-1/);
+    expect(R, 'chevron 이 2열의 별도 칸이 아니다').toMatch(/chevron-right[\s\S]*?col-start-2/);
+    // 우측 정렬 — 배지와 시간이 **같은 오른쪽 모서리**를 쓴다.
+    expect(R, 'grid 가 우측 정렬이 아니다').toMatch(/justify-items-end/);
+    expect(R, '시간 묶음이 우측 정렬이 아니다').toMatch(/schedule-start-group[\s\S]*?items-end/);
+    expect(R, '배지가 우측에 붙지 않았다').toMatch(/schedule-grade-badge[\s\S]*?justify-self-end/);
+    // ⚠ 배지를 두 열에 span 시키면 chevron 너머까지 밀려 나가 시간과 오른쪽 끝이 어긋난다(옛 사선).
+    expect(R, '배지가 두 열을 span 한다 — 시간과 오른쪽 끝이 어긋난다').not.toMatch(/col-span-2/);
+    // 오너 지시로 `시작` 라벨을 뺐다 — 그 자리를 필드 현황이 쓴다(줄 수 불변 = 카드 높이 불변).
+    expect(R, '`시작` 라벨이 되살아났다 — 오너가 빼라고 한 문구다').not.toMatch(/>시작</);
+    expect(R, '필드 현황(생존/엔트리) 줄이 없다').toMatch(/data-testid="schedule-field-count"/);
+    expect(R, '필드 현황을 시작 전에도 그린다 — 0/0 은 아무도 없다로 읽힌다').toMatch(/regInfo\?\.hasField &&/);
     // row-gap 으로 간격을 주면 배지 없는 카드에 빈 줄이 생겨 카드가 커진다.
     expect(R, 'grid 에 row-gap 을 줬다 — 배지 없는 카드에 빈 간격이 생긴다').not.toMatch(/\bgap-y-/);
     expect(R, 'grid 에 일괄 gap 을 줬다 — gap-x 만 써야 한다').not.toMatch(/className="grid shrink-0 grid-cols-\[auto_auto\][^"]*\sgap-\d/);

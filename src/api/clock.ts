@@ -302,7 +302,7 @@ export async function saveClockLevel(
 // 첫 화면 임계 경로에서 빠진다(그 파일 상단 주석 참고). 여기서 **재수출**하므로
 // `from '../api/clock'` 로 쓰던 기존 임포트는 한 줄도 바꿀 필요가 없다.
 import { effectiveLevel } from '../lib/clockLevel';
-export { effectiveLevel, type ClockEffective } from '../lib/clockLevel';
+export { effectiveLevel, fieldCounts, type ClockEffective } from '../lib/clockLevel';
 
 /** 자동 전진 결과. advanced=한 번에 넘어간 레벨 수(2 이상이면 '밀렸다가 따라잡은' 보정),
  *  finished=마지막 레벨까지 소진해 토너가 끝난 경우. */

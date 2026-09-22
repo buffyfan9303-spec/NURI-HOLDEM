@@ -391,7 +391,9 @@ function Metric({ label, value, tone, title }: { label: string; value: string; t
 }
 
 function ListCard({
-  schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, vtActive, venue,
+  // 🔴 2026-09-22 — `regInfo` 를 목록 카드도 받는다. 시각 아래 `생존/엔트리` 의 출처다.
+  //   App 이 이미 `regInfoBySchedule` 로 넘기고 있어 **새 조회는 0건**이다(이 카드가 직접 클락을 읽지 않는다).
+  schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, vtActive, venue, regInfo,
 }: CardProps) {
   // 목록 카드만 라벨·금액을 따로 그린다(라벨 작게·금액 크게) — 계산은 정본 하나(prizeParts).
   const prize = prizeParts(schedule);
@@ -602,18 +604,16 @@ function ListCard({
           ⚠ 바깥 flex 의 **항목 수는 그대로 2개**다(로고·가운데·이 덩어리) — 위 주석이 경고한
             '항목을 하나 더 만들면 gap 이 하나 더 생긴다' 에 걸리지 않는다. 이 안에서만 세로로 나눈다.
           ⚠ ♥ 가 없을 때(비배선 화면)는 렌더되지 않아 종전 레이아웃과 **완전히 동일**하다. */}
-      {/* 🔴 2026-09-22 모바일 요구 — `데일리 / 시작 / 19:00` 의 **중심축**을 맞춘다.
-          종전 구조: 바깥이 `flex flex-col items-end`, 안쪽 `<p>` 도 `items-end` 였다.
-            → 셋의 **오른쪽 모서리만** 같고 폭이 달라 centerX 가 전부 어긋났다(오너 사진의 사선).
-            → chevron 까지 같은 정렬 상자에 있어 '텍스트의 중심' 기준 폭이 흐려졌다.
-          바뀐 구조: **2열 grid** = [시간열 auto | chevron auto].
-            · 모바일: 배지와 `시작/시간` 이 **같은 1열** 안에서 중앙 정렬 → 세 centerX 가 자동으로 같다.
-              (JS 측정·새 컴포넌트·전역 CSS 없이 CSS 만으로 성립한다.)
-            · `md` 이상: 배지가 두 열을 span 하고 `justify-self-end`, 문단은 `items-end` —
-              **PC 의 기존 우측 정렬을 그대로 재현**한다. PC 시각 변경 0 이 계약이다.
+      {/* 🔴 2026-09-22(2차 오너) — 우측 열은 **chevron 을 기준으로 오른쪽에 붙여 우측정렬**한다.
+          1차에서는 셋의 centerX 를 맞췄는데(사선 제거), 오너가 실제 화면을 보고 '화살표 기준 우측정렬'로
+          다시 정했다. 구조는 그대로 **2열 grid** = [시간열 auto | chevron auto] 이고 정렬만 바꾼다:
+            · 시간열 안의 모든 줄이 같은 오른쪽 모서리를 쓴다(`justify-items-end` + 문단 `items-end`).
+            · chevron 은 2열이라 그 모서리 **밖**이다 — 텍스트가 화살표 바로 왼쪽에 붙는다.
+          ⚠ 배지를 두 열에 span 시키지 않는다. span 하면 배지만 chevron 너머까지 밀려 나가
+            시각과 오른쪽 끝이 어긋난다(종전 `items-end` 구조의 사선이 정확히 그 모양이었다).
           ⚠ row-gap 을 쓰지 않는다. 배지가 없는 카드에 빈 간격이 생겨 카드가 커진다 —
             간격은 배지 자신의 `mb-0.5` 로만 준다(있을 때만 생긴다). */}
-      <div className="grid shrink-0 grid-cols-[auto_auto] content-center gap-x-1">
+      <div className="grid shrink-0 grid-cols-[auto_auto] content-center justify-items-end gap-x-1">
         {/* 🔴 2026-09-22 요구 C — 하트 버튼을 **목록 카드에서만** 빼고 그 자리에 등급 배지를 둔다.
             ⚠ 지운 컴포넌트 이름을 이 주석에 그대로 적지 마라 — 계약 테스트가 소스 문자열로 세므로
               주석 한 줄이 '되살아났다' 로 잡힌다(이 저장소가 여러 번 밟은 함정이다).
@@ -624,18 +624,31 @@ function ListCard({
             · `grade` 가 없으면 빈 자리도 만들지 않는다(gap 이 남지 않게 조건부 렌더). */}
         {grade && (
           <span data-testid="schedule-grade-badge"
-            className="col-start-1 row-start-1 mb-0.5 justify-self-center rounded-badge bg-surface-high px-1 text-[10px] font-extrabold leading-none text-ink-secondary md:col-span-2 md:justify-self-end">
+            className="col-start-1 row-start-1 mb-0.5 justify-self-end rounded-badge bg-surface-high px-1 text-[10px] font-extrabold leading-none text-ink-secondary">
             {grade}
           </span>
         )}
+        {/* 🔴 2026-09-22(2차 오너) — `시작` 라벨을 뺐다. 큰 숫자 하나로 충분히 '시작 시각' 으로 읽히고,
+            그 자리를 아래 필드 현황(생존/엔트리)이 쓴다 — 줄 수가 늘지 않아 카드 높이가 그대로다. */}
         <p data-testid="schedule-start-group"
-          className="col-start-1 row-start-2 flex min-w-0 flex-col items-center leading-tight md:items-end">
-          <span data-testid="schedule-start-label"
-            className="text-[8.5px] font-bold leading-tight text-ink-muted min-[360px]:text-[9px]">시작</span>
+          className="col-start-1 row-start-2 flex min-w-0 flex-col items-end leading-tight">
           <span data-testid="schedule-start-time"
             className="text-[0.875rem] font-extrabold leading-tight tracking-tight tabular-nums text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-base">
             {schedule.startTime || '—'}
           </span>
+          {/* 🔴 2026-09-22(2차 오너) — 게임이 시작돼 필드 숫자가 있으면 시각 아래에 `생존/엔트리`.
+              · 값은 `fieldCounts()` 단일 정본이 만든다(`src/api/clock.ts`) — 라이브 탭과 같은 수다.
+              · `hasField` 가 거짓이면(시작 전·엔트리 0) **아예 안 그린다** — `0/0` 은 '아무도 없다' 로
+                읽혀 오히려 틀린 정보가 된다. 안 그리면 줄도 안 생겨 카드 높이도 그대로다.
+              · 접근성: 숫자만 보면 무슨 비율인지 모른다 — 보조기술에는 말로 읽어 준다. */}
+          {regInfo?.hasField && (
+            <span data-testid="schedule-field-count"
+              className="text-[9px] font-bold leading-tight tabular-nums text-ink-muted min-[360px]:text-[10px]">
+              <span className="sr-only">생존 </span>{regInfo.alive}
+              <span aria-hidden>/</span><span className="sr-only">명, 엔트리 </span>{regInfo.entries}
+              <span className="sr-only">명</span>
+            </span>
+          )}
         </p>
         {/* chevron 은 **별도 열**이다 — 위 세 텍스트의 중심 계산에 들어가지 않는다. */}
         <Icon name="chevron-right" size={14} className="col-start-2 row-start-2 shrink-0 self-center text-ink-muted" />
