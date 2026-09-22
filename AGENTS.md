@@ -126,7 +126,9 @@ DB 를 바꿀 때는 `nuri-migration` 스킬을 먼저 부른다(라이브 DB �
 - **라이트 모드 대비는 순백이 아니라 실제 지면(`surface-base`)으로 재라.** 순백 기준으로 고른 색이 지면 위에서 AA 미달이었다.
 - **CLS** — 스켈레톤 높이를 실제 콘텐츠와 맞추고 이미지 치수를 예약한다. `content-visibility` 의
   `contain-intrinsic-size` 가 실제 행 높이와 다르면 스크롤이 점프한다.
-- **SlidingPill** — `src/components/atoms/SlidingPill.tsx` 의 자체 FLIP 인디케이터가 13곳에 쓰인다.
+- **SlidingPill** — `src/components/atoms/SlidingPill.tsx` 의 자체 FLIP 인디케이터가 **12곳(11개 파일)** 에 쓰인다(2026-09-23 실측).
+  ⚠ 여기 "13곳" 으로 적혀 있던 것을 고쳤다 — `CLAUDE.md:170` 은 12곳이라 두 문서가 **8일간 어긋나 있었다.**
+  같은 수치를 두 문서에 적어 둔 탓이다. 세는 명령: `grep -rn "<SlidingPill" src --include="*.tsx" | wc -l`
   다른 방식(framer-motion `layoutId` 등)을 도입해도 되지만, 같은 인디케이터가 두 방식으로 구현되면 그 자체가 버그다.
 - **`offsetLeft` 는 transform 이 걸린 조상에서 끊긴다(Chromium).** 전역 프레스 물리 `button:active { transform: scale(.97) }`
   + 0.2s 복귀 전환 동안 방금 누른 버튼이 자식의 `offsetParent` 가 되어 `offsetLeft` 가 0 이 된다 — 알약이 첫 칸으로
