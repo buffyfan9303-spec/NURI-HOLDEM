@@ -357,7 +357,21 @@ ToolsPanel 이 다시 참조하는 7개를 더 받고서야 `NuriSpotPanel-BRYr5
      어디에도 남지 않는다 — 작성자조차 복원 불가한 **되돌릴 수 없는 소실**.
    → 함수를 통째로 다시 쓸 때는 **원본 정의에서 보증 목록을 먼저 뽑고**(인가 검사·필수 컬럼 쓰기·에러코드),
      새 기능 계약과 **같이** 고정해라. 지금은 자가검사와 vitest 양쪽에 넣었고 NC6·NC7 로 확인했다.
-8. **`information_schema.column_privileges` 는 보안 검사에 쓰지 마라.** 테이블 수준 GRANT 를 전 컬럼으로
+8. 🔴 **`src/lib/spot.ts` 의 `toJSON` 에 키를 더하면 `spotPrivacy.migration.test.ts` 가 빨개진다 — 정상이다.**
+   그 검사는 toJSON 이 내는 **키 집합 전체**를 고정한다. 새 키를 만나면 멈춰 세워
+   **"공개해도 되는가, 가려야 하는가"** 를 사람이 분류하게 만든다.
+   · 가릴 것이면 → `20260922a` 의 `v_spot := p_spot - …` 목록과 테스트의 `SPOILER` 에 **둘 다** 넣어라.
+   · 공개해도 되면 → `PUBLIC` 에 넣고 **왜 괜찮은지 근거를 남겨라**.
+   ⚠ **분류를 건너뛰려고 이 검사를 느슨하게 풀지 마라.** 이게 없어서 `heroActionSizeBb` 가 오래 새어 나갔다 —
+   가림 목록은 SQL 에 있고 와이어는 TS 에 있는데 **둘을 잇는 계약이 없었다.**
+   음성 대조(NC8) 로 확인했다: toJSON 에 분류 안 된 키를 넣으면 그 테스트만 키 이름을 짚어 실패한다.
+9. **E2E 전체 스위트는 부하 flake 가 있다 — 실행마다 다른 테스트가 빠진다.**
+   2026-09-22 에 3회 돌려 매번 **다른** 스펙이 하나씩 빠졌다
+   (① `mystore-transition-cls` ② `backstack`(Ctrl+K history) ③ `admin-switches` + `post-nav`).
+   전부 격리 실행(`--repeat-each=2~3`)에서 통과했고, 세 번째 라운드의 소스 변경은 **주석뿐**이라
+   런타임 원인이 있을 수 없었다. `playwright.config.ts:32` 가 CI 에서만 `retries: 2` 를 주는 이유가 이것이다.
+   👉 **전체 스위트 1회 실패를 곧바로 회귀로 읽지 마라.** 같은 테스트가 **반복해서** 빠지는지를 먼저 봐라.
+10. **`information_schema.column_privileges` 는 보안 검사에 쓰지 마라.** 테이블 수준 GRANT 를 전 컬럼으로
    펼치는 것은 맞지만(2026-09-22 라이브에서 `grant select … to anon` 후 5를 세는 것을 확인), 그 뷰는
    **현재 연결 롤에 보이는 권한만** 돌려준다. 실행 주체가 바뀌면 행이 줄어 조용히 통과한다.
    → `has_column_privilege(role, table, col, 'SELECT')` 를 써라. 롤 의존이 없고 두 수준을 함께 본다.
