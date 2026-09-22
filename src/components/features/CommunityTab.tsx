@@ -763,7 +763,7 @@ function FeedSection({
     // data-board-loaded: 서버 첫 페이지의 3상태(idle=아직 안 시작 · loading=진행 중 · done=커서 끝) — 화면은 그대로, e2e 계약용.
     //   post-nav ③(2026-09-13): 네트워크 응답을 봐도 serverDone 커밋 전에 글을 열면 스냅샷 done=false 라 마지막 글이 '더 불러오기'(정직)로 뜬다.
     //   테스트가 기다릴 DOM 신호가 없어서(:894 갈래는 목록이 비었을 때만 렌더) 상태를 속성으로 노출한다.
-    // M1 cohort 준비 신호 — 이 블록이 이 화면의 유일한 진입 대상이라 표식과 같은 요소에 둔다.
+    // (역사) M1 cohort 준비 신호였다. 🔴 2026-09-22 폐기 — 이 표식을 읽던 본문 진입 모션(`src/lib/tabEnter.ts`)은 삭제됐다. 삼성 인터넷에서 transform 합성층이 붙었다 사라지며 화면 전체가 밝아졌다 돌아왔기 때문이다(App.tsx 탭 커밋 effect 주석 참고). 속성은 지금 **아무 동작도 하지 않는다** — 남겨 둔 것은 되살릴 때 대상 경계를 다시 찾지 않기 위해서다.
     <div data-main-enter data-main-enter-ready className="space-y-2" data-board-loaded={serverDone ? 'done' : serverLoading ? 'loading' : 'idle'}>
       {/* 글쓰기 — '글쓰기' 버튼 → 글쓰기 모달(카테고리·제목·내용·이미지) (Stage 2) */}
       {user ? (
@@ -1170,10 +1170,10 @@ function VenuesSection({
   useEffect(() => { getVenueRatings().then(setRatings).catch(() => {}); }, []);
   const filtered = kindFilter === 'all' ? sortedVenues : sortedVenues.filter((x) => (x.venue.kind ?? 'venue') === kindFilter);
   return (
-    // 🔴 M1(2026-09-21) `data-main-enter-ready` — **cohort 준비 신호**(`src/lib/tabEnter.ts` 의 `collect` 참고).
+    // (역사) M1(2026-09-21) `data-main-enter-ready` — cohort 준비 신호였다. 🔴 2026-09-22 폐기 — 이 표식을 읽던 본문 진입 모션(`src/lib/tabEnter.ts`)은 삭제됐다. 삼성 인터넷에서 transform 합성층이 붙었다 사라지며 화면 전체가 밝아졌다 돌아왔기 때문이다(App.tsx 탭 커밋 effect 주석 참고). 속성은 지금 **아무 동작도 하지 않는다** — 남겨 둔 것은 되살릴 때 대상 경계를 다시 찾지 않기 위해서다.
     //   이 안의 표식 4개(검색·여백·필터·목록)는 **같은 커밋**에 들어오므로, 이 루트가 붙었다는 것은
     //   곧 "이 화면의 진입 대상이 전부 모였다"는 뜻이다. 종전에는 표식 하나만 붙어도 재생해 버려서
-    //   외치기 하나만 움직이는 분절이 났다. 신호가 없으면 tabEnter 는 **아무것도 재생하지 않고 기다린다**.
+    //   당시 신호가 없으면 외치기 하나만 움직이는 분절이 났다. 지금은 재생 주체 자체가 없다.
     <div data-main-enter-ready className="space-y-3">
       {/* 검색 */}
       <div data-main-enter className="relative">

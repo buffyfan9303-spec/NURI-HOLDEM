@@ -132,7 +132,19 @@
       radial-gradient(min(600px, 150vw) min(600px, 150vw) at 88% 10%, rgb(var(--bloom-1) / var(--aura-a2)) 0%, rgb(var(--bloom-1) / calc(var(--aura-a2) * .55)) 30%, rgb(var(--bloom-1) / calc(var(--aura-a2) * .2)) 60%, transparent 100%),
       radial-gradient(min(420px, 110vw) min(420px, 110vw) at 50% 96%, rgb(var(--bloom-3) / var(--aura-a3)) 0%, rgb(var(--bloom-3) / calc(var(--aura-a3) * .55)) 30%, rgb(var(--bloom-3) / calc(var(--aura-a3) * .2)) 60%, transparent 100%);
   }
-  /* 🔴 C1(2026-09-21) — 모바일 본문 진입 모션(N1) 중 커뮤니티 카드가 **중간에 어두웠다 종료에 밝아지는** 회귀.
+  /* 🔴 2026-09-22 현행 정리 — 아래 C1 서술은 **역사**다. 지금은 규칙 설명이 아니다.
+     그 처방이 막던 원인(`src/lib/tabEnter.ts` 의 본문 transform)은 2026-09-22 에 **모듈째 삭제**됐다.
+     삼성 인터넷에서 같은 합성 승격/해제가 커뮤니티 한 곳이 아니라 **모든 메인 메뉴**의 밝기 점프로
+     나타났기 때문이다(로컬 390px 실측: 전 메뉴 8회 이동에 WAAPI 22개 / reduced-motion 대조 0개).
+     → 이제 모바일에서 `[data-main-enter]` 가 stacking context 로 승격되는 일 자체가 없다.
+
+     그런데 아래 `z-index:-1` 은 **일부러 남겨 둔다.** 지우는 것이 최소 수정이 아니기 때문이다 —
+     이 레이어의 쌓임 순서를 다시 0 으로 올리면 dark/light 배경과 오버레이 계층을 전부 다시 재야 하고,
+     그 변경은 이번 결함과 무관하다. 지금은 "승격이 없어도 쌓임 순서가 같다" 는 **방어선**으로만 남는다.
+     ⚠ 되돌리려면 근거(dark/light 실측 비교)를 먼저 남겨라. 근거 없이 또 다른 z-index 를 얹지 마라.
+
+     ── 이하 역사(2026-09-21 C1) ──
+     모바일 본문 진입 모션(N1) 중 커뮤니티 카드가 **중간에 어두웠다 종료에 밝아지는** 회귀였다.
      원인: `tabEnter.ts` 가 `[data-main-enter]`(커뮤니티는 목록 `UL`)에 WAAPI transform 을 거는 동안
      그 요소가 **새 stacking context** 가 되어 z-index:0 인 이 레이어 **위**로 올라간다. 애니메이션이 끝나면
      (`fill:'none'`) transform 이 사라져 다시 아래로 내려가고, 그제서야 아우라 gradient 가 카드 위에 덮인다.

@@ -160,6 +160,34 @@ let scopeSeq = 0;
  *   마커의 수명은 타이머가 아니라 전환 자신이어야 한다.
  */
 export function withViewTransition(update: () => void, fallback?: () => void, dir?: VTDirection, scope?: string): void {
+  // ── 🔴 모바일 중앙 경계 (2026-09-22) ─────────────────────────────────────
+  // `<1024px` 에서는 document 스냅샷을 **아예 만들지 않는다**. 이유는 연출 취향이 아니라 결함이다:
+  //   · 삼성 인터넷에서 본문이 세로로 눌렸다 돌아왔고(1862bb49), 포스터·내 정보에서도 같은 부류가 났다.
+  //   · root 스냅샷은 old/new 크로스페이드에 더해 **group 이 위치·크기까지 보간**한다(CSS View Transitions L1).
+  //     화면 길이가 다른 탭 사이에서 그 보간이 곧 '눌림' 이다.
+  //
+  // ⚠ 왜 호출부가 아니라 여기인가 — 이 저장소가 **네 번** 밟은 자리다.
+  //   메인 탭·일정 포스터·내 정보는 각자 모바일 가드를 갖고 있었는데 `handleVenueClick` 은 없었다.
+  //   호출부마다 같은 조건을 복제하면 다음에 추가되는 화면이 또 샌다. 경계는 한 곳이어야 한다.
+  //   → 새 화면을 만들 때 모바일 가드를 **기억할 필요가 없다.** 여기서 이미 막힌다.
+  //
+  // ⚠ 판정은 **호출 시점의 현재 viewport** 다. mount 시점 값을 캐시하면 열어 둔 채 리사이즈했을 때
+  //   닫기가 반대 경로를 탄다(2026-09-22 요구 B 에서 실제로 겪은 부류).
+  //
+  // ⚠ 데스크톱에서 시작된 전환이 도는 중에 창이 좁아질 수 있다. 그때 스냅샷과 마커를 그대로 두면
+  //   `data-vt-scope` 가 눌러앉아 index.css 의 view-transition-name 이 상시 붙는다(위 주석의 2026-09-10 사고).
+  //   그래서 여기서 active 전환을 걷고 마커도 같이 지운다.
+  //
+  // 포인터 구조(rescue) 스타일·리스너는 설치하지 않는다 — 스냅샷이 없으면 삼켜질 입력도 없다.
+  if (typeof window !== 'undefined' && typeof document !== 'undefined'
+      && !window.matchMedia('(min-width: 1024px)').matches) {
+    endActive();
+    delete document.documentElement.dataset.vtDir;
+    delete document.documentElement.dataset.vtScope;
+    (fallback ?? update)();
+    return;
+  }
+
   const d = document as VTDocument;
   // document.hidden: 숨긴 문서에서 startViewTransition 은 InvalidStateError 로 abort 되고,
   // 그 ready/finished 거부가 unhandledrejection 으로 새어 에러 수집망(Sentry)을 오염시킨다.

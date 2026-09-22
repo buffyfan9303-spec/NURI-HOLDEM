@@ -3,7 +3,13 @@
 > **다른 Claude Code 계정·다른 컴퓨터에서 이어서 작업할 때 이 파일 하나만 읽으면 된다.**
 > 한도가 끊기거나 계정을 바꿔도 이 파일은 git 에 있으므로 `git pull` 이면 따라온다.
 >
-> ✅ **마지막 갱신: 2026-09-22 (Opus 5) — §0-a24 가 오늘의 정본이다(§0-a23 은 그 앞).**
+> ✅ **마지막 갱신: 2026-09-22 (Opus 5) — §0-a25 가 오늘의 정본이다(§0-a24 는 같은 날 그 앞).**
+> 🔴 **전 메뉴 밝기 점프의 공통 원인을 없앴다** — 본문 진입 모션(`src/lib/tabEnter.ts`)을 **모듈째 삭제**하고,
+> 모바일 document View Transition 을 **공용 helper 한 곳**에서 막는다(`src/lib/viewTransition.ts`).
+> 종전에는 caller 마다 가드가 흩어져 `handleVenueClick` 만 빠져 있었다. **§0-a25 ⓪ 를 먼저 읽어라.**
+> PC 메인 탭은 실측에서 결함이 재현되지 않아 **현행 유지**다(§0-a25 ③). 모바일 신고로 PC 를 없애지 않았다.
+> 🔴 **Samsung Internet 실기기 = NOT_RUN** — Chromium PASS 를 Samsung PASS 로 바꾸지 마라(§0-a25 ⑨).
+> 아래 §0-a24 는 같은 날 앞 작업이다.
 > NURI SPOT 을 작성·저장·공유 중심으로 바꾸고, `내 정보` 눌림·일정 제목 12자를 닫았다.
 > 🔴 **그 과정에서 운영 P1 을 발견했다 — 스팟 공유(`share_spot_post`)가 라이브에서 한 번도 성공한 적이 없다**
 > (enum 컬럼에 text 를 넣어 SQLSTATE 42804). `20260922a` 에서 함께 고쳤다. **§0-a24 ⓪ 를 먼저 읽어라.**
@@ -19,7 +25,7 @@
 > 🔴 **역할 정의의 `model` 을 고쳐도 실행 중 세션에는 반영되지 않는다** — 새 세션에서 재확인해야 한다(§0-a16 ⑥).
 > ⛔ **"모든 하위 에이전트를 Sonnet 으로 강등" 은 사실이 아니다** — `CLAUDE_CODE_SUBAGENT_MODEL` 은 default 이고
 > agent definition 의 `model` 이 이긴다(§0-a24 ④).
-> §0-a24 → §0-a23 → §0-a22 순서로 읽어라. 팀·모델 정본은 `.claude/rules/nuri-team-capabilities.md`,
+> §0-a25 → §0-a24 → §0-a23 순서로 읽어라. 팀·모델 정본은 `.claude/rules/nuri-team-capabilities.md`,
 > 공통 교훈은 `docs/TEAM-KNOWLEDGE.md`.**
 >
 > 그 앞 갱신: **2026-09-20 밤(claude-4a)** · §2-D 에 **배포 증거**를 채웠다 — 운영은 `370c0cf`, 두 alias 확인, 손님 도메인 지문 실측.
@@ -104,7 +110,151 @@ npx tsc -b --force                # rc=0 이어야 한다
 ---
 
 
-## 0-a24. 2026-09-22 · Opus 5 — **NURI SPOT 작성·공유 중심 전환 · 내 정보 눌림 · 일정 제목 12자 + 운영 P1 발견** (여기가 가장 최신)
+## 0-a25. 2026-09-22 · Opus 5 — **전 메뉴 밝기 점프의 공통 원인 제거 · PC 내 매장 7칸 PILL · 모바일 일정 시간축** (여기가 가장 최신)
+
+원문 명세: `.claude/handoff/NURI-GLOBAL-MENU-BRIGHT-FLASH-ROOT-CAUSE-CLAUDE-EXECUTION-2026-09-22.md`
+
+### ⓪ 근본 원인 — `tabEnter` 의 transform 합성층 (모바일 공통 변수)
+
+오너 증상: 삼성 인터넷에서 **모든 하단 메인 메뉴**를 누를 때 화면이 잠깐 밝아졌다 돌아온다.
+
+로컬 프로덕션 빌드 390×844 실측(수정 전):
+
+| 측정 | 값 |
+|---|---|
+| `document.startViewTransition` 호출 | **0회** (모바일 가드가 이미 막고 있었다) |
+| 본문 WAAPI (`[data-main-enter]`) | **22개** / 8회 이동 (라이브 2 · 커뮤니티 4 · GTO 6 · 캘린더 1 · 홈 3 …) |
+| 키프레임 | `translateX(6px) → translateX(0)` · **170ms** |
+| `prefers-reduced-motion: reduce` 대조 | **0개 / VT 0** |
+
+reduced-motion 대조에서 0 이 나온 것이 인과를 갈랐다 — **전 메뉴 공통 변수는 이 WAAPI 하나**였다.
+
+기전: `transform` 이 `none` 이 아닌 요소는 **stacking context 와 fixed 자손의 컨테이닝 블록**을 만든다
+(CSS Transforms L1). 애니메이션이 `fill:'none'` 으로 끝나면 그 합성층이 사라지며 원래 쌓임·래스터로 돌아온다.
+반투명 카드·그라디언트 오라가 많은 이 앱에서 삼성 compositor 는 그 승격/해제를 밝기 변화로 보여 준다.
+`4d017b3` 이 `.aura-bg { z-index:-1 }` 로 **커뮤니티 한 조합만** 봉합했고 원인은 남아 있었다 — 이번엔 원인을 없앴다.
+
+🔴 **삼성 GPU 내부 동작은 실기기 trace 없이는 "추정"이다.** 확정한 것은 *공통 runtime 변수*와 *구조*다.
+
+### ① 바뀐 것
+
+1. **`src/lib/tabEnter.ts` 삭제** (213줄) + `App.tsx` 의 import·ref·호출·취소 effect 제거.
+   번들에서 `translateX(6px)` 170ms 시그니처 **0**. inert `data-main-enter*` 표식은 **일부러 남겼다**
+   (되살릴 때 대상 경계를 다시 찾지 않기 위해 — 지금은 아무 동작도 안 한다).
+2. **모바일 View Transition 을 공용 helper 한 곳에서 차단** — `src/lib/viewTransition.ts::withViewTransition`
+   진입부에서 `<1024px` 이면 active 전환을 걷고 마커(`data-vt-dir`·`data-vt-scope`)를 지운 뒤
+   `(fallback ?? update)()` 만 실행한다. 판정은 **호출 시점의 현재 viewport** 다.
+   🔴 이게 이번의 핵심 구조 변경이다 — 종전에는 메인탭·포스터·내 정보가 **각자** 가드를 갖고 있었고
+   `handleVenueClick`(매장 열기)만 빠져 있었다. 경계가 한 곳이 되어 **새 화면은 가드를 기억할 필요가 없다.**
+3. **PC 메인 탭은 현행 유지** — 아래 ③ 참고.
+4. **PC 내 매장 7칸 PILL** · **모바일 일정 카드 시간축 정렬** — ④⑤.
+
+### ② 모바일 실측 (수정 후 · 390px · 8회 이동)
+
+VT **0** · 목적지 본문 애니메이션 **22 → 0** · pane `transform: none` 전 프레임 ·
+html `opacity: 1` 불변 · body 배경 `rgb(6,8,15)` 불변 · 헤더 높이 **61px** 불변 · `scrollY` 0 · 목적지 pane 정확.
+
+### ③ PC 판정 — `PASS(현행 유지)`
+
+1280×900 실측: VT **1회**(설계대로), 본문 WAAPI **0**,
+pseudo 는 `::view-transition-group(root)`·`-new(root)` 최대 2개,
+html `opacity/filter` 와 body 배경 **전 프레임 불변**, pane `transform: none`.
+→ **PC 에서는 밝기·압축 결함이 재현되지 않았다.** 모바일 신고만으로 PC 전환을 없애지 않는다.
+
+### ④ PC 내 매장 상단 PILL — 7칸 동일 폭 (오너 결정으로 과거 PC 예외 폐기)
+
+`요약 | 포스터 | 장부 | 클락 | 순위 | 정산 | 이용권` 이 **가용 폭을 똑같이 나눈다.**
+
+| 폭 | 탭 | 각 칸 | 편차 |
+|---|---|---|---|
+| 1024 (7칸) | 7 | 104.09~104.11px | **0.02px** |
+| 1280·1440·1920 (7칸) | 7 | 132.39~132.41px | **0.02px** |
+| 킬스위치 off (6칸) | 6 | 154.81px | **0** |
+| 장부계열만 (6칸) | 6 | 154.81px | **0** — 빈 칸 0 |
+
+높이 44px · 중심 히트테스트 전부 도달 · rail/문서 overflow 0 · `aria-selected=true` 정확히 1 ·
+알약 중심차 ≤0.32px / 폭차 ≤0.39px · 보이는 `1.`~`5.` **0** · 티켓 아이콘 **0** · 이용권 진입점 **1개**.
+
+바뀐 것: ⓐ PC 이용권 화면에서 바를 숨기던 래퍼 `lg:hidden` 제거 → **이용권 판에서도 같은 바**가 남는다
+(왕복 `요약→…→이용권→요약` 전 구간 rail top/height 변화 ≤1px, `[data-pane="voucher"]` 실제 표시 확인).
+ⓑ tablist **밖** PC 전용 이용권 버튼 삭제 → tablist 안 **단일 탭**으로 승격(`role=tab`·`aria-selected`·`data-pill-active`).
+ⓒ `lg:flex-none`(요약)·`lg:max-w-[9rem]`(단계)·`lg:ml-auto`(이용권) 세 종류 폭 계약을
+`lg:min-w-0 lg:flex-1 lg:basis-0` **한 계약**으로 통일. ⓓ PC 숫자 접두 제거.
+
+🔴 **완료 정보는 버리지 않았다** — 라벨 폭을 쓰지 않는 absolute 점과 `aria-label="1. 포스터 (완료)"` 로 보존한다.
+**보이는 라벨은 `포스터`, 접근 이름은 `1. 포스터 (완료)`** 다. 테스트에서 탭을 찾을 때 이 둘을 헷갈리지 마라.
+모바일(320~1023)은 **동결**이다 — 기존 S1·375px 6칸 계약이 그대로 통과한다.
+
+### ⑤ 모바일 일정 카드 — `데일리 / 시작 / 시간` 중심축
+
+원인: 바깥이 `flex flex-col items-end`, 안쪽 문단도 `items-end` 라 **오른쪽 모서리만** 같았다.
+폭이 다른 세 문자열은 right edge 가 같아도 centerX 가 다르다(오너 사진의 사선).
+
+처방: 우측을 **2열 grid `[시간열 auto | chevron auto]`** 로 나누고 `<md` 는 1열 안에서 중앙 정렬.
+`md` 이상은 배지가 두 열 span + `justify-self-end`, 문단은 `items-end` — **PC 는 before 그대로.**
+
+| | centerX 편차 | chevron |
+|---|---|---|
+| 320·360·390·412·430·767 | **0.01px** (before 16.35px) | 별도 열 · 겹침 0 |
+| PC 768·1280·1440 | 우측 모서리 편차 **0** | 변화 0 |
+
+⚠ row-gap 을 쓰지 않는다 — 배지 없는 카드에 빈 간격이 생겨 카드가 커진다. 간격은 배지 자신의 `mb-0.5` 로만.
+
+### ⑥ 테스트 — 반대 계약을 **교체**했다(옆에 덧붙이지 않았다)
+
+폐기: `e2e/mobile-tab-transition.spec.ts` 의 **N1/M1/C1**.
+· N1 은 "본문이 6px 에서 170ms 들어온다" 를 **요구**해 이번 결함을 필수 기능으로 잠그고 있었다.
+· C1 은 커뮤니티 ROI 한 곳을 85ms 에 멈춘 Chromium 프레임으로만 봐서, 오너 증상이 남아 있는데도 초록이었다.
+신설: **R3**(390·1023에서 목적지 본문 애니메이션 0 · CDP 120~150ms 실제 터치 · first/warm 2회차) ·
+**R2**(모바일 매장 열기 VT 0 + 데스크톱 warm 재방문 VT>0 **양성 대조** + 리사이즈 잔재 0) ·
+**R7**(PC 7칸) · **R8**(모바일 centerX + PC 동결).
+
+🔴 R3 가 **두 번째 원인 후보를 찾았다**: 스크롤 구동 리빌(`.reveal` / `reveal-up`, `animation-timeline: view()`).
+`fill: both` 라 정착 상태에서도 computed `transform` 이 `matrix(1,0,0,1,0,0)`(항등)이다 — **보이는 변화는 0**
+이지만 속성값이 있으므로 합성층은 생긴다. 탭 전환 연출이 아니라 스크롤 위치가 정하는 값이라
+0건 계약에서는 빼되 **면제하지 않고 정착 상태를 직접 잰다**(항등 허용 · 비항등이나 opacity≠1 이면 빨강).
+→ **오너 판단 대기**: 삼성에서 증상이 남으면 이 `.reveal` 이 다음 후보다(제품 기능이라 임의로 지우지 않았다).
+
+### ⑦ 음성 대조 — 6건 모두 의도한 테스트가 의도한 메시지로 빨강
+
+| 되살린 것 | 빨개진 것 |
+|---|---|
+| pane 자손에 170ms `translateX(6px)` WAAPI | R3 "목적지 본문에 애니메이션을 시작했다" |
+| `commitTab` 모바일 live DOM 우회 제거 | "mobile navigation created a page snapshot" |
+| helper 모바일 중앙 가드 제거 | R2 "모바일 매장 열기에서 document VT 가 돌았다 (공용 helper 가드 누락)" |
+| PC 단계에 `lg:max-w-[9rem]` 복구 | R7 "탭 폭이 최대 10.88px 어긋났다: [163.88,153,153,153,153,153]" |
+| PC 이용권 래퍼 `lg:hidden` 복구 | R7 "이용권 로 간 뒤 바가 사라졌다" |
+| 일정 카드 `items-end` 옛 구조 복구 | R8 "centerX 가 16.35px 어긋났다 [333.22,316.87,323.78]" (PC 동결은 초록 유지) |
+
+전부 복원 후 **원본 해시 = 복원 해시** 확인. 최종 diff 에 실험 코드 0.
+
+⚠ **대조 하나는 일부러 기록해 둔다**: `closeMeCb` 의 caller 모바일 분기를 지워도 **초록이었다.**
+실패가 아니라 이중 방어의 증거다 — 중앙 경계가 이미 막는다. 다만 이제 caller 가드 제거는
+caller 쪽 계약으로 **감지되지 않는다**. caller 가드는 VT 방지가 아니라 `flushSync` 대 `commit()` 의미로 남는다.
+⚠ **대조를 잘못 고르면 초록이 거짓 안심을 준다**: 처음에 `lg:max-w-[9rem]` 을 1440·**7칸**에서 되살렸는데
+자연 폭 132px 이 상한 153px 에 안 걸려 초록이었다. 상한이 **실제로 무는** 6칸 조합으로 바꿔야 빨개졌다.
+
+### ⑧ 게이트
+
+lint 780파일 오류 0 / 경고 490 · tsc clean · **vitest 2,930 / 268 files** ·
+번들 JS **992.9**/1014 (tabEnter 제거로 993.5→992.9) · sitemap `5b5953aa…` 시작=종료 ·
+E2E **691 passed / 11 skipped** (총 705, 신설 계약 포함).
+
+E2E 실패 3건은 전부 비회귀로 확인했다:
+`pill-press`·`event-list-drag` 는 격리 2/2 통과(부하 flake) ·
+`mystore-transition-cls` 는 🔴 **`VenueManageTab.tsx` 를 HEAD 판으로 되돌려도 같은 값
+(`1159.90625→1115.84375`, 44.06px)으로 5회 중 3회 재현** — 이번 변경 이전부터 있던 결함이다(범위 밖).
+→ 내 매장 섹션 전환의 간헐 오르내림은 **별건으로 남는다.**
+
+### ⑨ 🔴 Samsung Internet 실기기 = **NOT_RUN**
+
+실기기·ADB·인증된 기기 서비스가 없다. 유료 가입을 자동으로 하지 않았다.
+Chromium 에뮬레이션 PASS 를 Samsung PASS 로 바꾸지 않는다. **구조적 공통 원인 제거·자동 회귀·배포는 끝냈고,
+오너의 실기기 확인 한 항목만 남는다.**
+
+---
+
+## 0-a24. 2026-09-22 · Opus 5 — **NURI SPOT 작성·공유 중심 전환 · 내 정보 눌림 · 일정 제목 12자 + 운영 P1 발견**
 
 원문 명세: `.claude/handoff/NURI-SPOT-PROFILE-SCHEDULE-EXECUTION-2026-09-22.md`
 진입 문서: `.claude/handoff/NURI-CLAUDE-CODE-COPY-PASTE-2026-09-22.md`

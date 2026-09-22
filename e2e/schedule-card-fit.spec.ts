@@ -616,3 +616,107 @@ for (const w of [320, 360, 390, 412]) {
     }
   });
 }
+
+// ── R8: 모바일 일정 카드 `데일리 / 시작 / 시간` 중심축 (2026-09-22 오너 요구) ──────────
+//
+// 증상(오너 사진): 카드 오른쪽 열에서 세 문자열이 **사선**으로 보인다.
+// 원인: 바깥 묶음이 `items-end`, 안쪽 문단도 `items-end` 라 **오른쪽 모서리만** 같았다.
+//   폭이 다른 세 문자열은 right edge 가 같아도 centerX 가 전부 다르다. chevron 까지 같은
+//   정렬 상자에 있어 '텍스트 중심' 의 기준 폭이 흐려졌다.
+// 처방: 우측을 [시간열 | chevron] 2열 grid 로 나누고, <md 에서 1열 안을 중앙 정렬한다.
+//   md 이상은 배지가 두 열을 span + `justify-self-end`, 문단은 `items-end` — PC 는 before 그대로.
+for (const w of [320, 360, 390, 412, 430, 767]) {
+  test(`🔴 R8 — ${w}px: 데일리·시작·시간 centerX 편차 1px 이하, chevron 별도 열`, async ({ page }) => {
+    const external: string[] = [];
+    await mockAll(page, external);
+    await openHome(page, w, 'dark', false);
+    await page.waitForSelector('main[data-tab="browse"] article.cv-card-list', { timeout: 10_000 });
+
+    const r = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll<HTMLElement>('main[data-tab="browse"] article.cv-card-list')]
+        .filter((c) => c.getBoundingClientRect().height > 0);
+      const cx = (el: Element) => { const b = el.getBoundingClientRect(); return +((b.left + b.right) / 2).toFixed(2); };
+      const rows: Array<Record<string, unknown>> = [];
+      let withBadge = 0, withoutBadge = 0;
+      for (const c of cards) {
+        const badge = c.querySelector<HTMLElement>('[data-testid="schedule-grade-badge"]');
+        const label = c.querySelector<HTMLElement>('[data-testid="schedule-start-label"]');
+        const time = c.querySelector<HTMLElement>('[data-testid="schedule-start-time"]');
+        const chev = c.querySelector<HTMLElement>('svg.lucide-chevron-right');
+        if (!label || !time) continue;
+        if (badge) withBadge += 1; else withoutBadge += 1;
+        const centers = [label, time, ...(badge ? [badge] : [])].map(cx);
+        const tb = time.getBoundingClientRect();
+        const cb = chev ? chev.getBoundingClientRect() : null;
+        rows.push({
+          badge: !!badge,
+          centers,
+          spread: +(Math.max(...centers) - Math.min(...centers)).toFixed(2),
+          // chevron 은 시간 텍스트 **오른쪽의 다른 열** 이어야 한다(겹침 0).
+          chevronRightOfTime: cb ? cb.left >= tb.right - 0.5 : null,
+          chevronOverlapsText: cb ? !(cb.left >= tb.right || cb.right <= tb.left) : null,
+          cardH: +c.getBoundingClientRect().height.toFixed(2),
+        });
+      }
+      return {
+        rows, withBadge, withoutBadge,
+        docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+
+    // 🔴 빈 통과 방지 — 잴 대상이 실제로 있었는지 먼저 못박는다.
+    expect(r.rows.length, '시작/시간 묶음을 가진 카드를 하나도 못 찾았다 — 아래 단언이 무의미하다').toBeGreaterThan(0);
+    expect(r.withBadge, '등급 배지가 있는 카드가 0개 — 배지 포함 정렬을 한 번도 재지 않았다').toBeGreaterThan(0);
+    console.log(`[R8 ${w}]`, JSON.stringify(r).slice(0, 700));
+
+    for (const row of r.rows) {
+      expect(row.spread as number,
+        `centerX 가 ${row.spread}px 어긋났다 (badge=${row.badge}, centers=${JSON.stringify(row.centers)})`).toBeLessThanOrEqual(1);
+      if (row.chevronOverlapsText !== null) {
+        expect(row.chevronOverlapsText, 'chevron 이 시간 텍스트와 겹친다').toBe(false);
+        expect(row.chevronRightOfTime, 'chevron 이 시간 텍스트 오른쪽의 별도 열이 아니다').toBe(true);
+      }
+    }
+    expect(r.docOverflow, '문서 가로 overflow 가 생겼다').toBeLessThanOrEqual(0);
+  });
+}
+
+// PC 동결 — 이 정렬 때문에 PC 카드가 바뀌면 실패다(우측 정렬 유지).
+for (const w of [768, 1280, 1440]) {
+  test(`🔴 R8 — ${w}px PC 는 우측 정렬 그대로다(중앙 정렬로 바뀌지 않는다)`, async ({ page }) => {
+    const external: string[] = [];
+    await mockAll(page, external);
+    await openHome(page, w, 'dark', false);
+    await page.waitForSelector('main[data-tab="browse"] article.cv-card-list', { timeout: 10_000 });
+
+    const r = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll<HTMLElement>('main[data-tab="browse"] article.cv-card-list')]
+        .filter((c) => c.getBoundingClientRect().height > 0);
+      const out: Array<Record<string, unknown>> = [];
+      for (const c of cards) {
+        const badge = c.querySelector<HTMLElement>('[data-testid="schedule-grade-badge"]');
+        const label = c.querySelector<HTMLElement>('[data-testid="schedule-start-label"]');
+        const time = c.querySelector<HTMLElement>('[data-testid="schedule-start-time"]');
+        if (!label || !time) continue;
+        const R = (el: Element) => +el.getBoundingClientRect().right.toFixed(2);
+        out.push({
+          badge: !!badge,
+          // PC 계약: 시작/시간의 **오른쪽 모서리**가 같다(중앙 정렬이면 달라진다).
+          labelRight: R(label), timeRight: R(time),
+          rightSpread: +Math.abs(R(label) - R(time)).toFixed(2),
+          badgeRight: badge ? R(badge) : null,
+          cardH: +c.getBoundingClientRect().height.toFixed(2),
+        });
+      }
+      return { out, docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+    });
+
+    expect(r.out.length, 'PC 에서 잴 카드를 못 찾았다').toBeGreaterThan(0);
+    console.log(`[R8 PC ${w}]`, JSON.stringify(r).slice(0, 600));
+    for (const row of r.out) {
+      expect(row.rightSpread as number,
+        `PC 에서 시작/시간 오른쪽 모서리가 ${row.rightSpread}px 어긋났다 — 모바일 중앙 정렬이 PC 로 샜다`).toBeLessThanOrEqual(1);
+    }
+    expect(r.docOverflow, 'PC 문서 가로 overflow').toBeLessThanOrEqual(0);
+  });
+}

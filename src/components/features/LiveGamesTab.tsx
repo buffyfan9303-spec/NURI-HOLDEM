@@ -171,8 +171,8 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   })();
   return (
     <main className="hero-aurora px-page-x pt-3 pb-section">
-      {/* `data-main-enter-ready` — M1 cohort 준비 신호. 이 루트가 붙으면 머리줄·목록·패널이 같은 커밋에 있다.
-          ⚠ 표식은 이 안의 블록들에만 있다. 이 컨테이너 자체를 움직이지 않는 이유는 `tabEnter.ts` 머리말 참고. */}
+      {/* (역사) `data-main-enter-ready` — M1 cohort 준비 신호였다. 이 루트가 붙으면 머리줄·목록·패널이 같은 커밋에 있었다.
+          🔴 2026-09-22 폐기 — 이 표식을 읽던 본문 진입 모션(`src/lib/tabEnter.ts`)은 삭제됐다. 삼성 인터넷에서 transform 합성층이 붙었다 사라지며 화면 전체가 밝아졌다 돌아왔기 때문이다(App.tsx 탭 커밋 effect 주석 참고). 속성은 지금 **아무 동작도 하지 않는다** — 남겨 둔 것은 되살릴 때 대상 경계를 다시 찾지 않기 위해서다. */}
       <div data-main-enter-ready className="mx-auto w-full max-w-3xl space-y-3">
         {/* items-start — 320~390px 에서는 설명 문구가 2줄이 되어 왼쪽 묶음이 62.8px, 버튼 그룹이 40.8px 가 된다.
             items-center 이면 버튼이 제목보다 11.0px 아래로 내려가 제목과 어긋난다(실측 375: 11.0 · 320: 10.83).

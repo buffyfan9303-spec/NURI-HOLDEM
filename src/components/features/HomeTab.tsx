@@ -425,7 +425,7 @@ export default function HomeTab({
   }
 
   return (
-    // `data-main-enter-ready` — M1 cohort 준비 신호(`src/lib/tabEnter.ts` 의 `collect`).
+    // (역사) `data-main-enter-ready` — M1 cohort 준비 신호였다. 🔴 2026-09-22 폐기 — 이 표식을 읽던 본문 진입 모션(`src/lib/tabEnter.ts`)은 삭제됐다. 삼성 인터넷에서 transform 합성층이 붙었다 사라지며 화면 전체가 밝아졌다 돌아왔기 때문이다(App.tsx 탭 커밋 effect 주석 참고). 속성은 지금 **아무 동작도 하지 않는다** — 남겨 둔 것은 되살릴 때 대상 경계를 다시 찾지 않기 위해서다.
     // 이 루트가 붙으면 아래 진입 대상(상단 안내·빠른 메뉴·섹션들)이 같은 커밋에 모두 들어 있다.
     <div data-main-enter-ready className="pb-section">
       {/* §6-4: 일반 컨테이너 최대 1200px, 좌우 최소 24px. 안쪽 섹션은 공용 px-page-x(17px)를 쓰므로

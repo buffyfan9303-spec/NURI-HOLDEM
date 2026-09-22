@@ -5,7 +5,7 @@
 // Run against a fresh preview: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/mobile-tab-transition.spec.ts
 import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
-import { mockSchedules } from './_schedules';
+import { mockSchedules, kstDay } from './_schedules';
 
 // 🔴 2026-09-21 실측 — 여기 있던 `test.use({ reducedMotion: 'no-preference' })` 를 지웠다.
 //   **런타임에 아무것도 하지 않는다**: `reducedMotion` 은 playwright-core 의 *브라우저 컨텍스트* 옵션이고
@@ -320,330 +320,287 @@ test.describe('schedule detail return snapshots', () => {
   }
 });
 
-// ── N1: 하단 대메뉴로 옮긴 뒤 **새 탭의 본문 콘텐츠가 한 번 들어온다** ────────────────
+// ── 2026-09-22: 여기 있던 N1 / M1 / C1 을 아래 R3 / R2 계약으로 **교체**했다 ────────
 //
-// 🔴 오너 정정(2026-09-21): "부드럽지 않다" 고 한 대상은 하단바 필이 아니라 **body 콘텐츠**였다.
-//    하단바만 움직이고 본문이 정적이면 실패다. 이 검사가 그 계약을 잠근다.
+// 폐기한 것과 이유(역사를 지우지 않으려고 남긴다):
+//   · N1 — "새 탭 본문이 오른쪽 6px 에서 170ms 동안 들어온다" 를 **요구**했다.
+//     이번 오너 결정으로 그 모션 자체가 결함이다. 이 계약을 두면 결함을 필수 기능으로 잠근다.
+//   · M1 — 그 모션의 cohort 가 분절·역행 없이 같이 들어오는지 봤다. 모션이 없으니 잴 대상이 없다.
+//   · C1 — 그 모션 중간/종료의 카드 픽셀 색만 봤다. 커뮤니티 ROI 한 곳, 85ms 에 멈춘 Chromium 프레임이라
+//     오너의 삼성 증상이 남아 있는데도 초록이었다. 원인(transform 합성)을 구조로 막는 쪽으로 바꾼다.
 //
-// 무엇을 재는가 — 두 가지를 **같이** 본다. 하나만 보면 거짓 통과가 난다:
-//   ① **선언값**(`getAnimations()` 의 keyframes/타이밍) — "그려지는데 값이 다르다" 를 잡는다.
-//   ② **실제 렌더된 rect 변위**(첫/중간/정착) — "선언은 맞는데 안 그려진다" 를 잡는다.
-//
-// ⚠ rAF 샘플러는 **피크 프레임을 놓칠 수 있다.** 실측(2026-09-21 · 격리 프로덕션 빌드 · 390×844):
-//   `5.8ms:0 → 10.3ms:5.89` 처럼 피크가 두 샘플 사이에 들어간 전환이 있었다.
-//   그래서 관측 최대값 하한은 선언값보다 낮게 두고(6px 선언 → 3.5px 하한), **정확한 6px 은 선언값으로 잠근다.**
-//
-// 🔴 FINAL-UX#MOTION-LIVE(2026-09-21) — 축이 y 에서 **x** 로 바뀌었다. 그래서 여기서 재는 변위도
-//    `rect.top` 이 아니라 `rect.left` 다. y 는 이제 **고정**이어야 하고(라이브 상단 카드의 아래→위
-//    움직임이 오너가 지적한 그것), 그 고정을 아래 ③ 에서 따로 단언한다.
-//
-// 음성 대조: `src/lib/tabEnter.ts` 의 `startTabEnter` 호출을 `App.tsx` 에서 빼면 이 검사가 빨개진다.
-test('🔴 N1 — 새 탭 본문이 오른쪽 6px 에서 170ms 동안 제자리로 들어온다 (첫·중간·정착)', async ({ page }) => {
-  test.setTimeout(180_000);
-  await stabilizeBackstack(page);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
-  await dismissOverlays(page);
-  await page.waitForTimeout(2000);
-  // 재방문(keep-alive) 경로로 만든다 — 실제 사용 조건이자 삼성 눌림이 났던 경로다.
-  for (const t of ['tools', 'community', 'home']) {
-    await page.evaluate((x) => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: x })), t);
-    await page.waitForTimeout(1000);
-  }
+// 대체 계약의 원칙: **색을 재지 않고 구조를 잰다.** Chromium GPU 가 밝기 차를 안 보여 줘도
+//   "본문에 새 애니메이션이 0개" 는 브라우저와 무관하게 성립한다.
 
-  const r = await page.evaluate(async () => {
-    const dest = 'tools';
-    const pick = () => Array.from(document.querySelectorAll<HTMLElement>(`[data-tab="${dest}"] [data-main-enter]`))
-      .filter((e) => e.offsetParent !== null && e.getBoundingClientRect().height > 0 && e.getBoundingClientRect().top < window.innerHeight);
-    const rows: { t: number; ys: number[]; tops: number[]; mats: string[]; ops: number[] }[] = [];
-    const hdr = () => document.querySelector<HTMLElement>('[data-stack-header]')?.getBoundingClientRect().height ?? -1;
-    const nav = () => document.querySelector<HTMLElement>('nav[aria-label="하단 내비게이션"]')?.getBoundingClientRect().top ?? -1;
-    const hdrs: number[] = []; const navs: number[] = [];
-    const t0 = performance.now();
-    window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: dest }));
-    await new Promise<void>((res) => {
-      const tick = () => {
-        const el = performance.now() - t0;
-        const els = pick();
-        rows.push({ t: +el.toFixed(1), ys: els.map((e) => +e.getBoundingClientRect().left.toFixed(2)),
-          tops: els.map((e) => +e.getBoundingClientRect().top.toFixed(2)),
-          mats: els.map((e) => getComputedStyle(e).transform), ops: els.map((e) => Number(getComputedStyle(e).opacity)) });
-        hdrs.push(hdr()); navs.push(nav());
-        if (el < 420) requestAnimationFrame(tick); else res();
-      };
-      requestAnimationFrame(tick);
+/** 목적지 pane 안에서 **이번 이동 때문에 새로 시작한** 애니메이션을 센다.
+ *  · WAAPI(`Element.animate`)와 CSS transition/animation 을 모두 본다.
+ *  · nav 의 작은 알약·아이콘은 `.tab-pane` 밖이라 애초에 잡히지 않는다(허용).
+ *  · 데이터 자체의 국소 애니메이션(스켈레톤 pulse 등)만 allowlist 로 뺀다. `*` 로 느슨하게 열지 않는다. */
+const BODY_PRESENTATION_PROPS = [
+  'transform', 'translate', 'scale', 'rotate', 'opacity', 'filter',
+  'backdrop-filter', 'clip-path', 'mix-blend-mode', 'background-color',
+];
+/** 데이터 로딩 표시처럼 **이동과 무관하게 항상 도는** 국소 애니메이션. 이름을 정확히 적는다. */
+const LOCAL_DATA_ANIMATIONS = ['pulse', 'nuri-skeleton', 'marquee', 'spin'];
+/**
+ * 스크롤 구동 리빌(`.reveal` / `reveal-up`, `src/index.css` 의 `animation-timeline: view()`).
+ *
+ * 🔴 **면제가 아니다.** 이름만 빼면 그 경로가 영원히 무검사가 된다(이 저장소 최다 함정).
+ *   이건 탭 이동이 **시작**하는 연출이 아니라 스크롤 위치가 정하는 값이라 위 0건 계약에서는 빼되,
+ *   대신 아래에서 **정착 상태를 직접 잰다**: 탭이 열린 뒤 화면 안에 있는 리빌 요소는
+ *   `transform: none` · `opacity: 1` 이어야 한다. 탭 전환 순간에 눈에 보이는 변화를 남기면 빨개진다.
+ *   (화면 밖 요소는 진행도 0% 라 일부러 흐린 상태다 — 그래서 '보이는 것' 만 잰다.)
+ */
+const SCROLL_DRIVEN = 'reveal-up';
+
+for (const width of [390, 1023]) {
+  test(`🔴 R3 — ${width}px 메인 메뉴 전환에 목적지 본문 애니메이션이 0개다`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await stabilizeBackstack(page);
+    await page.setViewportSize({ width, height: 844 });
+    await mockSchedules(page);
+    // 계측은 페이지 스크립트보다 **먼저** 붙어야 첫 호출을 놓치지 않는다.
+    await page.addInitScript(() => {
+      const w = window as unknown as Record<string, unknown>;
+      const rec: Array<Record<string, unknown>> = [];
+      w.__bodyAnims = rec;
+      let vt = 0;
+      w.__vtCalls = { get count() { return vt; } };
+      const nativeVT = document.startViewTransition?.bind(document);
+      if (nativeVT) {
+        document.startViewTransition = ((cb: () => void) => { vt += 1; return nativeVT(cb); }) as typeof document.startViewTransition;
+      }
+      const nativeAnimate = Element.prototype.animate;
+      Element.prototype.animate = function patched(this: Element, kf: unknown, opts: unknown) {
+        try {
+          const pane = this.closest?.('.tab-pane');
+          if (pane) {
+            rec.push({
+              via: 'waapi',
+              tab: pane.getAttribute('data-tab'),
+              cls: (this.getAttribute('class') ?? '').slice(0, 60),
+              kf: JSON.stringify(kf).slice(0, 160),
+            });
+          }
+        } catch { /* 계측이 앱을 깨뜨리지 않는다 */ }
+        return nativeAnimate.call(this, kf as Keyframe[], opts as KeyframeAnimationOptions);
+      } as typeof Element.prototype.animate;
     });
-    // 선언값은 다음 전환에서 애니메이션이 살아 있는 동안 읽는다.
-    window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'home' }));
-    await new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res())));
-    window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: dest }));
-    await new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res())));
-    const anims = pick().flatMap((e) => e.getAnimations());
-    const kf = anims[0] ? (anims[0].effect as KeyframeEffect).getKeyframes() as { transform?: string }[] : [];
-    const tm = anims[0] ? (anims[0].effect as KeyframeEffect).getTiming() : null;
-    return { rows: rows.filter((x) => x.ys.length > 0), hdrs, navs, animCount: anims.length,
-      kfFrom: kf[0]?.transform, kfTo: kf[kf.length - 1]?.transform, dur: tm?.duration, fill: tm?.fill };
-  });
+    await page.goto('/');
+    await dismissOverlays(page);
 
-  // ─ 잴 것이 실제로 있었는가 — 이 두 줄이 없으면 아래 전체가 빈 검사다.
-  expect(r.rows.length, 'data-main-enter 대상을 한 프레임도 못 잡았다 — 표식이 사라졌거나 탭이 안 열렸다').toBeGreaterThan(5);
-  const n = r.rows[0].ys.length;
-  expect(n, 'GTO 첫 화면에 움직일 대상이 없다 — hero 만이 아니라 검색·칩·도구 카드도 있어야 한다').toBeGreaterThanOrEqual(4);
+    const pane = (tab: string) => page.locator(`.tab-pane[data-tab="${tab}"]`);
+    await expect(pane('home')).toBeVisible();
 
-  // ① 선언값
-  expect(r.animCount, '진입 애니메이션 객체가 없다').toBeGreaterThan(0);
-  expect(r.kfFrom, '시작 keyframe').toBe('translateX(6px)');
-  expect(r.kfTo === 'translateX(0px)' || r.kfTo === 'translateX(0)', `끝 keyframe: ${r.kfTo}`).toBe(true);
-  expect(r.dur, 'duration').toBe(170);
-  expect(r.fill, 'fill 은 none 이어야 정착 뒤 transform 잔재가 안 남는다').toBe('none');
-
-  // ② 실제 렌더 — 기준선은 **정착 x**(애니메이션이 커밋 몇 프레임 뒤에 시작하므로 프레임 0 은 초기값이 아니다).
-  const settled = r.rows[r.rows.length - 1];
-  const disp = r.rows.map((f) => ({ t: f.t, d: f.ys.map((y, i) => +(y - (settled.ys[i] ?? y)).toFixed(2)) }));
-  const peak = disp.reduce((a, b) => (Math.max(...b.d) > Math.max(...a.d) ? b : a));
-  const mid = disp.find((x) => x.t > peak.t && Math.max(...x.d) > 0.3 && Math.max(...x.d) < Math.max(...peak.d) * 0.7);
-  console.log('[N1] 곡선#0:', disp.map((x) => `${x.t}:${x.d[0]}`).join(' '));
-
-  for (let i = 0; i < n; i++) {
-    expect(peak.d[i], `대상#${i} 관측 최대 x 변위 ${peak.d[i]}px — 본문이 정적이다`).toBeGreaterThanOrEqual(3.5);
-    expect(peak.d[i], `대상#${i} 변위가 과하다`).toBeLessThanOrEqual(8);
-  }
-  // 동시 진행 — 같은 프레임에서 서로 1px 이내(제각각 낙하 금지 = 오너가 말한 '분절').
-  expect(+(Math.max(...peak.d) - Math.min(...peak.d)).toFixed(2),
-    `대상들이 동시에 안 움직인다: ${JSON.stringify(peak.d)}`).toBeLessThanOrEqual(1);
-  expect(mid, '중간 프레임이 없다 — 한 프레임에 끝났거나 모션이 없다').toBeTruthy();
-  for (let i = 0; i < n; i++) expect(mid!.d[i], `대상#${i} 중간 변위가 [0, ${peak.d[i]}] 밖`).toBeLessThan(peak.d[i]);
-  for (const m of settled.mats) expect(m, '정착 뒤 transform 잔재').toBe('none');
-
-  // ③ 삼성 눌림 재발 — 순수 x 이동만. scale/skew 가 섞이면 본문이 '눌린' 것이고,
-  //    ty 가 0 이 아니면 오너가 지적한 **아래→위 세로 움직임**이 되살아난 것이다.
-  for (const f of r.rows) for (const m of f.mats) {
-    if (m === 'none') continue;
-    const v = m.match(/matrix\(([^)]+)\)/);
-    expect(v, `예상 밖 transform: ${m}`).toBeTruthy();
-    const [a, b, c, d, , ty] = v![1].split(',').map((x) => Number(x.trim()));
-    expect(Math.abs(a - 1) < 0.001 && Math.abs(d - 1) < 0.001 && Math.abs(b) < 0.001 && Math.abs(c) < 0.001,
-      `순수 이동이 아니다(scale/skew): ${m}`).toBe(true);
-    expect(Math.abs(ty), `세로 이동이 섞였다(y 는 고정이어야 한다): ${m}`).toBeLessThan(0.001);
-  }
-  // ③-b y 고정 — transform 뿐 아니라 **렌더된 top** 도 첫 프레임부터 정착까지 같아야 한다(허용 1px).
-  for (let i = 0; i < n; i++) {
-    const tops = r.rows.map((f) => f.tops[i]).filter((x) => typeof x === 'number');
-    expect(+(Math.max(...tops) - Math.min(...tops)).toFixed(2),
-      `대상#${i} 의 y 가 모션 중 ${Math.min(...tops)}→${Math.max(...tops)} 로 움직였다 — x 이동만 해야 한다`)
-      .toBeLessThanOrEqual(1);
-  }
-  // ④ Chrome 반짝임 재발 — 대상 opacity 를 건드리지 않는다.
-  for (const f of r.rows) for (const o of f.ops) expect(o, '대상 opacity 가 1 이 아니다 — 페이드는 금지다').toBeCloseTo(1, 3);
-  // ⑤ 헤더·하단바는 본문 이동과 무관하게 고정.
-  const hs = r.hdrs.filter((x) => x > 0); const ns = r.navs.filter((x) => x > 0);
-  expect(Math.max(...hs) - Math.min(...hs), '헤더 높이가 본문 모션 중에 변했다').toBeLessThanOrEqual(1);
-  expect(Math.max(...ns) - Math.min(...ns), '하단바가 본문 모션 중에 움직였다').toBeLessThanOrEqual(1);
-});
-
-// ── M1(2026-09-21) 커뮤니티 — **분절과 역행**을 잡는다 ────────────────────────────
-//
-// 위 N1 검사는 GTO 만 본다. 오너가 '본문 1·2·3 이 제각각'이라고 한 화면은 **커뮤니티**였고,
-// 원인이 둘이었다:
-//   ① 외치기 래퍼(`CommunityTab.tsx` 의 `mx-auto w-full max-w-3xl`)에 표식이 없어 **혼자 정적**이었다.
-//   ② `startTabEnter` 가 `requestAnimationFrame` 으로 한 프레임 미뤄, 그 프레임이 **정착 위치로 페인트**된
-//      뒤 다음 프레임에 +8 로 점프했다 — 사용자에겐 0→+8 **역행**으로 보인다.
-//
-// 그래서 여기서는 위 검사가 안 보는 두 가지를 본다:
-//   (a) 대상이 **처음 보이는 프레임**에서 이미 +6(x) 쪽인가 (역행 금지)
-//   (b) 모든 프레임에서 대상들의 값이 **서로 같은가** (분절 금지 — 피크 한 프레임만 보면 놓친다)
-//
-// 음성 대조(둘 다 확인함):
-//   · `tabEnter.ts` 의 `attempt()` 를 `requestAnimationFrame(attempt)` 로 되돌리면 (a) 가 빨개진다.
-//   · 외치기 래퍼의 `data-main-enter` 를 떼면 대상 수가 줄어 cohort 단언이 빨개진다.
-//
-// 🔴 FINAL-UX#MOTION-COMMUNITY(2026-09-21) — 이 검사는 종전에 **게시판(board)** 상태에서 돌았다.
-//    오너가 정적이라고 본 화면은 커뮤니티 **기본 서브탭(venues)** 이고, 그 상태에서는 `collect()` 가
-//    DOM 순서상 앞에 있는 **숨은** ready(live/board)를 골라 `offsetParent === null` → `return []` 로
-//    전부 정적이 되고 있었다. 그래서 아래 검사는 서브탭을 건드리지 않고 **기본 상태 그대로** 재현한다.
-//    음성 대조: `collect()` 를 `querySelector` 한 개로 되돌리거나, 보이는 ready 앞에 숨은 ready 를
-//    하나 삽입하면 이 검사가 빨개져야 한다.
-//
-// 🔴 이 검사가 **첫 방문에서는 아무것도 재지 않았다**(2026-09-21 음성 대조 실측).
-//    커뮤니티 **첫 방문 순간**에는 판 안에 ready 가 기본 섹션(venues) **하나뿐**이라 종전 코드도 통과한다.
-//    숨은 live/board 는 `CommunityTab` 의 **유휴 프리마운트**가 나중에 붙이고, 그때부터 DOM 순서상
-//    앞자리를 차지한다. 그래서 아래 검사는 **프리마운트가 끝난 뒤의 재방문**을 잰다 —
-//    실측: 되돌린 빌드에서 첫 방문 경로는 통과(거짓 통과), 재방문 경로는 실패.
-test('🔴 M1 — 커뮤니티 본문 cohort 가 첫 프레임부터 같은 값으로 함께 들어온다 (역행·분절 금지)', async ({ page }) => {
-  test.setTimeout(180_000);
-  await stabilizeBackstack(page);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
-  await dismissOverlays(page);
-  await page.waitForTimeout(2_500);
-
-  // 🔴 전환은 **하단바 버튼을 실제로 눌러서** 일으킨다. `nuri:goto-tab` 커스텀 이벤트로 재현하려다
-  //   2026-09-21 에 헛발을 디뎠다: 커뮤니티에서는 대상 5개가 잡히는데 transform 이 끝까지 `none` 이라
-  //   "모션이 없다"로 읽혔다(실측). 하단바 경로는 같은 조건에서 정상 재현된다 —
-  //   그리고 오너가 지적한 것도 **하단 대메뉴를 누른 뒤**의 화면이다. 재현 경로를 사용자 경로와 맞춘다.
-  const navBtn = page.getByRole('navigation', { name: '하단 내비게이션' })
-    .getByRole('button', { name: /커뮤니티/ });
-  await expect(navBtn, '하단바에 커뮤니티 칸이 없다').toBeVisible({ timeout: 15_000 });
-
-  // 🔴 프리마운트를 끝낸 **재방문** 상태로 만든다(위 주석). 여기가 실제 결함 조건이다.
-  await navBtn.click();
-  await page.waitForFunction(
-    () => document.querySelectorAll('[data-tab="community"] [data-main-enter-ready]').length >= 2,
-    undefined, { timeout: 20_000 });
-  const readyMap = await page.evaluate(() => Array.from(
-    document.querySelectorAll('[data-tab="community"] [data-main-enter-ready]'))
-    .map((el) => ({ sec: el.closest('[data-sec]')?.getAttribute('data-sec') ?? '(밖)',
-      hidden: (el as HTMLElement).offsetParent === null })));
-  console.log('[M1] ready 목록(DOM 순서):', JSON.stringify(readyMap));
-  // 잴 것이 실제로 결함 조건인가 — **보이는 ready 앞에 숨은 ready 가 있어야** 이 검사가 의미를 갖는다.
-  const firstVisible = readyMap.findIndex((x) => !x.hidden);
-  expect(firstVisible, `숨은 ready 가 앞에 없다(ready 목록 ${JSON.stringify(readyMap)}) — ` +
-    '프리마운트가 아직 안 돌았다면 이 검사는 결함을 재지 못한다').toBeGreaterThan(0);
-  await page.getByRole('navigation', { name: '하단 내비게이션' })
-    .getByRole('button', { name: /^홈/ }).click();
-  await page.waitForTimeout(800);
-
-  // 샘플러를 **먼저** 걸어 두고 그 다음에 누른다 — 첫 프레임을 놓치면 역행 검사가 성립하지 않는다.
-  await page.evaluate(() => {
-    const w = window as unknown as Record<string, unknown>;
-    w.__m1rows = [];
-    const tick = () => {
-      const els = Array.from(document.querySelectorAll<HTMLElement>('[data-tab="community"] [data-main-enter]'))
-        .filter((e) => e.offsetParent !== null && e.getBoundingClientRect().height > 0
-          && e.getBoundingClientRect().top < window.innerHeight);
-      // matrix 의 index 4 = tx(x 이동), 5 = ty. y 는 0 이어야 하므로 같이 들고 단언한다.
-      const ys = els.map((e) => {
-        const m = /matrix\(([^)]+)\)/.exec(getComputedStyle(e).transform);
-        return m ? +Number(m[1].split(',')[4]).toFixed(2) : 0;
+    const cdp = await page.context().newCDPSession(page);
+    /** 실제 손가락 — Playwright `click()` 은 누름 0ms 라 `:active`/합성 부류를 재현하지 못한다. */
+    const tapNav = async (label: string) => {
+      const nav = width < 1024
+        ? page.getByRole('navigation', { name: '하단 내비게이션' })
+        : page.locator('[data-stack-tabbar]');
+      // ⚠ `exact: true` 를 쓰지 않는다 — 라이브 버튼의 접근 이름은 진행 게임 수에 따라
+      //   `라이브, 진행 중 1게임` 으로 바뀐다. 대신 **시작 앵커** 정규식으로 좁힌다:
+      //   느슨한 부분일치는 다른 버튼을 잡아 조용히 거짓 통과할 수 있다(CLAUDE.md 경고).
+      const button = nav.getByRole(width < 1024 ? 'button' : 'tab', { name: new RegExp(`^${label}`) });
+      await expect(button, `${label} 버튼을 찾지 못했다 — 하단바 라벨이 바뀌었을 수 있다`)
+        .toBeVisible({ timeout: 15_000 });
+      const box = await button.boundingBox();
+      expect(box, `${label} 버튼의 위치를 잴 수 없다`).not.toBeNull();
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchStart', touchPoints: [{ x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 }],
       });
-      const tys = els.map((e) => {
-        const m = /matrix\(([^)]+)\)/.exec(getComputedStyle(e).transform);
-        return m ? +Number(m[1].split(',')[5]).toFixed(2) : 0;
-      });
-      (w.__m1rows as unknown[]).push({ t: +performance.now().toFixed(1), ys, tys });
-      if ((w.__m1rows as unknown[]).length < 60) requestAnimationFrame(tick);
+      await page.waitForTimeout(130);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     };
-    requestAnimationFrame(tick);
+
+    const MENUS: Array<{ label: string; tab: string }> = [
+      { label: '라이브', tab: 'live' },
+      { label: '커뮤니티', tab: 'community' },
+      { label: 'GTO', tab: 'tools' },
+      { label: '캘린더', tab: 'calendar' },
+      { label: '홈', tab: 'home' },
+    ];
+
+    const findings: string[] = [];
+    let visited = 0;
+
+    for (const pass of [1, 2]) { // 1회차 = first/cold, 2회차 = warm 재방문
+      for (const m of MENUS) {
+        await page.evaluate((props) => {
+          const w = window as unknown as Record<string, unknown>;
+          (w.__bodyAnims as unknown[]).length = 0;
+          // CSS transition/animation 은 getAnimations 로 본다 — 이동 직전 목록을 지문으로 남긴다.
+          w.__before = new Set(
+            document.getAnimations().map((a) => `${a.id}|${String((a.effect as KeyframeEffect | null)?.target?.className ?? '')}`),
+          );
+          w.__props = props;
+        }, BODY_PRESENTATION_PROPS);
+
+        await tapNav(m.label);
+        await expect(pane(m.tab)).toBeVisible({ timeout: 15_000 });
+        visited += 1;
+
+        // 정착까지 관찰한다 — 도착 직후 한 프레임만 보면 늦게 시작하는 애니메이션을 놓친다.
+        await page.waitForTimeout(500);
+
+        const res = await page.evaluate(([allow, scrollName]) => {
+          const w = window as unknown as Record<string, unknown>;
+          const waapi = (w.__bodyAnims as Array<Record<string, unknown>>).slice();
+          const before = w.__before as Set<string>;
+          const props = w.__props as string[];
+          const css: string[] = [];
+          const scrollDriven: string[] = [];
+          for (const a of document.getAnimations()) {
+            const eff = a.effect as KeyframeEffect | null;
+            const target = eff?.target as Element | null;
+            if (!target || !target.closest?.('.tab-pane')) continue;
+            const key = `${a.id}|${String(target.className ?? '')}`;
+            if (before.has(key)) continue;                       // 이동 전부터 돌던 것
+            const name = String((a as unknown as { animationName?: string }).animationName ?? a.id ?? '');
+            // 스크롤 구동 리빌 — 0건 계약에서는 빼되 **정착 상태를 대신 잰다**(면제가 아니다).
+            if (name.includes(scrollName as string)) {
+              const r = target.getBoundingClientRect();
+              if (r.width > 0 && r.height > 0 && r.top < innerHeight && r.bottom > 0) {
+                const cs = getComputedStyle(target);
+                // ⚠ `none` 이 아니라 **항등 여부**로 잰다. `fill: both` 애니메이션이 붙어 있으면
+                //   정착 상태에서도 computed 값이 `matrix(1, 0, 0, 1, 0, 0)` 이다 — 이동·배율은 0 이다.
+                //   우리가 막으려는 것은 '보이는 변화' 이므로 항등은 통과시키고 비항등만 잡는다.
+                const identity = cs.transform === 'none' || /^matrix\(1,\s*0,\s*0,\s*1,\s*0,\s*0\)$/.test(cs.transform);
+                if (!identity || cs.opacity !== '1') {
+                  scrollDriven.push(`${name} on .${String(target.className ?? '').slice(0, 36)} transform=${cs.transform} opacity=${cs.opacity}`);
+                }
+              }
+              continue;
+            }
+            if ((allow as string[]).some((x) => name.includes(x) || String(target.className ?? '').includes(x))) continue;
+            const changed = (eff?.getKeyframes?.() ?? [])
+              .flatMap((k) => Object.keys(k))
+              .filter((p) => props.includes(p.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())));
+            if (!changed.length) continue;                        // 표현과 무관한 속성
+            css.push(`css:${name || '(anon)'} on .${String(target.className ?? '').slice(0, 40)} [${[...new Set(changed)].join(',')}]`);
+          }
+          return { waapi, css, scrollDriven };
+        }, [LOCAL_DATA_ANIMATIONS, SCROLL_DRIVEN] as [string[], string]);
+
+        for (const a of res.waapi) findings.push(`pass${pass} ${m.label} waapi ${JSON.stringify(a)}`);
+        for (const c of res.css) findings.push(`pass${pass} ${m.label} ${c}`);
+        for (const s of res.scrollDriven) findings.push(`pass${pass} ${m.label} 스크롤리빌이 정착하지 않았다: ${s}`);
+      }
+    }
+
+    // 🔴 빈 통과 방지 — 실제로 잴 대상을 돌았는지 먼저 단언한다.
+    expect(visited, '메뉴를 한 번도 이동하지 않았다 — 아래 0건은 아무 의미가 없다').toBe(MENUS.length * 2);
+    expect(await page.evaluate(() => (window as unknown as { __vtCalls: { count: number } }).__vtCalls.count),
+      `${width}px 모바일 메인 탭에서 document View Transition 이 돌았다`).toBe(0);
+    expect(findings, `메인 메뉴 전환이 목적지 본문에 애니메이션을 시작했다:\n${findings.join('\n')}`).toEqual([]);
   });
-  await navBtn.click();
-  await page.waitForTimeout(1_500);
-  const r = await page.evaluate(() => (window as unknown as Record<string, unknown>).__m1rows) as { t: number; ys: number[]; tys: number[] }[];
+}
 
-  // 🔴 **대상이 화면에 나타난 첫 프레임**부터 본다. '움직이는 프레임만' 으로 거르면 안 된다 —
-  //   역행의 정체가 바로 "보이는데 아직 안 움직인(=정착 위치로 페인트된) 프레임" 이라, 그걸 걸러내면
-  //   검사가 스스로 증거를 버린다. 2026-09-21 음성 대조에서 실제로 그랬다: `rAF` 지연을 되살린
-  //   결함 빌드가 **그대로 통과**했다(잘못된 통과). 전환 전에는 pane 이 display:none 이라 ys.length 가 0 이다.
-  const appeared = r.filter((f) => f.ys.length > 0);
-  expect(appeared.length, '커뮤니티 본문 대상이 한 프레임도 안 잡혔다 — 표식이 사라졌거나 탭이 안 열렸다')
-    .toBeGreaterThan(2);
-
-  const first = appeared[0];
-  // (a) 역행 금지 — 대상이 **보이기 시작한 그 프레임**에서 이미 +6(x) 쪽이어야 한다.
-  //   한 프레임이라도 정착(0)으로 먼저 그려지면 사용자 눈에는 "내려갔다 올라온다"로 보인다.
-  expect(Math.max(...first.ys),
-    `대상이 보이기 시작한 첫 프레임의 x 변위가 ${Math.max(...first.ys)}px 다 — 정착 위치로 한 번 그려진 뒤 ` +
-    `튀었다(0→+6 역행). 시퀀스: ${appeared.slice(0, 6).map((f) => `${f.t}:${f.ys[0]}`).join(' ')}`)
-    .toBeGreaterThanOrEqual(3.5);
-  expect(Math.max(...first.ys), '첫 프레임 변위가 과하다').toBeLessThanOrEqual(8);
-  // y 는 어느 프레임에서도 움직이지 않는다 — 라이브 카드의 아래→위 움직임 재발 방지.
-  for (const f of appeared) {
-    expect(Math.max(...f.tys.map((v) => Math.abs(v))),
-      `t=${f.t} 에서 세로 이동이 섞였다: ${JSON.stringify(f.tys)}`).toBeLessThanOrEqual(0.01);
-  }
-  const moving = appeared;
-
-  // 🔴 cohort — 외치기 래퍼까지 들어와야 한다. 검색·여백·필터·목록 4개 + 외치기 = 5.
-  expect(first.ys.length,
-    `커뮤니티 첫 화면의 진입 대상이 ${first.ys.length}개다 — 외치기 래퍼(mx-auto w-full max-w-3xl)가 빠졌을 수 있다`)
-    .toBeGreaterThanOrEqual(5);
-
-  // 🔴 (b) 분절 금지 — **모든 프레임에서** 서로 같은 값이어야 한다(피크 한 프레임만 보면 놓친다).
-  for (const f of moving) {
-    expect(f.ys.length, `t=${f.t} 에서 대상 수가 ${f.ys.length} 로 줄었다`).toBe(first.ys.length);
-    expect(+(Math.max(...f.ys) - Math.min(...f.ys)).toFixed(2),
-      `t=${f.t} 에서 대상들이 제각각이다: ${JSON.stringify(f.ys)} — 이게 오너가 본 '본문 1·2·3 분절'이다`)
-      .toBeLessThanOrEqual(1);
-  }
-  // 단조 감소(+8 → 0) — 중간에 다시 커지면 역행이다.
-  for (let i = 1; i < moving.length; i++) {
-    expect(Math.max(...moving[i].ys),
-      `t=${moving[i].t} 에서 변위가 다시 커졌다 (${Math.max(...moving[i - 1].ys)} → ${Math.max(...moving[i].ys)})`)
-      .toBeLessThanOrEqual(Math.max(...moving[i - 1].ys) + 0.5);
-  }
-});
-
-// ── C1(2026-09-21) 커뮤니티 밝기 점프 ───────────────────────────────────────────
-//
-// 진입 모션 중 `[data-main-enter]` 가 transform 으로 **새 stacking context** 가 되면서 `.aura-bg`(fixed)
-// 위로 올라갔다가, 끝나면(`fill:'none'`) 다시 아래로 내려간다. 그 순간 아우라 gradient 가 카드 위에 덮여
-// **색이 바뀐다.** 운영 390×844 실측: 카드 안 픽셀 중간 rgb(14,19,34) → 종료 rgb(21,22,46).
-//
-// 재는 법: 170ms 를 쫓지 않고 애니메이션을 **중간에 일시정지**해 결정적으로 만든 뒤 같은 ROI 를 두 번 찍어
-// **PNG 바이트를 직접 비교**한다(색이 같으면 인코딩 결과도 같다 — 디코더 의존성이 필요 없다).
-//
-// 음성 대조(확인함): `src/index.css` 의 모바일 `.aura-bg { z-index: -1 }` 을 `0` 으로 되돌리면
-//   이 검사가 빨개진다(실측: 같은 ROI PNG 가 118바이트 → 342바이트로 갈렸다).
-test('🔴 C1 — 본문 진입 모션의 중간과 종료에서 카드 픽셀 색이 바뀌지 않는다', async ({ page }) => {
-  test.setTimeout(180_000);
+// ── R2: 모바일 View Transition 은 **공용 helper 한 곳**에서 막는다 ──────────────────
+// caller 마다 가드를 복제하면 새 화면이 또 샌다(2026-09-22 실행서 §4 재발 사슬).
+// `handleVenueClick` 이 정확히 그렇게 빠져 있었다 — 아래 (b) 가 그 회귀를 잠근다.
+test('🔴 R2 — 모바일은 공용 helper 가 스냅샷을 막고, 데스크톱은 그대로 돈다', async ({ page }) => {
+  test.setTimeout(90_000);
   await stabilizeBackstack(page);
+  // ⚠ `mockSchedules` 의 기본 행은 `venue_id: null` 이라 매장명이 **버튼이 아니라 span** 으로 그려진다
+  //   (`ScheduleCard.tsx` 의 VenueLink 는 onClick 이 없으면 span 이다). 매장 열기 경로를 재려면
+  //   venue_id 가 있는 행과 venues 응답이 함께 필요하다 — 핸들러 하나로 준다
+  //   (`e2e/schedule-card-clicks.spec.ts` 와 같은 규칙: 겹치면 route.continue 가 조용히 샌다).
+  const VENUE_ID = '33333333-3333-4333-8333-333333333333';
+  const VENUE_NAME = '전환검증 홀덤펍';
+  await page.route('**/*', async (route) => {
+    const url = route.request().url();
+    if (/^http:\/\/(localhost|127\.0\.0\.1)/.test(url) || url.startsWith('data:') || url.startsWith('blob:')) return route.continue();
+    const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (/\/rest\/v1\/schedules/.test(url)) {
+      return json([{
+        id: 'cccccccc-0000-4000-8000-000000000001', title: '전환검증 데일리',
+        venue_id: VENUE_ID, pub_name: VENUE_NAME, region: '서울', address: '서울 어딘가 1',
+        date: kstDay(0), start_time: '19:00:00',
+        duration: '4시간', format: 'NLH', guaranteed: true, prize_pool: 1_000_000, prize_percent: null,
+        is_competition: false, grade: 'daily', blinds: null, buy_in: { amount: 30_000 },
+        display_order: 1, is_premium: false, owner_id: VENUE_ID, approved: true,
+        unread_qna_count: 0, view_count: 0, premium_until: null, reg_close_time: null, structure: null,
+      }]);
+    }
+    if (/\/rest\/v1\/venues/.test(url)) {
+      return json([{ id: VENUE_ID, name: VENUE_NAME, region: '서울', address: '서울 어딘가 1',
+        approved: true, status: 'active', is_paid_ad: false, display_order: 1, follower_count: 0, rating: null }]);
+    }
+    if (/\/rest\/v1\//.test(url)) return json([]);
+    if (/supabase\.co/.test(url)) return json({});
+    return route.abort('blockedbyclient');
+  });
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    let vt = 0;
+    w.__vt = { get n() { return vt; } };
+    const native = document.startViewTransition?.bind(document);
+    if (native) {
+      document.startViewTransition = ((cb: () => void) => { vt += 1; return native(cb); }) as typeof document.startViewTransition;
+    }
+  });
+
+  // (a) 모바일: 매장 열기(handleVenueClick)가 스냅샷을 만들지 않고, 그래도 매장 화면은 열린다.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await dismissOverlays(page);
-  await page.waitForTimeout(2_000);
+  const card = page.locator('article.cv-card-list').first();
+  await expect(card, '일정 카드가 없어 매장 링크에 도달할 수 없다').toBeVisible({ timeout: 20_000 });
+  // 카드 안 첫 버튼이 매장명 링크다(`e2e/schedule-card-clicks.spec.ts` 와 같은 관례).
+  // 텍스트로 **대상을 확인**한 뒤 누른다 — 엉뚱한 버튼을 눌러 놓고 초록이 되는 것을 막는다.
+  const venueLink = card.locator('button').first();
+  await expect(venueLink, '카드 안 매장명 링크를 찾지 못했다').toContainText(VENUE_NAME);
+  const beforeVenue = await page.evaluate(() => (window as unknown as { __vt: { n: number } }).__vt.n);
+  await venueLink.click();
+  await expect(page.locator('[data-venue-page], [role="dialog"]').first(),
+    '매장 화면이 열리지 않았다 — 가드가 기능까지 막았다').toBeVisible({ timeout: 15_000 });
+  expect(await page.evaluate(() => (window as unknown as { __vt: { n: number } }).__vt.n) - beforeVenue,
+    '모바일 매장 열기에서 document View Transition 이 돌았다 (공용 helper 가드 누락)').toBe(0);
+  // 스냅샷을 안 만들었으니 마커도 남으면 안 된다.
+  expect(await page.evaluate(() => document.documentElement.dataset.vtScope ?? null),
+    '모바일인데 data-vt-scope 마커가 남았다').toBeNull();
 
-  // 처방이 실제로 걸려 있는가 — 이 한 줄이 없으면 아래 픽셀 비교가 '왜 같은지' 를 설명하지 못한다.
-  const z = await page.evaluate(() => {
-    const el = document.querySelector('.aura-bg');
-    return el ? getComputedStyle(el).zIndex : null;
-  });
-  expect(z, '모바일에서 .aura-bg 가 음수 z 가 아니다 — 애니메이션 전/중/후 쌓임 순서가 달라진다').toBe('-1');
+  // (b) 데스크톱 양성 대조 — helper 자체는 살아 있어야 한다. 죽은 helper 는 '0회' 로도 통과한다.
+  // ⚠ **첫 방문은 VT 경로가 아니다.** `commitTab` 은 `visitedTabs.has(t)` 일 때만 스냅샷을 쓰고
+  //   콜드 진입은 lazy 청크 때문에 `startTabTransition` 으로 간다. 그래서 한 번 다녀와서
+  //   **warm 재방문**으로 재야 한다 — 이걸 빠뜨리면 멀쩡한 helper 를 '죽었다' 고 오판한다.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/');
+  await dismissOverlays(page);
+  const tabbar = page.locator('[data-stack-tabbar]');
+  await tabbar.getByRole('tab', { name: 'GTO', exact: true }).click();
+  await expect(page.locator('.tab-pane[data-tab="tools"]')).toBeVisible({ timeout: 15_000 });
+  await tabbar.getByRole('tab', { name: '홈', exact: true }).click();
+  await expect(page.locator('.tab-pane[data-tab="home"]')).toBeVisible({ timeout: 15_000 });
+  const beforeDesktop = await page.evaluate(() => (window as unknown as { __vt: { n: number } }).__vt.n);
+  await tabbar.getByRole('tab', { name: 'GTO', exact: true }).click();   // warm 재방문
+  await expect(page.locator('.tab-pane[data-tab="tools"]')).toBeVisible({ timeout: 15_000 });
+  expect(await page.evaluate(() => (window as unknown as { __vt: { n: number } }).__vt.n) - beforeDesktop,
+    '데스크톱 warm 재방문에서 View Transition 이 0회 — helper 가 통째로 죽었을 수 있다(양성 대조 실패)').toBeGreaterThan(0);
+});
 
-  // 위 M1 검사와 같은 이유로 **실제 하단바 버튼**을 누른다(커스텀 이벤트로는 커뮤니티 모션이 안 선다).
+// ── R2-resize: 데스크톱 전환 중 좁아져도 잔재가 남지 않는다 ───────────────────────
+test('🔴 R2 — 1024 → 390 으로 좁힌 뒤에는 스냅샷도 마커도 남지 않는다', async ({ page }) => {
+  test.setTimeout(60_000);
+  await stabilizeBackstack(page);
+  await mockSchedules(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/');
+  await dismissOverlays(page);
+  // 데스크톱에서 전환을 한 번 돌려 마커를 만든 뒤 바로 좁힌다.
+  await page.locator('[data-stack-tabbar]').getByRole('tab', { name: '커뮤니티', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('navigation', { name: '하단 내비게이션' })
-    .getByRole('button', { name: /커뮤니티/ }).click();
-
-  // 진입 애니메이션만 골라 중간(85ms)에 세운다.
-  // ⚠ `.reveal` 같은 scroll-driven(progress based) 애니는 `currentTime` 에 ms 를 못 넣는다 — duration 으로 가른다.
-  const paused = await page.evaluate(() => {
-    let n = 0;
-    for (const a of document.getAnimations()) {
-      const eff = a.effect as KeyframeEffect | null;
-      if (!eff?.getKeyframes) continue;
-      if (eff.getTiming().duration !== 170) continue;
-      const kf = eff.getKeyframes() as { transform?: string }[];
-      if (!kf.some((f) => typeof f.transform === 'string' && f.transform.includes('translateX(6px)'))) continue;
-      a.pause(); a.currentTime = 85; n += 1;
-    }
-    return n;
-  });
-  expect(paused, '진입 애니메이션을 하나도 못 세웠다 — 모션이 없으면 이 검사는 아무것도 재지 않는다').toBeGreaterThan(0);
-  await page.waitForTimeout(250);
-
-  // 글자가 없는 평평한 영역을 ROI 로 — 색만 비교되게 한다.
-  const roi = await page.evaluate(() => {
-    for (const el of Array.from(document.querySelectorAll<HTMLElement>('[data-main-enter], [data-main-enter] *'))) {
-      const r = el.getBoundingClientRect();
-      if (r.width < 60 || r.height < 30) continue;
-      if (r.top < 60 || r.bottom > window.innerHeight - 90) continue; // 헤더·하단바 밖
-      return { x: Math.round(r.x + 8), y: Math.round(r.y + 5), width: 12, height: 8 };
-    }
-    return null;
-  });
-  expect(roi, '카드 ROI 를 못 잡았다 — 대상이 없거나 화면 밖이다').not.toBeNull();
-
-  const mid = await page.screenshot({ clip: roi! });
-  await page.evaluate(() => {
-    for (const a of document.getAnimations()) {
-      const eff = a.effect as KeyframeEffect | null;
-      if (eff?.getTiming && eff.getTiming().duration === 170) { try { a.finish(); } catch { /* 이미 끝남 */ } }
-    }
-  });
-  await page.waitForTimeout(400);
-  const settled = await page.screenshot({ clip: roi! });
-
-  expect(mid.equals(settled),
-    `모션 중간과 종료의 카드 픽셀이 다르다 (mid ${mid.length}B vs settled ${settled.length}B) — ` +
-    '아우라가 transform 전/후로 카드 위아래를 오가며 색이 점프한다').toBe(true);
+    .getByRole('button', { name: '홈', exact: true }).click();
+  await expect(page.locator('.tab-pane[data-tab="home"]')).toBeVisible({ timeout: 15_000 });
+  const left = await page.evaluate(() => ({
+    scope: document.documentElement.dataset.vtScope ?? null,
+    dir: document.documentElement.dataset.vtDir ?? null,
+    pseudo: document.getAnimations()
+      .filter((a) => String((a.effect as KeyframeEffect | null)?.pseudoElement ?? '').includes('view-transition')).length,
+  }));
+  expect(left, `리사이즈 뒤 전환 잔재가 남았다: ${JSON.stringify(left)}`).toEqual({ scope: null, dir: null, pseudo: 0 });
 });
 
 // ── B1(2026-09-21) 하단바 알약 **아래 여백** ────────────────────────────────────

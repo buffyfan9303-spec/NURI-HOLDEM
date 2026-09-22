@@ -91,11 +91,32 @@ describe('일정 목록 줄 — 골격', () => {
     const badges = [...LIST.matchAll(/data-testid="schedule-grade-badge"/g)];
     expect(badges.length, `등급 배지가 ${badges.length}개다 — 목록 카드에 정확히 1개여야 한다`).toBe(1);
     // 시작시각 덩어리와 같은 컨테이너 안에 있는가(하트가 있던 그 자리).
-    const right = LIST.match(/<div className="flex shrink-0 flex-col items-end[\s\S]*?<\/div>\s*<\/article>/);
-    expect(right, '우측 세로 덩어리를 못 찾았다 — 검사가 대상에 도달하지 못했다').not.toBeNull();
+    // 🔴 2026-09-22 R8 — 그 덩어리가 `flex flex-col items-end` 에서 **2열 grid** 로 바뀌었다
+    //   (`데일리/시작/시간` centerX 정렬). 셀렉터만 새 구조로 옮기고 계약은 그대로다.
+    const right = LIST.match(/<div className="grid shrink-0 grid-cols-\[auto_auto\][\s\S]*?<\/div>\s*<\/article>/);
+    expect(right, '우측 덩어리(2열 grid)를 못 찾았다 — 검사가 대상에 도달하지 못했다').not.toBeNull();
     expect(right![0], '등급 배지가 우측 덩어리 밖에 있다').toContain('schedule-grade-badge');
     expect(right![0], '등급 배지가 시작시각보다 아래로 갔다 — 하트가 있던 위쪽 자리여야 한다')
       .toMatch(/schedule-grade-badge[\s\S]*시작/);
+  });
+
+  // 🔴 R8(2026-09-22) — 모바일 중심축 정렬의 **구조**를 잠근다.
+  //   기하(centerX 편차 1px 이하)는 `e2e/schedule-card-fit.spec.ts` 가 실측으로 재고,
+  //   여기서는 그 기하를 성립시키는 전제가 조용히 사라지지 않게 막는다.
+  it('우측 묶음이 2열 grid 이고 모바일은 중앙·PC 는 우측 정렬이다', () => {
+    const right = LIST.match(/<div className="grid shrink-0 grid-cols-\[auto_auto\][\s\S]*?<\/div>\s*<\/article>/);
+    expect(right, '우측 2열 grid 를 못 찾았다').not.toBeNull();
+    const R = right![0];
+    // 시간열과 chevron 이 **다른 열**이어야 세 텍스트의 중심이 chevron 에 오염되지 않는다.
+    expect(R, '시작/시간 묶음이 1열에 있지 않다').toMatch(/data-testid="schedule-start-group"[\s\S]*?col-start-1/);
+    expect(R, 'chevron 이 2열의 별도 칸이 아니다 — 중심 계산에 섞인다').toMatch(/chevron-right[\s\S]*?col-start-2/);
+    // 모바일 중앙 / PC 우측 — 둘 다 있어야 한다. 하나라도 빠지면 한쪽이 회귀한다.
+    expect(R, '모바일에서 시작/시간이 중앙 정렬이 아니다').toMatch(/schedule-start-group[\s\S]*?items-center/);
+    expect(R, 'PC 우측 정렬(md:items-end)이 사라졌다 — PC 카드가 같이 바뀐다').toMatch(/md:items-end/);
+    expect(R, 'PC 에서 배지가 두 열을 span 해 우측에 서지 않는다').toMatch(/md:col-span-2[\s\S]*?md:justify-self-end/);
+    // row-gap 으로 간격을 주면 배지 없는 카드에 빈 줄이 생겨 카드가 커진다.
+    expect(R, 'grid 에 row-gap 을 줬다 — 배지 없는 카드에 빈 간격이 생긴다').not.toMatch(/\bgap-y-/);
+    expect(R, 'grid 에 일괄 gap 을 줬다 — gap-x 만 써야 한다').not.toMatch(/className="grid shrink-0 grid-cols-\[auto_auto\][^"]*\sgap-\d/);
   });
 
   it('제목은 모든 폭에서 한 줄이다 — legacy 장문이 카드 높이를 바꾸지 못한다', () => {

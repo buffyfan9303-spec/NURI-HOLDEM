@@ -83,7 +83,6 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY, isProgrammaticScroll, markProgrammaticScroll, notifyScrollNow } from './lib/useScrollY';
-import { startTabEnter, cancelTabEnter } from './lib/tabEnter';
 // Q6(2026-09-21) — URL 로 들어온 QR 도 **앱 안 스캐너와 같은 규칙**으로 읽는다(`parseQr` 단일 해석).
 import { parseQr, elsewhereMsg } from './lib/qrPayload';
 /** QR 이 URL 에 싣는 키 전부. 이 중 하나라도 있으면 QR 진입으로 보고, 처리 뒤에는 **이 키들만** 지운다
@@ -1057,9 +1056,6 @@ export default function App() {
   //   ⚠ 뒤로가기로 돌아오는 경로(commitTab(t,'back'))도 같은 규칙을 탄다. 오너가 '항상 맨 위' 를
   //     골랐고 '탭바 직접 누를 때만 맨 위' 는 고르지 않았다.
   const activeTabRef = useRef<TabId>('home');
-  /** N1 진입 모션 — 앱 **최초 커밋**에는 재생하지 않는다(설계서: 앱 부팅에 재생 금지).
-   *  탭 커밋 effect 가 마운트에도 한 번 도는데, 그 첫 회만 건너뛰려고 둔다. */
-  const tabEnterBooted = useRef(false);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   /**
    * 탭 '커밋' 만 담당한다 — 이력(트레일) 관리는 아래 useEffect 가 맡는다.
@@ -1176,18 +1172,20 @@ export default function App() {
     //   이 파일 :678-688 이 정확히 그 패턴을 없앤 기록이다(모바일 콜드 마운트 207ms · 탭 전환 회당 27ms).
     //   오너가 "눌림" 을 지적한 바로 그 프레임이라 비용을 되돌려 놓을 이유가 없다.
     notifyScrollNow(0);
-    // 🔴 N1(2026-09-21 오너 정정) — **새 탭의 본문 콘텐츠가 한 번 들어온다.**
-    //   "부드럽지 않다" 고 한 대상은 하단바 필이 아니라 body 콘텐츠였다. 하단바만 움직이면 실패다.
-    //   여기가 맞는 자리인 이유: 바로 위 두 줄이 `scrollTo(0)` 과 헤더 동기화를 **이미 확정**했다.
-    //   진입 모션이 그보다 먼저 돌면 옛 스크롤 위치에서 움직이기 시작해 튄다.
-    //   ⚠ 앱 **최초 로드**에는 재생하지 않는다(설계서 금지) — 그래서 첫 커밋을 건너뛴다.
-    //   🔴 M1(2026-09-21 정정) — `startTabEnter` 는 이제 **이 커밋에서, 페인트 전에** 대상을 재고 시작한다.
-    //     예전 주석은 "다음 프레임에 한다"였고 그게 바로 결함이었다: 미룬 한 프레임이 **정착 위치로 페인트**돼
-    //     사용자에게 0→+8 역행으로 보였다. 대신 콘텐츠가 아직 안 붙었으면 rect 를 읽기 전에 빠져나가므로
-    //     (`tabEnter.ts` 의 cohort 준비 신호) 흔한 경우의 측정 비용은 없다.
-    //     ⚠ 위 F2 의 `scrollY` 재읽기 금지는 그대로 유효하다 — 그건 **문서 전체** 레이아웃을 강제했다.
-    if (tabEnterBooted.current) startTabEnter(activeTab);
-    else tabEnterBooted.current = true;
+    // 🔴 2026-09-22 — **여기 있던 본문 진입 모션(N1/M1 · `startTabEnter`)을 없앴다.**
+    //   폐기 사유(역사): 2026-09-21 에 "탭을 옮기면 본문이 부드럽지 않다" 는 지적을 받고
+    //   보이는 `[data-main-enter]` 블록 전부에 `translateX(6px)→0` 170ms 를 걸었다. 그런데
+    //   `transform` 이 `none` 이 아닌 요소는 **stacking context 와 fixed 자손의 컨테이닝 블록**을 만든다
+    //   (CSS Transforms L1). 애니메이션이 `fill:'none'` 으로 끝나면 그 합성층이 사라지면서 원래
+    //   쌓임·래스터 상태로 돌아온다. 반투명 카드·그라디언트 오라가 많은 이 앱에서 삼성 인터넷은
+    //   그 승격/해제를 **화면 전체가 밝아졌다 돌아오는 것**으로 보여 줬다(오너: 모든 메인 메뉴에서).
+    //   4d017b3 이 `.aura-bg { z-index:-1 }` 로 커뮤니티 한 조합만 봉합했지만 원인은 남아 있었다.
+    //   2026-09-22 로컬 390px 실측: 전 메뉴 8회 이동에서 VT 0회 / 이 WAAPI **22개**,
+    //   `prefers-reduced-motion: reduce` 대조에서는 **0개** — 전 메뉴 공통 변수가 이것 하나였다.
+    //   → 축·거리·시간을 조정하는 대신(8616f395 가 y→x, 8→6px 로 이미 시도했다) 모션 자체를 뺐다.
+    //   탭 피드백은 하단바·상단바의 **작은 알약/라벨/아이콘**이 그대로 맡는다(pane 밖이라 무관).
+    //   ⚠ 되살리고 싶어지면 먼저 삼성 실기기에서 재현·반증부터 해라. 여기서 본문을 움직이면
+    //     `e2e/mobile-tab-transition.spec.ts` 의 "본문 진입 애니메이션 0" 계약이 빨개진다.
   }, [activeTab]);
 
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
@@ -1329,10 +1327,6 @@ export default function App() {
     startTransition(() => setAuthOpen(true));
   }, []);
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
-  // 🔴 N6 — 전면 오버레이(매장 페이지)가 덮으면 하단바가 `suppressed` 가 된다.
-  //   그때는 본문 진입도 **취소**한다: 사용자가 보는 것은 오버레이라 뒤에서 움직여 봐야 안 보이고,
-  //   오버레이를 닫는 순간 끝나 버린 모션의 잔재만 남는다.
-  useEffect(() => { if (openVenueId !== null) cancelTabEnter(); }, [openVenueId]);
   // changeTab(상단 선언)에서 TDZ 없이 오버레이를 닫기 위한 ref 바인딩
   closeOverlaysRef.current = () => setOpenVenueId(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);

@@ -718,7 +718,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     //     여기서 좌우 여백(px-page-x 17px×2)을 뺀 값이 1190 이다. 그래서 셸의 my-store 예외(xl:max-w-7xl)는
     //     테두리 기둥만 136px 넓히고 콘텐츠는 그대로여서 2026-09-15 에 제거했다(오너: "내 매장만 넓어 이질감").
     //     이 `xl:max-w-7xl` 은 남겨 둔다 — 지우면 xl 에서 1088 로 돌아가 **다른 탭보다 좁아진다.**
-    // `data-main-enter-ready` — M1 cohort 준비 신호(`src/lib/tabEnter.ts` 의 `collect`).
+    // (역사) `data-main-enter-ready` — M1 cohort 준비 신호였다. 🔴 2026-09-22 폐기 — 이 표식을 읽던
+    //   본문 진입 모션(`src/lib/tabEnter.ts`)은 삭제됐다(삼성 인터넷 밝기 점프). 속성은 지금 no-op 이다.
     //   ⚠ 이 요소 자체는 진입 대상이 **아니다.** 안쪽 `data-mystore-secpanel` 자손에 실재하는
     //     `position:fixed`(`NuriPosLedger.tsx`·`LedgerWorkspace.tsx`)가 있어 여기에 transform 이 걸리면
     //     그 고정 요소가 이 박스 안에 갇힌다(HANDOFF §4-(2) 의 위험 자리 3곳 중 하나).
@@ -890,12 +891,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {/* 🔴 S1(2026-09-20) — `voucher` 를 **모바일에서만** 더했다. 종전에는 이용권을 누르면
                 바가 통째로 사라져(이 조건에 voucher 가 없었다) 오너 사진처럼 "고르고 나면 아래에
                 아무것도 없는" 화면이 됐다. 돌아올 길이 바에 없으니 뒤로가기밖에 안 남는다.
-                PC 는 종전 그대로 — 이용권은 좌측 섹션 목록에서 가는 별도 판이라 바가 필요 없다.
-                ⚠ 숨기는 것은 **CSS 한 곳**(`lg:hidden`)으로만 한다. `useIsDesktop()` 으로 렌더를
+                🔴 2026-09-22 오너 결정 — **PC 도 같다.** 종전에는 PC 이용권 화면에서 이 래퍼의
+                `lg:hidden` 때문에 바가 통째로 사라졌다(모바일만 남겼던 예외). 이제 이용권도
+                같은 레일의 7번째 탭이라 PC 에서도 바가 남고 그 아래 이용권 판이 열린다.
+                ⚠ 숨기는 것이 필요해지면 **CSS 한 곳**으로만 해라. `useIsDesktop()` 으로 렌더를
                   가르면 같은 1024 가 JS·CSS 두 곳에 생기고, 리사이즈 중 matchMedia 가 한 프레임
                   뒤처지는 순간 바가 있어야 할 자리에 아무것도 없게 된다. */}
             {(renderSection === 'game' || renderSection === 'dashboard' || renderSection === 'voucher') && !dItem?.locked && (
-              <div data-main-enter className={renderSection === 'voucher' ? 'lg:hidden' : undefined}>
+              <div data-main-enter>
               <GameStepBar steps={GAME_STEPS.filter((st) => (st.id === 'posters' ? canPosters : ledgerOk))}
                 onHome={() => gotoSection('dashboard')} progress={stepInfo}
                 active={renderSection === 'dashboard' ? 'dashboard' : renderSection === 'voucher' ? 'voucher' : renderGameStep}
@@ -1339,8 +1342,12 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
   //     · 이용권 버튼의 `role` 은 **null** 인데 `role=tablist` 안에 있었다(ARIA 위반).
   //   ⚠ 실행문의 A안(`lg:flex-1 lg:basis-0` 만)은 **실측으로 반증했다**: 단계가 1개뿐인 권한에서
   //     그 한 칸이 16%→100% 로 늘어나 700px 짜리 버튼이 된다. 그래서 **폭 상한**을 같이 둔다.
-  //   → lg 이상에서만 단계 칩이 남는 폭을 나눠 갖되 `lg:max-w-[9rem]` 로 상한을 두고,
-  //     이용권은 tablist **밖**의 별도 버튼으로 오른쪽 끝(`lg:ml-auto`)에 세운다.
+  //   → (당시 처방) lg 이상에서 단계 칩이 남는 폭을 나눠 갖되 9rem 상한을 두고,
+  //     이용권은 tablist 밖의 별도 버튼으로 오른쪽 끝에 세웠다.
+  //   🔴 2026-09-22 오너 결정으로 **이 PC 처방을 폐기**했다. 상한과 별도 버튼을 없애고
+  //     7칸(요약·포스터·장부·클락·순위·정산·이용권)이 가용 폭을 **똑같이** 나눈다.
+  //     당시 반증했던 '단계 1개가 700px 로 늘어난다' 는 상한이 아니라 **모든 칸이 같은 계약**을
+  //     쓰는 것으로 해결된다 — 보이는 칸끼리 균등하므로 한 칸만 커질 수 없다.
   //   ⚠ 모바일·태블릿(<1024)의 기존 배치는 한 줄도 건드리지 않는다 — sm: 분기 그대로다.
   // 🔴 2026-09-20 유효 터치 — 칩이 `h-9`(=38.25px, 루트 17px)라 **44px 계약 미달**이었다.
   //   히트테스트로 확정했다(추정 아님): 중심 ±21.5px 지점이 위·아래 **둘 다 버튼에 안 닿았다.**
@@ -1360,7 +1367,8 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
   //     여유(= clientWidth − 칸폭합 − 간격 합) 26.8px. 두 줄이 필요해지는 판별식은 그 여유가
   //     **음수가 되는 폭이 나오는 것**이다 — 그때만 만들면 된다(e2e/store-nav.spec.ts 의 여유
   //     하한 단언이 그 신호를 먼저 잡는다).
-  //   ⚠ lg 이상은 종전 그대로다 — `lg:max-w-[9rem] lg:flex-1 lg:basis-0` 가 뒤에서 덮는다.
+  //   ⚠ (역사) 당시 lg 이상은 9rem 상한이 뒤에서 덮었다. 2026-09-22 에 상한을 없애고
+  //     lg 도 `lg:min-w-0 lg:flex-1 lg:basis-0` 한 계약으로 통일했다.
   // 🔴 2026-09-21 오너: "우측 공백이 많으니 칸을 채워 7개 칸으로 저 줄을 나눠서". `w-max shrink-0` 는
   //   글자 겹침(S1)은 막았지만 칸이 내용 폭에 고정돼 오른쪽이 빈다(실측 320: 26.8px · 390: 약 27%).
   //   → `min-w-max flex-1 basis-0`: 남는 폭을 칸이 **균등하게** 나눠 갖되 `min-w-max` 가 내용 폭 아래로는
@@ -1383,21 +1391,22 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
           내용 폭(flex-none)이라 좁다: 6칸이 375 에 들어가는 건 이 칸이 40px 대이기 때문. */}
       <button type="button" role="tab" aria-selected={active === 'dashboard'} data-pill-active={active === 'dashboard' || undefined}
         onClick={onHome} title="매장 대시보드(요약)"
-        className={[chip(active === 'dashboard'), 'lg:flex-none lg:basis-auto !px-2 sm:!px-3'].join(' ')}>
+        className={[chip(active === 'dashboard'), 'lg:min-w-0 lg:flex-1 lg:basis-0 !px-2 sm:!px-3'].join(' ')}>
         <span className="relative">요약</span>
       </button>
       {steps.map((st, i) => {
         const on = active === st.id;
         return (
-          // 🔴 lg 이상에서만 단계 칩이 남는 폭을 나눠 갖는다 — `sm:flex-none` 을 되돌리는 것이다.
-          //   `lg:max-w-[9rem]`(=153px, 루트 17px) 상한이 핵심이다. 상한이 없으면 권한이 적어
-          //   단계가 1개뿐일 때 그 칸 하나가 바 전체(약 700px)로 늘어난다(실측: '포스터만' 16%→100%).
+          // 🔴 2026-09-22 — lg 에서도 **다른 칸과 완전히 같은 계약**을 쓴다(요약·이용권 포함).
+          //   옛 `lg:max-w-[9rem]` 상한은 폐기했다: 상한이 있으면 칸이 적을 때 단계만 153px 에 걸리고
+          //   요약·이용권은 계속 늘어 **폭이 어긋난다**(음성 대조 실측: [163.88,153,153,153,153,153]).
+          //   '한 칸이 바 전체로 늘어난다' 던 옛 위험은 모든 칸이 같은 flex 계약을 쓰면 생기지 않는다.
           <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
             data-step={st.id}
             /* 🔴 S1(2026-09-20) — 완료 정보를 **잃지 않는다**. 모바일에서 인라인 번호·체크를 빼는 대신
                보조기술이 읽는 이름에 상태를 넣는다. PC 는 인라인 표시가 그대로 남는다. */
             aria-label={`${i + 1}. ${st.label}${progress?.[st.id]?.done ? ' (완료)' : ''}`}
-            onClick={() => onPick(st.id)} className={[chip(on), 'lg:max-w-[9rem] lg:flex-1 lg:basis-0'].join(' ')}>
+            onClick={() => onPick(st.id)} className={[chip(on), 'lg:min-w-0 lg:flex-1 lg:basis-0'].join(' ')}>
             {/* 완료 표시는 **번호 자리를 대신한다** — 칸을 넓히지 않고 상태를 얹는다(옛 숫자 스트립의 ✓ 승계). */}
             <span className="relative inline-flex items-center gap-px">
               {/* 🔴 S1 — 모바일에서는 번호·체크를 **라벨 폭에서 뺀다**(`hidden lg:inline`). 7칸을 겹침 없이
@@ -1405,14 +1414,16 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
                   아래 비인라인 점 마커가 대신 말한다.
                   ⚠ 2026-09-14 라이트 실측: 단계 번호가 `text-ink-muted/70` 이라 2.76:1 이었다(AA 4.5 미달).
                     '지금 몇 번째인가'를 말하는 정보라 흐릴 이유가 없다 — 투명도를 빼고 토큰 그대로 둔다. */}
-              {progress?.[st.id]?.done
-                ? <Icon name="check" size={12} className="hidden shrink-0 text-emerald-400 lg:inline" />
-                : <span className={['hidden lg:inline', on ? undefined : 'text-ink-muted'].filter(Boolean).join(' ')}>{i + 1}.</span>}
+              {/* 🔴 2026-09-22 오너 결정 — PC 의 `1.`~`5.` 숫자와 인라인 체크를 **없앴다.**
+                  보이는 라벨은 `요약·포스터·장부·클락·순위·정산·이용권` 일곱 개뿐이어야 한다.
+                  완료 정보는 **버리지 않는다** — 아래 absolute 점과 `aria-label` 의 '(완료)' 가 그대로 말한다.
+                  ⚠ 라벨 **앞**에 glyph 를 두지 마라. 7등분에서 앞 글리프는 칸마다 라벨 시작점을
+                    어긋나게 만들고, 폭을 쓰는 순간 '동일 폭' 계약이 글자 잘림으로 되갚는다. */}
               {st.label}
-              {/* 완료 점 — 모바일 전용. `absolute` 라 라벨 폭을 차지하지 않는다(색만으로 말하지 않게
-                  위 aria-label 에 '(완료)' 가 함께 있다). */}
+              {/* 완료 점 — `absolute` 라 라벨 폭을 차지하지 않는다(색만으로 말하지 않게
+                  위 aria-label 에 '(완료)' 가 함께 있다). 모바일·PC 공통이다. */}
               {progress?.[st.id]?.done && (
-                <span aria-hidden className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400 lg:hidden" />
+                <span aria-hidden className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
               )}
             </span>
           </button>
@@ -1431,31 +1442,18 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
         <button type="button" role="tab" aria-selected={active === 'voucher'}
           data-pill-active={active === 'voucher' || undefined}
           data-step="voucher" onClick={onVoucher} title="매장이용권"
-          className={[chip(active === 'voucher'), 'lg:hidden'].join(' ')}>
+          className={[chip(active === 'voucher'), 'lg:min-w-0 lg:flex-1 lg:basis-0'].join(' ')}>
           <span className="relative">이용권</span>
         </button>
       )}
       </div>
-      {/* 매장이용권 — 5단계 파이프라인의 다음 칸이 아니라 '5. 정산' 옆의 지름길이라 번호를 안 단다
-          (요약 칸과 같은 이유 — progress 는 GameStep 만 알고 voucher 는 모른다).
-          ⚠ 2026-09-19 실측(4173, mobile-chromium, 라벨 '매장이용권' 5자였을 때): 7칸째가 되면서
-            360/390/412 전부 scrollWidth > clientWidth 로 넘쳤다(각 11/9/7px) — 오너가 스팟에서 지적한
-            "우측으로 스크롤 해야지 끝까지 갈 수 있어" 와 같은 부류. '이용권'(3자, title 로 풀네임은 유지)
-            으로 줄였다 — 재빌드 후 재실측 필요(2자 이상 줄어드니 이론상 안 넘쳐야 하나 아직 확인 전). */}
-      {/* 🔴 2026-09-20 — tablist **밖**으로 나왔다. 원래도 role 이 없었는데 `role=tablist` 안에 있어
-          ARIA 위반이었다(실측: 다섯 권한 조합 전부 `role: null`). 시각적으로는 같은 바 안이고,
-          lg 이상에서 `ml-auto` 로 오른쪽 끝에 서서 '단계'가 아니라 '지름길'로 읽힌다. */}
-      {showVoucher && (
-        /* 🔴 S1(2026-09-20) — **PC 전용**으로 좁혔다. 모바일에서는 바로 위 tablist 안의 이용권 탭이
-           대신한다(거기서는 바가 남아야 하므로 탭이어야 한다). 둘이 동시에 보이면 한 화면에
-           같은 진입점이 두 번 생긴다. PC 배치·우측 별도 버튼·아이콘은 종전 그대로다. */
-        <button type="button" onClick={onVoucher} title="매장이용권"
-          className={[chip(false), 'hidden lg:ml-auto lg:inline-flex lg:flex-none lg:basis-auto'].join(' ')}>
-          <span className="relative inline-flex items-center gap-1">
-            <Icon name="ticket" size={12} className="shrink-0 text-ink-muted" />이용권
-          </span>
-        </button>
-      )}
+      {/* 🔴 2026-09-22 오너 결정 — 여기 있던 **PC 전용 이용권 버튼을 삭제**했다.
+          폐기 사유(역사): 2026-09-20 에 이용권을 tablist 밖 우측(`lg:ml-auto`) 지름길로 두고
+          모바일만 tablist 안의 탭으로 뒀다. 같은 기능이 breakpoint 별로 두 벌이 되면서
+          ⓐ PC 에서는 `role`·`aria-selected`·`data-pill-active` 가 없어 SlidingPill 의 대상이 아니었고,
+          ⓑ 7칸이 `요약(내용폭) / 5단계(max 9rem) / 이용권(우측 고정)` 세 종류 폭 계약으로 갈렸다.
+          이제 이용권도 위 tablist 안의 **같은 탭 한 벌**이다 — PC·모바일이 같은 노드를 쓴다.
+          ⚠ 여기에 두 번째 진입점을 다시 만들지 마라. 한 화면에 같은 목적지가 두 개가 된다. */}
     </div>
   );
 }

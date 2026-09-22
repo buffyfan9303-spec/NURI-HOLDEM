@@ -219,40 +219,33 @@ test.describe('내 매장 — 이동 안정성(목킹 업주 · 계정 없이)',
   });
 });
 
-// ── PC 단계 바 (2026-09-20 오너 지시 · D1) ─────────────────────────────────────
+// ── R7: PC 내 매장 상단 PILL — 7칸 동일 폭 (2026-09-22 오너 결정) ─────────────────
 //
-// 오너가 보낸 PC 사진의 지적: "넓은 PC 패널에서 7항목이 **작은 글씨로 왼쪽에 몰리고**
-//   이용권의 역할이 섞여 보인다."
+// 🔴 이 절은 **옛 PC 계약을 교체**한 것이다. 옆에 새 테스트를 덧붙이지 않았다 — 두 계약이 충돌한다.
 //
-// 🔴 실측이 전제를 하나 정정했다 — **넘침이 아니다.** 변경 전 1024/1280/1440 다섯 권한 조합
-//   전부 `scrollWidth - clientWidth === 0` 이었다. 문제는 잘림이 아니라 **안 쓰는 폭**이었다:
-//     1024 바 748px 중 칩이 431px(58%) · 1280·1440 바 946px 중 431px(**46%**) ·
-//     권한이 적으면 12%(포스터만). 글자는 어느 폭에서나 12.75px 로 고정이었다.
+// 폐기한 옛 정답(2026-09-20 D1)과 이유:
+//   · 단계 칸 폭 100~170px + `lg:max-w-[9rem]` 상한 → 이제 7칸이 **가용 폭을 똑같이 나눈다**.
+//   · 보이는 `1.`~`5.` 접두 숫자 → 라벨은 정확히 `요약·포스터·장부·클락·순위·정산·이용권` 일곱 개뿐이다.
+//   · 이용권 = tablist **밖** 우측 지름길(role 없음, 티켓 아이콘) → 이제 같은 tablist 안의 **7번째 탭**이다.
+//   · PC 이용권 화면에서 바를 숨기던 래퍼 `lg:hidden` → 이제 이용권 판에서도 같은 바가 남는다.
+// 완료 정보는 **버리지 않았다** — 라벨 폭을 쓰지 않는 absolute 점과 `aria-label` 의 '(완료)' 로 보존한다.
 //
-// ⚠ 실행문의 A안(`lg:flex-1 lg:basis-0` 만 주기)은 **실측으로 반증했다**: 단계가 1개인 권한에서
-//   그 칸 하나가 바 전체로 늘어난다. 그래서 `lg:max-w-[9rem]` 상한이 함께 있어야 한다.
-//   → 이 검사는 '비율' 이 아니라 **칸 폭과 글자 크기**를 잰다. 비율로 잠그면 단계가 적은 권한에서
-//     통과할 방법이 '한 칸을 900px 로 늘리기' 뿐이라 잘못된 것을 강제하게 된다.
-//
-// ⚠ 375px 6칸 계약(위)은 그대로 둔다. 여긴 **lg(≥1024) 전용**이고 모바일은 한 줄도 안 바뀐다.
-test.describe('PC 단계 바 — 넓은 패널에서 단계가 읽히는 크기로 퍼진다', () => {
-  // 🔴 `canVoucher = idOn && (manageOk || voucherView)`(VenueManageTab.tsx:370) 이다.
-  //   `idOn` 은 app_settings 의 `identity_voucher_enabled` 라 **권한만 켜도 이용권은 안 뜬다.**
-  //   처음 이 검사를 썼을 때 세 조합 전부 이용권이 없어 `이용권오른쪽여백: null` 이었고,
-  //   '오른쪽 끝에 붙는다' 단언이 **한 번도 실행되지 않았다**(빈 검사). 킬스위치를 켜서 실제로 띄운다.
-  //   ⚠ 두 번째 정정: '이용권 없음' 은 **권한으로 못 만든다.** 업주 픽스처는 `manageOk` 가 참이라
-  //   `can_view_vouchers: false` 를 줘도 `manageOk || voucherView` 가 통과한다(실측: 세 폭 전부 떴다).
-  //   실제로 이용권이 없는 상태는 **킬스위치가 꺼진 것**이고, 그게 운영 기본값이다 — 그걸 검사한다.
+// ⚠ 모바일(<1024)은 이 요구의 대상이 **아니다**. 아래 375px 6칸 계약과 S1 단언은 그대로 두고,
+//   이 절은 lg 전용이다. PC 변경이 base/sm 을 덮으면 그 검사들이 빨개진다.
+test.describe('PC 단계 바 — 7칸이 같은 폭을 나눈다', () => {
+  // 🔴 `canVoucher = idOn && (manageOk || voucherView)` 다. `idOn` 은 app_settings 의
+  //   `identity_voucher_enabled` 라 **권한만 켜도 이용권은 안 뜬다**(킬스위치가 운영 기본값 off).
+  //   '이용권 없음' 을 권한으로 만들 수 없다는 것은 2026-09-20 에 실측으로 확인했다.
   const IDENTITY_ON = { identity_voucher_enabled: 'on' };
   const PERMS = [
-    { name: '전체권한', appSettings: IDENTITY_ON, perms: undefined, 이용권: true },
-    { name: '킬스위치off', appSettings: {}, perms: undefined, 이용권: false },
-    { name: '장부계열만', appSettings: IDENTITY_ON, perms: { can_manage_venue_schedules: false }, 이용권: true },
+    { name: '전체권한', appSettings: IDENTITY_ON, perms: undefined, 이용권: true, 기대라벨: ['요약', '포스터', '장부', '클락', '순위', '정산', '이용권'] },
+    { name: '킬스위치off', appSettings: {}, perms: undefined, 이용권: false, 기대라벨: ['요약', '포스터', '장부', '클락', '순위', '정산'] },
+    { name: '장부계열만', appSettings: IDENTITY_ON, perms: { can_manage_venue_schedules: false }, 이용권: true, 기대라벨: null },
   ] as const;
 
-  for (const W of [1024, 1280, 1440] as const) {
+  for (const W of [1024, 1280, 1440, 1920] as const) {
     for (const P of PERMS) {
-      test(`${W}px ${P.name} — 단계 칸 폭·글자·넘침·활성 하나`, async ({ page }) => {
+      test(`${W}px ${P.name} — 7칸 동일 폭·라벨·활성 하나`, async ({ page }) => {
         test.setTimeout(90_000);
         await bootOwner(page, {
           viewport: { width: W, height: 900 },
@@ -272,61 +265,66 @@ test.describe('PC 단계 바 — 넓은 패널에서 단계가 읽히는 크기�
         const m = await page.evaluate((sel) => {
           const rail = document.querySelector<HTMLElement>(sel.rail)!;
           const rr = rail.getBoundingClientRect();
-          const steps = [...rail.querySelectorAll<HTMLElement>('[role=tab]')]
-            .filter((b) => /^\d+\./.test(b.textContent?.trim() ?? ''));
-          const voucher = [...rail.querySelectorAll<HTMLElement>('button')]
-            .find((b) => /이용권/.test(b.textContent ?? '') && !b.getAttribute('role'));
+          const vis = (el: HTMLElement) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+          const tabs = [...rail.querySelectorAll<HTMLElement>('[role=tab]')].filter(vis);
           const pill = rail.querySelector<HTMLElement>('[data-sliding-pill]');
           const act = rail.querySelector<HTMLElement>('[data-pill-active]');
+          const widths = tabs.map((b) => +b.getBoundingClientRect().width.toFixed(2));
+          const heights = tabs.map((b) => +b.getBoundingClientRect().height.toFixed(2));
+          // 실제 유효 히트 — 가운데 점에서 히트테스트해 그 탭(또는 자손)이 잡히는지 본다.
+          const hit = tabs.map((b) => {
+            const r = b.getBoundingClientRect();
+            const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+            return { w: +r.width.toFixed(1), h: +r.height.toFixed(1), ok: !!el && (el === b || b.contains(el)) };
+          });
           return {
             넘침: rail.scrollWidth - rail.clientWidth,
-            바폭: +rr.width.toFixed(1),
-            단계수: steps.length,
-            단계폭: steps.map((b) => +b.getBoundingClientRect().width.toFixed(1)),
-            글자: steps.map((b) => parseFloat(getComputedStyle(b).fontSize)),
-            높이: steps.map((b) => +b.getBoundingClientRect().height.toFixed(1)),
-            이용권오른쪽여백: voucher ? +(rr.right - voucher.getBoundingClientRect().right).toFixed(1) : null,
+            문서넘침: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            탭수: tabs.length,
+            라벨: tabs.map((b) => (b.textContent ?? '').trim()),
+            폭: widths,
+            폭편차: widths.length ? +(Math.max(...widths) - Math.min(...widths)).toFixed(2) : null,
+            높이편차: heights.length ? +(Math.max(...heights) - Math.min(...heights)).toFixed(2) : null,
+            히트: hit,
             활성수: rail.querySelectorAll('[role=tab][aria-selected="true"]').length,
+            숫자접두: tabs.filter((b) => /^[1-5]\./.test((b.textContent ?? '').trim())).length,
+            티켓아이콘: rail.querySelectorAll('svg.lucide-ticket, [data-icon="ticket"]').length,
+            탭아닌자식: [...document.querySelectorAll<HTMLElement>(`${sel.bar} > *`)]
+              .filter((el) => el.tagName === 'BUTTON' && el.getAttribute('role') !== 'tab')
+              .map((el) => el.textContent?.trim() ?? '?'),
+            중복이용권: [...rail.querySelectorAll<HTMLElement>('button')].filter((b) => vis(b) && /이용권/.test(b.textContent ?? '')).length,
             알약: pill && act ? {
               중심차: +Math.abs((pill.getBoundingClientRect().left + pill.getBoundingClientRect().right) / 2
                 - (act.getBoundingClientRect().left + act.getBoundingClientRect().right) / 2).toFixed(2),
               폭차: +Math.abs(pill.getBoundingClientRect().width - act.getBoundingClientRect().width).toFixed(2),
             } : null,
-            // tablist 안에 탭이 아닌 것이 섞여 있으면 ARIA 위반이다(이용권이 그랬다).
-            탭아닌자식: [...document.querySelectorAll<HTMLElement>(`${sel.bar} > *`)]
-              .filter((el) => el.tagName === 'BUTTON' && el.getAttribute('role') !== 'tab')
-              .map((el) => el.textContent?.trim() ?? '?'),
+            완료: tabs.filter((b) => /\(완료\)/.test(b.getAttribute('aria-label') ?? '')).length,
+            바폭: +rr.width.toFixed(1),
           };
         }, { rail: RAIL, bar: BAR });
-        console.log(`[PC ${W} ${P.name}]`, JSON.stringify(m));
+        console.log(`[R7 ${W} ${P.name}]`, JSON.stringify(m));
 
-        expect(m.넘침, '단계 바가 PC 에서 넘친다 — 마지막 단계가 잘린다').toBeLessThanOrEqual(0);
-        expect(m.활성수, '활성 탭이 정확히 하나가 아니다').toBe(1);
-        expect(m.단계수, '단계가 하나도 없다 — 이 검사가 아무것도 재지 않았다').toBeGreaterThan(0);
-
-        // 🔴 오너 지적의 알맹이 — 칸이 작아서 왼쪽에 몰려 보였다. 변경 전 실측은 60~68px 였다.
-        for (const w of m.단계폭) {
-          expect(w, `단계 칸이 ${w}px 다 — PC 에서 이렇게 좁으면 '작은 글씨로 몰려' 보인다(변경 전 60~68px)`).toBeGreaterThanOrEqual(100);
-          expect(w, `단계 칸이 ${w}px 다 — 상한이 풀렸다. 권한이 적을 때 한 칸이 바 전체로 늘어난다`).toBeLessThanOrEqual(170);
+        // 🔴 빈 통과 방지 — 잴 대상이 실제로 있었는지 먼저 못박는다.
+        expect(m.탭수, '탭이 하나도 없다 — 아래 단언들이 아무것도 재지 않는다').toBeGreaterThan(0);
+        if (P.기대라벨) {
+          expect(m.라벨, '보이는 라벨이 정확히 7개(또는 권한만큼)가 아니다').toEqual([...P.기대라벨]);
         }
-        for (const f of m.글자) expect(f, `PC 단계 글자가 ${f}px 다(변경 전 12.75px)`).toBeGreaterThanOrEqual(14);
-        // 🔴 44px 유효 터치 계약(2026-09-20 히트테스트로 미달 확정). `h-[44px]` 로 못박았다 —
-        //   `h-11` 은 루트 17px 에서 46.75px 이라 44 가 아니다.
-        for (const h of m.높이) expect(h, `단계 버튼 높이가 ${h}px 다 — 44px 유효 터치 계약 미달`).toBeGreaterThanOrEqual(44);
-
-        // 이용권은 '단계'가 아니라 지름길 — 오른쪽 끝에 서고 tablist 밖이어야 한다.
-        // ⚠ `if (여백 !== null)` 로 감싸면 안 된다 — 이용권이 안 뜨는 순간 단언이 통째로 사라져
-        //   초록인 채로 아무것도 안 잰다. 그래서 **있어야 할 때 없으면 실패**로 못박는다.
-        if (P.이용권) {
-          expect(m.이용권오른쪽여백, '이용권이 안 떴다 — 이 조합에서는 떠야 한다(킬스위치 on + 권한 있음). 이 단언이 빈 검사가 됐다')
-            .not.toBeNull();
-          expect(m.이용권오른쪽여백!, '이용권이 오른쪽 끝에 안 붙었다 — 단계들과 붙어 역할이 섞여 보인다')
-            .toBeLessThanOrEqual(12);
-        } else {
-          expect(m.이용권오른쪽여백, '권한이 없는데 이용권이 떴다').toBeNull();
-        }
+        expect(m.숫자접두, `보이는 \`1.\`~\`5.\` 접두가 ${m.숫자접두}개 남았다`).toBe(0);
+        expect(m.티켓아이콘, '이용권 앞 티켓 아이콘이 남았다').toBe(0);
+        expect(m.중복이용권, '이용권 진입점이 두 개다 — tablist 밖 PC 전용 버튼이 되살아났다').toBeLessThanOrEqual(1);
         expect(m.탭아닌자식, `tablist 안에 탭이 아닌 버튼이 있다 — ARIA 위반: ${JSON.stringify(m.탭아닌자식)}`).toEqual([]);
+        expect(m.활성수, '활성 탭이 정확히 하나가 아니다').toBe(1);
 
+        // 동일 폭 — 권한이 적으면 **보이는 것끼리** 같으면 된다(빈 칸을 만들지 않는다).
+        expect(m.폭편차!, `탭 폭이 최대 ${m.폭편차}px 어긋났다: ${JSON.stringify(m.폭)}`).toBeLessThanOrEqual(1);
+        expect(m.높이편차!, `탭 높이가 최대 ${m.높이편차}px 어긋났다`).toBeLessThanOrEqual(1);
+        for (const h of m.히트) {
+          expect(h.h, `탭 유효 높이가 ${h.h}px 다 — 44px 계약 미달`).toBeGreaterThanOrEqual(44);
+          expect(h.w, `탭 유효 폭이 ${h.w}px 다 — 44px 계약 미달`).toBeGreaterThanOrEqual(44);
+          expect(h.ok, '탭 중심 히트테스트가 그 탭에 닿지 않는다 — 무언가가 덮고 있다').toBe(true);
+        }
+        expect(m.넘침, '단계 바가 PC 에서 넘친다').toBeLessThanOrEqual(0);
+        expect(m.문서넘침, '문서 가로 스크롤이 생겼다').toBeLessThanOrEqual(0);
         if (m.알약) {
           expect(m.알약.중심차, '알약이 활성 탭 중심에서 벗어났다').toBeLessThanOrEqual(1);
           expect(m.알약.폭차, '알약 폭이 활성 탭과 다르다').toBeLessThanOrEqual(1);
@@ -334,6 +332,53 @@ test.describe('PC 단계 바 — 넓은 패널에서 단계가 읽히는 크기�
       });
     }
   }
+
+  // 🔴 이용권 지속 — 오너 요구 10. 바만 남고 본문이 비면 실패다.
+  test('1440 — 요약→…→이용권→요약 전 구간에서 같은 바가 같은 자리에 있고 이용권 판이 실제로 열린다', async ({ page }) => {
+    test.setTimeout(120_000);
+    await bootOwner(page, {
+      viewport: { width: 1440, height: 900 },
+      appSettings: { identity_voucher_enabled: 'on' },
+      // ⚠ 포스터 탭은 실제 일정이 있어야 뜬다 — 위 폭 검사들과 같은 라우트를 준다.
+      //   없으면 '포스터 탭이 없다' 로 실패한다(빈 통과가 아니라 정직한 실패라 그대로 둔다).
+      extra: async (p) => {
+        await p.route(/\/rest\/v1\/schedules\?/, (r) => (r.request().method() === 'GET'
+          ? r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([POSTER]) })
+          : r.fallback()));
+      },
+    });
+    await openMyStore(page);
+    await expect(page.locator(RAIL)).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(1500);
+
+    const railBox = () => page.locator(RAIL).evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { top: +r.top.toFixed(1), h: +r.height.toFixed(1) };
+    });
+    const order = ['요약', '포스터', '장부', '클락', '순위', '정산', '이용권', '요약'];
+    const tops: number[] = [];
+    const heights: number[] = [];
+    for (const label of order) {
+      // ⚠ 접근 이름으로 찾지 마라 — 단계 탭은 `aria-label="1. 포스터 (완료)"` 로 **순서·완료를 보존**한다
+      //   (보이는 라벨만 `포스터` 다). 여기서 재려는 것은 '보이는 7칸' 이므로 **보이는 텍스트**로 찾는다.
+      const tab = page.locator(RAIL).getByRole('tab').filter({ hasText: new RegExp(`^${label}$`) });
+      await expect(tab, `${label} 탭이 없다`).toBeVisible({ timeout: 15_000 });
+      await tab.click();
+      await page.waitForTimeout(700);
+      await expect(page.locator(RAIL), `${label} 로 간 뒤 바가 사라졌다`).toBeVisible();
+      const b = await railBox(); tops.push(b.top); heights.push(b.h);
+      // 활성 상태가 실제로 그 탭으로 옮겨갔는지
+      await expect(tab, `${label} 을 눌렀는데 활성이 아니다`).toHaveAttribute('aria-selected', 'true');
+      if (label === '이용권') {
+        await expect(page.locator('[data-pane="voucher"]'),
+          'PC 이용권에서 바만 남고 본문이 비었다').toBeVisible({ timeout: 15_000 });
+      }
+    }
+    expect(+(Math.max(...tops) - Math.min(...tops)).toFixed(1),
+      `rail top 이 움직였다: ${JSON.stringify(tops)}`).toBeLessThanOrEqual(1);
+    expect(+(Math.max(...heights) - Math.min(...heights)).toFixed(1),
+      `rail 높이가 변했다: ${JSON.stringify(heights)}`).toBeLessThanOrEqual(1);
+  });
 
   test('1440 — 요약↔단계 왕복에도 같은 바가 같은 자리에 있다', async ({ page }) => {
     test.setTimeout(90_000);
