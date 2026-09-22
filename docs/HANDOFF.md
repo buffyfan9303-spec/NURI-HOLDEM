@@ -7,7 +7,9 @@
 > NURI SPOT 을 작성·저장·공유 중심으로 바꾸고, `내 정보` 눌림·일정 제목 12자를 닫았다.
 > 🔴 **그 과정에서 운영 P1 을 발견했다 — 스팟 공유(`share_spot_post`)가 라이브에서 한 번도 성공한 적이 없다**
 > (enum 컬럼에 text 를 넣어 SQLSTATE 42804). `20260922a` 에서 함께 고쳤다. **§0-a24 ⓪ 를 먼저 읽어라.**
-> ⛔ **운영 포인터 정정: 여기 적혀 있던 `35783e7` 은 사실이 아니었다. 실제 운영은 `f37972b` 였다**
+> **운영은 지금 `16973474` 다** (CI run 35673594962 초록 · deployment `dpl_2NtzdsNVSoqy9sqMtVajxVPXNcL1` READY ·
+> 라이브 entry `assets/index-icGJjwod.js` 실측 — §0-a24 ⑨).
+> ⛔ 그 직전 포인터 정정: 여기 적혀 있던 `35783e7` 은 사실이 아니었고 **실제 운영은 `f37972b`** 였다
 > (CI run 35644391662 · deployment dpl_8KZfqkknev5HNTjE4qkSwk1CwdEn · alias 3종 · 라이브 지문 — §0-a24 ②).
 > 라이브 DB: `20260922a` 적용(§0-a24 ①), 더미 일정 5행(§0-a23), 그 전 변경 3건(§0-a20).
 > ✅ 번들 JS 여유가 생겼다 — equity 배선·하트 제거로 996.8 → **993.4 KB gz**(예산 1014).
@@ -264,6 +266,66 @@ live DOM 을 유지한다. PC 경로는 보존. 번들 지문으로도 확인했
 | 라이브 롤백 리허설 | T1~T9 전부 PASS · 롤백 뒤 두 함수 md5 시작값 복귀 |
 
 번들 JS 는 equity 배선과 하트 제거로 996.8 → **993.4 KB gz** 로 줄었다(예산 1014, 여유 생김).
+
+### ⑨ 배포와 라이브 검증 (2026-09-22)
+
+| 단계 | 증거 |
+|---|---|
+| 커밋 | `16973474398ab022dfdee960436638b70e90758c` — 31파일 +1676/−653 |
+| CI | run **35673594962** · `headSha=16973474…` · **conclusion=success** (security · semgrep · build-and-e2e 전부 success) |
+| Vercel | production deployment **`dpl_2NtzdsNVSoqy9sqMtVajxVPXNcL1`** · READY · commit metadata 일치 |
+| 라이브 entry | `https://nuriholdem.com/` 200 → **`assets/index-icGJjwod.js`** (직전 `index-Cq2C6EoC.js`) · `www.` 동일 |
+
+🔴 **READY 를 배포 완료로 읽지 마라 — 이번에도 밟았다.** 배포가 READY 된 뒤에도
+`nuriholdem.com` 은 **5.3시간 된 CDN 캐시**(`X-Vercel-Cache: HIT` · `Age: 18981`)로 옛 entry 를 주고 있었고,
+`list_aliases` 도 옛 deployment 를 가리키고 있었다. 실제로는 이미 승격돼 있었고
+(`request_promote` 가 409 `already the current production deployment`), **쿼리스트링으로 캐시를 깨자** 새 entry 가 나왔다.
+→ 판정은 **캐시 버스터를 붙인 라이브 fetch 의 entry 이름**으로 해라. alias API 와 `X-Vercel-Cache` 는 지연된다.
+
+⚠ **로컬 빌드 해시와 운영 해시는 다르다.** 로컬은 CRLF 작업트리, Vercel 은 LF blob 으로 빌드한다
+(이번: 로컬 `index-Dqp7KOOV.js` vs 운영 `index-icGJjwod.js`). **해시를 대조하지 말고 지문(문자열)을 대조해라.**
+
+**라이브 번들 지문** — 청크 **전이 폐쇄 100개(3.9MB)** 를 받아 검사했다.
+⚠ 처음에 entry 가 직접 참조하는 92개만 받았더니 `작성 내용` 이 "없음" 으로 나왔다 — **거짓 부재**였다.
+ToolsPanel 이 다시 참조하는 7개를 더 받고서야 `NuriSpotPanel-BRYr5Q2b.js` 에서 찾았다.
+**부재를 주장하려면 폐쇄를 다 받아라.**
+
+| 있어야 하는 것 | 찾은 곳 |
+|---|---|
+| `작성 내용` · `스팟 작성` | `NuriSpotPanel-BRYr5Q2b.js` |
+| `새 스팟 작성` | `ToolsPanel-CmdulxLH.js` |
+| `내 스팟으로 가져오기` · `상대 카드·내 선택·결과 공개` | `PostDetailModal-Bfnvlkup.js` |
+| `spot-details` · `spot-villain-hidden` | `spots-BBlx5MjL.js` |
+| `게임 이름은 공백 포함` | entry · `PosterFormModal-CYYl36ce.js` |
+| `min-width: 1024px` **6회** (직전 4회) | entry — 프로필 열기·닫기 분기 2개가 실제로 실렸다는 증거 |
+| CSS `tap-up-24` 2회 | `index-Bny7AWCa.css` |
+
+없어야 하는 것: `수학 참고`(주1) · `비슷한 스팟 풀기` · `분석 공개` · `새 스팟 분석` · `equityMultiAsync` · `데이터 버전` → 전부 **0**.
+
+> 주1: `수학 참고` 문자열 자체는 번들에 남아 있다. `src/lib/spotEvaluate.ts:43` 의 `COVERAGE_LABEL.math_only`
+> **상수 테이블 값**이고(그 파일은 명세가 변경 금지), 이를 렌더하는 곳은 `MySpotList.tsx:98` 의 **내 스팟 목록 행** 하나뿐이다.
+> 작성 화면에는 0개다. §2.4 가 "현재 요약 목록은 **유지**" 라고 못박아 임의로 지우지 않았다 — **오너 판단 대기**.
+> 같은 이유로 `필요 승률`(ICM 계산기·포스트플랍 드릴)과 `내 승률`(`OutsFromCards` = 아웃츠 계산기, `tools/OutsCalc.tsx` 전용)도
+> 작성 화면 밖이라 남겼다.
+
+**라이브 DOM 실측 (390×844 · 운영 데이터 · 읽기 전용)**
+
+| 항목 | 실측 |
+|---|---|
+| 일정 카드 안 하트 | **0** (전역 하트 21개는 전부 GTO **도구 즐겨찾기**, keep-alive 로 숨은 `tab:tools` 안 `visible:false`) |
+| grade 배지 | `데일리` — 제목 오른쪽(`gradeIsRightOfTitle: true`) |
+| 제목 | 1줄 · computed `webkitLineClamp: "1"` |
+| 카드 높이 | 75.53px |
+| 매장명 링크 | 17.53px + `::before` top −8px = **실효 25.53px** (AA 24px 충족 — HIT-1 목표와 일치) |
+| 가로 overflow | **0** |
+| GTO 도구 화면 | `새 스팟 작성` 라벨 확인(옛 `새 스팟 분석` 아님) |
+
+🔴 **NOT_RUN — 로그인이 필요한 화면은 운영에서 검증하지 않았다.**
+`내 정보`(요구 B 의 VT 0/0 · PC 1/1)와 **NURI SPOT 작성 화면**(§2.9 수용기준 1~3)은 둘 다 로그인 게이트 뒤에 있다.
+운영 계정으로 로그인하지 않았으므로 라이브 DOM 증거가 없다.
+⚠ 중간에 `새 스팟 작성` 을 눌러 뜬 **로그인 모달**의 텍스트를 재고 "금지 문구 0개" 로 읽을 뻔했다 —
+그건 작성 화면이 아니다. **거짓 초록이다.** 이 둘의 증거는 로컬 프로덕션 빌드 E2E(4173)와 위 번들 지문뿐이다.
+실기기·로그인 경로 확인은 다음 세션의 과제로 남긴다.
 
 ### ⑧ 이번에 또 밟은 함정 (다음 사람이 그대로 밟는다)
 
