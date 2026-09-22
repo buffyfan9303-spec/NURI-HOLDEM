@@ -7,8 +7,11 @@
 > NURI SPOT 을 작성·저장·공유 중심으로 바꾸고, `내 정보` 눌림·일정 제목 12자를 닫았다.
 > 🔴 **그 과정에서 운영 P1 을 발견했다 — 스팟 공유(`share_spot_post`)가 라이브에서 한 번도 성공한 적이 없다**
 > (enum 컬럼에 text 를 넣어 SQLSTATE 42804). `20260922a` 에서 함께 고쳤다. **§0-a24 ⓪ 를 먼저 읽어라.**
-> **운영은 지금 `16973474` 다** (CI run 35673594962 초록 · deployment `dpl_2NtzdsNVSoqy9sqMtVajxVPXNcL1` READY ·
+> **운영 앱 코드는 `16973474` 다** (CI run 35673594962 초록 · deployment `dpl_2NtzdsNVSoqy9sqMtVajxVPXNcL1` READY ·
 > 라이브 entry `assets/index-icGJjwod.js` 실측 — §0-a24 ⑨).
+> 그 위의 문서 커밋(`02840ccb` 등)은 번들에 영향이 없다 — 배포 뒤에도 라이브 entry 가 같은 것을 확인했다.
+> ⚠ 그래서 포인터는 **앱 코드 커밋**으로 적는다. 커밋 SHA 를 그대로 적으면 그 문장을 쓰는 커밋이
+> 다시 SHA 를 바꿔 문서가 영원히 뒤처진다.
 > ⛔ 그 직전 포인터 정정: 여기 적혀 있던 `35783e7` 은 사실이 아니었고 **실제 운영은 `f37972b`** 였다
 > (CI run 35644391662 · deployment dpl_8KZfqkknev5HNTjE4qkSwk1CwdEn · alias 3종 · 라이브 지문 — §0-a24 ②).
 > 라이브 DB: `20260922a` 적용(§0-a24 ①), 더미 일정 5행(§0-a23), 그 전 변경 3건(§0-a20).
