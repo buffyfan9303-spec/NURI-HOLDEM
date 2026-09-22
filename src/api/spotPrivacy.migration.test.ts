@@ -133,6 +133,48 @@ describe('20260922a — 공유 스팟 서버 가림 계약', () => {
     expect(m![0]).toMatch(/spot\s*=\s*spot\s*-\s*'heroActionSizeBb'/);
   });
 
+  // 🔴 와이어(TS)와 가림 목록(SQL)을 잇는 계약. 2026-09-22 독립 검토가 지적한 **근본 원인**이다 —
+  //    `heroActionSizeBb` 가 늦게 발견된 이유는 두 정본이 서로를 몰랐기 때문이다.
+  //    "이 키가 스포일러인가" 를 자동으로 판정할 수는 없다. 대신 toJSON 이 내는 키 **집합 전체**를 고정해
+  //    누가 키를 더하면 여기서 빨개지게 하고, 그때 사람이 "공개" 인지 "가릴 것" 인지 분류하게 만든다.
+  it('toJSON 이 내는 키를 전부 분류해 둔다 — 새 키가 생기면 여기서 막힌다', () => {
+    const src = readFileSync(resolve(__dirname, '../lib/spot.ts'), 'utf8');
+    const start = src.indexOf('export function toJSON');
+    expect(start, 'src/lib/spot.ts 에서 toJSON 을 찾지 못했다').toBeGreaterThan(-1);
+    const body = src.slice(start, src.indexOf('\nexport ', start + 10));
+    expect(body.length, 'toJSON 본문이 비었다 — 아래 검사가 무의미해진다').toBeGreaterThan(400);
+
+    // 와이어에 실리는 키: 객체 리터럴의 `key:` 와 나중에 붙이는 `o.key =` 두 형태.
+    const keys = new Set<string>();
+    for (const m of body.matchAll(/^\s{4}([a-zA-Z][a-zA-Z0-9]*):/gm)) keys.add(m[1]);
+    for (const m of body.matchAll(/\bo\.([a-zA-Z][a-zA-Z0-9]*)\s*=/g)) keys.add(m[1]);
+
+    // 공유 시 서버가 **반드시 빼야 하는** 키. 여기 있는 것은 SQL deny-list 와 일치해야 한다.
+    const SPOILER = ['villain', 'result', 'heroAction', 'heroActionSizeBb'];
+    // 공개돼도 되는 키. 왜 괜찮은지는 20260922a 머리말과 검토 기록에 있다
+    // (note 는 공유 시트에서 사용자가 편집한 값으로 갈아끼운다, actions 는 결정 지점 **이전** 액션,
+    //  potBbInput 은 선택 액션을 포함하지 않아 역산 불가, extraPos 는 자리 문자열뿐).
+    const PUBLIC = ['v', 'game', 'format', 'tableSize', 'sbBb', 'anteBb', 'effectiveBb',
+      'heroPos', 'villainPos', 'hero', 'board', 'street', 'actions', 'extraPos', 'potBbInput', 'note'];
+
+    const classified = new Set([...SPOILER, ...PUBLIC]);
+    const unknown = [...keys].filter((k) => !classified.has(k));
+    expect(unknown,
+      `toJSON 에 분류되지 않은 키가 생겼다: ${unknown.join(', ')}\n` +
+      '  → 스포일러면 20260922a 의 `v_spot := p_spot - …` 목록과 아래 SPOILER 에 같이 넣어라.\n' +
+      '  → 공개해도 되면 PUBLIC 에 넣고 왜 괜찮은지 근거를 남겨라.',
+    ).toEqual([]);
+
+    // SPOILER 가 실제로 toJSON 에 존재해야 한다 — 이름이 바뀌면 SQL 이 허공을 빼게 된다.
+    for (const k of SPOILER) {
+      expect(keys.has(k), `toJSON 에 '${k}' 가 없다 — SQL 이 존재하지 않는 키를 빼고 있다`).toBe(true);
+    }
+    // 그리고 SQL 의 deny-list 와 정확히 같아야 한다.
+    const m = code().match(/v_spot\s*:=\s*p_spot((\s*-\s*'[A-Za-z]+')+)\s*;/);
+    const stripped = [...m![1].matchAll(/'([A-Za-z]+)'/g)].map((x) => x[1]).sort();
+    expect(stripped, 'SQL 가림 목록과 TS 스포일러 분류가 어긋났다').toEqual([...SPOILER].sort());
+  });
+
   it('20260913b 를 재적용하지 않는다 (이미 라이브 적용됨 — 2026-09-22 ACL 실측)', () => {
     const c = code();
     expect(c).not.toMatch(/revoke[\s\S]{0,120}post_spots/i);
