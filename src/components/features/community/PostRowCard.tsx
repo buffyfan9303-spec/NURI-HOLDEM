@@ -77,10 +77,14 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
           그건 '훑어보는 정보'라 흘러가거나 잘리면 목록의 기능 자체가 사라진다.
           MarqueeText 는 **넘칠 때만** 애니메이션을 붙이므로 짧은 제목은 지금과 똑같이 정적이다. */}
       <span className="flex min-w-0 flex-1 items-center">
-        {/* NEW 도트(Phase 14, pokergosu 리스트 밀도) — 24시간 이내 글 */}
-        {Date.now() - new Date(post.createdAt).getTime() < 24 * 3600_000 && (
-          <span aria-label="새 글" className="mr-1 h-1.5 w-1.5 shrink-0 rounded-full bg-danger" />
-        )}
+        {/* 🔴 2026-09-23 오너 "앞에 빨간 불이 왜 있는지 모르겠고" — 제목 앞 NEW 점(24시간 이내 글)을 뺐다.
+            Phase 14 에서 pokergosu 목록 밀도를 따라 넣은 것인데, 정보가 0 인 표시였다:
+            ① 목록 기본 정렬이 `created_at desc`(api/community.ts:666) 라 '새 글'은 **항상 위에서부터**다.
+               점이 켜지는 집합 = 맨 위 몇 줄이라, 위치가 이미 말한 것을 한 번 더 말했을 뿐이다.
+               운영 실측(2026-09-23): 전체 7건 중 3건(42.9%)이 24시간 이내 → 맨 위 3줄 연속 점등.
+            ② 색이 danger(빨강) 토큰이었다 — 이 앱에서 빨강은 오류·HOT·비추천이라 '새 글'이 경고로 읽혔다.
+            되살리려면 색을 danger 밖으로 빼고 **정렬이 말하지 못하는 것**을 먼저 정의해라(예: 마지막 방문 이후).
+            ⚠ ScheduleDetailModal 의 대회 Q&A 안읽음 점은 생김새가 같지만 **다른 기능**이다 — 같이 지우지 마라. */}
         <MarqueeText text={post.title || post.content.slice(0, 40)}
           className="min-w-0 flex-1 text-sm font-bold leading-tight text-ink-primary" />
         {(replay || hand) && (

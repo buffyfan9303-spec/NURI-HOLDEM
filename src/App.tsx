@@ -661,10 +661,11 @@ const TabBar = memo(function TabBar({
 });
 
 // ── 모바일 하단 탭바(Riot Mobile 스타일) — 플로팅 알약 + 아이콘/라벨 + 프레스 스프링 ──
-const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, count, onOpenMe, overlayOpen, onSameTap, suppressed = false }: {
+const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count, onOpenMe, overlayOpen, onSameTap, suppressed = false }: {
   tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void;
-  dot?: Partial<Record<TabId, boolean>>;
-  /** 숫자 배지(예: 라이브 'N게임 진행중') — dot 보다 정보량이 높은 칸에만 */
+  /** 숫자 배지(예: 라이브 'N게임 진행중') — **몇 개인지 말할 수 있는 칸에만** 준다.
+   *  🔴 2026-09-23 오너 "굳이 있을 필요가 없어" — 여기 있던 불리언 `dot`(커뮤니티 새 글 점)을 없앴다.
+   *  유일한 소비자가 커뮤니티였고, '새 글이 있다'는 사실만으로는 눌러야 할 이유가 안 됐다(아래 tabDot 주석 참고). */
   count?: Partial<Record<TabId, number>>;
   /** 일반 유저 5번째 칸 '내 정보'(개인 대시보드 — 비로그인이면 로그인 유도) */
   onOpenMe: () => void;
@@ -887,7 +888,8 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
                   className={['pointer-events-none absolute inset-0 rounded-full pill-active transition-opacity duration-[var(--dur-fast)]',
                     on ? 'opacity-100' : 'opacity-0'].join(' ')} />
                 {tab ? TAB_ICON[tab] : ME_ICON}
-                {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-accent-300" aria-hidden />}
+                {/* 🔴 2026-09-23 — 커뮤니티 새 글 점을 여기서 뺐다(오너 지시). 아래 숫자 배지(라이브 N게임)는 남는다:
+                    그건 '몇 개'를 말하므로 누를 이유가 되지만, 불리언 점은 '뭔가 있다'까지만 말했다. */}
                 {tab && (count?.[tab] ?? 0) > 0 && (
                   <span aria-hidden
                     // §T1 규칙 2: 사다리 밖 임의 px 금지. text-[9px] 는 절대 px 이라 html 17px·브라우저 확대를
@@ -2505,18 +2507,10 @@ export default function App() {
   // 매장 보유 여부(상단 탭 목록 기준) — 하단 탭바의 hasStore 와 같은 판정이어야 PC/모바일이 안 어긋난다
   const hasStoreTabs = useMemo(() => tabs.some((t) => t.id === 'my-store'), [tabs]);
 
-  // 커뮤니티 탭 새 글 점(모바일 탭바) — 마지막 방문 이후 새 글이 있으면 골드 점
-  const [commSeenAt, setCommSeenAt] = useState(() => { try { return localStorage.getItem('nuri:comm-seen') ?? ''; } catch { return ''; } });
-  useEffect(() => {
-    if (activeTab !== 'community') return;
-    const now = new Date().toISOString();
-    try { localStorage.setItem('nuri:comm-seen', now); } catch { /* storage 차단/쿼터 초과 무시 */ }
-    setCommSeenAt(now);
-  }, [activeTab]);
-  const commHasNew = useMemo(
-    () => activeTab !== 'community' && posts.some((p) => !commSeenAt || p.createdAt > commSeenAt),
-    [posts, commSeenAt, activeTab],
-  );
+  // 🔴 2026-09-23 — 여기 있던 '커뮤니티 탭 새 글 점' 상태를 통째로 지웠다(오너 지시, 근거는 tabDot 자리 주석).
+  //   지운 것: commSeenAt state · localStorage 'nuri:comm-seen' 방문 기록 useEffect · commHasNew useMemo.
+  //   `posts` 는 그대로 둔다 — 딥링크 해석(pendingPostId)·상세 동기화·좋아요 토글·자식 4곳이 쓰는 별개 소비자다.
+  //   이미 저장된 'nuri:comm-seen' 키는 각자 브라우저에 남지만 읽는 코드가 없어 무해하다(정리 코드 안 넣는다).
 
   // 탭이 사라지면 (로그아웃 등) browse로 돌아감.
   // ⚠ 부팅 시 auth 는 비동기 — 해석 전엔 my-store/admin 이 잠시 목록에 없어서
@@ -3585,7 +3579,12 @@ export default function App() {
   }, [openEvent, changeTab, handleVenueClick]); // venues·openScheduleById 는 ref — 이 함수는 memo 자식(AppHeader·HomeTab)에 내려가므로 안정 참조여야 한다
   /** 이벤트 판(목록·보드 어느 쪽이든)이 떠 있는 동안 내비 활성 표시도 이벤트로 — 어디 있는지 모르는 화면을 만들지 않는다. */
   const navActive: TabId = (eventOpen || eventListOpen) ? 'event' : activeTab;
-  const tabDot = useMemo(() => ({ community: commHasNew }), [commHasNew]);
+  // 🔴 2026-09-23 오너 "커뮤니티 글이 올라올 때마다 하단 커뮤니티 탭에 알림 표시처럼 뜨는 것 없애줘,
+  //   굳이 있을 필요가 없어" — 여기 있던 `tabDot = { community: commHasNew }` 를 없앴다.
+  //   같이 지운 것: commSeenAt state · 'nuri:comm-seen' 방문 기록 useEffect · commHasNew useMemo
+  //   · MobileTabBar 의 `dot` prop 과 렌더(전부 소비자가 커뮤니티 하나뿐이었다).
+  //   ⚠ 되살리려면 한 덩어리로 되살려야 한다 — tsconfig 의 noUnusedLocals/noUnusedParameters 때문에
+  //     반쪽만 남기면 빌드가 죽는다(그래서 한 커밋에 전부 지웠다).
   const tabCount = useMemo(() => ({ live: liveCount }), [liveCount]);
   // 전면(페이지성) 오버레이 열림 여부 — MobileTabBar 가 개폐 순간 잔존 hidden 을 리셋한다.
   // 대상 = '페이지 이동'으로 인지되는 오버레이(내 정보·매장/그룹·상세·프로필·검색·클락·법적고지·문의).
@@ -3889,7 +3888,7 @@ export default function App() {
 
       <TabBar tabs={pcTabs} active={navActive} onChange={gotoTabOrEvent} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
-      <MobileTabBar tabs={tabs} active={navActive} onChange={changeTab} dot={tabDot} count={tabCount}
+      <MobileTabBar tabs={tabs} active={navActive} onChange={changeTab} count={tabCount}
         onSameTap={(t) => { if (t === 'my-store') setMyStoreHomeNonce((v) => v + 1); }}
         onOpenMe={openMeCb} overlayOpen={fullOverlayOpen} suppressed={openVenueId !== null} />
 
