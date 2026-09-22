@@ -77,12 +77,33 @@ describe('일정 목록 줄 — 골격', () => {
       .toMatch(/<h3[^>]*\[overflow-wrap:anywhere\]/);
   });
 
-  it('등급 배지가 제목 안의 인라인이다 — 형제로 빼면 제목 2줄에서 배지가 아랫줄로 밀린다', () => {
-    // 실측(320·360): 형제로 두면 카드가 +18px 이 되고 목업의 '제목 오른쪽' 이 아니라 별도 줄이 된다.
+  // 🔴 2026-09-22 요구 C — **반전됐다.** 등급 배지는 이제 제목 안이 아니라 **우측 덩어리**에 있다.
+  //   옛 계약("제목 안 인라인이어야 한다")의 근거는 "형제로 두면 제목 2줄에서 배지가 아랫줄로 밀린다" 였다.
+  //   그 전제가 사라졌다: ① 제목이 `line-clamp-1` 로 **항상 한 줄**이고 ② 배지가 간 곳은 하트가 있던
+  //   `shrink-0` 세로 덩어리라 가로 폭을 안 민다(시각 덩어리보다 좁다). 카드 높이 영향 0 이다.
+  //   인라인으로 되돌리면 12자 제목의 폭을 배지가 먹어 ellipsis 가 빨라진다.
+  it('등급 배지가 제목 밖 우측 덩어리에 정확히 1개 있다', () => {
     const h3 = LIST.match(/<h3[\s\S]*?<\/h3>/);
     expect(h3, '제목(h3)을 못 찾았다').not.toBeNull();
-    expect(h3![0], '등급 배지가 제목 안에 없다 — 형제로 빠지면 줄이 하나 더 생긴다')
-      .toMatch(/\{grade &&/);
+    expect(h3![0], '등급 배지가 다시 제목 안으로 들어갔다 — 12자 제목의 폭을 먹는다')
+      .not.toMatch(/\{grade &&/);
+    // 손잡이로 세어야 '어딘가에 있다' 가 아니라 '정확히 한 자리' 임을 잠글 수 있다.
+    const badges = [...LIST.matchAll(/data-testid="schedule-grade-badge"/g)];
+    expect(badges.length, `등급 배지가 ${badges.length}개다 — 목록 카드에 정확히 1개여야 한다`).toBe(1);
+    // 시작시각 덩어리와 같은 컨테이너 안에 있는가(하트가 있던 그 자리).
+    const right = LIST.match(/<div className="flex shrink-0 flex-col items-end[\s\S]*?<\/div>\s*<\/article>/);
+    expect(right, '우측 세로 덩어리를 못 찾았다 — 검사가 대상에 도달하지 못했다').not.toBeNull();
+    expect(right![0], '등급 배지가 우측 덩어리 밖에 있다').toContain('schedule-grade-badge');
+    expect(right![0], '등급 배지가 시작시각보다 아래로 갔다 — 하트가 있던 위쪽 자리여야 한다')
+      .toMatch(/schedule-grade-badge[\s\S]*시작/);
+  });
+
+  it('제목은 모든 폭에서 한 줄이다 — legacy 장문이 카드 높이를 바꾸지 못한다', () => {
+    const h3 = LIST.match(/<h3[\s\S]*?<\/h3>/);
+    expect(h3![0], '제목이 line-clamp-1 이 아니다 — 13자 이상 legacy 제목이 2~3줄로 펴져 카드 높이가 흔들린다')
+      .toMatch(/line-clamp-1/);
+    expect(h3![0], 'line-clamp-2/3 이 남아 있다 — 폭에 따라 줄 수가 달라지면 --card-h-list 예약과 어긋난다')
+      .not.toMatch(/line-clamp-[23]/);
   });
 
   it('🔴 리디자인이 기능을 떨어뜨리지 않았다 — TOP·별점·거리·예약·♥', () => {
@@ -94,38 +115,40 @@ describe('일정 목록 줄 — 골격', () => {
       ['rating.avg', '별점'],
       ['fmtKm(distanceKm)', '거리'],
       ['reserveCount', '예약 인원'],
-      ['FavoriteButton', '즐겨찾기 하트'],
+      // 🔴 2026-09-22 — '즐겨찾기 하트'는 이 목록에서 **뺐다**(오너 요구 C). 아래 전용 계약이 대신 잠근다.
     ] as const) {
       expect(LIST, `${what} 가 카드에서 사라졌다 — 목업에 없다고 지우면 안 된다(§8.1)`).toContain(needle);
     }
   });
 
-  it('🔴 ♥ 가 **실제로 배선돼 있다** — 컴포넌트만 있고 prop 을 안 넘기면 화면에 안 뜬다', () => {
-    // 🔴 이 검사가 있는 이유. 바로 위 '기능 보존' 검사는 `ScheduleCard.tsx` 소스에
-    //   `FavoriteButton` 이라는 **글자가 있는지**만 본다. 그런데 2026-08-28 ~ 2026-09-20 까지
-    //   **호출부 4곳 전부가 `onToggleFavorite` 를 안 넘겨서 하트가 어느 화면에도 안 떴다.**
-    //   그 20일 내내 이 파일의 검사는 **초록**이었다 — 회귀를 못 잡는 계약이었던 것이다.
-    //   (회귀가 아니라 미완성이었다: `git log -S FavoriteButton` 이 커밋 하나만 돌려준다.)
-    // → 컴포넌트 존재가 아니라 **호출부가 실제로 넘기는지**를 본다.
-    const sites = [
+  // 🔴 2026-09-22 요구 C — **반전됐다.** 옛 계약은 "세 화면이 하트를 실제로 배선하는가" 였다.
+  //   오너가 목록 카드의 하트를 빼고 그 자리에 등급 배지를 두라고 했으므로, 이제 잠글 것이 뒤집힌다:
+  //     ① 목록 카드에 하트 흔적이 **0개**   ② 세 호출부가 favorite prop 을 **안 넘긴다**
+  //     ③ 그러나 즐겨찾기 **시스템 자체는 살아 있다**(삭제와 이동을 구별한다 — 이게 핵심이다)
+  it('🔴 목록 카드에서 하트가 사라졌고, 즐겨찾기 시스템은 그대로다', () => {
+    expect(LIST, 'FavoriteButton 이 목록 카드에 되살아났다').not.toContain('FavoriteButton');
+    // 주석에 남은 설명 문구가 단언을 거짓 통과시키지 않도록 **JSX 전달 형태**로만 센다.
+    expect(LIST, '목록 카드가 아직 favorited prop 을 받는다').not.toMatch(/favorited=\{/);
+    expect(LIST, '목록 카드가 아직 onToggleFavorite prop 을 받는다').not.toMatch(/onToggleFavorite=\{/);
+
+    for (const [rel, label] of [
       ['../../App.tsx', 'App(일정 탐색 리스트·그리드 / 표모드 모바일 대체)'],
       ['./HomeTab.tsx', '홈(오늘·내일 일정)'],
       ['./LiveGamesTab.tsx', '라이브(오늘 곧 시작)'],
-    ] as const;
-    for (const [rel, label] of sites) {
+    ] as const) {
       const src = readFileSync(join(__dirname, rel), 'utf8');
-      expect(src, `${label} 가 ScheduleCard 에 onToggleFavorite 을 안 넘긴다 — 하트가 그 화면에서 사라진다`)
-        .toMatch(/onToggleFavorite=\{/);
-      expect(src, `${label} 가 favorited 를 안 넘긴다 — 눌러도 채워진 하트로 안 바뀐다`)
-        .toMatch(/favorited=\{/);
+      expect(src, `${label} 가 아직 ScheduleCard 에 onToggleFavorite 을 넘긴다`).not.toMatch(/onToggleFavorite=\{/);
+      expect(src, `${label} 가 아직 ScheduleCard 에 favorited 를 넘긴다`).not.toMatch(/favorited=\{/);
     }
-    // 세 화면이 **같은 집합**을 봐야 한다 — 각자 조회하면 '탭 재방문 시 하트가 안 갱신됨' 함정을
-    // 다시 밟는다(lib/useFavoriteVenues.ts 주석에 2026-09-17 실제 사례 기록).
-    for (const [rel, label] of sites) {
-      const src = readFileSync(join(__dirname, rel), 'utf8');
-      expect(src, `${label} 가 useFavoriteVenues 를 안 쓴다 — 탭마다 따로 조회하면 하트가 어긋난다`)
-        .toMatch(/useFavoriteVenues/);
-    }
+
+    // 🔴 '카드에서 뺐다' 와 '기능을 지웠다' 는 다르다. 공유 훅과 그 소비처가 남아 있는지 본다 —
+    //   여기가 빠지면 다음 사람이 "안 쓰네" 하고 즐겨찾기를 통째로 지우는 리팩터 손실이 난다.
+    const hook = readFileSync(join(__dirname, '../../lib/useFavoriteVenues.ts'), 'utf8');
+    expect(hook.length, '공유 훅 useFavoriteVenues 가 사라졌다 — 즐겨찾기 시스템 전체가 지워졌다').toBeGreaterThan(200);
+    const live = readFileSync(join(__dirname, './LiveGamesTab.tsx'), 'utf8');
+    expect(live, '라이브가 useFavoriteVenues 를 더 이상 안 쓴다 — 진행 게임 줄의 단골 표시가 죽었다')
+      .toMatch(/useFavoriteVenues\(/);
+    expect(live, '라이브 진행 게임 줄의 단골 표시(favIds)가 사라졌다').toMatch(/favIds\.has\(/);
   });
 
   it('🔴 날짜 그룹 머리말이 **세 목록 모두에** 배선돼 있다', () => {

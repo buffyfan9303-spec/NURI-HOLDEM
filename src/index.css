@@ -1020,6 +1020,20 @@
      가로는 늘리지 않는다(칩 사이 gap 6px 라 겹친다). Tailwind before:content-[''] 는 JSX 문자열 이스케이프 때문에 추출기가 못 잡아 유틸로 둔다. */
   .tap-y-44 { position: relative; }
   .tap-y-44::before { content: ''; position: absolute; inset: -6px 0; }
+  /* HIT-1(2026-09-22) — **위로만** 넓히는 히트 확장. 아래는 0 이다.
+     왜 tap-y-44 를 쓰면 안 되나: 그건 위아래 6px 양방향이라, 바로 아래에 세로 간격 0 으로 붙어 있는
+     일정 카드 제목을 덮는다. 그러면 매장명 링크가 카드 탭을 가로채고(목적지가 매장 페이지 ≠ 일정 상세),
+     f966f44 에서 실제로 home-flow-fit 잘림 게이트까지 빨개져 2d8ac48 로 되돌렸다.
+     목표는 WCAG 2.2 SC 2.5.8 **AA 24px** 이다(44px 은 2.5.5 AAA). 글줄 링크 17.53px(390)·19.13px(320)에
+     위 8px 을 더해 **25.5 / 27.1px** — AA 를 넘는다. 시각 box·document flow·카드 높이는 그대로다.
+     🔴 왜 28px 이 아닌가(2026-09-22 실측): 이 링크 위에 남은 카드 안쪽 여백은 **6.375px**(py-1.5) 뿐이다.
+        11px 로 넓혀 봤더니 확장부가 카드 경계를 넘어가 형제 카드에 가려 **실효가 25px 에서 멈췄다**
+        (elementFromPoint 로 확인). 즉 **카드 높이를 바꾸지 않고 28px 을 만드는 방법은 없다** —
+        24~27px 는 구조적으로 도달 불가능한 구간이 아니라, 28px 쪽이 카드 높이 증가를 전제한다.
+        오너 결정(§9.7)은 "카드 높이를 키우지 말고 AA 24px 만" 이므로 여기서 멈춘다.
+        44px(AAA)을 원하면 ScheduleCard·--card-h-list·HomeTab 스켈레톤·.cv-card-list 를 한 묶음으로 올려야 한다. */
+  .tap-up-24 { position: relative; }
+  .tap-up-24::before { content: ''; position: absolute; inset: -8px 0 0 0; }
   html.light .chip-aura { background-color: rgb(99 102 241 / 0.08); border-color: rgb(99 102 241 / 0.25); color: #4338CA; }
   @media (hover: hover) { .chip-aura:hover { background-color: rgb(99 102 241 / 0.16); border-color: rgb(99 102 241 / 0.35); } }
   .text-grad-violet {

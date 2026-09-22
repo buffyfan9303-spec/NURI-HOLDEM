@@ -165,7 +165,15 @@ export async function fetchPostSpot(postId: string): Promise<PostSpot | null> {
   // (20260911d). 그러니 여기 온 spot 에는 열리기 전 정답이 애초에 없다.
   // 아래 두 줄은 그 계약이 깨졌을 때를 위한 이중 방어다 — 지우지 마라.
   if (!data.reveal_villain) { spot.villain = []; spot.extra = spot.extra.map((v) => ({ ...v, cards: [] })); }
-  if (!data.reveal_result) delete spot.result;
+  if (!data.reveal_result) {
+    delete spot.result;
+    // 🔴 20260922a: 글쓴이의 선택과 그 크기도 결과와 같은 묶음이다(서버 reveal 이 p_result 에 함께 묶여 있다).
+    //    서버가 `heroActionSizeBb` 를 빼 주기 시작한 건 20260922a 부터라, 그 이전에 만들어진 글은
+    //    공개 payload 에 크기가 남아 있을 수 있다. 여기서 한 겹 더 지운다 — 지우지 마라.
+    //    heroAction 은 optional 이 아니라 `SpotActionType | null` 이라 delete 가 아니라 null 이다.
+    spot.heroAction = null;
+    delete spot.heroActionSizeBb;
+  }
   return {
     spot,
     coverageKind: data.coverage_kind as CoverageKind,

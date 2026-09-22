@@ -658,7 +658,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
           ⚠ 100% 에서 한 줄인지는 실측으로 확인했다(아래 커밋 메시지에 수치). */}
       <div className="mt-2.5 grid grid-cols-2 gap-1.5">
         <button type="button" onClick={() => onOpen('spot')} className="btn-primary min-h-[44px] px-2 text-xs">
-          새 스팟 분석
+          새 스팟 작성
         </button>
         <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} className="btn-ghost min-h-[44px] px-2 text-xs">
           내 스팟

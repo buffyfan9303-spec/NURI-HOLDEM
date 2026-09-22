@@ -91,7 +91,13 @@ docs/HANDOFF.md 의 <해당 절>, <요구 원문>, <필요 SKILL.md>를 읽어�
 
 - 요청 모델과 실제 resolved 모델은 별개다. **팀원이 스스로 말한 모델명은 증거가 아니다.**
 - 실행 기록·상태 표시의 모델 필드로 확인한다.
-- 재정의(`CLAUDE_CODE_SUBAGENT_MODEL` 등)가 있으면 그것이 이긴다. 2026-09-21 실측: **전부 미설정**.
+- 🔴 **`CLAUDE_CODE_SUBAGENT_MODEL` 은 "이기는 값" 이 아니라 default 다** (2026-09-22 정정).
+  · 호출 시 모델 지정과 agent definition 의 `model` 필드가 **우선**한다(`inherit` 도 명시 배정으로 센다).
+    즉 이 파일 §1 표의 배정은 그대로 살아 있고, 이 변수는 **모델이 빠진 임시 하위 에이전트만** 바꾼다.
+  · 우선순위를 실제로 뒤집는 값은 **별도 변수 `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`** 다.
+  · 2026-09-22 실측: `.codex/config.toml`(오너 미커밋 변경)에 `CLAUDE_CODE_SUBAGENT_MODEL = "sonnet"` 이 있고,
+    `..._FORCE` 는 **미설정**이다. 그러므로 "모든 하위 에이전트가 Sonnet 으로 강등된다" 는 서술은 **사실이 아니다**.
+  · 이 구분을 설정 이름만 보고 판단하지 마라 — 실제 모델은 세션 로그의 `model` 필드로 관찰한다.
 - 공급자 대체·사용 불가·추가 결제 요구는 **숨기거나 자동 동의하지 않는다.** 오너에게 알리고 Opus 5 로 계속한다.
 - 지원되지 않는 모델 ID·effort 를 만들어 내지 않는다. 확인된 ID:
   `claude-opus-5` · `claude-sonnet-5` · `claude-fable-5-1` · `haiku`(Haiku 4.5).

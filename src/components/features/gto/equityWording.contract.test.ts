@@ -95,31 +95,27 @@ describe('② 근사식을 "정확값" 이라 부르지 않는다', () => {
 });
 
 describe('③ 표본 추정치와 전수계산을 같은 문구로 뭉뚱그리지 않는다', () => {
-  it('SpotReport 가 엔진의 kind 로 둘을 가른다(메타가 없을 때만 보드 장수)', () => {
-    // 2026-09-19 멀티웨이: 상대 카드가 한 장이라도 비면 보드가 다 깔려도 표본이다 — 보드 장수만으로는 못 가른다.
-    //   엔진이 kind 를 실어 주고 리포트는 그것을 읽는다. 옛 규칙(보드 3장 미만)은 메타가 없는 경로의 폴백이다.
-    expect(REPORT).toMatch(/const sampled = meta \? meta\.kind === 'monte_carlo' : boardCount < 3;/);
-    expect(REPORT, '표본일 때 정수로 적지 않는다').toMatch(/약 \$\{Math\.round\(eq\)\}%/);
-    expect(REPORT, '표본이면 오차(±%p)를 같이 적는다 — 숫자만 크게 쓰고 오차를 숨기지 않는다').toMatch(/±\$\{half\}%p/);
-    expect(REPORT).toMatch(/무작위 표본 .*추정치/);
-    expect(REPORT).toMatch(/남은 카드를 전부 돌려 계산한 값입니다/);
-    // 카드를 안 넣은 상대는 무작위 핸드라는 **가정을 화면에 적는다**(리드 결정) — 가정을 숨긴 숫자가 금지다
-    expect(REPORT).toMatch(/무작위 핸드<\/b>로 계산했습니다/);
+  // 🔴 2026-09-22 요구 A — **반전됐다.** SpotReport 에서 승률 표기 자체가 사라졌다
+  //   (작성·저장·공유 중심으로 바뀌며 수학 지표를 걷어냈다). 그래서 "표본과 전수를 어떻게 구별해
+  //   적는가" 를 이 화면에 요구할 수 없다. 대신 **되살아나지 않는 것**을 잠근다.
+  //   ⚠ 다른 도구(레인지 vs 레인지·아웃츠)의 같은 문구 계약은 이 파일의 ①② 블록에 그대로 있다.
+  it('🔴 작성 화면에는 승률 문구가 아예 없다 — 표본/전수 구별을 요구할 대상이 사라졌다', () => {
+    expect(REPORT.length, 'SpotReport 소스를 못 읽었다 — 빈 검사 방지').toBeGreaterThan(1_000);
+    for (const gone of ['내 승률', '필요 승률', '무작위 표본', '남은 카드를 전부 돌려', '팟오즈']) {
+      expect(REPORT, `승률·수학 문구가 되살아났다: ${gone}`).not.toContain(gone);
+    }
   });
 
   it('전수계산 결과에 "돌릴 때마다 달라진다" 고 적지 않는다', () => {
     expect(REPORT, '옛 뭉뚱그린 문구가 남아 있다').not.toMatch(/무작위 시행 추정치 — 돌릴 때마다 소수점이 조금 달라집니다/);
   });
 
-  it('표본 수가 정수 자리를 의미 있게 만들 만큼 크다 — 소스의 상수를 직접 읽어 검사한다', () => {
-    // 2026-09-19: 2인 equityAsync → 멀티웨이 equityMultiAsync. 표본 수 계약은 그대로다.
-    const m = SPOT_PANEL.match(/equityMultiAsync\(h, villains, hb\.boardCards, (\d+)\)/);
-    expect(m, 'NuriSpotPanel 의 equityMultiAsync 표본 수를 못 찾았다').not.toBeNull();
-    const n = Number(m![1]);
-    // 화면이 "1%p 안팎으로 달라집니다" 라고 약속한다 — 그 약속이 참이려면 95% 구간이 ±1%p 이내여야 한다.
-    // p=0.5 가 분산 최대이므로 그 값으로 잡는다: 1.96 * sqrt(0.25/n) * 100 <= 1.0  →  n >= 9604
-    const ci95 = 1.96 * Math.sqrt(0.25 / n) * 100;
-    expect(ci95, `표본 ${n}회는 95% 구간이 ±${ci95.toFixed(2)}%p — 정수 자리가 흔들린다`).toBeLessThanOrEqual(1);
+  // 🔴 2026-09-22 요구 A — 작성 화면이 에퀴티를 아예 계산하지 않으므로 '표본 수가 충분한가' 를
+  //   여기서 물을 수 없다. 표본 수 계약은 그 워커를 **실제로 쓰는 도구**가 지켜야 한다.
+  it('🔴 작성 화면은 에퀴티 워커를 부르지 않는다 — 부르지 않으니 표본 수도 없다', () => {
+    expect(SPOT_PANEL.length, 'NuriSpotPanel 소스를 못 읽었다 — 빈 검사 방지').toBeGreaterThan(5_000);
+    expect(SPOT_PANEL, '10,000회 멀티웨이 에퀴티 호출이 되살아났다').not.toMatch(/equityMultiAsync\(/);
+    expect(SPOT_PANEL, '2인 전용 에퀴티 호출이 들어왔다').not.toMatch(/\bequityAsync\(/);
   });
 
   it('프리플랍은 실제로 표본이라 흔들린다 — 그래서 정수로 적는 것이다', () => {

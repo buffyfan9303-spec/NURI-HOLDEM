@@ -46,62 +46,50 @@ describe('F10 · 저장 스팟 다시 열기가 spot 과 hb 를 같은 커밋에
   });
 });
 
-describe('F11 · 에퀴티 이펙트의 세대와 재계산 키', () => {
-  const m = code.match(/const canCalc = [\s\S]*?\}, \[cardsKey, blocked\]\);/);
-
-  it('이펙트 본문을 찾을 수 있다(앵커가 1회만 맞는다)', () => {
-    expect(m, '에퀴티 이펙트 본문을 찾지 못했다').not.toBeNull();
-    expect(code.match(/\}, \[cardsKey, blocked\]\);/g)).toHaveLength(1);
-  });
-
-  it('세대 증가가 무효 조기 반환보다 먼저다 — 무효 전환도 in-flight 요청을 끊는다', () => {
-    const body = m![0];
-    const bump = body.indexOf('reqId.current = plan.gen');
-    const bail = body.indexOf("plan.kind === 'clear'");
-    expect(bump).toBeGreaterThanOrEqual(0);
-    expect(bail).toBeGreaterThanOrEqual(0);
-    expect(bump).toBeLessThan(bail);
-  });
-
-  it('응답 반영은 canApplyEquity 가드를 통과해야 한다', () => {
-    expect(m![0]).toMatch(/if \(!canApplyEquity\(my, reqId\.current\)\) return;[\s\S]{0,80}setEquity\(/);
-  });
-
-  it('재계산 키가 빌런 카드를 포함한다 — canonicalSpotKey 는 빌런을 빼므로 쓰지 않는다', () => {
-    // 2026-09-19 멀티웨이: 키는 **남아 있는 상대 전원**(liveVillains)의 카드로 만든다. 상대마다 ';' 로 끝맺어
-    // 상대 수·누가 빈손인지·누가 폴드로 빠졌는지까지 키가 바뀐다 — 안 그러면 B 를 지워도 옛 승률이 남는다(F11 재발).
-    expect(code).toContain("equityCardsKey(hb.ids.hero, live.map((v) => `${v.cards.join('')};`), hb.ids.board)");
-    expect(code).toMatch(/const live = useMemo\(\(\) => liveVillains\(spot\), \[spot\]\);/);
-    expect(code).not.toContain('canonicalSpotKey');
-  });
-
-  it('멀티웨이 엔진을 부르고, 상대 카드가 비어도 계산한다(무작위 핸드) — 2인 전용 equityAsync 로 되돌리지 않는다', () => {
-    expect(m![0]).toContain('equityMultiAsync(h, villains, hb.boardCards, 10000)');
-    expect(m![0]).not.toContain('hb.villainCards.length === 2');
-    expect(code).not.toMatch(/\bequityAsync\(/);
-  });
-});
-
-describe('🔴 표가 말하지 않는 갈래를 0% 로 그리지 않는다 (2026-09-17)', () => {
+// 🔴 2026-09-22 요구 A — 아래 두 블록(F11 에퀴티 세대·재계산 키 / MixBar 의 absent 표기)은
+//   **반전됐다.** 오너가 NURI SPOT 을 '작성·저장·공유' 중심으로 바꾸면서 이 화면의
+//   10,000회 멀티웨이 에퀴티 배선과 액션 빈도 막대(MixBar)를 통째로 걷어냈기 때문이다.
+//
+//   ⚠ 계약을 **지우지 않고 뒤집는다.** 지우면 누군가 "성능 개선" 이라며 워커 호출을 되살렸을 때
+//     아무도 못 잡는다. 지금 잠글 것은 "그 배선이 이 화면에 없다" 는 사실이다.
+//   ⚠ 엔진 자체(`equityClient`·`equityRequest`·워커)와 다른 GTO 도구의 에퀴티는 **그대로 살아 있다.**
+//     여기서 보는 것은 `NuriSpotPanel`/`SpotReport` 두 파일뿐이다.
+describe('요구 A · 작성 화면에서 에퀴티 배선과 빈도 막대가 빠졌다', () => {
   const REPORT = readFileSync(join(__dirname, 'SpotReport.tsx'), 'utf-8');
   const report = REPORT.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-  // 왜 계약으로 잠그나: 엔진(spotEvaluate)이 `absent` 를 만든 이유가 **잔여를 지어내지 않기 위해서**인데,
-  //   화면이 그걸 안 읽으면 `mix` 의 0 이 그대로 "0%" 로 나가 같은 거짓말이 복원된다.
-  //   실측(Fable 검증 2026-09-17): `CO vs LJ · JJ · 콜` 에서 "정확 일치" 배지 + "콜 0% · 폴드 0%".
-  //   3벳 표 23장과 SB 얼리 수비 3장이 전부 이 경로다 — 드문 구석이 아니라 기본 동선이다.
-  it('MixBar 가 absent 를 받아 — 로 그린다', () => {
-    expect(report, 'MixBar 호출부가 absent 를 안 넘긴다').toMatch(/<MixBar[^>]*absent=\{evaluation\.absent\}/);
-    expect(report, 'MixBar 가 absent 를 안 받는다').toMatch(/function MixBar\(\{[^}]*absent[^}]*\}/);
-    expect(report, "absent 갈래를 '—' 로 그리는 자리가 없다").toContain("'—'");
+  it('재료가 실제로 있다 — 정규식이 죽어 빈 검사가 되는 것을 막는다', () => {
+    expect(code.length, 'NuriSpotPanel 소스를 못 읽었다').toBeGreaterThan(5_000);
+    expect(report.length, 'SpotReport 소스를 못 읽었다').toBeGreaterThan(1_000);
+    expect(code, '스팟 패널이 아닌 파일을 읽고 있다').toContain('NuriSpotInit');
   });
 
-  it('aria-label 에도 0% 라고 말하지 않는다 — 스크린리더에게만 거짓말하지 않는다', () => {
-    const label = report.match(/aria-label=\{`기준 빈도 — \$\{text\}`\}/);
-    expect(label, 'aria-label 형태가 바뀌었다 — 계약을 같이 고쳐라').not.toBeNull();
-    expect(report, 'text 가 absent 를 반영하지 않는다').toMatch(/silent\(k\) \? '표에 없음'/);
+  it('🔴 작성 화면이 더 이상 에퀴티 워커를 부르지 않는다', () => {
+    expect(code, '10,000회 멀티웨이 에퀴티 호출이 되살아났다').not.toContain('equityMultiAsync(');
+    expect(code, '2인 전용 에퀴티 호출이 들어왔다').not.toMatch(/\bequityAsync\(/);
+    expect(code, '에퀴티 요청 세대 관리(planEquity)가 되살아났다 — 부를 것이 없으면 필요 없다').not.toContain('planEquity(');
+    expect(code, 'equityCardsKey 재계산 키가 되살아났다').not.toContain('equityCardsKey(');
+  });
+
+  it('🔴 evaluateSpot 은 그대로 돈다 — 저장 스냅샷 스키마 호환(coverage_kind·dataset_version)', () => {
+    // 지운 것은 '화면 표시' 이지 '저장 계약' 이 아니다. 이게 빠지면 기존 행·RPC 와 어긋난다.
+    expect(code, 'evaluateSpot 호출이 사라졌다 — 저장·공유 스냅샷이 깨진다').toMatch(/evaluateSpot\(spot, \{ heroEquity: null \}\)/);
+    expect(report, 'saveMySpot 이 evaluation 을 안 받는다').toMatch(/saveMySpot\(spot, evaluation\)/);
+  });
+
+  it('🔴 작성 화면에 빈도 막대·판정 줄이 없다', () => {
+    expect(report, 'MixBar(액션 빈도 막대)가 되살아났다').not.toContain('MixBar');
+    expect(report, 'MathBlock(수학 지표)이 되살아났다').not.toContain('MathBlock');
+    expect(code, 'VerdictLine(판정 한 줄)이 되살아났다').not.toContain('VerdictLine');
+  });
+
+  it('🔴 그 자리에 작성 내용이 실제로 들어갔다 — 전부 지우고 끝낸 것이 아니다', () => {
+    expect(report, 'SpotDetails 를 쓰지 않는다 — 작성 내용을 보여 줄 것이 없다').toMatch(/<SpotDetails[^>]*mode="owner"/);
+    expect(report, '저장 버튼이 사라졌다').toContain('내 스팟에 저장');
+    expect(report, '공유 버튼이 사라졌다').toContain('스팟 토론에 공유');
   });
 });
+
 
 // ── 빌런 B~E (2026-09-19) — 배선 셋 ──────────────────────────────────────────
 describe('빌런 B~E 배선', () => {
@@ -110,14 +98,9 @@ describe('빌런 B~E 배선', () => {
     expect(code).toMatch(/if \(extraSlots !== spot\.extra\.length\) setExtraCount\(spot\.extra\.length\);/);
   });
 
-  it('내 선택 아래 판정 줄(VerdictLine)은 evaluation 을 그대로 읽는다 — 다시 계산하지 않는다(정본은 하나)', () => {
-    const m = code.match(/function VerdictLine\([\s\S]*?\n\}/);
-    expect(m, 'VerdictLine 을 찾지 못했다').not.toBeNull();
-    expect(m![0]).not.toContain('evaluateSpot(');
-    expect(m![0]).toContain('VERDICT_LABEL[v]');
-    // 리포트의 판정 배지와 같은 조건 — 내 선택이 없으면 판정할 것도 없다
-    expect(m![0]).toContain('if (spot.heroAction === null) return null;');
-  });
+  // 🔴 2026-09-22 요구 A — 'VerdictLine 이 evaluation 을 그대로 읽는가' 계약은 **대상이 사라져**
+  //   위 '요구 A' 블록의 반전 계약(판정 줄 되살아남 금지)으로 옮겼다. 여기서 지우기만 하면
+  //   되살아났을 때 아무도 못 잡으므로, 금지는 그쪽이 잠근다.
 
   it('공유 스팟을 읽을 때 가려진 상대는 B~E 카드까지 비운다(이중 방어) — A 만 비우면 B 의 카드가 새어 나간다', () => {
     const api = readFileSync(join(__dirname, '../../../api/spots.ts'), 'utf-8');

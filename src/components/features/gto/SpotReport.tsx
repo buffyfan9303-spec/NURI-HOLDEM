@@ -1,29 +1,28 @@
-// src/components/features/gto/SpotReport.tsx — 스팟 리포트
+// src/components/features/gto/SpotReport.tsx — 작성 내용 + 저장·공유
 //
-// 정보 순서가 이 화면의 전부다(오너 지시 6-5):
-//   ① 내 선택 · 평가 상태 · 기준 액션 · 분석 등급   ← 먼저 보이는 것
-//   ② 액션별 빈도(가로 누적 막대) 또는 수학 지표
-//   ③ 왜 그런지 · 가정 · 데이터 출처와 버전
-//   ④ 저장 · 비슷한 스팟 · 스팟 토론에 공유
+// 🔴 2026-09-22 요구 A 로 이 화면의 성격이 바뀌었다.
+//   전: '스팟 리포트' — 평가 배지·분석 등급·액션 빈도 막대·수학 지표·데이터 버전이 주인공이었다.
+//   후: **작성한 내용을 그대로 읽어 주고, 저장하고, 게시판에 공유하는 자리.**
+//   오너: "분석 카드는 지우고, 작성하고 저장하고 게시판에 공유해서 보여 주는 게 목적이다."
 //
-// ⚠ '어그레션 차트' 같은 해석이 어려운 그림은 쓰지 않는다. 폴드·콜·레이즈 누적 막대 하나로
-//   끝내고, 퍼센트와 액션명은 **막대 밖에서도** 읽히게 목록으로 함께 적는다(작은 화면·색맹 대응).
+// 지금 순서:
+//   ① 작성 내용(SpotDetails — 세 화면이 함께 쓰는 표시 컴포넌트)
+//   ② 내 스팟에 저장 · 스팟 토론에 공유
+//
+// ⚠ 지운 것은 **판정 표시**뿐이다. 입력 검증(IssueList)·저장 스냅샷(`evaluation`)·
+//   공유 확인 시트(F16 계약)·트레이너 도구는 전부 그대로다.
 import { useEffect, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import Modal from '../../atoms/Modal';
 import { ensureLogin } from '../../../lib/requireLogin';
 import type { useToast } from '../../atoms/Toast';
 import type { useAuth } from '../../../contexts/AuthContext';
-import { actionLabel, spotSummary, type SpotReview } from '../../../lib/spot';
-import {
-  COVERAGE_LABEL, VERDICT_LABEL,
-  type SpotEvaluation, type CoverageKind, type Verdict, type ActionMix,
-} from '../../../lib/spotEvaluate';
-import { writeSnap } from '../../../lib/snapshot';
+import { spotSummary, type SpotReview } from '../../../lib/spot';
+import type { SpotEvaluation, CoverageKind } from '../../../lib/spotEvaluate';
 import { saveMySpot, shareSpotPost } from '../../../api/spots';
 import { gotoBoardPost } from '../../../lib/spotNav';
 import { buildShareBody, spotWithNote } from './spotShareBody';
-import { equityHalfWidthPct, type EquityMeta } from './equityRequest';
+import SpotDetails from './SpotDetails';
 
 /** 등급별 색 — **색만으로 의미를 전하지 않는다.** 항상 라벨·아이콘과 함께 쓴다. */
 /** led = [data-aura-variant](index.css) — 인라인 rgb 링은 라이트·고대비·강제색에서 못 껐다(2026-09-18). unsupported 는 LED 없음. */
@@ -35,38 +34,26 @@ const COVERAGE_TONE: Record<CoverageKind, { led: 'violet' | 'cyan' | 'amber' | n
   unsupported:          { led: null,     text: 'text-ink-muted',  icon: 'info' },
 };
 
-const VERDICT_TONE: Record<Verdict, string> = {
-  good: 'bg-emerald-500/12 text-emerald-300 border-emerald-500/35',
-  mixed: 'bg-accent-300/12 text-accent-200 border-accent-400/35',
-  improve: 'bg-rose-500/12 text-rose-300 border-rose-500/35',
-  reference: 'bg-amber-500/12 text-amber-200 border-amber-500/35',
-  math: 'bg-amber-500/10 text-amber-200 border-amber-500/30',
-  out_of_scope: 'bg-surface-high text-ink-muted border-border-default',
-};
-
-const MIX_TONE: Record<keyof ActionMix, { bar: string; dot: string; label: string }> = {
-  fold: { bar: 'bg-slate-500', dot: 'bg-slate-500', label: '폴드' },
-  call: { bar: 'bg-aura-300', dot: 'bg-aura-300', label: '콜' },
-  raise: { bar: 'bg-accent-300', dot: 'bg-accent-300', label: '레이즈' },
-};
+// 🔴 VERDICT_TONE(판정 색) 은 요구 A 로 제거했다 — 이 화면은 더 이상 옳고 그름을 말하지 않는다.
+//   판정 자체(`spotEvaluate`)는 저장 스냅샷 호환을 위해 그대로 살아 있다.
 
 interface Props {
   spot: SpotReview;
   evaluation: SpotEvaluation;
-  calculating: boolean;
+  // 🔴 `calculating` prop 은 요구 A 로 제거했다 — 이 화면에서 도는 비동기 계산이 없어졌다.
   blocked: boolean;
   /** 2026-09-14: 저장 목록(MySpotList)에서 "공유"로 열었을 때 증가하는 신호.
    *  ⚠ 여기서 **게시하지 않는다** — 기존 확인 시트(onShare)를 열 뿐이다.
    *     저장 목록에 shareSpotPost 를 직접 붙이면 F16 이 세운 "올라갈 본문을 먼저 보여 준다"는
    *     계약을 우회하는 두 번째 게시 경로가 생긴다. 그래서 진입점만 늘리고 경로는 하나로 둔다. */
   shareIntent?: number;
-  /** 승률 메타(2026-09-19 멀티웨이) — 표본인지·몇 장을 무작위로 뽑았는지. 없으면 승률 행이 비어 나온다 */
-  equityMeta?: EquityMeta | null;
+  // 🔴 `equityMeta` prop 은 요구 A 로 제거했다 — 승률을 화면에 쓰지 않으므로 받을 이유가 없다.
+  //   NuriSpotPanel 의 10,000회 equity 계산 배선도 같은 이유로 걷어냈다.
   user: ReturnType<typeof useAuth>['user'];
   toast: ReturnType<typeof useToast>;
 }
 
-export default function SpotReport({ spot, evaluation, calculating, blocked, user, toast, shareIntent = 0, equityMeta = null }: Props) {
+export default function SpotReport({ spot, evaluation, blocked, user, toast, shareIntent = 0 }: Props) {
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const [saved, setSaved] = useState(false);
   /** 공유 확인 시트가 떠 있는가 — 이게 true 인 동안에도 아직 올라간 글은 없다. */
@@ -87,13 +74,8 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
     } finally { setBusy(null); }
   };
 
-  // 트레이너로 넘길 때는 스냅샷에 실어 보낸다 — ToolsPanel 의 case 'trainer' 가 읽는다.
-  // 참조한 표의 **그 문제**를 그대로 낸다(makeQuiz 의 키 복원).
-  const onDrill = () => {
-    if (!('drill' in evaluation) || !evaluation.drill) return;
-    writeSnap('tool:trainer', evaluation.drill);
-    window.dispatchEvent(new CustomEvent('nuri:open-tool', { detail: 'trainer' }));
-  };
+  // 🔴 `onDrill`('비슷한 스팟 풀기' → 트레이너) 은 요구 A 로 제거했다.
+  //   트레이너 도구 자체와 `evaluation.drill` 데이터는 그대로 있다 — 이 화면에서 나가는 길만 없앴다.
 
   // ⚠ 공유 버튼은 **아무것도 올리지 않는다**(F16, 2026-09-13).
   //   예전에는 이 버튼이 곧장 shareSpotPost 를 불렀다. 그런데 본문은 클라이언트가 짓고
@@ -109,16 +91,15 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
 
   // 저장 목록에서 '공유'로 들어오면 **여기서** 확인 시트를 연다.
   // ⚠ 게시는 여전히 onConfirmShare 한 곳뿐이다 — 진입점만 늘리고 경로는 하나로 둔다(F16 계약).
-  // ⚠ 계산이 끝난 뒤에 연다. 계산 중에 열면 시트가 **비어 있거나 이전 스팟의 본문**을 보여 준다.
   // ⚠ blocked(입력 미완성)면 열지 않는다 — 올릴 수 없는 상태에서 시트만 뜨면 막다른 길이다.
   useEffect(() => {
-    if (!shareIntent || calculating || blocked) return;
+    if (!shareIntent || blocked) return;
     if (!ensureLogin(user)) return;
     setDraftNote(spot.note?.trim() ?? '');
     setConfirming(true);
     // spot 은 의도적으로 의존성에서 뺀다 — 메모를 고칠 때마다 시트가 다시 열리면 안 된다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shareIntent, calculating, blocked, user]);
+  }, [shareIntent, blocked, user]);
 
   // 취소는 시트만 닫는다 — 여기에는 네트워크 호출이 하나도 없다(공개 글 0).
   const onCancelShare = () => {
@@ -150,78 +131,29 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
       data-aura={tone.led ? '' : undefined}
       data-aura-level={tone.led ? 'hero' : undefined}
       data-aura-variant={tone.led ?? undefined}
-      aria-label="스팟 리포트"
+      aria-label="작성 내용"
     >
-      {/* ① 먼저 보이는 것 */}
-      <header className="flex flex-wrap items-center gap-2">
-        {/* 평가 배지는 **판정할 것이 있을 때만** 세운다.
-            · 내가 고른 액션이 없으면 판정할 대상이 없다.
-            · out_of_scope 는 아래 등급 배지가 이미 같은 문장을 말한다 — 두 배지가 같은 글자를
-              나란히 띄우면 정보가 늘지 않고 화면만 시끄러워진다(1280 실측에서 실제로 그랬다). */}
-        {spot.heroAction !== null && evaluation.verdict !== 'out_of_scope' && (
-          <span className={['inline-flex items-center gap-1 rounded-badge border px-2 py-0.5 text-2xs font-bold', VERDICT_TONE[evaluation.verdict]].join(' ')}>
-            <Icon name={evaluation.verdict === 'good' ? 'check' : evaluation.verdict === 'improve' ? 'alert' : 'info'} size={11} aria-hidden />
-            {VERDICT_LABEL[evaluation.verdict]}
-          </span>
-        )}
-        <span
-          data-source-badge={evaluation.kind}
-          title={coverageHint(evaluation.kind)}
-          className={['inline-flex items-center gap-1 rounded-badge border border-border-default bg-surface-high px-2 py-0.5 text-2xs font-semibold', tone.text].join(' ')}
-        >
-          <Icon name={tone.icon} size={11} aria-hidden />
-          {COVERAGE_LABEL[evaluation.kind]}
-        </span>
-        {calculating && <span className="text-2xs text-ink-muted" aria-live="polite">계산 중…</span>}
+      {/* 🔴 2026-09-22 요구 A — 이 카드는 이제 **작성한 내용을 읽어 주는 자리**다.
+          오너: "분석 카드는 지우고, 작성하고 저장하고 게시판에 공유해서 보여 주는 게 목적이다."
+          여기 있던 분석 UI 를 전부 걷어냈다: 평가/판정 배지, 출처 등급 배지, 수학 지표 블록,
+          액션 빈도 막대, 승률·오즈 계열 수치 세 줄, 평가 notes, 솔버 고지, 데이터 버전 줄,
+          트레이너로 가는 버튼.
+          ⚠ 지운 문구를 이 주석에 **그대로 적지 마라** — 계약 테스트가 소스 문자열로 세므로
+            주석 한 줄이 '되살아났다' 로 잡힌다(이 저장소가 여러 번 밟은 함정이다).
+          ⚠ **입력 검증은 그대로다.** 중복 카드·스트리트 장수·자리 충돌은 폼 아래 IssueList 가 계속 말한다.
+            없앤 것은 '무엇이 옳은가' 하는 판정뿐이다.
+          ⚠ `evaluation` prop 은 남는다 — 화면에 안 쓰지만 `saveMySpot` 이 스냅샷(coverage_kind·
+            dataset_version)을 그대로 저장해야 기존 행·RPC 스키마와 호환된다. */}
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-bold text-ink-primary">작성 내용</h3>
+        <span className="text-2xs text-ink-muted">{spotSummary(spot)}</span>
       </header>
 
-      <p className="mt-1.5 text-2xs text-ink-muted">{spotSummary(spot)}</p>
-
-      <div className="mt-2 flex items-center gap-2 rounded-input bg-surface-high px-2.5 py-2">
-        <span className="shrink-0 text-2xs text-ink-muted">내 선택</span>
-        <span className="text-sm font-bold text-ink-primary">
-          {spot.heroAction ? actionLabel(spot.heroAction) : '아직 고르지 않음'}
-          {spot.heroActionSizeBb !== undefined && spot.heroAction && ['call', 'bet', 'raise'].includes(spot.heroAction) && (
-            <span className="ml-1 text-xs tabular-nums text-ink-secondary">{spot.heroActionSizeBb}BB</span>
-          )}
-        </span>
+      <div className="mt-2 rounded-input bg-surface-high px-2.5 py-1.5">
+        <SpotDetails spot={spot} mode="owner" />
       </div>
 
-      {/* ② 빈도 또는 수학 */}
-      {(evaluation.kind === 'chart_nash' || evaluation.kind === 'normalized_reference') && (
-        <MixBar mix={evaluation.mix} absent={evaluation.absent} heroKey={heroMixKey(spot)} />
-      )}
-      {(evaluation.kind === 'math_only' || evaluation.kind === 'unsupported') && (
-        <MathBlock math={evaluation.math} boardCount={spot.board.length} meta={equityMeta} />
-      )}
-
-      {/* ③ 왜 그런지 · 가정 · 출처
-          범위 밖일 때는 **리포트 한 문장(reason)** 만 세운다.
-          notes 에는 검증 오류 목록이 그대로 들어 있지만(spotEvaluate 의 데이터 계약이다),
-          그건 입력 폼 바로 아래 IssueList 가 이미 빨간 배너로 말하고 있다 —
-          같은 문장을 한 화면 아래에서 회색 불릿으로 한 번 더 띄우면 정보가 늘지
-          않고 화면만 시끄러워진다(412px 실측에서 실제로 그러했다).
-          그래도 reason 은 반드시 세운다 — 리포트는 혼자 떨어져도 자기를 설명해야 한다. */}
-      {evaluation.kind === 'unsupported' ? (
-        <p className="mt-2.5 border-t border-border-subtle pt-2.5 text-2xs leading-relaxed text-ink-secondary break-keep">
-          {evaluation.reason}
-        </p>
-      ) : evaluation.notes.length > 0 ? (
-        <ul className="mt-2.5 space-y-1 border-t border-border-subtle pt-2.5">
-          {evaluation.notes.map((n, i) => (
-            <li key={i} className="flex items-start gap-1.5 text-2xs leading-relaxed text-ink-secondary break-keep">
-              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-muted" aria-hidden />
-              <span>{n}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <p className="mt-2 text-[10px] leading-relaxed text-ink-muted">
-        데이터 버전 <span className="tabular-nums">{evaluation.datasetVersion}</span>
-        {' · '}이 앱에는 검증된 솔버 데이터가 없어 <b className="text-ink-secondary">솔버 기준</b> 등급은 사용하지 않습니다.
-      </p>
-
-      {/* ④ 행동 */}
+      {/* 행동 */}
       {/* whitespace-normal · leading-tight: `.btn` 의 nowrap 이 200% 글자확대(root 34px)에서 '내 스팟에 저장' 을 칸 밖으로
           흘려 옆 버튼 위에 겹쳤다(2026-09-19 스윕, 320~390px). 라벨을 줄이지 않고 두 줄을 허용한다 — SpotHeroCard(ToolsPanel) 와 같은 조리법. */}
       <div className="mt-2.5 grid grid-cols-2 gap-1.5 border-t border-border-subtle pt-2.5">
@@ -238,18 +170,8 @@ export default function SpotReport({ spot, evaluation, calculating, blocked, use
         <p className="mt-1.5 text-2xs text-ink-muted">입력을 고치면 저장·공유할 수 있어요. 적어 둔 내용은 그대로 있습니다.</p>
       )}
 
-      {/* 비슷한 스팟 풀기 — **평가가 실제로 본 그 표**가 있을 때만 세운다.
-          이 저장소에는 스팟 사이의 거리를 재는 수단이 없다(canonicalSpotKey 는 같음/다름만 본다).
-          그러니 '비슷하다'고 부를 수 있는 정직한 대상은 참조한 표 하나뿐이고, 포스트플랍처럼
-          표가 없는 자리에는 **버튼을 만들지 않는다**(비활성 버튼은 '입력을 고치면 열린다'는
-          거짓 약속이 된다 — 여긴 고칠 입력이 없다).
-          ⚠ 위 2열 그리드에 넣지 않는다. 세 번째가 되면 한 칸이 혼자 남아 열이 깨진다. */}
-      {'drill' in evaluation && evaluation.drill && (
-        <button type="button" onClick={onDrill}
-          className="mt-1.5 flex min-h-[44px] w-full items-center justify-center gap-1 rounded-input border border-border-default text-xs font-bold text-ink-secondary">
-          <Icon name="target" size={13} aria-hidden />비슷한 스팟 풀기
-        </button>
-      )}
+      {/* 🔴 '비슷한 스팟 풀기' 버튼은 요구 A 로 제거했다(트레이너 도구 자체는 그대로 있다).
+          이 화면은 작성·저장·공유가 목적이고, 여기서 트레이너로 새는 길은 그 흐름을 끊는다. */}
 
       <ShareConfirmSheet
         open={confirming}
@@ -353,121 +275,4 @@ function ShareConfirmSheet({
       </div>
     </Modal>
   );
-}
-
-function heroMixKey(spot: SpotReview): keyof ActionMix | null {
-  const a = spot.heroAction;
-  if (a === 'fold') return 'fold';
-  if (a === 'call') return 'call';
-  if (a === 'raise' || a === 'bet') return 'raise';
-  return null;
-}
-
-/** 폴드·콜·레이즈 가로 누적 막대 + 목록. 퍼센트는 막대 밖에서도 읽힌다. */
-/**
- * 기준 빈도 막대.
- *
- * 🔴 **`absent` 갈래는 `0%` 가 아니라 `—` 로 그린다.** `mix` 에서 그 자리의 0 은 빈도가 아니라
- * **표의 침묵**이다(spotEvaluate 의 ActionMix 주석). 3벳 표 23장과 SB 얼리 수비 3장에는 콜 갈래가
- * 아예 없어서, 그대로 찍으면 "정확 일치" 배지 옆에 **"콜 0% · 폴드 0%"** 가 뜬다 —
- * 유저는 그걸 "차트가 접지 말라고 한다" 로 읽는다. 실측(2026-09-17 Fable 검증):
- * `CO vs LJ · JJ · 콜` 에서 배지 "정확 일치" + 막대 "폴드 0% · 콜 0% · 레이즈 50%" 가 그대로 나갔다.
- * 엔진이 잔여를 지어내지 않으려고 `absent` 를 만든 이유가 화면에서 도로 무너지던 자리다.
- * aria-label 도 같이 고친다 — 스크린리더에게만 "0%" 라고 말하면 그것도 거짓말이다.
- */
-function MixBar({ mix, absent, heroKey }: { mix: ActionMix; absent: readonly (keyof ActionMix)[]; heroKey: keyof ActionMix | null }) {
-  const order: (keyof ActionMix)[] = ['fold', 'call', 'raise'];
-  const pct = (n: number) => Math.round(n * 1000) / 10;
-  const silent = (k: keyof ActionMix) => absent.includes(k);
-  const cell = (k: keyof ActionMix) => (silent(k) ? '—' : `${pct(mix[k])}%`);
-  const text = order.map((k) => `${MIX_TONE[k].label} ${silent(k) ? '표에 없음' : `${pct(mix[k])}%`}`).join(', ');
-  return (
-    <div className="mt-2.5">
-      {/* 막대 자체는 장식 — 실제 값은 아래 목록이 전한다(스크린리더는 목록을 읽는다) */}
-      <div className="flex h-3 w-full overflow-hidden rounded-full bg-surface-high" role="img" aria-label={`기준 빈도 — ${text}`}>
-        {order.map((k) => (
-          !silent(k) && mix[k] > 0 ? <span key={k} className={MIX_TONE[k].bar} style={{ width: `${mix[k] * 100}%` }} /> : null
-        ))}
-      </div>
-      <ul className="mt-1.5 space-y-1">
-        {order.map((k) => (
-          <li key={k} className="flex items-center gap-2 text-2xs">
-            <span className={['h-2 w-2 shrink-0 rounded-full', MIX_TONE[k].dot].join(' ')} aria-hidden />
-            <span className="flex-1 text-ink-secondary">
-              {MIX_TONE[k].label}
-              {heroKey === k && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-px font-bold text-accent-200">내 선택</span>}
-            </span>
-            <span className={['tabular-nums font-bold', silent(k) ? 'text-ink-muted' : 'text-ink-primary'].join(' ')}
-              title={silent(k) ? '이 표는 이 갈래를 담지 않습니다 — 빈도 0 이 아닙니다' : undefined}>{cell(k)}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/**
- * 승률은 **두 가지 방식**으로 계산된다 — 같은 문구로 뭉뚱그리면 한쪽은 반드시 거짓말이 된다.
- * `computeEquity` 는 보드가 3장 이상이면 잔여 조합을 **전수계산**하고(플랍 990 · 턴 44 · 리버 1),
- * 프리플랍·보드 1~2장일 때만 몬테카를로 표본을 쓴다.
- *
- * 2026-09-17 실측: 표본 10,000회에서 같은 프리플랍 핸드를 12번 돌리면 폭이 1.4~1.7%p 였다
- * (2,500회일 때는 2.7~3.5%p). 즉 **소수점 자리는 잡음**이라 표본일 때는 정수로 적는다.
- * 반대로 플랍 이후는 흔들리지 않는 값인데 "돌릴 때마다 달라진다" 고 적혀 있었다 — 그것도 거짓이었다.
- */
-function MathBlock({ math, boardCount, meta }: { math: SpotEvaluation['math']; boardCount: number; meta: EquityMeta | null }) {
-  // 2026-09-19 멀티웨이: 표본 여부는 엔진이 말한다(kind). 상대 카드가 한 장이라도 비면 보드가 다 깔려도 표본이다.
-  //   메타가 없는 옛 경로만 예전 규칙(보드 3장 미만 = 표본)으로 본다.
-  const sampled = meta ? meta.kind === 'monte_carlo' : boardCount < 3;
-  const half = meta ? equityHalfWidthPct(meta) : null;   // 95% 구간 반폭(%p) — 오차를 숨기지 않는다(리드 결정)
-  const eq = math.heroEquityPct;
-  const vs = meta && meta.villains > 1 ? ` · 상대 ${meta.villains}명` : '';
-  // 🔴 G1(2026-09-20) — `null` 은 **0 이 아니라 '계산하지 않았다'** 는 뜻이다(막힌 원장·사이드팟).
-  //   종전에는 `math.potBb` 를 그대로 문자열에 끼워 `nullBB` 가 나가거나, blocker 가 있는데도
-  //   팟·콜·필요 승률이 그려져 "입력에 고칠 점이 있습니다" 옆에 그럴듯한 숫자가 서 있었다.
-  //   숫자가 없으면 **줄을 만들지 않고**, 대신 왜 없는지는 리포트의 notes 가 말한다.
-  const rows: [string, string, string?][] = [
-    ...(math.potBb !== null ? [['팟', `${math.potBb}BB`] as [string, string]] : []),
-    ...(math.toCallBb !== null && math.toCallBb > 0 ? [['콜 금액', `${math.toCallBb}BB`] as [string, string]] : []),
-    ...(math.uncalledBb > 0 ? [['돌려받는 돈', `${math.uncalledBb}BB`, '유효 스택을 넘어 아무도 콜할 수 없는 금액 — 팟에서 뺐습니다'] as [string, string, string]] : []),
-    ...(math.neededEquityPct !== null ? [['필요 승률', `${math.neededEquityPct}%`, '이 승률보다 높아야 콜이 손해가 아닙니다'] as [string, string, string]] : []),
-    ...(eq !== null ? [sampled
-      ? [`내 승률(추정)${vs}`, `약 ${Math.round(eq)}%${half ? ` ±${half}%p` : ''}`,
-        `무작위 표본 ${meta ? meta.iterations.toLocaleString() : ''}회 추정치 — 95% 구간 ±${half ?? 1}%p 라 정수로 적습니다`]
-      : [`내 승률${vs}`, `${eq}%`, '남은 카드를 전부 돌려 계산한 값입니다 — 다시 계산해도 같습니다'],
-    ] as [string, string, string][] : []),
-  ];
-  return (
-    <div className="mt-2.5">
-      <dl className="space-y-1">
-        {rows.map(([k, v, help]) => (
-          <div key={k} className="flex items-baseline justify-between gap-2 rounded-input bg-surface-high px-2.5 py-1.5">
-            <dt className="text-2xs text-ink-secondary" title={help}>{k}{help && <Icon name="info" size={10} className="ml-1 inline-block align-[-1px] text-ink-muted" aria-hidden />}</dt>
-            <dd className="text-sm font-bold tabular-nums text-ink-primary">{v}</dd>
-          </div>
-        ))}
-      </dl>
-      {/* 가정을 숨기고 숫자만 보여 주는 것이 금지다 — 카드를 안 넣은 상대는 무작위 핸드라는 사실을 적는다(리드 결정 2026-09-19). */}
-      {eq !== null && meta && meta.unknownCards > 0 && (
-        <p data-testid="spot-equity-assumption" className="mt-1.5 text-2xs leading-relaxed text-ink-muted break-keep">
-          카드를 넣지 않은 상대는 <b className="text-ink-secondary">무작위 핸드</b>로 계산했습니다(무작위 {meta.unknownCards}장). 상대 레인지를 가정하지 않은 근사치입니다.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function coverageHint(k: CoverageKind): string {
-  switch (k) {
-    case 'exact_solver':
-      return '동일한 게임 트리의 검증된 솔버 산출입니다. 이 앱에는 아직 해당 데이터가 없습니다.';
-    case 'chart_nash':
-      return '이 앱의 자체 프리플랍 차트 또는 자체 Nash 푸시·폴드 데이터와 조건이 정확히 일치합니다.';
-    case 'normalized_reference':
-      return '가까운 참조 스팟을 빌려 왔습니다. 무엇이 달랐는지 함께 적혀 있으니 그 차이를 감안해서 보세요.';
-    case 'math_only':
-      return '에퀴티·팟오즈·필요 승률만 계산했습니다. 어떤 액션이 옳은지는 말하지 않습니다.';
-    default:
-      return '이 조건은 지금 데이터로 판정할 수 없습니다. 리플레이·저장·토론은 그대로 됩니다.';
-  }
 }

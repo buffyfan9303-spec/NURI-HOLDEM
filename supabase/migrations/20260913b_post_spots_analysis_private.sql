@@ -1,6 +1,16 @@
 -- 20260913b — `post_spots.analysis` 를 공개 GRANT 에서 뺀다 (스팟 스포일러 차단)
 --
--- ⚠⚠ 아직 **적용하지 않았다(오너 승인 대기)**. `supabase db push` 를 돌리지 않았고 운영 DB 쓰기 0건이다.
+-- ✅ **라이브 적용 완료** — 2026-09-22 read-only 재측정으로 확인했다(적용 날짜 자체는 기록이 없다).
+--    2026-09-13 작성 당시 머리말은 "오너 승인 대기 / 운영 DB 쓰기 0건" 이라는 **미적용 표기**였는데 stale 이었다.
+--    그 표기를 믿고 재적용하면 안 된다 — 2026-09-22 에 재적용 없이 기록만 바로잡았다.
+--
+--    2026-09-22 실측 (project idsxiqspecrucvfvtgbw · PG 17.6.1.127):
+--      public.post_spots 테이블 ACL : anon=awdm / authenticated=awdm  → **SELECT(r) 가 테이블 수준에 없다**
+--      컬럼 수준 SELECT 화이트리스트 8개:
+--        post_id, spot, coverage_kind, source_label, dataset_version, reveal_villain, reveal_result, created_at
+--      → `analysis` · `hero_action` · `hidden_villain` · `hidden_result` · `hidden_action` 은 **모두 제외돼 있다.**
+--    즉 이 파일이 의도한 상태가 라이브에 이미 반영돼 있다. `src/api/spotPrivacy.migration.test.ts` 가
+--    이 머리말이 다시 stale 해지지 않도록 고정한다.
 --
 -- 무엇이 문제인가
 --   `20260911d_nuri_spot.sql:98-101` 이 테이블을 통째로 회수한 뒤 화이트리스트로 다시 부여하는데,

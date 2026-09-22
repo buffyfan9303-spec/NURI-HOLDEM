@@ -11,7 +11,7 @@
 //
 // ⚠ 기존 도구는 하나도 지우지 않는다. #tool=gto · #tool=replay 는 그대로 살아 있고
 //   이 화면은 그 위에 얹히는 통합 진입점이다(ToolsPanel 의 대표 카드).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import SegmentedTabs from '../../atoms/SegmentedTabs';
 import { useToast } from '../../atoms/Toast';
@@ -19,17 +19,14 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { gotoBoard } from '../../../lib/spotNav';
 import HandBoardPicker from './HandBoardPicker';
-import { useHandBoard, parseCardId } from './useHandBoard';
-import { equityMultiAsync } from './equityClient';
-import { planEquity, canApplyEquity, equityCardsKey, type EquityMeta } from './equityRequest';
+import { useHandBoard } from './useHandBoard';
 import { cardId } from './useDeepGto';
-import type { Card } from './gto.types';
 import {
   emptySpot, validateSpot, hasBlocker, positionsFor, streetLabel, actionLabel,
-  potBb, BOARD_LEN, ACTION_TYPES, fromJSON, liveVillains, actorPos, EXTRA_LETTERS, MAX_EXTRA_VILLAINS,
+  potBb, BOARD_LEN, ACTION_TYPES, fromJSON, actorPos, EXTRA_LETTERS, MAX_EXTRA_VILLAINS,
   type SpotReview, type SpotAction, type SpotActionType, type SpotPosition, type Street,
 } from '../../../lib/spot';
-import { evaluateSpot, investedByPos, VERDICT_LABEL, type SpotEvaluation } from '../../../lib/spotEvaluate';
+import { evaluateSpot, investedByPos, type SpotEvaluation } from '../../../lib/spotEvaluate';
 import SpotReport from './SpotReport';
 import MySpotList from './MySpotList';
 
@@ -118,42 +115,18 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
   const issues = useMemo(() => validateSpot(spot), [spot]);
   const blocked = hasBlocker(issues);
 
-  // ── 에퀴티: 워커 위임 + **최신 요청 우선**(오래된 응답이 새 결과를 덮지 않는다) ──
-  const [equity, setEquity] = useState<EquityMeta | null>(null);
-  const [calculating, setCalculating] = useState(false);
-  const reqId = useRef(0);
-  // 겨룰 상대 = 아직 팟에 남아 있는 상대(A + B~E, 마지막 액션이 폴드면 제외). 카드를 안 넣은 상대는 무작위 핸드다.
-  const live = useMemo(() => liveVillains(spot), [spot]);
   // ⚠ 재계산 키는 **카드로** 잡는다. canonicalSpotKey 는 빌런 카드를 의도적으로 빼기 때문에
   //   그 키를 쓰면 ① 히어로→빌런 순서 입력에서 마지막 변화가 키를 안 건드려 아예 계산되지 않고
   //   ② 빌런만 바꾸면 이전 빌런 핸드의 승률이 그대로 남아 저장·공유된다(F11).
   //   상대마다 ';' 로 끝맺어 상대 수·누가 빈손인지까지 키에 든다(폴드로 빠지는 것도 키가 바뀐다).
-  const cardsKey = equityCardsKey(hb.ids.hero, live.map((v) => `${v.cards.join('')};`), hb.ids.board);
-  useEffect(() => {
-    // 상대 카드는 몰라도 된다(무작위 핸드) — 내 카드 2장과 남아 있는 상대만 있으면 계산한다.
-    const canCalc = hb.heroCards.length === 2 && live.length > 0 && !blocked;
-    // ⚠ 세대는 **조기 반환보다 먼저** 올린다 — 무효 전환도 진행 중인 요청을 끊어야 한다.
-    const plan = planEquity(reqId.current, canCalc);
-    reqId.current = plan.gen;
-    if (plan.kind === 'clear') { setEquity(null); setCalculating(false); return; }
-    const my = plan.gen;
-    setCalculating(true);
-    const h = hb.heroCards as [Card, Card];
-    const villains = live.map((v) => v.cards.map(parseCardId).filter((c): c is Card => c !== null));
-    // 표본 수 10,000(리드 결정 2026-09-19): 2인 0.35s · 6인 1.0~1.4s, 12회 반복 SD 0.51%p.
-    // 25,000회는 3s 라 폰에서 너무 길다. 표본이면 리포트가 ±%p 를 같이 적는다(equityHalfWidthPct).
-    // 워커가 없는 기기는 equityClient 가 2,500회로 낮춰 동기 폴백한다 — iterations 가 결과에 실려 화면이 그대로 말한다.
-    equityMultiAsync(h, villains, hb.boardCards, 10000).then((r) => {
-      if (!canApplyEquity(my, reqId.current)) return;  // 오래된 응답 — 버린다
-      // 엔진이 '계산 못 함'(겹친 카드)이라 하면 0 을 승률로 싣지 않는다 — validateSpot 이 앞에서 막지만 엔진 답을 그대로 믿지 않는다
-      if (r.kind === 'no_legal_combinations') { setEquity(null); setCalculating(false); return; }
-      setEquity({ hero: r.hero, kind: r.kind, unknownCards: r.unknownCards, iterations: r.iterations, villains: villains.length });
-      setCalculating(false);
-    }).catch(() => { if (canApplyEquity(my, reqId.current)) setCalculating(false); });
-    return () => { /* 취소는 세대 비교로 처리 — 워커는 계속 돌게 둔다(중단 API 없음) */ };
-    // cardsKey 는 '에퀴티 입력이 바뀌었을 때만' 다시 계산하기 위한 안정 키다
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardsKey, blocked]);
+  // 🔴 2026-09-22 요구 A — 여기 있던 **10,000회 멀티웨이 에퀴티 배선을 걷어냈다.**
+  //   화면이 승률·필요 승률·팟오즈를 더 이상 보여 주지 않으므로(작성·저장·공유 중심으로 바뀌었다)
+  //   그 수치를 만들려고 모바일에서 워커를 돌릴 이유가 없다. 입력을 한 글자 고칠 때마다
+  //   2인 0.35s · 6인 1.0~1.4s 짜리 계산이 돌던 자리다.
+  //   ⚠ 지운 것은 **이 화면의 호출**뿐이다. `equityClient`·`equityRequest`·워커·다른 GTO 도구
+  //     (레인지 vs 레인지·아웃츠)는 그대로 살아 있다.
+  //   ⚠ `evaluateSpot(spot)` 은 계속 돈다 — 저장·공유 스냅샷의 `coverage_kind`·`dataset_version`
+  //     스키마 호환 때문이다(명세 §2.6). 그 결과를 화면에 다시 노출하지 않을 뿐이다.
 
   /** 저장한 스팟을 분석 탭으로 연다. '열기'와 '공유' 가 **같은 한 곳**을 지나야 상태 교체가 갈라지지 않는다. */
   const openSaved = useCallback((s: SpotReview) => {
@@ -168,8 +141,8 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
   }, [hb]);
 
   const evaluation = useMemo<SpotEvaluation>(
-    () => evaluateSpot(spot, { heroEquity: equity?.hero ?? null }),
-    [spot, equity],
+    () => evaluateSpot(spot, { heroEquity: null }),
+    [spot],
   );
 
   return (
@@ -180,7 +153,7 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
       {tab === 'analyze' && (
         <AnalyzeTab
           spot={spot} patch={patch} hb={hb} issues={issues} blocked={blocked}
-          evaluation={evaluation} equity={equity} calculating={calculating} savedAt={savedAt}
+          evaluation={evaluation} savedAt={savedAt}
           user={user} toast={toast} shareIntent={shareIntent}
         />
       )}
@@ -219,7 +192,7 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
       <div data-testid="spot-primary-nav" className="mt-2 flex flex-wrap items-stretch gap-1.5">
         <SegmentedTabs
           items={[
-            { key: 'analyze' as const, label: '분석' },
+            { key: 'analyze' as const, label: '스팟 작성' },   // 🔴 2026-09-22 요구 A: '분석' → 작성 중심
             { key: 'mine' as const, label: '내 스팟' },
           ]}
           value={tab} onChange={onTab} grow
@@ -265,17 +238,14 @@ interface AnalyzeProps {
   issues: ReturnType<typeof validateSpot>;
   blocked: boolean;
   evaluation: SpotEvaluation;
-  /** 승률 메타(표본 여부·무작위 상대 수) — 리포트가 가정과 오차를 적는다 */
-  equity: EquityMeta | null;
   /** 저장 목록의 '공유'로 들어온 신호 — 리포트가 확인 시트를 연다(게시 아님) */
   shareIntent: number;
-  calculating: boolean;
   savedAt: number | null;
   user: ReturnType<typeof useAuth>['user'];
   toast: ReturnType<typeof useToast>;
 }
 
-function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, equity, calculating, savedAt, user, toast, shareIntent }: AnalyzeProps) {
+function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, savedAt, user, toast, shareIntent }: AnalyzeProps) {
   // 2026-09-19 오너: "들어가면 무조건 3번 카드·액션부터 나오는데 1번 게임부터 진행하게" — 예전엔 'cards' 하드코딩.
   const [step, setStep] = useState<StepKey>('game');
   const cur = STEPS.find((s) => s.key === step) ?? STEPS[0];
@@ -308,7 +278,7 @@ function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, equity, calc
             <ActionTimeline spot={spot} patch={patch} />
           </div>
         )}
-        {step === 'choice' && <ChoiceStep spot={spot} patch={patch} evaluation={evaluation} calculating={calculating} />}
+        {step === 'choice' && <ChoiceStep spot={spot} patch={patch} />}
 
         <IssueList issues={issues} />
         {savedAt !== null && (
@@ -320,7 +290,7 @@ function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, equity, calc
 
       <div className="mt-3 min-w-0 lg:mt-0 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)]">
         <SpotReport
-          spot={spot} evaluation={evaluation} equityMeta={equity} calculating={calculating} blocked={blocked} shareIntent={shareIntent}
+          spot={spot} evaluation={evaluation} blocked={blocked} shareIntent={shareIntent}
           user={user} toast={toast}
         />
       </div>
@@ -641,42 +611,12 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
   );
 }
 
-/**
- * 내 선택 바로 아래 판정 한 줄 — **리포트의 판정(evaluation)을 그대로 읽는다.** 여기서 다시 계산하면 그 자체가 버그다.
- * 오너 2026-09-19 "스팟을 다 기입했으면 맞는지 틀린지 GTO 에 대비해 판단": 판정은 SpotReport 에 이미 있었는데
- * 모바일에서는 카드·액션 카드(801px) 아래라 안 보였다. 정본은 하나(evaluateSpot), 그리는 자리만 둘이다.
- */
-function VerdictLine({ spot, evaluation, calculating }: { spot: SpotReview; evaluation: SpotEvaluation; calculating: boolean }) {
-  if (spot.heroAction === null) return null;
-  if (evaluation.kind === 'unsupported') {
-    return <p className="text-2xs leading-relaxed text-ink-muted break-keep">{evaluation.reason}</p>;
-  }
-  const v = evaluation.verdict;
-  const tone = v === 'good' ? 'border-emerald-500/35 bg-emerald-500/12 text-emerald-300'
-    : v === 'improve' ? 'border-rose-500/35 bg-rose-500/12 text-rose-300'
-      : v === 'mixed' ? 'border-accent-400/35 bg-accent-300/12 text-accent-200'
-        : 'border-amber-500/30 bg-amber-500/10 text-amber-200';
-  const chart = evaluation.kind === 'chart_nash' || evaluation.kind === 'normalized_reference';
-  const freq = chart && evaluation.heroFreq !== null ? Math.round(evaluation.heroFreq * 1000) / 10 : null;
-  // 표가 없는 자리(수학 참고)는 옳고 그름을 말하지 않는다 — 그 이유가 notes 첫 줄에 있다(spotEvaluate).
-  const why = chart ? evaluation.sourceLabel : evaluation.notes[0];
-  return (
-    <div data-testid="spot-verdict-inline" className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className={['inline-flex items-center gap-1 rounded-badge border px-2 py-0.5 text-2xs font-bold', tone].join(' ')}>
-        <Icon name={v === 'good' ? 'check' : v === 'improve' ? 'alert' : 'info'} size={11} aria-hidden />
-        {VERDICT_LABEL[v]}
-      </span>
-      <span className="min-w-0 text-2xs leading-relaxed text-ink-secondary break-keep">
-        {freq !== null && <>표 빈도 <b className="tabular-nums text-ink-primary">{freq}%</b> · </>}
-        {why}
-        {calculating && <> · 승률 계산 중…</>}
-      </span>
-    </div>
-  );
-}
+// 🔴 VerdictLine(내 선택 아래 판정 한 줄)은 2026-09-22 요구 A 로 제거했다.
+//   오너: 이 화면은 옳고 그름을 판정하는 곳이 아니라 **작성·저장·공유** 하는 곳이다.
+//   판정 엔진(`evaluateSpot`)과 트레이너 도구는 그대로 살아 있다 — 이 자리의 표시만 없앴다.
 
-function ChoiceStep({ spot, patch, evaluation, calculating }: {
-  spot: SpotReview; patch: (p: Partial<SpotReview>) => void; evaluation: SpotEvaluation; calculating: boolean;
+function ChoiceStep({ spot, patch }: {
+  spot: SpotReview; patch: (p: Partial<SpotReview>) => void;
 }) {
   const sized = spot.heroAction === 'call' || spot.heroAction === 'bet' || spot.heroAction === 'raise';
   return (
@@ -685,7 +625,6 @@ function ChoiceStep({ spot, patch, evaluation, calculating }: {
         <Pick value={spot.heroAction ?? ('' as SpotActionType)} options={ACTION_TYPES}
           onChange={(v) => patch({ heroAction: v })} fmt={actionLabel} />
       </Row>
-      <VerdictLine spot={spot} evaluation={evaluation} calculating={calculating} />
       {sized && (
         // 액션 원장과 같은 규칙 — 총액이 아니라 **이번에 추가로 넣은 돈**이다.
         <Row label="이번에 추가">

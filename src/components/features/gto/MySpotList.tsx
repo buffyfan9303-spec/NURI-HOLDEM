@@ -10,6 +10,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { spotSummary, streetLabel, actionLabel, type SpotReview } from '../../../lib/spot';
 import { COVERAGE_LABEL } from '../../../lib/spotEvaluate';
 import { listMySpots, deleteMySpot, type SavedSpot } from '../../../api/spots';
+import SpotDetails from './SpotDetails';
 
 export default function MySpotList({ onOpen, onShare, onNew }: {
   onOpen: (s: SpotReview) => void;
@@ -25,6 +26,8 @@ export default function MySpotList({ onOpen, onShare, onNew }: {
   const [rows, setRows] = useState<SavedSpot[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  /** 인라인 상세는 **한 번에 하나만** 편다 — 여러 개가 열리면 목록이 길어져 스크롤이 무너진다. */
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     if (!user) { setRows([]); return; }
@@ -74,8 +77,8 @@ export default function MySpotList({ onOpen, onShare, onNew }: {
     // (그 전의 `dvh` 되먹임 고리 문제(2026-09-15)는 단위가 없어졌으니 같이 사라진다.)
     return (
       <Empty icon="bookmark" title="아직 저장한 스팟이 없어요"
-        desc="분석 탭에서 한 판을 입력하고 '내 스팟에 저장'을 누르면 여기에 쌓입니다."
-        action={<button type="button" onClick={onNew} className="btn-primary min-h-[44px] px-4 text-xs">분석 탭에서 새 스팟 만들기</button>} />
+        desc="'스팟 작성' 탭에서 한 판을 입력하고 '내 스팟에 저장'을 누르면 여기에 쌓입니다."
+        action={<button type="button" onClick={onNew} className="btn-primary min-h-[44px] px-4 text-xs">스팟 작성 탭에서 새로 만들기</button>} />
     );
   }
 
@@ -98,9 +101,15 @@ export default function MySpotList({ onOpen, onShare, onNew }: {
               </p>
             </div>
           </div>
+          {/* 🔴 2026-09-22 요구 A — '다시 열기'(= 작성 폼으로 되돌림) 대신 **상세 보기**가 기본이다.
+              오너: 저장한 스팟은 요약만 보이고 누르면 작성 폼으로 돌아가 버려서, 그때 무엇을 적었는지
+              한 화면에서 읽을 수가 없었다. 목록 안에서 펼치는 인라인 상세를 둔다 —
+              새 모달·중첩 시트를 만들지 않는다(뒤로가기 층이 늘고 keep-alive 와 얽힌다). */}
           <div className="mt-2 flex gap-1.5">
-            <button type="button" onClick={() => onOpen(r.spot)} className="btn-ghost min-h-[44px] flex-1 text-xs">
-              다시 열기
+            <button type="button" onClick={() => setExpandedId((id) => (id === r.id ? null : r.id))}
+              aria-expanded={expandedId === r.id} aria-controls={`spot-detail-${r.id}`}
+              className="btn-ghost min-h-[44px] flex-1 text-xs">
+              {expandedId === r.id ? '접기' : '상세 보기'}
             </button>
             <button type="button" onClick={() => onShare(r.spot)} className="btn-primary min-h-[44px] flex-1 text-xs">
               게시판에 공유
@@ -121,6 +130,21 @@ export default function MySpotList({ onOpen, onShare, onNew }: {
               </button>
             )}
           </div>
+          {expandedId === r.id && (
+            <div id={`spot-detail-${r.id}`} className="mt-2 rounded-input bg-surface-high px-2.5 py-1.5">
+              {/* 저장 당시 스냅샷을 **그대로** 보여 준다 — 지금 엔진으로 다시 계산해
+                  저장할 때와 다른 값을 보여 주지 않는다(명세 §2.4). */}
+              <SpotDetails spot={r.spot} mode="owner" />
+              <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border-subtle pt-2">
+                <button type="button" onClick={() => onOpen(r.spot)} className="btn-ghost min-h-[44px] flex-1 text-xs">
+                  수정하기
+                </button>
+                <button type="button" onClick={() => setExpandedId(null)} className="btn-ghost min-h-[44px] px-3 text-xs">
+                  목록으로
+                </button>
+              </div>
+            </div>
+          )}
         </li>
       ))}
     </ul>

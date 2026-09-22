@@ -14,11 +14,10 @@
 //   SELECT 를 회수한다. 작성자가 열면 reveal_post_spot 이 본문으로 되돌려 넣는다.
 import { useEffect, useState } from 'react';
 import Icon from '../../atoms/Icon';
-import { MiniCard } from '../../atoms/HandCards';
 import { useToast } from '../../atoms/Toast';
 import { writeSnap } from '../../../lib/snapshot';
-import { spotSummary, streetLabel, actionLabel } from '../../../lib/spot';
-import { COVERAGE_LABEL } from '../../../lib/spotEvaluate';
+import SpotDetails from '../gto/SpotDetails';
+import { spotSummary } from '../../../lib/spot';
 import { fetchPostSpot, revealPostSpot, type PostSpot } from '../../../api/spots';
 
 type State = 'loading' | 'none' | 'error' | 'ok';
@@ -98,34 +97,23 @@ export default function SpotPostCard({ postId, isAuthor, expectSpot = false }: {
         <span className="inline-flex items-center gap-1 rounded-badge border border-border-default bg-surface-high px-2 py-0.5 text-2xs font-semibold text-ink-secondary">
           <Icon name="cards" size={11} aria-hidden />NURI SPOT
         </span>
-        <span data-spot-coverage={ps.coverageKind}
-          className="rounded-badge bg-surface-high px-1.5 py-px text-2xs font-semibold text-ink-muted">
-          {COVERAGE_LABEL[ps.coverageKind]}
-        </span>
+        {/* 🔴 2026-09-22 요구 A — 출처/등급 배지를 화면에서 뺐다.
+            읽는 사람에게 필요한 것은 '무슨 상황이었나' 이지 분석 등급이 아니다.
+            ⚠ `ps.coverageKind` 값 자체는 DB·RPC 에 그대로 있다(스키마 무변경). 표시만 멈춘다. */}
       </header>
 
       <p className="mt-2 text-xs font-bold text-ink-primary break-keep">{spotSummary(spot)}</p>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <Cards label="내 카드" ids={spot.hero} />
-        {spot.board.length > 0 && <Cards label={streetLabel(spot.street)} ids={spot.board} />}
-        {ps.revealVillain && spot.villain.length > 0 && <Cards label="상대" ids={spot.villain} />}
-        {/* 빌런 B~E (2026-09-19 멀티웨이). A 라벨은 '상대' 그대로 둔다 —
-            `e2e/nuri-spot-board.spec.ts` 가 `getByLabel('상대')` 로 잡는데, 여기서 A 까지
-            '상대 A' 로 바꾸면 그 셀렉터가 빗나간다. 라벨을 바꿀 거면 같은 작업에서 그 스펙도 고쳐라.
-            ⚠ `revealVillain` 게이트 밖으로 내보내지 마라 — 상대 카드는 서버가 가려 주는 값이다. */}
-        {ps.revealVillain && spot.extra.map((v, i) => (
-          v.cards.length > 0 ? <Cards key={v.pos} label={`상대 ${'BCDE'[i]} (${v.pos})`} ids={v.cards} /> : null
-        ))}
+      {/* 🔴 2026-09-22 요구 A — 카드만 나열하던 자리를 **작성 내용 전체**로 바꿨다.
+          작성 화면·내 스팟 상세와 **같은 컴포넌트**를 써서 세 화면이 같은 것을 같은 모양으로 말한다.
+          ⚠ `mode="shared"` 는 서버가 내려준 sanitized 값만 그린다. `revealed` 가 false 인 동안
+            상대 카드·글쓴이 선택·결과는 '공개 전' 로 남는다(클라이언트 이중 방어).
+            서버(`fetchPostSpot`)가 이미 지워서 내려주지만, 화면도 한 겹 더 막는다.
+          ⚠ 글쓴이 선택을 `revealResult` 밖으로 내보내지 마라 — 먼저 보이면 "당신이라면?" 투표가
+            그 값에 끌려간다. 서버도 같은 시점에 내려준다(hidden_action). */}
+      <div className="mt-2" data-spot-heroaction={ps.revealResult && spot.heroAction ? '' : undefined}>
+        <SpotDetails spot={spot} mode="shared" revealed={ps.revealVillain && ps.revealResult} />
       </div>
-
-      {/* 글쓴이의 선택은 결과가 열린 뒤에만. 먼저 보이면 "당신이라면?" 투표가 그 값에
-          끌려간다 — 서버도 같은 시점에 내려준다(hidden_action). */}
-      {ps.revealResult && spot.heroAction && (
-        <p data-spot-heroaction className="mt-2 text-2xs text-ink-secondary">
-          글쓴이의 선택 <b className="text-ink-primary">{actionLabel(spot.heroAction)}</b>
-        </p>
-      )}
 
       {/* 가려진 동안에는 **무엇이 가려졌는지**를 분명히 말한다 — 투표가 먼저인 이유가 된다. */}
       {hidden && (
@@ -137,32 +125,21 @@ export default function SpotPostCard({ postId, isAuthor, expectSpot = false }: {
 
       <div className="mt-2.5 flex flex-wrap gap-1.5">
         <button type="button" onClick={analyze} className="btn-ghost min-h-[44px] px-3 text-xs">
-          이 스팟 분석하기
+          내 스팟으로 가져오기
         </button>
         {isAuthor && hidden && (
           <button type="button" onClick={reveal} disabled={revealing}
             className="min-h-[44px] rounded-input border border-accent-400/40 bg-accent-300/10 px-3 text-xs font-bold text-accent-200 disabled:opacity-60">
-            {revealing ? '공개하는 중…' : '분석 공개'}
+            {revealing ? '공개하는 중…' : '상대 카드·내 선택·결과 공개'}
           </button>
         )}
       </div>
 
-      <p className="mt-2 text-[10px] text-ink-muted">
-        공유 시점 기준 · 데이터 버전 <span className="tabular-nums">{ps.datasetVersion}</span>
-        {ps.sourceLabel ? ` · ${ps.sourceLabel}` : ''}
-      </p>
+      {/* 🔴 요구 A — '공유 시점 기준 · 데이터 버전 …' 줄을 뺐다(분석 메타는 읽는 사람의 관심사가 아니다).
+          값은 DB 에 그대로 남아 있어 나중에 다시 쓸 수 있다. */}
     </section>
   );
 }
 
-function Cards({ label, ids }: { label: string; ids: string[] }) {
-  if (ids.length === 0) return null;
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-2xs text-ink-muted">{label}</span>
-      <span className="flex gap-0.5" aria-label={label}>
-        {ids.map((c) => <MiniCard key={c} id={c} />)}
-      </span>
-    </div>
-  );
-}
+// 🔴 로컬 Cards 헬퍼는 요구 A 로 제거했다 — 카드 표시는 이제 공용 SpotDetails 가 맡는다.
+//   (세 화면이 카드를 각자 그리면 한 곳만 고치는 사고가 난다.)

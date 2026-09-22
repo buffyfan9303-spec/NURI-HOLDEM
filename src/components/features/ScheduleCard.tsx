@@ -253,56 +253,22 @@ function VenueLink({
   return (
     // ⚠ 2026-09-21 — 이 링크의 실제 박스는 18px(글줄 하나)이다. 더미 일정이 홈에 다시 뜨자 design-tokens 의
     //   '28px 미만 히트영역' 게이트가 이 자리를 잡았고, `tap-y-44`(::before 오버행)로 키웠더니 이번엔 home-flow-fit 의
-    //   잘림 게이트(scrollHeight > clientHeight)가 그 의사요소를 '잘림' 으로 세어 CI 가 빨개졌다(f966f44).
-    //   실제 패딩으로 키우면 카드 높이가 `--card-h-list` 예약과 어긋난다(HomeTab 스켈레톤·CLS). 그래서 **키우지 않는다** —
-    //   카드 전체가 1차 표적이고 이 링크는 보조 표적이다. design-tokens 는 글자 링크를 문서된 의도대로 제외한다(§0-a23).
+    //   잘림 게이트(scrollHeight > clientHeight)가 그 의사요소를 '잘림' 으로 세어 CI 가 빨개졌다(f966f44 → 2d8ac48 되돌림).
+    // 🔴 HIT-1(2026-09-22) — 되돌린 채 두지 않고 **위로만** 넓힌다.
+    //   · 기준 정정: 44px 은 WCAG 2.2 SC 2.5.5 **AAA** 이고, AA(SC 2.5.8)는 **24px** 이다. AA 만 충족한다.
+    //   · 기준 정정: 44px 은 WCAG 2.2 SC 2.5.5 **AAA** 이고, AA(SC 2.5.8)는 **24px** 이다. AA 만 충족한다.
+    //   · 아래로 넓히면 간격 0 으로 붙은 제목을 덮어 카드 탭을 가로챈다(목적지가 다르다) — 그래서 아래는 0 이다.
+    //   · 카드 높이·`--card-h-list`·HomeTab 스켈레톤은 **한 픽셀도 안 바꾼다**(의사요소라 flow 밖).
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
-      className={`group ${rootCls} hover:text-accent-300 transition-colors`}
+      className={`group tap-up-24 ${rootCls} hover:text-accent-300 transition-colors`}
     >
       <span className={`${nameCls} underline decoration-dotted underline-offset-2 group-hover:text-accent-300`}>
         {pubName}
       </span>
       <span className={dotCls}>·</span>
       <span className={regionCls}>{region}</span>
-    </button>
-  );
-}
-
-// ── 서브: 즐겨찾기(♥) — 콜백이 내려올 때만 렌더 ────────────────────────────
-// APIS 예정 카드 1행 우측의 ♥ 자리. App 이 팔로우 상태·토글을 내려주기 전까지는
-// 렌더하지 않는다(무반응 하트 금지 — VenueLink 의 venueId 게이트와 같은 원칙).
-function FavoriteButton({
-  pubName, on, onToggle,
-}: { pubName: string; on: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      aria-label={`${pubName} 단골 ${on ? '해제' : '등록'}`}
-      onClick={(e) => { e.stopPropagation(); onToggle(); }}
-      className={[
-        // 🔴 2026-09-20 — `.hit` 을 빼고 **실제 박스를 44px 로 키웠다.** `.hit::after` 는
-        //   `max(100%, 44px)` 를 중앙에서 펼치는데, 이 버튼이 오른쪽 열 **맨 끝**에 있어서
-        //   그 7.1px 오버행이 부모 밖으로 나가 `scrollWidth` 를 늘렸다 —
-        //   잘림 게이트가 `div "시작18:00" 73/80` · `button 30/37` 로 **10건을 잡았다**(실측).
-        //   `src/index.css` 의 `.hit` 함정 주석이 이 경우의 해법을 이미 적어 뒀다:
-        //   "이미 위치가 잡힌 요소는 `.hit` 대신 **실제 박스를 키워라**(`h-11 w-11`)".
-        // ⚠ 배경이 없는 아이콘 버튼이라 박스를 키워도 **화면에는 아무 변화가 없다**(♥ 14px 그대로).
-        //   오너가 지적한 '버튼이 쓸데없이 커 보이는 것' 과 무관하다 — 보이는 것은 아이콘뿐이다.
-        // ⚠ `h-11`(46.75px @루트 17px) ≥ 44 라 오버행이 0 이 된다. 44px 를 직접 박지 않는 이유는
-        //   루트 폰트가 17px 이라 rem 유틸이 6.25% 크기 때문이다(CLAUDE.md).
-        // ⚠ `-my-2`(−8.5px × 2) — 박스는 46.75px 로 두고 **레이아웃 몲만** 29.75px 로 줄인다.
-        //   2026-09-20 3차: 글자를 줄이고 대회명이 1줄이 되자 가운데 열이 챜챜해져
-        //   오른쪽 열(♥ + 시각)이 카드 높이를 정하기 시작했다(실측 +14.4px).
-        //   터치 영역 46.75px 는 그대로다 — 줄인 것은 주변 여백이지 누를 수 있는 면적이 아니다.
-        '-my-2 grid h-11 w-11 shrink-0 place-items-center rounded-full',
-        'transition-[color,transform] active:scale-90',
-        on ? 'text-danger-light' : 'text-ink-muted hover:text-ink-secondary',
-      ].join(' ')}
-    >
-      <Icon name={on ? 'heart-fill' : 'heart'} size={14} strokeWidth={2.2} />
     </button>
   );
 }
@@ -381,10 +347,11 @@ interface CardProps {
   regInfo?: RegInfo;
   /** [DS] MO-8B: 이 카드가 '지금 열리는 대상'일 때만 true — 포스터에 vt-poster 이름을 부여해 모달로 모핑 */
   vtActive?: boolean;
-  /** APIS 1행 ♥ — 이 포스터 매장을 팔로우(단골) 중인가. onToggleFavorite 과 함께 내려올 때만 렌더 */
-  favorited?: boolean;
-  /** ♥ 토글. 미제공이면 하트 자체를 렌더하지 않는다(무반응 클릭 금지) */
-  onToggleFavorite?: (venueId: string) => void;
+  // 🔴 2026-09-22 요구 C — `favorited`·`onToggleFavorite` 를 **이 카드에서 걷어냈다**.
+  //   하트가 있던 우측 자리에는 등급 배지(`schedule-grade-badge`)가 들어간다.
+  //   ⚠ 즐겨찾기 **시스템은 살아 있다**: `src/lib/useFavoriteVenues.ts`·`venue_follows`·캘린더 찜 필터와
+  //     `LiveGamesTab` 진행 게임 줄의 단골 표시(같은 파일 285·296행)가 그대로 쓴다.
+  //     여기서 없앤 것은 '일정 목록 카드에 하트를 그리는 것' 하나뿐이다.
   /** 매장 대표 이미지·테마색 — 목록 줄 **왼쪽 로고 자리**가 쓴다(2026-09-18 오너 레퍼런스).
    *  DB 에 '로고' 전용 칸은 없어 `venues.image_url`·`theme_color` 를 그대로 쓴다(서버 변경 0).
    *  App 이 이미 `venueById` 를 들고 있으므로 호출부에서 꺼내 내려 준다 — 조회를 카드가 하지 않는다. */
@@ -425,8 +392,7 @@ function Metric({ label, value, tone, title }: { label: string; value: string; t
 }
 
 function ListCard({
-  schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, vtActive,
-  favorited = false, onToggleFavorite, venue,
+  schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, vtActive, venue,
 }: CardProps) {
   // 목록 카드만 라벨·금액을 따로 그린다(라벨 작게·금액 크게) — 계산은 정본 하나(prizeParts).
   const prize = prizeParts(schedule);
@@ -562,12 +528,18 @@ function ListCard({
           ⚠ 1줄로 **강제하지 않는다.** 오너가 2026-09-12 에 "1줄로 강제해 말줄임하면 정작 무슨
             대회인지가 사라진다" 고 했다 — 글자를 줄여 대개 한 줄에 들어가게 하되, 긴 제목은 접힌다.
           ⚠ 320px 미만에서만 3줄을 허용한다(가운데가 142.5px 라 2줄로 자르면 꼬리가 사라진다). */}
-      <h3 className="min-w-0 line-clamp-3 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-xs min-[360px]:line-clamp-2"
+      {/* 🔴 2026-09-22 요구 C — 제목은 **모든 폭에서 한 줄**이다(line-clamp-1).
+          새 입력 상한이 공백 포함 12자(`SCHEDULE_TITLE_MAX`)라 한국어 제목은 320px 에서도 한 줄에 들어간다
+          (320 제목칸 148px vs 한글 12자 139.4px 실측). 그래도 1줄로 **고정**하는 이유는 두 가지다:
+            ① 운영에 이미 있는 13자 이상 legacy 제목을 자동 절단·DB 덮어쓰기 하지 않기로 했다 —
+               그것들이 2~3줄로 펴지면 카드 높이가 제각각이 되고 `--card-h-list` 예약과 어긋난다(CLS).
+            ② 글자 수는 폭을 보장하지 못한다(`W` 12자 ≈ 161.8px > 148px). 렌더 안전망이 따로 필요하다.
+          ⚠ 종전 주석의 "1줄로 강제하지 마라"(2026-09-12)는 **입력 상한이 없던 시절**의 판단이다.
+            지금은 12자 상한이 생겨 '한 줄에 다 보인다' 가 기본이고, ellipsis 는 legacy 전용 안전망이다.
+          ⚠ grade 배지는 여기서 뺐다 — 아래 우측 덩어리(하트가 있던 자리)로 옮겼다. */}
+      <h3 className="min-w-0 line-clamp-1 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-xs"
         title={schedule.title}>
         {titleWithoutGtd(schedule.title, !!prize)}
-        {grade && (
-          <span className="ml-1 inline-block rounded-badge bg-surface-high px-1 align-middle text-[10px] font-extrabold leading-none text-ink-secondary">{grade}</span>
-        )}
       </h3>
 
       {/* ② 3행 — 3칸 지표(GTD · 참가비 · 레지마감). 칸 사이는 가는 세로 구분선.
@@ -626,12 +598,19 @@ function ListCard({
             '항목을 하나 더 만들면 gap 이 하나 더 생긴다' 에 걸리지 않는다. 이 안에서만 세로로 나눈다.
           ⚠ ♥ 가 없을 때(비배선 화면)는 렌더되지 않아 종전 레이아웃과 **완전히 동일**하다. */}
       <div className="flex shrink-0 flex-col items-end justify-center gap-0.5">
-        {onToggleFavorite && schedule.venueId && (
-          <FavoriteButton
-            pubName={schedule.pubName}
-            on={favorited}
-            onToggle={() => onToggleFavorite(schedule.venueId)}
-          />
+        {/* 🔴 2026-09-22 요구 C — 하트 버튼을 **목록 카드에서만** 빼고 그 자리에 등급 배지를 둔다.
+            ⚠ 지운 컴포넌트 이름을 이 주석에 그대로 적지 마라 — 계약 테스트가 소스 문자열로 세므로
+              주석 한 줄이 '되살아났다' 로 잡힌다(이 저장소가 여러 번 밟은 함정이다).
+            · 즐겨찾기 시스템 자체는 살아 있다(`useFavoriteVenues`·`venue_follows`·캘린더 찜 필터·라이브 단골).
+              여기서 없앤 것은 **이 카드의 표시**뿐이다.
+            · 등급은 제목 옆(인라인)에 있으면 12자 제목의 폭을 먹고 줄바꿈을 유발했다. 여기는 `shrink-0`
+              세로 덩어리라 가로 폭을 안 밀고, 시각 덩어리보다 좁아 카드 높이도 그대로다(하트가 있던 자리 그대로).
+            · `grade` 가 없으면 빈 자리도 만들지 않는다(gap 이 남지 않게 조건부 렌더). */}
+        {grade && (
+          <span data-testid="schedule-grade-badge"
+            className="rounded-badge bg-surface-high px-1 text-[10px] font-extrabold leading-none text-ink-secondary">
+            {grade}
+          </span>
         )}
         <div className="flex items-center gap-1">
           <p className="flex min-w-0 flex-col items-end leading-tight">

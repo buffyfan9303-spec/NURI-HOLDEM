@@ -276,12 +276,17 @@ describe('NURI SPOT — GTO 홈 통합', () => {
     expect(SPOT_PANEL).not.toContain('CardGridPicker');   // HandBoardPicker 안에 이미 있다
   });
 
-  it('오래된 에퀴티 응답이 최신 결과를 덮지 않는다', () => {
-    expect(SPOT_PANEL).toMatch(/reqId/);
-    // 2026-09-13(F11) — 인라인 `my !== reqId.current` 비교를 순수 판정 canApplyEquity 로 옮겼다.
-    // 세대 증가가 무효 전환에서도 일어나는지까지는 gto/equityRequest.test.ts 와
-    // gto/nuriSpotWiring.contract.test.ts 가 본다.
-    expect(SPOT_PANEL).toMatch(/!canApplyEquity\(my, reqId\.current\)/);
+  // 🔴 2026-09-22 요구 A — **반전됐다.** 이 계약은 "오래된 에퀴티 응답이 최신 결과를 덮지 않는가"
+  //   였는데, 작성 화면이 에퀴티를 **아예 계산하지 않게 되면서** 덮을 응답 자체가 없어졌다.
+  //   (오너: NURI SPOT 은 작성·저장·공유가 목적이다. 승률 표시를 걷어냈다.)
+  //   경합 가드를 요구하는 대신 **호출이 없다**를 잠근다 — 되살아나면 그때 가드도 같이 와야 한다.
+  //   ⚠ `equityRequest`(planEquity·canApplyEquity)와 워커는 그대로 살아 있고, 그 순수 판정 테스트도
+  //     `gto/equityRequest.test.ts` 에 남아 있다. 여기서 없앤 것은 이 화면의 배선뿐이다.
+  it('작성 화면은 에퀴티를 계산하지 않는다 — 덮일 응답 자체가 없다', () => {
+    expect(SPOT_PANEL.length, 'NuriSpotPanel 소스를 못 읽었다 — 빈 검사 방지').toBeGreaterThan(5_000);
+    expect(SPOT_PANEL, '에퀴티 호출이 되살아났다 — 그렇다면 세대 가드(canApplyEquity)도 같이 와야 한다')
+      .not.toMatch(/equityMultiAsync\(|\bequityAsync\(/);
+    expect(SPOT_PANEL, '요청 세대 ref 가 되살아났다').not.toMatch(/reqId/);
   });
 
   it('솔버 등급을 만들어 내는 경로가 없다', () => {

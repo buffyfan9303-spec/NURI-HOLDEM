@@ -112,7 +112,9 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   // 🔴 2026-09-20 — 그 조리법을 `lib/useFavoriteVenues.ts` 로 옮겼다. 여기서 직접 구현하지 않는다.
   //   같은 날 일정 카드의 ♥ 를 살리면서 홈·일정탐색도 같은 집합이 필요해졌는데, 탭마다 각자 구현하면
   //   그중 하나는 반드시 위 '1회 조회' 함정을 다시 밟는다. **읽기만 하던 것이 이제 토글도 한다.**
-  const { ids: favIds, toggle: toggleFav } = useFavoriteVenues(active, promptLogin);
+  // 🔴 2026-09-22 요구 C — 목록 카드의 하트가 사라져 `toggle` 소비처가 없어졌다.
+  //   `ids` 는 **진행 게임 줄의 단골 표시**(아래 285·296행)가 계속 쓰므로 훅 자체는 유지한다.
+  const { ids: favIds } = useFavoriteVenues(active, promptLogin);
 
   // [DS] MO-9B①: venues.find 선형 탐색 제거 — Map 조회(O(게임수×매장수) → O(게임수))
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
@@ -317,8 +319,9 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                 320px 에서는 제목이 잘렸다(실측 134/190). 컨테이너 클래스는 App 의 일정 목록과 같다. */}
             <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
               {upcoming.map((s) => (
-                <ScheduleCard key={s.id} mode="list" schedule={s} venue={venueById.get(s.venueId)} onSelect={onSchedule} onVenueClick={onVenue}
-                  favorited={favIds.has(s.venueId)} onToggleFavorite={toggleFav} />
+                // 🔴 2026-09-22 요구 C — 목록 카드의 하트는 뺐다(등급 배지가 그 자리로 왔다).
+                //   ⚠ 위 진행 게임 줄(285·296행)의 `favIds` 단골 표시는 **그대로 살아 있다** — 같은 훅을 계속 쓴다.
+                <ScheduleCard key={s.id} mode="list" schedule={s} venue={venueById.get(s.venueId)} onSelect={onSchedule} onVenueClick={onVenue} />
               ))}
             </div>
           </div>

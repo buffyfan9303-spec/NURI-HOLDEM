@@ -166,7 +166,8 @@ test.describe('손이 닿는 곳의 정밀도', () => {
     await dismissOverlays(page);
     await page.waitForTimeout(1200);
     const small = await page.evaluate(() => {
-      const out: { label: string; w: number; h: number }[] = [];
+      // kind:'text' = 글자 링크(AA 24px 기준). 없으면 아이콘형(28px 기준).
+      const out: { label: string; w: number; h: number; kind?: 'text' }[] = [];
       // 🔴 2026-09-20: 예전엔 `getBoundingClientRect()` 만 봤다 — **그건 보이는 상자지 히트영역이 아니다.**
       //   이 저장소는 `.hit`(::after)·`.tap-y-44`(::before)로 **보이는 크기는 그대로 두고 누를 수 있는 범위만**
       //   넓히는 패턴을 쓴다. 그걸 못 보면 제대로 넓혀 둔 버튼도 '너무 작다'고 빨개진다(실제로 그랬다).
@@ -199,17 +200,29 @@ test.describe('손이 닿는 곳의 정밀도', () => {
         //   아이콘 버튼으로 잡혔다 — 더미 일정이 홈에 다시 뜨자 드러났다(일정 0건이던 동안은 잴 대상이 없었다).
         //   오버행(tap-y-44)으로 키우면 home-flow-fit 의 잘림 게이트가 그 의사요소를 잘림으로 세고(CI f966f44 빨강),
         //   실제 패딩으로 키우면 카드 높이(--card-h-list 예약)가 어긋난다. 그래서 글자 링크는 의도대로 제외한다:
-        //   svg/img 가 없고 글자가 4자 이상이며 한 줄(24px 미만)이면 글자 링크다. 카드 자체가 1차 표적이라 보조 표적이다.
+        //   svg/img 가 없고 글자가 4자 이상이면 글자 링크다. 카드 자체가 1차 표적이라 보조 표적이다.
         //   ⚠ 아이콘 버튼·2~3자 글자 버튼(✕·닫기·더보기)은 그대로 잡는다 — 게이트가 느슨해진 게 아니라 분류가 의도에 맞춰진 것이다.
-        const textLink = !el.querySelector('svg, img') && (el.textContent || '').trim().length >= 4 && e.h < 24;
-        if (e.h < 40 && e.w < 120 && !textLink) {
+        //
+        // 🔴 2026-09-22(HIT-1) — 글자 링크의 **기준을 없애지 않고 AA 로 명시**했다.
+        //   종전: 'h < 24 이면 글자 링크 → 아예 제외'. 그래서 링크를 개선해 24px 을 넘기는 순간
+        //   제외에서 벗어나 28px 문턱에 걸리는 **역설**이 생겼다(일정 카드 매장명을 18→26px 로 키우자 실제로 빨개졌다).
+        //   실측: 그 링크 위에 남은 카드 안쪽 여백은 6.375px 뿐이라 **카드 높이를 바꾸지 않고 28px 은 불가능**하다.
+        //   그래서 글자 링크는 '면제' 가 아니라 **WCAG 2.2 SC 2.5.8 AA(24px)** 로 판정한다.
+        //   아이콘 버튼은 종전대로 28px 이다. 게이트가 느슨해진 것이 아니라, 두 부류에 각자 맞는 기준이 생겼다.
+        const textLink = !el.querySelector('svg, img') && (el.textContent || '').trim().length >= 4;
+        if (textLink) {
+          if (e.h < 24 || e.w < 24) {
+            out.push({ label: (el.textContent || '?').trim().slice(0, 18), w: Math.round(e.w), h: Math.round(e.h), kind: 'text' });
+          }
+        } else if (e.h < 40 && e.w < 120) {
           out.push({ label: (el.textContent || el.getAttribute('aria-label') || '?').trim().slice(0, 18), w: Math.round(e.w), h: Math.round(e.h) });
         }
       }
       return out;
     });
     // 전부 40px 로 만드는 건 현실적이지 않다(밀도 높은 표·칩). 여기서는 '심각하게 작은' 것만 막는다.
-    const tiny = small.filter((s) => s.h < 28 || s.w < 28);
+    // 글자 링크(kind:'text')는 위에서 이미 AA 24px 기준으로 담겼다 — 여기서 28 로 다시 치면 그 기준이 무의미해진다.
+    const tiny = small.filter((s) => (s as { kind?: string }).kind === 'text' || s.h < 28 || s.w < 28);
     expect(tiny, `28px 미만 히트영역 — 한 손 조작에서 오탭이 난다:
 ${JSON.stringify(tiny, null, 1)}`).toEqual([]);
   });

@@ -95,9 +95,15 @@ describe('E · 상태가 따라온다', () => {
     const HOOK = readFileSync(join(__dirname, '../../lib/useFavoriteVenues.ts'), 'utf8');
     expect(HOOK, '훅이 active 를 의존성으로 다시 읽지 않는다 — keep-alive 탭에서 하트가 영원히 안 갱신된다')
       .toMatch(/useEffect\(\(\) => \{\s*if \(!active\) return;[\s\S]{0,400}?getMyFollowedVenueIds\(\)[\s\S]{0,400}?\}, \[active\]\);/);
-    // 소비처 셋이 **그 훅을 실제로 쓰는지**까지 본다 — 훅만 있고 아무도 안 쓰면 빈 계약이다.
-    expect(LIVE, '라이브 탭이 공유 훅을 안 쓴다').toMatch(/useFavoriteVenues\(active/);
-    expect(APP, 'App(홈·일정탐색)이 공유 훅을 안 쓴다').toMatch(/useFavoriteVenues\(/);
+    // 소비처가 **그 훅을 실제로 쓰는지**까지 본다 — 훅만 있고 아무도 안 쓰면 빈 계약이다.
+    // 🔴 2026-09-22 요구 C — 소비처가 셋에서 **하나로 줄었다.** 목록 카드의 하트가 빠지면서
+    //   App(홈·일정탐색)은 즐겨찾기 집합이 더 이상 필요 없어져 훅 호출을 제거했다(소비처 0 확인 후).
+    //   남은 실사용처는 라이브 탭의 **진행 게임 줄 단골 표시** 하나다 — 거기서 이 '1회 조회' 함정이
+    //   여전히 실재하므로 계약은 그대로 살아 있어야 한다.
+    expect(LIVE, '라이브 탭이 공유 훅을 안 쓴다 — 진행 게임 줄의 단골 표시가 죽었다')
+      .toMatch(/useFavoriteVenues\(active/);
+    expect(APP, 'App 이 다시 즐겨찾기 훅을 쓴다 — 목록 카드에서 하트를 뺐으므로 소비처가 없어야 한다')
+      .not.toMatch(/useFavoriteVenues\(/);
   });
   it('🔴 체크인 성공 3경로가 nuri:checkin-done 을 쏘고 App 이 visitedVenues 를 다시 읽는다', () => {
     // ⚠[갱신 2026-09-21, Q6] 예전 단언: `App.tsx` 안에 이 dispatch 가 **정확히 2번**.

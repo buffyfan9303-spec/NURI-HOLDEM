@@ -146,7 +146,6 @@ export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
   onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], showEventSlide = true, showBrandSlides = true, eventMenuVisible = true, onInternalLink,
   visitedVenues = [], myTodayRes = [], venueById, onOpenVoucher,
-  favVenueIds, onToggleFavorite,
 }: {
   /** 매장 대표 이미지·테마색 조회용 — 목록 줄 왼쪽 **매장 로고** 자리가 쓴다(2026-09-18).
    *  App 이 이미 들고 있는 `venueById` 를 그대로 받는다(새 조회 0). 없으면 이니셜만 보인다. */
@@ -154,11 +153,9 @@ export default function HomeTab({
   /** 출석 체크 퀵액션 — 헤더 [이용권·출석] 과 **같은 시트**를 연다(App 이 로그인 여부까지 판단한다).
    *  같은 목적지에 서로 다른 경로를 새로 만들지 않는다 — 헤더 진입점은 그대로 둔다(오너: 헤더는 유지). */
   onOpenVoucher?: () => void;
-  /** ♥ 즐겨찾기 — App 이 들고 있는 집합을 그대로 받는다(새 조회 0).
-   *  홈이 자기 조회를 따로 하면 '탭 재방문 시 하트가 안 갱신' 함정을 다시 밟는다(lib/useFavoriteVenues.ts 주석).
-   *  안 넘기면 하트가 안 보인다 — 무반응 클릭을 만들지 않는 기존 게이트 그대로다. */
-  favVenueIds?: ReadonlySet<string>;
-  onToggleFavorite?: (venueId: string) => void;
+  // 🔴 2026-09-22 요구 C — 목록 카드의 하트를 걷어내면서 `favVenueIds`·`onToggleFavorite` prop 도 뺐다.
+  //   홈은 이제 즐겨찾기 상태를 알 필요가 없다. 즐겨찾기 **시스템 자체**(`useFavoriteVenues`·`venue_follows`·
+  //   캘린더 찜 필터·라이브 진행 게임 줄의 단골 표시)는 그대로다.
 
   /** 추천 근거(2026-09-17) — 셋 다 App 이 **이미 받아 둔** 응답이다(새 조회 0). 안 넘기면 종전 정렬 그대로다. */
   liveClocks?: ClockState[];
@@ -793,9 +790,7 @@ export default function HomeTab({
                   regInfo={regInfoBySchedule.get(s.id)}
                   onVenueClick={onVenue}
                   onSelect={onSelect}
-                  priority={i < 4}
-                  favorited={!!favVenueIds?.has(s.venueId)}
-                  onToggleFavorite={onToggleFavorite} />
+                  priority={i < 4} />
                 </Fragment>
               ))}
               {/* 목록 끝의 '전체 일정' — 시안(첨부 HTML 271행 'See All Tournaments')의 자리.

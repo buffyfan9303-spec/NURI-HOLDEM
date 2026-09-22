@@ -91,7 +91,7 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     await installBoard(page);
     await page.goto('/?tab=tools');
     await dismissOverlays(page);
-    await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 분석' }).click();
+    await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 작성' }).click();
     const dlg = page.getByRole('dialog').first();
     await expect(dlg).toBeVisible({ timeout: 20_000 });
     // 토론 축은 아예 없다 — 대화는 전부 커뮤니티에서 한다(오너 지시).
@@ -108,8 +108,12 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     const card = dlg.locator('[data-spot-post]');
     await expect(card, '게시글에 스팟 카드가 없다').toBeVisible({ timeout: 15_000 });
     await expect(card.getByText('NURI SPOT')).toBeVisible();
-    await expect(card.locator('[data-spot-coverage="chart_nash"]')).toBeVisible();
-    await expect(card.getByRole('button', { name: '이 스팟 분석하기' })).toBeVisible();
+    // 🔴 2026-09-22 요구 A — 등급 배지(data-spot-coverage)는 화면에서 뺐다. 대신 **작성 내용**이 선다.
+    //   배지가 되살아나지 않았는지와, 그 자리에 실제 내용이 들어갔는지를 함께 본다(빈 검사 방지).
+    await expect(card.locator('[data-spot-coverage]'), '출처 등급 배지가 되살아났다').toHaveCount(0);
+    await expect(card.getByTestId('spot-details'), '작성 내용이 안 보인다').toBeVisible();
+    await expect(card.getByTestId('spot-details')).toContainText('유효 스택');
+    await expect(card.getByRole('button', { name: '내 스팟으로 가져오기' })).toBeVisible();
   });
 
   test('🔴 가려진 스팟은 상대 카드가 화면 어디에도 없다', async ({ page }) => {
@@ -123,7 +127,8 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     //   실제 표시 요소만 본다.
     await expect(card.locator('[data-spot-heroaction]'), '투표 전에 글쓴이의 선택이 보인다').toHaveCount(0);
     // 상대 라벨이 아예 서지 않아야 한다 — '가림'이 표시가 아니라 실제 부재여야 한다
-    await expect(card.getByLabel('상대')).toHaveCount(0);
+    await expect(card.getByTestId('spot-villain-cards'), '가려져야 할 상대 카드가 그려졌다').toHaveCount(0);
+    await expect(card.getByTestId('spot-villain-hidden'), "가림 표시('공개 전')가 없다").toBeVisible();
   });
 
   test('🔴 공개된 스팟은 상대 카드를 보여준다', async ({ page }) => {
@@ -132,7 +137,7 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     const card = dlg.locator('[data-spot-post]');
     await expect(card).toBeVisible({ timeout: 15_000 });
     await expect(card.getByText(/아직 가려져/)).toHaveCount(0);
-    await expect(card.getByLabel('상대')).toBeVisible();
+    await expect(card.getByTestId('spot-villain-cards'), '공개했는데 상대 카드가 없다').toBeVisible();
     await expect(card.locator('[data-spot-heroaction]'), '공개 뒤에는 글쓴이의 선택이 보여야 한다').toBeVisible();
   });
 
@@ -153,7 +158,7 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
   async function fillShareableSpot(page: Page) {
     await page.goto('/?tab=tools');
     await dismissOverlays(page);
-    await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 분석' }).click();
+    await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 작성' }).click();
     const dlg = page.getByRole('dialog').first();
     await expect(dlg).toBeVisible({ timeout: 20_000 });
     // 2026-09-19 오너 지시로 진입 단계가 1번(게임)이 됐다 — 카드 그리드는 3번 단계에서만 선다.

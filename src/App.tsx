@@ -66,7 +66,6 @@ import StaffInviteBanner from './components/features/StaffInviteBanner';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
 import { promptLogin, REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, ensureLogin } from './lib/requireLogin';
-import { useFavoriteVenues } from './lib/useFavoriteVenues';
 import { dateHeaderAt } from './lib/scheduleDateGroups';
 import { tierCss, tierOf, ADMIN_VIVID_VAR } from './components/atoms/TierBadge';
 
@@ -1192,13 +1191,12 @@ export default function App() {
   }, [activeTab]);
 
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
-  // ♥ 즐겨찾기(매장 팔로우) — 홈·일정탐색이 **같은 집합**을 본다.
-  // 🔴 2026-09-20 오너 지시로 살렸다. `ScheduleCard` 의 `onToggleFavorite` 은 2026-08-28 에 만들어지고
-  //   **호출부 4곳 전부 0건 전달** 이라 하트가 어느 화면에도 안 뜼던 자리다(회귀가 아니라 미완성).
-  // ⚠ `active` 를 홈·일정탐색 **둘 다**로 둔다 — 둘은 keep-alive 로 같이 살아 있고 한 집합을 공유한다.
-  //   라이브 탭은 자기 `active` 로 따로 든다(보일 때마다 다시 읽어 스스로 따라잡는다).
-  const { ids: favVenueIds, toggle: toggleFavVenue } = useFavoriteVenues(
-    activeTab === 'home' || activeTab === 'browse', promptLogin);
+  // 🔴 2026-09-22 요구 C — 홈·일정탐색용 `useFavoriteVenues` 호출을 **뺐다**.
+  //   목록 카드에서 하트를 걷어내자(등급 배지가 그 자리로 갔다) 이 훅의 소비처가 App 안에 0곳이 됐다.
+  //   명세는 "다른 소비처가 전혀 없어진 경우에만 정리" 를 허용한다 — grep 으로 0 을 확인하고 지웠다.
+  //   ⚠ 즐겨찾기 **시스템은 그대로**다: `src/lib/useFavoriteVenues.ts` 는 남아 있고
+  //     `LiveGamesTab`(진행 게임 줄 단골 표시)·캘린더 찜 필터가 계속 쓴다. 여기서 사라진 것은
+  //     홈·일정탐색 진입 때 돌던 `venue_follows` 조회 1건뿐이고, 그만큼 첫 화면이 가벼워진다.
   const [visitedTabs] = useState(() => new Set<TabId>(['home']));
   useEffect(() => { visitedTabs.add(activeTab); }, [activeTab, visitedTabs]);
   // keep-alive 의 대가 — 오버레이(Modal·ImageLightbox)는 포털을 안 써서 자기 탭 pane 안에 렌더된다.
@@ -3411,8 +3409,16 @@ export default function App() {
     // ── 수정 모드 ──
     if (data.id) {
       // 타입 정본은 `SchedulePatch` 하나다(src/api/schedules.ts) — 여기서 모양을 다시 적으면 어긋난다.
+      // 🔴 2026-09-22 요구 C — 제목이 **안 바뀌었으면 `patch.title` 을 아예 싣지 않는다.**
+      //   운영에는 12자 상한 이전에 만들어진 13자 이상 포스터가 있다. 그 포스터의 날짜·시각만 고치려는
+      //   업주를 제목 길이로 막으면 안 된다(제목은 건드리지도 않았는데 저장이 거부된다).
+      //   반대로 제목을 **실제로 바꾸는 순간부터**는 12자 계약을 탄다 — 그래야 새 장문이 안 들어온다.
+      //   ⚠ API 우회용 예외 플래그를 만들지 않는다. '키를 안 싣는다' 가 곧 '그 필드를 안 바꾼다' 다.
+      //   ⚠ 아래 optimistic `{...s, ...patch}` 도 title 이 빠진 patch 를 그대로 써서 원문을 유지한다.
+      const prevTitle = (schedules.find((s) => s.id === data.id)?.title ?? '').trim();
+      const nextTitle = (data.title ?? '').trim();
       const patch: SchedulePatch = {
-        title:        data.title,
+        ...(nextTitle !== prevTitle && { title: nextTitle }),
         date:         data.date,
         startTime:    data.startTime,
         regCloseTime: data.regCloseTime,
@@ -3615,8 +3621,15 @@ export default function App() {
     //   (handleScheduleSelect 의 `flushSync(() => setVtPosterId(...))` 를 withViewTransition 앞에 두기)이다.
     document.documentElement.setAttribute('data-overlay', '');
     setMeTab(tab);
-    if (meEverOpenedRef.current) {
+    // 🔴 요구 B(2026-09-22) — 모바일은 warm open 도 **live DOM** 으로 연다.
+    //   일정 포스터 `f37972b` 와 같은 계열이다: document View Transition 은 old/new 의 width·height·transform 을
+    //   보간하는데, 문서 높이가 다른 두 판이 겹치면 배경 홈이 눌렸다 펴진다(삼성 인터넷 리포트).
+    //   `CustomerDashboardPage` 는 keep-alive 라 스냅샷을 빼도 데이터·입력 상태를 잃지 않는다.
+    //   판정은 **누르는 그 시점의 폭**이다(열 때와 닫을 때 폭이 다를 수 있다).
+    if (meEverOpenedRef.current && window.matchMedia('(min-width: 1024px)').matches) {
       withViewTransition(() => flushSync(() => setVoucherWalletOpen(true)), () => startTransition(() => setVoucherWalletOpen(true)));
+    } else if (meEverOpenedRef.current) {
+      startTransition(() => setVoucherWalletOpen(true));
     } else {
       // 첫 열림 — lazy 청크 Suspense 가 끼므로 VT 를 쓰지 않는다. 다만 **그냥 setState 로 열면**
       //   바깥 경계가 불투명 폴백을 커밋하고 리액트가 ~300ms 붙잡는다(openLogin 주석의 그 스로틀).
@@ -3665,12 +3678,19 @@ export default function App() {
   const notificationsRef = useRef(notifications);
   useEffect(() => { notificationsRef.current = notifications; });
   const unreadNotifList = useMemo(() => notifications.filter((n) => !n.read), [notifications]);
-  const closeMeCb = useCallback(() => withViewTransition(
-    // 닫힐 때는 커밋 콜백 안에서 마커를 내린다 — new 스냅샷에 이름 붙은 크롬이 들어가야
-    // 헤더·GNB 가 root 애니(블러·슬라이드)에 딸려가지 않는다('상시 크롬은 흔들리지 않는다' 계약).
-    () => { document.documentElement.removeAttribute('data-overlay'); flushSync(() => setVoucherWalletOpen(false)); },
-    () => { document.documentElement.removeAttribute('data-overlay'); setVoucherWalletOpen(false); },
-  ), []);
+  const closeMeCb = useCallback(() => {
+    // 마커 제거 + 닫기를 한 덩어리로 — 아래 두 경로가 **같은 최종 상태**를 만들어야 한다.
+    const commit = () => { document.documentElement.removeAttribute('data-overlay'); setVoucherWalletOpen(false); };
+    // 🔴 요구 B(2026-09-22) — 모바일은 X 닫기도 live DOM. 위 openMeCb 와 같은 이유·같은 판정 시점이다.
+    //   Android history back 은 `useBackClose` 가 이미 live DOM 으로 닫으므로 건드리지 않는다.
+    if (!window.matchMedia('(min-width: 1024px)').matches) { commit(); return; }
+    withViewTransition(
+      // 닫힐 때는 커밋 콜백 안에서 마커를 내린다 — new 스냅샷에 이름 붙은 크롬이 들어가야
+      // 헤더·GNB 가 root 애니(블러·슬라이드)에 딸려가지 않는다('상시 크롬은 흔들리지 않는다' 계약).
+      () => { document.documentElement.removeAttribute('data-overlay'); flushSync(() => setVoucherWalletOpen(false)); },
+      commit,
+    );
+  }, []);
   const handleMeOpenNotification = useCallback((id: string) => {
     const n = notificationsRef.current.find((x) => x.id === id);
     if (!n) { setVoucherWalletOpen(false); return; }
@@ -3891,8 +3911,6 @@ export default function App() {
           <HomeTab
             schedules={schedules}
             venueById={venueById}
-            favVenueIds={favVenueIds}
-            onToggleFavorite={toggleFavVenue}
             /* 홈 퀵액션 '출석 체크' — 헤더 [이용권·출석] 과 **같은 시트·같은 조리법**(startTransition +
                선마운트 Suspense). 비로그인은 시트 대신 로그인부터 — 무반응 클릭을 만들지 않는다. */
             onOpenVoucher={() => (user ? startTransition(() => setVoucherSheetOpen(true)) : openLoginCb())}
@@ -4168,8 +4186,6 @@ export default function App() {
                         // ⚡ 첫 화면에 보이는 상단 카드만 포스터를 즉시 로드(LCP 단축).
                         //    그리드는 한 화면에 더 많이 보이므로 6장, 리스트는 4장.
                         priority={i < (viewMode === 'grid' ? 6 : 4)}
-                        favorited={favVenueIds.has(s.venueId)}
-                        onToggleFavorite={toggleFavVenue}
                       />
                       </Fragment>
                     ))}
@@ -4189,7 +4205,7 @@ export default function App() {
                             className="bg-surface-high/40 px-3 py-1.5 text-2xs font-bold leading-tight text-ink-secondary">{h}</p>
                         ) : null;
                       })()}
-                      <ScheduleCard mode="list" schedule={s} venue={venueById.get(s.venueId)} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} favorited={favVenueIds.has(s.venueId)} onToggleFavorite={toggleFavVenue} />
+                      <ScheduleCard mode="list" schedule={s} venue={venueById.get(s.venueId)} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} />
                       </Fragment>
                     ))}
                   </div>

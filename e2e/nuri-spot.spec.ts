@@ -39,7 +39,7 @@ async function openTools(page: Page, hash = '') {
 /** 스팟 도구를 열고 다이얼로그를 돌려준다 */
 async function openSpot(page: Page) {
   await openTools(page);
-  await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 분석' }).click();
+  await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 작성' }).click();
   const dlg = page.getByRole('dialog').first();
   await expect(dlg, 'NURI SPOT 이 안 열린다').toBeVisible({ timeout: 20_000 });
   await expect(dlg.getByText('NURI SPOT', { exact: true })).toBeVisible({ timeout: 15_000 });
@@ -62,7 +62,7 @@ test.describe('GTO 홈 — NURI SPOT 이 대표로 선다', () => {
     //   같은 계약(대표 카드가 첫 화면에서 읽힌다)을 지킨다 — 셀렉터를 느슨하게 푼 것이 아니라
     //   사라진 요소를 빼고 남은 요소를 그대로 단언한다.
     await expect(hero.getByText('NURI SPOT')).toBeVisible();
-    await expect(hero.getByRole('button', { name: '새 스팟 분석' })).toBeVisible();
+    await expect(hero.getByRole('button', { name: '새 스팟 작성' })).toBeVisible();
     await expect(hero.getByRole('button', { name: '내 스팟' })).toBeVisible();
 
     // 대표 카드가 첫 화면을 다 먹지 않는다 — 차트·트레이너 진입점이 스크롤 없이 함께 보여야 한다
@@ -101,7 +101,7 @@ test.describe('NURI SPOT — 분석 흐름', () => {
 
   test('🔴 두 축(분석 · 내 스팟)만 선다 — 토론 축은 도구에 없다', async ({ page }) => {
     const dlg = await openSpot(page);
-    for (const t of ['분석', '내 스팟']) {
+    for (const t of ['스팟 작성', '내 스팟']) {   // 🔴 2026-09-22 요구 A: '분석' → '스팟 작성'
       await expect(dlg.getByRole('tab', { name: t, exact: true }), `${t} 축이 없다`).toBeVisible();
     }
     // 오너 지시(2026-09-11): "절대 저 탭에서 뭔가 대화를 하게 하면 안 되고
@@ -124,10 +124,14 @@ test.describe('NURI SPOT — 분석 흐름', () => {
     await expect(dlg.getByRole('button', { name: /게시판 토론/ }), '게시판으로 가는 길이 없다').toBeVisible();
   });
 
-  test('🔴 카드를 넣으면 리포트가 등급과 수치를 보여준다 — solver 를 자칭하지 않는다', async ({ page }) => {
+  // 🔴 2026-09-22 요구 A — **반전됐다.** 옛 계약은 "리포트가 등급 배지와 수치를 보여주는가" 였다.
+  //   오너가 분석 카드를 걷어내라고 했으므로 이제 잠글 것은 그 반대다:
+  //     ① 작성 화면에 평가·수학 UI 가 **0개**
+  //     ② 그 자리에 **작성한 내용**이 실제로 보인다(전부 지워서 통과하는 빈 검사 방지)
+  test('🔴 작성 화면에는 분석·수학 UI 가 없고, 적은 내용이 그대로 보인다', async ({ page }) => {
     const dlg = await openSpot(page);
-    const report = dlg.getByLabel('스팟 리포트');
-    await expect(report, '리포트 영역이 없다').toBeVisible();
+    const report = dlg.getByLabel('작성 내용');
+    await expect(report, '작성 내용 영역이 없다').toBeVisible();
 
     await gotoStep(dlg, /카드·액션/);
     // 내 카드 2장 — CardGridPicker 의 data-card 훅으로 정확히 집는다(라벨 문구에 결합하지 않는다)
@@ -135,18 +139,23 @@ test.describe('NURI SPOT — 분석 흐름', () => {
     await dlg.locator('button[data-card="Ks"]').click();
     await page.waitForTimeout(900);
 
-    // 등급 배지가 뜬다(어떤 등급이든) — 그리고 절대 solver 가 아니다
-    await expect(report.locator('[data-source-badge]').first()).toBeVisible({ timeout: 10_000 });
-    await expect(report.locator('[data-source-badge="exact_solver"]'),
-      '검증된 솔버 데이터가 없는데 솔버 등급을 자칭한다').toHaveCount(0);
-    // ⚠ 본문에는 '솔버 기준 등급은 사용하지 않습니다' 라는 **고지**가 있다 — 그건 자칭이 아니다.
-    //   자칭 여부는 등급 배지 하나로만 판정한다.
-    const badge = report.locator('[data-source-badge]').first();
-    await expect(badge).not.toHaveText('솔버 기준');
-    await expect(await badge.getAttribute('data-source-badge')).not.toBe('exact_solver');
-    await expect(report.getByText(/데이터 버전/)).toBeVisible();
-    // 등급이 무엇이든 근거 문장이 함께 있어야 한다(빈 배지 금지)
-    expect((await badge.getAttribute('title'))?.length ?? 0).toBeGreaterThan(20);
+    // ① 분석 잔재 0 — 등급 배지·수학 문구가 이 화면에 남아 있으면 안 된다.
+    await expect(report.locator('[data-source-badge]'), '등급 배지가 아직 작성 화면에 있다').toHaveCount(0);
+    for (const gone of [/데이터 버전/, /수학 참고/, /필요 승률/, /내 승률/, /비슷한 스팟 풀기/]) {
+      await expect(report.getByText(gone), `작성 화면에 그 분석 문구가 남아 있다: ${gone}`).toHaveCount(0);
+    }
+
+    // ② 적은 내용이 실제로 읽힌다 — 여기가 빈 검사 방지선이다.
+    const details = report.getByTestId('spot-details');
+    await expect(details, '작성 내용(SpotDetails)이 렌더되지 않았다').toBeVisible();
+    await expect(details, '고른 카드가 작성 내용에 안 보인다').toContainText('As');
+    await expect(details, '고른 카드가 작성 내용에 안 보인다').toContainText('Ks');
+    await expect(details, '자리 정보가 안 보인다').toContainText('자리');
+    await expect(details, '유효 스택이 안 보인다').toContainText('유효 스택');
+
+    // ③ 저장·공유 경로는 그대로다(기능을 지운 것이 아니라 표시를 바꾼 것이다).
+    await expect(report.getByRole('button', { name: /내 스팟에 저장/ })).toBeVisible();
+    await expect(report.getByRole('button', { name: /스팟 토론에 공유/ })).toBeVisible();
   });
 
   test('🔴 액션 타임라인에 행이 쌓이고 지워진다', async ({ page }) => {
@@ -233,46 +242,24 @@ test.describe('NURI SPOT — 단계 바', () => {
 test.describe('NURI SPOT — 비슷한 스팟 풀기', () => {
   test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 412, height: 915 }); });
 
-  test('🔴 비슷한 스팟 풀기 — 참조한 그 표의 문제로 트레이너가 열린다', async ({ page }) => {
-    test.setTimeout(120_000);
+  // 🔴 2026-09-22 요구 A — '비슷한 스팟 풀기' CTA 를 작성 화면에서 없앴다.
+  //   이 화면의 목적은 작성·저장·공유이고, 여기서 트레이너로 새는 길은 그 흐름을 끊는다.
+  //   ⚠ 트레이너 도구 자체와 `evaluation.drill` 데이터는 그대로다 — 진입점만 사라졌다.
+  //   계약을 지우지 않고 **되살아남 금지**로 뒤집는다.
+  test('🔴 작성 화면에 트레이너로 새는 CTA 가 없다', async ({ page }) => {
     await stubLogin(page); await stabilizeBackstack(page);
     await page.goto('/?tab=tools');
     await dismissOverlays(page);
-    await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 분석' }).click();
+    await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 작성' }).click();
     const dlg = page.getByRole('dialog').first();
     await dlg.waitFor({ timeout: 20_000 });
     await gotoStep(dlg, /카드·액션/);
-
-    // 기본 스팟(6맥스 100BB BTN 첫 진입) + AKs → RFI 차트에 걸린다
     await dlg.locator('button[data-card="As"]').click();
     await dlg.locator('button[data-card="Ks"]').click();
     await page.waitForTimeout(900);
-
-    const cta = dlg.getByRole('button', { name: '비슷한 스팟 풀기' });
-    await expect(cta, '차트에 걸렸는데 연습 CTA 가 없다').toBeVisible({ timeout: 10_000 });
-    await page.screenshot({ path: 'docs/bugshots/spot-drill-cta.png' });
-
-    // 스냅샷에 그 표의 문제가 실린다(키는 nuri:snap:<name>:v1).
-    // ⚠ ToolsPanel 이 도구를 연 뒤 1회성 스냅샷을 지우므로 여기서 이미 비어 있을 수 있다 —
-    //   그래서 '있으면 형식을 검사' 하고, 결정적 증거는 아래 '그 핸드가 나오는가' 로 본다.
-    await cta.click();
-    const snap = await page.evaluate(() => {
-      try { return localStorage.getItem('nuri:snap:tool:trainer:v1'); } catch { return null; }
-    });
-    if (snap) expect(snap, '참조한 그 표의 키가 아니다').toMatch(/rfi\|rfi_[a-z0-9]+\|AKs/);
-
-    // 트레이너가 열리고 **그 핸드**가 나온다(랜덤 문제로 떨어지지 않았다)
-    const trainer = page.getByRole('dialog').first();
-    await expect(trainer.getByText('프리플랍 트레이너')).toBeVisible({ timeout: 20_000 });
-    await page.waitForTimeout(800);
-    await page.screenshot({ path: 'docs/bugshots/spot-drill-trainer.png' });
-    // ⚠ 카드는 랭크와 무늬가 **다른 요소**라 innerText 에서 A♥ 가 아니라 A + 줄바꿈 + ♥ 로 나온다.
-    //   스팟의 자리(BTN)와 상황(100bb 첫 진입)이 그대로 복원됐는지로 본다 — 랜덤이면 여기가 어긋난다.
-    const txt = await trainer.innerText();
-    expect(txt, '자리가 복원되지 않았다 — 무관한 문제다').toContain('BTN');
-    expect(txt, '상황이 복원되지 않았다').toContain('100bb · 첫 진입');
-    const ranks = (await trainer.locator('text=/^[AKQJT2-9]$/').allInnerTexts()).join('');
-    expect(ranks, `카드가 A·K 가 아니다: ${ranks}`).toMatch(/A.*K|K.*A/);
+    // 대상 도달 단언 — 카드를 실제로 골라 '차트에 걸리는' 상태를 만든 뒤에 본다(빈 검사 방지).
+    await expect(dlg.getByTestId('spot-details'), '작성 내용에 도달하지 못했다').toBeVisible();
+    await expect(dlg.getByRole('button', { name: '비슷한 스팟 풀기' }), '트레이너 CTA 가 되살아났다').toHaveCount(0);
   });
 });
 
@@ -342,11 +329,13 @@ test.describe('NURI SPOT — 9인 UTG+1 자리', () => {
     await dlg.locator('button[data-card="Ks"]').click();
     await page.waitForTimeout(900);
 
-    const report = dlg.getByLabel('스팟 리포트');
-    // 여기가 버그의 지점이다 — 예전엔 math_only 였다.
-    await expect(report.locator('[data-source-badge="chart_nash"]'),
-      'UTG+1 자리가 표에 안 걸린다 — 수학 참고로 떨어졌다').toBeVisible({ timeout: 15_000 });
-    // 이웃 표(UTG·MP)로 때운 것이 아니라 **제 표**를 봤는지까지 본다.
-    await expect(report.getByText(/UTG\+1/), '이웃 표로 때웠다').toBeVisible();
+    const report = dlg.getByLabel('작성 내용');
+    // 🔴 2026-09-22 요구 A — 등급 배지를 화면에서 뺐으므로 'chart_nash 배지가 뜨는가' 로는 못 본다.
+    //   원래 이 검사가 지키려던 것은 **9인 UTG+1 이 제 자리로 인식되는가**(이웃 표로 때우지 않는가)다.
+    //   그 사실은 작성 내용의 자리 표기로 그대로 확인할 수 있다 — 판정 표시가 아니라 입력 반영을 본다.
+    await expect(report.getByTestId('spot-details'), '작성 내용에 도달하지 못했다').toBeVisible({ timeout: 15_000 });
+    await expect(report.getByTestId('spot-details'), '내 자리가 UTG1 로 안 들어갔다').toContainText('UTG1');
+    await expect(report.getByTestId('spot-details'), '9인 테이블이 반영되지 않았다').toContainText('9인');
+    await expect(report.locator('[data-source-badge]'), '등급 배지가 되살아났다').toHaveCount(0);
   });
 });

@@ -77,7 +77,37 @@ describe('이용권 레일 — 권한이 있을 때만 그린다', () => {
 
   it('레일 자체와 빈 상태 문구는 건드리지 않았다 — 권한이 있으면 종전과 같다', () => {
     // 권한이 있는 사람(업주·공동사장·관리자·이용권권한직원)에게는 DOM 이 한 노드도 바뀌면 안 된다.
-    expect(WS).toContain('LedgerVoucherRail venueId={venueId} active dense');
+    // ⚠ 전체화면 레일의 `active` 는 아래 LVR-1 계약이 따로 잠근다(여기서 exact-string 으로 겹쳐 잡지 않는다).
     expect(WS).toContain('LedgerVoucherRail venueId={venueId} active={active}');
+  });
+
+  // ── LVR-1 (2026-09-22) ──────────────────────────────────────────────
+  // 전체화면 레일 wrapper 는 `hidden … md:block` 이라 <768px 에서 **보이지도 조작되지도 않는다.**
+  // 그런데 레일은 언마운트되지 않고 `active` 가 항상 true 라 Realtime 채널 1개 + 30초 interval 1개가
+  // 계속 돈다. 보이지 않는 화면을 위해 모바일에서 소켓과 타이머를 굴리는 것은 낭비다.
+  //
+  // 🔴 이번 결정은 **UI 를 추가하지 않는다**(오너 ③). 새 토글·새 패널·두 번째 레일 DOM 을 만들지 않고,
+  //   기존 `useIsMdUp()`(= CSS 의 `md:` 와 **같은 768px**)로 숨어 있는 백그라운드 작업만 끊는다.
+  //   CSS 브레이크포인트와 JS 판정이 다른 숫자면 767~768 경계에서 '보이는데 안 도는' 창이 생긴다.
+  //
+  // 일반 모드 레일은 모바일에서도 **실제로 보이므로** `active={active}` 그대로 둔다.
+  describe('LVR-1 — 전체화면 모바일에서는 숨은 레일의 구독·폴링을 끊는다', () => {
+    it('🔴 전체화면 레일만 isMdUp 으로 active 를 좁힌다', () => {
+      expect(WS, 'useIsMdUp 을 import 하지 않았다').toMatch(/useIsMdUp/);
+      expect(WS, '전체화면 레일이 아직 무조건 active 다 — 모바일에서 숨은 채 구독·폴링이 돈다')
+        .toContain('LedgerVoucherRail venueId={venueId} active={active && isMdUp} dense');
+    });
+
+    it('🔴 CSS 의 md 브레이크포인트와 같은 훅을 쓴다 — 다른 숫자를 새로 만들지 않는다', () => {
+      // useIsDesktop(1024) 을 쓰면 768~1023 에서 레일이 보이는데 구독이 끊긴다.
+      const full = WS.slice(WS.indexOf('data-ledger-fullscreen'));
+      expect(full, '전체화면 분기에서 useIsDesktop(1024) 을 쓰면 768~1023 이 어긋난다')
+        .not.toMatch(/active=\{active && isDesktop\}/);
+    });
+
+    it('일반 모드 레일은 모바일에서도 보이므로 그대로 둔다', () => {
+      expect(WS, '일반 모드 레일까지 좁히면 모바일 장부에서 이용권 내역이 갱신되지 않는다')
+        .toContain('LedgerVoucherRail venueId={venueId} active={active}');
+    });
   });
 });

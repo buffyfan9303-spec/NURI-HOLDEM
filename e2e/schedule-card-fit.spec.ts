@@ -524,3 +524,95 @@ for (const w of [1280, 1440]) {
     expect(r!.over, '표에서 잘린 칸이 있다').toEqual([]);
   });
 }
+
+// ── 2026-09-22 요구 C + HIT-1 ────────────────────────────────────────────────
+// 오너 요구: ① 제목은 목록에서 한 줄 ② 하트를 빼고 그 자리에 등급 배지 ③ 매장명 링크는
+// 카드 높이를 키우지 않고 WCAG 2.2 AA(24px)만 충족.
+//
+// 이 픽스처에는 legacy 장문 제목(23자·grade series), 짧은 제목(grade daily), grade 없음이 모두 있다 —
+// "12자 상한 이전에 저장된 행이 카드 높이를 흔들지 않는가" 를 그대로 잰다.
+for (const w of [320, 360, 390, 412]) {
+  test(`🔴 요구 C — ${w}px: 제목 1줄 · 하트 0 · 등급 우측 · 매장명 AA 24px`, async ({ page }) => {
+    const external: string[] = [];
+    await mockAll(page, external);
+    await openHome(page, w, 'dark', false);
+    await page.waitForSelector('main[data-tab="browse"] article.cv-card-list', { timeout: 10_000 });
+
+    const r = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll<HTMLElement>('main[data-tab="browse"] article.cv-card-list')]
+        .filter((c) => c.getBoundingClientRect().height > 0);
+      const out = {
+        cardCount: cards.length,
+        titleLines: [] as { text: string; lines: number; h: number; clamp: string }[],
+        badgesInTitle: 0,
+        badgesRight: 0,
+        hearts: 0,
+        venueHits: [] as { text: string; box: number; effective: number; titleStealsHit: boolean }[],
+        cardHeights: [] as number[],
+      };
+      for (const c of cards) {
+        out.cardHeights.push(+c.getBoundingClientRect().height.toFixed(2));
+        const h3 = c.querySelector<HTMLElement>('h3');
+        if (h3) {
+          // 🔴 줄 수는 `Range.getClientRects()` 로 세면 안 된다 — `-webkit-line-clamp` 는 **시각적으로만**
+          //   자르고 라인 박스 자체는 남아 있어서, 화면에 한 줄만 보여도 rect 는 2~3개가 나온다(실측).
+          //   실제로 보이는 줄 수는 **차지한 높이 ÷ line-height** 다.
+          const cs = getComputedStyle(h3);
+          const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+          const lines = Math.round(h3.getBoundingClientRect().height / lh);
+          out.titleLines.push({
+            text: (h3.textContent || '').trim().slice(0, 18), lines,
+            h: +h3.getBoundingClientRect().height.toFixed(2),
+            clamp: cs.webkitLineClamp || 'none',
+          });
+          if (h3.querySelector('[data-testid="schedule-grade-badge"]')) out.badgesInTitle += 1;
+        }
+        out.badgesRight += c.querySelectorAll('[data-testid="schedule-grade-badge"]').length - (h3?.querySelectorAll('[data-testid="schedule-grade-badge"]').length ?? 0);
+        // 하트: aria-label 에 '단골' 이 들어가는 버튼(옛 구현의 접근 이름)
+        out.hearts += [...c.querySelectorAll('button')].filter((b) => /단골/.test(b.getAttribute('aria-label') || '')).length;
+
+        // 매장명 링크의 **실효 히트 높이** — 의사요소 확장은 rect 로 안 잡히므로 elementFromPoint 로 잰다.
+        const venue = [...c.querySelectorAll<HTMLElement>('button')].find((b) => /tap-up-24/.test(b.className));
+        if (venue) {
+          const vr = venue.getBoundingClientRect();
+          const cx = vr.left + vr.width / 2, cy = vr.top + vr.height / 2;
+          const owns = (el: Element | null) => !!el && (el === venue || venue.contains(el));
+          let up = 0, down = 0;
+          for (let d = 1; d <= 40; d++) { if (owns(document.elementFromPoint(cx, cy - d))) up = d; else break; }
+          for (let d = 1; d <= 40; d++) { if (owns(document.elementFromPoint(cx, cy + d))) down = d; else break; }
+          // 제목 중심을 매장명 링크가 가로채면 목적지가 뒤바뀐다(매장 페이지 ≠ 일정 상세).
+          let titleStealsHit = false;
+          if (h3) {
+            const tr = h3.getBoundingClientRect();
+            titleStealsHit = owns(document.elementFromPoint(tr.left + tr.width / 2, tr.top + tr.height / 2));
+          }
+          out.venueHits.push({
+            text: (venue.textContent || '').trim().slice(0, 14),
+            box: +vr.height.toFixed(2), effective: up + down + 1, titleStealsHit,
+          });
+        }
+      }
+      return out;
+    });
+
+    // 🔴 대상 도달 — 카드가 0개면 아래 단언이 전부 공허하게 통과한다.
+    expect(r.cardCount, '카드를 못 찾았다 — 검사가 아무것도 재지 않는다').toBeGreaterThan(0);
+    expect(r.titleLines.length, '제목(h3)을 못 찾았다').toBeGreaterThan(0);
+    expect(r.venueHits.length, '매장명 링크를 못 찾았다 — tap-up-24 가 안 붙었다').toBeGreaterThan(0);
+
+    // ① 제목은 legacy 23자여도 한 줄
+    for (const t of r.titleLines) {
+      expect(t.clamp, `제목 "${t.text}" 에 line-clamp-1 이 안 걸렸다(현재 ${t.clamp})`).toBe('1');
+      expect(t.lines, `제목 "${t.text}" 이 ${t.lines}줄(높이 ${t.h}px)이다 — 목록은 한 줄이어야 카드 높이가 고정된다`).toBe(1);
+    }
+    // ② 하트 0 · 등급은 제목 밖 우측에
+    expect(r.hearts, '목록 카드에 하트가 남아 있다').toBe(0);
+    expect(r.badgesInTitle, '등급 배지가 제목 안에 있다 — 12자 제목의 폭을 먹는다').toBe(0);
+    expect(r.badgesRight, '우측 등급 배지가 없다 — 픽스처에 grade 있는 행이 있으므로 최소 1개여야 한다').toBeGreaterThan(0);
+    // ③ 매장명 링크 AA 24px · 제목 침범 0
+    for (const v of r.venueHits) {
+      expect(v.effective, `매장명 "${v.text}" 실효 히트 ${v.effective}px — WCAG 2.2 AA 24px 미달(박스 ${v.box}px)`).toBeGreaterThanOrEqual(24);
+      expect(v.titleStealsHit, `매장명 링크의 히트 영역이 제목을 덮었다 — 카드 탭이 매장 페이지로 샌다`).toBe(false);
+    }
+  });
+}

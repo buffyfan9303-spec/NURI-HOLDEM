@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Icon from '../atoms/Icon';
 import LedgerVoucherRail from './LedgerVoucherRail';
+import { useIsMdUp } from '../../lib/responsive';
 
 export default function LedgerWorkspace({ venueId, active, canViewVouchers, children }: {
   venueId: string;
@@ -27,6 +28,13 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
 }) {
   const [full, setFull] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
+  // 🔴 LVR-1(2026-09-22) — 전체화면 레일 wrapper 는 아래에서 `hidden … md:block` 이라
+  //   <768px 에서는 **보이지도 조작되지도 않는다.** 그런데 레일은 언마운트되지 않고 `active` 가
+  //   항상 true 여서 Realtime 채널 1개 + 30초 interval 1개가 계속 돈다(LedgerVoucherRail 의
+  //   effect 는 active=false 나 unmount 에서만 정리한다).
+  //   → UI 는 그대로 두고 **숨은 백그라운드 작업만** 끊는다. CSS 의 `md:` 와 반드시 같은 768px 이어야
+  //     767~768 경계에서 '보이는데 안 도는' 창이 안 생긴다. 그래서 useIsDesktop(1024) 이 아니라 이것이다.
+  const isMdUp = useIsMdUp();
 
   // 브라우저 전체화면은 '되면 좋은 것'이다 — 거부돼도(권한·iOS 사파리) 앱 안에서의 전체화면은 그대로 된다.
   const enter = useCallback(() => {
@@ -91,7 +99,7 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
           <div className="min-w-0 flex-1 overflow-y-auto px-3 py-3">{children}</div>
           {canViewVouchers && (
             <div className="hidden w-[20rem] shrink-0 border-l border-border-subtle p-3 md:block">
-              <LedgerVoucherRail venueId={venueId} active dense />
+              <LedgerVoucherRail venueId={venueId} active={active && isMdUp} dense />
             </div>
           )}
         </div>

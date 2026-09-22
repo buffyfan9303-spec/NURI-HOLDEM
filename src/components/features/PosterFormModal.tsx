@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { uploadPoster } from '../../lib/storage';
 import { filterContent } from '../../lib/content-filter';
 import type { Schedule, Promotion } from '../../api/schedules';
+import { SCHEDULE_TITLE_MAX } from '../../api/schedules';
 import { DISCOUNT_TYPES, retypePromotion, type DiscountType } from '../../lib/promotionLabel';
 import { ledgerLabelOf } from '../../lib/posterDiscounts';
 import { wonToMan, manToWon } from '../../lib/units';
@@ -277,6 +278,12 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim())     return failAt(titleId, '게임 이름을 입력해 주세요');
+    // 🔴 요구 C — native maxLength 를 우회한 programmatic 변경(자동완성·확장·테스트)을 여기서 막는다.
+    //   단 **제목을 실제로 바꿨을 때만**이다. legacy 장문 포스터의 날짜만 고치는 저장은 통과해야 한다
+    //   (App 이 그 경우 `patch.title` 을 안 싣는다 — 같은 규칙의 폼쪽 반쪽).
+    if (form.title.trim() !== (schedule?.title ?? '').trim() && form.title.trim().length > SCHEDULE_TITLE_MAX) {
+      return failAt(titleId, `게임 이름은 공백 포함 ${SCHEDULE_TITLE_MAX}자까지 입력할 수 있습니다`);
+    }
     if (!form.region.trim())    return failAt(regionId, '지역을 선택해 주세요');
     if (form.buyIn <= 0)        return failAt(buyInId, '참가비 금액을 입력해 주세요');
     if (form.prizeType === 'GTD'   && form.prizeAmount <= 0)  return failAt(prizeAmountId, '보장 상금 금액을 입력해 주세요');
@@ -440,11 +447,24 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           </FieldWrap>
         )}
 
-        {/* 게임 이름 */}
-        <FieldWrap label="게임 이름" required htmlFor={titleId}>
+        {/* 게임 이름 — 🔴 2026-09-22 요구 C: 공백 포함 12자 상한(`SCHEDULE_TITLE_MAX`).
+            · 상한 정본은 `src/api/schedules.ts` 하나다. 여기서 숫자를 다시 적지 않는다.
+            · native `maxLength` 가 키보드·붙여넣기를 같은 기준(UTF-16 길이)으로 막는다 —
+              IME 조합 중 강제 slice 를 하지 않는다(조합이 깨진다). 최종 방어는 submit 검증과 API 다.
+            · legacy(12자 초과로 이미 저장된) 제목은 **원문 그대로 보여 준다.** maxLength 는 새 입력만 막고
+              기존 value 를 자르지 않는다. 제목을 안 건드리면 App 이 `patch.title` 을 아예 안 실어
+              날짜·시각 같은 다른 수정은 그대로 저장된다. */}
+        <FieldWrap label="게임 이름" required htmlFor={titleId}
+          suffix={`${form.title.length}/${SCHEDULE_TITLE_MAX}`}>
           <input id={titleId} type="text" required value={form.title}
+            maxLength={SCHEDULE_TITLE_MAX}
             onChange={(e) => update('title', e.target.value)}
-            placeholder="예: 로티 단독 파이널롤백20" className="input" />
+            placeholder="예: 목요 딥스택" className="input" />
+          <p className="mt-1 text-2xs text-ink-muted">
+            {isEdit && (schedule?.title ?? '').trim().length > SCHEDULE_TITLE_MAX
+              ? `기존 제목 · 변경 시 ${SCHEDULE_TITLE_MAX}자 이하로 고쳐 주세요`
+              : `제목은 최대 ${SCHEDULE_TITLE_MAX}자이며 목록에는 한 줄로 표시됩니다`}
+          </p>
         </FieldWrap>
 
         {/* 날짜 + 스타트시간 */}

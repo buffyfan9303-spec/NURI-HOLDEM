@@ -5,6 +5,31 @@ import type { DiscountType } from '../lib/promotionLabel';
 
 export type { DiscountType };
 
+/** 게임 이름(포스터 제목) 입력 상한 — **공백 포함 12자**.
+ *
+ * 근거(2026-09-22 운영 `ScheduleCard` DOM + Pretendard 실측):
+ *   320px 제목 칸 clientWidth **148px** / font 13.8125px · weight 700 · letter-spacing −0.345313px.
+ *   한글 12자 반복 폭 **139.4px**(들어감) · 13자 **151.0px**(넘침). 그래서 12다.
+ *
+ * ⚠ 글자 수는 **모든 글꼴 폭을 보장하지 못한다** — `W` 12자는 같은 칸에서 약 161.8px 다.
+ *   그래서 계약이 두 겹이다: ① 여기 입력 상한 ② 목록 카드의 `line-clamp-1` 렌더 안전망.
+ * ⚠ native `maxLength` 와 여기 `string.length` 는 **같은 기준**을 쓴다(UTF-16 코드 단위).
+ *   두 번째 문자 계산기(grapheme segmenter 등)를 만들지 않는다 — 두 벌이 되면 반드시 어긋난다.
+ * ⚠ 기존 13자 이상 운영 행은 **자동 절단·DB 덮어쓰기를 하지 않는다.** 제목을 실제로 바꿀 때만 검증한다.
+ */
+export const SCHEDULE_TITLE_MAX = 12;
+
+/** 제목 검증 정본 — create 와 `patch.title` 이 실제로 실린 update 가 같은 함수를 쓴다.
+ *  통과하면 trim 된 제목을 돌려주고, 위반이면 그 자리에서 던진다(조용한 truncate 금지). */
+export function assertScheduleTitle(raw: string): string {
+  const t = (raw ?? '').trim();
+  if (!t) throw new Error('게임 이름을 입력해 주세요.');
+  if (t.length > SCHEDULE_TITLE_MAX) {
+    throw new Error(`게임 이름은 공백 포함 ${SCHEDULE_TITLE_MAX}자까지 입력할 수 있습니다. (현재 ${t.length}자)`);
+  }
+  return t;
+}
+
 /** 조회수만 바뀐 갱신을 걸러내기 위한 행 지문(뷰카운트 제외). 모듈 수명 = 탭 수명. */
 const rowSig = new Map<string, string>();
 
@@ -183,8 +208,10 @@ export async function createSchedule(
   payload: Omit<Schedule, 'id' | 'unreadQnaCount' | 'approved'> & { approved?: boolean },
 ): Promise<Schedule> {
   if (IS_MOCK) throw new Error('Mock mode');
+  // 🔴 새로 만드는 제목은 예외 없이 12자 계약을 탄다(요청을 보내기 **전에** 거절한다).
+  const title = assertScheduleTitle(payload.title);
   const { data, error } = await supabase.from('schedules').insert({
-    title: payload.title, venue_id: payload.venueId || null, pub_name: payload.pubName,
+    title, venue_id: payload.venueId || null, pub_name: payload.pubName,
     region: payload.region, address: payload.address,
     date: payload.date, start_time: payload.startTime, duration: payload.duration,
     format: payload.format, guaranteed: payload.guaranteed, prize_pool: payload.prizePool,
@@ -221,8 +248,12 @@ export type SchedulePatch = Omit<Partial<Schedule>, 'posterUrl'> & { posterUrl?:
 
 export async function updateSchedule(id: string, patch: SchedulePatch): Promise<void> {
   if (IS_MOCK) return;
+  // 🔴 `patch.title` 이 **실제로 실렸을 때만** 12자 계약을 탄다.
+  //   호출부(App)는 제목이 안 바뀌었으면 이 키를 아예 싣지 않는다 — 그래야 기존 13자 이상 legacy 포스터의
+  //   날짜·시각 같은 무관한 수정이 막히지 않는다. 여기서 '있으면 검사' 로 두는 것이 그 계약의 서버쪽 반쪽이다.
+  const title = patch.title !== undefined ? assertScheduleTitle(patch.title) : undefined;
   await mustAffect(supabase.from('schedules').update({
-    ...(patch.title         !== undefined && { title:           patch.title }),
+    ...(title               !== undefined && { title }),
     ...(patch.date          !== undefined && { date:            patch.date }),
     ...(patch.startTime     !== undefined && { start_time:      patch.startTime }),
     ...(patch.duration      !== undefined && { duration:        patch.duration }),

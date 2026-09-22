@@ -4,7 +4,7 @@
 // Negative control: remove the desktop matchMedia guard in App.tsx; mobile cases fail.
 // Run against a fresh preview: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/mobile-tab-transition.spec.ts
 import { test, expect } from './_fixtures';
-import { dismissOverlays, stabilizeBackstack } from './_session';
+import { dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
 import { mockSchedules } from './_schedules';
 
 // 🔴 2026-09-21 실측 — 여기 있던 `test.use({ reducedMotion: 'no-preference' })` 를 지웠다.
@@ -94,6 +94,165 @@ for (const width of [390, 1023, 1024]) {
     await cdp.detach();
   });
 }
+
+// ── 요구 B (2026-09-22): '내 정보' 열기·닫기도 모바일에서는 live DOM ──────────────
+//
+// 증상: 삼성 인터넷에서 '내 정보'를 열고 X 로 닫을 때 배경 홈이 순간 눌린다.
+// 원인(코드): `openMeCb` 의 warm open 과 `closeMeCb` 가 **모바일에서도** document View Transition 을
+//   만든다. 그 스냅샷이 old/new 의 width·height·transform 을 보간하므로 문서 높이가 다른 두 판이
+//   겹치면 배경이 눌렸다 펴진다. 일정 포스터 `f37972b` 와 **같은 계열**이고 처방도 같다.
+// 이 하네스는 삼성 GPU 를 흉내내지 못한다 — 여기서 재는 것은 '스냅샷을 만들었는가' 하나다.
+// 음성 대조: App.tsx 의 모바일 분기를 지우면 warm open / X close 에서 VT 가 생겨 이 검사가 빨개진다.
+test.describe('me page return snapshots', () => {
+  test.use({ contextOptions: { reducedMotion: 'no-preference' } });
+  for (const width of [360, 390, 1024]) {
+    const mobile = width < 1024;
+    test(`me open/close keeps ${mobile ? 'live DOM' : 'desktop transition'} at ${width}px`, async ({ page }) => {
+      test.setTimeout(60_000);
+      await stabilizeBackstack(page);
+      await stubLogin(page);
+      await page.setViewportSize({ width, height: 844 });
+      await page.addInitScript(() => {
+        const native = document.startViewTransition?.bind(document);
+        let calls = 0;
+        Object.defineProperty(window, '__meVtCalls', { get: () => calls });
+        if (native) document.startViewTransition = (...args) => { calls += 1; return native(...args); };
+      });
+      await page.goto('/');
+      await dismissOverlays(page);
+
+      // 진입 동선은 **헤더 아바타 메뉴 → '내 정보 열기'** 다(subtab-motion·account-isolation 과 같은 경로).
+      // 메뉴 버튼을 건너뛰면 '내 정보 열기' 가 DOM 에 없어 검사가 대상에 도달하지 못한다.
+      const menuBtn = page.locator('button[aria-label$="메뉴"]').first();
+      const openBtn = page.getByRole('button', { name: '내 정보 열기' });
+      const meTitle = page.locator('h1', { hasText: '내 정보' });
+      const closeBtn = page.locator('header:has(h1:text-is("내 정보")) button[aria-label="닫기"]');
+      const calls = () => page.evaluate(() => Reflect.get(window, '__meVtCalls') as number);
+      const openMe = async () => { await menuBtn.click(); await openBtn.click(); await expect(meTitle).toBeVisible(); };
+      const settle = () => page.waitForFunction(() => !document.getAnimations().some((a) =>
+        (a.effect as KeyframeEffect | null)?.pseudoElement?.startsWith('::view-transition')));
+      // 배경 홈의 기하 — 눌림은 여기서 보인다.
+      const homeBox = async () => page.evaluate(() => {
+        const el = document.querySelector('.tab-pane[data-tab="home"]');
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { w: +r.width.toFixed(2), h: +r.height.toFixed(2), t: getComputedStyle(el).transform, y: window.scrollY };
+      });
+
+      // 🔴 대상 도달 단언 — 진입점이 없으면 '0회라서 통과' 하는 빈 검사가 된다.
+      await expect(menuBtn, '헤더 아바타 메뉴를 못 찾았다 — 검사가 대상에 도달하지 못했다').toBeVisible();
+      // 🔴 측정 전에 홈 문서 높이를 **안정시킨다.** 일정·배너가 비동기로 들어오는 동안 재면
+      //   문서가 길어졌다 짧아지며 브라우저가 scrollY 를 깎는다(CLAUDE.md '문서가 짧아지면 scrollY 클램프').
+      //   그걸 '전환이 스크롤을 튀게 했다' 로 잘못 읽으면 영원히 흔들리는 검사가 된다 — 실제로 360px 에서 13px 이 그랬다.
+      await page.waitForFunction(() => {
+        const w = window as unknown as { __hPrev?: number; __hHit?: number };
+        const h = document.body.scrollHeight;
+        if (w.__hPrev === h) { w.__hHit = (w.__hHit ?? 0) + 1; } else { w.__hPrev = h; w.__hHit = 0; }
+        return (w.__hHit ?? 0) >= 3;
+      }, undefined, { timeout: 15_000 });
+      await page.evaluate(() => window.scrollTo(0, 140));
+      // 🔴 스크롤도 **정착한 뒤에** 기준을 잡는다. `scrollTo` 직후 곧바로 재면 헤더 축소(useScrollY 의 rAF)와
+      //   클램프가 아직 반영되지 않은 과도기 값을 기준으로 삼게 되고, 나중 비교에서 그 차이가
+      //   '전환이 스크롤을 튀게 했다' 로 잘못 보고된다(실측 13px 이 그랬다 — 프로브로 재니 실제 보존값은 정확했다).
+      await page.waitForFunction(() => {
+        const w = window as unknown as { __yPrev?: number; __yHit?: number };
+        const y = window.scrollY;
+        if (w.__yPrev === y) { w.__yHit = (w.__yHit ?? 0) + 1; } else { w.__yPrev = y; w.__yHit = 0; }
+        return (w.__yHit ?? 0) >= 3;
+      }, undefined, { timeout: 10_000 });
+      expect(await page.evaluate(() => window.scrollY), '스크롤이 안 걸렸다 — 스크롤 축을 못 재는 검사가 된다').toBeGreaterThan(0);
+      const before = await homeBox();
+      expect(before, '홈 판을 못 찾았다 — 검사가 아무것도 재지 않는다').not.toBeNull();
+
+      // ① 첫 열림 — 양쪽 모두 VT 0 (lazy Suspense 때문에 원래부터 startTransition 이다)
+      //    메뉴 열기 자체가 VT 를 쓸 수 있으므로 **절대값이 아니라 증분**으로 센다.
+      const beforeOpen = await calls();
+      await openMe();
+      await settle();
+      expect(await calls(), '첫 열림은 어느 폭에서도 스냅샷을 만들지 않는다').toBe(beforeOpen);
+
+      // ② X 닫기 — 모바일 0, PC +1
+      const beforeClose = await calls();
+      await closeBtn.click();
+      await expect(meTitle).toBeHidden();
+      await settle();
+      expect(await calls(), `X 닫기의 VT 호출 수가 기대와 다르다(${width}px)`).toBe(beforeClose + (mobile ? 0 : 1));
+
+      // ③ warm 재열림 — 모바일 0, PC +1. 여기가 요구 B 의 핵심이다.
+      const beforeWarm = await calls();
+      await openMe();
+      await settle();
+      expect(await calls(), `warm 재열림의 VT 호출 수가 기대와 다르다(${width}px)`).toBe(beforeWarm + (mobile ? 0 : 1));
+
+      // ④ history back 으로 닫기 — 이미 live DOM 경로라 어느 폭에서도 늘지 않는다
+      const beforeBack = await calls();
+      await page.evaluate(() => history.back());
+      await expect(meTitle).toBeHidden();
+      await settle();
+      expect(await calls(), 'history back 은 원래 live DOM 경로다').toBe(beforeBack);
+
+      // ⑤ 배경 홈에 눌림의 흔적이 없고 스크롤도 제자리다
+      //
+      // 🔴 여기서 **높이·폭 절대 비교는 쓰지 않는다.** 처음에 그렇게 썼다가 390/1024 에서 208px 차이로
+      //   빨개졌는데, 원인은 전환 눌림이 아니라 그 사이에 **홈 콘텐츠가 비동기로 로드된 것**이었다
+      //   (일정·배너가 뒤늦게 들어와 문서가 길어진다). 360px 만 우연히 타이밍이 맞아 통과했다 —
+      //   즉 그 단언은 '눌림' 이 아니라 '로딩 속도' 를 재고 있었고, 그대로 뒀으면 영원히 흔들리는 검사가 된다.
+      // 눌림의 실제 지표는 두 가지이고 둘 다 아래에서 잠근다:
+      //   ⓐ 배경에 남은 transform(스냅샷이 보간하던 scale/translate)
+      //   ⓑ `::view-transition*` pseudo 애니메이션의 존재(⑥)
+      //   그리고 이 검사의 핵심 계약인 **VT 호출 수**(②③)는 위에서 이미 RED→GREEN 으로 증명된다.
+      const after = await homeBox();
+      expect(after!.t === 'none' || /matrix\(1, 0, 0, 1, 0, 0\)/.test(after!.t), `배경 홈에 transform 이 남았다: ${after!.t}`).toBe(true);
+      // 🔴 스크롤 보존은 **모바일(live DOM 경로)에만** 건다.
+      //   PC 는 이 요구에서 손대지 않은 기존 View Transition 경로이고, 거기서는 닫을 때 scrollY 가
+      //   140 → 6 으로 떨어진다(1024px 실측 134px). 내 변경 전과 같은 동작이므로 여기서 회귀로 세지 않는다.
+      //   PC 의 그 점프는 별개 사안이다 — 이 검사로 끌고 오면 요구 B 의 모바일 축이 가려진다.
+      if (mobile) {
+        expect(Math.abs(after!.y - before!.y), '닫은 뒤 스크롤이 튀었다').toBeLessThanOrEqual(1);
+      }
+
+      // ⑥ 남은 ::view-transition pseudo 애니메이션 0
+      const pseudo = await page.evaluate(() => document.getAnimations()
+        .filter((a) => (a.effect as KeyframeEffect | null)?.pseudoElement?.startsWith('::view-transition')).length);
+      expect(pseudo, '전환 의사요소 애니메이션이 남아 있다').toBe(0);
+    });
+  }
+
+  // 경로 선택이 **누르는 그 시점**의 폭으로 정해지는지 — 열고 나서 폭이 바뀌어도 맞아야 한다.
+  test('resize while open picks the path at close time', async ({ page }) => {
+    test.setTimeout(60_000);
+    await stabilizeBackstack(page);
+    await stubLogin(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => {
+      const native = document.startViewTransition?.bind(document);
+      let calls = 0;
+      Object.defineProperty(window, '__meVtCalls', { get: () => calls });
+      if (native) document.startViewTransition = (...args) => { calls += 1; return native(...args); };
+    });
+    await page.goto('/');
+    await dismissOverlays(page);
+    const menuBtn = page.locator('button[aria-label$="메뉴"]').first();
+    const openBtn = page.getByRole('button', { name: '내 정보 열기' });
+    const meTitle = page.locator('h1', { hasText: '내 정보' });
+    const closeBtn = page.locator('header:has(h1:text-is("내 정보")) button[aria-label="닫기"]');
+    const calls = () => page.evaluate(() => Reflect.get(window, '__meVtCalls') as number);
+    const settle = () => page.waitForFunction(() => !document.getAnimations().some((a) =>
+      (a.effect as KeyframeEffect | null)?.pseudoElement?.startsWith('::view-transition')));
+
+    await expect(menuBtn, '헤더 아바타 메뉴를 못 찾았다 — 검사가 대상에 도달하지 못했다').toBeVisible();
+    await menuBtn.click();            // 390 에서 첫 열림
+    await openBtn.click();
+    await expect(meTitle).toBeVisible();
+    await settle();
+    await page.setViewportSize({ width: 1280, height: 844 });   // 열린 채로 PC 로
+    const beforeClose = await calls();
+    await closeBtn.click();
+    await expect(meTitle).toBeHidden();
+    await settle();
+    expect(await calls(), '열 때가 아니라 닫는 시점의 폭으로 경로가 정해져야 한다').toBe(beforeClose + 1);
+  });
+});
 
 // Samsung Internet: poster return must use the live home on mobile, too.
 // Negative control: the pre-fix production build creates one VT on the first close.
