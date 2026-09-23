@@ -17,7 +17,8 @@ const PM = strip(readFileSync(join(__dirname, 'ProfileModal.tsx'), 'utf-8'));
 describe('개인정보 열람권 — 약관 동의 이력', () => {
   it('🔴 보안 탭에 붙어 있고 getMyLegalConsents 를 부른다', () => {
     expect(PM).toMatch(/import \{ requestPasswordChangeCode[\s\S]{0,400}?getMyLegalConsents, type LegalConsentRecord/);
-    expect(PM).toMatch(/tab === 'security' && \([\s\S]{0,2000}?<LegalConsentHistory \/>/);
+    // PROFILE-MENU-JANK(2026-09-24): 보안 판은 keep-alive — 한 번 열면 hidden 으로 남아 이력을 탭마다 다시 부르지 않는다.
+    expect(PM).toMatch(/seen\.has\('security'\) && \(\s*<div hidden=\{tab !== 'security'\}>[\s\S]{0,2000}?<LegalConsentHistory \/>/);
     expect(PM).toMatch(/getMyLegalConsents\(20\)/);
   });
 

@@ -5,7 +5,8 @@
 // 내 매장이용권(매장별) + 매장 이용내역(방문·참가(바인)·참가비). 매장이용권은 금전적 가치 없음.
 //   '방문' = QR 체크인(매장별 KST 날짜 distinct), '참가' = 장부 바인 — 둘 다 머니인(입상)과 다른 단위다(점검 #6·#8).
 // 사용(회수) = 발급 매장 QR 스캔 또는 그 매장 업주 전화번호로만. 유저 간 전송 불가.
-import { Suspense, memo, startTransition, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, memo, startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { useAuth } from '../../contexts/AuthContext';
@@ -155,11 +156,12 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   // null = 아직 한 번도 성공한 적 없음(미조회·실패). 0 으로 두면 조회 실패가 '방문 0회' 라는 단정으로 보인다(F08).
   const [visitStats, setVisitStats] = useState<{ visits: number; upcoming: number; total: number } | null>(null); // 헤더 '방문' — 프로필 탭과 같은 함수·같은 단위(점검 #8)
   const recordsRef = useRef<HTMLElement | null>(null); // '내 전적' 버튼 → 기존 입상 기록 섹션 앵커 스크롤
-  // 4탭 상태 — 페이지가 소유(ProfilePanels 는 controlled). 열릴 때마다 initialTab 으로 리셋(keep-alive 재열림 포함).
-  const [tab, setTab] = useState<MeTab>(initialTab);
-  useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
-  // 하위 탭 전환 = 방향성 푸시(data-profile-tabbar 제자리 · data-profile-panel 만 밀림) — 커뮤니티·GTO 와 같은 조리법
-  const goTab = useCallback((v: MeTab) => goSubTab('profile-tab', ME_TAB_ORDER, tab, v, () => setTab(v)), [tab]);
+  // 4탭 상태는 아래 MeTabs 가 소유한다(PROFILE-MENU-JANK 2026-09-24) — 탭을 누를 때 이 1,000줄 페이지가 다시 렌더되지 않게.
+  //   대시보드 본문은 이 페이지가 만든 **같은 엘리먼트**를 MeTabs 에 넘기므로, 탭만 바뀌면 React 가 그 서브트리를 건너뛴다
+  //   (페이지가 탭을 들고 있으면 숨은 대시보드까지 탭마다 다시 렌더된다 — 실측 dev CPU 6배 탭당 210~370ms).
+  //   대시보드 안의 탭 이동 버튼(프로필 편집·아이디 설정·본인인증)은 MeTabs 가 채워 두는 이 ref 로 부른다.
+  const goTabRef = useRef<(v: MeTab) => void>(() => {});
+  const goTab = useCallback((v: MeTab) => goTabRef.current(v), []);
 
   // ── 계정 경계(2026-09-10) ──
   // 이 페이지는 keep-alive(언마운트 없음)라 user 가 A→null→B 로 바뀌어도 per-user state 가 그대로 남았고,
@@ -297,36 +299,14 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
         </button>
         <h1 className="text-lg font-bold text-ink-primary">내 정보</h1>
       </header>
-      {/* 탭 바 — view-transition 이름(profile-tabbar)은 index.css 의 data-vt-scope='profile-tab' 규칙이 준다. 탭 44px(py-3 + t-nav) */}
-      <div data-profile-tabbar="" className="shrink-0 px-page-x">
-        <UnderlineTabs items={ME_TABS} value={tab} onChange={goTab} />
-      </div>
-
-      {/* pb-[env(safe-area-inset-bottom)]: 아이폰 홈 인디케이터 띠만큼 바닥을 비워 둔다.
-          예전엔 상단만 예약해 마지막 요소(저장·탈퇴)가 그 띠 안으로 들어갔다 —
-          탈퇴는 되돌릴 수 없는 조작이라 '눌리지 않는' 것보다 '잘못 눌리는' 쪽이 더 나쁘다. */}
-      {/* 본문 — 탭 전환의 방향성 푸시 대상(탭바는 제자리 고정).
-          🔴 data-profile-panel 은 **이 스크롤 상자**에 있어야 한다(2026-09-17). 안쪽 내용 div 에 붙였더니
-          old 스냅샷 높이 = 이전 탭 콘텐츠 전체(대시보드 2600px), new = 새 탭(보안 420px) 이 되어
-          새 패널이 끝나는 지점 **아래로 2180px** 이 돌출했다 — 화면 하단에 이전 탭이 띠로 남던 원인이다
-          (오너 보고 "아래 하단바가 잔여물이 남아"). 스크롤 상자는 높이가 뷰포트에 묶여 old·new 가 같다(실측 743px). */}
-      <div data-profile-panel="" className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
-        {/* 프로필·설정·보안 패널은 keep-alive(hidden 토글) — 설정 탭에서 편집 중(닉네임·크롭 사진) 대시보드를 다녀와도
-            입력이 남는다(점검 #18). 상태는 ProfilePanels 본체에 있어 대시보드 표시 중엔 'profile' 로 접어 두기만 한다. */}
-        {/* 🔴 max-w-2xl — 대시보드 래퍼(아래)와 **같은 폭**이어야 한다(2026-09-17 오너 '지진').
-            예전엔 max-w-md(476px) 라 PC 에서 탭을 옮길 때마다 커버 밴드 폭이 714↔476 으로 **238px** 튀었다.
-            밴드는 h-20 고정에 w-full 이라 래퍼 폭을 그대로 따라간다 — 아바타(110.5px)는 그대로인데
-            밴드만 커졌다 작아져 '크기가 달라지고 지진나는 것처럼' 보였다.
-            md 는 **모달** 폭 토큰이 페이지 래퍼에 따라붙은 것이다(같은 커밋의 LevelGuideModal 이 max-w-md).
-            ⚠ 좁히는 쪽(대시보드를 476 으로)은 기각했다 — 정보를 476px 에 우겨넣게 되어 실질 손실이다. */}
-        <div hidden={tab === 'dashboard'} className="mx-auto w-full max-w-2xl">
-          <ProfilePanels open={open} tab={tab === 'dashboard' ? 'profile' : tab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
-        </div>
-        {/* 🔴 py-4 — 나머지 세 탭 래퍼가 전부 p-4(17px) 인데 여기만 py-section(25.5px) 이라
+      {/* 🔴 py-4 — 나머지 세 탭 래퍼가 전부 p-4(17px) 인데 여기만 py-section(25.5px) 이라
             탭을 옮길 때마다 커버 밴드가 세로로 **8.5px** 튀었다(PC·모바일 공통). 가로는 px-page-x 로 이미 같다.
             ⚠ 주석은 `&& (` **위**에 둔다 — `(` 바로 뒤는 식(expression) 자리라
               JSX 주석 컨테이너를 넣으면 파싱되지 않는다(2026-09-17 에 실제로 빌드를 깼다). */}
-        {tab === 'dashboard' && (
+      {/* 🔴 PROFILE-MENU-JANK(2026-09-24) — 대시보드도 keep-alive(hidden, 아래 MeTabs). 예전 `tab === 'dashboard' &&` 는
+          대시보드(1913px)를 복귀마다 재마운트해 탭을 누른 뒤 커밋까지 멈췄다(운영 CPU 6배 133~164ms)
+          + 빈 상태 카드 animate-fade-in 이 매번 다시 재생됐다. */}
+      <MeTabs open={open} initialTab={initialTab} goTabRef={goTabRef} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} dashboard={
         <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-4">
           {/* 통합 프로필 아이덴티티 헤더(오너 지시 2026-08-27) — ProfileModal '프로필' 탭과 같은 정본.
               커버 밴드(등급색 틴트) + 오버랩 아바타(등급 링) + 닉네임·등급·칭호·인증 + 등급 진행바. */}
@@ -697,14 +677,68 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
             </div>
           </section>
         </div>
-        )}
-      </div>
+      } />
 
     </div>
   );
 }
 
 export default memo(CustomerDashboardPage);
+
+/** '내 정보' 4탭 셸 — 탭 상태·탭 바·스크롤 상자·판 전환만 갖는다(PROFILE-MENU-JANK 2026-09-24).
+ *  대시보드는 페이지가 만든 엘리먼트(`dashboard`)를 hidden 으로 끼우고(keep-alive), 프로필·설정·보안은 ProfilePanels 가
+ *  한 번 연 판을 hidden 으로 유지한다. 예전엔 판이 탭마다 조건부 재마운트돼 누른 뒤 커밋까지 멈췄고(운영 CPU 6배
+ *  대시보드 133~164ms), 빈 상태 카드 fade-in 이 매번 다시 재생됐고, 보안 탭은 약관 동의 이력을 매번 다시 불러 높이가 튀었다.
+ *  계정 경계는 App 의 `key={user?.id}` 가 페이지째 새로 만든다. */
+function MeTabs({ open, initialTab, goTabRef, dashboard, onClose, onOpenLegal, onOpenSupport }: {
+  open: boolean; initialTab: MeTab; goTabRef: { current: (v: MeTab) => void }; dashboard: ReactNode;
+  onClose: () => void; onOpenLegal?: (d: LegalDoc) => void; onOpenSupport?: () => void;
+}) {
+  // 열릴 때마다 initialTab 으로 리셋(keep-alive 재열림 포함).
+  const [tab, setTab] = useState<MeTab>(initialTab);
+  useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
+  // 열리는 **첫 커밋**부터 initialTab — 위 이펙트만 있으면 첫 커밋이 닫힐 때의 탭(예: 보안)으로 그려져
+  // 그 판이 한 번 마운트·조회된 뒤 바뀐다(판이 keep-alive 라 그 판이 세션 내내 남는다).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) { setPrevOpen(open); if (open) setTab(initialTab); }
+  // 하위 탭 전환 = 방향성 푸시(data-profile-tabbar 제자리 · data-profile-panel 만 밀림) — 커뮤니티·GTO 와 같은 조리법
+  const goTab = useCallback((v: MeTab) => goSubTab('profile-tab', ME_TAB_ORDER, tab, v, () => setTab(v)), [tab]);
+  useLayoutEffect(() => { goTabRef.current = goTab; }, [goTabRef, goTab]);
+  return (
+    <>
+      {/* 탭 바 — view-transition 이름(profile-tabbar)은 index.css 의 data-vt-scope='profile-tab' 규칙이 준다. 탭 44px(py-3 + t-nav) */}
+      <div data-profile-tabbar="" className="shrink-0 px-page-x">
+        <UnderlineTabs items={ME_TABS} value={tab} onChange={goTab} />
+      </div>
+
+      {/* pb-[env(safe-area-inset-bottom)]: 아이폰 홈 인디케이터 띠만큼 바닥을 비워 둔다.
+          예전엔 상단만 예약해 마지막 요소(저장·탈퇴)가 그 띠 안으로 들어갔다 —
+          탈퇴는 되돌릴 수 없는 조작이라 '눌리지 않는' 것보다 '잘못 눌리는' 쪽이 더 나쁘다. */}
+      {/* 본문 — 탭 전환의 방향성 푸시 대상(탭바는 제자리 고정).
+          🔴 data-profile-panel 은 **이 스크롤 상자**에 있어야 한다(2026-09-17). 안쪽 내용 div 에 붙였더니
+          old 스냅샷 높이 = 이전 탭 콘텐츠 전체(대시보드 2600px), new = 새 탭(보안 420px) 이 되어
+          새 패널이 끝나는 지점 **아래로 2180px** 이 돌출했다 — 화면 하단에 이전 탭이 띠로 남던 원인이다
+          (오너 보고 "아래 하단바가 잔여물이 남아"). 스크롤 상자는 높이가 뷰포트에 묶여 old·new 가 같다(실측 743px). */}
+      {/* 🔴 fade-in 무효화 — 판이 keep-alive(hidden↔표시)라 브라우저가 display:none→block 복귀 때 안의 CSS 진입 애니메이션
+          (빈 상태 카드)을 처음부터 다시 튼다(PROFILE-MENU-JANK 실측: 복귀마다 3개 재생). 메인 탭의 index.css `.tab-pane` 규칙과 같은 처방인데,
+          그 규칙은 `:not(.fixed *)` 라 페이지 루트가 fixed 인 여기엔 안 닿는다 — 그래서 이 상자에 직접 건다. 떠 있는 오버레이(.fixed)는 제외. */}
+      <div data-profile-panel="" className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)] [&_.animate-fade-in:not(.fixed)]:animate-none">
+        {/* 프로필·설정·보안 패널은 keep-alive(hidden 토글) — 설정 탭에서 편집 중(닉네임·크롭 사진) 대시보드를 다녀와도
+            입력이 남는다(점검 #18). 상태는 ProfilePanels 본체에 있어 대시보드 표시 중엔 'profile' 로 접어 두기만 한다. */}
+        {/* 🔴 max-w-2xl — 대시보드 래퍼(아래)와 **같은 폭**이어야 한다(2026-09-17 오너 '지진').
+            예전엔 max-w-md(476px) 라 PC 에서 탭을 옮길 때마다 커버 밴드 폭이 714↔476 으로 **238px** 튀었다.
+            밴드는 h-20 고정에 w-full 이라 래퍼 폭을 그대로 따라간다 — 아바타(110.5px)는 그대로인데
+            밴드만 커졌다 작아져 '크기가 달라지고 지진나는 것처럼' 보였다.
+            md 는 **모달** 폭 토큰이 페이지 래퍼에 따라붙은 것이다(같은 커밋의 LevelGuideModal 이 max-w-md).
+            ⚠ 좁히는 쪽(대시보드를 476 으로)은 기각했다 — 정보를 476px 에 우겨넣게 되어 실질 손실이다. */}
+        <div hidden={tab === 'dashboard'} className="mx-auto w-full max-w-2xl">
+          <ProfilePanels open={open} tab={tab === 'dashboard' ? 'profile' : tab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
+        </div>
+        <div hidden={tab !== 'dashboard'}>{dashboard}</div>
+      </div>
+    </>
+  );
+}
 
 /** 비로그인 로그인 랜딩 — APIS '내 게임' 문법(타이틀 + 가치 제안 + 소셜 로그인 + 설정성 행).
  *  왜 별도 화면: 비로그인에게 빈 대시보드 껍데기를 보여주는 대신, 로그인의 '이유'를 먼저 판다. */

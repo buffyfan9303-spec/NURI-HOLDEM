@@ -1,7 +1,7 @@
 // src/components/features/ProfileModal.tsx
 // 2026-09-04 통합 '내 정보'(오너 지시): 독립 모달이 아니라 CustomerDashboardPage 의 [프로필·설정·보안] 탭 패널이다.
 // 탭 바·뒤로가기 겹·스크롤 컨테이너는 페이지가 갖고, 여기는 패널 본문(폼·상태 로직)만 — 기능·카피 소실 0.
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { memo, useState, useRef, useEffect, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 // (프로필 카드 이미지 저장 기능 제거 — 2026-06-15 사장님 요청)
@@ -72,6 +72,12 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
   const toast = useToast();
   // 본인인증·매장이용권 킬스위치(2026-08-29) — 꺼져 있으면 인증 진입부와 '이용권' 프레이밍을 모두 내린다.
   const idOn = useIdentityEnabled();
+  // PROFILE-MENU-JANK(2026-09-24) — 한 번 연 판은 유지하고 hidden 으로만 가린다. 예전 `tab === 'x' &&` 는 탭마다
+  //   판을 재마운트해(CPU 6배 55~146ms 멈춤) 보안 탭은 들어갈 때마다 약관 동의 이력을 다시 불러 '불러오는 중…'→목록으로
+  //   높이가 튀었다(895→1180px). 페이지가 닫히면 비운다 — 탈퇴 확인 비밀번호 같은 입력이 닫힌 뒤까지 남지 않게.
+  //   (설정 폼 값은 이 컴포넌트 본체 상태라 예전처럼 탭 왕복에 남고, 열 때마다 initRef 이펙트가 초기화한다.)
+  const [seen, setSeen] = useState<ReadonlySet<ProfileTab>>(() => new Set(open ? [tab] : []));
+  if (open ? !seen.has(tab) : seen.size > 0) setSeen(open ? new Set(seen).add(tab) : new Set());
   const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 });
   // 조회 실패를 {0,0,0} 으로 두면 방문 뱃지가 전부 '미획득'으로 보인다 — 획득한 뱃지를 뺏는 셈이라
   // 실패는 뱃지 자리에 재시도 카드로 드러낸다(F08).
@@ -324,8 +330,8 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
   return (
     <>
       {/* ── 프로필 탭 (읽기 전용) ─────────────────────── */}
-      {tab === 'profile' && (
-        <div className="p-4 space-y-5">
+      {seen.has('profile') && (
+        <div hidden={tab !== 'profile'} className="p-4 space-y-5"><Frozen active={tab === 'profile'} render={() => <>
 
           {/* 아이덴티티 헤더 — 통합 프로필(CustomerDashboardPage)과 공유하는 정본 컴포넌트.
               여기서는 편집 중 상태(name·avatarPreview·selectedColor)를 미리보기로 반영 */}
@@ -399,12 +405,12 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
               <button type="button" onClick={() => onOpenLegal('location')} className="transition-colors hover:text-accent-300">위치기반서비스 이용약관</button>
             </div>
           )}
-        </div>
+        </>} /></div>
       )}
 
       {/* ── 설정 탭 (편집 폼 — 저장 플로우는 기존 그대로) ─────────── */}
-      {tab === 'settings' && (
-        <div className="p-4 space-y-5">
+      {seen.has('settings') && (
+        <div hidden={tab !== 'settings'} className="p-4 space-y-5"><Frozen active={tab === 'settings'} render={() => <>
 
           {/* 아바타 편집 — 클릭 → 크롭 편집기 */}
           <div className="flex flex-col items-center gap-3 pt-1">
@@ -600,12 +606,12 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
               {saving ? '저장 중…' : '저장하기'}
             </button>
           </div>
-        </div>
+        </>} /></div>
       )}
 
       {/* ── 보안 탭 ───────────────────────────────────────────────── */}
-      {tab === 'security' && (
-        <>
+      {seen.has('security') && (
+        <div hidden={tab !== 'security'}><Frozen active={tab === 'security'} render={() => <>
         {/* 본인인증 (1인 1계정) — 킬스위치 OFF 면 카드 자체를 내린다.
             왜 '완료' 배지까지 내리나: 인증이 아무 문(門)도 열지 않는 동안 상태만 남으면
             "인증했는데 왜 아무것도 안 되지" 라는 질문만 남는다. 데이터(ci_hash)는 그대로 보존된다. */}
@@ -732,7 +738,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
         <BlockListSection />
         <LogoutSection onDone={onClose} />
         <WithdrawAccountSection />
-        </>
+        </>} /></div>
       )}
 
       {cropFile && (
@@ -745,6 +751,12 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     </>
   );
 }
+
+/** 숨은 판은 부모(ProfilePanels) 리렌더를 건너뛴다 — 보일 때만 render() 를 다시 부른다(PROFILE-MENU-JANK 2026-09-24).
+ *  keep-alive 로 판 셋을 다 들고 있으면 탭마다 셋을 다 다시 그려 재마운트를 없앤 이득을 도로 먹었다(dev CPU 6배 실측).
+ *  가림(hidden)은 바깥 div 가 맡는다. 판 안 컴포넌트 자신의 state 갱신은 그대로 반영된다. */
+const Frozen = memo(function Frozen({ render }: { active: boolean; render: () => ReactNode }) { return <>{render()}</>; },
+  (_prev, next) => !next.active);
 
 // ── 개인정보 열람권(개인정보보호법 §35) — 내 약관 동의 이력 ─────────────────────
 // 오너 결정(2026-09-19): getMyLegalConsents(api/auth.ts) 가 만들어져 있었는데 화면이 없었다.
