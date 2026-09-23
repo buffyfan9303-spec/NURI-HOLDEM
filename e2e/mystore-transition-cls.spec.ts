@@ -96,12 +96,25 @@ async function watchTransition(page: Page, label: string, durationMs = 1900): Pr
     const heights: { t: number; h: number }[] = [];
     const shifts: { t: number; value: number }[] = [];
     const start = performance.now();
+    // 🔴 2026-09-24 — 모바일 메뉴 시트 닫힘은 **원인으로** 가려낸다(시각으로 면제하지 않는다).
+    //   evaluate 의 합성 click 은 입력으로 안 찍혀(hadRecentInput=false) 시트가 닫히며 판이 시트 높이만큼
+    //   올라가는 이동(390 실측 0.2768, 수정 전·후 코드 동일)이 CLS 로 잡힌다. 실제 손가락 탭이면 정의상 빠지는 이동이다.
+    //   제외 조건: 클릭 전에 잰 시트 변위 D 가 있고, 그 이동의 **옮겨진 모든 source 가 정확히 D(±2px) 만큼 위로** 갔으며,
+    //   이런 제외는 **한 번뿐**이다. 같은 프레임에 다른 크기의 이동이 섞이면 제외하지 않는다(→ 진짜 회귀는 그대로 잡힌다).
+    const toggle = [...document.querySelectorAll<HTMLElement>('button[aria-expanded="true"]')].find((b) => b.offsetParent !== null);
+    const sheet = toggle?.nextElementSibling as HTMLElement | null | undefined;
+    const sheetShift = sheet ? sheet.getBoundingClientRect().bottom - toggle!.getBoundingClientRect().bottom : 0;
+    let sheetExcused = 0;
     const po = new PerformanceObserver((l) => {
       for (const e of l.getEntries()) {
-        const s = e as PerformanceEntry & { value: number; hadRecentInput: boolean };
-        // 2026-09-24: 콜백 시각이 아니라 **프레임 시각(startTime)** 으로 적는다 — 아래 settleThenCls 가
-        //   '탭 직후 첫 프레임' 을 가려내려면 rAF 표본과 같은 시계여야 한다.
-        if (!s.hadRecentInput) shifts.push({ t: s.startTime - start, value: s.value });
+        const s = e as PerformanceEntry & { value: number; hadRecentInput: boolean; sources?: { previousRect: DOMRectReadOnly; currentRect: DOMRectReadOnly }[] };
+        if (s.hadRecentInput) continue;
+        const moved = (s.sources ?? []).filter((x) => x.previousRect.width * x.previousRect.height > 0);
+        const bySheet = sheetShift > 0 && sheetExcused === 0 && moved.length > 0
+          && moved.every((x) => Math.abs((x.previousRect.y - x.currentRect.y) - sheetShift) <= 2);
+        if (bySheet) { sheetExcused++; continue; }
+        // 프레임 시각(startTime) — rAF 표본(heights)과 같은 시계.
+        shifts.push({ t: s.startTime - start, value: s.value });
       }
     });
     try { po.observe({ type: 'layout-shift', buffered: false }); } catch { /* 미지원 브라우저 — shifts 비워서 진행 */ }
@@ -125,12 +138,8 @@ async function watchTransition(page: Page, label: string, durationMs = 1900): Pr
  *  여기서는 그 시각 뒤 300ms 안의 layout-shift 합만 더한다(이 합산은 Playwright 의 shifts 배열에만
  *  의미가 있어 순수 모듈로 안 뽑았다). */
 function settleThenCls(heights: { t: number; h: number }[], shifts: { t: number; value: number }[]): { settleAt: number; cls: number } {
-  // 🔴 2026-09-24 — 탭의 **동기 커밋**(모바일 메뉴 시트 닫힘 305px)이 만든 첫 프레임 이동은 창에서 뺀다.
-  //   실제 손가락 탭이면 CLS 정의상 hadRecentInput 으로 빠지는 이동인데, 여기선 evaluate 의 합성 click 이라
-  //   **입력 없음**으로 찍힌다(0.2768 — 수정 전·후 코드 모두 같은 값, 실측). 종전엔 뒤이은 헤더 높이 변화가
-  //   정착 시각을 우연히 그 뒤로 밀어 가려졌을 뿐이고, 모바일 대시보드 헤더를 숨기자 정착이 앞당겨져 드러났다.
-  //   첫 프레임(heights[1] 이전)만 빼므로 lazy 청크 도착 뒤의 붕괴(S6, 수백 ms 뒤)는 그대로 잡힌다.
-  const at = Math.max(computeSettleAt(heights), heights[1]?.t ?? 0);
+  // 메뉴 시트 닫힘 이동은 watchTransition 이 원인으로 이미 걸렀다 — 창은 종전 계약 그대로.
+  const at = computeSettleAt(heights);
   const cls = shifts.filter((s) => s.t > at && s.t <= at + 300).reduce((sum, s) => sum + s.value, 0);
   return { settleAt: at, cls };
 }
