@@ -223,6 +223,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
   const rangeMode = deep.villainMode === 'range';
   // 레인지 모드에선 빌런 슬롯 대신 선택 레인지 이름을 표시
   const villainId = rangeMode ? deep.villainRange.label : deep.villainComboId;
+  const villainRangeCombos = Math.round(deep.villainRange.combos.reduce((s, c) => s + c.weight, 0));
   // 계산 중에도 결과 카드는 세운다 — 단 에퀴티·참고 액션 두 섹션이 **함께** '계산 중' 이다(감사 2026-09-19: 예전엔 액션만 가짜 34/33/33 확정).
   const showResult = deep.heroComplete && (rangeMode || deep.villainComplete) && (deep.calculating || (deep.result && deep.normalizedAction));
 
@@ -276,19 +277,26 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
           ))}
         </div>
         <div className="flex items-end justify-center gap-3">
-          <Section title="Hero" target="hero" cards={deep.hero} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
+          {/* Hero·Villain 은 같은 폭(7rem) 상자 — Hero 는 오른쪽, Villain 은 왼쪽에 붙여 'vs' 를 축으로 대칭(2026-09-23).
+              Villain 상자는 두 모드가 같은 폭이라 슬롯↔select 교체에도 Hero 가 움직이지 않는다(전: 52px 흔들림).
+              7rem = 119px ≥ 라벨만 든 select 필요폭 116px. 11rem 상자는 특정 핸드에서 카드가 왼쪽에 붙어 윗줄 중심이
+              −29~−53px 치우쳤고 320 에선 select 가 139px 로 줄어 옵션이 잘렸다(design-reviewer 실측).
+              좁은 폭에선 Hero 상자만 줄어든다(최소 = 카드 두 장 폭) — select 는 줄지 않아 잘리지 않는다. */}
+          <div className="flex w-[7rem] shrink justify-end">
+            <Section title="Hero" target="hero" cards={deep.hero} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
+          </div>
           <span className="pb-4 text-2xs font-bold text-ink-muted">vs</span>
-          {/* 두 모드가 같은 폭을 쓴다(select 는 이 상자를 꽉 채운다 · 좁은 폭에선 함께 줄어 Hero 를 밀어내지 않는다) — 슬롯↔select 교체로 가운데 정렬된 Hero 가 52px 흔들리던 자리(2026-09-23 실측). */}
-          <div className="w-[11rem] min-w-0 shrink">
+          <div className="w-[7rem] shrink-0">
           {deep.villainMode === 'hand' ? (
             <Section title="Villain" target="villain" cards={deep.villain} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
           ) : (
             <div>
-              <p className="mb-1 text-2xs font-bold uppercase tracking-wider text-ink-muted">Villain</p>
+              <p className="mb-1 whitespace-nowrap text-2xs font-bold uppercase tracking-wider text-ink-muted">Villain · {villainRangeCombos}콤보</p>
               {/* 🔴 2026-09-21 오너: 프리셋 칩 6개가 wrap 되며 'BB 수비콜' 하나만 둘째 줄에 고아로 떨어졌다
                   ("선택 부분 클릭하면 리스트업 되서 거기서 고를 수 있게"). 칩 구름 대신 **네이티브 select** —
                   종전의 표시 상자(라벨 · N콤보)가 그대로 선택 상자가 되고, 누르면 OS 목록(모바일은 바텀시트/휠)이
-                  뜬다. wrap 고아 문제가 구조적으로 사라지고 새 드롭다운 코드도 0 이다. 콤보 수는 옵션 글에 같이 싣는다. */}
+                  뜬다. wrap 고아 문제가 구조적으로 사라지고 새 드롭다운 코드도 0 이다.
+                  옵션 글은 라벨만 — 콤보 수까지 실으면 'BB 수비콜 · 444콤보' 가 360 에서 잘렸다(2026-09-23). 콤보 수는 위 캡션으로. */}
               <select
                 value={deep.villainRange.id}
                 onChange={(e) => deep.selectVillainRange(e.target.value)}
@@ -297,7 +305,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
               >
                 {deep.villainRanges.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.label} · {Math.round(r.combos.reduce((s, c) => s + c.weight, 0))}콤보
+                    {r.label}
                   </option>
                 ))}
               </select>

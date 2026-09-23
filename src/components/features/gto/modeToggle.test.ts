@@ -75,7 +75,16 @@ describe('②③⑤ 화면 — 같은 카드, 같은 높이, 같은 자리', () 
     expect(PANEL.match(/disabled=\{rangeMode\}/g)?.length).toBe(2);
   });
   it('Villain 자리는 두 모드가 같은 폭 상자를 쓰고 select 는 그 상자를 채운다', () => {
-    expect(PANEL).toMatch(/<div className="w-\[11rem\] min-w-0 shrink">\s*\{deep\.villainMode === 'hand' \? \(/);
+    expect(PANEL).toMatch(/<div className="w-\[7rem\] shrink-0">\s*\{deep\.villainMode === 'hand' \? \(/);
     expect(PANEL).toContain('className="input h-12 w-full text-xs font-bold"');
+  });
+  // 2026-09-23 design-reviewer: 11rem 상자는 특정 핸드 카드가 왼쪽에 붙어 윗줄 중심 −29~−53px, 320 에서 select 139px 로 옵션 잘림.
+  it('Hero 도 같은 7rem 상자에 오른쪽 정렬 — vs 를 축으로 대칭(특정 핸드 중심 편차 0 · 실측 360/390)', () => {
+    expect(PANEL).toMatch(/<div className="flex w-\[7rem\] shrink justify-end">\s*<Section title="Hero"/);
+  });
+  it('select 옵션 글은 라벨만 — 콤보 수는 캡션으로 옮긴다(옵션에 싣으면 360 에서 BB 수비콜 · 444콤보 잘림)', () => {
+    expect(PANEL).toMatch(/<option key=\{r\.id\} value=\{r\.id\}>\s*\{r\.label\}\s*<\/option>/);
+    expect(PANEL).toContain('Villain · {villainRangeCombos}콤보');
+    expect(PANEL).toMatch(/const villainRangeCombos = Math\.round\(deep\.villainRange\.combos\.reduce\(\(s, c\) => s \+ c\.weight, 0\)\);/);
   });
 });
