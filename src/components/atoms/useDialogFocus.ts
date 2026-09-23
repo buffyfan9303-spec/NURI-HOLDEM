@@ -41,8 +41,11 @@ export function useDialogFocus(active: boolean, contentRef: React.RefObject<HTML
     // 부모가 "밖으로 샜다"고 보고 자식의 첫 포커스·Tab·Space 를 매번 빼앗아 가면 안 된다.
     openDialogs.push(el);
     const isTop = () => openDialogs[openDialogs.length - 1] === el;
-    const t = window.setTimeout(() => { if (isTop()) (focusables()[0] ?? el).focus(); }, 50);
+    const t = window.setTimeout(() => { if (isTop()) (focusables()[0] ?? el).focus({ preventScroll: true }); }, 50);
 
+    // Tab 순환의 first/last.focus() 에는 preventScroll 을 일부러 안 쓴다 — 사용자가 직접 Tab 을 눌러 이동한 결과라,
+    //   새 포커스 위치가 화면 밖이면 스크롤해서 보여주는 게 키보드 접근성 기본값이다.
+    //   반면 위 3곳(:44/:64/:80)은 사용자가 focus 이동을 요청한 적이 없는 복구(포커스된 요소가 사라지거나 disabled 되는 경우)라 스크롤 이동 자체가 부작용이다.
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
       const f = focusables();
@@ -61,7 +64,7 @@ export function useDialogFocus(active: boolean, contentRef: React.RefObject<HTML
       const target = e.target as Node | null;
       if (!target || el.contains(target)) return;
       if (!isTop()) return; // 위에 다른 다이얼로그가 열려 있으면 그쪽 포커스다 — 뺏지 않는다
-      (focusables()[0] ?? el).focus();
+      (focusables()[0] ?? el).focus({ preventScroll: true });
     };
     document.addEventListener('focusin', onFocusIn);
 
@@ -77,7 +80,7 @@ export function useDialogFocus(active: boolean, contentRef: React.RefObject<HTML
         if (!isTop() || !document.contains(el)) return;
         const a = document.activeElement;
         if (a && a !== document.body && a !== document.documentElement) return;
-        (focusables()[0] ?? el).focus();
+        (focusables()[0] ?? el).focus({ preventScroll: true });
       }, 0);
     };
     document.addEventListener('focusout', onFocusOut);
