@@ -1188,7 +1188,7 @@ export default function App() {
     //   이 파일 :678-688 이 정확히 그 패턴을 없앤 기록이다(모바일 콜드 마운트 207ms · 탭 전환 회당 27ms).
     //   오너가 "눌림" 을 지적한 바로 그 프레임이라 비용을 되돌려 놓을 이유가 없다.
     notifyScrollNow(0);
-    // BOTTOM-TAB-SMOOTH(2026-09-24) — 본문이 아니라 본문 **위 덮개**를 걷어낸다. 기본 꺼짐(`?fx=tabfade` 기기만).
+    // BOTTOM-TAB-SMOOTH(2026-09-24) — 본문이 아니라 본문 **위 덮개**를 걷어낸다. 기본 켜짐(tabsoft), `?fx=off` 기기만 끔.
     //   이 layout effect 안이라 첫 페인트부터 덮개가 깔린다(K-07). 본문(.tab-pane)에는 아무것도 걸지 않는다 — 아래 폐기 기록 참고.
     isTabCoverOn(); // 첫 호출이 ?fx= 를 읽어 저장한다 — 딥링크 처리가 query 를 지우기 전(마운트)에 부른다
     if (coverTabRef.current !== activeTab) playTabCover(tabCoverRef.current);
@@ -3929,7 +3929,7 @@ export default function App() {
         onSameTap={(t) => { if (t === 'my-store') setMyStoreHomeNonce((v) => v + 1); }}
         onOpenMe={openMeCb} overlayOpen={fullOverlayOpen} suppressed={openVenueId !== null} />
       {/* BOTTOM-TAB-SMOOTH 덮개 — 헤더(z-50·모바일 불투명) 아래부터, 탭바(z-50)·시트(z-55+) 아래 z-45.
-          평소 display:none. 켜진 기기의 모바일 탭 전환 때만 160ms 동안 opacity 1→0 (src/lib/tabCover.ts). */}
+          평소 display:none. 켜진 기기의 모바일 탭 전환 때만 280ms 동안 opacity 만 1→0(tabsoft, 기본 켜짐·?fx=off 로 기기별 끄기) (src/lib/tabCover.ts). */}
       <div ref={tabCoverRef} aria-hidden data-tab-cover
         className="pointer-events-none fixed inset-x-0 bottom-0 z-[45] hidden bg-surface-base opacity-0"
         style={{ top: 'calc(var(--header-now) + 1px)' }} />
