@@ -26,6 +26,7 @@ const APP = readFileSync(join(root, 'src', 'App.tsx'), 'utf8');
 const HOME = readFileSync(join(root, 'src', 'components', 'features', 'HomeTab.tsx'), 'utf8');
 const CSS = readFileSync(join(root, 'src', 'index.css'), 'utf8');
 const VMT = readFileSync(join(root, 'src', 'components', 'features', 'VenueManageTab.tsx'), 'utf8');
+const EVL = readFileSync(join(root, 'src', 'components', 'features', 'EventListPage.tsx'), 'utf8');
 
 describe('① 지연 로딩 폴백이 화면 높이를 예약한다', () => {
   it('LazyFallback 이 뷰포트 기준 높이를 갖는다 — 푸터가 첫 화면 위로 못 올라온다', () => {
@@ -95,5 +96,36 @@ describe('④ 같은 토큰을 border 박스와 content 박스가 공유하지 �
       .toMatch(/\.cv-card-list\s*\{[^}]*contain-intrinsic-size:\s*auto\s+calc\(var\(--card-h-list\)\s*-/);
     expect(CSS, '.cv-row-sm 도 같은 함정이다')
       .toMatch(/\.cv-row-sm\s*\{[^}]*contain-intrinsic-size:\s*auto\s+calc\(var\(--row-h-sm\)\s*-/);
+  });
+});
+
+describe('⑤ 이벤트 목록 — 스켈레톤이 카드 한 장과 같은 상자다 (EVT-OPEN-STUTTER · 2026-09-23)', () => {
+  // 오너(삼성 실기기): "아래에서 드르륵 끊기면서 올라간다". 열 때마다 스켈레톤 3줄(h-20 ×3 = 85px×3)이
+  // 섰다가 카드 1장(70px)으로 바뀌어 목록 아래 경계가 **202px** 줄었다(390×844 · CPU 6x 실측).
+  // 카드 상자 = 테두리 1px + py-3 + h-10 아이콘. 스켈레톤도 같은 세 조각으로 만든다.
+  const skel = EVL.match(/aria-busy="true"[\s\S]{0,400}?\n\s*\) : /);
+
+  it('로딩 분기가 남아 있다', () => {
+    expect(skel, 'EventListPage 의 aria-busy 스켈레톤 분기가 사라졌다 — 계약을 같이 고쳐라').not.toBeNull();
+  });
+
+  it('여러 줄을 찍지 않는다(1줄) — 카드가 오면 아래 경계가 줄어든다', () => {
+    expect(skel![0], '스켈레톤을 여러 줄로 찍는다(예전 Array.from ×3)').not.toMatch(/Array\.from|\.map\(/);
+    expect(skel![0].match(/\bskeleton\b/g) ?? [], '스켈레톤 조각이 1개가 아니다').toHaveLength(1);
+  });
+
+  it('카드와 같은 상자다 — 테두리·py-3·h-10', () => {
+    expect(skel![0], '고정 높이(h-20 등)로 돌아갔다 — 카드(70px)와 어긋난다').not.toMatch(/\bskeleton[^"]*\bh-\d/);
+    expect(skel![0]).toMatch(/\bskeleton\b[^"]*\bborder\b[^"]*\bpy-3\b/);
+    expect(skel![0]).toMatch(/className="h-10"/);
+    expect(EVL, '카드 쪽 상자가 바뀌었다 — 스켈레톤도 같이 맞춰라')
+      .toMatch(/data-testid="event-list-item"[\s\S]{0,200}rounded-aura border card-aura px-3\.5 py-3/);
+    expect(EVL).toMatch(/flex h-10 w-10 shrink-0 items-center justify-center rounded-input tile-grad/);
+  });
+
+  it('다시 열면 지난 목록을 즉시 그린다 — 캐시가 있으면 스켈레톤을 거치지 않는다', () => {
+    expect(EVL, '목록 초기값이 캐시가 아니다').toMatch(/useState<EventListItem\[\] \| null>\(peekEventList\)/);
+    expect(EVL, '캐시가 있어도 loading 으로 시작한다').toMatch(/useState\(\(\) => peekEventList\(\) === null\)/);
+    expect(APP, '홈 idle 예열이 목록 데이터를 채우지 않는다').toMatch(/prefetchEventList\(\)/);
   });
 });

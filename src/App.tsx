@@ -699,7 +699,13 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
   // 왜: hidden 은 스크롤 이벤트로만 풀리는데, 오버레이를 다녀오거나 keep-alive 탭을 오가면
   // 스크롤 이벤트가 없어 '문서끝 숨김' 상태가 영구 잔존했다(짧은 탭 복귀는 스크롤 자체가 불가라 더 치명적).
   // 억제창을 함께 세워 직후 복원 스크롤(behavior:'instant')의 거대 dy 오판을 막는다 — 기존 억제창 문법.
-  // 오버레이 '열림' 순간에도 리셋: 매장 페이지(z-40)는 탭바(z-50) 아래라 열려 있는 동안 탭바가 보여야 한다.
+  // 🔴 EVT-OPEN-STUTTER(오너 2026-09-23, 삼성 실기기 "아래에서 드르륵 끊기면서 올라간다"):
+  //   예전엔 오버레이 **열림** 순간에도 리셋했다(근거: '매장 페이지 z-40 은 탭바 아래라 열려 있는 동안 탭바가 보여야 한다').
+  //   그 근거는 U06 에서 사라졌다 — 매장·그룹 페이지는 `suppressed` 로 탭바를 invisible 로 끈다.
+  //   남은 fullOverlayOpen 대상은 전부 z≥55(EventPage·EventListPage·Modal page 변형 z-55, Modal·내 정보 z-60,
+  //   클락 z-80)라 탭바(z-50)를 덮는다. 그런데도 숨어 있던 탭바가 **덮인 채로 0.32s 동안 아래→위로** 올라왔고
+  //   '맨 위로' FAB 도 같이 움직였다. ⇒ 열려 있는 동안은 hidden 을 그대로 두고, **닫힘·탭 변경**에서만 되살린다.
+  //   (닫힐 때 overlayOpen 이 false 로 바뀌며 이 effect 가 다시 돈다 — 잔존 hidden 리셋 계약은 그대로다.)
   // ⚡ 2026-08-29 계측: 이 이펙트가 **모든 국면의 1위 병목**이었다 —
   //   모바일 콜드 마운트 207ms · 탭 전환 회당 27ms(PC 110ms / 14ms).
   //   원인은 useLayoutEffect(= 커밋 직후, 레이아웃이 가장 오염된 시점)에서 window.scrollY 를
@@ -721,6 +727,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
     //   억제창(300ms) 안에 스크롤 이벤트가 안 오면, 그 뒤 첫 이벤트의 dy 가 '현재 위치 - 0' 이라
     //   1px 만 움직여도 임계(48)를 넘겨 탭바가 즉시 숨는다.
     tb2Ref.current = { lastY: window.scrollY, acc: 0 };
+    if (overlayOpen) return; // 덮여 있는 동안 올리지 않는다 — 닫힘에서 되살린다(위 EVT-OPEN-STUTTER)
     setHidden(false);
   }, [active, overlayOpen]);
   // 숨김 상태를 문서에 알린다 — '맨 위로' FAB 가 CSS 만으로 같이 내려간다(index.css .scroll-top-fab).
@@ -1725,6 +1732,12 @@ export default function App() {
         // 이벤트 화면 — 홈 배너에서 바로 들어가는 길인데 목록에 빠져 있었다. 클릭 순간 청크를 받느라
         //   Suspense 폴백(불투명 스피너)이 **299ms** 떴다(실측 2026-09-08). gzip 5.2KB 라 idle 에 데워도 싸다.
         import('./components/features/EventPage'),
+        // 이벤트 **목록** — 홈 이벤트 칸이 여는 첫 화면이 이것이다(2026-09-18 부터 보드가 아니라 목록).
+        //   EventPage 만 데우고 이건 빠져 있었다. 청크와 함께 목록 데이터도 캐시에 채워 둔다 —
+        //   그래야 첫 열기부터 스켈레톤 없이 카드가 바로 선다(EVT-OPEN-STUTTER, 오너 2026-09-23).
+        //   조회는 event_campaigns 30행·7열 한 번. 실패는 여기서 알릴 화면이 없어 두고, 열 때 다시 받아 그린다.
+        import('./components/features/EventListPage'),
+        import('./lib/eventListCache').then((m) => m.prefetchEventList()),
         // 캘린더 — **일반 유저의 5번째 탭인데 이 목록에도, 아래 프리마운트 seq 에도 빠져 있었다.**
         //   오너 2026-09-17: "다른 메뉴에서 캘린더로 이동하는 경우 다른 메뉴 이동과 다르게 버벅임이 있다."
         //   실측(라이브 프로덕션 · 390×844 · 로그아웃): 첫 진입 **261ms** vs 라이브 18ms · 커뮤니티 21ms.

@@ -451,19 +451,21 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
           {/* 레벨·칭호 — 활동점수 기반 레벨/칭호 + 다음 레벨까지 진행 */}
           <LevelCard points={user?.activityPoints ?? 0} championships={championships} />
 
-          {/* 내 것 바로가기 — 프로필·장터 내 거래가 각각 다른 구석에 살아서 늘 헤맸다 */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* 내 것 바로가기 — 프로필·장터 내 거래가 각각 다른 구석에 살아서 늘 헤맸다.
+              한 줄 균등 분할(오너 2026-09-23): 장터·순위 prop 은 없을 수 있어 grid-cols-3 고정이면 빈칸이 남는다 —
+              grid-flow-col + auto-cols-fr 는 **보이는 버튼 수만큼** 같은 폭 칸을 만든다(1·2·3칸).
+              320px 에서 칸 폭이 ~90px 라 아이콘 옆에 라벨이 안 들어간다 → 아이콘 위·라벨 아래 세로 타일. */}
+          <div className="grid grid-flow-col auto-cols-fr gap-2">
             <button type="button" onClick={() => goTab('settings')}
-              className="rounded-aura border card-aura px-3 py-2.5 text-left">
-              <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad"><Icon name="user" size={13} /></span> 프로필 관리</span>
-              {/* ⚠ '알림 설정' 을 통째로 묶는다 — 안 묶으면 360·100% 에서 마지막 줄에 '설정' 2자만
-                  남는다(고아줄, 실측 칸 131px). text-pretty 는 크로미움 한글에서 효과가 고르지 않다. */}
-              <span className="block text-2xs text-ink-muted mt-0.5">닉네임 · {idOn ? '본인인증 · ' : ''}<span className="whitespace-nowrap">알림 설정</span></span>
+              className="flex min-h-[44px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-aura border card-aura px-1.5 py-2.5 text-center">
+              <span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad"><Icon name="user" size={13} /></span>
+              <span className="text-xs font-bold text-ink-primary">프로필 관리</span>
             </button>
             {onOpenMarket && (
               <button type="button" onClick={onOpenMarket}
-                className="rounded-aura border card-aura px-3 py-2.5 text-left">
-                <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-cyan"><Icon name="cart" size={13} /></span> 내 장터 거래</span>
+                className="flex min-h-[44px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-aura border card-aura px-1.5 py-2.5 text-center">
+                <span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-cyan"><Icon name="cart" size={13} /></span>
+                <span className="text-xs font-bold text-ink-primary">내 장터 거래</span>
                 {/* 2026-09-18 오너 지시로 설명줄 제거 — 417행과 같은 성격 — 하위 화면 미리보기 나열, 클릭하면 바로 확인 가능. 유지 사유 없음. */}
               </button>
             )}
@@ -471,8 +473,9 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                 점수가 보이는 이 화면에서 바로 갈 수 있어야 '모은다 → 쓴다'가 이어진다. */}
             {onOpenRanking && (
               <button type="button" onClick={onOpenRanking}
-                className="rounded-aura border card-aura px-3 py-2.5 text-left">
-                <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-fuchsia"><Icon name="medal" size={13} /></span> 순위 · 상점</span>
+                className="flex min-h-[44px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-aura border card-aura px-1.5 py-2.5 text-center">
+                <span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-fuchsia"><Icon name="medal" size={13} /></span>
+                <span className="text-xs font-bold text-ink-primary">순위 · 상점</span>
                 {/* 2026-09-18 오너 지시로 설명줄 제거 — 동일 — 뻔한 하위 항목 나열. 유지 사유 없음. */}
               </button>
             )}

@@ -12,7 +12,8 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
-import { listEvents, type EventListItem } from '../../api/events';
+import type { EventListItem } from '../../api/events';
+import { peekEventList, fetchEventList } from '../../lib/eventListCache';
 import type { EventState } from '../../lib/eventState';
 import { useDialogFocus } from '../atoms/useDialogFocus';
 // 아래로 끌어 닫기(2026-09-21 추가 요구, 실행문 §5) — Modal.tsx 의 page 변형(bodyDrag)과 **같은 조리법**을
@@ -46,16 +47,18 @@ export default function EventListPage({ open, onClose, onSelect }: {
   /** 카드를 고르면 그 slug 로 보드를 연다 — App 의 `openEvent(slug)` 종전 보드-직행 경로를 그대로 탄다. */
   onSelect: (slug: string) => void;
 }) {
-  const [items, setItems] = useState<EventListItem[] | null>(null);
+  // 캐시가 있으면 첫 프레임부터 목록이다 — 스켈레톤을 거치지 않는다.
+  const [items, setItems] = useState<EventListItem[] | null>(peekEventList);
   const [err, setErr] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => peekEventList() === null);
 
   const load = () => {
     setErr(null);
-    setLoading(true);
-    listEvents().then(setItems).catch(setErr).finally(() => setLoading(false));
+    setLoading(items === null); // 이미 그린 목록(캐시)이 있으면 스켈레톤으로 되돌리지 않는다
+    fetchEventList().then(setItems).catch(setErr).finally(() => setLoading(false));
   };
   // 열릴 때마다 새로 — 그 사이 캠페인이 새로 열리거나 끝났을 수 있다(EventPage.load 와 같은 이유).
+  // 캐시로 먼저 그렸어도 여기서 다시 받아 덮는다(상태 배지가 낡은 채 남지 않게).
   useEffect(() => { if (open) load(); }, [open]);
 
   // U06(2026-09-12) 공유 계약 — Modal 을 쓰지 않는 풀스크린 오버레이(VenuePage·GroupPage 와 같은 부류)도
@@ -206,15 +209,24 @@ export default function EventListPage({ open, onClose, onSelect }: {
       </header>
 
       <div className="px-page-x pb-24 pt-3">
+        {/* 스켈레톤은 **카드 한 장과 같은 상자**다(EVT-OPEN-STUTTER) — 테두리 1px·py-3·h-10 아이콘 = 카드 70px.
+            예전엔 h-20 ×3(85px×3)이라 카드가 오는 순간 아래 경계가 202px 줄었다. 줄 수를 늘리지 마라
+            (spaceReservation.contract.test.ts ⑤ 가 잠근다). */}
         {loading ? (
-          <div className="space-y-2" aria-busy="true">
-            {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-aura" />)}
+          <div aria-busy="true">
+            <div className="skeleton rounded-aura border border-transparent py-3"><div className="h-10" /></div>
           </div>
-        ) : err ? (
+        ) : err && !items ? (
           <LoadErrorCard error={err} what="이벤트 목록" onRetry={load} />
         ) : !items || items.length === 0 ? (
-          <EmptyState title="진행 중인 이벤트가 없어요" hint="새 이벤트가 열리면 여기서 볼 수 있어요" icon={<Icon name="gift" />} />
+          err
+            // 지난 목록이 비어 있었고 새로 받기도 실패 — '없어요'로 위장하지 않는다(K-03).
+            ? <LoadErrorCard error={err} what="이벤트 목록" onRetry={load} />
+            : <EmptyState title="진행 중인 이벤트가 없어요" hint="새 이벤트가 열리면 여기서 볼 수 있어요" icon={<Icon name="gift" />} />
         ) : (
+          <>
+          {/* 캐시로 그린 목록을 새로 받다 실패 — 목록은 두고(지우면 멀쩡한 정보가 사라진다) 낡았을 수 있다고 알린다(K-03). */}
+          {err != null && <div className="mb-2"><LoadErrorCard compact error={err} what="최신 이벤트 목록" hint="아래는 마지막으로 불러온 목록이에요." onRetry={load} /></div>}
           <ul className="space-y-2">
             {items.map((ev) => {
               const b = badgeOf(ev.state);
@@ -242,6 +254,7 @@ export default function EventListPage({ open, onClose, onSelect }: {
               );
             })}
           </ul>
+          </>
         )}
       </div>
       </div>

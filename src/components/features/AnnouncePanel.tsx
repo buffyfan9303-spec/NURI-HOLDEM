@@ -1,6 +1,6 @@
 // src/components/features/AnnouncePanel.tsx
 // 운영자 마케팅 푸시 — 우리 매장을 팔로우한 손님에게 커스텀 알림(푸시) 발송. 하루 3회 제한.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { getVenueAnnounceStatus, sendVenueAnnouncement, type AnnounceStatus } from '../../api/announcements';
 import Icon from '../atoms/Icon';
@@ -8,18 +8,29 @@ import Icon from '../atoms/Icon';
 export default function AnnouncePanel({ venueId }: { venueId: string }) {
   const toast = useToast();
   const [status, setStatus] = useState<AnnounceStatus>({ followers: 0, sentToday: 0 });
+  const [loadError, setLoadError] = useState(false);
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  // 매장 전환 가드: 응답이 왔을 때 요청 당시 venueId(클로저)와 ref 에 담긴 "현재" venueId 를 비교한다.
+  // 같은 클로저 안의 두 값을 비교하면 늘 같아서 가드가 무력화된다(HANDOVER §3-C) — ref 로 현재값을 읽는다.
+  const currentVenueIdRef = useRef(venueId);
+  currentVenueIdRef.current = venueId;
 
-  const load = () => getVenueAnnounceStatus(venueId).then(setStatus).catch(() => {});
+  const load = () => {
+    const requestedVenueId = venueId;
+    setLoadError(false);
+    getVenueAnnounceStatus(requestedVenueId)
+      .then((s) => { if (currentVenueIdRef.current === requestedVenueId) setStatus(s); })
+      .catch(() => { if (currentVenueIdRef.current === requestedVenueId) setLoadError(true); });
+  };
   useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   const remaining = Math.max(0, 3 - status.sentToday);
 
   const send = async () => {
     if (busy) return;
     if (!title.trim() || !message.trim()) { toast.show('제목과 내용을 입력하세요', 'error'); return; }
-    if (!window.confirm(`팔로워 ${status.followers}명에게 푸시 알림을 보낼까요?`)) return;
+    if (!window.confirm(`팔로워 ${status.followers}명에게 알림을 보낼까요?`)) return;
     setBusy(true);
     try {
       const n = await sendVenueAnnouncement(venueId, title.trim(), message.trim());
@@ -37,12 +48,13 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
       </div>
       {/* leading-relaxed(1.625)를 따로 걸면 같은 11.69px 글자가 화면에서 18.99 / 15.94 두 행간으로 갈린다
           (2026-09-07 실측: 표준 15.94 가 27곳, 이 줄만 18.99). 크기별 행간은 한 값이어야 리듬이 산다. */}
-      <p className="text-2xs text-ink-muted">새 대회 등록·D-1 리마인더는 자동 발송돼요.</p>
+      <p className="text-2xs text-ink-muted">새 대회가 승인되면 팔로워에게 자동으로 알림이 가요.</p>
       <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={60} placeholder="제목 (예: 오늘 8시 GTD 500!)" className="input w-full text-sm" />
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} maxLength={200} rows={2} placeholder="내용 (예: 마감 임박! 지금 예약하세요)" className="input w-full resize-none text-sm" />
-      <button type="button" onClick={send} disabled={busy || remaining === 0 || status.followers === 0}
+      <button type="button" onClick={loadError ? load : send} disabled={busy || (!loadError && (remaining === 0 || status.followers === 0))}
         className="btn-primary w-full text-sm disabled:opacity-50">
-        {status.followers === 0 ? '아직 팔로워가 없어요' : remaining === 0 ? '오늘 발송 한도 소진(3/3)' : busy ? '발송 중…'
+        {loadError ? '불러오지 못했어요 · 다시 시도'
+          : status.followers === 0 ? '아직 팔로워가 없어요' : remaining === 0 ? '오늘 발송 한도 소진(3/3)' : busy ? '발송 중…'
           : <span className="inline-flex items-center gap-1.5"><Icon name="send" size={15} className="shrink-0" />{`${status.followers}명에게 발송 · ${remaining}회 남음`}</span>}
       </button>
     </section>
