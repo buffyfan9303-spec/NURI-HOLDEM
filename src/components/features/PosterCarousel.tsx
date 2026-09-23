@@ -135,6 +135,8 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
   const n = slides.length;
   const multi = n > 1;
   const vpRef = useRef<HTMLDivElement>(null);
+  /** 점·화살표가 건 스무스 스크롤의 목표 scrollLeft — 도착 전엔 랩하지 않는다(아래 onScroll). */
+  const navRef = useRef<number | null>(null);
   const [idx, setIdx] = useState(0);
   // §7.1-9: 데이터가 늦게 도착해 슬라이드 수가 변하면 현재 인덱스를 유효 범위로 맞춘다(점 표시·aria-current 가 없는 장을 가리키지 않게).
   useEffect(() => { if (idx >= n) setIdx(Math.max(0, n - 1)); }, [n, idx]);
@@ -166,7 +168,14 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
       geo();
       const half = trackW / 2;
       const w = vpW; // 카드 폭 = clientWidth(w-full)
-      if (w > 0 && half > w) {
+      // 🔴 2026-09-24 — 점·화살표의 스무스 스크롤 **도중**엔 랩하지 않는다. 랩(scrollLeft 대입)은 진행 중인
+      //   스무스 스크롤을 끊는다: 다음→이전(=half)→'3번째 점' 이 half+w 를 지나며 잘려 2번째 장에 멈췄다(3/3).
+      //   ⚠ go() 에서 '원본 세트로 먼저 옮기기'(대칭 사전 이동)는 답이 아니다 — 첫 장의 원본 자리는 0 이라
+      //   첫 스크롤 이벤트가 0 을 보고 왼쪽 랩(+half)이 돌아 '다음' 까지 멈췄다(실측 12/12 실패).
+      //   도착하면(±1px) 가드를 풀고 그 자리에서 한 번 랩한다 — 화면은 같은 픽셀이다.
+      const nav = navRef.current;
+      if (nav !== null && Math.abs(vp.scrollLeft - nav) < 1) navRef.current = null;
+      if (w > 0 && half > w && navRef.current === null) {
         // ⚠ 우측 임계 = half + 카드 1장. (>=half → −half) ↔ (<=0 → +half) 짝은 0↔half 를 서로
         //   되던지는 무한 스크롤 이벤트 루프가 된다(같은 픽셀이라 눈엔 안 보이고 메인스레드만 돈다).
         if (vp.scrollLeft >= half + w) vp.scrollLeft -= half;
@@ -181,12 +190,23 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
       });
     };
     vp.addEventListener('scroll', onScroll, { passive: true });
+    // 가드가 도착 판정 없이 남는 경우(손가락이 끼어듦·스냅이 다른 장에 세움) — 사용자 입력이나 스크롤 끝에서 푼다.
+    const release = () => { if (navRef.current === null) return; navRef.current = null; onScroll(); };
+    const releaseOnInput = () => { navRef.current = null; };
+    vp.addEventListener('scrollend', release);
+    vp.addEventListener('pointerdown', releaseOnInput, { passive: true });
+    vp.addEventListener('touchstart', releaseOnInput, { passive: true });
+    vp.addEventListener('wheel', releaseOnInput, { passive: true });
     return () => {
       if (raf) cancelAnimationFrame(raf);
       ro?.disconnect();
       mo?.disconnect();
       window.removeEventListener('resize', markGeoDirty);
       vp.removeEventListener('scroll', onScroll);
+      vp.removeEventListener('scrollend', release);
+      vp.removeEventListener('pointerdown', releaseOnInput);
+      vp.removeEventListener('touchstart', releaseOnInput);
+      vp.removeEventListener('wheel', releaseOnInput);
     };
   }, [multi, n]);
 
@@ -203,8 +223,12 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
     const half = vp.scrollWidth / 2;
     let from = vp.scrollLeft;
     if (delta < 0 && from <= 0 && half > w) { vp.scrollLeft = half; from = half; }
+    // 앞선 이동이 아직 복제 세트 깊숙이(랩 임계 너머) 있으면 같은 픽셀의 원본 쪽으로 옮기고 시작한다(끝을 넘어 클램프되지 않게).
+    else if (half > w && from >= half + w) { from -= half; vp.scrollLeft = from; }
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    vp.scrollTo({ left: from + delta * w, behavior: reduced ? 'auto' : 'smooth' });
+    const left = from + delta * w;
+    navRef.current = reduced || !delta ? null : left; // 제자리(delta 0)는 스크롤 이벤트가 안 나 가드가 남는다
+    vp.scrollTo({ left, behavior: reduced ? 'auto' : 'smooth' });
   }, []);
   const goTo = useCallback((i: number) => {
     const vp = vpRef.current;
@@ -245,7 +269,9 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
         style={b ? { background: b.bg } : evBg ? { background: evBg } : undefined}
       >
         {ev ? (
-          <span className="relative flex h-full flex-col justify-center gap-1 px-4 py-3 md:px-6">
+          /* 🔴 2026-09-24 HOME-DENSITY — 점·화살표가 배너 **안쪽 아래 띠**로 들어왔다(아래 제어 묶음 주석).
+             여러 장일 때만 글자를 그 띠 위로 올린다(pb-8) — 글자와 44px 터치 상자가 겹치지 않게. */
+          <span className={['relative flex h-full flex-col justify-center gap-1 px-4 pt-3 md:px-6', multi ? 'pb-8' : 'pb-3'].join(' ')}>
             <span className="flex flex-wrap items-center gap-1.5">
               {/* 강조는 EVENT 칩 색으로만 — live 일 때 accent, 아니면 중립 */}
               <span className={['shrink-0 rounded-chip px-1.5 py-px t-meta font-bold tracking-wide', ev.live ? 'bg-accent-300/25 text-accent-200' : 'bg-white/10 text-white/60'].join(' ')}>EVENT</span>
@@ -277,7 +303,7 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
             />
             {/* 아트워크 위 글자가 읽히도록 왼쪽에서 오른쪽으로 빠지는 스크림 하나만 — 관리자 배너와 동일(여러 겹 금지). */}
             <span
-              className="absolute inset-0 flex flex-col justify-center gap-1 px-4 pr-[38%] md:px-6"
+              className={['absolute inset-0 flex flex-col justify-center gap-1 px-4 pr-[38%] max-[359px]:pr-[30%] md:px-6', multi ? 'pb-6' : ''].join(' ')}
               style={{ background: 'linear-gradient(to right, rgba(6,8,11,0.92) 0%, rgba(6,8,11,0.78) 45%, transparent 100%)' }}
             >
               {/* §5 역할표: 홈 짧은 제목 18/26(PC 22/30) · 보조 설명 13/19 */}
@@ -299,7 +325,7 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
                 왼쪽에서 오른쪽으로 빠지는 스크림 하나만 쓴다(여러 겹 금지). */}
             {(s.title || s.sub) && (
               <span
-                className="absolute inset-0 flex flex-col justify-center gap-1 px-4 pr-[38%] md:px-6"
+                className={['absolute inset-0 flex flex-col justify-center gap-1 px-4 pr-[38%] max-[359px]:pr-[30%] md:px-6', multi ? 'pb-6' : ''].join(' ')}
                 style={{ background: 'linear-gradient(to right, rgba(6,8,11,0.92) 0%, rgba(6,8,11,0.78) 45%, transparent 100%)' }}
               >
                 {s.title && <span className="font-display text-[18px] font-extrabold leading-[26px] text-white md:text-[22px] md:leading-[30px]">{s.title}</span>}
@@ -321,8 +347,8 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
   if (n === 0) return null; // 폴백 배너를 만들지 않는다 — 자리도 만들지 않는다.
 
   return (
-    <div className="pt-3 lg:pt-0">
-      <div className="poster-frame mx-page-x overflow-hidden rounded-aura border card-aura lg:mx-0">
+    <div className="pt-2.5 lg:pt-0">
+      <div className="poster-frame relative mx-page-x overflow-hidden rounded-aura border card-aura lg:mx-0">
         <div
           ref={vpRef}
           data-testid="home-banner-viewport"
@@ -338,31 +364,40 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
             {multi && set(true)}
           </div>
         </div>
+        {/* §6-2: **배너 1개면 점·이전/다음 제어를 숨긴다.**
+            🔴 2026-09-24 HOME-DENSITY(오너: "나머지 공백들도 조금 줄여서 한 페이지에 들어가는 콘텐츠 양을 늘려줘") —
+            배너 **밑의 별도 줄**(34px + 여백)이던 제어를 배너 **안쪽 아래 띠**로 옮겼다. 첫 화면에서 37px 가 돌아온다.
+            · 화살표는 **실박스 44×44** 다(종전 32×32 는 기준 미달이었다). 점은 28×32(e2e design-tokens: 아이콘형 28 이상 — 24 로 줄였다가 빨개졌다).
+            · 상자는 전부 프레임 **안**이다 — overflow-hidden 프레임 밖으로 오버행을 내면 잘리거나
+              조상 scrollHeight 가 부푼다(종전 주석의 229/238 실측, K-18). 그래서 `.hit` 도 쓰지 않는다.
+            · 글자와 겹치지 않게 여러 장일 때만 슬라이드 글자 칸을 띠 위로 올린다(이벤트 pb-8 · 그림 배너 pb-6).
+              실측(390): 글자 아래 65.6 < 터치 상자 위 72. ⚠ 320 에서 관리자 문구가 4줄로 접히면 글자 아래가
+              92 까지 내려와 화살표 상자(72~116)와 겹쳤다(윗변에 붙어 답답했다) → 320~359 는 글자 칸 오른쪽 여백을
+              38%→30% 로 줄여 한 줄로 되돌린다(실측 제목 164 · 부제 181 / 칸 184). 문구 길이에 따라 다시 접힐 수 있다.
+            · 보이는 부분은 어두운 알약 하나 — 배너 그림이 밝아도 흰 점·화살표가 읽힌다(테마 무관). */}
+        {multi && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center" data-testid="home-banner-dots">
+            <div className="pointer-events-auto relative flex items-end">
+              <span aria-hidden className="absolute inset-x-[10px] bottom-[3px] h-[20px] rounded-full bg-black/45" />
+              <button type="button" onClick={() => go(-1)} aria-label="이전 배너"
+                className="relative flex h-[44px] w-[44px] items-end justify-center pb-[6px] text-white/80 transition-colors hover:text-white">
+                <Icon name="chevron-left" size={14} aria-hidden />
+              </button>
+              {slides.map((s, i) => (
+                <button key={s.key} type="button" onClick={() => goTo(i)}
+                  aria-label={`${i + 1}번째 배너`} aria-current={i === idx ? 'true' : undefined}
+                  className="relative flex h-[32px] w-[28px] items-end justify-center pb-[10px]">
+                  <span aria-hidden className={['block h-1.5 w-1.5 rounded-full transition-colors', i === idx ? 'bg-white' : 'bg-white/45'].join(' ')} />
+                </button>
+              ))}
+              <button type="button" onClick={() => go(1)} aria-label="다음 배너"
+                className="relative flex h-[44px] w-[44px] items-end justify-center pb-[6px] text-white/80 transition-colors hover:text-white">
+                <Icon name="chevron-right" size={14} aria-hidden />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-      {/* §6-2: **배너 1개면 점·이전/다음 제어를 숨긴다.** 여러 개면 제어 영역 16~20px 을 쓰되
-          작은 점 자체만 터치 대상이 되지 않게 — 점은 6px 이고 눌리는 범위는 28×32px 이다. */}
-      {multi && (
-        <div className="mx-page-x mt-0.5 flex items-center justify-center gap-0.5 lg:mx-0" data-testid="home-banner-dots">
-          {/* ⚠ 행에 고정 높이(h-5)를 주고 버튼을 -my 로 넘치게 두면 **조상의 scrollHeight 가 9px 부푼다**
-              (실측 229/238) — 잘림 검사가 거짓 양성을 내고, 실제로도 버튼이 이웃 영역을 덮는다.
-              행 높이 = 버튼 높이로 두고, 시각적인 '제어 영역'은 6px 점 + 16px 화살표가 만든다. */}
-          <button type="button" onClick={() => go(-1)} aria-label="이전 배너"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:text-ink-secondary">
-            <Icon name="chevron-left" size={16} aria-hidden />
-          </button>
-          {slides.map((s, i) => (
-            <button key={s.key} type="button" onClick={() => goTo(i)}
-              aria-label={`${i + 1}번째 배너`} aria-current={i === idx ? 'true' : undefined}
-              className="flex h-8 w-7 items-center justify-center">
-              <span aria-hidden className={['block h-1.5 w-1.5 rounded-full transition-colors', i === idx ? 'bg-accent-300' : 'bg-border-strong'].join(' ')} />
-            </button>
-          ))}
-          <button type="button" onClick={() => go(1)} aria-label="다음 배너"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:text-ink-secondary">
-            <Icon name="chevron-right" size={16} aria-hidden />
-          </button>
-        </div>
-      )}
     </div>
   );
 }

@@ -1078,7 +1078,7 @@ export default function App() {
     // Mobile page snapshots compress in Samsung Internet and flash in Chromium.
     // Warm panes need only an urgent state update (also safe from auth effects).
     // Run before the stale-ref guard so the last choice in a batch always wins.
-    if (visitedTabs.has(t) && !window.matchMedia('(min-width: 1024px)').matches) {
+    if (seenTabs.has(t) && !window.matchMedia('(min-width: 1024px)').matches) {
       setActiveTab(t);
       return;
     }
@@ -1088,7 +1088,7 @@ export default function App() {
     // 가능하므로 flushSync 를 트랜지션 콜백 안에서 돌려 display 토글·스크롤 복원 비용 전부를
     // 이전 화면 스냅샷 '뒤에서' 치르고, 완성된 새 화면으로 180ms 크로스페이드만 보여준다.
     // 첫 방문(lazy 청크)은 Suspense 가 끼므로 기존 startTransition 유지(이전 화면 유지 효과 동일).
-    if (visitedTabs.has(t)) {
+    if (seenTabs.has(t)) {
       // 애플식 방향성: 탭바에서 오른쪽 탭으로 가면 새 화면이 오른쪽에서 밀려 들어온다(반대는 반대).
       const ORDER: TabId[] = ['home', 'browse', 'live', 'community', 'tools', 'calendar', 'my-store', 'admin'];
       const from = ORDER.indexOf(activeTabRef.current);
@@ -1101,7 +1101,7 @@ export default function App() {
     } else {
       startTabTransition(() => setActiveTab(t));
     }
-    // visitedTabs 는 안정 Set 인스턴스(useState 초기화) — 참조 불변
+    // seenTabs 는 안정 Set 인스턴스(useState 초기화) — 참조 불변
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1216,15 +1216,21 @@ export default function App() {
   //   ⚠ 즐겨찾기 **시스템은 그대로**다: `src/lib/useFavoriteVenues.ts` 는 남아 있고
   //     `LiveGamesTab`(진행 게임 줄 단골 표시)·캘린더 찜 필터가 계속 쓴다. 여기서 사라진 것은
   //     홈·일정탐색 진입 때 돌던 `venue_follows` 조회 1건뿐이고, 그만큼 첫 화면이 가벼워진다.
-  const [visitedTabs] = useState(() => new Set<TabId>(['home']));
-  useEffect(() => { visitedTabs.add(activeTab); }, [activeTab, visitedTabs]);
+  // 🔴 2026-09-24 perf① — 가변 Set 은 **커밋 뒤(effect)에서만** 바꾼다. 프리마운트가 이 Set 을
+  //   커밋 전에 바꾸자 끼어든 일반 우선순위 렌더가 lazy 판을 트랜지션 밖에서 마운트 → 서스펜드 →
+  //   바깥 LazyFallback(647px)이 홈 밑에 커밋돼 푸터를 밀었다(CPU 8x 11/15, CLS 0.33).
+  //   프리마운트는 아래 premounted **상태**로 올리고, 렌더는 두 곳을 합쳐 읽는다.
+  const [seenTabs] = useState(() => new Set<TabId>(['home']));
+  useEffect(() => { seenTabs.add(activeTab); }, [activeTab, seenTabs]);
+  const [premounted, setPremounted] = useState<ReadonlySet<TabId>>(() => new Set());
+  // layout effect — 커밋과 같은 틱에 넣어, 그 직후 누른 탭도 commitTab 이 재방문 경로로 본다.
+  useLayoutEffect(() => { premounted.forEach((t) => seenTabs.add(t)); }, [premounted, seenTabs]);
+  const visitedTabs = { has: (t: TabId) => seenTabs.has(t) || premounted.has(t) };
   // keep-alive 의 대가 — 오버레이(Modal·ImageLightbox)는 포털을 안 써서 자기 탭 pane 안에 렌더된다.
   // 열린 채로 탭이 display:none 되면 정리 함수가 돌지 않아 **스크롤 잠금이 미아로 남고**,
   // 화면엔 아무 단서도 없이 앱 전체가 굳는다(새로고침 외엔 사용자가 못 푼다).
   // 탭 전환 = 그 상태가 만들어지는 순간이자 체감되는 순간 — 여기서 모순만 골라 되돌린다.
   useEffect(() => { sweepScrollLocks(); }, [activeTab]);
-  // 프리마운트 커밋 트리거 — visitedTabs 는 렌더를 못 깨우는 가변 Set 이라 상태 범프가 필요
-  const [, setPremountTick] = useState(0);
 
   // 17-5 오프라인·재연결 — 홀덤펍은 지하 매장이 많다: 단절이 예외가 아니라 일상 조건.
   // 캐시 퍼스트(Phase 6) 덕에 화면은 살아 있으므로, 배너로 상태만 알리고
@@ -1812,11 +1818,13 @@ export default function App() {
         const seq: TabId[] = [...(canStore ? (['my-store'] as TabId[]) : []), 'live', 'community', 'tools',
           ...(canStore ? [] : (['calendar'] as TabId[])),
           ...(isAdmin ? (['admin'] as TabId[]) : [])];
+        const sent = new Set<TabId>();
         const mountNext = () => {
-          const t = seq.find((x) => !visitedTabs.has(x));
+          const t = seq.find((x) => !seenTabs.has(x) && !sent.has(x));
           if (!t) return;
-          visitedTabs.add(t);
-          startTransition(() => setPremountTick((n) => n + 1)); // transition: 만약 suspend 돼도 폴백 커밋 없음
+          sent.add(t);
+          // transition 안에서만 상태로 올린다 — suspend 돼도 폴백 커밋 없음(가변 Set 을 여기서 건드리지 않는다)
+          startTransition(() => setPremounted((prev) => (prev.has(t) ? prev : new Set(prev).add(t))));
           idle(mountNext);
         };
         idle(mountNext);
@@ -1824,7 +1832,7 @@ export default function App() {
     };
     // timeout 을 늘린 이유: 4초는 '한가하지 않아도 4초 뒤엔 무조건 실행'이라 첫 화면과 자주 겹쳤다.
     idle(warm);
-    // visitedTabs 는 안정 Set 인스턴스 — 참조 불변
+    // seenTabs 는 안정 Set 인스턴스 — 참조 불변
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // user?.id 까지 보는 이유: 위 이용권 프리로드가 `user` 게이트를 쓰는데, 같은 role 로 계정만
     //   바뀌는 전환에서는 user?.role 이 안 변해 warm 이 다시 돌지 않는다.

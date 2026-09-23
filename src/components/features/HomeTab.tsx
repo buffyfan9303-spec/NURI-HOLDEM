@@ -132,8 +132,10 @@ function eventMenuSubtitle(loaded: boolean, failed: boolean, b: EventBoard | nul
 
 
 /** 섹션 제목·'더 보기' 버튼·진입 줄은 홈에서 3~4번 반복된다 — 문자열을 한 벌로 둔다
- *  (읽기에도 좋고, 번들에서 같은 리터럴이 여러 벌 실리지 않는다). §5 역할표: 섹션 제목 18/26(PC 20/28). */
-const H3_CLS = 'font-display text-[18px] font-bold leading-[26px] tracking-tight text-ink-primary md:text-[20px] md:leading-[28px]';
+ *  (읽기에도 좋고, 번들에서 같은 리터럴이 여러 벌 실리지 않는다).
+ *  🔴 2026-09-24 HOME-DENSITY(오너: "'9월 24일 (목) 일정' 글씨 크기 줄여주고") — 18/26 → **15/22**(PC 20/28 → 18/26).
+ *    두 섹션 제목('지금 등록 가능'·'N월 N일 일정')이 같은 급이라 한 벌을 같이 내렸다. 본문(13px)보다는 여전히 크다. */
+const H3_CLS = 'font-display text-[15px] font-bold leading-[22px] tracking-tight text-ink-primary md:text-[18px] md:leading-[26px]';
 const MORE_CLS = 'flex items-center gap-0.5 py-2 -my-2 t-desc font-semibold text-ink-muted hover:text-ink-secondary';
 
 /** 문장 속 숫자만 강조색 — 종전 '오늘 대회 <N>개' 의 색 계약을 문자열 한 줄에도 그대로 적용한다. */
@@ -420,8 +422,11 @@ export default function HomeTab({
     writeSeenCount(OPENNOW_SEEN, openAll.length, { min: 0, max: OPEN_NOW_ROWS });
   }
   // 다음 방문의 스켈레톤 행 수 — 같은 기기는 대개 비슷한 줄 수를 본다.
+  // 🔴 2026-09-24 정정: 종전엔 `upcoming`(오늘+내일) 수를 적었는데 목록은 날짜 레일이 생긴 뒤(09-20)
+  //   **고른 날 하나**(dayVisible)나 폴백(nextUp)을 그린다 — 실측(390, 오늘 5·내일 1): 스켈레톤 6행 vs 실제 5행.
+  //   화면에 실제로 그리는 줄 수를 적는다.
   if (loaded) {
-    writeSeenCount(UPCOMING_SEEN, upcoming.length, { min: 1, max: 8 });
+    writeSeenCount(UPCOMING_SEEN, (useFallback ? nextUp : dayVisible).length, { min: 1, max: 8 });
   }
 
   return (
@@ -529,16 +534,18 @@ export default function HomeTab({
               배지가 아랫줄로 흐르게 두는 것이 글자를 줄이는 것보다 낫다(§7).
             ⚠ 글로우는 여기 둘에만 준다(micro). 화면에서 '지금 여기를 눌러라' 가 이 둘뿐이기 때문이다 —
               목록 줄처럼 반복되는 자리에 같은 빛을 주면 강조가 아니라 소음이 된다. */}
+        {/* 2026-09-24 HOME-DENSITY — 카드 세로 여백 py-2.5→2 · 제목 행 1.5rem→23px · 줄 사이 mt 한 단계씩.
+            배지 자리 예약(min-h)의 **이유**는 그대로다 — 23px 는 배지 실상자 22.2px 보다 크다. */}
         <section data-main-enter className="px-page-x pt-3" data-testid="home-quick">
           {/* 이벤트 메뉴 스위치가 꺼져 있으면 칸이 하나다 — 2열 격자에 빈 칸을 남기지 않는다. */}
           <div className={eventMenuVisible ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1 gap-2.5'}>
             <button type="button" onClick={onOpenVoucher} data-testid="home-quick-checkin"
               data-aura data-aura-level="micro" data-aura-variant="violet"
-              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
+              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40">
               {/* 배경 — 시안의 우상단 블러 원 + 직접 제작한 QR 모티프(public/art/). 조리법은 index.css. */}
               <span aria-hidden className="quick-blob quick-blob-violet" />
               <span aria-hidden className="quick-art quick-art-checkin" />
-              <span className="relative z-10 flex min-h-[1.5rem] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
+              <span className="relative z-10 flex min-h-[23px] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
                 <span className="min-w-0 t-desc font-extrabold text-ink-primary">
                   {/* 🔴 2026-09-18 오너: "홈 화면에 출석체크를 매장이용권도 추가해줘 어차피 매장이용권을
                       보낼 때 QR로 보낼텐데 그럼 출석체크하고 같으니까".
@@ -555,10 +562,12 @@ export default function HomeTab({
               </span>
               {/* 설명줄 — 시안 'QR 출석 = 매일 1회'. 기능을 사실대로 말하는 한 줄이라 남긴다.
                   ⚠ min-h 로 자리를 고정한다: 두 칸의 설명 길이가 달라도 아래 섹션이 안 밀린다. */}
-              <p className="relative z-10 mt-1 min-h-[1.15rem] text-2xs font-medium leading-tight text-ink-secondary">
-                내 이용권 · QR 출석 매일 1회
+              <p className="relative z-10 mt-0.5 min-h-[1.15rem] text-2xs font-medium leading-tight text-ink-secondary">
+                {/* 2026-09-24 HOME-DENSITY — 이 줄이 360 이하에서 두 줄로 접혔다(글자 132.1 / 칸 130.5·110.5 실측).
+                    '이용권'은 바로 위 제목이 이미 말하므로 좁은 폭(≤365)에서만 앞머리를 숨긴다 — 390 이상은 문구 그대로. */}
+                <span className="max-[365px]:hidden">내 이용권 · </span>QR 출석 매일 1회
               </p>
-              <span className="relative z-10 mt-2 flex flex-wrap items-center justify-between gap-x-1 border-t border-border-subtle pt-1.5">
+              <span className="relative z-10 mt-1.5 flex flex-wrap items-center justify-between gap-x-1 border-t border-border-subtle pt-1">
                 <span className="inline-flex min-w-0 items-center gap-1 text-2xs font-bold text-emerald-300">
                   <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />매장 QR 스캔
                 </span>
@@ -569,10 +578,10 @@ export default function HomeTab({
             {eventMenuVisible && (
             <button type="button" onClick={() => onEvent()} data-testid="home-quick-event"
               data-aura data-aura-level="micro" data-aura-variant="amber"
-              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:border-gold-300/40">
+              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-gold-300/40">
               <span aria-hidden className="quick-blob quick-blob-gold" />
               <span aria-hidden className="quick-art quick-art-event" />
-              <span className="relative z-10 flex min-h-[1.5rem] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
+              <span className="relative z-10 flex min-h-[23px] flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
                 <span className="min-w-0 t-desc font-extrabold text-ink-primary">
                   {/* 2026-09-19 오너: "제휴 혜택 - 이벤트로 이름 변경". 목적지(onEvent)는 그대로다 —
                       이 칸은 처음부터 이벤트로 갔고, '제휴 혜택' 이라는 이름만 그 사실을 가리고 있었다. */}
@@ -583,10 +592,10 @@ export default function HomeTab({
               </span>
               {/* 설명줄 — **실제 값**이다(시안의 '강남 라운지 무료 바이인'은 예시 문구라 그대로 쓰지 않는다).
                   진행 중이면 참여권 상태, 아니면 eventMenuSubtitle 이 사실대로 말한다(§6-1 허위 문구 금지). */}
-              <p className="relative z-10 mt-1 min-h-[1.15rem] truncate text-2xs font-medium leading-tight text-ink-secondary">
+              <p className="relative z-10 mt-0.5 min-h-[1.15rem] truncate text-2xs font-medium leading-tight text-ink-secondary">
                 {quickEventDesc}
               </p>
-              <span className="relative z-10 mt-2 flex flex-wrap items-center justify-between gap-x-1 border-t border-border-subtle pt-1.5">
+              <span className="relative z-10 mt-1.5 flex flex-wrap items-center justify-between gap-x-1 border-t border-border-subtle pt-1">
                 <span className="min-w-0 text-2xs font-bold text-gold-300">이벤트 보기</span>
                 <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" />
               </span>
@@ -661,13 +670,13 @@ export default function HomeTab({
               들어 있던 제목 '오늘·내일 일정' 으로 찾고 있었다. 제목을 바꾸면 매칭이 영영 실패해
               **드리프트가 0 으로 거짓 통과**한다. `describe()` 가 `#id` 를 직렬화하므로 여기로 옮긴다.
               (같은 이유로 이 id 를 지우거나 이름을 바꾸지 마라 — 지우면 그 게이트가 빈손이 된다.) */}
-        <section data-main-enter id="home-schedule" data-testid="home-schedule" className="px-page-x pt-5">
+        <section data-main-enter id="home-schedule" data-testid="home-schedule" className="px-page-x pt-3.5">
           {/* ① 날짜 레일 — 5칸 + 좌우 이동. 레퍼런스의 상단 레일.
               ⚠ 화살표에 `.hit` 을 쓰지 않는다 — `::after` 가 44px 를 중앙에서 펼치는데 이 둘은
                 레일의 **양 끝**이라 그 오버행이 컨테이너 밖으로 나가 `scrollWidth` 를 1px 늘렸다
                 (실측 client 354 / scroll 355 — 모든 폭에서). 이 저장소가 경계하는 '숨은 가로 스크롤' 이다.
                 `src/index.css` 의 `.hit` 함정 주석이 적어 둔 대로 **실제 박스를 44px 로** 키운다. */}
-          <div data-testid="home-date-rail" className="mb-2.5 flex items-stretch gap-1 rounded-aura border card-aura p-1">
+          <div data-testid="home-date-rail" className="mb-2 flex items-stretch gap-1 rounded-aura border card-aura p-1">
             <button type="button" aria-label="이전 날짜" data-testid="home-date-prev"
               onClick={() => setRailStart((v) => isoAdd(v, -5))}
               className="grid min-h-[44px] w-11 shrink-0 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-high hover:text-ink-secondary">
@@ -678,7 +687,10 @@ export default function HomeTab({
                 이 저장소 기준은 "확대에서 2줄 되는 것은 실패가 아니고 **잘림**이 실패" 다.
                 → `flex-wrap` 으로 접히게 하고, 칸에서 `min-w-0` 을 **뺀다** — 그게 있으면
                   flex 항목이 글자보다 작게 짓눌려 잘린다. 빼면 min-content 가 바닥이 돼 접힌다.
-                ⚠ 100% 에서는 폭이 남아 wrap 이 안 일어난다 — 5칸 한 줄 그대로다(실측으로 확인). */}
+                ⚠ 100% 에서는 폭이 남아 wrap 이 안 일어난다 — 5칸 한 줄 그대로다(실측으로 확인).
+                🔴 2026-09-24 정정: 320 에서는 **100% 에서도 접혔다**(레일 54.5→98.5px, 9.26 한 칸이 173px 로 둘째 줄).
+                  basis 2.5rem ×5 = 212.5 > 칸 폭 ~184 였기 때문이다. basis-0 이면 바닥이 글자 min-content 라
+                  글자가 실제로 안 들어갈 때(200% 확대)만 접힌다. */}
             <div className="flex min-w-0 flex-1 flex-wrap">
               {railDays.map((iso) => {
                 const [, mm, dd] = iso.split('-').map(Number);
@@ -689,7 +701,7 @@ export default function HomeTab({
                     aria-label={`${mm}월 ${dd}일 ${dow}요일 일정 보기`}
                     onClick={() => setSelectedDate(iso)}
                     className={[
-                      'flex min-h-[44px] flex-1 basis-[2.5rem] flex-col items-center justify-center rounded-[8px] px-0.5 leading-tight transition-colors',
+                      'flex min-h-[44px] flex-1 basis-0 flex-col items-center justify-center rounded-[8px] px-0.5 leading-tight transition-colors',
                       on
                         // 선택일 강조 — 레퍼런스의 금색 테두리. 색만으로 구분하지 않게 테두리도 같이 준다(§접근성).
                         // 🔴 2026-09-20 — 종전 `text-gold-300` 이었는데 **라이트 테마에서 대비 1.43:1** 이었다
@@ -714,7 +726,8 @@ export default function HomeTab({
 
           {/* ② 선택일 제목 + 실제 건수 — 레퍼런스의 "9월 20일 (일) 일정 / 총 6개의 토너먼트".
               ⚠ 건수는 **자르기 전 전체 수**(daySchedules)다. 화면에 8개만 그려도 숫자는 사실이어야 한다. */}
-          <header className="flex items-baseline justify-between gap-2 pb-2.5">
+          {/* 2026-09-24 HOME-DENSITY — 섹션 pt-5→3.5 · 레일 아래 mb-2.5→2 · 제목 아래 pb-2.5→2. 날짜 칩(44px)은 그대로. */}
+          <header className="flex items-baseline justify-between gap-2 pb-2">
             <h3 data-testid="home-schedule-title" className={H3_CLS}>
               {selectedDate ? `${dayTitle(selectedDate)} 일정` : '일정'}
             </h3>
@@ -730,10 +743,13 @@ export default function HomeTab({
                     다만 **첫 항목에는 항상 하나 붙는다**(lib/scheduleDateGroups 의 i===0 분기) —
                     확실한 그 하나만 예약한다. 추측으로 더 넣으면 반대로 과다예약이 된다.
                   실측: 진짜 머리말 27.4px · 이 예약 27.6px(py-1.5 12.75 + h-3.5 14.875). */}
-              <div className="bg-surface-high/40 px-3 py-1.5"><div className="skeleton h-3.5 w-16" /></div>
+              {/* 🔴 2026-09-24 정정: 위 머리말 예약은 날짜 레일 도입(09-20) 뒤 **일반 갈래에 머리말이 없어져** 과다예약이었다.
+                  대신 목록 끝에 **늘 붙는** '전체 일정 보기'(min-h 44px) 자리를 맨 아래에 예약한다(아래 map 뒤). */}
               {Array.from({ length: upcomingSeenCount() }).map((_, i) => (
-                /* min-h: 실제 카드 행과 같은 높이를 예약한다(--card-h-list — 카드가 바뀌면 그 토큰만 고친다). */
-                <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-1.5">
+                /* 실제 카드 행과 같은 높이를 예약한다(--card-h-list — 카드가 바뀌면 그 토큰만 고친다).
+                   🔴 2026-09-24 정정: min-h 였는데 안쪽 막대 4줄+gap(76.4)+py-1.5 가 **89.1~90.1px** 로 토큰(82)을 넘어
+                   행마다 +8px 과다예약이었다(390 실측, 실제 카드 76.5). 높이를 토큰으로 **고정**하고 넘침은 자른다. */
+                <div key={i} className="flex h-[var(--card-h-list)] items-center gap-3 overflow-hidden px-3 py-1.5">
                   <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <div className="skeleton h-3.5 w-1/3" />
@@ -743,6 +759,7 @@ export default function HomeTab({
                   </div>
                 </div>
               ))}
+              <div aria-hidden className="min-h-[44px] bg-surface-high/40" />
             </div>
           ) : failed ? (
             /* 세 번째 갈래(§11) — '없음'이 아니라 '못 불러옴'. 카드·문구·재시도 버튼은 일정 탐색과

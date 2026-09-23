@@ -11,16 +11,21 @@
 //   ① 새 본문이 **보이는 첫 프레임**(목적지 판이 보이고 높이가 있으며 '불러오는 중' 스피너가 없음)에 덮개 opacity ≥ 0.9
 //   ② 덮개가 깔린 뒤 목적지가 아직 준비 안 된 프레임에서는 덮개가 걷히지 않았다(opacity ≥ 0.9) — 걷힌 뒤에만 본문이 드러난다
 //   ③ 280ms · opacity 만 · 중간값이 있다(컷 아님) · 본문/조상 WAAPI 0 · 정착 후 숨김
-// 조건: TC0 일반 · TC1 CPU 6배(느린 폰 모사) · TC5 프리마운트 경합(첫 방문 GTO 가 Suspense 폴백 뒤 늦게 공개되는 경우를
-//   결정적으로 만든다 — 프리마운트가 'tools' 를 방문 처리한 직후, 그 커밋 전에 GTO 를 누른다).
+// 조건: TC0 일반 · TC1 CPU 6배(느린 폰 모사) · TC5 늦은 판 공개(첫 방문 GTO 가 Suspense 폴백 뒤 늦게 공개되는 경우를
+//   결정적으로 만든다 — GTO(ToolsPanel) 청크 응답을 붙잡아 두고, 급한 업데이트로 그 탭에 들어간다).
+//   ⚠ 2026-09-24 개정: 예전 TC5 는 '프리마운트가 tools 를 방문 처리한 직후·커밋 전에 GTO 탭' 경합에 기댔다.
+//     그 경합은 perf① 수정(프리마운트를 React 상태로, e2e/premount-no-fallback.spec.ts)으로 **없어졌다** —
+//     탭바 첫 방문은 이제 transition 이라 폴백이 커밋되지 않는다. 남은 급한 첫 방문 경로(로그인 뒤 보던 탭 복원,
+//     App 의 restoreActionFor → setActiveTab)에 청크 지연을 걸어 '판이 아직 안 섰다' 를 새로 만든다.
 //
 // 음성 대조(2026-09-24 3차 확인): playTabCover 가 준비를 기다리지 않고(고정 시각) 바로 걷으면 TC5 의 ①② 가 빨개진다.
+//   (개정 TC5 도 같은 음성 대조로 확인 — tabCover.ts 대기 제거 사본에서 빨강, 복원 후 해시 일치.)
 //   본문에 opacity 를 걸면 '본문 WAAPI 0' 이, TAB_COVER_DEFAULT_ON=false 면 TC0 이 빨개진다(2차 기록).
 // 실행: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/tab-cover.spec.ts
 //  ⚠ 하네스 Chromium 만 본다. 삼성 인터넷 GPU 의 밝기는 재현하지 못한다(재현 못 함 ≠ 없음).
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
-import { dismissOverlays, stabilizeBackstack } from './_session';
+import { dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
 import { mockSchedules } from './_schedules';
 
 type Frame = { t: number; disp: string; op: number; dur: number; props: string; ready: boolean; spin: boolean };
@@ -172,34 +177,42 @@ for (const cpu of [1, 6]) {
   });
 }
 
-test('🔴 TC5 — 프리마운트 경합: 첫 방문 GTO 가 폴백 뒤 늦게 공개돼도 덮개는 새 본문이 그려진 뒤에 걷힌다', async ({ page }) => {
+/** GTO 판 청크를 붙잡는 시간. 덮개의 준비 대기 상한(TAB_COVER_WAIT_MAX_MS 700)보다 **충분히 짧아야** 한다 —
+ *  상한을 넘기면 덮개는 준비와 상관없이 걷히는 게 설계라(영원히 덮지 않는다) 계약 ②가 설계대로 빨개진다.
+ *  실측(dev 4297): 400ms 지연이면 덮개 대기 583~617ms 로 상한까지 여유가 80ms 뿐이라 200ms 로 둔다
+ *  (React 폴백 스로틀 ~300ms + 하위 모듈 로딩이 더해진다). 폴백은 여전히 덮개 280ms 보다 길게 선다. */
+const TOOLS_CHUNK_DELAY_MS = 200;
+
+test('🔴 TC5 — 늦은 판 공개: 첫 방문 GTO 청크가 늦어 폴백이 먼저 서도 덮개는 새 본문이 그려진 뒤에 걷힌다', async ({ page }) => {
   test.setTimeout(90_000);
-  await boot(page, 390, '', HOLD_PREMOUNT_IDLE);
-  // 프리마운트 순서(비업주): live → community → tools. community 판이 커밋될 때까지 붙잡은 idle 을 흘려보낸다 —
-  //   그 시점 큐에 남은 것이 'tools 를 방문 처리할' 다음 차례다.
-  for (let i = 0; i < 40; i++) {
-    const s = await page.evaluate(() => ({
-      community: !!document.querySelector('.tab-pane[data-tab="community"]'),
-      tools: !!document.querySelector('.tab-pane[data-tab="tools"]'),
-      q: (window as unknown as { __iq: unknown[] }).__iq.length,
-    }));
-    expect(s.tools, 'tools 가 이미 프리마운트됐다 — 경합을 만들지 못했다').toBe(false);
-    if (s.community && s.q > 0) break;
-    await page.evaluate(() => (window as unknown as { __iq: IdleRequestCallback[] }).__iq.splice(0).forEach((cb) => cb({ didTimeout: false, timeRemaining: () => 50 })));
-    await page.waitForTimeout(300);
-  }
-  await startRec(page, 'tools');
-  // 같은 태스크 안에서: 다음 프리마운트(= tools 방문 처리 + transition 예약) → 곧바로 GTO 누름(급한 업데이트).
-  await page.evaluate(() => {
-    (window as unknown as { __iq: IdleRequestCallback[] }).__iq.splice(0).forEach((cb) => cb({ didTimeout: false, timeRemaining: () => 50 }));
-    const nav = document.querySelector('nav[aria-label="하단 내비게이션"]')!;
-    [...nav.querySelectorAll<HTMLButtonElement>('button')].find((b) => /^GTO/.test((b.getAttribute('aria-label') ?? b.textContent ?? '').trim()))!.click();
+  // ① 급한 첫 방문 경로 = 로그인 뒤 보던 탭 복원(App restoreActionFor → setActiveTab). 네트워크 없는 세션.
+  await stubLogin(page);
+  await stabilizeBackstack(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockSchedules(page);
+  // ② GTO 판 청크를 붙잡는다(dev: /src/…/ToolsPanel.tsx · prod: /assets/ToolsPanel-*.js).
+  let held = 0;
+  await page.route(/\/ToolsPanel[^/?]*\.(tsx|js)(\?|$)/, async (route) => {
+    held++;
+    await new Promise((res) => setTimeout(res, TOOLS_CHUNK_DELAY_MS));
+    await route.continue();
   });
+  await page.addInitScript(RECORDER);
+  // 프리마운트·청크 데우기(idle)를 붙잡아 tools 가 미리 마운트·로드되지 않게 한다.
+  await page.addInitScript(HOLD_PREMOUNT_IDLE);
+  await page.addInitScript(() => {
+    try { localStorage.setItem('nuri:view-intent', JSON.stringify({ kind: 'tab', id: 'tools', at: Date.now() })); } catch { /* noop */ }
+    const c = (window as unknown as { __cov: Cov }).__cov;
+    c.dest = 'tools'; c.rec = true; // 복원은 부팅 중에 일어난다 — 처음부터 기록한다
+  });
+  await page.goto('/');
   const r = await settle(page, 'tools');
+  // 전제(청크 지연이 만든 조건): 청크를 실제로 붙잡았고, 덮개가 깔린 뒤 '판이 아직 안 선' 프레임(폴백 스피너)이 있었다.
+  expect(held, 'GTO 청크 요청을 붙잡지 못했다 — 이미 로드됐다(전제 없음)').toBeGreaterThanOrEqual(1);
   const start = r.frames.findIndex((x) => x.disp === 'block');
-  expect(r.frames.slice(Math.max(start, 0)).some((x) => x.spin),
-    '경합이 재현되지 않았다(폴백 스피너 0프레임) — 이 테스트가 지키는 조건이 없다').toBe(true);
-  expectCoverContract(r, 'GTO(경합)');
+  const waiting = r.frames.slice(Math.max(start, 0)).filter((x) => x.spin && !x.ready).length;
+  expect(waiting, '덮개가 깔린 뒤 판이 아직 안 선 프레임이 없다 — 이 테스트가 지키는 조건이 없다').toBeGreaterThanOrEqual(1);
+  expectCoverContract(r, 'GTO(늦은 공개)');
 });
 
 test('🔴 TC2 — ?fx=off 는 그 기기에서 덮개를 한 프레임도 그리지 않고, URL 없이 다시 와도 꺼진 채다 · 지운 ?fx=tabfade 는 무시된다', async ({ page }) => {
