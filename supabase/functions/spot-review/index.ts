@@ -117,8 +117,8 @@ Deno.serve(async (req: Request) => {
     if (await refund()) {
       return json({ error: 'AI 답변을 받지 못했습니다. 포인트를 돌려드렸어요.', code: 'AI_FAILED', refunded: true }, 502);
     }
-    // 환불이 확인되지 않았다 — '돌려드렸다' 고 말하지 않는다. 남은 pending 은 5분 뒤 다음 요청이 먼저 환불한다.
-    return json({ error: 'AI 답변을 받지 못했습니다. 포인트 환불이 늦어지고 있어요 — 5분 뒤 다시 요청하면 먼저 돌려드려요.', code: 'REFUND_PENDING', refunded: false }, 502);
+    // 환불이 확인되지 않았다 — '돌려드렸다' 고 말하지 않는다. 남은 pending 은 5분 크론(_spot_ai_refund_stale)이 환불한다.
+    return json({ error: 'AI 답변을 받지 못했습니다. 포인트는 5분 안에 자동으로 돌려드려요. 결과가 저장됐다면 내 스팟에서 확인할 수 있어요.', code: 'REFUND_PENDING', refunded: false }, 502);
   };
   try {
     const key = Deno.env.get('GEMINI_API_KEY');
@@ -164,7 +164,7 @@ Deno.serve(async (req: Request) => {
     for (let attempt = 0; attempt < 2 && !passed; attempt++) {
       const g = await generate(key, prompt);
       if (!g) break;
-      const c = checkOutput(g.text);
+      const c = checkOutput(g.text, spot.text);   // 스팟에 나온 숫자만 허용(허용목록)
       if (c.ok) passed = { body: c.body, model: g.model };
       else console.warn('[spot-review] 출력 검사 탈락', c.why);
     }

@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { spotToText, checkOutput, cleanNote, buildPrompt, SYSTEM_PROMPT, DISCLAIMER, NOTE_MAX, OUTPUT_MAX, UUID_RE } from '../../supabase/functions/spot-review/logic.ts';
+import { spotToText, checkOutput, cleanNote, buildPrompt, SYSTEM_PROMPT, allowedNumbers, strayNumber, DISCLAIMER, NOTE_MAX, OUTPUT_MAX, UUID_RE } from '../../supabase/functions/spot-review/logic.ts';
 import { spotCompleteness } from './spotReview';
 import { emptySpot, toJSON, type SpotReview } from '../lib/spot';
 
@@ -225,7 +225,94 @@ describe('F3 — 환불이 확인될 때만 "돌려드렸어요"', () => {
   });
   it('클라이언트: 코드 없는 502 를 "돌려드렸어요" 로 말하지 않는다', () => {
     expect(API).toContain("status === 502 ? 'REFUND_PENDING'");
-    expect(API).toMatch(/case 'REFUND_PENDING': return '[^']*늦어지고/);
+    expect(API).toMatch(/case 'REFUND_PENDING': return '[^']*5분 안에 자동으로 돌려드려요/);
   });
 });
 
+// 2026-09-24 critical-reviewer **재판정** — 블랙리스트가 새 반례 20개 중 14개를 놓쳤다 → 허용목록(입력 스팟의 숫자만).
+//   아래 표는 리뷰어 원래 반례 + 새 반례 + 허용목록만 잡는 반례(음성), 정상 코칭 문장(양성)이다.
+//   입력 스팟은 full() — 서술문에 6인·100BB·2.5BB·3BB 등이 나온다(그 숫자만 출력에 허용).
+describe('출력 검사 허용목록 (리뷰어 재판정)', () => {
+  const spotText = spotToText(toJSON(full()))!.text;
+  const head = '1. 포지션을 생각하면 오픈 크기를 줄여 볼 수 있습니다.\n';
+  const NEG: [string, string][] = [
+    // 리뷰어 원래 반례
+    ['전각 퍼센트', '승률은 ５０％ 정도입니다.'],
+    ['한글 퍼센트', '오십 퍼센트로 이깁니다.'],
+    ['분수', '3분의 1 확률로 맞습니다.'],
+    ['소수', '0.25 정도 가져갑니다.'],
+    ['기대 값', '기대 값이 높은 선택입니다.'],
+    ['GTO 기준 맞다', 'GTO 기준으로는 콜이 맞습니다.'],
+    ['전각 EV', 'ＥＶ 가 플러스입니다.'],
+    ['E V', 'E V 가 플러스입니다.'],
+    ['열 번 중 세 번', '열 번 중 세 번은 상대가 블러프입니다.'],
+    // 새 반례(재판정에서 누출된 14개 포함)
+    ['반반', '이 보드에서는 반반 싸움입니다.'],
+    ['열에 셋', '열에 셋은 상대가 드로우입니다.'],
+    ['65 대 35', '65 대 35 로 앞서 있습니다.'],
+    ['확률상 절반', '확률상 절반은 이깁니다.'],
+    ['약 55 대 45', '약 55 대 45 정도의 싸움입니다.'],
+    ['세 번에 한 번', '세 번에 한 번은 블러프를 섞어 보세요.'],
+    ['팟 오즈 3:1', '팟 오즈 3:1 이라 콜이 됩니다.'],
+    ['승률 육십', '승률 육십 정도로 보입니다.'],
+    ['equity 40', '상대 레인지 대비 equity 40 정도입니다.'],
+    ['사할', '약 사할 승률로 앞섭니다.'],
+    ['쓰리벳 비율', '쓰리벳 비율을 30 으로 올려 보세요.'],
+    ['블러프 비중 1/3', '블러프 비중을 1/3 로 두세요.'],
+    ['솔버 결론 단정', '솔버는 이 스팟에서 콜을 한다.'],
+    ['솔버가 선택', '솔버가 여기서 체크를 선택합니다.'],
+    ['GTO상 레이즈', 'GTO상 레이즈가 맞습니다.'],
+    ['셋 중 둘', '셋 중 둘은 폴드가 나옵니다.'],
+    ['열 번에 여섯 번', '열 번에 여섯 번은 이깁니다.'],
+    ['이분의 일', '승률은 대략 이분의 일입니다.'],
+    ['4:6', '대략 4:6 정도로 밀립니다.'],
+    ['삼십 퍼센트', '확률이 삼십 퍼센트쯤 됩니다.'],
+    ['영문 수', 'You win about half the time.'],
+    // 허용목록만 잡는 것 — 금지어가 없고 숫자만 지어낸 문장
+    ['스팟에 없는 숫자', '상대 레인지에서 약 42 정도는 이깁니다.'],
+    ['스팟에 없는 콤보 수', '상대에게 가능한 조합이 18 가량 남습니다.'],
+    ['면책 줄에 섞인 수치', '2. 드라이 보드에서는 작은 벳을 고려해 볼 수 있습니다.\n참고용 코칭이며 솔버 결과가 아닙니다(승률 50)'],
+  ];
+  const POS: [string, string][] = [
+    ['일단', '일단 포지션을 먼저 생각해 보세요.'],
+    ['이번', '이번 핸드에서는 상대 성향이 중요합니다.'],
+    ['삼가', '무리한 블러프는 삼가는 편이 좋습니다.'],
+    ['반응', '상대의 반응을 보고 결정해도 됩니다.'],
+    ['백도어', '백도어 드로우도 함께 고려해 보세요.'],
+    ['반드시', '반드시 레인지 단위로 생각해 보세요.'],
+    ['한 번 더', '확률을 한 번 더 따져 볼 수 있습니다.'],
+    ['세 가지', '승률을 높이는 세 가지 선택지를 떠올려 보세요.'],
+    ['둘 중 하나', '콜과 레이즈 둘 중 하나를 고를 수 있습니다.'],
+    ['스팟 숫자 100BB', '100BB 유효 스택이라 여유가 있습니다.'],
+    ['스팟 숫자(단위 없음)', '유효 스택 100 을 생각하면 서두를 필요가 없습니다.'],
+    ['사이즈 2.5BB', '2.5BB 오픈은 무난합니다.'],
+    ['팟의 1/3 벳', '팟의 1/3 크기 벳을 고려해 보세요.'],
+    ['3벳 팟', '3벳 팟에서는 레인지가 좁아집니다.'],
+    ['three-bet', 'A three-bet here is reasonable.'],
+    ['T9s 표기', 'T9s 같은 핸드는 이 보드에서 좋습니다.'],
+    ['99 포켓', '99 같은 포켓 페어는 신중하게 다루세요.'],
+    ['6인 테이블', '6인 테이블에서는 오픈 레인지가 넓습니다.'],
+    ['통계어만', '승률이 높아 보이는 보드입니다.'],
+    ['솔버처럼', '솔버처럼 외우기보다 상대의 레인지를 떠올려 보세요.'],
+    ['정답은 하나가 아니다', '정답은 하나가 아닙니다. 상대 성향을 먼저 보세요.'],
+    ['팟 절반 벳', '팟의 절반 크기 벳도 고려해 볼 수 있습니다.'],
+    ['2~3BB', '2~3BB 정도의 작은 벳이 어울립니다.'],
+  ];
+  it.each(NEG)('🔴 음성 · %s → 막힌다', (_n, line) => {
+    expect(checkOutput(head + line, spotText).ok).toBe(false);
+  });
+  it.each(POS)('양성 · %s → 통과', (_n, line) => {
+    expect(checkOutput(head + line, spotText).ok).toBe(true);
+  });
+  it('허용목록 — 입력 스팟의 숫자만 모은다', () => {
+    const a = allowedNumbers(spotText);
+    expect(a.has('100')).toBe(true);
+    expect(a.has('2.5')).toBe(true);
+    expect(a.has('42')).toBe(false);
+    expect(strayNumber('약 42 정도', a)).toBe('42');
+    expect(strayNumber('100 스택', a)).toBeNull();
+  });
+  it('엣지 함수는 출력 검사에 스팟 서술문을 넘긴다(허용목록 배선)', () => {
+    expect(strip(read('supabase/functions/spot-review/index.ts'))).toContain('checkOutput(g.text, spot.text)');
+  });
+});
