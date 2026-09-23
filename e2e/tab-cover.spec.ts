@@ -183,36 +183,44 @@ for (const cpu of [1, 6]) {
  *  (React 폴백 스로틀 ~300ms + 하위 모듈 로딩이 더해진다). 폴백은 여전히 덮개 280ms 보다 길게 선다. */
 const TOOLS_CHUNK_DELAY_MS = 200;
 
-test('🔴 TC5 — 늦은 판 공개: 첫 방문 GTO 청크가 늦어 폴백이 먼저 서도 덮개는 새 본문이 그려진 뒤에 걷힌다', async ({ page }) => {
-  test.setTimeout(90_000);
-  // ① 급한 첫 방문 경로 = 로그인 뒤 보던 탭 복원(App restoreActionFor → setActiveTab). 네트워크 없는 세션.
-  await stubLogin(page);
-  await stabilizeBackstack(page);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await mockSchedules(page);
-  // ② GTO 판 청크를 붙잡는다(dev: /src/…/ToolsPanel.tsx · prod: /assets/ToolsPanel-*.js).
-  let held = 0;
-  await page.route(/\/ToolsPanel[^/?]*\.(tsx|js)(\?|$)/, async (route) => {
-    held++;
-    await new Promise((res) => setTimeout(res, TOOLS_CHUNK_DELAY_MS));
-    await route.continue();
+// ⚠ 서비스 워커를 막는다 — 운영 빌드(sw.js: skipWaiting + clients.claim)는 부팅 직후 페이지를 장악하고 /assets 를
+//   SW 가 가져온다. page.route 는 SW 가 응답한 요청을 못 가로채서 청크 지연이 걸리지 않았다
+//   (2026-09-24 실측 4173/4299: held=0 4/4 · 같은 조건 serviceWorkers 'block' 이면 held=1). dev 엔 SW 가 없어 몰랐다.
+//   font-strategy-measure·perf-baseline 이 쓰는 같은 옵션을, _fixtures 쓰기 가드를 잃지 않게 test.use 로 준다.
+test.describe('TC5 — 서비스 워커 없음', () => {
+  test.use({ serviceWorkers: 'block' });
+
+  test('🔴 TC5 — 늦은 판 공개: 첫 방문 GTO 청크가 늦어 폴백이 먼저 서도 덮개는 새 본문이 그려진 뒤에 걷힌다', async ({ page }) => {
+    test.setTimeout(90_000);
+    // ① 급한 첫 방문 경로 = 로그인 뒤 보던 탭 복원(App restoreActionFor → setActiveTab). 네트워크 없는 세션.
+    await stubLogin(page);
+    await stabilizeBackstack(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockSchedules(page);
+    // ② GTO 판 청크를 붙잡는다(dev: /src/…/ToolsPanel.tsx · prod: /assets/ToolsPanel-*.js).
+    let held = 0;
+    await page.route(/\/ToolsPanel[^/?]*\.(tsx|js)(\?|$)/, async (route) => {
+      held++;
+      await new Promise((res) => setTimeout(res, TOOLS_CHUNK_DELAY_MS));
+      await route.continue();
+    });
+    await page.addInitScript(RECORDER);
+    // 프리마운트·청크 데우기(idle)를 붙잡아 tools 가 미리 마운트·로드되지 않게 한다.
+    await page.addInitScript(HOLD_PREMOUNT_IDLE);
+    await page.addInitScript(() => {
+      try { localStorage.setItem('nuri:view-intent', JSON.stringify({ kind: 'tab', id: 'tools', at: Date.now() })); } catch { /* noop */ }
+      const c = (window as unknown as { __cov: Cov }).__cov;
+      c.dest = 'tools'; c.rec = true; // 복원은 부팅 중에 일어난다 — 처음부터 기록한다
+    });
+    await page.goto('/');
+    const r = await settle(page, 'tools');
+    // 전제(청크 지연이 만든 조건): 청크를 실제로 붙잡았고, 덮개가 깔린 뒤 '판이 아직 안 선' 프레임(폴백 스피너)이 있었다.
+    expect(held, 'GTO 청크 요청을 붙잡지 못했다 — 이미 로드됐다(전제 없음)').toBeGreaterThanOrEqual(1);
+    const start = r.frames.findIndex((x) => x.disp === 'block');
+    const waiting = r.frames.slice(Math.max(start, 0)).filter((x) => x.spin && !x.ready).length;
+    expect(waiting, '덮개가 깔린 뒤 판이 아직 안 선 프레임이 없다 — 이 테스트가 지키는 조건이 없다').toBeGreaterThanOrEqual(1);
+    expectCoverContract(r, 'GTO(늦은 공개)');
   });
-  await page.addInitScript(RECORDER);
-  // 프리마운트·청크 데우기(idle)를 붙잡아 tools 가 미리 마운트·로드되지 않게 한다.
-  await page.addInitScript(HOLD_PREMOUNT_IDLE);
-  await page.addInitScript(() => {
-    try { localStorage.setItem('nuri:view-intent', JSON.stringify({ kind: 'tab', id: 'tools', at: Date.now() })); } catch { /* noop */ }
-    const c = (window as unknown as { __cov: Cov }).__cov;
-    c.dest = 'tools'; c.rec = true; // 복원은 부팅 중에 일어난다 — 처음부터 기록한다
-  });
-  await page.goto('/');
-  const r = await settle(page, 'tools');
-  // 전제(청크 지연이 만든 조건): 청크를 실제로 붙잡았고, 덮개가 깔린 뒤 '판이 아직 안 선' 프레임(폴백 스피너)이 있었다.
-  expect(held, 'GTO 청크 요청을 붙잡지 못했다 — 이미 로드됐다(전제 없음)').toBeGreaterThanOrEqual(1);
-  const start = r.frames.findIndex((x) => x.disp === 'block');
-  const waiting = r.frames.slice(Math.max(start, 0)).filter((x) => x.spin && !x.ready).length;
-  expect(waiting, '덮개가 깔린 뒤 판이 아직 안 선 프레임이 없다 — 이 테스트가 지키는 조건이 없다').toBeGreaterThanOrEqual(1);
-  expectCoverContract(r, 'GTO(늦은 공개)');
 });
 
 test('🔴 TC2 — ?fx=off 는 그 기기에서 덮개를 한 프레임도 그리지 않고, URL 없이 다시 와도 꺼진 채다 · 지운 ?fx=tabfade 는 무시된다', async ({ page }) => {
