@@ -7,6 +7,7 @@ import { listVenueCheckins, subscribeCheckins, checkinUrl, type Checkin } from '
 import { getVenueVisitorStats } from '../../api/crm';
 import { issueVoucher, VOUCHER_REASONS } from '../../api/vouchers';
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
+import { useCheckinGeoEnabled } from '../../lib/checkinGeo';
 
 /**
  * 🔴 2026-09-18 오너: "홈 화면에 출석체크를 매장이용권도 추가해줘 어차피 매장이용권을 보낼 때
@@ -35,6 +36,8 @@ export function canSendVoucher(c: Pick<Checkin, 'venueId' | 'userId'>, venueId: 
 
 export default function CheckinModal({ open, onClose, venueId, venueName, canIssue = false }: { open: boolean; onClose: () => void; venueId: string; venueName?: string; canIssue?: boolean }) {
   const toast = useToast();
+  // CHECKIN-GEO — 위치 안내는 운영 스위치가 켜졌을 때만(꺼짐이면 위치를 안 보므로 거짓 안내가 된다).
+  const geoOn = useCheckinGeoEnabled();
   /** 지금 이용권을 보낼 손님(체크인 행 id). null 이면 아무 행도 안 펼쳐져 있다. */
   const [sendTo, setSendTo] = useState<string | null>(null);
   const [customCount, setCustomCount] = useState('');
@@ -149,7 +152,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
             : qrFailed
               ? <div className="flex h-[200px] w-[200px] items-center justify-center rounded-lg border border-border-subtle bg-surface-low text-2xs text-ink-muted">QR 을 만들지 못했어요</div>
               : <div className="h-[200px] w-[200px] animate-pulse rounded-lg bg-ink-primary/10" aria-label="QR 생성 중" />}
-          <p className="text-center text-2xs text-ink-muted"><b className="text-accent-300">고정 QR</b> · 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 출석 처리됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.</p>
+          <p className="text-center text-2xs text-ink-muted"><b className="text-accent-300">고정 QR</b> · 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 출석 처리됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.{geoOn && <><br /><b data-testid="checkin-geo-hint" className="text-ink-secondary">매장 안에서 위치 권한을 허용해야 출석돼요</b></>}</p>
           <button type="button" onClick={copy} className="btn-ghost px-3 text-2xs">출석 링크 복사</button>
         </div>
         <div>

@@ -2,12 +2,16 @@ import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, use
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { flushSync } from 'react-dom';
 import { withViewTransition, type VTDirection } from './lib/viewTransition';
+import { isTabCoverOn, playTabCover } from './lib/tabCover';
 import { getAppSetting, loadEventMenuVisibility } from './api/settings';
 // ⚠ `api/events` 가 아니라 `lib/eventSlug` 에서 받는다 — 둘은 같은 값이지만(그쪽이 재수출한다),
 //   api/events 를 정적으로 물면 TIER_META·oddsRows 까지 첫 화면 임계 경로로 딸려 온다(실측 2026-09-13).
 import { isEventSlug } from './lib/eventSlug';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
+import { checkinFailureAction, checkinGeoRetryCopy } from './lib/checkinGeoRetry';
+import type { CheckinGeoErrorCode } from './lib/checkinGeo';
+import Modal from './components/atoms/Modal';
 import type { MyBuyinRequest } from './api/ledger';
 
 /**
@@ -1160,6 +1164,9 @@ export default function App() {
     if (t === 'live') refreshClocksRef.current?.();
     commitTab(t);
   }, [clearTabTrail, commitTab]);
+  /** BOTTOM-TAB-SMOOTH 덮개(src/lib/tabCover.ts) — 본문 위 지면색 한 장. 직전 탭을 기억해 마운트엔 돌지 않는다. */
+  const tabCoverRef = useRef<HTMLDivElement>(null);
+  const coverTabRef = useRef<TabId>(activeTab);
   // 탭이 바뀌면 **항상 맨 위**로. layout 단계에서 잡는다 — 페인트 전에 위치를 정해야
   // '옛 위치로 한 번 그려졌다가 튀는' 프레임이 안 생긴다(실측: 전환은 한 프레임에 원자적이다).
   // ⚠ `behavior: 'instant'` 를 'smooth' 로 바꾸지 마라 — 탭 전환에 스크롤 애니메이션이 겹치면
@@ -1181,6 +1188,11 @@ export default function App() {
     //   이 파일 :678-688 이 정확히 그 패턴을 없앤 기록이다(모바일 콜드 마운트 207ms · 탭 전환 회당 27ms).
     //   오너가 "눌림" 을 지적한 바로 그 프레임이라 비용을 되돌려 놓을 이유가 없다.
     notifyScrollNow(0);
+    // BOTTOM-TAB-SMOOTH(2026-09-24) — 본문이 아니라 본문 **위 덮개**를 걷어낸다. 기본 꺼짐(`?fx=tabfade` 기기만).
+    //   이 layout effect 안이라 첫 페인트부터 덮개가 깔린다(K-07). 본문(.tab-pane)에는 아무것도 걸지 않는다 — 아래 폐기 기록 참고.
+    isTabCoverOn(); // 첫 호출이 ?fx= 를 읽어 저장한다 — 딥링크 처리가 query 를 지우기 전(마운트)에 부른다
+    if (coverTabRef.current !== activeTab) playTabCover(tabCoverRef.current);
+    coverTabRef.current = activeTab;
     // 🔴 2026-09-22 — **여기 있던 본문 진입 모션(N1/M1 · `startTabEnter`)을 없앴다.**
     //   폐기 사유(역사): 2026-09-21 에 "탭을 옮기면 본문이 부드럽지 않다" 는 지적을 받고
     //   보이는 `[data-main-enter]` 블록 전부에 `translateX(6px)→0` 170ms 를 걸었다. 그런데
@@ -1383,7 +1395,15 @@ export default function App() {
    *  하려던 QR 의도도 같이 버린다 — 안 버리면 나중에 다른 이유로 로그인했을 때 되살아나
    *  손님이 요청한 적 없는 출석·바인이 실행된다(30분 TTL 안). 아래 `closeLoginFromQr` 가 소비한다. */
   const qrLoginPending = useRef(false);
+  /** CHECKIN-GEO 재시도 시트 — 위치를 못 얻은 출석(CheckinGeoError)만 여기로 온다. 서버 거부는 종전대로 토스트.
+   *  venueId 를 시트가 들고 있는다(보류 의도는 이미 소비됐다). uid 는 **요청 시점** 계정 — 다른 계정이면 그리지 않는다. */
+  const [geoRetry, setGeoRetry] = useState<{ venueId: string; code: CheckinGeoErrorCode; uid: string | null; open: boolean } | null>(null);
+  // ⚠ uidRef(아래 [user?.id] effect 가 채운다)를 쓰지 않는다 — QR 딥링크 effect 가 **그 effect 보다 먼저 선언**돼 있어
+  //   로그인 직후 첫 runCheckin 에서 uidRef 가 아직 null 이다(2026-09-24 e2e 실측: 시트가 안 떴다). 렌더 시점 값을 쓴다.
+  const checkinUidRef = useRef<string | null>(null);
+  checkinUidRef.current = user?.id ?? null;
   const runCheckin = useCallback((venueId: string) => {
+    const forUid = checkinUidRef.current; // 늦은 응답 가드 — 응답이 올 때 계정이 바뀌었으면 시트를 그리지 않는다(아래 렌더 조건)
     checkIn(venueId)
       .then(async ({ name, points, streak: served }) => {
         // 점수·연속일은 서버(check_in, 20260905k)가 단일 출처 — 같은 날 두 번째 체크인은 points 0 이라 '+N점' 을 붙이지 않는다.
@@ -1399,7 +1419,11 @@ export default function App() {
         // 매장 QR 스캔은 '그 매장에 와 있다'는 뜻 — 홈이 아니라 그 매장 페이지(오늘 대회·내 활동)에 착지
         startTransition(() => setOpenVenueId(venueId));
       })
-      .catch((e) => toast.show(e instanceof Error ? e.message : '출석 실패', 'error'));
+      .catch((e) => {
+        const act = checkinFailureAction(e);
+        if (act.kind === 'sheet') setGeoRetry({ venueId, code: act.code, uid: forUid, open: true });
+        else toast.show(act.message, 'error');
+      });
   }, [toast, refreshProfile]);
 
   /** 바인(참가) 요청 시작 — 게임이 여럿이면 선택 모달, 하나(또는 지정)면 바로 전송.
@@ -3904,6 +3928,11 @@ export default function App() {
       <MobileTabBar tabs={tabs} active={navActive} onChange={changeTab} count={tabCount}
         onSameTap={(t) => { if (t === 'my-store') setMyStoreHomeNonce((v) => v + 1); }}
         onOpenMe={openMeCb} overlayOpen={fullOverlayOpen} suppressed={openVenueId !== null} />
+      {/* BOTTOM-TAB-SMOOTH 덮개 — 헤더(z-50·모바일 불투명) 아래부터, 탭바(z-50)·시트(z-55+) 아래 z-45.
+          평소 display:none. 켜진 기기의 모바일 탭 전환 때만 160ms 동안 opacity 1→0 (src/lib/tabCover.ts). */}
+      <div ref={tabCoverRef} aria-hidden data-tab-cover
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-[45] hidden bg-surface-base opacity-0"
+        style={{ top: 'calc(var(--header-now) + 1px)' }} />
 
       {/* 일정 탐색 */}
       <div className="px-page-x"><StaffInviteBanner /></div>
@@ -4501,6 +4530,22 @@ export default function App() {
               <button type="button" onClick={() => setBuyinPick(null)} className="w-full pt-1 text-2xs text-ink-muted">취소</button>
             </div>
           </div>
+        );
+      })()}
+
+      {/* CHECKIN-GEO 재시도 시트 — 버튼 누름이 곧 사용자 제스처라 권한 창이 뜬다(딥링크·로그인 왕복 직후엔 제스처가 없다). */}
+      {geoRetry && geoRetry.uid === (user?.id ?? null) && (() => {
+        const copy = checkinGeoRetryCopy(geoRetry.code, typeof navigator === 'undefined' ? '' : navigator.userAgent);
+        return (
+          <Modal open={geoRetry.open} onClose={() => setGeoRetry((g) => g && { ...g, open: false })} title="위치 확인이 필요해요" variant="sheet" maxWidth="sm">
+            <div data-testid="checkin-geo-retry" className="space-y-2">
+              <p className="text-sm text-ink-primary">{copy.reason}</p>
+              {copy.hint && <p className="text-xs text-ink-secondary">{copy.hint}</p>}
+              <button type="button" data-testid="checkin-geo-retry-btn"
+                onClick={() => { const v = geoRetry.venueId; setGeoRetry((g) => g && { ...g, open: false }); runCheckin(v); }}
+                className="btn-primary mt-1 min-h-[44px] w-full text-sm">위치 확인 후 출석</button>
+            </div>
+          </Modal>
         );
       })()}
 

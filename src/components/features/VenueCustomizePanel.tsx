@@ -10,6 +10,7 @@ import { DEFAULT_RANK_METRICS,
 import { searchRegisteredPlayers, type RegisteredPlayer } from '../../api/ledger';
 import { getVenueSlug, isSlugAvailable, setVenueSlug, getVenueContactInfo, updateVenueContact, updateVenueKakao, type VenueContact } from '../../api/community';
 import ContactListEditor from './VenueContactFields';
+import CheckinLocationSection from './CheckinLocationSection';
 import { cleanContacts, ensureOneContact, normalizeKakaoUrl } from '../../lib/venueContacts';
 
 // 매장 페이지 탭(VenuePage와 동일 키)
@@ -108,6 +109,9 @@ export default function VenueCustomizePanel({ venueId, onOpenVenue }: {
 
       {/* 위치·연락처·영업시간 — 매장 페이지 「매장 소개」에 그대로 나가는 값(오너 #17) */}
       <VenueContactSection venueId={venueId} />
+
+      {/* 출석 위치(CHECKIN-GEO) — 좌표가 없으면 서버가 손님 출석을 거부한다(20260923b) */}
+      <CheckinLocationSection venueId={venueId} />
 
       {/* 내 매장 링크(커스텀 슬러그) — nuriholdem.com/s/<원하는이름> */}
       <SlugEditor venueId={venueId} onOpenVenue={onOpenVenue} />

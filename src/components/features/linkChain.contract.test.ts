@@ -116,8 +116,10 @@ describe('E · 상태가 따라온다', () => {
     const helper = /const runCheckin = useCallback\(\(venueId: string\) => \{[\s\S]*?new Event\('nuri:checkin-done'\)/;
     expect(APP, 'App 의 출석 성공 처리(runCheckin)가 nuri:checkin-done 을 쏘지 않는다').toMatch(helper);
     // 두 경로 = ① QR 딥링크 단일 분기 ② 로그인 왕복 뒤의 '보류된 QR'. 둘 다 같은 함수를 부른다.
+    // ③(2026-09-24 CHECKIN-GEO) 위치 재시도 시트의 버튼도 **같은 runCheckin** 을 다시 부른다 — 새 복사본이 아니라 세 번째 호출부다.
     expect((APP.match(/runCheckin\((?!venueId: string)/g) ?? []).length,
-      'App 의 두 출석 경로(딥링크·보류 의도)가 runCheckin 을 각각 부르지 않는다').toBe(2);
+      'App 의 출석 경로(딥링크·보류 의도·위치 재시도)가 runCheckin 을 각각 부르지 않는다').toBe(3);
+    expect(APP, '위치 재시도 버튼이 runCheckin 을 다시 부르지 않는다').toMatch(/data-testid="checkin-geo-retry-btn"[\s\S]{0,200}?runCheckin\(v\)/);
     expect(VENUE).toMatch(/window\.dispatchEvent\(new Event\('nuri:checkin-done'\)\);/);
     expect(APP).toMatch(/window\.addEventListener\('nuri:checkin-done', load\);\s*return \(\) => window\.removeEventListener\('nuri:checkin-done', load\);/);
   });

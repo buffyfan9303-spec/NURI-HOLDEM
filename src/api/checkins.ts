@@ -4,6 +4,7 @@ import { currentUser } from './_session';
 // ⚠ './ledger' 에서 가져오면 안 된다 — checkins 는 App.tsx 가 정적 import 하므로 장부 API 전체(7.1KB gz)가
 //    비로그인 손님의 첫 화면 임계 경로에 실린다(2026-09-11 실측). 같은 함수의 원본을 직접 쓴다.
 import { kstToday } from '../lib/kst';
+import { getCheckinPosition, isCheckinGeoEnabled } from '../lib/checkinGeo';
 
 export interface Checkin { id: string; venueId: string; userId: string; displayName: string | null; createdAt: string }
 
@@ -31,12 +32,32 @@ export function normalizeCheckInResult(data: unknown): CheckInResult {
   return { name: typeof data === 'string' ? data : '', points: 3, streak: null };
 }
 
-/** 체크인 실행. 성공 시 매장명·부여 점수·연속일 반환. */
+/** 체크인 실행. 성공 시 매장명·부여 점수·연속일 반환.
+ *  CHECKIN-GEO 2단계(2026-09-23): 위치를 **여기 한 곳에서만** 얻어 서버에 보낸다 — 호출부 3곳(App.tsx runCheckin ·
+ *  MyVoucherSheet · VenuePage)은 시그니처 그대로라 경로별 결과가 갈리지 않는다(K-05 Q6).
+ *  위치를 못 얻으면 `CheckinGeoError`(src/lib/checkinGeo.ts)를 그대로 던진다 — RPC 는 부르지 않는다.
+ *  거리 판정은 서버(20260923b)만 한다. */
 export async function checkIn(venueId: string): Promise<CheckInResult> {
   if (IS_MOCK) return { name: '데모 매장', points: 3, streak: null };
-  const { data, error } = await supabase.rpc('check_in', { p_venue_id: venueId });
+  // 운영 스위치(checkin_geo_enabled) 꺼짐·조회 실패 → 위치를 묻지 않고 예전과 똑같이 매장 id 만 보낸다.
+  let args: Record<string, unknown> = { p_venue_id: venueId };
+  if (await isCheckinGeoEnabled()) {
+    const pos = await getCheckinPosition();
+    args = { p_venue_id: venueId, p_lat: pos.lat, p_lng: pos.lng, p_accuracy: pos.accuracy };
+  }
+  const { data, error } = await supabase.rpc('check_in', args);
   if (error) throw new Error(error.message);
   return normalizeCheckInResult(data);
+}
+
+/** 업주 '출석 위치' 칸 — 매장에 등록된 좌표와 주소. 좌표가 없으면 손님 출석이 서버에서 막힌다(20260923b).
+ *  조회 실패는 던진다 — '등록 안 됨'과 '못 읽음'을 화면이 구별해야 한다. */
+export async function getVenueCheckinSpot(venueId: string): Promise<{ lat: number | null; lng: number | null; address: string }> {
+  if (IS_MOCK) return { lat: null, lng: null, address: '' };
+  const { data, error } = await supabase.from('venues').select('lat, lng, address').eq('id', venueId).maybeSingle();
+  if (error) throw new Error(error.message);
+  const num = (v: unknown) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+  return { lat: num(data?.lat), lng: num(data?.lng), address: data?.address ?? '' };
 }
 
 export async function listVenueCheckins(venueId: string, sinceIso: string): Promise<Checkin[]> {
