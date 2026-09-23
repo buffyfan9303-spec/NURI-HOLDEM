@@ -44,7 +44,7 @@ export async function getSpotAiStatus(): Promise<SpotAiStatus | null> {
 
 export type SpotAiCode =
   | 'INSUFFICIENT' | 'DAILY_LIMIT' | 'DISABLED' | 'NOT_OWNER' | 'SANCTIONED' | 'PENDING'
-  | 'AI_FAILED' | 'ATTEMPT_LIMIT' | 'LOGIN' | 'UNKNOWN';
+  | 'AI_FAILED' | 'REFUND_PENDING' | 'ATTEMPT_LIMIT' | 'LOGIN' | 'UNKNOWN';
 
 export class SpotAiError extends Error {
   code: SpotAiCode;
@@ -61,14 +61,16 @@ export function spotAiMessage(code: SpotAiCode, extra?: { available?: number; pr
     case 'NOT_OWNER': return '내가 저장한 스팟만 AI 코칭을 받을 수 있어요.';
     case 'SANCTIONED': return '이용이 제한된 계정이에요.';
     case 'PENDING': return '이 스팟의 코칭을 만드는 중이에요. 잠시 후 다시 열어 주세요.';
+    // 'AI_FAILED' 는 서버가 환불 RPC 의 true 를 확인했을 때만 온다(F3). 확인 못 하면 REFUND_PENDING.
     case 'AI_FAILED': return 'AI 답변을 받지 못했어요. 포인트를 돌려드렸어요.';
+    case 'REFUND_PENDING': return 'AI 답변을 받지 못했어요. 포인트 환불이 늦어지고 있어요 — 5분 뒤 다시 요청하면 먼저 돌려드려요.';
     case 'ATTEMPT_LIMIT': return '오늘 AI 코칭 요청이 너무 많아요. 내일 다시 이용해 주세요.';
     case 'LOGIN': return '로그인이 필요합니다.';
     default: return 'AI 코칭을 받지 못했어요. 잠시 후 다시 시도해 주세요.';
   }
 }
 
-const KNOWN: readonly SpotAiCode[] = ['INSUFFICIENT', 'DAILY_LIMIT', 'DISABLED', 'NOT_OWNER', 'SANCTIONED', 'PENDING', 'AI_FAILED', 'ATTEMPT_LIMIT'];
+const KNOWN: readonly SpotAiCode[] = ['INSUFFICIENT', 'DAILY_LIMIT', 'DISABLED', 'NOT_OWNER', 'SANCTIONED', 'PENDING', 'AI_FAILED', 'REFUND_PENDING', 'ATTEMPT_LIMIT'];
 
 /** 저장된 스팟 하나에 AI 코칭을 요청한다. 같은 스팟의 재요청은 서버가 무료로 돌려준다(cached). */
 export async function requestSpotAi(spotReviewId: string): Promise<{ body: string; cached: boolean }> {
@@ -83,7 +85,8 @@ export async function requestSpotAi(spotReviewId: string): Promise<{ body: strin
     const status = typeof ctx?.status === 'number' ? ctx.status : 0;
     const raw = String(j?.code ?? '');
     const code: SpotAiCode = (KNOWN as readonly string[]).includes(raw) ? (raw as SpotAiCode)
-      : status === 401 ? 'LOGIN' : status === 502 ? 'AI_FAILED' : 'UNKNOWN';
+      // 코드 없는 502 는 환불 여부를 모른다 — '돌려드렸다' 고 말하지 않는다(F3).
+      : status === 401 ? 'LOGIN' : status === 502 ? 'REFUND_PENDING' : 'UNKNOWN';
     throw new SpotAiError(code, spotAiMessage(code, {
       available: typeof j?.available === 'number' ? j.available : undefined,
       price: typeof j?.price === 'number' ? j.price : undefined,

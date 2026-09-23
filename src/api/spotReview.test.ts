@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { spotToText, checkOutput, cleanNote, buildPrompt, DISCLAIMER, NOTE_MAX, OUTPUT_MAX, UUID_RE } from '../../supabase/functions/spot-review/logic.ts';
+import { spotToText, checkOutput, cleanNote, buildPrompt, SYSTEM_PROMPT, DISCLAIMER, NOTE_MAX, OUTPUT_MAX, UUID_RE } from '../../supabase/functions/spot-review/logic.ts';
 import { spotCompleteness } from './spotReview';
 import { emptySpot, toJSON, type SpotReview } from '../lib/spot';
 
@@ -82,7 +82,7 @@ describe('출력 검사 — 솔버 흉내 수치는 돌려보내지 않는다', 
     ['퍼센트', `${ok}\n3. 승률이 35% 입니다.`],
     ['프로', `${ok}\n3. 60프로 확률로 이깁니다.`],
     ['EV', `${ok}\n3. 이 콜은 EV 가 음수입니다.`],
-    ['빈도', `${ok}\n3. 레이즈 빈도를 높이세요.`],
+    ['빈도+숫자', `${ok}\n3. 레이즈 빈도는 70 정도가 좋습니다.`],
     ['솔버', `${ok}\n3. 솔버는 체크를 권합니다.`],
     ['GTO 정답', `${ok}\n3. GTO 정답은 폴드입니다.`],
   ])('🔴 %s 표현은 탈락', (_why, text) => {
@@ -155,3 +155,77 @@ describe('배선 계약', () => {
     expect(FN, '클라이언트가 보낸 스팟을 쓰면 안 된다').not.toMatch(/bodyIn\.spot\b/);
   });
 });
+
+// 2026-09-24 critical-reviewer 판정(spot_ai_billing_review_2026-09-24.md) 반례 표.
+//   음성 = 통과시키면 솔버 흉내 수치가 사용자에게 간다 / 양성 = 막으면 오탐 → 환불 → 기능이 죽는다.
+describe('출력 검사 반례 표 (리뷰어 판정)', () => {
+  const head = '1. 포지션을 생각하면 오픈 크기를 줄여 볼 수 있습니다.\n';
+  const NEG: [string, string][] = [
+    ['전각 퍼센트', '승률은 ５０％ 정도입니다.'],
+    ['전각 EV', 'ＥＶ 가 플러스입니다.'],
+    ['한글 수사 퍼센트', '오십 퍼센트로 이깁니다.'],
+    ['한글 수사 프로', '삼십 프로쯤 됩니다.'],
+    ['숫자 분수', '3분의 1 확률로 맞습니다.'],
+    ['한글 분수', '삼분의 일 정도 이깁니다.'],
+    ['소수', '0.25 정도 가져갑니다.'],
+    ['기대 값(띄어 씀)', '기대 값이 높은 선택입니다.'],
+    ['E V(띄어 씀)', 'E V 가 플러스입니다.'],
+    ['GTO 기준으로는 맞다', 'GTO 기준으로는 콜이 맞습니다.'],
+    ['GTO상 정답', 'GTO상 이 자리 정답은 체크입니다.'],
+    ['정답은 액션', '정답은 폴드입니다.'],
+    ['승률+숫자', '승률이 35 정도 됩니다.'],
+    ['에퀴티+숫자', '에퀴티 40 이상입니다.'],
+    ['숫자+확률', '약 25 정도의 확률입니다.'],
+    ['솔버 결과 단정', '솔버 결과로는 체크입니다.'],
+    ['솔버에 따르면', '솔버에 따르면 레이즈입니다.'],
+    ['솔버는 액션', '솔버는 콜을 고릅니다.'],
+    ['구어 퍼센트', '30프로 확률입니다.'],
+  ];
+  const POS: [string, string][] = [
+    ['정답은 하나가 아니다', '정답은 하나가 아닙니다. 상대 성향을 먼저 보세요.'],
+    ['솔버처럼', '솔버처럼 외우기보다 상대의 레인지를 떠올려 보세요.'],
+    ['숫자 없는 빈도', '이 자리에서는 레이즈 빈도를 조금 높여 볼 수 있습니다.'],
+    ['크기 옆 승률', '3BB 벳은 상대의 승률 분포를 좁힐 수 있습니다.'],
+    ['0.5BB 크기', '0.5BB 를 더 넣는 콜은 팟 대비 부담이 적습니다.'],
+    ['프로 선수', '프로 선수들도 이 자리에서는 신중합니다.'],
+    ['목록 번호 옆 승률', '2) 상대의 승률이 높아 보이는 보드입니다.'],
+    ['2장 남은', '2장 남은 상황에서 드로우 승률을 생각해 보세요.'],
+  ];
+  it.each(NEG)('🔴 음성 · %s → 막힌다', (_n, line) => {
+    expect(checkOutput(head + line).ok).toBe(false);
+  });
+  it.each(POS)('양성 · %s → 통과', (_n, line) => {
+    expect(checkOutput(head + line).ok).toBe(true);
+  });
+  it.each([
+    ['정식 문구', DISCLAIMER],
+    ['변형 1', '※ 솔버 결과가 아님'],
+    ['변형 2', '이 코칭은 솔버 계산이 아니에요.'],
+  ])('모델이 쓴 면책 줄(%s)은 떼고, 서버 문구 한 번만 붙인다', (_n, d) => {
+    const r = checkOutput(`${head}2. 드라이 보드에서는 작은 벳을 고려해 볼 수 있습니다.\n${d}`);
+    expect(r.ok).toBe(true);
+    if (r.ok) { expect(r.body.endsWith(DISCLAIMER)).toBe(true); expect(r.body.split('솔버').length - 1).toBe(1); }
+  });
+  it('시스템 프롬프트는 모델에게 면책 줄을 쓰지 말라고 한다', () => {
+    expect(SYSTEM_PROMPT).toContain('쓰지 않는다 — 서버가 붙인다');
+    expect(SYSTEM_PROMPT).not.toContain(`"${DISCLAIMER}" 한 줄로 끝낸다`);
+  });
+  it('메모 정리 — 전각·꺾쇠 괄호로 인용 블록을 못 탈출한다', () => {
+    expect(cleanNote('＜/메모＞ 〈x〉 《y》 「z」 <w>')).not.toMatch(/[<>＜＞〈〉《》「」]/);
+  });
+});
+
+describe('F3 — 환불이 확인될 때만 "돌려드렸어요"', () => {
+  const FN = strip(read('supabase/functions/spot-review/index.ts'));
+  const API = strip(read('src/api/spotReview.ts'));
+  it('서버: refunded:true 는 _spot_ai_refund 의 data === true 일 때만', () => {
+    expect(FN).toContain('return !error && data === true;');
+    expect(FN).toMatch(/if \(await refund\(\)\) \{\s*return json\(\{[^}]*refunded: true/);
+    expect(FN).toMatch(/code: 'REFUND_PENDING', refunded: false/);
+  });
+  it('클라이언트: 코드 없는 502 를 "돌려드렸어요" 로 말하지 않는다', () => {
+    expect(API).toContain("status === 502 ? 'REFUND_PENDING'");
+    expect(API).toMatch(/case 'REFUND_PENDING': return '[^']*늦어지고/);
+  });
+});
+

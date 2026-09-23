@@ -105,15 +105,20 @@ Deno.serve(async (req: Request) => {
   // begin 이 성공한 뒤에만 채워진다 — 이 값이 있는 채로 빠져나가면 반드시 환불한다.
   let pendingId: number | null = null;
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-  const refund = async () => {
-    if (pendingId === null) return;
+  /** 환불 RPC 가 **true** 를 돌려줬을 때만 환불된 것이다(F3, 2026-09-24 critical-reviewer). */
+  const refund = async (): Promise<boolean> => {
+    if (pendingId === null) return false;
     const id = pendingId; pendingId = null;
-    const { error } = await admin.rpc('_spot_ai_refund', { p_id: id });
-    if (error) console.error('[spot-review] 환불 실패(다음 begin 이 5분 뒤 환불한다)', id, error.message);
+    const { data, error } = await admin.rpc('_spot_ai_refund', { p_id: id });
+    if (error || data !== true) console.error('[spot-review] 환불 미확인(5분 뒤 다음 요청의 begin 이 환불한다)', id, error?.message ?? data);
+    return !error && data === true;
   };
   const failRefunded = async () => {
-    await refund();
-    return json({ error: 'AI 답변을 받지 못했습니다. 포인트를 돌려드렸어요.', code: 'AI_FAILED', refunded: true }, 502);
+    if (await refund()) {
+      return json({ error: 'AI 답변을 받지 못했습니다. 포인트를 돌려드렸어요.', code: 'AI_FAILED', refunded: true }, 502);
+    }
+    // 환불이 확인되지 않았다 — '돌려드렸다' 고 말하지 않는다. 남은 pending 은 5분 뒤 다음 요청이 먼저 환불한다.
+    return json({ error: 'AI 답변을 받지 못했습니다. 포인트 환불이 늦어지고 있어요 — 5분 뒤 다시 요청하면 먼저 돌려드려요.', code: 'REFUND_PENDING', refunded: false }, 502);
   };
   try {
     const key = Deno.env.get('GEMINI_API_KEY');
