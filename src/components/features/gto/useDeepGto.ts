@@ -11,7 +11,7 @@
 // 죽은 데이터였던 GtoDeepSituation(사람이 쓴 "약 40% 빈도로 3-Bet" 예시 프리셋)은 통째로 제거했다 —
 // 실제로는 어느 화면에도 렌더되지 않았고(situation/selectSituation 을 쓰는 컴포넌트가 없었다),
 // 남겨두면 나중에 실수로 이어붙였을 때 그 예시 숫자가 그대로 "GTO 40%"로 노출될 위험이 있었다.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { canonicalizeHand, normalizeFrequency } from './useGtoCalculator';
 import { type WeightedCombo, type EquityKind } from './equityEngine';
 import { equityAsync, equityVsRangeAsync } from './equityClient';
@@ -135,6 +135,50 @@ export interface UseDeepGto {
 
 export interface DeepGtoInit { hero?: Card[]; villain?: Card[]; board?: Card[]; }
 
+/**
+ * 레인지 모드에서 돌아올 때 보관해 둔 빌런 카드를 되살린다(GTO-MODE-TOGGLE-FLASH 2026-09-23).
+ * 레인지 모드에 있는 동안 그 카드가 Hero·보드로 쓰였으면 그 슬롯만 비운다 — 같은 카드 두 장은 계산할 수 없다.
+ */
+export function restoreVillain(
+  saved: readonly (Card | null)[],
+  hero: readonly (Card | null)[],
+  board: readonly (Card | null)[],
+): (Card | null)[] {
+  const taken = new Set<CardId>();
+  [...hero, ...board].forEach((c) => { if (c) taken.add(cardId(c)); });
+  return padSlots(undefined, 2).map((_, i) => {
+    const c = saved[i] ?? null;
+    return c && !taken.has(cardId(c)) ? c : null;
+  });
+}
+
+/**
+ * 에퀴티 계산의 입력 서명 — **모드가 첫 토막**이다. 결과는 이 서명에 묶여 저장되고,
+ * 화면은 지금 서명과 **정확히 같은** 결과만 받는다(`visibleEquity`). 그래서
+ * 다른 모드·다른 입력의 에퀴티가 지금 라벨 아래 그려지는 프레임이 구조적으로 없다
+ * (수정 전: 레인지로 바꾼 첫 프레임에 특정 핸드 46% 가 'BTN 오픈' 라벨로 그려졌다).
+ */
+export function equitySignature(
+  mode: VillainMode,
+  hero: readonly (Card | null)[],
+  villain: readonly (Card | null)[],
+  board: readonly (Card | null)[],
+  rangeId: string,
+): string {
+  const ids = (cs: readonly (Card | null)[]) => cs.map((c) => (c ? cardId(c) : '-')).join('');
+  return [mode, ids(hero), mode === 'range' ? rangeId : ids(villain), ids(board)].join('|');
+}
+
+export interface EquityEntry { sig: string; equity: Equity; kind: EquityKind | undefined; }
+/** 모드별 마지막 계산 결과 — 모드를 오가도 각자의 값이 남는다(되돌아오면 재계산 없이 즉시). */
+export type EquityCache = Partial<Record<VillainMode, EquityEntry>>;
+
+/** 지금 모드·지금 입력의 결과만 돌려준다. 다른 모드의 값은 서명이 달라 절대 나오지 않는다. */
+export function visibleEquity(cache: EquityCache, mode: VillainMode, sig: string): EquityEntry | null {
+  const e = cache[mode];
+  return e && e.sig === sig ? e : null;
+}
+
 function padSlots(cards: Card[] | undefined, n: number): (Card | null)[] {
   const out: (Card | null)[] = (cards ?? []).slice(0, n);
   while (out.length < n) out.push(null);
@@ -159,16 +203,23 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     [villainRangeId],
   );
 
+  // 레인지 모드 동안 빌런 카드를 여기 보관한다. 예전엔 그냥 지웠다 — 특정 핸드로 돌아오면
+  // 결과 카드가 통째로 언마운트되고(번쩍) 사용자가 넣은 QQ 가 사라졌다(오너 신고 2026-09-23).
+  const savedVillainRef = useRef<(Card | null)[]>([null, null]);
   const setVillainMode = useCallback((m: VillainMode) => {
+    if (m === villainMode) return; // 같은 모드 재클릭이 보관본을 빈 슬롯으로 덮지 않게
     setVillainModeState(m);
     if (m === 'range') {
-      // 레인지 모드에선 빌런 슬롯을 비워 카드 그리드 차단을 없앤다
+      // 레인지 모드에선 빌런 슬롯을 비워 카드 그리드 차단을 없앤다(보관본은 위 ref 에)
+      savedVillainRef.current = villain;
       setVillain([null, null]);
       setCurrentTarget((t) => (t === 'villain' ? 'board' : t));
     } else {
-      setCurrentTarget('villain');
+      const back = restoreVillain(savedVillainRef.current, hero, board);
+      setVillain(back);
+      if (back.some((c) => c === null)) setCurrentTarget('villain');
     }
-  }, []);
+  }, [villainMode, villain, hero, board]);
 
   const usedIds = useMemo(() => {
     const s = new Set<CardId>();
@@ -211,6 +262,7 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
   }, [hero, villain, board]);
 
   const clearAll = useCallback(() => {
+    savedVillainRef.current = [null, null];
     setHero([null, null]);
     setVillain([null, null]);
     setBoard([null, null, null, null, null]);
@@ -247,20 +299,19 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     return canonicalizeHand([villain[0].rank, villain[1].rank], suited)?.id ?? null;
   }, [villain]);
 
-  // 실시간 에퀴티: 입력 완성 시 다음 틱에 몬테카를로 계산(탭 반응성 유지) + 계산 중 표시
-  const [equity, setEquity] = useState<Equity | null>(null);
-  // 엔진이 값을 **어떻게** 냈는지. 'no_legal_combinations' 는 "못 냈다" 는 뜻이라
+  // 실시간 에퀴티: 입력 완성 시 워커로 몬테카를로 계산. 결과는 **입력 서명에 묶여** 모드별로 저장되고,
+  // equity·equityKind·calculating 은 모두 그 저장본에서 **파생**한다 — 예전처럼 effect 안에서 setCalculating(true) 로
+  // 뒤따라 맞추면 모드를 바꾼 첫 프레임(effect 전)에 이전 모드의 에퀴티가 새 라벨로 그려졌다.
+  // 엔진이 값을 **어떻게** 냈는지(kind)도 같이 저장한다. 'no_legal_combinations' 는 "못 냈다" 는 뜻이라
   // hero=0.5 가 승률이 아니라 자리표시자다 — 이걸 버리면 참고 믹스가 그 0.5 를 먹는다.
-  const [equityKind, setEquityKind] = useState<EquityKind | undefined>(undefined);
-  const [calculating, setCalculating] = useState(false);
+  const [equityCache, setEquityCache] = useState<EquityCache>({});
+  const sig = equitySignature(villainMode, hero, villain, board, villainRange.id);
+  const current = inputReady ? visibleEquity(equityCache, villainMode, sig) : null;
+  const equity = current?.equity ?? null;
+  const equityKind = current?.kind;
+  const calculating = inputReady && !current;
   useEffect(() => {
-    if (!inputReady) {
-      setEquity(null);
-      setEquityKind(undefined);
-      setCalculating(false);
-      return;
-    }
-    setCalculating(true);
+    if (!calculating) return; // 입력 미완성이거나, 이 모드·이 입력의 값이 이미 있다(모드 왕복 = 재계산 없음)
     const h = hero as Card[];
     const v = villain as Card[];
     const b = board.filter((c): c is Card => c !== null);
@@ -273,12 +324,10 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
       if (!alive) return;
       // kind 를 같이 들고 온다 — 이걸 버리면 '계산 못 함(0.5)' 과 '정말 5:5' 가 구별되지 않아
       // 아래 actionFromEquity 가 근거 없는 믹스를 만든다(엔진만 고쳐서는 여기서 도로 무너진다).
-      setEquityKind(r.kind);
-      setEquity({ hero: r.hero, villain: r.villain, tie: r.tie });
-      setCalculating(false);
+      setEquityCache((c) => ({ ...c, [villainMode]: { sig, kind: r.kind, equity: { hero: r.hero, villain: r.villain, tie: r.tie } } }));
     });
     return () => { alive = false; };
-  }, [hero, villain, board, inputReady, villainMode, villainRange]);
+  }, [calculating, sig, hero, villain, board, villainMode, villainRange]);
 
   const result = useMemo<GtoResult | null>(() => {
     // 입력 완성 시 실시간 에퀴티 기반으로 참고 액션 믹스를 추정 (솔버 아님).

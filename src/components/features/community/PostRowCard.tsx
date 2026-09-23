@@ -104,11 +104,6 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
       <span className="shrink-0 max-w-[7rem] truncate text-xs text-ink-muted">{mark}{post.userName}</span>
       {/* 칭호 칩 미노출(2026-09-18 오너) — 아래 PostCard 주석 참고. 한 줄 행은 폭이 더 빠듯하다. */}
       <span className="hidden shrink-0 text-xs tabular-nums text-ink-muted sm:inline">{relativeTime(post.createdAt)}</span>
-      {(post.viewCount ?? 0) > 0 && (
-        <span className="shrink-0 inline-flex w-10 items-center justify-end gap-0.5 text-xs tabular-nums text-ink-muted" aria-label={`조회 ${post.viewCount}`}>
-          <Icon name="eye" size={11} className="shrink-0" />{post.viewCount}
-        </span>
-      )}
     </li>
   );
 }, samePostProps);
@@ -256,14 +251,6 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
               좋아요만 인터랙티브(목록에서 바로 누를 수 있는 유일한 액션),
               추천/비추천은 카운트 표시 전용 — 실제 투표는 상세에서(중복 투표 UX 단일화). */}
           <div className="mt-2 flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border-subtle pt-1.5 text-2xs text-ink-muted">
-            {(post.viewCount ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-1" aria-label={`조회 ${post.viewCount}`}>
-                {/* [E] 1.6 은 옆 볼드 숫자·같은 줄 chevron(2.2)보다 눈에 띄게 가늘었다 — 화면 굵기 하한(1.1px)
-                    밴드 안에서 chevron 과 맞춘다. */}
-                <Icon name="eye" size={13} strokeWidth={2.2} className="shrink-0" />
-                <span className="tabular-nums">{post.viewCount}</span>
-              </span>
-            )}
             <button
               type="button"
               aria-pressed={!!post.liked}

@@ -278,6 +278,8 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
         <div className="flex items-end justify-center gap-3">
           <Section title="Hero" target="hero" cards={deep.hero} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
           <span className="pb-4 text-2xs font-bold text-ink-muted">vs</span>
+          {/* 두 모드가 같은 폭을 쓴다(select 는 이 상자를 꽉 채운다 · 좁은 폭에선 함께 줄어 Hero 를 밀어내지 않는다) — 슬롯↔select 교체로 가운데 정렬된 Hero 가 52px 흔들리던 자리(2026-09-23 실측). */}
+          <div className="w-[11rem] min-w-0 shrink">
           {deep.villainMode === 'hand' ? (
             <Section title="Villain" target="villain" cards={deep.villain} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
           ) : (
@@ -291,7 +293,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
                 value={deep.villainRange.id}
                 onChange={(e) => deep.selectVillainRange(e.target.value)}
                 aria-label="Villain 레인지 프리셋"
-                className="input h-12 w-auto min-w-[10rem] text-xs font-bold"
+                className="input h-12 w-full text-xs font-bold"
               >
                 {deep.villainRanges.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -301,6 +303,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
               </select>
             </div>
           )}
+          </div>
         </div>
         <div className="flex justify-center">
           <Section title="Board (선택)" target="board" cards={deep.board} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
@@ -347,8 +350,9 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
       </CalcCard>
 
       {/* 결과 */}
+      {/* 등장 애니메이션 없음 — 모드 토글마다 opacity .45 + blur(3px) 로 다시 떠서 '번쩍' 으로 보였다(오너 신고 2026-09-23). */}
       {showResult ? (
-        <CalcCard className="animate-fade-in">
+        <CalcCard>
           <p className="text-center text-sm">
             <b className="text-accent-300">{heroId}</b>
             <span className="mx-2 text-ink-muted">vs</span>
@@ -360,10 +364,14 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
               에퀴티 (Hero vs Villain){deep.board.some((c) => c !== null) ? ' · 보드 반영' : ' · 프리플랍'} · 실시간 계산
             </p>
             {deep.calculating || !deep.equity ? (
-              <div className="flex h-5 items-center gap-2 text-2xs text-ink-muted">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent-300 border-t-transparent" />
-                에퀴티 계산 중...
-              </div>
+              // 결과와 **같은 높이**(막대 h-5 + 한 줄). 예전 스피너 한 줄은 카드를 406→157px 로 접었다가 되펴 화면이 튀었다.
+              <>
+                <div className="h-5 rounded-input bg-surface-high" />
+                <div className="mt-1 flex items-center gap-2 text-2xs text-ink-muted">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent-300 border-t-transparent" />
+                  에퀴티 계산 중...
+                </div>
+              </>
             ) : (
               <>
                 <div className="flex h-5 overflow-hidden rounded-input bg-surface-high">
@@ -383,21 +391,28 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
             {deep.normalizedAction && !deep.calculating ? (
               <>
                 <MixBar action={deep.normalizedAction} />
-                <div className="mt-1.5 flex"><SourceBadge kind="heuristic" /></div>
-                <p className="mt-1 text-2xs text-ink-muted">※ 에퀴티·팟오즈 기반 근사(솔버 아님). 실제 GTO 솔버 값과 다를 수 있습니다.</p>
               </>
             ) : (
-              <div data-testid="gto-action-pending" className="flex h-5 items-center gap-2 text-2xs text-ink-muted">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent-300 border-t-transparent" />
-                참고 액션 계산 중...
+              // MixBar 와 같은 모양(막대 h-7 + 범례 한 줄) — 숫자는 없다(계산 전 숫자 금지 계약은 그대로).
+              <div className="space-y-1.5">
+                <div className="h-7 rounded-input bg-surface-high" />
+                <div data-testid="gto-action-pending" className="flex items-center gap-2 text-2xs text-ink-muted">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent-300 border-t-transparent" />
+                  참고 액션 계산 중...
+                </div>
               </div>
             )}
+            {/* 출처 배지·고지는 숫자가 아니라 늘 같다 — 계산 중에도 두어 높이를 지킨다. */}
+            <div className="mt-1.5 flex"><SourceBadge kind="heuristic" /></div>
+            <p className="mt-1 text-2xs text-ink-muted">※ 에퀴티·팟오즈 기반 근사(솔버 아님). 실제 GTO 솔버 값과 다를 수 있습니다.</p>
           </div>
 
-          {deep.equity && !deep.calculating && (() => {
-            const tie = deep.equity.tie ?? 0;
-            const win = Math.max(0, deep.equity.hero - tie / 2);
-            const lose = Math.max(0, deep.equity.villain - tie / 2);
+          {(() => {
+            // 계산 중에도 칸은 선다(값은 대시) — 이 격자가 통째로 빠졌다 붙으며 카드가 튀던 자리.
+            const eq = deep.equity && !deep.calculating ? deep.equity : null;
+            const tie = eq ? (eq.tie ?? 0) : 0;
+            const win = eq ? Math.max(0, eq.hero - tie / 2) : 0;
+            const lose = eq ? Math.max(0, eq.villain - tie / 2) : 0;
             const cells = [
               // 숫자는 '글자'라 fill 스냅샷 hex 를 쓰면 안 된다(라이트 실측 승 2.02 · 무 2.27 · 패 3.33:1).
               { k: '승', v: win, color: 'var(--gto-txt-playable)' },
@@ -412,7 +427,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
                     <div key={c.k} className="rounded-input border border-border-subtle bg-surface-high px-2 py-1.5 text-center">
                       <p className="text-2xs text-ink-muted">{c.k}</p>
                       <p className="text-base font-extrabold tabular-nums leading-tight" style={{ color: c.color }}>
-                        {(c.v * 100).toFixed(1)}%
+                        {eq ? `${(c.v * 100).toFixed(1)}%` : '—'}
                       </p>
                     </div>
                   ))}
@@ -421,7 +436,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
             );
           })()}
 
-          {recommended && (
+          {recommended ? (
             <div
               className="flex items-center justify-center gap-2 rounded-input border py-2"
               style={{ borderColor: `${recommended.color}66`, background: `${recommended.color}14` }}
@@ -431,16 +446,21 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
                 {recommended.label} {Math.round(recommended.v * 100)}%
               </span>
             </div>
+          ) : (
+            <div className="flex items-center justify-center gap-2 rounded-input border border-border-subtle py-2">
+              <span className="text-2xs text-ink-muted">권장 액션</span>
+              <span className="text-sm font-extrabold text-ink-muted">—</span>
+            </div>
           )}
 
-          {/* 액션 시트·공유는 특정 핸드(hand) 모드 전용 — 공유 해시가 hand 조합만 인코딩 */}
-          {!rangeMode && (
+          {/* 액션 시트·공유는 특정 핸드(hand) 모드 전용 — 공유 해시가 hand 조합만 인코딩.
+              레인지 모드에선 숨기지 않고 **비활성**으로 둔다 — 줄이 빠졌다 붙으면 모드를 바꿀 때마다 카드 높이가 54px 변했다. */}
           <div className="flex gap-2">
-            <button type="button" onClick={() => setSheetOpen(true)} className="btn-ghost inline-flex flex-1 items-center justify-center gap-2 py-2.5">
+            <button type="button" disabled={rangeMode} title={rangeMode ? '특정 핸드 모드에서 사용할 수 있습니다' : undefined} onClick={() => setSheetOpen(true)} className="btn-ghost inline-flex flex-1 items-center justify-center gap-2 py-2.5 disabled:opacity-40">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 3v18h18" /><path d="m7 14 4-4 3 3 5-6" /></svg>
               스트리트별 액션
             </button>
-            <button type="button" onClick={shareSpot} aria-label="공유 링크 생성" className="btn-ghost inline-flex items-center justify-center gap-1.5 px-4 py-2.5">
+            <button type="button" disabled={rangeMode} onClick={shareSpot} aria-label="공유 링크 생성" className="btn-ghost inline-flex items-center justify-center gap-1.5 px-4 py-2.5 disabled:opacity-40">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
                 <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" /><line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
@@ -448,7 +468,6 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
               공유
             </button>
           </div>
-          )}
         </CalcCard>
       ) : (
         <p className="rounded-aura border card-aura px-3 py-4 text-center text-2xs leading-relaxed text-ink-muted">

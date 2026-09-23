@@ -37,6 +37,8 @@ const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 // NURI SPOT — 구조화 스팟·분석 엔진·리포트를 물고 있어 도구 중 가장 무겁다. 열 때 받는다.
 const NuriSpotPanel = lazyWithReload(() => import('./gto/NuriSpotPanel'));
+// 스타팅 핸드 순위(2026-09-23) — 169칸 격자 + 표. 첫 화면 예산 여유가 2% 뿐이라 열 때 받는다.
+const StartingHandRankPanel = lazyWithReload(() => import('./tools/StartingHandRankPanel'));
 
 /**
  * NURI SPOT 진입 초기값 — 직전 스팟이 있으면 그것, 없으면 **기존 두 도구의 스냅샷에서 카드를 물려받는다**.
@@ -55,7 +57,7 @@ function spotInitFromSnapshots(): { spot?: Partial<SpotReview> } | undefined {
   return { spot: { hero, villain, board } };
 }
 
-type ToolKey = 'spot' | 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'wrongnote' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'handrank' | 'deal' | 'tda';
+type ToolKey = 'spot' | 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'wrongnote' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'handrank' | 'startrank' | 'deal' | 'tda';
 /** 실사용 흐름 4갈래 IA (2026-09-11 오너 지시 5갈래 → 2026-09-14 4갈래).
  *  종전 4레인(차트/트레이닝/분석/계산기)은 '도구의 종류'로 나눈 것이라, 하나의 목적(예: 한 판 복기)을
  *  이루려면 레인 세 개를 오가야 했다. 이제 **무엇을 하러 왔는가**로 가른다:
@@ -98,6 +100,7 @@ type ToolCat = 'explore' | 'train' | 'review' | 'rules' | 'ops' | 'money';
  */
 const TITLE_LINES: Partial<Record<ToolKey, readonly [string, string]>> = {
   tda:       ['2026', 'TDA 규칙'],
+  startrank: ['스타팅', '핸드 순위'],
   range:     ['프리플랍', '레인지 차트'],
   pushfold:  ['푸시 · 폴드', '차트'],
   trainer:   ['프리플랍', '트레이너'],
@@ -123,6 +126,9 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
   { key: 'glossary', cat: 'rules', name: '홀덤 용어사전', desc: '79개 용어 검색과 뜻풀이', keywords: '용어 79개 · 한글 설명·검색', icon: 'book-a' },
   // 홀덤 족보(오너 지시 2026-09-17 "용어 있는 쪽에 탭 하나 더"). 아이콘 crown = 로열 플러시. 데이터는 tools/handRank.data.ts.
   { key: 'handrank', cat: 'rules', name: '홀덤 족보', desc: '10가지 족보 순서와 예시', keywords: '핸드 랭킹 족보 순위 로열 스트레이트 플러시 포카드 풀하우스 트리플 투페어 원페어 하이카드 키커 휠 스플릿', icon: 'crown' },
+  // 스타팅 핸드 순위(오너 요청 2026-09-23 "규칙 · 대회 쪽에 핸드 순위 신설") — 두 장 169개의 강한 순서. 족보(5장)와 다른 도구다.
+  //   값: tools/startingHandRank.data.ts(생성기 scripts/gen-starting-hand-rank.mjs → 에퀴티 엔진). 아이콘 medal = 순위.
+  { key: 'startrank', cat: 'rules', name: '스타팅 핸드 순위', desc: '두 장 169개의 강한 순서', keywords: '핸드 순위 시작 핸드 프리플랍 169 승률 에퀴티 랭킹 AA KK AK 72o 페어 수딧 오프수트 스타팅핸드', icon: 'medal' },
   // ── 분석 — 핸드·레인지 에퀴티 ──
   // NURI SPOT — 카드·포지션·스택·액션을 **하나의 구조화된 스팟**으로 받아 분석·저장·토론까지 잇는다.
   //   ⚠ 새 레인을 만들지 않고 'review'(핸드 리뷰)에 넣는다 — 레인이 늘면
@@ -165,7 +171,7 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
 // + 트레이너 59.4 + 핸드 리뷰 62.2 + gap 25.5 = 316.6 ≤ 326 → 한 줄. 라벨은 하나도 줄이지 않았다(px-2.5→px-2 로 4.25px×5 확보).
 // '규칙 · 대회': TDA 규칙·용어사전 + ICM·딜·M존. '토너먼트'(문자폭 63.6)를 쓰면 336 으로 넘친다 — 앱 전반이 '대회'(대회 일정·대회 후기)를 쓴다.
 const LANES: { id: ToolCat; label: string; desc: string; icon: IconName }[] = [
-  { id: 'rules',   label: '규칙 · 대회', desc: 'TDA 규칙 · 용어사전 · 족보 · ICM · 딜 · M존', icon: 'gavel' },
+  { id: 'rules',   label: '규칙 · 대회', desc: 'TDA 규칙 · 용어사전 · 족보 · 핸드 순위 · ICM · 딜 · M존', icon: 'gavel' },
   { id: 'explore', label: '전략 탐색', desc: '스팟을 정하고 레인지·빈도를 본다', icon: 'table' },
   { id: 'train',   label: '트레이너',   desc: '풀고 · 틀리고 · 오답 노트로 복습', icon: 'graduation-cap' },
   { id: 'review',  label: '핸드 리뷰',  desc: '지난 판 되짚기 — 에퀴티·아웃츠·팟오즈·SPR·MDF·EV', icon: 'microscope' },
@@ -249,6 +255,7 @@ function renderTool(k: ToolKey, intent?: OpenIntent): ReactNode {
     case 'blindgen': return <BlindBuilder />;
     case 'glossary': return <GlossaryPanel />;
     case 'handrank': return <HandRankPanel />;
+    case 'startrank': return <StartingHandRankPanel />;
     // 딜 계산기는 ICM 계산기에 병합됐다(2026-09-18) — 옛 딥링크는 딜 비교 모드로 연다.
     case 'deal': return <ICMCalculator initialMode="deal" />;
     default: return null;

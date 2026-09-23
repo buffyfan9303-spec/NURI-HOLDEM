@@ -177,7 +177,7 @@ describe('G4 — 가장 가까운 Nash 표를 고른다', () => {
 
 describe('G6 — 홈이 말하는 도구 수가 사실이다', () => {
   it('🔴 GTO_TOOL_COUNT 는 21 이다 (숨긴 drill·deal 을 둘 다 뺀 값)', () => {
-    expect(GTO_TOOL_COUNT).toBe(21);
+    expect(GTO_TOOL_COUNT).toBe(22);
   });
 });
 

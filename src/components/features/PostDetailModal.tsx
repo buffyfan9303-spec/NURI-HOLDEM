@@ -601,13 +601,12 @@ export default function PostDetailModal({
                 {formatFullDate(post.createdAt)}
               </span>
               {/* 조회 — 오버라인에서 내려온 자리(§5-1). 시각과 같은 역할·같은 크기로 한 줄에 둔다. */}
-              {(post.viewCount ?? 0) > 0 && (
-                <span className="inline-flex items-center gap-1 text-xs text-ink-secondary" aria-label={`조회 ${post.viewCount}`}>
-                  {/* [E] 1.6 은 실효 0.87px — 화면 굵기 하한(1.1px) 미달. PostRowCard 목록과 같은 굵기로. */}
-                  <Icon name="eye" size={13} strokeWidth={2.2} className="shrink-0" />
-                  <span className="tabular-nums">{post.viewCount}</span>
-                </span>
-              )}
+              <span className="inline-flex items-center gap-1 text-xs text-ink-secondary" aria-label={`조회 ${post.viewCount ?? 0}`}>
+                {/* [E] 1.6 은 실효 0.87px — 화면 굵기 하한(1.1px) 미달. PostRowCard 목록과 같은 굵기로.
+                    조회수는 여기서만 상시 표시한다(오너 결정 2026-09-23 BOARD-VIEWCOUNT-DETAIL-ONLY) — 0 도 보인다. */}
+                <Icon name="eye" size={13} strokeWidth={2.2} className="shrink-0" />
+                <span className="tabular-nums">{post.viewCount ?? 0}</span>
+              </span>
             </div>
           </div>
           {/* 관리 동작 묶음 — 셋 다 같은 급(작게·중립·hover 에서만 의도 색).

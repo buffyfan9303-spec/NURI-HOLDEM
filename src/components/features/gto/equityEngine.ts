@@ -403,13 +403,17 @@ export function computeEquityMulti(
   };
 }
 
-/** Hero 특정 핸드 vs 빌런 레인지 — 매 반복 가중 랜덤 콤보 샘플 + 보드 완성 몬테카를로 */
+/** Hero 특정 핸드 vs 빌런 레인지 — 매 반복 가중 랜덤 콤보 샘플 + 보드 완성 몬테카를로.
+ *  `seed` 를 주면 재현 가능한 난수열(makeRng)을 쓴다 — 스타팅 핸드 순위 생성기(scripts/gen-starting-hand-rank.mjs)가
+ *  '무작위 한 손' 레인지(1326콤보)로 이 함수를 그대로 불러 169개 값을 결정적으로 만든다. 없으면 종전대로 Math.random. */
 export function computeEquityVsRange(
   hero: [Card, Card],
   villainRange: WeightedCombo[],
   board: Card[],
   iterations = 2500,
+  seed?: number,
 ): EquityResult {
+  const rnd = makeRng(seed);
   const heroN = [toN(hero[0]), toN(hero[1])];
   const boardN = board.map(toN);
   const blocked = new Set([...heroN, ...boardN].map(keyOf));
@@ -453,12 +457,12 @@ export function computeEquityVsRange(
 
   let hw = 0; let vw = 0; let tie = 0; let total = 0;
   for (let i = 0; i < iterations; i += 1) {
-    const vc = sampleCombo(combos, rangeTotal);
+    const vc = sampleCombo(combos, rangeTotal, rnd);
     const full = boardN.slice();
     if (need > 0) {
       const used = new Set<number>([vc.ka, vc.kb]);
       while (full.length < boardN.length + need) {
-        const c = deck[Math.floor(Math.random() * deck.length)];
+        const c = deck[Math.floor(rnd() * deck.length)];
         const k = keyOf(c);
         if (used.has(k)) continue;
         used.add(k);

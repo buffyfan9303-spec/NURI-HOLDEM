@@ -1,4 +1,4 @@
-// GTO 도구 전수 점검 — **21개 노출 + 9개 숨김/이관 딥링크**를 하나도 빠뜨리지 않는다.
+// GTO 도구 전수 점검 — **22개 노출 + 9개 숨김/이관 딥링크**를 하나도 빠뜨리지 않는다.
 //
 // 왜 필요한가(2026-09-20 GTO 감사): 지금까지 도구별 검사는 몇 개만 있었고, "열리기는 하는가" 를
 // 전수로 확인하는 장치가 없었다. 도구 하나가 렌더 중 터져도 카탈로그에는 타일이 그대로 보이므로
@@ -29,9 +29,10 @@ const HIDDEN = new Set<string>([
 ]);
 const VISIBLE = ALL_KEYS.filter((k) => !HIDDEN.has(k));
 
-test('전제 — 카탈로그를 실제로 읽었고 노출 21 · 숨김 9 이다', () => {
-  expect(ALL_KEYS.length, 'TOOLS 를 못 읽었다 — 이 스펙 전체가 빈 검사가 된다').toBe(30);
-  expect(VISIBLE.length, `노출 도구가 ${VISIBLE.length}개다: ${VISIBLE.join(',')}`).toBe(21);
+// 2026-09-23 스타팅 핸드 순위(startrank) 추가로 30→31 · 21→22.
+test('전제 — 카탈로그를 실제로 읽었고 노출 22 · 숨김 9 이다', () => {
+  expect(ALL_KEYS.length, 'TOOLS 를 못 읽었다 — 이 스펙 전체가 빈 검사가 된다').toBe(31);
+  expect(VISIBLE.length, `노출 도구가 ${VISIBLE.length}개다: ${VISIBLE.join(',')}`).toBe(22);
   expect(HIDDEN.size, `숨김/이관이 ${HIDDEN.size}개다: ${[...HIDDEN].join(',')}`).toBe(9);
 });
 
@@ -77,7 +78,7 @@ async function probeTool(page: import('@playwright/test').Page, key: string) {
   return { ...(m ?? {}), fatal, found: m !== null };
 }
 
-test('🔴 노출 21개 도구가 전부 실제로 열린다 (390px · 목킹 로그인)', async ({ page }) => {
+test('🔴 노출 22개 도구가 전부 실제로 열린다 (390px · 목킹 로그인)', async ({ page }) => {
   test.setTimeout(600_000);
   await bootOwner(page, { viewport: { width: 390, height: 844 }, goto: false });
   const rows: Record<string, unknown>[] = [];
@@ -96,10 +97,10 @@ test('🔴 노출 21개 도구가 전부 실제로 열린다 (390px · 목킹 �
     else if (r.fatal.length) bad.push(`${key}: 콘솔 오류 ${JSON.stringify(r.fatal.slice(0, 2))}`);
     else if ((r.문서가로넘침 ?? 0) > 0) bad.push(`${key}: 문서가 가로로 ${r.문서가로넘침}px 넘친다`);
   }
-  console.log('[21 도구]', JSON.stringify(rows.map((r) => ({
+  console.log('[22 도구]', JSON.stringify(rows.map((r) => ({
     key: r.key, 글자: r.글자수, 조작: r.조작요소, 넘침: r.문서가로넘침, 작은표적: (r.작은표적 as unknown[]).length,
   }))));
-  expect(rows.length, '한 개도 못 열었다면 이 검사는 아무것도 재지 않았다').toBe(21);
+  expect(rows.length, '한 개도 못 열었다면 이 검사는 아무것도 재지 않았다').toBe(22);
   expect(bad, `열리지 않거나 깨진 도구: ${bad.join(' | ')}`).toEqual([]);
 });
 
