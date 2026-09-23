@@ -155,7 +155,9 @@ function reactionPill(active: boolean): string {
  */
 function trayCell(active: boolean): string {
   return [
-    'flex h-[44px] min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-[10px] px-1',
+    // ≥380 한 줄: 4등분 grid 는 '좋아요 1234' 처럼 긴 칸이 넘쳤다(design-reviewer 2026-09-24, 390 ±5.1px).
+    //   flex-auto + min-w-fit 로 칸 폭을 내용에 비례시키고, 좌우 안쪽을 px-0.5 로 줄여 9999/999/999 도 들어가게 한다.
+    'flex h-[44px] min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-[10px] px-1 min-[380px]:min-w-fit min-[380px]:flex-auto min-[380px]:px-0.5',
     'text-xs font-semibold leading-none transition-colors active:scale-[0.98]',
     active ? 'bg-accent-300/15 text-accent-200' : 'text-ink-secondary',
   ].join(' ');
@@ -876,7 +878,7 @@ export default function PostDetailModal({
               윗줄 칸 아래 끝의 히트 테스트가 픽셀 스냅으로 아랫줄 칸에 먹혔다(e2e 트레이 히트 실측 실패로 확인). */}
         {!hidden && !inline && (
         <div role="group" aria-label="게시글 반응"
-          className="mt-3 grid grid-cols-2 gap-0.5 overflow-hidden rounded-[14px] border border-border-strong bg-surface-low p-1 min-[380px]:grid-cols-4 lg:hidden">
+          className="mt-3 grid grid-cols-2 gap-0.5 overflow-hidden rounded-[14px] border border-border-strong bg-surface-low p-1 min-[380px]:flex lg:hidden">
           <button type="button" aria-pressed={!!post.liked}
             onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; } onLike(post.id); }}
             className={trayCell(!!post.liked)}>

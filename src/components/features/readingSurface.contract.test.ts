@@ -121,7 +121,8 @@ describe('UI-03 · 아우라 구분선', () => {
     // 트레이: 독립 상세 전용 + lg 에서 숨김.
     expect(POST).toMatch(/\{!hidden && !inline && \(/);
     expect(POST).toMatch(/role="group" aria-label="게시글 반응"/);
-    expect(POST).toMatch(/grid-cols-2[^"]*min-\[380px\]:grid-cols-4[^"]*lg:hidden/);
+    // 380 이상은 flex 한 줄(내용 비례 폭 — design-reviewer 2026-09-24 FAIL-1: 4등분 grid 는 큰 숫자에서 넘쳤다).
+    expect(POST).toMatch(/grid-cols-2[^"]*min-\[380px\]:flex[^"]*lg:hidden/);
     // 권한 조건이 두 벌로 복사되지 않았다 — 각 조건이 소스에 한 번씩만 있다.
     expect((POST.match(/acts\.push\(/g) ?? []).length, '관리 동작은 신고·차단·삭제 셋').toBe(3);
     expect(POST).toMatch(/aria-label="게시글 메뉴"/);

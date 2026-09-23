@@ -139,12 +139,15 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
                 {listing.condition}급
               </span>
             </span>
+            {/* 상태칩도 등급칩과 같은 반투명 틴트라 같은 받침을 깐다 — 라이트 '예약중' 4.80 → 카드 위 4.35 였다(design-reviewer). */}
             {listing.status !== 'on_sale' && (
-              <span className={[
-                'inline-flex items-center rounded-badge border px-2 py-0.5 font-bold',
-                status.cls,
-              ].join(' ')}>
-                {status.label}
+              <span className="inline-flex rounded-badge bg-surface-mid">
+                <span className={[
+                  'inline-flex items-center rounded-badge border px-2 py-0.5 font-bold',
+                  status.cls,
+                ].join(' ')}>
+                  {status.label}
+                </span>
               </span>
             )}
             <span className="text-ink-secondary">{listing.region}</span>
@@ -152,7 +155,9 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
             <span className="text-ink-secondary">{relativeTime(listing.createdAt)}</span>
             {/* 신고·차단 — 예전엔 글자만(20×16px)이라 손가락으로 거의 못 눌렀다. 44px 실박스(오버행 .hit 금지 — HANDOVER §3 J). */}
             {user && user.id !== listing.sellerId && (
-              <span className="-my-2.5 -mr-2 ml-auto flex shrink-0 items-center">
+              <span className="relative z-[1] -my-2.5 -mr-2 ml-auto flex shrink-0 items-center">
+                {/* relative z-[1]: 칩 줄이 접혀 이 묶음만 한 줄에 남으면 -my-2.5 로 튀어나온 아래 2px 를 다음 형제 h1 이 덮어
+                    히트가 42px 였다(design-reviewer 2026-09-24, 320·긴 지역명). 쌓임 순서를 올려 44px 전부를 버튼이 받는다. */}
                 <button type="button" onClick={() => setReportOpen(true)}
                   className="inline-flex h-[44px] min-w-[44px] items-center justify-center whitespace-nowrap px-2 text-xs text-ink-muted hover:text-danger-light transition-colors">신고</button>
                 <button type="button"

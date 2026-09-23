@@ -78,7 +78,7 @@ const READER_SESSION = {
   user: { id: READER_UID, aud: 'authenticated', role: 'authenticated', email: 'reader@example.com', app_metadata: {}, user_metadata: { name: '읽는사람' }, created_at: '2026-01-01T00:00:00Z' },
 };
 
-async function install(page: Page, baseURL: string | undefined, opts: { loggedIn?: boolean } = {}) {
+async function install(page: Page, baseURL: string | undefined, opts: { loggedIn?: boolean; post?: Record<string, unknown> } = {}) {
   // Playwright 픽스처의 baseURL 은 `string | undefined` 다. 예전엔 `string` 으로 받아
   //   호출부 6곳이 전부 타입 오류였는데 **e2e 는 tsc 대상이 아니라 아무도 못 봤다**(§0-a22).
   //   없으면 `new URL(undefined)` 가 알 수 없는 TypeError 를 던진다 — 여기서 크게, 말이 되게 실패시킨다.
@@ -97,7 +97,7 @@ async function install(page: Page, baseURL: string | undefined, opts: { loggedIn
     if (url.includes('__pd-fixture-poster.png')) return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: POSTER_SVG });
     if (url.startsWith(ORIGIN) || url.startsWith('data:') || url.startsWith('blob:')) return route.continue();
     // ── 여기부터는 전부 외부다. **절대 continue 하지 않는다.**
-    if (/\/rest\/v1\/community_posts\?/.test(url)) return j(route, postsWith(POSTER));
+    if (/\/rest\/v1\/community_posts\?/.test(url)) return j(route, postsWith(POSTER).map((p, i) => (i === 0 ? { ...p, ...(opts.post ?? {}) } : p)));
     if (/\/rest\/v1\/comments\?/.test(url)) return j(route, COMMENTS);
     if (/\/rest\/v1\/shop_skus/.test(url)) return j(route, [
       { key: 'cheer', kind: 'cheer', label: '응원', descr: '', price: 30, duration_hours: 0, duration_seconds: 0, tier_rank: 1, sort: 1 },
@@ -521,6 +521,43 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
       }
       // 폭을 글자 축소로 맞추지 않았다 — 320 에서도 같은 크기다.
       for (const f of t.글꼴) expect(f, `트레이 글자가 ${f}px 로 줄었다`).toBeGreaterThanOrEqual(12.5);
+    });
+  }
+
+  // 🔴 POST-DETAIL-DENSITY 후속(design-reviewer 2026-09-24 FAIL-1) — 한 줄 트레이(≥380)가 **큰 숫자**에서 넘쳤다
+  //   (4등분 grid 라 390 '좋아요 1234' 가 칸 양쪽으로 5.1px). 픽스처 숫자 3 으로는 안 보인다 → 9999/999/999 로 잰다.
+  //   잠그는 것: 한 줄 · 라벨이 자기 칸 안 · 이웃 잉크 간격 ≥4px · 칸 높이 44px · 트레이 가로 넘침 0.
+  for (const W of [380, 390, 412] as const) {
+    test(`🔴 ${W}px — 반응 트레이가 큰 숫자(9999·999·999)에서도 칸 밖으로 안 나간다`, async ({ page, baseURL }) => {
+      await page.setViewportSize({ width: W, height: 844 });
+      await install(page, baseURL, { post: { like_count: 9999, goodrun_count: 999, badbeat_count: 999 } });
+      await openPost(page);
+      const m = await page.evaluate(() => {
+        const tray = document.querySelector<HTMLElement>('[aria-label="게시글 반응"]');
+        if (!tray) return null;
+        tray.scrollIntoView({ block: 'center' });
+        const ink = Array.from(tray.querySelectorAll<HTMLElement>('button')).map((c) => {
+          const rs = Array.from(c.children).map((k) => k.getBoundingClientRect()).filter((r) => r.width > 0);
+          return { t: (c.textContent || '').replace(/\s+/g, ' ').trim(), l: Math.min(...rs.map((r) => r.left)), r: Math.max(...rs.map((r) => r.right)), box: c.getBoundingClientRect() };
+        });
+        return {
+          라벨: ink.map((k) => k.t),
+          넘침: ink.filter((k) => k.box.left - k.l > 0.5 || k.r - k.box.right > 0.5).map((k) => `${k.t}:${(k.box.left - k.l).toFixed(1)}/${(k.r - k.box.right).toFixed(1)}`),
+          잉크간격: ink.slice(1).map((k, i) => +(k.l - ink[i].r).toFixed(1)),
+          높이: ink.map((k) => +k.box.height.toFixed(1)),
+          줄수: new Set(ink.map((k) => Math.round(k.box.top))).size,
+          트레이넘침: tray.scrollWidth - tray.clientWidth,
+        };
+      });
+      expect(m, '반응 트레이가 없다').not.toBeNull();
+      const t = m!;
+      console.log(`[tray-big ${W}]`, JSON.stringify(t));
+      expect(t.라벨.join('|'), '큰 숫자 목킹이 화면에 안 실렸다 — 이 검사가 빈 검사가 됐다').toMatch(/좋아요 9999/);
+      expect(t.줄수, `${W}px 는 한 줄 트레이여야 한다`).toBe(1);
+      expect(t.넘침, `라벨이 칸 밖으로 나갔다: ${JSON.stringify(t.넘침)}`).toEqual([]);
+      for (const g of t.잉크간격) expect(g, `이웃 칸 글자 사이가 ${g}px — 4px 미만이면 붙어 읽힌다`).toBeGreaterThanOrEqual(4);
+      for (const h of t.높이) expect(h, `칸 높이 ${h}px — 44px 계약`).toBeGreaterThanOrEqual(44);
+      expect(t.트레이넘침, '트레이가 가로로 넘쳤다').toBeLessThanOrEqual(0);
     });
   }
 
