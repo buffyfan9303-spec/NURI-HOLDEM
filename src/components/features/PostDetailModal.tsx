@@ -156,11 +156,26 @@ function reactionPill(active: boolean): string {
 function trayCell(active: boolean): string {
   return [
     // ≥380 한 줄: 4등분 grid 는 '좋아요 1234' 처럼 긴 칸이 넘쳤다(design-reviewer 2026-09-24, 390 ±5.1px).
-    //   flex-auto + min-w-fit 로 칸 폭을 내용에 비례시키고, 좌우 안쪽을 px-0.5 로 줄여 9999/999/999 도 들어가게 한다.
-    'flex h-[44px] min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-[10px] px-1 min-[380px]:min-w-fit min-[380px]:flex-auto min-[380px]:px-0.5',
+    //   flex-auto 로 칸 폭을 내용에 비례시키고, 좌우 안쪽을 px-0.5 로 줄인다.
+    // 🔴 CI 2026-09-24 — 칸을 min-w-fit 로 두면 **글꼴 폭이 곧 트레이 폭**이다. 리눅스/안드로이드 래스터는 윈도우보다
+    //   글자가 넓어(380 에서 합계 ~7px) 트레이가 1px 넘쳤다. → 칸은 min-w-0 로 줄어들 수 있게 두고, 줄어드는 몫은
+    //   `trayLabel` 의 라벨 낱말(말줄임)이 받는다. 숫자·아이콘은 줄지 않는다. 아이콘↔글자 간격을 gap-0.5 로 좁혀
+    //   실제 글꼴에서는 말줄임이 나오지 않을 여유를 만든다(e2e post-detail-read '큰 숫자' · '넓은 글꼴').
+    'flex h-[44px] min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-[10px] px-1 min-[380px]:flex-auto min-[380px]:gap-0.5 min-[380px]:px-0.5',
     'text-xs font-semibold leading-none transition-colors active:scale-[0.98]',
     active ? 'bg-accent-300/15 text-accent-200' : 'text-ink-secondary',
   ].join(' ');
+}
+
+/** 트레이 칸의 '라벨 숫자'. 칸이 좁아지면 라벨 낱말만 말줄임되고 숫자는 끝까지 남는다(위 trayCell 주석).
+ *  낱말 사이 `{' '}` 는 flex 라 그려지지 않지만 textContent·읽기 이름('좋아요 9999')에는 남는다. */
+function TrayLabel({ label, count }: { label: string; count?: number }) {
+  return (
+    <span className="flex min-w-0 items-center gap-[0.25em]">
+      <span className="min-w-0 overflow-x-clip text-ellipsis">{label}</span>
+      {count !== undefined && <>{' '}<span className="tabular-nums">{count}</span></>}
+    </span>
+  );
 }
 
 export default function PostDetailModal({
@@ -883,23 +898,23 @@ export default function PostDetailModal({
             onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; } onLike(post.id); }}
             className={trayCell(!!post.liked)}>
             <Icon name={post.liked ? 'heart-fill' : 'heart'} size={15} strokeWidth={2.0} className="shrink-0" />
-            <span>좋아요 <span className="tabular-nums">{post.likeCount}</span></span>
+            <TrayLabel label="좋아요" count={post.likeCount} />
           </button>
           <button type="button" aria-pressed={myReaction === 'goodrun'} onClick={() => react('goodrun')}
             className={trayCell(myReaction === 'goodrun')}>
             <Icon name="chevron-up" size={15} strokeWidth={2.2} className="shrink-0" />
-            <span>추천 <span className="tabular-nums">{gr}</span></span>
+            <TrayLabel label="추천" count={gr} />
           </button>
           <button type="button" aria-pressed={myReaction === 'badbeat'} onClick={() => react('badbeat')}
             className={trayCell(myReaction === 'badbeat')}>
             <Icon name="chevron-down" size={15} strokeWidth={2.2} className="shrink-0" />
-            <span>비추천 <span className="tabular-nums">{bb}</span></span>
+            <TrayLabel label="비추천" count={bb} />
           </button>
           {/* 공유만 면을 깐다 — 숫자가 없는 동작이라 나머지 셋과 역할이 다르다는 표시다. */}
           <button type="button" onClick={copyLink} aria-label="링크 복사"
             className={[trayCell(false), 'bg-accent-300/10 text-accent-200'].join(' ')}>
             <Icon name="share" size={15} strokeWidth={2.0} className="shrink-0" />
-            <span>공유</span>
+            <TrayLabel label="공유" />
           </button>
         </div>
         )}

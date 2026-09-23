@@ -527,38 +527,80 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
   // 🔴 POST-DETAIL-DENSITY 후속(design-reviewer 2026-09-24 FAIL-1) — 한 줄 트레이(≥380)가 **큰 숫자**에서 넘쳤다
   //   (4등분 grid 라 390 '좋아요 1234' 가 칸 양쪽으로 5.1px). 픽스처 숫자 3 으로는 안 보인다 → 9999/999/999 로 잰다.
   //   잠그는 것: 한 줄 · 라벨이 자기 칸 안 · 이웃 잉크 간격 ≥4px · 칸 높이 44px · 트레이 가로 넘침 0.
+  //
+  // 🔴 CI 2026-09-24(run 35922871478) — 위 수정은 **윈도우에서만** 통과했다. 리눅스 Chromium(=안드로이드 계열
+  //   글꼴 래스터)은 같은 Pretendard 로도 글자 폭이 조금 넓어 380 에서 트레이가 1px 넘쳤다(칸이 전부 min-content,
+  //   잉크 간격 6.4 = 여유 0). **글꼴 폭에 기대는 통과**였다는 뜻이다.
+  //   → 두 벌로 잰다: (a) 실제 글꼴 — 라벨이 잘리지 않고 여유가 남는다
+  //                  (b) 글자 폭 +0.12em(자간 주입, 어느 기기 글꼴보다 넓게) — 그래도 트레이는 안 넘치고
+  //                      **숫자는 한 글자도 안 잘린다**(줄어드는 것은 '좋아요' 같은 라벨 낱말뿐, 말줄임).
   for (const W of [380, 390, 412] as const) {
-    test(`🔴 ${W}px — 반응 트레이가 큰 숫자(9999·999·999)에서도 칸 밖으로 안 나간다`, async ({ page, baseURL }) => {
-      await page.setViewportSize({ width: W, height: 844 });
-      await install(page, baseURL, { post: { like_count: 9999, goodrun_count: 999, badbeat_count: 999 } });
-      await openPost(page);
-      const m = await page.evaluate(() => {
-        const tray = document.querySelector<HTMLElement>('[aria-label="게시글 반응"]');
-        if (!tray) return null;
-        tray.scrollIntoView({ block: 'center' });
-        const ink = Array.from(tray.querySelectorAll<HTMLElement>('button')).map((c) => {
-          const rs = Array.from(c.children).map((k) => k.getBoundingClientRect()).filter((r) => r.width > 0);
-          return { t: (c.textContent || '').replace(/\s+/g, ' ').trim(), l: Math.min(...rs.map((r) => r.left)), r: Math.max(...rs.map((r) => r.right)), box: c.getBoundingClientRect() };
+    for (const wide of [false, true] as const) {
+      test(`🔴 ${W}px${wide ? ' 넓은 글꼴' : ''} — 반응 트레이가 큰 숫자(9999·999·999)에서도 칸 밖으로 안 나간다`, async ({ page, baseURL }) => {
+        await page.setViewportSize({ width: W, height: 844 });
+        await install(page, baseURL, { post: { like_count: 9999, goodrun_count: 999, badbeat_count: 999 } });
+        await openPost(page);
+        if (wide) await page.addStyleTag({ content: '[aria-label="게시글 반응"] button { letter-spacing: 0.12em !important; }' });
+        const m = await page.evaluate(() => {
+          const tray = document.querySelector<HTMLElement>('[aria-label="게시글 반응"]');
+          if (!tray) return null;
+          tray.scrollIntoView({ block: 'center' });
+          // 내용 그대로의 폭(max-content) — 보이지 않는 복제본으로 잰다. 여유 = 실제 폭 − 내용 폭.
+          const probe = tray.cloneNode(true) as HTMLElement;
+          probe.style.cssText = 'position:absolute;visibility:hidden;width:max-content;left:0;top:0';
+          tray.parentElement!.appendChild(probe);
+          const natural = probe.getBoundingClientRect().width;
+          probe.remove();
+          const ink = Array.from(tray.querySelectorAll<HTMLElement>('button')).map((c) => {
+            const rs = Array.from(c.children).map((k) => k.getBoundingClientRect()).filter((r) => r.width > 0);
+            const num = c.querySelector<HTMLElement>('.tabular-nums');
+            const nr = num?.getBoundingClientRect();
+            return {
+              t: (c.textContent || '').replace(/\s+/g, ' ').trim(), l: Math.min(...rs.map((r) => r.left)), r: Math.max(...rs.map((r) => r.right)), box: c.getBoundingClientRect(),
+              // 숫자가 보이는 폭 — 조상 중 overflow 로 잘리는 상자까지 고려해 교집합으로 잰다.
+              숫자잘림: num && nr ? (() => {
+                let vis = nr.right;
+                for (let a: HTMLElement | null = num.parentElement; a && a !== c.parentElement; a = a.parentElement) {
+                  if (getComputedStyle(a).overflowX !== 'visible') vis = Math.min(vis, a.getBoundingClientRect().right);
+                }
+                return +(nr.right - vis).toFixed(1) + (num.scrollWidth - num.clientWidth);
+              })() : 0,
+              라벨잘림: Array.from(c.querySelectorAll<HTMLElement>('span')).some((s) => s.scrollWidth - s.clientWidth > 0.5 && getComputedStyle(s).overflowX !== 'visible'),
+            };
+          });
+          return {
+            라벨: ink.map((k) => k.t),
+            넘침: ink.filter((k) => k.box.left - k.l > 0.5 || k.r - k.box.right > 0.5).map((k) => `${k.t}:${(k.box.left - k.l).toFixed(1)}/${(k.r - k.box.right).toFixed(1)}`),
+            잉크간격: ink.slice(1).map((k, i) => +(k.l - ink[i].r).toFixed(1)),
+            높이: ink.map((k) => +k.box.height.toFixed(1)),
+            줄수: new Set(ink.map((k) => Math.round(k.box.top))).size,
+            트레이넘침: tray.scrollWidth - tray.clientWidth,
+            여유: +(tray.getBoundingClientRect().width - natural).toFixed(1),
+            숫자잘림: ink.map((k) => k.숫자잘림),
+            라벨잘림: ink.map((k) => k.라벨잘림),
+            글꼴: getComputedStyle(tray.querySelector('button')!).fontFamily,
+            프리텐다드: document.fonts.check('600 12.75px "Pretendard Variable"', '좋아요 9'),
+          };
         });
-        return {
-          라벨: ink.map((k) => k.t),
-          넘침: ink.filter((k) => k.box.left - k.l > 0.5 || k.r - k.box.right > 0.5).map((k) => `${k.t}:${(k.box.left - k.l).toFixed(1)}/${(k.r - k.box.right).toFixed(1)}`),
-          잉크간격: ink.slice(1).map((k, i) => +(k.l - ink[i].r).toFixed(1)),
-          높이: ink.map((k) => +k.box.height.toFixed(1)),
-          줄수: new Set(ink.map((k) => Math.round(k.box.top))).size,
-          트레이넘침: tray.scrollWidth - tray.clientWidth,
-        };
+        expect(m, '반응 트레이가 없다').not.toBeNull();
+        const t = m!;
+        console.log(`[tray-big ${W}${wide ? ' wide' : ''}]`, JSON.stringify(t));
+        expect(t.라벨.join('|'), '큰 숫자 목킹이 화면에 안 실렸다 — 이 검사가 빈 검사가 됐다').toMatch(/좋아요 9999/);
+        expect(t.줄수, `${W}px 는 한 줄 트레이여야 한다`).toBe(1);
+        expect(t.넘침, `라벨이 칸 밖으로 나갔다: ${JSON.stringify(t.넘침)}`).toEqual([]);
+        for (const g of t.잉크간격) expect(g, `이웃 칸 글자 사이가 ${g}px — 4px 미만이면 붙어 읽힌다`).toBeGreaterThanOrEqual(4);
+        for (const h of t.높이) expect(h, `칸 높이 ${h}px — 44px 계약`).toBeGreaterThanOrEqual(44);
+        expect(t.트레이넘침, '트레이가 가로로 넘쳤다').toBeLessThanOrEqual(0);
+        expect(t.숫자잘림, `숫자가 잘렸다 — 줄어들어도 되는 것은 라벨 낱말뿐이다: ${JSON.stringify(t.숫자잘림)}`).toEqual([0, 0, 0, 0]);
+        if (!wide) {
+          // 실제 글꼴에서는 말줄임이 나오면 안 된다 — 안전망(말줄임)이 평소 화면이 되면 그건 통과가 아니다.
+          expect(t.라벨잘림, `${W}px 실제 글꼴에서 라벨이 말줄임됐다`).toEqual([false, false, false, false]);
+          // 여유 0 근처 통과 금지. 윈도우 380 = 14.6px, 리눅스 CI 는 같은 글꼴로 ~7px 넓다(수정 전 윈도우 6.5 ↔ CI −1).
+          //   4px 는 리눅스에서도 남는 몫이다. 이보다 줄면 평소 화면이 말줄임 안전망에 기대기 시작한다.
+          expect(t.여유, `${W}px 트레이 여유 ${t.여유}px — 기기 글꼴 차이를 못 흡수한다`).toBeGreaterThanOrEqual(4);
+        }
       });
-      expect(m, '반응 트레이가 없다').not.toBeNull();
-      const t = m!;
-      console.log(`[tray-big ${W}]`, JSON.stringify(t));
-      expect(t.라벨.join('|'), '큰 숫자 목킹이 화면에 안 실렸다 — 이 검사가 빈 검사가 됐다').toMatch(/좋아요 9999/);
-      expect(t.줄수, `${W}px 는 한 줄 트레이여야 한다`).toBe(1);
-      expect(t.넘침, `라벨이 칸 밖으로 나갔다: ${JSON.stringify(t.넘침)}`).toEqual([]);
-      for (const g of t.잉크간격) expect(g, `이웃 칸 글자 사이가 ${g}px — 4px 미만이면 붙어 읽힌다`).toBeGreaterThanOrEqual(4);
-      for (const h of t.높이) expect(h, `칸 높이 ${h}px — 44px 계약`).toBeGreaterThanOrEqual(44);
-      expect(t.트레이넘침, '트레이가 가로로 넘쳤다').toBeLessThanOrEqual(0);
-    });
+    }
   }
 
   // 🔴 C1 — 작성자 행의 `…` 메뉴. 모바일은 메뉴 하나로 모으고 PC 는 종전 가로 묶음이다.
