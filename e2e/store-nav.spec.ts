@@ -622,3 +622,43 @@ test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 �
     //   구별하지 못하는 **빈 검사**였다. 위 두 단언(보이는 칸 6개 · voucher 없음)이 실제 계약을 잡는다.
   });
 });
+
+// 🔴 2026-09-24 오너(모바일 대시보드 캡처 "머리글이 3~4겹, 내용이 밀린다") — MYSTORE-MOBILE-DASH-LAYOUT.
+//   모바일 대시보드에서 ① 아코디언('대시보드 · 메뉴') ② 단계 바('요약') ③ 섹션 헤더('대시보드')가 같은 말을 세 번 했다.
+//   → ① 은 '전체 메뉴'(다른 섹션으로 가는 길) ③ 은 모바일 대시보드에서만 숨김. PC 헤더와 다른 섹션 헤더는 그대로.
+//   390 실측: 대시보드 판 top 327.1 → 268.7(−58.4px). 레일 아래 → 판 top 간격 71.2 → 12.8.
+test.describe('모바일 대시보드 — 같은 뜻의 머리글은 하나', () => {
+  test('390 — 섹션 헤더 없음 · 메뉴는 "전체 메뉴" · 판이 레일 바로 아래 · 다른 섹션 도달 가능', async ({ page }) => {
+    await bootOwner(page, { viewport: { width: 390, height: 844 } });
+    await openMyStore(page);
+    const tab = page.locator('[data-tab="my-store"]');
+    const pane = tab.locator('[data-pane="dashboard"]');
+    await expect(pane).toBeVisible({ timeout: 20_000 });
+    await expect(tab.getByRole('heading', { level: 2, name: '대시보드', exact: true }),
+      '모바일 대시보드에 섹션 헤더 "대시보드" 가 남아 단계 바의 "요약" 과 같은 말을 두 번 한다').toBeHidden();
+    const toggle = tab.getByTestId('mystore-menu-toggle');
+    await expect(toggle).toHaveText(/^\s*전체 메뉴\s*$/);
+    const gap = await page.evaluate(() => {
+      const rail = [...document.querySelectorAll<HTMLElement>('[data-tab="my-store"] [data-mystore-rail]')].find((e) => e.offsetParent)!;
+      const p = document.querySelector<HTMLElement>('[data-tab="my-store"] [data-pane="dashboard"]')!;
+      return p.getBoundingClientRect().top - rail.getBoundingClientRect().bottom;
+    });
+    expect(gap, `레일 아래 → 대시보드 판 간격 ${gap}px — 사이에 머리글이 다시 끼었다`).toBeLessThan(20);
+    // 기능 소실 0 — 아코디언이 여전히 다른 섹션으로 데려간다.
+    await toggle.evaluate((b) => (b as HTMLElement).click());
+    await expect(tab.getByRole('button', { name: '매장 설정' }).first()).toBeVisible();
+    await toggle.evaluate((b) => (b as HTMLElement).click());
+    // 다른 단계의 섹션 헤더(설명·액션 보유)는 그대로다.
+    await tab.locator(`${RAIL} button`).filter({ hasText: /^포스터$/ }).first().evaluate((b) => (b as HTMLElement).click());
+    await expect(tab.getByRole('heading', { level: 2, name: '포스터', exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(toggle).toHaveText(/^\s*전체 메뉴\s*$/);
+  });
+
+  test('1440 — PC 대시보드 섹션 헤더는 그대로 보인다', async ({ page }) => {
+    await bootOwner(page, { viewport: { width: 1440, height: 900 } });
+    await openMyStore(page);
+    const tab = page.locator('[data-tab="my-store"]');
+    await expect(tab.locator('[data-pane="dashboard"]')).toBeVisible({ timeout: 20_000 });
+    await expect(tab.getByRole('heading', { level: 2, name: '대시보드', exact: true })).toBeVisible();
+  });
+});

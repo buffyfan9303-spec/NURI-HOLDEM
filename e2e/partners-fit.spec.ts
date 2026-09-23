@@ -52,7 +52,7 @@ async function openPartners(page: Page) {
   await expect(tab).toBeVisible({ timeout: 20_000 });
   const nav = tab.getByRole('button', { name: '파트너 매장' });
   if (!(await nav.first().isVisible().catch(() => false))) {
-    await tab.getByRole('button', { name: /대시보드/ }).first().click();
+    await tab.getByTestId('mystore-menu-toggle').click();
   }
   await page.evaluate(() => { const b = [...document.querySelectorAll('[data-tab="my-store"] button')].find((x) => x.textContent?.trim() === '파트너 매장') as HTMLButtonElement | undefined; b?.click(); });
   await expect(tab.getByText('함께 열 매장 찾기')).toBeVisible({ timeout: 20_000 });

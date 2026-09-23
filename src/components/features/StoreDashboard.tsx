@@ -84,6 +84,9 @@ export interface DashCaps {
 
 interface Props {
   venueId: string;
+  /** 매장 이름(venues.name) — 없으면 포스터의 pubName, 그것도 없으면 '내 매장'.
+   *  2026-09-24: 포스터가 없는 매장은 표지판 줄이 '내 매장' 으로 떠 앱 헤더의 '내 매장' 과 같은 말을 두 번 했다. */
+  venueName?: string;
   schedules: Schedule[];
   /** 이동. 문자열이면 예전대로 '지금 화면'을, 객체면 날짜·게임·event·정산 문맥까지 데려간다. */
   onGoto: StoreGoto;
@@ -100,7 +103,7 @@ interface Props {
  * 매장 대시보드 — 오늘 장부·클락·예약·출근 + 최근 7일 추세·객단가 + 미수 알림 + 인건비·손님유형을 실시간 요약.
  * 모든 카드는 해당 운영 화면으로 바로가기. 직원은 부여된 권한(caps)의 카드만 노출 — 권한 없는 화면으로의 dead-end 방지.
  */
-export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePoster, caps, active = true, onProgress }: Props) {
+export default function StoreDashboard({ venueId, venueName: venueNameProp, schedules, onGoto, onCreatePoster, caps, active = true, onProgress }: Props) {
   const toast = useToast();
   const d = localToday();
   const days = last7();
@@ -241,7 +244,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 5);
   // 스티키 상단 바 매장명 — 이 매장 포스터의 pubName 재사용(추가 조회 없음). 포스터가 없으면 일반 명칭 폴백.
-  const venueName = schedules.find((s) => s.venueId === venueId)?.pubName || '내 매장';
+  const venueName = venueNameProp || schedules.find((s) => s.venueId === venueId)?.pubName || '내 매장';
 
   // C08(2026-09-12) — reload 는 [venueId, d] 로만 재생성되는데 예전엔 그 안에서 `schedules`(props)를
   // 직접 읽어 예약 id 목록을 만들었다. schedules 가 바뀌어도(포스터 추가·삭제) reload 함수 자체는
@@ -823,10 +826,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             <span className="hidden text-2xs tabular-nums text-ink-muted lg:inline">
               {refreshedAt ? `${String(refreshedAt.getHours()).padStart(2, '0')}:${String(refreshedAt.getMinutes()).padStart(2, '0')} 기준` : '불러오는 중'}
             </span>
+            {/* 2026-09-24 모바일 44px — 종전 h-8(34px). 음수 세로 여백으로 이 표지판 줄 높이는 그대로 둔다(py-2 안에서 겹침).
+                PC(lg)는 종전 h-8 그대로. */}
             <button type="button" title="새로고침" aria-label="대시보드 새로고침"
               disabled={refreshing || loading}
               onClick={() => { setRefreshing(true); void Promise.resolve(reload()).finally(() => setRefreshing(false)); }}
-              className="grid h-8 w-8 place-items-center rounded-input text-ink-muted transition-colors hover:bg-surface-float/60 hover:text-ink-primary disabled:opacity-40">
+              className="-my-2.5 grid h-[44px] w-[44px] place-items-center lg:my-0 lg:h-8 lg:w-8 rounded-input text-ink-muted transition-colors hover:bg-surface-float/60 hover:text-ink-primary disabled:opacity-40">
               <Icon name="refresh" size={13} className={refreshing ? 'animate-spin' : undefined} />
             </button>
           </span>

@@ -16,7 +16,8 @@ import { bootOwner, openMyStore } from './_mockOwner';
 
 /** SectionHeader(atoms/SectionHeader.tsx) 만 고른다 — 앱 셸 헤더도 border-b 라 h2.text-fluid-lg 로 좁힌다. */
 const MEASURE = () => [...document.querySelectorAll<HTMLElement>('header')]
-  .filter((h) => h.querySelector('h2.text-fluid-lg'))
+  // 2026-09-24: 모바일 대시보드는 섹션 헤더를 숨긴다(max-lg:hidden) — 숨은 헤더는 rect 가 0 이라 중심차 0 으로 잡혔다.
+  .filter((h) => h.querySelector('h2.text-fluid-lg') && h.getBoundingClientRect().height > 0)
   .map((h) => {
     const t2 = h.querySelector('h2')!.getBoundingClientRect();
     const tile = h.querySelector<HTMLElement>('span[aria-hidden]')?.getBoundingClientRect();
@@ -91,6 +92,9 @@ test.describe('PC 내 매장 — 섹션 헤더는 액션 유무와 무관하게 
     await openMyStore(page);
     await expect(page.locator('[data-tab="my-store"]')).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(2000);
+    // 모바일 대시보드는 섹션 헤더가 없다(2026-09-24) — 설명이 붙은 '포스터' 단계 헤더에서 잰다.
+    await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-mystore-rail] [role=tab]')].find((b) => b.offsetParent && b.textContent?.trim() === '포스터')?.click());
+    await expect(page.locator('[data-tab="my-store"] h2', { hasText: '포스터' }).first()).toBeVisible({ timeout: 20_000 });
 
     const m = (await page.evaluate(MEASURE)).filter((x) => x.중심차 != null);
     console.log('[모바일 390 섹션 헤더]', JSON.stringify(m));

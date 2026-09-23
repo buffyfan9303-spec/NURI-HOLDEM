@@ -673,6 +673,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     : available.filter((a) => (a.id === 'stats' ? matured.insights : true));
   const navHiddenCount = available.length - navItems.length;
   const curItem = available.find((a) => a.id === section);
+  /** 모바일 아코디언 라벨 — 단계 바가 현재 위치를 말하는 섹션인가(아래 GameStepBar 렌더 조건과 같은 집합). */
+  const railNav = (section === 'game' || section === 'dashboard' || section === 'voucher') && !curItem?.locked;
   // ⚠ 2026-09-15 — deferred 를 걷어냈다. 이유는 위 renderSettingsTab 주석과 같다:
   //   내 매장은 이제 goSubTab(VT) 을 타는데, deferred 값은 flushSync 커밋 안에서 갱신되지 않아
   //   전환이 **옛 판을 찍고** 진짜 교체가 전환 밖에서 드러났다. 지금은 VT 스냅샷이 렌더 비용을 가린다.
@@ -783,12 +785,17 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
         <div className="lg:flex lg:gap-5">
           {available.length > 1 && (<>
               {/* 모바일: 아코디언 — 현재 메뉴만 보이고, 탭하면 그룹별 전체 펼침(위로 다 몰지 않게) */}
+              {/* 🔴 2026-09-24 오너(모바일 대시보드 캡처 "머리글이 3~4겹"): 단계 바가 뜨는 섹션(대시보드·게임 진행·이용권)에서는
+                  '지금 어디'를 단계 바의 활성 알약이 이미 말한다. 이 버튼까지 '대시보드'라고 적으면 같은 뜻의 머리글이
+                  두 겹이 된다 → 거기서는 역할을 **'전체 메뉴'(다른 섹션으로 가는 길)** 로만 둔다. 펼친 목록·현재 항목 강조·
+                  매장 설정·직원·캘린더 등 도달 경로는 그대로다(기능 소실 0). 단계 바가 없는 섹션은 종전처럼 현재 섹션명.
+                  data-testid: 라벨이 바뀌므로 셀렉터는 이 id 로 잡는다(e2e/partners-fit.spec.ts). */}
               <div data-main-enter className="lg:hidden">
-                <button type="button" onClick={() => setNavOpen((v) => !v)} aria-expanded={navOpen}
+                <button type="button" data-testid="mystore-menu-toggle" onClick={() => setNavOpen((v) => !v)} aria-expanded={navOpen}
                   className="flex w-full items-center gap-2 rounded-card border border-accent-400/30 bg-surface-high px-3 py-2.5">
-                  <span className="shrink-0 text-accent-300" aria-hidden>{SECTION_ICON[section as Section]}</span>
-                  <span className="min-w-0 flex-1 text-left text-sm font-bold text-ink-primary truncate">{curItem?.label ?? '메뉴'}</span>
-                  <span className="text-2xs text-ink-muted">{navOpen ? '닫기' : '메뉴'}</span>
+                  <span className="shrink-0 text-accent-300" aria-hidden>{railNav ? <Icon name="menu" size={16} /> : SECTION_ICON[section as Section]}</span>
+                  <span className="min-w-0 flex-1 text-left text-sm font-bold text-ink-primary truncate">{railNav ? '전체 메뉴' : (curItem?.label ?? '메뉴')}</span>
+                  {(navOpen || !railNav) && <span className="text-2xs text-ink-muted">{navOpen ? '닫기' : '메뉴'}</span>}
                   <Icon name="chevron-down" size={16} className={['shrink-0 text-ink-muted transition-transform', navOpen ? 'rotate-180' : ''].join(' ')} />
                 </button>
                 {navOpen && (
@@ -953,7 +960,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               <SettingsTabBar tabs={SETTINGS_TABS.filter((t) => canSettingsTab(t.id))} active={renderSettingsTab} onPick={gotoSection} />
             )}
             {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로(콘텐츠와 함께 deferred 전환) */}
+            {/* 🔴 2026-09-24 오너(모바일 대시보드 캡처) — 모바일 대시보드에서는 이 헤더를 숨긴다(`max-lg:hidden`).
+                대시보드 헤더는 제목 '대시보드' 하나뿐이고(설명·액션 없음 — SECTION_DESC 에 키가 없다) 바로 위 단계 바의
+                활성 '요약' 알약이 같은 말을 한다. 남겨 두면 실제 내용(오늘 장부)이 58px 아래로 밀린다(390 실측).
+                ⚠ PC(≥1024)는 그대로다 — PC 는 단계 바 옆에 사이드바가 있고 섹션 헤더 높이 계약(pc-store-regression)이 있다.
+                ⚠ 다른 섹션은 설명·'+ 새 게임' 액션을 이 헤더에만 싣는다 — 대시보드만 숨긴다. */}
             {!dItem?.locked && (
+              <div className={renderSection === 'dashboard' ? 'max-lg:hidden' : undefined}>
               <SectionHeader
                 title={renderSection === 'game'
                   ? (GAME_STEPS.find((s) => s.id === renderGameStep)?.label ?? '게임 진행')
@@ -970,6 +983,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   ? <button type="button" onClick={onCreatePoster} className="btn-primary">+ 새 게임</button>
                   : undefined}
               />
+              </div>
             )}
             {/* 방문한 판(섹션/스텝)은 마운트 유지 — display 토글만(전환 시 unmount/remount·재fetch·깜빡임 제거). 토글 기준은 deferred */}
             {(() => {
@@ -987,7 +1001,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               };
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
-                  <StoreDashboardM venueId={venueId} schedules={schedules} onGoto={onGotoStore} onCreatePoster={onCreatePoster} onProgress={setStepInfo}
+                  <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={onCreatePoster} onProgress={setStepInfo}
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />
                   {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
