@@ -130,9 +130,19 @@ const SINO = '(?:[일이삼사오육칠팔구]?[십백][일이삼사오육칠팔
 const NUM_LOOSE = String.raw`(?:\d+(?:\.\d+)?|(?<![가-힣])(?:${NATIVE}|${SINO}|반)(?=[은는이가을를도의]?(?:[^가-힣]|$)))`;
 /** 통계어 옆 수치 토큰 — 관형사 한·두·세·네('한 핸드'·'세 가지')와 크기·개수 단위가 붙은 숫자는 뺀다. */
 const NUMTOK = String.raw`(?:\d+(?:\.\d+)?|(?<![가-힣])(?:다섯|여섯|일곱|여덟|아홉|열|스물|서른|마흔|쉰|예순|일흔|여든|아흔|하나|둘|셋|넷|${SINO}|반)(?![가-힣])|(?<![가-힣])[일이삼사오육칠팔구]할|반반|절반)`
-  + String.raw`(?!\s*(?:${SAFE_UNIT}|번(?!\s*(?:중|에))))`;
-/** 분모 — '둘 중 하나'·'한 번' 같은 일상어를 피하려고 셋 이상만. */
-const DEN = String.raw`(?:\d+|(?<![가-힣])(?:세|네|다섯|여섯|일곱|여덟|아홉|열|스물|서른|셋|넷)|(?<![가-힣])${SINO})`;
+  + String.raw`(?!\s*-?\s*(?:${SAFE_UNIT}|번(?!\s*(?:중|에))))`;
+// 🔴 3차 판정(2026-09-24): 단위 면제·한 글자 한자 수·'판' 누락으로 '100명 중 60명'·'오 대 오'·'칠 할'·
+//   '천 번 중 백 번'·'두 판에 한 판'·'열 판 중 일곱 판' 이 샜다. 비율 규칙은 **단위와 무관하게** 본다.
+/** 비율 단위 — 이것이 붙어도 비율이면 비율이다. */
+const RUNIT = '(?:번|판|명|개|가지|콤보|핸드)';
+/** 한자 수 — 한 글자(일~구)까지. 비율·'대' 안에서만 쓴다(낱말 속 오탐을 피하려고 앞뒤 경계를 본다). */
+const SINO1 = '(?:[일이삼사오육칠팔구]?[십백천][일이삼사오육칠팔구]?|[일이삼사오육칠팔구])';
+/** 수 뒤 경계 — 조사 하나까지, 또는 비율 단위. */
+const NUM_END = String.raw`(?=[은는이가을를도의]?(?:[^가-힣]|$)|\s*${RUNIT}|\s*(?:중|에))`;
+/** 비율의 분자 — '하나' 는 뺀다('셋 중 하나를 고르라' 는 빈도가 아니다). 범위 수사(두세·서너) 포함. */
+const R_NUM = String.raw`(?:\d+(?:\.\d+)?|(?<![가-힣])(?:두세|서너|너덧|대여섯|한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|스물|서른|마흔|쉰|둘|셋|넷|${SINO1})${NUM_END})`;
+/** 비율의 분모 — '이 중에'(지시어)·'한 번에'·'하나' 를 피하려고 이·한·하나·둘 은 뺀다. */
+const R_DEN = String.raw`(?:\d+(?:\.\d+)?|(?<![가-힣])(?:두세|서너|너덧|대여섯|두|세|네|다섯|여섯|일곱|여덟|아홉|열|스물|서른|마흔|쉰|셋|넷|[일이삼사오육칠팔구]?[십백천][일이삼사오육칠팔구]?|[일삼사오육칠팔구])${NUM_END})`;
 const STAT = String.raw`(?:승률|확률|비율|비중|빈도|에퀴티|이퀴티|오즈|\bequity\b|\bEV\b|\bodds\b)`;
 const ACT = '(?:콜|폴드|레이즈|벳|체크|올인)';
 
@@ -140,15 +150,16 @@ export const FORBIDDEN: { re: RegExp; why: string }[] = [
   { re: /%|퍼센트|퍼센티지|percent/i, why: 'percent' },
   // '프로 선수' 는 앞에 숫자가 없어 걸리지 않는다. '30프로'·'오십 프로' 는 구어 퍼센트.
   { re: new RegExp(String.raw`(?:\d|${SINO})\s*프로`), why: 'percent' },
-  { re: /(?<![가-힣])[일이삼사오육칠팔구]할(?!\s*(?:때|수|것|만|거|일))/, why: 'percent-ko' },
+  // '8할'·'칠 할'·'5할' — 스팟에 있는 숫자여도 할푼리는 확률 주장이다(3차 판정 ①).
+  { re: /(?:\d+|(?<![가-힣])[일이삼사오육칠팔구십백]+)\s*할(?!\s*(?:때|수|것|만|거|일|지|까|게|래))/, why: 'percent-ko' },
   { re: /반반/, why: 'half-half' },
   // 비율·분수 — 'a:b'·'a/b'(팟 크기 '1/3 팟' 은 제외)·'a 대 b'·'a분의 b'·'N 중 M'·'N에 M'·'N번에 M번'
   { re: /\d+(?:\.\d+)?\s*[:：]\s*\d+/, why: 'ratio' },
   { re: /\d+\s*[/⁄]\s*\d+(?!\s*(?:팟|pot|사이즈|크기))/i, why: 'ratio' },
-  { re: new RegExp(String.raw`${NUM_LOOSE}\s*대\s*${NUM_LOOSE}`), why: 'ratio' },
+  { re: new RegExp(String.raw`(?:${NUM_LOOSE}|(?<![가-힣])[일이삼사오육칠팔구](?![가-힣]))\s*대\s*(?:${NUM_LOOSE}|(?<![가-힣])[일이삼사오육칠팔구](?![가-힣]))`), why: 'ratio' },
   { re: new RegExp(String.raw`(?:\d+|${NATIVE}|${SINO})\s*분의\s*(?:\d+|${NATIVE}|[일이삼사오육칠팔구])`), why: 'fraction' },
   { re: /(?<![가-힣])[이삼사오육칠팔구]분의/, why: 'fraction' },
-  { re: new RegExp(String.raw`${DEN}\s*(?:번\s*)?(?:중에?|에)\s*(?:서\s*)?${NUM_LOOSE}`), why: 'ratio' },
+  { re: new RegExp(String.raw`${R_DEN}\s*${RUNIT}?\s*(?:중에?|에)\s*(?:서\s*)?${R_NUM}`), why: 'ratio' },
   // 통계어 옆 수치 — 입력에 있는 숫자라도 '승률 100' 처럼 붙으면 주장이다.
   { re: new RegExp(String.raw`${STAT}[^.\n]{0,12}?${NUMTOK}|${NUMTOK}[^.\n]{0,8}?${STAT}`, 'i'), why: 'stat-number' },
   // 영문 수(three-bet 은 제외)
@@ -162,22 +173,34 @@ export const FORBIDDEN: { re: RegExp; why: string }[] = [
   { re: new RegExp(String.raw`정답은\s*${ACT}`), why: 'gto-answer' },
 ];
 
-/** 입력 스팟 서술문에 나온 숫자 — 출력에서 허용되는 아라비아 숫자는 이것뿐이다(크기·개수 단위가 붙은 것 제외). */
+/** 크기·순서 — 이 단위가 붙은 숫자는 스팟에 없어도 된다(사이즈 제안·장수·3-bet 표기). */
+const SAFE_ALWAYS = String.raw`(?:BB|bb|배|장|번째|스트리트|벳|bet|레이즈|콜)`;
+/** 개수 단위 — 스팟에 **그 모양 그대로**(예: 6인) 나온 것만 허용한다(3차 판정 ②: '100명 중 60명'). */
+const FORM_UNIT = '(?:인|명|개|가지|콤보|핸드)';
+
+/** 입력 스팟 서술문에 나온 '숫자+개수 단위' 형태(예: '6인'). 단위 없는 숫자는 모으지 않는다 — 홀로 쓰인 숫자는 늘 거부. */
 export function allowedNumbers(spotText: string): Set<string> {
-  return new Set((spotText.normalize('NFKC').match(/\d+(?:\.\d+)?/g) ?? []).map((n) => String(Number(n))));
+  const out = new Set<string>();
+  for (const m of spotText.normalize('NFKC').matchAll(new RegExp(String.raw`(\d+(?:\.\d+)?)\s*(${FORM_UNIT})`, 'g'))) out.add(`${Number(m[1])}${m[2]}`);
+  return out;
 }
 
-/** 허용목록 밖의 아라비아 숫자 — 크기·개수 단위·카드 표기(T9s·K9)·포켓 페어(99)는 센다에서 뺀다. */
+/**
+ * 허용되지 않은 아라비아 숫자를 찾는다(3차 판정 ③ — 스팟 숫자 재사용 '25 정도가 블러프' 차단).
+ * 허용: 크기·순서 단위(2.5BB·2~3BB·3장·3-bet) · 스팟에 나온 모양 그대로의 개수(6인) · 카드 표기(T9s·7s·9x) · 포켓 페어(22~99).
+ * 그 밖의 숫자 — 단위 없이 홀로 쓰인 것 — 는 스팟에 있든 없든 거부한다.
+ */
 export function strayNumber(probe: string, allowed: ReadonlySet<string>): string | null {
   const re = new RegExp(String.raw`(?<![A-Za-z\d.])\d+(?:\.\d+)?(?![\d.])`, 'g');
   for (const m of probe.matchAll(re)) {
     const n = m[0]; const at = m.index ?? 0;
     const after = probe.slice(at + n.length);
     const before = probe.slice(Math.max(0, at - 1), at);
-    if (new RegExp(String.raw`^(?:\s*[~-]\s*\d+(?:\.\d+)?)?\s*${SAFE_UNIT}`).test(after)) continue;   // 2.5BB · 2~3BB · 3장 · 3벳
-    if (/^[A-Za-z+]/.test(after) || /[A-Za-z]/.test(before)) continue;                            // 9x · 99+ · T9s
-    if (/^([2-9])\1$/.test(n)) continue;                                                           // 포켓 페어 표기(22~99)
-    if (allowed.has(String(Number(n)))) continue;
+    if (new RegExp(String.raw`^(?:\s*[~-]\s*\d+(?:\.\d+)?)?\s*-?\s*${SAFE_ALWAYS}`).test(after)) continue;
+    const unit = after.match(new RegExp(String.raw`^\s*(${FORM_UNIT})`));
+    if (unit && allowed.has(`${Number(n)}${unit[1]}`)) continue;
+    if (/^[A-Za-z+]/.test(after) || /[A-Za-z]/.test(before)) continue;
+    if (/^([2-9])\1$/.test(n)) continue;
     return n;
   }
   return null;
@@ -193,7 +216,12 @@ const HAS_NUMERIC = /\d|%|퍼센트|프로|할|반반|절반/;
  * @param spotText 이 스팟의 spotToText().text — 여기 나온 숫자만 출력에 허용된다.
  */
 export function checkOutput(raw: string, spotText = ''): { ok: true; body: string } | { ok: false; why: string } {
-  const lines = raw.normalize('NFKC').replace(/\r\n/g, '\n').trim().split('\n');
+  // NFKC 전에: 로마 숫자(Ⅲ→'III' 가 되면 수로 안 보인다)는 아라비아로, 줄 머리 원문자(①)는 목록 번호로.
+  const pre = raw
+    .replace(/[\u2160-\u216B]/g, (c) => String(c.charCodeAt(0) - 0x215F))
+    .replace(/[\u2170-\u217B]/g, (c) => String(c.charCodeAt(0) - 0x216F))
+    .replace(/^(\s*)([\u2460-\u2468])\s*/gm, (_m, sp: string, c: string) => `${sp}${c.charCodeAt(0) - 0x245F}. `);
+  const lines = pre.normalize('NFKC').replace(/\r\n/g, '\n').trim().split('\n');
   const tail = Math.max(0, lines.length - 3);
   for (let i = lines.length - 1; i >= tail; i--) {
     if (MODEL_DISCLAIMER.test(lines[i]) && !HAS_NUMERIC.test(lines[i])) lines.splice(i, 1);
