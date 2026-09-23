@@ -149,12 +149,13 @@ function reactionPill(active: boolean): string {
  * 활성 표시는 알약과 **같은 규칙**이다(accent 한 색 · 채움 + 글자색). 여기서만 다른 색을
  * 쓰면 같은 동작이 화면에 따라 다른 색으로 보인다.
  *
- * 높이: `min-h-16` = 68px(루트 17px) — 44px 계약을 넉넉히 넘기고, 위 아이콘·아래 라벨 두 줄이
- * 들어갈 실제 공간이다. 숫자가 늘어도 `tabular-nums` 라 폭이 흔들리지 않는다.
+ * 높이: POST-DETAIL-DENSITY(2026-09-24 오너 "한 화면에 더 많이") — 위 아이콘·아래 라벨 두 줄(68px)을
+ * 아이콘+라벨+숫자 **한 줄 `h-[44px]` 실박스**로 낮췄다(오버행 `.hit` 없음 — HANDOVER §3 J). 글자를 줄이지 않고
+ * 줄바꿈도 막는다(whitespace-nowrap). 숫자가 늘어도 `tabular-nums` 라 폭이 흔들리지 않는다.
  */
 function trayCell(active: boolean): string {
   return [
-    'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-[13px] px-1',
+    'flex h-[44px] min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-[10px] px-1',
     'text-xs font-semibold leading-none transition-colors active:scale-[0.98]',
     active ? 'bg-accent-300/15 text-accent-200' : 'text-ink-secondary',
   ].join(' ');
@@ -483,7 +484,7 @@ export default function PostDetailModal({
           균등 간격은 'ddd' 같은 짧은 글에서 제목·작성자·본문·반응이 전부 같은 거리로 떨어져
           섬 여섯 개처럼 흩어져 보였다(본문 45px < 반응 92px — 내용보다 버튼이 큰 화면).
           제목↔작성자는 한 덩어리라 좁게(12px), 내용 경계는 넓게(16px)로 위계를 준다. */}
-      <article ref={articleRef} data-pd-root className="p-4 sm:p-5 lg:p-6 max-lg:px-[18px]">
+      <article ref={articleRef} data-pd-root className="p-4 sm:p-5 lg:p-6 max-lg:p-3">
         {/* 🔴 C1(2026-09-20 오너 시안) — **모바일에서만** 게시글 내용(카테고리~끌올)을 둥근 카드
             한 벌로 감싼다. 댓글은 이 카드 **밖**의 형제 카드다(아래).
             왜 여기서 감싸나: `article` 자체를 카드로 만들면 댓글·이전/다음 내비게이션까지 같은 면에
@@ -493,7 +494,8 @@ export default function PostDetailModal({
             ⚠ 고정 높이를 주지 않는다. 본문·사진·첨부가 늘면 카드가 따라 늘어야 한다. */}
         <div data-pd-post-card className={[
           'lg:contents',
-          'max-lg:rounded-[24px] max-lg:border max-lg:border-border-strong max-lg:bg-surface-high max-lg:p-6',
+          // POST-DETAIL-DENSITY(2026-09-24): 모바일 카드 안쪽 25.5px → 17px, article 여백 18px → 12.75px(첫 화면 확보).
+          'max-lg:rounded-[24px] max-lg:border max-lg:border-border-strong max-lg:bg-surface-high max-lg:p-4',
           // 상단의 미세한 보라→청록 빛 — 시안의 카드 윗변 광. 기존 ring-aura 와 같은 계열의
           // 헤어라인이라 새 색을 들이지 않는다(라이트 모드에서는 거의 안 보이게 alpha 가 낮다).
           'max-lg:ring-aura',
@@ -509,7 +511,7 @@ export default function PostDetailModal({
             예전엔 18px 제목 바로 밑에 11px 색 알약이 붙어 둘이 같은 층으로 읽혔다 —
             게시판(어디) → 제목(무엇) 순서가 목록에서 들어온 사람의 실제 독해 순서다. */}
         {!hidden && (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {/* 고정·끌올 — 목록(CommunityTab PostRow)과 같은 배지. 목록에서 '왜 위에 있는지' 보고 들어온 사람이
                 상세에서 그 상태를 잃지 않게 한다(끌올은 작성자 전용 행에만 있어 남에게는 사라졌다). */}
@@ -539,7 +541,9 @@ export default function PostDetailModal({
                같은 방향으로 한 단 더 간 것이다). 루트가 17px 이라 `text-2xl` 이 곧 25.5px 다.
                행간은 `leading-snug`(1.375) 그대로 — §5-2 의 1.32~1.48 안이다.
                ⚠ PC 는 종전과 같다(원래도 `sm:text-2xl`). 즉 이 변경은 모바일 한 단계뿐이다. */
-            <h3 data-pd-title className="text-2xl font-bold text-ink-primary leading-snug tracking-tight break-words">{post.title}</h3>
+            /* POST-DETAIL-DENSITY(2026-09-24 오너 "글씨 크기 줄여 한 화면에 더"): 모바일 25.5 → 20px, 본문 15px 과 비 1.33.
+               PC 는 lg:text-2xl 그대로. 행간 snug(1.375) 유지. */
+            <h3 data-pd-title className="text-[20px] font-bold text-ink-primary leading-snug tracking-tight break-words lg:text-2xl">{post.title}</h3>
           )}
         </div>
         )}
@@ -553,7 +557,7 @@ export default function PostDetailModal({
         {/* UI-Aura(2026-09-14, design 실측): 작성자→본문 경계는 border-strong 실선(mid 위 2.71:1) — 아래 참고.
             제목→본문 84.8px 는 실측 과다 — pb-3→pb-2(본문 mt-4→mt-3 과 합쳐 −13px). line-height 는 안 건드린다. */}
         {!hidden && (
-        <header className="mt-3 flex items-center gap-2.5 pb-2">
+        <header className="mt-2 flex items-center gap-2.5 pb-2">
           {/* 2026-08-30: 여기 있던 `!object-contain` 땜질을 제거했다 — Avatar 의 기본값이 contain 이 됐다.
               (근거 실측은 유지: 이 글 작성자 아바타가 256×151 로고인데 object-cover 가 가로 59% 만 남겨
                원 안에 글자 토막만 보였다. 정사각 사진에서는 cover 와 결과가 동일해 회귀가 없다.)
@@ -561,7 +565,7 @@ export default function PostDetailModal({
           {/* UI-Aura(2026-09-14): data-aura 는 Avatar.tsx(공용 atom, 8개 파일이 쓴다)가 임의 속성을 안 받아
               직접 못 붙인다 — 그 파일을 고치는 대신 원 모양(rounded-full)의 얇은 래퍼로 감싼다. */}
           <span data-aura data-aura-level="micro" className="inline-block shrink-0 rounded-full">
-            <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={40}
+            <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={inline ? 40 : 32}
               className="border border-border-default" />
           </span>
           <div className="flex-1 min-w-0">
@@ -647,7 +651,7 @@ export default function PostDetailModal({
                     actionMenuRef.current.querySelector('summary')?.focus();
                   }}>
                   <summary aria-label="게시글 메뉴"
-                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-input text-lg leading-none text-ink-secondary transition-colors hover:text-ink-primary [&::-webkit-details-marker]:hidden">
+                    className="flex h-[44px] w-[44px] cursor-pointer list-none items-center justify-center rounded-input text-lg leading-none text-ink-secondary transition-colors hover:text-ink-primary [&::-webkit-details-marker]:hidden">
                     …
                   </summary>
                   {/* 메뉴를 누르는 동작이 본문 스와이프로 오발동하지 않게 — Modal 의 드래그는
@@ -710,7 +714,7 @@ export default function PostDetailModal({
                      본문 밑에 광원·입자·노이즈를 넣지 않는다 — 배경은 창 지면 그대로다.
                      P2(2026-09-21): 모바일 본문 17→16px(text-base 는 루트 17px 기준이라 rem 대신
                      고정 px). PC 는 lg:text-base 로 기존 17px 그대로 복원한다. */
-                  className="relative text-[16px] leading-[1.7] text-ink-primary whitespace-pre-wrap break-words lg:text-base">
+                  className="relative text-[15px] leading-[1.7] text-ink-primary whitespace-pre-wrap break-words lg:text-base">
                   {/* rose-500 은 팔레트 밖 기본 Tailwind 색이었다 — 토큰(danger)으로 교체.
                       상시 색이 아니라 250ms 만에 사라지는 피드백이라 색 예산에 잡히지 않는다. */}
                   {heartKey > 0 && (
@@ -868,30 +872,31 @@ export default function PostDetailModal({
               새 상태도, 새 API 도 만들지 않는다(눌렀을 때의 서버 연동·롤백은 onLike/react 안에 있다).
             ⚠ 320/360 은 2칸씩 두 줄, 380 이상부터 네 칸 — 숫자가 커져도 글자를 줄이지 않는다.
               `min-[380px]` 은 임의 값이 아니라 **실측으로 정한다**(아래 e2e 가 겹침 0 을 잰다).
-            ⚠ `min-h-16`(=68px, 루트 17px)이라 셀 하나하나가 44px 계약을 넉넉히 넘는다. */}
+            ⚠ 셀은 `h-[44px]` 한 줄 실박스다(POST-DETAIL-DENSITY 2026-09-24). `gap-0.5` 를 빼지 마라 — 2줄(320/360)에서
+              윗줄 칸 아래 끝의 히트 테스트가 픽셀 스냅으로 아랫줄 칸에 먹혔다(e2e 트레이 히트 실측 실패로 확인). */}
         {!hidden && !inline && (
         <div role="group" aria-label="게시글 반응"
-          className="mt-4 grid grid-cols-2 overflow-hidden rounded-[18px] border border-border-strong bg-surface-low p-1 min-[380px]:grid-cols-4 lg:hidden">
+          className="mt-3 grid grid-cols-2 gap-0.5 overflow-hidden rounded-[14px] border border-border-strong bg-surface-low p-1 min-[380px]:grid-cols-4 lg:hidden">
           <button type="button" aria-pressed={!!post.liked}
             onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; } onLike(post.id); }}
             className={trayCell(!!post.liked)}>
-            <Icon name={post.liked ? 'heart-fill' : 'heart'} size={17} strokeWidth={2.0} className="shrink-0" />
+            <Icon name={post.liked ? 'heart-fill' : 'heart'} size={15} strokeWidth={2.0} className="shrink-0" />
             <span>좋아요 <span className="tabular-nums">{post.likeCount}</span></span>
           </button>
           <button type="button" aria-pressed={myReaction === 'goodrun'} onClick={() => react('goodrun')}
             className={trayCell(myReaction === 'goodrun')}>
-            <Icon name="chevron-up" size={17} strokeWidth={2.2} className="shrink-0" />
+            <Icon name="chevron-up" size={15} strokeWidth={2.2} className="shrink-0" />
             <span>추천 <span className="tabular-nums">{gr}</span></span>
           </button>
           <button type="button" aria-pressed={myReaction === 'badbeat'} onClick={() => react('badbeat')}
             className={trayCell(myReaction === 'badbeat')}>
-            <Icon name="chevron-down" size={17} strokeWidth={2.2} className="shrink-0" />
+            <Icon name="chevron-down" size={15} strokeWidth={2.2} className="shrink-0" />
             <span>비추천 <span className="tabular-nums">{bb}</span></span>
           </button>
           {/* 공유만 면을 깐다 — 숫자가 없는 동작이라 나머지 셋과 역할이 다르다는 표시다. */}
           <button type="button" onClick={copyLink} aria-label="링크 복사"
             className={[trayCell(false), 'bg-accent-300/10 text-accent-200'].join(' ')}>
-            <Icon name="share" size={17} strokeWidth={2.0} className="shrink-0" />
+            <Icon name="share" size={15} strokeWidth={2.0} className="shrink-0" />
             <span>공유</span>
           </button>
         </div>
@@ -903,14 +908,14 @@ export default function PostDetailModal({
 
         {/* ── 끌올 — 작성자 본인에게만. 남의 글에서는 아예 그리지 않는다(살 수 없는 버튼은 소음이다). */}
         {user?.id === post.userId && (
-          <div className="mt-2 flex items-center gap-2">
+          <div data-pd-bump className="mt-1.5 flex items-center gap-2">
             <Icon name="zap" size={16} strokeWidth={1.8} className="shrink-0 text-ink-muted" />
             <span className="min-w-0 flex-1 text-xs leading-tight text-ink-secondary">
               <b className="text-ink-primary">끌올</b>
               <span className="ml-1.5">
                 {bumpActive
                   ? `목록 맨 위 · ${bumpRemain()}`
-                  : `${bumpSku?.hours ?? 3}시간 동안 목록 맨 위로 · 동시 ${BUMP_SLOTS}자리`}
+                  : `${bumpSku?.hours ?? 3}시간 목록 맨 위 · 동시 ${BUMP_SLOTS}자리`}
               </span>
             </span>
             {bumpActive ? (
@@ -918,7 +923,7 @@ export default function PostDetailModal({
             ) : (
               <button type="button" disabled={bumpBusy || bumpSku === null}
                 onClick={handleBump}
-                className="hit shrink-0 rounded-badge border border-accent-400/50 px-2.5 py-1 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
+                className="inline-flex h-[44px] shrink-0 items-center whitespace-nowrap rounded-badge border border-accent-400/50 px-3 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
                 {bumpBusy ? '올리는 중…' : bumpSku === null ? '준비 중' : `${bumpSku.price.toLocaleString()}점 끌올`}
               </button>
             )}
@@ -951,7 +956,7 @@ export default function PostDetailModal({
           //   라이트는 `surface-low == surface-mid == #FFFFFF` 라 셸과 **같은 흰색**이 되어 카드가
           //   통째로 사라진다(실측으로 잡았다 — 라이트 스크린샷에서 댓글 카드가 지면에 흡수됐다).
           //   그래서 라이트는 `surface-high`(#F0F1F4)로 **내려앉히고**, 다크만 셸보다 어두운 `surface-low`.
-          'max-lg:rounded-[24px] max-lg:bg-surface-high max-lg:dark:bg-surface-low max-lg:p-5',
+          'max-lg:rounded-[24px] max-lg:bg-surface-high max-lg:dark:bg-surface-low max-lg:p-4',
         ].join(' ')}>
           {/* 댓글 수는 화면에 실제로 불러온 목록(replies)만 신뢰한다.
               post.commentCount 는 DB 트리거가 같은 값을 넣어주는 컬럼이라 더하면 2배가 된다.

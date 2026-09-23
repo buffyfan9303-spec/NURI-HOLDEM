@@ -219,8 +219,10 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
     //   종전 구현은 1.25 라 "제목처럼" 읽히지 않았다(문서 C1-2-2 의 '390 기준 제목 26~28px').
     //   지금은 `text-2xl` = 25.5px(루트 17px). 아래 행간 비(1.32~1.48)는 **그대로** 지킨다 —
     //   크기만 올리고 행간 규격을 같이 푸는 것은 계약을 느슨하게 만드는 것이라 하지 않는다.
-    expect(tSize, `제목 ${tSize}px — C1 모바일 24~28.5px 밖`).toBeGreaterThanOrEqual(24);
-    expect(tSize).toBeLessThanOrEqual(28.5);
+    // 🔴 POST-DETAIL-DENSITY(2026-09-24 오너 "글씨 크기 줄여 한 화면에 더 많이") — 25.5px → **20px**(19.5~21.5).
+    //   본문 15px 대비 1.33 배라 제목 위계는 남는다. 행간 비 계약은 그대로다.
+    expect(tSize, `제목 ${tSize}px — 모바일 19.5~21.5px 밖`).toBeGreaterThanOrEqual(19.5);
+    expect(tSize).toBeLessThanOrEqual(21.5);
     expect(tLine / tSize, `제목 행간 ${(tLine / tSize).toFixed(2)} — 1.32~1.48 밖`).toBeGreaterThanOrEqual(1.32);
     expect(tLine / tSize).toBeLessThanOrEqual(1.48);
     // 최대 줄수로 자르지 않는다
@@ -333,8 +335,8 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
       expect(m.같은offsetParent2, '댓글과 탐색의 offsetParent 가 달라 간격 뺄셈이 성립하지 않는다').toBe(true);
       expect(m.탐색간격, `댓글→탐색 간격이 ${m.탐색간격}px 다 — P1 모바일 14~20px 계약 밖`).toBeGreaterThanOrEqual(14);
       expect(m.탐색간격, `댓글→탐색 간격이 ${m.탐색간격}px 다 — P1 모바일 14~20px 계약 밖`).toBeLessThanOrEqual(20);
-      // P2: 모바일 본문 16px·루트 댓글/답글 본문 14px.
-      expect(m.본문글꼴, `본문 글꼴이 ${m.본문글꼴}px 다 — P2 모바일 16px 계약 밖`).toBeCloseTo(16, 0);
+      // P2: 루트 댓글/답글 본문 14px. 본문은 POST-DETAIL-DENSITY(2026-09-24)로 16 → **15px**(오너 하한 15px).
+      expect(m.본문글꼴, `본문 글꼴이 ${m.본문글꼴}px 다 — 모바일 15px 계약 밖`).toBeCloseTo(15, 0);
       expect(m.루트댓글글꼴, `루트 댓글 본문을 못 찾았거나 ${m.루트댓글글꼴}px 다 — P2 모바일 14px 계약 밖`).toBeCloseTo(14, 0);
       expect(m.답글글꼴, `답글 본문을 못 찾았거나 ${m.답글글꼴}px 다 — P2 모바일 14px 계약 밖`).toBeCloseTo(14, 0);
       // ⑤ 두 카드가 **셸 위에 떠 보인다.** 카드가 지면과 같은 색이면 카드라는 사실 자체가 사라진다.
@@ -512,6 +514,8 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
       expect(t.알약줄보임, 'PC 알약 줄이 모바일에서도 보인다 — 같은 동작이 한 화면에 두 번이다').toBe(false);
       expect(t.문서가로넘침, '트레이 때문에 문서가 가로로 넘쳤다').toBeLessThanOrEqual(0);
       for (const h of t.히트) {
+        // POST-DETAIL-DENSITY(2026-09-24): 칸은 아이콘+라벨+숫자 한 줄 44px 실박스다 — 두 줄(68px)로 되부풀면 여기서 걸린다.
+        expect(h.h, `«${h.칸}» 칸 높이 ${h.h}px — 한 줄 44px(≤46) 계약 밖`).toBeLessThanOrEqual(46);
         expect(h.w, `«${h.칸}» 칸 폭 ${h.w}px — 44px 미만`).toBeGreaterThanOrEqual(44);
         expect(h.위 && h.아래, `«${h.칸}» 유효 터치 44px 미달(높이 ${h.h}px · 위 ${h.위} · 아래 ${h.아래})`).toBe(true);
       }

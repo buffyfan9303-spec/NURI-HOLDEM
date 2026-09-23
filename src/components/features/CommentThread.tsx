@@ -298,7 +298,7 @@ export default function CommentThread({
   };
 
   return (
-    <div className="space-y-4">
+    <div className={postDetailMobile ? 'space-y-4 max-lg:space-y-2' : 'space-y-4'}>
       {/* 입력창 */}
       {user ? (
         /* 🔴 C1(2026-09-20 시안) — 모바일 게시글 상세에서는 아바타·입력·보내기가 **둥근 한 면** 안에
@@ -310,16 +310,16 @@ export default function CommentThread({
              라이트 팔레트는 high(#F0F1F4)가 가장 어둡고 mid/low 가 흰색이라, 댓글 카드가 high 를
              쓰는 지금 입력까지 high 로 두면 **입력칸이 카드에 흡수된다**(실측으로 잡았다).
              → 라이트는 흰색(mid)으로 띄우고, 다크는 종전대로 카드보다 밝은 high. */
-          ? 'flex gap-2 py-2 max-lg:items-center max-lg:gap-1.5 max-lg:rounded-[16px] max-lg:border max-lg:border-border-strong max-lg:bg-surface-mid max-lg:dark:bg-surface-high max-lg:p-1.5 max-lg:py-1.5'
+          ? 'flex gap-2 py-2 max-lg:items-center max-lg:gap-1.5 max-lg:rounded-[16px] max-lg:border max-lg:border-border-strong max-lg:bg-surface-mid max-lg:dark:bg-surface-high max-lg:p-1 max-lg:py-1'
           : 'flex gap-2 py-2'}>
-          <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} />
+          <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={postDetailMobile ? 28 : 32} />
           <input
             type="text"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="댓글을 입력하세요…"
             className={postDetailMobile
-              ? 'input min-w-0 flex-1 max-lg:border-0 max-lg:bg-transparent max-lg:shadow-none max-lg:focus:ring-0'
+              ? 'input min-w-0 flex-1 max-lg:h-[44px] max-lg:py-0 max-lg:border-0 max-lg:bg-transparent max-lg:shadow-none max-lg:focus:ring-0'
               : 'input flex-1'}
           />
           {/* 보내기 — 모바일은 시안대로 정사각 아이콘 버튼. 글자 라벨은 `sr-only` 로 **남긴다**
@@ -327,7 +327,7 @@ export default function CommentThread({
               루트가 17px 이라 `h-11` 은 46.75px — 44 이상이므로 통과한다(여기선 넉넉한 쪽이 맞다). */}
           <button type="submit" aria-label={postDetailMobile ? '댓글 등록' : undefined}
             className={postDetailMobile
-              ? 'btn-primary shrink-0 px-4 max-lg:flex max-lg:h-11 max-lg:w-11 max-lg:items-center max-lg:justify-center max-lg:rounded-[12px] max-lg:px-0'
+              ? 'btn-primary shrink-0 px-4 max-lg:flex max-lg:h-[44px] max-lg:w-[44px] max-lg:items-center max-lg:justify-center max-lg:rounded-[12px] max-lg:px-0'
               : 'btn-primary px-4 shrink-0'}
             disabled={!content.trim() || pending}>
             {postDetailMobile && <Icon name="send" size={18} className="hidden max-lg:block" aria-hidden />}

@@ -170,7 +170,8 @@ describe('UI-Aura(2026-09-14) · Modal page 셸 — compact(게시글 상세)만
 describe('UI-Aura(2026-09-14) · 제목→본문 간격 — design 실측 84.8px 과다분만 줄인다', () => {
   // line-height 는 실측상 정상(본문 1.7·제목 1.375·댓글 1.625)이라 어느 것도 건드리지 않는다 — 아래는 여백만 본다.
   it('🔴 작성자 헤더 pb-2 · 본문 래퍼 mt-3 — 옛 pb-3/mt-4 로 되돌아오지 않았다', () => {
-    expect(POST).toMatch(/<header className="mt-3 flex items-center gap-2\.5 pb-2">/);
+    // POST-DETAIL-DENSITY(2026-09-24 오너 "한 화면에 더 많이"): 제목→작성자 mt-3 → mt-2 로 한 단 더 좁혔다.
+    expect(POST).toMatch(/<header className="mt-2 flex items-center gap-2\.5 pb-2">/);
     expect(POST).not.toMatch(/<header className="mt-3 flex items-center gap-2\.5 pb-3">/);
     expect(POST).toMatch(/<div className="mt-3 space-y-3">/);
     expect(POST).not.toMatch(/<div className="mt-4 space-y-3">/);
