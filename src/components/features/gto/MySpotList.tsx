@@ -10,6 +10,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { spotSummary, streetLabel, actionLabel, type SpotReview } from '../../../lib/spot';
 import { COVERAGE_LABEL } from '../../../lib/spotEvaluate';
 import { listMySpots, deleteMySpot, type SavedSpot } from '../../../api/spots';
+import { listSpotAiReviews } from '../../../api/spotReview';
 import SpotDetails from './SpotDetails';
 
 export default function MySpotList({ onOpen, onShare, onNew }: {
@@ -28,11 +29,16 @@ export default function MySpotList({ onOpen, onShare, onNew }: {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   /** 인라인 상세는 **한 번에 하나만** 편다 — 여러 개가 열리면 목록이 길어져 스크롤이 무너진다. */
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  /** 끝난 AI 코칭(spot_review_id → 본문). 재열람은 테이블을 읽을 뿐이라 포인트가 들지 않는다. */
+  const [ai, setAi] = useState<Map<string, string>>(() => new Map());
 
   const load = useCallback(() => {
     if (!user) { setRows([]); return; }
     listMySpots()
-      .then((r) => { setRows(r); setFailed(false); })
+      .then((r) => {
+        setRows(r); setFailed(false);
+        listSpotAiReviews(r.map((x) => x.id)).then(setAi).catch(() => { /* 코칭이 없어도 목록은 선다 */ });
+      })
       .catch(() => { setRows([]); setFailed(true); });
   }, [user]);
 
@@ -98,6 +104,7 @@ export default function MySpotList({ onOpen, onShare, onNew }: {
                 <span className="rounded-badge bg-surface-high px-1.5 py-px font-semibold">{COVERAGE_LABEL[r.coverageKind]}</span>
                 {r.spot.heroAction && <span>내 선택 {actionLabel(r.spot.heroAction)}</span>}
                 {r.spot.board.length > 0 && <span>{streetLabel(r.spot.street)} {r.spot.board.length}장</span>}
+                {ai.has(r.id) && <span className="inline-flex items-center gap-0.5 text-accent-200"><Icon name="sparkles" size={10} aria-hidden />AI 코칭</span>}
               </p>
             </div>
           </div>
@@ -135,6 +142,13 @@ export default function MySpotList({ onOpen, onShare, onNew }: {
               {/* 저장 당시 스냅샷을 **그대로** 보여 준다 — 지금 엔진으로 다시 계산해
                   저장할 때와 다른 값을 보여 주지 않는다(명세 §2.4). */}
               <SpotDetails spot={r.spot} mode="owner" />
+              {ai.has(r.id) && (
+                // 결과는 나만 본다 — 게시판 공유(onShare → 확인 시트)의 본문에는 실리지 않는다.
+                <section data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트" className="mt-2 border-t border-border-subtle pt-2">
+                  <h4 className="text-2xs font-bold text-ink-secondary">AI 아쉬운 포인트 <span className="font-normal text-ink-muted">(나만 보여요)</span></h4>
+                  <p className="mt-1 whitespace-pre-wrap break-keep text-xs leading-relaxed text-ink-primary">{ai.get(r.id)}</p>
+                </section>
+              )}
               <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border-subtle pt-2">
                 <button type="button" onClick={() => onOpen(r.spot)} className="btn-ghost min-h-[44px] flex-1 text-xs">
                   수정하기

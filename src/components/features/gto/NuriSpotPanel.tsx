@@ -23,11 +23,11 @@ import { useHandBoard } from './useHandBoard';
 import { cardId } from './useDeepGto';
 import {
   emptySpot, validateSpot, hasBlocker, positionsFor, streetLabel, actionLabel,
-  potBb, BOARD_LEN, ACTION_TYPES, fromJSON, actorPos, EXTRA_LETTERS, MAX_EXTRA_VILLAINS,
+  potBb, ACTION_TYPES, fromJSON, actorPos, EXTRA_LETTERS, MAX_EXTRA_VILLAINS,
   type SpotReview, type SpotAction, type SpotActionType, type SpotPosition, type Street,
 } from '../../../lib/spot';
 import { evaluateSpot, investedByPos, type SpotEvaluation } from '../../../lib/spotEvaluate';
-import SpotReport from './SpotReport';
+import SpotReport, { type SavedRef } from './SpotReport';
 import MySpotList from './MySpotList';
 
 export type SpotTab = 'analyze' | 'mine';
@@ -51,12 +51,15 @@ const SIZE_PRESETS: Record<'pre' | 'post', number[]> = {
 };
 
 // ── 입력 단계 ────────────────────────────────────────────────────────────────
-// 한 화면에 필드를 다 펼치면 모바일에서 스크롤만 길어진다. 네 묶음으로 나눈다.
+// 🔴 2026-09-23 오너 결정 A안(SPOT-WRITE-UX-AI) — 다섯 단계 + 하단 고정 [이전][다음].
+//   예전(네 단계)은 카드·액션이 한 화면이라 390px 에서 스크롤이 1480px 였고, 단계 이동이 상단 단계바뿐이었다.
+//   '작성 내용' 카드(저장·공유·AI)는 마지막 '확인' 단계에만 선다 — 입력 중에는 입력만 보인다.
 const STEPS = [
   { key: 'game', label: '게임', hint: '어떤 판이었는지 먼저 정합니다.' },
   { key: 'seat', label: '자리·스택', hint: '내 자리와 상대 자리, 유효 스택을 고릅니다.' },
-  { key: 'cards', label: '카드·액션', hint: '카드를 고르고 액션을 순서대로 쌓습니다.' },
-  { key: 'choice', label: '내 선택', hint: '그 자리에서 실제로 한 선택을 고릅니다.' },
+  { key: 'cards', label: '카드', hint: '내 카드와 보드를 고릅니다. 상대 카드는 알 때만 넣으세요.' },
+  { key: 'action', label: '액션', hint: '액션을 순서대로 쌓고, 그때 내가 한 선택을 고릅니다.' },
+  { key: 'confirm', label: '확인', hint: '작성한 내용을 확인하고 저장·공유합니다.' },
 ] as const;
 type StepKey = typeof STEPS[number]['key'];
 
@@ -148,7 +151,8 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
   return (
     // space-y-2: 탭 행 아래 12.75 → 8.5px (오너 2026-09-19 "탭 위아래 공백")
     <div className="space-y-2">
-      <SpotHero tab={tab} onTab={setTab} />
+      {/* 탭을 직접 옮기면 '공유로 들어옴' 신호를 지운다 — 남아 있으면 작성 탭에 돌아올 때마다 확인 시트가 다시 열린다. */}
+      <SpotHero tab={tab} onTab={(t) => { setShareIntent(0); setTab(t); }} />
 
       {tab === 'analyze' && (
         <AnalyzeTab
@@ -245,55 +249,91 @@ interface AnalyzeProps {
   toast: ReturnType<typeof useToast>;
 }
 
+const ALL_STEPS = STEPS.map((s) => s.key) as StepKey[];
+
 function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, savedAt, user, toast, shareIntent }: AnalyzeProps) {
   // 2026-09-19 오너: "들어가면 무조건 3번 카드·액션부터 나오는데 1번 게임부터 진행하게" — 예전엔 'cards' 하드코딩.
-  const [step, setStep] = useState<StepKey>('game');
-  const cur = STEPS.find((s) => s.key === step) ?? STEPS[0];
+  // 저장 목록의 '공유'로 들어오면 확인 단계부터 — 공유 확인 시트는 그 단계의 리포트가 연다.
+  const [step, setStep] = useState<StepKey>(shareIntent ? 'confirm' : 'game');
+  /** 사용자가 [다음] 으로 **확정한** 단계만 체크한다(A안). 값이 기본값으로 채워져 있다고 체크하지 않는다. */
+  const [confirmed, setConfirmed] = useState<ReadonlySet<StepKey>>(() => new Set(shareIntent ? ALL_STEPS : []));
+  /** 마지막 저장(id·내용 키) — 확인 단계를 떠났다 와도 '저장됨'·AI 대상 id 가 남게 여기서 쥔다. */
+  const [savedRef, setSavedRef] = useState<SavedRef | null>(null);
+  /** '공유로 들어옴' 신호는 한 번만 쓴다 — 단계를 오가며 리포트가 다시 마운트될 때 시트가 또 열리면 안 된다. */
+  const [intent, setIntent] = useState(shareIntent);
+  const idx = STEPS.findIndex((s) => s.key === step);
+  const cur = STEPS[idx] ?? STEPS[0];
+  const go = (to: StepKey) => {
+    setStep(to);
+    setIntent(0);
+    // 단계를 바꾸면 새 단계의 머리부터 보여 준다 — 긴 카드 단계 아래에서 [다음] 을 누르면 빈 화면 중간에 떨어졌다.
+    requestAnimationFrame(() => document.querySelector('[data-spot-steps]')?.scrollIntoView({ block: 'nearest' }));
+  };
+  const next = () => {
+    const to = STEPS[idx + 1]?.key;
+    if (!to) return;
+    setConfirmed((c) => new Set(c).add(step));
+    go(to);
+  };
+  const prev = () => { const to = STEPS[idx - 1]?.key; if (to) go(to); };
 
   return (
-    // PC 는 2열(왼쪽 입력 · 오른쪽 결과 sticky), 모바일은 한 줄로 쌓인다 — 같은 컴포넌트·같은 데이터.
-    // 🔴 요약 열이 22rem 이면 **왼쪽 입력 열이 289px** 밖에 안 남아 모바일 360 보다 좁아진다 —
-    // 벳 크기 칩이 1024~1920 전 폭에서 4+1 로 접혔다(오너가 지적한 '한 개만 떨어지는' 모양).
-    // 폭을 잡는 것은 뷰포트가 아니라 **`ToolsPanel.tsx` 의 `max-w-2xl`(714px) 고정 컨테이너**라
-    // 화면을 넓혀도 그대로다 — `lg:` 를 `xl:` 로 미루는 것은 헛수고다(1280 에서 같은 714 로 돌아온다).
-    // 실측 사슬: 714 −34(padding) = 680 → −17(gap) −374(22rem) = 289(왼쪽 열)
-    // → −25.5(p-3) = 262(행) → −68(w-16 입력) −14('BB') −12.75(gap) = **166px**
-    // 칩 필요 폭: 프리플랍 170 · 포스트플랍 188 → 166 으로는 둘 다 접힌다.
-    // 18rem 으로 줄이면 wrap 234px 로 **둘 다 한 줄**(여유 46px).
-    // 오른쪽 요약 패널은 374→306px 에서 빈 상태·채운 상태 모두 높이 변화 0 · 가로 스크롤 0(실측).
-    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-4">
-      <div className="min-w-0 space-y-3">
-        <StepBar step={step} onStep={setStep} spot={spot} />
-        <p className="text-2xs text-ink-muted">{cur.hint}</p>
+    // 🔴 A안(2026-09-23): PC 2열(오른쪽 작성 내용 sticky)을 걷었다 — 작성 내용은 '확인' 단계에만 선다.
+    //   폭은 ToolsPanel 의 max-w-2xl(714px) 고정이라 PC 도 한 열이 모바일과 같은 모양이다.
+    <div className="min-w-0 space-y-3">
+      <StepBar step={step} onStep={go} confirmed={confirmed} />
+      <p className="text-2xs text-ink-muted">{cur.hint}</p>
 
-        {step === 'game' && <GameStep spot={spot} patch={patch} />}
-        {step === 'seat' && <SeatStep spot={spot} patch={patch} />}
-        {step === 'cards' && (
-          <div className="space-y-3">
-            <HandBoardPicker
-              hb={hb}
-              villainLabels={[spot.villainPos, ...spot.extra.map((v) => v.pos)]}
-              hint={<>보드는 플랍 3장부터 리버 5장까지 — 지금은 <b className="text-ink-secondary">{streetLabel(spot.street)}</b>{spot.extra.length > 0 && <> · 카드를 모르는 상대는 비워 두세요(무작위 핸드로 계산)</>}</>}
-            />
-            <ActionTimeline spot={spot} patch={patch} />
-          </div>
-        )}
-        {step === 'choice' && <ChoiceStep spot={spot} patch={patch} />}
-
-        <IssueList issues={issues} />
-        {savedAt !== null && (
-          <p className="text-2xs text-ink-muted" aria-live="polite">
-            <Icon name="check" size={11} className="mr-1 inline-block align-[-1px]" />임시 저장됨 — 나갔다 와도 그대로입니다
-          </p>
-        )}
-      </div>
-
-      <div className="mt-3 min-w-0 lg:mt-0 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)]">
-        <SpotReport
-          spot={spot} evaluation={evaluation} blocked={blocked} shareIntent={shareIntent}
-          user={user} toast={toast}
+      {step === 'game' && <GameStep spot={spot} patch={patch} />}
+      {step === 'seat' && <SeatStep spot={spot} patch={patch} />}
+      {step === 'cards' && (
+        <HandBoardPicker
+          hb={hb}
+          villainLabels={[spot.villainPos, ...spot.extra.map((v) => v.pos)]}
+          hint={<>보드는 플랍 3장부터 리버 5장까지 — 지금은 <b className="text-ink-secondary">{streetLabel(spot.street)}</b>{spot.extra.length > 0 && <> · 카드를 모르는 상대는 비워 두세요(무작위 핸드로 계산)</>}</>}
         />
-      </div>
+      )}
+      {step === 'action' && (
+        <div className="space-y-3">
+          <ActionTimeline spot={spot} patch={patch} />
+          <ChoiceStep spot={spot} patch={patch} />
+        </div>
+      )}
+      {step === 'confirm' && (
+        <SpotReport
+          spot={spot} evaluation={evaluation} blocked={blocked} shareIntent={intent}
+          user={user} toast={toast} savedRef={savedRef} onSaved={setSavedRef}
+        />
+      )}
+
+      <IssueList issues={issues} />
+      {savedAt !== null && (
+        <p className="text-2xs text-ink-muted" aria-live="polite">
+          <Icon name="check" size={11} className="mr-1 inline-block align-[-1px]" />임시 저장됨 — 나갔다 와도 그대로입니다
+        </p>
+      )}
+
+      {/* 하단 고정 [이전][다음] — 전체화면 도구 창(Modal page, z-55)이 탭바(z-50)를 덮으므로 **창의 바닥**에 붙는다.
+          sticky 는 내용이 짧은 단계(카드 390px)에서 바닥까지 못 내려갔다(실측 bottom 788/844) — fixed 로 둔다.
+          창(fixed inset-0)이 곧 컨테이닝 블록이라 끌어내리기(transform) 중에도 창과 함께 움직인다.
+          아래 자리표시가 바의 높이만큼 본문 끝을 비워 마지막 줄이 가려지지 않게 한다. */}
+      <div aria-hidden className="h-[calc(2rem+env(safe-area-inset-bottom))]" />
+      <nav aria-label="단계 이동" data-spot-stepnav
+        className="fixed inset-x-0 bottom-0 z-10 border-t border-border-subtle bg-surface-base pt-2 pb-[max(env(safe-area-inset-bottom),0.5rem)]">
+        <div className="mx-auto grid w-full max-w-2xl grid-cols-2 gap-1.5 px-page-x">
+          <button type="button" onClick={prev} disabled={idx === 0}
+            className="btn-ghost min-h-[44px] text-xs disabled:opacity-40">
+            <Icon name="chevron-left" size={13} className="mr-0.5 inline-block align-[-2px]" aria-hidden />이전
+          </button>
+          {idx < STEPS.length - 1 ? (
+            <button type="button" onClick={next} className="btn-primary min-h-[44px] text-xs">
+              다음 · {STEPS[idx + 1].label}<Icon name="chevron-right" size={13} className="ml-0.5 inline-block align-[-2px]" aria-hidden />
+            </button>
+          ) : (
+            <button type="button" onClick={() => go('game')} className="btn-ghost min-h-[44px] text-xs">처음 단계로</button>
+          )}
+        </div>
+      </nav>
     </div>
   );
 }
@@ -306,15 +346,11 @@ function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, savedAt, use
  * 어느 폭에서도 가로 스크롤이 0 이고(e2e 접근성 게이트도 clientWidth<scrollWidth 를 잘림으로 본다),
  * 번호와 라벨을 두 줄로 쌓아 360px 칸(81.5px)에 '자리·스택' 이 들어간다.
  */
-function StepBar({ step, onStep, spot }: { step: StepKey; onStep: (s: StepKey) => void; spot: SpotReview }) {
-  const done: Record<StepKey, boolean> = {
-    game: true,
-    seat: spot.heroPos !== spot.villainPos,
-    cards: spot.hero.length === 2 && spot.board.length === BOARD_LEN[spot.street],
-    choice: spot.heroAction !== null,
-  };
+function StepBar({ step, onStep, confirmed }: { step: StepKey; onStep: (s: StepKey) => void; confirmed: ReadonlySet<StepKey> }) {
+  // 🔴 A안: 체크는 **사용자가 [다음] 으로 확정한 단계**에만. 예전엔 값으로 추정해서(게임=항상 true)
+  //   아무것도 안 했는데 1번에 체크가 붙어 있었다.
   return (
-    <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="입력 단계">
+    <div className="grid grid-cols-5 gap-1" role="group" aria-label="입력 단계" data-spot-steps>
       {STEPS.map((s, i) => {
         const on = s.key === step;
         return (
@@ -325,10 +361,14 @@ function StepBar({ step, onStep, spot }: { step: StepKey; onStep: (s: StepKey) =
               on ? 'border-accent-300 bg-accent-300 text-white'
                 : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}
           >
-            <span className={['tabular-nums', on ? 'text-white/80' : 'text-ink-muted'].join(' ')}>{i + 1}</span>
-            <span className="flex max-w-full items-center gap-1 break-keep text-center leading-tight">
-              {s.label}
-              {done[s.key] && <Icon name="check" size={11} className={['shrink-0', on ? 'text-white' : 'text-emerald-400'].join(' ')} aria-label="완료" />}
+            {/* 체크는 번호 옆 — 라벨 줄에 두면 320px 다섯 칸(칸 ≈50px)에서 '자리·스택' 이 밀려 넘친다. */}
+            <span className={['flex items-center gap-0.5 tabular-nums', on ? 'text-white/80' : 'text-ink-muted'].join(' ')}>
+              {i + 1}
+              {confirmed.has(s.key) && <Icon name="check" size={10} className={['shrink-0', on ? 'text-white' : 'text-emerald-400'].join(' ')} aria-label="완료" />}
+            </span>
+            {/* '·' 뒤에서만 접힌다 — 좁은 칸에서 '자리·' / '스택' 두 줄 */}
+            <span className="max-w-full break-keep text-center leading-tight">
+              {s.label.split('·').map((part, k) => <span key={k}>{k > 0 && <>·<wbr /></>}{part}</span>)}
             </span>
           </button>
         );

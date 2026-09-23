@@ -46,7 +46,7 @@ async function openSpot(page: Page) {
   return dlg;
 }
 
-/** 2026-09-19 오너 지시로 진입 단계가 1번(게임)이 됐다 — 카드·액션은 눌러서 간다. */
+/** 2026-09-19 오너 지시로 진입 단계가 1번(게임)이 됐다 — 이후 단계는 눌러서 간다(2026-09-23 A안: 카드/액션/확인). */
 async function gotoStep(dlg: Locator, name: RegExp) {
   await dlg.getByRole('group', { name: '입력 단계' }).getByRole('button', { name }).click();
 }
@@ -131,13 +131,15 @@ test.describe('NURI SPOT — 분석 흐름', () => {
   test('🔴 작성 화면에는 분석·수학 UI 가 없고, 적은 내용이 그대로 보인다', async ({ page }) => {
     const dlg = await openSpot(page);
     const report = dlg.getByLabel('작성 내용');
-    await expect(report, '작성 내용 영역이 없다').toBeVisible();
 
-    await gotoStep(dlg, /카드·액션/);
+    await gotoStep(dlg, /카드/);
     // 내 카드 2장 — CardGridPicker 의 data-card 훅으로 정확히 집는다(라벨 문구에 결합하지 않는다)
     await dlg.locator('button[data-card="As"]').click();
     await dlg.locator('button[data-card="Ks"]').click();
     await page.waitForTimeout(900);
+    // 2026-09-23 A안: 작성 내용은 5번 '확인' 단계에만 선다 — 거기로 옮겨 같은 항목을 같은 강도로 본다.
+    await gotoStep(dlg, /확인/);
+    await expect(report, '작성 내용 영역이 없다').toBeVisible();
 
     // ① 분석 잔재 0 — 등급 배지·수학 문구가 이 화면에 남아 있으면 안 된다.
     await expect(report.locator('[data-source-badge]'), '등급 배지가 아직 작성 화면에 있다').toHaveCount(0);
@@ -160,7 +162,7 @@ test.describe('NURI SPOT — 분석 흐름', () => {
 
   test('🔴 액션 타임라인에 행이 쌓이고 지워진다', async ({ page }) => {
     const dlg = await openSpot(page);
-    await gotoStep(dlg, /카드·액션/);
+    await gotoStep(dlg, /액션/);
     await expect(dlg.getByText('액션 순서')).toBeVisible();
     await expect(dlg.getByText('아직 액션이 없습니다.')).toBeVisible();
 
@@ -175,10 +177,11 @@ test.describe('NURI SPOT — 분석 흐름', () => {
     await expect(dlg.getByText('아직 액션이 없습니다.')).toBeVisible();
   });
 
-  test('🔴 입력 4단계가 서고 현재 단계가 표시된다', async ({ page }) => {
+  test('🔴 입력 5단계가 서고 현재 단계가 표시된다', async ({ page }) => {
     const dlg = await openSpot(page);
     const bar = dlg.getByRole('group', { name: '입력 단계' });
-    for (const s of ['게임', '자리·스택', '카드·액션', '내 선택']) {
+    // 2026-09-23 A안: 게임/자리·스택/카드/액션/확인
+    for (const s of ['게임', '자리·스택', '카드', '액션', '확인']) {
       await expect(bar.getByRole('button', { name: new RegExp(s) })).toBeVisible();
     }
     await bar.getByRole('button', { name: /자리·스택/ }).click();
@@ -207,7 +210,7 @@ test.describe('NURI SPOT — 분석 흐름', () => {
     // ⑤ 빌런 B~E 추가 — 자리 목록에 '상대 B 자리' 행이 생기고 카드 단계에 슬롯이 선다
     await dlg.getByRole('button', { name: /상대 추가/ }).click();
     await expect(dlg.getByText('상대 B 자리')).toBeVisible();
-    await gotoStep(dlg, /카드·액션/);
+    await gotoStep(dlg, /카드/);
     await expect(dlg.getByRole('button', { name: /^상대 B/ }).first()).toBeVisible();
   });
 });
@@ -217,14 +220,14 @@ test.describe('NURI SPOT — 단계 바', () => {
 
   test('🔴 현재 단계 칩은 잘리지 않는다 — 체크가 붙어 넓어져도', async ({ page }) => {
     const dlg = await openSpot(page);
-    await gotoStep(dlg, /카드·액션/);
-    // 4단계로 간 **뒤에** 액션을 고른다 → 완료 체크가 붙어 칩이 넓어진다.
+    await gotoStep(dlg, /카드/);
+    // 액션 단계로 간 **뒤에** 내 선택을 고른다 → 칩 상태가 바뀐 뒤에도 현재 칩이 잘리지 않아야 한다.
     // 여기서 실제 회귀가 났다: step 만 보고 스크롤을 맞춰서, 나중에 넓어진 칩이 잘린 채 남았다.
     await dlg.locator('button[data-card="As"]').click();
     await dlg.locator('button[data-card="Ks"]').click();
     const bar = dlg.getByRole('group', { name: '입력 단계' });
-    await bar.getByRole('button', { name: /내 선택/ }).click();
-    await dlg.getByRole('button', { name: '레이즈', exact: true }).first().click();
+    await bar.getByRole('button', { name: /액션/ }).click();
+    await dlg.getByRole('button', { name: '레이즈', exact: true }).last().click();   // '그때 나는'(A안: 액션 단계 안)
     await page.waitForTimeout(900);   // smooth 스크롤이 끝날 시간
 
     const cut = await bar.evaluate((el) => {
@@ -253,10 +256,11 @@ test.describe('NURI SPOT — 비슷한 스팟 풀기', () => {
     await page.getByTestId('spot-hero').getByRole('button', { name: '새 스팟 작성' }).click();
     const dlg = page.getByRole('dialog').first();
     await dlg.waitFor({ timeout: 20_000 });
-    await gotoStep(dlg, /카드·액션/);
+    await gotoStep(dlg, /카드/);
     await dlg.locator('button[data-card="As"]').click();
     await dlg.locator('button[data-card="Ks"]').click();
     await page.waitForTimeout(900);
+    await gotoStep(dlg, /확인/);   // 2026-09-23 A안: 작성 내용은 확인 단계에만
     // 대상 도달 단언 — 카드를 실제로 골라 '차트에 걸리는' 상태를 만든 뒤에 본다(빈 검사 방지).
     await expect(dlg.getByTestId('spot-details'), '작성 내용에 도달하지 못했다').toBeVisible();
     await expect(dlg.getByRole('button', { name: '비슷한 스팟 풀기' }), '트레이너 CTA 가 되살아났다').toHaveCount(0);
@@ -324,10 +328,11 @@ test.describe('NURI SPOT — 9인 UTG+1 자리', () => {
     await expect(dlg.getByRole('button', { name: 'UTG1', exact: true }).first(),
       '내 자리가 UTG1 로 안 바뀐다').toHaveAttribute('aria-pressed', 'true');
 
-    await steps.getByRole('button', { name: /카드·액션/ }).click();
+    await steps.getByRole('button', { name: /카드/ }).click();
     await dlg.locator('button[data-card="As"]').click();
     await dlg.locator('button[data-card="Ks"]').click();
     await page.waitForTimeout(900);
+    await steps.getByRole('button', { name: /확인/ }).click();   // 2026-09-23 A안: 작성 내용은 확인 단계에만
 
     const report = dlg.getByLabel('작성 내용');
     // 🔴 2026-09-22 요구 A — 등급 배지를 화면에서 뺐으므로 'chart_nash 배지가 뜨는가' 로는 못 본다.

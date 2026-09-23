@@ -193,6 +193,11 @@ export default function PrivacyPolicy() {
                 // 2026-09-11: 외부 생성형 AI 를 TDA 규칙 질의 하나로 줄이면서 실제 전송 항목이 바뀌었다.
                 // 더는 보내지 않는 것: 순위 인증 이미지 · 핸드 분석 텍스트 · 매장 주간 운영 요약(단골 이름 포함).
                 ['Google LLC (Gemini·Analytics)', '미국', 'TDA 규칙 질문 텍스트, 이용 통계', 'TDA 규칙 안내 요약 생성, 이용 통계', '처리 즉시 완료(모델 입력 별도 저장 없음)', '해당 기능 실행 시 API 전송'],
+                // 2026-09-24: 오너 결정 SPOT-WRITE-UX-AI — NURI SPOT 'AI 아쉬운 포인트' 코칭을 추가하며
+                // 위탁 범위를 넓혔다. 저장된 스팟의 핸드 정보·메모만 보내고 이름·닉네임 등 식별 정보는
+                // 스팟에 담기지 않아 전송되지 않는다(supabase/functions/spot-review/logic.ts NOTE_MAX=300).
+                // 결과는 TDA 질의와 달리 본인 전용으로 DB에 저장되어(spot_ai_reviews) 보유기간이 달라 별도 행으로 둔다.
+                ['Google LLC (Gemini)', '미국', "NURI SPOT 에 저장한 스팟의 핸드 정보(자리·스택·카드·액션·보드) 및 이용자가 작성한 메모(최대 300자). 이름·닉네임·연락처 등 계정 식별 정보는 전송하지 않습니다", "NURI SPOT 'AI 아쉬운 포인트' 코칭 생성", '코칭 결과는 본인만 열람할 수 있도록 서비스 DB에 저장되며, 회원 탈퇴 시 관련 계정과 함께 삭제됩니다', '해당 기능 실행 시 암호화 통신(API)으로 전송'],
               ] as string[][]).map((row, i) => (
                 <tr key={i} className="border-b border-border-subtle align-top">
                   {row.map((cell, j) => <td key={j} className="py-1.5 pr-2">{cell}</td>)}
@@ -203,7 +208,7 @@ export default function PrivacyPolicy() {
         </div>
         <p className="text-2xs text-ink-muted">
           정보주체는 개인정보의 국외 이전을 거부할 수 있습니다(문의: ace@nuriholdem.com).
-          다만 거부 시 오류 자동 보고·TDA 규칙 안내·이메일 소식 등 해당 기능의 이용이 제한될 수 있습니다.
+          다만 거부 시 오류 자동 보고·TDA 규칙 안내·NURI SPOT AI 코칭·이메일 소식 등 해당 기능의 이용이 제한될 수 있습니다.
         </p>
       </Article>
 

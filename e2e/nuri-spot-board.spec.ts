@@ -163,12 +163,14 @@ test.describe('스팟 토론은 게시판에서 돈다', () => {
     await expect(dlg).toBeVisible({ timeout: 20_000 });
     // 2026-09-19 오너 지시로 진입 단계가 1번(게임)이 됐다 — 카드 그리드는 3번 단계에서만 선다.
     const steps = dlg.getByRole('group', { name: '입력 단계' });
-    await steps.getByRole('button', { name: /카드·액션/ }).click();
+    // 2026-09-23 A안: 카드·액션이 '카드' 와 '액션'(내 선택 포함) 두 단계로 나뉘고, 저장·공유는 '확인' 단계에만 선다.
+    await steps.getByRole('button', { name: /카드/ }).click();
     await dlg.locator('button[data-card="As"]').click();
     await dlg.locator('button[data-card="Ks"]').click();
-    await steps.getByRole('button', { name: /내 선택/ }).click();
-    await dlg.getByRole('button', { name: '레이즈', exact: true }).first().click();
-    await dlg.getByRole('spinbutton').first().fill('3');
+    await steps.getByRole('button', { name: /액션/ }).click();
+    await dlg.getByRole('button', { name: '레이즈', exact: true }).last().click();   // '그때 나는'
+    await dlg.getByRole('spinbutton').last().fill('3');
+    await steps.getByRole('button', { name: /확인/ }).click();
     await page.waitForTimeout(600);
     const shareBtn = dlg.getByRole('button', { name: '스팟 토론에 공유' });
     await expect(shareBtn, '공유 버튼이 막혀 있다').toBeEnabled({ timeout: 10_000 });

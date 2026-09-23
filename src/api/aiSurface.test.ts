@@ -2,6 +2,8 @@
 //
 // 오너 결정: "웹에 과도하게 흩어진 외부 AI 기능을 제거하고 꼭 필요한 AI만 남긴다" —
 // 남는 것은 **TDA 규칙 질의 하나뿐**이다.
+// 2026-09-23 오너 결정(SPOT-WRITE-UX-AI)으로 **NURI SPOT 코칭(spot-review) 하나만** 더 허용한다.
+//   허용 목록은 정확히 ['tda-assist', 'spot-review'] 둘이다 — 세 번째가 생기면 여기서 빨개져야 한다.
 //
 // 이 테스트는 그 결정을 소스 수준에서 잠근다. 기능 테스트가 아니라 **표면(surface) 테스트**다:
 // 누군가 편의를 위해 범용 AI 클라이언트를 다시 만들거나, 문의·후기·순위·장부·GTO 화면에
@@ -27,10 +29,13 @@ const rel = (p: string) => relative(ROOT, p).replace(/\\/g, '/');
 /** 주석·문서 문자열이 아니라 **실제 호출**만 본다. 히스토리를 적은 주석까지 막으면 기록을 못 남긴다. */
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-describe('외부 생성형 AI 표면 — TDA 규칙 질의 하나만 남는다', () => {
+/** 허용된 AI 엣지 함수 — 오너 결정 두 건(2026-09-11 TDA · 2026-09-23 SPOT 코칭). 느슨하게 풀지 마라. */
+const AI_FUNCTIONS = ['spot-review', 'tda-assist'] as const;
+
+describe('외부 생성형 AI 표면 — TDA 규칙 질의와 SPOT 코칭 둘만 남는다', () => {
   const srcFiles = walk(SRC).filter((p) => !/\.test\.tsx?$/.test(p));
 
-  it('클라이언트에서 supabase.functions.invoke 로 부르는 AI 함수는 tda-assist 뿐이다', () => {
+  it('클라이언트에서 supabase.functions.invoke 로 부르는 AI 함수는 tda-assist · spot-review 뿐이다', () => {
     const offenders: string[] = [];
     for (const p of srcFiles) {
       const code = stripComments(readFileSync(p, 'utf-8'));
@@ -38,7 +43,7 @@ describe('외부 생성형 AI 표면 — TDA 규칙 질의 하나만 남는다',
         const fn = m[1];
         // AI 가 아닌 엣지 함수(본인인증·푸시·제재 안내)는 이 계약의 대상이 아니다.
         if (['verify-identity', 'send-push', 'notify-sanction'].includes(fn)) continue;
-        if (fn === 'tda-assist') continue;
+        if ((AI_FUNCTIONS as readonly string[]).includes(fn)) continue;
         offenders.push(`${rel(p)} → ${fn}`);
       }
     }
@@ -83,7 +88,7 @@ describe('외부 생성형 AI 표면 — TDA 규칙 질의 하나만 남는다',
     expect(/\bfetch\s*\(|functions\.invoke\(|supabase\.rpc\(/.test(code.split('function buildOpsReport')[1] ?? ''), '운영 리포트가 외부를 부른다').toBe(false);
   });
 
-  it('엣지 함수 중 Gemini 를 부르는 것은 tda-assist 뿐이고, 옛 gemini 함수는 거절 스텁이다', () => {
+  it('엣지 함수 중 Gemini 를 부르는 것은 tda-assist · spot-review 뿐이고, 옛 gemini 함수는 거절 스텁이다', () => {
     // 🔴 2026-09-21 — 예전엔 `if (!existsSync(FUNCS)) return;` 이었다. 경로가 사라지면
     //   이 계약이 **통째로 조용히 꺼진다**(아래 toEqual(['tda-assist']) 까지 같이 안 돈다).
     //   없으면 건너뛸 게 아니라 **크게 실패**해야 한다 — 엣지 함수는 사라질 물건이 아니다.
@@ -95,7 +100,7 @@ describe('외부 생성형 AI 표면 — TDA 규칙 질의 하나만 남는다',
       const code = stripComments(readFileSync(idx, 'utf-8'));
       if (code.includes('generativelanguage.googleapis.com')) callers.push(dir);
     }
-    expect(callers.sort()).toEqual(['tda-assist']);
+    expect(callers.sort()).toEqual([...AI_FUNCTIONS]);
 
     const gemini = join(FUNCS, 'gemini', 'index.ts');
     if (existsSync(gemini)) {
@@ -110,6 +115,16 @@ describe('외부 생성형 AI 표면 — TDA 규칙 질의 하나만 남는다',
     expect(code).toContain('ruleKeys');
     for (const forbidden of ['system:', 'model:', 'images:', 'temperature:']) {
       expect(stripComments(code), `클라이언트가 ${forbidden} 를 보낸다`).not.toContain(forbidden);
+    }
+  });
+
+  it('spot-review 클라이언트는 저장된 스팟 id 만 보낸다 — 스팟 본문·system/model/prompt 를 싣지 않는다', () => {
+    const code = stripComments(readFileSync(join(SRC, 'api', 'spotReview.ts'), 'utf-8'));
+    const call = code.match(/functions\.invoke\('spot-review', \{ body: \{([^}]*)\} \}\)/);
+    expect(call, 'spot-review 호출 형태를 못 찾았다').not.toBeNull();
+    expect(call![1].trim()).toBe('spotId: spotReviewId');
+    for (const forbidden of ['system:', 'model:', 'images:', 'temperature:', 'prompt:']) {
+      expect(code, `클라이언트가 ${forbidden} 를 보낸다`).not.toContain(forbidden);
     }
   });
 });
