@@ -11,7 +11,7 @@
 //
 // ⚠ 기존 도구는 하나도 지우지 않는다. #tool=gto · #tool=replay 는 그대로 살아 있고
 //   이 화면은 그 위에 얹히는 통합 진입점이다(ToolsPanel 의 대표 카드).
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import SegmentedTabs from '../../atoms/SegmentedTabs';
 import { useToast } from '../../atoms/Toast';
@@ -72,6 +72,27 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
   const { user } = useAuth();
   const toast = useToast();
   const [tab, setTab] = useState<SpotTab>(init?.tab ?? 'analyze');
+  // 🔴 SPOT-MYSPOT-JANK(2026-09-24): 두 판은 **한 번 들어간 뒤 유지**하고 hidden 으로만 바꾼다.
+  //   예전엔 조건부 렌더라 전환마다 재마운트됐다 — 작성 단계가 1단계로 되돌아가고(기능 결함),
+  //   목록은 재조회+스켈레톤으로 본문이 468→307→745px 로 계단지고 스크롤이 0 으로 깎였다.
+  const [seen, setSeen] = useState<ReadonlySet<SpotTab>>(() => new Set([init?.tab ?? 'analyze']));
+  /** 저장 스팟을 열 때만 올린다 — 작성 판을 **새로** 만들어 shareIntent(확인 단계·확인 시트)를 새 마운트 초기값으로 읽게 한다. */
+  const [analyzeKey, setAnalyzeKey] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  /** 탭마다 떠날 때의 스크롤 — 돌아오면 그 자리로(판을 유지해도 스크롤 상자는 둘이 함께 쓴다). */
+  const scrollMem = useRef<Partial<Record<SpotTab, number>>>({});
+  const switchTab = (t: SpotTab) => {
+    if (t === tab) return;
+    const sc = scrollBox(rootRef.current);
+    if (sc) scrollMem.current[tab] = sc.scrollTop;
+    setSeen((v) => (v.has(t) ? v : new Set(v).add(t)));
+    setTab(t);
+  };
+  useLayoutEffect(() => {
+    const y = scrollMem.current[tab];
+    const sc = scrollBox(rootRef.current);
+    if (sc && y !== undefined) sc.scrollTop = y;
+  }, [tab]);
 
   // 스팟 상태 — 마지막 입력을 24h 복원(기존 도구와 같은 조리법).
   const [spot, setSpot] = useState<SpotReview>(() => {
@@ -91,7 +112,12 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
   }, [spot]);
 
   // 카드 입력은 기존 훅을 그대로 쓴다 — 같은 선택기를 두 벌 만들지 않는다.
-  const hb = useHandBoard(5, { hero: spot.hero, villain: spot.villain, board: spot.board, extra: spot.extra.map((v) => v.cards) });
+  const hbRaw = useHandBoard(5, { hero: spot.hero, villain: spot.villain, board: spot.board, extra: spot.extra.map((v) => v.cards) });
+  // useHandBoard 는 렌더마다 새 객체를 돌려준다 — 필드가 하나도 안 바뀌었으면 이전 객체를 그대로 쓴다.
+  //   탭 전환(부모 재렌더)만으로 작성 판 전체(카드 52장 그리드)가 다시 그려지지 않게(SPOT-MYSPOT-JANK).
+  const hbRef = useRef(hbRaw);
+  if ((Object.keys(hbRaw) as (keyof typeof hbRaw)[]).some((k) => hbRaw[k] !== hbRef.current[k])) hbRef.current = hbRaw;
+  const hb = hbRef.current;
   // 빌런 B~E 의 **수**는 스팟(자리 목록)이 정본이고 슬롯 수가 따라간다(자리 단계에서 추가/삭제).
   const { setExtraCount } = hb;
   const extraSlots = hb.extra.length;
@@ -140,6 +166,11 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
     //   교체 직후 동기화 이펙트는 문자열 비교가 같아 early-return 하므로 s.street 는 보존된다.
     setSpot(s);
     hb.setAll({ hero: s.hero, villain: s.villain, board: s.board });
+    // 작성 판은 새로 만든다(유지되는 판의 단계·확정 체크·저장 표시는 이전 스팟의 것이다).
+    setAnalyzeKey((k) => k + 1);
+    setSeen((v) => (v.has('analyze') ? v : new Set(v).add('analyze')));
+    // 목록 자리는 기억하고, 새로 연 작성 판에는 옛 스크롤을 되살리지 않는다(여기는 늘 '내 스팟' 에서 온다).
+    scrollMem.current = { mine: scrollBox(rootRef.current)?.scrollTop };
     setTab('analyze');
   }, [hb]);
 
@@ -148,27 +179,55 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
     [spot],
   );
 
+  // 두 판의 요소를 메모한다 — 탭만 바뀌면 React 가 판 전체를 건너뛰고 wrapper 의 hidden 만 바꾼다.
+  //   (메모가 없으면 전환 한 번에 두 판이 다 다시 그려져 6x CPU 에서 클릭 프레임이 150ms 를 넘었다 — 실측)
+  const analyzePane = useMemo(() => (
+    <AnalyzeTab
+      key={analyzeKey}
+      spot={spot} patch={patch} hb={hb} issues={issues} blocked={blocked}
+      evaluation={evaluation} savedAt={savedAt}
+      user={user} toast={toast} shareIntent={shareIntent}
+    />
+  ), [analyzeKey, spot, patch, hb, issues, blocked, evaluation, savedAt, user, toast, shareIntent]);
+  const mineActive = tab === 'mine';
+  const minePane = useMemo(() => (
+    // 계정이 바뀌면 새로 만든다 — 이전 계정의 행·코칭이 한 프레임도 남지 않게.
+    <MySpotList
+      key={user?.id ?? 'anon'}
+      active={mineActive}
+      onShare={(s) => { openSaved(s); setShareIntent((n) => n + 1); }}
+      onOpen={openSaved}
+      onNew={() => { setSeen((v) => (v.has('analyze') ? v : new Set(v).add('analyze'))); setTab('analyze'); }} />
+  ), [user?.id, mineActive, openSaved]);
+
   return (
     // space-y-2: 탭 행 아래 12.75 → 8.5px (오너 2026-09-19 "탭 위아래 공백")
-    <div className="space-y-2">
+    <div ref={rootRef} className="space-y-2">
       {/* 탭을 직접 옮기면 '공유로 들어옴' 신호를 지운다 — 남아 있으면 작성 탭에 돌아올 때마다 확인 시트가 다시 열린다. */}
-      <SpotHero tab={tab} onTab={(t) => { setShareIntent(0); setTab(t); }} />
+      <SpotHero tab={tab} onTab={(t) => { setShareIntent(0); switchTab(t); }} />
 
-      {tab === 'analyze' && (
-        <AnalyzeTab
-          spot={spot} patch={patch} hb={hb} issues={issues} blocked={blocked}
-          evaluation={evaluation} savedAt={savedAt}
-          user={user} toast={toast} shareIntent={shareIntent}
-        />
+      {/* hidden(display:none) — 작성 판 안의 고정 하단 바([이전][다음])도 함께 숨는다. space-y 는 [hidden] 을 건너뛴다. */}
+      {seen.has('analyze') && (
+        <div hidden={tab !== 'analyze'} data-spot-pane="analyze">
+          {analyzePane}
+        </div>
       )}
-      {tab === 'mine' && (
-        <MySpotList
-          onShare={(s) => { openSaved(s); setShareIntent((n) => n + 1); }}
-          onOpen={openSaved}
-          onNew={() => setTab('analyze')} />
+      {seen.has('mine') && (
+        <div hidden={tab !== 'mine'} data-spot-pane="mine">
+          {minePane}
+        </div>
       )}
     </div>
   );
+}
+
+/** 가장 가까운 세로 스크롤 상자 — 도구 창(Modal)이면 그 본문, 아니면 문서. */
+function scrollBox(el: HTMLElement | null): HTMLElement | null {
+  for (let p = el?.parentElement; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if (o === 'auto' || o === 'scroll') return p;
+  }
+  return document.scrollingElement as HTMLElement | null;
 }
 
 // ── 대표 헤더 ────────────────────────────────────────────────────────────────

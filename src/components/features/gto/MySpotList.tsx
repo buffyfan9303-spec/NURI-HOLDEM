@@ -2,7 +2,7 @@
 //
 // 목록 카드에는 강한 glow 를 반복하지 않는다 — 히어로와 리포트가 이미 빛나고 있고,
 // 여기까지 빛나면 무엇을 먼저 볼지 알 수 없어진다(오너 지시 7 의 광량 단계).
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import { MiniCard } from '../../atoms/HandCards';
 import { useToast } from '../../atoms/Toast';
@@ -13,7 +13,13 @@ import { listMySpots, deleteMySpot, type SavedSpot } from '../../../api/spots';
 import { listSpotAiReviews } from '../../../api/spotReview';
 import SpotDetails from './SpotDetails';
 
-export default function MySpotList({ onOpen, onShare, onNew }: {
+/** 코칭 맵이 같은가 — 둘 다 비었을 때도 같다(빈 결과마다 새 Map 을 넣어 두 번째 커밋을 만들던 자리). */
+const sameAi = (a: Map<string, string>, b: Map<string, string>) =>
+  a.size === b.size && [...b].every(([k, v]) => a.get(k) === v);
+
+export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
+  /** 보이는 동안 true — 보일 때마다 **조용히** 다시 읽는다(받은 행은 유지, 스켈레톤은 첫 진입 1회). */
+  active?: boolean;
   onOpen: (s: SpotReview) => void;
   /** 2026-09-14 오너 지시 — 저장한 스팟을 **여기서 바로** 게시판에 올린다.
    *  ⚠ 여기서 게시 RPC 를 부르지 않는다. 분석 탭으로 열면서 리포트의 **확인 시트**를 띄울 뿐이다.
@@ -32,27 +38,125 @@ export default function MySpotList({ onOpen, onShare, onNew }: {
   /** 끝난 AI 코칭(spot_review_id → 본문). 재열람은 테이블을 읽을 뿐이라 포인트가 들지 않는다. */
   const [ai, setAi] = useState<Map<string, string>>(() => new Map());
 
+  /** 요청 세대 — 늦게 온 이전 응답이 새 응답을 덮지 않게. */
+  const seq = useRef(0);
+  /** 한 번이라도 목록을 받았나 — 그 뒤 재조회 실패는 보여 준 목록을 지우지 않는다. */
+  const loaded = useRef(false);
+
+  // 🔴 SPOT-MYSPOT-JANK(2026-09-24): 탭을 오갈 때마다 행을 버리고 스켈레톤부터 다시 그렸다.
+  //   같은 목록이면 상태를 바꾸지 않는다(재렌더 0) — 바뀐 경우(새로 저장한 스팟)만 커밋한다.
   const load = useCallback(() => {
+    const my = ++seq.current;
     if (!user) { setRows([]); return; }
     listMySpots()
       .then((r) => {
-        setRows(r); setFailed(false);
-        listSpotAiReviews(r.map((x) => x.id)).then(setAi).catch(() => { /* 코칭이 없어도 목록은 선다 */ });
+        if (my !== seq.current) return;
+        loaded.current = true;
+        setRows((prev) => (prev && JSON.stringify(prev) === JSON.stringify(r) ? prev : r));
+        setFailed(false);
+        return listSpotAiReviews(r.map((x) => x.id)).then(
+          (m) => { if (my === seq.current) setAi((prev) => (sameAi(prev, m) ? prev : m)); },
+          () => { /* 코칭이 없어도 목록은 선다 */ },
+        );
       })
-      .catch(() => { setRows([]); setFailed(true); });
+      .catch(() => {
+        if (my !== seq.current || loaded.current) return;
+        setRows([]); setFailed(true);
+      });
   }, [user]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (active) load(); }, [active, load]);
 
-  const remove = async (id: string) => {
+  const remove = useCallback(async (id: string) => {
     try {
       await deleteMySpot(id);
+      seq.current++; // 진행 중인 재조회 응답이 방금 지운 행을 되살리지 않게
       setRows((r) => (r ?? []).filter((x) => x.id !== id));
       toast.show('삭제했습니다', 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error');
     } finally { setConfirmId(null); }
-  };
+  }, [toast]);
+
+  /** 부모 콜백은 최신 것을 ref 로 부른다 — 콜백 정체성이 바뀌어도 목록 메모가 깨지지 않게. */
+  const cb = useRef({ onOpen, onShare });
+  cb.current = { onOpen, onShare };
+  // 목록 JSX 는 메모한다 — 탭을 오갈 때 active 만 바뀌면 행 10개를 다시 그리지 않는다(SPOT-MYSPOT-JANK).
+  const list = useMemo(() => (!rows || rows.length === 0 ? null : (
+    <ul className="space-y-2">
+      {rows.map((r) => (
+        <li key={r.id} className="rounded-aura border card-aura p-2.5">
+          <div className="flex items-start gap-2">
+            <div className="flex shrink-0 gap-0.5" aria-label="내 카드">
+              {r.spot.hero.length > 0
+                ? r.spot.hero.map((c) => <MiniCard key={c} id={c} />)
+                : <span className="text-2xs text-ink-muted">카드 없음</span>}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-bold text-ink-primary">{spotSummary(r.spot)}</p>
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-ink-muted">
+                <span className="rounded-badge bg-surface-high px-1.5 py-px font-semibold">{COVERAGE_LABEL[r.coverageKind]}</span>
+                {r.spot.heroAction && <span>내 선택 {actionLabel(r.spot.heroAction)}</span>}
+                {r.spot.board.length > 0 && <span>{streetLabel(r.spot.street)} {r.spot.board.length}장</span>}
+                {ai.has(r.id) && <span className="inline-flex items-center gap-0.5 text-accent-200"><Icon name="sparkles" size={10} aria-hidden />AI 코칭</span>}
+              </p>
+            </div>
+          </div>
+          {/* 🔴 2026-09-22 요구 A — '다시 열기'(= 작성 폼으로 되돌림) 대신 **상세 보기**가 기본이다.
+              오너: 저장한 스팟은 요약만 보이고 누르면 작성 폼으로 돌아가 버려서, 그때 무엇을 적었는지
+              한 화면에서 읽을 수가 없었다. 목록 안에서 펼치는 인라인 상세를 둔다 —
+              새 모달·중첩 시트를 만들지 않는다(뒤로가기 층이 늘고 keep-alive 와 얽힌다). */}
+          <div className="mt-2 flex gap-1.5">
+            <button type="button" onClick={() => setExpandedId((id) => (id === r.id ? null : r.id))}
+              aria-expanded={expandedId === r.id} aria-controls={`spot-detail-${r.id}`}
+              className="btn-ghost min-h-[44px] flex-1 text-xs">
+              {expandedId === r.id ? '접기' : '상세 보기'}
+            </button>
+            <button type="button" onClick={() => cb.current.onShare(r.spot)} className="btn-primary min-h-[44px] flex-1 text-xs">
+              게시판에 공유
+            </button>
+            {confirmId === r.id ? (
+              <>
+                <button type="button" onClick={() => remove(r.id)}
+                  className="min-h-[44px] rounded-input border border-danger/40 bg-danger/10 px-3 text-xs font-bold text-danger">
+                  정말 삭제
+                </button>
+                <button type="button" onClick={() => setConfirmId(null)}
+                  className="min-h-[44px] rounded-input px-3 text-xs text-ink-muted">취소</button>
+              </>
+            ) : (
+              <button type="button" onClick={() => setConfirmId(r.id)} aria-label="스팟 삭제"
+                className="flex h-[44px] w-[44px] items-center justify-center rounded-input text-ink-muted transition-colors hover:text-danger">
+                <Icon name="trash" size={14} />
+              </button>
+            )}
+          </div>
+          {expandedId === r.id && (
+            <div id={`spot-detail-${r.id}`} className="mt-2 rounded-input bg-surface-high px-2.5 py-1.5">
+              {/* 저장 당시 스냅샷을 **그대로** 보여 준다 — 지금 엔진으로 다시 계산해
+                  저장할 때와 다른 값을 보여 주지 않는다(명세 §2.4). */}
+              <SpotDetails spot={r.spot} mode="owner" />
+              {ai.has(r.id) && (
+                // 결과는 나만 본다 — 게시판 공유(onShare → 확인 시트)의 본문에는 실리지 않는다.
+                <section data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트" className="mt-2 border-t border-border-subtle pt-2">
+                  <h4 className="text-2xs font-bold text-ink-secondary">AI 아쉬운 포인트 <span className="font-normal text-ink-muted">(나만 보여요)</span></h4>
+                  <p className="mt-1 whitespace-pre-wrap break-keep text-xs leading-relaxed text-ink-primary">{ai.get(r.id)}</p>
+                </section>
+              )}
+              <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border-subtle pt-2">
+                <button type="button" onClick={() => cb.current.onOpen(r.spot)} className="btn-ghost min-h-[44px] flex-1 text-xs">
+                  수정하기
+                </button>
+                <button type="button" onClick={() => setExpandedId(null)} className="btn-ghost min-h-[44px] px-3 text-xs">
+                  목록으로
+                </button>
+              </div>
+            </div>
+          )}
+        </li>
+      ))}
+    </ul>
+  )), [rows, ai, expandedId, confirmId, remove]);
 
   if (!user) {
     return (
@@ -88,81 +192,7 @@ export default function MySpotList({ onOpen, onShare, onNew }: {
     );
   }
 
-  return (
-    <ul className="space-y-2">
-      {rows.map((r) => (
-        <li key={r.id} className="rounded-aura border card-aura p-2.5">
-          <div className="flex items-start gap-2">
-            <div className="flex shrink-0 gap-0.5" aria-label="내 카드">
-              {r.spot.hero.length > 0
-                ? r.spot.hero.map((c) => <MiniCard key={c} id={c} />)
-                : <span className="text-2xs text-ink-muted">카드 없음</span>}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-bold text-ink-primary">{spotSummary(r.spot)}</p>
-              <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-ink-muted">
-                <span className="rounded-badge bg-surface-high px-1.5 py-px font-semibold">{COVERAGE_LABEL[r.coverageKind]}</span>
-                {r.spot.heroAction && <span>내 선택 {actionLabel(r.spot.heroAction)}</span>}
-                {r.spot.board.length > 0 && <span>{streetLabel(r.spot.street)} {r.spot.board.length}장</span>}
-                {ai.has(r.id) && <span className="inline-flex items-center gap-0.5 text-accent-200"><Icon name="sparkles" size={10} aria-hidden />AI 코칭</span>}
-              </p>
-            </div>
-          </div>
-          {/* 🔴 2026-09-22 요구 A — '다시 열기'(= 작성 폼으로 되돌림) 대신 **상세 보기**가 기본이다.
-              오너: 저장한 스팟은 요약만 보이고 누르면 작성 폼으로 돌아가 버려서, 그때 무엇을 적었는지
-              한 화면에서 읽을 수가 없었다. 목록 안에서 펼치는 인라인 상세를 둔다 —
-              새 모달·중첩 시트를 만들지 않는다(뒤로가기 층이 늘고 keep-alive 와 얽힌다). */}
-          <div className="mt-2 flex gap-1.5">
-            <button type="button" onClick={() => setExpandedId((id) => (id === r.id ? null : r.id))}
-              aria-expanded={expandedId === r.id} aria-controls={`spot-detail-${r.id}`}
-              className="btn-ghost min-h-[44px] flex-1 text-xs">
-              {expandedId === r.id ? '접기' : '상세 보기'}
-            </button>
-            <button type="button" onClick={() => onShare(r.spot)} className="btn-primary min-h-[44px] flex-1 text-xs">
-              게시판에 공유
-            </button>
-            {confirmId === r.id ? (
-              <>
-                <button type="button" onClick={() => remove(r.id)}
-                  className="min-h-[44px] rounded-input border border-danger/40 bg-danger/10 px-3 text-xs font-bold text-danger">
-                  정말 삭제
-                </button>
-                <button type="button" onClick={() => setConfirmId(null)}
-                  className="min-h-[44px] rounded-input px-3 text-xs text-ink-muted">취소</button>
-              </>
-            ) : (
-              <button type="button" onClick={() => setConfirmId(r.id)} aria-label="스팟 삭제"
-                className="flex h-[44px] w-[44px] items-center justify-center rounded-input text-ink-muted transition-colors hover:text-danger">
-                <Icon name="trash" size={14} />
-              </button>
-            )}
-          </div>
-          {expandedId === r.id && (
-            <div id={`spot-detail-${r.id}`} className="mt-2 rounded-input bg-surface-high px-2.5 py-1.5">
-              {/* 저장 당시 스냅샷을 **그대로** 보여 준다 — 지금 엔진으로 다시 계산해
-                  저장할 때와 다른 값을 보여 주지 않는다(명세 §2.4). */}
-              <SpotDetails spot={r.spot} mode="owner" />
-              {ai.has(r.id) && (
-                // 결과는 나만 본다 — 게시판 공유(onShare → 확인 시트)의 본문에는 실리지 않는다.
-                <section data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트" className="mt-2 border-t border-border-subtle pt-2">
-                  <h4 className="text-2xs font-bold text-ink-secondary">AI 아쉬운 포인트 <span className="font-normal text-ink-muted">(나만 보여요)</span></h4>
-                  <p className="mt-1 whitespace-pre-wrap break-keep text-xs leading-relaxed text-ink-primary">{ai.get(r.id)}</p>
-                </section>
-              )}
-              <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border-subtle pt-2">
-                <button type="button" onClick={() => onOpen(r.spot)} className="btn-ghost min-h-[44px] flex-1 text-xs">
-                  수정하기
-                </button>
-                <button type="button" onClick={() => setExpandedId(null)} className="btn-ghost min-h-[44px] px-3 text-xs">
-                  목록으로
-                </button>
-              </div>
-            </div>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
+  return list;
 }
 
 function Empty({ icon, title, desc, action }: {
