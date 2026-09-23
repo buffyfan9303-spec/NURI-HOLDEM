@@ -307,11 +307,13 @@ function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, savedAt, use
       )}
 
       <IssueList issues={issues} />
-      {savedAt !== null && (
-        <p className="text-2xs text-ink-muted" aria-live="polite">
-          <Icon name="check" size={11} className="mr-1 inline-block align-[-1px]" />임시 저장됨 — 나갔다 와도 그대로입니다
-        </p>
-      )}
+      {/* 자리는 **항상** 잡아 둔다(GTO-TOOL-OPEN-JANK 2026-09-24) — 열고 400ms 뒤 첫 자동저장이 이 줄을 끼워 넣어
+          본문이 439→468px 로 한 번 더 늘었다(열기 모션 중 두 번째 계단). 글자만 나중에 채운다. */}
+      <p className="min-h-[1lh] text-2xs text-ink-muted" aria-live="polite" data-testid="spot-saved-line">
+        {savedAt !== null && (
+          <><Icon name="check" size={11} className="mr-1 inline-block align-[-1px]" />임시 저장됨 — 나갔다 와도 그대로입니다</>
+        )}
+      </p>
 
       {/* 하단 고정 [이전][다음] — 전체화면 도구 창(Modal page, z-55)이 탭바(z-50)를 덮으므로 **창의 바닥**에 붙는다.
           sticky 는 내용이 짧은 단계(카드 390px)에서 바닥까지 못 내려갔다(실측 bottom 788/844) — fixed 로 둔다.

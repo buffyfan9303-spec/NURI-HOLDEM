@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { promptLogin } from '../../lib/requireLogin';
 import { goSubTab } from '../../lib/subTabTransition';
 import TdaRulesTool from './gto/TdaRulesTool';
+import { loadTdaRules } from '../../lib/tdaRulesLoad';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
 import ChipDistributor from './tools/ChipDistributor';
@@ -39,6 +40,20 @@ const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 const NuriSpotPanel = lazyWithReload(() => import('./gto/NuriSpotPanel'));
 // 스타팅 핸드 순위(2026-09-23) — 169칸 격자 + 표. 첫 화면 예산 여유가 2% 뿐이라 열 때 받는다.
 const StartingHandRankPanel = lazyWithReload(() => import('./tools/StartingHandRankPanel'));
+/**
+ * 열 때 받는 도구들의 '미리 받기'(GTO-TOOL-OPEN-JANK 2026-09-24).
+ * 첫 열기마다 '불러오는 중…'(148px)이 ~300ms 붙잡혔다가 본문으로 튀었다 — React 가 새 Suspense 경계의
+ * 폴백을 최소 300ms 유지하기 때문이다(청크가 캐시에 있어도). 받아 두면 lazyWithReload 가 lazy 를 건너뛰고
+ * 동기로 그려 폴백 자체가 없다. **청크 분리는 그대로**다 — 첫 화면 번들 증가 0, 받는 시점만 앞당긴다.
+ * 언제: GTO 판이 실제로 보일 때 유휴 시간(아래 ToolsPanel 이펙트) + 카드를 누르는 순간(pointerdown).
+ */
+const PRELOAD: Partial<Record<ToolKey, () => void>> = {
+  gto: () => { void GtoDeepPanel.preload(); },
+  replay: () => { void HandReviewTool.preload(); },
+  spot: () => { void NuriSpotPanel.preload(); },
+  startrank: () => { void StartingHandRankPanel.preload(); },
+  tda: () => { loadTdaRules().catch(() => { /* 열 때 도구가 다시 받는다 */ }); },
+};
 
 /**
  * NURI SPOT 진입 초기값 — 직전 스팟이 있으면 그것, 없으면 **기존 두 도구의 스냅샷에서 카드를 물려받는다**.
@@ -343,6 +358,28 @@ export default function ToolsPanel() {
   const activeRef = useRef<ToolKey | null>(active);
   activeRef.current = active;
   useLayoutEffect(() => { stripToolHash(); }, []); // 딥링크 진입 항목 정규화(1회)
+  // 무거운 도구 미리 받기 — ⚠ **마운트가 아니라 '보일 때'** 다. 이 패널은 App 의 유휴 예열로 GTO 탭을 열기 전에
+  //   display:none 인 채 마운트될 수 있다. 그때 받으면 GTO 를 안 쓰는 사람까지 수백 KB 를 받는다.
+  //   IntersectionObserver 는 display:none 조상 아래에서 교차하지 않으므로 '실제로 화면에 나왔다' 의 신호가 된다.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    let idleId = 0; let timerId = 0;
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      io.disconnect();
+      const run = () => { for (const f of Object.values(PRELOAD)) f?.(); };
+      if (typeof window.requestIdleCallback === 'function') idleId = window.requestIdleCallback(run, { timeout: 3000 });
+      else timerId = window.setTimeout(run, 1200);
+    });
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      if (idleId) window.cancelIdleCallback(idleId);
+      if (timerId) window.clearTimeout(timerId);
+    };
+  }, []);
   useEffect(() => {
     if (!active) { stripToolHash(); return; }
     if (window.location.hash === `#tool=${active}`) return;
@@ -424,7 +461,7 @@ export default function ToolsPanel() {
   const grid = (items: typeof TOOLS) => (
     <div className="grid auto-rows-fr grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
       {items.map((t) => (
-        <ToolCard key={t.key} testId={`tool-${t.key}`} tone={LANE_TONE[t.cat]} name={t.name} lines={TITLE_LINES[t.key]} desc={t.desc} icon={t.icon} onClick={() => open(t.key)}
+        <ToolCard key={t.key} testId={`tool-${t.key}`} tone={LANE_TONE[t.cat]} name={t.name} lines={TITLE_LINES[t.key]} desc={t.desc} icon={t.icon} onClick={() => open(t.key)} onPointerDown={PRELOAD[t.key]}
           fav={favs.includes(t.key)} onToggleFav={() => toggleFav(t.key)} />
       ))}
     </div>
@@ -438,7 +475,7 @@ export default function ToolsPanel() {
     // 같은 커밋에 모두 있다(설계서: GTO 는 hero 뿐 아니라 검색·칩·첫 카드도 함께 움직여야 한다).
     // ⚠ 이 요소 자체는 진입 대상이 아니다 — `.hero-aurora` 는 도구 모달의 **진짜 DOM 조상**이라
     //   여기에 transform 이 걸리면 그 모달이 이 박스 안에 갇힌다(HANDOFF §4-(2) 의 실제 위험 자리 3곳).
-    <div data-main-enter-ready className="hero-aurora space-y-3">
+    <div ref={rootRef} data-main-enter-ready className="hero-aurora space-y-3">
       {/* 프리플랍 레인지 차트 대표 카드(2026-08-30 편입)는 2026-09-14 오너 결정으로 뺐다 — '자주 쓰는 도구'(FEATURED_KEYS 의 range)가
           그 역할을 대신한다. NURI SPOT 대표 카드는 '탭의 주인공'(2026-09-03 오너 결정)이라 남긴다. */}
       {/* 트레이너 진행 스트립(오늘 N/목표 · 스트릭 · XP · 목표까지 N문제).
@@ -664,10 +701,10 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
           ⚠ `min-h-[44px]` 는 **남긴다** — 그건 확대 대책이 아니라 손가락 터치 최소치다.
           ⚠ 100% 에서 한 줄인지는 실측으로 확인했다(아래 커밋 메시지에 수치). */}
       <div className="mt-2.5 grid grid-cols-2 gap-1.5">
-        <button type="button" onClick={() => onOpen('spot')} className="btn-primary min-h-[44px] px-2 text-xs">
+        <button type="button" onClick={() => onOpen('spot')} onPointerDown={PRELOAD.spot} className="btn-primary min-h-[44px] px-2 text-xs">
           새 스팟 작성
         </button>
-        <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} className="btn-ghost min-h-[44px] px-2 text-xs">
+        <button type="button" onClick={() => onOpen('spot', { spotTab: 'mine' })} onPointerDown={PRELOAD.spot} className="btn-ghost min-h-[44px] px-2 text-xs">
           내 스팟
         </button>
       </div>
@@ -675,13 +712,15 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
   );
 }
 
-function ToolCard({ name, lines, desc, icon, onClick, fav, onToggleFav, testId, tone = 'violet' }: {
+function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onToggleFav, testId, tone = 'violet' }: {
   name: string;
   /** 제목의 줄바꿈 지점(TITLE_LINES). 없으면 한 줄로 그린다. 합치면 `name` 과 같아야 한다. */
   lines?: readonly [string, string];
   /** 카드에 **그리지 않는다**(2026-09-18 오너: 설명줄 전체 삭제). PC 호버 툴팁(title)으로만 남긴다 —
    *  데이터 자체는 TOOLS 에 그대로 있어 검색(`t.desc`)과 다른 두 화면(StoreToolsPanel·CalendarToolsPanel)이 계속 쓴다. */
   desc: string; icon: IconName; onClick: () => void; testId?: string; tone?: TileTone;
+  /** 누르는 순간 청크 미리 받기(PRELOAD) — 뗄 때(click)까지 ~100ms 를 번다. */
+  onPointerDown?: () => void;
   fav?: boolean; onToggleFav?: () => void;
 }) {
   // 버튼 안에 role="button" 스팬(중첩 인터랙티브 위반) 대신 형제 버튼 2개 — 키보드로도 별을 켤 수 있다.
@@ -706,7 +745,7 @@ function ToolCard({ name, lines, desc, icon, onClick, fav, onToggleFav, testId, 
             실측(2026-09-18): 넣기 전 320·390 200% 에서 카드 clientWidth 116 / scrollWidth 166 = 50px 잘림.
           ⚠ `aria-label={name}` — 두 줄로 쪼갠 제목이 보조기기에서 한 낱말로 읽히게 한다.
           ⚠ `title={desc}` — 화면에서 뺀 설명을 **버리지는 않는다**(PC 호버 툴팁). 검색은 계속 t.desc 를 읽는다. */}
-      <button type="button" onClick={onClick} data-testid={testId} aria-label={name} title={desc}
+      <button type="button" onClick={onClick} onPointerDown={onPointerDown} data-testid={testId} aria-label={name} title={desc}
         className="flex h-full w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-aura border card-aura py-2.5 pl-2.5 pr-8 text-left hover:border-accent-400/40">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
           <Icon name={icon} size={16} strokeWidth={1.8} aria-hidden />

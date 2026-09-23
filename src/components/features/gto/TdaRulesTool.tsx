@@ -14,13 +14,17 @@
 //   그래서 AI 답변 아래에는 언제나 근거 원문이 함께 펼쳐진다. 사람이 대조할 수 있어야 한다.
 //
 // 이 도구는 이 앱에 남은 **유일한 외부 생성형 AI 기능**이다(오너 지시 2026-09-11).
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import { Skeleton } from '../../atoms/Skeleton';
 import { useAuth } from '../../../contexts/AuthContext';
 import { askTdaAssist, TDA_QUESTION_MAX } from '../../../api/tdaAssist';
 import { searchTda, tdaRuleKey, type Scored } from '../../../lib/tdaSearch';
 import type { TdaRule } from '../../../data/tdaRules';
+import { loadTdaRules, peekTdaRules, type TdaData } from '../../../lib/tdaRulesLoad';
+
+/** 첫 커밋에 그릴 규칙 카드 수 — 390×844 첫 화면을 넘치게 채우는 양(카드 ≈ 40px). */
+const FIRST_RULES = 16;
 
 const EXAMPLES = [
   '딜러가 카드를 쏟았어요',
@@ -31,7 +35,8 @@ const EXAMPLES = [
 
 export default function TdaRulesTool() {
   const { user } = useAuth();
-  const [data, setData] = useState<{ rules: TdaRule[]; version: string } | null>(null);
+  // 한 번 받았으면 첫 렌더부터 본문(스켈레톤 0) — lib/tdaRulesLoad 모듈 캐시.
+  const [data, setData] = useState<TdaData | null>(peekTdaRules);
   const [q, setQ] = useState('');
   const [asked, setAsked] = useState('');       // 실제로 답을 만든 질문
   const [answer, setAnswer] = useState('');
@@ -40,12 +45,21 @@ export default function TdaRulesTool() {
   const [openNo, setOpenNo] = useState<string | null>(null);
   const [section, setSection] = useState<string>('전체');
 
-  // 규칙 본문은 140KB 다 — 이 도구를 열 때만 내려받는다(도구 탭 첫 화면을 무겁게 하지 않는다).
+  // 규칙 본문은 140KB 다 — 첫 화면 번들에 넣지 않는다. GTO 판이 보이면 유휴 시간에 미리 받고(ToolsPanel),
+  // 못 받았으면 여기서 받는다. 6000px 커밋은 startTransition 으로 — 모달 진입과 입력을 막지 않게.
   useEffect(() => {
+    if (data) return;
     let ok = true;
-    import('../../../data/tdaRules').then((m) => { if (ok) setData({ rules: m.TDA_RULES, version: m.TDA_VERSION }); });
+    loadTdaRules().then((d) => { if (ok) startTransition(() => setData(d)); }, () => { /* 스켈레톤 유지 — 다시 열면 재시도 */ });
     return () => { ok = false; };
-  }, []);
+  }, [data]);
+  // 목록(≈120장)은 첫 커밋에 앞 FIRST_RULES 장만 — 나머지는 transition 으로 이어 그린다.
+  //   캐시로 동기 렌더하니 6000px 를 **여는 탭의 커밋 한 번**에 그려 창이 뜨기까지 ~1s(CPU 6배, 실측 2026-09-24)가 걸렸다.
+  //   첫 화면(844px)은 앞 몇 장으로 이미 다 찬다 — 뒤는 화면 밖이라 늘어나도 보이지 않는다(스켈레톤 없음).
+  const [allRules, setAllRules] = useState(false);
+  useEffect(() => {
+    if (data && !allRules) startTransition(() => setAllRules(true));
+  }, [data, allRules]);
 
   const hits: Scored[] = useMemo(
     () => (data && asked ? searchTda(data.rules, asked, 6) : []),
@@ -169,7 +183,7 @@ export default function TdaRulesTool() {
           ))}
         </div>
         <ul className="mt-2 space-y-1.5">
-          {browse.map((r) => {
+          {(allRules ? browse : browse.slice(0, FIRST_RULES)).map((r) => {
             const key = `${r.section}-${r.no}-${r.title}`;
             return <RuleCard key={key} rule={r} open={openNo === key} onToggle={() => setOpenNo(openNo === key ? null : key)} />;
           })}

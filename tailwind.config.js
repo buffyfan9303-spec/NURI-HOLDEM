@@ -189,9 +189,10 @@ export default {
           '50%':      { transform: 'scale(1.15)', opacity: '0.85' },
         },
         'slide-up': {
-          // 진입 blur 3px→0: 데이터 로드 커밋의 '뚝'을 뭉개는 1회성 블러(§20.4 #3 개정, 오너 지시 2026-08-27)
-          from: { transform: 'translateY(8px)', opacity: '0', filter: 'blur(3px)' },
-          to:   { transform: 'translateY(0)',   opacity: '1', filter: 'blur(0)' },
+          // 🔴 blur 제거(2026-09-24, fade-in 과 같은 이유 — blur 가 섞이면 합성 스레드로 못 가 compositeFailed=4096, 열린 직후 메인 작업이 모션을 멈춘다).
+          //   08-27 '뚝 뭉개기 블러' 지시는 오너 최신 지시("오류 없는 모션")가 대체. 이동·투명도는 그대로.
+          from: { transform: 'translateY(8px)', opacity: '0' },
+          to:   { transform: 'translateY(0)',   opacity: '1' },
         },
         // 시트(하단 모달) 열기: 화면 아래에서 실제로 올라온다.
         // ⚠ slide-up(8px 넛지)을 쓰면 시트가 '올라오지' 않고 반투명하게 번쩍 나타난다 —
@@ -207,9 +208,13 @@ export default {
         },
         // 0에서 시작하면 컨텐츠가 '꺼졌다 켜지는' 깜빡임으로 인지된다.
         // 0.45에서 시작해 짧게 정착 — iOS 컨텐츠 전환과 같은 '스르륵' 감각.
+        // 🔴 filter(blur) 는 뺐다(GTO-TOOL-OPEN-JANK 2026-09-24, 오너 "오류 없는 모션"이 08-27 블러 지시보다 우선).
+        //   blur 가 섞이면 이 애니메이션은 **합성 스레드로 못 간다**(CDP trace compositeFailed=4096, opacity 단독은 0).
+        //   그래서 열린 직후 메인 스레드 작업(포커스 타이머·큰 본문 커밋)이 페이드를 멈춰 '드드득' 끊겼다.
+        //   이름('fade-in')·길이는 e2e post-nav 가 잠근다 — 키프레임 속성만 바꾼다.
         'fade-in': {
-          from: { opacity: '0.45', filter: 'blur(3px)' },
-          to:   { opacity: '1', filter: 'blur(0)' },
+          from: { opacity: '0.45' },
+          to:   { opacity: '1' },
         },
         'fade-out': {
           from: { opacity: '1' },
