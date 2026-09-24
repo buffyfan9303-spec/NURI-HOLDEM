@@ -3,6 +3,7 @@
 // S1 단계 바: 칸 폭이 달라 알약이 이동마다 커졌다 줄었다 했다(실측 360: 요약 51.14 · 나머지 42.64 → 알약 43↔51).
 //    원인은 요약 칸만의 `!px-2` — flex-1 basis-0 은 패딩을 뺀 나머지를 나누므로 패딩 차(8.5px)가 그대로 폭 차가 된다.
 // S2 장부 새 게임: 하단 고정 '장부 시작' 바가 '대회 시작 시각' 칸을 덮은 채 포커스돼도 스크롤되지 않았다(10px 가림).
+//    → 2026-09-25 모바일은 바를 고정하지 않는다. 계약은 e2e/mystore-ledger-start-bar.spec.ts 로 옮겼다.
 // V1 이용권 발급: '아이디로 지정' 을 누르면 '받는 손님 필수' 라벨이 사라져 판 높이가 −20.19px 출렁였다.
 // K1 클락: Level 줄과 Min·Sec 줄이 갈라져 있었고, 미리보기가 반응형 축소라 글자 쌍 20여 개가 겹쳤다(PC 는 3).
 //
@@ -83,7 +84,7 @@ const stepperTops = (page: Page) => page.evaluate(() => {
 
 test.describe('내 매장 모바일 — S1·S2·V1·K1', () => {
   for (const [W, H] of [[360, 780], [390, 844], [412, 915]] as const) {
-    test(`${W}px — 칸 폭 균등·알약 폭 불변 · 클락 한 줄·미리보기 겹침 0 · 장부 포커스 가림 0 · 발급 높이 변화 0`, async ({ page }) => {
+    test(`${W}px — 칸 폭 균등·알약 폭 불변 · 클락 한 줄·미리보기 겹침 0 · 발급 높이 변화 0`, async ({ page }) => {
       test.setTimeout(150_000);
       await open(page, W, H);
 
@@ -157,22 +158,8 @@ test.describe('내 매장 모바일 — S1·S2·V1·K1', () => {
       expect(await stageOverlaps(page), '미리보기 글자가 서로 겹친다').toBe(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), '문서가 가로로 넘친다').toBeLessThanOrEqual(0);
 
-      // ── S2 ──
-      await pick(page, '장부');
-      await page.waitForTimeout(2000);
-      const today = page.getByRole('button', { name: /오늘 장부/ }).first();
-      if (await today.isVisible().catch(() => false)) await today.evaluate((b) => (b as HTMLElement).click());
-      await expect(page.getByRole('button', { name: '장부 시작', exact: true }), '장부 새 게임 폼이 안 열렸다').toBeVisible({ timeout: 15_000 });
-      const s2 = await page.evaluate(() => new Promise<{ before: number; after: number }>((resolve) => {
-        const lab = [...document.querySelectorAll<HTMLElement>('span')].find((e) => e.textContent?.trim().startsWith('대회 시작 시각'))!;
-        const field = lab.parentElement!.querySelector<HTMLElement>('input,select,button')!;
-        const bar = [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === '장부 시작')!.parentElement!;
-        const cover = () => Math.max(0, Math.min(field.getBoundingClientRect().bottom, bar.getBoundingClientRect().bottom) - Math.max(field.getBoundingClientRect().top, bar.getBoundingClientRect().top));
-        window.scrollBy(0, field.getBoundingClientRect().bottom - bar.getBoundingClientRect().top - 10); // 오너 캡처: 칸 아래 10px 가 바 밑
-        setTimeout(() => { const before = cover(); field.focus(); setTimeout(() => resolve({ before, after: cover() }), 500); }, 200);
-      }));
-      expect(s2.before, '재현 실패 — 칸이 바 밑으로 들어가지 않았다(빈 검사)').toBeGreaterThan(5);
-      expect(s2.after, `포커스한 칸이 여전히 고정 바에 ${s2.after}px 가려진다`).toBe(0);
+      // ── S2 ── 2026-09-25 오너 실기기 재지적으로 모바일 '장부 시작' 막대를 고정하지 않게 바꿨다(덮을 바가 없다).
+      //   더 강한 계약(스크롤 0·중간·끝 어디서도 막대가 컨트롤을 덮지 않음)은 e2e/mystore-ledger-start-bar.spec.ts 가 잠근다.
     });
   }
 

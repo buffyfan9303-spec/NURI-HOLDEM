@@ -2537,23 +2537,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     });
   };
 
-  // 🔴 S2(오너 2026-09-24 캡처) — 모바일에서 하단 고정 '장부 시작' 바가 '대회 시작 시각' 칸을 덮은 채로 입력하게 됐다.
-  //   실측(390): 칸이 바 밑으로 10.1px 들어간 상태에서 focus 해도 브라우저가 **스크롤하지 않았다**
-  //   (일부라도 보이면 '보인다' 로 판정한다) → 덮인 채 그대로 입력. sticky 는 흐름상 자리를 갖지만
-  //   스크롤 도중에는 그 위를 덮는다 — 그래서 여백(padding)만으로는 못 막고, **포커스 순간** 가린 만큼 올린다.
-  //   ⚠ 모바일(<768)만 — PC 는 종전 동작 그대로다(오너 지시: PC 무변경). CSS `max-md:` 와 같은 경계.
-  //   ⚠ 가상 키보드가 뜬 뒤의 visualViewport 축소는 하네스(Pixel 7 에뮬)가 재현 못 한다 — 실기기 미검증.
-  const stickyBarRef = useRef<HTMLDivElement>(null);
-  const keepFocusAboveBar = (target: EventTarget | null) => {
-    if (typeof window === 'undefined' || !window.matchMedia('(max-width: 767.98px)').matches) return;
-    const bar = stickyBarRef.current;
-    if (!bar || !(target instanceof HTMLElement) || bar.contains(target)) return;
-    const over = target.getBoundingClientRect().bottom - bar.getBoundingClientRect().top + 8; // 8px 숨 쉴 틈
-    if (over > 0) window.scrollBy({ top: over });
-  };
-
+  // (역사) S2(2026-09-24) — 모바일 하단 고정 바가 포커스한 칸을 덮어 onFocusCapture 에서 scrollBy 로 올렸다.
+  //   2026-09-25 오너 실기기에서 바 자체가 스크롤 내내 칸·칩·카드를 덮는다고 다시 지적 → 모바일은 바를 고정하지 않는다
+  //   (아래 실행 버튼 주석). 덮을 바가 없으니 포커스 보정도 필요 없어 지웠다.
   return (
-    <div onFocusCapture={(e) => keepFocusAboveBar(e.target)} className={embedded ? 'space-y-3' : 'rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2.5'}>
+    <div className={embedded ? 'space-y-3' : 'rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2.5'}>
       {mode === 'open' && (
         <div>
           <h3 className="text-sm font-bold text-accent-300">장부 시작 설정</h3>
@@ -2899,7 +2887,13 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       {/* ⚠ `pr-12` — 스크롤 뒤 나타나는 '맨 위로' FAB(`.scroll-top-fab`, `bottom-[var(--tabbar-float)] right-4`)가
           같은 기준선에 서서 실행 버튼 오른쪽 끝을 덮었다(실측 360: 겹침 28×41 ≈ 1,173px²).
           글자는 가운데라 안 가려지고 탭도 됐지만 그림이 겹친다 — FAB 폭(42.5)+여백만큼 비켜 준다. */}
-      <div ref={stickyBarRef} className={['sticky bottom-[var(--tabbar-safe)] lg:bottom-0 -mx-1 flex gap-2 px-1 pb-1 pr-12 pt-2 backdrop-blur-sm lg:pr-1', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
+      {/* 🔴 2026-09-25 오너 실기기(412 · 삼성 인터넷/크롬): 모바일에서 이 막대가 **본문 중간에 떠서** 담당 직원 칩·입력칸을
+          덮은 채 스크롤해도 사라지지 않았다. 실측(수정 전 빌드): 폼 첫머리·중간 스크롤에서 막대가 컨트롤을
+          360 4,170/2,641px² · 390 5,461/5,548 · 412 13,953/2,109 덮었다(e2e/mystore-ledger-start-bar.spec.ts).
+          모바일 화면 높이에서 '탭바 위 고정'은 바닥 105px + 막대 50px 를 입력칸 위에 영구히 얹는다 — 가리지 않는 고정은 없다.
+          → 하단 탭바가 있는 폭(<lg)은 **폼 끝의 일반 버튼**(흐름 배치). 끝까지 내리면 탭바 위로 올라온다(푸터 예약).
+          PC(lg+)는 종전 sticky bottom-0 그대로. */}
+      <div className={['lg:sticky lg:bottom-0 -mx-1 flex gap-2 px-1 pb-1 pr-12 pt-2 backdrop-blur-sm lg:pr-1', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
         {onCancel && <button type="button" onClick={onCancel} className="btn-ghost text-sm flex-1">취소</button>}
         <button type="button" onClick={submit} disabled={cash <= 0} className="btn-primary text-sm flex-1 disabled:opacity-50">
           {mode === 'open' ? '장부 시작' : '저장'}

@@ -1439,8 +1439,11 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
       /* 🔴 S1(오너 2026-09-24) — 모바일(<768)은 레일 테두리를 걷었다(종전 바 50.25px).
          🔴 같은 날 리드 결정(알약 한 기준) — 모바일 칸은 **보이는 32 · 누름 44**: 레일 `py-1.5 -my-1.5` 가 CHIP_HIT(±8)이
          overflow-x-auto 에 잘려도 44.75px 를 남기고(차지하는 높이는 32), 배경은 ::before 트랙(inset-y-1.5)이 칸 높이만 칠한다.
-         md 이상은 한 글자도 안 바뀐다(`max-md:` 만 · 1024/1440 rect 동일 실측). */
-      className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5 max-md:border-0 max-md:px-0 max-md:py-1.5 max-md:-my-1.5 max-md:bg-transparent max-md:before:absolute max-md:before:inset-x-0 max-md:before:inset-y-1.5 max-md:before:rounded-input max-md:before:bg-surface-high/60 max-md:before:content-['']">
+         md 이상은 한 글자도 안 바뀐다(`max-md:` 만 · 1024/1440 rect 동일 실측).
+         🔴 2026-09-25 오너 실기기: 레일 오른쪽 끝에 **세로 스크롤바**. overflow-x-auto 라 overflow-y 도 auto 가 되고
+         칸 누름 확장(CHIP_HIT ±8)이 레일 안쪽을 넘어 세로로 넘쳤다(실측 scrollHeight>clientHeight: 모바일 46>45 · PC 54>48).
+         → `overflow-y-hidden`: 세로 스크롤·스크롤바만 없앤다. 자르는 범위는 auto 와 같아 누름 44 계약은 그대로다. */
+      className="relative flex items-center gap-0.5 overflow-x-auto overflow-y-hidden rounded-input border border-border-subtle bg-surface-high/60 p-0.5 max-md:border-0 max-md:px-0 max-md:py-1.5 max-md:-my-1.5 max-md:bg-transparent max-md:before:absolute max-md:before:inset-x-0 max-md:before:inset-y-1.5 max-md:before:rounded-input max-md:before:bg-surface-high/60 max-md:before:content-['']">
       <SlidingPill containerRef={ref} activeKey={active} className="rounded-[6px] pill-active" />
       {/* 탭인 것만 tablist 에 넣는다 — 요약과 1~5단계. 이용권은 '단계'가 아니라 다른 화면으로 가는
           지름길이라 탭이 아니다(그래서 원래도 role 이 없었다). 시각적으로는 같은 바 안에 남는다.
