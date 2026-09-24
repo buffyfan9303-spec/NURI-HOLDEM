@@ -93,21 +93,40 @@ function toAppLink(raw) {
   m = u.match(/^\/community\/([^/?#]+)/);
   if (m) return '/?venue=' + m[1];
   if (u === '/admin') return '/?tab=admin';             // 탭형은 ?tab= 이 유일한 부팅 경로(App.tsx:791)
-  if (u.indexOf('/my-store') === 0) return '/?tab=my-store';
+  if (u === '/my-store') return '/?tab=my-store';
   if (u.indexOf('/guide/') === 0) return u;             // 정적 파일 — 그대로 연다
   if (u.charAt(0) === '?' || u.charAt(0) === '#') return '/' + u;
-  return u;
+  if (u === '/' || /\.[a-z0-9]+$/i.test(u)) return u;   // 홈 · 정적 파일(about.html 등)
+  // 🔴 CONNECTIVITY-ALL 1(2026-09-24) — 그 밖의 경로형(/posts/<id> · /wallet · /support · /invites ·
+  //   /staff-schedule · /my-store/ledger · /my-store/partners …)은 앱에 경로 라우터가 없어 **홈에 떨어졌다**.
+  //   원문을 ?nl= 로 싣고, 앱이 부팅 때 알림 패널과 **같은 처리기**(App.tsx openNotifLink)로 연다.
+  return '/?nl=' + encodeURIComponent(u);
+}
+
+// 이미 떠 있는 앱 창에는 전체 새로고침(client.navigate) 대신 원문 링크를 메시지로 넘긴다 — 앱이 받았다고
+// 답하면 끝, 답이 없거나 거절하면(옛 버전 앱·외부 링크) 예전처럼 navigate 로 떨어진다.
+function tellClient(client, raw) {
+  return new Promise((resolve) => {
+    const ch = new MessageChannel();
+    const t = setTimeout(() => resolve(false), 1500);
+    ch.port1.onmessage = (e) => { clearTimeout(t); resolve(e.data === true); };
+    try { client.postMessage({ type: 'nuri:notif-link', link: String(raw || '/') }, [ch.port2]); }
+    catch (e) { clearTimeout(t); resolve(false); }
+  });
 }
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = toAppLink(event.notification.data && event.notification.data.url);
+  const raw = event.notification.data && event.notification.data.url;
+  const target = toAppLink(raw);
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const client of list) {
         if ('focus' in client) {
-          if ('navigate' in client) { try { client.navigate(target); } catch (e) { /* noop */ } }
-          return client.focus();
+          // focus 를 먼저 — 클릭 직후(사용자 활성화 안)가 아니면 거부될 수 있다.
+          return Promise.resolve(client.focus()).catch(() => client).then(() => tellClient(client, raw)).then((ok) => {
+            if (!ok && 'navigate' in client) return Promise.resolve(client.navigate(target)).catch(() => {});
+          });
         }
       }
       return self.clients.openWindow(target);

@@ -90,7 +90,7 @@ import { parseQr, elsewhereMsg } from './lib/qrPayload';
 /** QR 이 URL 에 싣는 키 전부. 이 중 하나라도 있으면 QR 진입으로 보고, 처리 뒤에는 **이 키들만** 지운다
  *  (`ref`·`tab` 같은 다른 쿼리와 hash·history state 는 그대로 둔다). */
 const QR_URL_KEYS = ['checkin', 'buyin', 'signup', 'game'] as const;
-import { nextHeaderShrunk } from './lib/headerShrink';
+import { nextHeaderShrunk, restoreScrollTop } from './lib/headerShrink';
 // ⚠ lib/postNav 가 아니라 lib/postNavCtx 에서 받는다 — postNav 를 정적으로 물면 neighborsOf·appendPage(gz 2.1KB)까지
 //   첫 화면 임계 경로로 딸려 와 bundle:budget 257.1/256KB 초과(실측 2026-09-13). 위 api/events→lib/eventSlug 와 같은 함정.
 import { dropFromCtx, type PostNavCtx } from './lib/postNavCtx';
@@ -961,6 +961,9 @@ function PendingApprovalBanner() {
   );
 }
 
+/** 탭을 떠나는 순간의 위치와 헤더 높이(뒤로가기 복원용 — App 의 tabScrollRef). */
+const snapScroll = () => ({ y: window.scrollY, headerH: (document.querySelector('[data-stack-header]') as HTMLElement | null)?.offsetHeight ?? 0 });
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 // 데스크탑(lg+) 여부 — 일정탐색 2-pane 분기용
@@ -981,7 +984,7 @@ export default function App() {
   const [venueRatings, setVenueRatings] = useState<Record<string, { avg: number; count: number }>>({});
   // (별점 로드는 loadDeferred 로 이동 — 부팅 임계경로에서 제외)
   // 알림 딥링크 → 내 매장 탭의 특정 섹션(예: 📒 장부 시작 → 장부)
-  const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | 'partners' | null>(null);
+  const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | 'partners' | 'attendance' | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
   const [eventOpen, setEventOpen] = useState(false); // 이벤트 별도 페이지(보드)
   /** 이벤트 **목록** — 슬러그 없이 openEvent() 를 부른 진입(PC GNB·홈 칸)의 목적지(오너 2026-09-18:
@@ -1081,10 +1084,18 @@ export default function App() {
   //   → 탭을 누르면 **항상 맨 위**에서 시작한다. 예전엔 탭별로 떠날 때 위치를 저장했다가
   //   도착하면 되돌렸는데(세션 메모리), 그게 '중간부터 나온다' 의 정체였다.
   //   ⚠ 되살리고 싶어지면 먼저 오너에게 물어라 — 기능이 아니라 **지시로 뺀 것**이다.
-  //   ⚠ 뒤로가기로 돌아오는 경로(commitTab(t,'back'))도 같은 규칙을 탄다. 오너가 '항상 맨 위' 를
-  //     골랐고 '탭바 직접 누를 때만 맨 위' 는 고르지 않았다.
+  //   🔵 단 **뒤로가기로 돌아온 탭은 떠날 때 위치로** 돌려놓는다(오너 2026-09-24 CONNECTIVITY-ALL 2 —
+  //     "탭 → 다른 탭 → 뒤로가기 하면 보던 자리가 0 이다"). 탭을 직접 누르는 이동은 위 지시대로 항상 맨 위다.
+  //     저장은 떠나는 순간(changeTab·트레일 back)에 탭별로, 복원은 아래 layout effect 가 덮개 아래에서 한다.
   const activeTabRef = useRef<TabId>('home');
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+  /** 떠날 때의 위치와 그때 헤더 높이 — 헤더는 인플로우 sticky 라 복원 뒤 접히면 앵커링이 위치를 민다(lib/headerShrink). */
+  const tabScrollRef = useRef(new Map<TabId, { y: number; headerH: number }>());
+  /** 트레일 back 이 돌아가는 탭과 그 위치 — layout effect 가 그 탭이 커밋된 프레임에서 한 번 쓰고 비운다. */
+  const backScrollRef = useRef<{ tab: TabId; saved: { y: number; headerH: number } | null } | null>(null);
+  /** '내 정보' 바로가기(장터·순위)로 커뮤니티에 온 이동 — back 이 '내 정보' 를 다시 연다(CONNECTIVITY-ALL 6).
+   *  'tab' = 탭이 바뀌는 이동(트레일 겹이 맡는다) · 'same' = 이미 커뮤니티였다(별도 겹을 민다). */
+  const meTabReturnRef = useRef<'tab' | 'same' | null>(null);
   /**
    * 탭 '커밋' 만 담당한다 — 이력(트레일) 관리는 아래 useEffect 가 맡는다.
    * 뒤로가기로 되돌아오는 경로도 이 함수를 쓰므로 여기서 이력을 건드리면 안 된다.
@@ -1129,6 +1140,8 @@ export default function App() {
     const from = prevTabRef.current;
     prevTabRef.current = activeTab;
     if (from === activeTab) return;
+    const toMe = meTabReturnRef.current === 'tab';
+    if (toMe) meTabReturnRef.current = null;
     if (trailSuppressRef.current) { trailSuppressRef.current = false; return; }
     if (activeTab === 'home') { clearTabTrail(); return; }
     // 깊이 상한 — 탭을 계속 왕복하면 history 항목이 무한정 늘어난다. 브라우저는 pushState 를
@@ -1145,7 +1158,10 @@ export default function App() {
       const i = tabTrailRef.current.indexOf(item);
       if (i >= 0) tabTrailRef.current.splice(i, 1);
       trailSuppressRef.current = true;
+      tabScrollRef.current.set(activeTabRef.current, snapScroll());
+      backScrollRef.current = { tab: item.tab, saved: tabScrollRef.current.get(item.tab) ?? null };
       commitTab(item.tab, 'back');
+      if (toMe) setVoucherWalletOpen(true);
     });
     trail.push(item);
   }, [activeTab, clearTabTrail, commitTab]);
@@ -1161,6 +1177,8 @@ export default function App() {
     if (!autoTabBounce.current && pendingDeepTab.current && pendingDeepTab.current !== t) pendingDeepTab.current = null;
     // 탭 이동은 '화면 전환' — 떠 있는 매장 페이지 오버레이는 닫는다(탭을 눌렀는데 그대로 보이는 혼란 방지)
     closeOverlaysRef.current?.();
+    // 떠나는 탭의 위치 — 뒤로가기로 돌아올 때만 쓰인다(activeTabRef 주석).
+    if (t !== activeTabRef.current) tabScrollRef.current.set(activeTabRef.current, snapScroll());
     if (t === 'my-store') setMyStoreHomeNonce((v) => v + 1); // 다른 탭에서 넘어와도 대시보드부터
     if (t === 'home') clearTabTrail(); // 홈을 직접 누르면 이력의 뿌리로 — 쌓아 둔 겹을 정리
     // F5: 라이브 진입 = 배지와 본문이 한 화면에 같이 서는 순간. 여기서 같은 조회로 배지를 맞춘다
@@ -1184,14 +1202,28 @@ export default function App() {
     //     '사용자가 확 긁었다' 로 읽지 않게 하는 기존 표식이고(2026-09-05), `notifyScrollNow` 는
     //     **예약된 옛 rAF 를 취소하고** 지금 Y 를 구독자 전원에게 즉시 준다.
     //   ⚠ 새 effect 를 하나 더 달아 순서를 갈라 놓지 않는다 — 한 프레임 안에서 끝나야 한다.
+    // CONNECTIVITY-ALL 2 — 트레일 back 으로 돌아온 탭만 떠날 때 위치로(그 외는 맨 위). 이 layout effect 안이라
+    //   첫 페인트 전에 정해지고, 바로 아래 playTabCover 덮개가 같은 프레임부터 깔린다(덮개 아래 정착).
+    const back = backScrollRef.current;
+    backScrollRef.current = null;
+    const saved = back && back.tab === activeTab ? back.saved : null;
+    // 헤더 뒤집힘으로 앵커링이 되밀 만큼을 미리 더한다 — CommunityTab 섹션 복원과 같은 판정(restoreScrollTop).
+    //   (이 경로만 레이아웃을 읽는다 — 아래 F2 주석의 비용은 탭을 직접 누르는 이동(toY=0)에는 그대로 0 이다.)
+    const toY = saved && saved.y > 0
+      ? restoreScrollTop(saved, (document.querySelector('[data-stack-header]') as HTMLElement | null)?.offsetHeight ?? 0,
+          document.documentElement.scrollHeight - window.innerHeight)
+      : 0;
     markProgrammaticScroll();
-    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+    // 두 갈래로 쓴 이유: 맨 위 이동(탭 직접 누름)은 tabCover.test ④ 가 이 문자열 그대로 같은 layout effect 안에 있는지 잠근다.
+    if (toY > 0) window.scrollTo({ top: toY, behavior: 'instant' as ScrollBehavior });
+    else window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
     // 🔴 2026-09-20 독립 검증 F2 — **`window.scrollY` 를 다시 읽지 않는다.**
     //   바로 윗줄이 `top: 0` 을 확정했으므로 값은 0 이다. 이 훅은 `useLayoutEffect`(커밋 직후,
     //   레이아웃이 가장 오염된 시점)라 여기서 `scrollY` 를 읽으면 **문서 전체 레이아웃이 강제**된다 —
     //   이 파일 :678-688 이 정확히 그 패턴을 없앤 기록이다(모바일 콜드 마운트 207ms · 탭 전환 회당 27ms).
     //   오너가 "눌림" 을 지적한 바로 그 프레임이라 비용을 되돌려 놓을 이유가 없다.
-    notifyScrollNow(0);
+    //   (뒤로가기 복원(toY>0)만 예외로 한 번 읽는다 — 판이 짧아졌으면 브라우저가 깎은 실제 값을 헤더에 줘야 한다.)
+    notifyScrollNow(toY > 0 ? window.scrollY : 0);
     // BOTTOM-TAB-SMOOTH(2026-09-24) — 본문이 아니라 본문 **위 덮개**를 걷어낸다. 기본 켜짐(tabsoft), `?fx=off` 기기만 끔.
     //   이 layout effect 안이라 첫 페인트부터 덮개가 깔린다(K-07). 본문(.tab-pane)에는 아무것도 걸지 않는다 — 아래 폐기 기록 참고.
     isTabCoverOn(); // 첫 호출이 ?fx= 를 읽어 저장한다 — 딥링크 처리가 query 를 지우기 전(마운트)에 부른다
@@ -1695,6 +1727,22 @@ export default function App() {
     url.searchParams.delete('post');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
   }, [pendingPostId]);
+
+  // ── 푸시 알림 딥링크 (?nl=<원문 링크>) — CONNECTIVITY-ALL 1(2026-09-24) ──
+  //   sw.js toAppLink 가 경로로는 못 여는 알림 링크(/posts/<id> · /wallet · /my-store/ledger …)를 원문 그대로 싣는다.
+  //   ?tab= 과 같은 1회성 — 읽자마자 주소에서 지우고, 여는 것은 아래 openNotifLink 이펙트(권한 도착 뒤)가 맡는다.
+  const bootNotifLinkRef = useRef<string | null | undefined>(undefined);
+  if (bootNotifLinkRef.current === undefined) {
+    try { bootNotifLinkRef.current = new URLSearchParams(window.location.search).get('nl'); } catch { bootNotifLinkRef.current = null; }
+  }
+  useEffect(() => {
+    if (!bootNotifLinkRef.current) return;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('nl');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    } catch { /* ignore */ }
+  }, []);
 
   // 앱 안에서 글 상세를 여는 통로(스팟 공유 직후 등) — ?post= 딥링크와 **같은 경로**를 탄다.
   // pendingPostId 는 URL 을 마운트 때 한 번만 읽으므로, 이미 떠 있는 앱에는 이 이벤트가 필요하다.
@@ -3160,6 +3208,12 @@ export default function App() {
       setMyStoreDeep('partners');
       return;
     }
+    // /staff-schedule (출근 스케줄 확정 — StaffSchedule 이 보낸다) → 내 매장 '출근 관리'. 예전엔 처리기가 없어 제목 토스트로 끝났다.
+    if (link === '/staff-schedule') {
+      changeTab('my-store');
+      setMyStoreDeep('attendance');
+      return;
+    }
     // /admin (포스터 승인 알림)
     if (link === '/admin' || n.type === 'approval') {
       changeTab(isAdmin ? 'admin' : 'my-store');
@@ -3171,7 +3225,7 @@ export default function App() {
     if (link === '/wallet') { setMeTab('dashboard'); setVoucherWalletOpen(true); return; } // 초기 탭 명시 — 보안 탭 진입 뒤 stale 방지
     // '/' (홈 안내형 알림) → 홈 탭으로 — 제목만 다시 토스트하는 막다른 길 방지
     if (link === '/') { changeTab('home'); return; }
-    toast.show(n.title, 'info');
+    if (n.title) toast.show(n.title, 'info'); // 푸시로 온 원문 링크(openNotifLink)는 제목이 없다 — 빈 토스트를 띄우지 않는다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openScheduleById, isAdmin, toast]);
 
@@ -3652,6 +3706,9 @@ export default function App() {
       if (target) { handleVenueClick(target.id); return true; }
       return false; // 목록에 없으면 부팅 경로(venuesLoaded 대기 + 안내 토스트)에 맡긴다
     }
+    // ?post=<id> — 부팅 딥링크와 같은 pendingPostId 경로(CONNECTIVITY-ALL 5: 예전엔 여기 없어 전체 새로고침으로 떨어졌다).
+    const pid = u.searchParams.get('post');
+    if (pid) { setPendingPostId(pid); return true; }
     if (u.hash.startsWith('#tool=')) { window.dispatchEvent(new CustomEvent('nuri:open-tool', { detail: u.hash.slice('#tool='.length) })); return true; }
     if (u.hash.startsWith('#gto=')) {
       try { history.replaceState(null, '', window.location.pathname + window.location.search + u.hash); } catch { return false; }
@@ -3660,6 +3717,39 @@ export default function App() {
     }
     return false;
   }, [openEvent, changeTab, handleVenueClick]); // venues·openScheduleById 는 ref — 이 함수는 memo 자식(AppHeader·HomeTab)에 내려가므로 안정 참조여야 한다
+  /** 알림 **원문 링크** 하나를 앱 안에서 연다 — 푸시 부팅(?nl=)과, 떠 있는 앱으로 온 SW 메시지(sw.js tellClient)가 같이 쓴다.
+   *  '/경로' 는 알림 패널과 같은 handleNavigateNotification, '?·#' 는 openInternalLink. 못 열면 false(SW 가 navigate 로 떨어진다). */
+  const openNotifLink = useCallback((link: string): boolean => {
+    if (link.startsWith('?') || link.startsWith('#')) {
+      try { return openInternalLink(new URL(link, window.location.href)); } catch { return false; }
+    }
+    if (!link.startsWith('/') || link.startsWith('//')) return false;
+    // 내 매장 목적지는 권한(profiles)이 늦으면 탭 가드가 홈으로 튕긴다 — ?tab=my-store 와 같은 기억(pendingDeepTab)을 건다.
+    if ((link.startsWith('/my-store') || link === '/staff-schedule') && !tabs.some((t) => t.id === 'my-store')) pendingDeepTab.current = 'my-store';
+    handleNavigateNotification({ id: '', type: 'system', title: '', message: '', read: true, createdAt: '', link });
+    return true;
+  }, [openInternalLink, handleNavigateNotification, tabs]);
+  useEffect(() => {
+    const link = bootNotifLinkRef.current;
+    if (!link || authLoading) return;
+    bootNotifLinkRef.current = null;
+    openNotifLink(link);
+  }, [authLoading, openNotifLink]);
+  const openNotifLinkRef = useRef(openNotifLink);
+  useEffect(() => { openNotifLinkRef.current = openNotifLink; });
+  useEffect(() => {
+    const sw = typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined;
+    if (!sw) return;
+    const h = (e: MessageEvent) => {
+      const d = e.data as { type?: unknown; link?: unknown } | null;
+      if (!d || d.type !== 'nuri:notif-link' || typeof d.link !== 'string') return;
+      let ok: boolean;
+      try { ok = openNotifLinkRef.current(d.link); } catch { ok = false; }
+      e.ports[0]?.postMessage(ok);
+    };
+    sw.addEventListener('message', h);
+    return () => sw.removeEventListener('message', h);
+  }, []);
   /** 이벤트 판(목록·보드 어느 쪽이든)이 떠 있는 동안 내비 활성 표시도 이벤트로 — 어디 있는지 모르는 화면을 만들지 않는다. */
   const navActive: TabId = (eventOpen || eventListOpen) ? 'event' : activeTab;
   // 🔴 2026-09-23 오너 "커뮤니티 글이 올라올 때마다 하단 커뮤니티 탭에 알림 표시처럼 뜨는 것 없애줘,
@@ -3796,11 +3886,22 @@ export default function App() {
   // 장터·랭킹 상점은 **같은 조리법**(섹션 이벤트 + 세션 기억 + 탭 이동).
   // 커뮤니티가 아직 안 떠 있을 수도 있어 이벤트만으로는 부족하다 → sessionStorage 가 도착 후 복원한다.
   const goCommunitySection = useCallback((section: 'market' | 'rank') => {
+    // back 이 '내 정보' 로 돌아오게(매장 바로가기의 venueReturnRef 와 같은 왕복 — CONNECTIVITY-ALL 6)
+    meTabReturnRef.current = activeTabRef.current === 'community' ? 'same' : 'tab';
     setVoucherWalletOpen(false);
     window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: section }));
     try { sessionStorage.setItem('nuri:community-section', section); } catch { /* noop */ }
     changeTab('community');
   }, [changeTab]);
+  // 이미 커뮤니티였으면 탭 트레일 겹이 생기지 않는다 → '내 정보' 를 다시 여는 겹을 직접 민다('내 정보' 가 닫힌 커밋 뒤 —
+  //   닫히는 겹의 칸을 backstack 이 재사용한다). 탭이 바뀌는 경우는 트레일 이펙트가 먼저 돌아 'tab' 을 가져간다.
+  const meSameTabBackRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (voucherWalletOpen) { meSameTabBackRef.current?.(); meSameTabBackRef.current = null; return; }
+    if (meTabReturnRef.current !== 'same') return;
+    meTabReturnRef.current = null;
+    meSameTabBackRef.current = pushLayer(() => { meSameTabBackRef.current = null; setVoucherWalletOpen(true); });
+  }, [voucherWalletOpen]);
   const handleMeOpenMarket = useCallback(() => goCommunitySection('market'), [goCommunitySection]);
   const handleMeOpenRanking = useCallback(() => goCommunitySection('rank'), [goCommunitySection]);
 

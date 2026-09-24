@@ -127,6 +127,9 @@ function CommunityTab({
   });
   // 칩 하이라이트(알약)는 즉시, 컨텐츠 교체는 트랜지션 — 장터(lazy) 첫 진입에도 이전 화면이 유지돼 끊김이 없다
   const [shownSec, setShownSec] = useState<Section>(lastCommunitySection);
+  // 뒤로가기의 기준 섹션(아래 useBackClose 주석). 마운트 값에서 시작하고, 외부 지정(nuri:community-section)이 오면
+  // 그 섹션으로 **섹션과 같은 커밋에서** 옮긴다 — CONNECTIVITY-ALL 6 (2026-09-24).
+  const [entrySection, setEntrySection] = useState<Section>(section);
   const [, startSecTransition] = useTransition();
   // keep-alive — 한 번 방문한 섹션은 언마운트하지 않고 display 만 끈다(메인 탭 visitedTabs 와 같은 조리법).
   // 재방문 마운트 비용이 0이라 전환 커밋 프레임이 가벼워지고, 스냅샷 뒤 동기 커밋(flushSync)이 가능해진다.
@@ -152,8 +155,11 @@ function CommunityTab({
   // 메인 하단 탭 changeTab(App.tsx)과 동일 조리법 — 재방문(keep-alive)은 View Transition 스냅샷 뒤
   // flushSync 동기 커밋(방향성 푸시: 오른쪽 탭 = forward), 첫 방문(lazy·초기 fetch)은 startTransition 으로
   // 이전 화면 유지. 렌더 상태를 읽지 않아(모듈 변수·ref·안정 Set) 빈 deps 리스너의 stale closure 에도 안전.
-  const setSection = useCallback((s: Section) => {
-    if (s === lastCommunitySection && s === activeSecRef.current) return; // 같은 탭 재탭 — 무의미한 스냅샷 방지
+  const setSection = useCallback((s: Section, asEntry = false) => {
+    if (s === lastCommunitySection && s === activeSecRef.current) { // 같은 탭 재탭 — 무의미한 스냅샷 방지
+      if (asEntry) setEntrySection(s);
+      return;
+    }
     lastSwitchAtRef.current = performance.now(); // 프리마운트에게 '지금은 비켜라' 신호
     // scrollY 는 여기서 딱 한 번 읽는다 — 레이아웃이 아직 깨끗한 시점이라 강제 리플로우가 없다.
     const curY = window.scrollY;
@@ -172,12 +178,12 @@ function CommunityTab({
       //   알약이 이미 새 자리에 있다 → 그룹이 B→B 를 보간해 전혀 움직이지 않는다.
       //   (subtab-motion.spec 실측: 키프레임 matrix(…,89,71) → matrix(…,89,71) 로 동일했다.)
       //   전환 안에서 커밋하면 옛=A · 새=B 가 되어 VT 가 알약을 제 손으로 미끄러뜨린다.
-      goSubTab('community-sec', SEC_ORDER, activeSecRef.current, s, () => { setShownSec(s); setSectionState(s); });
+      goSubTab('community-sec', SEC_ORDER, activeSecRef.current, s, () => { setShownSec(s); setSectionState(s); if (asEntry) setEntrySection(s); });
     } else {
       // 미방문 섹션(첫 진입)은 VT 를 타지 않는다 — 가릴 스냅샷이 없으니 알약은 즉시 하이라이트하고
       // 컨텐츠만 트랜지션으로 넘긴다(장터 lazy 청크에서도 이전 화면이 유지된다).
       setShownSec(s);
-      startSecTransition(() => setSectionState(s));
+      startSecTransition(() => { setSectionState(s); if (asEntry) setEntrySection(s); });
     }
   }, [visitedSecs]);
   // 뒤로가기 — 진입 섹션이 아닌 서브섹션(딜러/랭킹/장터 등)에선 먼저 진입 섹션으로 복귀, 그 다음에야 탭을 빠져나감.
@@ -190,7 +196,10 @@ function CommunityTab({
   //      뒤로가기를 누르면 화면은 그대로인 채 숨은 탭의 섹션만 바뀌며 입력이 소진됐다.
   //      사용자 눈에는 '뒤로가기를 눌렀는데 아무 일도 안 일어남 → 한 번 더 누르니 홈' 으로 보인다.
   //   → 기준을 '이 탭이 열린 섹션'(마운트 시점 값)으로 잡고, **보일 때만** 겹을 등록한다.
-  const [entrySection] = useState<Section>(section);
+  // ⚠ 2026-09-24 — 외부 지정(내 정보 '내 장터 거래'·'순위 · 상점', SPOT→게시판)으로 도착한 섹션도 진입 섹션이다.
+  //   예전엔 마운트 값(홀덤펍)에 고정돼 그 위에 섹션 겹이 하나 더 얹혔고, 첫 뒤로가기가 '장터 → 홀덤펍' 으로
+  //   소비돼 App 의 트레일 겹('내 정보' 다시 열기)은 두 번째 뒤로가기에서야 닿았다. 섹션과 기준을 한 커밋에
+  //   바꾸므로 '섹션만 바뀐 중간 커밋'(겹 push→즉시 정리)도 생기지 않는다. 앱 안의 칩 이동은 종전대로 겹을 만든다.
   useBackClose(active && section !== entrySection, () => setSection(entrySection));
   // 복원은 layout 단계(페인트 전) — '맨 위가 번쩍했다가 내려가는' 깜빡임 방지. keep-alive 라 DOM 높이가 이미 있다.
   // flushSync 커밋 경로에선 스냅샷 뒤에서 실행돼 복원 비용까지 크로스페이드가 가린다.
@@ -219,7 +228,7 @@ function CommunityTab({
   useEffect(() => {
     const h = (e: Event) => {
       const sec = (e as CustomEvent<string>).detail as Section;
-      if (sec) setSection(sec);
+      if (sec) setSection(sec, true);
     };
     window.addEventListener('nuri:community-section', h);
     return () => window.removeEventListener('nuri:community-section', h);

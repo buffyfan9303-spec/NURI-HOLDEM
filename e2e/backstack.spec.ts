@@ -195,7 +195,9 @@ test.describe('오버레이별 뒤로가기 균형 — 전수', () => {
         await c.open(page);
         await expect(c.marker(page), `${c.name}가 안 열렸다 — 셀렉터가 낡았거나 진입점이 사라졌다`)
           .toHaveCount(1, { timeout: 10_000 });
-        expect(await layerOf(page), `${c.name}가 history 항목을 안 밀어넣었다 — 뒤로가기가 이 겹이 아니라 아래 탭을 닫아 홈으로 튄다`)
+        // poll — 겹은 커밋 뒤 passive effect 에서 밀린다. 마커가 보이는 순간(트랜지션 커밋 직후)과 그 effect 사이에
+        //   한 틈이 있어 한 번 읽기는 2/3 로 옛 값을 읽었다(통합 검색, 2026-09-24 root-cause 실측).
+        await expect.poll(() => layerOf(page), { message: `${c.name}가 history 항목을 안 밀어넣었다 — 뒤로가기가 이 겹이 아니라 아래 탭을 닫아 홈으로 튄다` })
           .not.toBe(before);
         await c.close(page);
         await expect(c.marker(page)).toHaveCount(0, { timeout: 10_000 });
