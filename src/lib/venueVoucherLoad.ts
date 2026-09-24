@@ -8,25 +8,28 @@
 //   ⚠ 현재 실피해 0(킬스위치 OFF · store_vouchers 0행, 2026-09-11 실측) — 기능을 켜는 첫날부터 유효하다.
 import { isStaleResponse, type RequestStamp } from './staleResponse';
 
-export interface VenueVoucherApi<V, S, P> {
+export interface VenueVoucherApi<V, S, P, R = unknown> {
   list: (venueId: string) => Promise<V[]>;
   stats: (venueId: string) => Promise<S>;
   profiles: (venueId: string) => Promise<P[]>;
   approved: (venueId: string) => Promise<boolean>;
+  /** V2(2026-09-24) 유형별 발급 통계 — 전체 기간. 기간 칩은 아래 loadVenueVoucherReasonRange 가 따로 든다. */
+  reasonStats: (venueId: string) => Promise<R>;
 }
-export interface VenueVoucherSinks<V, S, P> {
+export interface VenueVoucherSinks<V, S, P, R = unknown> {
   list: (v: V[]) => void; listErr: (e: unknown) => void; loading: (b: boolean) => void;
   stats: (s: S) => void; profiles: (ps: P[]) => void; statsErr: (e: unknown) => void;
   approved: (b: boolean) => void; approvedErr: (e: unknown) => void;
+  reasonStats: (r: R) => void; reasonStatsErr: (e: unknown) => void;
 }
 
 /** owner = venueId. 호출마다 seq 를 올린다 — 이 함수가 돌려준 stamp 가 ref 의 현재값과 다르면 그 응답은 버려진다. */
-export function loadVenueVoucherPanel<V, S, P>(
+export function loadVenueVoucherPanel<V, S, P, R = unknown>(
   ref: { current: RequestStamp<string> },
   venueId: string,
   canIssue: boolean,
-  api: VenueVoucherApi<V, S, P>,
-  on: VenueVoucherSinks<V, S, P>,
+  api: VenueVoucherApi<V, S, P, R>,
+  on: VenueVoucherSinks<V, S, P, R>,
 ): RequestStamp<string> {
   const stamp: RequestStamp<string> = { seq: ref.current.seq + 1, owner: venueId };
   ref.current = stamp;
@@ -39,9 +42,28 @@ export function loadVenueVoucherPanel<V, S, P>(
   if (canIssue) {
     api.stats(venueId).then((s) => { if (stale()) return; on.stats(s); on.statsErr(null); }).catch((e) => { if (!stale()) on.statsErr(e); });
     api.profiles(venueId).then((ps) => { if (!stale()) on.profiles(ps); }).catch((e) => { if (!stale()) on.statsErr(e); });
+    // 권한 없음(42501)은 reasonStatsErr 로 — 삼키면 표가 '0장' 으로 거짓말한다.
+    api.reasonStats(venueId).then((r) => { if (stale()) return; on.reasonStats(r); on.reasonStatsErr(null); }).catch((e) => { if (!stale()) on.reasonStatsErr(e); });
   }
   api.approved(venueId)
     .then((b) => { if (stale()) return; on.approved(b); on.approvedErr(null); })
     .catch((e) => { if (!stale()) on.approvedErr(e); });   // 삼키면 approved 초기값 true 가 남아 '운영자 승인 필요' 경고가 사라진다
+  return stamp;
+}
+
+/** V2 기간 칩(이번 달·최근 30일)의 재조회 — 같은 staleResponse 계약, owner = `매장|기간`.
+ *  패널 로더와 ref 를 나누는 이유: 칩을 누를 때마다 목록·승인까지 다시 읽어 보유자 목록이 '불러오는 중' 으로 깜빡이면 안 된다.
+ *  매장이 바뀌거나 칩을 다시 누르면 owner/seq 가 바뀌어 앞 응답은 버려진다. */
+export function loadVenueVoucherReasonRange<R>(
+  ref: { current: RequestStamp<string> },
+  venueId: string,
+  rangeKey: string,
+  fetch: (venueId: string) => Promise<R>,
+  on: { rows: (r: R) => void; err: (e: unknown) => void },
+): RequestStamp<string> {
+  const stamp: RequestStamp<string> = { seq: ref.current.seq + 1, owner: `${venueId}|${rangeKey}` };
+  ref.current = stamp;
+  const stale = () => isStaleResponse(stamp, ref.current);
+  fetch(venueId).then((r) => { if (stale()) return; on.rows(r); on.err(null); }).catch((e) => { if (!stale()) on.err(e); });
   return stamp;
 }

@@ -532,7 +532,9 @@ test.describe('S1 모바일 단계 바 — 7칸 한 줄 · 이용권도 같은 �
       // (실측 0.15px). 먼저 알약·활성 칸을 찾았는지부터 본다 — 못 찾으면 아래 단언이 빈 검사가 된다.
       expect(m.알약중심차, '알약이나 활성 칸을 못 찾았다 — 이 단언이 빈 검사가 됐다').not.toBeNull();
       expect(m.알약중심차!, '알약이 활성 탭 중심에서 벗어났다').toBeLessThanOrEqual(1);
-      for (const h of m.높이) expect(h, `칸 높이가 ${h}px — 44px 유효 터치 계약 미달`).toBeGreaterThanOrEqual(44);
+      // 🔴 2026-09-24 리드 결정(알약 한 기준) — 모바일 칸은 **보이는 32 · 누름 44**(종전 보이는 44). 누름 44 는
+      //   바로 아래 elementFromPoint(중심 ±21.5) 단언이 그대로 잰다 — 레일이 히트를 자르면 거기서 빨개진다.
+      for (const h of m.높이) expect(h, `칸 보이는 높이가 ${h}px — 알약 기준 32px 가 아니다`).toBeCloseTo(32, 0);
       // 글자를 줄여서 맞추는 것은 금지다(문서 §S1-4). 12.75px = t-desc 정본.
       for (const f of m.글꼴) expect(f, `칸 글자가 ${f}px 로 줄었다 — 폭을 글자 축소로 맞추지 않는다`).toBeGreaterThanOrEqual(12.5);
 

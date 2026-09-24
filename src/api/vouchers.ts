@@ -29,6 +29,8 @@ export interface Voucher {
   expiresAt: string | null;
   /** 발급 근거(2026-09-05 정책) — 2026-09-05 이전 발급분은 null */
   issueReason: VoucherReason | null;
+  /** 이벤트 카드 당첨으로 지급된 이용권이면 그 캠페인 id — issue_reason 은 수동 이벤트와 같은 'event' 라 이것으로 가른다(20260914b). */
+  eventCampaignId: string | null;
 }
 /**
  * '보유 중' 판정의 단일 정본 — 지갑(VoucherWallet)과 시트의 매장별 장수(MyVoucherSheet)가 같이 쓴다.
@@ -51,7 +53,14 @@ export const VOUCHER_REASONS: { value: VoucherReason; label: string; hint: strin
   { value: 'service', label: '서비스 보상', hint: '불편 사과·서비스 차원' },
   { value: 'other', label: '기타(비고 필수)', hint: '비고에 이유를 적어야 발급됩니다' },
 ];
-export const voucherReasonLabel = (r: string | null | undefined): string => VOUCHER_REASONS.find((x) => x.value === r)?.label ?? '';
+/** 통계·표시 전용 유형 키(V2, 서버 venue_voucher_reason_stats 가 만든다) — 발급 사유 목록(VOUCHER_REASONS)에는 넣지 않는다:
+ *  서버 CHECK 값이 아니라 발급 화면에 픽으로 나오면 안 된다(vouchers.reason.test.ts 가 목록 일치를 본다). */
+const REASON_KEY_EXTRA: Record<string, string> = { event_card: '이벤트 카드 당첨', unrecorded: '근거 미기록' };
+export const voucherReasonLabel = (r: string | null | undefined): string =>
+  VOUCHER_REASONS.find((x) => x.value === r)?.label ?? (r && Object.hasOwn(REASON_KEY_EXTRA, r) ? REASON_KEY_EXTRA[r] : '');
+/** 이용권 한 장의 유형 키 — 서버 venue_voucher_reason_stats 의 CASE 와 같은 규칙(표와 보유자 목록이 같은 말을 쓰게). */
+export const voucherReasonKey = (v: Pick<Voucher, 'issueReason' | 'eventCampaignId'>): string =>
+  v.issueReason === 'event' && v.eventCampaignId ? 'event_card' : (v.issueReason ?? 'unrecorded');
 export interface VoucherUsage { usedVenueId: string | null; venueName: string | null; usedCount: number }
 export interface VisitedVenue { venueId: string; venueName: string | null; visits: number }
 /** 매장별 참가(바인) 이력 — buyinCount = 장부 바인 횟수, totalAmount = 낸 참가비 합. 머니인(입상)이 아니다(점검 #6). */
@@ -68,6 +77,7 @@ function mapRow(r: any): Voucher {
     usedAt: r.used_at ?? null, createdAt: r.created_at,
     expiresAt: r.expires_at ?? null,
     issueReason: (r.issue_reason as VoucherReason | null) ?? null,
+    eventCampaignId: r.event_campaign_id ?? null,
   };
 }
 
@@ -428,6 +438,47 @@ export async function voucherHolderStats(venueId: string): Promise<VoucherHolder
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const r: any = (data ?? [])[0] ?? {};
   return { holderCount: Number(r.holder_count) || 0, activeCount: Number(r.active_count) || 0, usedCount: Number(r.used_count) || 0 };
+}
+
+// ── 유형별 발급 통계(V2, 오너 2026-09-24 · 마이그레이션 20260924c) ──
+// 발급 = 남아 있는 행(delete_voucher 로 지운 미사용분은 빠진다 — 화면이 고지한다) = 보유+사용+만료+회수+기타.
+// 목록(listVenueVouchers)으로 세지 않는 이유: max_rows=1000 에 잘려 조용히 과소 집계된다 — 서버가 센다.
+export interface VoucherReasonStat { reasonKey: string; issued: number; held: number; used: number; expired: number; revoked: number; other: number; holders: number }
+export type VoucherStatsRange = 'all' | 'month' | '30d';
+/** 기간 칩 → 서버 p_from/p_to(KST 날짜, 둘 다 포함). 'all' 은 null — 서버가 제한 없이 센다. */
+export function voucherStatsRange(key: VoucherStatsRange, now: number = Date.now()): { from: string | null; to: string | null } {
+  const kst = (ms: number) => new Date(ms + 9 * 3_600_000).toISOString().slice(0, 10); // = lib/kst kstToday (여기선 now 인자 고정용)
+  if (key === 'all') return { from: null, to: null };
+  const to = kst(now);
+  return { from: key === 'month' ? `${to.slice(0, 8)}01` : kst(now - 29 * 86_400_000), to };
+}
+export async function venueVoucherReasonStats(venueId: string, range: { from: string | null; to: string | null } = { from: null, to: null }): Promise<VoucherReasonStat[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('venue_voucher_reason_stats', { p_venue_id: venueId, p_from: range.from, p_to: range.to });
+  if (error) throw error; // 권한 없음은 서버가 42501 로 던진다 — '0장' 으로 뭉개지 않고 code 째 올린다(msgOf/isDenied 가 분류)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    reasonKey: String(r.reason_key), issued: Number(r.issued) || 0, held: Number(r.held) || 0, used: Number(r.used) || 0,
+    expired: Number(r.expired) || 0, revoked: Number(r.revoked) || 0, other: Number(r.other_status) || 0, holders: Number(r.holders) || 0,
+  }));
+}
+/** 행 불변식 — 발급 = 보유+사용+만료+회수+기타. 서버 정의상 항상 참이어야 하고, 깨지면 화면이 숫자를 믿지 말라고 말한다. */
+export const reasonStatBalanced = (s: VoucherReasonStat): boolean => s.issued === s.held + s.used + s.expired + s.revoked + s.other;
+/** 표의 행 순서: 지금 발급하는 유형은 0 이어도 보이고, 과거 유형(첫 방문·방문 감사)과 근거 미기록은 0 이면 숨긴다. 모르는 키는 뒤에 붙인다. */
+const CURRENT_REASON_KEYS = ['grant', 'event', 'event_card', 'service', 'other'];
+const PAST_REASON_KEYS = ['visit', 'welcome', 'unrecorded'];
+export function voucherReasonTable(rows: VoucherReasonStat[]): { rows: VoucherReasonStat[]; total: VoucherReasonStat } {
+  const by = new Map(rows.map((r) => [r.reasonKey, r]));
+  const zero = (reasonKey: string): VoucherReasonStat => ({ reasonKey, issued: 0, held: 0, used: 0, expired: 0, revoked: 0, other: 0, holders: 0 });
+  const out = [
+    ...CURRENT_REASON_KEYS.map((k) => by.get(k) ?? zero(k)),
+    ...PAST_REASON_KEYS.flatMap((k) => { const r = by.get(k); return r && r.issued > 0 ? [r] : []; }),
+    ...rows.filter((r) => !CURRENT_REASON_KEYS.includes(r.reasonKey) && !PAST_REASON_KEYS.includes(r.reasonKey)),
+  ];
+  // 합계는 숨긴 행까지 **서버 행 전부**로 센다(숨김은 0 행뿐이라 결과는 같지만, 모르는 키가 빠지지 않게).
+  const total = rows.reduce((t, r) => ({ ...t, issued: t.issued + r.issued, held: t.held + r.held, used: t.used + r.used,
+    expired: t.expired + r.expired, revoked: t.revoked + r.revoked, other: t.other + r.other }), zero('total'));
+  return { rows: out, total };
 }
 
 // 보유자 실명+닉네임(해당 매장 권한자만) — 관리 화면에 "실명(닉네임)" 표기용

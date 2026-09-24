@@ -7,7 +7,7 @@ const NOW = Date.parse('2026-09-06T12:00:00+09:00');
 const v = (o: Partial<Voucher> & { id: string; createdAt: string }): Voucher => ({
   venueId: 'V', venueName: null, issuedBy: 'O', holderUserId: null, holderName: '홍길동',
   title: '매장이용권', status: 'active', usedVenueId: null, usedVenueName: null,
-  usedAt: null, expiresAt: null, issueReason: 'event', ...o,
+  usedAt: null, expiresAt: null, issueReason: 'event', eventCampaignId: null, ...o,
 });
 
 describe('한 번에 보낸 묶음', () => {

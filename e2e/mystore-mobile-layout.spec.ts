@@ -58,6 +58,18 @@ const stageOverlaps = (page: Page) => page.evaluate(() => {
   return n;
 });
 
+/** 버튼마다 보이는 높이와 **누르는 세로 구간**(중심 x 에서 0.25px 씩 elementFromPoint 로 훑음). 알약 한 기준 = 보이는 32 · 누름 44. */
+const hitSpans = (page: Page, sel: string) => page.evaluate((s) => [...document.querySelectorAll<HTMLElement>(s)]
+  .filter((b) => getComputedStyle(b).display !== 'none' && b.offsetParent).map((b) => {
+    // elementFromPoint 는 뷰포트 밖이면 null — 훑기 전에 화면 가운데로 가져온다(안 하면 누름=보이는 높이로 거짓 측정)
+    b.scrollIntoView({ block: 'center', inline: 'nearest' });
+    const r = b.getBoundingClientRect(); const x = r.left + r.width / 2; let top = r.top, bot = r.bottom;
+    for (let y = r.top; y > r.top - 20; y -= 0.25) { const e = document.elementFromPoint(x, y); if (e && (e === b || b.contains(e))) top = y; else break; }
+    for (let y = r.bottom - 0.01; y < r.bottom + 20; y += 0.25) { const e = document.elementFromPoint(x, y); if (e && (e === b || b.contains(e))) bot = y; else break; }
+    // top/bot 은 문서 좌표 — 칩마다 스크롤 위치가 달라 뷰포트 좌표끼리는 비교할 수 없다
+    return { x: Math.round(r.left), h: r.height, top: top + scrollY, bot: bot + scrollY, hit: bot - top };
+  }), sel);
+
 /** 콘솔 라벨(Level·Min·Sec)의 top. */
 const stepperTops = (page: Page) => page.evaluate(() => {
   const box = document.querySelector<HTMLElement>('[data-testid="clk-main-action"]')!.parentElement!;
@@ -78,13 +90,22 @@ test.describe('내 매장 모바일 — S1·S2·V1·K1', () => {
       // ── S1 ──
       const rail = await page.evaluate((sel) => {
         const r = document.querySelector<HTMLElement>(sel)!;
+        const cs = getComputedStyle(r);
         const bs = [...r.querySelectorAll<HTMLElement>('button')].filter((b) => getComputedStyle(b).display !== 'none');
-        return { h: r.getBoundingClientRect().height, w: bs.map((b) => b.getBoundingClientRect().width), bh: bs.map((b) => b.getBoundingClientRect().height) };
+        // 차지하는 높이 = rect + 음수 마진(히트 자리 py-1.5 -my-1.5 는 자리를 차지하지 않는다)
+        return { occ: r.getBoundingClientRect().height + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom), w: bs.map((b) => b.getBoundingClientRect().width) };
       }, RAIL);
       expect(rail.w.length, '레일 칸이 7개가 아니다').toBe(7);
       expect(Math.max(...rail.w) - Math.min(...rail.w), `칸 폭이 서로 다르다: ${rail.w.map((x) => x.toFixed(2))}`).toBeLessThanOrEqual(0.5);
-      for (const h of rail.bh) expect(h, '칸 높이가 44px 유효 터치 미만').toBeGreaterThanOrEqual(44);
-      expect(rail.h, `레일 높이 ${rail.h}px — 모바일은 칸 높이(44)로 줄였다(종전 50.25)`).toBeLessThanOrEqual(44.5);
+      // 🔴 2026-09-24 리드 결정(알약 한 기준) — 칸은 **보이는 32 · 누름 44**(종전 보이는 44). 기준 변경이지 완화가 아니다:
+      //   누름 44 는 elementFromPoint 로 실제로 잰다(overflow-x-auto 가 히트를 자르면 여기서 빨개진다).
+      const railHit = await hitSpans(page, `${RAIL} button`);
+      expect(railHit.length).toBe(7);
+      for (const b of railHit) {
+        expect(b.h, '칸 보이는 높이는 32').toBeCloseTo(32, 0);
+        expect(b.hit, `칸 누름 높이 ${b.hit}px — 44 미만(레일이 히트를 자른다)`).toBeGreaterThanOrEqual(44);
+      }
+      expect(rail.occ, `레일이 차지하는 높이 ${rail.occ}px — 칸 높이(32)여야 한다(종전 44)`).toBeLessThanOrEqual(32.5);
       const pills: number[] = [];
       for (const n of ['포스터', '장부', '순위', '정산', '이용권', '요약']) {
         await pick(page, n);
@@ -96,12 +117,23 @@ test.describe('내 매장 모바일 — S1·S2·V1·K1', () => {
 
       // ── V1 ── (지금 요약 → 이용권)
       await pick(page, '이용권');
-      const hdr = page.getByRole('button', { name: /매장이용권 발급/ }).first();
+      // 오너 2026-09-24: 발급 칸은 항상 펼침(접기 버튼이 아니라 제목) — 셀렉터를 역할 이름에서 testid 로 옮겼다.
+      const hdr = page.getByTestId('voucher-issue-head');
       await expect(hdr, '이용권 발급 섹션이 없다').toBeVisible({ timeout: 15_000 });
       await expect(hdr.getByText(/업주\s*·\s*공동운영자/), '모바일 제목 옆 «업주·공동운영자» 가 남아 있다').toBeHidden();
-      await hdr.evaluate((b) => (b as HTMLElement).click());
-      const panel = hdr.locator('..');
+      const panel = page.getByTestId('voucher-issue');
       await expect(panel.getByRole('button', { name: /아이디\(닉네임\)로 지정/ })).toBeVisible();
+      // 발급 근거·유효기간 칩 — 보이는 32 · 누름 44, 두 줄 근거 칩은 윗줄·아랫줄 누름 구간이 겹치지 않는다
+      for (const sel of ['[role=group][aria-label="발급 근거"] button', '[data-expiry-chips] button']) {
+        const cs = await hitSpans(page, sel);
+        expect(cs.length, `${sel} 칩을 못 찾았다 — 빈 검사`).toBeGreaterThan(1);
+        for (const c of cs) {
+          expect(c.h, `${sel} 보이는 높이는 32`).toBeCloseTo(32, 0);
+          expect(c.hit, `${sel} 누름 ${c.hit}px — 44 미만`).toBeGreaterThanOrEqual(44);
+        }
+        const overlaps = cs.flatMap((a) => cs.filter((b) => a !== b && a.x === b.x && a.top < b.top && a.bot > b.top + 0.01).map((b) => `${a.bot}>${b.top}`));
+        expect(overlaps, `${sel} 윗줄 누름 구간이 아랫줄을 덮는다`).toEqual([]);
+      }
       for (const mode of [/아이디\(닉네임\)로 지정/, /전화번호로 지정/]) {
         const h0 = await panel.evaluate((p) => p.getBoundingClientRect().height);
         await panel.getByRole('button', { name: mode }).evaluate((b) => (b as HTMLElement).click());
@@ -145,7 +177,7 @@ test.describe('내 매장 모바일 — S1·S2·V1·K1', () => {
   }
 
   // PC 는 한 글자도 안 바뀌어야 한다 — 모바일 전용 처방이 새지 않았는지의 음성 쪽 계약.
-  test('1440 — PC 는 종전 그대로(바 50.25 · Level 따로 · 미리보기 반응형 · 발급 제목 배지 유지)', async ({ page }) => {
+  test('1440 — PC 는 종전 그대로(바 50.25 · Level 따로 · 미리보기 반응형 · 발급 제목 옆 라벨 없음·범위 안내 박스)', async ({ page }) => {
     test.setTimeout(120_000);
     await open(page, 1440, 900);
     expect(await page.locator(RAIL).evaluate((r) => r.getBoundingClientRect().height)).toBeCloseTo(50.25, 1);
@@ -156,8 +188,10 @@ test.describe('내 매장 모바일 — S1·S2·V1·K1', () => {
     expect(t.Min - t.Level, 'PC 에서 Level 이 Min 과 같은 줄로 올라왔다 — 모바일 처방이 샜다').toBeGreaterThan(30);
     await expect(page.locator('[data-clk-stage-slot="scaled"]')).toHaveCount(0);
     await pick(page, '이용권');
-    const hdr = page.getByRole('button', { name: /매장이용권 발급/ }).first();
+    const hdr = page.getByTestId('voucher-issue-head');
     await expect(hdr).toBeVisible({ timeout: 15_000 });
-    await expect(hdr.getByText(/업주\s*·\s*공동운영자/)).toBeVisible();
+    // 오너 2026-09-24: 제목 옆 라벨은 PC 에서도 없다. 범위 고지는 (항상 펼친) 안의 안내 박스로 옮겨 그것을 본다.
+    await expect(hdr.getByText(/업주\s*·\s*공동운영자/), 'PC 제목 옆 «업주·공동운영자» 가 남아 있다').toHaveCount(0);
+    await expect(page.getByTestId('voucher-issue-scope')).toHaveText(/업주\s*·\s*공동운영자/);
   });
 });

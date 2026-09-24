@@ -29,14 +29,14 @@ describe('D · 보유자 통계 조회 실패를 삼키지 않는다', () => {
 
 describe('N04-A · 매장 전환 경합 — staleResponse 계약 배선', () => {
   it('🔴 reload 가 lib/venueVoucherLoad 에 위임하고(owner=venueId 스탬프), 모든 sink 를 넘긴다', () => {
-    expect(VM).toMatch(/import \{ loadVenueVoucherPanel \} from '\.\.\/\.\.\/lib\/venueVoucherLoad';/);
+    expect(VM).toMatch(/import \{ loadVenueVoucherPanel, loadVenueVoucherReasonRange \} from '\.\.\/\.\.\/lib\/venueVoucherLoad';/);
     expect(VM).toMatch(/import type \{ RequestStamp \} from '\.\.\/\.\.\/lib\/staleResponse';/);
     expect(VM).toMatch(/const voucherReq = useRef<RequestStamp<string>>\(\{ seq: 0, owner: '' \}\);/);
     const i = VM.indexOf('const reload = () => {');
     const body = VM.slice(i, VM.indexOf('};', i));
     expect(body).toMatch(/loadVenueVoucherPanel\(voucherReq, venueId, canIssue,/);
-    expect(body).toMatch(/\{ list: listVenueVouchers, stats: voucherHolderStats, profiles: voucherHolderProfiles, approved: isVoucherIssueApproved \}/);
-    expect(body).toMatch(/approved: setApproved, approvedErr: setApprovedErr/);
+    expect(body).toMatch(/\{ list: listVenueVouchers, stats: voucherHolderStats, profiles: voucherHolderProfiles, approved: isVoucherIssueApproved, reasonStats: venueVoucherReasonStats \}/);
+    expect(body).toMatch(/approved: setApproved, approvedErr: setApprovedErr, reasonStats: setReasonAll, reasonStatsErr: setReasonErr/);
     // 옛 무가드 직접 호출이 남아 있지 않다
     expect(body).not.toMatch(/listVenueVouchers\(venueId\)\.then\(/);
   });
@@ -45,7 +45,7 @@ describe('N04-A · 매장 전환 경합 — staleResponse 계약 배선', () => 
     const i = VM.indexOf('voucherReq.current = { seq: voucherReq.current.seq + 1, owner: venueId };');
     expect(i, '초기화 effect 의 스탬프 갱신이 없다').toBeGreaterThan(-1);
     const block = VM.slice(i, VM.indexOf('}, [venueId]);', i));
-    for (const s of ['setList([]);', 'setListErr(null);', 'setStats(null);', 'setStatsErr(null);', 'setProfileMap(new Map());', 'setQuota(null);', 'setApproved(true);', 'setApprovedErr(null);', 'setRecvUserId(null);', 'setCands([]);']) {
+    for (const s of ['setReasonAll(null);', 'setReasonErr(null);', 'setRangeRows(null);', 'setList([]);', 'setListErr(null);', 'setStats(null);', 'setStatsErr(null);', 'setProfileMap(new Map());', 'setQuota(null);', 'setApproved(true);', 'setApprovedErr(null);', 'setRecvUserId(null);', 'setCands([]);']) {
       expect(block, `초기화에 ${s} 가 없다`).toContain(s);
     }
   });

@@ -31,6 +31,7 @@ import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 import StoreDashboard from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
+import { CHIP_HIT } from './gto/chip'; // 알약 한 기준: 보이는 32 · 누름 44(2026-09-24 리드 결정)
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, type TransferTarget } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
@@ -113,26 +114,34 @@ function SettingsTabBar({ tabs, active, onPick }: {
   }, []);
   return (
     <div className="relative" data-mystore-rail="">
+      {/* 🔴 2026-09-24(리드 결정 · design-reviewer 판정) — 알약은 **보이는 32 · 누름 44** 한 기준(gto/chip.ts).
+          종전 칸 h-9(38.25)·히트 39 였다. 가로 스크롤 칸(overflow-x-auto)은 세로도 잘라 칸의 위아래 히트 확장이
+          사라지므로, 스크롤 칸은 투명하게 두고 `py-1.5 -my-1.5` 로 확장이 들어갈 자리를 주고(차지하는 높이는 그대로),
+          트랙(테두리·배경)은 안쪽 판(w-max min-w-full)이 든다 — 스크롤하면 트랙도 함께 움직인다. */}
       <div ref={ref} role="tablist" aria-label="매장 설정 하위탭"
-        className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5 [scrollbar-width:none]">
+        className="relative -my-1.5 overflow-x-auto py-1.5 [scrollbar-width:none]">
+        <div className="relative flex w-max min-w-full items-center gap-0.5 rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
         <SlidingPill activeKey={active} className="rounded-[6px] pill-active" />
         {tabs.map((t) => {
           const on = active === t.id;
           return (
             <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined} data-tab-id={t.id}
               onClick={() => onPick(t.id)}
-              className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none',
+              className={['inline-flex h-[32px] shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none', CHIP_HIT,
                 on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
               <span className="relative">{t.label}</span>
             </button>
           );
         })}
+        </div>
       </div>
+      {/* 페이드는 트랙 안쪽에만 — 스크롤 칸의 -my-1.5 가 이 감싸개로 마진 상쇄되어 감싸개가 트랙보다 6.375px 씩 크다.
+          inset-y-2(8.5) = 6.375(히트 자리) + 2.125(종전 inset-y-0.5). */}
       {(edge === 'right' || edge === 'both') && (
-        <div aria-hidden className="pointer-events-none absolute inset-y-0.5 right-0.5 w-9 rounded-r-input bg-gradient-to-l from-surface-high via-surface-high/70 to-transparent" />
+        <div aria-hidden className="pointer-events-none absolute inset-y-2 right-0.5 w-9 rounded-r-input bg-gradient-to-l from-surface-high via-surface-high/70 to-transparent" />
       )}
       {(edge === 'left' || edge === 'both') && (
-        <div aria-hidden className="pointer-events-none absolute inset-y-0.5 left-0.5 w-9 rounded-l-input bg-gradient-to-r from-surface-high via-surface-high/70 to-transparent" />
+        <div aria-hidden className="pointer-events-none absolute inset-y-2 left-0.5 w-9 rounded-l-input bg-gradient-to-r from-surface-high via-surface-high/70 to-transparent" />
       )}
     </div>
   );
@@ -151,7 +160,7 @@ const NAV_GROUPS: readonly NavGroup[] = ['운영', '분석', '관리'];
 const MYSTORE_ORDER: readonly string[] = [
   'dashboard',
   'game', 'posters', 'ledger', 'clock', 'ranking', 'settle',
-  'calendar', 'stats', 'staff', 'attendance', 'partners', 'voucher', 'event',
+  'stats', 'calendar', 'staff', 'attendance', 'partners', 'voucher', 'event',
   'settings', 'page', 'presets', 'pos', 'optools', 'danger',
 ];
 
@@ -642,7 +651,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   available.push({ id: 'game', label: '게임 진행', group: '운영', locked: !ledgerOk && !canPosters });
   // 오너 지시(2026-09-04): 매장 보유자에게는 하단 탭 캘린더를 주지 않고 여기 넣는다.
   // 업주도 플레이어라 자기 예약·찜·수기 뱅크롤을 본다 — 매장 장부(매출·손님)와는 다른 축이다.
-  available.push({ id: 'calendar', label: '내 캘린더', group: '운영' });
+  // 🔴 2026-09-24 오너: '내 캘린더' 는 '운영'(매일 여는 매장 일) 이 아니라 '관리' 그룹으로. PC 사이드바·모바일 전체 메뉴가
+  //   같은 available 을 그룹으로 거르므로 둘 다 옮겨진다. 딥링크·섹션 id('calendar')는 그대로다.
+  available.push({ id: 'calendar', label: '내 캘린더', group: '관리' });
   if (manageOk) available.push({ id: 'stats',  label: '매출·손님', group: '분석' });
   // ATT-FIX: '내 출퇴근 기록'이 장부 권한(ledgerOk)에 묶여 있어 장부 권한 없는 직원이
   // 자기 출퇴근을 못 보던 오게이팅 — 이 탭에 들어온 소속 구성원이면 누구나
@@ -1389,15 +1400,20 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
   //     절대 안 줄여 S1 겹침이 되살아나지 않는다. 요약·PC 이용권의 '내용 폭 고정'은 `lg:` 에서만 남긴다.
   //   e2e/store-nav.spec.ts S1 절이 두 가지를 같이 잠근다 — 콘텐츠 여유(라벨이 늘어 넘치기 직전인가)와
   //   실제 남는 폭(≤ 레일 패딩, 즉 우측 공백 0).
-  const chip = (on: boolean) => ['relative inline-flex h-[44px] min-w-max flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:px-3 lg:text-sm',
-    on ? 'font-bold text-white' : 'font-semibold text-ink-muted hover:text-ink-secondary'].join(' ');
+  // 🔴 2026-09-24(리드 결정 · design-reviewer 판정, 오너 반복 지적 "알약 위아래 넓다") — 모바일(<768)은 **보이는 32 · 누름 44**
+  //   (gto/chip.ts CHIP_HIT, ±8px). 위 '칩 자체를 44px' 로 한 이유(overflow-x-auto 가 아래 오버행을 자름)는 레일에
+  //   `max-md:py-1.5 max-md:-my-1.5`(6.375px) 로 확장이 들어갈 자리를 줘서 푼다 — 잘려도 32+6.375×2 = 44.75px.
+  //   레일 배경은 그 패딩까지 칠하면 32 칸 위아래에 띠가 생기므로 모바일에서는 ::before 트랙(inset-y-1.5)으로 칸 높이만 칠한다.
+  //   md 이상은 종전 h-[44px]·레일 그대로다(CHIP_HIT 는 ::before 뿐이라 칸 rect 를 바꾸지 않는다).
+  const chip = (on: boolean) => ['inline-flex h-[44px] max-md:h-[32px] min-w-max flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:px-3 lg:text-sm',
+    on ? 'font-bold text-white' : 'font-semibold text-ink-muted hover:text-ink-secondary', CHIP_HIT].join(' ');
   return (
     <div ref={ref} data-mystore-rail=""
-      /* 🔴 S1(오너 2026-09-24) — 모바일(<768)은 레일 안쪽 패딩·테두리를 걷어 **바 높이 = 칸 높이 44px**
-         (종전 50.25px). 칸은 그대로 44px 라 유효 터치 계약은 안 바뀐다 — 줄어드는 것은 칸 바깥 테두리뿐이다.
-         오버행(tap-y-44)으로 칸을 더 낮추지 않는 이유는 위 주석 그대로다(overflow-x-auto 가 아래 오버행을 자른다).
-         md 이상은 한 글자도 안 바뀐다(`max-md:` 만). */
-      className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5 max-md:border-0 max-md:p-0">
+      /* 🔴 S1(오너 2026-09-24) — 모바일(<768)은 레일 테두리를 걷었다(종전 바 50.25px).
+         🔴 같은 날 리드 결정(알약 한 기준) — 모바일 칸은 **보이는 32 · 누름 44**: 레일 `py-1.5 -my-1.5` 가 CHIP_HIT(±8)이
+         overflow-x-auto 에 잘려도 44.75px 를 남기고(차지하는 높이는 32), 배경은 ::before 트랙(inset-y-1.5)이 칸 높이만 칠한다.
+         md 이상은 한 글자도 안 바뀐다(`max-md:` 만 · 1024/1440 rect 동일 실측). */
+      className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5 max-md:border-0 max-md:px-0 max-md:py-1.5 max-md:-my-1.5 max-md:bg-transparent max-md:before:absolute max-md:before:inset-x-0 max-md:before:inset-y-1.5 max-md:before:rounded-input max-md:before:bg-surface-high/60 max-md:before:content-['']">
       <SlidingPill containerRef={ref} activeKey={active} className="rounded-[6px] pill-active" />
       {/* 탭인 것만 tablist 에 넣는다 — 요약과 1~5단계. 이용권은 '단계'가 아니라 다른 화면으로 가는
           지름길이라 탭이 아니다(그래서 원래도 role 이 없었다). 시각적으로는 같은 바 안에 남는다.

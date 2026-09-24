@@ -10,9 +10,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
-import { listVenueVouchers, isHeldVoucher, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, requestVoucherQuota, myVoucherCreditRequests, type VoucherCreditRequest, VOUCHER_REASONS, voucherReasonLabel, voucherHolderLabel, type VoucherReason } from '../../api/vouchers';
+import { listVenueVouchers, isHeldVoucher, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, requestVoucherQuota, myVoucherCreditRequests, type VoucherCreditRequest, venueVoucherReasonStats, voucherReasonKey, voucherStatsRange, voucherReasonTable, reasonStatBalanced, type VoucherReasonStat, type VoucherStatsRange, VOUCHER_REASONS, voucherReasonLabel, voucherHolderLabel, type VoucherReason } from '../../api/vouchers';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
-import { loadVenueVoucherPanel } from '../../lib/venueVoucherLoad';
+import { loadVenueVoucherPanel, loadVenueVoucherReasonRange } from '../../lib/venueVoucherLoad';
+import { CHIP_HIT } from './gto/chip'; // 알약 한 기준: 보이는 32 · 누름 44(2026-09-24 리드 결정)
 import type { RequestStamp } from '../../lib/staleResponse';
 import { voucherGroupLabel, stripVenuePrefix } from '../../lib/voucherLabel'; // 손님 지갑 표기 규칙(오너 지시 #19)과 같은 함수로 미리보기
 import { buildQrForVenue } from './venueQrPrint'; // FINAL-QR#PRINT-A-B — `await` 뒤 '지금 매장' 판정의 단일 출처
@@ -28,6 +29,12 @@ import { kstToday } from '../../lib/kst'; // 유효기간 계산은 기기 로�
  *  — 값·라벨 조회 경로를 안 건드렸다. 소급 변환 없음, 새 값은 오늘 이후 발급분에만 붙는다). */
 const ISSUE_PICKS = VOUCHER_REASONS.filter((o) => o.value !== 'welcome' && o.value !== 'visit');
 
+/** V2 — 유형별 표의 기간 칩과 열. pc=true 는 모바일(md 미만)에서 숨긴다(발급·보유·사용 3열만). */
+const STAT_RANGES: [VoucherStatsRange, string][] = [['all', '전체'], ['month', '이번 달'], ['30d', '최근 30일']];
+const STAT_COLS: { k: 'issued' | 'held' | 'used' | 'expired' | 'revoked'; label: string; pc: boolean }[] = [
+  { k: 'issued', label: '발급', pc: false }, { k: 'held', label: '보유', pc: false }, { k: 'used', label: '사용', pc: false },
+  { k: 'expired', label: '만료', pc: true }, { k: 'revoked', label: '회수', pc: true },
+];
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '-';
   const d = new Date(iso);
@@ -86,6 +93,15 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [stats, setStats] = useState<VoucherHolderStats | null>(null);
   const [statsErr, setStatsErr] = useState<unknown>(null);
+  // V2(2026-09-24) 유형별 발급 통계 — 전체 기간(타일·'전체' 칩)은 패널 로더가, 기간 칩은 loadVenueVoucherReasonRange 가 든다.
+  //   rangeRows 는 `매장|기간` 표를 달고 다닌다 — 렌더에서 지금 매장·기간과 다르면 그리지 않는다(QR 의 srcOf 와 같은 이중 가드).
+  const [reasonAll, setReasonAll] = useState<VoucherReasonStat[] | null>(null);
+  const [reasonErr, setReasonErr] = useState<unknown>(null);
+  const [statRange, setStatRange] = useState<VoucherStatsRange>('all');
+  const [rangeRows, setRangeRows] = useState<{ key: string; rows: VoucherReasonStat[] } | null>(null);
+  const [rangeErr, setRangeErr] = useState<unknown>(null);
+  const [reasonTick, setReasonTick] = useState(0);
+  const reasonRangeReq = useRef<RequestStamp<string>>({ seq: 0, owner: '' });
   // Q5 — 매장에 매인 QR 은 `{venueId, src}` 로 들고 다닌다(아래 생성 effect 주석 참고).
   type VenueQr = { venueId: string; src: string } | null;
   const [qr, setQr] = useState<VenueQr>(null);
@@ -113,7 +129,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   const [holderQuery, setHolderQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [profileMap, setProfileMap] = useState<Map<string, VoucherHolderProfile>>(new Map());
-  const [issueOpen, setIssueOpen] = useState(false); // 발급 섹션 — 기본 접힘
+  // 🔴 2026-09-24 오너: '매장이용권 발급' 칸은 **항상 펼침**(접기 토글 없음). 매장 QR 만 접힌 채로 시작한다.
   const [qrOpen, setQrOpen] = useState(false);       // QR 섹션 — 기본 접힘(PC 포함)
   const [ownerOpen, setOwnerOpen] = useState(false); // 보유자 현황·통계(업주 전용) — 기본 접힘
 
@@ -125,10 +141,11 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   const reload = () => {
     if (!idOn) return; // 킬스위치 OFF — 꺼진 기능이 조용히 조회를 돌지 않게(무료 egress 예산)
     loadVenueVoucherPanel(voucherReq, venueId, canIssue,
-      { list: listVenueVouchers, stats: voucherHolderStats, profiles: voucherHolderProfiles, approved: isVoucherIssueApproved },
+      { list: listVenueVouchers, stats: voucherHolderStats, profiles: voucherHolderProfiles, approved: isVoucherIssueApproved, reasonStats: venueVoucherReasonStats },
       { list: setList, listErr: setListErr, loading: setLoading,
         stats: setStats, profiles: (ps) => setProfileMap(new Map(ps.map((p) => [p.userId, p]))), statsErr: setStatsErr,
-        approved: setApproved, approvedErr: setApprovedErr });
+        approved: setApproved, approvedErr: setApprovedErr, reasonStats: setReasonAll, reasonStatsErr: setReasonErr });
+    setReasonTick((t) => t + 1); // 발급·회수·실시간 갱신 뒤 기간 표도 다시 센다
   };
   // 매장이 바뀌면 앞 매장의 데이터를 **즉시** 지운다(지갑의 V04 와 같다) — 응답 격리와 별개로 한 프레임이라도 A 의 목록이 B 로 보이면 안 된다.
   //   받는 손님 선택도 A 화면에서 고른 것이라 함께 비운다(발급이 B 매장으로 나가면 안 된다).
@@ -142,6 +159,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   useEffect(() => {
     voucherReq.current = { seq: voucherReq.current.seq + 1, owner: venueId };   // 진행 중인 앞 매장 응답을 전부 stale 로
     setList([]); setListErr(null); setStats(null); setStatsErr(null); setProfileMap(new Map());
+    setReasonAll(null); setReasonErr(null); setRangeRows(null); setRangeErr(null);
     setQuota(null); setApproved(true); setApprovedErr(null);
     setRecvUserId(null); setRecvDisplay(''); setCands([]); setActiveIdx(-1); setExpanded(null);
     setConfirmOpen(false); // Q2 — 매장이 바뀌면 보여주던 확인 내용(매장·받는 회원 등)이 전부 낡은 것이라 취소한다
@@ -151,6 +169,13 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   //   확인 단계로 되돌아가기만 하면 된다.
   useEffect(() => { setConfirmOpen(false); }, [count, reason, expiry, recvUserId]);
   useEffect(() => { reload(); }, [venueId, idOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  // V2 기간 칩 재조회. 'all' 로 돌아오면 스탬프만 올려 진행 중인 기간 응답을 버린다(표는 reasonAll 을 쓴다).
+  useEffect(() => {
+    if (!idOn || !canIssue || statRange === 'all') { reasonRangeReq.current = { seq: reasonRangeReq.current.seq + 1, owner: `${venueId}|all` }; return; }
+    const range = voucherStatsRange(statRange);
+    loadVenueVoucherReasonRange(reasonRangeReq, venueId, statRange, (id) => venueVoucherReasonStats(id, range),
+      { rows: (rows) => setRangeRows({ key: `${venueId}|${statRange}`, rows }), err: setRangeErr });
+  }, [venueId, idOn, canIssue, statRange, reasonTick]);
   // 실시간: 이 매장 이용권이 들어오면(사용/발급/회수) 즉시 갱신 — 권한은 RLS로 자동 게이트.
   // ⚠ 킬스위치 OFF 에서는 채널을 열지 않는다 — Realtime 동시연결은 무료 한도의 실질 천장이라
   //   '안 보이는 화면'이 연결을 하나 차지하면 클락 TV 구독까지 같이 열화된다.
@@ -204,7 +229,9 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
       if (last && last.t === e.t && last.title === e.title && last.who === e.who && last.at.slice(0, 16) === e.at.slice(0, 16)) last.n += 1;
       else grouped.push({ ...e, n: 1 });
     }
-    return grouped.slice(0, 30);
+    // 🔴 2026-09-24 오너: 목록은 20줄 높이까지만 보이고 그 안에서 스크롤 — 종전 `slice(0, 30)` 은 31번째 줄부터 **화면에서 사라졌다**.
+    //   자르지 않고 전부 그린다(스크롤로 모두 닿는다). 원천 목록 자체의 상한(listVenueVouchers 1000행 · max_rows)은 별개 문제다.
+    return grouped;
   }, [list, profileMap]);
   const fmtFeed = (iso: string) => { const d = new Date(iso); const p2 = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
 
@@ -231,7 +258,6 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   useEffect(() => {
     const q = (prefillReceiver ?? '').trim();
     if (!q) return;
-    setIssueOpen(true);
     setRecvMode('id');
     setIdInput(q);
     let alive = true;   // N04-A: 프리필이 바뀌거나 언마운트되면 늦은 검색 결과를 버린다
@@ -348,7 +374,6 @@ ${cards}
     } catch (e) {
       const msg = e instanceof Error ? e.message : '배포 실패';
       toast.show(msg, 'error');
-      if (msg.includes('한도가 부족')) setIssueOpen(true); // 한도 안내 문구가 보이도록 발급 섹션만 펼침(유상 충전 UI 는 제거됨)
       setConfirmOpen(false); // 실패 시 확인 화면에 머무르지 않고 조건을 다시 고칠 수 있게 되돌린다
       reloadQuota();
     }
@@ -446,9 +471,11 @@ ${cards}
         ) : feed.length === 0 ? (
           <p className="py-3 text-center text-2xs text-ink-muted">아직 내역이 없습니다. 발급·사용되면 즉시 표시됩니다.</p>
         ) : (
-          <ul className="max-h-56 space-y-1 overflow-y-auto">
+          /* 20줄 창 = 줄 높이 h-7(1.75rem) × 20 + 줄 사이 space-y-1(0.25rem) × 19. 줄 높이를 고정해야 창이 정확히 20줄이다
+             (글자 줄높이에 맡기면 폰트·배지에 따라 19.x 줄이 된다 — 실측 종전 28.69px/줄). */
+          <ul data-testid="voucher-feed" className="max-h-[calc(20*1.75rem+19*0.25rem)] space-y-1 overflow-y-auto">
             {feed.map((e, i) => (
-              <li key={i} className="flex items-center gap-2 rounded-input bg-surface-base/50 px-2 py-1.5 text-2xs">
+              <li key={i} className="flex h-7 items-center gap-2 rounded-input bg-surface-base/50 px-2 py-1.5 text-2xs">
                 <span className={['shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
                   e.t === 'used' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>
                   <Icon name={e.t === 'used' ? 'arrow-down-left' : 'arrow-up-right'} size={10} className="mr-0.5 inline-block align-[-1px] shrink-0" />{e.t === 'used' ? '사용(받음)' : '발급(보냄)'}
@@ -467,15 +494,15 @@ ${cards}
 
       {/* 1) 매장이용권 발급 — 접기 */}
       {canIssue ? (
-        <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
-          <button type="button" onClick={() => setIssueOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-xs font-bold text-accent-300">매장이용권 발급 <span className="font-normal text-ink-muted max-md:hidden">· 업주 · 공동운영자</span>{/* 스윕②(2026-09-19): 이 배지는 '개', 바로 아래 한도 증액 패널(QuotaRequestPanel)은 '장' — 같은
+        <div data-testid="voucher-issue" className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
+          <h3 data-testid="voucher-issue-head" className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
+            <span className="text-xs font-bold text-accent-300">매장이용권 발급 {/* 오너 2026-09-24: 제목 옆 '업주·공동운영자' 라벨은 PC 에서도 뺀다(모바일은 이미 없었다). 발급 권한 범위는
+                  펼친 안의 안내 박스(data-testid=voucher-issue-scope)가 그대로 말한다 — e2e 가 그 박스를 본다. */}{/* 스윕②(2026-09-19): 이 배지는 '개', 바로 아래 한도 증액 패널(QuotaRequestPanel)은 '장' — 같은
                   quota 값이 한 스크롤 안에서 단위만 바뀌었다. '장'으로 통일(이용권은 '장' 으로 세는 물건 —
                   발급 폼도 '개' 스테퍼가 아니라 옆에 '개'라고 적혀 있었을 뿐 실제 문구는 전부 장이다). */}
                 {quota !== null && <span className={['ml-1.5 rounded-badge px-1.5 py-0.5 font-bold', quota < 50 ? 'bg-danger/15 text-danger-light' : 'bg-surface-high text-ink-secondary'].join(' ')}>잔여 한도 {quota.toLocaleString()}장</span>}</span>
-            <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', issueOpen ? 'rotate-180' : ''].join(' ')} />
-          </button>
-          {issueOpen && (
+          </h3>
+          {(
             /* 🔴 V1(오너 2026-09-24) — 모바일(<768) 발급 폼 정리. 칸마다 높이(32·38.3·40.8)·폭·모서리가 제각각이라
                "제멋대로" 보였다. 모바일에서만: 조작 요소 높이 44px 한 값 · 칩은 격자(근거 2열 · 기간 5열)로 폭 균등 ·
                각 묶음은 '라벨 → 조작' 같은 문법(간격 6px). md 이상은 클래스가 전부 `max-md:`/`md:hidden` 이라 **무변경**. */
@@ -508,10 +535,13 @@ ${cards}
                   "메모를 안 쓰면 발급이 안 된다"는 조건이라 줄이면 사용자가 왜 막히는지 모른다(§7). */}
               <div className="space-y-1.5">
               <p aria-hidden className="text-2xs font-semibold text-ink-secondary md:hidden">발급 근거</p>
-              <div className="flex flex-wrap gap-1.5 max-md:grid max-md:grid-cols-2" role="group" aria-label="발급 근거">
+              {/* 🔴 2026-09-24 리드 결정(알약 한 기준) — 모바일 칩은 보이는 44 가 아니라 **보이는 32 + CHIP_HIT(±8) = 누름 48**.
+                  두 줄로 접히므로 줄 간격을 `gap-y-3.5`(14.875 ≥ 8+8 − 가장자리 여유)로 둬 윗줄·아랫줄 히트가 겹치지 않게 한다.
+                  PC 는 종전 min-h-9 그대로(CHIP_HIT 는 ::before 뿐이라 rect 불변). */}
+              <div className="flex flex-wrap gap-1.5 max-md:grid max-md:grid-cols-2 max-md:gap-y-3.5" role="group" aria-label="발급 근거">
                 {ISSUE_PICKS.map((o) => (
                   <button key={o.value} type="button" onClick={() => setReason(o.value)} aria-pressed={reason === o.value} title={o.hint}
-                    className={['min-h-9 shrink-0 whitespace-nowrap rounded-chip border px-2.5 text-2xs font-bold transition-colors max-md:min-h-[44px] max-md:px-1',
+                    className={['min-h-9 shrink-0 whitespace-nowrap rounded-chip border px-2.5 text-2xs font-bold transition-colors max-md:min-h-[32px] max-md:px-1', CHIP_HIT,
                       reason === o.value ? 'border-transparent bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                     {o.label}
                   </button>
@@ -542,7 +572,7 @@ ${cards}
                   여기 규칙: N일 = **KST 오늘 + N일의 23:59:59** (1일 = 내일 밤까지). 종전 달력의 min 이
                   '내일'이었던 것과 같은 하한이라 당일 몇 시간짜리 표가 생기지 않는다. */}
               <div className="text-2xs text-ink-secondary">
-                <div className="flex flex-wrap items-center gap-1.5 max-md:grid max-md:grid-cols-5">
+                <div data-expiry-chips className="flex flex-wrap items-center gap-1.5 max-md:grid max-md:grid-cols-5">
                   <span className="shrink-0 font-semibold max-md:col-span-5">유효기간</span>
                   {EXPIRY_PRESETS.map((d) => {
                     const val = d === 0 ? '' : addKstDays(d);
@@ -550,7 +580,7 @@ ${cards}
                     return (
                       <button key={d} type="button" aria-pressed={on} onClick={() => setExpiry(val)}
                         className={[
-                          'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold transition-colors max-md:min-h-[44px] max-md:rounded-chip max-md:px-0',
+                          'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold transition-colors max-md:rounded-chip max-md:px-0', CHIP_HIT,
                           on ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
                              : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
                         ].join(' ')}>
@@ -688,7 +718,7 @@ ${cards}
                     (운영자 승인)를 본다 — pg_proc 직접 조회로 확인(2026-09-20).
                     오너 결정: "공동운영자에게 발급 줘. UI도 이에 맞춰서." → 실제 범위를 그대로 적는다.
                     ⚠ 위 주석대로 CheckinModal 의 같은 문구와 **갈리면 안 된다** — 둘 다 같이 고쳤다. */}
-                <b className="text-ink-primary">매장이용권 발급은 운영자 승인을 받은 매장의 업주·공동운영자만 가능합니다.</b><br />
+                <b data-testid="voucher-issue-scope" className="text-ink-primary">매장이용권 발급은 운영자 승인을 받은 매장의 업주·공동운영자만 가능합니다.</b><br />
                 손님끼리 주고받을 수 없으며, <b className="text-ink-primary">금전적 가치가 없습니다</b>(현금·상품권으로 교환·환불되지 않습니다).
               </p>
               <p className="text-2xs text-ink-muted">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 발급됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">아이디(닉네임) 또는 전화번호</b>로 지정합니다. 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
@@ -709,7 +739,7 @@ ${cards}
       {/* 2) QR 코드 — 접기 */}
       {canIssue && qr && (
         <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
-          <button type="button" onClick={() => setQrOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
+          <button type="button" onClick={() => setQrOpen((v) => !v)} aria-expanded={qrOpen} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
             <span className="text-xs font-bold text-accent-300">매장 QR <span className="font-normal text-ink-muted">· 이용권 · 출석 · 회원가입</span></span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', qrOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
@@ -779,31 +809,97 @@ ${cards}
       {canIssue && ownerOpen && statsErr != null && <LoadErrorCard what="보유자 통계" error={statsErr} onRetry={reload} compact />}
       {canIssue && ownerOpen && statsErr == null && stats && (
         <div className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.07] via-surface-low to-surface-low p-3 space-y-2.5">
-          <div className="grid grid-cols-3 gap-2">
-            {([
-              ['users', stats.holderCount, '보유 회원', 'text-ink-primary'],
-              ['ticket', stats.activeCount + stats.usedCount, '활성 이용권', 'text-ink-primary'],
-              ['check-circle', stats.activeCount, '잔여 이용권', 'text-emerald-300'],
-            ] as const).map(([icon, val, label, cls]) => (
-              <div key={label} className="rounded-input border border-border-subtle/60 bg-surface-base/60 p-2.5 text-center">
-                <Icon name={icon} size={14} className="mx-auto text-ink-muted" />
-                <p className={['mt-1 text-2xl font-extrabold tabular-nums leading-none', cls].join(' ')}>{val}</p>
-                <p className="mt-1 text-2xs text-ink-muted">{label}</p>
-              </div>
-            ))}
-          </div>
-          {(stats.activeCount + stats.usedCount) > 0 && (
-            <div>
-              <div className="flex items-baseline justify-between text-2xs text-ink-muted">
-                <span>사용률</span>
-                <span className="font-bold tabular-nums text-accent-300">{Math.round((stats.usedCount / (stats.activeCount + stats.usedCount)) * 100)}%</span>
-              </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-high">
-                <div className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-300 transition-[width] duration-[var(--dur-panel)]"
-                  style={{ width: `${Math.round((stats.usedCount / (stats.activeCount + stats.usedCount)) * 100)}%` }} />
-              </div>
-            </div>
-          )}
+          {/* V2(2026-09-24) — 타일은 유형별 통계의 **전체 기간 합계**로 다시 센다(B2). 옛 voucher_holder_stats 의 active_count 는
+              만료분을 포함해 '잔여' 가 지갑·보유자 목록보다 컸다. 보유 회원 수만은 유형별로 더할 수 없어(한 사람이 여러 유형) 옛 값을 쓴다.
+              유형별 조회가 실패하면(권한 42501 포함) 타일도 그리지 않는다 — 거짓 '0' 대신 오류 카드. */}
+          {reasonErr != null ? <LoadErrorCard what="유형별 통계" error={reasonErr} onRetry={reload} compact />
+            : !reasonAll ? <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
+            : (() => {
+              const all = voucherReasonTable(reasonAll).total;
+              const net = all.issued - all.revoked; // 발급(회수 제외) = 보유+사용+만료(+기타)
+              const pct = net > 0 ? Math.round((all.used / net) * 100) : 0;
+              return (<>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    ['users', stats.holderCount, '보유 회원', 'text-ink-primary'],
+                    ['ticket', net, '발급', 'text-ink-primary'], // 회수분 제외 — 표 아래 안내문이 말한다(오너: 타일 라벨 줄바꿈 금지)
+                    ['check-circle', all.held, '잔여 이용권', 'text-emerald-300'],
+                  ] as const).map(([icon, val, label, cls]) => (
+                    <div key={label} data-stat-tile className="rounded-input border border-border-subtle/60 bg-surface-base/60 p-2.5 text-center">
+                      <Icon name={icon} size={14} className="mx-auto text-ink-muted" />
+                      <p data-stat-val className={['mt-1 text-2xl font-extrabold tabular-nums leading-none', cls].join(' ')}>{val}</p>
+                      <p data-stat-label={label} className="mt-1 whitespace-nowrap text-2xs text-ink-muted">{label}</p>
+                    </div>
+                  ))}
+                </div>
+                {net > 0 && (
+                  <div>
+                    <div className="flex items-baseline justify-between text-2xs text-ink-muted">
+                      <span>사용률</span>
+                      <span className="font-bold tabular-nums text-accent-300">{pct}%</span>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-high">
+                      <div className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-300 transition-[width] duration-[var(--dur-panel)]"
+                        style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs font-bold text-ink-secondary">유형별 발급</p>
+                  <div role="group" aria-label="집계 기간" className="mt-1.5 flex flex-wrap items-center gap-1.5 max-md:grid max-md:grid-cols-3">
+                    {STAT_RANGES.map(([k, label]) => {
+                      const on = statRange === k;
+                      return (
+                        <button key={k} type="button" aria-pressed={on} onClick={() => { setRangeErr(null); setStatRange(k); }}
+                          className={[
+                            'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold transition-colors max-md:rounded-chip max-md:px-0', CHIP_HIT,
+                            on ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
+                               : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
+                          ].join(' ')}>
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {(() => {
+                    const rows = statRange === 'all' ? reasonAll : (rangeRows?.key === `${venueId}|${statRange}` ? rangeRows.rows : null);
+                    if (!rows) return rangeErr != null
+                      ? <div className="mt-2"><LoadErrorCard what="유형별 통계" error={rangeErr} onRetry={reload} compact /></div>
+                      : <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>;
+                    const t = voucherReasonTable(rows);
+                    const cell = (hideMobile: boolean) => ['py-1.5 text-right', hideMobile ? 'hidden md:table-cell' : ''].join(' ');
+                    return (<>
+                      <table data-testid="voucher-reason-stats" className="mt-2 w-full table-fixed text-xs tabular-nums">
+                        <thead>
+                          <tr className="text-2xs text-ink-muted">
+                            <th scope="col" className="w-[40%] py-1 text-left font-medium md:w-[34%]">유형</th>
+                            {STAT_COLS.map((c) => <th key={c.k} scope="col" className={['py-1 text-right font-medium', c.pc ? 'hidden md:table-cell' : ''].join(' ')}>{c.label}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {t.rows.map((r) => (
+                            <tr key={r.reasonKey} className="border-t border-border-subtle/60 text-ink-secondary">
+                              <th scope="row" className="truncate py-1.5 text-left font-medium">{voucherReasonLabel(r.reasonKey) || r.reasonKey}</th>
+                              {STAT_COLS.map((c) => <td key={c.k} className={cell(c.pc)}>{r[c.k]}</td>)}
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t border-border-default font-bold text-ink-primary">
+                            <th scope="row" className="py-1.5 text-left">합계</th>
+                            {STAT_COLS.map((c) => <td key={c.k} className={cell(c.pc)}>{t.total[c.k]}</td>)}
+                          </tr>
+                        </tfoot>
+                      </table>
+                      {!rows.every(reasonStatBalanced) && (
+                        <p role="alert" className="mt-1 text-2xs text-danger-light">집계가 맞지 않는 유형이 있습니다(발급 ≠ 보유+사용+만료+회수). 새로고침해 주세요.</p>
+                      )}
+                    </>);
+                  })()}
+                  <p className="mt-1.5 text-2xs leading-relaxed text-ink-muted">삭제한 미사용 이용권은 집계되지 않습니다. 기간은 발급일(한국 시간) 기준입니다.<br />위 ‘발급’ 타일은 회수한 이용권을 뺀 수입니다.</p>
+                </div>
+              </>);
+            })()}
         </div>
       )}
 
@@ -860,12 +956,24 @@ ${cards}
                             </button>
                           </div>
                         )}
+                        {/* B3(V2) — 미사용분에도 유형을 붙인다. 표(유형별 발급)와 같은 키 규칙(voucherReasonKey = 서버 CASE). */}
+                        {g.active.length > 0 && (<>
+                          <p className="mb-0.5 text-2xs font-bold text-ink-muted">미사용 이용권</p>
+                          <ul data-testid="holder-unused" className="mb-1.5 space-y-0.5">
+                            {g.active.map((v) => (
+                              <li key={v.id} className="flex items-center justify-between gap-2 text-[11px]">
+                                <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.title}<span className="ml-1 text-ink-muted">· {voucherReasonLabel(voucherReasonKey(v))}</span></span>
+                                <span className="shrink-0 tabular-nums text-ink-muted">{v.expiresAt ? `${fmtDateTime(v.expiresAt)}까지` : '무기한'}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </>)}
                         <p className="mb-0.5 text-2xs font-bold text-ink-muted">이 매장 이용내역{g.used.length > 0 ? ' (최근순)' : ''}</p>
                         {g.used.length === 0 ? <p className="py-1 text-[11px] text-ink-muted">사용 내역이 없습니다.</p>
                           : <ul className="space-y-0.5">
                               {g.used.slice().sort((a, b) => (b.usedAt ?? '').localeCompare(a.usedAt ?? '')).map((v) => (
                                 <li key={v.id} className="flex items-center justify-between gap-2 text-[11px]">
-                                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.title}{v.issueReason && <span className="ml-1 text-ink-muted">· {voucherReasonLabel(v.issueReason)}</span>}</span>
+                                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.title}<span className="ml-1 text-ink-muted">· {voucherReasonLabel(voucherReasonKey(v))}</span></span>
                                   <span className="shrink-0 tabular-nums text-ink-muted">{fmtDateTime(v.usedAt)}</span>
                                 </li>
                               ))}
