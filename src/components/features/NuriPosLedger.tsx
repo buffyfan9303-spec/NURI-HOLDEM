@@ -12,7 +12,8 @@ import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasRankingForGame, rankingEventOf } from '../../lib/rankingGame'; // 순위 완료·이동 대상은 (날짜, 게임) — F02
 import Icon from '../atoms/Icon';
-import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
+import { msgOf } from '../../lib/dbError';
+import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
   splitMismatch,
@@ -35,7 +36,7 @@ import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyTo
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
 import { resolveDiscountIndex } from '../../api/discountIndex';
-import { getClockState, clockHasProgress, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
+import { getClockState, clockHasProgress, saveClockState, saveClockPatch, createCoalescingSaver, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
@@ -153,6 +154,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const [hasPw, setHasPw]     = useState(false);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
   const [payBusy, setPayBusy] = useState(false); // 결제 저장 중 — 더블탭 이중 기록 방지
+  // LEDGER-REDUCE-PASSWORD(오너 2026-09-24) — 매출을 줄이는 수정은 취소 비밀번호로만. 값 = 비밀번호를 받아 다시 저장하는 함수.
+  const [reduceAsk, setReduceAsk] = useState<((pw: string) => Promise<void>) | null>(null);
   // 보드 상단 '바인 할인' 고정 선택. null = 자동(클락 레벨) — **기본값이라 기존 운영이 그대로다**.
   // 0 = 할인 없음 고정, 1~5 = 그 프리셋 고정. 결제창·QR 승인이 모두 이 값을 기본으로 받는다.
   const [discPick, setDiscPick] = useState<number | null>(null);
@@ -325,6 +328,24 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
 
   // (A4) reload 에도 요청 토큰 가드 — 실시간 콜백이 날짜 전환 중 호출돼도 stale 응답이 현재 명단을 덮지 않게.
   const reloadSeq = useRef(0);
+  // 감액 수정 — 서버 RPC(update_ledger_buyin_reduce)로 보낸다. 틀린 비밀번호는 서버 문구 그대로 띄우고 모달·입력은 연 채 둔다.
+  const saveReduce = async (save: (pw: string) => Promise<unknown>, pw: string) => {
+    setPayBusy(true);
+    try {
+      await save(pw);
+      setReduceAsk(null); setSelected(null);
+      toast.show('수정했습니다', 'success');
+      reload();
+    } catch (e) { toast.show(msgOf(e, '수정 실패'), 'error'); }   // rpc 오류는 Error 인스턴스가 아니다 — 서버 문구를 msgOf 로 꺼낸다
+    finally { setPayBusy(false); }
+  };
+  // 오너 결정(2026-09-24): 비밀번호 **미설정** 매장은 업주·공동사장(canManage = can_manage_pos)만 시트 없이 저장, 직원은 막는다.
+  //   비밀번호가 설정되면 업주 포함 모두 시트에서 비밀번호를 받는다. 최종 판정은 서버가 다시 한다.
+  const askReducePw = async (save: (pw: string) => Promise<unknown>) => {
+    if (hasPw) { setReduceAsk(() => (pw: string) => saveReduce(save, pw)); return; }
+    if (!canManage) { toast.show('취소 비밀번호가 설정되지 않은 매장은 업주만 금액을 줄일 수 있습니다', 'error'); return; }
+    await saveReduce(save, '');
+  };
   const reload = useCallback(() => {
     const my = ++reloadSeq.current;
     Promise.all([getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq)])
@@ -485,15 +506,36 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   //   늦게 도착한 앞 매장·앞 게임 응답은 owner 스탬프(staleResponse)로 버린다 — 앞 매장 클락이 이 장부의 정본으로 남아
   //   리모컨 조작이 남의 매장 대회로 나가던 경로를 막는다.
   const clockReq = useRef<RequestStamp<string>>({ seq: 0, owner: '' });
+  // CLOCK-TAP-LAG(2026-09-24) — 리모컨 바의 [아웃]·[얼리±]·레벨 저장은 클락 화면과 같은 저장기(api/clock.ts)로 나간다:
+  //   한 번에 한 요청 · 연타는 마지막 값 하나로 · **바뀐 칸만** UPDATE(장부 사본 전체로 다른 기기의 탈락·레벨을 되돌리지 않는다) ·
+  //   저장 대기 중의 재조회 응답은 버리고, 연타가 끝나면 한 번 다시 읽는다.
+  const clockReloadAfterSaveRef = useRef(false);
+  const reloadClockRef = useRef<() => void>(() => {});
+  const toastRef = useRef(toast);
+  useEffect(() => { toastRef.current = toast; });
+  const clockSaver = useMemo(() => createCoalescingSaver<ClockState>(
+    (s) => `${s.venueId}#${s.gameSeq}`,
+    (next, base) => saveClockPatch(base, next),
+    {
+      error: (_e, back) => {
+        setClock((cur) => (cur && cur.venueId === back.venueId && cur.gameSeq === back.gameSeq ? back : cur));
+        clockReloadAfterSaveRef.current = true;
+        toastRef.current.show('클락 제어 실패. 네트워크를 확인하세요', 'error');
+      },
+      idle: () => { if (clockReloadAfterSaveRef.current) { clockReloadAfterSaveRef.current = false; reloadClockRef.current(); } },
+    },
+  ), []);
   const reloadClock = useCallback(() => {
     const owner = `${venueId}#${gameSeq}`;
     if (clockReq.current.owner !== owner) setClock(null);
+    if (clockSaver.busy) { clockReloadAfterSaveRef.current = true; return; }
     const stamp: RequestStamp<string> = { seq: clockReq.current.seq + 1, owner };
     clockReq.current = stamp;
     getClockState(venueId, gameSeq)
-      .then((c) => { if (isFreshResponse(stamp, clockReq.current)) setClock(c); })
+      .then((c) => { if (isFreshResponse(stamp, clockReq.current) && !clockSaver.busy) setClock(c); })
       .catch(() => {});
-  }, [venueId, gameSeq]);
+  }, [venueId, gameSeq, clockSaver]);
+  useEffect(() => { reloadClockRef.current = reloadClock; }, [reloadClock]);
   // active 상승(다시 보일 때) 시에도 재실행 — 숨은 동안 놓친 클락 상태 변화를 메운다.
   useEffect(() => { if (active) reloadClock(); }, [reloadClock, active]);
   // ⚡ 이 판이 실제로 보일 때만(active) 구독 — keep-alive 로 숨은 탭이 채널을 계속 물고 있지 않게(§5-A).
@@ -544,24 +586,26 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     return earlyTypeAtLevel(clock.config, no);
   }, [clock, clockLevelNow]);
   // 리모컨 → 클락 상태 직접 저장(클락 화면은 realtime 구독으로 즉시 동기)
+  // ⚠ 예전엔 setClock 갱신 함수 **안에서** 저장을 불렀다 — 갱신 함수는 순수해야 한다(StrictMode 는 두 번 부른다).
   const patchClock = useCallback((patch: Partial<ClockState>) => {
-    setClock((cur) => {
-      if (!cur) return cur;
-      const next = { ...cur, ...patch };
-      // ⚠ liveStats 도 함께 재계산해 저장한다(2026-09-07). 예전엔 { ...cur, ...patch } 를 그대로 넘겨
-      //   liveStats 가 **낡은 스냅샷 그대로** 다시 쓰였다 — [✕ 아웃 처리]·[얼리 ±] 를 눌러도
-      //   생존·얼리 숫자가 움직이지 않고(아웃 카운터만 올라감), 그 낡은 값이 api/clock.ts:379 를 통해
-      //   TV 송출·라이브보드·업주 대시보드까지 그대로 퍼졌다.
-      //   조리법은 ClockRemote.persist(clock/ClockRemote.tsx:73)·마감 스냅샷(아래 handleClose)과 동일하다.
-      const derived = deriveClockCounts(buyins, {
-        earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin,
-        tournamentStart: session.tournamentStart, openedAt: session.openedAt,
-      });
-      saveClockState({ ...next, liveStats: { ...computeLiveStats(next, derived, next.config), buyInAmount: session.buyinAmount ?? null } })
-        .catch(() => toast.show('클락 제어 실패. 네트워크를 확인하세요', 'error'));
-      return next;
+    const cur = clock;
+    if (!cur) return;
+    const moved = { ...cur, ...patch };
+    // ⚠ liveStats 도 함께 재계산해 저장한다(2026-09-07). 예전엔 { ...cur, ...patch } 를 그대로 넘겨
+    //   liveStats 가 **낡은 스냅샷 그대로** 다시 쓰였다 — [✕ 아웃 처리]·[얼리 ±] 를 눌러도
+    //   생존·얼리 숫자가 움직이지 않고(아웃 카운터만 올라감), 그 낡은 값이 api/clock.ts:379 를 통해
+    //   TV 송출·라이브보드·업주 대시보드까지 그대로 퍼졌다.
+    //   조리법은 ClockRemote.persist(clock/ClockRemote.tsx:73)·마감 스냅샷(아래 handleClose)과 동일하다.
+    const derived = deriveClockCounts(buyins, {
+      earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin,
+      tournamentStart: session.tournamentStart, openedAt: session.openedAt,
     });
-  }, [toast, buyins, session]);
+    const next = { ...moved, liveStats: { ...computeLiveStats(moved, derived, moved.config), buyInAmount: session.buyinAmount ?? null } };
+    clockReq.current = { seq: clockReq.current.seq + 1, owner: clockReq.current.owner };   // 날아가던 조회 응답이 낙관값을 덮지 않게
+    clockReloadAfterSaveRef.current = true;
+    setClock(next);
+    clockSaver.push(next, cur);
+  }, [clock, buyins, session, clockSaver]);
 
   const closed = session.closed;
 
@@ -1723,6 +1767,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {selected && (
         <PaymentModal
           cell={selected} hasPw={hasPw} session={session}
+          reduceAsk={reduceAsk !== null}
+          onReduceConfirm={(pw) => { void reduceAsk?.(pw); }}
           levelNo={clockLevelNow()}
           autoDiscIdx={defaultDiscIdx()}
           autoFromLevel={discPick === null}
@@ -1737,17 +1783,20 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             return { method: prev.paymentMethod, isUnpaid: prev.isUnpaid, discountIndex: prev.discountIndex,
               label: `${mLabel} ${prev.isUnpaid ? '미수' : '완납'}${prev.discountIndex > 0 ? ' ·할인' : ''}` };
           })()}
-          onClose={() => setSelected(null)}
+          onClose={() => { setSelected(null); setReduceAsk(null); }}
           busy={payBusy}
           onPick={async (method, isUnpaid, discountIndex) => {
             if (payBusy) return; // 더블탭 → 이중 기록·이용권 이중 적립 방지
             const pn = selected.playerName; const isNew = !selected.buyin;
+            // 신규 첫 바인(entryNo=1)만 클락 현재 레벨로 얼리 확정. 2번째+는 리바인이라 얼리 없음.
+            const eo = (isNew && selected.entryNo === 1) ? clockEarlyNow() : (selected.buyin?.earlyOverride ?? null);
+            const before = selected.buyin;
+            const save = (pw?: string) => upsertBuyin({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex, earlyOverride: eo, existingId: before?.id ?? null,
+              snapshot: { buyinAmount: session.buyinAmount, cardAmount: session.cardAmount ?? null, discounts: session.discounts },
+              reduce: before ? { before, session, password: pw } : undefined });
             setPayBusy(true);
             try {
-              // 신규 첫 바인(entryNo=1)만 클락 현재 레벨로 얼리 확정. 2번째+는 리바인이라 얼리 없음.
-              const eo = (isNew && selected.entryNo === 1) ? clockEarlyNow() : (selected.buyin?.earlyOverride ?? null);
-              const savedId = await upsertBuyin({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex, earlyOverride: eo, existingId: selected.buyin?.id ?? null,
-                snapshot: { buyinAmount: session.buyinAmount, cardAmount: session.cardAmount ?? null, discounts: session.discounts } });
+              const savedId = await save();
               setSelected(null); reload();
               if (isNew) {
                 // 오입력 즉시 복구 — 최빈 조작(바인 기록)에 90초 셀프 되돌리기(비번 불요, 서버 검증)
@@ -1759,16 +1808,20 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               // W2-2 VCH-1b: 바인 자동적립 중단(§12-A-3 — 문체부 '적립→입장료' 패턴 회피).
               // ⚠ voucherAccrualPerBin 필드·DB write 는 유지 — 지우면 세션 저장 경로가 전 매장 설정을 0 으로 덮는다(§18.4).
             } catch (e) {
-              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 바꿨어요', 'info'); setSelected(null); reload(); }
+              if (e instanceof Error && e.message === REDUCE_NEEDS_PW) await askReducePw(save);
+              else if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 바꿨어요', 'info'); setSelected(null); reload(); }
               else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
             } finally { setPayBusy(false); }
           }}
           onPickSplit={async (d) => {
             if (payBusy) return;
             const pn = selected.playerName; const isNew = !selected.buyin;
+            const before = selected.buyin;
+            const save = (pw?: string) => upsertBuyinSplit({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, ...d, earlyOverride: (isNew && selected.entryNo === 1) ? clockEarlyNow() : undefined, existingId: before?.id ?? null,
+              reduce: before ? { before, session, password: pw } : undefined });
             setPayBusy(true);
             try {
-              const savedId = await upsertBuyinSplit({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, ...d, earlyOverride: (isNew && selected.entryNo === 1) ? clockEarlyNow() : undefined, existingId: selected.buyin?.id ?? null });
+              const savedId = await save();
               setSelected(null); reload();
               if (isNew) {
                 toast.show(`${pn} 분납 바인 기록됨`, 'success', { durationMs: 6000, action: { label: '되돌리기', onClick: () => {
@@ -1779,14 +1832,15 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               // W2-2 VCH-1b: 바인 자동적립 중단(§12-A-3 — 문체부 '적립→입장료' 패턴 회피).
               // ⚠ voucherAccrualPerBin 필드·DB write 는 유지 — 지우면 세션 저장 경로가 전 매장 설정을 0 으로 덮는다(§18.4).
             } catch (e) {
-              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 바꿨어요', 'info'); setSelected(null); reload(); }
+              if (e instanceof Error && e.message === REDUCE_NEEDS_PW) await askReducePw(save);
+              else if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 바꿨어요', 'info'); setSelected(null); reload(); }
               else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
             } finally { setPayBusy(false); }
           }}
           onCancelBuyin={async (pw) => {
             if (!selected.buyin) return;
             try { await cancelBuyin(selected.buyin.id, pw); toast.show('바인을 취소했습니다', 'info'); setSelected(null); reload(); }
-            catch (e) { toast.show(e instanceof Error ? e.message : '취소 실패', 'error'); }
+            catch (e) { toast.show(msgOf(e, '취소 실패'), 'error'); }
           }}
           onSetEarly={async (override) => {
             if (!selected.buyin) return;
@@ -2883,8 +2937,11 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 // ── 2-Tap 결제 입력 모달 ──────────────────────────────────────────────────────
 interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountIndex: number; }
 
-function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick, busy = false, levelNo = 0, autoDiscIdx = 0, autoFromLevel = true, autoEarly = null }: {
+function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick, busy = false, levelNo = 0, autoDiscIdx = 0, autoFromLevel = true, autoEarly = null, reduceAsk = false, onReduceConfirm }: {
   cell: SelectedCell; hasPw: boolean; session: LedgerSession;
+  /** 방금 누른 수정이 매출을 줄여 취소 비밀번호가 필요하다(LEDGER-REDUCE-PASSWORD) */
+  reduceAsk?: boolean;
+  onReduceConfirm?: (pw: string) => void;
   /** 연동 클락의 지금 레벨(1-based, 0=미연동) — 얼리·할인 자동 적용의 근거를 화면에 밝힌다 */
   levelNo?: number;
   /** 그 레벨에서 자동 적용될 할인 자리번호(0=없음). 신규 기록의 초기값일 뿐 — 언제든 바꿀 수 있다(#20) */
@@ -2904,7 +2961,6 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
   onSetEarly: (override: EarlyType | null) => void;
 }) {
   const [cancelMode, setCancelMode] = useState(false);
-  const [pw, setPw] = useState('');
   // 분납 셀도 저장된 할인 이벤트를 그대로 복원한다.
   // ⚠ 과거엔 분납이면 무조건 0으로 시작해, 금액만 고쳐 재저장할 때마다 할인 기록이 지워졌다.
   // #20: 신규 기록은 '지금 레벨의 할인'을 미리 골라 둔다(자동 적용). 기존 기록은 저장값이 정본.
@@ -2961,6 +3017,15 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
   return (
     <Modal open onClose={onClose} title={`${cell.playerName} · ${cell.entryNo}바인`} variant="center" maxWidth="sm">
         <div className="p-3 space-y-2">
+          {/* LEDGER-REDUCE-PASSWORD — 금액 축소·0원·가게지원·미수 전환처럼 매출이 줄어드는 수정은 취소 비밀번호로만 저장된다 */}
+          {reduceAsk && onReduceConfirm && (
+            <div role="alert" data-testid="ledger-reduce-pw" className="space-y-1.5 rounded-input border border-danger/40 bg-danger/10 px-2.5 py-2">
+              <p className="text-2xs font-bold text-danger-light">
+                매출이 줄어드는 수정입니다. 업주 취소 비밀번호를 입력하세요.
+              </p>
+              <PwConfirm hasPw={hasPw} label="수정 확정" busy={busy} onConfirm={onReduceConfirm} />
+            </div>
+          )}
           {/* 상태 요약 — '지금 무엇이 적용된 상태인가'를 먼저 보여준다.
               #22: 예전엔 얼리·할인 배지가 버튼 사이에 흩어져 있어, 8개 버튼 중 하나를 누르는 순간
               무슨 금액이 기록되는지 누르기 전엔 알 수 없었다. 결과를 먼저, 조작을 나중에. */}
@@ -3198,17 +3263,25 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               ) : (
                 <div className="space-y-1.5">
                   <p className="text-2xs text-ink-muted">취소하려면 업주 비밀번호를 입력하세요.</p>
-                  <div className="flex gap-1.5">
-                    <input type="password" inputMode="numeric" value={pw} onChange={(e) => setPw(e.target.value)}
-                      placeholder={hasPw ? '취소 비밀번호' : '비밀번호 미설정'} disabled={!hasPw} className="input flex-1 text-sm" autoFocus />
-                    <button type="button" onClick={() => onCancelBuyin(pw)} disabled={!hasPw || !pw} className="btn-danger text-xs px-3 shrink-0 disabled:opacity-50">취소 확정</button>
-                  </div>
+                  <PwConfirm hasPw={hasPw} label="취소 확정" onConfirm={onCancelBuyin} />
                 </div>
               )}
             </div>
           )}
         </div>
     </Modal>
+  );
+}
+
+/** 업주 취소 비밀번호 한 줄 — 바인 취소(삭제)와 감액 수정이 같이 쓴다 */
+function PwConfirm({ hasPw, label, busy = false, onConfirm }: { hasPw: boolean; label: string; busy?: boolean; onConfirm: (pw: string) => void }) {
+  const [pw, setPw] = useState('');
+  return (
+    <div className="flex gap-1.5">
+      <input type="password" inputMode="numeric" value={pw} onChange={(e) => setPw(e.target.value)} aria-label="취소 비밀번호"
+        placeholder={hasPw ? '취소 비밀번호' : '비밀번호 미설정'} disabled={!hasPw} className="input flex-1 text-sm" autoFocus />
+      <button type="button" onClick={() => onConfirm(pw)} disabled={!hasPw || !pw || busy} className="btn-danger text-xs px-3 shrink-0 disabled:opacity-50">{label}</button>
+    </div>
   );
 }
 

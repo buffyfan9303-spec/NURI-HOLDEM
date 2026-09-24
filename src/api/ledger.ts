@@ -309,6 +309,76 @@ export function splitMismatch(
 }
 
 /**
+ * 행 가치 세 겹(원) — **매출을 줄이는 수정** 판정용(오너 2026-09-24 LEDGER-REDUCE-PASSWORD).
+ * 서버 `_ledger_buyin_tiers`(supabase/migrations/20260924j) 의 쌍둥이다 — 한쪽만 고치면 판정이 갈린다.
+ *   [0] 완납 매출 = 현금+카드+이체        (정산 revenue)
+ *   [1] 수납 완료 = [0] + 이용권           (정산 '수납 완료 가치')
+ *   [2] 받을 가치 = [1] + 미수 = value − 가게지원
+ * 가게지원은 어느 겹에도 없다 — 매장이 부담한 참가비라 매출이 아니다.
+ * ⚠ 바이인 횟수·얼리는 여기와 무관하다(수정은 행 수를 바꾸지 않는다). 엔트리는 value 기준이라 [2]+지원이다.
+ */
+export function buyinTiers(b: LedgerBuyin, s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] }): [number, number, number] {
+  const t = buyinFinance(b, s).tender;
+  const paid = t.cash + t.card + t.transfer;
+  return [paid, paid + t.ticket, paid + t.ticket + t.unpaid];
+}
+
+/** 이 수정이 매출을 줄이는가 — 세 겹 중 **하나라도** 줄면 true. 이때는 취소 비밀번호가 필요하다.
+ *  통과(false): 증액 · 현금↔카드↔이체 같은 금액 교체 · 미수→완납 · 얼리만 변경.
+ *  감액(true) : 금액 축소/0원 · 가게지원 전환 · 완납→미수 · 현금→이용권 · 할인 자리 추가 · 미수 탕감. */
+export function isRevenueReduction(before: LedgerBuyin, after: LedgerBuyin,
+  s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] }): boolean {
+  const o = buyinTiers(before, s), n = buyinTiers(after, s);
+  return n[0] < o[0] || n[1] < o[1] || n[2] < o[2];
+}
+
+/** 서버가 감액 수정을 비밀번호 없이 받지 않았다(또는 클라가 미리 감액으로 판정했다) — 호출측이 비밀번호를 묻는다.
+ *  값은 서버 가드 트리거의 hint 와 같다(20260924j). */
+export const REDUCE_NEEDS_PW = 'LEDGER_REDUCE_NEEDS_PASSWORD';
+
+/** 기록 수정 필드(snake) — upsertBuyin/upsertBuyinSplit 가 만든 것 */
+type BuyinFields = {
+  payment_method: PaymentMethod; is_unpaid: boolean; is_split: boolean;
+  cash_amount: number; card_amount: number; transfer_amount: number;
+  ticket_count: number; unpaid_amount: number; discount_level: number; discount_index: number;
+  early_override?: EarlyType | null;
+};
+function applyBuyinFields(b: LedgerBuyin, f: BuyinFields): LedgerBuyin {
+  return { ...b, paymentMethod: f.payment_method, isUnpaid: f.is_unpaid, isSplit: f.is_split,
+    cashAmount: f.cash_amount, cardAmount: f.card_amount, transferAmount: f.transfer_amount,
+    ticketCount: f.ticket_count, unpaidAmount: f.unpaid_amount, discountLevel: f.discount_level,
+    discountIndex: f.discount_index, earlyOverride: f.early_override !== undefined ? f.early_override : b.earlyOverride };
+}
+
+/** 수정 대상의 이전 값과 세션 — 감액이면 비밀번호를 요구한다. password 가 있으면 서버 RPC 로 보낸다. */
+export interface ReduceGuard {
+  before: LedgerBuyin;
+  session: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] };
+  password?: string;
+}
+
+/** 기존 기록 수정의 단일 통로.
+ *  · 비밀번호가 있으면 update_ledger_buyin_reduce(서버가 비밀번호·권한·마감 확인)
+ *  · 없으면 직접 UPDATE — 감액이면 보내기 전에 REDUCE_NEEDS_PW. 판정이 서버와 갈려도 서버 hint 로 같은 오류가 된다. */
+async function updateBuyinFields(id: string, fields: BuyinFields, guard?: ReduceGuard): Promise<void> {
+  if (guard?.password !== undefined) {
+    const { error } = await supabase.rpc('update_ledger_buyin_reduce', { p_id: id, p_fields: fields, p_password: guard.password });
+    if (error) throw error;
+    return;
+  }
+  if (guard && isRevenueReduction(guard.before, applyBuyinFields(guard.before, fields), guard.session)) {
+    throw new Error(REDUCE_NEEDS_PW);
+  }
+  try {
+    // 수정은 id 기반 UPDATE — 0행(RLS·다른 기기가 방금 취소)을 성공으로 돌려주면 모달이 닫히고 옛 값이 남는다(현금 기록).
+    await mustAffect(supabase.from('ledger_buyins').update(fields).eq('id', id));
+  } catch (e) {
+    if ((e as { hint?: string } | null)?.hint === REDUCE_NEEDS_PW) throw new Error(REDUCE_NEEDS_PW, { cause: e });
+    throw e;
+  }
+}
+
+/**
  * 세션 하나의 횟수 집계 — **플레이어·첫 바이인·리바인·총 바이인을 한 곳에서 센다.**
  * 정산(ledgerSettlement)과 클락(clock.deriveClockCounts)이 이 함수를 쓴다.
  * 장부 보드·통계 패널·대시보드는 아직 각자 세고 있다 — 옮길 때 이 함수로 모은다.
@@ -1138,6 +1208,8 @@ export async function upsertBuyin(input: {
   existingId?: string | null;
   /** 기록 시점 세션 단가·할인 — 전달 시 net 금액을 스냅샷으로 저장(소급 변형 차단) */
   snapshot?: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] } | null;
+  /** 수정(existingId)일 때 이전 값 — 매출을 줄이면 비밀번호를 요구한다(LEDGER-REDUCE-PASSWORD) */
+  reduce?: ReduceGuard;
 }): Promise<string> {
   if (IS_MOCK) return 'mock';
   const user = await currentUser();
@@ -1146,15 +1218,14 @@ export async function upsertBuyin(input: {
   const snap = input.snapshot
     ? nonSplitSnapshot(input.paymentMethod, input.discountIndex ?? 0, input.snapshot)
     : { cash_amount: 0, card_amount: 0, transfer_amount: 0 };
-  const fields = {
+  const fields: BuyinFields = {
     payment_method: input.paymentMethod, is_unpaid: unpaid,
     is_split: false, ...snap,
     ticket_count: 0, unpaid_amount: 0, discount_level: 0, discount_index: input.discountIndex ?? 0,
     early_override: input.earlyOverride ?? null,
   };
   if (input.existingId) {
-    // 수정은 id 기반 UPDATE — 0행(RLS·다른 기기가 방금 취소)을 성공으로 돌려주면 모달이 닫히고 옛 값이 남는다(현금 기록).
-    await mustAffect(supabase.from('ledger_buyins').update(fields).eq('id', input.existingId));
+    await updateBuyinFields(input.existingId, fields, input.reduce);
     return input.existingId;
   }
   const { data, error } = await supabase.from('ledger_buyins').insert({
@@ -1183,6 +1254,8 @@ export async function upsertBuyinSplit(input: {
   /** undefined=기존 값 보존(수정), 값/null=바인 시점 확정 기록(신규) */
   earlyOverride?: EarlyType | null;
   existingId?: string | null;
+  /** 수정(existingId)일 때 이전 값 — 매출을 줄이면 비밀번호를 요구한다(LEDGER-REDUCE-PASSWORD) */
+  reduce?: ReduceGuard;
 }): Promise<string> {
   if (IS_MOCK) return 'mock';
   const user = await currentUser();
@@ -1192,7 +1265,7 @@ export async function upsertBuyinSplit(input: {
     : input.cardAmount >= input.cashAmount && input.cardAmount >= input.transferAmount && input.cardAmount > 0 ? 'card'
     : input.transferAmount > input.cashAmount && input.transferAmount > 0 ? 'transfer'
     : 'cash';
-  const fields = {
+  const fields: BuyinFields = {
     payment_method: primary, is_unpaid: input.unpaidAmount > 0,
     is_split: true,
     cash_amount: input.cashAmount, card_amount: input.cardAmount, transfer_amount: input.transferAmount,
@@ -1201,7 +1274,7 @@ export async function upsertBuyinSplit(input: {
     ...(input.earlyOverride !== undefined ? { early_override: input.earlyOverride } : {}),
   };
   if (input.existingId) {
-    await mustAffect(supabase.from('ledger_buyins').update(fields).eq('id', input.existingId));
+    await updateBuyinFields(input.existingId, fields, input.reduce);
     return input.existingId;
   }
   const { data, error } = await supabase.from('ledger_buyins').insert({

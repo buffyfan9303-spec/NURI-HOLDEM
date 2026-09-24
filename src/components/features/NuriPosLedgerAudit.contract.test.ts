@@ -78,12 +78,16 @@ describe('F5 · 연동 클락은 이 매장·이 게임의 것일 때만 정본�
     expect(code).toMatch(/import \{ isFreshResponse, type RequestStamp \} from '\.\.\/\.\.\/lib\/staleResponse';/);
     const i = code.indexOf('const reloadClock = useCallback(');
     expect(i, 'reloadClock 을 찾지 못했다').toBeGreaterThan(-1);
-    const body = code.slice(i, code.indexOf('}, [venueId, gameSeq]);', i));
+    const end = code.indexOf('}, [venueId, gameSeq, clockSaver]);', i);   // 2026-09-24 CLOCK-TAP-LAG: 저장기 의존성 추가
+    expect(end, 'reloadClock 끝을 찾지 못했다').toBeGreaterThan(i);
+    const body = code.slice(i, end);
     expect(body).toMatch(/const owner = `\$\{venueId\}#\$\{gameSeq\}`;/);
     expect(body).toMatch(/if \(clockReq\.current\.owner !== owner\) setClock\(null\);/);
     expect(body).toMatch(/const stamp: RequestStamp<string> = \{ seq: clockReq\.current\.seq \+ 1, owner \};/);
     expect(body).toMatch(/clockReq\.current = stamp;/);
-    expect(body).toMatch(/\.then\(\(c\) => \{ if \(isFreshResponse\(stamp, clockReq\.current\)\) setClock\(c\); \}\)/);
+    expect(body).toMatch(/\.then\(\(c\) => \{ if \(isFreshResponse\(stamp, clockReq\.current\) && !clockSaver\.busy\) setClock\(c\); \}\)/);
+    // CLOCK-TAP-LAG: 저장 대기 중 재조회는 화면에 쓰지 않는다(자기 저장 에코가 앞선 값으로 되돌린다).
+    expect(body).toMatch(/if \(clockSaver\.busy\) \{ clockReloadAfterSaveRef\.current = true; return; \}/);
     // 옛 모양(무가드 setClock)이 남아 있지 않다.
     expect(body).not.toMatch(/\.then\(setClock\)/);
   });
