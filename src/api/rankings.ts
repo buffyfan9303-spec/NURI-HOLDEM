@@ -4,6 +4,7 @@ import { supabase, IS_MOCK } from '../lib/supabase';
 import { mustAffect } from './_mustAffect';
 import { currentUser } from './_session';
 import { makeSearchCache } from '../lib/searchCache';
+import { splitLedgerName } from '../lib/rankingGame';
 
 /** 매장 순위 변경 실시간 구독 — 순위 입력/수정 시 공개 표시에 자동 반영 */
 export function subscribeRankings(venueId: string, onChange: () => void): () => void {
@@ -358,10 +359,15 @@ export async function setVenuePageConfig(venueId: string, config: VenuePageConfi
 // boardKey: null = 기본 '매장 포인트' 보드 합산 / 'c…' = 커스텀 보드 전용 항목
 export interface ScoreEntry { id: string; name: string; points: number; reason: string | null; entryDate: string; boardKey: string | null; }
 
-export async function getScoreEntries(venueId: string, limit = 300): Promise<ScoreEntry[]> {
+/** 🔴 2026-09-24 F5(개인정보 클라이언트 단계) — `withReason: false` 면 업주 자유 텍스트 사유(reason)를 **아예 SELECT 하지 않는다.**
+ *  공개 매장 페이지(VenuePage, 비로그인 포함)는 사유를 그리지 않으므로 받을 이유가 없다. 이 배포 뒤 리드가 anon 의
+ *  reason·created_by 컬럼 SELECT 를 회수한다 — 그때 이 목록에 reason 이 남아 있으면 **조회 전체가 권한 오류**로 떨어져
+ *  공개 순위표의 포인트가 통째로 사라진다(e2e/venue-points-anon.spec.ts 가 잠근다). 업주 화면(VenueCustomizePanel)은 기본값(true) 그대로. */
+export async function getScoreEntries(venueId: string, limit = 300, opts: { withReason?: boolean } = {}): Promise<ScoreEntry[]> {
   if (IS_MOCK) return [];
+  const withReason = opts.withReason ?? true;
   const { data, error } = await supabase.from('venue_score_entries')
-    .select('id, name, points, reason, entry_date, board_key')
+    .select(withReason ? 'id, name, points, reason, entry_date, board_key' : 'id, name, points, entry_date, board_key')
     .eq('venue_id', venueId).order('entry_date', { ascending: false }).order('created_at', { ascending: false }).limit(limit);
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -404,13 +410,33 @@ export async function getVenueBuyinCounts(venueId: string): Promise<Map<string, 
  *  제네릭인 이유: 캐시 타입(RankPanelCache)은 화면 파일에 있고, 여기서는 민감 필드 4개만 안다. */
 export function redactForCache<T extends {
   totals: RankingTotal[]; latest: { date: string | null; entries: RankingEntry[] }; manual: ScoreEntry[]; checkinRows: unknown[];
+  playerCounts: PlayerCounts[]; buyinCounts: Record<string, number>;
 }>(e: T): T {
+  // 🔴 2026-09-24 F5 — 장부 집계(playerCounts·buyinCounts)의 이름도 캐시 전에 **닉네임만** 남긴다.
+  //   장부 이름은 '실명(닉네임)' 형식이라, 서버가 닉네임만 돌려주기 전(20260924i 이전)에 받은 값이 그대로 캐시에 들어갔다.
+  //   지금 서버는 닉네임만 주지만, 옛 응답·다른 경로로 들어온 값도 여기서 한 번 더 걸러진다(splitLedgerName — 장부와 같은 규칙).
+  //   같은 닉네임으로 합쳐지는 행은 횟수를 더한다(첫 렌더용 근사치 — 매 로드마다 서버 값으로 다시 그린다).
+  const nick = (raw: string) => splitLedgerName(raw).nickname || raw.trim();
+  const pcMap = new Map<string, PlayerCounts>();
+  for (const p of e.playerCounts) {
+    const name = nick(p.name);
+    const k = name.toLowerCase();
+    const prev = pcMap.get(k);
+    pcMap.set(k, prev ? { name: prev.name, buyins: prev.buyins + p.buyins, visits: prev.visits + p.visits } : { name, buyins: p.buyins, visits: p.visits });
+  }
+  const bc: Record<string, number> = {};
+  for (const [k, v] of Object.entries(e.buyinCounts)) {
+    const nk = nick(k).toLowerCase();
+    bc[nk] = (bc[nk] ?? 0) + v;
+  }
   return {
     ...e,
     totals: e.totals.map((t) => ({ ...t, realName: '' })),
     latest: { date: e.latest.date, entries: e.latest.entries.map((x) => ({ ...x, realName: '' })) },
     manual: e.manual.map((m) => ({ ...m, reason: null })),
     checkinRows: [],
+    playerCounts: [...pcMap.values()],
+    buyinCounts: bc,
   };
 }
 

@@ -35,7 +35,7 @@ import {
   DEFAULT_RANK_METRICS, RANK_METRIC_LABEL,
   type RankingEntry, type RankingTotal, type VenuePageConfig, type RankBoardId, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
-import { RANK_CACHE_PREFIX } from '../../lib/supabase';
+import { RANK_CACHE_PREFIX, purgeLegacyRankCache } from '../../lib/supabase';
 import { listVenueCheckins } from '../../api/checkins';
 import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
@@ -1001,6 +1001,9 @@ interface RankPanelCache {
   playerCounts: PlayerCounts[]; checkinRows: { name: string; count: number }[]; metric: RankBoardId | null;
 }
 const rankPanelCache = new globalThis.Map<string, RankPanelCache>();
+// 🔴 2026-09-24 F5 — 이 화면 청크가 처음 로드될 때 **한 번**, 옛 접두사('실명(닉네임)' 이 남아 있을 수 있는) 순위 캐시를 지운다.
+//   새 접두사(RANK_CACHE_PREFIX)만 읽으므로 옛 값은 화면에 다시 그려지지 않는다 — 지우는 것은 공용 PC 에 남은 흔적 제거다.
+purgeLegacyRankCache();
 // 새로고침 후에도 깜빡임 없도록 localStorage에 영속(메모리 우선, 없으면 LS 폴백 → 즉시 표시 후 백그라운드 갱신)
 const RANK_LS = (venueId: string) => `${RANK_CACHE_PREFIX}${venueId}`;
 function readRankCache(venueId: string): RankPanelCache | undefined {
@@ -1077,7 +1080,8 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         const [t, d, m, optIns] = await Promise.all([
           getVenueRankingTotals(venueId, c),
           getVenueRankings(venueId),
-          getScoreEntries(venueId).catch(() => [] as ScoreEntry[]),
+          // 공개 화면 — 업주 사유(reason)는 받지 않는다(F5 · rankings.getScoreEntries 주석).
+          getScoreEntries(venueId, 300, { withReason: false }).catch(() => [] as ScoreEntry[]),
           getVenueRealNameOptIns(venueId).catch(() => new Set<string>()),
         ]);
         const pc: PlayerCounts[] = wantsCounts ? await getVenuePlayerCounts(venueId).catch(() => []) : [];

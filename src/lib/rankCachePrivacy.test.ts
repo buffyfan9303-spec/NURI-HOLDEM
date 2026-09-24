@@ -28,6 +28,7 @@ describe('redactForCache — 캐시에는 속도용 숫자만 남고 사람 식�
       manual: [{ id: 'm1', name: 'kim', points: 5, reason: '단골이라 보너스', entryDate: '2026-09-01', boardKey: null }],
       checkinRows: [{ name: '김철수', count: 3 }],
       buyinCounts: { kim: 2 },
+      playerCounts: [{ name: 'kim', buyins: 2, visits: 1 }],
       metric: 'score',
     });
     expect(out.totals).toEqual([{ nickname: 'kim', realName: '', moneyPoints: 10, appearances: 1, bestPosition: 1 }]);
@@ -35,8 +36,23 @@ describe('redactForCache — 캐시에는 속도용 숫자만 남고 사람 식�
     expect(out.manual).toEqual([{ id: 'm1', name: 'kim', points: 5, reason: null, entryDate: '2026-09-01', boardKey: null }]);
     expect(out.checkinRows).toEqual([]);
     expect(out.buyinCounts).toEqual({ kim: 2 });
+    expect(out.playerCounts).toEqual([{ name: 'kim', buyins: 2, visits: 1 }]);
     expect(out.metric).toBe('score');
     expect(JSON.stringify(out)).not.toMatch(/김철수|단골/);
+  });
+});
+
+describe('🔴 F5(2026-09-24) — 장부 집계 이름 "실명(닉네임)" 도 캐시에는 닉네임만', () => {
+  it('playerCounts·buyinCounts 의 실명이 사라지고 같은 닉네임은 합쳐진다', async () => {
+    const { redactForCache } = await import('../api/rankings');
+    const out = redactForCache({
+      totals: [], latest: { date: null, entries: [] }, manual: [], checkinRows: [], metric: 'buyin_count',
+      playerCounts: [{ name: '김철수(kim)', buyins: 3, visits: 2 }, { name: 'kim', buyins: 1, visits: 1 }, { name: '박영희(park)', buyins: 5, visits: 4 }],
+      buyinCounts: { '김철수(kim)': 3, kim: 1, '박영희(park)': 5 },
+    });
+    expect(out.playerCounts).toEqual([{ name: 'kim', buyins: 4, visits: 3 }, { name: 'park', buyins: 5, visits: 4 }]);
+    expect(out.buyinCounts).toEqual({ kim: 4, park: 5 });
+    expect(JSON.stringify(out)).not.toMatch(/김철수|박영희/);
   });
 });
 
@@ -47,17 +63,34 @@ describe('clearAuthStorage — 로그아웃은 순위 캐시 키도 걷는다', 
     ls = new FakeStorage(); ss = new FakeStorage();
     vi.stubGlobal('window', { localStorage: ls, sessionStorage: ss });
     ls.setItem('sb-abc-auth-token', '{}');
-    ls.setItem('nuri:rankcache:v1', '{"totals":[]}');
-    ls.setItem('nuri:rankcache:v2', '{}');
+    ls.setItem('nuri:rankcache:v1', '{"totals":[]}');      // 옛 접두사(F5 이전) — 로그아웃이 이것도 걷는다
+    ls.setItem('nuri:rankcache2:v2', '{}');               // 새 접두사
     ls.setItem('nuri:keep-signed-in', '1');   // 취향 플래그 — 남아야 한다
-    ss.setItem('nuri:rankcache:v3', '{}');
+    ss.setItem('nuri:rankcache2:v3', '{}');
     ss.setItem('nh_pw_otp', '1');
   });
   it('🔴 sb-*-auth-token · nuri:rankcache:* · nh_pw_otp 가 두 저장소에서 사라지고 취향 플래그는 남는다', async () => {
     const { clearAuthStorage, RANK_CACHE_PREFIX } = await import('./supabase');
-    expect(RANK_CACHE_PREFIX).toBe('nuri:rankcache:');
+    // 2026-09-24 F5 — 접두사를 올렸다(옛 캐시에 '실명(닉네임)' 이 남아 있을 수 있어 옛 키는 읽지 않고 지운다).
+    expect(RANK_CACHE_PREFIX).toBe('nuri:rankcache2:');
     clearAuthStorage();
     expect(ls.keys()).toEqual(['nuri:keep-signed-in']);
+    expect(ss.keys()).toEqual([]);
+  });
+});
+
+describe('🔴 F5(2026-09-24) — 옛 접두사 순위 캐시는 읽지 않고 지운다', () => {
+  it('purgeLegacyRankCache 가 nuri:rankcache:* 만 두 저장소에서 지우고 새 접두사·다른 키는 남긴다', async () => {
+    vi.resetModules();
+    const ls = new FakeStorage(); const ss = new FakeStorage();
+    vi.stubGlobal('window', { localStorage: ls, sessionStorage: ss });
+    ls.setItem('nuri:rankcache:v1', '{"playerCounts":[{"name":"김철수(kim)"}]}');
+    ls.setItem('nuri:rankcache2:v1', '{}');
+    ls.setItem('nuri:keep-signed-in', '1');
+    ss.setItem('nuri:rankcache:v9', '{}');
+    const { purgeLegacyRankCache } = await import('./supabase');
+    purgeLegacyRankCache();
+    expect(ls.keys()).toEqual(['nuri:keep-signed-in', 'nuri:rankcache2:v1']);
     expect(ss.keys()).toEqual([]);
   });
 });

@@ -426,6 +426,9 @@ function ListCard({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
+        // 🔴 2026-09-24 연결성 감사① — 카드 **안의** 버튼(매장명 등)에서 올라온 키는 그 버튼의 것이다.
+        //   이 가드가 없으면 매장명에 포커스하고 Enter 를 누르면 카드가 preventDefault 로 가로채 **포스터 상세**가 열렸다(클릭은 매장).
+        if (e.target !== e.currentTarget) return;
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(schedule); }
       }}
       className={[
@@ -690,6 +693,9 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
+        // 🔴 2026-09-24 연결성 감사① — 카드 **안의** 버튼(매장명 등)에서 올라온 키는 그 버튼의 것이다.
+        //   이 가드가 없으면 매장명에 포커스하고 Enter 를 누르면 카드가 preventDefault 로 가로채 **포스터 상세**가 열렸다(클릭은 매장).
+        if (e.target !== e.currentTarget) return;
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(schedule); }
       }}
       className={[
@@ -851,6 +857,9 @@ function TimetableCard({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
+        // 🔴 2026-09-24 연결성 감사① — 카드 **안의** 버튼(매장명 등)에서 올라온 키는 그 버튼의 것이다.
+        //   이 가드가 없으면 매장명에 포커스하고 Enter 를 누르면 카드가 preventDefault 로 가로채 **포스터 상세**가 열렸다(클릭은 매장).
+        if (e.target !== e.currentTarget) return;
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(schedule); }
       }}
       className={[

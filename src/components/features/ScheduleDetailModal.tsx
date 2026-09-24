@@ -46,6 +46,9 @@ interface ScheduleDetailModalProps {
   /** 내 예약/취소가 성공했다 — App 이 홈 '오늘 예약한 대회'·카드 '예약 N'·캘린더를 다시 읽는다(F06).
    *  값을 나르지 않는 신호다. 실패하면 호출하지 않으므로 화면 숫자가 서버보다 앞서가지 않는다. */
   onReservationChange?: () => void;
+  /** 🔴 2026-09-24 연결성 감사① — 찜(내 캘린더에 담기/빼기)이 **서버에 저장된 뒤** 부른다. App 이 캘린더를 다시 읽게 한다.
+   *  종전엔 캘린더 탭 위에서 상세를 열고 찜해도 닫은 뒤 캘린더가 그대로였다(탭 왕복해야 반영). */
+  onLikeChange?: () => void;
   /** 데스크탑 2-pane 우측 패널로 인라인 렌더 */
   inline?: boolean;
   /** UX-1: 라이브 클락 실측 레지 상태 — '매장에 확인해 주세요'를 실제 답으로 교체 */
@@ -108,7 +111,7 @@ function Head({ icon, tile = '', children }: { icon: IconName; tile?: string; ch
 }
 
 export default function ScheduleDetailModal({
-  schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline, regInfo, onReservationChange, onDisplay,
+  schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline, regInfo, onReservationChange, onLikeChange, onDisplay,
 }: ScheduleDetailModalProps) {
   const [tab, setTab] = useState<Tab>('main');
   const [lightbox, setLightbox] = useState(false);
@@ -477,7 +480,7 @@ export default function ScheduleDetailModal({
         )}
 
         {/* 캘린더 등록 · 공유 — 참가 결심 직후 동선 */}
-        <CalendarShareRow schedule={schedule} />
+        <CalendarShareRow schedule={schedule} onLikeChange={onLikeChange} />
 
         {/* ── 게임 정보 (APIS 하단 2열 정의 리스트) — 게임명·날짜·시작 시간·유형·바이인·
             스타팅 칩·리바이 칩·블라인드 타임. 값이 없는 선택 항목은 행 자체를 생략하고,
@@ -1003,7 +1006,7 @@ function StatRow({ label, value }: { label: string; value: string }) {
 // ── 찜 · 공유 링크 줄 ────────────────────────────────────────────────────────
 // 구글 캘린더·단건 .ics '기기 캘린더' 버튼은 오너 지시(2026-09-09, 외부 반출 기능 제거)로 뺐다.
 // 공유 링크(앱으로 되돌아오는 주소)와 찜(앱 내 캘린더)은 반출이 아니라 유지한다.
-function CalendarShareRow({ schedule }: { schedule: Schedule }) {
+function CalendarShareRow({ schedule, onLikeChange }: { schedule: Schedule; onLikeChange?: () => void }) {
   const toast = useToast();
   const { user } = useAuth();
   const [liked, setLiked] = useState(false);
@@ -1022,6 +1025,7 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
     setLiked(next); setLikeBusy(true);          // 낙관적 — 실패하면 되돌린다
     try {
       await toggleScheduleLike(schedule.id, next);
+      onLikeChange?.();   // 저장 성공 뒤에만 — 실패하면 캘린더를 다시 읽을 이유가 없다
       toast.show(next ? '내 캘린더에 담았어요' : '캘린더에서 뺐어요', 'success');
     } catch (e) {
       setLiked(!next);

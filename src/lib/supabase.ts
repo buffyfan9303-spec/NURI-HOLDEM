@@ -123,8 +123,27 @@ export const authStorage = {
   },
 };
 
-/** 매장 순위 패널 첫 렌더 캐시의 localStorage 키 접두사(VenuePage.writeRankCache) — 로그아웃이 같이 걷는다(아래). */
-export const RANK_CACHE_PREFIX = 'nuri:rankcache:';
+/** 매장 순위 패널 첫 렌더 캐시의 localStorage 키 접두사(VenuePage.writeRankCache) — 로그아웃이 같이 걷는다(아래).
+ *  🔴 2026-09-24 F5 — 접두사를 올렸다(v2). 옛 접두사로 이미 저장된 캐시에는 장부 이름 '실명(닉네임)'(playerCounts·buyinCounts)이
+ *  남아 있을 수 있다 — 새 코드는 그 키를 **읽지 않고**, 부팅 때 한 번 지운다(purgeLegacyRankCache). */
+export const RANK_CACHE_PREFIX = 'nuri:rankcache2:';
+/** 지난 접두사들 — 읽지 않고 지우기만 한다. 접두사를 또 올리면 여기에 옛 값을 더한다. */
+export const LEGACY_RANK_CACHE_PREFIXES = ['nuri:rankcache:'] as const;
+const isRankCacheKey = (k: string) => k.startsWith(RANK_CACHE_PREFIX) || LEGACY_RANK_CACHE_PREFIXES.some((p) => k.startsWith(p));
+/** 옛 접두사 순위 캐시를 두 저장소에서 지운다(부팅 1회 — 아래 모듈 끝에서 부른다). 실패는 조용히 무시한다(저장소 차단 환경). */
+export function purgeLegacyRankCache(): void {
+  for (const s of [safeLocal(), safeSession()]) {
+    if (!s) continue;
+    try {
+      const doomed: string[] = [];
+      for (let i = 0; i < s.length; i++) {
+        const k = s.key(i);
+        if (k && LEGACY_RANK_CACHE_PREFIXES.some((p) => k.startsWith(p))) doomed.push(k);
+      }
+      doomed.forEach((k) => s.removeItem(k));
+    } catch { /* noop */ }
+  }
+}
 
 /**
  * 로그아웃 마무리 청소 — supabase 가 지우는 건 '자기가 아는 현재 키' 하나뿐이라,
@@ -141,7 +160,7 @@ export function clearAuthStorage(): void {
       const doomed: string[] = [];
       for (let i = 0; i < s.length; i++) {
         const k = s.key(i);
-        if (k && (/^sb-.+-auth-token/.test(k) || k.startsWith(RANK_CACHE_PREFIX))) doomed.push(k);
+        if (k && (/^sb-.+-auth-token/.test(k) || isRankCacheKey(k))) doomed.push(k);
       }
       doomed.forEach((k) => s.removeItem(k));
     } catch { /* noop */ }

@@ -2440,7 +2440,10 @@ export default function App() {
   //   prop 참조가 전부 바뀌어 화면의 모든 카드가 재렌더된다(카톡 갔다 온 순간 뻑뻑해지는 정체).
   //   게다가 schedules 참조 변경이 예약자 수·지난대회 순위·매장 별점 재조회를 연쇄로 부른다.
   //   → '지금 보고 있는 탭'에 필요한 것만 갱신하고, 디바운스를 실제 사용 리듬에 맞춰 늘린다.
-  //   (다른 탭 데이터는 그 탭으로 이동할 때 어차피 최신화된다 + 실시간 구독이 이미 돌고 있다)
+  //   🔴 2026-09-24 정정(root-cause-debugger 실측): 예전 주석은 "다른 탭 데이터는 그 탭으로 이동할 때 어차피 최신화된다 +
+  //     실시간 구독이 이미 돌고 있다" 였는데 **사실이 아니었다** — 일정 구독은 일정이 보이는 탭에서만 열리고(아래 wantScheduleRealtime),
+  //     커뮤니티처럼 구독이 닫힌 탭에 있다가 돌아오면 그 사이 바뀐 포스터를 따라잡지 않았다(홈 복귀 schedules GET 0회 · 옛 제목 유지).
+  //     지금은 그 복귀 순간(구독이 false→true)에 한 번 다시 읽는다 — 아래 prevWantSchedRt 효과.
   useVisibilityRefresh(() => {
     // 알림은 탭과 무관하게 항상 — 뱃지 숫자가 틀리면 바로 눈에 띈다(가볍기도 하다)
     if (user) {
@@ -2529,6 +2532,15 @@ export default function App() {
     const unsub = subscribeSchedules(() => { if (t) clearTimeout(t); t = setTimeout(reloadSchedules, 700); });
     return () => { if (t) clearTimeout(t); unsub(); };
   }, [reloadSchedules, wantScheduleRealtime]);
+  // 🔴 2026-09-24 연결성 감사① — 구독이 닫혀 있던 동안(커뮤니티·GTO 등) 놓친 변경을 **다시 열리는 순간 한 번** 따라잡는다.
+  //   구독은 '지금부터' 의 변경만 전해 준다. 닫혀 있던 사이의 승인·수정·삭제는 이벤트로 오지 않는다.
+  //   ⚠ 부팅 첫 값(true)에서는 부르지 않는다 — 부팅 조회가 이미 돈다(중복 요청 금지). 이전 값을 ref 로 들고 **상승만** 본다.
+  const prevWantSchedRt = useRef(wantScheduleRealtime);
+  useEffect(() => {
+    const was = prevWantSchedRt.current;
+    prevWantSchedRt.current = wantScheduleRealtime;
+    if (!was && wantScheduleRealtime) reloadSchedules();
+  }, [wantScheduleRealtime, reloadSchedules]);
 
   // 관리자: 회원 목록 로드
   useEffect(() => {
@@ -4394,7 +4406,10 @@ export default function App() {
       {(activeTab === 'live' || visitedTabs.has('live')) && (
         <div data-tab="live" className="tab-pane" style={activeTab !== 'live' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="live">
-            <LiveGamesTabM venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} onDisplay={openDisplay} active={activeTab === 'live'} myGames={myApprovedGames} />
+            {/* 🔴 2026-09-24 연결성 감사① — 매장 페이지(오버레이)가 라이브 위에 떠 있는 동안은 '비활성'으로 본다.
+                단골 하트(useFavoriteVenues)는 active 가 **올라갈 때** 다시 읽으므로, 매장 페이지에서 팔로우하고 닫으면
+                그 순간 하트가 따라온다(종전: 닫아도 0 — 탭을 왕복해야 1). */}
+            <LiveGamesTabM venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} onDisplay={openDisplay} active={activeTab === 'live' && openVenueId === null} myGames={myApprovedGames} />
           </ErrorBoundary>
         </div>
       )}
@@ -4486,6 +4501,10 @@ export default function App() {
             onEditPoster={handleEditPosterFromStore}
             onDeletePoster={handleDeletePoster}
             onOpenVenue={handleOpenOwnVenue}
+            /* 2026-09-24 연결성 감사① — 내 매장 안 캘린더도 홈 캘린더와 같은 재조회 신호·매장 이동을 받게 넘긴다.
+               ⚠ VenueManageTab 이 아직 이 둘을 받지 않는다(수용은 store-team — 그 파일은 다른 팀원 편집 중).
+               타입을 깨지 않도록 펼침으로 넘긴다 — 수용되면 이름 그대로 props 로 옮겨 적어라(값·이름은 CalendarPanel 과 같다). */
+            {...({ resVersion, onVenue: handleVenueClick } satisfies { resVersion: number; onVenue: (venueId: string) => void })}
           />
           </ErrorBoundary>
         </main>
@@ -4658,6 +4677,8 @@ export default function App() {
         onDeleteComment={handleDeleteComment}
         onDeletePoster={handleDeletePoster}
         onReservationChange={bumpResVersion}
+        /* 2026-09-24 연결성 감사① — 상세의 찜(캘린더에 담기)도 같은 신호로 캘린더를 다시 읽게 한다(CalendarPanel 의 resVersion ③ 경로). */
+        onLikeChange={bumpResVersion}
       />
       )}
 
