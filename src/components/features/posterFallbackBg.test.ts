@@ -1,7 +1,7 @@
 // 이미지 없는 로고 자리 배경 — poster_color 가 null 이어도 배경이 살아 있고, 흰 이니셜(white/85)이 읽힌다(라이트 지면 포함).
 // 2026-09-24 design-reviewer 실측: 라이트에서 이니셜 대비 1.00 — `${null}ee` 가 그라데이션을 무효로 만들어 배경이 사라졌다.
 import { describe, it, expect } from 'vitest';
-import { posterFallbackBg, POSTER_FALLBACK_COLOR } from './ScheduleCard';
+import { posterFallbackBg, POSTER_FALLBACK_COLOR } from '../../lib/posterFallbackBg';
 
 const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lum = ([r, g, b]: number[]) => {
