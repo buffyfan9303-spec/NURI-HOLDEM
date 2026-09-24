@@ -1746,7 +1746,7 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
   useEffect(() => { load(); }, [load]);
 
   const add = async () => {
-    if (!login.trim()) { toast.show('직원 아이디(닉네임 또는 이메일)를 입력해 주세요', 'error'); return; }
+    if (!login.trim()) { toast.show('직원 닉네임 또는 이메일을 입력해 주세요', 'error'); return; }
     setBusy(true);
     try {
       await addVenueStaff({ venueId, login: login.trim(), position: position.trim() || undefined });
@@ -1765,7 +1765,7 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
       {/* 직원 추가 */}
       <div className="flex items-end gap-1.5">
         <label className="flex-1 block min-w-0">
-          <span className="block text-2xs text-ink-muted mb-0.5">직원 아이디 (닉네임/이메일)</span>
+          <span className="block text-2xs text-ink-muted mb-0.5">직원 닉네임 또는 이메일</span>
           <input value={login} onChange={(e) => setLogin(e.target.value)} maxLength={60} placeholder="예: dealer_kim" className="input w-full text-sm" />
         </label>
         <label className="w-20 shrink-0 block">
@@ -1779,7 +1779,7 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
       {loading ? (
         <p className="text-center py-2 text-2xs text-ink-muted">불러오는 중…</p>
       ) : staff.length === 0 ? (
-        <p className="text-center py-2 text-2xs text-ink-muted">등록된 직원이 없습니다. 위에서 아이디로 추가하세요.</p>
+        <p className="text-center py-2 text-2xs text-ink-muted">등록된 직원이 없습니다. 위에서 닉네임 또는 이메일로 추가하세요.</p>
       ) : (
         <ul className="space-y-1.5">
           {staff.map((s) => <StaffRow key={s.id} staff={s} onChanged={load} />)}
@@ -1827,7 +1827,7 @@ function StaffRow({ staff, onChanged }: { staff: VenueStaff; onChanged: () => vo
             ? <span className="shrink-0 text-2xs font-normal text-emerald-400">계정연결</span>
             : <span className="shrink-0 text-2xs font-normal text-ink-muted">미가입</span>}
         </p>
-        <p className="text-2xs text-ink-muted truncate">아이디: {staff.login}</p>
+        <p className="text-2xs text-ink-muted truncate">닉네임/이메일: {staff.login}</p>
       </div>
       <input
         value={position}
