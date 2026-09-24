@@ -1,3 +1,4 @@
+import { CHIP_HIT } from '../gto/chip';
 import { useState } from 'react';
 import { CalcCard, Field, NumIn } from './calcUi';
 import { generateBlinds } from '../../../api/clock';
@@ -33,7 +34,7 @@ export default function BlindBuilder() {
           <div className="flex gap-1.5">
             {([{ id: 'none', label: '없음' }, { id: 'bb', label: 'BB앤티' }] as const).map((a) => (
               <button key={a.id} type="button" onClick={() => setAnteMode(a.id)}
-                className={['flex-1 h-9 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
+                className={[CHIP_HIT, 'flex-1 h-[32px] rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
                   anteMode === a.id ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
                 {a.label}
               </button>

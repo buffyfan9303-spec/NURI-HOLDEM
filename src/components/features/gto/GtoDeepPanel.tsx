@@ -1,6 +1,7 @@
 // src/components/features/gto/GtoDeepPanel.tsx
 // GTO 핸드 분석 — 인라인 패널. 도구 탭에서 다른 계산기와 동일한 카드형 UI로 표시된다.
 // 공유 링크(#gto=) 진입 시에는 GtoDeepModal 이 이 패널을 모달로 감싸 재사용한다.
+import { CHIP_HIT } from './chip';
 import { useEffect, useState } from 'react';
 import Modal from '../../atoms/Modal';
 import { useToast } from '../../atoms/Toast';
@@ -266,9 +267,9 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
               type="button"
               onClick={() => deep.setVillainMode(m)}
               // h-7(29.8px)는 tap-y-44 오버행(±6px)을 더해도 41.75px로 44px에 못 미친다(2026-09-20 실측 확정).
-              // 오버행이 아니라 박스 자체를 44px로 키운다 — h-11(46.75px)이 아니라 정확히 h-[44px].
+              // 2026-09-24 G3: 보이는 32px + CHIP_HIT(gto/chip.ts — 테두리가 있어도 46px).
               className={[
-                'h-[44px] rounded-input px-3 text-2xs font-semibold transition-colors',
+                CHIP_HIT, 'h-[32px] rounded-input px-3 text-2xs font-semibold transition-colors',
                 deep.villainMode === m ? 'bg-accent-300 text-white' : 'border border-border-default bg-surface-high text-ink-secondary',
               ].join(' ')}
             >

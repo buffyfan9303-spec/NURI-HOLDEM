@@ -1,3 +1,4 @@
+import { CHIP_HIT } from '../gto/chip';
 import { useMemo, useState } from 'react';
 import { CalcCard } from './calcUi';
 import RangeMatrix13, { type MatrixAction } from './RangeMatrix13';
@@ -33,13 +34,13 @@ const VS_CAPTION: Record<RangeScenario['group'], string> = {
 // overflow-y 를 함께 auto 로 만들어 tap-y-44 의 위아래 오버행이 실측(2026-09-20)에서 잘렸고,
 // 그래서 한동안 박스 자체를 44px 로 키웠다(h-8 → h-[44px]).
 // 🔴 2026-09-21 오너: "버튼 pill 위아래 공백 조절" — 11.7px 글자에 44px 박스는 위아래가 16px 씩 비어 보였다.
-//   박스를 34px(h-8)로 되돌리고 44px 터치는 다시 오버행(tap-y-44, ±6px)이 맡는다. 잘림은 **레일 쪽**에서 푼다:
+//   박스를 34px(h-8)로 되돌리고 44px 터치는 다시 오버행이 맡는다. 2026-09-24 G3: 32px + CHIP_HIT(gto/chip.ts) — 레일 py-1.5 에 잘려 44.75px. 잘림은 **레일 쪽**에서 푼다:
 //   레일에 `py-1.5 -my-1.5`(6.375px ≥ 6px) — 오버행이 스크롤 컨테이너의 패딩 박스 안에 들어와 안 잘리고,
 //   음수 마진이 그만큼 되물려 바깥 레이아웃(캡션 간격·space-y)은 종전과 같다. 레일 ① 은 CalcCard 의
 //   `space-y-3`(특이도 0,3,0 — 자식 margin 을 덮어쓴다) 직계라 래퍼 div 로 한 겹 감싼다(마진 상쇄로 12.75px 유지).
 //   e2e/gto-tab-verify.spec.ts '상황 그룹 칩 44px 유효 표적' 이 elementFromPoint 로 오버행까지 잰다.
 const chipCls = (on: boolean) =>
-  ['h-8 tap-y-44 shrink-0 rounded-input px-2.5 text-2xs font-bold leading-none border transition-colors focus:outline-none',
+  [CHIP_HIT, 'h-[32px] shrink-0 rounded-input px-2.5 text-2xs font-bold leading-none border transition-colors focus:outline-none',
     on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ');
 
 const firstOfGroup = (g: RangeScenario['group']) => RANGE_SCENARIOS.find((s) => s.group === g)!;

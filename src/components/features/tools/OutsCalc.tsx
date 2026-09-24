@@ -1,3 +1,4 @@
+import { CHIP_HIT } from '../gto/chip';
 import { Suspense, useState } from 'react';
 import { CalcCard, Field, NumIn, Result } from './calcUi';
 import Icon from '../../atoms/Icon';
@@ -51,8 +52,8 @@ export default function OutsCalc() {
             onClick={() => pickMode(m.id)}
             className={[
               // 🔴 G12(2026-09-20 모바일 실측) — `h-9` 는 루트 17px 에서 **38.25px** 라 44px 계약 미달이었다.
-              //   `h-11` 은 46.75px 이라 44 가 아니다 — `h-[44px]` 로 못박는다(이 저장소의 44px 관행).
-              'h-[44px] flex-1 rounded-input border text-2xs font-bold leading-none transition-colors focus:outline-none',
+              //   `h-11` 은 46.75px 이라 44 가 아니다. 2026-09-24 G3: 보이는 32px + CHIP_HIT(gto/chip.ts)로 누르는 44px.
+              CHIP_HIT, 'h-[32px] flex-1 rounded-input border text-2xs font-bold leading-none transition-colors focus:outline-none',
               mode === m.id ? 'border-accent-300 bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
@@ -84,7 +85,7 @@ export default function OutsCalc() {
                   type="button"
                   onClick={() => setStreet(s.id)}
                   className={[
-                    'flex-1 h-9 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
+                    CHIP_HIT, 'flex-1 h-[32px] rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
                     street === s.id ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >

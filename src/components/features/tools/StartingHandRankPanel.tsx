@@ -8,6 +8,7 @@
 // 격자 칸 크기: 13×13 은 320px 에서 칸당 약 20px 이라 44px 터치 계약을 만족할 수 없다 — RangeMatrix13(프리플랍 레인지 차트)과
 // 같은 선례를 따른다: 격자는 '훑어보기 + 대략 탭', **정확한 선택은 아래 목록**(행 높이 44px·검색)이 1급 경로다.
 // 목록 행을 누르면 격자의 같은 칸에 링이 켜지고, 격자 칸을 누르면 격자 바로 아래 상세가 뜬다.
+import { CHIP_HIT } from '../gto/chip';
 import { useMemo, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import { comboCount, gridName } from '../../../lib/ranges';
@@ -138,8 +139,8 @@ export default function StartingHandRankPanel() {
                 onClick={() => setLimit(n)}
                 disabled={searching}
                 className={[
-                  // tap-y-44: 보이는 높이 34px, 누르는 높이는 위아래 6px 씩 보태 46px(index.css).
-                  'tap-y-44 inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-input border px-2.5 text-2xs font-semibold transition-colors disabled:opacity-40',
+                  // 보이는 32px · 누르는 44px(CHIP_HIT — gto/chip.ts)
+                  CHIP_HIT, 'inline-flex h-[32px] shrink-0 items-center whitespace-nowrap rounded-input border px-2.5 text-2xs font-semibold transition-colors disabled:opacity-40',
                   !searching && limit === n ? 'border-accent-300 bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary',
                 ].join(' ')}
               >

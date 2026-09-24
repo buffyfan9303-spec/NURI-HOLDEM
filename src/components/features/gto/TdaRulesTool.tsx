@@ -14,6 +14,7 @@
 //   그래서 AI 답변 아래에는 언제나 근거 원문이 함께 펼쳐진다. 사람이 대조할 수 있어야 한다.
 //
 // 이 도구는 이 앱에 남은 **유일한 외부 생성형 AI 기능**이다(오너 지시 2026-09-11).
+import { CHIP_HIT } from './chip';
 import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import { Skeleton } from '../../atoms/Skeleton';
@@ -118,10 +119,10 @@ export default function TdaRulesTool() {
           </button>
         </form>
 
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap gap-x-1.5 gap-y-3.5">
           {EXAMPLES.map((ex) => (
             <button key={ex} type="button" onClick={() => { setQ(ex); ask(ex); }}
-              className="rounded-chip border border-border-default bg-surface-high px-2.5 py-1 text-2xs text-ink-secondary transition-colors hover:border-accent-400/40 hover:text-accent-300">
+              className={`${CHIP_HIT} min-h-[32px] rounded-chip border border-border-default bg-surface-high px-2.5 py-1 text-2xs text-ink-secondary transition-colors hover:border-accent-400/40 hover:text-accent-300`}>
               {ex}
             </button>
           ))}
@@ -173,10 +174,11 @@ export default function TdaRulesTool() {
           <h3 className="min-w-0 flex-1 text-sm font-bold text-ink-primary">2026 TDA 규칙</h3>
           <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{browse.length}개</span>
         </div>
-        <div className="mt-2 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none]">
+        {/* 가로 스크롤 레일은 위아래를 자른다 — py-1.5(6.375px) 가 칩 히트 확장 자리다(잘려도 44.75px). mt-0.5+py-1.5 = 종전 mt-2 와 같은 위 간격. */}
+        <div className="mt-0.5 flex gap-1 overflow-x-auto py-1.5 [scrollbar-width:none]">
           {sections.map((s) => (
             <button key={s} type="button" onClick={() => setSection(s)}
-              className={['shrink-0 whitespace-nowrap rounded-chip px-2.5 py-1 text-2xs font-semibold transition-colors',
+              className={[CHIP_HIT, 'h-[32px] shrink-0 whitespace-nowrap rounded-chip px-2.5 text-2xs font-semibold transition-colors',
                 section === s ? 'chip-aura text-white' : 'border border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
               {s}
             </button>

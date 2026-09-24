@@ -1,3 +1,4 @@
+import { CHIP_HIT } from '../gto/chip';
 import { useState } from 'react';
 import { CalcCard, Field, NumIn, Result } from './calcUi';
 import Term from './Term';
@@ -73,7 +74,7 @@ export function PayoutCalc() {
         {PAYOUT_PRESETS.map((p) => (
           <button key={p.id} type="button"
             onClick={() => { setPresetId(p.id); setEntries(p.entries); setPlacesIn(p.pct.length); }}
-            className={['flex-1 h-8 rounded-input border text-2xs font-bold leading-none transition-colors',
+            className={[CHIP_HIT, 'flex-1 h-[32px] rounded-input border text-2xs font-bold leading-none transition-colors',
               presetId === p.id ? 'bg-accent-300 border-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
             {p.label}
           </button>
@@ -84,7 +85,7 @@ export function PayoutCalc() {
         <div className="grid grid-cols-3 gap-1">
           {PAYOUT_STYLES.map((s) => (
             <button key={s.id} type="button" onClick={() => { setStyle(s.id); setPresetId(null); }} title={s.desc}
-              className={['rounded-input py-1.5 text-2xs font-bold leading-tight transition-colors', style === s.id && !presetId ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>{s.label}</button>
+              className={[CHIP_HIT, 'min-h-[32px] rounded-input py-1 text-2xs font-bold leading-tight transition-colors', style === s.id && !presetId ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>{s.label}</button>
           ))}
         </div>
         <p className="mt-1 text-2xs text-ink-muted">{presetId ? '표준 고정 %표를 그대로 적용 중입니다.' : PAYOUT_STYLES.find((s) => s.id === style)!.desc}</p>

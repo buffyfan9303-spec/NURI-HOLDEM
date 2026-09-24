@@ -11,6 +11,7 @@
 //
 // ⚠ 기존 도구는 하나도 지우지 않는다. #tool=gto · #tool=replay 는 그대로 살아 있고
 //   이 화면은 그 위에 얹히는 통합 진입점이다(ToolsPanel 의 대표 카드).
+import { CHIP_HIT } from './chip';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import SegmentedTabs from '../../atoms/SegmentedTabs';
@@ -472,15 +473,6 @@ function RowInline({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-/**
- * SPOT 칩 기준(2026-09-24 오너 G3 "알약 세로 폭을 줄여라"): **보이는 높이 32px · 누르는 높이 44px.**
- * 히트는 ::before 를 위아래 7px 넓힌다 — 절대배치 기준이 padding box 라 테두리 1px 만큼 줄어 실효는 6px 씩(32+12=44).
- * ⚠ 공용 `.tap-y-44`(±6px)는 테두리 있는 칩에서 **실효 ±5px** 다(실측: 36px 칩이 아래로 4px 까지만 잡혔다) —
- *   그걸로 32px 을 만들면 42px 로 44 계약 미달이라 여기서 7px 로 둔다.
- * 두 줄로 접힐 때 줄 간격(gap-y-3 = 12.75px)이 위아래 확장 6+6 보다 커서 이웃 칩의 히트를 덮지 않는다.
- */
-const CHIP_HIT = "relative before:absolute before:inset-x-0 before:-inset-y-[7px] before:content-['']";
-
 function Pick<T extends string | number>({ value, options, onChange, fmt, end = false }: {
   value: T; options: readonly T[]; onChange: (v: T) => void; fmt?: (v: T) => string;
   /** RowInline 안에서 칩을 오른쪽에 붙인다 */
@@ -493,9 +485,9 @@ function Pick<T extends string | number>({ value, options, onChange, fmt, end = 
   // 자리 칩 10개(10인)만 2줄이 된다 — 균형 잡힌 줄바꿈이라 받아들인다. 한 줄 가로 스크롤은 시도했다가 철회했다:
   // e2e 접근성 게이트(가로 잘림 0·가로 스크롤 0)가 clientWidth < scrollWidth 를 잘림으로 보고 200% 확대에선 통과 불가.
   // 같은 이유로 whitespace-nowrap 도 두지 않는다(칩 안에서 글자가 접혀야 320px·200% 를 지난다).
-  // ⚠ gap-y-3: 두 줄이 될 때 `.tap-y-44` 의 위아래 6px 확장이 겹치지 않게(gap-1 이면 실효 터치가 줄어든다).
+  // ⚠ gap-y-3.5(14.875px): 두 줄이 될 때 CHIP_HIT 위아래 확장(7+7)이 겹치지 않게. 옛 설명 — `.tap-y-44` 의 위아래 6px 확장이 겹치지 않게(gap-1 이면 실효 터치가 줄어든다).
   return (
-    <div className={['flex min-w-0 flex-1 flex-wrap gap-x-1 gap-y-3', end ? 'justify-end' : ''].join(' ')}>
+    <div className={['flex min-w-0 flex-1 flex-wrap gap-x-1 gap-y-3.5', end ? 'justify-end' : ''].join(' ')}>
       {shown.map((o) => (
         <button key={String(o)} type="button" aria-pressed={o === value} onClick={() => onChange(o)}
           // 보이는 32px · 누르는 44px(CHIP_HIT) — 2026-09-24 전: 36px · 실효 46px

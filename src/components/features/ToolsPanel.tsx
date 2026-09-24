@@ -1,3 +1,4 @@
+import { CHIP_HIT } from './gto/chip';
 import { useEffect, useLayoutEffect, useRef, useState, Suspense, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import Modal from '../atoms/Modal';
@@ -506,7 +507,7 @@ export default function ToolsPanel() {
           className="input w-full text-sm" aria-label="도구 검색" />
       </div>
 
-      {/* 레인 필터 칩 — 보이는 높이 34px, 탭 타깃 46px(`.tap-y-44::before { inset:-6px 0 }` 로 위아래 6px 확장), aria-pressed 토글.
+      {/* 레인 필터 칩 — 보이는 높이 32px, 누르는 높이 44px(CHIP_HIT · gto/chip.ts, 2026-09-24 오너 G3 칩 기준), aria-pressed 토글.
           flex-wrap + 칩 5개(2026-09-14 오너 결정 "분류를 합쳐서 한 줄로"). 종전 6개는 폭 합 420.7px 이라 360px 바(326px)에서
           마지막 칩 하나만 혼자 둘째 줄로 떨어졌다(오너 지적). 갈래를 합치고 px-2 로 줄여 316.6px — 360 부터 한 줄이고
           320·200% 확대에서는 자연히 두 줄로 접힌다(줄바꿈 능력을 남긴 채 폭만 줄였다).
@@ -514,10 +515,10 @@ export default function ToolsPanel() {
           gto-tab-verify 의 "가로 스크롤 0")가 clientWidth < scrollWidth 를 잘림으로 보고, 고정 셀은 200% 에서 3px 넘쳤다.
           그래서 칩에 whitespace-nowrap 도 두지 않는다 — 320px·200% 에서는 칩 안에서 글자가 접혀야 게이트를 지난다.
           ⚠ gap-y 가 gap-x 보다 큰 이유(2026-09-11 실측): gap-1.5(6.375px)는 위아래 줄의 6px 확장이 서로 겹치는 폭이라
-            실효 터치 높이가 39px 로 줄었다. gap-y-3(12.75px) > 6+6 이면 두 줄 모두 46px 을 온전히 가진다. */}
+            실효 터치 높이가 39px 로 줄었다. 2026-09-24: CHIP_HIT 확장 7+7 → gap-y-3.5(14.875px) 로 두 줄 모두 46px. */}
       {!hits && (
         <div data-main-enter data-tools-lanebar="" role="group" aria-label="도구 분류 필터"
-          className="flex flex-wrap justify-center gap-x-1.5 gap-y-3">
+          className="flex flex-wrap justify-center gap-x-1.5 gap-y-3.5">
           {([{ id: 'all' as const, label: '전체' }, ...LANES]).map((l) => {
             const on = lane === l.id;
             return (
@@ -526,7 +527,7 @@ export default function ToolsPanel() {
               //   게이트가 조용히 꺼진다 — subtab-motion 의 tools-lane 계측이 실제로 그렇게 죽어 있었다.
               <button key={l.id} type="button" aria-pressed={on} data-lane={l.id}
                 onClick={() => { const next = on && l.id !== 'all' ? 'all' : l.id; goSubTab('tools-lane', LANE_ORDER, lane, next, () => setLane(next)); }}
-                className={['tap-y-44 inline-flex h-8 items-center justify-center rounded-badge border px-2 text-2xs font-semibold transition-colors',
+                className={[CHIP_HIT, 'inline-flex h-[32px] items-center justify-center rounded-badge border px-2 text-2xs font-semibold transition-colors',
                   on ? 'border-accent-300 bg-accent-300 text-white' : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {l.label}
               </button>

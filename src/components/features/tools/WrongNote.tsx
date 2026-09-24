@@ -8,6 +8,7 @@
 //   카드는 quizCards 공용, 채점·큐 갱신은 applyPreflopAnswer/applyPostflopAnswer 규칙 그대로(맞히면 큐에서 빠진다).
 // 차트 점프: writeSnap('tool:range'|'tool:pushfold') 뒤 #tool= 앵커 — ToolsPanel 이 클릭을 가로채 열린 상태에서
 //   갈아끼우고(swapToolOnLinkClick), renderTool 이 readSnap 으로 initial/highlight prop 을 주입한다.
+import { CHIP_HIT } from '../gto/chip';
 import { useMemo, useState } from 'react';
 import { CalcCard } from './calcUi';
 import Icon from '../../atoms/Icon';
@@ -100,7 +101,7 @@ export default function WrongNote() {
           // 행 탭 → 목록을 그 문제 카드 하나로 교체(카드는 다중 블록이라 행 안에 못 들어간다) → 맞히든 틀리든 '목록으로'
           <div className="space-y-3" data-testid="wrong-note-solving">
             <button type="button" onClick={back}
-              className="inline-flex h-8 items-center gap-1 rounded-input border border-border-default bg-surface-high px-2.5 text-2xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary">
+              className={`${CHIP_HIT} inline-flex h-[32px] items-center gap-1 rounded-input border border-border-default bg-surface-high px-2.5 text-2xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary`}>
               <Icon name="chevron-left" size={13} className="shrink-0" aria-hidden />목록
             </button>
             {solving.kind === 'preflop' ? (
@@ -121,8 +122,8 @@ export default function WrongNote() {
             <p className="text-2xs text-ink-muted">트레이너·드릴에서 틀린 문제가 여기에 쌓입니다.</p>
             <div className="grid grid-cols-2 gap-2 pt-1">
               {/* ToolsPanel 이 #tool= 앵커 클릭을 가로채 도구를 갈아끼운다(히스토리 항목 불변) */}
-              <a href="#tool=trainer" className="inline-flex h-9 items-center justify-center rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">프리플랍 트레이너</a>
-              <a href="#tool=postflop" className="inline-flex h-9 items-center justify-center rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">포스트플랍 트레이너</a>
+              <a href="#tool=trainer" className={`${CHIP_HIT} inline-flex h-[32px] items-center justify-center rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary`}>프리플랍 트레이너</a>
+              <a href="#tool=postflop" className={`${CHIP_HIT} inline-flex h-[32px] items-center justify-center rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary`}>포스트플랍 트레이너</a>
             </div>
           </div>
         ) : (

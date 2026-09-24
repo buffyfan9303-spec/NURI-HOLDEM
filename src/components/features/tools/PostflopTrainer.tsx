@@ -1,3 +1,4 @@
+import { CHIP_HIT } from '../gto/chip';
 import { useMemo, useState } from 'react';
 import { CalcCard } from './calcUi';
 import { useTrainerProgress, recordAnswer, setDailyGoal, GOAL_CHOICES } from '../../../lib/trainerProgress';
@@ -98,7 +99,7 @@ export default function PostflopTrainer() {
             <span className="text-2xs text-ink-muted mr-0.5">목표</span>
             {GOAL_CHOICES.map((g) => (
               <button key={g} type="button" onClick={() => setDailyGoal(g)}
-                className={['h-6 px-1.5 rounded-[6px] text-2xs font-bold leading-none tabular-nums transition-colors', prog.goal === g ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-muted'].join(' ')}>{g}</button>
+                className={[CHIP_HIT, 'h-[32px] px-2 rounded-[6px] text-2xs font-bold leading-none tabular-nums transition-colors', prog.goal === g ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-muted'].join(' ')}>{g}</button>
             ))}
           </div>
         </div>
@@ -109,10 +110,10 @@ export default function PostflopTrainer() {
       </div>
 
       {/* 카테고리 필터 칩 */}
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-x-1 gap-y-3.5">
         {(['all', ...ALL_CATS] as const).map((f) => (
           <button key={f} type="button" onClick={() => changeFilter(f)}
-            className={['rounded-full border px-2 py-0.5 text-2xs font-bold transition-colors',
+            className={[CHIP_HIT, 'h-[32px] rounded-full border px-2.5 text-2xs font-bold transition-colors',
               filter === f ? 'border-accent-400/60 bg-accent-300/10 text-accent-300' : 'border-border-default bg-surface-high text-ink-muted hover:border-accent-400/40'].join(' ')}>
             {f === 'all' ? '전체' : CAT_LABEL[f]}
           </button>

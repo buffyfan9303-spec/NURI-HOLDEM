@@ -5,6 +5,7 @@
 //
 // ⚠ 용어 데이터는 이 파일에 없다 — glossary.data.ts 가 단일 출처다(제안 ⑩).
 //   계산기들이 붙이는 Term 툴팁과 같은 배열을 봐야 사전과 툴팁이 갈라지지 않는다.
+import { CHIP_HIT } from '../gto/chip';
 import { useMemo, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import { GLOSSARY_CATS as CATS, GLOSSARY_TERMS as TERMS, type GlossaryCat as Cat } from './glossary.data';
@@ -44,7 +45,7 @@ export default function GlossaryPanel() {
       {/* ⚠ 줄바꿈이 아니라 가로 스크롤이다(오너 2026-09-18) — 칩이 8개(전체+7분류)라 좁은 폭에서
           반드시 접히고, 마지막 줄에 한두 개만 남는 **고아 줄**이 생긴다. 게다가 분류를 고를 때마다
           줄 수가 변해 아래 목록이 위아래로 튄다. 앱의 다른 칩 레일(커뮤니티 서브탭·장터 분류)과 같은 규약이다. */}
-      <div className="flex gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="용어 분류 필터">
+      <div className="-my-1.5 flex gap-1.5 overflow-x-auto py-1.5 scrollbar-none" role="group" aria-label="용어 분류 필터">
         {(['all', ...CATS] as const).map((c) => {
           const on = cat === c;
           return (
@@ -55,7 +56,8 @@ export default function GlossaryPanel() {
               onClick={() => setCat(on && c !== 'all' ? 'all' : c)}
               className={[
                 // shrink-0 필수 — 가로 스크롤 레일에서 이게 없으면 칩이 눌려 글자가 짜부라진다.
-                'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-input border px-2.5 text-2xs font-semibold transition-colors',
+                // 보이는 32px · 누르는 44px(CHIP_HIT). 가로 스크롤 레일이 위아래를 자르므로 레일에 py-1.5 -my-1.5(6.375px — 잘려도 44.75px).
+                CHIP_HIT, 'inline-flex h-[32px] shrink-0 items-center whitespace-nowrap rounded-input border px-2.5 text-2xs font-semibold transition-colors',
                 on ? 'border-accent-300 bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
               ].join(' ')}
             >

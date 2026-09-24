@@ -1,3 +1,4 @@
+import { CHIP_HIT } from '../gto/chip';
 import { useEffect, useState } from 'react';
 import { CalcCard, Result } from './calcUi';
 import { handName, type FreqMap } from '../../../lib/ranges';
@@ -47,10 +48,10 @@ export function MdfCalc() {
         </label>
       </div>
       {/* 자주 쓰는 벳 사이즈 프리셋 */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-x-1.5 gap-y-3.5">
         {[[25, '¼팟'], [33, '⅓팟'], [50, '½팟'], [66, '⅔팟'], [75, '¾팟'], [100, '팟'], [150, '1.5팟']].map(([pct, label]) => (
           <button key={pct} type="button" onClick={() => setBet(String(Math.round((p * Number(pct)) / 100)))}
-            className="rounded-badge border border-border-default bg-surface-high px-2 py-1 text-2xs font-bold text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 transition-colors">
+            className={`${CHIP_HIT} rounded-badge border border-border-default bg-surface-high h-[32px] px-2 text-2xs font-bold text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 transition-colors`}>
             {label}
           </button>
         ))}

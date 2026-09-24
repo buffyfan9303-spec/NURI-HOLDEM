@@ -1,3 +1,4 @@
+import { CHIP_HIT } from '../gto/chip';
 import { useState } from 'react';
 import { CalcCard, Field, NumIn, Result } from './calcUi';
 import Term from './Term';
@@ -96,9 +97,9 @@ export function EvCalc() {
     <CalcCard title="EV 계산기" desc="EV = 승률×이득 − (1−승률)×손실 (폴드에퀴티 선택 반영)">
       <div className="flex gap-1.5">
         <button type="button" onClick={applyFlip}
-          className="flex-1 h-8 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary leading-none hover:text-ink-primary transition-colors">플립 콜</button>
+          className={`${CHIP_HIT} flex-1 h-[32px] rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary leading-none hover:text-ink-primary transition-colors`}>플립 콜</button>
         <button type="button" onClick={applyBluff}
-          className="flex-1 h-8 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary leading-none hover:text-ink-primary transition-colors">블러프 손익분기</button>
+          className={`${CHIP_HIT} flex-1 h-[32px] rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary leading-none hover:text-ink-primary transition-colors`}>블러프 손익분기</button>
       </div>
       <Field label="승률"><NumIn value={win} onChange={setWin} suffix="%" decimal /></Field>
       <div className="grid grid-cols-2 gap-2">
@@ -124,7 +125,7 @@ export function BankrollCalc() {
         <div className="flex gap-1.5">
           {([{ id: 'tourney', label: '대회' }, { id: 'cash', label: '캐시' }] as const).map((t) => (
             <button key={t.id} type="button" onClick={() => setType(t.id)}
-              className={['flex-1 h-9 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
+              className={[CHIP_HIT, 'flex-1 h-[32px] rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
                 type === t.id ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
               {t.label}
             </button>

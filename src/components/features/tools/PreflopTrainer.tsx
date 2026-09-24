@@ -4,6 +4,7 @@
 //
 // 설계 배경(유지): 균등 샘플이면 UTG 문제의 86%가 자명한 폴드라 경계 집중 샘플링을 쓰고,
 // 통계는 localStorage 에 영속하며, 채점 근거는 가이드와 동일한 표준 차트/Nash 데이터다.
+import { CHIP_HIT } from '../gto/chip';
 import { useState } from 'react';
 import { CalcCard } from './calcUi';
 import {
@@ -56,10 +57,11 @@ export default function PreflopTrainer(
     <CalcCard desc="가이드·Nash 차트와 같은 데이터로 채점 · 경계 핸드 집중 출제">
       {/* 모드 + 점수 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex flex-wrap rounded-input border border-border-default bg-surface-high p-0.5" data-testid="preflop-mode">
+        {/* gap-y-3.5: 320px 에서 5+1 로 접히면 아랫줄 칩의 히트 확장(CHIP_HIT)이 윗줄을 덮었다(실측 '오픈' 39.75px) — 줄 간격을 확장보다 넓힌다. */}
+        <div className="inline-flex flex-wrap gap-y-3.5 rounded-input border border-border-default bg-surface-high p-0.5" data-testid="preflop-mode">
           {MODES.map((m) => (
             <button key={m.id} type="button" onClick={() => switchMode(m.id)} aria-pressed={mode === m.id}
-              className={['h-7 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', mode === m.id ? 'bg-accent-300 text-white' : 'text-ink-muted'].join(' ')}>{m.label}</button>
+              className={[CHIP_HIT, 'h-[32px] px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', mode === m.id ? 'bg-accent-300 text-white' : 'text-ink-muted'].join(' ')}>{m.label}</button>
           ))}
         </div>
         <div className="flex items-center gap-3 text-2xs">
@@ -81,7 +83,7 @@ export default function PreflopTrainer(
             <span className="text-2xs text-ink-muted mr-0.5">목표</span>
             {GOAL_CHOICES.map((g) => (
               <button key={g} type="button" onClick={() => setDailyGoal(g)}
-                className={['h-6 px-1.5 rounded-[6px] text-2xs font-bold leading-none tabular-nums transition-colors', prog.goal === g ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-muted'].join(' ')}>{g}</button>
+                className={[CHIP_HIT, 'h-[32px] px-2 rounded-[6px] text-2xs font-bold leading-none tabular-nums transition-colors', prog.goal === g ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-muted'].join(' ')}>{g}</button>
             ))}
           </div>
         </div>
