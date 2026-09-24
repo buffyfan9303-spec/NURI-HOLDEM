@@ -35,8 +35,19 @@ describe('외부 반출 기능 제거(EXP-01·02·03 · DEAD-01)', () => {
 
   it('CSV·엑셀·캘린더 반출 MIME/도메인 문자열이 src 에 없다', () => {
     for (const re of [/text\/csv/, /vnd\.ms-excel/, /calendar\.google\.com/, /text\/calendar/]) {
-      expect(hits(re), `${re} 잔존`).toEqual([]);
+      // 예외는 딱 한 곳: 매장 영구 삭제 직전 '자료 내려받기'(오너 2026-09-25 DATA-RETENTION —
+      //   장부·근무 기록의 법정 보존은 매장 책임이라 지우기 전에 업주가 가져가게 한다. 위 머리말의 '법적 데이터 제공').
+      //   다른 화면에 CSV 반출이 되살아나면 여전히 여기서 걸린다.
+      const allowed = re.source === 'text\\/csv' ? ['src/components/features/KillSwitch.tsx'] : [];
+      expect(hits(re).filter((f) => !allowed.includes(f)), `${re} 잔존`).toEqual([]);
     }
+  });
+
+  it('CSV 예외(KillSwitch)는 삭제 확인 모달 안에만 있다 — 다른 경로로 새지 않는다', () => {
+    const ks = read('src/components/features/KillSwitch.tsx');
+    expect(ks).toContain('text/csv');
+    expect(ks).toContain('data-testid="kill-export"');
+    expect(hits(/exportVenueCsv/).sort()).toEqual(['src/api/killswitch.ts', 'src/components/features/KillSwitch.tsx']);
   });
 
   it('calendar.ts 는 shareOrCopy 만 export 하고, import 하는 곳은 ToolsPanel 뿐이다', () => {

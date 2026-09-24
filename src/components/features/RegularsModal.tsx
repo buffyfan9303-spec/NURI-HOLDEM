@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { getVenueRegulars, getCustomerActivity, type VenueRegular, type CustomerActivity } from '../../api/reservations';
 import { wonToMan } from '../../api/ledger';
-import { getCustomerProfile, saveCustomerProfile, getCoupons, issueCoupon, setCouponStatus, type Coupon } from '../../api/crm';
+import { getCustomerProfile, saveCustomerProfile, deleteCustomerProfile, getCoupons, issueCoupon, setCouponStatus, type Coupon } from '../../api/crm';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { SkeletonList } from '../atoms/Skeleton';
@@ -91,6 +91,9 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [couponBusy, setCouponBusy] = useState(false);
   const [crmLoaded, setCrmLoaded] = useState(false);
+  // 저장된 손님 정보(customer_profiles 행)가 있는지 — 없으면 지울 것도 없으니 삭제 버튼을 내지 않는다.
+  const [hasProfile, setHasProfile] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   // 생일·쿠폰 조회 실패는 '빈 생일 + 활성 쿠폰 0장'과 똑같이 보였다 —
   // 그 상태로 저장하면 기존 생일을 지우고, 이미 준 쿠폰을 또 발급한다. 실패는 실패로 말하고 재시도를 준다.
   const [crmError, setCrmError] = useState<unknown>(null);
@@ -101,7 +104,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
   const loadCrm = () => {
     setCrmError(null);
     Promise.all([getCustomerProfile(venueId, r.name), getCoupons(venueId, r.name)])
-      .then(([p, c]) => { setBday(p?.birthday ?? ''); setCoupons(c); setCrmLoaded(true); })
+      .then(([p, c]) => { setBday(p?.birthday ?? ''); setHasProfile(p !== null); setCoupons(c); setCrmLoaded(true); })
       .catch((e) => setCrmError(e));
   };
   const toggle = () => {
@@ -113,9 +116,18 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
   const saveBday = async () => {
     if (savingBday) return;
     setSavingBday(true);
-    try { await saveCustomerProfile(venueId, r.name, { birthday: bday || null }); toast.show('생일을 저장했습니다', 'success'); }
+    try { await saveCustomerProfile(venueId, r.name, { birthday: bday || null }); setHasProfile(true); toast.show('생일을 저장했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '생일 저장에 실패했습니다', 'error'); }
     finally { setSavingBday(false); }
+  };
+  // 손님 정보 삭제(오너 2026-09-25 DATA-RETENTION) — 실제 DELETE. 장부·쿠폰은 매장 기록이라 남는다(확인창에 그대로 말한다).
+  const removeProfile = async () => {
+    if (deleting) return;
+    if (!window.confirm(`${r.name}님의 손님 정보(생일·연락처·메모·방문 집계)를 삭제할까요?\n장부·쿠폰 기록은 남습니다. 삭제하면 되돌릴 수 없습니다.`)) return;
+    setDeleting(true);
+    try { await deleteCustomerProfile(venueId, r.name); setBday(''); setHasProfile(false); toast.show('손님 정보를 삭제했습니다', 'success'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '손님 정보 삭제에 실패했습니다', 'error'); }
+    finally { setDeleting(false); }
   };
   // 서버에는 반영됐는데 재조회만 실패한 경우를 '실패'로 말하면 사장님이 같은 쿠폰을 또 발급한다 — 둘을 갈라 말한다.
   const refreshCoupons = async (okMsg: string) => {
@@ -214,6 +226,12 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
                   <button type="button" onClick={() => redeemCoupon(c.id)} disabled={couponBusy} className="shrink-0 text-2xs font-bold text-accent-300 disabled:opacity-50">사용</button>
                 </div>
               ))}
+              {hasProfile && (
+                <div className="flex justify-end">
+                  <button type="button" onClick={removeProfile} disabled={deleting} data-testid="crm-delete-customer"
+                    className="btn-ghost whitespace-nowrap px-2 text-2xs text-danger-light disabled:opacity-50">{deleting ? '삭제 중…' : '손님 정보 삭제'}</button>
+                </div>
+              )}
             </>
             )}
           </div>

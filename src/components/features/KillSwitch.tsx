@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
-import { killSwitchIsSet, setKillPassword, killVenue } from '../../api/killswitch';
+import { killSwitchIsSet, setKillPassword, killVenue, exportVenueCsv, VENUE_EXPORT_GROUPS, type VenueExportGroup } from '../../api/killswitch';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 
@@ -29,6 +29,27 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
   const [password, setPassword] = useState('');
   const [confirmText, setConfirmText] = useState('');
   const [err, setErr] = useState('');
+  // 삭제 전 자료 내려받기(오너 2026-09-25) — 어느 묶음을 받았는지는 모달이 닫혀도 이 화면에 있는 동안 기억한다.
+  const [exported, setExported] = useState<Set<VenueExportGroup>>(() => new Set());
+  const [exporting, setExporting] = useState<VenueExportGroup | null>(null);
+  const doExport = async (g: VenueExportGroup) => {
+    if (exporting) return;
+    setExporting(g);
+    try {
+      const { csv, rows } = await exportVenueCsv(venueId, g);
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      const a = document.createElement('a');
+      const d = new Date(); const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+      a.href = url; a.download = `NURI-${VENUE_EXPORT_GROUPS[g].label}-${ymd}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setExported((s) => new Set(s).add(g));
+      toast.show(`${VENUE_EXPORT_GROUPS[g].label} ${rows}행을 내려받았습니다`, 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '내려받기에 실패했습니다', 'error');
+    } finally { setExporting(null); }
+  };
+  const missing = (Object.keys(VENUE_EXPORT_GROUPS) as VenueExportGroup[]).filter((g) => !exported.has(g));
 
   const refreshStatus = () => {
     setStatusErr(null);
@@ -151,6 +172,20 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
             // ── 3단계 삭제 ──
             <>
               <Steps step={step} />
+              {/* 법정 보존(장부·근무 기록)은 매장 책임이다 — 지우기 전에 먼저 받아 두게 한다. 삭제를 막지는 않는다. */}
+              <div className="rounded-card border border-border-subtle bg-surface-low p-3" data-testid="kill-export">
+                <p className="text-2xs font-bold text-ink-primary">먼저 자료를 내려받으세요</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">삭제하면 다시 받을 수 없습니다. 장부·근무 기록의 법정 보존은 매장 몫입니다.</p>
+                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                  {(Object.keys(VENUE_EXPORT_GROUPS) as VenueExportGroup[]).map((g) => (
+                    <button key={g} type="button" onClick={() => doExport(g)} disabled={exporting !== null}
+                      className="btn-ghost inline-flex items-center justify-center gap-1 whitespace-nowrap px-2 text-2xs disabled:opacity-50">
+                      <Icon name={exported.has(g) ? 'check' : 'download'} size={12} className="shrink-0" />
+                      {exporting === g ? '받는 중…' : VENUE_EXPORT_GROUPS[g].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {step === 1 && (
                 <>
                   <div className="rounded-card border border-danger/30 bg-danger/[0.05] p-3">
@@ -191,6 +226,9 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
                       정말 <b className="text-danger-light">매장 전체를 영구 삭제</b>하시겠습니까? 장부·순위·이용권·직원·클락 등 <b className="text-ink-secondary">모든 데이터가 즉시 사라지며 복구할 수 없습니다.</b>
                     </p>
                   </div>
+                  {missing.length > 0 && (
+                    <p className="text-[11px] font-semibold text-danger-light">아직 내려받지 않은 자료: {missing.map((g) => VENUE_EXPORT_GROUPS[g].label).join(' · ')}</p>
+                  )}
                   <Lbl label={`확인을 위해 '${CONFIRM_PHRASE}'를 입력하세요`}>
                     <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} className="input w-full text-sm" placeholder={CONFIRM_PHRASE} autoFocus />
                   </Lbl>

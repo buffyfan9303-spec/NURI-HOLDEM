@@ -1,5 +1,6 @@
 // src/api/crm.ts — 고객 프로필(생일/연락처/메모) + 쿠폰. 관계자(can_manage_pos)만 접근.
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { mustAffect } from './_mustAffect';
 
 export interface CustomerProfile { name: string; birthday: string | null; phone: string | null; memo: string | null }
 export interface Coupon { id: string; customerName: string; title: string; status: string; expiresAt: string | null; createdAt: string }
@@ -19,6 +20,13 @@ export async function saveCustomerProfile(venueId: string, name: string, p: { bi
     { onConflict: 'venue_id,name' },
   );
   if (error) throw error;
+}
+
+/** 손님 정보(생일·연락처·메모·방문 집계) 삭제 — 실제 DELETE. 서버 규칙: customer_profiles_pos_all = can_manage_pos(venue_id).
+ *  장부·쿠폰은 매장 기록이라 지우지 않는다(오너 2026-09-25 DATA-RETENTION). 0행(권한 없음·이미 지워짐)은 실패로 올린다. */
+export async function deleteCustomerProfile(venueId: string, name: string): Promise<void> {
+  if (IS_MOCK) return;
+  await mustAffect(supabase.from('customer_profiles').delete().eq('venue_id', venueId).eq('name', name));
 }
 
 // ── 장부 이름 ↔ 회원 수동 연결(alias) ─────────────────────────────────────────
