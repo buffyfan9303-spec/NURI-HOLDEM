@@ -137,6 +137,13 @@ const UNREACHABLE: Record<string, string> = {
   GlobalSearchModal: '헤더 검색 버튼이 제거돼(오너 지시) 진입이 Cmd/Ctrl+K 단축키뿐 — 키보드 진입은 다른 축이라 별도.',
   PostFormModal: '글쓰기는 로그인+본인인증 게이트 뒤다(drag-close.spec 의 거짓 통과 사례).',
   MarketplaceFormModal: '장터 글쓰기 — 로그인+본인인증 게이트 뒤라 비로그인으로 도달 못 한다.',
+  // 2026-09-24 번들 여유(D): App 셸의 상시 마운트를 지연 청크(shellDeferred)로 옮겼다 — 사용자가 '여는' 오버레이가 아니다.
+  VerifyGateSheet: '상시 마운트(평소 null). 실제 차단은 ensureVerified() 반환값이 하고 시트는 안내다 — 로그인+미인증 조건이라 비로그인으로 도달 못 한다.',
+  StaffInviteBanner: '상시 마운트(평소 null). 직원 초대가 걸린 로그인 사용자에게만 뜬다 — 비로그인 목킹 없음.',
+  LevelUpWatcher: '상시 마운트 감시자(레벨업 순간에만 축하를 그린다) — 사용자가 여는 화면이 아니다.',
+  NotificationPanel: '헤더 안 상시 마운트, open 은 prop(재서스펜드 없음). 벨은 로그인 필요 — notif-panel-tabbar-safe.spec 이 목킹 세션으로 따로 잰다.',
+  BrowseSideRail: '일정 탐색의 PC 우측 레일(모바일 숨김) — 오버레이가 아니라 탭 본문 조각이다.',
+  PastTournaments: '일정 탐색 목록 맨 아래 조각 — 오버레이가 아니라 탭 본문 조각이다.',
   NoticeFormModal: '관리자 전용 — 공지 작성 버튼이 비관리자에게 렌더되지 않는다.',
   PosterFormModal: '업주·관리자 전용 — 포스터 등록 버튼이 손님에게 없다.',
   GtoDeepModal: 'GTO 탭 안에서 핸드를 고른 뒤라야 열린다 — 진입이 다단계.',
