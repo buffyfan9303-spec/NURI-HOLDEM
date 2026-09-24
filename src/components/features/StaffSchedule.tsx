@@ -32,7 +32,7 @@ function hoursBetween(inHm?: string | null, outHm?: string | null): number {
   return mins / 60;
 }
 
-export default function StaffSchedule({ venueId }: { venueId: string }) {
+export default function StaffSchedule({ venueId, active = true }: { venueId: string; active?: boolean }) {
   const toast = useToast();
   const { user } = useAuth();
   const [month, setMonth] = useState(thisMonth);
@@ -50,9 +50,10 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
   const from = days[0], to = days[days.length - 1];
 
   const reload = () => { getStaffSchedule(venueId, from, to).then(setShifts).catch(() => {}).finally(() => setLoading(false)); };
-  useEffect(() => { setLoading(true); reload(); setSelDay(null); }, [venueId, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 실시간: 직원 셀프 출퇴근/배정 변경 자동 반영
-  useEffect(() => subscribeStaffSchedule(venueId, reload), [venueId, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setLoading(true); setSelDay(null); }, [venueId, from, to]);
+  // 조회 + 실시간(직원 셀프 출퇴근/배정 변경 자동 반영). 숨은 판(내 매장 keep-alive)은 채널을 놓는다 —
+  // 다시 보이면 이 효과만 다시 돌며 조용히 한 번 읽는다(로딩 표시·선택한 날은 그대로).
+  useEffect(() => { if (!active) return; reload(); return subscribeStaffSchedule(venueId, reload); }, [venueId, from, to, active]); // eslint-disable-line react-hooks/exhaustive-deps
   // venueId 를 반드시 넘긴다 — 생략하면 서버가 '내가 소유한 첫 매장'으로 폴백해서
   // 운영자(admin)가 매장을 골라 들어오면 구성원 목록엔 직원이 보이는데 이 명부만 0명이 된다.
   useEffect(() => { getMyVenueStaff(venueId).then((s) => setVenueStaff(s.map((x) => ({ id: x.id, name: x.name })))).catch(() => {}); }, [venueId]);
