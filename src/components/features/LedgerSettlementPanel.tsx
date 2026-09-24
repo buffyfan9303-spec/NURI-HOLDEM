@@ -12,7 +12,7 @@
 // ⚠ 금액은 전부 settlementReport(=buyinFinance) 로만 만든다. 여기서 따로 합산하면
 //   장부·통계·CSV 와 갈린다 — 실제로 CRM 이 그렇게 갈린 적이 있다(ledger.ts F04 주석).
 // ⚠ 플랫폼: 매장 운영은 PC 99%(CLAUDE.md). 데스크톱 2열을 기본으로 두고 모바일은 1열로 접는다.
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Icon, { type IconName } from '../atoms/Icon';
 import { EmptyState } from '../atoms/Skeleton';
 import {
@@ -38,12 +38,19 @@ export default function LedgerSettlementPanel({ venueId, date, active = true }: 
   // 부모(단계 바)가 다른 날짜를 실어 보내면 따라간다 — 사용자가 여기서 바꾼 날짜는 그대로 둔다.
   useEffect(() => { if (date) setDay(date); }, [date]);
 
-  const [data, setData] = useState<{ sessions: LedgerSession[]; buyins: LedgerBuyin[]; players: LedgerPlayer[] } | null>(null);
+  // 🔴 MYSTORE-PC-TAB-JANK(2026-09-24) — 자료에 **누구의 어느 날**인지(key=venueId|day)를 붙인다.
+  //   종전엔 판이 다시 보일 때마다(active) setData(null) 로 비워서, keep-alive 인데도 재진입마다
+  //   옛 보고서 → 스켈레톤 ~300ms → 보고서로 깜빡였다(오너 "정산 탭 깜빡임"). 같은 키면 보고서를 그대로 둔 채
+  //   조용히 다시 읽고, 매장·날짜가 바뀐 경우에만 비운다(다른 날 숫자가 한 프레임이라도 보이면 안 된다).
+  const [data, setData] = useState<{ key: string; sessions: LedgerSession[]; buyins: LedgerBuyin[]; players: LedgerPlayer[] } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const reqKey = useRef('');
+  const key = `${venueId}|${day}`;
 
   const load = useCallback(() => {
     if (!venueId) return;
-    setData(null); setErr(null);
+    reqKey.current = key;
+    setData((d) => (d && d.key === key ? d : null)); setErr(null);
     getLedgerRange(venueId, day, day)
       .then(async ({ sessions, buyins }) => {
         // 명단은 게임별 조회밖에 없다. 하루의 게임은 보통 1~3개라 그대로 병렬로 부른다.
@@ -52,16 +59,17 @@ export default function LedgerSettlementPanel({ venueId, date, active = true }: 
         //   바로 아래 주석이 경계하는 "실패를 빈 화면으로 위장" 과 같은 사고인데 명단만 예외였다.
         //   Promise.all 은 첫 거부에서 바로 거부되므로 아래 .catch 가 그대로 받아 배너를 띄운다.
         const rosters = await Promise.all(sessions.map((s) => getLedgerPlayers(venueId, day, s.gameSeq)));
-        setData({ sessions, buyins, players: rosters.flat() });
+        if (reqKey.current !== key) return; // 날짜·매장이 바뀐 뒤 늦게 온 응답 — 지금 화면에 싣지 않는다
+        setData({ key, sessions, buyins, players: rosters.flat() });
       })
       // 통계는 '0원'과 '못 불러옴'이 시각적으로 같아서 특히 위험하다 — 실패를 빈 화면으로 위장하지 않는다.
-      .catch((e) => setErr(e instanceof Error ? e.message : '정산 자료를 불러오지 못했습니다'));
-  }, [venueId, day]);
+      .catch((e) => { if (reqKey.current === key) setErr(e instanceof Error ? e.message : '정산 자료를 불러오지 못했습니다'); });
+  }, [venueId, day, key]);
   useEffect(() => { if (active) load(); }, [active, load]);
 
   const r: SettlementReport | null = useMemo(
-    () => (data ? settlementReport(day, data.sessions, data.buyins, data.players) : null),
-    [data, day],
+    () => (data && data.key === key ? settlementReport(day, data.sessions, data.buyins, data.players) : null),
+    [data, day, key],
   );
 
   return (

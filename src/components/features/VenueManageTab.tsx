@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, useRef, memo, useCallback, useMemo, startTransition, Suspense } from 'react';
+import { useEffect, useLayoutEffect, useState, type ReactNode, useRef, memo, useCallback, useMemo, startTransition, Suspense } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { goSubTab } from '../../lib/subTabTransition';
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
@@ -208,7 +208,7 @@ const VenueEventRequestPanelM = memo(lazyWithReload(() => import('./VenueEventRe
 // '내 캘린더' 섹션 — App 의 하단 탭 캘린더와 **같은 컴포넌트**다(중복 구현 금지).
 const CalendarPanelM = memo(lazyWithReload(() => import('./CalendarPanel')));
 
-export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, onOpenVenue, deepSection, onConsumeDeepSection, tabActive = true, homeNonce = 0 }: {
+export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, onOpenVenue, deepSection, onConsumeDeepSection, tabActive = true, homeNonce = 0, resVersion, onVenue }: {
   schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
   /** '내 캘린더' 행·포스터 행 '손님화면'·장부 '대회 …' → 손님이 보는 대회 상세. 없으면 행이 클릭되지 않을 뿐 화면은 그대로 뜬다 */
   onOpenSchedule?: (s: Schedule) => void;
@@ -222,6 +222,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   /** 하단 '내 매장' 탭을 누른 횟수 — 바뀔 때마다 대시보드로 돌아간다(오너 2026-09-05:
    *  "다른 걸 보다가 내 매장 탭을 누르면 대시보드로"). keep-alive 라 그냥 두면 마지막 섹션(장부 등)이 남는다. */
   homeNonce?: number;
+  /** '내 캘린더' 재조회 신호 — 홈 캘린더와 같은 값(App 의 resVersion). 예약이 바뀌면 올라간다 */
+  resVersion?: number;
+  /** '내 캘린더' 행의 매장 이름 → 손님이 보는 매장 페이지(App 의 handleVenueClick) */
+  onVenue?: (venueId: string) => void;
 }) {
   const { user, refreshProfile } = useAuth();
   const toast = useToast();
@@ -295,7 +299,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 오늘 5단계의 완료·목적지 — 대시보드가 계산해 올려 준다(숫자 스트립을 알약 바로 합치면서).
   const [stepInfo, setStepInfo] = useState<StoreStepMap | null>(null);
   const gameSelN = useRef(0);
-  const [visited, setVisited] = useState<PaneId[]>([]); // 방문 판(섹션/게임스텝, 최근순) — 마운트 유지(깜빡임 제거), 상한 초과 시 가장 오래된 판 정리(메모리 가드)
+  const [visited, setVisited] = useState<PaneId[]>([]); // 방문 판(섹션/게임스텝) — 마운트 유지(깜빡임 제거). 상한 없음: 아래 P1/P2 주석
 
   // 스텝 이동 공통(IA2) — 게임 섹션 안에서의 이동은 직전 스텝을 백스택에 1개 기억.
   // 장부를 메뉴/칩으로 직접 열 땐 게임관리 시드를 지워 일반 진입으로(시드 부착 진입은 keepLedgerSeed).
@@ -317,6 +321,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // (min-height 가 걸린 노드는 콘텐츠가 그보다 짧은 동안 scrollHeight 도 항상 예약값을 돌려준다).
   const secPanelRef = useRef<HTMLDivElement>(null);
   const secInnerRef = useRef<HTMLDivElement>(null);
+  /** 이번 판 전환이 **첫 방문**인가 — 렌더에서 visited 에 새로 넣을 때 표시하고, 판이 바뀐 커밋(P5 layout effect)에서 옮겨 담는다. */
+  const freshPane = useRef<string | null>(null);
+  const switchFresh = useRef(false);
   const [lockPx, setLockPx] = useState<number | null>(null);
   /** 전환 직전에 부른다 — 지금 판 높이를 그대로 다음 판의 바닥으로 예약. */
   const lockPane = useCallback(() => {
@@ -344,9 +351,31 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       }, 160);
     });
     ro.observe(inner);
-    // 안전망 — 새로 연 판이 원래 예약보다 짧은 판일 수도 있다(영원히 못 따라잡음). 1.2s 뒤엔 그냥 푼다.
-    const t = setTimeout(release, 1200);
-    return () => { ro.disconnect(); clearTimeout(t); if (debounce) clearTimeout(debounce); };
+    // 🔴 MYSTORE-PC-TAB-JANK(2026-09-24) — 종전 1.2s 안전망이 '늦은 덜컥'이었다(root-cause-debugger 실측):
+    //   짧은 판으로 가면 1.2s 뒤에 푸터가 올라오고(CLS 0.06~0.16), 스크롤 1200 이면 1.25s 뒤 scrollY 가
+    //   1200→99 로 깎였다(CLS 0.215). 판은 이미 바뀌었는데 1초 넘게 지나 화면이 한 번 더 움직인 것이다.
+    //   그래서 **정착을 직접 본다**: 판 안에 로딩 표시(skeleton·aria-busy)가 없고 안쪽 높이가 2프레임 연속
+    //   같으면 정착 — 재방문 판은 이미 다 그려져 있어 판 전환과 같은 순간(1~2프레임)에 풀린다.
+    //   재방문인데 판이 로딩 표시를 띄우면(조용한 재조회가 아닌 판) 그동안 기다리되 500ms 에서 끊는다(사업자 푸터 상시
+    //   노출이라 예약을 무한정 쥐고 있을 수 없다 — 판에 뷰포트 min-height 를 거는 방식은 그래서 쓰지 않았다).
+    // ⚠ 첫 방문은 종전 규칙 그대로(따라잡기 디바운스 + 1.2s 안전망). 첫 방문 판은 데이터 파도가 로딩 표시 없이도 온다 —
+    //   매장 설정은 533px 에서 몇 프레임 멈췄다가 2954px 로 자란다(e2e/mystore-transition-cls A, 4325 실측). 여기서 '정착'으로
+    //   풀면 판이 줄었다 다시 자라는 오르내림이 된다. 늦은 덜컥의 실측 사례는 전부 **재방문**이었다(판 전부 유지 이후 재방문은 다 그려져 있다).
+    if (switchFresh.current) {
+      const t = setTimeout(release, 1200);
+      return () => { ro.disconnect(); clearTimeout(t); if (debounce) clearTimeout(debounce); };
+    }
+    const t0 = performance.now();
+    let last = inner.getBoundingClientRect().height, still = 0, raf = 0;
+    const busy = () => !!inner.querySelector('[data-pane]:not([style*="none"]) :is(.skeleton,[aria-busy="true"])');
+    const tick = () => {
+      const h = inner.getBoundingClientRect().height;
+      still = h === last ? still + 1 : 0; last = h;
+      if ((still >= 2 && !busy()) || performance.now() - t0 >= 500) { release(); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { ro.disconnect(); cancelAnimationFrame(raf); if (debounce) clearTimeout(debounce); };
   }, [lockPx]);
   const goStep = useCallback((s: GameStep, opts?: { keepLedgerSeed?: boolean }) => {
     if (s === 'ledger' && !opts?.keepLedgerSeed) setLedgerSeed(null);
@@ -493,16 +522,33 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       return h.slice(0, -1);
     });
   });
-  // 방문 판(섹션/스텝)을 최근순으로 기록 + 상한(8) 초과 시 가장 오래된 판 언마운트(메모리 가드).
-  // 잰크는 active 게이팅(클락·라이브·장부)으로 이미 차단했고, 이건 순수 메모리/구독 누적 방지용.
+  // 방문 판(섹션/스텝) 기록.
+  // 🔴 MYSTORE-PC-TAB-JANK(2026-09-24, root-cause-debugger 실측 · 운영 빌드 1440/1024 · CPU4×):
+  //   P1 — 종전엔 useEffect 로 넣어서, 첫 방문마다 **제목만 바뀌고 판이 없는 프레임**이 한 장 그려졌다
+  //        (커밋 → 페인트 → effect → 다시 커밋). 렌더 중 setState 는 React 가 커밋 전에 즉시 다시 렌더하므로
+  //        판이 제목과 같은 프레임에 선다. 조건부라 무한 루프가 아니다(이미 들어 있으면 부르지 않는다).
+  //   P2 — 종전 상한 8 은 판이 18개인 PC 에서 두 바퀴째 21회 중 14회를 **재마운트**(빈 프레임+스켈레톤+재조회)로
+  //        만들었다. 판 종류는 PaneId 로 유한(≤20)하므로 상한 없이 전부 유지한다. 메모리/구독 누적은
+  //        판마다 active 로 끊는다(클락·장부·통계·포스터·이용권·출근·인건비 — 숨으면 채널을 놓는다).
   const pane: PaneId | null = section === 'game' ? gameStep : section === 'settings' ? settingsTab : section;
-  useEffect(() => {
-    if (!pane) return;
-    setVisited((v) => {
-      const next = [...v.filter((x) => x !== pane), pane];
-      return next.length > 8 ? next.slice(next.length - 8) : next;
-    });
-  }, [pane]);
+  if (pane && !visited.includes(pane)) { freshPane.current = pane; setVisited((v) => (v.includes(pane) ? v : [...v, pane])); }
+  // P5 — PC 에서 판이 바뀐 커밋에, 판 상단이 sticky 머리(사이드바 top)보다 위로 올라가 있으면 판 머리로 끌어내린다.
+  //   긴 판 아래쪽을 보다가 짧은 판으로 가면 새 판의 위쪽이 화면 밖에 있거나, 예약이 풀리며 브라우저가
+  //   scrollY 를 깎아(클램프) 화면이 한 번 더 튀었다. 페인트 전에(useLayoutEffect) 옮겨 한 번에 선다.
+  //   모바일(<1024)은 종전 동작 그대로 — 사이드바가 없고 아코디언 메뉴가 스크롤을 따로 다룬다.
+  const paneSeen = useRef<PaneId | null>(null);
+  useLayoutEffect(() => {
+    const prev = paneSeen.current; paneSeen.current = pane;
+    if (prev !== pane) { switchFresh.current = freshPane.current === pane; freshPane.current = null; } // 예약 해제 규칙이 읽는다(위 lockPx effect)
+    if (!prev || !pane || prev === pane || !tabActive) return;
+    if (!window.matchMedia('(min-width: 1024px)').matches) return;
+    const el = secPanelRef.current;
+    if (!el || el.offsetParent === null) return; // 숨은 탭(display:none) — 좌표가 0 이라 오판한다
+    const nav = document.querySelector('[data-mystore-secbar]');
+    const head = nav ? parseFloat(getComputedStyle(nav).top) || 0 : 0;
+    const top = el.getBoundingClientRect().top;
+    if (top < head - 1) window.scrollBy({ top: top - head, behavior: 'instant' as ScrollBehavior });
+  }, [pane, tabActive]);
 
   // 시즌 '역대 챔피언' 카드 공유에 찍히는 매장명 — prop 이 비어 있어 카드에서 매장명 줄이 통째로
   // 빠져 있었다. 첫 진입 비용 0 을 지키려고 '매장 설정 > 매장 페이지'를 실제로 연 뒤에만 조회한다.
@@ -1022,8 +1068,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     가장 가까운 경계가 이 폴백을 흡수하게 만드는 것이 핵심 — 폴백도 빈 스피너가 아니라
                     `.pane-reserve`(이 파일의 권한 로딩 셸과 같은 자리 예약, index.css:1734)로 높이를 유지한다. */}
                 {visited.includes('calendar') && box('calendar',
-                  <Suspense fallback={<p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
+                  <Suspense fallback={<p aria-busy="true" className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
                     <CalendarPanelM schedules={schedules} onSelect={onOpenSchedule ?? (() => {})}
+                      resVersion={resVersion} onVenue={onVenue}
                       active={tabActive && renderSection === 'calendar'} />
                   </Suspense>)}
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
@@ -1063,18 +1110,18 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </>)}
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} venueName={venueName || undefined} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
-                {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
-                {visited.includes('staff') && staffOk && box('staff', <StaffHub venueId={venueId} />)}
+                {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} active={tabActive && renderSection === 'attendance'} />)}
+                {visited.includes('staff') && staffOk && box('staff', <StaffHub venueId={venueId} active={tabActive && renderSection === 'staff'} />)}
                 {visited.includes('partners') && manageOk && box('partners',
-                  <Suspense fallback={<p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
+                  <Suspense fallback={<p aria-busy="true" className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
                     <VenueMatchPanelM venueId={venueId} canConfigure={manageOk} />
                   </Suspense>)}
                 {visited.includes('event') && manageOk && box('event',
-                  <Suspense fallback={<p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
+                  <Suspense fallback={<p aria-busy="true" className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
                     <VenueEventRequestPanelM venueId={venueId} />
                   </Suspense>)}
                 {visited.includes('pos') && canSettingsTab('pos') && box('pos', <PosSettingsPanelM venueId={venueId} />)}
-                {visited.includes('voucher') && canVoucher && box('voucher', <VoucherManagePanelM venueId={venueId} canIssue={caps.issueVoucher} />)}
+                {visited.includes('voucher') && canVoucher && box('voucher', <VoucherManagePanelM venueId={venueId} canIssue={caps.issueVoucher} active={tabActive && renderSection === 'voucher'} />)}
                 {/* §7 ⑥b: 운영 도구 5종 — GTO 탭에서 이관(레지스트리는 ToolsPanel 재사용) */}
                 {visited.includes('optools') && canSettingsTab('optools') && box('optools', <StoreToolsPanelM />)}
                 {/* 위험 구역(IA1→IA3c) — 매장 영구 삭제. 설정의 전용 하위탭으로 격리(접근 2단계) */}
@@ -2318,14 +2365,14 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
 const TITLE_SUGGEST = ['매니저', '플로어', '딜러', '칩러너', '매장장', '직원'];
 
 // ── 직원 관리 허브(아코디언) ──────────────────────────────────────────────────
-function StaffHub({ venueId }: { venueId: string }) {
+function StaffHub({ venueId, active = true }: { venueId: string; active?: boolean }) {
   const [open, setOpen] = useState<string>('members'); // 한 번에 하나(스크롤 절약)
   const items: { id: string; label: string; node: ReactNode }[] = [
     { id: 'members',  label: '구성원 목록',                 node: <StaffManager venueId={venueId} /> },
     { id: 'schedule', label: '딜러 출근 스케줄',            node: <StaffSchedule venueId={venueId} /> },
     { id: 'wage',     label: '인건비 관리 (시급·급여일·휴무)', node: <StaffWageManager venueId={venueId} /> },
-    { id: 'settle',   label: '인건비 정산 (월 급여·총 인건비)', node: <StaffSettlement venueId={venueId} /> },
-    { id: 'log',      label: '직원 출근일지',                node: <StaffWorkLog venueId={venueId} /> },
+    { id: 'settle',   label: '인건비 정산 (월 급여·총 인건비)', node: <StaffSettlement venueId={venueId} active={active} /> },
+    { id: 'log',      label: '직원 출근일지',                node: <StaffWorkLog venueId={venueId} active={active} /> },
   ];
   return (
     <div className="space-y-3">

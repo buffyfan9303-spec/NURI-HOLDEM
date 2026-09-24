@@ -42,9 +42,11 @@ function fmtDateTime(iso: string | null): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssueProp }: {
+export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssueProp, active: shown = true }: {
   venueId: string;
   prefillReceiver?: string;
+  /** 판이 화면에 보이는가 — 내 매장 keep-alive 로 숨은 동안엔 실시간 채널을 놓는다(모달은 기본 true) */
+  active?: boolean;
   /** 🔴 2026-09-20 (E2-F) — 발급 권한은 **서버 판정을 받아서 넣는다**(`canManagePos` 결과).
    *  종전에는 이 파일 안에서 `user.role === 'venue_owner' && user.venueId === venueId` 로 직접 판정했고,
    *  그건 서버보다 **좁았다**: 라이브 `issue_voucher` 는 `can_manage_pos` 를 쓰고 그 함수는
@@ -179,7 +181,21 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   // 실시간: 이 매장 이용권이 들어오면(사용/발급/회수) 즉시 갱신 — 권한은 RLS로 자동 게이트.
   // ⚠ 킬스위치 OFF 에서는 채널을 열지 않는다 — Realtime 동시연결은 무료 한도의 실질 천장이라
   //   '안 보이는 화면'이 연결을 하나 차지하면 클락 TV 구독까지 같이 열화된다.
-  useEffect(() => (idOn ? subscribeVenueVouchers(venueId, () => reload()) : undefined), [venueId, idOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 🔴 MYSTORE-PC-TAB-JANK(2026-09-24) — 내 매장 판을 전부 유지하게 되면서(상한 해제), 숨은 판이 채널을 계속 물지 않도록
+  //   **보일 때만** 구독한다. 숨은 동안 놓친 변경은 다시 보일 때 1회 조용히 다시 읽는다 — 목록을 '불러오는 중…' 으로
+  //   비우지 않는다(loading 을 켜지 않는다; 진행 중이던 일반 reload 의 로딩 표시는 끝날 때 끈다).
+  useEffect(() => (idOn && shown ? subscribeVenueVouchers(venueId, () => reload()) : undefined), [venueId, idOn, shown]); // eslint-disable-line react-hooks/exhaustive-deps
+  const wasShown = useRef(shown);
+  useEffect(() => {
+    const back = shown && !wasShown.current; wasShown.current = shown;
+    if (!back || !idOn) return;
+    loadVenueVoucherPanel(voucherReq, venueId, canIssue,
+      { list: listVenueVouchers, stats: voucherHolderStats, profiles: voucherHolderProfiles, approved: isVoucherIssueApproved, reasonStats: venueVoucherReasonStats },
+      { list: setList, listErr: setListErr, loading: (b) => { if (!b) setLoading(false); },
+        stats: setStats, profiles: (ps) => setProfileMap(new Map(ps.map((p) => [p.userId, p]))), statsErr: setStatsErr,
+        approved: setApproved, approvedErr: setApprovedErr, reasonStats: setReasonAll, reasonStatsErr: setReasonErr });
+    setReasonTick((t) => t + 1);
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
   // 🔴 Q5(2026-09-21) — QR 이미지는 **어느 매장 것인지**를 함께 들고 다닌다.
   //   종전에는 `QRCode.toDataURL(...).then(setXxxQr)` 만 있어서, 관리자가 매장을 A→B 로 바꾸면
   //   ① 전환 직후 잠깐 **A 의 QR 이 B 라벨 아래 그대로** 남고

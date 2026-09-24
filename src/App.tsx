@@ -4501,10 +4501,9 @@ export default function App() {
             onEditPoster={handleEditPosterFromStore}
             onDeletePoster={handleDeletePoster}
             onOpenVenue={handleOpenOwnVenue}
-            /* 2026-09-24 연결성 감사① — 내 매장 안 캘린더도 홈 캘린더와 같은 재조회 신호·매장 이동을 받게 넘긴다.
-               ⚠ VenueManageTab 이 아직 이 둘을 받지 않는다(수용은 store-team — 그 파일은 다른 팀원 편집 중).
-               타입을 깨지 않도록 펼침으로 넘긴다 — 수용되면 이름 그대로 props 로 옮겨 적어라(값·이름은 CalendarPanel 과 같다). */
-            {...({ resVersion, onVenue: handleVenueClick } satisfies { resVersion: number; onVenue: (venueId: string) => void })}
+            /* 2026-09-24 연결성 감사① — 내 매장 안 캘린더도 홈 캘린더와 같은 재조회 신호·매장 이동을 받는다(값·이름은 CalendarPanel 과 같다). */
+            resVersion={resVersion}
+            onVenue={handleVenueClick}
           />
           </ErrorBoundary>
         </main>

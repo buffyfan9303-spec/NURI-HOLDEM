@@ -36,7 +36,7 @@ describe('F3 · 출근 기록 조회 실패는 "기록 없음" 이 아니다', (
       expect(c).toMatch(/getStaffSchedule\(venueId, from, to\)\s*\.then\([\s\S]*?setShiftErr\(null\);[\s\S]*?\)\s*\.catch\(\(e\) => setShiftErr\(msgOf\(e, '출근 기록을 불러오지 못했습니다'\)\)\)/);
       // 재시도 틱이 effect deps 에 있어야 '다시 시도' 가 실제로 조회를 다시 낸다.
       expect(c).toMatch(/const \[shiftTick, setShiftTick\] = useState\(0\);/);
-      expect(c).toMatch(/\}, \[venueId, from, to, shiftTick(, user)?\]\);/);
+      expect(c).toMatch(/\}, \[venueId, from, to, shiftTick(, user)?(, active)?\]\);/); // active = 숨은 판은 채널을 놓는다(MYSTORE-PC-TAB-JANK)
       expect(c).toMatch(/onClick=\{\(\) => setShiftTick\(\(t\) => t \+ 1\)\}/);
       expect(c).toMatch(/role="alert"/);
     });

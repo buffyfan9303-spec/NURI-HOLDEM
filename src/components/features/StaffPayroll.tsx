@@ -115,7 +115,7 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
 }
 
 // ── 인건비 정산 ──────────────────────────────────────────────────────────────
-export function StaffSettlement({ venueId }: { venueId: string }) {
+export function StaffSettlement({ venueId, active = true }: { venueId: string; active?: boolean }) {
   const [month, setMonth] = useState(thisMonth);
   const [shifts, setShifts] = useState<StaffShift[]>([]);
   const [wages, setWages] = useState<Record<string, number>>({});
@@ -134,9 +134,11 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
     const reload = () => getStaffSchedule(venueId, from, to)
       .then((ss) => { setShifts(ss); setShiftErr(null); })
       .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
+    // 숨은 판(내 매장 keep-alive)은 채널을 놓는다 — 다시 보이면(active) 이 효과가 다시 돌며 조용히 한 번 읽는다(로딩 표시 없음).
+    if (!active) return;
     reload();
     return subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
-  }, [venueId, from, to, shiftTick]);
+  }, [venueId, from, to, shiftTick, active]);
   useEffect(() => {
     getDealerShifts(venueId, from, to)
       .then((ds) => { setDealers(ds); setDealerErr(null); })
@@ -276,7 +278,7 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
 }
 
 // ── 출근 일지 ────────────────────────────────────────────────────────────────
-export function StaffWorkLog({ venueId }: { venueId: string }) {
+export function StaffWorkLog({ venueId, active = true }: { venueId: string; active?: boolean }) {
   const [month, setMonth] = useState(thisMonth);
   const [shifts, setShifts] = useState<StaffShift[]>([]);
   // F3: 조회 실패를 '기록이 없습니다' 로 그리지 않는다.
@@ -287,9 +289,11 @@ export function StaffWorkLog({ venueId }: { venueId: string }) {
     const reload = () => getStaffSchedule(venueId, from, to)
       .then((ss) => { setShifts(ss); setShiftErr(null); })
       .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
+    // 숨은 판(내 매장 keep-alive)은 채널을 놓는다 — 다시 보이면(active) 이 효과가 다시 돌며 조용히 한 번 읽는다(로딩 표시 없음).
+    if (!active) return;
     reload();
     return subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
-  }, [venueId, from, to, shiftTick]);
+  }, [venueId, from, to, shiftTick, active]);
   const sorted = useMemo(() => [...shifts].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.name.localeCompare(b.name))), [shifts]);
   return (
     <div className="space-y-2">
@@ -321,7 +325,7 @@ export function StaffWorkLog({ venueId }: { venueId: string }) {
 }
 
 // ── 직원 본인 출퇴근 입력(셀프) ───────────────────────────────────────────────
-export function StaffSelfAttendance({ venueId }: { venueId: string }) {
+export function StaffSelfAttendance({ venueId, active = true }: { venueId: string; active?: boolean }) {
   const { user } = useAuth();
   const toast = useToast();
   const [month, setMonth] = useState(thisMonth);
@@ -337,10 +341,11 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
     const reload = () => getStaffSchedule(venueId, from, to)
       .then((ss) => { setShifts(ss.filter((s) => myNames.includes(s.name))); setShiftErr(null); })
       .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
+    if (!active) return; // 숨은 판은 채널을 놓는다 — 다시 보이면 조용히 한 번 읽는다
     reload();
     return subscribeStaffSchedule(venueId, reload); // 실시간 동기화
     /* eslint-disable-next-line */
-  }, [venueId, from, to, shiftTick, user]);
+  }, [venueId, from, to, shiftTick, user, active]);
   const setT = async (s: StaffShift, field: 'checkIn' | 'checkOut', val: string) => {
     const prev = s[field] ?? null;
     setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, [field]: val || null } : x)));
