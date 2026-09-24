@@ -1351,19 +1351,25 @@ function FollowButton({ following, count, busy, onToggle, compact }: {
       type="button"
       onClick={onToggle}
       disabled={busy}
+      // 상태는 aria-pressed 가 말한다 — 이름까지 상태 따라 바꾸면 '팔로우 해제, 눌림' 처럼 뜻이 뒤집혀 읽힌다.
       aria-pressed={following}
-      aria-label={following ? '팔로우 해제' : '매장 팔로우'}
+      aria-label="매장 팔로우"
+      data-testid="venue-follow"
       className={[
         // compact: 헤더용 — 높이만 헤더 아이콘(36px)에 맞추고 라벨은 유지(팔로워 수는 숨김).
         // hit: 실측 62×38 로 44px 최소 터치타깃 미달이었다 — 옆 공유 버튼과 달리 .hit 이 빠져 있었다.
         compact
           ? 'hit shrink-0 inline-flex items-center justify-center gap-1 px-2.5 h-9 rounded-full text-xs font-semibold transition-colors disabled:opacity-60'
           : 'shrink-0 inline-flex items-center justify-center gap-1 px-3 h-9 rounded-input text-xs font-semibold transition-colors disabled:opacity-60',
+        // C1(오너 2026-09-24): 예전엔 '팔로잉'이 채운 보라색, '팔로우'가 회색 윤곽이라 인스타·X·유튜브와
+        // 정반대였다 — 채운 버튼은 '누르라는 행동'으로 읽혀 팔로우 중인지 헷갈렸다.
+        // 이제 아이콘(+/✓)·문구·색 3중으로 가른다. 테두리는 양쪽 다 1px(투명/실선)이라 토글해도 폭이 안 변한다.
         following
-          ? 'bg-accent-300 text-white'
-          : 'bg-surface-high text-ink-secondary border border-border-default hover:text-ink-primary',
+          ? 'bg-surface-high text-ink-secondary border border-border-default hover:text-ink-primary'
+          : 'bg-accent-300 text-white border border-transparent hover:bg-accent-400',
       ].join(' ')}
     >
+      <Icon name={following ? 'check' : 'plus'} size={14} className="shrink-0" />
       {following ? '팔로잉' : '팔로우'}
       {!compact && <span className="text-2xs opacity-80">({count.toLocaleString()})</span>}
     </button>
