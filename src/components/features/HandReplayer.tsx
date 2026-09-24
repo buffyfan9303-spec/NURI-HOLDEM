@@ -144,7 +144,10 @@ export default function HandReplayer({ replay, revealAll = false }: { replay: Re
           {replay.pot && <span className="text-2xs text-ink-muted">팟 {replay.pot}</span>}
           {hasBoard && total > 0 && (
             <button type="button" onClick={() => { setShowAll((v) => !v); setStep(0); }}
-              className="rounded-badge border border-border-default px-1.5 py-0.5 text-2xs font-bold text-ink-muted hover:text-ink-secondary transition-colors">
+              // 보이는 크기(22px)는 그대로, 누르는 높이만 넓힌다(2026-09-24 리드 결정 — 글자 버튼 히트 잔여).
+              //   gto/chip.ts TEXT_HIT(위 6 · 아래 13)로는 39px 이라 모자라 위를 12px 로 — 이 버튼 위는 카드 안쪽 여백(13.75px↑)뿐이다.
+              //   아래 13px(테두리 실효 12)은 다음 줄까지 간격 12.75px 안이다. 실측 390·1440: 누름 45px · 이웃 가로채기 0.
+              className={`relative before:absolute before:inset-x-0 before:-top-[12px] before:-bottom-[13px] before:content-[''] rounded-badge border border-border-default px-1.5 py-0.5 text-2xs font-bold text-ink-muted hover:text-ink-secondary transition-colors`}>
               {showAll ? '단계별 보기' : '전체 보기'}
             </button>
           )}
