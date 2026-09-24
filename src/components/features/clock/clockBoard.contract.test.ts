@@ -118,7 +118,9 @@ describe('#4·#6·#7 운영자 콘솔·전체화면 띠', () => {
   });
   it('#4 전체화면 띠 — 하단 레일 폭·높이 전체(inset-x-0 bottom-0 h-[12cqmin]) · 시작/일시정지 testid', () => {
     const i = tc.indexOf('data-testid="clk-fs-overlay"');
-    const block = tc.slice(i, tc.indexOf('<ClockStage', i));
+    const end = tc.indexOf('{stageEl}', i);   // 2026-09-24: 보드는 뒤따라 그리는 {stageEl}(= <ClockStage>)
+    expect(end, '띠 뒤의 보드를 못 찾았다').toBeGreaterThan(i);
+    const block = tc.slice(i, end);
     expect(block).toContain('inset-x-0 bottom-0');
     expect(block, '띠 높이가 하단 레일(12cqmin)과 다르면 숫자가 반쯤 가려진 채 남는다').toContain('h-[12cqmin]');
     expect(block).toContain('data-testid="clk-fs-main"');

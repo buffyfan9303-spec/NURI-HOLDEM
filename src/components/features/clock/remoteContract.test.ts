@@ -37,7 +37,7 @@ describe('C03 · STOP·레벨 이동은 raw currentIndex 가 아니라 effective
 // applyRemoteStatDelta 에 넘긴다 — 동작 검증은 src/api/clock.remoteStats.test.ts 가 한다.
 describe('C02 · 리모컨은 장부 연동 클락의 통계를 "장부에서" 재계산해 저장하지 않는다', () => {
   it('persist 가 장부 연동(state.sessionDate) 분기에서 computeLiveStats·derived 를 쓰지 않는다', () => {
-    const m = code.match(/const persist = useCallback\(async \(patch: Partial<ClockState>\) => \{[\s\S]*?\n {2}\}, \[/);
+    const m = code.match(/const persist = useCallback\((?:async )?\(patch: Partial<ClockState>\) => \{[\s\S]*?\n {2}\}, \[/);
     expect(m, 'persist 정의를 찾지 못했다').not.toBeNull();
     const body = m![0];
     // 삼항의 sessionDate 쪽(참 분기, `?` 와 `:` 사이)에 장부 재계산이 있으면 안 된다.
@@ -49,7 +49,7 @@ describe('C02 · 리모컨은 장부 연동 클락의 통계를 "장부에서" �
   });
 
   it('참 분기는 정본 스냅샷에 state 변화분만 얹는다(그대로 흘리면 TV 가 멈춘다)', () => {
-    const body = code.match(/const persist = useCallback\(async \(patch: Partial<ClockState>\) => \{[\s\S]*?\n {2}\}, \[/)![0];
+    const body = code.match(/const persist = useCallback\((?:async )?\(patch: Partial<ClockState>\) => \{[\s\S]*?\n {2}\}, \[/)![0];
     const truthyBranch = body.match(/const liveStats = state\.sessionDate\s*\?\s*([\s\S]*?)\s*:\s*/)![1];
     expect(truthyBranch).toContain('applyRemoteStatDelta');
     expect(truthyBranch, 'next.liveStats 를 그대로 흘리면 리모컨 조작이 TV 에 반영되지 않는다').not.toMatch(/^next\.liveStats/);

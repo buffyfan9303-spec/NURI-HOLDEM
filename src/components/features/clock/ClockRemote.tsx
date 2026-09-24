@@ -15,7 +15,7 @@
 // 진입: ?remote=<venueId>&g=<gameSeq> (TV 화면 하단 QR · 내 매장 클락 '휴대폰 리모컨' 버튼).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  getClockState, saveClockState, subscribeClock, effectiveLevel, levelMovePatch, computeLiveStats, deriveClockCounts,
+  getClockState, saveClockPatch, createCoalescingSaver, subscribeClock, effectiveLevel, levelMovePatch, computeLiveStats, deriveClockCounts,
   applyRemoteStatDelta, clampAdjEarlies, clampAdjCount,
   type ClockState,
 } from '../../../api/clock';
@@ -41,11 +41,42 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
   const [session, setSession] = useState<LedgerSession | null>(null);
   const [readOnly, setReadOnly] = useState(false); // 저장이 거절되면 켠다(권한 없음)
   const [, setTick] = useState(0);
-  const busyRef = useRef(false);
 
+  // 🔴 CLOCK-TAP-LAG(오너 2026-09-24) — 예전엔 저장 중(busyRef) 탭을 **버렸다**: 왕복 300ms 안의 연타가 사라졌다.
+  //   그리고 자기 저장의 realtime 에코가 부른 재조회가 앞선 탭까지만 반영된 값으로 화면을 되돌렸다.
+  //   운영자 클락과 같은 저장기(api/clock.ts createCoalescingSaver)를 쓴다 — 연타 합치기·순서 보장·바뀐 칸만 UPDATE,
+  //   저장 대기 중 재조회는 버리고 연타가 끝나면 한 번 다시 읽는다.
+  const loadSeqRef = useRef(0);
+  const reloadAfterSaveRef = useRef(false);
+  const loadRef = useRef<() => void>(() => {});
+  const toastRef = useRef(toast);
+  useEffect(() => { toastRef.current = toast; });
+  const saver = useMemo(() => createCoalescingSaver<ClockState>(
+    (s) => `${s.venueId}#${s.gameSeq}`,
+    (next, base) => saveClockPatch(base, next),
+    {
+      error: (e, back) => {
+        setState((cur) => (cur && cur.venueId === back.venueId && cur.gameSeq === back.gameSeq ? back : cur));
+        reloadAfterSaveRef.current = true;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/permission|policy|403|denied|row-level|권한/i.test(msg)) {
+          setReadOnly(true);
+          toastRef.current.show('이 매장의 클락을 조작할 권한이 없어요. 매장 운영자·직원 계정으로 로그인해 주세요', 'error');
+        } else {
+          toastRef.current.show(`저장에 실패했어요. ${msg}`, 'error');
+        }
+      },
+      idle: () => { if (reloadAfterSaveRef.current) { reloadAfterSaveRef.current = false; loadRef.current(); } },
+    },
+  ), []);
   const load = useCallback(() => {
-    getClockState(venueId, gameSeq).then((s) => setState(s)).catch(() => setState((cur) => cur ?? null));
-  }, [venueId, gameSeq]);
+    if (saver.busy) { reloadAfterSaveRef.current = true; return; }
+    const my = ++loadSeqRef.current;
+    getClockState(venueId, gameSeq)
+      .then((s) => { if (my === loadSeqRef.current && !saver.busy) setState(s); })
+      .catch(() => setState((cur) => cur ?? null));
+  }, [venueId, gameSeq, saver]);
+  useEffect(() => { loadRef.current = load; }, [load]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => subscribeClock(venueId, load), [venueId, load]);
   useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
@@ -68,32 +99,23 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
     openedAt: session?.openedAt ?? null,
   }), [buyins, session, cfg?.earlyDoubleMin, cfg?.earlySingleMin]);
 
-  // 낙관적 반영 + 같은 저장 경로. 거절(RLS)되면 읽기전용으로 전환하고 원래 상태로 되돌린다.
-  const persist = useCallback(async (patch: Partial<ClockState>) => {
-    if (!state || !cfg || busyRef.current) return;
-    const next = { ...state, ...patch };
-    const prev = state;
+  // 낙관적 반영 + 같은 저장기. 거절(RLS)되면 읽기전용으로 전환하고 서버가 받아 준 값으로 되돌린다(saver.error).
+  const persist = useCallback((patch: Partial<ClockState>) => {
+    if (!state || !cfg) return;
+    const moved = { ...state, ...patch };
+    // 장부 연동 클락은 정본 스냅샷을 기준으로 두고(장부 재계산 금지, C02) 이번 조작이 바꾼
+    // adj*·eliminations 차이만 얹는다 — 안 얹으면 리모컨 조작이 TV 보드에 영영 반영되지 않는다.
+    // 미연동(standalone) 클락은 derived 가 항상 빈 값이라 여기서 계산해도 stale 하지 않다.
+    // ⚠ 얹은 스냅샷을 **낙관 상태에도** 싣는다 — 안 실으면 다음 탭이 옛 스냅샷에 차분을 얹어 앞 탭 몫이 빠진다.
+    const liveStats = state.sessionDate
+      ? applyRemoteStatDelta(state.liveStats, state, moved, cfg)
+      : { ...computeLiveStats(moved, derived, cfg), buyInAmount: session?.buyinAmount ?? null };
+    const next = { ...moved, liveStats };
+    loadSeqRef.current++;               // 날아가던 조회 응답이 낙관값을 덮지 않게
+    reloadAfterSaveRef.current = true;  // 연타가 끝나면 한 번 다시 읽어 다른 기기 변경과 맞춘다
     setState(next);
-    busyRef.current = true;
-    try {
-      // 장부 연동 클락은 정본 스냅샷을 기준으로 두고(장부 재계산 금지, C02) 이번 조작이 바꾼
-      // adj*·eliminations 차이만 얹는다 — 안 얹으면 리모컨 조작이 TV 보드에 영영 반영되지 않는다.
-      // 미연동(standalone) 클락은 derived 가 항상 빈 값이라 여기서 계산해도 stale 하지 않다.
-      const liveStats = state.sessionDate
-        ? applyRemoteStatDelta(state.liveStats, state, next, cfg)
-        : { ...computeLiveStats(next, derived, cfg), buyInAmount: session?.buyinAmount ?? null };
-      await saveClockState({ ...next, liveStats });
-    } catch (e) {
-      setState(prev);
-      const msg = e instanceof Error ? e.message : String(e);
-      if (/permission|policy|403|denied|row-level/i.test(msg)) {
-        setReadOnly(true);
-        toast.show('이 매장의 클락을 조작할 권한이 없어요. 매장 운영자·직원 계정으로 로그인해 주세요', 'error');
-      } else {
-        toast.show(`저장에 실패했어요. ${msg}`, 'error');
-      }
-    } finally { busyRef.current = false; }
-  }, [state, cfg, derived, session, toast]);
+    saver.push(next, state);
+  }, [state, cfg, derived, session, saver]);
 
   if (!user) {
     return (

@@ -41,9 +41,9 @@ describe('전체화면은 조작 콘솔을 렌더하지 않는다', () => {
     // ⚠ 예전에는 `slice(i, i + 1200)` 고정 창이었다. 버튼이 하나 늘자 toggleFs 가 창 밖으로 밀려
     //   **코드가 멀쩡한데도** 빨개졌다(2026-09-16). 창 크기가 계약이 되면 안 된다 —
     //   다음 형제 요소가 시작되는 지점까지를 블록으로 본다. 2026-09-19 부터 띠는 스테이지 박스 **안**(하단 레일 높이 12cqmin 을
-    //   쓰려고)에 있고 다음 형제는 <ClockStage> 다.
-    const end = code.indexOf('<ClockStage', i);
-    expect(end, '오버레이 뒤의 <ClockStage> 를 못 찾았다 — 구조가 바뀌었으면 이 계약부터 다시 읽어라').toBeGreaterThan(i);
+    //   쓰려고)에 있고 다음 형제는 보드다. 2026-09-24(CLOCK-TAP-LAG)부터 보드는 뒤따라 그리는 `{stageEl}`(= <ClockStage>) 이다.
+    const end = code.indexOf('{stageEl}', i);
+    expect(end, '오버레이 뒤의 보드({stageEl}) 를 못 찾았다 — 구조가 바뀌었으면 이 계약부터 다시 읽어라').toBeGreaterThan(i);
     const block = code.slice(i, end);
 
     for (const forbidden of ['setLevel', 'adjustTime', 'resetClock', 'handleEnd', 'onOpenSettings']) {

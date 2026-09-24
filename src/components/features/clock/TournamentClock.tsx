@@ -1,7 +1,7 @@
 // src/components/features/clock/TournamentClock.tsx
 // 토너먼트 클락 — 설정/프리셋 + 라이브 디스플레이(블라인드 타이머) + 수기 컨트롤 + 일시정지.
 // 와홀덤/Roti 클락 구조를 따르되 NURI 테마로. 장부 연동 카운트 자동 산출 + 수기 보정.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../../atoms/Toast';
 import { useBackClose } from '../../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../../lib/scrollLock';
@@ -15,6 +15,7 @@ import {
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
   getClockState, saveClockState, saveClockLiveStats, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
+  saveClockPatch, createCoalescingSaver,
 } from '../../../api/clock';
 import {
   getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames, openLedgerSession,
@@ -73,12 +74,41 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     clockReqRef.current = stamp;
     return stamp;
   }, []);
+  // 🔴 CLOCK-TAP-LAG(오너 2026-09-24 "올라가는 게 버벅버벅") — 조작 저장은 이 저장기 하나로 나간다.
+  //   예전엔 탭마다 전 행 upsert 가 병렬로 나가고, 자기 저장의 realtime 에코가 부른 재조회가 '앞선 탭까지만 반영된'
+  //   값으로 화면을 되돌렸다(9→10→9→10). 그 되돌아간 값 위에 다음 탭이 얹혀 **탭이 사라졌다**(실측 20회 → +11).
+  //   이제: 한 번에 한 요청 · 날아가는 동안의 탭은 마지막 값 하나로 합침 · 바뀐 칸만 UPDATE ·
+  //   저장 대기 중의 재조회는 버리고, 연타가 끝나면 한 번 재조회해 다른 기기 변경과 맞춘다.
+  const reloadAfterSaveRef = useRef(false);
+  const reloadRef = useRef<() => void>(() => {});
+  const toastRef = useRef(toast);
+  useEffect(() => { toastRef.current = toast; });
+  const saver = useMemo(() => createCoalescingSaver<ClockState>(
+    (s) => `${s.venueId}#${s.gameSeq}`,
+    (next, base) => saveClockPatch(base, next),
+    {
+      error: (e, back) => {
+        setState((cur) => (cur && cur.venueId === back.venueId && cur.gameSeq === back.gameSeq ? back : cur));
+        reloadAfterSaveRef.current = true;
+        toastRef.current.show(msgOf(e, '저장 실패'), 'error');
+      },
+      idle: () => { if (reloadAfterSaveRef.current) { reloadAfterSaveRef.current = false; reloadRef.current(); } },
+    },
+  ), []);
   const reloadState = useCallback(() => {
+    if (saver.busy) { reloadAfterSaveRef.current = true; return Promise.resolve(); }
     const my = bumpClockReq(curGameSeqRef.current);
     return getClockState(venueId, my.owner)
-      .then((s) => { if (!isStaleResponse(my, clockReqRef.current)) setState(s); })
+      .then((s) => { if (!isStaleResponse(my, clockReqRef.current) && !saver.busy) setState(s); })
       .catch(() => {});
-  }, [venueId, bumpClockReq]);
+  }, [venueId, bumpClockReq, saver]);
+  useEffect(() => { reloadRef.current = reloadState; }, [reloadState]);
+  /** ClockLive 의 조작 저장 — 낙관값은 이미 화면에 있다. 날아가던 조회 응답이 그 값을 덮지 않게 스탬프를 올린다. */
+  const saveLive = useCallback((next: ClockState, prev: ClockState) => {
+    if (next.gameSeq === curGameSeqRef.current) bumpClockReq(next.gameSeq);
+    reloadAfterSaveRef.current = true;
+    saver.push(next, prev);
+  }, [saver, bumpClockReq]);
   const reloadPresets = useCallback(() => getClockPresets(venueId).then(setPresets).catch(() => {}), [venueId]);
 
   useEffect(() => {
@@ -258,6 +288,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
         venueName={venueName}
         state={state} canManage={canManage} active={active}
         onChange={(s) => setState(s)}
+        onSave={saveLive}
         onOpenSettings={() => setView('settings')}
         onEnd={endClock}
       />
@@ -336,14 +367,14 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
 /** K1 — 모바일 미리보기의 고정 캔버스 폭(px). PC 미리보기(1024: 748 · 1440: 570)와 같은 급이라 '그대로 축소' 가 된다. */
 const STAGE_CANVAS_W = 720;
 
-function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEnd, active = true }: {
+function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettings, onEnd, active = true }: {
   state: ClockState; canManage: boolean; venueName?: string;
-  onChange: (s: ClockState) => void; onOpenSettings: () => void; onEnd: () => void; active?: boolean;
+  onChange: (s: ClockState) => void; onSave: (next: ClockState, prev: ClockState) => void; onOpenSettings: () => void; onEnd: () => void; active?: boolean;
 }) {
   const toast = useToast();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [linkedSession, setLinkedSession] = useState<LedgerSession | null>(null);
   // 볼륨/음소거 기억 — localStorage에 저장해 매번 재설정 불필요(0=음소거)
@@ -488,13 +519,13 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
   //   예컨대 [일시정지] 저장이 실패하면 PC 만 '정지'로 보이고 서버·TV·장부는 계속 진행했다.
   //   그 상태에서 아무 버튼이나 누르면 `{...state, ...patch}` 전 행 upsert 라 **서버의 진행 레벨이
   //   PC 의 옛 레벨·정지 상태로 되돌아갔다.** 리모컨(ClockRemote:86)은 이미 되돌리는데 PC 만 빠져 있었다.
+  //   롤백·연타 합치기·에코 무시는 부모의 저장기(onSave → createCoalescingSaver)가 맡는다(CLOCK-TAP-LAG).
   const persist = useCallback((patch: Partial<ClockState>) => {
     const prev = state;
     const next = { ...state, ...patch };
     onChange(next);
-    if (canManage) saveClockState({ ...next, liveStats: { ...computeLiveStats(next, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null } })
-      .catch((e) => { onChange(prev); toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); });
-  }, [state, canManage, onChange, toast, derived, cfg, linkedSession]);
+    if (canManage) onSave({ ...next, liveStats: { ...computeLiveStats(next, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null } }, prev);
+  }, [state, canManage, onChange, onSave, derived, cfg, linkedSession]);
 
   // 장부 변동(엔트리/리바인/얼리/바인단가) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
   // (A2) persist(수동 제어)와 이중 저장되며 경쟁하던 것을 디바운스(400ms) 단일 쓰기로 정리 + buyinAmount 키 포함.
@@ -842,6 +873,12 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
     ...state, title,
     liveStats: { ...liveStats, buyInAmount: linkedSession?.buyinAmount ?? null },
   }), [state, title, liveStats, linkedSession]);
+  // CLOCK-TAP-LAG — 보드(ClockStage)는 **뒤따라** 그린다. ± 한 번에 보드 전체(프라이즈·레일·타이머)를 같은 급한 렌더로
+  //   다시 그리면 콘솔 숫자가 그만큼 늦게 바뀐다. 콘솔은 즉시, 보드는 다음 여유 렌더에서 같은 값으로 따라온다.
+  //   tick 을 의존성에 넣는 이유: 보드 머리(effectiveLevel·curBB)는 시각에 따라 바뀌므로 초 틱마다 다시 그려야 한다(종전과 같다).
+  const deferredStage = useDeferredValue(stageState);
+  const stageEl = useMemo(() => <ClockStage g={deferredStage} venueName={venueName} sponsor={adImg} adSize={adSize} />,
+    [deferredStage, tick, venueName, adImg, adSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 초기화 — 종료(END)와 달리 설정은 유지하고 레벨·시간·인원만 처음으로 되돌림
   const resetClock = () => {
@@ -1079,7 +1116,7 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
             · liveStats — 장부 바인에서 파생한 지금 값(TV 는 저장된 스냅샷을 읽는다)
             · title     — 연동된 장부의 대회명이 우선
             · sponsor   — 운영자가 등록한 전체 클락 공통 광고. TV 는 이걸 하단 스폰서 자리에 건다. */}
-        <ClockStage g={stageState} venueName={venueName} sponsor={adImg} adSize={adSize} />
+        {stageEl}
         {/* 🔴 2026-09-11 오너 지시로 뒤집은 결정 — 전체화면에는 **조작 콘솔(consoleUI)을 넣지 않는다.**
             예전 주석은 "전체화면에서는 컨트롤을 화면 안에 둔다 — 그 창이 곧 조작 창이다" 였고,
             그래서 시작·Level±·Min/Sec±·엔트리 5종±·볼륨 슬라이더·초기화·해제가 화면 하단 약 30%를 먹었다.

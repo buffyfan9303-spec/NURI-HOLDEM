@@ -436,6 +436,94 @@ export async function saveClockLiveStats(venueId: string, gameSeq: number, liveS
   if (error) throw error;
 }
 
+/** 이 기기가 **바꾼 칸만** 행 조각으로 만든다(CLOCK-TAP-LAG · critical-reviewer F3, 2026-09-24).
+ *
+ *  왜 전 행 upsert 를 버리나: saveClockState 는 이 기기가 들고 있는 사본 **전체**를 다시 쓴다. 리모컨·장부 리모컨 바·PC 가
+ *  같은 행을 쓰는데, 한쪽의 [아웃] 이 다른 쪽의 낡은 사본(탈락 0·옛 레벨·옛 ends_at)으로 되돌아갔다.
+ *  base(서버가 마지막으로 받아 준 값) 대비 달라진 칸만 보내면 남이 바꾼 칸은 건드리지 않는다.
+ *  ⚠ 같은 칸을 두 기기가 동시에 ±1 하면 여전히 마지막 writer 가 이긴다(절대값 쓰기) — 원자 증감은 서버 RPC 몫이다. */
+export function clockPatchRow(base: ClockState, next: ClockState): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  const put = (col: string, a: unknown, b: unknown) => { if (JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)) row[col] = b ?? null; };
+  put('session_date', base.sessionDate, next.sessionDate);
+  put('title', base.title, next.title);
+  put('config', base.config, next.config);
+  put('current_index', base.currentIndex, next.currentIndex);
+  put('running', base.running, next.running);
+  put('ends_at', base.endsAt, next.endsAt);
+  put('remaining_ms', base.remainingMs, next.remainingMs);
+  put('adj_entries', base.adjEntries, next.adjEntries);
+  put('adj_rebuys', base.adjRebuys, next.adjRebuys);
+  put('adj_earlies', base.adjEarlies, next.adjEarlies);
+  put('adj_addons', base.adjAddons, next.adjAddons);
+  put('eliminations', base.eliminations, next.eliminations);
+  put('live_stats', base.liveStats, next.liveStats);
+  return row;
+}
+
+/** 진행 중 클락의 **바뀐 칸만** UPDATE — 조작(±·시작/정지·레벨) 전용. 행을 새로 만들지 않는다(시작은 saveClockState).
+ *  0행(다른 기기가 종료했거나 권한 없음)은 성공이 아니다 — 호출부가 화면을 되돌린다. */
+export async function saveClockPatch(base: ClockState, next: ClockState): Promise<void> {
+  if (IS_MOCK) return;
+  const row = clockPatchRow(base, next);
+  if (Object.keys(row).length === 0) return;
+  await mustAffect(
+    supabase.from('clock_states').update({ ...row, updated_at: new Date().toISOString() })
+      .eq('venue_id', next.venueId).eq('game_seq', next.gameSeq ?? 1),
+    '클락을 찾지 못했습니다. 이미 종료됐거나 권한이 없습니다',
+  );
+}
+
+/** 연타 합치기 + 순서 보장 저장기 (오너 2026-09-24 CLOCK-TAP-LAG).
+ *
+ *  왜 필요한가(e2e/clock-tap-latency 실측 · 왕복 300ms · 탭 간격 250ms · CPU 4×):
+ *   ① 탭마다 저장이 **병렬로** 나갔다 — 도착 순서가 뒤섞이면 옛 값이 마지막에 이긴다.
+ *   ② 저장마다 realtime 에코 → 재조회(GET)가 **앞선 탭까지만 반영된** 행을 돌려줘 화면이 9→10→9→10 으로 되돌아갔고,
+ *      그 되돌아간 값 위에 다음 탭이 얹혀 **탭이 사라졌다**(20회 → +11). 오너가 본 "버벅버벅" 이 이것이다.
+ *  그래서: 한 번에 **한 요청만** 날리고, 날아가는 동안 들어온 탭은 **마지막 값 하나로 합친다**(키별).
+ *  save 는 (보낼 값, 서버가 마지막으로 받아 준 값) 을 받는다 — 둘의 차이만 쓰면 남이 바꾼 칸을 덮지 않는다.
+ *  `busy` 동안 호출부는 재조회 결과를 화면에 쓰지 않는다 — 이 기기가 곧 그 칸의 마지막 writer 다.
+ *  실패하면 그 키의 **마지막으로 서버가 받아 준 값**(없으면 연타 시작 직전 값)을 돌려준다. */
+export interface CoalescingSaver<T> {
+  push(next: T, prev: T): void;
+  readonly busy: boolean;
+}
+export function createCoalescingSaver<T>(
+  keyOf: (s: T) => string,
+  save: (next: T, base: T) => Promise<void>,
+  on: { error: (e: unknown, rollback: T) => void; idle: () => void },
+): CoalescingSaver<T> {
+  const pending = new Map<string, T>();
+  const base = new Map<string, T>();
+  let inflight = false;
+  const pump = async () => {
+    inflight = true;
+    while (pending.size > 0) {
+      const [k, s] = pending.entries().next().value as [string, T];
+      pending.delete(k);
+      try {
+        await save(s, base.get(k) as T);
+        base.set(k, s);
+      } catch (e) {
+        pending.delete(k);   // 실패한 값 위에 쌓인 탭은 보내지 않는다 — 화면을 서버 기준으로 되돌린다
+        on.error(e, base.get(k) as T);
+      }
+    }
+    inflight = false;
+    base.clear();
+    on.idle();
+  };
+  return {
+    push(next, prev) {
+      const k = keyOf(next);
+      if (!base.has(k)) base.set(k, prev);
+      pending.set(k, next);
+      if (!inflight) void pump();
+    },
+    get busy() { return inflight || pending.size > 0; },
+  };
+}
+
 export async function clearClockState(venueId: string, gameSeq = 1): Promise<void> {
   if (IS_MOCK) return;
   // C07: error 를 버리면 403/500 이어도 호출부(TournamentClock.endClock)가 성공으로 알고
