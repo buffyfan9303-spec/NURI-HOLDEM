@@ -26,7 +26,8 @@ jobs:
     #   Vercel 이 체크 통과를 기다려 승격하므로, CI 가 끝나지 않으면 빌드가 READY 여도
     #   프로덕션 도메인은 이전 배포에 머무른다(2026-09-17 실측: nuriholdem.com 이 749a835 에 멈춤).
     # 통과를 위해 게이트를 느슨하게 푸는 것이 아니다 — 검사 범위는 그대로 두고 **시간만** 준다.
-    timeout-minutes: 30
+    # 2026-09-24: 807 테스트·2 워커로 28~30분에 닿아 e1ea47e8 이 30분에 취소됐다(실패 0, 재시도 몇 건). 45분으로.
+    timeout-minutes: 45
     # Supabase 시크릿이 있으면 실데이터로, 없으면 자동으로 Mock 모드로 스모크가 돈다(둘 다 통과해야 정상)
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
