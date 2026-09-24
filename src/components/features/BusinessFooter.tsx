@@ -52,6 +52,9 @@ function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenLegal?: (d: Lega
           <button type="button" onClick={() => onOpenLegal?.('refund')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">취소·환불 정책</button>
           <span className="text-border-strong" aria-hidden>·</span>
           <button type="button" onClick={() => onOpenLegal?.('location')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">위치기반서비스 이용약관</button>
+          <span className="text-border-strong" aria-hidden>·</span>
+          {/* 계정 삭제 안내(공개 정적 페이지) — Google Play '계정 삭제 URL' 요건: 앱 설치·로그인 없이 열려야 한다(2026-09-25). */}
+          <a href="/legal/delete-account.html" target="_blank" rel="noopener" data-testid="footer-delete-account" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">계정 삭제 안내</a>
           {onOpenSupport && <>
             <span className="text-border-strong" aria-hidden>·</span>
             <button type="button" onClick={onOpenSupport} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-accent-300/90 hover:text-accent-300">고객센터 문의</button>

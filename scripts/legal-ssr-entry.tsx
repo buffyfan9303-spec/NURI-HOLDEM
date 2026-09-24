@@ -6,3 +6,4 @@ export { default as privacy } from '../src/pages/legal/PrivacyPolicy';
 export { default as antiGambling } from '../src/pages/legal/LegalNotice';
 export { default as marketing } from '../src/pages/legal/MarketingConsent';
 export { default as refund } from '../src/pages/legal/RefundPolicy';
+export { default as deleteAccount } from '../src/pages/legal/AccountDeletion';
