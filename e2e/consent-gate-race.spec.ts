@@ -35,14 +35,31 @@ test('🔴 동의 미이행 회원 — 지연 청크가 3초 늦어도 그 사�
   expect(held, '지연 청크 요청을 한 건도 못 잡았다 — 패턴이 빗나가면 이 테스트는 거짓 통과한다').toBeGreaterThan(0);
   expect(released, '게이트가 지연 청크가 풀린 뒤에야 떴다').toBe(0);
 
-  // 뒤 화면 조작 — 실제 손가락처럼 좌표로 누른다(locator.click 은 가려진 요소를 기다리다 타임아웃으로 끝나 '막혔다' 를 말하지 못한다).
+  // 뒤 화면이 가려졌는가 — 탭바 라이브 칸 좌표에 **하단 내비가 아닌 것**이 잡혀야 한다.
+  //   ⚠ 그 좌표를 실제로 누르지 않는다(2026-09-24 간헐 실패 원인): 390×844 에서 동의 시트(높이 622)가 탭바를 덮어
+  //     라이브 칸 중심이 정착한 시트의 '로그아웃' 버튼이다. 누르면 로그아웃→게이트 소멸로 12회 중 2회 실패했다.
   const liveBtn = page.getByRole('navigation', { name: '하단 내비게이션' }).getByRole('button', { name: '라이브', exact: true });
   const box = await liveBtn.boundingBox();
-  expect(box, '하단 탭바 라이브 칸을 못 찾았다 — 누르지 못하면 막혔는지 알 수 없다').not.toBeNull();
-  await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  expect(box, '하단 탭바 라이브 칸을 못 찾았다 — 가려졌는지 알 수 없다').not.toBeNull();
+  const navHit = await page.evaluate(([x, y]) => {
+    const el = document.elementFromPoint(x, y);
+    return !!el?.closest('nav[aria-label="하단 내비게이션"]');
+  }, [box!.x + box!.width / 2, box!.y + box!.height / 2]);
+  expect(navHit, '동의 게이트가 떠 있는데 하단 내비가 손가락에 그대로 닿는다').toBe(false);
+
+  // 실제 누르기는 **시트 위쪽 딤**에 한다 — 뒤 화면(헤더·홈 본문) 위라 가림막이 없으면 뒤로 샌다.
+  const gateTop = (await gate.boundingBox())?.y ?? 0;
+  expect(gateTop, '게이트 시트 위쪽에 딤 영역이 없다 — 누를 자리를 못 잡았다').toBeGreaterThan(40);
+  const dimY = Math.round(gateTop / 2);
+  const dimHit = await page.evaluate(([x, y]) => {
+    const el = document.elementFromPoint(x, y);
+    return !!el && !el.closest('[role="dialog"]') && !!el.closest('[data-scroll-lock]');
+  }, [195, dimY]);
+  expect(dimHit, '시트 위쪽 좌표에 모달 딤이 아닌 것이 잡힌다 — 뒤 화면이 노출돼 있다').toBe(true);
+  await page.mouse.click(195, dimY);
   await page.waitForTimeout(400);
   await expect(page.locator('.tab-pane[data-tab="live"]'), '동의 게이트 뒤에서 탭 전환이 먹혔다').toBeHidden();
-  await expect(gate).toBeVisible();
+  await expect(gate, '딤을 눌렀더니 동의 게이트가 사라졌다').toBeVisible();
   expect(released, '측정이 지연 창(3초)을 넘겼다 — 위 단언이 청크 도착 뒤를 본 것일 수 있다').toBe(0);
 });
 

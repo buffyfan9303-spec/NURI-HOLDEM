@@ -50,7 +50,17 @@ interface ModalProps {
    *  ⚠ 하네스에 주소창이 없어 **효과는 실기기에서만 확인된다**(CLAUDE.md: 재현 못 함 ≠ 없음).
    *    여기서 검증 가능한 것은 '닫은 뒤 목록 위치가 그대로인가' 까지다(e2e/post-nav). */
   keepViewport?: boolean;
+  /**
+   * false 면 **사용자가 닫을 수단이 하나도 없다** — 필수 동의 게이트처럼 '동의 또는 로그아웃' 만 남겨야 하는 창용.
+   * 그립·헤더·본문 드래그(그립 막대 포함), 배경 클릭, 헤더 X, ESC 가 전부 꺼지고 뒤로가기도 닫지 않는다. 기본 true(종전 그대로).
+   * 🔴 2026-09-24 라이브 결함: onClose 를 빈 함수로 넘겨도 시트 그립 드래그는 늘 붙어 있어, 끌어내리면
+   *   onSheetEnd 가 시트만 화면 밖으로 밀고 딤을 0 으로 걷었다 — 보이지 않는 딤이 입력을 삼켜 새로고침 전까지 먹통.
+   *   '닫기 불가' 는 onClose 가 아니라 이 값으로 선언한다(e2e/consent-gate-drag.spec.ts).
+   */
+  dismissible?: boolean;
 }
+
+const NOOP = () => {};
 
 /** 텍스트를 편집 중인 컨트롤 — 여기서 시작한 손짓은 절대 '닫기'로 해석하지 않는다. */
 const EDITABLE_SEL = 'input,textarea,select,[contenteditable=""],[contenteditable="true"],[data-no-drag-close]';
@@ -86,10 +96,14 @@ export function resolveBodyDrag(variant: NonNullable<ModalProps['variant']>, dra
 
 export default function Modal({
   open, onClose, title, headerAction, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
-  dragToClose, density = 'default', keepViewport = false,
+  dragToClose: dragToCloseProp, density = 'default', keepViewport = false, dismissible = true,
 }: ModalProps) {
   const compact = density === 'compact';
+  // 닫을 수 없는 창은 본문 끌기도 끈다 — 변형과 무관하게 resolveBodyDrag 가 false 를 낸다(page 그립도 사라진다).
+  const dragToClose = dismissible ? dragToCloseProp : false;
   const bodyDrag = resolveBodyDrag(variant, dragToClose);
+  // 닫을 수 없는 창은 소비처가 dismissOnBackdrop 을 안 넘겨도 배경 클릭을 받지 않는다.
+  const backdropCloses = dismissible && dismissOnBackdrop;
   // 바디 스크롤 잠금
   // 드래그로 닫혔으면 닫힘 키프레임을 다시 돌리지 않는다(이미 화면 밖 — 되감아 올라왔다 다시 내려가는 이중 퇴장 방지)
   const [dragClosed, setDragClosed] = useState(false);
@@ -105,7 +119,8 @@ export default function Modal({
   // 뒤로가기(브라우저/모바일 back)·ESC → 페이지 이탈 대신 "이 모달만" 닫기.
   // 중앙 back-stack 매니저가 중첩/충돌/이중 pop 을 모두 처리한다. ESC 도 같은 스택이 최상단 한 겹만 닫는다 —
   // 여기서 window keydown 을 따로 들으면 겹친 모달(포스터 상세 위 글쓰기)이 ESC 한 번에 전부 닫힌다(MODAL-01).
-  useBackClose(open && !inline, onClose, { escape: true });
+  // 닫을 수 없는 창도 겹은 등록한다 — 뒤로가기가 뒤 화면(탭 이력)으로 새지 않게 이 겹이 받아 삼킨다. ESC 대상에서는 뺀다.
+  useBackClose(open && !inline, dismissible ? onClose : NOOP, { escape: dismissible });
 
   // 열기/닫기 애니메이션: 닫힐 때 잠깐 더 렌더링하여 시트가 아래로 슬라이드되며 사라지게 한다.
   const [render, setRender] = useState(open);
@@ -296,7 +311,10 @@ export default function Modal({
     if (el && presentationY(el) !== 0) void springTo(el, 0, { damping: 1, response: 0.3 });
   };
   // 시트 드래그 핸들러 한 벌 — 그립·헤더·본문이 **같은 것**을 쓴다(예전엔 같은 리터럴이 세 벌이었다).
-  const sheetTouch = { onTouchStart: onSheetStart, onTouchMove: onSheetMove, onTouchEnd: onSheetEnd, onTouchCancel: onSheetCancel };
+  // 닫을 수 없는 창에는 한 벌도 붙이지 않는다 — onSheetEnd 는 onClose 와 무관하게 시트를 화면 밖으로 민다.
+  const sheetTouch = dismissible
+    ? { onTouchStart: onSheetStart, onTouchMove: onSheetMove, onTouchEnd: onSheetEnd, onTouchCancel: onSheetCancel }
+    : {};
   const dragHandlers = bodyDrag ? sheetTouch : {};
   // ⚠ render 를 같이 본다 — 마운트된 채 닫혀 있다가 열리는 모달(약관 시트 등)은 open 이 true 가 되는 커밋에
   //   콘텐츠가 아직 없다(render 는 위 효과가 다음 커밋에 올린다). open 만 보면 el 이 null 이라 조용히 빠져
@@ -318,9 +336,11 @@ export default function Modal({
             <div className="flex shrink-0 items-center gap-1">
               {headerAction}
               {/* [B] inline(2-pane) 변형만 34px 였다 — sheet/page 변형과 같은 w-11 h-11 로 통일(-mr-2 로 시각 여백 상쇄) */}
-              <button type="button" onClick={onClose} aria-label="닫기" className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
-                <Icon name="close" size={18} />
-              </button>
+              {dismissible && (
+                <button type="button" onClick={onClose} aria-label="닫기" className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                  <Icon name="close" size={18} />
+                </button>
+              )}
             </div>
           </header>
         )}
@@ -366,10 +386,12 @@ export default function Modal({
               compact ? 'text-xs font-semibold text-ink-secondary' : 'text-base font-bold text-ink-primary'].join(' ')}>{title}</h2>
             <div className="flex shrink-0 items-center gap-1.5">
               {headerAction}
-              <button type="button" onClick={onClose} aria-label="닫기"
-                className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
-                <Icon name="close" size={18} />
-              </button>
+              {dismissible && (
+                <button type="button" onClick={onClose} aria-label="닫기"
+                  className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
+                  <Icon name="close" size={18} />
+                </button>
+              )}
             </div>
           </header>
         )}
@@ -390,7 +412,7 @@ export default function Modal({
       }}
     >
       {/* 배경 dim — dismissOnBackdrop=false면 클릭해도 닫히지 않음(작성 중 실수 방지) */}
-      {dismissOnBackdrop ? (
+      {backdropCloses ? (
         <button
           type="button"
           // ⚠ 화면 전체를 덮는 이 버튼이 dialog **바깥**에 있어서, 탭 순서상 모달 내용보다 먼저 잡혔다.
@@ -444,7 +466,8 @@ export default function Modal({
             영역을 핸들 자체가 아니라 이 래퍼로 잡은 이유: 1px 짜리 막대를 정확히 짚기 어렵다. */}
         {/* compact 는 이 자리를 쓰지 않는다 — 그립을 헤더 행 안(절대 배치)으로 옮겨
             '그립 층 + 제목 층'의 이중 높이를 없앤다. 드래그 손잡이는 헤더가 그대로 받는다. */}
-        {variant === 'sheet' && !compact && (
+        {/* 닫을 수 없는 창(dismissible=false)은 그립을 그리지 않는다 — '끌 수 있다' 고 말하면 안 된다. */}
+        {variant === 'sheet' && !compact && dismissible && (
           <div
             className="flex justify-center pt-2 pb-1 sm:hidden touch-none cursor-grab active:cursor-grabbing"
             {...sheetTouch}
@@ -463,7 +486,7 @@ export default function Modal({
             className={['relative flex items-center justify-between border-b border-border-strong',
               compact ? 'px-3 py-1' : 'px-4 py-3',
               // 드래그가 켜진 헤더는 브라우저 기본 제스처에 뺏기지 않게 한다(그립과 같은 처방).
-              variant === 'sheet' && (compact || bodyDrag) ? 'touch-none' : ''].join(' ')}
+              variant === 'sheet' && dismissible && (compact || bodyDrag) ? 'touch-none' : ''].join(' ')}
             /* 헤더 행 전체가 그립이다 — 그립 블록과 **같은 핸들러**를 쓴다.
                (닫기 버튼 위에서 시작한 손짓도 8px 미만이면 드래그로 확정되지 않아 클릭이 그대로 간다.)
                🔴 2026-09-21 오너 요청 — 예전엔 `compact` 시트에서만 붙어 있었다. 그래서
@@ -477,7 +500,7 @@ export default function Modal({
                  e2e/drag-close.spec.ts 의 `toHaveCount(1)` 이 2 가 되어 지금 통과하는 게이트가 깨진다. */
             {...(variant === 'sheet' && (compact || bodyDrag) ? sheetTouch : {})}
           >
-            {compact && variant === 'sheet' && (
+            {compact && variant === 'sheet' && dismissible && (
               <div aria-hidden className="absolute left-1/2 top-1 h-1 w-10 -translate-x-1/2 rounded-full bg-border-strong sm:hidden" />
             )}
             <h2 id="modal-title"
@@ -485,15 +508,17 @@ export default function Modal({
                 compact ? 'text-xs font-semibold text-ink-secondary' : 'text-base font-bold text-ink-primary'].join(' ')}>
               {title}
             </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="닫기"
-              // 44px 터치 표준 — 작아서 빗나가던 닫기 버튼 전역 교정
-              className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
-            >
-              <Icon name="close" size={18} />
-            </button>
+            {dismissible && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="닫기"
+                // 44px 터치 표준 — 작아서 빗나가던 닫기 버튼 전역 교정
+                className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
+              >
+                <Icon name="close" size={18} />
+              </button>
+            )}
           </header>
         )}
 

@@ -83,7 +83,9 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
     setMarketing(v); setPubRank(v); setPubRankTouched(true);
   };
 
-  // 두 상태 모두 필수 동의 게이트다 — 닫기·ESC·배경 클릭으로 빠져나갈 수 없다.
+  // 두 상태 모두 필수 동의 게이트다 — 닫기·ESC·배경 클릭·드래그로 빠져나갈 수 없다.
+  // ⚠ 막는 것은 Modal 의 dismissible={false} 다. 빈 onClose 만으로는 그립 드래그가 시트를 화면 밖으로 밀어
+  //   보이지 않는 딤만 남는 먹통이 났다(2026-09-24 라이브).
   const noClose = () => { /* 필수 동의 — 닫기 불가 */ };
 
   const submit = async () => {
@@ -113,7 +115,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
   const title = mode === 'initial' ? '서비스 이용 동의' : '개정 약관 동의';
 
   return (
-    <Modal open={mode !== null} onClose={noClose} title={title} maxWidth="md" variant="sheet">
+    <Modal open={mode !== null} onClose={noClose} dismissible={false} title={title} maxWidth="md" variant="sheet">
       <div className="p-4 space-y-4">
         {mode === 'initial' ? (
           <p className="text-xs text-ink-secondary leading-relaxed">
