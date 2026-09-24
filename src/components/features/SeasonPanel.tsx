@@ -24,7 +24,8 @@ const medal = (r: number) => (r === 1 ? 'bg-accent-300 text-white' : r === 2 ? '
 // `html.light .text-accent-200 { color:#6946C8 }` 오버라이드로 **라이트 accent-300 과 완전히 동일한 값**이라
 // 라이트 렌더는 1px 도 변하지 않고 다크만 통과한다. 배경/보더의 accent-300 은 텍스트가 아니라 그대로 둔다.
 
-export default function SeasonPanel({ venueId, canManage = false, venueName }: { venueId: string; canManage?: boolean; venueName?: string }) {
+// paneActive — 내 매장 keep-alive 판이 숨었는지(MYSTORE-PC-TAB-JANK). 본문의 `active` 는 '진행 중 시즌'이라 이름을 달리했다.
+export default function SeasonPanel({ venueId, canManage = false, venueName, active: paneActive = true }: { venueId: string; canManage?: boolean; venueName?: string; active?: boolean }) {
   const toast = useToast();
   const [seasons, setSeasons] = useState<VenueSeason[] | null>(null);
   const [standings, setStandings] = useState<SeasonStanding[]>([]);
@@ -50,7 +51,8 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
     getVenueRealNameOptIns(venueId).then(setRealNameOptIns).catch(() => {});
   };
   // 순위 입력(venue_rankings 변경) 시 시즌 standings·HOF 즉시 갱신(실시간). 퍼블리케이션 등록 완료.
-  useEffect(() => { load(); return subscribeRankings(venueId, load); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 숨은 판(내 매장 keep-alive)은 채널을 놓는다 — 다시 보이면 이 효과가 다시 돌며 조용히 한 번 읽는다.
+  useEffect(() => { if (!paneActive) return; load(); return subscribeRankings(venueId, load); }, [venueId, paneActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const active = useMemo(() => seasons?.find((s) => s.status === 'active') ?? null, [seasons]);
   const archived = useMemo(() => seasons?.filter((s) => s.status === 'ended') ?? [], [seasons]);

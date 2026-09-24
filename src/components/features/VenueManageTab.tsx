@@ -1086,7 +1086,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
                 {visited.includes('page') && canSettingsTab('page') && box('page', <>
                   <VenueCustomizePanelM venueId={venueId} onOpenVenue={onOpenVenue ? () => onOpenVenue(venueId) : undefined} />
-                  {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} /></div>}
+                  {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'settings' && renderSettingsTab === 'page'} /></div>}
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </>)}
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} venueName={venueName || undefined} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
@@ -2349,7 +2349,7 @@ function StaffHub({ venueId, active = true }: { venueId: string; active?: boolea
   const [open, setOpen] = useState<string>('members'); // 한 번에 하나(스크롤 절약)
   const items: { id: string; label: string; node: ReactNode }[] = [
     { id: 'members',  label: '구성원 목록',                 node: <StaffManager venueId={venueId} /> },
-    { id: 'schedule', label: '딜러 출근 스케줄',            node: <StaffSchedule venueId={venueId} /> },
+    { id: 'schedule', label: '딜러 출근 스케줄',            node: <StaffSchedule venueId={venueId} active={active} /> },
     { id: 'wage',     label: '인건비 관리 (시급·급여일·휴무)', node: <StaffWageManager venueId={venueId} /> },
     { id: 'settle',   label: '인건비 정산 (월 급여·총 인건비)', node: <StaffSettlement venueId={venueId} active={active} /> },
     { id: 'log',      label: '직원 출근일지',                node: <StaffWorkLog venueId={venueId} active={active} /> },
