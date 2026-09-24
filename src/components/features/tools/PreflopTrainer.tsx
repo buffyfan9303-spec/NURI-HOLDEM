@@ -4,7 +4,7 @@
 //
 // 설계 배경(유지): 균등 샘플이면 UTG 문제의 86%가 자명한 폴드라 경계 집중 샘플링을 쓰고,
 // 통계는 localStorage 에 영속하며, 채점 근거는 가이드와 동일한 표준 차트/Nash 데이터다.
-import { CHIP_HIT } from '../gto/chip';
+import { CHIP_HIT, TEXT_HIT } from '../gto/chip';
 import { useState } from 'react';
 import { CalcCard } from './calcUi';
 import {
@@ -108,7 +108,7 @@ export default function PreflopTrainer(
       />
 
       <div className="flex items-center justify-between">
-        <button type="button" onClick={reset} className="px-1.5 py-1.5 -my-1.5 text-2xs text-ink-muted hover:text-ink-secondary transition-colors">기록 초기화</button>
+        <button type="button" onClick={reset} className={`${TEXT_HIT} px-1.5 py-1.5 -my-1.5 text-2xs text-ink-muted hover:text-ink-secondary transition-colors`}>기록 초기화</button>
         <p className="text-2xs text-ink-muted">
           {stats.wrong.length > 0 ? `오답 노트 ${stats.wrong.length}개. 다음 문제에서 25% 확률로 다시 나옵니다` : '기록은 이 기기에 저장됩니다'}
         </p>

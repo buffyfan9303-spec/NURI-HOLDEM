@@ -262,14 +262,14 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
             { key: 'mine' as const, label: '내 스팟' },
           ]}
           value={tab} onChange={onTab} grow
-          // 44px 히트 계약은 **자식 버튼의** .tap-y-44(::before 위아래 6px)로 지킨다 — 컨테이너에 걸면 버튼 히트는 그대로다(실측 27px).
-          // 2026-09-19 오너 "탭 위아래 공백이 너무 크다": 시각 높이 44 → 34(글자 12.75px 위아래 각 15.6px 이 비어 있었다).
-          //   히트는 34 + 6×2 = 46 ≥ 44 — e2e nuri-spot.spec 뷰포트 매트릭스가 elementFromPoint 로 잰다.
+          // 44px 히트 계약은 **자식 버튼의** ::before 로 지킨다 — 컨테이너에 걸면 버튼 히트는 그대로다(실측 27px).
+          // 2026-09-19 오너 "탭 위아래 공백이 너무 크다": 시각 높이 44 → 34. 2026-09-24 알약 통일(design-reviewer 판정): 34 → 32,
+          //   히트는 CHIP_HIT 와 같은 위아래 8px(gto/chip.ts) — 32 + 16 = 48. e2e nuri-spot.spec 뷰포트 매트릭스가 elementFromPoint 로 잰다.
           //   flex-[2_1_10rem]: 줄 배치용 basis 일 뿐 최소 폭이 아니라(200% 에서도 320px 을 밀지 않는다) 남는 폭을 탭이 가져간다.
-          className="min-w-0 flex-[2_1_10rem] [&>button]:tap-y-44 [&>button]:min-h-[34px]"
+          className="min-w-0 flex-[2_1_10rem] [&>button]:min-h-[32px] [&>button]:before:absolute [&>button]:before:inset-x-0 [&>button]:before:-inset-y-[8px] [&>button]:before:content-['']"
         />
         <button type="button" onClick={gotoBoard} data-testid="spot-board-link"
-          className="tap-y-44 flex min-h-[34px] shrink-0 items-center justify-center gap-1 rounded-input border border-border-subtle bg-surface-high/60 px-2.5 t-tab font-semibold text-accent-200">
+          className={`${CHIP_HIT} flex min-h-[32px] shrink-0 items-center justify-center gap-1 rounded-input border border-border-subtle bg-surface-high/60 px-2.5 t-tab font-semibold text-accent-200`}>
           <span data-testid="spot-board-label">게시판 토론</span>
           <Icon name="chevron-right" size={12} className="block shrink-0" aria-hidden />
         </button>

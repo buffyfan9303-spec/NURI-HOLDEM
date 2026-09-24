@@ -1,7 +1,7 @@
 // src/components/features/gto/GtoDeepPanel.tsx
 // GTO 핸드 분석 — 인라인 패널. 도구 탭에서 다른 계산기와 동일한 카드형 UI로 표시된다.
 // 공유 링크(#gto=) 진입 시에는 GtoDeepModal 이 이 패널을 모달로 감싸 재사용한다.
-import { CHIP_HIT } from './chip';
+import { CHIP_HIT, TEXT_HIT } from './chip';
 import { useEffect, useState } from 'react';
 import Modal from '../../atoms/Modal';
 import { useToast } from '../../atoms/Toast';
@@ -321,7 +321,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
           <button
             type="button"
             onClick={() => deep.applyBoardPreset([])}
-            className="rounded-input border border-border-default bg-surface-high px-3 py-1.5 text-2xs font-semibold text-ink-muted transition-colors hover:text-danger-light"
+            className={`${TEXT_HIT} rounded-input border border-border-default bg-surface-high px-3 py-1.5 text-2xs font-semibold text-ink-muted transition-colors hover:text-danger-light`}
           >
             보드 초기화
           </button>
@@ -343,9 +343,9 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
                 key={t}
                 type="button"
                 onClick={() => deep.setTarget(t)}
-                // 위 빌런 모드 토글과 같은 이유로 h-[44px](오버행이 아니라 실제 박스).
+                // 위 빌런 모드 토글과 같은 기준 — 보이는 32px + CHIP_HIT(누르는 46px 이상). 2026-09-24 알약 통일.
                 className={[
-                  'h-[44px] rounded-input px-2.5 text-2xs font-semibold transition-colors',
+                  CHIP_HIT, 'h-[32px] rounded-input px-2.5 text-2xs font-semibold transition-colors',
                   deep.currentTarget === t ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary border border-border-default',
                 ].join(' ')}
               >

@@ -11,4 +11,8 @@
 //   · 두 줄로 접히는 칩 묶음은 줄 간격 `gap-y-3.5`(14.875px) 이상 — 위아래 확장(실효 7+7)이 겹치면 아랫줄이 윗줄 칩의 히트를 가로챈다.
 //   · 가로 스크롤(overflow-x-auto) 레일은 위아래도 자른다 — 레일에 `py-1.5 -my-1.5`(6.375px) 로 확장이 들어갈 자리를 준다(잘려도 32+6.375×2 = 44.75px).
 // 이 문자열은 Tailwind content 스캔(.ts 포함)에 그대로 잡힌다 — 조립하지 말고 이 한 줄을 그대로 쓴다.
+// 글자 버튼(보이는 크기 그대로, 누름만 44px 이상)용 — **위 6px · 아래 13px** 비대칭.
+//   위쪽 이웃(카드 슬롯·입력칸·다음 문제 버튼)과의 간격이 6.375~12.75px 라 위로는 넓힐 수 없고, 아래는 카드 안쪽 여백(12.75px)이 비어 있다.
+//   28.69~30.69px 글자 버튼 → 47.69px(테두리 있으면 위 5 · 아래 12 실효). 이웃을 덮지 않는지는 elementFromPoint 로 잰다(보고서 표).
+export const TEXT_HIT = "relative before:absolute before:inset-x-0 before:-top-[6px] before:-bottom-[13px] before:content-['']";
 export const CHIP_HIT = "relative before:absolute before:inset-x-0 before:-inset-y-[8px] before:content-['']";

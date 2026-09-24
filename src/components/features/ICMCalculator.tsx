@@ -8,6 +8,7 @@
 // 스택·상금 입력은 세 모드가 공유한다 — 같은 테이블을 두 번 입력시키지 않기 위해서다.
 // 계산(Malmuth-Harville · 리스크 프리미엄 · 칩찹)은 src/lib/icm.ts 단일 소스. 예전엔 이 파일과
 // tools/DealCalc.tsx 에 icmEquity 가 두 벌로 복제돼 있었다.
+import { CHIP_HIT } from './gto/chip';
 import { useMemo, useState } from 'react';
 import { CalcCard } from './tools/calcUi';
 import SegmentedTabs from '../atoms/SegmentedTabs';
@@ -341,9 +342,9 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
       {/* flex-wrap: 320px 에서 탭(130px)+버블 버튼이 한 줄에 못 들어가 탭이 4px 잘렸다(실측) — 좁으면 버블 버튼이 다음 줄로 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SegmentedTabs items={MODES} value={mode} onChange={setMode} />
-        {/* 🔴 G11 — 실측 약 122×22px 였다. 폭은 충분하니 **높이만** 44px 로 올린다(줄바꿈·정렬 불변). */}
+        {/* 🔴 G11 — 실측 약 122×22px 였다. 2026-09-24 알약 통일: 보이는 32px(옆 모드 탭과 같은 높이) + CHIP_HIT 로 누르는 44px 이상. */}
         <button type="button" onClick={applyBubble}
-          className="inline-flex min-h-[44px] shrink-0 items-center rounded-input border border-accent-400/50 bg-accent-300/10 px-2 text-2xs font-bold leading-none text-accent-300">
+          className={`${CHIP_HIT} inline-flex min-h-[32px] shrink-0 items-center rounded-input border border-accent-400/50 bg-accent-300/10 px-2 text-2xs font-bold leading-none text-accent-300`}>
           버블: 4명 · 3자리 시상
         </button>
       </div>
