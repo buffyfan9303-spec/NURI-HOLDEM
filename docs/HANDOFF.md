@@ -7,7 +7,7 @@
 > 그걸 막는 **작업 전 한 동작**이 거기 있다. 10종 전부 지금도 밟을 수 있다(2026-09-23 전수 조사·반증 완료).
 >
 > ✅ **마지막 갱신: 2026-09-24 저녁 (Opus 5.5, nuri-lead) — 순서표 정본은 `docs/plans/2026-09-24-afternoon-execution-plan.md`.**
-> **운영 앱 코드**: `fcb9605f`(CI 초록·라이브 entry `assets/index-DHBAmWZe.js`) → 그 위 `f7546310`(연결성) CI 진행 중.
+> **운영 앱 코드**: `b714c621`(CI 초록·라이브 entry `assets/index-fj5UV9eX.js`·sw.js 에 nuri:notif-link 확인) — 연결성(f7546310) + 내 매장 첫 방문 공통 덮개(b714c621) 포함.
 > 오늘 운영 DB 적용(전부 begin…rollback 리허설 + 대조 후): 20260924c·d·f·g·h·i·j·k·l·m·n·o·p·q.
 > - 🔴 **오늘 발견한 '처음부터 동작하지 않던' 기능 4개**(전부 수정·적용): ① 회원 탈퇴(storage 삭제 가드, n) ② 주간 리포트(enum 'report' 없음, o)
 >   ③ 매장 킬스위치(pgcrypto 가 extensions 스키마 — 이름만 부르면 없음, p) ④ (09-22) 스팟 공유. **0행·0건은 '안 쓴다'가 아니라 '못 쓴다'일 수 있다.**
