@@ -29,8 +29,12 @@ import { useEffect, useRef, useState } from 'react';
 /**
  * `open` 이 true 가 되면 즉시 true, false 가 되면 `ms` 뒤에 false.
  * 닫히는 도중 다시 열리면 예약된 언마운트를 취소한다(빠른 토글에서 화면이 사라지지 않게).
+ * `ms <= 0` 이면 닫히는 **그 렌더에서** 바로 false 다(타이머 한 틱도 남기지 않는다) — 같은 커밋 안에서
+ * 내려야 하는 경로(PC 포스터 역모핑 View Transition 의 new 스냅샷)용. MOTION-UNIFY P3(2026-09-24).
  */
-export function useDelayedUnmount(open: boolean, ms = 220): boolean {
+export function useDelayedUnmount(open: boolean, delayMs = 220): boolean {
+  // 동작 줄이기(reduced-motion)면 index.css 가 fade-out 을 끈다 — 불투명한 채 220ms 남아 있으면 닫힘만 늦어진다(2026-09-24 design-reviewer 실측 +190ms).
+  const ms = delayMs > 0 && typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : delayMs;
   const [mounted, setMounted] = useState(open);
   const timer = useRef(0);
 
@@ -54,5 +58,5 @@ export function useDelayedUnmount(open: boolean, ms = 220): boolean {
   // 언마운트 시 남은 타이머 정리 — setState 경고(사라진 컴포넌트에 상태 갱신)를 막는다
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
 
-  return mounted;
+  return mounted && (open || ms > 0);
 }

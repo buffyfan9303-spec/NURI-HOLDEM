@@ -7,9 +7,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  nextTabCoverValue, tabCoverOnFor, tabCoverKeyframes, tabPaneReady, playTabCover, resetTabCoverCache,
-  TAB_COVER_DEFAULT_ON, TAB_COVER_MS, TAB_COVER_WAIT_MAX_MS,
+  nextTabCoverValue, tabCoverOnFor, tabCoverKeyframes, tabPaneReady, playTabCover, resetTabCoverCache, isSettled,
+  SUB_PANEL, OWN_SCROLL_SCOPES, TAB_COVER_DEFAULT_ON, TAB_COVER_MS, TAB_COVER_WAIT_MAX_MS,
 } from './tabCover';
+import { readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 describe('① 기기별 스위치', () => {
   it('기본 켜짐(2026-09-24 리드 결정) — 스위치 없는 기기는 켜짐', () => {
@@ -59,25 +61,34 @@ describe('② 키프레임 — opacity 만, 첫 프레임 1(K-07)', () => {
 
 describe('③ 준비 대기 — 목적지 판이 그려진 뒤에만 걷는다', () => {
   // node 환경(jsdom 없음) — tabCover 가 쓰는 DOM 면만 흉내 낸다.
-  type Fake = { style: Record<string, string>; offsetHeight: number; shown: boolean; tab?: string };
+  type Fake = { style: Record<string, string>; offsetHeight: number; shown: boolean; tab?: string;
+    querySelectorAll?: () => unknown[]; getBoundingClientRect?: () => { top: number; bottom: number; left: number; width: number } };
   let panes: Fake[] = [];
   let reserves: Fake[] = [];
   let frames: FrameRequestCallback[] = [];
   let now = 0;
   let wide = false;
+  let reducedMotion = false;
   const flush = (ms = 16) => { now += ms; const f = frames; frames = []; f.forEach((cb) => cb(now)); };
   const rects = (f: Fake) => ({ length: f.shown ? 1 : 0 });
-  const pane = (tab: string, h: number): Fake => { const p = { style: { display: '' }, offsetHeight: h, shown: true, tab }; panes.push(p); return p; };
+  const pane = (tab: string, h: number): Fake => {
+    const p: Fake = { style: { display: '' }, offsetHeight: h, shown: true, tab, querySelectorAll: () => [],
+      getBoundingClientRect: () => ({ top: 104, bottom: 104 + p.offsetHeight, left: 108, width: 1224 }) };
+    panes.push(p); return p;
+  };
   const reserve = (shown: boolean): Fake => { const r = { style: {}, offsetHeight: 400, shown }; reserves.push(r); return r; };
   let cover: HTMLElement;
   let animate: ReturnType<typeof vi.fn>;
   beforeEach(() => {
-    panes = []; reserves = []; frames = []; now = 0; wide = false;
+    panes = []; reserves = []; frames = []; now = 0; wide = false; reducedMotion = false;
     vi.stubGlobal('document', {
       querySelectorAll: (sel: string) => (sel === '.pane-reserve[aria-busy="true"]' ? reserves.map((r) => ({ getClientRects: () => rects(r) })) : []),
-      querySelector: (sel: string) => panes.find((p) => sel === `.tab-pane[data-tab="${p.tab}"]`) ?? null,
+      querySelector: (sel: string) => (sel === '[data-stack-tabbar]'
+        ? { getBoundingClientRect: () => ({ bottom: 104 }) }
+        : panes.find((p) => sel === `.tab-pane[data-tab="${p.tab}"]`) ?? null),
     });
-    vi.stubGlobal('window', { matchMedia: () => ({ matches: wide }) });
+    vi.stubGlobal('window', { innerWidth: 1440, innerHeight: 900,
+      matchMedia: (q: string) => ({ matches: q.includes('reduce') ? reducedMotion : wide }) });
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { frames.push(cb); return frames.length; });
     vi.spyOn(performance, 'now').mockImplementation(() => now);
     resetTabCoverCache();
@@ -110,6 +121,8 @@ describe('③ 준비 대기 — 목적지 판이 그려진 뒤에만 걷는다',
     expect(animate).not.toHaveBeenCalled();
     fb.shown = false;
     pane('tools', 900);
+    flush(); // 4차: 높이가 **두 프레임 연속** 같아야 걷는다(늦은 붕괴를 덮개 아래서 끝낸다)
+    expect(animate).not.toHaveBeenCalled();
     flush();
     expect(animate).toHaveBeenCalledTimes(1);
     expect(animate.mock.calls[0][1]).toMatchObject({ duration: TAB_COVER_MS });
@@ -129,18 +142,92 @@ describe('③ 준비 대기 — 목적지 판이 그려진 뒤에만 걷는다',
     const t = pane('tools', 0);
     pane('community', 500);
     playTabCover(cover, 'community');
-    flush();
+    flush(); flush(); // 높이 정지 확인에 두 프레임
     expect(animate).toHaveBeenCalledTimes(1);
     t.offsetHeight = 900;
     flush(); flush();
     expect(animate).toHaveBeenCalledTimes(1);
   });
 
-  it('PC 폭·동작 줄이기면 아무것도 하지 않는다', () => {
-    wide = true;
+  it('동작 줄이기면 아무것도 하지 않는다', () => {
+    reducedMotion = true;
     playTabCover(cover, 'tools');
     expect(cover.style.display).toBe('');
     expect(frames).toEqual([]);
+  });
+
+  it('4차: PC 도 같은 덮개를 탄다 — GNB 밑·콘텐츠 열 폭만(좌우 채움 배경·GNB 는 안 덮는다)', () => {
+    wide = true;
+    pane('tools', 600);
+    playTabCover(cover, 'tools');
+    expect(cover.style.display).toBe('block');
+    expect(cover.style.top).toBe('104px');
+    expect(cover.style.left).toBe('108px');
+    expect(cover.style.width).toBe('1224px');
+    expect(cover.style.height).toBe('600px');
+    flush(); flush();
+    expect(animate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('⑤ 단일 준비 판정 isSettled — 판 안 스켈레톤·aria-busy 까지 본다(4차)', () => {
+  const el = (tag: string, r: { top: number; h: number }, shown = true) => ({
+    tagName: tag, getClientRects: () => ({ length: shown ? 1 : 0 }),
+    getBoundingClientRect: () => ({ top: r.top, bottom: r.top + r.h, width: 300, height: r.h }),
+  });
+  let inner: unknown[] = [];
+  const root = { style: { display: '' }, offsetHeight: 800, querySelectorAll: () => inner } as unknown as Element;
+  beforeEach(() => {
+    inner = [];
+    vi.stubGlobal('document', { querySelectorAll: () => [] });
+    vi.stubGlobal('window', { innerHeight: 844 });
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('화면에 걸친 스켈레톤(invisible 예약 포함 — 레이아웃 박스가 있으면)이 있으면 아직이다', () => {
+    expect(isSettled(root)).toBe(true);
+    inner = [el('DIV', { top: 200, h: 900 })];
+    expect(isSettled(root)).toBe(false); // 첫 방문 라이브의 200ms 게이트 invisible 예약이 이것이다
+  });
+  it('화면 밖(아래) 로딩·숨은(display none) 로딩은 기다리지 않는다', () => {
+    inner = [el('DIV', { top: 1200, h: 100 }), el('DIV', { top: 100, h: 50 }, false)];
+    expect(isSettled(root)).toBe(true);
+  });
+  it('동작 중 버튼·인라인 집계 글자의 aria-busy 는 판 모양을 안 바꾸므로 안 기다린다(상시 700ms 대기 방지)', () => {
+    inner = [el('BUTTON', { top: 100, h: 44 }), el('SPAN', { top: 300, h: 19 })];
+    expect(isSettled(root)).toBe(true);
+  });
+});
+
+describe('⑥ 하위 탭 25곳이 같은 덮개를 탄다 — goSubTab scope ↔ SUB_PANEL ↔ 판 표식', () => {
+  const files: string[] = [];
+  const walk = (d: string) => { for (const n of readdirSync(d)) { const p = join(d, n); if (statSync(p).isDirectory()) walk(p); else if (/\.tsx$/.test(n)) files.push(p); } };
+  walk(resolve(process.cwd(), 'src'));
+  const calls: { file: string; scope: string }[] = [];
+  for (const f of files) {
+    const src = readFileSync(f, 'utf-8');
+    for (const m of src.matchAll(/goSubTab\(\s*'([\w-]+)'/g)) calls.push({ file: f, scope: m[1] });
+  }
+  it('앵커 — 호출부를 실제로 찾았다(공허한 초록 방지)', () => {
+    expect(calls.length).toBeGreaterThanOrEqual(20);
+  });
+  it('모든 scope 에 판 선택자가 있고, 그 판 표식이 **같은 파일**에 실제로 있다', () => {
+    const missing = calls.filter((c) => !SUB_PANEL[c.scope]).map((c) => `${c.file}: ${c.scope}`);
+    expect(missing, 'SUB_PANEL 에 없는 하위 탭 — 덮개 없이 컷으로 바뀐다. src/lib/tabCover.ts 에 한 줄 추가').toEqual([]);
+    const noPanel = calls.filter((c) => {
+      const attr = /\[(data-[\w-]+)\]/.exec(SUB_PANEL[c.scope])![1];
+      return !readFileSync(c.file, 'utf-8').includes(attr);
+    }).map((c) => `${c.file}: ${c.scope} → ${SUB_PANEL[c.scope]}`);
+    expect(noPanel, '판 표식이 그 화면에 없다 — 덮개가 엉뚱한 판을 덮거나 아무것도 안 덮는다').toEqual([]);
+  });
+  it('goSubTab 은 commit() 바로 뒤에 playSubTabCover 를 부른다(한 줄이 25곳을 먹인다)', () => {
+    const g = readFileSync(resolve(process.cwd(), 'src/lib/subTabTransition.ts'), 'utf-8').replace(/\/\/[^\n]*/g, '');
+    const i = g.indexOf('commit();');
+    expect(i).toBeGreaterThan(0);
+    expect(g.slice(i, i + 200)).toMatch(/playSubTabCover\(scope,/);
+  });
+  it('섹션별 복원이 있는 커뮤니티만 공용 스크롤 맞춤에서 뺀다', () => {
+    expect([...OWN_SCROLL_SCOPES]).toEqual(['community-sec']);
   });
 });
 

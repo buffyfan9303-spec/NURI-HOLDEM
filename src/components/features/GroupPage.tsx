@@ -89,7 +89,8 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
     return () => { alive = false; };
   }, [isMember, group?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!open || !group) return null;
+  // MOTION-UNIFY P3 — 닫혀도 App 이 220ms 더 붙들어 둔다(useDelayedUnmount). 그동안 fade-out 으로 그린다.
+  if (!group) return null;
 
   const kindLabel = GROUP_KIND_LABEL[group.kind ?? 'other'];
   const desc  = profile?.description ?? group.description ?? '';
@@ -167,8 +168,10 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
       role="dialog"
       aria-modal="true"
       aria-label={`${group.name} 그룹 페이지`}
-      className="fixed inset-0 z-40 bg-surface-base flex flex-col animate-slide-up pt-[env(safe-area-inset-top)]"
-      style={{ animationDuration: '0.25s' }}
+      inert={!open || undefined}
+      className={['fixed inset-0 z-40 bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]',
+        open ? 'animate-slide-up' : 'animate-fade-out pointer-events-none'].join(' ')}
+      style={open ? { animationDuration: '0.25s' } : undefined}
     >
       {/* 헤더 */}
       <header className="shrink-0 sticky top-0 z-30 flex items-center h-header-h px-page-x bg-surface-base border-b border-border-subtle">

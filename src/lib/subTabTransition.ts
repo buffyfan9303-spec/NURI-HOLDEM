@@ -18,6 +18,12 @@
 // 되살릴 때 함께 푼다 ↓
 // import { flushSync } from 'react-dom';
 // import { withViewTransition } from './viewTransition';
+//
+// 🔵 2026-09-24 MOTION-UNIFY P1 — 본문 전환 연출은 VT 가 아니라 **메인 탭과 같은 덮개**(src/lib/tabCover.ts playSubTabCover)다.
+//   오너: "하나를 부드럽게 바꾸면 나머지 모든 페이지에서도 동일하게." 25곳 호출부는 한 줄도 안 바뀐다 — 여기 한 줄이 전부 먹인다.
+//   덮개는 판 위 지면색 한 장(opacity 1→0, 280ms, 판이 다 그려진 뒤)이라 위 1,300px 낙하(스냅샷 좌표계) 부류가 생기지 않는다.
+//   판 윗변이 레일 밑으로 말려 올라가 있으면 덮개 아래에서 레일 바로 밑으로 맞춘다(스크롤 규칙, 커뮤니티 섹션 복원은 예외).
+import { playSubTabCover } from './tabCover';
 
 /**
  * 하위 탭 하나를 방향성 푸시로 전환한다.
@@ -30,8 +36,8 @@
  * @param commit 상태 갱신(여러 개여도 된다 — 한 커밋으로 묶인다)
  */
 export function goSubTab<T extends string>(
-  /** 되살릴 때 쓴다(지금은 안 쓴다 — 아래 주석 참고). 호출부 20곳을 안 건드리려 시그니처는 그대로 둔다. */
-  _scope: string,
+  /** 덮개가 덮을 판을 찾는 열쇠(src/lib/tabCover.ts SUB_PANEL). 두 화면이 동시에 DOM 에 있어도 누른 레일 옆 판을 고른다. */
+  scope: string,
   _order: readonly T[],
   from: T,
   to: T,
@@ -75,6 +81,8 @@ export function goSubTab<T extends string>(
   //     index.css 의 하위 탭 VT 규칙은 **지우지 않았다** — 마커가 안 켜지므로 잠자코 있을 뿐이다.
   //     되돌릴 필요가 없다고 정해지면 그때 규칙과 계약을 같이 정리한다(CSS 예산도 그만큼 는다).
   commit();
+  // 덮개 — 누른 요소(현재 이벤트의 target)로 레일과 판을 찾는다. 이벤트 밖에서 부르면 target 이 없어 판만 덮는다.
+  playSubTabCover(scope, (globalThis as { event?: Event }).event?.target ?? null);
   // 되살리는 자리 ↓
   // const a = order.indexOf(from);
   // const b = order.indexOf(to);

@@ -18,6 +18,7 @@ import { test, expect } from './_fixtures';
 import { stabilizeBackstack } from './_session';
 
 // 2026-09-20: 모바일 대메뉴는 스냅샷 없이 전환하고, PC는 기존 VT를 유지한다.
+// 2026-09-24 MOTION-UNIFY: PC 도 VT 를 걷어냈다 — 두 폭 모두 스냅샷 0 이 계약이다(아래 ①).
 // 두 폭 모두 실제 목적지 도착과 공통 배경/푸터의 애니메이션 부재를 검사한다.
 const VIEWPORTS = [
   { width: 390, height: 844, label: '모바일' },
@@ -78,9 +79,10 @@ test(`🔴 ${PC.label} ${PC.width}px 대메뉴 전환 — 좌우 채움 배경�
   await expect(page.locator('.tab-pane[data-tab="live"]')).toBeVisible();
   const pseudos = probe.pseudos!;
 
-  // ① 모바일은 VT 부재가 요구사항이고 PC는 VT 실행이 대조군이다.
+  // ① 🔵 2026-09-24 MOTION-UNIFY — 모바일·PC 모두 VT 부재가 요구사항이다(대메뉴 전환은 덮개 한 장, src/lib/tabCover.ts).
+  //   PC 덮개가 좌우 채움 배경·GNB 를 안 덮는지는 e2e/motion-unify.spec.ts MU2 가 덮개 치수로 잰다.
   expect(pseudos.some((p) => p.includes('view-transition')),
-    `${PC.label} 대메뉴의 스냅샷 경로가 잘못됐다: ${JSON.stringify(pseudos)}`).toBe(PC.width >= 1024);
+    `${PC.label} 대메뉴가 스냅샷(VT)을 만들었다: ${JSON.stringify(pseudos)}`).toBe(false);
 
   // ② 좌우 채움 배경과 푸터는 **애니메이션 대상이 아니어야 한다.**
   //    이름이 붙고 `animation:none` 이 먹으면 이 둘의 old/new 의사요소에는 애니메이션이 안 생긴다.
@@ -98,13 +100,13 @@ test(`🔴 ${PC.label} ${PC.width}px 대메뉴 전환 — 좌우 채움 배경�
       .toEqual([]);
   }
 
-  // ②-b 공통 셸은 정지. root 애니메이션은 PC에서만 돌아야 한다.
+  // ②-b 공통 셸은 정지. root 애니메이션도 없다(MOTION-UNIFY — PC 도 VT 를 안 쓴다).
   for (const name of ['app-header', 'app-tabbar', 'app-gnb']) {
     expect(pseudos.filter((p) => p.includes(`(${name})`)),
       `${name} 는 원래 얼려 둔 것인데 애니메이션이 살아났다`).toEqual([]);
   }
   expect(pseudos.some((p) => p.includes('(root)')),
-    `${PC.label} root 애니메이션이 화면 크기별 전환 계약과 다르다`).toBe(PC.width >= 1024);
+    `${PC.label} root 스냅샷 애니메이션이 돌았다`).toBe(false);
 
   // ③ 이름이 실제 화면에서 적용됐나(소스 문자열이 아니라 computed style 로 본다).
   expect(probe.vtNames!.bg, '.aura-bg 에 view-transition-name 이 안 붙었다').not.toBe('none');

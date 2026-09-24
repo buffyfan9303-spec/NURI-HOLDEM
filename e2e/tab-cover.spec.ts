@@ -254,16 +254,25 @@ test('🔴 TC2 — ?fx=off 는 그 기기에서 덮개를 한 프레임도 그�
   expect(r.stored).toBe('tabsoft');
 });
 
-test('TC3 — PC 폭(1024)은 View Transition 이 맡으므로 덮개를 그리지 않는다', async ({ page }) => {
+// 🔵 2026-09-24 MOTION-UNIFY — 뒤집었다. 종전 TC3 는 "PC 는 View Transition 이 맡으므로 덮개를 그리지 않는다" 였다.
+//   오너: "PC 던 모바일이던 하나를 부드럽게 바꾸면 나머지 모든 페이지에서도 동일하게" — PC 메인 탭도 같은 덮개를 탄다
+//   (PC 재방문 VT 0.12s·PC 첫 방문 하드컷을 대체). 덮개는 GNB 밑·콘텐츠 열 폭만 덮는다(좌우 채움 배경·GNB 는 안 덮는다).
+//   프레임 계약 전체(①②③)는 e2e/motion-unify.spec.ts MU2 가 1440·CPU 4배로 잰다 — 여기는 1024 경계의 자리만 본다.
+test('TC3 — PC 폭(1024)도 같은 덮개를 탄다 — GNB 밑에서 시작하고, 정착 후 숨는다', async ({ page }) => {
   test.setTimeout(60_000);
   await boot(page, 1024, '');
   await startRec(page, 'tools');
   await page.locator('[data-stack-tabbar]').getByRole('tab', { name: 'GTO', exact: true }).click();
-  await expect(page.locator('.tab-pane[data-tab="tools"]')).toBeVisible();
-  await page.waitForTimeout(900);
-  const frames = await page.evaluate(() => (window as unknown as { __cov: Cov }).__cov.frames.slice());
-  expect(frames.length).toBeGreaterThan(3);
-  expect(frames.filter((f) => f.disp !== 'none'), 'PC 에서 덮개가 그려졌다').toEqual([]);
+  const r = await settle(page, 'tools');
+  expect(r.frames.length).toBeGreaterThan(3);
+  expect(r.frames.some((f) => f.disp === 'block' && f.op >= 0.9), 'PC 에서 덮개가 한 프레임도 깔리지 않았다').toBe(true);
+  const geo = await page.evaluate(() => ({
+    top: parseFloat(document.querySelector<HTMLElement>('[data-tab-cover]')!.style.top),
+    gnb: document.querySelector('[data-stack-tabbar]')!.getBoundingClientRect().bottom,
+  }));
+  expect(geo.top, '덮개가 PC GNB(활성 밑줄)를 덮는다').toBeGreaterThanOrEqual(geo.gnb - 0.5);
+  expect(r.paneWaapi, '본문(.tab-pane)이나 그 조상에 WAAPI 가 시작됐다').toEqual([]);
+  expect(r.endDisplay).toBe('none');
 });
 
 test.describe('동작 줄이기', () => {

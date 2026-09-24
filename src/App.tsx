@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, use
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { flushSync } from 'react-dom';
 import { withViewTransition, type VTDirection } from './lib/viewTransition';
-import { isTabCoverOn, playTabCover } from './lib/tabCover';
+import { isTabCoverOn, playTabCover, TAB_COVER_TOP } from './lib/tabCover';
 import { getAppSetting, loadEventMenuVisibility } from './api/settings';
 // ⚠ `api/events` 가 아니라 `lib/eventSlug` 에서 받는다 — 둘은 같은 값이지만(그쪽이 재수출한다),
 //   api/events 를 정적으로 물면 TIER_META·oddsRows 까지 첫 화면 임계 경로로 딸려 온다(실측 2026-09-13).
@@ -1089,33 +1089,22 @@ export default function App() {
    * 탭 '커밋' 만 담당한다 — 이력(트레일) 관리는 아래 useEffect 가 맡는다.
    * 뒤로가기로 되돌아오는 경로도 이 함수를 쓰므로 여기서 이력을 건드리면 안 된다.
    */
-  const commitTab = useCallback((t: TabId, dir?: VTDirection) => {
+  const commitTab = useCallback((t: TabId, _dir?: VTDirection) => {
     // Mobile page snapshots compress in Samsung Internet and flash in Chromium.
     // Warm panes need only an urgent state update (also safe from auth effects).
     // Run before the stale-ref guard so the last choice in a batch always wins.
-    if (seenTabs.has(t) && !window.matchMedia('(min-width: 1024px)').matches) {
+    // 🔵 MOTION-UNIFY P1(2026-09-24) — **PC 도 같은 길**이다. PC 재방문은 View Transition(0.12s 크로스페이드)이었고
+    //   PC 첫 방문은 가림막 0 하드컷이었다. 이제 두 폭 모두 급한 커밋 + 아래 layout effect 의 덮개(tabCover.ts) 하나다.
+    //   (VT 는 전환 중 히트테스트가 <html> 로 떨어져 rescue 가 필요했다 — 덮개는 pointer-events-none 이라 그런 게 없다.)
+    //   `_dir` 은 뒤로가기 경로(commitTab(t,'back'))의 호출 모양을 지키려고 남긴다 — 방향 연출은 없다.
+    void _dir;
+    if (seenTabs.has(t)) {
       setActiveTab(t);
       return;
     }
     if (t === activeTabRef.current) return;
-    // 메이저 사이트의 '부드러움'은 전환 커밋 비용이 0이라서가 아니라, 스냅샷 크로스페이드가
-    // 무거운 프레임을 가리기 때문이다(View Transition). 재방문 탭(keep-alive)은 동기 커밋이
-    // 가능하므로 flushSync 를 트랜지션 콜백 안에서 돌려 display 토글·스크롤 복원 비용 전부를
-    // 이전 화면 스냅샷 '뒤에서' 치르고, 완성된 새 화면으로 180ms 크로스페이드만 보여준다.
-    // 첫 방문(lazy 청크)은 Suspense 가 끼므로 기존 startTransition 유지(이전 화면 유지 효과 동일).
-    if (seenTabs.has(t)) {
-      // 애플식 방향성: 탭바에서 오른쪽 탭으로 가면 새 화면이 오른쪽에서 밀려 들어온다(반대는 반대).
-      const ORDER: TabId[] = ['home', 'browse', 'live', 'community', 'tools', 'calendar', 'my-store', 'admin'];
-      const from = ORDER.indexOf(activeTabRef.current);
-      const to = ORDER.indexOf(t);
-      withViewTransition(
-        () => { flushSync(() => setActiveTab(t)); },
-        () => startTabTransition(() => setActiveTab(t)),
-        dir ?? (to >= from ? 'forward' : 'back'),
-      );
-    } else {
-      startTabTransition(() => setActiveTab(t));
-    }
+    // 첫 방문(lazy 청크)은 Suspense 가 끼므로 startTransition — 준비될 때까지 이전 화면을 유지하고, 커밋 뒤 덮개가 받는다.
+    startTabTransition(() => setActiveTab(t));
     // seenTabs 는 안정 Set 인스턴스(useState 초기화) — 참조 불변
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1758,30 +1747,36 @@ export default function App() {
       if (w.requestIdleCallback) w.requestIdleCallback(cb, { timeout: 10000 });
       else setTimeout(cb, 5000);
     };
+    // MOTION-UNIFY P4(2026-09-24) — `import()` 가 아니라 `X.preload()` 로 데운다.
+    //   `import()` 는 청크만 받고 lazyWithReload 의 모듈 칸(`mod`)을 안 채워, 첫 렌더가 여전히 lazy 로 한 번
+    //   서스펜드했다 → 조건부 Suspense 경계(매장 페이지 등)에서 불투명 폴백 357~426ms(4x 실측).
+    //   preload() 는 같은 요청을 공유하면서 모듈을 채워 **첫 열기부터 동기 렌더**가 된다(받는 바이트는 같다).
     const warm = () => {
       void Promise.allSettled([
-        import('./components/features/CommunityTab'),
-        import('./components/features/MarketplaceTab'),
-        import('./components/features/LiveGamesTab'),
+        CommunityTab.preload(),
+        MarketplaceTab.preload(),
+        LiveGamesTab.preload(),
         // ⚠ VenueManageTab 은 여기 넣지 않는다 — 업주 전용 스위트(장부·통계·클락·급여)를 static import 로
         //   끌고 와서 306KB + LedgerStatsPanel 155KB 가 '비로그인 손님'에게도 내려갔다.
         //   아래 prefetch() 가 이미 `if (isOwner)` 로 게이팅하고 있는데 여기가 그걸 무력화하고 있었다.
-        import('./components/features/ToolsPanel'),
-        import('./components/features/VenuePage'),
-        import('./components/features/ScheduleDetailModal'),
-        import('./components/features/CustomerDashboardPage'),
-        import('./components/features/AuthModal'),
-        import('./components/features/GlobalSearchModal'),
-        import('./components/features/PostDetailModal'),
-        import('./components/features/ListingDetailModal'),
+        ToolsPanel.preload(),
+        VenuePage.preload(),
+        GroupPage.preload(),            // 매장 목록의 그룹 카드 — VenuePage 와 같은 경계(첫 열기 폴백)
+        ScheduleDetailModal.preload(),
+        CustomerDashboardPage.preload(),
+        AuthModal.preload(),
+        GlobalSearchModal.preload(),
+        PostDetailModal.preload(),
+        ListingDetailModal.preload(),
+        NoticeDetailModal.preload(),    // 장터 첫 행이 공지다 — 매물 상세와 같은 자리
         // 이벤트 화면 — 홈 배너에서 바로 들어가는 길인데 목록에 빠져 있었다. 클릭 순간 청크를 받느라
         //   Suspense 폴백(불투명 스피너)이 **299ms** 떴다(실측 2026-09-08). gzip 5.2KB 라 idle 에 데워도 싸다.
-        import('./components/features/EventPage'),
+        EventPage.preload(),
         // 이벤트 **목록** — 홈 이벤트 칸이 여는 첫 화면이 이것이다(2026-09-18 부터 보드가 아니라 목록).
         //   EventPage 만 데우고 이건 빠져 있었다. 청크와 함께 목록 데이터도 캐시에 채워 둔다 —
         //   그래야 첫 열기부터 스켈레톤 없이 카드가 바로 선다(EVT-OPEN-STUTTER, 오너 2026-09-23).
         //   조회는 event_campaigns 30행·7열 한 번. 실패는 여기서 알릴 화면이 없어 두고, 열 때 다시 받아 그린다.
-        import('./components/features/EventListPage'),
+        EventListPage.preload(),
         import('./lib/eventListCache').then((m) => m.prefetchEventList()),
         // 캘린더 — **일반 유저의 5번째 탭인데 이 목록에도, 아래 프리마운트 seq 에도 빠져 있었다.**
         //   오너 2026-09-17: "다른 메뉴에서 캘린더로 이동하는 경우 다른 메뉴 이동과 다르게 버벅임이 있다."
@@ -1797,7 +1792,7 @@ export default function App() {
         //     (나머지 절반은 섹션이 빈 판으로 먼저 서는 것 — VenueManageTab 쪽에서 자리 예약으로 막는다).
         //     ⇒ **역할 게이트를 없애지 않고 양쪽 다 데운다.** 손님에게 업주 스위트를 내려보내는 것과는
         //       방향이 반대다 — 이건 이미 업주가 열게 되어 있는 화면의 청크다.
-        import('./components/features/CalendarPanel'),
+        CalendarPanelLazy.preload(),   // 같은 청크를 VenueManageTab 의 CalendarPanelM 도 쓴다(네트워크 캐시 공유)
         //   같은 이유로 내 매장의 나머지 lazy 섹션 둘도 데운다(둘 다 가벼운 청크다).
         ...((isOwner || isAdmin || user?.role === 'venue_staff')
           ? [import('./components/features/VenueMatchPanel'), import('./components/features/VenueEventRequestPanel')]
@@ -1808,11 +1803,11 @@ export default function App() {
         //   (바로 옆 알림 아이콘에는 이 비용이 0이다: NotificationPanel 은 부팅 직후 shellDeferred 청크로 받아 상시 마운트해 둔다 — 누를 땐 이미 떠 있다.)
         // ⚠ user 게이트가 필요하다 — 이용권 버튼 자체가 `{user && (` 안이라 비로그인에는 없는 화면이다.
         //   위 VenueManageTab 주석이 기록한 '게이트를 무력화해 손님에게 내려보낸' 사고와 같은 부류를 만들지 않는다.
-        ...(user ? [import('./components/features/MyVoucherSheet')] : []),
+        ...(user ? [MyVoucherSheet.preload()] : []),
         // 역할 전용 청크 — 해당 역할일 때만(손님에게 업주 스위트를 내려보내지 않는다)
         // 직원(venue_staff)도 내 매장 탭을 쓰므로 업주와 같은 게이트에 포함
-        ...((isOwner || isAdmin || user?.role === 'venue_staff') ? [import('./components/features/VenueManageTab')] : []),
-        ...(isAdmin ? [import('./components/features/AdminTab')] : []),
+        ...((isOwner || isAdmin || user?.role === 'venue_staff') ? [VenueManageTab.preload()] : []),
+        ...(isAdmin ? [AdminTab.preload()] : []),
       ]).then(() => {
         // 프리마운트: 청크가 데워진 뒤, 핵심 탭을 idle 마다 하나씩 숨김 마운트해 둔다.
         // 이유 — '첫 탭 진입'만 VT 마스킹이 못 가리는 경로(Suspense·startTransition 커밋)라
@@ -2064,6 +2059,22 @@ export default function App() {
   const lastNotice = useRef(openNotice);        if (openNotice !== null) lastNotice.current = openNotice;
   const lastPosterTarget = useRef(posterFormTarget); if (posterFormTarget !== null) lastPosterTarget.current = posterFormTarget;
   const lastLegal = useRef(legalDoc);           if (legalDoc !== null) lastLegal.current = legalDoc;
+  /* MOTION-UNIFY P3(2026-09-24) — 위 ⚠ 에서 뺐던 4개(+이벤트 목록)도 퇴장을 준다. 닫기 하드컷 전부 제거.
+     · 포스터·게시글 상세 = Modal page 라 open=false 면 스스로 fade-out 한다. 마지막 값을 붙잡아 넘긴다.
+     · 매장/그룹·이벤트·이벤트 목록 = 자체 fixed 화면 — open=false 를 받으면 fade-out 으로 그리게 바꿨다.
+     ⚠ PC 포스터 닫기는 역모핑(View Transition, closeSchedule) — new 스냅샷에 상세가 남으면 모핑이 깨지므로
+       PC 는 지연 0(같은 커밋에서 내린다). PC 2-pane inline 상세는 여기 아닌 각 탭 안이라 무관. */
+  const isDesktopNow = useIsDesktop();
+  const scheduleMounted = useDelayedUnmount(openSchedule !== null, isDesktopNow ? 0 : 220);
+  const postMounted      = useDelayedUnmount(openPost !== null);
+  const venueMounted     = useDelayedUnmount(openVenueId !== null);
+  const eventMounted     = useDelayedUnmount(eventOpen);
+  const eventListMounted = useDelayedUnmount(eventListOpen);
+  const lastSchedule = useRef(openSchedule);    if (openSchedule !== null) lastSchedule.current = openSchedule;
+  const lastPost = useRef(openPost);            if (openPost !== null) lastPost.current = openPost;
+  const lastVenueId = useRef(openVenueId);      if (openVenueId !== null) lastVenueId.current = openVenueId;
+  const shownSchedule = openSchedule ?? lastSchedule.current;
+  const shownPost = openPost ?? lastPost.current;
 
   // GTO 공유 링크(#gto=...) 진입 — 받은 사람이 열면 같은 스팟으로 GTO 검색 모달 표시
   const [gtoInit, setGtoInit] = useState<DeepGtoInit | null>(null);
@@ -3967,7 +3978,7 @@ export default function App() {
           평소 display:none. 켜진 기기의 모바일 탭 전환 때 opacity 1 로 깔고, 목적지 판이 그려진 뒤(상한 700ms) 280ms 동안 opacity 만 1→0(tabsoft, 기본 켜짐·?fx=off 로 기기별 끄기) (src/lib/tabCover.ts). */}
       <div ref={tabCoverRef} aria-hidden data-tab-cover
         className="pointer-events-none fixed inset-x-0 bottom-0 z-[45] hidden bg-surface-base opacity-0"
-        style={{ top: 'calc(var(--header-now) + 1px)' }} />
+        style={{ top: TAB_COVER_TOP }} />
 
       {/* 일정 탐색 */}
       <div className="px-page-x"><Suspense fallback={null}><StaffInviteBanner /></Suspense></div>
@@ -4625,20 +4636,20 @@ export default function App() {
           보드가 목록 위에 덮인다. 목록은 여기서 닫지 않는다 — 보드를 닫으면 그대로 드러나야
           "뒤로가기: 보드 → 목록 → 닫기" 가 성립한다(위 eventListOpen 주석 참고). */}
       <Suspense fallback={null}>
-        {eventListOpen && (
-          <EventListPage open onClose={() => setEventListOpen(false)} onSelect={(slug) => openEvent(slug)} />
+        {eventListMounted && (
+          <EventListPage open={eventListOpen} onClose={() => setEventListOpen(false)} onSelect={(slug) => openEvent(slug)} />
         )}
       </Suspense>
 
       <Suspense fallback={null}>
-        {eventOpen && (
+        {eventMounted && (
           /* ⚠ onLogin 은 이벤트 판을 **닫지 않는다.**
               예전엔 `setEventOpen(false)` 를 먼저 불렀는데, 그 순간 '지금 보고 있는 화면' 스냅샷이
               `kind:'tab'` 으로 덮여서 — AuthModal 이 구글로 떠나기 직전에 뜨는 그 스냅샷이다 —
               로그인 왕복 뒤 이벤트가 아니라 홈에 떨어졌다. 복원 종류에 'event' 를 추가해도 순서가 그대로면 소용이 없다.
               AuthModal 은 같은 z-[60] 을 이 뒤에 렌더하므로 위에 얹히고, 이메일 로그인처럼 떠나지 않는 경로에서는
               닫으면 이벤트 판이 그대로 남아 있다(왕복 자체가 없어 더 낫다). */
-          <EventPage open slug={eventSlug} onSlug={setEventSlug} onClose={() => setEventOpen(false)} onLogin={openLoginCb} />
+          <EventPage open={eventOpen} slug={eventSlug} onSlug={setEventSlug} onClose={() => setEventOpen(false)} onLogin={openLoginCb} />
         )}
       </Suspense>
 
@@ -4659,15 +4670,15 @@ export default function App() {
         <AuthModal key={authMode} open={authOpen} onClose={closeLoginFromQr} initialMode={authMode} />
       )}
 
-      {openSchedule !== null && (
+      {scheduleMounted && shownSchedule && (
       <ScheduleDetailModal
-        open
-        schedule={openSchedule}
+        open={openSchedule !== null}
+        schedule={shownSchedule}
         onClose={closeSchedule}
         onVenueClick={openVenueFromSchedule}
         onDisplay={openDisplay}
-        rating={openSchedule ? venueRatings[openSchedule.venueId] : undefined}
-        regInfo={openSchedule ? regInfoBySchedule.get(openSchedule.id) : undefined}
+        rating={venueRatings[shownSchedule.venueId]}
+        regInfo={regInfoBySchedule.get(shownSchedule.id)}
         comments={comments}
         onSubmitComment={async (content, parentId) => {
           if (!openSchedule) return;
@@ -4681,18 +4692,20 @@ export default function App() {
       />
       )}
 
-      {openVenueId !== null && (() => {
-        const ov = venues.find((v) => v.id === openVenueId) ?? null;
+      {venueMounted && lastVenueId.current !== null && (() => {
+        const vid = lastVenueId.current;
+        const vOpen = openVenueId !== null;
+        const ov = venues.find((v) => v.id === vid) ?? null;
         const isGroup = !!ov?.kind && ov.kind !== 'venue';
         return (
           <Suspense fallback={<OverlayFallback />}>
             {/* key=대상: 그룹/매장이 바뀌면 재마운트 — 이전 대상의 늦은 멤버십·게시글·전송 응답이 새 대상에 붙지 않는다 */}
             {isGroup ? (
-              <GroupPage key={openVenueId} open group={ov} onClose={closeVenue} />
+              <GroupPage key={vid} open={vOpen} group={ov} onClose={closeVenue} />
             ) : (
               <VenuePage
-                key={openVenueId}
-                open
+                key={vid}
+                open={vOpen}
                 venue={ov}
                 onClose={closeVenue}
                 schedules={schedules}
@@ -4714,7 +4727,7 @@ export default function App() {
       {listingMounted && (
       <ListingDetailModal
         open={openListing !== null}
-        listing={openListing}
+        listing={openListing ?? lastListing.current}
         onClose={() => setOpenListing(null)}
         onDelete={handleDeleteListing}
         onStatusChanged={(id, st) => {
@@ -4727,7 +4740,7 @@ export default function App() {
       {noticeMounted && (
       <NoticeDetailModal
         open={openNotice !== null}
-        notice={openNotice}
+        notice={openNotice ?? lastNotice.current}
         onClose={() => setOpenNotice(null)}
         isAdmin={user?.role === 'admin'}
         onEdit={() => { setEditingNotice(openNotice); setOpenNotice(null); startTransition(() => setNoticeFormOpen(true)); }}
@@ -4738,7 +4751,7 @@ export default function App() {
       {posterFormMounted && (
       <PosterFormModal
         open={posterFormTarget !== null}
-        schedule={posterFormTarget}
+        schedule={posterFormTarget !== null ? posterFormTarget : lastPosterTarget.current}
         onClose={() => setPosterFormTarget(null)}
         onSubmit={handleSubmitPoster}
         venues={venues.map((v) => ({ id: v.id, name: v.name, region: v.region }))}
@@ -4746,10 +4759,10 @@ export default function App() {
       />
       )}
 
-      {openPost !== null && (
+      {postMounted && shownPost && (
       <PostDetailModal
-        open
-        post={openPost}
+        open={openPost !== null}
+        post={shownPost}
         nav={postNav}
         onNavigate={openPostWithNav}
         onClose={closePost}

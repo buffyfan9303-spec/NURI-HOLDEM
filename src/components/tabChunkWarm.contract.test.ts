@@ -51,6 +51,16 @@ function warmBlock(): string {
 }
 
 /** 프리마운트 순서 배열(`const seq: TabId[] = [` ~ 그 문장의 `];`). */
+/** warm() 안에서 그 청크를 데우는 자리. `import('…/X')` 든 `X.preload()`(MOTION-UNIFY P4 — 모듈 칸까지 채운다)든 인정한다.
+ *  App 이 같은 모듈을 `XLazy` 로 부르는 경우(CalendarPanelLazy)도 같다. 없으면 -1. */
+function warmAt(warm: string, chunk: string): number {
+  for (const needle of [`features/${chunk}'`, `${chunk}.preload(`, `${chunk}Lazy.preload(`]) {
+    const i = warm.indexOf(needle);
+    if (i > -1) return i;
+  }
+  return -1;
+}
+
 function premountSeq(): string {
   const start = SRC.indexOf('const seq: TabId[] = [');
   expect(start, 'App.tsx 의 프리마운트 seq 를 못 찾았다').toBeGreaterThan(-1);
@@ -63,7 +73,7 @@ describe('탭 청크 프리워밍 계약', () => {
     const warm = warmBlock();
     for (const [tab, chunk] of Object.entries(TAB_CHUNK)) {
       expect(
-        warm.includes(`features/${chunk}'`),
+        warmAt(warm, chunk) > -1,
         `탭 '${tab}' 의 청크(${chunk})가 warm() 목록에 없다 — 첫 진입에서 화면이 멈춘다(캘린더 실측 261ms)`,
       ).toBe(true);
     }
@@ -83,7 +93,8 @@ describe('탭 청크 프리워밍 계약', () => {
     const warm = warmBlock();
     // VenueManageTab·AdminTab 은 반드시 조건부 spread 안에 있어야 한다(무게 306KB+ · 155KB).
     for (const chunk of ['VenueManageTab', 'AdminTab']) {
-      const i = warm.indexOf(`features/${chunk}'`);
+      const i = warmAt(warm, chunk);
+      expect(i, `${chunk} 가 warm() 에 없다`).toBeGreaterThan(-1);
       const line = warm.slice(warm.lastIndexOf('\n', i) + 1, i);
       expect(line.includes('...('), `${chunk} 가 무조건 프리로드되고 있다 — 역할 게이트가 사라졌다`).toBe(true);
     }
@@ -96,7 +107,7 @@ describe('탭 청크 프리워밍 계약', () => {
     //   오너가 "내 매장 모든 부분이 페이지가 변경되며 말려 올라간다" 고 한 증상의 절반이 이것이었다.
     //   ⇒ 이제 **양쪽 다** 데운다. 이건 '손님에게 업주 스위트를 내려보내는 것' 과 방향이 반대다 —
     //     업주가 이미 열게 되어 있는 화면의 청크이고, 손님도 5번째 탭에서 같은 판을 쓴다.
-    const ci = warm.indexOf("features/CalendarPanel'");
+    const ci = warmAt(warm, 'CalendarPanel');
     expect(ci, '캘린더가 프리워밍 목록에서 빠졌다 — 두 역할 모두에게 cold 가 된다').toBeGreaterThan(-1);
     const cline = warm.slice(warm.lastIndexOf('\n', ci) + 1, ci);
     expect(cline.includes('...('), '캘린더가 다시 역할 게이트 뒤로 들어갔다 — 업주의 내 매장 > 내 캘린더가 cold 가 된다')

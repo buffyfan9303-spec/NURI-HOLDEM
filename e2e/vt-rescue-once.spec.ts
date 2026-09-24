@@ -25,15 +25,19 @@ test('🔴 전환 중 구조된 클릭은 한 번만 전달된다 — 정상 클
   //   걷어내면서(알약 1,300px 낙하의 근본 원인) 그 경로가 사라졌다.
   //   ⚠ rescue 자체는 멀쩡하다 — **VT 를 쓰는 경로**(최상위 탭 전환)에서는 그대로 설치되고 동작한다.
   //     바뀐 것은 '어디서 설치되는가' 뿐이라 검사도 그 경로로 옮긴다.
-  //   ⚠ 최상위 탭도 **재방문일 때만** VT 를 탄다(App.tsx: `if (visitedTabs.has(t))`).
-  //     첫 방문은 lazy 청크 때문에 startTransition 경로다 — 그래서 GTO 를 두 번 들어간다.
+  //   🔵 2026-09-24 MOTION-UNIFY — PC 최상위 탭도 VT 를 걷어냈다(메인·하위 탭 모두 덮개 한 장, src/lib/tabCover.ts).
+  //     VT 가 남은 PC 경로는 **매장 페이지 열기**(handleVenueClick → withViewTransition)·포스터 모핑·내 정보다.
+  //     rescue 는 그 경로에서 설치되므로 검사도 매장 페이지 열기로 옮긴다(설치 뒤 리스너는 상주한다).
   const nav = page.locator('[data-stack-tabbar]');
-  await nav.getByRole('tab', { name: 'GTO', exact: true }).click();
-  await expect(page.locator('[data-tools-lanebar]')).toBeVisible({ timeout: 15_000 });
-  await nav.getByRole('tab', { name: '홈', exact: true }).click();
-  await page.waitForTimeout(400);
-  await nav.getByRole('tab', { name: 'GTO', exact: true }).click();  // 재방문 → withViewTransition → rescue 설치
-  await page.waitForTimeout(700);                     // 이번 전환이 끝난 뒤에 잰다(전환 중 클릭과 섞지 않는다)
+  await nav.getByRole('tab', { name: '커뮤니티', exact: true }).click();
+  await page.locator('[data-community-secbar]').getByRole('button', { name: /^홀덤펍/ }).click();
+  await page.locator('[data-testid="venue-card"]').first().click();   // withViewTransition → rescue 설치
+  const venue = page.getByRole('dialog', { name: /매장 페이지$/ });
+  await expect(venue).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(700);                     // 전환이 끝난 뒤에
+  await page.keyboard.press('Escape');
+  await expect(venue).toHaveCount(0, { timeout: 5_000 });
+  await page.waitForTimeout(400);                     // 닫힘 페이드가 끝난 뒤에 잰다(전환 중 클릭과 섞지 않는다)
 
   const counts = await page.evaluate(async () => {
     const btn = document.createElement('button');

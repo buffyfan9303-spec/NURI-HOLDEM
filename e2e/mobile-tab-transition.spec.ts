@@ -1,7 +1,10 @@
 // 2026-09-20: Samsung compresses the main-tab snapshot vertically; Chrome flashes
 // overlapping captures. Mobile navigation must render the live pane, including on
-// revisit/back. Desktop keeps its existing transition. This cannot emulate Samsung's GPU.
-// Negative control: remove the desktop matchMedia guard in App.tsx; mobile cases fail.
+// revisit/back. This cannot emulate Samsung's GPU.
+// 🔵 2026-09-24 MOTION-UNIFY: desktop main tabs no longer use a View Transition either — every width takes the
+//   same cover (src/lib/tabCover.ts, frames locked by e2e/motion-unify.spec.ts MU2). So this test now expects
+//   zero page snapshots at 390·1023·1024 (it used to expect desktop VT as a positive control; R2 below keeps a
+//   desktop positive control on a path that still uses VT — the venue page open).
 // Run against a fresh preview: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/mobile-tab-transition.spec.ts
 import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
@@ -16,7 +19,7 @@ import { mockSchedules, kstDay } from './_schedules';
 //     `browser.newContext({ reducedMotion: 'reduce' })` 로 줘야 한다.
 
 for (const width of [390, 1023, 1024]) {
-  test(`main tab snapshots at ${width}px: mobile stays live, desktop keeps transitions`, async ({ page }) => {
+  test(`main tab snapshots at ${width}px: no page snapshot at any width (MOTION-UNIFY)`, async ({ page }) => {
     test.setTimeout(60_000);
     await stabilizeBackstack(page);
     await page.setViewportSize({ width, height: 844 });
@@ -80,11 +83,9 @@ for (const width of [390, 1023, 1024]) {
       await page.setViewportSize({ width: 1024, height: 844 });
       await page.evaluate(() => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'tools' })));
       await expect(pane('tools')).toBeVisible();
-      expect(await count(), 'desktop navigation stopped using its existing transition').toBeGreaterThan(0);
+      expect(await count(), 'desktop navigation created a page snapshot (MOTION-UNIFY: cover only)').toBe(0);
     } else {
-      expect(await count(), 'desktop revisit lost its existing transition').toBeGreaterThan(beforeRevisit);
-      await page.waitForFunction(() => !document.getAnimations().some((animation) =>
-        (animation.effect as KeyframeEffect | null)?.pseudoElement?.startsWith('::view-transition')));
+      expect(await count(), 'desktop revisit created a page snapshot (MOTION-UNIFY: cover only)').toBe(beforeRevisit);
       const desktopCount = await count();
       await page.setViewportSize({ width: 390, height: 844 });
       await page.evaluate(() => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'home' })));
@@ -562,22 +563,20 @@ test('🔴 R2 — 모바일은 공용 helper 가 스냅샷을 막고, 데스크�
     '모바일인데 data-vt-scope 마커가 남았다').toBeNull();
 
   // (b) 데스크톱 양성 대조 — helper 자체는 살아 있어야 한다. 죽은 helper 는 '0회' 로도 통과한다.
-  // ⚠ **첫 방문은 VT 경로가 아니다.** `commitTab` 은 `visitedTabs.has(t)` 일 때만 스냅샷을 쓰고
-  //   콜드 진입은 lazy 청크 때문에 `startTabTransition` 으로 간다. 그래서 한 번 다녀와서
-  //   **warm 재방문**으로 재야 한다 — 이걸 빠뜨리면 멀쩡한 helper 를 '죽었다' 고 오판한다.
+  // 🔵 2026-09-24 MOTION-UNIFY — PC 메인 탭은 이제 VT 가 아니라 덮개다(재방문도 0회가 정상).
+  //   VT 가 남은 데스크톱 경로 = **같은 매장 열기**(handleVenueClick). (a) 와 같은 버튼으로 양성 대조한다.
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
   await dismissOverlays(page);
-  const tabbar = page.locator('[data-stack-tabbar]');
-  await tabbar.getByRole('tab', { name: 'GTO', exact: true }).click();
-  await expect(page.locator('.tab-pane[data-tab="tools"]')).toBeVisible({ timeout: 15_000 });
-  await tabbar.getByRole('tab', { name: '홈', exact: true }).click();
-  await expect(page.locator('.tab-pane[data-tab="home"]')).toBeVisible({ timeout: 15_000 });
+  const cardPc = page.locator('article.cv-card-list').first();
+  await expect(cardPc).toBeVisible({ timeout: 20_000 });
+  const venueLinkPc = cardPc.locator('button').first();
+  await expect(venueLinkPc).toContainText(VENUE_NAME);
   const beforeDesktop = await page.evaluate(() => (window as unknown as { __vt: { n: number } }).__vt.n);
-  await tabbar.getByRole('tab', { name: 'GTO', exact: true }).click();   // warm 재방문
-  await expect(page.locator('.tab-pane[data-tab="tools"]')).toBeVisible({ timeout: 15_000 });
+  await venueLinkPc.click();
+  await expect(page.locator('[data-venue-page], [role="dialog"]').first()).toBeVisible({ timeout: 15_000 });
   expect(await page.evaluate(() => (window as unknown as { __vt: { n: number } }).__vt.n) - beforeDesktop,
-    '데스크톱 warm 재방문에서 View Transition 이 0회 — helper 가 통째로 죽었을 수 있다(양성 대조 실패)').toBeGreaterThan(0);
+    '데스크톱 매장 열기에서 View Transition 이 0회 — helper 가 통째로 죽었을 수 있다(양성 대조 실패)').toBeGreaterThan(0);
 });
 
 // ── R2-resize: 데스크톱 전환 중 좁아져도 잔재가 남지 않는다 ───────────────────────

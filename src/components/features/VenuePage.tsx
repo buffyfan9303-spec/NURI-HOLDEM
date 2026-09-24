@@ -215,7 +215,8 @@ export default function VenuePage({
     return venueSchedules.filter((s) => s.date === todayIso);
   }, [venueSchedules]);
 
-  if (!open || !venue) return null;
+  // MOTION-UNIFY P3 — 닫혀도 App 이 220ms 더 붙들어 둔다(useDelayedUnmount). 그동안 fade-out 으로 그린다.
+  if (!venue) return null;
 
   const isMyVenue = isApprovedOwner && user?.venueId === venue.id;
   const isRoti    = venue.id === 'v_roti';
@@ -278,8 +279,10 @@ export default function VenuePage({
       role="dialog"
       aria-modal="true"
       aria-label={`${venue.name} 매장 페이지`}
-      className="fixed inset-0 z-40 bg-surface-base flex flex-col animate-slide-up pt-[env(safe-area-inset-top)]"
-      style={{ animationDuration: '0.25s' }}
+      inert={!open || undefined}
+      className={['fixed inset-0 z-40 bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]',
+        open ? 'animate-slide-up' : 'animate-fade-out pointer-events-none'].join(' ')}
+      style={open ? { animationDuration: '0.25s' } : undefined}
     >
       {/* ── 최상단: 뒤로가기 헤더 ──────────────────────────────────────── */}
       {/* 헤더 배경·구분선은 전폭(상시 크롬), 내용물은 본문과 같은 중앙 컬럼(max-w-3xl)에 정렬한다.

@@ -78,8 +78,18 @@ describe('lazy 오버레이는 트랜지션으로 연다 — 안 그러면 폴�
   const lazies = new Set([...src.matchAll(/const\s+(\w+)\s*=\s*lazyWithReload\(/g)].map((m) => m[1]));
 
   const gates = new Map<string, { comps: Set<string>; kind: GateKind }>();
-  const note = (st: string, comp: string, kind: GateKind) => {
+  // MOTION-UNIFY P3(2026-09-24) — 퇴장을 살리려고 게이트가 `{xMounted && <X open={x !== null}>}` 로 바뀐 곳이 많다
+  //   (useDelayedUnmount). 그 파생 변수는 상태가 아니라 setter 를 못 찾으므로 **원래 상태로 되돌려 센다.**
+  //   안 그러면 게이트를 바꾸는 순간 그 오버레이의 여는 호출이 검사 밖으로 빠진다(공허한 초록).
+  const alias = new Map<string, { st: string; kind: GateKind }>();
+  for (const m of src.matchAll(/const\s+(\w+)\s*=\s*useDelayedUnmount\(\s*([A-Za-z_$][\w$]*)\s*(!==\s*null)?/g)) {
+    alias.set(m[1], { st: m[2], kind: m[3] ? 'notnull' : 'truthy' });
+  }
+  const note = (gate: string, comp: string, gateKind: GateKind) => {
     if (!lazies.has(comp)) return;
+    const a = alias.get(gate);
+    const st = a ? a.st : gate;
+    const kind = a ? a.kind : gateKind;
     if (!gates.has(st)) gates.set(st, { comps: new Set(), kind });
     gates.get(st)!.comps.add(comp);
   };
@@ -113,6 +123,10 @@ describe('lazy 오버레이는 트랜지션으로 연다 — 안 그러면 폴�
   }
 
   it('앵커 — App.tsx 를 실제로 읽었고 lazy 오버레이와 그 게이트를 찾아냈다', () => {
+    expect(alias.size, 'useDelayedUnmount 파생 게이트를 못 찾았다 — 정규식이 낡았으면 이 계약을 같이 고쳐라').toBeGreaterThan(5);
+    for (const st of ['openSchedule', 'openPost', 'openVenueId']) {
+      expect(gates.has(st), `${st} 게이트가 검사에서 빠졌다(퇴장용 파생 변수를 못 따라갔다)`).toBe(true);
+    }
     // 앵커가 비면 아래 검사는 **아무것도 안 보면서 통과**한다. 그게 제일 위험한 실패다.
     expect(lazies.size, 'lazyWithReload 컴포넌트를 하나도 못 찾았다').toBeGreaterThan(10);
     expect(gates.size, 'lazy 를 감싸는 게이트 상태를 못 찾았다').toBeGreaterThan(5);

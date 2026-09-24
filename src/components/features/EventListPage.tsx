@@ -174,15 +174,16 @@ export default function EventListPage({ open, onClose, onSelect }: {
     e.preventDefault();
     e.stopPropagation();
   };
-  if (!open) return null;
+  // MOTION-UNIFY P3 — 닫혀도 App 이 220ms 더 붙들어 둔다(useDelayedUnmount). 그동안 fade-out 으로 그린다.
 
   return (
     // z-[55] — EventPage(보드)와 같은 층이다. 이 컴포넌트가 App 에서 EventPage 보다 **먼저** 렌더되므로
     // 보드가 목록 위에서 이긴다(같은 z-index 는 DOM 순서가 이긴다) — 목록에서 카드를 고르면 보드가 덮고,
     // 보드를 닫으면 이 화면이 그대로 드러난다. z-[60]은 쓰지 않는다(Modal.tsx 의 시트·모달 층이라 겹치면
     // 안내 시트가 뒤에 깔린다 — EventPage 머리말 참고).
-    <div ref={rootRef} data-testid="event-list-page"
-      className="fixed inset-0 z-[55] overflow-y-auto overscroll-contain bg-surface-base"
+    <div ref={rootRef} data-testid="event-list-page" inert={!open || undefined}
+      className={['fixed inset-0 z-[55] overflow-y-auto overscroll-contain bg-surface-base',
+        open ? '' : 'animate-fade-out pointer-events-none'].join(' ')}
       role="dialog" aria-modal="true" aria-label="이벤트 목록"
       onTouchStart={onListTouchStart} onTouchEnd={onListTouchEnd} onTouchCancel={onListTouchCancel}
       onClickCapture={onListClickCapture}>
