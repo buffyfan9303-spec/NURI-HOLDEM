@@ -492,12 +492,14 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
           return { 칸: (c.textContent || '').trim().slice(0, 4), w: +r.width.toFixed(1), h: +r.height.toFixed(1), 위: at(cy - 21.5), 아래: at(cy + 21.5) };
         });
         // PC 알약 줄(같은 동작의 다른 모양) — 모바일에서 같이 보이면 한 화면에 두 번이다.
-        const pill = document.querySelector<HTMLElement>('[data-pd-post-card] .ring-aura.rounded-card');
+        // POST-DETAIL-TRIM(2026-09-24): 알약 묶음의 ring-aura 칸을 걷어 클래스 셀렉터 대신 data-pd-pills 로 찾는다.
+        const pill = document.querySelector<HTMLElement>('[data-pd-post-card] [data-pd-pills]');
         return {
           칸수: cells.length, 겹침, 글자넘침, 히트,
           라벨: cells.map((c) => (c.textContent || '').replace(/\s+/g, ' ').trim()),
           글꼴: cells.map((c) => parseFloat(getComputedStyle(c).fontSize)),
           누름속성: cells.filter((c) => c.hasAttribute('aria-pressed')).length,
+          알약줄있음: !!pill,
           알약줄보임: !!pill && getComputedStyle(pill.parentElement!).display !== 'none',
           문서가로넘침: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         };
@@ -511,6 +513,7 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
       expect(t.누름속성, '좋아요·추천·비추천 셋은 aria-pressed 를 가져야 한다').toBe(3);
       expect(t.겹침, `칸이 서로 겹친다: ${JSON.stringify(t.겹침)}`).toEqual([]);
       expect(t.글자넘침, `라벨이 칸 밖으로 나갔다: ${JSON.stringify(t.글자넘침)}`).toEqual([]);
+      expect(t.알약줄있음, 'PC 알약 줄([data-pd-pills])을 못 찾았다 — 아래 단언이 빈 검사가 된다').toBe(true);
       expect(t.알약줄보임, 'PC 알약 줄이 모바일에서도 보인다 — 같은 동작이 한 화면에 두 번이다').toBe(false);
       expect(t.문서가로넘침, '트레이 때문에 문서가 가로로 넘쳤다').toBeLessThanOrEqual(0);
       for (const h of t.히트) {
@@ -534,8 +537,11 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
   //   → 두 벌로 잰다: (a) 실제 글꼴 — 라벨이 잘리지 않고 여유가 남는다
   //                  (b) 글자 폭 +0.12em(자간 주입, 어느 기기 글꼴보다 넓게) — 그래도 트레이는 안 넘치고
   //                      **숫자는 한 글자도 안 잘린다**(줄어드는 것은 '좋아요' 같은 라벨 낱말뿐, 말줄임).
-  for (const W of [380, 390, 412] as const) {
-    for (const wide of [false, true] as const) {
+  // POST-DETAIL-TRIM(2026-09-24): 바깥 칸을 걷어 한 줄 트레이가 360 부터다. 360 은 **넓은 글꼴만** 잰다 —
+  //   실제 글꼴 9999/999/999 여유가 윈도우 9.1px 라 리눅스 CI(~7px 넓음)에서 4px 문턱 아래로 내려간다.
+  //   그 폭에서 지켜야 하는 것은 '안 넘치고 숫자가 안 잘린다'(말줄임 안전망)이고, 그건 넓은 글꼴 벌이 잰다.
+  for (const W of [360, 380, 390, 412] as const) {
+    for (const wide of (W === 360 ? [true] : [false, true])) {
       test(`🔴 ${W}px${wide ? ' 넓은 글꼴' : ''} — 반응 트레이가 큰 숫자(9999·999·999)에서도 칸 밖으로 안 나간다`, async ({ page, baseURL }) => {
         await page.setViewportSize({ width: W, height: 844 });
         await install(page, baseURL, { post: { like_count: 9999, goodrun_count: 999, badbeat_count: 999 } });
@@ -652,4 +658,68 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
       .filter((b) => /^(신고|차단|삭제)$/.test((b.textContent ?? '').trim())).length);
     expect(n, `비로그인인데 관리 동작 버튼이 ${n}개 있다`).toBe(0);
   });
+
+  // 🔴 POST-DETAIL-TRIM(2026-09-24 오너) — "반응 줄을 덮는 네모 칸 제거 · '대화에 참여해 보세요' 제거 · (이모티콘)댓글 제목은
+  //   지우고 아래에 · 댓글 쓰는 칸 세로폭 축소 · 두 카드 뒤 LED 조금 더". 로그인 상태(=작성 폼이 있어야 폼 높이를 잴 수 있다)로 잰다.
+  for (const W of [360, 390] as const) {
+    test(`🔴 ${W}px — 반응 줄에 바깥 칸이 없고, 댓글 카드는 제목 행 없이 폼이 낮고 수는 아래에 있다`, async ({ page, baseURL }) => {
+      await page.setViewportSize({ width: W, height: 844 });
+      await install(page, baseURL, { loggedIn: true });
+      await openPost(page);
+      await expect(page.locator('[data-pd-comment-count]'), '댓글 수 줄이 안 뜬다').toBeVisible({ timeout: 10_000 });
+      const m = await page.evaluate(() => {
+        const tray = document.querySelector<HTMLElement>('[aria-label="게시글 반응"]')!;
+        const sec = document.querySelector<HTMLElement>('[data-pd-comments]')!;
+        const card = document.querySelector<HTMLElement>('[data-pd-post-card]')!;
+        const ts = getComputedStyle(tray);
+        const form = sec.querySelector<HTMLElement>('form')!;
+        const input = form.querySelector<HTMLInputElement>('input[type="text"]')!;
+        const send = form.querySelector<HTMLElement>('button[type="submit"]')!;
+        const ic = getComputedStyle(input);
+        const cv = document.createElement('canvas').getContext('2d')!;
+        cv.font = `${ic.fontWeight} ${ic.fontSize} ${ic.fontFamily}`;
+        const count = sec.querySelector<HTMLElement>('[data-pd-comment-count]')!;
+        const visible = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 1 && r.height > 1; };
+        const led = (el: Element) => { const cs = getComputedStyle(el); return { shadow: cs.boxShadow, blur: parseFloat(cs.getPropertyValue('--aura-led-blur')) || 0, a: parseFloat(cs.getPropertyValue('--aura-led-a')) || 0 }; };
+        return {
+          트레이테두리: ts.borderTopWidth, 트레이면: ts.backgroundColor, 트레이안쪽: ts.paddingTop, 트레이높이: tray.getBoundingClientRect().height,
+          공유면: getComputedStyle(tray.querySelectorAll('button')[3]).backgroundColor,
+          참여문구: /대화에 참여해 보세요/.test(sec.textContent ?? ''),
+          보이는제목: Array.from(sec.querySelectorAll('h1,h2,h3,h4')).filter(visible).map((h) => h.textContent?.trim()),
+          영역이름: sec.getAttribute('aria-label'),
+          폼높이: form.getBoundingClientRect().height, 입력높이: input.getBoundingClientRect().height,
+          보내기: [send.getBoundingClientRect().width, send.getBoundingClientRect().height],
+          글자공간: input.clientWidth - parseFloat(ic.paddingLeft) - parseFloat(ic.paddingRight), 안내폭: cv.measureText(input.placeholder).width,
+          수글자: count.textContent?.trim(), 수가폼아래: count.getBoundingClientRect().top >= form.getBoundingClientRect().bottom,
+          수가맨끝: sec.lastElementChild === count,
+          카드: led(card), 댓글: led(sec),
+        };
+      });
+      console.log(`[trim ${W}]`, JSON.stringify(m));
+      // ① 바깥 칸 제거 — 테두리·면·안쪽 여백 0, 한 줄 44px(360 부터 한 줄).
+      expect(m.트레이테두리, '반응 줄에 바깥 테두리가 남았다').toBe('0px');
+      expect(m.트레이면, '반응 줄에 바깥 면이 남았다').toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+      expect(m.트레이안쪽).toBe('0px');
+      expect(m.트레이높이, `반응 줄 높이 ${m.트레이높이}px — 한 줄 44px`).toBeLessThanOrEqual(46);
+      expect(m.공유면, '공유 칸에 면이 남았다').toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+      // ②③ 안내 문구·보이는 제목 행 제거, 이름은 aria-label 로만 남고 수는 폼 아래 맨 끝.
+      expect(m.참여문구, "'대화에 참여해 보세요'가 남았다").toBe(false);
+      expect(m.보이는제목, `댓글 카드에 보이는 제목이 남았다: ${JSON.stringify(m.보이는제목)}`).toEqual([]);
+      expect(m.영역이름, '보이는 제목과 함께 보조기술용 이름(댓글)까지 사라졌다').toBe('댓글');
+      expect(m.수글자, '댓글 수가 불러온 목록 수와 다르다').toBe(`댓글 ${COMMENTS.length}`);
+      expect(m.수가폼아래 && m.수가맨끝, '댓글 수가 카드 맨 아래에 있지 않다').toBe(true);
+      // ④ 작성 칸 — 세로 54.5 → 46(입력·보내기 44 + 테두리). 터치 44 와 글자 공간은 그대로.
+      expect(m.폼높이, `댓글 작성 칸 높이 ${m.폼높이}px — 48 이하여야 한다`).toBeLessThanOrEqual(48);
+      expect(m.입력높이).toBeGreaterThanOrEqual(44);
+      expect(m.보내기[0]).toBeGreaterThanOrEqual(44); expect(m.보내기[1]).toBeGreaterThanOrEqual(44);
+      expect(m.글자공간 - m.안내폭, `입력칸 안내 글자가 잘린다(여유 ${(m.글자공간 - m.안내폭).toFixed(2)}px)`).toBeGreaterThan(0);
+      // ⑤ 두 카드 뒤 LED — 기존 hero 유틸, 기본(34/.19)보다 한 단계 위, AURA-03 상한(48/.22) 안, outer 만.
+      for (const [k, l] of [['게시글', m.카드], ['댓글', m.댓글]] as const) {
+        expect(l.blur, `${k} 카드 LED 확산`).toBeGreaterThan(34); expect(l.blur).toBeLessThanOrEqual(48);
+        expect(l.a, `${k} 카드 LED 알파`).toBeGreaterThan(0.19); expect(l.a).toBeLessThanOrEqual(0.22);
+        expect(l.shadow, `${k} 카드에 LED 그림자가 없다`).toContain(`${l.blur}px`);
+        expect(l.shadow, `${k} 카드 LED 가 inset 이다(글자 위)`).not.toContain('inset');
+      }
+    });
+  }
 });

@@ -148,5 +148,8 @@ describe('댓글 빈 안내 — 입력 폼과 중복되지 않는다(오너 2026
     const block = SRC.slice(i, i + 300);
     expect(block).toMatch(/threads\.length === 0 \? \(\s*\n\s*user \? null : \(/);
     expect(block).toMatch(/border-dashed border-border-default py-6[^]*\{emptyText\}/);
+    // POST-DETAIL-TRIM(2026-09-24 오너): 모바일 게시글 상세에서만 비로그인 점선 칸도 숨긴다(로그인 버튼이 같은 말을 한다).
+    //   다른 호출자·PC 는 종전대로 보인다 — 무조건 숨김(기능 소실)이 아니라 postDetailMobile 분기여야 한다.
+    expect(block).toMatch(/postDetailMobile \? 'max-lg:hidden' : ''/);
   });
 });

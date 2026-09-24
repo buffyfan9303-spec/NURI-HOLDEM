@@ -14,6 +14,7 @@ import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { onColorInkClass } from '../../lib/color';
 import { promptLogin } from '../../lib/requireLogin';
+import { DETAIL_CARD_AURA, DETAIL_CARD_AURA_CLASS } from '../../lib/detailCardAura';
 
 interface ListingDetailModalProps {
   /** 본인 매물 상태 변경 직후 — 목록·열린 매물 동기화(팔린 물건이 '판매중'으로 남는 헛문의 방지) */
@@ -26,7 +27,9 @@ interface ListingDetailModalProps {
 }
 
 /** MARKET-DETAIL-CARD — 게시글 상세 모바일 카드(PostDetailModal data-pd-post-card)와 같은 면·선·반지름·안쪽 여백. */
-const MK_CARD = 'rounded-[24px] border border-border-strong bg-surface-high p-4 ring-aura';
+// POST-DETAIL-TRIM(2026-09-24 오너 "장터도 동일하게") — 게시글 상세와 같은 카드 뒤 LED 한 벌(lib/detailCardAura).
+//   클래스는 여기서, 속성(data-aura hero)은 각 section 에 {...DETAIL_CARD_AURA} 로 붙인다.
+const MK_CARD = ['rounded-[24px] border border-border-strong bg-surface-high p-4 ring-aura', DETAIL_CARD_AURA_CLASS].join(' ');
 
 export default function ListingDetailModal({ listing, open, onClose, onDelete, onStatusChanged }: ListingDetailModalProps) {
   const { user }                  = useAuth();
@@ -124,7 +127,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
       <div className="space-y-3 px-3 pt-3 pb-4">
 
         {/* ① 요약 — 분류·등급·상태·지역·시간·신고/차단 → 제목 → 가격(§28: 상품 가격이라 표시 유지) → 조회·찜 */}
-        <section data-mk-card="summary" className={MK_CARD}>
+        <section data-mk-card="summary" {...DETAIL_CARD_AURA} className={MK_CARD}>
           <div className="flex items-center gap-1.5 flex-wrap text-2xs">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-badge bg-surface-mid text-ink-secondary font-semibold">
               {category?.label}
@@ -193,7 +196,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
         </section>
 
         {/* ② 거래 옵션 + 판매자 — 한 카드. 판매자 칸의 큰 빈 상자를 없애고 36px 아바타 한 줄로. */}
-        <section data-mk-card="deal" className={MK_CARD}>
+        <section data-mk-card="deal" {...DETAIL_CARD_AURA} className={MK_CARD}>
           <h3 className="text-xs font-bold text-ink-secondary">거래 옵션</h3>
           <div className="mt-2 space-y-1.5">
             <OptionRow ok={listing.shippingAvailable} label="택배 발송 가능" />
@@ -224,7 +227,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
         </section>
 
         {/* ③ 설명 — 게시글 본문과 같은 읽기 규격(15px · 행간 1.7 · ink-primary). */}
-        <section data-mk-card="desc" className={MK_CARD}>
+        <section data-mk-card="desc" {...DETAIL_CARD_AURA} className={MK_CARD}>
           <h3 className="text-xs font-bold text-ink-secondary">설명</h3>
           <p className="mt-1.5 text-[15px] text-ink-primary leading-[1.7] whitespace-pre-wrap break-words">
             {listing.description}
@@ -234,7 +237,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
         {/* ④ 문의 안내 — 판매자와의 대화는 1:1 채팅으로 일원화.
             (이전엔 목업 댓글창이라 남겨도 저장·전달되지 않아 "문의했는데 답이 없다"는 오해를 만들었다)
             안내 문구의 버튼 이름을 실제 버튼('판매자에게 연락')과 맞췄다 — 예전엔 없는 '판매자에게 문의'를 가리켰다. */}
-        <section id="listing-comments" data-mk-card="inquiry" className={[MK_CARD, 'dark:bg-surface-low text-center'].join(' ')}>
+        <section id="listing-comments" data-mk-card="inquiry" {...DETAIL_CARD_AURA} className={[MK_CARD, 'dark:bg-surface-low text-center'].join(' ')}>
           <p className="text-xs font-bold text-ink-primary">궁금한 점이 있으신가요?</p>
           <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
             가격 협상·상태 문의는 아래 <b className="text-accent-300">판매자에게 연락</b> 버튼으로<br />1:1 채팅에서 바로 대화할 수 있어요.

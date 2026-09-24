@@ -11,6 +11,7 @@ import type { CommunityPost, ReactionType, Comment } from '../../api/community';
 import type { UserRole } from '../../api/auth';
 import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded, getComments, addComment, deleteComment, bumpPost, getShopSkus, isBumped, isPostHidden, BUMP_SLOTS, subscribePostComments, type PostCommentEvent } from '../../api/community';
 import CommentThread from './CommentThread';
+import { DETAIL_CARD_AURA, DETAIL_CARD_AURA_CLASS } from '../../lib/detailCardAura';
 import ReportModal from './ReportModal';
 import { parseAttachments } from '../../lib/hand';
 import HandReplayer from './HandReplayer';
@@ -155,13 +156,15 @@ function reactionPill(active: boolean): string {
  */
 function trayCell(active: boolean): string {
   return [
-    // ≥380 한 줄: 4등분 grid 는 '좋아요 1234' 처럼 긴 칸이 넘쳤다(design-reviewer 2026-09-24, 390 ±5.1px).
+    // ≥360 한 줄(POST-DETAIL-TRIM 전에는 ≥380): 4등분 grid 는 '좋아요 1234' 처럼 긴 칸이 넘쳤다(design-reviewer 2026-09-24, 390 ±5.1px).
     //   flex-auto 로 칸 폭을 내용에 비례시키고, 좌우 안쪽을 px-0.5 로 줄인다.
     // 🔴 CI 2026-09-24 — 칸을 min-w-fit 로 두면 **글꼴 폭이 곧 트레이 폭**이다. 리눅스/안드로이드 래스터는 윈도우보다
     //   글자가 넓어(380 에서 합계 ~7px) 트레이가 1px 넘쳤다. → 칸은 min-w-0 로 줄어들 수 있게 두고, 줄어드는 몫은
     //   `trayLabel` 의 라벨 낱말(말줄임)이 받는다. 숫자·아이콘은 줄지 않는다. 아이콘↔글자 간격을 gap-0.5 로 좁혀
     //   실제 글꼴에서는 말줄임이 나오지 않을 여유를 만든다(e2e post-detail-read '큰 숫자' · '넓은 글꼴').
-    'flex h-[44px] min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-[10px] px-1 min-[380px]:flex-auto min-[380px]:gap-0.5 min-[380px]:px-0.5',
+    // POST-DETAIL-TRIM(2026-09-24 오너 "반응 줄이 너무 커"): 히트는 44px 실박스 그대로, **보이는 면**만 가운데 캡슐로 줄인다 —
+    //   py-1.5 + bg-clip-content 라 활성 채움이 44 → 약 31.5px 높이로만 칠해진다(DOM·잉크 폭 변화 0, 큰 숫자 여유 불변).
+    'flex h-[44px] min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-full bg-clip-content px-1 py-1.5 min-[360px]:flex-auto min-[360px]:gap-0.5 min-[360px]:px-0.5',
     'text-xs font-semibold leading-none transition-colors active:scale-[0.98]',
     active ? 'bg-accent-300/15 text-accent-200' : 'text-ink-secondary',
   ].join(' ');
@@ -509,8 +512,10 @@ export default function PostDetailModal({
             ⚠ PC 는 `lg:contents` 로 **박스를 없앤다** — article 의 padding·자식 배치·ref·스크롤이
               종전 그대로 유지되고 2-pane 인상이 안 바뀐다(inline=true 경로도 같다).
             ⚠ 고정 높이를 주지 않는다. 본문·사진·첨부가 늘면 카드가 따라 늘어야 한다. */}
-        <div data-pd-post-card className={[
+        <div data-pd-post-card {...DETAIL_CARD_AURA} className={[
           'lg:contents',
+          // POST-DETAIL-TRIM — 카드 뒤 LED(기존 [data-aura] hero, 세기만 한 단계 ↑). lib/detailCardAura 참고.
+          DETAIL_CARD_AURA_CLASS,
           // POST-DETAIL-DENSITY(2026-09-24): 모바일 카드 안쪽 25.5px → 17px, article 여백 18px → 12.75px(첫 화면 확보).
           'max-lg:rounded-[24px] max-lg:border max-lg:border-border-strong max-lg:bg-surface-high max-lg:p-4',
           // 상단의 미세한 보라→청록 빛 — 시안의 카드 윗변 광. 기존 ring-aura 와 같은 계열의
@@ -830,9 +835,10 @@ export default function PostDetailModal({
           {/* 알약 셋만 자기들끼리 접히는 그룹 — 공유는 바깥에 두어 폭이 어떻게 변해도
               항상 첫 줄 오른쪽에 고정된다. 한 통에 넣으면 좋아요가 4자리(1,284)가 되는 순간
               공유가 밀려 내려가 줄 수가 바뀐다(= 숫자 때문에 레이아웃이 흔들린다). */}
-          {/* UI-Aura(2026-09-14): ring-aura 헤어라인으로 묶음 전체를 한 면으로 묶는다. 활성 알약에만
-              data-aura(micro) — '지금 누른 것'에만 LED, 상시 3개가 다 켜지지 않는다. */}
-          <div className="flex min-w-0 flex-wrap items-center gap-1 ring-aura rounded-card p-1.5">
+          {/* UI-Aura(2026-09-14)의 ring-aura 묶음 칸은 POST-DETAIL-TRIM(2026-09-24 오너 "덮고 있는 네모 칸을 지워")에서 걷었다 —
+              알약마다 이미 테두리가 있어 바깥 칸이 한 겹 더였다. 활성 알약에만 data-aura(micro) 는 그대로다.
+              data-pd-pills: e2e 가 '모바일에서 PC 알약 줄이 안 보인다'를 이 표식으로 찾는다(클래스에 기대지 않는다). */}
+          <div data-pd-pills className="flex min-w-0 flex-wrap items-center gap-1">
             <button
               type="button"
               aria-pressed={!!post.liked}
@@ -887,33 +893,35 @@ export default function PostDetailModal({
             위 아이콘 / 아래 라벨+숫자, 마지막 공유 셀만 차분한 보라 면.
             ⚠ 핸들러·카운트·`aria-pressed`·로그인 유도는 **위 알약과 같은 것을 그대로 쓴다** —
               새 상태도, 새 API 도 만들지 않는다(눌렀을 때의 서버 연동·롤백은 onLike/react 안에 있다).
-            ⚠ 320/360 은 2칸씩 두 줄, 380 이상부터 네 칸 — 숫자가 커져도 글자를 줄이지 않는다.
-              `min-[380px]` 은 임의 값이 아니라 **실측으로 정한다**(아래 e2e 가 겹침 0 을 잰다).
+            ⚠ 320 은 2칸씩 두 줄, 360 이상부터 네 칸 — 숫자가 커져도 글자를 줄이지 않는다.
+              `min-[360px]` 은 임의 값이 아니라 **실측으로 정한다**(아래 e2e 가 겹침 0 을 잰다). POST-DETAIL-TRIM(2026-09-24)에서 바깥 칸(테두리+여백 10.5px)을
+              걷어 380 → 360 으로 내렸다: 360 트레이 여유 실측(윈도우) 보통 숫자 66.3px · 9999/999/999 9.1px · 넓은 글꼴+큰 숫자는 말줄임 안전망.
             ⚠ 셀은 `h-[44px]` 한 줄 실박스다(POST-DETAIL-DENSITY 2026-09-24). `gap-0.5` 를 빼지 마라 — 2줄(320/360)에서
               윗줄 칸 아래 끝의 히트 테스트가 픽셀 스냅으로 아랫줄 칸에 먹혔다(e2e 트레이 히트 실측 실패로 확인). */}
         {!hidden && !inline && (
         <div role="group" aria-label="게시글 반응"
-          className="mt-3 grid grid-cols-2 gap-0.5 overflow-hidden rounded-[14px] border border-border-strong bg-surface-low p-1 min-[380px]:flex lg:hidden">
+          /* POST-DETAIL-TRIM(2026-09-24 오너 "덮고 있는 네모 칸을 지워버려") — 바깥 테두리·면·안쪽 여백을 걷었다(54.5 → 44px 한 줄). */
+          className="mt-2 grid grid-cols-2 gap-0.5 min-[360px]:flex lg:hidden">
           <button type="button" aria-pressed={!!post.liked}
             onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; } onLike(post.id); }}
             className={trayCell(!!post.liked)}>
-            <Icon name={post.liked ? 'heart-fill' : 'heart'} size={15} strokeWidth={2.0} className="shrink-0" />
+            <Icon name={post.liked ? 'heart-fill' : 'heart'} size={14} strokeWidth={2.0} className="shrink-0" />
             <TrayLabel label="좋아요" count={post.likeCount} />
           </button>
           <button type="button" aria-pressed={myReaction === 'goodrun'} onClick={() => react('goodrun')}
             className={trayCell(myReaction === 'goodrun')}>
-            <Icon name="chevron-up" size={15} strokeWidth={2.2} className="shrink-0" />
+            <Icon name="chevron-up" size={14} strokeWidth={2.2} className="shrink-0" />
             <TrayLabel label="추천" count={gr} />
           </button>
           <button type="button" aria-pressed={myReaction === 'badbeat'} onClick={() => react('badbeat')}
             className={trayCell(myReaction === 'badbeat')}>
-            <Icon name="chevron-down" size={15} strokeWidth={2.2} className="shrink-0" />
+            <Icon name="chevron-down" size={14} strokeWidth={2.2} className="shrink-0" />
             <TrayLabel label="비추천" count={bb} />
           </button>
-          {/* 공유만 면을 깐다 — 숫자가 없는 동작이라 나머지 셋과 역할이 다르다는 표시다. */}
+          {/* 공유는 글자색으로만 구분한다 — 숫자가 없는 동작이라는 표시. 면(bg)은 POST-DETAIL-TRIM 에서 걷었다(네모 칸 제거). */}
           <button type="button" onClick={copyLink} aria-label="링크 복사"
-            className={[trayCell(false), 'bg-accent-300/10 text-accent-200'].join(' ')}>
-            <Icon name="share" size={15} strokeWidth={2.0} className="shrink-0" />
+            className={[trayCell(false), 'text-accent-200'].join(' ')}>
+            <Icon name="share" size={14} strokeWidth={2.0} className="shrink-0" />
             <TrayLabel label="공유" />
           </button>
         </div>
@@ -964,37 +972,26 @@ export default function PostDetailModal({
             선까지 있으면 경계가 두 번 그려진다. PC(2-pane 포함)는 종전 그대로 선으로 끊는다. */}
         {!hidden && <hr className="border-t border-border-strong mt-4 max-lg:hidden" aria-hidden="true" />}
         {!hidden && (
-        <section data-pd-comments className={[
+        <section data-pd-comments aria-label="댓글" {...DETAIL_CARD_AURA} className={[
           // P1(2026-09-21): 모바일 카드→댓글 간격 17px→13px(mt-3), PC 는 기존 mt-4(17px) 유지.
           'reveal mt-3 space-y-2 rounded-card border border-border-strong bg-surface-base p-3 ring-aura lg:mt-4',
+          DETAIL_CARD_AURA_CLASS,
           // 🔴 C1 — 모바일은 게시글 카드와 **같은 좌우 경계·같은 반지름**의 독립 카드다.
           //   PC 간격 17px: `mt-4`(=1rem=17px, 루트 17px) 가 그 값이라 그대로 쓴다.
           // ⚠ 면은 테마마다 **반대 방향**으로 가야 한다(이 파일 `reactionPill` 의 면 계약과 같은 함정):
           //   라이트는 `surface-low == surface-mid == #FFFFFF` 라 셸과 **같은 흰색**이 되어 카드가
           //   통째로 사라진다(실측으로 잡았다 — 라이트 스크린샷에서 댓글 카드가 지면에 흡수됐다).
           //   그래서 라이트는 `surface-high`(#F0F1F4)로 **내려앉히고**, 다크만 셸보다 어두운 `surface-low`.
-          'max-lg:rounded-[24px] max-lg:bg-surface-high max-lg:dark:bg-surface-low max-lg:p-4',
+          // POST-DETAIL-TRIM(2026-09-24 오너 "칸을 줄여, 너무 넓어"): 모바일 안쪽 17 → 12.75px.
+          'max-lg:rounded-[24px] max-lg:bg-surface-high max-lg:dark:bg-surface-low max-lg:p-3',
         ].join(' ')}>
           {/* 댓글 수는 화면에 실제로 불러온 목록(replies)만 신뢰한다.
               post.commentCount 는 DB 트리거가 같은 값을 넣어주는 컬럼이라 더하면 2배가 된다.
               (트리거 도입 전에는 항상 0이라 0+n 으로 우연히 맞아 보였을 뿐이다.
                App.tsx 가 posts 갱신마다 openPost 를 덮어쓰므로 리얼타임 갱신 때 반드시 드러난다.) */}
-          {/* 🔴 C1(시안 두 번째 카드 첫 행) — 말풍선 아이콘 · '댓글' · 작은 보라 수 배지 · 우측 안내.
-              ⚠ `replies === null`(아직 도착 전)에는 **수를 아예 안 그린다.** 종전 `?? ''` 와 같은 뜻인데,
-                배지는 '0' 을 보여주기 쉬운 모양이라 명시적으로 막는다 — 미확정 0 은 "댓글이 없다"는
-                사실이 아닌 말이고, 그걸 보고 업주·작성자가 다시 쓰게 된다(이 저장소의 반복 결함 유형).
-              ⚠ 우측 안내는 모바일에서만 — PC 2-pane 은 폭이 좁아 제목 줄이 두 줄로 접힌다. */}
-          <div className="flex min-w-0 items-center justify-between gap-2">
-            {/* P2(2026-09-21): 모바일 "댓글" 제목 14.9→14px, PC lg:text-sm 로 기존 유지. */}
-            <h3 className="flex min-w-0 items-center gap-1.5 text-[14px] font-bold text-ink-primary lg:text-sm">
-              <Icon name="comment" size={16} className="shrink-0 text-accent-200" aria-hidden />
-              <span>댓글</span>
-              {replies !== null && (
-                <span className="shrink-0 rounded-badge bg-accent-300/20 px-1.5 py-0.5 text-2xs font-bold tabular-nums leading-none text-accent-200">{replies.length}</span>
-              )}
-            </h3>
-            <span className="shrink-0 text-2xs text-ink-muted lg:hidden">대화에 참여해 보세요</span>
-          </div>
+          {/* POST-DETAIL-TRIM(2026-09-24 오너 "(이모티콘)댓글 지우고 아래에 남겨두면 · '대화에 참여해 보세요' 제거") —
+              보이는 제목 행(말풍선·'댓글'·수 배지·우측 안내)을 걷었다. 이름은 section 의 aria-label('댓글' 영역)로 보조기술에 남기고,
+              수는 섹션 **맨 아래** 작은 한 줄로 옮겼다. (sr-only 제목은 e2e clippedNodes 가 '감춰진 채 넘친 요소'로 잡아 영역 이름으로 둔다.) */}
           {/* 실패 카드는 스레드 **위에** 얹는다 — 작성 폼은 남겨 둔다(기능 보존). replies 가 null 로 남아 빈 문구도 안 뜬다. */}
           {cErr != null && <LoadErrorCard error={cErr} what="댓글" onRetry={() => setCReload((k) => k + 1)} compact />}
           {/* 🔴 2026-09-20 — 댓글이 도착하며 목록이 늘어나 **아래 이전/다음 내비게이션이 밀렸다.**
@@ -1027,6 +1024,11 @@ export default function PostDetailModal({
             /* 미로드 구간에는 빈 상태 문구를 내지 않는다 — '없다'는 아직 사실이 아니다 */
             emptyText={replies === null ? ' ' : '첫 댓글을 남겨보세요'}
           />
+          {/* 댓글 수 — 불러온 목록(replies)만 신뢰한다(post.commentCount 를 더하면 2배, 위 주석).
+              ⚠ 아직 도착 전(null)·0개에는 그리지 않는다 — 미확정 0 은 "댓글이 없다"는 사실이 아닌 말이다. */}
+          {replies !== null && replies.length > 0 && (
+            <p data-pd-comment-count className="text-right text-2xs tabular-nums text-ink-muted">댓글 {replies.length}</p>
+          )}
         </section>
         )}
         {/* ── 이전 글 / 다음 글(UI-04, 실행문 §7.3·§7.4) — 열었던 목록의 실제 화면 순서(스냅샷) 기준. lib/postNav 가 이웃·끝·상한을 판정한다.

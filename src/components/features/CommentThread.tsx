@@ -310,7 +310,9 @@ export default function CommentThread({
              라이트 팔레트는 high(#F0F1F4)가 가장 어둡고 mid/low 가 흰색이라, 댓글 카드가 high 를
              쓰는 지금 입력까지 high 로 두면 **입력칸이 카드에 흡수된다**(실측으로 잡았다).
              → 라이트는 흰색(mid)으로 띄우고, 다크는 종전대로 카드보다 밝은 high. */
-          ? 'flex gap-2 py-2 max-lg:items-center max-lg:gap-1.5 max-lg:rounded-[16px] max-lg:border max-lg:border-border-strong max-lg:bg-surface-mid max-lg:dark:bg-surface-high max-lg:p-1 max-lg:py-1'
+          /* POST-DETAIL-TRIM(2026-09-24 오너 "댓글 쓰는 칸 세로폭을 줄여"): 위아래 안쪽 여백을 걷어 54.5 → 46px(입력·보내기 44 + 테두리).
+             보내기 버튼은 오른쪽 끝에 붙어 면의 끝마감이 된다(반지름 15 = 면 16 − 테두리 1). 왼쪽만 아바타 숨 쉴 자리 pl-2. */
+          ? 'flex gap-2 py-2 max-lg:items-center max-lg:gap-1.5 max-lg:rounded-[16px] max-lg:border max-lg:border-border-strong max-lg:bg-surface-mid max-lg:dark:bg-surface-high max-lg:p-0 max-lg:pl-2'
           : 'flex gap-2 py-2'}>
           <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={postDetailMobile ? 28 : 32} />
           <input
@@ -327,7 +329,7 @@ export default function CommentThread({
               루트가 17px 이라 `h-11` 은 46.75px — 44 이상이므로 통과한다(여기선 넉넉한 쪽이 맞다). */}
           <button type="submit" aria-label={postDetailMobile ? '댓글 등록' : undefined}
             className={postDetailMobile
-              ? 'btn-primary shrink-0 px-4 max-lg:flex max-lg:h-[44px] max-lg:w-[44px] max-lg:items-center max-lg:justify-center max-lg:rounded-[12px] max-lg:px-0'
+              ? 'btn-primary shrink-0 px-4 max-lg:flex max-lg:h-[44px] max-lg:w-[44px] max-lg:items-center max-lg:justify-center max-lg:rounded-[15px] max-lg:px-0'
               : 'btn-primary px-4 shrink-0'}
             disabled={!content.trim() || pending}>
             {postDetailMobile && <Icon name="send" size={18} className="hidden max-lg:block" aria-hidden />}
@@ -348,9 +350,13 @@ export default function CommentThread({
           같은 말을 반복하는 점선 안내 박스를 생략한다(오너 2026-09-14: 댓글 0 헤더 → 입력창 →
           "첫 댓글을 남겨보세요" 3단 중복). 비로그인(=입력 폼 대신 로그인 버튼)에서는 이 박스가
           "댓글이 없다"를 알리는 유일한 신호라 그대로 둔다 — 기존 `user` 분기를 그대로 재사용한다. */}
+      {/* POST-DETAIL-TRIM(2026-09-24 오너 "빈 상태 문구·칸 제거, 칸을 줄여") — 모바일 게시글 상세(postDetailMobile)에서는
+          비로그인 점선 칸도 걷는다(max-lg:hidden): 바로 위 '로그인하면 댓글을…' 버튼이 이미 댓글 자리를 말하고 있어
+          같은 뜻의 큰 점선 칸(약 64px)이 한 번 더 있었다. 다른 호출자(매장 Q&A·요강 댓글)·PC 는 종전 그대로다. */}
       {threads.length === 0 ? (
         user ? null : (
-          <p className="rounded-card border border-dashed border-border-default py-6 text-center text-xs text-ink-muted">{emptyText}</p>
+          <p className={['rounded-card border border-dashed border-border-default py-6 text-center text-xs text-ink-muted',
+            postDetailMobile ? 'max-lg:hidden' : ''].join(' ')}>{emptyText}</p>
         )
       ) : (
         /* 🔴 C1(2026-09-20 시안) — 모바일 게시글 상세에서는 **서로 다른 댓글 사이에만** 얇은 선을 둔다.

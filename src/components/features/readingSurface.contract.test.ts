@@ -79,7 +79,8 @@ describe('UI-03 · 아우라 구분선', () => {
   //   따옴표 리터럴만 찾던 옛 정규식은 이제 `null` 이라 "찾지 못했다"로 실패한다 — 계약을 느슨하게 푸는 게
   //   아니라 **새 구조를 포함해 더 강하게** 다시 건다: PC 우물(종전)이 남아 있을 것 + 모바일 카드가 있을 것.
   it('🔴 댓글 section 은 PC 우물(border-strong·bg-surface-base)이면서 모바일에서는 형제 카드다', () => {
-    const c = POST.match(/<section data-pd-comments className=\{\[([\s\S]*?)\]\.join\(' '\)\}/);
+    // POST-DETAIL-TRIM(2026-09-24): section 에 aria-label·카드 LED 속성이 붙었다 — 정확한 순서로 요구한다(LED 포함).
+    const c = POST.match(/<section data-pd-comments aria-label="댓글" \{\.\.\.DETAIL_CARD_AURA\} className=\{\[([\s\S]*?)\]\.join\(' '\)\}/);
     expect(c, '댓글 section 을 찾지 못했다 — className 구조가 또 바뀌었으면 이 정규식부터 고쳐라').not.toBeNull();
     // PC 계약(2026-09-14 UI-Aura)은 한 글자도 안 바뀌었다.
     expect(c![1]).toMatch(/rounded-card border border-border-strong bg-surface-base p-3/);
@@ -121,8 +122,10 @@ describe('UI-03 · 아우라 구분선', () => {
     // 트레이: 독립 상세 전용 + lg 에서 숨김.
     expect(POST).toMatch(/\{!hidden && !inline && \(/);
     expect(POST).toMatch(/role="group" aria-label="게시글 반응"/);
-    // 380 이상은 flex 한 줄(내용 비례 폭 — design-reviewer 2026-09-24 FAIL-1: 4등분 grid 는 큰 숫자에서 넘쳤다).
-    expect(POST).toMatch(/grid-cols-2[^"]*min-\[380px\]:flex[^"]*lg:hidden/);
+    // 360 이상은 flex 한 줄(내용 비례 폭 — design-reviewer 2026-09-24 FAIL-1: 4등분 grid 는 큰 숫자에서 넘쳤다).
+    //   POST-DETAIL-TRIM(2026-09-24)에서 바깥 칸(테두리·면·여백)을 걷어 380 → 360(실측 여유는 e2e post-detail-read 가 잰다).
+    expect(POST).toMatch(/grid-cols-2[^"]*min-\[360px\]:flex[^"]*lg:hidden/);
+    expect(POST, '반응 줄에 바깥 칸(테두리·면)이 되살아났다').not.toMatch(/className="[^"]*border border-border-strong bg-surface-low p-1 min-\[\d+px\]:flex/);
     // 권한 조건이 두 벌로 복사되지 않았다 — 각 조건이 소스에 한 번씩만 있다.
     expect((POST.match(/acts\.push\(/g) ?? []).length, '관리 동작은 신고·차단·삭제 셋').toBe(3);
     expect(POST).toMatch(/aria-label="게시글 메뉴"/);
