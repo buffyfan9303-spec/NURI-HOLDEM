@@ -157,6 +157,7 @@ test('🔴 계정 전환 — A 로 나간 늦은 알림·쪽지 응답이 B 의 
 
   // B 로 패널을 열어 B 의 쪽지 조회([])가 끝난 다음에야 A 의 늦은 응답을 풀어 준다.
   await bell.click();
+  await panel.getByRole('tab', { name: '쪽지', exact: true }).click();   // 2026-09-24 H5 — 기본 탭이 알림이 됐다
   await expect(panel.getByText('주고받은 쪽지가 없습니다')).toBeVisible({ timeout: 10_000 });
   releaseA();
   await page.waitForTimeout(800);

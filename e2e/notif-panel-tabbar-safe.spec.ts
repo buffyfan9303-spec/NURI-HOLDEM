@@ -41,6 +41,8 @@ test('🔴 쪽지 DM 서브뷰 — 보내기 버튼이 하단 탭바에 가려�
   const dialog = page.getByRole('dialog', { name: '알림' });
   await expect(dialog, '알림 패널이 열리지 않았다').toBeVisible({ timeout: 10_000 });
 
+  // 2026-09-24 H5 — 패널 기본 탭이 알림이 됐다. 쪽지 탭으로 옮긴 뒤 '새 쪽지'.
+  await dialog.getByRole('tab', { name: '쪽지', exact: true }).click();
   await dialog.getByRole('button', { name: '새 쪽지' }).click();
   await dialog.getByLabel('받는 사람 닉네임 검색').fill('DM상대');
   await dialog.getByRole('button', { name: 'DM상대' }).click(); // 검색 결과 클릭 → openThread (기존 이력 불필요)

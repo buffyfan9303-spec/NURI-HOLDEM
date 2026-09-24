@@ -92,8 +92,9 @@ export default function NotificationPanel({
     return () => window.clearTimeout(t);
   }, [open]);
 
-  // ── 쪽지/알림 모드 — 헤더 아이콘이 메시지가 됐으므로 쪽지가 기본 ──
-  const [mode, setMode] = useState<'messages' | 'notifs'>('messages');
+  // ── 쪽지/알림 모드 — 알림이 기본(오너 2026-09-24 H5: "열면 알림부터"). 닫으면 알림으로 되돌린다(아래 [open] 이펙트).
+  //   패널을 쪽지로 바로 여는 경로는 없다(2026-09-24 grep: 여는 곳은 App.tsx 헤더 버튼·사용자 메뉴, 둘 다 setNotifOpen(true) 뿐).
+  const [mode, setMode] = useState<'messages' | 'notifs'>('notifs');
   const [msgView, setMsgView] = useState<'list' | 'thread' | 'compose'>('list');
   const [threads, setThreads] = useState<MessageThread[]>([]);
   // 열자마자 "주고받은 쪽지가 없습니다"가 스치던 것 — 미로드를 로딩으로 시작해 가른다
@@ -149,10 +150,15 @@ export default function NotificationPanel({
   useEffect(() => {
     if (open && mode === 'messages') reloadThreads();
   }, [open, mode, reloadThreads, uid]);
-
-  // 패널이 닫히면 내부 화면을 목록으로 되돌린다(다음 열림이 항상 같은 곳에서 시작)
+  // ⚠ 기본 탭이 알림이 된 뒤에도 **열 때 한 번은 쪽지를 읽는다**(H5) — 위 조건만 두면 알림 탭으로 열린 패널은
+  //   쪽지 뱃지를 90s 폴링까지 재계산하지 않는다(종전 '열면 갱신' 계약 소실). 쪽지→알림 전환마다 다시 읽지는 않는다.
   useEffect(() => {
-    if (!open) { setMsgView('list'); setActiveOther(null); setDraft(''); setQuery(''); setResults([]); }
+    if (open && mode === 'notifs') reloadThreads();
+  }, [open, reloadThreads, uid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 패널이 닫히면 탭은 알림으로, 내부 화면은 목록으로 되돌린다(다음 열림이 항상 같은 곳에서 시작)
+  useEffect(() => {
+    if (!open) { setMode('notifs'); setMsgView('list'); setActiveOther(null); setDraft(''); setQuery(''); setResults([]); }
   }, [open]);
 
   // 대화 본문 조회 정본 — 처음 열 때와 실패 카드의 '다시 시도'가 같은 함수를 쓴다(껍데기 버튼 방지).

@@ -229,7 +229,8 @@ test.describe('하위 탭 — VT 없이 알약만 움직인다', () => {
     await page.locator('button[aria-label^="알림"]').first().click();
     const bar = page.locator('[data-notif-tabbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
-    const r = await probe(page, bar.getByRole('tab', { name: '알림', exact: true }), '[data-notif-tabbar]');
+    // 2026-09-24 H5 — 기본 탭이 알림이 됐다. 이미 선택된 탭을 누르면 전환이 안 일어나 측정이 비므로 쪽지로 옮긴다.
+    const r = await probe(page, bar.getByRole('tab', { name: '쪽지', exact: true }), '[data-notif-tabbar]');
     // ⚠ 다른 스코프처럼 expectPanelPush(방향성 푸시)를 쓰지 않는다 — notif-panel 은 예외다.
     //   근거는 expectNotifPanelFadeOnly 주석 참고(팝업 카드 좌우 여백 17px < 푸시 이동량 18px).
     expectNoViewTransition(r.samples, 'notif-panel');

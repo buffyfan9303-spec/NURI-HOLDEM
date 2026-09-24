@@ -171,8 +171,12 @@ test.describe('계정 전환 — 이전 계정 데이터 격리', () => {
     // 패널 바깥(좌측 여백 page-x 안쪽) 클릭 = 바깥 클릭 닫기
     const closePanel = async () => { await page.mouse.click(4, 400); await expect(panel).toHaveCount(0); };
 
+    // 2026-09-24 H5 — 패널 기본 탭이 알림이 됐다(닫으면 알림으로 복귀). 쪽지 목록은 탭을 눌러서 본다.
+    //   ②처럼 열고 바로 닫는 동선도 쪽지 조회는 그대로 나간다(열 때 1회 갱신 계약 — NotificationPanel [open] 이펙트).
+    const msgTab = () => panel.getByRole('tab', { name: '쪽지', exact: true }).click();
     // ① A 의 목록이 실제로 그려진다
     await bell.click();
+    await msgTab();
     await expect(page.getByText('상대A')).toBeVisible();
     await closePanel();
     // ② A 의 두 번째 조회를 붙잡은 채 계정을 바꾼다
@@ -184,6 +188,7 @@ test.describe('계정 전환 — 이전 계정 데이터 격리', () => {
     // ③ B 가 열면(B 의 응답은 아직 붙잡힌 상태) A 의 대화 상대가 보이면 안 된다
     await bell.click();
     await expect(panel).toBeVisible();
+    await msgTab();
     await expect(page.getByText('상대A'), 'B 의 응답 전인데 A 의 대화 상대가 보인다(패널 state 잔존)').toHaveCount(0);
     await expect(page.getByText('쪽지를 불러오는 중…')).toBeVisible();
     // ④ B 의 응답 → 빈 목록

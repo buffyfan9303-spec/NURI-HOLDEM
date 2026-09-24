@@ -77,6 +77,8 @@ async function boot(page: Page, g: { x1: ReturnType<typeof gate>; send: ReturnTy
   await page.goto('/');
   await page.locator('button[aria-label^="알림"]').click();
   await expect(page.getByRole('dialog', { name: '알림' })).toBeVisible({ timeout: 15_000 });
+  // 2026-09-24 H5 — 패널 기본 탭이 알림이 됐다. 이 스펙은 쪽지 목록에서 시작한다.
+  await page.getByRole('dialog', { name: '알림' }).getByRole('tab', { name: '쪽지', exact: true }).click();
 }
 
 const threadRow = (page: Page, name: string) => page.locator('li').filter({ hasText: name }).first();

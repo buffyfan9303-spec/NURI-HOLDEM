@@ -70,7 +70,13 @@ export default function Avatar({ name, src, color, size = 28, fit = 'contain', c
         // 404·차단 시 이니셜 경로로 떨어진다. 박스 치수가 인라인 style 로 고정이라 레이아웃은 안 움직인다(CLS 0).
         onError={() => setFailedSrc(src)}
         className={[
-          'shrink-0 rounded-full bg-surface-high',
+          // 2026-09-24 H1(오너 캡처: 라이트 헤더에서 프로필이 흰 원만 남고 내용이 사라짐) — 투명 이미지의 받침을
+          //   **테마 무관 고정색**(다크의 surface-high #1B243C)으로 둔다. 예전 `bg-surface-high` 는 라이트에서 #EEF2F8 로
+          //   바뀌어, 실측 오너 아바타(256×151 webp · 57.6% 투명 · 불투명 픽셀 100% 순백)가 흰 바탕 위 흰 글자(≈1.1:1)가 됐다.
+          //   이미지는 업로더가 고른 그림이라 테마를 따라 받침이 바뀌면 안 된다. 기본 테마(다크)에서 보이던 그대로를 양 테마에 준다.
+          //   ponytail: 어두운 내용의 투명 이미지는 이 받침에서 안 보인다 — 다크 모드의 종전 동작과 같다(새 결함 아님).
+          //   필요해지면 업로드 시 불투명 배경을 합성하거나 픽셀 휘도로 받침을 고른다.
+          'shrink-0 rounded-full bg-[#1B243C]',
           fit === 'cover' ? 'object-cover' : 'object-contain',
           className,
         ].join(' ')}
