@@ -1,7 +1,7 @@
 // NURI SPOT 작성 A안 + 'AI 아쉬운 포인트' (2026-09-23 오너 결정 SPOT-WRITE-UX-AI)
 //
 // 잠그는 것
-//  ① 다섯 단계(게임/자리·스택/카드/액션/확인) · 하단 고정 [이전][다음](44px, 창 바닥) · 체크는 [다음] 으로 확정한 단계에만
+//  ① 네 단계(게임·자리/카드/액션/확인 — 2026-09-24 G3 합침) · 하단 고정 [이전][다음](44px, 창 바닥) · 체크는 [다음] 으로 확정한 단계에만
 //  ② '작성 내용'(저장·공유·AI)은 확인 단계에만 선다
 //  ③ AI 버튼 — 서버 status 가 꺼짐이면 없다 / 미완성 스팟이면 막힌다 / 완성이면 확인 시트 → 결과
 //  ④ 코드별 안내(DAILY_LIMIT · AI_FAILED 환불)
@@ -44,7 +44,7 @@ const next = (dlg: Locator) => nav(dlg).getByRole('button', { name: /^다음/ })
 
 /** 카드 2장 + 액션 1개 + 내 선택(레이즈 3BB) → 확인 단계 */
 async function fillComplete(dlg: Locator) {
-  await next(dlg); await next(dlg);                       // 게임 → 자리·스택 → 카드
+  await next(dlg);                                        // 게임·자리 → 카드
   await dlg.locator('button[data-card="As"]').click();
   await dlg.locator('button[data-card="Ks"]').click();
   await next(dlg);                                        // → 액션
@@ -58,12 +58,12 @@ for (const vp of [{ w: 390, h: 844 }, { w: 320, h: 640 }]) {
   test.describe(`A안 단계 작성 — ${vp.w}px`, () => {
     test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: vp.w, height: vp.h }); });
 
-    test('🔴 다섯 단계 · 하단 [이전][다음] 이 창 바닥에 붙고 44px · 가로 넘침 0', async ({ page }) => {
+    test('🔴 네 단계 · 하단 [이전][다음] 이 창 바닥에 붙고 44px · 가로 넘침 0', async ({ page }) => {
       const dlg = await openSpot(page, OFF);
       const labels = await steps(dlg).getByRole('button').allInnerTexts();
-      expect(labels.map((t) => t.replace(/\s+/g, ''))).toEqual(['1게임', '2자리·스택', '3카드', '4액션', '5확인']);
+      expect(labels.map((t) => t.replace(/\s+/g, ''))).toEqual(['1게임·자리', '2카드', '3액션', '4확인']);
 
-      await next(dlg); await next(dlg);   // 가장 긴 카드 단계
+      await next(dlg);   // 가장 긴 카드 단계
       const m = await page.evaluate(() => {
         const bar = document.querySelector('[data-spot-stepnav]') as HTMLElement;
         const sc = bar.closest('.overflow-y-auto') as HTMLElement;
@@ -104,7 +104,7 @@ for (const vp of [{ w: 390, h: 844 }, { w: 320, h: 640 }]) {
       await expect(steps(dlg).getByLabel('완료'), '아무것도 안 했는데 체크가 있다').toHaveCount(0);
       await expect(dlg.getByLabel('작성 내용'), '입력 단계에 작성 내용이 보인다').toHaveCount(0);
       await next(dlg);
-      await expect(steps(dlg).locator('[aria-current="step"]')).toContainText('자리·스택');
+      await expect(steps(dlg).locator('[aria-current="step"]')).toContainText('카드');
       await expect(steps(dlg).getByRole('button').nth(0).getByLabel('완료')).toHaveCount(1);
       await expect(steps(dlg).getByLabel('완료'), '확정 안 한 단계에 체크').toHaveCount(1);
       // 단계바로 건너뛰면 확정이 아니다

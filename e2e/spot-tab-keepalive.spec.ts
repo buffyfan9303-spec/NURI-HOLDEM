@@ -40,7 +40,7 @@ test('🔴 작성↔내 스팟 3왕복 — 단계 유지 · 재조회 1회 · �
 
   const current = dlg.getByRole('group', { name: '입력 단계' }).locator('[aria-current="step"]');
   const nextBtn = dlg.locator('[data-spot-stepnav]').getByRole('button', { name: /^다음/ });
-  await nextBtn.click(); await nextBtn.click();           // 게임 → 자리·스택 → 카드
+  await nextBtn.click();                                  // 게임·자리 → 카드
   await expect(current).toContainText('카드');
 
   const tap = (name: string) => page.evaluate((n) => {
@@ -123,7 +123,7 @@ test('🔴 목록의 공유·수정하기는 작성 판을 새로 연다 — 확
 
   // 작성 판을 먼저 2단계로 옮겨 둔다 — 공유로 열면 이 상태가 아니라 새 판(확인 단계)이어야 한다.
   await dlg.locator('[data-spot-stepnav]').getByRole('button', { name: /^다음/ }).click();
-  await expect(current).toContainText('자리');
+  await expect(current).toContainText('카드');
 
   await tab('내 스팟');
   await dlg.getByRole('listitem').first().getByRole('button', { name: '게시판에 공유' }).click();

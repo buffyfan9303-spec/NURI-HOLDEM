@@ -54,9 +54,10 @@ const SIZE_PRESETS: Record<'pre' | 'post', number[]> = {
 // 🔴 2026-09-23 오너 결정 A안(SPOT-WRITE-UX-AI) — 다섯 단계 + 하단 고정 [이전][다음].
 //   예전(네 단계)은 카드·액션이 한 화면이라 390px 에서 스크롤이 1480px 였고, 단계 이동이 상단 단계바뿐이었다.
 //   '작성 내용' 카드(저장·공유·AI)는 마지막 '확인' 단계에만 선다 — 입력 중에는 입력만 보인다.
+// 🔴 2026-09-24 오너 G3: 게임 + 자리·스택 두 단계를 하나로 합쳤다(다섯 → 네 단계). 입력 항목·검증·AI 입력은 그대로 —
+//   화면 묶음만 바뀌었다. key 'game' 을 유지해 '진입은 1번 게임부터' 계약이 이어진다.
 const STEPS = [
-  { key: 'game', label: '게임', hint: '어떤 판이었는지 먼저 정합니다.' },
-  { key: 'seat', label: '자리·스택', hint: '내 자리와 상대 자리, 유효 스택을 고릅니다.' },
+  { key: 'game', label: '게임·자리', hint: '어떤 판이었는지와 내 자리·상대 자리·유효 스택을 정합니다.' },
   { key: 'cards', label: '카드', hint: '내 카드와 보드를 고릅니다. 상대 카드는 알 때만 넣으세요.' },
   { key: 'action', label: '액션', hint: '액션을 순서대로 쌓고, 그때 내가 한 선택을 고릅니다.' },
   { key: 'confirm', label: '확인', hint: '작성한 내용을 확인하고 저장·공유합니다.' },
@@ -252,7 +253,8 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
           토론 탭은 없앴다(오너 지시 2026-09-11: "스팟 토론은 게시판에서 하게 해야 돼"). 대신 **가는 길**은 남긴다 —
           같은 행의 형제 버튼이지 세 번째 탭(role=tab·aria-selected·알약)이 아니다. 좁은 폭·200% 에서는 CTA 가 다음 줄로 내려간다
           (flex-wrap — 가로 스크롤·whitespace-nowrap 은 접근성 게이트에 걸려 쓰지 않는다). */}
-      <div data-testid="spot-primary-nav" className="mt-2 flex flex-wrap items-stretch gap-1.5">
+      {/* mt-4(17px): 2026-09-24 오너 G1 "탭이 위 아이콘·제목에 너무 붙어 있다" — 8.5px → 17px */}
+      <div data-testid="spot-primary-nav" className="mt-4 flex flex-wrap items-stretch gap-1.5">
         <SegmentedTabs
           items={[
             { key: 'analyze' as const, label: '스팟 작성' },   // 🔴 2026-09-22 요구 A: '분석' → 작성 중심
@@ -343,8 +345,14 @@ function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, savedAt, use
       <StepBar step={step} onStep={go} confirmed={confirmed} />
       <p className="text-2xs text-ink-muted">{cur.hint}</p>
 
-      {step === 'game' && <GameStep spot={spot} patch={patch} />}
-      {step === 'seat' && <SeatStep spot={spot} patch={patch} />}
+      {step === 'game' && (
+        // 한 카드 안에 게임(위) · 자리·스택(아래) — 가는 선 하나로 두 묶음을 가른다.
+        <div className="rounded-aura border card-aura p-3">
+          <GameStep spot={spot} patch={patch} />
+          <div className="my-2.5 border-t border-border-subtle" />
+          <SeatStep spot={spot} patch={patch} />
+        </div>
+      )}
       {step === 'cards' && (
         <HandBoardPicker
           hb={hb}
@@ -411,7 +419,7 @@ function StepBar({ step, onStep, confirmed }: { step: StepKey; onStep: (s: StepK
   // 🔴 A안: 체크는 **사용자가 [다음] 으로 확정한 단계**에만. 예전엔 값으로 추정해서(게임=항상 true)
   //   아무것도 안 했는데 1번에 체크가 붙어 있었다.
   return (
-    <div className="grid grid-cols-5 gap-1" role="group" aria-label="입력 단계" data-spot-steps>
+    <div className="grid grid-cols-4 gap-1" role="group" aria-label="입력 단계" data-spot-steps>
       {STEPS.map((s, i) => {
         const on = s.key === step;
         return (
@@ -422,12 +430,12 @@ function StepBar({ step, onStep, confirmed }: { step: StepKey; onStep: (s: StepK
               on ? 'border-accent-300 bg-accent-300 text-white'
                 : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}
           >
-            {/* 체크는 번호 옆 — 라벨 줄에 두면 320px 다섯 칸(칸 ≈50px)에서 '자리·스택' 이 밀려 넘친다. */}
+            {/* 체크는 번호 옆 — 라벨 줄에 두면 320px 좁은 칸에서 라벨이 밀려 넘친다. */}
             <span className={['flex items-center gap-0.5 tabular-nums', on ? 'text-white/80' : 'text-ink-muted'].join(' ')}>
               {i + 1}
               {confirmed.has(s.key) && <Icon name="check" size={10} className={['shrink-0', on ? 'text-white' : 'text-emerald-400'].join(' ')} aria-label="완료" />}
             </span>
-            {/* '·' 뒤에서만 접힌다 — 좁은 칸에서 '자리·' / '스택' 두 줄 */}
+            {/* '·' 뒤에서만 접힌다 — 좁은 칸에서 '게임·' / '자리' 두 줄 */}
             <span className="max-w-full break-keep text-center leading-tight">
               {s.label.split('·').map((part, k) => <span key={k}>{k > 0 && <>·<wbr /></>}{part}</span>)}
             </span>
@@ -443,7 +451,7 @@ function StepBar({ step, onStep, confirmed }: { step: StepKey; onStep: (s: StepK
  *  wrap: 자식이 칩 묶음 + 직접 입력처럼 둘일 때 입력을 다음 줄로 내려 칩 줄에서 고아를 만들지 않는다. */
 function Row({ label, children, wrap = false }: { label: string; children: React.ReactNode; wrap?: boolean }) {
   return (
-    <div className="flex flex-col items-stretch gap-1 py-1">
+    <div className="flex flex-col items-stretch gap-1 py-0.5">
       <span className="shrink-0 text-xs font-medium text-ink-secondary">{label}</span>
       <div className={['flex min-w-0 items-center gap-1.5', wrap ? 'flex-wrap' : ''].join(' ')}>{children}</div>
     </div>
@@ -457,12 +465,21 @@ function Row({ label, children, wrap = false }: { label: string; children: React
  */
 function RowInline({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-h-[36px] items-center justify-between gap-3">
+    <div className="flex min-h-[32px] items-center justify-between gap-3">
       <span className="shrink-0 text-xs font-medium text-ink-secondary">{label}</span>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">{children}</div>
     </div>
   );
 }
+
+/**
+ * SPOT 칩 기준(2026-09-24 오너 G3 "알약 세로 폭을 줄여라"): **보이는 높이 32px · 누르는 높이 44px.**
+ * 히트는 ::before 를 위아래 7px 넓힌다 — 절대배치 기준이 padding box 라 테두리 1px 만큼 줄어 실효는 6px 씩(32+12=44).
+ * ⚠ 공용 `.tap-y-44`(±6px)는 테두리 있는 칩에서 **실효 ±5px** 다(실측: 36px 칩이 아래로 4px 까지만 잡혔다) —
+ *   그걸로 32px 을 만들면 42px 로 44 계약 미달이라 여기서 7px 로 둔다.
+ * 두 줄로 접힐 때 줄 간격(gap-y-3 = 12.75px)이 위아래 확장 6+6 보다 커서 이웃 칩의 히트를 덮지 않는다.
+ */
+const CHIP_HIT = "relative before:absolute before:inset-x-0 before:-inset-y-[7px] before:content-['']";
 
 function Pick<T extends string | number>({ value, options, onChange, fmt, end = false }: {
   value: T; options: readonly T[]; onChange: (v: T) => void; fmt?: (v: T) => string;
@@ -481,8 +498,8 @@ function Pick<T extends string | number>({ value, options, onChange, fmt, end = 
     <div className={['flex min-w-0 flex-1 flex-wrap gap-x-1 gap-y-3', end ? 'justify-end' : ''].join(' ')}>
       {shown.map((o) => (
         <button key={String(o)} type="button" aria-pressed={o === value} onClick={() => onChange(o)}
-          // min-h 36 + tap-y-44 의 위아래 6px = 48px 터치(전엔 32px 로 44px 계약 미달)
-          className={['tap-y-44 min-h-[36px] rounded-input border px-2 text-2xs font-bold transition-colors',
+          // 보이는 32px · 누르는 44px(CHIP_HIT) — 2026-09-24 전: 36px · 실효 46px
+          className={[CHIP_HIT, 'min-h-[32px] rounded-input border px-2 text-2xs font-bold transition-colors',
             o === value ? 'border-accent-300 bg-accent-300 text-white'
               : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
           {fmt ? fmt(o) : String(o)}
@@ -497,11 +514,12 @@ const TABLE_SIZES = [2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 
 function GameStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotReview>) => void }) {
   return (
-    // space-y-2: 세 행이 각각 컨트롤 높이(36)로 끝나 카드가 224 → 약 150px (390px 실측 기준)
-    <div className="rounded-aura border card-aura p-3 space-y-2">
-      <RowInline label="형식">
+    // space-y-2: 세 행이 각각 컨트롤 높이로 끝난다. 카드 껍데기는 부모(게임·자리 단계)가 쥔다.
+    <div className="space-y-2">
+      {/* 2026-09-24 오너 G2: '형식' → '게임 종류', '대회' → '토너먼트'. 저장값('mtt'|'cash')은 그대로 — 표시만. */}
+      <RowInline label="게임 종류">
         <Pick end value={spot.format} options={['mtt', 'cash'] as const}
-          onChange={(v) => patch({ format: v })} fmt={(v) => (v === 'mtt' ? '대회' : '캐시')} />
+          onChange={(v) => patch({ format: v })} fmt={(v) => (v === 'mtt' ? '토너먼트' : '캐시')} />
       </RowInline>
       <RowInline label="테이블 인원">
         <select
@@ -556,7 +574,8 @@ function SeatStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
     });
   };
   return (
-    <div className="rounded-aura border card-aura p-3">
+    // space-y-1: 칩 줄 아래 → 다음 라벨 8.5px(Row py-0.5 ×2 + 4.25). 칩 히트(아래 6px)가 다음 라벨까지만 닿는다.
+    <div className="space-y-1">
       <Row label="내 자리">
         <Pick value={spot.heroPos} options={seats} onChange={(v) => patch({ heroPos: v as SpotPosition })} />
       </Row>
@@ -569,7 +588,7 @@ function SeatStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
           <Pick value={v.pos} options={seats}
             onChange={(p) => patch({ extra: spot.extra.map((x, k) => (k === i ? { ...x, pos: p as SpotPosition } : x)) })} />
           <button type="button" onClick={() => removeVillain(i)} aria-label={`상대 ${EXTRA_LETTERS[i]} 삭제`}
-            className="flex h-[36px] shrink-0 items-center gap-1 rounded-input border border-border-default px-2 text-2xs font-semibold text-ink-muted transition-colors hover:text-danger">
+            className={`${CHIP_HIT} flex h-[32px] shrink-0 items-center gap-1 rounded-input border border-border-default px-2 text-2xs font-semibold text-ink-muted transition-colors hover:text-danger`}>
             <Icon name="close" size={12} aria-hidden />빼기
           </button>
         </Row>
@@ -675,7 +694,7 @@ function ActionTimeline({ spot, patch }: { spot: SpotReview; patch: (p: Partial<
       )}
 
       {/* 추가 줄 — 버튼으로 빠르게, 필요하면 숫자를 직접 */}
-      <div className="mt-2.5 space-y-1.5 border-t border-border-subtle pt-2.5">
+      <div className="mt-2.5 space-y-1 border-t border-border-subtle pt-2.5">
         <Row label="누가">
           <Pick value={who} options={whoOptions} onChange={setWho} fmt={whoLabel} />
         </Row>

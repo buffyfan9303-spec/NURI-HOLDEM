@@ -134,9 +134,9 @@ describe('배선 계약', () => {
     expect(read('src/api/spots.ts'), '공유 RPC 경로가 AI 결과를 안다').not.toMatch(/spot_ai|spotReview/);
   });
 
-  it('A안 — 다섯 단계, 작성 내용은 확인 단계에만, 체크는 확정한 단계에만', () => {
+  it('A안 — 네 단계(2026-09-24 G3: 게임+자리 합침), 작성 내용은 확인 단계에만, 체크는 확정한 단계에만', () => {
     const keys = [...PANEL.matchAll(/\{ key: '([a-z]+)', label: '([^']+)'/g)].map((m) => m[2]);
-    expect(keys).toEqual(['게임', '자리·스택', '카드', '액션', '확인']);
+    expect(keys).toEqual(['게임·자리', '카드', '액션', '확인']);
     expect(PANEL).toMatch(/\{step === 'confirm' && \(\s*<SpotReport/);
     expect(PANEL.match(/<SpotReport/g), '작성 내용이 확인 단계 밖에도 있다').toHaveLength(1);
     expect(PANEL).toContain('confirmed.has(s.key)');

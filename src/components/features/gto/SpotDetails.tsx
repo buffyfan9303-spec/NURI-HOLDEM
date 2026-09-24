@@ -75,8 +75,8 @@ function SpotDetailsBase({ spot, mode = 'owner', revealed = false }: {
     <div className="min-w-0" data-testid="spot-details">
       {/* ① 판 — 형식·인원·블라인드·앤티 */}
       <Row label="판">
-        {/* 용어 정본: 'mtt' 의 화면 표기는 '대회' 다(terminology.contract) — '토너먼트' 로 쓰지 마라. */}
-        {spot.format === 'mtt' ? '대회' : '캐시'} · {spot.tableSize}인 · SB {spot.sbBb}BB{ante}
+        {/* 2026-09-24 오너 G2: SPOT 의 'mtt' 표기는 '토너먼트'(작성 화면 '게임 종류' 와 같은 글자). terminology.contract ALLOW 에 등록. */}
+        {spot.format === 'mtt' ? '토너먼트' : '캐시'} · {spot.tableSize}인 · SB {spot.sbBb}BB{ante}
       </Row>
       {/* ② 자리와 스택 */}
       <Row label="자리">

@@ -180,11 +180,11 @@ test.describe('NURI SPOT — 분석 흐름', () => {
   test('🔴 입력 5단계가 서고 현재 단계가 표시된다', async ({ page }) => {
     const dlg = await openSpot(page);
     const bar = dlg.getByRole('group', { name: '입력 단계' });
-    // 2026-09-23 A안: 게임/자리·스택/카드/액션/확인
-    for (const s of ['게임', '자리·스택', '카드', '액션', '확인']) {
+    // 2026-09-24 G3: 게임·자리/카드/액션/확인
+    for (const s of ['게임·자리', '카드', '액션', '확인']) {
       await expect(bar.getByRole('button', { name: new RegExp(s) })).toBeVisible();
     }
-    await bar.getByRole('button', { name: /자리·스택/ }).click();
+    await bar.getByRole('button', { name: /게임·자리/ }).click();
     await expect(dlg.getByText('내 자리').first()).toBeVisible();
     await expect(dlg.getByText('유효 스택').first()).toBeVisible();
   });
@@ -204,7 +204,7 @@ test.describe('NURI SPOT — 분석 흐름', () => {
     await expect(sel).toBeVisible();
     expect(await sel.locator('option').allTextContents()).toEqual(['2인', '3인', '4인', '5인', '6인', '7인', '8인', '9인', '10인']);
     // ④ 유효 스택은 직접 입력만 — 프리셋 칩(10BB·20BB…)이 없다
-    await bar.getByRole('button', { name: /자리·스택/ }).click();
+    await bar.getByRole('button', { name: /게임·자리/ }).click();
     await expect(dlg.getByLabel('유효 스택 BB 직접 입력')).toBeVisible();
     await expect(dlg.getByRole('button', { name: /^(10|20|40|60|100)BB$/ })).toHaveCount(0);
     // ⑤ 빌런 B~E 추가 — 자리 목록에 '상대 B 자리' 행이 생기고 카드 단계에 슬롯이 선다
@@ -322,7 +322,7 @@ test.describe('NURI SPOT — 9인 UTG+1 자리', () => {
     // 2026-09-19: 테이블 인원은 네이티브 select(2~10인) — 칩이 아니다
     await dlg.getByLabel('테이블 인원').selectOption('9');
 
-    await steps.getByRole('button', { name: /자리·스택/ }).click();
+    await steps.getByRole('button', { name: /게임·자리/ }).click();
     // '내 자리' 행이 먼저 온다 — 상대 자리에도 같은 이름의 칩이 있어 첫 번째를 집는다.
     await dlg.getByRole('button', { name: 'UTG1', exact: true }).first().click();
     await expect(dlg.getByRole('button', { name: 'UTG1', exact: true }).first(),

@@ -685,13 +685,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
               같은 커밋에서 `e2e/nuri-spot.spec.ts:56` 의 이 문구 단언도 `data-testid` 기준으로 바꿨다
               (CLAUDE.md: 라벨을 바꾸면 같은 커밋에서 셀렉터를 data-testid 로 교체). */}
         </div>
-        {/* `text-[10px]` 은 역할 사다리 밖이라 루트 17px 확대를 못 받는다 — `text-2xs`(11.69px)로 올린다.
-            `shrink-0` 도 뺐다: 320px·200% 에서 이 배지 하나가 245px 을 선점해 섹션(199px)을 밖으로 밀었다.
-            배지 글자는 스스로 줄바꿈된다 — 잘리는 것이 아니라 두 줄이 된다. */}
-        <span className="min-w-0 rounded-badge border border-border-default bg-surface-high px-1.5 py-0.5 text-2xs font-semibold text-ink-muted"
-          title="프리플랍은 자체 차트·Nash 데이터와 일치할 때만 기준 빈도를 보여주고, 포스트플랍은 에퀴티·팟오즈만 계산합니다.">
-          프리플랍 차트 · 수학
-        </span>
+        {/* 🔴 2026-09-24 오너 G4: 이름 옆 부제 배지('프리플랍 차트 · 수학')를 뺐다 — SPOT 은 이제 판정이 아니라 작성·저장·공유 화면이다. */}
       </div>
       {/* 🔴 2026-09-20 오너 지시: "그런 사람 없어 앞으로 200% 확대 다 빼" ·
           "기존 작업에서도 200% 확대를 전제로 뭔가 둡다면 모든 기준은 100%".
