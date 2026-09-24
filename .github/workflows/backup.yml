@@ -1,6 +1,6 @@
 name: DB Backup to R2
 
-# OBS-1 — 무료 Supabase는 자동 백업·PITR이 없다. 야간 pg_dump → Cloudflare R2(S3 호환).
+# OBS-1 — 외부 백업(Supabase 요금제 자체 백업과 별개로 R2 에 보관). 야간 pg_dump → Cloudflare R2(S3 호환).
 # 라이브 DB는 읽기(dump)만.
 #
 # ⚠ 2026-09-09 — "필수 secret 없으면 우아하게 스킵"을 폐기했다.
@@ -120,7 +120,7 @@ jobs:
           #   "server version mismatch"(서버 17.6) 로 실패했다. 위에서 설치한 17 바이너리를 직접 부른다.
           PGDUMP=/usr/lib/postgresql/17/bin/pg_dump
           "$PGDUMP" --version
-          "$PGDUMP" --format=custom --no-owner --no-privileges "$USE" -f "nuri-$STAMP.dump"
+          "$PGDUMP" --format=custom --no-owner "$USE" -f "nuri-$STAMP.dump"
           gzip "nuri-$STAMP.dump"
           echo "FILE=nuri-$STAMP.dump.gz" >> "$GITHUB_ENV"
           ls -lh "nuri-$STAMP.dump.gz"

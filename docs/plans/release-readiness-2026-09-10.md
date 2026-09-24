@@ -27,7 +27,7 @@
    - 접속 문자열 secret 이름은 **`SUPABASE_DB_URL` 또는 `SUPABASE_URI` 둘 다** 받는다(2026-09-10 수정). 오너는 `SUPABASE_URI` 로 등록해 두었는데 워크플로가 `SUPABASE_DB_URL` 만 보고 있어 등록해도 계속 스킵됐다. 값은 Supabase 대시보드 → **Connect → Direct → Session pooler(5432) URI**. (6543 트랜잭션 풀러는 pg_dump 가 실패한다 — 경고를 띄운다.)
    - 가드가 `postgres://` 로 시작하지 않으면 실패시킨다 — 프로젝트 API 주소(`https://xxx.supabase.co`)를 붙여 넣는 실수를 첫 단계에서 잡는다.
    - 이미 있는 것: `R2_ACCESS_KEY_ID` `R2_SECRET_ACCESS_KEY` `R2_ENDPOINT` `R2_BUCKET` `R2_ACCOUNT_ID` (2026-08-24 등록) · `SUPABASE_URI`. (선택) `HEALTHCHECK_BACKUP_URL`.
-   - 그다음 순서: ① Actions → "DB Backup to R2" → Run workflow(수동) ② 로그의 "R2 객체 크기: N bytes / 로컬: N bytes" 확인 ③ Cloudflare R2 콘솔에서 `db/nuri-<날짜>.dump.gz` 객체 확인 ④ **격리된 일회용 DB**(새 Supabase 프로젝트 또는 로컬 Postgres 17)에 `pg_restore --no-owner --no-privileges -d <disposable>` 로 복구 드릴 — 운영 DB 에는 절대 restore 하지 않는다.
+   - 그다음 순서: ① Actions → "DB Backup to R2" → Run workflow(수동) ② 로그의 "R2 객체 크기: N bytes / 로컬: N bytes" 확인 ③ Cloudflare R2 콘솔에서 `db/nuri-<날짜>.dump.gz` 객체 확인 ④ **격리된 일회용 DB**(새 Supabase 프로젝트 또는 로컬 Postgres 17)에 `pg_restore --no-owner -d <disposable>` (⚠ 2026-09-24: `--no-privileges` 를 쓰지 마라 — anon 회수 294개 함수의 권한이 풀린 채 복구된다) 로 복구 드릴 — 운영 DB 에는 절대 restore 하지 않는다.
    - Storage 객체(포스터·장터·아바타·커뮤니티 이미지·클락 배경·본인인증 신분증 임시)는 pg_dump 에 담기지 않는다. 최소안: 주 1회 `supabase storage` CLI 또는 service_role 키로 버킷 6종을 R2 에 증분 복사하는 스크립트 — service_role 키를 GitHub Secrets 에 둘지 **오너 결정**이 먼저다(둘 때까지 미착수).
 
 2. **[P0] CI 가 실패해도 프로덕션에 배포된다.** main 브랜치 보호·룰셋이 **없고**, Vercel Git 연동은 push 마다 즉시 배포한다. 실제로 2026-09-07 CI 실패 커밋 2건(b438cee · cbbb2e5)이 그대로 프로덕션에 나갔다(Vercel 배포 dpl_7t7mSw… · dpl_ANxtKQ… READY/production).
