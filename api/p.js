@@ -18,6 +18,12 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// </script> 주입 방지 — HTML 이스케이프(esc)와는 별개로, JSON 문자열 안의 '<' 를 유니코드 이스케이프한다.
+// (JSON.stringify 는 '<'/'>'를 이스케이프하지 않으므로 </script> 리터럴이 그대로 나갈 수 있다)
+function jsonLd(obj) {
+  return JSON.stringify(obj).replace(/</g, '\\u003c');
+}
+
 export default async function handler(req, res) {
   let id = '';
   try {
@@ -32,6 +38,12 @@ export default async function handler(req, res) {
   let title = 'NURI HOLDEM | 홀덤 대회 일정';
   let desc = '전국 홀덤 대회 일정 · 홀덤펍 커뮤니티 · 중고장터';
   let image = `${ORIGIN}/icon-512.png`;
+  // JSON-LD(Event) 용 — §28 허용 범위(일정·장소·바이인)만 채운다.
+  let foundSchedule = false;
+  let isoStart = '';
+  let venueName = '';
+  let venueAddress = '';
+  let buyInAmount = 0;
 
   try {
     const SB = process.env.VITE_SUPABASE_URL;
@@ -45,6 +57,7 @@ export default async function handler(req, res) {
         const rows = await r.json();
         const s = Array.isArray(rows) && rows[0] ? rows[0] : null;
         if (s) {
+          foundSchedule = true;
           const where = s.pub_name || s.region || '';
           const buyMan = s && s.buy_in && typeof s.buy_in.amount === 'number'
             ? Math.round(s.buy_in.amount / MAN) : 0;
@@ -57,10 +70,39 @@ export default async function handler(req, res) {
             .filter(Boolean).join(' · ');
           desc = (s.description ? `${bits} — ${String(s.description)}` : bits).slice(0, 150) || desc;
           if (s.poster_url) image = s.poster_url;
+          venueName = s.pub_name || '';
+          venueAddress = s.address || s.region || '';
+          if (buyMan) buyInAmount = buyMan * MAN;
+          if (s.date && /^\d{2}:\d{2}/.test(String(s.start_time || ''))) {
+            isoStart = `${s.date}T${String(s.start_time).slice(0, 5)}:00+09:00`;
+          }
         }
       }
     }
   } catch { /* 폴백 메타 유지 */ }
+
+  /** @typedef {import('schema-dts').Event} Event */
+  /** @type {(import('schema-dts').WithContext<Event>)|null} */
+  let eventLd = null;
+  if (foundSchedule) {
+    eventLd = {
+      '@context': 'https://schema.org',
+      '@type': 'Event',
+      name: title,
+      ...(isoStart ? { startDate: isoStart } : {}),
+      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+      eventStatus: 'https://schema.org/EventScheduled',
+      location: {
+        '@type': 'Place',
+        name: venueName || title,
+        ...(venueAddress ? { address: venueAddress } : {}),
+      },
+      // §28: 참가비(바이인)만 가격 정보로 싣는다 — 상금·수익·환전 계열 필드는 금지.
+      ...(buyInAmount ? { offers: { '@type': 'Offer', price: String(buyInAmount), priceCurrency: 'KRW', url: appUrl, availability: 'https://schema.org/InStock' } } : {}),
+      image,
+      url: appUrl,
+    };
+  }
 
   const html = '<!doctype html><html lang="ko"><head><meta charset="utf-8"/>'
     + '<meta name="viewport" content="width=device-width,initial-scale=1"/>'
@@ -73,6 +115,7 @@ export default async function handler(req, res) {
     + `<meta property="og:image" content="${esc(image)}"/>`
     + `<meta property="og:url" content="${esc(appUrl)}"/>`
     + '<meta property="og:locale" content="ko_KR"/>'
+    + (eventLd ? `<script type="application/ld+json">${jsonLd(eventLd)}</script>` : '')
     + '<meta name="twitter:card" content="summary_large_image"/>'
     + `<meta name="twitter:title" content="${esc(title)}"/>`
     + `<meta name="twitter:description" content="${esc(desc)}"/>`

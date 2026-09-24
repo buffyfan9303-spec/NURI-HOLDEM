@@ -65,3 +65,4 @@ docs/clock-shots/
 #   결함을 잡는 동안 남긴 증거라 그때는 유용하지만, 저장소에 넣으면 이력에서 영영 안 지워진다
 #   (pack 70MB → 107MB). 필요하면 해당 e2e/프로브를 다시 돌려 재생성한다.
 docs/bugshots/
+.analyze

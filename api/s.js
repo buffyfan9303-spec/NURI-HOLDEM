@@ -16,6 +16,11 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// </script> 주입 방지 — HTML 이스케이프(esc)와는 별개로, JSON 문자열 안의 '<' 를 유니코드 이스케이프한다.
+function jsonLd(obj) {
+  return JSON.stringify(obj).replace(/</g, '\\u003c');
+}
+
 export default async function handler(req, res) {
   let code = '';
   try {
@@ -32,6 +37,9 @@ export default async function handler(req, res) {
   let title = 'NURI HOLDEM | 홀덤펍 커뮤니티';
   let desc = '전국 홀덤 대회 일정 · 홀덤펍 커뮤니티 · 중고장터';
   let image = `${ORIGIN}/icon-512.png`;
+  // JSON-LD(LocalBusiness) 용 — §28 허용 범위(일정·장소)만 채운다. 금액 필드 없음(매장은 바이인이 대회별).
+  let foundVenue = false;
+  let venueRegion = '';
 
   try {
     const SB = process.env.VITE_SUPABASE_URL;
@@ -49,6 +57,8 @@ export default async function handler(req, res) {
             ?? rows.find((x) => typeof x.id === 'string' && x.id.startsWith(code)))
           : null;
         if (v) {
+          foundVenue = true;
+          venueRegion = v.region || '';
           title = `${v.name}${v.region ? ` · ${v.region}` : ''} | 홀덤펍`;
           desc = (v.description && String(v.description).slice(0, 120)) || `${v.name} — 일정·예약·순위를 확인하세요`;
           if (v.image_url) image = v.image_url;
@@ -61,6 +71,21 @@ export default async function handler(req, res) {
     }
   } catch { /* 폴백 메타 유지 — 조회 자체가 실패한 경우는 '없음' 이 아니므로 표식을 달지 않는다 */ }
 
+  /** @typedef {import('schema-dts').LocalBusiness} LocalBusiness */
+  /** @type {(import('schema-dts').WithContext<LocalBusiness>)|null} */
+  let venueLd = null;
+  if (foundVenue) {
+    venueLd = {
+      '@context': 'https://schema.org',
+      '@type': 'LocalBusiness',
+      name: title.split(' | ')[0],
+      description: desc,
+      image,
+      url: appUrl,
+      ...(venueRegion ? { address: { '@type': 'PostalAddress', addressRegion: venueRegion, addressCountry: 'KR' } } : {}),
+    };
+  }
+
   const html = '<!doctype html><html lang="ko"><head><meta charset="utf-8"/>'
     + '<meta name="viewport" content="width=device-width,initial-scale=1"/>'
     + `<title>${esc(title)}</title>`
@@ -72,6 +97,7 @@ export default async function handler(req, res) {
     + `<meta property="og:image" content="${esc(image)}"/>`
     + `<meta property="og:url" content="${esc(appUrl)}"/>`
     + '<meta property="og:locale" content="ko_KR"/>'
+    + (venueLd ? `<script type="application/ld+json">${jsonLd(venueLd)}</script>` : '')
     + '<meta name="twitter:card" content="summary_large_image"/>'
     + `<meta name="twitter:title" content="${esc(title)}"/>`
     + `<meta name="twitter:description" content="${esc(desc)}"/>`
