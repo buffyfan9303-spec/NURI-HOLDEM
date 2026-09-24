@@ -17,14 +17,20 @@
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-monochrome-512.png", "sizes": "512x512", "type": "image/png", "purpose": "monochrome" }
   ],
   "shortcuts": [
-    { "name": "일정 탐색", "short_name": "일정", "url": "/?tab=browse", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "라이브", "short_name": "라이브", "url": "/?tab=live", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "커뮤니티", "short_name": "커뮤니티", "url": "/?tab=community", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "중고장터", "short_name": "장터", "url": "/?tab=market", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "내 매장", "short_name": "내 매장", "url": "/?tab=my-store", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+    { "name": "라이브", "short_name": "라이브", "url": "/?tab=live", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "커뮤니티", "short_name": "커뮤니티", "url": "/?tab=community", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "GTO", "short_name": "GTO", "url": "/?tab=tools", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "캘린더", "short_name": "캘린더", "url": "/?tab=calendar", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ],
+  "screenshots": [
+    { "src": "/screenshots/home-1080x1920.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "오늘·내일 홀덤 대회 일정" },
+    { "src": "/screenshots/browse-1080x1920.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "대회 일정 탐색" },
+    { "src": "/screenshots/community-1080x1920.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "홀덤펍 커뮤니티" },
+    { "src": "/screenshots/gto-1080x1920.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "GTO 학습 도구" }
   ],
   "share_target": {
     "action": "/?tab=community&shared=1",
