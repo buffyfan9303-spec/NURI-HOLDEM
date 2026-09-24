@@ -143,6 +143,35 @@ jobs:
           echo "원격 ${REMOTE}B / 로컬 ${LOCAL}B"
           [ "$REMOTE" = "$LOCAL" ] || { echo "::error::업로드 크기 불일치"; exit 1; }
 
+      # 2026-09-25 DATA-RETENTION: 이 단계가 없어 파일 백업(신분증 사본 버킷 포함)이 **무기한** 쌓였다.
+      #   탈퇴·삭제한 사람의 파일이 백업에서 영원히 남지 않게, DB 백업(backup.yml KEEP=14 ≈ 2주)과 같은
+      #   보존 기간으로 맞춘다 — 주 1회라 최근 2개. 위 업로드·크기 대조가 성공했을 때만 돈다.
+      - name: 옛 파일 백업 정리(보존 약 2주)
+        if: success()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          EP="https://${ACCOUNT_ID}.r2.cloudflarestorage.com"
+          KEEP=2    # 주 1회 × 2 ≈ 2주 (개인정보처리방침의 백업 보존 기간과 같아야 한다)
+          list() {
+            aws s3api list-objects-v2 --bucket "$BUCKET" --prefix storage/ --endpoint-url "$EP" \
+              --query 'sort_by(Contents,&LastModified)[].Key' --output text 2>/dev/null \
+              | tr '\t' '\n' | grep -v '^None$' | grep -v '^$' || true
+          }
+          C=$(list | grep -c . || true)
+          echo "정리 전: ${C}개"
+          if [ "$C" -gt "$KEEP" ]; then
+            list | head -n "$((C - KEEP))" | while read -r k; do
+              [ -n "$k" ] && aws s3 rm "s3://$BUCKET/$k" --endpoint-url "$EP" --only-show-errors && echo "삭제: $k"
+            done
+          fi
+          echo "정리 후: $(list | grep -c . || true)개"
+
       - name: 흔적 정리
         if: always()
         run: rm -rf storage-dump nuri-storage-*.tar.gz
