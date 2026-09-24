@@ -28,7 +28,6 @@
 //       트랙에 gap 을 넣거나 카드마다 폭을 달리하면 정착 위치가 깨진다. 여백은 **트랙 바깥**에 둔다.
 //       링크 없는 배너는 <div> 로 그린다(죽은 버튼 금지). 관리자 배너의 활성·정렬·기간 규칙은 API 담당.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { thumbUrl } from '../../lib/imageUrl';
 import Icon from '../atoms/Icon';
 import type { HomeBanner } from '../../api/homeBanners';
 
@@ -129,7 +128,11 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
     const brands = showBrand ? BRAND_SLIDES.map((b): Slide => ({
       key: `b:${b.key}`, alt: b.alt, brand: b, onClick: () => onBanner(b.action),
     })) : [];
-    return [...posters, ...events, ...brands];
+    // 🔴 2026-09-25 오너 결정(HOME-BANNER-REDESIGN) — **참여 가능(live)이 아닌** 이벤트 안내는 맨 뒤로 보낸다.
+    //   관리자 배너가 0개가 되자 '매장 이벤트 · 지금 진행 중인 이벤트가 없어요' 평면 슬라이드가 홈에서 가장 큰 자리의
+    //   첫 장이 됐다(실측 360~1440 전부). 빼지 않는 이유: 이 슬라이드가 시작 전·소진·종료·조회 실패를 사실대로 말하는
+    //   자리이고 e2e 5개 파일의 진입점이다(home-event-menu). 라이브가 되면 종전처럼 관리자 배너 바로 뒤·브랜드 앞(§7.1-3).
+    return eventSlide?.live ? [...posters, ...events, ...brands] : [...posters, ...brands, ...events];
   }, [onBanner, banners, onBannerUrl, eventSlide, showBrand]);
 
   const n = slides.length;
@@ -286,13 +289,14 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
         style={b ? { background: b.bg } : evBg ? { background: evBg } : undefined}
       >
         {ev ? (
-          /* 🔴 2026-09-24 HOME-DENSITY — 점·화살표가 배너 **안쪽 아래 띠**로 들어왔다(아래 제어 묶음 주석).
-             여러 장일 때만 글자를 그 띠 위로 올린다(pb-8) — 글자와 44px 터치 상자가 겹치지 않게. */
-          <span className={['relative flex h-full flex-col justify-center gap-1 px-4 pt-3 md:px-6', multi ? 'pb-8' : 'pb-3'].join(' ')}>
+          /* 🔴 2026-09-25 HOME-BANNER-REDESIGN — 다른 슬라이드와 같은 구도(글자 **왼쪽 아래**, 오른쪽 36% 는 'n / N' 칩 자리).
+             ⚠ 이 슬라이드만 글자가 **흐름 안**(relative)이다 — 그림이 없어 글자가 곧 높이이고, 루트 글자 200% 에서
+               프레임이 같이 자라야 잘리지 않는다. absolute 로 빼면 min-h 에 갇혀 잘린다. min-h 는 버튼 값을 상속한다. */
+          <span className="relative flex h-full min-h-[inherit] flex-col justify-end gap-1 px-4 pb-4 pr-[36%] pt-3 md:px-6 md:pb-5">
             <span className="flex flex-wrap items-center gap-1.5">
               {/* 강조는 EVENT 칩 색으로만 — live 일 때 accent, 아니면 중립 */}
               <span className={['shrink-0 rounded-chip px-1.5 py-px t-meta font-bold tracking-wide', ev.live ? 'bg-accent-300/25 text-accent-200' : 'bg-white/10 text-white/60'].join(' ')}>EVENT</span>
-              <span className="font-display text-[18px] font-extrabold leading-[26px] text-[#EEECFA] md:text-[22px] md:leading-[30px]">{ev.title}</span>
+              <span className="font-display text-[21px] font-extrabold leading-[28px] text-[#EEECFA] md:text-[22px] md:leading-[30px]">{ev.title}</span>
             </span>
             <span className="text-[13px] font-medium leading-[19px] tabular-nums text-[#B2ACEC]" aria-busy={ev.pending || undefined}>{ev.sub}</span>
           </span>
@@ -301,30 +305,34 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
             {/* 2026-09-13 — **수트 글리프를 뺐다.** 104px 글리프가 116px 배너에서 카드 밖으로 나가
                 (실측 scrollWidth 367 / clientWidth 354, 세로 121/104) 잘린 채로만 보였고, 글자 자리를
                 92px 먹어 긴 제목을 밀었다. 깊이는 배경 그라데이션이 낸다 — 장식을 더 쌓지 않는다. */}
-            {/* 🔴 2026-09-19 실측 — 브랜드 배너도 **원본**을 받고 있었다
-                (mind.webp 2,262B → -400 변형본 572B · 74.7%↓). 배너는 가로를 꽉 채우므로 400px 변형본.
-                변형본이 없으면 아래 onError 가 원본으로 되돌린다(VenueThumb·PosterArea 와 같은 조리법). */}
+            {/* 🔴 2026-09-25 HOME-BANNER-REDESIGN — 400px 변형본(400×80)을 **원본(1200×240, 2,262B)** 으로 되돌렸다.
+                배너가 152px 로 높아진 뒤 5:1 아트는 cover 로 가로 51% 만 보이고(390), 400 변형본을 기기 픽셀 780 에 맞춰
+                ~3.8배 늘려 흐렸다(실측). 원본이면 ~1.27배다. 늘어난 전송량 +1.7KB/장.
+                초점 72% — 볼거리(MIND 구슬·NURI 핀)가 오른쪽에 있어 가운데 크롭이면 오른끝에서 잘렸다.
+                (종전 09-19: 원본 → -400 변형본으로 74.7% 줄였었다 — 그땐 배너가 110px 이었다.)
+                onError 폴백은 그대로 둔다(원본이 없을 일은 없지만 같은 조리법 유지). */}
             <img
-              src={thumbUrl(b.img, 400)}
+              src={b.img}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full object-cover object-[72%_50%]"
               /* 관리자 배너와 같은 규칙 — 마퀴 안에서 lazy 는 '빈 배너'가 된다(오너 실기기 리포트). */
               loading={i < 2 ? 'eager' : 'lazy'}
               decoding="async"
               onError={(e) => {
                 const el = e.currentTarget;
-                if (el.dataset.fb) return;   // 원본도 실패하면 더 시도하지 않는다(무한 루프 방지)
+                if (el.dataset.fb) return;   // 한 번만 다시 시도한다(무한 루프 방지)
                 el.dataset.fb = '1';
                 el.src = b.img;
               }}
             />
-            {/* 아트워크 위 글자가 읽히도록 왼쪽에서 오른쪽으로 빠지는 스크림 하나만 — 관리자 배너와 동일(여러 겹 금지). */}
+            {/* 2026-09-25 — 그림이 판 전체, 글자는 **왼쪽 아래**(레퍼런스 다수: 무신사·야놀자·번개장터). 스크림은 아래→위 + 왼쪽 옅게
+                한 레이어(배경 두 겹 = 한 요소). 오른쪽 36% 는 'n / N' 칩 자리라 글자를 두지 않는다. 관리자 배너와 동일. */}
             <span
-              className={['absolute inset-0 flex flex-col justify-center gap-1 px-4 pr-[38%] max-[359px]:pr-[30%] md:px-6', multi ? 'pb-6' : ''].join(' ')}
-              style={{ background: 'linear-gradient(to right, rgba(6,8,11,0.92) 0%, rgba(6,8,11,0.78) 45%, transparent 100%)' }}
+              className="absolute inset-0 flex flex-col justify-end gap-0.5 px-4 pb-4 pr-[36%] md:px-6 md:pb-5"
+              style={{ background: 'linear-gradient(to top, rgba(6,8,11,0.92) 0%, rgba(6,8,11,0.5) 48%, rgba(6,8,11,0.05) 100%), linear-gradient(to right, rgba(6,8,11,0.6) 0%, transparent 62%)' }}
             >
               {/* §5 역할표: 홈 짧은 제목 18/26(PC 22/30) · 보조 설명 13/19 */}
-              <span className="font-display text-[18px] font-extrabold leading-[26px] md:text-[22px] md:leading-[30px]" style={{ color: b.titleColor }}>{b.title}</span>
+              <span className="font-display text-[21px] font-extrabold leading-[28px] md:text-[22px] md:leading-[30px]" style={{ color: b.titleColor }}>{b.title}</span>
               <span className="text-[13px] font-medium leading-[19px]" style={{ color: b.subColor }}>{b.sub}</span>
             </span>
           </>
@@ -338,14 +346,13 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
               loading={i < 2 ? 'eager' : 'lazy'}
               decoding="async"
             />
-            {/* §6-2: 짧은 제목은 **왼쪽**, 이미지는 오른쪽 일부가 보이게. 이미지 위 글자가 읽히도록
-                왼쪽에서 오른쪽으로 빠지는 스크림 하나만 쓴다(여러 겹 금지). */}
+            {/* §6-2: 짧은 제목은 **왼쪽**(2026-09-25 부터 왼쪽 **아래**), 이미지는 판 전체. 스크림은 브랜드 슬라이드와 같은 한 요소. */}
             {(s.title || s.sub) && (
               <span
-                className={['absolute inset-0 flex flex-col justify-center gap-1 px-4 pr-[38%] max-[359px]:pr-[30%] md:px-6', multi ? 'pb-6' : ''].join(' ')}
-                style={{ background: 'linear-gradient(to right, rgba(6,8,11,0.92) 0%, rgba(6,8,11,0.78) 45%, transparent 100%)' }}
+                className="absolute inset-0 flex flex-col justify-end gap-0.5 px-4 pb-4 pr-[36%] md:px-6 md:pb-5"
+                style={{ background: 'linear-gradient(to top, rgba(6,8,11,0.92) 0%, rgba(6,8,11,0.5) 48%, rgba(6,8,11,0.05) 100%), linear-gradient(to right, rgba(6,8,11,0.6) 0%, transparent 62%)' }}
               >
-                {s.title && <span className="font-display text-[18px] font-extrabold leading-[26px] text-white md:text-[22px] md:leading-[30px]">{s.title}</span>}
+                {s.title && <span className="font-display text-[21px] font-extrabold leading-[28px] text-white md:text-[22px] md:leading-[30px]">{s.title}</span>}
                 {s.sub && <span className="text-[13px] font-medium leading-[19px] text-white/80">{s.sub}</span>}
               </span>
             )}
@@ -373,8 +380,10 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
           §6-2 의 104~116 과 e2e home-flow-fit 게이트를 오너 지시로 새 범위(104~140)로 옮겼다. 132 를 고른 이유: 390 에서
           온전한 일정 카드 4장이 남는 최대치다(실측 여유 23px → 7px, 140 이면 −1px 로 3장).
           md 이상은 종전 카드 모양 그대로(PC 폭은 HomeTab 의 두 칸 비율 4:8 이 키운다). 글자는 안쪽 px-4(17px)라 본문 여백과 같은 세로선이다.
-          ⚠ index.html 정적 셸의 배너 예약도 같은 모양으로 맞췄다(첫 페인트 CLS). */}
-      <div className="poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-x-0 md:mx-page-x md:rounded-aura lg:mx-0">
+          ⚠ index.html 정적 셸의 배너 예약도 같은 모양으로 맞췄다(첫 페인트 CLS).
+          🔴 2026-09-25 HOME-BANNER-REDESIGN — 모바일은 위아래 헤어라인·카드 그림자도 뺐다(border-0·shadow-none). 풀블리드 그림 판에
+            선이 두 줄 그어져 '띠'로 읽혔다. 높이 154 → 152(테두리 2px) — 셸도 같이 바꿨다. md~ 카드 모양은 그대로. */}
+      <div className="poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none md:mx-page-x md:rounded-aura lg:mx-0">
         <div
           ref={vpRef}
           data-testid="home-banner-viewport"
@@ -400,25 +409,38 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
               실측(390): 글자 아래 65.6 < 터치 상자 위 72. ⚠ 320 에서 관리자 문구가 4줄로 접히면 글자 아래가
               92 까지 내려와 화살표 상자(72~116)와 겹쳤다(윗변에 붙어 답답했다) → 320~359 는 글자 칸 오른쪽 여백을
               38%→30% 로 줄여 한 줄로 되돌린다(실측 제목 164 · 부제 181 / 칸 184). 문구 길이에 따라 다시 접힐 수 있다.
-            · 보이는 부분은 어두운 알약 하나 — 배너 그림이 밝아도 흰 점·화살표가 읽힌다(테마 무관). */}
+            · 보이는 부분은 어두운 알약 하나 — 배너 그림이 밝아도 흰 점·화살표가 읽힌다(테마 무관).
+            🔴 2026-09-25 HOME-BANNER-REDESIGN(오너 결정 B) — 가운데 '‹ ● ● ● ›' 알약 → **오른쪽 아래 '‹ 1 / 3 ›' 칩**.
+            · 레퍼런스 390 실측: 오른쪽 아래 숫자 칩 4곳(무신사·인터파크·야놀자·번개장터), 가운데 점+화살표 알약 0곳.
+              종전 알약은 판 높이의 29%(44/152)를 쓰며 글자를 위로 밀었고, 장 수만큼 넓어졌다(5장이면 ~210px). 칩은 폭이 일정하다.
+            · 화살표 실박스 44×44 그대로. 점 버튼은 **DOM 에 남기고 display:none** — e2e 가 aria-current·evaluate click 으로
+              장 위치를 재는 손잡이다. ⚠ sr-only(1×1)로 두면 design-tokens 히트 게이트(아이콘형 28px)에 걸린다.
+            · 스크린리더에는 칩이 '배너 N장 중 i번째' 로 읽힌다(role=img + aria-label — sr-only 1×1 은 잘림 검사에 잡혔다). */}
         {multi && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center" data-testid="home-banner-dots">
-            <div className="pointer-events-auto relative flex items-end">
-              <span aria-hidden className="absolute inset-x-[10px] bottom-[3px] h-[20px] rounded-full bg-black/45" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-end pr-1.5 md:pr-3" data-testid="home-banner-dots">
+            {/* 보이는 알약(24px)은 **숫자 칩 자신의 배경**이다 — 좌우로 34px 씩 화살표 칸 밑까지 펼친다(-mx·px 로 레이아웃 폭은 글자 폭 그대로).
+                · 형제 레이어로 깔면 대비 검사가 지면색(라이트: 흰색)과 비교해 거짓 미달이 났다(2026-09-25 실측).
+                · 화살표 44×44 를 알약 밖으로 -my 오버행시키면 알약의 scrollWidth/Height 가 부풀어 잘림 검사에 걸렸다(101/107 × 24/34) —
+                  그래서 행 높이 = 화살표 높이(44)로 두고 알약을 그 가운데에 그린다. 모든 상자가 행 안이다.
+                · bg-black/65: 가장 밝은 관리자 그림(흰색) 위에서도 합성 rgb(89) → 흰 글자 7.0:1 · 흰 90% 6.0:1(AA 4.5 이상, 계산).
+                · 화살표는 z-10 으로 알약 위에 그린다(아이콘이 알약에 덮이지 않게), 칩은 pointer-events-none(누름은 화살표가 받는다). */}
+            <div className="pointer-events-auto relative flex h-[44px] items-center">
               <button type="button" onClick={() => go(-1)} aria-label="이전 배너"
-                className="relative flex h-[44px] w-[44px] items-end justify-center pb-[6px] text-white/80 transition-colors hover:text-white">
-                <Icon name="chevron-left" size={14} aria-hidden />
+                className="relative z-10 flex h-[44px] w-[44px] items-center justify-end pr-[8px] text-white/85 transition-colors hover:text-white">
+                <Icon name="chevron-left" size={13} aria-hidden />
               </button>
+              <span data-testid="home-banner-counter" role="img" aria-label={`배너 ${n}장 중 ${idx + 1}번째`}
+                className="pointer-events-none relative -mx-[34px] flex h-[24px] items-center rounded-full bg-black/65 px-[34px] text-[12px] font-semibold leading-[16px] tabular-nums text-white backdrop-blur-sm">
+                {idx + 1}<span className="mx-[3px] font-medium text-white/90">/</span><span className="font-medium text-white/90">{n}</span>
+              </span>
               {slides.map((s, i) => (
                 <button key={s.key} type="button" onClick={() => goTo(i)}
                   aria-label={`${i + 1}번째 배너`} aria-current={i === idx ? 'true' : undefined}
-                  className="relative flex h-[32px] w-[28px] items-end justify-center pb-[10px]">
-                  <span aria-hidden className={['block h-1.5 w-1.5 rounded-full transition-colors', i === idx ? 'bg-white' : 'bg-white/45'].join(' ')} />
-                </button>
+                  className="hidden" />
               ))}
               <button type="button" onClick={() => go(1)} aria-label="다음 배너"
-                className="relative flex h-[44px] w-[44px] items-end justify-center pb-[6px] text-white/80 transition-colors hover:text-white">
-                <Icon name="chevron-right" size={14} aria-hidden />
+                className="relative z-10 flex h-[44px] w-[44px] items-center justify-start pl-[8px] text-white/85 transition-colors hover:text-white">
+                <Icon name="chevron-right" size={13} aria-hidden />
               </button>
             </div>
           </div>

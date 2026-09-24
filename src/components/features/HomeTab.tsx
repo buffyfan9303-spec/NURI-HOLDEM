@@ -545,13 +545,19 @@ export default function HomeTab({
             배너 칸 681 → 783px(1280~). 오늘 안내 칸은 479 → 378px 인데 그 안의 글자는 날짜 줄 249px · 문장 191px 이라 남는다.
             ⚠ 개인화 문장(todayLine 3조각)은 22px 에서 최장 ~470px 라 lg 에서는 두 줄을 허용한다(아래 p) — 옆 배너가
               더 높아서(200px) 이 칸의 높이 변화가 아래 섹션을 밀지 않는다. */}
-        <div data-main-enter className="lg:grid lg:grid-cols-12 lg:items-center lg:gap-6 lg:pt-4">
+        {/* 🔴 2026-09-25 HOME-BANNER-REDESIGN(오너: "PC 쪽 레이아웃 이상하니까 수정해", 결정 P) — 4:8 은 그대로, **왼쪽 4칸을 채운다**.
+            실측(1440, 종전): 왼쪽 칸은 글자 두 줄(70px)뿐이라 200px 배너 옆에서 위아래 65px 씩 비었고(items-center),
+            그 아래 퀵 카드 줄은 20rem×2 로 x=831 에서 끝나 오른쪽 462px 가 비었다. 날짜 레일(w-fit 499)·목록(전체 폭)과
+            오른끝이 세 단으로 어긋났다. → lg 에서 왼쪽 = 위 오늘 안내 + 아래 퀵 카드(두 행), 오른쪽 = 배너(두 행에 걸침).
+            결과(1440): 퀵 아래끝 323 ≈ 배너 아래끝 322 · 일정 목록 top 492 → 407.
+            ⚠ 퀵 섹션을 이 그리드 **안**으로 옮겼지만 DOM 순서(오늘 → 배너 → 퀵)는 그대로라 모바일·md 는 한 열 흐름 그대로다. */}
+        <div data-main-enter className="lg:grid lg:grid-cols-12 lg:gap-x-6 lg:gap-y-3 lg:pt-4">
           {/* 오늘 안내 — 기본 48~60px(§6-2). 큰 인사말이 아니라 **사실**이다. */}
           {/* 2026-09-24 오너: "'무료 GTO 도구' 줄 아래 공백이 너무 크다 — 위아래 공백을 살짝 줄이고 비율을 맞춰라"(모바일).
               헤더→날짜 10.4 → 8.3 · 날짜→GTO 11.4 → 6.4 · GTO→배너 19.6 → 9.0px(390 실측). GTO 버튼 히트 44px 는 그대로 —
               44px 칸 안의 위 여백 5px 를 음수 마진으로 날짜 줄 쪽에 겹치고(위로 넘친 것은 스크롤 넘침이 아니다),
               아래는 배너 위 여백(pt-2.5)을 모바일에서 뺀다. md~ 는 종전 그대로. */}
-          <section data-testid="home-today" className="px-page-x pt-1 md:pt-1.5 lg:col-span-4 lg:pt-0">
+          <section data-testid="home-today" className="px-page-x pt-1 md:pt-1.5 lg:col-span-4 lg:col-start-1 lg:row-start-1 lg:self-center lg:pt-0">
             <a
               href="https://www.nurimind.co.kr" target="_blank" rel="noopener"
               className="inline-flex items-center gap-1 py-1 -my-1 t-desc text-ink-muted transition-colors hover:text-accent-200"
@@ -601,7 +607,7 @@ export default function HomeTab({
           </section>
 
           {/* 작은 실제 배너 — 하나의 메시지, 하나의 연결(§6-2) */}
-          <div className="lg:col-span-8">
+          <div className="lg:col-span-8 lg:col-start-5 lg:row-span-2 lg:row-start-1">
             <PosterCarousel
               banners={banners}
               eventSlide={eventSlide}
@@ -638,7 +644,6 @@ export default function HomeTab({
               }}
             />
           </div>
-        </div>
 
         {/* ── 퀵액션 2열 — 출석 체크 · 제휴 혜택 (2026-09-18 오너 시안) ────────
             시안(첨부 HTML 152행)의 2열 압축 액션 그리드. **없던 것을 더하는 것이지 무엇도 지우지 않는다** —
@@ -656,14 +661,16 @@ export default function HomeTab({
               목록 줄처럼 반복되는 자리에 같은 빛을 주면 강조가 아니라 소음이 된다. */}
         {/* 2026-09-24 HOME-DENSITY — 카드 세로 여백 py-2.5→2 · 제목 행 1.5rem→23px · 줄 사이 mt 한 단계씩.
             배지 자리 예약(min-h)의 **이유**는 그대로다 — 23px 는 배지 실상자 22.2px 보다 크다. */}
-        <section data-main-enter className="px-page-x pt-3" data-testid="home-quick">
+        {/* 2026-09-25 P — lg 에서 왼쪽 4칸 아래 행(배너 아래끝에 맞춘다). 카드 두 칸은 제목/행동 두 줄(모바일과 같은 모양) —
+            4칸(378px) 안의 한 칸 ~184px 에 제목+행동 한 줄은 들어가지 않는다. */}
+        <section data-main-enter className="px-page-x pt-3 lg:col-span-4 lg:col-start-1 lg:row-start-2 lg:self-end lg:pt-0" data-testid="home-quick">
           {/* 이벤트 메뉴 스위치가 꺼져 있으면 칸이 하나다 — 2열 격자에 빈 칸을 남기지 않는다. */}
           {/* 2026-09-24 리드 지적(PC 1440 빠른 카드 ~570px 에 제목+행동 줄만) — md~ 는 칸을 20rem 으로 묶고(왼쪽 정렬)
               행동 줄을 제목 **옆 같은 줄**로 올린다. 모바일은 종전 두 줄 그대로. */}
-          <div className={eventMenuVisible ? 'grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(2,minmax(0,20rem))]' : 'grid grid-cols-1 gap-2.5 md:grid-cols-[minmax(0,20rem)]'}>
+          <div className={eventMenuVisible ? 'grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(2,minmax(0,20rem))] lg:grid-cols-2' : 'grid grid-cols-1 gap-2.5 md:grid-cols-[minmax(0,20rem)] lg:grid-cols-1'}>
             <button type="button" onClick={onOpenVoucher} data-testid="home-quick-checkin"
               data-aura data-aura-level="micro" data-aura-variant="violet"
-              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3">
+              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
               {/* 배경 — 시안의 우상단 블러 원 + 직접 제작한 QR 모티프(public/art/). 조리법은 index.css. */}
               <span aria-hidden className="quick-blob quick-blob-violet" />
               <span aria-hidden className="quick-art quick-art-checkin" />
@@ -685,7 +692,7 @@ export default function HomeTab({
                 )}
               </span>
               {/* 2026-09-24 오너 — 설명 줄('내 이용권 · QR 출석 매일 1회')을 뺐다. 제목·아이콘·행동 줄은 그대로. */}
-              <span className="relative z-10 mt-1 flex flex-wrap items-center gap-x-1 border-t border-border-subtle pt-1 md:mt-0 md:border-l md:border-t-0 md:pl-3 md:pt-0">
+              <span className="relative z-10 mt-1 flex flex-wrap items-center gap-x-1 border-t border-border-subtle pt-1 md:mt-0 md:border-l md:border-t-0 md:pl-3 md:pt-0 lg:mt-1 lg:border-l-0 lg:border-t lg:pl-0 lg:pt-1">
                 <span className="inline-flex min-w-0 items-center gap-1 text-2xs font-bold text-emerald-300">
                   <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />매장 QR 스캔
                 </span>
@@ -696,7 +703,7 @@ export default function HomeTab({
             {eventMenuVisible && (
             <button type="button" onClick={() => onEvent()} data-testid="home-quick-event"
               data-aura data-aura-level="micro" data-aura-variant="amber"
-              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-gold-300/40 md:flex-row md:items-center md:gap-3">
+              className="group relative flex min-h-[44px] flex-col overflow-hidden rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-gold-300/40 md:flex-row md:items-center md:gap-3 lg:flex-col lg:items-stretch lg:gap-0">
               <span aria-hidden className="quick-blob quick-blob-gold" />
               <span aria-hidden className="quick-art quick-art-event" />
               <span className="relative z-10 flex min-h-[23px] flex-wrap items-center gap-x-1.5 gap-y-0.5">
@@ -709,14 +716,19 @@ export default function HomeTab({
                     같은 정보를 쓰는 다른 자리(캐러셀 이벤트 슬라이드)는 그대로다 — 오너가 지목한 것은 이 칸이다. */}
               </span>
               {/* 2026-09-24 오너 — 설명 줄을 뺐다(위 quickEventFailed 주석: 그 줄의 사실이 어디로 갔나). */}
-              <span className="relative z-10 mt-1 flex flex-wrap items-center gap-x-1 border-t border-border-subtle pt-1 md:mt-0 md:border-l md:border-t-0 md:pl-3 md:pt-0">
-                <span data-testid="home-quick-event-action" className="min-w-0 text-2xs font-bold text-gold-300">{quickEventFailed ? '불러오기 실패 · 다시' : '이벤트 보기'}</span>
+              <span className="relative z-10 mt-1 flex flex-wrap items-center gap-x-1 border-t border-border-subtle pt-1 md:mt-0 md:border-l md:border-t-0 md:pl-3 md:pt-0 lg:mt-1 lg:border-l-0 lg:border-t lg:pl-0 lg:pt-1">
+                {/* 🔴 2026-09-25 오너 결정 — 진행 이벤트가 없는데 '이벤트 보기' 가 강조색으로 남아 있었다. 그 갈래(menu)에선
+                    흐린 '진행 중 이벤트 없음' 으로 **사실을 말한다**. 진입은 그대로다(누르면 이벤트 판 — 지난 이벤트·시작 전 안내가 거기 있다).
+                    응답 전(pending)·참여 가능(banner)은 종전 '이벤트 보기'. 실패는 '불러오기 실패 · 다시' 가 먼저다. */}
+                <span data-testid="home-quick-event-action" className={['min-w-0 text-2xs font-bold', eventShown === 'menu' && !quickEventFailed ? 'text-ink-muted' : 'text-gold-300'].join(' ')}>{quickEventFailed ? '불러오기 실패 · 다시' : eventShown === 'menu' ? '진행 중 이벤트 없음' : '이벤트 보기'}</span>
                 <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" />
               </span>
             </button>
             )}
           </div>
         </section>
+
+        </div>
 
         {/* ── 지금 등록 가능 ──────────────────────────────────────────────────
             라이브 실측이 열려 있을 때만. 지난 방문에 열린 대회가 있던 기기는 클락 도착 '전'까지
@@ -786,7 +798,10 @@ export default function HomeTab({
               들어 있던 제목 '오늘·내일 일정' 으로 찾고 있었다. 제목을 바꾸면 매칭이 영영 실패해
               **드리프트가 0 으로 거짓 통과**한다. `describe()` 가 `#id` 를 직렬화하므로 여기로 옮긴다.
               (같은 이유로 이 id 를 지우거나 이름을 바꾸지 마라 — 지우면 그 게이트가 빈손이 된다.) */}
-        <section data-main-enter id="home-schedule" data-testid="home-schedule" className="px-page-x pt-3.5">
+        {/* 🔴 2026-09-25 P — lg 에서 제목(왼쪽)·날짜 레일(오른쪽)을 **한 줄**로. 레일(w-fit 499px)이 반쪽에서 끝나 오른쪽이 비던 자리를
+            제목이 채우고, 레일 오른끝이 목록 오른끝과 맞는다(1440: 1293 = 1293). 레일·머리 뒤의 자식(목록·빈 상태·실패)은 두 칸을 다 쓴다.
+            ⚠ 자식 순서(레일 → 머리 → 목록)에 기대는 규칙이다 — 앞에 자식을 끼우면 nth-child(n+3) 을 같이 고쳐라. */}
+        <section data-main-enter id="home-schedule" data-testid="home-schedule" className="px-page-x pt-3.5 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-x-4 lg:pt-5 lg:[&>*:nth-child(n+3)]:col-span-2">
           {/* ① 날짜 레일 — 5칸 + 좌우 이동. 레퍼런스의 상단 레일.
               ⚠ 화살표에 `.hit` 을 쓰지 않는다 — `::after` 가 44px 를 중앙에서 펼치는데 이 둘은
                 레일의 **양 끝**이라 그 오버행이 컨테이너 밖으로 나가 `scrollWidth` 를 1px 늘렸다
@@ -801,7 +816,7 @@ export default function HomeTab({
               ⚠ 320~359 는 7×44 = 308px 가 스트립 폭(278px)보다 커서 **6칸 남짓**만 보인다 — 44px 터치를 지키는 쪽을 택했다.
               · 스트립은 **의도한 가로 스크롤러**다(배너와 같은 부류) — e2e home-flow-fit 의 허용 목록에 올렸다.
               ⚠ 레일 높이는 칩의 min-h 44px(+ p-1)가 정한다. 칩이 오기 전 첫 렌더에도 같은 높이를 지키도록 스트립에 min-h 를 준다(CLS 0). */}
-          <div data-testid="home-date-rail" className="mb-2 flex items-stretch gap-1 rounded-aura border card-aura p-1 md:w-fit">
+          <div data-testid="home-date-rail" className="mb-2 flex items-stretch gap-1 rounded-aura border card-aura p-1 md:w-fit lg:col-start-2 lg:row-start-1">
             <button type="button" aria-label="이전 날짜" data-testid="home-date-prev"
               onClick={() => stepStrip(-1)}
               className="hidden min-h-[44px] w-11 shrink-0 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-high hover:text-ink-secondary md:grid">
@@ -853,7 +868,7 @@ export default function HomeTab({
               ⚠ 건수는 **자르기 전 전체 수**(daySchedules)다. 화면에 8개만 그려도 숫자는 사실이어야 한다. */}
           {/* 2026-09-24 HOME-DENSITY — 섹션 pt-5→3.5 · 레일 아래 mb-2.5→2 · 제목 아래 pb-2.5→2. 날짜 칩(44px)은 그대로. */}
           {/* 2026-09-24 HOME-LAYOUT-STRETCH — 건수를 제목 **바로 뒤**에(종전 양끝 정렬: PC 에서 둘 사이 956px, 390 에서도 182px > 글자 174px). */}
-          <header className="flex flex-wrap items-baseline gap-x-2 pb-2">
+          <header className="flex flex-wrap items-baseline gap-x-2 pb-2 lg:col-start-1 lg:row-start-1 lg:mb-2 lg:pb-0">
             <h3 data-testid="home-schedule-title" className={H3_CLS}>
               {selectedDate ? `${dayTitle(selectedDate)} 일정` : '일정'}
             </h3>

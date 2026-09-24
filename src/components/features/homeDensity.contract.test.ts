@@ -23,9 +23,36 @@ describe('배너 제어 — 별도 줄이 아니라 프레임 안', () => {
     expect(arrows.length).toBe(2);
     for (const a of arrows) expect(a).toMatch(/h-\[44px\] w-\[44px\]/);
   });
-  it('여러 장일 때 슬라이드 글자가 제어 띠 위로 올라간다', () => {
-    expect(PC).toMatch(/multi \? 'pb-8' : 'pb-3'/);
-    expect(PC.match(/multi \? 'pb-6' : ''/g)?.length).toBe(2);
+  // 🔴 2026-09-25 HOME-BANNER-REDESIGN(오너 결정 B) — 가운데 점+화살표 알약 → 오른쪽 아래 '‹ i / N ›' 칩, 글자는 왼쪽 아래.
+  //   종전 계약('여러 장일 때 글자를 제어 띠 위로 pb-8/pb-6')은 제어가 가운데 아래 띠를 다 쓰던 시절의 것이라 대체했다.
+  it('제어는 오른쪽 아래 숫자 칩이다 — 장 수가 늘어도 폭이 같다', () => {
+    expect(ctrl).toMatch(/flex justify-end[^"]*" data-testid="home-banner-dots"/);
+    expect(ctrl).toMatch(/data-testid="home-banner-counter"/);
+    expect(ctrl).toMatch(/data-testid="home-banner-counter" role="img" aria-label=\{`배너 \$\{n\}장 중 \$\{idx \+ 1\}번째`\}/);
+    expect(ctrl).toMatch(/\{idx \+ 1\}<span className="mx-\[3px\] font-medium text-white\/90">\/<\/span><span className="font-medium text-white\/90">\{n\}<\/span>/);
+    // 알약 배경이 숫자 칩 **자신**이다(형제 레이어면 대비 검사가 지면색과 비교한다) · 불투명도 0.6 초과
+    expect(ctrl).toMatch(/data-testid="home-banner-counter"[^>]*\n\s*className="pointer-events-none relative -mx-\[34px\] flex h-\[24px\] items-center rounded-full bg-black\/65 px-\[34px\]/);
+    // 화살표를 알약 밖으로 오버행(-my)시키지 않는다 — 행 높이 = 화살표 높이
+    expect(ctrl).not.toMatch(/-my-\[10px\]/);
+  });
+  it('점 버튼은 DOM 에 남되 display:none 이다(1×1 sr-only 는 히트 게이트 28px 에 걸린다)', () => {
+    expect(ctrl).toMatch(/aria-label=\{`\$\{i \+ 1\}번째 배너`\} aria-current=\{i === idx \? 'true' : undefined\}\s*\n\s*className="hidden" \/>/);
+    expect(ctrl).not.toMatch(/sr-only" \/>/);
+  });
+  it('슬라이드 글자는 왼쪽 아래, 오른쪽 36% 는 칩 자리다(이벤트·브랜드·관리자 세 갈래)', () => {
+    expect(PC.match(/flex-col justify-end gap-[\d.]+ px-4 pb-4 pr-\[36%\]/g)?.length).toBe(3);
+    // 이벤트 슬라이드만 글자가 흐름 안이다 — 200% 확대에서 프레임이 같이 자라야 한다(absolute 면 min-h 에 갇혀 잘린다)
+    expect(PC).toMatch(/<span className="relative flex h-full min-h-\[inherit\] flex-col justify-end/);
+  });
+  it('브랜드 아트는 원본 + 볼거리 쪽 초점(400 변형본 ~3.8배 확대 흐림 재발 방지)', () => {
+    expect(PC).toMatch(/src=\{b\.img\}\s*\n\s*alt=""\s*\n\s*className="absolute inset-0 h-full w-full object-cover object-\[72%_50%\]"/);
+    expect(PC).not.toMatch(/thumbUrl\(b\.img, 400\)/);
+  });
+});
+
+describe('빈 상태 이벤트 슬라이드가 첫 장을 먹지 않는다(2026-09-25 오너 결정)', () => {
+  it('참여 가능(live)이 아니면 맨 뒤, live 면 관리자 배너 바로 뒤', () => {
+    expect(PC).toMatch(/return eventSlide\?\.live \? \[\.\.\.posters, \.\.\.events, \.\.\.brands\] : \[\.\.\.posters, \.\.\.brands, \.\.\.events\];/);
   });
 });
 
@@ -114,8 +141,8 @@ describe('PC 일정 목록 2열 · 머리 줄', () => {
     expect(APP).toMatch(/text-ink-secondary lg:col-span-2">\{h\}<\/p>/);
   });
   it('건수가 제목 바로 뒤에 붙는다(양끝 정렬 금지)', () => {
-    const hdr = HOME.slice(HOME.indexOf('data-testid="home-schedule-title"') - 120, HOME.indexOf('data-testid="home-schedule-title"'));
-    expect(hdr).toMatch(/<header className="flex flex-wrap items-baseline gap-x-2 pb-2">/);
+    const hdr = HOME.slice(HOME.indexOf('data-testid="home-schedule-title"') - 200, HOME.indexOf('data-testid="home-schedule-title"'));
+    expect(hdr).toMatch(/<header className="flex flex-wrap items-baseline gap-x-2 pb-2(?: lg:col-start-1 lg:row-start-1 lg:mb-2 lg:pb-0)?">/);
   });
 });
 
@@ -158,11 +185,12 @@ describe('날짜 스트립', () => {
 
 describe('배너 가로폭', () => {
   it('모바일(≤767) 풀블리드 — 좌우 여백·좌우 테두리·둥근 모서리를 뺀다, md~ 종전 카드', () => {
-    expect(PC).toMatch(/poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-x-0 md:mx-page-x md:rounded-aura lg:mx-0/);
+    // 2026-09-25 — 모바일은 위아래 헤어라인·그림자도 뺀다(border-0 · shadow-none, 154 → 152)
+    expect(PC).toMatch(/poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none md:mx-page-x md:rounded-aura lg:mx-0/);
     expect(PC).toMatch(/'relative min-h-\[152px\] w-full/);   // 2026-09-24 오너 지시 116 → 132 → 152(2차)
   });
   it('정적 셸 배너 예약이 같은 모양이다(첫 페인트 CLS)', () => {
-    expect(INDEX).toMatch(/<div class="pt-0 md:pt-2\.5"><div class="border border-transparent max-md:rounded-none max-md:border-x-0 md:mx-page-x md:rounded-aura"><div class="skeleton min-h-\[152px\]/);
+    expect(INDEX).toMatch(/<div class="pt-0 md:pt-2\.5"><div class="border border-transparent max-md:rounded-none max-md:border-0 md:mx-page-x md:rounded-aura"><div class="skeleton min-h-\[152px\]/);
     expect(INDEX).toMatch(/<div class="max-md:-mt-\[5px\]" style="height:44px;display:flex;align-items:center"><div class="skeleton" style="height:26px;width:230px"><\/div><\/div>/);
     // React 쪽도 같은 여백이다(모바일 상단 공백 축소 — 오너 2026-09-24)
     expect(PC).toMatch(/<div className="pt-0 md:pt-2\.5 lg:pt-0">/);
@@ -171,7 +199,22 @@ describe('배너 가로폭', () => {
   });
   it('PC 두 칸 비율 4:8 — 배너 칸이 넓어진다(구조는 그대로)', () => {
     expect(HOME).toMatch(/data-testid="home-today" className="[^"]*lg:col-span-4/);
-    expect(HOME).toMatch(/<div className="lg:col-span-8">/);
+    expect(HOME).toMatch(/<div className="lg:col-span-8 lg:col-start-5 lg:row-span-2 lg:row-start-1">/);
+  });
+  // 🔴 2026-09-25 오너("PC 쪽 레이아웃 이상하니까 수정해", 결정 P): 왼쪽 4칸이 비고(글자 두 줄) 퀵 줄·날짜 레일이 반쪽에서 끝났다.
+  it('PC 왼쪽 4칸 = 오늘 안내(위) + 퀵 카드(아래) — 퀵 섹션이 첫 줄 그리드 안이다', () => {
+    const grid = HOME.slice(HOME.indexOf('lg:grid lg:grid-cols-12'), HOME.indexOf('── 지금 등록 가능'));
+    expect(grid).toMatch(/data-testid="home-quick"/);
+    expect(HOME).toMatch(/className="px-page-x pt-3 lg:col-span-4 lg:col-start-1 lg:row-start-2 lg:self-end lg:pt-0" data-testid="home-quick"/);
+    // DOM 순서 = 모바일 흐름: 오늘 → 배너 → 퀵
+    const iToday = HOME.indexOf('data-testid="home-today"'), iBanner = HOME.indexOf('<PosterCarousel'), iQuick = HOME.indexOf('data-testid="home-quick"');
+    expect(iToday).toBeLessThan(iBanner);
+    expect(iBanner).toBeLessThan(iQuick);
+  });
+  it('PC 일정 머리 = 제목(왼쪽) · 날짜 레일(오른쪽) 한 줄, 나머지 자식은 두 칸', () => {
+    expect(HOME).toMatch(/data-testid="home-schedule" className="[^"]*lg:grid lg:grid-cols-\[minmax\(0,1fr\)_auto\][^"]*lg:\[&>\*:nth-child\(n\+3\)\]:col-span-2"/);
+    expect(HOME).toMatch(/data-testid="home-date-rail" className="[^"]*lg:col-start-2 lg:row-start-1"/);
+    expect(HOME).toMatch(/<header className="[^"]*lg:col-start-1 lg:row-start-1/);
   });
 });
 
@@ -200,7 +243,11 @@ describe('빠른 카드 두 개', () => {
   });
   it('이벤트 조회 실패 안내는 행동 줄로 옮겨 남는다', () => {
     expect(HOME).toMatch(/const quickEventFailed = eventLoaded && eventFailed && eventShown !== 'banner';/);
-    expect(HOME).toMatch(/\{quickEventFailed \? '불러오기 실패 · 다시' : '이벤트 보기'\}/);
+    expect(HOME).toMatch(/\{quickEventFailed \? '불러오기 실패 · 다시' : eventShown === 'menu' \? '진행 중 이벤트 없음' : '이벤트 보기'\}/);
+  });
+  it('진행 이벤트가 없으면 행동 줄이 흐린 글자로 사실을 말한다(2026-09-25) — 진입 버튼은 그대로', () => {
+    expect(HOME).toMatch(/eventShown === 'menu' && !quickEventFailed \? 'text-ink-muted' : 'text-gold-300'/);
+    expect(HOME).toMatch(/<button type="button" onClick=\{\(\) => onEvent\(\)\} data-testid="home-quick-event"/);
   });
 });
 

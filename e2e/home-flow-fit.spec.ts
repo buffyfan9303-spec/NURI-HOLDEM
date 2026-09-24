@@ -348,12 +348,22 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
     await expect(gtoTab.first(), '홈에서도 탭바에서도 GTO 로 갈 길이 없다 — 진입을 통째로 잃었다')
       .toBeVisible();
     expect(r!.dots, '배너가 여러 장인데 점 제어가 없다').toBe(true);
-    // 점 하나하나가 터치 대상이어야 한다(작은 점 자체만 눌리게 두지 않는다)
-    const dot = page.getByRole('button', { name: '1번째 배너' });
-    await expect(dot).toBeVisible();
-    const bb = await dot.boundingBox();
-    expect(bb!.width, '배너 점의 터치 폭이 24px 미만이다').toBeGreaterThanOrEqual(24);
-    expect(bb!.height, '배너 점의 터치 높이가 24px 미만이다').toBeGreaterThanOrEqual(24);
+    // 🔴 2026-09-25 HOME-BANNER-REDESIGN(오너 결정 B) — 보이는 제어는 오른쪽 아래 '‹ i / N ›' 칩이다.
+    //   종전 단언('1번째 배너' 점이 보이고 24px 이상)은 점을 **보이는** 터치 대상으로 두던 시절의 것이라 대체했다.
+    //   대체 단언은 더 좁다: 숫자가 실제 장 수와 맞고(1 / N), 이전·다음이 실박스 44px 이상이며,
+    //   장 위치 손잡이(점 버튼 N개)는 DOM 에 그대로 있다(aria-current 가 한 장만).
+    const dotBtns = page.locator('[data-testid="home-banner-dots"] button[aria-label$="번째 배너"]');
+    const nDots = await dotBtns.count();
+    expect(nDots, '장 위치 손잡이(점 버튼)가 사라졌다').toBeGreaterThan(1);
+    await expect(page.locator('[data-testid="home-banner-dots"] button[aria-current="true"]')).toHaveCount(1);
+    const counter = page.getByTestId('home-banner-counter');
+    await expect(counter).toBeVisible();
+    await expect(counter).toContainText(new RegExp(`^1\s*/\s*${nDots}`));
+    for (const name of ['이전 배너', '다음 배너']) {
+      const bb = await page.getByRole('button', { name }).boundingBox();
+      expect(bb!.width, `${name} 터치 폭이 44px 미만이다`).toBeGreaterThanOrEqual(44);
+      expect(bb!.height, `${name} 터치 높이가 44px 미만이다`).toBeGreaterThanOrEqual(44);
+    }
     // 오너 H2 — 누르면 **앱 안에서** GTO 탭이 열린다(전체 리로드 없음: 같은 문서의 표식이 살아 있어야 한다).
     await page.evaluate(() => { (window as unknown as { __noReload?: number }).__noReload = 1; });
     await entry.click();
