@@ -748,7 +748,10 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           · 2026-09-18 오너 스크린샷: 모바일 첫 줄이 '운영 가이드 ……… ✕' 로 **38px 높이의 빈 줄**처럼 보였다
             (설명 span 은 sm 미만에서 원래 안 그려지고, ✕ 의 h-9 상자가 첫 줄 높이를 정했다 — 실측 첫 줄 38.3px 중 라벨 17px).
             ✕ 에 -my-2 로 세로 여백을 상쇄해 첫 줄을 라벨 캡션 높이로 접는다(히트 상자 38px 는 그대로,
-            카드 py-2 안에서만 겹친다). sm+ 는 한 줄이라 my-0 으로 되돌린다. */}
+            카드 py-2 안에서만 겹친다). sm+ 는 한 줄이라 my-0 으로 되돌린다.
+          · 2026-09-24 히트영역 44px(오너 지시) — h-9/min-h-9(38.25px, 루트 폰트 17px 기준)는 44px 미달이라
+            h-[44px]/min-h-[44px] 로 올린다. ✕ 는 히트 상자만 키우고 첫 줄 압축은 유지해야 해서
+            -my-2 → -my-3 으로 다시 맞췄다(44 − 2×12.75 ≈ 18.5px, 종전 21.25px 캡션 자리와 비슷하다). */}
       {!guideHidden && (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
         <span className="order-1 flex min-w-0 flex-1 items-center gap-2 text-xs text-ink-secondary">
@@ -756,21 +759,21 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           <b className="text-ink-primary">운영 가이드</b><span className="hidden sm:inline">포스터→장부→클락→순위→정산 한눈에</span>
         </span>
         <button type="button" onClick={dismissGuide} aria-label="가이드 배너 닫기"
-          className="order-2 -my-2 grid h-9 w-9 shrink-0 place-items-center rounded-input text-ink-muted transition-colors hover:bg-surface-float/60 hover:text-ink-primary sm:order-3 sm:my-0">
+          className="order-2 -my-3 grid h-[44px] w-[44px] shrink-0 place-items-center rounded-input text-ink-muted transition-colors hover:bg-surface-float/60 hover:text-ink-primary sm:order-3 sm:my-0">
           <Icon name="close" size={14} strokeWidth={2.4} />
         </button>
-        {/* min-h-9(36px): 종전 py-1 은 26px 라 손가락 표적이 작았다. sm+ 에서는 내용 폭 그대로. */}
+        {/* min-h-[44px](종전 min-h-9=38.25px, 그 전 py-1=26px): sm+ 에서는 내용 폭 그대로. */}
         <span className="order-3 flex w-full shrink-0 items-center gap-2 sm:order-2 sm:w-auto">
           <button type="button" onClick={() => window.open('/guide/manual.html', '_blank', 'noopener')}
-            className="min-h-9 flex-1 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 sm:flex-none">
+            className="min-h-[44px] flex-1 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 sm:flex-none">
             사용설명서
           </button>
           <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
-            className="min-h-9 flex-1 rounded-input border border-border-default px-3 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary sm:flex-none">
+            className="min-h-[44px] flex-1 rounded-input border border-border-default px-3 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary sm:flex-none">
             슬라이드
           </button>
           <a href="/guide/owner.pdf" download="NURI-HOLDEM-업주가이드.pdf"
-            className="grid min-h-9 flex-1 place-items-center rounded-input border border-border-default px-3 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary sm:flex-none">
+            className="grid min-h-[44px] flex-1 place-items-center rounded-input border border-border-default px-3 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary sm:flex-none">
             PDF
           </a>
         </span>
