@@ -129,7 +129,8 @@ test.describe('me page return snapshots', () => {
       const meTitle = page.locator('h1', { hasText: '내 정보' });
       const closeBtn = page.locator('header:has(h1:text-is("내 정보")) button[aria-label="닫기"]');
       const calls = () => page.evaluate(() => Reflect.get(window, '__meVtCalls') as number);
-      const openMe = async () => { await menuBtn.click(); await openBtn.click(); await expect(meTitle).toBeVisible(); };
+      // PW 의 click 은 대상까지 자동 스크롤한다 — 헤더가 접힌(느린 CPU) 상태면 +56px 밀어 측정을 오염시켰다(CI 전용 실패, 2026-09-24). CLAUDE.md 참고 메모.
+      const openMe = async () => { await menuBtn.click(); await expect(openBtn).toBeVisible(); await openBtn.evaluate((b) => (b as HTMLElement).click()); await expect(meTitle).toBeVisible(); };
       const settle = () => page.waitForFunction(() => !document.getAnimations().some((a) =>
         (a.effect as KeyframeEffect | null)?.pseudoElement?.startsWith('::view-transition')));
       // 배경 홈의 기하 — 눌림은 여기서 보인다.
