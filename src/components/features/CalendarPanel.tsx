@@ -1,4 +1,13 @@
-// 캘린더 — 파이프라인의 **유저 쪽 거울**(오너 지시 2026-09-04).
+// 캘린더 — **개인 포커 기록장**(2026-09-24 오너 확정).
+//   "캘린더의 주 목적은 ①ROI·뱅크롤 ②내가 한 게임들의 +/− 기록 ③언제 어떤 게임을 할지 기록(계획) ④누리 스팟을 해당 날짜에 저장."
+//   → 전체 대회 탐색은 홈·일정 탐색 탭의 몫이다. 이 화면의 첫 화면은 **이번 달 +/−·ROI·뱅크롤 요약 + 월 그리드**이고,
+//     날짜 칸이 그날의 +/−(결과)·계획·SPOT 을 말한다. 날짜를 누르면 그날 기록(결과·계획·SPOT·예약·찜)과 입력 칸.
+//   기존 기능(찜·예약 표시·이 날 열리는 대회·찜한 게임·자금 도구)은 없애지 않고 **아래로 보조**로 옮겼다(보고서의 기능 표).
+//   ⚠ §28: 금액은 '+/−·순손익·ROI·뱅크롤·참가비' 로만 말한다('수익·환전·현금' 금지 — 화면이 원래 쓰는 말 그대로).
+//   ⚠ 첫 화면 계약(오너 2026-09-24): S25 360×780 · iPhone 16 Pro 402×874 · S25 Ultra 412×915 에서 요약 + 월 그리드(6주)가
+//     헤더~하단 탭바 사이에 스크롤 없이 들어온다 — e2e/calendar-first-screen.spec.ts 가 잠근다.
+//
+// (2026-09-04 원래 기록) 파이프라인의 **유저 쪽 거울**(오너 지시 2026-09-04).
 //
 // 한 화면에서 사슬이 보여야 한다: 찜한 게임 → 예약 → 바이인(참가) → 머니인(입상).
 // 같은 날짜에 이 넷이 모이므로 월 그리드가 그 연결을 가장 잘 드러낸다.
@@ -30,22 +39,29 @@ import {
 import type { Schedule } from '../../api/schedules';
 import { investedOf, isMemoEntry, filterRoiRows, roiStats, roiNotice, ROI_MIN_EVENTS } from '../../lib/roi';
 import { kstToday } from '../../lib/kst';
+import { listMySpots, type SavedSpot } from '../../api/spots';
+import { villainsLabel } from '../../lib/spot';
+import { compactWon } from '../../lib/compactWon';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 const ymd = (d: Date) => d.toLocaleDateString('en-CA');
 const won = (n: number) => n.toLocaleString('ko-KR');
+/** 저장 시각(UTC ISO) → KST 날짜 — SPOT 은 '저장한 날' 칸에 놓는다(spot_reviews 에 날짜 칸이 따로 없다 — 보고서의 DB 초안 참고). */
+const kstDateOf = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
 /** 뱅크롤 상한 — int4(약 21.4억) 를 넘기면 서버가 영문 Postgres 오류를 던진다. 입력 단계에서 막는다. */
 const BANKROLL_MAX = 2_000_000_000;
 
 /** 한 날짜에 걸린 항목들 — 마커 색과 상세 목록의 단일 출처.
  *  색은 라이트 테마에서도 대비가 서는 토큰 계열만 쓴다(기본 Tailwind 400 톤은 흰 카드 위 1.4~3:1 로 무너진다). */
-type Kind = 'like' | 'reserve' | 'bankroll' | 'memo';
+type Kind = 'like' | 'reserve' | 'bankroll' | 'memo' | 'spot';
 const KIND: Record<Kind, { label: string; dot: string; icon: IconName }> = {
   like:     { label: '찜',     dot: 'dot-like',     icon: 'heart' },
   reserve:  { label: '예약',   dot: 'dot-reserve',  icon: 'calendar-check' },
-  bankroll: { label: '뱅크롤', dot: 'dot-bankroll', icon: 'notebook' },
-  // 기타 스케줄 — 예약과 색이 겹치면 마커로 구분이 안 되므로 비어 있는 골드 톤(dot-cash)을 쓴다
-  memo:     { label: '일정',   dot: 'dot-cash',     icon: 'calendar' },
+  bankroll: { label: '결과',   dot: 'dot-bankroll', icon: 'notebook' },
+  // 계획(= 예전 '일정', bankroll_entries 의 금액 0 행) — 예약과 색이 겹치면 마커로 구분이 안 되므로 골드 톤(dot-cash)
+  memo:     { label: '계획',   dot: 'dot-cash',     icon: 'calendar' },
+  // 누리 SPOT — 그날 저장한 핸드. 보라(브랜드) — 다른 넷과 겹치지 않는다
+  spot:     { label: 'SPOT',   dot: 'bg-accent-300', icon: 'target' },
 };
 
 // scheduleId 를 들고 다니는 이유: 목록에서 대회 상세로 이어질 때 제목+날짜로 되찾으면
@@ -81,6 +97,8 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   const [likes, setLikes] = useState<Set<string>>(new Set());
   const [reservations, setReservations] = useState<MyReservationRow[]>([]);
   const [bankroll, setBankroll] = useState<BankrollEntry[]>([]);
+  /** 내가 저장한 누리 SPOT(최근 100) — 저장한 날(KST) 칸에 놓는다. 조회 실패는 빈 배열(listMySpots 가 삼킨다 — 보조 표시). */
+  const [spots, setSpots] = useState<SavedSpot[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [err, setErr] = useState<unknown>(null);
   /** 셋 중 **뱅크롤 조회만** 실패했는가 — 문구와 LED 를 정확히 말하기 위해 따로 둔다(2026-09-10).
@@ -109,13 +127,14 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     if (!uid) { setLoaded(true); setErr(null); setBankrollErr(null); return; }
     setErr(null); setBankrollErr(null);
     const r = await Promise.allSettled([
-      getMyLikedScheduleIds(), getMyReservations(200), getMyBankroll(300),
+      getMyLikedScheduleIds(), getMyReservations(200), getMyBankroll(300), listMySpots(100),
     ]);
     // ⚠ 여기서부터는 **늦게 도착한 응답일 수 있다.** 내 세대가 아니면 아무것도 그리지 않는다.
     //   판정 계약은 `lib/staleResponse.ts` 하나로 둔다 — 화면마다 다르게 막으면 그중 하나는 반드시 빠진다.
     if (isStaleResponse({ seq, owner: forUid }, { seq: reqSeq.current, owner: uidRef.current })) return;
 
-    const [l, rv, w] = r;
+    const [l, rv, w, sp] = r;
+    if (sp.status === 'fulfilled') setSpots(sp.value);
     if (l.status === 'fulfilled') setLikes(l.value);
     if (rv.status === 'fulfilled') setReservations(rv.value);
     if (w.status === 'fulfilled') setBankroll(w.value); else setBankrollErr(w.reason);
@@ -134,7 +153,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     loadedForRef.current = uid;
     // 계정이 바뀌었다 — 진행 중이던 이전 계정의 응답을 전부 무효화한다.
     reqSeq.current += 1;
-    setLikes(new Set()); setReservations([]); setBankroll([]);
+    setLikes(new Set()); setReservations([]); setBankroll([]); setSpots([]);
     setLoaded(false); setErr(null); setBankrollErr(null);
   }, [uid]);
 
@@ -175,8 +194,18 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     bankroll.forEach((e) => push(e.entryDate, isMemoEntry(e)
       ? { kind: 'memo', title: e.memo, detail: '' }
       : { kind: 'bankroll', title: e.amount > 0 ? `+${won(e.amount)}` : won(e.amount), detail: e.memo, amount: e.amount }));
+    spots.forEach((sp) => push(kstDateOf(sp.createdAt), {
+      kind: 'spot', title: `${sp.spot.heroPos} vs ${villainsLabel(sp.spot)} · ${sp.spot.effectiveBb}BB`, detail: sp.spot.street === 'preflop' ? '프리플랍' : sp.spot.street,
+    }));
     return m;
-  }, [schedules, likes, reservations, bankroll]);
+  }, [schedules, likes, reservations, bankroll, spots]);
+
+  /** 날짜 → 그날 +/− 합(결과 행만 — 계획·참가비만 적은 행은 0). 칸에 적는 숫자의 단일 출처. */
+  const netByDate = useMemo(() => {
+    const m = new Map<string, number>();
+    bankroll.forEach((e) => { if (!isMemoEntry(e) && e.amount !== 0) m.set(e.entryDate, (m.get(e.entryDate) ?? 0) + e.amount); });
+    return m;
+  }, [bankroll]);
 
   // 조회창 하한 — 상한(BUYIN_LIMIT·RANK_LIMIT)에 걸려 더 옛 기록이 안 들어왔을 수 있다.
   // 그 사실을 숨기면 '기록이 없다'와 '아직 안 불러왔다'가 구분되지 않는다.
@@ -205,10 +234,16 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   const summary = useMemo(() => {
     const inMonth = (d: string) => d.startsWith(monthPrefix);
     const mine = bankroll.filter((e) => inMonth(e.entryDate));
+    const monthRoi = roiStats(filterRoiRows(bankroll, { monthPrefix }));
     return {
       reserveCount: reservations.filter((r) => inMonth(r.date)).length,
       likeCount: schedules.filter((s) => likes.has(s.id) && inMonth(s.date)).length,
       bankrollSum: mine.reduce((a, e) => a + e.amount, 0),
+      // ROI 는 참가비가 적힌 기록 3건부터(한두 판의 % 는 사람을 속인다 — 아래 '선택 기간 분석' 과 같은 규칙)
+      roi: monthRoi.events >= ROI_MIN_EVENTS ? monthRoi.roi : null,
+      roiEvents: monthRoi.events,
+      // 뱅크롤 = 불러온 기록 전체의 +/− 누계(아래 '전체 누계' 와 같은 값 — 모집단이 같다)
+      total: bankroll.reduce((a, e) => a + e.amount, 0),
     };
   }, [monthPrefix, reservations, schedules, likes, bankroll]);
 
@@ -248,24 +283,39 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     );
   }
 
+  const isThisMonth = monthPrefix === today.slice(0, 7);
+  const goToday = () => { const d = new Date(`${today}T00:00:00`); d.setDate(1); setCursor(d); setPicked(today); };
+  // 그날 목록 — 결과·계획(bankroll_entries)은 아래 입력 카드가 삭제 버튼과 함께 그린다. 여기는 **그 밖의 것**(예약·찜·SPOT)만.
+  const dayOthers = dayItems.filter((it) => it.kind !== 'bankroll' && it.kind !== 'memo');
+  const pickedDayTitle = `${Number(picked.slice(5, 7))}월 ${Number(picked.slice(8, 10))}일`;
+
   return (
     // `data-main-enter-ready` — M1 cohort 준비 신호. 로그인 캘린더의 진입 대상(월 이동·요약·카드들)이
     // 이 루트와 같은 커밋에 들어온다.
     // ⚠ 이 요소 자체는 진입 대상이 아니다 — 뒤 형제 `CalendarToolsPanel` 이 `Modal variant="page"` 를 연다
     //   (HANDOFF §4-(2) 의 위험 자리). transform 을 여기 걸면 그 모달이 이 박스 안에 갇힌다.
-    <div data-main-enter-ready className="space-y-3 px-page-x py-section">
-      {/* 월 이동 */}
-      <div data-main-enter className="flex items-center justify-between">
-        <button type="button" aria-label="이전 달" className="hit -my-1 p-1 text-ink-secondary hover:text-ink-primary"
+    // 2026-09-24 — PC(lg~)는 두 칸: 왼쪽 [월 이동·요약·그리드](sticky) / 오른쪽 [그날 기록·분석·도구].
+    //   한 칸으로 1222px 을 채우면 날짜 칸이 165×44 로 납작하게 늘어났다(실측 before/light-1440).
+    // 태블릿(768~1023)은 한 칸이지만 폭을 36rem 으로 묶는다 — 풀폭이면 칸이 102×58 로 늘어졌다(실측).
+    <div data-main-enter-ready className="px-page-x pb-section pt-2 md:max-lg:mx-auto md:max-lg:max-w-[36rem] lg:grid lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)] lg:items-start lg:gap-5 lg:pt-4">
+      <div data-testid="cal-first-screen" className="space-y-2 lg:sticky lg:top-28">
+      {/* 월 이동 — 제목 18px · 좌우 이동 44px · '오늘' 은 이번 달·오늘이 아닐 때만 켠다(무반응 버튼 금지 대신 흐리게 두지 않고 숨긴다). */}
+      <div data-main-enter className="flex items-center gap-1">
+        <button type="button" aria-label="이전 달" className="grid h-11 w-11 place-items-center rounded-input text-ink-secondary hover:bg-surface-high/50 hover:text-ink-primary"
           onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>
           <Icon name="chevron-left" size={20} />
         </button>
-        <h2 className="font-display text-lg font-bold tracking-tight text-ink-primary">
+        <h2 className="min-w-0 flex-1 text-center font-display text-[18px] font-bold leading-[26px] tracking-tight text-ink-primary">
           {cursor.getFullYear()}년 {cursor.getMonth() + 1}월
         </h2>
-        <button type="button" aria-label="다음 달" className="hit -my-1 p-1 text-ink-secondary hover:text-ink-primary"
+        <button type="button" aria-label="다음 달" className="grid h-11 w-11 place-items-center rounded-input text-ink-secondary hover:bg-surface-high/50 hover:text-ink-primary"
           onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>
           <Icon name="chevron-right" size={20} />
+        </button>
+        <button type="button" onClick={goToday} data-testid="cal-today" aria-label="오늘로 이동"
+          disabled={isThisMonth && picked === today}
+          className="min-h-[44px] shrink-0 rounded-input px-2.5 text-xs font-bold text-accent-200 hover:bg-surface-high/50 disabled:text-ink-muted disabled:opacity-60">
+          오늘
         </button>
       </div>
 
@@ -284,88 +334,92 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
         />
       )}
 
-      {/* 이번 달 요약 — 전부 '내가 한 것'이다(예약·찜·내가 적은 뱅크롤).
-          매장 장부에서 끌어오는 값은 없다(오너 지시 2026-09-04).
-          sub 줄은 값이 없어도 자리를 지킨다(조건부로 넣으면 월을 옮길 때마다 아래가 15px 밀린다 = CLS). */}
-      {/* 2026-09-10 — '내 기록'은 무엇의 기록인지 말하지 않았다. '순손익'으로 바꾸되
-          아래 카드의 '전체 누계 순손익'과 같은 낱말이 되므로 **sub 줄에 범위를 적는다**(§6 '범위가 문구로 구분됨').
-          sub 는 이미 자리를 지키는 줄이라 높이 변화 0. */}
-      <div data-main-enter className="grid grid-cols-3 gap-1.5">
-        <Stat testId="sum-reserve" label="예약" value={`${summary.reserveCount}건`} sub="이번 달" tone="cyan" />
-        <Stat testId="sum-like" label="찜" value={`${summary.likeCount}개`} sub="이번 달" tone="gold" />
-        <Stat testId="sum-net" label="순손익" value={`${summary.bankrollSum >= 0 ? '+' : ''}${won(summary.bankrollSum)}`} sub="이번 달" tone={summary.bankrollSum >= 0 ? 'emerald' : 'danger'} />
+      {/* 이번 달 요약 — 오너 목적 ①(ROI·뱅크롤)이 첫 화면 맨 위다. 셋 다 '내가 적은 기록' 에서만 나온다(장부 자동 복제 없음).
+          값은 칸 폭(320: 88px)에 맞춰 만/억으로 줄여 적는다 — 종전 전체 금액은 '+1,384,567' 이 칸을 넘어 잘렸다(before 실측).
+          전체 값은 title·aria-label 과 아래 '전체 누계' 가 말한다. 기록 전(로딩·없음)은 '—'. */}
+      <div data-main-enter className="grid grid-cols-3 gap-1.5" data-testid="cal-summary">
+        <SumCell testId="sum-net" label="이번 달 +/−" full={summary.bankrollSum}
+          value={loaded ? compactWon(summary.bankrollSum) || '0' : '—'} tone={summary.bankrollSum > 0 ? 'emerald' : summary.bankrollSum < 0 ? 'danger' : 'muted'} />
+        <SumCell testId="month-roi" label="이번 달 ROI"
+          value={loaded && summary.roi != null ? `${summary.roi.toFixed(1)}%` : '—'}
+          hint={loaded && summary.roi == null ? `ROI 는 참가비를 적은 기록 ${ROI_MIN_EVENTS}건부터 계산해요(지금 ${summary.roiEvents}건)` : undefined}
+          tone={summary.roi == null ? 'muted' : summary.roi >= 0 ? 'emerald' : 'danger'} />
+        <SumCell testId="bankroll-total" label="뱅크롤 누계" full={summary.total}
+          value={loaded ? compactWon(summary.total) || '0' : '—'} tone={summary.total > 0 ? 'emerald' : summary.total < 0 ? 'danger' : 'muted'} />
       </div>
 
-      {/* 월 그리드 — 이 화면의 주인공 면이라 아우라 헤어라인(.ring-aura)을 준다.
-          글로우(.ring-aura-glow)는 쓰지 않는다: 화면당 1곳 규칙의 '주인공'은 지금 진행 중인 무언가를
-          가리키는 신호인데, 캘린더는 상시 화면이라 늘 빛나면 신호가 아니라 배경이 된다. */}
-      <section data-main-enter className="rounded-aura border card-aura ring-aura p-2">
-        <div className="grid grid-cols-7 pb-1">
+      {/* 월 그리드 — 날짜 칸이 그날의 **+/−(결과)** · 계획 · SPOT 을 말한다(오너 목적 ②③④).
+          레퍼런스: 트레이딩 저널 P&L 캘린더(TradeZella·Tradervue) — 칸 안에 그날 합계 금액 + 이익/손실 색,
+          포커 기록 앱(Roll·Poker Note+) — 날짜별 색 점 + 누르면 그날 세션. 구조만 가져왔다(에셋 없음).
+          6주 고정(달마다 높이가 바뀌면 아래가 튄다 = CLS). 칸 높이: 모바일 50px · md~ 58px. */}
+      <section data-main-enter className="rounded-aura border card-aura ring-aura px-1 pb-1 pt-1.5">
+        <div className="grid grid-cols-7 pb-0.5">
           {DAYS_KO.map((d, i) => (
-            <span key={d} className={['text-center text-2xs font-semibold', i === 0 ? 'text-danger-light' : i === 6 ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>{d}</span>
+            <span key={d} className={['text-center text-[11px] font-semibold leading-4', i === 0 ? 'text-danger-deep dark:text-danger-light' : i === 6 ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>{d}</span>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-0.5">
+        <div className="grid grid-cols-7 gap-px">
           {cells.map((d) => {
             const key = ymd(d);
             const items = byDate.get(key);
             const outside = d.getMonth() !== cursor.getMonth();
             const isToday = key === today;
             const isPicked = key === picked;
-            // 마커는 종류당 하나씩만 — 같은 날 바이인 3회여도 점 3개가 아니라 점 1개다(정보 밀도 ≠ 소음)
+            const net = netByDate.get(key);
             const kinds = items ? [...new Set(items.map((i) => i.kind))] : [];
+            const hasPlan = kinds.some((k) => k === 'memo' || k === 'reserve' || k === 'like');
+            const hasSpot = kinds.includes('spot');
             return (
               <button key={key} type="button" onClick={() => setPicked(key)}
-                aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일${kinds.length ? ` · ${kinds.map((k) => KIND[k].label).join(' ')}` : ''}`}
+                aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일${net ? ` · ${net > 0 ? '+' : ''}${won(net)}` : ''}${kinds.filter((k) => k !== 'bankroll').length ? ` · ${kinds.filter((k) => k !== 'bankroll').map((k) => KIND[k].label).join(' ')}` : ''}`}
                 aria-pressed={isPicked}
+                data-cal-date={key}
                 className={[
-                  'cal-day flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-input',
-                  isPicked ? 'chip-aura shadow-glow' : 'hover:bg-surface-high/50',
+                  'cal-day relative flex h-[50px] min-w-0 flex-col items-center justify-start gap-px rounded-input pt-1 md:h-[58px]',
+                  isPicked ? 'chip-aura shadow-glow' : net && net > 0 ? 'bg-emerald-400/[0.08] hover:bg-emerald-400/15' : net && net < 0 ? 'bg-danger/[0.08] hover:bg-danger/15' : 'hover:bg-surface-high/50',
                   outside ? 'opacity-35' : '',
                 ].join(' ')}>
-                <span className={['text-xs tabular-nums', isToday ? 'font-extrabold text-accent-200' : 'font-medium text-ink-primary'].join(' ')}>
+                <span className={['text-[13px] leading-4 tabular-nums md:text-[15px] md:leading-5', isToday ? 'font-extrabold text-accent-200' : 'font-semibold text-ink-primary'].join(' ')}>
                   {d.getDate()}
                 </span>
-                <span className="flex h-1.5 items-center gap-0.5">
-                  {kinds.slice(0, 4).map((k) => <span key={k} className={`h-1 w-1 rounded-full ${KIND[k].dot}`} />)}
+                {/* 그날 +/− — 칸 폭(320: 39px)에 맞춘 짧은 금액. 없으면 같은 높이를 비워 둔다(칸 높이가 날마다 안 바뀐다). */}
+                <span data-cal-net className={['max-w-full whitespace-nowrap text-[10.5px] font-bold leading-[13px] tabular-nums tracking-tight md:text-[11px] md:leading-[14px]',
+                  !net ? 'text-transparent' : net > 0 ? 'stat-emerald' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
+                  {net ? compactWon(net) : '·'}
+                </span>
+                <span className="flex h-1.5 items-center gap-0.5" aria-hidden>
+                  {hasPlan && <span className="h-1 w-1 rounded-full dot-cash" />}
+                  {hasSpot && <span className="h-1 w-1 rounded-full bg-accent-300" />}
                 </span>
               </button>
             );
           })}
         </div>
       </section>
+      {/* 범례 + 이번 달 예약·찜 수(종전 요약 칸 두 개 — 첫 화면 무게를 목적 ①에 넘기고 여기 한 줄로 보존) */}
+      <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px] leading-4 text-ink-muted">
+        <span className="inline-flex items-center gap-1"><span aria-hidden className="h-1.5 w-1.5 rounded-full dot-cash" />계획·예약·찜</span>
+        <span className="inline-flex items-center gap-1"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent-300" />SPOT</span>
+        <span className="whitespace-nowrap">이번 달 예약 <b data-stat="sum-reserve" className="font-bold tabular-nums text-ink-secondary">{summary.reserveCount}건</b> · 찜 <b data-stat="sum-like" className="font-bold tabular-nums text-ink-secondary">{summary.likeCount}개</b></span>
+      </p>
+      </div>
 
-      {/* 선택한 날 */}
-      <section data-main-enter className="rounded-aura border card-aura p-3">
-        <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
-            <Icon name="calendar" size={14} />
-          </span>
-          <h3 className="text-sm font-bold text-ink-primary">
-            {Number(picked.slice(5, 7))}월 {Number(picked.slice(8, 10))}일
-          </h3>
-          <span className="text-2xs tabular-nums text-ink-muted">{dayItems.length}건</span>
-        </div>
+      <div className="mt-3 space-y-3 lg:mt-0">
+      {/* 그날 기록 — 오너 목적 ②③④: 결과(+/−)·계획 입력과 목록, 그날 저장한 SPOT, 예약·찜. */}
+      <BankrollCard part="entry" title={pickedDayTitle} othersCount={loaded ? dayOthers.length : 1} date={picked} monthPrefix={monthPrefix} rows={bankroll} loaded={loaded} failed={bankrollErr != null} onChanged={reload} onPickDate={setPicked} toast={toast}>
         {!loaded ? (
           // 스켈레톤 높이는 실제 행(44px)과 같아야 로드 완료 시 아래가 안 밀린다
           <ul className="mt-1 space-y-0.5" aria-busy="true">
-            {[0, 1].map((i) => <li key={i} className="skeleton h-[44px] rounded-input" />)}
+            {[0].map((i) => <li key={i} className="skeleton h-[44px] rounded-input" />)}
           </ul>
-        ) : dayItems.length === 0 ? (
-          <p className="py-6 text-center text-2xs text-ink-muted">
-            이 날은 기록이 없어요
-            {oldestLoaded && picked < oldestLoaded && (
-              <><br /><span className="text-ink-secondary">{oldestLoaded.replace(/-/g, '.')} 이전 기록은 아직 불러오지 않았어요</span></>
-            )}
-          </p>
-        ) : (
-          <ul className="mt-1 space-y-0.5">
-            {dayItems.map((it, i) => {
-              const s = it.scheduleId ? scheduleById.get(it.scheduleId) : undefined;
+        ) : dayOthers.length > 0 && (
+          <ul className="mt-1 space-y-0.5" data-testid="cal-day-others">
+            {dayOthers.map((it, i) => {
+              const sch = it.scheduleId ? scheduleById.get(it.scheduleId) : undefined;
               // 대회로 갈 수 없으면 매장으로라도 잇는다 — 사슬 끝에서 막다른 길을 만들지 않는다
-              const vid = !s && it.venueId && onVenue ? it.venueId : undefined;
+              const vid = !sch && it.venueId && onVenue ? it.venueId : undefined;
               // 목록에 없는 예약(=이 탭이 낡았거나 목록 밖 대회)은 id 로 다시 확인해 연다.
-              const byId = !s && it.scheduleId && onOpenSchedule ? it.scheduleId : undefined;
+              const byId = !sch && it.scheduleId && onOpenSchedule ? it.scheduleId : undefined;
               const Row = (
                 <>
                   <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full', KIND[it.kind].dot, 'bg-opacity-20'].join(' ')} aria-hidden>
@@ -373,15 +427,15 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-ink-primary">{it.title}</span>
-                    {it.detail && <span className="block truncate text-2xs text-ink-muted">{KIND[it.kind].label} · {it.detail}</span>}
+                    <span className="block truncate text-xs text-ink-muted">{KIND[it.kind].label}{it.detail ? ` · ${it.detail}` : ''}</span>
                   </span>
                 </>
               );
               const cls = 'flex w-full min-h-[var(--row-h-sm)] items-center gap-2.5 rounded-input px-2 py-1.5 text-left';
               return (
                 <li key={`${it.kind}:${i}`}>
-                  {s ? (
-                    <button type="button" onClick={() => onSelect(s)} className={`${cls} transition-colors hover:bg-surface-high/50`}>{Row}</button>
+                  {sch ? (
+                    <button type="button" onClick={() => onSelect(sch)} className={`${cls} transition-colors hover:bg-surface-high/50`}>{Row}</button>
                   ) : byId ? (
                     <button type="button" onClick={() => onOpenSchedule!(byId, { fallbackVenueId: it.venueId ?? null })} className={`${cls} transition-colors hover:bg-surface-high/50`}>{Row}</button>
                   ) : vid ? (
@@ -394,12 +448,13 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
             })}
           </ul>
         )}
-      </section>
+        {loaded && dayItems.length === 0 && oldestLoaded && picked < oldestLoaded && (
+          <p className="mt-1 text-center text-xs text-ink-secondary">{oldestLoaded.replace(/-/g, '.')} 이전 기록은 아직 불러오지 않았어요</p>
+        )}
+      </BankrollCard>
 
-      {/* 이 날 열리는 대회 — 사슬의 첫 칸(노출 → 찜/예약).
-          위 마커에는 섞지 않는다: 마커는 '내 기록'이라 남의 일정이 들어가면 신호가 죽는다.
-          여기서 대회를 눌러 상세로 가면 찜·예약 버튼이 있으므로, 캘린더가 '보는 곳'에서
-          '시작하는 곳'이 된다(예전엔 찜이 0개인 신규 유저에게 영원히 빈 화면이었다). 새 쿼리 0건. */}
+      {/* 이 날 열리는 대회 — 사슬의 첫 칸(노출 → 찜/예약). 계획을 세우는 재료라 **보조**로 둔다(탐색은 홈·일정 탐색 탭의 몫).
+          위 마커에는 섞지 않는다: 마커는 '내 기록'이라 남의 일정이 들어가면 신호가 죽는다. 새 쿼리 0건. */}
       {dayOpenGames.length > 0 && (
         <section className="rounded-aura border card-aura p-3">
           <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
@@ -407,18 +462,18 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
               <Icon name="cards" size={14} />
             </span>
             <h3 className="text-sm font-bold text-ink-primary">이 날 열리는 대회</h3>
-            <span className="text-2xs tabular-nums text-ink-muted">{dayOpenGames.length}개</span>
+            <span className="text-xs tabular-nums text-ink-muted">{dayOpenGames.length}개</span>
           </div>
           <ul className="mt-1 space-y-0.5">
-            {dayOpenGames.slice(0, 10).map((s) => (
-              <li key={s.id}>
-                <button type="button" onClick={() => onSelect(s)}
+            {dayOpenGames.slice(0, 10).map((sch) => (
+              <li key={sch.id}>
+                <button type="button" onClick={() => onSelect(sch)}
                   className="flex w-full min-h-[var(--row-h-sm)] items-center gap-2.5 rounded-input px-2 py-1.5 text-left transition-colors hover:bg-surface-high/50">
-                  {likes.has(s.id) && <span className="shrink-0 rounded-chip chip-aura px-1.5 py-0.5 text-2xs font-bold">찜</span>}
+                  {likes.has(sch.id) && <span className="shrink-0 rounded-chip chip-aura px-1.5 py-0.5 text-2xs font-bold">찜</span>}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-ink-primary">{s.title}</span>
-                    <span className="block truncate text-2xs text-ink-muted">
-                      {[s.startTime?.slice(0, 5), s.pubName].filter(Boolean).join(' · ')}
+                    <span className="block truncate text-sm font-semibold text-ink-primary">{sch.title}</span>
+                    <span className="block truncate text-xs text-ink-muted">
+                      {[sch.startTime?.slice(0, 5), sch.pubName].filter(Boolean).join(' · ')}
                     </span>
                   </span>
                   <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
@@ -429,7 +484,8 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
         </section>
       )}
 
-      <BankrollCard date={picked} monthPrefix={monthPrefix} rows={bankroll} loaded={loaded} failed={bankrollErr != null} onChanged={reload} onPickDate={setPicked} toast={toast} />
+      {/* 뱅크롤 · ROI 분석 — 전체 누계·선택 기간 분석(오너 목적 ①의 자세한 판). */}
+      <BankrollCard part="stats" title="뱅크롤 · ROI" date={picked} monthPrefix={monthPrefix} rows={bankroll} loaded={loaded} failed={bankrollErr != null} onChanged={reload} onPickDate={setPicked} toast={toast} />
 
       {/* 자금 도구 — 2026-09-11 오너 지시로 GTO 탭에서 여기로 이관.
           내 참가비·순손익을 보는 바로 그 자리에서 권장 뱅크롤·분산을 확인하게 된다. */}
@@ -441,7 +497,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
         <CalendarToolsPanel />
       </section>
 
-      {/* 찜한 다가올 게임 — 캘린더 밖에서도 한눈에. 헤더 수와 목록은 같은 배열에서 나온다. */}
+      {/* 찜한 다가올 게임 — 계획의 재료. 헤더 수와 목록은 같은 배열에서 나온다. */}
       {likedUpcoming.length > 0 && (
         <section className="rounded-aura border card-aura p-3">
           <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
@@ -449,16 +505,16 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
               <Icon name="heart" size={14} />
             </span>
             <h3 className="text-sm font-bold text-ink-primary">찜한 게임</h3>
-            <span className="text-2xs tabular-nums text-ink-muted">{likedUpcoming.length}개</span>
+            <span className="text-xs tabular-nums text-ink-muted">{likedUpcoming.length}개</span>
           </div>
           <ul className="mt-1 space-y-0.5">
-            {likedUpcoming.slice(0, 8).map((s) => (
-              <li key={s.id}>
-                <button type="button" onClick={() => onSelect(s)}
+            {likedUpcoming.slice(0, 8).map((sch) => (
+              <li key={sch.id}>
+                <button type="button" onClick={() => onSelect(sch)}
                   className="flex w-full min-h-[var(--row-h-sm)] items-center gap-2.5 rounded-input px-2 py-1.5 text-left transition-colors hover:bg-surface-high/50">
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-ink-primary">{s.title}</span>
-                    <span className="block truncate text-2xs text-ink-muted">{s.date.slice(5).replace('-', '.')} · {s.pubName}</span>
+                    <span className="block truncate text-sm font-semibold text-ink-primary">{sch.title}</span>
+                    <span className="block truncate text-xs text-ink-muted">{sch.date.slice(5).replace('-', '.')} · {sch.pubName}</span>
                   </span>
                   <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
                 </button>
@@ -467,24 +523,45 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
           </ul>
         </section>
       )}
+      </div>
     </div>
   );
 }
 
-function Stat({ label, value, sub, tone, testId }: {
+/** 첫 화면 요약 한 칸 — 짧은 값 + 라벨. full 이 있으면 전체 금액을 title·aria 로 남긴다(칸에는 짧게). */
+function SumCell({ label, value, tone, testId, full, hint }: {
+  label: string; value: string; tone: 'emerald' | 'danger' | 'muted'; testId: string; full?: number; hint?: string;
+}) {
+  const cls = tone === 'emerald' ? 'stat-emerald' : tone === 'danger' ? 'text-danger-deep dark:text-danger-light' : 'text-ink-secondary';
+  const fullText = full != null ? `${full > 0 ? '+' : ''}${won(full)}` : undefined;
+  return (
+    <div data-stat={testId} className="rounded-input border border-border-subtle bg-surface-low px-1 py-1.5 text-center"
+      title={hint ?? fullText} aria-label={`${label} ${fullText ?? value}${hint ? ` · ${hint}` : ''}`}>
+      <p className={`whitespace-nowrap text-base font-extrabold leading-5 tabular-nums ${cls}`}>{value}</p>
+      <p className="mt-0.5 whitespace-nowrap text-[11px] leading-4 text-ink-muted">{label}</p>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub, tone, testId, full }: {
   label: string; value: string; sub?: string; tone: 'cyan' | 'gold' | 'emerald' | 'danger';
   /** data-stat — 라벨 문자열 대신 e2e 가 잡는 안정 키(CLAUDE.md: 라벨을 바꾸면 같은 커밋에서 testid 로 교체) */
   testId?: string;
+  /** 금액 칸이면 원래 숫자 — 9자를 넘는 값(예: '+1,384,567')은 칸(320: 67px)을 넘어 **잘렸다**(2026-09-24 실측 67/88).
+   *  그때만 만/억 짧은 표기로 바꾸고 전체 값은 title·aria-label 로 남긴다(숫자를 꺾지도 자르지도 않는다). */
+  full?: number;
 }) {
+  const shown = full != null && value.length > 9 ? compactWon(full) : value;
   // stat-* 토큰은 라이트 오버라이드를 갖고 있다. cyan·gold 는 없어서 라이트 흰 카드 위 1.45:1 이었다 —
   // index.css 에 stat-cyan·stat-gold 를 추가하고 여기서 그것만 쓴다(하드 팔레트 금지).
   const cls = tone === 'cyan' ? 'stat-cyan' : tone === 'gold' ? 'stat-gold' : tone === 'emerald' ? 'stat-emerald'
     : 'text-danger-deep dark:text-danger-light';
   return (
     // p-2 → p-1.5: 320px 에서 '+250,000' 이 칸을 3px 넘겨 잘렸다(2026-09-10 실측). 좌우 4.2px 를 되찾고 칸 높이도 4px 줄어든다.
-    <div data-stat={testId} className="rounded-input border border-border-subtle bg-surface-low p-1.5 text-center">
+    <div data-stat={testId} className="rounded-input border border-border-subtle bg-surface-low p-1.5 text-center"
+      title={shown !== value ? value : undefined} aria-label={shown !== value ? `${label} ${value}` : undefined}>
       {/* 360px 3칸(칸 ~100px)에서 '-150,000' 같은 8자 값이 두 줄로 꺾였다(2026-09-10 캡처) — 숫자는 절대 꺾지 않고 긴 값만 한 단 줄인다 */}
-      <p className={`${value.length > 7 ? 'text-sm' : 'text-base'} whitespace-nowrap font-extrabold leading-none tabular-nums ${cls}`}>{value}</p>
+      <p className={`${shown.length > 7 ? 'text-sm' : 'text-base'} whitespace-nowrap font-extrabold leading-5 tabular-nums ${cls}`}>{shown}</p>
       <p className="mt-1 text-2xs text-ink-muted">{label}</p>
       {/* 값이 없어도 자리를 지킨다 — 조건부 렌더는 월 이동마다 아래를 15px 밀어 올린다 */}
       <p className="text-2xs tabular-nums text-ink-muted">{sub ?? ' '}</p>
@@ -496,7 +573,14 @@ function Stat({ label, value, sub, tone, testId }: {
 /** 내가 적는 기록 — 뱅크롤(금액)과 일정(메모) 두 가지를 한 카드에서, 모드를 갈라 받는다.
  *  저장은 둘 다 bankroll_entries 한 테이블로 간다(금액 0 = 일정). DB 제약: amount<>0 or buy_in>0 or memo<>''(20260909b).
  *  개인 ROI(참가비·매장·게임)는 선택 입력 — 개인 비공개 기록이라 랭킹·비교로 잇지 않는다(src/lib/roi.ts). */
-function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPickDate, toast }: {
+function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefix, rows, loaded, failed, onChanged, onPickDate, toast }: {
+  /** 2026-09-24 — 한 카드를 두 자리로 나눴다: 'entry' = 그날 기록(목록·입력, 날짜 아래 바로) · 'stats' = 전체 누계·선택 기간 분석(아래).
+   *  상태(입력값)는 entry 판에만 있고, 계산은 둘 다 같은 rows 에서 나온다 — 두 벌 계산 없음. */
+  part: 'entry' | 'stats';
+  title: string;
+  /** entry — 위에서 넘긴 그 밖의 항목(예약·찜·SPOT) 수. 0 이고 그날 결과·계획도 없으면 '기록 없음' 을 말한다. */
+  othersCount?: number;
+  children?: React.ReactNode;
   date: string;
   /** 위 달력이 보고 있는 달(YYYY-MM) — ROI '이번 달' 범위의 단일 출처 */
   monthPrefix: string;
@@ -576,7 +660,7 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
       setAmount(''); setMemo(''); setBuyIn(''); setRebuy(''); setAddon(''); setVenueName(''); setGameName('');
       // 마이그레이션 전 서버 — 참가비 등이 저장되지 않았다는 사실을 숨기지 않는다
       if (degraded) toast.show('서버 업데이트 중입니다 — 금액·메모만 먼저 기록됩니다', 'info');
-      else toast.show(sign === 0 ? '일정을 적었어요' : sign > 0 ? '플러스로 기록했어요' : '마이너스로 기록했어요', 'success');
+      else toast.show(sign === 0 ? '계획을 적었어요' : sign > 0 ? '플러스로 기록했어요' : '마이너스로 기록했어요', 'success');
       onChanged();
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '기록 실패', 'error');
@@ -597,17 +681,18 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
   ].join(' ');
 
   return (
-    <section className="rounded-aura border card-aura p-3">
+    <section className="rounded-aura border card-aura p-3" data-testid={part === 'entry' ? 'cal-day-card' : 'cal-stats-card'}>
       <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-cyan" aria-hidden>
-          <Icon name="notebook" size={14} />
+        <span className={['flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad', part === 'entry' ? '' : 'tile-grad-cyan'].join(' ')} aria-hidden>
+          <Icon name={part === 'entry' ? 'calendar' : 'notebook'} size={14} />
         </span>
-        <div className="flex min-w-0 flex-1 flex-col">
-          {/* 2026-09-10 — '내가 적는 기록'은 기능을 말하지 않는다. 제목/부제를 맞바꾼다. */}
-          <h3 className="text-sm font-bold leading-tight text-ink-primary">뱅크롤 · 일정</h3>
-          {/* 2026-09-18 오너 지시로 설명줄 제거 — 제목 '뱅크롤 · 일정' 자체가 이미 두 기능(손익 기록 / 일정)을 말하고 있고, 바로 아래 탭(뱅크롤·일 */}
+        <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          {/* 2026-09-24 — entry 판 제목은 고른 날('9월 24일 기록'), stats 판은 '뱅크롤 · ROI'. */}
+          <h3 className="text-sm font-bold leading-tight text-ink-primary">{part === 'entry' ? `${title} 기록` : title}</h3>
+          {part === 'entry' && <span className="text-xs tabular-nums text-ink-muted">{dayRows.length + othersCount}건</span>}
         </div>
       </div>
+      {part === 'stats' && (<>
 
       {/* ── 전체 누계 ────────────────────────────────────────────────────────────
           범위: 불러온 행 전체(필터 무시). 아래 '선택 기간 분석'과 **모집단이 다르다** —
@@ -625,7 +710,7 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
         <p className="text-2xs text-ink-muted">순손익</p>
         <p className={[
           netText.length > 9 ? 'text-lg' : 'text-[22px]',
-          'whitespace-nowrap font-extrabold leading-none tabular-nums',
+          'whitespace-nowrap font-extrabold leading-[1.2] tabular-nums',
           !heroReady ? 'text-ink-muted' : net > 0 ? 'stat-emerald' : net < 0 ? 'text-danger-deep dark:text-danger-light' : 'text-ink-primary',
         ].join(' ')}>{netText}</p>
         {/* 한 줄로 자리를 항상 지킨다 — 조건부로 빼면 도착할 때 아래가 밀린다(CLS) */}
@@ -663,7 +748,7 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
           ⚠ 라벨을 바꿨으므로(참가→참가 횟수, 결과→회수, 순결과→순손익) e2e 셀렉터를
             같은 커밋에서 data-stat 으로 교체했다(CLAUDE.md: 라벨 결합 셀렉터는 느슨하게 풀지 않는다). */}
       <div className="mt-1.5 grid grid-cols-3 gap-1.5" data-testid="roi-stats">
-        <Stat testId="net" label="순손익" value={`${stats.net >= 0 ? '+' : ''}${won(stats.net)}`} sub=" " tone={stats.net >= 0 ? 'emerald' : 'danger'} />
+        <Stat testId="net" label="순손익" value={`${stats.net >= 0 ? '+' : ''}${won(stats.net)}`} full={stats.net} sub=" " tone={stats.net >= 0 ? 'emerald' : 'danger'} />
         {/* 3건 미만이면 % 대신 — : 한두 판의 % 는 사람을 속인다(아래 안내가 이유를 말한다) */}
         <Stat testId="roi" label="ROI" value={showRoi && stats.roi != null ? `${stats.roi.toFixed(1)}%` : '—'} sub=" " tone={(stats.roi ?? 0) >= 0 ? 'emerald' : 'danger'} />
         <Stat testId="itm" label="ITM" value={showRoi && stats.itm != null ? `${Math.round(stats.itm)}%` : '—'} sub=" " tone="cyan" />
@@ -698,13 +783,46 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
         </ul>
       )}
 
+      </>)}
+
+      {part === 'entry' && (<>
+      {/* 그날 결과·계획 — 삭제 버튼과 함께(종전엔 입력칸 아래에 있었다 — 날짜를 누르면 먼저 보여야 할 것이 그날 기록이다). */}
+      {dayRows.length > 0 && (
+        <ul className="mt-1 space-y-0.5" data-testid="cal-day-rows">
+          {dayRows.map((r) => (
+            <li key={r.id} className="flex min-h-[var(--row-h-sm)] items-center gap-2 rounded-input px-2">
+              {/* 금액 0 = 계획 — '+0' 을 그리면 돈 기록으로 오해된다 */}
+              {isMemoEntry(r) ? (<>
+                <span className="shrink-0 rounded-chip bg-surface-high px-1.5 py-0.5 text-[11px] font-bold leading-4 text-ink-secondary">계획</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{r.memo}</span>
+              </>) : (<>
+                <span className={['shrink-0 text-sm font-bold tabular-nums', r.amount > 0 ? 'stat-emerald' : r.amount < 0 ? 'text-danger-deep dark:text-danger-light' : 'text-ink-secondary'].join(' ')}>
+                  {r.amount > 0 ? '+' : ''}{won(r.amount)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-xs text-ink-muted">
+                  {[r.venueName, r.gameName, investedOf(r) > 0 ? `참가비 ${won(investedOf(r))}` : '', r.memo].filter(Boolean).join(' · ')}
+                </span>
+              </>)}
+              <button type="button" onClick={() => remove(r.id)} disabled={busy}
+                aria-label="기록 삭제" className="hit shrink-0 p-2 text-ink-muted hover:text-danger-light disabled:opacity-40">
+                <Icon name="trash" size={13} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {children}
+      {loaded && dayRows.length === 0 && othersCount === 0 && (
+        <p className="py-3 text-center text-xs text-ink-muted">이 날은 기록이 없어요</p>
+      )}
+
       {/* 무엇을 적는 중인지 먼저 고른다 — 예전엔 한 줄에 5개가 섞여 모드가 안 보였다 */}
       <p className="mt-3 text-2xs font-bold text-ink-muted">기록 추가</p>
       <div className="mt-1 flex gap-0.5 rounded-input bg-surface-high/60 p-0.5" role="tablist" aria-label="기록 종류">
         <button type="button" role="tab" aria-selected={mode === 'bankroll'}
-          onClick={() => setMode('bankroll')} className={tabCls(mode === 'bankroll')}>뱅크롤</button>
+          onClick={() => setMode('bankroll')} className={tabCls(mode === 'bankroll')}>결과 +/−</button>
         <button type="button" role="tab" aria-selected={mode === 'memo'}
-          onClick={() => setMode('memo')} className={tabCls(mode === 'memo')}>일정</button>
+          onClick={() => setMode('memo')} className={tabCls(mode === 'memo')}>계획</button>
       </div>
 
       {/* ⚠ `flex-wrap` + 자식마다 `min-w-0` 은 **줄바꿈이 영영 안 일어난다** — 0까지 줄일 수 있다고
@@ -767,7 +885,7 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
         )}
 
         <input value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={40}
-          placeholder={mode === 'bankroll' ? '메모(선택)' : '일정 내용'}
+          placeholder={mode === 'bankroll' ? '메모(선택)' : '계획 — 예: 금요일 위클리 메인'}
           aria-label={mode === 'bankroll' ? '메모' : '일정 내용'}
           className="input col-span-4 min-h-[44px] min-w-0 text-sm" />
         {mode === 'bankroll' ? (<>
@@ -781,29 +899,7 @@ function BankrollCard({ date, monthPrefix, rows, loaded, failed, onChanged, onPi
         )}
       </div>
 
-      {dayRows.length > 0 && (
-        <ul className="mt-2 space-y-0.5">
-          {dayRows.map((r) => (
-            <li key={r.id} className="flex min-h-[var(--row-h-sm)] items-center gap-2 rounded-input px-2">
-              {/* 금액 0 = 일정 — '+0' 을 그리면 돈 기록으로 오해된다 */}
-              {isMemoEntry(r) ? (
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{r.memo}</span>
-              ) : (<>
-                <span className={['shrink-0 text-sm font-bold tabular-nums', r.amount > 0 ? 'stat-emerald' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
-                  {r.amount > 0 ? '+' : ''}{won(r.amount)}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">
-                  {[r.venueName, r.gameName, investedOf(r) > 0 ? `참가비 ${won(investedOf(r))}` : '', r.memo].filter(Boolean).join(' · ')}
-                </span>
-              </>)}
-              <button type="button" onClick={() => remove(r.id)} disabled={busy}
-                aria-label="기록 삭제" className="hit shrink-0 p-2 text-ink-muted hover:text-danger-light disabled:opacity-40">
-                <Icon name="trash" size={13} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      </>)}
     </section>
   );
 }

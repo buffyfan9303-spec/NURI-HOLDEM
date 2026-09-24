@@ -280,7 +280,7 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
            가장 큰 높이로 함께 늘어난다** — 슬라이드마다 높이가 달라지지 않으면서, 글자 확대에는
            프레임이 같이 커져 잘리지 않는다(고정 h- 였다면 200%에서 글자가 잘린다). */
         className={[
-          'relative min-h-[132px] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left md:min-h-[170px] lg:min-h-[200px]',
+          'relative min-h-[152px] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left md:min-h-[170px] lg:min-h-[200px]',
           s.onClick ? '' : 'cursor-default',
         ].join(' ')}
         style={b ? { background: b.bg } : evBg ? { background: evBg } : undefined}
@@ -367,7 +367,9 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
     <div className="pt-0 md:pt-2.5 lg:pt-0">
       {/* 🔴 2026-09-24 HOME-LAYOUT-STRETCH(오너: "메인 배너 가로폭을 늘리고 싶다") — 모바일(≤767)은 **풀블리드**:
           좌우 여백 17px·좌우 테두리·둥근 모서리를 빼고 화면 폭 그대로(375: 341 → 375px).
-          🔴 높이 116 → **132** — 2026-09-24 오너 지시("모바일 메인 배너 세로 폭을 조금 더 늘려라", 132~140 범위).
+          🔴 높이 132 → **152** — 2026-09-24 오너 지시(2차: "조금 더", 148~156 · 첫 화면 카드 수보다 배너 우선).
+            152 를 고른 이유: 390 에서 온전한 일정 카드 4장이 남는 최대 단계(실측 여유 25px → 5px, 156 이면 1px).
+          (1차) 높이 116 → **132** — 2026-09-24 오너 지시("모바일 메인 배너 세로 폭을 조금 더 늘려라", 132~140 범위).
           §6-2 의 104~116 과 e2e home-flow-fit 게이트를 오너 지시로 새 범위(104~140)로 옮겼다. 132 를 고른 이유: 390 에서
           온전한 일정 카드 4장이 남는 최대치다(실측 여유 23px → 7px, 140 이면 −1px 로 3장).
           md 이상은 종전 카드 모양 그대로(PC 폭은 HomeTab 의 두 칸 비율 4:8 이 키운다). 글자는 안쪽 px-4(17px)라 본문 여백과 같은 세로선이다.

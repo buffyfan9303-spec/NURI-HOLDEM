@@ -124,20 +124,26 @@ describe('날짜 스트립', () => {
   it('9주 스트립 · 한 화면 7칸(칩 = 1/7, 최소 44px · md~ 3.25rem×7) · 스냅 가로 스크롤', () => {
     expect(HOME).toMatch(/const STRIP_DAYS = 64;/);
     expect(HOME).toMatch(/const STRIP_PAST = 3;/);   // 첫 화면에서 오늘이 7칸의 가운데
-    expect(rail).toMatch(/data-testid="home-date-strip"[\s\S]{0,300}snap-x snap-mandatory overflow-x-auto[^"]*px-\[max\(0px,min\(16px,calc\(\(100%-308px\)\/2\)\)\)\] md:w-\[calc\(22\.75rem\+32px\)\] md:flex-none md:px-\[16px\]/);
+    expect(rail).toMatch(/data-testid="home-date-strip"[\s\S]{0,300}snap-x snap-mandatory overflow-x-auto[^"]*md:w-\[22\.75rem\] md:flex-none/);
     expect(rail).toMatch(/min-h-\[44px\] w-\[calc\(100%\/7\)\] min-w-\[44px\] shrink-0 snap-center[^']*md:w-\[3\.25rem\]/);
   });
   it('PC 에서만 화살표 · 달력 버튼과 네이티브 날짜 선택은 없다(2차 오너 지시로 제거)', () => {
     expect(rail).toMatch(/data-testid="home-date-prev"[\s\S]{0,300}hidden[^"]*md:grid/);
     expect(HOME).not.toMatch(/type="date"|home-date-calendar|showPicker/);
   });
-  it('양끝 페이드(mask-image) — 스크롤 끝이면 그쪽을 끈다(오너 2026-09-24)', () => {
-    expect(rail).toMatch(/style=\{\{ maskImage: stripMask, WebkitMaskImage: stripMask \}\}/);
-    expect(HOME).toMatch(/const l = sc\.scrollLeft > 1;/);
-    expect(HOME).toMatch(/const r = sc\.scrollLeft \+ sc\.clientWidth < sc\.scrollWidth - 1;/);
-    // 페이드 폭 = 온전한 칩 묶음 바깥 남는 폭(최대 16px) — 7칸 창 안의 끝 칩은 흐려지지 않는다(design-reviewer 2026-09-24, hl/strip2 fadedFull 0)
-    expect(HOME).toMatch(/Math\.max\(0, Math\.min\(16, \(sc\.clientWidth - n \* cw\) \/ 2\)\)/);
-    expect(HOME).toMatch(/stripEdge\.l \? `transparent 0, #000 \$\{stripEdge\.f\}px` : '#000 0'/);
+  it('휠 피커 입체감(오너 2차 2026-09-24) — 가운데에서 멀수록 양쪽 점진 흐림 · 선택일 선명 · 오늘은 블러 없이 · 안쪽 얼굴에만', () => {
+    // 가장자리 마스크(1차)는 철회됐다 — 되살아나면 끝 칩만 흐리고 안쪽은 평평해진다.
+    expect(HOME).not.toMatch(/maskImage: stripMask|stripEdge/);
+    expect(HOME).toMatch(/Math\.abs\(p\.offsetLeft \+ p\.offsetWidth \/ 2 - mid\) \/ half/);
+    expect(HOME).toMatch(/if \(p\.getAttribute\('aria-pressed'\) === 'true'\) t = 0;/);
+    // 강도(오너 3차 2026-09-24 "조금만 덜 흐리게"): 투명도 최소 0.6 · 블러 최대 0.8px · 크기 최소 0.94 · 오늘 투명도 최소 0.8
+    expect(HOME).toMatch(/const op = 1 - \(today \? 0\.2 : 0\.4\) \* t;/);
+    expect(HOME).toMatch(/const blur = today \? 0 : Math\.round\(8 \* t\) \/ 10;/);
+    expect(HOME).toMatch(/scale\(\$\{\(1 - 0\.06 \* t\)\.toFixed\(3\)\}\)/);
+    expect(HOME).toMatch(/requestAnimationFrame\(paint\)/);
+    expect(rail).toMatch(/<span data-pill-face className="flex flex-col items-center">/);
+    // React 상태를 쓰지 않는다(스크롤마다 리렌더 금지) — style 을 직접 쓴다
+    expect(HOME).toMatch(/face\.style\.filter = /);
   });
   it('좁은 폭 첫 배치는 스트립 scrollLeft 만(다음 프레임) — 창 스크롤 API 를 쓰지 않는다', () => {
     const first = HOME.slice(HOME.indexOf('if (!stripPlaced.current) {'), HOME.indexOf('return () => cancelAnimationFrame(id);'));
@@ -153,10 +159,10 @@ describe('날짜 스트립', () => {
 describe('배너 가로폭', () => {
   it('모바일(≤767) 풀블리드 — 좌우 여백·좌우 테두리·둥근 모서리를 뺀다, md~ 종전 카드', () => {
     expect(PC).toMatch(/poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-x-0 md:mx-page-x md:rounded-aura lg:mx-0/);
-    expect(PC).toMatch(/'relative min-h-\[132px\] w-full/);   // 2026-09-24 오너 지시 116 → 132
+    expect(PC).toMatch(/'relative min-h-\[152px\] w-full/);   // 2026-09-24 오너 지시 116 → 132 → 152(2차)
   });
   it('정적 셸 배너 예약이 같은 모양이다(첫 페인트 CLS)', () => {
-    expect(INDEX).toMatch(/<div class="pt-0 md:pt-2\.5"><div class="border border-transparent max-md:rounded-none max-md:border-x-0 md:mx-page-x md:rounded-aura"><div class="skeleton min-h-\[132px\]/);
+    expect(INDEX).toMatch(/<div class="pt-0 md:pt-2\.5"><div class="border border-transparent max-md:rounded-none max-md:border-x-0 md:mx-page-x md:rounded-aura"><div class="skeleton min-h-\[152px\]/);
     expect(INDEX).toMatch(/<div class="max-md:-mt-\[5px\]" style="height:44px;display:flex;align-items:center"><div class="skeleton" style="height:26px;width:230px"><\/div><\/div>/);
     // React 쪽도 같은 여백이다(모바일 상단 공백 축소 — 오너 2026-09-24)
     expect(PC).toMatch(/<div className="pt-0 md:pt-2\.5 lg:pt-0">/);

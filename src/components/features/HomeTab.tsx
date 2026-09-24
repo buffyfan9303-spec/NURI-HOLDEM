@@ -24,7 +24,7 @@
 //
 // 유지: 탭 keep-alive(App 의 visitedTabs + display 토글) 전제 — 이벤트 보드는 마운트 1회로 끝내지
 //       않고 visibilitychange·체크인 신호로 다시 받는다. 스켈레톤 자리 예약(localStorage)도 그대로.
-import { useCallback, useEffect, useMemo, useRef, useState, Fragment } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, Fragment } from 'react';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import PosterCarousel, { type EventSlide } from './PosterCarousel';
@@ -322,36 +322,51 @@ export default function HomeTab({
     const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     sc.scrollTo({ left: Math.max(0, left), behavior: smooth ? 'smooth' : 'auto' });
   }, [selectedDate]);
-  /** 🔴 2026-09-24 오너: "좌우 슬라이드이므로 왼쪽 끝·오른쪽 끝에 블러(페이드) 처리로 입체감".
-   *  스트립에 mask-image 선형 그라디언트(양끝 28px)를 건다 — 글자가 배경색으로 녹아 들어가므로 다크·라이트 어느 지면에도 맞다.
-   *  스크롤이 맨 끝이면 그쪽 페이드를 끈다(더 없는데 있는 것처럼 보이지 않게). mask 는 레이아웃을 안 건드린다(CLS 0).
-   *  가운데 선택 칩(폭 44~55px, 스트립 가운데)은 양끝 28px 안에 들어오지 않는다. */
-  const [stripEdge, setStripEdge] = useState<{ l: boolean; r: boolean; f: number }>({ l: false, r: true, f: 16 });
-  useEffect(() => {
+  /** 🔴 2026-09-24 오너(2차): "좌측 9월 21일 쪽은 블러가 안 돼 있어 입체감이 없다. 오늘 날짜 빼고 서서히 블러를 진하게 하면서 입체감 있게."
+   *  → 앞서의 '창 밖 조각만 페이드'(mask)를 **철회**하고 **휠 피커**처럼 만든다: 스트립 가운데에서 멀어질수록 양쪽 모두
+   *    점진적으로 흐려진다(투명도·블러·약간 작아짐). 선택일은 늘 선명, 오늘은 블러 없이 투명도만 절반 — '오늘' 글자가 읽히게.
+   *  · 스크롤·스와이프마다 rAF 한 번 — React 상태를 쓰지 않고 칩 안쪽 얼굴(`[data-pill-face]`)의 style 을 직접 쓴다(리렌더 0).
+   *  · 레이아웃 읽기는 스트립 clientWidth·scrollLeft 와 칩 offsetLeft/offsetWidth 뿐이고(스크롤 중 레이아웃은 깨끗하다 — 강제 재계산 없음),
+   *    화면에 걸친 칩(±2)만 갱신한다 — 64칸 전부를 매 프레임 건드리지 않는다.
+   *  · 변형은 버튼이 아니라 **안쪽 얼굴**에 건다 — 버튼에 transform 을 쓰면 전역 누름(`:active` scale) 피드백을 덮는다.
+   *  · 끊김 실측: hl/wheel-perf(스와이프 중 프레임 간격) — 보고서. */
+  useLayoutEffect(() => {
     const sc = stripRef.current;
     if (!sc) return;
     let raf = 0;
-    const read = () => {
+    const paint = () => {
       raf = 0;
-      if (sc.clientWidth === 0) return;   // 숨은 탭에서는 재지 않는다
-      const l = sc.scrollLeft > 1;
-      const r = sc.scrollLeft + sc.clientWidth < sc.scrollWidth - 1;
-      // 페이드 폭 = 가운데 정렬된 **온전한 칩 묶음(홀수 개)** 바깥에 남는 폭(최대 16px) — 온전히 보이는 칩은 흐리지 않는다.
-      //   390: 7칸 · 남는 17.2 → 16 · 360: 칩 최소 44px 로 7칸 · 남는 5 → 5 · 320: 5칸 · 남는 33 → 16(넘친 조각만 흐려짐).
-      const cw = (sc.querySelector<HTMLElement>('[data-date-pill]')?.offsetWidth) ?? 0;
-      let n = cw ? Math.floor(sc.clientWidth / cw) : 0;
-      if (n % 2 === 0) n -= 1;
-      const f = cw && n > 0 ? Math.round(Math.max(0, Math.min(16, (sc.clientWidth - n * cw) / 2))) : 16;
-      setStripEdge((p) => (p.l === l && p.r === r && p.f === f ? p : { l, r, f }));
+      const cw = sc.clientWidth;
+      if (!cw) return;                         // 숨은 탭(display:none)에서는 재지 않는다
+      const pills = sc.querySelectorAll<HTMLElement>('[data-date-pill]');
+      if (!pills.length) return;
+      const w = pills[0].offsetWidth || 1;
+      const mid = sc.scrollLeft + cw / 2;
+      const half = cw / 2;
+      const i0 = Math.max(0, Math.floor(sc.scrollLeft / w) - 2);
+      const i1 = Math.min(pills.length - 1, Math.ceil((sc.scrollLeft + cw) / w) + 2);
+      for (let i = i0; i <= i1; i++) {
+        const p = pills[i];
+        const face = p.firstElementChild as HTMLElement | null;
+        if (!face) continue;
+        let t = Math.min(1, Math.abs(p.offsetLeft + p.offsetWidth / 2 - mid) / half);
+        if (p.getAttribute('aria-pressed') === 'true') t = 0;           // 선택일은 늘 선명
+        const today = p.dataset.today === '1';
+        // 2026-09-24 오너(3차): "흐림이 너무 짙어, 조금만 덜 흐리게" — 곡선(거리 비례)은 그대로, 강도만 낮췄다.
+        //   투명도 최소 0.4 → 0.6 · 블러 최대 1.8 → 0.8px · 크기 최소 0.9 → 0.94. 오늘은 투명도만 절반(최소 0.8)·블러 없음.
+        const op = 1 - (today ? 0.2 : 0.4) * t;
+        const blur = today ? 0 : Math.round(8 * t) / 10;                 // 최대 0.8px
+        face.style.opacity = op.toFixed(3);
+        face.style.filter = blur ? `blur(${blur}px)` : '';
+        face.style.transform = t ? `scale(${(1 - 0.06 * t).toFixed(3)})` : '';
+      }
     };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(read); };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(paint); };
     sc.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
     onScroll();
-    return () => { sc.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
-  }, [railDays.length]);
-  // 2026-09-24 design-reviewer — 페이드는 **창 밖으로 넘친 조각에만** 건다: 스트립 좌우 안쪽 여백(최대 16px — 7칸 × 44px 가 들어가는 한도에서
-  //   `max(0, min(16px, (폭 − 308px) / 2))`) 안에서만 투명해진다. 7칸 창 안의 끝 칩(예: 9.21·9.27)은 흐려지지 않는다(hl/strip2 실측 fadedFull 0).
-  const stripMask = `linear-gradient(to right, ${stripEdge.l ? `transparent 0, #000 ${stripEdge.f}px` : '#000 0'}, ${stripEdge.r ? `#000 calc(100% - ${stripEdge.f}px), transparent 100%` : '#000 100%'})`;
+    return () => { sc.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, [railDays.length, selectedDate]);
   /** PC 화살표 — 한 창(7칸)씩 민다. 모바일은 손가락 스와이프가 같은 일을 한다(화살표 숨김 — 320 에서 화살표 두 개를
    *  넣으면 7칸이 칸당 27px 로 짓눌려 터치 44px 를 못 지킨다). */
   const stepStrip = (dir: 1 | -1) => {
@@ -793,9 +808,7 @@ export default function HomeTab({
               <Icon name="chevron-left" size={15} />
             </button>
             <div ref={stripRef} data-testid="home-date-strip"
-              data-fade-left={stripEdge.l || undefined} data-fade-right={stripEdge.r || undefined}
-              style={{ maskImage: stripMask, WebkitMaskImage: stripMask }}
-              className="scrollbar-none relative flex min-h-[44px] min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain px-[max(0px,min(16px,calc((100%-308px)/2)))] md:w-[calc(22.75rem+32px)] md:flex-none md:px-[16px]">
+              className="scrollbar-none relative flex min-h-[44px] min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain md:w-[22.75rem] md:flex-none">
               {railDays.map((iso) => {
                 const [, mm, dd] = iso.split('-').map(Number);
                 const dow = ['일', '월', '화', '수', '목', '금', '토'][new Date(Number(iso.slice(0, 4)), mm - 1, dd).getDay()];
@@ -803,7 +816,7 @@ export default function HomeTab({
                 const isToday = iso === today;
                 const has = gameDays.has(iso);
                 return (
-                  <button key={iso} type="button" data-date-pill={iso} aria-pressed={on}
+                  <button key={iso} type="button" data-date-pill={iso} aria-pressed={on} data-today={isToday ? '1' : undefined}
                     aria-label={`${mm}월 ${dd}일 ${dow}요일${isToday ? ' 오늘' : ''} 일정 보기${has ? ' · 대회 있음' : ''}`}
                     onClick={() => setSelectedDate(iso)}
                     className={[
@@ -818,10 +831,13 @@ export default function HomeTab({
                         ? 'border border-gold-300/70 bg-gold-300/10 text-ink-primary'
                         : 'border border-transparent text-ink-secondary hover:bg-surface-high',
                     ].join(' ')}>
-                    <span className="text-[11px] font-bold tabular-nums md:text-[13px]">{mm}.{dd}</span>
-                    <span className={`text-[9px] md:text-[11px] ${isToday ? 'font-bold text-accent-200' : on ? 'text-ink-secondary' : 'text-ink-muted'}`}>{isToday ? '오늘' : `(${dow})`}</span>
-                    {/* 대회 있는 날 점 — 없는 날도 **같은 자리**를 비워 둔다(칩 높이가 날마다 달라지지 않게). */}
-                    <span aria-hidden className={`mt-0.5 h-1 w-1 rounded-full ${has ? 'bg-accent-300' : 'bg-transparent'}`} />
+                    {/* 안쪽 얼굴 — 휠 피커 효과(투명도·블러·크기)는 여기에만 건다(위 효과 주석). 첫 자식이어야 한다. */}
+                    <span data-pill-face className="flex flex-col items-center">
+                      <span className="text-[11px] font-bold tabular-nums md:text-[13px]">{mm}.{dd}</span>
+                      <span className={`text-[9px] md:text-[11px] ${isToday ? 'font-bold text-accent-200' : on ? 'text-ink-secondary' : 'text-ink-muted'}`}>{isToday ? '오늘' : `(${dow})`}</span>
+                      {/* 대회 있는 날 점 — 없는 날도 **같은 자리**를 비워 둔다(칩 높이가 날마다 달라지지 않게). */}
+                      <span aria-hidden className={`mt-0.5 h-1 w-1 rounded-full ${has ? 'bg-accent-300' : 'bg-transparent'}`} />
+                    </span>
                   </button>
                 );
               })}
