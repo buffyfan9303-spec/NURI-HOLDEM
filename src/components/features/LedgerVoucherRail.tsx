@@ -109,8 +109,8 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
       <div className="border-b border-border-subtle px-3 py-2">
         <div className="relative">
           <Icon name="search" size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름·아이디로 확인"
-            aria-label="이름 또는 아이디로 이용권 확인"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="닉네임으로 확인"
+            aria-label="닉네임으로 이용권 확인"
             className="input min-h-[38px] w-full pl-8 text-sm" />
           {q && (
             <button type="button" onClick={() => setQ('')} aria-label="지우기"

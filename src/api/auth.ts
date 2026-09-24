@@ -12,13 +12,11 @@ export type UserStatus = 'active' | 'suspended' | 'banned' | 'pending' | 'withdr
 export interface User {
   id: string;
   email: string;
+  /** 20260924k 부터 서버가 항상 nickname 과 같게 맞추는 거울 값. 새 코드는 nickname 을 읽어라. */
   name: string;
-  nickname?: string;       // 표시용 닉네임 (Stage 3, unique)
-  /** 받는 아이디가 **확정**됐는가(`profiles.nickname_locked`).
-   *  🔴 `nickname` 존재 여부와 다르다 — 소셜 가입 트리거(20260909a)가 가입 순간 `이름_uuid앞4자` 를
-   *  **자동으로 넣어 두기 때문**이다. 그래서 '닉네임이 있으니 확정됐다' 는 판단은 틀린다
-   *  (2026-09-16 오너 리포트 "저건 어디서 나온 아이디인지 모르겠고 변경이 불가하게 되어있어").
-   *  잠금 판정은 **반드시 이 값**으로 하라. 서버 `set_my_nickname` 도 이 컬럼만 본다. */
+  nickname?: string;       // 닉네임 — 누리홀덤의 공개 이름은 이것 하나(대소문자·공백 무시 유일)
+  /** `profiles.nickname_locked` — 20260924k 전의 '한 번 설정하면 운영자만' 잠금 표시. 지금은 변경 제한이
+   *  30일 규칙(nameChangedAt)이라 화면 판정에 쓰지 않는다. 옛 이력 확인용으로만 남긴다. */
   nicknameLocked?: boolean;
   role: UserRole;
   approved?: boolean;
@@ -37,7 +35,9 @@ export interface User {
   consentedLegalVersion?: number | null;
   joinedAt?: string;
   lastSeenAt?: string;      // 최근 접속 시각 (관리자 회원관리 표시용)
-  nameChangedAt?: string;   // 닉네임(name) 마지막 변경 시각 — 30일 쿨다운 판별
+  /** 닉네임 마지막 본인 변경 시각 — 30일 1회 판별. 20260924k 부터 공개 이름은 nickname 하나라
+   *  profiles.nickname_changed_at 을 싣는다(없으면 옛 name_changed_at). 비어 있으면 바로 변경 가능. */
+  nameChangedAt?: string;
   venueVerified?: boolean;  // 업주 본인 매장이 인증(verified)인지 — 업주 커뮤니티 게이트
   activityPoints?: number;  // 활동 점수(배드빗/굿런 받은 수)
   badges?: string[];        // 획득 뱃지
@@ -95,7 +95,8 @@ function rowToUser(row: any): User {
     consentedLegalVersion: row.consented_legal_version ?? null,
     joinedAt:       row.joined_at,
     lastSeenAt:     row.last_seen_at ?? undefined,
-    nameChangedAt:  row.name_changed_at ?? undefined,
+    // 20260924k 뒤에는 nickname_changed_at 이 유일한 30일 기준이다(키가 있으면 그것, null 이어도 그것).
+    nameChangedAt:  ('nickname_changed_at' in row ? row.nickname_changed_at : row.name_changed_at) ?? undefined,
     activityPoints: row.activity_points ?? 0,
     badges:         row.badges ?? [],
     staffTitle:     row.staff_title ?? undefined,
@@ -151,10 +152,10 @@ export async function claimDailyLoginPoint(): Promise<number | null> {
 
 // ── 닉네임 중복 검사 ──────────────────────────────────────────────────────────
 // is_nickname_available RPC(security definer)로 대소문자·공백 무시 중복 여부 확인.
-// 반환: true=사용 가능 / false=사용 중 또는 형식 위반(2자 미만 등).
+// 반환: true=사용 가능 / false=사용 중 또는 형식 위반(공백 정리 후 2~20자 밖 — 서버 set_my_nickname 과 같은 기준).
 export async function checkNicknameAvailable(nickname: string): Promise<boolean> {
   const trimmed = nickname.trim();
-  if (trimmed.length < 2) return false;
+  if (!isValidDisplayName(trimmed)) return false;
   if (IS_MOCK) return true;
   const { data, error } = await supabase.rpc('is_nickname_available', { p_nickname: trimmed });
   if (error) throw error;
@@ -174,21 +175,12 @@ export async function checkEmailAvailable(email: string): Promise<boolean> {
   return data === true;
 }
 
-// ── 닉네임(profiles.name = 표시 이름) 중복 검사 ───────────────────────────────
-// is_name_available RPC(security definer)로 대소문자·공백 무시 중복 여부 확인. 로그인 상태면 본인 행은 제외.
-// 반환: true=사용 가능 / false=사용 중 또는 형식 위반(공백 정리 후 2~20자 밖).
-export async function checkNameAvailable(name: string): Promise<boolean> {
-  if (!isValidDisplayName(name)) return false;
-  if (IS_MOCK) return true;
-  const { data, error } = await supabase.rpc('is_name_available', { p_name: name.trim() });
-  if (error) throw error;
-  return data === true;
-}
-
-// 본인 닉네임(받는 아이디) 최초 설정 — 설정 후 잠김(변경은 운영자). 중복 시 에러.
+// 본인 닉네임 변경 — 처음 한 번은 바로, 그다음은 30일에 한 번(서버 트리거 20260924k). 중복·30일 위반 시 서버 문구로 에러.
 export async function setMyNickname(nickname: string): Promise<void> {
   const { error } = await supabase.rpc('set_my_nickname', { p_nickname: nickname.trim() });
-  if (error) throw new Error(error.message);
+  // 서버 문장(30일·사칭어·중복, P0001)은 msgOf 가 그대로 보여 준다. 경합으로 유일 인덱스에 걸리면(23505)
+  //   원문에 인덱스 이름이 들어 있어 사람 문장으로 바꾼다(보안 6). 오류 객체를 그대로 던져야 msgOf 가 code 를 본다.
+  if (error) throw error.code === '23505' ? new Error('이미 사용 중인 닉네임입니다') : error;
 }
 // 운영자 전용: 회원 닉네임 변경(잠금 무시).
 export async function adminSetNickname(userId: string, nickname: string): Promise<void> {

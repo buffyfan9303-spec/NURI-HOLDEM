@@ -34,7 +34,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
   useEffect(reloadAliases, [venueId]);
   useEffect(() => {
     const q = mq.trim();
-    if (!linking || !q) { setMcands([]); return; }
+    if (!linking || q.length < 2) { setMcands([]); return; }
     const t = setTimeout(() => { findUserForTransfer(q).then(setMcands).catch(() => setMcands([])); }, 280);
     return () => clearTimeout(t);
   }, [mq, linking]);
@@ -147,7 +147,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                 if (linking === r.name) return (
                   <div className="mt-1.5 space-y-1">
                     <div className="flex gap-1.5">
-                      <input autoFocus value={mq} onChange={(e) => setMq(e.target.value)} placeholder="회원 닉네임·이름 검색" className="input min-w-0 flex-1 text-xs py-1" />
+                      <input autoFocus value={mq} onChange={(e) => setMq(e.target.value)} placeholder="회원 닉네임 검색 (2자 이상)" className="input min-w-0 flex-1 text-xs py-1" />
                       <button type="button" onClick={() => { setLinking(null); setMq(''); setMcands([]); }} className="shrink-0 rounded-input border border-border-default bg-surface-float px-2 text-2xs text-ink-muted">취소</button>
                     </div>
                     {mcands.length > 0 ? (
@@ -160,7 +160,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                           </li>
                         ))}
                       </ul>
-                    ) : mq.trim() ? <p className="px-1 text-2xs text-ink-muted">일치하는 회원이 없습니다.</p> : null}
+                    ) : mq.trim().length >= 2 ? <p className="px-1 text-2xs text-ink-muted">일치하는 회원이 없습니다.</p> : null}
                   </div>
                 );
                 return (

@@ -65,7 +65,9 @@ export interface VoucherUsage { usedVenueId: string | null; venueName: string | 
 export interface VisitedVenue { venueId: string; venueName: string | null; visits: number }
 /** 매장별 참가(바인) 이력 — buyinCount = 장부 바인 횟수, totalAmount = 낸 참가비 합. 머니인(입상)이 아니다(점검 #6). */
 export interface PlayHistory { venueId: string; venueName: string | null; buyinCount: number; totalAmount: number; lastAt: string | null }
-export interface TransferTarget { id: string; display: string; verified?: boolean }
+/** display = 저장·표시용 닉네임(발급 시 holderName 으로 저장된다 — 실명을 넣지 마라).
+ *  label = 후보 목록에만 보이는 한 줄(예: '홍길동 → 길동이'). 없으면 display. */
+export interface TransferTarget { id: string; display: string; verified?: boolean; label?: string }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapRow(r: any): Voucher {
@@ -390,6 +392,47 @@ async function rawFindUserByPhone(phone: string): Promise<TransferTarget[]> {
 export const findUserForTransfer = makeSearchCache(rawFindUserForTransfer, (s) => s.trim().toLowerCase());
 // 전화번호 경로 — 키는 숫자만 끝10자리(국가코드 유무 무시, RPC 매칭과 동일 정규화). verified=본인인증(ci) 보유라 미인증 배지·차단 UI가 양 경로 일관.
 export const findUserByPhone = makeSearchCache(rawFindUserByPhone, (s) => s.replace(/[^0-9]/g, '').slice(-10));
+
+// ── 이용권 받는 사람 검색(20260924k search_voucher_recipients) ─────────────────
+// 오너 2026-09-24: 업주가 닉네임이든 실명이든 넣으면 찾는다. 후보는 '실명 → 닉네임'(예: 홍길동 → 길동이).
+// 서버 규칙: 발급 권한자(can_manage_pos)만 · 2자 이상 · 8건. 닉네임은 부분 일치, 실명·옛 닉네임은 정확 일치.
+// 실명은 **입력과 같을 때만** 실린다 — 부분 일치로 남의 실명이 드러나지 않는다(보안 6). 선택 확인용이다.
+export interface VoucherRecipient {
+  userId: string;
+  nickname: string;
+  /** 입력이 실명과 정확히 같을 때만 값이 있다 */
+  realName: string | null;
+  verified: boolean;
+  /** 무엇으로 찾았나 — 'old_nickname' 이면 입력은 옛 닉네임이고 nickname 이 지금 닉네임이다 */
+  matched: 'nickname' | 'real_name' | 'old_nickname' | 'partial';
+}
+async function rawSearchVoucherRecipients(venueId: string, q: string): Promise<VoucherRecipient[]> {
+  if (IS_MOCK || q.trim().length < 2) return [];
+  const { data, error } = await supabase.rpc('search_voucher_recipients', { p_venue_id: venueId, p_q: q.trim() });
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    userId: r.user_id, nickname: r.nickname ?? '', realName: r.real_name ?? null,
+    verified: r.verified === true, matched: r.matched,
+  }));
+}
+/** 후보 한 줄 — 실명이 확인되면 '실명 → 닉네임', 옛 닉네임으로 찾았으면 '옛 → 지금', 아니면 닉네임. */
+export function voucherRecipientLabel(r: VoucherRecipient, query: string): string {
+  if (r.realName) return `${r.realName} → ${r.nickname}`;
+  if (r.matched === 'old_nickname') return `${query.trim()} → ${r.nickname}`;
+  return r.nickname;
+}
+/** 매장마다 결과가 다르다(권한) — 키에 매장 id 를 넣는다. */
+const recipientCache = makeSearchCache(
+  (key: string) => { const i = key.indexOf('|'); return rawSearchVoucherRecipients(key.slice(0, i), key.slice(i + 1)); },
+  (key: string) => key.trim().toLowerCase(),
+);
+export const searchVoucherRecipients = (venueId: string, q: string): Promise<VoucherRecipient[]> =>
+  recipientCache(`${venueId}|${q.trim()}`);
+/** 이용권 모달의 기존 후보 모양(TransferTarget)으로 — display 는 닉네임만(holderName 에 실명이 저장되지 않게). */
+export const findVoucherRecipientTargets = (venueId: string, q: string): Promise<TransferTarget[]> =>
+  searchVoucherRecipients(venueId, q).then((rs) =>
+    rs.map((r) => ({ id: r.userId, display: r.nickname, verified: r.verified, label: voucherRecipientLabel(r, q) })));
 
 export async function voucherUsageByVenue(venueId: string): Promise<VoucherUsage[]> {
   if (IS_MOCK) return [];

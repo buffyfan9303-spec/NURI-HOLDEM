@@ -35,6 +35,8 @@ export const READ_ONLY_RPCS = new Set([
   'venue_rankings_public',
   // 2026-09-11 커뮤니티 광고 게시글 승격(20260911a) — 광고 읽기가 이 STABLE RPC 하나로 바뀌었다.
   'community_ads_public',
+  // 2026-09-24 닉네임 이력(20260924k) — 내 입상 기록·이용권 받는 사람 검색. 둘 다 STABLE select 만.
+  'my_ranking_history', 'my_nickname_aliases', 'search_voucher_recipients',
 ]);
 
 const SUPABASE_API = /^https:\/\/([a-z0-9]+)\.supabase\.co\/(rest|auth|storage|functions)\/v1\/(.*)$/;

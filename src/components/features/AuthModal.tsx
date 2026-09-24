@@ -9,7 +9,7 @@ import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox';
 import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
 import { rememberCurrentView, clearViewIntent } from '../../lib/pendingViewIntent';
 import { signInWithGoogle,
-  signUpUser, signUpOwner, checkNicknameAvailable, checkNameAvailable, checkEmailAvailable, EMAIL_RE,
+  signUpUser, signUpOwner, checkNicknameAvailable, checkEmailAvailable, EMAIL_RE,
   requestPasswordReset, verifyPasswordResetOtp, setNewPassword, EMAIL_OTP_LENGTH,
 } from '../../api/auth';
 import { validatePassword, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER } from '../../lib/password';
@@ -670,7 +670,6 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
 function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode) => void; onDone: () => void }) {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
-  const nameChk = useNameCheck();
   const nick = useNicknameCheck();
   const mail = useEmailCheck();
   const [password, setPassword] = useState('');
@@ -681,8 +680,7 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     // 모든 항목 필수 — 하나라도 비면 가입 불가
-    if (nameChk.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
-    if (nick.status !== 'available') return toast.show('사용 가능한 받는 아이디를 입력해 주세요.', 'error');
+    if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
     if (mail.status !== 'available') return toast.show('사용 가능한 이메일을 입력해 주세요.', 'error');
     if (!validatePassword(password).ok) return toast.show(`비밀번호 규칙: ${PASSWORD_RULE_HINT}`, 'error');
     if (!confirm.trim())   return toast.show('비밀번호 확인을 입력해 주세요.', 'error');
@@ -695,7 +693,7 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
     setLoading(true);
     try {
       await signUpUser({
-        email: mail.value.trim(), password, name: nameChk.value.trim(), nickname: nick.value.trim(),
+        email: mail.value.trim(), password, name: nick.value.trim(), nickname: nick.value.trim(), // 공개 이름은 닉네임 하나
         agreedToTerms:        c.terms,
         agreedToPrivacy:      c.privacy,
         agreedToAntiGambling: c.antiGambling,
@@ -715,7 +713,6 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
     <>
       <SignupSegment mode={mode} onChange={onMode} />
       <form onSubmit={submit} className="space-y-3">
-        <NameField value={nameChk.value} status={nameChk.status} onChange={nameChk.setValue} />
         <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
         <EmailField value={mail.value} status={mail.status} onChange={mail.setValue} />
         <div>
@@ -737,7 +734,7 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
         <button
           type="submit"
           disabled={
-            loading || !allRequired || nameChk.status !== 'available' || nick.status !== 'available'
+            loading || !allRequired || nick.status !== 'available'
             || mail.status !== 'available' || !validatePassword(password).ok || password !== confirm
           }
           className="btn-primary w-full mt-2 disabled:opacity-60"
@@ -757,7 +754,6 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
 function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode) => void; onDone: () => void }) {
   const toast = useToast();
   const [loading,   setLoading]   = useState(false);
-  const nameChk = useNameCheck();
   const nick = useNicknameCheck();
   const mail = useEmailCheck();
   const [password,  setPassword]  = useState('');
@@ -775,15 +771,14 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
     if (!c.terms)        return toast.show('서비스 이용약관에 동의해 주세요.', 'error');
     if (!c.privacy)      return toast.show('개인정보 수집·이용에 동의해 주세요.', 'error');
     if (!c.antiGambling) return toast.show('불법 환전·사행성 금지 서약에 동의해 주세요.', 'error');
-    if (nameChk.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
-    if (nick.status !== 'available') return toast.show('사용 가능한 받는 아이디를 입력해 주세요.', 'error');
+    if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
     if (mail.status !== 'available') return toast.show('사용 가능한 이메일을 입력해 주세요.', 'error');
     if (!validatePassword(password).ok) return toast.show(`비밀번호 규칙: ${PASSWORD_RULE_HINT}`, 'error');
 
     setLoading(true);
     try {
       await signUpOwner({
-        name: nameChk.value.trim(), email: mail.value.trim(), password, nickname: nick.value.trim(),
+        name: nick.value.trim(), email: mail.value.trim(), password, nickname: nick.value.trim(), // 공개 이름은 닉네임 하나
         agreedToTerms:        c.terms,
         agreedToPrivacy:      c.privacy,
         agreedToAntiGambling: c.antiGambling,
@@ -818,7 +813,6 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
         <section>
           <p className="text-2xs font-semibold text-ink-secondary mb-2">계정 정보</p>
           <div className="space-y-3">
-            <NameField value={nameChk.value} status={nameChk.status} onChange={nameChk.setValue} subLabel="(대표자 표시 이름)" />
             <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
             <EmailField value={mail.value} status={mail.status} onChange={mail.setValue} />
             <div>
@@ -852,7 +846,7 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
 
         <button
           type="submit"
-          disabled={loading || !allRequired || nameChk.status !== 'available' || nick.status !== 'available' || mail.status !== 'available' || !validatePassword(password).ok}
+          disabled={loading || !allRequired || nick.status !== 'available' || mail.status !== 'available' || !validatePassword(password).ok}
           className="btn-primary w-full mt-3 disabled:opacity-60"
         >
           {loading ? '처리 중…' : '업주 가입 신청'}
@@ -865,28 +859,19 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
   );
 }
 
-// ── 닉네임(name)·받는 아이디(nickname) 필드 — 실시간 중복검사 ─────────────────
-// 훅·필드 본체는 atoms/AvailabilityField(프로필 설정과 공용). 여기서는 두 컬럼의 규칙만 고정한다.
-//  · 닉네임(profiles.name)          = 표시 이름(랭킹·글 작성자명). 공백 정리 후 2~20자, is_name_available.
-//  · 받는 아이디(profiles.nickname) = 이용권 수령·전적 연결용. 2~16자 한글·영문·숫자·_-, is_nickname_available.
-
-const NICK_RE = /^[가-힣a-zA-Z0-9_-]{2,16}$/;
-const isValidNick = (v: string) => NICK_RE.test(v);
+// ── 닉네임 필드 — 실시간 중복검사 ─────────────────────────────────────────────
+// 오너 2026-09-24: 누리홀덤의 공개 이름은 닉네임 하나(옛 '닉네임'·'받는 아이디' 두 칸을 합쳤다).
+// 규칙은 서버 is_nickname_available·set_my_nickname 과 같다 — 공백 정리 후 2~20자, 대소문자·공백 무시 유일.
 
 type FieldProps = Omit<React.ComponentProps<typeof AvailabilityField>, 'label' | 'invalidText'>;
 
-const useNameCheck     = () => useAvailabilityCheck(checkNameAvailable, isValidDisplayName);
-const useNicknameCheck = () => useAvailabilityCheck(checkNicknameAvailable, isValidNick);
+const useNicknameCheck = () => useAvailabilityCheck(checkNicknameAvailable, isValidDisplayName);
 
 // 인증 화면의 세 중복검사 필드는 비밀번호 칸과 **같은 규격**을 쓴다 — 한쪽만 밝으면 폼이 층져 보인다.
-function NameField(props: FieldProps) {
-  return <AvailabilityField label="닉네임" placeholder="2~20자 (순위·글에 표시)" maxLength={20} invalidText="2~20자로 입력해 주세요"
-    inputClassName={FIELD_CLS} quietLabel {...props} />;
-}
 function NicknameField(props: FieldProps) {
   return (
-    <AvailabilityField label="받는 아이디" noun="아이디" subLabel="(이용권 수령·전적 연결용)" placeholder="2~16자 (한글/영문/숫자)" maxLength={16}
-      invalidText="2~16자 한글·영문·숫자·_- 만 가능" inputClassName={FIELD_CLS} quietLabel {...props} />
+    <AvailabilityField label="닉네임" placeholder="2~20자 (커뮤니티·순위·이용권에 표시)" maxLength={20}
+      invalidText="2~20자로 입력해 주세요" inputClassName={FIELD_CLS} quietLabel {...props} />
   );
 }
 

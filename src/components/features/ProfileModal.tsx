@@ -9,11 +9,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useBlocks } from '../../contexts/BlockContext';
 import { resizeImage } from '../../lib/storage';
-import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, checkNicknameAvailable, checkNameAvailable, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent, getMyLegalConsents, type LegalConsentRecord, EMAIL_OTP_LENGTH } from '../../api/auth';
+import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, checkNicknameAvailable, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent, getMyLegalConsents, type LegalConsentRecord, EMAIL_OTP_LENGTH } from '../../api/auth';
 import { PASSWORD_RULES, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER, validatePassword } from '../../lib/password';
 import { useAvailabilityCheck, availabilityHint } from '../atoms/AvailabilityField';
 import { isValidDisplayName } from '../../lib/displayName';
 import { msgOf } from '../../lib/dbError';
+import { nextChangeAt, kstMonthDay, cooldownNotice } from '../../lib/nicknameCooldown';
 import {
   getMyRankingDisplaySettings, setMyRankingNamePref,
   type RankingNamePref, type RankingDisplaySettings,
@@ -130,11 +131,10 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
   };
 
   // ── 기본 정보 상태 ─────────────────────────────────────────────────────
-  // 닉네임(name) — 바꿀 때만 실시간 중복검사(현재 값과 같으면 idle). 저장 직전에 한 번 더 확인한다.
-  const nameChk = useAvailabilityCheck(checkNameAvailable, isValidDisplayName, user?.name);
+  // 닉네임(profiles.nickname — 누리홀덤의 공개 이름은 이것 하나, 오너 2026-09-24).
+  // 바꿀 때만 실시간 중복검사(현재 값과 같으면 idle). 저장 직전에 한 번 더 확인한다.
+  const nameChk = useAvailabilityCheck(checkNicknameAvailable, isValidDisplayName, user?.nickname ?? user?.name);
   const name = nameChk.value, setName = nameChk.setValue;
-  const [recvId,        setRecvId]       = useState(''); // 받는 아이디(닉네임) 최초 설정용
-  const [recvBusy,      setRecvBusy]     = useState(false);
   const [selectedColor, setColor]        = useState('#FFD100');
   const [avatarPreview, setAvatarPreview] = useState('');
   const [avatarFile,    setAvatarFile]   = useState<File | null>(null);
@@ -161,9 +161,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     if (initRef.current || !user) return;
     initRef.current = true;
 
-    setName(user.name);
-    // 미확정이면 자동 생성된 아이디를 프리필한다 — 빈칸을 주면 지금 뭐가 쓰이고 있는지 알 수 없다.
-    setRecvId(user.nickname ?? '');
+    setName(user.nickname ?? user.name);
     setColor(user.avatarColor ?? '#FFD100');
     setAvatarPreview(user.avatarUrl ?? '');
     setAvatarFile(null);
@@ -223,35 +221,14 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     }
   }, [newPw, confirmPw, code, toast]);
 
-  // 받는 아이디(닉네임) 최초 설정 — 설정 후 잠김(변경은 운영자)
-  const saveRecvId = useCallback(async () => {
-    const v = recvId.trim();
-    if (v.length < 2) { toast.show('아이디(닉네임)는 2자 이상이어야 합니다', 'error'); return; }
-    setRecvBusy(true);
-    try {
-      // 중복 체크 필수(오너 2026-09-03) — 서버 RPC 도 같은 검사를 하지만 원인을 먼저 알려 준다.
-      // ⚠ 단 **지금 내 값 그대로 확정하는 경우는 건너뛴다.** 사전 검사 RPC(is_nickname_available)는
-      //   본인 행을 제외하지 않아서, 자동 생성된 아이디를 그대로 확정하려 하면 '이미 사용 중' 으로 막힌다
-      //   = 확정이 영원히 불가능해진다. 서버 set_my_nickname 의 중복 검사는 `id <> auth.uid()` 라 안전하다.
-      const same = v.toLowerCase() === (user?.nickname ?? '').toLowerCase();
-      if (!same && !(await checkNicknameAvailable(v))) { toast.show('이미 사용 중인 아이디(닉네임)입니다', 'error'); return; }
-      await setMyNickname(v);
-      toast.show('받는 아이디(닉네임)를 설정했습니다', 'success');
-      await refreshProfile().catch(() => {});
-      setRecvId('');
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : '설정 실패', 'error');
-    } finally { setRecvBusy(false); }
-  }, [recvId, toast, refreshProfile, user?.nickname]);
-
   if (!user) return null;
 
-  // ── 닉네임(name) 30일 변경 제한 (관리자 제외) ────────────────────────────
-  const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
-  const lastNameChange = user.nameChangedAt ? new Date(user.nameChangedAt).getTime() : 0;
-  const nextNameChange = lastNameChange + COOLDOWN_MS;
-  const nicknameLocked = user.role !== 'admin' && lastNameChange > 0 && Date.now() < nextNameChange;
-  const nextNameDateStr = new Date(nextNameChange).toLocaleDateString('ko-KR');
+  // ── 닉네임 30일 1회 변경(관리자 제외) — 서버 trg_profiles_nickname_rules(20260924k)가 정본 ──
+  //   첫 변경(가입 자동 닉네임 포함)은 기록이 없어 바로 된다. 날짜는 서버 문구와 같은 KST.
+  const curNick  = user.nickname ?? user.name;
+  const nameNext = nextChangeAt(user.nameChangedAt, user.role === 'admin');
+  const nicknameLocked = nameNext !== null;
+  const nextNameDateStr = nameNext ? kstMonthDay(nameNext) : '';
   const nameHint = availabilityHint(nameChk.status, '닉네임', '2~20자로 입력해 주세요');
 
   // ── 아이덴티티 헤더 파생값 — 이미 내려오는 데이터만 사용(새 fetch 없음) ────
@@ -286,7 +263,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
   const handleProfileSave = async () => {
     if (!name.trim()) return toast.show('닉네임을 입력해 주세요', 'error');
     if (name.trim().length < 2) return toast.show('닉네임은 2자 이상이어야 합니다', 'error');
-    const nameChanged = name.trim() !== user.name;
+    const nameChanged = name.trim() !== curNick;
     if (nicknameLocked && nameChanged) {
       return toast.show(`닉네임은 ${nextNameDateStr} 이후에 변경할 수 있습니다`, 'error');
     }
@@ -294,7 +271,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     setSaving(true);
     try {
       // 디바운스 검사가 아직 안 끝났거나 실패했을 수 있다 — 저장 직전 서버에 한 번 더 묻는다.
-      if (nameChanged && !(await checkNameAvailable(name))) {
+      if (nameChanged && !(await checkNicknameAvailable(name))) {
         toast.show('이미 사용 중인 닉네임입니다', 'error');
         return;
       }
@@ -311,8 +288,9 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
         }
       }
 
+      // 닉네임은 전용 RPC 로만 바뀐다(30일·중복·이력은 서버가 한 곳에서). name 은 서버가 닉네임으로 맞춘다.
+      if (nameChanged) await setMyNickname(name.trim());
       await updateProfile({
-        name:        name.trim(),
         avatarColor: selectedColor,
         avatarUrl:   avatarFile ? avatarUrl : (avatarPreview || null), // '' = 사진 제거 → null 로 실어야 패치에 남는다
       });
@@ -493,12 +471,14 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             )}
           </div>
 
-          {/* 닉네임 */}
+          {/* 닉네임 — 공개 이름은 이것 하나(오너 2026-09-24: 이용권 수령용 아이디와 닉네임을 한 칸으로 합침) */}
           <div>
-            <label className="block text-xs font-medium text-ink-secondary mb-1.5">
+            <label htmlFor="nickname-input" className="block text-xs font-medium text-ink-secondary mb-1.5">
               닉네임 <span className="text-danger ml-0.5">*</span>
             </label>
             <input
+              id="nickname-input"
+              data-testid="nickname-input"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -513,42 +493,28 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             />
             {nameHint && <p className={`mt-1 text-2xs ${nameHint.cls}`} aria-live="polite">{nameHint.text}</p>}
             <div className="mt-1 flex items-start justify-between gap-2">
-              {/* 잠긴 순간이 곧 '즉시 변경권'(상점 250점)이 필요한 순간이다 — 여기서 알려주지 않으면
-                  상품이 있는 줄도 모르고 30일을 기다린다. 파는 것은 기능이 아니라 대기 시간 면제라
-                  '변경은 원래 무료'라는 사실을 같이 적는다(있던 기능을 뺏은 것처럼 읽히면 안 된다). */}
-              <p className={['text-2xs leading-relaxed', nicknameLocked ? 'text-amber-400' : 'text-ink-muted'].join(' ')}>
-                {nicknameLocked
-                  ? `30일에 한 번만 변경 가능 · 다음 변경 가능일 ${nextNameDateStr} · 기다리지 않으려면 순위 › 상점의 '닉네임 즉시 변경권'`
-                  : '닉네임은 변경 후 30일간 다시 바꿀 수 없습니다'}
-              </p>
+              <p className="text-2xs leading-relaxed text-ink-muted">커뮤니티·순위·매장이용권에 쓰이는 공개 이름이에요 · 다른 사람과 겹칠 수 없어요</p>
               <p className="text-2xs text-ink-muted shrink-0">{name.length} / 20</p>
             </div>
+            {/* 잠긴 순간이 곧 '즉시 변경권'(상점 250점)이 필요한 순간이다 — 여기서 알려주지 않으면
+                상품이 있는 줄도 모르고 30일을 기다린다. 파는 것은 기능이 아니라 대기 시간 면제다. */}
+            <p data-testid="name-cooldown-notice" className={['mt-0.5 text-2xs leading-relaxed', nicknameLocked ? 'text-amber-400' : 'text-ink-muted'].join(' ')}>
+              {cooldownNotice('닉네임은', nameNext)}
+              {nicknameLocked && " · 기다리지 않으려면 순위 › 상점의 '닉네임 즉시 변경권'"}
+            </p>
           </div>
 
-          {/* 받는 아이디(닉네임) — 매장이용권 수령용. 최초 1회 설정, 변경은 운영자 */}
+          {/* 실명 — 본인인증으로만 채워진다. 기본 비공개(아래 '순위표 표시 이름' 에서 실명을 고를 때만 공개),
+              매장이 이용권 받는 사람을 찾을 때 정확히 같은 실명을 넣으면 '실명 → 닉네임' 으로 확인된다(20260924k §8). */}
           <div>
-            {/* 킬스위치 OFF 에서도 이 아이디 자체는 살아 있다 — 순위·전적이 닉네임으로 연결되기 때문.
-                바뀌는 것은 '왜 필요한가'의 설명뿐이다(없는 기능을 근거로 설정을 요구하지 않는다). */}
-            <label htmlFor="recv-id-input" className="block text-xs font-medium text-ink-secondary mb-1.5">받는 아이디 <span className="text-2xs font-normal text-ink-muted">({idOn ? '매장이용권 수령용' : '순위·전적 연결용'})</span></label>
-            {/* 🔴 판정은 `nicknameLocked`(서버 확정 플래그)다. `user.nickname` 으로 가르면
-                소셜 가입자가 **한 번도 고른 적 없는 자동 아이디**에 영원히 잠긴다(오너 2026-09-16). */}
-            {user.nicknameLocked ? (
-              <>
-                <div className="flex items-center justify-between gap-2 rounded-input border border-border-default bg-surface-high/60 px-3 py-2">
-                  <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">{user.nickname}</span>
-                  <span className="inline-flex shrink-0 items-center gap-1 text-2xs text-ink-muted"><Icon name="lock" size={11} /> 설정 완료</span>
-                </div>
-                <p className="mt-1 text-2xs leading-relaxed text-amber-400">초기 설정이 완료되었습니다. <b>변경은 운영자에게 문의</b>하세요.</p>
-              </>
-            ) : (
-              <>
-                <div className="flex gap-1.5">
-                  <input id="recv-id-input" type="text" value={recvId} onChange={(e) => setRecvId(e.target.value)} maxLength={20} placeholder="받을 아이디 (2~20자, 중복 불가)" className="input min-w-0 flex-1" />
-                  <button type="button" onClick={saveRecvId} disabled={recvBusy} className="btn-primary shrink-0 px-4 text-sm disabled:opacity-60">{recvBusy ? '설정 중…' : '설정'}</button>
-                </div>
-                <p className="mt-1 text-2xs leading-relaxed text-ink-muted">{idOn ? '매장이용권을 받을 때 쓰는 고유 아이디입니다.' : '매장 순위·전적이 이 아이디로 연결됩니다.'} <b className="text-amber-400">지금은 자유롭게 바꿀 수 있습니다</b> — ‘설정’을 누르면 확정되고, 그 뒤에는 운영자만 바꿀 수 있습니다.</p>
-              </>
-            )}
+            <p className="mb-1.5 text-xs font-medium text-ink-secondary">실명</p>
+            <div data-testid="real-name-row" className="flex h-10 items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-high px-3">
+              <span className={['min-w-0 truncate text-sm', user.realName ? 'text-ink-secondary' : 'text-ink-muted'].join(' ')}>
+                {user.realName ?? (idOn ? '본인인증을 하면 표시돼요' : '—')}
+              </span>
+              <span className="inline-flex shrink-0 items-center gap-1 text-2xs text-ink-muted"><Icon name="lock" size={11} /> 비공개</span>
+            </div>
+            <p className="mt-1 text-2xs leading-relaxed text-ink-muted">본인인증으로만 바뀌어요 · 기본은 비공개 · 매장이 이용권 받는 사람을 확인할 때 쓰여요</p>
           </div>
 
           {/* ── 랭킹 공개 설정(오너 #14) ─────────────────────────────────

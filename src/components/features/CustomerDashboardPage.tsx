@@ -25,12 +25,13 @@ import { wonToMan } from '../../api/ledger';
 import { getMyReservations, getMyVisitStats, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
 import { useBackClose } from '../../lib/backstack';
 import { getPostsByUser, type CommunityPost } from '../../api/community';
-import { getMyRankingHistory, getGlobalRankingTotals, placementPoints, type MyRankingRow } from '../../api/rankings';
+import { getGlobalRankingTotals, placementPoints, type MyRankingRow } from '../../api/rankings';
 import { shareRecordCard, shareRecordCardKakao } from '../../lib/recordCard';
 import { kakaoConfigured, kakaoShareLink } from '../../lib/kakao';
 import { getMyReferralStats, claimPendingReferralTickets, inviteUrl,
   type ReferralStats, type ReferralTicketClaim } from '../../api/referrals';
 import { getMyChampionships } from '../../api/seasons';
+import { getMyRankingHistoryAll } from '../../api/nickname';
 import QRCode from 'qrcode';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
 import TierBadge, { tierOf, tierProgress, allTiers, tierCss } from '../atoms/TierBadge';
@@ -196,7 +197,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
       myVisitedVenues(), myPlayHistory(),
       getMyReservations(),
       getMyVisitStats(),
-      user?.nickname ? getMyRankingHistory(user.nickname, 200) : Promise.resolve([] as MyRankingRow[]),
+      user?.nickname ? getMyRankingHistoryAll(200) : Promise.resolve([] as MyRankingRow[]), // 옛 닉네임 기록까지(20260924k 이력)
       user?.nickname ? getMyReferralStats() : Promise.resolve({ invited: 0, rewarded: 0 }),
       // 🔴 여기가 '그 사람이 다음에 들어올 때' 다 — 이 호출이 빠지면 밀린 참여권이 영원히 안 풀린다.
       //   지급과 대기 수 조회가 같은 RPC 라, 화면에 쓰는 값과 실제로 지급된 값이 갈릴 수 없다.
@@ -390,8 +391,8 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               )}
             </section>
           )}
-          {/* 내 계정 — 받는 아이디 · 본인인증(매장이용권 수령 조건).
-              킬스위치 OFF: 인증 배지/이용권 수령 칸/인증 독촉이 모두 빠지고 '받는 아이디'만 남는다
+          {/* 내 계정 — 닉네임 · 본인인증(매장이용권 수령 조건).
+              킬스위치 OFF: 인증 배지/이용권 수령 칸/인증 독촉이 모두 빠지고 '닉네임'만 남는다
               (아이디는 순위·전적 연결에 계속 쓰이므로 기능 자체를 없애지 않는다). */}
           <section className="rounded-aura border card-aura p-3">
             <div className="flex items-center gap-3">
@@ -408,7 +409,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
             </div>
             <div className={['mt-2.5 grid gap-2', idOn ? 'grid-cols-2' : 'grid-cols-1'].join(' ')}>
               <div className="rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
-                <p className="text-2xs text-ink-muted">받는 아이디</p>
+                <p className="text-2xs text-ink-muted">닉네임</p>
                 <p className="truncate text-xs font-bold text-ink-primary">{user?.nickname ? '@' + user.nickname : <span className="text-danger-light">미설정</span>}</p>
               </div>
               {idOn && (
@@ -423,8 +424,8 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
             )}
             {(idOn ? user?.verified : true) && !user?.nickname && (
               <p className="mt-2 flex items-start gap-1.5 text-2xs leading-relaxed text-ink-secondary"><Icon name="info" size={12} className="mt-0.5 shrink-0" /> {idOn
-                ? '받는 아이디(닉네임)를 설정하면 업주가 더 쉽게 이용권을 보낼 수 있어요. 프로필에서 설정하세요.'
-                : '받는 아이디(닉네임)를 설정하면 매장에서 등록한 순위·전적이 자동으로 연결돼요. 프로필에서 설정하세요.'}</p>
+                ? '닉네임을 설정하면 업주가 더 쉽게 이용권을 보낼 수 있어요. 프로필에서 설정하세요.'
+                : '닉네임을 설정하면 매장에서 등록한 순위·전적이 자동으로 연결돼요. 프로필에서 설정하세요.'}</p>
             )}
           </section>
 
@@ -654,7 +655,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               </>
             )
               : ranksErr != null ? <LoadErrorCard error={ranksErr} what="입상 기록" onRetry={reload} compact />
-              : !user?.nickname ? <EmptyState icon={<Icon name="trophy" />} title="프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">아이디 설정하기</button>} />
+              : !user?.nickname ? <EmptyState icon={<Icon name="trophy" />} title="프로필에서 닉네임을 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">닉네임 설정하기</button>} />
               : ranks.length === 0 ? <EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장에서 순위가 등록되면 자동으로 표시됩니다." />
                 : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
                 <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => { const vid = onOpenVenue ? venueIdByName.get(r.venueName) : undefined; return (
@@ -1213,7 +1214,7 @@ function InviteSection({ nickname, stats, tickets, idOn }: {
     return (
       <section className="rounded-aura border card-aura p-3">
         <div className="flex items-center gap-2"><Tile icon="gift" tone="fuchsia" /><h2 className="text-sm font-bold text-ink-primary">친구 초대</h2></div>
-        <p className="mt-1.5 text-2xs leading-relaxed text-ink-secondary">받는 아이디(닉네임)를 설정하면 내 초대 링크가 생깁니다. 프로필에서 설정하세요.</p>
+        <p className="mt-1.5 text-2xs leading-relaxed text-ink-secondary">닉네임을 설정하면 내 초대 링크가 생깁니다. 프로필에서 설정하세요.</p>
       </section>
     );
   }

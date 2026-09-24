@@ -2630,7 +2630,7 @@ function StaffManager({ venueId }: { venueId: string }) {
             inputMode="email"
             value={ident}
             onChange={(e) => setIdent(e.target.value)}
-            placeholder="아이디(닉네임) 또는 이메일"
+            placeholder="닉네임 또는 이메일"
             autoComplete="off"
             aria-describedby="staff-invite-hint"
             className="input flex-1 text-sm"
@@ -2674,7 +2674,7 @@ function StaffManager({ venueId }: { venueId: string }) {
 
         {/* 초대 절차 — 문장 나열 대신 번호 배지 스텝(순서가 의미 있는 3단계) */}
         <ol id="staff-invite-hint" className="flex flex-col gap-1 rounded-input border border-border-subtle bg-surface-low px-3 py-2 sm:flex-row sm:items-center sm:gap-3">
-          {(['상대가 일반 회원으로 가입', '아이디나 이메일로 초대', '상대가 알림에서 수락 → 합류'] as const).map((t, i) => (
+          {(['상대가 일반 회원으로 가입', '닉네임이나 이메일로 초대', '상대가 알림에서 수락 → 합류'] as const).map((t, i) => (
             <li key={t} className="flex items-center gap-2 text-2xs text-ink-muted">
               <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-300/15 text-2xs font-bold leading-none tabular-nums text-accent-300 dark:text-accent-200">{i + 1}</span>
               {t}
@@ -2764,7 +2764,7 @@ function StaffManager({ venueId }: { venueId: string }) {
               {TITLE_SUGGEST.map((t) => <option key={t} value={t} />)}
             </datalist>
             {staff.length === 0 ? (
-              <p className="py-6 text-center text-2xs text-ink-muted">아직 구성원이 없습니다. 위에서 아이디나 이메일로 초대해 보세요.</p>
+              <p className="py-6 text-center text-2xs text-ink-muted">아직 구성원이 없습니다. 위에서 닉네임이나 이메일로 초대해 보세요.</p>
             ) : (
               <ul className="space-y-2">
                 {staff.map((s) => {

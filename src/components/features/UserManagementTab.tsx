@@ -231,13 +231,13 @@ function UserRow({ user, onUpdate }: {
   // 회원이 받는 메일의 상세 사유는 폴백 '운영원칙 위반'(notify-sanction)으로 나간다.
   const reject = () => run({ status: 'banned', approved: false, sanctionReason: '가입 심사 거절' },
     () => toast.show(`${user.name} 가입 거절`, 'error'));
-  // 운영자: 회원 아이디(닉네임) 변경 — 잠금 무시(admin_set_nickname RPC)
+  // 운영자: 회원 닉네임 변경 — 30일 규칙 면제(admin_set_nickname RPC · 이력은 서버 트리거가 source=admin 으로 남긴다)
   const changeNick = async () => {
-    const v = window.prompt('새 아이디(닉네임) 입력', user.nickname ?? '');
+    const v = window.prompt('새 닉네임 입력', user.nickname ?? '');
     if (v == null) return;
     const t = v.trim();
     if (t.length < 2) { toast.show('닉네임은 2자 이상이어야 합니다', 'error'); return; }
-    try { await adminSetNickname(user.id, t); onUpdate(user.id, { nickname: t }); toast.show('닉네임을 변경했습니다', 'success'); close(); }
+    try { await adminSetNickname(user.id, t); onUpdate(user.id, { nickname: t, name: t }); toast.show('닉네임을 변경했습니다', 'success'); close(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
   };
   // 운영자: 섀도우밴 토글 — 오류 없이 콘텐츠는 그대로, 활동 랭킹에서만 조용히 제외/복귀.
@@ -383,7 +383,7 @@ function UserRow({ user, onUpdate }: {
           ) : (
             // ── 액션 선택 단계 ──
             <div className="flex flex-wrap gap-1.5">
-              <button type="button" onClick={changeNick} className="text-2xs font-semibold px-2.5 py-1 rounded-chip border border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary transition-colors">아이디 변경</button>
+              <button type="button" onClick={changeNick} className="text-2xs font-semibold px-2.5 py-1 rounded-chip border border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary transition-colors">닉네임 변경</button>
               <button type="button" onClick={toggleShadowban}
                 className={['text-2xs font-semibold px-2.5 py-1 rounded-badge border transition-colors',
                   user.shadowbanned

@@ -122,7 +122,7 @@ test.describe('내 매장 모바일 — S1·S2·V1·K1', () => {
       await expect(hdr, '이용권 발급 섹션이 없다').toBeVisible({ timeout: 15_000 });
       await expect(hdr.getByText(/업주\s*·\s*공동운영자/), '모바일 제목 옆 «업주·공동운영자» 가 남아 있다').toBeHidden();
       const panel = page.getByTestId('voucher-issue');
-      await expect(panel.getByRole('button', { name: /아이디\(닉네임\)로 지정/ })).toBeVisible();
+      await expect(panel.getByTestId('voucher-recv-by-name')).toBeVisible();
       // 발급 근거·유효기간 칩 — 보이는 32 · 누름 44, 두 줄 근거 칩은 윗줄·아랫줄 누름 구간이 겹치지 않는다
       for (const sel of ['[role=group][aria-label="발급 근거"] button', '[data-expiry-chips] button']) {
         const cs = await hitSpans(page, sel);
@@ -134,12 +134,12 @@ test.describe('내 매장 모바일 — S1·S2·V1·K1', () => {
         const overlaps = cs.flatMap((a) => cs.filter((b) => a !== b && a.x === b.x && a.top < b.top && a.bot > b.top + 0.01).map((b) => `${a.bot}>${b.top}`));
         expect(overlaps, `${sel} 윗줄 누름 구간이 아랫줄을 덮는다`).toEqual([]);
       }
-      for (const mode of [/아이디\(닉네임\)로 지정/, /전화번호로 지정/]) {
+      for (const mode of ['voucher-recv-by-name', 'voucher-recv-by-phone']) {
         const h0 = await panel.evaluate((p) => p.getBoundingClientRect().height);
-        await panel.getByRole('button', { name: mode }).evaluate((b) => (b as HTMLElement).click());
+        await panel.getByTestId(mode).evaluate((b) => (b as HTMLElement).click());
         await page.waitForTimeout(300);
         const h1 = await panel.evaluate((p) => p.getBoundingClientRect().height);
-        expect(Math.abs(h1 - h0), `«${mode.source}» 를 누르자 발급 판 높이가 ${(h1 - h0).toFixed(2)}px 변했다`).toBeLessThanOrEqual(0.5);
+        expect(Math.abs(h1 - h0), `«${mode}» 를 누르자 발급 판 높이가 ${(h1 - h0).toFixed(2)}px 변했다`).toBeLessThanOrEqual(0.5);
         await expect(panel.getByText('받는 손님', { exact: false }).first(), '«받는 손님 필수» 라벨이 사라졌다').toBeVisible();
         await panel.getByRole('button', { name: '취소', exact: true }).evaluate((b) => (b as HTMLElement).click());
         await page.waitForTimeout(300);
