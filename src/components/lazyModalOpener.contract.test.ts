@@ -66,6 +66,9 @@ const ALLOWED: Record<string, string> = {
     '일정 상세는 포스터 모핑(View Transition) 경로다 — withViewTransition + flushSync 로 동기 커밋해야 스냅샷이 맞는다.',
   setOpenPost:
     '딥링크 복원 이펙트(부팅·URL 변경)에서 부르는 경로가 남아 있다. 사용자 클릭 경로(openPostWithNav)는 트랜지션으로 열린다.',
+  setNotifOpen:
+    '쪽지·알림 패널은 notifOpen 으로 마운트되지 않는다 — 부팅 때 shellDeferred 로 **상시 마운트**되고 open 은 prop 일 뿐이라 열 때 서스펜드가 없다(2026-09-24). '
+    + '트랜지션으로 감싸면 오히려 NotificationPanel 의 useLayoutEffect 동기 열기(한 프레임 빈 패널 → 두 번째 클릭이 뒤 화면에 꽂힘, account-isolation)를 되살린다.',
 };
 
 describe('lazy 오버레이는 트랜지션으로 연다 — 안 그러면 폴백이 ~300ms 번쩍인다', () => {

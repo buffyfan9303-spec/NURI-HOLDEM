@@ -111,21 +111,13 @@ const PATHS: Partial<Record<IconName, ReactElement>> = {
   cards: <><rect x="4" y="6" width="11" height="15" rx="2" /><path d="M9.5 3.9 17 2.2a2 2 0 0 1 2.4 1.5l2.3 10.2a2 2 0 0 1-1.5 2.4l-2.2.5" /></>,
   'dealer-button': <><circle cx="12" cy="12" r="9" /><path d="M10 8h1.8a4 4 0 0 1 0 8H10Z" /></>,
   blinds: <><circle cx="8.5" cy="14.5" r="5.5" /><circle cx="15.5" cy="9.5" r="5.5" /></>,
-  trophy: <><path d="M7 3h10v6a5 5 0 0 1-10 0Z" /><path d="M7 5H4v1.5A3.5 3.5 0 0 0 7.5 10M17 5h3v1.5A3.5 3.5 0 0 1 16.5 10" /><path d="M12 14v4M8 21h8M9.5 18h5" /></>,
   'all-in': <><path d="M12 11V3M8.5 6.5 12 3l3.5 3.5" /><ellipse cx="12" cy="16" rx="7" ry="2.6" /><path d="M5 16v2.4c0 1.44 3.13 2.6 7 2.6s7-1.16 7-2.6V16" /></>,
   'felt-table': <><ellipse cx="12" cy="12" rx="9.5" ry="6.5" /><ellipse cx="12" cy="12" rx="5.8" ry="3.3" /></>,
   'timer-poker': <><path d="M9.5 2h5" /><path d="M12 2v3" /><circle cx="12" cy="13.5" r="8" /><path d="M12 9.5v4l2.6 1.6" /></>,
   // ── 리디자인 스파인 공통 글리프(자체 제작) ────────────────────────────────
-  comment: <path d="M21 11.5c0 4.14-4.03 7.5-9 7.5-1.06 0-2.08-.15-3.02-.44L4 20l1.16-3.48C3.82 15.19 3 13.42 3 11.5 3 7.36 7.03 4 12 4s9 3.36 9 7.5Z" />,
-  eye: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></>,
-  bookmark: <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.2L5 21V4a1 1 0 0 1 1-1Z" />,
-  flame: <path d="M12 2.5c.6 3-0.9 4.6-2.4 6.2C8.1 10.3 7 11.9 7 14a5 5 0 0 0 10 0c0-1.4-.5-2.6-1.2-3.7-.4.9-1 1.5-1.8 2 .3-2.9-.6-6.6-2-9.8Z" />,
-  target: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /></>,
-  wallet: <><path d="M20 7H5a2 2 0 0 1-2-2 2 2 0 0 1 2-2h13v4" /><path d="M3 5v13a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1" /><path d="M16 13h.01" /></>,
-  gift: <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8" /><path d="M12 8c-3.5 0-4.5-3-3-4.5C10.5 2 12 4 12 8c0-4 1.5-6 3-4.5 1.5 1.5.5 4.5-3 4.5Z" /></>,
-  'check-double': <><path d="M2.5 12.5 7 17 17 7" /><path d="m12 17 9.5-9.5" /></>,
-  'map-pin': <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></>,
-  'log-out': <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></>,
+  // 2026-09-24 — 여기 있던 comment·eye·bookmark·flame·target·wallet·gift·check-double·map-pin·log-out 과 위 trophy 는 지웠다.
+  //   아래 Icon() 은 LUCIDE 를 PATHS 보다 먼저 보므로 같은 이름이 LUCIDE 에 있으면 이 칸은 **한 번도 그려지지 않는다**(죽은 바이트).
+  //   ⚠ 되살리려면 LUCIDE 쪽 항목을 빼야 이긴다 — 두 곳에 같은 이름을 두지 마라.
 };
 
 // 범용 이름 → lucide-react 컴포넌트(트리셰이킹: 여기 임포트된 것만 번들에 포함)

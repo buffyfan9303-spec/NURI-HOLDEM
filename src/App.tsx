@@ -42,18 +42,15 @@ import ScheduleTable from './components/features/ScheduleTable';
  * 셋 다 **호출부가 이펙트 안 1~2곳뿐**이라 첫 페인트에는 실행되지 않는데, 정적 import 는
  * 코드를 index 청크(= '최대 청크' 예산의 병목이자 임계 경로의 절반)에 통째로 싣는다.
  *   · rankings     — 일정 탐색 하단 '지난 대회' 아카이브(PastTournaments)가 마운트된 뒤에만
+ *                    (2026-09-24 부터 PastTournaments.tsx 안으로 옮겼다 — 그 컴포넌트 자체가 shellDeferred 청크다)
  *   · reservations — browse pane 게이트(resCountsWanted) + '오늘 예약한 대회'
  *   · reviews      — loadDeferred(유휴 또는 커뮤니티 탭 진입) 배치
  * ⚠ `ScheduleCard` 는 여기 넣어도 소용없다 — **HomeTab 이 정적으로 물고 있어** 어차피 임계 경로다(실측).
  * 타입은 `import type` 이라 런타임 코드를 만들지 않는다 — 지연되는 것은 값뿐이다.
  */
-const rankingsMod     = () => import('./api/rankings');
 const reservationsMod = () => import('./api/reservations');
 const reviewsMod      = () => import('./api/reviews');
-import type { RankingEntry } from './api/rankings';
 import type { MyReservationRow } from './api/reservations';
-import NotificationPanel from './components/features/NotificationPanel';
-import VerifyGateSheet from './components/features/VerifyGateSheet';
 import { NoticeRow } from './components/features/NoticeSection';
 import { getActiveHomeBanners, type HomeBannerFeed } from './api/homeBanners';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
@@ -66,7 +63,6 @@ import Avatar from './components/atoms/Avatar';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import { useTheme } from './contexts/ThemeContext';
 import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationButton';
-import StaffInviteBanner from './components/features/StaffInviteBanner';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
 import { promptLogin, REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, ensureLogin } from './lib/requireLogin';
@@ -80,6 +76,8 @@ import { tierCss, tierOf, ADMIN_VIVID_VAR } from './components/atoms/TierBadge';
  */
 const ringVarOf = (u: { activityPoints?: number | null; role?: string | null }): string =>
   u.role === 'admin' ? ADMIN_VIVID_VAR : tierOf(u.activityPoints ?? 0).vividVar;
+// 🔴 법적 동의 게이트는 **지연 청크에 넣지 않는다**(2026-09-24 verifier 반려) — 미동의 사용자를 클라이언트에서 막는 곳은
+//   이 모달뿐이라, 청크가 늦으면 그동안 앱을 그대로 쓸 수 있었다(청크 3초 지연 실측: 0~2500ms 게이트 0개). e2e/consent-gate-race.spec.ts.
 import ConsentGateModal from './components/features/ConsentGateModal';
 import type { PostFormData } from './components/features/PostFormModal';
 import type { ReplayData } from './lib/hand';
@@ -134,9 +132,7 @@ import { rememberQrIntent, takeQrIntent, clearQrIntent } from './lib/pendingQrIn
 import { setCurrentView, takeViewIntent } from './lib/pendingViewIntent';
 import { currentViewFor, restoreActionFor } from './lib/viewIntentRestore';
 import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral, claimPendingReferralTickets } from './api/referrals';
-import LevelUpWatcher from './components/features/LevelUpCelebration';
 import BusinessFooter from './components/features/BusinessFooter';
-import { useBlocks } from './contexts/BlockContext';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import type { LegalDoc } from './components/features/LegalDocsModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
@@ -174,6 +170,25 @@ const MarketplaceTab = lazyWithReload(() => import('./components/features/Market
 const VenueManageTab = lazyWithReload(() => import('./components/features/VenueManageTab'));
 const ToolsPanel     = lazyWithReload(() => import('./components/features/ToolsPanel'));
 const LiveGamesTab   = lazyWithReload(() => import('./components/features/LiveGamesTab'));
+// 🔴 2026-09-24 번들 여유(요구 D) — 첫 화면에 **그림이 없는** 상시 마운트를 첫 화면 청크에서 뺐다.
+//   평소엔 null 을 그리고(열린 시트·축하·초대 띠·닫힌 패널), 사용자 행동이나 서버 응답 뒤에야 보인다.
+//   🔴 **보안·법적 게이트는 여기 넣지 않는다** — 청크가 늦는 동안 막아야 할 화면이 열린다(동의 게이트는 되돌렸다, 위 import 주석).
+//     본인인증 시트는 안내일 뿐이라 남긴다: 실제 차단은 ensureVerified 의 반환값이 한다.
+//   마운트 즉시 청크를 받기 시작하므로(각자 Suspense fallback={null}) 부팅 직후 한 번 왕복이 늘 뿐 화면 변화는 없다.
+//   ⚠ 각자 **자기 Suspense** 로 감싼다 — 경계 없이 두면 가장 가까운 앱 경계가 서스펜드해 판 전체가 폴백으로 덮인다.
+//   전부 **한 청크**(shellDeferred)로 묶는다 — 따로 떼면 작은 청크 4개가 압축을 못 받아 JS 전체가 +3.8KB 늘었다(실측).
+const shellDeferred     = () => import('./components/features/shellDeferred');
+const VerifyGateSheet   = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.VerifyGateSheet })));
+const StaffInviteBanner = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.StaffInviteBanner })));
+const LevelUpWatcher    = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.LevelUpWatcher })));
+// 쪽지·알림 패널도 같은 청크다 — 닫혀 있을 땐 아무것도 그리지 않는다(render=false).
+//   ⚠ 계정 경계 계약(아래 AppHeader 주석: 같은 인스턴스를 유지)은 그대로다 — Suspense 가 한 번 풀린 뒤엔
+//   모듈이 캐시에 있어 다시 서스펜드하지 않으므로 인스턴스가 언마운트되지 않는다. key 도 붙이지 않는다.
+const NotificationPanel = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.NotificationPanel })));
+// PC(xl) 전용 일정 탐색 우측 레일도 같은 청크다 — 모바일에선 hidden 이고, 첫 화면(홈)에 없다.
+const BrowseSideRail    = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.BrowseSideRail })));
+// 일정 탐색 맨 아래 '지난 대회' 아카이브도 같다 — 목록 아래(스크롤 밖)이고 첫 화면(홈)에 없다.
+const PastTournaments   = lazyWithReload(() => shellDeferred().then((m) => ({ default: m.PastTournaments })));
 
 // 최상위 탭은 visitedTabs 로 마운트 유지(display 토글)라, App 재렌더(실시간 데이터·알림 등)마다
 // 숨은 탭까지 재렌더됐다. memo 로 감싸 props 안정 시 재렌더 스킵 — 데이터가 실제로 바뀔 때만 갱신.
@@ -553,7 +568,7 @@ const AppHeader = memo(function AppHeader({
           계정 경계는 NotificationPanel 안의 [uid] 리셋 이펙트 + threadsSeq 세대 가드가 지킨다(같은 인스턴스).
           ⚠ 여기 key=계정 을 붙이면 안 된다 — 재마운트되면 A 인스턴스가 세대 가드가 돌기 전에 죽고, 죽은 인스턴스의
           listMyThreads 응답이 onUnreadMessagesChange(부모 콜백은 살아 있다)로 B 의 배지에 A 의 미읽음 수를 싣는다. */}
-      <NotificationPanel
+      <Suspense fallback={null}><NotificationPanel
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
         notifications={notifications}
@@ -561,7 +576,7 @@ const AppHeader = memo(function AppHeader({
         onNavigate={onNavigateNotification}
         onUnreadMessagesChange={onUnreadMessagesChange}
         onInternalLink={onInternalLink}
-      />
+      /></Suspense>
     </header>
   );
 });
@@ -1790,7 +1805,7 @@ export default function App() {
         // 이용권 시트 — 헤더 상시 진입점 중 **유일하게 cold** 였다(오너 2026-09-17: "이용권 아이콘을 누르면 딜레이가 걸려").
         //   여는 경로가 startTransition(아래 onOpenVoucher) + `<Suspense fallback={null}>` 조합이라
         //   청크가 도착할 때까지 **스피너조차 없이 이전 화면이 그대로** 있다 — 왕복 시간이 그대로 체감 딜레이다.
-        //   (바로 옆 알림 아이콘에는 이 비용이 0이다: NotificationPanel 은 정적 import 에 상시 마운트라 서스펜드가 없다.)
+        //   (바로 옆 알림 아이콘에는 이 비용이 0이다: NotificationPanel 은 부팅 직후 shellDeferred 청크로 받아 상시 마운트해 둔다 — 누를 땐 이미 떠 있다.)
         // ⚠ user 게이트가 필요하다 — 이용권 버튼 자체가 `{user && (` 안이라 비로그인에는 없는 화면이다.
         //   위 VenueManageTab 주석이 기록한 '게이트를 무력화해 손님에게 내려보낸' 사고와 같은 부류를 만들지 않는다.
         ...(user ? [import('./components/features/MyVoucherSheet')] : []),
@@ -3872,7 +3887,7 @@ export default function App() {
       )}
 
       {/* 본인인증 게이트 안내 시트(#31) — 미인증 회원이 민감 기능 시도 시 자동 표시 */}
-      <VerifyGateSheet onStart={() => openMeCb('security')} />
+      <Suspense fallback={null}><VerifyGateSheet onStart={() => openMeCb('security')} /></Suspense>
 
       {/* 첫 진입 온보딩(#29)은 오너 지시(2026-08-28)로 삭제. 마지막 남은 소비처였던
           'nuri:persona' 기반 초기 탭 결정도 2026-09-04 오너 지시로 제거됐다(진입은 항상 홈). */}
@@ -3919,7 +3934,7 @@ export default function App() {
 
       {/* 전역 레벨업 감지 + 축하 — 점수 변동 즉시(대시보드 밖에서도). 승급 감지는 이 한 곳뿐이다
           (TierCelebration 과 2겹으로 뜨던 것을 통합). key=계정: 로그아웃 뒤 다른 계정이 이전 축하를 물려받지 않게. */}
-      <LevelUpWatcher key={user?.id ?? 'anon'} />
+      <Suspense fallback={null}><LevelUpWatcher key={user?.id ?? 'anon'} /></Suspense>
 
       <PendingApprovalBanner />
       {/* [F10] 설치 안내는 전면(페이지성) 오버레이 위에 남지 않는다 — 상세 본문·CTA·내 정보·매장을 가렸다.
@@ -3943,7 +3958,7 @@ export default function App() {
         style={{ top: 'calc(var(--header-now) + 1px)' }} />
 
       {/* 일정 탐색 */}
-      <div className="px-page-x"><StaffInviteBanner /></div>
+      <div className="px-page-x"><Suspense fallback={null}><StaffInviteBanner /></Suspense></div>
 
       {/* 홈(P1) — 결정 3섹션: 지금 등록 가능 · 포스터 · 오늘·내일 일정 */}
       {(activeTab === 'home' || visitedTabs.has('home')) && (
@@ -4255,7 +4270,7 @@ export default function App() {
                 )}
 
                 {/* 🏁 지난 대회 — 완료된 대회 아카이브(결과는 상세에서) */}
-                <PastTournaments schedules={schedules} onSelect={handleScheduleSelect} />
+                <Suspense fallback={null}><PastTournaments schedules={schedules} onSelect={handleScheduleSelect} /></Suspense>
 
 
                 {/* [DS] MO-7B 규칙 A — 개인화 블록(오늘예약·바인요청·이어서하기)은 auth 왕복
@@ -4356,12 +4371,12 @@ export default function App() {
               </div>
 
               {/* 우측 위젯 레일 — 주간 머니인 킹·HOT 게시글·오늘 요약 */}
-              <BrowseSideRail
+              <Suspense fallback={null}><BrowseSideRail
                 posts={posts}
                 schedules={schedules}
                 onSelectPost={setOpenPost}
                 onSelectSchedule={handleScheduleSelect}
-              />
+              /></Suspense>
             </div>
           </div>
         </main>
@@ -4829,166 +4844,6 @@ function ScrollTopButton() {
     </button>
   );
 }
-
-// ── 🏁 지난 대회 아카이브 — 일정탐색 하단(완료 대회, 최근 5개) ─────────────────
-// 순위가 입력된 대회면 행에 👑 우승자 표시 + 클릭 시 입상 순위 펼침(미입력이면 바로 상세).
-const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: { schedules: Schedule[]; onSelect: (s: Schedule) => void }) {
-  const today = new Date().toLocaleDateString('en-CA');
-  const past = [...schedules]
-    .filter((s) => s.approved && s.date < today)
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 5);
-  const [results, setResults] = useState<Record<string, RankingEntry[]>>({});
-  const [openId, setOpenId] = useState<string | null>(null);
-  // ⚠ 의존성을 배열 참조([schedules])로 두면 실시간 갱신·창 복귀·당겨서 새로고침마다
-  //   내용이 똑같아도 다시 돈다. 실제로 보는 값(매장·날짜 쌍)을 문자열 키로 만들어 그것에만 반응한다.
-  const pastKey = past.map((s) => `${s.venueId ?? ''}:${s.date}`).join('|');
-  useEffect(() => {
-    const pairs = past.filter((s) => s.venueId).map((s) => ({ venueId: s.venueId as string, date: s.date }));
-    if (pairs.length === 0) return;
-    let alive = true;
-    // 항목마다 1건씩 쏘던 것을 한 번에 — 5요청 → 1요청(데이터가 0행이어도 5건이 나가던 구조였다)
-    rankingsMod().then((m) => m.getRankingsBulk(pairs))
-      .then((byKey) => {
-        if (!alive) return;
-        const next: Record<string, RankingEntry[]> = {};
-        for (const s of past) {
-          const e = s.venueId ? byKey[`${s.venueId}|${s.date}`] : undefined;
-          if (e && e.length > 0) next[s.id] = e;
-        }
-        setResults(next);
-      })
-      .catch(() => {});
-    return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pastKey]);
-  if (past.length === 0) return null;
-  const day = (d: string) => ['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00`).getDay()];
-  const medal = (p: number) => (p === 1 ? '1위' : p === 2 ? '2위' : p === 3 ? '3위' : null);
-  return (
-    <section className="reveal mt-4 overflow-hidden rounded-card border border-border-subtle bg-surface-low">
-      <header className="flex items-center justify-between border-b border-border-subtle px-3 py-2">
-        <h2 data-testid="past-tournaments" className="flex items-center gap-1 text-xs font-bold text-ink-secondary"><Icon name="trophy" size={13} /> 지난 대회</h2>
-        
-      </header>
-      <ul>
-        {past.map((s) => {
-          const entries = results[s.id];
-          const champ = entries?.find((e) => e.position === 1);
-          const opened = openId === s.id;
-          return (
-            <li key={s.id} className="border-b border-border-subtle last:border-b-0">
-              <button type="button"
-                onClick={() => (entries ? setOpenId(opened ? null : s.id) : onSelect(s))}
-                className={['flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-surface-high/70', opened ? 'bg-surface-high/50' : ''].join(' ')}>
-                <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-ink-muted">
-                  {s.date.slice(5).replace('-', '/')}({day(s.date)})
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.title}</span>
-                {champ && <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-gold-300"><Icon name="trophy" size={12} />{champ.nickname}</span>}
-                <span className="hidden shrink-0 text-xs text-ink-muted sm:inline">{s.pubName}</span>
-                <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
-              </button>
-              {opened && entries && (
-                <div className="border-t border-border-subtle bg-surface-base/40 px-3 py-2 animate-fade-in">
-                  <ul className="space-y-1">
-                    {[...entries].sort((a, b) => a.position - b.position).slice(0, 5).map((e) => (
-                      <li key={`${e.position}-${e.nickname}`} className="flex items-center gap-2 text-sm">
-                        <span className="w-8 shrink-0 text-center text-xs font-bold tabular-nums text-ink-muted">
-                          {medal(e.position) ?? `${e.position}위`}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{e.nickname}</span>
-                        {/* 상금 표기는 2026-09-05 제거(법적위험완화 v3) — 지난 대회 결과는 등수·닉네임만 */}
-                      </li>
-                    ))}
-                  </ul>
-                  <button type="button" onClick={() => onSelect(s)}
-                    className="mt-1.5 text-xs font-semibold text-ink-muted transition-colors hover:text-accent-300">
-                    대회 정보 전체 보기 →
-                  </button>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-});
-
-// ── PC 우측 위젯 레일(일정탐색) — 곧 시작·HOT 게시글 (주간 머니인 킹은 2026-09-05 제거) ─────
-const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
-  posts: CommunityPost[];
-  schedules: Schedule[];
-  onSelectPost: (p: CommunityPost) => void;
-  onSelectSchedule: (s: Schedule) => void;
-}) {
-  const today = new Date().toLocaleDateString('en-CA');
-  const { isBlocked } = useBlocks();
-  const hot = [...posts]
-    .filter((p) => !isBlocked(p.userId) && !p.blinded && (p.viewCount ?? 0) > 0 && Date.now() - new Date(p.createdAt).getTime() < 6 * 3600 * 1000)
-    .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
-    .slice(0, 3);
-  // 곧 시작 — 오늘 이후 가장 가까운 대회 3개(날짜→시간 순)
-  const upcoming = [...schedules]
-    .filter((s) => s.approved && s.date >= today)
-    .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''))
-    .slice(0, 3);
-  const dday = (date: string) => {
-    const diff = Math.round((new Date(`${date}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000);
-    return diff === 0 ? '오늘' : diff === 1 ? '내일' : `D-${diff}`;
-  };
-
-  // sticky 요소에 reveal을 걸면 view() 진행도가 고정될 수 있어 내부 섹션에 개별 적용
-  return (
-    <aside className="sticky top-[calc(var(--stack-top,6.0625rem)+0.75rem)] hidden w-72 shrink-0 space-y-3 xl:block">
-      {/* 곧 시작하는 대회 — 시간 임박 순 3개 */}
-      {upcoming.length > 0 && (
-        <section className="reveal overflow-hidden rounded-card border border-border-subtle bg-surface-low">
-          <header className="flex items-center gap-1 border-b border-border-subtle px-3 py-2 text-xs font-bold text-ink-secondary"><Icon name="alarm" size={13} className="shrink-0" />곧 시작</header>
-          <ul>
-            {upcoming.map((s) => (
-              <li key={s.id} className="border-b border-border-subtle last:border-b-0">
-                <button type="button" onClick={() => onSelectSchedule(s)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-high/70">
-                  <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums', s.date === today ? 'bg-accent-300/15 text-accent-300' : 'bg-surface-high text-ink-muted'].join(' ')}>{dday(s.date)}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-ink-primary">{s.title}</span>
-                    <span className="block truncate text-xs text-ink-muted">{s.pubName} · {s.startTime}</span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* HOT 게시글 */}
-      {hot.length > 0 && (
-        <section className="reveal rounded-card border border-danger/25 bg-surface-low overflow-hidden">
-          <header className="flex items-center gap-1 border-b border-border-subtle px-3 py-2 text-xs font-bold text-danger-light"><Icon name="flame" size={13} className="shrink-0" />지금 HOT</header>
-          <ul>
-            {hot.map((p) => (
-              <li key={p.id}>
-                <button type="button" onClick={() => onSelectPost(p)}
-                  className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-surface-high/60">
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{p.title || p.content.slice(0, 30)}</span>
-                  <span className="flex shrink-0 items-center gap-0.5 text-xs tabular-nums text-ink-muted"><Icon name="eye" size={12} />{p.viewCount}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* 광고 자리 — 비어 있을 땐 문의 안내(수익 슬롯) */}
-      <section className="reveal rounded-card border border-dashed border-border-default bg-surface-low/60 px-3 py-3 text-center">
-        <p className="flex items-center gap-1 text-xs font-bold text-ink-secondary"><Icon name="megaphone" size={13} className="shrink-0" />광고 자리</p>
-        <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">이 자리에 매장·브랜드 광고를 게재할 수 있습니다.<br />내 매장 → 포스터 상단 고정 카드에서 문의하세요.</p>
-      </section>
-    </aside>
-  );
-});
 
 // ── 빈 상태 ─────────────────────────────────────────────────────────────────
 

@@ -99,8 +99,9 @@ function staticGraph(): Map<string, string[]> {
 
 /** 임계 경로에 **다시 들어오면 안 되는** 모듈 + 대신 쓰는 진입점.
  *  ⚠ 여기서 빼려면 bundle:budget 전후 수치를 근거로 같이 적어라. */
-const BANNED: { mod: string; why: string; instead: string }[] = [
-  { mod: 'src/api/rankings.ts',     why: "호출부는 '지난 대회' 아카이브 이펙트 1곳뿐이다(12.5:1)",    instead: "const rankingsMod = () => import('./api/rankings');" },
+const BANNED: { mod: string; why: string; instead: string; at?: string }[] = [
+  // 2026-09-24 — '지난 대회' 컴포넌트가 App.tsx 에서 PastTournaments.tsx(shellDeferred 청크)로 옮겨 가며 진입점도 따라갔다.
+  { mod: 'src/api/rankings.ts',     why: "호출부는 '지난 대회' 아카이브 이펙트 1곳뿐이다(12.5:1)",    instead: "const rankingsMod = () => import('../../api/rankings');", at: 'src/components/features/PastTournaments.tsx' },
   { mod: 'src/api/reservations.ts', why: '호출부는 browse 게이트·오늘예약 이펙트 2곳뿐이다(10.2:1)',  instead: "const reservationsMod = () => import('./api/reservations');" },
   { mod: 'src/api/reviews.ts',      why: '호출부는 loadDeferred(유휴) 1곳뿐이다(4.5:1)',              instead: "const reviewsMod = () => import('./api/reviews');" },
 ];
@@ -134,13 +135,22 @@ describe('첫 화면 임계 경로 계약 — 떼어낸 모듈이 되돌아오�
     });
   }
 
-  it('동적 진입점이 실제로 App.tsx 에 있다 — 끊기만 하고 호출부를 잃지 않았다', () => {
-    const app = readFileSync(ENTRY, 'utf8');
-    for (const { instead } of BANNED) {
+  it('동적 진입점이 실제로 App.tsx(또는 옮겨 간 파일)에 있다 — 끊기만 하고 호출부를 잃지 않았다', () => {
+    for (const { instead, at } of BANNED) {
+      const app = readFileSync(at ? resolve(ROOT, at) : ENTRY, 'utf8');
       // 공백 수는 정렬 때문에 흔들린다 — 토큰 단위로 본다
       const tokens = instead.split(/\s+/).filter(Boolean);
       const re = new RegExp(tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+'));
-      expect(app, `App.tsx 에서 진입점을 못 찾았다: ${instead}`).toMatch(re);
+      expect(app, `${at ?? 'App.tsx'} 에서 진입점을 못 찾았다: ${instead}`).toMatch(re);
     }
+  });
+
+  // 🔴 반대 방향 계약 — 보안·법적 게이트는 **첫 화면 정적 그래프에 있어야 한다**(2026-09-24 verifier 반려).
+  //   번들을 줄이려고 ConsentGateModal 을 지연 청크로 옮기자 청크가 늦는 동안 미동의 회원이 앱을 그대로 썼다(3초 지연 실측).
+  //   실행 확인은 e2e/consent-gate-race.spec.ts 가 한다 — 이 칸은 원인(정적 import)을 잠근다.
+  it('법적 동의 게이트(ConsentGateModal)는 지연 청크가 아니라 정적 그래프에 있다', () => {
+    const gate = resolve(ROOT, 'src/components/features/ConsentGateModal.tsx');
+    expect(graph.get(gate)?.map((p) => relative(ROOT, p).replace(/\\/g, '/')),
+      'ConsentGateModal 이 첫 화면 정적 그래프에서 빠졌다 — 청크가 늦는 동안 미동의 회원을 막을 곳이 없어진다').toContain('src/App.tsx');
   });
 });

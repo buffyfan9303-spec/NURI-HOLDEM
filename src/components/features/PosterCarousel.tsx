@@ -27,7 +27,7 @@
 // 유지: 카드 폭 = 스크롤러 clientWidth(w-full) 불변식 — 랩·스냅·스텝 경계가 전부 여기에 걸려 있다.
 //       트랙에 gap 을 넣거나 카드마다 폭을 달리하면 정착 위치가 깨진다. 여백은 **트랙 바깥**에 둔다.
 //       링크 없는 배너는 <div> 로 그린다(죽은 버튼 금지). 관리자 배너의 활성·정렬·기간 규칙은 API 담당.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { thumbUrl } from '../../lib/imageUrl';
 import Icon from '../atoms/Icon';
 import type { HomeBanner } from '../../api/homeBanners';
@@ -140,6 +140,21 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
   const [idx, setIdx] = useState(0);
   // §7.1-9: 데이터가 늦게 도착해 슬라이드 수가 변하면 현재 인덱스를 유효 범위로 맞춘다(점 표시·aria-current 가 없는 장을 가리키지 않게).
   useEffect(() => { if (idx >= n) setIdx(Math.max(0, n - 1)); }, [n, idx]);
+  /** 사용자가 캐러셀을 한 번이라도 움직였나(스와이프·휠·점·화살표). */
+  const touchedRef = useRef(false);
+  // 🔴 2026-09-24 — 관리자 배너가 이벤트·브랜드 슬라이드보다 **늦게** 오면 앞에 끼워진다. 그때 브라우저의
+  //   스냅 재정렬(re-snap)이 보던 장(이벤트)을 붙잡아 scrollLeft 가 끼워진 폭만큼 밀려, 첫 화면이 1번째 배너가
+  //   아니었다(실측 390: scrollLeft 708 = 2장 뒤 '매장 이벤트'). 아직 손대지 않았으면 첫 장으로 되돌린다 —
+  //   페인트 전(layout effect)이라 밀린 장이 보이지 않는다. 손댄 뒤엔 보던 장을 지키는 재정렬이 맞다.
+  const firstKey = slides[0]?.key;
+  /** 스크롤 핸들러가 읽는 장 수 — 재구독 전(passive effect 전)에 온 스크롤 이벤트가 **옛 n** 으로 인덱스를 셈하지 않게.
+   *  실측: 되돌린 직후 첫 스크롤 이벤트가 옛 핸들러(n=3)로 half=5w 를 5%3=2 로 읽어 점이 3번째 장을 가리켰다. */
+  const nRef = useRef(n);
+  useLayoutEffect(() => {
+    nRef.current = n;
+    const vp = vpRef.current;
+    if (vp && !touchedRef.current && vp.scrollLeft !== 0) vp.scrollLeft = 0;
+  }, [firstKey, n]);
 
   // ── 무한 랩 + 현재 장 추적 ────────────────────────────────────────────────
   // 자동 스텝이 사라져 이 effect 가 하는 일은 둘뿐이다: 경계 랩, 그리고 점 표시용 인덱스.
@@ -185,14 +200,15 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
       raf = requestAnimationFrame(() => {
         raf = 0;
         if (!w) return;
-        const i = ((Math.round(vp.scrollLeft / w) % n) + n) % n;
+        const k = nRef.current;
+        const i = ((Math.round(vp.scrollLeft / w) % k) + k) % k;
         setIdx((prev) => (prev === i ? prev : i));
       });
     };
     vp.addEventListener('scroll', onScroll, { passive: true });
     // 가드가 도착 판정 없이 남는 경우(손가락이 끼어듦·스냅이 다른 장에 세움) — 사용자 입력이나 스크롤 끝에서 푼다.
     const release = () => { if (navRef.current === null) return; navRef.current = null; onScroll(); };
-    const releaseOnInput = () => { navRef.current = null; };
+    const releaseOnInput = () => { navRef.current = null; touchedRef.current = true; };
     vp.addEventListener('scrollend', release);
     vp.addEventListener('pointerdown', releaseOnInput, { passive: true });
     vp.addEventListener('touchstart', releaseOnInput, { passive: true });
@@ -225,6 +241,7 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
     if (delta < 0 && from <= 0 && half > w) { vp.scrollLeft = half; from = half; }
     // 앞선 이동이 아직 복제 세트 깊숙이(랩 임계 너머) 있으면 같은 픽셀의 원본 쪽으로 옮기고 시작한다(끝을 넘어 클램프되지 않게).
     else if (half > w && from >= half + w) { from -= half; vp.scrollLeft = from; }
+    touchedRef.current = true;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const left = from + delta * w;
     navRef.current = reduced || !delta ? null : left; // 제자리(delta 0)는 스크롤 이벤트가 안 나 가드가 남는다
