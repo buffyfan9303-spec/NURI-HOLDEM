@@ -170,7 +170,8 @@ test('이벤트 페이지 닫기 버튼 — 실효 히트영역 44px', async ({ 
   const banner = page.getByTestId('home-event-banner').or(page.getByTestId('home-event-menu')).first();
   await expect(banner, '홈에 이벤트 진입 칸이 없다 — 상시 진입 계약이 깨졌다').toBeVisible({ timeout: 15_000 });
   await banner.click();
-  const close = page.locator('[role="dialog"][aria-label="이벤트"] button[aria-label="닫기"]');
+  // 진행 중 이벤트가 있으면 이벤트 판("이벤트"), 없으면(숨김·종료) 목록("이벤트 목록")이 열린다 — 운영 데이터와 무관하게 둘 다 같은 기준(2026-09-25).
+  const close = page.locator('[role="dialog"]:is([aria-label="이벤트"], [aria-label="이벤트 목록"]) button[aria-label="닫기"]').first();
   await expect(close).toBeVisible({ timeout: 15_000 });
   // live-card-fit.spec 과 같은 방식 — 시각 크기와 의사요소 확장분 중 큰 쪽(.hit 은 ::after 를 max(100%,44px) 로 넓힌다)
   const hit = await close.evaluate((el) => {
