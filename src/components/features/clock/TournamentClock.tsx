@@ -1,7 +1,7 @@
 // src/components/features/clock/TournamentClock.tsx
 // 토너먼트 클락 — 설정/프리셋 + 라이브 디스플레이(블라인드 타이머) + 수기 컨트롤 + 일시정지.
 // 와홀덤/Roti 클락 구조를 따르되 NURI 테마로. 장부 연동 카운트 자동 산출 + 수기 보정.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../../atoms/Toast';
 import { useBackClose } from '../../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../../lib/scrollLock';
@@ -333,6 +333,9 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
 }
 
 // ── 라이브 디스플레이 + 컨트롤 ──────────────────────────────────────────────────
+/** K1 — 모바일 미리보기의 고정 캔버스 폭(px). PC 미리보기(1024: 748 · 1440: 570)와 같은 급이라 '그대로 축소' 가 된다. */
+const STAGE_CANVAS_W = 720;
+
 function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEnd, active = true }: {
   state: ClockState; canManage: boolean; venueName?: string;
   onChange: (s: ClockState) => void; onOpenSettings: () => void; onEnd: () => void; active?: boolean;
@@ -350,6 +353,24 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
   const [tickStyle, setTickStyle] = useState<'beep' | 'soft' | 'off'>(() => { try { const v = localStorage.getItem('nuri:clock-tick'); return v === 'soft' || v === 'off' ? v : 'beep'; } catch { return 'beep'; } });
   useEffect(() => { try { localStorage.setItem('nuri:clock-tick', tickStyle); } catch { /* quota */ } }, [tickStyle]);
   const [fs, setFs] = useState(false);
+  // 🔴 K1(오너 2026-09-24 캡처 — 모바일 미리보기 숫자 겹침) — 미리보기는 cqw/cqh 로 **반응형**이라 폭 356px 에서
+  //   글자 하한(px)·고정 간격이 비율보다 커져 타이머가 프라이즈·지표와 겹쳤다(실측 390: 겹치는 글자 쌍 21 · PC 3).
+  //   모바일(<768)에서는 재배치하지 않고 **PC 와 같은 캔버스(720×405)를 그려 그대로 축소**한다(transform scale).
+  //   PC·태블릿(≥768)과 전체화면은 종전 그대로다 — 슬롯이 `display: contents` 라 레이아웃에 없다.
+  //   폭은 슬롯의 부모(미리보기/콘솔 그리드)에서 잰다: 슬롯이 contents 인 첫 렌더에도 폭이 있다.
+  const stageSlotRef = useRef<HTMLDivElement>(null);
+  const [stageScale, setStageScale] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const host = stageSlotRef.current?.parentElement;
+    if (fs || !host) { setStageScale(null); return; }
+    const mq = window.matchMedia('(max-width: 767.98px)');
+    const upd = () => setStageScale(mq.matches && host.clientWidth > 0 ? host.clientWidth / STAGE_CANVAS_W : null);
+    upd();
+    const ro = new ResizeObserver(upd);
+    ro.observe(host);
+    mq.addEventListener('change', upd);
+    return () => { ro.disconnect(); mq.removeEventListener('change', upd); };
+  }, [fs]);
   const [remoteQr, setRemoteQr] = useState<string | null>(null); // 휴대폰 리모컨 QR(data URL)
   // 전체 클락 공통 광고 이미지(운영자 설정) — 모든 클락 상단에 표시
   const [adImg, setAdImg] = useState<string | null>(null);
@@ -852,21 +873,26 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
         <Icon name={state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{CLOCK_PHASE_ACTION[phase]}
       </button>
 
+      {/* 🔴 K1(오너 2026-09-24) — 모바일(<768)은 Level · Min · Sec 를 **한 줄 3칸 격자**로 둔다(종전: Level 줄과
+          Min·Sec 줄이 갈라져 67px 떨어져 있었다). 아래 지표 격자(grid-cols-3)와 같은 열·간격이라 세로로 줄이 맞는다.
+          md 이상은 이 래퍼가 `contents` 라 박스가 없고, 안쪽 두 줄이 종전 그대로 콘솔의 자식처럼 놓인다(PC 무변경). */}
+      <div className="mt-2 grid grid-cols-3 items-end gap-x-1 gap-y-2 md:contents">
       {/* ② 레벨 — 시작 아래 자기 줄. 되돌리기는 이동 직후 6초만 옆에 뜬다. */}
-      <div data-testid="clk-level-row" className="mt-2 flex items-end gap-2">
+      <div data-testid="clk-level-row" className="mt-2 flex items-end gap-2 max-md:contents">
         <Stepper label="Level" size="lg"
           plusDisabled={state.currentIndex >= cfg.levels.length - 1} minusDisabled={state.currentIndex <= 0}
           onPlus={() => setLevel(1)} onMinus={() => setLevel(-1)} />
         {levelUndo && (
           <button type="button" onClick={undoLevel} title="방금 레벨 이동을 취소하고 남은 시간까지 되돌립니다(TV 포함)"
-            className="inline-flex h-10 shrink-0 items-center gap-1 self-end rounded-input border border-amber-400/60 bg-amber-400/15 px-3 text-2xs font-extrabold text-amber-200 hover:bg-amber-400/25"><Icon name="undo" size={13} className="shrink-0" />되돌리기</button>
+            className="inline-flex h-10 shrink-0 items-center gap-1 self-end rounded-input border border-amber-400/60 max-md:order-last max-md:col-span-3 max-md:h-[44px] max-md:justify-center bg-amber-400/15 px-3 text-2xs font-extrabold text-amber-200 hover:bg-amber-400/25"><Icon name="undo" size={13} className="shrink-0" />되돌리기</button>
         )}
       </div>
 
       {/* ③ 시간 보정 */}
-      <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2">
+      <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2 max-md:contents">
         <Stepper label="Min" onPlus={() => adjustTime(60_000)} onMinus={() => adjustTime(-60_000)} />
         <Stepper label="Sec" onPlus={() => adjustTime(1_000)} onMinus={() => adjustTime(-1_000)} />
+      </div>
       </div>
 
       {/* ③ 현재 상태 입력 — 엔트리·생존·리바이·얼리·애드온 */}
@@ -876,7 +902,7 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
           따라서 5열 임계값은 행 폭 ≥ 5×61.6 + 4×4.25 = 325px, 즉 **넷포트 ≈ 378px** 이다.
           임계값에 붙여 `min-[380px]:` 로 조이면 `w-7` 을 건드리는 순간 조용히 깨진다 — 그래서 일부러 헐거운 `sm:`(640px)을 고른다.
           640 이상은 5열 렌더가 종전과 **수치까지 동일**하고(행 clientW·트랙 폭 불변), 미만은 3+2 로 **균형 접힘**이라 고아가 아니다. */}
-      <div className="mt-2 grid grid-cols-3 sm:grid-cols-5 items-end justify-items-center gap-x-1 gap-y-2 border-t border-border-default dark:border-white/[0.06] pt-2">
+      <div className="mt-2 grid grid-cols-3 sm:grid-cols-5 items-end justify-items-center gap-x-1 gap-y-2 max-md:justify-items-stretch border-t border-border-default dark:border-white/[0.06] pt-2">
         <Stepper label="Entries" value={liveStats.entries} onPlus={() => adj('adjEntries', 1)} onMinus={() => adj('adjEntries', -1)} />
         <Stepper label="Player" value={liveStats.alive} onPlus={() => adjPlayer(1)} onMinus={() => adjPlayer(-1)} />
         <Stepper label="Rebuy" value={liveStats.rebuys} onPlus={() => adj('adjRebuys', 1)} onMinus={() => adj('adjRebuys', -1)} />
@@ -991,9 +1017,13 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
           글자 크기는 `fs ? cq단위 : 고정 Tailwind` 두 벌이라 미리보기와 TV 가 서로 닮지 않았다.
           두 모드가 같은 컨테이너 계약을 가지면 아래 cqw/cqh 한 벌이 양쪽에서 그대로 산다 —
           '운영자 미리보기 = TV 축소판'이 비로소 성립한다. */}
+      <div ref={stageSlotRef} data-clk-stage-slot={stageScale != null ? 'scaled' : undefined}
+        className={stageScale != null ? 'relative aspect-[16/9] overflow-hidden rounded-card' : 'contents'}>
       <div className={['relative overflow-hidden border border-white/[0.08] text-white shadow-[0_10px_50px_rgba(0,0,0,0.45)] [container-type:size]',
-        fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'flex flex-col rounded-card aspect-[16/9]'].join(' ')}
-        style={{ ...clkVars, background: 'var(--clk-bg, #06080F)' }}>
+        fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'flex flex-col rounded-card aspect-[16/9]',
+        stageScale != null ? 'absolute left-0 top-0 origin-top-left' : ''].join(' ')}
+        style={{ ...clkVars, background: 'var(--clk-bg, #06080F)',
+          ...(stageScale != null ? { width: STAGE_CANVAS_W, height: STAGE_CANVAS_W * 9 / 16, transform: `scale(${stageScale})` } : null) }}>
         {/* 2026-09-02 v3 'NURI 아우라'(오너 승인) — TV(ClockDisplay)와 같은 정보 위계·색 체계. 라벨은 2026-09-19 부터 영문 대문자,
             골드는 프라이즈 금액에만, 레벨/블라인드 인디고, 타이머 순백. 조작부(아래 컨트롤 행)는 그대로. */}
         {fs && (
@@ -1059,6 +1089,7 @@ function ClockLive({ state, canManage, venueName, onChange, onOpenSettings, onEn
             시작/일시정지·엔트리·생존·리바이·얼리·애드온까지 넓어졌고, 레벨·시간·초기화·종료·설정은 여전히 없다.
             그 다섯은 (a) 전체화면을 풀고 하는 운영자 화면 (b) 휴대폰 리모컨(ClockRemote) 두 경로로 한다. */}
       </div>
+      </div>
       {/* 우측 콘솔(비전체화면) — 화면이 좁으면 그리드가 1열이 되어 아래로 흐른다 */}
       {canManage && !fs && consoleUI}
       </div>
@@ -1113,13 +1144,15 @@ function Stepper({ label, value, onPlus, onMinus, size = 'sm', plusDisabled, min
   label: string; value?: number; onPlus: () => void; onMinus: () => void;
   size?: 'sm' | 'lg'; plusDisabled?: boolean; minusDisabled?: boolean;
 }) {
-  const box = size === 'lg' ? 'w-10 h-10 text-base' : 'w-7 h-7 text-sm';
+  // 🔴 K1(오너 2026-09-24) — 모바일(<768)은 Level(lg)·Min·Sec·지표(sm) 크기가 제각각(40 vs 29.75px)이던 것을
+  //   **한 값**으로 맞춘다: 격자 칸 폭을 두 버튼이 반씩 나누고 높이 44px(유효 터치). md 이상은 종전 크기 그대로.
+  const box = [size === 'lg' ? 'w-10 h-10 text-base' : 'w-7 h-7 text-sm', 'max-md:h-[44px] max-md:w-auto max-md:min-w-0 max-md:flex-1'].join(' ');
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div className="flex flex-col items-center gap-0.5 max-md:w-full">
       <span className="text-[9px] text-ink-muted">
         {label}{value !== undefined && <b className="ml-1 font-bold tabular-nums text-ink-primary">{value}</b>}
       </span>
-      <div className={size === 'lg' ? 'flex gap-1.5' : 'flex gap-0.5'}>
+      <div className={[size === 'lg' ? 'flex gap-1.5' : 'flex gap-0.5', 'max-md:w-full max-md:gap-1'].join(' ')}>
         <button type="button" onClick={onPlus} disabled={plusDisabled} className={`${box} rounded-input bg-surface-high dark:bg-white/10 hover:bg-surface-float dark:hover:bg-white/15 border border-border-strong dark:border-border-default text-ink-secondary hover:text-[#8B94E8] leading-none disabled:opacity-30`}>＋</button>
         <button type="button" onClick={onMinus} disabled={minusDisabled} className={`${box} rounded-input bg-surface-high dark:bg-white/10 hover:bg-surface-float dark:hover:bg-white/15 border border-border-strong dark:border-border-default text-ink-secondary hover:text-danger-light leading-none disabled:opacity-30`}>－</button>
       </div>

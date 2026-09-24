@@ -469,26 +469,29 @@ ${cards}
       {canIssue ? (
         <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
           <button type="button" onClick={() => setIssueOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-xs font-bold text-accent-300">매장이용권 발급 <span className="font-normal text-ink-muted">· 업주 · 공동운영자</span>{/* 스윕②(2026-09-19): 이 배지는 '개', 바로 아래 한도 증액 패널(QuotaRequestPanel)은 '장' — 같은
+            <span className="text-xs font-bold text-accent-300">매장이용권 발급 <span className="font-normal text-ink-muted max-md:hidden">· 업주 · 공동운영자</span>{/* 스윕②(2026-09-19): 이 배지는 '개', 바로 아래 한도 증액 패널(QuotaRequestPanel)은 '장' — 같은
                   quota 값이 한 스크롤 안에서 단위만 바뀌었다. '장'으로 통일(이용권은 '장' 으로 세는 물건 —
                   발급 폼도 '개' 스테퍼가 아니라 옆에 '개'라고 적혀 있었을 뿐 실제 문구는 전부 장이다). */}
                 {quota !== null && <span className={['ml-1.5 rounded-badge px-1.5 py-0.5 font-bold', quota < 50 ? 'bg-danger/15 text-danger-light' : 'bg-surface-high text-ink-secondary'].join(' ')}>잔여 한도 {quota.toLocaleString()}장</span>}</span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', issueOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
           {issueOpen && (
-            <div className="space-y-1.5 px-2.5 pb-2.5">
+            /* 🔴 V1(오너 2026-09-24) — 모바일(<768) 발급 폼 정리. 칸마다 높이(32·38.3·40.8)·폭·모서리가 제각각이라
+               "제멋대로" 보였다. 모바일에서만: 조작 요소 높이 44px 한 값 · 칩은 격자(근거 2열 · 기간 5열)로 폭 균등 ·
+               각 묶음은 '라벨 → 조작' 같은 문법(간격 6px). md 이상은 클래스가 전부 `max-md:`/`md:hidden` 이라 **무변경**. */
+            <div className="space-y-1.5 px-2.5 pb-2.5 max-md:space-y-2.5">
               {!isAdmin && approvedErr == null && !approved && (
                 <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/[0.08] px-2 py-1.5 text-2xs text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 운영자 승인 후 발급할 수 있습니다.</p>
               )}
               {!isAdmin && approvedErr != null && (
                 <LoadErrorCard what="발급 승인 상태" error={approvedErr} onRetry={reload} compact hint="승인 상태를 확인하기 전에는 발급할 수 없습니다." />
               )}
-              <div className="flex gap-1.5">
-                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm" />
-                <div className="flex items-stretch gap-1 shrink-0">
+              <div className="flex gap-1.5 max-md:flex-col">
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm max-md:h-[44px] max-md:flex-none" />
+                <div className="flex items-stretch gap-1 shrink-0 max-md:h-[44px] max-md:w-full">
                   <StepBtn label="−" onStep={() => setCount((c) => Math.max(1, c - 1))} />
                   <input type="number" inputMode="numeric" min={1} max={1000} value={count || ''} onChange={(e) => setCount(Math.min(1000, Math.max(1, parseInt(e.target.value, 10) || 1)))}
-                    className="input w-16 text-sm tabular-nums text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" aria-label="발급 갯수" />
+                    className="input w-16 text-sm tabular-nums text-center max-md:h-auto max-md:min-w-0 max-md:flex-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" aria-label="발급 갯수" />
                   <StepBtn label="+" onStep={() => setCount((c) => Math.min(1000, c + 1))} />
                   <span className="self-center pl-0.5 text-2xs text-ink-muted">개</span>
                 </div>
@@ -503,14 +506,17 @@ ${cards}
                   가로 스크롤·페이드는 걷어냈다(스크롤이 없으니 페이드는 '더 있는데 가려졌다'는 거짓
                   신호가 된다 — 리드 지적). 라벨(특히 '기타(비고 필수)')은 그대로 둔다 — '(비고 필수)'는
                   "메모를 안 쓰면 발급이 안 된다"는 조건이라 줄이면 사용자가 왜 막히는지 모른다(§7). */}
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label="발급 근거">
+              <div className="space-y-1.5">
+              <p aria-hidden className="text-2xs font-semibold text-ink-secondary md:hidden">발급 근거</p>
+              <div className="flex flex-wrap gap-1.5 max-md:grid max-md:grid-cols-2" role="group" aria-label="발급 근거">
                 {ISSUE_PICKS.map((o) => (
                   <button key={o.value} type="button" onClick={() => setReason(o.value)} aria-pressed={reason === o.value} title={o.hint}
-                    className={['min-h-9 shrink-0 whitespace-nowrap rounded-chip border px-2.5 text-2xs font-bold transition-colors',
+                    className={['min-h-9 shrink-0 whitespace-nowrap rounded-chip border px-2.5 text-2xs font-bold transition-colors max-md:min-h-[44px] max-md:px-1',
                       reason === o.value ? 'border-transparent bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                     {o.label}
                   </button>
                 ))}
+              </div>
               </div>
               {reason === 'other' && (
                 <input value={reasonNote} onChange={(e) => setReasonNote(e.target.value)} maxLength={80} placeholder="기타 사유 — 발급 이유를 적어 주세요(필수)" className="input w-full text-sm" />
@@ -536,15 +542,15 @@ ${cards}
                   여기 규칙: N일 = **KST 오늘 + N일의 23:59:59** (1일 = 내일 밤까지). 종전 달력의 min 이
                   '내일'이었던 것과 같은 하한이라 당일 몇 시간짜리 표가 생기지 않는다. */}
               <div className="text-2xs text-ink-secondary">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="shrink-0 font-semibold">유효기간</span>
+                <div className="flex flex-wrap items-center gap-1.5 max-md:grid max-md:grid-cols-5">
+                  <span className="shrink-0 font-semibold max-md:col-span-5">유효기간</span>
                   {EXPIRY_PRESETS.map((d) => {
                     const val = d === 0 ? '' : addKstDays(d);
                     const on = expiry === val;
                     return (
                       <button key={d} type="button" aria-pressed={on} onClick={() => setExpiry(val)}
                         className={[
-                          'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold transition-colors',
+                          'min-h-[32px] rounded-full border px-2.5 text-2xs font-bold transition-colors max-md:min-h-[44px] max-md:rounded-chip max-md:px-0',
                           on ? 'border-accent-300/60 bg-accent-500/20 text-accent-100'
                              : 'border-border-default bg-surface-high text-ink-secondary hover:bg-surface-float/60',
                         ].join(' ')}>
@@ -560,13 +566,22 @@ ${cards}
                 </p>
               </div>
               {/* 받는 손님 지정 — 아이디(닉네임)로 지정 */}
+              {/* 🔴 V1(오너 2026-09-24) — '아이디/전화번호로 지정' 을 누르면 위 '받는 손님 필수' 라벨이 사라지며
+                  입력칸이 생겨 **높이가 줄었다 늘었다** 했다(실측 390: 발급 판 −20.19px). 모바일에서는 세 상태
+                  (미지정 · 입력 중 · 선택됨) 모두 **같은 라벨 + 44px 한 줄**로 맞춰 누를 때 높이 변화 0 이다.
+                  최근 받은 손님 줄도 미지정 상태에서 같이 보여(모바일) 누르는 순간 줄이 새로 끼지 않는다.
+                  PC 는 라벨·최근 줄이 `md:hidden` 이라 종전 그대로다. */}
               {recvUserId ? (
-                <div className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1.5">
-                  <span className="min-w-0 flex-1 truncate text-xs text-ink-primary">받는 손님: <b className="text-accent-300">{recvDisplay}</b></span>
-                  <button type="button" onClick={() => { setRecvUserId(null); setRecvDisplay(''); }} className="shrink-0 text-2xs text-ink-muted">변경</button>
+                <div className="max-md:space-y-1.5">
+                  <p className="text-2xs font-semibold text-ink-secondary md:hidden">받는 손님 <span className="text-danger-light">필수</span></p>
+                  <div className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1.5 max-md:h-[44px]">
+                    <span className="min-w-0 flex-1 truncate text-xs text-ink-primary">받는 손님: <b className="text-accent-300">{recvDisplay}</b></span>
+                    <button type="button" onClick={() => { setRecvUserId(null); setRecvDisplay(''); }} className="shrink-0 text-2xs text-ink-muted max-md:-my-1.5 max-md:h-[44px] max-md:px-2">변경</button>
+                  </div>
                 </div>
               ) : (recvMode === 'id' || recvMode === 'phone') ? (
                 <div className="space-y-1.5">
+                  <p className="text-2xs font-semibold text-ink-secondary md:hidden">받는 손님 <span className="text-danger-light">필수</span></p>
                   {/* 최근 발급한 손님(단골) 빠른 선택 — 자주 주는 대상 원탭 */}
                   {recentRecipients.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1">
@@ -592,8 +607,8 @@ ${cards}
                         else if (e.key === 'Escape') { setCands([]); setActiveIdx(-1); }
                       }}
                       inputMode={recvMode === 'phone' ? 'numeric' : 'text'}
-                      placeholder={recvMode === 'phone' ? '전화번호 입력 · 자동완성 (↑/↓·Enter)' : '이름·아이디(닉네임) 입력 · 자동완성 (↑/↓·Enter)'} className="input min-w-0 flex-1 text-sm" />
-                    <button type="button" onClick={() => { setRecvMode('none'); setCands([]); setIdInput(''); setActiveIdx(-1); }} className="shrink-0 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-bold text-ink-muted hover:text-ink-secondary">취소</button>
+                      placeholder={recvMode === 'phone' ? '전화번호 입력 · 자동완성 (↑/↓·Enter)' : '이름·아이디(닉네임) 입력 · 자동완성 (↑/↓·Enter)'} className="input min-w-0 flex-1 text-sm max-md:h-[44px]" />
+                    <button type="button" onClick={() => { setRecvMode('none'); setCands([]); setIdInput(''); setActiveIdx(-1); }} className="shrink-0 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-bold text-ink-muted hover:text-ink-secondary max-md:h-[44px]">취소</button>
                   </div>
                   {cands.length > 0 ? (
                     <ul role="listbox" className="max-h-40 space-y-1 overflow-y-auto rounded-input border border-accent-400/30 bg-surface-low p-1">
@@ -616,14 +631,25 @@ ${cards}
                   ) : null}
                 </div>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-1 max-md:space-y-1.5">
                   {/* 2026-09-18 오너 확인: "전화번호 닉네임 둘다 가능" — 두 갈래를 **둘 다 유지**한다.
                       (처음 지시는 "닉네임으로만" 이었는데, 전화번호 경로가 이미 있다는 걸 알리고 확인받았다.
                        있던 기능을 말없이 없애지 않는다 — CLAUDE.md 기능 보존.) */}
                   <p className="text-2xs font-semibold text-ink-secondary">받는 손님 <span className="text-danger-light">필수</span></p>
+                  {recentRecipients.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1 md:hidden">
+                      <span className="self-center text-2xs text-ink-muted">최근:</span>
+                      {recentRecipients.map((r) => (
+                        <button key={r.id} type="button" onClick={() => pickRecv(r)}
+                          className="inline-flex items-center gap-1 rounded-full border border-accent-400/30 bg-accent-300/[0.06] px-2 py-0.5 text-[11px] text-ink-secondary hover:border-accent-400/60 hover:text-accent-300">
+                          <Icon name="user" size={11} /> {r.display}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex gap-1.5">
-                    <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs"><Icon name="user" size={12} /> 아이디(닉네임)로 지정</button>
-                    <button type="button" onClick={() => setRecvMode('phone')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs"><Icon name="phone" size={12} /> 전화번호로 지정</button>
+                    <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs max-md:h-[44px]"><Icon name="user" size={12} /> 아이디(닉네임)로 지정</button>
+                    <button type="button" onClick={() => setRecvMode('phone')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs max-md:h-[44px]"><Icon name="phone" size={12} /> 전화번호로 지정</button>
                   </div>
                 </div>
               )}

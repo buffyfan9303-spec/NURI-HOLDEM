@@ -1393,7 +1393,11 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
     on ? 'font-bold text-white' : 'font-semibold text-ink-muted hover:text-ink-secondary'].join(' ');
   return (
     <div ref={ref} data-mystore-rail=""
-      className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
+      /* 🔴 S1(오너 2026-09-24) — 모바일(<768)은 레일 안쪽 패딩·테두리를 걷어 **바 높이 = 칸 높이 44px**
+         (종전 50.25px). 칸은 그대로 44px 라 유효 터치 계약은 안 바뀐다 — 줄어드는 것은 칸 바깥 테두리뿐이다.
+         오버행(tap-y-44)으로 칸을 더 낮추지 않는 이유는 위 주석 그대로다(overflow-x-auto 가 아래 오버행을 자른다).
+         md 이상은 한 글자도 안 바뀐다(`max-md:` 만). */
+      className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5 max-md:border-0 max-md:p-0">
       <SlidingPill containerRef={ref} activeKey={active} className="rounded-[6px] pill-active" />
       {/* 탭인 것만 tablist 에 넣는다 — 요약과 1~5단계. 이용권은 '단계'가 아니라 다른 화면으로 가는
           지름길이라 탭이 아니다(그래서 원래도 role 이 없었다). 시각적으로는 같은 바 안에 남는다.
@@ -1405,7 +1409,12 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
           내용 폭(flex-none)이라 좁다: 6칸이 375 에 들어가는 건 이 칸이 40px 대이기 때문. */}
       <button type="button" role="tab" aria-selected={active === 'dashboard'} data-pill-active={active === 'dashboard' || undefined}
         onClick={onHome} title="매장 대시보드(요약)"
-        className={[chip(active === 'dashboard'), 'lg:min-w-0 lg:flex-1 lg:basis-0 !px-2 sm:!px-3'].join(' ')}>
+        /* 🔴 S1(오너 2026-09-24 "알약이 칸마다 폭이 달라 이동할 때마다 크기가 바뀐다") — 원인은 이 칸만의
+           `!px-2`(8.5px)였다. `flex-1 basis-0` 은 **패딩을 뺀 나머지**를 균등 분배하므로 패딩이 큰 칸이
+           정확히 그만큼 넓어진다(실측 360: 요약 51.14 · 나머지 42.64 = 차 8.5). 알약이 요약↔단계를 오갈 때
+           43→51px 로 늘었다 줄었다 한 것이 이것이다. 다른 칸과 같은 `px-1` 을 쓰고, sm 이상은 종전 `!px-3`
+           그대로(다른 칸도 sm:px-3 이라 PC 폭은 원래도 같았다). */
+        className={[chip(active === 'dashboard'), 'lg:min-w-0 lg:flex-1 lg:basis-0 sm:!px-3'].join(' ')}>
         <span className="relative">요약</span>
       </button>
       {steps.map((st, i) => {
