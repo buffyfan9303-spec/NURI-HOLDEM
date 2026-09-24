@@ -203,6 +203,10 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
           보낸 뒤에 아무 흔적이 없으면 업주는 보냈는지조차 알 수 없다. */}
       {loadErr != null ? (
         <LoadErrorCard error={loadErr} what="내 신청 내역" onRetry={load} compact />
+      ) : mine === null ? (
+        // 이력은 폼 아래에 늦게 붙는다 — 받는 동안 '아직 그리는 중' 이라고 알린다(자리는 차지하지 않는다).
+        //   하위 탭 덮개·내 매장 높이 예약(tabCover isSettled)이 이걸 보고 이력이 붙은 뒤에 걷힌다(2026-09-24).
+        <p aria-busy="true" className="sr-only">내 신청 내역을 불러오는 중</p>
       ) : rows.length > 0 && (
         <ul className="space-y-1.5 border-t border-border-subtle pt-2">
           {rows.map((r) => {

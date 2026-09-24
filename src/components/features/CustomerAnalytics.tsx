@@ -112,7 +112,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
       {/* 명단 — 기간 전환의 본문(방향성 푸시 대상). 위 기간·검색 바는 제자리. */}
       <div data-crm-panel="">
       {loading ? (
-        <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
+        <p aria-busy="true" className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-2xs text-ink-muted">{query ? '검색 결과가 없습니다.' : '이 기간의 장부 기록이 없습니다.'}</p>
       ) : (

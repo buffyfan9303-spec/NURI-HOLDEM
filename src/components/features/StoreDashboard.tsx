@@ -1781,7 +1781,7 @@ function MyStaffCard({ venueId }: { venueId: string }) {
       <div className="rounded-card border border-border-default bg-surface-low p-5 space-y-3">
         <p className="text-sm font-bold text-ink-primary">내 근무 정보</p>
 
-        {state === 'loading' && <p className="t-desc text-ink-muted">불러오는 중…</p>}
+        {state === 'loading' && <p aria-busy="true" className="t-desc text-ink-muted">불러오는 중…</p>}
 
         {state === 'error' && (
           <p className="t-desc break-keep text-ink-muted">

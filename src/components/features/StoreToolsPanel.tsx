@@ -49,7 +49,7 @@ export default function StoreToolsPanel() {
       <div className="contents">
       <Modal open={!!activeTool} onClose={() => setActive(null)} variant="page" title={activeTool?.name} maxWidth="2xl">
         <div className="px-page-x py-3 pb-8">
-          <Suspense fallback={<div className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
+          <Suspense fallback={<div aria-busy="true" className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
             {active ? renderStoreTool(active) : null}
           </Suspense>
         </div>

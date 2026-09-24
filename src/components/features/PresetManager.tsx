@@ -202,7 +202,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
           </div>
         </div>
       )}
-      {presets === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+      {presets === null ? <p aria-busy="true" className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
         : presets.length === 0 ? <p className="rounded-aura border card-aura py-6 text-center text-2xs text-ink-muted">저장된 프리셋이 없습니다.</p>
           : <ul className="space-y-1.5">{presets.map((p) => (
             <li key={p.id} className="rounded-aura border card-aura px-3 py-2.5">

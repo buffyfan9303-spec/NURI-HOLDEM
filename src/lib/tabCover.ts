@@ -96,8 +96,10 @@ const inViewport = (el: Element): boolean => {
  * ③ root 안 **화면에 걸친** 스켈레톤·aria-busy 가 있으면 아직. `invisible` 예약(visibility hidden)도 센다 —
  *    그건 곧 스켈레톤이나 실제 내용으로 바뀔 자리다. 화면 밖(아래쪽) 것은 안 본다(보이지 않는 로딩을 기다리지 않는다).
  * root 가 없는 목적지(event 처럼 판 없이 여는 탭)는 ①만 본다.
+ * whole=true 면 ③을 화면 밖까지 본다 — 덮개가 아니라 **판 전체 높이**를 지키는 쪽(VenueManageTab 높이 예약)이 쓴다.
+ *   화면 밖 목록이 늦게 붙어도 판 높이는 바뀌기 때문이다(예약을 먼저 풀면 줄었다 다시 자라는 오르내림).
  */
-export function isSettled(root: Element | null): boolean {
+export function isSettled(root: Element | null, whole = false): boolean {
   for (const el of document.querySelectorAll('.pane-reserve[aria-busy="true"]')) {
     if (el.getClientRects().length > 0) return false;
   }
@@ -106,7 +108,7 @@ export function isSettled(root: Element | null): boolean {
   if (h.style?.display === 'none' || h.offsetHeight === 0) return false;
   for (const el of root.querySelectorAll(BUSY_SEL)) {
     if (el.tagName === 'BUTTON' || el.tagName === 'SPAN') continue;
-    if (el.getClientRects().length > 0 && inViewport(el)) return false;
+    if (el.getClientRects().length > 0 && (whole || inViewport(el))) return false;
   }
   return true;
 }
@@ -116,7 +118,33 @@ export function tabPaneReady(tab: string): boolean {
   return isSettled(document.querySelector(`.tab-pane[data-tab="${tab}"]`));
 }
 
+/**
+ * 판(root)이 **준비될 때까지** rAF 로 기다렸다가 onReady 를 한 번 부른다 — 덮개 걷기와 판 높이 예약 해제
+ * (VenueManageTab S6)가 같은 판정·같은 상한을 쓴다(MOTION-UNIFY: "한 곳을 고치면 전부 따라온다").
+ * 준비 = isSettled(root) 이고 root 높이가 **두 프레임 연속** 같다. 상한 TAB_COVER_WAIT_MAX_MS 를 넘으면 그래도 부른다.
+ * onFrame 은 매 프레임 판정 전에 불린다(덮개 자리 맞춤). whole 은 isSettled 와 같다. 돌려준 함수로 취소한다(연타·언마운트).
+ */
+export function waitSettled(root: () => Element | null, onReady: () => void, onFrame?: () => void, whole = false): () => void {
+  const t0 = performance.now();
+  let lastH = -1;
+  let alive = true;
+  const tick = () => {
+    if (!alive) return;
+    onFrame?.();
+    const r = root();
+    const h = r ? (r as HTMLElement).offsetHeight : 0;
+    const ready = isSettled(r, whole) && h === lastH;
+    lastH = h;
+    if (!ready && performance.now() - t0 < TAB_COVER_WAIT_MAX_MS) { requestAnimationFrame(tick); return; }
+    alive = false;
+    onReady();
+  };
+  requestAnimationFrame(tick);
+  return () => { alive = false; }; // 다음 프레임에 tick 이 alive 를 보고 멈춘다
+}
+
 const runs = new WeakMap<HTMLElement, number>();
+const waits = new WeakMap<HTMLElement, () => void>();
 type Rect = { top: number; left: number; width: number; bottom: number };
 /**
  * 덮개 한 장을 opacity 1 로 깔고, 목적지(root)가 준비된 프레임에 280ms 동안 걷는다. 모든 전환이 이 함수 하나를 탄다.
@@ -126,6 +154,7 @@ type Rect = { top: number; left: number; width: number; bottom: number };
 function lift(el: HTMLElement, root: () => Element | null, rect?: () => Rect | null, defer = false): void {
   const my = (runs.get(el) ?? 0) + 1;
   runs.set(el, my);
+  waits.get(el)?.(); // 연타 — 이전 대기는 버린다
   for (const a of el.getAnimations()) a.cancel();
   const place = () => {
     const r = rect?.();
@@ -136,23 +165,17 @@ function lift(el: HTMLElement, root: () => Element | null, rect?: () => Rect | n
   // defer: 호출 시점엔 아직 커밋 전 DOM 이다(하위 탭 — 이벤트 안) → 자리는 첫 rAF(커밋 뒤·첫 페인트 전)에 잡고 그때 보인다.
   if (!defer) { place(); el.style.display = 'block'; } else el.style.display = 'none';
   el.style.opacity = '1';
-  const t0 = performance.now();
-  let lastH = -1;
-  const tick = () => {
+  waits.set(el, waitSettled(root, () => {
     if (runs.get(el) !== my) return;
-    place();
-    el.style.display = 'block';
-    const r = root();
-    const h = r ? (r as HTMLElement).offsetHeight : 0;
-    const ready = isSettled(r) && h === lastH;
-    lastH = h;
-    if (!ready && performance.now() - t0 < TAB_COVER_WAIT_MAX_MS) { requestAnimationFrame(tick); return; }
     const anim = el.animate(tabCoverKeyframes(), { duration: TAB_COVER_MS, easing: 'linear' });
     // 끝나면 쉬는 상태로 — 메인 덮개는 클래스(hidden opacity-0)로 돌아가고, 하위 탭 덮개(defer)는 클래스가 없어 인라인으로 숨긴다.
     //   ⚠ 하위 탭 덮개에서 display 를 '' 로 지우면 div 기본값(block)·opacity 1 로 **화면에 눌러앉는다**(2026-09-24 첫 측정에서 밟았다).
     anim.onfinish = () => { if (runs.get(el) === my) { el.style.display = defer ? 'none' : ''; el.style.opacity = defer ? '0' : ''; } };
-  };
-  requestAnimationFrame(tick);
+  }, () => {
+    if (runs.get(el) !== my) return;
+    place();
+    el.style.display = 'block';
+  }));
 }
 
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;

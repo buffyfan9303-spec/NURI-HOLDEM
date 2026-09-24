@@ -257,7 +257,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     await startClock(cfg2, new Date().toLocaleDateString('en-CA'), g);
   };
 
-  if (loading) return <p className="py-10 text-center text-sm text-ink-muted">클락 불러오는 중…</p>;
+  if (loading) return <p aria-busy="true" className="py-10 text-center text-sm text-ink-muted">클락 불러오는 중…</p>;
 
   // 불러오기 실패 — 설정폼(=새 클락 시작)으로 절대 넘기지 않는다.
   if (loadError) {

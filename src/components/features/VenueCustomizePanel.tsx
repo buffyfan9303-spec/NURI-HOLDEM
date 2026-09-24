@@ -83,11 +83,14 @@ export default function VenueCustomizePanel({ venueId, onOpenVenue }: {
     finally { setSaving(false); }
   };
 
-  if (!loaded) return <p className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</p>;
-
+  // 🔴 2026-09-24 MYSTORE-PC-TAB-JANK — 불러오는 동안에도 **같은 뼈대**를 세운다(순서는 기본값, 조작은 잠금).
+  //   종전엔 '불러오는 중…' 한 줄만 그리고, 그 한 줄은 aria-busy 도 없어 하위 탭 덮개(tabCover isSettled)가
+  //   '다 그려졌다'고 보고 먼저 걷혔다 → 그 뒤 판이 540→2954 로 자라고(아래 두 판이 화면 밖으로 밀림),
+  //   이 뼈대가 선 뒤에야 마운트되던 「위치 · 연락처」가 한 번 더 339px 를 밀었다(정착 뒤 CLS 0.0205, CPU4× 실측).
+  //   뼈대를 먼저 세우면 자식 판들이 첫 프레임부터 마운트돼 조회가 동시에 출발하고(폭포 제거), 높이도 처음부터 선다.
   return (
     <div className="space-y-3">
-      <section className="rounded-aura border card-aura p-3 space-y-2">
+      <section className="rounded-aura border card-aura p-3 space-y-2" aria-busy={!loaded || undefined}>
         <h3 className="text-sm font-bold text-ink-primary">매장 페이지 탭 순서</h3>
         <p className="text-2xs text-ink-muted">가장 위가 가장 왼쪽에 노출됩니다.</p>
         <ul className="space-y-1">
@@ -97,9 +100,9 @@ export default function VenueCustomizePanel({ venueId, onOpenVenue }: {
               <li key={k} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5">
                 <span className="w-5 text-center text-2xs font-bold text-accent-300 tabular-nums">{i + 1}</span>
                 <span className="flex-1 text-sm font-semibold text-ink-primary">{t.label}</span>
-                <button type="button" aria-label="위로" disabled={i === 0} onClick={() => move(k, -1)}
+                <button type="button" aria-label="위로" disabled={!loaded || i === 0} onClick={() => move(k, -1)}
                   className="h-7 w-7 rounded-input border border-border-default text-ink-secondary disabled:opacity-30 hover:border-accent-400/50">↑</button>
-                <button type="button" aria-label="아래로" disabled={i === order.length - 1} onClick={() => move(k, 1)}
+                <button type="button" aria-label="아래로" disabled={!loaded || i === order.length - 1} onClick={() => move(k, 1)}
                   className="h-7 w-7 rounded-input border border-border-default text-ink-secondary disabled:opacity-30 hover:border-accent-400/50">↓</button>
               </li>
             );
@@ -121,7 +124,7 @@ export default function VenueCustomizePanel({ venueId, onOpenVenue }: {
 
       <p className="text-2xs text-ink-muted">순위 탭에 보일 <span className="font-semibold text-accent-300">순위 보드 종류·1~3등 칭호·기준 점수·포인트 지급</span>은 「매장 순위」 탭에서 설정합니다.</p>
 
-      <button type="button" onClick={save} disabled={saving} className="btn-primary w-full text-sm py-2.5 disabled:opacity-50">
+      <button type="button" onClick={save} disabled={!loaded || saving} className="btn-primary w-full text-sm py-2.5 disabled:opacity-50">
         {saving ? '저장 중…' : '탭 순서 저장'}
       </button>
     </div>
@@ -178,15 +181,14 @@ function VenueContactSection({ venueId }: { venueId: string }) {
     finally { setSaving(false); }
   };
 
+  // 불러오는 동안에도 입력 뼈대를 세우고 잠가 둔다(위 VenueCustomizePanel 주석 — 한 줄 자리표시가 339px 로 자라며 아래를 밀었다).
   return (
-    <section className="rounded-aura border card-aura p-3 space-y-3">
+    <section className="rounded-aura border card-aura p-3 space-y-3" aria-busy={!loaded || undefined}>
       <div className="space-y-1">
         <h3 className="text-sm font-bold text-ink-primary">위치 · 연락처 · 영업시간 · 카카오톡</h3>
         <p className="text-2xs text-ink-muted">연락처는 <span className="font-semibold text-accent-300">1개 필수 · 최대 5개</span>입니다.</p>
       </div>
-      {!loaded ? (
-        <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
-      ) : (<>
+      <fieldset disabled={!loaded} className="contents">
         <label className="block space-y-1">
           <span className="block text-2xs font-semibold text-ink-secondary">주소</span>
           <input value={addr} onChange={(e) => setAddr(e.target.value)} maxLength={120}
@@ -215,7 +217,7 @@ function VenueContactSection({ venueId }: { venueId: string }) {
           className="btn-primary w-full py-2.5 text-sm disabled:opacity-50">
           {saving ? '저장 중…' : '위치 · 연락처 · 영업시간 · 카카오톡 저장'}
         </button>
-      </>)}
+      </fieldset>
     </section>
   );
 }

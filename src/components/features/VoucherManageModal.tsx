@@ -840,7 +840,7 @@ ${cards}
               만료분을 포함해 '잔여' 가 지갑·보유자 목록보다 컸다. 보유 회원 수만은 유형별로 더할 수 없어(한 사람이 여러 유형) 옛 값을 쓴다.
               유형별 조회가 실패하면(권한 42501 포함) 타일도 그리지 않는다 — 거짓 '0' 대신 오류 카드. */}
           {reasonErr != null ? <LoadErrorCard what="유형별 통계" error={reasonErr} onRetry={reload} compact />
-            : !reasonAll ? <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
+            : !reasonAll ? <p aria-busy="true" className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
             : (() => {
               const all = voucherReasonTable(reasonAll).total;
               const net = all.issued - all.revoked; // 발급(회수 제외) = 보유+사용+만료(+기타)
@@ -892,7 +892,7 @@ ${cards}
                     const rows = statRange === 'all' ? reasonAll : (rangeRows?.key === `${venueId}|${statRange}` ? rangeRows.rows : null);
                     if (!rows) return rangeErr != null
                       ? <div className="mt-2"><LoadErrorCard what="유형별 통계" error={rangeErr} onRetry={reload} compact /></div>
-                      : <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>;
+                      : <p aria-busy="true" className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>;
                     const t = voucherReasonTable(rows);
                     const cell = (hideMobile: boolean) => ['py-1.5 text-right', hideMobile ? 'hidden md:table-cell' : ''].join(' ');
                     return (<>
@@ -945,7 +945,7 @@ ${cards}
         {holders.length > 0 && (
           <input value={holderQuery} onChange={(e) => setHolderQuery(e.target.value)} placeholder="보유자 검색 (실명·닉네임)" className="input mb-1.5 w-full text-sm" />
         )}
-        {loading ? <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
+        {loading ? <p aria-busy="true" className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
           : listErr != null && list.length === 0 ? <LoadErrorCard error={listErr} what="보유자 현황" onRetry={reload} compact />
           : holders.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">배포된 이용권이 없습니다.</p>
           : shownHolders.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">검색 결과가 없습니다.</p>

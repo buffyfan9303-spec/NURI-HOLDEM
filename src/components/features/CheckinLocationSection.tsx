@@ -111,7 +111,7 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
       {loadErr ? (
         <p role="alert" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">출석 위치를 불러오지 못했어요. 잠시 후 다시 열어 주세요.</p>
       ) : spot == null ? (
-        <p className="py-2 text-2xs text-ink-muted">불러오는 중…</p>
+        <p aria-busy="true" className="py-2 text-2xs text-ink-muted">불러오는 중…</p>
       ) : has ? (
         <p data-testid="checkin-location-state" className="text-2xs text-ink-secondary">
           <span className="font-semibold text-emerald-400">등록됨</span>

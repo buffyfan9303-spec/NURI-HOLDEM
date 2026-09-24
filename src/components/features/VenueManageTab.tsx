@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState, type ReactNode, useRef, memo, useCallback, useMemo, startTransition, Suspense } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { goSubTab } from '../../lib/subTabTransition';
+import { waitSettled } from '../../lib/tabCover';
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 import Icon, { type IconName } from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
@@ -321,9 +322,6 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // (min-height 가 걸린 노드는 콘텐츠가 그보다 짧은 동안 scrollHeight 도 항상 예약값을 돌려준다).
   const secPanelRef = useRef<HTMLDivElement>(null);
   const secInnerRef = useRef<HTMLDivElement>(null);
-  /** 이번 판 전환이 **첫 방문**인가 — 렌더에서 visited 에 새로 넣을 때 표시하고, 판이 바뀐 커밋(P5 layout effect)에서 옮겨 담는다. */
-  const freshPane = useRef<string | null>(null);
-  const switchFresh = useRef(false);
   const [lockPx, setLockPx] = useState<number | null>(null);
   /** 전환 직전에 부른다 — 지금 판 높이를 그대로 다음 판의 바닥으로 예약. */
   const lockPane = useCallback(() => {
@@ -351,31 +349,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       }, 160);
     });
     ro.observe(inner);
-    // 🔴 MYSTORE-PC-TAB-JANK(2026-09-24) — 종전 1.2s 안전망이 '늦은 덜컥'이었다(root-cause-debugger 실측):
-    //   짧은 판으로 가면 1.2s 뒤에 푸터가 올라오고(CLS 0.06~0.16), 스크롤 1200 이면 1.25s 뒤 scrollY 가
-    //   1200→99 로 깎였다(CLS 0.215). 판은 이미 바뀌었는데 1초 넘게 지나 화면이 한 번 더 움직인 것이다.
-    //   그래서 **정착을 직접 본다**: 판 안에 로딩 표시(skeleton·aria-busy)가 없고 안쪽 높이가 2프레임 연속
-    //   같으면 정착 — 재방문 판은 이미 다 그려져 있어 판 전환과 같은 순간(1~2프레임)에 풀린다.
-    //   재방문인데 판이 로딩 표시를 띄우면(조용한 재조회가 아닌 판) 그동안 기다리되 500ms 에서 끊는다(사업자 푸터 상시
-    //   노출이라 예약을 무한정 쥐고 있을 수 없다 — 판에 뷰포트 min-height 를 거는 방식은 그래서 쓰지 않았다).
-    // ⚠ 첫 방문은 종전 규칙 그대로(따라잡기 디바운스 + 1.2s 안전망). 첫 방문 판은 데이터 파도가 로딩 표시 없이도 온다 —
-    //   매장 설정은 533px 에서 몇 프레임 멈췄다가 2954px 로 자란다(e2e/mystore-transition-cls A, 4325 실측). 여기서 '정착'으로
-    //   풀면 판이 줄었다 다시 자라는 오르내림이 된다. 늦은 덜컥의 실측 사례는 전부 **재방문**이었다(판 전부 유지 이후 재방문은 다 그려져 있다).
-    if (switchFresh.current) {
-      const t = setTimeout(release, 1200);
-      return () => { ro.disconnect(); clearTimeout(t); if (debounce) clearTimeout(debounce); };
-    }
-    const t0 = performance.now();
-    let last = inner.getBoundingClientRect().height, still = 0, raf = 0;
-    const busy = () => !!inner.querySelector('[data-pane]:not([style*="none"]) :is(.skeleton,[aria-busy="true"])');
-    const tick = () => {
-      const h = inner.getBoundingClientRect().height;
-      still = h === last ? still + 1 : 0; last = h;
-      if ((still >= 2 && !busy()) || performance.now() - t0 >= 500) { release(); return; }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => { ro.disconnect(); cancelAnimationFrame(raf); if (debounce) clearTimeout(debounce); };
+    // 🔴 MOTION-UNIFY(2026-09-24 2차) — 예약 해제는 **하위 탭 덮개와 같은 판정**(tabCover.ts waitSettled)을 탄다.
+    //   판 안에 로딩 표시(skeleton·aria-busy)가 없고 안쪽 높이가 두 프레임 연속 같으면 정착, 상한은 덮개와 같다.
+    //   종전엔 여기만의 busy()·재방문 500ms·첫 방문 1.2s 안전망이 따로 있어 덮개가 걷힌 뒤 1.2s 에 한 번 더 움직였다
+    //   (첫 방문 늦은 덜컥). 첫 방문 오르내림(매장 설정 533→2954)은 판이 로딩 표시 없이 불러오던 탓이라
+    //   그 판(VenueCustomizePanel)이 aria-busy 로 알리게 고쳤다 — 판정은 하나, 알리는 쪽이 제 몫을 한다.
+    //   화면 밖 로딩까지 본다(whole) — 덮개는 보이는 곳만 지키지만 예약은 판 전체 높이를 지킨다.
+    const stop = waitSettled(() => secInnerRef.current, release, undefined, true);
+    return () => { ro.disconnect(); stop(); if (debounce) clearTimeout(debounce); };
   }, [lockPx]);
   const goStep = useCallback((s: GameStep, opts?: { keepLedgerSeed?: boolean }) => {
     if (s === 'ledger' && !opts?.keepLedgerSeed) setLedgerSeed(null);
@@ -531,7 +512,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //        만들었다. 판 종류는 PaneId 로 유한(≤20)하므로 상한 없이 전부 유지한다. 메모리/구독 누적은
   //        판마다 active 로 끊는다(클락·장부·통계·포스터·이용권·출근·인건비 — 숨으면 채널을 놓는다).
   const pane: PaneId | null = section === 'game' ? gameStep : section === 'settings' ? settingsTab : section;
-  if (pane && !visited.includes(pane)) { freshPane.current = pane; setVisited((v) => (v.includes(pane) ? v : [...v, pane])); }
+  if (pane && !visited.includes(pane)) { setVisited((v) => (v.includes(pane) ? v : [...v, pane])); }
   // P5 — PC 에서 판이 바뀐 커밋에, 판 상단이 sticky 머리(사이드바 top)보다 위로 올라가 있으면 판 머리로 끌어내린다.
   //   긴 판 아래쪽을 보다가 짧은 판으로 가면 새 판의 위쪽이 화면 밖에 있거나, 예약이 풀리며 브라우저가
   //   scrollY 를 깎아(클램프) 화면이 한 번 더 튀었다. 페인트 전에(useLayoutEffect) 옮겨 한 번에 선다.
@@ -539,7 +520,6 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const paneSeen = useRef<PaneId | null>(null);
   useLayoutEffect(() => {
     const prev = paneSeen.current; paneSeen.current = pane;
-    if (prev !== pane) { switchFresh.current = freshPane.current === pane; freshPane.current = null; } // 예약 해제 규칙이 읽는다(위 lockPx effect)
     if (!prev || !pane || prev === pane || !tabActive) return;
     if (!window.matchMedia('(min-width: 1024px)').matches) return;
     const el = secPanelRef.current;
@@ -2143,7 +2123,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       )}
 
       {loading ? (
-        <p className="text-center py-8 text-2xs text-ink-muted">불러오는 중…</p>
+        <p aria-busy="true" className="text-center py-8 text-2xs text-ink-muted">불러오는 중…</p>
       ) : loadErr ? null : (
         <ul className="space-y-1">
           {rows.map((row, i) => (
@@ -2684,7 +2664,7 @@ function StaffManager({ venueId }: { venueId: string }) {
       </form>
 
       {loading ? (
-        <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
+        <p aria-busy="true" className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
       ) : listError != null ? (
         <LoadErrorCard what="구성원 목록" error={listError} onRetry={reload} />
       ) : (

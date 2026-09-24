@@ -179,7 +179,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
   if (!loaded) {
     // 스켈레톤 높이 = 실제 카드와 동일(로드 후 아래 내용이 밀리지 않게 — CLS 0)
     return <section className="rounded-aura border card-aura p-3" style={{ minHeight: 300 }}>
-      <p className="py-10 text-center text-2xs text-ink-muted">클락 화면 설정 불러오는 중…</p>
+      <p aria-busy="true" className="py-10 text-center text-2xs text-ink-muted">클락 화면 설정 불러오는 중…</p>
     </section>;
   }
 

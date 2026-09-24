@@ -284,7 +284,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
           </div>
         )}
       </div>
-      {loading && <p className="text-center text-2xs text-ink-muted">불러오는 중…</p>}
+      {loading && <p aria-busy="true" className="text-center text-2xs text-ink-muted">불러오는 중…</p>}
     </section>
   );
 }
