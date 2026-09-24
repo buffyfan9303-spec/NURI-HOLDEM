@@ -25,7 +25,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 import { stripVenuePrefix, voucherGroupLabel, voucherLineLabel } from '../../lib/voucherLabel'; // "어느 매장이 준 것인가" 표기 규칙(오너 지시 #19)
-import type { Html5Qrcode } from 'html5-qrcode/es2015/html5-qrcode'; // 타입만(런타임 번들 제외) — 실제 라이브러리는 스캐너 열 때 동적 로드
+import { startQrCamera } from '../../lib/qrCamera'; // 공용 카메라 루프 — BarcodeDetector, 없으면 jsQR(동적 로드)
 import {
   listMyVouchers, subscribeMyVouchers,
   redeemMyVoucherByQr, redeemMyVoucherByPhone,
@@ -369,7 +369,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const vid = stack.ids[0];
-  // 스캔 세션당 결과 처리는 1회 — QrScanner 자체에도 프레임 dedupe 가 있지만(html5-qrcode 콜백),
+  // 스캔 세션당 결과 처리는 1회 — QrScanner 자체에도 프레임 dedupe 가 있지만(done 플래그),
   // '확정' 은 사용자 조작(더블탭)까지 막아야 해서 이 화면에서 한 겹 더 둔다.
   const qrDoneRef = useRef(false);
   const confirmDoneRef = useRef(false);
@@ -508,22 +508,28 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
 }
 
 function QrScanner({ onResult, onError }: { onResult: (text: string) => void; onError: (msg: string) => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
   useEffect(() => {
-    let scanner: Html5Qrcode | null = null;
+    const ac = new AbortController();
     let done = false;
-    const stop = () => { const s = scanner; scanner = null; if (s) { s.stop().then(() => s.clear()).catch(() => {}); } };
-    (async () => {
-      try {
-        // 같은 스캐너의 ES2015 진입점: 미사용 Scanner UI와 ES5 변환 코드를 싣지 않는다.
-        const { Html5Qrcode: QrLib } = await import('html5-qrcode/es2015/html5-qrcode'); // 동적 로드 — 스캐너를 열 때만 다운로드(초기 번들 제외)
-        scanner = new QrLib('nuri-qr-reader');
-        await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 220 },
-          (text) => { if (!done) { done = true; const r = text; stop(); onResult(r); } },
-          () => {});
-      } catch (e) { onError(e instanceof Error ? e.message : '카메라를 열 수 없습니다. 권한을 확인하세요.'); }
-    })();
-    return () => { done = true; stop(); };
+    const v = videoRef.current;
+    if (!v) return;
+    startQrCamera(v, (text) => {
+      if (done) return true;
+      done = true;
+      ac.abort(); // 첫 결과에서 카메라를 먼저 끄고 넘긴다(예전 html5-qrcode stop() 과 같은 순서)
+      onResult(text);
+      return true;
+    }, ac.signal)
+      // 문구는 고정: 예전 html5-qrcode 는 문자열로 reject 해 늘 이 한국어 문구가 떴다.
+      // getUserMedia 의 DOMException.message(영문 'Permission denied')를 그대로 띄우지 않는다.
+      .catch(() => { if (!ac.signal.aborted) onError('카메라를 열 수 없습니다. 권한을 확인하세요.'); });
+    return () => { done = true; ac.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return <div id="nuri-qr-reader" className="mx-auto w-full max-w-[280px] overflow-hidden rounded-input bg-black" style={{ minHeight: 220 }} />;
+  return (
+    <div className="mx-auto w-full max-w-[280px] overflow-hidden rounded-input bg-black" style={{ minHeight: 220 }}>
+      <video ref={videoRef} autoPlay playsInline muted className="block aspect-square w-full object-cover" />
+    </div>
+  );
 }

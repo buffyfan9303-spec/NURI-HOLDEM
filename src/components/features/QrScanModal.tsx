@@ -9,16 +9,9 @@ import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import { parseQr, ACTIONABLE, elsewhereMsg, type QrHit } from '../../lib/qrPayload';
 
-// BarcodeDetector 는 아직 lib.dom 타입에 없다(크롬·안드로이드 웹뷰 지원, 사파리 구버전 미지원)
-interface DetectedBarcode { rawValue: string }
-interface BarcodeDetectorLike { detect(src: HTMLVideoElement): Promise<DetectedBarcode[]> }
-type BarcodeDetectorCtor = new (opts?: { formats?: string[] }) => BarcodeDetectorLike;
+import { startQrCamera } from '../../lib/qrCamera';
 
 type Phase = 'starting' | 'scanning' | 'unsupported' | 'denied';
-/** 어느 리더로 읽는가. native=BarcodeDetector(크롬 계열) / lib=html5-qrcode(사파리·iOS 폴백) */
-type Engine = 'native' | 'lib';
-/** html5-qrcode 가 <video> 를 심을 자리. 이용권 스캐너(nuri-qr-reader)와 겹치면 안 된다 — 동시에 열릴 수 있다. */
-const LIB_HOST = 'nuri-qr-scan';
 
 interface QrScanModalProps {
   open: boolean;
@@ -39,7 +32,6 @@ interface QrScanModalProps {
 export default function QrScanModal({ open, onClose, venueId, venueName, onMatch, accept = 'checkin' }: QrScanModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [phase, setPhase] = useState<Phase>('starting');
-  const [engine, setEngine] = useState<Engine>('native');
   const [warn, setWarn] = useState<string | null>(null);
 
   // 부모가 인라인 콜백을 넘겨도(참조가 매 렌더 바뀌어도) 카메라를 재기동하지 않도록 ref 로 고정
@@ -54,13 +46,9 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
     // 미지원(사파리 구버전 등) → 기기 카메라 앱 안내 폴백. 카메라 앱으로 스캔하면
     // ?checkin= 딥링크가 열리며 App.tsx 의 기존 자동 체크인이 처리한다.
     if (!navigator.mediaDevices?.getUserMedia) { setPhase('unsupported'); return; }
-    const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
-    let detector: BarcodeDetectorLike | null = null;
-    if (Detector) { try { detector = new Detector({ formats: ['qr_code'] }); } catch { detector = null; } }
-
-    let alive = true;
+    const ac = new AbortController();
     let matched = false; // 첫 매치 이후 중복 onMatch(→중복 체크인 RPC) 방지
-    let stream: MediaStream | null = null;
+
 
     // 스캔 원문 → 실행/안내. 두 엔진이 **같은 판정**을 쓰도록 한 곳에 둔다.
     const handleRaw = (raw: string): boolean => {
@@ -77,77 +65,27 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
 
     // ⚠ BarcodeDetector 는 **크롬 계열 전용**이다. 사파리(=iOS 의 모든 브라우저, 카톡·네이버 인앱 포함)에는
     //   없어서, 예전에는 아이폰 손님이 앱 안에서 QR 을 아예 못 찍고 '지원하지 않아요' 카드만 봤다
-    //   (2026-09-06 QR 감사). 이용권 스캐너(VoucherWallet)는 이미 html5-qrcode 를 동적 로드해 iOS 에서도
-    //   되고 있었다 — 같은 라이브러리가 이미 의존성에 있으므로 여기서도 같은 폴백을 태운다.
-    if (!detector) {
-      setEngine('lib');
-      let lib: { stop: () => Promise<void>; clear: () => void } | null = null;
-      (async () => {
-        try {
-          // 같은 스캐너의 ES2015 진입점: 미사용 Scanner UI와 ES5 변환 코드를 싣지 않는다.
-          const { Html5Qrcode } = await import('html5-qrcode/es2015/html5-qrcode');
-          if (!alive) return;
-          // Modal 이 한 프레임 뒤에 본문을 붙이므로 host 가 생길 때까지 기다린다.
-          for (let i = 0; i < 30 && alive && !document.getElementById(LIB_HOST); i++) {
-            await new Promise((r) => requestAnimationFrame(r));
-          }
-          if (!alive || !document.getElementById(LIB_HOST)) return;
-          const inst = new Html5Qrcode(LIB_HOST);
-          lib = inst;
-          await inst.start({ facingMode: 'environment' }, { fps: 10, qrbox: 220 },
-            (text) => { if (!matched && alive && handleRaw(text)) { matched = true; } },
-            () => { /* 프레임마다 오는 '못 찾음' — 무시 */ });
-          if (alive) setPhase('scanning');
-        } catch { if (alive) setPhase('denied'); }
-      })();
-      return () => {
-        alive = false;
-        const l = lib; lib = null;
-        if (l) { l.stop().then(() => l.clear()).catch(() => {}); }
-      };
-    }
-
-    let attachedVideo: HTMLVideoElement | null = null; // cleanup 에서 ref.current 대신 사용(스냅샷)
-    let timer = 0;
-
-    // Modal 이 열림 애니메이션 상태(render)를 한 프레임 늦게 세우므로, 카메라가 아주 빨리
-    // 열리면 <video> 가 아직 없을 수 있다 — 마운트될 때까지 rAF 로 재시도해 확실히 붙인다.
-    const attach = (s: MediaStream) => {
-      if (!alive) return;
+    //   (2026-09-06 QR 감사). startQrCamera 가 BarcodeDetector 가 없으면 jsQR 로 같은 <video> 프레임을 읽는다
+    //   (2026-09-24 — 93KB 짜리 html5-qrcode 폴백을 대체). 두 엔진이 같은 handleRaw 판정을 쓴다.
+    (async () => {
+      // Modal 이 열림 애니메이션 상태(render)를 한 프레임 늦게 세우므로 <video> 가 생길 때까지 기다린다.
+      for (let i = 0; i < 60 && !ac.signal.aborted && !videoRef.current; i++) {
+        await new Promise((r) => requestAnimationFrame(r));
+      }
       const v = videoRef.current;
-      if (!v) { requestAnimationFrame(() => attach(s)); return; }
-      attachedVideo = v;
-      v.srcObject = s;
-      v.play().catch(() => { /* 자동재생 거부 시 프레임 준비만 늦어짐 */ });
-    };
+      if (ac.signal.aborted || !v) return;
+      try {
+        await startQrCamera(v, (raw) => {
+          if (matched) return true;
+          // venueId 를 안 준 호출부는 아무 매장 QR 이나 받는다(어느 매장인지는 인자로 넘긴다)
+          if (handleRaw(raw)) { matched = true; return true; }
+          return false;
+        }, ac.signal);
+        if (!ac.signal.aborted) setPhase('scanning');
+      } catch { if (!ac.signal.aborted) setPhase('denied'); }
+    })();
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
-      .then((s) => {
-        if (!alive) { s.getTracks().forEach((t) => t.stop()); return; }
-        stream = s;
-        attach(s);
-        setPhase('scanning');
-        // rAF 매 프레임 detect 는 과잉(디코드 비용) — 350ms 폴링이면 손 흔들림 포함 체감 즉시다
-        timer = window.setInterval(async () => {
-          const video = videoRef.current;
-          if (!alive || matched || !video || video.readyState < 2) return;
-          try {
-            const codes = await detector!.detect(video);
-            const raw = codes[0]?.rawValue;
-            if (!raw || !alive || matched) return;
-            // venueId 를 안 준 호출부는 아무 매장 QR 이나 받는다(어느 매장인지는 인자로 넘긴다)
-            if (handleRaw(raw)) { matched = true; return; }
-          } catch { /* 프레임 미준비 등 일시 실패 — 다음 틱에 재시도 */ }
-        }, 350);
-      })
-      .catch(() => { if (alive) setPhase('denied'); });
-
-    return () => {
-      alive = false;
-      if (timer) window.clearInterval(timer);
-      stream?.getTracks().forEach((t) => t.stop());
-      if (attachedVideo) attachedVideo.srcObject = null;
-    };
+    return () => ac.abort(); // 카메라 트랙 stop·루프 해제는 startQrCamera 가 abort 에 묶어 둔다
   }, [open, venueId, accept]);
 
   // ⚠ 포털 필수(2026-08-28 스윕): 이 모달은 VenuePage 오버레이(fixed z-40) **안에서** 렌더된다.
@@ -173,9 +111,7 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
           <>
             {/* aspect-square 로 공간 예약 — 카메라가 늦게 떠도 레이아웃이 밀리지 않는다(CLS 원칙) */}
             <div className="relative aspect-square overflow-hidden rounded-card border border-border-subtle bg-black">
-              {engine === 'lib'
-                ? <div id={LIB_HOST} className="absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover" />
-                : <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" />}
+              <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" />
               <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <div className="h-3/5 w-3/5 rounded-2xl border-2 border-white/70" />
               </div>
