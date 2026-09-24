@@ -55,7 +55,17 @@ describe('buildRegInfoMap · scheduleId → 레지 실측 상태', () => {
     const map = buildRegInfoMap([clock()], [sched()], 0);
     // 🔴 2026-09-22 — RegInfo 에 필드 현황이 더해졌다. 이 픽스처 클락은 엔트리 0 이라 `hasField: false` 다
     //   (시작 전 `0 / 0` 을 카드에 그리지 않는다는 계약이 여기서도 확인된다).
-    expect(map.get('s1')).toEqual({ msLeft: 55 * 60_000, running: false, gameSeq: 1, alive: 0, entries: 0, hasField: false });
+    // 🔴 2026-09-24 — 현재 레벨(levelNo·onBreak)이 더해졌다. index 0 = L1, 브레이크 아님.
+    expect(map.get('s1')).toEqual({ msLeft: 55 * 60_000, running: false, gameSeq: 1, alive: 0, entries: 0, hasField: false, levelNo: 1, onBreak: false });
+  });
+
+  it('현재 레벨 — 브레이크는 세지 않고, 브레이크 칸에서는 직전 레벨 번호 + onBreak', () => {
+    const at = (i: number) => buildRegInfoMap([clock({ currentIndex: i })], [sched()], 0).get('s1');
+    expect(at(1)).toMatchObject({ levelNo: 2, onBreak: false });
+    expect(at(2)).toMatchObject({ levelNo: 2, onBreak: true });
+    expect(at(3)).toMatchObject({ levelNo: 3, onBreak: false });
+    expect(buildRegInfoMap([clock({ config: { title: '데일리 6만', levels: [], regCloseLevel: 0 } })], [sched()], 0).get('s1'))
+      .toMatchObject({ levelNo: 0, onBreak: false });
   });
 
   it('클락과 매칭되지 않는 대회는 맵에 없다 (소비처가 추정으로 폴백)', () => {
@@ -142,7 +152,7 @@ describe('🔴 F3 — 일시정지 클락의 msLeft 는 벽시계로 깎이지 �
     const t0 = Date.UTC(2026, 7, 26, 10, 0, 0);
     const a = buildRegInfoMap([paused], [sched()], t0).get('s1');
     const b = buildRegInfoMap([paused], [sched()], t0 + 3 * 3600_000).get('s1');
-    expect(a, '일시정지 클락이 맵에서 빠졌다').toEqual({ msLeft: 55 * 60_000, running: false, gameSeq: 1, alive: 0, entries: 0, hasField: false });
+    expect(a, '일시정지 클락이 맵에서 빠졌다').toEqual({ msLeft: 55 * 60_000, running: false, gameSeq: 1, alive: 0, entries: 0, hasField: false, levelNo: 1, onBreak: false });
     expect(b, '정지된 대회를 벽시계로 깎았다 — 절대 마감시각 방식으로 되돌아갔다는 뜻이다').toEqual(a);
   });
 

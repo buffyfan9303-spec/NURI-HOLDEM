@@ -75,6 +75,12 @@ export interface RegInfo {
   entries: number;
   /** 필드 숫자를 보여 줄 만한가(시작 전 `0 / 0` 방지). */
   hasField: boolean;
+  /** 🔴 2026-09-24 HOME-LAYOUT-STRETCH(오너: 일정 카드 우측 열 "시간·게임 종류·**현재 레벨**") — 지금 진행 중인 레벨 번호(1-based).
+   *  이미 받아 둔 클락 행(config.levels + effectiveLevel)에서 센다 — 새 조회 0. 레벨 표가 없으면 0.
+   *  세는 법은 api/clock 의 `currentLevelNo` 와 같다(그 모듈은 장부 청크를 물어 여기서 import 하지 않는다 — 머리말). */
+  levelNo?: number;
+  /** 지금 칸이 브레이크인가 — 그때 levelNo 는 **직전 레벨**이다. */
+  onBreak?: boolean;
 }
 
 /** 확신도 순위 — 높을수록 강하다. */
@@ -105,7 +111,13 @@ export function buildRegInfoMap(clocks: ClockState[], schedules: Schedule[], now
     if (prev && (rank < prev.rank || (rank === prev.rank && g.gameSeq >= prev.gameSeq))) continue;
     const eff = effectiveLevel(g, nowMs);
     won.set(m.schedule.id, { rank, gameSeq: g.gameSeq });
-    map.set(m.schedule.id, { msLeft: msToRegClose(g, eff.index, eff.remainingMs), running: g.running, gameSeq: g.gameSeq, ...fieldCounts(g) });
+    const lv = g.config?.levels ?? [];
+    let levelNo = 0;
+    for (let i = 0; i <= eff.index && i < lv.length; i++) if (lv[i].kind === 'level') levelNo++;
+    map.set(m.schedule.id, {
+      msLeft: msToRegClose(g, eff.index, eff.remainingMs), running: g.running, gameSeq: g.gameSeq, ...fieldCounts(g),
+      levelNo, onBreak: lv[eff.index]?.kind === 'break',
+    });
   }
   return map;
 }

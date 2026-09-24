@@ -554,7 +554,7 @@ for (const w of [320, 360, 390, 412]) {
         .filter((c) => c.getBoundingClientRect().height > 0);
       const out = {
         cardCount: cards.length,
-        titleLines: [] as { text: string; lines: number; h: number; clamp: string }[],
+        titleLines: [] as { text: string; len: number; lines: number; h: number; clamp: string; cut: boolean }[],
         badgesInTitle: 0,
         badgesRight: 0,
         hearts: 0,
@@ -572,7 +572,8 @@ for (const w of [320, 360, 390, 412]) {
           const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
           const lines = Math.round(h3.getBoundingClientRect().height / lh);
           out.titleLines.push({
-            text: (h3.textContent || '').trim().slice(0, 18), lines,
+            text: (h3.textContent || '').trim().slice(0, 18), len: (h3.textContent || '').trim().length, lines,
+            cut: h3.scrollHeight - h3.clientHeight > 1 || h3.scrollWidth - h3.clientWidth > 1 || cs.textOverflow === 'ellipsis',
             h: +h3.getBoundingClientRect().height.toFixed(2),
             clamp: cs.webkitLineClamp || 'none',
           });
@@ -611,11 +612,16 @@ for (const w of [320, 360, 390, 412]) {
     expect(r.titleLines.length, '제목(h3)을 못 찾았다').toBeGreaterThan(0);
     expect(r.venueHits.length, '매장명 링크를 못 찾았다 — tap-up-24 가 안 붙었다').toBeGreaterThan(0);
 
-    // ① 제목은 legacy 23자여도 한 줄
+    // ① 🔴 2026-09-24 오너 지시(HOME-LAYOUT-STRETCH · 일정 탭에도 적용 — 리드 판정)로 **계약이 바뀌었다**:
+    //   종전 "legacy 23자여도 한 줄(line-clamp-1 말줄임)" → 이제 "**글자를 숨기지 않는다**(말줄임·잘림 0)".
+    //   · 입력 상한(12자) 이하 제목은 여전히 **한 줄**이어야 한다 — 카드 높이 고정의 근거가 그대로 산다.
+    //   · 12자를 넘는 옛 제목은 어절 단위로 접혀 전부 보인다(줄 수 상한 없음 · 잘림 0).
     for (const t of r.titleLines) {
-      expect(t.clamp, `제목 "${t.text}" 에 line-clamp-1 이 안 걸렸다(현재 ${t.clamp})`).toBe('1');
-      expect(t.lines, `제목 "${t.text}" 이 ${t.lines}줄(높이 ${t.h}px)이다 — 목록은 한 줄이어야 카드 높이가 고정된다`).toBe(1);
+      expect(t.clamp, `제목 "${t.text}" 에 line-clamp 가 남아 있다 — 글자를 숨기면 안 된다(오너 2026-09-24)`).toBe('none');
+      expect(t.cut, `제목 "${t.text}" 이 잘렸거나 말줄임이다`).toBe(false);
+      if (t.len <= 12) expect(t.lines, `12자 이하 제목 "${t.text}" 이 ${t.lines}줄(높이 ${t.h}px)이다 — 한 줄이어야 카드 높이가 고정된다`).toBe(1);
     }
+    expect(r.titleLines.some((t) => t.len > 12), '12자 넘는 옛 제목 픽스처가 없다 — 줄바꿈 경로를 한 번도 안 쟀다').toBe(true);
     // ② 하트 0 · 등급은 제목 밖 우측에
     expect(r.hearts, '목록 카드에 하트가 남아 있다').toBe(0);
     expect(r.badgesInTitle, '등급 배지가 제목 안에 있다 — 12자 제목의 폭을 먹는다').toBe(0);
@@ -657,14 +663,22 @@ for (const w of [320, 360, 390, 412, 430, 767, 768, 1280, 1440]) {
         const badge = c.querySelector<HTMLElement>('[data-testid="schedule-grade-badge"]');
         const time = c.querySelector<HTMLElement>('[data-testid="schedule-start-time"]');
         const field = c.querySelector<HTMLElement>('[data-testid="schedule-field-count"]');
+        const level = c.querySelector<HTMLElement>('[data-testid="schedule-current-level"]');
         const chev = c.querySelector<HTMLElement>('svg.lucide-chevron-right');
         if (!time) continue;
         if (badge) withBadge += 1;
-        const rights = [R(time), ...(badge ? [R(badge)] : []), ...(field ? [R(field)] : [])];
+        // 🔴 2026-09-24 오너: 게임 종류(등급 배지)는 **매장·지역 줄 오른쪽**으로 옮겼다("바뀌지 않는 정보") —
+        //   우측 열에는 시각 + 상태 한 줄(생존/엔트리 또는 현재 레벨)만 남는다. 그래서 우측 정렬 대상에서 배지를 빼고
+        //   대신 '배지가 우측 열(start-group) 밖, 매장 줄 안에 있다' 를 따로 단언한다(badgeInVenueRow).
+        const group = c.querySelector<HTMLElement>('[data-testid="schedule-start-group"]');
+        const timetable = c.dataset.layout === 'timetable';
+        const rights = [R(time), ...(!timetable && badge ? [R(badge)] : []), ...(field ? [R(field)] : []), ...(timetable && level ? [R(level)] : [])];
         const tb = time.getBoundingClientRect();
         const cb = chev ? chev.getBoundingClientRect() : null;
         rows.push({
           badge: !!badge,
+          badgeInVenueRow: !timetable || !badge ? null
+            : !group?.contains(badge) && !!c.querySelector('h3')?.previousElementSibling?.contains(badge),
           field: !!field,
           rights,
           rightSpread: +(Math.max(...rights) - Math.min(...rights)).toFixed(2),
@@ -688,6 +702,7 @@ for (const w of [320, 360, 390, 412, 430, 767, 768, 1280, 1440]) {
 
     expect(r.startLabels, '`시작` 라벨이 되살아났다').toBe(0);
     for (const row of r.rows) {
+      if (row.badgeInVenueRow !== null) expect(row.badgeInVenueRow, '게임 종류 배지가 매장·지역 줄에 있지 않다(오너 2026-09-24)').toBe(true);
       expect(row.rightSpread as number,
         `오른쪽 모서리가 ${row.rightSpread}px 어긋났다 (badge=${row.badge}, field=${row.field}, rights=${JSON.stringify(row.rights)})`)
         .toBeLessThanOrEqual(1);

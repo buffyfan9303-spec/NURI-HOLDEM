@@ -4211,7 +4211,10 @@ export default function App() {
                       ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
                       // 리스트 뷰(DAI-4 rounded 도배 탈피): 행마다 박스 대신
                       // 한 컨테이너 + 헤어라인 구분 행 — APIS·FotMob 목록 문법
-                      : 'divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura',
+                      // 2026-09-24 HOME-LAYOUT-STRETCH(리드 결정) — PC(lg~)는 **2열**(카드 1024 에서 빈 오른쪽 539~560px 실측).
+                      //   읽는 순서는 행 우선(grid 기본 흐름) · 날짜 머리말은 두 칸 전체(아래 p 의 lg:col-span-2).
+                      //   구분선은 칸마다 0.5px 바깥 그림자(홈 HOME_LIST_GRID 와 같은 조리법 — 머리말이 끼어도 짝이 안 어긋난다).
+                      : 'divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura lg:grid lg:grid-cols-2 lg:divide-y-0 lg:[&>*]:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))]',
                   ].join(' ')}>
                     {visibleSchedules.map((s, i) => (
                       <Fragment key={s.id}>
@@ -4227,11 +4230,14 @@ export default function App() {
                         const h = dateHeaderAt(visibleSchedules, i, !nearSort && viewMode === 'list');
                         return h ? (
                           <p key={`h-${s.date}`} data-date-header={s.date}
-                            className="bg-surface-high/40 px-3 py-1.5 text-2xs font-bold leading-tight text-ink-secondary">{h}</p>
+                            className="bg-surface-high/40 px-3 py-1.5 text-2xs font-bold leading-tight text-ink-secondary lg:col-span-2">{h}</p>
                         ) : null;
                       })()}
+                      {/* 2026-09-24 HOME-LAYOUT-STRETCH(리드 판정: 오너가 '일정 탭'이라고 했다) — 목록 카드는 홈과 같은 시간표형.
+                          layout 은 list 모드에서만 쓰인다(grid 는 포스터 카드 그대로). 라이브 탭은 종전 ListCard 그대로. */}
                       <ScheduleCard
                         mode={viewMode}
+                        layout="timetable"
                         schedule={s}
                         venue={venueById.get(s.venueId)}
                         reserveCount={browseResCounts[s.id]}
@@ -4263,7 +4269,7 @@ export default function App() {
                             className="bg-surface-high/40 px-3 py-1.5 text-2xs font-bold leading-tight text-ink-secondary">{h}</p>
                         ) : null;
                       })()}
-                      <ScheduleCard mode="list" schedule={s} venue={venueById.get(s.venueId)} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} />
+                      <ScheduleCard mode="list" layout="timetable" schedule={s} venue={venueById.get(s.venueId)} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} />
                       </Fragment>
                     ))}
                   </div>
@@ -4860,7 +4866,8 @@ function ScheduleSkeletonGrid({ viewMode, rows }: { viewMode: 'grid' | 'list' | 
   const grid = viewMode === 'grid';
   const n = grid ? 10 : (rows ?? 6);
   return (
-    <div className={[grid ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low'].join(' ')} aria-busy="true">
+    // 2026-09-24 — 목록 스켈레톤도 PC(lg~) 2열(실제 목록과 같은 격자 — 한 열로 예약하면 도착 순간 높이가 절반으로 줄어 아래가 끌려 올라간다).
+    <div className={[grid ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low lg:grid lg:grid-cols-2 lg:divide-y-0 lg:[&>*]:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))]'].join(' ')} aria-busy="true">
       {/* 🔴 날짜 머리말 자리 예약(2026-09-20) — 목록에 날짜 그룹 머리말을 넣으면서
           스켈레톤이 그만큼 적게 예약해 데이터 도착 시 아래가 밀렸다(CLS).
           ⚠ **몇 개**가 붙을지는 데이터 전에 모른다(그룹 수는 배열을 봐야 나온다).
@@ -4868,7 +4875,7 @@ function ScheduleSkeletonGrid({ viewMode, rows }: { viewMode: 'grid' | 'list' | 
             확실한 그 하나만 예약한다. 추측으로 더 넣으면 반대로 과다예약이 된다.
           실측: 진짜 머리말 27.4px · 이 예약 27.6px(py-1.5 12.75 + h-3.5 14.875). */}
       {!grid && (
-      <div className="bg-surface-high/40 px-3 py-1.5"><div className="skeleton h-3.5 w-16" /></div>
+      <div className="bg-surface-high/40 px-3 py-1.5 lg:col-span-2"><div className="skeleton h-3.5 w-16" /></div>
       )}
       {Array.from({ length: n }).map((_, i) =>
         grid ? (

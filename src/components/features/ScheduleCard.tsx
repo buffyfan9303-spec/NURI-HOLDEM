@@ -133,9 +133,9 @@ export function prizeText(s: Schedule): string | null {
 const SUITS = ['♠', '♥', '♦', '♣'];
 
 function PosterArea({
-  posterUrl, posterColor = '#1a1d24', title, className = '', thumbWidth = 400, priority = false, vtName, compact = false,
+  posterUrl, posterColor, title, className = '', thumbWidth = 400, priority = false, vtName, compact = false,
   fallbackText,
-}: { posterUrl?: string; posterColor?: string; title: string; className?: string; thumbWidth?: number; priority?: boolean;
+}: { posterUrl?: string; posterColor?: string | null; title: string; className?: string; thumbWidth?: number; priority?: boolean;
   /** 이미지가 없을 때 ♠ 대신 보여줄 글자(매장 이니셜). 목록 줄의 매장 로고 자리가 쓴다 —
    *  같은 매장의 대회 3개가 **같은 글자·같은 색**으로 묶여 보이는 것이 ♠ 세 개보다 식별에 낫다. */
   fallbackText?: string;
@@ -173,7 +173,7 @@ function PosterArea({
   return (
     <div
       className={`relative overflow-hidden flex items-center justify-center ${className}`}
-      style={{ background: `linear-gradient(135deg, ${posterColor}ee 0%, #0a0c0f 100%)`, ...(vtName ? { viewTransitionName: vtName } : {}) }}
+      style={{ background: posterFallbackBg(posterColor), ...(vtName ? { viewTransitionName: vtName } : {}) }}
     >
       {!compact && !fallbackText && (
         <div className="absolute inset-0 grid grid-cols-3 gap-2 p-3 opacity-[0.08] select-none pointer-events-none" aria-hidden>
@@ -192,6 +192,17 @@ function PosterArea({
         : <span className={`relative select-none opacity-25 ${compact ? 'text-sm' : 'text-4xl'}`} aria-hidden>♠</span>}
     </div>
   );
+}
+
+/** 이미지 없는 로고·포스터 자리의 배경.
+ *  🔴 2026-09-24(design-reviewer 실측) — 종전엔 `${posterColor}ee` 를 그대로 붙였는데, 호출부가 `venue?.themeColor ?? schedule.posterColor`
+ *    로 **null** 을 넘기면 기본값 인자('#1a1d24')를 우회해 `nullee` 가 되어 그라데이션 전체가 무효 → 배경이 사라졌다.
+ *    라이트 지면 위 흰 이니셜 대비 **1.00**(다크는 어두운 지면이라 가려졌다). null·빈 값도 기본색으로 떨어뜨린다.
+ *  회귀: src/components/features/posterFallbackBg.test.ts */
+export const POSTER_FALLBACK_COLOR = '#1a1d24';
+export function posterFallbackBg(posterColor?: string | null): string {
+  const base = posterColor && posterColor.trim() ? posterColor.trim() : POSTER_FALLBACK_COLOR;
+  return `linear-gradient(135deg, ${base}ee 0%, #0a0c0f 100%)`;
 }
 
 /** 매장 이니셜 — 이미지 없는 매장의 로고 자리. 이모지·서로게이트 쌍이 반 글자로 잘리지 않게 코드포인트로 자른다. */
@@ -808,14 +819,148 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
   );
 }
 
+/** 🔴 2026-09-24 HOME-LAYOUT-STRETCH — **홈 일정 · 일정 탐색(browse) 목록** 배치(`layout="timetable"`). 라이브 탭만 종전 `ListCard` 그대로다.
+ *
+ *  오너: "[로고] [본문: 대회 이름·매장/지역·GTD·테이블] [우측 열: 시간·게임 종류·현재 레벨] — 우측 열은 본문 옆에 붙은 고정 폭,
+ *        글자 끊김(말줄임·잘림·줄바꿈) 0". 종전 카드는 시각 덩어리가 **카드 오른쪽 끝**에 붙어 있어
+ *        PC 1440 에서 본문 글자 끝 → 시각 사이가 **800px** 였다(실측, scratchpad hl/before/stretch.json).
+ *
+ *  3행 격자 = [로고 | 본문 | 우측 열]:
+ *    1행  매장 · 지역 · 게임 종류 (+TOP·별점·거리·예약) — **본문+우측 열 두 칸에 걸친다.** 320 에서 본문 칸만으로는
+ *         실제 최장 매장명(17자 '누리 테스트 홀덤펍 강남 센텀점')과 지역이 한 줄에 서지 못했다.
+ *    2행  대회명 | 시각        ← 제목과 시각이 **같은 줄**이다(시선이 가로로 건너뛰지 않는다)
+ *    3행  3칸 지표(GTD·참가비·레지마감) | 상태 한 줄(라이브 생존/엔트리, 아니면 현재 레벨 L8·휴식·시작 전)
+ *  · 우측 열은 `minmax(고정폭, auto)` — 평소엔 고정 폭이라 줄마다 시각이 같은 세로선에 서고, 글자 확대로 시각이
+ *    넓어질 때만 늘어난다(잘리지 않게). 본문 칸은 PC(md~)에서 17rem 상한 → 우측 열이 **본문 바로 옆**에 붙는다.
+ *  · 대회명은 줄 수를 막지 않는다(line-clamp 없음). 입력 상한 12자(`SCHEDULE_TITLE_MAX`)는 320 에서도 한 줄이고,
+ *    그보다 긴 **옛 제목**은 어절 단위로 접는다 — 말줄임표로 숨기지 않는다(오너: "잘라서 숨기면 안 된다").
+ *  · 꺾쇠(›)는 뺐다 — 오른쪽 끝에 떨어진 요소를 두지 말라는 지시. 카드 전체가 버튼(role=button)이라 목적지는 그대로다.
+ *  · 현재 레벨은 `RegInfo.levelNo/onBreak`(lib/regStatus.ts — 이미 받은 클락 행에서 셈, 새 조회 0). 규칙은 아래 우측 열 주석.
+ *  ⚠ 폭 예산은 scratchpad 하네스(hl/fit.cjs)로 320·360·390·412·768·1440 에서 잰다 — 글자·gap·열 폭을 바꾸면 다시 재라. */
+function TimetableCard({
+  schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, vtActive, venue, regInfo,
+}: CardProps) {
+  const prize = prizeParts(schedule);
+  const reg = regCloseRaw(schedule);
+  const grade = schedule.grade ? GRADE_BADGE[schedule.grade] : undefined;
+  return (
+    <article
+      onClick={() => onSelect(schedule)}
+      data-date={schedule.date}
+      data-layout="timetable"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(schedule); }
+      }}
+      className={[
+        'cv-card-list grid cursor-pointer items-center gap-x-1.5 gap-y-0 px-3 py-1.5 hover:bg-surface-high/50 active:bg-surface-high',
+        // 폭 예산(실측 hl/fit): 360 에서 최악 지표(참가비 1,234,567원)가 여유 0px 였다 → 390 미만은 gap·지표 칸 여백을 한 단계 좁힌다.
+        'grid-cols-[auto_minmax(0,1fr)_minmax(2.75rem,auto)] min-[360px]:grid-cols-[auto_minmax(0,1fr)_minmax(3.25rem,auto)] min-[390px]:gap-x-2',
+        // md~: 본문 칸 상한 17rem + justify-start — auto 열(우측)이 남는 폭을 먹고 늘어나지 않게(늘어나면 시각이 다시 카드 끝으로 간다).
+        'md:grid-cols-[auto_minmax(0,17rem)_minmax(3.25rem,auto)] md:justify-start',
+        schedule.isPremium ? 'bg-accent-300/[0.05]' : '',
+      ].join(' ')}
+    >
+      <div className="col-start-1 row-span-3 row-start-1 self-center">
+        <PosterArea
+          posterUrl={venue?.imageUrl}
+          posterColor={venue?.themeColor ?? schedule.posterColor}
+          fallbackText={venueInitial(schedule.pubName)}
+          title={schedule.pubName}
+          className="h-[42px] w-[42px] rounded-[9px] min-[360px]:h-[48px] min-[360px]:w-[48px] min-[360px]:rounded-[10px]"
+          thumbWidth={128}
+          priority={priority}
+          vtName={vtActive ? 'vt-poster' : undefined}
+        />
+      </div>
+
+      <div className="col-span-2 col-start-2 row-start-1 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0">
+        <VenueLink
+          pubName={schedule.pubName}
+          region={schedule.region}
+          wrap
+          sizeCls="text-[0.6875rem]"
+          onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
+        />
+        {/* 🔴 2026-09-24 오너: "시간과 인원은 달라지지만 게임 종류는 바뀌지 않는 정보" → 게임 종류는 **매장·지역 줄 오른쪽**.
+            배지 상자(패딩·배경)를 두지 않고 굵은 글자만 둔다 — 320 에서 실제 최장 매장명(17자)+지역과 한 줄에 서게(패딩 8px 이면 −2px 로 접혔다, 실측).
+            등급(데일리·새틀·시리즈)이 정본이고, 없으면 게임 형식(format: MTT 등). */}
+        {grade ? (
+          <span data-testid="schedule-grade-badge" className="whitespace-nowrap text-[10px] font-extrabold leading-tight text-accent-200">{grade}</span>
+        ) : schedule.format ? (
+          <span data-testid="schedule-game-type" className="whitespace-nowrap text-[10px] font-extrabold leading-tight text-accent-200">{schedule.format}</span>
+        ) : null}
+        {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
+        {rating && rating.count > 0 && (
+          <span className="text-[10px] tabular-nums leading-tight text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
+        )}
+        {distanceKm != null && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
+        {(reserveCount ?? 0) > 0 && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}
+      </div>
+
+      <h3 className="col-start-2 row-start-2 min-w-0 break-keep text-xs font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere]"
+        title={schedule.title}>
+        {titleWithoutGtd(schedule.title, !!prize)}
+      </h3>
+
+      <div
+        data-metrics
+        className={[
+          'col-start-2 row-start-3 flex min-w-0 flex-wrap items-start gap-y-0.5 divide-x divide-border-subtle',
+          '[&>*]:px-1 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0 min-[390px]:[&>*]:px-1.5',
+        ].join(' ')}
+      >
+        <Metric label={prize?.label ?? '상금'} value={prize?.amount ?? '—'} tone={prize ? 'text-gold-300' : 'text-ink-muted'} />
+        <Metric label="참가비" value={buyInText(schedule.buyIn?.amount)}
+          title={schedule.buyIn?.amount ? `${schedule.buyIn.amount.toLocaleString()}원` : undefined} />
+        <Metric label="레지마감" value={reg ?? '—'} />
+      </div>
+
+      {/* 우측 열 — **시각 + 그 아래 상태 한 줄**(2026-09-24 오너: 게임 종류는 윗줄로 옮기고 여기엔 달라지는 것만).
+          · 상태 줄: 라이브 필드 숫자가 있으면 생존/엔트리, 없으면 현재 레벨.
+          · 글자 비율: 시각 17px(360~) · 14.9px(<360) 대비 상태 11px · 10px = **0.65 · 0.67**(오너 예시 0.55~0.65 의 위쪽 — 종전 10px=0.59 가 작다는 지적).
+          · 현재 레벨: 이 포스터에 **매칭된 클락이 있을 때만** 실측(RegInfo.levelNo, 이미 받은 클락 행에서 셈 — 새 조회 0).
+              진행 중 → 'L8' · 브레이크 → '휴식' · 레벨 표 없는 클락 → '진행 중'(liveBadge 와 같은 말).
+            클락이 없으면 레벨을 **모른다** — 시작 전이면 '시작 전', 시작 시각이 지났으면 'L —'(추정해서 번호를 만들지 않는다).
+            레지마감 레벨(예: '레벨 12')은 본문 지표 칸이 이미 말하므로 여기서 되풀이하지 않는다. */}
+      <p data-testid="schedule-start-group"
+        className="col-start-3 row-span-2 row-start-2 flex min-w-0 flex-col items-end gap-0.5 self-start leading-none">
+        <span data-testid="schedule-start-time"
+          className="whitespace-nowrap text-[0.875rem] font-extrabold leading-none tracking-tight tabular-nums text-ink-primary min-[360px]:text-[1rem]">
+          {schedule.startTime || '—'}
+        </span>
+        {regInfo?.hasField ? (
+          <span data-testid="schedule-field-count"
+            className="whitespace-nowrap text-[10px] font-bold leading-none tabular-nums text-ink-secondary min-[360px]:text-[11px]">
+            <span className="sr-only">생존 </span>{regInfo.alive}
+            <span aria-hidden>/</span><span className="sr-only">명, 엔트리 </span>{regInfo.entries}
+            <span className="sr-only">명</span>
+          </span>
+        ) : (
+          <span data-testid="schedule-current-level"
+            className="whitespace-nowrap text-[10px] font-bold leading-none tabular-nums text-ink-secondary min-[360px]:text-[11px]">
+            {regInfo
+              ? (regInfo.onBreak ? '휴식' : regInfo.levelNo ? `L${regInfo.levelNo}` : '진행 중')
+              : (scheduleStatus(schedule.date, schedule.startTime) === 'upcoming' ? '시작 전' : 'L —')}
+          </span>
+        )}
+      </p>
+    </article>
+  );
+}
+
 // ── 익스포트 ────────────────────────────────────────────────────────────────
 
 export interface ScheduleCardProps extends CardProps {
   mode: ViewMode;
+  /** 목록 카드 배치 — 기본 'row'(일정 탐색·라이브, 종전 그대로). 'timetable' 은 홈 일정(위 TimetableCard). */
+  layout?: 'row' | 'timetable';
 }
 
-function ScheduleCard({ mode, ...rest }: ScheduleCardProps) {
-  return mode === 'grid' ? <GridCard {...rest} /> : <ListCard {...rest} />;
+function ScheduleCard({ mode, layout = 'row', ...rest }: ScheduleCardProps) {
+  if (mode === 'grid') return <GridCard {...rest} />;
+  return layout === 'timetable' ? <TimetableCard {...rest} /> : <ListCard {...rest} />;
 }
 
 // 메모이즈 — 일정 목록(첫 화면) 대량 렌더 시 App 리렌더로 인한 불필요한 재렌더 방지

@@ -149,7 +149,9 @@ const measure = (page: Page) => page.evaluate(() => {
   /** 의도한 가로 스크롤러(배너·추천 레일) 밖에서 숨은 가로 스크롤이 생기면 정보가 사라진다. */
   const hiddenScroll: string[] = [];
   // 2026-09-18: home-rail-track 은 추천 대회 레일을 지우면서 같이 없어졌다.
-  const ALLOWED = '[data-testid="home-banner-viewport"]';
+  // 2026-09-24: 날짜 스트립(home-date-strip)은 9주를 가로로 미는 **설계된 스크롤러**다 — 배너와 같은 부류로 허용한다.
+  //   ⚠ 스트립 **밖**의 가로 넘침·숨은 스크롤은 그대로 잡는다(허용은 그 요소와 자손에만 걸린다).
+  const ALLOWED = '[data-testid="home-banner-viewport"], [data-testid="home-date-strip"]';
   for (const el of home.querySelectorAll<HTMLElement>('*')) {
     const s = getComputedStyle(el);
     if (s.display === 'none' || s.visibility === 'hidden') continue;
@@ -325,7 +327,7 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
     expect(r!.text, '근거 없는 긴박감 문구가 붙었다').not.toMatch(/마감 임박|급상승|인기 급등/);
   });
 
-  test('🔴 GTO 진입은 홈에 **없고** 탭바에 있다 · 배너 점 제어는 여러 장일 때만 나온다', async ({ page }) => {
+  test('🔴 GTO 진입은 홈에 **정확히 한 곳**(첫 줄)이고 탭바에도 있다 · 배너 점 제어는 여러 장일 때만 나온다', async ({ page }) => {
     const external: string[] = [];
     await mockAll(page, external);
     await openHome(page, 390, 'dark', false);
@@ -334,7 +336,12 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
     // 🔴 2026-09-19 오너: "홈 화면에 GTO 도구 있는 부분 삭제".
     //   종전 계약은 '홈에 정확히 하나'(히어로와 카드에서 같은 설명을 반복하지 말 것)였다.
     //   이제 홈에는 0 이다 — 같은 곳으로 가는 문이 탭바에 이미 있었기 때문이다.
-    expect(r!.gtoEntries, 'GTO 진입 칸이 홈에 다시 생겼다 — 오너가 지운 자리다').toBe(0);
+    // 🔴 2026-09-24 오너 지시(H2): "'무료 GTO 도구 22개' 줄 전체를 누르면 GTO 탭으로" — 0 → **정확히 1**.
+    //   두 곳 이상이면 09-19 에 지운 중복(히어로+카드)이 되살아난 것이다.
+    expect(r!.gtoEntries, 'GTO 진입이 홈에 정확히 한 곳이 아니다(오너 H2: 첫 줄 하나)').toBe(1);
+    const entry = page.getByTestId('home-gto-entry');
+    const eb = await entry.boundingBox();
+    expect(eb!.height, 'GTO 진입 줄의 터치 높이가 44px 미만이다').toBeGreaterThanOrEqual(44);
     // ⚠ 0 만 단언하면 '진입을 통째로 잃은 것' 과 구별되지 않는다.
     //   길이 남아 있는지를 **같은 검사에서** 확인한다(기능 소실 방지 — 이 저장소의 3대 불문율).
     const gtoTab = page.getByRole('button', { name: 'GTO' });
@@ -347,11 +354,18 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
     const bb = await dot.boundingBox();
     expect(bb!.width, '배너 점의 터치 폭이 24px 미만이다').toBeGreaterThanOrEqual(24);
     expect(bb!.height, '배너 점의 터치 높이가 24px 미만이다').toBeGreaterThanOrEqual(24);
+    // 오너 H2 — 누르면 **앱 안에서** GTO 탭이 열린다(전체 리로드 없음: 같은 문서의 표식이 살아 있어야 한다).
+    await page.evaluate(() => { (window as unknown as { __noReload?: number }).__noReload = 1; });
+    await entry.click();
+    await expect(page.locator('main[data-tab="tools"]'), 'GTO 줄을 눌렀는데 GTO 탭이 안 열렸다').toBeVisible({ timeout: 10_000 });
+    expect(await page.evaluate(() => (window as unknown as { __noReload?: number }).__noReload), 'GTO 줄이 문서를 새로 받았다(전체 리로드)').toBe(1);
   });
 
   // §6-2 의 배너 높이 — **기본 배율에서만** 잰다. 글자 확대 상태에 이 목표를 강제하지 않는다
   // (min-h 라 확대되면 프레임이 같이 커지는 것이 옳다).
-  for (const c of [{ w: 390, lo: 104, hi: 120 }, { w: 1440, lo: 180, hi: 220 }]) {
+  // 🔴 2026-09-24 오너 지시("모바일 메인 배너 세로 폭을 조금 더 늘려라", 132~140) — 390 상한 120 → 140.
+  //   첫 화면을 먹지 않게 하는 하한·상한 계약 자체는 그대로다(범위만 오너 지시로 옮겼다).
+  for (const c of [{ w: 390, lo: 104, hi: 140 }, { w: 1440, lo: 180, hi: 220 }]) {
     test(`🔴 배너가 첫 화면을 먹지 않는다 — ${c.w}px 에서 ${c.lo}~${c.hi}px`, async ({ page }) => {
       const external: string[] = [];
       await mockAll(page, external);
