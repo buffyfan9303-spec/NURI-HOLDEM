@@ -22,6 +22,9 @@ export interface SavedSpot {
   sourceLabel: string | null;
   datasetVersion: string;
   createdAt: string;
+  /** 사용자가 고른 '이 스팟의 날짜'(YYYY-MM-DD, KST). null 이면 날짜 선택 이전 옛 행 — createdAt 의 KST 날짜로 표시한다
+   *  (마이그레이션 20260925b, 오너 2026-09-25 지시). */
+  playedOn: string | null;
 }
 
 /** 게시글에 붙은 스팟(공유 시점 스냅샷) */
@@ -75,6 +78,7 @@ function rowToSaved(r: any): SavedSpot | null {
     sourceLabel: (r.source_label as string | null) ?? null,
     datasetVersion: r.dataset_version as string,
     createdAt: r.created_at as string,
+    playedOn: (r.played_on as string | null) ?? null,
   };
 }
 
@@ -85,14 +89,16 @@ export async function listMySpots(limit = 50): Promise<SavedSpot[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase
     .from('spot_reviews')
-    .select('id, spot, coverage_kind, source_label, dataset_version, created_at')
+    .select('id, spot, coverage_kind, source_label, dataset_version, created_at, played_on')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error || !data) return [];
   return data.map(rowToSaved).filter((s): s is SavedSpot => s !== null);
 }
 
-export async function saveMySpot(spot: SpotReview, e: SpotEvaluation): Promise<string | null> {
+/** playedOn 은 사용자가 저장 화면에서 고른 '이 스팟의 날짜'(YYYY-MM-DD, KST). 안 주면 서버 컬럼이 null 로 남고
+ *  화면은 created_at 의 KST 날짜로 대신 보여준다(20260925b). */
+export async function saveMySpot(spot: SpotReview, e: SpotEvaluation, playedOn?: string | null): Promise<string | null> {
   if (IS_MOCK) return null;
   const { data, error } = await supabase
     .from('spot_reviews')
@@ -105,10 +111,17 @@ export async function saveMySpot(spot: SpotReview, e: SpotEvaluation): Promise<s
       source_label: sourceLabelOf(e),
       dataset_version: e.datasetVersion,
       analysis: analysisSnapshot(e),
+      played_on: playedOn ?? null,
     })
     .select('id').single();
   if (error) throw new Error(error.message);
   return (data?.id as string) ?? null;
+}
+
+/** 이미 저장한 내 스팟의 날짜만 바꾼다 — 내 스팟 목록의 날짜 편집이 쓴다. RLS 로 본인 행만 바뀐다. */
+export async function updateSpotPlayedOn(id: string, playedOn: string | null): Promise<void> {
+  if (IS_MOCK) return;
+  await mustAffect(supabase.from('spot_reviews').update({ played_on: playedOn }).eq('id', id));
 }
 
 export async function deleteMySpot(id: string): Promise<void> {

@@ -74,7 +74,9 @@ describe('요구 A · 작성 화면에서 에퀴티 배선과 빈도 막대가 �
   it('🔴 evaluateSpot 은 그대로 돈다 — 저장 스냅샷 스키마 호환(coverage_kind·dataset_version)', () => {
     // 지운 것은 '화면 표시' 이지 '저장 계약' 이 아니다. 이게 빠지면 기존 행·RPC 와 어긋난다.
     expect(code, 'evaluateSpot 호출이 사라졌다 — 저장·공유 스냅샷이 깨진다').toMatch(/evaluateSpot\(spot, \{ heroEquity: null \}\)/);
-    expect(report, 'saveMySpot 이 evaluation 을 안 받는다').toMatch(/saveMySpot\(spot, evaluation\)/);
+    // 2026-09-25 SPOT-DATE: saveMySpot 이 playedOn(날짜) 세 번째 인자를 받게 됐다 — evaluation 이 계속
+    // 두 번째 인자인 것까지 그대로 잠근다(약화 아님, 새 인자를 인지하도록 강화).
+    expect(report, 'saveMySpot 이 evaluation 을 안 받는다').toMatch(/saveMySpot\(spot, evaluation, playedOn\)/);
   });
 
   it('🔴 작성 화면에 빈도 막대·판정 줄이 없다', () => {

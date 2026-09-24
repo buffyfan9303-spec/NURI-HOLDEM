@@ -97,7 +97,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   const [likes, setLikes] = useState<Set<string>>(new Set());
   const [reservations, setReservations] = useState<MyReservationRow[]>([]);
   const [bankroll, setBankroll] = useState<BankrollEntry[]>([]);
-  /** 내가 저장한 누리 SPOT(최근 100) — 저장한 날(KST) 칸에 놓는다. 조회 실패는 빈 배열(listMySpots 가 삼킨다 — 보조 표시). */
+  /** 내가 저장한 누리 SPOT(최근 100) — 사용자가 고른 날짜(playedOn) 칸, 없으면 저장한 날(KST) 칸에 놓는다(2026-09-25). 조회 실패는 빈 배열(listMySpots 가 삼킨다 — 보조 표시). */
   const [spots, setSpots] = useState<SavedSpot[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [err, setErr] = useState<unknown>(null);
@@ -194,7 +194,8 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     bankroll.forEach((e) => push(e.entryDate, isMemoEntry(e)
       ? { kind: 'memo', title: e.memo, detail: '' }
       : { kind: 'bankroll', title: e.amount > 0 ? `+${won(e.amount)}` : won(e.amount), detail: e.memo, amount: e.amount }));
-    spots.forEach((sp) => push(kstDateOf(sp.createdAt), {
+    // 2026-09-25 SPOT-DATE: playedOn(사용자가 고른 날짜)이 있으면 그 칸에, 없으면 옛 행처럼 저장일(KST) 칸에.
+    spots.forEach((sp) => push(sp.playedOn ?? kstDateOf(sp.createdAt), {
       kind: 'spot', title: `${sp.spot.heroPos} vs ${villainsLabel(sp.spot)} · ${sp.spot.effectiveBb}BB`, detail: sp.spot.street === 'preflop' ? '프리플랍' : sp.spot.street,
     }));
     return m;

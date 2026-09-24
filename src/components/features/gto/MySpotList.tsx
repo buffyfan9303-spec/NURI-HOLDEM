@@ -9,9 +9,12 @@ import { useToast } from '../../atoms/Toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { spotSummary, streetLabel, actionLabel, type SpotReview } from '../../../lib/spot';
 import { COVERAGE_LABEL } from '../../../lib/spotEvaluate';
-import { listMySpots, deleteMySpot, type SavedSpot } from '../../../api/spots';
+import { listMySpots, deleteMySpot, updateSpotPlayedOn, type SavedSpot } from '../../../api/spots';
 import { listSpotAiReviews } from '../../../api/spotReview';
 import SpotDetails from './SpotDetails';
+
+/** 저장 시각(UTC ISO) → KST 날짜 — playedOn 이 없는 옛 행의 표시용(CalendarPanel 과 같은 한 줄, 2026-09-25). */
+const kstDateOf = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
 
 /** 코칭 맵이 같은가 — 둘 다 비었을 때도 같다(빈 결과마다 새 Map 을 넣어 두 번째 커밋을 만들던 자리). */
 const sameAi = (a: Map<string, string>, b: Map<string, string>) =>
@@ -67,6 +70,16 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
 
   useEffect(() => { if (active) load(); }, [active, load]);
 
+  /** 이미 저장한 스팟의 날짜만 바꾼다(오너 2026-09-25 SPOT-DATE) — 서버가 실제로 바뀐 뒤에만 목록을 갱신한다. */
+  const setDate = useCallback(async (id: string, date: string) => {
+    try {
+      await updateSpotPlayedOn(id, date);
+      setRows((r) => (r ?? []).map((x) => (x.id === id ? { ...x, playedOn: date } : x)));
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '날짜를 바꾸지 못했습니다', 'error');
+    }
+  }, [toast]);
+
   const remove = useCallback(async (id: string) => {
     try {
       await deleteMySpot(id);
@@ -79,8 +92,8 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
   }, [toast]);
 
   /** 부모 콜백은 최신 것을 ref 로 부른다 — 콜백 정체성이 바뀌어도 목록 메모가 깨지지 않게. */
-  const cb = useRef({ onOpen, onShare });
-  cb.current = { onOpen, onShare };
+  const cb = useRef({ onOpen, onShare, setDate });
+  cb.current = { onOpen, onShare, setDate };
   // 목록 JSX 는 메모한다 — 탭을 오갈 때 active 만 바뀌면 행 10개를 다시 그리지 않는다(SPOT-MYSPOT-JANK).
   const list = useMemo(() => (!rows || rows.length === 0 ? null : (
     <ul className="space-y-2">
@@ -136,6 +149,14 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
               {/* 저장 당시 스냅샷을 **그대로** 보여 준다 — 지금 엔진으로 다시 계산해
                   저장할 때와 다른 값을 보여 주지 않는다(명세 §2.4). */}
               <SpotDetails spot={r.spot} mode="owner" />
+              {/* SPOT-DATE(2026-09-25) — 저장 뒤에도 날짜를 바꿀 수 있게. defaultValue + onChange 라 새로
+                  고르기 전까지는 지금 값(playedOn 또는 저장일의 KST 날짜)을 그대로 보여준다. */}
+              <div className="mt-2 flex items-center justify-between gap-2 border-t border-border-subtle pt-2">
+                <label htmlFor={`spot-date-${r.id}`} className="shrink-0 text-2xs text-ink-muted">이 스팟 날짜</label>
+                <input id={`spot-date-${r.id}`} type="date" defaultValue={r.playedOn ?? kstDateOf(r.createdAt)}
+                  onChange={(e) => { if (e.target.value) cb.current.setDate(r.id, e.target.value); }}
+                  className="h-[36px] min-w-0 flex-1 rounded-input border border-border-subtle bg-surface-high px-2 text-xs text-ink-primary" />
+              </div>
               {ai.has(r.id) && (
                 // 결과는 나만 본다 — 게시판 공유(onShare → 확인 시트)의 본문에는 실리지 않는다.
                 <section data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트" className="mt-2 border-t border-border-subtle pt-2">

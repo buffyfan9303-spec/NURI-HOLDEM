@@ -20,6 +20,7 @@ import type { useAuth } from '../../../contexts/AuthContext';
 import { spotSummary, toJSON, type SpotReview } from '../../../lib/spot';
 import type { SpotEvaluation, CoverageKind } from '../../../lib/spotEvaluate';
 import { saveMySpot, shareSpotPost } from '../../../api/spots';
+import { kstToday } from '../../../lib/kst';
 import {
   getSpotAiStatus, requestSpotAi, findSavedSpotId, spotCompleteness, SpotAiError, spotAiMessage, type SpotAiStatus,
 } from '../../../api/spotReview';
@@ -66,6 +67,9 @@ const spotKey = (s: SpotReview) => JSON.stringify(toJSON(s));
 export default function SpotReport({ spot, evaluation, blocked, user, toast, shareIntent = 0, savedRef, onSaved }: Props) {
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const saved = savedRef !== null && savedRef.key === spotKey(spot);
+  // 2026-09-25 오너 결정 — SPOT 날짜 직접 지정. 기본은 오늘(KST). 서버 컬럼은 nullable 이라
+  // 여기서 고르지 않아도(예: SpotAiCoach 의 자동 저장) 오늘 날짜로 저장된다.
+  const [playedOn, setPlayedOn] = useState<string>(() => kstToday());
   /** 공유 확인 시트가 떠 있는가 — 이게 true 인 동안에도 아직 올라간 글은 없다. */
   const [confirming, setConfirming] = useState(false);
   /** 시트에서 고치는 메모. 원본 spot 은 건드리지 않는다(내 스팟 임시저장을 흔들지 않게). */
@@ -76,7 +80,7 @@ export default function SpotReport({ spot, evaluation, blocked, user, toast, sha
     if (!ensureLogin(user)) return;
     setBusy('save');
     try {
-      const id = await saveMySpot(spot, evaluation);
+      const id = await saveMySpot(spot, evaluation, playedOn);
       onSaved({ id, key: spotKey(spot) });
       toast.show('내 스팟에 저장했습니다', 'success');
     } catch (e) {
@@ -166,7 +170,14 @@ export default function SpotReport({ spot, evaluation, blocked, user, toast, sha
       {/* 행동 */}
       {/* whitespace-normal · leading-tight: `.btn` 의 nowrap 이 200% 글자확대(root 34px)에서 '내 스팟에 저장' 을 칸 밖으로
           흘려 옆 버튼 위에 겹쳤다(2026-09-19 스윕, 320~390px). 라벨을 줄이지 않고 두 줄을 허용한다 — SpotHeroCard(ToolsPanel) 와 같은 조리법. */}
-      <div className="mt-2.5 grid grid-cols-2 gap-1.5 border-t border-border-subtle pt-2.5">
+      {/* 날짜 선택 — 기본 오늘(KST), 네이티브 <input type="date"> (오너 2026-09-25). 저장 뒤에도 바꿀 수 있다(MySpotList). */}
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5">
+        <label htmlFor="spot-played-on" className="shrink-0 text-2xs text-ink-muted">이 스팟 날짜</label>
+        <input id="spot-played-on" type="date" value={playedOn} max={kstToday()}
+          onChange={(e) => setPlayedOn(e.target.value || kstToday())}
+          className="h-[36px] min-w-0 flex-1 rounded-input border border-border-subtle bg-surface-high px-2 text-xs text-ink-primary" />
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-1.5">
         <button type="button" onClick={onSave} disabled={blocked || busy !== null}
           className="btn-ghost min-h-[44px] whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">
           {busy === 'save' ? '저장 중…' : saved ? '저장됨' : '내 스팟에 저장'}
@@ -181,7 +192,7 @@ export default function SpotReport({ spot, evaluation, blocked, user, toast, sha
       )}
 
       <SpotAiCoach spot={spot} evaluation={evaluation} blocked={blocked} user={user} toast={toast}
-        savedId={saved ? savedRef?.id ?? null : null} onSaved={onSaved} />
+        savedId={saved ? savedRef?.id ?? null : null} onSaved={onSaved} playedOn={playedOn} />
 
       {/* 🔴 '비슷한 스팟 풀기' 버튼은 요구 A 로 제거했다(트레이너 도구 자체는 그대로 있다).
           이 화면은 작성·저장·공유가 목적이고, 여기서 트레이너로 새는 길은 그 흐름을 끊는다. */}
@@ -298,10 +309,10 @@ function ShareConfirmSheet({
  *  · 누르면 확인 시트 → (미저장이면 같은 내용 행을 찾거나 저장) → spot-review → 결과.
  *  · 결과는 이 화면과 '내 스팟' 에만 보인다. 게시판 공유(buildShareBody)에 싣지 않는다.
  */
-function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved }: {
+function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved, playedOn }: {
   spot: SpotReview; evaluation: SpotEvaluation; blocked: boolean;
   user: ReturnType<typeof useAuth>['user']; toast: ReturnType<typeof useToast>;
-  savedId: string | null; onSaved: (r: SavedRef) => void;
+  savedId: string | null; onSaved: (r: SavedRef) => void; playedOn: string;
 }) {
   const [status, setStatus] = useState<SpotAiStatus | null>(null);
   const [asking, setAsking] = useState(false);
@@ -332,7 +343,7 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved 
       // AI 는 저장된 행에만 붙는다 — 없으면 같은 내용 행을 찾고, 그래도 없으면 지금 저장한다.
       let id = savedId ?? await findSavedSpotId(spot);
       if (!id) {
-        id = await saveMySpot(spot, evaluation);
+        id = await saveMySpot(spot, evaluation, playedOn);
         if (!id) throw new SpotAiError('UNKNOWN', spotAiMessage('UNKNOWN'));
         toast.show('내 스팟에 저장했습니다', 'success');
       }
