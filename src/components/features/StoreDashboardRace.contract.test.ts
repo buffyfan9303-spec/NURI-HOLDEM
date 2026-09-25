@@ -106,7 +106,8 @@ describe('F14 ⑦ · 14일 장부 조회 실패를 "데이터 없음"·0장과 �
 
   it('이용권 7일 두 칸은 실패 시 0장이 아니라 —(오늘 두 칸은 core 값이라 그대로)', () => {
     expect(code).toMatch(/label="7일 발행" value=\{rangeErr \? '—' : `\$\{weekVoucher\}`\}/);
-    expect(code).toMatch(/label="7일 회수" value=\{rangeErr \? '—' : `\$\{weekTicket\}`\}/);
+    // 2026-09-25 #9 — T 는 소수라 fmtT(소수 1자리+천단위)로 감싼다. 계약의 핵심(실패 시 —)은 그대로다.
+    expect(code).toMatch(/label="7일 회수" value=\{rangeErr \? '—' : fmtT\(weekTicket\)\}/);
     expect(code).toMatch(/label="오늘 발행" value=\{`\$\{todayVoucher\}`\}/);
   });
 

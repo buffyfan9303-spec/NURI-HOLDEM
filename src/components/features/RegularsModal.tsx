@@ -60,12 +60,23 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [], on
         ) : (
           <>
             {/* 열 머리 — 아래 숫자 열과 같은 폭·같은 우측 정렬. 머리가 없으면 어느 숫자가 바인인지 매 행에서 다시 읽어야 한다. */}
-            <div className="flex items-center gap-2 px-3 text-[11px] text-ink-muted">
-              <span className="w-5 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1">고객</span>
-              <span className="w-11 shrink-0 text-right">바인</span>
-              <span className="w-11 shrink-0 text-right">방문</span>
-              <span className="w-4 shrink-0" aria-hidden />
+            {/* 2026-09-25 MYSTORE-FULL-AUDIT #2 — 행에는 오른쪽에 '이용권' 버튼이 형제로 붙는데 머리에는 그 자리가 없어
+                '바인/방문' 머리가 값보다 74px 오른쪽에 섰다(1440 실측). 행과 **같은 두 칸 구조**로 두고, 버튼 자리는
+                같은 클래스의 보이지 않는 자리표로 채운다 — 폭을 숫자로 베끼면 라벨·패딩이 바뀔 때 다시 어긋난다. */}
+            {/* 행(li)의 1px 테두리만큼 안쪽이 밀리므로 머리에도 투명 테두리를 준다 — 없으면 1px 어긋난다(실측). */}
+            <div className="flex items-center border-x border-transparent text-[11px] text-ink-muted">
+              <div className="flex min-w-0 flex-1 items-center gap-2 px-3">
+                <span className="w-5 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1">고객</span>
+                <span className="w-11 shrink-0 text-right">바인</span>
+                <span className="w-11 shrink-0 text-right">방문</span>
+                <span className="w-4 shrink-0" aria-hidden />
+              </div>
+              {onSendVoucher && (
+                <span aria-hidden className={`invisible ${VOUCHER_BTN_CLS}`}>
+                  <Icon name="gift" size={11} className="shrink-0" />이용권
+                </span>
+              )}
             </div>
             <ul className="space-y-1.5">
               {rows.map(({ r, rank }) => <RegularRow key={r.name} idx={rank} r={r} venueId={venueId} onSendVoucher={onSendVoucher} />)}
@@ -80,6 +91,9 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [], on
     </Modal>
   );
 }
+
+// 행의 '이용권' 버튼과 열 머리의 보이지 않는 자리표가 **같은 클래스**를 써야 숫자 열이 머리와 맞는다(#2).
+const VOUCHER_BTN_CLS = 'mr-2 inline-flex min-h-10 shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-2 text-2xs font-bold text-accent-300';
 
 function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueRegular; venueId: string; onSendVoucher?: (name: string) => void }) {
   const toast = useToast();
@@ -172,7 +186,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
         {onSendVoucher && (
           // 터치 영역 40px 확보(min-h-10) — 라벨은 아이콘만이 아니라 글자도 남긴다(색·아이콘만으로 뜻을 전하지 않는다).
           <button type="button" onClick={() => onSendVoucher(r.name)} title={`${r.name}님에게 매장이용권 보내기`}
-            className="mr-2 inline-flex min-h-10 shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-2 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
+            className={`${VOUCHER_BTN_CLS} transition-colors hover:bg-accent-300/20`}>
             <Icon name="gift" size={11} className="shrink-0" />이용권
           </button>
         )}

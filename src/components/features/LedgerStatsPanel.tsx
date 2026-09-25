@@ -455,7 +455,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
                   <div className="flex items-center gap-3 mt-1.5 text-2xs text-ink-muted">
                     <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-emerald-500" /> 메인</span>
                     <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-accent-300" /> 사이드</span>
-                    <span className="text-ink-muted/70">· 막대 탭 = 그날 상세</span>
+                    <span className="text-ink-muted">· 막대 탭 = 그날 상세</span>
                   </div>
                 )}
                 {trendDetail && (() => {
@@ -516,7 +516,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
               <ul className="space-y-1">
                 {m.ranking.slice(0, 10).map(([name, cnt], i) => (
                   <li key={name} className="flex items-center gap-2 px-2 py-2 rounded-input bg-surface-high border border-border-default">
-                    <span className={['w-5 text-center text-xs font-bold tabular-nums', i === 0 ? 'text-accent-300' : i === 2 ? 'text-amber-600' : 'text-ink-secondary'].join(' ')}>{i + 1}</span>
+                    <span className={['w-5 text-center text-xs font-bold tabular-nums', i === 0 ? 'text-accent-300' : i === 2 ? 'text-amber-800 dark:text-amber-600' : 'text-ink-secondary'].join(' ')}>{i + 1}</span>
                     {/* 긴 닉네임은 잘리되 title 로 전체를 볼 수 있게 — 잘린 이름만 남으면 누구인지 확인할 길이 없다 */}
                     <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary" title={name}>{name}</span>
                     <span className="w-14 shrink-0 text-right text-xs font-bold text-ink-secondary tabular-nums">{cnt}회</span>
@@ -755,7 +755,8 @@ function Mini({ label, value, hint, tone = 'default' }: { label: string; value: 
     <div className="rounded-input border border-border-default bg-surface-high px-2 py-2">
       <p className="truncate text-[11px] leading-tight text-ink-muted" title={label}>{label}</p>
       <p data-testid="mini-value" className={['mt-1 text-base font-bold leading-none tabular-nums', MINI_TONE[tone]].join(' ')}>{value}</p>
-      {hint && <p className="mt-1 text-[10px] leading-tight text-ink-muted/70">{hint}</p>}
+      {/* 2026-09-25 #7 — /70 은 라이트 2.7:1 · 다크 3.2:1 로 AA 미달이었다(10px 글자라 완화 기준도 없다). */}
+      {hint && <p className="mt-1 text-[10px] leading-tight text-ink-muted">{hint}</p>}
     </div>
   );
 }

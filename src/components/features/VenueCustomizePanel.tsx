@@ -272,7 +272,8 @@ function SlugEditor({ venueId, onOpenVenue }: { venueId: string; onOpenVenue?: (
         <input value={slug}
           onChange={(e) => { setSlug(normalize(e.target.value)); setCheck('idle'); }}
           placeholder="예: roti-arena" maxLength={20}
-          className="input min-w-0 flex-1 text-sm lowercase" />
+          // 2026-09-25 #14 — min-w-0 이면 flex-wrap 이 줄을 안 바꿔 390 에서 글자공간 48.5px(자리글 85.8 → −37.3)로 눌렸다.
+          className="input min-w-[9rem] flex-1 text-sm lowercase" />
         <button type="button" onClick={doCheck} disabled={!slug}
           className="btn-ghost shrink-0 px-3 text-xs disabled:opacity-50">중복 확인</button>
         <button type="button" onClick={save} disabled={busy || (slug !== '' && check !== 'ok') || slug === (saved ?? '')}
@@ -453,7 +454,8 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
           )}
           {customBoards.length < MAX_CUSTOM_BOARDS && (
             <div className="flex flex-wrap gap-1.5">
-              <input value={nbName} onChange={(e) => setNbName(e.target.value)} maxLength={16} placeholder="보드 이름 (예: 월요 토너 킹)" className="input min-w-0 flex-1 text-sm" />
+              {/* 2026-09-25 #14 — 390 에서 글자공간 64.5px(자리글 161.1 → −96.6). 실제 최소폭을 줘서 단위·기간 칸을 다음 줄로 내린다. */}
+              <input value={nbName} onChange={(e) => setNbName(e.target.value)} maxLength={16} placeholder="보드 이름 (예: 월요 토너 킹)" className="input min-w-[12rem] flex-1 text-sm" />
               <input value={nbUnit} onChange={(e) => setNbUnit(e.target.value)} maxLength={4} placeholder="단위(점)" className="input w-20 text-sm" />
               <select value={nbPeriod} onChange={(e) => setNbPeriod(e.target.value as 'all' | 'month' | 'season')} className="input w-auto shrink-0 text-sm" aria-label="집계 기간">
                 <option value="all">누적</option>
@@ -488,12 +490,12 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
           <div className="grid grid-cols-5 gap-1.5">
             {points.map((p, i) => (
               <label key={i} className="space-y-0.5 text-center">
-                <span className="flex items-center justify-center gap-1 text-2xs font-semibold text-ink-muted">
+                <span className="flex min-h-6 items-center justify-center gap-0.5 text-2xs font-semibold text-ink-muted">
                   {i + 1}등
                   {/* 마지막 행만 지울 수 있다 — 가운데를 지우면 등수가 통째로 한 칸씩 당겨진다 */}
                   {points.length > 1 && i === points.length - 1 && (
                     <button type="button" onClick={() => removePlacement(i)} aria-label={`${i + 1}등 삭제`}
-                      className="text-ink-muted transition-colors hover:text-danger-light"><Icon name="close" size={11} /></button>
+                      className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-float hover:text-danger-light"><Icon name="close" size={11} /></button>
                   )}
                 </span>
                 <input type="number" inputMode="numeric" min={0} max={PLACEMENT_POINT_MAX} value={p}

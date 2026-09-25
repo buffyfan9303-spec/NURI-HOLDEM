@@ -164,7 +164,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                   </div>
                 );
                 return (
-                  <button type="button" onClick={() => { setLinking(r.name); setMq(''); setMcands([]); }} className="mt-1 inline-flex items-center gap-1 text-2xs text-accent-300 hover:underline"><Icon name="link" size={11} className="shrink-0" />회원 연결</button>
+                  <button type="button" onClick={() => { setLinking(r.name); setMq(''); setMcands([]); }} className="hit mt-1 inline-flex items-center gap-1 text-2xs text-accent-300 hover:underline"><Icon name="link" size={11} className="shrink-0" />회원 연결</button>
                 );
               })()}
             </li>

@@ -103,6 +103,10 @@ interface Props {
  * 매장 대시보드 — 오늘 장부·클락·예약·출근 + 최근 7일 추세·객단가 + 미수 알림 + 인건비·손님유형을 실시간 요약.
  * 모든 카드는 해당 운영 화면으로 바로가기. 직원은 부여된 권한(caps)의 카드만 노출 — 권한 없는 화면으로의 dead-end 방지.
  */
+// 2026-09-25 MYSTORE-FULL-AUDIT #9 — T(회수 이용권)는 금액 비례라 소수가 된다. 무포맷이면 '501.8268 T' 처럼
+// 소수 4자리·천단위 없이 떴다. 장부 바(NuriPosLedger '티켓')와 **같은 표기**(소수 1자리 + 천단위)로 맞춘다.
+const fmtT = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
+
 export default function StoreDashboard({ venueId, venueName: venueNameProp, schedules, onGoto, onCreatePoster, caps, active = true, onProgress }: Props) {
   const toast = useToast();
   const d = localToday();
@@ -881,7 +885,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 <span className="block text-2xs text-ink-muted">회수 이용권</span>
                 {/* 2026-09-11: '장' 은 통계·정산의 'T' 와 같은 수를 다른 이름으로 불러 헷갈렸다 — 단위를 T 로 통일. */}
                 <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-fuchsia">
-                  {fin.ticket}<span className="ml-1 text-sm font-semibold text-ink-muted">T</span>
+                  {fmtT(fin.ticket)}<span className="ml-1 text-sm font-semibold text-ink-muted">T</span>
                 </span>
               </span>
             </span>
@@ -965,7 +969,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                       <li key={r.id} className="relative flex items-center gap-2 text-xs">
                         <span className="min-w-0 flex-1 truncate text-ink-secondary">{r.playerName}</span>
                         <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{relativeTime(r.createdAt)}</span>
-                        <span className="shrink-0 rounded-badge bg-surface-float px-1 py-0.5 text-2xs text-ink-muted">{gameLabel(r.requestedGameSeq)}</span>
+                        <span className="shrink-0 rounded-badge bg-surface-float px-1 py-0.5 text-2xs text-ink-secondary">{gameLabel(r.requestedGameSeq)}</span>
                         {/* ⚠ 승인(✓)과 거절(✕)이 24px 로 6px 간격에 붙어 있었다.
                             접수대에서 한 손으로 누르는 자리인데, 오탭하면 손님이 거절되거나
                             엉뚱한 사람이 명단에 들어간다 — 되돌리는 비용이 승인 1탭과 비대칭이다.
@@ -1099,7 +1103,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         <section className="rounded-aura border card-aura p-3">
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="flex items-center gap-2 text-sm font-bold text-ink-primary"><Icon name="filter" size={13} className="shrink-0 text-ink-muted" />최근 7일 흐름 <span className="font-normal text-ink-muted">조회→예약→방문 · 대회 {funnel.tournaments}개</span></h3>
-            <button type="button" onClick={() => onGoto('stats')} className="shrink-0 text-2xs font-bold text-accent-300">통계 →</button>
+            <button type="button" onClick={() => onGoto('stats')} className="hit shrink-0 text-2xs font-bold text-accent-300">통계 →</button>
           </div>
           <div className="mt-2 flex items-center gap-2 text-center">
             <div className="min-w-0 flex-1 rounded-input bg-surface-high px-1 py-2">
@@ -1402,8 +1406,12 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               {topRegulars.map((r, i) => (
                 <li key={r.name} className="flex items-center gap-2 text-xs">
                   <span className={`w-4 shrink-0 text-center text-2xs font-bold tabular-nums ${i === 0 ? 'text-gold-300' : 'text-ink-muted'}`}>{i + 1}</span>
-                  <span className="flex-1 min-w-0 truncate text-ink-secondary">{r.name}</span>
-                  <span className="shrink-0 tabular-nums text-ink-muted">바인 <b className="text-ink-secondary">{r.buyins}</b> · 방문 <b className="text-ink-secondary">{r.visits}</b>{r.buyins >= 5 && <span className="ml-1 font-bold text-ink-secondary">단골</span>}</span>
+                  {/* 2026-09-25 MYSTORE-FULL-AUDIT #5 — 한 줄에 [이름 | 바인·방문·단골 | 보내기] 를 다 세우면 이름 열이
+                      65px(1440, 카드 279px)만 남아 '이도현(포…' 처럼 잘렸다. 수치는 이름 아래 둘째 줄로 내린다. */}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-ink-secondary" title={r.name}>{r.name}</span>
+                    <span className="block text-2xs tabular-nums text-ink-muted">바인 <b className="text-ink-secondary">{r.buyins}</b> · 방문 <b className="text-ink-secondary">{r.visits}</b>{r.buyins >= 5 && <span className="ml-1 font-bold text-ink-secondary">단골</span>}</span>
+                  </span>
                   {/* CRM 행동 버튼 — 고객에게 바로 매장이용권 발급(받는 사람 자동 입력).
                       DashCard 의 children 은 헤더 <button> 밖이라 진짜 <button> 을 쓸 수 있다 —
                       span[role=button] 은 Space 키가 안 먹고 폼 의미도 없어서 흉내에 그친다. */}
@@ -1412,7 +1420,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                   {caps.issueVoucher && (
                     <button type="button" title={`${r.name}님에게 매장이용권 보내기`}
                       onClick={() => { setVoucherPrefill(r.name); setVoucherOpen(true); }}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-1.5 py-0.5 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 active:opacity-80"
+                      className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-2 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 active:opacity-80"
                     ><Icon name="gift" size={11} className="shrink-0" />보내기</button>
                   )}
                 </li>
@@ -1477,8 +1485,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 <Stat label="오늘 발행" value={`${todayVoucher}`} unit="T" />
                 {/* 2026-09-18: 위 KPI(:843)가 같은 수(fin.ticket)를 'T' 로 부르는데 여기만 '장' 이었다 —
                     한 화면에서 같은 숫자가 '8T' 와 '8장' 으로 두 번 보였다(PC 전수조사 2026-09-18). */}
-                <Stat label="7일 회수" value={rangeErr ? '—' : `${weekTicket}`} unit={rangeErr ? '' : 'T'} />
-                <Stat label="오늘 회수" value={`${fin.ticket}`} unit="T" />
+                <Stat label="7일 회수" value={rangeErr ? '—' : fmtT(weekTicket)} unit={rangeErr ? '' : 'T'} />
+                <Stat label="오늘 회수" value={fmtT(fin.ticket)} unit="T" />
               </div>
               {!!rangeErr && <div className="mt-2"><LoadFailRow what="최근 7일 이용권" onRetry={reloadRange} /></div>}
               <p className="mt-2 t-desc break-keep text-ink-muted">발행 = 장부에 적은 발급·시상 장수 · 회수 = 티켓으로 낸 바인 금액(T)</p>
@@ -1566,8 +1574,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 {todayGames.map(({ sx, c, value, unpaid, ck, ckLive }) => {
                   const label = sx.gameSeq === MAIN_GAME_SEQ ? (sx.title || '메인') : (sx.title || `사이드 ${sx.gameSeq - 1}`);
                   // 상태는 색만으로 구분하지 않는다 — 라벨을 항상 함께 쓴다(§6 접근성).
-                  const st = sx.closed ? { t: '마감', c: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30' }
-                    : sx.regClosed ? { t: '레지 마감', c: 'text-amber-500 bg-amber-400/10 border-amber-400/30' }
+                  // 2026-09-25 #7 — 라이트에서 emerald-600 은 틴트 위 3.0:1, amber-500 도 미달이었다. 라이트는 텍스트용 딥 단(700/800), 다크는 그대로.
+                  const st = sx.closed ? { t: '마감', c: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30' }
+                    : sx.regClosed ? { t: '레지 마감', c: 'text-amber-800 dark:text-amber-500 bg-amber-400/10 border-amber-400/30' }
                     : { t: '진행중', c: 'text-accent-300 bg-accent-300/10 border-accent-400/30' };
                   return (
                     <tr key={sx.gameSeq} className="border-b border-border-subtle/60 last:border-0 transition-colors hover:bg-surface-float/40">

@@ -1102,7 +1102,7 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
             </div>
           </div>
           <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200}
-            placeholder="필요한 이유 (선택) — 예) 주말 시리즈 3일 · 예상 참가 200명"
+            placeholder="필요한 이유 (선택) — 예) 주말 시리즈 3일"
             className="input w-full text-sm" aria-label="증액이 필요한 이유" />
           <button type="button" disabled={busy || pending} onClick={submit}
             className="btn-primary w-full text-xs disabled:opacity-50">

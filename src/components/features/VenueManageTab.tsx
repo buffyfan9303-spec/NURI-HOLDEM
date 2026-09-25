@@ -1231,11 +1231,14 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
       data-aura=""
       data-aura-level="hero"
       data-aura-variant={mainRunning ? 'emerald' : 'amber'}
-      className="flex items-stretch gap-2 overflow-x-auto rounded-card border border-accent-400/30 bg-surface-low px-2 py-1 text-2xs"
+      className="flex items-stretch gap-2 overflow-x-auto rounded-card border border-accent-400/30 bg-surface-low px-2 py-0.5 text-2xs"
     >
+      {/* 2026-09-25 MYSTORE-FULL-AUDIT #10 — 두 버튼이 24.4px 였다(390·1024·1440 공통). 이 바는 overflow-x-auto 라
+          ::before 오버행은 아래 절반이 잘린다(위 단계 칩 주석의 실측) → 버튼 박스를 min-h-[44px] 로 직접 키우고
+          바의 세로 여백을 py-1→py-0.5 로 줄여 바 높이 증가를 줄인다. 루트 17px 이라 h-11 이 아니라 44px 로 못박는다. */}
       {main && eff && (
         <button type="button" onClick={() => onGoto('clock')}
-          className="flex shrink-0 items-center gap-2 rounded-input px-2 py-1 transition-colors hover:bg-surface-float">
+          className="flex min-h-[44px] shrink-0 items-center gap-2 rounded-input px-2 py-1 transition-colors hover:bg-surface-float">
           <span className={['h-1.5 w-1.5 shrink-0 rounded-full', main.running ? 'bg-emerald-400' : 'bg-amber-400'].join(' ')} aria-hidden />
           <span className="font-bold text-ink-primary">{lv?.kind === 'break' ? 'BREAK' : `레벨 ${levelNo}`}</span>
           {lv && lv.kind !== 'break' && <span className="tabular-nums text-ink-secondary">{lv.sb.toLocaleString()}/{lv.bb.toLocaleString()}</span>}
@@ -1251,7 +1254,7 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
           ⚠ 주석을 `{pending > 0 && (` **안**에 두면 JSX 가 형제 둘로 읽혀 빌드가 깨진다 — 밖에 둔다. */}
       {pending > 0 && (
         <button type="button" onClick={() => onGoto({ section: 'ledger', date: kstToday() })}
-          className="flex shrink-0 items-center gap-2 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
+          className="flex min-h-[44px] shrink-0 items-center gap-2 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
           바인 대기 <b className="tabular-nums">{pending}</b>건 →
         </button>
       )}
@@ -2003,7 +2006,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         };
         const Section = ({ icon, label, hint, children }: { icon: IconName; label: string; hint: string; children: ReactNode }) => (
           <div className="space-y-1">
-            <p className="flex items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name={icon} size={12} className="shrink-0" />{label}<span className="font-normal text-ink-muted/70"> · {hint}</span></p>
+            <p className="flex items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name={icon} size={12} className="shrink-0" />{label}<span className="font-normal text-ink-muted"> · {hint}</span></p>
             <div className="flex flex-wrap items-center gap-2">{children}</div>
           </div>
         );

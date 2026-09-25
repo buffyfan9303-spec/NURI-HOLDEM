@@ -298,8 +298,11 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     // 2026-09-24 — PC(lg~)는 두 칸: 왼쪽 [월 이동·요약·그리드](sticky) / 오른쪽 [그날 기록·분석·도구].
     //   한 칸으로 1222px 을 채우면 날짜 칸이 165×44 로 납작하게 늘어났다(실측 before/light-1440).
     // 태블릿(768~1023)은 한 칸이지만 폭을 36rem 으로 묶는다 — 풀폭이면 칸이 102×58 로 늘어졌다(실측).
-    <div data-main-enter-ready className="px-page-x pb-section pt-2 md:max-lg:mx-auto md:max-lg:max-w-[36rem] lg:grid lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)] lg:items-start lg:gap-5 lg:pt-4">
-      <div data-testid="cal-first-screen" className="space-y-2 lg:sticky lg:top-28">
+    // 2026-09-25 MYSTORE-FULL-AUDIT #3 — 두 칸은 lg(1024)가 아니라 **xl(1280)부터**다. 1024 에선 업주 사이드 메뉴를 뺀
+    //   남은 폭에서 왼쪽이 30rem 을 먼저 가져가 오른쪽 열이 175px 로 눌렸고, 날짜 input 글자공간 69.5px(글자 83.4 → −13.9),
+    //   '금액' −8.2, ROI 기간 select −22.9 로 잘렸다(프로덕션 프리뷰 실측). 1024~1279 는 태블릿과 같은 36rem 한 칸으로 쌓는다.
+    <div data-main-enter-ready className="px-page-x pb-section pt-2 md:max-xl:mx-auto md:max-xl:max-w-[36rem] xl:grid xl:grid-cols-[minmax(0,30rem)_minmax(0,1fr)] xl:items-start xl:gap-5 xl:pt-4">
+      <div data-testid="cal-first-screen" className="space-y-2 xl:sticky xl:top-28">
       {/* 월 이동 — 제목 18px · 좌우 이동 44px · '오늘' 은 이번 달·오늘이 아닐 때만 켠다(무반응 버튼 금지 대신 흐리게 두지 않고 숨긴다). */}
       <div data-main-enter className="flex items-center gap-1">
         <button type="button" aria-label="이전 달" className="grid h-11 w-11 place-items-center rounded-input text-ink-secondary hover:bg-surface-high/50 hover:text-ink-primary"
@@ -405,7 +408,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
       </p>
       </div>
 
-      <div className="mt-3 space-y-3 lg:mt-0">
+      <div className="mt-3 space-y-3 xl:mt-0">
       {/* 그날 기록 — 오너 목적 ②③④: 결과(+/−)·계획 입력과 목록, 그날 저장한 SPOT, 예약·찜. */}
       <BankrollCard part="entry" title={pickedDayTitle} othersCount={loaded ? dayOthers.length : 1} date={picked} monthPrefix={monthPrefix} rows={bankroll} loaded={loaded} failed={bankrollErr != null} onChanged={reload} onPickDate={setPicked} toast={toast}>
         {!loaded ? (
@@ -886,7 +889,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
         )}
 
         <input value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={40}
-          placeholder={mode === 'bankroll' ? '메모(선택)' : '계획 — 예: 금요일 위클리 메인'}
+          placeholder={mode === 'bankroll' ? '메모(선택)' : '계획 — 예: 금요일 위클리'}
           aria-label={mode === 'bankroll' ? '메모' : '일정 내용'}
           className="input col-span-4 min-h-[44px] min-w-0 text-sm" />
         {mode === 'bankroll' ? (<>
