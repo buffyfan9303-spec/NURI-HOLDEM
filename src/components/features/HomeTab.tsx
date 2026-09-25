@@ -149,7 +149,7 @@ const H3_CLS = 'font-display text-[15px] font-bold leading-[22px] tracking-tight
  *  칸 수가 홀수여도·사이에 두 칸짜리 줄이 끼어도 짝(nth-child)이 어긋나지 않는다.
  *  ⚠ 폴백 갈래(여러 날짜 + 날짜 머리말)는 한 열 그대로다 — 머리말이 두 칸에 흩어지면 어느 날 대회인지 읽을 수 없다.
  *  ⚠ 스켈레톤도 같은 격자다 — 한 열로 예약하면 데이터가 오는 순간 목록 높이가 절반으로 줄어 아래가 끌려 올라간다(CLS). */
-const HOME_LIST_GRID = 'lg:grid lg:grid-cols-2 lg:divide-y-0 lg:[&>*]:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))]';
+const HOME_LIST_GRID = 'lg:grid lg:grid-cols-2 lg:divide-y-0 lg:[&>*]:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))] lg:[&>article:nth-of-type(odd):last-of-type]:col-span-2';
 const MORE_CLS = 'flex items-center gap-0.5 py-2 -my-2 t-desc font-semibold text-ink-muted hover:text-ink-secondary';
 
 /** 문장 속 숫자만 강조색 — 종전 '오늘 대회 <N>개' 의 색 계약을 문자열 한 줄에도 그대로 적용한다. */

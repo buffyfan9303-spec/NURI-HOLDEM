@@ -145,7 +145,7 @@ describe('홈 일정 카드 — [로고][본문][우측 열] 시간표형', () =
 
 describe('PC 일정 목록 2열 · 머리 줄', () => {
   it('목록·스켈레톤·지금 등록 가능이 같은 lg~ 2열 격자다(폴백 갈래는 한 열 · md 는 지표가 접혀 제외 — 근거는 HomeTab 주석)', () => {
-    expect(HOME).toMatch(/const HOME_LIST_GRID = 'lg:grid lg:grid-cols-2 lg:divide-y-0 lg:\[&>\*\]:shadow-\[0_0_0_0\.5px_rgb\(var\(--border-subtle\)\)\]'/);
+    expect(HOME).toMatch(/const HOME_LIST_GRID = 'lg:grid lg:grid-cols-2 lg:divide-y-0 lg:\[&>\*\]:shadow-\[0_0_0_0\.5px_rgb\(var\(--border-subtle\)\)\] lg:\[&>article:nth-of-type\(odd\):last-of-type\]:col-span-2'/);
     expect(HOME.match(/card-aura \$\{HOME_LIST_GRID\}`\}/g)?.length, '지금 등록 가능(목록·스켈레톤)과 일정 스켈레톤').toBe(3);
     expect(HOME).toMatch(/card-aura \$\{HOME_LIST_GRID\}`\} aria-busy="true"/);
     expect(HOME).toMatch(/card-aura \$\{useFallback \? '' : HOME_LIST_GRID\}`\}/);
