@@ -111,7 +111,11 @@ describe('홈 일정 카드 — [로고][본문][우측 열] 시간표형', () =
   it('금액 칸: 보장(guaranteed && prizePool)이면 금색 금액, 아니면 초록 "데일리" · 아래 참가비 · 라벨 글자 없음', () => {
     expect(TT).toMatch(/const gtd = schedule\.guaranteed && schedule\.prizePool \? formatPrize\(schedule\.prizePool\) : null;/);
     expect(TT).toMatch(/data-testid="schedule-prize" className="[^"]*text-gold-300">\{gtd\}/);
-    expect(TT).toMatch(/data-testid="schedule-daily" className="[^"]*text-emerald-300">데일리</);
+    expect(TT).toMatch(/data-testid="schedule-daily" data-kind=\{kind\.text\} className=\{`[^`]*\$\{kind\.cls\}`\}>\{kind\.text\}</);
+    // 오너 2026-09-25: 보장이 없으면 새틀 → '새틀', 시리즈·대회 → '대회', 나머지 → '데일리'
+    expect(CARD).toMatch(/grade === 'satellite'\) return \{ text: '새틀'/);
+    expect(CARD).toMatch(/grade === 'series' \|\| s\.isCompetition\) return \{ text: '대회'/);
+    expect(CARD).toMatch(/return \{ text: '데일리', cls: 'text-emerald-300' \};/);
     expect(TT).toMatch(/data-testid="schedule-buyin"[\s\S]{0,300}\{buyInText\(schedule\.buyIn\?\.amount\)\}/);
     expect(TT).not.toMatch(/<Metric/);
     // 제목 끝 GTD 표기는 금액 칸이 보장 금액을 보여 줄 때만 뗀다(엔트리 게임 제목의 'GTD' 는 정보다)

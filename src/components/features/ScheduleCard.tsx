@@ -828,10 +828,18 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
  *  · 라이브 상태(생존/엔트리 · 현재 레벨 L8·휴식·진행 중 · 클락 없이 시작 시각 지남 'L —')는 ③ 줄 끝으로 옮겼다(기능 유지).
  *    시작 전 '시작 전' 표기만 뺐다 — 같은 줄의 `18:00 시작` 이 이미 말한다.
  *  ⚠ 폭을 바꾸면 scratchpad schedrow/measure.cjs 로 360·390·412·1024·1280·1440 을 다시 재라(12자 제목 + 최장 금액). */
+/** 보장 금액이 없을 때 금액 자리에 쓰는 말(오너 2026-09-25): 새틀이면 '새틀', 시리즈·대회면 '대회', 나머지(엔트리 등)는 '데일리'. */
+export function noGtdLabel(s: { grade?: string | null; isCompetition?: boolean }): { text: string; cls: string } {
+  if (s.grade === 'satellite') return { text: '새틀', cls: 'text-sky-300' };
+  if (s.grade === 'series' || s.isCompetition) return { text: '대회', cls: 'text-accent-200' };
+  return { text: '데일리', cls: 'text-emerald-300' };
+}
+
 function TimetableCard({
   schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, vtActive, venue, regInfo,
 }: CardProps) {
   const gtd = schedule.guaranteed && schedule.prizePool ? formatPrize(schedule.prizePool) : null;
+  const kind = noGtdLabel(schedule);
   const reg = regCloseRaw(schedule);
   const status = regInfo?.hasField ? null
     : regInfo ? (regInfo.onBreak ? '휴식' : regInfo.levelNo ? `L${regInfo.levelNo}` : '진행 중')
@@ -913,13 +921,13 @@ function TimetableCard({
             글자·폭·gap 을 바꾸면 360 에서 12자 제목(139.1px)과 이 금액이 둘 다 한 줄인지 다시 재라. */}
       {/* 라벨 글자가 없으므로 보조기술에는 그룹 이름으로 무슨 값인지 말해 준다(sr-only 1×1 스팬은 home-flow-fit 잘림 게이트에 걸린다). */}
       <div data-metrics data-testid="schedule-money" role="group"
-        aria-label={`${gtd ? `보장 상금 ${gtd}` : '데일리(보장 없음)'}, 참가비 ${buyInText(schedule.buyIn?.amount)}`}
+        aria-label={`${gtd ? `보장 상금 ${gtd}` : `${kind.text}(보장 없음)`}, 참가비 ${buyInText(schedule.buyIn?.amount)}`}
         className="flex w-[5.125rem] min-w-0 flex-col items-end justify-center gap-y-[3px] self-stretch border-l border-border-subtle pl-2 text-right">
         {gtd ? (
           <span data-testid="schedule-prize" className="break-keep text-[0.8125rem] font-extrabold
  leading-tight tracking-tight tabular-nums text-gold-300">{gtd}</span>
         ) : (
-          <span data-testid="schedule-daily" className="text-[0.8125rem] font-extrabold leading-tight text-emerald-300">데일리</span>
+          <span data-testid="schedule-daily" data-kind={kind.text} className={`text-[0.8125rem] font-extrabold leading-tight ${kind.cls}`}>{kind.text}</span>
         )}
         {/* 참가비 — §28 상품 가격 정보. T 로 정확히 떨어지는 금액만 T, 나머지는 원 그대로(buyInText 정본). */}
         <span data-testid="schedule-buyin"
