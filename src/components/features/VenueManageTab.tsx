@@ -381,9 +381,19 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //  ① 이용권 킬스위치 OFF 인데 알림 딥링크가 voucher 를 지정 → 제목만 '이용권·QR' 인 백지
   //  ② 이용권 열람 권한만 있는 직원(staffOk=false)이 '매장 설정' 첫 진입 → 기본값 'page' 가
   //     권한 밖이라 백지. 볼 수 있는 탭이 하나 있는데도 아무것도 안 보인다.
+  // 20260925g N7: '위험 구역'(kill_venue) 은 서버가 venues.owner_id = auth.uid() 만 받는다. role 이 venue_owner 여도 이 매장에는
+  //   공동운영자(venue_owners)일 수 있어 탭은 보이고 실행에서만 '대표 업주만' 으로 거절됐다 → 대표 업주가 **아님이 확인되면** 탭을 뺀다.
+  //   확인 못 함(null)은 종전대로 보인다 — 조회 실패로 대표 업주의 메뉴를 없애지 않는다.
+  const [primaryOwner, setPrimaryOwner] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!isOwner || !venueId) { setPrimaryOwner(null); return; }
+    let alive = true;
+    getMyVenue().then((v) => { if (alive) setPrimaryOwner(v ? v.id === venueId : null); }).catch(() => { if (alive) setPrimaryOwner(null); });
+    return () => { alive = false; };
+  }, [isOwner, venueId]);
   const canSettingsTab = useCallback((t: SettingsTab) => (
-    t === 'danger' ? (isOwner && !!venueId) : staffOk
-  ), [isOwner, venueId, staffOk]);
+    t === 'danger' ? (isOwner && !!venueId && primaryOwner !== false) : staffOk
+  ), [isOwner, venueId, staffOk, primaryOwner]);
   /** 이용권 섹션을 열 수 있는가 — 종전 canSettingsTab('voucher') 와 **같은 조건**이다(권한을 넓히지 않았다).
    *  idOn = 본인인증·이용권 통합 킬스위치. 꺼져 있으면 탭 자체를 만들지 않는다 —
    *  '제목만 있고 백지' 를 피하려고 이 판정을 단일 지점으로 두는 이유는 아래 주석과 같다. */
@@ -2212,6 +2222,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                                 title="같은 닉네임의 회원이 둘 이상입니다. 실명을 보고 골라 주세요">중복</span>
                             )}
                             <span className="truncate font-semibold text-ink-primary">{c.nickname}{c.realName ? <span className="font-normal text-ink-muted"> · {c.realName}</span> : null}</span>
+                            {c.phoneMasked ? <span data-testid="cand-phone" className="ml-auto shrink-0 text-2xs tabular-nums text-ink-muted">{c.phoneMasked}</span> : null}
                           </button>
                         </li>
                       ))}
@@ -2469,6 +2480,16 @@ function StaffManager({ venueId }: { venueId: string }) {
     if (on) next.add(key); else next.delete(key);
     return next;
   });
+  // 20260925g: 서버(grant_*_access)는 미승인·정지 직원에게 권한 주기를 22023 '그 매장의 승인된 직원에게만…' 으로 거절한다.
+  //   직원 목록 RPC(get_my_venue_staff)가 승인·정지 상태를 안 내려줘 화면이 버튼을 미리 가리지 못한다(RPC 컬럼 추가는 리드 결정).
+  //   msgOf 는 22xxx 를 내부 오류로 보고 사유를 삼켜 '변경 실패' 만 남았다(죽은 버튼) → 사유를 쉬운 말로 올린다.
+  const accessErrMsg = (e: unknown, fallback: string) => {
+    const r = (e && typeof e === 'object') ? e as { code?: unknown; message?: unknown } : {};
+    if (r.code === '22023' && typeof r.message === 'string' && /승인된 직원/.test(r.message)) {
+      return `${fallback} — 아직 승인되지 않았거나 이용이 정지된 직원에게는 권한을 줄 수 없습니다. 승인·정지 해제 뒤 다시 시도해 주세요`;
+    }
+    return msgOf(e, fallback);
+  };
   const toggleAccess = async (id: string) => {
     const view = accessViewOf(access, changingOf('ledger'), id);
     if (!canToggleAccess(view)) {
@@ -2482,7 +2503,7 @@ function StaffManager({ venueId }: { venueId: string }) {
     catch (e) {
       // P02 재작업 4: 재조회만 걸면 한 커밋 동안 낙관값('권한 ✓')이 disabled 도 풀린 채 남는다 — catch 에서 **직접 역연산**으로 되돌린 뒤 재조회.
       setAccess((a) => a.status === 'ready' ? { status: 'ready', ids: has ? [...a.ids, id] : a.ids.filter((x) => x !== id) } : a);
-      toast.show(msgOf(e, '장부·순위 권한 변경 실패'), 'error'); reloadAccess();
+      toast.show(accessErrMsg(e, '장부·순위 권한 변경 실패'), 'error', { durationMs: 7000 }); reloadAccess();
     }
     finally { markChanging(`ledger:${id}`, false); }
   };
@@ -2501,7 +2522,7 @@ function StaffManager({ venueId }: { venueId: string }) {
     catch (e) {
       // 재조회만 걸면 한 커밋 동안 낙관값이 남는다 — catch 에서 **직접 역연산**으로 되돌린 뒤 재조회(P02).
       setSched((a) => a.status === 'ready' ? { status: 'ready', ids: has ? [...a.ids, id] : a.ids.filter((x) => x !== id) } : a);
-      toast.show(msgOf(e, '스케줄 편성 권한 변경 실패'), 'error'); reloadSched();
+      toast.show(accessErrMsg(e, '스케줄 편성 권한 변경 실패'), 'error', { durationMs: 7000 }); reloadSched();
     }
     finally { markChanging(`schedule:${id}`, false); }
   };
@@ -2517,7 +2538,7 @@ function StaffManager({ venueId }: { venueId: string }) {
     try { if (has) await revokeVoucherAccess(venueId, id); else await grantVoucherAccess(venueId, id); }
     catch (e) {
       setVouch((a) => a.status === 'ready' ? { status: 'ready', ids: has ? [...a.ids, id] : a.ids.filter((x) => x !== id) } : a);
-      toast.show(msgOf(e, '이용권내역 권한 변경 실패'), 'error'); reloadVouch();
+      toast.show(accessErrMsg(e, '이용권내역 권한 변경 실패'), 'error', { durationMs: 7000 }); reloadVouch();
     }
     finally { markChanging(`voucher:${id}`, false); }
   };

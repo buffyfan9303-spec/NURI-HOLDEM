@@ -673,6 +673,7 @@ ${cards}
                               className={`flex w-full items-center gap-1.5 rounded-input px-2 py-1.5 text-left ${unverified ? 'cursor-not-allowed opacity-60' : i === activeIdx ? 'bg-surface-high' : 'hover:bg-surface-high'}`}>
                               <Icon name="user" size={12} className="shrink-0 text-ink-muted" />
                               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{c.label ?? c.display}</span>
+                              {c.phoneMasked ? <span data-testid="cand-phone" className="shrink-0 text-2xs tabular-nums text-ink-muted">{c.phoneMasked}</span> : null}
                               {unverified && <span className="shrink-0 rounded bg-danger/15 px-1.5 py-0.5 text-2xs font-bold text-danger-light">미인증 · 발급 불가</span>}
                             </button>
                           </li>

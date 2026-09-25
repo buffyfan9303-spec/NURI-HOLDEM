@@ -67,7 +67,15 @@ export interface VisitedVenue { venueId: string; venueName: string | null; visit
 export interface PlayHistory { venueId: string; venueName: string | null; buyinCount: number; totalAmount: number; lastAt: string | null }
 /** display = 저장·표시용 닉네임(발급 시 holderName 으로 저장된다 — 실명을 넣지 마라).
  *  label = 후보 목록에만 보이는 한 줄(예: '홍길동 → 길동이'). 없으면 display. */
-export interface TransferTarget { id: string; display: string; verified?: boolean; label?: string }
+export interface TransferTarget {
+  id: string; display: string; verified?: boolean; label?: string;
+  /** 가린 전화(010-****-5678) — 서버(20260925h)가 내 매장 손님 행에만 싣는다. null 이면 화면은 아무것도 그리지 않는다. */
+  phoneMasked?: string | null;
+}
+/** RPC 행 → 후보. phone_masked 는 빈 문자열도 null 로(화면이 빈 칸을 차지하지 않게). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const toTransferTarget = (r: any): TransferTarget =>
+  ({ id: r.id, display: r.display, verified: r.verified ?? undefined, phoneMasked: r.phone_masked || null });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapRow(r: any): Voucher {
@@ -377,15 +385,13 @@ async function rawFindUserForTransfer(nickname: string): Promise<TransferTarget[
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('find_user_for_transfer', { p_nickname: nickname });
   if (error) throw new Error(error.message);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, display: r.display, verified: r.verified ?? undefined }));
+  return (data ?? []).map(toTransferTarget);
 }
 async function rawFindUserByPhone(phone: string): Promise<TransferTarget[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('find_user_by_phone', { p_phone: phone });
   if (error) throw new Error(error.message);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, display: r.display, verified: r.verified ?? undefined }));
+  return (data ?? []).map(toTransferTarget);
 }
 
 // 닉네임/이름 경로 — 키는 trim+소문자(ILIKE 검색이라 대소문자·공백 무관)
@@ -405,16 +411,19 @@ export interface VoucherRecipient {
   verified: boolean;
   /** 무엇으로 찾았나 — 'old_nickname' 이면 입력은 옛 닉네임이고 nickname 이 지금 닉네임이다 */
   matched: 'nickname' | 'real_name' | 'old_nickname' | 'partial';
+  /** 가린 전화 — 이 매장 손님 행에만(20260925h). 그 밖은 null */
+  phoneMasked?: string | null;
 }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const toVoucherRecipient = (r: any): VoucherRecipient => ({
+  userId: r.user_id, nickname: r.nickname ?? '', realName: r.real_name ?? null,
+  verified: r.verified === true, matched: r.matched, phoneMasked: r.phone_masked || null,
+});
 async function rawSearchVoucherRecipients(venueId: string, q: string): Promise<VoucherRecipient[]> {
   if (IS_MOCK || q.trim().length < 2) return [];
   const { data, error } = await supabase.rpc('search_voucher_recipients', { p_venue_id: venueId, p_q: q.trim() });
   if (error) throw new Error(error.message);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({
-    userId: r.user_id, nickname: r.nickname ?? '', realName: r.real_name ?? null,
-    verified: r.verified === true, matched: r.matched,
-  }));
+  return (data ?? []).map(toVoucherRecipient);
 }
 /** 후보 한 줄 — 실명이 확인되면 '실명 → 닉네임', 옛 닉네임으로 찾았으면 '옛 → 지금', 아니면 닉네임. */
 export function voucherRecipientLabel(r: VoucherRecipient, query: string): string {
@@ -432,7 +441,7 @@ export const searchVoucherRecipients = (venueId: string, q: string): Promise<Vou
 /** 이용권 모달의 기존 후보 모양(TransferTarget)으로 — display 는 닉네임만(holderName 에 실명이 저장되지 않게). */
 export const findVoucherRecipientTargets = (venueId: string, q: string): Promise<TransferTarget[]> =>
   searchVoucherRecipients(venueId, q).then((rs) =>
-    rs.map((r) => ({ id: r.userId, display: r.nickname, verified: r.verified, label: voucherRecipientLabel(r, q) })));
+    rs.map((r) => ({ id: r.userId, display: r.nickname, verified: r.verified, label: voucherRecipientLabel(r, q), phoneMasked: r.phoneMasked ?? null })));
 
 export async function voucherUsageByVenue(venueId: string): Promise<VoucherUsage[]> {
   if (IS_MOCK) return [];

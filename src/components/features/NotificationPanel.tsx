@@ -593,6 +593,7 @@ export default function NotificationPanel({
                         <span className="text-xs font-bold leading-none">{r.display.slice(0, 1)}</span>
                       </span>
                       <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{r.display}</span>
+                      {r.phoneMasked ? <span data-testid="cand-phone" className="shrink-0 text-2xs tabular-nums text-ink-muted">{r.phoneMasked}</span> : null}
                       {r.verified && (
                         <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-400">인증</span>
                       )}

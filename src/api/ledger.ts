@@ -1183,13 +1183,13 @@ export async function listStaleOpenSessions(venueId: string): Promise<{ sessionD
 }
 
 // 바인 추가 시 가입계정 연동 — 이름/닉네임으로 누리홀덤 가입자 검색(실명·닉네임·이 매장 방문횟수).
-export interface RegisteredPlayer { userId: string; realName: string | null; nickname: string | null; visits: number; }
+export interface RegisteredPlayer { userId: string; realName: string | null; nickname: string | null; visits: number; phoneMasked?: string | null; }
 export async function searchRegisteredPlayers(venueId: string, query: string): Promise<RegisteredPlayer[]> {
   if (IS_MOCK || !query.trim()) return [];
   const { data, error } = await supabase.rpc('search_registered_players', { p_venue_id: venueId, p_query: query.trim() });
   if (error) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ userId: r.user_id, realName: r.real_name ?? null, nickname: r.nickname ?? null, visits: Number(r.visits) || 0 }));
+  return (data ?? []).map((r: any) => ({ userId: r.user_id, realName: r.real_name ?? null, nickname: r.nickname ?? null, visits: Number(r.visits) || 0, phoneMasked: r.phone_masked || null }));
 }
 
 // ── 바이인(셀) ────────────────────────────────────────────────────────────────

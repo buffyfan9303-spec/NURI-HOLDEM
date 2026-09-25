@@ -155,7 +155,8 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                         {mcands.map((c) => (
                           <li key={c.id}>
                             <button type="button" disabled={busy} onClick={() => doLink(r.name.trim(), c)} className="flex w-full items-center gap-1.5 rounded-input px-2 py-1 text-left text-xs text-ink-primary hover:bg-surface-high disabled:opacity-50">
-                              <Icon name="user" size={13} className="shrink-0 text-ink-muted" /><span className="truncate font-semibold">{c.display}</span>
+                              <Icon name="user" size={13} className="shrink-0 text-ink-muted" /><span className="min-w-0 flex-1 truncate font-semibold">{c.display}</span>
+                              {c.phoneMasked ? <span data-testid="cand-phone" className="shrink-0 text-2xs tabular-nums text-ink-muted">{c.phoneMasked}</span> : null}
                             </button>
                           </li>
                         ))}

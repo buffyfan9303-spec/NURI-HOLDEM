@@ -522,11 +522,14 @@ export interface RankMember {
   realName: string;
   /** 본인인증(CI) 보유 — 매장이용권 지급 가능 조건과 동일한 판정 */
   verified: boolean;
+  /** 가린 전화(010-****-5678) — realName 과 같은 규칙으로 내 매장 손님 행에만 서버가 싣는다(20260925h). 그 밖은 null. */
+  phoneMasked?: string | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const toMember = (r: any): RankMember => ({
+export const toMember = (r: any): RankMember => ({
   id: r.id, nickname: r.nickname ?? '', realName: r.real_name ?? '', verified: r.verified === true,
+  phoneMasked: r.phone_masked || null,
 });
 
 async function rawSearchRankingMembers(q: string): Promise<RankMember[]> {

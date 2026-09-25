@@ -1606,7 +1606,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                     <li key={rp.userId}>
                       <button type="button" onClick={() => pickRegistered(rp)} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
                         <span className="shrink-0 rounded-badge border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">✓회원</span>
-                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{rp.realName ? `${rp.realName}(${rp.nickname ?? '-'})` : (rp.nickname ?? '-')}</span>
+                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{rp.realName ? `${rp.realName}(${rp.nickname ?? '-'})` : (rp.nickname ?? '-')}</span>{rp.phoneMasked ? <span data-testid="cand-phone" className="shrink-0 text-2xs tabular-nums text-ink-muted">{rp.phoneMasked}</span> : null}
                         <span className="shrink-0 text-2xs text-ink-muted">{rp.visits > 0 ? `방문 ${rp.visits}회` : '첫 방문'}</span>
                       </button>
                     </li>

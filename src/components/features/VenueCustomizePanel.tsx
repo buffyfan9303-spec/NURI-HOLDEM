@@ -632,7 +632,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
                       <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">
                         {s.nickname ?? '(닉네임 없음)'}{s.realName ? <span className="ml-1 text-2xs text-ink-muted">{s.realName}</span> : null}
                       </span>
-                      <span className="shrink-0 text-2xs tabular-nums text-ink-muted">방문 {s.visits}회</span>
+                      {s.phoneMasked ? <span data-testid="cand-phone" className="shrink-0 text-2xs tabular-nums text-ink-muted">{s.phoneMasked}</span> : null}<span className="shrink-0 text-2xs tabular-nums text-ink-muted">방문 {s.visits}회</span>
                     </button>
                   </li>
                 );
