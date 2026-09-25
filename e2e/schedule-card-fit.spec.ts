@@ -67,7 +67,7 @@ const RES_COUNTS = [
 
 /** 단일 핸들러 — 이 스펙이 내보내는 **모든** 요청이 여기를 지난다.
  *  로컬 preview(앱 번들·이미지)만 통과시키고, 그 밖의 외부 주소는 전부 여기서 끝낸다(실네트워크 0). */
-async function mockAll(page: Page, external: string[]) {
+async function mockAll(page: Page, external: string[], rows: unknown[] = ROWS) {
   await page.route('**/*', async (route) => {
     const url = route.request().url();
     if (/^http:\/\/(localhost|127\.0\.0\.1)/.test(url) || url.startsWith('data:') || url.startsWith('blob:')) {
@@ -75,7 +75,7 @@ async function mockAll(page: Page, external: string[]) {
     }
     external.push(`${route.request().method()} ${url}`);
     const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-    if (/\/rest\/v1\/schedules/.test(url)) return json(ROWS);
+    if (/\/rest\/v1\/schedules/.test(url)) return json(rows);
     if (/\/rest\/v1\/rpc\/schedule_reservation_counts/.test(url)) return json(RES_COUNTS);
     if (/\/rest\/v1\/venues/.test(url)) return json([{
       id: VENUE_ID, name: '누리홀덤 의정부 로티아레나 본점', region: '경기 의정부',
@@ -178,9 +178,13 @@ const measure = (page: Page) => page.evaluate(() => {
       return {
         title: pick('h3'),
         // 지표 3칸 — 이 셋이 **한 줄에 서는가**가 오너가 목업으로 요구한 계약이다.
-        m1: cell(0), m2: cell(1), m3: cell(2),
+        // 🔴 2026-09-25 SCHEDULE-ROW-E — `[data-metrics]` 는 이제 **오른쪽 금액 칸**이다: [보장 금액|데일리] / 참가비 2칸.
+        m1: cell(0), m2: cell(1),
         metricsN: metrics ? metrics.children.length : 0,
-        time:  pick(':scope > div:last-of-type'),
+        /** 금액 칸의 세로선(왼쪽 모서리) — 줄마다 같은 x 여야 한다(오너 E안). */
+        divX: metrics ? Math.round(metrics.getBoundingClientRect().left * 100) / 100 : null,
+        cardLeft: Math.round(c.getBoundingClientRect().left * 10) / 10,
+        time:  pick('[data-testid="schedule-start-time"]'),
       };
     }),
     // 🔴 제목 줄과 그 아래(참가비·등록마감) 줄이 **겹치지 않는가**.
@@ -194,7 +198,8 @@ const measure = (page: Page) => page.evaluate(() => {
       //   재려는 것은 '아랫줄과의 간격' 이므로 3행 2열(참가비·메타)을 직접 집는다.
       // 🔴 2026-09-20 — 제목 아랫줄은 이제 지표 3칸이다(옛 `row-start-3` 은 존재하지 않아
       //   null 이 되고, 그러면 이 카드가 통째로 검사에서 빠져 **겹침을 못 잡는다**).
-      const next = c.querySelector('[data-metrics]');
+      // 🔴 2026-09-25 SCHEDULE-ROW-E — 제목 아랫줄은 매장·지역 줄이다(금액은 오른쪽 칸으로 갔다).
+      const next = h3?.nextElementSibling;
       if (!h3 || !next) return null;
       const a = h3.getBoundingClientRect(); const b = next.getBoundingClientRect();
       return {
@@ -268,7 +273,7 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
           console.log(`[${w}/${theme}/${zoom ? 200 : 100}] cards=${r.cards} h=${r.cardH.join(',')} clamp=${r.clamped.length} ellip=${r.ellipsis.length}`);
           // 격자 기하를 **항상** 찍는다 — 어긋남은 통과/실패보다 먼저 눈에 보여야 원인을 짚는다.
           console.log(`  제목 ${r.cols.map((c) => `${c.title?.top}~${c.title?.bot}`).join(' ')}`);
-          console.log(`  지표3칸 ${r.cols.map((c) => `[${c.m1?.top}~${c.m1?.bot} | ${c.m2?.top}~${c.m2?.bot} | ${c.m3?.top}~${c.m3?.bot}] n=${c.metricsN}`).join(' ')}`);
+          console.log(`  금액칸 ${r.cols.map((c) => `[${c.m1?.top}~${c.m1?.bot} / ${c.m2?.top}~${c.m2?.bot}] x=${c.divX} n=${c.metricsN}`).join(' ')}`);
           console.log(`  시각 ${r.cols.map((c) => `${c.time?.top}~${c.time?.bot}`).join(' ')}`);
           expect(r.clippedValues, `🔴 값이 잘렸다 — 이름은 줄여도 금액·등록 마감은 못 줄인다:\n${r.clippedValues.join('\n')}`).toEqual([]);
           expect(r.hiddenScroll, `등록 마감·참가비가 숨은 가로 스크롤 안에 있다:\n${r.hiddenScroll.join('\n')}`).toEqual([]);
@@ -319,26 +324,28 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
           //     대신 **한 장이라도 3칸이 한 줄로 서는가**를 본다. 하나도 못 서면 구조가 깨진 것이다
           //     (예: 균등 3등분으로 바뀌어 늘 접히는 상태).
           //   ⚠ 200% 확대는 뺀다 — 글자가 2배면 전부 접히는 것이 정상이다.
+          // 🔴 2026-09-25 SCHEDULE-ROW-E(오너 E안) — 지표 3칸 한 줄 계약을 **교체**했다(그 줄 자체가 없어졌다).
+          //   같은 성질('값이 흩어지지 않고 한 자리에 선다')을 지금 있는 대상에 건다:
+          //     ① 금액 칸은 2칸(금액|데일리 · 참가비)이고 위아래로 겹치지 않는다
+          //     ② 세로선 x 가 같은 목록 열 안에서 **모든 줄이 같다**(고정 폭 칸 — 오너 요구)
           const 칸수틀림 = r.cols
             .map((c, i) => ({ i, n: c.metricsN }))
-            .filter(({ n }) => n !== 3)
-            .map(({ i, n }) => `${i + 1}번째 카드: 지표 칸이 3개가 아니라 ${n}개다`);
-          expect(칸수틀림, `🔴 지표 칸 수가 3이 아니다 — 칸을 지우면 구분선도 같이 사라진다:\n${칸수틀림.join('\n')}`)
-            .toEqual([]);
-
-          const 한줄인카드 = zoom ? 1 : r.cols.filter((c) => 겹치나(c.m1, c.m2) && 겹치나(c.m2, c.m3)).length;
-          expect(
-            한줄인카드,
-            '🔴 지표 3칸(상금·참가비·레지마감)이 **한 장도** 한 줄로 안 선다 — 오너 목업의 핵심 계약이다.\n'
-            + `  잰 카드 ${r.cols.length}장: `
-            + r.cols.map((c) => `[${c.m1?.top}~${c.m1?.bot}|${c.m2?.top}~${c.m2?.bot}|${c.m3?.top}~${c.m3?.bot}]`).join(' ')
-            + '\n→ 칸에 균등분할(3등분)이 들어갔는지 봐라. 320px 에서 칸이 44px 가 되어 `1,000만`(47px)이 **항상** 접힌다.'
-            + '\n  내용 폭 flex 로 두면 320px 에서도 129px 로 한 줄에 선다.',
-          ).toBeGreaterThan(0);
+            .filter(({ n }) => n !== 2)
+            .map(({ i, n }) => `${i + 1}번째 카드: 금액 칸이 2개(금액·참가비)가 아니라 ${n}개다`);
+          expect(칸수틀림, `🔴 금액 칸 구성이 틀렸다:\n${칸수틀림.join('\n')}`).toEqual([]);
+          const 겹친칸 = r.cols.filter((c) => 겹치나(c.m1, c.m2)).length;
+          expect(겹친칸, '금액과 참가비가 위아래로 겹친다').toBe(0);
+          const 열별 = new Map<number, number[]>();
+          for (const c of r.cols) if (c.divX !== null) 열별.set(c.cardLeft, [...(열별.get(c.cardLeft) ?? []), c.divX]);
+          for (const [left, xs] of 열별) {
+            expect(Math.max(...xs) - Math.min(...xs),
+              `🔴 목록 열(left ${left})에서 금액 칸 세로선 x 가 줄마다 다르다: ${xs.join(', ')} — 칸 폭 고정이 풀렸다`)
+              .toBeLessThanOrEqual(0.5);
+          }
 
           // 🔴 잴 것이 실제로 있었는가 — 마크업이 바뀌면 위 검사가 **빈 통과**가 된다.
           const 못찾음 = r.cols
-            .map((c, i) => ({ i, miss: ['title', 'm1', 'm2', 'm3', 'time'].filter((k) => !c[k as keyof typeof c]) }))
+            .map((c, i) => ({ i, miss: ['title', 'm1', 'm2', 'time'].filter((k) => !c[k as keyof typeof c]) }))
             .filter(({ miss }) => miss.length)
             .map(({ i, miss }) => `${i + 1}번째 카드: ${miss.join('/')} 없음`);
           expect(
@@ -372,11 +379,16 @@ test.describe('일정 목록 카드 — 잘림 0', () => {
     expect(all, '5.5T 로 정확히 떨어지는 참가비가 T 로 안 적혔다').toContain('5.5T');
     expect(all, '🔴 참가비 1,234,567원이 T 로 반올림됐다 — 가격을 바꿔 적으면 안 된다').toContain('1,234,567원');
     expect(all, 'T 로 안 떨어지는 금액에 T 가 붙었다').not.toMatch(/12[0-9.]*T/);
-    // 라벨 '상금 보장' → 'GTD'(2026-09-18 오너). 금액 표시 유지라는 요지는 그대로.
-    // ⚠ 2026-09-18(6차) — GTD 라벨과 금액이 **다른 요소**로 나뉘었다(라벨은 작게·금액은 크게).
-    //   그래서 `textContent` 가 'GTD1,000만' 로 붙어 나온다 — 공백을 박은 문자열 비교는 이걸 못 본다.
-    //   이 검사의 요지는 **금액이 반올림되지 않는 것**이므로 공백을 선택적으로 보는 정규식으로 바꾼다.
-    expect(all, 'GTD 1,000만이 안 보인다(§28 가격 정보는 표시 유지)').toMatch(/GTD\s*1,000만/);
+    // 🔴 2026-09-25 SCHEDULE-ROW-E — 'GTD' 라벨 글자가 없어졌다(오너 E안: 금색 금액 = 보장). 요지(반올림 금지·표시 유지)는
+    //   보장 금액 칸(testid)의 값으로 본다. 보장이 없는 행은 금액 대신 '데일리' 다.
+    const money = await page.evaluate(() => ({
+      prizes: [...document.querySelectorAll('main[data-tab="browse"] [data-testid="schedule-prize"]')].map((e) => (e.textContent || '').trim()),
+      dailies: document.querySelectorAll('main[data-tab="browse"] [data-testid="schedule-daily"]').length,
+      buyins: [...document.querySelectorAll('main[data-tab="browse"] [data-testid="schedule-buyin"]')].map((e) => (e.textContent || '').trim()),
+    }));
+    expect(money.prizes, '보장 1,000만이 안 보인다(§28 가격 정보는 표시 유지)').toContain('1,000만');
+    expect(money.dailies, '보장이 없는 행(엔트리·데일리)에 "데일리" 표시가 없다').toBeGreaterThan(0);
+    expect(money.buyins, '참가비 미입력이 "—" 가 아니다').toContain('—');
     expect(all, '예약 12명은 정원 근거가 없다 — "마감 임박"으로 부풀리면 안 된다').not.toContain('마감 임박');
     expect(all, '예약 인원은 사실 그대로 표시한다').toContain('예약 12명');
     // 참가비 미입력(0)을 '무료'·'0원'으로 만들지 않는다
@@ -448,7 +460,7 @@ for (const theme of ['dark', 'light'] as const) {
     // 🔴 2026-09-22 — `^시작` 을 뺐다(오너가 그 라벨을 없앴다). 대신 **구조로** 두 가지를 더 잡는다:
     //   ① 대회명(h3) — 주석이 처음부터 '읽어야 할 값' 으로 적어 뒀는데 텍스트 패턴에 안 걸려 빠져 있었다.
     //   ② 라이브 필드 현황(생존/엔트리) — 있으면 반드시 읽혀야 하는 값이다(이 픽스처엔 클락이 없어 보통 없다).
-    const key = rows.filter((r) => r.tag === 'h3' || r.tid === 'schedule-field-count'
+    const key = rows.filter((r) => r.tag === 'h3' || /^schedule-(field-count|prize|daily|buyin|start-time)$/.test(r.tid)
       || /원$|T$|만$|^\d{1,2}:\d{2}$|상금|^참가비|^등록 마감|^레지마감|^예약|누리홀덤/.test(r.text));
     expect(key.length, '핵심 값이 화면에 없다').toBeGreaterThan(3);
     const bad = key.filter((r) => r.ratio < 4.5).map((r) => `${r.text} ${r.ratio}:1 (${r.fg} on ${r.bg})`);
@@ -543,7 +555,8 @@ for (const w of [1280, 1440]) {
 // 이 픽스처에는 legacy 장문 제목(23자·grade series), 짧은 제목(grade daily), grade 없음이 모두 있다 —
 // "12자 상한 이전에 저장된 행이 카드 높이를 흔들지 않는가" 를 그대로 잰다.
 for (const w of [320, 360, 390, 412]) {
-  test(`🔴 요구 C — ${w}px: 제목 1줄 · 하트 0 · 등급 우측 · 매장명 AA 24px`, async ({ page }) => {
+  test(`🔴 요구 C — ${w}px: 제목 1줄 · 하트 0 · 등급 배지 0(데일리는 금액 칸) · 매장명 AA 24px`, async ({ page }) => {
+
     const external: string[] = [];
     await mockAll(page, external);
     await openHome(page, w, 'dark', false);
@@ -558,6 +571,7 @@ for (const w of [320, 360, 390, 412]) {
         badgesInTitle: 0,
         badgesRight: 0,
         hearts: 0,
+        dailies: 0,
         venueHits: [] as { text: string; box: number; effective: number; titleStealsHit: boolean }[],
         cardHeights: [] as number[],
       };
@@ -580,6 +594,7 @@ for (const w of [320, 360, 390, 412]) {
           if (h3.querySelector('[data-testid="schedule-grade-badge"]')) out.badgesInTitle += 1;
         }
         out.badgesRight += c.querySelectorAll('[data-testid="schedule-grade-badge"]').length - (h3?.querySelectorAll('[data-testid="schedule-grade-badge"]').length ?? 0);
+        out.dailies += c.querySelectorAll('[data-testid="schedule-daily"]').length;
         // 하트: aria-label 에 '단골' 이 들어가는 버튼(옛 구현의 접근 이름)
         out.hearts += [...c.querySelectorAll('button')].filter((b) => /단골/.test(b.getAttribute('aria-label') || '')).length;
 
@@ -625,7 +640,10 @@ for (const w of [320, 360, 390, 412]) {
     // ② 하트 0 · 등급은 제목 밖 우측에
     expect(r.hearts, '목록 카드에 하트가 남아 있다').toBe(0);
     expect(r.badgesInTitle, '등급 배지가 제목 안에 있다 — 12자 제목의 폭을 먹는다').toBe(0);
-    expect(r.badgesRight, '우측 등급 배지가 없다 — 픽스처에 grade 있는 행이 있으므로 최소 1개여야 한다').toBeGreaterThan(0);
+    // 🔴 2026-09-25 SCHEDULE-ROW-E — 목록 줄에서 등급·게임 형식 배지를 **뺐다**(오너 E안: "데일리는 오른쪽 칸이 말한다").
+    //   종전 '우측 등급 배지 ≥1' 을 '배지 0 · 보장 없는 행에 데일리 ≥1' 로 교체한다(픽스처에 grade=daily·보장 없음 행이 있다).
+    expect(r.badgesRight, '목록 줄에 등급 배지가 남아 있다(오너 E안에서 뺐다)').toBe(0);
+    expect(r.dailies, '보장이 없는 행에 "데일리" 표시가 없다').toBeGreaterThan(0);
     // ③ 매장명 링크 AA 24px · 제목 침범 0
     for (const v of r.venueHits) {
       expect(v.effective, `매장명 "${v.text}" 실효 히트 ${v.effective}px — WCAG 2.2 AA 24px 미달(박스 ${v.box}px)`).toBeGreaterThanOrEqual(24);
@@ -634,83 +652,90 @@ for (const w of [320, 360, 390, 412]) {
   });
 }
 
-// ── R8: 일정 카드 우측 열 — chevron 기준 우측 정렬 (2026-09-22 오너 2차) ──────────
+// ── SCHEDULE-ROW-E: 일정 목록 줄 오른쪽 금액 칸 (2026-09-25 오너 확정 E안) ─────────────────
 //
-// 🔴 1차 계약(centerX 편차 1px 이하)을 **교체**했다. 옆에 덧붙이지 않았다 — 두 계약이 충돌한다.
-//   1차: 오너 사진의 '사선'을 없애려고 데일리/시작/시간의 **중심축**을 맞췄다.
-//   2차: 오너가 실제 화면을 보고 "화살표를 기준으로 우측정렬해서 우측에 붙여" 라고 다시 정했고,
-//        같은 지시에서 `시작` 라벨을 빼고 그 자리에 라이브 `생존/엔트리` 를 넣기로 했다.
+// 🔴 R8(2026-09-22 '우측 열 = 시각·배지·필드현황의 chevron 기준 우측 정렬')을 **교체**했다 — 그 우측 열이 없어졌다.
+//   시각은 가운데 셋째 줄(`18:00 시작 · 레지 …`)로 갔고, 오른쪽은 세로선 + [보장 금액|데일리] / 참가비 고정 칸이다.
 //
-// 지금 재는 것:
-//   ① 배지·시각·필드현황이 **같은 오른쪽 모서리**를 쓴다(편차 1px 이하) — '우측에 붙여'의 측정값.
-//   ② chevron 은 그 모서리 **오른쪽의 다른 열**이고 텍스트와 겹치지 않는다 — '화살표 기준'.
-//   ③ `시작` 라벨이 화면에 없다.
-//   ④ PC(768+)도 같은 우측 정렬이고 카드 높이·overflow 가 그대로다.
-for (const w of [320, 360, 390, 412, 430, 767, 768, 1280, 1440]) {
-  test(`🔴 R8 — ${w}px: 우측 열이 chevron 기준 우측 정렬이고 '시작' 라벨이 없다`, async ({ page }) => {
+// 지금 재는 것(오너 E안 문장 그대로):
+//   ① 세로선 위치가 **모든 줄에서 같다**(칸 폭 고정) — 같은 목록 열 안에서 편차 0.5px 이하.
+//   ② 가장 긴 금액 표기가 **한 줄**이다 — 금액 포맷(formatPrize)이 만원 단위 입력에서 내는 최장형 `9억 9,999만`.
+//   ③ 12자(`SCHEDULE_TITLE_MAX`) 제목이 360·390·412 에서 **한 줄**이다(글자 폭이 가장 넓은 한글 12자, 공백 없음).
+//   ④ 금액·참가비가 칸 안에서 오른쪽 모서리를 같이 쓴다 · 꺾쇠·등급 배지·`시작` 라벨이 없다 · 문서 가로 넘침 0.
+//   ⑤ PC(1024·1280·1440)도 같은 구조다.
+// 음성 대조(2026-09-25): 금액 칸의 `w-[5.125rem]` 을 빼면 ① 이 금액 길이만큼(최대 23px) 어긋나 FAIL.
+const ROWS_E = [
+  { ...ROWS[0], id: 'eeeeeeee-0000-4000-8000-000000000001', title: '토요일나이트딥스택메인전', prize_pool: 999_990_000,
+    grade: null, is_premium: false, start_time: '23:00:00', reg_close_time: 'Lv12', buy_in: { amount: 100_000, gameType: '홀덤' } },
+  { ...ROWS[0], id: 'eeeeeeee-0000-4000-8000-000000000002', title: '위클리 딥스택 1억', prize_pool: 130_000_000,
+    grade: null, is_premium: false, start_time: '23:10:00' },
+  { ...ROWS[1], id: 'eeeeeeee-0000-4000-8000-000000000003', date: day(0), start_time: '23:20:00' },
+  { ...ROWS[0], id: 'eeeeeeee-0000-4000-8000-000000000004' },
+];
+for (const w of [360, 390, 412, 1024, 1280, 1440]) {
+  test(`🔴 SCHEDULE-ROW-E — ${w}px: 세로선 x 동일 · 최장 금액 한 줄 · 12자 제목 한 줄`, async ({ page }) => {
     const external: string[] = [];
-    await mockAll(page, external);
+    await mockAll(page, external, ROWS_E);
     await openHome(page, w, 'dark', false);
     await page.waitForSelector('main[data-tab="browse"] article.cv-card-list', { timeout: 10_000 });
 
     const r = await page.evaluate(() => {
       const cards = [...document.querySelectorAll<HTMLElement>('main[data-tab="browse"] article.cv-card-list')]
         .filter((c) => c.getBoundingClientRect().height > 0);
-      const R = (el: Element) => +el.getBoundingClientRect().right.toFixed(2);
-      const rows: Array<Record<string, unknown>> = [];
-      let withBadge = 0;
-      for (const c of cards) {
-        const badge = c.querySelector<HTMLElement>('[data-testid="schedule-grade-badge"]');
-        const time = c.querySelector<HTMLElement>('[data-testid="schedule-start-time"]');
-        const field = c.querySelector<HTMLElement>('[data-testid="schedule-field-count"]');
-        const level = c.querySelector<HTMLElement>('[data-testid="schedule-current-level"]');
-        const chev = c.querySelector<HTMLElement>('svg.lucide-chevron-right');
-        if (!time) continue;
-        if (badge) withBadge += 1;
-        // 🔴 2026-09-24 오너: 게임 종류(등급 배지)는 **매장·지역 줄 오른쪽**으로 옮겼다("바뀌지 않는 정보") —
-        //   우측 열에는 시각 + 상태 한 줄(생존/엔트리 또는 현재 레벨)만 남는다. 그래서 우측 정렬 대상에서 배지를 빼고
-        //   대신 '배지가 우측 열(start-group) 밖, 매장 줄 안에 있다' 를 따로 단언한다(badgeInVenueRow).
-        const group = c.querySelector<HTMLElement>('[data-testid="schedule-start-group"]');
-        const timetable = c.dataset.layout === 'timetable';
-        const rights = [R(time), ...(!timetable && badge ? [R(badge)] : []), ...(field ? [R(field)] : []), ...(timetable && level ? [R(level)] : [])];
-        const tb = time.getBoundingClientRect();
-        const cb = chev ? chev.getBoundingClientRect() : null;
-        rows.push({
-          badge: !!badge,
-          badgeInVenueRow: !timetable || !badge ? null
-            : !group?.contains(badge) && !!c.querySelector('h3')?.previousElementSibling?.contains(badge),
-          field: !!field,
-          rights,
-          rightSpread: +(Math.max(...rights) - Math.min(...rights)).toFixed(2),
-          chevronRightOfText: cb ? cb.left >= tb.right - 0.5 : null,
-          chevronOverlapsText: cb ? !(cb.left >= tb.right || cb.right <= tb.left) : null,
-          cardH: +c.getBoundingClientRect().height.toFixed(2),
-        });
-      }
+      const lines = (el: HTMLElement) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight));
       return {
-        rows, withBadge,
-        // `시작` 라벨은 화면 어디에도 없어야 한다(오너가 빼라고 한 문구).
+        rows: cards.map((c) => {
+          const money = c.querySelector<HTMLElement>('[data-testid="schedule-money"]');
+          const amount = c.querySelector<HTMLElement>('[data-testid="schedule-prize"], [data-testid="schedule-daily"]');
+          const buy = c.querySelector<HTMLElement>('[data-testid="schedule-buyin"]');
+          const h3 = c.querySelector<HTMLElement>('h3');
+          const R = (el: Element | null) => (el ? +el.getBoundingClientRect().right.toFixed(2) : null);
+          return {
+            layout: c.dataset.layout ?? '',
+            cardLeft: +c.getBoundingClientRect().left.toFixed(1),
+            divX: money ? +money.getBoundingClientRect().left.toFixed(2) : null,
+            border: money ? getComputedStyle(money).borderLeftWidth : null,
+            amount: amount ? (amount.textContent || '').trim() : null,
+            amountLines: amount ? lines(amount) : null,
+            amountCut: amount ? amount.scrollWidth - amount.clientWidth > 1 || (money ? money.scrollWidth - money.clientWidth > 1 : false) : null,
+            rightSpread: amount && buy ? Math.abs(R(amount)! - R(buy)!) : null,
+            title: h3 ? (h3.textContent || '').trim() : '',
+            titleLines: h3 ? lines(h3) : 0,
+            chevrons: c.querySelectorAll('svg.lucide-chevron-right').length,
+            badges: c.querySelectorAll('[data-testid="schedule-grade-badge"], [data-testid="schedule-game-type"]').length,
+          };
+        }),
         startLabels: document.querySelectorAll('[data-testid="schedule-start-label"]').length,
         docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       };
     });
+    console.log(`[ROW-E ${w}]`, JSON.stringify(r).slice(0, 900));
 
     // 🔴 빈 통과 방지 — 잴 대상이 실제로 있었는지 먼저 못박는다.
-    expect(r.rows.length, '시각을 가진 카드를 하나도 못 찾았다 — 아래 단언이 무의미하다').toBeGreaterThan(0);
-    expect(r.withBadge, '등급 배지가 있는 카드가 0개 — 배지 포함 정렬을 한 번도 재지 않았다').toBeGreaterThan(0);
-    console.log(`[R8 ${w}]`, JSON.stringify(r).slice(0, 700));
-
-    expect(r.startLabels, '`시작` 라벨이 되살아났다').toBe(0);
+    expect(r.rows.length, '카드를 하나도 못 찾았다 — 아래 단언이 무의미하다').toBeGreaterThanOrEqual(3);
     for (const row of r.rows) {
-      if (row.badgeInVenueRow !== null) expect(row.badgeInVenueRow, '게임 종류 배지가 매장·지역 줄에 있지 않다(오너 2026-09-24)').toBe(true);
-      expect(row.rightSpread as number,
-        `오른쪽 모서리가 ${row.rightSpread}px 어긋났다 (badge=${row.badge}, field=${row.field}, rights=${JSON.stringify(row.rights)})`)
-        .toBeLessThanOrEqual(1);
-      if (row.chevronOverlapsText !== null) {
-        expect(row.chevronOverlapsText, 'chevron 이 시각 텍스트와 겹친다').toBe(false);
-        expect(row.chevronRightOfText, 'chevron 이 텍스트 오른쪽의 별도 열이 아니다').toBe(true);
-      }
+      expect(row.layout, '일정 탐색 목록이 시간표형(timetable)이 아니다').toBe('timetable');
+      expect(row.divX, '금액 칸(schedule-money)이 없다').not.toBeNull();
+      expect(row.border, '금액 칸 왼쪽 세로선이 없다').not.toBe('0px');
+      expect(row.amountLines, `금액 "${row.amount}" 이 ${row.amountLines}줄이다 — 한 줄이어야 한다`).toBe(1);
+      expect(row.amountCut, `금액 "${row.amount}" 이 칸 밖으로 넘친다`).toBe(false);
+      expect(row.rightSpread!, '금액과 참가비의 오른쪽 모서리가 어긋났다').toBeLessThanOrEqual(1);
+      expect(row.chevrons, '꺾쇠가 되살아났다').toBe(0);
+      expect(row.badges, '등급·게임 형식 배지가 되살아났다(오너 E안에서 뺐다)').toBe(0);
     }
+    const byCol = new Map<number, number[]>();
+    for (const row of r.rows) byCol.set(row.cardLeft, [...(byCol.get(row.cardLeft) ?? []), row.divX!]);
+    for (const [left, xs] of byCol) {
+      expect(Math.max(...xs) - Math.min(...xs), `목록 열(left ${left}) 세로선 x 가 줄마다 다르다: ${xs.join(', ')}`).toBeLessThanOrEqual(0.5);
+    }
+    // 최장 금액 픽스처가 실제로 그려졌는가(대상 도달)
+    expect(r.rows.map((x) => x.amount), '최장 금액 9억 9,999만 픽스처가 안 보인다').toContain('9억 9,999만');
+    expect(r.rows.map((x) => x.amount), '1억 3,000만 픽스처가 안 보인다').toContain('1억 3,000만');
+    expect(r.rows.map((x) => x.amount), '보장 없는 행의 "데일리" 가 안 보인다').toContain('데일리');
+    const t12 = r.rows.find((x) => x.title === '토요일나이트딥스택메인전');
+    expect(t12, '12자 제목 픽스처가 안 보인다').toBeTruthy();
+    expect(t12!.titleLines, `12자 제목이 ${t12!.titleLines}줄이다 — 360~ 에서 한 줄이어야 한다`).toBe(1);
+    expect(r.startLabels, '`시작` 라벨(옛 우측 열)이 되살아났다').toBe(0);
     expect(r.docOverflow, '문서 가로 overflow 가 생겼다').toBeLessThanOrEqual(0);
   });
 }

@@ -184,16 +184,23 @@ test.describe('일정 카드 — 라이브 필드 현황', () => {
     //   ('/' 는 aria-hidden 이라 낭독에서 빠지고 "생존 18명, 엔트리 24명" 으로 읽힌다.)
     const full = (await field.textContent()) ?? '';
     expect(full, '접근성 안내말(생존/엔트리)이 없다').toMatch(/생존[\s\S]*18[\s\S]*엔트리[\s\S]*24/);
-    // 오른쪽 모서리가 시각과 같아야 한다(우측 정렬 계약이 이 줄에도 걸린다).
-    const spread = await card.evaluate((c) => {
-      const R = (sel: string) => {
-        const el = c.querySelector<HTMLElement>(sel);
-        return el ? +el.getBoundingClientRect().right.toFixed(2) : null;
-      };
-      const t = R('[data-testid="schedule-start-time"]'); const f = R('[data-testid="schedule-field-count"]');
-      return t !== null && f !== null ? +Math.abs(t - f).toFixed(2) : null;
+    // 🔴 2026-09-25 SCHEDULE-ROW-E — 시각은 가운데 셋째 줄(`18:00 시작 · 레지 … · 18/24`)로 갔다(오너 E안).
+    //   종전 '오른쪽 모서리가 시각과 같다'(옛 우측 열) 대신 **시각과 같은 문단(③ 줄) 안에서 시각 뒤**에 오는지 본다.
+    //   ⚠ '같은 시각적 줄' 은 요구하지 않는다 — 레지마감 저장값(예: '12LV 00:30')이 길면 문단이 어절에서 접히는 것이 설계다(잘림 0).
+    const pos = await card.evaluate((c) => {
+      const grp = c.querySelector<HTMLElement>('[data-testid="schedule-start-group"]');
+      const t = c.querySelector<HTMLElement>('[data-testid="schedule-start-time"]');
+      const f = c.querySelector<HTMLElement>('[data-testid="schedule-field-count"]');
+      if (!grp || !t || !f) return null;
+      const tr = t.getBoundingClientRect(), fr = f.getBoundingClientRect();
+      return { inGroup: grp.contains(t) && grp.contains(f),
+        after: !!(t.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING) && fr.top >= tr.top - 0.5 };
     });
-    expect(spread, `필드 현황 줄의 오른쪽 모서리가 시각과 ${spread}px 어긋났다`).toBeLessThanOrEqual(1);
+    expect(pos, '시각 또는 필드 현황을 못 찾았다').not.toBeNull();
+    expect(pos!.inGroup, '필드 현황이 시작 시각과 같은 ③ 줄(schedule-start-group)에 있지 않다').toBe(true);
+    expect(pos!.after, '필드 현황이 시작 시각 뒤에 오지 않는다').toBe(true);
+
+
   });
 
   test('🔴 대조 — 클락이 없으면 그 줄이 아예 없다(시작 전 `0 / 0` 금지)', async ({ page }) => {

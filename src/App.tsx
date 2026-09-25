@@ -5025,16 +5025,16 @@ function ScheduleSkeletonGrid({ viewMode, rows }: { viewMode: 'grid' | 'list' | 
             </div>
           </div>
         ) : (
-          // ListCard 골격: 4줄 행 문법 복제(시간/제목/매장/가격 — 재문법과 높이 동조)
+          // 시간표형 골격(SCHEDULE-ROW-E) — 로고 56 · 세 줄 · 금액 칸
           <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-1.5">
-            <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="skeleton h-3.5 w-1/3" />
-              <div className="skeleton h-[19px] w-3/4" />
-              <div className="skeleton h-3.5 w-1/2" />
-              <div className="skeleton h-3.5 w-2/3" />
+            <div className="skeleton h-[56px] w-[56px] shrink-0 rounded-[12px]" />
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              {['w-3/4', 'w-1/2', 'w-2/3'].map((w) => <div key={w} className={`skeleton h-3 ${w}`} />)}
             </div>
+            <div className="skeleton h-8 w-[4.5rem] shrink-0" />
           </div>
+
+
         )
       )}
     </div>

@@ -891,14 +891,15 @@ export default function HomeTab({
                    🔴 2026-09-24 정정: min-h 였는데 안쪽 막대 4줄+gap(76.4)+py-1.5 가 **89.1~90.1px** 로 토큰(82)을 넘어
                    행마다 +8px 과다예약이었다(390 실측, 실제 카드 76.5). 높이를 토큰으로 **고정**하고 넘침은 자른다. */
                 <div key={i} className="flex h-[var(--card-h-list)] items-center gap-3 overflow-hidden px-3 py-1.5">
-                  <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="skeleton h-3.5 w-1/3" />
-                    <div className="skeleton h-[19px] w-3/4" />
-                    <div className="skeleton h-3.5 w-1/2" />
-                    <div className="skeleton h-3.5 w-2/3" />
+                  {/* 2026-09-25 SCHEDULE-ROW-E — 실제 카드(로고 56 · 세 줄 · 오른쪽 금액 칸)와 같은 모양 */}
+                  <div className="skeleton h-[56px] w-[56px] shrink-0 rounded-[12px]" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    {['w-3/4', 'w-1/2', 'w-2/3'].map((w) => <div key={w} className={`skeleton h-3 ${w}`} />)}
                   </div>
+                  <div className="skeleton h-8 w-[4.5rem] shrink-0" />
+
                 </div>
+
               ))}
               <div aria-hidden className="min-h-[44px] bg-surface-high/40 lg:col-span-2" />
             </div>

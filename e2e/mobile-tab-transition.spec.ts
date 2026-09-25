@@ -265,7 +265,11 @@ test.describe('schedule detail return snapshots', () => {
       test.setTimeout(60_000);
       await stabilizeBackstack(page);
       await mockSchedules(page);
-      await page.setViewportSize({ width, height: 844 });
+      // 🔴 2026-09-25 — PC(lg~) 홈은 배너 4:8 배치(8126841f) 뒤 본문이 한 화면에 다 들어간다(1024×844 실측: 푸터 바닥 801px,
+      //   문서 높이 = 뷰포트 844 → 스크롤 0). 그러면 아래 scrollTo(0,140) 이 먹지 않아 '스크롤된 상태에서 복귀 위치 보존' 을
+      //   **잴 수가 없다**(scrollY 0 에서 멈춰 poll 이 실패). 의도를 지키려고 PC 조건만 뷰포트 높이를 낮춰 스크롤 여유를 만든다
+      //   (640 → 여유 ≈160px ≥ 140). 모바일(390)은 종전 844 그대로다. 복귀 위치 단언(±1px)은 손대지 않는다.
+      await page.setViewportSize({ width, height: width < 1024 ? 844 : 640 });
       await page.addInitScript(() => {
         const native = document.startViewTransition.bind(document);
         let calls = 0;
@@ -283,7 +287,9 @@ test.describe('schedule detail return snapshots', () => {
       await expect(card).toBeVisible();
       await page.evaluate(() => window.scrollTo(0, 140));
       // Let the scroll-compressed header settle before measuring the return position.
-      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+      await expect.poll(() => page.evaluate(() => window.scrollY),
+        { message: '홈이 스크롤되지 않는다 — 문서 높이가 뷰포트 이하라 복귀 위치 보존을 잴 수 없다(픽스처·뷰포트 높이를 확인)' }).toBeGreaterThan(0);
+
 
       for (const back of [false, true]) {
         await card.click();

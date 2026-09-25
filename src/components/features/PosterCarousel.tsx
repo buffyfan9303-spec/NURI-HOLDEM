@@ -382,8 +382,10 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
           md 이상은 종전 카드 모양 그대로(PC 폭은 HomeTab 의 두 칸 비율 4:8 이 키운다). 글자는 안쪽 px-4(17px)라 본문 여백과 같은 세로선이다.
           ⚠ index.html 정적 셸의 배너 예약도 같은 모양으로 맞췄다(첫 페인트 CLS).
           🔴 2026-09-25 HOME-BANNER-REDESIGN — 모바일은 위아래 헤어라인·카드 그림자도 뺐다(border-0·shadow-none). 풀블리드 그림 판에
-            선이 두 줄 그어져 '띠'로 읽혔다. 높이 154 → 152(테두리 2px) — 셸도 같이 바꿨다. md~ 카드 모양은 그대로. */}
-      <div className="poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none md:mx-page-x md:rounded-aura lg:mx-0">
+            선이 두 줄 그어져 '띠'로 읽혔다. 높이 154 → 152(테두리 2px) — 셸도 같이 바꿨다. md~ 카드 모양은 그대로.
+          🔴 2026-09-25 오너 "위아래 살짝 블러로 일체감 / 아우라 LED" → 같은 날 "흐림으로 통일": 모든 폭에서
+            위아래 8px 페더(mask). mask 는 테두리 상자 밖을 잘라 md~ 카드의 접촉 그림자도 위아래로는 보이지 않는다. */}
+      <div className="poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none [mask-image:linear-gradient(to_bottom,transparent,#000_8px,#000_calc(100%-8px),transparent)] md:mx-page-x md:rounded-aura lg:mx-0">
         <div
           ref={vpRef}
           data-testid="home-banner-viewport"

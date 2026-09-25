@@ -815,30 +815,28 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
   );
 }
 
-/** 🔴 2026-09-24 HOME-LAYOUT-STRETCH — **홈 일정 · 일정 탐색(browse) 목록** 배치(`layout="timetable"`). 라이브 탭만 종전 `ListCard` 그대로다.
+/** 🔴 2026-09-25 SCHEDULE-ROW-E(오너 확정 E안) — **홈 일정 · 일정 탐색(browse) 목록** 배치(`layout="timetable"`). 라이브 탭만 종전 `ListCard` 그대로다.
  *
- *  오너: "[로고] [본문: 대회 이름·매장/지역·GTD·테이블] [우측 열: 시간·게임 종류·현재 레벨] — 우측 열은 본문 옆에 붙은 고정 폭,
- *        글자 끊김(말줄임·잘림·줄바꿈) 0". 종전 카드는 시각 덩어리가 **카드 오른쪽 끝**에 붙어 있어
- *        PC 1440 에서 본문 글자 끝 → 시각 사이가 **800px** 였다(실측, scratchpad hl/before/stretch.json).
- *
- *  3행 격자 = [로고 | 본문 | 우측 열]:
- *    1행  매장 · 지역 · 게임 종류 (+TOP·별점·거리·예약) — **본문+우측 열 두 칸에 걸친다.** 320 에서 본문 칸만으로는
- *         실제 최장 매장명(17자 '누리 테스트 홀덤펍 강남 센텀점')과 지역이 한 줄에 서지 못했다.
- *    2행  대회명 | 시각        ← 제목과 시각이 **같은 줄**이다(시선이 가로로 건너뛰지 않는다)
- *    3행  3칸 지표(GTD·참가비·레지마감) | 상태 한 줄(라이브 생존/엔트리, 아니면 현재 레벨 L8·휴식·시작 전)
- *  · 우측 열은 `minmax(고정폭, auto)` — 평소엔 고정 폭이라 줄마다 시각이 같은 세로선에 서고, 글자 확대로 시각이
- *    넓어질 때만 늘어난다(잘리지 않게). 본문 칸은 PC(md~)에서 17rem 상한 → 우측 열이 **본문 바로 옆**에 붙는다.
- *  · 대회명은 줄 수를 막지 않는다(line-clamp 없음). 입력 상한 12자(`SCHEDULE_TITLE_MAX`)는 320 에서도 한 줄이고,
- *    그보다 긴 **옛 제목**은 어절 단위로 접는다 — 말줄임표로 숨기지 않는다(오너: "잘라서 숨기면 안 된다").
- *  · 꺾쇠(›)는 뺐다 — 오른쪽 끝에 떨어진 요소를 두지 말라는 지시. 카드 전체가 버튼(role=button)이라 목적지는 그대로다.
- *  · 현재 레벨은 `RegInfo.levelNo/onBreak`(lib/regStatus.ts — 이미 받은 클락 행에서 셈, 새 조회 0). 규칙은 아래 우측 열 주석.
- *  ⚠ 폭 예산은 scratchpad 하네스(hl/fit.cjs)로 320·360·390·412·768·1440 에서 잰다 — 글자·gap·열 폭을 바꾸면 다시 재라. */
+ *  [로고 56] [① 대회명(굵게) / ② 매장 · 지역 / ③ `18:00 시작 · 레지 {저장값}` (+ 라이브 상태)] ┃ [보장 금액 / 참가비]
+ *  · 오른쪽 칸은 **고정 폭**이다 — 줄마다 세로선이 같은 x 에 선다(e2e schedule-card-fit 'SCHEDULE-ROW-E' 가 잰다).
+ *    폭 기준은 금액 포맷(`formatPrize`)이 폼 입력(만원 단위)에서 낼 수 있는 가장 긴 모양 `9억 9,999만`(9자, tabular)이다.
+ *    ⚠ 10억 이상(10자+)은 공백에서 두 줄로 접힌다 — 잘리지는 않는다. 운영 최댓값은 1,000만(2026-09-25 실측).
+ *  · 'GTD'·'참가비' 라벨 글자는 없다(오너). 금색 = 보장 금액, 초록 '데일리' = 보장이 없는 게임(guaranteed && prizePool 이 아님).
+ *    ⚠ 엔트리 비례(예상 상금 %)·등급(새틀·시리즈)은 이 줄에서 안 보인다 — 상세·필터 칩이 그대로 말한다(오너 E안).
+ *  · 게임 형식(MTT 등)·등급 배지는 뺐다(오너 E안). 꺾쇠(›)도 없다 — 카드 전체가 버튼이다.
+ *  · 글자는 숨기지 않는다(line-clamp·truncate 없음). 12자(`SCHEDULE_TITLE_MAX`) 제목은 360~ 한 줄이고, 옛 긴 제목은 어절로 접힌다.
+ *  · 라이브 상태(생존/엔트리 · 현재 레벨 L8·휴식·진행 중 · 클락 없이 시작 시각 지남 'L —')는 ③ 줄 끝으로 옮겼다(기능 유지).
+ *    시작 전 '시작 전' 표기만 뺐다 — 같은 줄의 `18:00 시작` 이 이미 말한다.
+ *  ⚠ 폭을 바꾸면 scratchpad schedrow/measure.cjs 로 360·390·412·1024·1280·1440 을 다시 재라(12자 제목 + 최장 금액). */
 function TimetableCard({
   schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, vtActive, venue, regInfo,
 }: CardProps) {
-  const prize = prizeParts(schedule);
+  const gtd = schedule.guaranteed && schedule.prizePool ? formatPrize(schedule.prizePool) : null;
   const reg = regCloseRaw(schedule);
-  const grade = schedule.grade ? GRADE_BADGE[schedule.grade] : undefined;
+  const status = regInfo?.hasField ? null
+    : regInfo ? (regInfo.onBreak ? '휴식' : regInfo.levelNo ? `L${regInfo.levelNo}` : '진행 중')
+    : scheduleStatus(schedule.date, schedule.startTime) === 'upcoming' ? null : 'L —';
+  const dot = <span aria-hidden className="px-1 text-border-strong">·</span>;
   return (
     <article
       onClick={() => onSelect(schedule)}
@@ -853,98 +851,83 @@ function TimetableCard({
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(schedule); }
       }}
       className={[
-        'cv-card-list grid cursor-pointer items-center gap-x-1.5 gap-y-0 px-3 py-1.5 hover:bg-surface-high/50 active:bg-surface-high',
-        // 폭 예산(실측 hl/fit): 360 에서 최악 지표(참가비 1,234,567원)가 여유 0px 였다 → 390 미만은 gap·지표 칸 여백을 한 단계 좁힌다.
-        'grid-cols-[auto_minmax(0,1fr)_minmax(2.75rem,auto)] min-[360px]:grid-cols-[auto_minmax(0,1fr)_minmax(3.25rem,auto)] min-[390px]:gap-x-2',
-        // md~: 본문 칸 상한 17rem + justify-start — auto 열(우측)이 남는 폭을 먹고 늘어나지 않게(늘어나면 시각이 다시 카드 끝으로 간다).
-        'md:grid-cols-[auto_minmax(0,17rem)_minmax(3.25rem,auto)] md:justify-start',
+        'cv-card-list grid cursor-pointer items-center gap-x-1.5 px-3 py-1.5 hover:bg-surface-high/50 active:bg-surface-high',
+        // 오른쪽 칸(auto)은 안쪽 w-[…] 로 고정 — 가운데(1fr)가 남는 폭을 전부 갖고 세로선 x 는 카드마다 같다.
+        // md~: 가운데 상한 17rem + justify-start — 넓은 카드에서 금액 칸이 카드 끝으로 떨어지지 않는다(HOME-LAYOUT-STRETCH).
+        'grid-cols-[auto_minmax(0,1fr)_auto] md:grid-cols-[auto_minmax(0,17rem)_auto] md:justify-start',
         schedule.isPremium ? 'bg-accent-300/[0.05]' : '',
       ].join(' ')}
     >
-      <div className="col-start-1 row-span-3 row-start-1 self-center">
-        <PosterArea
-          posterUrl={venue?.imageUrl}
-          posterColor={venue?.themeColor ?? schedule.posterColor}
-          fallbackText={venueInitial(schedule.pubName)}
-          title={schedule.pubName}
-          className="h-[42px] w-[42px] rounded-[9px] min-[360px]:h-[48px] min-[360px]:w-[48px] min-[360px]:rounded-[10px]"
-          thumbWidth={128}
-          priority={priority}
-          vtName={vtActive ? 'vt-poster' : undefined}
-        />
+      <PosterArea
+        posterUrl={venue?.imageUrl}
+        posterColor={venue?.themeColor ?? schedule.posterColor}
+        fallbackText={venueInitial(schedule.pubName)}
+        title={schedule.pubName}
+        className="h-[56px] w-[56px] shrink-0 rounded-[12px]"
+        thumbWidth={128}
+        priority={priority}
+        vtName={vtActive ? 'vt-poster' : undefined}
+      />
+
+      <div className="flex min-w-0 flex-col justify-center gap-y-[3px]">
+        <h3 className="min-w-0 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere]"
+          title={schedule.title}>
+          {titleWithoutGtd(schedule.title, !!gtd)}
+        </h3>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0">
+          <VenueLink
+            pubName={schedule.pubName}
+            region={schedule.region}
+            wrap
+            sizeCls="text-[0.6875rem]"
+            onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
+          />
+          {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
+          {rating && rating.count > 0 && (
+            <span className="text-[10px] tabular-nums leading-tight text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
+          )}
+          {distanceKm != null && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
+          {(reserveCount ?? 0) > 0 && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}
+        </div>
+        {/* ③ 시작 · 레지마감(저장값 그대로 — regCloseRaw, 오너 2026-09-20 "계산하지 마라") · 라이브 상태 */}
+        <p data-testid="schedule-start-group"
+          className="min-w-0 break-keep text-[0.6875rem] leading-tight text-ink-secondary [overflow-wrap:anywhere]">
+          <span data-testid="schedule-start-time" className="font-extrabold tabular-nums text-ink-primary">{schedule.startTime || '—'}</span>
+          {' 시작'}
+          {reg && <>{dot}<span data-testid="schedule-reg-close">레지 {reg}</span></>}
+          {regInfo?.hasField ? (
+            <>{dot}<span data-testid="schedule-field-count" className="font-bold tabular-nums">
+              <span className="sr-only">생존 </span>{regInfo.alive}
+              <span aria-hidden>/</span><span className="sr-only">명, 엔트리 </span>{regInfo.entries}
+              <span className="sr-only">명</span>
+            </span></>
+          ) : status ? (
+            <>{dot}<span data-testid="schedule-current-level" className="font-bold tabular-nums">{status}</span></>
+          ) : null}
+        </p>
       </div>
 
-      <div className="col-span-2 col-start-2 row-start-1 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0">
-        <VenueLink
-          pubName={schedule.pubName}
-          region={schedule.region}
-          wrap
-          sizeCls="text-[0.6875rem]"
-          onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
-        />
-        {/* 🔴 2026-09-24 오너: "시간과 인원은 달라지지만 게임 종류는 바뀌지 않는 정보" → 게임 종류는 **매장·지역 줄 오른쪽**.
-            배지 상자(패딩·배경)를 두지 않고 굵은 글자만 둔다 — 320 에서 실제 최장 매장명(17자)+지역과 한 줄에 서게(패딩 8px 이면 −2px 로 접혔다, 실측).
-            등급(데일리·새틀·시리즈)이 정본이고, 없으면 게임 형식(format: MTT 등). */}
-        {grade ? (
-          <span data-testid="schedule-grade-badge" className="whitespace-nowrap text-[10px] font-extrabold leading-tight text-accent-200">{grade}</span>
-        ) : schedule.format ? (
-          <span data-testid="schedule-game-type" className="whitespace-nowrap text-[10px] font-extrabold leading-tight text-accent-200">{schedule.format}</span>
-        ) : null}
-        {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
-        {rating && rating.count > 0 && (
-          <span className="text-[10px] tabular-nums leading-tight text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
-        )}
-        {distanceKm != null && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
-        {(reserveCount ?? 0) > 0 && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}
-      </div>
-
-      <h3 className="col-start-2 row-start-2 min-w-0 break-keep text-xs font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere]"
-        title={schedule.title}>
-        {titleWithoutGtd(schedule.title, !!prize)}
-      </h3>
-
-      <div
-        data-metrics
-        className={[
-          'col-start-2 row-start-3 flex min-w-0 flex-wrap items-start gap-y-0.5 divide-x divide-border-subtle',
-          '[&>*]:px-1 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0 min-[390px]:[&>*]:px-1.5',
-        ].join(' ')}
-      >
-        <Metric label={prize?.label ?? '상금'} value={prize?.amount ?? '—'} tone={prize ? 'text-gold-300' : 'text-ink-muted'} />
-        <Metric label="참가비" value={buyInText(schedule.buyIn?.amount)}
-          title={schedule.buyIn?.amount ? `${schedule.buyIn.amount.toLocaleString()}원` : undefined} />
-        <Metric label="레지마감" value={reg ?? '—'} />
-      </div>
-
-      {/* 우측 열 — **시각 + 그 아래 상태 한 줄**(2026-09-24 오너: 게임 종류는 윗줄로 옮기고 여기엔 달라지는 것만).
-          · 상태 줄: 라이브 필드 숫자가 있으면 생존/엔트리, 없으면 현재 레벨.
-          · 글자 비율: 시각 17px(360~) · 14.9px(<360) 대비 상태 11px · 10px = **0.65 · 0.67**(오너 예시 0.55~0.65 의 위쪽 — 종전 10px=0.59 가 작다는 지적).
-          · 현재 레벨: 이 포스터에 **매칭된 클락이 있을 때만** 실측(RegInfo.levelNo, 이미 받은 클락 행에서 셈 — 새 조회 0).
-              진행 중 → 'L8' · 브레이크 → '휴식' · 레벨 표 없는 클락 → '진행 중'(liveBadge 와 같은 말).
-            클락이 없으면 레벨을 **모른다** — 시작 전이면 '시작 전', 시작 시각이 지났으면 'L —'(추정해서 번호를 만들지 않는다).
-            레지마감 레벨(예: '레벨 12')은 본문 지표 칸이 이미 말하므로 여기서 되풀이하지 않는다. */}
-      <p data-testid="schedule-start-group"
-        className="col-start-3 row-span-2 row-start-2 flex min-w-0 flex-col items-end gap-0.5 self-start leading-none">
-        <span data-testid="schedule-start-time"
-          className="whitespace-nowrap text-[0.875rem] font-extrabold leading-none tracking-tight tabular-nums text-ink-primary min-[360px]:text-[1rem]">
-          {schedule.startTime || '—'}
-        </span>
-        {regInfo?.hasField ? (
-          <span data-testid="schedule-field-count"
-            className="whitespace-nowrap text-[10px] font-bold leading-none tabular-nums text-ink-secondary min-[360px]:text-[11px]">
-            <span className="sr-only">생존 </span>{regInfo.alive}
-            <span aria-hidden>/</span><span className="sr-only">명, 엔트리 </span>{regInfo.entries}
-            <span className="sr-only">명</span>
-          </span>
+      {/* 오른쪽 고정 칸 — 가는 세로선 + [보장 금액 | 데일리] / 참가비. 라벨 글자 없음(오너 E안).
+          ⚠ `data-metrics` 는 계측 손잡이다(schedule-card-fit 이 이 안을 전부 '값' 으로 보고 잘림 0 을 단언한다). 지우지 마라.
+          ⚠ w-[5.125rem] 가 세로선 위치의 정본이다 — 줄마다 같아야 한다. 실측(schedrow/measure.cjs): `9억 9,999만` 74.3px / 칸 안쪽 77.6px.
+            글자·폭·gap 을 바꾸면 360 에서 12자 제목(139.1px)과 이 금액이 둘 다 한 줄인지 다시 재라. */}
+      {/* 라벨 글자가 없으므로 보조기술에는 그룹 이름으로 무슨 값인지 말해 준다(sr-only 1×1 스팬은 home-flow-fit 잘림 게이트에 걸린다). */}
+      <div data-metrics data-testid="schedule-money" role="group"
+        aria-label={`${gtd ? `보장 상금 ${gtd}` : '데일리(보장 없음)'}, 참가비 ${buyInText(schedule.buyIn?.amount)}`}
+        className="flex w-[5.125rem] min-w-0 flex-col items-end justify-center gap-y-[3px] self-stretch border-l border-border-subtle pl-2 text-right">
+        {gtd ? (
+          <span data-testid="schedule-prize" className="break-keep text-[0.8125rem] font-extrabold
+ leading-tight tracking-tight tabular-nums text-gold-300">{gtd}</span>
         ) : (
-          <span data-testid="schedule-current-level"
-            className="whitespace-nowrap text-[10px] font-bold leading-none tabular-nums text-ink-secondary min-[360px]:text-[11px]">
-            {regInfo
-              ? (regInfo.onBreak ? '휴식' : regInfo.levelNo ? `L${regInfo.levelNo}` : '진행 중')
-              : (scheduleStatus(schedule.date, schedule.startTime) === 'upcoming' ? '시작 전' : 'L —')}
-          </span>
+          <span data-testid="schedule-daily" className="text-[0.8125rem] font-extrabold leading-tight text-emerald-300">데일리</span>
         )}
-      </p>
+        {/* 참가비 — §28 상품 가격 정보. T 로 정확히 떨어지는 금액만 T, 나머지는 원 그대로(buyInText 정본). */}
+        <span data-testid="schedule-buyin"
+          title={schedule.buyIn?.amount ? `참가비 ${schedule.buyIn.amount.toLocaleString()}원` : undefined}
+          className="text-[0.75rem] font-bold leading-tight tabular-nums text-ink-secondary [overflow-wrap:anywhere]">
+          {buyInText(schedule.buyIn?.amount)}
+        </span>
+      </div>
     </article>
   );
 }

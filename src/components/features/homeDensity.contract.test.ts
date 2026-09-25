@@ -81,39 +81,49 @@ describe('홈 일정 카드 — [로고][본문][우측 열] 시간표형', () =
     expect(HOME).toMatch(/<ScheduleCard mode="list" layout="timetable"/);
     expect(CARD).toMatch(/layout === 'timetable' \? <TimetableCard \{\.\.\.rest\} \/> : <ListCard \{\.\.\.rest\} \/>/);
   });
-  it('우측 열은 고정 폭(minmax rem) · md~ 본문 17rem 상한 + justify-start — 시각이 카드 끝으로 떨어지지 않는다', () => {
-    expect(TT).toMatch(/grid-cols-\[auto_minmax\(0,1fr\)_minmax\(2\.75rem,auto\)\]/);
-    expect(TT).toMatch(/md:grid-cols-\[auto_minmax\(0,17rem\)_minmax\(3\.25rem,auto\)\] md:justify-start/);
+  // 🔴 2026-09-25 SCHEDULE-ROW-E(오너 확정 E안) — [로고 56] [제목 / 매장·지역 / 시작·레지] ┃ [보장 금액 / 참가비].
+  //   종전 계약(우측 열 = 시각 + 상태, 게임 종류는 매장 줄)을 **교체**했다. 화면 수치(12자 제목·최장 금액 한 줄,
+  //   세로선 x 동일)는 e2e/schedule-card-fit 'SCHEDULE-ROW-E' 가 브라우저에서 잰다. 여기서는 조리법만 잠근다.
+  it('오른쪽 금액 칸은 고정 폭 + 왼쪽 세로선 — 가운데가 1fr 이라 세로선 x 가 줄마다 같다 · md~ 본문 17rem 상한', () => {
+    expect(TT).toMatch(/grid-cols-\[auto_minmax\(0,1fr\)_auto\] md:grid-cols-\[auto_minmax\(0,17rem\)_auto\] md:justify-start/);
+    expect(TT).toMatch(/data-testid="schedule-money"[\s\S]{0,300}className="flex w-\[5\.125rem\] min-w-0 flex-col[^"]*border-l border-border-subtle/);
   });
-  it('시각은 제목과 같은 줄(2행)에서 시작하고, 로고는 맨 왼쪽 3행 전체다', () => {
-    expect(TT).toMatch(/col-start-1 row-span-3 row-start-1/);
-    expect(TT).toMatch(/col-start-3 row-span-2 row-start-2[^"]*self-start/);
-    expect(TT).toMatch(/<h3 className="col-start-2 row-start-2/);
+  it('로고 56px · 가운데 세 줄 순서 = 제목 → 매장·지역 → 시작·레지', () => {
+    expect(TT).toMatch(/className="h-\[56px\] w-\[56px\] shrink-0/);
+    const h3 = TT.indexOf('<h3'), venue = TT.indexOf('<VenueLink'), start = TT.indexOf('data-testid="schedule-start-group"');
+    expect(h3).toBeGreaterThan(0);
+    expect(venue).toBeGreaterThan(h3);
+    expect(start).toBeGreaterThan(venue);
+    expect(TT).toMatch(/\{' 시작'\}/);
+    expect(TT).toMatch(/<span data-testid="schedule-reg-close">레지 \{reg\}<\/span>/);  // 저장값 그대로(regCloseRaw)
+    expect(TT).toMatch(/const reg = regCloseRaw\(schedule\)/);
   });
   it('글자를 말줄임으로 숨기지 않는다 — 제목에 line-clamp·truncate 가 없다', () => {
     const h3 = TT.slice(TT.indexOf('<h3'), TT.indexOf('</h3>'));
     expect(h3).not.toMatch(/line-clamp|truncate/);
     expect(h3).toMatch(/\[overflow-wrap:anywhere\]/);
   });
-  it('매장·지역 줄은 본문+우측 열 두 칸에 걸친다(320 에서 실제 최장 매장명 17자가 한 줄에 서는 근거)', () => {
-    expect(TT).toMatch(/col-span-2 col-start-2 row-start-1/);
-  });
-  it('오른쪽 끝에 떨어진 꺾쇠가 없다', () => {
+  it('오른쪽 끝에 떨어진 꺾쇠가 없다 · 게임 형식(format)·등급 배지를 그리지 않는다(오너 E안)', () => {
     expect(TT).not.toMatch(/chevron-right/);
+    expect(TT).not.toMatch(/schedule\.format/);
+    expect(TT).not.toMatch(/data-testid="schedule-(game-type|grade-badge)"/);
   });
-  it('게임 종류는 매장·지역 줄(우측 열 밖) · 우측 열 = 시각 + 상태 한 줄(생존/엔트리 또는 현재 레벨, 11px = 시각 17px 의 0.65)', () => {
-    const grp = TT.indexOf('data-testid="schedule-start-group"');
-    expect(TT.indexOf('data-testid="schedule-grade-badge"')).toBeLessThan(TT.indexOf('<h3'));
-    expect(TT.indexOf('data-testid="schedule-game-type"')).toBeLessThan(TT.indexOf('<h3'));
-    expect(TT.indexOf('data-testid="schedule-current-level"')).toBeGreaterThan(grp);
-    expect(TT.indexOf('data-testid="schedule-field-count"')).toBeGreaterThan(grp);
-    expect(TT).toMatch(/regInfo\?\.hasField \? \(/);
-    expect(TT.match(/text-\[10px\] font-bold leading-none tabular-nums text-ink-secondary min-\[360px\]:text-\[11px\]/g)?.length).toBe(2);
+  it('금액 칸: 보장(guaranteed && prizePool)이면 금색 금액, 아니면 초록 "데일리" · 아래 참가비 · 라벨 글자 없음', () => {
+    expect(TT).toMatch(/const gtd = schedule\.guaranteed && schedule\.prizePool \? formatPrize\(schedule\.prizePool\) : null;/);
+    expect(TT).toMatch(/data-testid="schedule-prize" className="[^"]*text-gold-300">\{gtd\}/);
+    expect(TT).toMatch(/data-testid="schedule-daily" className="[^"]*text-emerald-300">데일리</);
+    expect(TT).toMatch(/data-testid="schedule-buyin"[\s\S]{0,300}\{buyInText\(schedule\.buyIn\?\.amount\)\}/);
+    expect(TT).not.toMatch(/<Metric/);
+    // 제목 끝 GTD 표기는 금액 칸이 보장 금액을 보여 줄 때만 뗀다(엔트리 게임 제목의 'GTD' 는 정보다)
+    expect(TT).toMatch(/titleWithoutGtd\(schedule\.title, !!gtd\)/);
+  });
+  it('라이브 상태(생존/엔트리 · 현재 레벨 · 휴식 · 진행 중 · L —)는 ③ 줄에 남는다(기능 유지)', () => {
+    const grp = TT.slice(TT.indexOf('data-testid="schedule-start-group"'), TT.indexOf('</p>', TT.indexOf('data-testid="schedule-start-group"')));
+    expect(grp).toMatch(/regInfo\?\.hasField \? \(/);
+    expect(grp).toMatch(/data-testid="schedule-field-count"/);
+    expect(grp).toMatch(/data-testid="schedule-current-level"/);
     expect(TT).toMatch(/regInfo\.onBreak \? '휴식' : regInfo\.levelNo \? `L\$\{regInfo\.levelNo\}` : '진행 중'/);
-    expect(TT).toMatch(/=== 'upcoming' \? '시작 전' : 'L —'/);
-    // 시각은 leading-none 이 지켜져야 한다 — text-base 유틸은 lineHeight 를 같이 실어 카드가 82px 로 부풀었다(실측).
-    expect(TT).toMatch(/min-\[360px\]:text-\[1rem\]/);
-    expect(TT).not.toMatch(/min-\[360px\]:text-base/);
+    expect(TT).toMatch(/=== 'upcoming' \? null : 'L —'/);
   });
   it('일정 탭(browse) 목록도 시간표형이다 — 라이브 탭은 종전 그대로', () => {
     const APP = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
@@ -122,7 +132,7 @@ describe('홈 일정 카드 — [로고][본문][우측 열] 시간표형', () =
     expect(LIVE).not.toMatch(/layout="timetable"/);
   });
   it('계측 손잡이(testid·data-metrics)를 그대로 단다', () => {
-    for (const id of ['schedule-start-group', 'schedule-start-time', 'schedule-grade-badge', 'schedule-field-count']) expect(TT).toContain(`data-testid="${id}"`);
+    for (const id of ['schedule-start-group', 'schedule-start-time', 'schedule-field-count', 'schedule-current-level', 'schedule-money', 'schedule-prize', 'schedule-daily', 'schedule-buyin']) expect(TT).toContain(`data-testid="${id}"`);
     expect(TT).toMatch(/data-metrics/);
   });
 });
@@ -186,7 +196,7 @@ describe('날짜 스트립', () => {
 describe('배너 가로폭', () => {
   it('모바일(≤767) 풀블리드 — 좌우 여백·좌우 테두리·둥근 모서리를 뺀다, md~ 종전 카드', () => {
     // 2026-09-25 — 모바일은 위아래 헤어라인·그림자도 뺀다(border-0 · shadow-none, 154 → 152)
-    expect(PC).toMatch(/poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none md:mx-page-x md:rounded-aura lg:mx-0/);
+    expect(PC).toMatch(/poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none \[mask-image:linear-gradient\(to_bottom,transparent,#000_8px,#000_calc\(100%-8px\),transparent\)\] md:mx-page-x md:rounded-aura lg:mx-0/);
     expect(PC).toMatch(/'relative min-h-\[152px\] w-full/);   // 2026-09-24 오너 지시 116 → 132 → 152(2차)
   });
   it('정적 셸 배너 예약이 같은 모양이다(첫 페인트 CLS)', () => {

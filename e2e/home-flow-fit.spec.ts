@@ -172,7 +172,9 @@ const measure = (page: Page) => page.evaluate(() => {
     //     지워 놓고 "말줄임은 설계"라고 넘어가면 이 검사는 아무것도 못 잡는다(실제로 그 구멍이 났다).
     //  ③ 나머지 말줄임(이름)은 설계로 인정한다 — 전체 이름은 상세에서 보인다(§5).
     if (s.webkitLineClamp && s.webkitLineClamp !== 'none') { clamped.push(text); continue; }
-    if (cut && /마감까지|등록 마감|참가비 [\d—]|GTD/.test(text)) {
+    // 2026-09-25 SCHEDULE-ROW-E — 목록 줄의 금액 칸에는 라벨 글자('GTD'·'참가비')가 없다. 글자 대신 **구조**로 값을 짚는다
+    //   (`[data-metrics]` 안은 전부 값 — schedule-card-fit 과 같은 규칙). 이름 정규식은 PC 표·그리드용으로 남긴다.
+    if (cut && (!!el.closest('[data-metrics]') || /마감까지|등록 마감|참가비 [\d—]|GTD/.test(text))) {
       clippedValues.push(`${text} ${el.clientWidth}/${el.scrollWidth} × ${el.clientHeight}/${el.scrollHeight}`);
       continue;
     }
@@ -208,6 +210,9 @@ const measure = (page: Page) => page.evaluate(() => {
     railCardH: railCards.map((c) => Math.round(c.getBoundingClientRect().height * 10) / 10),
     railMinFont: smallest.length ? Math.min(...smallest) : 0,
     gtoEntries: home.querySelectorAll('[data-testid="home-gto-entry"]').length,
+    // 목록 줄 금액 칸의 값 — 라벨 글자가 없어져(오너 E안 2026-09-25) textContent 로는 무엇의 값인지 못 가른다.
+    prizes: [...home.querySelectorAll('[data-testid="schedule-prize"]')].map((e) => (e.textContent || '').trim()),
+    buyins: [...home.querySelectorAll('[data-testid="schedule-buyin"]')].filter((e) => e.getBoundingClientRect().height > 0).map((e) => (e.textContent || '').trim()),
     text: (home.textContent || '').replace(/\s+/g, ' ').trim(),
   };
 });
@@ -316,14 +321,18 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
     await page.locator(`[data-date-pill="${TOMORROW}"]`).click();
     await page.waitForTimeout(700);
     const r2 = await measure(page);
-    expect(r2!.text, '내일을 골랐는데 그 날 카드가 안 보인다').toMatch(/참가비상금|상금참가비|참가비—/);
-    expect(r2!.text, '참가비 미입력이 "무료"로 둔갑했다').toContain('참가비—');
+    // 2026-09-25 SCHEDULE-ROW-E — '참가비' 라벨 글자가 없어졌다(오너 E안). 같은 사실을 참가비 칸(testid)의 값으로 본다.
+    expect(r2!.buyins.length, '내일을 골랐는데 그 날 카드가 안 보인다').toBeGreaterThan(0);
+    expect(r2!.buyins, '참가비 미입력이 "무료"·0원으로 둔갑했다 — 값은 "—" 여야 한다').toContain('—');
+
     // 2026-09-18 오너 지시로 라벨이 '상금 보장' → 'GTD' 로 바뀌었다. 이 검사의 요지는 라벨이 아니라
     //   **금액이 반올림·축약되지 않는 것**이므로 그 부분은 그대로 본다.
     // ⚠ 2026-09-18(6차) — GTD 라벨과 금액이 **다른 요소**로 나뉘었다(라벨은 작게·금액은 크게).
     //   그래서 `textContent` 가 'GTD1,000만' 로 붙어 나온다 — 공백을 박은 문자열 비교는 이걸 못 본다.
     //   이 검사의 요지는 **금액이 반올림되지 않는 것**이므로 공백을 선택적으로 보는 정규식으로 바꾼다.
-    expect(r!.text, 'GTD 금액이 반올림됐다').toMatch(/GTD\s*1,000만/);
+    // 2026-09-25 SCHEDULE-ROW-E — 'GTD' 라벨 글자가 없어졌다(오너 E안: 금색 금액 = 보장). 요지(반올림 금지)는 보장 금액 칸 값으로 본다.
+    expect(r!.prizes, '보장 금액이 반올림됐다(1,000만 이어야 한다)').toContain('1,000만');
+
     expect(r!.text, '근거 없는 긴박감 문구가 붙었다').not.toMatch(/마감 임박|급상승|인기 급등/);
   });
 
@@ -358,7 +367,7 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
     await expect(page.locator('[data-testid="home-banner-dots"] button[aria-current="true"]')).toHaveCount(1);
     const counter = page.getByTestId('home-banner-counter');
     await expect(counter).toBeVisible();
-    await expect(counter).toContainText(new RegExp(`^1\s*/\s*${nDots}`));
+    await expect(counter).toContainText(new RegExp(`^1\\s*/\\s*${nDots}`));
     for (const name of ['이전 배너', '다음 배너']) {
       const bb = await page.getByRole('button', { name }).boundingBox();
       expect(bb!.width, `${name} 터치 폭이 44px 미만이다`).toBeGreaterThanOrEqual(44);
