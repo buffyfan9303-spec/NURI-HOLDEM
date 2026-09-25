@@ -62,8 +62,9 @@ describe('인건비 — 급여 시스템 두 벌을 모두 센다', () => {
       const src = code(read(f));
       expect(src, '딜러 시프트를 조회하지 않습니다 — 딜러 급여가 총 인건비에서 통째로 빠집니다')
         .toMatch(/getDealerShifts\s*\(/);
+      // PAYROLL-LAW 2026-09-26: 계산은 staffPay.laborSummary 한 벌 — 화면마다 식을 따로 두지 않는다.
       expect(src, '딜러 근무시간을 계산하지 않습니다 — 조회만 하고 합산하지 않는 상태입니다')
-        .toMatch(/shiftHours\s*\(/);
+        .toMatch(/laborSummary\s*\(/);
     });
   }
 });

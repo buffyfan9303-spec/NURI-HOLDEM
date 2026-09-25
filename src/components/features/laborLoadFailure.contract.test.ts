@@ -33,10 +33,10 @@ describe('F3 · 출근 기록 조회 실패는 "기록 없음" 이 아니다', (
       const c = component(SP, name);
       expect(c).toMatch(/const \[shiftErr, setShiftErr\] = useState<string \| null>\(null\);/);
       expect(c, '빈 catch 가 남아 있다').not.toMatch(/\.catch\(\(\) => \{\}\)/);
-      expect(c).toMatch(/getStaffSchedule\(venueId, from, to\)\s*\.then\([\s\S]*?setShiftErr\(null\);[\s\S]*?\)\s*\.catch\(\(e\) => setShiftErr\(msgOf\(e, '출근 기록을 불러오지 못했습니다'\)\)\)/);
+      expect(c).toMatch(/getStaffSchedule\(venueId, (?:from|loadFrom), to\)\s*\.then\([\s\S]*?setShiftErr\(null\);[\s\S]*?\)\s*\.catch\(\(e\) => setShiftErr\(msgOf\(e, '출근 기록을 불러오지 못했습니다'\)\)\)/);
       // 재시도 틱이 effect deps 에 있어야 '다시 시도' 가 실제로 조회를 다시 낸다.
       expect(c).toMatch(/const \[shiftTick, setShiftTick\] = useState\(0\);/);
-      expect(c).toMatch(/\}, \[venueId, from, to, shiftTick(, user)?(, active)?\]\);/); // active = 숨은 판은 채널을 놓는다(MYSTORE-PC-TAB-JANK)
+      expect(c).toMatch(/\}, \[venueId, (?:from|loadFrom), to, shiftTick(, user)?(, active)?\]\);/); // active = 숨은 판은 채널을 놓는다(MYSTORE-PC-TAB-JANK)
       expect(c).toMatch(/onClick=\{\(\) => setShiftTick\(\(t\) => t \+ 1\)\}/);
       expect(c).toMatch(/role="alert"/);
     });
@@ -44,7 +44,7 @@ describe('F3 · 출근 기록 조회 실패는 "기록 없음" 이 아니다', (
 
   it('🔴 StaffSettlement: 총 인건비·총 근무시간이 시급·출근·딜러 셋 중 하나라도 실패면 — 이고 0원을 그리지 않는다', () => {
     const c = component(SP, 'StaffSettlement');
-    expect(c).toContain('const payErr = wageErr ?? shiftErr ?? dealerErr;');
+    expect(c).toMatch(/const payErr = wageErr \?\? shiftErr \?\? dealerErr( \?\? pay\.err)?;/); // pay.err = 급여 설정 조회 실패(PAYROLL-LAW)
     expect(c).toMatch(/\{payErr\s*\? <p className="text-base font-extrabold text-danger-light">—<\/p>/);
     expect(c).not.toMatch(/\{wageErr\s*\? <p className="text-base font-extrabold text-danger-light">—<\/p>/);
     expect(c).toMatch(/\{shiftErr \|\| dealerErr\s*\? <p className="text-base font-extrabold text-danger-light">—<\/p>/);
@@ -63,12 +63,12 @@ describe('F6 · 딜러 근무 조회 실패를 호출부가 든다(throw 만 하
   it('🔴 DealerShiftsModal: 실패가 loadErr(msgOf) 에 남고 빈 catch 가 없다, 목록 자리에 role="alert" + 다시 시도', () => {
     const DM = strip(readFileSync(join(__dirname, 'DealerShiftsModal.tsx'), 'utf-8'));
     expect(DM).toMatch(/const \[loadErr, setLoadErr\] = useState<string \| null>\(null\);/);
-    expect(DM).not.toMatch(/getDealerShifts\(venueId, s, e\)\.then\(setList\)\.catch\(\(\) => \{\}\)/);
-    expect(DM).toMatch(/getDealerShifts\(venueId, s, e\)\s*\.then\(\(l\) => \{ setList\(l\); setLoadErr\(null\); \}\)\s*\.catch\(\(err\) => setLoadErr\(msgOf\(err, '딜러 근무 기록을 불러오지 못했습니다'\)\)\)/);
+    expect(DM).not.toMatch(/getDealerShifts\(venueId, (?:s|weekStartOf\(s\)), e\)\.then\(setList\)\.catch\(\(\) => \{\}\)/);
+    expect(DM).toMatch(/getDealerShifts\(venueId, (?:s|weekStartOf\(s\)), e\)\s*\.then\(\(l\) => \{ setList\(l\); setLoadErr\(null\); \}\)\s*\.catch\(\(err\) => setLoadErr\(msgOf\(err, '딜러 근무 기록을 불러오지 못했습니다'\)\)\)/);
     expect(DM).toMatch(/\{loadErr \? \(\s*<div role="alert"/);
     expect(DM).toMatch(/onClick=\{\(\) => reload\(month\)\}/);
     // 급여 명세 합계도 실패 중에는 그리지 않는다(부분 목록 합계가 '이번 달 합계' 로 읽힌다).
-    expect(DM).toMatch(/\{!loadErr && payroll\.length > 0 &&/);
+    expect(DM).toMatch(/\{!loadErr( && !pay\.err)? && payroll\.length > 0 &&/); // pay.err = 급여 설정 조회 실패도 합계를 그리지 않는다
   });
 
   it('getDealerShifts 소비처가 세 파일뿐이다 — 새 소비처가 생기면 dealerErr 관용구를 같이 붙여야 한다', () => {
@@ -81,17 +81,17 @@ describe('F6 · 딜러 근무 조회 실패를 호출부가 든다(throw 만 하
     const c = component(SP, 'StaffSettlement');
     expect(c).toMatch(/const \[dealerErr, setDealerErr\] = useState<string \| null>\(null\);/);
     expect(c).not.toMatch(/\.catch\(\(\) => setDealers\(\[\]\)\)/);
-    expect(c).toMatch(/getDealerShifts\(venueId, from, to\)\s*\.then\(\(ds\) => \{ setDealers\(ds\); setDealerErr\(null\); \}\)\s*\.catch\(\(e\) => setDealerErr\(msgOf\(e, '딜러 근무 기록을 불러오지 못했습니다'\)\)\)/);
+    expect(c).toMatch(/getDealerShifts\(venueId, (?:from|loadFrom), to\)\s*\.then\(\(ds\) => \{ setDealers\(ds\); setDealerErr\(null\); \}\)\s*\.catch\(\(e\) => setDealerErr\(msgOf\(e, '딜러 근무 기록을 불러오지 못했습니다'\)\)\)/);
   });
 
   // 독립 검증(2026-09-13) B: 출근(getStaffSchedule) 실패는 그대로 삼켜져 딜러 인건비만의 값이 '총 인건비 N만원' 으로 떴다.
   it('🔴 StoreDashboard: 출근 조회 실패도 shiftErr 로 들고 총 인건비·오늘 출근이 실패를 말한다', () => {
     expect(SD).toMatch(/const \[shiftErr, setShiftErr\] = useState\(false\);/);
     expect(SD).not.toMatch(/getStaffSchedule\(venueId, d, d\)\.then\(guard\(setShifts\)\)\.catch\(\(\) => \{\}\)/);
-    expect(SD).not.toMatch(/getStaffSchedule\(venueId, mr\.start, mr\.end\)\.then\(guard\(setMonthShifts\)\)\.catch\(\(\) => \{\}\)/);
+    expect(SD).not.toMatch(/getStaffSchedule\(venueId, (?:mr\.start|weekStartOf\(mr\.start\)), mr\.end\)\.then\(guard\(setMonthShifts\)\)\.catch\(\(\) => \{\}\)/);
     expect(SD).toMatch(/getStaffSchedule\(venueId, d, d\)\.then\(guard\(\(ss: StaffShift\[\]\) => \{ setShifts\(ss\); setShiftErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setShifts\(\[\]\); setShiftErr\(true\); \}\)\)/);
-    expect(SD).toMatch(/getStaffSchedule\(venueId, mr\.start, mr\.end\)\.then\(guard\(\(ss: StaffShift\[\]\) => \{ setMonthShifts\(ss\); setShiftErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setMonthShifts\(\[\]\); setShiftErr\(true\); \}\)\)/);
-    expect(SD).toContain('const laborErr = wageErr || dealerErr || shiftErr;');
+    expect(SD).toMatch(/getStaffSchedule\(venueId, (?:mr\.start|weekStartOf\(mr\.start\)), mr\.end\)\.then\(guard\(\(ss: StaffShift\[\]\) => \{ setMonthShifts\(ss\); setShiftErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setMonthShifts\(\[\]\); setShiftErr\(true\); \}\)\)/);
+    expect(SD).toMatch(/const laborErr = wageErr \|\| dealerErr \|\| shiftErr( \|\| !!payRules\.err)?;/);
     expect(SD).toMatch(/\{shiftErr && <p className="text-\[11px\] text-danger-light">출근 기록을 불러오지 못해/);
     // '오늘 출근' 카드도 실패를 '배정 없음' 으로 그리지 않는다
     expect(SD).toMatch(/shifts\.length === 0 && !shiftErr \?/);
@@ -107,9 +107,9 @@ describe('F6 · 딜러 근무 조회 실패를 호출부가 든다(throw 만 하
 
   it('🔴 StoreDashboard: dealerErr 를 세대 가드 안에서 세우고, 총 인건비가 wageErr || dealerErr 로 — 가 된다', () => {
     expect(SD).toMatch(/const \[dealerErr, setDealerErr\] = useState\(false\);/);
-    expect(SD).toMatch(/getDealerShifts\(venueId, mr\.start, mr\.end\)\.then\(guard\(\(ds: DealerShift\[\]\) => \{ setMonthDealers\(ds\); setDealerErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setMonthDealers\(\[\]\); setDealerErr\(true\); \}\)\)/);
+    expect(SD).toMatch(/getDealerShifts\(venueId, (?:mr\.start|weekStartOf\(mr\.start\)), mr\.end\)\.then\(guard\(\(ds: DealerShift\[\]\) => \{ setMonthDealers\(ds\); setDealerErr\(false\); \}\)\)\.catch\(guard\(\(\) => \{ setMonthDealers\(\[\]\); setDealerErr\(true\); \}\)\)/);
     expect(SD).not.toMatch(/\.catch\(guard\(\(\) => setMonthDealers\(\[\]\)\)\)/);
-    expect(SD).toMatch(/const laborErr = wageErr \|\| dealerErr( \|\| shiftErr)?;/);
+    expect(SD).toMatch(/const laborErr = wageErr \|\| dealerErr( \|\| shiftErr)?( \|\| !!payRules\.err)?;/);
     expect(SD).toMatch(/<Stat label="총 인건비" value=\{laborErr \? '—' : wonToMan\(laborTotal\)\} unit=\{laborErr \? '' : '만원'\} gold \/>/);
     expect(SD).toMatch(/\{dealerErr && <p className="text-\[11px\] text-danger-light">딜러 근무 기록을 불러오지 못해/);
     expect(SD).toMatch(/\{!laborErr && dealerPay > 0 &&/);

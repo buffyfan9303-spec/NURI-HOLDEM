@@ -23,7 +23,9 @@ import RegularsModal from './RegularsModal';
 import DealerShiftsModal from './DealerShiftsModal';
 // 딜러 급여는 dealer_shifts 에 **행마다 시급**이 붙어 있다(staff_wage 와 별개 시스템).
 // 합산하지 않으면 딜러를 로테이션으로만 굴리는 매장의 '총 인건비'가 통째로 0원이 된다.
-import { getDealerShifts, shiftHours, type DealerShift } from '../../api/dealerShifts';
+import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
+import { usePayRules } from '../../api/payrollRules';
+import { laborSummary, weekStartOf } from '../../lib/staffPay';
 import VoucherManageModal from './VoucherManageModal';
 import CheckinModal from './CheckinModal';
 import Modal from '../atoms/Modal';
@@ -55,7 +57,6 @@ const monthRange = () => {
     label: `${n.getMonth() + 1}월`,
   };
 };
-const hhmm = (s?: string | null) => { if (!s) return null; const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
 
 // PC 밀도 규약(오너 #5, 2026-08-30) — 이 파일의 모든 간격은 아래 4단만 쓴다.
 //  1rem = 17px(index.css html) 이라 실제 렌더값은 괄호 안 값이다.
@@ -153,6 +154,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   const [monthDealers, setMonthDealers] = useState<DealerShift[]>([]);
   const [dealerErr, setDealerErr] = useState(false);
   const [shiftErr, setShiftErr] = useState(false);
+  // 인건비는 급여 정산 화면과 같은 규칙(휴게·주휴·5인 가산 설정)으로 센다 — 두 화면의 합계가 달라지면 안 된다.
+  const payRules = usePayRules(venueId);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [range, setRange] = useState<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }>({ sessions: [], buyins: [] });
   // ⚠ 14일 장부 조회 실패와 '장부가 없다'는 다르다 — 예전엔 catch(() => {}) 라 이 한 번의 실패가
@@ -329,10 +332,10 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       getPendingBuyinRequests(venueId, d).then(guard(setPendingReqs)).catch(() => {}),
       // 독립 검증 B(2026-09-13): 출근 조회 실패를 삼키면 딜러 인건비만의 값이 '총 인건비 N만원' 으로 뜬다 — wageErr·dealerErr 와 같은 모양.
       getStaffSchedule(venueId, d, d).then(guard((ss: StaffShift[]) => { setShifts(ss); setShiftErr(false); })).catch(guard(() => { setShifts([]); setShiftErr(true); })),
-      getStaffSchedule(venueId, mr.start, mr.end).then(guard((ss: StaffShift[]) => { setMonthShifts(ss); setShiftErr(false); })).catch(guard(() => { setMonthShifts([]); setShiftErr(true); })),
+      getStaffSchedule(venueId, weekStartOf(mr.start), mr.end).then(guard((ss: StaffShift[]) => { setMonthShifts(ss); setShiftErr(false); })).catch(guard(() => { setMonthShifts([]); setShiftErr(true); })),
       getStaffWages(venueId).then(guard((w: StaffWage[]) => { setWages(w); setWageErr(false); })).catch(guard(() => { setWages([]); setWageErr(true); })),
       // F6: getDealerShifts 가 이제 실패를 던진다 — 빈 배열로 받으면 '딜러 인건비 0' 이 정상값처럼 보인다. wageErr 와 같은 모양.
-      getDealerShifts(venueId, mr.start, mr.end).then(guard((ds: DealerShift[]) => { setMonthDealers(ds); setDealerErr(false); })).catch(guard(() => { setMonthDealers([]); setDealerErr(true); })),
+      getDealerShifts(venueId, weekStartOf(mr.start), mr.end).then(guard((ds: DealerShift[]) => { setMonthDealers(ds); setDealerErr(false); })).catch(guard(() => { setMonthDealers([]); setDealerErr(true); })),
       // ⚠ 실패를 삼키지 않는다 — 실패하면 rangeErr 가 켜지고 이번 세대의 '갱신 시각'도 올리지 않는다(F14).
       reloadRange().then((good) => { if (!good) ok = false; }),
       getVenueRegulars(venueId).then(guard(setRegulars)).catch(() => {}),
@@ -686,28 +689,13 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   //   운영 분석이 필요하면 '통계' 화면의 운영 리포트(LedgerStatsPanel.buildOpsReport)를 쓴다 —
   //   그쪽은 처음부터 외부 호출 없이 로컬 집계로만 문장을 만든다.
 
-  // ── 직원 인건비(이번 달) ──
-  const wageMap: Record<string, number> = Object.fromEntries(wages.map((w) => [w.name, w.hourlyWage]));
-  let laborTotal = 0, laborHours = 0;
-  for (const s of monthShifts) {
-    const ci = hhmm(s.checkIn), co = hhmm(s.checkOut);
-    if (ci == null || co == null) continue;
-    let mins = co - ci; if (mins < 0) mins += 1440;
-    const hrs = mins / 60;
-    laborHours += hrs;
-    laborTotal += hrs * (wageMap[s.name] ?? 0);
-  }
-  // 딜러 로테이션 — 같은 달, 같은 화면의 '총 인건비'에 더한다(StaffSettlement 와 같은 식).
-  let dealerPay = 0, dealerHours = 0;
-  for (const d of monthDealers) {
-    const hrs = shiftHours(d.startTime, d.endTime);
-    dealerHours += hrs;
-    dealerPay += hrs * d.hourlyWage;
-  }
-  laborTotal += dealerPay;
-  laborHours += dealerHours;
-  // 시급이든 딜러 근무든 못 불러왔으면 합계는 숫자가 아니다 — '0만원' 이 정상값처럼 읽힌다(F6).
-  const laborErr = wageErr || dealerErr || shiftErr;
+  // ── 인건비(이번 달) — 직원·딜러 모두 staffPay.laborSummary(급여 정산 화면과 같은 함수·같은 설정) ──
+  // 기록은 첫 주 월요일부터 읽는다(주 40h·주휴). 이 달 밖의 날 금액은 laborSummary 가 넣지 않는다.
+  const labor = laborSummary({ from: mr.start, to: mr.end, today: d, rules: payRules.rules, staff: monthShifts,
+    wages: Object.fromEntries(wages.map((w) => [w.name, w.hourlyWage])), dealers: monthDealers });
+  const laborTotal = labor.total, laborHours = labor.netMin / 60, dealerPay = labor.dealerPay;
+  // 시급이든 딜러 근무든 못 불러왔으면 합계는 숫자가 아니다 — '0만원' 이 정상값처럼 읽힌다(F6). 급여 설정도 같다.
+  const laborErr = wageErr || dealerErr || shiftErr || !!payRules.err;
 
   // ── 손님 유형 비중(오늘 명단) ──
   const typeCount: Record<string, number> = {};

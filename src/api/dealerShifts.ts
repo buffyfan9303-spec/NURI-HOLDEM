@@ -41,11 +41,5 @@ export async function removeDealerShift(id: string): Promise<void> {
   await mustAffect(supabase.from('dealer_shifts').delete().eq('id', id));
 }
 
-/** 'HH:MM' → 분. 종료<시작이면 익일로 +24h. 근무 시간(시간) 반환. */
-export function shiftHours(start?: string | null, end?: string | null): number {
-  if (!start || !end) return 0;
-  const m = (s: string) => { const [h, mm] = s.split(':').map(Number); return h * 60 + (mm || 0); };
-  let d = m(end) - m(start);
-  if (d < 0) d += 1440;
-  return Math.round((d / 60) * 10) / 10;
-}
+// 근무 시간·급여는 src/lib/staffPay.ts(dealerWageShift · laborSummary)가 센다 — 예전 shiftHours 는 교대마다 0.1h 로
+// 반올림해 1분 단위 전액 지급(근로기준법 제43조)과 어긋났다(18:00~18:07 = 0.1h = 1,200원, 실제 7분 = 1,400원).
