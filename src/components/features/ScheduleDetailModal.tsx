@@ -1159,7 +1159,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
     : `예약 ${resList.length}명`;
 
   const act = async () => {
-    if (!user) { toast.show('로그인 후 예약할 수 있습니다', 'error'); promptLogin(); return; }
+    if (!user) { promptLogin(); return; } // 토스트 없이 — fixed 하단 토스트가 로그인 시트의 'Google로 계속하기' 를 덮는다(SWEEP-A 추가, post-login-gate 와 같은 결함)
     if (busy || !mine) return;
     setBusy(true);
     try {
@@ -1306,7 +1306,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
             아래 <b className="text-ink-secondary">예약하기</b>를 누르면 위 제공에 동의하는 것으로 봅니다.{' '}
             <a href="/legal/privacy.html" target="_blank" rel="noopener"
-              className="font-semibold text-accent-300 underline underline-offset-2">개인정보처리방침 제9조</a>
+              className="inline-flex items-center py-1 -my-1 font-semibold text-accent-300 underline underline-offset-2">개인정보처리방침 제9조</a>
           </p>
         </div>
       )}

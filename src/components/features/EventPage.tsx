@@ -190,7 +190,7 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
           className="hit -ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-input text-ink-secondary transition-colors hover:bg-surface-high">
           <Icon name="chevron-left" size={20} />
         </button>
-        <h1 className="min-w-0 flex-1 truncate text-base font-bold text-ink-primary">{board?.title ?? '이벤트'}</h1>
+        <h1 className="min-w-0 flex-1 line-clamp-2 break-keep text-base font-bold leading-tight text-ink-primary">{board?.title ?? '이벤트'}</h1>
         {user && board && (
           <span className="flex shrink-0 items-center gap-1 rounded-chip border border-accent-400/40 bg-accent-300/10 px-2.5 py-1 text-2xs font-bold text-accent-200">
             <Icon name="ticket" size={12} className="shrink-0" />
@@ -279,7 +279,7 @@ function Hero({ board, left, total, user, onLogin, av }: {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent-300">EVENT</p>
-          <h2 className="truncate text-base font-bold leading-tight text-ink-primary">{board.title}</h2>
+          <h2 className="line-clamp-2 break-keep text-base font-bold leading-tight text-ink-primary">{board.title}</h2>
         </div>
         <span className="shrink-0 text-right">
           <span className="block text-lg font-extrabold leading-none tabular-nums text-accent-200">{left}</span>

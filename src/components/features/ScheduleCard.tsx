@@ -204,8 +204,11 @@ function venueInitial(name: string): string {
 // ── 서브: 매장 링크 ─────────────────────────────────────────────────────────
 
 function VenueLink({
-  pubName, region, onClick, regionShrinks = true, sizeCls = 'text-xs', wrap = false,
+  pubName, region, onClick, regionShrinks = true, sizeCls = 'text-xs', wrap = false, hitCls = 'tap-up-24',
 }: { pubName: string; region: string; onClick?: (e: React.MouseEvent) => void;
+  /** 터치 히트 확장 클래스. 기본 `tap-up-24`(위로만 8px 의사요소)는 매장 줄이 제목 **위**에 있는 ListCard 의 것이다.
+   *  TimetableCard 는 제목이 매장 줄 위라 위 확장이 제목을 덮는다 — 실제 박스 클래스로 바꿔 넘긴다(아래 ① 주석). */
+  hitCls?: string;
   /** 폭 부족 시 지역이 먼저 줄어드는가. 목록 카드=true(매장명 우선), 그리드=false(기존 동작 유지) */
   regionShrinks?: boolean;
   /** 글자 크기 — 목록 카드는 모바일에서 13.8px(0.8125rem)로 올린다(§6-1 매장·지역 13~14px). */
@@ -261,8 +264,9 @@ function VenueLink({
     //   · 카드 높이·`--card-h-list`·HomeTab 스켈레톤은 **한 픽셀도 안 바꾼다**(의사요소라 flow 밖).
     <button
       type="button"
+      data-testid="schedule-venue-link"
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
-      className={`group tap-up-24 ${rootCls} hover:text-accent-300 transition-colors`}
+      className={`group ${hitCls} ${rootCls} hover:text-accent-300 transition-colors`}
     >
       <span className={`${nameCls} underline decoration-dotted underline-offset-2 group-hover:text-accent-300`}>
         {pubName}
@@ -871,23 +875,37 @@ function TimetableCard({
         posterColor={venue?.themeColor ?? schedule.posterColor}
         fallbackText={venueInitial(schedule.pubName)}
         title={schedule.pubName}
-        className="h-[56px] w-[56px] shrink-0 rounded-[12px]"
+        className="h-[56px] w-[56px] shrink-0 rounded-[12px] active:opacity-100"
         thumbWidth={128}
         priority={priority}
         vtName={vtActive ? 'vt-poster' : undefined}
       />
 
-      <div className="flex min-w-0 flex-col justify-center gap-y-[3px]">
-        <h3 className="min-w-0 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere]"
+      {/* ⚠ 세로 gap 이 없다 — 3px 간격은 아래 매장 줄의 `py-[3.25px]` 가 대신 낸다(SWEEP-A ①: 매장 링크 24px 박스를
+          줄 밖으로 넘치지 않게 담는 자리. 넘치면 home-flow-fit·schedule-card-fit 의 잘림 게이트(scrollHeight>clientHeight)에 걸린다). */}
+      <div className="flex min-w-0 flex-col justify-center">
+        {/* 🔴 2026-09-25 FULL-ERROR-SWEEP-A ① — 제목을 **터치**하면 매장 페이지가 열리던 결함(마우스는 정상). 원인은 둘이다
+            (scratchpad sweepA/exp1~3 실측 · CDP Input.dispatchTouchEvent 반경 1/4/8 · 390/360 · 홈·일정 탐색):
+            ① 매장 링크의 `tap-up-24`(위로 8px 의사요소)가 제목 아래 5px 를 덮었다 — 여기선 제목이 매장 줄 **위**다(ListCard 와 반대).
+               → 의사요소 대신 실제 박스: 매장 줄(row)에 `py-[3.25px]`, 버튼에 `-my-[3.25px] py-[3.25px]` → 17.53 + 6.5 = 24.03px(AA 24).
+                 버튼 박스가 줄의 padding 박스에 정확히 들어가 제목·③줄과 겹치지도, 줄 밖으로 넘치지도 않는다(넘치면 잘림 게이트가 잡는다).
+            ② Chromium 터치 보정은 터치 사각형(최소 20px)에 걸린 '응답 요소' 중 가까운 것으로 **touchstart 부터** 옮긴다.
+               응답 요소 = 네이티브 button/link · focusable · :hover/:active 규칙이 있는 요소이고, **다른 응답 요소의 조상은 뺀다**.
+               이 article 은 매장 button 의 조상이라 후보에서 빠져, 제목 아래쪽 10px 안의 터치는 ::before 가 없어도 매장 버튼으로 갔다
+               (exp2 실측: 제목 y=0.8 → 매장 페이지). 그래서 제목·③줄·금액칸·로고에 **값이 안 바뀌는 `active:` 클래스**를 하나씩 둔다.
+               `hover:` 는 tailwind future.hoverOnlyWhenSupported 라 터치 기기엔 규칙이 없다. 장식이 아니라 **터치 보정 후보 표시**다 — 지우면 재발한다.
+               게이트: e2e/schedule-card-touch.spec.ts(터치, 수정 전 FAIL) · e2e/schedule-card-fit.spec.ts(마우스 · AA 24). */}
+        <h3 className="min-w-0 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] active:text-ink-primary"
           title={schedule.title}>
           {titleWithoutGtd(schedule.title, !!gtd)}
         </h3>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0 py-[3.25px]">
           <VenueLink
             pubName={schedule.pubName}
             region={schedule.region}
             wrap
             sizeCls="text-[0.6875rem]"
+            hitCls="-my-[3.25px] py-[3.25px]"
             onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
           />
           {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
@@ -899,7 +917,7 @@ function TimetableCard({
         </div>
         {/* ③ 시작 · 레지마감(저장값 그대로 — regCloseRaw, 오너 2026-09-20 "계산하지 마라") · 라이브 상태 */}
         <p data-testid="schedule-start-group"
-          className="min-w-0 break-keep text-[0.6875rem] leading-tight text-ink-secondary [overflow-wrap:anywhere]">
+          className="min-w-0 break-keep text-[0.6875rem] leading-tight text-ink-secondary [overflow-wrap:anywhere] active:text-ink-secondary">
           <span data-testid="schedule-start-time" className="font-extrabold tabular-nums text-ink-primary">{schedule.startTime || '—'}</span>
           {' 시작'}
           {reg && <>{dot}<span data-testid="schedule-reg-close">레지 {reg}</span></>}
@@ -922,7 +940,7 @@ function TimetableCard({
       {/* 라벨 글자가 없으므로 보조기술에는 그룹 이름으로 무슨 값인지 말해 준다(sr-only 1×1 스팬은 home-flow-fit 잘림 게이트에 걸린다). */}
       <div data-metrics data-testid="schedule-money" role="group"
         aria-label={`${gtd ? `보장 상금 ${gtd}` : `${kind.text}(보장 없음)`}, 참가비 ${buyInText(schedule.buyIn?.amount)}`}
-        className="flex w-[5.125rem] min-w-0 flex-col items-end justify-center gap-y-[3px] self-stretch border-l border-border-subtle pl-2 text-right">
+        className="flex w-[5.125rem] min-w-0 flex-col items-end justify-center gap-y-[3px] self-stretch border-l border-border-subtle pl-2 text-right active:text-right">
         {gtd ? (
           <span data-testid="schedule-prize" className={`break-keep ${gtd.includes('억') ? 'text-[0.75rem]' : 'text-[0.8125rem]'} font-extrabold
  leading-tight tracking-tight tabular-nums text-gold-300`}>{gtd}</span>

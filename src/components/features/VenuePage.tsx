@@ -226,12 +226,12 @@ export default function VenuePage({
   // '체크인'은 매장에 실제로 왔다는 증명 — 버튼은 스캐너 모달만 열고, 체크인 RPC(doCheckin)는
   // 매장 비치 QR(?checkin=<venueId>) 스캔 검증 후에만 실행된다. 딥링크 자동 체크인은 App.tsx 보존.
   const openQrScan = () => {
-    if (!user) { toast.show('로그인 후 출석할 수 있습니다', 'error'); promptLogin(); return; }
+    if (!user) { promptLogin(); return; } // 토스트 없이 — 하단 토스트가 로그인 시트의 'Google로 계속하기' 를 덮는다(SWEEP-A)
     if (checkinBusy) return;
     setQrScanOpen(true);
   };
   const doCheckin = async () => {
-    if (!user) { toast.show('로그인 후 출석할 수 있습니다', 'error'); promptLogin(); return; }
+    if (!user) { promptLogin(); return; } // 토스트 없이 — 하단 토스트가 로그인 시트의 'Google로 계속하기' 를 덮는다(SWEEP-A)
     if (checkinBusy) return;
     setCheckinBusy(true);
     try {
@@ -947,7 +947,7 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) { toast.show('로그인 후 채팅할 수 있습니다', 'error'); promptLogin(); return; }
+    if (!user) { promptLogin(); return; } // 토스트 없이 — 같은 이유
     const body = draft.trim();
     if (!body) return;
     setSending(true);

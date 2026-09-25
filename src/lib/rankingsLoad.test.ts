@@ -91,7 +91,8 @@ describe('loadRankingsEffect — 대상이 바뀐 뒤 도착한 응답은 버린
     const a = deferred<{ entries: Entry[] }>();
     h.run(() => a.promise);
     a.reject({ code: '42501', message: 'permission denied for table venue_rankings' }); await flush();
-    expect(h.state.loadErr).toBe('권한이 없습니다. 매장 담당자 계정인지 확인해 주세요');
+    expect(h.state.loadErr).toMatch(/이 계정에는 권한이 없습니다$/);
+    expect(h.state.loadErr).not.toMatch(/permission denied|venue_rankings/);
     expect(h.state.entries).toEqual([]);
   });
 });

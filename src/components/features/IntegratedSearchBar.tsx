@@ -442,7 +442,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
               type="button"
               onClick={handleClear}
               aria-label="검색어 초기화"
-              className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-surface-float text-ink-muted hover:text-ink-primary transition-colors"
+              className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-surface-float text-ink-muted hover:text-ink-primary transition-colors"
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden>
                 <path d="M1.5 1.5 L8.5 8.5 M8.5 1.5 L1.5 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>

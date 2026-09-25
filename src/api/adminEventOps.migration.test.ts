@@ -70,7 +70,7 @@ describe('관리자 RPC 미적용 창 — 0건으로 위장하지 않는다', ()
     expect(isDenied(e), 'isDenied 가 false — 42501 인데 권한 안내가 안 뜬다').toBe(true);
     expect(msgOf(e, ''), '서버 원문이 그대로 새어 나온다(보안 표준 6번)')
       .not.toMatch(/permission denied|admin_list_event_campaigns/);
-    expect(msgOf(e, '')).toBe('권한이 없습니다. 매장 담당자 계정인지 확인해 주세요');
+    expect(msgOf(e, '')).toBe('이 계정에는 권한이 없습니다');
   });
 
   it('내부 SQLSTATE 원문(42883 등)도 화면 문구로 새지 않는다', async () => {

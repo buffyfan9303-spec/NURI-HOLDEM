@@ -599,7 +599,7 @@ for (const w of [320, 360, 390, 412]) {
         out.hearts += [...c.querySelectorAll('button')].filter((b) => /단골/.test(b.getAttribute('aria-label') || '')).length;
 
         // 매장명 링크의 **실효 히트 높이** — 의사요소 확장은 rect 로 안 잡히므로 elementFromPoint 로 잰다.
-        const venue = [...c.querySelectorAll<HTMLElement>('button')].find((b) => /tap-up-24/.test(b.className));
+        const venue = [...c.querySelectorAll<HTMLElement>('button')].find((b) => b.dataset.testid === 'schedule-venue-link');
         if (venue) {
           const vr = venue.getBoundingClientRect();
           const cx = vr.left + vr.width / 2, cy = vr.top + vr.height / 2;
@@ -625,7 +625,7 @@ for (const w of [320, 360, 390, 412]) {
     // 🔴 대상 도달 — 카드가 0개면 아래 단언이 전부 공허하게 통과한다.
     expect(r.cardCount, '카드를 못 찾았다 — 검사가 아무것도 재지 않는다').toBeGreaterThan(0);
     expect(r.titleLines.length, '제목(h3)을 못 찾았다').toBeGreaterThan(0);
-    expect(r.venueHits.length, '매장명 링크를 못 찾았다 — tap-up-24 가 안 붙었다').toBeGreaterThan(0);
+    expect(r.venueHits.length, '매장명 링크를 못 찾았다 — data-testid=schedule-venue-link 가 안 붙었다').toBeGreaterThan(0);
 
     // ① 🔴 2026-09-24 오너 지시(HOME-LAYOUT-STRETCH · 일정 탭에도 적용 — 리드 판정)로 **계약이 바뀌었다**:
     //   종전 "legacy 23자여도 한 줄(line-clamp-1 말줄임)" → 이제 "**글자를 숨기지 않는다**(말줄임·잘림 0)".

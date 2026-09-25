@@ -26,6 +26,6 @@ describe('PostgrestError 의 실체(설치본)', () => {
   it('msgOf 는 42501 원문을 사용자 문장으로 바꾼다 — instanceof 관용구는 원문을 그대로 낸다', () => {
     const e = new PostgrestError({ message: 'permission denied for table dealer_shifts', details: '', hint: '', code: '42501' });
     expect(e instanceof Error ? e.message : 'x').toContain('permission denied');
-    expect(msgOf(e, '추가 실패')).toBe('권한이 없습니다. 매장 담당자 계정인지 확인해 주세요');
+    expect(msgOf(e, '추가 실패')).toBe('추가 실패 — 이 계정에는 권한이 없습니다');
   });
 });

@@ -402,7 +402,7 @@ export default function NotificationPanel({
                   <button
                     type="button"
                     onClick={handleMarkAll}
-                    className="text-2xs font-semibold text-accent-300 hover:text-accent-200 transition-colors focus:outline-none"
+                    className="py-1 -my-1 text-2xs font-semibold text-accent-300 hover:text-accent-200 transition-colors focus:outline-none"
                   >
                     모두 읽음
                   </button>

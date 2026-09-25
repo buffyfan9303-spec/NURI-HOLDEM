@@ -42,8 +42,18 @@ export function isOffline(e: unknown): boolean {
 export function isDenied(e: unknown): boolean {
   if (e == null) return false;
   const r = asRecord(e);
-  return str(r.code) === '42501' || r.status === 403;
+  if (str(r.code) === '42501' || r.status === 403) return true;
+  // 🔴 2026-09-25 FULL-ERROR-SWEEP-A ⑤: `new Error(error.message)` 로 감싼 호출부(api/auth.ts getMyLegalConsents 등)는 code 를
+  //   버린다 — 그러면 여기가 false 가 되고 msgOf 는 원문 'permission denied for table legal_consents' 를 화면에 그렸다
+  //   (보안 표준 6번, 보안 탭 실측). 원문 모양이 곧 42501 이므로 문장으로도 알아본다.
+  return DENIED_RAW.test(rawOf(e));
 }
+
+/** Postgres 42501 원문의 모양 — code 가 버려진 뒤에도 이 문장은 남는다. */
+const DENIED_RAW = /^permission denied for (?:table|function|schema|sequence|relation|view)\b/i;
+const rawOf = (e: unknown): string => str(asRecord(e).message) || (e instanceof Error ? e.message : '') || str(asRecord(e).error_description);
+/** 기본 fallback — 이 값 그대로면 호출부가 문맥을 안 준 것이라 권한 문장만 보여 준다. */
+const DEFAULT_FALLBACK = '요청을 처리하지 못했습니다';
 
 /**
  * Postgres 가 **스스로** 만든 오류인가 — 원문에 스키마 식별자·SQL 이 들어 있는 부류.
@@ -69,20 +79,27 @@ function logInternal(code: string, raw: string): void {
  * 오류 → 사용자에게 보여줄 한 문장.
  * @param fallback 아무 단서도 없을 때 쓸 기본 문구(호출부의 맥락을 담아 넘길 것 — 예: '장부 저장 실패')
  */
-export function msgOf(e: unknown, fallback = '요청을 처리하지 못했습니다'): string {
+export function msgOf(e: unknown, fallback = DEFAULT_FALLBACK): string {
   if (e == null) return fallback;
   if (isOffline(e)) return '네트워크가 끊겼습니다. 연결을 확인하고 다시 시도해 주세요';
 
   const r = asRecord(e);
   const code = str(r.code);
-  const raw = str(r.message) || (e instanceof Error ? e.message : '') || str(r.error_description);
+  const raw = rawOf(e);
+
+  // 🔴 2026-09-25 FULL-ERROR-SWEEP-A ⑤ — 권한 거부는 **문맥별 문장**이다. 종전 고정 문구('매장 담당자 계정인지 확인')는
+  //   손님 화면(이용권 지갑·동의 이력)에서 틀린 안내였다. 문맥은 호출부의 fallback 이 들고 있으니 그 앞에 붙인다.
+  //   원문(테이블·함수 이름)은 화면에 안 그리고 콘솔에만 남긴다. code 가 버려진 원문(위 DENIED_RAW)도 같은 길이다.
+  if (code === '42501' || (!code && DENIED_RAW.test(raw))) {
+    logInternal(code || '42501', raw);
+    const denied = '이 계정에는 권한이 없습니다';
+    return fallback && fallback !== DEFAULT_FALLBACK ? `${fallback} — ${denied}` : denied;
+  }
 
   switch (code) {
     // 서버가 사용자를 향해 직접 쓴 문장(plpgsql raise exception) — 번역하지 않는다
     case 'P0001':
       return raw || fallback;
-    case '42501':
-      return '권한이 없습니다. 매장 담당자 계정인지 확인해 주세요';
     case '23505':
       return '이미 등록된 값입니다';
     case '23503':

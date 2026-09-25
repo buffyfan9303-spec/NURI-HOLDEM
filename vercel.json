@@ -36,7 +36,7 @@
         },
         {
           "key": "Permissions-Policy",
-          "value": "camera=(self), geolocation=(self), fullscreen=(self), screen-wake-lock=(self), clipboard-write=(self), web-share=(self), autoplay=(self), payment=(self), microphone=(), display-capture=(), usb=(), serial=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), local-fonts=(), idle-detection=()"
+          "value": "camera=(self), geolocation=(self), fullscreen=(self), screen-wake-lock=(self), clipboard-write=(self), autoplay=(self), payment=(self), microphone=(), display-capture=(), usb=(), serial=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), local-fonts=(), idle-detection=()"
         },
         {
           "key": "Content-Security-Policy",
@@ -73,7 +73,7 @@
         },
         {
           "key": "Permissions-Policy",
-          "value": "camera=(self), geolocation=(self), fullscreen=(self), screen-wake-lock=(self), clipboard-write=(self), web-share=(self), autoplay=(self), payment=(self), microphone=(), display-capture=(), usb=(), serial=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), local-fonts=(), idle-detection=()"
+          "value": "camera=(self), geolocation=(self), fullscreen=(self), screen-wake-lock=(self), clipboard-write=(self), autoplay=(self), payment=(self), microphone=(), display-capture=(), usb=(), serial=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), local-fonts=(), idle-detection=()"
         },
         {
           "key": "Content-Security-Policy",
@@ -110,7 +110,7 @@
         },
         {
           "key": "Permissions-Policy",
-          "value": "camera=(self), geolocation=(self), fullscreen=(self), screen-wake-lock=(self), clipboard-write=(self), web-share=(self), autoplay=(self), payment=(self), microphone=(), display-capture=(), usb=(), serial=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), local-fonts=(), idle-detection=()"
+          "value": "camera=(self), geolocation=(self), fullscreen=(self), screen-wake-lock=(self), clipboard-write=(self), autoplay=(self), payment=(self), microphone=(), display-capture=(), usb=(), serial=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), local-fonts=(), idle-detection=()"
         },
         {
           "key": "Content-Security-Policy",
@@ -147,7 +147,7 @@
         },
         {
           "key": "Permissions-Policy",
-          "value": "camera=(self), geolocation=(self), fullscreen=(self), screen-wake-lock=(self), clipboard-write=(self), web-share=(self), autoplay=(self), payment=(self), microphone=(), display-capture=(), usb=(), serial=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), local-fonts=(), idle-detection=()"
+          "value": "camera=(self), geolocation=(self), fullscreen=(self), screen-wake-lock=(self), clipboard-write=(self), autoplay=(self), payment=(self), microphone=(), display-capture=(), usb=(), serial=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), local-fonts=(), idle-detection=()"
         },
         {
           "key": "Content-Security-Policy",
@@ -184,7 +184,7 @@
         },
         {
           "key": "Permissions-Policy",
-          "value": "camera=(self), geolocation=(self), fullscreen=(self), screen-wake-lock=(self), clipboard-write=(self), web-share=(self), autoplay=(self), payment=(self), microphone=(), display-capture=(), usb=(), serial=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), local-fonts=(), idle-detection=()"
+          "value": "camera=(self), geolocation=(self), fullscreen=(self), screen-wake-lock=(self), clipboard-write=(self), autoplay=(self), payment=(self), microphone=(), display-capture=(), usb=(), serial=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), local-fonts=(), idle-detection=()"
         },
         {
           "key": "Content-Security-Policy",

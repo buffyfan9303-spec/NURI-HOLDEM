@@ -61,7 +61,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
   const onToggleLike = async () => {
     // 비로그인: 토스트만 띄우면 손님이 헤더까지 가서 로그인하고 매물을 다시 찾아야 한다 — 댓글·예약과 같이 로그인 모달로 유도.
     // 매물 상세(openListing)는 App 상태라 로그인 모달이 닫힌 뒤에도 그대로 남는다 = 원래 흐름으로 복귀.
-    if (!user) { toast.show('로그인 후 찜할 수 있습니다', 'info'); promptLogin(); return; }
+    if (!user) { promptLogin(); return; } // 토스트 없이 — 시트가 곧 안내이고, 하단 토스트가 'Google로 계속하기' 를 덮는다
     if (likeBusy) return; // 연타 시 두 요청이 엇갈려 하트와 카운트가 반대로 굳는 걸 막는다
     setLikeBusy(true);
     const prev = like;

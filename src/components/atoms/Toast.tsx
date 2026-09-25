@@ -58,7 +58,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const durationMs = opts?.durationMs ?? (opts?.action ? 6000 : variant === 'error' ? 4500 : 2400);
     setToasts((prev) => [...prev, { id, message, variant, action: opts?.action, durationMs }]);
     // 햅틱 피드백(모바일) — 성공 10ms 한 번, 에러는 짧게 두 번(네이티브 앱 감각)
+    // ⚠ 첫 제스처 전(부팅 직후 자동 토스트)에는 Chromium 이 vibrate 를 막고 콘솔에 개입 경고를 남긴다
+    //   ("Blocked call to navigator.vibrate because user hasn't tapped on the frame") — 활성화 전이면 부르지 않는다.
     try {
+      if (navigator.userActivation?.hasBeenActive === false) return;
       if (variant === 'success') navigator.vibrate?.(10);
       else if (variant === 'error') navigator.vibrate?.([18, 40, 18]);
     } catch { /* 미지원 무시 */ }

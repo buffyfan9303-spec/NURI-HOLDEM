@@ -150,7 +150,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
           <span className="text-sm font-bold text-ink-primary">전체 동의 (필수 + 선택 포함)</span>
         </label>
 
-        <div className="space-y-2 pl-1">
+        <div className="space-y-1 pl-1">
           <ConsentRow checked={age19}     onChange={setAge19}     required label="만 19세 이상입니다." />
           <ConsentRow checked={terms}     onChange={setTerms}     required label="서비스 이용약관에 동의합니다." />
           <ConsentRow checked={privacy}   onChange={setPrivacy}   required label="개인정보 수집·이용에 동의합니다. (개인정보보호법 §15)" />
@@ -180,7 +180,7 @@ function ConsentRow({
   checked, onChange, label, required,
 }: { checked: boolean; onChange: (v: boolean) => void; label: string; required?: boolean }) {
   return (
-    <label className="flex items-start gap-2 cursor-pointer">
+    <label className="flex items-start gap-2 py-0.5 cursor-pointer">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-accent-300 w-4 h-4 mt-0.5 shrink-0" />
       <span className="text-xs text-ink-secondary leading-relaxed">
         {required

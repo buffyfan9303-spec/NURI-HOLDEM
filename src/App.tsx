@@ -3180,7 +3180,7 @@ export default function App() {
         else getPostById(pm[1]).then((fetched) => {
           if (fetched) setOpenPost(fetched);
           else toast.show('삭제되었거나 찾을 수 없는 글이에요', 'info');
-        }).catch(() => {});
+        }).catch(() => toast.show('글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요', 'error')); // 조용히 삼키면 알림이 '무반응' 이 된다(SWEEP-A ⑥)
         return prev;
       });
       return;
@@ -3194,6 +3194,14 @@ export default function App() {
     if (link === '/invites') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       toast.show('상단의 초대 배너에서 수락/거절할 수 있습니다', 'info');
+      return;
+    }
+    // 🔴 2026-09-25 FULL-ERROR-SWEEP-A ⑥ — 내 매장·출근·승인 목적지는 업주/직원 탭이 있어야 열린다. 탭이 없는 계정이 누르면
+    //   changeTab 가드가 홈으로 조용히 튕겨 '무반응' 이었다. 프로필이 온 뒤(user)에도 탭이 없으면 안내하고 끝낸다.
+    //   ⚠ 부팅 딥링크(openNotifLink)는 권한이 늦게 올 수 있어 pendingDeepTab 을 걸고 들어온다 — 그 경우는 종전 경로 그대로.
+    const storeDest = link.startsWith('/my-store') || link === '/staff-schedule' || ((link === '/admin' || n.type === 'approval') && !isAdmin);
+    if (storeDest && user && !hasStoreTabs && pendingDeepTab.current !== 'my-store') {
+      toast.show('매장 운영자·직원 계정에서만 열 수 있는 알림입니다', 'info');
       return;
     }
     // /my-store/ledger (📒 장부 시작 알림) → 내 매장 탭 장부 섹션으로 바로
@@ -3227,7 +3235,7 @@ export default function App() {
     if (link === '/') { changeTab('home'); return; }
     if (n.title) toast.show(n.title, 'info'); // 푸시로 온 원문 링크(openNotifLink)는 제목이 없다 — 빈 토스트를 띄우지 않는다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openScheduleById, isAdmin, toast]);
+  }, [openScheduleById, isAdmin, toast, user, hasStoreTabs]);
 
   // ⚠ N04: 매장 Q&A·요강 댓글도 게시글 댓글과 **같은 계약**이다 — 성공을 기다려 돌려주고, 실패는 던진다.
   //   입력창을 비울지 말지는 CommentThread 가 이 Promise 로 판단한다.

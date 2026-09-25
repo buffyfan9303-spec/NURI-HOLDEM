@@ -374,13 +374,13 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
           {/* 약관 및 정책 */}
           {onOpenLegal && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border-subtle pt-3 text-2xs text-ink-muted">
-              <button type="button" onClick={() => onOpenLegal('terms')} className="transition-colors hover:text-accent-300">이용약관</button>
+              <button type="button" onClick={() => onOpenLegal('terms')} className="py-1 -my-1 transition-colors hover:text-accent-300">이용약관</button>
               <span className="text-border-strong">·</span>
-              <button type="button" onClick={() => onOpenLegal('privacy')} className="transition-colors hover:text-accent-300">개인정보처리방침</button>
+              <button type="button" onClick={() => onOpenLegal('privacy')} className="py-1 -my-1 transition-colors hover:text-accent-300">개인정보처리방침</button>
               <span className="text-border-strong">·</span>
-              <button type="button" onClick={() => onOpenLegal('refund')} className="transition-colors hover:text-accent-300">취소·환불 정책</button>
+              <button type="button" onClick={() => onOpenLegal('refund')} className="py-1 -my-1 transition-colors hover:text-accent-300">취소·환불 정책</button>
               <span className="text-border-strong">·</span>
-              <button type="button" onClick={() => onOpenLegal('location')} className="transition-colors hover:text-accent-300">위치기반서비스 이용약관</button>
+              <button type="button" onClick={() => onOpenLegal('location')} className="py-1 -my-1 transition-colors hover:text-accent-300">위치기반서비스 이용약관</button>
             </div>
           )}
         </>} /></div>
