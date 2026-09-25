@@ -71,7 +71,12 @@ describe('UI-04 · 이전/다음 배선', () => {
     expect(PD).toMatch(/<CommentThread\s+key=\{post\.id\}/);
   });
   it('🔴 CommunityTab: 실제 화면 배열·커서·done 스냅샷을 넘기고 광고 클릭도 같은 경로, 2-pane 도 같은 스냅샷', () => {
-    expect(COMM).toMatch(/const openWithNav = \(p: CommunityPost\) => onSelectPost\(p, \{[\s\S]{0,200}items: listSource, cursor: serverCursor, done: serverDone,/);
+    // 2026-09-25: PostRow/PostCard 의 memo(samePostProps)가 onClick 을 안 봐서, 행이 재렌더되지 않으면
+    //   openWithNav 클로저가 옛 목록/커서/done 을 그대로 물고 있었다(인기 전환 뒤 옛 순서로 이전/다음 이동).
+    //   고친 배선은 매 렌더 navNowRef 를 useLayoutEffect 로 갱신하고, 클릭 시점엔 ref 를 읽는다.
+    expect(COMM).toMatch(/navNowRef\.current = \(\) => \(\{[\s\S]{0,200}items: listSource, cursor: serverCursor, done: serverDone,/);
+    expect(COMM).toMatch(/const openWithNav = useCallback\(\(p: CommunityPost\) => selectRef\.current\(p, navNowRef\.current\(\)\), \[\]\);/);
+    expect(COMM).not.toMatch(/const openWithNav = \(p: CommunityPost\) => onSelectPost\(p, \{/);
     expect(COMM).not.toMatch(/onClick=\{\(\) => onSelectPost\(/);
     expect((COMM.match(/onClick=\{\(\) => openWithNav\(/g) ?? []).length).toBeGreaterThanOrEqual(6);
     expect(COMM).toMatch(/onSelectPost=\{isDesktop \? selectBoard : onSelectPost\}/);

@@ -159,7 +159,9 @@ test('🔴 ⑤ 공유 링크 직접 진입은 맥락이 없다 — 양쪽 비활
   await install(page);
   await stabilizeBackstack(page);
   await page.goto('/?post=n2');
-  await dismissOverlays(page);
+  // 2026-09-25: dismissOverlays 의 스킵 매칭(/건너뛰기|닫기|시작하기|확인/)이 PostDetailModal 자체의
+  //   "닫기" 헤더 버튼에 걸려, 검사하려던 딥링크 상세를 열자마자 닫아버렸다(부분일치 셀렉터 함정).
+  //   stubLogin 이 이미 현재 약관 버전으로 로그인시켜 재동의 게이트가 뜨지 않으니 여기서는 필요 없다.
   await expect(dialog(page)).toBeVisible({ timeout: 20_000 });
   await expect(navBtn(page, 'prev')).toBeDisabled(); await expect(navBtn(page, 'next')).toBeDisabled();
   await expect(navBtn(page, 'prev')).toHaveAttribute('data-pd-nav-edge', 'no-context');
@@ -172,7 +174,7 @@ test('🔴 ⑥ PC 1440 전체화면 읽기 폭 68~74ch · 1280 2-pane 인라인�
   await install(page);
   await stabilizeBackstack(page);
   await page.goto('/?post=n2');
-  await dismissOverlays(page);
+  // 2026-09-25: 위 ⑤와 같은 이유로 제거 — dismissOverlays 가 딥링크 상세 자체를 닫는다.
   await expect(dialog(page)).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(500);
   const m = await dialog(page).locator('[data-pd-body]').evaluate(async (el) => {

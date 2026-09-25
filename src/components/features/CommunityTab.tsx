@@ -719,10 +719,19 @@ function FeedSection({
   const shown = listSource.slice(0, visible);
   // UI-04: 글을 열 때 **이 화면의 실제 순서**(고정→HOT→끌올→최신 / 인기, 광고 제외·중복 제거·서버 이어받기 포함)를 스냅샷으로 넘긴다.
   //   광고로 승격된 글은 listSource 에 없어 이웃 없음(no-context)으로 정직하게 떨어진다. 커서·done 은 상세가 '다음 글' 을 이어받는 데 쓴다.
-  const openWithNav = (p: CommunityPost) => onSelectPost(p, {
-    key: filterKeyRef.current, q: q.trim(), category: enableCategory ? cat : 'all', order,
-    items: listSource, cursor: serverCursor, done: serverDone,
+  // ⚠ PostRow/PostCard 의 memo 비교(samePostProps)는 onClick 을 보지 않는다 — 행이 다시 안 그려지면 그 행의 onClick 은
+  //   옛 렌더의 클로저다(인기 전환 뒤 옛 최신 순서, 서버 done 도착 뒤 done=false 가 넘어갔다 · 2026-09-25 실측).
+  //   그래서 클릭하는 순간 **마지막 커밋의 값**을 ref 로 읽는다. key 는 종전대로 클릭 시점의 filterKeyRef.
+  const navNowRef = useRef<() => PostNavCtx>(null!);
+  const selectRef = useRef(onSelectPost);
+  useLayoutEffect(() => {
+    selectRef.current = onSelectPost;
+    navNowRef.current = () => ({
+      key: filterKeyRef.current, q: q.trim(), category: enableCategory ? cat : 'all', order,
+      items: listSource, cursor: serverCursor, done: serverDone,
+    });
   });
+  const openWithNav = useCallback((p: CommunityPost) => selectRef.current(p, navNowRef.current()), []);
 
   // 서버 커서 이어받기 — cursor 는 항상 서버가 돌려준 마지막 원본 행 기준으로 전진한다
   // (로컬과 겹쳐 dedupe 로 0건이 merge돼도 다음 페이지로 계속 나아간다 — 61번째 글도 결국 걸린다).
@@ -1309,7 +1318,7 @@ function VenuesSection({
                   </div>
 
                   {latest && (
-                    <div className="mt-1.5 px-2 py-1.5 bg-surface-base/50 rounded-input border-l-2 border-accent-400/40">
+                    <div className="mt-1.5 px-2 py-1.5 bg-surface-base/50 rounded-input border-l border-accent-400/20">
                       <p className="text-2xs text-ink-muted leading-tight">
                         <span className={[
                           'font-semibold',
