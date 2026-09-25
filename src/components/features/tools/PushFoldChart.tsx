@@ -44,7 +44,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
   //   `nash.data.ts` 의 NASH_ANTE_QUARANTINE. 실측 BTN 12bb 40.1%(2026-09-25 k=2 정확 3인 균형 — 전엔 39.0%).
   //   2026-09-21 부터 2~10bb 는 추정값(NASH_ANTE_APPROX)으로 열렸지만 기본은 여전히 12bb — 첫 화면은 정식 등급 표다.
   //   2026-09-25: BTN(k=2) 은 2~10bb 도 정식(정확 3인 균형)이 됐다. 기본 12bb 는 그대로(e2e/tools.spec 이 기본 화면 % 를 본다).
-  const [stack, setStack] = useState((NASH_STACKS as readonly number[]).includes(initialStack ?? -1) ? initialStack! : 12);
+  const [stack, setStack] = useState((NASH_STACKS as readonly number[]).includes(initialStack ?? -1) ? initialStack! : 10);   // 오너 2026-09-26: 기본 10bb(원래 값)로
   const [view, setView] = useState<View>(initialView ?? 'shove');
   const pos = POSITIONS.find((p) => p.k === k)!;
   const stackIdx = (NASH_STACKS as readonly number[]).indexOf(stack);

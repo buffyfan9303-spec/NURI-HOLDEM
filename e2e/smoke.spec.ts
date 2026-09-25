@@ -30,7 +30,7 @@ test('탭 순회 — 라이브/도구/커뮤니티 전환 중 크래시 없음',
   await expect(nav).toBeVisible();
 
   await nav.getByRole('button', { name: /^라이브/ /* 진행 중 게임이 있으면 배지 숫자가 접근성 이름에 붙는다('라이브 1') — exact 는 저녁마다 깨진다 */ }).click();
-  await expect(page.getByText('진행 중 게임')).toBeVisible();
+  await expect(page.getByText('진행 중 대회')).toBeVisible();
 
   await nav.getByRole('button', { name: 'GTO', exact: true }).click();
   await expect(page.locator('#root')).not.toBeEmpty();

@@ -81,7 +81,7 @@ describe('🔴 F5 — 라이브 탭 배지 수와 본문 게임 수는 같은 �
   });
 
   it('본문의 숫자는 여전히 자기 조회 결과 그대로다(배지에 맞추려고 본문을 고치지 않았다)', () => {
-    expect(LIVE).toMatch(/진행 중 게임 \{games \? <span className="text-accent-200 text-grad-keep">\{games\.length\}<\/span> : null\}/);
+    expect(LIVE).toMatch(/진행 중 대회 \{games \? <span className="text-accent-200 text-grad-keep">\{games\.length\}<\/span> : null\}/);
     expect(LIVE, '본문 조회원이 getRunningClocks 가 아니다 — 두 숫자의 출처가 갈라졌다')
       .toMatch(/const load = \(\) => getRunningClocks\(\)/);
   });

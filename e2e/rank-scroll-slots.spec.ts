@@ -27,7 +27,7 @@ import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
 import { stabilizeBackstack, dismissOverlays } from './_session';
 
-const RANK_LABELS = ['활동 순위', '머니인', '명예의 전당', '국내 순위', '순위 인증', '상점'];
+const RANK_LABELS = ['활동 순위', '입상', '명예의 전당', '국내 순위', '순위 인증', '상점'];
 
 interface Probe { winY: number; docH: number; clientH: number; maxScroll: number; headerH: number; secbarY: number | null; railY: number | null }
 

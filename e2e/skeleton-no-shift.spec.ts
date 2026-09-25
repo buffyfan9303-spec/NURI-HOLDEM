@@ -163,5 +163,5 @@ test('🔴 라이브 탭 — 클락 조회가 실패하면 빈 상태가 아니�
 
   const panel = page.locator('[data-live-panel]');
   await expect(panel.getByRole('button', { name: /다시 시도/ }), '조회 실패인데 재시도 버튼이 없다').toBeVisible({ timeout: 15_000 });
-  await expect(panel.getByText('진행 중인 게임이 없습니다'), '실패를 빈 상태로 위장했다').toHaveCount(0);
+  await expect(panel.getByText('진행 중인 대회가 없습니다'), '실패를 빈 상태로 위장했다').toHaveCount(0);
 });

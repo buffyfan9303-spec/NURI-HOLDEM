@@ -55,16 +55,19 @@ type Board = 'activity' | 'moneyin' | 'badges' | 'missions' | 'hall' | 'shop' | 
 // map 과 방향 계산이 각자 배열을 들면 언젠가 어긋나므로 하나만 둔다.
 // 주간 리그는 2026-09-05 삭제(오너). 머니인 = 전국 대회 입상 경력.
 const RANK_TABS: Board[] = ['activity', 'moneyin', 'hall', 'domestic', 'verify', 'shop'];
+// 2026-09-26 카카오 재심사 소명서 대조 — 탭 이름 '머니인'이 앱 내부 현금 경쟁처럼 읽힌다.
+//   보드가 실제로 세는 건 상금·금액이 아니라 대회 입상 횟수(BOARD_DESC.moneyin 참고) — 이름을 실체에 맞춘다.
+//   내부 키·캐시 식별자(moneyin, D-moneyin)는 그대로 둔다 — 화면 문구만 바꾼다.
 const BOARD_LABEL: Record<Board, string> = {
-  activity: '활동 순위', moneyin: '머니인', shop: '상점', domestic: '국내 순위', verify: '순위 인증',
+  activity: '활동 순위', moneyin: '입상', shop: '상점', domestic: '국내 순위', verify: '순위 인증',
   badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
   domestic: '대회 입상만 인정. 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(100T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
-  verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(100T)당 1점입니다.',
+  verify: '대회 입상 증빙 2장(입상 증빙·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(100T)당 1점입니다.',
   shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
-  moneyin: '전국 대회 머니인(입상) 경력 순위. 매장이 등록한 대회 순위 기록만 세며 상금·금액은 보지 않습니다 — 입상 횟수 → 우승 → TOP3 → 최고 등수 순.',
+  moneyin: '전국 대회 입상 경력 순위. 매장이 등록한 대회 순위 기록만 세며 상금·금액은 보지 않습니다 — 입상 횟수 → 우승 → TOP3 → 최고 등수 순.',
   badges: '',
   missions: '이번 주 미션. 달성하면 활동점수 보상을 바로 받아요. 월요일 리셋.',
   hall: '지난달 가장 빛난 플레이어 TOP3. 운영자가 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
@@ -1033,7 +1036,7 @@ export default function TierLeaderboard() {
                   placeholder="대회명 (예: ○○ 인비테이셔널)" className="input w-full text-sm" />
                 <div className="relative">
                   <input value={vForm.amount} inputMode="numeric" onChange={(e) => setVForm((f) => ({ ...f, amount: e.target.value.replace(/[^\d]/g, '') }))}
-                    placeholder="머니인 금액(원)" className="input w-full text-sm pr-8 tabular-nums" />
+                    placeholder="입상 상금(원)" className="input w-full text-sm pr-8 tabular-nums" />
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
                 </div>
                 {/* 오너 #11 — 구분 선택을 없앴다. 인증 대상은 '대회'뿐이고, 일반 펍 정기 게임은
@@ -1049,7 +1052,7 @@ export default function TierLeaderboard() {
                     onChange={(e) => setVForm((f) => ({ ...f, overseas: e.target.checked }))} />
                 </label>
                 <label className="flex items-center justify-between gap-2 rounded-input border border-dashed border-border-default px-3 py-2 text-2xs">
-                  <span className={vProof ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>1. 머니인 증빙 {vProof ? '✓ 첨부됨' : '이름·순위·금액이 보여야 해요'}</span>
+                  <span className={vProof ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>1. 입상 증빙 {vProof ? '✓ 첨부됨' : '이름·순위·금액이 보여야 해요'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setVProof(e.target.files?.[0] ?? null)} />
                   <span className="shrink-0 rounded-input bg-surface-float px-2 py-1 font-bold text-ink-secondary">선택</span>
                 </label>
