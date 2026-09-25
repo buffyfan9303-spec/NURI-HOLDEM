@@ -179,6 +179,15 @@ describe('판정 예시', () => {
     expect(verdictLine(0.01, 'mid')).toContain('전부 콜');
   });
 
+  // 🔴 2026-09-25 — 벤치 승률은 보드 전수 정확값이다(scripts/gen-nash/icm-bench-exact.mjs). 옛 몬테카를로 값은
+  //   '±0.2%p' 라 적혀 있었지만 최대 0.5%p 어긋나 있었다. 옛 값으로 되돌리면 여기서 빨개진다.
+  it('벤치 승률 = 전수 정확값(소수 첫째 자리) — 몬테카를로로 되돌리지 않는다', () => {
+    const at = (id: 'tight' | 'mid' | 'wide', hand: string) => handLadder(0, id).find((e) => e.hand === hand)!.eq;
+    expect(at('wide', 'JJ')).toBe(70.0);
+    expect(at('mid', '77')).toBe(52.3);
+    expect(at('tight', 'AKo')).toBe(55.9);
+  });
+
   it('레인지가 넓어질수록 같은 핸드의 승률은 오른다', () => {
     const at = (id: 'tight' | 'mid' | 'wide', hand: string) => handLadder(0, id).find((e) => e.hand === hand)!.eq;
     for (const h of ['QQ', '88', 'AJo', 'KQo']) {

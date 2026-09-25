@@ -1,5 +1,5 @@
 // 스타팅 핸드 순위 데이터 검산(2026-09-23 RULES-STARTING-HAND-RANK).
-// 값은 생성기(scripts/gen-starting-hand-rank.mjs)가 앱 에퀴티 엔진으로 만든 몬테카를로(핸드당 100만 회, 표준오차 ≈0.05%p)다.
+// 값은 생성기(scripts/gen-nash/starting-hand-exact.mjs)가 보드 C(48,5) 전수로 센 **정확값**이다(2026-09-25 — 첫 판은 몬테카를로 100만회였다).
 // 여기서는 **엔진과 독립인 기준**과 대조한다: 무작위 한 손 상대 프리플랍 승률의 공표 정확값(PokerStove 등 전수 계산,
 // 무승부 1/2). 허용 오차 ±0.30%p = 표준오차의 약 6배 + 표시 반올림(0.005). 이보다 벗어나면 엔진·생성기·데이터 중 하나가 틀렸다.
 import { describe, expect, it } from 'vitest';
@@ -43,6 +43,14 @@ describe('스타팅 핸드 순위 데이터', () => {
     expect(rank.get('AKs')).toBe(8);
     expect(rank.get('88')!).toBeLessThan(rank.get('AKs')!);
     expect(rank.get('AKs')!).toBeLessThan(rank.get('77')!);
+  });
+
+  // 🔴 2026-09-25 — 몬테카를로 판(표준오차 0.05%p)은 AQs·77 을 66.20 동률로 두고 AQs 를 앞에 세웠다.
+  //   전수값은 77 66.24 · AQs 66.21(PokerStove 공표값과 같다). 옛 데이터로 되돌리면 여기서 빨개진다.
+  it('정확값으로만 가려지는 이웃 순서 — 77 > AQs · AKs 67.04 · AKo 65.32', () => {
+    expect(rank.get('77')!).toBeLessThan(rank.get('AQs')!);
+    expect(eq.get('AKs')).toBe(67.04);
+    expect(eq.get('AKo')).toBe(65.32);
   });
 
   it('같은 두 랭크면 수딧이 오프수트보다 강하다(78쌍 전부)', () => {

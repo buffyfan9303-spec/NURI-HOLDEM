@@ -2,7 +2,7 @@
 // 스타팅 핸드 순위 — 오너 요청 2026-09-23 "규칙 · 대회 쪽에 핸드 순위 신설"(= 프리플랍 두 장 169개의 강한 순서).
 // 기존 '홀덤 족보'(HandRankPanel, 5장 족보 순서)와 다른 도구다 — 그쪽은 그대로 둔다.
 //
-// 값은 startingHandRank.data.ts 가 단일 출처(생성기 scripts/gen-starting-hand-rank.mjs → 앱 에퀴티 엔진).
+// 값은 startingHandRank.data.ts 가 단일 출처(생성기 scripts/gen-nash/starting-hand-exact.mjs — 보드 전수 정확값, 2026-09-25).
 // 기준: 무작위 한 손(헤즈업) 상대 프리플랍 올인 승률. 실전 판단(포지션·스택·상대 레인지)은 레인지 차트 몫이라 화면에 그 한계를 적는다.
 //
 // 격자 칸 크기: 13×13 은 320px 에서 칸당 약 20px 이라 44px 터치 계약을 만족할 수 없다 — RangeMatrix13(프리플랍 레인지 차트)과

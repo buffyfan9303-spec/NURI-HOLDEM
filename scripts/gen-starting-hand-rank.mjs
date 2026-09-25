@@ -1,3 +1,5 @@
+// ⚠ 2026-09-25 — **대체됨**: scripts/gen-nash/starting-hand-exact.mjs 가 같은 값을 정확 전수로 낸다(이 몬테카를로 판과 최대 0.10%p·순위 32자리 차).
+//   이 스크립트를 돌리면 정확값을 표본값으로 덮는다 — 엔진 회귀 비교용으로만 남긴다.
 // 스타팅 핸드 순위 생성기 (2026-09-23, 오너 요청 RULES-STARTING-HAND-RANK)
 // 169개 시작 핸드의 **무작위 한 손(헤즈업) 상대 프리플랍 올인 승률(무승부 1/2)** 을 계산해
 // src/components/features/tools/startingHandRank.data.ts 를 다시 쓴다.

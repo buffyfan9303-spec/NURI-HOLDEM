@@ -111,3 +111,36 @@ describe('차트와 드릴은 같은 Nash 표(공용 NASH_BIG_ANTE)를 읽는다
     }
   });
 });
+
+// 🔴 2026-09-25 G5 — k=1(SB vs BB 헤즈업) 열은 **정확 계산 균형**이다(scripts/gen-nash/hu-exact.mjs).
+// 옛 표(몬테카를로 4만회 에퀴티)는 표본 잡음으로 경계 손이 뒤집혀 있었고, HRC 공개 HU 표와 50%p 이상 갈렸다.
+// 169×169 전수 에퀴티 + CFR+(착취가능도 ≤1e-7bb)로 다시 풀자 네 셀 모두 HRC 쪽으로 맞았다(HRC: Q5o 0 · T7o 1 · Q4o 0.19 · 85o 0.96).
+// 손별 (올인 − 폴드) EV 차는 전부 0.006bb 이하 — 경계의 '거의 무차별' 손이라 옛 표의 손실은 판당 ≤0.00007bb 였다.
+// 이 셀을 옛 값으로 되돌리면 여기서 빨개진다(음성 대조). 셀을 손으로 고치지 말고 hu-exact.mjs 를 다시 돌려라.
+describe('nash.data — k=1 헤즈업 열은 정확 계산 균형(G5, 2026-09-25)', () => {
+  const at = (kind: NashKind, stack: number, hand: string) => nashRange(kind, 1, stack, false)[HAND_ORDER.indexOf(hand)];
+  it('HRC 와 갈리던 경계 손 — 정확 균형 값(1/8 양자화)', () => {
+    expect(at('shove', 9, 'Q5o'), '9bb Q5o: EV차 −0.0008bb → 폴드').toBe(0);
+    expect(at('shove', 9, 'T7o'), '9bb T7o: EV차 +0.0018bb → 올인').toBe(1);
+    expect(at('shove', 8, 'Q4o'), '8bb Q4o: 혼합 0.19 → 2/8').toBe(0.25);
+    expect(at('shove', 8, 'T7o'), '8bb T7o: EV차 +0.0055bb → 올인').toBe(1);
+    expect(at('shove', 3, '85o'), '3bb 85o: 혼합 0.94 → 8/8').toBe(1);
+    expect(at('callBB', 5, '95s'), '5bb BB 95s: EV차 +0.0006bb → 콜').toBe(1);
+  });
+});
+
+// 🔴 2026-09-25 — 빅앤티 k=2(BTN) 열은 **근사 없는 3인 균형**이다(tri-equity.mjs + solve3.mjs, 선수별 최선응답 이득 ≤3e-6bb).
+// 옛 값(단일 콜러·곱 정규화 근사)은 SB 콜을 크게 좁게 잡았다(5bb 39.1% · 2bb 66.5%). 표본 씨앗을 바꿔 다시 풀어도 집계 차 ≤0.6%p.
+// 옛 값으로 되돌리면 여기서 빨개진다. 손으로 고치지 말고 solve3.mjs 를 다시 돌려라.
+describe('nash.data — 빅앤티 k=2 열은 정확 3인 균형(2026-09-25)', () => {
+  const pct = (kind: NashKind, stack: number) => {
+    const f = nashRange(kind, 2, stack, true, true);
+    let t = 0; for (let i = 0; i < 169; i++) t += f[i] * (HAND_ORDER[i].length === 2 ? 6 : HAND_ORDER[i][2] === 's' ? 4 : 12);
+    return (t / 1326) * 100;
+  };
+  it('콤보 % — SB 콜 5bb ≈47.5 · 2bb ≈93.7 · BTN 셔브 12bb ≈40.1 (±0.8%p: 양자화 + 표본 씨앗 차)', () => {
+    expect(Math.abs(pct('callSB', 5) - 47.5), `callSB 5bb ${pct('callSB', 5).toFixed(1)}`).toBeLessThanOrEqual(0.8);
+    expect(Math.abs(pct('callSB', 2) - 93.7), `callSB 2bb ${pct('callSB', 2).toFixed(1)}`).toBeLessThanOrEqual(0.8);
+    expect(Math.abs(pct('shove', 12) - 40.1), `shove 12bb ${pct('shove', 12).toFixed(1)}`).toBeLessThanOrEqual(0.8);
+  });
+});

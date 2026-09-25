@@ -27,7 +27,7 @@ const META: Record<SourceKind, { label: string; hint: string; icon: IconName; cl
   },
   nash: {
     label: '자체 Nash 모델',
-    hint: '첫 진입(first-in) 올인 · 단일 콜러 근사 · 2~20bb · BB앤티 옵션. fictitious play 로 수렴시킨 자체 산출값이고, 에퀴티는 몬테카를로입니다. 빈도는 0~8 단계로 양자화돼 있습니다.',
+    hint: '첫 진입(first-in) 올인 · 단일 콜러 근사 · 2~20bb · BB앤티 옵션. fictitious play 로 수렴시킨 자체 산출값이고, 에퀴티는 몬테카를로입니다(SB·BTN 빅앤티 열은 전수·3인 에퀴티로 푼 균형). 빈도는 0~8 단계로 양자화돼 있습니다.',
     icon: 'arrow-up-from-line', cls: 'border-emerald-500/40 bg-emerald-500/[0.08] text-emerald-300',
   },
   mc: {
