@@ -9,6 +9,7 @@ import { getMyVenueStaff } from '../../api/auth';
 import { getDealerShifts, shiftHours, type DealerShift } from '../../api/dealerShifts';
 import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
+import { kstToday } from '../../lib/kst';
 
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const thisMonth = () => ymOf(new Date());
@@ -335,7 +336,10 @@ export function StaffSelfAttendance({ venueId, active = true }: { venueId: strin
   const [shiftTick, setShiftTick] = useState(0);
   const [from, to] = monthRange(month);
   const myNames = [user?.name, user?.nickname].filter(Boolean) as string[];
-  const today = new Date().toLocaleDateString('en-CA');
+  // 20260925g N5: 서버(set_my_shift_time)는 KST 오늘·어제만 받는다 — 기기 로컬 날짜가 아니라 같은 KST 기준으로 판단한다.
+  const today = kstToday();
+  const yesterday = kstToday(Date.now() - 86_400_000);
+  const canSelfEdit = (d: string) => d === today || d === yesterday;
   const nowHm = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
   useEffect(() => {
     const reload = () => getStaffSchedule(venueId, from, to)
@@ -382,17 +386,19 @@ export function StaffSelfAttendance({ venueId, active = true }: { venueId: strin
               <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-accent-400/50 bg-accent-300/[0.06]' : 'border-border-subtle bg-surface-base'].join(' ')}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-bold text-ink-primary">{s.date.slice(5)}{isToday ? ' (오늘)' : ''}{s.confirmed && <span className="ml-1.5 text-2xs text-emerald-700 dark:text-emerald-400">확정</span>}</span>
-                  {isToday && (
+                  {canSelfEdit(s.date) && (
                     <div className="flex gap-1">
-                      <button type="button" onClick={() => setT(s, 'checkIn', nowHm())} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">지금 출근</button>
+                      {isToday && <button type="button" onClick={() => setT(s, 'checkIn', nowHm())} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">지금 출근</button>}
+                      {/* 자정을 넘긴 야간 근무 — 어제 행에도 '지금 퇴근' 을 둔다(서버가 어제까지 받는다) */}
                       <button type="button" onClick={() => setT(s, 'checkOut', nowHm())} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-rose-500/15 text-rose-300 border border-rose-500/40">지금 퇴근</button>
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
-                  <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
+                  <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-[6rem] disabled:opacity-60" /></label>
+                  <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-[6rem] disabled:opacity-60" /></label>
                   {s.checkIn && s.checkOut && <span className="text-2xs text-accent-300 dark:text-accent-200 tabular-nums font-bold">{hours(s.checkIn, s.checkOut).toFixed(1)}h</span>}
+                  {!canSelfEdit(s.date) && <span data-testid="shift-locked-note" className="basis-full text-2xs text-ink-muted">오늘·어제 근무만 직접 기록할 수 있어요. 지난 근무는 업주에게 수정을 요청해 주세요.</span>}
                 </div>
               </div>
             );

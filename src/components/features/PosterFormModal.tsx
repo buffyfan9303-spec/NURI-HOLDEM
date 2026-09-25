@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useId } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
+import { posterCoreChanged } from '../../lib/posterReview';
 import { useAuth } from '../../contexts/AuthContext';
 import { uploadPoster } from '../../lib/storage';
 import { filterContent } from '../../lib/content-filter';
@@ -346,6 +347,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     }
     onClose();
   };
+
+  // 서버(prevent_self_approve_poster)와 같은 여섯 칸을 App 의 patch 규칙(prizePool = GTD ? 만원×10,000 : 0)으로 비교한다.
+  const reReview = isEdit && !isAdmin && !!schedule?.approved && posterCoreChanged(form, schedule);
 
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? '포스터 수정' : '새 포스터 등록'} maxWidth="md" variant="sheet" dismissOnBackdrop={false}>
@@ -735,6 +739,14 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           </label>
         )}
 
+        {/* 20260925g N14 — 승인된 포스터의 핵심 항목(제목·참가비·상금·보장·날짜·시작 시각)이 바뀌면 서버 트리거가 approved=false 로 되돌린다.
+            업주가 모르고 저장하면 손님 화면에서 포스터가 내려가 놀란다 → **실제로 바뀌었을 때만** 저장 전에 알린다(관리자는 재심사 대상이 아니다). */}
+        {reReview && (
+          <p role="status" data-testid="poster-rereview-notice"
+            className="rounded-input border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-2xs leading-relaxed text-amber-400">
+            제목·참가비·상금·보장·날짜·시작 시각 중 하나를 바꿨습니다. <b>저장하면 다시 심사를 받습니다</b> — 승인될 때까지 '승인대기' 로 표시됩니다.
+          </p>
+        )}
         <div className="flex gap-2 pt-2">
           <button type="button" onClick={onClose} className="btn-ghost flex-1">취소</button>
           <button type="submit" disabled={uploading || saving} className="btn-primary flex-1 disabled:opacity-60">

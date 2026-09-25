@@ -12,7 +12,6 @@ import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasRankingForGame, rankingEventOf } from '../../lib/rankingGame'; // 순위 완료·이동 대상은 (날짜, 게임) — F02
 import Icon from '../atoms/Icon';
-import { msgOf } from '../../lib/dbError';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
@@ -28,7 +27,7 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBu
   getPendingBuyinRequests, approveBuyinRequest, rejectBuyinRequest, subscribeBuyinRequests, type BuyinRequest,
   getLastClosedRound, type LastClosedRound,
   discountsAppendOnly, ledgerSessionMatches, cancelPwStateFromError, type LedgerRowOwner,
-  LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING,
+  LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING, ledgerErrorText,
 } from '../../api/ledger';
 import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
@@ -307,13 +306,16 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const [delLoss, setDelLoss] = useState<LedgerLossSummary | null>(null);
   const [delLossErr, setDelLossErr] = useState(false);
   const [delBusy, setDelBusy] = useState(false);
+  const [delPw, setDelPw] = useState('');   // 20260925g N19 — 비밀번호 설정 매장에서 바인 있는 장부를 지울 때 서버가 취소 비밀번호를 본다
   const delSeq = useRef(0); // (reload 와 같은 관행) 다른 장부의 늦은 응답이 현재 수치를 덮지 않게
   // 목록 API는 단가·담당만 들고 있어 '잃는 양'을 모른다. 목록 로드를 무겁게 만들지 않으려고
   // 삭제를 누른 그 장부 하나만 이 시점에 조회한다(보드의 buyins/players 는 다른 날짜 것이라 못 씀).
   const askDeleteSession = useCallback((d: string, g = MAIN_GAME_SEQ) => {
     const my = ++delSeq.current;
     setDelTarget({ date: d, gameSeq: g, label: `${d} ${g === MAIN_GAME_SEQ ? '메인' : `사이드${g - 1}`}` });
-    setDelLoss(null); setDelLossErr(false);
+    setDelLoss(null); setDelLossErr(false); setDelPw('');
+    // 목록 화면은 보드를 안 거쳐 hasPw 가 옛 값일 수 있다 — 비밀번호 칸을 낼지 지금 다시 묻는다(실패하면 직전 값 유지).
+    posHasPassword(venueId).then(setHasPw).catch(() => { /* 직전 값 유지 */ });
     Promise.all([getLedgerSession(venueId, d, g), getLedgerBuyins(venueId, d, g), getLedgerPlayers(venueId, d, g)])
       .then(([s, bs, ps]) => { if (my === delSeq.current) setDelLoss(ledgerLossSummary(bs, ps, s)); })
       .catch(() => { if (my === delSeq.current) setDelLossErr(true); });
@@ -322,13 +324,18 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     if (!delTarget || delBusy) return; // 홀드 재진입/연타로 두 번 실행되지 않게
     setDelBusy(true);
     try {
-      await deleteLedgerSession(venueId, delTarget.date, delTarget.gameSeq);
+      await deleteLedgerSession(venueId, delTarget.date, delTarget.gameSeq, hasPw ? delPw : null);
       toast.show(`${delTarget.label} 장부를 삭제했습니다`, 'info'); // 어느 장부였는지 남긴다(오삭제 사후 추적)
-      setDelTarget(null); loadList();
+      setDelTarget(null); setDelPw(''); loadList();
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    catch (e) {
+      // 서버가 비밀번호 문구(틀림·잠김·미설정)로 거절하면 그 사실로 hasPw 를 바로 고친다(D3 와 같은 규칙) — 모달은 열어 둔다.
+      const st = cancelPwStateFromError(ledgerErrorText(e, ''));
+      if (st !== null) setHasPw(st);
+      toast.show(ledgerErrorText(e, '삭제 실패'), 'error', { durationMs: 7000 });
+    }
     finally { setDelBusy(false); }
-  }, [venueId, delTarget, delBusy, toast, loadList]);
+  }, [venueId, delTarget, delBusy, toast, loadList, hasPw, delPw]);
 
   // (A4) reload 에도 요청 토큰 가드 — 실시간 콜백이 날짜 전환 중 호출돼도 stale 응답이 현재 명단을 덮지 않게.
   const reloadSeq = useRef(0);
@@ -340,7 +347,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       setReduceAsk(null); setSelected(null);
       toast.show('수정했습니다', 'success');
       reload();
-    } catch (e) { notePwFromError(e); toast.show(msgOf(e, '수정 실패'), 'error'); }   // rpc 오류는 Error 인스턴스가 아니다 — 서버 문구를 msgOf 로 꺼낸다
+    } catch (e) { notePwFromError(e); toast.show(ledgerErrorText(e, '수정 실패'), 'error', { durationMs: 7000 }); }   // 서버 문구(남은 횟수·잠금)를 그대로 — 20260925g
     finally { setPayBusy(false); }
   };
   // 🔴 D3(2026-09-25) — hasPw 는 보드를 열 때 **한 번** 읽은 값이었다(그것도 조회 실패를 '없음'으로 삼킨 값).
@@ -348,7 +355,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   //   입력칸이 끝내 안 나왔다. ① 다시 보일 때 재조회 ② 서버가 비밀번호 문구로 거절하면 그 사실로 바로 고친다.
   const refreshPw = useCallback(() => { posHasPassword(venueId).then(setHasPw).catch(() => { /* 직전 값 유지 */ }); }, [venueId]);
   const notePwFromError = (e: unknown) => {
-    const st = cancelPwStateFromError(msgOf(e, ''));
+    const st = cancelPwStateFromError(ledgerErrorText(e, ''));   // msgOf 는 42501 문구를 뭉개 '비밀번호가 올바르지 않습니다' 를 못 본다(20260925g)
     if (st !== null) setHasPw(st);
   };
   // 오너 결정(2026-09-24): 비밀번호 **미설정** 매장은 업주·공동사장(canManage = can_manage_pos)만 시트 없이 저장, 직원은 막는다.
@@ -969,7 +976,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       //   ⚠ 되살릴 일이 있어도 confirm 이 아니라 화면 안 배너로 해라 — 모달 대화상자는 그동안
       //     다른 조작을 전부 막고, 브라우저 자동화에서는 세션이 통째로 멈춘다.
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '시작 실패', 'error'); }
+    catch (e) { toast.show(ledgerErrorText(e, '시작 실패'), 'error', { durationMs: 7000 }); }   // 20260925g: 직원 지난 날짜·담당 권한 hint 를 쉬운 말로
   };
   const handleEditSave = async (s: LedgerSession) => {
     // 비분납 바인은 세션 단가·할인을 '참조'로 재계산한다 — 변경이 기존 기록 전체에 소급된다는
@@ -992,7 +999,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       return;
     }
     try { await saveLedgerSession(s); await syncDealersToSchedule(s.sessionDate, s.dealers); setSession((prev) => ({ ...prev, ...s })); setEditOpen(false); toast.show('세션 정보를 저장했습니다', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    catch (e) { toast.show(ledgerErrorText(e, '저장 실패'), 'error', { durationMs: 7000 }); }
   };
   const handleClose = async (memo: string) => {
     try {
@@ -1111,7 +1118,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       // 원자 RPC — 예전 순차 삭제는 중간 실패 시 '바인 2건만 사라진' 반쪽 장부를 남겼다
       await deleteLedgerPlayerAtomic(p.id, password);
       toast.show('플레이어를 삭제했습니다', 'info'); setEditPlayer(null); reload();
-    } catch (e) { notePwFromError(e); toast.show(e instanceof Error ? e.message : '삭제 실패(비밀번호 확인)', 'error'); }
+    } catch (e) { notePwFromError(e); toast.show(ledgerErrorText(e, '삭제 실패(비밀번호 확인)'), 'error', { durationMs: 7000 }); }
   };
 
   // ── 게임(세션) 리스트 — 장부 진입 첫 화면 ──────────────────────────────────
@@ -1238,6 +1245,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         {delTarget && (
           <DeleteSessionModal
             label={delTarget.label} loss={delLoss} lossErr={delLossErr} busy={delBusy}
+            hasPw={hasPw} pw={delPw} onPw={setDelPw}
             onClose={() => { if (!delBusy) setDelTarget(null); }}
             onConfirm={doDeleteSession}
           />
@@ -1927,7 +1935,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             if (!selected.buyin || payBusy) return;
             setPayBusy(true);
             try { await cancelBuyin(selected.buyin.id, pw); toast.show('바인을 취소했습니다', 'info'); setSelected(null); reload(); }
-            catch (e) { notePwFromError(e); toast.show(msgOf(e, '취소 실패'), 'error'); }
+            catch (e) { notePwFromError(e); toast.show(ledgerErrorText(e, '취소 실패'), 'error', { durationMs: 7000 }); }
             finally { setPayBusy(false); }
           }}
           onSetEarly={async (override) => {
@@ -3566,14 +3574,21 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
 // 왜 confirm 이 아니라 이 모달인가: 삭제는 복구 수단이 0인데(하드 삭제 RPC) 되돌릴 수 있는 '마감'보다
 // 확인이 약했다. 잃는 실수치를 먼저 보여주고, 마감과 같은 꾹-누르기로 강도를 맞춘다.
 // 수치 로딩 중에는 확정을 막는다 — 무엇을 잃는지 모른 채 누르는 것이 이 결함의 핵심이라 그 상태를 재현하면 안 된다.
-function DeleteSessionModal({ label, loss, lossErr, busy, onClose, onConfirm }: {
+function DeleteSessionModal({ label, loss, lossErr, busy, hasPw, pw, onPw, onClose, onConfirm }: {
   label: string;
   loss: LedgerLossSummary | null;
   lossErr: boolean;
   busy: boolean;
+  /** 취소 비밀번호가 설정된 매장 — 바인이 있는 장부는 서버(delete_ledger_session)가 비밀번호를 본다(20260925g N19) */
+  hasPw: boolean;
+  pw: string;
+  onPw: (v: string) => void;
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  // 바인이 있다고 확인됐으면 비밀번호 없이는 못 누른다(빈 값으로 보내면 서버가 '틀림' 으로 세어 잠금 카운터가 오른다).
+  // 수치를 못 받았을 때(lossErr)는 칸만 두고 강제하지 않는다 — 바인 0건이면 서버가 비밀번호를 안 본다.
+  const pwRequired = hasPw && !!loss && loss.buyins > 0;
   return (
     <Overlay title={`${label} 장부 삭제`} onClose={onClose}>
       <div className="space-y-3">
@@ -3595,10 +3610,17 @@ function DeleteSessionModal({ label, loss, lossErr, busy, onClose, onConfirm }: 
           </div>
         )}
         <p className="text-2xs text-ink-muted">마감은 해제할 수 있지만 삭제는 복구 불가. 보관만 원하면 마감을 쓰세요.</p>
+        {hasPw && (lossErr || !loss || loss.buyins > 0) && (
+          <label className="block space-y-1">
+            <span className="text-2xs text-ink-secondary">{pwRequired ? '바인 기록이 있는 장부라 취소 비밀번호가 필요합니다' : '바인 기록이 있으면 취소 비밀번호가 필요합니다'}</span>
+            <input type="password" inputMode="numeric" value={pw} onChange={(e) => onPw(e.target.value)} placeholder="취소 비밀번호"
+              aria-label="취소 비밀번호" disabled={busy} className="input w-full text-sm" />
+          </label>
+        )}
         <div className="flex gap-2">
           <button type="button" onClick={onClose} disabled={busy} className="btn-ghost text-sm flex-1 disabled:opacity-50">취소</button>
           {/* #8(2026-09-25) — btn-danger 기본색(246,70,93) 위 흰 글자 3.5:1. 되돌릴 수 없는 버튼이라 글자가 확실히 읽혀야 한다 → 한 단계 진한 빨강. */}
-          <HoldToConfirmButton onConfirm={onConfirm} disabled={busy || (!loss && !lossErr)}
+          <HoldToConfirmButton onConfirm={onConfirm} disabled={busy || (!loss && !lossErr) || (pwRequired && !pw)}
             className="btn-danger !bg-rose-700 hover:!bg-rose-800 text-sm flex-1 disabled:opacity-50">
             {busy ? '삭제 중…' : '꾹 눌러 영구 삭제'}
           </HoldToConfirmButton>

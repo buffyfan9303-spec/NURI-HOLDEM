@@ -4,6 +4,7 @@ import { TICKET_WON } from '../lib/units';
 import { hasRankingForGame, rankingEventOf } from '../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
 import { currentUser } from './_session';
 import { mustAffect } from './_mustAffect';
+import { msgOf } from '../lib/dbError';
 import type { ClockConfig as ClockConfigT } from './clock'; // 타입 전용 — 런타임 순환 없음
 
 export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card' | 'support';
@@ -341,6 +342,41 @@ export const REDUCE_NEEDS_PW = 'LEDGER_REDUCE_NEEDS_PASSWORD';
 export const LEDGER_SPLIT_MISMATCH = 'LEDGER_SPLIT_MISMATCH';
 export const LEDGER_SESSION_MISSING = 'LEDGER_SESSION_MISSING';
 const BUYIN_WRITE_HINTS = new Set([REDUCE_NEEDS_PW, LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING]);
+/** 20260925g — 서버 강화 hint 3종. 값은 마이그레이션 머리의 '화면이 알아야 할 새 hint' 와 같다.
+ *  · PW_LOCKED: 취소 비밀번호 5회 연속 실패 → 10분 잠금(정답도 거절). 바인 취소·플레이어 삭제·감액 수정·장부 삭제 전부.
+ *  · DATE_NOT_ALLOWED: 직원이 오늘(또는 진행 중 영업일)이 아닌 날짜의 새 장부를 열 때.
+ *  · OPERATOR_INVALID: 담당(opened_by)이 그 매장 장부 권한자가 아닐 때. */
+export const LEDGER_PW_LOCKED = 'LEDGER_PW_LOCKED';
+export const LEDGER_DATE_NOT_ALLOWED = 'LEDGER_DATE_NOT_ALLOWED';
+export const LEDGER_OPERATOR_INVALID = 'LEDGER_OPERATOR_INVALID';
+export const LEDGER_HINT_TEXT: Readonly<Record<string, string>> = {
+  [LEDGER_PW_LOCKED]: '취소 비밀번호를 5번 틀려 10분 동안 잠겼습니다. 그동안은 맞는 비밀번호를 넣어도 풀리지 않으니 10분 뒤에 다시 시도해 주세요',
+  [LEDGER_DATE_NOT_ALLOWED]: '직원 계정은 오늘(또는 진행 중인 영업일) 장부만 새로 열 수 있습니다. 지난 날짜 장부는 업주에게 요청해 주세요',
+  [LEDGER_OPERATOR_INVALID]: '담당자는 이 매장의 장부 권한이 있는 사람(업주·승인된 공동운영자·장부 권한 직원)만 지정할 수 있습니다. 담당을 다시 골라 주세요',
+};
+/** 오류(또는 그 cause)에 실린 서버 hint. 없으면 ''. buyinWriteError 가 `new Error(hint, { cause })` 로 감싼 것도 읽는다. */
+export function ledgerHintOf(e: unknown): string {
+  let cur: unknown = e;
+  for (let i = 0; i < 3 && cur && typeof cur === 'object'; i++) {
+    const r = cur as { hint?: unknown; cause?: unknown; message?: unknown };
+    if (typeof r.hint === 'string' && r.hint) return r.hint;
+    if (typeof r.message === 'string' && r.message in LEDGER_HINT_TEXT) return r.message;
+    cur = r.cause;
+  }
+  return '';
+}
+/** 장부 쓰기 오류 → 사용자 문장(단일 통로).
+ *  왜 msgOf 만으로 안 되나: 20260925g 의 장부 가드는 전부 errcode 42501 에 **사용자 문장**(남은 횟수·잠금·날짜 규칙)을 싣는데,
+ *  msgOf 는 42501 을 '이 계정에는 권한이 없습니다' 한 문장으로 뭉갠다 — 그러면 '4번 더 틀리면 잠깁니다' 가 사라진다.
+ *  아는 hint 는 쉬운 말로, 42501 이어도 한글 문장(우리가 raise 한 것)이면 그대로, 나머지는 msgOf. */
+export function ledgerErrorText(e: unknown, fallback: string): string {
+  const known = LEDGER_HINT_TEXT[ledgerHintOf(e)];
+  if (known) return known;
+  const r = (e && typeof e === 'object') ? e as { code?: unknown; message?: unknown } : {};
+  const msg = typeof r.message === 'string' ? r.message.trim() : '';
+  if (r.code === '42501' && /[가-힣]/.test(msg)) return msg;   // 'permission denied…'·RLS 원문은 한글이 없어 msgOf 로 간다
+  return msgOf(e, fallback);
+}
 /** 바인 INSERT/UPDATE 오류를 화면이 가를 수 있는 Error 로 — 23505 는 CELL_TAKEN, 아는 서버 hint 는 그 이름이 message 다.
  *  예전엔 `error.message` 만 실어 서버가 hint 로 말한 사유를 화면이 못 알아들었다(그저 빨간 토스트). */
 export function buyinWriteError(e: { code?: string; hint?: unknown; message?: string } | null | undefined): Error {
@@ -1061,10 +1097,12 @@ export async function reopenLedgerSession(venueId: string, date: string, gameSeq
   if (error) throw new Error(error.message);
 }
 
-/** 장부(세션) 통째 삭제 — 바인·명단·세션 일괄 제거. POS 관리 권한 필요(SECURITY DEFINER RPC). */
-export async function deleteLedgerSession(venueId: string, date: string, gameSeq = MAIN_GAME_SEQ): Promise<void> {
+/** 장부(세션) 통째 삭제 — 바인·명단·세션 일괄 제거. POS 관리 권한 필요(SECURITY DEFINER RPC).
+ *  20260925g N19: 바인이 하나라도 있으면 서버가 취소 비밀번호 규칙을 거친다 — 비밀번호 설정 매장은 password 를 실어야 한다
+ *  (미설정 매장의 업주는 종전처럼 null). 틀리면 5회 잠금 카운터가 오르므로 화면이 먼저 물어야 한다. */
+export async function deleteLedgerSession(venueId: string, date: string, gameSeq = MAIN_GAME_SEQ, password: string | null = null): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.rpc('delete_ledger_session', { p_venue_id: venueId, p_date: date, p_game_seq: gameSeq });
+  const { error } = await supabase.rpc('delete_ledger_session', { p_venue_id: venueId, p_date: date, p_game_seq: gameSeq, p_password: password || null });
   if (error) throw error;
 }
 
@@ -1125,7 +1163,7 @@ export async function renameLedgerPlayer(input: {
 export async function deleteLedgerPlayerAtomic(id: string, password?: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('delete_ledger_player', { p_player_id: id, p_password: password ?? null });
-  if (error) throw new Error(error.message);
+  if (error) throw error;   // 래핑하면 code·hint(LEDGER_PW_LOCKED)가 사라져 화면이 잠금을 못 알아본다
 }
 
 /** 미마감 지난 장부 — 대시보드 넛지용.
@@ -1376,7 +1414,7 @@ export function ledgerSessionMatches(
  *  화면의 hasPw 는 보드를 열 때 한 번 읽은 값이라, 그 사이 다른 기기에서 비밀번호를 설정·해제하면 어긋난다
  *  (예: 비밀번호가 생겼는데 화면은 '비밀번호 없이 취소' 버튼 → 서버가 거절 → 입력칸이 영영 안 나온다). */
 export function cancelPwStateFromError(message: string): boolean | null {
-  if (/비밀번호가 올바르지 않습니다|업주 취소 비밀번호가 필요합니다/.test(message)) return true;
+  if (/비밀번호가 올바르지 않습니다|업주 취소 비밀번호가 필요합니다|취소 비밀번호를 \d+번 틀려/.test(message)) return true;   // 잠금(20260925g)도 '비밀번호가 있다' 는 뜻
   if (/취소 비밀번호가 설정되지 않았습니다|취소 비밀번호가 설정되지 않은 매장/.test(message)) return false;
   return null;
 }
