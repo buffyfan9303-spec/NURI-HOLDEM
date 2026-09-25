@@ -58,6 +58,18 @@ interface ModalProps {
    *   '닫기 불가' 는 onClose 가 아니라 이 값으로 선언한다(e2e/consent-gate-drag.spec.ts).
    */
   dismissible?: boolean;
+  /**
+   * 쌓임 층. 기본('default')은 콘텐츠 시트·모달의 z-[60] — 종전 그대로다.
+   *
+   * 'gate': **전역 이벤트로 아무 화면 위에서나 뜨는 게이트 시트**(로그인 AuthModal · 본인인증 VerifyGateSheet)용 z-[65].
+   *   🔴 2026-09-25 FULL-ERROR-SWEEP-A: 장터 매물 상세(sheet z-[60])에서 비로그인 찜 → 로그인 시트가 같은 z-[60] 인데
+   *   App 의 DOM 앞순위라 **매물 상세 뒤에 깔려 안 보였다**(CTA 세로 중심열 히트 0/46, 390·360). 게시글 상세는 page(z-[55])라
+   *   우연히 통과했고, 그 전엔 소비처마다 '로그인 필요' 안내창을 먼저 닫는 땜질(SellerChatModal·MyMarketModal·SupportInquiryModal)이 있었다.
+   *   층을 한 곳에서 정한다: 콘텐츠 모달(60) < 게이트(65) < 확인창·말풍선(70) < QR·클락(80) < 축하(90) < 라이트박스·설치배너(100) < 토스트(120).
+   *   ⚠ sheet/center 변형에만 뜻이 있다 — page(z-[55])는 전체화면 판이라 게이트가 될 수 없다.
+   *   e2e: login-gate-layer.spec.ts(장터 sheet 위 · 일정 page 위 양성 대조).
+   */
+  layer?: 'default' | 'gate';
 }
 
 const NOOP = () => {};
@@ -96,7 +108,7 @@ export function resolveBodyDrag(variant: NonNullable<ModalProps['variant']>, dra
 
 export default function Modal({
   open, onClose, title, headerAction, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
-  dragToClose: dragToCloseProp, density = 'default', keepViewport = false, dismissible = true,
+  dragToClose: dragToCloseProp, density = 'default', keepViewport = false, dismissible = true, layer = 'default',
 }: ModalProps) {
   const compact = density === 'compact';
   // 닫을 수 없는 창은 본문 끌기도 끈다 — 변형과 무관하게 resolveBodyDrag 가 false 를 낸다(page 그립도 사라진다).
@@ -405,7 +417,8 @@ export default function Modal({
 
   return (
     // z-[60]: 전체화면 page 변형(z-[55]) 위에도 항상 뜨도록 — 예: 포스터 상세에서 '대회 후기 쓰기' 글쓰기 모달
-    <div data-scroll-lock className={['fixed inset-0 z-[60] flex', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}
+    // z-[65]: layer='gate' — 로그인·본인인증 시트가 z-[60] 시트 위에서 열려도 DOM 순서와 무관하게 위에 온다(ModalProps.layer 참고)
+    <div data-scroll-lock className={['fixed inset-0 flex', layer === 'gate' ? 'z-[65]' : 'z-[60]', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}
       style={{
         alignItems: variant === 'sheet' ? 'flex-end' : 'center',
         justifyContent: 'center',

@@ -388,7 +388,8 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
   };
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet" dragToClose={canDragClose}>
+    <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet" dragToClose={canDragClose} layer="gate">
+      {/* layer="gate": 어떤 시트(장터 매물 상세 등 z-[60]) 위에서 promptLogin 이 불려도 이 시트가 위에 온다 — Modal.tsx ModalProps.layer */}
       {/* key={mode} — 모드가 바뀌면 다시 마운트돼 nameDialog 가 새 이름을 심는다(콜백 ref 는 마운트 때만 돈다) */}
       <div key={mode} ref={nameDialog} className="relative">
         {/* 앰비언트 — 오브의 빛이 시트 상단을 물들인다. 정적 2겹, 본문 뒤로만 깔린다. */}
