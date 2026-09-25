@@ -1,16 +1,19 @@
 // 13×13 레인지 매트릭스 — 혼합 빈도를 셀 세로 채움으로 표현하는 공용 렌더러.
 // (형식 자체는 수십 년 된 업계 표준 표기: 대각=페어, 우상=수딧, 좌하=오프수트.
-//  색·채움 방식은 앱 토큰 기반 독자 설계 — 공격=인디고, 콜=에메랄드, 4벳=바이올렛.)
+//  색·채움 방식은 앱 토큰 기반 독자 설계 — 2026-09-26 아우라 팔레트: 공격=바이올렛, 콜=틸, 4벳=푸시아, 테마별 hex(src/lib/rangeColors.ts).)
 // 모바일에서 169셀은 셀당 ~26px라 셀 안 글자만으론 부족 — 셀 탭 → 하단 상세가 1급 UX다.
 import { useMemo, useState } from 'react';
 import { comboCount, gridName, rangeComboPct, type FreqMap } from '../../../lib/ranges';
-import { pickCellText, useSurfaceHigh, type CellSegment } from './cellText';
+import { toneOfKey, type ActionTone } from '../../../lib/rangeColors';
+import { pickCellText, useRangeTheme, type CellSegment } from './cellText';
 
 export interface MatrixAction {
   key: string;
   label: string;
-  /** CSS 색 — 셀 채움·범례 공용 */
-  color: string;
+  /** 색 톤 — 생략하면 key 로 정한다(toneOfKey). 실제 hex 는 테마별 RANGE_FILL 에서 읽는다. */
+  tone?: ActionTone;
+  /** @deprecated 2026-09-26 채움색은 테마별 토큰(rangeColors.ts)에서 온다 — 호출부가 넘겨도 쓰지 않는다. 호출부 정리 뒤 제거. */
+  color?: string;
   freq: FreqMap;
 }
 
@@ -21,10 +24,12 @@ export default function RangeMatrix13({ actions, foldLabel = '폴드', initialSe
 }) {
   const [sel, setSel] = useState<string | null>(initialSel ?? null);
   // 🔴 2026-09-25: 글자색은 채움 비율이 아니라 **칸 배경 명도**로 고른다(cellText.ts). 지면색은 테마 토큰에서 읽는다.
-  const surface = useSurfaceHigh();
+  // 2026-09-26: 채움색도 테마별이다(다크=흰 글자 보장, 라이트=검은 글자 보장 — rangeColors.ts).
+  const { surface, fill } = useRangeTheme();
+  const colorOf = (a: Pick<MatrixAction, 'key' | 'tone'>): string => fill[a.tone ?? toneOfKey(a.key)];
 
   // 셀별 액션 빈도 합성(최대 1로 클램프) — 배경은 아래→위 스택 채움
-  const cellStyle = (name: string): { bg?: string; total: number; text: string } => {
+  const cellStyle = (name: string): { bg?: string; text: string } => {
     let acc = 0;
     const stops: string[] = [];
     const segs: CellSegment[] = [];
@@ -32,17 +37,19 @@ export default function RangeMatrix13({ actions, foldLabel = '폴드', initialSe
       const f = a.freq.get(name) ?? 0;
       if (f <= 0) continue;
       const from = acc, to = Math.min(1, acc + f);
-      stops.push(`${a.color} ${from * 100}% ${to * 100}%`);
-      segs.push({ color: a.color, from, to });
+      const color = colorOf(a);
+      stops.push(`${color} ${from * 100}% ${to * 100}%`);
+      segs.push({ color, from, to });
       acc = to;
       if (acc >= 1) break;
     }
-    if (!stops.length) return { total: 0, text: '' };
-    if (acc < 1) stops.push(`transparent ${acc * 100}% 100%`);
-    return { bg: `linear-gradient(to top, ${stops.join(', ')})`, total: acc, text: pickCellText(segs, surface).color };
+    if (!stops.length) return { text: '' };
+    // 남은 부분은 폴드 칸과 같은 지면(--surface-high) — transparent 면 카드색(surface-low)이 비쳐 cellText 의 지면 가정과 어긋난다(2026-09-26 실측 #0E1322).
+    if (acc < 1) stops.push(`rgb(var(--surface-high)) ${acc * 100}% 100%`);
+    return { bg: `linear-gradient(to top, ${stops.join(', ')})`, text: pickCellText(segs, surface).color };
   };
 
-  const summary = useMemo(() => actions.map((a) => ({ ...a, pct: rangeComboPct(a.freq) })), [actions]);
+  const summary = useMemo(() => actions.map((a) => ({ ...a, color: fill[a.tone ?? toneOfKey(a.key)], pct: rangeComboPct(a.freq) })), [actions, fill]);
   const totalPct = summary.reduce((s, a) => s + a.pct, 0);
 
   return (
@@ -52,7 +59,7 @@ export default function RangeMatrix13({ actions, foldLabel = '폴드', initialSe
           {Array.from({ length: 13 }, (_, i) =>
             Array.from({ length: 13 }, (_, j) => {
               const name = gridName(i, j);
-              const { bg, total, text } = cellStyle(name);
+              const { bg, text } = cellStyle(name);
               const on = sel === name;
               return (
                 <button
@@ -63,8 +70,8 @@ export default function RangeMatrix13({ actions, foldLabel = '폴드', initialSe
                   style={bg ? { background: bg, color: text } : undefined}
                   className={[
                     'relative aspect-square flex items-center justify-center rounded-[3px] text-[10px] font-bold leading-none tracking-tighter',
-                    bg ? '' : 'bg-surface-high',
-                    total > 0 ? '' : 'text-ink-muted/50',
+                    // 폴드 칸: 지면색 그대로(비어 있음) + ink-muted **불투명** — /50 은 1.98(라이트)/2.27(다크) 였다(2026-09-26). 지금은 4.76/4.93.
+                    bg ? '' : 'bg-surface-high text-ink-muted',
                     on ? 'ring-2 ring-ink-primary z-10' : '',
                   ].join(' ')}
                 >
@@ -96,7 +103,7 @@ export default function RangeMatrix13({ actions, foldLabel = '폴드', initialSe
 
       {/* 셀 상세 — 탭한 핸드의 빈도·콤보 수. 모바일에서 유일하게 판독 보장되는 층. */}
       {sel && (() => {
-        const rows = actions.map((a) => ({ label: a.label, color: a.color, f: a.freq.get(sel) ?? 0 })).filter((r) => r.f > 0);
+        const rows = actions.map((a) => ({ label: a.label, color: colorOf(a), f: a.freq.get(sel) ?? 0 })).filter((r) => r.f > 0);
         const foldF = Math.max(0, 1 - rows.reduce((s, r) => s + r.f, 0));
         return (
           <div className="rounded-input border border-border-default bg-surface-high px-3 py-2 animate-fade-in">

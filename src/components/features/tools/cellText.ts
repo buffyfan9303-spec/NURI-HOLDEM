@@ -5,9 +5,10 @@
 //   흰 글자와 1.12:1 이라 반쯤 채운 칸의 윗부분이 통째로 안 보였다.
 // 규칙: 글자는 셀 세로 30~70% 띠에 놓인다(TEXT_BAND). 그 띠에 실제로 걸치는 색 조각(아래→위 스택 채움 + 남은 지면)마다
 //   흰·검 후보의 대비를 재고, **가장 낮은 대비가 더 높은 쪽**을 고른다. 셀마다 지면색은 테마 토큰(--surface-high)에서 읽는다.
-// 한계(수치는 cellText.test.ts 가 잠근다): 채움색 하나로 흰·검 모두 4.5 를 넘길 수 없는 색(콜 #10B981 은 흰 2.54·검 8.28)은
-//   다크 지면과 걸친 띠에서 2.54 가 상한이다 — 채움색을 바꾸지 않는 한 글자색 선택만으로는 못 넘는다(보고서에 수치).
+// 2026-09-26: 채움색이 테마별(src/lib/rangeColors.ts)이 되어 다크는 전부 흰 글자 ≥4.5, 라이트는 전부 검은 글자 ≥4.5 다 —
+//   9/25 에 남았던 다크 콜 2.54·4벳 4.23 은 채움색 교체로 사라졌다(cellText.test.ts 가 전 단계 채움에서 잠근다).
 import { useEffect, useState } from 'react';
+import { RANGE_FILL, type ActionTone, type RangeTheme } from '../../../lib/rangeColors';
 
 /** 셀 세로 방향에서 글자가 실제로 차지하는 띠(0=바닥, 1=천장). 10px 글자가 26px 셀 가운데 → 대략 30~70%. */
 export const TEXT_BAND: readonly [number, number] = [0.3, 0.7];
@@ -47,13 +48,19 @@ export function readSurfaceHigh(): Rgb {
   const v = getComputedStyle(document.documentElement).getPropertyValue('--surface-high').trim().split(/[\s,]+/).map(Number);
   return v.length === 3 && v.every(Number.isFinite) ? [v[0], v[1], v[2]] : [27, 36, 60];
 }
-export function useSurfaceHigh(): Rgb {
-  const [rgb, setRgb] = useState<Rgb>(readSurfaceHigh);
+export function readTheme(): RangeTheme {
+  return typeof document !== 'undefined' && document.documentElement.classList.contains('light') ? 'light' : 'dark';
+}
+export interface RangeThemeState { theme: RangeTheme; surface: Rgb; fill: Record<ActionTone, string> }
+const readRangeTheme = (): RangeThemeState => { const theme = readTheme(); return { theme, surface: readSurfaceHigh(), fill: RANGE_FILL[theme] }; };
+/** 지면색 + 테마별 채움색(rangeColors.ts) 을 함께 읽는다 — 2026-09-26 채움색이 테마별이 되면서 지면만 보던 useSurfaceHigh 를 대체. */
+export function useRangeTheme(): RangeThemeState {
+  const [st, setSt] = useState<RangeThemeState>(readRangeTheme);
   useEffect(() => {
     const el = document.documentElement;
-    const mo = new MutationObserver(() => setRgb(readSurfaceHigh()));
+    const mo = new MutationObserver(() => setSt(readRangeTheme()));
     mo.observe(el, { attributes: true, attributeFilter: ['class'] });
     return () => mo.disconnect();
   }, []);
-  return rgb;
+  return st;
 }

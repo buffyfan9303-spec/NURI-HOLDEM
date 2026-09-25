@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react';
 import { CalcCard } from './calcUi';
 import RangeMatrix13, { type MatrixAction } from './RangeMatrix13';
 import SourceBadge from './SourceBadge';
-import { ACTION_COLORS } from '../../../lib/ranges.data';
 import { buildFreq, rangeComboPct } from '../../../lib/ranges';
 import { RANGE_GROUPS, RANGE_SCENARIOS, type RangeScenario, type TablePos } from '../../../lib/ranges.data';
 import Icon from '../../atoms/Icon';
@@ -73,7 +72,7 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
     () => scen.actions.map((a) => ({
       key: a.key,
       label: a.label,
-      color: a.key === 'call' ? ACTION_COLORS.call : a.key === 'fourbet' ? ACTION_COLORS.fourbet : ACTION_COLORS.raise,
+      // 채움색은 RangeMatrix13 이 key → 테마별 RANGE_FILL(src/lib/rangeColors.ts) 로 정한다(2026-09-26).
       freq: buildFreq(a.spec),
     })),
     [scen],
