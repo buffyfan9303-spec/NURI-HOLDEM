@@ -12,7 +12,8 @@
 //   node scripts/gen-nash/tri-equity.mjs /tmp/tri8k.bin 8000                                # ≈9분(12코어) · 116MB
 //   node scripts/gen-nash/solve3.mjs /tmp/tri8k.bin src/lib/nash.data.ts /tmp/s3.json 4000   # 24표 ≈14분 · 표마다 ε·게시표 손실 출력
 //   node scripts/gen-nash/emit.mjs /tmp/s3.json src/lib/nash.data.ts ante 2,3,4,5,6,7,8,9,10,12,15,20 2   # 빅앤티 k=2 만 교체
-//   ⚠ 노앤티 k=2 는 emit 하지 마라 — k≥3 옛 표와 k 단조성이 뒤집힌다(README '2026-09-25').
+//   node scripts/gen-nash/emit.mjs /tmp/s3.json src/lib/nash.data.ts all 2,3,4 2    # 노앤티 k=2 2~4bb (오너 결정 2026-09-25 — k≥3 은 NASH_NOANTE_QUARANTINE 격리)
+//   ⚠ 노앤티 k=2 5bb+ 는 emit 하지 않는다 — 옛 표 손실 ≤0.004bb 이고 k≥3 이 살아 있는 깊이라 k 단조성 계약과 함께 봐야 한다(README '2026-09-25').
 //   잡음 확인: tri-equity.mjs 셋째 인자(salt)를 바꿔 다시 만들고 풀면 셀 9126 중 8 개만 다르다(집계 ≤0.6%p).
 // 인자: <tri.bin> <nash.data.ts> <out.json> [iters=3000] [stacks=2,...,20] [ante=both|ante|no]
 import { readFileSync, writeFileSync } from 'node:fs';

@@ -21,6 +21,7 @@ import { spotSummary, toJSON, type SpotReview } from '../../../lib/spot';
 import type { SpotEvaluation, CoverageKind } from '../../../lib/spotEvaluate';
 import { saveMySpot, shareSpotPost } from '../../../api/spots';
 import { kstToday } from '../../../lib/kst';
+import { clampSpotDate } from '../../../lib/spotDate';
 import {
   getSpotAiStatus, requestSpotAi, findSavedSpotId, spotCompleteness, SpotAiError, spotAiMessage, type SpotAiStatus,
 } from '../../../api/spotReview';
@@ -173,8 +174,10 @@ export default function SpotReport({ spot, evaluation, blocked, user, toast, sha
       {/* 날짜 선택 — 기본 오늘(KST), 네이티브 <input type="date"> (오너 2026-09-25). 저장 뒤에도 바꿀 수 있다(MySpotList). */}
       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5">
         <label htmlFor="spot-played-on" className="shrink-0 text-2xs text-ink-muted">이 스팟 날짜</label>
+        {/* 🔴 2026-09-25 스윕: max 는 달력 UI 만 막고 프로그램·키보드 입력(2099-12-31)은 그대로 저장됐다 — 상태에 들어오는 값을 clampSpotDate 로 접는다
+            (초기값 kstToday · onChange 클램프 → playedOn 상태에는 미래 날짜가 존재할 수 없고, 저장 호출부(SpotAiCoach 자동 저장 포함)는 그 상태만 읽는다). */}
         <input id="spot-played-on" type="date" value={playedOn} max={kstToday()}
-          onChange={(e) => setPlayedOn(e.target.value || kstToday())}
+          onChange={(e) => setPlayedOn(clampSpotDate(e.target.value))}
           className="h-[36px] min-w-0 flex-1 rounded-input border border-border-subtle bg-surface-high px-2 text-xs text-ink-primary" />
       </div>
       <div className="mt-2 grid grid-cols-2 gap-1.5">

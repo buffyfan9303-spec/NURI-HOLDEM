@@ -43,6 +43,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
   //   빈 상자가 된다: 오너가 원래 항의한 그 증상이 기본값이 되는 것). 격리 하한이 바뀌면 여기도 같이 봐라 —
   //   `nash.data.ts` 의 NASH_ANTE_QUARANTINE. 실측 BTN 12bb 40.1%(2026-09-25 k=2 정확 3인 균형 — 전엔 39.0%).
   //   2026-09-21 부터 2~10bb 는 추정값(NASH_ANTE_APPROX)으로 열렸지만 기본은 여전히 12bb — 첫 화면은 정식 등급 표다.
+  //   2026-09-25: BTN(k=2) 은 2~10bb 도 정식(정확 3인 균형)이 됐다. 기본 12bb 는 그대로(e2e/tools.spec 이 기본 화면 % 를 본다).
   const [stack, setStack] = useState((NASH_STACKS as readonly number[]).includes(initialStack ?? -1) ? initialStack! : 12);
   const [view, setView] = useState<View>(initialView ?? 'shove');
   const pos = POSITIONS.find((p) => p.k === k)!;
@@ -149,7 +150,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
       </p>
 
       {/* 자체 산출 Nash 다 — 상용 솔버 표가 아니라는 것이 결과 옆에서 바로 보여야 한다. */}
-      {/* 추정 구간(빅앤티 2~10bb · 뒤 2명+)은 배지 문구로 등급을 가른다 — e2e/pushfold-ticks 가 '추정' 유무를 본다. */}
+      {/* 추정 구간(빅앤티 2~10bb · 뒤 3명+ — BTN·SB 는 정확)은 배지 문구로 등급을 가른다 — e2e/pushfold-ticks 가 '추정' 유무를 본다. */}
       <div className="flex justify-center" data-testid="pushfold-source" data-approx={approx ? 'true' : 'false'}>
         <SourceBadge kind="nash" note={approx ? '빅 앤티 · first-in · 다인 콜 근사(추정)' : '빅 앤티 · first-in'} />
       </div>
@@ -187,7 +188,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
           ⚠ 2026-09-19 까지는 '생성기 재현 필요' 였다. 생성기가 유실돼 사실이었지만 이제 `scripts/gen-nash/` 로
             **이 화면이 읽는 빅 앤티 표는 전부 다시 만들 수 있다** — 그대로 두면 거짓 고지가 된다. */}
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
-        ※ 자체 계산 Nash(첫 진입 올인 · {approx ? '콜러 2명까지 근사' : '단일 콜러'}) · 빅 앤티 기준 · 부분 채움 셀 = 그 빈도만큼 올인 · <b>재산출 가능</b>
+        ※ 자체 계산 Nash(첫 진입 올인 · {approx ? '콜러 2명까지 근사' : k === 2 ? '3인 균형' : '단일 콜러'}) · 빅 앤티 기준 · 부분 채움 셀 = 그 빈도만큼 올인 · <b>재산출 가능</b>
       </p>
     </CalcCard>
   );

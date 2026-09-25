@@ -10,7 +10,9 @@ import type { RangeSpec } from './ranges';
  *  raise 인디고(#5E6AD2)는 구 accent-300 과 같은 값이었으나 '데이터 시각화 fill 전용' 도메인 고정색이다 —
  *  2026-08-27 accent 가 플럼 바이올렛으로 이동한 뒤에도 차트 fill·범례·빈도바의 의미 축은 그대로 잠근다. */
 export const ACTION_COLORS = {
-  raise: '#5E6AD2',
+  // 2026-09-25: #5E6AD2 → #606CD4(채널당 +2, 눈으로는 같다). 매트릭스 셀 글자색을 배경 명도로 고르게 되면서(cellText.ts)
+  //   흰 글자 4.70·검은 글자 4.47 이던 것을 둘 다 4.5 이상(4.57·4.59)으로 — 라이트 지면과 걸친 혼합 칸에서 검은 글자가 AA 를 넘게.
+  raise: '#606CD4',
   call: '#10B981',
   fourbet: '#8B5CF6',
   fold: '#6B7280',

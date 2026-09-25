@@ -39,7 +39,7 @@ export const PUSH_STACKS = [5, 7, 8, 10, 12, 15]; // 실전 빈발 구간
  *
  *  왜 따로 두나: 격리된 조합을 `nashRange` 로 읽으면 **전부 0** 이 돌아오는데, 드릴은 그걸 "전부 폴드가 정답" 으로
  *  채점한다 — 틀린 조언이 채점 기준이 되는 것이라 차트에 "데이터 없음" 을 띄우는 것보다 나쁘다.
- *  ⚠ 지금 격리는 **빅앤티 k≥2 의 2~10BB** 다(`nash.data.ts` 의 `NASH_ANTE_QUARANTINE`). k=1(SB)은 전 깊이
+ *  ⚠ 지금 격리는 **빅앤티 k≥3 의 2~10BB** 다(`nash.data.ts` 의 `NASH_ANTE_QUARANTINE` · k=2 는 2026-09-25 정확값으로 해제). k=1(SB)·k=2(BTN)은 전 깊이
  *    살아 있으므로 이 필터는 **깊이를 하나도 못 뺀다** — 깊이별로 자리가 줄 뿐이다. 실제로 자리를 고르는 것은
  *    `seatsFor`·`pushQuiz` 의 격리 판정이고, 이 목록은 "그 깊이에 낼 문제가 아예 없나" 만 본다.
  *  ⚠ `PUSH_STACKS` 자체는 그대로 둔다 — 표를 재산출해 격리를 풀면 자리가 자동으로 되살아난다. */
@@ -126,8 +126,11 @@ function callQuiz(seatId: string, k: number, stack: number, hand: string): Quiz 
   const shover = PUSH_POS.find((x) => x.k === k);
   if (!seat || !shover || k < seat.minK) return null;
   if (isNashQuarantined(stack, NASH_BIG_ANTE, k, seat.kind)) return null; // 위 pushQuiz 와 같은 이유 — 콜 표는 kind 별 격리(2026-09-19)
+  // 게시 BB 콜 표(nash.data CALL_BB)는 **SB 가 접은 뒤** BB 가 콜하는 상황(b1)이다 — SB 콜 뒤 오버콜(b2) 표는 없다(2026-09-25 교차검증).
+  //   셔버가 SB 가 아닐 때(k≥2) BB 자리 문제는 그 전제를 화면에 적는다. 안 적으면 오버콜 상황으로 읽혀 다른 값을 배운다.
+  const sbFolded = seat.id === 'bb' && k >= 2 ? ' · SB 폴드' : '';
   return {
-    mode: 'call', key: `call|${seat.id}-${k}-${stack}|${hand}`, posLabel: seat.label, situ: `${stack}bb · ${shover.label} 올인 · 빅 앤티`,
+    mode: 'call', key: `call|${seat.id}-${k}-${stack}|${hand}`, posLabel: seat.label, situ: `${stack}bb · ${shover.label} 올인${sbFolded} · 빅 앤티`,
     hand, cards: labelToCards(hand), stackBb: stack, vs: { label: shover.label, bb: stack },
     acts: [{ label: '콜', freq: nashFreq(seat.kind, k, stack).get(hand) ?? 0 }],
   };

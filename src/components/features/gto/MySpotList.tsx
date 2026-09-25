@@ -8,6 +8,8 @@ import { MiniCard } from '../../atoms/HandCards';
 import { useToast } from '../../atoms/Toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { spotSummary, streetLabel, actionLabel, type SpotReview } from '../../../lib/spot';
+import { kstToday } from '../../../lib/kst';
+import { clampSpotDate } from '../../../lib/spotDate';
 import { COVERAGE_LABEL } from '../../../lib/spotEvaluate';
 import { listMySpots, deleteMySpot, updateSpotPlayedOn, type SavedSpot } from '../../../api/spots';
 import { listSpotAiReviews } from '../../../api/spotReview';
@@ -153,8 +155,9 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
                   고르기 전까지는 지금 값(playedOn 또는 저장일의 KST 날짜)을 그대로 보여준다. */}
               <div className="mt-2 flex items-center justify-between gap-2 border-t border-border-subtle pt-2">
                 <label htmlFor={`spot-date-${r.id}`} className="shrink-0 text-2xs text-ink-muted">이 스팟 날짜</label>
-                <input id={`spot-date-${r.id}`} type="date" defaultValue={r.playedOn ?? kstDateOf(r.createdAt)}
-                  onChange={(e) => { if (e.target.value) cb.current.setDate(r.id, e.target.value); }}
+                {/* 🔴 2026-09-25 스윕: 여기엔 max 가 없어 미래 날짜가 그대로 PATCH 됐다 — max=오늘 + 저장 전 clampSpotDate(접힌 값을 칸에도 되돌려 쓴다). */}
+                <input id={`spot-date-${r.id}`} type="date" defaultValue={r.playedOn ?? kstDateOf(r.createdAt)} max={kstToday()}
+                  onChange={(e) => { if (!e.target.value) return; const d = clampSpotDate(e.target.value); if (d !== e.target.value) e.target.value = d; cb.current.setDate(r.id, d); }}
                   className="h-[36px] min-w-0 flex-1 rounded-input border border-border-subtle bg-surface-high px-2 text-xs text-ink-primary" />
               </div>
               {ai.has(r.id) && (

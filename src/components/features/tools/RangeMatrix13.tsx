@@ -4,6 +4,7 @@
 // 모바일에서 169셀은 셀당 ~26px라 셀 안 글자만으론 부족 — 셀 탭 → 하단 상세가 1급 UX다.
 import { useMemo, useState } from 'react';
 import { comboCount, gridName, rangeComboPct, type FreqMap } from '../../../lib/ranges';
+import { pickCellText, useSurfaceHigh, type CellSegment } from './cellText';
 
 export interface MatrixAction {
   key: string;
@@ -19,22 +20,26 @@ export default function RangeMatrix13({ actions, foldLabel = '폴드', initialSe
   initialSel?: string | null;
 }) {
   const [sel, setSel] = useState<string | null>(initialSel ?? null);
+  // 🔴 2026-09-25: 글자색은 채움 비율이 아니라 **칸 배경 명도**로 고른다(cellText.ts). 지면색은 테마 토큰에서 읽는다.
+  const surface = useSurfaceHigh();
 
   // 셀별 액션 빈도 합성(최대 1로 클램프) — 배경은 아래→위 스택 채움
-  const cellStyle = (name: string): { bg?: string; total: number } => {
+  const cellStyle = (name: string): { bg?: string; total: number; text: string } => {
     let acc = 0;
     const stops: string[] = [];
+    const segs: CellSegment[] = [];
     for (const a of actions) {
       const f = a.freq.get(name) ?? 0;
       if (f <= 0) continue;
       const from = acc, to = Math.min(1, acc + f);
       stops.push(`${a.color} ${from * 100}% ${to * 100}%`);
+      segs.push({ color: a.color, from, to });
       acc = to;
       if (acc >= 1) break;
     }
-    if (!stops.length) return { total: 0 };
+    if (!stops.length) return { total: 0, text: '' };
     if (acc < 1) stops.push(`transparent ${acc * 100}% 100%`);
-    return { bg: `linear-gradient(to top, ${stops.join(', ')})`, total: acc };
+    return { bg: `linear-gradient(to top, ${stops.join(', ')})`, total: acc, text: pickCellText(segs, surface).color };
   };
 
   const summary = useMemo(() => actions.map((a) => ({ ...a, pct: rangeComboPct(a.freq) })), [actions]);
@@ -47,7 +52,7 @@ export default function RangeMatrix13({ actions, foldLabel = '폴드', initialSe
           {Array.from({ length: 13 }, (_, i) =>
             Array.from({ length: 13 }, (_, j) => {
               const name = gridName(i, j);
-              const { bg, total } = cellStyle(name);
+              const { bg, total, text } = cellStyle(name);
               const on = sel === name;
               return (
                 <button
@@ -55,11 +60,11 @@ export default function RangeMatrix13({ actions, foldLabel = '폴드', initialSe
                   type="button"
                   onClick={() => setSel(on ? null : name)}
                   aria-label={`${name} 상세`}
-                  style={bg ? { background: bg } : undefined}
+                  style={bg ? { background: bg, color: text } : undefined}
                   className={[
                     'relative aspect-square flex items-center justify-center rounded-[3px] text-[10px] font-bold leading-none tracking-tighter',
                     bg ? '' : 'bg-surface-high',
-                    total > 0.45 ? 'text-white' : total > 0 ? 'text-ink-primary' : 'text-ink-muted/50',
+                    total > 0 ? '' : 'text-ink-muted/50',
                     on ? 'ring-2 ring-ink-primary z-10' : '',
                   ].join(' ')}
                 >

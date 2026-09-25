@@ -540,7 +540,7 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   const stack = exact ?? near;
   if (stack === undefined) return null;
 
-  // 🔴 격리 구간(빅 앤티 k≥2 의 2~10BB · 2026-09-19 재산출로 4~6BB 에서 넓어졌다)은 표 값을 못 믿는다 —
+  // 🔴 격리 구간(빅 앤티 k≥3 의 2~10BB · 노앤티 k≥3 의 2~4BB — k=1·2 는 정확 게임이라 전 깊이 산다, 2026-09-25)은 표 값을 못 믿는다 —
   //   범위는 `nash.data.ts` 의 `NASH_ANTE_QUARANTINE` 한 곳만 본다(여기에 다시 적으면 또 어긋난다).
   //   여기서 null 을 돌려주면 이 스팟은 **수학 참고(math_only)** 로 떨어진다. 틀린 차트로 "개선 필요" 라고
   //   말하는 것보다 "차트 없음 + 팟오즈만" 이 정직하다. ⚠ `nashRange` 를 그냥 부르면 격리 표는 **전부 0**

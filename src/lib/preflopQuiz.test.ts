@@ -4,27 +4,35 @@ import { describe, it, expect } from 'vitest';
 import { FOLD, MODES, gradePreflop, gradeDetail, makeQuiz, modeOfKey, verdictOf, wrongPickOf, type Quiz, type QuizAct } from './preflopQuiz';
 import { RANGE_SCENARIOS } from './ranges.data';
 
-// ── 콜 문제는 **격리**를 본다 (2026-09-19 재산출: 빅앤티 k≥2 는 2~10bb 전부 격리, 12bb+ 만 게시) ──
+// ── 콜 문제는 **격리**를 본다 (2026-09-19 재산출: 빅앤티 k≥2 는 2~10bb 전부 격리, 12bb+ 만 게시 →
+//    2026-09-25 오너 결정: k=2 는 정확 3인 균형이라 격리에서 뺐다 · k≥3 만 2~10bb 격리) ──
 // 저장된 오답 키로 복원할 때 격리된 표의 문제가 되살아나면 "콜 0% = 폴드가 정답" 이라는 거짓 채점이 된다.
-describe('call 모드 — 격리된 빅앤티 k≥2 표는 문제로 내지 않는다', () => {
-  it('BTN(k=2) 올인에 BB 콜 · 7bb 키는 복원되지 않고 새 문제로 대체된다', () => {
-    const key = 'call|bb-2-7|AA';
+describe('call 모드 — 격리된 빅앤티 k≥3 표는 문제로 내지 않는다 · k=2 는 2bb 부터 낸다', () => {
+  it('CO(k=3) 올인에 BB 콜 · 7bb 키는 복원되지 않고 새 문제로 대체된다', () => {
+    const key = 'call|bb-3-7|AA';
     expect(makeQuiz('call', key).key).not.toBe(key);
+  });
+  it('BTN(k=2) 올인에 BB 콜 · 7bb 는 정확 3인 균형이라 그대로 복원된다(2026-09-25 — 전엔 격리라 새 문제로 대체됐다)', () => {
+    for (const key of ['call|bb-2-7|AA', 'call|sb-2-2|AA', 'call|sb-2-10|AA']) {
+      const q = makeQuiz('call', key);
+      expect(q.key, `${key} 가 복원되지 않는다 — k=2 가 다시 격리됐다`).toBe(key);
+      expect(q.acts[0].freq, `${key} AA 콜 빈도가 0 — 격리 표(전부 0)를 읽었다`).toBe(1);
+    }
   });
   it('SB(k=1) 올인에 BB 콜 · 7bb 는 살아 있는 표라 그대로 복원된다(양성 대조)', () => {
     const key = 'call|bb-1-7|AA';
     expect(makeQuiz('call', key).key).toBe(key);
   });
-  it('같은 자리(k=2)라도 12bb 는 게시 구간이라 복원된다(경계 대조: 10bb 는 막히고 12bb 는 열린다)', () => {
-    expect(makeQuiz('call', 'call|sb-2-10|AA').key, '10bb k≥2 가 복원됐다 — 격리 하한이 밀렸다').not.toBe('call|sb-2-10|AA');
-    expect(makeQuiz('call', 'call|sb-2-12|AA').key, '12bb k≥2 가 막혔다 — 격리 상한이 밀렸다').toBe('call|sb-2-12|AA');
+  it('같은 자리(k=3)라도 12bb 는 게시 구간이라 복원된다(경계 대조: 10bb 는 막히고 12bb 는 열린다)', () => {
+    expect(makeQuiz('call', 'call|sb-3-10|AA').key, '10bb k≥3 가 복원됐다 — 격리 하한이 밀렸다').not.toBe('call|sb-3-10|AA');
+    expect(makeQuiz('call', 'call|sb-3-12|AA').key, '12bb k≥3 가 막혔다 — 격리 상한이 밀렸다').toBe('call|sb-3-12|AA');
   });
-  it('새로 뽑는 콜 문제 100건 중 격리된 (k≥2 · 2~10bb) 조합이 없다', () => {
+  it('새로 뽑는 콜 문제 100건 중 격리된 (k≥3 · 2~10bb) 조합이 없다', () => {
     for (let i = 0; i < 100; i += 1) {
       const k = makeQuiz('call').key;                       // call|<seat>-<k>-<stack>|<hand>
       const [, situ] = k.split('|');
       const [, kk, stack] = situ.split('-');
-      if (Number(kk) >= 2) expect(Number(stack), k).toBeGreaterThanOrEqual(12);
+      if (Number(kk) >= 3) expect(Number(stack), k).toBeGreaterThanOrEqual(12);
     }
   });
 });

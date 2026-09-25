@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { HAND_ORDER, NASH_BIG_ANTE, NASH_KS, NASH_STACKS, hasNashRange, isNashQuarantined, nashRange, type NashKind } from './nash.data';
+import { HAND_ORDER, NASH_BIG_ANTE, NASH_KS, NASH_STACKS, hasNashRange, isNashApprox, isNashQuarantined, nashRange, type NashKind } from './nash.data';
 import { makeQuiz } from './preflopQuiz';
 
 describe('nash.data — BB 깊이별 표 존재 계약', () => {
@@ -13,7 +13,7 @@ describe('nash.data — BB 깊이별 표 존재 계약', () => {
     //   여기서 예외로 두지 않고 격리를 풀면 "K2o 100% 올인" 이 다시 라이브로 나간다.
     //   격리가 **실제로 걸려 있는지**는 `ranges.test.ts` 의 격리 계약이 따로 잠근다(여기서 되풀이하지 않는다).
     for (const kind of ['shove', 'callBB'] as NashKind[]) for (const ante of [false, true]) for (const k of NASH_KS) for (const s of NASH_STACKS) {
-      if (isNashQuarantined(s, ante, k, kind)) continue;   // kind 별 격리 — 지금 살아 있는 kind 전용 목록은 **노앤티 3bb 의 BB 콜 하나뿐**이다
+      if (isNashQuarantined(s, ante, k, kind)) continue;   // (깊이, k, kind) 단위 격리 — 빅앤티 2~10bb k≥3 · 노앤티 2~4bb k≥3. kind 전용 목록은 지금 비어 있다(2026-09-25)
         //   (2026-09-19: 빅앤티 7~9bb 는 NASH_CALLBB_QUARANTINE.ante 에서 빠지고 NASH_ANTE_QUARANTINE 이 통째로 막는다)
       expect(hasNashRange(kind, k, s, ante), `${kind} ante=${ante} k=${k} ${s}bb`).toBe(true);
       expect(nashRange(kind, k, s, ante).some((v) => v > 0), `${kind} ante=${ante} k=${k} ${s}bb 가 전부 0`).toBe(true);
@@ -21,11 +21,14 @@ describe('nash.data — BB 깊이별 표 존재 계약', () => {
   });
 
   it('callSB 는 k>=2 에만 있고 k=1(SB 가 셔버 본인)은 없다고 말한다 — 없는 표를 0 으로 꾸며 주지 않는다', () => {
+    let checked = 0;
     for (const ante of [false, true]) for (const s of NASH_STACKS) {
-      if (isNashQuarantined(s, ante, undefined, 'callSB')) continue; // 격리 구간(빅앤티 k≥2 의 2~10BB) — 위 계약과 같은 이유
       expect(hasNashRange('callSB', 1, s, ante)).toBe(false);
-      for (const k of NASH_KS) if (k >= 2) expect(hasNashRange('callSB', k, s, ante), `callSB k=${k} ${s}bb`).toBe(true);
+      // 격리는 (깊이, k) 짝 단위다(빅앤티 2~10bb · 노앤티 2~4bb 의 k≥3) — k 마다 따로 본다. k=2 는 어느 깊이에서도 살아 있다(2026-09-25).
+      for (const k of NASH_KS) if (k >= 2 && !isNashQuarantined(s, ante, k, 'callSB')) { expect(hasNashRange('callSB', k, s, ante), `callSB k=${k} ${s}bb`).toBe(true); checked += 1; }
+      expect(hasNashRange('callSB', 2, s, ante), `callSB k=2 ${s}bb ante=${ante} 가 막혔다 — 정확 3인 균형 열이다`).toBe(true);
     }
+    expect(checked, '격리가 너무 넓어 검사할 칸이 줄었다').toBe(2 * NASH_STACKS.length * 7 - (9 + 3) * 6);   // 빅앤티 9깊이 + 노앤티 3깊이 × k=3..8
     // 데이터에 없는 깊이(11bb)는 어느 표에서도 '있다'고 하지 않는다 — UI 가 가까운 값으로 몰래 대체할 수 없게
     expect(hasNashRange('shove', 2, 11, false)).toBe(false);
   });
@@ -132,9 +135,11 @@ describe('nash.data — k=1 헤즈업 열은 정확 계산 균형(G5, 2026-09-25
 // 🔴 2026-09-25 — 빅앤티 k=2(BTN) 열은 **근사 없는 3인 균형**이다(tri-equity.mjs + solve3.mjs, 선수별 최선응답 이득 ≤3e-6bb).
 // 옛 값(단일 콜러·곱 정규화 근사)은 SB 콜을 크게 좁게 잡았다(5bb 39.1% · 2bb 66.5%). 표본 씨앗을 바꿔 다시 풀어도 집계 차 ≤0.6%p.
 // 옛 값으로 되돌리면 여기서 빨개진다. 손으로 고치지 말고 solve3.mjs 를 다시 돌려라.
+// ✅ 오너 결정 2026-09-25(critical-reviewer 독립 교차검증 CONFIRMED): 이 열은 '추정' 이 아니라 **정식 등급**이다 —
+//   아래는 일부러 allowApprox **없이** 읽는다. 격리·추정 목록에 k=2 를 되돌리면 이 표가 전부 0 이 되어 여기서 빨개진다(음성 대조).
 describe('nash.data — 빅앤티 k=2 열은 정확 3인 균형(2026-09-25)', () => {
   const pct = (kind: NashKind, stack: number) => {
-    const f = nashRange(kind, 2, stack, true, true);
+    const f = nashRange(kind, 2, stack, true);
     let t = 0; for (let i = 0; i < 169; i++) t += f[i] * (HAND_ORDER[i].length === 2 ? 6 : HAND_ORDER[i][2] === 's' ? 4 : 12);
     return (t / 1326) * 100;
   };
@@ -142,5 +147,12 @@ describe('nash.data — 빅앤티 k=2 열은 정확 3인 균형(2026-09-25)', ()
     expect(Math.abs(pct('callSB', 5) - 47.5), `callSB 5bb ${pct('callSB', 5).toFixed(1)}`).toBeLessThanOrEqual(0.8);
     expect(Math.abs(pct('callSB', 2) - 93.7), `callSB 2bb ${pct('callSB', 2).toFixed(1)}`).toBeLessThanOrEqual(0.8);
     expect(Math.abs(pct('shove', 12) - 40.1), `shove 12bb ${pct('shove', 12).toFixed(1)}`).toBeLessThanOrEqual(0.8);
+  });
+  it("'추정' 이 아니다 — 차트 배지(isNashApprox)·드릴/스팟 격리(isNashQuarantined) 둘 다 k=2 를 정식으로 본다", () => {
+    for (const s of [2, 5, 10]) {
+      expect(isNashApprox(s, NASH_BIG_ANTE, 2), `${s}bb BTN 배지가 '추정'`).toBe(false);
+      expect(isNashQuarantined(s, NASH_BIG_ANTE, 2), `${s}bb BTN 이 드릴·스팟에서 격리`).toBe(false);
+      expect(isNashApprox(s, NASH_BIG_ANTE, 3), `${s}bb CO(k=3) 는 아직 추정이어야 한다`).toBe(true);
+    }
   });
 });

@@ -26,7 +26,9 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   );
 }
 
-export function NumIn({ value, onChange, suffix, placeholder, decimal }: { value: number; onChange: (n: number) => void; suffix?: string; placeholder?: string; decimal?: boolean }) {
+/** `max` — 정수 모드 상한. 입력칸 속성(max)과 onChange 값 둘 다 자른다(2026-09-25: 상금 분배 참가 인원 4,294,967,296 → RangeError).
+ *  음수는 어느 모드에서도 내보내지 않는다(min={0} 속성은 타이핑을 막지 못한다 — '-5' 가 parseInt 로 그대로 나갔다). */
+export function NumIn({ value, onChange, suffix, placeholder, decimal, max }: { value: number; onChange: (n: number) => void; suffix?: string; placeholder?: string; decimal?: boolean; max?: number }) {
   // decimal 모드: '3.' 같은 입력 중간 문자열을 살리기 위해 [원문, 그때 보낸 숫자]를 기억.
   // 외부에서 value 가 바뀌면(프리셋 버튼 등) 기억을 버리고 value 를 그대로 표시한다.
   const [draft, setDraft] = useState<{ raw: string; sent: number } | null>(null);
@@ -37,7 +39,7 @@ export function NumIn({ value, onChange, suffix, placeholder, decimal }: { value
   return (
     <div className="relative">
       <input
-        type={decimal ? 'text' : 'number'} inputMode={decimal ? 'decimal' : 'numeric'} min={0}
+        type={decimal ? 'text' : 'number'} inputMode={decimal ? 'decimal' : 'numeric'} min={0} max={max}
         value={shown}
         onChange={(e) => {
           const s = e.target.value;
@@ -47,7 +49,8 @@ export function NumIn({ value, onChange, suffix, placeholder, decimal }: { value
             setDraft({ raw: s, sent: n });
             onChange(n);
           } else {
-            onChange(parseInt(s, 10) || 0);
+            const n = parseInt(s, 10) || 0;
+            onChange(Math.max(0, max !== undefined ? Math.min(max, n) : n));
           }
         }}
         placeholder={placeholder}

@@ -2,12 +2,13 @@ import { CHIP_HIT } from '../gto/chip';
 import { useState } from 'react';
 import { CalcCard, Field, NumIn, Result } from './calcUi';
 import Term from './Term';
+import { PAYOUT_MAX_ENTRIES, computePayout, type PayoutStyle } from '../../../lib/payout';
 
 // 추가 계산기 — 상금 분배 / 종료시간 예측(운영) + 콤보(플레이어). 모두 calcUi 카드 UI.
 
 // ── 상금 분배 계산기 ────────────────────────────────────────────────────────
 // 총 상금과 참가 인원으로 시상 인원(~상위 12%)과 표준 분배표(참고용)를 자동 산출.
-type PayoutStyle = 'topheavy' | 'flat' | 'satellite';
+// 계산은 src/lib/payout.ts(computePayout) — 인원 상한(PAYOUT_MAX_ENTRIES)·잔액 보정·역전 가드를 거기서 검사한다.
 const PAYOUT_STYLES: { id: PayoutStyle; label: string; desc: string }[] = [
   { id: 'topheavy', label: '탑헤비', desc: '상위에 집중(가파른 곡선)' },
   { id: 'flat', label: '뱅크롤 관리', desc: '완만·다수 시상(플레이어 친화)' },
@@ -29,46 +30,24 @@ export function PayoutCalc() {
   const [presetId, setPresetId] = useState<PayoutPresetId | null>(null); // 곡선 대신 고정 %표 사용
 
   const preset = presetId ? PAYOUT_PRESETS.find((p) => p.id === presetId)! : null;
-  const autoPct = style === 'flat' ? 0.18 : style === 'satellite' ? 0.15 : 0.10;
   // 🔴 2026-09-19 GTO 감사 [medium]: 시상 인원(수동 입력)에 상한이 없어 참가 5명인데 12명을 시상하는
   //   표가 그대로 만들어졌다(합계는 맞아떨어져 눈치채기 어렵다). 시상 인원은 참가 인원을 넘을 수 없다
   //   (places ≤ entries). 아래 Result 라벨이 실제 쓰인 places 를 그대로 보여주므로 클램프해도
   //   "화면 숫자와 계산 숫자가 갈린다"(OutsCalc 와 같은 부류)는 문제가 생기지 않는다.
-  const places = preset ? preset.pct.length : Math.max(1, Math.min(entries, placesIn > 0 ? placesIn : Math.round(entries * autoPct)));
-
-  let amounts: number[];
-  if (preset) {
-    // 프리셋: 고정 %표 그대로 1000 단위 반올림, 잔액은 1위에 보정.
-    amounts = preset.pct.map((p) => Math.max(0, Math.round((p / 100) * pool / 1000) * 1000));
-    const used = amounts.reduce((a, b) => a + b, 0);
-    if (amounts.length) amounts[0] += pool - used;
-  } else if (style === 'satellite') {
-    // 세틀라이트: 상위 시상자 동일 금액(시트). 반올림 잔액은 1위에 보정.
-    const each = Math.max(0, Math.floor(pool / places / 1000) * 1000);
-    amounts = Array.from({ length: places }, () => each);
-    if (amounts.length) amounts[0] += pool - each * places;
-  } else {
-    // 탑헤비(가파름)=1.15 / 뱅크롤(완만)=0.55 지수 곡선.
-    const exp = style === 'flat' ? 0.55 : 1.15;
-    const weights = Array.from({ length: places }, (_, i) => 1 / Math.pow(i + 1, exp));
-    const wSum = weights.reduce((a, b) => a + b, 0);
-    amounts = weights.map((w) => Math.max(0, Math.round((w / wSum) * pool / 1000) * 1000));
-    const used = amounts.reduce((a, b) => a + b, 0);
-    if (amounts.length) amounts[0] += pool - used;
-  }
-  // 가드: 잔액 보정이 음수면 flat 곡선에서 1위<2위 역전 가능 — 2위에서 차액을 옮겨 1위≥2위 유지(합계 불변).
-  if (amounts.length > 1 && amounts[0] < amounts[1]) {
-    const d = Math.ceil((amounts[1] - amounts[0]) / 2 / 1000) * 1000;
-    amounts[0] += d;
-    amounts[1] -= d;
-  }
+  // 🔴 2026-09-25 전수 스윕: 참가 인원 자체에 상한이 없어 4,294,967,296 명이 RangeError 로 GTO 탭을 통째로 죽였다.
+  //   NumIn 의 max 와 computePayout 의 clampEntries 가 같은 PAYOUT_MAX_ENTRIES 를 본다 — 입력칸이 먼저 자르고, 계산이 한 번 더 자른다.
+  const { places, amounts } = computePayout({ pool, entries, placesIn, style, presetPct: preset?.pct ?? null });
+  const capped = entries >= PAYOUT_MAX_ENTRIES || placesIn >= PAYOUT_MAX_ENTRIES;
 
   return (
     <CalcCard title="상금 분배 계산기" desc="총 상금·참가 인원 → 시상 인원과 분배표(참고용)">
       <div className="grid grid-cols-2 gap-2">
         <Field label="총 상금"><NumIn value={pool} onChange={setPool} /></Field>
-        <Field label="참가 인원"><NumIn value={entries} onChange={(v) => { setEntries(v); setPresetId(null); }} suffix="명" /></Field>
+        <Field label="참가 인원"><NumIn value={entries} max={PAYOUT_MAX_ENTRIES} onChange={(v) => { setEntries(v); setPresetId(null); }} suffix="명" /></Field>
       </div>
+      {capped && (
+        <p role="status" className="text-2xs leading-relaxed text-aura-300">참가·시상 인원은 최대 {PAYOUT_MAX_ENTRIES.toLocaleString()}명까지 계산합니다.</p>
+      )}
       {/* 표준 프리셋 — 클릭 시 고정 %표 적용, 다른 입력을 만지면 곡선 모드로 복귀 */}
       <div className="flex gap-1.5">
         {PAYOUT_PRESETS.map((p) => (
@@ -90,7 +69,7 @@ export function PayoutCalc() {
         </div>
         <p className="mt-1 text-2xs text-ink-muted">{presetId ? '표준 고정 %표를 그대로 적용 중입니다.' : PAYOUT_STYLES.find((s) => s.id === style)!.desc}</p>
       </div>
-      <Field label="시상 인원 (0=자동)"><NumIn value={placesIn} onChange={(v) => { setPlacesIn(v); setPresetId(null); }} suffix="명" /></Field>
+      <Field label="시상 인원 (0=자동)"><NumIn value={placesIn} max={PAYOUT_MAX_ENTRIES} onChange={(v) => { setPlacesIn(v); setPresetId(null); }} suffix="명" /></Field>
       <Result label={`시상 인원 ${places}명 · 1위`} value={(amounts[0] ?? 0).toLocaleString()} accent />
       <div className="max-h-56 overflow-y-auto rounded-input border border-border-subtle">
         <table className="w-full text-2xs tabular-nums">

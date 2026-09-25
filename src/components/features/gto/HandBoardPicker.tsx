@@ -116,8 +116,9 @@ export default function HandBoardPicker({ hb, hint, summary, villainLabels }: {
 
       <CardGridPicker usedIds={hb.usedIds} onPick={hb.place} />
 
-      <div className="flex justify-end">
-        <button type="button" onClick={hb.clear} className="text-2xs font-semibold text-ink-muted transition-colors hover:text-danger-light">
+      <div className="-mb-2 flex justify-end">
+        {/* 2026-09-25 스윕: 글자 크기 그대로(54×16)라 터치 표적 미달 — 보이는 글자는 두고 누르는 상자를 44px 로(min-h · px-2 · -mr-2 로 오른쪽 정렬 유지). */}
+        <button type="button" onClick={hb.clear} className="-mr-2 min-h-[44px] px-2 text-2xs font-semibold text-ink-muted transition-colors hover:text-danger-light">
           카드 초기화
         </button>
       </div>

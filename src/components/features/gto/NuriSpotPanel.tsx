@@ -491,7 +491,8 @@ function Pick<T extends string | number>({ value, options, onChange, fmt, end = 
       {shown.map((o) => (
         <button key={String(o)} type="button" aria-pressed={o === value} onClick={() => onChange(o)}
           // 보이는 32px · 누르는 44px(CHIP_HIT) — 2026-09-24 전: 36px · 실효 46px
-          className={[CHIP_HIT, 'min-h-[32px] rounded-input border px-2 text-2xs font-bold transition-colors',
+          // 2026-09-25 스윕: 사이징 칩 '2'·'3'·'4' 가 가로 26~29px 라 min-w-[44px] — 가로도 44. 이웃과 gap-x-1 이라 가로 확장은 겹쳐서 못 쓴다.
+          className={[CHIP_HIT, 'min-h-[32px] min-w-[44px] rounded-input border px-2 text-2xs font-bold transition-colors',
             o === value ? 'border-accent-300 bg-accent-300 text-white'
               : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
           {fmt ? fmt(o) : String(o)}
