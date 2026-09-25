@@ -36,7 +36,8 @@ describe('C05 · 다른 접수대의 realtime 변경이 현재 session state 를
     const after = code.slice(start, start + 400);
     expect(before, 'active 게이트가 없다').toMatch(/if \(!active\) return;/);
     expect(before, '다시 보일 때 재검증(reload/reloadSession)이 없다').toMatch(/reload\(\); reloadSession\(\);/);
-    expect(after, 'active 가 deps 에 없다').toMatch(/\}, \[venueId, reload, reloadSession, active\]\);/);
+    // 2026-09-25 D1·D3: deps 뒤에 ownsRow·refreshPw 가 붙었다 — active 가 여전히 들어 있는지만 본다.
+    expect(after, 'active 가 deps 에 없다').toMatch(/\}, \[venueId, reload, reloadSession, active[^\]]*\]\);/);
   });
 
   // 2026-09-12 독립 검증에서 잡힌 결함의 회귀 방지.
@@ -49,7 +50,7 @@ describe('C05 · 다른 접수대의 realtime 변경이 현재 session state 를
     expect(before, '상승 에지 판정(이전 active 값 기억)이 없다 — 전환마다 중복 조회한다')
       .toMatch(/ledgerWasActive\.current === false && active/);
     expect(before, '재검증이 상승 에지 조건 뒤에 있지 않다')
-      .toMatch(/if \(rising\) \{ reload\(\); reloadSession\(\); \}/);
+      .toMatch(/if \(rising\) \{ reload\(\); reloadSession\(\);[^}]*\}/);   // D3: 다시 보일 때 refreshPw() 도 함께
   });
 
   it('QR 바인요청 실시간 구독도 active 게이트 뒤에서 걸린다(§5-A)', () => {
@@ -115,15 +116,16 @@ describe('C05 보완 · 재조회 실패를 조용히 삼키지 않는다(낡은
   it('reloadSession 이 실패를 loadError 에 남긴다(빈 catch 로 삼키지 않는다)', () => {
     const idx = code.indexOf('const reloadSession = useCallback(');
     expect(idx, 'reloadSession 정의를 찾지 못했다').toBeGreaterThan(-1);
-    const slice = code.slice(idx, idx + 500);
+    const slice = code.slice(idx, idx + 900);
     expect(slice).not.toMatch(/\.catch\(\(\) => \{\}\)/); // 빈 catch 로 되돌리면 회귀
-    expect(slice).toMatch(/\.catch\(\([a-zA-Z]+\) => \{\s*setLoadError\(/);
+    // D2(2026-09-25): 순번 가드 뒤에서 남긴다 — 낡은 요청의 실패가 지금 장부에 오류 배너를 세우지 않게.
+    expect(slice).toMatch(/\.catch\(\([a-zA-Z]+\) => \{\s*(?:if \(isFreshResponse\([^)]*\)\) )?setLoadError\(/);
   });
 
   it('reloadSession 이 성공하면 지난 실패 표시를 지운다(setLoadError(null))', () => {
     const idx = code.indexOf('const reloadSession = useCallback(');
-    const slice = code.slice(idx, idx + 500);
-    expect(slice).toMatch(/setSession\(s\); setLoadError\(null\); \}/);
+    const slice = code.slice(idx, idx + 900);
+    expect(slice).toMatch(/setSession\(s\);(?: setGames\(gs\);)? setLoadError\(null\);/);
   });
 
   it('loadGames 가 내부에서 실패를 삼키지 않는다(빈 catch 로 되돌리면 reloadSession 의 Promise.all 이 실패를 못 본다)', () => {

@@ -25,7 +25,9 @@ describe('C03 · STOP·레벨 이동은 raw currentIndex 가 아니라 effective
     const body = m![0];
     const stopBranch = body.match(/if \(state\.running\) persist\(\{[^}]*\}\)/);
     expect(stopBranch, 'STOP persist 호출을 찾지 못했다').not.toBeNull();
-    expect(stopBranch![0]).toContain('currentIndex: eff.index');
+    // C5(2026-09-25): 실효 레벨을 **누른 순간** 다시 잰다(at = effectiveLevel(state, nowMs())) — 렌더 시점 eff 는 최대 1초 낡았다.
+    expect(stopBranch![0]).toMatch(/currentIndex: (?:eff|at)\.index/);
+    expect(body).toContain('effectiveLevel(state, nowMs())');
   });
 });
 

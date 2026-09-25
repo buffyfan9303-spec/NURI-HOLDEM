@@ -267,8 +267,8 @@ export async function saveClockLevel(
   venueId: string, gameSeq: number,
   patch: Pick<ClockState, 'currentIndex' | 'remainingMs' | 'endsAt'> & Partial<Pick<ClockState, 'running'>>,
   expectEndsAt?: string,
-): Promise<void> {
-  if (IS_MOCK) return;
+): Promise<number> {
+  if (IS_MOCK) return 1;
   let q = supabase.from('clock_states').update({
     current_index: patch.currentIndex,
     remaining_ms: patch.remainingMs,
@@ -285,8 +285,11 @@ export async function saveClockLevel(
   //   ⚠ null 은 조건으로 걸지 않는다(PostgREST 는 .is() 가 필요하고, 백업 전진자는 항상 값이 있는
   //     경계에서만 쓴다). expectEndsAt 을 안 주면 예전 동작 그대로다.
   if (expectEndsAt) q = q.eq('ends_at', expectEndsAt);
-  const { error } = await q;
+  // C2(2026-09-25): **반영 행 수**를 돌려준다. 0 = 누가 먼저 움직였다(정지·레벨 이동·종료) — CAS 가 막은 것이다.
+  //   예전엔 void 라 호출부가 '썼다' 고 믿고 낙관값(한 칸 올린 레벨)을 화면에 그대로 뒀다. 0 이면 재조회해 서버 진실로 돌아간다.
+  const { data, error } = await q.select();
   if (error) throw error;
+  return data?.length ?? 0;
 }
 
 // ── 자동 전진 / 표시 보정 ──────────────────────────────────────────────────────
@@ -297,11 +300,90 @@ export async function saveClockLevel(
 //   · levelCatchUp   : 실제 전진 패치(쓰기). 쓰기 권한(can_access_ledger) 있는 운영자 화면만 호출한다.
 // 같은 while 보정이 이미 MultiClockOverview·ClockRemoteBar 에 복붙돼 있어 3벌째가 되기 전에 단일소스로 뺀다.
 
+// ── 진행 중 블라인드 구조 수정 (C10, 오너 2026-09-25) ────────────────────────────
+// 왜: 예전엔 진행 중에 구조를 고치려면 [설정] → [이 설정으로 다시 시작] 뿐이었고, 그건 레벨·경과·엔트리·탈락을 **통째로 0** 으로
+//   덮는다(clockHasProgress 경고가 뜨는 바로 그 경로). 대회장에서 "레벨 몇 개 더 붙여 주세요"·"다음 레벨 블라인드 오타"를
+//   고칠 방법이 없었다. 이제 config.levels 만 바꾼다 — 행의 진행 필드(currentIndex·endsAt·remainingMs·adj*·eliminations)는 그대로다.
+// 규칙(오너 결정):
+//   · 이미 **지난 레벨**(실효 인덱스 앞)은 한 글자도 못 바꾼다 — 경과 시간·얼리 판정·총 진행 시간이 거기에 걸려 있다.
+//   · **현재 레벨**은 블라인드·앤티·라벨만 고칠 수 있다. 길이(분)는 여기서 안 바꾼다 — 남은 시간은 [Min/Sec ±] 로 조정한다.
+//   · **아직 안 온 레벨**은 블라인드·앤티·시간 수정·삭제 자유, 뒤에 레벨·브레이크 추가 자유.
+//   · 마지막 레벨까지 끝난(finished) 클락은 기존 레벨이 전부 '지난 레벨'이다. 뒤에 덧붙이면 **첫 새 레벨에서 일시정지** 상태로
+//     이어진다(운영자가 [계속하기] 로 재개) — 자동으로 돌리지 않는다(손님 화면에서 갑자기 시간이 흐르지 않게).
+// 저장은 기존 clock_states.config 한 칸이다(스키마 변경 없음). TV·리모컨·장부 리모컨·라이브 탭은 realtime/재조회로 새 config 를 읽는다.
+
+/** 진행 중 구조 편집에서 **잠긴 앞부분의 길이** — 이 인덱스 미만은 지난 레벨(수정 불가). finished 면 전 레벨 길이. */
+export function liveLockedCount(s: Pick<ClockState, 'config' | 'running' | 'currentIndex' | 'endsAt' | 'remainingMs'>, nowMs = Date.now()): { passed: number; current: number | null } {
+  const lv = s.config?.levels ?? [];
+  const phase = clockPhase(s, nowMs);
+  if (phase === 'finished') return { passed: lv.length, current: null };
+  if (phase === 'idle') return { passed: 0, current: null };           // 시작 전 — 전부 자유(현재 레벨도 아직 안 흘렀다)
+  const idx = effectiveLevel(s, nowMs).index;
+  return { passed: idx, current: idx };
+}
+
+const sameLevel = (a: ClockLevel, b: ClockLevel) =>
+  a.kind === b.kind && a.sb === b.sb && a.bb === b.bb && a.ante === b.ante && a.minutes === b.minutes && (a.label ?? '') === (b.label ?? '');
+
+export type LiveStructureResult = { ok: true; patch: Partial<ClockState>; resumed: boolean } | { ok: false; error: string };
+
+/** 진행 중 클락에 새 블라인드 구조를 적용하는 **패치**(쓰기는 호출부의 바뀐 칸 저장기가 한다). 규칙 위반이면 이유를 돌려준다. */
+export function liveStructurePatch(
+  s: ClockState, levels: ClockLevel[], nowMs = Date.now(),
+): LiveStructureResult {
+  const old = s.config?.levels ?? [];
+  const { passed, current } = liveLockedCount(s, nowMs);
+  for (const l of levels) {
+    const bad = !Number.isFinite(l.minutes) || l.minutes <= 0
+      || (l.kind === 'level' && (!(l.sb >= 0) || !(l.bb > 0) || !(l.ante >= 0)));
+    if (bad) return { ok: false, error: '레벨마다 시간(분)은 0보다 커야 하고, 블라인드(BB)는 0보다 커야 합니다' };
+  }
+  if (levels.length < passed || levels.length === 0) return { ok: false, error: '이미 지난 레벨은 지울 수 없습니다' };
+  for (let i = 0; i < passed; i++) {
+    if (!sameLevel(old[i], levels[i])) return { ok: false, error: `이미 지난 ${old[i]?.kind === 'break' ? '브레이크' : `레벨 ${levelNumberAt(old, i)}`} 은(는) 수정할 수 없습니다` };
+  }
+  if (current !== null) {
+    const o = old[current], n = levels[current];
+    if (!n) return { ok: false, error: '진행 중인 레벨은 지울 수 없습니다' };
+    if (o.kind !== n.kind || o.minutes !== n.minutes) {
+      return { ok: false, error: '진행 중인 레벨의 길이·종류는 여기서 바꿀 수 없습니다 — 남은 시간은 Min/Sec ± 로 조정하세요' };
+    }
+  }
+  if (levels.length === old.length && levels.every((l, i) => sameLevel(l, old[i]))) return { ok: false, error: '바뀐 내용이 없습니다' };
+  const config = withDerivedEarly({ ...s.config, levels, maxLevel: Math.max(s.config?.maxLevel ?? 0, countLevels(levels)) });
+  // 끝난 대회에 덧붙였다 — 첫 새 레벨에서 **일시정지**로 이어 둔다.
+  if (passed === old.length && old.length > 0) {
+    if (levels.length <= old.length) return { ok: false, error: '끝난 대회를 이어 가려면 뒤에 레벨을 하나 이상 추가하세요' };
+    const first = levels[old.length];
+    return { ok: true, resumed: true, patch: { config, currentIndex: old.length, running: false, endsAt: null, remainingMs: first.minutes * 60_000 } };
+  }
+  // 시작 전(idle)인데 1레벨 길이를 바꿨다 — 남은 시간도 새 길이로 맞춰야 계속 '시작 전'으로 읽힌다(clockPhase 의 만액 규칙).
+  if (passed === 0 && current === null && !s.running && s.currentIndex === 0 && levels[0].minutes !== old[0]?.minutes) {
+    return { ok: true, resumed: false, patch: { config, remainingMs: levels[0].minutes * 60_000 } };
+  }
+  return { ok: true, resumed: false, patch: { config } };
+}
+
+// ── 사이드 게임 날짜 ───────────────────────────────────────────────────────────
+/** 사이드 클락·사이드 장부를 **어느 날짜 장부에** 붙일까 (C8, 2026-09-25).
+ *  예전엔 `new Date().toLocaleDateString('en-CA')`(기기 로컬 오늘)라 ① 해외·시계 오설정 기기에서 하루가 어긋나고
+ *  ② 자정을 넘긴 대회(어제 연 장부)에서 사이드만 **오늘 날짜**로 갈라졌다 — 바인요청은 ledger_business_date(어제 열린 장부 우선)로
+ *  어제 장부에 붙는데 사이드 클락은 오늘 장부를 찾아 '메인 장부가 없습니다'로 막혔다.
+ *  우선순위: 지금 보고 있는 클락의 장부 날짜 → 메인 클락의 장부 날짜 → KST 오늘. */
+export function sideGameDate(
+  cur: { sessionDate: string | null } | null | undefined,
+  main: { sessionDate: string | null } | null | undefined,
+  nowMs = Date.now(),
+): string {
+  return cur?.sessionDate ?? main?.sessionDate ?? kstToday(nowMs);
+}
+
 // effectiveLevel 은 순수 계산이라 lib/clockLevel.ts 로 내렸다 — 그래야
 // App → lib/regStatus → api/clock → api/ledger 정적 사슬이 끊겨 업주용 장부 청크가
 // 첫 화면 임계 경로에서 빠진다(그 파일 상단 주석 참고). 여기서 **재수출**하므로
 // `from '../api/clock'` 로 쓰던 기존 임포트는 한 줄도 바꿀 필요가 없다.
-import { effectiveLevel } from '../lib/clockLevel';
+import { effectiveLevel, clockExhausted, clockPhase, levelNumberAt } from '../lib/clockLevel';
+import { kstToday } from '../lib/kst';
 export { effectiveLevel, fieldCounts, type ClockEffective } from '../lib/clockLevel';
 
 /** 자동 전진 결과. advanced=한 번에 넘어간 레벨 수(2 이상이면 '밀렸다가 따라잡은' 보정),
@@ -390,8 +472,12 @@ export async function getRunningClocks(): Promise<ClockState[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('clock_states').select('*').eq('running', true).order('updated_at', { ascending: false });
   if (error) throw error; // 실패를 빈 배열로 바꾸면 '진행 중인 대회 없음'으로 위장된다
+  // C3(2026-09-25): running=true 여도 마지막 레벨까지 소진한 클락은 **끝난 대회**다 — 라이브 목록·홈 레일·배지에서 뺀다.
+  //   종료를 쓰는 주체가 없으면 running 이 영영 true 로 남는다(실측: 9/17 부터 running 인 더미 클락이 '진행 중 1게임').
+  //   판정은 clockPhase 와 같은 clockExhausted 하나다 — 목록과 배지가 다른 규칙을 쓰면 숫자가 갈린다.
+  const now = Date.now();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => rowToState(r));
+  return (data ?? []).map((r: any) => rowToState(r)).filter((s) => !clockExhausted(s, now));
 }
 
 /** 이 매장의 모든 게임 클락 상태(진행·정지 포함, 게임당 1개) — 멀티 클락 오버뷰용. */

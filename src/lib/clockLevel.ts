@@ -106,6 +106,10 @@ export function clockPhase(s: ClockPhaseInput, nowMs = Date.now()): ClockPhase {
 
   const last = lv.length - 1;
   if (s.running) {
+    // C3(2026-09-25 MYSTORE-FULL-AUDIT): running=true 여도 **마지막 레벨까지 소진**했으면 끝난 대회다.
+    //   종료를 DB 에 쓰는 주체(운영자 워치독·장부 백업 전진자)가 아무도 떠 있지 않으면 running=true 가 영영 남는다 —
+    //   실측: 9/17 부터 running 인 더미 클락이 라이브 탭에 '진행 중' 으로 떠 있었다. 표시는 여기서 '종료'로 읽는다.
+    if (clockExhausted(s, nowMs)) return 'finished';
     // 브레이크는 levels 배열의 원소다 — 흐른 시간만큼 전진시킨 **실효 레벨**로 봐야 맞다
     // (endsAt 이 지났는데 아무도 전진을 못 쓴 행에서도 TV 가 옳게 말한다).
     return lv[effectiveLevel(s, nowMs).index]?.kind === 'break' ? 'break' : 'running';
@@ -118,6 +122,22 @@ export function clockPhase(s: ClockPhaseInput, nowMs = Date.now()): ClockPhase {
   return 'paused';
 }
 
+/**
+ * 진행 중(running)인 클락이 **마지막 레벨의 시간까지 다 썼는가** — levelCatchUp 의 `finished` 와 같은 경계다.
+ * effectiveLevel 은 잔여를 0 으로 클램프해 '마지막 레벨 00:00' 과 '이미 지남'을 못 가르므로 누적을 따로 잰다.
+ * 정지 행은 대상이 아니다(정지 종료는 clockPhase 의 remainingMs<=0 규칙이 본다).
+ */
+export function clockExhausted(s: ClockLevelInput, nowMs = Date.now()): boolean {
+  const lv = s.config?.levels ?? [];
+  if (!s.running || lv.length === 0) return false;
+  const last = lv.length - 1;
+  let idx = Math.max(0, Math.min(s.currentIndex, last));
+  let rem = s.endsAt ? new Date(s.endsAt).getTime() - nowMs : s.remainingMs;
+  if (!Number.isFinite(rem)) return false;
+  while (rem < 0 && idx < last) { idx++; rem += (lv[idx].minutes || 0) * 60_000; }
+  return idx >= last && rem <= 0;
+}
+
 /** 화면에 쓰는 상태 문구 — 5개 화면이 같은 말을 하도록 한 곳에 둔다. */
 export const CLOCK_PHASE_LABEL: Record<ClockPhase, string> = {
   idle: '시작 전', running: '진행 중', break: '브레이크', paused: '일시정지', finished: '종료',
@@ -128,7 +148,9 @@ export const CLOCK_PHASE_TV: Record<ClockPhase, string> = {
 };
 /** 주 버튼 문구 — 지금 누르면 무엇이 되는가. */
 export const CLOCK_PHASE_ACTION: Record<ClockPhase, string> = {
-  idle: '시작', running: '일시정지', break: '일시정지', paused: '계속하기', finished: '다시 시작',
+  // C7(2026-09-25): 종료 상태의 주 버튼은 **누를 수 없다**('대회 종료' 표시). 예전 '다시 시작'은 remainingMs 0 으로 재개해
+  //   즉시 다시 종료됐다 — 눌러도 아무 일이 없는 버튼이었다. 처음부터 다시는 [↺ 초기화], 이어서 하려면 [구조 수정]으로 레벨을 덧붙인다.
+  idle: '시작', running: '일시정지', break: '일시정지', paused: '계속하기', finished: '대회 종료',
 };
 
 /**

@@ -141,8 +141,9 @@ describe('P02 · NuriPosLedger 의 담당 직원 후보는 실패를 조용히 �
   });
 
   it('직원 목록 조회 실패도 같은 배너로 말한다 — 후보가 "나" 뿐인 것이 실제인지 못 불러온 것인지(독립 검증 Q2)', () => {
-    expect(POS).not.toMatch(/getMyVenueStaff\(\)\.then\(setStaff\)\.catch\(\(\) => \{\}\)/);
-    expect(POS).toMatch(/getMyVenueStaff\(\)\s*\.then\(\(s\) => \{ if \(alive\) setStaff\(s\); \}\)\s*\.catch\(\(e: unknown\) => \{ if \(alive\) setStaffLoadError\(e\); \}\)/);
+    expect(POS).not.toMatch(/getMyVenueStaff\((?:venueId)?\)\.then\(setStaff\)\.catch\(\(\) => \{\}\)/);
+    // D5(2026-09-25): 매장 id 를 넘긴다(인자 없으면 서버가 owner_id 첫 매장으로 폴백 — 공동운영자·관리자는 0명).
+    expect(POS).toMatch(/getMyVenueStaff\(venueId\)\s*\.then\(\(s\) => \{ if \(alive\) setStaff\(s\); \}\)\s*\.catch\(\(e: unknown\) => \{ if \(alive\) setStaffLoadError\(e\); \}\)/);
   });
 
   it('SessionForm 두 호출부 모두 실패와 재시도를 넘긴다(장부 열기·세션 수정)', () => {

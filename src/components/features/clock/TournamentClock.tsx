@@ -15,8 +15,9 @@ import {
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
   getClockState, saveClockState, saveClockLiveStats, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
-  saveClockPatch, createCoalescingSaver,
+  saveClockPatch, createCoalescingSaver, saveClockLevel, sideGameDate, liveStructurePatch,
 } from '../../../api/clock';
+import LiveLevelsEditor from './LiveLevelsEditor';
 import {
   getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames, openLedgerSession,
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
@@ -221,7 +222,9 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   }, [venueId, bumpClockReq]);
   // ＋ 사이드 클락 — 옵션으로 장부 사이드 게임도 자동 생성(메인 설정 복사) 후 그 게임 클락 설정으로 전환
   const addSide = useCallback(async (nextSeq: number) => {
-    const linkDate = new Date().toLocaleDateString('en-CA');
+    // C8(2026-09-25): 기기 로컬 오늘이 아니라 **지금 대회의 장부 날짜**(자정 넘긴 대회면 어제) → 메인 클락 → KST 오늘.
+    const mainClock = state?.sessionDate ? null : await getClockState(venueId, 1).catch(() => null);
+    const linkDate = sideGameDate(state, mainClock);
     if (window.confirm(`사이드${nextSeq - 1} 게임을 장부에도 만들고 클락을 시작할까요?\n\n확인 = 장부 사이드 게임 생성 + 클락 / 취소 = 클락만`)) {
       try {
         const main = await getLedgerSession(venueId, linkDate, 1);
@@ -246,7 +249,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
       } catch (e) { toast.show(e instanceof Error ? e.message : '사이드 게임 생성 실패', 'error'); }
     }
     switchGame(nextSeq);
-  }, [venueId, switchGame, toast]);
+  }, [venueId, switchGame, toast, state]);
   // 빈 슬롯 1탭 시작 — 메인(또는 현재) 클락 설정을 복사해 그 게임 클락을 오늘 장부에 연동하여 바로 시작
   const quickStart = async (g: number) => {
     const main = await getClockState(venueId, 1).catch(() => null);
@@ -254,7 +257,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     // 사이드는 제목에 접미 강제 — 같은 event_name 으로 END 순위를 저장하면
     // 메인 대회 순위·점수 지급이 통째로 교체되는 사고가 났다(save 가 (날짜,이벤트) 단위 replace)
     const cfg2 = g > 1 ? { ...base, title: `${(base.title || '게임').trim()} 사이드${g - 1}` } : base;
-    await startClock(cfg2, new Date().toLocaleDateString('en-CA'), g);
+    await startClock(cfg2, sideGameDate(state, main), g);   // C8 — 기기 로컬 오늘 금지
   };
 
   if (loading) return <p aria-busy="true" className="py-10 text-center text-sm text-ink-muted">클락 불러오는 중…</p>;
@@ -289,6 +292,7 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
         state={state} canManage={canManage} active={active}
         onChange={(s) => setState(s)}
         onSave={saveLive}
+        onReload={reloadState}
         onOpenSettings={() => setView('settings')}
         onEnd={endClock}
       />
@@ -367,9 +371,9 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
 /** K1 — 모바일 미리보기의 고정 캔버스 폭(px). PC 미리보기(1024: 748 · 1440: 570)와 같은 급이라 '그대로 축소' 가 된다. */
 const STAGE_CANVAS_W = 720;
 
-function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettings, onEnd, active = true }: {
+function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, onOpenSettings, onEnd, active = true }: {
   state: ClockState; canManage: boolean; venueName?: string;
-  onChange: (s: ClockState) => void; onSave: (next: ClockState, prev: ClockState) => void; onOpenSettings: () => void; onEnd: () => void; active?: boolean;
+  onChange: (s: ClockState) => void; onSave: (next: ClockState, prev: ClockState) => void; onReload: () => void; onOpenSettings: () => void; onEnd: () => void; active?: boolean;
 }) {
   const toast = useToast();
   const { user } = useAuth();
@@ -458,7 +462,13 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettin
   const [levelUndo, setLevelUndo] = useState<ClockLevelSnapshot | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
+  // C10(2026-09-25) — 진행 중 블라인드 구조 수정 시트(레벨·엔트리·탈락·경과 보존).
+  const [structOpen, setStructOpen] = useState(false);
 
+  // D1(2026-09-25) — 다른 접수대의 **바인 취소**는 필터 구독에 안 온다. 지금 집계 중인 바인 id 면 삭제 알림으로도 다시 읽는다
+  //   (안 그러면 취소한 손님이 클락·TV 엔트리에 그대로 남는다).
+  const buyinIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => { buyinIdsRef.current = new Set(buyins.map((b) => b.id)); }, [buyins]);
   // 장부 연동: 연결된 세션의 바인/얼리설정 자동 반영
   // (A1) stale 가드 — 게임/세션을 빠르게 전환하면 이전 fetch 응답이 늦게 도착해 현재 값을 덮어쓰는 race 차단.
   useEffect(() => {
@@ -470,7 +480,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettin
       getLedgerSession(v, d, g).then((s) => { if (alive) setLinkedSession(s); }).catch(() => {});
     };
     load();
-    const unsub = subscribeLedger(v, load);
+    const unsub = subscribeLedger(v, load, { ownsRow: (t, id) => t === 'ledger_buyins' && buyinIdsRef.current.has(id) });
     return () => { alive = false; unsub(); };
   }, [state.venueId, state.sessionDate, state.gameSeq]);
 
@@ -520,12 +530,18 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettin
   //   그 상태에서 아무 버튼이나 누르면 `{...state, ...patch}` 전 행 upsert 라 **서버의 진행 레벨이
   //   PC 의 옛 레벨·정지 상태로 되돌아갔다.** 리모컨(ClockRemote:86)은 이미 되돌리는데 PC 만 빠져 있었다.
   //   롤백·연타 합치기·에코 무시는 부모의 저장기(onSave → createCoalescingSaver)가 맡는다(CLOCK-TAP-LAG).
+  // 🔴 C1(2026-09-25 MYSTORE-FULL-AUDIT) — 기준은 **렌더 클로저의 state 가 아니라 stateRef.current(지금 화면의 최신값)** 다.
+  //   토스트 [실행취소] 는 누른 **그 순간**의 persist 를 들고 5초 뒤에 불린다. 예전엔 그 persist 의 state 가 '정지 전'이라
+  //   정지 취소 = {running:true(원래 값과 같아 diff 없음), ends_at} → 서버엔 ends_at 만 가고 running 은 false 로 남았다(실측 P2a).
+  //   재개 취소는 prev·next 가 같아 **아무것도 안 보냈다**(P2b). 최신값을 기준으로 삼고, 같은 틱의 연속 호출도 서로를 보도록
+  //   stateRef 를 바로 갱신한다.
   const persist = useCallback((patch: Partial<ClockState>) => {
-    const prev = state;
-    const next = { ...state, ...patch };
+    const prev = stateRef.current;
+    const next = { ...prev, ...patch };
+    stateRef.current = next;
     onChange(next);
-    if (canManage) onSave({ ...next, liveStats: { ...computeLiveStats(next, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null } }, prev);
-  }, [state, canManage, onChange, onSave, derived, cfg, linkedSession]);
+    if (canManage) onSave({ ...next, liveStats: { ...computeLiveStats(next, derived, next.config), buyInAmount: linkedSession?.buyinAmount ?? null } }, prev);
+  }, [canManage, onChange, onSave, derived, linkedSession]);
 
   // 장부 변동(엔트리/리바인/얼리/바인단가) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
   // (A2) persist(수동 제어)와 이중 저장되며 경쟁하던 것을 디바운스(400ms) 단일 쓰기로 정리 + buyinAmount 키 포함.
@@ -648,13 +664,32 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettin
   // 예전엔 (1) 250ms 표시 틱의 재렌더에 얹혀 있어 장부 섹션으로 옮기면 아예 멈췄고,
   //        (2) 겨우 돌아와도 nextIndex 로 딱 1레벨만 올리며 타이머를 '전체 분'으로 리셋해
   //            밀린 레벨과 잔여 시간이 통째로 증발했다. levelCatchUp 은 endsAt 을 누적해 둘 다 막는다.
+  // 🔴 C2(2026-09-25) — 자동 전진은 **CAS 조건 쓰기**(saveClockLevel + 읽은 ends_at)다. 예전엔 persist(바뀐 칸 UPDATE, 조건 없음)라
+  //   다른 기기(리모컨·장부 리모컨)가 방금 멈춘 클락을, realtime 이 이 PC 에 닿기 전에 돈 1초 틱이 **한 칸 올려** 버렸다(실측 P10).
+  //   누가 먼저 움직였으면(정지·레벨 이동·종료) ends_at 이 달라 0행이 되고 → 서버 값을 다시 읽어 화면을 되돌린다.
+  //   장부 백업 전진자(NuriPosLedger ClockRemoteBar)와 같은 저장 함수·같은 조건이다.
   const advance = useCallback(() => {
     if (advancingRef.current) return;
-    const cu = levelCatchUp(state);
+    const s = stateRef.current;
+    const cu = levelCatchUp(s);
     if (!cu) return;
     advancingRef.current = true;
-    setTimeout(() => { advancingRef.current = false; }, 800);
-    persist(cu.patch);
+    const boundary = s.endsAt;
+    const next = { ...s, ...cu.patch };
+    stateRef.current = next;
+    onChange(next);
+    const release = () => { setTimeout(() => { advancingRef.current = false; }, 800); };
+    if (canManage) {
+      saveClockLevel(s.venueId, s.gameSeq ?? 1, {
+        currentIndex: cu.patch.currentIndex ?? s.currentIndex,
+        remainingMs: cu.patch.remainingMs ?? 0,
+        endsAt: cu.patch.endsAt ?? null,
+        ...(cu.finished && { running: false }),
+      }, boundary ?? undefined)
+        .then((n) => { if (n === 0) onReload(); })   // 누가 먼저 움직였다 — 서버 진실로
+        .catch(() => onReload())
+        .finally(release);
+    } else release();
     if (cu.finished) {
       playChime('finish');
       if (canManage && state.sessionDate) {
@@ -666,9 +701,9 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettin
     // 2레벨 이상 한 번에 넘어갔다 = 그동안 아무도 전진을 쓰지 못했다는 뜻.
     // 조용히 넘기면 업주가 "레벨이 왜 튀지" 하고 수기로 되돌려 오히려 더 어긋난다.
     if (cu.advanced > 1) {
-      toast.show(`레벨 자동 보정 · L${levelNumberAt(cfg.levels, state.currentIndex)} → L${levelNumberAt(cfg.levels, cu.toIndex)}`, 'info', { durationMs: 5000 });
+      toast.show(`레벨 자동 보정 · L${levelNumberAt(cfg.levels, s.currentIndex)} → L${levelNumberAt(cfg.levels, cu.toIndex)}`, 'info', { durationMs: 5000 });
     }
-  }, [state, persist, playChime, canManage, cfg, toast]);
+  }, [onChange, onReload, playChime, canManage, cfg, toast, state.sessionDate]);
 
   // 워치독 — active(섹션 노출)와 무관하게 running 인 동안 계속 돈다.
   // 비용: 경계를 안 지났으면 setState 를 하지 않으므로 재렌더가 0 이다(1초에 Date.now 비교 1회).
@@ -713,15 +748,20 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettin
   // 일시정지·재개는 손님 전원이 보는 화면을 그 자리에서 바꾼다(Phase 11-9 오조작 방지) —
   // 확인 다이얼로그는 정상 조작까지 느리게 하므로, 실행 직후 5초 [실행취소] 토스트를 택했다.
   const toggleRun = () => {
-    if (state.running) {
-      const frozen = Math.max(0, remaining);
+    const live = stateRef.current;
+    // C7 — 끝난 대회는 주 버튼이 비활성이다(누르면 remainingMs 0 으로 재개돼 즉시 재종료됐다). 키보드·띠 버튼도 여기서 막는다.
+    if (clockPhase(live) === 'finished') return;
+    if (live.running) {
+      // 🔴 C5(2026-09-25) — 남은 시간은 **누른 순간** 잰다. 예전엔 마지막 렌더(최대 1초 전)의 remaining 을 얼려
+      //   정지할 때마다 최대 ~1초를 손님 몰래 돌려줬다(실측 P9: 회당 +0.2~0.95s).
+      const frozen = Math.max(0, computeRemaining(live));
       persist({ running: false, remainingMs: frozen, endsAt: null });
       toast.show('클락을 일시정지했어요. 손님 화면에도 바로 반영됩니다', 'info', {
         durationMs: 5000,
         action: { label: '실행취소', onClick: () => persist({ running: true, endsAt: new Date(now() + frozen).toISOString() }) },
       });
     } else {
-      const ms = Math.max(0, state.remainingMs || remaining);
+      const ms = Math.max(0, live.remainingMs || computeRemaining(live));
       persist({ running: true, endsAt: new Date(now() + ms).toISOString() });
       toast.show('클락을 재개했어요', 'info', {
         durationMs: 5000,
@@ -880,6 +920,16 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettin
   const stageEl = useMemo(() => <ClockStage g={deferredStage} venueName={venueName} sponsor={adImg} adSize={adSize} />,
     [deferredStage, tick, venueName, adImg, adSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // C10 — 진행 중 구조 적용. 규칙 판정은 저장 **직전** 지금 시각으로 다시 한다(편집 중 레벨이 넘어갔으면 거절).
+  //   쓰기는 persist → 바뀐 칸 저장기(config 한 칸, 끝난 대회 이어 가기면 +레벨 4필드). realtime 으로 TV·리모컨·장부·라이브 탭이 다시 읽는다.
+  const applyStructure = (levels: ClockLevel[]): boolean => {
+    const r = liveStructurePatch(stateRef.current, levels);
+    if (!r.ok) { toast.show(r.error, 'error'); return false; }
+    persist(r.patch);
+    toast.show(r.resumed ? '레벨을 덧붙였습니다. [계속하기]로 이어서 진행하세요' : '블라인드 구조를 바꿨습니다. TV·리모컨에 바로 반영됩니다', 'success');
+    return true;
+  };
+
   // 초기화 — 종료(END)와 달리 설정은 유지하고 레벨·시간·인원만 처음으로 되돌림
   const resetClock = () => {
     if (!confirm('클락을 처음으로 초기화할까요? 레벨·시간·인원이 모두 초기화됩니다(설정은 유지).')) return;
@@ -903,12 +953,21 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettin
       {/* ① 주 조작 — 가장 크고, 항상 첫 화면에. 2026-09-19 오너 지시 #6 "시작이 맨 위에, 레벨을 아래로" —
           시작 버튼이 한 줄을 통째로 쓰고, 예전에 그 옆에 붙어 있던 Level 스테퍼는 아랫줄(②)로 내려간다. */}
       <button type="button" onClick={toggleRun} data-testid="clk-main-action"
-        className={['inline-flex w-full items-center justify-center gap-1.5 rounded-input px-4 py-3 text-sm font-bold transition-colors',
-          state.running ? 'bg-amber-500/90 text-ink-inverse hover:bg-amber-500' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>
+        className={['inline-flex w-full items-center justify-center gap-1.5 rounded-input px-4 py-3 text-sm font-bold transition-colors disabled:cursor-not-allowed',
+          phase === 'finished' ? 'bg-surface-high text-ink-muted' : state.running ? 'bg-amber-500/90 text-ink-inverse hover:bg-amber-500' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}
+        disabled={phase === 'finished'}
+        title={phase === 'finished' ? '마지막 레벨까지 끝났습니다. 처음부터는 ↺ 초기화, 이어서 하려면 블라인드 수정으로 레벨을 덧붙이세요' : undefined}>
         {/* 버튼 문구도 phase 에서 나온다 — '시작 전'은 [시작], 일시정지는 [계속하기], 종료는 [다시 시작].
             예전엔 running 하나로 갈라 '시작 전'과 '일시정지'가 똑같이 [시작]이었고, 바로 위 배지는 '일시정지'라 모순이었다. */}
-        <Icon name={state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{CLOCK_PHASE_ACTION[phase]}
+        <Icon name={phase === 'finished' ? 'check' : state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{CLOCK_PHASE_ACTION[phase]}
       </button>
+      {/* C7·C10 — 끝난 대회에서 할 수 있는 일을 버튼 바로 아래에 말한다(눌러도 아무 일 없는 주 버튼만 남기지 않는다). */}
+      {phase === 'finished' && (
+        <button type="button" onClick={() => setStructOpen(true)} data-testid="clk-finished-extend"
+          className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/20">
+          <Icon name="plus" size={13} className="shrink-0" />레벨 덧붙여 이어가기
+        </button>
+      )}
 
       {/* 🔴 K1(오너 2026-09-24) — 모바일(<768)은 Level · Min · Sec 를 **한 줄 3칸 격자**로 둔다(종전: Level 줄과
           Min·Sec 줄이 갈라져 67px 떨어져 있었다). 아래 지표 격자(grid-cols-3)와 같은 열·간격이라 세로로 줄이 맞는다.
@@ -1029,6 +1088,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettin
               className="btn-ghost inline-flex items-center gap-1 text-2xs px-2.5 py-1 text-accent-300"><Icon name="smartphone" size={13} className="shrink-0" />휴대폰 리모컨</button>
           )}
           <button type="button" onClick={toggleFs} className="btn-ghost text-2xs px-2.5 py-1">{fs ? '⤡ 전체화면 해제' : '⤢ 전체화면'}</button>
+          {canManage && !fs && <button type="button" onClick={() => setStructOpen(true)} data-testid="clk-edit-structure" title="진행 중에도 레벨·엔트리·탈락을 지우지 않고 앞으로 올 레벨을 고치거나 덧붙입니다" className="btn-ghost text-2xs px-2.5 py-1">블라인드 수정</button>}
           {canManage && !fs && <button type="button" onClick={onOpenSettings} className="btn-ghost text-2xs px-2.5 py-1">설정</button>}
         </div>
       </div>
@@ -1073,10 +1133,10 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettin
                 높이 12cqmin = 하단 지표 레일과 같다 — 띠가 뜨는 동안 레일을 **통째로** 덮어 반쯤 가려진 숫자가 남지 않는다. */}
             {canManage && (
               <>
-                <button type="button" onClick={toggleRun} data-testid="clk-fs-main"
-                  className={['inline-flex h-[4.2cqmin] min-h-[44px] shrink-0 items-center gap-[0.6cqmin] rounded-[1cqmin] px-[1.6cqmin] text-[1.7cqmin] font-extrabold text-ink-inverse transition-colors',
-                    state.running ? 'bg-amber-400 hover:bg-amber-300' : 'bg-emerald-400 hover:bg-emerald-300'].join(' ')}>
-                  <Icon name={state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{CLOCK_PHASE_ACTION[phase]}
+                <button type="button" onClick={toggleRun} data-testid="clk-fs-main" disabled={phase === 'finished'}
+                  className={['inline-flex h-[4.2cqmin] min-h-[44px] shrink-0 items-center gap-[0.6cqmin] rounded-[1cqmin] px-[1.6cqmin] text-[1.7cqmin] font-extrabold text-ink-inverse transition-colors disabled:cursor-not-allowed',
+                    phase === 'finished' ? 'bg-white/15 text-white/60' : state.running ? 'bg-amber-400 hover:bg-amber-300' : 'bg-emerald-400 hover:bg-emerald-300'].join(' ')}>
+                  <Icon name={phase === 'finished' ? 'check' : state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{CLOCK_PHASE_ACTION[phase]}
                 </button>
                 {[
                   { k: 'e', label: '엔트리', value: liveStats.entries, plus: () => adj('adjEntries', 1), minus: () => adj('adjEntries', -1) },
@@ -1142,6 +1202,9 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onOpenSettin
              마운트만 유지되므로(섹션 keep-alive), 숨은 상태에서 이 모달이 뜨면 화면엔 안 보이는 채
              장부 같은 긴 화면이 통째로 스크롤 불능이 되고 ESC·뒤로가기도 유령 모달이 먼저 먹는다.
              finishRows 상태는 그대로 두므로 클락 섹션으로 돌아오면 정상적으로 뜬다. */}
+      {structOpen && active && canManage && (
+        <LiveLevelsEditor state={state} onClose={() => setStructOpen(false)} onApply={applyStructure} />
+      )}
       {finishRows && state.sessionDate && active && (
         <Modal open onClose={() => { setFinishRows(null); setEndAfterFinish(false); }} title="입상 순위 입력" maxWidth="md" variant="sheet">
           <div className="space-y-2 p-4">

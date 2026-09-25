@@ -27,7 +27,8 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBu
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
   getPendingBuyinRequests, approveBuyinRequest, rejectBuyinRequest, subscribeBuyinRequests, type BuyinRequest,
   getLastClosedRound, type LastClosedRound,
-  discountsAppendOnly,
+  discountsAppendOnly, ledgerSessionMatches, cancelPwStateFromError, type LedgerRowOwner,
+  LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING,
 } from '../../api/ledger';
 import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
@@ -36,7 +37,8 @@ import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyTo
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
 import { resolveDiscountIndex } from '../../api/discountIndex';
-import { getClockState, clockHasProgress, saveClockState, saveClockPatch, createCoalescingSaver, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
+import { getClockState, clockHasProgress, saveClockState, saveClockPatch, createCoalescingSaver, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, effectiveLevel, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
+import { clockPhase } from '../../lib/clockLevel';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
@@ -208,11 +210,13 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   useEffect(() => {
     let alive = true;
     setStaffLoadError(null);
-    getMyVenueStaff()
+    // 🔴 D5(2026-09-25) — 매장을 **넘긴다**. 인자 없이 부르면 서버가 owner_id 첫 매장으로 폴백해
+    //   공동운영자·관리자에게는 직원 0명(담당 후보가 '나' 뿐)이었고, 매장을 바꿔도 앞 매장 직원이 남았다(deps 에 venueId 없음).
+    getMyVenueStaff(venueId)
       .then((s) => { if (alive) setStaff(s); })
       .catch((e: unknown) => { if (alive) setStaffLoadError(e); });
     return () => { alive = false; };
-  }, [accessTick]);
+  }, [venueId, accessTick]);
   // 금일 딜러 칩의 후보 명부 — 계정 직원(venue_staff)만으로는 **비회원 딜러가 통째로 빠진다**.
   // StaffSchedule.tsx 가 쓰는 것과 **같은 두 출처**를 합친다(명부가 두 벌이 되면 어느 화면이 맞는지 알 수 없다).
   // ⚠ 실패해도 조용히 빈 배열로 둔다 — 명부가 없으면 칩만 안 뜨고 직접 입력은 그대로다(장부를 막지 않는다).
@@ -336,8 +340,16 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       setReduceAsk(null); setSelected(null);
       toast.show('수정했습니다', 'success');
       reload();
-    } catch (e) { toast.show(msgOf(e, '수정 실패'), 'error'); }   // rpc 오류는 Error 인스턴스가 아니다 — 서버 문구를 msgOf 로 꺼낸다
+    } catch (e) { notePwFromError(e); toast.show(msgOf(e, '수정 실패'), 'error'); }   // rpc 오류는 Error 인스턴스가 아니다 — 서버 문구를 msgOf 로 꺼낸다
     finally { setPayBusy(false); }
+  };
+  // 🔴 D3(2026-09-25) — hasPw 는 보드를 열 때 **한 번** 읽은 값이었다(그것도 조회 실패를 '없음'으로 삼킨 값).
+  //   그 사이 다른 기기에서 비밀번호를 설정하면 업주 화면은 '비밀번호 없이 취소' 버튼만 내밀고 서버는 매번 거절 →
+  //   입력칸이 끝내 안 나왔다. ① 다시 보일 때 재조회 ② 서버가 비밀번호 문구로 거절하면 그 사실로 바로 고친다.
+  const refreshPw = useCallback(() => { posHasPassword(venueId).then(setHasPw).catch(() => { /* 직전 값 유지 */ }); }, [venueId]);
+  const notePwFromError = (e: unknown) => {
+    const st = cancelPwStateFromError(msgOf(e, ''));
+    if (st !== null) setHasPw(st);
   };
   // 오너 결정(2026-09-24): 비밀번호 **미설정** 매장은 업주·공동사장(canManage = can_manage_pos)만 시트 없이 저장, 직원은 막는다.
   //   비밀번호가 설정되면 업주 포함 모두 시트에서 비밀번호를 받는다. 최종 판정은 서버가 다시 한다.
@@ -353,18 +365,32 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   }, [venueId, date, gameSeq]);
   // ⚠ 내부에서 실패를 삼키면 안 된다 — reloadSession 의 Promise.all 이 이 실패를 못 본다
   //   (이미 resolve 된 것으로 보여 아래 setLoadError(null) 이 방금 실패한 재조회를 '성공'으로 지운다).
-  const loadGames = useCallback(() => getLedgerGames(venueId, date).then(setGames), [venueId, date]);
+  // 🔴 D2(2026-09-25) — 세션 재조회에도 **순번·대상 가드**를 건다(reload 에만 있었다). realtime·online·다시 보임이
+  //   재조회를 겹쳐 내는 동안 날짜·게임을 옮기면, 앞 장부의 늦은 응답이 지금 장부의 session(단가·할인·마감)을 덮었다 —
+  //   그 단가가 바로 다음 바인의 금액 스냅샷이 된다. 초기 로드도 같은 표를 올려 날아가던 재조회를 무효로 만든다.
+  const sessionReq = useRef<RequestStamp<string>>({ seq: 0, owner: '' });
+  const bumpSessionReq = useCallback((): RequestStamp<string> => {
+    const stamp = { seq: sessionReq.current.seq + 1, owner: `${venueId}|${date}|${gameSeq}` };
+    sessionReq.current = stamp;
+    return stamp;
+  }, [venueId, date, gameSeq]);
+  const loadGames = useCallback(() => getLedgerGames(venueId, date), [venueId, date]);
   // C05 보완: return 을 살려도 `.catch(() => {})` 로 실패를 삼키면 '조회 실패'와 '정상'이 구분되지 않는다
   // — 다른 접수대가 단가·할인·마감을 바꿨는데 이쪽 재조회가 실패하면 화면은 예전 값을 그대로 들고
   //   아무 표시 없이 정상처럼 보이고, 운영자는 낡은 단가로 승인·정산한다.
   // 기존 loadError 장치를 그대로 쓴다(새 상태 추가 안 함) — 렌더 쪽에서 '보여줄 데이터가 있는가'로
   // 전면 카드(초기 로드 실패)와 인라인 배너(재조회 실패, 마지막 정상 값 유지)를 가른다 — hasBoardData 참고.
-  const reloadSession = useCallback(() => Promise.all([
-    getLedgerSession(venueId, date, gameSeq),
-    loadGames(),
-  ]).then(([s]) => { setSession(s); setLoadError(null); })
-    .catch((e) => { setLoadError(e); }), // session/games 는 건드리지 않는다 — 마지막 정상 값 유지
-  [venueId, date, gameSeq, loadGames]);
+  const reloadSession = useCallback(() => {
+    const stamp = bumpSessionReq();
+    return Promise.all([
+      getLedgerSession(venueId, date, gameSeq),
+      loadGames(),
+    ]).then(([s, gs]) => {
+      if (!isFreshResponse(stamp, sessionReq.current)) return;   // 늦게 온 앞 장부 응답 — 지금 화면을 덮지 않는다
+      setSession(s); setGames(gs); setLoadError(null);
+    })
+      .catch((e) => { if (isFreshResponse(stamp, sessionReq.current)) setLoadError(e); }); // session/games 는 건드리지 않는다 — 마지막 정상 값 유지
+  }, [venueId, date, gameSeq, loadGames, bumpSessionReq]);
 
   useEffect(() => {
     // stale 응답 가드 — 날짜를 빠르게 바꾸면(예: 게임관리 '장부' 바로가기) 이전 날짜의
@@ -372,14 +398,16 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     let alive = true;
     setLoading(true);
     setLoadError(null);
-    Promise.all([getLedgerSession(venueId, date, gameSeq), getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq), posHasPassword(venueId), getLedgerGames(venueId, date)])
-      .then(([s, b, p, pw, gs]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); setHasPw(pw); setGames(gs); })
+    bumpSessionReq();   // D2 — 앞 장부로 날아가던 reloadSession 응답을 무효로
+    // D3 — 비밀번호 조회 실패는 장부를 막지 않되 '없음'으로도 바꾸지 않는다(null = 모름 → 직전 값 유지).
+    Promise.all([getLedgerSession(venueId, date, gameSeq), getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq), posHasPassword(venueId).catch(() => null), getLedgerGames(venueId, date)])
+      .then(([s, b, p, pw, gs]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); if (pw !== null) setHasPw(pw); setGames(gs); })
       // ⚠ 여기서 실패를 삼키면 '조회 실패'가 '오늘 게임 없음'이 되어 세팅 폼이 뜬다.
       //   사장님이 [시작]을 누르는 순간 진행 중이던 장부의 마감·단가·할인이 덮인다.
       .catch((e) => { if (alive) setLoadError(e); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [venueId, date, gameSeq]);
+  }, [venueId, date, gameSeq]); // eslint-disable-line react-hooks/exhaustive-deps -- bumpSessionReq 는 같은 세 값에서 파생
 
   // C05: reloadSession() 이 빠져 있었다 — 다른 접수대의 마감·단가·할인 변경이 realtime 으로 와도
   // 현재 화면의 session state 가 안 바뀌었다(loadGames 만으로는 games 목록만 갱신됨).
@@ -392,17 +420,38 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   //   부수로 두 effect 가 `setLoadError` 를 동시에 쓰면서, 초기 로드가 세운 오류를 늦게 온 성공이 지울 수 있었다.
   //   최초 마운트도 재검증하지 않는다 — 그 역시 초기 로드 effect 가 이미 한다.
   const ledgerWasActive = useRef<boolean | null>(null);
+  // 🔴 D1(2026-09-25) — 다른 접수대의 **바인 취소·플레이어 삭제**는 필터 걸린 구독에 오지 않는다(api/ledger subscribeLedger 주석).
+  //   지금 화면에 있는 행 id 를 알려 주면 필터 없는 DELETE 알림 중 내 것만 골라 재조회한다.
+  const rowIdsRef = useRef<{ b: Set<string>; p: Set<string> }>({ b: new Set(), p: new Set() });
+  useEffect(() => { rowIdsRef.current = { b: new Set(buyins.map((x) => x.id)), p: new Set(players.map((x) => x.id)) }; }, [buyins, players]);
+  const ownsRow = useCallback<LedgerRowOwner>((t, id) => (t === 'ledger_buyins' ? rowIdsRef.current.b : rowIdsRef.current.p).has(id), []);
   useEffect(() => {
     const rising = ledgerWasActive.current === false && active;
     ledgerWasActive.current = active;
     if (!active) return;
-    if (rising) { reload(); reloadSession(); }
-    return subscribeLedger(venueId, () => { reload(); reloadSession(); });
-  }, [venueId, reload, reloadSession, active]);
+    if (rising) { reload(); reloadSession(); refreshPw(); }
+    return subscribeLedger(venueId, () => { reload(); reloadSession(); }, { ownsRow });
+  }, [venueId, reload, reloadSession, active, ownsRow, refreshPw]);
+  // D3 — 창을 다시 볼 때(다른 창에서 비밀번호를 바꾸고 돌아옴) 한 번 더 확인한다.
+  useEffect(() => {
+    if (!active) return;
+    const onVis = () => { if (document.visibilityState === 'visible') refreshPw(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [active, refreshPw]);
 
   // 손님 자가 바인요청(QR) — 그날 매장 단위 대기목록 로드 + 실시간. 승인 시 현재 게임(gameSeq) 명단에 추가.
   // 실패 시 기존 목록 유지 — 빈 배열로 덮으면 '요청 0건'으로 위장돼 새벽 대기열이 증발해 보인다
-  const loadPending = useCallback(() => { getPendingBuyinRequests(venueId, date).then(setPendingReqs).catch(() => {}); }, [venueId, date]);
+  // 🔴 D8(2026-09-25) — 순번·대상 가드. 승인 직후의 낙관 제거 → 재조회가 겹칠 때, 먼저 나간(승인 전) 느린 응답이 나중에 도착해
+  //   방금 승인한 요청을 대기열에 **되살렸다**(다시 누르면 이중 승인 시도). 날짜를 옮겼을 때 앞 날짜 대기열이 남는 것도 같은 부류다.
+  const pendingReq = useRef<RequestStamp<string>>({ seq: 0, owner: '' });
+  const loadPending = useCallback(() => {
+    const stamp = { seq: pendingReq.current.seq + 1, owner: `${venueId}|${date}` };
+    pendingReq.current = stamp;
+    getPendingBuyinRequests(venueId, date)
+      .then((rs) => { if (isFreshResponse(stamp, pendingReq.current)) setPendingReqs(rs); })
+      .catch(() => {});
+  }, [venueId, date]);
   // ⚡ 위와 같은 이유로 active 게이트 — 다시 보일 때(active 상승) loadPending 이 재실행돼 놓친 대기열을 메운다.
   useEffect(() => {
     if (!active) return;
@@ -606,6 +655,30 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     setClock(next);
     clockSaver.push(next, cur);
   }, [clock, buyins, session, clockSaver]);
+
+  /** D2 — 기록 직전: 들고 있는 세션이 지금 화면의 장부(매장·날짜·게임) 것인가. 아니면 저장하지 않고 다시 읽는다. */
+  const sessionFitsBoard = (): boolean => {
+    if (ledgerSessionMatches(session, venueId, date, gameSeq)) return true;
+    toast.show('장부 정보를 다시 불러오는 중이라 기록을 멈췄습니다. 잠시 뒤 다시 눌러 주세요', 'error');
+    void reloadSession();
+    return false;
+  };
+
+  /** 20260925f — 서버 금액 규칙이 hint 로 거절한 바인 쓰기를 쉬운 말로 안내하고 장부를 다시 읽는다. 아는 hint 가 아니면 false. */
+  const noteServerAmountHint = (e: unknown): boolean => {
+    if (!(e instanceof Error)) return false;
+    if (e.message === LEDGER_SPLIT_MISMATCH) {
+      toast.show('참가비나 할인이 방금 바뀌어 분납 합계가 맞지 않습니다. 최신 장부를 다시 불러왔으니 금액을 확인하고 다시 기록해 주세요', 'error', { durationMs: 7000 });
+      void reloadSession();   // 모달은 열어 둔다 — 새 단가로 다시 나누면 된다
+      return true;
+    }
+    if (e.message === LEDGER_SESSION_MISSING) {
+      toast.show('이 게임의 장부가 없습니다(삭제됐거나 아직 열리지 않음). 장부에서 게임을 먼저 열어 주세요', 'error', { durationMs: 7000 });
+      setSelected(null); void reloadSession(); reload();
+      return true;
+    }
+    return false;
+  };
 
   const closed = session.closed;
 
@@ -1038,7 +1111,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       // 원자 RPC — 예전 순차 삭제는 중간 실패 시 '바인 2건만 사라진' 반쪽 장부를 남겼다
       await deleteLedgerPlayerAtomic(p.id, password);
       toast.show('플레이어를 삭제했습니다', 'info'); setEditPlayer(null); reload();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패(비밀번호 확인)', 'error'); }
+    } catch (e) { notePwFromError(e); toast.show(e instanceof Error ? e.message : '삭제 실패(비밀번호 확인)', 'error'); }
   };
 
   // ── 게임(세션) 리스트 — 장부 진입 첫 화면 ──────────────────────────────────
@@ -1075,8 +1148,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-2xs text-ink-muted">{hasRange ? `${filterFrom || '처음'} ~ ${filterTo || '오늘'}` : '기간 설정 시 그 범위만'}</span>
-            <button type="button" onClick={() => { setFilterFrom(shiftDays(todayStr, -6)); setFilterTo(todayStr); }} className="px-1.5 py-1.5 -my-1.5 text-2xs font-semibold text-accent-200/90 hover:text-accent-200">최근 7일</button>
-            <button type="button" onClick={() => { setFilterFrom(todayStr.slice(0, 7) + '-01'); setFilterTo(todayStr); }} className="px-1.5 py-1.5 -my-1.5 text-2xs font-semibold text-accent-200/90 hover:text-accent-200">이번 달</button>
+            {/* #7(2026-09-25) — accent-200/90 은 라이트에서 remap(html.light .text-accent-200)을 못 받는 알파 변형이라 대비가 떨어졌다. 알파 없는 토큰으로. */}
+            <button type="button" onClick={() => { setFilterFrom(shiftDays(todayStr, -6)); setFilterTo(todayStr); }} className="px-1.5 py-1.5 -my-1.5 text-2xs font-semibold text-accent-200 hover:underline">최근 7일</button>
+            <button type="button" onClick={() => { setFilterFrom(todayStr.slice(0, 7) + '-01'); setFilterTo(todayStr); }} className="px-1.5 py-1.5 -my-1.5 text-2xs font-semibold text-accent-200 hover:underline">이번 달</button>
             {hasRange && <button type="button" onClick={() => { setFilterFrom(''); setFilterTo(''); }} className="text-2xs text-ink-muted hover:text-ink-secondary ml-auto">전체 보기</button>}
           </div>
         </div>
@@ -1128,7 +1202,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                               className={['flex items-center transition-colors', canOpen ? 'hover:bg-surface-high/40' : ''].join(' ')}>
                             <button type="button" disabled={!canOpen} onClick={() => canOpen && openBoard(s.sessionDate, s.gameSeq)}
                               className={['flex-1 min-w-0 flex items-center gap-2.5 px-3 py-2.5 text-left', canOpen ? '' : 'opacity-50 cursor-not-allowed'].join(' ')}>
-                              <span className={['shrink-0 text-2xs font-bold px-1.5 py-0.5 rounded-badge border', s.gameSeq === MAIN_GAME_SEQ ? 'bg-surface-float text-ink-muted border-border-default' : 'bg-accent-300/15 text-accent-300 border-accent-400/40'].join(' ')}>{gl(s.gameSeq)}</span>
+                              <span className={['shrink-0 text-2xs font-bold px-1.5 py-0.5 rounded-badge border', s.gameSeq === MAIN_GAME_SEQ ? 'bg-surface-float text-ink-secondary border-border-default' : 'bg-accent-300/15 text-accent-300 border-accent-400/40'].join(' ')}>{gl(s.gameSeq)}</span>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-bold text-ink-primary truncate">{s.title || '게임'}</p>
                                 <p className="text-2xs text-ink-muted truncate">바인 {s.buyinAmount.toLocaleString()}원{s.operators.length > 0 ? ` · 담당 ${operFull(s.operators[0])}${s.operators.length > 1 ? ` 외 ${s.operators.length - 1}` : ''}` : ''}{canOpen ? '' : ' · 접근 권한 없음'}</p>
@@ -1305,17 +1379,18 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                 <div className="flex items-center gap-1.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold text-ink-primary truncate">{r.playerName}
-                      {r.requestedGameSeq != null && <span className="ml-1.5 text-2xs font-semibold text-sky-300">원함: {r.requestedGameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (r.requestedGameSeq - 1)}</span>}
+                      {/* #7(2026-09-25) — 하늘색 요청 카드 위 라이트 대비: sky-300(remap #0369A1) 4.3 · ink-muted 3.9 → 한 단계 진하게 */}
+                      {r.requestedGameSeq != null && <span className="ml-1.5 text-2xs font-semibold text-sky-800 dark:text-sky-300">원함: {r.requestedGameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (r.requestedGameSeq - 1)}</span>}
                     </p>
-                    {r.note && <p className="text-2xs text-ink-muted truncate">{r.note}</p>}
+                    {r.note && <p className="text-2xs text-ink-secondary truncate">{r.note}</p>}
                   </div>
                   {/* 이용권 요청은 서버가 '티켓 완납' 바인을 자동 기록(무료입장 정합) — 💵 유료 패널은
                       승인해도 서버가 금액을 버리므로(20260623d #9) 숨겨서 '기록됐다고 믿는' 사고를 없앤다 */}
                   {r.voucherId == null && (
                     <button type="button" onClick={() => setPayPick(payPick === r.id ? null : r.id)} title="승인 + 바인 1건 기록(결제수단 선택)" className={['shrink-0 inline-flex h-10 items-center rounded-input px-2.5 text-2xs font-bold', payPick === r.id ? 'bg-emerald-600 text-ink-inverse' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500', 'gap-0.5'].join(' ')}>✓+<Icon name="banknote" size={13} className="shrink-0" /></button>
                   )}
-                  <button type="button" onClick={() => approveReq(r)} title={r.voucherId ? '승인(이용권 1장 → 티켓 바인 자동 기록)' : '승인만(명단 추가)'} className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">{r.voucherId ? '✓ 승인·티켓' : '승인'}</button>
-                  <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-input border px-2.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-muted hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
+                  <button type="button" onClick={() => approveReq(r)} title={r.voucherId ? '승인(이용권 1장 → 티켓 바인 자동 기록)' : '승인만(명단 추가)'} className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/10">{r.voucherId ? '✓ 승인·티켓' : '승인'}</button>
+                  <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-input border px-2.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-secondary hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
                 </div>
                 {payPick === r.id && (
                   <div className="mt-1.5 border-t border-border-subtle pt-1.5 space-y-1.5">
@@ -1374,7 +1449,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
 
       {/* 클락 리모컨 — 이 장부에 연결된 클락을 장부에서 바로 제어(레벨± · 일시정지/재개) */}
       {clockLinked && clock && !closed && (
-        <ClockRemoteBar clock={clock} onPatch={patchClock} active={active} onOpenClock={onOpenClock ? () => onOpenClock(date, gameSeq) : undefined} />
+        <ClockRemoteBar clock={clock} onPatch={patchClock} onReload={reloadClock} active={active} onOpenClock={onOpenClock ? () => onOpenClock(date, gameSeq) : undefined} />
       )}
 
       {closed && (
@@ -1485,8 +1560,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {/* 검색 + 유저 추가 */}
       {!closed && (
         <div className="space-y-1.5">
-          <div className="flex gap-1.5">
-            <div className="relative flex-1">
+          {/* #6(2026-09-25, 390 실측) — 한 줄에 검색·정렬 3칸·[+ 유저 추가]를 욱여넣어 검색칸 글자 공간이 37px('플레이' 만 보임)였다.
+              sm 미만은 검색이 첫 줄을 통째로 쓰고 정렬·추가가 다음 줄로 간다. sm 이상은 종전 한 줄 그대로. */}
+          <div className="flex flex-wrap gap-1.5 sm:flex-nowrap">
+            <div className="relative min-w-0 flex-1 max-sm:basis-full">
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="플레이어 검색"
                 className="input w-full text-sm pl-8" />
               <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -1499,7 +1576,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               value={sortBy} onChange={setSortBy} />
             {regClosed
               ? <span className="shrink-0 self-center text-2xs font-bold text-danger-light px-2">레지 마감</span>
-              : <button type="button" onClick={() => { if (!addOpen && query.trim()) setNewName(query.trim()); setAddOpen((v) => !v); }} className="btn-primary text-xs px-3 shrink-0">+ 유저 추가</button>}
+              : <button type="button" onClick={() => { if (!addOpen && query.trim()) setNewName(query.trim()); setAddOpen((v) => !v); }} className="btn-primary text-xs px-3 shrink-0 max-sm:ml-auto">+ 유저 추가</button>}
           </div>
 
           {addOpen && !regClosed && (
@@ -1587,8 +1664,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                   <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-default">{i + 1}바인</th>
                 ))}
                 <th className="sticky top-0 z-30 bg-surface-high min-w-[4rem] max-w-[10rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
-                <th className="sticky right-[4rem] top-0 z-40 bg-surface-high w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)]">총바인</th>
-                <th className="sticky right-0 top-0 z-40 bg-surface-high w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default">미수</th>
+                {/* #6(2026-09-25, 390 실측) — 왼쪽 No·플레이어(≈150px) + 오른쪽 총바인·미수(2×68px)가 모두 붙박이라 바인 칸이 **반 칸**(≈30px)만 보였다.
+                    sm 미만은 오른쪽 두 열을 가로로 함께 흐르게 둔다(머리행의 세로 고정 top-0 은 유지). sm 이상은 종전 그대로. */}
+                <th className="sticky right-[4rem] top-0 z-40 bg-surface-high w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
+                <th className="sticky right-0 top-0 z-40 bg-surface-high w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default max-sm:right-auto">미수</th>
               </tr>
             </thead>
             <tbody>
@@ -1647,7 +1726,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                                 className={['w-full h-full rounded-input border-2 flex flex-col items-center justify-center leading-none', tone, closed ? 'cursor-default' : 'cell-hover'].join(' ')}>
                                 <span className="text-[11px] font-extrabold">{topLabel}{c.discountIndex > 0 ? '*' : ''}</span>
                                 {sub
-                                  ? <span className={['text-[10px] font-bold leading-none mt-0.5', et !== 'none' ? 'text-amber-300' : 'text-accent-200'].join(' ')}>{sub}</span>
+                                  // #13(2026-09-25) — '더블얼리 · −23.46만' 처럼 두 줄로 접히면 leading-none(1.0)이라 줄끼리 맞닿았다 → 1.15.
+                                  ? <span className={['text-[10px] font-bold leading-[1.15] mt-0.5', et !== 'none' ? 'text-amber-300' : 'text-accent-200'].join(' ')}>{sub}</span>
                                   : <span className="text-[10px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>}
                               </button>
                             </td>
@@ -1665,15 +1745,16 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                       })}
 
                       <td className="min-w-[4rem] max-w-[10rem] px-1 py-1 border-b border-l border-border-default text-left">
+                        {/* 2026-09-25 감사: '비고 +' 버튼이 160×15.9 — 행(h-12 ≈ 51px) 안에서 44px 히트 영역을 준다(행 높이는 그대로). */}
                         {first && r.player ? (
-                          <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)} className="w-full text-left text-2xs disabled:cursor-default">
+                          <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)} className="flex min-h-[44px] w-full items-center text-left text-2xs disabled:cursor-default">
                             {r.player.note
                               ? <span className="text-ink-secondary line-clamp-2 whitespace-pre-wrap break-words">{r.player.note}</span>
                               : <span className="text-accent-200 font-semibold">{closed ? '—' : '비고 +'}</span>}
                           </button>
                         ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
                       </td>
-                      <td className="sticky right-[4rem] z-10 bg-surface-low w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-1 border-b border-l border-border-default border-l-border-strong text-2xs tabular-nums text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)]">
+                      <td className="sticky right-[4rem] z-10 bg-surface-low w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-1 border-b border-l border-border-default border-l-border-strong text-2xs tabular-nums text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:static max-sm:shadow-none">
                         {first && r.player ? (
                           // 리바인 원탭 — 다음 '+' 셀은 가로 스크롤 밖(6~9열)에 있기 일쑤. 항상 보이는
                           // sticky 셀에서 바로 다음 회차 결제 모달을 연다('직전과 동일'과 짝)
@@ -1693,7 +1774,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                           </span>
                         ) : ''}
                       </td>
-                      <td className="sticky right-0 z-10 bg-surface-low w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-1 border-b border-l border-border-default text-2xs tabular-nums text-left text-danger-light">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
+                      <td className="sticky right-0 z-10 bg-surface-low w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-1 border-b border-l border-border-default text-2xs tabular-nums text-left text-danger-light max-sm:static">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
                     </tr>
                   );
                 });
@@ -1787,6 +1868,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
           busy={payBusy}
           onPick={async (method, isUnpaid, discountIndex) => {
             if (payBusy) return; // 더블탭 → 이중 기록·이용권 이중 적립 방지
+            if (!sessionFitsBoard()) return;
             const pn = selected.playerName; const isNew = !selected.buyin;
             // 신규 첫 바인(entryNo=1)만 클락 현재 레벨로 얼리 확정. 2번째+는 리바인이라 얼리 없음.
             const eo = (isNew && selected.entryNo === 1) ? clockEarlyNow() : (selected.buyin?.earlyOverride ?? null);
@@ -1810,11 +1892,13 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             } catch (e) {
               if (e instanceof Error && e.message === REDUCE_NEEDS_PW) await askReducePw(save);
               else if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 바꿨어요', 'info'); setSelected(null); reload(); }
+              else if (noteServerAmountHint(e)) { /* 20260925f hint — 안내·재조회는 위에서 */ }
               else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
             } finally { setPayBusy(false); }
           }}
           onPickSplit={async (d) => {
             if (payBusy) return;
+            if (!sessionFitsBoard()) return;
             const pn = selected.playerName; const isNew = !selected.buyin;
             const before = selected.buyin;
             const save = (pw?: string) => upsertBuyinSplit({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, ...d, earlyOverride: (isNew && selected.entryNo === 1) ? clockEarlyNow() : undefined, existingId: before?.id ?? null,
@@ -1834,13 +1918,17 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             } catch (e) {
               if (e instanceof Error && e.message === REDUCE_NEEDS_PW) await askReducePw(save);
               else if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 바꿨어요', 'info'); setSelected(null); reload(); }
+              else if (noteServerAmountHint(e)) { /* 20260925f hint — 안내·재조회는 위에서 */ }
               else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
             } finally { setPayBusy(false); }
           }}
           onCancelBuyin={async (pw) => {
-            if (!selected.buyin) return;
+            // 🔴 D9(2026-09-25) — 확정 연타 가드. 예전엔 busy 가 없어 두 번째 탭이 이미 지운 행을 다시 지우려다 '권한/없음' 오류 토스트를 띄웠다.
+            if (!selected.buyin || payBusy) return;
+            setPayBusy(true);
             try { await cancelBuyin(selected.buyin.id, pw); toast.show('바인을 취소했습니다', 'info'); setSelected(null); reload(); }
-            catch (e) { toast.show(msgOf(e, '취소 실패'), 'error'); }
+            catch (e) { notePwFromError(e); toast.show(msgOf(e, '취소 실패'), 'error'); }
+            finally { setPayBusy(false); }
           }}
           onSetEarly={async (override) => {
             if (!selected.buyin) return;
@@ -1891,8 +1979,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
 
 // ── 클락 리모컨 바 — 장부 화면에서 레벨±·일시정지/재개. 클락 화면이 닫혀 있어도 제어 가능 ──
 // (저장 → clock_states upsert → 열려 있는 클락/라이브 보드는 realtime 구독으로 즉시 반영)
-function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
-  clock: ClockState; onPatch: (p: Partial<ClockState>) => void; onOpenClock?: () => void; active?: boolean;
+function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }: {
+  clock: ClockState; onPatch: (p: Partial<ClockState>) => void; onReload: () => void; onOpenClock?: () => void; active?: boolean;
 }) {
   const [, tick] = useReducer((x: number) => x + 1, 0);
   useEffect(() => {
@@ -1915,6 +2003,8 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
   // 로컬 화면은 realtime 구독이 갱신하므로 낙관 갱신을 하지 않고, 같은 경계는 한 번만 쓴다.
   const remoteRef = useRef(clock);
   useEffect(() => { remoteRef.current = clock; });
+  const onReloadRef = useRef(onReload);
+  useEffect(() => { onReloadRef.current = onReload; });
   const wroteForRef = useRef<string | null>(null);
   useEffect(() => {
     if (!clock.running) return;
@@ -1932,7 +2022,10 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
         remainingMs: cu.patch.remainingMs ?? 0,
         endsAt: cu.patch.endsAt ?? null,
         ...(cu.finished && { running: false }),
-      }, boundary).catch(() => {   // CAS — 다른 기기가 정지·전진시켰으면 이 쓰기는 0행이 된다
+      }, boundary).then((n) => {
+        // C2(2026-09-25) — 0행 = 다른 기기가 먼저 움직였다(CAS). 예전엔 이 사실을 몰라 realtime 이 안 오면 화면이 옛 경계에 머물렀다.
+        if (n === 0) onReloadRef.current();
+      }).catch(() => {   // CAS — 다른 기기가 정지·전진시켰으면 이 쓰기는 0행이 된다
         // 쓰기가 한 번 실패했다고 이 레벨 경계를 영구 포기하면(wroteForRef 가 그대로 남으면)
         // 대회장 와이파이가 잠깐 끊긴 것만으로 레벨이 영영 안 넘어간다 → 다음 틱에 재시도하게 푼다.
         if (wroteForRef.current === boundary) wroteForRef.current = null;
@@ -1969,12 +2062,18 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
     setLevelUndo(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
   };
+  // C7 — 끝난 대회(마지막 레벨 소진)는 재개 버튼이 비활성이다. 예전엔 여기만 마지막 레벨을 **통째로 다시** 돌렸다(다른 화면은 즉시 재종료).
+  //   이어서 하려면 클락 화면의 [블라인드 수정]으로 레벨을 덧붙인다.
+  const finished = clockPhase(clock) === 'finished';
   const toggle = () => {
+    if (finished) return;
+    // 🔴 C5(2026-09-25) — 누른 순간의 실효 레벨·잔여로 커밋한다(렌더는 1초 틱이라 최대 1초 낡았다).
+    const at = effectiveLevel(clock, Date.now());
     if (clock.running) {
-      onPatch({ currentIndex: idx, running: false, remainingMs: rem, endsAt: null });
+      onPatch({ currentIndex: at.index, running: false, remainingMs: Math.max(0, at.remainingMs), endsAt: null });
     } else {
-      const ms = rem > 0 ? rem : (lv[idx].minutes || 0) * 60_000;
-      onPatch({ currentIndex: idx, running: true, remainingMs: ms, endsAt: new Date(Date.now() + ms).toISOString() });
+      const ms = at.remainingMs > 0 ? at.remainingMs : (lv[at.index].minutes || 0) * 60_000;
+      onPatch({ currentIndex: at.index, running: true, remainingMs: ms, endsAt: new Date(Date.now() + ms).toISOString() });
     }
   };
   const ctl = 'w-10 h-10 shrink-0 rounded-input border text-base font-extrabold flex items-center justify-center transition-colors';
@@ -2016,9 +2115,9 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
         </button>
         <button type="button" onClick={() => go(-1)} disabled={idx <= 0} aria-label="이전 레벨"
           className={`${ctl} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>‹</button>
-        <button type="button" onClick={toggle} aria-label={clock.running ? '일시정지' : '재개'}
-          className={`${ctl} ${clock.running ? 'border-accent-400/50 bg-accent-300/15 text-accent-300' : 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'}`}>
-          <Icon name={clock.running ? 'pause' : 'play'} size={16} />
+        <button type="button" onClick={toggle} disabled={finished} aria-label={finished ? '대회 종료' : clock.running ? '일시정지' : '재개'}
+          className={`${ctl} ${finished ? 'border-border-default text-ink-muted disabled:opacity-50' : clock.running ? 'border-accent-400/50 bg-accent-300/15 text-accent-300' : 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'}`}>
+          <Icon name={finished ? 'check' : clock.running ? 'pause' : 'play'} size={16} />
         </button>
         <button type="button" onClick={() => go(1)} disabled={idx >= lv.length - 1} aria-label="다음 레벨"
           className={`${ctl} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>›</button>
@@ -2050,7 +2149,7 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
       {/* 3행: 보정 스테퍼 — 얼리(수기 가감). 클락이 자동 집계한 값에 ± */}
       <div className="flex items-center gap-2 rounded-input bg-surface-base/40 px-2.5 py-1.5">
         <span className="text-2xs font-semibold text-ink-muted shrink-0">얼리 보정</span>
-        <span className="text-2xs text-ink-muted/70">자동 {earlyAuto}{(clock.adjEarlies ?? 0) !== 0 ? ` ${(clock.adjEarlies ?? 0) > 0 ? '+' : ''}${clock.adjEarlies}` : ''}</span>
+        <span className="text-2xs text-ink-muted">자동 {earlyAuto}{(clock.adjEarlies ?? 0) !== 0 ? ` ${(clock.adjEarlies ?? 0) > 0 ? '+' : ''}${clock.adjEarlies}` : ''}</span>
         <span className="flex-1" />
         <button type="button" onClick={() => adjEarly(-1)} aria-label="얼리 −1" className={stepBtn}>−</button>
         {/* 2026-09-14: w-7(29.75px)에 3자리("321")가 "32 / 1" 두 줄로 떨어졌다(엔트리 1,238 규모 대회). */}
@@ -2719,7 +2818,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <fieldset key={i} disabled={rowLocked} className="flex items-center gap-1.5">
               <span className="w-9 shrink-0 text-2xs font-bold text-accent-300">할인{i + 1}</span>
               <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input min-w-0 flex-1 text-sm" />
-              <div className="relative w-20 shrink-0">
+              {/* #11(2026-09-25) — w-20 에 '23.4567' 이 글자 공간 45px 에 57px 로 잘렸다(끝자리가 안 보여 금액을 잘못 읽는다) → w-24. */}
+              <div className="relative w-24 shrink-0">
                 <input type="number" inputMode="decimal" step="0.1" min="0" max={minUnit > 0 ? minUnit / WON_PER_MAN : undefined} value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="금액" aria-invalid={badDisc === i}
                   className={['input w-full pr-6 text-sm tabular-nums', badDisc === i ? 'border-danger text-danger-light' : ''].join(' ')} />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
@@ -3152,7 +3252,8 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                       <span className="block text-2xs font-semibold opacity-70 tabular-nums">
                         {/* 티켓은 자리 1개 = (단가−할인)/1만 T — 10만 게임 10T, 5만 할인이면 5T.
                             ⚠ TICKET_WON 을 쓴다 — 만원 환산 상수(WON_PER_MAN)와 값이 같다고 섞으면 T 표시가 조용히 틀어진다. */}
-                        {due === null ? `${Math.max(0, session.buyinAmount - discWon) / TICKET_WON}T` : `${wonToMan(due)}만`}{discIdx > 0 ? ' ·할인' : ''}
+                        {/* #9(2026-09-25) — 5만5,555원 같은 단가가 5.5555T 로 소수 넷째 자리까지 나왔다. 장부 바·정산과 같은 1자리. */}
+                        {due === null ? `${(Math.max(0, session.buyinAmount - discWon) / TICKET_WON).toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : `${wonToMan(due)}만`}{discIdx > 0 ? ' ·할인' : ''}
                       </span>
                     </button>
                   );
@@ -3257,8 +3358,9 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                 </button>
               ) : (
                 <div className="space-y-1.5">
-                  <p className="text-2xs text-ink-muted">취소하려면 업주 비밀번호를 입력하세요.</p>
-                  <PwConfirm hasPw={hasPw} ownerNoPw={canManage} label="취소 확정" onConfirm={onCancelBuyin} />
+                  {/* D9 — 비밀번호 미설정 매장의 업주에게 '비밀번호를 입력하세요' 라고 말하면서 입력칸이 없는 모순을 없앤다. */}
+                  <p className="text-2xs text-ink-muted">{!hasPw && canManage ? '취소 비밀번호가 설정되지 않은 매장이라 비밀번호 없이 취소됩니다.' : '취소하려면 업주 비밀번호를 입력하세요.'}</p>
+                  <PwConfirm hasPw={hasPw} ownerNoPw={canManage} label="취소 확정" busy={busy} onConfirm={onCancelBuyin} />
                 </div>
               )}
             </div>
@@ -3495,8 +3597,9 @@ function DeleteSessionModal({ label, loss, lossErr, busy, onClose, onConfirm }: 
         <p className="text-2xs text-ink-muted">마감은 해제할 수 있지만 삭제는 복구 불가. 보관만 원하면 마감을 쓰세요.</p>
         <div className="flex gap-2">
           <button type="button" onClick={onClose} disabled={busy} className="btn-ghost text-sm flex-1 disabled:opacity-50">취소</button>
+          {/* #8(2026-09-25) — btn-danger 기본색(246,70,93) 위 흰 글자 3.5:1. 되돌릴 수 없는 버튼이라 글자가 확실히 읽혀야 한다 → 한 단계 진한 빨강. */}
           <HoldToConfirmButton onConfirm={onConfirm} disabled={busy || (!loss && !lossErr)}
-            className="btn-danger text-sm flex-1 disabled:opacity-50">
+            className="btn-danger !bg-rose-700 hover:!bg-rose-800 text-sm flex-1 disabled:opacity-50">
             {busy ? '삭제 중…' : '꾹 눌러 영구 삭제'}
           </HoldToConfirmButton>
         </div>
@@ -3507,9 +3610,16 @@ function DeleteSessionModal({ label, loss, lossErr, busy, onClose, onConfirm }: 
 
 function SummaryStat({ label, value, tone }: { label: string; value: string; tone?: 'emerald' | 'danger' }) {
   const c = tone === 'emerald' ? 'text-emerald-400' : tone === 'danger' ? 'text-danger-light' : 'text-ink-primary';
+  // #4(2026-09-25) — '8,887.38만원' 이 98px 칸에서 '8,887.38만 / 원' 두 줄로 쪼개졌다(1440 정산 마감 모달 실측).
+  //   단위(만원·건·명·회)는 작게 떼고 줄바꿈을 막는다. 숫자가 길면(7자+) 한 단계 작게 — 칸 폭은 그대로다.
+  const m = /^(.*?)([가-힣]+)$/.exec(value);
+  const num = m ? m[1] : value;
+  const unit = m ? m[2] : '';
   return (
     <div className="rounded-input bg-surface-low border border-border-subtle py-2 text-center">
-      <p className={['text-base font-extrabold tabular-nums', c].join(' ')}>{value}</p>
+      <p className={['whitespace-nowrap font-extrabold tabular-nums leading-6', num.length >= 7 ? 'text-sm' : 'text-base', c].join(' ')}>
+        {num}{unit && <span className="ml-px text-2xs font-bold">{unit}</span>}
+      </p>
       <p className="text-2xs text-ink-muted mt-0.5">{label}</p>
     </div>
   );

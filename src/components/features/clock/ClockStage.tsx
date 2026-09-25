@@ -60,6 +60,9 @@ function elapsedMs(s: ClockState, index: number, remaining: number): number {
  *  2026-09-19 오너 지시 #1 "생존/엔트리, 리바이, 얼리, 등록마감 전부 영어로" — 보드의 지표·시간 라벨은 전부 영문 대문자다
  *  (종전 "영문은 ANTE 하나만" 규칙을 이 지시가 뒤집었다). 손님 안내문(QR 캡션)과 대회명·매장명은 데이터라 그대로다. */
 const LABEL = 'font-bold uppercase tracking-[0.14em]';
+/** #12(2026-09-25) — 지표·블라인드 라벨 글자 크기. TV(짧은 변 1080 = 16.2px)는 그대로이고, 운영자 미리보기(짧은 변 320 = 4.8px)에서만
+ *  9px 하한이 걸린다. 값(숫자)은 이미 clamp 하한(18~24px)이 있었고 라벨만 하한이 없어 '무엇의 숫자인지' 가 사라졌다. */
+const LABEL_SIZE = 'text-[length:max(9px,1.5cqmin)]';
 const DIM = { color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' } as const;
 const SOFT = { color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' } as const;
 
@@ -117,6 +120,26 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
     showAddon && { k: 'addon', label: 'ADDON', v: ls.addons ?? 0 },
     showEarly && { k: 'early', label: 'EARLY', v: ls.earlies ?? 0 },
   ].filter(Boolean) as { k: string; label: string; v: number }[];
+
+  /** 지표 레일 — 가로 보드는 우측 열(clk-rails), 세로 보드는 하단 띠(clk-rails-band)에 **같은 조각**을 꽂는다(#1, 2026-09-25).
+   *  세로 TV(1080×1920)는 .clk-col 이 숨어 생존/엔트리·리바이·애드온/얼리·바인·Reg Close 가 통째로 없었다. */
+  const rails = (
+    <>
+      <Rail label="Players / Entries" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
+      {/* 리바이는 **자기 줄**(레퍼런스 보드와 같다). 애드온·얼리만 아래 한 줄로 묶는다.
+          줄을 무한정 늘리지 않는 이유는 그대로다: 이 열은 세로로 꽉 차 있어 줄이 늘면 clamp 가
+          글자를 줄이고, 10m 거리에서 가장 중요한 '생존 / 엔트리'까지 같이 작아진다(2026-09-11 사고).
+          그래서 늘리는 줄은 **하나**로 묶고, 그 안에서 각 값이 제 라벨을 갖는다. */}
+      {showRebuy && <Rail label="Rebuy" value={(ls.rebuys ?? 0).toLocaleString()} />}
+      {addonEarly.length > 0 && <GroupRail items={addonEarly} />}
+      {buyIn > 0 && <Rail label="Buy-in" value={buyIn.toLocaleString()} />}
+      {/* 2026-09-11: 총 칩·평균 스택은 **하단 레일**로 내렸다(아래 BottomMetrics).
+          우측 열에 7줄이 몰려 글자가 작아지는 동안 화면 하단 중앙이 통째로 비어 있었다 —
+          레퍼런스 보드처럼 '칩 경제'는 아래 가로줄, '사람 수'는 오른쪽 세로줄로 나눈다. */}
+      {/* 초당 갱신이 필요한 줄은 별도 컴포넌트에 가둔다 — 여기서 틱을 돌리면 화면 전체가 매초 다시 그려진다 */}
+      <TimeRails g={g} regLevel={regLevel} />
+    </>
+  );
 
   return (
     <>
@@ -192,20 +215,16 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
 
             {/* 우 — 지표 세로 레일. 라벨 작게 위, 숫자 크게 아래(레퍼런스 공통 문법). */}
             <aside data-testid="clk-rails" className="clk-col min-h-0 flex-col justify-center gap-[1.5cqmin]">
-              <Rail label="Players / Entries" value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} lead />
-              {/* 리바이는 **자기 줄**(레퍼런스 보드와 같다). 애드온·얼리만 아래 한 줄로 묶는다.
-                  줄을 무한정 늘리지 않는 이유는 그대로다: 이 열은 세로로 꽉 차 있어 줄이 늘면 clamp 가
-                  글자를 줄이고, 10m 거리에서 가장 중요한 '생존 / 엔트리'까지 같이 작아진다(2026-09-11 사고).
-                  그래서 늘리는 줄은 **하나**로 묶고, 그 안에서 각 값이 제 라벨을 갖는다. */}
-              {showRebuy && <Rail label="Rebuy" value={(ls.rebuys ?? 0).toLocaleString()} />}
-              {addonEarly.length > 0 && <GroupRail items={addonEarly} />}
-              {buyIn > 0 && <Rail label="Buy-in" value={buyIn.toLocaleString()} />}
-              {/* 2026-09-11: 총 칩·평균 스택은 **하단 레일**로 내렸다(아래 BottomMetrics).
-                  우측 열에 7줄이 몰려 글자가 작아지는 동안 화면 하단 중앙이 통째로 비어 있었다 —
-                  레퍼런스 보드처럼 '칩 경제'는 아래 가로줄, '사람 수'는 오른쪽 세로줄로 나눈다. */}
-              {/* 초당 갱신이 필요한 줄은 별도 컴포넌트에 가둔다 — 여기서 틱을 돌리면 화면 전체가 매초 다시 그려진다 */}
-              <TimeRails g={g} regLevel={regLevel} />
+              {rails}
             </aside>
+          </div>
+
+          {/* 🔴 #1(2026-09-25 MYSTORE-FULL-AUDIT) — 세로 보드(세로 TV·세로 폰)의 지표 띠. 예전엔 여기 '좁은 폭 보조 줄'(Reg Close · Next Break)만 있었고
+              지표 레일(생존/엔트리·리바이·애드온/얼리·바인)은 .clk-col 과 함께 통째로 숨었다. Next Break 는 하단 레일과 **두 번** 나왔다(1080×1920 실측).
+              이제 레일 조각 전부를 여기 격자로 편다 — Reg Close 는 레일 안(TimeRails), Next Break 는 하단 레일에 한 번씩만 있다.
+              본문(clk-cols) 밖이라 타이머의 '본문 세로 중앙' 계약(clock-board.spec)은 그대로다. */}
+          <div data-testid="clk-rails-band" className="clk-narrow-only shrink-0 grid-cols-[repeat(auto-fit,minmax(28cqmin,1fr))] items-end gap-x-[3cqmin] gap-y-[1cqmin] border-t border-white/[0.06] px-[3cqmin] py-[1.4cqmin]">
+            {rails}
           </div>
 
           {/* ── 하단 — QR · 스폰서 · Powered by. 지표가 우측 열로 올라가서 이 줄은 보조만 남는다. ── */}
@@ -236,10 +255,6 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
             </div>
           </div>
 
-          {/* 모바일 폭(세로 폰 관전) — 우측 보조가 숨으니 레지·휴식만 아래에 한 줄 */}
-          <div className="clk-narrow-only shrink-0 grid-cols-2 gap-[1.2cqmin] border-t border-white/[0.06] px-[3cqmin] py-[1.4cqmin]">
-            <HeaderTimes g={g} regLevel={regLevel} compact />
-          </div>
     </>
   );
 }
@@ -393,6 +408,7 @@ function PausedLabel({ g }: { g: ClockState }) {
  * data-testid clk-level 은 e2e 앵커(clock-catchup 이 숫자를 읽는다) — 자리는 옮겼어도 id 는 유지한다.
  */
 function LevelLine({ g }: { g: ClockState }) {
+  useSecondTick();   // C4 — 아래 주석(useSecondTick) 참고: DB 쓰기 없이 레벨 경계를 지나도 매초 실효 레벨을 다시 읽는다
   const lvls = g.config?.levels ?? [];
   const eff = effectiveLevel(g);
   const isBreak = lvls[eff.index]?.kind === 'break';
@@ -402,6 +418,18 @@ function LevelLine({ g }: { g: ClockState }) {
       {isBreak ? 'BREAK' : `LEVEL ${levelNumberAt(lvls, eff.index)}`}
     </p>
   );
+}
+
+/**
+ * 1초 틱 — 🔴 C4(2026-09-25 MYSTORE-FULL-AUDIT, 실측 P1).
+ * 매장 TV(ClockDisplay)는 clock_states 가 **바뀔 때만** g 를 새로 받는다. 레벨 경계는 시간이 시키는 일이라
+ * 아무도 DB 를 안 쓰는 동안(운영자 PC 가 닫혀 있거나 워치독 1초 사이)에도 지나간다. 그때 타이머(CenterPanel, 자체 틱)는
+ * 다음 레벨 시간으로 넘어갔는데 LEVEL 줄과 CURRENT|NEXT 는 **옛 레벨**을 그렸다 — 최대 30초(TV 폴링 주기).
+ * 운영자 미리보기는 부모가 매초 다시 그려서 드러나지 않았다. 실효 레벨을 쓰는 칸은 각자 초 틱을 가진다(부모 전체 리렌더 0).
+ */
+function useSecondTick(): void {
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
 }
 
 /**
@@ -462,7 +490,7 @@ function BottomMetrics({ g, curBB }: { g: ClockState; curBB: number }) {
   //   숫자는 어떤 폭에서도 한 줄이어야 한다 — 줄이 바뀌면 자릿수를 잘못 읽는다.
   const cell = (label: string, value: string, sub?: string, tone?: string) => (
     <div className="min-w-0 text-center">
-      <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>{label}</p>
+      <p className={`${LABEL} ${LABEL_SIZE} whitespace-nowrap`} style={SOFT}>{label}</p>
       <p className="mt-[0.2cqmin] whitespace-nowrap leading-none">
         <span className="font-extrabold tabular-nums" style={{ fontSize: 'clamp(18px, 3.4cqmin, 70px)', color: tone ?? '#FFFFFF' }}>{value}</span>
         {sub && <span className="ml-[0.8cqmin] text-[1.7cqmin] font-semibold tabular-nums" style={DIM}>{sub}</span>}
@@ -477,41 +505,6 @@ function BottomMetrics({ g, curBB }: { g: ClockState; curBB: number }) {
       {/* 휴식이 없는 구성이면 칸을 만들지 않는다 — 빈 '—' 로 자리를 채우지 않는다 */}
       {brk !== null && cell('Next Break', hms(brk), undefined, 'var(--clk-timer-break, #7dd3fc)')}
     </div>
-  );
-}
-
-/**
- * HeaderTimes — 레지 마감 · 휴식까지 중 **지금 더 중요한 하나**만 상태 바 우측에 둔다.
- * (둘 다 띄우면 상태 바가 정보 나열이 된다 — 우선순위: 등록 마감이 남아 있으면 그것, 아니면 다음 휴식.)
- * 초당 틱은 여기 안에만(부모 리렌더 0). compact = 모바일 폭 하단 한 줄.
- */
-function HeaderTimes({ g, regLevel, compact }: { g: ClockState; regLevel: number; compact?: boolean }) {
-  const [, setTick] = useState(0);
-  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
-  const eff = effectiveLevel(g);
-  const reg = regLevel > 0 ? msToRegClose(g, eff.index, eff.remainingMs) : null;
-  const brk = msToNextBreak(g, eff.index, eff.remainingMs);
-  const regText = reg === null ? null : reg === 0 ? 'CLOSED' : `Lv ${regLevel} · ${hms(reg)}`;
-  if (compact) {
-    return (
-      <>
-        <MiniStat label="Reg Close" value={regText ?? '—'} tone={reg === 0 ? 'rose' : undefined} />
-        <MiniStat label="Next Break" value={brk === null ? '—' : hms(brk)} tone={brk === null ? undefined : 'rose'} />
-      </>
-    );
-  }
-  // 등록 마감이 아직 남아 있으면 그게 더 급하다. 마감됐거나 없으면 다음 휴식을 보여준다.
-  const show: { label: string; text: string; urgent: boolean } | null =
-    regText !== null && reg !== 0 ? { label: 'Reg Close', text: regText, urgent: false }
-      : brk !== null ? { label: 'Next Break', text: hms(brk), urgent: false }
-        : regText !== null ? { label: 'Reg', text: regText, urgent: true }
-          : null;
-  if (!show) return null;
-  return (
-    <p className="clk-wide-only shrink-0 text-right">
-      <span className={`${LABEL} block text-[1.3cqmin]`} style={DIM}>{show.label}</span>
-      <span className={`text-[2.1cqmin] font-extrabold tabular-nums ${show.urgent ? 'text-rose-400' : 'text-white'}`}>{show.text}</span>
-    </p>
   );
 }
 
@@ -578,6 +571,7 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
  * 브레이크 중에는 CURRENT 자리에 BREAK 를, NEXT 자리에 다음 레벨을 둔다.
  */
 const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
+  useSecondTick();   // C4 — memo 라 부모 리렌더도 안 탄다. 틱이 없으면 TV 가 다음 폴링(최대 30초)까지 옛 블라인드를 보였다.
   const lvls = g.config?.levels ?? [];
   const eff = effectiveLevel(g);
   const lv = lvls[eff.index];
@@ -620,7 +614,7 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
           맨 텍스트로 두고(§8 "불필요한 카드 박스가 없는 넓은 TV 레이아웃") 구분은 크기·색으로만 한다.
           가운데 세로 헤어라인 하나로 CURRENT|NEXT 를 가른다 — 면이 아니라 선이라 프레임과 싸우지 않는다. */}
       <div className="row-span-3 grid grid-rows-subgrid items-end justify-items-center border-r border-white/[0.07] px-[2cqmin]">
-        <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>{isBreak ? 'BREAK' : 'CURRENT'}</p>
+        <p className={`${LABEL} ${LABEL_SIZE}`} style={SOFT}>{isBreak ? 'BREAK' : 'CURRENT'}</p>
         {isBreak ? (
           <p className="whitespace-nowrap font-extrabold leading-none" style={{ fontSize: 'clamp(24px, 6.4cqmin, 108px)', color: 'var(--clk-timer-break, #7dd3fc)' }}>
             {lv?.label || 'BREAK'}
@@ -648,7 +642,7 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
 
       {/* NEXT — 한 단계 어둡고 작게 */}
       <div className="row-span-3 grid grid-rows-subgrid items-end justify-items-center px-[2cqmin]">
-        <p className={`${LABEL} text-[1.5cqmin]`} style={DIM}>NEXT</p>
+        <p className={`${LABEL} ${LABEL_SIZE}`} style={DIM}>NEXT</p>
         {next ? (
           <>
             <p data-testid="clk-next-blinds" className="whitespace-nowrap font-extrabold leading-none tabular-nums text-white/75"
@@ -678,7 +672,7 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
 function Rail({ label, value, sub, lead, danger }: { label: string; value: string; sub?: string; lead?: boolean; danger?: boolean }) {
   return (
     <div className="min-w-0 border-b border-white/[0.07] pb-[1.1cqmin] last:border-b-0">
-      <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>{label}</p>
+      <p className={`${LABEL} ${LABEL_SIZE} whitespace-nowrap`} style={SOFT}>{label}</p>
       <p className="mt-[0.2cqmin] flex items-baseline gap-[0.6cqmin] leading-none">
         <span className="font-extrabold tabular-nums"
           style={{ fontSize: lead ? 'clamp(24px, 5.4cqmin, 92px)' : 'clamp(18px, 3.6cqmin, 60px)',
@@ -698,7 +692,7 @@ function GroupRail({ items }: { items: { k: string; label: string; v: number }[]
       <div className="flex items-end gap-[1.6cqmin]">
         {items.map((it) => (
           <div key={it.k} className="min-w-0 flex-1">
-            <p className={`${LABEL} text-[1.5cqmin]`} style={SOFT}>{it.label}</p>
+            <p className={`${LABEL} ${LABEL_SIZE} whitespace-nowrap`} style={SOFT}>{it.label}</p>
             <p className="mt-[0.2cqmin] font-extrabold tabular-nums leading-none text-white"
                style={{ fontSize: `clamp(15px, ${size}, 48px)` }}>{it.v.toLocaleString()}</p>
           </div>
@@ -708,11 +702,3 @@ function GroupRail({ items }: { items: { k: string; label: string; v: number }[]
   );
 }
 
-function MiniStat({ label, value, tone }: { label: string; value: string; tone?: 'rose' }) {
-  return (
-    <div className="text-center">
-      <p className={`${LABEL} text-[1.4cqmin]`} style={DIM}>{label}</p>
-      <p className={`mt-[0.4cqmin] font-extrabold tabular-nums leading-none ${tone === 'rose' ? 'text-rose-400' : 'text-white'}`} style={{ fontSize: 'clamp(16px, 3.2cqmin, 48px)' }}>{value}</p>
-    </div>
-  );
-}

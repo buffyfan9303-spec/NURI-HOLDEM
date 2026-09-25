@@ -67,7 +67,8 @@ describe('배선 — 클락 보드가 그 한 곳을 실제로 부른다(2026-09
   // 왜 이 파일인가: 03cd8bb 이후 TV·운영자 보드의 단일 마크업이 ClockStage 다 — 손님 앞 TV 의 '등록 마감' 레일과 미니 보드 둘 다 여기서 그린다.
   it('🔴 ClockStage.tsx: import 1회 · regLevel > 0 게이트 뒤에 실효 index/remaining 으로 2회(레일·미니 보드) 부른다', () => {
     expect(count(stage, IMPORT)).toBe(1);
-    expect(count(stage, /const reg = regLevel > 0 \? msToRegClose\(g, eff\.index, eff\.remainingMs\) : null;/)).toBe(2);
+    // 2026-09-25 #1: 미니 보드(HeaderTimes)를 지웠다 — 세로 보드도 지표 레일(TimeRails)의 Reg Close 한 곳으로 말한다.
+    expect(count(stage, /const reg = regLevel > 0 \? msToRegClose\(g, eff\.index, eff\.remainingMs\) : null;/)).toBe(1);
     expect(count(stage, DEF), '상류 사본(F2 가드 없는 msToRegClose)이 되살아났다 — 마감 레벨을 비운 대회가 TV 에서 "마감" 이 된다').toBe(0);
   });
 
@@ -166,7 +167,9 @@ describe('배선 — 클락 보드가 그 한 곳을 실제로 부른다(2026-09
   //   반대로 이 예외를 없애려면(보드를 다시 한글로) 오너에게 먼저 물어라. 아래 계약이 지키는 것은 어휘가 아니라
   //   **분기 구조**(null 을 먼저 거른다)이며, 리터럴은 그 화면의 어휘를 따른다.
   it('🔴 ClockStage.tsx: null 은 "CLOSED" 가 아니다 — 미니 보드 `reg === null ? null : reg === 0 ? \'CLOSED\'` 1회 · 레일 `reg === 0 ? \'CLOSED\'` 1회', () => {
-    expect(count(stage, /const regText = reg === null \? null : reg === 0 \? 'CLOSED'/)).toBe(1);
+    // 2026-09-25 #1: 미니 보드(HeaderTimes)를 지웠다(세로 보드도 지표 레일이 나온다) — 남은 것은 레일 한 곳이다.
+    expect(count(stage, /const regText = reg === null \? null : reg === 0 \? 'CLOSED'/)).toBe(0);
+    expect(count(stage, /\{reg !== null && \(/), '레일이 reg === null 을 건너뛰지 않는다').toBe(1);
     expect(count(stage, /value=\{reg === 0 \? 'CLOSED' : hms\(reg\)\}/)).toBe(1);
     expect(count(stage, /reg === null \? 'CLOSED'|reg == null \? 'CLOSED'/), 'null 을 마감으로 그린다').toBe(0);
   });

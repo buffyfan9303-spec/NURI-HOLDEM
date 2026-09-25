@@ -58,7 +58,8 @@ describe('클락 상태 파생 — 다섯 상태가 실제로 갈린다', () => 
   it('마지막 레벨이 0 으로 끝나면 "종료"', () => {
     const s = base({ currentIndex: 3, remainingMs: 0, running: false, endsAt: null });
     expect(clockPhase(s, NOW)).toBe('finished');
-    expect(CLOCK_PHASE_ACTION[clockPhase(s, NOW)]).toBe('다시 시작');
+    // C7(2026-09-25): 종료 버튼은 누를 게 없다 — '다시 시작'(누르면 즉시 재종료)을 '대회 종료'(비활성)로 바꿨다.
+    expect(CLOCK_PHASE_ACTION[clockPhase(s, NOW)]).toBe('대회 종료');
   });
 
   it('🔴 running=true 는 어떤 경우에도 PAUSED 로 표시되지 않는다', () => {

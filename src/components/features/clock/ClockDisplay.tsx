@@ -72,7 +72,15 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   const gamesRef = useRef<ClockState[]>([]);
 
   // ⚠ 실패 시 setClocks([]) 로 비우면 순간 끊김 한 번에 매장 TV 가 통째로 빈 화면이 된다 — 마지막 상태를 유지한다.
-  const load = () => getVenueClocks(venueId).then(setClocks).catch(() => setClocks((cur) => cur ?? []));
+  // 🔴 C6(2026-09-25, 실측 P7) — 재조회는 realtime·30초 폴링·화면 복귀 세 곳에서 겹쳐 나간다. 먼저 나간 느린 응답이
+  //   나중에 도착하면 **옛 값이 마지막에 남았다**(생존 6 → 7 로 되돌아감). 가장 최근 요청의 응답만 화면에 쓴다.
+  const loadSeqRef = useRef(0);
+  const load = () => {
+    const my = ++loadSeqRef.current;
+    return getVenueClocks(venueId)
+      .then((cs) => { if (my === loadSeqRef.current) setClocks(cs); })
+      .catch(() => { if (my === loadSeqRef.current) setClocks((cur) => cur ?? []); });
+  };
   useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => subscribeClock(venueId, load), [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   // 실시간 구독이 조용히 끊기면(대회장 와이파이) 복구 수단이 없었다 — 30초 폴링 + 복귀 재조회.

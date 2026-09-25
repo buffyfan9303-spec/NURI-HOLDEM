@@ -154,9 +154,14 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
   // (C03, 2026-09-12) 표시는 effectiveLevel(state) 인데 STOP 이 remainingMs 만 패치하고
   // currentIndex 는 그대로 두면, 드리프트(endsAt 경과) 상태에서 정지할 때 '옛 레벨 번호 + 새 레벨의 남은 시간'
   // 이라는 불일치 행이 저장됐다 — 같은 now·같은 실효 인덱스(eff.index)로 커밋한다.
+  // 🔴 C5(2026-09-25) — 정지 순간의 잔여는 **누른 순간** 다시 잰다(렌더는 1초 틱이라 최대 1초 낡았다 → 정지마다 손님 몰래 시간이 늘었다).
+  // C7 — 끝난 대회는 START 가 비활성이다(remainingMs 0 으로 재개되면 운영자 워치독이 즉시 다시 종료시킨다).
+  const finished = clockPhase(state) === 'finished';
   const toggleRun = () => {
-    if (state.running) persist({ running: false, currentIndex: eff.index, remainingMs: Math.max(0, remaining), endsAt: null });
-    else { const ms = Math.max(0, state.remainingMs || remaining); persist({ running: true, endsAt: new Date(nowMs() + ms).toISOString() }); }
+    if (finished) return;
+    const at = effectiveLevel(state, nowMs());
+    if (state.running) persist({ running: false, currentIndex: at.index, remainingMs: Math.max(0, at.remainingMs), endsAt: null });
+    else { const ms = Math.max(0, state.remainingMs || at.remainingMs); persist({ running: true, endsAt: new Date(nowMs() + ms).toISOString() }); }
   };
   // levelMovePatch 의 계약(api/clock.ts levelMovePatch 주석)은 '실효 인덱스'를 요구한다 —
   // raw state.currentIndex 를 넘기면 드리프트된 클락에서 엉뚱한 레벨을 기준으로 이동했다.
@@ -196,10 +201,10 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
       {/* 1행: START/STOP 크게 + 레벨 이전/다음 */}
       <div className="grid grid-cols-[1fr_2fr_1fr] gap-2">
         <Big label="이전 레벨" icon="chevron-left" onClick={() => moveLevel(-1)} disabled={disabled || state.currentIndex <= 0} />
-        <button type="button" onClick={toggleRun} disabled={disabled}
+        <button type="button" onClick={toggleRun} disabled={disabled || finished}
           className={['flex h-20 flex-col items-center justify-center gap-1 rounded-aura text-base font-extrabold text-ink-inverse transition-transform active:scale-[0.97] disabled:opacity-40',
-            state.running ? 'bg-amber-400' : 'bg-emerald-400'].join(' ')}>
-          <Icon name={state.running ? 'pause' : 'play'} size={26} />{state.running ? 'STOP' : 'START'}
+            finished ? 'bg-surface-high text-ink-muted' : state.running ? 'bg-amber-400' : 'bg-emerald-400'].join(' ')}>
+          <Icon name={finished ? 'check' : state.running ? 'pause' : 'play'} size={26} />{finished ? '대회 종료' : state.running ? 'STOP' : 'START'}
         </button>
         <Big label="다음 레벨" icon="chevron-right" onClick={() => moveLevel(1)} disabled={disabled || state.currentIndex >= lvls.length - 1} />
       </div>

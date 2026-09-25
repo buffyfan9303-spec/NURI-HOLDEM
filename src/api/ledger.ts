@@ -335,6 +335,21 @@ export function isRevenueReduction(before: LedgerBuyin, after: LedgerBuyin,
 /** 서버가 감액 수정을 비밀번호 없이 받지 않았다(또는 클라가 미리 감액으로 판정했다) — 호출측이 비밀번호를 묻는다.
  *  값은 서버 가드 트리거의 hint 와 같다(20260924j). */
 export const REDUCE_NEEDS_PW = 'LEDGER_REDUCE_NEEDS_PASSWORD';
+/** 20260925f — 서버 금액 규칙(_ledger_buyin_apply_amount_rule)이 거절할 때의 hint. 화면이 알아듣고 장부를 다시 읽는다.
+ *  · SPLIT_MISMATCH: 분납 합계 ≠ (단가 − 할인) — 다른 접수대가 단가·할인을 바꿨거나 낡은 세션으로 찍으려 했다.
+ *  · SESSION_MISSING: 이 게임의 장부 행이 없다(삭제됐거나 아직 안 열렸다). */
+export const LEDGER_SPLIT_MISMATCH = 'LEDGER_SPLIT_MISMATCH';
+export const LEDGER_SESSION_MISSING = 'LEDGER_SESSION_MISSING';
+const BUYIN_WRITE_HINTS = new Set([REDUCE_NEEDS_PW, LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING]);
+/** 바인 INSERT/UPDATE 오류를 화면이 가를 수 있는 Error 로 — 23505 는 CELL_TAKEN, 아는 서버 hint 는 그 이름이 message 다.
+ *  예전엔 `error.message` 만 실어 서버가 hint 로 말한 사유를 화면이 못 알아들었다(그저 빨간 토스트). */
+export function buyinWriteError(e: { code?: string; hint?: unknown; message?: string } | null | undefined): Error {
+  if (e instanceof Error && !(e as { hint?: unknown }).hint) return e;
+  if (e?.code === '23505') return new Error(CELL_TAKEN, { cause: e });
+  const hint = typeof e?.hint === 'string' ? e.hint : '';
+  if (BUYIN_WRITE_HINTS.has(hint)) return new Error(hint, { cause: e });
+  return new Error(e?.message || '저장 실패', { cause: e });
+}
 
 /** 기록 수정 필드(snake) — upsertBuyin/upsertBuyinSplit 가 만든 것 */
 type BuyinFields = {
@@ -373,8 +388,7 @@ async function updateBuyinFields(id: string, fields: BuyinFields, guard?: Reduce
     // 수정은 id 기반 UPDATE — 0행(RLS·다른 기기가 방금 취소)을 성공으로 돌려주면 모달이 닫히고 옛 값이 남는다(현금 기록).
     await mustAffect(supabase.from('ledger_buyins').update(fields).eq('id', id));
   } catch (e) {
-    if ((e as { hint?: string } | null)?.hint === REDUCE_NEEDS_PW) throw new Error(REDUCE_NEEDS_PW, { cause: e });
-    throw e;
+    throw buyinWriteError(e as { code?: string; hint?: unknown; message?: string });
   }
 }
 
@@ -1234,7 +1248,7 @@ export async function upsertBuyin(input: {
     ...fields,
     created_by: user?.id ?? null, // buyin_at 은 DB default now() — 기록 시각의 단일 출처
   }).select('id').single();
-  if (error) throw new Error(error.code === '23505' ? CELL_TAKEN : error.message);
+  if (error) throw buyinWriteError(error);
   return (data as { id: string }).id;
 }
 
@@ -1283,7 +1297,7 @@ export async function upsertBuyinSplit(input: {
     ...fields,
     created_by: user?.id ?? null,
   }).select('id').single();
-  if (error) throw new Error(error.code === '23505' ? CELL_TAKEN : error.message);
+  if (error) throw buyinWriteError(error);
   return (data as { id: string }).id;
 }
 
@@ -1302,9 +1316,25 @@ export async function cancelBuyin(id: string, password: string): Promise<void> {
 }
 
 // ── 실시간 동기화 (바이인 + 명단) ─────────────────────────────────────────────
-export function subscribeLedger(venueId: string, onChange: () => void): () => void {
+/** 삭제 알림을 받을지 가르는 판정 — 이 화면이 **지금 들고 있는** 행인가. */
+export type LedgerRowOwner = (table: 'ledger_buyins' | 'ledger_players', id: string) => boolean;
+
+/**
+ * 장부 변경 구독.
+ *
+ * 🔴 D1(오너 2026-09-25 MYSTORE-FULL-AUDIT) — **filter 를 건 postgres_changes 는 DELETE 를 못 받는다**(Supabase 문서:
+ *   "Delete events are not filterable"). 그래서 venue 필터만 걸어 둔 이 구독은 다른 접수대의 **바인 취소·플레이어 삭제**를
+ *   통째로 놓쳤다 — 옆 창구에서 취소한 칸이 이 화면에는 그대로 남아, 그 칸을 다시 누르면 없는 행을 고치게 된다.
+ *   RLS 테이블의 DELETE 알림은 old 에 **기본키만** 싣는다. 그래서 필터 없는 DELETE 를 따로 듣고,
+ *   · ledger_sessions — 기본키가 (venue_id, session_date, game_seq) 라 venue 를 바로 대조한다.
+ *   · ledger_buyins / ledger_players — 기본키가 id 뿐이다. 호출부가 넘긴 `ownsRow`(지금 화면에 있는 id 인가)로 거른다.
+ *     ownsRow 를 안 넘긴 호출부는 종전과 같다(삭제 알림을 안 받는다 — 과구독 0).
+ *   과구독 비용(실측 2026-09-25, pg_stat_user_tables 누적): 전 매장 합계 DELETE 가 buyins 112 · players 30 · sessions 5건 —
+ *   열린 장부 화면 수만큼 곱해도 무료 한도(월 200만 메시지)에 비해 무시할 크기라 필터 없는 DELETE 구독을 택했다.
+ */
+export function subscribeLedger(venueId: string, onChange: () => void, opts?: { ownsRow?: LedgerRowOwner }): () => void {
   if (IS_MOCK) return () => {};
-  const ch = supabase
+  let ch = supabase
     .channel(`ledger:${venueId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'ledger_buyins', filter: `venue_id=eq.${venueId}` },
@@ -1315,8 +1345,40 @@ export function subscribeLedger(venueId: string, onChange: () => void): () => vo
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'ledger_sessions', filter: `venue_id=eq.${venueId}` },
       () => onChange())
-    .subscribe();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ledger_sessions' }, (p: any) => {
+      if (p?.old?.venue_id === venueId) onChange();
+    });
+  const owns = opts?.ownsRow;
+  if (owns) {
+    for (const table of ['ledger_buyins', 'ledger_players'] as const) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ch = ch.on('postgres_changes', { event: 'DELETE', schema: 'public', table }, (p: any) => {
+        const id = p?.old?.id;
+        if (typeof id === 'string' && owns(table, id)) onChange();
+      });
+    }
+  }
+  ch.subscribe();
   return () => { supabase.removeChannel(ch); };
+}
+
+/** D2(2026-09-25) — 지금 들고 있는 세션이 **지금 화면의 장부**(매장·날짜·게임)의 것인가.
+ *  단가·할인은 세션에서 읽어 바인 금액 스냅샷으로 저장된다. 날짜·게임을 옮기는 사이 늦게 도착한 앞 장부 세션이 남아 있으면
+ *  메인 단가로 사이드 바인을 찍는 식의 **조용한 금액 오류**가 된다 — 기록 직전에 이 값으로 막는다. */
+export function ledgerSessionMatches(
+  s: Pick<LedgerSession, 'venueId' | 'sessionDate' | 'gameSeq'>, venueId: string, date: string, gameSeq: number,
+): boolean {
+  return s.venueId === venueId && s.sessionDate === date && (s.gameSeq ?? MAIN_GAME_SEQ) === gameSeq;
+}
+
+/** D3(2026-09-25) — 서버 오류 문구로 '이 매장에 취소 비밀번호가 있는가'를 되짚는다. 모르면 null.
+ *  화면의 hasPw 는 보드를 열 때 한 번 읽은 값이라, 그 사이 다른 기기에서 비밀번호를 설정·해제하면 어긋난다
+ *  (예: 비밀번호가 생겼는데 화면은 '비밀번호 없이 취소' 버튼 → 서버가 거절 → 입력칸이 영영 안 나온다). */
+export function cancelPwStateFromError(message: string): boolean | null {
+  if (/비밀번호가 올바르지 않습니다|업주 취소 비밀번호가 필요합니다/.test(message)) return true;
+  if (/취소 비밀번호가 설정되지 않았습니다|취소 비밀번호가 설정되지 않은 매장/.test(message)) return false;
+  return null;
 }
 
 // ── 손님 자가 바인(참가) 요청 — QR(?buyin=<venueId>) ───────────────────────────
@@ -1447,7 +1509,10 @@ export function subscribeMyBuyinRequests(userId: string, cb: () => void): () => 
 // ── 취소 비밀번호 ─────────────────────────────────────────────────────────────
 export async function posHasPassword(venueId: string): Promise<boolean> {
   if (IS_MOCK) return false;
-  const { data } = await supabase.rpc('pos_has_password', { p_venue_id: venueId });
+  // D3(2026-09-25): 예전엔 error 를 버려 **조회 실패 = '비밀번호 없음'** 이 됐다. 그러면 비밀번호가 있는 매장에서도
+  //   업주 화면이 '비밀번호 없이 취소' 버튼을 내밀고 서버가 매번 거절했다. 실패는 실패로 올려 호출부가 직전 값을 지킨다.
+  const { data, error } = await supabase.rpc('pos_has_password', { p_venue_id: venueId });
+  if (error) throw error;
   return !!data;
 }
 export async function setPosCancelPassword(venueId: string, password: string): Promise<void> {

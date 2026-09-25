@@ -76,7 +76,8 @@ describe('배선 — 소비처가 그 한 곳을 실제로 부른다(2026-09-13 
     // 2026-09-19: CLOCK_PHASE_TV 는 상태 알약과 함께 보드에서 빠졌다(오너 지시 #9) — clockPhase 는 일시정지 타이머 색에 남는다.
     expect(count(stage, /^import \{ clockPhase, gameLabel, levelNumberAt, msToNextBreak \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
     expect(count(stage, /\blevelNumberAt\(lvls, eff\.index\)/)).toBe(1);
-    expect(count(stage, /\bmsToNextBreak\(g, eff\.index, eff\.remainingMs\)/)).toBe(2);
+    // 2026-09-25 #1: 세로 보드의 '미니 보드'(HeaderTimes compact)를 지웠다 — Next Break 가 하단 레일과 두 번 나왔다. 하단 레일 한 곳뿐이다.
+    expect(count(stage, /\bmsToNextBreak\(g, eff\.index, eff\.remainingMs\)/)).toBe(1);
     expect(count(stage, DEF_LNA), '상류 사본(levelNumberAt)이 되살아났다').toBe(0);
     expect(count(stage, DEF_MTB), '상류 사본(msToNextBreak)이 되살아났다').toBe(0);
   });

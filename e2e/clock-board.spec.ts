@@ -42,13 +42,15 @@ async function geometry(page: Page) {
     const header = stage.querySelector('header')!;
     const metrics = stage.querySelector('.clk-metrics')!;
     const bottom = metrics.parentElement!;
+    // 2026-09-25 #1: 세로 보드는 지표 레일 띠(clk-rails-band)가 본문과 하단 레일 사이에 선다 — 보이면 그 윗변이 '본문 아래'다(가로 보드는 display:none · h 0).
+    const band = stage.querySelector('[data-testid="clk-rails-band"]');
     const level = document.querySelector('[data-testid="clk-level"]')!;
     const bar = stage.querySelector('[role="progressbar"]')!;
     const cur = Array.from(stage.querySelectorAll('p')).find((p) => p.textContent === 'CURRENT')!;
     const nxt = Array.from(stage.querySelectorAll('p')).find((p) => p.textContent === 'NEXT')!;
     const headerText = header.textContent ?? '';
     return {
-      stage: r(stage)!, header: r(header)!, bottom: r(bottom)!, metrics: r(metrics)!,
+      stage: r(stage)!, header: r(header)!, bottom: r(bottom)!, band: r(band), metrics: r(metrics)!,
       timer: r(timer)!, level: { text: level.textContent ?? '', ...r(level)!, radius: getComputedStyle(level).borderRadius, border: getComputedStyle(level).borderTopWidth },
       bar: r(bar)!, cur: r(cur)!, nxt: r(nxt)!, headerText,
       cells: Array.from(metrics.children).map((c) => r(c)!),
@@ -59,7 +61,7 @@ async function geometry(page: Page) {
 async function checkBoard(page: Page, tag: string) {
   const g = await geometry(page);
   const bodyTop = g.header.y + g.header.h;
-  const bodyBottom = g.bottom.y;
+  const bodyBottom = g.band && g.band.h > 0 ? g.band.y : g.bottom.y;
   const bodyCy = (bodyTop + bodyBottom) / 2;
   console.log(`[clock-board ${tag}]`, JSON.stringify({
     stageCx: g.stage.cx, metricsCx: g.metrics.cx, bodyCy, timerCy: g.timer.cy, level: g.level.text, levelH: g.level.h, curY: g.cur.y, nxtY: g.nxt.y, barBottom: g.bar.y + g.bar.h,
@@ -118,8 +120,10 @@ test.describe('클락 보드 — 2026-09-19 오너 10건(픽셀 계약)', () => 
       expect(c.x, '하단 셀이 왼쪽으로 잘린다').toBeGreaterThanOrEqual(0);
       expect(c.x + c.w, '하단 셀이 오른쪽으로 잘린다').toBeLessThanOrEqual(1080);
     }
-    // 세로에서도 타이머는 본문 중앙
-    const bodyCy = (g.header.y + g.header.h + g.bottom.y) / 2;
+    // 세로에서도 타이머는 본문 중앙 — 본문 아래는 지표 띠(#1, 2026-09-25)의 윗변이다. 띠 자체도 잘리지 않아야 한다.
+    expect(g.band && g.band.h > 0, '세로 보드에 지표 띠(생존/엔트리·리바이·바인·Reg Close)가 없다').toBe(true);
+    expect(g.band!.y + g.band!.h, '지표 띠가 하단 레일과 겹친다').toBeLessThanOrEqual(g.bottom.y + 1);
+    const bodyCy = (g.header.y + g.header.h + g.band!.y) / 2;
     expect(Math.abs(g.timer.cy - bodyCy)).toBeLessThanOrEqual(3);
   });
 
