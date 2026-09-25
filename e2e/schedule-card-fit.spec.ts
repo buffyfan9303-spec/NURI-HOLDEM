@@ -678,6 +678,8 @@ for (const w of [360, 390, 412, 1024, 1280, 1440]) {
     await mockAll(page, external, ROWS_E);
     await openHome(page, w, 'dark', false);
     await page.waitForSelector('main[data-tab="browse"] article.cv-card-list', { timeout: 10_000 });
+    // 글자 폭을 재기 전에 웹폰트가 확정되게 한다(리눅스 CI 에서 대체 폰트로 재 9억 금액이 두 줄로 잡혔다).
+    await page.evaluate(() => document.fonts.ready);
 
     const r = await page.evaluate(() => {
       const cards = [...document.querySelectorAll<HTMLElement>('main[data-tab="browse"] article.cv-card-list')]

@@ -924,8 +924,8 @@ function TimetableCard({
         aria-label={`${gtd ? `보장 상금 ${gtd}` : `${kind.text}(보장 없음)`}, 참가비 ${buyInText(schedule.buyIn?.amount)}`}
         className="flex w-[5.125rem] min-w-0 flex-col items-end justify-center gap-y-[3px] self-stretch border-l border-border-subtle pl-2 text-right">
         {gtd ? (
-          <span data-testid="schedule-prize" className="break-keep text-[0.8125rem] font-extrabold
- leading-tight tracking-tight tabular-nums text-gold-300">{gtd}</span>
+          <span data-testid="schedule-prize" className={`break-keep ${gtd.includes('억') ? 'text-[0.75rem]' : 'text-[0.8125rem]'} font-extrabold
+ leading-tight tracking-tight tabular-nums text-gold-300`}>{gtd}</span>
         ) : (
           <span data-testid="schedule-daily" data-kind={kind.text} className={`text-[0.8125rem] font-extrabold leading-tight ${kind.cls}`}>{kind.text}</span>
         )}
