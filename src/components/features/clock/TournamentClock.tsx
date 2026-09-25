@@ -37,6 +37,7 @@ import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTh
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { isStaleResponse, type RequestStamp } from '../../../lib/staleResponse';
+import { createBackoff } from '../../../lib/retryBackoff';
 import QRCode from 'qrcode';
 import Icon from '../../atoms/Icon';
 import ClockThemePanel from './ClockThemePanel';
@@ -668,8 +669,11 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   //   다른 기기(리모컨·장부 리모컨)가 방금 멈춘 클락을, realtime 이 이 PC 에 닿기 전에 돈 1초 틱이 **한 칸 올려** 버렸다(실측 P10).
   //   누가 먼저 움직였으면(정지·레벨 이동·종료) ends_at 이 달라 0행이 되고 → 서버 값을 다시 읽어 화면을 되돌린다.
   //   장부 백업 전진자(NuriPosLedger ClockRemoteBar)와 같은 저장 함수·같은 조건이다.
+  // #7(FULL-RECHECK-2/C) — 저장이 네트워크 오류로 실패하면 다음 1초 틱이 같은 CAS 쓰기를 또 보냈다(끝난 클락 실측 31회/10초).
+  //   실패가 이어지면 1·2·4…30초로 간격을 벌린다. 성공(0행 포함)하면 바로 1초 주기로 돌아온다.
+  const advanceBackoffRef = useRef(createBackoff());
   const advance = useCallback(() => {
-    if (advancingRef.current) return;
+    if (advancingRef.current || advanceBackoffRef.current.blocked()) return;
     const s = stateRef.current;
     const cu = levelCatchUp(s);
     if (!cu) return;
@@ -686,8 +690,8 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
         endsAt: cu.patch.endsAt ?? null,
         ...(cu.finished && { running: false }),
       }, boundary ?? undefined)
-        .then((n) => { if (n === 0) onReload(); })   // 누가 먼저 움직였다 — 서버 진실로
-        .catch(() => onReload())
+        .then((n) => { advanceBackoffRef.current.ok(); if (n === 0) onReload(); })   // 누가 먼저 움직였다 — 서버 진실로
+        .catch(() => { advanceBackoffRef.current.fail(); onReload(); })
         .finally(release);
     } else release();
     if (cu.finished) {
@@ -1052,13 +1056,16 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
           어둠이라 하드코딩 알파가 정답이다. 같은 이유로 클락 보드 자체(아래 [container-type:size] div)도 그대로 둔다. */}
       {/* (조작 띠 자체는 아래 스테이지 박스 **안**에 그린다 — 하단 지표 레일과 같은 높이 12cqmin 을 쓰려면 컨테이너 안이어야 한다) */}
       {/* 풀스크린은 16:9 고정 박스(레터박스) + container-type:size — cqw/cqh로 모든 모니터(16:9·21:9·세로) 동일 비율 */}
-      <div className={fs ? 'flex flex-col w-full aspect-[16/9] max-w-[177.78vh] max-h-screen [container-type:size]' : 'space-y-2'}>
+      {/* #2(FULL-RECHECK-2/C) — 세로 화면(폰 390×844·세로 TV)에서 16:9 레터박스는 스테이지가 390×166 이 되어 타이머 하한(84px)이
+          우측 레일을 21px 덮었다. 세로에서는 화면을 채워 보드가 세로 배치(1열 + 지표 띠)로 접히게 한다 — 손님 TV(ClockDisplay)와 같은 방식. */}
+      <div className={fs ? 'flex flex-col w-full aspect-[16/9] max-w-[177.78vh] max-h-screen portrait:h-full portrait:max-h-none portrait:max-w-none portrait:aspect-auto [container-type:size]' : 'space-y-2'}>
       {/* 상단 바 */}
       <div className={['flex items-center gap-2', fs ? 'shrink-0 px-3 pt-2 pb-1' : ''].join(' ')}>
         {fs
-          ? <span className="flex items-center gap-1 text-2xs font-semibold text-ink-muted">{state.sessionDate ? <><Icon name="notebook" size={12} className="shrink-0" />{`장부 ${state.sessionDate} 연동`}</> : '단독 클락'}</span>
+          ? <span className="flex items-center gap-1 text-2xs font-semibold text-white/60">{state.sessionDate ? <><Icon name="notebook" size={12} className="shrink-0" />{`장부 ${state.sessionDate} 연동`}</> : '단독 클락'}</span>
           : <h2 className="text-base font-bold text-ink-primary">클락</h2>}
-        <div className="flex items-center gap-1.5 ml-auto">
+        {/* flex-wrap: 390 에서 버튼 6개가 한 줄로 452px 가 되어 [블라인드 수정]·[설정]이 화면 밖(잘림)으로 밀렸다(FULL-RECHECK-2/C 부수 실측). */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           {isAdmin && !fs && (
             <>
               <label className="btn-ghost cursor-pointer text-2xs px-2.5 py-1">
@@ -1087,7 +1094,10 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
               title="휴대폰으로 QR을 찍으면 이 클락을 손안에서 조작할 수 있습니다(매장 계정 로그인 필요)"
               className="btn-ghost inline-flex items-center gap-1 text-2xs px-2.5 py-1 text-accent-300"><Icon name="smartphone" size={13} className="shrink-0" />휴대폰 리모컨</button>
           )}
-          <button type="button" onClick={toggleFs} className="btn-ghost text-2xs px-2.5 py-1">{fs ? '⤡ 전체화면 해제' : '⤢ 전체화면'}</button>
+          {/* #6 — 전체화면 바는 테마와 무관하게 #06080c 위라 btn-ghost(라이트 잉크)가 2.8:1 이었다. 전체화면일 땐 어두운 지면 전용 색.
+              크기(min-h 2.4rem · leading-none · 1px 테두리)는 .btn 과 같게 둔다 — 이 바 높이가 바뀌면 아래 스테이지의 cqmin 이 바뀐다. */}
+          <button type="button" onClick={toggleFs}
+            className={fs ? 'inline-flex min-h-[2.4rem] items-center rounded-[8px] border border-white/15 bg-white/10 px-2.5 py-1 text-2xs font-semibold leading-none text-white/80 hover:bg-white/20 hover:text-white' : 'btn-ghost text-2xs px-2.5 py-1'}>{fs ? '⤡ 전체화면 해제' : '⤢ 전체화면'}</button>
           {canManage && !fs && <button type="button" onClick={() => setStructOpen(true)} data-testid="clk-edit-structure" title="진행 중에도 레벨·엔트리·탈락을 지우지 않고 앞으로 올 레벨을 고치거나 덧붙입니다" className="btn-ghost text-2xs px-2.5 py-1">블라인드 수정</button>}
           {canManage && !fs && <button type="button" onClick={onOpenSettings} className="btn-ghost text-2xs px-2.5 py-1">설정</button>}
         </div>
@@ -1125,7 +1135,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
             골드는 프라이즈 금액에만, 레벨/블라인드 인디고, 타이머 순백. 조작부(아래 컨트롤 행)는 그대로. */}
         {fs && (
           <div data-testid="clk-fs-overlay"
-            className={['absolute inset-x-0 bottom-0 z-10 flex h-[12cqmin] flex-wrap items-center justify-center gap-x-[1.2cqmin] gap-y-[0.6cqmin] border-t border-white/10 bg-black/70 px-[2cqmin] backdrop-blur-md transition-opacity duration-300',
+            className={['absolute inset-x-0 bottom-0 z-10 flex h-[12cqmin] portrait:h-auto portrait:min-h-[12cqmin] portrait:py-[1.5cqmin] flex-wrap items-center justify-center gap-x-[1.2cqmin] gap-y-[0.6cqmin] border-t border-white/10 bg-black/70 px-[2cqmin] backdrop-blur-md transition-opacity duration-300',
               ctlOn ? 'opacity-100' : 'opacity-0 pointer-events-none'].join(' ')}>
             {/* 시작/일시정지·보정 — 콘솔과 **같은 toggleRun/persist/adj 경로**를 재사용한다. 새 저장 경로를 만들지 않는다.
                 장부 연동 중이면 자동 반영분 **위에 얹는 보정**이라 aria-label 에 그 사실을 적는다
@@ -1134,7 +1144,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
             {canManage && (
               <>
                 <button type="button" onClick={toggleRun} data-testid="clk-fs-main" disabled={phase === 'finished'}
-                  className={['inline-flex h-[4.2cqmin] min-h-[44px] shrink-0 items-center gap-[0.6cqmin] rounded-[1cqmin] px-[1.6cqmin] text-[1.7cqmin] font-extrabold text-ink-inverse transition-colors disabled:cursor-not-allowed',
+                  className={['inline-flex h-[4.2cqmin] min-h-[44px] shrink-0 items-center gap-[0.6cqmin] rounded-[1cqmin] px-[1.6cqmin] text-[length:max(11px,1.7cqmin)] font-extrabold text-ink-inverse transition-colors disabled:cursor-not-allowed',
                     phase === 'finished' ? 'bg-white/15 text-white/60' : state.running ? 'bg-amber-400 hover:bg-amber-300' : 'bg-emerald-400 hover:bg-emerald-300'].join(' ')}>
                   <Icon name={phase === 'finished' ? 'check' : state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{CLOCK_PHASE_ACTION[phase]}
                 </button>
@@ -1146,14 +1156,14 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
                   { k: 'a', label: '애드온', value: liveStats.addons, plus: () => adj('adjAddons', 1), minus: () => adj('adjAddons', -1) },
                 ].map((it) => (
                   <div key={it.k} className="flex shrink-0 items-center gap-[0.5cqmin]">
-                    <span className="text-[1.4cqmin] font-semibold text-white/60">{it.label}</span>
+                    <span className="text-[length:max(10px,1.4cqmin)] font-semibold text-white/60">{it.label}</span>
                     <button type="button" onClick={it.minus}
                       aria-label={`${it.label} 1 줄이기${state.sessionDate ? ' (장부 자동 반영분 보정)' : ''}`}
-                      className="grid h-[4.2cqmin] min-h-[44px] w-[4.2cqmin] min-w-[44px] place-items-center rounded-[1cqmin] bg-white/10 text-[2cqmin] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">−</button>
-                    <span className="min-w-[3.4cqmin] text-center text-[2cqmin] font-bold tabular-nums text-white">{it.value}</span>
+                      className="grid h-[4.2cqmin] min-h-[44px] w-[4.2cqmin] min-w-[44px] place-items-center rounded-[1cqmin] bg-white/10 text-[length:max(16px,2cqmin)] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">−</button>
+                    <span className="min-w-[3.4cqmin] text-center text-[length:max(12px,2cqmin)] font-bold tabular-nums text-white">{it.value}</span>
                     <button type="button" onClick={it.plus}
                       aria-label={`${it.label} 1 늘리기${state.sessionDate ? ' (장부 자동 반영분 보정)' : ''}`}
-                      className="grid h-[4.2cqmin] min-h-[44px] w-[4.2cqmin] min-w-[44px] place-items-center rounded-[1cqmin] bg-white/10 text-[2cqmin] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">+</button>
+                      className="grid h-[4.2cqmin] min-h-[44px] w-[4.2cqmin] min-w-[44px] place-items-center rounded-[1cqmin] bg-white/10 text-[length:max(16px,2cqmin)] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">+</button>
                   </div>
                 ))}
               </>
@@ -1163,7 +1173,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
               <Icon name={volume > 0 ? 'volume' : 'volume-off'} size={16} />
             </button>
             <button type="button" onClick={toggleFs} aria-label="전체화면 해제"
-              className="shrink-0 rounded-[1cqmin] bg-white/10 px-[1.6cqmin] py-[0.9cqmin] text-[1.7cqmin] font-bold text-white/75 transition-colors hover:bg-white/20 hover:text-white">
+              className="min-h-[36px] shrink-0 rounded-[1cqmin] bg-white/10 px-[1.6cqmin] py-[0.9cqmin] text-[length:max(11px,1.7cqmin)] font-bold text-white/75 transition-colors hover:bg-white/20 hover:text-white">
               ⤡ 해제
             </button>
           </div>
@@ -1265,8 +1275,8 @@ function VolCtl({ value, onChange, onToggleMute }: { value: number; onChange: (v
       <span className="text-[9px] text-ink-muted">Volume ({value})</span>
       <div className="flex items-center gap-1">
         <button type="button" onClick={onToggleMute} title={value > 0 ? '음소거' : '음소거 해제'} aria-label={value > 0 ? '음소거' : '음소거 해제'}
-          className="grid place-items-center hover:opacity-80"><Icon name={value > 0 ? 'volume' : 'volume-off'} size={14} /></button>
-        <input type="range" min={0} max={100} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-16 accent-accent-300" />
+          className="grid h-7 w-7 place-items-center hover:opacity-80"><Icon name={value > 0 ? 'volume' : 'volume-off'} size={14} /></button>
+        <input type="range" min={0} max={100} value={value} onChange={(e) => onChange(Number(e.target.value))} aria-label="음량" className="h-6 w-16 accent-accent-300" />
       </div>
     </div>
   );
@@ -1477,8 +1487,8 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <Field label="리바인 스택"><input type="number" inputMode="numeric" value={cfg.rebuyStack || ''} onChange={(e) => set({ rebuyStack: +e.target.value || 0 })} className={numInput} /></Field>
           <Field label="애드온 스택"><input type="number" inputMode="numeric" disabled={!cfg.isAddon} value={cfg.isAddon ? (cfg.addonStack || '') : ''} onChange={(e) => set({ addonStack: +e.target.value || 0 })} className={`${numInput} disabled:opacity-50`} /></Field>
         </div>
-        <label className="flex items-center gap-2 text-xs text-ink-secondary">
-          <input type="checkbox" checked={cfg.isAddon} onChange={(e) => set({ isAddon: e.target.checked })} className="accent-accent-300 w-4 h-4" />
+        <label className="flex min-h-[2rem] w-fit cursor-pointer items-center gap-2 text-xs text-ink-secondary">
+          <input type="checkbox" checked={cfg.isAddon} onChange={(e) => set({ isAddon: e.target.checked })} className="accent-accent-300 h-6 w-6" />
           애드온 게임
         </label>
         <div className="grid grid-cols-3 gap-2">
@@ -1508,7 +1518,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
 
       {/* 블라인드 구조 — 접기/펴기 */}
       <section className="rounded-aura border card-aura p-3 space-y-2">
-        <button type="button" onClick={() => setBldOpen((v) => !v)} className="w-full flex items-center justify-between py-0.5">
+        <button type="button" onClick={() => setBldOpen((v) => !v)} className="w-full flex min-h-[2rem] items-center justify-between py-0.5">
           <span className="text-2xs font-semibold text-ink-secondary">블라인드 구조 · {totalLevels}레벨</span>
           <span className="text-2xs font-bold text-accent-300">{bldOpen ? '접기 ▲' : '펼치기 ▼'}</span>
         </button>
@@ -1554,7 +1564,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
                 <input type="number" inputMode="numeric" value={l.minutes || ''} onChange={(e) => setLevel(i, { minutes: +e.target.value || 0 })} className="input w-full text-xs tabular-nums pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">분</span>
               </div>
-              <button type="button" onClick={() => removeLevel(i)} className="text-ink-muted hover:text-danger-light text-xs px-1 shrink-0">✕</button>
+              <button type="button" onClick={() => removeLevel(i)} className="grid h-8 min-w-[2rem] shrink-0 place-items-center px-1 text-xs text-ink-muted hover:text-danger-light">✕</button>
             </div>
           ))}
         </div>
@@ -1579,7 +1589,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
                   placeholder="500000" className="input w-full text-sm tabular-nums pr-8" />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
               </div>
-              <button type="button" onClick={() => removePrize(i)} className="text-ink-muted hover:text-danger-light text-xs px-1 shrink-0">✕</button>
+              <button type="button" onClick={() => removePrize(i)} className="grid h-8 min-w-[2rem] shrink-0 place-items-center px-1 text-xs text-ink-muted hover:text-danger-light">✕</button>
             </div>
           ))}
         </div>

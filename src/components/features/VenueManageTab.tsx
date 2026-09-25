@@ -13,7 +13,7 @@ import { msgOf } from '../../lib/dbError';
 import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
 import { canAccessLedger, canManagePos, canManageVenueStaff, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess,
   getScheduleAccessUserIds, grantScheduleAccess, revokeScheduleAccess } from '../../api/ledger';
-import { getAllVenues, createMyVenue, getMyVenue, getVenueStaff, type Venue } from '../../api/community';
+import { getAllVenues, createMyVenue, getMyVenue, getVenueStaff, listVenueOwners, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
 import { splitLedgerName } from '../../lib/rankingGame';
 import { uploadPoster } from '../../lib/storage';
@@ -383,16 +383,23 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //     권한 밖이라 백지. 볼 수 있는 탭이 하나 있는데도 아무것도 안 보인다.
   // 20260925g N7: '위험 구역'(kill_venue) 은 서버가 venues.owner_id = auth.uid() 만 받는다. role 이 venue_owner 여도 이 매장에는
   //   공동운영자(venue_owners)일 수 있어 탭은 보이고 실행에서만 '대표 업주만' 으로 거절됐다 → 대표 업주가 **아님이 확인되면** 탭을 뺀다.
-  //   확인 못 함(null)은 종전대로 보인다 — 조회 실패로 대표 업주의 메뉴를 없애지 않는다.
+  // 🔴 FULL-RECHECK-2/C #3(2026-09-26) — 예전 판정은 getMyVenue()(owner_id = 나, limit 1)였다. 소유 매장이 0개인 공동운영자는
+  //   null(모름)이 되어 탭이 **보였고**, 매장이 둘인 대표 업주는 다른 매장이 잡혀 false 가 될 수 있었다(limit 1).
+  //   이제 이 매장의 사장 목록(list_venue_owners)에서 **내 줄의 is_primary** 로 정한다. 확인될 때(true)만 보인다 —
+  //   조회 실패·로딩 중에는 숨긴다(되돌릴 수 없는 매장 삭제 버튼이라 fail-closed; 다시 들어오면 재조회된다).
   const [primaryOwner, setPrimaryOwner] = useState<boolean | null>(null);
+  const myUid = user?.id;
   useEffect(() => {
-    if (!isOwner || !venueId) { setPrimaryOwner(null); return; }
+    if (!isOwner || !venueId || !myUid) { setPrimaryOwner(null); return; }
     let alive = true;
-    getMyVenue().then((v) => { if (alive) setPrimaryOwner(v ? v.id === venueId : null); }).catch(() => { if (alive) setPrimaryOwner(null); });
+    setPrimaryOwner(null);
+    listVenueOwners(venueId)
+      .then((rows) => { if (alive) setPrimaryOwner(rows.some((r) => r.userId === myUid && r.isPrimary)); })
+      .catch(() => { if (alive) setPrimaryOwner(null); });
     return () => { alive = false; };
-  }, [isOwner, venueId]);
+  }, [isOwner, venueId, myUid]);
   const canSettingsTab = useCallback((t: SettingsTab) => (
-    t === 'danger' ? (isOwner && !!venueId && primaryOwner !== false) : staffOk
+    t === 'danger' ? (isOwner && !!venueId && primaryOwner === true) : staffOk
   ), [isOwner, venueId, staffOk, primaryOwner]);
   /** 이용권 섹션을 열 수 있는가 — 종전 canSettingsTab('voucher') 와 **같은 조건**이다(권한을 넓히지 않았다).
    *  idOn = 본인인증·이용권 통합 킬스위치. 꺼져 있으면 탭 자체를 만들지 않는다 —
@@ -2739,7 +2746,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                         onBlur={(e) => void saveInviteTitle(iv, e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                         placeholder="직책 (매니저·딜러 등)"
-                        className="input min-w-0 flex-1 text-2xs py-1"
+                        className="input min-w-0 flex-1 text-2xs py-1 max-sm:basis-full"
                       />
                       {([
                         ['ledger', '장부·순위', iv.grantLedger],
@@ -2804,13 +2811,18 @@ function StaffManager({ venueId }: { venueId: string }) {
                       </div>
                       <button type="button" onClick={() => remove(s)} className="text-2xs px-2.5 py-1.5 rounded-input text-ink-muted hover:text-danger-light transition-colors">제거</button>
                     </div>
+                    {s.isActive === false ? (
+                      // 오너 결정(2026-09-26): 승인되지 않았거나 정지된 직원은 권한 토글 자체를 숨긴다(is_active=false, get_my_venue_staff).
+                      <p className="text-2xs font-semibold text-amber-400">승인 대기·정지 중 — 권한을 변경할 수 없습니다</p>
+                    ) : (
+                    // FULL-RECHECK-2/C #9 — 390 에서 권한 버튼 3개가 한 줄을 차지해 직책 칸이 57px(값 134px)로 눌렸다 → 좁은 폭은 직책이 첫 줄 전체.
                     <div className="flex flex-wrap items-center gap-2">
                       <input
                         type="text" defaultValue={s.staffTitle ?? ''} list="staff-title-suggest" maxLength={20}
                         onBlur={(e) => saveTitle(s.id, e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                         placeholder="직책 (매니저·딜러 등)"
-                        className="input flex-1 min-w-0 text-xs py-1.5"
+                        className="input flex-1 min-w-0 text-xs py-1.5 max-sm:basis-full"
                       />
                       <button type="button" onClick={() => toggleAccess(s.id)} disabled={accessBusy} aria-busy={accessBusy || undefined}
                         data-access-state={accessView}
@@ -2832,6 +2844,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                         {accessLabel('schedule', schedView)}
                       </button>
                     </div>
+                    )}
                   </li>
                   );
                 })}

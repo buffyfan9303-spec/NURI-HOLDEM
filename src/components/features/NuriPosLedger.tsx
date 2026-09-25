@@ -49,6 +49,7 @@ import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import { SkeletonList } from '../atoms/Skeleton';
 import { kstToday } from '../../lib/kst';
+import { createBackoff } from '../../lib/retryBackoff';
 
 // 🔴 2026-09-20 (E2-C/F5) — 여기만 **기기 로컬 날짜**를 썼다. 서버 RPC(request_buyin·check_in)와
 //   앱의 나머지(kstToday)는 전부 **KST** 기준이라, 해외·시계 오설정 기기에서 새 장부의 기본 날짜와
@@ -1331,8 +1332,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         {scheduleTitle(session.scheduleId) && (onOpenSchedule
           ? <button type="button" title="손님이 보는 대회 상세 열기"
               onClick={() => { const s = venueSchedules.find((x) => x.id === session.scheduleId); if (s) onOpenSchedule(s); }}
-              className="text-2xs text-accent-300 font-semibold whitespace-nowrap hover:underline underline-offset-2">· 대회 {scheduleTitle(session.scheduleId)}</button>
-          : <span className="text-2xs text-accent-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>)}
+              // #5(FULL-RECHECK-2/C) — whitespace-nowrap 이라 긴 대회명이 카드 밖으로 99px(1024)·146px(390) 넘쳤다 → 말줄임 + 24px 과녁.
+              aria-label={`대회 ${scheduleTitle(session.scheduleId)} — 손님이 보는 대회 상세 열기`}
+              className="max-w-full truncate py-1 text-left text-2xs text-accent-300 font-semibold hover:underline underline-offset-2">· 대회 {scheduleTitle(session.scheduleId)}</button>
+          : <span className="inline-block max-w-full truncate align-bottom text-2xs text-accent-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>)}
         <span className="flex-1" />
         {onOpenClock && <button type="button" onClick={() => onOpenClock(date, gameSeq)} className="btn-ghost inline-flex items-center gap-1.5 text-sm px-3.5 py-2 font-semibold"><Icon name="timer" size={15} className="shrink-0" />클락</button>}
         {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">세션 정보 수정</button>}
@@ -1404,9 +1407,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                   <div className="mt-1.5 border-t border-border-subtle pt-1.5 space-y-1.5">
                     {splitFor !== r.id ? (
                       <div className="flex items-center gap-1.5">
-                        <span className="shrink-0 text-2xs text-ink-muted">결제수단</span>
+                        <span className="shrink-0 text-2xs text-ink-secondary">결제수단</span>
                         {([['cash', '현금'], ['card', '카드'], ['transfer', '이체']] as const).map(([mth, lbl]) => (
-                          <button key={mth} type="button" onClick={() => approveReq(r, true, mth)} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-emerald-500/50 px-2 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/15">{lbl}</button>
+                          <button key={mth} type="button" onClick={() => approveReq(r, true, mth)} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-emerald-500/50 px-2 text-2xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/15">{lbl}</button>
                         ))}
                         <button type="button" onClick={() => { setSplitFor(r.id); setSplitAmts({ cash: splitDue(wantSeq(r)), card: 0, transfer: 0 }); }} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-accent-400/50 px-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">분할</button>
                       </div>
@@ -1618,14 +1621,14 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                 {VISITOR_OPTS.map((t) => (
                   <button key={t.code} type="button" onClick={() => setNewType((cur) => (cur === t.code ? null : t.code))}
                     className={['text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
-                      newType === t.code ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                      newType === t.code ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
                     {t.label}
                   </button>
                 ))}
                 <button type="button"
                   onClick={() => { const v = window.prompt('유형 직접입력'); if (v && v.trim()) setNewType(v.trim()); }}
                   className={['text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
-                    newType && !VISITOR_OPTS.some((o) => o.code === newType) ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                    newType && !VISITOR_OPTS.some((o) => o.code === newType) ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
                   {newType && !VISITOR_OPTS.some((o) => o.code === newType) ? newType : '직접입력'}
                 </button>
                 <span className="flex-1" />
@@ -2014,11 +2017,14 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
   const onReloadRef = useRef(onReload);
   useEffect(() => { onReloadRef.current = onReload; });
   const wroteForRef = useRef<string | null>(null);
+  // #7(FULL-RECHECK-2/C) — 쓰기가 네트워크 오류로 실패하면 다음 1초 틱에 또 보냈다(클락 화면 워치독과 같은 결함). 1·2·4…30초로 벌린다.
+  const backoffRef = useRef(createBackoff());
   useEffect(() => {
     if (!clock.running) return;
     const t = setInterval(() => {
       const c = remoteRef.current;
       if (!c.running || !c.endsAt) return;
+      if (backoffRef.current.blocked()) return;
       if (Date.now() - new Date(c.endsAt).getTime() < 3000) return; // 클락 화면이 먼저 쓸 시간을 준다
       if (wroteForRef.current === c.endsAt) return;                 // 이 경계는 이미 우리가 썼다(realtime 대기 중)
       const cu = levelCatchUp(c);
@@ -2031,9 +2037,11 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
         endsAt: cu.patch.endsAt ?? null,
         ...(cu.finished && { running: false }),
       }, boundary).then((n) => {
+        backoffRef.current.ok();
         // C2(2026-09-25) — 0행 = 다른 기기가 먼저 움직였다(CAS). 예전엔 이 사실을 몰라 realtime 이 안 오면 화면이 옛 경계에 머물렀다.
         if (n === 0) onReloadRef.current();
       }).catch(() => {   // CAS — 다른 기기가 정지·전진시켰으면 이 쓰기는 0행이 된다
+        backoffRef.current.fail();
         // 쓰기가 한 번 실패했다고 이 레벨 경계를 영구 포기하면(wroteForRef 가 그대로 남으면)
         // 대회장 와이파이가 잠깐 끊긴 것만으로 레벨이 영영 안 넘어간다 → 다음 틱에 재시도하게 푼다.
         if (wroteForRef.current === boundary) wroteForRef.current = null;
@@ -2245,7 +2253,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button type="button" onClick={onClick}
       className={['text-2xs font-bold px-2.5 py-1 rounded-badge border transition-colors',
-        active ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+        active ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
       {children}
     </button>
   );
@@ -2823,11 +2831,13 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             // 바인이 있으면 **이미 저장돼 있던 자리**만 잠근다. 새로 추가한 행은 자유롭게 입력할 수 있다.
             const rowLocked = lockPricing && i < (base.discounts?.length ?? 0);
             return (
-            <fieldset key={i} disabled={rowLocked} className="flex items-center gap-1.5">
+            // #9(FULL-RECHECK-2/C) — 390 에서 한 줄 5칸이면 라벨 칸 글자 공간이 43.5px 라 '1레벨 얼리버드 할인'(117px)이 잘렸다.
+            //   좁은 폭(<sm)은 라벨이 첫 줄을 다 쓰고 금액·LV·✕ 가 둘째 줄로 내려간다(sm 이상은 종전 한 줄 그대로).
+            <fieldset key={i} disabled={rowLocked} className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap">
               <span className="w-9 shrink-0 text-2xs font-bold text-accent-300">할인{i + 1}</span>
-              <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input min-w-0 flex-1 text-sm" />
+              <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input min-w-0 grow basis-[calc(100%-3rem)] text-sm sm:basis-0" />
               {/* #11(2026-09-25) — w-20 에 '23.4567' 이 글자 공간 45px 에 57px 로 잘렸다(끝자리가 안 보여 금액을 잘못 읽는다) → w-24. */}
-              <div className="relative w-24 shrink-0">
+              <div className="relative w-24 shrink-0 max-sm:ml-[2.625rem]">
                 <input type="number" inputMode="decimal" step="0.1" min="0" max={minUnit > 0 ? minUnit / WON_PER_MAN : undefined} value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="금액" aria-invalid={badDisc === i}
                   className={['input w-full pr-6 text-sm tabular-nums', badDisc === i ? 'border-danger text-danger-light' : ''].join(' ')} />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
@@ -3174,7 +3184,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                 return (
                   <button key={String(v)} type="button" onClick={() => onSetEarly(v)}
                     className={['text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
-                      active ? 'bg-amber-400/20 text-amber-300 border-amber-400/50' : 'bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary'].join(' ')}>{label}</button>
+                      active ? 'bg-amber-400/20 text-amber-300 border-amber-400/50' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>{label}</button>
                 );
               })}
               <span className="text-[10px] text-ink-muted w-full">
@@ -3194,12 +3204,12 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                     <span className="text-xs text-ink-muted">할인</span>
                     <button type="button" onClick={() => setDiscIdx(0)}
                       className={['text-xs font-bold px-2.5 py-1.5 min-h-[2.2rem] rounded-badge border transition-colors',
-                        discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-muted border-border-default hover:text-ink-secondary'].join(' ')}>없음</button>
+                        discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>없음</button>
                     {/* 비운 자리(0원)는 감추되 인덱스는 그대로 둔다 — 자리번호가 바인 계산의 기준이라 재배열 불가 */}
                     {discs.map((d, i) => (d.amount <= 0 ? null : (
                       <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
                         className={['text-xs font-bold px-2.5 py-1.5 min-h-[2.2rem] rounded-badge border transition-colors',
-                          discIdx === i + 1 ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'text-ink-muted border-border-default hover:text-ink-secondary'].join(' ')}>
+                          discIdx === i + 1 ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
                         {d.label || `할인${i + 1}`} −{wonToMan(d.amount)}만{d.level ? ` · ${d.level}LV` : ''}
                       </button>
                     )))}
@@ -3587,8 +3597,10 @@ function DeleteSessionModal({ label, loss, lossErr, busy, hasPw, pw, onPw, onClo
   onConfirm: () => void;
 }) {
   // 바인이 있다고 확인됐으면 비밀번호 없이는 못 누른다(빈 값으로 보내면 서버가 '틀림' 으로 세어 잠금 카운터가 오른다).
-  // 수치를 못 받았을 때(lossErr)는 칸만 두고 강제하지 않는다 — 바인 0건이면 서버가 비밀번호를 안 본다.
-  const pwRequired = hasPw && !!loss && loss.buyins > 0;
+  // 하지만 lossErr(수치 조회 실패)일 때도 바인이 0건인지는 모른다 —
+  // 빈 비밀번호('')를 그대로 보내면 비밀번호가 설정된 매장에서도
+  // 잠김 카운터가 오른다(D8, 2026-09-26). 칸이 보이는 조건과 동일하게 강제한다.
+  const pwRequired = hasPw && (lossErr || !loss || loss.buyins > 0);
   return (
     <Overlay title={`${label} 장부 삭제`} onClose={onClose}>
       <div className="space-y-3">
@@ -3693,7 +3705,7 @@ function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
     <div className="pb-1">
       <div className="rounded-input border border-border-subtle bg-surface-low/70 px-2.5 py-1.5">
         <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-          className="flex w-full items-center gap-1.5 text-left text-2xs font-bold text-ink-secondary">
+          className="flex min-h-[24px] w-full items-center gap-1.5 text-left text-2xs font-bold text-ink-secondary">
           <Icon name="filter" size={12} className={['shrink-0 transition-transform', open ? '' : '-rotate-90'].join(' ')} />
           정산 제외
           {exKeys.size === 0

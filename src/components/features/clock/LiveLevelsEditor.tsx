@@ -10,7 +10,8 @@ import Icon from '../../atoms/Icon';
 import { liveLockedCount, type ClockLevel, type ClockState } from '../../../api/clock';
 import { levelNumberAt } from '../../../lib/clockLevel';
 
-const NUM = 'input w-full min-w-0 text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-60';
+// px-2: 기본 .input 의 px-3 은 390 폭에서 글자 공간을 25.5px 로 줄여 6~7자리 블라인드가 잘렸다(FULL-RECHECK-2/C #1).
+const NUM = 'input w-full min-w-0 px-2 text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-60';
 
 export default function LiveLevelsEditor({ state, onClose, onApply }: {
   state: ClockState;
@@ -33,7 +34,7 @@ export default function LiveLevelsEditor({ state, onClose, onApply }: {
   const addBreak = () => setDraft((d) => [...d, { kind: 'break', sb: 0, bb: 0, ante: 0, minutes: 8, label: 'BREAK' }]);
 
   return (
-    <Modal open onClose={onClose} title="블라인드 구조 수정" maxWidth="md" variant="sheet">
+    <Modal open onClose={onClose} title="블라인드 구조 수정" maxWidth="lg" variant="sheet">
       <div className="space-y-2 p-4" data-testid="clk-live-editor">
         <p className="text-2xs leading-relaxed text-ink-muted">
           {finished
@@ -45,29 +46,30 @@ export default function LiveLevelsEditor({ state, onClose, onApply }: {
             const passed = i < lock.passed;
             const current = i === lock.current;
             const no = levelNumberAt(draft, i);
+            // 좁은 폭(<sm)은 두 줄 — 1줄: 번호·SB·BB·ANTE, 2줄: 시간·상태. 한 줄 6칸이면 390 에서 입력칸이 55px 로 눌렸다.
             return (
               <div key={i} data-level-row={i} data-row-state={passed ? 'passed' : current ? 'current' : 'future'}
-                className={['flex items-center gap-1.5 rounded-input px-1 py-0.5', current ? 'bg-accent-300/10 ring-1 ring-accent-400/40' : ''].join(' ')}>
+                className={['grid grid-cols-[1.75rem_repeat(3,minmax(0,1fr))] items-center gap-1.5 rounded-input px-1 py-0.5 sm:grid-cols-[1.75rem_repeat(3,minmax(0,1fr))_4.5rem_2.75rem]', current ? 'bg-accent-300/10 ring-1 ring-accent-400/40' : ''].join(' ')}>
                 <span className="w-7 shrink-0 text-center text-2xs font-bold text-accent-300">{l.kind === 'break' ? 'B' : no}</span>
                 {l.kind === 'break' ? (
-                  <input value={l.label ?? ''} disabled={passed} onChange={(e) => set(i, { label: e.target.value })} placeholder="BREAK" aria-label={`브레이크 ${i + 1} 라벨`} className="input flex-1 text-xs disabled:opacity-60" />
+                  <input value={l.label ?? ''} disabled={passed} onChange={(e) => set(i, { label: e.target.value })} placeholder="BREAK" aria-label={`브레이크 ${i + 1} 라벨`} className="input col-span-3 min-w-0 text-xs disabled:opacity-60" />
                 ) : (<>
                   <input type="number" inputMode="numeric" disabled={passed} value={l.sb || ''} onChange={(e) => set(i, { sb: +e.target.value || 0 })} placeholder="SB" aria-label={`레벨 ${no} SB`} className={NUM} />
                   <input type="number" inputMode="numeric" disabled={passed} value={l.bb || ''} onChange={(e) => set(i, { bb: +e.target.value || 0 })} placeholder="BB" aria-label={`레벨 ${no} BB`} className={NUM} />
                   <input type="number" inputMode="numeric" disabled={passed} value={l.ante || ''} onChange={(e) => set(i, { ante: +e.target.value || 0 })} placeholder="ANTE" aria-label={`레벨 ${no} 앤티`} className={NUM} />
                 </>)}
-                <div className="relative w-[4.5rem] shrink-0">
+                <div className="relative col-start-2 sm:col-start-auto">
                   <input type="number" inputMode="numeric" disabled={passed || current} value={l.minutes || ''} onChange={(e) => set(i, { minutes: +e.target.value || 0 })}
                     aria-label={`${l.kind === 'break' ? '브레이크' : `레벨 ${no}`} 시간(분)`} className={`${NUM} pr-6`} />
                   <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">분</span>
                 </div>
                 {passed ? (
-                  <span className="w-11 shrink-0 text-center text-[10px] font-bold text-ink-muted" title="이미 지난 레벨"><Icon name="lock" size={12} className="inline-block" /> 지남</span>
+                  <span className="w-11 text-center text-[10px] font-bold text-ink-muted" title="이미 지난 레벨"><Icon name="lock" size={12} className="inline-block" /> 지남</span>
                 ) : current ? (
-                  <span className="w-11 shrink-0 text-center text-[10px] font-bold text-accent-300">진행 중</span>
+                  <span className="w-11 text-center text-[10px] font-bold text-accent-300">진행 중</span>
                 ) : (
                   <button type="button" onClick={() => remove(i)} aria-label={`${l.kind === 'break' ? '브레이크' : `레벨 ${no}`} 삭제`}
-                    className="hit grid h-8 w-11 shrink-0 place-items-center text-xs text-ink-muted hover:text-danger-light">✕</button>
+                    className="hit grid h-8 w-11 place-items-center text-xs text-ink-muted hover:text-danger-light">✕</button>
                 )}
               </div>
             );

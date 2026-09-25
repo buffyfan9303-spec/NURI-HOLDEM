@@ -123,6 +123,9 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
   // 순위 판이 타는 STABLE RPC. 없으면 운영 서버에서 401 을 받고 화면이 삼켜
   //   '데이터 없음' 과 '인증 실패' 가 구별되지 않는다.
   await page.route(/\/rest\/v1\/rpc\/venue_rankings_public/, (r) => r.fulfill(json([])));
+  // 매장 사장 목록 — '위험 구역' 하위탭은 여기서 **내 줄의 is_primary** 가 확인될 때만 보인다(FULL-RECHECK-2/C #3, fail-closed).
+  //   목킹 업주는 venues.owner_id 인 대표 업주다. 안 걸어 두면 가짜 토큰이 401 을 받아 탭이 사라진다.
+  await page.route(/\/rest\/v1\/rpc\/list_venue_owners/, (r) => r.fulfill(json([{ user_id: MOCK_UID, nickname: '업주', name: '업주', is_primary: true, status: 'approved' }])));
   // ⚠ StoreLiveBar 는 `진행 중 클락 없음 && 대기 바인 0` 일 때만 null 이다(VenueManageTab).
   //   그 바는 단계 바보다 **위**에 있어서, 값이 우연히 0 이면 '바 위치 고정' 불변식이
   //   우연 위에 서게 된다. 명시로 0 을 준다.
