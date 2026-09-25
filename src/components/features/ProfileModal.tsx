@@ -27,6 +27,7 @@ import Icon from '../atoms/Icon';
 import TierBadge, { tierProgress, tierCss, tierVividVar } from '../atoms/TierBadge';
 import TitleChip from '../atoms/TitleChip';
 import IdentityVerificationButton from './IdentityVerificationButton';
+import LocationPrivacyCard from './LocationPrivacyCard';
 import { useIdentityEnabled } from '../../lib/identityFlag';
 import { getMyVisitStats } from '../../api/reservations';
 import type { LegalDoc } from './LegalDocsModal';
@@ -604,6 +605,11 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             그대로 보여준다 — 제도 설명·법 문구는 화면에 새로 쓰지 않는다. */}
         <div className="px-4 pt-4">
           <LegalConsentHistory />
+        </div>
+
+        {/* 위치정보 이용 동의·철회·이용 내역 열람(위치정보법 제24조) — LOCATION-READY 2026-09-26 */}
+        <div className="px-4 pt-4">
+          <LocationPrivacyCard onOpenLegal={onOpenLegal} />
         </div>
 
         <form onSubmit={handleConfirmChange} className="p-4 space-y-4">

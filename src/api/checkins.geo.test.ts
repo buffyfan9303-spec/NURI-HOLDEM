@@ -4,12 +4,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
+const rpcReply: { data: unknown } = { data: null };
 vi.mock('../lib/supabase', () => ({
   IS_MOCK: false,
   supabase: {
     rpc: (name: string, args: Record<string, unknown>) => {
       rpcCalls.push({ name, args });
-      return Promise.resolve({ data: { name: '누리 홀덤', points: 3, streak: 1 }, error: null });
+      return Promise.resolve({ data: rpcReply.data, error: null });
     },
   },
 }));
@@ -25,6 +26,10 @@ vi.mock('./settings', () => ({
   },
 }));
 
+// LOCATION-READY: 위치정보 이용 동의 — 'yes' 면 좌표 전송, 'no' 면 매장 id 만
+const consent = { value: 'yes' as 'yes' | 'no', asks: 0 };
+vi.mock('../lib/locationConsent', () => ({ ensureLocationConsent: async () => { consent.asks++; return consent.value === 'yes'; } }));
+
 import { checkIn } from './checkins';
 import { CheckinGeoError, getCheckinPosition, geoErrorCodeOf, isLowAccuracy, resetCheckinGeoFlagCache, parseCheckinGeoEnabled } from '../lib/checkinGeo';
 
@@ -36,7 +41,7 @@ function stubGeo(impl: (ok: PositionCallback, bad: PositionErrorCallback, o: Opt
 }
 const pos = (lat: number, lng: number, accuracy: number) => ({ coords: { latitude: lat, longitude: lng, accuracy } }) as GeolocationPosition;
 
-beforeEach(() => { rpcCalls.length = 0; flag.value = 'on'; flag.reads = 0; resetCheckinGeoFlagCache(); });
+beforeEach(() => { rpcCalls.length = 0; flag.value = 'on'; flag.reads = 0; consent.value = 'yes'; consent.asks = 0; rpcReply.data = { name: '누리 홀덤', points: 3, streak: 1 }; resetCheckinGeoFlagCache(); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('checkIn — 위치를 싣고 간다', () => {
@@ -47,18 +52,25 @@ describe('checkIn — 위치를 싣고 간다', () => {
     expect(rpcCalls).toEqual([{ name: 'check_in', args: { p_venue_id: 'v-1', p_lat: 37.5, p_lng: 127.01, p_accuracy: 35 } }]);
   });
 
-  it('권한 거부 → CheckinGeoError(denied) 를 그대로 던지고 서버는 부르지 않는다', async () => {
-    stubGeo((_ok, bad) => bad({ code: 1, message: 'denied' } as GeolocationPositionError));
-    const e = await checkIn('v-1').catch((x) => x);
-    expect(e).toBeInstanceOf(CheckinGeoError);
-    expect((e as CheckinGeoError).code).toBe('denied');
-    expect(rpcCalls).toHaveLength(0);
+  // 오너 결정(2026-09-26): 동의했지만 위치를 못 얻으면 막지 않고 좌표 없이 출석한다(재시도 시트 없음).
+  it.each([
+    ['권한 차단(1)', 1], ['측위 실패(2)', 2], ['시간 초과(3)', 3],
+  ])('%s → 던지지 않고 매장 id 만으로 check_in 1회', async (_label, code) => {
+    stubGeo((_ok, bad) => bad({ code, message: 'x' } as GeolocationPositionError));
+    const r = await checkIn('v-1');
+    expect(r.name).toBe('누리 홀덤');
+    expect(rpcCalls).toEqual([{ name: 'check_in', args: { p_venue_id: 'v-1' } }]);
   });
 
-  it('위치 기능이 없는 브라우저 → unsupported, 서버 호출 0', async () => {
+  it('위치 기능이 없는 브라우저(unsupported) → 좌표 없이 check_in 1회', async () => {
     vi.stubGlobal('navigator', {});
-    const e = await checkIn('v-1').catch((x) => x);
-    expect((e as CheckinGeoError).code).toBe('unsupported');
+    await checkIn('v-1');
+    expect(rpcCalls).toEqual([{ name: 'check_in', args: { p_venue_id: 'v-1' } }]);
+  });
+
+  it('위치와 무관한 오류는 삼키지 않는다(출석을 조용히 좌표 없이 바꾸지 않는다)', async () => {
+    stubGeo(() => { throw new TypeError('boom'); });
+    await expect(checkIn('v-1')).rejects.toThrow('boom');
     expect(rpcCalls).toHaveLength(0);
   });
 });
@@ -86,6 +98,26 @@ describe('checkIn — 운영 스위치', () => {
     await checkIn('v-1'); await checkIn('v-2');
     expect(rpcCalls.map((c) => c.args.p_lat)).toEqual([37.5, 37.5]);
     expect(flag.reads).toBe(1);
+  });
+});
+
+describe('checkIn — 위치정보 이용 동의(LOCATION-READY)', () => {
+  it('동의하지 않음 → 위치를 묻지 않고 매장 id 만(출석은 된다)', async () => {
+    consent.value = 'no';
+    stubGeo(() => { throw new Error('동의 없이 위치를 물으면 안 된다'); });
+    const r = await checkIn('v-1');
+    expect(r.name).toBe('누리 홀덤');
+    expect(rpcCalls).toEqual([{ name: 'check_in', args: { p_venue_id: 'v-1' } }]);
+  });
+  it('스위치 꺼짐이면 동의를 묻지도 않는다', async () => {
+    flag.value = null; stubGeo(() => { throw new Error('x'); });
+    await checkIn('v-1');
+    expect(consent.asks).toBe(0);
+  });
+  it('서버가 {error} 로 거부하면 그 문구로 던진다(점수·이름으로 오인하지 않는다)', async () => {
+    stubGeo((ok) => ok(pos(37.5, 127, 10)));
+    rpcReply.data = { error: '매장 근처에서만 출석할 수 있어요' };
+    await expect(checkIn('v-1')).rejects.toThrow('매장 근처에서만 출석할 수 있어요');
   });
 });
 

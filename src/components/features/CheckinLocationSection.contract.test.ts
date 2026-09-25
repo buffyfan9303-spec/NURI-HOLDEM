@@ -38,7 +38,7 @@ describe('CheckinLocationSection', () => {
   });
   it('출석 QR 안내의 위치 권한 문구는 스위치가 켜졌을 때만', () => {
     const modal = readFileSync(fileURLToPath(new URL('./CheckinModal.tsx', import.meta.url)), 'utf8');
-    expect(modal).toMatch(/\{geoOn && <>[^}]*매장 안에서 위치 권한을 허용해야 출석돼요/);
-    expect(modal.match(/매장 안에서 위치 권한을 허용해야 출석돼요/g)).toHaveLength(1);
+    expect(modal).toMatch(/\{geoOn && <>[^}]*위치 확인에 동의한 손님은 매장 안에서만 출석돼요/);
+    expect(modal.match(/위치 확인에 동의한 손님은 매장 안에서만 출석돼요/g)).toHaveLength(1);
   });
 });

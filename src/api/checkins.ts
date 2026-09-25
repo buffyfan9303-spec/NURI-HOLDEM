@@ -4,7 +4,8 @@ import { currentUser } from './_session';
 // ⚠ './ledger' 에서 가져오면 안 된다 — checkins 는 App.tsx 가 정적 import 하므로 장부 API 전체(7.1KB gz)가
 //    비로그인 손님의 첫 화면 임계 경로에 실린다(2026-09-11 실측). 같은 함수의 원본을 직접 쓴다.
 import { kstToday } from '../lib/kst';
-import { getCheckinPosition, isCheckinGeoEnabled } from '../lib/checkinGeo';
+import { getCheckinPosition, isCheckinGeoEnabled, CheckinGeoError } from '../lib/checkinGeo';
+import { ensureLocationConsent } from '../lib/locationConsent';
 
 export interface Checkin { id: string; venueId: string; userId: string; displayName: string | null; createdAt: string }
 
@@ -35,18 +36,29 @@ export function normalizeCheckInResult(data: unknown): CheckInResult {
 /** 체크인 실행. 성공 시 매장명·부여 점수·연속일 반환.
  *  CHECKIN-GEO 2단계(2026-09-23): 위치를 **여기 한 곳에서만** 얻어 서버에 보낸다 — 호출부 3곳(App.tsx runCheckin ·
  *  MyVoucherSheet · VenuePage)은 시그니처 그대로라 경로별 결과가 갈리지 않는다(K-05 Q6).
- *  위치를 못 얻으면 `CheckinGeoError`(src/lib/checkinGeo.ts)를 그대로 던진다 — RPC 는 부르지 않는다.
+ *  위치를 못 얻으면(권한 차단·측위 실패·미지원) **좌표 없이 출석**한다 — 오너 결정 2026-09-26(아래 catch).
  *  거리 판정은 서버(20260923b)만 한다. */
 export async function checkIn(venueId: string): Promise<CheckInResult> {
   if (IS_MOCK) return { name: '데모 매장', points: 3, streak: null };
   // 운영 스위치(checkin_geo_enabled) 꺼짐·조회 실패 → 위치를 묻지 않고 예전과 똑같이 매장 id 만 보낸다.
   let args: Record<string, unknown> = { p_venue_id: venueId };
-  if (await isCheckinGeoEnabled()) {
-    const pos = await getCheckinPosition();
-    args = { p_venue_id: venueId, p_lat: pos.lat, p_lng: pos.lng, p_accuracy: pos.accuracy };
+  // LOCATION-READY(2026-09-26): 스위치가 켜져도 **위치정보 이용 동의**가 있어야 좌표를 보낸다(위치정보법 제15조①).
+  //   동의하지 않으면(또는 동의 창을 닫으면) 매장 id 만 보낸다 — 출석은 된다. 서버(20260926b)도 동의 없으면 좌표를 버린다.
+  if (await isCheckinGeoEnabled() && await ensureLocationConsent()) {
+    // 오너 결정(2026-09-26): 우리 동의는 했지만 브라우저 위치 권한이 막혔거나 측위에 실패하면 재시도 시트로 막지 않고
+    //   **좌표 없이 출석**으로 넘긴다(서버는 좌표 없는 출석을 받는다 — 20260923b 1단계). 위치를 못 얻은 이유 외의 오류는 그대로 던진다.
+    try {
+      const pos = await getCheckinPosition();
+      args = { p_venue_id: venueId, p_lat: pos.lat, p_lng: pos.lng, p_accuracy: pos.accuracy };
+    } catch (e) {
+      if (!(e instanceof CheckinGeoError)) throw e;
+    }
   }
   const { data, error } = await supabase.rpc('check_in', args);
   if (error) throw new Error(error.message);
+  // 20260926b: 좌표를 쓴 출석의 거부는 예외가 아니라 {error} 로 온다 — 예외면 서버의 위치 이용 기록(확인자료)까지 롤백된다.
+  const refused = data && typeof data === 'object' ? (data as { error?: unknown }).error : undefined;
+  if (typeof refused === 'string' && refused) throw new Error(refused);
   return normalizeCheckInResult(data);
 }
 
