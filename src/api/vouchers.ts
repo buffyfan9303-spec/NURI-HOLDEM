@@ -211,20 +211,6 @@ export async function setVoucherIssueApproval(venueId: string, approved: boolean
   if (error) throw new Error(error.message);
 }
 
-// 적립: 장부 바인 시 손님에게 이용권 발급(닉네임>실명>이름 매칭). 발급 수 반환.
-export async function accrueVoucher(venueId: string, playerName: string, count: number): Promise<number> {
-  if (IS_MOCK) return 0;
-  const { data, error } = await supabase.rpc('accrue_voucher', { p_venue_id: venueId, p_player_name: playerName, p_count: count });
-  if (error) throw new Error(error.message);
-  return Number(data) || 0;
-}
-
-export async function redeemVoucher(voucherId: string, usedVenueId: string): Promise<void> {
-  if (IS_MOCK) return;
-  const { error } = await supabase.rpc('redeem_voucher', { p_voucher_id: voucherId, p_used_venue_id: usedVenueId });
-  if (error) throw new Error(error.message);
-}
-
 /** 회수 — 미사용(active) 이용권만. 이미 사용·회수된 건은 서버가 사유를 들고 거절한다
  *  (2026-08-29 이전엔 조용히 0행 UPDATE 라 화면엔 성공으로 보였다). */
 export async function revokeVoucher(voucherId: string): Promise<void> {

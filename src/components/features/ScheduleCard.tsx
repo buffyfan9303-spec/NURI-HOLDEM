@@ -243,7 +243,7 @@ function VenueLink({
     ? 'break-keep [overflow-wrap:anywhere] font-semibold text-ink-secondary'
     : 'min-w-0 truncate font-semibold text-ink-secondary';
   // flex 가 아니면 gap 이 안 먹는다 — 구분점 좌우 여백을 padding 으로 준다(flex 쪽은 종전 gap 그대로).
-  const dotCls = wrap ? 'px-0.5 text-border-strong' : 'shrink-0 text-border-strong';
+  const dotCls = wrap ? 'px-0.5 text-ink-muted' : 'shrink-0 text-ink-muted';
   const regionCls = wrap ? 'break-keep' : (regionShrinks ? 'min-w-0 flex-1 truncate' : 'shrink-0');
   if (!onClick) {
     return (
@@ -848,7 +848,7 @@ function TimetableCard({
   const status = regInfo?.hasField ? null
     : regInfo ? (regInfo.onBreak ? '휴식' : regInfo.levelNo ? `L${regInfo.levelNo}` : '진행 중')
     : scheduleStatus(schedule.date, schedule.startTime) === 'upcoming' ? null : 'L —';
-  const dot = <span aria-hidden className="px-1 text-border-strong">·</span>;
+  const dot = <span aria-hidden className="px-1 text-ink-muted">·</span>;
   return (
     <article
       onClick={() => onSelect(schedule)}
@@ -905,7 +905,7 @@ function TimetableCard({
             region={schedule.region}
             wrap
             sizeCls="text-[0.6875rem]"
-            hitCls="-my-[3.25px] py-[3.25px]"
+            hitCls="relative z-10 -mt-[3.25px] pt-[3.25px] -mb-[4.25px] pb-[4.25px]"
             onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
           />
           {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}

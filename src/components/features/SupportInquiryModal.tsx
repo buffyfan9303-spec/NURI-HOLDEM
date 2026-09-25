@@ -50,7 +50,7 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
           <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
             답변을 받아 보려면 계정이 필요합니다. 접수한 문의와 답변은 이 화면에서 확인할 수 있어요.
           </p>
-          <button type="button" onClick={() => { onClose(); promptLogin(); }}
+          <button type="button" onClick={() => promptLogin()}
             className="btn-primary mx-auto mt-4 w-full max-w-[220px] py-2.5 text-sm">
             로그인하기
           </button>

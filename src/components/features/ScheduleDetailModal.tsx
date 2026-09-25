@@ -1020,7 +1020,7 @@ function CalendarShareRow({ schedule, onLikeChange }: { schedule: Schedule; onLi
   }, [user, schedule.id]);
 
   const toggleLike = async () => {
-    if (!user) { toast.show('로그인하면 캘린더에 담을 수 있어요', 'info'); return; }
+    if (!user) { promptLogin(); return; }
     const next = !liked;
     setLiked(next); setLikeBusy(true);          // 낙관적 — 실패하면 되돌린다
     try {

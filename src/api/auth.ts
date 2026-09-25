@@ -42,6 +42,8 @@ export interface User {
   activityPoints?: number;  // 활동 점수(배드빗/굿런 받은 수)
   badges?: string[];        // 획득 뱃지
   staffTitle?: string;      // 직원 직책(매니저·딜러·플로어 등) — 권한과 분리, 업주가 지정
+  /** 직원이 현재 승인·활성 상태인가(get_my_venue_staff 서버 판정 그대로) — undefined 면 구버전(칸 없음), 서버 적용 후만 내려온다. */
+  isActive?: boolean;
   verified?: boolean;       // 본인인증(CI) 완료 여부 — 1인 1계정
   verifiedAt?: string;      // 본인인증 시각
   realName?: string;        // 인증된 실명(표시명/닉네임과 분리 저장)
@@ -162,18 +164,10 @@ export async function checkNicknameAvailable(nickname: string): Promise<boolean>
   return data === true;
 }
 
-// ── 이메일(아이디) 중복 검사 ──────────────────────────────────────────────────
-// is_email_available RPC(security definer, auth.users 기준). 가입 전 화면이라 anon 호출.
-// 왜 필요한가: 이메일 확인이 켜진 Supabase 는 중복 이메일 signUp 을 오류 없이 성공처럼 응답한다(열거 방지).
-export const EMAIL_RE = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i; // 중첩 수량자 없음(ReDoS 회피) · 서버 RPC 와 동일
-export async function checkEmailAvailable(email: string): Promise<boolean> {
-  const trimmed = email.trim();
-  if (!EMAIL_RE.test(trimmed)) return false;
-  if (IS_MOCK) return true;
-  const { data, error } = await supabase.rpc('is_email_available', { p_email: trimmed });
-  if (error) throw error;
-  return data === true;
-}
+// ── 이메일 형식 ───────────────────────────────────────────────────────
+// 오너 결정(2026-09-26): is_email_available 은 anon·authenticated 모두에서 회수된다(20260926a) — 가입 전 중복 확인을 없애서다.
+//   이 함수를 부르던 checkEmailAvailable 은 이제 호출하면 조용히 실패하므로 지운다(호출부 0곳 확인 후). EMAIL_RE 는 형식 검증용으로 남긴다.
+export const EMAIL_RE = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i; // 중첩 수량자 없음(ReDoS 회피)
 
 // 본인 닉네임 변경 — 처음 한 번은 바로, 그다음은 30일에 한 번(서버 트리거 20260924k). 중복·30일 위반 시 서버 문구로 에러.
 export async function setMyNickname(nickname: string): Promise<void> {
@@ -213,7 +207,7 @@ export async function signUpUser(payload: SignupUserPayload): Promise<void> {
   if (!payload.agreedToPrivacy)      throw new Error('개인정보 수집·이용에 동의해 주세요.');
   if (!payload.agreedToAntiGambling) throw new Error('불법 환전·사행성 금지 서약에 동의해 주세요.');
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email:    payload.email,
     password: payload.password,
     options: { data: {
@@ -229,6 +223,11 @@ export async function signUpUser(payload: SignupUserPayload): Promise<void> {
     } },
   });
   if (error) throw error;
+  // 서버가 이메일 확인을 요구하면 중복 이메일 signUp 을 error 없이 성공처럼 응답한다(열거 방지) —
+  //   이때 data.user.identities 가 빈 배열이다(Supabase 문서가 말하는 유일한 판별법). 본인 시도이라 안내해도 열거가 아니다.
+  if (!error && data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    throw new Error('이미 가입된 이메일입니다 — 로그인하거나 비밀번호 찾기를 이용해 주세요');
+  }
 }
 
 // ── 업주 가입 신청 ─────────────────────────────────────────────────────────────
@@ -239,7 +238,7 @@ export async function signUpOwner(payload: SignupOwnerPayload): Promise<void> {
   if (!payload.agreedToPrivacy)      throw new Error('개인정보 수집·이용에 동의해 주세요.');
   if (!payload.agreedToAntiGambling) throw new Error('불법 환전·사행성 금지 서약에 동의해 주세요.');
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email:    payload.email,
     password: payload.password,
     options: { data: {
@@ -259,6 +258,11 @@ export async function signUpOwner(payload: SignupOwnerPayload): Promise<void> {
     } },
   });
   if (error) throw error;
+  // 서버가 이메일 확인을 요구하면 중복 이메일 signUp 을 error 없이 성공처럼 응답한다(열거 방지) —
+  //   이때 data.user.identities 가 빈 배열이다(Supabase 문서가 말하는 유일한 판별법). 본인 시도이라 안내해도 열거가 아니다.
+  if (!error && data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    throw new Error('이미 가입된 이메일입니다 — 로그인하거나 비밀번호 찾기를 이용해 주세요');
+  }
 }
 
 // ── 매장 구성원(직원) — 업주 초대 + 수락 모델 ────────────────────────────────
@@ -287,7 +291,7 @@ export async function setInviteGrants(
 // ⚠ get_my_venue_staff 는 20260914d 부터 아래 6컬럼만 내려준다(보안 표준 §6 — 예전엔 profiles 전 컬럼이 나가
 //   업주가 직원의 ci_hash·실명·전화까지 받았다). rowToUser 로 받으면 verified(!!ci_hash)가 조용히 false 가 되므로
 //   전용 매퍼로 받는다 — 직원 화면(StaffManager·NuriPosLedger·StaffSchedule·StaffPayroll)이 쓰는 필드는 이 여섯뿐이다.
-interface StaffRow { id: string; name: string; nickname: string | null; email: string; avatar_color: string | null; staff_title: string | null }
+interface StaffRow { id: string; name: string; nickname: string | null; email: string; avatar_color: string | null; staff_title: string | null; is_active?: boolean }
 function staffRowToUser(row: StaffRow): User {
   return {
     id:          row.id,
@@ -297,6 +301,8 @@ function staffRowToUser(row: StaffRow): User {
     role:        'venue_staff', // RPC 가 role = 'venue_staff' 로 걸러 준다
     avatarColor: row.avatar_color ?? undefined,
     staffTitle:  row.staff_title ?? undefined,
+    // is_active 컨이 아직 없는 서버(20260926a 적용 전)이면 row.is_active 가 undefined — 그대로 undefined 로 둔다(화면이 '구버전처럼' 다 보여준다).
+    isActive:    row.is_active,
     // verified·realName·phone 등은 서버가 내려주지 않는다 — undefined(모름)로 둔다. false 로 뭉개지 않는다.
   };
 }

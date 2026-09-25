@@ -30,7 +30,7 @@ export default function ChipDistributor() {
             <NumIn value={r.per} onChange={(v) => setRow(i, { per: v })} />
             <span className="text-right text-xs tabular-nums text-ink-secondary">{((r.per || 0) * players).toLocaleString()}개</span>
             <button type="button" onClick={() => del(i)} aria-label="삭제"
-              className="w-7 h-7 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light">✕</button>
+              className="hit w-7 h-7 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light">✕</button>
           </div>
         ))}
         <button type="button" onClick={add}

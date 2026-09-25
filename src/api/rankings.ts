@@ -391,17 +391,6 @@ export async function deleteScoreEntry(id: string): Promise<void> {
   await mustAffect(supabase.from('venue_score_entries').delete().eq('id', id));
 }
 
-/** 머니인 비율용 — 이름별 바인 횟수(장부 집계, 금액 없음) */
-export async function getVenueBuyinCounts(venueId: string): Promise<Map<string, number>> {
-  if (IS_MOCK) return new Map();
-  const { data, error } = await supabase.rpc('venue_buyin_counts', { p_venue_id: venueId });
-  if (error) return new Map();
-  const m = new Map<string, number>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const r of (data ?? []) as any[]) m.set(String(r.name).toLowerCase(), Number(r.buyin_count) || 0);
-  return m;
-}
-
 /** 바인왕/출석왕 보드용 — 이름별 바인·방문(고유 일자) 횟수(장부 집계, 금액 없음) */
 /** 순위 패널 첫 렌더 캐시(VenuePage.writeRankCache → localStorage)에 넣기 **전에** 사람 식별 정보를 떨어뜨린다.
  *  D4(2026-09-17): 캐시에 실명(totals·latest.entries.realName)·업주 자유 텍스트 사유(manual.reason)·방문자 명단(checkinRows)이

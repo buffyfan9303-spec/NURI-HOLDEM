@@ -9,11 +9,11 @@ import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox';
 import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
 import { rememberCurrentView, clearViewIntent } from '../../lib/pendingViewIntent';
 import { signInWithGoogle,
-  signUpUser, signUpOwner, checkNicknameAvailable, checkEmailAvailable, EMAIL_RE,
+  signUpUser, signUpOwner, checkNicknameAvailable, EMAIL_RE,
   requestPasswordReset, verifyPasswordResetOtp, setNewPassword, EMAIL_OTP_LENGTH,
 } from '../../api/auth';
 import { validatePassword, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER } from '../../lib/password';
-import AvailabilityField, { useAvailabilityCheck } from '../atoms/AvailabilityField';
+import AvailabilityField, { useAvailabilityCheck, type AvailStatus } from '../atoms/AvailabilityField';
 import { isValidDisplayName } from '../../lib/displayName';
 import TermsOfService   from '../../pages/legal/TermsOfService';
 import PrivacyPolicy    from '../../pages/legal/PrivacyPolicy';
@@ -876,10 +876,17 @@ function NicknameField(props: FieldProps) {
   );
 }
 
-// ── 이메일(아이디) 필드 — 실시간 중복검사(600ms · 형식 통과 후에만 RPC, 열거 위험 완화 20260903b) ──
-
+// ── 이메일(아이디) 필드 ──
+// 오너 결정(2026-09-26): 비로그인 상태의 이메일 가입 여부 사전 확인을 없앤다 — 서버 is_email_available 을
+//   anon·authenticated 모두에서 회수한다(20260926a). 형식만 즉시 확인하고, 실제 중복 여부는 가입 시도 결과(signUpUser/signUpOwner
+//   의 identities 빈 배열 판별)로 안다 — EmailField 의 status 는 이제 'available' 또는 'invalid' 뿐(taken 없음).
 const isValidEmail  = (v: string) => EMAIL_RE.test(v);
-const useEmailCheck = () => useAvailabilityCheck(checkEmailAvailable, isValidEmail, undefined, 600);
+function useEmailCheck() {
+  const [value, setValue] = useState('');
+  const trimmed = value.trim();
+  const status: AvailStatus = trimmed.length === 0 ? 'idle' : isValidEmail(trimmed) ? 'available' : 'invalid';
+  return { value, setValue, status };
+}
 
 function EmailField(props: FieldProps) {
   return (
