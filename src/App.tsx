@@ -1,8 +1,8 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, Fragment, type ReactNode } from 'react';
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
+import { bootTabForNotifLink } from './lib/notifBootTab';
 import { flushSync } from 'react-dom';
 import { withViewTransition, type VTDirection } from './lib/viewTransition';
-import { isTabCoverOn, playTabCover, TAB_COVER_TOP } from './lib/tabCover';
 import { getAppSetting, loadEventMenuVisibility } from './api/settings';
 // ⚠ `api/events` 가 아니라 `lib/eventSlug` 에서 받는다 — 둘은 같은 값이지만(그쪽이 재수출한다),
 //   api/events 를 정적으로 물면 TIER_META·oddsRows 까지 첫 화면 임계 경로로 딸려 온다(실측 2026-09-13).
@@ -886,8 +886,9 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
               onClick={() => { if (tab) { if (tab === active) { window.scrollTo({ top: 0, behavior: 'smooth' }); onSameTap?.(tab); } else { setOptimistic(tab); onChange(tab); } } else onOpenMe(); }}
               aria-current={on ? 'page' : undefined}
               // 접근성 이름을 버튼에 고정 — 배지 span 의 aria-label 이 DOM 순서상 라벨보다 앞이라 이름이
-              // '진행 중 2게임 라이브' 로 뒤집혔다(게임이 돌 때마다 e2e /^라이브/ 가 깨지던 원인). 이름 = '라이브, 진행 중 2게임'.
-              aria-label={tab && (count?.[tab] ?? 0) > 0 ? `${label}, 진행 중 ${count![tab]}게임` : label}
+              // '진행 중 대회 2개 라이브' 로 뒤집혔다(게임이 돌 때마다 e2e /^라이브/ 가 깨지던 원인). 이름 = '라이브, 진행 중 대회 2개'.
+              // 2026-09-26 카카오 재심사 소명 — '게임'이 앱 안에서 직접 진행하는 것처럼 읽혀 오해를 준다 — 오프라인 대회 정보임을 드러내는 '대회 N개' 로 바꾼다(값은 동일, 이름만).
+              aria-label={tab && (count?.[tab] ?? 0) > 0 ? `${label}, 진행 중 대회 ${count![tab]}개` : label}
               // ⚠ 2026-09-21 press-spring 제거 — 실측(CDP 130ms 터치)상 특이도로 한 번도 이기지 못한
               // 죽은 규칙이었다(전역 button:active(0,2,1) > .press-spring:active(0,2,0)). 대신
               // data-main-tab 으로 하단바 전용 press 규칙을 index.css 에 특이도 우위로 건다.
@@ -1034,7 +1035,10 @@ export default function App() {
       }
       const valid: TabId[] = ['home', 'browse', 'live', 'community', 'tools', 'calendar', 'my-store', 'admin'];
       if ((valid as string[]).includes(t ?? '')) return t as TabId;
-      return 'home';
+      // 🔴 2026-09-26(auth-boot-gap G7) — 푸시 부팅 링크(?nl=)가 권한 탭(/admin · /my-store/* · /staff-schedule)을 가리키면
+      //   그 탭으로 시작한다. 홈으로 시작하면 권한이 오기 전 ~100~150ms 홈이 그려졌다가 바뀌었다(깜빡임).
+      //   권한이 없으면 아래 탭 가드가 확인 뒤 홈으로 보낸다(?tab=admin 과 같은 길).
+      return bootTabForNotifLink(new URLSearchParams(window.location.search).get('nl')) ?? 'home';
     } catch { return 'home'; }
   });
   /** 🔴 `?tab=` 이 가리킨 탭이 **권한이 도착한 뒤에야 생기는** 경우를 위한 기억 (2026-09-18).
@@ -1052,18 +1056,27 @@ export default function App() {
   const pendingDeepTab = useRef<TabId | null>(null);
   if (pendingDeepTab.current === null) {
     try {
-      const t0 = new URLSearchParams(window.location.search).get('tab');
+      const sp0 = new URLSearchParams(window.location.search);
+      const t0 = sp0.get('tab');
       if (t0 === 'my-store' || t0 === 'admin') pendingDeepTab.current = t0;
+      else pendingDeepTab.current = bootTabForNotifLink(sp0.get('nl')); // 알림 부팅 링크도 같은 기억(G7)
     } catch { /* noop */ }
   }
+  /** 알림 부팅 링크(?nl=)가 가리킨 권한 탭 — 부팅 동안만 의미가 있는 상수(G7). 아래 탭 가드가 '업주의 /admin' 을 내 매장으로 보낼 때 쓴다. */
+  const [bootNotifTab] = useState(() => { try { return bootTabForNotifLink(new URLSearchParams(window.location.search).get('nl')); } catch { return null; } });
   // `?tab=` 은 **1회성 진입**이다 — v/venue 딥링크와 같은 문법(아래 1780행대).
   // 이걸 안 지우면 PWA 바로가기·알림 패널(NotificationPanel)로 들어온 사용자는 URL 에 ?tab= 이 박힌 채
   // 남아, 새로고침·복귀 때마다 계속 그 탭으로 부팅된다 — 위 '항상 홈' 규칙이 그 사용자에게만 무력화된다.
+  // 🔴 2026-09-26(G7) — `?nl=` 도 **여기서** 지운다. 알림 링크가 권한 탭으로 부팅하면 아래 탭 이력 effect 가 부팅 칸을 하나 밀어 넣는데,
+  //   아래(1740행대) nl 정리 effect 는 그 **뒤에** 돌아 새 칸만 고치고 밑 칸에 `?nl=/admin` 이 남았다(권한 없으면 홈으로 되돌아가며
+  //   그 칸이 드러나 주소창에 ?nl= 이 남음 — 새로고침하면 다시 연다). 이 effect 는 이력 effect 보다 먼저 선언돼 먼저 돈다.
+  //   링크 값은 첫 렌더에서 이미 읽었다(bootNotifLinkRef · bootNotifTab) — 지워도 여는 데 지장이 없다.
   useEffect(() => {
     try {
       const url = new URL(window.location.href);
-      if (!url.searchParams.has('tab')) return;
+      if (!url.searchParams.has('tab') && !url.searchParams.has('nl')) return;
       url.searchParams.delete('tab');
+      url.searchParams.delete('nl');
       window.history.replaceState(null, '', url.pathname + url.search + url.hash);
     } catch { /* ignore */ }
   }, []);
@@ -1105,8 +1118,8 @@ export default function App() {
     // Warm panes need only an urgent state update (also safe from auth effects).
     // Run before the stale-ref guard so the last choice in a batch always wins.
     // 🔵 MOTION-UNIFY P1(2026-09-24) — **PC 도 같은 길**이다. PC 재방문은 View Transition(0.12s 크로스페이드)이었고
-    //   PC 첫 방문은 가림막 0 하드컷이었다. 이제 두 폭 모두 급한 커밋 + 아래 layout effect 의 덮개(tabCover.ts) 하나다.
-    //   (VT 는 전환 중 히트테스트가 <html> 로 떨어져 rescue 가 필요했다 — 덮개는 pointer-events-none 이라 그런 게 없다.)
+    //   PC 첫 방문은 가림막 0 하드컷이었다. 이제 두 폭 모두 급한 커밋 하나다(5차 PILL-FLASH 에서 덮개도 없앴다 — src/lib/tabCover.ts 5차 절).
+    //   (VT 는 전환 중 히트테스트가 <html> 로 떨어져 rescue 가 필요했다.)
     //   `_dir` 은 뒤로가기 경로(commitTab(t,'back'))의 호출 모양을 지키려고 남긴다 — 방향 연출은 없다.
     void _dir;
     if (seenTabs.has(t)) {
@@ -1186,9 +1199,6 @@ export default function App() {
     if (t === 'live') refreshClocksRef.current?.();
     commitTab(t);
   }, [clearTabTrail, commitTab]);
-  /** BOTTOM-TAB-SMOOTH 덮개(src/lib/tabCover.ts) — 본문 위 지면색 한 장. 직전 탭을 기억해 마운트엔 돌지 않는다. */
-  const tabCoverRef = useRef<HTMLDivElement>(null);
-  const coverTabRef = useRef<TabId>(activeTab);
   // 탭이 바뀌면 **항상 맨 위**로. layout 단계에서 잡는다 — 페인트 전에 위치를 정해야
   // '옛 위치로 한 번 그려졌다가 튀는' 프레임이 안 생긴다(실측: 전환은 한 프레임에 원자적이다).
   // ⚠ `behavior: 'instant'` 를 'smooth' 로 바꾸지 마라 — 탭 전환에 스크롤 애니메이션이 겹치면
@@ -1203,7 +1213,7 @@ export default function App() {
     //     **예약된 옛 rAF 를 취소하고** 지금 Y 를 구독자 전원에게 즉시 준다.
     //   ⚠ 새 effect 를 하나 더 달아 순서를 갈라 놓지 않는다 — 한 프레임 안에서 끝나야 한다.
     // CONNECTIVITY-ALL 2 — 트레일 back 으로 돌아온 탭만 떠날 때 위치로(그 외는 맨 위). 이 layout effect 안이라
-    //   첫 페인트 전에 정해지고, 바로 아래 playTabCover 덮개가 같은 프레임부터 깔린다(덮개 아래 정착).
+    //   첫 페인트 전에 정해진다.
     const back = backScrollRef.current;
     backScrollRef.current = null;
     const saved = back && back.tab === activeTab ? back.saved : null;
@@ -1214,7 +1224,7 @@ export default function App() {
           document.documentElement.scrollHeight - window.innerHeight)
       : 0;
     markProgrammaticScroll();
-    // 두 갈래로 쓴 이유: 맨 위 이동(탭 직접 누름)은 tabCover.test ④ 가 이 문자열 그대로 같은 layout effect 안에 있는지 잠근다.
+    // 두 갈래로 쓴 이유: 맨 위 이동(탭 직접 누름)의 호출 모양을 그대로 둔다(옛 덮개 배선 계약의 흔적 — 동작은 같다).
     if (toY > 0) window.scrollTo({ top: toY, behavior: 'instant' as ScrollBehavior });
     else window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
     // 🔴 2026-09-20 독립 검증 F2 — **`window.scrollY` 를 다시 읽지 않는다.**
@@ -1224,11 +1234,8 @@ export default function App() {
     //   오너가 "눌림" 을 지적한 바로 그 프레임이라 비용을 되돌려 놓을 이유가 없다.
     //   (뒤로가기 복원(toY>0)만 예외로 한 번 읽는다 — 판이 짧아졌으면 브라우저가 깎은 실제 값을 헤더에 줘야 한다.)
     notifyScrollNow(toY > 0 ? window.scrollY : 0);
-    // BOTTOM-TAB-SMOOTH(2026-09-24) — 본문이 아니라 본문 **위 덮개**를 걷어낸다. 기본 켜짐(tabsoft), `?fx=off` 기기만 끔.
-    //   이 layout effect 안이라 첫 페인트부터 덮개가 깔린다(K-07). 본문(.tab-pane)에는 아무것도 걸지 않는다 — 아래 폐기 기록 참고.
-    isTabCoverOn(); // 첫 호출이 ?fx= 를 읽어 저장한다 — 딥링크 처리가 query 를 지우기 전(마운트)에 부른다
-    if (coverTabRef.current !== activeTab) playTabCover(tabCoverRef.current, activeTab); // 걷기는 목적지 판이 그려진 뒤(3차)
-    coverTabRef.current = activeTab;
+    // (BOTTOM-TAB-SMOOTH 덮개 호출이 있던 자리 — 5차 PILL-FLASH(2026-09-26)에 덮개를 없애고 2026-09-26 호출·요소·`?fx=` 스위치를 걷었다.
+    //   본문(.tab-pane)에는 여전히 아무것도 걸지 않는다 — 아래 폐기 기록 참고.)
     // 🔴 2026-09-22 — **여기 있던 본문 진입 모션(N1/M1 · `startTabEnter`)을 없앴다.**
     //   폐기 사유(역사): 2026-09-21 에 "탭을 옮기면 본문이 부드럽지 않다" 는 지적을 받고
     //   보이는 `[data-main-enter]` 블록 전부에 `translateX(6px)→0` 170ms 를 걸었다. 그런데
@@ -1397,14 +1404,16 @@ export default function App() {
   // 세션당 포스터별 1회(새로고침 어뷰징 방지), 실패 무시(장식 지표가 UX 를 막으면 안 된다).
   useEffect(() => {
     const sid = openSchedule?.id;
-    if (!sid) return;
+    // 2026-09-26: 서버(bump_schedule_view)가 anon 실행 권한을 회수하고 사람당 1회로 바뀐다(20260926a) —
+    //   비로그인은 호출해도 서버가 거부하므로 미리 거른다(콘솔 에러 소음도 막는다).
+    if (!sid || !user) return;
     try {
       const k = `nuri:viewed:${sid}`;
       if (sessionStorage.getItem(k)) return;
       sessionStorage.setItem(k, '1');
     } catch { /* 스토리지 불가 시 그냥 1회 발사 */ }
     bumpScheduleView(sid).catch(() => {});
-  }, [openSchedule?.id]);
+  }, [openSchedule?.id, user]);
   const [displayTarget, setDisplayTarget] = useState<{ venueId: string; gameSeq: number } | null>(null); // 관전/대형 디스플레이
   // 📍 가까운 순(Phase 14 보류 해제 — venues.lat/lng 신설): 위치 1회 요청, 거부 시 지역 필터 안내.
   const [nearSort, setNearSort] = useState(false);
@@ -1658,7 +1667,11 @@ export default function App() {
   //   ⚠ `?ref=`(친구 초대)는 QR 이 아니라 **공유 링크**라 아래에 그대로 남는다 — 합치지 마라.
 
   // ── 친구 초대 (?ref=<추천코드>) — 코드 기억 + 비로그인 시 가입 유도 ──
+  // 🔴 2026-09-26(auth-boot-gap G6) — 마운트 1회로 돌면 부팅 첫 커밋의 user 는 **항상 null** 이라, 로그인된 사람이
+  //   초대 링크를 열어도 가입 시트가 떴다(AuthContext 틈을 고친 뒤에도 2/2 재현 — 이 effect 는 로딩을 아예 안 봤다).
+  //   → 세션이 확정될 때까지 기다린다. 한 번만 처리되는 근거는 **주소**다: 처리하는 순간 ?ref 를 지우므로 다시 돌아도 바로 빠진다.
   useEffect(() => {
+    if (authLoading) return;
     const sp = new URLSearchParams(window.location.search);
     const ref = sp.get('ref');
     if (!ref) return;
@@ -1668,7 +1681,7 @@ export default function App() {
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
     if (!user) openLogin('signup-user');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoading]);
 
   // 로그인/가입 완료 후 — 기억해둔 추천 코드가 있으면 record_referral 1회(신규 14일내만 서버에서 수락)
   const refRecorded = useRef(false);
@@ -2650,7 +2663,8 @@ export default function App() {
     if (!tabs.find((t) => t.id === activeTab)) {
       if (authLoading && (activeTab === 'my-store' || activeTab === 'admin')) return;
       autoTabBounce.current = true;
-      changeTab('home');
+      // G7: 알림 부팅 링크 /admin(포스터 승인)은 업주에게도 온다 — 업주는 홈을 거치지 않고 바로 내 매장으로(알림 처리와 같은 목적지).
+      changeTab(activeTab === 'admin' && bootNotifTab === 'admin' && tabs.some((x) => x.id === 'my-store') ? 'my-store' : 'home');
       autoTabBounce.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3166,9 +3180,18 @@ export default function App() {
     // /schedules/:id — 목록에 없으면 단건 조회로 한 번 더 확인한다(F09: '내려간 포스터' 단정 금지)
     const sm = link.match(/^\/schedules\/(.+)$/);
     if (sm) { openScheduleById(sm[1], opts); return; }
-    // /community/:venueId
+    // /community/:venueId — 목록에 없으면(문 닫음·삭제) 무반응으로 끝나던 자리다(F09 와 같은 원칙).
+    //   venues 가 아직 로드 전이면 판정을 미루고 낙관적으로 연다(로드되면 VenuePage 가 채운다).
     const cm = link.match(/^\/community\/(.+)$/);
-    if (cm) { startTransition(() => setOpenVenueId(cm[1])); return; }
+    if (cm) {
+      const vid = cm[1];
+      if (venuesLoaded && !venues.some((v) => v.id === vid)) {
+        toast.show('삭제되었거나 찾을 수 없는 매장이에요', 'info');
+      } else {
+        startTransition(() => setOpenVenueId(vid));
+      }
+      return;
+    }
     // /posts/:id → 커뮤니티 탭 이동 + 해당 게시글 열기
     const pm = link.match(/^\/posts\/(.+)$/);
     if (pm) {
@@ -3233,9 +3256,14 @@ export default function App() {
     if (link === '/wallet') { setMeTab('dashboard'); setVoucherWalletOpen(true); return; } // 초기 탭 명시 — 보안 탭 진입 뒤 stale 방지
     // '/' (홈 안내형 알림) → 홈 탭으로 — 제목만 다시 토스트하는 막다른 길 방지
     if (link === '/') { changeTab('home'); return; }
+    // 위 규칙에 안 걸리고 link 가 비어 있는 경우 — 게시글·댓글 연결 알림(qna·comment·mention)은 원래 특정 대상을 가리키는데,
+    // 대상이 삭제되면 link 가 빈다 — 이때 제목만 되풀이하면 '눌러도 아무 데도 안 가는' 것과 같은 무반응으로 보인다.
+    // system·reminder 등 원래 대상이 없는 안내형은 제목 반복이 정상(링크 없이 만들어진다) — 이 둘을 타입으로 가른다.
+    const linkedType = n.type === 'qna' || n.type === 'comment' || n.type === 'mention';
+    if (!link && linkedType) { toast.show('삭제되었거나 찾을 수 없는 게시글·매장이에요', 'info'); return; }
     if (n.title) toast.show(n.title, 'info'); // 푸시로 온 원문 링크(openNotifLink)는 제목이 없다 — 빈 토스트를 띄우지 않는다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openScheduleById, isAdmin, toast, user, hasStoreTabs]);
+  }, [openScheduleById, isAdmin, toast, user, hasStoreTabs, venues, venuesLoaded]);
 
   // ⚠ N04: 매장 Q&A·요강 댓글도 게시글 댓글과 **같은 계약**이다 — 성공을 기다려 돌려주고, 실패는 던진다.
   //   입력창을 비울지 말지는 CommentThread 가 이 Promise 로 판단한다.
@@ -4083,11 +4111,6 @@ export default function App() {
       <MobileTabBar tabs={tabs} active={navActive} onChange={changeTab} count={tabCount}
         onSameTap={(t) => { if (t === 'my-store') setMyStoreHomeNonce((v) => v + 1); }}
         onOpenMe={openMeCb} overlayOpen={fullOverlayOpen} suppressed={openVenueId !== null} />
-      {/* BOTTOM-TAB-SMOOTH 덮개 — 헤더(z-50·모바일 불투명) 아래부터, 탭바(z-50)·시트(z-55+) 아래 z-45.
-          평소 display:none. 켜진 기기의 모바일 탭 전환 때 opacity 1 로 깔고, 목적지 판이 그려진 뒤(상한 700ms) 280ms 동안 opacity 만 1→0(tabsoft, 기본 켜짐·?fx=off 로 기기별 끄기) (src/lib/tabCover.ts). */}
-      <div ref={tabCoverRef} aria-hidden data-tab-cover
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-[45] hidden bg-surface-base opacity-0"
-        style={{ top: TAB_COVER_TOP }} />
 
       {/* 일정 탐색 */}
       <div className="px-page-x"><Suspense fallback={null}><StaffInviteBanner /></Suspense></div>
@@ -4599,7 +4622,8 @@ export default function App() {
             빈 예약 칸이 영원히 남는다**(예전엔 아무것도 안 그려졌다). 자리는 '아직 모르는 동안' 만 잡는다.
           ⚠ 여기서 VenueManageTab 을 미리 마운트하면 안 된다 — 권한 없는 사용자에게 그 코드를
             내려보내는 것이고, 바로 위 주석의 '로그아웃 시 즉시 언마운트' 계약도 깨진다. */}
-      {authLoading && !(isOwner || isStaff || isAdmin) && activeTab === 'my-store' && (
+      {/* 관리자 탭(`?tab=admin` · 알림 `?nl=/admin`)으로 부팅할 때도 같은 자리 예약(2026-09-26 G7) — 권한 확인 전 푸터가 헤더 밑까지 올라오지 않게. */}
+      {authLoading && ((activeTab === 'my-store' && !(isOwner || isStaff || isAdmin)) || (activeTab === 'admin' && !isAdmin)) && (
         // ⚠ `data-tab="my-store"` 를 붙이지 않는다 — 진짜 pane 과 같은 표식이 둘이 되면
         //   e2e 셀렉터와 `tabPaneParity` 계약이 이 빈 자리를 진짜 판으로 착각한다(실제로 걸렸다).
         <div className="px-page-x pt-3 pb-section">

@@ -677,7 +677,9 @@
     /* PET 시그니처 상단 인디고 글로우는 body::before 고정 레이어로 —
        background-attachment:fixed 는 스크롤 프레임마다 뷰포트 전체 재페인트를 강제한다
        (2026-08-17 끊김 계측의 페인트 1순위). 고정 ::before 는 합성만 하므로 비용 0. */
-    font-family: 'Pretendard Variable', 'Pretendard', 'NuriMarks', system-ui, sans-serif;
+    /* 'Pretendard FB Win/Android' = 크기 맞춘 폴백(맑은 고딕·Noto CJK) — woff2 도착 전 첫 페인트와 swap 뒤 글자 크기를 맞춰 리플로우를 줄인다
+       (정의: public/fonts/pretendard/pretendardvariable-dynamic-subset.css 끝 · tailwind fontFamily.sans 와 같은 순서). Apple 폴백은 미측정이라 넣지 않았다. */
+    font-family: 'Pretendard Variable', 'Pretendard', 'Pretendard FB Win', 'Pretendard FB Android', 'NuriMarks', system-ui, sans-serif;
     /* iOS 탭 하이라이트 제거 */
     -webkit-tap-highlight-color: transparent;
     /* 한글 줄바꿈: 어절(단어) 단위로 끊어 "글자 하나만 다음 줄로 내려가는" 어색함 방지.
@@ -1227,7 +1229,7 @@ main { max-width: 48rem; margin-inline: auto; }
    ① 아래 :is(...) 무효화 목록(keep-alive 재방문 깜빡임 방지)
    ② prefers-reduced-motion 블록의 animation:none 목록
    (.animate-scale-in 은 tailwind 에 정의가 없는 죽은 셀렉터라 제거, .anim-pop 은 뚫려 있던 유일한 구멍이라 등록) */
-.tab-pane :is(.animate-fade-in, .animate-slide-up, .animate-slide-down, .anim-pop):not(.fixed):not(.fixed *) {
+.tab-pane :is(.animate-fade-in, .animate-slide-up, .animate-slide-down, .anim-pop, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out):not(.fixed):not(.fixed *) {
   animation: none !important;
 }
 
@@ -1397,7 +1399,7 @@ body { overscroll-behavior-y: contain; }
   }
   /* 진입/로딩 애니메이션은 아예 끔(0.01ms 단축이 아니라 none) — 모션 민감 사용자에게 깜빡임 0.
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
-  .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down,
+  .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out,
   .skeleton, .confetti, .anim-pop, .poster-marquee { animation: none !important; }
   /* ::details-content 는 위 전역 * 셀렉터가 못 잡는다(의사 요소가 아니라 UA 생성 트리라 * 에 안 걸린다) —
      별도로 끈다. block-size 전환은 헌법 §4 의 grid-template-rows 0fr→1fr 예외와 성격이 같아

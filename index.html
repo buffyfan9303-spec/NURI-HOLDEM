@@ -99,7 +99,10 @@
            ① 서브셋 CSS 의 92 face `font-display: optional` → `fallback`  ② 여기 <head> 정적 <link> (유휴 지연 주입 금지 — CLS 0.132 의 원인).
          preload 0개에서 시작(첫 화면 이득이 실측된 파일에만 최소 적용). 폰트 파일·OFL.txt 는 손대지 않는다(SIL OFL 1.1).
          루트 17px·역할별 타이포 토큰은 그대로 — 폰트 활성화와 글자 크기 변경을 섞지 않는다.
-         적용 증거는 CDP CSS.getPlatformFontsForNode 만(e2e/font-apply-measure.spec.ts — 양성 검사로 갱신). -->
+         적용 증거는 CDP CSS.getPlatformFontsForNode 만(e2e/font-apply-measure.spec.ts — 양성 검사로 갱신).
+         [2026-09-26 리드 결정] `fallback` → `swap`. fallback 의 100ms 차단 구간이 첫 React 커밋 롱태스크와 겹쳐 홈 콜드 진입에
+           글자 없는 프레임 11~29개(185~480ms)가 났다(오너 "메인화면 블링크"). swap 은 빈 프레임 0 · CLS 0.0012 로 동일
+           (e2e/home-cold-text-pop.spec.ts). optional 은 콜드에 폰트가 안 붙어 기각. -->
     <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css">
     <!-- [FONT] Pretendard 로딩을 **멈췄다**(2026-09-12 — 위 09-13 메모로 다시 켰다. 아래는 원인 규명 기록으로 남긴다). 파일은 지웠지 않고 그대로 둔다.
          `public/fonts/pretendard/` (3.2MB, SIL OFL 1.1, 라이선스 /fonts/pretendard/OFL.txt)

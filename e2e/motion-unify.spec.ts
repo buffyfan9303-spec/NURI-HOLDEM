@@ -1,18 +1,20 @@
 // MOTION-UNIFY (오너 2026-09-24) — "PC 던 모바일이던 하나를 부드럽게 바꾸면 나머지 모든 페이지에서도 동일하게.
 //   모바일 메인 메뉴 이동 정도의 부드러움을 모든 PC·모바일 페이지에."
 //
-// 무엇을 잠그나 — **모든 화면 이동이 한 덮개(src/lib/tabCover.ts)를 탄다**:
-//   MU1 하위 탭(goSubTab 25곳) — 390 · CPU 4배 · 실제 손가락(CDP 터치 홀드)
-//        새 판이 그려지는 첫 프레임에 덮개(≥0.9) · 덮개 없이 scrollY 순간이동 0 · 덮개 없이 스켈레톤 노출 0 ·
-//        페이드(중간값)로 걷힘 · 걷힌 뒤 레이아웃 이동 < 0.02 · 정착 후 덮개 숨김.
-//   MU2 PC 메인 탭 — 1440 · CPU 4배 · 마우스. 재방문도 같은 덮개(View Transition 0) ·
-//        덮개는 GNB 밑·콘텐츠 열 폭만(좌우 채움 배경·GNB 는 안 덮는다).
-//   MU3 오버레이 닫기 — 매장 페이지(버튼·뒤로)·장터 행 상세·게시글 상세: 한 프레임에 사라지지 않고 페이드로 닫힌다.
-//   MU4 첫 방문 라이브(GET +400ms) — 판 안 스켈레톤이 덮개 밖으로 드러나지 않고, 걷힌 뒤 무너지지 않는다(CLS < 0.02).
+// 🔴 5차(2026-09-26 PILL-FLASH) — 4차까지 이 스펙은 '새 판 첫 프레임에 덮개 ≥ 0.9' 를 요구했다. 그 덮개(판 위 지면색 한 장)가
+//   오너가 말한 "검정색이 됐다가 다시 콘텐츠가 나와 깜빡인다" 그 자체였다(재방문에도 ~100ms 지면색 판 — root-cause-debugger 실측).
+//   덮개를 없앴고, 이 스펙은 **같은 이동들이 빈 판 없이 한 프레임에 바뀐다**를 잠근다. 픽셀 휘도 판정은 e2e/pill-flash.spec.ts.
 //
-// 음성 대조(2026-09-24 실측, 격리 빌드 — 결과는 home-team 보고서):
-//   · src/lib/subTabTransition.ts 의 `playSubTabCover(scope, …)` 한 줄을 지우면 MU1 의 **모든 하위 탭 화면**이 동시에 빨개진다.
-//   · src/lib/tabCover.ts isSettled 의 판 안 스켈레톤 검사(③)를 지우면 MU4 가 빨개진다.
+// 무엇을 잠그나 — 모든 화면 이동이 **가리지 않고** 바뀐다:
+//   MU1 하위 탭(goSubTab 25곳) — 390 · CPU 4배 · 실제 손가락(CDP 터치 홀드)
+//        덮개 0 프레임 · 판이 그대로인데 scrollY 만 움직이는 프레임 0(판 교체와 같은 프레임의 스크롤은 교체다) ·
+//        재방문 스켈레톤 0 · 레이아웃 이동 < 0.02 · View Transition 0.
+//   MU2 PC 메인 탭 — 1440 · CPU 4배 · 마우스. 같은 계약(재방문).
+//   MU3 오버레이 닫기 — 매장 페이지(버튼·뒤로)·장터 행 상세·게시글 상세: 한 프레임에 사라지지 않고 페이드로 닫힌다(5차와 무관, 그대로).
+//   MU4 첫 방문 라이브(GET +400ms) — 덮개 0 · 스켈레톤(모양 예약)이 실제 내용으로 바뀌며 무너지지 않는다(CLS < 0.02).
+//
+// 음성 대조(2026-09-26 실행): 옛 tabCover.ts 빌드(덮개 있음)에 돌리면 MU1·MU2·MU4 의 '덮개 0' 이 빨개진다.
+// (4차 음성 대조 기록 — 덮개 한 줄·isSettled ③ 제거 — 은 덮개와 함께 사라졌다.)
 // ⚠ 운영 데이터를 읽는다(매장 카드·게시글·장터 행). 코드를 안 바꿨는데 빨개지면 운영 데이터부터 의심하라(CLAUDE.md).
 // ⚠ 하네스 Chromium 만 본다. 삼성 인터넷 GPU·주소창 접힘은 재현하지 못한다(재현 못 함 ≠ 없음).
 // 실행: E2E_BASE_URL=http://localhost:43xx npx playwright test e2e/motion-unify.spec.ts
@@ -92,24 +94,21 @@ async function press(page: Page, sel: string, opts: { text?: string; idx?: numbe
   }
 }
 
-/** 판 전환 계약 — 한 이동의 프레임으로 판정한다. 실패는 soft 로 모아 **어느 화면들이** 깨졌는지 한 번에 보인다. */
-function expectCovered(r: Rec, label: string) {
+/** 판 전환 계약(5차) — 한 이동의 프레임으로 판정한다. 실패는 soft 로 모아 **어느 화면들이** 깨졌는지 한 번에 보인다. */
+function expectCleanSwap(r: Rec, label: string) {
   const F = r.F;
   expect.soft(F.length, `${label}: 프레임을 못 모았다 — 공허한 통과`).toBeGreaterThan(10);
   const i = F.findIndex((f, k) => k > 0 && (f.sig !== F[0].sig || f.ph !== F[0].ph || f.sy !== F[0].sy || f.shown !== F[0].shown));
   expect.soft(i, `${label}: 판이 바뀌는 프레임을 못 봤다(전환이 안 일어났다) — 아래 단언이 공허해진다`).toBeGreaterThan(0);
-  if (i > 0) expect.soft(F[i].cov, `${label}: 새 판이 그려진 첫 프레임에 덮개가 없다(컷)`).toBeGreaterThanOrEqual(0.9);
-  const bareJumps = F.flatMap((f, k) => (k > 0 && Math.abs(f.sy - F[k - 1].sy) > 40 && f.cov < 0.5 ? [`${Math.round(f.t)}ms ${F[k - 1].sy}→${f.sy}`] : []));
-  expect.soft(bareJumps, `${label}: 덮개 밖 scrollY 순간이동`).toEqual([]);
-  expect.soft(F.filter((f) => f.sk > 0 && f.cov < 0.5).length, `${label}: 덮개 밖으로 스켈레톤이 드러났다`).toBe(0);
-  // 페이드 = 중간 opacity 표본 **또는** 280ms 걷기 애니메이션이 실제로 돈 프레임. 부하가 크면 메인 스레드 표본이
-  //   합성 스레드의 중간 프레임을 건너뛴다(tab-cover.spec 의 sparse 조건과 같은 이유) — 그때는 WAAPI 로 본다.
-  expect.soft(F.some((f) => (f.cov > 0.05 && f.cov < 0.6) || f.ca === 280), `${label}: 덮개가 중간값 없이 사라졌다 — 페이드가 아니라 컷`).toBe(true);
-  let covEnd = 0; for (const f of F) if (f.cov > 0) covEnd = f.t;
-  const late = r.LS.filter(([t]) => t > covEnd).reduce((a, [, v]) => a + v, 0);
-  expect.soft(late, `${label}: 덮개가 걷힌 뒤 레이아웃 이동(늦은 흔들림)`).toBeLessThan(0.02);
-  expect.soft(F.at(-1)?.cov ?? 1, `${label}: 정착 후에도 덮개가 남아 있다(화면을 가린 채 눌러앉음)`).toBe(0);
-  expect.soft(F.filter((f) => f.vt > 0).length, `${label}: View Transition 이 돌았다(덮개 하나로 통일)`).toBe(0);
+  expect.soft(F.filter((f) => f.cov > 0.05).map((f) => `${Math.round(f.t)}ms cov=${f.cov}`),
+    `${label}: 덮개(지면색 판)가 그려졌다 — 이미 그려진 판을 가렸다 드러내는 '검정 → 콘텐츠' 깜빡임`).toEqual([]);
+  // 보이는 스크롤 튐 = 판(글자 서명·높이)은 그대로인데 scrollY 만 40px 넘게 움직인 프레임. 판이 바뀐 프레임의 스크롤은 교체의 일부다.
+  //   (keep-alive 판은 숨은 섹션 글자까지 textContent 에 들어가 서명만으로는 교체를 못 볼 수 있다 — 높이를 같이 본다.)
+  const bareJumps = F.flatMap((f, k) => (k > 0 && Math.abs(f.sy - F[k - 1].sy) > 40 && f.sig === F[k - 1].sig && f.ph === F[k - 1].ph ? [`${Math.round(f.t)}ms ${F[k - 1].sy}→${f.sy}`] : []));
+  expect.soft(bareJumps, `${label}: 같은 판에서 scrollY 순간이동(보이는 튐)`).toEqual([]);
+  expect.soft(F.filter((f) => f.sk > 0).length, `${label}: 재방문인데 스켈레톤이 드러났다(콘텐츠 → 스켈레톤 → 콘텐츠)`).toBe(0);
+  expect.soft(r.LS.reduce((a, [, v]) => a + v, 0), `${label}: 레이아웃 이동(흔들림)`).toBeLessThan(0.02);
+  expect.soft(F.filter((f) => f.vt > 0).length, `${label}: View Transition 이 돌았다`).toBe(0);
 }
 
 async function boot(page: Page, width: number, height: number) {
@@ -128,7 +127,7 @@ const scrollTo = (page: Page, y: number) => page.evaluate((yy) => window.scrollT
 const TAB = (mobile: boolean) => (mobile ? 'nav[aria-label="하단 내비게이션"] button[data-main-tab]' : '[data-stack-tabbar] button[role=tab]');
 const SEC = '[data-community-secbar] button';
 
-test('🔴 MU1 — 하위 탭(390 · CPU 4배 · 터치 홀드): 커뮤니티 섹션·순위 보드·장터 분류·GTO 레인이 메인 탭과 같은 덮개를 탄다', async ({ page }) => {
+test('🔴 MU1 — 하위 탭(390 · CPU 4배 · 터치 홀드): 커뮤니티 섹션·순위 보드·장터 분류·GTO 레인이 가리지 않고 한 프레임에 바뀐다', async ({ page }) => {
   test.setTimeout(150_000);
   await boot(page, 390, 844);
   await press(page, TAB(true), { text: '커뮤니티', mobile: true });
@@ -149,34 +148,31 @@ test('🔴 MU1 — 하위 탭(390 · CPU 4배 · 터치 홀드): 커뮤니티 �
     if (pre) { await pre(); await page.waitForTimeout(500); }
     await startRec(page, root);
     await act();
-    expectCovered(await stopRec(page), label);
+    expectCleanSwap(await stopRec(page), label);
   }
   // GTO 레인
   await press(page, TAB(true), { text: 'GTO', mobile: true });
   await page.waitForTimeout(1200);
   await startRec(page, '[data-tools-lanepanel]');
   await press(page, '[data-tools-lanebar] button', { idx: 1, mobile: true });
-  expectCovered(await stopRec(page), 'GTO 레인 → 두 번째');
+  expectCleanSwap(await stopRec(page), 'GTO 레인 → 두 번째');
   expect(steps.length + 1, '잰 하위 탭 이동 수(커뮤니티 섹션 3 · 순위 보드 · 장터 분류 · GTO 레인)').toBe(6);
 });
 
-test('🔴 MU2 — PC 메인 탭(1440 · CPU 4배 · 마우스): 재방문도 View Transition 이 아니라 같은 덮개 · GNB 밑·콘텐츠 열만 덮는다', async ({ page }) => {
+test('🔴 MU2 — PC 메인 탭(1440 · CPU 4배 · 마우스): 재방문도 View Transition·덮개 없이 한 프레임에 바뀐다', async ({ page }) => {
   test.setTimeout(120_000);
   await boot(page, 1440, 900);
   await cpu4(page);
-  for (const [label, tab] of [['커뮤니티', 'community'], ['홈', 'home'], ['라이브', 'live'], ['GTO', 'tools']] as const) {
+  const tabs = [['커뮤니티', 'community'], ['홈', 'home'], ['라이브', 'live'], ['GTO', 'tools']] as const;
+  // 한 바퀴 먼저 돈다 — 프리마운트돼 있어도 라이브는 **첫 활성화**에 데이터를 불러 스켈레톤이 선다(1440 CPU 4배 ~40ms,
+  //   덮개가 있던 빌드에서도 같은 프레임 — 그땐 지면색 판에 가려졌을 뿐). 이 테스트는 재방문 계약만 본다.
+  for (const [label] of tabs) { await press(page, TAB(false), { text: label, mobile: false }); await page.waitForTimeout(1200); }
+  for (const [label, tab] of tabs) {
     await startRec(page, `.tab-pane[data-tab="${tab}"]`);
     await press(page, TAB(false), { text: label, mobile: false });
-    const geo = await page.evaluate(() => {
-      const c = document.querySelector<HTMLElement>('[data-tab-cover]')!;
-      const g = document.querySelector('[data-stack-tabbar]')!.getBoundingClientRect();
-      return { top: parseFloat(c.style.top), left: parseFloat(c.style.left), width: parseFloat(c.style.width), gnb: g.bottom };
-    });
-    expectCovered(await stopRec(page), `PC ${label}`);
-    expect.soft(geo.top, `PC ${label}: 덮개가 GNB 를 덮는다`).toBeGreaterThanOrEqual(geo.gnb - 0.5);
-    expect.soft(geo.width, `PC ${label}: 덮개가 전폭이다 — 좌우 채움 배경이 깜빡인다(2026-09-19 오너 지적)`).toBeLessThan(1440);
-    expect.soft(geo.left, `PC ${label}: 덮개가 콘텐츠 열에 맞지 않았다`).toBeGreaterThan(0);
+    expectCleanSwap(await stopRec(page), `PC ${label}`);
   }
+  expect(tabs.length, '잰 PC 메인 탭 이동 수').toBe(4);
 });
 
 /** 오버레이가 한 프레임에 사라지지 않았다 — 닫기 입력 뒤 중간 투명도 프레임이 있고, 끝에는 없다. */
@@ -258,39 +254,50 @@ const HOLD_PREMOUNT_IDLE = () => {
   };
 };
 
+/** 첫 방문 라이브(GET +400ms · CPU 4배 · 390) 한 번을 잰다. */
+async function firstVisitLive(page: Page): Promise<{ r: Rec; delayed: number }> {
+  await stabilizeBackstack(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockSchedules(page);
+  await page.addInitScript(RECORDER);
+  await page.addInitScript(HOLD_PREMOUNT_IDLE);
+  await page.goto('/');
+  await dismissOverlays(page);
+  await expect(page.locator('.tab-pane[data-tab="home"]')).toBeVisible();
+  expect(await page.locator('.tab-pane[data-tab="live"]').count(), '라이브가 이미 마운트됐다 — 첫 방문 조건이 없다').toBe(0);
+  let delayed = 0;
+  await page.route(/supabase\.co\/rest\/v1\/(?!rpc\/)/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    delayed++;
+    await new Promise((z) => setTimeout(z, 400));
+    await route.fallback();
+  });
+  await cpu4(page);
+  await startRec(page, '.tab-pane[data-tab="live"]');
+  await press(page, TAB(true), { text: '라이브', mobile: true });
+  return { r: await stopRec(page, 2200), delayed };
+}
+
 test.describe('MU4 — 서비스 워커 없음(요청 지연을 page.route 로 건다)', () => {
   test.use({ serviceWorkers: 'block' });
-  test('🔴 MU4 — 첫 방문 라이브(GET +400ms · CPU 4배): 판 안 스켈레톤이 덮개 밖으로 드러나지 않고 걷힌 뒤 무너지지 않는다', async ({ page }) => {
+  test('🔴 MU4 — 첫 방문 라이브(GET +400ms · CPU 4배): 덮개 없이 스켈레톤(모양 예약)이 보인다 — 빈 지면 판 0', async ({ page }) => {
     test.setTimeout(90_000);
-    await stabilizeBackstack(page);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await mockSchedules(page);
-    await page.addInitScript(RECORDER);
-    await page.addInitScript(HOLD_PREMOUNT_IDLE);
-    await page.goto('/');
-    await dismissOverlays(page);
-    await expect(page.locator('.tab-pane[data-tab="home"]')).toBeVisible();
-    expect(await page.locator('.tab-pane[data-tab="live"]').count(), '라이브가 이미 마운트됐다 — 첫 방문 조건이 없다').toBe(0);
-    let delayed = 0;
-    await page.route(/supabase\.co\/rest\/v1\/(?!rpc\/)/, async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      delayed++;
-      await new Promise((z) => setTimeout(z, 400));
-      await route.fallback();
-    });
-    await cpu4(page);
-    await startRec(page, '.tab-pane[data-tab="live"]');
-    await press(page, TAB(true), { text: '라이브', mobile: true });
-    const r = await stopRec(page, 2200);
+    const { r, delayed } = await firstVisitLive(page);
     expect(delayed, 'GET 지연이 걸리지 않았다(전제 없음)').toBeGreaterThan(0);
     const F = r.F;
     const first = F.findIndex((f) => f.shown);
     expect(first, '라이브 판이 한 번도 보이지 않았다').toBeGreaterThanOrEqual(0);
-    expect(F[first].cov, '라이브 판이 보인 첫 프레임에 덮개가 없다').toBeGreaterThanOrEqual(0.9);
-    // 라이브 판 **안의** 스켈레톤만 센다(부팅 중인 홈의 스켈레톤은 이 이동과 무관 — 출발 판이다).
-    expect(F.slice(first).filter((f) => f.skr > 0 && f.cov < 0.5).map((f) => `${Math.round(f.t)}ms cov=${f.cov}`), '덮개 밖으로 스켈레톤이 드러났다(준비 판정이 판 안을 안 본다)').toEqual([]);
-    let covEnd = 0; for (const f of F) if (f.cov > 0) covEnd = f.t;
-    expect(r.LS.filter(([t]) => t > covEnd).reduce((a, [, v]) => a + v, 0), '덮개가 걷힌 뒤 판이 무너졌다(늦은 흔들림)').toBeLessThan(0.02);
-    expect(F.at(-1)?.cov).toBe(0);
+    expect(F.filter((f) => f.cov > 0.05).map((f) => `${Math.round(f.t)}ms cov=${f.cov}`), '덮개(지면색 판)가 그려졌다').toEqual([]);
+    expect(F.slice(first).some((f) => f.skr > 0), '라이브 판 안 스켈레톤을 한 번도 못 봤다 — 첫 방문 조건이 없다(공허)').toBe(true);
+  });
+  // LIVE-SKELETON-COLLAPSE(2026-09-26 PILL-FLASH 에서 드러남 → 같은 날 home-team 수정 · LiveGamesTab):
+  //   첫 방문 라이브 스켈레톤(판 989px)이 내용(796px)으로 바뀌며 무너졌다 — LS 0.1022(`DIV.reveal space-y-1.5` 553→392).
+  //   고친 방법: 목록이 오기 전엔 목록 결과에 딸린 아래 내용('오늘 곧 시작'·안내 줄)을 그리지 않고, 판 최소 높이를 화면−헤더로
+  //   예약해 사업자 푸터가 로딩 전후 모두 화면 밖에 있게 했다(0·1·다수 어느 경우도 보이는 요소가 움직이지 않는다).
+  //   음성 대조(2026-09-26): 수정 전 빌드에서 이 테스트는 LS 0.102 로 빨갛다.
+  test('🔴 MU4b — 첫 방문 라이브: 스켈레톤 → 내용에서 판이 무너지지 않는다(CLS < 0.02)', async ({ page }) => {
+    test.setTimeout(90_000);
+    const { r } = await firstVisitLive(page);
+    expect(r.LS.reduce((a, [, v]) => a + v, 0), '스켈레톤 → 내용에서 판이 무너졌다(모양 예약 불일치)').toBeLessThan(0.02);
   });
 });

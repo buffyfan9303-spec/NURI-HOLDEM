@@ -105,7 +105,9 @@ export default {
 
       // ── Typography ────────────────────────────────────────────────────────
       fontFamily: {
-        sans: ['Pretendard Variable', 'Pretendard', 'system-ui', 'sans-serif'],
+        // 'Pretendard FB Win/Android' — 폰트 도착 전 폴백(맑은 고딕·Noto)을 Pretendard 크기에 맞춘 @font-face(public/fonts/pretendard/…css 끝).
+        //   swap 교체 순간의 글자 폭·줄 높이 차이(리플로우)를 줄인다. src/index.css body 스택과 같은 순서로 둔다(2026-09-26).
+        sans: ['Pretendard Variable', 'Pretendard', 'Pretendard FB Win', 'Pretendard FB Android', 'system-ui', 'sans-serif'],
         // 디스플레이(제목·히어로 숫자) — 2026-08-29 Noto Sans KR 제거 후 Pretendard 로 통합.
         //
         // 왜: Noto 는 구글 폰트 CSS 로 왔는데 그 한 줄이 **렌더 차단 + CSS 95KB / @font-face 124개**를
@@ -202,9 +204,11 @@ export default {
           to:   { transform: 'translateY(0)' },
         },
         // 시트(하단 모달) 닫기: 아래로 슬라이드되며 사라짐
+        // 🔴 2026-09-26 투명도를 뺐다 — 내려가며 투명해지면 시트 뒤의 (아직 걷히는 중인) 딤이 비쳐 라이트에서 휘도가 푹 꺼졌다(voucher-close).
+        //   불투명한 채 끝까지 내려간다(여는 sheet-up 과 같은 문법). 소비처: Modal 시트 닫기 · VoucherWallet RedeemSheet.
         'slide-down': {
-          from: { transform: 'translateY(0)',    opacity: '1' },
-          to:   { transform: 'translateY(100%)',  opacity: '0' },
+          from: { transform: 'translateY(0)' },
+          to:   { transform: 'translateY(100%)' },
         },
         // 0에서 시작하면 컨텐츠가 '꺼졌다 켜지는' 깜빡임으로 인지된다.
         // 0.45에서 시작해 짧게 정착 — iOS 컨텐츠 전환과 같은 '스르륵' 감각.
@@ -220,6 +224,14 @@ export default {
           from: { opacity: '1' },
           to:   { opacity: '0' },
         },
+        // 모달 배경막(딤) 열기 — 시트·본문과 **같은 시간**에 걸쳐 어두워진다(Modal.tsx). 2026-09-26 flicker-gate:
+        //   예전엔 래퍼 fade(0.16s)가 딤을 시트 슬라이드(0.26s)보다 먼저 다 깔아, 라이트에서 화면 평균 휘도가 197→104 로
+        //   떨어졌다 시트가 올라오며 돌아왔다(깜빡임). 딤 곡선은 flick.cjs 실측으로 골랐다(390 라이트 CPU4 이용권 열기, 평균 휘도 블링크):
+        //   선형 −11(시트 첫 프레임이 늦게 설 때 딤이 앞섬) · ease-in +10(시트가 먼저 다 올라와 밝아짐) · **ease-in-out 0**.
+        'dim-in': {
+          from: { opacity: '0' },
+          to:   { opacity: '1' },
+        },
       },
       animation: {
         'badge-pulse': 'badge-pulse 2s ease-in-out infinite',
@@ -230,6 +242,11 @@ export default {
         'slide-down':  'slide-down 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards',
         'fade-in':     'fade-in 0.15s cubic-bezier(0.32, 0.72, 0, 1)',
         'fade-out':    'fade-out 0.18s cubic-bezier(0.32, 0.72, 0, 1) forwards',
+        'dim-in-sheet': 'dim-in 0.26s cubic-bezier(0.45, 0, 0.55, 1)',   // = sheet-up 0.26s
+        'dim-in':       'dim-in 0.32s cubic-bezier(0.45, 0, 0.55, 1)',   // = 가운데 모달 slide-up(index.css 0.32s)
+        // 시트 닫기의 딤 — 시트(slide-down 0.2s)보다 **먼저** 걷힌다. 같은 속도로 걷으면 내려가는 시트 뒤로 아직 어두운 화면이 드러나
+        //   라이트에서 207→148 로 떨어졌다 돌아왔다(voucher-close −45). flick.cjs 실측: 0.05s 감속 곡선 0 · 0.05s 선형 −21 · 0.08s −9 · 0.12s −28.
+        'dim-out':      'fade-out 0.05s cubic-bezier(0.32, 0.72, 0, 1) forwards',
       },
     },
   },

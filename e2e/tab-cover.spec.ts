@@ -1,26 +1,19 @@
-// BOTTOM-TAB-SMOOTH (오너 2026-09-23 "본문이 문제") — 하단 대메뉴 전환 **덮개** 계약.
+// BOTTOM-TAB-SMOOTH (오너 2026-09-23 "본문이 문제") — 하단 대메뉴 전환 계약. **5차(2026-09-26 PILL-FLASH)에 뒤집었다.**
 //
-// 본문(.tab-pane)은 움직이지 않는다. 본문 위 지면색 덮개 한 장이 opacity 1→0 으로 걷힌다(src/lib/tabCover.ts).
-//   · 본문에 opacity/transform 을 걸면 본문 레이어가 승격→해제된다 = §0-a25 삼성 밝기 점프 부류.
-//     R3(e2e/mobile-tab-transition.spec.ts)와 같은 이유로 막는다 — 여기는 덮개가 켜진 상태를 본다.
-//   · 2차: **기본 켜짐, tabsoft**(opacity 만 280ms · 첫 50ms 거의 불투명 · 긴 감속). `?fx=off` 로 기기별 끄기.
-//   · 3차(리드 실측: 프로덕션 GTO 첫 방문 4회 중 3회 '새 본문 첫 프레임에 덮개 없음'): 덮개는 고정 시각이 아니라
-//     **목적지 판이 실제로 그려진 뒤** 걷힌다(상한 700ms). 1차 비교용 `?fx=tabfade` 는 지웠다(무시·정리).
+// 1~4차: 본문 위 지면색 덮개 한 장을 opacity 1 로 깔았다가, 목적지 판이 그려진 뒤 280ms 에 걷었다(src/lib/tabCover.ts).
+//   이 스펙은 '새 본문의 첫 프레임에 덮개 opacity ≥ 0.9' 를 요구했다 — 즉 **이미 그려진 본문도 지면색으로 가리라**는 계약이었다.
+// 5차: 오너 "pill 을 눌러 이동하면 검정색이 됐다가 다시 콘텐츠가 나와 깜빡인다" — 그 덮개가 바로 깜빡임이었다
+//   (재방문에도 ~100ms 지면색 판, 판 휘도가 다크 7.9·라이트 247.4 = 지면색 그대로. root-cause-debugger 실측).
+//   덮개를 없앴다(2026-09-26 요소·호출·`?fx=` 스위치까지 App 에서 걷었다). 이 스펙은 이제 **덮개가 한 프레임도 안 그려진다**를 메인 탭 쪽에서 잠근다
+//   (하위 탭·픽셀 휘도는 e2e/pill-flash.spec.ts, 하위 탭 전환 프레임은 e2e/motion-unify.spec.ts).
 //
 // 계약(이동마다, 프레임 = rAF 표본):
-//   ① 새 본문이 **보이는 첫 프레임**(목적지 판이 보이고 높이가 있으며 '불러오는 중' 스피너가 없음)에 덮개 opacity ≥ 0.9
-//   ② 덮개가 깔린 뒤 목적지가 아직 준비 안 된 프레임에서는 덮개가 걷히지 않았다(opacity ≥ 0.9) — 걷힌 뒤에만 본문이 드러난다
-//   ③ 280ms · opacity 만 · 중간값이 있다(컷 아님) · 본문/조상 WAAPI 0 · 정착 후 숨김
-// 조건: TC0 일반 · TC1 CPU 6배(느린 폰 모사) · TC5 늦은 판 공개(첫 방문 GTO 가 Suspense 폴백 뒤 늦게 공개되는 경우를
-//   결정적으로 만든다 — GTO(ToolsPanel) 청크 응답을 붙잡아 두고, 급한 업데이트로 그 탭에 들어간다).
-//   ⚠ 2026-09-24 개정: 예전 TC5 는 '프리마운트가 tools 를 방문 처리한 직후·커밋 전에 GTO 탭' 경합에 기댔다.
-//     그 경합은 perf① 수정(프리마운트를 React 상태로, e2e/premount-no-fallback.spec.ts)으로 **없어졌다** —
-//     탭바 첫 방문은 이제 transition 이라 폴백이 커밋되지 않는다. 남은 급한 첫 방문 경로(로그인 뒤 보던 탭 복원,
-//     App 의 restoreActionFor → setActiveTab)에 청크 지연을 걸어 '판이 아직 안 섰다' 를 새로 만든다.
-//
-// 음성 대조(2026-09-24 3차 확인): playTabCover 가 준비를 기다리지 않고(고정 시각) 바로 걷으면 TC5 의 ①② 가 빨개진다.
-//   (개정 TC5 도 같은 음성 대조로 확인 — tabCover.ts 대기 제거 사본에서 빨강, 복원 후 해시 일치.)
-//   본문에 opacity 를 걸면 '본문 WAAPI 0' 이, TAB_COVER_DEFAULT_ON=false 면 TC0 이 빨개진다(2차 기록).
+//   ① 덮개(`[data-tab-cover]`)가 display none 이 아닌 프레임 0 — 첫 방문·재방문·늦은 판 공개·CPU 6배·PC 폭 모두
+//   ② 본문(.tab-pane)과 그 조상에 WAAPI 0 — §0-a25 삼성 밝기 점프 부류(R3 와 같은 이유)
+//   ③ 목적지 본문이 보이는 프레임을 실제로 봤다(공허 방지)
+// 조건: TC0 일반 · TC1 CPU 6배 · TC5 늦은 판 공개(GTO 청크를 붙잡아 Suspense 폴백이 먼저 서는 첫 방문) ·
+//   TC2 `?fx=` 옛 스위치 값과 무관(스위치는 걷었다 — 저장소에 아무것도 쓰지 않는다) · TC3 PC 1024 · TC4 동작 줄이기.
+// 음성 대조(2026-09-26 실행): 옛 tabCover.ts 빌드(덮개 있음)에 돌리면 TC0·TC1·TC3·TC5 의 ① 이 빨개진다.
 // 실행: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/tab-cover.spec.ts
 //  ⚠ 하네스 Chromium 만 본다. 삼성 인터넷 GPU 의 밝기는 재현하지 못한다(재현 못 함 ≠ 없음).
 import type { Page } from '@playwright/test';
@@ -97,7 +90,8 @@ async function startRec(page: Page, tab: string) {
 /** 정착(덮개가 숨을 때)까지 기다린 뒤 프레임·본문 WAAPI·정착 상태를 돌려준다. */
 async function settle(page: Page, tab: string) {
   await expect(page.locator(`.tab-pane[data-tab="${tab}"]`)).toBeVisible({ timeout: 15_000 });
-  await expect.poll(() => page.evaluate(() => getComputedStyle(document.querySelector('[data-tab-cover]')!).display), { timeout: 5_000 }).toBe('none');
+  // 덮개 요소는 2026-09-26 에 걷었다 — 없는 것이 곧 '가리지 않음' 이다(있으면 숨어 있어야 한다).
+  await expect.poll(() => page.evaluate(() => { const c = document.querySelector('[data-tab-cover]'); return c ? getComputedStyle(c).display : 'none'; }), { timeout: 5_000 }).toBe('none');
   await page.waitForTimeout(100);
   return page.evaluate(() => {
     const c = (window as unknown as { __cov: Cov }).__cov;
@@ -122,32 +116,18 @@ async function move(page: Page, label: string, tab: string) {
   return settle(page, tab);
 }
 
-/** 계약 ①②③ — 모든 조건(일반·CPU 6배·경합)이 같은 단언을 쓴다. */
-function expectCoverContract(r: Result, label: string, sparse = false) {
+/** 5차 계약 ①②③ — 모든 조건(일반·CPU 6배·늦은 공개·PC)이 같은 단언을 쓴다. */
+function expectNoCover(r: Result, label: string) {
   const f = r.frames;
-  const start = f.findIndex((x) => x.disp === 'block');
-  expect(start, `${label}: 덮개가 한 프레임도 깔리지 않았다(기본 켜짐)`).toBeGreaterThanOrEqual(0);
-  const firstReady = f.findIndex((x, k) => k >= start && x.ready);
-  expect(firstReady, `${label}: 목적지 본문이 보이는 프레임을 한 번도 못 봤다 — 아래 단언이 공허해진다`).toBeGreaterThanOrEqual(0);
-  const first = f[firstReady];
-  // 측정값 출력(선택): TAB_COVER_LOG=1 — 덮개가 깔린 뒤 새 본문까지의 대기, 그 프레임의 opacity, 스피너 프레임 수
-  if (process.env.TAB_COVER_LOG) console.log(`[cover] ${label} wait=${Math.round(first.t - f[start].t)}ms op@ready=${first.op} spin=${f.filter((x) => x.spin).length}`);
-  expect(first.disp, `${label}: 새 본문이 보이는 첫 프레임에 덮개가 없다`).toBe('block');
-  expect(first.op, `${label}: 새 본문이 보이는 첫 프레임의 덮개 opacity`).toBeGreaterThanOrEqual(0.9);
-  const leaked = f.slice(start).filter((x) => !x.ready && (x.disp !== 'block' || x.op < 0.9));
-  expect(leaked.map((x) => `${Math.round(x.t)}ms op=${x.op} spin=${x.spin}`), `${label}: 목적지가 준비되기 전에 덮개가 걷혔다(스피너·빈 판이 드러남)`).toEqual([]);
-  const run = f.slice(start).filter((x) => x.disp === 'block' && x.dur > 0);
-  expect(run.length, `${label}: 덮개 애니메이션을 한 프레임도 못 잡았다`).toBeGreaterThan(0);
-  expect([...new Set(run.map((x) => x.dur))], `${label}: 280ms(tabsoft)가 아니다`).toEqual([280]);
-  expect([...new Set(run.map((x) => x.props))], `${label}: 덮개가 opacity 외 속성을 움직였다`).toEqual(['opacity']);
-  // CPU 6배에서는 긴 태스크가 rAF 표본을 건너뛴다 — 덮개 opacity 는 합성 스레드가 돌려서 화면엔 중간값이 있지만
-  //   메인 스레드 표본에는 안 잡힐 수 있다(실측: 라이브 1/3). 그 조건에선 '280ms WAAPI 가 돌았다'(위)로 컷이 아님을 본다.
-  if (!sparse) expect(f.slice(firstReady).some((x) => x.disp === 'block' && x.op > 0.05 && x.op < 0.6),
-    `${label}: 덮개가 중간값 없이 사라졌다 — 페이드가 아니라 컷이다`).toBe(true);
+  expect(f.length, `${label}: 프레임을 못 모았다 — 공허한 통과`).toBeGreaterThan(3);
+  expect(f.some((x) => x.ready), `${label}: 목적지 본문이 보이는 프레임을 한 번도 못 봤다 — 아래 단언이 공허해진다`).toBe(true);
+  // 'missing' = 부팅 중 덮개 요소가 아직 DOM 에 없던 프레임(TC5 는 부팅부터 기록한다) — 그려진 것이 아니다.
+  expect(f.filter((x) => x.disp !== 'none' && x.disp !== 'missing').map((x) => `${Math.round(x.t)}ms op=${x.op}`),
+    `${label}: 덮개(지면색 판)가 그려졌다 — 이미 그려진 본문을 가렸다 드러내는 '검정 → 콘텐츠' 깜빡임`).toEqual([]);
   expect(r.paneWaapi, `${label}: 본문(.tab-pane)이나 그 조상에 WAAPI 가 시작됐다`).toEqual([]);
-  expect(r.coverInPane, '덮개가 .tab-pane 안에 들어갔다').toBe(false);
-  expect(r.endDisplay, `${label}: 정착 후에도 덮개가 남아 있다`).toBe('none');
-  expect(r.endAnims).toBe(0);
+  expect(r.coverInPane, '덮개 요소가 .tab-pane 안에 들어갔다').toBe(false);
+  expect(r.endDisplay, `${label}: 덮개 요소가 되살아났다(2026-09-26 걷음)`).toBe('missing');
+  expect(r.endAnims).toBe(-1);
 }
 
 async function boot(page: Page, width: number, query: string, extraInit?: () => void) {
@@ -165,22 +145,19 @@ async function boot(page: Page, width: number, query: string, extraInit?: () => 
 const ROUTE = [['GTO', 'tools'], ['커뮤니티', 'community'], ['라이브', 'live'], ['캘린더', 'calendar'], ['홈', 'home']] as const;
 
 for (const cpu of [1, 6]) {
-  test(`🔴 TC${cpu === 1 ? 0 : 1} — 기본(스위치 없음, 390${cpu > 1 ? ', CPU 6배' : ''}) 5개 탭: 새 본문 첫 프레임 덮음 · 준비 뒤에만 걷힘 · 280ms opacity 만 · 본문 WAAPI 0 · 정착 후 숨김`, async ({ page }) => {
+  test(`🔴 TC${cpu === 1 ? 0 : 1} — 기본(스위치 없음, 390${cpu > 1 ? ', CPU 6배' : ''}) 5개 탭: 덮개 0 프레임 · 본문 WAAPI 0`, async ({ page }) => {
     test.setTimeout(cpu > 1 ? 180_000 : 90_000);
     await boot(page, 390, '');
     if (cpu > 1) await (await page.context().newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: cpu });
     for (const [label, tab] of ROUTE) {
       const r = await move(page, label, tab);
-      expectCoverContract(r, `${label}(cpu${cpu})`, cpu > 1);
+      expectNoCover(r, `${label}(cpu${cpu})`);
       expect(r.stored, '기본값은 저장소에 아무것도 쓰지 않는다').toBeNull();
     }
   });
 }
 
-/** GTO 판 청크를 붙잡는 시간. 덮개의 준비 대기 상한(TAB_COVER_WAIT_MAX_MS 700)보다 **충분히 짧아야** 한다 —
- *  상한을 넘기면 덮개는 준비와 상관없이 걷히는 게 설계라(영원히 덮지 않는다) 계약 ②가 설계대로 빨개진다.
- *  실측(dev 4297): 400ms 지연이면 덮개 대기 583~617ms 로 상한까지 여유가 80ms 뿐이라 200ms 로 둔다
- *  (React 폴백 스로틀 ~300ms + 하위 모듈 로딩이 더해진다). 폴백은 여전히 덮개 280ms 보다 길게 선다. */
+/** GTO 판 청크를 붙잡는 시간 — Suspense 폴백이 먼저 서는 첫 방문을 만든다(4차 기록: 200ms 에서 폴백이 확실히 선다). */
 const TOOLS_CHUNK_DELAY_MS = 200;
 
 // ⚠ 서비스 워커를 막는다 — 운영 빌드(sw.js: skipWaiting + clients.claim)는 부팅 직후 페이지를 장악하고 /assets 를
@@ -190,7 +167,7 @@ const TOOLS_CHUNK_DELAY_MS = 200;
 test.describe('TC5 — 서비스 워커 없음', () => {
   test.use({ serviceWorkers: 'block' });
 
-  test('🔴 TC5 — 늦은 판 공개: 첫 방문 GTO 청크가 늦어 폴백이 먼저 서도 덮개는 새 본문이 그려진 뒤에 걷힌다', async ({ page }) => {
+  test('🔴 TC5 — 늦은 판 공개: 첫 방문 GTO 청크가 늦어 폴백이 먼저 서도 지면색 판으로 가리지 않는다', async ({ page }) => {
     test.setTimeout(90_000);
     // ① 급한 첫 방문 경로 = 로그인 뒤 보던 탭 복원(App restoreActionFor → setActiveTab). 네트워크 없는 세션.
     await stubLogin(page);
@@ -214,65 +191,36 @@ test.describe('TC5 — 서비스 워커 없음', () => {
     });
     await page.goto('/');
     const r = await settle(page, 'tools');
-    // 전제(청크 지연이 만든 조건): 청크를 실제로 붙잡았고, 덮개가 깔린 뒤 '판이 아직 안 선' 프레임(폴백 스피너)이 있었다.
+    // 전제(청크 지연이 만든 조건): 청크를 실제로 붙잡았고, '판이 아직 안 선' 프레임(폴백 스피너)이 있었다.
     expect(held, 'GTO 청크 요청을 붙잡지 못했다 — 이미 로드됐다(전제 없음)').toBeGreaterThanOrEqual(1);
-    const start = r.frames.findIndex((x) => x.disp === 'block');
-    const waiting = r.frames.slice(Math.max(start, 0)).filter((x) => x.spin && !x.ready).length;
-    expect(waiting, '덮개가 깔린 뒤 판이 아직 안 선 프레임이 없다 — 이 테스트가 지키는 조건이 없다').toBeGreaterThanOrEqual(1);
-    expectCoverContract(r, 'GTO(늦은 공개)');
+    const waiting = r.frames.filter((x) => x.spin && !x.ready).length;
+    expect(waiting, '판이 아직 안 선 프레임이 없다 — 이 테스트가 지키는 조건이 없다').toBeGreaterThanOrEqual(1);
+    expectNoCover(r, 'GTO(늦은 공개)');
   });
 });
 
-test('🔴 TC2 — ?fx=off 는 그 기기에서 덮개를 한 프레임도 그리지 않고, URL 없이 다시 와도 꺼진 채다 · 지운 ?fx=tabfade 는 무시된다', async ({ page }) => {
-  test.setTimeout(90_000);
-  await boot(page, 390, '?fx=off');
-  let r = await move(page, 'GTO', 'tools');
-  expect(r.frames.length, '프레임을 못 모았다 — 공허한 통과').toBeGreaterThan(3);
-  expect(r.frames.filter((f) => f.disp !== 'none'), '?fx=off 인데 덮개가 그려졌다').toEqual([]);
-  expect(r.stored).toBe('off');
-  // 같은 기기에서 URL 없이 재방문 — 저장값이 유지된다
-  await page.goto('/');
-  await dismissOverlays(page);
-  await expect(page.locator('.tab-pane[data-tab="home"]')).toBeVisible();
-  r = await move(page, 'GTO', 'tools');
-  expect(r.frames.length).toBeGreaterThan(3);
-  expect(r.frames.filter((f) => f.disp !== 'none'), '재방문에서 off 가 풀렸다').toEqual([]);
-  expect(r.stored).toBe('off');
-  // ?fx=tabsoft 로 다시 켠다
-  await page.goto('/?fx=tabsoft');
-  await dismissOverlays(page);
-  await expect(page.locator('.tab-pane[data-tab="home"]')).toBeVisible();
-  r = await move(page, 'GTO', 'tools');
-  expect(r.frames.some((f) => f.disp === 'block'), '?fx=tabsoft 로 다시 켜지지 않았다').toBe(true);
-  expect(r.stored).toBe('tabsoft');
-  // 3차: ?fx=tabfade 는 지운 값 — 무시되고(저장값 tabsoft 유지) 덮개는 280ms 그대로
-  await page.goto('/?fx=tabfade');
-  await dismissOverlays(page);
-  await expect(page.locator('.tab-pane[data-tab="home"]')).toBeVisible();
-  r = await move(page, 'GTO', 'tools');
-  expect([...new Set(r.frames.filter((f) => f.dur > 0).map((f) => f.dur))], '?fx=tabfade 가 아직 160ms 로 산다').toEqual([280]);
-  expect(r.stored).toBe('tabsoft');
+test('🔴 TC2 — ?fx= 옛 스위치 값(off·tabsoft·tabfade)과 무관하게 덮개 0 · 저장소에 아무것도 쓰지 않는다', async ({ page }) => {
+  test.setTimeout(120_000);
+  await boot(page, 390, '');
+  for (const q of ['?fx=off', '', '?fx=tabsoft', '?fx=tabfade'] as const) {
+    await page.goto('/' + q);
+    await dismissOverlays(page);
+    await expect(page.locator('.tab-pane[data-tab="home"]')).toBeVisible();
+    const r = await move(page, 'GTO', 'tools');
+    expectNoCover(r, `GTO(${q || 'URL 없음'})`);
+    expect(r.stored, `${q || 'URL 없음'}: 걷은 스위치가 저장소에 값을 썼다`).toBeNull();
+  }
 });
 
-// 🔵 2026-09-24 MOTION-UNIFY — 뒤집었다. 종전 TC3 는 "PC 는 View Transition 이 맡으므로 덮개를 그리지 않는다" 였다.
-//   오너: "PC 던 모바일이던 하나를 부드럽게 바꾸면 나머지 모든 페이지에서도 동일하게" — PC 메인 탭도 같은 덮개를 탄다
-//   (PC 재방문 VT 0.12s·PC 첫 방문 하드컷을 대체). 덮개는 GNB 밑·콘텐츠 열 폭만 덮는다(좌우 채움 배경·GNB 는 안 덮는다).
-//   프레임 계약 전체(①②③)는 e2e/motion-unify.spec.ts MU2 가 1440·CPU 4배로 잰다 — 여기는 1024 경계의 자리만 본다.
-test('TC3 — PC 폭(1024)도 같은 덮개를 탄다 — GNB 밑에서 시작하고, 정착 후 숨는다', async ({ page }) => {
+// 5차: PC 메인 탭도 덮개 없음(4차의 'GNB 밑·콘텐츠 열 폭 덮개' 는 같은 깜빡임이었다 — 1440 CPU 4배 재방문 112~144ms 실측).
+test('TC3 — PC 폭(1024)도 덮개 0 · 본문 WAAPI 0', async ({ page }) => {
   test.setTimeout(60_000);
   await boot(page, 1024, '');
   await startRec(page, 'tools');
   await page.locator('[data-stack-tabbar]').getByRole('tab', { name: 'GTO', exact: true }).click();
   const r = await settle(page, 'tools');
-  expect(r.frames.length).toBeGreaterThan(3);
-  expect(r.frames.some((f) => f.disp === 'block' && f.op >= 0.9), 'PC 에서 덮개가 한 프레임도 깔리지 않았다').toBe(true);
-  const geo = await page.evaluate(() => ({
-    top: parseFloat(document.querySelector<HTMLElement>('[data-tab-cover]')!.style.top),
-    gnb: document.querySelector('[data-stack-tabbar]')!.getBoundingClientRect().bottom,
-  }));
-  expect(geo.top, '덮개가 PC GNB(활성 밑줄)를 덮는다').toBeGreaterThanOrEqual(geo.gnb - 0.5);
-  expect(r.paneWaapi, '본문(.tab-pane)이나 그 조상에 WAAPI 가 시작됐다').toEqual([]);
-  expect(r.endDisplay).toBe('none');
+  expect(r.frames.length, '프레임을 못 모았다').toBeGreaterThan(3);
+  expectNoCover(r, 'PC GTO');
 });
 
 test.describe('동작 줄이기', () => {
@@ -284,6 +232,6 @@ test.describe('동작 줄이기', () => {
       '감소 모드가 적용되지 않았다 — 공허한 통과').toBe(true);
     const r = await move(page, 'GTO', 'tools');
     expect(r.frames.length).toBeGreaterThan(3);
-    expect(r.frames.filter((f) => f.disp !== 'none')).toEqual([]);
+    expect(r.frames.filter((f) => f.disp !== 'none' && f.disp !== 'missing')).toEqual([]);
   });
 });

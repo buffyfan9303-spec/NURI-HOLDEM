@@ -89,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       genRef.current = withSignedOut(genRef.current);   // 진행 중인 조회도 함께 끊는다
       apiSignOut().catch(() => {});
       setUser(null);
+      setLoading(false);
       return sanction;   // 로그인 경로가 이 문장을 그대로 사용자에게 보여준다
     }
 
@@ -99,8 +100,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 🔴 startTransition (2026-09-18 실측): 로그인 성공 프레임에서 setUser 전역 재렌더 +
     //   토스트 + 헤더 클러스터 교체가 **한 배치**로 들어가 CPU 6x 에서 LoAF 161ms · rAF 공백 167ms 였다
     //   (오너: "갑자기 드득 하면서"). 트랜지션으로 감싸면 그 재렌더가 시분할돼 성공 애니메이션이 안 멈춘다.
-    //   ⚠ setUser 만 감싼다 — 아래 제재(sanction) 동기 판정 흐름은 그대로 둔다.
-    startTransition(() => setUser((prev) => keepIfSame(prev, profile)));
+    //   ⚠ 아래 제재(sanction) 동기 판정 흐름은 그대로 둔다.
+    // 🔴 2026-09-26: 로딩 해제도 **같은 트랜지션**에서 한다. 밖(기본 레인)에서 풀면 React 가 그것을 먼저 커밋해
+    //   '로딩 끝 · 사용자 없음' 커밋이 한 번 생기고, 그 커밋의 effect 가 로그인된 사람을 비로그인으로 확정했다 —
+    //   로그인된 손님의 `?checkin=` 에 로그인 창, 로딩 중 누른 GTO 도구가 로그인 창으로(e2e/auth-boot-gap.spec.ts G1·G3).
+    //   여기서 풀므로 **어느 경로가 계정을 확정하든**(부팅 조회·onAuthStateChange·login) 로딩이 user 와 함께 풀린다.
+    startTransition(() => { setUser((prev) => keepIfSame(prev, profile)); setLoading(false); });
     if (!profile) return null;
 
     const pointStamp = genRef.current;
@@ -134,21 +139,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       getMyProfile()
         .then((profile) => {
           if (cancelled) return;
-          // 세대가 바뀌었으면(로그아웃·다른 계정 로그인) 이 응답은 버린다. 로딩도 그쪽 경로가 푼다.
+          // 세대가 바뀌었으면(로그아웃·다른 계정 로그인) 이 응답은 버린다. 로딩도 그쪽 경로가 푼다
+          //   (SIGNED_OUT 핸들러 · login/onAuthStateChange 의 applyProfileWithDailyPoint).
           if (!fresh(captured, profile?.id ?? null)) return;
-          applyProfileWithDailyPoint(profile, captured);
-          setLoading(false);
+          applyProfileWithDailyPoint(profile, captured);   // user 와 로딩을 한 트랜지션으로 확정한다
         })
         .catch(() => {
           if (cancelled) return;
-          if (!fresh(captured, null)) { setLoading(false); return; }
+          if (!fresh(captured, null)) { startTransition(() => setLoading(false)); return; }
           // 두 번까지 더 시도한다(1.2초·3초). 그 뒤엔 로딩만 풀고 **세션은 지우지 않는다** —
           // 토큰이 살아 있으면 다음 요청·탭 복귀·onAuthStateChange 가 회복시킨다.
           if (attempt < 2) {
             retryTimer = window.setTimeout(() => bootProfile(attempt + 1, captured), attempt === 0 ? 1200 : 3000);
             return;
           }
-          setLoading(false);
+          startTransition(() => setLoading(false));
         });
     };
     bootProfile(0, stamp());
@@ -161,6 +166,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // ⚠ A04: 세대를 먼저 올린다. 이미 날아간 조회들이 여기서 전부 무효가 된다.
         genRef.current = withSignedOut(genRef.current);
         setUser(null);
+        // 🔴 2026-09-26: 부팅 중 SIGNED_OUT(만료 세션의 갱신 거부)이면 위 부팅 조회 응답은 세대가 달라 버려진다.
+        //   여기서 풀지 않으면 로딩이 **영원히** 참이라 QR·알림 링크·도구 대기 의도가 전부 멈췄다(auth-boot-gap G4).
+        setLoading(false);
       } else if (session?.user) {
         // 계정이 **바뀌었을 때만** 세대가 오른다(같은 계정의 TOKEN_REFRESHED 는 무효화가 아니다).
         genRef.current = withOwner(genRef.current, session.user.id);

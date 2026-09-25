@@ -98,6 +98,8 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   // 첫 로드부터 실패하면(games 가 아직 null) 빈 상태로 위장하지 않고 LoadErrorCard 로 '못 불러옴'을 말한다 —
   // api/clock.ts 가 일부러 throw 하는 것을 여기서 `[]` 로 되받으면 '대회 일정 보기' 유도까지 붙은 거짓 화면이 된다(STATE-01).
   const [loadErr, setLoadErr] = useState<unknown>(null);
+  /** 목록이 아직 안 왔다(실패 아님) — 스켈레톤만 서는 구간. 이때는 목록 결과에 딸린 아래 내용을 그리지 않는다(MU4b). */
+  const listPending = games === null && loadErr == null;
   const load = () => getRunningClocks().then((g) => { setGames(g); setLoadErr(null); }).catch((e) => setLoadErr(e));
   // 폴링·1초 틱은 라이브 탭이 보일 때만 — 숨김 시 멈춰 백그라운드 끊김 방지(재진입 시 즉시 갱신). 실시간 구독은 이벤트 기반이라 상시 유지.
   useEffect(() => { if (!active) return; load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [active]);
@@ -170,7 +172,13 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
     return out;
   })();
   return (
-    <main className="hero-aurora px-page-x pt-3 pb-section">
+    // 🔴 MU4b(2026-09-26 LIVE-SKELETON-COLLAPSE) — 첫 방문(요청 +400ms)에 스켈레톤(판 989px)이 실제 내용(796px)으로 바뀌며
+    //   아래 '오늘 곧 시작'·안내 줄·사업자 푸터가 161px 끌려 올라왔다(CLS 0.1022). 진행 대회 수는 도착 전엔 모른다(0·1·다수 모두 가능) —
+    //   스켈레톤 줄 수를 어떻게 맞춰도 한쪽은 틀린다. 그래서 **아래에 밀려날 것을 두지 않는다**:
+    //   ① 목록이 오기 전에는 '오늘 곧 시작'·안내 줄을 그리지 않는다(둘 다 목록 결과에 딸린 내용 — upcoming 은 games 로 걸러진다).
+    //   ② 판 최소 높이 = 화면 높이 − 헤더(svh — 주소창 접힘에 안 흔들린다). 사업자 푸터는 로딩 중에도 도착 뒤에도 화면 아래 경계 밖이라
+    //      내용이 짧아지든 길어지든 **보이는 요소가 움직이지 않는다**(새로 생긴 내용은 이동이 아니다). e2e/motion-unify.spec.ts MU4b.
+    <main className="hero-aurora min-h-[calc(100svh-theme(spacing.header-h))] px-page-x pt-3 pb-section">
       {/* (역사) `data-main-enter-ready` — M1 cohort 준비 신호였다. 이 루트가 붙으면 머리줄·목록·패널이 같은 커밋에 있었다.
           🔴 2026-09-22 폐기 — 이 표식을 읽던 본문 진입 모션(`src/lib/tabEnter.ts`)은 삭제됐다. 삼성 인터넷에서 transform 합성층이 붙었다 사라지며 화면 전체가 밝아졌다 돌아왔기 때문이다(App.tsx 탭 커밋 effect 주석 참고). 속성은 지금 **아무 동작도 하지 않는다** — 남겨 둔 것은 되살릴 때 대상 경계를 다시 찾지 않기 위해서다. */}
       <div data-main-enter-ready className="mx-auto w-full max-w-3xl space-y-3">
@@ -179,14 +187,16 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             1280 은 설명이 1줄이라 렌더가 변하지 않는다. */}
         <div data-main-enter className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-fluid-lg font-bold text-ink-primary text-grad-violet">진행 중 게임 {games ? <span className="text-accent-200 text-grad-keep">{games.length}</span> : null}</h2>
-            {/* 2026-09-18 오너 지시로 설명줄 제거 — 제목 '진행 중 게임'이 이미 화면의 정체를 말하고, '블라인드·레지마감을 한눈에'는 바로 아래 카드 목록에 */}
+            <h2 className="text-fluid-lg font-bold text-ink-primary text-grad-violet">진행 중 대회 {games ? <span className="text-accent-200 text-grad-keep">{games.length}</span> : null}</h2>
+            {/* 2026-09-18 오너 지시로 설명줄 제거 — 제목 '진행 중 대회'가 이미 화면의 정체를 말하고, '블라인드·레지마감을 한눈에'는 바로 아래 카드 목록에 */}
+            {/* LOCATION-READY(2026-09-26): 가까운 순은 기기 안에서만 계산한다(위치정보지원센터 FAQ 9 — 서버 미전송) — 그 사실을 고른 사람에게만 한 줄로 알린다 */}
+            {sortBy === 'distance' && geo && <p data-testid="live-distance-local-note" className="mt-0.5 text-2xs text-ink-muted">위치는 이 기기에서 거리 계산에만 쓰고 저장·전송하지 않아요</p>}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {games && games.length > 1 && (
               <div data-live-sortbar="" className="flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
                 {LIVE_SORT_ORDER.map((k) => (
-                  <button key={k} type="button" onClick={() => goSubTab('live-sort', LIVE_SORT_ORDER, sortBy, k, () => pickSort(k))} title={k === 'players' ? '남은 인원 많은 순' : k === 'time' ? '시작 시간 빠른 순' : k === 'distance' ? '내 위치 기준 가까운 지역 먼저(위치 권한 필요)' : '기본 순'}
+                  <button key={k} type="button" onClick={() => goSubTab('live-sort', LIVE_SORT_ORDER, sortBy, k, () => pickSort(k))} title={k === 'players' ? '남은 인원 많은 순' : k === 'time' ? '시작 시간 빠른 순' : k === 'distance' ? '내 위치 기준 가까운 지역 먼저(위치는 이 기기 안에서만 계산 · 서버로 보내지 않음)' : '기본 순'}
                     className={['h-7 rounded-[5px] px-2 text-2xs font-bold transition-colors', sortBy === k ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{LIVE_SORT_LABEL[k]}</button>
                 ))}
               </div>
@@ -227,7 +237,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         <div data-main-enter data-live-panel="">
         {games === null ? (
           loadErr != null ? (
-            <LoadErrorCard error={loadErr} what="진행 중인 게임" onRetry={load} />
+            <LoadErrorCard error={loadErr} what="진행 중인 대회" onRetry={load} />
           ) : (
             // [DS] MO-6: LiveCard 3열 골격 복제 — 같은 패딩·같은 min-h(3.5rem)라 도착해도 높이가 안 변한다(CLS 0).
             // 게이트(200ms) 동안에도 자리는 예약한다(MO-B) — null 을 그리면 늦게 끼어든 스켈레톤이 아래(오늘 곧 시작·푸터)를 민다.
@@ -260,7 +270,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         ) : games.length === 0 ? (
           <EmptyState
             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5" /><path d="M9 2h6" /></svg>}
-            title="진행 중인 게임이 없습니다"
+            title="진행 중인 대회가 없습니다"
             desc="대회 클락이 시작되면 여기에 실시간으로 표시됩니다."
             action={
               // 빈 화면은 막다른 길이 아니라 다음 행동의 출발점(Phase 13-2)
@@ -296,7 +306,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                     <p className="flex items-center gap-1.5 px-1 text-sm font-bold text-ink-primary"><Icon name="home" size={14} className="shrink-0 text-accent-300" /><span className="min-w-0 truncate">{nameOf(grp.venueId)}</span>
                       {grpRegion && <span className="shrink-0 text-2xs font-normal text-ink-muted" title={venueById.get(grp.venueId)?.region}>{grpRegion}</span>}
                       {favIds.has(grp.venueId) && <><Icon name="heart-fill" size={12} className="shrink-0 text-danger" /><span className="sr-only">즐겨찾기</span></>}
-                      <span className="shrink-0 text-2xs font-normal text-accent-300">· {grp.games.length}게임 동시 진행</span></p>
+                      <span className="shrink-0 text-2xs font-normal text-accent-300">· 대회 {grp.games.length}개 동시 진행</span></p>
                     <ul className="grid grid-cols-1 gap-card-gap">
                       {grp.games.map((g) => {
                         const sched = matchSchedule(g, schedules);
@@ -311,7 +321,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
           </div>
         )}
         </div>
-        {upcoming.length > 0 && (
+        {!listPending && upcoming.length > 0 && (
           <div className="reveal space-y-1.5 pt-1">
             <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-muted"><Icon name="clock" size={12} className="shrink-0" />오늘 곧 시작 <span className="text-accent-300">{upcoming.length}</span> <span className="whitespace-nowrap font-normal">아직 클락 전</span></p>
             {/* 일정 목록 카드(ScheduleCard list) 그 자체 — 같은 대회가 일정 탭과 여기서 다른 줄 문법으로 보이지 않게(2026-09-18).
@@ -329,7 +339,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             </div>
           </div>
         )}
-        <p className="text-center text-2xs text-ink-muted">운영 중 클락의 공개 정보입니다 · 30초 자동 갱신.</p>
+        {!listPending && <p className="text-center text-2xs text-ink-muted">운영 중 클락의 공개 정보입니다 · 30초 자동 갱신.</p>}
       </div>
     </main>
   );
@@ -462,11 +472,11 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
               {fav && <><Icon name="heart-fill" size={12} className="shrink-0 text-danger" /><span className="sr-only">즐겨찾기</span></>}
               {/* 관전 클락 전용 버튼 — 카드 탭이 포스터로 바뀌면서(2026-09-08) 관전이 갈 곳을 잃었다.
                   그 자리를 그대로 물려받는다: 1행은 매장명이 truncate 로 흡수해 폭 부담이 가장 적다.
-                  아이콘 자체는 12px 라 히트영역을 ::before 로 28×28 까지 넓힌다(WCAG 2.5.8 AA=24).
-                  훔쳐 오는 8px 는 카드 배경(포스터 탭)뿐이라 안전하다 — 명시 컨트롤이 배경보다 우선이다. */}
+                  아이콘 자체는 12px 라 히트영역을 ::before 로 44×44 까지 넓힌다(WCAG 2.5.8 AA=24).
+                  훔쳐 오는 17px 는 카드 배경(포스터 탭)·아래 타이머 줄(비클릭 요소)뿐이라 안전하다 — 명시 컨트롤이 배경보다 우선이다. */}
               <button type="button" onClick={onDisplay} aria-label={`${name} 관전 클락 열기`}
                 title="관전 클락(블라인드·엔트리·평균 스택 전체)"
-                className="pointer-events-auto relative ml-auto shrink-0 text-accent-300 before:absolute before:-inset-2 before:content-['']">
+                className="pointer-events-auto relative ml-auto shrink-0 text-accent-300 before:absolute before:-inset-4 before:content-['']">
                 <Icon name="eye" size={12} /><span className="sr-only">관전</span>
               </button>
             </p>

@@ -18,58 +18,16 @@
 //     걷기 시작한다. 상한 TAB_COVER_WAIT_MAX_MS 를 넘으면 그래도 걷는다(영원히 덮지 않는다). 덮개는
 //     pointer-events-none 이라 기다리는 동안에도 조작을 막지 않는다. 연타면 새 이동이 이긴다.
 //
-// 기기별 스위치(localStorage 'nuri:fx'): `?fx=off` 로 이 기기만 끈다, `?fx=tabsoft` 는 켬을 명시 저장.
-//   전체 끄기는 TAB_COVER_DEFAULT_ON 한 줄을 false 로. 이 스위치 하나가 메인 탭·하위 탭 덮개를 함께 켜고 끈다(4차).
+// (기기별 스위치 localStorage 'nuri:fx' · `?fx=` 는 덮개와 함께 2026-09-26 에 걷었다 — 켤 것이 없다.)
+//
+// 🔴 5차 PILL-FLASH(2026-09-26) — **덮개를 없앴다.** 위 1~4차의 '지면색 한 장' 이 곧 오너가 말한
+//   "검정색이 됐다가 다시 콘텐츠가 나와 깜빡인다" 였다. 아래 '5차' 절이 실측과 이유다.
+//   2026-09-26 정리: App.tsx 의 덮개 요소·호출(playTabCover)·스위치(isTabCoverOn)를 걷었다. 남은 것은 준비 판정과 하위 탭 스크롤 규칙이다.
 
 import { markProgrammaticScroll, notifyScrollNow } from './useScrollY';
 
-/** 전체 기본값 — 2026-09-24 리드 결정으로 켬(tabsoft). */
-export const TAB_COVER_DEFAULT_ON = true;
-export const TAB_COVER_STORAGE_KEY = 'nuri:fx';
-export const TAB_COVER_MS = 280;
-/** 목적지 판을 기다리는 상한 — 넘으면 준비 여부와 상관없이 걷는다. */
+/** 판 준비를 기다리는 상한(waitSettled) — 넘으면 준비 여부와 상관없이 onReady 를 부른다. */
 export const TAB_COVER_WAIT_MAX_MS = 700;
-const SOFT = 'cubic-bezier(0.22, 0.61, 0.36, 1)'; // 감속 꼬리가 긴 곡선
-const SOFT_HOLD_MS = 50;
-
-const isSwitch = (v: string | null): v is 'tabsoft' | 'off' => v === 'tabsoft' || v === 'off';
-
-/** URL 의 fx 값과 저장값으로 **새 저장값**을 정한다. 'tabsoft' | 'off' | null(미지정). 그 밖의 값(지운 'tabfade' 포함)은 무시. */
-export function nextTabCoverValue(search: string, stored: string | null): string | null {
-  const fx = new URLSearchParams(search).get('fx');
-  if (isSwitch(fx)) return fx;
-  return isSwitch(stored) ? stored : null;
-}
-
-/** 저장값 → 이 기기에서 켜짐 여부. 미지정은 기본값을 따른다. */
-export function tabCoverOnFor(value: string | null, defaultOn = TAB_COVER_DEFAULT_ON): boolean {
-  return value === 'tabsoft' || (defaultOn && value !== 'off');
-}
-
-/** 키프레임(순수) — 첫 키프레임은 언제나 opacity 1(전면을 덮은 상태, K-07). opacity 외 속성은 쓰지 않는다. */
-export function tabCoverKeyframes(): Keyframe[] {
-  return [{ opacity: 1 }, { opacity: 0.96, offset: SOFT_HOLD_MS / TAB_COVER_MS, easing: SOFT }, { opacity: 0 }];
-}
-
-let cached: boolean | null = null;
-/** 이 기기에서 켜짐 여부. 첫 호출에서 URL 을 읽고 저장한다 — App 마운트 때 한 번 불러 두어라
- *  (그 뒤 딥링크 처리가 query 를 정리해도 결과가 같다). 저장소가 막힌 브라우저는 URL 값만 쓴다. */
-export function isTabCoverOn(): boolean {
-  if (cached !== null) return cached;
-  let stored: string | null = null;
-  try { stored = localStorage.getItem(TAB_COVER_STORAGE_KEY); } catch { /* 프라이빗·차단 */ }
-  const next = nextTabCoverValue(typeof location === 'undefined' ? '' : location.search, stored);
-  if (next !== stored) {
-    try {
-      if (next === null) localStorage.removeItem(TAB_COVER_STORAGE_KEY);
-      else localStorage.setItem(TAB_COVER_STORAGE_KEY, next);
-    } catch { /* 저장 실패 = 이번 세션만 */ }
-  }
-  cached = tabCoverOnFor(next);
-  return cached;
-}
-/** 테스트 전용. */
-export function resetTabCoverCache(): void { cached = null; }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 4차 MOTION-UNIFY(오너 2026-09-24: "하나를 부드럽게 바꾸면 나머지 모든 페이지에서도 동일하게") —
@@ -119,8 +77,8 @@ export function tabPaneReady(tab: string): boolean {
 }
 
 /**
- * 판(root)이 **준비될 때까지** rAF 로 기다렸다가 onReady 를 한 번 부른다 — 덮개 걷기와 판 높이 예약 해제
- * (VenueManageTab S6)가 같은 판정·같은 상한을 쓴다(MOTION-UNIFY: "한 곳을 고치면 전부 따라온다").
+ * 판(root)이 **준비될 때까지** rAF 로 기다렸다가 onReady 를 한 번 부른다 — 판 높이 예약 해제(VenueManageTab S6)가 쓴다
+ * (5차 전엔 덮개 걷기도 같은 판정·같은 상한을 썼다).
  * 준비 = isSettled(root) 이고 root 높이가 **두 프레임 연속** 같다. 상한 TAB_COVER_WAIT_MAX_MS 를 넘으면 그래도 부른다.
  * onFrame 은 매 프레임 판정 전에 불린다(덮개 자리 맞춤). whole 은 isSettled 와 같다. 돌려준 함수로 취소한다(연타·언마운트).
  */
@@ -143,72 +101,24 @@ export function waitSettled(root: () => Element | null, onReady: () => void, onF
   return () => { alive = false; }; // 다음 프레임에 tick 이 alive 를 보고 멈춘다
 }
 
-const runs = new WeakMap<HTMLElement, number>();
-const waits = new WeakMap<HTMLElement, () => void>();
-type Rect = { top: number; left: number; width: number; bottom: number };
-/**
- * 덮개 한 장을 opacity 1 로 깔고, 목적지(root)가 준비된 프레임에 280ms 동안 걷는다. 모든 전환이 이 함수 하나를 탄다.
- * · rect 를 주면 매 프레임 그 자리(판의 화면 위치)로 덮개를 맞춘다 — 판이 커밋·스크롤로 움직여도 따라간다.
- * · 연타 — 같은 덮개의 새 이동이 이긴다(이전 대기·애니메이션은 버린다).
- */
-function lift(el: HTMLElement, root: () => Element | null, rect?: () => Rect | null, defer = false): void {
-  const my = (runs.get(el) ?? 0) + 1;
-  runs.set(el, my);
-  waits.get(el)?.(); // 연타 — 이전 대기는 버린다
-  for (const a of el.getAnimations()) a.cancel();
-  const place = () => {
-    const r = rect?.();
-    if (!r) return;
-    const s = el.style;
-    s.top = `${r.top}px`; s.left = `${r.left}px`; s.width = `${r.width}px`; s.height = `${Math.max(0, r.bottom - r.top)}px`;
-  };
-  // defer: 호출 시점엔 아직 커밋 전 DOM 이다(하위 탭 — 이벤트 안) → 자리는 첫 rAF(커밋 뒤·첫 페인트 전)에 잡고 그때 보인다.
-  if (!defer) { place(); el.style.display = 'block'; } else el.style.display = 'none';
-  el.style.opacity = '1';
-  waits.set(el, waitSettled(root, () => {
-    if (runs.get(el) !== my) return;
-    const anim = el.animate(tabCoverKeyframes(), { duration: TAB_COVER_MS, easing: 'linear' });
-    // 끝나면 쉬는 상태로 — 메인 덮개는 클래스(hidden opacity-0)로 돌아가고, 하위 탭 덮개(defer)는 클래스가 없어 인라인으로 숨긴다.
-    //   ⚠ 하위 탭 덮개에서 display 를 '' 로 지우면 div 기본값(block)·opacity 1 로 **화면에 눌러앉는다**(2026-09-24 첫 측정에서 밟았다).
-    anim.onfinish = () => { if (runs.get(el) === my) { el.style.display = defer ? 'none' : ''; el.style.opacity = defer ? '0' : ''; } };
-  }, () => {
-    if (runs.get(el) !== my) return;
-    place();
-    el.style.display = 'block';
-  }));
-}
-
-const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const isPc = () => window.matchMedia('(min-width: 1024px)').matches;
-/** App 의 메인 탭 덮개 기본 윗변(모바일) — App.tsx 가 이 값을 인라인으로 준다. */
-export const TAB_COVER_TOP = 'calc(var(--header-now) + 1px)';
-
-/**
- * 메인 탭 커밋 직후(**useLayoutEffect 안**) 부른다 — 첫 페인트부터 덮개가 opacity 1 로 깔린다(K-07).
- * 걷기는 rAF 에서 목적지 판이 준비된(isSettled + 높이 정지) 프레임에 시작한다(상한 TAB_COVER_WAIT_MAX_MS).
- * 모바일: 헤더 밑 전폭(인라인 top). PC: GNB 밑 · 콘텐츠 열 폭 · 판 아래끝까지(푸터·좌우 채움 배경은 안 덮는다).
- * 덮개의 기본 클래스는 `hidden opacity-0` 이다 — 끝나면 인라인 display·opacity 를 지워 클래스로 돌아간다.
- */
-export function playTabCover(el: HTMLElement | null, tab: string): void {
-  if (!el || typeof el.animate !== 'function') return;
-  if (!isTabCoverOn() || reduced()) return;
-  const pane = () => document.querySelector(`.tab-pane[data-tab="${tab}"]`);
-  if (!isPc()) {
-    // 모바일은 CSS 자리(헤더 밑 전폭) 그대로 — PC 에서 줄였던 인라인 치수를 되돌린다.
-    const s = el.style;
-    if (s.left) { s.top = TAB_COVER_TOP; s.left = ''; s.width = ''; s.height = ''; }
-    lift(el, pane);
-    return;
-  }
-  lift(el, pane, () => {
-    const p = pane() as HTMLElement | null;
-    const gnb = document.querySelector('[data-stack-tabbar]');
-    const top = Math.max(gnb?.getBoundingClientRect().bottom ?? 0, 0);
-    if (!p || p.offsetHeight === 0) return { top, left: 0, width: window.innerWidth, bottom: window.innerHeight };
-    const r = p.getBoundingClientRect();
-    return { top, left: r.left, width: r.width, bottom: Math.min(window.innerHeight, Math.max(r.bottom, top)) };
-  });
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// 5차 PILL-FLASH(오너 2026-09-26: "내 매장에서 대메뉴 pill 을 눌러 이동하면 검정색이 됐다가 다시 콘텐츠가 나와 깜빡인다.
+//   이런 부분 전부 다 찾아서") — **덮개를 그리지 않는다.**
+//   덮개는 목적지 판 위에 지면색(다크=검정 · 라이트=흰) 한 장을 opacity 1 로 깔았다가, 판이 준비된 뒤(높이 정지 두 프레임)
+//   50ms 머물고 280ms 에 걷었다. **판이 이미 완성된 재방문에서도** 그 순서를 그대로 탔으므로, 이미 그려진 콘텐츠를
+//   ~100ms 빈 지면으로 가렸다가 돌려줬다 — 그게 '검정 → 콘텐츠' 깜빡임 그 자체다(덮개가 원인이지 증상의 마개가 아니었다).
+//   실측(프로덕션 빌드 · 목킹 업주 · 내 매장 단계 알약 7칸 첫/재방문 · 1440/1280/390 · 다크/라이트 · CPU 1/4배, 2026-09-26):
+//     덮개 opacity≥0.5 구간 = 재방문 94~123ms, 첫 방문 98~471ms. 판 영역 평균 휘도가 다크 7.9(지면색 그대로),
+//     라이트 247.4(흰 판)까지 갔다. 동작 줄이기(덮개 꺼짐) 대조군은 같은 이동에서 지면색 판이 한 번도 없었다.
+//     Suspense 폴백 0 · 재방문 스켈레톤 0 — 재마운트·재조회·청크 스로틀은 원인이 아니었다(반증).
+//   메인 탭(App.tsx)·하위 탭 25곳(goSubTab)이 전부 이 파일 하나를 타서, 앱 전체가 같은 증상이었다
+//     (메인 탭·커뮤니티 섹션·순위 보드·GTO 레인·내 매장 단계 실측: 재방문마다 ~100ms 지면색 판).
+//   → 이미 그려진 판은 그대로 보인다(재방문 0ms). 첫 방문은 판의 스켈레톤(모양 예약)이 보이고,
+//     startTransition 경로(내 매장 사이드바 등)는 새 판이 커밋될 때까지 **이전 판**이 보인다 — 어느 쪽도 빈 지면 판이 아니다.
+//   남긴 것: 준비 판정(isSettled·waitSettled — VenueManageTab 높이 예약 해제가 쓴다), 하위 탭 P2 스크롤 규칙(alignSubTabPanel).
+//   🔴 되살리지 마라 — 판 위에 불투명 한 장을 까는 방식은 판이 이미 그려져 있어도 가린다. 거리·시간을 줄여도
+//     '가렸다 보여 준다' 는 그대로다. e2e/pill-flash.spec.ts 가 잠근다(덮개가 보이는 프레임 0 · 판 휘도가 지면색으로 떨어지는 프레임 0).
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── 하위 탭(goSubTab) ─────────────────────────────────────────────────────────
 /** goSubTab 의 scope → 그 하위 탭이 바꾸는 판. **새 하위 탭을 만들면 여기 한 줄**(계약 테스트가 전 호출부를 대조한다). */
@@ -242,46 +152,16 @@ const scroller = (el: Element): HTMLElement | null => {
   }
   return null; // 창(window)
 };
-/** 판이 속한 전면 화면(fixed 오버레이)의 z-index — 덮개가 그 위·그 안 영역에만 깔리게. 없으면 메인 덮개와 같은 45. */
-const zFor = (el: Element): string => {
-  let z = '45';
-  for (let n: Element | null = el; n && n !== document.body; n = n.parentElement) {
-    const cs = getComputedStyle(n);
-    if (cs.position === 'fixed' && cs.zIndex !== 'auto') z = cs.zIndex; // 가장 바깥 fixed 가 층을 정한다
-  }
-  return z;
-};
-/** 판 뒤로 실제로 보이는 불투명 배경색 — 덮개가 그 색이어야 '빈 판 → 내용' 이 한 장으로 풀린다. */
-const bgFor = (el: Element): string => {
-  for (let n: Element | null = el; n; n = n.parentElement) {
-    const c = getComputedStyle(n).backgroundColor;
-    const m = /rgba?\(([^)]+)\)/.exec(c);
-    if (m) { const a = m[1].split(/[ ,/]+/).filter(Boolean); if (a.length < 4 || Number(a[3]) >= 1) return c; }
-  }
-  return 'rgb(var(--surface-base))';
-};
-
-let subCover: HTMLElement | null = null;
-const subCoverEl = (): HTMLElement => {
-  if (subCover?.isConnected) return subCover;
-  const d = document.createElement('div');
-  d.setAttribute('aria-hidden', 'true');
-  d.dataset.subCover = '';
-  d.style.cssText = 'position:fixed;pointer-events:none;display:none;opacity:0;';
-  document.body.appendChild(d);
-  subCover = d;
-  return d;
-};
-
 /**
- * 하위 탭 전환 — goSubTab 이 commit() **직후** 부른다(같은 이벤트 안). 메인 탭과 **같은 lift()** 를 탄다.
- * ① 누른 버튼이 든 레일(탭바)과 목적지 판을 찾는다(판은 커밋으로 바뀔 수 있어 매 프레임 다시 찾는다).
- * ② 첫 rAF(커밋 뒤·첫 페인트 전): 판 윗변이 레일 밑으로 말려 올라가 있으면 **레일 바로 밑**으로 맞춘다(P2 스크롤 규칙).
- *    짧은 판으로 가며 브라우저가 scrollY 를 깎는 클램프도 이 프레임 안에서 끝난다 — 덮개가 이미 깔려 있다.
- * ③ 덮개 = 판의 화면 영역(레일 밑 ~ 화면 아래)만. 레일·알약(SlidingPill)·헤더는 덮지 않는다.
+ * 하위 탭 전환 — goSubTab 이 commit() **직후** 부른다(같은 이벤트 안). 5차부터 덮개 없이 **P2 스크롤 규칙만** 남았다.
+ * ① 누른 버튼이 든 레일(탭바)과 목적지 판을 찾는다(판은 커밋으로 바뀔 수 있어 첫 rAF 에서 다시 찾는다).
+ * ② 첫 rAF(커밋 뒤·첫 페인트 전): 판 윗변이 레일 밑으로 말려 올라가 있으면 **레일 바로 밑**으로 맞춘다.
+ *    판 자체가 스크롤 상자면(내 정보·알림·약관) 그 상자를 맨 위로 — 새 탭 내용이 중간부터 보이지 않게.
+ *    섹션별 복원이 있는 scope(OWN_SCROLL_SCOPES)는 그쪽 정책을 따른다(이중 적용 금지).
+ * 동작 줄이기·`?fx=off` 와 무관하다 — 스크롤 규칙이지 연출이 아니다.
  */
-export function playSubTabCover(scope: string, target: EventTarget | null): void {
-  if (typeof document === 'undefined' || !isTabCoverOn() || reduced()) return;
+export function alignSubTabPanel(scope: string, target: EventTarget | null): void {
+  if (typeof document === 'undefined' || typeof requestAnimationFrame !== 'function' || OWN_SCROLL_SCOPES.has(scope)) return;
   const sel = SUB_PANEL[scope];
   if (!sel) return;
   const t = target instanceof Element ? target : null;
@@ -301,42 +181,17 @@ export function playSubTabCover(scope: string, target: EventTarget | null): void
     }
     return [...document.querySelectorAll(sel)].find((e) => e.getClientRects().length > 0) ?? null;
   };
-  const el = subCoverEl();
-  let first = true;
-  const safeTop = (root: Element): number => {
-    const sc = scroller(root);
-    let top = sc ? sc.getBoundingClientRect().top : Math.max(
-      document.querySelector('[data-stack-header]')?.getBoundingClientRect().bottom ?? 0,
-      isPc() ? (document.querySelector('[data-stack-tabbar]')?.getBoundingClientRect().bottom ?? 0) : 0,
-    );
-    if (rail?.isConnected) top = Math.max(top, rail.getBoundingClientRect().bottom);
-    return top;
-  };
-  lift(el, find, () => {
+  requestAnimationFrame(() => {
     const root = find();
-    if (!root) return null;
-    if (first) {
-      first = false;
-      el.style.zIndex = zFor(root);
-      el.style.background = bgFor(root);
-      // P2 — 판 윗변을 레일 밑으로(말려 올라가 있을 때만). 섹션별 복원이 있는 scope 는 그쪽 정책을 따른다.
-      //   판 자체가 스크롤 상자면(내 정보·알림·약관) 그 상자를 맨 위로 — 새 탭 내용이 중간부터 보이지 않게.
-      if (!OWN_SCROLL_SCOPES.has(scope)) {
-        const own = root as HTMLElement;
-        const oy = getComputedStyle(own).overflowY;
-        if ((oy === 'auto' || oy === 'scroll') && own.scrollTop > 0) own.scrollTop = 0;
-        else if (rail?.isConnected) {
-          const d = root.getBoundingClientRect().top - rail.getBoundingClientRect().bottom;
-          if (d < -1) {
-            const sc = scroller(root);
-            if (sc) sc.scrollTop += d;
-            else { markProgrammaticScroll(); window.scrollTo({ top: Math.max(0, window.scrollY + d), behavior: 'instant' as ScrollBehavior }); notifyScrollNow(window.scrollY); }
-          }
-        }
-      }
-    }
-    const r = root.getBoundingClientRect();
-    const top = Math.max(r.top, safeTop(root));
-    return { top, left: r.left, width: r.width, bottom: Math.max(top, Math.min(window.innerHeight, r.bottom)) };
-  }, true);
+    if (!root) return;
+    const own = root as HTMLElement;
+    const oy = getComputedStyle(own).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && own.scrollTop > 0) { own.scrollTop = 0; return; }
+    if (!rail?.isConnected) return;
+    const d = root.getBoundingClientRect().top - rail.getBoundingClientRect().bottom;
+    if (d >= -1) return;
+    const sc = scroller(root);
+    if (sc) sc.scrollTop += d;
+    else { markProgrammaticScroll(); window.scrollTo({ top: Math.max(0, window.scrollY + d), behavior: 'instant' as ScrollBehavior }); notifyScrollNow(window.scrollY); }
+  });
 }
