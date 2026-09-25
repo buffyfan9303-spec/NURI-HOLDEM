@@ -1766,7 +1766,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {/* 2-Tap 결제 모달 */}
       {selected && (
         <PaymentModal
-          cell={selected} hasPw={hasPw} session={session}
+          cell={selected} hasPw={hasPw} canManage={canManage} session={session}
           reduceAsk={reduceAsk !== null}
           onReduceConfirm={(pw) => { void reduceAsk?.(pw); }}
           levelNo={clockLevelNow()}
@@ -2931,7 +2931,7 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 // ── 2-Tap 결제 입력 모달 ──────────────────────────────────────────────────────
 interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountIndex: number; }
 
-function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick, busy = false, levelNo = 0, autoDiscIdx = 0, autoFromLevel = true, autoEarly = null, reduceAsk = false, onReduceConfirm }: {
+function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick, busy = false, levelNo = 0, autoDiscIdx = 0, autoFromLevel = true, autoEarly = null, reduceAsk = false, onReduceConfirm }: {
   cell: SelectedCell; hasPw: boolean; session: LedgerSession;
   /** 방금 누른 수정이 매출을 줄여 취소 비밀번호가 필요하다(LEDGER-REDUCE-PASSWORD) */
   reduceAsk?: boolean;
@@ -2952,6 +2952,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
   onPick: (m: PaymentMethod, isUnpaid: boolean, discountIndex: number) => void;
   onPickSplit: (d: SplitInput) => void;
   onCancelBuyin: (pw: string) => void;
+  canManage?: boolean;
   onSetEarly: (override: EarlyType | null) => void;
 }) {
   const [cancelMode, setCancelMode] = useState(false);
@@ -3257,7 +3258,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               ) : (
                 <div className="space-y-1.5">
                   <p className="text-2xs text-ink-muted">취소하려면 업주 비밀번호를 입력하세요.</p>
-                  <PwConfirm hasPw={hasPw} label="취소 확정" onConfirm={onCancelBuyin} />
+                  <PwConfirm hasPw={hasPw} ownerNoPw={canManage} label="취소 확정" onConfirm={onCancelBuyin} />
                 </div>
               )}
             </div>
@@ -3268,8 +3269,15 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
 }
 
 /** 업주 취소 비밀번호 한 줄 — 바인 취소(삭제)와 감액 수정이 같이 쓴다 */
-function PwConfirm({ hasPw, label, busy = false, onConfirm }: { hasPw: boolean; label: string; busy?: boolean; onConfirm: (pw: string) => void }) {
+// 오너 결정 2026-09-25 ②: 비밀번호 **미설정** 매장에서는 업주·공동운영자(ownerNoPw = can_manage_pos)가 비밀번호 없이 확정한다.
+//   직원은 여전히 막힌다. 최종 판정은 서버(cancel_ledger_buyin, 20260925e)가 다시 한다.
+function PwConfirm({ hasPw, ownerNoPw = false, label, busy = false, onConfirm }: { hasPw: boolean; ownerNoPw?: boolean; label: string; busy?: boolean; onConfirm: (pw: string) => void }) {
   const [pw, setPw] = useState('');
+  if (!hasPw && ownerNoPw) {
+    return (
+      <button type="button" onClick={() => onConfirm('')} disabled={busy} className="btn-danger w-full text-xs px-3 disabled:opacity-50">{label}</button>
+    );
+  }
   return (
     <div className="flex gap-1.5">
       <input type="password" inputMode="numeric" value={pw} onChange={(e) => setPw(e.target.value)} aria-label="취소 비밀번호"
