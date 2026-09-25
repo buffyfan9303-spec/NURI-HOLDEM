@@ -397,7 +397,9 @@ export default function PostDetailModal({
   };
 
   const react = async (type: ReactionType) => {
-    if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; }
+    // FULL-ERROR-SWEEP-B(2026-09-25): 로그인 시트를 여는 길에는 토스트를 띄우지 않는다 — fixed 하단 토스트가
+    //   시트의 'Google로 계속하기' CTA 를 덮었다(390·360 실측 히트 높이 18/46). 시트 자체가 안내다.
+    if (!user) { promptLogin(); return; }
     // 낙관적으로 먼저 바꾼다 — 실패하면 이 스냅샷으로 되돌린다(서버는 거부했는데 화면만 바뀐 채 남지 않게).
     const before = { my: myReaction, bb, gr };
     try {
@@ -844,7 +846,7 @@ export default function PostDetailModal({
               aria-pressed={!!post.liked}
               data-aura={post.liked || undefined}
               data-aura-level={post.liked ? 'micro' : undefined}
-              onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; } onLike(post.id); }}
+              onClick={() => { if (!user) { promptLogin(); return; } onLike(post.id); }}
               className={reactionPill(!!post.liked)}
             >
               {/* [E] 1.8 은 실효 1.05px — 화면 굵기 하한(1.1px) 미달 */}
@@ -903,7 +905,7 @@ export default function PostDetailModal({
           /* POST-DETAIL-TRIM(2026-09-24 오너 "덮고 있는 네모 칸을 지워버려") — 바깥 테두리·면·안쪽 여백을 걷었다(54.5 → 44px 한 줄). */
           className="mt-2 grid grid-cols-2 gap-0.5 min-[360px]:flex lg:hidden">
           <button type="button" aria-pressed={!!post.liked}
-            onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; } onLike(post.id); }}
+            onClick={() => { if (!user) { promptLogin(); return; } onLike(post.id); }}
             className={trayCell(!!post.liked)}>
             <Icon name={post.liked ? 'heart-fill' : 'heart'} size={14} strokeWidth={2.0} className="shrink-0" />
             <TrayLabel label="좋아요" count={post.likeCount} />

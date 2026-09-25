@@ -188,6 +188,9 @@ export async function getPostById(postId: string): Promise<CommunityPost | null>
     const { MOCK_COMMUNITY_POSTS } = await import('../mock/data');
     return MOCK_COMMUNITY_POSTS.find((p) => p.id === postId) ?? null;
   }
+  // FULL-ERROR-SWEEP-B(2026-09-25): ?post=·알림 링크의 id 는 URL 에서 온 남의 입력이다. uuid 꼴이 아니면
+  //   PostgREST 가 400(22P02) 을 돌려주던 것을 요청 없이 '없는 글'(null) 로 끝낸다.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(postId)) return null;
   const res = await supabase.from('community_posts').select('*').eq('id', postId).maybeSingle();
   if (res.error || !res.data) return null;
   const liked = await supabase.from('post_likes').select('post_id').eq('post_id', postId).limit(1);

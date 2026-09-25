@@ -30,7 +30,9 @@ const postRow = (id: string, title: string, over: Record<string, unknown> = {}) 
   ...over,
 });
 // 최신순 목록 = 서버가 준 순서 그대로: n3(09-03) → n2 → n1
-const POSTS = (hideMiddle = false) => [postRow('n3', '셋째 글 제목'), postRow('n2', '둘째 글 제목', { blinded: hideMiddle }), postRow('n1', '첫째 글 제목')];
+// FULL-ERROR-SWEEP-B(2026-09-25): getPostById 가 uuid 꼴이 아닌 id 를 요청 없이 null 로 끝내므로 ?post= 딥링크 픽스처는 uuid 꼴이어야 한다.
+const NID = (n: 1 | 2 | 3) => `0000000${n}-0000-4000-8000-00000000000${n}`;
+const POSTS = (hideMiddle = false) => [postRow(NID(3), '셋째 글 제목'), postRow(NID(2), '둘째 글 제목', { blinded: hideMiddle }), postRow(NID(1), '첫째 글 제목')];
 
 /** 게시판이 정착(서버 첫 페이지 done)한 뒤에 글을 연다 — ③ 의 '첫/마지막' 은 정착한 목록의 계약이다.
  *  2026-09-13 실측: 4173(프로덕션 빌드)에서 5/6 실패, 5174 dev 는 StrictMode 이중 effect·느린 렌더로 우연히 통과.
@@ -158,7 +160,7 @@ test('🔴 ⑤ 공유 링크 직접 진입은 맥락이 없다 — 양쪽 비활
   await page.setViewportSize({ width: 390, height: 844 });
   await install(page);
   await stabilizeBackstack(page);
-  await page.goto('/?post=n2');
+  await page.goto(`/?post=${NID(2)}`);
   // 2026-09-25: dismissOverlays 의 스킵 매칭(/건너뛰기|닫기|시작하기|확인/)이 PostDetailModal 자체의
   //   "닫기" 헤더 버튼에 걸려, 검사하려던 딥링크 상세를 열자마자 닫아버렸다(부분일치 셀렉터 함정).
   //   stubLogin 이 이미 현재 약관 버전으로 로그인시켜 재동의 게이트가 뜨지 않으니 여기서는 필요 없다.
@@ -173,7 +175,7 @@ test('🔴 ⑥ PC 1440 전체화면 읽기 폭 68~74ch · 1280 2-pane 인라인�
   await page.setViewportSize({ width: 1440, height: 900 });
   await install(page);
   await stabilizeBackstack(page);
-  await page.goto('/?post=n2');
+  await page.goto(`/?post=${NID(2)}`);
   // 2026-09-25: 위 ⑤와 같은 이유로 제거 — dismissOverlays 가 딥링크 상세 자체를 닫는다.
   await expect(dialog(page)).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(500);
