@@ -204,11 +204,12 @@ export default {
           to:   { transform: 'translateY(0)' },
         },
         // 시트(하단 모달) 닫기: 아래로 슬라이드되며 사라짐
-        // 🔴 2026-09-26 투명도를 뺐다 — 내려가며 투명해지면 시트 뒤의 (아직 걷히는 중인) 딤이 비쳐 라이트에서 휘도가 푹 꺼졌다(voucher-close).
-        //   불투명한 채 끝까지 내려간다(여는 sheet-up 과 같은 문법). 소비처: Modal 시트 닫기 · VoucherWallet RedeemSheet.
+        // ⚠ 투명도를 빼지 마라 — e2e/motion-unify MU3 가 '닫힘이 한 프레임 컷이 아니다(중간 투명도 프레임)' 를 이 값으로 잰다
+        //   (2026-09-26 한 번 뺐다가 장터 행 상세 닫기가 MU3 에서 3/3 빨개져 되돌렸다). 이용권 닫기 휘도 깜빡임(−45)은 이 투명도가 아니라
+        //   딤이 늦게 걷힌 탓이었다 — 딤을 먼저 걷는 dim-out(아래) 만으로 0 이다(투명도 유지 상태에서 flick.cjs 실측 blink 0).
         'slide-down': {
-          from: { transform: 'translateY(0)' },
-          to:   { transform: 'translateY(100%)' },
+          from: { transform: 'translateY(0)',    opacity: '1' },
+          to:   { transform: 'translateY(100%)',  opacity: '0' },
         },
         // 0에서 시작하면 컨텐츠가 '꺼졌다 켜지는' 깜빡임으로 인지된다.
         // 0.45에서 시작해 짧게 정착 — iOS 컨텐츠 전환과 같은 '스르륵' 감각.
@@ -245,7 +246,8 @@ export default {
         'dim-in-sheet': 'dim-in 0.26s cubic-bezier(0.45, 0, 0.55, 1)',   // = sheet-up 0.26s
         'dim-in':       'dim-in 0.32s cubic-bezier(0.45, 0, 0.55, 1)',   // = 가운데 모달 slide-up(index.css 0.32s)
         // 시트 닫기의 딤 — 시트(slide-down 0.2s)보다 **먼저** 걷힌다. 같은 속도로 걷으면 내려가는 시트 뒤로 아직 어두운 화면이 드러나
-        //   라이트에서 207→148 로 떨어졌다 돌아왔다(voucher-close −45). flick.cjs 실측: 0.05s 감속 곡선 0 · 0.05s 선형 −21 · 0.08s −9 · 0.12s −28.
+        //   라이트에서 207→148 로 떨어졌다 돌아왔다(voucher-close −45). flick.cjs 실측(시트 slide-down 투명도 유지): 0.05s 감속 곡선 0.
+        //   (투명도를 뺀 상태의 비교값: 0.05s 선형 −21 · 0.08s −9 · 0.12s −28.)
         'dim-out':      'fade-out 0.05s cubic-bezier(0.32, 0.72, 0, 1) forwards',
       },
     },

@@ -416,7 +416,7 @@ export default function Modal({
   }
 
   /** 딤 애니 — 열기: 본문 진입과 같은 길이(시트 sheet-up 0.26s · 가운데 slide-up 0.32s, ease-in-out). 닫기: 시트는 딤만 먼저 걷고(dim-out 0.05s)
-   *  시트는 불투명하게 내려간다(slide-down), 가운데 모달은 래퍼 fade-out 이 맡는다. 값의 근거는 tailwind.config.js keyframes 주석. */
+   *  시트는 slide-down(이동+투명도)으로 내려간다, 가운데 모달은 래퍼 fade-out 이 맡는다. 값의 근거는 tailwind.config.js keyframes 주석. */
   const dimIn = closing ? (variant === 'sheet' && !dragClosed ? 'animate-dim-out' : '') : variant === 'sheet' ? 'animate-dim-in-sheet' : 'animate-dim-in';
   return (
     // z-[60]: 전체화면 page 변형(z-[55]) 위에도 항상 뜨도록 — 예: 포스터 상세에서 '대회 후기 쓰기' 글쓰기 모달
@@ -424,8 +424,9 @@ export default function Modal({
     // 🔴 2026-09-26(flicker-gate voucher-open) — 열 때 래퍼 전체 fade(0.16s)를 뺐다. 그 fade 가 끝나면 딤은 이미 다 어두운데 시트는
     //   아직 올라오는 중(0.26s)이라, 라이트에서 화면 평균 휘도가 197→104 로 떨어졌다 시트가 덮으며 돌아왔다(2프레임 깜빡임).
     //   이제 딤은 자기 애니(animate-dim-in*, 본문과 같은 길이·선형)로 어두워지고, 시트는 불투명한 채 올라오며, 가운데 모달 본문은
-    //   slide-up 자체의 투명도로 나타난다. 닫힘: 가운데 모달은 래퍼 fade-out 그대로, **시트는 딤만** fade-out 한다 — 래퍼까지 걷으면
-    //   시트 자신의 slide-down 투명도와 곱해져 시트가 딤보다 먼저 비쳐, 라이트에서 휘도가 207→148 로 떨어졌다 돌아왔다(voucher-close).
+    //   slide-up 자체의 투명도로 나타난다. 닫힘: 가운데 모달은 래퍼 fade-out 그대로, **시트는 딤만 먼저 걷고(dim-out 0.05s)** 시트는
+    //   slide-down(이동+투명도, MU3 가 투명도 프레임을 잰다)으로 내려간다 — 딤이 시트와 같이 걷히면 투명해지는 시트 뒤로 아직 어두운 딤이 비쳐
+    //   라이트에서 휘도가 207→148 로 떨어졌다 돌아왔다(voucher-close).
     //   드래그로 닫힌 시트(dragClosed)는 딤이 이미 animateDim 으로 0 이라 아무 애니도 걸지 않는다(애니가 인라인 0 을 이겨 딤이 다시 켜진다). 드래그 딤(animateDim)은 takeOverDim 이
     //   이 CSS 애니를 getAnimations() 로 넘겨받아 취소하고 보이는 값에서 잇는다(열리는 도중에 잡아도 튀지 않는다).
     <div data-scroll-lock className={['fixed inset-0 flex', layer === 'gate' ? 'z-[65]' : 'z-[60]', closing && variant !== 'sheet' ? 'animate-fade-out' : ''].join(' ')}
