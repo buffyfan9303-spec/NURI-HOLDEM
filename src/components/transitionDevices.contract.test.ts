@@ -73,6 +73,17 @@ describe('(b) 메인 탭은 commitTab 한 입구로만 바뀐다', () => {
     expect(body.indexOf('notePaneLeaving(')).toBeLessThan(body.indexOf('setActiveTab('));
     expect(app).toMatch(/handOffPane\(activeTab\)/);
   });
+  it('부팅 링크(?tab·?nl) 정리는 탭 이력 effect 와 같은 layout 단계이고 그보다 먼저 선언된다', () => {
+    // 이력 effect 가 먼저 돌면 `?nl=/admin` 칸을 밀어 넣어, 권한 없는 회원이 홈으로 되돌아갈 때 주소에 ?nl= 이 남는다
+    //   (2026-09-26 e391fb2f 회귀 · auth-boot-gap G7b). 두 effect 가 서로 다른 단계면 선언 순서가 아무 의미가 없다.
+    const clean = app.search(/use(Layout)?Effect\(\(\) => \{\s*try \{\s*const url = new URL\(window\.location\.href\);\s*if \(!url\.searchParams\.has\('tab'\)/);
+    const trail = app.search(/use(Layout)?Effect\(\(\) => \{\s*const from = prevTabRef\.current;/);
+    expect(clean, '부팅 링크 정리 effect 를 못 찾았다').toBeGreaterThan(0);
+    expect(trail, '탭 이력 effect 를 못 찾았다').toBeGreaterThan(0);
+    expect(app.slice(clean, clean + 16), '부팅 링크 정리가 layout 단계가 아니다').toMatch(/^useLayoutEffect/);
+    expect(app.slice(trail, trail + 16), '탭 이력이 layout 단계가 아니다').toMatch(/^useLayoutEffect/);
+    expect(clean, '부팅 링크 정리가 탭 이력보다 아래에 선언됐다').toBeLessThan(trail);
+  });
   it('setActiveTab 은 App 밖으로 나가지 않는다(prop·컨텍스트로 내려보내지 않는다)', () => {
     expect(app.match(/[=({,]\s*setActiveTab\s*[,})]/g) ?? [], 'setActiveTab 을 값으로 넘겼다 — 받는 쪽이 입구를 우회한다').toEqual([]);
   });

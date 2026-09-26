@@ -1073,7 +1073,10 @@ export default function App() {
   //   아래(1740행대) nl 정리 effect 는 그 **뒤에** 돌아 새 칸만 고치고 밑 칸에 `?nl=/admin` 이 남았다(권한 없으면 홈으로 되돌아가며
   //   그 칸이 드러나 주소창에 ?nl= 이 남음 — 새로고침하면 다시 연다). 이 effect 는 이력 effect 보다 먼저 선언돼 먼저 돈다.
   //   링크 값은 첫 렌더에서 이미 읽었다(bootNotifLinkRef · bootNotifTab) — 지워도 여는 데 지장이 없다.
-  useEffect(() => {
+  // 🔴 2026-09-26 — **layout 단계**다. 탭 이력 effect 가 layout 단계로 옮겨 간 뒤(useBackClose 와 같은 단계 · e391fb2f) 이 정리가
+  //   passive 로 남아 있어 순서가 뒤집혔다: 이력이 `?nl=/admin` 칸을 먼저 밀고 정리는 새 칸만 고쳐, 권한 없는 회원이 홈으로 되돌아가며
+  //   주소에 ?nl= 이 남았다(auth-boot-gap G7b 5/5). 같은 단계 안에서는 선언 순서대로 돈다 — 이 effect 가 이력 effect 보다 위에 있어야 한다.
+  useLayoutEffect(() => {
     try {
       const url = new URL(window.location.href);
       if (!url.searchParams.has('tab') && !url.searchParams.has('nl')) return;
