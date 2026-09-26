@@ -86,7 +86,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY, isProgrammaticScroll, markProgrammaticScroll, notifyScrollNow } from './lib/useScrollY';
-import { notePaneLeaving, handOffPane } from './lib/tabCover';
+import { notePaneLeaving, handOffPane, LEAVE_FADE_MS, LEAVE_EASE } from './lib/tabCover';
 // Q6(2026-09-21) — URL 로 들어온 QR 도 **앱 안 스캐너와 같은 규칙**으로 읽는다(`parseQr` 단일 해석).
 import { parseQr, elsewhereMsg } from './lib/qrPayload';
 /** QR 이 URL 에 싣는 키 전부. 이 중 하나라도 있으면 QR 진입으로 보고, 처리 뒤에는 **이 키들만** 지운다
@@ -303,6 +303,23 @@ const AppHeader = memo(function AppHeader({
   const [notifOpen,    setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenu]  = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  // 🔴 2026-09-27 MENU-HANDOFF — 메뉴에서 다른 화면을 열면 **메뉴가 먼저 닫혀 홈이 비쳤다**(390 라이트 휘도 −23, 두 번째 열기 ~110ms ·
+  //   첫 열기는 lazy 청크까지 ~240ms). 원인: '내 정보' 는 startTransition 으로 열리는데(openMeCb) 메뉴 닫힘은 같은 클릭의 **급한** 갱신이라
+  //   닫힘이 먼저 커밋·페인트되고 목적지는 트랜지션 렌더가 끝난 뒤 다른 커밋에 섰다(MutationObserver 계측: 닫힘 커밋 ≠ 열림 커밋).
+  //   처방 — 메뉴는 **목적지가 서는 그 커밋에서** 걷힌다:
+  //   ① leaveMenuTo: 메뉴 닫힘을 트랜지션에 싣는다. 같은 이벤트의 트랜지션은 한 차선이라 트랜지션으로 여는 목적지('내 정보'·첫 방문 탭)와
+  //      같은 커밋이 되고, 목적지가 서스펜드(첫 열기 청크)하면 메뉴도 그대로 기다린다.
+  //   ② 급한 목적지(재방문 탭·알림 패널)는 트랜지션을 기다리지 않는다 — 메뉴는 **연 탭 그대로이고 알림 패널이 닫혀 있을 때만** 산다(menuLive,
+  //      파생값). 그래서 탭이 바뀌는/패널이 서는 그 커밋에서 같이 내린다 — 메뉴가 새 탭 위에 한 프레임도 남지 않는다.
+  //      ⚠ 렌더 중 setUserMenu(false) 로 조정하면 안 된다 — 뒤에 트랜지션 갱신이 대기 중이면 같은 태스크의 다음 동기 렌더(App layout
+  //        effect)가 큐를 되감으며 그 조정을 잃어 메뉴가 **다시 열렸다**(MutationObserver 실측: 닫힘 커밋 1ms 뒤 inert 제거). 그래서 파생값이다.
+  //   걷을 때는 한 프레임 컷 대신 **떠나는 판과 같은 퇴장**(LEAVE_FADE_MS·LEAVE_EASE) — 탭 이동에서 판(handOffPane)과 함께 사라져
+  //   '메뉴만 먼저 컷' 이 남지 않고, 전면 판 아래에서는 판 fade-in 에 덮여 보이지 않는다. 게이트: e2e/flicker-gate.spec.ts MENU-HANDOFF.
+  const leaveMenuTo = (go: () => void) => { go(); startTransition(() => setUserMenu(false)); };
+  const [menuTab, setMenuTab] = useState(activeTab);
+  const menuLive = userMenuOpen && !notifOpen && menuTab === activeTab;
+  // 1000ms = 퇴장 페이드(240ms)가 스왑 정적화 동안 멈춰 있을 수 있는 몫까지 — 끝난 뒤엔 opacity 0(forwards)·inert 라 남아 있어도 안 보인다.
+  const userMenuShown = useDelayedUnmount(menuLive, 1000);
 
   // 모바일 스크롤 축소 — 내리면 헤더가 낮아져 포스터 화면이 넓어진다(useScrollY 공용 구독 — MO-9A)
   // MO-3: 높이 전환이 즉시가 되면서 단일 임계값(48)은 그 부근 미세 스크롤에서
@@ -472,7 +489,7 @@ const AppHeader = memo(function AppHeader({
                   44x44px로 확장(WCAG 2.5.5 최소 타깃). -mr-1로 우측 페이지 여백 정렬 보정. */}
               <button
                 type="button"
-                onClick={() => setUserMenu((v) => !v)}
+                onClick={() => { setMenuTab(activeTab); setUserMenu(!menuLive); }}
                 aria-label={`${user.name} 메뉴`}
                 className="group relative w-11 h-11 -mr-1 flex items-center justify-center rounded-full focus:outline-none"
               >
@@ -499,14 +516,18 @@ const AppHeader = memo(function AppHeader({
               </button>
 
               {/* 드롭다운 메뉴 */}
-              {userMenuOpen && (
+              {userMenuShown && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-56 bg-surface-mid border border-border-default rounded-card shadow-dialog animate-slide-up z-50 overflow-hidden"
+                  inert={!menuLive || undefined}
+                  data-menu-leave={menuLive ? undefined : ''}
+                  className={`absolute right-0 top-full mt-2 w-56 bg-surface-mid border border-border-default rounded-card shadow-dialog z-50 overflow-hidden ${
+                    menuLive ? 'animate-slide-up' : 'animate-fade-out pointer-events-none'}`}
+                  style={menuLive ? undefined : { animationDuration: `${LEAVE_FADE_MS}ms`, animationTimingFunction: LEAVE_EASE }}
                 >
                   {/* 사용자 정보 헤더 — 행 전체가 클릭/터치 영역(빈 여백 포함)이 되도록 button으로 확장 */}
                   <button
                     type="button"
-                    onClick={() => { onOpenMe(); setUserMenu(false); }}
+                    onClick={() => leaveMenuTo(onOpenMe)}
                     aria-label="내 정보 열기"
                     className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 border-b border-border-subtle
                                hover:bg-surface-high transition-colors focus:outline-none"
@@ -519,7 +540,7 @@ const AppHeader = memo(function AppHeader({
                   </button>
 
                   {/* 내 정보 — 대시보드·프로필·설정·보안 통합 페이지(오너 지시 2026-09-03: 진입점 1개) */}
-                  <button type="button" onClick={() => { onOpenMe(); setUserMenu(false); }}
+                  <button type="button" onClick={() => leaveMenuTo(onOpenMe)}
                     className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                     <Icon name="circle-user" size={14} />
                     내 정보 <span className="text-ink-muted">(대시보드·프로필·설정)</span>
@@ -527,18 +548,18 @@ const AppHeader = memo(function AppHeader({
 
                   {/* 모바일 전용 — 헤더에서 빠진 알림/도구/테마를 메뉴로 제공 */}
                   <div className="lg:hidden border-y border-border-subtle">
-                    <button type="button" onClick={() => { setNotifOpen(true); setUserMenu(false); }}
+                    <button type="button" onClick={() => leaveMenuTo(() => setNotifOpen(true))}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                       <Icon name="mail" size={14} />
                       알림{unreadCount > 0 && <span className="ml-auto rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white tabular-nums">{unreadCount}</span>}
                     </button>
-                    <button type="button" onClick={() => { onGotoTab?.('tools'); setUserMenu(false); }}
+                    <button type="button" onClick={() => leaveMenuTo(() => onGotoTab?.('tools'))}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                       <Icon name="wrench" size={14} />
                       도구
                     </button>
                     {user.role === 'admin' && (
-                      <button type="button" onClick={() => { onGotoTab?.('admin'); setUserMenu(false); }}
+                      <button type="button" onClick={() => leaveMenuTo(() => onGotoTab?.('admin'))}
                         className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                         <Icon name="shield" size={14} />
                         관리자 설정

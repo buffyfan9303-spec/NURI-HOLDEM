@@ -1338,6 +1338,12 @@ html[data-vt-dir]::view-transition-new(root),
 [data-swap-freeze], [data-swap-freeze] * {
   transition: none !important;
 }
+/* 헤더 계정 메뉴가 탭 이동으로 걷힐 때(App AppHeader MENU-HANDOFF, 2026-09-27) — 퇴장 페이드를 **떠나는 판 퇴장이 시작될 때까지** 멈춘다.
+   헤더의 data-swap-freeze 는 새 판 첫 프레임 다음에 풀리고 그때 떠나는 판 페이드가 시작된다(tabCover fadeAfterFirstFrame) — 둘이 같은
+   순간·같은 곡선으로 사라진다. 안 멈추면 CPU4 에서 메뉴가 판보다 1~2프레임 먼저 사라져 옛 판(메뉴 없는 홈)이 비쳤다(390 라이트 −8). */
+[data-swap-freeze] [data-menu-leave] {
+  animation-play-state: paused;
+}
 /* ② 떠나는 판 — React 가 방금 준 display:none(inline)을 페이드 동안만 이기고, 떠나기 직전 화면 자리(--leave-*)에 fixed 로 선다.
    새 판(in-flow)은 그 **아래**에서 제 모습으로 래스터된다. opacity .999 = 가려진 새 판 타일도 '보이는 타일'로 래스터하게 하는 값
    (1 이면 가림 판정으로 새 판 래스터를 미룬다). will-change 는 퇴장 페이드가 시작될 때 층을 새로 만들지 않게 미리 세운다.

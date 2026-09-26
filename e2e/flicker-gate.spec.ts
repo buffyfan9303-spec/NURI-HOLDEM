@@ -219,3 +219,91 @@ test.describe('MISSING-TILES — 스크롤한 판에서 메인 탭 이동(모바
     expect.soft(flatRows, '본문 영역이 한 색으로 평평해진 프레임(지면색 판)').toEqual([]);
   });
 });
+
+// ── MENU-HANDOFF(2026-09-27) — 헤더 계정 메뉴에서 다른 화면을 열 때 메뉴가 먼저 닫혀 홈이 비치던 틈 ──────────────────
+// 증상(OVERLAY-OPEN-UNIFY 부수 발견): '내 정보' 두 번째 열기에서 메뉴가 먼저 사라지고 홈이 ~110ms 보인 뒤 판이 섰다(390 라이트 휘도 −23).
+//   첫 열기는 lazy 청크까지 ~240ms 라 150ms 창의 blink 로는 안 잡히고, 위 게이트는 '내 정보 열기' 를 modal 로 빼서 blink 를 안 봤다.
+// 원인: 메뉴 닫힘(급한 갱신)과 '내 정보' 열림(startTransition)이 **다른 커밋** — 메뉴가 먼저 커밋·페인트됐다.
+//   도구(재방문 탭)는 같은 커밋이었지만 떠나는 판(handOffPane)이 옛 판을 붙잡는 동안 메뉴만 컷돼 −23 이 났다.
+// 판정: DOM(rAF 표본) — 메뉴도 목적지도 안 보이는 프레임 0 · 메뉴가 살아 있는(inert 아님) 채 목적지가 선 상태 0,
+//       픽셀 — 이 이동은 modal 예외 없이 blink 0(시작·끝 범위 밖 8 이상 튀었다 150ms 안 복귀).
+// 음성 대조(2026-09-27 실행): 3556e3a9 빌드 → 내 정보 1·2 틈 프레임 · 도구/알림 blink 로 FAIL / 처방 빌드 → PASS(보고 참고).
+// 처방: src/App.tsx AppHeader leaveMenuTo · menuLive(MENU-HANDOFF 주석).
+const MENU_TRACKER = () => {
+  if (window.top !== window) return;
+  const M = ((window as unknown as { __mh: { on: boolean; dest: string; log: string[]; gap: number; liveOver: number; frames: number } }).__mh = { on: false, dest: '', log: [] as string[], gap: 0, liveOver: 0, frames: 0 });
+  const vis = (el: Element | null) => !!el && el.getClientRects().length > 0;
+  const st = () => {
+    const mb = document.querySelector('header button[aria-label="내 정보 열기"]');
+    const menuVis = vis(mb);
+    const live = menuVis && !mb!.closest('[inert]');
+    let dest = false;
+    if (M.dest === 'me') dest = [...document.querySelectorAll('.fixed.inset-0.bg-surface-base')].some((e) => vis(e) && e.className.includes('z-[60]'));
+    else if (M.dest === 'notif') dest = vis(document.querySelector('[role=dialog][aria-label="알림"]'));
+    else if (M.dest === 'tools') dest = vis(document.querySelector('[data-testid="tools-featured"]'));
+    return { menuVis, live, dest };
+  };
+  new MutationObserver(() => {
+    if (!M.on) return;
+    const s = st(); const k = `${s.live ? 'M' : '-'}${s.dest ? 'D' : '-'}`;
+    if (M.log[M.log.length - 1] !== k) M.log.push(k);
+    if (s.live && s.dest) M.liveOver++;
+  }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'inert'] });
+  const loop = () => { if (M.on) { const s = st(); M.frames++; if (!s.menuVis && !s.dest) M.gap++; if (s.live && s.dest) M.liveOver++; } requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+};
+
+test.describe('MENU-HANDOFF — 헤더 메뉴에서 연 화면이 메뉴를 걷는 커밋에 선다(모바일 · CPU 4배 · DPR 3 · 라이트)', () => {
+  test.use({ deviceScaleFactor: 3 });
+  test.describe.configure({ timeout: 240_000 });
+
+  test('내 정보(첫·두 번째) · 알림 · 도구 — 틈 프레임 0 · 메뉴가 새 화면 위에 산 채로 남는 상태 0 · 휘도 튐 0', async ({ page }) => {
+    await page.addInitScript(MENU_TRACKER);
+    const cdp = await boot(page, 'light');
+    await page.goto('/');
+    await expect(page.getByTestId('home-schedule-title')).toBeVisible({ timeout: 30_000 });
+    await page.waitForTimeout(4000); // idle 프리마운트(도구 판)가 끝난 조건 — 도구는 재방문(급한 커밋) 경로
+    const ITEMS: { id: string; dest: 'me' | 'notif' | 'tools'; text: string }[] = [
+      { id: '내 정보 첫 열기', dest: 'me', text: '내 정보' }, { id: '내 정보 두 번째', dest: 'me', text: '내 정보' },
+      { id: '알림', dest: 'notif', text: '알림' }, { id: '도구', dest: 'tools', text: '도구' },
+    ];
+    const cast = new Cast(cdp);
+    const bad: string[] = [];
+    const rows: string[] = [];
+    for (const it of ITEMS) {
+      await page.evaluate(() => { const m = document.documentElement.scrollHeight - innerHeight; scrollTo({ top: Math.max(0, Math.round(m * 0.45)), behavior: 'instant' as ScrollBehavior }); });
+      await page.waitForTimeout(700);
+      const menu = await center(page, ME_MENU);
+      expect(menu, `${it.id}: 헤더 계정 메뉴 버튼을 못 찾았다(stubLogin 이 안 먹었다)`).not.toBeNull();
+      await press(page, cdp, menu!.x, menu!.y, true);
+      await page.waitForTimeout(600);
+      const hit = await center(page, { sel: 'header div.w-56 button', text: it.text }); // 드롭다운 안만 — 헤더 벨(aria-label 알림)과 섞이지 않게
+      expect(hit, `${it.id}: 메뉴 항목 '${it.text}' 를 못 찾았다 — 측정이 공허해진다`).not.toBeNull();
+      await page.waitForTimeout(150);
+      await page.evaluate((d) => { const M = (window as unknown as { __mh: { on: boolean; dest: string; log: string[]; gap: number; liveOver: number; frames: number } }).__mh; Object.assign(M, { on: true, dest: d, log: [], gap: 0, liveOver: 0, frames: 0 }); }, it.dest);
+      await cast.start();
+      await page.waitForTimeout(120);
+      const t0 = Date.now();
+      await press(page, cdp, hit!.x, hit!.y, true);
+      await page.waitForTimeout(WIN_MS);
+      const frames = await cast.stop();
+      const M = await page.evaluate(() => { const M = (window as unknown as { __mh: { on: boolean; log: string[]; gap: number; liveOver: number; frames: number } }).__mh; M.on = false; return { log: M.log, gap: M.gap, liveOver: M.liveOver, frames: M.frames }; });
+      const v = analyze(it.id, frames, [], t0, t0 + WIN_MS + 200);
+      if (process.env.FLICKER_LOG) console.log(`[menu-handoff] ${it.id} L ` + frames.map((f) => `${Math.round(f.t - t0)}:${f.L.toFixed(0)}`).join(' '));
+      rows.push(`${it.id}: dom=${M.log.join('>')} gap=${M.gap} liveOver=${M.liveOver} raf=${M.frames} · ${fmt(v)}`);
+      // 공허 방지 — 목적지가 실제로 섰고(마지막 상태 D), 화면 프레임을 받았다.
+      expect(M.log[M.log.length - 1] ?? '', `${it.id}: 목적지가 서지 않았다(${M.log.join('>')}) — 누름이 안 먹었거나 셀렉터가 낡았다`).toMatch(/D$/);
+      expect(v.frames, `${it.id}: 스크린캐스트 프레임 0`).toBeGreaterThan(2);
+      if (M.gap) bad.push(`${it.id}: 메뉴도 목적지도 없는 프레임 ${M.gap}개(메뉴가 먼저 닫혀 홈이 비쳤다)`);
+      if (M.liveOver) bad.push(`${it.id}: 메뉴가 산 채로 새 화면과 겹친 표본 ${M.liveOver}개(메뉴 닫힘이 목적지보다 늦은 커밋)`);
+      if (v.blink.length) bad.push(`${it.id}: 휘도 튐 ${v.blink.join('|')}`);
+      // 원위치 — 전면 판·패널은 뒤로가기(backstack), 탭은 홈.
+      await page.waitForTimeout(400);
+      if (it.dest === 'tools') { const home = await center(page, TAB('홈', true)); await press(page, cdp, home!.x, home!.y, true); }
+      else await page.evaluate(() => history.back());
+      await page.waitForTimeout(1200);
+    }
+    console.log('[menu-handoff] ' + rows.join(String.fromCharCode(10) + '  '));
+    expect(bad).toEqual([]);
+  });
+});

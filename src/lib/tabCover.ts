@@ -229,7 +229,9 @@ export function alignSubTabPanel(scope: string, target: EventTarget | null): voi
 // ─────────────────────────────────────────────────────────────────────────────
 // 2026-09-26 오너 "드르륵, 더 부드럽게" — design-reviewer 최종 수치: 240ms · cubic-bezier(.4,0,.2,1). 160ms 는 두 프레임에 절반이 사라져
 //   '컷+꼬리'로 보였다(최대 프레임 낙폭 .53 → .19). 블러는 넣지 않는다(옛 판이 번져 남아 '겹쳐 보임'이 는다). 첫 방문 대기(300ms)는 그대로.
-const LEAVE_FADE_MS = 240;
+export const LEAVE_FADE_MS = 240;
+/** 떠나는 판 퇴장 곡선 — 헤더 메뉴가 판과 함께 걷힐 때도 같은 곡선을 쓴다(App AppHeader MENU-HANDOFF). */
+export const LEAVE_EASE = 'cubic-bezier(.4,0,.2,1)';
 const FIRST_VISIT_HOLD_MAX_MS = 300;
 /** 커밋이 끝내 안 오는 경우(같은 탭으로 되돌린 연타 등)에도 전환을 영원히 꺼 두지 않는 상한. */
 const SWAP_GUARD_MS = 1500;
@@ -304,7 +306,7 @@ function fadeAfterFirstFrame(parts: HTMLElement[], cleanup: () => void, dest: ()
   fading = stop;
   const fade = () => {
     if (!alive) return;
-    anims = parts.map((p) => p.animate([{ opacity: 0.999 }, { opacity: 0 }], { duration: LEAVE_FADE_MS, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' }));
+    anims = parts.map((p) => p.animate([{ opacity: 0.999 }, { opacity: 0 }], { duration: LEAVE_FADE_MS, easing: LEAVE_EASE, fill: 'forwards' }));
     anims[0].finished.then(stop, () => {});
   };
   afterFirstFrame(() => {
