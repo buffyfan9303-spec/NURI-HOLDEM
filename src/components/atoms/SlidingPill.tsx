@@ -45,8 +45,11 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
     const pill = pillRef.current;
     const container = containerRef?.current ?? (pill?.parentElement as HTMLElement | null);
     if (!container || !pill) return;
+    /** 판 교체 뒤로 미룬 FLIP(아래 measure)을 취소한다 — 있으면 대기 중이다(verify 가 '어긋났다' 고 판정해 FLIP 을 죽이지 않게 본다). */
+    let pending: (() => void) | null = null;
 
     const measure = () => {
+      pending?.();
       const target = container.querySelector<HTMLElement>('[data-pill-active]');
       if (!target) { pill.style.opacity = '0'; prevRect.current = null; return; }
       // ⚠ 화면에 없는 동안(display:none)에는 재지 않는다.
@@ -98,9 +101,9 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       // [DS] MO-4 진짜 FLIP: width/height 는 즉시 최종값(레이아웃 1회)으로 박고,
       // 미끄러짐은 transform(translate+scale) 만 — 애니메이션 구간 전체가 컴포지터에서 돈다.
       // (예전엔 width/height 가 트랜지션에 포함돼 매 프레임 레이아웃+페인트였다)
-      pill.style.width = `${r.w}px`;
-      pill.style.height = `${r.h}px`;
       if (first || !prev) {
+        pill.style.width = `${r.w}px`;
+        pill.style.height = `${r.h}px`;
         // 첫 배치·리사이즈 보정은 전환 없이 — 어디선가 미끄러져 들어오는 유령 모션 방지.
         //
         // View Transition 이 도는 중에도 전환 없이 간다(2026-09-07). 이유: VT 는 update 콜백
@@ -113,16 +116,34 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
         pill.style.transform = `translate(${r.x}px, ${r.y}px)`;
         return;
       }
-      // Invert: 새 크기의 알약을 '이전 시각 박스'로 되돌려 놓고(transform-origin 0 0 전제)
-      const sx = r.w > 0 ? prev.w / r.w : 1;
-      const sy = r.h > 0 ? prev.h / r.h : 1;
-      pill.style.transition = 'none';
-      pill.style.transform = `translate(${prev.x}px, ${prev.y}px) scale(${sx}, ${sy})`;
-      void pill.offsetWidth; // Invert 프레임 고정(의도적 강제 리플로우 1회) — 이후는 컴포지터
-      // Play: transform 만 전환
-      // v2: 화면 안에서 자리를 옮기는 것은 --ease-move(양끝 감속) — 출발이 급한 감속 곡선은 '튀어나가는' 느낌을 준다(헌법 §1)
-      pill.style.transition = 'transform var(--dur-base) var(--ease-move), opacity var(--dur-fast) var(--ease)';
-      pill.style.transform = `translate(${r.x}px, ${r.y}px)`;
+      const flip = () => {
+        pending?.();
+        pill.style.width = `${r.w}px`;
+        pill.style.height = `${r.h}px`;
+        // Invert: 새 크기의 알약을 '이전 시각 박스'로 되돌려 놓고(transform-origin 0 0 전제)
+        const sx = r.w > 0 ? prev.w / r.w : 1;
+        const sy = r.h > 0 ? prev.h / r.h : 1;
+        pill.style.transition = 'none';
+        pill.style.transform = `translate(${prev.x}px, ${prev.y}px) scale(${sx}, ${sy})`;
+        void pill.offsetWidth; // Invert 프레임 고정(의도적 강제 리플로우 1회) — 이후는 컴포지터
+        // Play: transform 만 전환
+        // v2: 화면 안에서 자리를 옮기는 것은 --ease-move(양끝 감속) — 출발이 급한 감속 곡선은 '튀어나가는' 느낌을 준다(헌법 §1)
+        pill.style.transition = 'transform var(--dur-base) var(--ease-move), opacity var(--dur-fast) var(--ease)';
+        pill.style.transform = `translate(${r.x}px, ${r.y}px)`;
+      };
+      // 판 교체 중(html[data-tab-swap] — src/lib/tabCover.ts 6·7차)이면 FLIP 전체(크기·Invert·Play)를 새 판 첫 프레임이 나간 **뒤로** 미룬다.
+      //   스왑 프레임에 합성 애니(transform 전환)가 돌면 Chromium 이 새 판 타일 래스터를 안 기다리고 그린다(빠진 타일 = 지면색).
+      //   기다리는 동안 알약은 **그려진 자리 그대로** 둔다 — Invert 값(prevRect)은 그려진 자리와 2px 쯤 다를 수 있어,
+      //   먼저 걸어 두면 출발점 밖으로 새어 보였다(pill-press 실측 82 ∉ [84.1, 337]).
+      //   정적화가 **풀리는 순간**(새 판 첫 프레임 다음 프레임의 rAF 안, 그 프레임 페인트 전)에 튼다 — 속성 변화를 지켜본다.
+      //   rAF 로 세면 한 프레임 더 늦고(누른 뒤 알약이 늦게 떠난다 — pill-press 실측), 풀리기 전에 걸면 헤더 안 레일(알림 패널)은
+      //   정적화 표식([data-swap-freeze] *)의 transition:none 에 눌려 순간이동한다(subtab-motion notif-tab 실측 84→38).
+      const root = document.documentElement;
+      if (!root.hasAttribute('data-tab-swap')) { flip(); return; }
+      const mo = new MutationObserver(() => { if (!root.hasAttribute('data-tab-swap')) flip(); });
+      const guard = window.setTimeout(flip, 1600); // 표식이 끝내 안 풀려도(스왑 상한 1500ms) 제자리로 간다
+      mo.observe(root, { attributes: true, attributeFilter: ['data-tab-swap'] });
+      pending = () => { mo.disconnect(); clearTimeout(guard); pending = null; };
     };
     measure();
 
@@ -182,7 +203,7 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       // ⚠ 'running' 만 보면 새는다 — 커밋 직후 첫 rAF 에서 CSS 트랜지션은 아직 **'pending'** 이다
       //   (시작 시각이 아직 안 정해졌다). 그 한 프레임에 verify 가 '어긋났다' 고 판정해
       //   firstRef=true → measure 로 방금 건 FLIP 을 죽였다(실측: 10ms anims=1 → 19ms dur=0s 순간이동).
-      if (pill.getAnimations().some((a) => a.playState === 'running')) return;
+      if (pending || pill.getAnimations().some((a) => a.playState === 'running')) return;
       const t = container.querySelector<HTMLElement>('[data-pill-active]');
       if (!t) return;
       const tr = t.getBoundingClientRect();
@@ -250,6 +271,7 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       alive = false;
       ro.disconnect(); mo.disconnect(); io.disconnect();
       if (raf) cancelAnimationFrame(raf);
+      pending?.();
       document.removeEventListener('visibilitychange', onWake);
       window.removeEventListener('pageshow', onWake);
       [...timers, ...lateTimers].forEach(clearTimeout);

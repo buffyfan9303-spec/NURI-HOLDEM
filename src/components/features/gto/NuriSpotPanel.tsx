@@ -19,6 +19,7 @@ import { useToast } from '../../atoms/Toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { gotoBoard } from '../../../lib/spotNav';
+import { goSubTab } from '../../../lib/subTabTransition';
 import HandBoardPicker from './HandBoardPicker';
 import { useHandBoard } from './useHandBoard';
 import { cardId } from './useDeepGto';
@@ -32,6 +33,7 @@ import SpotReport, { type SavedRef } from './SpotReport';
 import MySpotList from './MySpotList';
 
 export type SpotTab = 'analyze' | 'mine';
+const SPOT_TAB_ORDER: readonly SpotTab[] = ['analyze', 'mine'];
 
 const SNAP_KEY = 'tool:spot';
 
@@ -87,8 +89,11 @@ export default function NuriSpotPanel({ init }: { init?: NuriSpotInit }) {
     if (t === tab) return;
     const sc = scrollBox(rootRef.current);
     if (sc) scrollMem.current[tab] = sc.scrollTop;
-    setSeen((v) => (v.has(t) ? v : new Set(v).add(t)));
-    setTab(t);
+    // 하위 탭 전환은 한 입구(goSubTab — 메인 탭과 같은 판 교체 규칙, src/lib/tabCover.ts 7차 절). 스크롤은 위 탭별 기억이 맡는다(OWN_SCROLL_SCOPES).
+    goSubTab('spot-tab', SPOT_TAB_ORDER, tab, t, () => {
+      setSeen((v) => (v.has(t) ? v : new Set(v).add(t)));
+      setTab(t);
+    });
   };
   useLayoutEffect(() => {
     const y = scrollMem.current[tab];

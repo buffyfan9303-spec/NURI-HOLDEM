@@ -1323,10 +1323,11 @@ html[data-vt-dir]::view-transition-new(root),
    오너: "하단 메뉴로 메인 탭을 옮기면 모바일에서 본문이 검은색이 됐다가 올라온다."
    원인: 판 교체와 같은 프레임에 하단바 알약·아이콘·FAB 전환(합성 애니)이 돌면 Chromium 이 새 판 타일 래스터를 안 기다리고
    그린다 — 빠진 타일 = 지면색(다크=검정). 트레이스 has_missing_content 16프레임 → 그 전환을 끄면 0(root-cause 실측).
-   ① 스왑 프레임 정적화 — html[data-tab-swap] 은 탭을 누른 이벤트에서 켜지고 새 판 첫 프레임 **다음**에 꺼진다.
-      그 사이 상시 크롬의 전환은 즉시 값으로 간다(알약·아이콘 스케일·자동숨김 복귀·FAB 숨김). 새 판 래스터를 기다리게 하는 것이 목적이다. */
-html[data-tab-swap] :is(nav[aria-label="하단 내비게이션"], [data-stack-header], [data-stack-tabbar], .scroll-top-fab),
-html[data-tab-swap] :is(nav[aria-label="하단 내비게이션"], [data-stack-header], [data-stack-tabbar]) * {
+   ① 스왑 프레임 정적화 — 탭을 누른 이벤트에서 켜지고 새 판 첫 프레임 **다음**에 꺼진다(src/lib/tabCover.ts holdSwap·releaseSwap).
+      그 사이 상시 크롬(하단바·헤더·GNB·FAB)과 누른 하위 탭 버튼의 전환은 즉시 값으로 간다. 새 판 래스터를 기다리게 하는 것이 목적이다.
+      표식은 그 요소들에 직접 단다(data-swap-freeze) — <html> 속성 + 하위 선택자로 걸면 그 토글이 **문서 전체** 스타일 재계산을
+      부른다(PC 내 매장 2,400요소 · CPU4 40~90ms, 2026-09-27 실측). html[data-tab-swap] 은 표식만 남는다(SlidingPill·e2e 가 읽는다). */
+[data-swap-freeze], [data-swap-freeze] * {
   transition: none !important;
 }
 /* ② 떠나는 판 — React 가 방금 준 display:none(inline)을 페이드 동안만 이기고, 떠나기 직전 화면 자리(--leave-*)에 fixed 로 선다.

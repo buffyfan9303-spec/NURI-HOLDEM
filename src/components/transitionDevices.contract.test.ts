@@ -9,8 +9,13 @@
 //       직접 setActiveTab 은 그 규칙을 건너뛴다(2026-09-26 로그인 뒤 탭 복원이 실제로 그랬다).
 //   (c) 화면 전환 키프레임·WAAPI 는 아래 목록뿐이다. 새 장치를 더하려면 이 목록에 **이유와 함께** 올려라 —
 //       조용히 늘어나는 것을 막는 것이 목적이다(같은 전환이 두 방식으로 구현되면 그 자체가 결함).
+//   (d) 하위 탭도 메인 탭과 **같은 장치·같은 수치**다(오너 2026-09-26 "메인 카테고리 이동 때의 부드러운 모션을 하위 탭에서도 동일하게").
+//       goSubTab 한 입구가 커밋 전에 handOffSubPanel 을 부르고, 메인(handOffPane)·하위(handOffSubPanel)가 **같은 퇴장 함수**
+//       (fadeAfterFirstFrame — 떠나는 판만 240ms 페이드, 새 판 무효과)를 쓴다. 탭 레일(SegmentedTabs·UnderlineTabs·SlidingPill·tablist)을
+//       그리는 화면은 goSubTab 을 쓰거나, 판이 아니라 카드 안 입력·차트만 바꾸는 컨트롤이면 아래 목록에 이유와 함께 올린다.
 // 음성 대조(2026-09-26 실행): (a) src 에 startViewTransition 호출 한 줄 · (b) App.tsx 에 setActiveTab('home') 한 줄 ·
 //   (c) index.css 에 새 @keyframes 한 개를 넣으면 각각 빨개진다(되돌린 뒤 해시 대조).
+//   (d) goSubTab 의 handOffSubPanel 한 줄 삭제 · NuriSpotPanel 의 goSubTab 을 setTab 직접 호출로 되돌림 → 각각 빨개진다(되돌린 뒤 해시 대조).
 // 실행: npx vitest run src/components/transitionDevices.contract.test.ts
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -129,7 +134,7 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
   const WAAPI_FILES: Record<string, string> = {
     'src/components/atoms/Modal.tsx': '시트 드래그 닫기 뒤 제자리 복귀',
     'src/lib/spring.ts': '시트 드래그 스프링',
-    'src/lib/tabCover.ts': '메인 탭 떠나는 판 퇴장 페이드(판 교체 규칙의 유일한 모션)',
+    'src/lib/tabCover.ts': '떠나는 판 퇴장 페이드 — 메인 탭·하위 탭 공용(판 교체 규칙의 유일한 모션, fadeAfterFirstFrame 한 곳)',
   };
   it('index.css 의 @keyframes 는 목록에 있는 것뿐이다', () => {
     const names = [...read('src/index.css').matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]);
@@ -148,5 +153,48 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
       .map((f) => f.slice(ROOT.length + 1).replace(/\\/g, '/'));
     expect(files.length).toBeGreaterThan(0);
     expect(files.filter((f) => !(f in WAAPI_FILES)), '새 WAAPI 전환 — 목록에 이유와 함께 올려라').toEqual([]);
+  });
+});
+
+describe('(d) 하위 탭도 메인 탭과 같은 판 교체 장치를 탄다 — 한 입구 · 한 퇴장 함수 · 우회 금지', () => {
+  const tc = codeOnly(read('src/lib/tabCover.ts'));
+  const sub = codeOnly(read('src/lib/subTabTransition.ts'));
+  it('goSubTab 은 commit() **전에** handOffSubPanel(떠나는 판 복제·스왑 정적화)을, 뒤에 alignSubTabPanel 을 부른다', () => {
+    const body = sub.slice(sub.indexOf('export function goSubTab'));
+    const h = body.indexOf('handOffSubPanel(scope'), c = body.indexOf('commit();'), a = body.indexOf('alignSubTabPanel(scope');
+    expect(h, 'goSubTab 이 handOffSubPanel 을 안 부른다 — 하위 탭이 메인 탭과 다른(없는) 모션으로 바뀐다').toBeGreaterThan(0);
+    expect(h).toBeLessThan(c);
+    expect(c).toBeLessThan(a);
+  });
+  it('메인·하위가 같은 퇴장 함수(fadeAfterFirstFrame)를 쓰고, 퇴장 애니(.animate)는 그 한 곳뿐이다', () => {
+    const fn = (name: string) => { const i = tc.indexOf(`export function ${name}(`); expect(i, `${name} 정의가 없다`).toBeGreaterThan(0); const rest = tc.slice(i); return rest.slice(0, rest.search(/\n}\r?\n/)); };
+    expect(fn('handOffPane')).toMatch(/fadeAfterFirstFrame\(/);
+    expect(fn('handOffSubPanel')).toMatch(/fadeAfterFirstFrame\(/);
+    expect((tc.match(/\.animate\(/g) ?? []).length, '퇴장 페이드가 두 벌이 됐다 — fadeAfterFirstFrame 하나로').toBe(1);
+    expect(tc).toMatch(/const LEAVE_FADE_MS = 240;/);
+  });
+  it('SlidingPill 은 판 교체 중(html[data-tab-swap]) 미끄러짐을 새 판 첫 프레임 뒤로 미룬다(스왑 프레임에 합성 애니 0)', () => {
+    expect(codeOnly(read('src/components/atoms/SlidingPill.tsx'))).toMatch(/hasAttribute\('data-tab-swap'\)/);
+  });
+  /** 탭 레일을 그리지만 goSubTab 을 쓰지 않는 파일 — 판이 아니라 카드 안 입력·차트·정렬만 바꾼다(또는 부품 자신). */
+  const NOT_SUBTAB: Record<string, string> = {
+    'src/components/atoms/SegmentedTabs.tsx': '부품 — 입구는 쓰는 쪽이 부른다',
+    'src/components/atoms/UnderlineTabs.tsx': '부품 — 입구는 쓰는 쪽이 부른다',
+    'src/components/atoms/SlidingPill.tsx': '부품(인디케이터)',
+    'src/components/atoms/ViewModeToggle.tsx': '부품 — 목록/격자 보기 토글(판 교체 아님)',
+    'src/components/features/CalendarPanel.tsx': "'기록 추가' 폼의 입력 모드(결과/계획) — 입력칸 몇 개만 바뀐다",
+    'src/components/features/ICMCalculator.tsx': '계산기 카드 안 모드(ICM/딜/팟 오즈) — 입력칸이 바뀐다',
+    'src/components/features/LedgerStatsPanel.tsx': '통계 카드 안 기간·지표 토글 — 차트만 다시 그린다',
+    'src/components/features/NuriPosLedger.tsx': '장부 목록 정렬 토글',
+    'src/components/features/tools/PushFoldChart.tsx': '푸시/폴드 차트 보기(올인/콜) — 같은 차트 칸',
+  };
+  it('탭 레일을 그리는 화면은 goSubTab 을 쓴다(아니면 위 목록에 이유와 함께)', () => {
+    const rail = /<SegmentedTabs|<UnderlineTabs|<SlidingPill|role="tablist"/;
+    const hits = srcFiles.filter((f) => f.endsWith('.tsx') && rail.test(readFileSync(f, 'utf-8')))
+      .map((f) => f.slice(ROOT.length + 1).replace(/\\/g, '/'));
+    expect(hits.length, '탭 레일 파일을 못 찾았다(공허한 초록 방지)').toBeGreaterThan(15);
+    const bypass = hits.filter((f) => !(f in NOT_SUBTAB) && !/goSubTab\(/.test(codeOnly(read(f))));
+    expect(bypass, '하위 탭을 goSubTab 없이 바꾼다 — 메인 탭과 같은 판 교체(떠나는 판 페이드)를 잃는다. goSubTab(scope, …) 으로 감싸고 SUB_PANEL 에 판 표식을 올려라').toEqual([]);
+    expect(Object.keys(NOT_SUBTAB).filter((f) => !hits.includes(f)), '목록에 있는데 더는 탭 레일이 없다 — 목록에서 빼라').toEqual([]);
   });
 });

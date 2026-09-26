@@ -204,4 +204,107 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     expect(left).toEqual([]);
   });
+
+  // ④ 하위 탭(goSubTab) — 메인 탭과 **같은 판 교체**(오너 2026-09-26 "메인 카테고리 이동 때의 부드러운 모션을 하위 탭에서도 동일하게",
+  //   src/lib/tabCover.ts 7차 SUB-HANDOFF). 하위 판은 조건부 마운트라 커밋 전에 떠나는 판을 복제해 세우고 240ms 에 걷는다.
+  //   판정(탭마다 · 판을 스크롤한 뒤 · 실제 손가락 110ms):
+  //     leave — 판 그림이 바뀐 이동이면 떠나는 판([data-pane-leaving], 메인 탭 판·푸터 복제본 제외)이 섰다
+  //     cut   — 본문 영역(레일 아래) 썸네일의 **연속 두 프레임 차** 최댓값 ≤ 6(한 프레임에 판이 통째로 바뀌는 컷이 없다)
+  //     missing — 트레이스 has_missing_content 0 · hit — 복제본이 서 있는 동안 본문 중앙 입력이 복제본에 닿지 않는다 · stuck — 정착 뒤 남은 것 0
+  // 음성 대조(2026-09-26 실행): 9433f190 빌드(하위 탭 즉시 교체) → leave 0/N · cut 9~17 로 FAIL, SUB-HANDOFF 빌드 → PASS.
+  test('④ 하위 탭 — 떠나는 판이 서고 걷힌다 · 한 프레임 컷 없음 · 빠진 타일 0 · 입력은 새 판', async ({ page }) => {
+    const cdp = await boot(page, 'dark');
+    await page.evaluate(() => {
+      const w = window as unknown as { __lv: number[] };
+      w.__lv = [];
+      new MutationObserver((rs) => {
+        for (const r of rs) for (const n of [r.target, ...Array.from(r.addedNodes)]) {
+          if (n instanceof Element && n.hasAttribute('data-pane-leaving') && !n.classList.contains('tab-pane') && n.tagName !== 'FOOTER') w.__lv.push(performance.now());
+        }
+      }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-pane-leaving'] });
+    });
+    const cast = new Cast(cdp);
+    await cdp.send('Tracing.start', { categories: 'cc,benchmark,blink.user_timing', transferMode: 'ReturnAsStream' });
+    const SCOPES = [
+      { nav: '커뮤니티', rail: '[data-community-secbar] button', panel: '[data-community-secpanel]', lim: 900 },
+      { nav: 'GTO', rail: '[data-tools-lanebar] button', panel: '[data-tools-lanepanel]', lim: 60 },
+    ];
+    const rows: string[] = []; const bad: string[] = []; let changed = 0; let taps = 0;
+    for (const sc of SCOPES) {
+      await tapTab(page, cdp, sc.nav, sc.nav);
+      await page.waitForTimeout(2000);
+      const n = await page.evaluate((s) => [...document.querySelectorAll(s)].filter((e) => e.getClientRects().length).length, sc.rail);
+      expect(n, `${sc.nav}: 하위 탭 버튼을 못 찾았다`).toBeGreaterThan(2);
+      const K = Math.min(n, 5);
+      for (let i = 0; i < K; i++) {
+        const idx = (i + 1) % K;
+        await page.evaluate((lim) => scrollTo({ top: Math.max(0, Math.min(lim, document.documentElement.scrollHeight - innerHeight - 150)), behavior: 'instant' as ScrollBehavior }), sc.lim);
+        await page.waitForTimeout(700);
+        const b = await page.evaluate(([rail, panel, k]) => {
+          const x = [...document.querySelectorAll(rail as string)].filter((e) => e.getClientRects().length)[k as number];
+          const p = [...document.querySelectorAll(panel as string)].find((e) => e.getClientRects().length);
+          if (!x || !p) return null;
+          const r = x.getBoundingClientRect(); const pr = p.getBoundingClientRect();
+          const nv = document.querySelector('nav[aria-label="하단 내비게이션"] > div:not([aria-hidden])')!.getBoundingClientRect().top;
+          const top = Math.max(r.bottom + 2, pr.top, document.querySelector('[data-stack-header]')!.getBoundingClientRect().bottom + 2);
+          const bottom = Math.max(top + 60, Math.min(pr.bottom, (nv > 0 ? nv : innerHeight) - 14));
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2, label: (x.textContent ?? '').trim().slice(0, 8), vh: innerHeight, crop: { top, bottom, w: innerWidth }, mid: { x: innerWidth / 2, y: (top + bottom) / 2 } };
+        }, [sc.rail, sc.panel, idx] as [string, string, number]);
+        expect(b, `${sc.nav}#${i}: 누를 하위 탭을 못 찾았다`).not.toBeNull();
+        const id = `${sc.nav}#${i}:${b!.label}`;
+        const lv0 = await page.evaluate(() => (window as unknown as { __lv: number[] }).__lv.length);
+        await cast.start(b!.crop);
+        await page.waitForTimeout(120);
+        const t0 = Date.now();
+        await page.evaluate((m) => performance.mark(m), `tap:${id}`);
+        await press(page, cdp, b!.x, b!.y, true);
+        const hit = await page.evaluate(([x, y]) => new Promise<string | null>((res) => setTimeout(() => {
+          const el = document.elementFromPoint(x, y);
+          res(el?.closest('[data-pane-leaving]') ? `${el.tagName} LEAVING` : null);
+        }, 40)), [b!.mid.x, b!.mid.y] as [number, number]);
+        await page.waitForTimeout(1000);
+        const frames = await cast.stop();
+        taps += 1;
+        // 본문 영역 썸네일(Cast.th 는 화면 전체 20칸 — 레일 아래 크롭 줄만 쓴다)
+        const pre = frames.filter((f) => f.t < t0).pop();
+        const post = frames.filter((f) => f.t >= t0);
+        const rowsOf = (f: typeof frames[number]) => {
+          const TW = 20, TH = f.th.length / TW;
+          const r0 = Math.floor((b!.crop.top / b!.vh) * TH), r1 = Math.max(r0 + 1, Math.ceil((b!.crop.bottom / b!.vh) * TH));
+          return Array.from(f.th.slice(r0 * TW, Math.min(TH, r1) * TW));
+        };
+        const d = (a: typeof frames[number], c: typeof frames[number]) => { const x = rowsOf(a), y = rowsOf(c); let s = 0; for (let q = 0; q < x.length; q++) s += Math.abs(x[q] - y[q]); return s / (x.length || 1); };
+        let cut = 0; let prev = pre;
+        for (const f of post) { if (prev) cut = Math.max(cut, d(prev, f)); prev = f; }
+        const total = pre && post.length ? d(pre, post[post.length - 1]) : 0;
+        const lv = await page.evaluate((k) => (window as unknown as { __lv: number[] }).__lv.length - k, lv0);
+        const stuck = await page.evaluate(() => ({ n: document.querySelectorAll('[data-pane-leaving]').length, swap: document.documentElement.hasAttribute('data-tab-swap') }));
+        rows.push(`${id} total=${total.toFixed(1)} cut=${cut.toFixed(1)} leave=${lv}${hit ? ' hit=' + hit : ''}`);
+        if (total > 3) {
+          changed += 1;
+          if (lv === 0) bad.push(`${id} 판이 바뀌었는데 떠나는 판이 서지 않았다(즉시 교체 — 메인 탭과 다른 전환)`);
+          if (cut > 6) bad.push(`${id} 한 프레임 컷 ${cut.toFixed(1)}(> 6) — 판이 한 번에 바뀌었다`);
+        }
+        if (hit) bad.push(`${id} +40ms 본문 입력이 떠나는 판에 닿았다(${hit})`);
+        if (stuck.n || stuck.swap) bad.push(`${id} 정착 뒤 남았다: 떠나는 판 ${stuck.n} · data-tab-swap ${stuck.swap}`);
+        await page.waitForTimeout(300);
+      }
+    }
+    const done = new Promise<{ stream: string }>((res) => cdp.once('Tracing.tracingComplete', (e) => res(e as { stream: string })));
+    await cdp.send('Tracing.end');
+    const { stream } = await done;
+    let json = '';
+    for (;;) { const r = await cdp.send('IO.read', { handle: stream, size: 1 << 22 }); json += r.data; if (r.eof) break; }
+    await cdp.send('IO.close', { handle: stream });
+    type Ev = { name: string; ts: number; cat?: string; args?: { frame_reporter?: { has_missing_content?: boolean } } };
+    const ev = (JSON.parse(json) as { traceEvents?: Ev[] }).traceEvents ?? [];
+    const tapsTr = ev.filter((e) => e.cat?.includes('blink.user_timing') && e.name.startsWith('tap:')).sort((a, b) => a.ts - b.ts);
+    const near = (ts: number) => { let best: Ev | null = null; for (const m of tapsTr) if (m.ts <= ts && (!best || m.ts > best.ts)) best = m; return best ? { tap: best.name.slice(4), dt: Math.round((ts - best.ts) / 1000) } : null; };
+    const missing = ev.filter((e) => e.name === 'PipelineReporter' && e.args?.frame_reporter?.has_missing_content).map((e) => near(e.ts)).filter((n): n is { tap: string; dt: number } => !!n && n.dt <= 1100);
+    console.log(`[handoff-sub] taps=${taps} changed=${changed} missing=${missing.length}\n  ${rows.join('\n  ')}`);
+    expect(tapsTr.length, '트레이스에서 탭 표식을 못 찾았다').toBe(taps);
+    expect(changed, '판 그림이 바뀐 이동이 거의 없다 — 게이트가 공허해진다(데이터·선택자 확인)').toBeGreaterThanOrEqual(6);
+    expect.soft(missing.map((m) => `${m.tap} +${m.dt}ms`), '새 판 타일이 래스터되기 전 프레임이 나갔다').toEqual([]);
+    expect(bad).toEqual([]);
+  });
 });

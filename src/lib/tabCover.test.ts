@@ -139,8 +139,8 @@ describe('⑥ 하위 탭 25곳이 같은 전환(P2 스크롤)을 탄다 — goSu
     expect(i).toBeGreaterThan(0);
     expect(g.slice(i, i + 200)).toMatch(/alignSubTabPanel\(scope,/);
   });
-  it('섹션별 복원이 있는 커뮤니티만 공용 스크롤 맞춤에서 뺀다', () => {
-    expect([...OWN_SCROLL_SCOPES]).toEqual(['community-sec']);
+  it('자기 스크롤 정책이 있는 곳(커뮤니티 섹션별 복원 · NURI SPOT 탭별 기억)만 공용 스크롤 맞춤에서 뺀다', () => {
+    expect([...OWN_SCROLL_SCOPES]).toEqual(['community-sec', 'spot-tab']);
   });
 });
 

@@ -25,7 +25,10 @@
 //   판 윗변이 레일 밑으로 말려 올라가 있으면 덮개 아래에서 레일 바로 밑으로 맞춘다(스크롤 규칙, 커뮤니티 섹션 복원은 예외).
 // 🔴 2026-09-26 PILL-FLASH — 그 덮개가 곧 '검정 판 → 콘텐츠' 깜빡임이었다(재방문에도 ~100ms 지면색 판, src/lib/tabCover.ts 5차).
 //   덮개는 없앴고 P2 스크롤 규칙(alignSubTabPanel)만 남았다. 본문은 즉시 교체, 움직이는 것은 알약(SlidingPill)뿐 — 2026-09-18 결정으로 돌아간다.
-import { alignSubTabPanel } from './tabCover';
+// 🔵 2026-09-26 SUB-HANDOFF(오너 "메인 카테고리 이동 때의 부드러운 모션을 하위 탭에서도 동일한 모션으로") — 하위 탭도 **메인 탭과 같은 판 교체**
+//   (src/lib/tabCover.ts 7차 절: 스왑 프레임 정적화 + 떠나는 판만 240ms 페이드 · 새 판 무효과 · 알약 FLIP 은 새 판 첫 프레임 뒤).
+//   25곳 호출부는 한 줄도 안 바뀐다 — 아래 handOffSubPanel 한 줄이 전부 먹인다. 하위 탭 전환은 **이 함수로만** 한다(계약: transitionDevices).
+import { alignSubTabPanel, handOffSubPanel } from './tabCover';
 
 /**
  * 하위 탭 하나를 방향성 푸시로 전환한다.
@@ -82,9 +85,11 @@ export function goSubTab<T extends string>(
   //   ⚠ 되돌리려면 아래 `commit()` 을 지우고 그 밑 주석의 `withViewTransition(...)` 을 되살리면 된다.
   //     index.css 의 하위 탭 VT 규칙은 **지우지 않았다** — 마커가 안 켜지므로 잠자코 있을 뿐이다.
   //     되돌릴 필요가 없다고 정해지면 그때 규칙과 계약을 같이 정리한다(CSS 예산도 그만큼 는다).
+  const target = (globalThis as { event?: Event }).event?.target ?? null;
+  handOffSubPanel(scope, target); // 커밋 **전** — 떠나는 판을 이벤트 시점 자리 그대로 복제해 두고 스왑 정적화를 켠다(커밋 뒤 세운다)
   commit();
   // P2 스크롤 — 누른 요소(현재 이벤트의 target)로 레일과 판을 찾는다. 이벤트 밖에서 부르면 target 이 없어 판 스크롤 상자만 맞춘다.
-  alignSubTabPanel(scope, (globalThis as { event?: Event }).event?.target ?? null);
+  alignSubTabPanel(scope, target);
   // 되살리는 자리 ↓
   // const a = order.indexOf(from);
   // const b = order.indexOf(to);
