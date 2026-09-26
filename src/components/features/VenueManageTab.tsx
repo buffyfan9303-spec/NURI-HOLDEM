@@ -325,8 +325,16 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [lockPx, setLockPx] = useState<number | null>(null);
   /** 전환 직전에 부른다 — 지금 판 높이를 그대로 다음 판의 바닥으로 예약. */
   const lockPane = useCallback(() => {
-    const h = secPanelRef.current?.getBoundingClientRect().height;
-    if (h && h > 0) setLockPx(h);
+    const p = secPanelRef.current;
+    const h = p?.getBoundingClientRect().height;
+    if (!p || !h || h <= 0) return;
+    // 🔴 2026-09-27 — 예약은 **누른 그 순간** DOM 에 건다. setLockPx 만 두면 PC 사이드바처럼 startTransition 안에서 부를 때
+    //   예약도 전환 레인이라 커밋 때에야 걸린다. 그 사이(~100~180ms) 떠나는 판은 아직 살아 있어 제 데이터 도착으로 줄 수 있고
+    //   (대시보드 스켈레톤→실데이터 1121→1093), 커밋에서 옛 높이 예약이 다시 부풀려 '줄었다 다시 자람' 오르내림이 됐다
+    //   (e2e/mystore-transition-cls PC A2·B 간헐 실패 — root-cause 실측, 하위 탭 handoff 전 빌드 aa91cf04 에도 같은 기전).
+    //   state 는 그대로 둔다 — 커밋에서 같은 값이 다시 쓰이고, 해제(null)는 React 가 이 값을 지운다.
+    p.style.minHeight = `${h}px`;
+    setLockPx(h);
   }, []);
   useEffect(() => {
     if (lockPx == null) return;

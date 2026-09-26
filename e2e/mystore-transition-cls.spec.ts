@@ -84,6 +84,8 @@ interface RawSeries {
   heights: { t: number; h: number }[];
   shifts: { t: number; value: number }[];
   mainMissingFrames: number;
+  /** 대시보드 판이 아직 보인 표본 수 — 커밋 전(전환 대기) 구간을 실제로 봤는가(A3 의 거짓 통과 방지). */
+  oldFrames: number;
   error?: string;
 }
 
@@ -91,8 +93,18 @@ interface RawSeries {
  *  판정(단조 비감소·정착 후 300ms CLS)은 Node 쪽에서 한다 — 브라우저 evaluate 안에서 판정 로직까지
  *  넣으면 사람이 못 읽는다. Node↔브라우저 왕복 지연이 순간적인 변화를 놓칠 수 있어, 관찰 루프와
  *  클릭을 **같은 동기 턴**에서 시작한다. */
-async function watchTransition(page: Page, label: string, durationMs = 1900): Promise<RawSeries> {
-  return page.evaluate(({ label, durationMs }) => new Promise<RawSeries>((resolve) => {
+async function watchTransition(page: Page, label: string, durationMs = 1900, shrinkOldPx = 0): Promise<RawSeries> {
+  return page.evaluate(({ label, durationMs, shrinkOldPx }) => new Promise<RawSeries>((resolve) => {
+    // shrinkOldPx — 떠나는 판이 **커밋 전에** 스스로 줄어드는 순간(늦은 데이터 도착: 대시보드 스켈레톤→실데이터 −28px)을
+    //   결정적으로 만든다. 누르기 전 판 안쪽에 그만큼 칸을 넣어 두고(예약이 그 높이를 잰다) 누른 **같은 턴**에 뺀다.
+    const inner = document.querySelector('[data-mystore-secpanel]')?.firstElementChild;
+    let spacer: HTMLElement | null = null;
+    if (shrinkOldPx > 0 && inner) {
+      spacer = document.createElement('div');
+      spacer.style.height = `${shrinkOldPx}px`;
+      inner.appendChild(spacer);
+      void (inner as HTMLElement).offsetHeight;
+    }
     const heights: { t: number; h: number }[] = [];
     const shifts: { t: number; value: number }[] = [];
     const start = performance.now();
@@ -119,19 +131,21 @@ async function watchTransition(page: Page, label: string, durationMs = 1900): Pr
     });
     try { po.observe({ type: 'layout-shift', buffered: false }); } catch { /* 미지원 브라우저 — shifts 비워서 진행 */ }
     let mainMissingFrames = 0;
+    let oldFrames = 0;
     const sample = () => {
       if (!document.querySelector('[data-tab="my-store"]')) mainMissingFrames++;
+      if (document.querySelector('[data-mystore-secpanel] [data-pane="dashboard"]')?.getClientRects().length) oldFrames++;
       const panel = document.querySelector('[data-mystore-secpanel]');
       heights.push({ t: Math.round(performance.now() - start), h: panel ? panel.getBoundingClientRect().height : 0 });
       if (performance.now() - start < durationMs) requestAnimationFrame(sample);
-      else { po.disconnect(); resolve({ heights, shifts, mainMissingFrames }); }
+      else { po.disconnect(); resolve({ heights, shifts, mainMissingFrames, oldFrames }); }
     };
     requestAnimationFrame(sample);
     const btn = [...document.querySelectorAll('button')]
       .find((b) => (b as HTMLElement).offsetParent !== null && (b.textContent ?? '').trim().includes(label));
-    if (!btn) resolve({ heights: [], shifts: [], mainMissingFrames: -1, error: `버튼을 못 찾음: ${label}` });
-    else (btn as HTMLElement).click();
-  }), { label, durationMs });
+    if (!btn) resolve({ heights: [], shifts: [], mainMissingFrames: -1, oldFrames: 0, error: `버튼을 못 찾음: ${label}` });
+    else { (btn as HTMLElement).click(); spacer?.remove(); }
+  }), { label, durationMs, shrinkOldPx });
 }
 
 /** ③ 정착 후 300ms CLS — '정착' 시각(settleAt)은 순수 함수(paneTransitionShape.ts)가 계산하고,
@@ -176,6 +190,22 @@ for (const vp of VIEWPORTS) {
       const r = await watchTransition(page, '게임 진행');
       expect(r.error, r.error).toBeUndefined();
       expect(r.mainMissingFrames, 'main 이 사라진 프레임').toBe(0);
+      const osc = findOscillation(r.heights);
+      expect(osc, osc ? `t=${osc.t}ms 에 ${osc.kind}(${osc.from}→${osc.to})` : '').toBeNull();
+    });
+
+    // 🔴 2026-09-27 — A2·B(PC)·A(모바일)의 간헐 실패(×8 에 2~4건)는 모두 같은 한 가지였다(root-cause 실측, 하위 탭 handoff 전 빌드에도 있음):
+    //   사이드바·메뉴는 startTransition 안에서 lockPane 을 불러, 예약(setLockPx)이 **커밋 때에야** 걸렸다. 그 사이 떠나는 대시보드가
+    //   제 데이터 도착으로 1121→1093 줄고, 커밋에서 옛 높이 예약이 다시 부풀려 '줄었다 다시 자람'이 됐다. 대시보드가 로딩 중일 때
+    //   누른 판만 걸려 우연에 기댔다 — 여기서는 커밋 전 줄어듦(−60px)을 직접 만들어 **매번** 잰다. 예약을 누른 순간 걸지 않으면 빨개진다.
+    test('A3 — 떠나는 판이 커밋 전에 줄어도(늦은 데이터 도착) 예약이 누른 순간부터 버틴다: 오르내림 없음', async ({ page }) => {
+      // 대시보드 로딩이 끝난 뒤 — 줄어듦이 아래에서 만드는 한 번뿐이게
+      await expect.poll(() => page.evaluate(() =>
+        document.querySelectorAll('[data-mystore-secpanel] .skeleton, [data-mystore-secpanel] [aria-busy="true"]').length)).toBe(0);
+      await openMobileMenuIfPresent(page);
+      const r = await watchTransition(page, '게임 진행', 1900, 60);
+      expect(r.error, r.error).toBeUndefined();
+      expect(r.oldFrames, '커밋 전(대시보드가 아직 보이는) 프레임을 못 봤다 — 이 검사가 아무것도 안 잰 것').toBeGreaterThan(0);
       const osc = findOscillation(r.heights);
       expect(osc, osc ? `t=${osc.t}ms 에 ${osc.kind}(${osc.from}→${osc.to})` : '').toBeNull();
     });
