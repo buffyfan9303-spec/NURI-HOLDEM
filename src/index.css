@@ -1248,84 +1248,11 @@ main { max-width: 48rem; margin-inline: auto; }
   animation: none !important;
 }
 
-/* ── 화면 전환(View Transition) — 애플 감각의 핵심 ───────────────────────────
-   전환 커밋(디스플레이 토글·스크롤 복원)은 스냅샷 뒤에서 끝난다('투두둑' 원천 차단).
-   그 위에 '움직임'을 입힌다: 탭 전환은 방향성 패럴랙스 푸시(이전 화면이 밀려나가고
-   새 화면이 감속 곡선으로 미끄러져 들어옴 — iOS 내비게이션 문법), 오버레이 열기는
-   짧은 크로스페이드(내부 sheet-up 이 모션을 담당하므로 이중 모션 방지). */
-/* 전환 캔버스 자체를 테마색으로 — blur 진입이 흰색으로 번쩍이지 않게(오너 2026-08-27) */
-::view-transition { background-color: rgb(var(--surface-base)); }
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 0.18s;
-  animation-timing-function: var(--ease);
-}
-/* [DS] MO-8A 방향성 이징: 나가는 화면은 짧고 가속(--ease-out 0.2s)으로 비켜주고,
-   들어오는 화면은 감속(--ease, --dur-tab)으로 안착 — iOS 푸시의 비대칭 문법.
-   (양쪽 같은 곡선 0.3s 는 '둘이 동시에 미끄러지는' 밋밋한 평행이동으로 읽혔다)
-   이동량 32px→20px: 시차 푸시는 거리보다 겹침 타이밍이 감각을 만든다 — 과한 거리는 들뜸. */
-@keyframes vt-push-out-l { to   { opacity: 0; transform: translateX(-20px); } }
-/* 진입 blur(오너 지시 2026-08-27) — §20.4 #3 개정: '1회성 진입 애니'에 한해 filter blur 허용.
-   데이터 로드 커밋의 뚝 끊김을 시각적으로 뭉개 부드럽게. 상시·호버 filter 는 여전히 금지. */
-@keyframes vt-push-in-r  { from { opacity: 0; transform: translateX(20px); filter: blur(6px) brightness(0.9); } to { filter: blur(0) brightness(1); } }
-@keyframes vt-push-out-r { to   { opacity: 0; transform: translateX(20px); } }
-@keyframes vt-push-in-l  { from { opacity: 0; transform: translateX(-20px); filter: blur(6px) brightness(0.9); } to { filter: blur(0) brightness(1); } }
-html[data-vt-dir='forward']::view-transition-old(root) { animation: vt-push-out-l var(--dur-base) var(--ease-out) both; }
-html[data-vt-dir='forward']::view-transition-new(root) { animation: vt-push-in-r var(--dur-tab) var(--ease) both; }
-html[data-vt-dir='back']::view-transition-old(root)    { animation: vt-push-out-r var(--dur-base) var(--ease-out) both; }
-html[data-vt-dir='back']::view-transition-new(root)    { animation: vt-push-in-l var(--dur-tab) var(--ease) both; }
-/* 🔴 2026-09-18 오너: "왜 전부다 관리자설정부터 모든 페이지가 처음에는 한번 위에서 주르륵 글이
-   내려오는 것처럼 버벅이고 시작하지? ... 이 페이지는 나만 쓸것이기 때문에 UI UX는 상관없고
-   모션도 상관없는데 ... 내 매장도 똑같잖아 PC 버젼에서 제대로 다시해 처음부터"
-
-   실측으로 원인을 좁혔다(1280×800·1920×1080, getAnimations() 를 rAF 마다 샘플링):
-     · pane 안에서 도는 진입 애니메이션은 **0개**다. 위 :is() 무효화 목록에 빠진 셀렉터는 없다.
-       (`.reveal` 도 관리자·내 매장에는 안 쓰인다 — 이쪽을 의심했다가 실측으로 반증했다.)
-     · 매 진입마다 실제로 도는 것은 **이 root View Transition 하나**뿐이다.
-     · 프레임 실측: 클릭 후 87ms 옛 화면 그대로 → 120ms 옛 화면이 거의 불투명한 채로 새 화면이
-       blur(6px) 유령으로 겹침 → 173ms 두 화면 겹침 → 280ms 정착.
-       홈이 스크롤된 상태(y=203)였다면 **옛 글자와 새 글자가 서로 다른 y 에 겹쳐 페이드된다.**
-       그게 "글이 주르륵 내려온다" 로 보이는 장면이다.
-
-   왜 PC 에서만 문제인가: 이 연출은 iOS 푸시 문법(20px 시차 + 감속)이라 폰 화면에서는 맞다.
-   PC 는 화면이 3~4배 넓어 같은 시간 동안 **훨씬 많은 픽셀에 blur 를 칠한다** — 비용도 크고,
-   무엇보다 두 화면이 겹치는 구간이 눈에 그대로 보인다.
-
-   → PC(≥1024px)에서는 **겹치지 않게** 한다. 옛 스냅샷을 즉시 지우고 새 화면만 아주 짧게 넣는다.
-     같은 파일 아래쪽 `admin-active`/`mystore-active` 가 이미 쓰는 방식과 같은 처방이다.
-   ⚠ 모바일은 건드리지 않는다. 유저는 99% 모바일이고 거기선 이 연출이 제 역할을 한다.
-   ⚠ `animation: none` 만 적으면 UA 기본 crossfade 가 되살아나 옛 화면이 다시 겹친다 —
-     `opacity` 를 같이 못박아야 한다. */
-/* 🔴 2026-09-20 오너(세 번째 지적): "메뉴 옮길 때마다 아직도 **전체 칸이 줄었다가 다시 제대로 돌아오잖아**."
-   바로 위 2026-09-18 기록은 같은 증상을 PC 에서만 걷어내고 **모바일은 일부러 남겼다**
-   ("유저는 99% 모바일이고 거기선 이 연출이 제 역할을 한다"). 그 판단이 틀렸다 —
-   오너가 보는 화면이 바로 그 모바일이고, 세 번을 지적했다.
-
-   무엇이 그렇게 보이나(프레임 실측 2026-09-20 · 390px · 전환 2.4s 로 늘려 캡처):
-     `vt-push-in-r` 이 새 화면을 **`blur(6px) brightness(0.9)` + `translateX(20px)`** 로 들여온다.
-     흐리고 어둡게 들어와 선명해지는 장면이 "전체가 줄었다가 제자리로 돌아오는" 것으로 읽힌다.
-     +150ms 프레임에서 화면 전체가 실제로 뿌옇게 축소돼 보인다(스크린샷 확인).
-
-   → **PC 와 같은 처방을 모바일에도 적용한다.** 옛 스냅샷을 즉시 지우고 새 화면만 아주 짧게 넣는다.
-     blur 도 시차 이동도 없다 — 필요한 건 '끊기지 않았다' 는 최소 신호뿐이다.
-   ⚠ `animation: none` 만 적으면 UA 기본 crossfade 가 되살아나 옛 화면이 다시 겹친다 —
-     `opacity` 를 같이 못박아야 한다(2026-09-18 에 확인된 함정).
-   ⚠ 위 `vt-push-*` 키프레임과 `data-vt-dir` 분기는 **지우지 않는다.** 하위 탭·오버레이가 아니라
-     root 전환만 여기서 덮는 것이고, 되살릴 때 근거가 되는 기록이다(이동량 20px·비대칭 이징).
-     되돌리려면 이 블록을 지우면 종전 연출로 돌아온다. */
-html[data-vt-dir]::view-transition-old(root),
-::view-transition-old(root) { animation: none !important; opacity: 0 !important; }
-html[data-vt-dir]::view-transition-new(root),
-::view-transition-new(root) {
-  animation: vt-pc-in 0.12s var(--ease) both !important;
-}
-/* 블러도 시차도 없다 — PC 에서 필요한 건 '끊기지 않았다' 는 최소 신호뿐이다. */
-@keyframes vt-pc-in { from { opacity: 0; } to { opacity: 1; } }
-
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(root),
-  ::view-transition-new(root) { animation: none !important; }
-}
+/* (삭제됨 2026-09-27) root ::view-transition-old/new 크로스페이드·패럴랙스 푸시(vt-push-in/out-l/r)·
+   PC 컷인(vt-pc-in)·html[data-vt-dir] 분기 — startViewTransition 호출이 0(2026-09-26 전면 제거,
+   transitionDevices.contract.test.ts (a))이라 `html[data-vt-dir]` 도 JS 에서 전혀 안 붙는 죽은 속성이었다.
+   ::view-transition-old/new(root) 는 실제 View Transition 이 돌 때만 생기는 UA 의사요소라 함께 죽은 규칙.
+   판 전환 모션은 이제 src/lib/tabCover.ts(PANE-HANDOFF, 아래 [data-pane-leaving])가 전담한다. */
 
 /* ── 메인 탭 판 교체(PANE-HANDOFF, 2026-09-26) — src/lib/tabCover.ts 6차 절 ─────────────────────────
    오너: "하단 메뉴로 메인 탭을 옮기면 모바일에서 본문이 검은색이 됐다가 올라온다."

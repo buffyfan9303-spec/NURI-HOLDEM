@@ -112,13 +112,9 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
     'shred-fly': '이용권 찢기 연출',
     'prize-burst': '상금 연출',
     'prize-pop': '상금 연출',
-    'tab-in-r': '⚠ 사용처 0(죽은 규칙) — 다음 정리 대상',
-    'vt-fade-out': '⚠ View Transition 잔재(사용처 0) — 다음 정리 대상',
-    'vt-pc-in': '⚠ View Transition 잔재(사용처 0) — 다음 정리 대상',
-    'vt-push-in-l': '⚠ View Transition 잔재(사용처 0) — 다음 정리 대상',
-    'vt-push-in-r': '⚠ View Transition 잔재(사용처 0) — 다음 정리 대상',
-    'vt-push-out-l': '⚠ View Transition 잔재(사용처 0) — 다음 정리 대상',
-    'vt-push-out-r': '⚠ View Transition 잔재(사용처 0) — 다음 정리 대상',
+    // 아래 둘은 index.css 안의 죽은-규칙 삭제 기록 주석(예: `@keyframes tab-in-r/l`·`@keyframes vt-fade-out { to { opacity: 0 } }`) 자체가 이 정규식에 잡힌다(주석을 안 거르는 거친 검사) — 실제 @keyframes 는 0개.
+    'tab-in-r': '⚠ 실제 규칙 0(2026-09-18 삭제) — index.css 주석의 삭제 기록 문구가 이 정규식에 잡힌다',
+    'vt-fade-out': '⚠ 실제 규칙 0(2026-09-18 삭제) — index.css 주석의 삭제 기록 문구가 이 정규식에 잡힌다',
   };
   /** tailwind.config.js keyframes — 오버레이·시트의 진입/퇴장 한 벌. */
   const TW_KEYFRAMES: Record<string, string> = {
