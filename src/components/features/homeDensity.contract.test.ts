@@ -95,7 +95,9 @@ describe('홈 일정 카드 — [로고][본문][우측 열] 시간표형', () =
     expect(venue).toBeGreaterThan(h3);
     expect(start).toBeGreaterThan(venue);
     expect(TT).toMatch(/\{' 시작'\}/);
-    expect(TT).toMatch(/<span data-testid="schedule-reg-close">레지 \{reg\}<\/span>/);  // 저장값 그대로(regCloseRaw)
+    // 🔴 2026-09-26 — 라벨이 '레지'→'레지마감'으로(오너 지적: "레지마감 레벨 7 이어야 한다").
+    //   좁은 폭에서는 '마감'만 보이고(CSS 로 '레지' 부분만 숨김), 스크린리더에는 부모 aria-label 로 폭과 무관하게 항상 '레지마감'.
+    expect(TT).toMatch(/<span data-testid="schedule-reg-close" aria-label=\{`레지마감 \$\{reg\}`\}><span aria-hidden><span className="hidden min-\[450px\]:inline">레지<\/span>마감 \{reg\}<\/span><\/span>/);
     expect(TT).toMatch(/const reg = regCloseRaw\(schedule\)/);
   });
   it('글자를 말줄임으로 숨기지 않는다 — 제목에 line-clamp·truncate 가 없다', () => {
@@ -123,13 +125,18 @@ describe('홈 일정 카드 — [로고][본문][우측 열] 시간표형', () =
     // 제목 끝 GTD 표기는 금액 칸이 보장 금액을 보여 줄 때만 뗀다(엔트리 게임 제목의 'GTD' 는 정보다)
     expect(TT).toMatch(/titleWithoutGtd\(schedule\.title, !!gtd\)/);
   });
-  it('라이브 상태(생존/엔트리 · 현재 레벨 · 휴식 · 진행 중 · L —)는 ③ 줄에 남는다(기능 유지)', () => {
+  it('라이브 상태(생존/엔트리 · 현재 레벨 · 휴식 · 진행 중)는 ③ 줄에 남는다(기능 유지)', () => {
     const grp = TT.slice(TT.indexOf('data-testid="schedule-start-group"'), TT.indexOf('</p>', TT.indexOf('data-testid="schedule-start-group"')));
     expect(grp).toMatch(/regInfo\?\.hasField \? \(/);
     expect(grp).toMatch(/data-testid="schedule-field-count"/);
     expect(grp).toMatch(/data-testid="schedule-current-level"/);
     expect(TT).toMatch(/regInfo\.onBreak \? '휴식' : regInfo\.levelNo \? `L\$\{regInfo\.levelNo\}` : '진행 중'/);
-    expect(TT).toMatch(/=== 'upcoming' \? null : 'L —'/);
+  });
+  // 🔴 2026-09-26 오너: "L 표시는 진행 중일 때에만 나오게" — `regInfo`(클락 실측)가 없으면
+  //   시작 시각이 지났다는 추정만으로 `L —` 를 지어내지 않는다(모르는 레벨을 억지로 보이지 않는다).
+  it('regInfo 가 없으면(클락 미매칭) 상태는 null 이다 — "L —" 추정 폴백을 지어내지 않는다', () => {
+    expect(TT).toMatch(/const status = regInfo\?\.hasField \? null\s*\n\s*: regInfo \? \(regInfo\.onBreak \? '휴식' : regInfo\.levelNo \? `L\$\{regInfo\.levelNo\}` : '진행 중'\)\s*\n\s*: null;/);
+    expect(TT).not.toMatch(/'L —'/);
   });
   it('일정 탭(browse) 목록도 시간표형이다 — 라이브 탭은 종전 그대로', () => {
     const APP = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');

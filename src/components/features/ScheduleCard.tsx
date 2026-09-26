@@ -845,9 +845,13 @@ function TimetableCard({
   const gtd = schedule.guaranteed && schedule.prizePool ? formatPrize(schedule.prizePool) : null;
   const kind = noGtdLabel(schedule);
   const reg = regCloseRaw(schedule);
+  // 🔴 2026-09-26 오너: "L 표시는 진행 중일 때에만 나오게" — `regInfo`(클락 실측)가
+  //   없으면 시작 시각이 지났다는 추정만으로 `L —` 를 지어내지 않는다. 모르는 레벨은 안 보이는 게 맞다
+  //   (§9 쉬운 한국어와 같은 원칙: 모르는 것을 단정하지 않는다). 이 분기가 사라져도 GridCard는 여전히
+  //   `scheduleStatus` 를 자기 배지에 쓴다(670행) — 배지 문구 자체는 유지된다.
   const status = regInfo?.hasField ? null
     : regInfo ? (regInfo.onBreak ? '휴식' : regInfo.levelNo ? `L${regInfo.levelNo}` : '진행 중')
-    : scheduleStatus(schedule.date, schedule.startTime) === 'upcoming' ? null : 'L —';
+    : null;
   const dot = <span aria-hidden className="px-1 text-ink-muted">·</span>;
   return (
     <article
@@ -915,12 +919,17 @@ function TimetableCard({
           {distanceKm != null && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">{fmtKm(distanceKm)}</span>}
           {(reserveCount ?? 0) > 0 && <span className="text-[10px] tabular-nums leading-tight text-ink-muted">예약 {reserveCount}명</span>}
         </div>
-        {/* ③ 시작 · 레지마감(저장값 그대로 — regCloseRaw, 오너 2026-09-20 "계산하지 마라") · 라이브 상태 */}
+        {/* ③ 시작 · 레지마감(저장값 그대로 — regCloseRaw, 오너 2026-09-20 "계산하지 마라") · 라이브 상태.
+            🔴 2026-09-26 오너 캡처 지적: "'레지 레벨 7'은 '레지마감 레벨 7'이어야 한다, 칸이 부족하면 '마감 레벨 7'로 해도 된다".
+            실측(scratchpad main-regclose/measure3.cjs, 최악 조합 reg='16LV 00:12' + 필드현황'18/24'):
+              '마감' 단독은 425px(가운데 207.6px)에서 한 줄 진입, '레지마감' 전체는 438px(220.6px)에서 한 줄.
+              폰트 렌더링 편차 안전폭(+12px)을 두고 min-[450px] 를 기준으로 한다 — 그 아래(휴대폰 전체)는 항상 '마감',
+              그 위(태블릿·PC, md: 17rem 상한)는 '레지마감'. 스크린리더는 폭과 무관하게 항상 '레지마감'을 듣는다(부모 aria-label, 자식은 aria-hidden — schedule-money 와 같은 정본). */}
         <p data-testid="schedule-start-group"
           className="min-w-0 break-keep text-[0.6875rem] leading-tight text-ink-secondary [overflow-wrap:anywhere] active:text-ink-secondary">
           <span data-testid="schedule-start-time" className="font-extrabold tabular-nums text-ink-primary">{schedule.startTime || '—'}</span>
           {' 시작'}
-          {reg && <>{dot}<span data-testid="schedule-reg-close">레지 {reg}</span></>}
+          {reg && <>{dot}<span data-testid="schedule-reg-close" aria-label={`레지마감 ${reg}`}><span aria-hidden><span className="hidden min-[450px]:inline">레지</span>마감 {reg}</span></span></>}
           {regInfo?.hasField ? (
             <>{dot}<span data-testid="schedule-field-count" className="font-bold tabular-nums">
               <span className="sr-only">생존 </span>{regInfo.alive}
