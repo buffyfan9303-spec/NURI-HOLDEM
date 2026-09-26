@@ -370,6 +370,11 @@ for (const width of [390, 1023]) {
     await stabilizeBackstack(page);
     await page.setViewportSize({ width, height: 844 });
     await mockSchedules(page);
+    // 🔴 2026-09-26 — 벽시계를 멈춘다(Date 만 — 타이머·rAF·performance.now·WAAPI 는 그대로 돈다).
+    //   커뮤니티 외치기 줄은 **20초 벽시계 격자**마다 문구를 150ms 크로스페이드로 갈아 끼운다(CommunityShoutBar slotKey).
+    //   그 경계가 관찰 창에 걸리면 탭 이동과 무관한 opacity 전환이 '목적지 본문 애니메이션' 으로 잡혔다(CPU×4 실측 2/10).
+    //   탭 이동이 시작한 애니메이션만 재려는 계약이라, 시간이 흘러 저절로 도는 것을 멈추는 것이지 대상을 빼는 것이 아니다.
+    await page.clock.setFixedTime(Date.now());
     // 계측은 페이지 스크립트보다 **먼저** 붙어야 첫 호출을 놓치지 않는다.
     await page.addInitScript(() => {
       const w = window as unknown as Record<string, unknown>;
@@ -467,6 +472,12 @@ for (const width of [390, 1023]) {
 
         // 정착까지 관찰한다 — 도착 직후 한 프레임만 보면 늦게 시작하는 애니메이션을 놓친다.
         await page.waitForTimeout(500);
+        // 🔴 2026-09-26 CI(7433a4c3) — 떠나는 판의 상한은 첫 방문 700ms 인데 **500ms 에 한 번** 찍어 보고 있었다.
+        //   라이브 첫 방문은 실데이터가 올 때까지 준비 대기(상한 300) 뒤 페이드 240 이라, 응답이 느린 CI 에서는 500ms 에 아직 도는
+        //   정상 퇴장이 '걷히지 않았다·남았다·opacity 애니' 로 잡혔다(REST 응답 400ms 지연 주입 · CPU×1 에서 10/10 재현 = CI 문구 그대로).
+        //   → 걷힐 때까지(상한 넉넉히) 기다린 뒤 잰다. 걸린 시간은 아래 leave 단언(off−on ≤ 상한)이 그대로 판정하고,
+        //     끝내 안 걷히면 여기서 멈추지 않고 아래 '걷히지 않았다·남았다' 가 빨개진다(음성 대조 경로 유지).
+        await page.waitForFunction(() => !document.querySelector('[data-pane-leaving]'), null, { timeout: 3_000 }).catch(() => {});
 
         const res = await page.evaluate(([allow, scrollName]) => {
           const w = window as unknown as Record<string, unknown>;

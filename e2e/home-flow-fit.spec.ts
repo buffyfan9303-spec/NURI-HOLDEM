@@ -415,6 +415,21 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
     const vp = page.getByTestId('home-banner-viewport');
     const at = () => vp.evaluate((el) => Math.round(el.scrollLeft));
     const w = await vp.evaluate((el) => el.clientWidth);
+    // 🔴 2026-09-26 CI(7433a4c3) 3/3 빨강 — 제품이 아니라 **측정 시점**이었다. 스무스 스크롤 **도중**의 scrollLeft 를
+    //   읽어 반올림하면 도착할 장과 다른 장이 나온다(실측 CPU×8: '이전' 5→4 도중 4.6 을 읽어 before=5≡0, 실제 도착 4 →
+    //   5번 '다음' 뒤 정확히 4 로 돌아왔는데 0≠4 로 빨강). 2f2a7dcf 빌드도 같은 조건에서 같은 값으로 빨갛다(회귀 아님).
+    //   → 위치는 **멈춘 뒤에만** 읽는다: 한 프레임 넘게 같은 값이고 카드 경계(±2%) 위일 때.
+    const settled = async () => {
+      let v = NaN;
+      await expect.poll(async () => {
+        const a = await at();
+        await vp.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+        const b = await at();
+        v = b;
+        return a === b && Math.abs(b / w - Math.round(b / w)) < 0.02;
+      }, { timeout: 5_000, message: '배너가 카드 경계에 멈추지 않았다' }).toBe(true);
+      return v;
+    };
 
     // '이전'은 **어느 위치에서든** 움직여야 한다. 왼쪽에 갈 자리가 없으면(scrollLeft 0) 음수로
     // 클램프되어 스크롤 이벤트조차 안 나고 랩도 안 돌아 통째로 먹통이 된다 — go() 가 복제 세트로
@@ -425,16 +440,19 @@ test.describe('홈 §6 흐름 — 잘림 0 · 가로 스크롤은 레일 안에�
     await expect.poll(at, { timeout: 5_000 }).not.toBe(start);
     expect(await at(), '이전이 0 에 갇혔다').toBeGreaterThan(0);
 
-    // 다음으로 한 바퀴(장 수만큼) 돌리면 같은 장으로 돌아온다 — 랩이 끊기면 끝에서 멈춘다.
+    // '다음'은 **매번 정확히 한 장** 나아가야 한다(장 수 × 2 걸음 — 반드시 복제 트랙의 끝을 넘는다). 랩이 끊기면 끝에서 멈춘다.
+    //   ⚠ 예전 판정(한 바퀴 돈 뒤 before === after)은 랩을 못 쟀다: '이전' 뒤 자리는 n−1 이고 끊긴 트랙의 끝(2n−1)도
+    //   n−1 과 같은 장이라, 끝에 붙어 멈춰도 '제자리' 로 보였다(2026-09-26 음성 대조: 랩 두 곳을 지운 빌드에서 통과).
     const dots = page.locator('[data-testid="home-banner-dots"] button[aria-label$="번째 배너"]');
     const n = await dots.count();
-    const before = ((Math.round((await at()) / w)) % n + n) % n;
-    for (let i = 0; i < n; i++) {
+    const idx = async () => ((Math.round((await settled()) / w)) % n + n) % n;
+    let cur = await idx();
+    for (let i = 0; i < 2 * n; i++) {
       await page.getByRole('button', { name: '다음 배너' }).click();
-      await page.waitForTimeout(350);
+      const got = await idx();
+      expect(got, `${i + 1}번째 '다음' 이 ${cur}번 장에서 한 장 나아가지 않았다(${n}장) — 랩이 끊겼다`).toBe((cur + 1) % n);
+      cur = got;
     }
-    const after = ((Math.round((await at()) / w)) % n + n) % n;
-    expect(after, `${n}장을 한 바퀴 돌렸는데 제자리로 안 왔다 — 랩이 끊겼다`).toBe(before);
 
     // 클릭 목적지 — 'NURI HOLDEM' 브랜드 배너는 전체 일정(browse) 판으로 간다.
     await page.locator('[data-testid="home-banner-viewport"] button[aria-label^="NURI HOLDEM"]').first().click();
