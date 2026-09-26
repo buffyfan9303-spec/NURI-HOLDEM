@@ -57,6 +57,9 @@ async function openMe(page: Page, menu: string) {
   await page.getByRole('button', { name: menu }).click();
   await page.getByRole('button', { name: '내 정보 열기' }).click();
   await expect(page.locator('h1', { hasText: '내 정보' })).toBeVisible();
+  // 닫힘이 페이드(220ms, 그동안 판은 inert)라 '보인다' 만으로는 다시 열렸다는 증거가 못 된다 — 사라지는 중인 판도 보인다(2026-09-27 전면 판 한 벌).
+  //   다시 열린 판(inert 해제)을 기다린다. 안 그러면 다음 DOM click 이 inert 판에 떨어져 무시된다.
+  await expect(page.locator('div.fixed.inset-0:has(> header h1:text-is("내 정보"))')).toHaveJSProperty('inert', false);
 }
 const closeMe = (page: Page) => page.locator('header:has(h1:text-is("내 정보")) button[aria-label="닫기"]').click();
 const nickInput = (page: Page) => page.getByPlaceholder('닉네임 입력 (2~20자)');

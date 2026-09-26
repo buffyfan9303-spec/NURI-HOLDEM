@@ -9,6 +9,7 @@ import {
 import CommentThread from './CommentThread';
 import RotiArenaLogo from '../atoms/RotiArenaLogo';
 import Icon from '../atoms/Icon';
+import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import { useToast } from '../atoms/Toast';
 import type { Venue, Comment, VenueContact } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
@@ -281,8 +282,7 @@ export default function VenuePage({
       aria-label={`${venue.name} 매장 페이지`}
       inert={!open || undefined}
       className={['fixed inset-0 z-40 bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]',
-        open ? 'animate-slide-up' : 'animate-fade-out pointer-events-none'].join(' ')}
-      style={open ? { animationDuration: '0.25s' } : undefined}
+        open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`].join(' ')}
     >
       {/* ── 최상단: 뒤로가기 헤더 ──────────────────────────────────────── */}
       {/* 헤더 배경·구분선은 전폭(상시 크롬), 내용물은 본문과 같은 중앙 컬럼(max-w-3xl)에 정렬한다.

@@ -12,6 +12,7 @@
 //   MU2 PC 메인 탭 — 1440 · CPU 4배 · 마우스. 같은 계약(재방문).
 //   MU3 오버레이 닫기 — 매장 페이지(버튼·뒤로)·장터 행 상세·게시글 상세: 한 프레임에 사라지지 않고 페이드로 닫힌다(5차와 무관, 그대로).
 //   MU4 첫 방문 라이브(GET +400ms) — 덮개 0 · 스켈레톤(모양 예약)이 실제 내용으로 바뀌며 무너지지 않는다(CLS < 0.02).
+//   MU5 전면 판 열기 — 매장·게시글·일정 상세·이벤트 목록·내 정보가 한 장치(fade-in)로 열리고, 내 정보도 페이드로 닫힌다(2026-09-27).
 //
 // 음성 대조(2026-09-26 실행): 옛 tabCover.ts 빌드(덮개 있음)에 돌리면 MU1·MU2·MU4 의 '덮개 0' 이 빨개진다.
 // (4차 음성 대조 기록 — 덮개 한 줄·isSettled ③ 제거 — 은 덮개와 함께 사라졌다.)
@@ -20,7 +21,7 @@
 // 실행: E2E_BASE_URL=http://localhost:43xx npx playwright test e2e/motion-unify.spec.ts
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
-import { dismissOverlays, stabilizeBackstack } from './_session';
+import { ANON_KEY, dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
 import { mockSchedules } from './_schedules';
 
 type F = { t: number; cov: number; ca: number; sy: number; ph: number; sig: string; sk: number; skr: number; vt: number; op: number | null; shown: boolean };
@@ -242,6 +243,79 @@ test('🔴 MU3 — 오버레이 닫기(390 · CPU 4배): 매장 페이지(버튼
   await startRec(page, '', post);
   await tapAt(await closeBtn(post), '게시글');
   expectFaded(await stopRec(page, 900), '게시글 상세 닫기');
+});
+
+/** 전면 판 열기 표본 — 판 루트가 처음 보인 프레임부터 4프레임: 투명도 · 루트에 돌고 있는 애니 이름(CSS 는 animationName). */
+type OpenSample = { op: number; names: string[] };
+async function sampleOpen(page: Page, sel: string, act: () => Promise<void>): Promise<OpenSample[]> {
+  await page.evaluate((s) => {
+    const w = window as unknown as { __po: OpenSample[] };
+    w.__po = [];
+    const t0 = performance.now();
+    const loop = () => {
+      const el = [...document.querySelectorAll<HTMLElement>(s)].filter((e) => e.getClientRects().length > 0 && !e.hasAttribute('inert')).pop();
+      if (el) w.__po.push({ op: Math.round(Number(getComputedStyle(el).opacity) * 100) / 100, names: el.getAnimations().map((a) => (a as CSSAnimation).animationName ?? 'waapi') });
+      if (w.__po.length < 4 && performance.now() - t0 < 4000) requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }, sel);
+  await act();
+  await page.waitForTimeout(1200);
+  return page.evaluate(() => (window as unknown as { __po: OpenSample[] }).__po);
+}
+function expectOneOpen(s: OpenSample[], label: string) {
+  expect.soft(s.length, `${label}: 판을 못 봤다 — 공허한 통과`).toBeGreaterThan(0);
+  expect.soft(s[0]?.names, `${label}: 여는 장치가 한 벌(atoms/pageMotion PAGE_ENTER = fade-in)이 아니다`).toEqual(['fade-in']);
+  expect.soft(s[0]?.op ?? 1, `${label}: 첫 프레임부터 불투명 — 한 프레임 컷으로 열렸다`).toBeLessThan(0.95);
+}
+
+// MU5 — 전면 판 열기 한 벌(오너 2026-09-27 "매장·이벤트·내 정보처럼 화면 전체가 새로 열리는 곳의 여는 방식이 두 가지 — 통일해").
+//   소스 계약은 transitionDevices (e), 이 테스트는 **실제로 돈 애니**를 본다: 판 루트가 처음 보인 프레임에 fade-in 하나만 돌고 반투명이다.
+//   내 정보는 닫기도 본다(예전엔 display:none 한 프레임 컷).
+// 음성 대조(2026-09-27): c7b61fca 빌드에 돌리면 매장 = ['slide-up'] · 이벤트 목록·내 정보 = [] (첫 프레임 불투명) · 내 정보 닫기 = 컷 으로 빨개진다.
+test('🔴 MU5 — 전면 판 열기(390 · CPU 4배 · 터치): 매장·게시글·일정 상세·이벤트 목록·내 정보가 같은 장치(fade-in)로 열린다', async ({ page }) => {
+  test.setTimeout(150_000);
+  await stabilizeBackstack(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  // stub 토큰은 서버가 401 → 읽기는 anon 으로 통과시킨다. **stubLogin 보다 먼저** 건다(flicker-gate 와 같은 조리법).
+  await page.route(/supabase\.co\/rest\/v1\//, (r) => r.continue({ headers: { ...r.request().headers(), authorization: `Bearer ${ANON_KEY}`, apikey: ANON_KEY } }));
+  await stubLogin(page);
+  await mockSchedules(page);
+  await page.addInitScript(RECORDER);
+  await page.goto('/');
+  await dismissOverlays(page);
+  await expect(page.locator('[data-testid="home-schedule-title"]')).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(1500);
+  await cpu4(page);
+  const back = async () => { await page.evaluate(() => history.back()); await page.waitForTimeout(900); };
+  // 일정 상세(Modal page — 예전부터 fade-in, 양성 대조)
+  expectOneOpen(await sampleOpen(page, '.fixed.inset-0.z-\\[55\\][role=dialog]', () => press(page, '[data-testid="home-schedule"] [role="button"]', { mobile: true })), '일정 상세');
+  await back();
+  // 이벤트 목록
+  expectOneOpen(await sampleOpen(page, '[data-testid="event-list-page"]', () => press(page, '[data-testid="home-quick-event"]', { mobile: true })), '이벤트 목록');
+  await back();
+  // 내 정보 — 열기 + 닫기(페이드)
+  const me = '.fixed.inset-0.bg-surface-base[class*="z-[60]"]';
+  expectOneOpen(await sampleOpen(page, me, async () => {
+    await press(page, 'header [aria-label$="메뉴"]', { mobile: true });
+    await page.waitForTimeout(500);
+    await press(page, 'button, a, [role="menuitem"]', { text: '내 정보', mobile: true });
+  }), '내 정보');
+  await page.waitForTimeout(600);
+  await startRec(page, '', me);
+  await press(page, `${me} header [aria-label="닫기"]`, { mobile: true });
+  expectFaded(await stopRec(page, 900), '내 정보 닫기');
+  // 매장 페이지
+  await press(page, TAB(true), { text: '커뮤니티', mobile: true });
+  await page.waitForTimeout(900);
+  await press(page, SEC, { text: '홀덤펍', mobile: true });
+  await page.waitForTimeout(900);
+  expectOneOpen(await sampleOpen(page, '[role=dialog][aria-label$="매장 페이지"]', () => press(page, '[data-testid="venue-card"]', { mobile: true })), '매장 페이지');
+  await back();
+  // 게시글 상세(Modal page)
+  await press(page, SEC, { text: '게시판', mobile: true });
+  await page.waitForTimeout(900);
+  expectOneOpen(await sampleOpen(page, '.fixed.inset-0.z-\\[55\\][role=dialog]', () => press(page, '[data-sec="board"] li[role=button]', { mobile: true })), '게시글 상세');
 });
 
 /** App 의 프리마운트·청크 데우기 idle(timeout 10000)을 붙잡아 라이브를 **진짜 첫 방문**으로 만든다(tab-cover.spec 과 같은 방법). */

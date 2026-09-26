@@ -122,9 +122,9 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
   };
   /** tailwind.config.js keyframes — 오버레이·시트의 진입/퇴장 한 벌. */
   const TW_KEYFRAMES: Record<string, string> = {
-    'fade-in': 'Modal page·가운데 모달·전면 오버레이 진입',
-    'fade-out': '전면 오버레이·모달 퇴장(한 벌)',
-    'slide-up': '가운데 모달 진입·팝오버',
+    'fade-in': '전면 판 열기 한 벌(atoms/pageMotion PAGE_ENTER — (e))·알림 스크림·라이트박스',
+    'fade-out': '전면 판·모달 퇴장 한 벌(PAGE_LEAVE — (e))',
+    'slide-up': '가운데 모달 진입·팝오버·축하 카드 — 전면 판에는 쓰지 않는다((e))',
     'sheet-up': '바텀 시트 진입',
     'slide-down': '바텀 시트 퇴장',
     'dim-in': '모달 딤',
@@ -196,5 +196,76 @@ describe('(d) 하위 탭도 메인 탭과 같은 판 교체 장치를 탄다 —
     const bypass = hits.filter((f) => !(f in NOT_SUBTAB) && !/goSubTab\(/.test(codeOnly(read(f))));
     expect(bypass, '하위 탭을 goSubTab 없이 바꾼다 — 메인 탭과 같은 판 교체(떠나는 판 페이드)를 잃는다. goSubTab(scope, …) 으로 감싸고 SUB_PANEL 에 판 표식을 올려라').toEqual([]);
     expect(Object.keys(NOT_SUBTAB).filter((f) => !hits.includes(f)), '목록에 있는데 더는 탭 레일이 없다 — 목록에서 빼라').toEqual([]);
+  });
+});
+
+// (e) 전면 판(화면 전체가 새로 열리는 곳)은 **한 벌**로 열고 닫는다 — 오너 2026-09-27 "여는 방식이 두 가지 — 통일해".
+//   그전: 매장·그룹 = slide-up(8px 넛지 + 투명도 0→1, 0.25s) · Modal page(게시글·일정 상세·도구) = fade-in(0.45→1, 0.16s) ·
+//   이벤트 목록·보드·내 정보 = 효과 없음(한 프레임 컷, 내 정보는 닫힘도 컷). 닫기는 이미 fade-out 한 벌이었다.
+//   → atoms/pageMotion 의 PAGE_ENTER·PAGE_LEAVE 두 값만 쓴다. 판 루트(불투명 지면 `fixed inset-0`)를 찾아 전부 검사한다.
+//   고른 근거(2026-09-27 실측 — 390·360 × 다크·라이트, DPR3 · CPU4 · 스크롤한 상태, 버튼·뒤로·드래그, 프로브 scratchpad ov/probe.cjs):
+//     A = fade-in(0.45→1, 0.16s, 투명도만) · B = fade + 8px 떠오름(0.2s). 두 안 모두 blink·빈 판 0, missing-content 는 전과 같은 잡음 범위.
+//     열기 정착(중앙값) 매장 A 128~132ms / B 215~222ms / 전 257~259ms · 이벤트 목록 A 131~149 / B 149~182 · 게시글 A 248 / B 295.
+//     → 더 빨리 정착하고 이동(transform)이 없는 A. 이벤트 보드(카드 100장) 첫 프레임 LoAF 도 하드 컷 92~160 vs A 88~169 로 같다.
+// 음성 대조(2026-09-27 실행): VenuePage(slide-up)·EventPage(효과 없음)·CustomerDashboardPage(열기·닫기 컷) 원본 3개로 되돌리면
+//   아래 '열기'·'닫기' 두 단언이 빨개진다(되돌린 뒤 해시 대조). 실화면 단언은 e2e/motion-unify.spec.ts MU5.
+describe('(e) 전면 판 열기·닫기는 한 벌 — atoms/pageMotion 의 PAGE_ENTER·PAGE_LEAVE', () => {
+  it('한 벌의 값 — 투명도만(이동 없음)', () => {
+    const pm = codeOnly(read('src/components/atoms/pageMotion.ts'));
+    expect(pm).toMatch(/export const PAGE_ENTER = 'animate-fade-in';/);
+    expect(pm).toMatch(/export const PAGE_LEAVE = 'animate-fade-out';/);
+  });
+  /** 전면 판 루트가 있는 파일 — 무엇인가. 루트는 PAGE_ENTER 로 열린다. */
+  const FULL_PAGES: Record<string, string> = {
+    'src/components/atoms/Modal.tsx': 'page 변형 — 게시글·일정 상세·GTO/매장/캘린더 도구·GTO 분석',
+    'src/components/features/VenuePage.tsx': '매장 페이지',
+    'src/components/features/GroupPage.tsx': '그룹 페이지',
+    'src/components/features/EventPage.tsx': '이벤트 보드',
+    'src/components/features/EventListPage.tsx': '이벤트 목록',
+    'src/components/features/CustomerDashboardPage.tsx': '내 정보(대시보드) · 비로그인 로그인 랜딩',
+    'src/components/features/AdminTab.tsx': '관리자 매장 장부/통계(PC)',
+  };
+  /** 닫기 페이드가 없어도 되는 전면 판 — 이유. */
+  const NO_LEAVE: Record<string, string> = {
+    'src/components/features/AdminTab.tsx': '관리자 PC 장부/통계 — 부모가 닫는 커밋에 언마운트한다(관리자 전용·별건)',
+  };
+  /** 불투명 지면 `fixed inset-0` 이지만 '앱 안에서 열리는 전면 판'이 아닌 것 — 이유. */
+  const NOT_PAGE: Record<string, string> = {
+    'src/App.tsx': 'OverlayFallback — 청크를 기다리는 Suspense 폴백(전환이 아니라 대기 화면, 곧 판으로 바뀐다)',
+    'src/components/features/clock/ClockRemote.tsx': '클락 리모컨 — 전용 진입 주소(?remote)로 여는 독립 화면, 앱 안 전환 없음',
+    'src/components/features/LedgerWorkspace.tsx': '장부 전체화면 — 브라우저 Fullscreen API 전환이 모션을 맡는다',
+  };
+  const roots = srcFiles.filter((f) => f.endsWith('.tsx')).flatMap((f) => {
+    const rel = f.slice(ROOT.length + 1).replace(/\\/g, '/');
+    const lines = codeOnly(readFileSync(f, 'utf-8')).split('\n');
+    return lines.flatMap((l, i) => {
+      if (!/fixed inset-0/.test(l)) return [];
+      // 여는 태그 끝(`=>` 가 아닌 첫 `>`)까지만 — 안쪽 카드의 지면색(가운데 모달·시트)을 판 루트로 오인하지 않는다.
+      const joined = lines.slice(i, i + 3).join('\n');
+      const end = joined.search(/[^=]>/);
+      const win = end < 0 ? joined : joined.slice(0, end + 1);
+      return /bg-surface-(base|mid)\b(?!\/)/.test(win) ? [{ rel, at: `${rel}:${i + 1}`, win }] : [];
+    });
+  });
+  it('앵커 — 전면 판 루트를 실제로 찾았다(공허한 초록 방지)', () => {
+    expect(roots.length).toBeGreaterThanOrEqual(10);
+    for (const f of Object.keys(FULL_PAGES)) expect(roots.some((r) => r.rel === f), `${f} 에서 전면 판 루트를 못 찾았다 — 모양이 바뀌었으면 이 스캐너를 고쳐라`).toBe(true);
+  });
+  it('모든 전면 판 루트는 목록에 있다(새 전면 판은 이유와 함께 올린다)', () => {
+    expect(roots.filter((r) => !(r.rel in FULL_PAGES) && !(r.rel in NOT_PAGE)).map((r) => r.at), '목록에 없는 전면 판 — PAGE_ENTER·PAGE_LEAVE 로 열고 닫고 FULL_PAGES 에 올려라').toEqual([]);
+  });
+  it('전면 판 루트는 PAGE_ENTER 로 열고, 다른 진입 효과를 섞지 않는다', () => {
+    const bad = roots.filter((r) => r.rel in FULL_PAGES).flatMap((r) => {
+      const why: string[] = [];
+      if (!/\bPAGE_ENTER\b/.test(r.win)) why.push('PAGE_ENTER 없음(한 프레임 컷이거나 다른 장치)');
+      const other = r.win.match(/animate-(?:slide-up|sheet-up|fade-in|scale-in|zoom-in)|animationDuration/g);
+      if (other) why.push(`다른 진입 효과: ${other.join(',')}`);
+      return why.length ? [`${r.at} ${why.join(' · ')}`] : [];
+    });
+    expect(bad, '전면 판이 두 번째 여는 방식을 쓴다 — atoms/pageMotion 의 PAGE_ENTER 로').toEqual([]);
+  });
+  it('전면 판 루트는 PAGE_LEAVE 로 닫는다(한 프레임 컷 금지 — NO_LEAVE 는 이유와 함께)', () => {
+    const bad = roots.filter((r) => r.rel in FULL_PAGES && !(r.rel in NO_LEAVE) && !/\bPAGE_LEAVE\b/.test(r.win)).map((r) => r.at);
+    expect(bad, '닫기가 페이드가 아니다 — PAGE_LEAVE 로 닫고 useDelayedUnmount 로 220ms 붙잡아라').toEqual([]);
   });
 });

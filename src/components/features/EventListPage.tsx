@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import type { EventListItem } from '../../api/events';
 import { peekEventList, fetchEventList } from '../../lib/eventListCache';
 import type { EventState } from '../../lib/eventState';
@@ -183,7 +184,7 @@ export default function EventListPage({ open, onClose, onSelect }: {
     // 안내 시트가 뒤에 깔린다 — EventPage 머리말 참고).
     <div ref={rootRef} data-testid="event-list-page" inert={!open || undefined}
       className={['fixed inset-0 z-[55] overflow-y-auto overscroll-contain bg-surface-base',
-        open ? '' : 'animate-fade-out pointer-events-none'].join(' ')}
+        open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`].join(' ')}
       role="dialog" aria-modal="true" aria-label="이벤트 목록"
       onTouchStart={onListTouchStart} onTouchEnd={onListTouchEnd} onTouchCancel={onListTouchCancel}
       onClickCapture={onListClickCapture}>

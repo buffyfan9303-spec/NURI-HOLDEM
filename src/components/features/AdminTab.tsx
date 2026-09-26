@@ -40,6 +40,7 @@ import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import SectionHeader from '../atoms/SectionHeader';
+import { PAGE_ENTER } from '../atoms/pageMotion';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
 import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, EVENT_KIND_LABEL, type RankVerification } from '../../api/rankverify';
@@ -1706,7 +1707,7 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
           그 토큰을 바꾸면 여기도 같이 바꿔야 한다. */
     <div data-scroll-lock role="dialog" aria-modal="true" aria-label={`${venueName} 장부/통계`}
       style={{ '--header-now': '3.5rem' } as CSSProperties}
-      className="fixed inset-0 z-[60] bg-surface-base overflow-y-auto animate-fade-in">
+      className={`fixed inset-0 z-[60] bg-surface-base overflow-y-auto ${PAGE_ENTER}`}>
       <header className="sticky top-0 z-10 h-[calc(theme(spacing.header-h)+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
         <button type="button" onClick={onClose} className="text-sm font-semibold text-ink-secondary hover:text-ink-primary">← 닫기</button>
         <span className="text-sm font-bold text-ink-primary truncate">{venueName} · 장부/통계</span>

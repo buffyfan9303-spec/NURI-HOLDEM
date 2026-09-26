@@ -11,6 +11,7 @@ import { useToast } from '../atoms/Toast';
 import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import { useDialogFocus } from '../atoms/useDialogFocus';
+import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import Avatar from '../atoms/Avatar';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 import { relativeTime } from './MarketplaceTab';
@@ -170,8 +171,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
       aria-label={`${group.name} 그룹 페이지`}
       inert={!open || undefined}
       className={['fixed inset-0 z-40 bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]',
-        open ? 'animate-slide-up' : 'animate-fade-out pointer-events-none'].join(' ')}
-      style={open ? { animationDuration: '0.25s' } : undefined}
+        open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`].join(' ')}
     >
       {/* 헤더 */}
       <header className="shrink-0 sticky top-0 z-30 flex items-center h-header-h px-page-x bg-surface-base border-b border-border-subtle">

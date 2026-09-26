@@ -9,6 +9,8 @@ import { Suspense, memo, startTransition, useCallback, useEffect, useLayoutEffec
 import type { ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import { lazyWithReload } from '../../lib/lazyWithReload';
+import { useDelayedUnmount } from '../../lib/useDelayedUnmount';
+import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
 import UnderlineTabs from '../atoms/UnderlineTabs';
@@ -129,6 +131,10 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   // 본인인증·매장이용권 킬스위치. OFF 면 지갑(이용권) 전체와 인증 유도가 이 화면에서 사라진다.
   // 훅이므로 조건부 return 들보다 위 — 아래 everOpenedRef / LoginLanding 분기보다 반드시 먼저 실행돼야 한다.
   const idOn = useIdentityEnabled();
+  // 닫힘 페이드(PAGE_LEAVE) 동안 판을 붙잡아 둔다 — 다른 전면 판(매장·이벤트·상세)과 같은 220ms.
+  //   예전엔 닫는 그 커밋에 display:none 이라 내 정보만 한 프레임 컷으로 사라졌다(2026-09-27 전면 판 한 벌).
+  //   붙잡는 동안 판 안의 내용도 그대로 둔다(아래 내 글 비우기·지갑 게이트가 `open` 대신 이 값을 본다) — 사라지는 판 안에서 줄이 무너지지 않게.
+  const shown = useDelayedUnmount(open);
   const [visits, setVisits] = useState<VisitedVenue[]>([]);
   const [plays, setPlays] = useState<PlayHistory[]>([]);
   const [resv, setResv] = useState<MyReservationRow[]>([]);   // 대회 참가(예약) 이력
@@ -179,12 +185,12 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   }, [user?.id]);
 
   useEffect(() => {
-    if (!open || !user) { setMyPosts([]); setMyPostTotal(0); return; }
+    if (!shown || !user) { setMyPosts([]); setMyPostTotal(0); return; }
     let alive = true; // 닫히거나 계정이 바뀐 뒤 도착한 응답은 버린다
     getPostsByUser(user.id).then(({ posts, total }) => { if (!alive) return; setMyPosts(posts); setMyPostTotal(total); }).catch(() => {});
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, user?.id]);
+  }, [shown, user?.id]);
 
   // 왜 allSettled 인가(2026-09-05): 여기는 서로 다른 7개 조회다. Promise.all + 바깥 catch(()=>{})
   // 였을 때는 하나만 실패해도 **성공한 나머지까지 버려지고** 실패가 통째로 삼켜져,
@@ -249,12 +255,12 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   const everOpenedRef = useRef(false);
   if (open) everOpenedRef.current = true; // 렌더 중 latch — 단조 증가라 안전
   if (!open && !everOpenedRef.current) return null;
-  const hidden = !open;
+  const hidden = !shown;
 
   // 비로그인 — 대시보드 대신 로그인 랜딩(APIS '내 게임' 문법). 훅은 전부 위에서 이미 실행됐고
   // 데이터 이펙트는 user 가드로 잠겨 있어 user=null 렌더가 안전하다.
   // 숨김 중 로그인이 확정되면(user 등장) 갈래 전환은 자연 리렌더로 처리된다.
-  if (!user) return <LoginLanding onClose={onClose} hidden={hidden} />;
+  if (!user) return <LoginLanding onClose={onClose} hidden={hidden} closing={!open} />;
 
   const usageMap = new Map<string, { name: string; visits: number; buyins: number; amount: number; lastAt: string | null }>();
   for (const x of visits) usageMap.set(x.venueId, { name: x.venueName ?? '매장', visits: x.visits, buyins: 0, amount: 0, lastAt: null });
@@ -293,7 +299,9 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]" style={hidden ? { display: 'none' } : undefined}>
+    // 루트 전환 — 전면 판 공용 한 벌(atoms/pageMotion). 닫히는 220ms 는 입력을 받지 않는다.
+    <div className={`fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`}`}
+      inert={!open || undefined} style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 px-page-x">
         <button type="button" onClick={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
           <Icon name="back" size={20} />
@@ -544,7 +552,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                  (덤으로 진행 중이던 RedeemSheet·QR 카메라도 함께 정리된다. 예전 !open 이펙트와 같은 효과). */}
           {/* [A] 형제 섹션과 같은 박스 문법 — VoucherWallet 은 compact(시트)와 다른 화면이라
               `boxed` 를 따로 내려준다(compact 는 시트 전용 바깥 여백까지 바꾸므로 여기 그대로 쓰면 안 된다). */}
-          {open && <VoucherWallet onNeedVerify={() => goTab('security')} onVenue={onOpenVenue} boxed />}
+          {shown && <VoucherWallet onNeedVerify={() => goTab('security')} onVenue={onOpenVenue} boxed />}
 
           <section className="rounded-aura border card-aura p-3">
             <Head icon="store" tone="cyan" title="매장 이용·참가 내역" count={usage.length} unit="곳" />
@@ -743,7 +751,7 @@ function MeTabs({ open, initialTab, goTabRef, dashboard, onClose, onOpenLegal, o
 
 /** 비로그인 로그인 랜딩 — APIS '내 게임' 문법(타이틀 + 가치 제안 + 소셜 로그인 + 설정성 행).
  *  왜 별도 화면: 비로그인에게 빈 대시보드 껍데기를 보여주는 대신, 로그인의 '이유'를 먼저 판다. */
-function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden?: boolean }) {
+function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: () => void; hidden?: boolean; closing?: boolean }) {
   const toast = useToast();
   // 진행 중인 소셜만 로딩 표기 + 두 버튼 동시 비활성(중복 리다이렉트 방지) — AuthModal 과 동일 패턴
   const [busy, setBusy] = useState<'google' | null>(null);
@@ -771,7 +779,8 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]" style={hidden ? { display: 'none' } : undefined}>
+    <div className={`fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${closing ? `${PAGE_LEAVE} pointer-events-none` : PAGE_ENTER}`}
+      inert={closing || undefined} style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
         <button type="button" onClick={onClose} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
           <Icon name="back" size={20} />

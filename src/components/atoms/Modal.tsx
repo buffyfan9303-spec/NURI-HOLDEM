@@ -5,6 +5,7 @@ import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import { springTo, presentationY, project, rubberband, releaseVelocity, type VelSample } from '../../lib/spring';
 import Icon from './Icon';
 import { useDialogFocus } from './useDialogFocus';
+import { PAGE_ENTER, PAGE_LEAVE } from './pageMotion';
 
 interface ModalProps {
   open: boolean;
@@ -383,7 +384,7 @@ export default function Modal({
         // compact 아닌 나머지 5곳(캘린더/매장 도구·GTO 분석·일정 상세 등)은 그대로(바이트 동일 유지).
         className={['fixed inset-0 z-[55] flex flex-col pt-[env(safe-area-inset-top)]',
           compact ? 'bg-surface-mid' : 'bg-surface-base',
-          closing ? (dragClosed ? '' : 'animate-fade-out') : 'animate-fade-in'].join(' ')}>
+          closing ? (dragClosed ? '' : PAGE_LEAVE) : PAGE_ENTER].join(' ')}>
         {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기. ⚠ 드래그를 끈 page(게시글 읽기)에는 그리지 않는다 —
             핸들이 '끌 수 있다'고 말해 놓고 잡아끌면 아무 반응이 없으면 UI 가 거짓말을 한다(아래 sheet 그립 주석과 같은 원칙). */}
         {bodyDrag && (

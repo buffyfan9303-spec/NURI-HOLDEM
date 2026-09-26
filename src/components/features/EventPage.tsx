@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29) — 새 판정을 만들지 않고 재사용
@@ -146,7 +147,12 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
   const canPlay = av.canJoin;
 
   return (
-    /* ⚠ 진입 애니메이션을 **일부러 걸지 않는다**(2026-09-08 실측 후 되돌림).
+    /* 🔴 2026-09-27 — 이제 진입 효과가 **있다**: 전면 판 공용 한 벌(atoms/pageMotion PAGE_ENTER = fade-in 0.45→1, 0.16s).
+         오너 "매장·이벤트·내 정보처럼 화면 전체가 새로 열리는 곳의 여는 방식이 두 가지 — 통일해". 아래 09-08 기록과 **같은 자**로
+         다시 쟀다(390 · DPR3 · CPU4 · 카드 100장 목킹 보드, long-animation-frame 최대): 하드 컷 92~160ms vs fade-in 88~169ms —
+         보드의 첫 프레임 비용은 효과가 아니라 격자 래스터 자체였고 효과를 걸어도 늘지 않았다. blink·빈 판·missing-content 도 0 으로 같다.
+         (판 한 겹의 투명도만 움직인다 — slide-up 처럼 이동·블러가 없다.) 아래는 그때의 기록이다.
+       ⚠ (역사) 진입 애니메이션을 **일부러 걸지 않는다**(2026-09-08 실측 후 되돌림).
        교차 검증이 "이벤트만 진입 전환이 0 — VenuePage 는 animate-slide-up, CustomerDashboardPage 는
        withViewTransition 으로 여는데 여기만 하드 컷"이라고 짚었고, 그 지적 자체는 맞다.
        그런데 걸어 보고 쟀더니 **더 나빠졌다**(375×812, 프로덕션 빌드, long-animation-frame):
@@ -167,7 +173,7 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
         배너의 '프로필에서 본인인증하기' 를 눌러도 시트가 뒤에 그려져 **아무 일도 안 나는 것처럼 보인다**
         (그다음 뒤로가기 한 번은 보이지 않는 시트를 닫느라 먹힌다). 2026-09-17 스윕에서 확인. */
     <div ref={dialogRef} inert={!open || undefined}
-      className={['fixed inset-0 z-[55] overflow-y-auto bg-surface-base', open ? '' : 'animate-fade-out pointer-events-none'].join(' ')}
+      className={['fixed inset-0 z-[55] overflow-y-auto bg-surface-base', open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`].join(' ')}
       role="dialog" aria-modal="true" aria-label="이벤트">
       {/* 🔴 2026-09-18 오너: "PC 버젼에서 모든 탭이 제대로 잘 움직이다가 이벤트만 가면 갑자기
           전체화면으로 바뀌면서 지혼자서 이상하게 돼 이 부분도 수정 다른 탭들처럼".
