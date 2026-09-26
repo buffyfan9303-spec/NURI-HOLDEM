@@ -513,10 +513,31 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
   return { el, box: { top: r.top, left: r.left, width: r.width }, page, scroll, canvas, clipBelow };
 }
 
+// ── 커밋 판정(2026-09-27 COMMIT-SIGNAL) ─────────────────────────────────────────
+// 종전엔 '판 DOM 이 바뀐 첫 배치'를 커밋으로 봤다. 그런데 떠나는 판은 커밋 전까지 **살아 있다** — 제 데이터가 늦게 오거나 실시간 갱신이
+//   들어오면 그것도 판 DOM 변화다. 실측(root-cause · 내 매장 PC 사이드바 · CPU4 · 누른 뒤 떠나는 판에 늦은 도착): 복제본 47~58ms,
+//   실제 전환 115~166ms — 옛 그림이 먼저 걷히고 진짜 전환은 복제본 없이 컷(3/3). 모바일 메뉴는 시트가 먼저 닫혀(레일만 바뀜) 늘 컷이었다.
+// 이제 커밋은 **활성 판이 실제로 바뀐 신호**로만 본다:
+//   ① 판 식별자가 있는 판(keep-alive — 판마다 [data-pane]=id, 숨김은 인라인 display:none. 내 매장) — 목적지([data-pane=to])가 보이거나
+//      보이는 판 목록이 바뀐 배치. 전환(startTransition)·Suspense 로 커밋이 늦어도, 그 사이 떠나는 판이 바뀌어도 속지 않는다.
+//      기다리는 동안 떠나는 판이 바뀌면 그 자리에서 다시 복제한다 — 복제본은 커밋 직전에 보이던 모습이어야 한다(옛 스켈레톤이 걷히면 안 된다).
+//   ② 식별자가 없는 판(조건부 마운트 — 나머지 전부) — React 는 이산 이벤트(탭·클릭·키)의 상태 변경을 **같은 태스크의 마이크로태스크**에서
+//      동기 반영한다. 그러니 이벤트 태스크 안에 온 판 변화만 커밋이다. 태스크가 끝날 때까지 판이 안 바뀌었으면 판 교체가 없던 것이다
+//      (같은 결과를 다시 그린 필터 · 레일만 바뀜) — 복제본을 버리고 스왑을 푼다. 늦게 오는 판 변화는 데이터 도착이지 전환이 아니다.
+//   이벤트 밖에서 불린(프로그램) 식별자 없는 전환은 커밋 시점을 알 수 없어 복제본을 세우지 않는다(한 프레임 교체 — 스왑 정적화만).
+const PANE_ID = 'data-pane';
+/** 판 안에서 지금 보이는 keep-alive 판 id 목록('' = 식별자 없는 판). 인라인 display 만 본다 — 레이아웃을 강제하지 않는다. */
+const shownPanes = (root: Element): string =>
+  [...root.querySelectorAll<HTMLElement>(`[${PANE_ID}]`)].filter((e) => e.style.display !== 'none').map((e) => e.getAttribute(PANE_ID)).join('|');
+/** 이벤트 태스크의 마이크로태스크 체크포인트 **뒤**에 fn — React 의 동기 반영(마이크로태스크 한두 겹)과 그 커밋의 MutationObserver 콜백보다
+ *  늦게 돈다(마이크로태스크는 같은 태스크 안에서 다 돈다 — 다른 태스크(네트워크 응답·전환 커밋)가 끼어들 수 없다). */
+const afterEventTask = (fn: () => void, hops = 8): void => { queueMicrotask(hops > 0 ? () => afterEventTask(fn, hops - 1) : fn); };
+
 /**
  * 하위 탭 판 교체 — goSubTab 이 commit() **직전**(같은 이벤트 안)에 부른다. 메인 탭의 notePaneLeaving + handOffPane 한 벌.
+ * to = goSubTab 이 아는 목적지 값(판 식별자가 있는 판은 [data-pane=to] 가 보이는 순간이 커밋이다).
  */
-export function handOffSubPanel(scope: string, target: EventTarget | null): void {
+export function handOffSubPanel(scope: string, target: EventTarget | null, to?: string): void {
   if (typeof document === 'undefined' || typeof requestAnimationFrame !== 'function') return;
   const rapid = fading !== null || leaving !== null;
   fading?.();
@@ -534,50 +555,66 @@ export function handOffSubPanel(scope: string, target: EventTarget | null): void
     if (fading === cancel) fading = null;
   };
   const t = target instanceof Element ? target : null;
+  const inEvent = !!(globalThis as { event?: Event }).event;
+  const key0 = root ? shownPanes(root) : '';
+  const keyed = key0 !== '';
   const skip = !root || rapid || document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    || (document.documentElement.hasAttribute('data-overlay') && !!root.closest('.tab-pane'));
+    || (document.documentElement.hasAttribute('data-overlay') && !!root.closest('.tab-pane'))
+    || (!keyed && !inEvent);
   // 레일이 판 **안**에 있으면(내 매장 단계 바) 누른 탭바(tablist)를 레일로 본다 — 그 위·그 자신은 복제본에서 잘라 살아 있는 알약이 보이게.
   const railIn = sp?.rail ?? (t && root?.contains(t) ? t.closest('[role="tablist"]') : null);
   // 재기 **먼저**, 스왑 정적화는 그 뒤 — html[data-tab-swap] 을 먼저 켜면 그 무효화로 문서 스타일 재계산(PC 내 매장 #2415 요소 ·
   //   CPU4 40~90ms)이 여기서 강제된다. 뒤에 켜면 커밋 뒤 한 번의 재계산에 합쳐진다(메인 탭 notePaneLeaving 도 같은 순서).
-  const snap = skip ? null : snapSubPanel(root!, railIn);
+  let snap = skip ? null : snapSubPanel(root!, railIn);
   const foot = snap?.page ? visibleFooter() : null;
   holdSwap(cancel, t?.closest('button, a, [role="button"], [role="tab"]'));
   if (!root) { afterFirstFrame(releaseSwap); return; }
   const parent = root.parentElement;
   const rail = sp!.rail;
-  // 커밋 판정 — 판(과 판 자리)의 DOM 이 바뀌면 커밋이다. 첫 프레임까지 **레일만** 바뀌었으면(알약 이동은 커밋됐는데 판 그림이 같다 —
-  //   같은 결과를 다시 그린 필터 등) 세울 것이 없다: 복제본을 버리고 스왑을 푼다. 둘 다 안 바뀌었으면 커밋이 늦는 것이다
-  //   (startTransition·Suspense — 내 매장 사이드바 등) — 그동안 떠나는 판은 화면에 그대로라 사용자가 스크롤할 수 있으니 커밋 직전 프레임의 자리를 쓴다.
-  //   ⚠ 늦은 비동기 로딩(판이 같게 그려진 뒤 목록 도착)을 커밋으로 오인하면 옛 그림이 새 목록 위에 다시 선다 — 그래서 레일 규칙이 먼저다.
-  const y0 = window.scrollY;
+  /** 활성 판이 실제로 바뀌었는가(위 ①). */
+  const paneSwapped = (): boolean => {
+    if (!root.isConnected) return true;
+    const k = shownPanes(root);
+    return (!!to && k.split('|').includes(to)) || k !== key0;
+  };
+  // 커밋이 늦는 동안(전환·Suspense) 떠나는 판은 화면에 그대로라 사용자가 스크롤할 수 있다 — 커밋 직전 프레임의 자리를 쓴다.
+  let y0 = window.scrollY;
   let yLast = y0;
-  let railMoved = false;
-  let frames = 0;
   const track = () => {
     if (!alive) return;
     yLast = window.scrollY;
-    if (++frames === 1 && railMoved) { cancel(); releaseSwap(); return; }
     raf = requestAnimationFrame(track);
   };
   raf = requestAnimationFrame(track);
   fading = cancel;
+  // ② 식별자 없는 판 — 이벤트 태스크가 끝날 때까지 커밋(판 변화)이 없었으면 판 교체가 없던 것이다.
+  if (!keyed && inEvent) afterEventTask(() => { if (alive) { cancel(); releaseSwap(); } });
   mo = new MutationObserver((recs) => {
     if (!alive) return;
-    if (rail && recs.every((r) => rail.contains(r.target))) { railMoved = true; return; }
+    if (keyed) {
+      if (!paneSwapped()) {
+        // 커밋 전 떠나는 판의 변화(늦은 데이터·실시간) — 지금 모습으로 다시 복제한다(레일만 바뀌었으면 판 그림은 그대로다).
+        if (snap && !(rail && recs.every((r) => rail.contains(r.target)))) {
+          const s2 = snapSubPanel(root, railIn);
+          if (s2) { snap = s2; y0 = yLast = window.scrollY; }
+        }
+        return;
+      }
+    } else if (rail && recs.every((r) => rail.contains(r.target))) return; // 레일만 바뀜 — 판 변화를 태스크 끝까지 기다린다
     cancel();
     if (!snap || !parent?.isConnected) { afterFirstFrame(releaseSwap); return; }
-    const { el } = snap;
-    const dy = snap.page ? yLast - y0 : 0;
-    if (dy) el.style.setProperty('--leave-top', `${snap.box.top - dy}px`);
+    const s = snap;
+    const { el } = s;
+    const dy = s.page ? yLast - y0 : 0;
+    if (dy) el.style.setProperty('--leave-top', `${s.box.top - dy}px`);
     parent.insertBefore(el, root.parentNode === parent ? root.nextSibling : null);
     // 조상에 transform·filter 가 있으면(시트·모달) fixed 의 기준이 뷰포트가 아니다 — 붙인 뒤 어긋난 만큼 되돌린다.
     const q = el.getBoundingClientRect();
-    const ox = q.left - snap.box.left, oy = q.top - (snap.box.top - dy);
-    if (Math.abs(ox) > 0.5) el.style.setProperty('--leave-left', `${snap.box.left - ox}px`);
-    if (Math.abs(oy) > 0.5) el.style.setProperty('--leave-top', `${snap.box.top - dy - oy}px`);
-    for (const [x, st, sl] of snap.scroll) { x.scrollTop = st; x.scrollLeft = sl; }
-    for (const [o, c] of snap.canvas) { try { c.getContext('2d')?.drawImage(o, 0, 0); } catch { /* 그리지 못하면 빈 칸 */ } }
+    const ox = q.left - s.box.left, oy = q.top - (s.box.top - dy);
+    if (Math.abs(ox) > 0.5) el.style.setProperty('--leave-left', `${s.box.left - ox}px`);
+    if (Math.abs(oy) > 0.5) el.style.setProperty('--leave-top', `${s.box.top - dy - oy}px`);
+    for (const [x, st, sl] of s.scroll) { x.scrollTop = st; x.scrollLeft = sl; }
+    for (const [o, c] of s.canvas) { try { c.getContext('2d')?.drawImage(o, 0, 0); } catch { /* 그리지 못하면 빈 칸 */ } }
     // 복제본 안에서 CSS 애니가 처음부터 다시 돈다(진입 페이드·스켈레톤·스크롤 리빌) — 원본이 이미 도달한 끝 상태로 세운다.
     for (const a of el.getAnimations({ subtree: true })) {
       try { if (a.timeline === document.timeline && Number.isFinite(Number(a.effect?.getComputedTiming().endTime))) a.finish(); else a.cancel(); } catch { a.cancel(); }
@@ -591,8 +628,8 @@ export function handOffSubPanel(scope: string, target: EventTarget | null): void
     let lastRb: number | null = null;
     const follow = () => {
       if (!el.isConnected) return;
-      const rb = railBottomOver(railIn, snap.box);
-      if (rb !== null && (lastRb === null || Math.abs(rb - lastRb) > 0.5)) { lastRb = rb; snap.clipBelow(rb); }
+      const rb = railBottomOver(railIn, s.box);
+      if (rb !== null && (lastRb === null || Math.abs(rb - lastRb) > 0.5)) { lastRb = rb; s.clipBelow(rb); }
       requestAnimationFrame(follow);
     };
     if (railIn) follow();

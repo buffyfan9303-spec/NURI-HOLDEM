@@ -86,7 +86,7 @@ export function goSubTab<T extends string>(
   //     index.css 의 하위 탭 VT 규칙은 **지우지 않았다** — 마커가 안 켜지므로 잠자코 있을 뿐이다.
   //     되돌릴 필요가 없다고 정해지면 그때 규칙과 계약을 같이 정리한다(CSS 예산도 그만큼 는다).
   const target = (globalThis as { event?: Event }).event?.target ?? null;
-  handOffSubPanel(scope, target); // 커밋 **전** — 떠나는 판을 이벤트 시점 자리 그대로 복제해 두고 스왑 정적화를 켠다(커밋 뒤 세운다)
+  handOffSubPanel(scope, target, String(to)); // 커밋 **전** — 떠나는 판을 이벤트 시점 자리 그대로 복제해 두고 스왑 정적화를 켠다(목적지 판이 실제로 커밋된 뒤 세운다)
   commit();
   // P2 스크롤 — 누른 요소(현재 이벤트의 target)로 레일과 판을 찾는다. 이벤트 밖에서 부르면 target 이 없어 판 스크롤 상자만 맞춘다.
   alignSubTabPanel(scope, target);

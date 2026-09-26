@@ -11,11 +11,13 @@
 // 음성 대조(2026-09-26 실행): B1 빌드 → ① 라이트 has_missing_content FAIL · B2 빌드 → 전부 PASS.
 //   ② 히트테스트는 `[data-pane-leaving]{pointer-events:auto}` 를 주입한 B2 에서 빨개진다(입력을 삼키는 떠나는 판).
 // 실행: E2E_BASE_URL=http://localhost:4782 npx playwright test e2e/tab-handoff-gate.spec.ts
+// ⑤(2026-09-27) 로딩 중 탭 — 복제본이 떠나는 판의 늦은 변화가 아니라 실제 커밋에 맞춰 서는가. 6edb9738 빌드 FAIL(PC 사이드바 이른 복제본 · 모바일 메뉴 복제본 0).
 import type { CDPSession, Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import { ANON_KEY, stubLogin } from './_session';
 import { mockSchedules } from './_schedules';
 import { Cast, RECORDER, center, press, FLAT_STD, type Finder } from './_flicker';
+import { bootOwner, openMyStore } from './_mockOwner';
 
 const MENUS = ['라이브', '커뮤니티', 'GTO', '캘린더', '홈'];
 const TAB = (label: string): Finder => ({ sel: 'nav[aria-label="하단 내비게이션"] button', text: label, exact: true });
@@ -305,6 +307,112 @@ test.describe('TAB-HANDOFF-GATE — 스크롤한 판에서 메인 탭 이동(모
     expect(tapsTr.length, '트레이스에서 탭 표식을 못 찾았다').toBe(taps);
     expect(changed, '판 그림이 바뀐 이동이 거의 없다 — 게이트가 공허해진다(데이터·선택자 확인)').toBeGreaterThanOrEqual(6);
     expect.soft(missing.map((m) => `${m.tap} +${m.dt}ms`), '새 판 타일이 래스터되기 전 프레임이 나갔다').toEqual([]);
+    expect(bad).toEqual([]);
+  });
+});
+
+// ⑤ 로딩 중 탭(2026-09-27 COMMIT-SIGNAL, root-cause-debugger) — 떠나는 판은 커밋 전까지 **살아 있다**. 그 판 자신의 늦은 데이터 도착·실시간 갱신
+//   (판 DOM 변화)을 커밋으로 오인하면 옛 그림이 먼저 걷히고 진짜 전환은 복제본 없이 컷이다.
+//   6edb9738 빌드 실측: 내 매장 PC 사이드바(전환 레인 커밋) 3/3 — 복제본 47~72ms · 실제 커밋 118~169ms, 모바일 메뉴 6/6 — 복제본 0(시트가 먼저 닫혀 레일만 바뀜).
+//   여기서는 누른 뒤 떠나는 판에 칸을 붙여 '늦은 도착'을 결정적으로 만들고, 복제본이 **실제 커밋과 같은 태스크**에서 **한 번만**,
+//   그 도착까지 담은 모습으로 서는지 본다. 커밋 판정은 구현과 독립이다(보이는 [data-pane] 가 바뀜 · 누른 칸이 활성 표식을 얻음).
+//   커뮤니티·GTO 는 판을 연 직후(아직 불러오는 중) 누른다 — 동기 커밋 경로가 그대로 복제본을 세우는지.
+async function armCommitWatch(page: Page, btnSel: string, text: string | null, idx: number, panelSel: string, inject: boolean) {
+  return page.evaluate(([btnSel, text, idx, panelSel, inject]) => {
+    const vis = (e: Element) => e.getClientRects().length > 0;
+    const pool = [...document.querySelectorAll<HTMLElement>(btnSel as string)].filter(vis);
+    const b = text ? pool.find((x) => (x.textContent ?? '').trim().includes(text as string)) : pool[idx as number];
+    const panel = [...document.querySelectorAll(panelSel as string)].find(vis) as HTMLElement | undefined;
+    if (!b || !panel) return null;
+    const panes = () => [...panel.querySelectorAll<HTMLElement>('[data-pane]')].filter(vis).map((e) => e.getAttribute('data-pane')).join('|');
+    const p0 = panes();
+    const act = (e: Element) => [e, ...e.querySelectorAll('*')].some((x) => x.hasAttribute('data-pill-active') || x.getAttribute('aria-selected') === 'true' || x.getAttribute('aria-pressed') === 'true');
+    const was = act(b);
+    // 누를 때마다 새 표식 — keep-alive 판(숨은 판)에 남은 앞선 칸을 세지 않게
+    const mark = `h5-late-${Math.round(performance.now())}`;
+    const w = { clones: [] as { same: boolean; late: number }[], committed: false, inC: false };
+    (window as unknown as { __h5: typeof w }).__h5 = w;
+    const mo = new MutationObserver((rs) => {
+      if (!w.committed && ((p0 && panes() !== p0) || (!was && b.isConnected && act(b)))) {
+        w.committed = true; w.inC = true; setTimeout(() => { w.inC = false; }, 0);
+      }
+      for (const r of rs) for (const n of [r.target, ...r.addedNodes]) {
+        if (n instanceof Element && n.hasAttribute('data-pane-leaving') && !n.classList.contains('tab-pane') && n.tagName !== 'FOOTER'
+          && (r.type === 'childList' || r.attributeName === 'data-pane-leaving')) w.clones.push({ same: w.inC, late: n.querySelectorAll(`.${mark}`).length });
+      }
+    });
+    mo.observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-pane-leaving', 'style', 'data-pill-active', 'aria-selected', 'aria-pressed'] });
+    setTimeout(() => mo.disconnect(), 2500);
+    if (inject) b.addEventListener('click', () => setTimeout(() => {
+      const host = [...panel.querySelectorAll('[data-pane]')].find(vis);
+      if (host) { const s = document.createElement('div'); s.className = mark; s.style.height = '6px'; host.appendChild(s); }
+    }, 0), { capture: true, once: true });
+    const r = b.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, label: (b.textContent ?? '').trim().slice(0, 10) };
+  }, [btnSel, text, idx, panelSel, inject] as const);
+}
+
+test.describe('TAB-HANDOFF-GATE ⑤ — 로딩 중 탭', () => {
+  test.describe.configure({ timeout: 240_000 });
+  test('⑤ 로딩 중 탭 — 복제본은 떠나는 판의 늦은 변화가 아니라 실제 커밋에 맞춰, 한 번, 마지막 모습으로 선다', async ({ page }) => {
+    const bad: string[] = []; const rows: string[] = [];
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const judge = async (id: string, late: boolean) => {
+      await page.waitForTimeout(1500);
+      const w = await page.evaluate(() => (window as unknown as { __h5: { clones: { same: boolean; late: number }[]; committed: boolean } }).__h5);
+      rows.push(`${id} committed=${w.committed} clones=${JSON.stringify(w.clones)}`);
+      if (!w.committed) bad.push(`${id} 커밋을 못 봤다 — 누른 것이 판을 바꾸지 않았다(선택자·데이터 확인)`);
+      else if (w.clones.length !== 1) bad.push(`${id} 복제본 ${w.clones.length}개(1이어야 한다 — 0 이면 컷)`);
+      else if (!w.clones[0].same) bad.push(`${id} 복제본이 실제 커밋과 다른 때 섰다(늦은 데이터 도착을 커밋으로 오인)`);
+      else if (late && w.clones[0].late !== 1) bad.push(`${id} 복제본이 커밋 직전 모습이 아니다(늦은 도착 ${w.clones[0].late}/1)`);
+    };
+    const mouse = async (x: number, y: number) => { await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(70); await page.mouse.up(); };
+    const touch = async (x: number, y: number) => {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, radiusX: 4, radiusY: 4, force: 1, id: 1 }] });
+      await page.waitForTimeout(110);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+    // 내 매장 PC — 사이드바(startTransition 커밋)
+    await bootOwner(page, { viewport: { width: 1440, height: 900 } });
+    await openMyStore(page);
+    await expect(page.locator('[data-mystore-secpanel] [data-pane="dashboard"]')).toBeVisible();
+    await page.waitForTimeout(1000); // 내 매장을 연 메인 탭 전환이 끝난 뒤(도는 중이면 연타로 보고 한 프레임 교체한다 — 정상)
+    for (const to of ['게임 진행', '매장 설정', '대시보드']) {
+      const a = await armCommitWatch(page, '[data-mystore-secbar] button', to, 0, '[data-mystore-secpanel]', true);
+      expect(a, `사이드바 '${to}' 를 못 찾았다`).not.toBeNull();
+      await mouse(a!.x, a!.y);
+      await judge(`PC 사이드바 → ${a!.label}`, true);
+    }
+    // 내 매장 모바일 — 전체 메뉴 시트(시트는 즉시 닫히고 판은 전환 레인에서 늦게 커밋)
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(800);
+    for (const to of ['게임 진행', '대시보드']) {
+      const t = await page.getByTestId('mystore-menu-toggle').boundingBox();
+      expect(t, '모바일 메뉴 버튼을 못 찾았다').not.toBeNull();
+      await touch(t!.x + t!.width / 2, t!.y + t!.height / 2);
+      await expect(page.locator('.animate-slide-up').first()).toBeVisible();
+      const a = await armCommitWatch(page, '.animate-slide-up button', to, 0, '[data-mystore-secpanel]', true);
+      expect(a, `메뉴 '${to}' 를 못 찾았다`).not.toBeNull();
+      await touch(a!.x, a!.y);
+      await judge(`모바일 메뉴 → ${a!.label}`, true);
+    }
+    // 커뮤니티·GTO — 판을 연 직후(불러오는 중) 누른다
+    for (const sc of [{ nav: '커뮤니티', rail: '[data-community-secbar] button', panel: '[data-community-secpanel]' },
+      { nav: 'GTO', rail: '[data-tools-lanebar] button', panel: '[data-tools-lanepanel]' }]) {
+      const n = await center(page, TAB(sc.nav));
+      expect(n, `하단바 '${sc.nav}' 를 못 찾았다`).not.toBeNull();
+      await touch(n!.x, n!.y);
+      await page.waitForTimeout(600);
+      for (let i = 1; i <= 3; i++) {
+        const a = await armCommitWatch(page, sc.rail, null, i, sc.panel, false);
+        expect(a, `${sc.nav} 하위 탭 #${i} 를 못 찾았다`).not.toBeNull();
+        await touch(a!.x, a!.y);
+        await judge(`${sc.nav} → ${a!.label}`, false);
+      }
+    }
+    console.log(`[handoff-loading]\n  ${rows.join('\n  ')}`);
+    expect(rows.length, '잰 탭이 모자라다 — 게이트가 공허해진다').toBe(11);
     expect(bad).toEqual([]);
   });
 });
