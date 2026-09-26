@@ -275,6 +275,7 @@ const visibleFooter = (): { el: HTMLElement; box: Box } | null => {
 /** 푸터 복제본 — 떠나기 직전 자리를 지킨다. 입력·보조기술·스냅샷 이름에서 뺀다(같은 이름 둘이면 진행 중 View Transition 이 통째로 실패한다). */
 const cloneFooter = (foot: { el: HTMLElement; box: Box }, parent: Node, before: Node | null): HTMLElement => {
   const c = foot.el.cloneNode(true) as HTMLElement;
+  stripIdentity(c);
   c.setAttribute('aria-hidden', 'true');
   c.inert = true;
   c.style.viewTransitionName = 'none';
@@ -394,6 +395,36 @@ const alphaOf = (c: string): number => {
   return rgba ? parseFloat(rgba[1]) : 1;
 };
 
+/** 문서 스타일시트가 선택자로 읽는 data-·aria-·role 속성 이름 — 복제본에서 남길 것(모양). 시트 수가 바뀌면(지연 청크 CSS) 다시 모은다. */
+let styledAttrs: { n: number; set: Set<string> } | null = null;
+const styledAttrSet = (): Set<string> => {
+  const sheets = document.styleSheets;
+  if (styledAttrs && styledAttrs.n === sheets.length) return styledAttrs.set;
+  const set = new Set<string>();
+  const walk = (rules: CSSRuleList) => {
+    for (const r of rules) {
+      const sel = (r as CSSStyleRule).selectorText;
+      if (sel) for (const m of sel.matchAll(/\[((?:data-|aria-)[\w-]+|role)\b/g)) set.add(m[1]);
+      const inner = (r as CSSGroupingRule).cssRules;
+      if (inner) walk(inner);
+    }
+  };
+  for (const sh of sheets) { try { walk(sh.cssRules); } catch { /* 다른 출처 시트(글꼴) — 읽을 수 없다 */ } }
+  styledAttrs = { n: sheets.length, set };
+  return set;
+};
+/** 복제본(떠나는 판·푸터)을 **그림**으로 만든다 — id·for·name·testid·표식(data-*)·aria-*·role 을 뗀다(모양에 쓰이는 것만 남김).
+ *  테스트 선택자·접근성 트리·판 찾기·라벨 연결이 복제본을 원본으로 잡지 않게. inert·aria-hidden 은 호출부가 붙인다. */
+function stripIdentity(root: HTMLElement): void {
+  const keep = styledAttrSet();
+  for (const x of [root, ...root.querySelectorAll('*')]) {
+    for (const a of [...x.attributes]) {
+      const n = a.name;
+      if (n === 'id' || n === 'for' || n === 'name' || ((n.startsWith('data-') || n.startsWith('aria-') || n === 'role') && !keep.has(n))) x.removeAttribute(n);
+    }
+  }
+}
+
 type SubSnap = {
   el: HTMLElement; box: Box; page: boolean; scroll: [HTMLElement, number, number][]; canvas: [HTMLCanvasElement, HTMLCanvasElement][];
   /** 레일 밑변(뷰포트 y — 레일이 판과 가로로 안 겹치면 null)을 받아 복제본을 자른다. 레일은 커밋 뒤에도 움직인다(헤더 접힘·스크롤 깎임). */
@@ -469,6 +500,9 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
     for (const ch of o.childNodes) {
       if (!(ch instanceof Element)) { c.appendChild(ch.cloneNode(true)); continue; }
       const q = ch.getBoundingClientRect();
+      // 숨은 자식(keep-alive 판·접힌 목록 — display:none)은 그리지 않으니 **속은 비운** 껍데기만 둔다. 통째로 복제하면 숨은 판의 id·표식·글자가
+      //   문서에 두 벌이 된다(배포 게이트 2026-09-27: [data-rank-tabbar] 2개 · '약관 버전' 글자 2개). 껍데기는 형제 선택자(space-y)의 자리만 지킨다.
+      if (q.width === 0 && q.height === 0 && getComputedStyle(ch).display === 'none') { c.appendChild(ch.cloneNode(false)); continue; }
       if (q.height > 0 && (q.bottom < top0 || q.top > bottom)) { // 레일 위(top0~top)는 남긴다 — 레일이 올라가면 드러난다
         const s = ch.cloneNode(false) as HTMLElement;
         if (s.style) { s.style.height = `${q.height}px`; s.style.minHeight = '0'; s.style.maxHeight = 'none'; }
@@ -480,16 +514,11 @@ function snapSubPanel(root: HTMLElement, rail: Element | null): SubSnap | null {
   const el = cut(root, 0) as HTMLElement;
   el.setAttribute('aria-hidden', 'true');
   el.inert = true;
-  // 복제본은 그림일 뿐이다 — 판 찾기·id·testid 검색에 걸리지 않게, 라디오는 같은 그룹이면 원본의 선택을 뺏으니 이름을 지운다.
-  for (const m of SUB_MARKS) el.removeAttribute(m);
-  el.querySelectorAll(SUB_MARK_SEL).forEach((x) => SUB_MARKS.forEach((m) => x.removeAttribute(m)));
-  el.removeAttribute('id');
-  el.removeAttribute('data-testid');
-  el.querySelectorAll('[id], [data-testid], input[type="radio"][name]').forEach((x) => {
-    x.removeAttribute('id');
-    x.removeAttribute('data-testid');
-    if (x instanceof HTMLInputElement && x.type === 'radio') x.removeAttribute('name');
-  });
+  // 복제본은 그림일 뿐이다 — 판 찾기·id·testid·표식 검색에 걸리지 않게 식별 속성을 모두 뗀다(stripIdentity). 모양에 쓰이는 것(CSS 선택자가 읽는
+  //   data-·aria-·role)만 남긴다 — 떼면 그 순간 복제본 모양이 원본과 달라진다(아우라·알약 등).
+  stripIdentity(el);
+  // 판 표식은 CSS 가 읽어도 뗀다 — 남으면 판 찾기(subPanelOf)가 보이는 복제본을 판으로 잡는다.
+  for (const x of [el, ...el.querySelectorAll(SUB_MARK_SEL)]) SUB_MARKS.forEach((m) => x.removeAttribute(m));
 
   el.style.setProperty('display', getComputedStyle(root).display, 'important'); // [data-pane-leaving] 의 block 이 판의 flex·grid 를 깨지 않게
   el.style.height = `${r.height}px`;

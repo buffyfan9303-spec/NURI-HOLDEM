@@ -21,7 +21,10 @@ const FAKE = {
 };
 const T = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
 const MON = T.slice(0, 7);
-const d = (n: number) => `${MON}-${String(n).padStart(2, '0')}`;
+// ⚠ 2026-09-27 — 고정 날짜(3·7·11·15·18·22·27일)가 **오늘과 겹치면** 그 기록이 오늘 칸 합계에 더해져 '+108만' 이 깨졌다
+//   (27일 실측: +108만 − 150만 = −41.5만, 3eb2ad26 이전 빌드도 같은 실패 — 제품이 아니라 픽스처가 날짜에 묶여 있었다). 오늘과 겹치면 다음 날로 민다(최대 28일).
+const TD = Number(T.slice(8, 10));
+const d = (n: number) => `${MON}-${String(n === TD ? n + 1 : n).padStart(2, '0')}`;
 let seq = 0;
 const br = (date: string, amount: number, memo = '', extra: Record<string, unknown> = {}) => ({
   id: `aaaaaaaa-0000-4000-8000-${String(++seq).padStart(12, '0')}`, entry_date: date, amount, memo,
