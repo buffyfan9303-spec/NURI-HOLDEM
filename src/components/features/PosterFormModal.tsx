@@ -582,7 +582,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
         {/* 상금 형태 */}
         <FieldWrap label="상금 형태" required>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="상금 형태">
             <RadioCard checked={form.prizeType === 'GTD'} onClick={() => update('prizeType', 'GTD')} title="GTD" desc="보장 상금" />
             <RadioCard checked={form.prizeType === 'ENTRY'} onClick={() => update('prizeType', 'ENTRY')} title="엔트리" desc="참가비 누적" />
           </div>
@@ -590,9 +590,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
         {/* 대회 등급(선택) — waholdem 탐색 축: 손님이 '데일리만/새틀만' 골라 보게 된다 */}
         <FieldWrap label="대회 등급 (선택)">
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="대회 등급">
             {([[null, '일반'], ['daily', '데일리'], ['satellite', '새틀라이트'], ['series', '시리즈']] as const).map(([v, l]) => (
-              <button key={l} type="button" onClick={() => update('grade', v)}
+              <button key={l} type="button" role="radio" aria-checked={form.grade === v} onClick={() => update('grade', v)}
                 className={['h-9 rounded-input border text-xs font-bold transition-colors',
                   form.grade === v ? 'border-accent-300 bg-accent-300/10 text-accent-300' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {l}
@@ -1026,7 +1026,7 @@ function RadioCard({ checked, onClick, title, desc }: {
   checked: boolean; onClick: () => void; title: string; desc: string;
 }) {
   return (
-    <button type="button" onClick={onClick}
+    <button type="button" role="radio" aria-checked={checked} onClick={onClick}
       className={['p-3 rounded-input border-2 text-left transition-colors',
         checked ? 'border-accent-300 bg-accent-300/10' : 'border-border-default bg-surface-high hover:border-border-strong'].join(' ')}>
       <p className={['text-sm font-bold leading-none', checked ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{title}</p>
