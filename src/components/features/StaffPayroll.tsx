@@ -458,9 +458,9 @@ export function StaffSelfAttendance({ venueId, active = true }: { venueId: strin
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-primary">내 출근 관리 (출퇴근 기록)</h3>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-[44px] w-[44px] rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
           <span className="text-xs font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[4.5rem] text-center">{month}</span>
-          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-[44px] w-[44px] rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
         </div>
       </div>
       {!user ? <p className="text-2xs text-ink-muted">로그인이 필요합니다.</p> : shiftErr ? (
@@ -481,9 +481,9 @@ export function StaffSelfAttendance({ venueId, active = true }: { venueId: strin
                   <span className="text-sm font-bold text-ink-primary">{s.date.slice(5)}{isToday ? ' (오늘)' : ''}{s.confirmed && <span className="ml-1.5 text-2xs text-emerald-700 dark:text-emerald-400">확정</span>}</span>
                   {canSelfEdit(s.date) && (
                     <div className="flex gap-1">
-                      {isToday && <button type="button" onClick={() => setT(s, 'checkIn', nowHm())} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">지금 출근</button>}
+                      {isToday && <button type="button" onClick={() => setT(s, 'checkIn', nowHm())} className="min-h-[44px] text-2xs font-bold px-2.5 py-1.5 rounded-input bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">지금 출근</button>}
                       {/* 자정을 넘긴 야간 근무 — 어제 행에도 '지금 퇴근' 을 둔다(서버가 어제까지 받는다) */}
-                      <button type="button" onClick={() => setT(s, 'checkOut', nowHm())} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-rose-500/15 text-rose-300 border border-rose-500/40">지금 퇴근</button>
+                      <button type="button" onClick={() => setT(s, 'checkOut', nowHm())} className="min-h-[44px] text-2xs font-bold px-2.5 py-1.5 rounded-input bg-rose-500/15 text-rose-300 border border-rose-500/40">지금 퇴근</button>
                     </div>
                   )}
                 </div>

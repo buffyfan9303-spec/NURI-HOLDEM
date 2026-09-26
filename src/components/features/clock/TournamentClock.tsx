@@ -832,6 +832,20 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
     lockScroll(); // 뷰포트 스크롤러는 html이라 body만 잠그면 무효 — 공용 유틸(ref-count)로 documentElement+body 동시 잠금
     return () => unlockScroll();
   }, [fs]);
+  // 전체화면 동안 배경(헤더·내 매장 메뉴·하단 탭·푸터)을 inert 로 — 2026-09-26 전체 디버깅 #3.
+  //   네이티브 전체화면이 없는 곳(iPhone Safari 등)은 fixed inset-0 덮개뿐이라 눈에만 가려지고
+  //   Tab·스크린리더는 뒤의 메뉴로 그대로 새어 나갔다(실측 390·네이티브 없음: Tab 60회 중 39회가 배경).
+  //   wrap 에서 body 까지 올라가며 **형제만** 막는다 — 이미 inert 인 것은 건드리지 않고, 해제 때 내가 막은 것만 푼다.
+  useEffect(() => {
+    if (!fs) return;
+    const made: HTMLElement[] = [];
+    for (let n: HTMLElement | null = wrapRef.current; n && n.parentElement && n !== document.body; n = n.parentElement) {
+      for (const sib of Array.from(n.parentElement.children)) {
+        if (sib !== n && sib instanceof HTMLElement && !sib.inert) { sib.inert = true; made.push(sib); }
+      }
+    }
+    return () => { for (const s of made) s.inert = false; };
+  }, [fs]);
   // 풀스크린 = 매장 방송 화면 — 화면 꺼짐은 운영 사고다(Phase 11-9). 손님용 ClockDisplay 에만
   // 있던 WakeLock 을 운영자 풀스크린에도. 미지원 브라우저는 조용히 무시(기능 저하 허용).
   useEffect(() => {

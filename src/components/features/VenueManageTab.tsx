@@ -1055,8 +1055,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               };
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
+                  {/* 승인 대기 업주(role=venue_owner · profiles.approved≠true)는 서버가 운영 판정을 전부 거짓으로 준다(20260926c·e).
+                      그러면 StoreDashboard 가 '운영 권한 없는 직원' 화면(업주에게 요청하세요)을 그렸다 — 본인이 매장 주인인데. */}
+                  {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
                   <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={onCreatePoster} onProgress={setStepInfo}
-                    active={tabActive && renderSection === 'dashboard'} caps={caps} />
+                    active={tabActive && renderSection === 'dashboard'} caps={caps} />)}
                   {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
                 {/* S6-2(2026-09-19): 지역 Suspense 경계 — 이게 없으면 이 셋(캘린더·파트너 매장·이벤트 신청)은
@@ -2795,7 +2798,8 @@ function StaffManager({ venueId }: { venueId: string }) {
                   const toneOf = (view: AccessView, on: boolean) =>
                     view === 'failed' ? 'bg-amber-500/10 text-amber-400 border-amber-500/40'
                       : on ? 'bg-accent-300/15 text-accent-300 dark:text-accent-200 border-accent-400/40'
-                        : 'bg-surface-float text-ink-muted border-border-default';
+                        // 미부여 글자: ink-muted 는 라이트 surface-float 위 4.39:1 (AA 미달, 2026-09-26 전체 디버깅 #5) → ink-secondary.
+                        : 'bg-surface-float text-ink-secondary border-border-default';
                   return (
                   <li key={s.id} className="p-3 rounded-aura border card-aura space-y-2">
                     <div className="flex items-center gap-3">
@@ -2853,6 +2857,18 @@ function StaffManager({ venueId }: { venueId: string }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** 승인 대기 업주의 대시보드 자리(2026-09-26 전체 디버깅 #7) — 서버 20260926c·e 와 같은 말: 운영 기능은 관리자 승인 뒤에 열린다. */
+function OwnerPendingCard() {
+  return (
+    <div data-testid="owner-pending-card" className="space-y-2 rounded-card border border-amber-500/40 bg-amber-500/[0.06] p-5">
+      <p className="text-sm font-bold text-ink-primary">관리자 승인 후 운영 기능이 열립니다</p>
+      <p className="t-desc break-keep text-ink-secondary">
+        업주 인증을 관리자가 확인하고 있어요. 승인되면 이 화면에서 포스터·장부·클락·순위·이용권을 바로 쓸 수 있습니다.
+      </p>
     </div>
   );
 }
