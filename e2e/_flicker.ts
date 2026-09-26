@@ -13,7 +13,10 @@
 import type { CDPSession, Page } from '@playwright/test';
 import sharp from 'sharp';
 
-export type Frame = { t: number; L: number; std: number; ink: number; th: Float32Array };
+/** bL·bStd = 본문 영역(헤더 아래 ~ 하단바 위)만의 휘도 평균·표준편차 — Cast.start(crop) 을 줬을 때만. */
+export type Frame = { t: number; L: number; std: number; ink: number; th: Float32Array; bL?: number; bStd?: number };
+/** 본문 영역(CSS px) — 헤더 아래 ~ 하단바 위. w = 그때 innerWidth(프레임 폭과 CSS px 의 비율). */
+export type Crop = { top: number; bottom: number; w: number };
 export type Sample = [t: number, busy: number, ov: number, cover: number];
 export type Verdict = {
   id: string; frames: number; rafFrames: number; flat: number[]; blink: string[]; foit: number[]; coverFrames: number; ovFrames: number;
@@ -50,7 +53,7 @@ export const RECORDER = () => {
 };
 
 /** 스크린캐스트 한 장 → 휘도 통계(sharp raw). */
-async function stats(t: number, b64: string): Promise<Frame> {
+async function stats(t: number, b64: string, crop?: Crop): Promise<Frame> {
   const { data, info } = await sharp(Buffer.from(b64, 'base64')).raw().toBuffer({ resolveWithObject: true });
   const { width: w, height: h, channels: ch } = info; const n = w * h;
   const L = new Float32Array(n); let sum = 0;
@@ -63,11 +66,19 @@ async function stats(t: number, b64: string): Promise<Frame> {
     for (let y = Math.floor(ty * h / TH); y < Math.floor((ty + 1) * h / TH); y++) for (let x = Math.floor(tx * w / TW); x < Math.floor((tx + 1) * w / TW); x++) { a += L[y * w + x]; k++; }
     th[ty * TW + tx] = k ? a / k : 0;
   }
-  return { t, L: mean, std: Math.sqrt(s2 / n), ink, th };
+  let body: { bL: number; bStd: number } | undefined;
+  if (crop) {
+    const k = w / crop.w, y0 = Math.max(0, Math.round(crop.top * k)), y1 = Math.min(h, Math.round(crop.bottom * k));
+    let bs = 0, bn = 0; for (let y = y0; y < y1; y++) for (let x = 0; x < w; x++) { bs += L[y * w + x]; bn++; }
+    const bm = bn ? bs / bn : 0; let b2 = 0; for (let y = y0; y < y1; y++) for (let x = 0; x < w; x++) { const d = L[y * w + x] - bm; b2 += d * d; }
+    body = { bL: bm, bStd: bn ? Math.sqrt(b2 / bn) : 0 };
+  }
+  return { t, L: mean, std: Math.sqrt(s2 / n), ink, th, ...body };
 }
 
 export class Cast {
   private raw: { t: number; data: string }[] = [];
+  private crop?: Crop;
   private handler = (ev: { sessionId: number; data: string; metadata: { timestamp?: number } }) => {
     this.cdp.send('Page.screencastFrameAck', { sessionId: ev.sessionId }).catch(() => {});
     this.raw.push({ t: (ev.metadata.timestamp ?? 0) * 1000, data: ev.data });
@@ -75,12 +86,12 @@ export class Cast {
   // erasableSyntaxOnly — 매개변수 속성(private cdp) 대신 필드 + 대입(타입만 정리, 동작 동일)
   private cdp: CDPSession;
   constructor(cdp: CDPSession) { this.cdp = cdp; }
-  async start() { this.raw = []; this.cdp.on('Page.screencastFrame', this.handler); await this.cdp.send('Page.startScreencast', { format: 'png', maxWidth: CAST_W, maxHeight: 900, everyNthFrame: 1 }); }
+  async start(crop?: Crop) { this.raw = []; this.crop = crop; this.cdp.on('Page.screencastFrame', this.handler); await this.cdp.send('Page.startScreencast', { format: 'png', maxWidth: CAST_W, maxHeight: 900, everyNthFrame: 1 }); }
   async stop(): Promise<Frame[]> {
     await this.cdp.send('Page.stopScreencast').catch(() => {});
     this.cdp.off('Page.screencastFrame', this.handler);
     const out: Frame[] = [];
-    for (const r of this.raw) { try { out.push(await stats(r.t, r.data)); } catch { /* 깨진 프레임은 버린다 */ } }
+    for (const r of this.raw) { try { out.push(await stats(r.t, r.data, this.crop)); } catch { /* 깨진 프레임은 버린다 */ } }
     return out;
   }
 }

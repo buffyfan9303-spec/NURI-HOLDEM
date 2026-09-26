@@ -17,9 +17,12 @@ import { join } from 'node:path';
 const PILL = readFileSync(join(__dirname, './SlidingPill.tsx'), 'utf8');
 
 describe('알약(SlidingPill) — CSS FLIP 경로', () => {
-  it('VT 중에는 CSS 전환을 끄고 위치만 확정한다 — 두 경로가 겹치면 A→A 를 보간해 안 움직인다', () => {
-    // 최상위 탭 전환은 여전히 VT 다(scope 없이). 캡처 중에 FLIP 이 돌면 new 스냅샷이 '중간 위치' 가 된다.
-    expect(PILL).toMatch(/if \(first \|\| !prev \|\| isViewTransitionActive\(\)\)/);
+  it('첫 배치·자리 보정만 전환 없이 가고, 그 밖의 이동은 CSS FLIP 하나로 미끄러진다', () => {
+    // 🔴 2026-09-26 — View Transition 을 앱에서 전부 걷었다(src/components/transitionDevices.contract.test.ts (a)).
+    //   예전엔 'VT 캡처 중이면 즉시 이동' 분기가 있었다(두 경로가 겹치면 A→A 보간). 이제 경로가 하나라 그 분기는 없다 —
+    //   되살아나면(VT 판정 import) 죽은 경로가 다시 생긴 것이다.
+    expect(PILL).toMatch(/if \(first \|\| !prev\) \{/);
+    expect(PILL).not.toMatch(/from '[^']*viewTransition'|isViewTransitionActive\(\)/);
   });
 
   it('숨어 있다 보이게 된 판에서도 다시 잰다 — 마운트 타이머만으로는 못 깨운다', () => {

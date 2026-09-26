@@ -45,7 +45,7 @@
 //      → App 이 '열림 상태' 를 커밋하는 순간 { adoptable: true } 로 자리를 **예약**하고,
 //        뒤늦게 마운트한 컴포넌트의 pushLayer 가 그 자리를 **물려받는다**(항목을 새로 밀지 않음).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 type CloseFn = () => void;
 
@@ -316,7 +316,11 @@ export function useBackClose(open: boolean, onClose: CloseFn, opts?: PushLayerOp
   ref.current = onClose;
   const adoptable = !!opts?.adoptable;
   const escape = !!opts?.escape;
-  useEffect(() => {
+  // 🔴 useLayoutEffect 인 이유(2026-09-26 실측): useEffect 는 전환(transition) 커밋에서 **페인트 뒤**에 돈다.
+  //   그러면 판이 화면에 뜬 뒤 30~110ms 동안 뒤로가기 칸이 없고, 그 창의 Back 은 **아래 겹**을 소비한다
+  //   (보드 위 Back 이 목록을 닫고 보드는 남음 — e2e/event-list-drag ⑧ 간헐 10/20·⑧-0 결정적 검출).
+  //   레이아웃 단계는 페인트 전이라 '보이는 순간 이미 칸이 있다'. 자식→부모 실행 순서(입양 규칙)는 같다.
+  useLayoutEffect(() => {
     if (!open) return;
     const dispose = pushLayer(() => ref.current(), { adoptable, escape });
     return dispose;

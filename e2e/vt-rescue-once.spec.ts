@@ -1,21 +1,24 @@
-// N05 §9.4 — 전환 중 입력 구조(rescue)가 **한 번만** 전달된다: 구매/제출 버튼이 두 번 실행되는 반례가 없다 (2026-09-13).
+// N05 §9.4 — 버튼 클릭은 **정확히 한 번** 전달된다: 구매/제출 버튼이 두 번 실행되는 반례가 없다 (2026-09-13, 2026-09-26 개정).
 //
-// 왜: viewTransition.ts 의 onClickCapture 는 <html>/<body> 로 떨어진(=스냅샷에 먹힌) 클릭만 좌표로 대상을 되찾아
-//   target.click() 으로 다시 보낸다. 이 게이트가 없으면 "정상 전달된 클릭까지 되보내는" 회귀(버튼 1회 → 2회 실행)가
-//   조용히 들어온다 — 상점 구매·바인 승인처럼 돈이 걸린 버튼에서 치명적이다.
-// 무엇을 재나(앱 코드 무수정, 로그인 불필요):
-//   ① PC 대메뉴를 재방문해 rescue 리스너가 설치된 상태를 만든다(withViewTransition → ensureInputRescue).
-//   ② 화면에 카운터 버튼을 만든다. 버튼 자신에게 click → 정확히 1회(되보내지 않는다).
-//   ③ 같은 좌표로 <html> 에 click(먹힌 클릭의 재현) → 정확히 +1회(구조는 되지만 두 번은 아니다).
-// 음성 대조(실측 2026-09-13): viewTransition.ts 의 `target.click();` 을 `target.click(); target.click();` 로 바꾸면 ③이 3회가 되어 실패한다.
-//   ⚠ `if (!wasSwallowed(e.target)) return;` 을 지우는 변형은 이 검사가 못 본다 — 그 변형은 이중 실행이 아니라
-//     캡처 단계 stopPropagation + 재귀 click 이 되어(스택 오버플로) 원래 클릭 자체가 사라진다. 그건 별개 결함이다.
+// 🔴 2026-09-26 — View Transition 을 앱에서 **전부 걷었다**(src/components/transitionDevices.contract.test.ts (a)).
+//   예전엔 VT 스냅샷이 전환 동안 히트테스트를 <html> 로 떨어뜨려 viewTransition.ts 의 rescue 가 그 클릭을 좌표로 되찾아
+//   다시 보냈고, 이 검사는 '되보내기가 한 번뿐인가' 를 잠갔다. 이제 스냅샷도 rescue 도 없다 — 삼켜질 입력이 없으니
+//   되보낼 것도 없어야 한다. 그래서 같은 두 반례를 거꾸로 잠근다:
+//   ① VT 가 남아 있던 마지막 PC 경로(매장 페이지 열기)가 스냅샷을 **만들지 않는다**(startViewTransition 호출 0).
+//   ② 버튼 자신에게 click → 정확히 1회. ③ 같은 좌표로 <html> 에 click → **그대로 1회**(누가 되살린 구조기가 되보내면 2).
+// 음성 대조: ③ 은 옛 rescue(viewTransition.ts)가 설치된 빌드에서 2 가 되어 빨개진다(2f2a7dcf 빌드 실행).
 // 실행: E2E_BASE_URL=http://localhost:5174 npx playwright test e2e/vt-rescue-once.spec.ts
 import { test, expect } from './_fixtures';
 import { stabilizeBackstack, dismissOverlays } from './_session';
 
-test('🔴 전환 중 구조된 클릭은 한 번만 전달된다 — 정상 클릭은 되보내지 않는다', async ({ page }) => {
+test('🔴 클릭은 한 번만 전달된다 — 스냅샷도 되보내기도 없다', async ({ page }) => {
   await stabilizeBackstack(page);
+  await page.addInitScript(() => {
+    let n = 0;
+    Object.defineProperty(window, '__vtCalls', { get: () => n });
+    const native = document.startViewTransition?.bind(document);
+    if (native) document.startViewTransition = ((cb: () => void) => { n += 1; return native(cb); }) as typeof document.startViewTransition;
+  });
   // 모바일 대메뉴는 이제 VT를 쓰지 않는다. 실제 VT가 남아 있는 PC 경로로 rescue를 검증한다.
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
@@ -31,7 +34,7 @@ test('🔴 전환 중 구조된 클릭은 한 번만 전달된다 — 정상 클
   const nav = page.locator('[data-stack-tabbar]');
   await nav.getByRole('tab', { name: '커뮤니티', exact: true }).click();
   await page.locator('[data-community-secbar]').getByRole('button', { name: /^홀덤펍/ }).click();
-  await page.locator('[data-testid="venue-card"]').first().click();   // withViewTransition → rescue 설치
+  await page.locator('[data-testid="venue-card"]').first().click();   // 예전 VT 경로(매장 페이지 열기)
   const venue = page.getByRole('dialog', { name: /매장 페이지$/ });
   await expect(venue).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(700);                     // 전환이 끝난 뒤에
@@ -59,5 +62,6 @@ test('🔴 전환 중 구조된 클릭은 한 번만 전달된다 — 정상 클
     return { afterDirect, afterSwallowed, hit: document.elementFromPoint(x, y)?.textContent ?? null };
   });
   expect(counts.afterDirect, '정상 전달된 클릭을 되보내면 2회가 된다(구매 이중 실행)').toBe(1);
-  expect(counts.afterSwallowed, '<html> 로 먹힌 클릭은 정확히 한 번 구조된다').toBe(2);
+  expect(counts.afterSwallowed, '<html> 로 떨어진 클릭을 누가 되보냈다 — 스냅샷이 없는데 구조기가 살아 있다(이중 실행 위험)').toBe(1);
+  expect(await page.evaluate(() => Reflect.get(window, '__vtCalls') as number), '매장 페이지 열기가 document View Transition 을 만들었다').toBe(0);
 });

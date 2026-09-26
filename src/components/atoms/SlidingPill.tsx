@@ -22,7 +22,6 @@
 // · 리사이즈·폰트 로드로 배치가 변하면 재측정(ResizeObserver)
 // · 대상이 없으면(활성 없음) 조용히 숨김 — 렌더 트리를 어지럽히지 않는다
 import { useLayoutEffect, useRef, useState } from 'react';
-import { isViewTransitionActive } from '../../lib/viewTransition';
 
 interface Props {
   /** 버튼들의 공통 부모(position:relative 필수). 생략하면 이 스팬의 부모를 자동 사용 —
@@ -101,7 +100,7 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       // (예전엔 width/height 가 트랜지션에 포함돼 매 프레임 레이아웃+페인트였다)
       pill.style.width = `${r.w}px`;
       pill.style.height = `${r.h}px`;
-      if (first || !prev || isViewTransitionActive()) {
+      if (first || !prev) {
         // 첫 배치·리사이즈 보정은 전환 없이 — 어디선가 미끄러져 들어오는 유령 모션 방지.
         //
         // View Transition 이 도는 중에도 전환 없이 간다(2026-09-07). 이유: VT 는 update 콜백

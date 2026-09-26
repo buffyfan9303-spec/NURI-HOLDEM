@@ -2,7 +2,8 @@ import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, use
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
 import { flushSync } from 'react-dom';
-import { withViewTransition, type VTDirection } from './lib/viewTransition';
+/** 트레일 back 이 commitTab(t,'back') 으로 부르는 호출 모양만 남은 방향 표식 — 연출은 없다(2026-09-26 View Transition 전면 제거). */
+type VTDirection = 'forward' | 'back';
 import { getAppSetting, loadEventMenuVisibility } from './api/settings';
 // ⚠ `api/events` 가 아니라 `lib/eventSlug` 에서 받는다 — 둘은 같은 값이지만(그쪽이 재수출한다),
 //   api/events 를 정적으로 물면 TIER_META·oddsRows 까지 첫 화면 임계 경로로 딸려 온다(실측 2026-09-13).
@@ -85,6 +86,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY, isProgrammaticScroll, markProgrammaticScroll, notifyScrollNow } from './lib/useScrollY';
+import { notePaneLeaving, handOffPane } from './lib/tabCover';
 // Q6(2026-09-21) — URL 로 들어온 QR 도 **앱 안 스캐너와 같은 규칙**으로 읽는다(`parseQr` 단일 해석).
 import { parseQr, elsewhereMsg } from './lib/qrPayload';
 /** QR 이 URL 에 싣는 키 전부. 이 중 하나라도 있으면 QR 진입으로 보고, 처리 뒤에는 **이 키들만** 지운다
@@ -1122,6 +1124,9 @@ export default function App() {
     //   (VT 는 전환 중 히트테스트가 <html> 로 떨어져 rescue 가 필요했다.)
     //   `_dir` 은 뒤로가기 경로(commitTab(t,'back'))의 호출 모양을 지키려고 남긴다 — 방향 연출은 없다.
     void _dir;
+    // 6차 PANE-HANDOFF(2026-09-26) — 떠나는 판의 화면 자리를 커밋 **전에** 적고 스왑 프레임 전환을 끈다(src/lib/tabCover.ts 6차 절).
+    //   커밋 뒤 layout effect 의 handOffPane 이 그 판을 제자리에 세웠다가 새 판 첫 프레임 뒤 걷는다.
+    notePaneLeaving(activeTabRef.current, t, !seenTabs.has(t));
     if (seenTabs.has(t)) {
       setActiveTab(t);
       return;
@@ -1149,7 +1154,9 @@ export default function App() {
     tabTrailRef.current = [];
     for (let i = items.length - 1; i >= 0; i--) items[i].dispose();
   }, []);
-  useEffect(() => {
+  // 🔴 2026-09-26 — layout 단계다(useBackClose 와 같은 단계 · backstack.ts). history 칸을 밀고 죽이는 자리는 모두 같은 단계여야
+  //   닫히는 겹의 죽은 칸 재사용이 균형 history.go(-1) 보다 먼저 일어난다(매장 페이지 + nuri:goto-tab 뒤 back 2회: 탭 이동 소실 7/10 → 0/10).
+  useLayoutEffect(() => {
     const from = prevTabRef.current;
     prevTabRef.current = activeTab;
     if (from === activeTab) return;
@@ -1166,6 +1173,7 @@ export default function App() {
     // ⚠ 이 겹은 반드시 '커밋 이후'(effect)에 쌓아야 한다. 탭 이동은 떠 있던 오버레이를 함께
     //   닫는데(closeOverlaysRef), 그 오버레이의 history 칸이 죽는 것은 같은 커밋의 정리 단계다.
     //   effect 에서 쌓으면 backstack 이 그 죽은 칸을 그대로 재사용해 항목이 늘지 않는다.
+    //   (2026-09-26: 오버레이 칸 정리(useBackClose)가 layout 단계로 옮겨 가 이 effect 도 layout 단계다 — 순서는 같다: 정리 → 쌓기.)
     const item: { tab: TabId; dispose: () => void } = { tab: from, dispose: () => {} };
     item.dispose = pushLayer(() => {
       const i = tabTrailRef.current.indexOf(item);
@@ -1234,6 +1242,9 @@ export default function App() {
     //   오너가 "눌림" 을 지적한 바로 그 프레임이라 비용을 되돌려 놓을 이유가 없다.
     //   (뒤로가기 복원(toY>0)만 예외로 한 번 읽는다 — 판이 짧아졌으면 브라우저가 깎은 실제 값을 헤더에 줘야 한다.)
     notifyScrollNow(toY > 0 ? window.scrollY : 0);
+    // 6차 PANE-HANDOFF — 떠나는 판을 떠나기 직전 자리에 세우고(새 판 **위**, opacity .999), 새 판 첫 프레임 다음에 떠나는 판만 걷는다.
+    //   새 판(.tab-pane)에는 여전히 아무것도 걸지 않는다 — 아래 폐기 기록·R3 계약 그대로.
+    handOffPane(activeTab);
     // (BOTTOM-TAB-SMOOTH 덮개 호출이 있던 자리 — 5차 PILL-FLASH(2026-09-26)에 덮개를 없애고 2026-09-26 호출·요소·`?fx=` 스위치를 걷었다.
     //   본문(.tab-pane)에는 여전히 아무것도 걸지 않는다 — 아래 폐기 기록 참고.)
     // 🔴 2026-09-22 — **여기 있던 본문 진입 모션(N1/M1 · `startTabEnter`)을 없앴다.**
@@ -2053,7 +2064,9 @@ export default function App() {
     // 이벤트는 **판을 여는 데까지**다. 고르던 카드는 담지도 않고 열지도 않는다 —
     // 로그인했더니 참여권이 한 장 줄어 있으면 그건 복원이 아니라 사용자가 지시하지 않은 쓰기다.
     else if (a.open === 'event') openEvent(a.id);
-    else if (a.open === 'tab') setActiveTab(a.id as TabId);
+    // 2026-09-26 — 탭 복원도 commitTab 을 탄다(직접 setActiveTab 은 PANE-HANDOFF 의 스왑 프레임 정적화·떠나는 판 페이드와
+    //   첫 방문 startTransition 을 건너뛰었다 — 로그인 뒤 탭 복원에서 본문 검정 부류가 남는 우회 경로).
+    else if (a.open === 'tab') commitTab(a.id as TabId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -2123,10 +2136,9 @@ export default function App() {
   /* MOTION-UNIFY P3(2026-09-24) — 위 ⚠ 에서 뺐던 4개(+이벤트 목록)도 퇴장을 준다. 닫기 하드컷 전부 제거.
      · 포스터·게시글 상세 = Modal page 라 open=false 면 스스로 fade-out 한다. 마지막 값을 붙잡아 넘긴다.
      · 매장/그룹·이벤트·이벤트 목록 = 자체 fixed 화면 — open=false 를 받으면 fade-out 으로 그리게 바꿨다.
-     ⚠ PC 포스터 닫기는 역모핑(View Transition, closeSchedule) — new 스냅샷에 상세가 남으면 모핑이 깨지므로
-       PC 는 지연 0(같은 커밋에서 내린다). PC 2-pane inline 상세는 여기 아닌 각 탭 안이라 무관. */
-  const isDesktopNow = useIsDesktop();
-  const scheduleMounted = useDelayedUnmount(openSchedule !== null, isDesktopNow ? 0 : 220);
+     · 포스터 상세는 2026-09-26 부터 PC 도 역모핑 없이 fade-out 으로 닫는다(closeSchedule 주석) — 그래서 PC 지연 0 분기가 없다.
+       PC 2-pane inline 상세는 여기 아닌 각 탭 안이라 무관. */
+  const scheduleMounted = useDelayedUnmount(openSchedule !== null); // 2026-09-26: PC 도 역모핑 대신 page fade-out(기본 220ms) — closeSchedule 주석
   const postMounted      = useDelayedUnmount(openPost !== null);
   const venueMounted     = useDelayedUnmount(openVenueId !== null);
   const eventMounted     = useDelayedUnmount(eventOpen);
@@ -2821,15 +2833,13 @@ export default function App() {
       toast.show(venuesRef.current.length === 0 ? '매장 목록을 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요' : '그 매장을 찾을 수 없어요. 문을 닫았거나 주소가 바뀌었을 수 있습니다', 'error');
       return false;
     }
-    // 스냅샷 전에 동기적으로 — 매장 페이지도 전면 오버레이라 크롬 스냅샷이 위에 얹힌다(openMeCb 와 같은 이유).
     document.documentElement.setAttribute('data-overlay', '');
-    // 풀페이지 마운트(지도 임베드 포함)를 스냅샷 뒤에서 끝낸다 — 포스터→매장 전환도 크로스페이드
-    // ⚠ 여기만 startTransition 을 쓰지 않는다 — 포스터 모핑(VT)이 **동기 커밋**을 요구한다.
-    //   '일관성' 을 이유로 감싸지 마라. 감싸면 스냅샷 뒤에서 커밋되지 않아 모핑이 깨진다.
-    withViewTransition(() => flushSync(() => {
+    // 🔴 2026-09-26 — View Transition 전면 제거(오너 "여러 개면 한 개로"). 모바일이 원래 타던 길(동기 커밋) 그대로다 —
+    //   PC 만 스냅샷 크로스페이드를 탔는데, 이 앱의 VT 교차는 라이트·다크 휘도 차 때문에 ±10~33 튀었다(flick 3회 실측).
+    flushSync(() => {
       setOpenSchedule(null);   // 일정 모달이 열려있으면 닫고 매장으로 전환
       setOpenVenueId(venueId);
-    }));
+    });
     return true;
   }, [toast]);
 
@@ -2964,10 +2974,6 @@ export default function App() {
   //  X 버튼(CustomerDashboardPage)과 같은 결과 — 비밀번호 OTP 대기 마커도 함께 내린다
   useBackClose(voucherWalletOpen, () => { sessionStorage.removeItem('nh_pw_otp'); setVoucherWalletOpen(false); });
 
-  // [DS] MO-8B: 포스터 모핑 — '지금 열리는' 카드 1장에만 view-transition-name 을 부여한다.
-  // 이름이 문서에 2개 이상이면 전환이 통째로 취소되므로, 열림 중에는 카드가 이름을 잃고
-  // 모달만 가진다(카드 조건: vtPosterId 일치 && 모달 닫힘). 닫힘 역모핑이 끝난 뒤에만 해제.
-  const [vtPosterId, setVtPosterId] = useState<string | null>(null);
   // [H · 2026-09-17] 업주 '손님 화면' — 자기 매장의 공개 페이지(VenuePage). VenueManageTab → VenueCustomizePanel 배선은
   //   업주 팀이 끝냈고 이 prop 이 내려가는 순간 버튼이 켜진다(옵셔널 게이트).
   // ⚠ 목록에 없으면 VenuePage `if (!open || !venue) return null` 이라 **눌러도 아무 일도 안 난다** —
@@ -2979,35 +2985,14 @@ export default function App() {
     }
     startTransition(() => setOpenVenueId(venueId));
   }, [venues, toast]);
-  /** 상세 모달이 **한 번이라도 렌더된 적 있는가**. 청크를 받은 것과는 다르다 — 아래 참고. */
-  const schedEverOpenedRef = useRef(false);
   const handleScheduleSelect = useCallback((s: Schedule) => {
     // 포스터 상세는 전체화면 2열 모달(PC: 포스터 좌+정보 우)로 표시 — 좁은 패널보다 가독성↑
-    // 마운트 비용을 스냅샷 뒤에서 치러 sheet-up 첫 프레임 드랍을 없앤다(미지원은 기존 경로)
-    if (!schedEverOpenedRef.current || !window.matchMedia('(min-width: 1024px)').matches) {
-      schedEverOpenedRef.current = true;
-      // Mobile poster navigation stays on live DOM, like the main tabs (avoid overlapping page snapshots).
-      // Desktop still skips VT on the first mount (2026-09-18 frame measurement).
-      //   `lazyWithReload` 는 `lazy(async () => …)` 라 **청크가 이미 캐시에 있어도 첫 렌더는 반드시
-      //   한 번 서스펜드**한다. 그 서스펜드가 `flushSync` 안에서 일어나면 바깥 경계(App.tsx:4139
-      //   `<Suspense fallback={<OverlayFallback/>}>`)의 **불투명 전면 오버레이가 new 스냅샷**이 된다.
-      //   실측(프레임 캡처): 폴백이 화면에 있던 시간 390 CPU×4 ≈500ms · 390 CPU×1 ≈320ms ·
-      //   1280 CPU×1 ≈365ms. PC 에서는 헤더·GNB 만 남은 **빈 화면 + 스피너**였고, 그 뒤 내용이
-      //   1~3프레임에 툭 나타났다(모핑 없음).
-      //   ⚠ 네트워크가 아니다 — 같은 계측에서 청크 요청은 클릭 **3.7초 전**에 끝났고 클릭 뒤 요청 0이다
-      //     (App.tsx:1540 idle 프리워밍이 이미 받아 뒀다). 즉 '프리워밍했으니 warm' 은 틀렸다:
-      //     warm 은 **한 번 렌더된 뒤**부터다. 그래서 판정 기준이 '청크 유무' 가 아니라 이 ref 다.
-      //   트랜지션이면 리액트가 폴백을 커밋하지 않고 준비될 때까지 이전 화면(목록)을 유지한다.
-      //   같은 조리법의 전례가 셋 있다 — openLogin(1162) · openMeCb(3360) · openEvent.
-      setVtPosterId(s.id); // PC로 크기를 바꾼 뒤 닫아도 역모핑할 수 있게 이름은 유지한다
-      startTransition(() => setOpenSchedule(s));
-      return;
-    }
-    flushSync(() => setVtPosterId(s.id)); // 스냅샷 전에 카드에 이름 부여(모핑 페어의 old 쪽)
-    withViewTransition(
-      () => flushSync(() => setOpenSchedule(s)),
-      () => startTabTransition(() => setOpenSchedule(s)),
-    );
+    // 🔴 2026-09-26 — 모든 폭·모든 회차가 한 길이다: 트랜지션으로 열고 Modal page 의 fade-in 이 맡는다.
+    //   PC 두 번째 열기부터 타던 포스터 모핑(View Transition)은 걷었다 — 라이트 +33.5(204ms 거의 빈 흰 캔버스)·다크 −9.3 번쩍임
+    //   (design-reviewer flick 1280 실측, 두 빌드 공통). 닫기(closeSchedule)도 같은 날 모핑을 걷었다.
+    //   `lazyWithReload` 는 청크가 캐시에 있어도 첫 렌더에 한 번 서스펜드한다 — 트랜지션이면 폴백을 커밋하지 않고 목록을 유지한다
+    //   (같은 조리법: openLogin · openMeCb · openEvent).
+    startTransition(() => setOpenSchedule(s));
   }, []);
   // [F09] '내 정보'(예약 내역·알림 미리보기)에서 연 상세는 닫을 때 **내 정보로 돌아온다**.
   //   대시보드(z-60)가 page 모달(z-55)을 덮으므로 여는 쪽이 먼저 대시보드를 닫아야 한다 —
@@ -3017,17 +3002,12 @@ export default function App() {
   const closeSchedule = useCallback(() => {
     const backToMe = meReturnRef.current;
     meReturnRef.current = false;
+    // 🔴 2026-09-26(flick 1280 라이트 sched-close −11) — PC 도 모바일과 같은 길로 닫는다: View Transition 역모핑을 쓰지 않고
+    //   Modal page 의 fade-out(220ms)으로 걷는다. 역모핑은 상세의 큰 포스터 칸(어두운 그라디언트·이미지)이 밝은 홈 위로 줄어들며
+    //   지나가 평균 휘도가 211→200 으로 꺼졌다 돌아왔다. 이름만 빼고 VT 를 남기면 root 새 스냅샷이 밝은 전환 캔버스 위에서
+    //   0.12s 페이드 인해 +23 으로 번쩍였다(둘 다 flick.cjs 실측). 여는 쪽 모핑(handleScheduleSelect)은 그대로다(open blink 0).
     const commit = () => { setOpenSchedule(null); if (backToMe) setVoucherWalletOpen(true); };
-    if (!window.matchMedia('(min-width: 1024px)').matches) {
-      commit();
-      setVtPosterId(null);
-      return;
-    }
-    withViewTransition(
-      () => flushSync(commit), // new 쪽: 카드가 이름을 되찾아 역모핑
-      commit,
-    );
-    window.setTimeout(() => setVtPosterId(null), 350); // 역모핑 종료 후 이름 해제(전환 중 제거 금지)
+    commit();
   }, []);
   // 상세가 closeSchedule 을 거치지 않고 닫히는 길이 여럿이다(상세 안 매장 이름 탭 → handleVenueClick,
   // 로고 → handleHome, 포스터 삭제). 그때 복귀 표시가 남아 있으면 **다음에 연 아무 상세**를 닫을 때
@@ -3148,7 +3128,6 @@ export default function App() {
   const handleHome = useCallback(() => {
     changeTab('home');
     setOpenSchedule(null);
-    setVtPosterId(null);
     setOpenVenueId(null);
     setOpenListing(null);
     setOpenNotice(null);
@@ -3817,10 +3796,6 @@ export default function App() {
   const meEverOpenedRef = useRef(false);
   if (voucherWalletOpen) meEverOpenedRef.current = true; // 렌더 중 latch(단조) — 헤더 🎟 등 모든 열림 경로를 커버
   const openMeCb = useCallback((tab: MeTab = 'dashboard') => {
-    // ⚠ 이 한 줄은 **startViewTransition 보다 먼저, 동기적으로** 실행돼야 한다.
-    //   old 스냅샷은 전환 시작 시점에 찍히므로, effect·상태로 미루면 이미 이름이 붙은 크롬이
-    //   캡처돼 오버레이 위에 그대로 겹친다(실측). 같은 조리법의 전례가 아래 포스터 모핑
-    //   (handleScheduleSelect 의 `flushSync(() => setVtPosterId(...))` 를 withViewTransition 앞에 두기)이다.
     document.documentElement.setAttribute('data-overlay', '');
     setMeTab(tab);
     // 🔴 요구 B(2026-09-22) — 모바일은 warm open 도 **live DOM** 으로 연다.
@@ -3828,9 +3803,8 @@ export default function App() {
     //   보간하는데, 문서 높이가 다른 두 판이 겹치면 배경 홈이 눌렸다 펴진다(삼성 인터넷 리포트).
     //   `CustomerDashboardPage` 는 keep-alive 라 스냅샷을 빼도 데이터·입력 상태를 잃지 않는다.
     //   판정은 **누르는 그 시점의 폭**이다(열 때와 닫을 때 폭이 다를 수 있다).
-    if (meEverOpenedRef.current && window.matchMedia('(min-width: 1024px)').matches) {
-      withViewTransition(() => flushSync(() => setVoucherWalletOpen(true)), () => startTransition(() => setVoucherWalletOpen(true)));
-    } else if (meEverOpenedRef.current) {
+    //   🔴 2026-09-26 — PC 도 같은 길이다(View Transition 전면 제거 — 이 앱의 스냅샷 교차는 휘도가 ±10~33 튀었다).
+    if (meEverOpenedRef.current) {
       startTransition(() => setVoucherWalletOpen(true));
     } else {
       // 첫 열림 — lazy 청크 Suspense 가 끼므로 VT 를 쓰지 않는다. 다만 **그냥 setState 로 열면**
@@ -3885,13 +3859,8 @@ export default function App() {
     const commit = () => { document.documentElement.removeAttribute('data-overlay'); setVoucherWalletOpen(false); };
     // 🔴 요구 B(2026-09-22) — 모바일은 X 닫기도 live DOM. 위 openMeCb 와 같은 이유·같은 판정 시점이다.
     //   Android history back 은 `useBackClose` 가 이미 live DOM 으로 닫으므로 건드리지 않는다.
-    if (!window.matchMedia('(min-width: 1024px)').matches) { commit(); return; }
-    withViewTransition(
-      // 닫힐 때는 커밋 콜백 안에서 마커를 내린다 — new 스냅샷에 이름 붙은 크롬이 들어가야
-      // 헤더·GNB 가 root 애니(블러·슬라이드)에 딸려가지 않는다('상시 크롬은 흔들리지 않는다' 계약).
-      () => { document.documentElement.removeAttribute('data-overlay'); flushSync(() => setVoucherWalletOpen(false)); },
-      commit,
-    );
+    //   🔴 2026-09-26 — PC 도 같은 길이다(View Transition 전면 제거).
+    commit();
   }, []);
   const handleMeOpenNotification = useCallback((id: string) => {
     const n = notificationsRef.current.find((x) => x.id === id);
@@ -3932,7 +3901,8 @@ export default function App() {
   // 이미 커뮤니티였으면 탭 트레일 겹이 생기지 않는다 → '내 정보' 를 다시 여는 겹을 직접 민다('내 정보' 가 닫힌 커밋 뒤 —
   //   닫히는 겹의 칸을 backstack 이 재사용한다). 탭이 바뀌는 경우는 트레일 이펙트가 먼저 돌아 'tab' 을 가져간다.
   const meSameTabBackRef = useRef<(() => void) | null>(null);
-  useEffect(() => {
+  // layout 단계 — 위 탭 트레일과 같은 이유(useBackClose 와 같은 단계에서 칸을 밀고 죽인다).
+  useLayoutEffect(() => {
     if (voucherWalletOpen) { meSameTabBackRef.current?.(); meSameTabBackRef.current = null; return; }
     if (meTabReturnRef.current !== 'same') return;
     meTabReturnRef.current = null;
@@ -4401,7 +4371,7 @@ export default function App() {
                         regInfo={regInfoBySchedule.get(s.id)}
                         onVenueClick={handleVenueClick}
                         onSelect={handleScheduleSelect}
-                        vtActive={vtPosterId === s.id && !openSchedule}
+                       
                         // ⚡ 첫 화면에 보이는 상단 카드만 포스터를 즉시 로드(LCP 단축).
                         //    그리드는 한 화면에 더 많이 보이므로 6장, 리스트는 4장.
                         priority={i < (viewMode === 'grid' ? 6 : 4)}
@@ -4424,7 +4394,7 @@ export default function App() {
                             className="bg-surface-high/40 px-3 py-1.5 text-2xs font-bold leading-tight text-ink-secondary">{h}</p>
                         ) : null;
                       })()}
-                      <ScheduleCard mode="list" layout="timetable" schedule={s} venue={venueById.get(s.venueId)} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} />
+                      <ScheduleCard mode="list" layout="timetable" schedule={s} venue={venueById.get(s.venueId)} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} priority={i < 4} />
                       </Fragment>
                     ))}
                   </div>

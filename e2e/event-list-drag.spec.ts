@@ -349,6 +349,34 @@ test('🔴 ⑧ 상세에서 Back 으로 목록에 돌아온 뒤에도 목록 스
   await expect(page).toHaveURL((u) => !u.searchParams.has('event'));
 });
 
+// 🔴 ⑧-0 (2026-09-26 root-cause) — ⑧ 이 간헐(로컬 10/20)로 빨갛던 근본 원인: **판이 화면에 뜬 뒤에야 뒤로가기 칸이 생겼다.**
+//   useBackClose 가 useEffect(=페인트 뒤)로 pushState 를 해서, 보드가 그려지고 30~110ms 동안 history 에 보드 칸이 없었다.
+//   그 창에 누른 Back 은 보드가 아니라 **목록 칸**을 소비해 목록이 닫히고, 보드는 뒤늦게 칸을 잡아 그대로 남는다.
+//   ⑧ 은 이걸 타이밍 운으로만 잡는다 — 여기서는 **판이 DOM 에 들어오는 순간의 history.state** 를 직접 본다(결정적).
+test('🔴 ⑧-0 목록·보드가 DOM 에 나타나는 순간 이미 제 뒤로가기 칸을 갖고 있다 (Back 선점 창 0)', async ({ page }) => {
+  await stub(page);
+  await page.addInitScript(() => {
+    if (window.top !== window) return;
+    const seen: Record<string, number> = ((window as unknown as { __layerAt: Record<string, number> }).__layerAt = {});
+    const layer = () => { const s = history.state as { __layer?: unknown } | null; return s && typeof s.__layer === 'number' ? s.__layer : 0; };
+    // MutationObserver 콜백은 커밋 직후 마이크로태스크다 — 레이아웃 단계(동기)의 pushState 는 이미 끝났고,
+    //   페인트 뒤로 밀린 useEffect 의 pushState 는 아직이다. 즉 이 시점의 칸 번호가 곧 "Back 을 눌렀을 때 닫힐 겹" 이다.
+    new MutationObserver(() => {
+      for (const [k, sel] of [['list', '[data-testid="event-list-page"]'], ['board', '[role="dialog"][aria-label="이벤트"]']] as const) {
+        if (!(k in seen) && document.querySelector(sel)) seen[k] = layer();
+      }
+    }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['role', 'aria-label'] });
+  });
+  await openList(page);
+  const p = await cardPoint(page, 0);
+  await tap(page, p.x, p.y);
+  await expect(page.locator(DIALOG)).toBeVisible({ timeout: 15_000 });
+  const at = await page.evaluate(() => (window as unknown as { __layerAt: Record<string, number> }).__layerAt);
+  expect(at.list, `목록이 뜬 순간 뒤로가기 칸이 없었다(__layer=${at.list}) — 그 창의 Back 은 목록이 아니라 아래 탭을 닫는다`).toBeGreaterThan(0);
+  expect(at.board, `보드가 뜬 순간 칸이 여전히 목록 것이었다(목록 ${at.list} · 보드 ${at.board}) — 그 창의 Back 은 보드 대신 목록을 닫는다(⑧ 간헐 실패의 원인)`)
+    .toBeGreaterThan(at.list);
+});
+
 // ──────────────────────────────────────────────────────────────────────────────
 // ⑨ 취소 · 빠른 Back · 두 번째 터치 — transform 0 · URL 정합 · 늦은 onClose 0회
 // ──────────────────────────────────────────────────────────────────────────────

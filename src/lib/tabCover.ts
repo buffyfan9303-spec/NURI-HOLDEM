@@ -82,7 +82,7 @@ export function tabPaneReady(tab: string): boolean {
  * 준비 = isSettled(root) 이고 root 높이가 **두 프레임 연속** 같다. 상한 TAB_COVER_WAIT_MAX_MS 를 넘으면 그래도 부른다.
  * onFrame 은 매 프레임 판정 전에 불린다(덮개 자리 맞춤). whole 은 isSettled 와 같다. 돌려준 함수로 취소한다(연타·언마운트).
  */
-export function waitSettled(root: () => Element | null, onReady: () => void, onFrame?: () => void, whole = false): () => void {
+export function waitSettled(root: () => Element | null, onReady: () => void, onFrame?: () => void, whole = false, maxMs = TAB_COVER_WAIT_MAX_MS): () => void {
   const t0 = performance.now();
   let lastH = -1;
   let alive = true;
@@ -93,7 +93,7 @@ export function waitSettled(root: () => Element | null, onReady: () => void, onF
     const h = r ? (r as HTMLElement).offsetHeight : 0;
     const ready = isSettled(r, whole) && h === lastH;
     lastH = h;
-    if (!ready && performance.now() - t0 < TAB_COVER_WAIT_MAX_MS) { requestAnimationFrame(tick); return; }
+    if (!ready && performance.now() - t0 < maxMs) { requestAnimationFrame(tick); return; }
     alive = false;
     onReady();
   };
@@ -193,5 +193,136 @@ export function alignSubTabPanel(scope: string, target: EventTarget | null): voi
     const sc = scroller(root);
     if (sc) sc.scrollTop += d;
     else { markProgrammaticScroll(); window.scrollTo({ top: Math.max(0, window.scrollY + d), behavior: 'instant' as ScrollBehavior }); notifyScrollNow(window.scrollY); }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6차 PANE-HANDOFF(오너 2026-09-26: "하단 메뉴로 메인 탭을 옮기면 본문이 검은색이 됐다가 올라온다 — 검은색 없이 부드럽게").
+//   원인(root-cause 실측 · main 2f2a7dcf · Pixel7 DPR3 · CPU4 · 출발 판을 스크롤한 뒤 탭):
+//     판 교체(display 토글)와 **같은 커밋**에 하단바 알약 opacity·아이콘 transform·FAB opacity 전환(합성 애니)이 시작된다.
+//     합성 애니가 돌면 Chromium 은 부드러움을 우선해 새 판 타일 래스터를 기다리지 않고 프레임을 낸다 →
+//     아직 래스터 안 된 타일 = 문서 배경색(다크 #06080F). 트레이스 PipelineReporter.has_missing_content 16프레임,
+//     그 전환만 끄면 0. 원점 스크롤 0(하네스 기본)이면 0 이라 기존 게이트가 못 봤다.
+//   처방 두 겹:
+//     ① 스왑 프레임 정적화 — `html[data-tab-swap]` 동안 하단바·헤더·GNB·맨 위로 FAB 의 transition 을 끈다(index.css).
+//        새 판의 첫 프레임이 나간 **다음** 프레임에 푼다. 모든 폭·모든 경로(동작 줄이기·연타 포함) 공통.
+//     ② 떠나는 판 퇴장 페이드 — 떠나는 판을 **떠나기 직전 화면 자리 그대로** fixed 로 새 판 위에 세운다(opacity .999 —
+//        완전 불투명이면 가려진 새 판 타일을 래스터하지 않는다). 새 판 첫 제출 다음 rAF 에 **떠나는 판만** opacity→0(240ms)
+//        하고 걷는다(2026-09-26 240ms 로 조정). 새 판에는 opacity·transform·filter 를 절대 걸지 않는다(§0-a25 삼성 밝기 점프 부류 · R3 계약).
+//        떠나는 판 배경은 지면(지면색 + body::before 결 + .aura-bg 블룸)과 같은 그림을 fixed 로 깐다 — 투명이면 새 판 글자가
+//        첫 프레임부터 비쳐 두 벌로 겹친다(2026-08-29 부류).
+//        첫 방문(스켈레톤)은 새 판이 준비될 때까지(상한 300ms) 떠나는 판을 붙잡은 뒤 걷는다. 동작 줄이기·연타·전면 오버레이·
+//        숨은 문서는 페이드 없이 한 프레임 교체(①만).
+//   ⚠ View Transition 을 쓰지 않는다 — 모바일 document 스냅샷은 삼성에서 눌렸고(1862bb49) 교차 페이드는 휘도가 튀었다(+23/−11).
+// ─────────────────────────────────────────────────────────────────────────────
+// 2026-09-26 오너 "드르륵, 더 부드럽게" — design-reviewer 최종 수치: 240ms · cubic-bezier(.4,0,.2,1). 160ms 는 두 프레임에 절반이 사라져
+//   '컷+꼬리'로 보였다(최대 프레임 낙폭 .53 → .19). 블러는 넣지 않는다(옛 판이 번져 남아 '겹쳐 보임'이 는다). 첫 방문 대기(300ms)는 그대로.
+const LEAVE_FADE_MS = 240;
+const FIRST_VISIT_HOLD_MAX_MS = 300;
+/** 커밋이 끝내 안 오는 경우(같은 탭으로 되돌린 연타 등)에도 전환을 영원히 꺼 두지 않는 상한. */
+const SWAP_GUARD_MS = 1500;
+
+type Box = { top: number; left: number; width: number };
+/** foot = 떠나기 직전 화면에 걸쳐 있던 사업자 푸터(판 밖 형제라 새 판 아래로 내려간다 — 그 자리를 복제본이 지킨다). */
+type Leaving = { tab: string; el: HTMLElement; box: Box; foot: { el: HTMLElement; box: Box } | null; skip: boolean; first: boolean };
+let leaving: Leaving | null = null;
+let fading: (() => void) | null = null;
+let swapTimer = 0;
+
+function releaseSwap(): void {
+  if (swapTimer) { clearTimeout(swapTimer); swapTimer = 0; }
+  document.documentElement.removeAttribute('data-tab-swap');
+}
+
+/**
+ * 메인 탭 커밋 **직전**(같은 이벤트 안, App commitTab)에 부른다 — 떠나는 판의 화면 자리를 적고 스왑 프레임 정적화를 켠다.
+ * from === to 면(같은 배치에서 마지막 선택이 원래 탭) 적어 둔 것을 버린다. first = 목적지 첫 방문(lazy·스켈레톤 — 준비까지 붙잡는다).
+ */
+export function notePaneLeaving(from: string, to: string, first = false): void {
+  if (typeof document === 'undefined') return;
+  // 연타 = 도는 퇴장이 있거나(fading) **아직 커밋 전인 앞선 탭**이 있다(leaving) — 후자를 빠뜨리면 70~150ms 연타에서
+  //   페이드가 두 번 나가고 빠진 타일이 4프레임 났다(design-reviewer 실측). 둘 다 페이드 없이 한 프레임 교체.
+  const rapid = fading !== null || leaving !== null;
+  fading?.(); // 연타 — 도는 퇴장은 즉시 끝낸다(연출보다 응답)
+  leaving = null;
+  if (from === to) { releaseSwap(); return; }
+  document.documentElement.setAttribute('data-tab-swap', '');
+  if (swapTimer) clearTimeout(swapTimer);
+  swapTimer = window.setTimeout(() => { leaving = null; releaseSwap(); }, SWAP_GUARD_MS);
+  // 도는 부드러운 스크롤(같은 탭 재탭 = 맨 위로 smooth)을 지금 자리에서 멈춘다 — 합성 스크롤 애니가 돌면 새 판 래스터를 안 기다리고,
+  //   떠나는 판도 커밋 전까지 계속 움직여 적어 둔 자리와 어긋난다(design-reviewer 연타 실측: 자리 어긋남 80~710px · 빠진 타일 4).
+  window.scrollTo({ top: window.scrollY, behavior: 'instant' as ScrollBehavior });
+  const el = document.querySelector<HTMLElement>(`.tab-pane[data-tab="${from}"]`);
+  if (!el || el.getClientRects().length === 0) return;
+  const box = (e: Element): Box => { const r = e.getBoundingClientRect(); return { top: r.top, left: r.left, width: r.width }; };
+  // 이벤트 시점 — 레이아웃이 깨끗해 강제 레이아웃 비용이 없다
+  const footEl = document.querySelector<HTMLElement>('footer');
+  const fr = footEl?.getBoundingClientRect();
+  leaving = {
+    tab: from, el, box: box(el), first,
+    foot: footEl && fr && fr.bottom > 0 && fr.top < window.innerHeight ? { el: footEl, box: box(footEl) } : null,
+    skip: rapid || document.hidden || document.documentElement.hasAttribute('data-overlay')
+      || window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  };
+}
+
+/**
+ * 메인 탭이 커밋된 layout effect(첫 페인트 전)에서 부른다 — 떠나는 판을 제자리에 세우고, 새 판 첫 프레임 뒤에 걷는다.
+ */
+export function handOffPane(to: string): void {
+  if (typeof document === 'undefined') return;
+  const l = leaving;
+  leaving = null;
+  const afterFirstFrame = (fn: () => void) => requestAnimationFrame(() => requestAnimationFrame(fn));
+  if (!l || l.tab === to || !l.el.isConnected || l.skip) { afterFirstFrame(releaseSwap); return; }
+  const el = l.el;
+  const place = (e: HTMLElement, b: Box) => {
+    e.style.setProperty('--leave-top', `${b.top}px`);
+    e.style.setProperty('--leave-left', `${b.left}px`);
+    e.style.setProperty('--leave-width', `${b.width}px`);
+    e.setAttribute('data-pane-leaving', '');
+  };
+  place(el, l.box);
+  // 푸터는 판 밖 형제라 새 판을 따라 내려간다 — 떠나기 직전 자리를 **복제본**이 지킨다(없으면 그 자리가 첫 프레임에 새 판으로 컷된다).
+  //   판과 같은 부모(앱 셸) 안에 넣어 같은 쌓임 맥락에 둔다 — body 에 붙이면 헤더·하단바(셸 안 z-50) 위로 올라간다.
+  //   복제본은 입력·보조기술·스냅샷 이름에서 뺀다(같은 이름 둘이면 진행 중 View Transition 이 통째로 실패한다).
+  let clone: HTMLElement | null = null;
+  if (l.foot?.el.isConnected && el.parentElement) {
+    clone = l.foot.el.cloneNode(true) as HTMLElement;
+    clone.setAttribute('aria-hidden', 'true');
+    clone.inert = true;
+    clone.style.viewTransitionName = 'none';
+    place(clone, l.foot.box);
+    el.parentElement.insertBefore(clone, el.nextSibling);
+  }
+  const parts = clone ? [el, clone] : [el];
+  let alive = true;
+  let anims: Animation[] = [];
+  let stopWait = () => {};
+  const stop = () => {
+    if (!alive) return;
+    alive = false;
+    stopWait();
+    el.removeAttribute('data-pane-leaving'); // React 가 준 display:none 이 그대로 다시 이긴다
+    el.style.removeProperty('--leave-top');
+    el.style.removeProperty('--leave-left');
+    el.style.removeProperty('--leave-width');
+    clone?.remove();
+    anims.forEach((a) => a.cancel());
+    if (fading === stop) fading = null;
+  };
+  fading = stop;
+  const fade = () => {
+    if (!alive) return;
+    anims = parts.map((p) => p.animate([{ opacity: 0.999 }, { opacity: 0 }], { duration: LEAVE_FADE_MS, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' }));
+    anims[0].finished.then(stop, () => {});
+  };
+  afterFirstFrame(() => {
+    releaseSwap();
+    if (!alive) return;
+    // 재방문은 이미 그려진 판이다 — 판 안의 새로고침 표시(aria-busy)를 기다리며 붙잡지 않는다(실측: 라이브 재방문이 300ms 늦게 보였다).
+    const dest = () => document.querySelector(`.tab-pane[data-tab="${to}"]`);
+    if (!l.first || isSettled(dest())) fade();
+    else stopWait = waitSettled(dest, fade, undefined, false, FIRST_VISIT_HOLD_MAX_MS);
   });
 }

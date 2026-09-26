@@ -62,8 +62,7 @@ type GateKind = 'notnull' | 'truthy';
 
 /** 여는 자리인데 트랜지션이 아니어도 되는 곳 — **이유를 반드시 적는다.** */
 const ALLOWED: Record<string, string> = {
-  setOpenSchedule:
-    '일정 상세는 포스터 모핑(View Transition) 경로다 — withViewTransition + flushSync 로 동기 커밋해야 스냅샷이 맞는다.',
+  // (setOpenSchedule 예외는 2026-09-26 에 지웠다 — 포스터 모핑(View Transition)을 걷어 일정 상세도 트랜지션으로 연다.)
   setOpenPost:
     '딥링크 복원 이펙트(부팅·URL 변경)에서 부르는 경로가 남아 있다. 사용자 클릭 경로(openPostWithNav)는 트랜지션으로 열린다.',
   setNotifOpen:

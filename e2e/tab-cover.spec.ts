@@ -10,6 +10,8 @@
 // 계약(이동마다, 프레임 = rAF 표본):
 //   ① 덮개(`[data-tab-cover]`)가 display none 이 아닌 프레임 0 — 첫 방문·재방문·늦은 판 공개·CPU 6배·PC 폭 모두
 //   ② 본문(.tab-pane)과 그 조상에 WAAPI 0 — §0-a25 삼성 밝기 점프 부류(R3 와 같은 이유)
+//      단 **떠나는 판 자신의 퇴장(data-pane-leaving · opacity→0)** 은 뺀다 — 2026-09-26 PANE-HANDOFF 의 유일한 모션이고,
+//      R3(mobile-tab-transition)가 '출발 판 1건·목적지 0건·기한 안에 걷힘' 으로 따로 잠근다.
 //   ③ 목적지 본문이 보이는 프레임을 실제로 봤다(공허 방지)
 // 조건: TC0 일반 · TC1 CPU 6배 · TC5 늦은 판 공개(GTO 청크를 붙잡아 Suspense 폴백이 먼저 서는 첫 방문) ·
 //   TC2 `?fx=` 옛 스위치 값과 무관(스위치는 걷었다 — 저장소에 아무것도 쓰지 않는다) · TC3 PC 1024 · TC4 동작 줄이기.
@@ -33,7 +35,8 @@ const RECORDER = () => {
   Element.prototype.animate = function patched(this: Element, kf: unknown, opts: unknown) {
     try {
       const pane = this.closest?.('.tab-pane');
-      if (pane) paneWaapi.push(`${pane.getAttribute('data-tab')} ${JSON.stringify(kf).slice(0, 80)}`);
+      if (pane && this === pane && pane.hasAttribute('data-pane-leaving')) { /* 떠나는 판 퇴장 — ② 주석 참고 */ }
+      else if (pane) paneWaapi.push(`${pane.getAttribute('data-tab')} ${JSON.stringify(kf).slice(0, 80)}`);
       // 본문의 **조상**(main·body 등)에 걸어도 본문 레이어가 승격된다 — 같이 센다.
       else if (this.querySelector?.('.tab-pane')) paneWaapi.push(`ancestor:${this.tagName} ${JSON.stringify(kf).slice(0, 80)}`);
     } catch { /* 계측이 앱을 깨뜨리지 않는다 */ }
@@ -193,8 +196,11 @@ test.describe('TC5 — 서비스 워커 없음', () => {
     const r = await settle(page, 'tools');
     // 전제(청크 지연이 만든 조건): 청크를 실제로 붙잡았고, '판이 아직 안 선' 프레임(폴백 스피너)이 있었다.
     expect(held, 'GTO 청크 요청을 붙잡지 못했다 — 이미 로드됐다(전제 없음)').toBeGreaterThanOrEqual(1);
+    // 🔴 2026-09-26 — 로그인 뒤 탭 복원이 commitTab(한 입구)을 타면서 **첫 방문 트랜지션**으로 바뀌었다: 청크가 늦어도
+    //   이전 판(홈)을 유지하고 폴백 스피너를 한 프레임도 커밋하지 않는다. 예전 전제('폴백이 먼저 선다')가 곧 결함이었으므로 뒤집어 잠근다.
+    //   음성 대조: 복원 줄을 setActiveTab 으로 되돌린 빌드에서 waiting ≥ 1 로 빨개진다.
     const waiting = r.frames.filter((x) => x.spin && !x.ready).length;
-    expect(waiting, '판이 아직 안 선 프레임이 없다 — 이 테스트가 지키는 조건이 없다').toBeGreaterThanOrEqual(1);
+    expect(waiting, '로그인 뒤 탭 복원이 폴백 스피너를 커밋했다 — commitTab 을 건너뛰었다(첫 방문 트랜지션 없음)').toBe(0);
     expectNoCover(r, 'GTO(늦은 공개)');
   });
 });

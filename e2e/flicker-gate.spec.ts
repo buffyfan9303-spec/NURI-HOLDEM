@@ -142,3 +142,80 @@ test.describe('FLICKER-GATE — 화면 이동에 빈 판·번쩍임·글자 없�
     });
   });
 });
+
+// ── MISSING-TILES(2026-09-26) — 출발 판을 스크롤한 뒤의 메인 탭 이동 ─────────────────────────────────────
+// 오너: "하단 메뉴로 메인 탭을 옮기면 모바일에서 **본문 콘텐츠 영역 전체**가 검은색이 됐다가 올라온다."
+// 원인(root-cause 실측): 판 교체 프레임에 하단바 알약·아이콘·FAB 전환(합성 애니)이 같이 돌면 Chromium 이 새 판 타일 래스터를
+//   기다리지 않고 프레임을 낸다 — 빠진 타일은 문서 배경(지면색 = 다크에서 검정)으로 칠해진다. 출발 판이 원점(스크롤 0)이면 안 나서
+//   위 게이트(스크롤 0 에서 탭)는 0 이었다.
+// 픽셀만으로는 못 잡는다 — 하네스에선 빠진 면적이 작아 휘도가 −0.4 만 움직인다(실기기의 판 전체 검정은 NOT_RUN).
+//   그래서 **트레이스**를 본다: 컴포지터 프레임마다 PipelineReporter.frame_reporter.has_missing_content(탭 뒤 1.1초 안).
+//   본문 영역(헤더 아래~하단바 위)이 지면색으로 평평해진 프레임도 같이 센다(오너 정정: 판정 대상은 본문 전체, 탭바는 뺀다).
+// 음성 대조(2026-09-26 실행): main 2f2a7dcf 빌드 → has_missing_content 프레임 FAIL / PANE-HANDOFF 빌드 → 0 PASS(보고 참고).
+// 처방: src/lib/tabCover.ts 6차 절(스왑 프레임 정적화 + 떠나는 판 퇴장 페이드).
+test.describe('MISSING-TILES — 스크롤한 판에서 메인 탭 이동(모바일 · CPU 4배 · DPR 3)', () => {
+  test.use({ deviceScaleFactor: 3 });
+  test.describe.configure({ timeout: 240_000 });
+
+  test('다크 — 새 판 타일이 빠진 프레임 0 · 본문이 평평한 프레임 0', async ({ page }) => {
+    const cdp = await boot(page, 'dark');
+    await page.goto('/');
+    await expect(page.getByTestId('home-schedule-title')).toBeVisible({ timeout: 30_000 });
+    await page.waitForTimeout(4000); // idle 프리마운트가 끝난 재방문 경로 — root-cause 실측과 같은 조건
+    const MENUS = ['라이브', '커뮤니티', 'GTO', '캘린더', '홈'];
+    const cast = new Cast(cdp);
+    await cdp.send('Tracing.start', { categories: 'cc,benchmark,blink.user_timing', transferMode: 'ReturnAsStream' });
+    const flatRows: string[] = [];
+    const castRows: string[] = [];
+    for (const pass of [1, 2]) {
+      for (const label of MENUS) {
+        const id = `p${pass}→${label}`;
+        // 출발 판 끝까지 → 150px 위로(문서 끝에 붙으면 하단바가 자동으로 숨는다 — 올려야 돌아온다).
+        await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight - innerHeight, behavior: 'instant' as ScrollBehavior }));
+        await page.waitForTimeout(300);
+        await page.evaluate(() => scrollTo({ top: Math.max(0, document.documentElement.scrollHeight - innerHeight - 150), behavior: 'instant' as ScrollBehavior }));
+        await page.waitForTimeout(700);
+        const pre = await page.evaluate(() => ({ y: scrollY, nav: getComputedStyle(document.querySelector('nav[aria-label="하단 내비게이션"]')!).transform }));
+        expect(pre.y, `${id}: 출발 판이 스크롤되지 않았다 — 이 게이트의 전제(원점 스크롤)가 빠진다`).toBeGreaterThan(0);
+        expect(pre.nav === 'none' || /matrix\(1, 0, 0, 1, 0, 0\)/.test(pre.nav), `${id}: 하단바가 숨어 있다(${pre.nav}) — 누를 수 없다`).toBe(true);
+        const hit = await center(page, TAB(label, true));
+        expect(hit, `${id}: 하단바 '${label}' 버튼을 못 찾았다`).not.toBeNull();
+        const crop = await page.evaluate(() => ({
+          top: document.querySelector('[data-stack-header]')!.getBoundingClientRect().bottom + 2,
+          bottom: document.querySelector('nav[aria-label="하단 내비게이션"] > div:not([aria-hidden])')!.getBoundingClientRect().top - 14,
+          w: innerWidth,
+        }));
+        await cast.start(crop);
+        await page.waitForTimeout(100);
+        await page.evaluate((m) => performance.mark(m), `tap:${id}`);
+        await press(page, cdp, hit!.x, hit!.y, true);
+        await page.waitForTimeout(1100);
+        const frames = await cast.stop();
+        const flat = frames.filter((f) => f.bStd !== undefined && f.bStd < FLAT_STD);
+        castRows.push(`${id} frames=${frames.length} bodyL ${frames.map((f) => (f.bL ?? 0).toFixed(0)).join(',')}`);
+        if (flat.length) flatRows.push(`${id} ${flat.length}프레임(bL ${flat.map((f) => (f.bL ?? 0).toFixed(0)).join(',')})`);
+        await page.waitForTimeout(400);
+      }
+    }
+    const done = new Promise<{ stream: string }>((res) => cdp.once('Tracing.tracingComplete', (e) => res(e as { stream: string })));
+    await cdp.send('Tracing.end');
+    const { stream } = await done;
+    let json = '';
+    for (;;) { const r = await cdp.send('IO.read', { handle: stream, size: 1 << 22 }); json += r.data; if (r.eof) break; }
+    await cdp.send('IO.close', { handle: stream });
+    type Ev = { name: string; ts: number; cat?: string; args?: { frame_reporter?: { has_missing_content?: boolean; checkerboarded_needs_raster?: boolean } } };
+    const ev = (JSON.parse(json) as { traceEvents?: Ev[] }).traceEvents ?? [];
+    const taps = ev.filter((e) => e.cat?.includes('blink.user_timing') && e.name.startsWith('tap:')).sort((a, b) => a.ts - b.ts);
+    const pipeline = ev.filter((e) => e.name === 'PipelineReporter' && e.args?.frame_reporter);
+    const near = (ts: number) => { let best: Ev | null = null; for (const m of taps) if (m.ts <= ts && (!best || m.ts > best.ts)) best = m; return best ? { tap: best.name.slice(4), dt: Math.round((ts - best.ts) / 1000) } : null; };
+    const missing = pipeline.filter((e) => e.args!.frame_reporter!.has_missing_content).map((e) => near(e.ts)).filter((n): n is { tap: string; dt: number } => !!n && n.dt <= 1100);
+    const needsRaster = pipeline.filter((e) => e.args!.frame_reporter!.checkerboarded_needs_raster).map((e) => near(e.ts)).filter((n) => !!n && n.dt <= 1100).length;
+    console.log(`[missing-tiles] taps=${taps.length} pipelineFrames=${pipeline.length} missing=${missing.length} needsRaster=${needsRaster} bodyFlat=${flatRows.length}`
+      + String.fromCharCode(10) + '  ' + castRows.join(String.fromCharCode(10) + '  '));
+    // 공허 방지 — 탭 표식 10개를 트레이스에서 찾았고, 컴포지터 프레임 보고를 실제로 받았다.
+    expect(taps.length, '트레이스에서 탭 표식을 못 찾았다 — blink.user_timing 범주가 빠졌거나 mark 가 안 찍혔다').toBe(MENUS.length * 2);
+    expect(pipeline.length, 'PipelineReporter 가 0 — 트레이스 범주(cc)가 빠져 이 게이트가 공허해진다').toBeGreaterThan(50);
+    expect.soft(missing.map((m) => `${m.tap} +${m.dt}ms`), '새 판 타일이 래스터되기 전 프레임이 나갔다(빠진 타일 = 지면색·검정) — 판 교체 프레임에 합성 애니가 돌고 있다').toEqual([]);
+    expect.soft(flatRows, '본문 영역이 한 색으로 평평해진 프레임(지면색 판)').toEqual([]);
+  });
+});

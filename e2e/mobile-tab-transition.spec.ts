@@ -108,7 +108,7 @@ test.describe('me page return snapshots', () => {
   test.use({ contextOptions: { reducedMotion: 'no-preference' } });
   for (const width of [360, 390, 1024]) {
     const mobile = width < 1024;
-    test(`me open/close keeps ${mobile ? 'live DOM' : 'desktop transition'} at ${width}px`, async ({ page }) => {
+    test(`me open/close keeps live DOM at ${width}px (2026-09-26: no View Transition at any width)`, async ({ page }) => {
       test.setTimeout(60_000);
       await stabilizeBackstack(page);
       await stubLogin(page);
@@ -178,13 +178,13 @@ test.describe('me page return snapshots', () => {
       await closeBtn.click();
       await expect(meTitle).toBeHidden();
       await settle();
-      expect(await calls(), `X 닫기의 VT 호출 수가 기대와 다르다(${width}px)`).toBe(beforeClose + (mobile ? 0 : 1));
+      expect(await calls(), `X 닫기의 VT 호출 수가 기대와 다르다(${width}px)`).toBe(beforeClose);
 
       // ③ warm 재열림 — 모바일 0, PC +1. 여기가 요구 B 의 핵심이다.
       const beforeWarm = await calls();
       await openMe();
       await settle();
-      expect(await calls(), `warm 재열림의 VT 호출 수가 기대와 다르다(${width}px)`).toBe(beforeWarm + (mobile ? 0 : 1));
+      expect(await calls(), `warm 재열림의 VT 호출 수가 기대와 다르다(${width}px)`).toBe(beforeWarm);
 
       // ④ history back 으로 닫기 — 이미 live DOM 경로라 어느 폭에서도 늘지 않는다
       const beforeBack = await calls();
@@ -252,12 +252,15 @@ test.describe('me page return snapshots', () => {
     await closeBtn.click();
     await expect(meTitle).toBeHidden();
     await settle();
-    expect(await calls(), '열 때가 아니라 닫는 시점의 폭으로 경로가 정해져야 한다').toBe(beforeClose + 1);
+    expect(await calls(), '리사이즈 뒤 닫기도 스냅샷 0 이다(2026-09-26 View Transition 전면 제거)').toBe(beforeClose);
   });
 });
 
 // Samsung Internet: poster return must use the live home on mobile, too.
 // Negative control: the pre-fix production build creates one VT on the first close.
+// 🔴 2026-09-26 — PC 닫기도 역모핑(VT) 없이 page fade-out 으로 닫는다(App.tsx closeSchedule · flick 1280 라이트 −11/+23 휘도 튐).
+//   그래서 **닫기는 모든 폭에서 스냅샷 0** 이다. 여는 쪽 모핑(PC 두 번째 열기부터 1회)은 그대로라 데스크톱 양성 대조로 남는다.
+//   음성 대조: 옛 closeSchedule(PC withViewTransition)로 되돌리면 1024 의 닫기마다 +1 이 되어 빨개진다.
 test.describe('schedule detail return snapshots', () => {
   test.use({ contextOptions: { reducedMotion: 'no-preference' } });
   for (const width of [390, 1024]) {
@@ -304,14 +307,14 @@ test.describe('schedule detail return snapshots', () => {
         await expect(detail).toHaveCount(0);
         await expect(card).toBeVisible();
         await settle();
-        expect(await count(), 'mobile poster return created a page snapshot').toBe(calls + (width < 1024 ? 0 : 1));
+        expect(await count(), 'poster return created a page snapshot (2026-09-26: close is snapshot-free at every width)').toBe(calls);
         if (width < 1024) expect(await count(), 'mobile poster reopen created a page snapshot').toBe(0);
         expect(Math.abs(await page.evaluate(() => window.scrollY) - y)).toBeLessThanOrEqual(1);
         const after = await home.boundingBox();
         expect(after!.width).toBeCloseTo(before!.width, 1);
         expect(after!.height).toBeCloseTo(before!.height, 1);
       }
-      expect(await count()).toBe(width < 1024 ? 0 : 3);
+      expect(await count(), 'poster open/close created a page snapshot (2026-09-26: no View Transition at any width)').toBe(0);
 
       // Select the path at interaction time, including a resize while detail is open.
       await card.click();
@@ -323,7 +326,7 @@ test.describe('schedule detail return snapshots', () => {
       await expect(detail).toHaveCount(0);
       await expect(card).toBeVisible();
       await settle();
-      expect(await count()).toBe(calls + (width < 1024 ? 1 : 0));
+      expect(await count(), 'close after resize created a page snapshot').toBe(calls);
     });
   }
 });
@@ -374,6 +377,17 @@ for (const width of [390, 1023]) {
       w.__bodyAnims = rec;
       let vt = 0;
       w.__vtCalls = { get count() { return vt; } };
+      // 🔵 2026-09-26 PANE-HANDOFF — **떠나는 판**이 제자리에 섰다가(data-pane-leaving) 걷히는 구간을 잰다(src/lib/tabCover.ts 6차 절).
+      const leave: Array<{ tab: string | null; on: number; off?: number }> = [];
+      w.__leave = leave;
+      new MutationObserver((ms) => {
+        for (const mu of ms) {
+          const el = mu.target as Element;
+          if (!el.classList?.contains('tab-pane')) continue;
+          if (el.hasAttribute('data-pane-leaving')) leave.push({ tab: el.getAttribute('data-tab'), on: performance.now() });
+          else { const open = leave.find((x) => x.tab === el.getAttribute('data-tab') && x.off === undefined); if (open) open.off = performance.now(); }
+        }
+      }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-pane-leaving'] });
       const nativeVT = document.startViewTransition?.bind(document);
       if (nativeVT) {
         document.startViewTransition = ((cb: () => void) => { vt += 1; return nativeVT(cb); }) as typeof document.startViewTransition;
@@ -386,6 +400,7 @@ for (const width of [390, 1023]) {
             rec.push({
               via: 'waapi',
               tab: pane.getAttribute('data-tab'),
+              self: this === pane,
               cls: (this.getAttribute('class') ?? '').slice(0, 60),
               kf: JSON.stringify(kf).slice(0, 160),
             });
@@ -437,6 +452,7 @@ for (const width of [390, 1023]) {
         await page.evaluate((props) => {
           const w = window as unknown as Record<string, unknown>;
           (w.__bodyAnims as unknown[]).length = 0;
+          (w.__leave as unknown[]).length = 0;
           // CSS transition/animation 은 getAnimations 로 본다 — 이동 직전 목록을 지문으로 남긴다.
           w.__before = new Set(
             document.getAnimations().map((a) => `${a.id}|${String((a.effect as KeyframeEffect | null)?.target?.className ?? '')}`),
@@ -444,6 +460,7 @@ for (const width of [390, 1023]) {
           w.__props = props;
         }, BODY_PRESENTATION_PROPS);
 
+        const from = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.tab-pane')].find((p) => p.style.display !== 'none')?.getAttribute('data-tab') ?? null);
         await tapNav(m.label);
         await expect(pane(m.tab)).toBeVisible({ timeout: 15_000 });
         visited += 1;
@@ -487,10 +504,24 @@ for (const width of [390, 1023]) {
             if (!changed.length) continue;                        // 표현과 무관한 속성
             css.push(`css:${name || '(anon)'} on .${String(target.className ?? '').slice(0, 40)} [${[...new Set(changed)].join(',')}]`);
           }
-          return { waapi, css, scrollDriven };
+          const leave = (w.__leave as Array<{ tab: string | null; on: number; off?: number }>).slice();
+          const stuck = [...document.querySelectorAll('[data-pane-leaving]')].map((e) => e.getAttribute('data-tab') ?? e.tagName).join(',');
+          return { waapi, css, scrollDriven, leave, stuck };
         }, [LOCAL_DATA_ANIMATIONS, SCROLL_DRIVEN] as [string[], string]);
 
-        for (const a of res.waapi) findings.push(`pass${pass} ${m.label} waapi ${JSON.stringify(a)}`);
+        // 🔵 2026-09-26 PANE-HANDOFF — 허용되는 것은 **출발 판 자신의 opacity 퇴장 1건**뿐이다(목적지·다른 판·판 안 요소는 그대로 0건).
+        //   그 퇴장은 판을 320ms 안에 걷어야 한다(페이드 240ms + 첫 프레임 두 번 · 첫 방문은 준비 대기 상한 300ms 가 더해져 700ms).
+        //   음성 대조: 목적지(새 판)에 opacity 를 걸면 첫 줄에서, 퇴장이 판을 못 걷으면(stop 누락) 아래 leave 단언에서 빨개진다.
+        const origin = res.waapi.filter((a) => a.tab === from && a.self === true && /^\[\{"opacity":[\d.]+\},\{"opacity":0\}\]$/.test(String(a.kf)));
+        for (const a of res.waapi) if (!origin.includes(a)) findings.push(`pass${pass} ${m.label} waapi ${JSON.stringify(a)}`);
+        if (origin.length > 1) findings.push(`pass${pass} ${m.label} 출발 판 퇴장이 ${origin.length}번 걸렸다`);
+        const lim = pass === 1 ? 700 : 320;
+        for (const l of res.leave) {
+          if (l.tab !== from) findings.push(`pass${pass} ${m.label} 출발 판이 아닌 판이 떠나는 판으로 섰다: ${JSON.stringify(l)}`);
+          else if (l.off === undefined) findings.push(`pass${pass} ${m.label} 떠나는 판이 걷히지 않았다(${l.tab})`);
+          else if (l.off - l.on > lim) findings.push(`pass${pass} ${m.label} 떠나는 판이 ${Math.round(l.off - l.on)}ms 남았다(상한 ${lim})`);
+        }
+        if (res.stuck) findings.push(`pass${pass} ${m.label} 정착 뒤에도 떠나는 판/복제본이 남았다: ${res.stuck}`);
         for (const c of res.css) findings.push(`pass${pass} ${m.label} ${c}`);
         for (const s of res.scrollDriven) findings.push(`pass${pass} ${m.label} 스크롤리빌이 정착하지 않았다: ${s}`);
       }
@@ -503,6 +534,33 @@ for (const width of [390, 1023]) {
     expect(findings, `메인 메뉴 전환이 목적지 본문에 애니메이션을 시작했다:\n${findings.join('\n')}`).toEqual([]);
   });
 }
+
+// ── R4(2026-09-26): 로그인 뒤 '보던 탭' 복원도 **commitTab 한 입구**를 탄다 ──────────────────────────────
+// 우회였던 것: App 의 view-intent 복원이 setActiveTab 을 직접 불러 판 교체 규칙(스왑 프레임 정적화 html[data-tab-swap] ·
+//   떠나는 판 페이드 · 첫 방문 startTransition)을 전부 건너뛰었다 — 하단바가 아닌 입구로 들어오면 본문 검정 부류가 남는다.
+// 소스 잠금은 src/components/transitionDevices.contract.test.ts (b). 여기서는 **런타임에** 그 입구를 탔는지 본다.
+// 음성 대조(2026-09-26 실행): 복원 줄만 setActiveTab 으로 되돌린 빌드 → swap 0 으로 빨강 / 수정 빌드 → 초록.
+test('🔴 R4 — 로그인 뒤 탭 복원이 판 교체 입구(commitTab)를 탄다', async ({ page }) => {
+  test.setTimeout(60_000);
+  await stubLogin(page);
+  await stabilizeBackstack(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockSchedules(page);
+  await page.addInitScript(() => {
+    try { localStorage.setItem('nuri:view-intent', JSON.stringify({ kind: 'tab', id: 'community', at: Date.now() })); } catch { /* noop */ }
+    let swaps = 0;
+    Object.defineProperty(window, '__swaps', { get: () => swaps });
+    // document 를 본다 — init 스크립트 시점엔 documentElement 가 아직 없을 수 있다(observe 가 던지면 0 으로 거짓 빨강).
+    new MutationObserver(() => { if (document.documentElement?.hasAttribute('data-tab-swap')) swaps += 1; })
+      .observe(document, { subtree: true, attributes: true, attributeFilter: ['data-tab-swap'] });
+  });
+  await page.goto('/');
+  await expect(page.locator('.tab-pane[data-tab="community"]'), '로그인 뒤 보던 탭(커뮤니티)이 복원되지 않았다 — 전제가 빠졌다').toBeVisible({ timeout: 20_000 });
+  expect(await page.evaluate(() => Reflect.get(window, '__swaps') as number),
+    '탭 복원이 commitTab 을 건너뛰었다(스왑 프레임 정적화가 한 번도 켜지지 않았다)').toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() => document.documentElement.hasAttribute('data-tab-swap')),
+    { message: '스왑 표식이 풀리지 않았다 — 상시 전환이 꺼진 채 남는다' }).toBe(false);
+});
 
 // ── R2: 모바일 View Transition 은 **공용 helper 한 곳**에서 막는다 ──────────────────
 // caller 마다 가드를 복제하면 새 화면이 또 샌다(2026-09-22 실행서 §4 재발 사슬).
@@ -569,9 +627,9 @@ test('🔴 R2 — 모바일은 공용 helper 가 스냅샷을 막고, 데스크�
   expect(await page.evaluate(() => document.documentElement.dataset.vtScope ?? null),
     '모바일인데 data-vt-scope 마커가 남았다').toBeNull();
 
-  // (b) 데스크톱 양성 대조 — helper 자체는 살아 있어야 한다. 죽은 helper 는 '0회' 로도 통과한다.
-  // 🔵 2026-09-24 MOTION-UNIFY — PC 메인 탭은 이제 VT 가 아니라 덮개다(재방문도 0회가 정상).
-  //   VT 가 남은 데스크톱 경로 = **같은 매장 열기**(handleVenueClick). (a) 와 같은 버튼으로 양성 대조한다.
+  // (b) 데스크톱도 스냅샷 0 — 🔴 2026-09-26 View Transition 을 앱에서 전부 걷었다(공용 helper 자체가 없다).
+  //   '0회' 가 죽은 경로의 공허한 초록이 아님은 **매장 화면이 실제로 열리는 것**으로 확인한다(양성 대조를 기능 쪽으로 옮겼다).
+  //   소스 쪽 잠금: src/components/transitionDevices.contract.test.ts (a).
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
   await dismissOverlays(page);
@@ -583,7 +641,7 @@ test('🔴 R2 — 모바일은 공용 helper 가 스냅샷을 막고, 데스크�
   await venueLinkPc.click();
   await expect(page.locator('[data-venue-page], [role="dialog"]').first()).toBeVisible({ timeout: 15_000 });
   expect(await page.evaluate(() => (window as unknown as { __vt: { n: number } }).__vt.n) - beforeDesktop,
-    '데스크톱 매장 열기에서 View Transition 이 0회 — helper 가 통째로 죽었을 수 있다(양성 대조 실패)').toBeGreaterThan(0);
+    '데스크톱 매장 열기에서 document View Transition 이 돌았다 — 스냅샷 교차를 되살렸다').toBe(0);
 });
 
 // ── R2-resize: 데스크톱 전환 중 좁아져도 잔재가 남지 않는다 ───────────────────────
