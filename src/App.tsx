@@ -395,8 +395,17 @@ const AppHeader = memo(function AppHeader({
                 로고 버튼이 `shrink-0` 이라 96.1px(마크 25.5 + 워드마크 64.2 + gap)을 먼저 가져가고
                 타이틀에 **34.9px** 만 남았다. 그래서 '커뮤니티' 가 `커…` 로 잘렸다(다크·라이트 모두).
                 워드마크만 접으면 잔량이 99px 가 되어 타이틀이 전부 산다 —
-                글자 크기나 히트영역을 줄이는 방법은 쓰지 않는다(접근성 규격을 깎는 것이라). */}
-            <NuriHoldemLogo className="!h-7 max-[359px]:hidden" />
+                글자 크기나 히트영역을 줄이는 방법은 쓰지 않는다(접근성 규격을 깎는 것이라).
+                🔴 2026-09-27 실측 정정 — 경계가 359 로는 부족했다. 진짜 제약은 '워드마크가 보이는
+                채로 타이틀이 안 잘리려면 뷰포트가 그 탭 제목의 필요폭만큼은 있어야 한다'(로고 25.5 +
+                워드마크 64.2 + 구분선 + 타이틀 + 우측 클러스터 + 여백의 합 — 탭마다 타이틀 글자 수가 달라
+                필요폭도 다르다). '커뮤니티'(4자)만 기준으로 삼으면 369 로 충분해 보이지만, 탭 10개(TAB_LABEL)
+                전부를 같은 방식으로 재면 **'일정 탐색'(5자, browse 탭)이 가장 넓어 373 이 필요**했다(371 에서
+                1.17px·372 에서 0.17px 잘림 실측). 라벨별로 문턱을 따로 두는 대신, 가장 넓은 라벨 기준
+                하나로 통일한다 — 359→372 로 올려 373 미만에서는 어떤 탭이어도 워드마크가 접힌다.
+                글자 크기·히트영역은 그대로다.
+                (재현: `foot.cjs`·`hdr5~9.cjs` 로 TAB_LABEL 10개 × 355~400px 전수 스윕, scratchpad st4 참고). */}
+            <NuriHoldemLogo className="!h-7 max-[372px]:hidden" />
           </button>
           <span className="h-4 w-px shrink-0 bg-border-default" aria-hidden />
           <span className="min-w-0 truncate text-base font-extrabold tracking-tight text-ink-primary" aria-current="page">

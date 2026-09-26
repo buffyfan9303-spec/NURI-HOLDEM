@@ -660,7 +660,9 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
               type="button"
               onClick={handleSendCode}
               disabled={sendingCode || !newPw || newPw !== confirmPw || !validatePassword(newPw).ok}
-              className="btn-primary w-full disabled:opacity-60"
+              // 1급 CTA — btn-lg(46.75px, index.css :root 사다리 §B1). 크기 변형은 반드시
+              // btn-primary 뒤에 와야 이긴다(같은 특이도라 순서가 곧 우선순위, index.css 주석).
+              className="btn-primary btn-lg w-full disabled:opacity-60"
             >
               {sendingCode ? '인증코드 발송 중…' : '이메일로 인증코드 받기'}
             </button>
@@ -935,31 +937,38 @@ function PushNotificationSetting() {
   return (
     <div className="px-4 pb-5 -mt-1">
       <h3 className="text-xs font-semibold text-ink-secondary mb-2">알림</h3>
-      <div className="flex items-center gap-3 p-3 rounded-aura bg-surface-high border border-border-subtle">
-        <div className="flex-1 min-w-0">
+      {/* 2026-09-27 — 예전엔 스위치(46.8×25.5)만 눌렸고 라벨 행은 죽은 영역이었다.
+          행 전체를 단일 스위치로 만든다(WCAG 2.5.8 히트영역) — 안쪽 스위치 모양은
+          이제 순수 시각용(span, aria-hidden)이라 중첩 인터랙티브 요소가 생기지 않는다. */}
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={!supported || busy}
+        role="switch"
+        aria-checked={on}
+        aria-label="푸시 알림 토글"
+        className="flex w-full items-center gap-3 rounded-aura border border-border-subtle bg-surface-high p-3 text-left disabled:opacity-40"
+      >
+        <span className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-ink-primary">푸시 알림</p>
           <p className="text-2xs text-ink-muted mt-0.5 leading-relaxed">
             {supported
               ? '댓글·승인·팔로우 매장 새 포스터를 브라우저 알림으로 받습니다'
               : '이 브라우저는 푸시 알림을 지원하지 않습니다'}
           </p>
-        </div>
-        <button
-          type="button"
-          onClick={toggle}
-          disabled={!supported || busy}
-          aria-pressed={on}
-          aria-label="푸시 알림 토글"
+        </span>
+        <span
+          aria-hidden
           className={[
-            'relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-40',
+            'relative w-11 h-6 rounded-full transition-colors shrink-0',
             on ? 'bg-accent-300' : 'bg-surface-float',
           ].join(' ')}
         >
           <span
             className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform"
             style={{ transform: `translateX(${on ? 20 : 0}px)` }} />
-        </button>
-      </div>
+        </span>
+      </button>
     </div>
   );
 }

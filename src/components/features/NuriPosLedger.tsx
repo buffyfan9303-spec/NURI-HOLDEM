@@ -824,6 +824,39 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     } else setCopyMain(null);
   }, [showSetup, gameSeq, venueId, date]);
 
+  // 정산바(하단 고정)가 --tabbar-safe(탭바 예약)보다 커지면(실측 ~166px, SettleFilter 펼침·
+  // 좁은 폭 2×2 그리드 포함) 전 화면 상시 노출 푸터(BusinessFooter)의 법정 고지(19세 미만·1336·
+  // 사업자정보)를 끝까지 스크롤해도 영구히 가렸다(2026-09-27 오너 보고). 실측 높이를
+  // --footer-reserve 로 노출해 푸터가 max() 로 받아쓰게 한다(index.css :root 기본 0 —
+  // 다른 화면은 무영향, 정산바가 없는 화면도 이 파일 밖 전부 그대로다).
+  // 콜백 ref — mode 전환으로 이 바가 사라지거나(el=null) active(keep-alive 가시성)가 바뀌면
+  // measureFooterReserve 의 정체성이 바뀌어 React 가 구 ref(null)→신 ref(el) 로 재호출한다.
+  // 그 재호출 자체가 '숨김→0 복귀 / 다시 보임→재측정'을 별도 이펙트 없이 처리한다.
+  const settleBarElRef = useRef<HTMLDivElement | null>(null);
+  const settleBarRoRef = useRef<ResizeObserver | null>(null);
+  const measureFooterReserve = useCallback(() => {
+    const el = settleBarElRef.current;
+    if (!active || !el) { document.documentElement.style.removeProperty('--footer-reserve'); return; }
+    const rect = el.getBoundingClientRect();
+    if (rect.height <= 0) return; // 과도기(display 전환 중) — 다음 발화에서 다시 잰다
+    document.documentElement.style.setProperty('--footer-reserve', `${Math.ceil(Math.max(0, window.innerHeight - rect.top) + 12)}px`);
+  }, [active]);
+  const settleBarRef = useCallback((el: HTMLDivElement | null) => {
+    settleBarElRef.current = el;
+    settleBarRoRef.current?.disconnect();
+    settleBarRoRef.current = null;
+    if (el) {
+      const ro = new ResizeObserver(measureFooterReserve);
+      ro.observe(el);
+      settleBarRoRef.current = ro;
+    }
+    measureFooterReserve();
+  }, [measureFooterReserve]);
+  useEffect(() => {
+    window.addEventListener('resize', measureFooterReserve);
+    return () => window.removeEventListener('resize', measureFooterReserve);
+  }, [measureFooterReserve]);
+
   // 셀/행 조회는 표에서 행×열×바인(예: 50명×10칸×200바인 ≈ 10만회/렌더)으로 폭증하던 곳 —
   // buyins 1회 순회로 맵을 만들어 O(1) 조회로 전환(필터/find/reduce per-cell 제거).
   const binByKey = useMemo(() => {
@@ -1800,7 +1833,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {/* 좌우 경계를 변수로 뽑는다 — 기본값은 예전 그대로(0/0 · max-w-6xl)라 일반 화면은 변화 없다.
           전체화면(LedgerWorkspace)에서는 그 변수를 **장부 칸** 기준으로 덮어 바가 칸에 맞는다.
           예전엔 뷰포트 기준 1152px 중앙이라 전체화면에서 좌우가 어긋났다(오너 2026-09-08 "길이가 안맞아"). */}
-      <div className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-[var(--ledger-bar-left,0px)] right-[var(--ledger-bar-right,0px)] z-30 mx-auto max-w-[var(--ledger-bar-max,72rem)] bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
+      <div ref={settleBarRef} className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-[var(--ledger-bar-left,0px)] right-[var(--ledger-bar-right,0px)] z-30 mx-auto max-w-[var(--ledger-bar-max,72rem)] bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
         {/* 정산 제외 — 오너 지시: "관계자·신규처럼 빼고 정산", "티켓·현금·카드도 뺄 수 있게".
             정산바 **안** 최상단에 둔다. 바는 bottom 고정이라 펼치면 위로 자라 숫자를 가리지 않는다. */}
         <SettleFilter

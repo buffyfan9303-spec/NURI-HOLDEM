@@ -33,8 +33,11 @@ const BIZ_EXTRA: [string, string][] = [
 //   같은 이유로 AppHeader·MobileTabBar 는 이미 memo 다(App.tsx:230, :617). 여기만 빠져 있었다.
 //   근거: docs/render-perf-checklist.md §5(무프롭 무거운 컴포넌트 → memo).
 function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenLegal?: (d: LegalDoc) => void; onOpenSupport?: () => void }) {
+  // 아래 여백 = max(기본 탭바 예약, --footer-reserve) — 정산바처럼 탭바보다 큰 하단 고정 바가
+  // 떠 있는 화면은 그 화면이 --footer-reserve 를 실측으로 채워 이 상시 고지가 가려지지 않게 한다
+  // (index.css :root 주석, NuriPosLedger.tsx 설정부 — 2026-09-27, 정산바가 이 예약보다 커서 가리던 결함).
   return (
-    <footer className="mt-6 border-t border-border-subtle px-page-x pt-5 pb-[calc(var(--tabbar-safe)+0.5rem)] lg:pb-8">
+    <footer className="mt-6 border-t border-border-subtle px-page-x pt-5 pb-[max(calc(var(--tabbar-safe)+0.5rem),var(--footer-reserve,0px))] lg:pb-[max(2rem,var(--footer-reserve,0px))]">
       <div className="mx-auto w-full max-w-5xl space-y-3">
         {/* 약관·정책 링크 — §7 P0-C(2026-09-12 실측): 11.69px 로, 이미 t-desc(12.75px)로 올라간
             사업자 정보·법정 고지보다 1.06px 작았다. 같은 '법정 고지' 역할이라 같은 토큰으로 맞춘다. */}
