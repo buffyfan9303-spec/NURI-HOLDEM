@@ -5,7 +5,7 @@
 //  · 거짓 '미입력' → 버튼이 남을 뿐 데이터는 안전하다.
 // 그래서 애매하면 '완료'로 찍지 않는다. 아래 경계를 그 원칙대로 못 박는다.
 import { describe, it, expect } from 'vitest';
-import { hasRankingForGame, rankingEventOf, rankingEventCandidates, normalizeEventName } from './rankingGame';
+import { hasRankingForGame, rankingEventOf, rankingEventCandidates, normalizeEventName, gameSeqOfEvent } from './rankingGame';
 import { gameKey, ledgerGameLabel } from './ledgerLink';
 
 const MAIN = { gameSeq: 1, title: '수요일 딥스택' };
@@ -179,5 +179,24 @@ describe('rankingSaveTarget — 이미 행이 있는 이름으로 저장해 "교
       const { eventName } = rankingSaveTarget(MAIN, saved);
       expect(rankingEventCandidates(MAIN)).toContain(eventName);
     }
+  });
+});
+
+// F04(2026-09-26, 오너): 순위 입력의 '장부 보기' 패널이 게임 번호(gameSeq) 없이 getLedgerBuyins 를 불러
+// 사이드 게임을 골라도 항상 메인 명단을 보였다. gameSeqOfEvent 가 그 번호를 찾는 자리 — 이 계약이 깨지면
+// 다시 항상 메인(1)만 돌려주는 예전 결함으로 되돌아간다(수정 전: 이 describe 전체가 실패).
+describe('gameSeqOfEvent — 장부 보기 패널이 순위와 같은 게임을 보게(F04)', () => {
+  const games = [MAIN, SIDE, { gameSeq: 3, title: '' }]; // 제목 없는 사이드 → '사이드2' 라벨(ledgerGameLabel)
+  it("메인('')은 항상 메인 gameSeq", () => {
+    expect(gameSeqOfEvent('', games)).toBe(1);
+  });
+  it('사이드 이름이 맞으면 그 사이드의 gameSeq — 메인(1)로 새지 않는다', () => {
+    expect(gameSeqOfEvent('나이트 사이드', games)).toBe(2);
+  });
+  it("제목 없는 사이드는 ledgerGameLabel 로 찾는다", () => {
+    expect(gameSeqOfEvent(ledgerGameLabel(3), games)).toBe(3);
+  });
+  it('그날 게임 목록에 없는 이름은 메인으로 안전하게 되돌린다(추정으로 엉뚱한 게임을 짚지 않는다)', () => {
+    expect(gameSeqOfEvent('없는 게임', games)).toBe(1);
   });
 });

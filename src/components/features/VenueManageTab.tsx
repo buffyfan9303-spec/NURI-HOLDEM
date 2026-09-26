@@ -37,7 +37,7 @@ import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·�
 import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, type TransferTarget } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
 import { type LedgerLinkTarget } from '../../lib/ledgerLink';
-import { rankingEventOf } from '../../lib/rankingGame'; // 게임 이름(순위 event) 규칙 — F02
+import { rankingEventOf, gameSeqOfEvent } from '../../lib/rankingGame'; // 게임 이름(순위 event) 규칙 — F02
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -1615,6 +1615,9 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   const [allEntries, setAllEntries] = useState<RankingEntry[]>([]);
   // 그날 열린 게임 후보 = 그날 포스터 제목 + 그날 장부 제목(둘 다 '어떤 게임인지' 선택지)
   const [dayGames, setDayGames] = useState<GameOpt[]>([]);
+  // 그날 장부의 실제 게임 번호(gameSeq) — '장부 보기' 패널이 지금 고른 게임(eventName)의
+  // 진짜 gameSeq 를 찾는 데 쓴다(아래 currentGameSeq). dayGames 는 이름만 갖고 있어 번호를 못 준다.
+  const [dayLedgerGames, setDayLedgerGames] = useState<LedgerGame[]>([]);
   useEffect(() => {
     Promise.all([
       getSchedules().then((all: Schedule[]) => all.filter((sc) => sc.venueId === venueId && new Date(sc.date).toLocaleDateString('en-CA') === date)).catch(() => [] as Schedule[]),
@@ -1622,6 +1625,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       // 사이드 순위가 '기타'로 밀리거나 메인 칸에 섞여 저장됐다(F02)
       getLedgerGames(venueId, date).catch(() => [] as LedgerGame[]),
     ]).then(([posters, ledgerGames]) => {
+      setDayLedgerGames(ledgerGames);
       const opts: GameOpt[] = [];
       // 포스터 1장 = 메인 게임(제목) + 사이드 게임 여러 개(sideEvents[])
       for (const sc of posters) {
@@ -1642,6 +1646,9 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       setDayGames(opts.filter((o) => (seen.has(o.name) ? false : (seen.add(o.name), true))));
     });
   }, [venueId, date]);
+  // 지금 고른 게임(eventName)의 실제 gameSeq — 장부 조회(getLedgerBuyins)가 게임 번호 없이
+  // 항상 메인만 보던 결함의 근본 수정(F04, 2026-09-26). 판정 규칙은 lib/rankingGame.ts 에 한 번만 둔다.
+  const currentGameSeq = useMemo(() => gameSeqOfEvent(eventName, dayLedgerGames), [eventName, dayLedgerGames]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   // ⚠ 조회 실패를 삼키면 **데이터가 사라진다**(F1, 2026-09-13). 예전 `.catch(() => setAllEntries([]))` 는 실패를
@@ -1786,7 +1793,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   // 마감정산에서 넘어온 참가자 명단은 이제 행을 채우지 않는다 — 자동완성 후보로만 합류시킨다.
   const draftNames = draft && draft.date === date ? draft.names : null;
   useEffect(() => {
-    getLedgerBuyins(venueId, date)
+    getLedgerBuyins(venueId, date, currentGameSeq)
       .then((bs) => {
         setLedgerNames([...new Set([...bs.map((b) => b.playerName), ...(draftNames ?? [])].filter(Boolean))]);
         const counts = new Map<string, number>();
@@ -1799,7 +1806,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       })
       .catch(() => { setLedgerNames([...new Set((draftNames ?? []).filter(Boolean))]); setLedgerPlayers([]); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venueId, date, draftNames?.length]);
+  }, [venueId, date, currentGameSeq, draftNames?.length]);
   const [sugRow, setSugRow] = useState<number | null>(null);     // 드롭다운 열린 행
   const [memCands, setMemCands] = useState<RankMember[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

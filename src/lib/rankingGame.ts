@@ -115,3 +115,15 @@ export function rankingSaveTarget(
   const leftover = rankingEventCandidates(game).filter((c) => c !== eventName).reduce((n, c) => n + (counts.get(c) ?? 0), 0);
   return { eventName, replaces, leftover };
 }
+
+/**
+ * 지금 고른 event 이름(rankingEventOf 결과)에 대응하는 실제 gameSeq — 장부 조회(getLedgerBuyins 등)는
+ * event 이름이 아니라 gameSeq 로 게임을 가른다. 그날 게임 목록에서 이름이 같은 걸 찾고,
+ * 메인('')이거나 못 찾으면 메인(1)으로 되돌린다(F04, 2026-09-26: 순위 패널이 게임 번호 없이 항상 메인만 봤다).
+ * 값 1 은 ledger.ts 의 MAIN_GAME_SEQ 와 같다 — 여기서 그 상수를 가져오면 순환 임포트가 된다(ledger.ts 가 이 파일을 가져온다).
+ */
+export function gameSeqOfEvent(eventName: string, games: Iterable<RankingGame>): number {
+  if (!eventName) return 1;
+  for (const g of games) if (rankingEventOf(g) === eventName) return g.gameSeq;
+  return 1;
+}
