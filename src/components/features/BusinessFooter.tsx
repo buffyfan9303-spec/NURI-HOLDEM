@@ -45,21 +45,21 @@ function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenLegal?: (d: Lega
           {/* 업주 완전 사용설명서(공개 정적 페이지) — 회원가입부터 정산까지 전 기능 안내 */}
           {/* PG 심사 요건: '어떤 서비스를 운영하는지' 확인 가능한 소개 페이지(정적 URL) */}
           <a href="/about.html" target="_blank" rel="noopener" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">서비스 소개</a>
-          <span className="text-border-strong" aria-hidden>·</span>
+          <span className="text-ink-muted" aria-hidden>·</span>
           <a href="/guide/manual.html" target="_blank" rel="noopener" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-accent-300/90 hover:text-accent-300">사용설명서</a>
-          <span className="text-border-strong" aria-hidden>·</span>
+          <span className="text-ink-muted" aria-hidden>·</span>
           <button type="button" onClick={() => onOpenLegal?.('terms')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">이용약관</button>
-          <span className="text-border-strong" aria-hidden>·</span>
+          <span className="text-ink-muted" aria-hidden>·</span>
           <button type="button" onClick={() => onOpenLegal?.('privacy')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">개인정보처리방침</button>
-          <span className="text-border-strong" aria-hidden>·</span>
+          <span className="text-ink-muted" aria-hidden>·</span>
           <button type="button" onClick={() => onOpenLegal?.('refund')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">취소·환불 정책</button>
-          <span className="text-border-strong" aria-hidden>·</span>
+          <span className="text-ink-muted" aria-hidden>·</span>
           <button type="button" onClick={() => onOpenLegal?.('location')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">위치기반서비스 이용약관</button>
-          <span className="text-border-strong" aria-hidden>·</span>
+          <span className="text-ink-muted" aria-hidden>·</span>
           {/* 계정 삭제 안내(공개 정적 페이지) — Google Play '계정 삭제 URL' 요건: 앱 설치·로그인 없이 열려야 한다(2026-09-25). */}
           <a href="/legal/delete-account.html" target="_blank" rel="noopener" data-testid="footer-delete-account" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">계정 삭제 안내</a>
           {onOpenSupport && <>
-            <span className="text-border-strong" aria-hidden>·</span>
+            <span className="text-ink-muted" aria-hidden>·</span>
             <button type="button" onClick={onOpenSupport} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-accent-300/90 hover:text-accent-300">고객센터 문의</button>
           </>}
         </nav>

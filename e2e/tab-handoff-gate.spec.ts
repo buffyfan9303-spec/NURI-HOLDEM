@@ -416,3 +416,110 @@ test.describe('TAB-HANDOFF-GATE ⑤ — 로딩 중 탭', () => {
     expect(bad).toEqual([]);
   });
 });
+
+// ⑥ 내 정보 하위 탭(대시보드·프로필·설정·보안) — 다른 하위 탭과 **같은 판 교체**(오너 2026-09-27 요청 1).
+//   내 정보는 전면 판(fixed) 안의 스크롤 상자([data-profile-panel])이고 판 넷이 keep-alive(hidden 토글)다.
+//   판정은 ④와 같다: 판 그림이 바뀐 이동이면 떠나는 판([data-pane-leaving])이 서고(leave) · 한 프레임 컷 ≤ 6 · 정착 뒤 남은 것 0.
+//   더해서 keep-alive 계약: 두 바퀴 도는 동안 대시보드 판 노드가 같은 노드이고(재마운트 0) · 약관 이력 조회가 첫 보안 진입 뒤 늘지 않는다(재조회 0).
+//   390·360 × 다크·라이트 · CPU 4배 · 실제 손가락 110ms · 판을 스크롤한 뒤 누른다.
+test.describe('TAB-HANDOFF-GATE ⑥ — 내 정보 하위 탭', () => {
+  test.describe.configure({ timeout: 300_000 });
+  for (const [w, scheme] of [[390, 'dark'], [390, 'light'], [360, 'dark'], [360, 'light']] as const) {
+    test(`⑥ 내 정보 ${w} ${scheme} — 떠나는 판이 서고 걷힌다 · 컷 없음 · 재마운트·재조회 0`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: 800 });
+      let consentReads = 0;
+      page.on('request', (r) => { if (r.method() === 'GET' && /\/rest\/v1\/legal_consents\?/.test(r.url())) consentReads += 1; });
+      const cdp = await boot(page, scheme);
+      await page.evaluate(() => {
+        const g = window as unknown as { __lv: number[] };
+        g.__lv = [];
+        new MutationObserver((rs) => {
+          for (const r of rs) for (const n of [r.target, ...Array.from(r.addedNodes)]) {
+            if (n instanceof Element && n.hasAttribute('data-pane-leaving') && !n.classList.contains('tab-pane') && n.tagName !== 'FOOTER') g.__lv.push(performance.now());
+          }
+        }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-pane-leaving'] });
+      });
+      await page.getByRole('button', { name: '검증계정 메뉴' }).click();
+      await page.getByRole('button', { name: '내 정보 열기' }).click();
+      await expect(page.locator('div.fixed.inset-0:has(> header h1:text-is("내 정보"))')).toHaveJSProperty('inert', false);
+      await page.waitForTimeout(1500);
+      // 대시보드 판 노드에 표식 — 두 바퀴 뒤 같은 노드여야 한다(keep-alive)
+      const marked = await page.evaluate(() => {
+        const p = document.querySelector('[data-profile-panel]');
+        const d = p?.lastElementChild?.firstElementChild as (Element & { __keep?: boolean }) | null | undefined;
+        if (!d) return false;
+        d.__keep = true;
+        (window as unknown as { __dash: Element }).__dash = d;
+        return true;
+      });
+      expect(marked, '대시보드 판을 못 찾았다').toBe(true);
+      const cast = new Cast(cdp);
+      // '@…' = 판 안의 이동 버튼(대시보드 '프로필 편집' → 설정 탭) — 탭바가 아닌 두 번째 입구도 같은 장치를 타야 한다.
+      const ORDER = ['프로필', '설정', '보안', '대시보드', '@프로필 편집', '보안', '프로필', '대시보드'];
+      const DEST: Record<string, string> = { '@프로필 편집': '설정' };
+      const rows: string[] = []; const bad: string[] = []; let changed = 0; let readsAfterSec = -1;
+      for (let i = 0; i < ORDER.length; i++) {
+        const name = ORDER[i];
+        // 판을 스크롤한 뒤(가능하면 200px) 누른다 — 원점 스크롤 0 은 실사용이 아니다
+        // '@' 입구(대시보드 머리의 버튼)는 판 맨 위에 있어 스크롤하면 화면 밖이다 — 그 이동만 원점에서 누른다.
+        await page.evaluate((top) => { const p = document.querySelector<HTMLElement>('[data-profile-panel]'); if (p) p.scrollTop = top ? 0 : Math.min(200, Math.max(0, p.scrollHeight - p.clientHeight)); }, name.startsWith('@'));
+        await page.waitForTimeout(500);
+        const b = await page.evaluate((label) => {
+          const x = label.startsWith('@')
+            ? [...document.querySelectorAll<HTMLElement>('[data-profile-panel] button')].find((e) => e.getClientRects().length > 0 && (e.textContent ?? '').trim() === label.slice(1))
+            : [...document.querySelectorAll<HTMLElement>('[data-profile-tabbar] [role="tab"]')].find((e) => (e.textContent ?? '').trim() === label);
+          const p = document.querySelector('[data-profile-panel]');
+          if (!x || !p) return null;
+          const r = x.getBoundingClientRect(); const pr = p.getBoundingClientRect();
+          const top = Math.max(r.bottom + 2, pr.top + 2);
+          const bottom = Math.max(top + 60, Math.min(pr.bottom, innerHeight) - 8);
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2, vh: innerHeight, crop: { top, bottom, w: innerWidth }, mid: { x: innerWidth / 2, y: (top + bottom) / 2 }, on: x.getAttribute('aria-selected') === 'true' };
+        }, name);
+        expect(b, `${name}: 탭을 못 찾았다`).not.toBeNull();
+        const id = `${w}${scheme[0]}#${i}:${name}`;
+        const lv0 = await page.evaluate(() => (window as unknown as { __lv: number[] }).__lv.length);
+        await cast.start(b!.crop);
+        await page.waitForTimeout(120);
+        const t0 = Date.now();
+        await press(page, cdp, b!.x, b!.y, true);
+        const hit = await page.evaluate(([x, y]) => new Promise<string | null>((res) => setTimeout(() => {
+          const el = document.elementFromPoint(x, y);
+          res(el?.closest('[data-pane-leaving]') ? `${el.tagName} LEAVING` : null);
+        }, 40)), [b!.mid.x, b!.mid.y] as [number, number]);
+        await page.waitForTimeout(1000);
+        const frames = await cast.stop();
+        await expect(page.locator('[data-profile-tabbar] [role="tab"]', { hasText: DEST[name] ?? name })).toHaveAttribute('aria-selected', 'true');
+        const pre = frames.filter((f) => f.t < t0).pop();
+        const post = frames.filter((f) => f.t >= t0);
+        const rowsOf = (f: typeof frames[number]) => {
+          const TW = 20, TH = f.th.length / TW;
+          const r0 = Math.floor((b!.crop.top / b!.vh) * TH), r1 = Math.max(r0 + 1, Math.ceil((b!.crop.bottom / b!.vh) * TH));
+          return Array.from(f.th.slice(r0 * TW, Math.min(TH, r1) * TW));
+        };
+        const d = (a: typeof frames[number], c: typeof frames[number]) => { const x = rowsOf(a), y = rowsOf(c); let s = 0; for (let q = 0; q < x.length; q++) s += Math.abs(x[q] - y[q]); return s / (x.length || 1); };
+        let cut = 0; let prev = pre;
+        for (const f of post) { if (prev) cut = Math.max(cut, d(prev, f)); prev = f; }
+        const total = pre && post.length ? d(pre, post[post.length - 1]) : 0;
+        const lv = await page.evaluate((k) => (window as unknown as { __lv: number[] }).__lv.length - k, lv0);
+        const stuck = await page.evaluate(() => ({ n: document.querySelectorAll('[data-pane-leaving]').length, swap: document.documentElement.hasAttribute('data-tab-swap') }));
+        rows.push(`${id} total=${total.toFixed(1)} cut=${cut.toFixed(1)} leave=${lv}${hit ? ' hit=' + hit : ''}`);
+        if (total > 3) {
+          changed += 1;
+          if (lv === 0) bad.push(`${id} 판이 바뀌었는데 떠나는 판이 서지 않았다(즉시 교체 — 다른 하위 탭과 다른 전환)`);
+          if (cut > 6) bad.push(`${id} 한 프레임 컷 ${cut.toFixed(1)}(> 6)`);
+        }
+        if (hit) bad.push(`${id} +40ms 본문 입력이 떠나는 판에 닿았다(${hit})`);
+        if (stuck.n || stuck.swap) bad.push(`${id} 정착 뒤 남았다: 떠나는 판 ${stuck.n} · data-tab-swap ${stuck.swap}`);
+        if (name === '보안' && readsAfterSec < 0) { await page.waitForTimeout(1500); readsAfterSec = consentReads; }
+        await page.waitForTimeout(300);
+      }
+      const same = await page.evaluate(() => { const d = (window as unknown as { __dash: Element & { __keep?: boolean } }).__dash; return !!d?.isConnected && d.__keep === true; });
+      console.log(`[handoff-me ${w} ${scheme}] changed=${changed} consentReads=${consentReads} (after first 보안 ${readsAfterSec})\n  ${rows.join('\n  ')}`);
+      expect(changed, '판 그림이 바뀐 이동이 거의 없다 — 게이트가 공허해진다').toBeGreaterThanOrEqual(6);
+      expect(same, 'keep-alive: 대시보드 판이 다시 마운트됐다').toBe(true);
+      expect(readsAfterSec, '보안 탭 진입을 못 쟀다').toBeGreaterThanOrEqual(0);
+      expect(consentReads, 'keep-alive: 첫 보안 진입 뒤 약관 이력을 다시 불렀다').toBe(readsAfterSec);
+      expect(bad).toEqual([]);
+    });
+  }
+});

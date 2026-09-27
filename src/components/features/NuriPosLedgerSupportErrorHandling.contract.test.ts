@@ -32,6 +32,7 @@ describe('가게지원 버튼은 다른 결제수단 버튼과 같은 onPick 을
     expect(j).toBeGreaterThan(i);
     const body = code.slice(i, j);
     expect(body).toContain('} catch (e) {');
-    expect(body).toMatch(/else toast\.show\(e instanceof Error \? e\.message : '저장 실패', 'error'\);/);
+    // 2026-09-27 #3 — 원문(TypeError: Failed to fetch 등) 대신 ledgerErrorText 로 쉬운 말. '모든 오류를 보여준다' 계약은 그대로.
+    expect(body).toMatch(/else toast\.show\(ledgerErrorText\(e, '저장 실패'\), 'error'\);/);
   });
 });

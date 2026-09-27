@@ -1137,7 +1137,7 @@ function AdminNavBtn({ active, onClick, icon, badge, children }: { active: boole
         active ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       <span className="shrink-0" aria-hidden>{icon}</span>
       <span className="flex-1 lg:text-left">{children}</span>
-      {badge ? <span className="inline-flex h-4 min-w-[1.1rem] items-center justify-center rounded-full bg-danger px-1 text-2xs font-bold tabular-nums text-white">{badge}</span> : null}
+      {badge ? <span className="inline-flex h-4 min-w-[1.1rem] items-center justify-center rounded-full bg-danger-dark px-1 text-2xs font-bold tabular-nums text-white">{badge}</span> : null}
     </button>
   );
 }

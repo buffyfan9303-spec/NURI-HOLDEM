@@ -18,12 +18,16 @@
 //   allRequired 에 선택 항목이 들어가는 순간 위법이고, 그렇게 받은 동의는 무효다.
 // ⚠ 재동의 화면의 마케팅 체크박스는 **현재 값으로 프리필**한다. 기본 false 로 두면 재동의 한 번에
 //   기존 수신 동의가 조용히 철회된다 — 사용자는 철회한 적이 없는데 결과만 바뀐다.
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateMyConsent } from '../../api/auth';
 import { LEGAL_EFFECTIVE_DATE, legalConsentStage } from '../../lib/legalVersion';
+import { saveLocationConsent } from '../../lib/locationConsent';
+
+// 위치 동의 칸은 소셜 가입의 첫 동의에서만 보인다 — 이 게이트는 첫 화면 번들에 실리므로 칸은 지연 로드한다(번들 예산).
+const SignupLocationConsent = lazy(() => import('./SignupLocationConsent'));
 
 type GateMode = 'initial' | 'required';
 
@@ -64,6 +68,8 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
   const [marketing, setMarketing] = useState(false);
   const [pubRank,   setPubRank]   = useState(false);
   const [pubRankTouched, setPubRankTouched] = useState(false);
+  // 위치정보 이용 동의(선택) — 소셜 가입의 첫 동의(initial)에서만 받는다. 전체 동의에 묶지 않는다(위치정보법 §18 별도 동의).
+  const [locOk,     setLocOk]     = useState(false);
   const [saving,    setSaving]    = useState(false);
 
   // 재동의 진입 시 선택 항목을 현재 값으로 되살린다(철회 사고 방지). 필수 항목은 반드시 다시 체크하게 둔다 —
@@ -102,6 +108,8 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
         publicRankingConsent: sendPubRank ? pubRank : undefined,
       });
       await refreshProfile();
+      // 이미 로그인된 세션이라 바로 적는다. 실패해도 가입 동의는 끝났다 — 출석 때 시트가 다시 묻는다.
+      if (mode === 'initial' && locOk) await saveLocationConsent(true).catch(() => {});
       // 「정보통신망법」 §50⑦ — 수신 동의·철회의 처리 결과를 이용자에게 알려야 한다.
       if (reconsent && wasMarketing && !marketing) toast.show('마케팅 정보 수신 동의가 철회되었습니다', 'success');
       else toast.show('동의가 완료되었습니다', 'success');
@@ -161,11 +169,15 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
                       label="랭킹 프로필 공개에 동의합니다. (순위표에 닉네임·자주 가는 매장 표시 · 미동의 시 매장은 표시하지 않습니다)" />
         </div>
 
+        {mode === 'initial' && <Suspense fallback={null}><SignupLocationConsent checked={locOk} onChange={setLocOk} /></Suspense>}
+
         <p className="text-2xs text-ink-muted leading-relaxed">
           [선택] 항목은 동의하지 않으셔도 회원가입과 서비스 이용에 어떠한 제한도 없습니다.
         </p>
 
-        <div className="flex gap-2 pt-1">
+        {/* 버튼 줄은 시트 바닥에 붙인다 — 위치 동의 칸(가입 첫 동의)이 더해져 390×844 에서도 본문이 화면을 넘는다.
+            필수 동의 게이트라 '동의하고 시작'이 스크롤해야 보이면 안 된다(e2e/consent-gate-drag 가 잡는다). */}
+        <div className="sticky bottom-0 -mx-4 flex gap-2 border-t border-border-subtle bg-surface-mid px-4 py-3">
           <button type="button" onClick={() => logout()} className="btn-ghost flex-1">로그아웃</button>
           <button type="button" onClick={submit} disabled={saving || !allRequired} className="btn-primary flex-1 disabled:opacity-60">
             {saving ? '저장 중…' : mode === 'initial' ? '동의하고 시작' : '동의하고 계속'}

@@ -1369,7 +1369,7 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
                 {g.title && <span className="max-w-[6rem] truncate font-semibold">· {g.title}</span>}
                 {/* 2026-09-14 라이트 실측: opacity-70 이 3.24:1 이었다. '마감'은 그 게임에 더 못 넣는다는
                     운영 상태라 흐리면 안 된다 — 투명도 대신 의미가 있는 토큰으로. */}
-                {g.closed && <span className="text-2xs font-semibold text-ink-muted">마감</span>}
+                {g.closed && <span className="text-2xs font-semibold text-ink-secondary">마감</span>}
               </button>
             );
           })}

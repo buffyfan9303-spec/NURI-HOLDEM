@@ -316,7 +316,7 @@ function UserRow({ user, onUpdate }: {
           <p className="text-2xs text-ink-muted truncate">{user.email}</p>
           <p className="text-2xs text-ink-muted">
             {user.joinedAt && <>가입 {relativeTime(user.joinedAt)}</>}
-            {user.joinedAt && <span className="mx-1 text-border-strong">·</span>}
+            {user.joinedAt && <span className="mx-1 text-ink-muted">·</span>}
             최근 접속 {user.lastSeenAt ? relativeTime(user.lastSeenAt) : '기록 없음'}
           </p>
           {user.suspendedUntil && status === 'suspended' && (

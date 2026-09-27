@@ -17,6 +17,7 @@ import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
+import { promptLogin } from '../../lib/requireLogin';
 
 /** 구인/구직 필터 칩 — 진열 순서가 곧 하위 탭 전환 방향(forward/back)의 기준. */
 const KIND_FILTERS: [DealerPostKind | 'all', string][] = [['all', '전체'], ['hiring', '구인'], ['seeking', '구직'], ['general', '일반']];
@@ -128,7 +129,7 @@ export default function DealerCommunity() {
       {/* ICM 계산기 + 글쓰기 — 모바일에서 반반(두 칸 동일 너비). ICM 펼치면 아래 풀폭 */}
       <div className="grid grid-cols-2 gap-2">
         <button type="button" onClick={() => setShowIcm((v) => !v)}
-          className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+          className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
           <span className="inline-flex items-center gap-1"><span className="text-accent-300">ICM</span> 계산기</span>
           <Icon name={showIcm ? 'chevron-up' : 'chevron-down'} size={12} className="shrink-0 text-ink-muted" />
         </button>
@@ -137,7 +138,8 @@ export default function DealerCommunity() {
             {open ? '글쓰기 닫기' : '+ 글쓰기'}
           </button>
         ) : (
-          <div className="flex items-center justify-center rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-2xs text-ink-muted">로그인 후 작성</div>
+          <button type="button" onClick={() => promptLogin()}
+            className="flex min-h-[44px] items-center justify-center rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-2xs font-semibold text-accent-300 transition-colors hover:bg-surface-high/70">로그인 후 작성</button>
         )}
       </div>
       {showIcm && <div><ICMCalculator /></div>}
@@ -196,7 +198,7 @@ export default function DealerCommunity() {
           const cnt = k === 'all' ? posts.length : posts.filter((x) => x.kind === k).length;
           return (
             <button key={k} type="button" onClick={() => goSubTab('dealer-kind', KIND_FILTER_ORDER, filterKind, k, () => setFilterKind(k))} aria-pressed={on}
-              className={['shrink-0 inline-flex h-11 -my-3 items-center whitespace-nowrap text-xs leading-none transition-colors tabular-nums',
+              className={['shrink-0 inline-flex h-11 min-w-[44px] -my-3 items-center justify-center whitespace-nowrap text-xs leading-none transition-colors tabular-nums',
                 on ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-primary'].join(' ')}>
               {label}{cnt > 0 ? ` ${cnt}` : ''}
             </button>

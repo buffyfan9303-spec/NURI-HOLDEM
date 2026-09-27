@@ -160,14 +160,15 @@ function MarketplaceTab({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="제목으로 검색…"
-            className="input pl-9"
+            // 44px(2026-09-27 점검: 40.8) — 공용 .input 높이는 그대로 두고 여기만 키운다. -my 로 줄 높이(40.8)는 그대로.
+            className="input pl-9 min-h-[44px] -my-[1.6px]"
           />
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
         </div>
         <button
           type="button"
           onClick={onCreate}
-          className="btn-primary text-xs px-3 shrink-0"
+          className="btn-primary text-xs px-3 shrink-0 min-h-[44px] -my-[1.6px]"
         >
           글쓰기
         </button>
@@ -178,8 +179,11 @@ function MarketplaceTab({
           배경·보더 없는 텍스트 필터(활성 = 액센트 색+굵기만). */}
       {/* 44px 탭 타깃(오너 승인 2026-09-03): 버튼 h-11, 레일 -my-2.5 로 원래 24px 행 높이 유지.
           부모 space-y-3 이 자식 margin 을 덮어쓰므로 h-6 래퍼 안에서 상쇄한다(data-market-catbar 는 그대로). */}
-      <div className="h-6">
-      <div data-market-catbar="" className="-my-2.5 flex items-center gap-3 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
+      {/* flow-root — 안 레일의 -my 가 이 상자 밖으로 새어(마진 상쇄) 칩이 행 가운데가 아니라 아래로 21px 매달려 있었다(2026-09-27 실측). 글자 자리는 그대로다. */}
+      <div className="h-6 flow-root">
+      {/* 가로도 44px(2026-09-27 점검: '전체'·'용품' 22px) — 칩마다 좌우 11px(두 글자 22px + 22 = 44), 칩 사이 여백 없음 → 글자 간격은 고르게 22px(종전 12.75).
+          레일 -mx-[11px] 로 첫 글자는 종전처럼 왼쪽 끝에 선다(누름 면만 여백 쪽으로 11px 나간다). */}
+      <div data-market-catbar="" className="-my-2.5 -mx-[11px] flex items-center overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
         {CATEGORIES.map((cat) => {
           const active = category === cat.id;
           return (
@@ -189,7 +193,7 @@ function MarketplaceTab({
               aria-pressed={active}
               onClick={() => goSubTab('market-cat', CAT_ORDER, category, cat.id, () => setCategory(cat.id))}
               className={[
-                'shrink-0 inline-flex h-11 items-center whitespace-nowrap text-xs transition-colors',
+                'shrink-0 inline-flex h-11 items-center px-[11px] whitespace-nowrap text-xs transition-colors',
                 active ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-primary',
               ].join(' ')}
             >
@@ -201,22 +205,23 @@ function MarketplaceTab({
       </div>
 
       {/* ── 정렬·필터 바 ────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-2 text-2xs">
+      {/* !mt 18.7px(종전 12.75) — 위 분류 칩(46.75px 누름 면)과 아래 정렬·거래완료(44px) 누름 면이 겹치지 않게 중심 간격 ≥ 44.
+          (겹치면 뒤에 오는 정렬 칩이 분류 칩 아래쪽 15px 를 가로챘다 — 2026-09-27 elementFromPoint 실측). 이 줄부터 아래는 약 16px 내려간다. */}
+      <div className="!mt-[1.1rem] flex items-center justify-between gap-2 text-2xs">
         <div className="flex items-center gap-1">
           <SortPill active={sortBy === 'recent'}  onClick={() => goSubTab('market-cat', SORT_ORDER, sortBy, 'recent',  () => setSortBy('recent'))}  label="최신순"   />
           <SortPill active={sortBy === 'popular'} onClick={() => goSubTab('market-cat', SORT_ORDER, sortBy, 'popular', () => setSortBy('popular'))} label="조회수순" />
-          <span className="ml-2 text-ink-muted">
+          {/* 체크박스+글자를 한 label 로 — 네이티브 체크박스는 13px 였다(2026-09-27 점검). 실제 높이 44px, -my 로 줄 높이(28.7)는 그대로. */}
+          <label htmlFor="includeSold" className="ml-2 inline-flex h-[44px] -my-[7.65px] cursor-pointer items-center gap-1 text-ink-muted">
             <input
               id="includeSold"
               type="checkbox"
               checked={includeSold}
               onChange={(e) => setIncludeSold(e.target.checked)}
-              className="accent-accent-300 mr-1 align-middle"
+              className="accent-accent-300"
             />
-            {/* label 을 히트영역으로 쓴다 — 네이티브 체크박스는 16px 라 글자를 정확히 찍어야 켜졌다.
-                py-1.5 + tap-y-44 로 글자 줄 전체가 눌리는 면이 된다. */}
-            <label htmlFor="includeSold" className="tap-y-44 inline-block cursor-pointer py-1.5">거래완료 포함</label>
-          </span>
+            거래완료 포함
+          </label>
         </div>
         <span className="text-ink-muted tabular-nums">총 {visible.length}건</span>
       </div>
@@ -330,10 +335,8 @@ function SortPill({ active, onClick, label }: { active: boolean; onClick: () => 
       type="button"
       onClick={onClick}
       className={[
-        // tap-y-44: 세로만 넓힌다(::before inset -6px 0). 이 행은 가로 스크롤 레일이 아니라
-        //   flex justify-between 이라 세로 오버플로가 안 생기고, 좌우로는 안 번져 이웃 칩을 안 훔친다.
-        //   py-1.5 로 실제 높이도 20 → 26px 올려 AA(24) 를 넘긴다.
-        'tap-y-44 px-2 py-1.5 rounded-badge transition-colors',
+        // 실제 높이 44px(2026-09-27 점검: tap-y-44 로 38px·위 분류 칩과 겹침) — -my 7.65px 로 줄 높이(28.7)는 그대로.
+        'inline-flex h-[44px] -my-[7.65px] min-w-[44px] items-center justify-center px-2 rounded-badge transition-colors',
         active ? 'text-accent-300 font-bold' : 'text-ink-muted hover:text-ink-secondary',
       ].join(' ')}
     >
@@ -402,9 +405,9 @@ function ListingRow({
             <span className="font-bold text-ink-primary tabular-nums">
               {listing.price.toLocaleString()}
             </span>
-            <span className="text-border-strong">·</span>
+            <span className="text-ink-muted">·</span>
             <span className="text-ink-muted truncate">{listing.sellerName}</span>
-            <span className="text-border-strong">·</span>
+            <span className="text-ink-muted">·</span>
             <span className="text-ink-muted shrink-0">{relativeTime(listing.createdAt)}</span>
           </div>
         </div>

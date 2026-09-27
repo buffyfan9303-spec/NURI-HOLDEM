@@ -907,7 +907,8 @@ export default function TierLeaderboard() {
           <button
             type="button"
             onClick={() => setShowLadder((v) => !v)}
-            className="mt-2 text-2xs font-semibold text-accent-300 hover:text-accent-200"
+            // 44px 히트(2026-09-27 점검: 글자 76x16 이 곧 히트였다) — 음수 여백으로 글줄 자리·세로 흐름은 그대로 둔다(24.5px)
+            className="-mt-[5.5px] -mb-[14px] inline-flex min-h-[44px] items-center text-2xs font-semibold text-accent-300 hover:text-accent-200"
           >
             {showLadder ? '등급표 닫기' : '전체 등급표 보기'}
           </button>

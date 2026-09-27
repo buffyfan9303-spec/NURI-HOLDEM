@@ -4,6 +4,7 @@ import { currentUser, currentUserStrict } from './_session';
 import { dedupe } from '../lib/inflight';
 import { LEGAL_VERSION } from '../lib/legalVersion';
 import { isValidDisplayName } from '../lib/displayName';
+import { coverKey, type ProfileCover } from '../lib/profileCover';
 
 export type UserRole   = 'user' | 'venue_owner' | 'venue_staff' | 'admin';
 // 'withdrawn' = 강제 탈퇴(Stage 3). 정지(suspended)/영구정지(banned)와 구분.
@@ -23,6 +24,9 @@ export interface User {
   venueId?: string;
   avatarColor?: string;
   avatarUrl?: string;
+  /** 내 정보 머리 배경(profiles.profile_cover — null 은 'tier' 기본). **undefined = 서버에 칸이 아직 없다**(마이그레이션 전) —
+   *  그때는 배경 고르기를 숨긴다(select('*') 라 칸이 없으면 키 자체가 없다). src/lib/profileCover.ts */
+  profileCover?: ProfileCover;
   status?: UserStatus;
   suspendedUntil?: string;
   sanctionReason?: string; // 관리자 제재 사유 (Stage 3)
@@ -88,6 +92,7 @@ function rowToUser(row: any): User {
     venueId:        row.venue_id,
     avatarColor:    row.avatar_color,
     avatarUrl:      row.avatar_url,
+    profileCover:   'profile_cover' in row ? coverKey(row.profile_cover) : undefined,
     status:         row.status,
     suspendedUntil: row.suspended_until,
     sanctionReason: row.sanction_reason ?? undefined,
@@ -628,6 +633,8 @@ export interface ProfilePatch {
   /** null = 사진 제거(avatar_url 을 NULL 로) · undefined = 변경 없음 */
   avatarUrl?: string | null;
   avatarColor?: string;
+  /** 머리 배경 — 'tier'(기본)는 null 로 싣는다. */
+  profileCover?: ProfileCover;
 }
 
 /** ProfilePatch → profiles 행 패치. undefined 는 건너뛰고 null 은 그대로 싣는다(사진 제거가 저장되는 길). */
@@ -636,6 +643,7 @@ export function profilePatchToRow(patch: ProfilePatch): Record<string, unknown> 
   if (patch.name        !== undefined) dbPatch.name         = patch.name;
   if (patch.avatarUrl   !== undefined) dbPatch.avatar_url   = patch.avatarUrl;
   if (patch.avatarColor !== undefined) dbPatch.avatar_color = patch.avatarColor;
+  if (patch.profileCover !== undefined) dbPatch.profile_cover = patch.profileCover === 'tier' ? null : patch.profileCover;
   return dbPatch;
 }
 

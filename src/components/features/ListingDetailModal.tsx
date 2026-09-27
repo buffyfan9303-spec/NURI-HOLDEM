@@ -154,7 +154,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
               </span>
             )}
             <span className="text-ink-secondary">{listing.region}</span>
-            <span className="text-border-strong">·</span>
+            <span className="text-ink-muted">·</span>
             <span className="text-ink-secondary">{relativeTime(listing.createdAt)}</span>
             {/* 신고·차단 — 예전엔 글자만(20×16px)이라 손가락으로 거의 못 눌렀다. 44px 실박스(오버행 .hit 금지 — HANDOVER §3 J). */}
             {user && user.id !== listing.sellerId && (

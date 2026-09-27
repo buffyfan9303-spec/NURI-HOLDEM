@@ -153,7 +153,7 @@ export default function LegalNotice() {
             '대회의 참가비와 상금은 매장이 제공하는 상품 정보로서 안내될 뿐이며, 회사가 지급을 약속하는 대상이 아닙니다.',
           ].map((t, i) => (
             <li key={i} className="flex gap-2">
-              <span className="shrink-0 text-border-strong">·</span>
+              <span className="shrink-0 text-ink-muted">·</span>
               <span>{t}</span>
             </li>
           ))}
@@ -205,7 +205,7 @@ export default function LegalNotice() {
             '나는 위 서약을 위반하여 회사에 손해가 발생한 경우 그 배상 책임이 나에게 있음을 확인합니다.',
           ].map((t, i) => (
             <li key={i} className="flex gap-2">
-              <span className="shrink-0 text-border-strong">·</span>
+              <span className="shrink-0 text-ink-muted">·</span>
               <span>{t}</span>
             </li>
           ))}
@@ -228,7 +228,7 @@ export default function LegalNotice() {
             '도박 문제로 어려움을 겪고 있다면 한국도박문제예방치유원 헬프라인 1336(24시간·무료)에서 상담받을 수 있습니다.',
           ].map((t, i) => (
             <li key={i} className="flex gap-2">
-              <span className="shrink-0 text-border-strong">·</span>
+              <span className="shrink-0 text-ink-muted">·</span>
               <span>{t}</span>
             </li>
           ))}
@@ -268,7 +268,7 @@ export default function LegalNotice() {
             '약관의 규제에 관한 법률 제7조 (면책조항의 금지). 회사의 고의·중대한 과실 책임은 배제되지 않습니다',
           ].map((law, i) => (
             <li key={i} className="flex gap-2">
-              <span className="shrink-0 text-border-strong">·</span>
+              <span className="shrink-0 text-ink-muted">·</span>
               <span>{law}</span>
             </li>
           ))}

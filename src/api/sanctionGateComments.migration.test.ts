@@ -10,7 +10,7 @@
 // 훗날 시스템 UPDATE 를 오폭하게 만드는 것 · 작성자 위조를 막는 WITH CHECK 을 빼는 것 ·
 // 클라이언트가 RLS 원문을 그대로 토스트하게 되는 것.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** 줄끝 정규화 — Windows 체크아웃(core.autocrlf)에서는 이 파일이 CRLF 로 내려온다.
@@ -127,5 +127,51 @@ describe('20260911n — 제재 게이트를 댓글·쪽지·구인글까지 넓�
     expect(API).toContain(
       "if (error) throw new Error(error.code === 'P0001' ? error.message : '댓글 등록에 실패했습니다');",
     );
+  });
+});
+
+// ── 20260927b(2026-09-27) — 위 게이트는 **한 번도 작동한 적이 없었다** ──────────────────────────
+// require_active_author() 가 SECURITY DEFINER 라 함수 안의 current_user 가 소유자(postgres)였다 →
+//   `current_user in ('authenticated','anon')` 가 항상 거짓. 위 20260911n 테스트는 **트리거가 붙었는지**만 봐서
+//   이 구멍을 못 봤다(텍스트는 맞고 실행은 무력 — 거짓 통과). 운영 리허설: 정지 회원 댓글 ALLOWED → invoker 후 DENY P0001.
+// 이 블록은 '실행 주체' 를 잠근다. 주석(--)은 걷어 내고 본다 — 머리말에 적힌 문장이 단언을 대신 통과시키지 못하게.
+// ⚠ 20260911n 의 자가검사('SECURITY DEFINER·search_path 고정')는 옛 전제라 **재적용하면 ABORT** 한다 — 재적용 금지, 역사 기록이다.
+const GUARDS = lf(readFileSync(
+  join(__dirname, '..', '..', 'supabase', 'migrations', '20260927b_community_guards.sql'),
+  'utf-8',
+));
+/** 줄 주석(--) 을 걷어 낸 실행 문장만 */
+const code = (s: string) => s.split('\n').map((l) => l.replace(/--.*$/, '')).join('\n');
+const GCODE = code(GUARDS);
+/** 함수 정의 한 벌(create … $f$ … $f$;)을 잘라 낸다 */
+const fnBody = (src: string, name: string) => {
+  const a = src.indexOf(`create or replace function public.${name}(`);
+  if (a < 0) return '';
+  const b = src.indexOf('$f$;', a);
+  return src.slice(a, b + 4);
+};
+
+describe('20260927b — 제재·위조 가드는 호출자 권한(invoker)으로 돈다', () => {
+  it('require_active_author 를 security invoker 로 바꾼다(주석 말고 실행 문장으로)', () => {
+    expect(GCODE).toContain('alter function public.require_active_author() security invoker;');
+    // 같은 파일이 뒤에서 다시 definer 로 되돌리지 않는다
+    expect(GCODE).not.toMatch(/alter function public\.require_active_author\(\)\s+security definer/i);
+  });
+
+  it('_guard_ugc_client_cols 는 SECURITY DEFINER 가 아니다 — definer 면 current_user 판정이 죽어 가드가 통째로 꺼진다', () => {
+    const body = fnBody(GCODE, '_guard_ugc_client_cols');
+    expect(body, '_guard_ugc_client_cols 정의가 없다').not.toBe('');
+    expect(body).not.toMatch(/security\s+definer/i);
+    expect(body).toContain("if current_user not in ('authenticated','anon') then return new; end if;");
+    expect(body).toContain('set search_path = public, pg_temp');
+  });
+
+  it('이후 마이그레이션이 require_active_author 를 다시 definer 로 만들지 않는다(마지막으로 만진 파일이 invoker)', () => {
+    const dir = join(__dirname, '..', '..', 'supabase', 'migrations');
+    const touching = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()
+      .filter((f) => /(create or replace function|alter function) public\.require_active_author\(/i
+        .test(code(lf(readFileSync(join(dir, f), 'utf-8')))));
+    const last = touching[touching.length - 1];
+    expect(last, `마지막으로 require_active_author 를 정의·변경한 파일: ${last}`).toBe('20260927b_community_guards.sql');
   });
 });

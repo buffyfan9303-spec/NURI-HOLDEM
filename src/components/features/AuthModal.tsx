@@ -19,6 +19,8 @@ import TermsOfService   from '../../pages/legal/TermsOfService';
 import PrivacyPolicy    from '../../pages/legal/PrivacyPolicy';
 import LegalNotice      from '../../pages/legal/LegalNotice';
 import MarketingConsent from '../../pages/legal/MarketingConsent';
+import SignupLocationConsent from './SignupLocationConsent';
+import { rememberSignupLocationConsent, flushSignupLocationConsent } from '../../lib/locationConsent';
 
 type Mode     = 'login' | 'signup-user' | 'signup-owner' | 'forgot';
 type LegalDoc = 'terms' | 'privacy' | 'anti-gambling' | 'marketing';
@@ -677,6 +679,8 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
   const [confirm,  setConfirm]  = useState('');
   const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null);
   const { c, allRequired, allChecked, set, toggleAll } = useConsent();
+  // 위치정보 이용 동의(선택) — 필수·전체 동의와 분리된 별도 체크(위치정보법 §18). 세션이 생긴 뒤 적는다(afterSignupLocation).
+  const [locOk, setLocOk] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -701,6 +705,7 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
         agreedToMarketing:    c.marketing,
         publicRankingConsent: c.publicRanking,
       });
+      if (locOk) await afterSignupLocation(mail.value);
       toast.show('가입 완료! 로그인 후 휴대폰 본인인증을 진행해 주세요.', 'success');
       onDone();
     } catch (err: unknown) {
@@ -731,6 +736,7 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
           set={set} toggleAll={toggleAll}
           onView={setLegalDoc}
         />
+        <SignupLocationConsent checked={locOk} onChange={setLocOk} />
 
         <button
           type="submit"
@@ -750,6 +756,13 @@ function SignupUserForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode
   );
 }
 
+/** 가입 때 체크한 위치 동의를 적는다 — 가입이 세션을 만들었으면 지금, 아니면(확인 메일 대기) 그 계정이 처음 로그인할 때(App).
+ *  가입 성공은 이것과 무관하다 — 적기 실패는 조용히 남겨 두고 다음 로그인 때 다시 적는다(출석 때 시트가 묻는 것도 그대로). */
+async function afterSignupLocation(email: string) {
+  rememberSignupLocationConsent(email);
+  try { await flushSignupLocationConsent(email); } catch { /* 다음 로그인 때 다시 */ }
+}
+
 // ── 매장 업주 가입 ─────────────────────────────────────────────────────────────
 
 function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mode) => void; onDone: () => void }) {
@@ -765,6 +778,8 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
   const [bizNum,    setBizNum]    = useState('');
   const [legalDoc,  setLegalDoc]  = useState<LegalDoc | null>(null);
   const { c, allRequired, allChecked, set, toggleAll } = useConsent();
+  // 위치정보 이용 동의(선택) — 필수·전체 동의와 분리된 별도 체크(위치정보법 §18). 세션이 생긴 뒤 적는다(afterSignupLocation).
+  const [locOk, setLocOk] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -787,6 +802,7 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
         publicRankingConsent: c.publicRanking,
         venueName, region, address, phone, businessNumber: bizNum,
       });
+      if (locOk) await afterSignupLocation(mail.value);
       toast.show('업주 가입 신청 완료. 로그인 후 휴대폰 본인인증·운영자 승인을 거쳐 포스터 업로드가 활성화됩니다.', 'success');
       onDone();
     } catch (err: unknown) {
@@ -844,6 +860,7 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
           set={set} toggleAll={toggleAll}
           onView={setLegalDoc}
         />
+        <SignupLocationConsent checked={locOk} onChange={setLocOk} />
 
         <button
           type="submit"

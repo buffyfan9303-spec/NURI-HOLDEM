@@ -21,7 +21,7 @@ export default function VenueVerificationCard() {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-accent-300">인증 매장</p>
-          <p className="text-2xs text-ink-muted">포스터(요강)가 운영자 승인 없이 즉시 게시됩니다.</p>
+          <p className="text-2xs text-ink-secondary">포스터(요강)가 운영자 승인 없이 즉시 게시됩니다.</p>
         </div>
       </div>
     );

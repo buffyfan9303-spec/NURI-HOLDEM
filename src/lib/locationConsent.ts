@@ -10,6 +10,7 @@
 import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getMyLocationConsent, setMyLocationConsent, type LocationConsentState } from '../api/locationPrivacy';
+import { supabase } from './supabase';
 
 /** 위치기반서비스 이용약관 판(版). 약관의 수집·이용 조항을 바꾸면 올린다 — 옛 판 동의자는 다음 출석 때 다시 묻는다. */
 export const LOCATION_TERMS_VERSION = 2;
@@ -82,4 +83,38 @@ export async function ensureLocationConsent(ask: () => Promise<boolean | null> =
   try { choice = await ask(); } catch { return false; }
   if (choice === null) return false;
   try { return isConsentCurrent(await saveLocationConsent(choice)); } catch { return false; }
+}
+
+// ── 가입 때 받는 위치 동의(선택 · 2026-09-27 오너 요청 4) ─────────────────────────────────────────
+// 위치정보법 제18조① — 이용약관에 적은 뒤 **동의를 받아** 수집한다. 가입 화면이 그 동의를 필수 동의와 **분리된** 선택 체크로 받는다.
+//   · 체크함   → set_my_location_consent(true, LOCATION_TERMS_VERSION) — 출석 때 다시 묻지 않는다(isConsentCurrent)
+//   · 체크 안 함 → 아무것도 적지 않는다('선택 안 함'). 가입·이용은 그대로 되고, 위치 확인을 처음 쓸 때 시트가 묻는다(ensureLocationConsent)
+// 서버 기록은 **본인 세션이 생긴 뒤**에만 쓸 수 있다(본인 RPC). 이메일 가입은 확인 메일 설정에 따라 세션이 바로 없을 수 있어,
+//   이 기기에 '적을 동의'(가입 이메일 · 판 · 시각)만 남기고 그 계정이 로그인한 순간(App [user.email] 이펙트) 적은 뒤 지운다.
+//   이메일이 다른 계정이 로그인하면 적지 않는다(남의 동의를 대신 적지 않는다). 30일 지나면 버린다.
+const PENDING_KEY = 'nuri:signup-location-consent';
+const PENDING_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+type Pending = { email: string; v: number; at: number };
+const norm = (e: string) => e.trim().toLowerCase();
+
+export function rememberSignupLocationConsent(email: string): void {
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify({ email: norm(email), v: LOCATION_TERMS_VERSION, at: Date.now() } satisfies Pending)); } catch { /* 저장소 차단 — 출석 때 시트가 묻는다 */ }
+}
+
+/** 남겨 둔 가입 동의가 지금 로그인한 그 계정 것이면 서버에 적는다. 적었으면 true. 실패하면 남겨 두고 다음 로그인 때 다시. */
+export async function flushSignupLocationConsent(email: string | null | undefined): Promise<boolean> {
+  let p: Pending | null;
+  try { p = JSON.parse(localStorage.getItem(PENDING_KEY) ?? 'null') as Pending | null; } catch { return false; }
+  if (!p || !email) return false;
+  const drop = () => { try { localStorage.removeItem(PENDING_KEY); } catch { /* 무시 */ } };
+  if (Date.now() - p.at > PENDING_TTL_MS || p.v !== LOCATION_TERMS_VERSION) { drop(); return false; } // 오래됐거나 약관 판이 바뀌었다 — 다시 묻는다
+  if (p.email !== norm(email)) return false;
+  // 세션이 그 계정인지 확인하고 적는다 — 세션 없는 가입 직후(확인 메일 대기)에는 적지 않고 기다린다.
+  const { data } = await supabase.auth.getSession();
+  if (norm(data.session?.user?.email ?? '') !== p.email) return false;
+  try {
+    const s = await saveLocationConsent(true);
+    drop();
+    return isConsentCurrent(s);
+  } catch { return false; }
 }

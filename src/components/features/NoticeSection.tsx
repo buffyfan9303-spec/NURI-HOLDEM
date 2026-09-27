@@ -186,7 +186,7 @@ export default function NoticeSection({
             {rest.length > 0 && (
               <button type="button" onClick={() => setOpen((v) => !v)}
                 aria-expanded={open} aria-controls={listId} aria-label={open ? '공지 목록 접기' : `공지 전체 ${ranked.length}건 펼치기`}
-                className="inline-flex h-11 shrink-0 items-center gap-0.5 rounded-input px-2 text-2xs font-semibold tabular-nums text-ink-secondary transition-colors hover:bg-surface-high/50">
+                className="inline-flex h-11 min-w-[44px] shrink-0 items-center justify-center gap-0.5 rounded-input px-2 text-2xs font-semibold tabular-nums text-ink-secondary transition-colors hover:bg-surface-high/50">
                 {/* ⚠ 회전(transform) 대신 아이콘을 바꾼다 — 이 섹션은 'transform 애니메이션 0개'가
                     계약이다(e2e/notice-static: 전광판 재발 방지). 회전 트랜지션도 그 계수에 잡힌다. */}
                 {/* ⚠ 360 에서 이 라벨(71.7px)이 제목 칸을 101.5px 까지 밀어 "🛒 중고장터…" 4자만 남겼다

@@ -27,7 +27,7 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBu
   getPendingBuyinRequests, approveBuyinRequest, rejectBuyinRequest, subscribeBuyinRequests, type BuyinRequest,
   getLastClosedRound, type LastClosedRound,
   discountsAppendOnly, ledgerSessionMatches, cancelPwStateFromError, type LedgerRowOwner,
-  LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING, ledgerErrorText,
+  LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING, ledgerErrorText, LEDGER_ALREADY_OPEN,
 } from '../../api/ledger';
 import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
@@ -503,14 +503,14 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     return discIdxFor(target)
       .then((discIdx) => approveBuyinRequest(r.id, target, withBuyin, payMethod, split, discIdx))
       .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? ' + 티켓 기록(이용권)' : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
-      .catch((e) => { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); loadPending(); });
+      .catch((e) => { toast.show(ledgerErrorText(e, '승인 실패'), 'error'); loadPending(); });
   };
   const doReject = (r: BuyinRequest, reason?: string) => {
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id)); // 낙관 제거
     setRejectFor(null);
     return rejectBuyinRequest(r.id, reason)
       .then(() => loadPending())
-      .catch((e) => { toast.show(e instanceof Error ? e.message : '거절 실패', 'error'); loadPending(); });
+      .catch((e) => { toast.show(ledgerErrorText(e, '거절 실패'), 'error'); loadPending(); });
   };
   const bulkApprove = () => {
     if (!pendingReqs.length) return;
@@ -1010,7 +1010,15 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       //   ⚠ 되살릴 일이 있어도 confirm 이 아니라 화면 안 배너로 해라 — 모달 대화상자는 그동안
       //     다른 조작을 전부 막고, 브라우저 자동화에서는 세션이 통째로 멈춘다.
     }
-    catch (e) { toast.show(ledgerErrorText(e, '시작 실패'), 'error', { durationMs: 7000 }); }   // 20260925g: 직원 지난 날짜·담당 권한 hint 를 쉬운 말로
+    catch (e) {
+      // #5(2026-09-27) — 다른 접수대가 먼저 시작했다. 덮지 않았으니 그 장부를 다시 읽어 보드로 넘어간다.
+      if (e instanceof Error && e.message === LEDGER_ALREADY_OPEN) {
+        toast.show(`${LEDGER_ALREADY_OPEN}. 그 장부를 불러왔어요 — 제목·단가·담당을 확인해 주세요`, 'info', { durationMs: 7000 });
+        await reloadSession(); reload();
+        return;
+      }
+      toast.show(ledgerErrorText(e, '시작 실패'), 'error', { durationMs: 7000 });   // 20260925g: 직원 지난 날짜·담당 권한 hint 를 쉬운 말로
+    }
   };
   const handleEditSave = async (s: LedgerSession) => {
     // 비분납 바인은 세션 단가·할인을 '참조'로 재계산한다 — 변경이 기존 기록 전체에 소급된다는
@@ -1078,11 +1086,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       if (mismatch) toast.show(closeMsg, 'error', { durationMs: 8000 });
       else toast.show(closeMsg, 'success');
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '마감 실패', 'error'); }
+    catch (e) { toast.show(ledgerErrorText(e, '마감 실패'), 'error'); }
   };
   const handleReopen = async () => {
     try { await reopenLedgerSession(venueId, date, gameSeq); await reloadSession(); toast.show('마감을 해제했습니다', 'info'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '해제 실패', 'error'); }
+    catch (e) { toast.show(ledgerErrorText(e, '해제 실패'), 'error'); }
   };
   // PL3: 마감 직후 '이 게임을 프리셋으로 저장' — 프리셋이 별도 작업이 아니라 운영의 부산물로 쌓이게.
   const [roundPresetState, setRoundPresetState] = useState<'idle' | 'busy' | 'done'>('idle');
@@ -1096,11 +1104,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       await saveGamePreset(venueId, session.title?.trim() || `${date} 게임`, presetFromRound(session, cfg, sched));
       setRoundPresetState('done');
       toast.show('프리셋으로 저장했어요. 포스터·장부·클락 어디서든 한 번에 불러올 수 있어요', 'success');
-    } catch (e) { setRoundPresetState('idle'); toast.show(e instanceof Error ? e.message : '프리셋 저장 실패', 'error'); }
+    } catch (e) { setRoundPresetState('idle'); toast.show(ledgerErrorText(e, '프리셋 저장 실패'), 'error'); }
   };
   const handleRegClose = async () => {
     try { await setRegistrationClosed(venueId, date, !regClosed, gameSeq); await reloadSession(); toast.show(!regClosed ? '레지 마감했습니다' : '레지를 다시 열었습니다', 'info'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
+    catch (e) { toast.show(ledgerErrorText(e, '실패했습니다'), 'error'); }
   };
   const addPlayer = async () => {
     const n = newName.trim();
@@ -1110,7 +1118,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       // 개장 러시: 손님 10~20명이 줄 선다 — 폼을 유지하고 입력만 비워 연속 등록(닫기는 ✕로)
       setNewName(''); setNewType('regular'); setSuggest([]); reload();
       toast.show(`${n} 추가됨. 이어서 입력하세요`, 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
+    } catch (e) { toast.show(ledgerErrorText(e, '추가 실패'), 'error'); }
   };
   // 가입자 검색(디바운스) — RPC 하나가 두 경우를 다 준다(20260911h):
   //   이 매장 손님(체크인·CRM·예약)은 부분 일치 + 실명, 처음 오는 회원은 닉네임 정확 일치(실명 없음).
@@ -1130,9 +1138,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       await addLedgerPlayer({ venueId, sessionDate: date, gameSeq, name: label, visitorType: newType, sortOrder: players.length });
       setNewName(''); setSuggest([]); setNewType('regular'); reload();
       toast.show(`${label} 추가됨. 이어서 입력하세요`, 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
+    } catch (e) { toast.show(ledgerErrorText(e, '추가 실패'), 'error'); }
   };
-  const savePlayer = async (id: string, patch: { visitorType?: string | null; note?: string | null; name?: string }) => {
+  /** 성공하면 true — 실패면 모달을 닫지 않는다(#7 2026-09-27: 이름 충돌로 거절돼도 닫혀 입력이 사라졌다). */
+  const savePlayer = async (id: string, patch: { visitorType?: string | null; note?: string | null; name?: string }): Promise<boolean> => {
     try {
       const { name: newName, ...rest } = patch;
       // 이름 변경은 로스터+해당 세션 바인 기록(player_name 키)을 함께 갱신
@@ -1142,13 +1151,17 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       }
       await updateLedgerPlayer(id, rest);
       reload();
+      return true;
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    catch (e) { toast.show(ledgerErrorText(e, '저장 실패'), 'error'); reload(); return false; }
   };
   const removePlayer = async (p: LedgerPlayer, password?: string) => {
     const hasBuyins = buyins.some((b) => b.playerName === p.name);
     try {
-      if (hasBuyins && !password) { toast.show('바인 기록 삭제에는 취소 비밀번호가 필요합니다', 'error'); return; }
+      // #1(2026-09-27) — 서버(_ledger_require_cancel_auth)와 같은 규칙: 비밀번호가 설정된 매장만 비밀번호를 받고,
+      //   미설정 매장은 업주·공동운영자(canManage)만 비밀번호 없이 지운다. 예전엔 미설정 매장에서 업주도 영영 못 지웠다.
+      if (hasBuyins && hasPw && !password) { toast.show('바인 기록 삭제에는 취소 비밀번호가 필요합니다', 'error'); return; }
+      if (hasBuyins && !hasPw && !canManage) { toast.show('취소 비밀번호가 설정되지 않은 매장은 업주·공동운영자만 바인 기록이 있는 플레이어를 지울 수 있습니다', 'error'); return; }
       // 원자 RPC — 예전 순차 삭제는 중간 실패 시 '바인 2건만 사라진' 반쪽 장부를 남겼다
       await deleteLedgerPlayerAtomic(p.id, password);
       toast.show('플레이어를 삭제했습니다', 'info'); setEditPlayer(null); reload();
@@ -1450,8 +1463,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                       <>
                         <div className="grid grid-cols-3 gap-1.5">
                           {([['cash', '현금'], ['card', '카드'], ['transfer', '이체']] as const).map(([k, lbl]) => (
-                            <label key={k} className="text-2xs text-ink-muted">{lbl}
-                              <input type="number" inputMode="numeric" value={splitAmts[k] || ''} onChange={(e) => setSplitAmts((s) => ({ ...s, [k]: parseInt(e.target.value, 10) || 0 }))} className="input w-full text-2xs py-1 mt-0.5" />
+                            <label key={k} className="text-2xs text-ink-secondary">{lbl}
+                              {/* #2(2026-09-27) — 음수가 그대로 서버로 갔다(p_cash −500,000 + 카드 +50만 = 합계만 맞으면 확정). 0 미만은 0 으로 막는다. */}
+                              <input type="number" inputMode="numeric" min={0} value={splitAmts[k] || ''} onChange={(e) => setSplitAmts((s) => ({ ...s, [k]: Math.max(0, parseInt(e.target.value, 10) || 0) }))} className="input w-full text-2xs py-1 mt-0.5" />
                             </label>
                           ))}
                         </div>
@@ -1464,10 +1478,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                           return (
                             <div className="flex items-center gap-1.5">
                               <span className="flex-1 text-2xs">
-                                <span className="text-ink-muted">합계 </span><b className={['tabular-nums', mismatch ? 'text-danger-light' : 'text-ink-secondary'].join(' ')}>{sum.toLocaleString()}</b><span className="text-ink-muted">원</span>
+                                <span className="text-ink-secondary">합계 </span><b className={['tabular-nums', mismatch ? 'text-danger-light' : 'text-ink-primary'].join(' ')}>{sum.toLocaleString()}</b><span className="text-ink-secondary">원</span>
                                 {mismatch && <span className="text-danger-light"> · 받을 금액 {due.toLocaleString()}원과 다름</span>}
                               </span>
-                              <button type="button" onClick={() => setSplitFor(null)} className="rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-muted">취소</button>
+                              <button type="button" onClick={() => setSplitFor(null)} className="rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary">취소</button>
                               <button type="button" disabled={sum <= 0 || mismatch} onClick={() => approveReq(r, true, 'cash', splitAmts)} className="rounded-input bg-emerald-500/90 px-3 py-1 text-2xs font-bold text-ink-inverse hover:bg-emerald-500 disabled:opacity-40">확정</button>
                             </div>
                           );
@@ -1653,14 +1667,14 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                 <span className="text-2xs text-ink-muted">유형(선택):</span>
                 {VISITOR_OPTS.map((t) => (
                   <button key={t.code} type="button" onClick={() => setNewType((cur) => (cur === t.code ? null : t.code))}
-                    className={['text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
+                    className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
                       newType === t.code ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
                     {t.label}
                   </button>
                 ))}
                 <button type="button"
                   onClick={() => { const v = window.prompt('유형 직접입력'); if (v && v.trim()) setNewType(v.trim()); }}
-                  className={['text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
+                  className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
                     newType && !VISITOR_OPTS.some((o) => o.code === newType) ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
                   {newType && !VISITOR_OPTS.some((o) => o.code === newType) ? newType : '직접입력'}
                 </button>
@@ -1805,7 +1819,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                           <button type="button" disabled={closed}
                             onClick={() => setSelected({ playerName: (r.player as LedgerPlayer).name, entryNo: maxEntryOf((r.player as LedgerPlayer).name) + 1, buyin: null })}
                             title="+1 바인 · 결제수단 선택"
-                            className="block w-full rounded-input px-0.5 py-0.5 text-left leading-tight transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
+                            className="tap-y-44 block w-full rounded-input px-0.5 py-0.5 text-left leading-tight transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
                             <b className="text-accent-200">{cnt}회{closed ? '' : ' +'}</b>
                             {/* 회수와 같은 정의로 — 티켓·지원도 단가만큼. paid+unpaid 로 두면
                                 티켓 바인이 '1회 / 0만' 이 된다(오너 보고 2026-09-05). */}
@@ -1906,7 +1920,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             if (!prev) return null;
             const mLabel = ({ ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '가게지원' } as Record<string, string>)[prev.paymentMethod] ?? prev.paymentMethod;
             return { method: prev.paymentMethod, isUnpaid: prev.isUnpaid, discountIndex: prev.discountIndex,
-              label: `${mLabel} ${prev.isUnpaid ? '미수' : '완납'}${prev.discountIndex > 0 ? ' ·할인' : ''}` };
+              // #8(2026-09-27) — 할인은 화면 값(discIdx)을 따르므로 여기서 말하지 않는다('·할인 · 할인 없음' 모순)
+              label: `${mLabel} ${prev.isUnpaid ? '미수' : '완납'}` };
           })()}
           onClose={() => { setSelected(null); setReduceAsk(null); }}
           busy={payBusy}
@@ -1928,7 +1943,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                 // 오입력 즉시 복구 — 최빈 조작(바인 기록)에 90초 셀프 되돌리기(비번 불요, 서버 검증)
                 toast.show(`${pn} 바인 기록됨`, 'success', { durationMs: 6000, action: { label: '되돌리기', onClick: () => {
                   cancelMyRecentBuyin(savedId).then(() => { toast.show('바인을 되돌렸습니다', 'info'); reload(); })
-                    .catch((err) => toast.show(err instanceof Error ? err.message : '되돌리기 실패', 'error'));
+                    .catch((err) => toast.show(ledgerErrorText(err, '되돌리기 실패'), 'error'));
                 } } });
               }
               // W2-2 VCH-1b: 바인 자동적립 중단(§12-A-3 — 문체부 '적립→입장료' 패턴 회피).
@@ -1937,7 +1952,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               if (e instanceof Error && e.message === REDUCE_NEEDS_PW) await askReducePw(save);
               else if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 바꿨어요', 'info'); setSelected(null); reload(); }
               else if (noteServerAmountHint(e)) { /* 20260925f hint — 안내·재조회는 위에서 */ }
-              else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
+              else toast.show(ledgerErrorText(e, '저장 실패'), 'error');
             } finally { setPayBusy(false); }
           }}
           onPickSplit={async (d) => {
@@ -1954,7 +1969,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               if (isNew) {
                 toast.show(`${pn} 분납 바인 기록됨`, 'success', { durationMs: 6000, action: { label: '되돌리기', onClick: () => {
                   cancelMyRecentBuyin(savedId).then(() => { toast.show('바인을 되돌렸습니다', 'info'); reload(); })
-                    .catch((err) => toast.show(err instanceof Error ? err.message : '되돌리기 실패', 'error'));
+                    .catch((err) => toast.show(ledgerErrorText(err, '되돌리기 실패'), 'error'));
                 } } });
               }
               // W2-2 VCH-1b: 바인 자동적립 중단(§12-A-3 — 문체부 '적립→입장료' 패턴 회피).
@@ -1963,7 +1978,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               if (e instanceof Error && e.message === REDUCE_NEEDS_PW) await askReducePw(save);
               else if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 바꿨어요', 'info'); setSelected(null); reload(); }
               else if (noteServerAmountHint(e)) { /* 20260925f hint — 안내·재조회는 위에서 */ }
-              else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
+              else toast.show(ledgerErrorText(e, '저장 실패'), 'error');
             } finally { setPayBusy(false); }
           }}
           onCancelBuyin={async (pw) => {
@@ -1983,7 +1998,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               setSelected((cur) => cur && cur.buyin ? { ...cur, buyin: { ...cur.buyin, earlyOverride: override } } : cur);
               reload();
             }
-            catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+            catch (e) { toast.show(ledgerErrorText(e, '변경 실패'), 'error'); }
           }}
         />
       )}
@@ -2012,8 +2027,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
           player={editPlayer}
           recordCount={countOf(editPlayer.name)}
           hasPw={hasPw}
+          canManage={canManage}
           onClose={() => setEditPlayer(null)}
-          onSave={async (patch) => { await savePlayer(editPlayer.id, patch); setEditPlayer(null); }}
+          onSave={async (patch) => { if (await savePlayer(editPlayer.id, patch)) setEditPlayer(null); }}
           onDelete={(pw) => removePlayer(editPlayer, pw)}
         />
       )}
@@ -2210,8 +2226,10 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
 }
 
 // ── 플레이어 편집 모달(이름 수정 + 유형 + 비고 무제한 + 삭제) ─────────────────
-function PlayerEditModal({ player, recordCount, hasPw, onClose, onSave, onDelete }: {
+function PlayerEditModal({ player, recordCount, hasPw, canManage = false, onClose, onSave, onDelete }: {
   player: LedgerPlayer; recordCount: number; hasPw: boolean;
+  /** 업주·공동운영자(can_manage_pos) — 취소 비밀번호 미설정 매장에서는 비밀번호 없이 지운다(서버와 같은 규칙) */
+  canManage?: boolean;
   onClose: () => void;
   onSave: (patch: { visitorType: string | null; note: string | null; name?: string }) => void;
   onDelete: (password?: string) => void;
@@ -2264,10 +2282,16 @@ function PlayerEditModal({ player, recordCount, hasPw, onClose, onSave, onDelete
           <button type="button" onClick={() => setDelMode(true)} className="w-full rounded-input border border-danger/40 py-2 text-xs font-semibold text-danger-light transition-colors hover:bg-danger/10">플레이어 삭제 (바인 {recordCount}건 포함)</button>
         ) : (
           <div className="space-y-1.5 rounded-input border border-danger/40 bg-danger/[0.06] p-2">
-            <p className="text-2xs text-danger-light">바인 {recordCount}건이 함께 삭제됩니다. 취소 비밀번호를 입력하세요.</p>
+            <p className="text-2xs text-danger-light">
+              바인 {recordCount}건이 함께 삭제됩니다. {hasPw ? '취소 비밀번호를 입력하세요.' : canManage ? '취소 비밀번호가 설정되지 않은 매장이라 비밀번호 없이 삭제됩니다.' : '취소 비밀번호가 설정되지 않은 매장은 업주·공동운영자만 삭제할 수 있습니다.'}
+            </p>
             <div className="flex gap-1.5">
-              <input type="password" inputMode="numeric" value={delPw} onChange={(e) => setDelPw(e.target.value)} placeholder={hasPw ? '취소 비밀번호' : '비밀번호 미설정'} disabled={!hasPw} className="input min-w-0 flex-1 text-sm" autoFocus />
-              <button type="button" onClick={() => onDelete(delPw)} disabled={!hasPw || !delPw} className="btn-danger shrink-0 px-3 text-xs disabled:opacity-50">삭제 확정</button>
+              {!hasPw && canManage
+                ? <button type="button" onClick={() => onDelete('')} className="btn-danger !bg-rose-700 hover:!bg-rose-800 min-w-0 flex-1 px-3 text-xs">삭제 확정</button>
+                : <>
+                  <input type="password" inputMode="numeric" value={delPw} onChange={(e) => setDelPw(e.target.value)} placeholder={hasPw ? '취소 비밀번호' : '비밀번호 미설정'} disabled={!hasPw} className="input min-w-0 flex-1 text-sm" autoFocus />
+                  <button type="button" onClick={() => onDelete(delPw)} disabled={!hasPw || !delPw} className="btn-danger !bg-rose-700 hover:!bg-rose-800 shrink-0 px-3 text-xs disabled:opacity-50">삭제 확정</button>
+                </>}
               <button type="button" onClick={() => { setDelMode(false); setDelPw(''); }} className="btn-ghost shrink-0 px-2 text-xs">취소</button>
             </div>
           </div>
@@ -2285,7 +2309,7 @@ function PlayerEditModal({ player, recordCount, hasPw, onClose, onSave, onDelete
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button type="button" onClick={onClick}
-      className={['text-2xs font-bold px-2.5 py-1 rounded-badge border transition-colors',
+      className={['tap-y-44 min-h-[32px] text-2xs font-bold px-2.5 py-1 rounded-badge border transition-colors',
         active ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
       {children}
     </button>
@@ -2358,7 +2382,7 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
 function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], operatorOptionsError = null, onRetryOperatorOptions, operatorOptionsPartial = false, presets = [], scheduledDealers = [], dealerOptions = [], copyMain = null, lastRound = null, autoApplyLast, onLastApplied, lockPricing = false }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
-  onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
+  onSubmit: (s: LedgerSession) => void | Promise<void>; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
   schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[]; presets?: LedgerPreset[]; scheduledDealers?: string[]; copyMain?: LedgerSession | null;
   /** 이 매장에 등록된 딜러/직원 이름 — 금일 딜러 명단을 **적는 대신 고르게** 한다(오너 2026-09-18).
    *  venue_staff(계정 직원) ∪ staff_wage(비회원 포함 인건비 명부). 비어 있으면 칩 줄을 그리지 않고
@@ -2621,7 +2645,16 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const minUnit = card > 0 ? Math.min(cash, card) : cash;
   const badDisc = discs.findIndex((d) => d.amount > 0 && minUnit > 0 && d.amount > minUnit);
 
-  const submit = () => {
+  // #4(2026-09-27) — [장부 시작] 3연타에 장부 저장·클락 설정 저장이 3번씩 나갔다(담당 알림·출근표 등록도 반복).
+  //   ref 로 막는다 — 같은 틱의 연속 클릭은 state 가 아직 안 바뀌어 disabled 만으로는 못 막는다.
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+  const submit = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true; setSubmitting(true);
+    try { await submitOnce(); } finally { submittingRef.current = false; setSubmitting(false); }
+  };
+  const submitOnce = (): void | Promise<void> => {
     if (cash <= 0) return;
     if (badDisc >= 0) return; // 아래 경고 문구가 이유를 말한다
     const tStart = startISO;
@@ -2665,11 +2698,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             ? { ...fresh, config: cfg }
             : { ...emptyClockState(base.venueId, cfg, base.gameSeq), title: base.title ?? '' });
         } catch (e) {
-          formToast.show(e instanceof Error ? e.message : '클락 설정 저장에 실패했습니다', 'error');
+          formToast.show(ledgerErrorText(e, '클락 설정 저장에 실패했습니다'), 'error');
         }
       })();
     }
-    onSubmit({
+    return onSubmit({
       ...base, title: title.trim() || undefined,
       buyinAmount: cash, cardAmount: card > 0 ? card : null,
       gameType, targetEntries: gameType === 'gtd' ? target : 0, maxEntries: gameType === 'entry' ? maxEntries : 0,
@@ -2947,14 +2980,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       {gameType === 'gtd' ? (
         <Field label="기준 엔트리(통계용) · 선택">
           <div className="flex items-center gap-2">
-            <input type="number" inputMode="numeric" value={target || ''} onChange={(e) => setTarget(parseInt(e.target.value, 10) || 0)} placeholder="100" className="input w-32 shrink-0 text-sm tabular-nums" />
+            <input type="number" inputMode="numeric" value={target || ''} onChange={(e) => setTarget(Math.max(0, parseInt(e.target.value, 10) || 0))} placeholder="100" className="input w-32 shrink-0 text-sm tabular-nums" />
             <span className="text-2xs text-ink-muted leading-snug">통계의 목표 달성률에 사용</span>
           </div>
         </Field>
       ) : (
         <Field label="맥스 엔트리 · 선택">
           <div className="flex items-center gap-2">
-            <input type="number" inputMode="numeric" value={maxEntries || ''} onChange={(e) => setMaxEntries(parseInt(e.target.value, 10) || 0)} placeholder="200" className="input w-32 shrink-0 text-sm tabular-nums" />
+            <input type="number" inputMode="numeric" value={maxEntries || ''} onChange={(e) => setMaxEntries(Math.max(0, parseInt(e.target.value, 10) || 0))} placeholder="200" className="input w-32 shrink-0 text-sm tabular-nums" />
             <span className="text-2xs text-ink-muted leading-snug">최대 참가 인원 · 무제한이면 비움</span>
           </div>
         </Field>
@@ -2969,7 +3002,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           </button>
           {isAddon ? (
             <div className="relative w-40 shrink-0">
-              <input type="number" inputMode="numeric" value={addonStack || ''} onChange={(e) => setAddonStack(parseInt(e.target.value, 10) || 0)}
+              <input type="number" inputMode="numeric" value={addonStack || ''} onChange={(e) => setAddonStack(Math.max(0, parseInt(e.target.value, 10) || 0))}
                 placeholder="스택" className="input w-full text-sm pr-7 tabular-nums" />
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">칩</span>
             </div>
@@ -2981,7 +3014,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 
       <Field label="매장이용권 발행/시상 · 선택 (당일 발급 장수)">
         <div className="relative w-40">
-          <input type="number" inputMode="numeric" value={voucherIssued || ''} onChange={(e) => setVoucherIssued(parseInt(e.target.value, 10) || 0)}
+          <input type="number" inputMode="numeric" value={voucherIssued || ''} onChange={(e) => setVoucherIssued(Math.max(0, parseInt(e.target.value, 10) || 0))}
             placeholder="0" className="input w-full text-sm pr-7 tabular-nums" />
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">장</span>
         </div>
@@ -3046,8 +3079,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           PC(lg+)는 종전 sticky bottom-0 그대로. */}
       <div className={['lg:sticky lg:bottom-0 -mx-1 flex gap-2 px-1 pb-1 pr-12 pt-2 backdrop-blur-sm lg:pr-1', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
         {onCancel && <button type="button" onClick={onCancel} className="btn-ghost text-sm flex-1">취소</button>}
-        <button type="button" onClick={submit} disabled={cash <= 0} className="btn-primary text-sm flex-1 disabled:opacity-50">
-          {mode === 'open' ? '장부 시작' : '저장'}
+        <button type="button" onClick={submit} disabled={cash <= 0 || submitting} className="btn-primary text-sm flex-1 disabled:opacity-50">
+          {submitting ? '저장 중…' : mode === 'open' ? '장부 시작' : '저장'}
         </button>
       </div>
       {/* role=alert: 저장 버튼이 왜 잠겼는지 보조기술에도 들리게(FORM-01) */}
@@ -3134,12 +3167,16 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
 
   // 분납/할인 상세
   const init = cell.buyin?.isSplit ? cell.buyin : null;
+  // #10(2026-09-27) — 기존 완납·미수 기록을 분납으로 고치면 0 에서 시작해 '100만원 부족' 부터 떴다.
+  //   지금 기록의 수납 내역(tender = 할인 적용 후)을 칸에 채운다. 가게지원은 분납 칸이 없어 0 에서 시작한다.
+  const pre = !init && cell.buyin && cell.buyin.paymentMethod !== 'support' ? buyinFinance(cell.buyin, session).tender : null;
+  const preT = pre && pre.ticket % TICKET_WON === 0 ? pre.ticket / TICKET_WON : 0;
   const [splitMode, setSplitMode] = useState(!!init);
-  const [cash, setCash]         = useState<number>(init?.cashAmount ?? 0);
-  const [card, setCard]         = useState<number>(init?.cardAmount ?? 0);
-  const [transfer, setTransfer] = useState<number>(init?.transferAmount ?? 0);
-  const [tkt, setTkt]           = useState<number>(init?.ticketCount ?? 0);
-  const [unpaidAmt, setUnpaidAmt] = useState<number>(init?.unpaidAmount ?? 0);
+  const [cash, setCash]         = useState<number>(init?.cashAmount ?? pre?.cash ?? 0);
+  const [card, setCard]         = useState<number>(init?.cardAmount ?? pre?.card ?? 0);
+  const [transfer, setTransfer] = useState<number>(init?.transferAmount ?? pre?.transfer ?? 0);
+  const [tkt, setTkt]           = useState<number>(init?.ticketCount ?? preT);
+  const [unpaidAmt, setUnpaidAmt] = useState<number>(init?.unpaidAmount ?? pre?.unpaid ?? 0);
   // ⚠ 티켓을 빼면 화면이 저장값과 다른 말을 한다 — 카드 4만 + 6T 를 넣어도 '합계 4만원'이라
   //   적어 놓고 저장은 10만(entry 1.0)으로 한다. 티켓만 10T 면 '합계 0만원'인데 저장은 된다
   //   (바로 아래 canSaveSplit 이 tkt>0 만으로도 허용한다 — 합계가 0인데 저장되는 모순).
@@ -3161,7 +3198,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
 
   // 셸은 Modal 원자(MODAL-03) — 뒤로가기·ESC(최상단 한 겹)·포커스 트랩·복원을 원자가 준다. 개별 ESC 리스너 금지.
   return (
-    <Modal open onClose={onClose} title={`${cell.playerName} · ${cell.entryNo}바인`} variant="center" maxWidth="sm">
+    <Modal open onClose={onClose} title={`${cell.entryNo}바인 · ${cell.playerName}`} variant="center" maxWidth="sm">
         <div className="p-3 space-y-2">
           {/* LEDGER-REDUCE-PASSWORD — 금액 축소·0원·가게지원·미수 전환처럼 매출이 줄어드는 수정은 취소 비밀번호로만 저장된다 */}
           {reduceAsk && onReduceConfirm && (
@@ -3186,7 +3223,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
               </span>
               {discs.some((d) => d.amount > 0) && (
                 <>
-                  <span className="text-border-strong">·</span>
+                  <span className="text-ink-muted" aria-hidden>·</span>
                   <span className={discIdx > 0 ? 'font-bold text-accent-300' : 'text-ink-muted'}>
                     할인 {discIdx > 0 ? `${discs[discIdx - 1]?.label || '할인' + discIdx} −${wonToMan(discWon)}만` : '없음'}
                   </span>
@@ -3216,7 +3253,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                 const active = (cell.buyin!.earlyOverride ?? null) === v;
                 return (
                   <button key={String(v)} type="button" onClick={() => onSetEarly(v)}
-                    className={['text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
+                    className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
                       active ? 'bg-amber-400/20 text-amber-300 border-amber-400/50' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>{label}</button>
                 );
               })}
@@ -3330,7 +3367,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
           ) : (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <button type="button" onClick={() => setSplitMode(false)} className="text-2xs text-ink-muted hover:text-ink-primary">← 빠른 입력</button>
+                <button type="button" onClick={() => setSplitMode(false)} className="tap-y-44 inline-flex min-h-[32px] items-center text-2xs text-ink-secondary hover:text-ink-primary">← 빠른 입력</button>
                 <span className="text-2xs font-semibold text-accent-300">분납 / 할인</span>
               </div>
               <AmountRow label="현금" value={cash} set={setCash} />
@@ -3352,13 +3389,13 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                   <span className="mb-1 block text-2xs text-ink-muted">할인 이벤트 (선택)</span>
                   <div className="flex flex-wrap gap-1">
                     <button type="button" onClick={() => setDiscIdx(0)}
-                      className={['rounded-input border px-2 py-1 text-2xs font-bold transition-colors',
+                      className={['tap-y-44 min-h-[32px] rounded-input border px-2 py-1 text-2xs font-bold transition-colors',
                         discIdx === 0 ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted'].join(' ')}>
                       없음
                     </button>
                     {discs.map((d, i) => (d.amount <= 0 ? null : (
                       <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
-                        className={['rounded-input border px-2 py-1 text-2xs font-bold transition-colors',
+                        className={['tap-y-44 min-h-[32px] rounded-input border px-2 py-1 text-2xs font-bold transition-colors',
                           discIdx === i + 1 ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted'].join(' ')}>
                         {d.label || `할인${i + 1}`} ({wonToMan(d.amount)}만)
                       </button>
@@ -3428,14 +3465,14 @@ function PwConfirm({ hasPw, ownerNoPw = false, label, busy = false, onConfirm }:
   const [pw, setPw] = useState('');
   if (!hasPw && ownerNoPw) {
     return (
-      <button type="button" onClick={() => onConfirm('')} disabled={busy} className="btn-danger w-full text-xs px-3 disabled:opacity-50">{label}</button>
+      <button type="button" onClick={() => onConfirm('')} disabled={busy} className="btn-danger !bg-rose-700 hover:!bg-rose-800 w-full text-xs px-3 disabled:opacity-50">{label}</button>
     );
   }
   return (
     <div className="flex gap-1.5">
       <input type="password" inputMode="numeric" value={pw} onChange={(e) => setPw(e.target.value)} aria-label="취소 비밀번호"
         placeholder={hasPw ? '취소 비밀번호' : '비밀번호 미설정'} disabled={!hasPw} className="input flex-1 text-sm" autoFocus />
-      <button type="button" onClick={() => onConfirm(pw)} disabled={!hasPw || !pw || busy} className="btn-danger text-xs px-3 shrink-0 disabled:opacity-50">{label}</button>
+      <button type="button" onClick={() => onConfirm(pw)} disabled={!hasPw || !pw || busy} className="btn-danger !bg-rose-700 hover:!bg-rose-800 text-xs px-3 shrink-0 disabled:opacity-50">{label}</button>
     </div>
   );
 }

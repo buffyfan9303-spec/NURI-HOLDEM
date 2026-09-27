@@ -148,7 +148,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                   <div className="mt-1.5 space-y-1">
                     <div className="flex gap-1.5">
                       <input autoFocus value={mq} onChange={(e) => setMq(e.target.value)} placeholder="회원 닉네임 검색 (2자 이상)" className="input min-w-0 flex-1 text-xs py-1" />
-                      <button type="button" onClick={() => { setLinking(null); setMq(''); setMcands([]); }} className="shrink-0 rounded-input border border-border-default bg-surface-float px-2 text-2xs text-ink-muted">취소</button>
+                      <button type="button" onClick={() => { setLinking(null); setMq(''); setMcands([]); }} className="shrink-0 rounded-input border border-border-default bg-surface-float px-2 text-2xs text-ink-secondary">취소</button>
                     </div>
                     {mcands.length > 0 ? (
                       <ul className="space-y-0.5 rounded-input border border-accent-400/30 bg-surface-low p-1">

@@ -13,4 +13,8 @@ describe('profilePatchToRow — undefined 는 빠지고 null 은 실린다', () 
     expect(profilePatchToRow({ name: 'n', avatarColor: '#FFD100' })).toEqual({ name: 'n', avatar_color: '#FFD100' });
     expect(profilePatchToRow({})).toEqual({});
   });
+  it('머리 배경 — 기본(tier)은 null, 고른 배경은 그 키로 실린다(profiles.profile_cover)', () => {
+    expect(profilePatchToRow({ profileCover: 'tier' })).toEqual({ profile_cover: null });
+    expect(profilePatchToRow({ profileCover: 'ocean' })).toEqual({ profile_cover: 'ocean' });
+  });
 });

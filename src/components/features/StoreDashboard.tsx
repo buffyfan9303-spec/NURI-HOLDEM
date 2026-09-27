@@ -1611,9 +1611,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       {caps.manage && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-1 text-2xs">
           <button type="button" onClick={() => setCheckinOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">출석·QR 명단</button>
-          <span className="text-border-strong" aria-hidden>·</span>
+          <span className="text-ink-muted" aria-hidden>·</span>
           <button type="button" onClick={() => setDealerOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">딜러 로테이션·급여</button>
-          <span className="text-border-strong" aria-hidden>·</span>
+          <span className="text-ink-muted" aria-hidden>·</span>
           <button type="button" onClick={() => setBoostOpen(true)} className="inline-flex items-center gap-1 font-bold text-ink-muted transition-colors hover:text-accent-300"><Icon name="flame" size={11} />포스터 상단 고정 문의</button>
         </div>
       )}

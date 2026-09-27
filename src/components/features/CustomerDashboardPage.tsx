@@ -324,6 +324,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               displayName={user.name}
               avatarUrl={user.avatarUrl}
               avatarColor={user.avatarColor}
+              cover={user.profileCover}
               points={user.activityPoints ?? 0}
               isAdmin={user.role === 'admin'}
               verified={idOn && user.verified}

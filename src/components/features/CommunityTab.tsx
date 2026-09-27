@@ -592,7 +592,10 @@ function FeedSection({
   useEffect(() => {
     searchSeqRef.current += 1;
     filterKeyRef.current = `${q.trim().toLowerCase()}|${enableCategory ? cat : 'all'}|${order}`;
-    setServerExtra([]); setServerCursor(null); setServerDone(false); setServerErr(null);
+    // 🔴 loading 도 푼다(2026-09-27 점검) — 옛 요청의 finally 는 stale 이라 setServerLoading(false) 를 건너뛴다.
+    //   여기서 안 풀면 한 글자 친 뒤 응답 전에 다음 글자를 칠 때(한글은 자모마다 onChange) loading 이 true 로 굳어
+    //   새 검색어의 서버 조회가 영영 안 나가고 '찾는 중…' 이 끝나지 않았다. 계약: e2e/board-search-race.spec.ts
+    setServerExtra([]); setServerCursor(null); setServerDone(false); setServerErr(null); setServerLoading(false);
   }, [q, cat, order, enableCategory]);
   // 보기 모드: feed(카드 스택, **기본**) / compact(에펨코리아식 한 줄).
   // 오너 리포트(2026-08-28) "샘플까지 줬는데 적용이 안 됐다"의 원인이 정확히 이 한 줄이었다 —
@@ -788,7 +791,7 @@ function FeedSection({
         <button
           type="button"
           onClick={onOpenWrite}
-          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-input bg-surface-high border border-border-default hover:border-accent-400/50 transition-colors text-left"
+          className="w-full min-h-[44px] flex items-center justify-between gap-2 px-3 py-2.5 rounded-input bg-surface-high border border-border-default hover:border-accent-400/50 transition-colors text-left"
         >
           <span className="text-xs text-ink-muted">{placeholder}</span>
           <span className="shrink-0 inline-flex items-center gap-1 text-2xs font-bold text-accent-300">
@@ -800,7 +803,7 @@ function FeedSection({
         </button>
       ) : (
         <button type="button" onClick={() => promptLogin()}
-          className="w-full rounded-input bg-surface-high p-2 text-center text-2xs text-ink-secondary transition-colors hover:bg-surface-high/70 hover:text-accent-300">
+          className="w-full min-h-[44px] rounded-input bg-surface-high p-2 text-center text-2xs text-ink-secondary transition-colors hover:bg-surface-high/70 hover:text-accent-300">
           로그인하면 게시글을 작성할 수 있어요 — <b className="text-accent-300">로그인하기 →</b>
         </button>
       )}
@@ -828,14 +831,15 @@ function FeedSection({
                 onChange={(e) => { setQ(e.target.value); setVisible(15); }}
                 placeholder="검색"
                 aria-label="게시글 검색 (제목·내용·작성자)"
-                className="input h-9 min-h-0 w-full py-0 pl-9 pr-3 text-sm"
+                className="input h-[44px] min-h-0 w-full py-0 pl-9 pr-3 text-sm"
               />
             </div>
-            {/* 최신/인기 정렬(Phase 14) — 인기 = 좋아요순. overflow-hidden이 .hit 확장을 잘라내므로 실높이(h-9)로 탭 타깃 확보 */}
+            {/* 최신/인기 정렬(Phase 14) — 인기 = 좋아요순. overflow-hidden이 .hit 확장을 잘라내므로 실높이로 탭 타깃 확보.
+                ⚠ h-9 는 이 앱(루트 17px)에서 38.25px 라 44 에 못 미쳤다(2026-09-27 실측) — px 로 박는다 */}
             <div className="inline-flex shrink-0 overflow-hidden rounded-input border border-border-default">
               {(['new', 'popular'] as const).map((o) => (
                 <button key={o} type="button" onClick={() => setOrder(o)} aria-pressed={order === o}
-                  className={['h-9 px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300/15 text-accent-200 font-bold' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                  className={['h-[44px] min-w-[44px] px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300/15 text-accent-200 font-bold' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                   {o === 'new' ? '최신' : '인기'}
                 </button>
               ))}
@@ -1026,7 +1030,7 @@ function InfiniteSentinel({ onMore, remain }: { onMore: () => void; remain: numb
   }, [onMore]);
   return (
     <button ref={ref} type="button" onClick={onMore}
-      className="w-full rounded-input bg-surface-high py-2.5 text-xs font-semibold text-ink-muted transition-colors hover:text-ink-primary">
+      className="w-full min-h-[44px] rounded-input bg-surface-high py-2.5 text-xs font-semibold text-ink-muted transition-colors hover:text-ink-primary">
       불러오는 중… ({remain.toLocaleString()}개 남음)
     </button>
   );
@@ -1109,7 +1113,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
               <ul className="space-y-1">
                 {owned.map((v) => (
                   <li key={v.id}>
-                    <button type="button" onClick={() => onSelectVenue(v.id)} className="w-full flex items-center gap-1.5 rounded-input bg-surface-high px-2.5 py-1.5 text-left hover:bg-surface-float">
+                    <button type="button" onClick={() => onSelectVenue(v.id)} className="w-full min-h-[44px] flex items-center gap-1.5 rounded-input bg-surface-high px-2.5 py-1.5 text-left hover:bg-surface-float">
                       <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">{GROUP_KIND_LABEL[v.kind ?? 'venue']}</span>
                       <span className="text-xs font-semibold text-ink-primary truncate">{v.name}</span>
                       {!v.approved && <span className="ml-auto shrink-0 text-2xs text-ink-muted">승인 대기</span>}
@@ -1126,7 +1130,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
             ) : (
               <ul className="space-y-1">
                 {joined.map((j) => (
-                  <li key={j.membershipId} className="flex items-center gap-1.5 rounded-input bg-surface-high px-2.5 py-1.5">
+                  <li key={j.membershipId} className="flex min-h-[44px] items-stretch gap-1.5 rounded-input bg-surface-high px-2.5">
                     <button type="button" onClick={() => onSelectVenue(j.group.id)} className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
                       <span className="shrink-0 rounded-badge chip-aura px-1.5 py-0.5 text-2xs font-bold">{GROUP_KIND_LABEL[j.group.kind ?? 'other']}</span>
                       <span className="text-xs font-semibold text-ink-primary truncate">{j.group.name}</span>
@@ -1136,7 +1140,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
                         오탭의 대가가 큰 자리다. 세로는 tap-y-44, 가로는 실제 패딩으로 넓힌다
                         (.hit 는 왼쪽 버튼과 겹친다). */}
                     <button type="button" onClick={() => leave(j)}
-                      className="tap-y-44 shrink-0 -my-1 px-2 py-1 text-2xs text-ink-muted hover:text-danger-light">탈퇴</button>
+                      className="shrink-0 px-3 text-2xs text-ink-muted hover:text-danger-light">탈퇴</button>
                   </li>
                 ))}
               </ul>
@@ -1144,7 +1148,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
           </div>
           {isOwner && !hasVenue && (
             !createOpen ? (
-              <button type="button" onClick={() => setCreateOpen(true)} className="w-full rounded-input border border-accent-400/40 py-1.5 text-2xs font-bold text-accent-300">+ 홀덤펍 커뮤니티 생성</button>
+              <button type="button" onClick={() => setCreateOpen(true)} className="w-full min-h-[44px] rounded-input border border-accent-400/40 py-1.5 text-2xs font-bold text-accent-300">+ 홀덤펍 커뮤니티 생성</button>
             ) : (
               <div className="space-y-2 rounded-input border border-border-default p-2.5">
                 <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="매장명 (예: 강남 로얄 홀덤)" className="input w-full text-sm" />
@@ -1200,7 +1204,7 @@ function VenuesSection({
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           placeholder="매장명, 지역으로 검색…"
-          className="input pl-9"
+          className="input h-[44px] min-h-0 pl-9"
         />
         <svg
           width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8"
@@ -1510,20 +1514,21 @@ function LiveWallSection({ visible }: { visible: boolean }) {
             onChange={(e) => setDraft(e.target.value)}
             maxLength={140}
             placeholder="한 줄로 빠르게 (최대 140자)"
-            className="input flex-1"
+            className="input h-[44px] min-h-0 flex-1"
           />
           <button
             type="submit"
             disabled={sending || !draft.trim()}
-            className="btn-primary px-4 shrink-0 disabled:opacity-50"
+            className="btn-primary min-h-[44px] px-4 shrink-0 disabled:opacity-50"
           >
             {sending ? '…' : '전송'}
           </button>
         </form>
       ) : (
-        <div className="p-2 rounded-input bg-surface-high text-center text-2xs text-ink-muted">
-          로그인하면 실시간 댓글을 남길 수 있습니다
-        </div>
+        <button type="button" onClick={() => promptLogin()}
+          className="w-full min-h-[44px] rounded-input bg-surface-high p-2 text-center text-2xs text-ink-secondary transition-colors hover:bg-surface-high/70 hover:text-accent-300">
+          로그인하면 실시간 댓글을 남길 수 있어요 — <b className="text-accent-300">로그인하기 →</b>
+        </button>
       )}
 
       {loading ? (

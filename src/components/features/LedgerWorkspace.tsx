@@ -110,14 +110,15 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
   return (
     <div ref={hostRef}>
       <div className="mb-2 flex items-center justify-end">{toggle}</div>
-      {/* PC 는 2단(장부 + 레일), 좁은 폭은 장부 아래에 레일을 둔다 — 좁은 화면에서 옆에 붙이면 둘 다 못 쓴다. */}
-      {/* ⚠ 레일 div 만 감싸면 안 된다 — 2열 그리드 선언이 남아 **19rem 빈 거터**가 그대로 생기고
-          장부가 계속 좁아진다(매장 운영주 = PC 99%). 그리드도 같은 조건에 묶는다.
-          클래스는 **통짜 리터럴**로 둔다 — 조각을 조립하면 Tailwind content 스캔이 못 찾아 규칙이 통째로 사라진다. */}
-      <div className={canViewVouchers ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start lg:gap-4' : ''}>
+      {/* 🔴 2026-09-27 장부 점검 #6(리드 결정) — 이용권 레일은 **모든 폭에서 장부 아래**다.
+          옆에 붙였더니 표 상자가 1024 에서 402px(바인 **1칸**), 1280·1440·1920 에서 606px(5칸)이었다 —
+          판 폭 상한 때문에 큰 모니터에서도 레일이 표 폭을 그대로 깎는다(업주 = PC 99%, 표가 본업).
+          2열 그리드를 두지 않으므로 권한 없는 직원 화면의 빈 거터 문제도 생기지 않는다.
+          전체화면(위 분기)은 그대로 — 거기 경계값은 index.css [data-ledger-fullscreen] 이 같이 들고 있다. */}
+      <div>
         <div className="min-w-0">{children}</div>
         {canViewVouchers && (
-          <div className="mt-4 h-[26rem] lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:mt-0 lg:h-[calc(100vh-var(--stack-top,6.0625rem)-2rem)]">
+          <div className="mt-4 h-[26rem]">
             <LedgerVoucherRail venueId={venueId} active={active} />
           </div>
         )}

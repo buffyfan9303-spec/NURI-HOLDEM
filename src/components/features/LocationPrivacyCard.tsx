@@ -53,7 +53,7 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
       <p className="mb-1.5 text-sm font-semibold text-ink-primary">위치정보 이용 동의(선택)</p>
       <p className="mb-2 text-2xs leading-relaxed text-ink-muted">출석할 때 매장 안인지 위치로 확인하는 데만 써요. 좌표는 저장하지 않아요.</p>
       {s === null && err == null ? (
-        <p className="rounded-aura border card-aura p-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
+        <p aria-busy="true" className="rounded-aura border card-aura p-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
       ) : err != null ? (
         <LoadErrorCard error={err} what="위치정보 동의 상태" onRetry={() => setTick((t) => t + 1)} compact />
       ) : (

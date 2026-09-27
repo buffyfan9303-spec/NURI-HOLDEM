@@ -32,6 +32,7 @@ import { useIdentityEnabled } from '../../lib/identityFlag';
 import { getMyVisitStats } from '../../api/reservations';
 import type { LegalDoc } from './LegalDocsModal';
 import { onColorInkClass } from '../../lib/color';
+import { coverImage, PROFILE_COVERS, COVER_LABEL, type ProfileCover } from '../../lib/profileCover';
 
 interface ProfilePanelsProps {
   /** 통합 페이지 열림 — 열리는 순간에만 폼을 초기화한다(keep-alive 페이지의 display 토글과 같은 신호) */
@@ -137,6 +138,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
   const nameChk = useAvailabilityCheck(checkNicknameAvailable, isValidDisplayName, user?.nickname ?? user?.name);
   const name = nameChk.value, setName = nameChk.setValue;
   const [selectedColor, setColor]        = useState('#FFD100');
+  const [cover,         setCover]        = useState<ProfileCover>('tier'); // 머리 배경 — 저장 전엔 이 판 안의 미리보기만 바뀐다
   const [avatarPreview, setAvatarPreview] = useState('');
   const [avatarFile,    setAvatarFile]   = useState<File | null>(null);
   const [saving,        setSaving]       = useState(false);
@@ -164,6 +166,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
 
     setName(user.nickname ?? user.name);
     setColor(user.avatarColor ?? '#FFD100');
+    setCover(user.profileCover ?? 'tier');
     setAvatarPreview(user.avatarUrl ?? '');
     setAvatarFile(null);
     setNewPw(''); setConfirmPw(''); setCode('');
@@ -293,6 +296,8 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
       if (nameChanged) await setMyNickname(name.trim());
       await updateProfile({
         avatarColor: selectedColor,
+        // 머리 배경은 서버에 칸이 있을 때(user.profileCover !== undefined)·바꿨을 때만 싣는다 — 칸이 없는 서버에 보내면 저장 전체가 실패한다
+        profileCover: user.profileCover !== undefined && cover !== user.profileCover ? cover : undefined,
         avatarUrl:   avatarFile ? avatarUrl : (avatarPreview || null), // '' = 사진 제거 → null 로 실어야 패치에 남는다
       });
 
@@ -318,6 +323,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             displayName={name.trim() || user.name}
             avatarUrl={avatarPreview}
             avatarColor={selectedColor}
+            cover={cover}
             points={points}
             isAdmin={isAdmin}
             verified={idOn && user.verified}
@@ -376,11 +382,11 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
           {onOpenLegal && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border-subtle pt-3 text-2xs text-ink-muted">
               <button type="button" onClick={() => onOpenLegal('terms')} className="py-1 -my-1 transition-colors hover:text-accent-300">이용약관</button>
-              <span className="text-border-strong">·</span>
+              <span className="text-ink-muted">·</span>
               <button type="button" onClick={() => onOpenLegal('privacy')} className="py-1 -my-1 transition-colors hover:text-accent-300">개인정보처리방침</button>
-              <span className="text-border-strong">·</span>
+              <span className="text-ink-muted">·</span>
               <button type="button" onClick={() => onOpenLegal('refund')} className="py-1 -my-1 transition-colors hover:text-accent-300">취소·환불 정책</button>
-              <span className="text-border-strong">·</span>
+              <span className="text-ink-muted">·</span>
               <button type="button" onClick={() => onOpenLegal('location')} className="py-1 -my-1 transition-colors hover:text-accent-300">위치기반서비스 이용약관</button>
             </div>
           )}
@@ -391,9 +397,11 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
       {seen.has('settings') && (
         <div hidden={tab !== 'settings'} className="p-4 space-y-5"><Frozen active={tab === 'settings'} render={() => <>
 
-          {/* 아바타 편집 — 클릭 → 크롭 편집기 */}
-          <div className="flex flex-col items-center gap-3 pt-1">
-            <div className="relative">
+          {/* 아바타 편집 — 클릭 → 크롭 편집기. 머리 배경(커버 밴드)은 대시보드·프로필 탭과 **같은 한 벌**(ProfileCoverBand)·같은 값(profiles.profile_cover)이다
+              (오너 2026-09-27: "대시보드 프로필 위 배경을 프로필 설정에서도 똑같이 보이고 거기서 바꿀 수 있게"). 아바타는 대시보드처럼 밴드에 걸친다. */}
+          <div className="flex flex-col items-center gap-3">
+            <ProfileCoverBand cover={cover} tierColor={ringColor} />
+            <div className="relative -mt-[3.75rem]">
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
@@ -451,10 +459,33 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
 
             <p className="text-2xs text-ink-muted">클릭하여 사진 변경 · JPG / PNG / WEBP · 최대 5MB</p>
 
-            {/* 배경색 팔레트 (사진 없을 때) */}
+            {/* 머리 배경 — 서버에 칸이 있을 때만(마이그레이션 전엔 undefined → 숨김). 고르면 위 밴드가 바로 바뀌고 '저장'으로 확정된다. */}
+            {user.profileCover !== undefined && (
+              <div data-testid="profile-cover-picker" className="flex items-center gap-2 flex-wrap justify-center">
+                <span className="text-2xs text-ink-muted">머리 배경</span>
+                {PROFILE_COVERS.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    data-testid={`profile-cover-${k}`}
+                    onClick={() => setCover(k)}
+                    aria-label={`머리 배경 ${COVER_LABEL[k]}`}
+                    aria-pressed={cover === k}
+                    title={COVER_LABEL[k]}
+                    className={[
+                      'w-6 h-6 rounded-full transition-transform hover:scale-110 focus:outline-none border-2 bg-surface-high',
+                      cover === k ? 'border-white scale-110' : 'border-transparent',
+                    ].join(' ')}
+                    style={{ backgroundImage: coverImage(k, ringColor) }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* 아바타 색 팔레트 (사진 없을 때) */}
             {!avatarPreview && (
               <div className="flex items-center gap-2 flex-wrap justify-center">
-                <span className="text-2xs text-ink-muted">배경색</span>
+                <span className="text-2xs text-ink-muted">아바타 색</span>
                 {COLOR_PALETTE.map((c) => (
                   <button
                     key={c}
@@ -763,7 +794,7 @@ function LegalConsentHistory() {
       <p className="mb-1.5 text-sm font-semibold text-ink-primary">약관 동의 이력</p>
       <p className="mb-2 text-2xs leading-relaxed text-ink-muted">언제 · 어떤 약관에 동의했는지(개인정보보호법 §35 열람권)</p>
       {items === null && err == null ? (
-        <p className="rounded-aura border card-aura p-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
+        <p aria-busy="true" className="rounded-aura border card-aura p-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
       ) : err != null ? (
         <LoadErrorCard error={err} what="약관 동의 이력" onRetry={() => setTick((t) => t + 1)} compact />
       ) : items!.length === 0 ? (
@@ -794,8 +825,19 @@ function LegalConsentHistory() {
 // 커버 밴드(등급색 틴트) + 오버랩 아바타(등급 링) + 닉네임·등급·칭호·인증 + 등급 진행바.
 // ProfileModal '프로필' 탭과 CustomerDashboardPage(통합 프로필)가 같은 마크업을 공유하는 정본.
 // 새 fetch 없음 — 이미 내려온 유저 데이터만 props 로 받는다(오너 레퍼런스 2026-08-27).
-export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, points, isAdmin, verified, footnote, stats, actions }: {
+/** 머리 배경(커버 밴드) 한 벌 — 대시보드·프로필 탭(ProfileIdentityHeader)과 설정 탭이 같이 쓴다. 값은 src/lib/profileCover.ts. */
+function ProfileCoverBand({ cover, tierColor }: { cover: ProfileCover; tierColor: string }) {
+  return (
+    <div data-testid="profile-cover-band" data-cover={cover} className="relative h-20 w-full overflow-hidden rounded-aura bg-surface-high">
+      <div aria-hidden className="absolute inset-0 opacity-25" style={{ backgroundImage: coverImage(cover, tierColor) }} />
+    </div>
+  );
+}
+
+export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, cover, points, isAdmin, verified, footnote, stats, actions }: {
   displayName: string;
+  /** 머리 배경(profiles.profile_cover) — 없으면 기본 '등급색' */
+  cover?: ProfileCover;
   /** 아바타 이미지 URL(없으면 배경색 + 첫 글자 폴백) */
   avatarUrl?: string | null;
   /** 이미지 없을 때 아바타 배경색 */
@@ -815,14 +857,8 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, poi
   const prog = tierProgress(points);
   return (
     <div className="flex flex-col items-center gap-3">
-      {/* 커버 — 이미지 없이 등급색 틴트(개인 브랜딩 = 등급) — 새 에셋·fetch 0 */}
-      <div className="relative h-20 w-full overflow-hidden rounded-aura bg-surface-high">
-        <div
-          aria-hidden
-          className="absolute inset-0 opacity-25"
-          style={{ backgroundImage: `linear-gradient(135deg, ${ringColor}, transparent 72%)` }}
-        />
-      </div>
+      {/* 커버 — 기본은 등급색 틴트(개인 브랜딩 = 등급), 설정 탭에서 고른 배경이 있으면 그것 — 새 에셋·fetch 0 */}
+      <ProfileCoverBand cover={cover ?? 'tier'} tierColor={ringColor} />
       {/* 오버랩 아바타 — 등급색 그라데이션 링(샘플 문법 ①) */}
       <div
         className="relative -mt-[3.75rem] h-[6.5rem] w-[6.5rem] rounded-full p-1"

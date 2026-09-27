@@ -10,6 +10,7 @@ import { getAppSetting, loadEventMenuVisibility } from './api/settings';
 import { isEventSlug } from './lib/eventSlug';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
+import { flushSignupLocationConsent } from './lib/locationConsent';
 import { checkinFailureAction, checkinGeoRetryCopy } from './lib/checkinGeoRetry';
 import type { CheckinGeoErrorCode } from './lib/checkinGeo';
 import Modal from './components/atoms/Modal';
@@ -954,7 +955,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
                     // §T1 규칙 2: 사다리 밖 임의 px 금지. text-[9px] 는 절대 px 이라 html 17px·브라우저 확대를
                     // 하나도 받지 않아 앱에서 가장 작은 글자였다 → 사다리 최소단 text-2xs(11.69px, rem).
                     // 박스는 h-4/min-w-4(17px)에 px-1 이라 두 자리 이상이면 가로로 자란다(99+ 확인).
-                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-2xs font-extrabold leading-none tabular-nums text-white ring-2 ring-surface-mid">
+                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-dark px-1 text-2xs font-extrabold leading-none tabular-nums text-white ring-2 ring-surface-mid">
                     {count![tab]}
                   </span>
                 )}
@@ -1318,6 +1319,10 @@ export default function App() {
   // 화면엔 아무 단서도 없이 앱 전체가 굳는다(새로고침 외엔 사용자가 못 푼다).
   // 탭 전환 = 그 상태가 만들어지는 순간이자 체감되는 순간 — 여기서 모순만 골라 되돌린다.
   useEffect(() => { sweepScrollLocks(); }, [activeTab]);
+
+  // 가입 때 체크한 위치 동의(선택)를 그 계정의 첫 로그인에 적는다 — 가입 직후 세션이 없던 경우(확인 메일)의 이어 받기.
+  //   남겨 둔 것이 없으면 localStorage 한 번 읽고 끝난다(요청 0). src/lib/locationConsent.ts flushSignupLocationConsent
+  useEffect(() => { if (user?.email) void flushSignupLocationConsent(user.email); }, [user?.email]);
 
   // 17-5 오프라인·재연결 — 홀덤펍은 지하 매장이 많다: 단절이 예외가 아니라 일상 조건.
   // 캐시 퍼스트(Phase 6) 덕에 화면은 살아 있으므로, 배너로 상태만 알리고

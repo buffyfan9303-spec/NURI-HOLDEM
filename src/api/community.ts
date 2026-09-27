@@ -604,7 +604,10 @@ export function subscribePostComments(postId: string, onEvent: (evt: PostComment
     )
     .on(
       'postgres_changes',
-      { event: 'DELETE', schema: 'public', table: 'comments', filter: `post_id=eq.${postId}` },
+      // 🔴 DELETE 는 filter 없이 듣는다 — Supabase Realtime 은 filter 를 건 DELETE 를 보내지 않는다("Delete events are not filterable").
+      //   RLS 테이블의 삭제 알림은 old 에 id 만 실어 post_id 로 거를 수도 없다. 목록에 없는 id 는 applyCommentEvent 가 무시한다.
+      //   (2026-09-27 점검: 다른 기기에서 지운 댓글이 열린 상세에 남았다 — 계약 src/api/community.realtimeDelete.test.ts)
+      { event: 'DELETE', schema: 'public', table: 'comments' },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (payload: any) => { const id = payload.old?.id; if (id != null) onEvent({ type: 'delete', id: String(id) }); },
     )

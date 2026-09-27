@@ -369,13 +369,19 @@ export function ledgerHintOf(e: unknown): string {
  *  왜 msgOf 만으로 안 되나: 20260925g 의 장부 가드는 전부 errcode 42501 에 **사용자 문장**(남은 횟수·잠금·날짜 규칙)을 싣는데,
  *  msgOf 는 42501 을 '이 계정에는 권한이 없습니다' 한 문장으로 뭉갠다 — 그러면 '4번 더 틀리면 잠깁니다' 가 사라진다.
  *  아는 hint 는 쉬운 말로, 42501 이어도 한글 문장(우리가 raise 한 것)이면 그대로, 나머지는 msgOf. */
+export const LEDGER_NONNEG_TEXT = '금액·티켓 칸에는 0 이상만 넣을 수 있습니다. 빼기(−)가 들어간 칸을 고쳐 주세요';
 export function ledgerErrorText(e: unknown, fallback: string): string {
   const known = LEDGER_HINT_TEXT[ledgerHintOf(e)];
   if (known) return known;
-  const r = (e && typeof e === 'object') ? e as { code?: unknown; message?: unknown } : {};
+  // buyinWriteError 는 원문을 cause 에 싣는다 — 코드를 거기서 찾는다(겉 Error 에는 code 가 없다).
+  let coded: unknown = e;
+  for (let i = 0; i < 3 && coded && typeof coded === 'object' && !(coded as { code?: unknown }).code; i++) coded = (coded as { cause?: unknown }).cause;
+  const src = (coded && typeof coded === 'object' && (coded as { code?: unknown }).code) ? coded : e;
+  const r = (src && typeof src === 'object') ? src as { code?: unknown; message?: unknown } : {};
   const msg = typeof r.message === 'string' ? r.message.trim() : '';
-  if (r.code === '42501' && /[가-힣]/.test(msg)) return msg;   // 'permission denied…'·RLS 원문은 한글이 없어 msgOf 로 간다
-  return msgOf(e, fallback);
+  if ((r.code === '42501' || r.code === '23514') && /[가-힣]/.test(msg)) return msg;   // 우리가 raise 한 문장(한글). 'permission denied…'·CHECK 원문은 한글이 없다
+  if (r.code === '23514' && /amounts_nonneg/.test(msg)) return LEDGER_NONNEG_TEXT;   // 20260927a CHECK(금액 ≥ 0)
+  return msgOf(src, fallback);
 }
 /** 바인 INSERT/UPDATE 오류를 화면이 가를 수 있는 Error 로 — 23505 는 CELL_TAKEN, 아는 서버 hint 는 그 이름이 message 다.
  *  예전엔 `error.message` 만 실어 서버가 hint 로 말한 사유를 화면이 못 알아들었다(그저 빨간 토스트). */
@@ -1034,10 +1040,18 @@ export async function saveLedgerSession(s: LedgerSession): Promise<void> {
 }
 
 /** 장부 입장(세션 오픈) — 담당직원/오픈시각 기록 + 편집 필드 저장. closed=false 로 리셋. */
+/** 두 기기가 같은 (날짜·게임) 장부를 거의 동시에 시작했을 때 늦은 쪽이 받는 오류 — 문장 그대로 화면에 나가도 된다.
+ *  (클락 화면의 사이드 생성도 이 함수를 부르고 e.message 를 그대로 띄운다.) */
+export const LEDGER_ALREADY_OPEN = '다른 기기에서 이 장부를 먼저 시작해서 덮어쓰지 않았습니다';
 export async function openLedgerSession(s: LedgerSession, operatorId?: string | null): Promise<void> {
   if (IS_MOCK) return;
   const user = await currentUser();
-  const { error } = await supabase.from('ledger_sessions').upsert({
+  // 🔴 2026-09-27 장부 점검 #5 — 예전엔 덮어쓰기 upsert 였다. 두 접수대가 같은 날 시작 화면을 열어 둔 채
+  //   차례로 [장부 시작]을 누르면 **늦은 쪽이 먼저 시작된 장부의 제목·담당·딜러·포스터 연결·목표를 조용히 덮고**
+  //   '장부를 시작했습니다' 라고 말했다(서버 가드는 단가·할인·opened_at 만 지킨다).
+  //   → 없을 때만 만든다(ON CONFLICT DO NOTHING). 이미 행이 있으면 **입장 전 행(opened_at 없음)만** 채우고,
+  //     이미 시작된 장부면 덮지 않고 LEDGER_ALREADY_OPEN 을 던진다(화면이 그 장부를 다시 읽는다).
+  const row = {
     venue_id: s.venueId, session_date: s.sessionDate, game_seq: s.gameSeq ?? MAIN_GAME_SEQ,
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
     target_entries: s.targetEntries, title: s.title ?? null,
@@ -1052,8 +1066,18 @@ export async function openLedgerSession(s: LedgerSession, operatorId?: string | 
     reg_closed: false, reg_closed_at: null,
     closed: false, closed_at: null, close_memo: null,
     updated_at: new Date().toISOString(),
-  }, { onConflict: 'venue_id,session_date,game_seq' });
-  if (error) throw error;
+  };
+  const ins = await supabase.from('ledger_sessions')
+    .upsert(row, { onConflict: 'venue_id,session_date,game_seq', ignoreDuplicates: true })
+    .select('opened_at');
+  if (ins.error) throw ins.error;
+  if (ins.data && ins.data.length > 0) return;   // 새로 만들었다
+  const upd = await supabase.from('ledger_sessions').update(row)
+    .eq('venue_id', row.venue_id).eq('session_date', row.session_date).eq('game_seq', row.game_seq)
+    .is('opened_at', null)
+    .select('opened_at');
+  if (upd.error) throw upd.error;
+  if (!upd.data || upd.data.length === 0) throw new Error(LEDGER_ALREADY_OPEN);
 }
 
 /** 레지(레지스트리) 마감 — 신규 등록/엔트리 중단(정산 마감과 별개) */
@@ -1492,7 +1516,7 @@ export async function getPendingBuyinRequests(venueId: string, date: string): Pr
 export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }, discountIndex = 0): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq, p_record_buyin: recordBuyin, p_pay_method: payMethod, p_split: !!split, p_cash: split?.cash ?? 0, p_card: split?.card ?? 0, p_transfer: split?.transfer ?? 0, p_discount_index: discountIndex });
-  if (error) throw new Error(error.message);
+  if (error) throw error;   // 래핑 금지 — 23514(금액 음수 CHECK) 같은 코드가 사라지면 화면이 쉬운 문장으로 못 바꾼다
 }
 /** 운영자: 요청 거절. */
 export async function rejectBuyinRequest(id: string, reason?: string): Promise<void> {
