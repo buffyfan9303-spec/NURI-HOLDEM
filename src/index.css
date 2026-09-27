@@ -1063,11 +1063,13 @@
         44px(AAA)을 원하면 ScheduleCard·--card-h-list·HomeTab 스켈레톤·.cv-card-list 를 한 묶음으로 올려야 한다. */
   .tap-up-24 { position: relative; }
   .tap-up-24::before { content: ''; position: absolute; inset: -8px 0 0 0; }
-  /* 2026-09-28 — 크기와 무관하게 **세로 누름면만 44px** 로(보이는 상자·흐름·가로는 그대로). top/bottom % 는 자기 높이 기준이라
-     25.5px 칸은 위아래 9.25, 38.25px 칸은 2.9, 44px 이상은 0 이 된다. tap-y-44(고정 6px)는 32px 칩 전용이다.
-     ⚠ 확장부는 위치 지정 요소라 **흐름상 뒤에 오는 비위치 요소 위를 덮는다** — 붙인 곳마다 위아래 이웃의 누름면을 elementFromPoint 로 재라. */
+  /* 2026-09-28 — 크기와 무관하게 **세로 누름면만 44px** 로(보이는 상자·흐름·가로는 그대로). top % 는 자기 높이 기준이라
+     25.5px 칸은 위로 18.5, 38.25px 칸은 5.75, 44px 이상은 0. tap-y-44(고정 6px)는 32px 칩 전용이다.
+     🔴 **위로만** 넓힌다: 아래로 삐져나간 확장부는 그 요소의 scrollHeight 를 키워 '글자 잘림' 게이트
+        (scrollHeight > clientHeight, schedule-card-fit 상세 등)에 걸린다(실측 21→33). 위(음의 방향)는 스크롤 넘침에 안 잡힌다.
+     ⚠ 확장부는 위치 지정 요소라 **흐름상 앞의 비위치 요소 위를 덮는다** — 붙인 곳마다 위 이웃의 누름면을 elementFromPoint 로 재라. */
   .tap-44 { position: relative; }
-  .tap-44::before { content: ''; position: absolute; inset: min(0px, calc(50% - 22px)) 0; }
+  .tap-44::before { content: ''; position: absolute; inset: min(0px, calc(100% - 44px)) 0 0 0; }
   html.light .chip-aura { background-color: rgb(99 102 241 / 0.08); border-color: rgb(99 102 241 / 0.25); color: #4338CA; }
   @media (hover: hover) { .chip-aura:hover { background-color: rgb(99 102 241 / 0.16); border-color: rgb(99 102 241 / 0.35); } }
   .text-grad-violet {

@@ -28,10 +28,10 @@ export default function UnderlineTabs<T extends string>({
             className={[
               'relative flex-1 transition-colors focus:outline-none',
               // §T1 타이포 스케일: md=1단계 내비(t-nav) / sm=서브탭(t-tab)
-              // sm(34px): 누름면을 아래로 13px 더해 47px(2026-09-28). 위는 시트 머리(제목줄)가 덮고 있어 위로 넓혀도 안 잡힌다
-              //   (가운데 확장 실측 39.75). 아래는 제 패널의 여백(p-4)이라 남의 누름면을 뺏지 않는다. md(46.75)는 그대로.
-              //   값은 이미 번들에 있는 조합(HandReplayer)을 재사용 — CSS 예산 여유가 0 이다.
-              size === 'md' ? 'py-3 t-nav' : "py-2 t-tab before:absolute before:inset-x-0 before:-top-[12px] before:-bottom-[13px] before:content-['']",
+              // sm: 34 → **46.75px 실제 상자**(py-2 → py-3.5, 2026-09-28). 위는 시트 머리가 덮어 확장이 안 잡히고(39.75),
+              //   아래로 넓힌 확장부는 scrollHeight 넘침(글자 잘림 게이트)을 만들고, 밑줄(SlidingPill)은 버튼 상자 아래끝에 붙어
+              //   상자를 음수 여백으로 키우면 밑줄이 떠 버린다 — 그래서 탭 줄 자체를 md 와 같은 높이로 키웠다(글자는 t-tab 그대로).
+              size === 'md' ? 'py-3 t-nav' : 'py-3.5 t-tab',
               // §T1 탭 굵기 규격: 비활성 600(t-* 기본) / 활성 700
               on ? 'font-bold text-accent-300' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}

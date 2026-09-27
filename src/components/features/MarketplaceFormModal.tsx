@@ -226,14 +226,15 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
 
         {/* 이미지 */}
         <div>
-          <div className="flex items-center justify-between mb-1.5">
+          {/* mb-1.5 → pb-1.5(흐름 동일): 아래 '+ 사진 추가' 상자가 이 여백 안으로 내려와도 줄의 넘침(scrollHeight)이 안 생긴다 */}
+          <div className="flex items-center justify-between pb-1.5">
             <label className="text-xs font-medium text-ink-secondary">
               사진 <span className="text-ink-muted">({previews.length}/{MAX_IMAGES})</span>
             </label>
             <button type="button" onClick={() => fileRef.current?.click()} disabled={previews.length >= MAX_IMAGES}
-              /* 16px → 누름면 44px(2026-09-28, tap-44 위아래 14px). 위는 설명 칸까지 25px 틈이라 칸을 덮지 않는다.
-                 아래는 같은 동작인 '사진 첨부' 칸 위이거나, 미리보기가 있으면 썸네일(위치 지정 요소라 그쪽이 이긴다 — 그때 36px). */
-              className="tap-44 text-2xs font-semibold text-accent-300 hover:text-accent-200 disabled:opacity-40 disabled:cursor-not-allowed">
+              /* 16px → 누름면 44px(2026-09-28): 상자를 위아래 6.4px 키우고(py-1.5 -my-1.5, 흐름 불변 — 아래는 줄의 pb-1.5 안),
+                 나머지 15.25px 는 tap-44 가 위로만 — 위 설명 칸까지 25px 틈이라 칸을 덮지 않는다(3.4px 남음). */
+              className="tap-44 -my-1.5 py-1.5 text-2xs font-semibold text-accent-300 hover:text-accent-200 disabled:opacity-40 disabled:cursor-not-allowed">
               + 사진 추가
             </button>
           </div>

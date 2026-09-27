@@ -370,7 +370,9 @@ export default function NotificationPanel({
         ].join(' ')}
       >
         {/* 헤더 — 좌: [쪽지|알림] 세그먼트(서브 화면에선 뒤로+제목) / 우: 모드별 액션 */}
-        <header className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border-subtle">
+        {/* pt-3.5 pb-2.5(합은 종전 py-3 과 같다, 2026-09-28): 세그먼트 탭의 위로만 넓힌 누름면(tap-44, 18.5px)이
+            패널 overflow-hidden 에 2.6px 잘려 42px 였다 — 내용을 2px 내려 44px 가 패널 안에 들어오게 했다. */}
+        <header className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-2.5 border-b border-border-subtle">
           {inSubView ? (
             <div className="flex min-w-0 items-center gap-1.5">
               <button
@@ -389,7 +391,7 @@ export default function NotificationPanel({
             <div data-notif-tabbar="">
               <SegmentedTabs
                 items={[{ key: 'messages', label: '쪽지' }, { key: 'notifs', label: '알림' }]}
-                value={mode}
+                value={mode} hitUp
                 onChange={(v) => goSubTab('notif-tab', NOTIF_MODE_ORDER, mode, v, () => setMode(v))}
               />
             </div>
@@ -402,12 +404,12 @@ export default function NotificationPanel({
                   <button
                     type="button"
                     onClick={handleMarkAll}
-                    className="tap-44 py-1 -my-1 text-2xs font-semibold text-accent-300 hover:text-accent-200 transition-colors focus:outline-none"
+                    className="tap-44 py-2 -my-2 text-2xs font-semibold text-accent-300 hover:text-accent-200 transition-colors focus:outline-none"
                   >
                     모두 읽음
                   </button>
                 )}
-                <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안읽음' }]} value={filter}
+                <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안읽음' }]} value={filter} hitUp
                   onChange={(v) => goSubTab('notif-filter', NOTIF_FILTER_ORDER, filter, v, () => setFilter(v))} />
               </>
             )}

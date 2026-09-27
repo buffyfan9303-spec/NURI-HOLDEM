@@ -332,9 +332,8 @@ export default function ScheduleDetailModal({
                    두 타깃이 겹쳐 오히려 오탭이 난다. 그래서 **간격을 먼저 벌리고**(mt-0.5 → mt-3)
                    그 벌린 만큼만 위로 확장한다(py-1.5 + -my-1.5 = 각 12.75px).
                    결과 42.5px · 위쪽 확장이 간격과 정확히 맞닿아 겹침 0. 레이아웃은 아래로 10px 만 움직인다. */
-                /* 2026-09-28: 29.75px → 44px. 아래는 곧바로 sticky 탭바(메인·상금…)가 덮어 1px 밖에 못 넓힌다 —
-                   위로만 15px(바로 위는 글자뿐인 지역·형식 줄, 매장명 버튼의 확장부와는 11px 떨어져 겹치지 않는다). 아래 8px 는 탭바가 이긴다. */
-                className="relative -my-1.5 mt-3 flex items-start gap-1.5 py-1.5 text-xs before:absolute before:inset-x-0 before:-inset-y-[8px] before:-top-[15px] before:content-[''] text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
+                /* 2026-09-28: 29.75px → 44px — tap-44(위로만 14.25). 아래는 곧바로 sticky 탭바가 덮고, 바로 위는 글자뿐인 지역·형식 줄이다. */
+                className="tap-44 -my-1.5 mt-3 flex items-start gap-1.5 py-1.5 text-xs text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
                 <Icon name="map" size={13} className="mt-0.5 shrink-0" /><span className="break-keep [overflow-wrap:anywhere]">{schedule.address}</span>
               </a>
             )}
