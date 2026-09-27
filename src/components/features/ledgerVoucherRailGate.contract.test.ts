@@ -62,7 +62,13 @@ describe('이용권 레일 — 권한이 있을 때만 그린다', () => {
     // 예전 계약은 '그리드를 권한 조건에 묶어라' 였다. 이제 그리드 자체가 없다 — 권한 없는 직원 화면의 빈 거터도 함께 사라진다.
     expect(WS, '장부 옆 레일 2열 그리드가 되살아났다 — 1920 에서도 표가 5칸으로 줄어든다')
       .not.toMatch(/grid-cols-\[minmax\(0,1fr\)_19rem\]/);
-    expect(WS, '레일이 표 아래 고정 높이 상자에 있지 않다').toMatch(/className="mt-4 h-\[26rem\]"/);
+    expect(WS, '레일이 표 아래 고정 높이 상자에 있지 않다').toMatch(/className="mt-4 h-\[26rem\]/);
+  });
+
+  it('🔴 상단 [이용권 확인] 바로가기도 레일과 같은 권한 뒤에 있다', () => {
+    const i = WS.indexOf('data-testid="ledger-voucher-jump"');
+    expect(i, '바로가기 버튼을 못 찾았다').toBeGreaterThan(0);
+    expect(WS.slice(Math.max(0, i - 400), i), '바로가기가 권한 게이트 밖에 있다').toContain(`${GATE} &&`);
   });
 
   it('🔴 호출부가 이용권 권한 단일 지점(caps.voucher)을 그대로 넘긴다 — 새 판정을 만들지 않는다', () => {

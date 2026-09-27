@@ -37,7 +37,7 @@ describe('장부 점검 2026-09-27', () => {
   });
   it('#6 이용권 레일은 모든 폭에서 표 아래(옆 2열 그리드 없음)', () => {
     expect(W).not.toMatch(/grid-cols-\[minmax\(0,1fr\)_19rem\]/);
-    expect(W).toMatch(/className="mt-4 h-\[26rem\]"/);
+    expect(W).toMatch(/className="mt-4 h-\[26rem\]/);
   });
   it('#7 플레이어 저장이 실패하면 모달을 닫지 않는다', () => {
     expect(L).toMatch(/if \(await savePlayer\(editPlayer\.id, patch\)\) setEditPlayer\(null\)/);

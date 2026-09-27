@@ -35,6 +35,17 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
   //   → UI 는 그대로 두고 **숨은 백그라운드 작업만** 끊는다. CSS 의 `md:` 와 반드시 같은 768px 이어야
   //     767~768 경계에서 '보이는데 안 도는' 창이 안 생긴다. 그래서 useIsDesktop(1024) 이 아니라 이것이다.
   const isMdUp = useIsMdUp();
+  // 2026-09-27(오너 승인) — 레일이 모든 폭에서 표 **아래**로 내려가 검색칸이 화면 2.4개 밑이 됐다.
+  //   카운터에서 "이 손님 이용권 있나?" 는 바인만큼 잦다 → 상단 바로가기로 레일까지 부드럽게 내리고 검색칸에 포커스.
+  //   레일 상자의 scroll-mt 가 앱 헤더(--stack-top) 아래에 멈추게 한다 — 검색칸은 레일 맨 위라 하단 정산바와 겹치지 않는다.
+  const railRef = useRef<HTMLDivElement>(null);
+  const jumpToRail = useCallback(() => {
+    const box = railRef.current;
+    if (!box) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    box.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    box.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true });
+  }, []);
 
   // 브라우저 전체화면은 '되면 좋은 것'이다 — 거부돼도(권한·iOS 사파리) 앱 안에서의 전체화면은 그대로 된다.
   const enter = useCallback(() => {
@@ -109,7 +120,18 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
 
   return (
     <div ref={hostRef}>
-      <div className="mb-2 flex items-center justify-end">{toggle}</div>
+      <div className="mb-2 flex items-center justify-end gap-2">
+        {/* 권한 없는 직원은 레일이 없으니 바로가기도 없다(아래 레일과 같은 게이트) */}
+        {canViewVouchers && (
+          <button type="button" onClick={jumpToRail} data-testid="ledger-voucher-jump"
+            // 32px 상자 + tap-y-44(위아래 6px) = 누름영역 44px. whitespace-nowrap — 360 에서도 한 줄.
+            className="tap-y-44 inline-flex min-h-[32px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-input border border-border-default bg-surface-high px-2.5 text-2xs font-bold text-ink-secondary transition-colors hover:border-accent-400/40 hover:text-accent-300">
+            <Icon name="ticket" size={13} className="shrink-0" />
+            이용권 확인
+          </button>
+        )}
+        {toggle}
+      </div>
       {/* 🔴 2026-09-27 장부 점검 #6(리드 결정) — 이용권 레일은 **모든 폭에서 장부 아래**다.
           옆에 붙였더니 표 상자가 1024 에서 402px(바인 **1칸**), 1280·1440·1920 에서 606px(5칸)이었다 —
           판 폭 상한 때문에 큰 모니터에서도 레일이 표 폭을 그대로 깎는다(업주 = PC 99%, 표가 본업).
@@ -118,7 +140,7 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
       <div>
         <div className="min-w-0">{children}</div>
         {canViewVouchers && (
-          <div className="mt-4 h-[26rem]">
+          <div ref={railRef} className="mt-4 h-[26rem] scroll-mt-[calc(var(--stack-top,6.0625rem)+0.75rem)]">
             <LedgerVoucherRail venueId={venueId} active={active} />
           </div>
         )}
