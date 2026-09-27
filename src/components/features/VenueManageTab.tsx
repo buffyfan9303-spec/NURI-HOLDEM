@@ -15,6 +15,8 @@ import { canAccessLedger, canManagePos, canManageVenueStaff, getLedgerAccessUser
   getScheduleAccessUserIds, grantScheduleAccess, revokeScheduleAccess } from '../../api/ledger';
 import { getAllVenues, createMyVenue, getMyVenue, getVenueStaff, listVenueOwners, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
+import { canManageSchedule } from '../../api/staffSchedule';
+import { listMyMemberVenues, type MemberVenue } from '../../api/myVenues';
 import { splitLedgerName } from '../../lib/rankingGame';
 import { uploadPoster } from '../../lib/storage';
 import VenueVerificationCard from './VenueVerificationCard';
@@ -30,7 +32,7 @@ import PresetManager from './PresetManager';
 import KillSwitch from './KillSwitch';
 import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
-import StoreDashboard from './StoreDashboard';
+import StoreDashboard, { MyStaffCard } from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
 import { CHIP_HIT } from './gto/chip'; // 알약 한 기준: 보이는 32 · 누름 44(2026-09-24 리드 결정)
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
@@ -243,8 +245,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const canPosters = scheduleOk ?? (isOwner || isAdmin);
   const [adminVenues, setAdminVenues] = useState<Venue[]>([]);
   const [adminVenueId, setAdminVenueId] = useState<string | null>(null);
-  // 운영자는 선택한 매장, 그 외는 본인 소속 매장
-  const venueId: string | null = isAdmin ? adminVenueId : (user?.venueId ?? null);
+  // ⑥ 오너 2026-09-28: 한 사람이 여러 매장(대표 업주·승인 공동운영자·직원)에 속하면 상단에서 고른다 — 관리자 고르개를 그대로 확장.
+  //   목록은 서버(my_member_venues)가 정한다. 미적용·실패면 빈 목록 → 종전처럼 profiles.venue_id 한 매장.
+  const [memberVenues, setMemberVenues] = useState<MemberVenue[]>([]);
+  const [memberVenueId, setMemberVenueId] = useState<string | null>(null);
+  // 운영자는 선택한 매장, 그 외는 고른 소속 매장 → 없으면 프로필 매장 → 없으면 소속 목록의 첫 매장(공동운영 매장만 있는 사람)
+  const venueId: string | null = isAdmin ? adminVenueId
+    : (memberVenueId ?? user?.venueId ?? memberVenues[0]?.id ?? null);
   const [section, setSection] = useState<Section | null>(null);
   // IA2: 게임 진행 스텝 — 마지막 사용 스텝을 기억해 착지(대시보드 '지금 할 일' CTA 는 정확한 스텝을 직접 지정)
   const [gameStep, setGameStep] = useState<GameStep>(() => {
@@ -272,6 +279,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [navOpen, setNavOpen] = useState(false); // 모바일 메뉴 아코디언 펼침
   const [ledgerOk, setLedgerOk] = useState(false); // 장부 접근(업주/운영자/권한직원)
   const [staffOk, setStaffOk] = useState(false);   // 직원 관리(업주/공동 사장/관리자) — 서버 판정
+  const [schedOk, setSchedOk] = useState(false);   // 스케줄 편성(위 ∪ 스케줄 위임 직원) — 서버 can_manage_schedule
   const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
   const [voucherViewRaw, setVoucherView] = useState(false); // 매장이용권 내역 열람 '권한'(업주/권한직원)
   // 킬스위치(2026-08-29). 권한(voucherViewRaw)은 서버 판정 그대로 두고 **노출만** 덮는다 —
@@ -563,10 +571,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   useEffect(() => {
     if (!venueId || !needVenueName) return;
     if (isAdmin) { setVenueName(adminVenues.find((v) => v.id === venueId)?.name ?? ''); return; }
+    const known = memberVenues.find((v) => v.id === venueId);
+    if (known) { setVenueName(known.name); return; }
     let alive = true;
     getMyVenue().then((v) => { if (alive && v?.id === venueId) setVenueName(v.name); }).catch(() => { /* 이름은 장식 — 실패해도 카드는 나간다 */ });
     return () => { alive = false; };
-  }, [venueId, isAdmin, adminVenues, needVenueName]);
+  }, [venueId, isAdmin, adminVenues, memberVenues, needVenueName]);
 
   // 권한 조회가 끝났거나(직원) 킬스위치가 꺼져 현재 하위탭이 사라졌으면 첫 노출 탭으로 이동.
   // (탭 바에서 사라진 탭이 그대로 열려 있으면 판이 렌더되지 않아 백지가 된다)
@@ -634,6 +644,16 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     return () => { alive = false; };
   }, [venueId, staffOk, isAdmin]);
 
+  // 소속 매장 목록(전환기용) — 계정이 바뀌면 고른 매장도 버린다(다른 계정의 매장 id 가 남지 않게).
+  const myUidForVenues = user?.id;
+  useEffect(() => {
+    setMemberVenues([]); setMemberVenueId(null);
+    if (isAdmin || !myUidForVenues) return;
+    let alive = true;
+    listMyMemberVenues().then((vs) => { if (alive) setMemberVenues(vs); }).catch(() => { /* 전환기만 안 뜬다 — 종전 동작 */ });
+    return () => { alive = false; };
+  }, [isAdmin, myUidForVenues]);
+
   // 운영자: 전체 매장 목록 로드(선택용)
   useEffect(() => {
     if (!isAdmin) return;
@@ -649,7 +669,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (!venueId) { setPermsLoaded(false); return; }
     let alive = true;
     if (isAdmin) {
-      setLedgerOk(true); setManageOk(true); setVoucherView(true); setStaffOk(true); setScheduleOk(true);
+      setLedgerOk(true); setManageOk(true); setVoucherView(true); setStaffOk(true); setScheduleOk(true); setSchedOk(true);
       setSection((s) => s ?? 'dashboard');
       setPermsError(null);
       setPermsLoaded(true);
@@ -666,10 +686,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     // 포스터 판정도 **보조**다 — 배치에 그냥 넣으면 이 RPC 한 번의 실패가 장부·정산까지 닫는다.
     //   실패는 null(모른다)로 받아 폴백이 종전 규칙을 쓰게 한다.
     const schedCap = () => canManageVenueSchedules(venueId).catch(() => null);
-    Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId), staffCap(), schedCap()])
-      .then(([l, m, vv, st, sc]) => {
+    // 스케줄 위임(schedule_access) 판정도 보조 — 실패는 false(메뉴 하나만 숨긴다). F5 2026-09-28.
+    const rosterCap = () => canManageSchedule(venueId).catch(() => false);
+    Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId), staffCap(), schedCap(), rosterCap()])
+      .then(([l, m, vv, st, sc, ro]) => {
         if (!alive) return;
-        setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); setScheduleOk(sc);
+        setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); setScheduleOk(sc); setSchedOk(ro);
         setSection((s) => s ?? 'dashboard');
       })
       .catch((e) => { if (alive) { setPermsError(e ?? new Error('권한 조회 실패')); setSection(null); } })
@@ -683,8 +705,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     const recheck = () => {
       Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId),
                    canManageVenueStaff(venueId).catch(() => false),              // 보조 판정 — 위와 같은 이유로 격리
-                   canManageVenueSchedules(venueId).catch(() => null)])          // 같은 이유
-        .then(([l, m, vv, st, sc]) => { setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); setScheduleOk(sc); })
+                   canManageVenueSchedules(venueId).catch(() => null),           // 같은 이유
+                   canManageSchedule(venueId).catch(() => false)])                // 같은 이유
+        .then(([l, m, vv, st, sc, ro]) => { setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); setScheduleOk(sc); setSchedOk(ro); })
         .catch(() => { /* keep current */ });
     };
     window.addEventListener('focus', recheck);
@@ -710,6 +733,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 자기 출퇴근을 못 보던 오게이팅 — 이 탭에 들어온 소속 구성원이면 누구나
   available.push({ id: 'attendance', label: '출근 관리', group: '관리' });
   if (staffOk) available.push({ id: 'staff', label: '직원 관리', group: '관리' });
+  // F5(2026-09-28): 스케줄을 위임받은 직원(schedule_access)은 서버가 스케줄 편성을 허락하는데(can_manage_schedule)
+  //   화면에 들어갈 문이 없었다. 직원 관리 **전체가 아니라 스케줄만** 연다 — 구성원·인건비는 서버도 막는다.
+  else if (schedOk) available.push({ id: 'staff', label: '출근 스케줄', group: '관리' });
   // 연합 대회 파트너 매장(오너 2026-09-17: 옛 연합리그 자리에 '매칭만') — 업주만. 점수·정산 없음.
   if (manageOk) available.push({ id: 'partners', label: '파트너 매장', group: '관리' });
   // 🔴 2026-09-18 오너 승격: 이용권은 '매장 설정 > 이용권·QR' 이 아니라 **독립 탭**이다.
@@ -791,15 +817,23 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       {/* 관리자만 보는 매장 고르개(`isAdmin` 게이트는 그대로 — 기능은 손대지 않는다).
           ⚠ 2026-09-15 오너 지시: '운영자 전체 접근' **표기**를 없앤다. 일반 업주에게는 원래 이 칸 자체가
             안 보이지만, 문구가 남아 있으면 관리자 화면에서 권한 등급이 그대로 읽힌다. 남기는 것은 '관리할 매장 선택' 하나. */}
-      {isAdmin && (
+      {(isAdmin || memberVenues.length > 1) && (
         <div className="space-y-2 rounded-card border border-accent-400/40 bg-accent-300/[0.06] p-3">
-          <p className="text-2xs font-bold text-accent-300">관리할 매장 선택</p>
-          <select value={venueId ?? ''} onChange={(e) => setAdminVenueId(e.target.value || null)} className="input text-sm">
-            {adminVenues.length === 0 && <option value="">불러오는 중…</option>}
-            {adminVenues.map((v) => (
-              <option key={v.id} value={v.id}>{v.name} · {v.region}{v.approved ? '' : ' (미승인)'}</option>
-            ))}
-          </select>
+          <label htmlFor="mystore-venue-pick" className="block text-2xs font-bold text-accent-300">관리할 매장 선택</label>
+          {isAdmin ? (
+            <select id="mystore-venue-pick" value={venueId ?? ''} onChange={(e) => setAdminVenueId(e.target.value || null)} className="input text-sm">
+              {adminVenues.length === 0 && <option value="">불러오는 중…</option>}
+              {adminVenues.map((v) => (
+                <option key={v.id} value={v.id}>{v.name} · {v.region}{v.approved ? '' : ' (미승인)'}</option>
+              ))}
+            </select>
+          ) : (
+            <select id="mystore-venue-pick" value={venueId ?? ''} onChange={(e) => setMemberVenueId(e.target.value || null)} className="input text-sm">
+              {memberVenues.map((v) => (
+                <option key={v.id} value={v.id}>{v.name} · {v.relation === 'owner' ? '대표 업주' : v.relation === 'coowner' ? '공동운영' : '직원'}</option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 
@@ -1113,13 +1147,24 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {/* IA3c '매장 페이지' 탭 = 구 매장꾸미기 + 구 매장랭킹(시즌·랭킹보드) 병합 — 같은
                     venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
                 {visited.includes('page') && canSettingsTab('page') && box('page', <>
-                  <VenueCustomizePanelM venueId={venueId} onOpenVenue={onOpenVenue ? () => onOpenVenue(venueId) : undefined} />
+                  <VenueCustomizePanelM venueId={venueId} onOpenVenue={onOpenVenue ? () => onOpenVenue(venueId) : undefined}
+                    canEditKakao={isAdmin || (isOwner && primaryOwner !== false)} />
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'settings' && renderSettingsTab === 'page'} /></div>}
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </>)}
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} venueName={venueName || undefined} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
-                {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} active={tabActive && renderSection === 'attendance'} />)}
-                {visited.includes('staff') && staffOk && box('staff', <StaffHub venueId={venueId} active={tabActive && renderSection === 'staff'} />)}
+                {/* 🔴 2026-09-28 오너 "마스터 계정에 직원 탭" — 관리자는 직원 본인 화면(내 근무 정보 + 출퇴근)을 **보기만** 한다.
+                    서버(my_staff_wage·set_my_shift_time·_is_active_venue_staff)에 관리자 분기를 만들지 않는다 — 접근표·인건비 조작면이 생긴다. */}
+                {visited.includes('attendance') && box('attendance', <div className="space-y-3">
+                  {isAdmin && <>
+                    <p role="note" className="rounded-input border border-border-subtle bg-surface-high px-3 py-2 t-desc break-keep text-ink-muted">
+                      직원 화면 미리보기 · 관리자 계정은 보기만 할 수 있어요. 출퇴근 기록은 직원 본인만 남깁니다.
+                    </p>
+                    <MyStaffCard venueId={venueId} preview />
+                  </>}
+                  <StaffSelfAttendanceM venueId={venueId} readOnly={isAdmin} active={tabActive && renderSection === 'attendance'} />
+                </div>)}
+                {visited.includes('staff') && (staffOk || schedOk) && box('staff', <StaffHub venueId={venueId} scheduleOnly={!staffOk} active={tabActive && renderSection === 'staff'} />)}
                 {visited.includes('partners') && manageOk && box('partners',
                   <Suspense fallback={<p aria-busy="true" className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
                     <VenueMatchPanelM venueId={venueId} canConfigure={manageOk} />
@@ -2387,8 +2432,10 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
 const TITLE_SUGGEST = ['매니저', '플로어', '딜러', '칩러너', '매장장', '직원'];
 
 // ── 직원 관리 허브(아코디언) ──────────────────────────────────────────────────
-function StaffHub({ venueId, active = true }: { venueId: string; active?: boolean }) {
+function StaffHub({ venueId, active = true, scheduleOnly = false }: { venueId: string; active?: boolean; scheduleOnly?: boolean }) {
   const [open, setOpen] = useState<string>('members'); // 한 번에 하나(스크롤 절약)
+  // 스케줄 위임 직원 — 아코디언 없이 스케줄 하나만(나머지 네 칸은 서버가 can_manage_pos 로 막는다)
+  if (scheduleOnly) return <StaffSchedule venueId={venueId} active={active} />;
   const items: { id: string; label: string; node: ReactNode }[] = [
     { id: 'members',  label: '구성원 목록',                 node: <StaffManager venueId={venueId} /> },
     { id: 'schedule', label: '딜러 출근 스케줄',            node: <StaffSchedule venueId={venueId} active={active} /> },
@@ -2826,7 +2873,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                         <span className="block text-sm font-semibold text-ink-primary truncate">
                           {s.name}{s.staffTitle ? <span className="ml-1.5 text-2xs font-bold text-accent-300 dark:text-accent-200">· {s.staffTitle}</span> : null}
                         </span>
-                        <p className="text-2xs text-ink-muted truncate">{s.nickname ? `@${s.nickname}` : s.email}</p>
+                        {(s.nickname || s.email) && <p className="text-2xs text-ink-muted truncate">{s.nickname ? `@${s.nickname}` : s.email}</p>}
                       </div>
                       <button type="button" onClick={() => remove(s)} className="text-2xs px-2.5 py-1.5 rounded-input text-ink-muted hover:text-danger-light transition-colors">제거</button>
                     </div>

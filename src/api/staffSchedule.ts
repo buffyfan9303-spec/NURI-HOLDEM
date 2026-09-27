@@ -107,6 +107,15 @@ export async function saveStaffWage(venueId: string, w: StaffWage): Promise<void
  *   화면은 그 둘을 갈라 말해야 한다(빈 화면 + 안내). 급여에서는 빈 화면이 남의 금액보다 낫다.
  */
 export interface MyWage { hourlyWage: number; payday: number; weeklyOff: string; updatedAt: string | null }
+/** 스케줄 편성 권한 — 서버 can_manage_schedule(= can_manage_pos ∪ 스케줄 위임받은 활성 직원, 20260915g·20260925f)과 같은 선.
+ *  내 매장에서는 **보조** 판정이라 호출부가 실패를 false 로 받는다(메뉴 하나만 가린다 — 서버 RLS 가 한 겹 더 막는다). */
+export async function canManageSchedule(venueId: string): Promise<boolean> {
+  if (IS_MOCK) return false;
+  const { data, error } = await supabase.rpc('can_manage_schedule', { p_venue_id: venueId });
+  if (error) throw error;
+  return !!data;
+}
+
 export async function getMyStaffWage(venueId: string): Promise<MyWage | null> {
   if (IS_MOCK) return null;
   const { data, error } = await supabase.rpc('my_staff_wage', { p_venue_id: venueId });

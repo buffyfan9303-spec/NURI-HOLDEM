@@ -419,7 +419,11 @@ export function StaffWorkLog({ venueId, active = true }: { venueId: string; acti
 }
 
 // ── 직원 본인 출퇴근 입력(셀프) ───────────────────────────────────────────────
-export function StaffSelfAttendance({ venueId, active = true }: { venueId: string; active?: boolean }) {
+export function StaffSelfAttendance({ venueId, active = true, readOnly = false }: {
+  venueId: string; active?: boolean;
+  /** 관리자(마스터) 미리보기 — 출퇴근 버튼·시각 칸을 잠근다. 서버 set_my_shift_time 에 관리자 분기를 만들지 않는다(오너 2026-09-28). */
+  readOnly?: boolean;
+}) {
   const { user } = useAuth();
   const toast = useToast();
   const [month, setMonth] = useState(thisMonth);
@@ -432,7 +436,7 @@ export function StaffSelfAttendance({ venueId, active = true }: { venueId: strin
   // 20260925g N5: 서버(set_my_shift_time)는 KST 오늘·어제만 받는다 — 기기 로컬 날짜가 아니라 같은 KST 기준으로 판단한다.
   const today = kstToday();
   const yesterday = kstToday(Date.now() - 86_400_000);
-  const canSelfEdit = (d: string) => d === today || d === yesterday;
+  const canSelfEdit = (d: string) => !readOnly && (d === today || d === yesterday);
   const nowHm = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
   useEffect(() => {
     const reload = () => getStaffSchedule(venueId, from, to)
@@ -491,7 +495,7 @@ export function StaffSelfAttendance({ venueId, active = true }: { venueId: strin
                   <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-[6rem] disabled:opacity-60" /></label>
                   <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-[6rem] disabled:opacity-60" /></label>
                   {s.checkIn && s.checkOut && <span className="text-2xs text-accent-300 dark:text-accent-200 tabular-nums font-bold">{hours(s.checkIn, s.checkOut).toFixed(1)}h</span>}
-                  {!canSelfEdit(s.date) && <span data-testid="shift-locked-note" className="basis-full text-2xs text-ink-muted">오늘·어제 근무만 직접 기록할 수 있어요. 지난 근무는 업주에게 수정을 요청해 주세요.</span>}
+                  {!canSelfEdit(s.date) && <span data-testid="shift-locked-note" className="basis-full text-2xs text-ink-muted">{readOnly ? '관리자 계정은 보기만 할 수 있어요. 출퇴근 기록은 직원 본인만 남깁니다.' : '오늘·어제 근무만 직접 기록할 수 있어요. 지난 근무는 업주에게 수정을 요청해 주세요.'}</span>}
                 </div>
               </div>
             );

@@ -295,7 +295,7 @@ export default function ScheduleDetailModal({
               <button
                 type="button"
                 onClick={() => onVenueClick(schedule.venueId!)}
-                className="mt-1.5 flex w-full items-center gap-1 text-left text-base text-ink-secondary hover:text-accent-300 transition-colors group"
+                className="tap-44 mt-1.5 flex w-full items-center gap-1 text-left text-base text-ink-secondary hover:text-accent-300 transition-colors group"
               >
                 <span className="min-w-0 break-keep [overflow-wrap:anywhere] font-bold underline decoration-dotted underline-offset-2">
                   {schedule.pubName}
@@ -332,7 +332,9 @@ export default function ScheduleDetailModal({
                    두 타깃이 겹쳐 오히려 오탭이 난다. 그래서 **간격을 먼저 벌리고**(mt-0.5 → mt-3)
                    그 벌린 만큼만 위로 확장한다(py-1.5 + -my-1.5 = 각 12.75px).
                    결과 42.5px · 위쪽 확장이 간격과 정확히 맞닿아 겹침 0. 레이아웃은 아래로 10px 만 움직인다. */
-                className="-my-1.5 mt-3 flex items-start gap-1.5 py-1.5 text-xs text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
+                /* 2026-09-28: 29.75px → 44px. 아래는 곧바로 sticky 탭바(메인·상금…)가 덮어 1px 밖에 못 넓힌다 —
+                   위로만 15px(바로 위는 글자뿐인 지역·형식 줄, 매장명 버튼의 확장부와는 11px 떨어져 겹치지 않는다). 아래 8px 는 탭바가 이긴다. */
+                className="relative -my-1.5 mt-3 flex items-start gap-1.5 py-1.5 text-xs before:absolute before:inset-x-0 before:-inset-y-[8px] before:-top-[15px] before:content-[''] text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
                 <Icon name="map" size={13} className="mt-0.5 shrink-0" /><span className="break-keep [overflow-wrap:anywhere]">{schedule.address}</span>
               </a>
             )}
@@ -1216,7 +1218,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
             두 제목이 가까워졌으므로 여기 '참가 예약' 과 그쪽 설명줄이 역할을 가르는 유일한 단서다. */}
       <div className="flex items-center gap-2 px-3 py-2">
         <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          className="tap-44 flex min-w-0 flex-1 items-center gap-2 text-left">
           <span className="shrink-0 text-sm font-bold text-accent-300">참가 예약</span>
           {/* truncate → 줄바꿈(2026-09-12): 360px 에서 '미리 자리 잡아두기'가 87/102 로 잘렸다.
               예약 상태·실패 안내가 들어가는 자리라 잘라 숨기면 안 된다(§5-2). */}
@@ -1235,7 +1237,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
         {/* 예약 CTA 는 접혀 있어도 숨기지 않는다 — 누르면 예약 UI(닉네임 입력)가 펼쳐진다 */}
         {mine === null && !ended && !expanded && (
           <button type="button" onClick={() => setExpanded(true)}
-            className="btn-primary shrink-0 px-3 py-1.5 text-xs">
+            className="tap-44 btn-primary shrink-0 px-3 py-1.5 text-xs">
             예약하기
           </button>
         )}

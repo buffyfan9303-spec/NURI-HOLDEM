@@ -199,7 +199,8 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
             ) : (
               <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, ${group.themeColor ?? '#1A1D24'} 0%, #0a0c0f 100%)` }} />
             )}
-            {isManager && (
+            {/* 이미지 추가는 venues UPDATE 라 서버(venues_update)가 **개설자·관리자만** 받는다 — 운영진에게 보이면 업로드 뒤 저장이 실패한다(2026-09-28 F4) */}
+            {isOwner && (
               <label className="absolute bottom-2 right-2 cursor-pointer rounded-input bg-black/60 px-2.5 py-1 text-2xs font-semibold text-white hover:bg-black/80">
                 + 이미지
                 <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => addImages(e.target.files)} />
@@ -276,7 +277,8 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
           <div className="px-page-x py-3 border-b border-border-subtle">
             <div className="flex items-center justify-between mb-1.5">
               <h3 className="text-xs font-bold text-accent-200">공지사항</h3>
-              {isManager && <button type="button" onClick={addNotice} className="text-2xs text-accent-200 hover:opacity-80">+ 공지</button>}
+              {/* 공지 등록은 서버(venue_notices_insert)가 **개설자·관리자만** 받는다(2026-09-28 F4) */}
+              {isOwner && <button type="button" onClick={addNotice} className="text-2xs text-accent-200 hover:opacity-80">+ 공지</button>}
             </div>
             {notices.length === 0 ? (
               <p className="text-2xs text-ink-muted py-1">등록된 공지가 없습니다</p>
@@ -287,7 +289,8 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                     <p className="text-xs text-ink-primary whitespace-pre-wrap break-words">{n.content}</p>
                     <div className="mt-0.5 flex items-center gap-2 text-2xs text-ink-muted">
                       <span>{relativeTime(n.createdAt)}</span>
-                      {isManager && <button type="button" onClick={() => deleteVenueNotice(n.id).then(() => getVenueNotices(group.id).then(setNotices)).catch((e) => toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'))} className="ml-auto hover:text-danger-light">삭제</button>}
+                      {/* 삭제는 서버(venue_notices_delete)가 관리자·작성자·개설자만 받는다 */}
+                      {(isOwner || n.authorId === user?.id) && <button type="button" onClick={() => deleteVenueNotice(n.id).then(() => getVenueNotices(group.id).then(setNotices)).catch((e) => toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'))} className="ml-auto hover:text-danger-light">삭제</button>}
                     </div>
                   </li>
                 ))}

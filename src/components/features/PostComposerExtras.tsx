@@ -43,6 +43,11 @@ const CLOSE_MS: Record<PollCloseKey, number | null> = {
   none: null, '24h': DAY_MS, '3d': 3 * DAY_MS, '7d': 7 * DAY_MS,
 };
 
+/** 글쓰기 첨부 머리줄의 '+ 추가 / 닫기 / 제거' 글자 버튼 — 44×44 누름(2026-09-28 점검: 글자 54×16 이 곧 히트였다).
+ *  음수 여백 -my-2(8.5px)로 머리줄은 27px 만 차지하고, 상자는 위아래 8.5px 씩 넘친다. 그래서 머리줄은 `mb-2`(8.5px)를
+ *  둬야 아래 내용(사진 격자의 ✕·펼친 패널)을 덮지 않고, 닫힌 머리줄끼리는 space-y-4(17px) 를 반씩 나눠 겹치지 않는다. */
+export const ATTACH_TOGGLE = 'inline-flex min-h-[44px] min-w-[44px] -my-2 items-center justify-end text-2xs font-semibold';
+
 /**
  * 핸드 드래프트 → 저장 페이로드. 요약도 카드도 없으면 null(저장 안 함) —
  * saveHand 의 빈 껍데기 가드(DB CHECK)와 같은 판정을 폼 단계에서 먼저 내린다.
@@ -168,7 +173,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1.5">
+      <div className="flex items-center justify-between mb-2">
         <label className="text-xs font-medium text-ink-secondary">
           핸드 카드 <span className="text-ink-muted">(선택)</span>
           {attached && !open && (
@@ -180,7 +185,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="text-2xs font-semibold text-accent-200 hover:text-accent-100"
+          className={`${ATTACH_TOGGLE} text-accent-200 hover:text-accent-100`}
         >
           {open ? '닫기' : '+ 핸드 카드'}
         </button>
@@ -388,7 +393,7 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1.5">
+      <div className="flex items-center justify-between mb-2">
         <label className="text-xs font-medium text-ink-secondary">
           투표 <span className="text-ink-muted">(선택)</span>
         </label>
@@ -396,7 +401,7 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
           type="button"
           onClick={() => onChange({ ...value, enabled: !value.enabled })}
           className={[
-            'text-2xs font-semibold transition-colors',
+            ATTACH_TOGGLE, 'transition-colors',
             value.enabled ? 'text-ink-muted hover:text-danger' : 'text-accent-200 hover:text-accent-100',
           ].join(' ')}
         >

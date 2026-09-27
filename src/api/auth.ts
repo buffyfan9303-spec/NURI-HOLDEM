@@ -296,11 +296,11 @@ export async function setInviteGrants(
 // ⚠ get_my_venue_staff 는 20260914d 부터 아래 6컬럼만 내려준다(보안 표준 §6 — 예전엔 profiles 전 컬럼이 나가
 //   업주가 직원의 ci_hash·실명·전화까지 받았다). rowToUser 로 받으면 verified(!!ci_hash)가 조용히 false 가 되므로
 //   전용 매퍼로 받는다 — 직원 화면(StaffManager·NuriPosLedger·StaffSchedule·StaffPayroll)이 쓰는 필드는 이 여섯뿐이다.
-interface StaffRow { id: string; name: string; nickname: string | null; email: string; avatar_color: string | null; staff_title: string | null; is_active?: boolean }
+interface StaffRow { id: string; name: string; nickname: string | null; email: string | null; avatar_color: string | null; staff_title: string | null; is_active?: boolean }
 function staffRowToUser(row: StaffRow): User {
   return {
     id:          row.id,
-    email:       row.email,
+    email:       row.email ?? '', // 20260928b: 관리자 외에는 null 로 온다 — 화면은 빈 값이면 그 줄을 안 그린다
     name:        row.name,
     nickname:    row.nickname ?? undefined,
     role:        'venue_staff', // RPC 가 role = 'venue_staff' 로 걸러 준다

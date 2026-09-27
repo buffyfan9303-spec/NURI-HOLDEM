@@ -16,7 +16,8 @@ export default function ThemeToggle({ className = '' }: { className?: string }) 
       aria-label={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}
       title={isDark ? '라이트 모드' : '다크 모드'}
       className={[
-        'w-9 h-9 flex items-center justify-center rounded-full transition-colors active:scale-90',
+        // tap-44: 보이는 원 38.25px, 누름면 세로 44px — 가로는 늘리지 않는다(360 헤더 제목 잘림 방지).
+        'tap-44 w-9 h-9 flex items-center justify-center rounded-full transition-colors active:scale-90',
         'text-ink-secondary hover:text-ink-primary hover:bg-surface-high',
         className,
       ].join(' ')}

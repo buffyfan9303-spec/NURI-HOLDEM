@@ -100,7 +100,18 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   const [loadErr, setLoadErr] = useState<unknown>(null);
   /** 목록이 아직 안 왔다(실패 아님) — 스켈레톤만 서는 구간. 이때는 목록 결과에 딸린 아래 내용을 그리지 않는다(MU4b). */
   const listPending = games === null && loadErr == null;
-  const load = () => getRunningClocks().then((g) => { setGames(g); setLoadErr(null); }).catch((e) => setLoadErr(e));
+  const load = () => getRunningClocks().then((g) => { setGames(g); setLoadErr(null); return true; }).catch((e) => { setLoadErr(e); return false; });
+  // 수동 새로고침 피드백(2026-09-28) — 눌러도 목록 값이 같으면 아무 변화가 없어 '안 눌렸다'로 읽혔다.
+  // 도는 표시 → 완료/실패 1.6초 → 원래 글자. 폭은 그대로(같은 칸에 겹쳐 그린다). 빨리 와도 0.45초는 돈다(번쩍 한 번은 못 본다).
+  const [refresh, setRefresh] = useState<'idle' | 'busy' | 'done' | 'fail'>('idle');
+  const manualRefresh = () => {
+    if (refresh === 'busy') return;
+    setRefresh('busy');
+    Promise.all([load(), new Promise((r) => setTimeout(r, 450))]).then(([ok]) => {
+      setRefresh(ok ? 'done' : 'fail');
+      setTimeout(() => setRefresh((s) => (s === 'busy' ? s : 'idle')), 1600);
+    });
+  };
   // 폴링·1초 틱은 라이브 탭이 보일 때만 — 숨김 시 멈춰 백그라운드 끊김 방지(재진입 시 즉시 갱신). 실시간 구독은 이벤트 기반이라 상시 유지.
   useEffect(() => { if (!active) return; load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [active]);
   // 실시간 구독도 **보일 때만** — 라이브 탭은 유휴 시점에 숨긴 채 프리마운트되므로 상시 구독하면
@@ -215,7 +226,18 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                 ⚠ `.hit` 함정 ②(오버행이 옆을 덮는다): 세로 오버행 (44−34)/2 = **5px**.
                   가로는 이 버튼 폭이 44px 를 넘어 오버행 0 이다. 적용 후 `elementFromPoint` 로
                   그 좌표가 정말 이 버튼을 돌려주는지 실측했다(아래 커밋 메시지에 수치). */}
-            <button type="button" onClick={load} className="btn-ghost btn-sm hit px-3">새로고침</button>
+            <button type="button" onClick={manualRefresh} aria-busy={refresh === 'busy'} data-testid="live-refresh" data-state={refresh}
+              className="btn-ghost btn-sm hit px-3">
+              {/* 글자는 늘 자리를 잡고(폭 고정) 진행·결과 표시는 그 위에 겹친다 — .hit 가 relative 라 absolute 기준이 된다 */}
+              <span className={refresh === 'idle' ? '' : 'invisible'}>새로고침</span>
+              {refresh === 'busy' && <span aria-hidden className="absolute inset-0 flex items-center justify-center"><span className="block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /></span>}
+              {(refresh === 'done' || refresh === 'fail') && (
+                <span aria-hidden className="absolute inset-0 flex items-center justify-center gap-0.5">
+                  <Icon name={refresh === 'done' ? 'check' : 'close'} size={12} className="shrink-0" />{refresh === 'done' ? '완료' : '실패'}
+                </span>
+              )}
+              <span className="sr-only" aria-live="polite">{refresh === 'done' ? '목록을 새로 불러왔어요' : refresh === 'fail' ? '목록을 불러오지 못했어요' : ''}</span>
+            </button>
           </div>
         </div>
 

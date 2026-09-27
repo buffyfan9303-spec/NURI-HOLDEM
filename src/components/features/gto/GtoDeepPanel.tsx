@@ -43,7 +43,8 @@ function CardSlot({ card, active, onClick }: { card: Card | null; active: boolea
           <span className={['text-2xs leading-none', SUIT_COLOR[card.suit]].join(' ')}>{SUIT_LABEL[card.suit]}</span>
         </>
       ) : (
-        <span className="text-xs text-ink-muted/40">+</span>
+        // '+' 는 '여기 카드를 넣는다'는 UI 표지 — 비텍스트 3:1 이상(ink-muted 전량, 2026-09-28 /40 은 1.7~2.0)
+        <span className="text-xs text-ink-muted">+</span>
       )}
     </button>
   );

@@ -37,7 +37,8 @@ const rowToListing = (r: any): MarketplaceListing => ({
   status: r.status, images: r.images ?? [],
   region: r.region, shippingAvailable: r.shipping_available, pickupOnly: r.pickup_only,
   sellerId: r.seller_id, sellerName: r.seller_name,
-  sellerAvatarColor: r.seller_avatar_color, sellerTradeCount: r.seller_trade_count,
+  // 운영 매물 3건 전부 null 이었다(2026-09-28) → 원 배경 투명 + 흰 이니셜 = 라이트 1.12:1. 등록(App)·쪽지(chat.ts)와 같은 기본색.
+  sellerAvatarColor: r.seller_avatar_color || '#5A6175', sellerTradeCount: r.seller_trade_count,
   sellerVerified: r.seller_verified,
   createdAt: r.created_at, viewCount: r.view_count,
   likeCount: r.like_count, commentCount: r.comment_count,

@@ -449,7 +449,8 @@ const AppHeader = memo(function AppHeader({
             aria-label={`알림 ${unreadCount}개`}
             aria-expanded={notifOpen}
             className={[
-              'relative w-9 h-9 flex items-center justify-center rounded-full',
+              // tap-44: 보이는 원 38.25px, 누름면 세로 44px(가로 그대로 — 360 헤더 제목 폭 불변).
+              'tap-44 w-9 h-9 flex items-center justify-center rounded-full',
               'transition-colors duration-[var(--dur-fast)] ease-out active:scale-90',
               notifOpen
                 ? 'bg-surface-high text-accent-300'
@@ -473,7 +474,7 @@ const AppHeader = memo(function AppHeader({
               onClick={onOpenVoucher}
               aria-label="이용권 · 출석"
               className={[
-                'relative w-9 h-9 flex items-center justify-center rounded-full',
+                'tap-44 w-9 h-9 flex items-center justify-center rounded-full',
                 'transition-colors duration-[var(--dur-fast)] ease-out active:scale-90',
                 'text-ink-secondary hover:text-ink-primary hover:bg-surface-high',
               ].join(' ')}
@@ -542,7 +543,7 @@ const AppHeader = memo(function AppHeader({
 
                   {/* 내 정보 — 대시보드·프로필·설정·보안 통합 페이지(오너 지시 2026-09-03: 진입점 1개) */}
                   <button type="button" onClick={() => leaveMenuTo(onOpenMe)}
-                    className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                    className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                     <Icon name="circle-user" size={14} />
                     내 정보 <span className="text-ink-muted">(대시보드·프로필·설정)</span>
                   </button>
@@ -550,24 +551,24 @@ const AppHeader = memo(function AppHeader({
                   {/* 모바일 전용 — 헤더에서 빠진 알림/도구/테마를 메뉴로 제공 */}
                   <div className="lg:hidden border-y border-border-subtle">
                     <button type="button" onClick={() => leaveMenuTo(() => setNotifOpen(true))}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                      className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                       <Icon name="mail" size={14} />
                       알림{unreadCount > 0 && <span className="ml-auto rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white tabular-nums">{unreadCount}</span>}
                     </button>
                     <button type="button" onClick={() => leaveMenuTo(() => onGotoTab?.('tools'))}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                      className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                       <Icon name="wrench" size={14} />
                       도구
                     </button>
                     {user.role === 'admin' && (
                       <button type="button" onClick={() => leaveMenuTo(() => onGotoTab?.('admin'))}
-                        className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                        className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                         <Icon name="shield" size={14} />
                         관리자 설정
                       </button>
                     )}
                     <button type="button" onClick={() => { toggleTheme(); }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                      className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                       <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} />
                       {theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
                     </button>
@@ -577,7 +578,7 @@ const AppHeader = memo(function AppHeader({
                   <button
                     type="button"
                     onClick={() => { logout(); setUserMenu(false); }}
-                    className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs
+                    className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs
                                text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors
                                lg:border-t border-border-subtle"
                   >
@@ -590,7 +591,7 @@ const AppHeader = memo(function AppHeader({
             </div>
           ) : (
             <SpringButton onClick={onOpenLogin} ariaLabel="로그인"
-              className="btn-primary !h-7 !min-h-0 !px-2.5 !py-0 text-2xs shadow-none">
+              className="tap-44 btn-primary !h-7 !min-h-0 !px-2.5 !py-0 text-2xs shadow-none">
               로그인
             </SpringButton>
           )}

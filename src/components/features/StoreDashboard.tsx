@@ -1760,33 +1760,43 @@ function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => vo
  *    · 오류 → 조회 자체가 실패했다(네트워크·권한)
  *  둘을 같은 문장으로 말하면 직원이 "고장인가?" 하고 업주에게 헛되이 묻는다. 갈라 말한다.
  */
-function MyStaffCard({ venueId }: { venueId: string }) {
+export function MyStaffCard({ venueId, preview = false }: {
+  venueId: string;
+  /** 관리자(마스터) 미리보기 — 직원 화면을 **보기만** 한다. 본인 급여 조회(my_staff_wage)를 부르지 않는다:
+   *  관리자에게는 연결된 급여 줄이 없어 '업주가 연결하지 않았어요' 라는 거짓 안내가 뜬다(오너 2026-09-28). */
+  preview?: boolean;
+}) {
   const [wage, setWage] = useState<MyWage | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
+    if (preview) return;
     let alive = true;
     setState('loading');
     getMyStaffWage(venueId)
       .then((w) => { if (alive) { setWage(w); setState('ready'); } })
       .catch(() => { if (alive) setState('error'); });
     return () => { alive = false; };
-  }, [venueId]);
+  }, [venueId, preview]);
 
   return (
     <div className="space-y-3">
       <div className="rounded-card border border-border-default bg-surface-low p-5 space-y-3">
         <p className="text-sm font-bold text-ink-primary">내 근무 정보</p>
 
-        {state === 'loading' && <p aria-busy="true" className="t-desc text-ink-muted">불러오는 중…</p>}
+        {preview && (
+          <p className="t-desc break-keep text-ink-muted">직원 본인에게는 업주가 연결한 시급 · 급여일 · 휴무가 여기에 표시됩니다.</p>
+        )}
 
-        {state === 'error' && (
+        {!preview && state === 'loading' && <p aria-busy="true" className="t-desc text-ink-muted">불러오는 중…</p>}
+
+        {!preview && state === 'error' && (
           <p className="t-desc break-keep text-ink-muted">
             인건비를 불러오지 못했어요. 잠시 후 다시 열어 주세요.
           </p>
         )}
 
-        {state === 'ready' && wage && (
+        {!preview && state === 'ready' && wage && (
           <dl className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-badge bg-surface-high py-2">
               <dt className="text-2xs text-ink-muted">시급</dt>
@@ -1803,7 +1813,7 @@ function MyStaffCard({ venueId }: { venueId: string }) {
           </dl>
         )}
 
-        {state === 'ready' && !wage && (
+        {!preview && state === 'ready' && !wage && (
           <p className="t-desc break-keep text-ink-muted">
             아직 업주가 내 급여 정보를 연결하지 않았어요.{' '}
             업주에게 <span className="font-semibold text-ink-primary">직원 연결</span>을 요청하면 여기에 표시됩니다.

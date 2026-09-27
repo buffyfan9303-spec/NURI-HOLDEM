@@ -377,7 +377,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
           )}
           {badgeStats && (
             <section className="rounded-aura border card-aura p-3">
-              <button type="button" onClick={() => setAchOpen((v) => !v)} aria-expanded={achOpen} className="flex w-full items-center gap-2 text-left">
+              <button type="button" onClick={() => setAchOpen((v) => !v)} aria-expanded={achOpen} className="-my-2.5 flex w-full items-center gap-2 py-2.5 text-left">
                 <Tile icon="medal" tone="violet" />
                 <h2 className="text-sm font-bold text-ink-primary">내 업적</h2>
                 <span className="text-2xs font-semibold tabular-nums text-ink-muted">{BADGES.filter((b) => b.check(badgeStats)).length}/{BADGES.length} 달성</span>

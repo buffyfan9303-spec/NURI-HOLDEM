@@ -239,10 +239,14 @@ function CareerBoard({ myNick, nickStyle, markPrefix, period, setPeriod, rows, l
       {/* 기간 — 경력은 누적이 본질이라 '전체'가 기본. 올해·최근 90일은 현역 감각용. */}
       <div className="flex gap-1.5" role="group" aria-label="집계 기간">
         {(Object.keys(CAREER_PERIOD_LABEL) as CareerPeriod[]).map((p) => (
+          // 44px 누름(2026-09-28 점검: 칩 38.25 가 곧 히트였다) — 버튼은 투명 44 히트, 안쪽 span 이 종전 38.25 칩.
+          // 음수 여백 -my-[2.875px] 로 줄 높이는 38.25 그대로(세로 흐름 불변). 위 보드 설명 mb-2·아래 space-y-2 가 8.5px 라 넘침이 안 닿는다.
           <button key={p} type="button" onClick={() => setPeriod(p)} aria-pressed={period === p}
-            className={['min-h-9 rounded-chip border px-3 text-2xs font-bold transition-colors',
-              period === p ? 'border-transparent bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
-            {CAREER_PERIOD_LABEL[p]}
+            className="group -my-[2.875px] inline-flex min-h-[44px] items-center">
+            <span className={['inline-flex min-h-9 items-center rounded-chip border px-3 text-2xs font-bold transition-colors',
+              period === p ? 'border-transparent bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary group-hover:text-ink-primary'].join(' ')}>
+              {CAREER_PERIOD_LABEL[p]}
+            </span>
           </button>
         ))}
       </div>
@@ -984,7 +988,7 @@ export default function TierLeaderboard() {
                     className={['card-sink rounded-card border p-2.5 text-center transition-colors', got ? 'border-accent-400/50 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
                     <Icon name={b.icon} size={22} className={['mx-auto', got ? b.tone : 'text-ink-muted'].join(' ')} />
                     <p className={['mt-1 text-xs font-bold', got ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
-                    <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{b.desc}</p>
+                    <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">{b.desc}</p>
                   </div>
                 );
               })}
@@ -1163,7 +1167,7 @@ export default function TierLeaderboard() {
                               : 'border-border-subtle bg-surface-high'].join(' ')}>
                         <p className="text-2xl leading-none">{mk.emoji}</p>
                         <p className="mt-1 text-xs font-bold text-ink-primary">{mk.name}</p>
-                        <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{mk.desc}</p>
+                        <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">{mk.desc}</p>
                         {/* 판매 중지된 기간권의 잔여분 — 산 것을 뺏지 않는다는 표시라 절대 지우지 않는다 */}
                         {own?.source === 'rent' && own.until && (
                           <p className="mt-1 text-2xs font-semibold text-accent-300">기간권 {remainDays(own.until)}</p>
@@ -1265,7 +1269,7 @@ export default function TierLeaderboard() {
                                : own ? 'border-border-default bg-surface-high'
                                      : 'border-border-subtle bg-surface-high'].join(' ')}>
                           <p className="text-xs font-bold text-ink-primary">{c.label}</p>
-                          <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{c.desc}</p>
+                          <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">{c.desc}</p>
                           {own ? (
                             <button type="button" disabled={equipBusy !== null}
                               onClick={() => handleEquipCosmetic(c, on)}
@@ -1410,7 +1414,7 @@ export default function TierLeaderboard() {
                   <Icon name="edit" size={18} className="shrink-0 text-accent-300" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-bold text-ink-primary">{nickChangeSku.label}</span>
-                    <span className="block text-2xs leading-tight text-ink-muted">
+                    <span className="block text-2xs leading-relaxed text-ink-muted">
                       {nickLocked
                         ? <>지금은 <b className="text-ink-secondary">{nickFreeAt}</b>부터 바꿀 수 있어요. 기다리지 않고 바로 바꿉니다</>
                         : '지금은 기다리지 않고 바로 바꿀 수 있어요 · 변경은 원래 무료예요'}
@@ -1435,7 +1439,7 @@ export default function TierLeaderboard() {
                 <Icon name="megaphone" size={20} className="shrink-0 text-accent-300" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-bold text-ink-primary">외치기</span>
-                  <span className="block text-2xs leading-tight text-ink-muted">
+                  <span className="block text-2xs leading-relaxed text-ink-muted">
                     커뮤니티 맨 위에서 {SHOUT_SLOT_SECONDS}초 1회 방송 · 대기열 순서대로
                     {shoutTierHint(skus) && <> · {shoutTierHint(skus)}</>}
                   </span>
@@ -1454,7 +1458,7 @@ export default function TierLeaderboard() {
                       <Icon name="zap" size={18} className="shrink-0 text-accent-300" />
                       <span className="min-w-0 flex-1">
                         <span className="block text-xs font-bold text-ink-primary">{bumpSku.label}</span>
-                        <span className="block text-2xs leading-tight text-ink-muted">
+                        <span className="block text-2xs leading-relaxed text-ink-muted">
                           내 글에서 누르면 {bumpSku.durationHours}시간 상단 · 동시 {BUMP_SLOTS}자리
                         </span>
                       </span>
@@ -1485,7 +1489,7 @@ export default function TierLeaderboard() {
                         on ? 'border-accent-300 bg-accent-300/[0.1]' : unlocked ? 'border-border-default bg-surface-high' : 'border-border-subtle bg-surface-high opacity-50'].join(' ')}>
                       <p className={['text-2xl leading-none', unlocked ? '' : 'grayscale'].join(' ')}>{mk.emoji}</p>
                       <p className="mt-1 text-xs font-bold text-ink-primary">{mk.name}</p>
-                      <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{mk.desc}</p>
+                      <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">{mk.desc}</p>
                       {unlocked ? (
                         <button type="button" disabled={equipBusy !== null}
                           onClick={() => handleEquip(on ? null : mk.key)}
@@ -1609,9 +1613,9 @@ export default function TierLeaderboard() {
                         {r.nickname[0]}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-accent-300">{i + 1}위 · {r.nickname} <span className="font-semibold text-ink-muted">(나)</span></p>
+                        <p className="text-xs font-bold text-accent-300">{i + 1}위 · {r.nickname} <span className="font-semibold text-ink-secondary">(나)</span></p>
                         <p className="text-2xl font-extrabold leading-tight tabular-nums" style={{ color: tierCss(rowAce ? ACE_VAR : t.colorVar) }}>
-                          {r.activityPoints.toLocaleString()}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
+                          {r.activityPoints.toLocaleString()}<span className="ml-0.5 text-xs font-bold text-ink-secondary">점</span>
                         </p>
                       </div>
                       <TierBadge points={r.activityPoints} size={26} overallRank={i + 1} />
@@ -1652,11 +1656,11 @@ export default function TierLeaderboard() {
                 {(user.nickname ?? '나')[0]}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-accent-300">{user.nickname ?? '나'} <span className="font-semibold text-ink-muted">(나)</span></p>
+                <p className="text-xs font-bold text-accent-300">{user.nickname ?? '나'} <span className="font-semibold text-ink-secondary">(나)</span></p>
                 <p className="text-2xl font-extrabold leading-tight tabular-nums text-ink-primary">
-                  {(user.activityPoints ?? 0).toLocaleString()}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
+                  {(user.activityPoints ?? 0).toLocaleString()}<span className="ml-0.5 text-xs font-bold text-ink-secondary">점</span>
                 </p>
-                <p className="text-2xs text-ink-muted">TOP 30 진입까지 활동 점수를 모아보세요</p>
+                <p className="text-2xs text-ink-secondary">TOP 30 진입까지 활동 점수를 모아보세요</p>
               </div>
             </div>
           )}

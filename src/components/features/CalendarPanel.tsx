@@ -873,7 +873,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
               </label>
               <label className="col-span-3 min-w-0">
                 <span className="mb-0.5 block text-2xs text-ink-muted">매장</span>
-                <input value={venueName} onChange={(e) => setVenueName(e.target.value)} maxLength={40} list="roi-venue-names" placeholder="예: 누리홀덤 강남" aria-label="매장 이름"
+                <input value={venueName} onChange={(e) => setVenueName(e.target.value)} maxLength={40} list="roi-venue-names" placeholder="예: 누리홀덤" aria-label="매장 이름"
                   className="input min-h-[44px] w-full min-w-0 text-sm" />
               </label>
               <label className="col-span-3 min-w-0">

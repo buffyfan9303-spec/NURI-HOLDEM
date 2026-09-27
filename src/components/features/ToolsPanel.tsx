@@ -612,7 +612,8 @@ export default function ToolsPanel() {
             aria-label={`${activeTool?.name ?? '도구'} 링크 공유`}
             // tap-y-44: 보이는 박스(38.3px)는 그대로 두고 위아래 6px씩 눌림 영역만 확장(index.css:1005-1006).
             // 헤더 행에는 overflow-x-auto 조상이 없어(오버행이 안 잘림) 실측 확인됨(2026-09-20).
-            className="tap-y-44 inline-flex h-9 items-center gap-1.5 rounded-input px-2.5 text-2xs font-semibold text-ink-secondary transition-colors hover:bg-surface-high hover:text-ink-primary">
+            // min-w-[44px]: 모바일은 아이콘만 보여 폭이 38px 였다 — 누름 폭도 44 로(2026-09-28).
+            className="tap-y-44 inline-flex h-9 min-w-[44px] items-center justify-center gap-1.5 rounded-input px-2.5 text-2xs font-semibold text-ink-secondary transition-colors hover:bg-surface-high hover:text-ink-primary">
             <Icon name="share" size={15} aria-hidden />
             <span className="hidden sm:inline">공유</span>
           </button>

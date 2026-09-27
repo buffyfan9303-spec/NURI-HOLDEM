@@ -35,8 +35,11 @@ const PLACEMENT_POINT_MAX = 100;
 const MAX_PLACEMENT_ROWS = 30;
 
 /** 매장 꾸미기 — 매장 페이지 탭 순서. (순위 보드·칭호·점수는 「매장 랭킹」 탭) */
-export default function VenueCustomizePanel({ venueId, onOpenVenue }: {
+export default function VenueCustomizePanel({ venueId, onOpenVenue, canEditKakao = true }: {
   venueId: string;
+  /** 카카오 링크를 바꿀 수 있는가 — 서버 venues_update 정책(owner_id = 나 ∪ admin)과 같은 선.
+   *  공동운영자는 연락처(can_manage_venue)는 저장되는데 카카오만 거절돼 **부분 저장**이 났다(2026-09-28 F4). */
+  canEditKakao?: boolean;
   /** '손님 화면' — 손님이 보는 이 매장 페이지. 없으면 버튼이 렌더되지 않는다(호출부가 App 배선 전이어도 안전). */
   onOpenVenue?: () => void;
 }) {
@@ -111,7 +114,7 @@ export default function VenueCustomizePanel({ venueId, onOpenVenue }: {
       </section>
 
       {/* 위치·연락처·영업시간 — 매장 페이지 「매장 소개」에 그대로 나가는 값(오너 #17) */}
-      <VenueContactSection venueId={venueId} />
+      <VenueContactSection venueId={venueId} canEditKakao={canEditKakao} />
 
       {/* 출석 위치(CHECKIN-GEO) — 좌표가 없으면 서버가 손님 출석을 거부한다(20260923b) */}
       <CheckinLocationSection venueId={venueId} />
@@ -138,7 +141,7 @@ export default function VenueCustomizePanel({ venueId, onOpenVenue }: {
  * 손님 화면으로 나갔다 와야 한다. 운영주는 PC 99% 이고 설정은 설정 자리에 있어야 한다.
  * 두 문은 같은 편집기(ContactListEditor)와 같은 저장 경로(update_venue_contacts)를 쓴다.
  */
-function VenueContactSection({ venueId }: { venueId: string }) {
+function VenueContactSection({ venueId, canEditKakao }: { venueId: string; canEditKakao: boolean }) {
   const toast = useToast();
   const [loaded, setLoaded] = useState(false);
   const [addr, setAddr] = useState('');
@@ -169,14 +172,14 @@ function VenueContactSection({ venueId }: { venueId: string }) {
     // 오너 지시: 연락처 1개는 필수. (서버는 0개도 허용한다 — 전화 없는 매장이 주소조차
     // 저장 못 하는 상태를 만들지 않기 위해서다. 필수 강제는 이 화면의 책임이다.)
     if (next.length === 0) { toast.show('연락처는 1개 이상 입력해 주세요', 'error'); return; }
-    const nextKakao = normalizeKakaoUrl(kakao);
+    const nextKakao = canEditKakao ? normalizeKakaoUrl(kakao) : savedKakao;
     if (nextKakao === null) { toast.show('카카오톡 링크는 https://open.kakao.com/… 형식의 주소여야 합니다', 'error'); return; }
     setSaving(true);
     try {
       await updateVenueContact(venueId, { address: addr, hours, contacts: next });
       if (nextKakao !== savedKakao) { await updateVenueKakao(venueId, nextKakao); setSavedKakao(nextKakao); setKakao(nextKakao); }
       setContacts(ensureOneContact(next));
-      toast.show('위치 · 연락처 · 영업시간 · 카카오톡 링크를 저장했습니다', 'success');
+      toast.show(canEditKakao ? '위치 · 연락처 · 영업시간 · 카카오톡 링크를 저장했습니다' : '위치 · 연락처 · 영업시간을 저장했습니다', 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
     finally { setSaving(false); }
   };
@@ -210,8 +213,11 @@ function VenueContactSection({ venueId }: { venueId: string }) {
             카카오톡 오픈채팅/단톡방 링크 <span className="font-normal text-ink-muted">(선택 · 비우고 저장하면 삭제)</span>
           </span>
           <input value={kakao} onChange={(e) => setKakao(e.target.value)} maxLength={300} inputMode="url"
-            placeholder="https://open.kakao.com/o/…" className="input w-full text-sm" />
-          <span className="block text-2xs text-ink-muted">손님 매장 페이지 위쪽 「카카오톡」 버튼이 이 주소로 열립니다.</span>
+            readOnly={!canEditKakao} aria-readonly={!canEditKakao || undefined}
+            placeholder="https://open.kakao.com/o/…" className="input w-full text-sm read-only:opacity-60" />
+          <span className="block text-2xs text-ink-muted">{canEditKakao
+            ? '손님 매장 페이지 위쪽 「카카오톡」 버튼이 이 주소로 열립니다.'
+            : '카카오톡 링크는 대표 업주만 바꿀 수 있어요.'}</span>
         </label>
         <button type="button" onClick={save} disabled={saving}
           className="btn-primary w-full py-2.5 text-sm disabled:opacity-50">

@@ -23,7 +23,7 @@ import type { Card } from './gto/gto.types';
 import { encodeHand, encodeReplay, type HandSel, type ReplayData } from '../../lib/hand';
 import { MiniCard } from '../atoms/HandCards';
 import {
-  CardPicker, PollBuilder, emptyHand, emptyPoll, normalizeHand, normalizePoll,
+  ATTACH_TOGGLE, CardPicker, PollBuilder, emptyHand, emptyPoll, normalizeHand, normalizePoll,
   type HandDraft, type PollDraft,
 } from './PostComposerExtras';
 import { saveHand, savePoll, type HandAttachment, type PollAttachment } from '../../api/postAttachments';
@@ -407,7 +407,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
 
           {/* 이미지 첨부 */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-medium text-ink-secondary">
                 이미지 <span className="text-ink-muted">({previews.length}/{MAX_IMAGES})</span>
               </label>
@@ -415,7 +415,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={previews.length >= MAX_IMAGES}
-                className="text-2xs font-semibold text-accent-200 hover:text-accent-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                className={`${ATTACH_TOGGLE} text-accent-200 hover:text-accent-100 disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 + 사진 추가
               </button>
@@ -457,14 +457,14 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
 
           {/* 핸드 첨부 (내 핸드 / 상대 핸드) */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-medium text-ink-secondary">
                 핸드 첨부 <span className="text-ink-muted">(선택)</span>
               </label>
               <button
                 type="button"
                 onClick={() => setShowHand((v) => !v)}
-                className="text-2xs font-semibold text-accent-200 hover:text-accent-100"
+                className={`${ATTACH_TOGGLE} text-accent-200 hover:text-accent-100`}
               >
                 {showHand ? '닫기' : '+ 핸드 추가'}
               </button>

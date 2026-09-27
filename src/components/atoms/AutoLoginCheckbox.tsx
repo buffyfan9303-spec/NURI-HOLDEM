@@ -42,35 +42,34 @@ export default function AutoLoginCheckbox({ checked, onChange, disabled, compact
     />
   );
 
+  // 2026-09-28: 줄 **전체**가 누름면이다(label 이 감싼다). 종전엔 13px 체크박스와 글자 폭(80px)만 눌렸고
+  //   44px 줄의 나머지·카드 여백은 죽은 칸이었다. label 안에는 구문 요소만 둘 수 있어 div/p 를 span 으로 바꿨다.
   if (compact) {
     return (
-      <div className="flex min-h-[44px] min-w-0 items-center gap-2" title={WARN}>
+      <label htmlFor={id} className="flex min-h-[44px] min-w-0 cursor-pointer select-none items-center gap-2" title={WARN}>
         {box}
-        <label htmlFor={id} className="min-w-0 cursor-pointer select-none truncate text-xs font-semibold text-ink-primary">
+        <span className="min-w-0 truncate text-xs font-semibold text-ink-primary">
           자동 로그인
-        </label>
+        </span>
         {/* 자물쇠 아이콘은 한 줄 모드에서 라벨 옆에 홀로 떠 보였다 — 경고는 title·sr-only 로만 남긴다 */}
         <span className="sr-only">{WARN}</span>
-      </div>
+      </label>
     );
   }
 
   return (
-    <div className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-2">
-      <div className="flex items-center gap-2">
+    <label htmlFor={id} className="block cursor-pointer select-none rounded-input border border-border-subtle bg-surface-high px-2.5 py-2">
+      <span className="flex items-center gap-2">
         {box}
-        <label
-          htmlFor={id}
-          className="flex-1 cursor-pointer select-none text-xs font-semibold text-ink-primary"
-        >
+        <span className="flex-1 text-xs font-semibold text-ink-primary">
           자동 로그인
-        </label>
-      </div>
-      <p className="mt-1 pl-[22px] text-2xs leading-relaxed text-ink-muted">
+        </span>
+      </span>
+      <span className="mt-1 block pl-[22px] text-2xs leading-relaxed text-ink-muted">
         <Icon name="lock" size={11} className="mr-1 inline-block align-[-1px] shrink-0" />
         이 브라우저에서 다음부터 자동으로 로그인됩니다.
         <b className="text-ink-secondary"> 공용 PC에서는 꼭 해제하세요.</b>
-      </p>
-    </div>
+      </span>
+    </label>
   );
 }

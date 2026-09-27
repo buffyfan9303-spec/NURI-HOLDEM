@@ -31,7 +31,8 @@ export default function SegmentedTabs<T extends string>({
             data-pill-active={on || undefined}
             onClick={() => onChange(it.key)}
             className={[
-              'relative shrink-0 rounded-[6px] leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none',
+              // tap-44: 보이는 칸 25.5px(sm)·30px(md) 그대로, 누름면만 세로 44px(2026-09-28 전수 점검).
+              'tap-44 shrink-0 rounded-[6px] leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none',
               grow ? 'flex-1' : '',
               // §T1 타이포 스케일: md=1단계 내비(t-nav) / sm=서브탭(t-tab). 굵기는 위 줄의 font-bold 가 이긴다.
               size === 'md' ? 'px-3 py-2 t-nav' : 'px-2.5 py-1.5 t-tab',

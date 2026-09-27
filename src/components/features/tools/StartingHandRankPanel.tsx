@@ -11,6 +11,7 @@
 import { CHIP_HIT } from '../gto/chip';
 import { useMemo, useState } from 'react';
 import Icon from '../../atoms/Icon';
+import { useRangeTheme } from './cellText';
 import { comboCount, gridName } from '../../../lib/ranges';
 import { STARTING_HAND_EQUITY } from './startingHandRank.data';
 
@@ -33,15 +34,20 @@ const ROWS: Row[] = (() => {
 const BY_HAND = new Map(ROWS.map((r) => [r.hand, r]));
 
 // 순위 색 단계 — 진할수록 강하다. 글자색은 바탕 진하기에 맞춰 흰색/본문색으로 갈린다.
+// 🔴 2026-09-28 테마별(레인지 칸 0f14bb9d 와 같은 방식 — useRangeTheme): 라이트에서 11~25 칸(75% 채움, 흰 카드 위)은
+//   흰 10px 굵은 글자 3.88 이었다. 라이트만 채움 70% + 본문색 글자(5.5)로 바꾼다 — 1~10(흰 글자)과 글자색도 갈려 구별이 는다.
+//   다크는 그대로(흰 글자 9.15). `light` 가 없는 단계는 두 테마 공용.
 const TIERS = [
   { max: 10, cell: 'bg-accent-300 text-white', label: '1~10' },
-  { max: 25, cell: 'bg-accent-300/75 text-white', label: '11~25' },
+  { max: 25, cell: 'bg-accent-300/75 text-white', light: 'bg-accent-300/70 text-ink-primary', label: '11~25' },
   { max: 50, cell: 'bg-accent-300/50 text-ink-primary', label: '26~50' },
   { max: 85, cell: 'bg-accent-300/30 text-ink-primary', label: '51~85' },
   { max: 120, cell: 'bg-accent-300/15 text-ink-primary', label: '86~120' },
   { max: 169, cell: 'bg-surface-high text-ink-muted', label: '121~169' },
 ] as const;
-const tierOf = (rank: number) => TIERS.find((t) => rank <= t.max) ?? TIERS[TIERS.length - 1];
+type Tier = (typeof TIERS)[number] & { light?: string };
+const tierOf = (rank: number): Tier => TIERS.find((t) => rank <= t.max) ?? TIERS[TIERS.length - 1];
+const cellOf = (t: Tier, theme: 'dark' | 'light') => (theme === 'light' && t.light) || t.cell;
 
 const LIMITS = [20, 50, 169] as const;
 
@@ -52,6 +58,7 @@ export default function StartingHandRankPanel() {
   const [sel, setSel] = useState<string | null>(null);
   const [limit, setLimit] = useState<(typeof LIMITS)[number]>(20);
   const [q, setQ] = useState('');
+  const { theme } = useRangeTheme();
 
   const list = useMemo(() => {
     const needle = norm(q);
@@ -87,7 +94,7 @@ export default function StartingHandRankPanel() {
                   aria-label={`${name} ${r.rank}위 승률 ${r.eq.toFixed(1)}%`}
                   className={[
                     'relative aspect-square flex items-center justify-center rounded-[3px] text-[10px] font-bold leading-none tracking-tighter whitespace-nowrap',
-                    tierOf(r.rank).cell,
+                    cellOf(tierOf(r.rank), theme),
                     on ? 'ring-2 ring-ink-primary z-10' : '',
                   ].join(' ')}
                 >
@@ -104,7 +111,7 @@ export default function StartingHandRankPanel() {
         <span role="listitem" className="text-2xs font-semibold text-ink-muted">순위</span>
         {TIERS.map((t) => (
           <span key={t.label} role="listitem" className="inline-flex items-center gap-1 text-2xs text-ink-secondary">
-            <span className={`inline-block h-3 w-3 rounded-[3px] ${t.cell}`} aria-hidden />
+            <span className={`inline-block h-3 w-3 rounded-[3px] ${cellOf(t, theme)}`} aria-hidden />
             {t.label}
           </span>
         ))}
@@ -177,7 +184,7 @@ export default function StartingHandRankPanel() {
                     className={['flex min-h-[44px] w-full items-center gap-2.5 px-3 text-left', on ? 'bg-accent-300/10' : ''].join(' ')}
                   >
                     <span className="w-8 shrink-0 text-2xs font-bold tabular-nums text-ink-muted">{r.rank}</span>
-                    <span className={`inline-flex h-6 w-10 shrink-0 items-center justify-center rounded-[4px] text-xs font-bold ${tierOf(r.rank).cell}`}>{r.hand}</span>
+                    <span className={`inline-flex h-6 w-10 shrink-0 items-center justify-center rounded-[4px] text-xs font-bold ${cellOf(tierOf(r.rank), theme)}`}>{r.hand}</span>
                     <span className="min-w-0 flex-1 truncate text-2xs text-ink-secondary">{r.kind}</span>
                     <span className="shrink-0 text-xs font-bold tabular-nums text-ink-primary">{r.eq.toFixed(1)}%</span>
                   </button>

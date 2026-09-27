@@ -560,7 +560,10 @@ export default function HomeTab({
           <section data-testid="home-today" className="px-page-x pt-1 md:pt-1.5 lg:col-span-4 lg:col-start-1 lg:row-start-1 lg:self-center lg:pt-0">
             <a
               href="https://www.nurimind.co.kr" target="_blank" rel="noopener"
-              className="inline-flex items-center gap-1 py-1 -my-1 t-desc text-ink-muted transition-colors hover:text-accent-200"
+              /* 2026-09-28: 아래 GTO 줄(-mt-[5px])이 이 링크 아래 8px 를 덮어 누름면이 20.75px 였다 — 위로만 더 넓힌다
+                 (py-2.5, 헤더 밑선까지 — 아래로 늘어난 몫은 GTO 줄이 덮는다). 44px 는 GTO 줄 44px 나 줄 간격(오너 2026-09-24 결정)을
+                 깎아야 해서 여기서 멈춘다(GTO 버튼 폭 구간 23.75px, 그 밖 38px). */
+              className="inline-flex items-center gap-1 py-2.5 -my-2.5 t-desc text-ink-muted transition-colors hover:text-accent-200"
             >
               {/* 오너 지시(2026-08-29): 인사말은 아무 데도 안 데려간다 — 링크인데 갈 이유를 안 준다.
                   날짜는 맥락으로 남기고, 그 자리를 NURI MIND 로 가고 싶게 만드는 문구로. */}
