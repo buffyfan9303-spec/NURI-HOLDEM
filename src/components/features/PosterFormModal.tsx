@@ -1010,12 +1010,12 @@ function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) 
   const baseMins = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
   const mins = baseMins.includes(mm) ? baseMins : [mm, ...baseMins].sort();
   return (
-    <div className="flex items-center gap-1.5">
-      <select value={hh} onChange={(e) => onChange(`${e.target.value}:${mm}`)} className="input flex-1 text-sm tabular-nums">
+    <div className="flex items-center gap-1">
+      <select value={hh} onChange={(e) => onChange(`${e.target.value}:${mm}`)} className="input min-w-0 flex-1 px-2 text-sm tabular-nums">
         {hours.map((x) => <option key={x} value={x}>{x}시</option>)}
       </select>
       <span className="text-ink-muted font-bold">:</span>
-      <select value={mm} onChange={(e) => onChange(`${hh}:${e.target.value}`)} className="input flex-1 text-sm tabular-nums">
+      <select value={mm} onChange={(e) => onChange(`${hh}:${e.target.value}`)} className="input min-w-0 flex-1 px-2 text-sm tabular-nums">
         {mins.map((x) => <option key={x} value={x}>{x}분</option>)}
       </select>
     </div>

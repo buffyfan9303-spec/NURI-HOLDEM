@@ -258,9 +258,11 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
               <button key={s.value} type="button" disabled={busy} title={s.label} aria-label={`강조색 ${s.label}`}
                 aria-pressed={on}
                 onClick={() => pickAccent(s.value)}
-                className={['h-7 w-7 rounded-full border-2 transition-colors disabled:opacity-50',
+                className="grid h-11 w-11 place-items-center disabled:opacity-50">
+                <span aria-hidden className={['h-7 w-7 rounded-full border-2 transition-colors',
                   on ? 'border-ink-primary' : 'border-transparent hover:border-ink-muted'].join(' ')}
-                style={{ backgroundColor: s.value }} />
+                  style={{ backgroundColor: s.value }} />
+              </button>
             );
           })}
         </div>

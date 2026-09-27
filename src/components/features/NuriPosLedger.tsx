@@ -1786,7 +1786,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                                 {sub
                                   // #13(2026-09-25) — '더블얼리 · −23.46만' 처럼 두 줄로 접히면 leading-none(1.0)이라 줄끼리 맞닿았다 → 1.15.
                                   ? <span className={['text-[10px] font-bold leading-[1.15] mt-0.5', et !== 'none' ? 'text-amber-300' : 'text-accent-200'].join(' ')}>{sub}</span>
-                                  : <span className="text-[10px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>}
+                                  : <span className="text-[10px] mt-0.5">{hhmm(c.buyinAt)}</span>}
                               </button>
                             </td>
                           );
@@ -2199,7 +2199,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
       {/* 2행: 아웃 처리(최우선) — 생존 카운트 + 큰 아웃 버튼 + 되돌리기 아이콘 */}
       <div className="flex items-center gap-2 border-t border-accent-400/15 pt-2">
         <div className="min-w-0 flex-1 leading-none">
-          <span className="text-2xs text-ink-muted">생존</span>
+          <span className="text-2xs text-ink-secondary">생존</span>
           <span className="ml-1.5 text-lg font-extrabold text-emerald-300 tabular-nums">{alive}</span>
           {clock.eliminations > 0 && <span className="ml-2 text-2xs text-ink-muted">아웃 <b className="text-ink-secondary tabular-nums">{clock.eliminations}</b></span>}
         </div>
@@ -2924,7 +2924,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           {discs.length < 5 && (
             <button type="button" onClick={addDisc} className="w-full rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">+ 할인 추가</button>
           )}
-          <p className="text-2xs leading-[1.75] text-ink-muted">
+          <p className="text-2xs leading-relaxed text-ink-muted">
             할인은 <b className="text-accent-300">금액에서만</b> 차감합니다 — 예) 10만 게임에 5만 할인 = 적용금액 5만원 · 바인 <b className="text-accent-300">1회</b> · 엔트리 <b className="text-accent-300">0.5</b>.<br />
             {badDisc >= 0 && (
               <b className="block text-danger-light">
@@ -3309,7 +3309,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                   <Icon name="zap" size={15} className="shrink-0" />직전과 동일 — {lastPick.label}
                   {discIdx > 0
                     ? <span className="text-2xs font-semibold opacity-80"> · {discs[discIdx - 1]?.label || `할인${discIdx}`} −{wonToMan(discWon)}만</span>
-                    : <span className="text-2xs font-semibold opacity-70"> · 할인 없음</span>}
+                    : <span className="text-2xs font-semibold"> · 할인 없음</span>}
                 </button>
               )}
 
@@ -3337,7 +3337,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                           ? 'border-danger/50 bg-danger/10 text-danger-light hover:bg-danger/20'
                           : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'].join(' ')}>
                       <span className="block leading-tight">{m.label} {unpaidMode ? '미수' : '완납'}</span>
-                      <span className="block text-2xs font-semibold opacity-70 tabular-nums">
+                      <span className="block text-2xs font-semibold tabular-nums">
                         {/* 티켓은 자리 1개 = (단가−할인)/1만 T — 10만 게임 10T, 5만 할인이면 5T.
                             ⚠ TICKET_WON 을 쓴다 — 만원 환산 상수(WON_PER_MAN)와 값이 같다고 섞으면 T 표시가 조용히 틀어진다. */}
                         {/* #9(2026-09-25) — 5만5,555원 같은 단가가 5.5555T 로 소수 넷째 자리까지 나왔다. 장부 바·정산과 같은 1자리. */}
@@ -3355,7 +3355,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                      티켓은 discIdx 를 받는데 지원만 안 받는 비대칭이기도 했다(2026-09-05 감사). */}
               <button type="button" disabled={busy} onClick={() => onPick('support', false, discIdx)}
                 className="w-full h-11 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition hover:bg-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none">
-                가게지원 <span className="text-2xs font-semibold opacity-70">· 수납 없음</span>
+                가게지원 <span className="text-2xs font-semibold">· 수납 없음</span>
               </button>
 
               {/* 분납/할인 상세 */}

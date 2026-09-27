@@ -574,7 +574,7 @@ ${cards}
               {reason === 'other' && (
                 <input value={reasonNote} onChange={(e) => setReasonNote(e.target.value)} maxLength={80} placeholder="기타 사유 — 발급 이유를 적어 주세요(필수)" className="input w-full text-sm" />
               )}
-              <p className="text-2xs text-ink-muted">대회 순위·입상을 근거로 한 이용권은 발급할 수 없습니다(2026-09-05). 발급 근거는 기록에 남습니다.</p>
+              <p className="text-2xs leading-relaxed text-ink-muted">대회 순위·입상을 근거로 한 이용권은 발급할 수 없습니다(2026-09-05). 발급 근거는 기록에 남습니다.</p>
               {/* 손님 화면 미리보기(오너 지시 #19) — 매장명은 **자동으로 붙는다**.
                   왜 필요한가: 라이브 데이터 101장 중 100장의 제목에 업주가 '로티아레나'를 손으로 타이핑해
                   두었다. 이제 그럴 필요가 없고, 그렇게 해도 중복은 표시 단계에서 걷힌다는 걸 여기서 보여 준다.
@@ -749,7 +749,7 @@ ${cards}
                 <b data-testid="voucher-issue-scope" className="text-ink-primary">매장이용권 발급은 운영자 승인을 받은 매장의 업주·공동운영자만 가능합니다.</b><br />
                 손님끼리 주고받을 수 없으며, <b className="text-ink-primary">금전적 가치가 없습니다</b>(매장 안에서 참가비로만 쓸 수 있고 다른 용도로 바꿀 수 없습니다).
               </p>
-              <p className="text-2xs text-ink-muted">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 발급됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">닉네임·실명 또는 전화번호</b>로 지정합니다(실명은 정확히 입력). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
+              <p className="text-2xs leading-relaxed text-ink-secondary">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 발급됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">닉네임·실명 또는 전화번호</b>로 지정합니다(실명은 정확히 입력). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
 
               {/* 🔴 2026-09-18 오너: "매장이용권 발행 한도 늘리는 요청(관리자에게)부터 시작해서 더 편하게",
                   "이용권 한도는 한도 증액 문구를 사용해서 전혀 금전적인게 없게".
@@ -768,7 +768,7 @@ ${cards}
       {canIssue && qr && (
         <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
           <button type="button" onClick={() => setQrOpen((v) => !v)} aria-expanded={qrOpen} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-xs font-bold text-accent-300">매장 QR <span className="font-normal text-ink-muted">· 이용권 · 출석 · 회원가입</span></span>
+            <span className="text-xs font-bold text-accent-300">매장 QR <span className="font-normal text-ink-secondary">· 이용권 · 출석 · 회원가입</span></span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', qrOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
           {qrOpen && (
@@ -782,26 +782,26 @@ ${cards}
                   {srcOf(qr)
                     ? <img src={srcOf(qr)} alt="매장 이용권 QR" width={130} height={130} className="rounded bg-white p-1.5" />
                     : <div className="flex h-[130px] w-[130px] items-center justify-center rounded border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
-                  <p className="text-center text-2xs leading-snug text-ink-muted">손님이 스캔해 사용 (고정)</p>
+                  <p className="text-center text-2xs leading-snug text-ink-secondary">손님이 스캔해 사용 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">출석 QR</p>
                   {srcOf(checkinQr)
                     ? <img src={srcOf(checkinQr)} alt="출석 QR" width={130} height={130} className="rounded bg-white p-1.5" />
                     : <div className="flex h-[130px] w-[130px] items-center justify-center rounded border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
-                  <p className="text-center text-2xs leading-snug text-ink-muted">손님 스캔 → 출석 · 출석왕 집계 (고정)</p>
+                  <p className="text-center text-2xs leading-snug text-ink-secondary">손님 스캔 → 출석 · 출석왕 집계 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">회원가입 QR</p>
                   {signupQr && <img src={signupQr} alt="회원가입 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
-                  <p className="text-center text-2xs leading-snug text-ink-muted">스캔 시 회원가입 페이지로 이동</p>
+                  <p className="text-center text-2xs leading-snug text-ink-secondary">스캔 시 회원가입 페이지로 이동</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">바인 요청 QR</p>
                   {srcOf(buyinQr)
                     ? <img src={srcOf(buyinQr)} alt="바인 요청 QR" width={130} height={130} className="rounded bg-white p-1.5" />
                     : <div className="flex h-[130px] w-[130px] items-center justify-center rounded border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
-                  <p className="text-center text-2xs leading-snug text-ink-muted">손님 스캔 → 참가 요청 → 장부에서 승인</p>
+                  <p className="text-center text-2xs leading-snug text-ink-secondary">손님 스캔 → 참가 요청 → 장부에서 승인</p>
                 </div>
               </div>
               {/* 인쇄할 QR 선택 — 종이가 작아 한꺼번에 안 됨. 1~3개 선택 */}

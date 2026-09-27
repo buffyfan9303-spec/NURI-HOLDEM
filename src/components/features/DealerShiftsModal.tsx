@@ -131,7 +131,7 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
                 <span className="w-12 shrink-0 text-2xs text-ink-muted tabular-nums">{s.shiftDate.slice(5)}</span>
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.dealerName}</span>
                 <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{s.startTime && s.endTime ? `${s.startTime}~${s.endTime} · ${hoursOf(s)}h` : '-'}</span>
-                <button type="button" onClick={() => del(s.id)} aria-label="삭제" className="-my-2 grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs text-ink-muted transition-colors hover:bg-surface-float hover:text-danger-light">✕</button>
+                <button type="button" onClick={() => del(s.id)} aria-label="삭제" className="-my-3 grid h-11 w-11 shrink-0 place-items-center rounded-full text-xs text-ink-muted transition-colors hover:bg-surface-float hover:text-danger-light">✕</button>
               </li>
             ))}
           </ul>

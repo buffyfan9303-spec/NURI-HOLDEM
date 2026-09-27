@@ -139,7 +139,7 @@ function Report({ r }: { r: SettlementReport }) {
           장부 화면의 '정산 제외'(관계자·가게지원 등)는 그 화면에서만 살아 있는 일회성 필터라,
           같은 날짜인데 장부 정산바와 여기 숫자가 다를 수 있다. 둘이 다른 이유를 화면에 밝혀 둔다 —
           숫자가 갈리는 것보다, 갈리는 이유를 모르는 것이 더 위험하다. */}
-      <p className="text-2xs text-ink-muted">
+      <p className="text-2xs leading-relaxed text-ink-muted">
         이 정산은 <b className="text-ink-secondary">그날 장부에 남은 바인 전부</b>를 셉니다.
         장부 화면에서 건 ‘정산 제외’ 필터는 그 화면에만 적용되므로, 제외를 걸어 둔 날은 장부 하단 정산바와 숫자가 다를 수 있습니다.
       </p>
@@ -334,7 +334,7 @@ function Line({ label, value, sub, tone = 'muted' }: { label: string; value: str
   return (
     <div className="rounded-input border card-aura-sub px-3 py-2">
       <p className="text-2xs font-semibold text-ink-muted">{label}</p>
-      <p className={`text-lg font-extrabold tabular-nums ${TONE[tone] ?? TONE.muted}`}>{value}</p>
+      <p className={`whitespace-nowrap text-lg font-extrabold tabular-nums ${TONE[tone] ?? TONE.muted}`}>{value}</p>
       {sub && <p className="text-2xs text-ink-muted">{sub}</p>}
     </div>
   );

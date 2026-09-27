@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { type ClockLevel, generateBlinds, countLevels } from '../../../api/clock';
 import Icon from '../../atoms/Icon';
+import { LEVEL_NUM, LEVEL_ROW } from './LiveLevelsEditor';
 
 // index i 까지의 레벨 번호(브레이크 제외)
 function levelNoAt(levels: ClockLevel[], i: number): number {
@@ -12,7 +13,7 @@ function levelNoAt(levels: ClockLevel[], i: number): number {
   return n;
 }
 
-const NUM = 'input w-full text-xs tabular-nums min-w-0 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+const NUM = LEVEL_NUM; // 레벨 행 정본(LiveLevelsEditor) — 여기서 따로 정하지 않는다
 
 export default function BlindLevelsEditor({ levels, onChange }: { levels: ClockLevel[]; onChange: (levels: ClockLevel[]) => void }) {
   const [bulkAll, setBulkAll] = useState(20);
@@ -75,20 +76,20 @@ export default function BlindLevelsEditor({ levels, onChange }: { levels: ClockL
       <div className="space-y-1">
         <p className="text-2xs text-ink-muted">총 {total}레벨 · 부족하면 아래 ‘+ 레벨’로 계속 추가하세요</p>
         {levels.map((l, i) => (
-          <div key={i} className="flex items-center gap-1.5">
-            <span className="w-6 shrink-0 text-center text-2xs font-bold text-accent-300">{l.kind === 'break' ? 'B' : levelNoAt(levels, i)}</span>
+          <div key={i} className={LEVEL_ROW}>
+            <span className="w-7 text-center text-2xs font-bold text-accent-300">{l.kind === 'break' ? 'B' : levelNoAt(levels, i)}</span>
             {l.kind === 'break' ? (
-              <input value={l.label ?? ''} onChange={(e) => setLevel(i, { label: e.target.value })} placeholder="BREAK" className="input flex-1 text-xs" />
+              <input value={l.label ?? ''} onChange={(e) => setLevel(i, { label: e.target.value })} placeholder="BREAK" className="input col-span-3 min-w-0 text-xs" />
             ) : (<>
               <input type="number" inputMode="numeric" value={l.sb || ''} onChange={(e) => setLevel(i, { sb: +e.target.value || 0 })} placeholder="SB" className={NUM} />
               <input type="number" inputMode="numeric" value={l.bb || ''} onChange={(e) => setLevel(i, { bb: +e.target.value || 0 })} placeholder="BB" className={NUM} />
               <input type="number" inputMode="numeric" value={l.ante || ''} onChange={(e) => setLevel(i, { ante: +e.target.value || 0 })} placeholder="ANTE" className={NUM} />
             </>)}
-            <div className="relative w-[4.5rem] shrink-0">
-              <input type="number" inputMode="numeric" value={l.minutes || ''} onChange={(e) => setLevel(i, { minutes: +e.target.value || 0 })} className="input w-full pr-6 text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+            <div className="relative col-start-2 sm:col-start-auto">
+              <input type="number" inputMode="numeric" value={l.minutes || ''} onChange={(e) => setLevel(i, { minutes: +e.target.value || 0 })} aria-label="시간(분)" className={`${NUM} pr-6`} />
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">분</span>
             </div>
-            <button type="button" onClick={() => removeLevel(i)} className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light">✕</button>
+            <button type="button" onClick={() => removeLevel(i)} aria-label="삭제" className="hit grid h-8 w-11 place-items-center text-xs text-ink-muted hover:text-danger-light">✕</button>
           </div>
         ))}
       </div>

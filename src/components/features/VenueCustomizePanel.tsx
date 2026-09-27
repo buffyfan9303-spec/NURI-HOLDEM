@@ -434,7 +434,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
         </section>
 
         {/* ② 커스텀 보드 만들기 — 목록에 없는 랭킹을 직접 */}
-        <section className="rounded-card border border-violet-500/30 bg-violet-500/[0.04] p-3 space-y-2">
+        <section className="rounded-aura border border-violet-500/30 bg-violet-500/[0.04] p-3 space-y-2">
           <h3 className="text-sm font-bold text-ink-primary">커스텀 보드 만들기 <span className="text-2xs font-normal text-ink-muted">(최대 {MAX_CUSTOM_BOARDS}개)</span></h3>
           <p className="text-2xs text-ink-muted">명단·점수는 아래 「포인트 지급 · 차감」에서 보드를 골라 입력하세요.</p>
           {customBoards.length > 0 && (
@@ -867,7 +867,7 @@ function RankBoardPreview({ venueId, cfg }: { venueId: string; cfg: VenuePageCon
   const unit = boardUnit(metric, cfg);
 
   return (
-    <section className="rounded-card border border-accent-400/25 bg-accent-300/[0.04] p-3 space-y-2">
+    <section className="rounded-aura border border-accent-400/25 bg-accent-300/[0.04] p-3 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="min-w-0 flex-1 text-sm font-bold text-accent-300">보드 미리보기 (TOP 10)</h3>
         <select value={metric} onChange={(e) => setMetric(e.target.value)} className="input w-auto shrink-0 text-2xs py-1.5">

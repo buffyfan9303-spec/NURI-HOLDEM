@@ -264,7 +264,7 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
           <p className="text-2xs text-ink-muted">총 인건비</p>
           {payErr
             ? <p className="text-base font-extrabold text-danger-light">—</p>
-            : <p data-testid="labor-total" className="text-xl font-extrabold text-accent-200 tabular-nums">{totalPay.toLocaleString()}원</p>}
+            : <p data-testid="labor-total" className="whitespace-nowrap text-base font-extrabold text-accent-200 tabular-nums sm:text-lg">{totalPay.toLocaleString()}원</p>}
           {!payErr && dealerPay > 0 && (
             <p className="text-[11px] text-ink-muted tabular-nums">직원 {staffPay.toLocaleString()} · 딜러 {dealerPay.toLocaleString()}</p>
           )}

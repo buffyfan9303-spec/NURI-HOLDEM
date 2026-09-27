@@ -17,7 +17,7 @@ import {
   getClockState, saveClockState, saveClockLiveStats, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
   saveClockPatch, createCoalescingSaver, saveClockLevel, sideGameDate, liveStructurePatch,
 } from '../../../api/clock';
-import LiveLevelsEditor from './LiveLevelsEditor';
+import LiveLevelsEditor, { LEVEL_NUM, LEVEL_ROW } from './LiveLevelsEditor';
 import {
   getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames, openLedgerSession,
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
@@ -354,7 +354,7 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
                 <span className={['text-[9px] font-bold', c.running ? 'text-emerald-400' : 'text-accent-300'].join(' ')}>{c.running ? (cur?.kind === 'break' ? '브레이크' : 'L' + no) : '정지'}</span>
               </div>
               <p className="mt-0.5 text-base font-extrabold leading-none tabular-nums text-ink-primary">{pad(rem / 60_000)}:{pad((rem % 60_000) / 1000)}</p>
-              {cur && cur.kind === 'level' && <p className="truncate text-[9px] tabular-nums text-ink-muted">{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}</p>}
+              {cur && cur.kind === 'level' && <p className="truncate text-[9px] tabular-nums text-ink-secondary">{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}</p>}
             </button>
           );
         })}
@@ -1405,17 +1405,17 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       </div>
 
       {/* ── 클락 시작(진입) — 맨 위: 단독 / 장부 연동 리스트 ───────────── */}
-      <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.06] to-transparent p-3 space-y-2.5">
+      <section className="rounded-aura border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.06] to-transparent p-3 space-y-2.5">
         <p className="text-2xs font-bold text-accent-300">클락 시작 방식</p>
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => setLinkDate(null)}
             className={['rounded-input border p-2.5 text-left transition-colors', linkDate === null ? 'border-accent-400/60 bg-accent-300/15' : 'border-border-default bg-surface-high hover:border-border-strong'].join(' ')}>
             <p className="flex items-center gap-1.5 text-xs font-bold text-ink-primary"><Icon name="timer-poker" size={14} className="shrink-0" />단독 클락</p>
-            <p className="text-2xs text-ink-muted mt-0.5">장부 연동 없이 실행</p>
+            <p className="text-2xs text-ink-secondary mt-0.5">장부 연동 없이 실행</p>
           </button>
           <div className={['rounded-input border p-2.5 transition-colors', linkDate !== null ? 'border-accent-400/60 bg-accent-300/15' : 'border-border-default bg-surface-high'].join(' ')}>
             <p className="flex items-center gap-1.5 text-xs font-bold text-ink-primary"><Icon name="notebook" size={14} className="shrink-0" />장부 연동</p>
-            <p className="text-2xs text-ink-muted mt-0.5 truncate">{linkDate ? linkDate : '아래 목록에서 선택'}</p>
+            <p className="text-2xs text-ink-secondary mt-0.5 truncate">{linkDate ? linkDate : '아래 목록에서 선택'}</p>
           </div>
         </div>
         <div>
@@ -1455,7 +1455,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       </section>
 
       {/* 프리셋 — PL2c: 게임 프리셋(공용 PresetPicker)이 기본. 저장은 [내 매장 → 프리셋]으로 일원화. */}
-      <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3 space-y-2">
+      <section className="rounded-aura border border-accent-400/30 bg-accent-300/[0.05] p-3 space-y-2">
         <p className="text-base font-bold text-accent-300">프리셋 · 클릭해 불러오기</p>
         <PresetPicker key={pickerKey} venueId={venueId} scope="clock" onApply={applyGamePreset}
           note="프리셋 저장·수정은 [내 매장 → 프리셋]에서." />
@@ -1517,7 +1517,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       </section>
 
       {/* 얼리 구간 — 레벨 기준 */}
-      <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2">
+      <section className="rounded-aura border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2">
         <p className="text-2xs font-semibold text-accent-300">얼리 구간 (레벨 기준 · 장부 바인 시각→레벨 환산으로 자동 분류)</p>
         <div className="grid grid-cols-2 gap-2">
           <Field label="더블얼리 ~레벨까지"><input type="number" inputMode="numeric" min="0" max={totalLevels} value={cfg.earlyDoubleLevel || ''} onChange={(e) => set({ earlyDoubleLevel: +e.target.value || 0 })} placeholder="예) 1" className={numInput} /></Field>
@@ -1563,22 +1563,22 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         </div>
         <div className="space-y-1">
           {cfg.levels.map((l, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <span className="w-6 text-center text-2xs font-bold text-accent-300 shrink-0">{l.kind === 'break' ? 'B' : levelNumberAt(cfg.levels, i)}</span>
+            <div key={i} className={LEVEL_ROW}>
+              <span className="w-7 text-center text-2xs font-bold text-accent-300">{l.kind === 'break' ? 'B' : levelNumberAt(cfg.levels, i)}</span>
               {l.kind === 'break' ? (
-                <input value={l.label ?? ''} onChange={(e) => setLevel(i, { label: e.target.value })} placeholder="BREAK" className="input flex-1 text-sm" />
+                <input value={l.label ?? ''} onChange={(e) => setLevel(i, { label: e.target.value })} placeholder="BREAK" className="input col-span-3 min-w-0 text-sm" />
               ) : (
                 <>
-                  <input type="number" inputMode="numeric" value={l.sb || ''} onChange={(e) => setLevel(i, { sb: +e.target.value || 0 })} placeholder="SB" className="input w-full text-xs tabular-nums min-w-0" />
-                  <input type="number" inputMode="numeric" value={l.bb || ''} onChange={(e) => setLevel(i, { bb: +e.target.value || 0 })} placeholder="BB" className="input w-full text-xs tabular-nums min-w-0" />
-                  <input type="number" inputMode="numeric" value={l.ante || ''} onChange={(e) => setLevel(i, { ante: +e.target.value || 0 })} placeholder="ANTE" className="input w-full text-xs tabular-nums min-w-0" />
+                  <input type="number" inputMode="numeric" value={l.sb || ''} onChange={(e) => setLevel(i, { sb: +e.target.value || 0 })} placeholder="SB" aria-label={`레벨 ${levelNumberAt(cfg.levels, i)} SB`} className={LEVEL_NUM} />
+                  <input type="number" inputMode="numeric" value={l.bb || ''} onChange={(e) => setLevel(i, { bb: +e.target.value || 0 })} placeholder="BB" aria-label={`레벨 ${levelNumberAt(cfg.levels, i)} BB`} className={LEVEL_NUM} />
+                  <input type="number" inputMode="numeric" value={l.ante || ''} onChange={(e) => setLevel(i, { ante: +e.target.value || 0 })} placeholder="ANTE" aria-label={`레벨 ${levelNumberAt(cfg.levels, i)} 앤티`} className={LEVEL_NUM} />
                 </>
               )}
-              <div className="relative w-[4.75rem] shrink-0">
-                <input type="number" inputMode="numeric" value={l.minutes || ''} onChange={(e) => setLevel(i, { minutes: +e.target.value || 0 })} className="input w-full text-xs tabular-nums pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+              <div className="relative col-start-2 sm:col-start-auto">
+                <input type="number" inputMode="numeric" value={l.minutes || ''} onChange={(e) => setLevel(i, { minutes: +e.target.value || 0 })} aria-label="시간(분)" className={`${LEVEL_NUM} pr-6`} />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">분</span>
               </div>
-              <button type="button" onClick={() => removeLevel(i)} className="grid h-8 min-w-[2rem] shrink-0 place-items-center px-1 text-xs text-ink-muted hover:text-danger-light">✕</button>
+              <button type="button" onClick={() => removeLevel(i)} aria-label="삭제" className="hit grid h-8 w-11 place-items-center text-xs text-ink-muted hover:text-danger-light">✕</button>
             </div>
           ))}
         </div>
@@ -1603,7 +1603,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
                   placeholder="500000" className="input w-full text-sm tabular-nums pr-8" />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
               </div>
-              <button type="button" onClick={() => removePrize(i)} className="grid h-8 min-w-[2rem] shrink-0 place-items-center px-1 text-xs text-ink-muted hover:text-danger-light">✕</button>
+              <button type="button" onClick={() => removePrize(i)} aria-label="상금 줄 삭제" className="hit grid h-8 w-11 shrink-0 place-items-center text-xs text-ink-muted hover:text-danger-light">✕</button>
             </div>
           ))}
         </div>

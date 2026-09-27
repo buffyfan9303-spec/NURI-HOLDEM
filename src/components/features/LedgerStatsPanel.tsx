@@ -289,7 +289,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
               className={['relative flex-1 min-w-[3.6rem] py-1.5 t-tab rounded-[6px] whitespace-nowrap transition-colors duration-[var(--dur-fast)] focus:outline-none',
                 on ? 'font-bold text-white' : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
               {/* AI 기간(그라데이션)은 자기 배경을 직접 칠한다 — 공용 알약은 숨김 */}
-              {on && p.ai && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-gradient-to-r from-violet-500 to-indigo-500 shadow animate-fade-in" />}
+              {on && p.ai && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-gradient-to-r from-accent-400 to-accent-300 shadow animate-fade-in" />}
               <span className="relative inline-flex items-center justify-center gap-1">{p.ai && <Icon name="sparkles" size={11} className="shrink-0" />}{p.label}</span>
             </button>
           );
@@ -728,7 +728,7 @@ function StatCard({ label, value, sub, icon, danger, emerald, gold, testId }: { 
       {/* data-testid: e2e 가 이 값을 **클래스가 아니라 이름으로** 찾게 한다.
           종전엔 `p.text-lg` 로 찾았는데, 좁은 폭 대응으로 `text-base sm:text-lg` 가 되자
           모바일 하네스에서 0개가 됐다(게이트가 거짓 실패). 글자 크기는 앞으로도 바뀐다. */}
-      <p data-testid="stat-card-value" className={['mt-auto pt-2 text-base font-extrabold leading-none tabular-nums sm:text-lg', c].join(' ')}>{value}</p>
+      <p data-testid="stat-card-value" className={['mt-auto whitespace-nowrap pt-2 text-base font-extrabold leading-none tabular-nums sm:text-lg', c].join(' ')}>{value}</p>
       {/* ⚠ 보조 줄은 **반드시 한 줄**이어야 한다. 자리만 예약하고 줄 수를 안 묶으면, 실제 폭
           (412px 3칸 = 카드 111px)에서 '전체 바인 중 0.0%' 가 두 줄로 접혀 그 카드만 값이 14px 올라간다
           — 로그인 화면 실측에서 잡았다(2026-09-06). 넓은 하네스에서는 안 접혀 안 보이던 결함이다.
@@ -940,7 +940,7 @@ ${rpt.actions.length
         <div className="min-w-0">
           <h4 className="flex items-center gap-1.5 text-sm font-bold text-violet-200"><Icon name="chart" size={14} className="shrink-0" />NURI 운영 리포트</h4>
           {/* '인사이트' 라고 부르지 않는다 — 이건 장부 집계이고, 근거 없는 추천을 만들지 않는 것이 이 리포트의 계약이다. */}
-          <p className="text-2xs text-ink-muted mt-0.5">최근 {days}일 장부를 집계했습니다. 제안에는 근거 수치를 함께 표시합니다.</p>
+          <p className="text-2xs text-ink-secondary mt-0.5">최근 {days}일 장부를 집계했습니다. 제안에는 근거 수치를 함께 표시합니다.</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {!rpt.empty && <button type="button" onClick={exportReport} className="inline-flex items-center gap-1 text-2xs font-semibold text-ink-secondary bg-surface-high border border-border-default rounded-input px-2.5 py-1.5 hover:text-ink-primary transition-colors"><Icon name="printer" size={12} className="shrink-0" />저장</button>}

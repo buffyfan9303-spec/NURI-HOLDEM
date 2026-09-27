@@ -130,7 +130,7 @@ function SettingsTabBar({ tabs, active, onPick }: {
           return (
             <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined} data-tab-id={t.id}
               onClick={() => onPick(t.id)}
-              className={['inline-flex h-[32px] shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none', CHIP_HIT,
+              className={['inline-flex h-[32px] shrink-0 items-center rounded-[6px] px-1 t-tab leading-none sm:px-3 transition-colors duration-[var(--dur-fast)] focus:outline-none', CHIP_HIT,
                 on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
               <span className="relative">{t.label}</span>
             </button>
@@ -2821,7 +2821,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                         (k === 'voucher' && !vchOn) ? null : (
                           <button key={k} type="button" onClick={() => void toggleInviteGrant(iv, k)}
                             aria-pressed={on}
-                            className={['shrink-0 text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
+                            className={['hit shrink-0 text-2xs font-bold px-2 py-1.5 rounded-badge border transition-colors',
                               on ? 'border-accent-400/40 bg-accent-300/15 text-accent-300 dark:text-accent-200'
                                  : 'border-border-subtle text-ink-muted'].join(' ')}>
                             {on ? `${label} ✓` : label}
@@ -2892,13 +2892,13 @@ function StaffManager({ venueId }: { venueId: string }) {
                       />
                       <button type="button" onClick={() => toggleAccess(s.id)} disabled={accessBusy} aria-busy={accessBusy || undefined}
                         data-access-state={accessView}
-                        className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors disabled:opacity-60', toneOf(accessView, hasAccess)].join(' ')}>
+                        className={['hit shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors disabled:opacity-60', toneOf(accessView, hasAccess)].join(' ')}>
                         {accessLabel('ledger', accessView)}
                       </button>
                       {vchOn && (
                         <button type="button" onClick={() => toggleVoucher(s.id)} disabled={vouchBusy} aria-busy={vouchBusy || undefined}
                           data-access-state={vouchView}
-                          className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors disabled:opacity-60', toneOf(vouchView, hasVouch)].join(' ')}>
+                          className={['hit shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors disabled:opacity-60', toneOf(vouchView, hasVouch)].join(' ')}>
                           {accessLabel('voucher', vouchView)}
                         </button>
                       )}
@@ -2906,7 +2906,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                           이 버튼이 없으면 그 권한을 줄 경로가 없어 마이그레이션이 무용지물이다. */}
                       <button type="button" onClick={() => toggleSchedule(s.id)} disabled={schedBusy} aria-busy={schedBusy || undefined}
                         data-access-state={schedView}
-                        className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors disabled:opacity-60', toneOf(schedView, hasSched)].join(' ')}>
+                        className={['hit shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors disabled:opacity-60', toneOf(schedView, hasSched)].join(' ')}>
                         {accessLabel('schedule', schedView)}
                       </button>
                     </div>

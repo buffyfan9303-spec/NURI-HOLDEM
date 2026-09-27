@@ -851,7 +851,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             <span className="mt-2 grid grid-cols-2 items-end gap-x-5 gap-y-3 lg:grid-cols-4">
               <span className="block">
                 <span className="block text-2xs text-ink-muted">완납 매출</span>
-                <span className="mt-1 block text-3xl font-extrabold leading-none tabular-nums text-gold-300">
+                <span className="mt-1 block whitespace-nowrap text-2xl font-extrabold leading-none tabular-nums text-gold-300">
                   {wonToMan(fin.paid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
                 </span>
               </span>

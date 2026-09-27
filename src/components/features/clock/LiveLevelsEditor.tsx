@@ -11,7 +11,12 @@ import { liveLockedCount, type ClockLevel, type ClockState } from '../../../api/
 import { levelNumberAt } from '../../../lib/clockLevel';
 
 // px-2: 기본 .input 의 px-3 은 390 폭에서 글자 공간을 25.5px 로 줄여 6~7자리 블라인드가 잘렸다(FULL-RECHECK-2/C #1).
-const NUM = 'input w-full min-w-0 px-2 text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-60';
+// 🔴 2026-09-28: 이 두 상수는 블라인드 레벨 행의 **단일 정본**이다 — 클락 설정(TournamentClock ClockSettings)·프리셋 편집기(BlindLevelsEditor)도
+//   여기서 가져간다. 8afa1724 는 이 파일만 고쳐 형제 호출부가 360 에서 글자 공간 14.5px 로 남았다(같은 결함 재발).
+export const LEVEL_NUM = 'input w-full min-w-0 px-2 text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-60';
+/** 좁은 폭(<sm)은 두 줄 — 1줄: 번호·SB·BB·ANTE, 2줄: 시간·삭제. sm 이상은 한 줄 6칸. */
+export const LEVEL_ROW = 'grid grid-cols-[1.75rem_repeat(3,minmax(0,1fr))] items-center gap-1.5 sm:grid-cols-[1.75rem_repeat(3,minmax(0,1fr))_4.5rem_2.75rem]';
+const NUM = LEVEL_NUM;
 
 export default function LiveLevelsEditor({ state, onClose, onApply }: {
   state: ClockState;
@@ -49,7 +54,7 @@ export default function LiveLevelsEditor({ state, onClose, onApply }: {
             // 좁은 폭(<sm)은 두 줄 — 1줄: 번호·SB·BB·ANTE, 2줄: 시간·상태. 한 줄 6칸이면 390 에서 입력칸이 55px 로 눌렸다.
             return (
               <div key={i} data-level-row={i} data-row-state={passed ? 'passed' : current ? 'current' : 'future'}
-                className={['grid grid-cols-[1.75rem_repeat(3,minmax(0,1fr))] items-center gap-1.5 rounded-input px-1 py-0.5 sm:grid-cols-[1.75rem_repeat(3,minmax(0,1fr))_4.5rem_2.75rem]', current ? 'bg-accent-300/10 ring-1 ring-accent-400/40' : ''].join(' ')}>
+                className={[LEVEL_ROW, 'rounded-input px-1 py-0.5', current ? 'bg-accent-300/10 ring-1 ring-accent-400/40' : ''].join(' ')}>
                 <span className="w-7 shrink-0 text-center text-2xs font-bold text-accent-300">{l.kind === 'break' ? 'B' : no}</span>
                 {l.kind === 'break' ? (
                   <input value={l.label ?? ''} disabled={passed} onChange={(e) => set(i, { label: e.target.value })} placeholder="BREAK" aria-label={`브레이크 ${i + 1} 라벨`} className="input col-span-3 min-w-0 text-xs disabled:opacity-60" />
