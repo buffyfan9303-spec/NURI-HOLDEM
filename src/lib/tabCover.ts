@@ -193,20 +193,29 @@ export function alignSubTabPanel(scope: string, target: EventTarget | null): voi
   const sp = subPanelOf(scope, target);
   if (!sp) return;
   const { rail, find } = sp;
-  requestAnimationFrame(() => {
+  // 커밋을 기다리는 판 교체(handOffSubPanel)가 있으면 **그 커밋 순간**(복제본을 세우기 직전 · 첫 페인트 전)에 맞춘다.
+  //   종전엔 첫 rAF 에 맞춰, 커밋이 늦는 경로(내 매장 PC 사이드바 = startTransition)는 옛 판이 먼저 스크롤된 채 페인트되고
+  //   복제본은 그 전 자리(rAF 로 잰 scrollY)에 서서 판 밖(배너·사이드바)과 찢겼다(root-cause 2026-09-28).
+  const run = () => {
     const root = find();
     if (!root) return;
     const own = root as HTMLElement;
     const oy = getComputedStyle(own).overflowY;
     if ((oy === 'auto' || oy === 'scroll') && own.scrollTop > 0) { own.scrollTop = 0; return; }
     if (!rail?.isConnected) return;
-    const d = root.getBoundingClientRect().top - rail.getBoundingClientRect().bottom;
+    // 판 위에 가로로 걸친 레일(탭바)은 밑변, 판 **옆**에 선 레일(PC 세로 사이드바 — sticky 머리)은 윗변에 맞춘다.
+    //   종전엔 세로 사이드바도 밑변을 써서 판을 사이드바 아래로 끌어내리려다 문서 맨 위(0)까지 올렸다 — 판 위의 배너·레벨바가 드러났다.
+    const p = root.getBoundingClientRect(), q = rail.getBoundingClientRect();
+    const d = p.top - (q.right > p.left && q.left < p.right ? q.bottom : q.top);
     if (d >= -1) return;
     const sc = scroller(root);
     if (sc) sc.scrollTop += d;
     else { markProgrammaticScroll(); window.scrollTo({ top: Math.max(0, window.scrollY + d), behavior: 'instant' as ScrollBehavior }); notifyScrollNow(window.scrollY); }
-  });
+  };
+  if (atCommit) atCommit(run); else requestAnimationFrame(run);
 }
+/** 커밋을 기다리는 하위 탭 판 교체가 있으면 그 커밋 순간에 fn 을 부르도록 맡긴다(handOffSubPanel 이 세운다). */
+let atCommit: ((fn: () => void) => void) | null = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 6차 PANE-HANDOFF(오너 2026-09-26: "하단 메뉴로 메인 탭을 옮기면 본문이 검은색이 됐다가 올라온다 — 검은색 없이 부드럽게").
@@ -578,11 +587,18 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
   let alive = true;
   let raf = 0;
   let mo: MutationObserver | null = null;
+  const queued: (() => void)[] = [];
+  const hook = (fn: () => void) => { queued.push(fn); };
+  /** 커밋 순간 할 일(P2 스크롤) — 복제본 자리를 정하기 **전에** 부른다. */
+  const flush = () => { if (atCommit === hook) atCommit = null; queued.splice(0).forEach((f) => f()); };
   const cancel = () => {
     if (!alive) return;
     alive = false;
     mo?.disconnect();
     cancelAnimationFrame(raf);
+    if (atCommit === hook) atCommit = null;
+    // 커밋 없이 끝나면(연타·1.5s 안전망) 맡겨 둔 P2 스크롤은 종전처럼 다음 프레임에 — 버리지 않는다.
+    queued.splice(0).forEach((f) => requestAnimationFrame(f));
     if (fading === cancel) fading = null;
   };
   const t = target instanceof Element ? target : null;
@@ -618,8 +634,9 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
   };
   raf = requestAnimationFrame(track);
   fading = cancel;
+  atCommit = hook;
   // ② 식별자 없는 판 — 이벤트 태스크가 끝날 때까지 커밋(판 변화)이 없었으면 판 교체가 없던 것이다.
-  if (!keyed && inEvent) afterEventTask(() => { if (alive) { cancel(); releaseSwap(); } });
+  if (!keyed && inEvent) afterEventTask(() => { if (alive) { flush(); cancel(); releaseSwap(); } });
   mo = new MutationObserver((recs) => {
     if (!alive) return;
     if (keyed) {
@@ -632,6 +649,7 @@ export function handOffSubPanel(scope: string, target: EventTarget | null, to?: 
         return;
       }
     } else if (rail && recs.every((r) => rail.contains(r.target))) return; // 레일만 바뀜 — 판 변화를 태스크 끝까지 기다린다
+    flush(); // P2 스크롤 — 커밋과 같은 순간. 복제본 자리(yLast = 마지막으로 페인트된 스크롤)는 이 스크롤을 넣지 않는다(페인트된 적 없다)
     cancel();
     if (!snap || !parent?.isConnected) { afterFirstFrame(releaseSwap); return; }
     const s = snap;
