@@ -92,7 +92,7 @@ export class Cast {
     this.cdp.off('Page.screencastFrame', this.handler);
     const out: Frame[] = [];
     for (const r of this.raw) { try { out.push(await stats(r.t, r.data, this.crop)); } catch { /* 깨진 프레임은 버린다 */ } }
-    return out;
+    return out.sort((a, b) => a.t - b.t); // 스크린캐스트 프레임은 부하 때 순서가 뒤바뀌어 도착한다 — 인접 프레임끼리 비교해야 한 프레임 컷이다(2026-09-28)
   }
 }
 

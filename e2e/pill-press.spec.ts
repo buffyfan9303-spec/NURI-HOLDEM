@@ -21,7 +21,7 @@ const SAMPLE = `(() => {
   if (!bar || !pill || !act) return null;
   const pr = pill.getBoundingClientRect(), ar = act.getBoundingClientRect();
   return {
-    active: (act.textContent || '').trim(),
+    active: (act.closest('button')?.getAttribute('data-testid') || '').replace('sec-tab-', ''),
     pillLeft: +pr.left.toFixed(1), targetLeft: +ar.left.toFixed(1),
     dx: +Math.abs(pr.left - ar.left).toFixed(1),
     op: Number(getComputedStyle(pill).opacity),
@@ -41,7 +41,7 @@ test('🔴 손가락으로 누르고 있다 뗀 탭 — 알약이 첫 칸으로 
   await page.waitForTimeout(2_000); // 유휴 프리마운트가 돌아 서브탭이 재방문(View Transition) 경로가 되게
 
   const cdp = await page.context().newCDPSession(page);
-  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 }); // 실기기 가까이 — 빠른 기기에선 창이 좁아진다
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.PILL_CPU || 4) }); // 실기기 가까이 — 빠른 기기에선 창이 좁아진다
 
   const seq = ['live', 'rank', 'board', 'dealer', 'venues', 'market']; // SectionTab data-testid=sec-tab-<id>
   const failures: string[] = [];
@@ -57,6 +57,17 @@ test('🔴 손가락으로 누르고 있다 뗀 탭 — 알약이 첫 칸으로 
     if (await btn.count() === 0) { skipped.push(`${name}(없음)`); continue; }
     const box = await btn.boundingBox();
     if (!box) { skipped.push(`${name}(보이지 않음)`); continue; }
+    // 🔴 '출발 칸'은 **정착한** 알약이어야 한다. 이전 탭의 슬라이드는 새 판 첫 프레임 뒤에 출발한다(3eb2ad26) —
+    //   무거운 판(게시판·CPU4)은 누른 뒤 460~690ms 에 출발해 600~810ms 에 선다. 그 전에 잰 '출발'은 이동 중 값이라,
+    //   알약이 원래 가던 칸(이전 탭)으로 마저 가는 정상 동작이 '구간 밖'으로 읽혔다(2026-09-28 실측 3/12).
+    const settled = await page.waitForFunction(() => {
+      const bar = document.querySelector('[data-community-secbar]');
+      const pill = bar?.querySelector<HTMLElement>('[data-sliding-pill]'); const act = bar?.querySelector('[data-pill-active]');
+      if (!pill || !act || document.documentElement.hasAttribute('data-tab-swap')) return false;
+      if (pill.getAnimations().some((a) => a.playState !== 'finished')) return false;
+      return Math.abs(pill.getBoundingClientRect().left - act.getBoundingClientRect().left) < 1;
+    }, null, { timeout: 3_000 }).then(() => true, () => false);
+    if (!settled) failures.push(`${name}: 누르기 전 3초 안에 알약이 활성 탭에 정착하지 않았다(이전 탭의 정착 실패)`);
     const before = (await page.evaluate(SAMPLE)) as Sample | null;
     expect(before, '알약·활성 탭을 찾지 못했다').not.toBeNull();
     const target = await btn.locator('span').first().boundingBox();
@@ -83,8 +94,16 @@ test('🔴 손가락으로 누르고 있다 뗀 탭 — 알약이 첫 칸으로 
       if (s.pillLeft < lo || s.pillLeft > hi) failures.push(`${name}: +${at}ms 알약이 출발·도착 구간 밖으로 샜다 — ${s.pillLeft} ∉ [${lo}, ${hi}]`);
       // 슬라이드(--dur-base ≤ .3s)가 끝난 +500ms 부터는 반드시 그 탭 자리다 — 600ms verify 타이머가
       // 가려 주기 **전**이라, measure 자체가 맞아야만 통과한다(결함 상태에선 여기서 dx≈128).
-      if (at >= 500 && s.active === name && s.dx >= 3) failures.push(`${name}: +${at}ms 에도 알약이 활성 탭에서 ${s.dx}px 떨어져 있다`);
     }
+    const rest = await page.waitForFunction(() => {
+      const bar = document.querySelector('[data-community-secbar]');
+      const pill = bar?.querySelector<HTMLElement>('[data-sliding-pill]'); const act = bar?.querySelector('[data-pill-active]');
+      if (!pill || !act || document.documentElement.hasAttribute('data-tab-swap')) return null;
+      if (pill.getAnimations().some((a) => a.playState !== 'finished')) return null;
+      return { dx: Math.abs(pill.getBoundingClientRect().left - act.getBoundingClientRect().left), op: Number(getComputedStyle(pill).opacity) };
+    }, null, { timeout: 3_000, polling: 'raf' }).then((h) => h.jsonValue(), () => null);
+    if (!rest) failures.push(`${name}: 3초 안에 알약이 멈추지 않았다`);
+    else if (rest.op >= 0.05 && rest.dx >= 1) failures.push(`${name}: 알약이 멈춘 첫 자리가 활성 탭에서 ${rest.dx.toFixed(1)}px 떨어져 있다(verify 타이머 전 정착값)`);
     test.info().annotations.push({ type: name, description: rows.join(' | ') });
     measured.push(name);
   }
