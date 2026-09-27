@@ -214,11 +214,17 @@ describe('배너 가로폭', () => {
   });
   it('정적 셸 배너 예약이 같은 모양이다(첫 페인트 CLS)', () => {
     expect(INDEX).toMatch(/<div class="pt-0 md:pt-2\.5"><div class="border border-transparent max-md:rounded-none max-md:border-0 md:mx-page-x md:rounded-aura"><div class="skeleton min-h-\[152px\]/);
-    expect(INDEX).toMatch(/<div class="max-md:-mt-\[5px\]" style="height:44px;display:flex;align-items:center"><div class="skeleton" style="height:26px;width:230px"><\/div><\/div>/);
+    // 2026-09-28 오너: NURI MIND 줄이 맨 아래로 — 첫 줄 = GTO 44px 칸 하나(음수 여백 없음). React 와 정적 셸이 같은 모양이다.
+    expect(INDEX).toMatch(/<div class="px-page-x" style="padding-top:4\.25px">\s*<!--[^>]*-->\s*<div style="height:44px;display:flex;align-items:center"><div class="skeleton" style="height:26px;width:230px"><\/div><\/div>\s*<\/div>/);
     // React 쪽도 같은 여백이다(모바일 상단 공백 축소 — 오너 2026-09-24)
     expect(PC).toMatch(/<div className="pt-0 md:pt-2\.5 lg:pt-0">/);
     expect(HOME).toMatch(/data-testid="home-today" className="px-page-x pt-1 md:pt-1\.5/);
-    expect(HOME).toMatch(/data-testid="home-today-line" className="flex h-\[44px\] items-center max-md:-mt-\[5px\]/);
+    expect(HOME).toMatch(/data-testid="home-today-line" className="flex h-\[44px\] items-center whitespace-nowrap/);
+    // NURI MIND 는 첫 줄이 아니라 맨 아래(일정 섹션 뒤) — 목적지는 그대로, 누름 44px
+    const iSched = HOME.indexOf('data-testid="home-schedule"'), iMind = HOME.indexOf('data-testid="home-mind"');
+    expect(iMind).toBeGreaterThan(iSched);
+    expect(HOME.indexOf('href="https://www.nurimind.co.kr"')).toBeGreaterThan(iSched); // 링크(배너 슬라이드 동작은 별개)
+    expect(HOME.slice(iMind, iMind + 500)).toMatch(/href="https:\/\/www\.nurimind\.co\.kr"[\s\S]*className="inline-flex min-h-\[44px\]/);
   });
   it('PC 두 칸 비율 4:8 — 배너 칸이 넓어진다(구조는 그대로)', () => {
     expect(HOME).toMatch(/data-testid="home-today" className="[^"]*lg:col-span-4/);

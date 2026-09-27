@@ -557,19 +557,11 @@ export default function HomeTab({
               헤더→날짜 10.4 → 8.3 · 날짜→GTO 11.4 → 6.4 · GTO→배너 19.6 → 9.0px(390 실측). GTO 버튼 히트 44px 는 그대로 —
               44px 칸 안의 위 여백 5px 를 음수 마진으로 날짜 줄 쪽에 겹치고(위로 넘친 것은 스크롤 넘침이 아니다),
               아래는 배너 위 여백(pt-2.5)을 모바일에서 뺀다. md~ 는 종전 그대로. */}
+          {/* 🔴 2026-09-28 오너: "NURI MIND 는 중요하지 않고 GTO 가 중요하다. 공간이 부족하면 NURI MIND 를 맨 아래로."
+              날짜·NURI MIND 링크 줄은 홈 맨 아래(data-testid=home-mind)로 옮겼다. 여기엔 GTO 줄만 남아 헤더 바로 아래 첫 줄이다.
+              GTO 줄의 모바일 음수 여백(-5px)은 그 링크 줄과 겹치려던 것이라 함께 뺐다 — 헤더→GTO 글자 = 4.25 + 9(44px 칸 안 여백)
+              ≈ 다른 섹션 위 여백(pt-3·pt-3.5)과 같은 간격. */}
           <section data-testid="home-today" className="px-page-x pt-1 md:pt-1.5 lg:col-span-4 lg:col-start-1 lg:row-start-1 lg:self-center lg:pt-0">
-            <a
-              href="https://www.nurimind.co.kr" target="_blank" rel="noopener"
-              /* 2026-09-28: 아래 GTO 줄(-mt-[5px])이 이 링크 아래 8px 를 덮어 누름면이 20.75px 였다 — 위로만 더 넓힌다
-                 (py-2.5, 헤더 밑선까지 — 아래로 늘어난 몫은 GTO 줄이 덮는다). 44px 는 GTO 줄 44px 나 줄 간격(오너 2026-09-24 결정)을
-                 깎아야 해서 여기서 멈춘다(GTO 버튼 폭 구간 23.75px, 그 밖 38px). */
-              className="inline-flex items-center gap-1 py-2.5 -my-2.5 t-desc text-ink-muted transition-colors hover:text-accent-200"
-            >
-              {/* 오너 지시(2026-08-29): 인사말은 아무 데도 안 데려간다 — 링크인데 갈 이유를 안 준다.
-                  날짜는 맥락으로 남기고, 그 자리를 NURI MIND 로 가고 싶게 만드는 문구로. */}
-              {now.getMonth() + 1}/{now.getDate()}({DAYS_KO[now.getDay()]}) · 오늘의 운을 점쳐보세요{' '}
-              <span className="inline-flex items-center gap-0.5 font-semibold text-accent-300">· NURI MIND<Icon name="chevron-right" size={12} className="shrink-0" /></span>
-            </a>
             {/* §5 역할표: 홈 짧은 제목 18/26(PC 22/30). 수치는 **도착한 것만** 적는다 —
                 일정이 안 왔으면 대회 수를, 클락이 안 왔으면 등록 가능 수를 쓰지 않는다. */}
             {/* 한 줄 고정(h-[26px] + nowrap): 방문·예약 응답은 일정보다 늦게 오는데, 그때 문장이 바뀌며 두 줄이 되거나
@@ -578,7 +570,7 @@ export default function HomeTab({
             {/* 🔴 2026-09-24 오너 H2: "'무료 GTO 도구 22개' 줄 전체를 누르면 GTO 탭으로" — 그 문구일 때 줄 전체가 버튼(onTools = 탭바와 같은 경로,
                 전체 리로드 없음). 터치 44px 를 위해 줄 높이를 26 → **44px 고정**으로 올렸다(문구가 바뀌어도 높이는 같다 — CLS 0).
                 개인화 문장·로딩·실패 문구는 종전처럼 글자만이다(목적지가 없다). */}
-            <p data-testid="home-today-line" className="flex h-[44px] items-center max-md:-mt-[5px] whitespace-nowrap text-[18px] font-bold leading-[26px] text-ink-primary md:text-[22px] md:leading-[30px] lg:h-auto lg:min-h-[44px] lg:whitespace-normal lg:break-keep">
+            <p data-testid="home-today-line" className="flex h-[44px] items-center whitespace-nowrap text-[18px] font-bold leading-[26px] text-ink-primary md:text-[22px] md:leading-[30px] lg:h-auto lg:min-h-[44px] lg:whitespace-normal lg:break-keep">
               {/* ⚠ 여기서 '오늘 대회 0개' 라고 적으면 그것은 **조회 실패를 사실로 위장**하는 것이다(§11).
                   수치는 '도착한 것만' 적는다는 이 줄의 원래 규칙에, 실패도 '미도착' 이라는 사실을 더한다. */}
               {/* 🔴 2026-09-18 오너: "초반에는 매장이 많이 없을 예정이라 '지금 등록 가능 0개' 는 빼도 좋겠다.
@@ -964,6 +956,20 @@ export default function HomeTab({
               </button>
             </div>
           )}
+        </section>
+
+        {/* NURI MIND(외부 운세 nurimind.co.kr) — 2026-09-28 오너 결정으로 첫 줄에서 **홈 맨 아래**(법적 푸터 바로 위)로 옮겼다.
+            문구·목적지는 종전 그대로(기능 보존). 첫 줄에선 GTO 줄에 8px 가 덮여 누름면 20.75px 였다 — 여기선 줄 전체 44px. */}
+        <section data-testid="home-mind" className="px-page-x pt-3.5">
+          <a
+            href="https://www.nurimind.co.kr" target="_blank" rel="noopener" data-testid="home-mind-link"
+            className="inline-flex min-h-[44px] items-center gap-1 t-desc text-ink-muted transition-colors hover:text-accent-200"
+          >
+            {/* 오너 지시(2026-08-29): 인사말은 아무 데도 안 데려간다 — 링크인데 갈 이유를 안 준다.
+                날짜는 맥락으로 남기고, 그 자리를 NURI MIND 로 가고 싶게 만드는 문구로. */}
+            {now.getMonth() + 1}/{now.getDate()}({DAYS_KO[now.getDay()]}) · 오늘의 운을 점쳐보세요{' '}
+            <span className="inline-flex items-center gap-0.5 font-semibold text-accent-300">· NURI MIND<Icon name="chevron-right" size={12} className="shrink-0" /></span>
+          </a>
         </section>
 
         {/* 🔴 2026-09-19 오너: "홈 화면에 GTO 도구 있는 부분 삭제".
