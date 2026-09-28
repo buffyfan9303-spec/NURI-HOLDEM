@@ -19,12 +19,18 @@ import { join } from 'node:path';
 
 const raw = readFileSync(join(process.cwd(), 'src/components/features/StoreDashboard.tsx'), 'utf8');
 const src = raw.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+// 2026-09-29 F1 — '오늘 회수'(fin.ticket)의 합산은 ledger.ts ledgerMoney 로 옮겼다(애드온 포함 매출·미수와 한 함수).
+//   그래서 오늘 쪽 잠금은 (대시보드가 ledgerMoney 로 fin 을 만든다) + (ledgerMoney 가 ticketPaid 를 합산한다) 두 겹이다.
+const ledgerRaw = readFileSync(join(process.cwd(), 'src/api/ledger.ts'), 'utf8');
+const moneyFn = ledgerRaw.slice(ledgerRaw.indexOf('export function ledgerMoney('), ledgerRaw.indexOf('export function ledgerMoney(') + 900);
+const todaySums = () => /const fin = session \? ledgerMoney\(buyins, session\)/.test(src) && /m\.ticket\s*\+=\s*f\.ticketPaid\s*;/.test(moneyFn);
 
 describe('회수 이용권 = 티켓으로 낸 바인 금액(T) 합계', () => {
   it("'오늘 회수'(fin.ticket)가 ticketPaid 를 **합산**한다 — 건수가 아니다", () => {
     expect(src, '회수가 다시 건수 세기로 돌아갔다 — 라벨은 T 인데 값이 건수가 된다')
-      .not.toMatch(/a\.ticket\s*\+=\s*f\.ticketPaid\s*>\s*0/);
-    expect(src, 'fin.ticket 이 ticketPaid 합산이 아니다').toMatch(/a\.ticket\s*\+=\s*f\.ticketPaid\s*;/);
+      .not.toMatch(/ticket\s*\+=\s*f\.ticketPaid\s*>\s*0/);
+    expect(moneyFn, 'ledgerMoney 가 건수를 센다').not.toMatch(/ticket\s*\+=\s*f\.ticketPaid\s*>\s*0/);
+    expect(todaySums(), 'fin.ticket 이 ticketPaid 합산(ledgerMoney)이 아니다').toBe(true);
   });
 
   it("'7일 회수'(weekTicket)도 같은 척도다 — 한쪽만 바꾸면 화면에서 두 수가 갈린다", () => {
@@ -41,7 +47,7 @@ describe('회수 이용권 = 티켓으로 낸 바인 금액(T) 합계', () => {
   });
 
   it('두 값이 같은 표현으로 계산된다 — 나중에 한쪽만 고치는 것을 막는다', () => {
-    const today = /a\.ticket\s*\+=\s*f\.ticketPaid\s*;/.test(src);
+    const today = todaySums();
     const week = /weekTicket\s*\+=\s*buyinFinance\([^)]*\)\.ticketPaid\s*;/.test(src);
     expect(today && week, `오늘 회수=${today} · 7일 회수=${week} — 둘 다 T 합계여야 한다`).toBe(true);
   });

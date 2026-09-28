@@ -193,10 +193,11 @@ function Report({ r }: { r: SettlementReport }) {
           <Row label="현금성 수납" value={man(t.revenue)} sub="현금 + 카드 + 이체" />
           <Row label="할인이 없었다면 현금성 매출" value={man(t.revenue + t.discount.cashTotal)} />
         </dl>
+        {/* F7(2026-09-29): 애드온 타일은 3장이다 — 4열이면 PC 오른쪽 25%(230px)가 비어 sm:grid-cols-3. */}
         {t.addon.count > 0 && (
           <div data-testid="settle-addon">
             <p className="mb-1.5 mt-3 text-2xs font-semibold text-ink-secondary">애드온 {t.addon.count}건 · 바인·엔트리와 따로 셉니다</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <Tile label="애드온 매출" value={man(t.addon.revenue)} sub="현금 + 카드 + 이체" />
               <Tile label="애드온 이용권" value={man(t.addon.ticketWon)} sub={`${Math.round(t.addon.ticketWon / TICKET_WON)}T`} />
               <Tile label="애드온 미수" value={man(t.addon.unpaid)} tone={t.addon.unpaid > 0 ? 'danger' : undefined} />

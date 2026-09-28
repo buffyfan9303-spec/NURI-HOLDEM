@@ -200,8 +200,10 @@ const AnnouncePanelM = memo(AnnouncePanel);
 const VenueRankHubM = memo(VenueRankHub);
 const PosSettingsPanelM = memo(PosSettingsPanel);
 const StaffSelfAttendanceM = memo(StaffSelfAttendance);
-const VenueMatchPanelM = memo(lazyWithReload(() => import('./VenueMatchPanel')));
-const VenueEventRequestPanelM = memo(lazyWithReload(() => import('./VenueEventRequestPanel')));
+const VenueMatchPanelL = lazyWithReload(() => import('./VenueMatchPanel'));
+const VenueEventRequestPanelL = lazyWithReload(() => import('./VenueEventRequestPanel'));
+const VenueMatchPanelM = memo(VenueMatchPanelL);
+const VenueEventRequestPanelM = memo(VenueEventRequestPanelL);
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 // PC 밀도 규약(오너 #5, 2026-08-30) — 내 매장 셸(사이드바·섹션 헤더·라이브 바·순위 입력·직원 허브)의
@@ -210,7 +212,8 @@ const VenueEventRequestPanelM = memo(lazyWithReload(() => import('./VenueEventRe
 //   gap-3 (12.75) 카드 패딩·카드 사이·블록 사이 / gap-5 (21.25) 그룹·섹션 경계
 //  행간은 §T1 역할표(index.css) — 설명문 t-desc(12.75/19.13)+break-keep, 메타 text-2xs(11.69/15.94).
 // '내 캘린더' 섹션 — App 의 하단 탭 캘린더와 **같은 컴포넌트**다(중복 구현 금지).
-const CalendarPanelM = memo(lazyWithReload(() => import('./CalendarPanel')));
+const CalendarPanelL = lazyWithReload(() => import('./CalendarPanel'));
+const CalendarPanelM = memo(CalendarPanelL);
 
 export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, onOpenVenue, deepSection, onConsumeDeepSection, tabActive = true, homeNonce = 0, resVersion, onVenue }: {
   schedules: Schedule[]; onCreatePoster: (venueId?: string | null) => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
@@ -718,6 +721,23 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     window.addEventListener('focus', recheck);
     return () => { alive = false; window.removeEventListener('focus', recheck); };
   }, [venueId, isAdmin]);
+
+  // F6(2026-09-29) — 캘린더·파트너 매장·이벤트 신청(lazy 3종)을 한가할 때 미리 받는다. 받아 두면 lazyWithReload 가
+  //   lazy 를 건너뛰고 동기로 그려, 첫 방문의 '불러오는 중…'(Suspense 폴백 스로틀 ~300ms, 1280 실측 280ms)이 사라진다.
+  //   받기 전에 누르면 종전처럼 지역 Suspense 폴백이 안전망이다.
+  // F5(2026-09-29) — 같은 틈에 '오늘 게임' 칩 목록도 데운다(GameChipBar 는 게임 단계에서만 마운트돼 매번 [] 에서 시작했다).
+  useEffect(() => {
+    if (!tabActive || !venueId) return;
+    const run = () => {
+      void CalendarPanelL.preload();
+      if (manageOk) { void VenueMatchPanelL.preload(); void VenueEventRequestPanelL.preload(); }
+      if (ledgerOk) warmGameChips(venueId);
+    };
+    const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (w.requestIdleCallback && w.cancelIdleCallback) { const id = w.requestIdleCallback(run, { timeout: 2000 }); return () => w.cancelIdleCallback!(id); }
+    const t = window.setTimeout(run, 800);
+    return () => window.clearTimeout(t);
+  }, [tabActive, venueId, manageOk, ledgerOk]);
 
   // 섹션 노출 규칙(IA1 — 14개 평면 형제 → 사용 빈도 3그룹, 컴포넌트 마운트 이동 0):
   //  · 직원이 부여받을 수 있는 권한(장부)은 권한 없어도 '잠금' 탭으로 노출 → 클릭 시 "권한 없음" 안내(휑한 화면 방지).
@@ -1348,6 +1368,15 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
 // 데이터는 오늘 장부 게임 목록(getLedgerGames) 재사용 — 구독·틱 0, active 로드 + 포커스/스텝 전환 시 갱신.
 // 칩 문법 = browse 필터 레일과 동일(h-9·rounded-badge). 단일 게임 날(사이드 0)엔 **칩 줄만** 접는다 —
 // U1 문맥 줄(매장 › 날짜 › 게임)은 스텝 4개 어디서나 같은 자리에 남아야 하므로 바 자체를 지우지 않는다.
+// F5(2026-09-29) — 칩 목록 캐시(매장|영업일). GameChipBar 는 게임 단계에서만 마운트돼 들어올 때마다 games=[] 로 시작했고,
+//   조회가 끝난 뒤에야 칩 줄(46.75px)이 끼어 본문이 47px 밀렸다(1280 실측, 600ms 지연 CLS 0.0164).
+//   마지막으로 받은 목록으로 첫 렌더를 하고, 조회는 종전대로 다시 한다(stale-while-revalidate).
+const chipCache = new Map<string, LedgerGame[]>();
+function warmGameChips(venueId: string) {
+  const key = `${venueId}|${businessDateOf(venueId)}`;
+  if (chipCache.has(key)) return;
+  getLedgerGames(venueId, businessDateOf(venueId)).then((g) => { chipCache.set(key, g); }).catch(() => {});
+}
 const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, canPosters, onPick, onNewGame, venueName, ctxDate, ctxGame }: {
   venueId: string; active: boolean; step: GameStep; current: number; canPosters: boolean;
   onPick: (seq: number, title?: string) => void;
@@ -1360,15 +1389,15 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
   /** 셸이 아는 대상 게임 이름(포스터 제목·순위 이벤트). 없으면 칩 라벨(메인/사이드N)로 대체 */
   ctxGame?: string;
 }) {
-  const [games, setGames] = useState<LedgerGame[]>([]);
   // B1 — 칩은 **영업일**의 게임이다(자정 넘긴 토너의 어제 장부). 장부 판 followGame 도 같은 날짜로 간다.
   const biz = useBusinessDate(venueId, active);
+  const [games, setGames] = useState<LedgerGame[]>(() => chipCache.get(`${venueId}|${biz}`) ?? []);
   // E(2026-09-28) — 매장·영업일 스탬프: A 매장 칩 응답이 B 로 바꾼 뒤 도착해도 B 칩 바를 덮지 않는다.
   const chipOwner = useRef('');
   chipOwner.current = `${venueId}|${biz}`;
   const reload = useCallback(() => {
     const owner = `${venueId}|${biz}`;
-    getLedgerGames(venueId, biz).then((g) => { if (chipOwner.current === owner) setGames(g); }).catch(() => {});
+    getLedgerGames(venueId, biz).then((g) => { chipCache.set(owner, g); if (chipOwner.current === owner) setGames(g); }).catch(() => {});
   }, [venueId, biz]);
   // step 은 갱신 트리거 — 장부에서 사이드를 새로 열고 다른 단계로 넘어오면 칩이 따라잡는다
   useEffect(() => { if (active) reload(); }, [active, step, reload]);
