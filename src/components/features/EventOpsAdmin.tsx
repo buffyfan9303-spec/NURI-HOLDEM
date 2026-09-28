@@ -56,12 +56,12 @@ const errText = (e: unknown, fallback = '처리하지 못했습니다') => msgOf
 /** 서버 미적용 안내 — '0건' 으로 위장하지 않기 위한 전용 카드. */
 function RpcMissingCard({ onRetry }: { onRetry: () => void }) {
   return (
-    <section data-testid="event-ops-rpc-missing" className="rounded-card border border-amber-400/40 bg-amber-400/[0.06] p-3 space-y-1.5">
+    <section data-testid="event-ops-rpc-missing" className="rounded-card border border-amber-400/40 bg-amber-400/6 p-3 space-y-1.5">
       <h3 className="flex items-center gap-1.5 text-sm font-bold text-amber-300">
         <Icon name="alert" size={15} className="shrink-0" />이벤트 관리 기능이 서버에 아직 없습니다
       </h3>
       <p className="text-2xs leading-relaxed text-ink-secondary">
-        마이그레이션 <code className="rounded bg-surface-high px-1">20260912c_admin_event_ops.sql</code> 이 운영 DB 에 적용되지 않았습니다.
+        마이그레이션 <code className="rounded-sm bg-surface-high px-1">20260912c_admin_event_ops.sql</code> 이 운영 DB 에 적용되지 않았습니다.
         <strong className="text-ink-primary"> 이벤트가 0건이라는 뜻이 아닙니다</strong> — 목록을 읽을 방법이 아직 없다는 뜻입니다.
         적용 전에는 만들기·공개·종료가 모두 거절되며, 이미 진행 중인 이벤트에는 아무 영향이 없습니다.
       </p>
@@ -154,7 +154,7 @@ function EventMenuCard() {
         // ⚠ 조회 실패를 '메뉴 숨김' 으로 해석하지 않는다(문서 §8-2). 진입 경로는 열어 둔 채 오류만 알린다.
         <p data-testid="event-menu-load-error" className="flex items-start gap-1 text-2xs text-amber-300">
           <Icon name="alert" size={12} className="mt-px shrink-0" />
-          <span className="break-words">
+          <span className="wrap-break-word">
             {errText(loadErr, '설정을 불러오지 못했습니다')} — 지금 표시는 <strong>기본값(표시)</strong>이며 실제 저장값이 아닙니다.{' '}
             <button type="button" onClick={load} className="underline">다시 확인</button>
           </span>
@@ -235,9 +235,9 @@ export default function EventOpsAdmin({ venues }: { venues: Venue[] }) {
       <EventMenuCard />
 
       {!visibilityKnown && (
-        <p data-testid="event-visibility-unsupported" className="flex items-start gap-1 rounded-card border border-amber-400/40 bg-amber-400/[0.06] px-2.5 py-2 text-2xs leading-relaxed text-amber-300">
+        <p data-testid="event-visibility-unsupported" className="flex items-start gap-1 rounded-card border border-amber-400/40 bg-amber-400/6 px-2.5 py-2 text-2xs leading-relaxed text-amber-300">
           <Icon name="alert" size={12} className="mt-px shrink-0" />
-          <span className="break-words">
+          <span className="wrap-break-word">
             캠페인 <strong>공개 여부</strong>를 서버가 아직 알려주지 않습니다(마이그레이션 20260912d 미적용).
             지금은 숨기기·다시 공개가 거절되며, 목록의 공개 상태는 <strong>확인 불가</strong>입니다.
             진행 중인 행사에는 아무 영향이 없습니다.
@@ -247,7 +247,7 @@ export default function EventOpsAdmin({ venues }: { venues: Venue[] }) {
 
       {/* 검색·필터 */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <label className="relative min-w-[9rem] flex-1">
+        <label className="relative min-w-36 flex-1">
           <span className="sr-only">이벤트 검색</span>
           <input
             value={q} onChange={(e) => setQ(e.target.value)}
@@ -332,7 +332,7 @@ function EventRow({ c, open, visibilityKnown, onToggle, onCopy, onChanged, onNex
             <span className="text-xs font-bold text-ink-primary break-all">{c.title}</span>
             <span className="text-2xs text-ink-muted break-all">/?event={c.slug}</span>
           </p>
-          <p className="mt-0.5 text-2xs text-ink-muted break-words">
+          <p className="mt-0.5 text-2xs text-ink-muted wrap-break-word">
             {c.venueName ?? '(삭제된 매장)'} · {fmtDate(c.startsAt)} ~ {fmtDate(c.endsAt)} · 참여권 지급 {c.ticketVenueName ?? '모든 매장'}
             {' · 손님에게 '}
             {/* 초안은 애초에 손님에게 안 나간다 — '공개' 라고 쓰면 세 제어가 다시 섞여 보인다. */}
@@ -342,7 +342,7 @@ function EventRow({ c, open, visibilityKnown, onToggle, onCopy, onChanged, onNex
                   : c.hiddenAt == null ? '공개' : '숨김'}
             </strong>
           </p>
-          <p className="mt-0.5 text-2xs tabular-nums text-ink-secondary break-words">
+          <p className="mt-0.5 text-2xs tabular-nums text-ink-secondary wrap-break-word">
             카드 {c.openedCards}/{c.totalCards} 개봉 · 남은 당첨 {c.remainPrizeCards}/{c.prizeCards} ·
             {' '}참여권 {c.ticketsUsed}/{c.ticketsIssued} 사용 · 이용권 {c.vouchersUsed}/{c.vouchersIssued} 사용
           </p>
@@ -356,7 +356,7 @@ function EventRow({ c, open, visibilityKnown, onToggle, onCopy, onChanged, onNex
         <ul className="border-t border-border-subtle px-2.5 py-1.5 space-y-0.5">
           {alerts.map((a) => (
             <li key={a} className="flex items-start gap-1 text-2xs text-amber-300">
-              <Icon name="alert" size={12} className="mt-px shrink-0" /><span className="break-words">{a}</span>
+              <Icon name="alert" size={12} className="mt-px shrink-0" /><span className="wrap-break-word">{a}</span>
             </li>
           ))}
         </ul>
@@ -410,7 +410,7 @@ function EventDetail({ c, visibilityKnown, onChanged, onNextRound }: {
             <ul className="space-y-0.5">
               {check.problems.map((p) => (
                 <li key={p.code} className="flex items-start gap-1 text-2xs text-danger-light">
-                  <Icon name="alert" size={12} className="mt-px shrink-0" /><span className="break-words">{p.message}</span>
+                  <Icon name="alert" size={12} className="mt-px shrink-0" /><span className="wrap-break-word">{p.message}</span>
                 </li>
               ))}
             </ul>
@@ -470,9 +470,9 @@ function EventDetail({ c, visibilityKnown, onChanged, onNextRound }: {
         )}
       </div>
       {confirmEnd && (
-        <section data-testid="event-ops-end-confirm" className="rounded-input border border-danger-light/40 bg-danger-light/[0.06] p-2.5 space-y-2">
+        <section data-testid="event-ops-end-confirm" className="rounded-input border border-danger-light/40 bg-danger-light/6 p-2.5 space-y-2">
           <h4 className="text-2xs font-bold text-danger-light">행사 종료 — 되돌릴 수 없습니다</h4>
-          <p className="text-2xs leading-relaxed text-ink-secondary break-words">
+          <p className="text-2xs leading-relaxed text-ink-secondary wrap-break-word">
             <strong className="text-ink-primary">{c.venueName ?? '매장 미상'}</strong> 의{' '}
             <strong className="text-ink-primary">‘{c.title}’</strong> 행사를 종료합니다.
           </p>
@@ -599,7 +599,7 @@ function CardComposer({ campaignId, current, onDone }: { campaignId: string; cur
       <p className="text-2xs tabular-nums text-ink-secondary">당첨 {prize}장 · 이용권 합계 {vouchers}장 · 매장 남은 한도 {current.venueQuota}장</p>
       {local.map((m) => (
         <p key={m} className="flex items-start gap-1 text-2xs text-danger-light">
-          <Icon name="alert" size={12} className="mt-px shrink-0" /><span className="break-words">{m}</span>
+          <Icon name="alert" size={12} className="mt-px shrink-0" /><span className="wrap-break-word">{m}</span>
         </p>
       ))}
       <button type="button" disabled={busy || local.length > 0} onClick={submit} className="btn-primary px-3 py-1.5 text-2xs disabled:opacity-50">
@@ -663,7 +663,7 @@ function DraftForm({ venues, seed, onCancel, onCreated }: {
 
   const field = 'input w-full py-1.5 text-xs';
   return (
-    <section data-testid="event-ops-draft-form" className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
+    <section data-testid="event-ops-draft-form" className="rounded-card border border-accent-400/30 bg-accent-300/4 p-3 space-y-2">
       <h3 className="text-sm font-bold text-accent-300">새 이벤트 초안</h3>
       <p className="text-2xs text-ink-muted">초안은 손님에게 보이지 않고 참여권도 나가지 않습니다. 공개를 눌러야 시작됩니다.</p>
       <div className="grid gap-2 sm:grid-cols-2">
@@ -703,7 +703,7 @@ function DraftForm({ venues, seed, onCancel, onCreated }: {
       </div>
       {problems.map((m) => (
         <p key={m} className="flex items-start gap-1 text-2xs text-danger-light">
-          <Icon name="alert" size={12} className="mt-px shrink-0" /><span className="break-words">{m}</span>
+          <Icon name="alert" size={12} className="mt-px shrink-0" /><span className="wrap-break-word">{m}</span>
         </p>
       ))}
       <div className="flex gap-1.5">

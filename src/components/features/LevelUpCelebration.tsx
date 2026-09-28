@@ -54,7 +54,7 @@ export function LevelUpCelebration({ points, onClose }: { points: number; onClos
   // 캔버스를 아예 마운트하지 않는다('깜빡임 0' 계약).
   const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center" role="dialog" aria-modal="true" aria-label="레벨 업">
+    <div className="fixed inset-0 z-90 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="레벨 업">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/80" />
       {!reduced && <Confetti />}
       <div className="relative mx-4 max-w-xs rounded-dialog border border-accent-400/40 bg-surface-mid p-6 text-center animate-slide-up">

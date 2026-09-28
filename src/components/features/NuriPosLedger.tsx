@@ -1358,7 +1358,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {/* C05 보완 — 재조회 실패(다른 접수대의 마감·단가·할인 변경을 못 받아옴)를 조용히 감추지 않는다.
           hasBoardData 라 전면 카드로 안 덮었을 뿐, 지금 보이는 값이 낡았을 수 있다는 사실은 알려야 한다. */}
       {!!loadError && hasBoardData && (
-        <div role="alert" className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2">
+        <div role="alert" className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/8 px-3 py-2">
           <p className="text-2xs font-semibold text-ink-secondary">방금 장부를 새로 불러오지 못했어요. 아래는 마지막으로 확인된 내용이라 단가·할인이 바뀌었을 수 있어요.</p>
           <button type="button" onClick={() => { reloadSession(); reload(); }}
             className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-1 text-2xs font-bold text-ink-primary">다시 시도</button>
@@ -1393,7 +1393,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         <div role="button" tabIndex={0} title="탭하면 정산 마감 버튼으로"
           onClick={pointAtSettle}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pointAtSettle(); } }}
-          className="sticky top-[var(--header-now)] z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur cursor-pointer sm:grid-cols-4">
+          className="sticky top-(--header-now) z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-xs backdrop-blur-sm cursor-pointer sm:grid-cols-4">
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
           {(() => {
@@ -1414,7 +1414,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
 
       {/* 손님 자가 바인 요청(QR) — 운영자 원탭 승인 → 현재 게임 명단 추가 */}
       {!closed && pendingReqs.length > 0 && (
-        <div className="rounded-card border border-sky-500/40 bg-sky-500/[0.06] p-2.5 space-y-2">
+        <div className="rounded-card border border-sky-500/40 bg-sky-500/6 p-2.5 space-y-2">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="inline-flex items-center gap-1 text-2xs font-bold text-sky-300"><Icon name="hand" size={12} className="shrink-0" />손님 바인 요청 {pendingReqs.length}건</span>
             {/* 게임별 건수·안내문은 sm 미만에서 **자기 줄**(basis-full·order-last)로 내린다 — 종전엔 [전체 승인](ml-auto)이
@@ -1428,7 +1428,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             })()}
             <span className="text-2xs text-ink-muted">· 승인 시 각자 원한 게임에 추가(미지정은 현재 {gLabel(gameSeq)})</span>
             </span>
-            {pendingReqs.length > 1 && <button type="button" onClick={bulkApprove} className="ml-auto shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1.5 min-h-[2.25rem] text-2xs font-bold text-ink-inverse hover:bg-emerald-500">전체 승인</button>}
+            {pendingReqs.length > 1 && <button type="button" onClick={bulkApprove} className="ml-auto shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1.5 min-h-9 text-2xs font-bold text-ink-inverse hover:bg-emerald-500">전체 승인</button>}
           </div>
           <ul className="space-y-1.5">
             {pendingReqs.map((r) => (
@@ -1447,7 +1447,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                     <button type="button" onClick={() => setPayPick(payPick === r.id ? null : r.id)} title="승인 + 바인 1건 기록(결제수단 선택)" className={['shrink-0 inline-flex h-10 items-center rounded-input px-2.5 text-2xs font-bold', payPick === r.id ? 'bg-emerald-600 text-ink-inverse' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500', 'gap-0.5'].join(' ')}>✓+<Icon name="banknote" size={13} className="shrink-0" /></button>
                   )}
                   <button type="button" onClick={() => approveReq(r)} title={r.voucherId ? '승인(이용권 1장 → 티켓 바인 자동 기록)' : '승인만(명단 추가)'} className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/10">{r.voucherId ? '✓ 승인·티켓' : '승인'}</button>
-                  <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-input border px-2.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-secondary hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
+                  <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 inline-flex h-10 min-w-10 items-center justify-center rounded-input border px-2.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-secondary hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
                 </div>
                 {payPick === r.id && (
                   <div className="mt-1.5 border-t border-border-subtle pt-1.5 space-y-1.5">
@@ -1667,14 +1667,14 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                 <span className="text-2xs text-ink-muted">유형(선택):</span>
                 {VISITOR_OPTS.map((t) => (
                   <button key={t.code} type="button" onClick={() => setNewType((cur) => (cur === t.code ? null : t.code))}
-                    className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
+                    className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-8 rounded-badge border transition-colors',
                       newType === t.code ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
                     {t.label}
                   </button>
                 ))}
                 <button type="button"
                   onClick={() => { const v = window.prompt('유형 직접입력'); if (v && v.trim()) setNewType(v.trim()); }}
-                  className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
+                  className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-8 rounded-badge border transition-colors',
                     newType && !VISITOR_OPTS.some((o) => o.code === newType) ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
                   {newType && !VISITOR_OPTS.some((o) => o.code === newType) ? newType : '직접입력'}
                 </button>
@@ -1717,15 +1717,15 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               {/* 헤더는 세로 스크롤에도 고정(sticky top) — 100명 명단에서도 바인 번호가 항상 보임 */}
               <tr className="bg-surface-high">
                 <th className="sticky left-0 top-0 z-40 bg-surface-high w-9 px-1 py-2 text-xs text-ink-muted border-b border-border-default">No</th>
-                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-[6rem] max-w-[9rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">플레이어</th>
+                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-24 max-w-36 px-2 py-2 text-xs text-ink-muted border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">플레이어</th>
                 {Array.from({ length: binCols }, (_, i) => (
                   <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-default">{i + 1}바인</th>
                 ))}
-                <th className="sticky top-0 z-30 bg-surface-high min-w-[4rem] max-w-[10rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
+                <th className="sticky top-0 z-30 bg-surface-high min-w-16 max-w-40 px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
                 {/* #6(2026-09-25, 390 실측) — 왼쪽 No·플레이어(≈150px) + 오른쪽 총바인·미수(2×68px)가 모두 붙박이라 바인 칸이 **반 칸**(≈30px)만 보였다.
                     sm 미만은 오른쪽 두 열을 가로로 함께 흐르게 둔다(머리행의 세로 고정 top-0 은 유지). sm 이상은 종전 그대로. */}
-                <th className="sticky right-[4rem] top-0 z-40 bg-surface-high w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
-                <th className="sticky right-0 top-0 z-40 bg-surface-high w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default max-sm:right-auto">미수</th>
+                <th className="sticky right-16 top-0 z-40 bg-surface-high w-16 min-w-16 max-w-16 px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
+                <th className="sticky right-0 top-0 z-40 bg-surface-high w-16 min-w-16 max-w-16 px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default max-sm:right-auto">미수</th>
               </tr>
             </thead>
             <tbody>
@@ -1739,7 +1739,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                   return (
                     <tr key={`${r.name}-${chunk}`}>
                       <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-2xs text-ink-muted border-b border-border-default tabular-nums">{first ? ri + 1 : <span className="opacity-40">↳</span>}</td>
-                      <td className="sticky left-9 z-10 bg-surface-low min-w-[6rem] max-w-[9rem] px-2 py-1 border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">
+                      <td className="sticky left-9 z-10 bg-surface-low min-w-24 max-w-36 px-2 py-1 border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">
                         {first ? (
                           <button type="button" disabled={!r.player || closed} onClick={() => r.player && setEditPlayer(r.player)} className="w-full text-left disabled:cursor-default">
                             <div className="flex items-center gap-1">
@@ -1750,7 +1750,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                               {r.player?.visitorType
                                 ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40">{visitorLabel(r.player.visitorType)}</span>
                                 : r.player ? <span className="text-[10px] text-ink-muted">{closed ? '' : '유형/비고 +'}</span> : <span className="text-[10px] text-ink-muted">—</span>}
-                              {r.player?.note && <span className="text-[10px] text-ink-secondary truncate max-w-[4rem]">· {r.player.note}</span>}
+                              {r.player?.note && <span className="text-[10px] text-ink-secondary truncate max-w-16">· {r.player.note}</span>}
                             </div>
                           </button>
                         ) : <span className="block text-2xs text-ink-muted/50 truncate">{r.name}</span>}
@@ -1802,17 +1802,17 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                         return <td key={e} className={cls}><div className="w-full h-full rounded-input bg-surface-base/30" /></td>;
                       })}
 
-                      <td className="min-w-[4rem] max-w-[10rem] px-1 py-1 border-b border-l border-border-default text-left">
+                      <td className="min-w-16 max-w-40 px-1 py-1 border-b border-l border-border-default text-left">
                         {/* 2026-09-25 감사: '비고 +' 버튼이 160×15.9 — 행(h-12 ≈ 51px) 안에서 44px 히트 영역을 준다(행 높이는 그대로). */}
                         {first && r.player ? (
                           <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)} className="flex min-h-[44px] w-full items-center text-left text-2xs disabled:cursor-default">
                             {r.player.note
-                              ? <span className="text-ink-secondary line-clamp-2 whitespace-pre-wrap break-words">{r.player.note}</span>
+                              ? <span className="text-ink-secondary line-clamp-2 whitespace-pre-wrap wrap-break-word">{r.player.note}</span>
                               : <span className="text-accent-200 font-semibold">{closed ? '—' : '비고 +'}</span>}
                           </button>
                         ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
                       </td>
-                      <td className="sticky right-[4rem] z-10 bg-surface-low w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-1 border-b border-l border-border-default border-l-border-strong text-2xs tabular-nums text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:static max-sm:shadow-none">
+                      <td className="sticky right-16 z-10 bg-surface-low w-16 min-w-16 max-w-16 px-1 py-1 border-b border-l border-border-default border-l-border-strong text-2xs tabular-nums text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:static max-sm:shadow-none">
                         {first && r.player ? (
                           // 리바인 원탭 — 다음 '+' 셀은 가로 스크롤 밖(6~9열)에 있기 일쑤. 항상 보이는
                           // sticky 셀에서 바로 다음 회차 결제 모달을 연다('직전과 동일'과 짝)
@@ -1832,7 +1832,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                           </span>
                         ) : ''}
                       </td>
-                      <td className="sticky right-0 z-10 bg-surface-low w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-1 border-b border-l border-border-default text-2xs tabular-nums text-left text-danger-light max-sm:static">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
+                      <td className="sticky right-0 z-10 bg-surface-low w-16 min-w-16 max-w-16 px-1 py-1 border-b border-l border-border-default text-2xs tabular-nums text-left text-danger-light max-sm:static">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
                     </tr>
                   );
                 });
@@ -1847,7 +1847,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {/* 좌우 경계를 변수로 뽑는다 — 기본값은 예전 그대로(0/0 · max-w-6xl)라 일반 화면은 변화 없다.
           전체화면(LedgerWorkspace)에서는 그 변수를 **장부 칸** 기준으로 덮어 바가 칸에 맞는다.
           예전엔 뷰포트 기준 1152px 중앙이라 전체화면에서 좌우가 어긋났다(오너 2026-09-08 "길이가 안맞아"). */}
-      <div ref={settleBarRef} className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-[var(--ledger-bar-left,0px)] right-[var(--ledger-bar-right,0px)] z-30 mx-auto max-w-[var(--ledger-bar-max,72rem)] bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
+      <div ref={settleBarRef} className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-(--ledger-bar-left,0px) right-(--ledger-bar-right,0px) z-30 mx-auto max-w-(--ledger-bar-max,72rem) bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
         {/* 정산 제외 — 오너 지시: "관계자·신규처럼 빼고 정산", "티켓·현금·카드도 뺄 수 있게".
             정산바 **안** 최상단에 둔다. 바는 bottom 고정이라 펼치면 위로 자라 숫자를 가리지 않는다. */}
         <SettleFilter
@@ -2161,7 +2161,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
   const stepBtn = 'h-10 w-10 shrink-0 rounded-input border border-border-default text-ink-secondary text-base font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-35';
 
   return (
-    <div className="rounded-card border border-accent-400/30 bg-gradient-to-r from-accent-300/[0.07] to-transparent px-2.5 py-2 space-y-2">
+    <div className="rounded-card border border-accent-400/30 bg-linear-to-r/srgb from-accent-300/[0.07] to-transparent px-2.5 py-2 space-y-2">
       {/* 1행: 레벨/시간 제어 */}
       <div className="flex items-center gap-2">
         <button type="button" onClick={onOpenClock} disabled={!onOpenClock} className="min-w-0 flex-1 text-left disabled:cursor-default">
@@ -2191,7 +2191,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
       {/* 레벨 오조작 복구(6초) — 이동 전 레벨·남은 시간으로 되돌린다. TV 송출 화면도 함께 복원됨 */}
       {levelUndo && (
         <button type="button" onClick={undoGo} aria-label="레벨 이동 되돌리기"
-          className="flex w-full items-center justify-center gap-1.5 rounded-input border border-amber-400/60 bg-amber-400/12 py-2 text-2xs font-extrabold text-amber-300 active:bg-amber-400/20">
+          className="flex w-full items-center justify-center gap-1.5 rounded-input border border-amber-400/60 py-2 text-2xs font-extrabold text-amber-300 active:bg-amber-400/20">
           <Icon name="undo" size={13} className="shrink-0" />레벨 이동 되돌리기 <span className="font-normal text-amber-300">남은 시간까지 복원</span>
         </button>
       )}
@@ -2206,7 +2206,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
         <button type="button" onClick={() => out(-1)} disabled={clock.eliminations <= 0} aria-label="아웃 1명 되돌리기"
           className="h-10 w-10 shrink-0 rounded-input border border-border-default text-ink-secondary text-lg font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-30">↺</button>
         <button type="button" onClick={() => out(1)}
-          className="h-10 shrink-0 rounded-input border border-danger/50 bg-danger/12 px-4 text-sm font-extrabold text-danger-light flex items-center gap-1.5 active:bg-danger/20">
+          className="h-10 shrink-0 rounded-input border border-danger/50 px-4 text-sm font-extrabold text-danger-light flex items-center gap-1.5 active:bg-danger/20">
           <span className="text-base leading-none">✕</span> 아웃 처리
         </button>
       </div>
@@ -2281,16 +2281,16 @@ function PlayerEditModal({ player, recordCount, hasPw, canManage = false, onClos
         ) : !delMode ? (
           <button type="button" onClick={() => setDelMode(true)} className="w-full rounded-input border border-danger/40 py-2 text-xs font-semibold text-danger-light transition-colors hover:bg-danger/10">플레이어 삭제 (바인 {recordCount}건 포함)</button>
         ) : (
-          <div className="space-y-1.5 rounded-input border border-danger/40 bg-danger/[0.06] p-2">
+          <div className="space-y-1.5 rounded-input border border-danger/40 bg-danger/6 p-2">
             <p className="text-2xs text-danger-light">
               바인 {recordCount}건이 함께 삭제됩니다. {hasPw ? '취소 비밀번호를 입력하세요.' : canManage ? '취소 비밀번호가 설정되지 않은 매장이라 비밀번호 없이 삭제됩니다.' : '취소 비밀번호가 설정되지 않은 매장은 업주·공동운영자만 삭제할 수 있습니다.'}
             </p>
             <div className="flex gap-1.5">
               {!hasPw && canManage
-                ? <button type="button" onClick={() => onDelete('')} className="btn-danger !bg-rose-700 hover:!bg-rose-800 min-w-0 flex-1 px-3 text-xs">삭제 확정</button>
+                ? <button type="button" onClick={() => onDelete('')} className="btn-danger bg-rose-700! hover:bg-rose-800! min-w-0 flex-1 px-3 text-xs">삭제 확정</button>
                 : <>
                   <input type="password" inputMode="numeric" value={delPw} onChange={(e) => setDelPw(e.target.value)} placeholder={hasPw ? '취소 비밀번호' : '비밀번호 미설정'} disabled={!hasPw} className="input min-w-0 flex-1 text-sm" autoFocus />
-                  <button type="button" onClick={() => onDelete(delPw)} disabled={!hasPw || !delPw} className="btn-danger !bg-rose-700 hover:!bg-rose-800 shrink-0 px-3 text-xs disabled:opacity-50">삭제 확정</button>
+                  <button type="button" onClick={() => onDelete(delPw)} disabled={!hasPw || !delPw} className="btn-danger bg-rose-700! hover:bg-rose-800! shrink-0 px-3 text-xs disabled:opacity-50">삭제 확정</button>
                 </>}
               <button type="button" onClick={() => { setDelMode(false); setDelPw(''); }} className="btn-ghost shrink-0 px-2 text-xs">취소</button>
             </div>
@@ -2722,7 +2722,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   //   2026-09-25 오너 실기기에서 바 자체가 스크롤 내내 칸·칩·카드를 덮는다고 다시 지적 → 모바일은 바를 고정하지 않는다
   //   (아래 실행 버튼 주석). 덮을 바가 없으니 포커스 보정도 필요 없어 지웠다.
   return (
-    <div className={embedded ? 'space-y-3' : 'rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2.5'}>
+    <div className={embedded ? 'space-y-3' : 'rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/5 to-transparent p-3 space-y-2.5'}>
       {mode === 'open' && (
         <div>
           <h3 className="text-sm font-bold text-accent-300">장부 시작 설정</h3>
@@ -2754,7 +2754,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       {/* PL3①: 스냅샷이 최우선 후보 — 마지막 마감 회차를 1탭으로 그대로(§13-B 생성 경로 역전) */}
       {mode === 'open' && lastRound && (
         <button type="button" onClick={() => applyLastRound(lastRound)} data-testid="open-last-round"
-          className="flex w-full items-center gap-2 rounded-input border border-emerald-500/40 bg-emerald-500/[0.08] px-3 py-2.5 text-left transition-colors hover:bg-emerald-500/[0.14]">
+          className="flex w-full items-center gap-2 rounded-input border border-emerald-500/40 bg-emerald-500/8 px-3 py-2.5 text-left transition-colors hover:bg-emerald-500/[0.14]">
           <Icon name="refresh" size={16} className="shrink-0 text-emerald-400" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-bold text-emerald-300">
@@ -2768,7 +2768,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       )}
       {mode === 'open' && copyMain && (base.gameSeq ?? 1) > 1 && (
         <button type="button" onClick={applyCopyMain}
-          className="w-full flex items-center justify-center gap-1.5 rounded-input border border-accent-400/50 bg-accent-300/12 px-3 py-2.5 text-sm font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
+          className="w-full flex items-center justify-center gap-1.5 rounded-input border border-accent-400/50 px-3 py-2.5 text-sm font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
           <Icon name="clipboard" size={16} className="shrink-0" />메인 게임 설정 그대로 복사 (단가·할인·딜러·유형)
         </button>
       )}
@@ -2784,7 +2784,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <span className="text-sm">{presetOpen ? '▲' : '▼'}</span>
           </button>
           {presetOpen && (
-            <div className="mt-1 max-h-[13rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
+            <div className="mt-1 max-h-52 overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
               {presets.map((p, i) => (
                 <button key={i} type="button" onClick={() => { applyPreset(p); setPresetOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-surface-high transition-colors">
@@ -2903,7 +2903,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               <span className="w-9 shrink-0 text-2xs font-bold text-accent-300">할인{i + 1}</span>
               <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input min-w-0 grow basis-[calc(100%-3rem)] text-sm sm:basis-0" />
               {/* #11(2026-09-25) — w-20 에 '23.4567' 이 글자 공간 45px 에 57px 로 잘렸다(끝자리가 안 보여 금액을 잘못 읽는다) → w-24. */}
-              <div className="relative w-24 shrink-0 max-sm:ml-[2.625rem]">
+              <div className="relative w-24 shrink-0 max-sm:ml-10.5">
                 <input type="number" inputMode="decimal" step="0.1" min="0" max={minUnit > 0 ? minUnit / WON_PER_MAN : undefined} value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="금액" aria-invalid={badDisc === i}
                   className={['input w-full pr-6 text-sm tabular-nums', badDisc === i ? 'border-danger text-danger-light' : ''].join(' ')} />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
@@ -2913,7 +2913,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
                   w-16(68px) − pl-3(12.75) − pr-6(25.5) = 글자 공간 **29.75px** 인데 placeholder '자동' 이
                   text-sm(14.875px)×2 = **29.75px** 로 정확히 경계라 한 글자에서 잘렸다. 여유를 준다.
                   줄이려면 placeholder 를 먼저 줄여라 — 폭만 줄이면 같은 자리로 돌아온다. */}
-              <div className="relative w-[4.75rem] shrink-0">
+              <div className="relative w-19 shrink-0">
                 <input type="number" inputMode="numeric" min="0" max="60" value={d.level || ''} onChange={(e) => setDisc(i, { level: Math.max(0, Math.min(60, parseInt(e.target.value, 10) || 0)) })} placeholder="자동" className="input w-full pr-6 text-sm tabular-nums" />
                 <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">LV</span>
               </div>
@@ -3068,7 +3068,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           390 도 동일. 탭바가 스크롤로 자동숨김된 동안에만 보였다 = 매일 쓰는 실행 버튼이 안 눌린다.
           `--tabbar-safe` 는 이 저장소의 **탭바 회피 단일 소스**다(index.css) — 임의 상수를 새로 만들지 않는다.
           PC(lg+)에는 하단 탭바가 없으므로 종전대로 bottom-0. */}
-      {/* ⚠ `pr-12` — 스크롤 뒤 나타나는 '맨 위로' FAB(`.scroll-top-fab`, `bottom-[var(--tabbar-float)] right-4`)가
+      {/* ⚠ `pr-12` — 스크롤 뒤 나타나는 '맨 위로' FAB(`.scroll-top-fab`, `bottom-(--tabbar-float) right-4`)가
           같은 기준선에 서서 실행 버튼 오른쪽 끝을 덮었다(실측 360: 겹침 28×41 ≈ 1,173px²).
           글자는 가운데라 안 가려지고 탭도 됐지만 그림이 겹친다 — FAB 폭(42.5)+여백만큼 비켜 준다. */}
       {/* 🔴 2026-09-25 오너 실기기(412 · 삼성 인터넷/크롬): 모바일에서 이 막대가 **본문 중간에 떠서** 담당 직원 칩·입력칸을
@@ -3077,7 +3077,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           모바일 화면 높이에서 '탭바 위 고정'은 바닥 105px + 막대 50px 를 입력칸 위에 영구히 얹는다 — 가리지 않는 고정은 없다.
           → 하단 탭바가 있는 폭(<lg)은 **폼 끝의 일반 버튼**(흐름 배치). 끝까지 내리면 탭바 위로 올라온다(푸터 예약).
           PC(lg+)는 종전 sticky bottom-0 그대로. */}
-      <div className={['lg:sticky lg:bottom-0 -mx-1 flex gap-2 px-1 pb-1 pr-12 pt-2 backdrop-blur-sm lg:pr-1', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
+      <div className={['lg:sticky lg:bottom-0 -mx-1 flex gap-2 px-1 pb-1 pr-12 pt-2 backdrop-blur-xs lg:pr-1', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
         {onCancel && <button type="button" onClick={onCancel} className="btn-ghost text-sm flex-1">취소</button>}
         <button type="button" onClick={submit} disabled={cash <= 0 || submitting} className="btn-primary text-sm flex-1 disabled:opacity-50">
           {submitting ? '저장 중…' : mode === 'open' ? '장부 시작' : '저장'}
@@ -3253,7 +3253,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                 const active = (cell.buyin!.earlyOverride ?? null) === v;
                 return (
                   <button key={String(v)} type="button" onClick={() => onSetEarly(v)}
-                    className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
+                    className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-8 rounded-badge border transition-colors',
                       active ? 'bg-amber-400/20 text-amber-300 border-amber-400/50' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>{label}</button>
                 );
               })}
@@ -3465,14 +3465,14 @@ function PwConfirm({ hasPw, ownerNoPw = false, label, busy = false, onConfirm }:
   const [pw, setPw] = useState('');
   if (!hasPw && ownerNoPw) {
     return (
-      <button type="button" onClick={() => onConfirm('')} disabled={busy} className="btn-danger !bg-rose-700 hover:!bg-rose-800 w-full text-xs px-3 disabled:opacity-50">{label}</button>
+      <button type="button" onClick={() => onConfirm('')} disabled={busy} className="btn-danger bg-rose-700! hover:bg-rose-800! w-full text-xs px-3 disabled:opacity-50">{label}</button>
     );
   }
   return (
     <div className="flex gap-1.5">
       <input type="password" inputMode="numeric" value={pw} onChange={(e) => setPw(e.target.value)} aria-label="취소 비밀번호"
         placeholder={hasPw ? '취소 비밀번호' : '비밀번호 미설정'} disabled={!hasPw} className="input flex-1 text-sm" autoFocus />
-      <button type="button" onClick={() => onConfirm(pw)} disabled={!hasPw || !pw || busy} className="btn-danger !bg-rose-700 hover:!bg-rose-800 text-xs px-3 shrink-0 disabled:opacity-50">{label}</button>
+      <button type="button" onClick={() => onConfirm(pw)} disabled={!hasPw || !pw || busy} className="btn-danger bg-rose-700! hover:bg-rose-800! text-xs px-3 shrink-0 disabled:opacity-50">{label}</button>
     </div>
   );
 }
@@ -3561,7 +3561,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
         {/* 제외를 걸었으면 **위 숫자가 무엇을 뺀 결과인지**와 제외 전 원본을 나란히 세운다.
             둘 중 하나만 보여 주면 나중에 "그날 진짜 몇 엔트리였지?"에 답할 수 없다. */}
         {stats.removed.count > 0 && (
-          <div className="rounded-input border border-danger/30 bg-danger/[0.06] p-2.5">
+          <div className="rounded-input border border-danger/30 bg-danger/6 p-2.5">
             <p className="mb-1 flex items-center gap-1 text-2xs font-bold text-danger-light">
               <Icon name="filter" size={12} className="shrink-0" />{exNote || '정산 제외'}
             </p>
@@ -3582,7 +3582,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
         {/* #20: 할인은 '덜 받은 돈'이라 매출 옆에 같이 서야 한다.
             예전엔 마감정산 어디에도 없어서, 5만 할인 20건(=100만)이 그냥 매출 미달로만 보였다.
             할인 엔트리 수와 총 할인액을 같이 세워야 '왜 덜 들어왔는가'가 그 자리에서 끝난다. */}
-        <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2.5">
+        <div className="rounded-input border border-accent-400/30 bg-accent-300/6 p-2.5">
           <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-accent-300">
             <Icon name="gift" size={12} className="shrink-0" />금일 할인
           </p>
@@ -3618,7 +3618,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
         )}
 
         {/* 미수자 리스트 */}
-        <div className="rounded-input border border-danger/30 bg-danger/[0.05] p-2.5">
+        <div className="rounded-input border border-danger/30 bg-danger/5 p-2.5">
           <p className="mb-1 text-2xs font-bold text-danger-light">미수자 {unpaidPlayers.length}명</p>
           {unpaidPlayers.length === 0 ? (
             <p className="py-1 text-center text-2xs text-ink-muted">미수자가 없습니다</p>
@@ -3683,7 +3683,7 @@ function DeleteSessionModal({ label, loss, lossErr, busy, hasPw, pw, onPw, onClo
             <SummaryStat label="미수금 기록" value={`${wonToMan(loss.unpaid)}만원`} tone="danger" />
           </div>
         ) : lossErr ? (
-          <p className="rounded-input border border-danger/30 bg-danger/[0.05] p-2.5 text-2xs text-danger-light">
+          <p className="rounded-input border border-danger/30 bg-danger/5 p-2.5 text-2xs text-danger-light">
             잃는 기록의 양을 불러오지 못했습니다(네트워크). 수치를 확인하지 못한 채로도 삭제는 가능하지만, 확인 후 진행을 권합니다.
           </p>
         ) : (
@@ -3703,7 +3703,7 @@ function DeleteSessionModal({ label, loss, lossErr, busy, hasPw, pw, onPw, onClo
           <button type="button" onClick={onClose} disabled={busy} className="btn-ghost text-sm flex-1 disabled:opacity-50">취소</button>
           {/* #8(2026-09-25) — btn-danger 기본색(246,70,93) 위 흰 글자 3.5:1. 되돌릴 수 없는 버튼이라 글자가 확실히 읽혀야 한다 → 한 단계 진한 빨강. */}
           <HoldToConfirmButton onConfirm={onConfirm} disabled={busy || (!loss && !lossErr) || (pwRequired && !pw)}
-            className="btn-danger !bg-rose-700 hover:!bg-rose-800 text-sm flex-1 disabled:opacity-50">
+            className="btn-danger bg-rose-700! hover:bg-rose-800! text-sm flex-1 disabled:opacity-50">
             {busy ? '삭제 중…' : '꾹 눌러 영구 삭제'}
           </HoldToConfirmButton>
         </div>

@@ -99,7 +99,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
   };
 
   return (
-    <section className="mt-8 rounded-card border border-danger/40 bg-danger/[0.04] p-3.5">
+    <section className="mt-8 rounded-card border border-danger/40 bg-danger/4 p-3.5">
       <div className="flex items-start gap-2.5">
         <Icon name="bomb" size={19} className="mt-0.5 shrink-0 text-danger" />
         <div className="min-w-0 flex-1">
@@ -150,7 +150,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
           {/* ── 최초 비밀번호 설정 ── */}
           {pwIsSet === false ? (
             <>
-              <div className="rounded-card border border-amber-500/30 bg-amber-500/[0.06] p-3">
+              <div className="rounded-card border border-amber-500/30 bg-amber-500/6 p-3">
                 <p className="text-2xs font-bold text-amber-300">킬스위치 비밀번호 설정 (최초 1회)</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
                   이 비밀번호는 매장 전체를 삭제할 때 필요합니다. <b className="text-danger-light">한 번 설정하면 변경·재설정할 수 없으니</b> 신중히 정하고 안전하게 보관하세요.
@@ -188,7 +188,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               </div>
               {step === 1 && (
                 <>
-                  <div className="rounded-card border border-danger/30 bg-danger/[0.05] p-3">
+                  <div className="rounded-card border border-danger/30 bg-danger/5 p-3">
                     <p className="text-2xs font-bold text-danger-light">1단계 · 업주 본인 확인</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">본인인증된 <b className="text-ink-secondary">업주 본인의 실명</b>을 입력하세요.</p>
                   </div>
@@ -204,7 +204,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               )}
               {step === 2 && (
                 <>
-                  <div className="rounded-card border border-danger/30 bg-danger/[0.05] p-3">
+                  <div className="rounded-card border border-danger/30 bg-danger/5 p-3">
                     <p className="text-2xs font-bold text-danger-light">2단계 · 킬스위치 비밀번호</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">최초에 설정한 <b className="text-ink-secondary">킬스위치 비밀번호</b>를 입력하세요.</p>
                   </div>
@@ -220,7 +220,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               )}
               {step === 3 && (
                 <>
-                  <div className="rounded-card border border-danger/50 bg-danger/[0.08] p-3">
+                  <div className="rounded-card border border-danger/50 bg-danger/8 p-3">
                     <p className="text-2xs font-bold text-danger-light">3단계 · 최종 확인</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
                       정말 <b className="text-danger-light">매장 전체를 영구 삭제</b>하시겠습니까? 장부·순위·이용권·직원·클락 등 <b className="text-ink-secondary">모든 데이터가 즉시 사라지며 복구할 수 없습니다.</b>

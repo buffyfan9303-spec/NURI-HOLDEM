@@ -235,7 +235,7 @@ export default function DealerCommunity() {
                     {p.workPeriod && <span className="inline-flex items-center gap-1 rounded-badge bg-surface-high border border-border-default px-1.5 py-0.5 text-2xs text-ink-secondary">{p.workPeriod}</span>}
                   </div>
                 )}
-                <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-ink-primary line-clamp-3">{p.content}</p>
+                <p className="mt-1.5 whitespace-pre-wrap wrap-break-word text-sm text-ink-primary line-clamp-3">{p.content}</p>
                 <div className="mt-1.5 flex items-center gap-2">
                   <div className={['flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold', onColorInkClass(p.authorColor ?? '#5A6175')].join(' ')} style={{ background: p.authorColor ?? '#5A6175' }}>
                     {p.authorName[0]}
@@ -330,7 +330,7 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
       )}
 
       {/* 내용 */}
-      <p className="whitespace-pre-wrap break-words text-sm text-ink-primary leading-relaxed">{post.content}</p>
+      <p className="whitespace-pre-wrap wrap-break-word text-sm text-ink-primary leading-relaxed">{post.content}</p>
 
       {/* 작성자 */}
       <div className="flex items-center gap-2 pt-1 border-t border-border-subtle">
@@ -344,7 +344,7 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
       ) : isAuthor ? null : applied ? (
         <p className="rounded-input bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 text-center text-xs font-semibold text-emerald-400">지원이 접수되었습니다 ✓</p>
       ) : canApply ? (
-        <form onSubmit={apply} className="space-y-2 rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3">
+        <form onSubmit={apply} className="space-y-2 rounded-card border border-accent-400/30 bg-accent-300/4 p-3">
           <p className="text-xs font-bold text-accent-300">지원하기</p>
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
@@ -380,7 +380,7 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
                     <a href={`tel:${a.phone}`} className="text-xs font-bold text-accent-300 tabular-nums">{a.phone}</a>
                     <span className="ml-auto text-2xs text-ink-muted">{relativeTime(a.createdAt)}</span>
                   </div>
-                  {a.message && <p className="mt-1 whitespace-pre-wrap break-words text-2xs text-ink-secondary leading-snug">{a.message}</p>}
+                  {a.message && <p className="mt-1 whitespace-pre-wrap wrap-break-word text-2xs text-ink-secondary leading-snug">{a.message}</p>}
                 </li>
               ))}
             </ul>
@@ -393,9 +393,9 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
 
 function ConditionCell({ label, value, highlight }: { label: string; value?: string; highlight?: boolean }) {
   return (
-    <div className={['rounded-input border p-2 text-center', highlight ? 'border-accent-400/40 bg-accent-300/[0.06]' : 'border-border-default bg-surface-high'].join(' ')}>
+    <div className={['rounded-input border p-2 text-center', highlight ? 'border-accent-400/40 bg-accent-300/6' : 'border-border-default bg-surface-high'].join(' ')}>
       <p className="text-2xs text-ink-muted">{label}</p>
-      <p className={['text-xs font-bold mt-0.5 break-words', highlight ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{value || '-'}</p>
+      <p className={['text-xs font-bold mt-0.5 wrap-break-word', highlight ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{value || '-'}</p>
     </div>
   );
 }

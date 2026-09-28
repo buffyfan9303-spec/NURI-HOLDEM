@@ -549,7 +549,7 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
 }
 function Cell({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
   return (
-    <div className="rounded bg-surface-base border border-border-subtle py-1.5">
+    <div className="rounded-sm bg-surface-base border border-border-subtle py-1.5">
       <p className={['text-sm font-bold tabular-nums leading-none', gold ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{value}</p>
       <p className="text-2xs text-ink-muted mt-0.5">{label}</p>
     </div>

@@ -200,7 +200,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
             // grid-cols-3 에 셀 9개라 실제는 3행인데 예전엔 2행으로 예약해 -55px 밀렸다(2026-09-20 실측,
             // 프로덕션 프리뷰 4273 에 합성 DOM 삽입·getBoundingClientRect: 실제 149.8125px vs 예전 예약 94.75px).
             // 2.6875rem = (149.8125 − 갭 2×0.375rem) ÷ 3행 — 실측값 역산.
-            <SkeletonList rows={3} rowClassName="h-[2.6875rem]" />
+            <SkeletonList rows={3} rowClassName="h-10.75" />
           ) : (
             <div className="grid grid-cols-3 gap-1.5">
               <Cell label="바인" v={`${act.buyins}회`} />
@@ -235,7 +235,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
                 <button type="button" onClick={addCoupon} disabled={couponBusy} className="btn-ghost px-2 text-2xs text-accent-300 disabled:opacity-50">+ 쿠폰 발급</button>
               </div>
               {coupons.filter((c) => c.status === 'active').map((c) => (
-                <div key={c.id} className="flex items-center justify-between gap-2 rounded bg-surface-high px-2 py-1">
+                <div key={c.id} className="flex items-center justify-between gap-2 rounded-sm bg-surface-high px-2 py-1">
                   <span className="flex min-w-0 flex-1 items-center gap-1 text-2xs text-ink-secondary"><Icon name="ticket" size={11} className="shrink-0" /><span className="truncate" title={c.title}>{c.title}</span></span>
                   <button type="button" onClick={() => redeemCoupon(c.id)} disabled={couponBusy} className="shrink-0 text-2xs font-bold text-accent-300 disabled:opacity-50">사용</button>
                 </div>
@@ -257,7 +257,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
 
 function Cell({ label, v, gold }: { label: string; v: string; gold?: boolean }) {
   return (
-    <div className="rounded bg-surface-high py-1.5 text-center">
+    <div className="rounded-sm bg-surface-high py-1.5 text-center">
       <p className={`text-sm font-bold leading-none tabular-nums ${gold ? 'text-accent-300' : 'text-ink-primary'}`}>{v}</p>
       <p className="mt-0.5 text-2xs text-ink-muted">{label}</p>
     </div>

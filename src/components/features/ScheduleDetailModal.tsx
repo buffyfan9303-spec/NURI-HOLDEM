@@ -164,7 +164,7 @@ export default function ScheduleDetailModal({
         onClick={onClose}
         aria-label="닫기"
         // [B] 44px 터치 표준 — 예전 w-9 h-9(38.25px)는 미달이었다. Modal.tsx 닫기 버튼과 같은 값(w-11 h-11)으로.
-        className="lg:hidden fixed top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-[60] w-11 h-11 flex items-center justify-center rounded-full bg-surface-base/80 backdrop-blur text-ink-primary hover:bg-surface-high transition-colors"
+        className="lg:hidden fixed top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-60 w-11 h-11 flex items-center justify-center rounded-full bg-surface-base/80 backdrop-blur-sm text-ink-primary hover:bg-surface-high transition-colors"
       >
         <Icon name="close" size={18} />
       </button>
@@ -176,7 +176,7 @@ export default function ScheduleDetailModal({
           <div
             className={[
               'relative flex w-full items-center justify-center overflow-hidden',
-              schedule.posterUrl ? 'bg-surface-base' : 'aspect-[16/9] sm:aspect-[2/1]',
+              schedule.posterUrl ? 'bg-surface-base' : 'aspect-video sm:aspect-2/1',
             ].join(' ')}
             // [DS] MO-8B: 카드 포스터(같은 이름)에서 이 자리로 모핑 — 모달은 열려 있는 동안만
             // 존재하므로 이름 중복(전환 취소) 걱정이 없다. 카드 쪽 이름은 App 이 조건부 관리.
@@ -274,7 +274,7 @@ export default function ScheduleDetailModal({
                 쓰고 있는 break-keep(어절 단위) + [overflow-wrap:anywhere](초장문 토큰만 예외) 짝을
                 제목에도 맞춘다. 360px 에서 대회명이 음절 중간에서 갈리던 문제. */}
             <h1 className={[
-              'text-xl font-bold leading-tight break-keep [overflow-wrap:anywhere]',
+              'text-xl font-bold leading-tight break-keep wrap-anywhere',
               schedule.isPremium ? 'text-accent-300' : 'text-ink-primary',
             ].join(' ')}>
               {schedule.title}
@@ -297,7 +297,7 @@ export default function ScheduleDetailModal({
                 onClick={() => onVenueClick(schedule.venueId!)}
                 className="tap-44 mt-1.5 flex w-full items-center gap-1 text-left text-base text-ink-secondary hover:text-accent-300 transition-colors group"
               >
-                <span className="min-w-0 break-keep [overflow-wrap:anywhere] font-bold underline decoration-dotted underline-offset-2">
+                <span className="min-w-0 break-keep wrap-anywhere font-bold underline decoration-dotted underline-offset-2">
                   {schedule.pubName}
                 </span>
                 <svg
@@ -309,7 +309,7 @@ export default function ScheduleDetailModal({
                 </svg>
               </button>
             ) : (
-              <p className="mt-1.5 break-keep [overflow-wrap:anywhere] text-base font-bold text-ink-secondary">{schedule.pubName}</p>
+              <p className="mt-1.5 break-keep wrap-anywhere text-base font-bold text-ink-secondary">{schedule.pubName}</p>
             )}
             {/* 지역 · 형식 · 별점 — 줄바꿈 허용(flex-wrap). 포스터 배지와 중복이지만 포스터를 지나쳐도 유형이 남는다 */}
             <p className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-sm text-ink-secondary">
@@ -334,7 +334,7 @@ export default function ScheduleDetailModal({
                    결과 42.5px · 위쪽 확장이 간격과 정확히 맞닿아 겹침 0. 레이아웃은 아래로 10px 만 움직인다. */
                 /* 2026-09-28: 29.75px → 44px — tap-44(위로만 14.25). 아래는 곧바로 sticky 탭바가 덮고, 바로 위는 글자뿐인 지역·형식 줄이다. */
                 className="tap-44 -my-1.5 mt-3 flex items-start gap-1.5 py-1.5 text-xs text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
-                <Icon name="map" size={13} className="mt-0.5 shrink-0" /><span className="break-keep [overflow-wrap:anywhere]">{schedule.address}</span>
+                <Icon name="map" size={13} className="mt-0.5 shrink-0" /><span className="break-keep wrap-anywhere">{schedule.address}</span>
               </a>
             )}
           </div>
@@ -346,7 +346,7 @@ export default function ScheduleDetailModal({
           **뷰포트에 붙어 있다**. 이 탭바는 sticky top-0 이고 스크롤 컨테이너의 top 이 곧 safe-top 이라,
           조금만 스크롤하면 탭바(높이 40px 남짓)의 12~48px 구간에 닫기 버튼이 그대로 겹쳐 앉는다 —
           5번째 칸(Q&A)의 탭 영역 대부분이 닫기 버튼에 먹혔다(360px 기준 x=312~348 ⊂ Q&A 칸 288~360).
-          PC 에서 같은 이유로 이미 lg:pr-[4.25rem] 을 두고 있다 — 모바일에도 같은 해법(48px 버튼 자리 + 4px). */}
+          PC 에서 같은 이유로 이미 lg:pr-17 을 두고 있다 — 모바일에도 같은 해법(48px 버튼 자리 + 4px). */}
       {/* 🔴 2026-09-18 전수 점검: 루트 글자 **200% 확대에서 다섯 탭이 전부 첫 글자+말줄임**이 됐다
           ('메인'→'메…', '매장정보'→'매…'). 하필 '메'와 '매'라 확대가 필요한 저시력 유저일수록 더 헷갈린다.
           원인은 `grid-cols-5` — 칸 수가 고정이라 글자가 커져도 칸이 안 늘고, 안쪽 truncate 가 글자를 지운다.
@@ -357,7 +357,7 @@ export default function ScheduleDetailModal({
         ⚠ SlidingPill 은 `[data-pill-active]` 상자를 재므로 레일(=offsetParent)이 바뀌면 안 된다 —
           `relative` 를 바깥 레일에 그대로 두고 알약도 레일의 직계로 남긴다.
         ⚠ pr 은 레일에 둔다(닫기 버튼 자리). 안쪽 그리드에 주면 스크롤 폭 계산이 그만큼 어긋난다. */}
-      <div data-sched-tabbar="" role="tablist" className="relative flex border-b border-border-subtle sticky top-0 bg-surface-base z-10 overflow-x-auto scrollbar-none pr-[3.25rem] lg:pr-[4.25rem]">
+      <div data-sched-tabbar="" role="tablist" className="relative flex border-b border-border-subtle sticky top-0 bg-surface-base z-10 overflow-x-auto scrollbar-none pr-13 lg:pr-17">
         <SlidingPill activeKey={tab} underline className="rounded-full bg-accent-300" />
         {/* PC 닫기 — 정보 영역 우상단(항상 보이는 sticky 탭바, 손 닿는 위치) */}
         <button
@@ -536,16 +536,16 @@ export default function ScheduleDetailModal({
                   <li
                     key={i}
                     className={`flex items-start gap-2.5 px-3 py-2 rounded-input border ${
-                      v.isDiscount ? 'border-accent-400/50 bg-accent-300/[0.08]'
+                      v.isDiscount ? 'border-accent-400/50 bg-accent-300/8'
                         : promoHasDiscount ? 'border-border-subtle bg-surface-high'
-                          : 'border-accent-400/30 bg-accent-300/[0.04]'
+                          : 'border-accent-400/30 bg-accent-300/4'
                     }`}
                   >
                     {promoHasPill && (
-                      <span className="w-[4.75rem] shrink-0">
+                      <span className="w-19 shrink-0">
                         {v.pill && (
                           <span
-                            className={`block px-1 py-0.5 rounded-badge text-center text-2xs font-bold leading-tight break-keep [overflow-wrap:anywhere] ${
+                            className={`block px-1 py-0.5 rounded-badge text-center text-2xs font-bold leading-tight break-keep wrap-anywhere ${
                               v.isDiscount ? 'bg-accent-300 text-white tabular-nums'
                                 : promoHasDiscount ? 'border border-border-default bg-surface-float text-ink-secondary'
                                   : 'bg-accent-300 text-white'
@@ -557,9 +557,9 @@ export default function ScheduleDetailModal({
                       </span>
                     )}
                     <span className="min-w-0 flex-1">
-                      <span className="block whitespace-normal break-keep [overflow-wrap:anywhere] text-sm leading-snug text-ink-primary font-semibold">{p.title}</span>
+                      <span className="block whitespace-normal break-keep wrap-anywhere text-sm leading-snug text-ink-primary font-semibold">{p.title}</span>
                       {v.sub && (
-                        <span className="mt-0.5 block whitespace-normal break-keep [overflow-wrap:anywhere] text-2xs leading-snug text-ink-muted">{v.sub}</span>
+                        <span className="mt-0.5 block whitespace-normal break-keep wrap-anywhere text-2xs leading-snug text-ink-muted">{v.sub}</span>
                       )}
                     </span>
                   </li>
@@ -746,7 +746,7 @@ export default function ScheduleDetailModal({
                   {schedule.partners.map((p) => (
                     <span
                       key={p}
-                      className="inline-flex max-w-full items-center break-keep [overflow-wrap:anywhere] px-2.5 py-1 rounded-badge bg-surface-high border border-border-default text-xs font-bold text-ink-primary tracking-wider"
+                      className="inline-flex max-w-full items-center break-keep wrap-anywhere px-2.5 py-1 rounded-badge bg-surface-high border border-border-default text-xs font-bold text-ink-primary tracking-wider"
                     >
                       {p}
                     </span>
@@ -762,7 +762,7 @@ export default function ScheduleDetailModal({
                   {schedule.paymentMethods.map((m) => (
                     <span
                       key={m}
-                      className={`inline-flex max-w-full items-center break-keep [overflow-wrap:anywhere] px-2.5 py-1 rounded-badge bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold ${LIVE_INK}`}
+                      className={`inline-flex max-w-full items-center break-keep wrap-anywhere px-2.5 py-1 rounded-badge bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold ${LIVE_INK}`}
                     >
                       {m}
                     </span>
@@ -779,7 +779,7 @@ export default function ScheduleDetailModal({
         {/* 대회 후기 쓰기 — 커뮤니티 게시판(대회 후기 카테고리)으로 바로 작성 */}
         <button type="button"
           onClick={() => { if (!user) { promptLogin(); return; } openPostForm('tourney'); }}
-          className="flex w-full items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-accent-300/[0.1]">
+          className="flex w-full items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/6 px-3 py-2.5 text-left transition-colors hover:bg-accent-300/10">
           <Icon name="edit" size={15} className="shrink-0 text-accent-300" />
           <span className="min-w-0 flex-1">
             <span className={`block text-xs font-bold ${ACCENT_INK}`}>이 대회 후기 쓰기</span>
@@ -913,7 +913,7 @@ function LiveClockPanel({ schedule, regInfo, onSeePrize, onDisplay }: {
   return (
     <section className={[
       'rounded-aura border p-2',
-      running ? 'border-emerald-500/30 bg-emerald-500/[0.04]' : 'border-border-default bg-surface-high/40',
+      running ? 'border-emerald-500/30 bg-emerald-500/4' : 'border-border-default bg-surface-high/40',
     ].join(' ')}>
       {/* 헤더: ● LIVE ────────────── 등록 마감 · LV8
           [D] '등록 마감' — 같은 화면(스크롤 위 InfoRow)과 이름을 맞춘다. 예전엔 여기만 '레지 마감'이었다. */}
@@ -937,7 +937,7 @@ function LiveClockPanel({ schedule, regInfo, onSeePrize, onDisplay }: {
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {/* ── 가운데(모바일 1행): LEVEL · 타이머 · BLINDS · NEXT ── */}
-        <div className="col-span-2 flex min-h-[7.5rem] flex-col items-center justify-center rounded-input border border-border-subtle bg-surface-low px-3 py-2.5 text-center sm:order-2 sm:col-span-1">
+        <div className="col-span-2 flex min-h-30 flex-col items-center justify-center rounded-input border border-border-subtle bg-surface-low px-3 py-2.5 text-center sm:order-2 sm:col-span-1">
           <p className="text-2xs font-bold leading-none tracking-wider text-ink-muted">
             {isBreak ? 'BREAK' : `LEVEL ${levelNo || '-'}`}
           </p>
@@ -953,7 +953,7 @@ function LiveClockPanel({ schedule, regInfo, onSeePrize, onDisplay }: {
         </div>
 
         {/* ── 왼쪽: 프라이즈 요약 + 전체보기 ── */}
-        <div className="flex min-h-[6.5rem] flex-col rounded-input border border-border-subtle bg-surface-low px-3 py-2.5 sm:order-1">
+        <div className="flex min-h-26 flex-col rounded-input border border-border-subtle bg-surface-low px-3 py-2.5 sm:order-1">
           <p className="text-2xs font-bold leading-none tracking-wider text-ink-muted">PRIZE</p>
           {/* §28: 프라이즈풀·GTD 는 상품 가격 정보라 표시 유지 */}
           <p className="mt-1.5 text-lg font-extrabold leading-none tabular-nums text-ink-primary">{prizeMainText(schedule)}</p>
@@ -967,7 +967,7 @@ function LiveClockPanel({ schedule, regInfo, onSeePrize, onDisplay }: {
         </div>
 
         {/* ── 오른쪽: PLAYERS · TOTAL CHIPS · AVG STACK · NEXT BREAK ── */}
-        <div className="flex min-h-[6.5rem] flex-col rounded-input border border-border-subtle bg-surface-low px-3 py-2.5 sm:order-3">
+        <div className="flex min-h-26 flex-col rounded-input border border-border-subtle bg-surface-low px-3 py-2.5 sm:order-3">
           <p className="text-2xs font-bold leading-none tracking-wider text-ink-muted">PLAYERS</p>
           <p className="mt-1.5 text-lg font-extrabold leading-none tabular-nums text-ink-primary">
             {ls ? `${ls.alive}/${ls.entries}` : '—'}
@@ -1081,7 +1081,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
       .finally(() => setSending(false));
   };
   return (
-    <div className="flex items-center gap-3 rounded-aura border border-sky-500/30 bg-sky-500/[0.05] p-2.5">
+    <div className="flex items-center gap-3 rounded-aura border border-sky-500/30 bg-sky-500/5 p-2.5">
       {qr && <img src={qr} alt="바인 요청 QR" width={72} height={72} decoding="async" className="shrink-0 rounded-input bg-white p-1" />}
       <div className="min-w-0 flex-1">
         {/* 🔴 2026-09-22 오너 — 제목을 `참가 신청` 한 마디로 줄였다(종전: '지금 매장에서 참가 신청 · 오늘 · 현장').
@@ -1210,7 +1210,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
   const fmtRes = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
   return (
-    <section className="rounded-aura border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent">
+    <section className="rounded-aura border border-accent-400/40 bg-linear-to-br/srgb from-accent-300/8 to-transparent">
       {/* 한 줄 요약 행(기본 접힘) — 아래 현장 신청 박스(`BuyinRequestBox`, 제목 '참가 신청')와
           역할이 헷갈려 손님이 잘못 누르는 사고가 있어 제목에 역할을 박아둔다.
           ⚠ 2026-09-22 에 그쪽 제목이 '지금 매장에서 참가 신청 · 오늘 · 현장' → '참가 신청' 로 짧아졌다.
@@ -1221,7 +1221,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           <span className="shrink-0 text-sm font-bold text-accent-300">참가 예약</span>
           {/* truncate → 줄바꿈(2026-09-12): 360px 에서 '미리 자리 잡아두기'가 87/102 로 잘렸다.
               예약 상태·실패 안내가 들어가는 자리라 잘라 숨기면 안 된다(§5-2). */}
-          <span className="min-w-0 flex-1 break-keep [overflow-wrap:anywhere] text-2xs leading-tight text-ink-muted">
+          <span className="min-w-0 flex-1 break-keep wrap-anywhere text-2xs leading-tight text-ink-muted">
             {mineErr !== null && mine === undefined ? '예약 정보를 불러오지 못했어요'
               : mine === undefined ? ' ' : mine ? `예약자: ${mine.displayName}` : isManager ? resSummary : '미리 자리 잡아두기'}
           </span>
@@ -1462,7 +1462,7 @@ function BlindStructure({ schedule, alwaysOpen = false }: { schedule: Schedule; 
               {levels.map((l, i) => {
                 if (l.kind === 'break') {
                   return (
-                    <tr key={i} className="bg-accent-300/[0.06] border-t border-border-subtle">
+                    <tr key={i} className="bg-accent-300/6 border-t border-border-subtle">
                       <td colSpan={4} className="py-1.5 px-2 text-center font-bold text-accent-300">BREAK · {l.minutes}분</td>
                     </tr>
                   );
@@ -1470,7 +1470,7 @@ function BlindStructure({ schedule, alwaysOpen = false }: { schedule: Schedule; 
                 levelNo += 1;
                 const isRegClose = levelNo === regClose;
                 return (
-                  <tr key={i} className={`border-t border-border-subtle ${isRegClose ? 'bg-amber-500/[0.08]' : ''}`}>
+                  <tr key={i} className={`border-t border-border-subtle ${isRegClose ? 'bg-amber-500/8' : ''}`}>
                     <td className="py-1.5 px-2 text-left font-bold text-ink-secondary">
                       {levelNo}{isRegClose && <span className="ml-1 text-[9px] font-bold text-amber-400">레지마감</span>}
                     </td>
@@ -1494,12 +1494,12 @@ function BlindStructure({ schedule, alwaysOpen = false }: { schedule: Schedule; 
 // dl > div > dt+dd 는 HTML5 유효 구조 — 행 단위 구분선을 주려면 래퍼가 필요하다.
 // ⚠ 2026-09-12: 값에서 **MarqueeText 를 걷어냈다.** 참가비·등록 마감·스타팅 칩을 읽으려고
 //   글자가 흘러 지나가기를 기다려야 했다(§6-2). 지금은 어절 단위로 자연 줄바꿈하고 행이 늘어난다 —
-//   잘림도 없고 기다림도 없다. 띄어쓰기 없는 초장문 토큰만 [overflow-wrap:anywhere] 로 예외 절단.
+//   잘림도 없고 기다림도 없다. 띄어쓰기 없는 초장문 토큰만 wrap-anywhere 로 예외 절단.
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-start gap-3 py-1.5">
       <dt className="text-2xs leading-relaxed text-ink-muted">{label}</dt>
-      <dd className="min-w-0 break-keep [overflow-wrap:anywhere] text-right text-xs font-semibold leading-relaxed tabular-nums text-ink-primary">
+      <dd className="min-w-0 break-keep wrap-anywhere text-right text-xs font-semibold leading-relaxed tabular-nums text-ink-primary">
         {value}
       </dd>
     </div>
@@ -1515,10 +1515,10 @@ function SummaryCell({ label, value, badge, accent = false }: {
   label: string; value: string; badge?: React.ReactNode; accent?: boolean;
 }) {
   return (
-    <div className="flex min-h-[3.5rem] min-w-0 flex-col justify-center gap-0.5 px-3 py-2">
+    <div className="flex min-h-14 min-w-0 flex-col justify-center gap-0.5 px-3 py-2">
       <span className="text-2xs leading-none text-ink-muted">{label}</span>
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className={`min-w-0 flex-1 break-keep [overflow-wrap:anywhere] text-sm font-bold leading-snug tabular-nums ${accent ? 'text-gold-300' : 'text-ink-primary'}`}>
+        <span className={`min-w-0 flex-1 break-keep wrap-anywhere text-sm font-bold leading-snug tabular-nums ${accent ? 'text-gold-300' : 'text-ink-primary'}`}>
           {value}
         </span>
         {badge}

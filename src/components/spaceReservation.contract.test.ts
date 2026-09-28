@@ -64,7 +64,7 @@ describe('②③ 목록 스켈레톤은 개수와 높이를 둘 다 실제와 �
     const m = APP.match(/function ScheduleSkeletonGrid[\s\S]{0,2600}?\n}/);
     expect(m, 'ScheduleSkeletonGrid 가 사라졌다').not.toBeNull();
     expect(m![0], '행이 내용 높이만 차지한다 — 실제 카드 높이(--card-h-list)를 예약해야 한다')
-      .toMatch(/min-h-\[var\(--card-h-list\)\]/);
+      .toMatch(/min-h-\(--card-h-list\)/);
   });
 
   it('일정 탐색 스켈레톤 개수가 고정이 아니라 지난 방문 기준이다', () => {

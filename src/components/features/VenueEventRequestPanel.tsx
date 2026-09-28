@@ -218,7 +218,7 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
                   <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">
                     {r.kind === 'campaign' ? '신청' : '제안'}
                   </span>
-                  <span className="min-w-[4rem] flex-1 break-words text-xs font-bold text-ink-primary">{r.title}</span>
+                  <span className="min-w-16 flex-1 wrap-break-word text-xs font-bold text-ink-primary">{r.title}</span>
                   <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{r.createdAt.slice(0, 10)}</span>
                 </div>
                 {r.kind === 'campaign' && (
@@ -232,7 +232,7 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
                     승인됐습니다 — 운영자가 7일 이내에 이벤트를 엽니다.
                   </p>
                 )}
-                {r.adminNote && <p className="mt-0.5 break-words text-2xs leading-relaxed text-ink-muted">운영자: {r.adminNote}</p>}
+                {r.adminNote && <p className="mt-0.5 wrap-break-word text-2xs leading-relaxed text-ink-muted">운영자: {r.adminNote}</p>}
               </li>
             );
           })}

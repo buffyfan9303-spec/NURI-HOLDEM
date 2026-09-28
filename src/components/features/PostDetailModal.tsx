@@ -567,7 +567,7 @@ export default function PostDetailModal({
                ⚠ PC 는 종전과 같다(원래도 `sm:text-2xl`). 즉 이 변경은 모바일 한 단계뿐이다. */
             /* POST-DETAIL-DENSITY(2026-09-24 오너 "글씨 크기 줄여 한 화면에 더"): 모바일 25.5 → 20px, 본문 15px 과 비 1.33.
                PC 는 lg:text-2xl 그대로. 행간 snug(1.375) 유지. */
-            <h3 data-pd-title className="text-[20px] font-bold text-ink-primary leading-snug tracking-tight break-words lg:text-2xl">{post.title}</h3>
+            <h3 data-pd-title className="text-[20px] font-bold text-ink-primary leading-snug tracking-tight wrap-break-word lg:text-2xl lg:leading-8">{post.title}</h3>
           )}
         </div>
         )}
@@ -582,7 +582,7 @@ export default function PostDetailModal({
             제목→본문 84.8px 는 실측 과다 — pb-3→pb-2(본문 mt-4→mt-3 과 합쳐 −13px). line-height 는 안 건드린다. */}
         {!hidden && (
         <header className="mt-2 flex items-center gap-2.5 pb-2">
-          {/* 2026-08-30: 여기 있던 `!object-contain` 땜질을 제거했다 — Avatar 의 기본값이 contain 이 됐다.
+          {/* 2026-08-30: 여기 있던 `object-contain!` 땜질을 제거했다 — Avatar 의 기본값이 contain 이 됐다.
               (근거 실측은 유지: 이 글 작성자 아바타가 256×151 로고인데 object-cover 가 가로 59% 만 남겨
                원 안에 글자 토막만 보였다. 정사각 사진에서는 cover 와 결과가 동일해 회귀가 없다.)
               꽉 채우는 크롭이 필요해지면 `fit="cover"` 로 명시할 것 — ! 유틸을 다시 붙이지 말 것. */}
@@ -599,11 +599,11 @@ export default function PostDetailModal({
                 실제로 접히는 일이 거의 없지만, 긴 닉네임 방어로 남긴다. */}
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
               {/* 닉네임 색 — 텍스트용 --tier-*(4.5:1 계약). 색이 없으면 종전 ink-primary 그대로다. */}
-              {/* truncate → break-words: 200% 확대 실측에서 이 이름만 `59px` 이 말줄임으로 잘렸다
+              {/* truncate → wrap-break-word: 200% 확대 실측에서 이 이름만 `59px` 이 말줄임으로 잘렸다
                   (§10: 말줄임으로 감춘 화면은 합격이 아니다). 줄바꿈을 허용하면 잘리는 대신 다음 줄로 흐른다.
                   ⚠ 옛 주석의 '이름이 ♣.. 로 사라지던' 문제는 이 줄의 truncate 가 아니라 flex-wrap+min-w-0 이
                   막고 있다 — 그 보호는 그대로다. */}
-              <span data-pd-author className="max-w-full break-words text-sm font-semibold text-ink-primary"
+              <span data-pd-author className="max-w-full wrap-break-word text-sm font-semibold text-ink-primary"
                     style={nickColorVar(authorNickToken) ? { color: tierCss(nickColorVar(authorNickToken)!) } : undefined}>{authorMark}{post.userName}</span>
               <TitleChip points={titlePts(post.userId)} />
             </div>
@@ -713,7 +713,7 @@ export default function PostDetailModal({
 
         {/* 신고 누적 자동 숨김 안내 — 배너는 blinded 면 항상(운영자에겐 해제 버튼), 아래 본문·사진·댓글은 hidden 이면 미렌더 */}
         {post.blinded && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-card border border-danger/40 bg-danger/[0.06] px-3 py-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-card border border-danger/40 bg-danger/6 px-3 py-2">
             <span className="inline-flex items-center gap-1 text-2xs font-bold text-danger"><Icon name="ban" size={12} className="shrink-0" />신고 누적으로 숨김 처리된 게시글입니다</span>
             {user?.role === 'admin' && (
               <button type="button"
@@ -738,7 +738,7 @@ export default function PostDetailModal({
                      본문 밑에 광원·입자·노이즈를 넣지 않는다 — 배경은 창 지면 그대로다.
                      P2(2026-09-21): 모바일 본문 17→16px(text-base 는 루트 17px 기준이라 rem 대신
                      고정 px). PC 는 lg:text-base 로 기존 17px 그대로 복원한다. */
-                  className="relative text-[15px] leading-[1.7] text-ink-primary whitespace-pre-wrap break-words lg:text-base">
+                  className="relative text-[15px] leading-[1.7] text-ink-primary whitespace-pre-wrap wrap-break-word lg:text-base lg:leading-6">
                   {/* rose-500 은 팔레트 밖 기본 Tailwind 색이었다 — 토큰(danger)으로 교체.
                       상시 색이 아니라 250ms 만에 사라지는 피드백이라 색 예산에 잡히지 않는다. */}
                   {heartKey > 0 && (
@@ -759,7 +759,7 @@ export default function PostDetailModal({
                     <li key={url}>
                       {imgErr[url] ? (
                         // 실패 타일 — 자리(비율)는 그대로 두어 레이아웃이 튀지 않게 하고, 무슨 일인지 글로 말한다.
-                        <div className={`flex flex-col items-center justify-center gap-1 rounded-card border border-dashed border-border-default bg-surface-high px-2 text-center text-2xs text-ink-muted dark:bg-surface-low ${images.length === 1 ? 'aspect-[4/3]' : 'aspect-square'}`}>
+                        <div className={`flex flex-col items-center justify-center gap-1 rounded-card border border-dashed border-border-default bg-surface-high px-2 text-center text-2xs text-ink-muted dark:bg-surface-low ${images.length === 1 ? 'aspect-4/3' : 'aspect-square'}`}>
                           <Icon name="image" size={18} strokeWidth={1.6} className="shrink-0" />
                           <span>사진을 불러오지 못했어요</span>
                           <button type="button"
@@ -771,7 +771,7 @@ export default function PostDetailModal({
                       ) : (
                       <button type="button" onClick={() => { if (performance.now() - openedAtRef.current < 400) return; setZoomIdx(i); }}
                         aria-label={`첨부 사진 ${i + 1} 확대 보기`}
-                        className={`block w-full overflow-hidden rounded-card border border-border-strong bg-surface-high active:opacity-80 ${images.length === 1 ? 'aspect-[4/3]' : 'aspect-square'}`}>
+                        className={`block w-full overflow-hidden rounded-card border border-border-strong bg-surface-high active:opacity-80 ${images.length === 1 ? 'aspect-4/3' : 'aspect-square'}`}>
                         {/* 한 장일 때는 **자르지 않는다**(object-contain): 세로 포스터·안내문은 글이 이미지 안에 있어
                             4:3 크롭이 문장을 통째로 잘라낸다(§5-3). 자리는 4:3 으로 예약해 CLS 를 막고,
                             남는 여백은 사진 면(bg)으로 채운다. 여러 장 격자는 cover 로 정렬을 맞추되,
@@ -1067,7 +1067,7 @@ export default function PostDetailModal({
                       overflow-hidden/whitespace-nowrap/text-ellipsis). PC(lg)는 기존 12.75px·
                       두 줄 line-clamp·break-words 그대로 복원한다. line-clamp 를 lg: 로만 걸어
                       display:-webkit-box 가 모바일에 남지 않게 한다(Tailwind line-clamp 함정). */}
-                  <span data-pd-nav-text className={['block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] leading-snug lg:whitespace-normal lg:break-words lg:text-xs lg:line-clamp-2', enabled && side.post ? 'text-ink-primary' : 'text-ink-muted'].join(' ')}>{reason}</span>
+                  <span data-pd-nav-text className={['block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] leading-snug lg:whitespace-normal lg:wrap-break-word lg:text-xs lg:leading-4 lg:line-clamp-2', enabled && side.post ? 'text-ink-primary' : 'text-ink-muted'].join(' ')}>{reason}</span>
                 </span>
               </button>
             );

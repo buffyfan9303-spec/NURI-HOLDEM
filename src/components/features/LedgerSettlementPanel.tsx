@@ -190,7 +190,7 @@ function Report({ r }: { r: SettlementReport }) {
           <Row label="할인이 없었다면 현금성 매출" value={man(t.revenue + t.discount.cashTotal)} />
         </dl>
         {t.removed.count > 0 && (
-          <p className="mt-3 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2 text-2xs text-ink-secondary">
+          <p className="mt-3 rounded-input border border-amber-500/40 bg-amber-500/8 px-3 py-2 text-2xs text-ink-secondary">
             정산에서 제외된 행 <b className="tabular-nums">{t.removed.count}건</b>
             {' '}(바인 {t.removed.count}회 · 엔트리 {ent(t.removed.entries)} · 매출 {man(t.removed.revenue)})은 위 합계에 들어 있지 않습니다.
           </p>
@@ -228,7 +228,7 @@ function Report({ r }: { r: SettlementReport }) {
       {r.games.length > 1 && (
         <Card title="게임별 내역" icon="layers" note="'바인'은 앉은 횟수, '엔트리'는 금액 기준입니다. 합계만 보면 어느 게임이 기준에 못 미쳤는지 알 수 없습니다.">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[36rem] text-left text-xs">
+            <table className="w-full min-w-xl text-left text-xs">
               <thead>
                 <tr className="border-b border-border-subtle text-2xs text-ink-muted">
                   <th className="py-1.5 pr-2 font-semibold">게임</th>
@@ -264,8 +264,8 @@ function Report({ r }: { r: SettlementReport }) {
 
       {/* ── ⑦ 손님별 전체 ── */}
       <Card title="손님별 정산" icon="list-ordered" note="머니인 많은 순. 명단에만 있고 바인이 없는 손님도 인원에는 들어갑니다.">
-        <div className="max-h-[28rem] overflow-y-auto overflow-x-auto">
-          <table className="w-full min-w-[32rem] text-left text-xs">
+        <div className="max-h-112 overflow-y-auto overflow-x-auto">
+          <table className="w-full min-w-lg text-left text-xs">
             <thead className="sticky top-0 z-10 bg-surface-mid">
               <tr className="border-b border-border-subtle text-2xs text-ink-muted">
                 <th className="py-1.5 pr-2 font-semibold">손님</th>

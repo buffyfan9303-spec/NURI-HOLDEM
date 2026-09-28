@@ -144,7 +144,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
       )}
 
       {writing && (
-        <div className="space-y-2 rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3">
+        <div className="space-y-2 rounded-card border border-accent-400/30 bg-accent-300/4 p-3">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-ink-secondary">별점</span>
             <Stars value={rating} size={22} onPick={setRating} />
@@ -182,7 +182,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
               </div>
               {r.content && <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink-secondary">{r.content}</p>}
               {r.ownerReply && (
-                <div className="mt-1.5 rounded-input border border-accent-400/25 bg-accent-300/[0.05] p-2">
+                <div className="mt-1.5 rounded-input border border-accent-400/25 bg-accent-300/5 p-2">
                   <p className="text-2xs font-bold text-accent-300">사장님 답글</p>
                   <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-primary">{r.ownerReply}</p>
                 </div>

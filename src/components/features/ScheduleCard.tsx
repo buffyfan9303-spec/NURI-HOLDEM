@@ -240,7 +240,7 @@ function VenueLink({
     ? `block min-w-0 max-w-full ${sizeCls} text-ink-muted text-left`
     : `inline-flex min-w-0 items-baseline gap-0.5 ${sizeCls} text-ink-muted max-w-full text-left`;
   const nameCls = wrap
-    ? 'break-keep [overflow-wrap:anywhere] font-semibold text-ink-secondary'
+    ? 'break-keep wrap-anywhere font-semibold text-ink-secondary'
     : 'min-w-0 truncate font-semibold text-ink-secondary';
   // flex 가 아니면 gap 이 안 먹는다 — 구분점 좌우 여백을 padding 으로 준다(flex 쪽은 종전 gap 그대로).
   const dotCls = wrap ? 'px-0.5 text-ink-muted' : 'shrink-0 text-ink-muted';
@@ -382,15 +382,15 @@ const GRADE_BADGE: Record<string, string> = { daily: '데일리', satellite: '�
 
 /** 지표 한 칸 — 위에 작은 라벨 / 아래에 값. 3칸이 **한 줄에 서야 하므로** 이 칸은 자기 내용만큼만
  *  차지하고(basis auto), 폭이 모자라면 `min-w-0` 으로 줄어든다. 줄어들면 글자가 접힐 뿐 잘리지 않는다
- *  — `[overflow-wrap:anywhere]` 가 그 탈출구다(§28: 막으려는 것은 '금액이 안 보이는 것'이다).
+ *  — `wrap-anywhere` 가 그 탈출구다(§28: 막으려는 것은 '금액이 안 보이는 것'이다).
  *  ⚠ `flex-1`(균등 3등분)로 하지 마라. 320px 에서 칸이 44px 인데 `1,000만` 이 47px 라 반드시 접힌다. */
 function Metric({ label, value, tone, title }: { label: string; value: string; tone?: string;
   /** 값의 원문(마우스 오버·보조기기용). 참가비 `10T` 는 이 저장소의 단위라 **첫 방문자가 확인할 길**이 필요하다. */
   title?: string }) {
   return (
-    <div className="min-w-0 sm:min-w-[4.5rem]" title={title}>
-      <div className="text-[8.5px] font-bold uppercase leading-tight text-ink-muted [overflow-wrap:anywhere] min-[360px]:text-[9px]">{label}</div>
-      <div className={`text-[11px] font-extrabold leading-tight tracking-tight tabular-nums [overflow-wrap:anywhere] min-[360px]:text-xs ${tone ?? 'text-ink-primary'}`}>{value}</div>
+    <div className="min-w-0 sm:min-w-18" title={title}>
+      <div className="text-[8.5px] font-bold uppercase leading-tight text-ink-muted wrap-anywhere min-[360px]:text-[9px]">{label}</div>
+      <div className={`text-[11px] font-extrabold leading-tight tracking-tight tabular-nums wrap-anywhere min-[360px]:text-xs min-[360px]:leading-4 ${tone ?? 'text-ink-primary'}`}>{value}</div>
     </div>
   );
 }
@@ -465,7 +465,7 @@ function ListCard({
         'flex flex-wrap items-center gap-x-1 gap-y-1 cursor-pointer px-3 py-1.5 hover:bg-surface-high/50 active:bg-surface-high',
         'min-[360px]:gap-x-2',
         // 프리미엄(TOP)은 행 틴트 + 매장 줄 마커로 차별(박스 글로우 제거 — 목록 결 유지)
-        schedule.isPremium ? 'bg-accent-300/[0.05]' : '',
+        schedule.isPremium ? 'bg-accent-300/5' : '',
       ].join(' ')}
     >
       {/* ① 매장 로고 — 정사각 타일. 줄마다 같은 자리·같은 크기라 눈이 세로로 훑기 좋다.
@@ -487,10 +487,10 @@ function ListCard({
       </div>
 
       {/* ② 가운데 덩어리 — 매장 / 대회명 / 3칸 지표. 세 줄은 여기 **안에서만** 쌓인다.
-          ⚠ `basis-[6rem]`(=102px @100%, 204px @200%)가 줄바꿈 문턱이다. flex 는 **줄이기 전의
+          ⚠ `basis-24`(=102px @100%, 204px @200%)가 줄바꿈 문턱이다. flex 는 **줄이기 전의
             가상 크기**로 줄을 가르므로, 확대되면 이 덩어리가 커져 시각 덩어리를 아랫줄로 민다.
           ⚠ `min-w-0` 이 없으면 안쪽 긴 글자가 이 덩어리를 밀어 카드가 가로로 넘친다. */}
-      <div className="min-w-0 grow basis-[6rem]">
+      <div className="min-w-0 grow basis-24">
       {/* ② 1행 — 매장 · 지역 (+ TOP · 별점 · 거리 · 예약 · ♥)
           🔴 목업에는 매장명만 그려져 있지만 **지우지 않는다.** TOP(유료 노출)·별점·거리·예약·♥ 는
             지금 카드가 가진 기능이고, 3칸 지표 줄이 옛 메타 줄의 자리를 가져갔으므로 이 줄로 옮긴다.
@@ -552,7 +552,7 @@ function ListCard({
           ⚠ 종전 주석의 "1줄로 강제하지 마라"(2026-09-12)는 **입력 상한이 없던 시절**의 판단이다.
             지금은 12자 상한이 생겨 '한 줄에 다 보인다' 가 기본이고, ellipsis 는 legacy 전용 안전망이다.
           ⚠ grade 배지는 여기서 뺐다 — 아래 우측 덩어리(하트가 있던 자리)로 옮겼다. */}
-      <h3 className="min-w-0 line-clamp-1 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-xs"
+      <h3 className="min-w-0 line-clamp-1 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary wrap-anywhere min-[360px]:text-xs min-[360px]:leading-4"
         title={schedule.title}>
         {titleWithoutGtd(schedule.title, !!prize)}
       </h3>
@@ -575,7 +575,7 @@ function ListCard({
           //   (그 '한 줄' 은 `e2e/schedule-card-fit.spec.ts` 가 확대 100% 에서만 단언한다).
           // ⚠ `gap-y-0.5` 로 접힌 줄 사이만 띄운다 — 한 줄일 때는 아무 영향이 없다.
           'flex min-w-0 flex-wrap items-start gap-y-0.5 divide-x divide-border-subtle',
-          '[&>*]:px-1 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0 min-[360px]:[&>*]:px-1.5',
+          '*:px-1 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0 min-[360px]:*:px-1.5',
         ].join(' ')}
       >
         {/* 상금 — 값에만 색을 준다(지금 GTD 가 쓰던 gold-300 그대로).
@@ -641,7 +641,7 @@ function ListCard({
         <p data-testid="schedule-start-group"
           className="col-start-1 row-start-2 flex min-w-0 flex-col items-end leading-tight">
           <span data-testid="schedule-start-time"
-            className="text-[0.875rem] font-extrabold leading-tight tracking-tight tabular-nums text-ink-primary [overflow-wrap:anywhere] min-[360px]:text-base">
+            className="text-[0.875rem] font-extrabold leading-tight tracking-tight tabular-nums text-ink-primary wrap-anywhere min-[360px]:text-base min-[360px]:leading-6">
             {schedule.startTime || '—'}
           </span>
           {/* 🔴 2026-09-22(2차 오너) — 게임이 시작돼 필드 숫자가 있으면 시각 아래에 `생존/엔트리`.
@@ -701,7 +701,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
         //   그리드 스크롤 40회 잰크 합 2353ms → transform 만 남기면 1373ms(-42%). 모바일은 hover 가
         //   없어 영향 0. §20.4 #3 도 색 계열 트랜지션은 ≤0.15s 로 제한하므로 300ms 는 원래 위반이었다.
         //   들어올림(transform)은 그대로 — 마우스 유저의 손맛은 잃지 않는다.
-        'flex flex-col overflow-hidden rounded-aura border transition-transform duration-[var(--dur-panel)] ease-out active:duration-[var(--dur-fast)]',
+        'flex flex-col overflow-hidden rounded-aura border transition-transform duration-(--dur-panel) ease-out active:duration-(--dur-fast)',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
           ? 'border-accent-400 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] bg-surface-low'
@@ -717,7 +717,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
           posterUrl={schedule.posterUrl}
           posterColor={schedule.posterColor}
           title={schedule.title}
-          className="aspect-[3/4] w-full"
+          className="aspect-3/4 w-full"
           priority={priority}
           vtName={vtActive ? 'vt-poster' : undefined}
         />
@@ -765,7 +765,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
           // min-h-[2.5em] — 그리드 2열에서 한 카드 제목이 2줄이고 옆 카드가 1줄이면, 본문이 flex-col 로
           // 위에서부터 쌓이는 탓에 아래 매장·참가비·메타 행이 카드끼리 한 줄(18.59px)만큼 어긋났다.
           // 2줄 자리를 항상 예약해 아래 행들이 카드 사이에서 같은 y 에 오게 한다(2.5em = 2 × leading-tight 1.25).
-          'min-h-[2.5em] text-sm font-bold tracking-tight leading-tight line-clamp-2 break-keep [overflow-wrap:anywhere]',
+          'min-h-[2.5em] text-sm font-bold tracking-tight leading-tight line-clamp-2 break-keep wrap-anywhere',
           // accent-300 은 다크 카드 위 3.71:1(AA 미달) — 액센트 '텍스트' 토큰인 200 으로(8.18 / 6.34)
           schedule.isPremium ? 'text-accent-200' : 'text-ink-primary',
         ].join(' ')}>
@@ -871,7 +871,7 @@ function TimetableCard({
         // 오른쪽 칸(auto)은 안쪽 w-[…] 로 고정 — 가운데(1fr)가 남는 폭을 전부 갖고 세로선 x 는 카드마다 같다.
         // md~: 가운데 상한 17rem + justify-start — 넓은 카드에서 금액 칸이 카드 끝으로 떨어지지 않는다(HOME-LAYOUT-STRETCH).
         'grid-cols-[auto_minmax(0,1fr)_auto] md:grid-cols-[auto_minmax(0,17rem)_auto] md:justify-start',
-        schedule.isPremium ? 'bg-accent-300/[0.05]' : '',
+        schedule.isPremium ? 'bg-accent-300/5' : '',
       ].join(' ')}
     >
       <PosterArea
@@ -891,7 +891,7 @@ function TimetableCard({
         {/* 🔴 2026-09-25 FULL-ERROR-SWEEP-A ① — 제목을 **터치**하면 매장 페이지가 열리던 결함(마우스는 정상). 원인은 둘이다
             (scratchpad sweepA/exp1~3 실측 · CDP Input.dispatchTouchEvent 반경 1/4/8 · 390/360 · 홈·일정 탐색):
             ① 매장 링크의 `tap-up-24`(위로 8px 의사요소)가 제목 아래 5px 를 덮었다 — 여기선 제목이 매장 줄 **위**다(ListCard 와 반대).
-               → 의사요소 대신 실제 박스: 매장 줄(row)에 `py-[3.25px]`, 버튼에 `-my-[3.25px] py-[3.25px]` → 17.53 + 6.5 = 24.03px(AA 24).
+               → 의사요소 대신 실제 박스: 매장 줄(row)에 `py-[3.25px]`, 버튼에 `my-[-3.25px] py-[3.25px]` → 17.53 + 6.5 = 24.03px(AA 24).
                  버튼 박스가 줄의 padding 박스에 정확히 들어가 제목·③줄과 겹치지도, 줄 밖으로 넘치지도 않는다(넘치면 잘림 게이트가 잡는다).
             ② Chromium 터치 보정은 터치 사각형(최소 20px)에 걸린 '응답 요소' 중 가까운 것으로 **touchstart 부터** 옮긴다.
                응답 요소 = 네이티브 button/link · focusable · :hover/:active 규칙이 있는 요소이고, **다른 응답 요소의 조상은 뺀다**.
@@ -899,7 +899,7 @@ function TimetableCard({
                (exp2 실측: 제목 y=0.8 → 매장 페이지). 그래서 제목·③줄·금액칸·로고에 **값이 안 바뀌는 `active:` 클래스**를 하나씩 둔다.
                `hover:` 는 tailwind future.hoverOnlyWhenSupported 라 터치 기기엔 규칙이 없다. 장식이 아니라 **터치 보정 후보 표시**다 — 지우면 재발한다.
                게이트: e2e/schedule-card-touch.spec.ts(터치, 수정 전 FAIL) · e2e/schedule-card-fit.spec.ts(마우스 · AA 24). */}
-        <h3 className="min-w-0 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary [overflow-wrap:anywhere] active:text-ink-primary"
+        <h3 className="min-w-0 break-keep text-[0.8125rem] font-bold leading-tight tracking-tight text-ink-primary wrap-anywhere active:text-ink-primary"
           title={schedule.title}>
           {titleWithoutGtd(schedule.title, !!gtd)}
         </h3>
@@ -909,7 +909,7 @@ function TimetableCard({
             region={schedule.region}
             wrap
             sizeCls="text-[0.6875rem]"
-            hitCls="relative z-10 -mt-[3.25px] pt-[3.25px] -mb-[4.25px] pb-[4.25px]"
+            hitCls="relative z-10 mt-[-3.25px] pt-[3.25px] mb-[-4.25px] pb-[4.25px]"
             onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
           />
           {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
@@ -926,7 +926,7 @@ function TimetableCard({
               폰트 렌더링 편차 안전폭(+12px)을 두고 min-[450px] 를 기준으로 한다 — 그 아래(휴대폰 전체)는 항상 '마감',
               그 위(태블릿·PC, md: 17rem 상한)는 '레지마감'. 스크린리더는 폭과 무관하게 항상 '레지마감'을 듣는다(부모 aria-label, 자식은 aria-hidden — schedule-money 와 같은 정본). */}
         <p data-testid="schedule-start-group"
-          className="min-w-0 break-keep text-[0.6875rem] leading-tight text-ink-secondary [overflow-wrap:anywhere] active:text-ink-secondary">
+          className="min-w-0 break-keep text-[0.6875rem] leading-tight text-ink-secondary wrap-anywhere active:text-ink-secondary">
           <span data-testid="schedule-start-time" className="font-extrabold tabular-nums text-ink-primary">{schedule.startTime || '—'}</span>
           {' 시작'}
           {reg && <>{dot}<span data-testid="schedule-reg-close" aria-label={`레지마감 ${reg}`}><span aria-hidden><span className="hidden min-[450px]:inline">레지</span>마감 {reg}</span></span></>}
@@ -944,12 +944,12 @@ function TimetableCard({
 
       {/* 오른쪽 고정 칸 — 가는 세로선 + [보장 금액 | 데일리] / 참가비. 라벨 글자 없음(오너 E안).
           ⚠ `data-metrics` 는 계측 손잡이다(schedule-card-fit 이 이 안을 전부 '값' 으로 보고 잘림 0 을 단언한다). 지우지 마라.
-          ⚠ w-[5.125rem] 가 세로선 위치의 정본이다 — 줄마다 같아야 한다. 실측(schedrow/measure.cjs): `9억 9,999만` 74.3px / 칸 안쪽 77.6px.
+          ⚠ w-20.5 가 세로선 위치의 정본이다 — 줄마다 같아야 한다. 실측(schedrow/measure.cjs): `9억 9,999만` 74.3px / 칸 안쪽 77.6px.
             글자·폭·gap 을 바꾸면 360 에서 12자 제목(139.1px)과 이 금액이 둘 다 한 줄인지 다시 재라. */}
       {/* 라벨 글자가 없으므로 보조기술에는 그룹 이름으로 무슨 값인지 말해 준다(sr-only 1×1 스팬은 home-flow-fit 잘림 게이트에 걸린다). */}
       <div data-metrics data-testid="schedule-money" role="group"
         aria-label={`${gtd ? `보장 상금 ${gtd}` : `${kind.text}(보장 없음)`}, 참가비 ${buyInText(schedule.buyIn?.amount)}`}
-        className="flex w-[5.125rem] min-w-0 flex-col items-end justify-center gap-y-[3px] self-stretch border-l border-border-subtle pl-2 text-right active:text-right">
+        className="flex w-20.5 min-w-0 flex-col items-end justify-center gap-y-[3px] self-stretch border-l border-border-subtle pl-2 text-right active:text-right">
         {gtd ? (
           <span data-testid="schedule-prize" className={`break-keep ${gtd.includes('억') ? 'text-[0.75rem]' : 'text-[0.8125rem]'} font-extrabold
  leading-tight tracking-tight tabular-nums text-gold-300`}>{gtd}</span>
@@ -959,7 +959,7 @@ function TimetableCard({
         {/* 참가비 — §28 상품 가격 정보. T 로 정확히 떨어지는 금액만 T, 나머지는 원 그대로(buyInText 정본). */}
         <span data-testid="schedule-buyin"
           title={schedule.buyIn?.amount ? `참가비 ${schedule.buyIn.amount.toLocaleString()}원` : undefined}
-          className="text-[0.75rem] font-bold leading-tight tabular-nums text-ink-secondary [overflow-wrap:anywhere]">
+          className="text-[0.75rem] font-bold leading-tight tabular-nums text-ink-secondary wrap-anywhere">
           {buyInText(schedule.buyIn?.amount)}
         </span>
       </div>

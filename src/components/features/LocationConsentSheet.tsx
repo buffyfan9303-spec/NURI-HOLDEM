@@ -39,7 +39,7 @@ export default function LocationConsentSheetView({ onChoose }: { onChoose: (v: b
       <Modal open={open && !terms && !blocked} onClose={() => choose(null)} variant="sheet" maxWidth="sm" title="출석 위치 확인 동의(선택)" layer="gate">
         <div data-testid="location-consent-sheet" className="space-y-4 px-4 pb-5 pt-1">
           <div className="flex items-center gap-3 pt-1">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-300/[0.12] text-accent-300"><Icon name="map-pin" size={22} /></div>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-300/12 text-accent-300"><Icon name="map-pin" size={22} /></div>
             <p className="text-sm font-bold text-ink-primary">매장 안에 있는지 위치로 확인해 출석을 처리할까요?</p>
           </div>
           <ul className="space-y-1.5">

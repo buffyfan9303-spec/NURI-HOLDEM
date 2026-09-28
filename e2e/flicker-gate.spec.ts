@@ -238,7 +238,7 @@ const MENU_TRACKER = () => {
     const menuVis = vis(mb);
     const live = menuVis && !mb!.closest('[inert]');
     let dest = false;
-    if (M.dest === 'me') dest = [...document.querySelectorAll('.fixed.inset-0.bg-surface-base')].some((e) => vis(e) && e.className.includes('z-[60]'));
+    if (M.dest === 'me') dest = [...document.querySelectorAll('.fixed.inset-0.bg-surface-base')].some((e) => vis(e) && e.classList.contains('z-60'));
     else if (M.dest === 'notif') dest = vis(document.querySelector('[role=dialog][aria-label="알림"]'));
     else if (M.dest === 'tools') dest = vis(document.querySelector('[data-testid="tools-featured"]'));
     return { menuVis, live, dest };

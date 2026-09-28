@@ -12,10 +12,10 @@
 //   '전송'이라 부르는 3경로는 전부 **발급 매장으로의 회수**다: ① 바로 전송 ② 매장 QR ③ 매장 업주 전화번호.
 //   findUserByPhone 은 '받는 업주 확인'이지 유저 간 전송이 아니다 — 헷갈리면 관광진흥법 지침 위반이 된다.
 //
-// ⚠ 전면 오버레이(RedeemSheet z-[70] · 차감 완료 z-[80])는 portal 을 쓰지 않는다.
+// ⚠ 전면 오버레이(RedeemSheet z-70 · 차감 완료 z-[80])는 portal 을 쓰지 않는다.
 //   시트 안에서 쓰일 때 Modal 의 포커스 트랩이 '내용 바깥'의 포커스를 도로 뺏어가므로(전화번호 입력 불가),
 //   DOM 상 Modal 내용 안에 있어야 한다. fixed 는 조상에 transform 이 남지 않는 한 뷰포트 기준이고
-//   (spring.ts 가 복귀 시 인라인 transform 을 지운다), Modal 껍데기가 이미 z-[60] 이라 탭바 위로 올라간다.
+//   (spring.ts 가 복귀 시 인라인 transform 을 지운다), Modal 껍데기가 이미 z-60 이라 탭바 위로 올라간다.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
@@ -182,7 +182,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
             업주는 왜 안 되는지 모른다. 인증 전에 이미 받아 둔 이용권도 사용만 막히므로
             (2026-08-27 게이트 도입 이전 발급분이 실제로 남아 있다) 여기서 미리 짚는다. */}
         {!loading && !user?.verified && active.length > 0 && (
-          <div className="mb-2 rounded-aura border border-danger/40 bg-danger/[0.08] p-3">
+          <div className="mb-2 rounded-aura border border-danger/40 bg-danger/8 p-3">
             <p className="flex items-start gap-1.5 text-xs font-bold text-danger-deep dark:text-danger-light">
               <Icon name="alert" size={14} className="mt-0.5 shrink-0" />
               본인인증을 완료해야 이용권을 사용할 수 있어요
@@ -209,7 +209,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
             {/* V04 — 이미 목록을 한 번 본 뒤의 재조회 실패는 지금 있는 장수를 지우지 않는다.
                 LoadErrorCard 로 통째로 바꾸면 방금 보던(정상 조회된) 장수까지 사라진 것처럼 보인다. */}
             {err && (
-              <div role="alert" className="mb-2 flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2">
+              <div role="alert" className="mb-2 flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/8 px-3 py-2">
                 <p className="text-2xs font-semibold text-ink-secondary">방금 목록을 새로 불러오지 못했어요. 아래는 마지막으로 확인된 내용입니다.</p>
                 <button type="button" onClick={load} className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-1 text-2xs font-bold text-ink-primary">다시 시도</button>
               </div>
@@ -227,7 +227,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
               const head = (
                 <>
                   <span className="mt-[7px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent-300" />
-                  <span className="min-w-0 flex-1 break-keep text-left [overflow-wrap:anywhere]">{g.label}</span>
+                  <span className="min-w-0 flex-1 break-keep text-left wrap-anywhere">{g.label}</span>
                   <span className="mt-0.5 shrink-0 text-2xs font-bold tabular-nums text-accent-300">{g.count}T</span>
                 </>
               );
@@ -235,10 +235,10 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
                 <div key={g.vid} className="card-glow-hover rounded-aura border card-aura p-3">
                   {onVenue
                     ? <button type="button" onClick={() => onVenue(g.vid)}
-                        className={`${GROUP_HEAD_CLS} w-full rounded-input transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50`}>{head}</button>
+                        className={`${GROUP_HEAD_CLS} w-full rounded-input transition-colors duration-(--dur-fast) hover:bg-surface-high/50`}>{head}</button>
                     : <p className={GROUP_HEAD_CLS}>{head}</p>}
                   <ul className="space-y-1.5">{g.stacks.map((s) => (
-                    <li key={s.title} className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.05] px-3 py-2 transition-colors duration-[var(--dur-fast)] hover:bg-accent-300/[0.10] hover:border-accent-400/60">
+                    <li key={s.title} className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/5 px-3 py-2 transition-colors duration-(--dur-fast) hover:bg-accent-300/10 hover:border-accent-400/60">
                       <Icon name="ticket" size={18} className="shrink-0 text-accent-300" />
                       <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-semibold text-ink-primary">
                         {/* 머리글이 이미 매장명을 말했다. 업주가 제목에 손으로 박아 둔 매장명까지 그대로 두면
@@ -277,7 +277,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
         <section className="space-y-2">
           <Head icon="ticket" tone="cyan" title="이용권 사용 내역" count={usedHistory.length} unit="건" />
           <ul className="space-y-1">{usedHistory.map((v) => (
-            <li key={v.id} className="flex items-center gap-2 rounded-input border card-aura-sub px-3 py-2 text-2xs transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50">
+            <li key={v.id} className="flex items-center gap-2 rounded-input border card-aura-sub px-3 py-2 text-2xs transition-colors duration-(--dur-fast) hover:bg-surface-high/50">
               <span className="shrink-0 text-ink-muted tabular-nums">{fmtDate(v.usedAt!)}</span>
               {/* #4: 이용권은 발급 매장에서만 쓸 수 있다(서버 redeem_* 3경로 모두 used_venue_id := venue_id).
                   usedVenueName 을 앞세우면 '다른 매장에서 썼을 수도 있다'는 없는 개념을 암시한다. */}
@@ -326,7 +326,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
           ⚠ '사용 완료'라고 단정하지 않는다 — 운영자 승인 전까지는 대기 상태고, 거절되면 지갑으로 돌아온다. */}
       {redeemDone && (
         // FINAL-UX#SHEET — 위 RedeemSheet 와 같은 이유(부모 시트 본문 드래그 차단). 3초 대기 중 오닫힘 방지.
-        <div role="status" data-no-drag-close className="fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 bg-emerald-600 px-6 text-white animate-fade-in"
+        <div role="status" data-no-drag-close className="fixed inset-0 z-80 flex flex-col items-center justify-center gap-3 bg-emerald-600 px-6 text-white animate-fade-in"
           onClick={() => setRedeemDone(null)}>
           <svg width="88" height="88" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="12" cy="12" r="10" opacity="0.35" /><path d="M7 12.5l3.2 3.2L17 9" />
@@ -429,12 +429,12 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
     // 핸들러까지 올라가 **부모 시트가 통째로 내려가고 사용 확인/QR/전화번호가 날아갈** 수 있게 됐다.
     // 부모는 이 컴포넌트의 내부 상태(`redeem`)를 모르므로 prop 으로 끌 수 없다 — Modal 이 이미 가진
     // 옵트아웃 속성(Modal.tsx:56 EDITABLE_SEL 의 `[data-no-drag-close]`)을 쓴다. `closest()` 판정이라 자손 전부 덮는다.
-    <div data-no-drag-close className={['fixed inset-0 z-[70] flex items-end justify-center sm:items-center', closing ? 'pointer-events-none' : ''].join(' ')}>
+    <div data-no-drag-close className={['fixed inset-0 z-70 flex items-end justify-center sm:items-center', closing ? 'pointer-events-none' : ''].join(' ')}>
       <button type="button" aria-label="닫기" onClick={startClose} className="absolute inset-0 overscroll-contain bg-black/70" />
       <div className={['relative w-full max-w-md space-y-3 rounded-t-dialog border border-border-default bg-surface-mid p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:rounded-dialog sm:pb-4',
         closing ? 'animate-slide-down' : 'animate-sheet-up'].join(' ')}>
         <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 break-keep text-sm font-bold text-ink-primary [overflow-wrap:anywhere]">{voucherLineLabel(stack.title, stack.venueName)}</p>
+          <p className="min-w-0 break-keep text-sm font-bold text-ink-primary wrap-anywhere">{voucherLineLabel(stack.title, stack.venueName)}</p>
           <button type="button" onClick={startClose} aria-label="닫기" className="hit shrink-0 text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
         {mode === 'menu' && (<>
@@ -461,7 +461,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
             '매장명 · 이용권 제목 · 1장 · 사용 후 남는 장수'를 보여 주고 눌러야 RPC 가 나간다. */}
         {mode === 'confirmQr' && (
           <div className="space-y-2">
-            <div className="space-y-1 rounded-input border border-emerald-500/40 bg-emerald-500/[0.08] px-3 py-2.5">
+            <div className="space-y-1 rounded-input border border-emerald-500/40 bg-emerald-500/8 px-3 py-2.5">
               <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="store" size={14} className="shrink-0 text-emerald-400" /> {stack.venueName ?? '발급 매장'}</p>
               <p className="text-2xs text-ink-secondary">{stripVenuePrefix(stack.title, stack.venueName)}</p>
               <p className="text-2xs font-bold text-emerald-400">1장 사용 · 사용 후 남는 장수 {stack.ids.length - 1}장</p>
@@ -475,7 +475,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
         {/* Q1 — 출석 QR 등 이 스캐너가 실행하지 않는 QR 을 비췄을 때의 안내. RPC 0회, 카메라는 이미 언마운트로 꺼졌다. */}
         {mode === 'notice' && (
           <div className="space-y-2">
-            <p role="alert" className="rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2.5 text-sm font-semibold text-ink-primary">{noticeMsg}</p>
+            <p role="alert" className="rounded-input border border-amber-500/40 bg-amber-500/8 px-3 py-2.5 text-sm font-semibold text-ink-primary">{noticeMsg}</p>
             <button type="button" onClick={backToMenu} className="btn-ghost w-full text-sm">확인</button>
           </div>
         )}
@@ -484,7 +484,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
             <p className="text-2xs text-ink-muted">발급 매장 <b className="text-ink-secondary">업주 전화번호</b>를 입력하세요.</p>
             <input value={phone} onChange={(e) => { setPhone(e.target.value); setPhoneTarget(null); }} inputMode="tel" autoComplete="tel" placeholder="010-0000-0000" className="input w-full text-sm" />
             {phoneTarget && (
-              <div className="flex items-center gap-2 rounded-input border border-emerald-500/40 bg-emerald-500/[0.08] px-3 py-2.5">
+              <div className="flex items-center gap-2 rounded-input border border-emerald-500/40 bg-emerald-500/8 px-3 py-2.5">
                 <Icon name={phoneTarget.id ? 'user' : 'store'} size={16} className="shrink-0 text-emerald-400" />
                 <p className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">{phoneTarget.display}</p>
                 {/* 조회로 사람이 확인된 경우와, 매장명으로만 확인한 경우를 구분해 말한다 —

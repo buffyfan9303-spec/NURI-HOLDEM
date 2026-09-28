@@ -147,7 +147,7 @@ export default function HandReplayer({ replay, revealAll = false }: { replay: Re
               // 보이는 크기(22px)는 그대로, 누르는 높이만 넓힌다(2026-09-24 리드 결정 — 글자 버튼 히트 잔여).
               //   gto/chip.ts TEXT_HIT(위 6 · 아래 13)로는 39px 이라 모자라 위를 12px 로 — 이 버튼 위는 카드 안쪽 여백(13.75px↑)뿐이다.
               //   아래 13px(테두리 실효 12)은 다음 줄까지 간격 12.75px 안이다. 실측 390·1440: 누름 45px · 이웃 가로채기 0.
-              className={`relative before:absolute before:inset-x-0 before:-top-[12px] before:-bottom-[13px] before:content-[''] rounded-badge border border-border-default px-1.5 py-0.5 text-2xs font-bold text-ink-muted hover:text-ink-secondary transition-colors`}>
+              className={`relative before:absolute before:inset-x-0 before:top-[-12px] before:bottom-[-13px] before:content-[''] rounded-badge border border-border-default px-1.5 py-0.5 text-2xs font-bold text-ink-muted hover:text-ink-secondary transition-colors`}>
               {showAll ? '단계별 보기' : '전체 보기'}
             </button>
           )}
@@ -221,7 +221,7 @@ export default function HandReplayer({ replay, revealAll = false }: { replay: Re
           {/* 아웃츠/런아웃 — 내가 뒤지면 역전 카드, 앞서면 상대의 위험 카드 */}
           {showOuts && !computing && showOuts.outs > 0 && showOuts.outs < showOuts.total && (
             <div className={['rounded-input border px-2.5 py-2 space-y-1.5',
-              outsIsHero ? 'border-emerald-400/25 bg-emerald-500/[0.06]' : 'border-danger/25 bg-danger/[0.06]'].join(' ')}>
+              outsIsHero ? 'border-emerald-400/25 bg-emerald-500/6' : 'border-danger/25 bg-danger/6'].join(' ')}>
               <p className="text-2xs font-bold">
                 <span className={['inline-flex items-center gap-1', outsIsHero ? 'text-emerald-300' : 'text-danger-light'].join(' ')}>
                   <Icon name={outsIsHero ? 'target' : 'alert'} size={12} className="shrink-0" />{outsIsHero ? '내 아웃츠' : '상대 아웃츠'} {showOuts.outs}장

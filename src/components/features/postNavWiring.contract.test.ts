@@ -43,7 +43,7 @@ describe('UI-02 · 전체화면 셸', () => {
     expect(PD).not.toMatch(/inline \? 'sheet' : 'page'/);
   });
   it('🔴 Modal: read 폭이 문자열 리터럴이고, page 그립은 bodyDrag 일 때만 그린다', () => {
-    expect(MODAL).toMatch(/read: 'max-w-\[46rem\]'/);
+    expect(MODAL).toMatch(/read: 'max-w-184'/);
     expect(MODAL).toMatch(/\{bodyDrag && \(\s*<div aria-hidden className="lg:hidden absolute top-1\.5/);
     expect(MODAL).toMatch(/const bodyDrag = resolveBodyDrag\(variant, dragToClose\);/);
     expect(MODAL).not.toMatch(/dragToClose = false, density/);

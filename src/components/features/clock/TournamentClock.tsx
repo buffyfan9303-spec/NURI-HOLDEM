@@ -1016,7 +1016,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
           따라서 5열 임계값은 행 폭 ≥ 5×61.6 + 4×4.25 = 325px, 즉 **넷포트 ≈ 378px** 이다.
           임계값에 붙여 `min-[380px]:` 로 조이면 `w-7` 을 건드리는 순간 조용히 깨진다 — 그래서 일부러 헐거운 `sm:`(640px)을 고른다.
           640 이상은 5열 렌더가 종전과 **수치까지 동일**하고(행 clientW·트랙 폭 불변), 미만은 3+2 로 **균형 접힘**이라 고아가 아니다. */}
-      <div className="mt-2 grid grid-cols-3 sm:grid-cols-5 items-end justify-items-center gap-x-1 gap-y-2 max-md:justify-items-stretch border-t border-border-default dark:border-white/[0.06] pt-2">
+      <div className="mt-2 grid grid-cols-3 sm:grid-cols-5 items-end justify-items-center gap-x-1 gap-y-2 max-md:justify-items-stretch border-t border-border-default dark:border-white/6 pt-2">
         <Stepper label="Entries" value={liveStats.entries} onPlus={() => adj('adjEntries', 1)} onMinus={() => adj('adjEntries', -1)} />
         <Stepper label="Player" value={liveStats.alive} onPlus={() => adjPlayer(1)} onMinus={() => adjPlayer(-1)} />
         <Stepper label="Rebuy" value={liveStats.rebuys} onPlus={() => adj('adjRebuys', 1)} onMinus={() => adj('adjRebuys', -1)} />
@@ -1025,7 +1025,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       </div>
 
       {/* ④ 소리 */}
-      <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-border-default dark:border-white/[0.06] pt-2">
+      <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2 border-t border-border-default dark:border-white/6 pt-2">
         <VolCtl value={volume} onChange={setVolume} onToggleMute={toggleMute} />
         <button type="button" onClick={() => playChime('level')} title="알림음 미리듣기" aria-label="알림음 미리듣기"
           className="grid h-7 w-7 shrink-0 place-items-center self-end rounded-input border border-border-strong dark:border-border-default bg-surface-high dark:bg-white/10 text-ink-secondary hover:bg-surface-float dark:hover:bg-white/15 hover:text-[#8B94E8]"><Icon name="volume" size={14} /></button>
@@ -1041,7 +1041,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
 
       {/* ⑥ 위험군 — 주 버튼에서 떼어 맨 아래. 되돌릴 수 없는 것과 매번 누르는 것을 이웃시키지 않는다.
           2026-09-19 오너 지시 #7 "초기화 · 토너 종료는 좌측으로" — justify-end → justify-start. */}
-      <div data-testid="clk-danger-row" className="mt-2 flex flex-wrap items-center justify-start gap-2 border-t border-border-default dark:border-white/[0.06] pt-2">
+      <div data-testid="clk-danger-row" className="mt-2 flex flex-wrap items-center justify-start gap-2 border-t border-border-default dark:border-white/6 pt-2">
         <button type="button" onClick={resetClock}
           className="rounded-input border border-border-strong dark:border-border-default bg-surface-high dark:bg-white/10 px-3 py-2 text-2xs font-bold text-ink-secondary hover:bg-surface-float dark:hover:bg-white/15 hover:text-amber-300">↺ 초기화</button>
         {/* 콘솔은 이제 `!fs` 일 때만 렌더된다(아래 사용처) — 여기 있던 `fs ? 해제 : 토너 종료` 삼항은
@@ -1055,7 +1055,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   );
 
   return (
-    <div ref={wrapRef} data-scroll-lock className={fs ? 'fixed inset-0 z-[70] bg-[#06080c] flex items-center justify-center overflow-hidden' : ''}>
+    <div ref={wrapRef} data-scroll-lock className={fs ? 'fixed inset-0 z-70 bg-[#06080c] flex items-center justify-center overflow-hidden' : ''}>
       {/* 전체화면 조작 띠 — 해제·음소거 + 시작/일시정지 + **엔트리·생존·리바이·얼리·애드온 보정**.
           이력: 2026-09-11 '전체화면에는 조작 콘솔을 넣지 않는다' → 09-16 오너가 엔트리·생존 둘을 허용 →
           **2026-09-19 오너 지시 #4** "전체화면에서 수동 조정이 가능한 부분에 일시정지·시작·리바인·얼리·애드온 모두 추가".
@@ -1067,12 +1067,12 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
           무인증 공개 화면이라 **거기엔 넣지 않는다** — 넣으면 손님이 닿는 화면에서 대회 상태가 바뀐다.
           ⚠ 안의 bg-black/55·text-white/75 는 토큰화하지 않는다(2026-09-15 판정). 조작 패널과 달리
           이 띠는 **항상 다크한 클락 보드 위에만** 떠서 테마를 타지 않는다 — 라이트에서도 지면이
-          어둠이라 하드코딩 알파가 정답이다. 같은 이유로 클락 보드 자체(아래 [container-type:size] div)도 그대로 둔다. */}
+          어둠이라 하드코딩 알파가 정답이다. 같은 이유로 클락 보드 자체(아래 @container-size div)도 그대로 둔다. */}
       {/* (조작 띠 자체는 아래 스테이지 박스 **안**에 그린다 — 하단 지표 레일과 같은 높이 12cqmin 을 쓰려면 컨테이너 안이어야 한다) */}
       {/* 풀스크린은 16:9 고정 박스(레터박스) + container-type:size — cqw/cqh로 모든 모니터(16:9·21:9·세로) 동일 비율 */}
       {/* #2(FULL-RECHECK-2/C) — 세로 화면(폰 390×844·세로 TV)에서 16:9 레터박스는 스테이지가 390×166 이 되어 타이머 하한(84px)이
           우측 레일을 21px 덮었다. 세로에서는 화면을 채워 보드가 세로 배치(1열 + 지표 띠)로 접히게 한다 — 손님 TV(ClockDisplay)와 같은 방식. */}
-      <div className={fs ? 'flex flex-col w-full aspect-[16/9] max-w-[177.78vh] max-h-screen portrait:h-full portrait:max-h-none portrait:max-w-none portrait:aspect-auto [container-type:size]' : 'space-y-2'}>
+      <div className={fs ? 'flex flex-col w-full aspect-video max-w-[177.78vh] max-h-screen portrait:h-full portrait:max-h-none portrait:max-w-none portrait:aspect-auto @container-size' : 'space-y-2'}>
       {/* 상단 바 */}
       <div className={['flex items-center gap-2', fs ? 'shrink-0 px-3 pt-2 pb-1' : ''].join(' ')}>
         {fs
@@ -1139,9 +1139,9 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
           두 모드가 같은 컨테이너 계약을 가지면 아래 cqw/cqh 한 벌이 양쪽에서 그대로 산다 —
           '운영자 미리보기 = TV 축소판'이 비로소 성립한다. */}
       <div ref={stageSlotRef} data-clk-stage-slot={stageScale != null ? 'scaled' : undefined}
-        className={stageScale != null ? 'relative aspect-[16/9] overflow-hidden rounded-card' : 'contents'}>
-      <div className={['relative overflow-hidden border border-white/[0.08] text-white shadow-[0_10px_50px_rgba(0,0,0,0.45)] [container-type:size]',
-        fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'flex flex-col rounded-card aspect-[16/9]',
+        className={stageScale != null ? 'relative aspect-video overflow-hidden rounded-card' : 'contents'}>
+      <div className={['relative overflow-hidden border border-white/8 text-white shadow-[0_10px_50px_rgba(0,0,0,0.45)] @container-size',
+        fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'flex flex-col rounded-card aspect-video',
         stageScale != null ? 'absolute left-0 top-0 origin-top-left' : ''].join(' ')}
         style={{ ...clkVars, background: 'var(--clk-bg, #06080F)',
           ...(stageScale != null ? { width: STAGE_CANVAS_W, height: STAGE_CANVAS_W * 9 / 16, transform: `scale(${stageScale})` } : null) }}>
@@ -1158,7 +1158,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
             {canManage && (
               <>
                 <button type="button" onClick={toggleRun} data-testid="clk-fs-main" disabled={phase === 'finished'}
-                  className={['inline-flex h-[4.2cqmin] min-h-[44px] shrink-0 items-center gap-[0.6cqmin] rounded-[1cqmin] px-[1.6cqmin] text-[length:max(11px,1.7cqmin)] font-extrabold text-ink-inverse transition-colors disabled:cursor-not-allowed',
+                  className={['inline-flex h-[4.2cqmin] min-h-[44px] shrink-0 items-center gap-[0.6cqmin] rounded-[1cqmin] px-[1.6cqmin] text-[max(11px,1.7cqmin)] font-extrabold text-ink-inverse transition-colors disabled:cursor-not-allowed',
                     phase === 'finished' ? 'bg-white/15 text-white/60' : state.running ? 'bg-amber-400 hover:bg-amber-300' : 'bg-emerald-400 hover:bg-emerald-300'].join(' ')}>
                   <Icon name={phase === 'finished' ? 'check' : state.running ? 'pause' : 'play'} size={16} className="shrink-0" />{CLOCK_PHASE_ACTION[phase]}
                 </button>
@@ -1170,14 +1170,14 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
                   { k: 'a', label: '애드온', value: liveStats.addons, plus: () => adj('adjAddons', 1), minus: () => adj('adjAddons', -1) },
                 ].map((it) => (
                   <div key={it.k} className="flex shrink-0 items-center gap-[0.5cqmin]">
-                    <span className="text-[length:max(10px,1.4cqmin)] font-semibold text-white/60">{it.label}</span>
+                    <span className="text-[max(10px,1.4cqmin)] font-semibold text-white/60">{it.label}</span>
                     <button type="button" onClick={it.minus}
                       aria-label={`${it.label} 1 줄이기${state.sessionDate ? ' (장부 자동 반영분 보정)' : ''}`}
-                      className="grid h-[4.2cqmin] min-h-[44px] w-[4.2cqmin] min-w-[44px] place-items-center rounded-[1cqmin] bg-white/10 text-[length:max(16px,2cqmin)] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">−</button>
-                    <span className="min-w-[3.4cqmin] text-center text-[length:max(12px,2cqmin)] font-bold tabular-nums text-white">{it.value}</span>
+                      className="grid h-[4.2cqmin] min-h-[44px] w-[4.2cqmin] min-w-[44px] place-items-center rounded-[1cqmin] bg-white/10 text-[max(16px,2cqmin)] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">−</button>
+                    <span className="min-w-[3.4cqmin] text-center text-[max(12px,2cqmin)] font-bold tabular-nums text-white">{it.value}</span>
                     <button type="button" onClick={it.plus}
                       aria-label={`${it.label} 1 늘리기${state.sessionDate ? ' (장부 자동 반영분 보정)' : ''}`}
-                      className="grid h-[4.2cqmin] min-h-[44px] w-[4.2cqmin] min-w-[44px] place-items-center rounded-[1cqmin] bg-white/10 text-[length:max(16px,2cqmin)] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">+</button>
+                      className="grid h-[4.2cqmin] min-h-[44px] w-[4.2cqmin] min-w-[44px] place-items-center rounded-[1cqmin] bg-white/10 text-[max(16px,2cqmin)] font-bold leading-none text-white/80 transition-colors hover:bg-white/20 hover:text-white">+</button>
                   </div>
                 ))}
               </>
@@ -1187,7 +1187,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
               <Icon name={volume > 0 ? 'volume' : 'volume-off'} size={16} />
             </button>
             <button type="button" onClick={toggleFs} aria-label="전체화면 해제"
-              className="min-h-[36px] shrink-0 rounded-[1cqmin] bg-white/10 px-[1.6cqmin] py-[0.9cqmin] text-[length:max(11px,1.7cqmin)] font-bold text-white/75 transition-colors hover:bg-white/20 hover:text-white">
+              className="min-h-[36px] shrink-0 rounded-[1cqmin] bg-white/10 px-[1.6cqmin] py-[0.9cqmin] text-[max(11px,1.7cqmin)] font-bold text-white/75 transition-colors hover:bg-white/20 hover:text-white">
               ⤡ 해제
             </button>
           </div>
@@ -1405,7 +1405,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       </div>
 
       {/* ── 클락 시작(진입) — 맨 위: 단독 / 장부 연동 리스트 ───────────── */}
-      <section className="rounded-aura border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.06] to-transparent p-3 space-y-2.5">
+      <section className="rounded-aura border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/6 to-transparent p-3 space-y-2.5">
         <p className="text-2xs font-bold text-accent-300">클락 시작 방식</p>
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => setLinkDate(null)}
@@ -1427,7 +1427,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
             <input value={sessQuery} onChange={(e) => setSessQuery(e.target.value)} placeholder="검색 (예: 2026-06 · 게임명)" className="input w-full text-xs pl-8 py-1.5" />
           </div>
-          <div className="max-h-[11.5rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
+          <div className="max-h-46 overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
             {sessions.length === 0 ? (
               <p className="text-center py-4 text-2xs text-ink-muted">저장된 장부가 없습니다. 「장부」 탭에서 게임을 먼저 만들어 주세요.</p>
             ) : filteredSessions.length === 0 ? (
@@ -1448,14 +1448,14 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           </div>
         </div>
         {seededFromLedger && linkDate && (
-          <p className="text-[11px] text-emerald-200 bg-emerald-500/12 border border-emerald-500/40 rounded-input px-2.5 py-2 leading-relaxed">
+          <p className="text-[11px] text-emerald-200 border border-emerald-500/40 rounded-input px-2.5 py-2 leading-relaxed">
             <Icon name="notebook" size={13} className="inline-block align-[-2px] mr-1 shrink-0" /><b>장부 {linkDate}</b> 연동됨 — 게임명·얼리 자동 연결, 장부 수정은 라이브에 즉시 반영.
           </p>
         )}
       </section>
 
       {/* 프리셋 — PL2c: 게임 프리셋(공용 PresetPicker)이 기본. 저장은 [내 매장 → 프리셋]으로 일원화. */}
-      <section className="rounded-aura border border-accent-400/30 bg-accent-300/[0.05] p-3 space-y-2">
+      <section className="rounded-aura border border-accent-400/30 bg-accent-300/5 p-3 space-y-2">
         <p className="text-base font-bold text-accent-300">프리셋 · 클릭해 불러오기</p>
         <PresetPicker key={pickerKey} venueId={venueId} scope="clock" onApply={applyGamePreset}
           note="프리셋 저장·수정은 [내 매장 → 프리셋]에서." />
@@ -1474,7 +1474,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           {filteredPresets.length === 0 ? (
             <p className="text-center py-2 text-xs text-ink-muted">"{presetQuery.trim()}" 검색 결과가 없습니다.</p>
           ) : (
-            <div className="max-h-[13rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
+            <div className="max-h-52 overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
               {filteredPresets.map((p) => (
                 <div key={p.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-surface-high">
                   <button type="button" onClick={() => loadPreset(p)} className="flex-1 text-left text-sm font-semibold text-ink-primary truncate hover:text-accent-300">{p.name}</button>
@@ -1485,7 +1485,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
             </div>
           )}
           <button type="button" onClick={convertClockPresets} disabled={convertBusy}
-            className="w-full rounded-input border border-accent-400/40 bg-accent-300/12 py-2 text-xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 disabled:opacity-50">
+            className="w-full rounded-input border border-accent-400/40 py-2 text-xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 disabled:opacity-50">
             {convertBusy ? '가져오는 중…' : `클락 프리셋 ${presets.length}개 → 게임 프리셋으로 가져오기 (1회 변환)`}
           </button>
         </>)}
@@ -1501,7 +1501,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <Field label="리바인 스택"><input type="number" inputMode="numeric" value={cfg.rebuyStack || ''} onChange={(e) => set({ rebuyStack: +e.target.value || 0 })} className={numInput} /></Field>
           <Field label="애드온 스택"><input type="number" inputMode="numeric" disabled={!cfg.isAddon} value={cfg.isAddon ? (cfg.addonStack || '') : ''} onChange={(e) => set({ addonStack: +e.target.value || 0 })} className={`${numInput} disabled:opacity-50`} /></Field>
         </div>
-        <label className="flex min-h-[2rem] w-fit cursor-pointer items-center gap-2 text-xs text-ink-secondary">
+        <label className="flex min-h-8 w-fit cursor-pointer items-center gap-2 text-xs text-ink-secondary">
           <input type="checkbox" checked={cfg.isAddon} onChange={(e) => set({ isAddon: e.target.checked })} className="accent-accent-300 h-6 w-6" />
           애드온 게임
         </label>
@@ -1511,13 +1511,13 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <Field label="최대 레벨 (자동생성용)"><input type="number" inputMode="numeric" min="1" max="60" value={cfg.maxLevel || ''} onChange={(e) => set({ maxLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
           <Field label="미스터리 바운티"><input type="number" inputMode="numeric" value={cfg.mysteryBounty || ''} onChange={(e) => set({ mysteryBounty: +e.target.value || 0 })} className={numInput} /></Field>
         </div>
-        <button type="button" onClick={autoGenerate} className="w-full inline-flex items-center justify-center gap-1.5 whitespace-nowrap py-2 rounded-input bg-accent-300/12 text-accent-300 border border-accent-400/40 text-xs font-bold hover:bg-accent-300/20">
+        <button type="button" onClick={autoGenerate} className="w-full inline-flex items-center justify-center gap-1.5 whitespace-nowrap py-2 rounded-input text-accent-300 border border-accent-400/40 text-xs font-bold hover:bg-accent-300/20">
           <Icon name="settings" size={14} className="shrink-0" />블라인드 자동 생성 · 마감 {cfg.regCloseLevel || '-'} · 최대 {cfg.maxLevel || 15}레벨
         </button>
       </section>
 
       {/* 얼리 구간 — 레벨 기준 */}
-      <section className="rounded-aura border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2">
+      <section className="rounded-aura border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/5 to-transparent p-3 space-y-2">
         <p className="text-2xs font-semibold text-accent-300">얼리 구간 (레벨 기준 · 장부 바인 시각→레벨 환산으로 자동 분류)</p>
         <div className="grid grid-cols-2 gap-2">
           <Field label="더블얼리 ~레벨까지"><input type="number" inputMode="numeric" min="0" max={totalLevels} value={cfg.earlyDoubleLevel || ''} onChange={(e) => set({ earlyDoubleLevel: +e.target.value || 0 })} placeholder="예) 1" className={numInput} /></Field>
@@ -1532,7 +1532,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
 
       {/* 블라인드 구조 — 접기/펴기 */}
       <section className="rounded-aura border card-aura p-3 space-y-2">
-        <button type="button" onClick={() => setBldOpen((v) => !v)} className="w-full flex min-h-[2rem] items-center justify-between py-0.5">
+        <button type="button" onClick={() => setBldOpen((v) => !v)} className="w-full flex min-h-8 items-center justify-between py-0.5">
           <span className="text-2xs font-semibold text-ink-secondary">블라인드 구조 · {totalLevels}레벨</span>
           <span className="text-2xs font-bold text-accent-300">{bldOpen ? '접기 ▲' : '펼치기 ▼'}</span>
         </button>

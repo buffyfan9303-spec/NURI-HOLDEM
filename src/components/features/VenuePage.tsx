@@ -446,7 +446,7 @@ export default function VenuePage({
             const st = scheduleStatus(t0.date, t0.startTime);
             return (
               <button type="button" onClick={() => onSelectSchedule?.(t0)}
-                className={['w-full flex items-center gap-2.5 rounded-aura border bg-accent-300/[0.06] px-3 py-2.5 text-left hover:bg-accent-300/10 transition-colors',
+                className={['w-full flex items-center gap-2.5 rounded-aura border bg-accent-300/6 px-3 py-2.5 text-left hover:bg-accent-300/10 transition-colors',
                   // v6.5 글로우 = '지금 진행 중' 신호(오너 승인 2026-09-02) — live 일 때만. 링 헤어라인이 테두리를 대신하므로 accent 테두리는 낮춘다
                   st === 'live' ? 'border-accent-400/15 ring-aura ring-aura-glow' : 'border-accent-400/30'].join(' ')}>
                 <Icon name="flame" size={18} className="shrink-0 text-accent-200" />
@@ -755,7 +755,7 @@ function HeroSection({
       {slides.length > 0 ? (
         // 슬라이드 트랙(자동 + 스와이프)
         <div
-          className="absolute inset-0 flex transition-transform duration-[var(--dur-panel)] ease-out touch-pan-y select-none"
+          className="absolute inset-0 flex transition-transform duration-(--dur-panel) ease-out touch-pan-y select-none"
           style={{ transform: `translateX(-${safeIdx * 100}%)` }}
         >
           {slides.map((src, i) => (
@@ -822,7 +822,7 @@ function HeroSection({
           type="button"
           onClick={() => onSlideTap(slides[safeIdx])}
           aria-label={`${venue.name} 배너 · 이 대회 자세히 보기`}
-          className="absolute inset-0 z-0 hidden lg:block cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-300"
+          className="absolute inset-0 z-0 hidden lg:block cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-300"
         />
       )}
       {slides.length > 1 && (
@@ -831,7 +831,7 @@ function HeroSection({
             type="button"
             onClick={() => go(safeIdx - 1)}
             aria-label="이전 사진"
-            className="absolute left-2 top-1/2 z-10 -translate-y-1/2 hidden lg:flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-ink-primary backdrop-blur transition-colors hover:bg-surface-base/80"
+            className="absolute left-2 top-1/2 z-10 -translate-y-1/2 hidden lg:flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-ink-primary backdrop-blur-sm transition-colors hover:bg-surface-base/80"
           >
             <Icon name="chevron-left" size={14} />
           </button>
@@ -839,7 +839,7 @@ function HeroSection({
             type="button"
             onClick={() => go(safeIdx + 1)}
             aria-label="다음 사진"
-            className="absolute right-2 top-1/2 z-10 -translate-y-1/2 hidden lg:flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-ink-primary backdrop-blur transition-colors hover:bg-surface-base/80"
+            className="absolute right-2 top-1/2 z-10 -translate-y-1/2 hidden lg:flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-ink-primary backdrop-blur-sm transition-colors hover:bg-surface-base/80"
           >
             <Icon name="chevron-right" size={14} />
           </button>
@@ -876,7 +876,7 @@ function HeroSection({
               type="button"
               onClick={() => bgInputRef.current?.click()}
               disabled={uploading}
-              className="inline-flex h-8 items-center gap-1.5 rounded-input bg-surface-base/85 px-3 text-xs font-semibold text-ink-primary backdrop-blur transition-colors hover:bg-surface-high disabled:opacity-50"
+              className="inline-flex h-8 items-center gap-1.5 rounded-input bg-surface-base/85 px-3 text-xs font-semibold text-ink-primary backdrop-blur-sm transition-colors hover:bg-surface-high disabled:opacity-50"
             >
               {uploading ? '업로드 중' : (venue.imageUrl ? '배경 변경' : '배경 업로드')}
             </button>
@@ -885,7 +885,7 @@ function HeroSection({
             type="button"
             onClick={() => galleryInputRef.current?.click()}
             disabled={busy}
-            className="inline-flex h-8 items-center gap-1.5 rounded-input bg-accent-300/90 px-3 text-xs font-bold text-white backdrop-blur transition-colors hover:bg-accent-200 disabled:opacity-50"
+            className="inline-flex h-8 items-center gap-1.5 rounded-input bg-accent-300/90 px-3 text-xs font-bold text-white backdrop-blur-sm transition-colors hover:bg-accent-200 disabled:opacity-50"
           >
             {busy ? '추가 중' : '사진 추가'}
           </button>
@@ -976,7 +976,7 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
                   <button type="button" onClick={() => deleteVenueMessage(m.id).then(() => setMessages((p) => p.filter((x) => x.id !== m.id))).catch((e) => toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'))} aria-label="삭제" className="-my-3.5 flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
                 )}
               </div>
-              <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words whitespace-pre-wrap">{m.content}</p>
+              <p className="text-xs text-ink-primary leading-snug mt-0.5 wrap-break-word whitespace-pre-wrap">{m.content}</p>
             </div>
           </li>
         ))}
@@ -1041,7 +1041,7 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
     // 동일 근거). 게이트(첫 뷰포트 행동 ≤6)는 이 속성이 붙은 요소를 세지 않는다.
     // ⚠ 이 속성은 '페이지 내부 탭 전환만 하는 요소'에만 허용 — 다른 행동 버튼에 붙이면 게이트 무력화다.
     <button type="button" onClick={onRanking} data-nav="venue-tab"
-      className="flex w-full items-center gap-2.5 rounded-aura border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2.5 text-left transition-colors hover:border-accent-400/50 active:scale-[0.99]">
+      className="flex w-full items-center gap-2.5 rounded-aura border border-accent-400/30 bg-accent-300/6 px-3 py-2.5 text-left transition-colors hover:border-accent-400/50 active:scale-[0.99]">
       {/* 종전엔 👑 과 🏆 두 이모지가 같은 카드에 겹쳐 있었다(같은 뜻을 두 번). 왕관 하나만 아이콘으로
           남기고 헤드라인의 트로피는 뺀다 — gold 톤이 이미 '1등'을 말한다. */}
       <Icon name="crown" size={20} className="shrink-0 text-gold-300" />
@@ -1237,14 +1237,14 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
             const rank = slot === 1 ? 1 : slot === 0 ? 2 : 3;
             const { main: rMain, sub: rSub } = rankDisplay(e, realNameOptIns);
             const big = rank === 1;
-            const ring = rank === 1 ? 'border-accent-300/80 bg-gradient-to-b from-accent-300/[0.14] to-transparent'
-              : rank === 2 ? 'border-slate-300/50 bg-gradient-to-b from-slate-300/[0.08] to-transparent'
-              : 'border-amber-700/50 bg-gradient-to-b from-amber-700/[0.10] to-transparent';
+            const ring = rank === 1 ? 'border-accent-300/80 bg-linear-to-b/srgb from-accent-300/[0.14] to-transparent'
+              : rank === 2 ? 'border-slate-300/50 bg-linear-to-b/srgb from-slate-300/8 to-transparent'
+              : 'border-amber-700/50 bg-linear-to-b/srgb from-amber-700/10 to-transparent';
             // 2등 메달은 `bg-slate-300 text-white` 였다 — 흰 글자 대비 **1.48:1**(다크·라이트 공통, AA 근처도 못 감).
             // 밝은 은색 배지 위 숫자는 어두운 글자여야 읽힌다. 1등(보라)·3등(동)은 흰 글자로 4.5 이상이라 유지.
             const medal = rank === 1 ? 'bg-accent-300 text-white' : rank === 2 ? 'bg-slate-300 text-slate-900' : 'bg-amber-700 text-white';
             return (
-              <div key={e.nickname} className={['flex-1 max-w-[9.5rem] rounded-aura border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgb(var(--accent-300)/0.18)]' : ''].join(' ')}>
+              <div key={e.nickname} className={['flex-1 max-w-38 rounded-aura border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgb(var(--accent-300)/0.18)]' : ''].join(' ')}>
                 {big && <Icon name="crown" size={16} className="mx-auto mb-1 text-gold-300" />}
                 <span className={['mx-auto flex items-center justify-center rounded-full font-extrabold tabular-nums', medal, big ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-2xs'].join(' ')}>{rank}</span>
                 <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-accent-200' : 'text-ink-secondary', 'text-2xs'].join(' ')}>{titleOf(rank)}</p>
@@ -1464,7 +1464,7 @@ function AboutPanel({
             <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">{venue.description}</p>
           ) : editable ? (
             <button type="button" onClick={() => { setDraft(venue.description ?? ''); setEditing(true); }}
-              className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3.5 text-xs font-bold text-accent-200 hover:bg-accent-300/10 transition-colors">
+              className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/6 px-3.5 text-xs font-bold text-accent-200 hover:bg-accent-300/10 transition-colors">
               + 소개 쓰기
             </button>
           ) : (
@@ -1534,7 +1534,7 @@ function AboutPanel({
             <AddressRow address={addr} />
             {contacts.length > 0 ? <ContactRows contacts={contacts} /> : editable && (
               <button type="button" onClick={openInfoEdit}
-                className="inline-flex h-8 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3 text-2xs font-bold text-accent-200 hover:bg-accent-300/10 transition-colors">
+                className="inline-flex h-8 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/6 px-3 text-2xs font-bold text-accent-200 hover:bg-accent-300/10 transition-colors">
                 + 전화번호 등록
               </button>
             )}
@@ -1870,7 +1870,7 @@ function PostersPanel({
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="w-full flex items-center justify-between px-3 py-2.5 bg-gradient-to-br from-accent-300/[0.08] to-transparent hover:from-accent-300/[0.12] transition-colors focus:outline-none"
+          className="w-full flex items-center justify-between px-3 py-2.5 bg-linear-to-br/srgb from-accent-300/8 to-transparent hover:from-accent-300/12 transition-colors focus:outline-hidden"
         >
           <span className="inline-flex items-center gap-1.5 text-sm font-bold text-accent-200">
             금일 포스터
@@ -1881,7 +1881,7 @@ function PostersPanel({
           <Icon
             name="chevron-down"
             size={16}
-            className={['text-ink-secondary transition-transform duration-[var(--dur-base)] [transition-timing-function:var(--ease)]', open ? 'rotate-180' : ''].join(' ')}
+            className={['text-ink-secondary transition-transform duration-(--dur-base) ease-(--ease)', open ? 'rotate-180' : ''].join(' ')}
           />
         </button>
 
@@ -1911,7 +1911,7 @@ function PostersPanel({
                 {todayPosters.map((s) => (
                   <li key={s.id} onClick={() => onSelect?.(s)} role="button" tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(s); } }}
-                    className="flex items-center gap-3 p-2.5 rounded-input bg-surface-low border border-border-subtle cursor-pointer hover:border-accent-400/40 focus:outline-none focus-visible:border-accent-300 transition-colors">
+                    className="flex items-center gap-3 p-2.5 rounded-input bg-surface-low border border-border-subtle cursor-pointer hover:border-accent-400/40 focus:outline-hidden focus-visible:border-accent-300 transition-colors">
                     {/* 포스터 썸네일 */}
                     <div
                       className="w-10 h-14 shrink-0 rounded-input overflow-hidden flex items-center justify-center"
@@ -1953,7 +1953,7 @@ function PostersPanel({
               return (
                 <li key={s.id} onClick={() => onSelect?.(s)} role="button" tabIndex={0}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(s); } }}
-                  className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-accent-400/40 focus:outline-none focus-visible:border-accent-300 transition-colors">
+                  className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-accent-400/40 focus:outline-hidden focus-visible:border-accent-300 transition-colors">
                   <div className="text-center shrink-0">
                     <p className="text-2xs text-ink-muted">{dows[d.getDay()]}</p>
                     <p className="text-lg font-bold text-accent-200 tabular-nums leading-none">{d.getDate()}</p>
@@ -2006,7 +2006,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
   if (notices.length === 0 && !canManage) return null;
 
   return (
-    <section className="rounded-aura border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.06] to-transparent overflow-hidden">
+    <section className="rounded-aura border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/6 to-transparent overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
         <h3 className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-200">
           매장 공지 <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>
@@ -2038,7 +2038,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
           {notices.map((n) => (
             <li key={n.id} className="px-3 py-2 border-b border-border-subtle last:border-b-0">
               <div className="flex items-start gap-2">
-                <p className="flex-1 text-xs text-ink-primary whitespace-pre-wrap break-words leading-relaxed">{n.content}</p>
+                <p className="flex-1 text-xs text-ink-primary whitespace-pre-wrap wrap-break-word leading-relaxed">{n.content}</p>
                 {canManage && (
                   <button type="button" onClick={() => remove(n.id)} className="shrink-0 text-2xs text-ink-muted hover:text-danger-light">삭제</button>
                 )}
@@ -2064,7 +2064,7 @@ function SchedulesPanel({ schedules, onSelect }: { schedules: Schedule[]; onSele
         return (
           <li key={s.id} onClick={() => onSelect?.(s)} role="button" tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(s); } }}
-            className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-accent-400/40 focus:outline-none focus-visible:border-accent-300 transition-colors">
+            className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-accent-400/40 focus:outline-hidden focus-visible:border-accent-300 transition-colors">
             <div className="text-center shrink-0">
               <p className="text-2xs text-ink-muted">{dows[d.getDay()]}</p>
               <p className="text-lg font-bold text-accent-200 tabular-nums leading-none">{d.getDate()}</p>

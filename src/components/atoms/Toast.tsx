@@ -83,7 +83,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           가용 폭을 온전히 주고 가운데 정렬한다(pointer-events-none 이라 클릭 방해 없음). */}
       <div
         aria-live="polite"
-        className="fixed bottom-[var(--tabbar-float)] lg:bottom-4 inset-x-0 z-[120] flex flex-col items-center gap-2 pointer-events-none"
+        className="fixed bottom-(--tabbar-float) lg:bottom-4 inset-x-0 z-120 flex flex-col items-center gap-2 pointer-events-none"
       >
         {toasts.map((t) => (
           <ToastItem key={t.id} {...t} onDismiss={() => dismiss(t.id)} />
@@ -109,7 +109,7 @@ function ToastItem({ message, variant, action, durationMs, onDismiss }: Toast & 
         // max-w: 모바일은 화면의 92%, PC 는 읽기 좋은 28rem 상한(끝없이 옆으로 길어지는 것 방지)
         'inline-flex items-center gap-2 px-4 py-2.5 rounded-input border shadow-dialog',
         'text-sm font-medium pointer-events-auto max-w-[92vw] sm:max-w-md cursor-pointer select-none',
-        'transition-[transform,opacity] duration-[var(--dur-panel)]',
+        'transition-[transform,opacity] duration-(--dur-panel)',
         COLOR[variant],
         out ? 'opacity-0 translate-y-2' : 'opacity-100 animate-slide-up',
       ].join(' ')}
@@ -117,7 +117,7 @@ function ToastItem({ message, variant, action, durationMs, onDismiss }: Toast & 
       <Icon variant={variant} />
       {/* flex-1 min-w-0: 액션 버튼(shrink-0)과 공존할 때도 텍스트가 남은 폭을 온전히 차지.
           break-keep: 한국어 어절 단위 줄바꿈(1자씩 꺾임 방지) + overflow-wrap 으로 긴 토큰만 예외 절단 */}
-      <span className="flex-1 min-w-0 whitespace-normal break-keep [overflow-wrap:anywhere]">{message}</span>
+      <span className="flex-1 min-w-0 whitespace-normal break-keep wrap-anywhere">{message}</span>
       {action && (
         // 되돌리기는 실수를 되돌리는 마지막 기회다 — 본문과 확실히 구분되고 손가락으로 짚을 크기여야 한다
         <button

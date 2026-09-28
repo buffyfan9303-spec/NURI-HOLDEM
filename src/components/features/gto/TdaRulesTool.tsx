@@ -138,7 +138,7 @@ export default function TdaRulesTool() {
           {busy && <div className="mt-2 space-y-1.5" aria-busy="true"><Skeleton className="h-4" /><Skeleton className="h-4 w-4/5" /></div>}
 
           {answer && (
-            <div className="mt-2.5 rounded-input border border-cyan-400/30 bg-cyan-400/[0.06] p-2.5">
+            <div className="mt-2.5 rounded-input border border-cyan-400/30 bg-cyan-400/6 p-2.5">
               <p className="mb-1 flex items-center gap-1 text-2xs font-bold text-cyan-300">
                 <Icon name="sparkles" size={11} className="shrink-0" />AI 안내
               </p>
@@ -175,7 +175,7 @@ export default function TdaRulesTool() {
           <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{browse.length}개</span>
         </div>
         {/* 가로 스크롤 레일은 위아래를 자른다 — py-1.5(6.375px) 가 칩 히트 확장 자리다(잘려도 44.75px). mt-0.5+py-1.5 = 종전 mt-2 와 같은 위 간격. */}
-        <div className="mt-0.5 flex gap-1 overflow-x-auto py-1.5 [scrollbar-width:none]">
+        <div className="mt-0.5 flex gap-1 overflow-x-auto py-1.5 scrollbar-none">
           {sections.map((s) => (
             <button key={s} type="button" onClick={() => setSection(s)}
               className={[CHIP_HIT, 'h-[32px] shrink-0 whitespace-nowrap rounded-chip px-2.5 text-2xs font-semibold transition-colors',

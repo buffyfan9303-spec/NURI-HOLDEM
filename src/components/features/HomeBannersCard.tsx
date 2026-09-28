@@ -222,13 +222,13 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
               <li key={b.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5">
                 <span className="flex shrink-0 gap-0.5">
                   <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || busy !== null} aria-label="위로 이동"
-                    className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 disabled:opacity-25">▲</button>
+                    className="min-h-8 min-w-8 rounded-sm border border-border-default text-2xs text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 disabled:opacity-25">▲</button>
                   <button type="button" onClick={() => move(i, 1)} disabled={i === list.length - 1 || busy !== null} aria-label="아래로 이동"
-                    className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 disabled:opacity-25">▼</button>
+                    className="min-h-8 min-w-8 rounded-sm border border-border-default text-2xs text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 disabled:opacity-25">▼</button>
                 </span>
                 {b.imageUrl
-                  ? <img src={b.imageUrl} alt="" width={64} height={30} className="h-[30px] w-16 shrink-0 rounded border border-border-subtle object-cover" />
-                  : <span className="h-[30px] w-16 shrink-0 rounded border border-border-subtle bg-surface-float" />}
+                  ? <img src={b.imageUrl} alt="" width={64} height={30} className="h-[30px] w-16 shrink-0 rounded-sm border border-border-subtle object-cover" />
+                  : <span className="h-[30px] w-16 shrink-0 rounded-sm border border-border-subtle bg-surface-float" />}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold text-ink-primary">{b.title || '(제목 없음)'}</span>
                   <span className="block truncate text-2xs text-ink-muted">

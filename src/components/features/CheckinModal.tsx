@@ -202,7 +202,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
                 {/* Q2 — 2단계: 매장/받는 회원/장수/사유/만료 최종 확인. 실행 전 별도 확인, 취소 가능 —
                     확인 내용이 바뀌거나(다른 장수 재선택) 매장이 바뀌면(위 clear effect) 이 단계 자체가 사라진다. */}
                 {canIssue && confirm && confirm.c.id === c.id && (
-                  <div className="mt-1.5 flex w-full flex-col gap-1 rounded-input border border-accent-400/40 bg-accent-300/[0.06] p-2 text-2xs">
+                  <div className="mt-1.5 flex w-full flex-col gap-1 rounded-input border border-accent-400/40 bg-accent-300/6 p-2 text-2xs">
                     <p className="font-bold text-ink-secondary">발급 확인</p>
                     <p>매장: <b className="text-ink-primary">{venueName ?? '우리 매장'}</b></p>
                     <p>받는 회원: <b className="text-ink-primary">{c.displayName ?? '회원'}</b> · ID …{c.userId.slice(-6)}</p>

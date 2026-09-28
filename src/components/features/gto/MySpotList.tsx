@@ -226,7 +226,7 @@ function Empty({ icon, title, desc, action }: {
     <div className="rounded-aura border card-aura px-4 py-6 text-center">
       <Icon name={icon} size={22} className="mx-auto mb-2 text-ink-muted" aria-hidden />
       <p className="text-sm font-bold text-ink-primary">{title}</p>
-      <p className="mx-auto mt-1 max-w-[22rem] text-2xs leading-relaxed text-ink-muted break-keep">{desc}</p>
+      <p className="mx-auto mt-1 max-w-88 text-2xs leading-relaxed text-ink-muted break-keep">{desc}</p>
       {action && <div className="mt-3">{action}</div>}
     </div>
   );

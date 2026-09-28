@@ -300,7 +300,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
 
   return (
     // 루트 전환 — 전면 판 공용 한 벌(atoms/pageMotion). 닫히는 220ms 는 입력을 받지 않는다.
-    <div className={`fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`}`}
+    <div className={`fixed inset-0 z-60 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`}`}
       inert={!open || undefined} style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 px-page-x">
         <button type="button" onClick={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
@@ -389,7 +389,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                     const got = b.check(badgeStats);
                     return (
                       <div key={b.key} title={b.desc}
-                        className={['rounded-card border p-2.5 text-center transition-colors', got ? 'border-accent-400/50 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
+                        className={['rounded-card border p-2.5 text-center transition-colors', got ? 'border-accent-400/50 bg-accent-300/8' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
                         <Icon name={b.icon} size={22} className={['mx-auto', got ? b.tone : 'text-ink-muted'].join(' ')} />
                         <p className={['mt-1 text-xs font-bold', got ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
                         <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{b.desc}</p>
@@ -780,7 +780,7 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
   };
 
   return (
-    <div className={`fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${closing ? `${PAGE_LEAVE} pointer-events-none` : PAGE_ENTER}`}
+    <div className={`fixed inset-0 z-60 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] ${closing ? `${PAGE_LEAVE} pointer-events-none` : PAGE_ENTER}`}
       inert={closing || undefined} style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
         <button type="button" onClick={onClose} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
@@ -843,7 +843,7 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
               </svg>
               {busy === 'google' ? 'Google로 이동 중…' : 'Google로 계속하기'}
             </button>
-            {/* 이메일 로그인 — AuthModal(로그인 탭)을 이 화면 위로. z-[60] 동순위지만 DOM 후순위라 위에 뜬다 */}
+            {/* 이메일 로그인 — AuthModal(로그인 탭)을 이 화면 위로. z-60 동순위지만 DOM 후순위라 위에 뜬다 */}
             <button type="button" onClick={promptLogin}
               className="mx-auto block px-3 py-1.5 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
               이메일로 로그인 ›
@@ -894,7 +894,7 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
         </div>
       </div>
 
-      {/* 업주 가입 모달 — z-[60] 동순위지만 DOM 후순위(이 랜딩 내부)라 위에 뜬다. 이메일 로그인(promptLogin)과 같은 문법.
+      {/* 업주 가입 모달 — z-60 동순위지만 DOM 후순위(이 랜딩 내부)라 위에 뜬다. 이메일 로그인(promptLogin)과 같은 문법.
           ⚠ Suspense 를 조건 **밖**에 둔다(App EventPage 와 같은 구조). 경계가 그 업데이트에서 처음 마운트되면 리액트는
           폴백(null)을 반드시 커밋하고 ~300ms 붙잡아 '눌렀는데 안 열린다 → 두 번 누른다'가 됐다(voucher-sheet-open 스펙 실측과
           같은 유형). 위 버튼의 startTransition 과 **함께**여야 첫 클릭에 뜬다 — 청크는 App warm() 이 이미 데워 둔다. */}
@@ -951,9 +951,9 @@ function SwipeCancelRow({ cancelable, onCancel, onOpen, openLabel, children }: {
       )}
       <div
         className={[
-          'relative bg-surface-low px-3 py-2 transition-transform duration-[var(--dur-fast)] ease-out',
+          'relative bg-surface-low px-3 py-2 transition-transform duration-(--dur-fast) ease-out',
           // PC: 호버 시 살짝 밀려 취소 버튼이 보인다(터치 불가 환경 대응)
-          cancelable ? 'md:group-hover:-translate-x-[76px]' : '',
+          cancelable ? 'md:group-hover:translate-x-[-76px]' : '',
         ].join(' ')}
         style={{ transform: dx ? `translateX(${dx}px)` : undefined }}
         onTouchStart={onTouchStart}
@@ -1120,7 +1120,7 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
   const tiers = allTiers();
   const cur = tierOf(points);
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
+    <div className="fixed inset-0 z-70 flex items-end justify-center sm:items-center">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/70" />
       {/* 루트는 flex 열 + 본문만 스크롤 → 헤더·× 고정(점검 #27). 하단은 홈 인디케이터 safe-area 를 더해 마지막 항목이 안 가린다(#14). */}
       <div className="relative flex max-h-[85vh] w-full max-w-md flex-col rounded-t-dialog border border-border-default bg-surface-mid p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-slide-up sm:rounded-dialog sm:pb-4">
@@ -1144,7 +1144,7 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
               </li>
             );
           })}
-          <li className="flex items-center gap-2.5 rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-3 py-2">
+          <li className="flex items-center gap-2.5 rounded-input border border-gold-400/40 bg-gold-300/6 px-3 py-2">
             <Icon name="spade" size={18} className="shrink-0 text-gold-300" />
             <p className="min-w-0 flex-1 text-sm font-bold text-gold-300">에이스 (AA)</p>
             <span className="shrink-0 text-2xs text-ink-muted">14,000점 + 전체 상위 10위</span>
@@ -1255,7 +1255,7 @@ function InviteSection({ nickname, stats, tickets, idOn }: {
           영원히 안 풀릴 수 있으므로 **상시 노출**한다(닫을 수 있는 배너로 만들지 않는다).
           tickets 가 null 이면(RPC 미적용·조회 실패) 아무것도 그리지 않는다 — '대기 0장'은 사실 주장이라 위장이 된다. */}
       {tickets && tickets.pending > 0 && (
-        <p className="mt-1.5 flex items-start gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/[0.08] px-2.5 py-1.5 text-2xs leading-relaxed text-ink-secondary">
+        <p className="mt-1.5 flex items-start gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/8 px-2.5 py-1.5 text-2xs leading-relaxed text-ink-secondary">
           <Icon name="clock" size={13} className="mt-px shrink-0 text-accent-300" />
           <span>
             <b className="text-accent-300 tabular-nums">이벤트 참여권 {tickets.pending}장</b> 대기 중 —
@@ -1264,7 +1264,7 @@ function InviteSection({ nickname, stats, tickets, idOn }: {
         </p>
       )}
       <div className="mt-2 flex items-center gap-2.5">
-        {qr && <img src={qr} alt="초대 QR" className="h-16 w-16 shrink-0 rounded bg-white p-0.5" />}
+        {qr && <img src={qr} alt="초대 QR" className="h-16 w-16 shrink-0 rounded-sm bg-white p-0.5" />}
         <div className="min-w-0 flex-1">
           <div className="truncate rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5 text-2xs text-ink-muted">{url}</div>
           <div className="mt-1.5 flex gap-1.5">

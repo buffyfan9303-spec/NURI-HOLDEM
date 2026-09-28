@@ -32,8 +32,8 @@ export default function CoachMark({ id, children }: { id: string; children: Reac
     // ⚠ 교차검증 실측(2026-08-29 다크): 아이콘·[확인] 의 `text-accent-300` 이 #805FDA on surface-base
     //   = **4.0:1** 로 AA 미달이었다. `text-accent-200` 은 테마 인지 토큰 — 다크 #BCA9F0(6.94:1),
     //   라이트는 index.css 오버라이드로 #6946C8 이라 **라이트 accent-300 과 값이 같다**(라이트 렌더 불변).
-    //   배경 `bg-accent-300/[0.08]` 과 보더는 텍스트가 아니므로 그대로 둔다.
-    <div role="note" className={['flex items-start gap-2 rounded-card border border-accent-400/40 bg-accent-300/[0.08] px-3 py-2',
+    //   배경 `bg-accent-300/8` 과 보더는 텍스트가 아니므로 그대로 둔다.
+    <div role="note" className={['flex items-start gap-2 rounded-card border border-accent-400/40 bg-accent-300/8 px-3 py-2',
       closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
       <Icon name="lightbulb" size={15} className="mt-0.5 shrink-0 text-accent-200" />
       <p className="min-w-0 flex-1 text-xs leading-5 text-ink-secondary">{children}</p>

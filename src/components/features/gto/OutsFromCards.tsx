@@ -153,7 +153,7 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
               색은 '내 아웃/상대 아웃'이 아니라 **나에게 좋은 소식인가**로 정한다:
               드로잉 데드(내 아웃 0)는 초록이면 안 되고, 상대 아웃 0(잠긴 승리)은 빨강이면 안 된다. */}
           <div className={['rounded-aura border px-3 py-2.5 space-y-1.5',
-            goodNews ? 'border-emerald-500/25 bg-emerald-500/[0.06]' : 'border-danger/25 bg-danger/[0.06]'].join(' ')}>
+            goodNews ? 'border-emerald-500/25 bg-emerald-500/6' : 'border-danger/25 bg-danger/6'].join(' ')}>
             <p className={['flex items-center gap-1 text-2xs font-bold', goodNews ? 'text-emerald-700 dark:text-emerald-300' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
               <Icon name={goodNews ? 'target' : 'alert'} size={12} className="shrink-0" />
               {mine

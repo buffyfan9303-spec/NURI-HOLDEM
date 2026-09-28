@@ -178,7 +178,7 @@ function DateTab({ slot, selected, hasEvents, onClick }: DateTabProps) {
         'active:scale-90 transition-transform',
         // 정사각 셀(요일·날짜만) — '오늘' 텍스트 제거로 모든 칸 동일 높이
         'relative flex h-[2.6rem] w-[2.6rem] shrink-0 flex-col items-center justify-center rounded-[10px] select-none',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
+        'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300',
         selected ? 'text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high active:bg-surface-high/70',
         // 오늘은 글자 대신 골드 테두리로 표시(미선택 시)
         !selected && slot.isToday ? 'ring-1 ring-accent-300/55' : '',
@@ -396,7 +396,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
         ref={stickyRef}
         // before:* = '브리지' — 검색바 위로 불투명 surface-base 띠를 깔아, 스크롤 시 헤더 축소로 생길 수 있는
         // 헤더-검색바 사이 틈으로 뒤 컨텐츠가 비치는 현상을 어떤 상태에서도 가린다(JS 측정 의존 없이 확실).
-        className={stickyTop ? "relative sticky z-30 bg-surface-base border-b border-border-subtle transition-colors duration-[var(--dur-fast)] before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-surface-base before:content-['']" : ''}
+        className={stickyTop ? "relative sticky z-30 bg-surface-base border-b border-border-subtle transition-colors duration-(--dur-fast) before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-surface-base before:content-['']" : ''}
         style={stickyTop ? { top: stickyTop } : undefined}
       >
       {/* ── 검색창 ─────────────────────────────────────────────────────── */}
@@ -407,7 +407,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           className={[
             'flex items-center gap-2 px-3',
             'bg-surface-high rounded-[12px] h-10', // v4.1: 알약 → 12px(오너: 알약은 안이 답답해 보인다)
-            'border transition-colors duration-[var(--dur-fast)]',
+            'border transition-colors duration-(--dur-fast)',
             isFocused
               ? 'border-accent-300'
               : 'border-border-default',
@@ -432,7 +432,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
             className={[
               'flex-1 bg-transparent text-sm text-ink-primary',
               'placeholder:text-ink-muted',
-              'outline-none border-none',
+              'outline-hidden border-none',
               '[&::-webkit-search-cancel-button]:appearance-none',
             ].join(' ')}
           />
@@ -453,7 +453,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           {hasActiveFilter && (
             <span
               aria-label="활성 필터"
-              className="shrink-0 min-w-[1.25rem] h-5 flex items-center justify-center rounded-badge bg-accent-300 text-white text-2xs font-bold px-1"
+              className="shrink-0 min-w-5 h-5 flex items-center justify-center rounded-badge bg-accent-300 text-white text-2xs font-bold px-1"
             >
               {activeCount}
             </span>
@@ -500,7 +500,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
               type="button"
               aria-pressed={active}
               onClick={() => setTour(active ? 'all' : id)}
-              className={[CHIP_BASE, 'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300', active ? CHIP_ON : CHIP_OFF].join(' ')}
+              className={[CHIP_BASE, 'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300', active ? CHIP_ON : CHIP_OFF].join(' ')}
             >
               {label}
             </button>
@@ -568,7 +568,7 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
         /* × 자체는 8px 글리프지만 히트영역은 24x24 로 넓힌다(WCAG 2.5.8 AA).
            ⚠ .hit(44x44 중앙 확장)은 여기서 금지 — 칩 사이 간격이 gap-1.5(6px)라 이웃 칩의
              × 와 히트박스가 겹쳐 **엉뚱한 필터가 지워진다**. 칩 높이(h-6=24)에 딱 맞춘다. */
-        className="-mr-1 p-2 text-ink-muted hover:text-ink-primary transition-colors focus:outline-none"
+        className="-mr-1 p-2 text-ink-muted hover:text-ink-primary transition-colors focus:outline-hidden"
       >
         <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
           <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />

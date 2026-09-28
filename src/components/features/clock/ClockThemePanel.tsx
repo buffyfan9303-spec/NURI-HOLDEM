@@ -29,7 +29,7 @@ import { uploadClockBg, deleteClockBg } from './clockBgImage';
  */
 function ClockMiniFace({ vars, accent, em, cqw, className }: {
   vars: React.CSSProperties; accent: string; em: number;
-  /** 2026-09-14: 컨테이너 폭 대비 비율(%). 이 얼굴은 aspect-[16/9] 상자 안이 **전부 em 단위**라
+  /** 2026-09-14: 컨테이너 폭 대비 비율(%). 이 얼굴은 aspect-video 상자 안이 **전부 em 단위**라
    *  루트 폰트가 폭에 비례하지 않으면 좁은 폭에서 글자만 그대로 커서 넘친다
    *  (실측 375: 미리보기 314px 인데 em 44 고정 → "500/1,000" 이 두 줄, 타이머가 배지와 겹침).
    *  `min(em px, cqw)` 라서 **넓은 폭에서는 종전 픽셀값 그대로**고 좁아질 때만 줄어든다 —
@@ -39,7 +39,7 @@ function ClockMiniFace({ vars, accent, em, cqw, className }: {
   const RAIL = 16; // TV 는 24칸 — 축소판에서는 셀 수 있는 만큼만
   const filled = 6;
   return (
-    <div className={`relative flex aspect-[16/9] flex-col overflow-hidden text-white ${className ?? ''}`}
+    <div className={`relative flex aspect-video flex-col overflow-hidden text-white ${className ?? ''}`}
       style={{ ...vars, fontSize: cqw ? `min(${em}px, ${cqw}cqw)` : `${em}px`, background: 'var(--clk-bg)' }} aria-hidden>
       {/* 상단 — 매장명만. LEVEL 알약·RUNNING 알약은 2026-09-19 오너 지시 #9 로 보드에서 사라졌다(ClockStage LevelLine). */}
       <div className="flex shrink-0 items-center gap-[0.4em] px-[0.7em] pt-[0.5em]">
@@ -63,11 +63,11 @@ function ClockMiniFace({ vars, accent, em, cqw, className }: {
 
       {/* CURRENT | NEXT */}
       <div className="grid shrink-0 grid-cols-2 gap-[0.3em] px-[0.6em]">
-        <div className="rounded-[0.3em] bg-white/[0.05] py-[0.25em] text-center">
+        <div className="rounded-[0.3em] bg-white/5 py-[0.25em] text-center">
           <p className="text-[0.36em] font-bold tracking-[0.2em]" style={{ color: 'var(--clk-ink-soft)' }}>CURRENT</p>
           <p className="text-[0.62em] font-extrabold leading-tight tabular-nums" style={{ color: accent }}>500/1,000</p>
         </div>
-        <div className="rounded-[0.3em] bg-white/[0.025] py-[0.25em] text-center">
+        <div className="rounded-[0.3em] bg-white/2.5 py-[0.25em] text-center">
           <p className="text-[0.36em] font-bold tracking-[0.2em]" style={{ color: 'var(--clk-ink-dim)' }}>NEXT</p>
           <p className="text-[0.55em] font-extrabold leading-tight tabular-nums text-white/70">1,000/2,000</p>
         </div>
@@ -196,7 +196,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
       </div>
 
       {/* 실제 합성 미리보기 — 배경 이미지 + 가독 보호 오버레이 + 강조색을 송출 화면과 같은 순서로 겹친다 */}
-      <div className="overflow-hidden rounded-input border border-border-subtle [container-type:inline-size]" aria-label="클락 화면 미리보기">
+      <div className="overflow-hidden rounded-input border border-border-subtle @container" aria-label="클락 화면 미리보기">
         {/* 4.8cqw = 1440 실측(폭 ≈920px · em 44)의 비율. min() 이라 PC 는 그대로 44px 이다. */}
         <ClockMiniFace vars={previewVars} accent={curAccent} em={44} cqw={4.8} />
       </div>
@@ -236,7 +236,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
               {/* 프리셋 버튼도 같은 축소판 — 배경색만 바뀌는 것이 아니라 타이머·accent·surface 대비가 실제로 보인다.
                   강조색은 '지금 고른 색'이 아니라 **그 프리셋의 색**으로 그려야 프리셋 간 비교가 성립한다
                   (활성 프리셋만 업주가 고른 색을 반영한다). */}
-              <span className="block overflow-hidden rounded-input [container-type:inline-size]">
+              <span className="block overflow-hidden rounded-input @container">
                 <ClockMiniFace vars={clockThemeVars(makeClockTheme(p.id, active ? curAccentSel : undefined, null))}
                   accent={active && curAccentSel ? curAccentSel : p.accent} em={22} cqw={8.8} />
               </span>

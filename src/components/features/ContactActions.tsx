@@ -12,7 +12,7 @@ import Icon from '../atoms/Icon';
 const ACTION_BASE =
   'inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-input px-2 text-sm font-semibold transition-colors';
 const ACTION_SOLID = `${ACTION_BASE} border border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary`;
-const ACTION_INVITE = `${ACTION_BASE} border border-dashed border-accent-400/50 bg-accent-300/[0.06] text-accent-200 hover:bg-accent-300/10`;
+const ACTION_INVITE = `${ACTION_BASE} border border-dashed border-accent-400/50 bg-accent-300/6 text-accent-200 hover:bg-accent-300/10`;
 const ACTION_EMPTY =
   'inline-flex h-11 min-w-0 flex-1 flex-col items-center justify-center rounded-input border border-dashed border-border-default bg-surface-high/60 px-2 text-center leading-none text-ink-muted';
 

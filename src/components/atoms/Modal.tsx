@@ -60,10 +60,10 @@ interface ModalProps {
    */
   dismissible?: boolean;
   /**
-   * 쌓임 층. 기본('default')은 콘텐츠 시트·모달의 z-[60] — 종전 그대로다.
+   * 쌓임 층. 기본('default')은 콘텐츠 시트·모달의 z-60 — 종전 그대로다.
    *
    * 'gate': **전역 이벤트로 아무 화면 위에서나 뜨는 게이트 시트**(로그인 AuthModal · 본인인증 VerifyGateSheet)용 z-[65].
-   *   🔴 2026-09-25 FULL-ERROR-SWEEP-A: 장터 매물 상세(sheet z-[60])에서 비로그인 찜 → 로그인 시트가 같은 z-[60] 인데
+   *   🔴 2026-09-25 FULL-ERROR-SWEEP-A: 장터 매물 상세(sheet z-[60])에서 비로그인 찜 → 로그인 시트가 같은 z-60 인데
    *   App 의 DOM 앞순위라 **매물 상세 뒤에 깔려 안 보였다**(CTA 세로 중심열 히트 0/46, 390·360). 게시글 상세는 page(z-[55])라
    *   우연히 통과했고, 그 전엔 소비처마다 '로그인 필요' 안내창을 먼저 닫는 땜질(SellerChatModal·MyMarketModal·SupportInquiryModal)이 있었다.
    *   층을 한 곳에서 정한다: 콘텐츠 모달(60) < 게이트(65) < 확인창·말풍선(70) < QR·클락(80) < 축하(90) < 라이트박스·설치배너(100) < 토스트(120).
@@ -89,7 +89,7 @@ const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
   // UI-02(2026-09-13): 게시글 **읽기 열**. Pretendard `0` 자폭 0.5957em × 17px ≈ 10.13px/ch — 문서의 68~72ch 는 689~729px.
   //   2xl(714) − lg:p-6(25.5×2) = 663px = 65.5ch(미달), 4xl(952)는 과다 → 46rem(782px) − 51 = 731px ≈ 72.2ch.
   //   ⚠ tailwind content 스캔: 임의값은 소스에 **문자열 리터럴**로 있어야 한다(변수 조합 금지 — tailwind.config.js 경고).
-  read: 'max-w-[46rem]',
+  read: 'max-w-184',
 };
 
 /**
@@ -382,7 +382,7 @@ export default function Modal({
         // UI-Aura(2026-09-14, 실행문 §4-1): compact page(게시글 상세)만 surface-mid — 본문 대부분이 투명이라
         // 셸이 곧 화면 전체 지면이다. surface-base(다크 #06080F 거의 검정)를 그대로 두면 "단색 검정 한 장"이 된다.
         // compact 아닌 나머지 5곳(캘린더/매장 도구·GTO 분석·일정 상세 등)은 그대로(바이트 동일 유지).
-        className={['fixed inset-0 z-[55] flex flex-col pt-[env(safe-area-inset-top)]',
+        className={['fixed inset-0 z-55 flex flex-col pt-[env(safe-area-inset-top)]',
           compact ? 'bg-surface-mid' : 'bg-surface-base',
           closing ? (dragClosed ? '' : PAGE_LEAVE) : PAGE_ENTER].join(' ')}>
         {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기. ⚠ 드래그를 끈 page(게시글 읽기)에는 그리지 않는다 —
@@ -420,8 +420,8 @@ export default function Modal({
    *  시트는 slide-down(이동+투명도)으로 내려간다, 가운데 모달은 래퍼 fade-out 이 맡는다. 값의 근거는 tailwind.config.js keyframes 주석. */
   const dimIn = closing ? (variant === 'sheet' && !dragClosed ? 'animate-dim-out' : '') : variant === 'sheet' ? 'animate-dim-in-sheet' : 'animate-dim-in';
   return (
-    // z-[60]: 전체화면 page 변형(z-[55]) 위에도 항상 뜨도록 — 예: 포스터 상세에서 '대회 후기 쓰기' 글쓰기 모달
-    // z-[65]: layer='gate' — 로그인·본인인증 시트가 z-[60] 시트 위에서 열려도 DOM 순서와 무관하게 위에 온다(ModalProps.layer 참고)
+    // z-60: 전체화면 page 변형(z-[55]) 위에도 항상 뜨도록 — 예: 포스터 상세에서 '대회 후기 쓰기' 글쓰기 모달
+    // z-65: layer='gate' — 로그인·본인인증 시트가 z-60 시트 위에서 열려도 DOM 순서와 무관하게 위에 온다(ModalProps.layer 참고)
     // 🔴 2026-09-26(flicker-gate voucher-open) — 열 때 래퍼 전체 fade(0.16s)를 뺐다. 그 fade 가 끝나면 딤은 이미 다 어두운데 시트는
     //   아직 올라오는 중(0.26s)이라, 라이트에서 화면 평균 휘도가 197→104 로 떨어졌다 시트가 덮으며 돌아왔다(2프레임 깜빡임).
     //   이제 딤은 자기 애니(animate-dim-in*, 본문과 같은 길이·선형)로 어두워지고, 시트는 불투명한 채 올라오며, 가운데 모달 본문은
@@ -430,7 +430,7 @@ export default function Modal({
     //   라이트에서 휘도가 207→148 로 떨어졌다 돌아왔다(voucher-close).
     //   드래그로 닫힌 시트(dragClosed)는 딤이 이미 animateDim 으로 0 이라 아무 애니도 걸지 않는다(애니가 인라인 0 을 이겨 딤이 다시 켜진다). 드래그 딤(animateDim)은 takeOverDim 이
     //   이 CSS 애니를 getAnimations() 로 넘겨받아 취소하고 보이는 값에서 잇는다(열리는 도중에 잡아도 튀지 않는다).
-    <div data-scroll-lock className={['fixed inset-0 flex', layer === 'gate' ? 'z-[65]' : 'z-[60]', closing && variant !== 'sheet' ? 'animate-fade-out' : ''].join(' ')}
+    <div data-scroll-lock className={['fixed inset-0 flex', layer === 'gate' ? 'z-65' : 'z-60', closing && variant !== 'sheet' ? 'animate-fade-out' : ''].join(' ')}
       style={{
         alignItems: variant === 'sheet' ? 'flex-end' : 'center',
         justifyContent: 'center',

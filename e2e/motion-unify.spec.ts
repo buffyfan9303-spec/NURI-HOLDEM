@@ -295,7 +295,7 @@ test('🔴 MU5 — 전면 판 열기(390 · CPU 4배 · 터치): 매장·게시�
   expectOneOpen(await sampleOpen(page, '[data-testid="event-list-page"]', () => press(page, '[data-testid="home-quick-event"]', { mobile: true })), '이벤트 목록');
   await back();
   // 내 정보 — 열기 + 닫기(페이드)
-  const me = '.fixed.inset-0.bg-surface-base[class*="z-[60]"]';
+  const me = '.fixed.inset-0.bg-surface-base[class~="z-60"]';
   expectOneOpen(await sampleOpen(page, me, async () => {
     await press(page, 'header [aria-label$="메뉴"]', { mobile: true });
     await page.waitForTimeout(500);

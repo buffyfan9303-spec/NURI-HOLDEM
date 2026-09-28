@@ -166,7 +166,7 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
               <div className="flex gap-1">
                 {DOW.map((d) => (
                   <button key={d} type="button" onClick={() => toggleOff(n, d)}
-                    className={['flex-1 py-1 rounded text-2xs font-bold border', offs.includes(d) ? 'bg-rose-500/15 text-rose-300 border-rose-500/40' : 'bg-surface-high text-ink-muted border-border-subtle'].join(' ')}>{d}</button>
+                    className={['flex-1 py-1 rounded-sm text-2xs font-bold border', offs.includes(d) ? 'bg-rose-500/15 text-rose-300 border-rose-500/40' : 'bg-surface-high text-ink-muted border-border-subtle'].join(' ')}>{d}</button>
                 ))}
               </div>
             </div>
@@ -256,7 +256,7 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
     <div className="space-y-3">
       <div className="flex items-center justify-center gap-1">
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
-        <span className="text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[5rem] text-center">{month}</span>
+        <span className="text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums w-20 text-center">{month}</span>
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -393,7 +393,7 @@ export function StaffWorkLog({ venueId, active = true }: { venueId: string; acti
     <div className="space-y-2">
       <div className="flex items-center justify-center gap-1">
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
-        <span className="text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[5rem] text-center">{month}</span>
+        <span className="text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums w-20 text-center">{month}</span>
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
       </div>
       {shiftErr ? (
@@ -403,7 +403,7 @@ export function StaffWorkLog({ venueId, active = true }: { venueId: string; acti
             className="shrink-0 rounded-badge border border-danger/40 px-2.5 py-1 text-2xs font-bold text-danger-light hover:bg-danger/15 transition-colors">다시 시도</button>
         </div>
       ) : sorted.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">기록이 없습니다.</p> : (
-        <div className="rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle max-h-[24rem] overflow-y-auto">
+        <div className="rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle max-h-96 overflow-y-auto">
           {sorted.map((s, i) => (
             <div key={`${s.date}-${s.name}-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
               <span className="w-14 shrink-0 text-2xs text-accent-300 dark:text-accent-200 tabular-nums">{s.date.slice(5)}</span>
@@ -463,7 +463,7 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
         <h3 className="text-sm font-bold text-ink-primary">내 출근 관리 (출퇴근 기록)</h3>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-[44px] w-[44px] rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
-          <span className="text-xs font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[4.5rem] text-center">{month}</span>
+          <span className="text-xs font-bold text-accent-300 dark:text-accent-200 tabular-nums w-18 text-center">{month}</span>
           <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-[44px] w-[44px] rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
         </div>
       </div>
@@ -480,7 +480,7 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
           {sorted.map((s) => {
             const isToday = s.date === today;
             return (
-              <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-accent-400/50 bg-accent-300/[0.06]' : 'border-border-subtle bg-surface-base'].join(' ')}>
+              <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-accent-400/50 bg-accent-300/6' : 'border-border-subtle bg-surface-base'].join(' ')}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-bold text-ink-primary">{s.date.slice(5)}{isToday ? ' (오늘)' : ''}{s.confirmed && <span className="ml-1.5 text-2xs text-emerald-700 dark:text-emerald-400">확정</span>}</span>
                   {canSelfEdit(s.date) && (
@@ -492,8 +492,8 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-[6rem] disabled:opacity-60" /></label>
-                  <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-[6rem] disabled:opacity-60" /></label>
+                  <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
+                  <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
                   {s.checkIn && s.checkOut && <span className="text-2xs text-accent-300 dark:text-accent-200 tabular-nums font-bold">{hours(s.checkIn, s.checkOut).toFixed(1)}h</span>}
                   {!canSelfEdit(s.date) && <span data-testid="shift-locked-note" className="basis-full text-2xs text-ink-muted">{readOnly ? '관리자 계정은 보기만 할 수 있어요. 출퇴근 기록은 직원 본인만 남깁니다.' : '오늘·어제 근무만 직접 기록할 수 있어요. 지난 근무는 업주에게 수정을 요청해 주세요.'}</span>}
                 </div>

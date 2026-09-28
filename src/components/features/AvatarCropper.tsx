@@ -131,7 +131,7 @@ export default function AvatarCropper({
 
   return (
     // aria-labelledby: 이름 없는 dialog 는 '대화상자' 로만 읽힌다(MODAL-03). 초기 포커스는 아래 '적용' autoFocus.
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-labelledby="avatar-cropper-title">
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-labelledby="avatar-cropper-title">
       <div className="w-full max-w-xs bg-surface-mid rounded-dialog overflow-hidden shadow-dialog">
         <div className="px-4 py-3 border-b border-border-subtle">
           <h3 id="avatar-cropper-title" className="text-sm font-semibold text-ink-primary">사진 편집</h3>

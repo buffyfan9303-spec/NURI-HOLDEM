@@ -122,7 +122,7 @@ function SettingsTabBar({ tabs, active, onPick }: {
           사라지므로, 스크롤 칸은 투명하게 두고 `py-1.5 -my-1.5` 로 확장이 들어갈 자리를 주고(차지하는 높이는 그대로),
           트랙(테두리·배경)은 안쪽 판(w-max min-w-full)이 든다 — 스크롤하면 트랙도 함께 움직인다. */}
       <div ref={ref} role="tablist" aria-label="매장 설정 하위탭"
-        className="relative -my-1.5 overflow-x-auto py-1.5 [scrollbar-width:none]">
+        className="relative -my-1.5 overflow-x-auto py-1.5 scrollbar-none">
         <div className="relative flex w-max min-w-full items-center gap-0.5 rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
         <SlidingPill activeKey={active} className="rounded-[6px] pill-active" />
         {tabs.map((t) => {
@@ -130,7 +130,7 @@ function SettingsTabBar({ tabs, active, onPick }: {
           return (
             <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined} data-tab-id={t.id}
               onClick={() => onPick(t.id)}
-              className={['inline-flex h-[32px] shrink-0 items-center rounded-[6px] px-1 t-tab leading-none sm:px-3 transition-colors duration-[var(--dur-fast)] focus:outline-none', CHIP_HIT,
+              className={['inline-flex h-[32px] shrink-0 items-center rounded-[6px] px-1 t-tab leading-none sm:px-3 transition-colors duration-(--dur-fast) focus:outline-hidden', CHIP_HIT,
                 on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
               <span className="relative">{t.label}</span>
             </button>
@@ -141,10 +141,10 @@ function SettingsTabBar({ tabs, active, onPick }: {
       {/* 페이드는 트랙 안쪽에만 — 스크롤 칸의 -my-1.5 가 이 감싸개로 마진 상쇄되어 감싸개가 트랙보다 6.375px 씩 크다.
           inset-y-2(8.5) = 6.375(히트 자리) + 2.125(종전 inset-y-0.5). */}
       {(edge === 'right' || edge === 'both') && (
-        <div aria-hidden className="pointer-events-none absolute inset-y-2 right-0.5 w-9 rounded-r-input bg-gradient-to-l from-surface-high via-surface-high/70 to-transparent" />
+        <div aria-hidden className="pointer-events-none absolute inset-y-2 right-0.5 w-9 rounded-r-input bg-linear-to-l/srgb from-surface-high via-surface-high/70 to-transparent" />
       )}
       {(edge === 'left' || edge === 'both') && (
-        <div aria-hidden className="pointer-events-none absolute inset-y-2 left-0.5 w-9 rounded-l-input bg-gradient-to-r from-surface-high via-surface-high/70 to-transparent" />
+        <div aria-hidden className="pointer-events-none absolute inset-y-2 left-0.5 w-9 rounded-l-input bg-linear-to-r/srgb from-surface-high via-surface-high/70 to-transparent" />
       )}
     </div>
   );
@@ -818,7 +818,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           ⚠ 2026-09-15 오너 지시: '운영자 전체 접근' **표기**를 없앤다. 일반 업주에게는 원래 이 칸 자체가
             안 보이지만, 문구가 남아 있으면 관리자 화면에서 권한 등급이 그대로 읽힌다. 남기는 것은 '관리할 매장 선택' 하나. */}
       {(isAdmin || memberVenues.length > 1) && (
-        <div className="space-y-2 rounded-card border border-accent-400/40 bg-accent-300/[0.06] p-3">
+        <div className="space-y-2 rounded-card border border-accent-400/40 bg-accent-300/6 p-3">
           <label htmlFor="mystore-venue-pick" className="block text-2xs font-bold text-accent-300">관리할 매장 선택</label>
           {isAdmin ? (
             <select id="mystore-venue-pick" value={venueId ?? ''} onChange={(e) => setAdminVenueId(e.target.value || null)} className="input text-sm">
@@ -1384,12 +1384,12 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
         <Icon name="store" size={12} className="shrink-0 text-ink-muted" />
         {/* ⚠ 2026-09-14 실측(375, 긴 매장명): 매장명이 폭을 **먼저** 다 먹어 게임명이 17px `메…` 로 소실됐다
             — 이 줄의 존재 이유("지금 어느 게임인가")가 사라지는 정보 소실이다.
-            ⚠ 루트 폰트가 17px 라 max-w-[14rem] = 238px 다(Tailwind rem 유틸이 6.25% 크다).
+            ⚠ 루트 폰트가 17px 라 max-w-56 = 238px 다(Tailwind rem 유틸이 6.25% 크다).
             그래서 우선순위를 뒤집는다: 매장명은 flex-1(basis 0)로 **남는 폭만** 먹고 먼저 줄어들며,
             게임명은 shrink-0 으로 제 폭을 지키되 max-w-[50%] 로 긴 이름일 때만 잘린다.
-            max-w-[14rem] 은 남겨 둬 PC 에서 매장명이 줄을 독점하지 않게 한다(1440·1280 렌더 불변). */}
+            max-w-56 은 남겨 둬 PC 에서 매장명이 줄을 독점하지 않게 한다(1440·1280 렌더 불변). */}
         {venueName && (<>
-          <span className="min-w-0 max-w-[14rem] flex-1 truncate font-bold text-ink-primary">{venueName}</span>
+          <span className="min-w-0 max-w-56 flex-1 truncate font-bold text-ink-primary">{venueName}</span>
           {sep}
         </>)}
         <span className="shrink-0 tabular-nums text-ink-secondary">{dLabel}</span>
@@ -1411,7 +1411,7 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
                     '+ 새 게임' 버튼이 컨테이너 밖으로 나갔다(오버레이 스크롤바 환경에선 더 있다는 단서가 없다).
                     ⚠ 루트 폰트 17px 라 8rem = 136px 다 — 6rem(102px)으로 줄여 칩을 좁힌다.
                     opacity-80 도 라이트에서 4.01 이라 경계값이었다 → opacity 를 빼고 토큰 계열로 둔다. */}
-                {g.title && <span className="max-w-[6rem] truncate font-semibold">· {g.title}</span>}
+                {g.title && <span className="max-w-24 truncate font-semibold">· {g.title}</span>}
                 {/* 2026-09-14 라이트 실측: opacity-70 이 3.24:1 이었다. '마감'은 그 게임에 더 못 넣는다는
                     운영 상태라 흐리면 안 된다 — 투명도 대신 의미가 있는 토큰으로. */}
                 {g.closed && <span className="text-2xs font-semibold text-ink-secondary">마감</span>}
@@ -1508,7 +1508,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
   //   `max-md:py-1.5 max-md:-my-1.5`(6.375px) 로 확장이 들어갈 자리를 줘서 푼다 — 잘려도 32+6.375×2 = 44.75px.
   //   레일 배경은 그 패딩까지 칠하면 32 칸 위아래에 띠가 생기므로 모바일에서는 ::before 트랙(inset-y-1.5)으로 칸 높이만 칠한다.
   //   md 이상은 종전 h-[44px]·레일 그대로다(CHIP_HIT 는 ::before 뿐이라 칸 rect 를 바꾸지 않는다).
-  const chip = (on: boolean) => ['inline-flex h-[44px] max-md:h-[32px] min-w-max flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:px-3 lg:text-sm',
+  const chip = (on: boolean) => ['inline-flex h-[44px] max-md:h-[32px] min-w-max flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-(--dur-fast) focus:outline-hidden sm:px-3 lg:text-sm',
     on ? 'font-bold text-white' : 'font-semibold text-ink-muted hover:text-ink-secondary', CHIP_HIT].join(' ');
   return (
     <div ref={ref} data-mystore-rail=""
@@ -1532,18 +1532,18 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
       <button type="button" role="tab" aria-selected={active === 'dashboard'} data-pill-active={active === 'dashboard' || undefined}
         onClick={onHome} title="매장 대시보드(요약)"
         /* 🔴 S1(오너 2026-09-24 "알약이 칸마다 폭이 달라 이동할 때마다 크기가 바뀐다") — 원인은 이 칸만의
-           `!px-2`(8.5px)였다. `flex-1 basis-0` 은 **패딩을 뺀 나머지**를 균등 분배하므로 패딩이 큰 칸이
+           `px-2!`(8.5px)였다. `flex-1 basis-0` 은 **패딩을 뺀 나머지**를 균등 분배하므로 패딩이 큰 칸이
            정확히 그만큼 넓어진다(실측 360: 요약 51.14 · 나머지 42.64 = 차 8.5). 알약이 요약↔단계를 오갈 때
-           43→51px 로 늘었다 줄었다 한 것이 이것이다. 다른 칸과 같은 `px-1` 을 쓰고, sm 이상은 종전 `!px-3`
+           43→51px 로 늘었다 줄었다 한 것이 이것이다. 다른 칸과 같은 `px-1` 을 쓰고, sm 이상은 종전 `px-3!`
            그대로(다른 칸도 sm:px-3 이라 PC 폭은 원래도 같았다). */
-        className={[chip(active === 'dashboard'), 'lg:min-w-0 lg:flex-1 lg:basis-0 sm:!px-3'].join(' ')}>
+        className={[chip(active === 'dashboard'), 'lg:min-w-0 lg:flex-1 lg:basis-0 sm:px-3!'].join(' ')}>
         <span className="relative">요약</span>
       </button>
       {steps.map((st, i) => {
         const on = active === st.id;
         return (
           // 🔴 2026-09-22 — lg 에서도 **다른 칸과 완전히 같은 계약**을 쓴다(요약·이용권 포함).
-          //   옛 `lg:max-w-[9rem]` 상한은 폐기했다: 상한이 있으면 칸이 적을 때 단계만 153px 에 걸리고
+          //   옛 `lg:max-w-36` 상한은 폐기했다: 상한이 있으면 칸이 적을 때 단계만 153px 에 걸리고
           //   요약·이용권은 계속 늘어 **폭이 어긋난다**(음성 대조 실측: [163.88,153,153,153,153,153]).
           //   '한 칸이 바 전체로 늘어난다' 던 옛 위험은 모든 칸이 같은 flex 계약을 쓰면 생기지 않는다.
           <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
@@ -1625,7 +1625,7 @@ function SectionBtn({ active, onClick, icon, children, locked, ...rest }: {
     <button type="button" onClick={onClick} ref={ref} {...rest}
       // 모바일=인라인 칩(아이콘+라벨 한 줄, 1행 가로 스크롤) / PC=세로 리스트.
       // §T1: PC 만 13px(사다리 밖)이라 모바일 12.75 와 어긋나 있었다 → t-tab 한 값으로 고정(-0.25px).
-      className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2 t-tab transition-colors duration-[var(--dur-fast)] focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:py-2',
+      className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2 t-tab transition-colors duration-(--dur-fast) focus:outline-hidden touch-manipulation lg:w-full lg:shrink lg:justify-start lg:py-2',
         active ? 'font-bold text-white' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       {active && <span aria-hidden className="absolute inset-0 rounded-[7px] pill-active animate-fade-in" />}
       <span className="relative shrink-0" aria-hidden>{icon}</span>
@@ -2092,7 +2092,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         );
 
         return (
-          <div className="space-y-3 rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
+          <div className="space-y-3 rounded-card border border-accent-400/30 bg-accent-300/5 p-3">
             <div className="flex items-center gap-2">
               <span className="inline-flex shrink-0 items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name="target" size={12} className="shrink-0" />입력 중인 게임</span>
               <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-accent-300 dark:text-accent-200">{eventName || '메인 게임(기본)'}</span>
@@ -2132,7 +2132,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       })()}
 
       {/* 그날 장부 명단 — 펼쳐서 참고하며 순위 입력(장부↔순위 직접 연동) */}
-      <div className="rounded-card border border-emerald-500/25 bg-emerald-500/[0.04] overflow-hidden">
+      <div className="rounded-card border border-emerald-500/25 bg-emerald-500/4 overflow-hidden">
         <button type="button" onClick={() => setLedgerPanelOpen((v) => !v)}
           className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left">
           <span className="inline-flex items-center gap-1 text-2xs font-bold text-emerald-300"><Icon name="notebook" size={12} className="shrink-0" />그날 장부 명단 {ledgerPlayers.length > 0 ? <span className="text-ink-secondary">({ledgerPlayers.length}명)</span> : <span className="font-normal text-ink-muted">연결된 장부 없음</span>}</span>
@@ -2183,7 +2183,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
 
       {/* 저장 전 입력분 안내 — 초안은 자동 보관되지만, 상태를 보여주지 않으면 사장님이 오탭을 눈치채지 못한다 */}
       {(drafted || restorable) && (
-        <div className="flex items-center gap-2 rounded-input border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2">
+        <div className="flex items-center gap-2 rounded-input border border-amber-500/30 bg-amber-500/6 px-3 py-2">
           {restorable ? (
             <>
               <span className="min-w-0 flex-1 text-2xs text-amber-200">저장하지 않고 나갔던 입력분이 있어요({restorable.length}줄). 지금 화면은 <b>저장된 순위</b>입니다.</span>
@@ -2926,7 +2926,7 @@ function StaffManager({ venueId }: { venueId: string }) {
 /** 승인 대기 업주의 대시보드 자리(2026-09-26 전체 디버깅 #7) — 서버 20260926c·e 와 같은 말: 운영 기능은 관리자 승인 뒤에 열린다. */
 function OwnerPendingCard() {
   return (
-    <div data-testid="owner-pending-card" className="space-y-2 rounded-card border border-amber-500/40 bg-amber-500/[0.06] p-5">
+    <div data-testid="owner-pending-card" className="space-y-2 rounded-card border border-amber-500/40 bg-amber-500/6 p-5">
       <p className="text-sm font-bold text-ink-primary">관리자 승인 후 운영 기능이 열립니다</p>
       <p className="t-desc break-keep text-ink-secondary">
         업주 인증을 관리자가 확인하고 있어요. 승인되면 이 화면에서 포스터·장부·클락·순위·이용권을 바로 쓸 수 있습니다.

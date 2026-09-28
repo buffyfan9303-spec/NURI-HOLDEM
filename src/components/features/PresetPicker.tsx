@@ -79,7 +79,7 @@ export default function PresetPicker({ venueId, scope, onApply, note }: {
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="프리셋 검색" className="input w-full py-1.5 pl-8 text-xs" />
             </div>
           )}
-          <div className="max-h-[13rem] divide-y divide-border-subtle overflow-y-auto rounded-input border border-border-subtle bg-surface-base">
+          <div className="max-h-52 divide-y divide-border-subtle overflow-y-auto rounded-input border border-border-subtle bg-surface-base">
             {filtered.length === 0 ? (
               <p className="py-4 text-center text-2xs text-ink-muted">"{q.trim()}" 검색 결과가 없습니다.</p>
             ) : filtered.map((p) => (

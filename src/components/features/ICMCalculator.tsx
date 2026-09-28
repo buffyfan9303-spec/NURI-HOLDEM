@@ -156,7 +156,7 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
           className="inline-flex h-[44px] w-[44px] items-center justify-center disabled:opacity-30">
           <span className="flex h-7 w-7 items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold leading-none text-ink-secondary">−</span>
         </button>
-        <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{prizes.length}명</span>
+        <span className="min-w-11 text-center text-2xs font-bold text-ink-primary tabular-nums">{prizes.length}명</span>
         <button type="button" aria-label="상금 자리 늘리기" onClick={() => setPrizes((p) => [...p, 0])} disabled={prizes.length >= 20}
           className="inline-flex h-[44px] w-[44px] items-center justify-center disabled:opacity-30">
           <span className="flex h-7 w-7 items-center justify-center rounded-input border border-accent-400/50 bg-accent-300/10 text-base font-bold leading-none text-accent-300">+</span>
@@ -196,7 +196,7 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
           className="inline-flex h-[44px] w-[44px] items-center justify-center disabled:opacity-30">
           <span className="flex h-7 w-7 items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold leading-none text-ink-secondary">−</span>
         </button>
-        <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{stacks.length}/{ICM_MAX_PLAYERS}명</span>
+        <span className="min-w-11 text-center text-2xs font-bold text-ink-primary tabular-nums">{stacks.length}/{ICM_MAX_PLAYERS}명</span>
         <button type="button" aria-label="플레이어 늘리기" onClick={() => setStacks((p) => [...p, 1000])} disabled={stacks.length >= ICM_MAX_PLAYERS}
           className="inline-flex h-[44px] w-[44px] items-center justify-center disabled:opacity-30">
           <span className="flex h-7 w-7 items-center justify-center rounded-input border border-accent-400/50 bg-accent-300/10 text-base font-bold leading-none text-accent-300">+</span>

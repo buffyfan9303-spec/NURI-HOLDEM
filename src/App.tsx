@@ -252,7 +252,7 @@ function LazyFallback() {
 }
 function OverlayFallback() {
   return (
-    <div className="fixed inset-0 z-[45] flex items-center justify-center bg-surface-base" aria-busy="true">
+    <div className="fixed inset-0 z-45 flex items-center justify-center bg-surface-base" aria-busy="true">
       <div className="h-7 w-7 animate-spin rounded-full border-2 border-border-strong border-t-ink-secondary" />
     </div>
   );
@@ -423,7 +423,7 @@ const AppHeader = memo(function AppHeader({
                 하나로 통일한다 — 359→372 로 올려 373 미만에서는 어떤 탭이어도 워드마크가 접힌다.
                 글자 크기·히트영역은 그대로다.
                 (재현: `foot.cjs`·`hdr5~9.cjs` 로 TAB_LABEL 10개 × 355~400px 전수 스윕, scratchpad st4 참고). */}
-            <NuriHoldemLogo className="!h-7 max-[372px]:hidden" />
+            <NuriHoldemLogo className="h-7! [@media(max-width:372px)]:hidden" />
           </button>
           <span className="h-4 w-px shrink-0 bg-border-default" aria-hidden />
           <span className="min-w-0 truncate text-base font-extrabold tracking-tight text-ink-primary" aria-current="page">
@@ -451,7 +451,7 @@ const AppHeader = memo(function AppHeader({
             className={[
               // tap-44: 보이는 원 38.25px, 누름면 세로 44px(가로 그대로 — 360 헤더 제목 폭 불변).
               'tap-44 w-9 h-9 flex items-center justify-center rounded-full',
-              'transition-colors duration-[var(--dur-fast)] ease-out active:scale-90',
+              'transition-colors duration-(--dur-fast) ease-out active:scale-90',
               notifOpen
                 ? 'bg-surface-high text-accent-300'
                 : unreadCount > 0
@@ -475,7 +475,7 @@ const AppHeader = memo(function AppHeader({
               aria-label="이용권 · 출석"
               className={[
                 'tap-44 w-9 h-9 flex items-center justify-center rounded-full',
-                'transition-colors duration-[var(--dur-fast)] ease-out active:scale-90',
+                'transition-colors duration-(--dur-fast) ease-out active:scale-90',
                 'text-ink-secondary hover:text-ink-primary hover:bg-surface-high',
               ].join(' ')}
             >
@@ -493,7 +493,7 @@ const AppHeader = memo(function AppHeader({
                 type="button"
                 onClick={() => { setMenuTab(activeTab); setUserMenu(!menuLive); }}
                 aria-label={`${user.name} 메뉴`}
-                className="group relative w-11 h-11 -mr-1 flex items-center justify-center rounded-full focus:outline-none"
+                className="group relative w-11 h-11 -mr-1 flex items-center justify-center rounded-full focus:outline-hidden"
               >
                 {/* 알림 벨이 모바일에서도 보이므로(숫자 배지 포함) 아바타 점은 제거 */}
                 {/* 보이는 아바타 32px(이미지/이니셜) — 터치영역은 44px 유지(WCAG) */}
@@ -532,7 +532,7 @@ const AppHeader = memo(function AppHeader({
                     onClick={() => leaveMenuTo(onOpenMe)}
                     aria-label="내 정보 열기"
                     className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 border-b border-border-subtle
-                               hover:bg-surface-high transition-colors focus:outline-none"
+                               hover:bg-surface-high transition-colors focus:outline-hidden"
                   >
                     <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} />
                     <div className="min-w-0 flex-1">
@@ -591,7 +591,7 @@ const AppHeader = memo(function AppHeader({
             </div>
           ) : (
             <SpringButton onClick={onOpenLogin} ariaLabel="로그인"
-              className="tap-44 btn-primary !h-7 !min-h-0 !px-2.5 !py-0 text-2xs shadow-none">
+              className="tap-44 btn-primary h-7! min-h-0! px-2.5! py-0! text-2xs shadow-none">
               로그인
             </SpringButton>
           )}
@@ -684,7 +684,7 @@ const TabBar = memo(function TabBar({
               //   min-width:auto(기본) 유지 → 탭이 많아 좁아지면 라벨 폭 이하로 줄지 않고 가로 스크롤(겹침 방지).
               // 데스크톱(sm+): 자연폭 + 컨테이너 sm:justify-center로 중앙 정렬 그룹(과도한 벌어짐 방지).
               // 총 높이 40px 유지: 버튼 py-1.5(12) + 캡슐 py-1(8) + 라벨 20 — 밑줄 시절과 동일(CLS 0).
-              'flex-1 px-1 sm:flex-none sm:px-2.5 py-1.5 text-sm whitespace-nowrap transition-colors duration-[var(--dur-fast)] focus:outline-none touch-manipulation rounded-t-input',
+              'flex-1 px-1 sm:flex-none sm:px-2.5 py-1.5 text-sm whitespace-nowrap transition-colors duration-(--dur-fast) focus:outline-hidden touch-manipulation rounded-t-input',
               // 폰트 굵기는 조건부로만 — 기본 font-medium 을 같이 두면 CSS 출력 순서상 font-bold 를 이겨
               // 활성 굵기가 500에 머문다(헤드리스 실측으로 확인). 굵기 변화로 라벨 폭이 바뀌어도
               // SlidingPill 은 렌더 후 재측정이라 밑줄은 어긋나지 않는다.
@@ -863,7 +863,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
     <nav
       // U06: 억제되면 보조기술·Tab 순서에서도 빠진다. 래퍼의 pointer-events 만으로는 키보드를 못 막는다.
       aria-hidden={suppressed || undefined}
-      className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none transition-transform duration-[var(--dur-panel)]',
+      className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none transition-transform duration-(--dur-panel)',
         hidden ? 'translate-y-[120%]' : 'translate-y-0',
         suppressed ? 'invisible pointer-events-none' : ''].join(' ')}
       // 🔴 B2(2026-09-21 오너) — 실기기에서 **알약 아래만 크게 벌어진다.** 실측(운영 375×812 에
@@ -886,7 +886,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
           예전엔 '아래 불투명 → 위 완전 투명' 한 장이라 상단 30px 가 거의 유리였고 푸터 글자가 그대로 비쳐
           "뒤쪽 배경이 보인다"(오너 2026-09-02 내 매장 모바일)로 읽혔다. */}
       <div aria-hidden className="absolute inset-0 glass-strong" />
-      <div aria-hidden className="absolute inset-x-0 -top-3 h-3 bg-gradient-to-t from-surface-base/80 to-transparent" />
+      <div aria-hidden className="absolute inset-x-0 -top-3 h-3 bg-linear-to-t/srgb from-surface-base/80 to-transparent" />
       {/* 🔴 B1(2026-09-21) — 하단바 알약 **아래 여백**. 운영 390×844 실측에서 `nav` 는 bottom:0 · 높이 74.25 CSS px 인데
           알약 아래가 8.5 CSS px 남아 "하단바가 너무 위에 떠 있다" 로 보였다(safe-area 0 환경).
           ⚠ 루트 폰트가 **17px** 이라 0.5rem = 8.5px 다(16px 가정하면 계산이 틀린다 — 이 저장소 고유 함정).
@@ -929,7 +929,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
               // 부수 효과: .press-spring 의 will-change:transform 이 빠지며 이 버튼이 더 이상 상시
               // offsetParent 가 아니게 된다(아래 필 주석 참고) — 이번 변경에서 노린 것은 아니지만 개선이다.
               data-main-tab
-              className="flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1 pt-2 touch-manipulation focus:outline-none"
+              className="flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1 pt-2 touch-manipulation focus:outline-hidden"
             >
               {/* 아이콘 21px · 라벨 t-tab(12.75px) — 공백 줄이고 또렷하게
                   ⚠ 2026-09-21 활성 아이콘 진입 바운스(0.4초, 최대 1.16배) 제거 — 손을 뗀 뒤에야
@@ -937,7 +937,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
                   이제 index.css 의 nav 전용 [aria-current="page"] 필/아이콘 전환이 담당한다.
                   (지운 유틸리티 클래스명은 여기 그대로 적지 않는다 — Tailwind content 스캔이
                   주석의 평문도 읽어 죽은 CSS 규칙을 되살린다, index.css 참고.) */}
-              <span data-main-tab-icon className={['relative flex h-7 w-12 items-center justify-center rounded-full [&_svg]:relative [&_svg]:h-[21px] [&_svg]:w-[21px] transition-colors duration-[var(--dur-fast)]',
+              <span data-main-tab-icon className={['relative flex h-7 w-12 items-center justify-center rounded-full [&_svg]:relative [&_svg]:h-[21px] [&_svg]:w-[21px] transition-colors duration-(--dur-fast)',
                 on ? 'text-white' : 'text-ink-secondary'].join(' ')}>
                 {/* 활성 알약(.pill-active 그라데이션 필 — OUTFLAME 필 내비 문법) — 각 칸이 자기 핀을 갖고
                     opacity 만 토글(transform·layout 0). SlidingPill FLIP 은 이 탭바에선 여전히 안 쓴다
@@ -946,7 +946,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
                     FLIP 을 새로 들일 이유가 되진 않는다.
                     아이콘은 그라데이션 필 위라 흰색으로 승격(다크 4.6:1 실측) */}
                 <span aria-hidden data-main-tab-pill
-                  className={['pointer-events-none absolute inset-0 rounded-full pill-active transition-opacity duration-[var(--dur-fast)]',
+                  className={['pointer-events-none absolute inset-0 rounded-full pill-active transition-opacity duration-(--dur-fast)',
                     on ? 'opacity-100' : 'opacity-0'].join(' ')} />
                 {tab ? TAB_ICON[tab] : ME_ICON}
                 {/* 🔴 2026-09-23 — 커뮤니티 새 글 점을 여기서 뺐다(오너 지시). 아래 숫자 배지(라이브 N게임)는 남는다:
@@ -970,7 +970,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
                   index.css:564 의 전역 `word-break: keep-all` 때문에 '커뮤니티'가 한 어절로 붙어 있어
                   폭 제한만으로는 안 접힌다 → `max-w-full` + `break-all` 로 확대 때만 두 줄로 접는다.
                   100% 에서는 320px 칸 59.3px > 최장 라벨 51px 이라 줄바꿈이 일어나지 않는다(실측). */}
-              <span className={['t-tab max-w-full break-all text-center transition-colors duration-[var(--dur-fast)]',
+              <span className={['t-tab max-w-full break-all text-center transition-colors duration-(--dur-fast)',
                 on ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>
                 {label}
               </span>
@@ -3962,16 +3962,16 @@ export default function App() {
     //     내 매장에 들어가는 순간 좌우로 68px 씩 벌어지는 것만 보였다(오너 보고 "전체가 넓어져서 이질감").
     //   그래서 예외를 지운다. 콘텐츠 폭은 전후가 같으므로 장부 표·입력칸이 새로 좁아지는 일이 없다.
     //   ⚠ 장부·클락을 **진짜로** 넓히려면 레버는 여기가 아니라 index.css 의 `main` 상한이다(별도 결정).
-    <div className="relative z-[1] min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
+    <div className="relative z-1 min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
       {/* 아우라 후광(정적) — body 배경 위, 콘텐츠(z-1) 아래. 이 래퍼의 bg-surface-base 를 걷어낸 이유: 불투명이면 후광이 안 보인다 */}
       <div aria-hidden className="aura-bg" />
       {/* 오프라인 배너(Phase 17-5) — 토스트(z-100)와 층 분리, 헤더(z-50) 위 상시 고정.
-          ⚠ z-[52] 이지 z-[60] 이 아니다(2026-09-13, e2e post-nav ⑦ 가 4173 프로덕션 빌드에서 3/3 실패):
+          ⚠ z-52 이지 z-60 이 아니다(2026-09-13, e2e post-nav ⑦ 가 4173 프로덕션 빌드에서 3/3 실패):
             이 배너는 앱 셸(relative z-[1]) 안의 sticky 라 같은 스택 안의 전체화면 page 모달(fixed z-[55])·내 정보(z-[60])와 z 로 겨룬다.
             60 이면 게시글 상세의 헤더 X(상단 46px) 를 덮어 닫기가 안 눌렸다(dev 5174 에선 렌더가 느려 300ms 안에 배너가 안 떠 거짓 통과).
             헤더 위·오버레이 아래가 맞다 — 오버레이 안에서는 배너가 가려지지만 닫기가 막히는 것보다 낫고, 토스트(z-100)는 그대로 보인다. */}
       {offline && (
-        <div role="status" className="sticky top-0 z-[52] flex items-center justify-center gap-1.5 bg-amber-500/95 px-3 py-1.5 text-xs font-bold text-black">
+        <div role="status" className="sticky top-0 z-52 flex items-center justify-center gap-1.5 bg-amber-500/95 px-3 py-1.5 text-xs font-bold text-black">
           <Icon name="wifi-off" size={14} className="shrink-0" /> 오프라인 — 저장된 정보를 보여드려요. 연결되면 자동으로 새로고침합니다.
         </div>
       )}
@@ -4001,13 +4001,13 @@ export default function App() {
       {/* 🔄 새 버전 배너 — 배포 감지 시 새로고침 유도(앱이 멈춰 보이지 않게). 오프라인 배너처럼 sticky로 스크롤 중에도 보이게(z는 오프라인 바로 아래) */}
       {updateReady && (
         <button type="button" onClick={() => location.reload()}
-          className="sticky top-0 z-[59] flex w-full items-center justify-center gap-2 bg-accent-300 px-3 py-2 text-xs font-bold text-white active:opacity-80">
+          className="sticky top-0 z-59 flex w-full items-center justify-center gap-2 bg-accent-300 px-3 py-2 text-xs font-bold text-white active:opacity-80">
           <Icon name="refresh" size={14} className="mr-1 inline-block align-[-2px] shrink-0" />새 버전이 있어요 — 탭하여 새로고침
         </button>
       )}
       {/* 🔔 운영자 푸시 온보딩(설치형·1회) — 새 바인요청 폰 알림 */}
       {pushNudge && (
-        <div className="flex items-center gap-2 border-b border-accent-400/30 bg-accent-300/[0.08] px-3 py-2.5">
+        <div className="flex items-center gap-2 border-b border-accent-400/30 bg-accent-300/8 px-3 py-2.5">
           <span className="text-accent-300" aria-hidden><Icon name="bell" size={18} /></span>
           <p className="min-w-0 flex-1 text-2xs leading-snug text-ink-secondary">
             {(isOwner || isAdmin || user?.role === 'venue_staff')
@@ -4033,7 +4033,7 @@ export default function App() {
           ⚠ `truncate` 는 장식이 아니라 **한 줄 보증**이다. 문구가 길어지면 말줄임으로 끝나고
             줄이 늘지 않는다(고아줄이 구조적으로 불가능해진다). */}
       {user && !user.verified && PORTONE_CONFIGURED && !verifyNudgeOff && (
-        <div className="flex items-center gap-2 border-b border-accent-400/30 bg-accent-300/[0.08] px-page-x py-2">
+        <div className="flex items-center gap-2 border-b border-accent-400/30 bg-accent-300/8 px-page-x py-2">
           {/* ⚠ 자물쇠는 **버튼 안**에 둔다. 셸을 div 로 바꾸면서 이걸 형제로 뺐더니
               예전엔 눌리던 아이콘 자리가 죽은 영역이 됐다(적대적 검토가 잡았다).
               셸 전체를 클릭으로 되돌릴 수는 없다 — 안에 닫기 버튼이 있어 중첩 button 이 된다. */}
@@ -4200,7 +4200,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => searchBarRef.current?.clearAll()}
-                    className="inline-flex h-9 shrink-0 items-center gap-1 rounded-chip bg-surface-high px-3 text-xs text-ink-secondary transition-colors hover:text-danger focus:outline-none"
+                    className="inline-flex h-9 shrink-0 items-center gap-1 rounded-chip bg-surface-high px-3 text-xs text-ink-secondary transition-colors hover:text-danger focus:outline-hidden"
                   >
                     초기화
                   </button>
@@ -4216,14 +4216,14 @@ export default function App() {
             const evNotice = browseNotices.find((n) => n.title.includes('오픈 기념 이벤트'));
             return (
               <div className="px-page-x pt-3">
-                <div className="relative flex items-center gap-2.5 overflow-hidden rounded-aura border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.16] via-accent-300/[0.07] to-transparent px-3 py-2.5">
+                <div className="relative flex items-center gap-2.5 overflow-hidden rounded-aura border border-accent-400/45 bg-linear-to-r/srgb from-accent-300/16 via-accent-300/[0.07] to-transparent px-3 py-2.5">
                   <Icon name="gift" size={20} className="shrink-0" />
                   {/* 공지 글이 조회되지 않으면 '자세히 보기'가 무반응 클릭이 된다 — 공지 있을 때만 버튼 문법 */}
                   {evNotice ? (
                     <button
                       type="button"
                       onClick={() => startTransition(() => setOpenNotice(evNotice))}
-                      className="min-w-0 flex-1 text-left focus:outline-none"
+                      className="min-w-0 flex-1 text-left focus:outline-hidden"
                     >
                       <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 · 출석 점수 2배 · 첫 예약 +50 · 웰컴 +100</p>
                       <p className="text-2xs text-ink-muted">8/3(월)까지 · 자세히 보기 →</p>
@@ -4288,11 +4288,11 @@ export default function App() {
                           aria-expanded={noticesOpen}
                           // 글자 높이 그대로면 17px 다. 헤더의 py-2 를 음수 마진으로 되먹여
                           // 헤더 높이는 유지한 채 손가락이 닿는 영역만 33px 로 넓힌다.
-                          className="-my-2 py-2 -ml-1 pl-1 pr-2 flex items-center gap-1.5 text-xs font-bold text-accent-300 focus:outline-none"
+                          className="-my-2 py-2 -ml-1 pl-1 pr-2 flex items-center gap-1.5 text-xs font-bold text-accent-300 focus:outline-hidden"
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
-                            className={['transition-transform duration-[var(--dur-base)]', noticesOpen ? '' : '-rotate-90'].join(' ')}>
+                            className={['transition-transform duration-(--dur-base)', noticesOpen ? '' : '-rotate-90'].join(' ')}>
                             <polyline points="6 9 12 15 18 9" />
                           </svg>
                           공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
@@ -4378,7 +4378,7 @@ export default function App() {
                       // 2026-09-24 HOME-LAYOUT-STRETCH(리드 결정) — PC(lg~)는 **2열**(카드 1024 에서 빈 오른쪽 539~560px 실측).
                       //   읽는 순서는 행 우선(grid 기본 흐름) · 날짜 머리말은 두 칸 전체(아래 p 의 lg:col-span-2).
                       //   구분선은 칸마다 0.5px 바깥 그림자(홈 HOME_LIST_GRID 와 같은 조리법 — 머리말이 끼어도 짝이 안 어긋난다).
-                      : 'divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura lg:grid lg:grid-cols-2 lg:divide-y-0 lg:[&>*]:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))]',
+                      : 'divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura lg:grid lg:grid-cols-2 lg:divide-y-0 lg:*:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))]',
                   ].join(' ')}>
                     {visibleSchedules.map((s, i) => (
                       <Fragment key={s.id}>
@@ -4471,7 +4471,7 @@ export default function App() {
                           data-aura={myTodayRes.length === 1 ? '' : undefined}
                           data-aura-level={myTodayRes.length === 1 ? 'hero' : undefined}
                           data-aura-variant={myTodayRes.length === 1 ? 'violet' : undefined}
-                          className="w-full flex items-center gap-2.5 rounded-aura border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
+                          className="w-full flex items-center gap-2.5 rounded-aura border border-accent-400/45 bg-linear-to-r/srgb from-accent-300/12 to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
                           <span className="shrink-0 text-accent-300" aria-hidden><Icon name="cards" size={18} /></span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-bold text-ink-primary">{r.title}</span>
@@ -4713,14 +4713,14 @@ export default function App() {
           ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요`, 'success'); m.getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
         };
         return (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" onClick={() => setBuyinPick(null)}>
+          <div className="fixed inset-0 z-80 flex items-center justify-center bg-black/60 p-4" onClick={() => setBuyinPick(null)}>
             <div className="w-full max-w-xs rounded-card border border-border-default bg-surface-high p-4 space-y-2" onClick={(e) => e.stopPropagation()}>
               <p className="text-sm font-bold text-ink-primary">참가(바인) 요청 · 게임 선택</p>
               <p className="text-2xs text-ink-muted">참가할 게임을 고르면 운영자에게 요청이 전송됩니다.</p>
               <div className="space-y-1.5 pt-1">
                 {buyinPick.games.map((g) => (
                   <button key={g.gameSeq} type="button" onClick={() => submit(g.gameSeq)}
-                    className="w-full rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-3 py-2.5 text-left text-sm font-bold text-ink-primary hover:bg-accent-300/15">
+                    className="w-full rounded-input border border-accent-400/40 bg-accent-300/6 px-3 py-2.5 text-left text-sm font-bold text-ink-primary hover:bg-accent-300/15">
                     <Icon name={g.gameSeq === 1 ? 'trophy' : 'dice'} size={14} className="mr-1 inline-block align-[-2px] shrink-0" />{g.title}
                   </button>
                 ))}
@@ -4750,7 +4750,7 @@ export default function App() {
       })()}
 
       {/* 이용권 · 출석 시트 — **루트**에서 렌더한다. 헤더(sticky z-50) 안에서 그리면
-          Modal 의 fixed z-[60] 이 헤더 스태킹 컨텍스트에 갇혀 하단 탭바에 덮인다(실측). */}
+          Modal 의 fixed z-60 이 헤더 스태킹 컨텍스트에 갇혀 하단 탭바에 덮인다(실측). */}
       {/* Suspense 는 조건 **밖**이다 — 아래 EventPage 와 같은 이유이고, 같은 증상이 실제로 났다:
           오너 2026-09-08 "티켓 아이콘 처음 누르면 안 가지고 두 번 눌러야 이동이 돼".
           경계가 그 업데이트에서 처음 마운트되면 리액트는 폴백을 반드시 커밋하고 최소 ~300ms 유지한다.
@@ -4774,7 +4774,7 @@ export default function App() {
           1회차에 283ms 빈 화면이 그대로 남았다 — 실측(2026-09-08) 그 구간에 긴 프레임 0 · 네트워크 0,
           계산도 대기도 아닌 순수 스로틀이었다. 경계를 미리 마운트해 두면 트랜지션이 홈을 유지한 채
           준비될 때까지 기다린다. 같은 구조를 위 CustomerDashboardPage 가 이미 쓰고 있다. */}
-      {/* 이벤트 **목록** — EventPage(보드) 보다 먼저 렌더한다. 같은 z-[55] 는 DOM 순서가 이기므로
+      {/* 이벤트 **목록** — EventPage(보드) 보다 먼저 렌더한다. 같은 z-55 는 DOM 순서가 이기므로
           보드가 목록 위에 덮인다. 목록은 여기서 닫지 않는다 — 보드를 닫으면 그대로 드러나야
           "뒤로가기: 보드 → 목록 → 닫기" 가 성립한다(위 eventListOpen 주석 참고). */}
       <Suspense fallback={null}>
@@ -4789,7 +4789,7 @@ export default function App() {
               예전엔 `setEventOpen(false)` 를 먼저 불렀는데, 그 순간 '지금 보고 있는 화면' 스냅샷이
               `kind:'tab'` 으로 덮여서 — AuthModal 이 구글로 떠나기 직전에 뜨는 그 스냅샷이다 —
               로그인 왕복 뒤 이벤트가 아니라 홈에 떨어졌다. 복원 종류에 'event' 를 추가해도 순서가 그대로면 소용이 없다.
-              AuthModal 은 같은 z-[60] 을 이 뒤에 렌더하므로 위에 얹히고, 이메일 로그인처럼 떠나지 않는 경로에서는
+              AuthModal 은 같은 z-60 을 이 뒤에 렌더하므로 위에 얹히고, 이메일 로그인처럼 떠나지 않는 경로에서는
               닫으면 이벤트 판이 그대로 남아 있다(왕복 자체가 없어 더 낫다). */
           <EventPage open={eventOpen} slug={eventSlug} onSlug={setEventSlug} onClose={() => setEventOpen(false)} onLogin={openLoginCb} />
         )}
@@ -5015,7 +5015,7 @@ function ScrollTopButton() {
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       // 모바일: 하단 탭바 위로 띄움(--tabbar-float, 누락됐던 safe-area 복구) / PC: 기존 위치
       className={[
-        'scroll-top-fab fixed bottom-[var(--tabbar-float)] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid text-ink-secondary shadow-dialog hover:text-accent-300',
+        'scroll-top-fab fixed bottom-(--tabbar-float) lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid text-ink-secondary shadow-dialog hover:text-accent-300',
         show ? 'opacity-100' : 'pointer-events-none opacity-0',
       ].join(' ')}
     >
@@ -5034,7 +5034,7 @@ function ScrollTopButton() {
 // 낙하했고, list 는 임의값 h-24(96px) vs 실측 87px 로 어긋났다. 골격을 복제하면 높이가
 // 구조적으로 일치한다(list 는 실측 87px 고정 — 2026-08-25, 375px, html 17px).
 /** ⚠ 목록 행은 **개수와 높이를 둘 다** 실제와 맞춰야 자리 예약이 성립한다(2026-09-17 감사).
- *  · 높이: `min-h-[var(--card-h-list)]` — 예전엔 내용 높이(≈98.7px)만 차지해 실제 카드와 어긋났다.
+ *  · 높이: `min-h-(--card-h-list)` — 예전엔 내용 높이(≈98.7px)만 차지해 실제 카드와 어긋났다.
  *  · 개수: 지난 방문에 몇 줄이었는지를 기억한다(`src/lib/seenCount.ts` — 홈과 **같은 함수**).
  *    6행 고정이던 시절 실측: 스켈레톤 642.5px vs 실제 232.9px → 데이터 도착 때 그만큼 위로 당겨졌다. */
 function ScheduleSkeletonGrid({ viewMode, rows }: { viewMode: 'grid' | 'list' | 'table'; rows?: number }) {
@@ -5042,7 +5042,7 @@ function ScheduleSkeletonGrid({ viewMode, rows }: { viewMode: 'grid' | 'list' | 
   const n = grid ? 10 : (rows ?? 6);
   return (
     // 2026-09-24 — 목록 스켈레톤도 PC(lg~) 2열(실제 목록과 같은 격자 — 한 열로 예약하면 도착 순간 높이가 절반으로 줄어 아래가 끌려 올라간다).
-    <div className={[grid ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low lg:grid lg:grid-cols-2 lg:divide-y-0 lg:[&>*]:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))]'].join(' ')} aria-busy="true">
+    <div className={[grid ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low lg:grid lg:grid-cols-2 lg:divide-y-0 lg:*:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))]'].join(' ')} aria-busy="true">
       {/* 🔴 날짜 머리말 자리 예약(2026-09-20) — 목록에 날짜 그룹 머리말을 넣으면서
           스켈레톤이 그만큼 적게 예약해 데이터 도착 시 아래가 밀렸다(CLS).
           ⚠ **몇 개**가 붙을지는 데이터 전에 모른다(그룹 수는 배열을 봐야 나온다).
@@ -5056,7 +5056,7 @@ function ScheduleSkeletonGrid({ viewMode, rows }: { viewMode: 'grid' | 'list' | 
         grid ? (
           // GridCard 골격: 포스터 3/4 + 본문(p-2.5 gap-1.5: 제목 2줄 + 매장 1줄 + 구분선 + 바인 1줄)
           <div key={i} className="flex flex-col overflow-hidden rounded-card border border-border-subtle bg-surface-low">
-            <div className="skeleton aspect-[3/4] w-full rounded-none" />
+            <div className="skeleton aspect-3/4 w-full rounded-none" />
             <div className="flex flex-col gap-1.5 p-2.5">
               <div className="skeleton h-4" />
               <div className="skeleton h-4 w-2/3" />
@@ -5067,12 +5067,12 @@ function ScheduleSkeletonGrid({ viewMode, rows }: { viewMode: 'grid' | 'list' | 
           </div>
         ) : (
           // 시간표형 골격(SCHEDULE-ROW-E) — 로고 56 · 세 줄 · 금액 칸
-          <div key={i} className="flex min-h-[var(--card-h-list)] items-center gap-3 px-3 py-1.5">
+          <div key={i} className="flex min-h-(--card-h-list) items-center gap-3 px-3 py-1.5">
             <div className="skeleton h-[56px] w-[56px] shrink-0 rounded-[12px]" />
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               {['w-3/4', 'w-1/2', 'w-2/3'].map((w) => <div key={w} className={`skeleton h-3 ${w}`} />)}
             </div>
-            <div className="skeleton h-8 w-[4.5rem] shrink-0" />
+            <div className="skeleton h-8 w-18 shrink-0" />
           </div>
 
 

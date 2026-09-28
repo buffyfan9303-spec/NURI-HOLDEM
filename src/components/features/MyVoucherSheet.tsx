@@ -10,7 +10,7 @@
 //   (VenuePage 의 체크인은 이미 그 매장 안에 들어가 있어야 누를 수 있다).
 //
 // ⚠ 이 시트는 **App 루트에서 렌더한다**(헤더 안이 아니라). 헤더는 sticky z-50 이라 스태킹 컨텍스트를
-//   만들고, 그 안에서 Modal 의 fixed z-[60] 이 갇혀 하단 탭바(fixed z-50, DOM 후순위)에 덮였다 —
+//   만들고, 그 안에서 Modal 의 fixed z-60 이 갇혀 하단 탭바(fixed z-50, DOM 후순위)에 덮였다 —
 //   시트 아래쪽 약 100px 이 잘려 버튼이 아예 안 보였다(오너 스크린샷). QrScanModal 이 2026-08-28 에
 //   createPortal 로 고친 것과 같은 결함이라, 여기서는 애초에 루트에서 렌더해 원인을 없앤다.
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -214,7 +214,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
                   <li key={g.venueId}>
                     <button type="button"
                       onClick={() => setPlan({ ...g, venueName: g.name, via: 'phone', gameSeq: null })}
-                      className="flex min-h-[44px] w-full items-center gap-2 rounded-input border card-aura-sub px-3 py-2 text-left transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50">
+                      className="flex min-h-[44px] w-full items-center gap-2 rounded-input border card-aura-sub px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-surface-high/50">
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{g.name}</span>
                       <span className="shrink-0 text-sm font-bold tabular-nums text-accent-200">{g.ids.length}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">T</span></span>
                       <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
@@ -304,7 +304,7 @@ function VenueVoucherCounts({ rows: all, error, onRetry, onVenue }: {
         </div>
       </div>
       {rows === null && error ? (
-        <div role="alert" className="mt-2 flex items-center justify-between gap-2 rounded-input border border-danger/30 bg-danger/[0.06] px-3 py-2">
+        <div role="alert" className="mt-2 flex items-center justify-between gap-2 rounded-input border border-danger/30 bg-danger/6 px-3 py-2">
           <p className="text-2xs font-semibold text-danger-light">불러오지 못했어요 — 없는 것과는 달라요.</p>
           {onRetry && <button type="button" onClick={onRetry} className="hit shrink-0 rounded-input border border-danger/40 px-2 py-1 text-2xs font-bold text-danger-light">다시 시도</button>}
         </div>
@@ -319,7 +319,7 @@ function VenueVoucherCounts({ rows: all, error, onRetry, onVenue }: {
           {rows.map((r) => (
             <li key={r.venueId}>
               <button type="button" onClick={() => onVenue?.(r.venueId)} disabled={!onVenue}
-                className="flex min-h-[44px] w-full items-center gap-2 rounded-input border card-aura-sub px-3 py-2 text-left transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50 disabled:cursor-default">
+                className="flex min-h-[44px] w-full items-center gap-2 rounded-input border card-aura-sub px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-surface-high/50 disabled:cursor-default">
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{r.name}</span>
                 <span className="shrink-0 text-sm font-bold tabular-nums text-accent-200">{r.count}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">T</span></span>
                 {onVenue && <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />}
@@ -409,7 +409,7 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center">
+    <div className="fixed inset-0 z-80 flex items-end justify-center sm:items-center">
       <button type="button" aria-label="닫기" onClick={onCancel} className="absolute inset-0 overscroll-contain bg-black/70" />
       {/* aria-modal: 스크린리더가 뒤의 이용권 지갑을 같은 화면으로 읽지 않게(MODAL-03). 포커스 되잡기는 부모 Modal 이 한다(위 주석). */}
       <div role="dialog" aria-modal="true" aria-label="이용권 보내기"
@@ -476,7 +476,7 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
         {step === 'confirm' && (
           <div className="space-y-3">
             {/* 확인 카드 — 되돌릴 수 없는 값 셋(어디로 · 몇 장 · 남는 장수)을 한눈에 */}
-            <dl className="space-y-1.5 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2.5">
+            <dl className="space-y-1.5 rounded-input border border-amber-500/40 bg-amber-500/8 px-3 py-2.5">
               <div className="flex items-baseline justify-between gap-2">
                 <dt className="shrink-0 text-2xs text-ink-muted">받는 곳</dt>
                 <dd className="min-w-0 truncate text-sm font-bold text-ink-primary">{target?.display || plan.venueName}</dd>

@@ -38,8 +38,8 @@ function Cards({ codes, empty = '—' }: { codes: string[]; empty?: string }) {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 items-baseline gap-2 py-1">
-      <span className="w-[4.5rem] shrink-0 text-2xs text-ink-muted">{label}</span>
-      <span className="min-w-0 flex-1 text-xs text-ink-primary [overflow-wrap:anywhere]">{children}</span>
+      <span className="w-18 shrink-0 text-2xs text-ink-muted">{label}</span>
+      <span className="min-w-0 flex-1 text-xs text-ink-primary wrap-anywhere">{children}</span>
     </div>
   );
 }

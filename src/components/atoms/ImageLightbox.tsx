@@ -137,7 +137,7 @@ export default function ImageLightbox({ src, alt, onClose }: Props) {
       // 🔴 2026-09-19 (추론으로 넣은 방어 — 이 파일에서 실제로 재현하지는 않았다) — 퇴장 애니 동안 이 풀스크린
       // 오버레이가 뒤 화면 클릭을 계속 가로챌 수 있다. closing 이 되는 즉시(시각적 퇴장은 느려도)
       // pointer-events 를 꺼서 입력 차단은 바로 풀리게 한다.
-      className={['fixed inset-0 z-[100] flex items-center justify-center bg-black/95',
+      className={['fixed inset-0 z-100 flex items-center justify-center bg-black/95',
         closing ? 'pointer-events-none animate-fade-out' : 'animate-fade-in'].join(' ')}
       role="dialog" aria-modal="true" aria-label={`${alt} 확대 보기`}
       onWheel={onWheel}
@@ -152,12 +152,12 @@ export default function ImageLightbox({ src, alt, onClose }: Props) {
         /* top-[calc(...)]: 노치·상태바 아래로 내린다. 사진을 열었을 때 **닫을 방법**이
            상태바에 가리면 빠져나갈 길이 없다(전체화면이라 뒤 크롬도 안 보인다).
            h-11 w-11: 44px 터치 표준. `hit` 토큰은 position:relative 라 이 absolute 배치를 깨뜨려 실제 크기를 키운다. */
-        className="absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur hover:bg-white/20 active:opacity-80"
+        className="absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm hover:bg-white/20 active:opacity-80"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M18 6L6 18M6 6l12 12" /></svg>
       </button>
       {/* 터치 전용 조작 힌트 — PC(휠줌)에서는 불필요해 숨김 */}
-      <p className="pointer-events-none absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-2xs text-white/80 backdrop-blur lg:hidden">
+      <p className="pointer-events-none absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-2xs text-white/80 backdrop-blur-sm lg:hidden">
         두 손가락으로 확대 · 두 번 탭하면 줌
       </p>
       <img

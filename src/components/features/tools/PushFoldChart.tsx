@@ -87,7 +87,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
               // 겹치면 아랫줄 버튼이 윗줄 버튼의 탭을 가로챌 수 있다(2026-09-20 실측 확정). 박스 자체를 44px로.
               // 🔴 2026-09-24 G3: 보이는 32px + CHIP_HIT(누르는 44px) · 줄 간격 gap-y-3.5(14.875px) ≥ 확장 7+7 — 겹치지 않는다(gap-y-3 은 1.25px 겹쳐 gto-tab-verify 정수 스캔에서 43 으로 빨개졌다).
               <button key={p.k} type="button" onClick={() => setK(p.k)} aria-pressed={on} title={p.desc}
-                className={[CHIP_HIT, 'h-[32px] rounded-input text-2xs font-bold leading-none whitespace-nowrap border transition-colors focus:outline-none',
+                className={[CHIP_HIT, 'h-[32px] rounded-input text-2xs font-bold leading-none whitespace-nowrap border transition-colors focus:outline-hidden',
                   on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
                 {p.label}
               </button>

@@ -97,7 +97,7 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
         phase === 'idle' ? (disabled ? 'text-ink-muted' : 'text-white enabled:hover:scale-[0.97] enabled:active:scale-95') : '',
         wantsFull || phase === 'idle' ? 'px-5' : 'px-4',
         phase === 'success' ? 'text-white' : phase === 'loading' ? 'text-ink-secondary' : '',
-        'disabled:cursor-default focus:outline-none',
+        'disabled:cursor-default focus:outline-hidden',
         wantsFull ? 'w-full' : '',
         restClass,
       ].join(' ')}
@@ -132,7 +132,7 @@ export function SpringButton({
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={['transition-transform hover:scale-[0.97] active:scale-95 focus:outline-none', className].join(' ')}
+      className={['transition-transform hover:scale-[0.97] active:scale-95 focus:outline-hidden', className].join(' ')}
     >
       {children}
     </button>

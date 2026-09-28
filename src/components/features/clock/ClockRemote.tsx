@@ -234,7 +234,7 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
 
 function Shell({ venueName, game, onClose, children }: { venueName?: string; game?: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-[80] flex flex-col bg-surface-base text-ink-primary" data-scroll-lock>
+    <div className="fixed inset-0 z-80 flex flex-col bg-surface-base text-ink-primary" data-scroll-lock>
       <header className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2">
         <Icon name="smartphone" size={16} className="text-aura-300" />
         <p className="min-w-0 flex-1 truncate text-sm font-bold">클락 리모컨 <span className="font-normal text-ink-muted">· {venueName || '매장'}{game ? ` · ${game}` : ''}</span></p>

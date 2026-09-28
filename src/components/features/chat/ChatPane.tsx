@@ -212,7 +212,7 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
                   </div>
                 )}
                 <div className={['flex flex-col', mine ? 'items-end' : 'items-start', grouped ? 'mt-0' : 'mt-1.5'].join(' ')}>
-                  <div className={['group max-w-[78%] px-3 py-2 text-sm leading-snug whitespace-pre-wrap break-words shadow-sm',
+                  <div className={['group max-w-[78%] px-3 py-2 text-sm leading-snug whitespace-pre-wrap wrap-break-word shadow-xs',
                     mine ? 'bg-accent-300 text-white rounded-2xl rounded-br-md' : 'bg-surface-high text-ink-primary rounded-2xl rounded-bl-md'].join(' ')}>
                     {m.content}
                     {showMeta && (

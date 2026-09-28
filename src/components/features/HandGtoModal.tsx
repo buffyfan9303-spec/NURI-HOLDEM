@@ -56,7 +56,7 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
       ) : (
         <div className="space-y-3 p-4">
           {/* 핸드 + 강도 */}
-          <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3 text-center">
+          <div className="rounded-card border border-accent-400/30 bg-accent-300/5 p-3 text-center">
             <p className="text-2xs text-ink-muted">내 핸드</p>
             <p className="text-3xl font-extrabold leading-none text-accent-300">{label}</p>
             <p className="mt-1 text-xs text-ink-secondary">169핸드 중 <b className="text-ink-primary">상위 {pctRank}%</b> 강도</p>
@@ -106,7 +106,7 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
             </>
           ) : (
             // 없는 데이터를 근사로 만들어 내지 않는다 — 그게 충돌의 원인이었다.
-            <div className="rounded-input border border-amber-500/40 bg-amber-500/[0.06] p-3">
+            <div className="rounded-input border border-amber-500/40 bg-amber-500/6 p-3">
               <p className="flex items-center gap-1.5 text-xs font-bold text-amber-200">
                 <Icon name="info" size={13} className="shrink-0" aria-hidden />현재 데이터 미지원
               </p>

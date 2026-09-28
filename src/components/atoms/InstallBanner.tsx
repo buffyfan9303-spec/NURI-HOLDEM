@@ -73,13 +73,13 @@ export default function InstallBanner({ hidden: covered = false }: { hidden?: bo
     <div
       aria-hidden={covered || undefined}
       className={[
-        'fixed bottom-[calc(4.5rem_+_var(--tabbar-lift)_+_max(env(safe-area-inset-bottom),12px))] lg:bottom-3 left-1/2 z-[60] w-[min(92%,28rem)] -translate-x-1/2',
+        'fixed bottom-[calc(4.5rem+var(--tabbar-lift)+max(env(safe-area-inset-bottom),12px))] lg:bottom-3 left-1/2 z-60 w-[min(92%,28rem)] -translate-x-1/2',
         // 등장은 처음 한 번만 — 다시 마운트돼도 미끄러져 들어오지 않는다(위 didEnter 주석).
         enter ? 'animate-slide-up' : '',
         // 전면 오버레이가 떠 있으면 **자리를 지킨 채** 물러난다. 언마운트하지 않으므로 돌아올 때 안 튄다.
         //   visibility 까지 끄는 이유: opacity 0 만 주면 키보드 포커스가 안 보이는 버튼에 들어간다.
         covered ? 'pointer-events-none invisible opacity-0' : 'opacity-100',
-        'transition-opacity duration-[var(--dur-fast)]',
+        'transition-opacity duration-(--dur-fast)',
       ].join(' ')}
     >
       {/* 🔴 2026-09-18 오너: "저부분은 도대체 그냥 UI/UX가 없잖아 그리고 너무 커 위아래로
@@ -95,7 +95,7 @@ export default function InstallBanner({ hidden: covered = false }: { hidden?: bo
             · 아우라를 입혀 띄우개만 떠 보이게 했다(data-aura micro · 우상단 블러 원).
           ⚠ 위치 계산(bottom calc)은 그대로다 — InstallBanner.position.test.ts 가 잠그고 있다. */}
       <div data-aura data-aura-level="micro" data-aura-variant="violet"
-        className="relative flex items-center gap-3 overflow-hidden rounded-card border border-accent-400/40 bg-surface-float/95 px-3.5 py-2 shadow-dialog backdrop-blur">
+        className="relative flex items-center gap-3 overflow-hidden rounded-card border border-accent-400/40 bg-surface-float/95 px-3.5 py-2 shadow-dialog backdrop-blur-sm">
         <span aria-hidden className="quick-blob quick-blob-violet" />
         {/* 앱 아이콘 타일 — 휴대폰 홈화면의 아이콘처럼 **둔덕한 사각 테두리**를 두른다(2026-09-18 오너).
             '이걸 홈에 놓는다' 를 그림으로 말해 주는 장치라 테두리가 있어야 아이콘으로 읽힌다. */}

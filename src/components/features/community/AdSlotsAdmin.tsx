@@ -168,9 +168,9 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="flex shrink-0 gap-0.5">
                     <button type="button" onClick={() => move(s.slot, -1)} disabled={i === 0 || busySlot !== null} aria-label="위로 이동"
-                      className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300 disabled:opacity-25">▲</button>
+                      className="min-h-8 min-w-8 rounded-sm border border-border-default text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300 disabled:opacity-25">▲</button>
                     <button type="button" onClick={() => move(s.slot, 1)} disabled={i === slots.length - 1 || busySlot !== null} aria-label="아래로 이동"
-                      className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300 disabled:opacity-25">▼</button>
+                      className="min-h-8 min-w-8 rounded-sm border border-border-default text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300 disabled:opacity-25">▼</button>
                   </span>
                   <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold',
                     st.tone === 'on' ? 'bg-accent-300 text-white'
@@ -186,7 +186,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
                       같은 것으로 읽지 못했다(2026-09-15 리포트: "연결할 수 있는 부분이 없어").
                       배지의 말과 버튼의 말을 같게 맞춘다. 셀렉터는 data-testid 로 고정한다. */}
                   <button type="button" data-testid="ad-admin-pick" onClick={() => setPicking(s.slot)} disabled={busySlot === s.slot}
-                    className="min-h-8 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 text-xs font-bold text-accent-300 disabled:opacity-50">
+                    className="min-h-8 rounded-input border border-accent-400/40 bg-accent-300/6 px-2.5 text-xs font-bold text-accent-300 disabled:opacity-50">
                     {s.postId ? '게시글 바꾸기' : '게시글 연결'}
                   </button>
                   {s.postId && (
@@ -351,7 +351,7 @@ function AdPostPicker({ posts, takenPostIds, slot, onClose, onPick, onCompose }:
         {/* 올릴 글이 아직 없을 때의 막다른 길을 여기서 연다(오너 지시 2026-09-15).
             글이 하나도 없으면 검색창만 놓아 두는 것은 '연결할 수 있는 부분이 없다' 와 같다. */}
         <button type="button" data-testid="ad-admin-compose" onClick={onCompose}
-          className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-input border border-dashed border-accent-400/50 bg-accent-300/[0.06] px-3 text-sm font-bold text-accent-300 transition-colors hover:bg-accent-300/10">
+          className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-input border border-dashed border-accent-400/50 bg-accent-300/6 px-3 text-sm font-bold text-accent-300 transition-colors hover:bg-accent-300/10">
           <Icon name="plus" size={15} className="shrink-0" />새 글을 써서 {slot}번 칸에 연결
         </button>
         <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="글 검색"
@@ -485,7 +485,7 @@ function AdPostComposer({ slot, onClose, onSubmit }: {
             className="min-h-[44px] flex-1 rounded-input border border-border-default text-sm font-bold text-ink-secondary transition-colors hover:text-ink-primary disabled:opacity-50">취소</button>
           <button type="button" data-testid="ad-composer-save" onClick={() => void submit()}
             disabled={saving || !category || !title.trim() || !body.trim()}
-            className="btn-primary min-h-[44px] flex-[2] text-sm disabled:opacity-50">
+            className="btn-primary min-h-[44px] flex-2 text-sm disabled:opacity-50">
             {saving ? '등록 중…' : '등록하고 ' + slot + '번에 연결'}
           </button>
         </div>

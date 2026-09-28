@@ -41,12 +41,12 @@ export async function saveLocationConsent(granted: boolean): Promise<LocationCon
 
 /** 이 시트가 마운트되는 별도 루트의 표식(아래 askLocationConsent 가 붙인다). */
 export const CONSENT_HOST_ATTR = 'data-location-consent-host';
-/** 다른 게이트 시트(로그인 AuthModal · 본인인증 VerifyGateSheet — Modal layer='gate' 의 z-[65] 층)가 열려 있거나 닫히는 중인가.
+/** 다른 게이트 시트(로그인 AuthModal · 본인인증 VerifyGateSheet — Modal layer='gate' 의 z-65 층)가 열려 있거나 닫히는 중인가.
  *  🔴 2026-09-26 design-reviewer 실측: `?checkin=` 딥링크에서 로그인 시트와 이 시트가 같은 z-65 로 겹쳐, 동의 시트가 뜨는 순간
  *    로그인 카드가 0.3~1초 비쳤다. 위치 동의는 **사용자별**이라 로그인이 끝나(시트가 퇴장까지 마치고 DOM 에서 빠진) 뒤에만 연다.
  *  퇴장 모션 중에도 요소는 DOM 에 남으므로(useDelayedUnmount 220ms) '빠질 때까지' 기다리면 퇴장 프레임과도 겹치지 않는다. */
 export function otherGateOpen(doc: Document = document): boolean {
-  return [...doc.querySelectorAll('[data-scroll-lock].z-\\[65\\]')].some((el) => !el.closest(`[${CONSENT_HOST_ATTR}]`));
+  return [...doc.querySelectorAll('[data-scroll-lock].z-65')].some((el) => !el.closest(`[${CONSENT_HOST_ATTR}]`));
 }
 
 /** 동의 시트를 띄우고 답을 돌려준다 — true 동의 · false 동의 안 함 · null 닫음.

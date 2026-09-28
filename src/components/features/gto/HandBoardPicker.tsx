@@ -107,7 +107,7 @@ export default function HandBoardPicker({ hb, hint, summary, villainLabels }: {
       <Slots hb={hb} target="board" label="보드" />
 
       {summary !== undefined && (
-        <div className="flex min-h-[2.25rem] items-center rounded-input bg-surface-high px-2.5" aria-live="polite">{summary}</div>
+        <div className="flex min-h-9 items-center rounded-input bg-surface-high px-2.5" aria-live="polite">{summary}</div>
       )}
 
       <p className="text-2xs leading-relaxed text-ink-muted">

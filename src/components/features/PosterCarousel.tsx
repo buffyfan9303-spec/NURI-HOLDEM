@@ -3,7 +3,7 @@
 //
 // 2026-09-13 §6-2 재구성. 바뀐 계약 세 가지와 그 이유:
 //
-//  ① **높이가 비율이 아니라 값이다.** 예전엔 `aspect-[960/448]`(2.143:1) 이라 폭이 커질수록 높이가 같이
+//  ① **높이가 비율이 아니라 값이다.** 예전엔 `aspect-960/448`(2.143:1) 이라 폭이 커질수록 높이가 같이
 //     커졌다 — 390px 에서 166px, 캡을 풀면 PC 에서 500px 을 넘는다. §6-2 는 배너 높이를 모바일
 //     104~116px · PC 180~220px 로 못박는다(홈 첫 화면을 배너 하나가 먹지 않게). 그래서 **공통 프레임**에
 //     `min-h` 를 주고 트랙의 flex stretch 로 **모든 슬라이드가 같은 높이**를 갖게 한다.
@@ -385,7 +385,7 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
             선이 두 줄 그어져 '띠'로 읽혔다. 높이 154 → 152(테두리 2px) — 셸도 같이 바꿨다. md~ 카드 모양은 그대로.
           🔴 2026-09-25 오너 "위아래 살짝 블러로 일체감 / 아우라 LED" → 같은 날 "흐림으로 통일": 모든 폭에서
             위아래 8px 페더(mask). mask 는 테두리 상자 밖을 잘라 md~ 카드의 접촉 그림자도 위아래로는 보이지 않는다. */}
-      <div className="poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none [mask-image:linear-gradient(to_bottom,transparent,#000_8px,#000_calc(100%-8px),transparent)] md:mx-page-x md:rounded-aura lg:mx-0">
+      <div className="poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none mask-[linear-gradient(to_bottom,transparent,#000_8px,#000_calc(100%-8px),transparent)] md:mx-page-x md:rounded-aura lg:mx-0">
         <div
           ref={vpRef}
           data-testid="home-banner-viewport"
@@ -432,7 +432,7 @@ export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, ev
                 <Icon name="chevron-left" size={13} aria-hidden />
               </button>
               <span data-testid="home-banner-counter" role="img" aria-label={`배너 ${n}장 중 ${idx + 1}번째`}
-                className="pointer-events-none relative -mx-[34px] flex h-[24px] items-center rounded-full bg-black/65 px-[34px] text-[12px] font-semibold leading-[16px] tabular-nums text-white backdrop-blur-sm">
+                className="pointer-events-none relative mx-[-34px] flex h-[24px] items-center rounded-full bg-black/65 px-[34px] text-[12px] font-semibold leading-[16px] tabular-nums text-white backdrop-blur-xs">
                 {idx + 1}<span className="mx-[3px] font-medium text-white/90">/</span><span className="font-medium text-white/90">{n}</span>
               </span>
               {slides.map((s, i) => (

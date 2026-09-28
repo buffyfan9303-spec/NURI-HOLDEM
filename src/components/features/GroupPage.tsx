@@ -262,7 +262,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-secondary">{desc}</p>
                 ) : isManager ? (
                   <button type="button" onClick={openProfileEdit}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3.5 text-xs font-bold text-accent-200 transition-colors hover:bg-accent-300/10">
+                    className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/6 px-3.5 text-xs font-bold text-accent-200 transition-colors hover:bg-accent-300/10">
                     + 소개 쓰기
                   </button>
                 ) : (
@@ -286,7 +286,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
               <ul className="space-y-1.5">
                 {notices.map((n) => (
                   <li key={n.id} className="rounded-input bg-surface-low border border-border-subtle px-2.5 py-1.5">
-                    <p className="text-xs text-ink-primary whitespace-pre-wrap break-words">{n.content}</p>
+                    <p className="text-xs text-ink-primary whitespace-pre-wrap wrap-break-word">{n.content}</p>
                     <div className="mt-0.5 flex items-center gap-2 text-2xs text-ink-muted">
                       <span>{relativeTime(n.createdAt)}</span>
                       {/* 삭제는 서버(venue_notices_delete)가 관리자·작성자·개설자만 받는다 */}
@@ -316,7 +316,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                         const on = (joinPolicy ?? group.joinApproval ?? true) === v;
                         return (
                           <button key={String(v)} type="button" onClick={() => changeJoinPolicy(v)} aria-pressed={on}
-                            className={['rounded-input border px-3 py-2 text-left transition-colors duration-[var(--dur-fast)]',
+                            className={['rounded-input border px-3 py-2 text-left transition-colors duration-(--dur-fast)',
                               on ? 'border-accent-400/45 bg-accent-300/15' : 'chip-aura'].join(' ')}>
                             <span className={['block text-xs font-bold', on ? 'text-accent-200' : 'text-ink-primary'].join(' ')}>{label}</span>
                             <span className="block text-2xs text-ink-muted">{desc}</span>
@@ -455,7 +455,7 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
                   <button type="button" onClick={() => deleteGroupMessage(m.id).then(() => setMessages((p) => (p ?? []).filter((x) => x.id !== m.id))).catch((e) => toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'))} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light">×</button>
                 )}
               </div>
-              <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words whitespace-pre-wrap">{m.content}</p>
+              <p className="text-xs text-ink-primary leading-snug mt-0.5 wrap-break-word whitespace-pre-wrap">{m.content}</p>
             </div>
           </li>
         ))}
@@ -518,7 +518,7 @@ function GroupBoard({ groupId, canManage }: { groupId: string; canManage: boolea
           {posts.map((p) => (
             <li key={p.id} className="rounded-card border border-border-subtle bg-surface-low p-3">
               {p.title && <p className="text-sm font-bold text-ink-primary mb-0.5">{p.title}</p>}
-              <p className="text-sm text-ink-primary whitespace-pre-wrap break-words">{p.content}</p>
+              <p className="text-sm text-ink-primary whitespace-pre-wrap wrap-break-word">{p.content}</p>
               <div className="mt-1.5 flex items-center gap-2">
                 <Avatar name={p.authorName} color={p.authorColor} size={18} />
                 <span className="text-2xs text-ink-muted">{p.authorName}</span>

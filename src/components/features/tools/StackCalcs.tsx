@@ -125,7 +125,7 @@ export function BankrollCalc() {
         <div className="flex gap-1.5">
           {([{ id: 'tourney', label: '대회' }, { id: 'cash', label: '캐시' }] as const).map((t) => (
             <button key={t.id} type="button" onClick={() => setType(t.id)}
-              className={[CHIP_HIT, 'flex-1 h-[32px] rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
+              className={[CHIP_HIT, 'flex-1 h-[32px] rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-hidden',
                 type === t.id ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
               {t.label}
             </button>

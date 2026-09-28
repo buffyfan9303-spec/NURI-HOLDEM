@@ -155,8 +155,8 @@ function RowSkeleton({ rows }: { rows: number }) {
         <li key={i} className="flex h-11 items-center gap-2.5 border-b border-border-subtle px-3 last:border-b-0">
           <span className="skeleton h-6 w-6 rounded-full" />
           <span className="skeleton h-7 w-7 rounded-full" />
-          <span className="skeleton h-3.5 min-w-0 flex-1 rounded" style={{ maxWidth: `${45 + ((i * 13) % 30)}%` }} />
-          <span className="skeleton h-3.5 w-10 rounded" />
+          <span className="skeleton h-3.5 min-w-0 flex-1 rounded-sm" style={{ maxWidth: `${45 + ((i * 13) % 30)}%` }} />
+          <span className="skeleton h-3.5 w-10 rounded-sm" />
         </li>
       ))}
     </ul>
@@ -170,7 +170,7 @@ function ActivityBoardSkeleton({ reserveMyRow }: { reserveMyRow: boolean }) {
   return (
     <div aria-busy="true">
       {reserveMyRow && (
-        <div className="mb-1.5 rounded-input border border-accent-400/40 bg-accent-300/[0.08] px-3 py-2" aria-hidden>
+        <div className="mb-1.5 rounded-input border border-accent-400/40 bg-accent-300/8 px-3 py-2" aria-hidden>
           <span className="block h-5" />
         </div>
       )}
@@ -180,7 +180,7 @@ function ActivityBoardSkeleton({ reserveMyRow }: { reserveMyRow: boolean }) {
             <span className={['skeleton mx-auto block', big ? 'h-[22px] w-[22px]' : 'h-[17px] w-[17px]'].join(' ')} />
             <span className={['skeleton mx-auto mt-1 block rounded-full', big ? 'h-10 w-10' : 'h-8 w-8'].join(' ')} />
             <span className={['skeleton mt-1 block', big ? 'h-5' : 'h-4'].join(' ')} />
-            <span className="skeleton block h-[0.9375rem]" />
+            <span className="skeleton block h-3.75" />
           </div>
         ))}
       </div>
@@ -240,9 +240,9 @@ function CareerBoard({ myNick, nickStyle, markPrefix, period, setPeriod, rows, l
       <div className="flex gap-1.5" role="group" aria-label="집계 기간">
         {(Object.keys(CAREER_PERIOD_LABEL) as CareerPeriod[]).map((p) => (
           // 44px 누름(2026-09-28 점검: 칩 38.25 가 곧 히트였다) — 버튼은 투명 44 히트, 안쪽 span 이 종전 38.25 칩.
-          // 음수 여백 -my-[2.875px] 로 줄 높이는 38.25 그대로(세로 흐름 불변). 위 보드 설명 mb-2·아래 space-y-2 가 8.5px 라 넘침이 안 닿는다.
+          // 음수 여백 my-[-2.875px] 로 줄 높이는 38.25 그대로(세로 흐름 불변). 위 보드 설명 mb-2·아래 space-y-2 가 8.5px 라 넘침이 안 닿는다.
           <button key={p} type="button" onClick={() => setPeriod(p)} aria-pressed={period === p}
-            className="group -my-[2.875px] inline-flex min-h-[44px] items-center">
+            className="group my-[-2.875px] inline-flex min-h-[44px] items-center">
             <span className={['inline-flex min-h-9 items-center rounded-chip border px-3 text-2xs font-bold transition-colors',
               period === p ? 'border-transparent bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary group-hover:text-ink-primary'].join(' ')}>
               {CAREER_PERIOD_LABEL[p]}
@@ -262,7 +262,7 @@ function CareerBoard({ myNick, nickStyle, markPrefix, period, setPeriod, rows, l
         <>
           {/* 내 경력 — 전국 순위·상위 % 와 경력 한 줄. 로그인 전엔 그리지 않는다. */}
           {myNick && (me ? (
-            <div className="rounded-card border border-accent-400/40 bg-accent-300/[0.08] px-3 py-2.5">
+            <div className="rounded-card border border-accent-400/40 bg-accent-300/8 px-3 py-2.5">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="min-w-0 truncate text-xs font-bold text-accent-300">내 대회 입상 경력 <span className="font-normal text-ink-muted">· {CAREER_PERIOD_LABEL[period]}</span></p>
                 <p className="shrink-0 text-xs font-extrabold tabular-nums text-ink-primary">전국 {myIdx + 1}위 <span className="font-semibold text-ink-muted">· 상위 {pct}%</span></p>
@@ -283,7 +283,7 @@ function CareerBoard({ myNick, nickStyle, markPrefix, period, setPeriod, rows, l
             {rows.slice(0, 50).map((r, i) => {
               const isMe = i === myIdx;
               return (
-                <li key={r.nickname} className={['flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0', isMe ? 'bg-accent-300/[0.08]' : ''].join(' ')}>
+                <li key={r.nickname} className={['flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0', isMe ? 'bg-accent-300/8' : ''].join(' ')}>
                   <RankNum n={i + 1} />
                   <div className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-ink-primary" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}{isMe && <span className="ml-1 text-2xs font-semibold text-accent-300">(나)</span>}</span>
@@ -794,7 +794,7 @@ export default function TierLeaderboard() {
           : missions === null ? (
             // 미션 카드와 같은 높이(74px)로 자리 예약 — 도착 시 아래가 밀리지 않는다
             <ul className="space-y-1.5" aria-busy="true">
-              {[0, 1, 2].map((i) => <li key={i} className="skeleton h-[4.625rem] rounded-card" />)}
+              {[0, 1, 2].map((i) => <li key={i} className="skeleton h-18.5 rounded-card" />)}
             </ul>
           )
           : missionDefs.length === 0 ? <p className="py-6 text-center t-desc text-ink-muted">이번 주 미션이 준비 중입니다</p>
@@ -816,14 +816,14 @@ export default function TierLeaderboard() {
                       {/* 세 상태(미달·받기·받음)를 **같은 박스 크기**로 고정한다 —
                           '받기' 버튼이 작은 뱃지로 바뀌면 행 높이가 줄어 그 아래가 또 밀린다(#5). */}
                       {claimed ? (
-                        <span className="inline-flex h-8 w-[4.75rem] shrink-0 items-center justify-center gap-1 rounded-badge bg-surface-float text-2xs font-bold text-ink-muted"><Icon name="check" size={12} className="shrink-0" />받음</span>
+                        <span className="inline-flex h-8 w-19 shrink-0 items-center justify-center gap-1 rounded-badge bg-surface-float text-2xs font-bold text-ink-muted"><Icon name="check" size={12} className="shrink-0" />받음</span>
                       ) : done ? (
                         <button type="button" disabled={claiming === m.key} onClick={() => handleClaim(m.key)}
-                          className="btn-primary inline-flex h-8 w-[4.75rem] shrink-0 items-center justify-center px-0 py-0 text-xs disabled:opacity-60">
+                          className="btn-primary inline-flex h-8 w-19 shrink-0 items-center justify-center px-0 py-0 text-xs disabled:opacity-60">
                           {claiming === m.key ? '받는 중…' : <span className="inline-flex items-center gap-1"><Icon name="gift" size={12} className="shrink-0" />받기</span>}
                         </button>
                       ) : (
-                        <span className="inline-flex h-8 w-[4.75rem] shrink-0 items-center justify-center text-xs font-bold tabular-nums text-ink-secondary">{cur}/{m.goal}</span>
+                        <span className="inline-flex h-8 w-19 shrink-0 items-center justify-center text-xs font-bold tabular-nums text-ink-secondary">{cur}/{m.goal}</span>
                       )}
                     </div>
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-float">
@@ -839,7 +839,7 @@ export default function TierLeaderboard() {
   return (
     <div className="space-y-3 animate-fade-in">
       {/* 인플루언서·프로 기회 프레이밍(오너 지시 2026-08-27) — §28 안전 표현(금전 언급 없음) */}
-      <div className="flex items-center gap-2 rounded-card border border-gold-400/30 bg-gold-300/[0.06] px-3 py-2">
+      <div className="flex items-center gap-2 rounded-card border border-gold-400/30 bg-gold-300/6 px-3 py-2">
         <Icon name="trophy" size={17} className="shrink-0 text-gold-300" />
         <p className="min-w-0 text-2xs font-semibold leading-relaxed text-gold-300">상위 랭커에게 프로·인플루언서 협업 기회가 열립니다</p>
       </div>
@@ -912,7 +912,7 @@ export default function TierLeaderboard() {
             type="button"
             onClick={() => setShowLadder((v) => !v)}
             // 44px 히트(2026-09-27 점검: 글자 76x16 이 곧 히트였다) — 음수 여백으로 글줄 자리·세로 흐름은 그대로 둔다(24.5px)
-            className="-mt-[5.5px] -mb-[14px] inline-flex min-h-[44px] items-center text-2xs font-semibold text-accent-300 hover:text-accent-200"
+            className="mt-[-5.5px] mb-[-14px] inline-flex min-h-[44px] items-center text-2xs font-semibold text-accent-300 hover:text-accent-200"
           >
             {showLadder ? '등급표 닫기' : '전체 등급표 보기'}
           </button>
@@ -920,7 +920,7 @@ export default function TierLeaderboard() {
           {showLadder && (
             <div className="mt-2 grid grid-cols-2 gap-1.5 animate-slide-up">
               {/* A — 점수가 아닌 상대평가(명예) 등급 */}
-              <div className="col-span-2 flex items-center justify-between px-2 py-1.5 rounded-input border border-accent-400/60 bg-gradient-to-r from-accent-300/15 to-transparent">
+              <div className="col-span-2 flex items-center justify-between px-2 py-1.5 rounded-input border border-accent-400/60 bg-linear-to-r/srgb from-accent-300/15 to-transparent">
                 <span className="inline-flex items-center gap-1.5">
                   <TierBadge points={ACE_MIN_POINTS} size={16} overallRank={1} />
                   <span className="text-2xs font-bold text-accent-300">AA 등급</span>
@@ -933,7 +933,7 @@ export default function TierLeaderboard() {
                   className={[
                     'flex items-center justify-between px-2 py-1.5 rounded-input border',
                     t.rank === myProg.current.rank
-                      ? 'border-accent-400/50 bg-accent-300/[0.06]'
+                      ? 'border-accent-400/50 bg-accent-300/6'
                       : 'border-border-subtle bg-surface-high',
                   ].join(' ')}
                 >
@@ -971,7 +971,7 @@ export default function TierLeaderboard() {
         </div>
         <div data-rank-panel>
         {/* 보드 설명 — 1행/2행이 섞이면 탭을 옮길 때마다 아래가 통째로 밀린다. 2행분을 예약. */}
-        <p className="mb-2 min-h-[2.25rem] t-desc text-ink-muted">{BOARD_DESC[board]}</p>
+        <p className="mb-2 min-h-9 t-desc text-ink-muted">{BOARD_DESC[board]}</p>
 
         {board === 'missions' ? (
           missionsBlock
@@ -985,7 +985,7 @@ export default function TierLeaderboard() {
                 const got = b.check(badgeStats);
                 return (
                   <div key={b.key} title={b.desc}
-                    className={['card-sink rounded-card border p-2.5 text-center transition-colors', got ? 'border-accent-400/50 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
+                    className={['card-sink rounded-card border p-2.5 text-center transition-colors', got ? 'border-accent-400/50 bg-accent-300/8' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
                     <Icon name={b.icon} size={22} className={['mx-auto', got ? b.tone : 'text-ink-muted'].join(' ')} />
                     <p className={['mt-1 text-xs font-bold', got ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
                     <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">{b.desc}</p>
@@ -1011,7 +1011,7 @@ export default function TierLeaderboard() {
                 // 행에 user id 가 없어 닉네임(소문자·공백 제거)으로 본인을 찾는다 — 서버 순위 함수와 같은 lower(nickname) 규칙(#21)
                 const isMe = !!myNickKey && r.nickname.trim().toLowerCase() === myNickKey;
                 return (
-                <li key={r.nickname} className={['flex items-center gap-2.5 rounded-input px-3 py-2', isMe ? 'border border-accent-400/40 bg-accent-300/[0.08]' : 'bg-surface-high'].join(' ')}>
+                <li key={r.nickname} className={['flex items-center gap-2.5 rounded-input px-3 py-2', isMe ? 'border border-accent-400/40 bg-accent-300/8' : 'bg-surface-high'].join(' ')}>
                   <span className="w-6 shrink-0 text-center text-sm font-extrabold tabular-nums text-accent-300">{i + 1}</span>
                   {/* ⚠ 부모에 truncate(nowrap+overflow+ellipsis)를 걸고 자식을 block 으로 두면
                       통계 줄은 **말줄임표조차 없이 하드 클립**된다 — ellipsis 는 부모의 인라인 콘텐츠에만
@@ -1047,7 +1047,7 @@ export default function TierLeaderboard() {
                 {/* 오너 #11 — 구분 선택을 없앴다. 인증 대상은 '대회'뿐이고, 일반 펍 정기 게임은
                     신청 자체가 성립하지 않는다(서버 RLS 도 official 만 받는다). 선택지를 남겨 두면
                     '내면 뭐라도 남겠지'라는 기대가 생겨 반려만 늘어난다 — 조건을 먼저 말한다. */}
-                <p className="flex items-start gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/[0.08] px-2.5 py-2 text-2xs leading-relaxed text-ink-secondary">
+                <p className="flex items-start gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/8 px-2.5 py-2 text-2xs leading-relaxed text-ink-secondary">
                   <Icon name="trophy" size={13} className="mt-px shrink-0 text-accent-300" />
                   <span><b className="text-accent-200">대회 입상만 인증됩니다.</b> 매장 정기 게임(일반 펍) 기록은 순위 인증 대상이 아니며, 제출해도 반려됩니다.</span>
                 </p>
@@ -1162,7 +1162,7 @@ export default function TierLeaderboard() {
                     return (
                       <div key={mk.key}
                         className={['card-sink rounded-card border p-2.5 text-center transition-colors',
-                          on ? 'border-accent-300 bg-accent-300/[0.1]'
+                          on ? 'border-accent-300 bg-accent-300/10'
                             : own ? 'border-border-default bg-surface-high'
                               : 'border-border-subtle bg-surface-high'].join(' ')}>
                         <p className="text-2xl leading-none">{mk.emoji}</p>
@@ -1265,7 +1265,7 @@ export default function TierLeaderboard() {
                       return (
                         <div key={c.key}
                           className={['card-sink rounded-card border p-2.5 text-center transition-colors',
-                            on ? 'border-accent-300 bg-accent-300/[0.1]'
+                            on ? 'border-accent-300 bg-accent-300/10'
                                : own ? 'border-border-default bg-surface-high'
                                      : 'border-border-subtle bg-surface-high'].join(' ')}>
                           <p className="text-xs font-bold text-ink-primary">{c.label}</p>
@@ -1316,7 +1316,7 @@ export default function TierLeaderboard() {
                       return (
                         <div key={c.key}
                           className={['card-sink rounded-card border p-2.5 text-center transition-colors',
-                            on ? 'border-accent-300 bg-accent-300/[0.1]'
+                            on ? 'border-accent-300 bg-accent-300/10'
                                : own ? 'border-border-default bg-surface-high'
                                      : 'border-border-subtle bg-surface-high'].join(' ')}>
                           {/* 미리보기는 '내 닉네임을 그 색으로' 보여준다 — 색 동그라미보다 정확하다 */}
@@ -1365,7 +1365,7 @@ export default function TierLeaderboard() {
                       {(seasonOwned ?? []).map((b) => (
                         <span key={b.seasonId}
                           className={['inline-flex items-center gap-1 rounded-badge border px-2 py-1 text-2xs font-bold',
-                            b.ongoing ? 'border-accent-400/50 bg-accent-300/[0.10] text-accent-300'
+                            b.ongoing ? 'border-accent-400/50 bg-accent-300/10 text-accent-300'
                                       : 'border-border-subtle bg-surface-float text-ink-secondary'].join(' ')}>
                           <Icon name="medal" size={11} className="shrink-0" />
                           {b.venueName} · {b.seasonName}
@@ -1435,7 +1435,7 @@ export default function TierLeaderboard() {
 
               {/* ── 소비형 ② 외치기 (오너 #8 · 2026-08-30 20초 슬롯 1회로 전환) ───── */}
               <button type="button" onClick={() => setShoutOpen(true)}
-                className="flex w-full items-center gap-2.5 rounded-card border border-accent-400/50 bg-gradient-to-r from-accent-300/[0.1] to-transparent px-3 py-2.5 text-left transition-colors hover:border-accent-300">
+                className="flex w-full items-center gap-2.5 rounded-card border border-accent-400/50 bg-linear-to-r/srgb from-accent-300/10 to-transparent px-3 py-2.5 text-left transition-colors hover:border-accent-300">
                 <Icon name="megaphone" size={20} className="shrink-0 text-accent-300" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-bold text-ink-primary">외치기</span>
@@ -1486,7 +1486,7 @@ export default function TierLeaderboard() {
                   return (
                     <div key={mk.key}
                       className={['card-sink rounded-card border p-2.5 text-center transition-colors',
-                        on ? 'border-accent-300 bg-accent-300/[0.1]' : unlocked ? 'border-border-default bg-surface-high' : 'border-border-subtle bg-surface-high opacity-50'].join(' ')}>
+                        on ? 'border-accent-300 bg-accent-300/10' : unlocked ? 'border-border-default bg-surface-high' : 'border-border-subtle bg-surface-high opacity-50'].join(' ')}>
                       <p className={['text-2xl leading-none', unlocked ? '' : 'grayscale'].join(' ')}>{mk.emoji}</p>
                       <p className="mt-1 text-xs font-bold text-ink-primary">{mk.name}</p>
                       <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">{mk.desc}</p>
@@ -1514,7 +1514,7 @@ export default function TierLeaderboard() {
           boardErr.hall != null ? <LoadErrorCard error={boardErr.hall} what="명예의 전당" onRetry={() => { clearErr('hall'); setHall(null); }} />
           : hall === null ? (
             <div className="space-y-1.5" aria-busy="true">
-              {[0, 1, 2].map((i) => <div key={i} className="skeleton h-[4.75rem] rounded-card" />)}
+              {[0, 1, 2].map((i) => <div key={i} className="skeleton h-19 rounded-card" />)}
             </div>
           )
           : hall.rows.length === 0 ? (
@@ -1527,7 +1527,7 @@ export default function TierLeaderboard() {
           : (
             <div className="space-y-1.5">
               {hall.rows.map((r, i) => (
-                <div key={`${r.nickname}-${i}`} className={['card-sink flex items-center gap-3 rounded-card border p-3', i === 0 ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
+                <div key={`${r.nickname}-${i}`} className={['card-sink flex items-center gap-3 rounded-card border p-3', i === 0 ? 'border-accent-400/60 bg-accent-300/8' : 'border-border-subtle bg-surface-high'].join(' ')}>
                   <Icon name={i === 0 ? 'crown' : 'medal'} size={26}
                     className={['shrink-0', HALL_TONE[i]].join(' ')} role="img" aria-hidden={false} aria-label={`${i + 1}위`} />
                   <div className="min-w-0 flex-1">
@@ -1559,7 +1559,7 @@ export default function TierLeaderboard() {
           <>
           {/* 상단 고정 '내 순위' 요약 1행 — 스크롤 없이 내 위치부터(TOP30 밖은 기존 하단 카드 유지) */}
           {user && !isAdmin && myRank && (
-            <div className="mb-1.5 flex items-center gap-2.5 rounded-input border border-accent-400/40 bg-accent-300/[0.08] px-3 py-2">
+            <div className="mb-1.5 flex items-center gap-2.5 rounded-input border border-accent-400/40 bg-accent-300/8 px-3 py-2">
               <span className="shrink-0 text-2xs font-bold text-accent-300">내 순위</span>
               <span className="shrink-0 text-sm font-extrabold tabular-nums text-ink-primary">{myRank}위</span>
               {/* §T1 순위 행 규격: 이름 text-sm/600 · 점수 text-xs/700 — 바로 아래 목록 행과 같은 값 */}
@@ -1606,7 +1606,7 @@ export default function TierLeaderboard() {
               if (isMe && !isAdmin) {
                 // 내 순위 빅 카드 — 리그 보드와 동일 패턴(리스트 흐름 속 인라인 강조)
                 return (
-                  <li key={r.id} className="border-y border-accent-400/40 bg-accent-300/[0.08] px-3 py-3 last:border-b-0">
+                  <li key={r.id} className="border-y border-accent-400/40 bg-accent-300/8 px-3 py-3 last:border-b-0">
                     <div className="flex items-center gap-3">
                       <span className={['flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-extrabold', onColorInkClass(r.avatarColor ?? '#5A6175')].join(' ')}
                         style={{ background: r.avatarColor ?? '#5A6175' }}>
@@ -1651,7 +1651,7 @@ export default function TierLeaderboard() {
           </ul>
           {/* TOP30 밖 — 리스트 아래 내 점수 카드(순위 미표기) */}
           {user && !isAdmin && !myRank && (
-            <div className="mt-2 flex items-center gap-3 rounded-card border border-accent-400/40 bg-accent-300/[0.08] px-3 py-3">
+            <div className="mt-2 flex items-center gap-3 rounded-card border border-accent-400/40 bg-accent-300/8 px-3 py-3">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-300 text-base font-extrabold text-white">
                 {(user.nickname ?? '나')[0]}
               </span>

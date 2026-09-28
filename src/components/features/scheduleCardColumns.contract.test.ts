@@ -33,7 +33,7 @@ describe('일정 목록 줄 — 골격', () => {
     // `min-w-0` 이 없으면 flex 항목의 최소 크기가 auto 라 긴 한글 낱말이 덩어리를 부풀리고,
     // 카드가 통째로 가로 넘침이 된다(그 상태로도 '잘림 0' 은 통과할 수 있어 여기서 못 박는다).
     expect(LIST, '가운데 덩어리에 min-w-0 + basis 가 없다 — 긴 제목이 카드를 밀어낸다')
-      .toMatch(/min-w-0 grow basis-\[\d+rem\]/);
+      .toMatch(/min-w-0 grow basis-\d+( |")/);
   });
 
   it('🔴 폭이 모자라면 시각 덩어리가 아랫줄로 내려간다 — 격자로 되돌아가면 200% 확대가 무너진다', () => {
@@ -73,8 +73,8 @@ describe('일정 목록 줄 — 골격', () => {
     expect(LIST, '제목이 줄 클램프가 아니다 — 한글 제목은 한 줄로는 자주 잘린다')
       .toMatch(/<h3[^>]*line-clamp-\d/);
     // 칸은 기본 min-width:auto 라 긴 낱말이 칸을 부풀린다 — 제목 쪽에서 막는다.
-    expect(LIST, '제목에 [overflow-wrap:anywhere] 가 없다 — 긴 낱말이 칸을 부풀린다')
-      .toMatch(/<h3[^>]*\[overflow-wrap:anywhere\]/);
+    expect(LIST, '제목에 wrap-anywhere 가 없다 — 긴 낱말이 칸을 부풀린다')
+      .toMatch(/<h3[^>]* wrap-anywhere( |")/);
   });
 
   // 🔴 2026-09-22 요구 C — **반전됐다.** 등급 배지는 이제 제목 안이 아니라 **우측 덩어리**에 있다.

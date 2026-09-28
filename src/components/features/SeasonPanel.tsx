@@ -114,7 +114,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
 
       {/* 현재 시즌 + 랭킹 */}
       {active ? (
-        <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3">
+        <div className="rounded-card border border-accent-400/30 bg-accent-300/4 p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-accent-200">{active.name}</p>
@@ -134,7 +134,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
 
       {/* 🏆 역대 챔피언(명예의 전당) */}
       {hof.length > 0 && (
-        <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
+        <div className="rounded-card border border-accent-400/30 bg-accent-300/5 p-3">
           <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-gold-300"><Icon name="trophy" size={15} className="shrink-0" />역대 챔피언</p>
           <ul className="space-y-1.5">
             {hof.map((h) => (

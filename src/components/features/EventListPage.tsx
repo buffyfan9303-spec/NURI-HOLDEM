@@ -178,12 +178,12 @@ export default function EventListPage({ open, onClose, onSelect }: {
   // MOTION-UNIFY P3 — 닫혀도 App 이 220ms 더 붙들어 둔다(useDelayedUnmount). 그동안 fade-out 으로 그린다.
 
   return (
-    // z-[55] — EventPage(보드)와 같은 층이다. 이 컴포넌트가 App 에서 EventPage 보다 **먼저** 렌더되므로
+    // z-55 — EventPage(보드)와 같은 층이다. 이 컴포넌트가 App 에서 EventPage 보다 **먼저** 렌더되므로
     // 보드가 목록 위에서 이긴다(같은 z-index 는 DOM 순서가 이긴다) — 목록에서 카드를 고르면 보드가 덮고,
     // 보드를 닫으면 이 화면이 그대로 드러난다. z-[60]은 쓰지 않는다(Modal.tsx 의 시트·모달 층이라 겹치면
     // 안내 시트가 뒤에 깔린다 — EventPage 머리말 참고).
     <div ref={rootRef} data-testid="event-list-page" inert={!open || undefined}
-      className={['fixed inset-0 z-[55] overflow-y-auto overscroll-contain bg-surface-base',
+      className={['fixed inset-0 z-55 overflow-y-auto overscroll-contain bg-surface-base',
         open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`].join(' ')}
       role="dialog" aria-modal="true" aria-label="이벤트 목록"
       onTouchStart={onListTouchStart} onTouchEnd={onListTouchEnd} onTouchCancel={onListTouchCancel}
@@ -202,7 +202,7 @@ export default function EventListPage({ open, onClose, onSelect }: {
           ⚠ `min-h-full` 이 필요하다. 없으면 xl 의 세로 테두리가 내용 높이에서 끊겨 셸이 반만 그려진다. */}
       <div className="mx-auto w-full max-w-6xl xl:min-h-full xl:border-x xl:border-border-subtle">
       {/* 헤더 구조는 EventPage 와 동일 — 노치 안전영역·히트영역 계약을 그대로 따른다. */}
-      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-surface-base/95 px-page-x pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] backdrop-blur">
+      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-surface-base/95 px-page-x pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] backdrop-blur-sm">
         <button type="button" onClick={onClose} aria-label="닫기"
           className="hit -ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-input text-ink-secondary transition-colors hover:bg-surface-high">
           <Icon name="chevron-left" size={20} />

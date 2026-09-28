@@ -244,7 +244,7 @@ export default function PrivacyPolicy() {
           '회사는 「개인정보 보호법」 제28조의8에 따라 다음과 같이 개인정보를 국외로 이전(전송·처리)합니다.',
         ]} />
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] text-2xs text-left">
+          <table className="w-full min-w-160 text-2xs text-left">
             <thead>
               <tr className="text-ink-muted border-b border-border-default">
                 <th className="py-1.5 pr-2 font-semibold">이전받는 자</th>

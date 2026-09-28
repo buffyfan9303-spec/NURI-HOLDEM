@@ -1,5 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import type { Plugin } from 'vite';
+import { cssOklabToRgb } from './src/lib/cssOklabToRgb';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 
@@ -9,9 +12,29 @@ const analyze = process.env.ANALYZE === '1';
 // SENTRY_AUTH_TOKEN 이 있을 때만 활성 — 없으면(CI/Vercel 미등록 상태) 완전 no-op, 빌드 동작 불변.
 const sentryToken = process.env.SENTRY_AUTH_TOKEN;
 
+// Tailwind v4 가 투명도 수식어(text-white/70 등)를 oklab(...) 리터럴로 굳힌다 — 색은 v3 rgb() 와 같지만 크롬이 흰 oklab 글자를
+//   다르게 안티에일리어싱해(최대 10/255) v3 화면과 달라졌다. 8비트로 정확히 떨어지는 리터럴만 rgb() 로 되돌린다(src/lib/cssOklabToRgb.ts).
+//   빌드 산출 CSS 에만 건다(dev 는 원본 그대로 — 화면 비교·게이트는 빌드본을 잰다).
+function oklabToRgbPlugin(): Plugin {
+  return {
+    name: 'nuri:oklab-to-rgb',
+    apply: 'build',
+    generateBundle(_opts, bundle) {
+      for (const f of Object.values(bundle)) {
+        if (f.type !== 'asset' || !f.fileName.endsWith('.css')) continue;
+        const src = typeof f.source === 'string' ? f.source : new TextDecoder().decode(f.source);
+        f.source = cssOklabToRgb(src).css;
+      }
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
+    // Tailwind v4(2026-09-28 이관) — PostCSS 플러그인 대신 공식 Vite 플러그인. 설정은 src/index.css(@theme) 한 곳이다.
+    tailwindcss(),
+    oklabToRgbPlugin(),
     // filename 은 project root 기준(빌드 outDir 과 무관) — 프로젝트 루트에 흘리지 않게 고정 경로로 못박는다.
     analyze ? visualizer({ filename: '.analyze/stats.html', gzipSize: true, brotliSize: true, open: false }) : null,
     sentryToken ? sentryVitePlugin({

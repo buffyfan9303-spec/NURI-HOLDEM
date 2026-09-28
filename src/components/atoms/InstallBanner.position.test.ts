@@ -46,8 +46,8 @@ describe('InstallBanner 위치 — 하단 탭바 쪽으로 낮췄지만 공유 �
   it('--tabbar-float 공유 변수 자체와 그 값을 쓰는 다른 소비처(Toast·scroll-top-fab)는 그대로다', () => {
     expect(CSS).toMatch(/--tabbar-float:\s*calc\(5\.75rem/);
     const toast = readFileSync(join(process.cwd(), 'src', 'components', 'atoms', 'Toast.tsx'), 'utf8');
-    expect(toast).toContain('bottom-[var(--tabbar-float)]');
+    expect(toast).toContain('bottom-(--tabbar-float)');
     const app = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
-    expect(app).toContain('bottom-[var(--tabbar-float)]');
+    expect(app).toContain('bottom-(--tabbar-float)');
   });
 });

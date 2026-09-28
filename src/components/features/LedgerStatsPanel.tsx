@@ -254,7 +254,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
   // 빈 통계와 실패는 완전히 다른 상태라, 실패는 실패로 말하고 다시 시도할 수단을 준다.
   if (loadError) {
     return (
-      <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-3">
+      <section className="rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/5 to-transparent p-3 space-y-3">
         <h3 className="text-sm font-bold text-accent-300">통계</h3>
         <LoadErrorCard error={loadError} what="통계"
           onRetry={() => { setLoadError(null); setLiveTick((v) => v + 1); }} />
@@ -263,7 +263,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
   }
 
   return (
-    <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-3">
+    <section className="rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/5 to-transparent p-3 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-bold text-accent-300">통계</h3>
         <div className="flex items-center gap-1.5">
@@ -286,10 +286,10 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
                JSX 주석 컨테이너를 넣으면 파싱되지 않는다(2026-09-17 에 실제로 빌드를 깼다). */
           return (
             <button key={p.id} type="button" data-pill-active={on || undefined} onClick={() => setTabPeriod(p.id)}
-              className={['relative flex-1 min-w-[3.6rem] py-1.5 t-tab rounded-[6px] whitespace-nowrap transition-colors duration-[var(--dur-fast)] focus:outline-none',
+              className={['relative flex-1 min-w-[3.6rem] py-1.5 t-tab rounded-[6px] whitespace-nowrap transition-colors duration-(--dur-fast) focus:outline-hidden',
                 on ? 'font-bold text-white' : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
               {/* AI 기간(그라데이션)은 자기 배경을 직접 칠한다 — 공용 알약은 숨김 */}
-              {on && p.ai && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-gradient-to-r from-accent-400 to-accent-300 shadow animate-fade-in" />}
+              {on && p.ai && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-linear-to-r/srgb from-accent-400 to-accent-300 shadow-sm animate-fade-in" />}
               <span className="relative inline-flex items-center justify-center gap-1">{p.ai && <Icon name="sparkles" size={11} className="shrink-0" />}{p.label}</span>
             </button>
           );
@@ -297,10 +297,10 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
       </div>
 
       {loading ? (
-        // 뼈대 높이를 실제 카드(StatCard min-h-[5.25rem] · Mini ≈ 3.1rem)와 맞춘다 —
+        // 뼈대 높이를 실제 카드(StatCard min-h-21 · Mini ≈ 3.1rem)와 맞춘다 —
         // '불러오는 중…' 한 줄이던 자리에 수백 px 통계가 들어오면서 화면이 아래로 주르륵 밀렸다.
         <div className="space-y-2" aria-busy="true">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[5.25rem]" />)}</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-21" />)}</div>
           {/* 3.1rem(52.7px) 은 hint 없는 타일 기준이라 실제 첫 줄(객단가 hint 포함 71px)보다 18px 짧았다 —
               데이터가 들어오는 순간 그만큼 아래가 밀렸다. 880px 실측값으로 맞춘다. */}
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[4.2rem]" />)}</div>
@@ -413,7 +413,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
                   <p className="text-sm font-bold text-ink-primary tabular-nums">{m.mainBuyins.toLocaleString()}회</p>
                   <p className="text-2xs text-emerald-400 tabular-nums">완납 {wonToMan(m.mainRev)}만</p>
                 </div>
-                <div className="rounded-input bg-accent-300/[0.06] border border-accent-400/30 px-2.5 py-2">
+                <div className="rounded-input bg-accent-300/6 border border-accent-400/30 px-2.5 py-2">
                   <p className="text-2xs text-accent-300">사이드 · {m.sideGameCount}게임</p>
                   <p className="text-sm font-bold text-ink-primary tabular-nums">{m.sideBuyins.toLocaleString()}회</p>
                   <p className="text-2xs text-emerald-400 tabular-nums">완납 {wonToMan(m.sideRev)}만</p>
@@ -440,9 +440,9 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
                     const sidePx = stacked && total > 0 ? Math.round((side / total) * barPx) : 0;
                     return (
                       <button key={d.date} type="button" onClick={() => setTrendDetail(trendDetail === d.date ? null : d.date)}
-                        className={['flex flex-col items-center gap-1 shrink-0 w-8 rounded-sm cursor-pointer pt-0.5', trendDetail === d.date ? 'bg-accent-300/15 ring-1 ring-accent-400/50' : 'hover:bg-surface-high/50'].join(' ')}
+                        className={['flex flex-col items-center gap-1 shrink-0 w-8 rounded-xs cursor-pointer pt-0.5', trendDetail === d.date ? 'bg-accent-300/15 ring-1 ring-accent-400/50' : 'hover:bg-surface-high/50'].join(' ')}
                         title={`${d.date} · ${fmt(total)}${stacked && side > 0 ? ` (사이드 ${fmt(side)})` : ''}`}>
-                        <div className="w-5 rounded-t-sm overflow-hidden flex flex-col-reverse bg-surface-high" style={{ height: barPx }}>
+                        <div className="w-5 rounded-t-xs overflow-hidden flex flex-col-reverse bg-surface-high" style={{ height: barPx }}>
                           <div className="bg-emerald-500 flex-1" />
                           {stacked && <div className="bg-accent-300" style={{ height: sidePx }} />}
                         </div>
@@ -453,8 +453,8 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
                 </div>
                 {stacked && (
                   <div className="flex items-center gap-3 mt-1.5 text-2xs text-ink-muted">
-                    <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-emerald-500" /> 메인</span>
-                    <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-accent-300" /> 사이드</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-xs bg-emerald-500" /> 메인</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-xs bg-accent-300" /> 사이드</span>
                     <span className="text-ink-muted">· 막대 탭 = 그날 상세</span>
                   </div>
                 )}
@@ -463,7 +463,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
                   if (!d) return null;
                   const f1 = (n: number) => n.toFixed(n % 1 ? 1 : 0);
                   return (
-                    <div className="mt-2 rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2.5">
+                    <div className="mt-2 rounded-input border border-accent-400/30 bg-accent-300/6 p-2.5">
                       <p className="text-2xs font-bold text-accent-300 mb-1.5">{d.date} 상세</p>
                       <div className="grid grid-cols-3 gap-1.5 text-center">
                         <div><p className="text-2xs text-ink-muted">바인</p><p className="text-sm font-bold text-ink-primary tabular-nums">{f1(d.mainB + d.sideB)}</p><p className="text-[10px] text-ink-muted">메인 {f1(d.mainB)} · 사이드 {f1(d.sideB)}</p></div>
@@ -532,7 +532,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
             ) : (
               <ul className="space-y-1">
                 {m.unpaidRanking.map(([name, amt]) => (
-                  <li key={name} className="flex items-center gap-2 px-2 py-2 rounded-input bg-danger/[0.06] border border-danger/30">
+                  <li key={name} className="flex items-center gap-2 px-2 py-2 rounded-input bg-danger/6 border border-danger/30">
                     <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary" title={name}>{name}</span>
                     {/* 합계 행과 같은 폭·같은 우측 정렬 — 금액 자릿수가 세로로 맞아야 큰 미수가 눈에 띈다 */}
                     <span className="w-28 shrink-0 text-right text-xs font-bold text-danger-light tabular-nums">{amt.toLocaleString()}원</span>
@@ -636,8 +636,8 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
             return (
               <li key={r.w} className="flex items-center gap-2">
                 <span className={['w-4 text-center text-xs font-bold', isBest ? 'text-emerald-400' : isWorst ? 'text-rose-400' : 'text-accent-300'].join(' ')}>{DOW[r.w]}</span>
-                <div className="flex-1 h-5 rounded bg-surface-high overflow-hidden">
-                  <div className={['h-full rounded-r transition-[width] duration-[var(--dur-panel)]', barColor].join(' ')} style={{ width: `${r.days ? Math.max(pct, 3) : 0}%` }} />
+                <div className="flex-1 h-5 rounded-sm bg-surface-high overflow-hidden">
+                  <div className={['h-full rounded-r transition-[width] duration-(--dur-panel)', barColor].join(' ')} style={{ width: `${r.days ? Math.max(pct, 3) : 0}%` }} />
                 </div>
                 <span className="w-16 text-right text-2xs tabular-nums text-ink-secondary">
                   {r.days ? (metric === 'fill' ? (r.fill !== null ? `${Math.round(r.fill)}%` : '기준없음') : metric === 'entry' ? val.toFixed(1) : `${wonToMan(val)}만`) : '휴무'}
@@ -653,7 +653,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
           가운데 정렬이면 '3.0' 과 '12.4' 의 일의 자리가 서로 다른 x 에 놓여, 요일 간 대소를 눈으로 못 훑는다.
           머리글도 같은 우측 정렬 — 머리와 값의 정렬이 어긋나면 어느 열인지 매번 다시 확인해야 한다. */}
       <div className="overflow-x-auto scrollbar-none">
-        <table className="w-full text-left border-separate border-spacing-0 min-w-[19rem]">
+        <table className="w-full text-left border-separate border-spacing-0 min-w-76">
           <thead><tr className="text-2xs text-ink-muted">
             <th scope="col" className="py-1 pl-1 font-normal">요일</th>
             <th scope="col" className="py-1 pr-1 text-right font-normal">영업일</th>
@@ -718,7 +718,7 @@ function StatIcon({ name, className = '' }: { name: IconName; className?: string
 function StatCard({ label, value, sub, icon, danger, emerald, gold, testId }: { label: string; value: string; sub?: string; icon: IconName; danger?: boolean; emerald?: boolean; gold?: boolean; testId?: string }) {
   const c = danger ? 'text-danger-light' : emerald ? 'text-emerald-400' : gold ? 'text-accent-300' : 'text-ink-primary';
   return (
-    <div className="flex min-h-[5.25rem] flex-col rounded-aura border card-aura p-2.5">
+    <div className="flex min-h-21 flex-col rounded-aura border card-aura p-2.5">
       <div className="flex items-start justify-between gap-1">
         <p data-testid={testId} className="text-xs font-medium leading-tight text-ink-secondary">{label}</p>
         <StatIcon name={icon} className="shrink-0 text-ink-muted" />
@@ -728,7 +728,7 @@ function StatCard({ label, value, sub, icon, danger, emerald, gold, testId }: { 
       {/* data-testid: e2e 가 이 값을 **클래스가 아니라 이름으로** 찾게 한다.
           종전엔 `p.text-lg` 로 찾았는데, 좁은 폭 대응으로 `text-base sm:text-lg` 가 되자
           모바일 하네스에서 0개가 됐다(게이트가 거짓 실패). 글자 크기는 앞으로도 바뀐다. */}
-      <p data-testid="stat-card-value" className={['mt-auto whitespace-nowrap pt-2 text-base font-extrabold leading-none tabular-nums sm:text-lg', c].join(' ')}>{value}</p>
+      <p data-testid="stat-card-value" className={['mt-auto whitespace-nowrap pt-2 text-base font-extrabold leading-none tabular-nums sm:text-lg sm:leading-7', c].join(' ')}>{value}</p>
       {/* ⚠ 보조 줄은 **반드시 한 줄**이어야 한다. 자리만 예약하고 줄 수를 안 묶으면, 실제 폭
           (412px 3칸 = 카드 111px)에서 '전체 바인 중 0.0%' 가 두 줄로 접혀 그 카드만 값이 14px 올라간다
           — 로그인 화면 실측에서 잡았다(2026-09-06). 넓은 하네스에서는 안 접혀 안 보이던 결함이다.
@@ -935,7 +935,7 @@ ${rpt.actions.length
     w.document.close();
   };
   return (
-    <div className="rounded-card border border-violet-500/40 bg-gradient-to-br from-violet-500/[0.12] to-indigo-500/[0.04] p-3 space-y-3">
+    <div className="rounded-card border border-violet-500/40 bg-linear-to-br/srgb from-violet-500/12 to-indigo-500/4 p-3 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h4 className="flex items-center gap-1.5 text-sm font-bold text-violet-200"><Icon name="chart" size={14} className="shrink-0" />NURI 운영 리포트</h4>
@@ -962,7 +962,7 @@ ${rpt.actions.length
         <p className="text-center py-8 text-2xs text-ink-muted">이 기간에 바인 기록이 없습니다.<br />장부를 작성하면 집계가 표시됩니다.</p>
       ) : rpt.lowSample ? (
         /* 표본 부족 — 가짜 진단을 만들지 않는다. 무엇이 얼마나 더 필요한지만 말한다. */
-        <div className="rounded-input border border-amber-400/30 bg-amber-400/[0.06] p-3">
+        <div className="rounded-input border border-amber-400/30 bg-amber-400/6 p-3">
           <p className="flex items-center gap-1.5 text-xs font-bold text-amber-300"><Icon name="alert" size={13} className="shrink-0" />판단할 데이터가 부족합니다</p>
           <p className="mt-1 text-2xs text-ink-secondary leading-relaxed break-keep">{rpt.sales}</p>
           <p className="mt-1.5 text-2xs text-ink-muted break-keep">
@@ -1064,7 +1064,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
           className={['relative h-6 w-11 shrink-0 rounded-full transition-colors', !mute ? 'bg-accent-300' : 'bg-surface-float'].join(' ')}>
           {/* left 는 모션 헌법 §4 가 금지한 레이아웃 속성이다(매 프레임 레이아웃 재계산).
               위치는 left-0.5 로 고정하고 이동만 transform 으로 — 시각 결과는 같고 합성만으로 처리된다. */}
-          <span className={['absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform', !mute ? 'translate-x-[1.15rem]' : 'translate-x-0'].join(' ')} />
+          <span className={['absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform', !mute ? 'translate-x-[1.15rem]' : 'translate-x-0'].join(' ')} />
         </button>
       </div>
 

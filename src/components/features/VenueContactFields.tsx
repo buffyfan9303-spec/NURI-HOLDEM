@@ -62,7 +62,7 @@ export default function ContactListEditor({
       </datalist>
       {rows.length < MAX_VENUE_CONTACTS ? (
         <button type="button" onClick={add}
-          className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3 text-2xs font-bold text-accent-200 transition-colors hover:bg-accent-300/10">
+          className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/6 px-3 text-2xs font-bold text-accent-200 transition-colors hover:bg-accent-300/10">
           <Icon name="plus" size={13} /> 연락처 추가
         </button>
       ) : (

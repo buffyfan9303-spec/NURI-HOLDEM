@@ -14,5 +14,5 @@
 // 글자 버튼(보이는 크기 그대로, 누름만 44px 이상)용 — **위 6px · 아래 13px** 비대칭.
 //   위쪽 이웃(카드 슬롯·입력칸·다음 문제 버튼)과의 간격이 6.375~12.75px 라 위로는 넓힐 수 없고, 아래는 카드 안쪽 여백(12.75px)이 비어 있다.
 //   28.69~30.69px 글자 버튼 → 47.69px(테두리 있으면 위 5 · 아래 12 실효). 이웃을 덮지 않는지는 elementFromPoint 로 잰다(보고서 표).
-export const TEXT_HIT = "relative before:absolute before:inset-x-0 before:-top-[6px] before:-bottom-[13px] before:content-['']";
-export const CHIP_HIT = "relative before:absolute before:inset-x-0 before:-inset-y-[8px] before:content-['']";
+export const TEXT_HIT = "relative before:absolute before:inset-x-0 before:top-[-6px] before:bottom-[-13px] before:content-['']";
+export const CHIP_HIT = "relative before:absolute before:inset-x-0 before:inset-y-[-8px] before:content-['']";

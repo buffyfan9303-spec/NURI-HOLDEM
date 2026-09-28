@@ -142,14 +142,14 @@ function eventMenuSubtitle(loaded: boolean, failed: boolean, b: EventBoard | nul
 const H3_CLS = 'font-display text-[15px] font-bold leading-[22px] tracking-tight text-ink-primary md:text-[18px] md:leading-[26px]';
 /** 🔴 2026-09-24 HOME-LAYOUT-STRETCH — PC(lg~) 일정 목록·'지금 등록 가능' 은 **2열**이다. 한 열이면 PC 카드가 1150px 인데
  *  글자는 왼쪽 ~480px 에만 있어 줄마다 오른쪽 ~670px 가 비었다(실측 1440). 카드 폭을 절반으로 묶어 늘어짐을 없앤다(블록 순서·섹션 구성은 그대로).
- *  ⚠ md(768~1023)로 내리지 않는 근거(리드 요청으로 실측, hl/fit-md.json): 두 칸이면 한 칸 359~475px 인데 지표 칸의 `sm:min-w-[4.5rem]`
+ *  ⚠ md(768~1023)로 내리지 않는 근거(리드 요청으로 실측, hl/fit-md.json): 두 칸이면 한 칸 359~475px 인데 지표 칸의 `sm:min-w-18`
  *    (행끼리 세로 열을 맞추는 최소 폭 76.5px × 3)이 본문 칸(≈213px)을 넘어 **지표 3칸이 두 줄로 접힌다** — 여유 −16.5~−28.6px,
  *    카드 74.5 → 104.8px. 끊김 0 계약이 깨지므로 lg 에서 시작한다(1024: 여유 +47.4~59.5).
  *  구분선: 기본 divide-y 를 끄고 칸마다 **0.5px 바깥 그림자**를 준다 — 이웃 칸의 그림자가 겹쳐 1px 선이 되고,
  *  칸 수가 홀수여도·사이에 두 칸짜리 줄이 끼어도 짝(nth-child)이 어긋나지 않는다.
  *  ⚠ 폴백 갈래(여러 날짜 + 날짜 머리말)는 한 열 그대로다 — 머리말이 두 칸에 흩어지면 어느 날 대회인지 읽을 수 없다.
  *  ⚠ 스켈레톤도 같은 격자다 — 한 열로 예약하면 데이터가 오는 순간 목록 높이가 절반으로 줄어 아래가 끌려 올라간다(CLS). */
-const HOME_LIST_GRID = 'lg:grid lg:grid-cols-2 lg:divide-y-0 lg:[&>*]:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))] lg:[&>article:nth-of-type(odd):last-of-type]:col-span-2';
+const HOME_LIST_GRID = 'lg:grid lg:grid-cols-2 lg:divide-y-0 lg:*:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))] lg:[&>article:nth-of-type(odd):last-of-type]:col-span-2';
 const MORE_CLS = 'flex items-center gap-0.5 py-2 -my-2 t-desc font-semibold text-ink-muted hover:text-ink-secondary';
 
 /** 문장 속 숫자만 강조색 — 종전 '오늘 대회 <N>개' 의 색 계약을 문자열 한 줄에도 그대로 적용한다. */
@@ -646,7 +646,7 @@ export default function HomeTab({
             · 출석 체크 → 헤더와 **같은 시트**(onOpenVoucher). 같은 목적지에 두 벌 경로를 만들지 않는다.
             · 제휴 혜택 → 이벤트(onEvent). 라벨은 오너 지시 문구이고, **밑에 적는 상태는 실제 값**이다
               (진행 중이면 남은 카드·참여권, 아니면 eventMenuSubtitle 이 사실대로 말한다 — §6-1).
-            ⚠ 제목 행에 `min-h-[1.5rem]` — 배지(참여권·카드 수)는 **응답이 와야** 생긴다. 자리를 안 잡으면
+            ⚠ 제목 행에 `min-h-6` — 배지(참여권·카드 수)는 **응답이 와야** 생긴다. 자리를 안 잡으면
               도착하는 순간 행이 3~6px 커지고 그 아래 '오늘·내일 일정'이 통째로 밀린다
               (perf④ 가 잡았다: "첫 페인트 뒤 3px 밀렸다"). 배지 유무와 무관하게 같은 높이를 예약한다.
             ⚠ 제목 행은 `flex-wrap` 이고 배지도 `shrink-0` 가 아니다 — 루트 글자 200% 확대에서
@@ -737,8 +737,8 @@ export default function HomeTab({
                 <div key={i} className="flex items-center gap-3 px-3 py-2.5">
                   <span className="skeleton h-9 w-0.5 shrink-0 rounded-full" />
                   <span className="min-w-0 flex-1">
-                    <span className="skeleton block h-[20px] w-2/3 rounded" />
-                    <span className="skeleton mt-0.5 block h-[16px] w-1/2 rounded" />
+                    <span className="skeleton block h-[20px] w-2/3 rounded-sm" />
+                    <span className="skeleton mt-0.5 block h-[16px] w-1/2 rounded-sm" />
                   </span>
                 </div>
               ))}
@@ -818,7 +818,7 @@ export default function HomeTab({
               <Icon name="chevron-left" size={15} />
             </button>
             <div ref={stripRef} data-testid="home-date-strip"
-              className="scrollbar-none relative flex min-h-[44px] min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain md:w-[22.75rem] md:flex-none">
+              className="scrollbar-none relative flex min-h-[44px] min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain md:w-91 md:flex-none">
               {railDays.map((iso) => {
                 const [, mm, dd] = iso.split('-').map(Number);
                 const dow = ['일', '월', '화', '수', '목', '금', '토'][new Date(Number(iso.slice(0, 4)), mm - 1, dd).getDay()];
@@ -831,7 +831,7 @@ export default function HomeTab({
                     onClick={() => setSelectedDate(iso)}
                     className={[
                       // 폭: 모바일 = 스트립의 1/7(최소 44px) · md~ 고정 3.25rem(55px · 13px 글자 29px 의 1.9배).
-                      'flex min-h-[44px] w-[calc(100%/7)] min-w-[44px] shrink-0 snap-center flex-col items-center justify-center rounded-[8px] leading-tight transition-colors md:w-[3.25rem]',
+                      'flex min-h-[44px] w-[calc(100%/7)] min-w-[44px] shrink-0 snap-center flex-col items-center justify-center rounded-[8px] leading-tight transition-colors md:w-13',
                       on
                         // 선택일 강조 — 레퍼런스의 금색 테두리. 색만으로 구분하지 않게 테두리도 같이 준다(§접근성).
                         // 🔴 2026-09-20 — 종전 `text-gold-300` 이었는데 **라이트 테마에서 대비 1.43:1** 이었다
@@ -885,13 +885,13 @@ export default function HomeTab({
                 /* 실제 카드 행과 같은 높이를 예약한다(--card-h-list — 카드가 바뀌면 그 토큰만 고친다).
                    🔴 2026-09-24 정정: min-h 였는데 안쪽 막대 4줄+gap(76.4)+py-1.5 가 **89.1~90.1px** 로 토큰(82)을 넘어
                    행마다 +8px 과다예약이었다(390 실측, 실제 카드 76.5). 높이를 토큰으로 **고정**하고 넘침은 자른다. */
-                <div key={i} className="flex h-[var(--card-h-list)] items-center gap-3 overflow-hidden px-3 py-1.5">
+                <div key={i} className="flex h-(--card-h-list) items-center gap-3 overflow-hidden px-3 py-1.5">
                   {/* 2026-09-25 SCHEDULE-ROW-E — 실제 카드(로고 56 · 세 줄 · 오른쪽 금액 칸)와 같은 모양 */}
                   <div className="skeleton h-[56px] w-[56px] shrink-0 rounded-[12px]" />
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     {['w-3/4', 'w-1/2', 'w-2/3'].map((w) => <div key={w} className={`skeleton h-3 ${w}`} />)}
                   </div>
-                  <div className="skeleton h-8 w-[4.5rem] shrink-0" />
+                  <div className="skeleton h-8 w-18 shrink-0" />
 
                 </div>
 

@@ -99,7 +99,7 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
       /* 안전영역: 브라우저 전체화면이 거부되면(iOS 사파리 등) 이건 그냥 `fixed inset-0` 오버레이라
           viewport-fit=cover 아래에서 머리말이 상태바 밑으로, 바닥이 홈 인디케이터 밑으로 들어간다.
           데스크톱에서는 env(...) 가 0 이라 PC 렌더는 한 픽셀도 안 바뀐다. */
-      <div ref={hostRef} data-ledger-fullscreen className="fixed inset-0 z-[70] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+      <div ref={hostRef} data-ledger-fullscreen className="fixed inset-0 z-70 flex flex-col bg-surface-base pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
           <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">장부 · 전체화면</span>
           <span className="hidden text-2xs text-ink-muted sm:inline">Esc 로 나가기</span>
@@ -140,7 +140,7 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
       <div>
         <div className="min-w-0">{children}</div>
         {canViewVouchers && (
-          <div ref={railRef} className="mt-4 h-[26rem] scroll-mt-[calc(var(--stack-top,6.0625rem)+0.75rem)]">
+          <div ref={railRef} className="mt-4 h-104 scroll-mt-[calc(var(--stack-top,6.0625rem)+0.75rem)]">
             <LedgerVoucherRail venueId={venueId} active={active} />
           </div>
         )}

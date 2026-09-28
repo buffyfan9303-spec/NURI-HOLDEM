@@ -124,7 +124,7 @@ export default function Term({ name, children, className }: TermProps) {
           // 점선 밑줄 — 글자색은 상속(주변 카피의 위계를 흔들지 않는다), 밑줄만 accent.
           'inline cursor-help underline decoration-dotted underline-offset-[3px]',
           'decoration-accent-300/70 hover:text-accent-300 hover:decoration-accent-300',
-          'transition-colors duration-[var(--dur-fast)] [transition-timing-function:var(--ease)]',
+          'transition-colors duration-(--dur-fast) ease-(--ease)',
           // 터치 타겟 여유 — 인라인이라 줄높이를 건드리지 않고 히트영역만 넓힌다.
           '-mx-0.5 px-0.5 py-0.5 rounded-[3px]',
           className ?? '',
@@ -142,7 +142,7 @@ export default function Term({ name, children, className }: TermProps) {
           data-term-tip={entry.term}
           // pointer-events:none — 말풍선은 순수 시각 요소다(aria-hidden). 손가락을 가로채면
           //   ① 말풍선에 가린 트리거를 다시 못 누르고 ② 아래 입력칸 탭까지 먹는다.
-          className="pointer-events-none fixed z-[70] animate-fade-in"
+          className="pointer-events-none fixed z-70 animate-fade-in"
           style={{ left: pos.left, top: pos.top, bottom: pos.bottom, width: pos.width }}
         >
           <span className="relative block rounded-card border border-border-strong bg-surface-float p-2.5 shadow-dialog">

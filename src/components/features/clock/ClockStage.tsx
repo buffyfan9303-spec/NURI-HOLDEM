@@ -62,7 +62,7 @@ function elapsedMs(s: ClockState, index: number, remaining: number): number {
 const LABEL = 'font-bold uppercase tracking-[0.14em]';
 /** #12(2026-09-25) — 지표·블라인드 라벨 글자 크기. TV(짧은 변 1080 = 16.2px)는 그대로이고, 운영자 미리보기(짧은 변 320 = 4.8px)에서만
  *  9px 하한이 걸린다. 값(숫자)은 이미 clamp 하한(18~24px)이 있었고 라벨만 하한이 없어 '무엇의 숫자인지' 가 사라졌다. */
-const LABEL_SIZE = 'text-[length:max(9px,1.5cqmin)]';
+const LABEL_SIZE = 'text-[max(9px,1.5cqmin)]';
 // #10(FULL-RECHECK-2/C) — 같은 9px 하한을 상태 바(Total Time)·ANTE·BB 보조·프라이즈 라벨·QR 캡션에도 건다.
 //   1024 운영자 전체화면에서 7.3~8.9px 로 내려가 읽을 수 없었다. TV(짧은 변 1080)는 전부 9px 을 넘어 그대로다.
 const DIM = { color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' } as const;
@@ -153,7 +153,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
       <header className="flex h-[8cqmin] shrink-0 items-center justify-between gap-[1.5cqmin] px-[3cqmin]">
         <div className="flex min-w-0 items-center gap-[1.5cqmin]">
           <span className={`h-[1.2cqmin] w-[1.2cqmin] shrink-0 rounded-full ${g.running ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden />
-          <p className="min-w-0 truncate text-[length:max(9px,2.6cqmin)] font-extrabold tracking-tight">
+          <p className="min-w-0 truncate text-[max(9px,2.6cqmin)] font-extrabold tracking-tight">
             {venueName || '홀덤 라이브'}
             {(g.title || g.config?.title) && <span className="ml-[1.2cqmin] font-medium" style={SOFT}>{g.title || g.config?.title}</span>}
           </p>
@@ -182,7 +182,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
                  보고 1열로 접혔다. 판정 기준은 뷰포트가 아니라 **스테이지 자신의 크기**여야 한다.
               ③ 그래서 `.clk-*`(src/index.css) 컨테이너 쿼리로 옮겼다. 경계값 768px·landscape 는 종전과 같은 값이라
                  **TV 렌더는 픽셀 동일**하고, 미리보기만 자기 박스 기준으로 바르게 펼쳐진다.
-                 전제: 두 호출처 모두 스테이지 루트에 `[container-type:size]` 가 있다(TournamentClock). */}
+                 전제: 두 호출처 모두 스테이지 루트에 `@container-size` 가 있다(TournamentClock). */}
           <div className="clk-cols min-h-0 flex-1 gap-[2cqmin] px-[3cqmin]">
 
             {/* 좌 — 프라이즈. 없으면 열 자체를 그리지 않는다(빈 칸을 남기지 않는다). */}
@@ -225,7 +225,7 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               지표 레일(생존/엔트리·리바이·애드온/얼리·바인)은 .clk-col 과 함께 통째로 숨었다. Next Break 는 하단 레일과 **두 번** 나왔다(1080×1920 실측).
               이제 레일 조각 전부를 여기 격자로 편다 — Reg Close 는 레일 안(TimeRails), Next Break 는 하단 레일에 한 번씩만 있다.
               본문(clk-cols) 밖이라 타이머의 '본문 세로 중앙' 계약(clock-board.spec)은 그대로다. */}
-          <div data-testid="clk-rails-band" className="clk-narrow-only shrink-0 grid-cols-[repeat(auto-fit,minmax(28cqmin,1fr))] items-end gap-x-[3cqmin] gap-y-[1cqmin] border-t border-white/[0.06] px-[3cqmin] py-[1.4cqmin]">
+          <div data-testid="clk-rails-band" className="clk-narrow-only shrink-0 grid-cols-[repeat(auto-fit,minmax(28cqmin,1fr))] items-end gap-x-[3cqmin] gap-y-[1cqmin] border-t border-white/6 px-[3cqmin] py-[1.4cqmin]">
             {rails}
           </div>
 
@@ -241,8 +241,8 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               <div className="flex min-w-0 items-center gap-[1cqmin]">
                 <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[0.6cqmin] bg-white" style={{ width: 'clamp(34px, 5cqmin, 78px)', height: 'auto' }} />
                 <div className="min-w-0">
-                  <p className={`${LABEL} text-[length:max(9px,1.2cqmin)]`} style={SOFT}>Buy-in QR</p>
-                  <p className="text-[length:max(9px,1.3cqmin)] leading-snug" style={DIM}>찍으면 {gameLabel(g)} 바인 요청</p>
+                  <p className={`${LABEL} text-[max(9px,1.2cqmin)]`} style={SOFT}>Buy-in QR</p>
+                  <p className="text-[max(9px,1.3cqmin)] leading-snug" style={DIM}>찍으면 {gameLabel(g)} 바인 요청</p>
                 </div>
               </div>
             ) : <span />}
@@ -331,13 +331,13 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
 
   return (
     <aside data-testid="clk-prizes" className="clk-col min-h-0 flex-col justify-center">
-      <p className={`${LABEL} text-[length:max(9px,1.5cqmin)]`} style={SOFT}>Prize Pool</p>
+      <p className={`${LABEL} text-[max(9px,1.5cqmin)]`} style={SOFT}>Prize Pool</p>
       <p className="mt-[0.3cqmin] font-black leading-none tabular-nums"
         style={{ fontSize: 'clamp(22px, 4.6cqmin, 76px)', color: 'var(--clk-prize, #F5C451)' }}>
         {totalPrize.toLocaleString()}
       </p>
       {/* 가로 뷰포트 — 트랙이 여기서 잘린다. 세로는 자르지 않는다(잘리면 줄이 반만 보인다). */}
-      <div className="mt-[1.4cqmin] overflow-x-hidden border-t border-white/[0.08] pt-[1.2cqmin]">
+      <div className="mt-[1.4cqmin] overflow-x-hidden border-t border-white/8 pt-[1.2cqmin]">
         <div data-testid="clk-prize-track" className="flex transition-transform ease-out motion-reduce:transition-none"
           style={{ transform: `translateX(-${cur * 100}%)`, transitionDuration: `${PRIZE_SLIDE_MS}ms` }}>
           {sheets.map((rows, pi) => {
@@ -361,15 +361,15 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty }: { prizes: PrizeRow[]
       {/* 미스터리 바운티 — 03cd8bb 에서 옛 보드가 사라지며 **함께 사라졌던** 값이다.
           설정 입력란(TournamentClock)은 그대로 남아 있어서, 없으면 '써도 아무 데도 안 나오는 죽은 컨트롤' 이 된다. */}
       {mysteryBounty > 0 && (
-        <div data-testid="clk-mystery" className="mt-[1.2cqmin] border-t border-white/[0.08] pt-[1cqmin]">
-          <p className={`${LABEL} text-[length:max(9px,1.4cqmin)]`} style={SOFT}>Mystery Bounty</p>
+        <div data-testid="clk-mystery" className="mt-[1.2cqmin] border-t border-white/8 pt-[1cqmin]">
+          <p className={`${LABEL} text-[max(9px,1.4cqmin)]`} style={SOFT}>Mystery Bounty</p>
           <p className="mt-[0.2cqmin] font-extrabold leading-none tabular-nums text-white" style={{ fontSize: 'clamp(16px, 2.6cqmin, 44px)' }}>
             {mysteryBounty.toLocaleString()}
           </p>
         </div>
       )}
       {pages > 1 && (
-        <p data-testid="clk-prize-page" className="mt-[1cqmin] text-right text-[length:max(9px,1.5cqmin)] font-bold tabular-nums" style={DIM}>
+        <p data-testid="clk-prize-page" className="mt-[1cqmin] text-right text-[max(9px,1.5cqmin)] font-bold tabular-nums" style={DIM}>
           {cur + 1} / {pages}
         </p>
       )}
@@ -446,7 +446,7 @@ function RunningTime({ g }: { g: ClockState }) {
   return (
     <p className="clk-wide-only shrink-0 text-right">
       <span className={`${LABEL} block ${LABEL_SIZE}`} style={DIM}>Total Time</span>
-      <span className="text-[length:max(9px,2.1cqmin)] font-extrabold tabular-nums text-white">{hms(run)}</span>
+      <span className="text-[max(9px,2.1cqmin)] font-extrabold tabular-nums text-white">{hms(run)}</span>
     </p>
   );
 }
@@ -495,7 +495,7 @@ function BottomMetrics({ g, curBB }: { g: ClockState; curBB: number }) {
       <p className={`${LABEL} ${LABEL_SIZE} whitespace-nowrap`} style={SOFT}>{label}</p>
       <p className="mt-[0.2cqmin] whitespace-nowrap leading-none">
         <span className="font-extrabold tabular-nums" style={{ fontSize: 'clamp(18px, 3.4cqmin, 70px)', color: tone ?? '#FFFFFF' }}>{value}</span>
-        {sub && <span className="ml-[0.8cqmin] text-[length:max(9px,1.7cqmin)] font-semibold tabular-nums" style={DIM}>{sub}</span>}
+        {sub && <span className="ml-[0.8cqmin] text-[max(9px,1.7cqmin)] font-semibold tabular-nums" style={DIM}>{sub}</span>}
       </p>
     </div>
   );
@@ -641,7 +641,7 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
                 행 높이는 부모가 고정하므로 이 줄의 유무가 타이머를 밀지 않는다. */}
             {lv && lv.ante > 0 && (
               <p className="flex items-baseline gap-[1cqmin] leading-none">
-                <span className="text-[length:max(9px,1.7cqmin)] font-bold uppercase tracking-[0.18em]" style={DIM}>Ante</span>
+                <span className="text-[max(9px,1.7cqmin)] font-bold uppercase tracking-[0.18em]" style={DIM}>Ante</span>
                 <span className="font-extrabold tabular-nums text-white" style={{ fontSize: 'clamp(16px, 3.4cqmin, 60px)' }}>{num(lv.ante)}</span>
               </p>
             )}
@@ -660,7 +660,7 @@ const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
             </p>
             {next.ante > 0 && (
               <p className="flex items-baseline gap-[1cqmin] leading-none">
-                <span className="text-[length:max(9px,1.7cqmin)] font-bold uppercase tracking-[0.18em]" style={DIM}>Ante</span>
+                <span className="text-[max(9px,1.7cqmin)] font-bold uppercase tracking-[0.18em]" style={DIM}>Ante</span>
                 <span className="font-extrabold tabular-nums text-white/70" style={{ fontSize: 'clamp(14px, 2.8cqmin, 48px)' }}>{num(next.ante)}</span>
               </p>
             )}
@@ -686,7 +686,7 @@ function Rail({ label, value, sub, lead, danger }: { label: string; value: strin
         <span className="font-extrabold tabular-nums"
           style={{ fontSize: lead ? 'clamp(24px, 5.4cqmin, 92px)' : 'clamp(18px, 3.6cqmin, 60px)',
                    color: danger ? 'var(--clk-timer-urgent, #fb7185)' : '#FFFFFF' }}>{value}</span>
-        {sub && <span className="text-[length:max(9px,1.9cqmin)] font-semibold tabular-nums" style={DIM}>{sub}</span>}
+        {sub && <span className="text-[max(9px,1.9cqmin)] font-semibold tabular-nums" style={DIM}>{sub}</span>}
       </p>
     </div>
   );
