@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const rpc = vi.fn();
 vi.mock('./supabase', () => ({ IS_MOCK: false, supabase: { rpc: (...a: unknown[]) => rpc(...a) } }));
 
-import { serverNow, syncServerTime, serverOffsetMs, __setServerOffsetForTest } from './serverTime';
+import { serverNow, syncServerTime, serverOffsetMs, serverTimeKnown, serverTimeSettled, __setServerOffsetForTest } from './serverTime';
 
 describe('서버 시각 오프셋', () => {
   afterEach(() => { vi.useRealTimers(); rpc.mockReset(); __setServerOffsetForTest(0, false); });
@@ -31,5 +31,37 @@ describe('서버 시각 오프셋', () => {
     rpc.mockImplementation(async () => { vi.setSystemTime(6_000); return { data: new Date(100_000).toISOString(), error: null }; });
     await syncServerTime();
     expect(serverOffsetMs()).toBe(0);
+  });
+
+  // 🔴 K2(2026-09-29 하네스 실측: +5분 PC 가 레벨을 149초 일찍 넘김) — '쟀는가' 를 따로 들고, 실패하면 15초 뒤 다시 잰다.
+  //   음성 대조: syncServerTime 의 known=true 를 성공 여부와 무관하게 세우거나, maybeSync 의 RETRY 를 RESYNC(10분)로 되돌리면 아래가 빨개진다.
+  it('🔴 측정 전·실패 뒤에는 known=false — 자동 쓰기 게이트가 닫혀 있다', async () => {
+    rpc.mockResolvedValue({ data: null, error: { code: '503', message: 'upstream' } });
+    expect(serverTimeKnown()).toBe(false);
+    await syncServerTime();
+    expect(serverTimeKnown()).toBe(false);
+    expect(serverTimeSettled()).toBe(true);   // 첫 표시는 풀린다(기기 시계로 보이며 다시 잰다)
+  });
+
+  it('🔴 실패하면 15초 뒤 다시 잰다(10분이 아니다) · 성공하면 known', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000_000);
+    rpc.mockResolvedValueOnce({ data: null, error: { code: '503' } });
+    await syncServerTime();
+    rpc.mockReset();
+    rpc.mockResolvedValue({ data: new Date(1_000_000 + 16_000).toISOString(), error: null });
+    vi.setSystemTime(1_000_000 + 14_000);
+    serverNow();
+    expect(rpc).not.toHaveBeenCalled();
+    vi.setSystemTime(1_000_000 + 16_000);
+    serverNow();
+    expect(rpc).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(serverTimeKnown()).toBe(true));
+  });
+
+  it('함수가 아예 없으면(PGRST202) 기기 시계가 기준 — known=true(전진이 영영 멈추지 않게)', async () => {
+    rpc.mockResolvedValue({ data: null, error: { code: 'PGRST202', message: 'not found' } });
+    await syncServerTime();
+    expect(serverTimeKnown()).toBe(true);
   });
 });

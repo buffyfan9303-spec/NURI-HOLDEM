@@ -30,7 +30,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  applyRemoteStatDelta, clampAdjEarlies, computeLiveStats, defaultClockConfig, emptyClockState,
+  composeLiveStats, clampAdjEarlies, computeLiveStats, defaultClockConfig, emptyClockState,
 } from './clock';
 
 const cfg = { ...defaultClockConfig(), earlyBonus: 5_000, doubleEarlyBonus: 10_000, startStack: 0, rebuyStack: 0, addonStack: 0 };
@@ -99,15 +99,15 @@ describe('얼리 음수 #11 — 카운트도 칩도 0 밑으로 안 내려간다
     expect(clampAdjEarlies(null, 3, -1)).toBe(2);
   });
 
-  it('🔴 칩: 리모컨 차분 경로(applyRemoteStatDelta)도 같은 하한을 쓴다', () => {
-    const st = (adjEarlies: number) => ({ ...emptyClockState('v1', cfg), adjEarlies });
-    const canon = computeLiveStats(st(0), derivedOf(0), cfg);
-    const next = applyRemoteStatDelta(canon, st(0), st(-1), cfg)!;
+  it('🔴 칩: 표시 합성 경로(composeLiveStats)도 같은 하한을 쓴다', () => {
+    const withLedger = (auto: number) => ({ ...derivedOf(auto), earlyUnits: auto });
+    const st = (adjEarlies: number, auto: number) => ({ ...emptyClockState('v1', cfg), sessionDate: '2026-09-15', adjEarlies,
+      liveStats: { ...computeLiveStats(emptyClockState('v1', cfg), derivedOf(auto), cfg), ledger: withLedger(auto) } });
+    const next = composeLiveStats(st(-1, 0))!;
     expect(next.earlies).toBe(0);
     expect(next.totalStack).toBe(0);   // 수정 전 −5,000
     // 정상 구간(자동 3 · 0 → −1)은 종전과 같다
-    const canon3 = computeLiveStats(st(0), derivedOf(3), cfg);
-    const next3 = applyRemoteStatDelta(canon3, st(0), st(-1), cfg)!;
+    const next3 = composeLiveStats(st(-1, 3))!;
     expect(next3.earlies).toBe(2);
     expect(next3.totalStack).toBe(10_000);
   });

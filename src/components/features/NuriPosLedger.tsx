@@ -6,7 +6,7 @@ import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 가게지원만 미수 불가(티켓은 가불 허용). 미수=붉은색.
 // 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모.
 // (엑셀 내보내기는 2026-09-09 오너 지시로 제거 — 외부 반출 기능 삭제.)
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -37,8 +37,9 @@ import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyTo
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
 import { resolveDiscountIndex } from '../../api/discountIndex';
-import { getClockState, clockHasProgress, saveClockState, saveClockPatch, saveClockLiveStats, createCoalescingSaver, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, effectiveLevel, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
-import { clockPhase } from '../../lib/clockLevel';
+import { getClockState, clockHasProgress, saveClockState, saveClockPatch, createCoalescingSaver, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, composeLiveStats, earlyWindowOf, writeLedgerStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, effectiveLevel, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
+import { clockPhase, formatCountdown } from '../../lib/clockLevel';
+import { useClockSecond } from '../../lib/clockTick';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
@@ -51,7 +52,7 @@ import SegmentedTabs from '../atoms/SegmentedTabs';
 import { SkeletonList } from '../atoms/Skeleton';
 import { kstToday } from '../../lib/kst';
 import { businessDateOf, useBusinessDate } from '../../lib/businessDate';
-import { serverNow } from '../../lib/serverTime';   // D1 — 장부 클락 바도 서버 기준 시각
+import { serverNow, serverTimeKnown, serverTimeSettled, whenServerTimeSettled } from '../../lib/serverTime';   // D1 — 장부 클락 바도 서버 기준 시각
 import { useResyncOnWake } from '../../lib/realtimeResync';
 import { createBackoff } from '../../lib/retryBackoff';
 
@@ -599,10 +600,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     (s) => `${s.venueId}#${s.gameSeq}`,
     (next, base) => saveClockPatch(base, next),
     {
-      error: (_e, back) => {
+      error: (e, back) => {
         setClock((cur) => (cur && cur.venueId === back.venueId && cur.gameSeq === back.gameSeq ? back : cur));
         clockReloadAfterSaveRef.current = true;
-        toastRef.current.show('클락 제어 실패. 네트워크를 확인하세요', 'error');
+        // 이유를 보인다 — 서버 RPC 미배포(CLOCK_COUNT_RPC_MISSING_TEXT)·CAS 충돌을 '네트워크' 로 뭉개지 않는다.
+        toastRef.current.show(`클락 제어 실패. ${ledgerErrorText(e, '네트워크를 확인하세요')}`, 'error');
       },
       idle: () => { if (clockReloadAfterSaveRef.current) { clockReloadAfterSaveRef.current = false; reloadClockRef.current(); } },
     },
@@ -622,6 +624,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   useEffect(() => { if (active) reloadClock(); }, [reloadClock, active]);
   // ⚡ 이 판이 실제로 보일 때만(active) 구독 — keep-alive 로 숨은 탭이 채널을 계속 물고 있지 않게(§5-A).
   useEffect(() => { if (!active) return; return subscribeClock(venueId, reloadClock); }, [venueId, reloadClock, active]);
+  // K11(2026-09-29) — 창 복귀·온라인 복귀·30초마다 클락도 다시 읽는다(TV·리모컨·클락 화면과 같은 계약).
+  //   예전엔 장부·세션·대기만 다시 읽어, 조용히 끊긴 동안 장부의 클락 바가 옛 레벨·옛 생존을 보였다.
+  useResyncOnWake(reloadClock, active, 30_000);
   // C04: sessionDate 만 보면 게임 전환 중 도착한 '다른 게임' 응답을 그대로 연동으로 본다 —
   // reloadClock 은 항상 gameSeq 로 조회하지만 요청·응답 사이 gameSeq 가 바뀌면 그 응답은 이전 게임 것이다.
   // 응답 자체에 찍힌 clock.gameSeq 를 지금 gameSeq 와 맞춰 보면 fetch 시점 가드 없이도 stale 을 걸러낸다.
@@ -678,16 +683,13 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     //   생존·얼리 숫자가 움직이지 않고(아웃 카운터만 올라감), 그 낡은 값이 api/clock.ts:379 를 통해
     //   TV 송출·라이브보드·업주 대시보드까지 그대로 퍼졌다.
     //   조리법은 ClockRemote.persist(clock/ClockRemote.tsx:73)·마감 스냅샷(아래 handleClose)과 동일하다.
-    const derived = deriveClockCounts(buyins, {
-      earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin,
-      tournamentStart: session.tournamentStart, openedAt: session.openedAt,
-    });
-    const next = { ...moved, liveStats: { ...computeLiveStats(moved, derived, moved.config), buyInAmount: session.buyinAmount ?? null } };
+    // K1(2026-09-29) — 통계는 저장하지 않는다(카운트는 차분 RPC). 화면 표시만 TV 와 같은 합성으로 다시 계산한다.
+    const next = { ...moved, liveStats: composeLiveStats(moved) };
     clockReq.current = { seq: clockReq.current.seq + 1, owner: clockReq.current.owner };   // 날아가던 조회 응답이 낙관값을 덮지 않게
     clockReloadAfterSaveRef.current = true;
     setClock(next);
     clockSaver.push(next, cur);
-  }, [clock, buyins, session, clockSaver]);
+  }, [clock, clockSaver]);
 
   // D4(2026-09-28) — 장부가 바뀌면(바인·취소·얼리 구간·단가) 연동 클락의 라이브 통계(TV 엔트리·생존·평균 스택)를 여기서도 갱신한다.
   //   예전엔 업주 PC 의 **클락 화면이 열려 있을 때만** 갱신됐다(TournamentClock 400ms 타이머) — 폰 장부로 바인만 받으면
@@ -697,11 +699,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   useEffect(() => { clockLatest.current = clock; });
   const statsKeyOf = (): string | null => {
     if (!clockLinked || !clock) return null;
-    const d = deriveClockCounts(buyins, {
-      earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin,
-      tournamentStart: session.tournamentStart, openedAt: session.openedAt,
-    });
-    return `${d.entries}/${d.rebuys}/${d.earlies}/${d.doubleEarlies}/${session.buyinAmount ?? ''}`;
+    const d = deriveClockCounts(buyins, earlyWindowOf(clock.config, session));
+    return `${d.entries}/${d.rebuys}/${d.earlies}/${d.doubleEarlies}/${session.buyinAmount ?? ''}/${JSON.stringify(clock.liveStats?.ledger ?? null)}`;
   };
   const statsKey = statsKeyOf();
   useEffect(() => {
@@ -709,13 +708,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     const t = setTimeout(() => {
       const c = clockLatest.current;
       if (!c || c.venueId !== venueId || c.sessionDate !== date || c.gameSeq !== gameSeq) return;
-      const derived = deriveClockCounts(buyins, {
-        earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin,
-        tournamentStart: session.tournamentStart, openedAt: session.openedAt,
-      });
-      const ls = { ...computeLiveStats(c, derived, c.config), buyInAmount: session.buyinAmount ?? null };
-      if (JSON.stringify(ls) === JSON.stringify(c.liveStats ?? null)) return;
-      saveClockLiveStats(c.venueId, c.gameSeq, ls).catch(() => {});
+      // K1·K3 — 장부 몫 작성기 한 벌(클락 화면·리모컨·대시보드와 같은 함수). 같으면 안 쓴다.
+      void writeLedgerStats(c, buyins, session).catch(() => {});
     }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1122,7 +1116,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       // 다음 게임이 덮으므로, 마감 시점이 '지난 게임 그대로 열기'가 복원할 수 있는 유일한 캡처 기회다.
       let snap: LedgerCloseSnapshot | null = null;
       if (clockLinked && clock) {
-        const derived = deriveClockCounts(buyins, { earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin, tournamentStart: session.tournamentStart, openedAt: session.openedAt });
+        const derived = deriveClockCounts(buyins, earlyWindowOf(clock.config, session));
         const ls = computeLiveStats(clock, derived, clock.config);
         snap = {
           entries: ls.entries, alive: ls.alive, eliminations: ls.eliminations, rebuys: ls.rebuys, earlies: ls.earlies, addons: ls.addons,
@@ -2131,12 +2125,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
 function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }: {
   clock: ClockState; onPatch: (p: Partial<ClockState>) => void; onReload: () => void; onOpenClock?: () => void; active?: boolean;
 }) {
-  const [, tick] = useReducer((x: number) => x + 1, 0);
-  useEffect(() => {
-    if (!clock.running || !active) return; // 장부가 숨김(다른 섹션)이면 백그라운드 1초 틱 정지
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
-  }, [clock.running, active]);
+  // K9 — 초 갱신은 공용 틱 한 벌(서버 기준 ends_at 의 올림 경계). 장부가 숨김(다른 섹션)이면 멈춘다.
+  useClockSecond(clock, clock.running && active);
 
   // 레벨 이동 되돌리기 — ‹ ⏸ › 는 40px 이지만 8px 간격으로 붙어 있어 방향 오탭이 실제로 난다.
   // 이동 직전 raw 행을 6초 보관했다가 그대로 되쓰면 클락 화면·TV(?display=)까지 함께 원상 복구된다.
@@ -2163,6 +2153,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
       const c = remoteRef.current;
       if (!c.running || !c.endsAt) return;
       if (backoffRef.current.blocked()) return;
+      if (!serverTimeKnown()) return;   // K2 — 서버 시각을 모르면 기기 시계로 레벨을 넘기지 않는다
       if (serverNow() - new Date(c.endsAt).getTime() < 3000) return; // 클락 화면이 먼저 쓸 시간을 준다
       if (wroteForRef.current === c.endsAt) return;                 // 이 경계는 이미 우리가 썼다(realtime 대기 중)
       const cu = levelCatchUp(c);
@@ -2190,14 +2181,11 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
 
   const lv = clock.config.levels;
   // 실효 레벨 — running인데 endsAt이 지났으면(클락 화면 미오픈으로 전진 못 함) 경과분만큼 전진해 표시/제어
-  let idx = Math.max(0, Math.min(clock.currentIndex, Math.max(0, lv.length - 1)));
-  let rem = clock.running && clock.endsAt ? new Date(clock.endsAt).getTime() - serverNow() : clock.remainingMs;
-  while (clock.running && rem < 0 && idx < lv.length - 1) { idx++; rem += (lv[idx].minutes || 0) * 60_000; }
-  rem = Math.max(0, rem);
+  //   (계산은 lib/clockLevel 의 effectiveLevel 한 벌 — 여기 있던 인라인 복제 while 을 걷었다)
+  const { index: idx, remainingMs: rem } = effectiveLevel(clock);
   const cur = lv[idx];
   let no = 0;
   for (let i = 0; i <= idx && i < lv.length; i++) if (lv[i].kind === 'level') no++;
-  const mm = Math.floor(rem / 60_000), ss = Math.floor((rem % 60_000) / 1000);
   if (!cur) return null;
 
   // 이동 계산은 실효 idx(endsAt 경과분 전진 반영) 기준이지만, 되돌리기는 '이동 전 DB 행'을 그대로 복원한다.
@@ -2221,6 +2209,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
   const finished = clockPhase(clock) === 'finished';
   const toggle = () => {
     if (finished) return;
+    if (!serverTimeSettled()) { void whenServerTimeSettled().then(toggle); return; }   // K2 — 측정 전엔 기다렸다 쓴다
     // 🔴 C5(2026-09-25) — 누른 순간의 실효 레벨·잔여로 커밋한다(렌더는 1초 틱이라 최대 1초 낡았다).
     const at = effectiveLevel(clock, serverNow());
     if (clock.running) {
@@ -2264,7 +2253,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
             {cur.kind === 'break'
               ? (cur.label || 'BREAK')
               : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
-            <span className={clock.running ? 'ml-2 text-emerald-300' : 'ml-2 text-accent-300'}>{mm}:{String(ss).padStart(2, '0')}</span>
+            <span className={clock.running ? 'ml-2 text-emerald-300' : 'ml-2 text-accent-300'}>{formatCountdown(rem)}</span>
           </p>
         </button>
         <button type="button" onClick={() => go(-1)} disabled={idx <= 0} aria-label="이전 레벨"

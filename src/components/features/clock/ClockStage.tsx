@@ -16,15 +16,16 @@
 //   폭·방향 분기도 같은 이유로 Tailwind 변형이 아니라 `.clk-*` 컨테이너 쿼리(src/index.css)를 쓴다.
 import { memo, useEffect, useState, type ReactNode } from 'react';
 import { effectiveLevel, type ClockState } from '../../../api/clock';
-import { clockPhase, gameLabel, levelNumberAt, msToNextBreak } from '../../../lib/clockLevel';
+import { clockPhase, gameLabel, levelNumberAt, msToNextBreak, formatCountdown, formatElapsed } from '../../../lib/clockLevel';
+import { useClockSecond } from '../../../lib/clockTick';
 import { msToRegClose } from '../../../lib/regStatus';
 import {
   PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, pickPrizeLayout, prizePlaceText, type PrizeRow,
 } from './prizeFit';
 
-const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
-const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
-const hms = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s >= 3600 ? `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}` : `${pad(s / 60)}:${pad(s % 60)}`; };
+// K9 — 시간 글자는 lib/clockLevel 한 벌(남은 시간 올림 · 흐른 시간 내림). 예전 round 는 경계에서 00:00 을 1초 보이고 20:00 을 건너뛰었다.
+const mmss = (ms: number) => formatCountdown(ms);
+const hms = (ms: number) => formatCountdown(ms, true);
 
 // levelNumberAt · msToNextBreak · msToRegClose 는 위 import 의 lib 한 곳뿐이다.
 //
@@ -410,7 +411,7 @@ function PausedLabel({ g }: { g: ClockState }) {
  * data-testid clk-level 은 e2e 앵커(clock-catchup 이 숫자를 읽는다) — 자리는 옮겼어도 id 는 유지한다.
  */
 function LevelLine({ g }: { g: ClockState }) {
-  useSecondTick();   // C4 — 아래 주석(useSecondTick) 참고: DB 쓰기 없이 레벨 경계를 지나도 매초 실효 레벨을 다시 읽는다
+  useClockSecond(g);   // C4 — 아래 'K9' 주석 참고(lib/clockTick): DB 쓰기 없이 레벨 경계를 지나도 매초 실효 레벨을 다시 읽는다
   const lvls = g.config?.levels ?? [];
   const eff = effectiveLevel(g);
   const isBreak = lvls[eff.index]?.kind === 'break';
@@ -429,24 +430,20 @@ function LevelLine({ g }: { g: ClockState }) {
  * 다음 레벨 시간으로 넘어갔는데 LEVEL 줄과 CURRENT|NEXT 는 **옛 레벨**을 그렸다 — 최대 30초(TV 폴링 주기).
  * 운영자 미리보기는 부모가 매초 다시 그려서 드러나지 않았다. 실효 레벨을 쓰는 칸은 각자 초 틱을 가진다(부모 전체 리렌더 0).
  */
-function useSecondTick(): void {
-  const [, setTick] = useState(0);
-  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
-}
+// K9(2026-09-29) — 칸마다 따로 돌던 1초 틱(마운트 시점마다 위상이 달랐다)을 공용 틱 한 벌(lib/clockTick)로 모았다.
 
 /**
  * RunningTime — 총 진행 시간. 상태 바 우측(레퍼런스 두 종 모두 이 자리에 둔다).
  * 초당 틱은 이 컴포넌트 안에만 — 부모(화면 전체) 리렌더 0.
  */
 function RunningTime({ g }: { g: ClockState }) {
-  const [, setTick] = useState(0);
-  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  useClockSecond(g);
   const eff = effectiveLevel(g);
   const run = elapsedMs(g, eff.index, eff.remainingMs);
   return (
     <p className="clk-wide-only shrink-0 text-right">
       <span className={`${LABEL} block ${LABEL_SIZE}`} style={DIM}>Total Time</span>
-      <span className="text-[max(9px,2.1cqmin)] font-extrabold tabular-nums text-white">{hms(run)}</span>
+      <span className="text-[max(9px,2.1cqmin)] font-extrabold tabular-nums text-white">{formatElapsed(run)}</span>
     </p>
   );
 }
@@ -458,8 +455,7 @@ function RunningTime({ g }: { g: ClockState }) {
  * 초당 틱은 여기 안에만.
  */
 function TimeRails({ g, regLevel }: { g: ClockState; regLevel: number }) {
-  const [, setTick] = useState(0);
-  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  useClockSecond(g);
   const eff = effectiveLevel(g);
   const reg = regLevel > 0 ? msToRegClose(g, eff.index, eff.remainingMs) : null;
   // 다음 휴식은 하단 레일(BottomMetrics)로 옮겼다 — 여기서는 등록 마감만 남는다.
@@ -480,8 +476,7 @@ function TimeRails({ g, regLevel }: { g: ClockState; regLevel: number }) {
  * 다음 휴식만 초당 갱신이라 이 컴포넌트에 틱을 가둔다 — 보드 전체를 매초 다시 그리지 않는다.
  */
 function BottomMetrics({ g, curBB }: { g: ClockState; curBB: number }) {
-  const [, setTick] = useState(0);
-  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  useClockSecond(g);
   const ls = g.liveStats;
   const eff = effectiveLevel(g);
   const brk = msToNextBreak(g, eff.index, eff.remainingMs);
@@ -523,8 +518,7 @@ const RAIL_SEGMENTS = 24;
  * data-testid clk-timer 는 e2e 앵커 — 문구를 바꿔도 이 id 는 유지한다.
  */
 const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
-  const [, setTick] = useState(0);
-  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  useClockSecond(g);
   const lvls = g.config?.levels ?? [];
   const eff = effectiveLevel(g);
   const lv = lvls[eff.index];
@@ -580,7 +574,7 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
  * 브레이크 중에는 CURRENT 자리에 BREAK 를, NEXT 자리에 다음 레벨을 둔다.
  */
 const BlindsRow = memo(function BlindsRow({ g }: { g: ClockState }) {
-  useSecondTick();   // C4 — memo 라 부모 리렌더도 안 탄다. 틱이 없으면 TV 가 다음 폴링(최대 30초)까지 옛 블라인드를 보였다.
+  useClockSecond(g);   // C4 — memo 라 부모 리렌더도 안 탄다. 틱이 없으면 TV 가 다음 폴링(최대 30초)까지 옛 블라인드를 보였다.
   const lvls = g.config?.levels ?? [];
   const eff = effectiveLevel(g);
   const lv = lvls[eff.index];

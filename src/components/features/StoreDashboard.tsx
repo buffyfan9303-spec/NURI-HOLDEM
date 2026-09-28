@@ -11,7 +11,9 @@ import { listStaleOpenSessions,
   getLastClosedRound, MAIN_GAME_SEQ, kstToday, type LastClosedRound, type PosterOpsSummary,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, ledgerCounts,} from '../../api/ledger';
 import { useToast } from '../atoms/Toast';
-import { getClockState, getVenueClocks, subscribeClock, type ClockState } from '../../api/clock';
+import { getClockState, getVenueClocks, subscribeClock, effectiveLevel, syncClockLedgerStats, type ClockState } from '../../api/clock';
+import { levelNumberAt, formatCountdown } from '../../lib/clockLevel';
+import { useClockSecond } from '../../lib/clockTick';
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { getVenueRankings } from '../../api/rankings';
 import { hasRankingForGame } from '../../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
@@ -38,7 +40,6 @@ import { relativeTime } from '../../lib/relativeTime';
 // 한 세대로 묶지 않으면 A 매장 응답이 B 화면에 숫자/오류 배너/시각으로 남는다.
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 import { useBusinessDate } from '../../lib/businessDate';
-import { serverNow } from '../../lib/serverTime';
 import { useResyncOnWake } from '../../lib/realtimeResync';
 
 // '오늘'·'최근 N일'은 전부 **KST** — 장부·서버(ledger_business_date · kstToday)와 같은 달력이어야 한다.
@@ -147,7 +148,6 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   const [splitOpen, setSplitOpen] = useState(false); // 분할 결제 입력 모드
   const [splitVals, setSplitVals] = useState({ cash: 0, card: 0, transfer: 0 }); // 분할 금액
   const [payOrder, setPayOrder] = useState<('cash' | 'card' | 'transfer')[]>(['cash', 'card', 'transfer']); // 결제수단 순서(자주 쓰는 것 먼저 — 학습)
-  const [, setNowTick] = useState(0); // 라이브 카운트다운/경과시간 1초 갱신
   const [resCounts, setResCounts] = useState<Record<string, number>>({});
   const [shifts, setShifts] = useState<StaffShift[]>([]);
   const [monthShifts, setMonthShifts] = useState<StaffShift[]>([]);
@@ -394,6 +394,23 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   useEffect(() => { if (active) return subscribeReservations(reloadReservations, upcomingIds); }, [reloadReservations, upcomingIds, active]);
   // 이 줄만 active 게이트가 빠져 있어 숨은 탭에서도 채널을 물고 reload 를 돌렸다(다른 4개와 규칙을 맞춘다).
   useEffect(() => { if (active) return subscribeStaffSchedule(venueId, reload); }, [venueId, reload, active]);
+  // 🔴 K3(2026-09-29 실측) — 업주가 대시보드에만 있을 때도 TV 인원·평균 스택이 따라가게, 장부가 움직이면 연동 클락의
+  //   **장부 몫** 스냅샷을 다시 쓴다(장부·클락·리모컨과 같은 작성기 writeLedgerStats 한 벌, 같으면 안 씀).
+  //   예전엔 장부·클락 화면만 썼다 — 대시보드 QR 승인·다른 접수대 바인 뒤 4초가 지나도 쓰기 0회, TV 5/5 그대로(4A ①).
+  const clocksRef = useRef(venueClocks);
+  clocksRef.current = venueClocks;
+  const linkedKey = venueClocks.filter((c) => c.sessionDate).map((c) => `${c.gameSeq}@${c.sessionDate}`).join(',');
+  useEffect(() => {
+    if (!active || !caps.ledger || !linkedKey) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const run = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => { for (const c of clocksRef.current) if (c.sessionDate) void syncClockLedgerStats(c).catch(() => {}); }, 400);
+    };
+    run();
+    const off = subscribeLedger(venueId, run, { ownsRow });
+    return () => { off(); if (t) clearTimeout(t); };
+  }, [venueId, active, caps.ledger, linkedKey, ownsRow]);
 
   // ── 오늘 장부 집계 ──
   // fin.entry 는 **금액 엔트리**(소수), cnt 는 **횟수·인원**. 라벨과 반드시 짝을 맞춘다(오너 규칙 2026-09-11).
@@ -427,18 +444,20 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     : 'bg-emerald-500/15 text-emerald-400';
 
   // ── 클락 ──
-  const lvl = clock?.config.levels[clock.currentIndex];
+  // K6(2026-09-29) — 레벨·남은 시간은 **실효 레벨**(effectiveLevel) 한 벌. 예전엔 raw current_index 라 전진자가 없는 운영에서
+  //   TV 는 레벨 2 인데 대시보드는 '레벨 1 · 0:00' 이었다(5A 실측).
+  const cEff = clock ? effectiveLevel(clock) : null;
+  const lvl = clock && cEff ? clock.config.levels[cEff.index] : undefined;
   const clockActive = !!clock && (clock.running || clock.currentIndex > 0 || clock.endsAt != null);
-  const levelNo = clock ? clock.config.levels.slice(0, clock.currentIndex + 1).filter((l) => l.kind === 'level').length : 0;
+  const levelNo = clock && cEff ? levelNumberAt(clock.config.levels, cEff.index) : 0;
   // ── 위젯 멀티게임 — 활성 클락 게임 목록 + 선택 게임(widgetGame)의 라이브 값 ──
   const activeClocks = venueClocks.filter((c) => c.running || c.currentIndex > 0 || c.endsAt != null).sort((a, b) => a.gameSeq - b.gameSeq);
   const wClock = venueClocks.find((c) => c.gameSeq === widgetGame) ?? clock;
   const wActive = !!wClock && (wClock.running || wClock.currentIndex > 0 || wClock.endsAt != null);
-  const wLvl = wClock?.config.levels[wClock.currentIndex];
-  const wLevelNo = wClock ? wClock.config.levels.slice(0, wClock.currentIndex + 1).filter((l) => l.kind === 'level').length : 0;
-  const clockRemainMs = wActive && wClock
-    ? (wClock.running && wClock.endsAt ? Math.max(0, new Date(wClock.endsAt).getTime() - serverNow()) : Math.max(0, wClock.remainingMs))
-    : 0;
+  const wEff = wClock ? effectiveLevel(wClock) : null;
+  const wLvl = wClock && wEff ? wClock.config.levels[wEff.index] : undefined;
+  const wLevelNo = wClock && wEff ? levelNumberAt(wClock.config.levels, wEff.index) : 0;
+  const clockRemainMs = wActive && wEff ? wEff.remainingMs : 0;
   // 생존: 클락 liveStats 우선 → 없으면 **인원 − 탈락**.
   // ⚠ 폴백의 기준은 금액 엔트리도 바이인 횟수도 아니라 **사람 수**다(2026-09-07 장부에서 고친 것과 같은 결함).
   //   예전엔 엔트리 합 + adjRebuys 를 썼다 — 리바인은 새 사람이 아니라서 6명이 리바인을 돌린 판에
@@ -541,13 +560,10 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       .catch(() => { if (alive) setWHeads(null); });
     return () => { alive = false; };
   }, [venueId, d, widgetGame]);
-  // 라이브 + 보이는 탭일 때만 1초 갱신(카운트다운·"분 전") — 숨김/평상시엔 멈춰 백그라운드 리렌더 방지
-  useEffect(() => {
-    if (!liveWidget || !active) return;
-    const id = setInterval(() => setNowTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, [liveWidget, active]);
-  const fmtClock = (ms: number) => { const t = Math.floor(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+  // 라이브 + 보이는 탭일 때만 초 갱신(카운트다운·"분 전") — 숨김/평상시엔 멈춰 백그라운드 리렌더 방지.
+  //   K9 — 공용 틱(lib/clockTick): 위젯 클락이 TV·보드와 같은 순간에 넘어간다. 정지 중에도 초마다 다시 그려 "분 전" 이 흐른다.
+  useClockSecond(wClock, liveWidget && active);
+  const fmtClock = formatCountdown;   // K9 — 시간 글자 한 벌(올림)
   const gameLabel = (g: number | null) => g == null ? '미지정' : g <= 1 ? '메인' : `사이드${g - 1}`;
   // 위젯 인라인 승인/거절 — 장부로 안 넘어가고 즉시 처리(승인=요청 게임에 추가, 결제 기록은 장부에서 별도)
   const quickApprove = async (r: BuyinRequest) => {

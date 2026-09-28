@@ -16,6 +16,7 @@
 import type { ClockState } from '../api/clock';
 import type { Schedule } from '../api/schedules';
 import { effectiveLevel, levelNumberAt } from './clockLevel';
+import { serverNow } from './serverTime';   // K10 — 기기 시계가 아니라 서버 기준
 import { matchClockScheduleDetailed } from './regStatus';
 import { compareByStartThenBoost } from './scheduleSort';
 
@@ -24,7 +25,7 @@ export interface LiveFact { alive: number; levelNo: number }
 
 /** scheduleId → LiveFact. 클락이 없는 대회는 맵에 없다. 같은 포스터에 클락이 둘이면 메인(gameSeq 작은 쪽)이 이긴다
  *  — buildRegInfoMap 과 같은 결정 규칙(어느 클락이 이기는지가 응답 순서에 달리면 같은 데이터에 다른 화면이 된다). */
-export function buildLiveFactMap(clocks: readonly ClockState[], schedules: readonly Schedule[], nowMs = Date.now()): Map<string, LiveFact> {
+export function buildLiveFactMap(clocks: readonly ClockState[], schedules: readonly Schedule[], nowMs = serverNow()): Map<string, LiveFact> {
   const map = new Map<string, LiveFact>();
   const seq = new Map<string, number>();
   for (const g of clocks) {

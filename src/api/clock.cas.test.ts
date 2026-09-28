@@ -15,14 +15,20 @@ const chain = (table: string) => {
   q.select = (...a: unknown[]) => { calls.push([`${table}.select`, ...a]); return Promise.resolve({ data: rows, error: null }); };
   return q;
 };
-vi.mock('../lib/supabase', () => ({ IS_MOCK: false, supabase: { from: (t: string) => chain(t), rpc: async () => ({ data: null, error: { code: 'PGRST202' } }) } }));
-const { saveClockPatch, emptyClockState, defaultClockConfig, CLOCK_STALE_TEXT } = await import('./clock');
+const rpcCalls: [string, Record<string, unknown>][] = [];
+let countRpcError: { code: string; message?: string } | null = null;
+vi.mock('../lib/supabase', () => ({ IS_MOCK: false, supabase: { from: (t: string) => chain(t), rpc: async (name: string, args: Record<string, unknown>) => {
+  rpcCalls.push([name, args]);
+  if (name === 'clock_adjust_counts') return { data: null, error: countRpcError };
+  return { data: null, error: { code: 'PGRST202' } };
+} } }));
+const { saveClockPatch, emptyClockState, defaultClockConfig, CLOCK_STALE_TEXT, CLOCK_COUNT_RPC_MISSING_TEXT } = await import('./clock');
 
 const base = () => ({ ...emptyClockState('v1', defaultClockConfig(), 1), sessionDate: '2026-09-28' });
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe('saveClockPatch CAS', () => {
-  beforeEach(() => { calls.length = 0; rows = [{}]; });
+  beforeEach(() => { calls.length = 0; rows = [{}]; rpcCalls.length = 0; countRpcError = null; });
 
   it('진행 중 클락을 멈출 때 — 내가 본 ends_at·레벨·running 이 그대로일 때만 쓴다', async () => {
     const b = { ...base(), running: true, currentIndex: 2, endsAt: '2026-09-28T10:20:00.000Z', remainingMs: 0 };
@@ -51,6 +57,50 @@ describe('saveClockPatch CAS', () => {
     const b = { ...base(), running: true, endsAt: '2026-09-28T10:20:00.000Z' };
     await saveClockPatch(b, { ...b, eliminations: 3 });
     expect(calls.some((c) => c[0] === 'clock_states.filter' || (c[0] === 'clock_states.eq' && c[1] === 'running'))).toBe(false);
+  });
+
+  // 🔴 K1(2026-09-29 실측 2A·2C) — 카운트는 **차분**으로 서버 원자 RPC 에 간다. 절대값 UPDATE 로 되돌리면
+  //   동시 탈락 두 건이 한 건이 되고, 잠든 폰의 탈락 한 번이 그 사이 다른 기기의 3건을 지운다.
+  //   음성 대조: saveClockPatch 의 deltas 블록을 지우고 clockPatchRow 에 eliminations 를 되살리면 아래 두 단언이 빨개진다.
+  it('🔴 탈락·보정은 차분(next − base)만 clock_adjust_counts 로 — clock_states 에 절대값을 쓰지 않는다', async () => {
+    const b = { ...base(), eliminations: 0, adjEntries: 2 };
+    await saveClockPatch(b, { ...b, eliminations: 1, adjEntries: 1 });
+    expect(rpcCalls).toEqual([['clock_adjust_counts', { p_venue_id: 'v1', p_game_seq: 1, p_d_elim: 1, p_d_entries: -1, p_d_rebuys: 0, p_d_earlies: 0, p_d_addons: 0 }]]);
+    expect(calls.filter((c) => c[0] === 'clock_states.update')).toEqual([]);
+  });
+
+  it('🔴 서버에 RPC 가 없으면(PGRST202) 옛 절대값 쓰기로 떨어지지 않고 오류를 보인다', async () => {
+    countRpcError = { code: 'PGRST202' };
+    const b = base();
+    await expect(saveClockPatch(b, { ...b, eliminations: 1 })).rejects.toThrow(CLOCK_COUNT_RPC_MISSING_TEXT);
+    expect(calls.filter((c) => c[0] === 'clock_states.update')).toEqual([]);
+  });
+
+  // 보안 표준 6 — 사용자에게 보이는 문장에 내부 함수 이름을 싣지 않는다.
+  it('RPC 미배포 안내 문장에 내부 함수 이름이 없다', () => {
+    expect(CLOCK_COUNT_RPC_MISSING_TEXT).not.toMatch(/clock_adjust_counts|[a-z]+_[a-z]+/);
+  });
+
+  // 🔴 초기화 부분 적용(2026-09-29) — 제어(레벨·시간)와 카운트(인원 0)가 한 저장에 섞였을 때, 제어 CAS 가 0행이면
+  //   카운트도 들어가면 안 된다. 예전엔 카운트 RPC 가 먼저 성공해 인원만 0 이 되고 레벨·시간은 그대로 남았다.
+  it('🔴 초기화 — 제어 CAS 0행이면 카운트 RPC 를 부르지 않는다', async () => {
+    rows = [];
+    const b = { ...base(), running: true, currentIndex: 3, endsAt: '2026-09-28T10:20:00.000Z', eliminations: 7, adjEntries: 2 };
+    const reset = { ...b, currentIndex: 0, remainingMs: 1_200_000, endsAt: null, running: false, eliminations: 0, adjEntries: 0 };
+    await expect(saveClockPatch(b, reset)).rejects.toThrow(CLOCK_STALE_TEXT);
+    expect(rpcCalls).toEqual([]);
+  });
+  it('초기화 — 제어 CAS 가 통과하면 그 뒤에 카운트 차분을 보낸다', async () => {
+    const b = { ...base(), running: false, currentIndex: 3, endsAt: null, remainingMs: 5, eliminations: 7 };
+    await saveClockPatch(b, { ...b, currentIndex: 0, remainingMs: 1_200_000, eliminations: 0 });
+    expect(calls.some((c) => c[0] === 'clock_states.update')).toBe(true);
+    expect(rpcCalls).toEqual([['clock_adjust_counts', { p_venue_id: 'v1', p_game_seq: 1, p_d_elim: -7, p_d_entries: 0, p_d_rebuys: 0, p_d_earlies: 0, p_d_addons: 0 }]]);
+  });
+  it('🔴 차분이 서버 한도(±1000)를 넘으면 제어도 쓰지 않고 거절한다(반쪽 초기화 방지)', async () => {
+    const b = { ...base(), running: false, currentIndex: 3, endsAt: null, remainingMs: 5, eliminations: 1001 };
+    await expect(saveClockPatch(b, { ...b, currentIndex: 0, remainingMs: 1_200_000, eliminations: 0 })).rejects.toThrow(/1000/);
+    expect(calls.filter((c) => c[0] === 'clock_states.update')).toEqual([]);
+    expect(rpcCalls).toEqual([]);
   });
 
   it('B2 — 연동 클락이 처음 돌면 장부의 비어 있는 대회 시작 시각을 채운다(업주 입력은 is null 로 보존)', async () => {
