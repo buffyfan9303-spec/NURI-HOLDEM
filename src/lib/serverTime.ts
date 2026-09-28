@@ -13,13 +13,19 @@
 //   · serverTimeKnown() — 측정에 성공했거나(또는 함수가 아예 없어 기기 시계가 곧 기준인 환경) 참. **자동 쓰기(레벨 전진)는 이것이 참일 때만** 한다.
 //   · 실패하면 15초 뒤 다시 잰다(10분이 아니라).
 //   · serverTimeSettled() — 첫 측정 시도가 끝났는가(성공·실패 무관). 첫 표시를 이때까지 미룬다(K8: TV 첫 1초가 기기 시계로 레벨까지 틀렸다).
+// 🔴 2026-09-29 CI(PR #30) — 측정이 **계속** 실패하면(차단·왕복 5초 초과가 이어지는 매장) known 이 영원히 거짓이라
+//   PC 워치독·장부 백업 전진이 DB 레벨을 **영영** 안 넘겼다(표시는 effectiveLevel 로 맞아 보여 아무도 모른다).
+//   연속 MAX_FAILS 번(≈30초) 실패하면 기기 시계(마지막 오프셋)로 전진을 재개한다 = K2 이전 동작. 측정은 15초마다 계속 시도하고, 성공하면 그 오프셋으로 바뀐다.
 // ⚠ 이 파일은 첫 화면 경로(lib/clockLevel → regStatus)에 실린다 — 무거운 import 를 두지 않는다.
 import { supabase, IS_MOCK } from './supabase';
 
 const RESYNC_MS = 10 * 60_000;
 const RETRY_MS = 15_000;
 const MAX_RTT_MS = 5_000;
+const MAX_FAILS = 3;
 let offset = 0;
+let fails = 0;
+let degraded = false;   // 측정 없이 기기 시계로 known 을 세운 상태 — 성공할 때까지 RETRY 간격으로 다시 잰다
 let syncedAt = 0;
 let known = false;
 let settled = false;
@@ -49,7 +55,7 @@ export function whenServerTimeSettled(): Promise<void> {
 
 function maybeSync(): void {
   if (IS_MOCK || inflight) return;
-  const every = known ? RESYNC_MS : RETRY_MS;
+  const every = known && !degraded ? RESYNC_MS : RETRY_MS;
   if (syncedAt && Date.now() - syncedAt < every) return;
   inflight = syncServerTime().finally(() => { inflight = null; });
 }
@@ -57,6 +63,12 @@ function maybeSync(): void {
 function settle(): void {
   settled = true;
   while (waiters.length) waiters.shift()!();
+}
+
+/** 측정 실패 1회. 연속 MAX_FAILS 번이면 기기 시계로 전진을 재개한다(영구 정지 방지). */
+function fail(): number {
+  if (++fails >= MAX_FAILS && !known) { known = true; degraded = true; }
+  return offset;
 }
 
 /** 서버 시각을 한 번 재고 오프셋을 갱신한다. 실패하면 이전 오프셋을 유지하고 15초 뒤 다시 잰다. */
@@ -70,19 +82,19 @@ export async function syncServerTime(): Promise<number> {
     if (error) {
       // 함수가 아예 없는 환경 — 기기 시계가 곧 기준이다(여기서 known 을 거짓으로 두면 전진이 영영 멈춘다).
       const code = (error as { code?: string }).code;
-      if (code === '42883' || code === 'PGRST202') known = true;
-      return offset;
+      if (code === '42883' || code === 'PGRST202') { known = true; return offset; }
+      return fail();
     }
-    if (typeof data !== 'string') return offset;
+    if (typeof data !== 'string') return fail();
     const srv = Date.parse(data);
-    if (!Number.isFinite(srv) || t1 - t0 > MAX_RTT_MS) return offset;
+    if (!Number.isFinite(srv) || t1 - t0 > MAX_RTT_MS) return fail();
     offset = Math.round(srv - (t0 + t1) / 2);
-    known = true;
-  } catch { /* 네트워크 실패 — 이전 오프셋 유지 */ } finally { settle(); }
+    known = true; degraded = false; fails = 0;
+  } catch { fail(); /* 네트워크 실패 — 이전 오프셋 유지 */ } finally { settle(); }
   return offset;
 }
 
 /** 테스트 전용. */
 export function __setServerOffsetForTest(ms: number, synced = true): void {
-  offset = ms; syncedAt = synced ? Date.now() : 0; known = synced; settled = synced;
+  offset = ms; syncedAt = synced ? Date.now() : 0; known = synced; settled = synced; fails = 0; degraded = false;
 }

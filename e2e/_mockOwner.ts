@@ -134,6 +134,14 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
   //   우연 위에 서게 된다. 명시로 0 을 준다.
   await page.route(/\/rest\/v1\/ledger_buyin_requests\?/, restGet([]));
   await page.route(/\/rest\/v1\/game_presets\?/, restGet([]));
+  // 서버 시각(읽기 RPC server_now = select now()). 안 걸면 _fixtures 가드가 POST 를 끊어 serverTimeKnown 이 거짓으로 남고
+  //   PC 워치독·장부 백업 전진이 DB 에 레벨을 쓰지 않는다(2026-09-29 CI: C2·recheck2 #7).
+  //   **이 페이지의 시계**로 답한다 = 서버와 기기 시계가 같은 매장(page.clock 을 건 스펙도 그대로 맞는다).
+  //   기기 시계가 틀린 경우를 재는 스펙은 extra 에서 자기 값으로 덮는다(mystore-linkage-0928 D1).
+  await page.route(/\/rest\/v1\/rpc\/server_now/, async (r) => {
+    const now = await page.evaluate(() => Date.now()).catch(() => Date.now());
+    return r.fulfill(json(new Date(now).toISOString()));
+  });
   // 클락 상태는 **항상** 라우트한다 — clock 을 안 준 스펙에서도.
   //   안 걸어 두면 그 조회만 운영 서버로 나가 가짜 토큰이 401 을 받고,
   //   콘솔 전체가 '클락을(를) 불러오지 못했습니다 / 로그인이 만료되었습니다' 로 떨어진다.
@@ -149,6 +157,33 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
     await page.waitForLoadState('networkidle');
   }
   return { uid: MOCK_UID, venueId: MOCK_VENUE, day: MOCK_DAY };
+}
+
+/**
+ * 서버 RPC clock_adjust_counts(20260929b) 를 **같은 의미로** 가짜 행에 적용한다 — 상태 있는 가짜 clock_states 서버용.
+ *   x = x + d · 하한 = −(live_stats.ledger 자동 몫)(탈락·애드온은 0) · 이미 범위 밖이면 그 자리(greatest(least(cur, lo), cur + d))
+ *   · 차분 하나라도 |d| > 1000 이면 22023 거절. 권한은 목 범위(목킹 업주 = 통과)라 검사하지 않는다.
+ * 반환: PostgREST 응답(status·body). 행은 제자리에서 바뀐다.
+ */
+export function applyClockCounts(row: Record<string, unknown>, body: Record<string, unknown>): { status: number; body: unknown } {
+  const d = (k: string) => Number(body[k] ?? 0) || 0;
+  if (['p_d_elim', 'p_d_entries', 'p_d_rebuys', 'p_d_earlies', 'p_d_addons'].some((k) => Math.abs(d(k)) > 1000)) {
+    return { status: 400, body: { code: '22023', message: '한 번에 바꿀 수 있는 인원은 1000 이하입니다', details: null, hint: null } };
+  }
+  const led = ((row.live_stats as { ledger?: Record<string, unknown> } | null)?.ledger ?? {}) as Record<string, unknown>;
+  const auto = (k: string) => (typeof led[k] === 'number' ? Math.max(0, Math.floor(led[k] as number)) : 0);
+  const step = (col: string, dk: string, a: number) => {
+    const cur = Number(row[col] ?? 0);
+    row[col] = Math.max(Math.min(cur, -a), cur + d(dk));
+  };
+  step('eliminations', 'p_d_elim', 0);
+  step('adj_entries', 'p_d_entries', auto('entries'));
+  step('adj_rebuys', 'p_d_rebuys', auto('rebuys'));
+  step('adj_earlies', 'p_d_earlies', auto('earlyUnits'));
+  step('adj_addons', 'p_d_addons', 0);
+  row.updated_at = new Date().toISOString();
+  const { eliminations, adj_entries, adj_rebuys, adj_earlies, adj_addons } = row;
+  return { status: 200, body: [{ eliminations, adj_entries, adj_rebuys, adj_earlies, adj_addons }] };
 }
 
 /** '내 매장' 은 ≥lg 에서 role=tab, 모바일에서 button — 폭과 무관하게 보이는 button 으로 잡는다. */

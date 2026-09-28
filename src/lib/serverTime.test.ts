@@ -59,6 +59,30 @@ describe('서버 시각 오프셋', () => {
     await vi.waitFor(() => expect(serverTimeKnown()).toBe(true));
   });
 
+  // 🔴 2026-09-29 CI(PR #30 C2·recheck2 #7) — 측정이 계속 막히면 known 이 영원히 거짓이라 DB 레벨 전진이 영구 정지했다.
+  //   음성 대조: fail() 의 known=true 를 지우면 마지막 expect 가 빨개진다.
+  it('🔴 측정이 연속 3번(≈30초) 실패하면 기기 시계로 전진을 재개하고, 뒤에 성공하면 서버 오프셋으로 바뀐다', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000_000);
+    rpc.mockResolvedValue({ data: null, error: { code: '503', message: 'upstream' } });
+    await syncServerTime();                                      // 1회 실패 (t=0)
+    expect(serverTimeKnown()).toBe(false);
+    vi.setSystemTime(1_000_000 + 16_000); serverNow();          // 15초 뒤 재시도 = 2회 실패
+    await vi.waitFor(() => expect(rpc).toHaveBeenCalledTimes(2));
+    await Promise.resolve();
+    expect(serverTimeKnown()).toBe(false);
+    vi.setSystemTime(1_000_000 + 32_000); serverNow();          // 3회 실패
+    await vi.waitFor(() => expect(rpc).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(serverTimeKnown()).toBe(true));
+    expect(serverOffsetMs()).toBe(0);                            // 기기 시계(마지막 오프셋)
+    // 측정은 15초 간격으로 계속 — 성공하면 서버 기준으로 돌아온다
+    rpc.mockReset();
+    rpc.mockResolvedValue({ data: new Date(1_000_000 + 48_000 - 60_000).toISOString(), error: null });   // 서버가 1분 느리다
+    vi.setSystemTime(1_000_000 + 48_000); serverNow();
+    await vi.waitFor(() => expect(Math.abs(serverOffsetMs() + 60_000)).toBeLessThan(200));   // waitFor 가 가짜 시계를 수십 ms 민다
+    expect(serverTimeKnown()).toBe(true);
+  });
+
   it('함수가 아예 없으면(PGRST202) 기기 시계가 기준 — known=true(전진이 영영 멈추지 않게)', async () => {
     rpc.mockResolvedValue({ data: null, error: { code: 'PGRST202', message: 'not found' } });
     await syncServerTime();
