@@ -248,3 +248,64 @@ test('🔴 시트 안 섹션이 전부 같은 박스 — 머리글이 박스 밖
     + '\n→ 시트(compact)에서는 모든 섹션이 `rounded-aura border card-aura p-3` 를 쓴다.',
   ).toEqual([]);
 });
+
+// ── 시트가 "살짝 올라갔다가 내려온다" (오너 2026-09-29) ─────────────────────
+//
+// root-cause-debugger 실측(scratchpad/voucher-bounce-report.md): 여는 순간 두 칸
+// ('자주 가는 매장 이용권'·'내 매장이용권')이 키 큰 스켈레톤으로 그려졌다가 조회가
+// 끝나면 짧은 빈 상태로 줄어, 내용에 맞춰 서는 시트(Modal fillHeight 미지정)의
+// 윗변이 최대 106.7px(412×915) 떨어졌다. 고정: MyVoucherSheet.tsx 의 Modal 에
+// fillHeight 를 켜 시트 높이를 88vh 로 고정한다(내용 변화가 스크롤 본문 안에서만
+// 일어나게).
+//
+// 잠그는 것: store_vouchers 조회를 500ms 늦추고 빈 목록으로 응답했을 때,
+// 시트가 뜬 뒤 1.5초 동안 [role=dialog]의 레이아웃 윗변(rect.top − translateY)이
+// 흔들리지 않는다(max−min ≤ 1px). 390×844 와 412×915(S26 폭) 둘 다 돈다 —
+// 88vh 상한이 낙하를 가리는 폭이 달라서다(보고서 §근거).
+for (const [w, h] of [[390, 844], [412, 915]] as const) {
+  test(`🔴 이용권 시트 — 열릴 때 윗변이 떨어지지 않는다 (${w}×${h})`, async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width: w, height: h });
+    await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* 차단 환경 */ } },
+      [KEY, JSON.stringify(FAKE)] as [string, string]);
+    const json = (b: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    await page.route(/\/auth\/v1\/user/, (r) => r.fulfill(json(FAKE.user)));
+    await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
+      id: FAKE.user.id, name: 'E2E', nickname: 'E2E', role: 'user', status: 'active',
+      activity_points: 0, created_at: FAKE.user.created_at,
+    })));
+    // 보유 0장 + 조회 지연 500ms — 스켈레톤(키 큰 자리표시)→빈 상태로 줄어드는 붕괴를 강제한다.
+    await page.route(/\/rest\/v1\/store_vouchers/, async (r) => {
+      await new Promise((res) => setTimeout(res, 500));
+      await r.fulfill(json([]));
+    });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    const btn = page.locator('header').getByRole('button', { name: '이용권 · 출석', exact: true });
+    await expect(btn).toBeVisible({ timeout: 10_000 });
+
+    await page.evaluate(() => {
+      const w = window as unknown as { __tops: number[]; __raf: number; __t0: number };
+      w.__tops = []; w.__t0 = performance.now();
+      const readTop = () => {
+        const el = document.querySelector('[role="dialog"]') as HTMLElement | null;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+        w.__tops.push(rect.top - m.m42); // m42 = translateY
+      };
+      const tick = () => {
+        readTop();
+        if (performance.now() - w.__t0 < 1500) w.__raf = requestAnimationFrame(tick);
+      };
+      w.__raf = requestAnimationFrame(tick);
+    });
+    await btn.click();
+    await page.waitForTimeout(1600);
+    const tops: number[] = await page.evaluate(() => (window as unknown as { __tops: number[] }).__tops);
+    expect(tops.length, '시트가 안 떴다 — 잴 것이 없으면 통과가 아니다').toBeGreaterThan(5);
+    const overshoot = Math.max(...tops) - Math.min(...tops);
+    console.log(`[${w}×${h}] 시트 윗변 min=${Math.min(...tops).toFixed(1)} max=${Math.max(...tops).toFixed(1)} overshoot=${overshoot.toFixed(1)}`);
+    expect(overshoot, '시트가 열리는 도중 윗변이 떨어졌다(살짝 올라갔다 내려옴)').toBeLessThanOrEqual(1);
+  });
+}
