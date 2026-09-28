@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import type { Plugin } from 'vite';
 import { cssOklabToRgb } from './src/lib/cssOklabToRgb';
+import { cssModernOnly } from './src/lib/cssModernOnly';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 
@@ -15,6 +16,9 @@ const sentryToken = process.env.SENTRY_AUTH_TOKEN;
 // Tailwind v4 가 투명도 수식어(text-white/70 등)를 oklab(...) 리터럴로 굳힌다 — 색은 v3 rgb() 와 같지만 크롬이 흰 oklab 글자를
 //   다르게 안티에일리어싱해(최대 10/255) v3 화면과 달라졌다. 8비트로 정확히 떨어지는 리터럴만 rgb() 로 되돌린다(src/lib/cssOklabToRgb.ts).
 //   빌드 산출 CSS 에만 건다(dev 는 원본 그대로 — 화면 비교·게이트는 빌드본을 잰다).
+// 먼저 cssModernOnly 로 v4 가 옛 브라우저용으로 찍는 폴백(@layer properties · color-mix/그라디언트 @supports 이중 선언 ·
+//   늘 거짓인 @supports not)을 걷어낸다 — 지원 하한(Chrome 111+·Safari 16.4+)이 이미 고르던 값만 남아 화면은 그대로이고
+//   CSS gz 가 약 1.3KB 준다(2026-09-28 ⑤-3 실측 36310→34992B). 근거·범위는 src/lib/cssModernOnly.ts 머리 주석.
 function oklabToRgbPlugin(): Plugin {
   return {
     name: 'nuri:oklab-to-rgb',
@@ -23,7 +27,7 @@ function oklabToRgbPlugin(): Plugin {
       for (const f of Object.values(bundle)) {
         if (f.type !== 'asset' || !f.fileName.endsWith('.css')) continue;
         const src = typeof f.source === 'string' ? f.source : new TextDecoder().decode(f.source);
-        f.source = cssOklabToRgb(src).css;
+        f.source = cssOklabToRgb(cssModernOnly(src).css).css;
       }
     },
   };

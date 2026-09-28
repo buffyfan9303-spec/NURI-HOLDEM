@@ -9,17 +9,26 @@
 //      → 낡은 dist 를 재는 것은 측정이 아니라 **거짓 통과**다. 소스보다 오래됐으면 아예 실패시킨다.
 //   ③ 청크가 조용히 불어난다(현재 최대 104KB gz). 임계값이 없으면 아무도 못 본다.
 //
+// 무엇이 실패이고 무엇이 경고인가 (2026-09-28 오너 승인 — 이유는 bundle-budget.json 의 _구조 에도 적었다)
+//   실패: 첫 화면 임계 경로(entry) · CSS 전체(한 파일이고 첫 화면이 통째로 받는다) · 청크별 상한(모든 JS 청크) · 외부 스타일시트 · 누수 파수꾼
+//   경고: JS 전체 합계 — 지연 청크는 그 화면을 여는 사람만 받는다. 합계는 '앱에 기능이 몇 개냐' 에 가깝고
+//         사용자가 기다리는 시간과 직접 묶이지 않는다. 합계를 실패로 두면 기능 하나 늘 때마다 게이트가 막혀
+//         결국 예산 숫자만 올리게 된다(2026-09-20 하루 두 번 올린 기록). 사용자가 기다리는 쪽(첫 화면·화면별)만 막는다.
+//
 // 사용: npm run build && node scripts/bundle-budget.mjs
+//       node scripts/bundle-budget.mjs --dist <폴더>   (dist 대신 다른 빌드 산출물을 잰다 — 측정용 scratch 빌드)
 //       node scripts/bundle-budget.mjs --update   (현재 값으로 예산 재작성 — 의도적으로 올릴 때만)
 
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-const DIST = 'dist';
+const distAt = process.argv.indexOf('--dist');
+const DIST = distAt > 0 ? process.argv[distAt + 1] : 'dist';
 const ASSETS = join(DIST, 'assets');
 const BUDGET_FILE = 'bundle-budget.json';
-const SRC_DIRS = ['src', 'index.html', 'tailwind.config.js', 'vite.config.ts'];
+// Tailwind v4 이관(2026-09-28)으로 tailwind.config.js·postcss.config.js 는 없어졌다 — 설정은 src/index.css(@theme) 안에 있다.
+const SRC_DIRS = ['src', 'index.html', 'vite.config.ts'];
 
 const kb = (n) => +(n / 1024).toFixed(1);
 const fail = [];
@@ -129,8 +138,12 @@ const actual = {
 
 if (process.argv.includes('--update')) {
   const pad = (v) => Math.ceil(v * 1.08);   // 8% 여유
+  // 오너가 읽는 설명(_ 로 시작하는 칸)은 지우지 않고 그대로 옮긴다.
+  const prev = existsSync(BUDGET_FILE) ? JSON.parse(readFileSync(BUDGET_FILE, 'utf8')) : {};
+  const notes = Object.fromEntries(Object.entries(prev).filter(([k]) => k.startsWith('_')));
   const next = {
     _주석: '번들 예산(gzip KB). 올릴 때는 왜 올리는지 커밋 메시지에 남길 것. --update 로 재작성.',
+    ...notes,
     totalJsGzipKb: pad(actual.totalJsGzipKb),
     totalCssGzipKb: pad(actual.totalCssGzipKb),
     entryGzipKb: pad(actual.entryGzipKb),
@@ -148,11 +161,17 @@ if (!existsSync(BUDGET_FILE)) {
 }
 const budget = JSON.parse(readFileSync(BUDGET_FILE, 'utf8'));
 
-const check = (key, label, unit = 'KB gz') => {
+// warnOnly: 넘어도 실패시키지 않고 경고로만 알린다(JS 전체 합계 — 위 머리 주석 참고).
+const check = (key, label, { warnOnly = false } = {}) => {
   const cap = budget[key];
   if (cap == null) return;
   const got = actual[key];
-  const line = `${label.padEnd(26)} ${String(got).padStart(7)} / ${String(cap).padStart(6)} ${unit}`;
+  const line = `${label.padEnd(26)} ${String(got).padStart(7)} / ${String(cap).padStart(6)} KB gz`;
+  if (got > cap && warnOnly) {
+    warn.push(`${label}: ${(got - cap).toFixed(1)} 초과 — 경고만(실패 조건 아님). 첫 화면·청크별 상한이 지켜지는지 먼저 본다`);
+    console.log(`  ${line}   (초과 — 경고)`);
+    return;
+  }
   if (got > cap) { fail.push(`${line}   ← ${(got - cap).toFixed(1)} 초과`); return; }
   const head = (1 - got / cap) * 100;
   // 여유가 5% 밑이면 통과지만 알려 준다 — '다음 커밋에서 터진다'는 신호다.
@@ -168,9 +187,13 @@ if (isMockBuild) {
 } else {
   check('entryGzipKb', '첫 화면 임계 경로');
 }
-check('totalJsGzipKb', 'JS 전체');
-check('totalCssGzipKb', 'CSS 전체');
-check('largestChunkGzipKb', `최대 청크(${biggest.f})`);
+check('totalCssGzipKb', 'CSS 전체(첫 화면이 받는다)');
+// 청크별 상한 — 모든 JS 청크가 이 값 아래여야 한다. 가장 큰 청크 한 줄로 보여 주고, 넘은 청크는 전부 실패에 적는다.
+check('largestChunkGzipKb', `청크별 상한(최대 ${biggest.f})`);
+for (const x of files.filter((x) => x.ext === '.js' && x.f !== biggest.f && kb(x.gz) > budget.largestChunkGzipKb)) {
+  fail.push(`청크 ${x.f} ${kb(x.gz)} / ${budget.largestChunkGzipKb} KB gz   ← 청크별 상한 초과`);
+}
+check('totalJsGzipKb', 'JS 전체 합계', { warnOnly: true });
 
 if (actual.externalStylesheets > (budget.externalStylesheets ?? 0)) {
   fail.push(
@@ -188,6 +211,6 @@ if (fail.length) {
   process.exit(1);
 }
 if (warn.length) {
-  console.log('\n! 여유 부족(통과지만 다음 커밋에서 터질 수 있다)\n' + warn.map((l) => '  ' + l).join('\n'));
+  console.log('\n! 경고(통과 — 여유 부족이거나 경고만 하는 항목의 초과)\n' + warn.map((l) => '  ' + l).join('\n'));
 }
 console.log('\n✓ 번들 예산 통과');

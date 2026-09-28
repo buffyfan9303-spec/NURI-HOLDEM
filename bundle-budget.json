@@ -1,5 +1,6 @@
 {
   "_주석": "번들 예산(gzip KB). 올릴 때는 왜 올리는지 커밋 메시지에 남길 것. --update 로 재작성.",
+  "_구조": "2026-09-28 오너 승인. 실패(배포 막음): entryGzipKb(첫 화면 임계 경로 — 앱을 켤 때 모두가 기다리는 양), totalCssGzipKb(CSS 는 한 파일이고 첫 화면이 통째로 받는다), largestChunkGzipKb(모든 JS 청크 각각의 상한 — 화면 하나를 열 때 기다리는 양), externalStylesheets. 경고만: totalJsGzipKb(모든 청크의 합계 — 지연 청크는 그 화면을 여는 사람만 받으므로 합계는 사용자가 기다리는 시간이 아니라 기능 수에 가깝다. 실패로 두면 기능 하나 늘 때마다 숫자만 올리게 된다). 숫자는 이 구조 변경 때 올리지 않았다.",
   "_2026-09-20": "totalJsGzipKb 1007 → 1010 → 1014. 하루에 두 번 올렸다. 🔴 오너 결정 대기: 계속 올릴지, 줄일 목표를 정할지. ① 1007→1010: H1·S1·C1 이 +1.28KB(PostDetailModal +0.81 · CommentThread +0.30 · VenueManageTab +0.14 · index +0.03). ② 1010→1014: GTO 감사 수리가 +2.86KB(ToolsPanel +0.83 · CardGridPicker +0.60 · spots +0.50 · OutsFromCards +0.40 · equity.worker +0.23 · ICMCalculator +0.23 · NuriSpotPanel +0.07). 늘어난 것은 대부분 **화면에 적는 한국어 문장**이다 — '계산할 수 없다'를 말로 설명하는 것이 이번 수리의 내용이라 지우면 결함이 되돌아온다. --update 는 쓰지 않았다(현재값에 딱 맞춰 여유 0% 를 재생산한다). 1014 는 실측 1010.8 보다 3.2KB 위다.",
   "totalJsGzipKb": 1014,
   "totalCssGzipKb": 34,

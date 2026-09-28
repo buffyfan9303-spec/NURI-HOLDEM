@@ -927,19 +927,9 @@ video {
         0 0 0 1px rgb(139 92 246 / 0.42), 0 0 26px rgb(139 92 246 / 0.36), 0 0 64px rgb(217 70 239 / 0.18),
         0 18px 36px -14px rgb(0 0 0 / 0.55);
     }
-    .card-aura.ring-aura-glow-vivid:hover {
-      box-shadow:
-        0 0 0 1px rgb(167 139 250 / 0.62), 0 0 32px rgb(139 92 246 / 0.52), 0 0 80px rgb(217 70 239 / 0.30),
-        0 18px 36px -14px rgb(0 0 0 / 0.55);
-    }
     html.light .card-aura.ring-aura-glow:hover {
       box-shadow:
         0 0 0 1px rgb(109 40 217 / 0.30), 0 0 24px rgb(139 92 246 / 0.20), 0 0 56px rgb(217 70 239 / 0.10),
-        0 16px 32px -14px rgb(11 18 32 / 0.25);
-    }
-    html.light .card-aura.ring-aura-glow-vivid:hover {
-      box-shadow:
-        0 0 0 1px rgb(109 40 217 / 0.45), 0 0 28px rgb(139 92 246 / 0.32), 0 0 68px rgb(217 70 239 / 0.16),
         0 16px 32px -14px rgb(11 18 32 / 0.25);
     }
   }
@@ -1004,42 +994,7 @@ video {
   @media (prefers-reduced-transparency: reduce) { [data-aura] { box-shadow: none; } }
   @media (prefers-contrast: more)               { [data-aura] { box-shadow: none; } }
   @media (forced-colors: active)                { [data-aura] { box-shadow: none; } }
-  /* 🔴 '지금' 신호 숫자에만 거는 글로우 (2026-09-18 오너 시안).
-     왜 box-shadow(=data-aura)가 아니라 text-shadow 인가: 홈 첫 줄은 `h-[26px] whitespace-nowrap` 으로
-     **높이가 고정**돼 있고 home-cls.spec 이 그 자리를 잰다. 배지(패딩·테두리)로 바꾸면 26px 을 넘겨
-     아래가 통째로 밀린다. text-shadow 는 레이아웃을 1px 도 바꾸지 않는다.
-     ⚠ 목록처럼 **반복되는 자리에는 쓰지 않는다** — 다 빛나면 아무것도 안 빛난다. 화면당 한두 곳. */
-  .stat-glow { text-shadow: 0 0 12px rgb(var(--aura-led-rgb, 139 92 246) / 0.55); }
-  html.light .stat-glow { text-shadow: 0 0 8px rgb(var(--aura-led-rgb, 139 92 246) / 0.22); }
-  @media (prefers-contrast: more)  { .stat-glow { text-shadow: none; } }
-  @media (forced-colors: active)   { .stat-glow { text-shadow: none; } }
-  /* 🔴 '오늘 대회 N개' 의 **알약 배지** (2026-09-18 오너 레퍼런스 code.html:108).
-     시안은 글자 그림자가 아니라 바탕+테두리+발광을 가진 알약이다.
-     ⚠ 이 span 은 **인라인**이라 세로 패딩·테두리가 줄 상자 높이를 바꾸지 않는다 —
-       홈 첫 줄의 `h-[26px]` 고정과 home-cls.spec 이 그대로 산다(레이아웃 이동 0).
-       대신 **가로 폭**은 늘어난다 — whitespace-nowrap 이라 320·360 에서 직접 재 본 값이
-       아니면 패딩을 늘리지 마라.
-     색은 호출부가 --aura-led-rgb 로 정한다(보라·에메랄드 한 벌로 끝난다). */
-  /* ⚠ 좀은 폭에서는 **글자 그림자만** 남긴다.
-     이 줄은 whitespace-nowrap 고정 한 줄이라 알약의 패딩·테두리가 가로로 더해지는데,
-     320px 에서 실측 252/290 으로 **38px 넘치다**(home-flow-fit '잘림 0' 이 15건 잡았다).
-     시안의 알약은 390 기준 디자인이므로 **390 이상에서만** 입힌다.
-     패딩·테두리를 px 로 두는 이유: rem 이면 글자 200% 확대에서 같이 불어 다시 넘친다. */
-  .stat-pill { text-shadow: 0 0 12px rgb(var(--aura-led-rgb, 139 92 246) / 0.70); }
-  @media (min-width: 390px) {
-    .stat-pill {
-      padding: 2px 5px; border-radius: 6px;
-      background-color: rgb(var(--aura-led-rgb, 139 92 246) / 0.14);
-      border: 1px solid rgb(var(--aura-led-rgb, 139 92 246) / 0.42);
-      box-shadow: 0 0 14px rgb(var(--aura-led-rgb, 139 92 246) / 0.30);
-    }
-  }
-  html.light .stat-pill { text-shadow: none; }
-  @media (min-width: 390px) {
-    html.light .stat-pill { background-color: rgb(var(--aura-led-rgb, 139 92 246) / 0.10); box-shadow: 0 0 10px rgb(var(--aura-led-rgb, 139 92 246) / 0.16); }
-  }
-  @media (prefers-contrast: more)  { .stat-pill { text-shadow: none; box-shadow: none; } }
-  @media (forced-colors: active)   { .stat-pill { text-shadow: none; box-shadow: none; } }
+  /* 홈 첫 줄 글로우 .stat-glow · 알약 배지 .stat-pill (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
 
   /* 네온 링/게이지 — 진행 스트로크에만(정적 필터, 애니메이트하지 않는다 §4) */
   .ring-glow { filter: drop-shadow(0 0 6px rgb(var(--aura-300) / 0.8)); }
@@ -1465,15 +1420,12 @@ video {
 
 /* ══ (구 @layer components) — 레이어 없이 이 자리(utilities 앞)에 둔다 ══ */
   /* ── 공통 카드 — 바이낸스식 플랫(그림자 제거, 보더+호버 배경) ── */
-  .card, .card-interactive {
+  .card {
     @apply bg-surface-low rounded-card border border-border-subtle
            transition-colors duration-150 ease-out;
   }
 
-  /* 인터랙티브 카드(포스터·매장 등): 호버 시 배경 강조(플랫 — 떠오름 제거) */
-  .card-interactive {
-    @apply cursor-pointer hover:bg-surface-high hover:border-border-strong;
-  }
+  /* 인터랙티브 카드 .card-interactive (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
 
   /* ── 아우라 구분선(UI-03, 2026-09-13) — **독서 경계** 전용 수평선(공지 메타→본문 · 게시글 작성자→본문 · 반응 줄 · 본문→댓글).
      .ring-aura 는 카드 외곽 마스크라 수평선으로 못 쓰고, .aura-bg/.card-aura/.subbar-aura 는 전부 배경이라 새로 둔다.
@@ -1592,13 +1544,10 @@ video {
   }
   html.light .ring-aura::before { background: linear-gradient(120deg, rgb(109 40 217 / 0.45), rgb(67 56 202 / 0.2) 45%, rgb(162 28 175 / 0.4)); }
   /* 링 글로우(v6.5, 오너 "테두리에 아우라 글로우") — 그라데이션 링 바깥으로 보라→푸시아 후광 2겹 + 착지 그림자. 정적(애니 없음).
-     soft = 기본(배너) · vivid = 강조가 필요할 때. 라이트는 후광 절반(흰 지면에선 얼룩이 빨리 온다). */
+     라이트는 후광 절반(흰 지면에선 얼룩이 빨리 온다). 강조판 .ring-aura-glow-vivid (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
   .ring-aura-glow { box-shadow: 0 0 0 1px rgb(139 92 246 / 0.30), 0 0 22px rgb(139 92 246 / 0.28), 0 0 56px rgb(217 70 239 / 0.14), 0 14px 32px -14px rgb(0 0 0 / 0.55); }
   .ring-aura-glow::before { background: linear-gradient(120deg, rgb(167 139 250 / 0.85), rgb(129 140 248 / 0.45) 45%, rgb(232 121 249 / 0.8)); }
   html.light .ring-aura-glow { box-shadow: 0 0 0 1px rgb(109 40 217 / 0.22), 0 0 20px rgb(139 92 246 / 0.16), 0 0 48px rgb(217 70 239 / 0.08), 0 12px 28px -14px rgb(11 18 32 / 0.25); }
-  .ring-aura-glow-vivid { box-shadow: 0 0 0 1px rgb(167 139 250 / 0.5), 0 0 28px rgb(139 92 246 / 0.45), 0 0 72px rgb(217 70 239 / 0.26), 0 14px 32px -14px rgb(0 0 0 / 0.55); }
-  .ring-aura-glow-vivid::before { background: linear-gradient(120deg, rgb(196 181 253 / 0.95), rgb(165 180 252 / 0.6) 45%, rgb(240 171 252 / 0.95)); }
-  html.light .ring-aura-glow-vivid { box-shadow: 0 0 0 1px rgb(109 40 217 / 0.35), 0 0 24px rgb(139 92 246 / 0.28), 0 0 60px rgb(217 70 239 / 0.14), 0 12px 28px -14px rgb(11 18 32 / 0.25); }
   /* 안쪽 후광 — 링만으론 '선', 이게 있어야 '빛나는 카드'. 합성 #16172F 위 ink-muted 4.62(.08 은 4.52 · .10 은 4.43 미달) */
   .ring-aura::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 28px rgb(139 92 246 / 0.06); }
   html.light .ring-aura::after { box-shadow: inset 0 0 28px rgb(109 40 217 / 0.05); }
@@ -1620,10 +1569,7 @@ video {
   /* 섹션 밴드(레퍼런스 bg-gray-50 교차 밴드) — PC 대시보드 KPI 밴드 1곳 한정. 모바일 피드에는 붙이지 않는다(3중 선). */
   .section-alt { background-color: rgb(var(--surface-low) / 0.5); border: 1px solid rgb(255 255 255 / 0.06); }
   html.light .section-alt { background-color: rgb(255 255 255 / 0.6); border-color: rgb(11 18 32 / 0.06); }
-  /* 네온 텍스트(v6, 오너 '글자 네온') — 그라데이션 구절 뒤에 같은 색의 부드러운 후광. 정적 filter(애니 없음), 짧은 span 에만. */
-  .text-grad-glow { filter: drop-shadow(0 0 10px rgb(139 92 246 / 0.45)) drop-shadow(0 0 22px rgb(217 70 239 / 0.22)); }
-  html.light .text-grad-glow { filter: drop-shadow(0 0 8px rgb(109 40 217 / 0.22)); }
-  @media (prefers-reduced-transparency: reduce) { .text-grad-glow { filter: none; } }
+  /* 네온 텍스트 .text-grad-glow (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
   /* 틴트 칩(v6, aura-ui.com 실측 배지): indigo-500/10 배경 · indigo-500/20 테두리 · indigo-300 글자. 선택형·바로가기 칩의 정본.
      활성은 .pill-active(채움+글로우), 비활성/바로가기는 이것 — 회색 칩은 아우라 문법이 아니다. */
   /* 통계 숫자 색(v6.2): emerald-400 은 라이트 흰 지면 위 1.79 — 테마별로 뒤집는다(다크 #34D399 6.9 · 라이트 #047857 5.1) */
@@ -1644,7 +1590,6 @@ video {
      점은 글자가 아니라 도형이라 3:1(비텍스트 대비) 기준을 쓴다. */
   .dot-like     { background-color: #E879F9; }  html.light .dot-like     { background-color: #A21CAF; }
   .dot-reserve  { background-color: #818CF8; }  html.light .dot-reserve  { background-color: #4338CA; }
-  .dot-buyin    { background-color: #22D3EE; }  html.light .dot-buyin    { background-color: #0E7490; }
   .dot-cash     { background-color: #FCD535; }  html.light .dot-cash     { background-color: #8D6A00; }
   .dot-bankroll { background-color: #34D399; }  html.light .dot-bankroll { background-color: #047857; }
   .stat-violet  { color: #A78BFA; }  html.light .stat-violet  { color: #6D28D9; }
@@ -1884,10 +1829,7 @@ video {
   /* ── 반응형 유동 타이포(clamp) — 큰 제목이 모바일에서 자동 축소(Apple·Stripe식 유동 스케일) ──
      모바일(min)~데스크톱(max)을 뷰포트 폭에 따라 매끄럽게 보간. 1rem=17px(html 기준). */
   .text-fluid-lg  { font-size: clamp(1rem, 0.86rem + 0.7vw, 1.25rem);  line-height: 1.3; }
-  .text-fluid-xl  { font-size: clamp(1.2rem, 0.95rem + 1.3vw, 1.875rem); line-height: 1.2;  letter-spacing: -0.01em; }
-  /* v7 §5-2: 한글 기본 자간은 0, **큰 제목만 약 -0.01em 범위**. -0.02em 은 한글 자모가 서로 붙어
-     읽히는 구간이라 절반으로 되돌린다(fluid-xl 은 이미 -0.01em 이라 그대로). */
-  .text-fluid-2xl { font-size: clamp(1.6rem, 1.05rem + 2.6vw, 3rem);     line-height: 1.12; letter-spacing: -0.01em; }
+  /* .text-fluid-xl · .text-fluid-2xl (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
 
   /* 숫자 정렬 일관화 — 숫자 입력 필드도 고정폭 숫자로(자릿수 흔들림 방지). 통계/금액/시간은 컴포넌트에서 tabular-nums 사용 */
   input[type="number"], input[type="date"], input[type="time"] { font-variant-numeric: tabular-nums; }
@@ -1906,15 +1848,15 @@ video {
     @apply animate-pulse rounded-sm;
   }
 
-  /* ── 활동 점수 +N 팝업 ──────────────────────────────── */
-  .animate-point-pop {
-    animation: pointPop 0.9s ease-out forwards;
-  }
+  /* 활동 점수 +N 팝업 .animate-point-pop (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — @keyframes pointPop 은 전환 장치 목록(transitionDevices 계약)에 있어 남긴다 */
 
 /* ══ 유틸리티 — v3 의 @tailwind utilities 자리. source(none)+@source 로 v3 content 와 같은 파일만 훑는다
    (v4 자동 감지는 저장소 전체 — docs·e2e 의 글자까지 클래스로 찍어, v3 에선 안 만들어지던 동적 클래스가 살아날 수 있다). */
 @source '../index.html';
 @source './**/*.{js,ts,jsx,tsx}';
+/* 주석 글자에서 잘못 찍히던 쓰레기 유틸(주석은 평문 스캔이라 클래스가 된다 — 예: '글자 150rem 줄간격'). 누구도 의도해서 쓸 수 없는 모양만 끈다.
+   2026-09-28 번들 정리 ⑤-3: 빌드 JS 에 리터럴 0 · CSS gz 91B. 흔한 유틸(ml-5 등)은 나중에 쓰는 순간 조용히 빠지는 함정이 되니 여기 넣지 않는다. */
+@source not inline('text-sm/600 text-xs/700 [perf:*] [perf:cls] top-[12px+safe] top-[calc(...)] min-h-[Npx] text-emerald-300/400 text-gold-300/400');
 @tailwind utilities source(none);
 
 /* v3 space-*·divide-* 그대로(맨 위 @source not inline 으로 v4 판을 끄고 여기 v3 판을 둔다) */
@@ -2120,8 +2062,7 @@ body { overscroll-behavior-y: contain; }
 /* 카드/리스트 행 등 클릭 가능한 요소의 공통 탭 피드백(버튼 외 영역) */
 /* 바이낸스식 절제: 탭/라디오 스케일 모션 제거 — 색 전환만 */
 
-/* 승급 축하 컨페티 — 위에서 흩날리며 떨어지는 골드 조각 */
-.confetti { top: -3%; animation-name: confettiFall; animation-timing-function: linear; animation-iteration-count: infinite; }
+/* 승급 축하 컨페티 .confetti (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — @keyframes confettiFall 은 전환 장치 목록에 있어 남긴다 */
 /* ── 포스터 오토 캐러셀(APIS식) — 무한 루프 마퀴(모션 헌법 허용 예외 ①) ─────────
    transform 전용·컴포지터 상주. 트랙은 2배 복제 + -50% 이동으로 이음새 없이 순환.
    (각 카드 mr-3 이라 세트 경계 간격이 내부 간격과 동일 = -50% 지점이 정확히 맞물림)
@@ -2155,7 +2096,7 @@ body { overscroll-behavior-y: contain; }
   /* 진입/로딩 애니메이션은 아예 끔(0.01ms 단축이 아니라 none) — 모션 민감 사용자에게 깜빡임 0.
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
   .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out,
-  .skeleton, .confetti, .anim-pop, .poster-marquee { animation: none !important; }
+  .skeleton, .anim-pop, .poster-marquee { animation: none !important; }
   /* ::details-content 는 위 전역 * 셀렉터가 못 잡는다(의사 요소가 아니라 UA 생성 트리라 * 에 안 걸린다) —
      별도로 끈다. block-size 전환은 헌법 §4 의 grid-template-rows 0fr→1fr 예외와 성격이 같아
      구현은 그대로 두되, 모션 민감 사용자에게는 즉시 열리게 한다(2026-09-04 조사). */
