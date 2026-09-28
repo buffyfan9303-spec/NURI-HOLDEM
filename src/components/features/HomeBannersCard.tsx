@@ -19,8 +19,13 @@ import {
 } from '../../api/homeBanners';
 import {
   getAppSetting, setAppSetting, parseSlideOn,
-  HOME_SLIDE_EVENT_KEY, HOME_SLIDE_BRAND_KEY,
+  HOME_SLIDE_EVENT_KEY, HOME_SLIDE_BRAND_KEY, EVENT_MENU_KEY,
 } from '../../api/settings';
+import { getEventBoard } from '../../api/events';
+import * as eventStateMod from '../../lib/eventState';
+import { homeCarouselPreview, eventStateOf, BRAND_SLIDE_TITLES, type HomeCarouselInput } from '../../lib/homeCarousel';
+
+const KIND_LABEL = { banner: '등록 배너', event: '이벤트', brand: '브랜드' } as const;
 
 const EMPTY: Omit<HomeBanner, 'id'> = {
   title: '', subtitle: '', imageUrl: '', linkUrl: '', sortOrder: 999,
@@ -52,6 +57,27 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
   /** 등록·수정·삭제·순서변경이 끝나면 홈 캐러셀도 같이 갱신한다(공지 패널과 같은 배선).
    *  이게 없으면 저장은 됐는데 홈은 부팅 때 받은 목록을 그대로 들고 있어 '안 나온다' 로 읽힌다. */
   const changed = useCallback(() => { reload(); onChanged?.(); }, [reload, onChanged]);
+
+  // 🔴 2026-09-29 오너 "배너가 메인에서는 3개인데 설정하는 것은 1개야" — 홈에 **실제로 뜨는 장**을 여기서도 같은 함수로 센다.
+  //   스위치 상태는 카드가 들고 아래 두 토글과 미리보기 목록이 같이 쓴다(한 스위치를 두 곳이 따로 읽으면 어긋난다).
+  const evSw = useSlideSetting(HOME_SLIDE_EVENT_KEY, '이벤트 슬라이드', onChanged);
+  const brSw = useSlideSetting(HOME_SLIDE_BRAND_KEY, '브랜드 슬라이드 2장', onChanged);
+  // 이벤트 메뉴 표시(event_menu_visible) — 꺼져 있으면 App 이 홈 이벤트 슬라이드도 뺀다(App.tsx showEventSlide). 여기선 읽기만.
+  const menuSw = useSlideSetting(EVENT_MENU_KEY, '이벤트 메뉴', onChanged);
+  // 홈이 여는 이벤트 — 중복 제거(같은 캠페인 배너)와 live 자리를 홈과 같은 판정(eventStateOf)으로 정한다.
+  //   조회 실패는 홈과 같게 '안내 슬라이드(비live)·slug 모름' 으로 본다.
+  const [ev, setEv] = useState<HomeCarouselInput['event']>({ slug: undefined, pending: true, live: false });
+  useEffect(() => {
+    let alive = true;
+    getEventBoard()
+      .then((b) => { if (alive) setEv({ slug: b?.slug, pending: false, live: !!b && eventStateOf(eventStateMod, b) === 'live' }); })
+      .catch(() => { if (alive) setEv({ slug: undefined, pending: false, live: false }); });
+    return () => { alive = false; };
+  }, []);
+  const preview = homeCarouselPreview(rows ?? [], today,
+    { showEvent: evSw.on, showBrand: brSw.on, eventMenu: menuSw.on }, ev);
+  const previewReady = rows !== null && evSw.known && brSw.known && menuSw.known && !ev.pending;
+  const previewDoubt = loadErr != null || evSw.loadErr != null || brSw.loadErr != null || menuSw.loadErr != null;
 
   // 노출 판정은 getActiveHomeBanners 와 **같은 조건**이어야 한다 —
   // 관리 화면 배지가 실제 노출과 어긋나면 오너가 화면을 못 믿게 된다.
@@ -262,13 +288,88 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
         <Icon name="layers" size={14} className="shrink-0 text-ink-muted" />홈 캐러셀 구성
       </p>
       <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">
-        손님 홈에는 여기서 관리하는 배너 <b className="text-ink-secondary tabular-nums">{list.length}장</b>이 먼저 돌고,
-        그 뒤에 아래 두 장이 이어집니다. 화면에 보이는 장수가 위 목록보다 많은 것은 그 때문입니다.
+        손님 홈에는 위에서 켠 등록 배너에 이벤트 슬라이드·브랜드 슬라이드가 이어 붙습니다. 아래 목록이 홈과 같은 계산으로 만든 실제 순서입니다.
       </p>
+      <div className="mt-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-2">
+        <p className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-ink-primary">
+          지금 홈에 뜨는 순서
+          <span data-testid="home-carousel-count" data-count={previewReady ? preview.onHome.length : undefined}
+            className="rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold tabular-nums text-accent-200">
+            {previewReady ? `홈에 지금 ${preview.onHome.length}장` : '확인 중…'}
+          </span>
+          {previewDoubt && <span className="text-2xs font-normal text-ink-muted">일부 상태를 못 읽어 기본값(켜짐)으로 셌습니다</span>}
+        </p>
+        {previewReady && (
+          <ol data-testid="home-carousel-preview" className="mt-1.5 space-y-1">
+            {preview.onHome.map((it, i) => {
+              const title = it.kind === 'banner' ? (it.banner.title || '(제목 없음)')
+                : it.kind === 'brand' ? BRAND_SLIDE_TITLES[it.key]
+                  : ev.live ? '이벤트 · 참여 가능' : '매장 이벤트 안내';
+              const control = it.kind === 'banner'
+                ? { label: '끄기', busy: busy === it.banner.id, run: () => toggle(it.banner) }
+                : it.kind === 'event'
+                  ? { label: '끄기', busy: evSw.busy || evSw.loadErr != null, run: evSw.toggle }
+                  : { label: '끄기(2장 함께)', busy: brSw.busy || brSw.loadErr != null, run: brSw.toggle };
+              return (
+                <li key={it.kind === 'banner' ? it.banner.id : it.kind === 'brand' ? `brand-${it.key}` : 'event'}
+                  data-testid="home-carousel-row" data-kind={it.kind}
+                  className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-xs">
+                  <span className="w-5 shrink-0 text-right tabular-nums text-ink-muted">{i + 1}</span>
+                  <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{KIND_LABEL[it.kind]}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-primary">{title}</span>
+                  <button type="button" onClick={control.run} disabled={control.busy}
+                    className="btn-ghost min-h-8 shrink-0 px-2.5 text-xs disabled:opacity-50">{control.label}</button>
+                </li>
+              );
+            })}
+            {preview.onHome.length === 0 && <li className="py-1 text-2xs text-ink-muted">홈 캐러셀이 비어 있어 자리째 숨겨집니다.</li>}
+          </ol>
+        )}
+        {previewReady && (preview.offHome.length > 0 || !preview.onHome.some((x) => x.kind === 'event') || !brSw.on) && (
+          <>
+            <p className="mt-2 text-2xs font-bold text-ink-muted">홈에 안 뜸</p>
+            <ul data-testid="home-carousel-off" className="mt-1 space-y-1">
+              {preview.offHome.map((b) => (
+                <li key={b.id} data-testid="home-carousel-off-row" data-kind="banner" className="flex items-center gap-1.5 px-1 py-0.5 text-xs opacity-70">
+                  <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{KIND_LABEL.banner}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{b.title || '(제목 없음)'}</span>
+                  <span className="shrink-0 text-2xs text-ink-muted">홈에 안 뜸 · {statusOf(b).label}</span>
+                  {!b.active && (
+                    <button type="button" onClick={() => toggle(b)} disabled={busy === b.id}
+                      className="btn-ghost min-h-8 shrink-0 px-2.5 text-xs disabled:opacity-50">켜기</button>
+                  )}
+                </li>
+              ))}
+              {!preview.onHome.some((x) => x.kind === 'event') && (
+                <li data-testid="home-carousel-off-row" data-kind="event" className="flex items-center gap-1.5 px-1 py-0.5 text-xs opacity-70">
+                  <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{KIND_LABEL.event}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-secondary">이벤트 슬라이드</span>
+                  <span className="shrink-0 text-2xs text-ink-muted">
+                    {!evSw.on ? '홈에 안 뜸 · 꺼짐' : !menuSw.on ? '홈에 안 뜸 · 이벤트 메뉴 꺼짐' : '홈에 안 뜸 · 등록 배너가 같은 이벤트로 연결'}
+                  </span>
+                  {!evSw.on && (
+                    <button type="button" onClick={evSw.toggle} disabled={evSw.busy || evSw.loadErr != null}
+                      className="btn-ghost min-h-8 shrink-0 px-2.5 text-xs disabled:opacity-50">켜기</button>
+                  )}
+                </li>
+              )}
+              {!brSw.on && (
+                <li data-testid="home-carousel-off-row" data-kind="brand" className="flex items-center gap-1.5 px-1 py-0.5 text-xs opacity-70">
+                  <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{KIND_LABEL.brand}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{BRAND_SLIDE_TITLES.mind} · {BRAND_SLIDE_TITLES.nuri}</span>
+                  <span className="shrink-0 text-2xs text-ink-muted">홈에 안 뜸 · 꺼짐</span>
+                  <button type="button" onClick={brSw.toggle} disabled={brSw.busy || brSw.loadErr != null}
+                    className="btn-ghost min-h-8 shrink-0 px-2.5 text-xs disabled:opacity-50">켜기</button>
+                </li>
+              )}
+            </ul>
+          </>
+        )}
+      </div>
       <div className="mt-1.5 space-y-1.5">
-        <SlideSwitch settingKey={HOME_SLIDE_EVENT_KEY} label="이벤트 슬라이드" onChanged={onChanged}
+        <SlideSwitch sw={evSw} settingKey={HOME_SLIDE_EVENT_KEY} label="이벤트 슬라이드"
           desc="진행 중인 매장 이벤트로 가는 한 장. 진행 중인 이벤트가 없으면 켜 두어도 안내 문구만 뜹니다." />
-        <SlideSwitch settingKey={HOME_SLIDE_BRAND_KEY} label="브랜드 슬라이드 2장" onChanged={onChanged}
+        <SlideSwitch sw={brSw} settingKey={HOME_SLIDE_BRAND_KEY} label="브랜드 슬라이드 2장"
           desc="오늘의 NURI MIND · NURI HOLDEM. 끄면 등록한 배너와 이벤트 슬라이드만 돕니다." />
       </div>
       <button type="button" onClick={purge} disabled={busy === 'purge'}
@@ -287,9 +388,8 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
  * ⚠ 기본은 켜기다. 못 읽었을 때(loadErr) 스위치는 **켜짐으로 두고** 조작만 막는다 —
  *   조회 실패를 '꺼짐'으로 그리면 오너가 '누가 껐지?' 로 읽는다.
  */
-function SlideSwitch({ settingKey, label, desc, onChanged }: {
-  settingKey: string; label: string; desc: string; onChanged?: () => void;
-}) {
+// 2026-09-29: 상태·저장은 useSlideSetting 이 들고, 스위치 모양(SlideSwitch)과 미리보기 목록의 켜기/끄기가 **같은 상태**를 쓴다.
+function useSlideSetting(settingKey: string, label: string, onChanged?: () => void) {
   const toast = useToast();
   const [server, setServer] = useState<string | null | undefined>(undefined);
   const [loadErr, setLoadErr] = useState<unknown>(null);
@@ -319,11 +419,18 @@ function SlideSwitch({ settingKey, label, desc, onChanged }: {
     } finally { setBusy(false); }
   };
 
+  return { on, known, loadErr, busy, toggle: () => { void apply(); } };
+}
+
+function SlideSwitch({ sw, settingKey, label, desc }: {
+  sw: ReturnType<typeof useSlideSetting>; settingKey: string; label: string; desc: string;
+}) {
+  const { on, known, loadErr, busy } = sw;
   return (
     <div className="flex items-start gap-2.5 rounded-input border border-border-subtle bg-surface-high/40 p-2">
       <button
         type="button" role="switch" aria-checked={on} aria-label={label}
-        disabled={busy || !known || loadErr != null} onClick={apply}
+        disabled={busy || !known || loadErr != null} onClick={sw.toggle}
         data-testid={`slide-switch-${settingKey}`}
         className={[
           'relative mt-0.5 inline-flex h-[24px] w-[44px] shrink-0 items-center rounded-full transition-colors disabled:opacity-50',

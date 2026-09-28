@@ -29,7 +29,7 @@
 //       링크 없는 배너는 <div> 로 그린다(죽은 버튼 금지). 관리자 배너의 활성·정렬·기간 규칙은 API 담당.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
-import type { HomeBanner } from '../../api/homeBanners';
+import { BRAND_SLIDE_TITLES, type BrandSlideKey, type HomeCarouselItem } from '../../lib/homeCarousel';
 
 export type BannerAction = 'tools' | 'explore' | 'nurimind';
 
@@ -50,7 +50,7 @@ export type BannerAction = 'tools' | 'explore' | 'nurimind';
  *  점쳐보세요', CustomerDashboardPage 는 '오늘의 운세'라고 부른다 — 여기만 어긋나 있었고, 우리가
  *  제공하지 않는 기능(GTO 트레이닝)으로 유도하고 있었다. 외부 이동이라는 사실도 부제에 적는다. */
 const BRAND_SLIDES: {
-  key: string; action: BannerAction; alt: string;
+  key: BrandSlideKey; action: BannerAction; alt: string;
   bg: string;
   /** 2026-09-14 오너 지시 — 관리자 배너와 같은 '아트워크 + 왼쪽 스크림 + 글자' 구조로 통일.
    *  ⚠ 아트워크에는 **글자를 넣지 않는다**(제목·부제는 아래 DOM 이 그린다 — 두 벌로 겹치면 안 된다).
@@ -65,13 +65,13 @@ const BRAND_SLIDES: {
     key: 'mind', action: 'nurimind', alt: '오늘의 NURI MIND · 외부 사이트 nurimind.co.kr 에서 오늘의 운세 보기',
     bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.12) 0%, transparent 55%), radial-gradient(150% 200% at 8% 110%, rgba(128,95,218,0.16) 0%, transparent 60%), linear-gradient(180deg, #1a162e 0%, #110f20 100%)',
     img: '/banners/mind.webp',
-    title: '오늘의 NURI MIND', sub: '오늘의 운세 보기 · 외부 사이트 ›', titleColor: '#EEECFA', subColor: '#B2ACEC',
+    title: BRAND_SLIDE_TITLES.mind, sub: '오늘의 운세 보기 · 외부 사이트 ›', titleColor: '#EEECFA', subColor: '#B2ACEC',
   },
   {
     key: 'nuri', action: 'explore', alt: 'NURI HOLDEM · 전국 홀덤 일정 한곳에서 보기',
     bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.07) 0%, transparent 55%), radial-gradient(150% 200% at 10% 110%, rgba(128,95,218,0.18) 0%, transparent 60%), linear-gradient(180deg, #151221 0%, #0d0b18 100%)',
     img: '/banners/nuri.webp',
-    title: 'NURI HOLDEM', sub: '전국 홀덤 일정, 한곳에서 ›', titleColor: '#D9B25A', subColor: '#DCE4DC',
+    title: BRAND_SLIDE_TITLES.nuri, sub: '전국 홀덤 일정, 한곳에서 ›', titleColor: '#D9B25A', subColor: '#DCE4DC',
   },
 ];
 
@@ -104,36 +104,31 @@ type Slide = {
   event?: EventSlide;
 };
 
-export default function PosterCarousel({ onBanner, banners = [], onBannerUrl, eventSlide = null, showBrand = true }: {
+export default function PosterCarousel({ onBanner, plan, onBannerUrl, eventSlide = null }: {
   onBanner: (action: BannerAction) => void;
-  /** 관리자 등록 배너(home_banners) 중 **지금 게재 중인 것**. 비어 있으면 브랜드 슬라이드만 돈다(폴백 없음). */
-  banners?: HomeBanner[];
+  /** 🔴 2026-09-29 오너("메인은 3개인데 설정은 1개") — 그릴 장과 순서는 **lib/homeCarousel.homeCarouselPlan** 이 정한다.
+   *  관리자 미리보기(HomeBannersCard)가 같은 함수를 부른다. 여기서 순서·중복 제거·스위치를 다시 판정하지 않는다 —
+   *  두 벌이 되면 관리 화면 장수와 홈 장수가 다시 갈린다. 순서 규칙(live 이벤트 위치 · 2026-09-25 오너 결정)도 그쪽에 있다.
+   *  0장이면 이 컴포넌트는 **자리까지** 비운다(n===0 → null). */
+  plan: HomeCarouselItem[];
   onBannerUrl?: (url: string) => void;
-  /** N06: 이벤트 진입 슬라이드 — 관리자 배너 뒤·브랜드 슬라이드 앞(§7.1-3: 관리자/광고 순서는 그대로). null 이면 없음. */
+  /** N06: plan 의 'event' 자리에 그릴 문구·목적지. 판정은 HomeTab 이 evaluateEvent 로 한다. */
   eventSlide?: EventSlide | null;
-  /** 관리자 스위치(app_settings.home_slide_brand). false 면 브랜드 2장을 빼고 돈다.
-   *  🔴 2026-09-18 오너 요청 — 종전엔 코드 고정이라 노출관리에서 끌 수 없었다.
-   *  ⚠ 기본 true. 세 종류가 전부 꺼지면 슬라이드가 0장이고, 그때 이 컴포넌트는 **자리까지** 비운다(n===0 → null). */
-  showBrand?: boolean;
 }) {
-  const slides = useMemo<Slide[]>(() => {
-    // 관리자 배너가 앞에 선다 — 등록 순서(sort_order)·활성·기간 판정은 api/homeBanners 가 이미 걸렀다.
+  const slides = useMemo<Slide[]>(() => plan.flatMap((it): Slide[] => {
     // ⚠ 링크 없는 배너는 **누를 수 없어야 한다**(2026-09-11). 관리 화면에서 링크는 '선택' 이라
     //   실제로 빈 배너가 등록될 수 있다. 목적지가 없으면 배너는 그냥 '보는 것' 으로 둔다.
-    const posters: Slide[] = banners.map((b): Slide => ({
-      key: `db:${b.id}`, src: b.imageUrl, alt: b.title || '배너', title: b.title, sub: b.subtitle,
-      onClick: b.linkUrl ? () => onBannerUrl?.(b.linkUrl) : undefined,
-    }));
-    const events: Slide[] = eventSlide ? [{ key: 'ev:home', alt: eventSlide.alt, event: eventSlide, onClick: eventSlide.onClick }] : [];
-    const brands = showBrand ? BRAND_SLIDES.map((b): Slide => ({
-      key: `b:${b.key}`, alt: b.alt, brand: b, onClick: () => onBanner(b.action),
-    })) : [];
-    // 🔴 2026-09-25 오너 결정(HOME-BANNER-REDESIGN) — **참여 가능(live)이 아닌** 이벤트 안내는 맨 뒤로 보낸다.
-    //   관리자 배너가 0개가 되자 '매장 이벤트 · 지금 진행 중인 이벤트가 없어요' 평면 슬라이드가 홈에서 가장 큰 자리의
-    //   첫 장이 됐다(실측 360~1440 전부). 빼지 않는 이유: 이 슬라이드가 시작 전·소진·종료·조회 실패를 사실대로 말하는
-    //   자리이고 e2e 5개 파일의 진입점이다(home-event-menu). 라이브가 되면 종전처럼 관리자 배너 바로 뒤·브랜드 앞(§7.1-3).
-    return eventSlide?.live ? [...posters, ...events, ...brands] : [...posters, ...brands, ...events];
-  }, [onBanner, banners, onBannerUrl, eventSlide, showBrand]);
+    if (it.kind === 'banner') {
+      const b = it.banner;
+      return [{
+        key: `db:${b.id}`, src: b.imageUrl, alt: b.title || '배너', title: b.title, sub: b.subtitle,
+        onClick: b.linkUrl ? () => onBannerUrl?.(b.linkUrl) : undefined,
+      }];
+    }
+    if (it.kind === 'event') return eventSlide ? [{ key: 'ev:home', alt: eventSlide.alt, event: eventSlide, onClick: eventSlide.onClick }] : [];
+    const b = BRAND_SLIDES.find((x) => x.key === it.key);
+    return b ? [{ key: `b:${b.key}`, alt: b.alt, brand: b, onClick: () => onBanner(b.action) }] : [];
+  }), [onBanner, plan, onBannerUrl, eventSlide]);
 
   const n = slides.length;
   const multi = n > 1;

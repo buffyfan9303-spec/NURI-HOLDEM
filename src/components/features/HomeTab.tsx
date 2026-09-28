@@ -42,7 +42,7 @@ import type { EventState } from '../../lib/eventState';
 //   첫 페인트 **뒤**의 이벤트 보드 조회 하나뿐이라 늦춰도 되는 것을 늦췄다(lib/eventState 와 같은 조리법).
 import type { EventBoard } from '../../api/events';
 // slug 판정만 담은 순수 모듈(런타임 의존 0) — 중복 제거가 **어느 캠페인인지** 보게 하려고 여기서만 정적으로 받는다.
-import { bannerCoversEvent } from '../../lib/eventSlug';
+import { homeCarouselPlan, eventStateOf, remainCardsOf } from '../../lib/homeCarousel';
 import { readSnap, writeSnap } from '../../lib/snapshot';
 // 상단 '오늘 안내' 한 줄(순수 함수). 왜 이 문장인지는 lib/homeRail.ts 머리말.
 import { todayLine } from '../../lib/homeRail';
@@ -94,23 +94,8 @@ const EVENT_SEEN = 'nuri:event-banner-seen';
  *  ⚠ 모듈을 못 받아도 **진입은 막히지 않는다**(아래 eventShown 이 'menu' 로 떨어진다). */
 type EventStateMod = typeof import('../../lib/eventState');
 
-/** 아직 안 열린 카드 수.
- *  ⚠ `b.cards` 가 배열이 아닐 수 있다 — `getEventBoard` 는 RPC 응답을 **검증 없이** `EventBoard` 로
- *    단언한다(`data as EventBoard | null`). RPC 가 `[]` 를 돌려주면 truthy 라 null 폴백도 안 걸리고,
- *    `b.cards.length` 가 그대로 터져 **홈 전체가 오류 화면**이 된다(실측 2026-09-13, 목 응답으로 재현).
- *    부가 기능 하나의 응답 모양 때문에 첫 화면이 죽으면 안 된다. */
-const remainCardsOf = (b: EventBoard): number | null =>
-  (Array.isArray(b.cards) ? b.cards.filter((c) => !c.opened).length : null);
-const totalCardsOf = (b: EventBoard): number | null => (Array.isArray(b.cards) ? b.cards.length : null);
-
-/** 이벤트 보드 → 단일 판정 함수 입력. `hiddenAt` 은 EventBoard 에 없다(= 서버가 모름 = 공개로 본다). */
-const eventStateOf = (m: EventStateMod, b: EventBoard): EventState => m.evaluateEvent({
-  status: b.status,
-  startsAt: b.startsAt,
-  endsAt: b.endsAt,
-  totalCards: totalCardsOf(b),
-  remainCards: remainCardsOf(b),
-}, m.eventNow()).state;
+// remainCardsOf(카드 배열 무검증 방어 — 2026-09-13 홈 전체 오류 사고)·eventStateOf 는 lib/homeCarousel 로 옮겼다 —
+// 관리자 캐러셀 미리보기(HomeBannersCard)가 같은 판정으로 이벤트 슬라이드 자리를 정해야 하기 때문이다(2026-09-29).
 
 const EVENT_SNAP_KEY = 'event-board';
 const EVENT_SNAP_MAX_AGE_MS = 30 * 60 * 1000;
@@ -483,12 +468,14 @@ export default function HomeTab({
   //   마우스 이벤트 객체가 slug 자리로 넘어가 목록이 안 열린다.
   //   EventSlide.onClick 의 타입이 `() => void` 라 **tsc 가 조용히 통과시켰다**(퀴액션 버튼은 잡혔다).
   //   e2e 8건이 이것 하나로 빨개졌다(2026-09-18).
+  /** 캐러셀에 뜨는 장과 순서 — 관리자 미리보기와 **같은 함수**(lib/homeCarousel). 이벤트 스위치(home_slide_event)·
+   *  중복 제거(같은 캠페인 배너, bannerCoversEvent)·live 자리 판정이 전부 그 안에 있다.
+   *  ⚠ 퀵액션 '제휴 혜택' 칸은 이 스위치와 무관하다(진입 경로를 통째로 잠그는 것은 event_menu_visible 쪽이다). */
+  const carouselPlan = useMemo(() => homeCarouselPlan({
+    banners, showEvent: showEventSlide, showBrand: showBrandSlides,
+    event: { slug: event?.slug, pending: eventShown === 'pending', live: eventShown === 'banner' && !!event },
+  }), [banners, showEventSlide, showBrandSlides, event, eventShown]);
   const eventSlide = useMemo<EventSlide | null>(() => {
-    // 관리자 스위치(app_settings.home_slide_event)로 끈 경우 — 캐러셀에서만 빼고 이벤트 기능 자체는 그대로다.
-    // ⚠ 퀵액션 '제휴 혜택' 칸은 이 스위치와 무관하다(진입 경로를 통째로 잠그는 것은 event_menu_visible 쪽이다).
-    if (!showEventSlide) return null;
-    // ⚠ '이벤트 링크가 있으면' 이 아니라 '**같은 캠페인**으로 가면' 이다 — 판정 근거는 bannerCoversEvent 주석.
-    if (bannerCoversEvent(banners.map((b) => b.linkUrl), event?.slug, eventShown === 'pending')) return null;
     if (eventShown === 'pending') return { title: '이벤트', sub: '불러오는 중…', alt: '이벤트 — 불러오는 중', testId: 'home-event-menu', live: false, pending: true, onClick: () => onEvent() };
     if (eventShown === 'banner' && event) {
       const sub = event.myTickets > 0 ? `참여권 ${event.myTickets}장 · 남은 카드 ${eventRemain}장` : `매장 출석하면 참여권 1장 · 남은 카드 ${eventRemain}장`;
@@ -500,7 +487,7 @@ export default function HomeTab({
     }
     const sub = eventMenuSubtitle(eventLoaded, eventFailed, event, eventState);
     return { title: '매장 이벤트', sub, alt: `매장 이벤트 · ${sub}`, testId: 'home-event-menu', live: false, onClick: () => onEvent() };
-  }, [showEventSlide, banners, eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
+  }, [eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
 
   /** 🔴 2026-09-24 오너: "빠른 카드 두 개의 세부 설명 줄은 삭제하고 세로 폭을 살짝 줄여라" — 설명 줄(종전 quickEventDesc)이 빠졌다.
    *  그 줄이 말하던 사실 중 **사라지면 안 되는 것**의 새 자리:
@@ -604,9 +591,8 @@ export default function HomeTab({
           {/* 작은 실제 배너 — 하나의 메시지, 하나의 연결(§6-2) */}
           <div className="lg:col-span-8 lg:col-start-5 lg:row-span-2 lg:row-start-1">
             <PosterCarousel
-              banners={banners}
+              plan={carouselPlan}
               eventSlide={eventSlide}
-              showBrand={showBrandSlides}
               onBannerUrl={(url) => {
                 // 관리자가 넣은 링크. 외부는 새 탭(noopener — opener 를 통한 탭내빙 차단),
                 // 내부 경로는 같은 탭. javascript: 같은 스킴은 애초에 열지 않는다.

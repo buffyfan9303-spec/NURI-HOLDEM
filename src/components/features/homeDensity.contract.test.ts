@@ -52,7 +52,9 @@ describe('배너 제어 — 별도 줄이 아니라 프레임 안', () => {
 
 describe('빈 상태 이벤트 슬라이드가 첫 장을 먹지 않는다(2026-09-25 오너 결정)', () => {
   it('참여 가능(live)이 아니면 맨 뒤, live 면 관리자 배너 바로 뒤', () => {
-    expect(PC).toMatch(/return eventSlide\?\.live \? \[\.\.\.posters, \.\.\.events, \.\.\.brands\] : \[\.\.\.posters, \.\.\.brands, \.\.\.events\];/);
+    // 2026-09-29: 순서 규칙은 lib/homeCarousel.homeCarouselPlan 으로 옮겼다(관리자 미리보기와 단일 정본). 동작 단언은 homeCarousel.test.ts.
+    const LIB = readFileSync(join(dir, '..', '..', 'lib', 'homeCarousel.ts'), 'utf8');
+    expect(LIB).toMatch(/return p\.event\.live \? \[\.\.\.posters, \.\.\.events, \.\.\.brands\] : \[\.\.\.posters, \.\.\.brands, \.\.\.events\];/);
   });
 });
 
