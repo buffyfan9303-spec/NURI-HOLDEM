@@ -915,8 +915,8 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
           return (
             <button
               key={key} type="button"
-              // 같은 탭 재탭 = 맨 위로(iOS 관례). 다른 탭 이동은 changeTab 의 스크롤 저장/복원이 맡는다 —
-              // 예전엔 무조건 맨 위로 튕겨서, 목록을 한참 내려 보다 다른 탭을 잠깐 다녀오면 위치를 전부 잃었다.
+              // 같은 탭 재탭 = 맨 위로(iOS 관례). 다른 탭으로 이동해도 **항상 맨 위로** 간다(오너 결정 2026-09-29).
+              // 떠난 자리 복원은 **뒤로가기로 돌아올 때만** 한다(changeTab 의 tabScrollRef 저장 → 아래 layout effect).
               // ⚠ 재탭 판정은 **실제 탭(active)** 으로 한다. shown 은 표시용으로 접은 값이라
               //   browse 에서 shown='home' 이 되고, 그러면 홈 버튼이 '재탭'으로 잘못 잡혀
               //   맨 위로 스크롤만 하고 홈에 영영 못 간다(2026-09-05 전수 조사). 모바일에는
