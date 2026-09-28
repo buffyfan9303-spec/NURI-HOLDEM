@@ -226,7 +226,7 @@ test('🔴 MU3 — 오버레이 닫기(390 · CPU 4배): 매장 페이지(버튼
   await page.waitForTimeout(900);
   await scrollTo(page, 0);
   await press(page, '[data-sec="market"] ul li[role=button], [data-sec="market"] ul li button', { mobile: true });
-  const sheet = '.fixed.inset-0.z-\\[60\\] [role=dialog]';
+  const sheet = '.fixed.inset-0[class~="z-60"] [role=dialog]';
   await expect(page.locator(sheet).first()).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(700);
   await startRec(page, '', sheet);
@@ -237,7 +237,7 @@ test('🔴 MU3 — 오버레이 닫기(390 · CPU 4배): 매장 페이지(버튼
   await page.waitForTimeout(900);
   await scrollTo(page, 0);
   await press(page, '[data-sec="board"] li[role=button]', { mobile: true });
-  const post = '.fixed.inset-0.z-\\[55\\][role=dialog]';
+  const post = '.fixed.inset-0[class~="z-55"][role=dialog]';
   await expect(page.locator(post).first()).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(700);
   await startRec(page, '', post);
@@ -289,7 +289,7 @@ test('🔴 MU5 — 전면 판 열기(390 · CPU 4배 · 터치): 매장·게시�
   await cpu4(page);
   const back = async () => { await page.evaluate(() => history.back()); await page.waitForTimeout(900); };
   // 일정 상세(Modal page — 예전부터 fade-in, 양성 대조)
-  expectOneOpen(await sampleOpen(page, '.fixed.inset-0.z-\\[55\\][role=dialog]', () => press(page, '[data-testid="home-schedule"] [role="button"]', { mobile: true })), '일정 상세');
+  expectOneOpen(await sampleOpen(page, '.fixed.inset-0[class~="z-55"][role=dialog]', () => press(page, '[data-testid="home-schedule"] [role="button"]', { mobile: true })), '일정 상세');
   await back();
   // 이벤트 목록
   expectOneOpen(await sampleOpen(page, '[data-testid="event-list-page"]', () => press(page, '[data-testid="home-quick-event"]', { mobile: true })), '이벤트 목록');
@@ -315,7 +315,7 @@ test('🔴 MU5 — 전면 판 열기(390 · CPU 4배 · 터치): 매장·게시�
   // 게시글 상세(Modal page)
   await press(page, SEC, { text: '게시판', mobile: true });
   await page.waitForTimeout(900);
-  expectOneOpen(await sampleOpen(page, '.fixed.inset-0.z-\\[55\\][role=dialog]', () => press(page, '[data-sec="board"] li[role=button]', { mobile: true })), '게시글 상세');
+  expectOneOpen(await sampleOpen(page, '.fixed.inset-0[class~="z-55"][role=dialog]', () => press(page, '[data-sec="board"] li[role=button]', { mobile: true })), '게시글 상세');
 });
 
 /** App 의 프리마운트·청크 데우기 idle(timeout 10000)을 붙잡아 라이브를 **진짜 첫 방문**으로 만든다(tab-cover.spec 과 같은 방법). */
