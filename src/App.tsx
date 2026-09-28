@@ -274,8 +274,10 @@ interface TabDef { id: TabId; label: string; }
 
 const AppHeader = memo(function AppHeader({
   unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenMe,
-  onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange, onOpenVoucher, onInternalLink,
+  onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange, onOpenVoucher, onInternalLink, hasStore = false,
 }: {
+  /** 내 매장 탭이 있는가 — App 의 tabs(업주·직원·관리자)와 같은 판정. 계정 메뉴의 '내 매장' 입구를 가른다. */
+  hasStore?: boolean;
   /** 알림의 쿼리·해시형 링크를 앱 안에서 여는 App.openInternalLink(연결 감사 D) */
   onInternalLink?: (u: URL) => boolean;
   /** [이용권 · 출석] 버튼 — 시트 자체는 **App 루트**에서 렌더한다(헤더 안이면 하단 탭바에 덮인다) */
@@ -564,6 +566,13 @@ const AppHeader = memo(function AppHeader({
                       <Icon name="wrench" size={14} />
                       도구
                     </button>
+                    {hasStore && (
+                      <button type="button" onClick={() => leaveMenuTo(() => onGotoTab?.('my-store'))}
+                        className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                        <Icon name="store" size={14} />
+                        내 매장 <span className="text-ink-muted">(직원 관리·장부·클락)</span>
+                      </button>
+                    )}
                     {user.role === 'admin' && (
                       <button type="button" onClick={() => leaveMenuTo(() => onGotoTab?.('admin'))}
                         className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
@@ -3987,6 +3996,7 @@ export default function App() {
         title={activeTab === 'browse' ? undefined : tabs.find((t) => t.id === activeTab)?.label}
         activeTab={activeTab}
         onGotoTab={changeTab}
+        hasStore={hasStoreTabs}
         unreadCount={unreadNotifs + unreadMsgs}
         notifications={notifications}
         onMarkRead={handleMarkRead}
