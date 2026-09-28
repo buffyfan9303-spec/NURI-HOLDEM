@@ -54,7 +54,8 @@ describe('C05 · 다른 접수대의 realtime 변경이 현재 session state 를
   });
 
   it('QR 바인요청 실시간 구독도 active 게이트 뒤에서 걸린다(§5-A)', () => {
-    const m = code.match(/useEffect\(\(\) => \{\s*if \(!active\) return;\s*loadPending\(\);\s*return subscribeBuyinRequests\(venueId, loadPending\);\s*\}, \[venueId, loadPending, active\]\);/);
+    // 2026-09-28 — 손님 취소·만료(DELETE)를 받으려고 ownsId 를 넘긴다(deps 에 ownsPending). active 게이트 계약은 같다.
+    const m = code.match(/useEffect\(\(\) => \{\s*if \(!active\) return;\s*loadPending\(\);\s*return subscribeBuyinRequests\(venueId, loadPending(?:, \{ ownsId: ownsPending \})?\);\s*\}, \[venueId, loadPending, active(?:, ownsPending)?\]\);/);
     expect(m, 'subscribeBuyinRequests 의 active 게이트를 찾지 못했다').not.toBeNull();
   });
 

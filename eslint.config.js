@@ -5,6 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import security from 'eslint-plugin-security'
 import playwright from 'eslint-plugin-playwright'
+import betterTailwindcss from 'eslint-plugin-better-tailwindcss'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
@@ -48,6 +49,22 @@ export default defineConfig([
       'react-hooks/purity': 'off',
       'react-hooks/preserve-manual-memoization': 'off',
       'react-hooks/immutability': 'off',
+    },
+  },
+  // 2026-09-28 도구 도입 — Tailwind v4 이관 중 "CSS 가 안 생기는 클래스"(오탈자·v3 전용 이름)를
+  //   기계로 잡는다. 화면에서는 스타일이 그냥 빠질 뿐 에러가 안 나 사람이 못 본다.
+  //   🔴 경고 모드로 시작한다(기존 오류 0 유지 지시). 포맷팅(줄바꿈·정렬) 규칙은 켜지 않는다 — 대량 diff 방지.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    plugins: { 'better-tailwindcss': betterTailwindcss },
+    settings: {
+      'better-tailwindcss': {
+        entryPoint: 'src/index.css',
+      },
+    },
+    rules: {
+      'better-tailwindcss/no-unknown-classes': 'warn',
+      'better-tailwindcss/no-conflicting-classes': 'warn',
     },
   },
   // 🔴 e2e 전용 — **거짓 통과하는 테스트**를 잡는 룰만 골랐다(2026-09-18).

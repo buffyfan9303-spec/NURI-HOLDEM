@@ -271,7 +271,7 @@ function SpotHero({ tab, onTab }: { tab: SpotTab; onTab: (t: SpotTab) => void })
           // 2026-09-19 오너 "탭 위아래 공백이 너무 크다": 시각 높이 44 → 34. 2026-09-24 알약 통일(design-reviewer 판정): 34 → 32,
           //   히트는 CHIP_HIT 와 같은 위아래 8px(gto/chip.ts) — 32 + 16 = 48. e2e nuri-spot.spec 뷰포트 매트릭스가 elementFromPoint 로 잰다.
           //   flex-[2_1_10rem]: 줄 배치용 basis 일 뿐 최소 폭이 아니라(200% 에서도 320px 을 밀지 않는다) 남는 폭을 탭이 가져간다.
-          className="min-w-0 flex-[2_1_10rem] [&>button]:min-h-[32px] [&>button]:before:absolute [&>button]:before:inset-x-0 [&>button]:before:-inset-y-[8px] [&>button]:before:content-['']"
+          className="min-w-0 flex-[2_1_10rem] [&>button]:min-h-[32px] [&>button]:before:absolute [&>button]:before:inset-x-0 [&>button]:before:inset-y-[-8px] [&>button]:before:content-['']"
         />
         <button type="button" onClick={gotoBoard} data-testid="spot-board-link"
           className={`${CHIP_HIT} flex min-h-[32px] shrink-0 items-center justify-center gap-1 rounded-input border border-border-subtle bg-surface-high/60 px-2.5 t-tab font-semibold text-accent-200`}>
@@ -382,7 +382,7 @@ function AnalyzeTab({ spot, patch, hb, issues, blocked, evaluation, savedAt, use
       <IssueList issues={issues} />
       {/* 자리는 **항상** 잡아 둔다(GTO-TOOL-OPEN-JANK 2026-09-24) — 열고 400ms 뒤 첫 자동저장이 이 줄을 끼워 넣어
           본문이 439→468px 로 한 번 더 늘었다(열기 모션 중 두 번째 계단). 글자만 나중에 채운다. */}
-      <p className="min-h-[1lh] text-2xs text-ink-muted" aria-live="polite" data-testid="spot-saved-line">
+      <p className="min-h-lh text-2xs text-ink-muted" aria-live="polite" data-testid="spot-saved-line">
         {savedAt !== null && (
           <><Icon name="check" size={11} className="mr-1 inline-block align-[-1px]" />임시 저장됨 — 나갔다 와도 그대로입니다</>
         )}

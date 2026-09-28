@@ -51,7 +51,7 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
                   //   호버 하이라이트 자체는 그대로 둔다(즉시 반응 — 고밀도 표에선 오히려 또렷하다).
                   //   참고로 호버를 아예 없애면 145ms 라, 남은 비용 30ms 가 이 기능의 실제 값이다.
                   'cursor-pointer border-b border-border-subtle last:border-b-0',
-                  s.isPremium ? 'bg-accent-300/[0.05] hover:bg-accent-300/10' : 'hover:bg-surface-high/70',
+                  s.isPremium ? 'bg-accent-300/5 hover:bg-accent-300/10' : 'hover:bg-surface-high/70',
                 ].join(' ')}
               >
                 {/* 일시·참가비·상금은 '의미상 한 덩어리인 값'이라 한 줄 유지(whitespace-nowrap),
@@ -66,19 +66,19 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onVenueClick(s.venueId); }}
-                      className="block max-w-full break-keep [overflow-wrap:anywhere] text-left font-semibold text-ink-primary hover:text-accent-300"
+                      className="block max-w-full break-keep wrap-anywhere text-left font-semibold text-ink-primary hover:text-accent-300"
                     >
                       {s.pubName}
                     </button>
                   ) : (
-                    <span className="block max-w-full break-keep [overflow-wrap:anywhere] font-semibold text-ink-primary">{s.pubName}</span>
+                    <span className="block max-w-full break-keep wrap-anywhere font-semibold text-ink-primary">{s.pubName}</span>
                   )}
                 </td>
                 <td className="px-3 py-2 align-top">
                   <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                     {s.isPremium && <span className="shrink-0 rounded-badge bg-accent-300 px-1 text-2xs font-bold leading-tight text-white">TOP</span>}
                     {s.isCompetition && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-bold leading-tight text-accent-200">대회</span>}
-                    <span className="min-w-0 break-keep [overflow-wrap:anywhere] font-bold text-ink-primary">{s.title}</span>
+                    <span className="min-w-0 break-keep wrap-anywhere font-bold text-ink-primary">{s.title}</span>
                     {/* 등록 마감 배지 — 카드와 같은 어휘·같은 포맷터. 데이터 있을 때만 */}
                     {reg && (
                       <span className="shrink-0 whitespace-nowrap rounded-badge bg-surface-high px-1.5 text-2xs font-bold leading-tight text-ink-muted">{reg}</span>

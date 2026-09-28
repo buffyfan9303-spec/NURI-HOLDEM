@@ -103,7 +103,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
       {/* ── 헤더 (이미지가 있으면 이미지, 없으면 슬림 헤더) ───────── */}
       {hasImage ? (
         <div className="relative">
-          <div className="aspect-square sm:aspect-[4/3] overflow-hidden bg-surface-mid">
+          <div className="aspect-square sm:aspect-4/3 overflow-hidden bg-surface-mid">
             <img src={listing.images[0]} alt={listing.title} className="w-full h-full object-cover" />
           </div>
           <CloseButton onClose={onClose} />
@@ -114,7 +114,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
           <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
             {category?.label ?? '게시글'}
           </span>
-          <CloseButton onClose={onClose} className="!top-2 !right-2" />
+          <CloseButton onClose={onClose} className="top-2! right-2!" />
         </div>
       )}
 
@@ -158,8 +158,8 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
             <span className="text-ink-secondary">{relativeTime(listing.createdAt)}</span>
             {/* 신고·차단 — 예전엔 글자만(20×16px)이라 손가락으로 거의 못 눌렀다. 44px 실박스(오버행 .hit 금지 — HANDOVER §3 J). */}
             {user && user.id !== listing.sellerId && (
-              <span className="relative z-[1] -my-2.5 -mr-2 ml-auto flex shrink-0 items-center">
-                {/* relative z-[1]: 칩 줄이 접혀 이 묶음만 한 줄에 남으면 -my-2.5 로 튀어나온 아래 2px 를 다음 형제 h1 이 덮어
+              <span className="relative z-1 -my-2.5 -mr-2 ml-auto flex shrink-0 items-center">
+                {/* relative z-1: 칩 줄이 접혀 이 묶음만 한 줄에 남으면 -my-2.5 로 튀어나온 아래 2px 를 다음 형제 h1 이 덮어
                     히트가 42px 였다(design-reviewer 2026-09-24, 320·긴 지역명). 쌓임 순서를 올려 44px 전부를 버튼이 받는다. */}
                 <button type="button" onClick={() => setReportOpen(true)}
                   className="inline-flex h-[44px] min-w-[44px] items-center justify-center whitespace-nowrap px-2 text-xs text-ink-muted hover:text-danger-light transition-colors">신고</button>
@@ -178,7 +178,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
               </span>
             )}
           </div>
-          <h1 className="mt-2 text-[20px] font-bold text-ink-primary leading-snug break-words">{listing.title}</h1>
+          <h1 className="mt-2 text-[20px] font-bold text-ink-primary leading-snug wrap-break-word">{listing.title}</h1>
           {/* 가격 31.9px → 25.5px — 여전히 화면에서 가장 큰 숫자다(제목 20px). */}
           <p data-mk-price className="mt-1.5 text-2xl font-extrabold text-accent-300 tabular-nums leading-none">
             {listing.price.toLocaleString()}
@@ -229,7 +229,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
         {/* ③ 설명 — 게시글 본문과 같은 읽기 규격(15px · 행간 1.7 · ink-primary). */}
         <section data-mk-card="desc" {...DETAIL_CARD_AURA} className={MK_CARD}>
           <h3 className="text-xs font-bold text-ink-secondary">설명</h3>
-          <p className="mt-1.5 text-[15px] text-ink-primary leading-[1.7] whitespace-pre-wrap break-words">
+          <p className="mt-1.5 text-[15px] text-ink-primary leading-[1.7] whitespace-pre-wrap wrap-break-word">
             {listing.description}
           </p>
         </section>
@@ -242,7 +242,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
           <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
             가격 협상·상태 문의는 아래 <b className="text-accent-300">판매자에게 연락</b> 버튼으로<br />1:1 채팅에서 바로 대화할 수 있어요.
           </p>
-          <p className="mt-2 rounded-input bg-amber-500/[0.08] px-2 py-1.5 text-2xs leading-relaxed text-amber-300">
+          <p className="mt-2 rounded-input bg-amber-500/8 px-2 py-1.5 text-2xs leading-relaxed text-amber-300">
             <Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />안전거래: 선입금 요구는 거절하세요 — 직거래·대면 확인을 권장하고, 의심되면 신고해 주세요.
           </p>
         </section>
@@ -302,7 +302,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
           </button>
 
           {/* 판매자 채팅 모달 열기 */}
-          <button type="button" onClick={() => setChatOpen(true)} className="flex-[2] btn-primary min-h-[44px] py-2.5">
+          <button type="button" onClick={() => setChatOpen(true)} className="flex-2 btn-primary min-h-[44px] py-2.5">
             판매자에게 연락
           </button>
         </div>
@@ -460,7 +460,7 @@ function CloseButton({ onClose, className = '' }: { onClose: () => void; classNa
       className={[
         // 44px 실박스(예전 36px·슬림 헤더 42.5px — HANDOVER §3 J: 오버행 대신 실박스)
         'absolute top-3 right-3 h-[44px] w-[44px] flex items-center justify-center rounded-full',
-        'bg-surface-base/80 backdrop-blur text-ink-primary hover:bg-surface-high transition-colors z-10',
+        'bg-surface-base/80 backdrop-blur-sm text-ink-primary hover:bg-surface-high transition-colors z-10',
         className,
       ].join(' ')}
     >
@@ -474,7 +474,7 @@ function CloseButton({ onClose, className = '' }: { onClose: () => void; classNa
 function SoldOverlay() {
   return (
     <div className="absolute inset-0 bg-black/50 flex items-center justify-center pointer-events-none">
-      <span className="text-3xl font-extrabold text-white rotate-[-8deg] border-4 border-white px-6 py-2 rounded">
+      <span className="text-3xl font-extrabold text-white rotate-[-8deg] border-4 border-white px-6 py-2 rounded-sm">
         SOLD OUT
       </span>
     </div>

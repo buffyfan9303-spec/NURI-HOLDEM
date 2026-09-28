@@ -43,6 +43,8 @@ interface PosterFormModalProps {
   venues?: { id: string; name: string; region?: string }[];
   /** 신규 작성 시 "지난 포스터 불러오기" 후보(전체 일정 — 내부에서 내 것만 필터) */
   pastPosters?: Schedule[];
+  /** 내 매장 전환기에서 고른 매장(2026-09-28) — 게임 프리셋을 그 매장 것으로 읽는다. 없으면 프로필 매장. */
+  storeVenueId?: string | null;
 }
 
 export interface PosterFormData {
@@ -92,7 +94,7 @@ const MAX_PRIZES = 10;
 const MAX_RANKS = 20;
 const MAX_EVENTS = 10;
 
-export default function PosterFormModal({ open, onClose, schedule, onSubmit, venues = [], pastPosters = [] }: PosterFormModalProps) {
+export default function PosterFormModal({ open, onClose, schedule, onSubmit, venues = [], pastPosters = [], storeVenueId = null }: PosterFormModalProps) {
   const toast  = useToast();
   const { user } = useAuth();
   const isEdit = !!schedule;
@@ -238,7 +240,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
   // ── PL2c: 게임 프리셋 → 포스터 폼(공용 PresetPicker + applyToPoster 어댑터) ──────
   // 채워진 항목만 덮는다 — 부분 프리셋(클락만 있는 프리셋)은 포스터 폼을 건드리지 않는다.
-  const presetVenueId = isAdmin ? (form.venueId || '') : (user?.venueId ?? '');
+  const presetVenueId = isAdmin ? (form.venueId || '') : (form.venueId || storeVenueId || user?.venueId || '');
   const applyGamePreset = (p: GamePreset) => {
     const patch = applyToPoster(p.data);
     if (Object.keys(patch).length === 0) { toast.show(`'${p.name}'. 포스터에 적용할 항목이 없는 프리셋입니다`, 'info'); return; }
@@ -357,7 +359,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
         {/* ── 지난 포스터 불러오기(신규 전용) — 전 필드 자동 채움, 날짜만 새로 ── */}
         {!isEdit && loadCandidates.length > 0 && (
-          <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.06] p-3">
+          <div className="rounded-card border border-accent-400/30 bg-accent-300/6 p-3">
             <label htmlFor={pastPosterId} className="mb-1.5 flex items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="clipboard" size={15} className="shrink-0" />지난 포스터 불러오기</label>
             <select
               id={pastPosterId}
@@ -387,7 +389,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           <div
             onClick={() => fileRef.current?.click()}
             className={[
-              'relative w-full aspect-[3/4] max-h-48 rounded-card overflow-hidden cursor-pointer',
+              'relative w-full aspect-3/4 max-h-48 rounded-card overflow-hidden cursor-pointer',
               'border-2 border-dashed border-border-default hover:border-accent-400 transition-colors',
               'flex flex-col items-center justify-center gap-2 bg-surface-high',
             ].join(' ')}

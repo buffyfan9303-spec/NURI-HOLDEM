@@ -89,7 +89,7 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
       className={[
         'flex items-center gap-3 px-3 py-3',
         'bg-surface-low border border-border-subtle rounded-card',
-        'transition-shadow duration-[var(--dur-fast)]',
+        'transition-shadow duration-(--dur-fast)',
         isSelfDragging
           ? 'opacity-0'                               // 원본은 투명 처리 (Overlay가 대신 표시)
           : isDragging

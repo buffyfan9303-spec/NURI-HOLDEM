@@ -748,7 +748,7 @@ function ToolCard({ name, lines, desc, icon, onClick, onPointerDown, fav, onTogg
         </span>
         <span className="flex min-h-[2.5em] min-w-0 flex-[1_1_4rem] flex-col justify-center text-xs font-bold leading-tight text-ink-primary">
           {(lines ?? [name]).map((l) => (
-            <span key={l} className="block [overflow-wrap:anywhere]">{l}</span>
+            <span key={l} className="block wrap-anywhere">{l}</span>
           ))}
         </span>
       </button>

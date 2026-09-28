@@ -311,7 +311,7 @@ function ModeIntro({ mode }: { mode: Mode }) {
         ].join(' ')}>
           {title}
         </h3>
-        <p className="mx-auto mt-1.5 max-w-[19rem] text-xs leading-relaxed text-ink-muted break-keep">{desc}</p>
+        <p className="mx-auto mt-1.5 max-w-76 text-xs leading-relaxed text-ink-muted break-keep">{desc}</p>
       </div>
     </div>
   );
@@ -337,14 +337,14 @@ function SignupSegment({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => 
     { m: 'signup-owner', label: '매장 업주' },
   ];
   return (
-    <div className="mb-4 grid grid-cols-2 gap-1 rounded-input border border-white/[0.06] bg-surface-base/70 p-1"
+    <div className="mb-4 grid grid-cols-2 gap-1 rounded-input border border-white/6 bg-surface-base/70 p-1"
       role="group" aria-label="가입 유형">
       {items.map(({ m, label }) => {
         const on = mode === m;
         return (
           <button key={m} type="button" aria-pressed={on} onClick={() => onChange(m)}
             className={['min-h-[40px] rounded-[10px] text-xs font-bold transition-colors',
-              on ? 'btn-primary !min-h-[40px] !px-0 !shadow-none' : 'text-ink-muted hover:text-ink-primary'].join(' ')}>
+              on ? 'btn-primary min-h-[40px]! px-0! shadow-none!' : 'text-ink-muted hover:text-ink-primary'].join(' ')}>
             {label}
           </button>
         );
@@ -356,11 +356,11 @@ function SignupSegment({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => 
 /** 인증 폼 입력의 공통 보정 — 시트보다 **어둡게** 눌러 넣는다.
  *  기본 .input 은 bg-surface-high(#1B243C)라 시트(#151C30)보다 밝아 블록이 튀어나와 보였다.
  *  레퍼런스처럼 입력이 뒤로 물러나야 제목과 CTA 가 앞으로 온다. */
-// ⚠ focus:!ring-0 — .input 기본은 border 변경 + ring-1 을 함께 준다. 라운드가 커진 이 필드에서는
+// ⚠ focus:ring-0! — .input 기본은 border 변경 + ring-1 을 함께 준다. 라운드가 커진 이 필드에서는
 //   두 선이 어긋나 이중 테두리로 보였다. 링을 끄고 바깥 글로우 한 겹으로 대신한다(대비는 유지).
 const FIELD_CLS = [
   'min-h-[50px] rounded-[14px] border-white/[0.07] bg-surface-base/60 text-[15px]',
-  'focus:border-accent-300 focus:!ring-0 focus:shadow-[0_0_0_3px_rgb(88_80_236_/_0.20)]',
+  'focus:border-accent-300 focus:ring-0! focus:shadow-[0_0_0_3px_rgb(88_80_236/0.20)]',
 ].join(' ');
 
 export default function AuthModal({ open, onClose, initialMode = 'login' }: AuthModalProps) {
@@ -395,7 +395,7 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
       {/* key={mode} — 모드가 바뀌면 다시 마운트돼 nameDialog 가 새 이름을 심는다(콜백 ref 는 마운트 때만 돈다) */}
       <div key={mode} ref={nameDialog} className="relative">
         {/* 앰비언트 — 오브의 빛이 시트 상단을 물들인다. 정적 2겹, 본문 뒤로만 깔린다. */}
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[19rem]"
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-76"
           style={{
             background: [
               'radial-gradient(52% 62% at 50% 8%, rgb(139 92 246 / 0.20) 0%, transparent 70%)',
@@ -404,7 +404,7 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
           }}
         />
         <button type="button" onClick={onClose} aria-label="닫기"
-          className="absolute right-2 top-0 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-ink-muted backdrop-blur-sm transition-colors hover:bg-white/[0.09] hover:text-ink-primary">
+          className="absolute right-2 top-0 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/8 bg-white/4 text-ink-muted backdrop-blur-xs transition-colors hover:bg-white/9 hover:text-ink-primary">
           <Icon name="close" size={17} />
         </button>
 
@@ -530,7 +530,7 @@ function LoginForm({ onClose, onForgot, onSignup }: { onClose: () => void; onFor
     try {
       await login(email.trim(), password, keepSignedIn);
       // 🔴 성공 토스트를 뺐다 (2026-09-18 실측): 버튼이 이미 '환영합니다!' 를 말하는데 토스트가
-      //   z-[120] 로 시트(z-[60]) **위** 구글 버튼 자리에 겹쳐 떴다(스크린샷 f020). 같은 말을 두 번 하면서
+      //   z-120 로 시트(z-[60]) **위** 구글 버튼 자리에 겹쳐 떴다(스크린샷 f020). 같은 말을 두 번 하면서
       //   성공 프레임의 렌더 부담만 키웠다 — 오너가 말한 '드득' 의 절반이 이 배치다.
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '';
@@ -571,7 +571,7 @@ function LoginForm({ onClose, onForgot, onSignup }: { onClose: () => void; onFor
       {/* 화면에서 가장 밝은 것 — btn-primary 의 보라 그라데이션 위에 블룸을 한 겹 더 얹는다 */}
       <StatefulActionButton ref={btnRef} label="로그인" successLabel="환영합니다!"
         disabled={!email.trim() || !password} onAction={doLogin} onDone={onClose}
-        className="w-full !min-h-[52px] !rounded-[14px] shadow-[0_10px_30px_-8px_rgb(88_80_236_/_0.65)] disabled:!shadow-none" />
+        className="w-full min-h-[52px]! rounded-[14px]! shadow-[0_10px_30px_-8px_rgb(88_80_236/0.65)] disabled:shadow-none!" />
 
       <SocialLoginButtons onError={(m) => setError(m)} keepSignedIn={keepSignedIn} />
       <ModeSwitch question="계정이 없으신가요?" action="회원가입" onClick={onSignup} />
@@ -625,7 +625,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
       <form onSubmit={sendCode} className="space-y-3">
         <Field label="이메일" type="email" required autoComplete="email" className={FIELD_CLS}
           value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-        <button type="submit" disabled={loading} className="btn-primary !min-h-[52px] !rounded-[14px] w-full shadow-[0_10px_30px_-8px_rgb(88_80_236_/_0.65)] disabled:!shadow-none disabled:opacity-60">
+        <button type="submit" disabled={loading} className="btn-primary min-h-[52px]! rounded-[14px]! w-full shadow-[0_10px_30px_-8px_rgb(88_80_236/0.65)] disabled:shadow-none! disabled:opacity-60">
           {loading ? '발송 중…' : '인증번호 받기'}
         </button>
         <button type="button" onClick={onBack} className="min-h-[44px] w-full text-xs text-ink-muted transition-colors hover:text-accent-200">

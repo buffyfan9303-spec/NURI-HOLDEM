@@ -301,7 +301,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     // 2026-09-25 MYSTORE-FULL-AUDIT #3 — 두 칸은 lg(1024)가 아니라 **xl(1280)부터**다. 1024 에선 업주 사이드 메뉴를 뺀
     //   남은 폭에서 왼쪽이 30rem 을 먼저 가져가 오른쪽 열이 175px 로 눌렸고, 날짜 input 글자공간 69.5px(글자 83.4 → −13.9),
     //   '금액' −8.2, ROI 기간 select −22.9 로 잘렸다(프로덕션 프리뷰 실측). 1024~1279 는 태블릿과 같은 36rem 한 칸으로 쌓는다.
-    <div data-main-enter-ready className="px-page-x pb-section pt-2 md:max-xl:mx-auto md:max-xl:max-w-[36rem] xl:grid xl:grid-cols-[minmax(0,30rem)_minmax(0,1fr)] xl:items-start xl:gap-5 xl:pt-4">
+    <div data-main-enter-ready className="px-page-x pb-section pt-2 md:max-xl:mx-auto md:max-xl:max-w-xl xl:grid xl:grid-cols-[minmax(0,30rem)_minmax(0,1fr)] xl:items-start xl:gap-5 xl:pt-4">
       <div data-testid="cal-first-screen" className="space-y-2 xl:sticky xl:top-28">
       {/* 월 이동 — 제목 18px · 좌우 이동 44px · '오늘' 은 이번 달·오늘이 아닐 때만 켠다(무반응 버튼 금지 대신 흐리게 두지 않고 숨긴다). */}
       <div data-main-enter className="flex items-center gap-1">
@@ -380,7 +380,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
                 data-cal-date={key}
                 className={[
                   'cal-day relative flex h-[50px] min-w-0 flex-col items-center justify-start gap-px rounded-input pt-1 md:h-[58px]',
-                  isPicked ? 'chip-aura shadow-glow' : net && net > 0 ? 'bg-emerald-400/[0.08] hover:bg-emerald-400/15' : net && net < 0 ? 'bg-danger/[0.08] hover:bg-danger/15' : 'hover:bg-surface-high/50',
+                  isPicked ? 'chip-aura shadow-glow' : net && net > 0 ? 'bg-emerald-400/8 hover:bg-emerald-400/15' : net && net < 0 ? 'bg-danger/8 hover:bg-danger/15' : 'hover:bg-surface-high/50',
                   outside ? 'opacity-35' : '',
                 ].join(' ')}>
                 <span className={['text-[13px] leading-4 tabular-nums md:text-[15px] md:leading-5', isToday ? 'font-extrabold text-accent-200' : 'font-semibold text-ink-primary'].join(' ')}>
@@ -426,7 +426,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
               const byId = !sch && it.scheduleId && onOpenSchedule ? it.scheduleId : undefined;
               const Row = (
                 <>
-                  <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full', KIND[it.kind].dot, 'bg-opacity-20'].join(' ')} aria-hidden>
+                  <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full', it.kind === 'spot' ? 'bg-accent-300/20' : KIND[it.kind].dot].join(' ')} aria-hidden>
                     <Icon name={KIND[it.kind].icon} size={13} />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -435,7 +435,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
                   </span>
                 </>
               );
-              const cls = 'flex w-full min-h-[var(--row-h-sm)] items-center gap-2.5 rounded-input px-2 py-1.5 text-left';
+              const cls = 'flex w-full min-h-(--row-h-sm) items-center gap-2.5 rounded-input px-2 py-1.5 text-left';
               return (
                 <li key={`${it.kind}:${i}`}>
                   {sch ? (
@@ -472,7 +472,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
             {dayOpenGames.slice(0, 10).map((sch) => (
               <li key={sch.id}>
                 <button type="button" onClick={() => onSelect(sch)}
-                  className="flex w-full min-h-[var(--row-h-sm)] items-center gap-2.5 rounded-input px-2 py-1.5 text-left transition-colors hover:bg-surface-high/50">
+                  className="flex w-full min-h-(--row-h-sm) items-center gap-2.5 rounded-input px-2 py-1.5 text-left transition-colors hover:bg-surface-high/50">
                   {likes.has(sch.id) && <span className="shrink-0 rounded-chip chip-aura px-1.5 py-0.5 text-2xs font-bold">찜</span>}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-ink-primary">{sch.title}</span>
@@ -515,7 +515,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
             {likedUpcoming.slice(0, 8).map((sch) => (
               <li key={sch.id}>
                 <button type="button" onClick={() => onSelect(sch)}
-                  className="flex w-full min-h-[var(--row-h-sm)] items-center gap-2.5 rounded-input px-2 py-1.5 text-left transition-colors hover:bg-surface-high/50">
+                  className="flex w-full min-h-(--row-h-sm) items-center gap-2.5 rounded-input px-2 py-1.5 text-left transition-colors hover:bg-surface-high/50">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-ink-primary">{sch.title}</span>
                     <span className="block truncate text-xs text-ink-muted">{sch.date.slice(5).replace('-', '.')} · {sch.pubName}</span>
@@ -794,7 +794,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
       {dayRows.length > 0 && (
         <ul className="mt-1 space-y-0.5" data-testid="cal-day-rows">
           {dayRows.map((r) => (
-            <li key={r.id} className="flex min-h-[var(--row-h-sm)] items-center gap-2 rounded-input px-2">
+            <li key={r.id} className="flex min-h-(--row-h-sm) items-center gap-2 rounded-input px-2">
               {/* 금액 0 = 계획 — '+0' 을 그리면 돈 기록으로 오해된다 */}
               {isMemoEntry(r) ? (<>
                 <span className="shrink-0 rounded-chip bg-surface-high px-1.5 py-0.5 text-[11px] font-bold leading-4 text-ink-secondary">계획</span>

@@ -166,7 +166,7 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
               <div className="flex gap-1">
                 {DOW.map((d) => (
                   <button key={d} type="button" onClick={() => toggleOff(n, d)}
-                    className={['flex-1 py-1 rounded text-2xs font-bold border', offs.includes(d) ? 'bg-rose-500/15 text-rose-300 border-rose-500/40' : 'bg-surface-high text-ink-muted border-border-subtle'].join(' ')}>{d}</button>
+                    className={['flex-1 py-1 rounded-sm text-2xs font-bold border', offs.includes(d) ? 'bg-rose-500/15 text-rose-300 border-rose-500/40' : 'bg-surface-high text-ink-muted border-border-subtle'].join(' ')}>{d}</button>
                 ))}
               </div>
             </div>
@@ -210,25 +210,32 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
   const [from, to] = monthRange(month);
   // 주 40h·주휴는 주 단위라 첫 주 월요일부터 읽는다(그 앞날 금액은 staffPay 가 이 달에 넣지 않는다).
   const loadFrom = weekStartOf(from);
+  // E(2026-09-28) — 매장 전환 가드: 앞 매장 출근 기록이 늦게 와서 지금 매장 급여표를 덮지 않게(alive).
   useEffect(() => {
+    let alive = true;
     const reload = () => getStaffSchedule(venueId, loadFrom, to)
-      .then((ss) => { setShifts(ss); setShiftErr(null); })
-      .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
+      .then((ss) => { if (alive) { setShifts(ss); setShiftErr(null); } })
+      .catch((e) => { if (alive) setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')); });
     // 숨은 판(내 매장 keep-alive)은 채널을 놓는다 — 다시 보이면(active) 이 효과가 다시 돌며 조용히 한 번 읽는다(로딩 표시 없음).
-    if (!active) return;
+    if (!active) return () => { alive = false; };
     reload();
-    return subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
+    const off = subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
+    return () => { alive = false; off(); };
   }, [venueId, loadFrom, to, shiftTick, active]);
   useEffect(() => {
+    let alive = true;
     getDealerShifts(venueId, loadFrom, to)
-      .then((ds) => { setDealers(ds); setDealerErr(null); })
-      .catch((e) => setDealerErr(msgOf(e, '딜러 근무 기록을 불러오지 못했습니다')));
+      .then((ds) => { if (alive) { setDealers(ds); setDealerErr(null); } })
+      .catch((e) => { if (alive) setDealerErr(msgOf(e, '딜러 근무 기록을 불러오지 못했습니다')); });
+    return () => { alive = false; };
   }, [venueId, loadFrom, to, shiftTick]);
   useEffect(() => {
+    let alive = true;
     setWageErr(null);
     getStaffWages(venueId)
-      .then((ws) => { const m: Record<string, number> = {}; ws.forEach((w) => (m[w.name] = w.hourlyWage)); setWages(m); })
-      .catch((e) => { setWages({}); setWageErr(msgOf(e, '시급을 불러오지 못했습니다')); });
+      .then((ws) => { if (!alive) return; const m: Record<string, number> = {}; ws.forEach((w) => (m[w.name] = w.hourlyWage)); setWages(m); })
+      .catch((e) => { if (alive) { setWages({}); setWageErr(msgOf(e, '시급을 불러오지 못했습니다')); } });
+    return () => { alive = false; };
   }, [venueId]);
 
   /** 직원·딜러 모두 staffPay.laborSummary 한 식으로 센다 — 대시보드 인건비 요약도 같은 함수다. */
@@ -256,7 +263,7 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
     <div className="space-y-3">
       <div className="flex items-center justify-center gap-1">
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
-        <span className="text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[5rem] text-center">{month}</span>
+        <span className="text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums w-20 text-center">{month}</span>
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -379,21 +386,24 @@ export function StaffWorkLog({ venueId, active = true }: { venueId: string; acti
   const [shiftErr, setShiftErr] = useState<string | null>(null);
   const [shiftTick, setShiftTick] = useState(0);
   const [from, to] = monthRange(month);
+  // E(2026-09-28) — 매장 전환 가드: 앞 매장 출근 기록이 늦게 와서 지금 매장 급여표를 덮지 않게(alive).
   useEffect(() => {
+    let alive = true;
     const reload = () => getStaffSchedule(venueId, from, to)
-      .then((ss) => { setShifts(ss); setShiftErr(null); })
-      .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
+      .then((ss) => { if (alive) { setShifts(ss); setShiftErr(null); } })
+      .catch((e) => { if (alive) setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')); });
     // 숨은 판(내 매장 keep-alive)은 채널을 놓는다 — 다시 보이면(active) 이 효과가 다시 돌며 조용히 한 번 읽는다(로딩 표시 없음).
-    if (!active) return;
+    if (!active) return () => { alive = false; };
     reload();
-    return subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
+    const off = subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
+    return () => { alive = false; off(); };
   }, [venueId, from, to, shiftTick, active]);
   const sorted = useMemo(() => [...shifts].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.name.localeCompare(b.name))), [shifts]);
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-center gap-1">
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
-        <span className="text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[5rem] text-center">{month}</span>
+        <span className="text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums w-20 text-center">{month}</span>
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
       </div>
       {shiftErr ? (
@@ -403,7 +413,7 @@ export function StaffWorkLog({ venueId, active = true }: { venueId: string; acti
             className="shrink-0 rounded-badge border border-danger/40 px-2.5 py-1 text-2xs font-bold text-danger-light hover:bg-danger/15 transition-colors">다시 시도</button>
         </div>
       ) : sorted.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">기록이 없습니다.</p> : (
-        <div className="rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle max-h-[24rem] overflow-y-auto">
+        <div className="rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle max-h-96 overflow-y-auto">
           {sorted.map((s, i) => (
             <div key={`${s.date}-${s.name}-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
               <span className="w-14 shrink-0 text-2xs text-accent-300 dark:text-accent-200 tabular-nums">{s.date.slice(5)}</span>
@@ -438,13 +448,16 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
   const yesterday = kstToday(Date.now() - 86_400_000);
   const canSelfEdit = (d: string) => !readOnly && (d === today || d === yesterday);
   const nowHm = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  // E(2026-09-28) — 매장 전환 가드: 앞 매장 출근 기록이 늦게 와서 지금 매장 급여표를 덮지 않게(alive).
   useEffect(() => {
+    let alive = true;
     const reload = () => getStaffSchedule(venueId, from, to)
-      .then((ss) => { setShifts(ss.filter((s) => myNames.includes(s.name))); setShiftErr(null); })
-      .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
-    if (!active) return; // 숨은 판은 채널을 놓는다 — 다시 보이면 조용히 한 번 읽는다
+      .then((ss) => { if (alive) { setShifts(ss.filter((s) => myNames.includes(s.name))); setShiftErr(null); } })
+      .catch((e) => { if (alive) setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')); });
+    if (!active) return () => { alive = false; }; // 숨은 판은 채널을 놓는다 — 다시 보이면 조용히 한 번 읽는다
     reload();
-    return subscribeStaffSchedule(venueId, reload); // 실시간 동기화
+    const off = subscribeStaffSchedule(venueId, reload); // 실시간 동기화
+    return () => { alive = false; off(); };
     /* eslint-disable-next-line */
   }, [venueId, from, to, shiftTick, user, active]);
   const setT = async (s: StaffShift, field: 'checkIn' | 'checkOut', val: string) => {
@@ -463,7 +476,7 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
         <h3 className="text-sm font-bold text-ink-primary">내 출근 관리 (출퇴근 기록)</h3>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-[44px] w-[44px] rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
-          <span className="text-xs font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[4.5rem] text-center">{month}</span>
+          <span className="text-xs font-bold text-accent-300 dark:text-accent-200 tabular-nums w-18 text-center">{month}</span>
           <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-[44px] w-[44px] rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
         </div>
       </div>
@@ -480,7 +493,7 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
           {sorted.map((s) => {
             const isToday = s.date === today;
             return (
-              <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-accent-400/50 bg-accent-300/[0.06]' : 'border-border-subtle bg-surface-base'].join(' ')}>
+              <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-accent-400/50 bg-accent-300/6' : 'border-border-subtle bg-surface-base'].join(' ')}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-bold text-ink-primary">{s.date.slice(5)}{isToday ? ' (오늘)' : ''}{s.confirmed && <span className="ml-1.5 text-2xs text-emerald-700 dark:text-emerald-400">확정</span>}</span>
                   {canSelfEdit(s.date) && (
@@ -492,8 +505,8 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-[6rem] disabled:opacity-60" /></label>
-                  <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-[6rem] disabled:opacity-60" /></label>
+                  <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
+                  <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} disabled={!canSelfEdit(s.date)} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-24 disabled:opacity-60" /></label>
                   {s.checkIn && s.checkOut && <span className="text-2xs text-accent-300 dark:text-accent-200 tabular-nums font-bold">{hours(s.checkIn, s.checkOut).toFixed(1)}h</span>}
                   {!canSelfEdit(s.date) && <span data-testid="shift-locked-note" className="basis-full text-2xs text-ink-muted">{readOnly ? '관리자 계정은 보기만 할 수 있어요. 출퇴근 기록은 직원 본인만 남깁니다.' : '오늘·어제 근무만 직접 기록할 수 있어요. 지난 근무는 업주에게 수정을 요청해 주세요.'}</span>}
                 </div>

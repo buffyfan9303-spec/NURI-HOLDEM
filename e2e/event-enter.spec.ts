@@ -26,7 +26,7 @@ const RECORDER = () => {
     // OverlayFallback = fixed inset-0 z-[45] aria-busy + 스피너.
     //   셀렉터는 여기 인라인으로 둔다 — 이 함수는 브라우저 안에서 돌아 바깥 상수를 못 본다.
     //   클래스 이스케이프(.z-\[45\])를 피하려고 속성 셀렉터로 잡는다.
-    const fb = document.querySelector('[class*="z-[45]"][aria-busy="true"]');
+    const fb = document.querySelector('[class~="z-45"][aria-busy="true"]');
     const root = document.querySelector('[role="dialog"][aria-label="이벤트"]');
     const sk = root?.querySelector('[aria-busy="true"] .skeleton') ?? null;
     const foil = root ? root.querySelectorAll('.foil').length : 0;

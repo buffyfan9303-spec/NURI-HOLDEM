@@ -17,8 +17,8 @@
 //   기준 매출 = 기준 엔트리 × 현금 단가,  차액 = 완납 매출 − 기준 매출.
 // 이걸 순이익이라 부르지 않는다 — 없는 비용을 아는 척하면 그 숫자로 오판한다.
 import {
-  buyinFinance, discountSummary, isBuyinExcluded, ledgerCounts, ZERO_TENDER,
-  type LedgerBuyin, type LedgerPlayer, type LedgerSession, type Tender, type DiscountSummary,
+  addonFinance, buyinFinance, discountSummary, isBuyinExcluded, ledgerCounts, ZERO_TENDER,
+  type AddonFinance, type LedgerBuyin, type LedgerPlayer, type LedgerSession, type Tender, type DiscountSummary,
 } from '../api/ledger';
 
 /** 손님 한 명 줄 — 순위 세 개(바인 수 · 머니인 · 미수)가 같은 행을 공유한다. */
@@ -86,6 +86,9 @@ export interface GameSettlement {
   /** 정산에서 빠진 것 — 무엇이 빠졌는지 밝히지 않으면 합계가 거짓말이 된다.
    *  count 는 **횟수**, entries 는 **금액 엔트리**(소수 가능)다. */
   removed: { count: number; entries: number; value: number; revenue: number };
+  /** 애드온(2026-09-28) — 바인과 **따로** 센다. revenue·unpaid·value·entries·buyinCount 어디에도 섞이지 않는다.
+   *  화면이 '완납 매출' 을 말할 때는 revenue + addon.revenue, '미수금' 은 unpaid + addon.unpaid 다. */
+  addon: AddonFinance;
 }
 
 export interface SettlementReport {
@@ -116,7 +119,13 @@ const zeroGame = (): Omit<GameSettlement, 'gameSeq' | 'title' | 'closed'> => ({
   discount: { count: 0, total: 0, cashTotal: 0, entryLoss: 0 },
   targetEntries: 0, targetRevenue: 0,
   removed: { count: 0, entries: 0, value: 0, revenue: 0 },
+  addon: { count: 0, revenue: 0, unpaid: 0, ticketWon: 0, tender: { ...ZERO_TENDER } },
 });
+
+function addAddon(into: AddonFinance, a: AddonFinance): void {
+  into.count += a.count; into.revenue += a.revenue; into.unpaid += a.unpaid; into.ticketWon += a.ticketWon;
+  for (const k of Object.keys(into.tender) as (keyof Tender)[]) into.tender[k] += a.tender[k];
+}
 
 /**
  * 하루치 정산 리포트.
@@ -180,12 +189,16 @@ export function settlementReport(
       g.value += f.value;
       g.tender.cash += f.tender.cash; g.tender.card += f.tender.card; g.tender.transfer += f.tender.transfer;
       g.tender.ticket += f.tender.ticket; g.tender.support += f.tender.support; g.tender.unpaid += f.tender.unpaid;
+      const a = addonFinance(b);
+      addAddon(g.addon, a);
 
       const cur = byName.get(b.playerName) ?? {
         name: b.playerName, visitorType: visitorOf.get(b.playerName) ?? null,
         buyins: 0, moneyIn: 0, paid: 0, unpaid: 0,
       };
-      cur.buyins += 1; cur.moneyIn += f.value; cur.paid += f.paid; cur.unpaid += f.unpaid;
+      // 손님 줄은 애드온까지 합친다 — 미수자 명단에서 애드온 미수가 빠지면 못 받는다. 바인 횟수(buyins)는 그대로.
+      cur.buyins += 1; cur.moneyIn += f.value + a.revenue + a.unpaid + a.ticketWon;
+      cur.paid += f.paid + a.revenue; cur.unpaid += f.unpaid + a.unpaid;
       byName.set(b.playerName, cur);
     }
     g.discount = discountSummary(kept, s);
@@ -208,6 +221,7 @@ export function settlementReport(
     total.discount.cashTotal += g.discount.cashTotal;
     total.removed.count += g.removed.count; total.removed.entries += g.removed.entries;
     total.removed.value += g.removed.value; total.removed.revenue += g.removed.revenue;
+    addAddon(total.addon, g.addon);
   }
 
   total.players = ledgerCounts(keptAll).players;

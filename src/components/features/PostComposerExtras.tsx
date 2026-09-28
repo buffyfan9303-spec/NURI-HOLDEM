@@ -112,7 +112,7 @@ function CardChip({ card, onRemove }: { card: Card; onRemove: () => void }) {
       type="button"
       onClick={onRemove}
       aria-label={`${card.rank} ${SUIT_NAME[card.suit]} 제거`}
-      className="group relative w-10 h-14 shrink-0 rounded-md bg-white border border-black/15 shadow-sm flex flex-col items-center justify-center focus:outline-none"
+      className="group relative w-10 h-14 shrink-0 rounded-md bg-white border border-black/15 shadow-xs flex flex-col items-center justify-center focus:outline-hidden"
     >
       <span className={['text-base font-extrabold leading-none tabular-nums', color].join(' ')}>{card.rank}</span>
       <span className={['text-sm leading-none mt-0.5', color].join(' ')}>{SUIT_GLYPH[card.suit]}</span>
@@ -221,7 +221,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
                   aria-pressed={active}
                   onClick={() => onChange({ ...value, tone })}
                   className={[
-                    'min-h-[36px] px-3 rounded-full border text-2xs font-semibold transition-colors focus:outline-none',
+                    'min-h-[36px] px-3 rounded-full border text-2xs font-semibold transition-colors focus:outline-hidden',
                     active ? activeCls : 'border-border-default bg-surface-mid text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >
@@ -301,7 +301,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
                         onClick={() => setPendingRank(active ? null : rank)}
                         className={[
                           'h-8 rounded-[4px] text-2xs font-bold tabular-nums select-none touch-manipulation transition-colors',
-                          'active:scale-[0.9] focus:outline-none',
+                          'active:scale-[0.9] focus:outline-hidden',
                           active
                             ? 'bg-accent-300/15 border border-accent-400 text-accent-200'
                             : 'bg-surface-mid border border-border-default text-ink-primary',
@@ -326,8 +326,8 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
                           aria-label={`${pendingRank} ${SUIT_NAME[suit]}`}
                           onClick={() => addCard(suit)}
                           className={[
-                            'h-11 rounded-md bg-white border border-black/15 shadow-sm flex items-center justify-center gap-1',
-                            'select-none touch-manipulation active:scale-[0.94] transition-transform focus:outline-none',
+                            'h-11 rounded-md bg-white border border-black/15 shadow-xs flex items-center justify-center gap-1',
+                            'select-none touch-manipulation active:scale-[0.94] transition-transform focus:outline-hidden',
                             taken ? 'opacity-25 cursor-not-allowed' : '',
                           ].join(' ')}
                         >
@@ -485,7 +485,7 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
                   aria-pressed={active}
                   onClick={() => onChange({ ...value, closesIn: key })}
                   className={[
-                    'min-h-[32px] px-2.5 rounded-full border text-2xs font-semibold transition-colors focus:outline-none',
+                    'min-h-[32px] px-2.5 rounded-full border text-2xs font-semibold transition-colors focus:outline-hidden',
                     active
                       ? 'bg-accent-300/15 border-accent-400 text-accent-200'
                       : 'bg-surface-mid border-border-default text-ink-muted hover:text-ink-secondary',

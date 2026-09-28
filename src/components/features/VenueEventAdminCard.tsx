@@ -59,7 +59,7 @@ export default function VenueEventAdminCard() {
   if (err == null && rows.length === 0) return null;
 
   return (
-    <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
+    <section className="rounded-card border border-accent-400/30 bg-accent-300/4 p-3 space-y-2">
       <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300">
         <Icon name="sparkles" size={15} className="shrink-0" />매장 이벤트 신청 · 제안
         <span className="text-2xs font-normal text-ink-muted">· 승인은 &lsquo;하겠다&rsquo; 표시 · 개설은 이벤트 관리에서</span>
@@ -74,7 +74,7 @@ export default function VenueEventAdminCard() {
                   <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">
                     {r.kind === 'campaign' ? '개설 신청' : '제안'}
                   </span>
-                  <span className="min-w-[5rem] flex-1 break-words text-xs font-bold text-ink-primary">
+                  <span className="min-w-20 flex-1 wrap-break-word text-xs font-bold text-ink-primary">
                     {r.venueName} <span className="font-normal text-ink-secondary">· {r.title}</span>
                   </span>
                   <span className="shrink-0 text-2xs tabular-nums text-ink-muted">
@@ -91,7 +91,7 @@ export default function VenueEventAdminCard() {
                     {r.desiredStart && <> · 희망 {r.desiredStart}{r.desiredEnd ? ` ~ ${r.desiredEnd}` : ''}</>}
                   </p>
                 )}
-                {r.body && <p className="break-words text-2xs leading-relaxed text-ink-secondary">{r.body}</p>}
+                {r.body && <p className="wrap-break-word text-2xs leading-relaxed text-ink-secondary">{r.body}</p>}
                 <p className="text-2xs text-ink-muted">신청 {r.requester || '(알 수 없음)'}</p>
 
                 <input value={note[r.id] ?? ''} onChange={(e) => setNote((n) => ({ ...n, [r.id]: e.target.value }))}

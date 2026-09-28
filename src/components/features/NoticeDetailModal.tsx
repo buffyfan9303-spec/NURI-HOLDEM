@@ -34,7 +34,7 @@ export default function NoticeDetailModal({ notice, open, onClose, isAdmin, onEd
 
         {/* 제목 — 게시글 상세(PostDetailModal)와 같은 배율. 공지는 게시글보다 **더** 정확히 읽혀야 하는 글인데
             예전엔 text-lg 로 더 작았다. 본문이 16px 이므로 1.25/1.5 배로 벌린다. */}
-        <h2 className="mt-2 text-xl font-bold leading-tight tracking-tight text-ink-primary break-words sm:text-2xl">
+        <h2 className="mt-2 text-xl font-bold leading-tight tracking-tight text-ink-primary wrap-break-word sm:text-2xl sm:leading-8">
           {notice.title}
         </h2>
 
@@ -55,7 +55,7 @@ export default function NoticeDetailModal({ notice, open, onClose, isAdmin, onEd
         <div className="mt-4">
           {notice.body ? (
             <div data-notice-body
-              className="break-words text-base leading-[1.75] text-ink-primary [&>*+*]:mt-[1em] [&>*+ol]:mt-[1.25em] [&>ol+*]:mt-[1.25em]">
+              className="wrap-break-word text-base leading-[1.75] text-ink-primary [&>*+*]:mt-[1em] [&>*+ol]:mt-[1.25em] [&>ol+*]:mt-[1.25em]">
               {parseNoticeBody(notice.body).map((b, i) => b.kind === 'p' ? (
                 <p key={i} className="whitespace-pre-wrap">{b.lines.join('\n')}</p>
               ) : (

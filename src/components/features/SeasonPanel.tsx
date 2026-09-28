@@ -1,7 +1,7 @@
 // src/components/features/SeasonPanel.tsx
 // 매장 시즌(분기) 리그 — 현재 시즌 랭킹 + 운영자 시즌 생성/종료(상위3 자동 보상) + 지난 시즌 아카이브.
 // canManage=true(운영자)면 생성/종료 UI 노출. 랭킹·아카이브는 누구나 조회(공개).
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { shareChampionCard, shareChampionCardKakao } from '../../lib/recordCard';
 import { kakaoConfigured } from '../../lib/kakao';
@@ -44,12 +44,20 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
   const [realNameOptIns, setRealNameOptIns] = useState<ReadonlySet<string>>(() => new Set<string>());
   const showsRealName = (nickname: string) => realNameOptIns.has(nickname.trim().toLowerCase());
 
+  // E(2026-09-28) — 매장 전환 가드. A 매장 응답이 B 로 바꾼 뒤 도착하면 A 시즌·챔피언이 B 화면에 남았고,
+  //   특히 A 의 **실명 공개 동의 목록**이 B 순위표에 적용될 수 있었다(동의 안 한 사람의 실명 노출 위험).
+  const venueRef = useRef(venueId);
+  venueRef.current = venueId;
   const load = () => {
-    listVenueSeasons(venueId).then(setSeasons).catch(() => setSeasons([]));
-    getCurrentSeasonStandings(venueId).then(setStandings).catch(() => {});
-    getVenueHallOfFame(venueId).then(setHof).catch(() => {});
-    getVenueRealNameOptIns(venueId).then(setRealNameOptIns).catch(() => {});
+    const v = venueId;
+    const mine = <T,>(set: (x: T) => void) => (x: T) => { if (venueRef.current === v) set(x); };
+    listVenueSeasons(v).then(mine(setSeasons)).catch(() => { if (venueRef.current === v) setSeasons([]); });
+    getCurrentSeasonStandings(v).then(mine(setStandings)).catch(() => {});
+    getVenueHallOfFame(v).then(mine(setHof)).catch(() => {});
+    getVenueRealNameOptIns(v).then(mine(setRealNameOptIns)).catch(() => {});
   };
+  // 매장이 바뀌면 앞 매장 표를 즉시 비운다(실명 동의 목록은 빈 집합 = 전원 닉네임이 안전한 기본값).
+  useEffect(() => { setSeasons(null); setStandings([]); setHof([]); setArchiveId(null); setArchiveRows([]); setRealNameOptIns(new Set<string>()); }, [venueId]);
   // 순위 입력(venue_rankings 변경) 시 시즌 standings·HOF 즉시 갱신(실시간). 퍼블리케이션 등록 완료.
   // 숨은 판(내 매장 keep-alive)은 채널을 놓는다 — 다시 보이면 이 효과가 다시 돌며 조용히 한 번 읽는다.
   useEffect(() => { if (!paneActive) return; load(); return subscribeRankings(venueId, load); }, [venueId, paneActive]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -114,7 +122,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
 
       {/* 현재 시즌 + 랭킹 */}
       {active ? (
-        <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3">
+        <div className="rounded-card border border-accent-400/30 bg-accent-300/4 p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-accent-200">{active.name}</p>
@@ -134,7 +142,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
 
       {/* 🏆 역대 챔피언(명예의 전당) */}
       {hof.length > 0 && (
-        <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
+        <div className="rounded-card border border-accent-400/30 bg-accent-300/5 p-3">
           <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-gold-300"><Icon name="trophy" size={15} className="shrink-0" />역대 챔피언</p>
           <ul className="space-y-1.5">
             {hof.map((h) => (

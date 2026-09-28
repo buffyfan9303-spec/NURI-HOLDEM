@@ -404,7 +404,7 @@ export default function NotificationPanel({
                   <button
                     type="button"
                     onClick={handleMarkAll}
-                    className="tap-44 py-2 -my-2 text-2xs font-semibold text-accent-300 hover:text-accent-200 transition-colors focus:outline-none"
+                    className="tap-44 py-2 -my-2 text-2xs font-semibold text-accent-300 hover:text-accent-200 transition-colors focus:outline-hidden"
                   >
                     모두 읽음
                   </button>
@@ -427,7 +427,7 @@ export default function NotificationPanel({
               <button
                 type="button"
                 onClick={handleBlock}
-                className="text-2xs font-semibold text-ink-muted hover:text-danger-light transition-colors focus:outline-none"
+                className="text-2xs font-semibold text-ink-muted hover:text-danger-light transition-colors focus:outline-hidden"
               >
                 차단
               </button>
@@ -516,10 +516,10 @@ export default function NotificationPanel({
                       <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{bubbleTime(m.createdAt)}</span>
                     )}
                     <p className={[
-                      'max-w-[75%] whitespace-pre-wrap break-words rounded-card px-3 py-2 text-xs leading-snug',
+                      'max-w-[75%] whitespace-pre-wrap wrap-break-word rounded-card px-3 py-2 text-xs leading-snug',
                       m.mine
-                        ? 'rounded-br-sm bg-accent-300 text-white'
-                        : 'rounded-bl-sm bg-surface-high text-ink-primary',
+                        ? 'rounded-br-xs bg-accent-300 text-white'
+                        : 'rounded-bl-xs bg-surface-high text-ink-primary',
                     ].join(' ')}>
                       {m.body}
                     </p>
@@ -544,7 +544,7 @@ export default function NotificationPanel({
                 maxLength={2000}
                 placeholder="쪽지 입력…"
                 aria-label="쪽지 입력"
-                className="min-w-0 flex-1 resize-none rounded-input border border-border-subtle bg-surface-high/60 px-3 py-2 text-xs text-ink-primary placeholder:text-ink-muted focus:border-accent-300 focus:outline-none"
+                className="min-w-0 flex-1 resize-none rounded-input border border-border-subtle bg-surface-high/60 px-3 py-2 text-xs text-ink-primary placeholder:text-ink-muted focus:border-accent-300 focus:outline-hidden"
               />
               <button
                 type="button"
@@ -572,7 +572,7 @@ export default function NotificationPanel({
                   autoFocus
                   placeholder="받는 사람 닉네임 검색"
                   aria-label="받는 사람 닉네임 검색"
-                  className="w-full rounded-input border border-border-subtle bg-surface-high/60 py-2 pl-8 pr-3 text-xs text-ink-primary placeholder:text-ink-muted focus:border-accent-300 focus:outline-none"
+                  className="w-full rounded-input border border-border-subtle bg-surface-high/60 py-2 pl-8 pr-3 text-xs text-ink-primary placeholder:text-ink-muted focus:border-accent-300 focus:outline-hidden"
                 />
               </div>
             </div>

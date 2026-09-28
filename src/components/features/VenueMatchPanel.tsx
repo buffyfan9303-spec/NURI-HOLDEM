@@ -162,7 +162,7 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
                   </span>
                 )}
               </div>
-              <p className="whitespace-pre-wrap break-words text-sm text-ink-primary">{p.note}</p>
+              <p className="whitespace-pre-wrap wrap-break-word text-sm text-ink-primary">{p.note}</p>
               <ul className="space-y-1">
                 {rs.length === 0
                   ? <li className="text-2xs text-ink-muted">받은 신청 없음</li>
@@ -170,7 +170,7 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
                     <li key={r.id} className="flex flex-wrap items-center gap-2 rounded-input bg-surface-base/60 px-2.5 py-2">
                       <VenueChip name={r.venue.name} region={r.venue.region} />
                       <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold', RESP_BADGE[r.status].cls].join(' ')}>{RESP_BADGE[r.status].label}</span>
-                      {r.message && <span className="w-full text-2xs text-ink-secondary break-words">{r.message}</span>}
+                      {r.message && <span className="w-full text-2xs text-ink-secondary wrap-break-word">{r.message}</span>}
                       <span className="ml-auto flex gap-1.5">
                         {r.status === 'pending' && canConfigure && <>
                           <button type="button" disabled={busy} onClick={() => run(() => decideMatchResponse(r.id, true), '수락했습니다', '실패')} className={BTN_OK}>수락하기</button>
@@ -203,7 +203,7 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
                     : canConfigure && applyId !== p.id && <button type="button" disabled={busy} onClick={() => { setApplyId(p.id); setApplyMsg(''); }} className={BTN_OK}>신청하기</button>}
                 </span>
               </div>
-              <p className="whitespace-pre-wrap break-words text-sm text-ink-primary">{p.note}</p>
+              <p className="whitespace-pre-wrap wrap-break-word text-sm text-ink-primary">{p.note}</p>
               {applyId === p.id && !sent && (
                 <div className="flex flex-wrap gap-1.5 border-t border-border-subtle pt-2">
                   {/* 320 에서 버튼 둘과 한 줄에 두면 placeholder 가 잘린다(실측 '한마디(선틱') — 입력은 전체 폭 */}

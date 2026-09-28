@@ -191,13 +191,13 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   );
 
   return (
-    // ⚠ [container-type:size] 는 장식이 아니라 **레이아웃의 전제**다.
+    // ⚠ @container-size 는 장식이 아니라 **레이아웃의 전제**다.
     //   본문 3열·프라이즈 열·지표 레일은 전부 `.clk-*` 컨테이너 쿼리(src/index.css)로 켜지는데,
     //   컨테이너 쿼리는 **container-type 이 걸린 조상이 하나도 없으면 영원히 거짓**이다 —
     //   즉 이게 없으면 TV 는 조건이 참이 될 길이 없어 1열로 굳고 프라이즈·지표 열이 통째로 사라진다.
     //   (2026-09-11 e008b02 가 md:landscape: → .clk-* 로 갈아타면서 TournamentClock 쪽만 확인하고
     //    이쪽 루트를 빠뜨렸다. 뷰포트가 곧 스테이지라 cq 경계값은 종전 md:landscape: 와 같다.)
-    <div ref={rootRef} className="fixed inset-0 z-[80] flex flex-col text-white select-none [container-type:size]"
+    <div ref={rootRef} className="fixed inset-0 z-80 flex flex-col text-white select-none @container-size"
       style={{ ...clkVars, background: 'var(--clk-bg, #06080F)' }}>
       {/* 보드는 ClockStage 한 벌 — 운영자 화면(TournamentClock)과 **같은 마크업**이다.
           여기서 하는 일은 데이터(구독·폴링·테마·QR·광고)와 TV 전용 조작(게임 전환·전체화면·닫기)뿐이다. */}

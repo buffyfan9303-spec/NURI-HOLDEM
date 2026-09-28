@@ -22,7 +22,7 @@ interface Props {
    *   cover 는 가로 59% 만 남겨 글자 토막만 보였다.
    * · 즉 기본값 contain 은 '보존', cover 는 '파괴' 쪽이다. 예외가 필요하면 이 prop 으로 탈출한다.
    *
-   * ⚠ 호출부에서 `!object-contain` 으로 덮던 땜질 3곳(CommentThread ×2 · PostDetailModal)은
+   * ⚠ 호출부에서 `object-contain!` 으로 덮던 땜질 3곳(CommentThread ×2 · PostDetailModal)은
    *    이 기본값으로 대체돼 같은 커밋에서 제거했다. 다시 붙이지 말 것.
    */
   fit?: 'cover' | 'contain';

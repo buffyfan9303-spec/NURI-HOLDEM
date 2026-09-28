@@ -1,0 +1,8 @@
+{
+  "_comment": "2026-09-28 최초 측정(scratch build, preview:4599, light 테마만, img 제외). 늘면 실패 — 줄이면 이 파일을 갱신해라. nested-interactive(홈/라이브 각 1건=버튼 안 버튼 5곳)는 알려진 채무로 남긴다.",
+  "home": 1,
+  "live": 1,
+  "community": 0,
+  "tools": 0,
+  "calendar": 0
+}

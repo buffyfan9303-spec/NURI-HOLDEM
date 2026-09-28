@@ -15,11 +15,14 @@ import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 import { getComments, logActivity } from '../../api/community';
 import { createUndoQueue } from '../../lib/undoableDelete';
 import Icon from '../atoms/Icon';
+import { useResyncOnWake } from '../../lib/realtimeResync';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { isVisited, createReqGuard } from '../../lib/ownerReservations';
 
 interface MyPostersTabProps {
   schedules: Schedule[];
+  /** 내 매장 전환기에서 고른 매장(2026-09-28). 없으면 예전처럼 프로필 매장. */
+  venueId?: string | null;
   onCreate: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
@@ -36,7 +39,7 @@ interface MyPostersTabProps {
 }
 
 /** 게임 관리 — 승인 업주가 본인 포스터(게임)와 예약을 관리. */
-export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking, onOpenSchedule, active = true }: MyPostersTabProps) {
+export default function MyPostersTab({ schedules, venueId: venueIdProp = null, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking, onOpenSchedule, active = true }: MyPostersTabProps) {
   const { user, isApprovedOwner } = useAuth();
   const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
   const [ops, setOps] = useState<Record<string, PosterOpsSummary>>({}); // scheduleId → 연결 장부 운영 요약
@@ -48,19 +51,25 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
   //   서버는 허용하는데 화면은 빈 칸인 상태, 20260911e 가 직원 목록에서 겪은 바로 그 모양이다.
   //   ⚠ ownerId 절을 함께 남긴다: venue_id 가 NULL 인 옛 포스터(매장 없이 등록)는 매장 기준으로
   //     잡히지 않는다. 둘을 OR 로 두면 대표에게 보이던 것이 하나도 사라지지 않는다.
-  const venueId = user?.venueId || schedules.find((s) => s.ownerId === user?.id)?.venueId;
-  const myPosters = schedules.filter((s) => s.ownerId === user?.id || (!!venueId && s.venueId === venueId));
+  // 2026-09-28 — 전환기에서 **고른 매장**이 기준이다(예전엔 늘 프로필 매장이라 B 를 골라도 A 포스터가 보였다).
+  //   고른 매장이 있으면 그 매장 포스터 + 매장 없이 올린 내 옛 포스터만. 없으면 종전 규칙 그대로.
+  const venueId = venueIdProp || user?.venueId || schedules.find((s) => s.ownerId === user?.id)?.venueId;
+  const myPosters = venueIdProp
+    ? schedules.filter((s) => s.venueId === venueIdProp || (!s.venueId && s.ownerId === user?.id))
+    : schedules.filter((s) => s.ownerId === user?.id || (!!venueId && s.venueId === venueId));
 
   const [resCounts, setResCounts] = useState<Record<string, number>>({}); // scheduleId → 예약 수
   useEffect(() => {
     if (!venueId || !active) return; // 숨은 동안엔 채널을 물고 있지 않는다 — 다시 보일 때 아래 reload 가 재검증
     const ids = myPosters.map((p) => p.id);
+    let alive = true;   // E(2026-09-28) — 매장 전환 뒤 도착한 앞 매장 응답을 버린다
     const reload = () => {
-      getVenueReserverCounts(venueId).then(setReserverCounts).catch(() => {});
-      getReservationCounts(ids).then(setResCounts).catch(() => {});
+      getVenueReserverCounts(venueId).then((c) => { if (alive) setReserverCounts(c); }).catch(() => {});
+      getReservationCounts(ids).then((c) => { if (alive) setResCounts(c); }).catch(() => {});
     };
     reload();
-    return subscribeReservations(reload, ids); // 실시간: 내 포스터 예약만 수신(서버 필터 — 전 매장 수신 방지)
+    const off = subscribeReservations(reload, ids); // 실시간: 내 포스터 예약만 수신(서버 필터 — 전 매장 수신 방지)
+    return () => { alive = false; off(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, myPosters.length, active]);
 
@@ -68,13 +77,20 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
   // ⚠ venueId 만 보면 keep-alive 로 숨어 있는 동안 일어난 장부 개설·마감·순위 저장이 반영되지 않아
   //   '장부 +'·'순위 미입력'·바인/매출 칩이 낡은 채 남는다(새로고침해야 맞는 값이 나왔다).
   //   다시 보일 때(active 상승) 재조회하고, 보고 있는 동안은 장부 변경을 구독한다.
+  // E(2026-09-28) — 요청 당시 매장이 아직 지금 매장일 때만 싣는다(렌더 중 ref 쓰기 대신 effect 에서 갱신).
+  const opsOwner = useRef<string | undefined>(venueId);
+  useEffect(() => { opsOwner.current = venueId; setOps({}); }, [venueId]);
   const reloadOps = useCallback(() => {
     if (!venueId || !onOpenLedger) return;
-    getPosterOpsSummaries(venueId).then(setOps).catch(() => {});
+    const v = venueId;
+    getPosterOpsSummaries(v).then((o) => { if (opsOwner.current === v) setOps(o); }).catch(() => {});
   }, [venueId, onOpenLedger]);
   useEffect(() => { if (active) reloadOps(); }, [active, reloadOps]);
   // 순위 저장은 장부 테이블을 건드리지 않으므로 구독으로는 오지 않는다 — 그 갱신은 위 active 상승분이 맡는다
-  useEffect(() => { if (active && venueId) return subscribeLedger(venueId, reloadOps); }, [active, venueId, reloadOps]);
+  // F(2026-09-28) — 바인 취소(DELETE)도 받는다. 행 id 를 들고 있지 않은 요약 화면이라 **이 매장 여부를 모른 채** 다시 읽는다
+  //   (삭제는 드물다 — 2026-09-25 누적 buyins 112건). 요약 한 번 재조회가 매출 칩이 취소 전 숫자로 굳는 것보다 싸다.
+  useEffect(() => { if (active && venueId) return subscribeLedger(venueId, reloadOps, { ownsRow: () => true }); }, [active, venueId, reloadOps]);
+  useResyncOnWake(reloadOps, active);
 
   // 체크인은 예약 테이블을 건드리지 않는다 — 손님이 QR 체크인해도 '✓ 방문' 이 안 뜨던 이유.
   // 펼쳐 둔 명단만 다시 읽도록 신호만 올린다(명단과 방문 판정은 같은 RPC 가 함께 준다).
@@ -549,7 +565,7 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
 }
 function Cell({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
   return (
-    <div className="rounded bg-surface-base border border-border-subtle py-1.5">
+    <div className="rounded-sm bg-surface-base border border-border-subtle py-1.5">
       <p className={['text-sm font-bold tabular-nums leading-none', gold ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{value}</p>
       <p className="text-2xs text-ink-muted mt-0.5">{label}</p>
     </div>

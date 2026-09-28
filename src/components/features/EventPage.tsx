@@ -168,12 +168,12 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
     /* ⚠ 이 자리는 `return (` 바로 뒤 = **식(expression) 자리** 라
        {/∗ … ∗/} 형태가 올 수 없다(빈 객체 리터럴로 읽힌 뒤 <div 에서 파서가 무너진다).
        2026-09-17 에 이 부류로 배포를 한 번 깨뜨렸다 — 위 주석처럼 **JS 블록 주석**을 쓴다.
-       z-[55] — **z-[60] 이면 안 된다.** Modal.tsx 가 정해 둔 층이다: z-[60] 은 시트·모달, z-[55] 는 전체화면 page 변형.
-        z-[60] 으로 두면 이 오버레이와 안내 시트가 **같은 층**이 되어 DOM 순서로 이 판이 이기고,
+       z-55 — **z-[60] 이면 안 된다.** Modal.tsx 가 정해 둔 층이다: z-60 은 시트·모달, z-55 는 전체화면 page 변형.
+        z-60 으로 두면 이 오버레이와 안내 시트가 **같은 층**이 되어 DOM 순서로 이 판이 이기고,
         배너의 '프로필에서 본인인증하기' 를 눌러도 시트가 뒤에 그려져 **아무 일도 안 나는 것처럼 보인다**
         (그다음 뒤로가기 한 번은 보이지 않는 시트를 닫느라 먹힌다). 2026-09-17 스윕에서 확인. */
     <div ref={dialogRef} inert={!open || undefined}
-      className={['fixed inset-0 z-[55] overflow-y-auto bg-surface-base', open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`].join(' ')}
+      className={['fixed inset-0 z-55 overflow-y-auto bg-surface-base', open ? PAGE_ENTER : `${PAGE_LEAVE} pointer-events-none`].join(' ')}
       role="dialog" aria-modal="true" aria-label="이벤트">
       {/* 🔴 2026-09-18 오너: "PC 버젼에서 모든 탭이 제대로 잘 움직이다가 이벤트만 가면 갑자기
           전체화면으로 바뀌면서 지혼자서 이상하게 돼 이 부분도 수정 다른 탭들처럼".
@@ -190,7 +190,7 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
           6px 만 손가락에 닿았다 — 이 화면의 유일한 탈출구다. pt 에 얹어 헤더 자체를 내린다
           (루트 스크롤러에 얹으면 `sticky top-0` 이 스크롤포트 top=0 에 붙어 다시 상태바로 들어간다).
           py-2.5 를 pt/pb 로 가른 이유: 같은 속성을 두 클래스가 쓰면 캐스케이드 순서에 결과가 달린다. */}
-      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-surface-base/95 px-page-x pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] backdrop-blur">
+      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border-subtle bg-surface-base/95 px-page-x pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] backdrop-blur-sm">
         {/* hit: 시각 40px 그대로, 손가락 영역만 44px(TOUCH-01 — 유저 모바일 99% 화면) */}
         <button type="button" onClick={onClose} aria-label="닫기"
           className="hit -ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-input text-ink-secondary transition-colors hover:bg-surface-high">
@@ -300,7 +300,7 @@ function Hero({ board, left, total, user, onLogin, av }: {
       {/* 진행 막대 — 자기완결 소형 진행바는 §20.4 예외로 width 전환이 허용된다 */}
       <div className="relative mt-2 flex items-center gap-2">
         <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-high">
-          <div className="h-full rounded-full bg-gradient-to-r from-accent-400 to-fuchsia-500 transition-[width] duration-[var(--dur-panel)]"
+          <div className="h-full rounded-full bg-linear-to-r/srgb from-accent-400 to-fuchsia-500 transition-[width] duration-(--dur-panel)"
             style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
         </div>
         <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{done}/{total} 개봉</span>
@@ -386,7 +386,7 @@ function EventVerifyNotice({ idOn, live, loggedIn, verified }: {
   }
   if (loggedIn && !verified) {
     return (
-      <section data-testid="event-verify-notice" className="mt-3 rounded-aura border border-danger/40 bg-danger/[0.08] px-3 py-2.5">
+      <section data-testid="event-verify-notice" className="mt-3 rounded-aura border border-danger/40 bg-danger/8 px-3 py-2.5">
         <p className="flex items-start gap-1.5 text-2xs font-bold text-danger-deep dark:text-danger-light">
           <Icon name="alert" size={13} className="mt-px shrink-0" />
           본인인증을 완료해야 카드를 열 수 있어요
@@ -443,7 +443,7 @@ function CardTile({ card, onPick, disabled }: { card: EventCard; onPick: () => v
   const b = BACKS[card.idx % BACKS.length];
   return (
     <button type="button" onClick={onPick} disabled={disabled} aria-label={`${card.idx}번 카드 열기`}
-      className={['foil group relative flex aspect-square items-center justify-center overflow-hidden rounded-input border border-white/10 bg-gradient-to-br transition-transform',
+      className={['foil group relative flex aspect-square items-center justify-center overflow-hidden rounded-input border border-white/10 bg-linear-to-br/srgb transition-transform',
         b.hue, disabled ? 'opacity-50' : 'hover:-translate-y-0.5 active:scale-[0.96]'].join(' ')}>
       <BackArt v={card.idx % BACKS.length} ink={b.ink} />
       <span className="relative text-[10px] font-bold tabular-nums text-white/75">{card.idx}</span>
@@ -476,10 +476,10 @@ function TearSheet({ card, phase, result, busy, voucherTitle, onOpen, onClose }:
     </>
   );
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-5"
+    <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/75 p-5"
       onClick={phase === 'result' ? onClose : undefined}>
-      <div className="w-full max-w-[17rem]" onClick={(e) => e.stopPropagation()}>
-        <div className="relative mx-auto aspect-[4/5] w-44">
+      <div className="w-full max-w-68" onClick={(e) => e.stopPropagation()}>
+        <div className="relative mx-auto aspect-4/5 w-44">
           {/* 결과(뒤에 깔린다) */}
           {phase !== 'confirm' && (
             <>
@@ -510,7 +510,7 @@ function TearSheet({ card, phase, result, busy, voucherTitle, onOpen, onClose }:
               ⚠ 쉬는 동안에는 **한 장**으로 그린다. 두 조각을 미리 겹쳐 두면 각 조각의 테두리가 겹치는 선이
                  그대로 보여, 아직 찢지도 않은 카드에 사선 이음매가 나타난다(시안 캡처에서 확인). */}
           {phase === 'confirm' && (
-            <div aria-hidden className={['foil absolute inset-0 overflow-hidden rounded-card border border-white/15 bg-gradient-to-br', b.hue, busy ? 'anim-strain' : ''].join(' ')}>
+            <div aria-hidden className={['foil absolute inset-0 overflow-hidden rounded-card border border-white/15 bg-linear-to-br/srgb', b.hue, busy ? 'anim-strain' : ''].join(' ')}>
               {face}
             </div>
           )}
@@ -518,7 +518,7 @@ function TearSheet({ card, phase, result, busy, voucherTitle, onOpen, onClose }:
             <>
               {['tear-l', 'tear-r'].map((side, i) => (
                 <div key={side} aria-hidden
-                  className={['absolute inset-0 overflow-hidden rounded-card border border-white/15 bg-gradient-to-br',
+                  className={['absolute inset-0 overflow-hidden rounded-card border border-white/15 bg-linear-to-br/srgb',
                     b.hue, side, i === 0 ? 'anim-tear-l' : 'anim-tear-r'].join(' ')}>
                   {face}
                 </div>

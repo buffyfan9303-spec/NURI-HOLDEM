@@ -161,14 +161,14 @@ function MarketplaceTab({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="제목으로 검색…"
             // 44px(2026-09-27 점검: 40.8) — 공용 .input 높이는 그대로 두고 여기만 키운다. -my 로 줄 높이(40.8)는 그대로.
-            className="input pl-9 min-h-[44px] -my-[1.6px]"
+            className="input pl-9 min-h-[44px] my-[-1.6px]"
           />
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
         </div>
         <button
           type="button"
           onClick={onCreate}
-          className="btn-primary text-xs px-3 shrink-0 min-h-[44px] -my-[1.6px]"
+          className="btn-primary text-xs px-3 shrink-0 min-h-[44px] my-[-1.6px]"
         >
           글쓰기
         </button>
@@ -182,8 +182,8 @@ function MarketplaceTab({
       {/* flow-root — 안 레일의 -my 가 이 상자 밖으로 새어(마진 상쇄) 칩이 행 가운데가 아니라 아래로 21px 매달려 있었다(2026-09-27 실측). 글자 자리는 그대로다. */}
       <div className="h-6 flow-root">
       {/* 가로도 44px(2026-09-27 점검: '전체'·'용품' 22px) — 칩마다 좌우 11px(두 글자 22px + 22 = 44), 칩 사이 여백 없음 → 글자 간격은 고르게 22px(종전 12.75).
-          레일 -mx-[11px] 로 첫 글자는 종전처럼 왼쪽 끝에 선다(누름 면만 여백 쪽으로 11px 나간다). */}
-      <div data-market-catbar="" className="-my-2.5 -mx-[11px] flex items-center overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
+          레일 mx-[-11px] 로 첫 글자는 종전처럼 왼쪽 끝에 선다(누름 면만 여백 쪽으로 11px 나간다). */}
+      <div data-market-catbar="" className="-my-2.5 mx-[-11px] flex items-center overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
         {CATEGORIES.map((cat) => {
           const active = category === cat.id;
           return (
@@ -207,12 +207,12 @@ function MarketplaceTab({
       {/* ── 정렬·필터 바 ────────────────────────────────────────────── */}
       {/* !mt 18.7px(종전 12.75) — 위 분류 칩(46.75px 누름 면)과 아래 정렬·거래완료(44px) 누름 면이 겹치지 않게 중심 간격 ≥ 44.
           (겹치면 뒤에 오는 정렬 칩이 분류 칩 아래쪽 15px 를 가로챘다 — 2026-09-27 elementFromPoint 실측). 이 줄부터 아래는 약 16px 내려간다. */}
-      <div className="!mt-[1.1rem] flex items-center justify-between gap-2 text-2xs">
+      <div className="mt-[1.1rem]! flex items-center justify-between gap-2 text-2xs">
         <div className="flex items-center gap-1">
           <SortPill active={sortBy === 'recent'}  onClick={() => goSubTab('market-cat', SORT_ORDER, sortBy, 'recent',  () => setSortBy('recent'))}  label="최신순"   />
           <SortPill active={sortBy === 'popular'} onClick={() => goSubTab('market-cat', SORT_ORDER, sortBy, 'popular', () => setSortBy('popular'))} label="조회수순" />
           {/* 체크박스+글자를 한 label 로 — 네이티브 체크박스는 13px 였다(2026-09-27 점검). 실제 높이 44px, -my 로 줄 높이(28.7)는 그대로. */}
-          <label htmlFor="includeSold" className="ml-2 inline-flex h-[44px] -my-[7.65px] cursor-pointer items-center gap-1 text-ink-muted">
+          <label htmlFor="includeSold" className="ml-2 inline-flex h-[44px] my-[-7.65px] cursor-pointer items-center gap-1 text-ink-muted">
             <input
               id="includeSold"
               type="checkbox"
@@ -238,14 +238,14 @@ function MarketplaceTab({
         <div className={['rounded-aura border card-aura overflow-hidden', showSkel ? '' : 'invisible'].join(' ')} aria-hidden>
           <BoardHeader />
           {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="grid min-h-[var(--row-h-md)] grid-cols-[1fr_auto] items-center gap-2 border-b border-border-subtle px-3 py-2.5 last:border-b-0 sm:grid-cols-[3rem_1fr_5rem_6rem_5rem_5rem]">
+            <div key={i} className="grid min-h-(--row-h-md) grid-cols-[1fr_auto] items-center gap-2 border-b border-border-subtle px-3 py-2.5 last:border-b-0 sm:grid-cols-[3rem_1fr_5rem_6rem_5rem_5rem]">
               <span className="hidden sm:block" />
               <div className="min-w-0">
-                <div className="skeleton h-[18px] rounded" style={{ width: `${[34, 42, 30, 38, 33, 40, 36][i]}%` }} />
-                <div className="skeleton mt-0.5 h-5 rounded" style={{ width: `${[70, 55, 64, 48, 60, 52, 68][i]}%` }} />
-                <div className="skeleton mt-1 h-4 w-1/2 rounded sm:hidden" />
+                <div className="skeleton h-[18px] rounded-sm" style={{ width: `${[34, 42, 30, 38, 33, 40, 36][i]}%` }} />
+                <div className="skeleton mt-0.5 h-5 rounded-sm" style={{ width: `${[70, 55, 64, 48, 60, 52, 68][i]}%` }} />
+                <div className="skeleton mt-1 h-4 w-1/2 rounded-sm sm:hidden" />
               </div>
-              <div className="skeleton h-3.5 w-12 shrink-0 rounded" />
+              <div className="skeleton h-3.5 w-12 shrink-0 rounded-sm" />
             </div>
           ))}
         </div>
@@ -336,7 +336,7 @@ function SortPill({ active, onClick, label }: { active: boolean; onClick: () => 
       onClick={onClick}
       className={[
         // 실제 높이 44px(2026-09-27 점검: tap-y-44 로 38px·위 분류 칩과 겹침) — -my 7.65px 로 줄 높이(28.7)는 그대로.
-        'inline-flex h-[44px] -my-[7.65px] min-w-[44px] items-center justify-center px-2 rounded-badge transition-colors',
+        'inline-flex h-[44px] my-[-7.65px] min-w-[44px] items-center justify-center px-2 rounded-badge transition-colors',
         active ? 'text-accent-300 font-bold' : 'text-ink-muted hover:text-ink-secondary',
       ].join(' ')}
     >
@@ -354,7 +354,7 @@ function ListingRow({
   const isSold = listing.status === 'sold';
 
   return (
-    <li className="cv-row-md min-h-[var(--row-h-md)]">
+    <li className="cv-row-md min-h-(--row-h-md)">
       <button
         type="button"
         onClick={onClick}

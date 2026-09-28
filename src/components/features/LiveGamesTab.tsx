@@ -189,7 +189,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
     //   ① 목록이 오기 전에는 '오늘 곧 시작'·안내 줄을 그리지 않는다(둘 다 목록 결과에 딸린 내용 — upcoming 은 games 로 걸러진다).
     //   ② 판 최소 높이 = 화면 높이 − 헤더(svh — 주소창 접힘에 안 흔들린다). 사업자 푸터는 로딩 중에도 도착 뒤에도 화면 아래 경계 밖이라
     //      내용이 짧아지든 길어지든 **보이는 요소가 움직이지 않는다**(새로 생긴 내용은 이동이 아니다). e2e/motion-unify.spec.ts MU4b.
-    <main className="hero-aurora min-h-[calc(100svh-theme(spacing.header-h))] px-page-x pt-3 pb-section">
+    <main className="hero-aurora min-h-[calc(100svh-(var(--spacing-header-h)))] px-page-x pt-3 pb-section">
       {/* (역사) `data-main-enter-ready` — M1 cohort 준비 신호였다. 이 루트가 붙으면 머리줄·목록·패널이 같은 커밋에 있었다.
           🔴 2026-09-22 폐기 — 이 표식을 읽던 본문 진입 모션(`src/lib/tabEnter.ts`)은 삭제됐다. 삼성 인터넷에서 transform 합성층이 붙었다 사라지며 화면 전체가 밝아졌다 돌아왔기 때문이다(App.tsx 탭 커밋 effect 주석 참고). 속성은 지금 **아무 동작도 하지 않는다** — 남겨 둔 것은 되살릴 때 대상 경계를 다시 찾지 않기 위해서다. */}
       <div data-main-enter-ready className="mx-auto w-full max-w-3xl space-y-3">
@@ -217,7 +217,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                 (커뮤니티 서브탭·필터칩은 44px 가 투명 히트박스이고 보이는 알약은 32px — 오탐이었다).
                 원인: `text-xs` 로 글자만 줄이고 `.btn` 의 바닥값 `min-h-[2.4rem]`(40.8px)은 그대로 둬서
                   글자(12.75px) 대비 위아래 여백이 과했다. 크기 사다리에 `text-xs` 짝인 `.btn-sm`
-                  (`min-h-[2rem]`=34px · `leading-[1.0625rem]`)이 이미 있는데 안 쓰고 있었다.
+                  (`min-h-8`=34px · `leading-4.25`)이 이미 있는데 안 쓰고 있었다.
                   → `btn-sm` 을 쓴다. `text-xs` 는 `btn-sm` 이 이미 포함하므로 뺀다(두 벌 방지).
                   `px-3` 은 유틸이라 `btn-sm` 의 `px-2.5` 를 이기고 기존 가로 폭이 유지된다.
                 🔴 `.hit` 을 같이 붙인다 — 이건 **줄이는 김에 얹는 것이 아니라 고치는 것**이다.
@@ -267,7 +267,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             <div className={['space-y-card-gap', showSkel ? '' : 'invisible'].join(' ')} aria-hidden aria-busy="true">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="rounded-aura border card-aura px-3.5 py-2.5">
-                  <div className="flex min-h-[4.25rem] items-stretch gap-2">
+                  <div className="flex min-h-17 items-stretch gap-2">
                     <div className="flex w-[3.2rem] shrink-0 flex-col items-center justify-center gap-1.5">
                       <div className="skeleton h-5 w-10" />
                       <div className="skeleton h-2.5 w-12" />
@@ -276,7 +276,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                     <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
                       <div className="skeleton h-3.5" style={{ width: `${[78, 62, 84, 70][i]}%` }} />
                       <div className="skeleton h-3" style={{ width: `${[58, 80, 50, 66][i]}%` }} />
-                      <div className="skeleton h-[1.125rem]" style={{ width: `${[70, 56, 74, 62][i]}%` }} />
+                      <div className="skeleton h-4.5" style={{ width: `${[70, 56, 74, 62][i]}%` }} />
                     </div>
                     <div className="flex w-16 shrink-0 flex-col items-end justify-center gap-1">
                       <div className="skeleton h-2.5 w-14" />
@@ -324,7 +324,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                 // 묶음 헤더가 매장 정체성(이름·지역·♥)을 이미 말하므로, 안쪽 카드는 '메인/사이드N'만 반복하지 않는다.
                 const grpRegion = regionShort(venueById.get(grp.venueId)?.region);
                 return (
-                  <div key={grp.venueId} className="rounded-aura border border-accent-400/25 bg-accent-300/[0.03] p-2 space-y-2">
+                  <div key={grp.venueId} className="rounded-aura border border-accent-400/25 bg-accent-300/3 p-2 space-y-2">
                     <p className="flex items-center gap-1.5 px-1 text-sm font-bold text-ink-primary"><Icon name="home" size={14} className="shrink-0 text-accent-300" /><span className="min-w-0 truncate">{nameOf(grp.venueId)}</span>
                       {grpRegion && <span className="shrink-0 text-2xs font-normal text-ink-muted" title={venueById.get(grp.venueId)?.region}>{grpRegion}</span>}
                       {favIds.has(grp.venueId) && <><Icon name="heart-fill" size={12} className="shrink-0 text-danger" /><span className="sr-only">즐겨찾기</span></>}
@@ -449,7 +449,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
               flex-wrap + 중앙 열 basis(4.5rem) — 폭이 모자라면 중앙 열이 **스스로 아래 줄로** 내려가고 좌/우 열은 첫 줄에 남는다
               (ScheduleCard ListCard 와 같은 조리법). 100% 에서는 320px 까지 3열이 그대로다 — basis 를 5rem 으로 두면
               320px 에서 '1,234,567원'(우측 104px) 카드와 묶음 카드의 중앙 열(82px)이 줄을 내렸다(실측 h 171). */}
-        <div className="flex min-h-[4.25rem] flex-wrap items-stretch gap-x-2 gap-y-1">
+        <div className="flex min-h-17 flex-wrap items-stretch gap-x-2 gap-y-1">
           {/* ── 좌: 필드 현황(생존/엔트리 · 평균 스택) — 세로 중앙 ── */}
           {hasPlayers && (
             <div data-live-players className="flex shrink-0 flex-col items-center justify-center">
@@ -534,7 +534,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
                     {/* 앤티는 좁을 때 가장 먼저 양보한다 — sb/bb 와 REG 배지를 지키는 게 우선(전값은 관전 클락에).
                         간격을 gap 이 아니라 선행 공백으로 두는 이유: gap 은 앤티가 0폭으로 접혀도 남아서
                         정작 지키려던 sb/bb 의 폭을 계속 갉아먹는다. */}
-                    {lv.ante > 0 && <span className="min-w-0 truncate text-2xs leading-none tabular-nums text-ink-muted [flex-shrink:100]">{` (${blindShort(lv.ante)})`}</span>}
+                    {lv.ante > 0 && <span className="min-w-0 truncate text-2xs leading-none tabular-nums text-ink-muted shrink-100">{` (${blindShort(lv.ante)})`}</span>}
                   </span>
                 </>
               ) : null}
@@ -564,14 +564,14 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
                 ⚠ '참가비' 라벨은 금액 **바로 위**에 붙여 둔다. 맨 위로 올리면 그 라벨이 GTD 를
                   가리키는 것처럼 읽혀 '참가비 300만' 으로 오독된다(§28 이 막으려는 사고). */}
               {startTime && <p className="text-2xs leading-none tabular-nums text-ink-muted">시작 {startTime}</p>}
-              {prize && <p className="max-w-[6rem] break-keep text-2xs font-bold leading-tight tabular-nums text-gold-400 dark:text-gold-300">{prize}</p>}
+              {prize && <p className="max-w-24 break-keep text-2xs font-bold leading-tight tabular-nums text-gold-400 dark:text-gold-300">{prize}</p>}
               {buyIn > 0 && (
                 <>
                   <p className="text-2xs font-bold leading-none tracking-wide text-ink-muted">참가비</p>
                   <p className="text-base font-extrabold leading-none tabular-nums text-ink-primary">{buyInText(buyIn)}</p>
                 </>
               )}
-              {seatText && <p className="max-w-[6rem] break-keep text-2xs leading-tight tabular-nums text-ink-muted">{seatText}</p>}
+              {seatText && <p className="max-w-24 break-keep text-2xs leading-tight tabular-nums text-ink-muted">{seatText}</p>}
             </div>
           )}
         </div>
@@ -610,7 +610,7 @@ function MyTournamentCard({ g, venueName, onDisplay, onPoster, onVenue, hero = f
   };
   const tone = vsAvg == null ? '' : vsAvg >= 100 ? 'text-emerald-400' : vsAvg >= 50 ? 'text-amber-300' : 'text-rose-400';
   return (
-    <section className={['rounded-aura border bg-gradient-to-br from-accent-300/[0.12] to-transparent p-3',
+    <section className={['rounded-aura border bg-linear-to-br/srgb from-accent-300/12 to-transparent p-3',
       // hero: 링 헤어라인이 테두리를 대신하므로 accent 테두리는 절반으로(3중선 방지)
       hero ? 'border-accent-300/30 ring-aura ring-aura-glow' : 'border-accent-300/60'].join(' ')}>
       <div className="flex items-center justify-between gap-2">

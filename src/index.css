@@ -1,3 +1,312 @@
+/* ══ Tailwind v4 (2026-09-28 이관 — 오너 승인 ②) ═══════════════════════════════════════════════
+   목표는 "v3 와 **같은 화면·같은 모션**" 이다. v4 의 기본값이 v3 와 다른 자리를 여기서 전부 v3 값으로 되돌린다.
+   ⚠ 이 파일은 **CSS 캐스케이드 레이어를 쓰지 않는다**(@import 'tailwindcss' 금지).
+     v3 는 레이어 없이 '선택자 특이도 + 소스 순서' 로 이겼다 — base(@layer base 였던 규칙) → components → utilities → 나머지.
+     v4 기본(@layer theme/base/components/utilities)으로 가면 ① base 의 (0,2,1) 규칙이 utilities 의 (0,1,0) 에 지고
+     ② 이 파일 아래쪽 레이어 밖 규칙(main{}, button:active 등)이 모든 유틸을 이겨 결과가 바뀐다.
+     그래서 테마만 가져오고(theme(inline) — :root 변수 0개), 유틸은 `@tailwind utilities` 로 v3 자리에 직접 찍는다.
+   ⚠ v4 preflight 도 쓰지 않는다 — v3 preflight 를 아래에 그대로 둔다(버튼 cursor·placeholder·border 색·input 배경이 v3 그대로).
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+@import 'tailwindcss/theme.css' theme(inline);
+
+@theme inline {
+  /* ── 색: v4 기본 팔레트(oklch)를 걷고 v3 팔레트(hex)를 그대로 — 같은 이름이 다른 색으로 바뀌지 않게 ── */
+  --color-*: initial;
+  --color-black: #000;
+  --color-white: #fff;
+  --color-slate-50: #f8fafc; --color-slate-100: #f1f5f9; --color-slate-200: #e2e8f0; --color-slate-300: #cbd5e1; --color-slate-400: #94a3b8; --color-slate-500: #64748b; --color-slate-600: #475569; --color-slate-700: #334155; --color-slate-800: #1e293b; --color-slate-900: #0f172a; --color-slate-950: #020617;
+  --color-gray-50: #f9fafb; --color-gray-100: #f3f4f6; --color-gray-200: #e5e7eb; --color-gray-300: #d1d5db; --color-gray-400: #9ca3af; --color-gray-500: #6b7280; --color-gray-600: #4b5563; --color-gray-700: #374151; --color-gray-800: #1f2937; --color-gray-900: #111827; --color-gray-950: #030712;
+  --color-zinc-50: #fafafa; --color-zinc-100: #f4f4f5; --color-zinc-200: #e4e4e7; --color-zinc-300: #d4d4d8; --color-zinc-400: #a1a1aa; --color-zinc-500: #71717a; --color-zinc-600: #52525b; --color-zinc-700: #3f3f46; --color-zinc-800: #27272a; --color-zinc-900: #18181b; --color-zinc-950: #09090b;
+  --color-neutral-50: #fafafa; --color-neutral-100: #f5f5f5; --color-neutral-200: #e5e5e5; --color-neutral-300: #d4d4d4; --color-neutral-400: #a3a3a3; --color-neutral-500: #737373; --color-neutral-600: #525252; --color-neutral-700: #404040; --color-neutral-800: #262626; --color-neutral-900: #171717; --color-neutral-950: #0a0a0a;
+  --color-stone-50: #fafaf9; --color-stone-100: #f5f5f4; --color-stone-200: #e7e5e4; --color-stone-300: #d6d3d1; --color-stone-400: #a8a29e; --color-stone-500: #78716c; --color-stone-600: #57534e; --color-stone-700: #44403c; --color-stone-800: #292524; --color-stone-900: #1c1917; --color-stone-950: #0c0a09;
+  --color-red-50: #fef2f2; --color-red-100: #fee2e2; --color-red-200: #fecaca; --color-red-300: #fca5a5; --color-red-400: #f87171; --color-red-500: #ef4444; --color-red-600: #dc2626; --color-red-700: #b91c1c; --color-red-800: #991b1b; --color-red-900: #7f1d1d; --color-red-950: #450a0a;
+  --color-orange-50: #fff7ed; --color-orange-100: #ffedd5; --color-orange-200: #fed7aa; --color-orange-300: #fdba74; --color-orange-400: #fb923c; --color-orange-500: #f97316; --color-orange-600: #ea580c; --color-orange-700: #c2410c; --color-orange-800: #9a3412; --color-orange-900: #7c2d12; --color-orange-950: #431407;
+  --color-amber-50: #fffbeb; --color-amber-100: #fef3c7; --color-amber-200: #fde68a; --color-amber-300: #fcd34d; --color-amber-400: #fbbf24; --color-amber-500: #f59e0b; --color-amber-600: #d97706; --color-amber-700: #b45309; --color-amber-800: #92400e; --color-amber-900: #78350f; --color-amber-950: #451a03;
+  --color-yellow-50: #fefce8; --color-yellow-100: #fef9c3; --color-yellow-200: #fef08a; --color-yellow-300: #fde047; --color-yellow-400: #facc15; --color-yellow-500: #eab308; --color-yellow-600: #ca8a04; --color-yellow-700: #a16207; --color-yellow-800: #854d0e; --color-yellow-900: #713f12; --color-yellow-950: #422006;
+  --color-lime-50: #f7fee7; --color-lime-100: #ecfccb; --color-lime-200: #d9f99d; --color-lime-300: #bef264; --color-lime-400: #a3e635; --color-lime-500: #84cc16; --color-lime-600: #65a30d; --color-lime-700: #4d7c0f; --color-lime-800: #3f6212; --color-lime-900: #365314; --color-lime-950: #1a2e05;
+  --color-green-50: #f0fdf4; --color-green-100: #dcfce7; --color-green-200: #bbf7d0; --color-green-300: #86efac; --color-green-400: #4ade80; --color-green-500: #22c55e; --color-green-600: #16a34a; --color-green-700: #15803d; --color-green-800: #166534; --color-green-900: #14532d; --color-green-950: #052e16;
+  /* emerald: v3 기본(50~200·800~950) 위에 앱의 바이낸스 업 그린(300~700)이 덮인다 — tailwind.config.js extend 와 같은 병합 결과 */
+  --color-emerald-50: #ecfdf5; --color-emerald-100: #d1fae5; --color-emerald-200: #a7f3d0; --color-emerald-800: #065f46; --color-emerald-900: #064e3b; --color-emerald-950: #022c22;
+  --color-emerald-300: #32D993; --color-emerald-400: #0ECB81; --color-emerald-500: #0BB873; --color-emerald-600: #09A266;
+  /* 라이트 테마 '텍스트용' 딥 그린 — 흰 배경 실측 5.39:1(emerald-500/15 틴트 위 4.64:1). 300~600 은 흰 배경 텍스트로 전부 4.5 미달(600도 3.30) — 라이트 텍스트는 이 단만 사용. */
+  --color-emerald-700: #067A4D;
+  --color-teal-50: #f0fdfa; --color-teal-100: #ccfbf1; --color-teal-200: #99f6e4; --color-teal-300: #5eead4; --color-teal-400: #2dd4bf; --color-teal-500: #14b8a6; --color-teal-600: #0d9488; --color-teal-700: #0f766e; --color-teal-800: #115e59; --color-teal-900: #134e4a; --color-teal-950: #042f2e;
+  --color-cyan-50: #ecfeff; --color-cyan-100: #cffafe; --color-cyan-200: #a5f3fc; --color-cyan-300: #67e8f9; --color-cyan-400: #22d3ee; --color-cyan-500: #06b6d4; --color-cyan-600: #0891b2; --color-cyan-700: #0e7490; --color-cyan-800: #155e75; --color-cyan-900: #164e63; --color-cyan-950: #083344;
+  --color-sky-50: #f0f9ff; --color-sky-100: #e0f2fe; --color-sky-200: #bae6fd; --color-sky-300: #7dd3fc; --color-sky-400: #38bdf8; --color-sky-500: #0ea5e9; --color-sky-600: #0284c7; --color-sky-700: #0369a1; --color-sky-800: #075985; --color-sky-900: #0c4a6e; --color-sky-950: #082f49;
+  --color-blue-50: #eff6ff; --color-blue-100: #dbeafe; --color-blue-200: #bfdbfe; --color-blue-300: #93c5fd; --color-blue-400: #60a5fa; --color-blue-500: #3b82f6; --color-blue-600: #2563eb; --color-blue-700: #1d4ed8; --color-blue-800: #1e40af; --color-blue-900: #1e3a8a; --color-blue-950: #172554;
+  --color-indigo-50: #eef2ff; --color-indigo-100: #e0e7ff; --color-indigo-200: #c7d2fe; --color-indigo-300: #a5b4fc; --color-indigo-400: #818cf8; --color-indigo-500: #6366f1; --color-indigo-600: #4f46e5; --color-indigo-700: #4338ca; --color-indigo-800: #3730a3; --color-indigo-900: #312e81; --color-indigo-950: #1e1b4b;
+  --color-violet-50: #f5f3ff; --color-violet-100: #ede9fe; --color-violet-200: #ddd6fe; --color-violet-300: #c4b5fd; --color-violet-400: #a78bfa; --color-violet-500: #8b5cf6; --color-violet-600: #7c3aed; --color-violet-700: #6d28d9; --color-violet-800: #5b21b6; --color-violet-900: #4c1d95; --color-violet-950: #2e1065;
+  --color-purple-50: #faf5ff; --color-purple-100: #f3e8ff; --color-purple-200: #e9d5ff; --color-purple-300: #d8b4fe; --color-purple-400: #c084fc; --color-purple-500: #a855f7; --color-purple-600: #9333ea; --color-purple-700: #7e22ce; --color-purple-800: #6b21a8; --color-purple-900: #581c87; --color-purple-950: #3b0764;
+  --color-fuchsia-50: #fdf4ff; --color-fuchsia-100: #fae8ff; --color-fuchsia-200: #f5d0fe; --color-fuchsia-300: #f0abfc; --color-fuchsia-400: #e879f9; --color-fuchsia-500: #d946ef; --color-fuchsia-600: #c026d3; --color-fuchsia-700: #a21caf; --color-fuchsia-800: #86198f; --color-fuchsia-900: #701a75; --color-fuchsia-950: #4a044e;
+  --color-pink-50: #fdf2f8; --color-pink-100: #fce7f3; --color-pink-200: #fbcfe8; --color-pink-300: #f9a8d4; --color-pink-400: #f472b6; --color-pink-500: #ec4899; --color-pink-600: #db2777; --color-pink-700: #be185d; --color-pink-800: #9d174d; --color-pink-900: #831843; --color-pink-950: #500724;
+  --color-rose-50: #fff1f2; --color-rose-100: #ffe4e6; --color-rose-200: #fecdd3; --color-rose-300: #fda4af; --color-rose-400: #fb7185; --color-rose-500: #f43f5e; --color-rose-600: #e11d48; --color-rose-700: #be123c; --color-rose-800: #9f1239; --color-rose-900: #881337; --color-rose-950: #4c0519;
+
+  /* ── 앱 브랜드 토큰 (구 tailwind.config.js theme.extend.colors) ──
+     index.css 의 CSS 변수("R G B")를 rgb() 로 받는다. 투명도 수식어(bg-surface-base/95)는 v4 가
+     color-mix(in oklab, rgb(var(--x)) 95%, transparent) 로 만든다 — 같은 색·같은 알파다(v3 의 <alpha-value> 대체). */
+  /* 아우라 신호색(틸) — --aura-* 참조. 브랜드 주색은 accent(바이올렛) 그대로. */
+  --color-aura-200: rgb(var(--aura-200));
+  --color-aura-300: rgb(var(--aura-300));
+  --color-aura-400: rgb(var(--aura-400));
+  /* 시안의 상태색 — 차트 블루·리커버리 오렌지(게이지/차트 세그먼트 전용) */
+  --color-chart-blue: rgb(var(--chart-blue));
+  --color-chart-orange: rgb(var(--chart-orange));
+  /* Surface scale — 라이트/다크 테마 전환 */
+  --color-surface-base: rgb(var(--surface-base));   /* 앱 최하위 배경 */
+  --color-surface-low: rgb(var(--surface-low));     /* 카드 배경 */
+  --color-surface-mid: rgb(var(--surface-mid));     /* 모달, 사이드바 */
+  --color-surface-high: rgb(var(--surface-high));   /* 호버 영역, 입력 필드 */
+  --color-surface-float: rgb(var(--surface-float)); /* 드롭다운, 툴팁 */
+  /* Accent: 트와일라잇 플럼 정합 바이올렛-인디고(h≈248) — 주요 액션·활성·링크·포커스.
+     대비 실측(2026-08-27): 다크 300 vs #151221 = 4.01, 흰 텍스트 on 300 = 4.59 / 라이트 300 vs #FFF = 6.78. */
+  --color-accent-50: rgb(var(--accent-50));
+  --color-accent-100: rgb(var(--accent-100));
+  --color-accent-200: rgb(var(--accent-200)); /* 다크 배경 위 액센트 텍스트(PET --accent-ink 계승) */
+  --color-accent-300: rgb(var(--accent-300)); /* primary(PET --accent 계승) */
+  --color-accent-400: rgb(var(--accent-400)); /* hover */
+  --color-accent-500: rgb(var(--accent-500)); /* pressed(PET --accent-strong 계승) */
+  --color-accent-600: rgb(var(--accent-600));
+  /* Gold: 바이낸스 옐로 — 상금·트로피·랭킹·프리미엄 강조 전용(인터랙션은 accent 로 이관) */
+  --color-gold-50: #FEF6D8;
+  --color-gold-100: #FCEBA8;
+  --color-gold-200: #FCE45C;
+  --color-gold-300: #FCD535; /* 상금/프리미엄 하이라이트 */
+  --color-gold-400: #F0B90B;
+  --color-gold-500: #C99400;
+  --color-gold-600: #8D6A00;
+  /* Red: 바이낸스 레드 — 언리드 뱃지, 경고 전용 (브랜드 색 — 테마 고정) */
+  --color-danger: #F6465D;
+  --color-danger-light: #FF8AA1;
+  --color-danger-dark: #CF304A;
+  /* 라이트 테마 '텍스트용' 딥 레드 — 흰 배경 실측 6.20:1(danger/15 틴트 위 5.12:1). light/DEFAULT 는 흰 배경 텍스트로 4.5 미달. */
+  --color-danger-deep: #B82640;
+  /* Felt: 포커 테이블 그린(DAI-2a) — 라이브 장면·도메인 긍정 신호 전용. emerald(수치)와 역할 분리. */
+  --color-felt-300: #3E9B70;
+  --color-felt-400: #2E7D5B;
+  --color-felt-500: #1F5D44;
+  --color-felt-600: #143E2E;
+  /* Text scale — CSS 변수 기반 (테마 전환) */
+  --color-ink-primary: rgb(var(--ink-primary));
+  --color-ink-secondary: rgb(var(--ink-secondary));
+  --color-ink-muted: rgb(var(--ink-muted));
+  --color-ink-inverse: rgb(var(--ink-inverse));
+  /* 유저 지정 밝은 배경(아바타 이니셜 등) 위 글자 — src/lib/color.ts onColorInk 가 고른다 */
+  --color-ink-onBright: rgb(var(--ink-on-bright));
+  /* Border scale — CSS 변수 기반 (테마 전환) */
+  --color-border-subtle: rgb(var(--border-subtle));
+  --color-border-default: rgb(var(--border-default));
+  --color-border-strong: rgb(var(--border-strong));
+
+  /* ── 반응형 경계: v4 기본은 rem(48rem 등)이다 — v3 와 같은 px 로 고정 ── */
+  --breakpoint-*: initial;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  /* ── 글꼴 ── 'Pretendard FB Win/Android' = 폰트 도착 전 크기 맞춘 폴백(public/fonts/pretendard/…css 끝). body 스택과 같은 순서.
+     display 는 2026-08-29 Noto Sans KR 제거 뒤 Pretendard 로 통합(FCP 388→148ms). 키는 호출부 font-display 7곳 때문에 남긴다. */
+  --font-sans: 'Pretendard Variable', 'Pretendard', 'Pretendard FB Win', 'Pretendard FB Android', system-ui, sans-serif;
+  --font-display: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* ── 글자 크기: v3 사다리(행간 절대값). v4 기본은 비율(calc(1.25/0.875))이라 상속 행간이 달라진다 ──
+     ⚠ 루트 폰트 17px — 1rem=17px. 2xs 는 50대 가독(10px → 11px). */
+  --text-*: initial;
+  --text-2xs: 0.6875rem;  --text-2xs--line-height: 0.9375rem;
+  --text-xs: 0.75rem;     --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;    --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;      --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;    --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;     --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;     --text-2xl--line-height: 2rem;
+  --text-3xl: 1.875rem;   --text-3xl--line-height: 2.25rem;
+  --text-4xl: 2.25rem;    --text-4xl--line-height: 2.5rem;
+  --text-5xl: 3rem;       --text-5xl--line-height: 1;
+  --text-6xl: 3.75rem;    --text-6xl--line-height: 1;
+  --text-7xl: 4.5rem;     --text-7xl--line-height: 1;
+  --text-8xl: 6rem;       --text-8xl--line-height: 1;
+  --text-9xl: 8rem;       --text-9xl--line-height: 1;
+
+  /* ── 간격 토큰 ── 🔴 루트 폰트 17px 이라 rem 은 전부 6.25% 크다. 44px 계약이 필요하면 h-[44px] 를 써라. */
+  --spacing-page-x: 1rem;       /* 17px   (모바일 좌우 여백) */
+  --spacing-page-x-md: 1.5rem;  /* 25.5px (md 이상 좌우 여백) */
+  --spacing-header-h: 3.5rem;   /* 59.5px (헤더 고정 높이) */
+  --spacing-tab-h: 2.75rem;     /* 46.75px(날짜 탭바 높이) — 44px 이 아니다 */
+  --spacing-card-gap: 0.75rem;  /* 12.75px(카드 간격) */
+  --spacing-section: 1.5rem;    /* 25.5px (섹션 간 여백) */
+
+  /* ── 모서리 ── (v4 이름 체계: v3 rounded → rounded-sm, rounded-sm → rounded-xs 는 변환 도구가 호출부를 바꿨다) */
+  --radius-card: 0.75rem;   /* v6 aura-ui 실측 rounded-aura-lg = 12px(카드) */
+  --radius-aura: 1rem;      /* 큰 히어로 카드 16px */
+  --radius-dialog: 1rem;    /* v6: 실측 rounded-2xl(16px) 모달 */
+  --radius-badge: 9999px;   /* 라벨용 배지(AD·인증·등급)는 알약 유지 */
+  --radius-chip: 0.5rem;    /* v6: 실측 버튼 8px 과 통일 */
+  --radius-input: 0.5rem;
+
+  /* ── 그림자 ── 헤어라인 링/그림자를 CSS 변수로 → 라이트 모드에서 흰색 테두리 선이 보이던 버그 해결 */
+  --shadow-card: 0 0 0 1px var(--card-ring);   /* 바이낸스식 플랫 — 헤어라인만 */
+  --shadow-gold: 0 0 10px rgba(252,213,53,0.30);
+  --shadow-aura: 0 0 0 1px rgb(var(--aura-300) / 0.5), 0 0 15px rgb(var(--aura-300) / 0.25); /* v3 네온 — 데이터 링 전용 */
+  --shadow-glow: 0 0 16px rgb(129 140 248 / 0.28); /* v6.5: 블룸 한 겹. 활성 칩은 ring-1 inset 이 테두리를 맡는다 */
+  --shadow-dialog: 0 -4px 32px var(--card-shadow);
+  --shadow-badge: 0 0 6px rgba(229,62,62,0.6);
+  /* drop-shadow: v4 기본값이 v3 와 다르다 — v3 값을 v4 이름(xs=v3 sm, sm=v3 기본)에 둔다 */
+  --drop-shadow-xs: 0 1px 1px rgb(0 0 0 / 0.05);
+  --drop-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.1), 0 1px 1px rgb(0 0 0 / 0.06);
+  --drop-shadow-md: 0 4px 3px rgb(0 0 0 / 0.07), 0 2px 2px rgb(0 0 0 / 0.06);
+  --drop-shadow-lg: 0 10px 8px rgb(0 0 0 / 0.04), 0 4px 3px rgb(0 0 0 / 0.1);
+  --drop-shadow-xl: 0 20px 13px rgb(0 0 0 / 0.03), 0 8px 5px rgb(0 0 0 / 0.08);
+  --drop-shadow-2xl: 0 25px 25px rgb(0 0 0 / 0.15);
+
+  /* ── 단일 물리(Phase 1): 기본 곡선 재정의 = 앱의 모든 transition-* 유틸이 한 곡선.
+     ease-in/out/in-out 유틸도 같은 곡선(spring/ease-out-quart 는 사용처 0 — 같은 곡선으로 봉인).
+     ⚠ theme(inline) 이라 :root 의 --ease-out(퇴장 가속 곡선, 아래 :root) 과 이름이 같아도 부딪치지 않는다 —
+       유틸은 값이 박히고, var(--ease-out) 을 읽는 규칙은 아래 :root 값을 받는다. */
+  --default-transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-in: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-in-out: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-ease-out-quart: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* ── ring 기본 색: v3 는 blue-500/50, v4 는 currentColor ── */
+  --default-ring-color: rgb(59 130 246 / 0.5);
+
+  /* ── 애니메이션 (구 tailwind.config.js keyframes/animation) ── */
+  --animate-badge-pulse: badge-pulse 2s ease-in-out infinite;
+  --animate-slide-up: slide-up 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+  /* iOS 시트 감각 — 빠르게 출발해 부드럽게 안착. MO-2: --dur-panel(0.26s)로 정렬(키프레임 이름·시작값은 e2e 잠금) */
+  --animate-sheet-up: sheet-up 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-slide-down: slide-down 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  --animate-fade-in: fade-in 0.15s cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-fade-out: fade-out 0.18s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  --animate-dim-in-sheet: dim-in 0.26s cubic-bezier(0.45, 0, 0.55, 1);   /* = sheet-up 0.26s */
+  --animate-dim-in: dim-in 0.32s cubic-bezier(0.45, 0, 0.55, 1);         /* = 가운데 모달 slide-up(index.css 0.32s) */
+  /* 시트 닫기의 딤 — 시트(slide-down 0.2s)보다 **먼저** 걷힌다(voucher-close −45 → 0, flick.cjs 실측). */
+  --animate-dim-out: fade-out 0.05s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+
+  @keyframes badge-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.15); opacity: 0.85; }
+  }
+  /* 🔴 blur 제거(2026-09-24) — blur 가 섞이면 합성 스레드로 못 가 compositeFailed=4096. 이동·투명도는 그대로. */
+  /* 🔴 2026-09-28 — transform 을 통째로 바꾸면 요소 자신의 정렬 translate(left-1/2 -translate-x-1/2 등)가 0.32s 동안 빠진다
+     (설치 배너가 반 폭 189.5px 오른쪽에서 나타나 제자리로 튀었다 — v3 때부터). 아래 transform 유틸 에뮬레이션과 같은 합성식을
+     뒤에 붙여 요소가 원래 서 있던 변환 위에 넛지만 더한다(to = 제 자리 그대로 → 끝나는 프레임에 튐 0). 유틸이 없으면 변수 기본값(0·1)이라 종전과 같다.
+     ⚠ calc(var(--tw-translate-y) + 8px) 로 합치지 마라 — 기본값이 단위 없는 0 이라 calc 가 무효가 된다. */
+  @keyframes slide-up {
+    from { transform: translateY(8px) translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(var(--tw-v3-scale-x)) scaleY(var(--tw-v3-scale-y)); opacity: 0; }
+    to { transform: translateY(0) translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(var(--tw-v3-scale-x)) scaleY(var(--tw-v3-scale-y)); opacity: 1; }
+  }
+  /* 시트(하단 모달) 열기: 화면 아래에서 실제로 올라온다. ⚠ slide-up(8px 넛지)을 쓰면 시트가 반투명하게 번쩍 나타난다. */
+  @keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  /* 시트 닫기: 아래로 슬라이드되며 사라짐. ⚠ 투명도를 빼지 마라 — e2e/motion-unify MU3 가 중간 투명도 프레임을 잰다(2026-09-26). */
+  @keyframes slide-down {
+    from { transform: translateY(0); opacity: 1; }
+    to { transform: translateY(100%); opacity: 0; }
+  }
+  /* 0.45 에서 시작 — 0 에서 시작하면 '꺼졌다 켜지는' 깜빡임. 🔴 filter(blur) 는 뺐다(GTO-TOOL-OPEN-JANK 2026-09-24).
+     이름('fade-in')·길이는 e2e post-nav 가 잠근다 — 키프레임 속성만 바꾼다. */
+  @keyframes fade-in {
+    from { opacity: 0.45; }
+    to { opacity: 1; }
+  }
+  @keyframes fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+  /* 모달 딤 열기 — 시트·본문과 같은 시간에 걸쳐 어두워진다(Modal.tsx). ease-in-out 이 flick.cjs 블링크 0(2026-09-26). */
+  @keyframes dim-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
+
+/* ── hover: v3 설정 future.hoverOnlyWhenSupported 와 같은 조건(v4 기본은 (hover: hover) 만) ── */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+/* ── dark: v3 darkMode:'class'(= :is(.dark *)). v4 기본은 prefers-color-scheme 이라 테마 토글이 안 먹는다 ── */
+@custom-variant dark (&:is(.dark *));
+
+/* ── transform 유틸: v3 와 같게 `transform` 한 속성으로 ──────────────────────────────────────────
+   v4 는 translate·scale·rotate 유틸을 개별 속성(translate:/scale:/rotate:)으로 찍는다. 그러면 같은 요소의
+   keyframes·WAAPI(tabCover·pageMotion·spring)·인라인 style.transform·index.css 의 transform 규칙
+   (전역 프레스 button:active{transform:scale(.97)} 포함)이 v3 에선 **덮던** 것을 v4 에선 **곱해** 합성한다.
+   → 개별 속성을 끄고(!important — 앱은 translate:/scale:/rotate: 속성을 어디서도 쓰지 않는다, 2026-09-28 전수 grep)
+     v3 와 같은 합성식을 `transform` 에 찍는다. 그러면 누가 이기는지가 v3 와 똑같이 특이도·순서로 정해진다.
+   ⚠ 변수: 이동은 v4 가 만드는 --tw-translate-x/y 를 그대로 읽고, 회전·배율은 아래 @property 로 등록한 --tw-v3-* 를 쓴다
+     (v4 는 scale-[0.97]·rotate-45 에 변수를 안 만든다). 등록(inherits:false)이 없으면 부모 값이 자식에게 상속돼 같이 돈다. */
+@property --tw-v3-rotate { syntax: '*'; inherits: false; initial-value: 0deg; }
+@property --tw-v3-scale-x { syntax: '*'; inherits: false; initial-value: 1; }
+@property --tw-v3-scale-y { syntax: '*'; inherits: false; initial-value: 1; }
+@utility translate-x-* {
+  --tw-v3-on: --value(number); --tw-v3-on: --value(ratio); --tw-v3-on: --value('full', 'px'); --tw-v3-on: --value([*]); /* 값 종류마다 한 줄 — 한 --value() 에 섞으면 분수·임의값이 안 잡힌다(실측) */
+  translate: none !important; scale: none !important; rotate: none !important;
+  transform: translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(var(--tw-v3-scale-x)) scaleY(var(--tw-v3-scale-y));
+}
+@utility -translate-x-* {
+  --tw-v3-on: --value(number); --tw-v3-on: --value(ratio); --tw-v3-on: --value('full', 'px'); --tw-v3-on: --value([*]); /* 값 종류마다 한 줄 — 한 --value() 에 섞으면 분수·임의값이 안 잡힌다(실측) */
+  translate: none !important; scale: none !important; rotate: none !important;
+  transform: translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(var(--tw-v3-scale-x)) scaleY(var(--tw-v3-scale-y));
+}
+@utility translate-y-* {
+  --tw-v3-on: --value(number); --tw-v3-on: --value(ratio); --tw-v3-on: --value('full', 'px'); --tw-v3-on: --value([*]); /* 값 종류마다 한 줄 — 한 --value() 에 섞으면 분수·임의값이 안 잡힌다(실측) */
+  translate: none !important; scale: none !important; rotate: none !important;
+  transform: translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(var(--tw-v3-scale-x)) scaleY(var(--tw-v3-scale-y));
+}
+@utility -translate-y-* {
+  --tw-v3-on: --value(number); --tw-v3-on: --value(ratio); --tw-v3-on: --value('full', 'px'); --tw-v3-on: --value([*]); /* 값 종류마다 한 줄 — 한 --value() 에 섞으면 분수·임의값이 안 잡힌다(실측) */
+  translate: none !important; scale: none !important; rotate: none !important;
+  transform: translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(var(--tw-v3-scale-x)) scaleY(var(--tw-v3-scale-y));
+}
+@utility scale-* {
+  --tw-v3-scale-x: calc(--value(number) / 100);
+  --tw-v3-scale-x: --value([*]);
+  --tw-v3-scale-y: calc(--value(number) / 100);
+  --tw-v3-scale-y: --value([*]);
+  translate: none !important; scale: none !important; rotate: none !important;
+  transform: translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(var(--tw-v3-scale-x)) scaleY(var(--tw-v3-scale-y));
+}
+@utility rotate-* {
+  --tw-v3-rotate: calc(--value(number) * 1deg);
+  --tw-v3-rotate: --value([*]);
+  translate: none !important; scale: none !important; rotate: none !important;
+  transform: translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(var(--tw-v3-scale-x)) scaleY(var(--tw-v3-scale-y));
+}
+@utility -rotate-* {
+  --tw-v3-rotate: calc(--value(number) * -1deg);
+  --tw-v3-rotate: calc(--value([*]) * -1);
+  translate: none !important; scale: none !important; rotate: none !important;
+  transform: translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(var(--tw-v3-scale-x)) scaleY(var(--tw-v3-scale-y));
+}
+/* (v3 의 `transform` 클래스는 호출부 0곳 — 2026-09-28 전수 grep. v4 판을 그대로 둔다: 선언 순서가 core 뒤로 보장되지 않아 덮어쓸 수 없다) */
+
+/* ── transition 목록: v3 목록 그대로(v4 는 outline-color·그라데이션 정지점·translate/scale/rotate·display 등을 더한다) ── */
+@utility transition {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+}
+@utility transition-colors {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+}
+@utility transition-transform {
+  transition-property: transform;
+}
+
+/* ── space-*·divide-*: v3 선택자(> :not([hidden]) ~ :not([hidden]), 특이도 (0,3,0))로 — 아래 @tailwind utilities 바로 뒤에 v3 규칙 그대로 둔다.
+   v4 는 :where(> :not(:last-child)) (특이도 0)에 margin-bottom 을 준다 — 레이어 없는 이 파일에선 p/ul 의 preflight margin:0 에 져서 간격이 사라진다. */
+@source not inline('space-y-0.5 space-y-1 space-y-1.5 space-y-2 space-y-2.5 space-y-3 space-y-3.5 space-y-4 space-y-5 space-y-[0.85em] space-y-card-gap divide-x divide-y divide-border-subtle max-lg:space-y-0 max-lg:space-y-2 max-lg:divide-y max-lg:divide-border-strong max-md:space-y-1.5 max-md:space-y-2.5 sm:divide-x sm:divide-y-0 lg:divide-y-0 xl:space-y-0');
+
+
 /* ── 랭킹 상점 마크 글리프 전용 폰트 (2026-08-30, 오너 #4 위임 판단) ───────────────
    문제: 상점 마크(🍀🐉🏆…)는 닉네임 앞에 **문자열로 결합**돼 유통되는 유저 보유 아이템이라
      SVG 아이콘으로 못 바꾼다(getEquippedMarks → '🍀 닉네임'). 그런데 이모지는 폰트 리소스라
@@ -23,14 +332,400 @@
                  U+1F98B, U+1FA99;
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* ══ v3 preflight (tailwindcss@3.4.19 src/css/preflight.css, MIT) — theme() 만 v3 빌드가 풀던 값으로 박았다 ══
+   v4 preflight 로 바꾸면 버튼 cursor(pointer→default)·placeholder 색·input 배경(투명)·border 기본색이 달라진다. */
+/*
+1. Prevent padding and border from affecting element width. (https://github.com/mozdevs/cssremedy/issues/4)
+2. Allow adding a border to an element by just adding a border-width. (https://github.com/tailwindcss/tailwindcss/pull/116)
+*/
 
-@layer base {
+*,
+::before,
+::after {
+  box-sizing: border-box; /* 1 */
+  border-width: 0; /* 2 */
+  border-style: solid; /* 2 */
+  border-color: #e5e7eb; /* 2 */
+}
+
+::before,
+::after {
+  --tw-content: '';
+}
+
+/*
+1. Use a consistent sensible line-height in all browsers.
+2. Prevent adjustments of font size after orientation changes in iOS.
+3. Use a more readable tab size.
+4. Use the user's configured `sans` font-family by default.
+5. Use the user's configured `sans` font-feature-settings by default.
+6. Use the user's configured `sans` font-variation-settings by default.
+7. Disable tap highlights on iOS
+*/
+
+html,
+:host {
+  line-height: 1.5; /* 1 */
+  -webkit-text-size-adjust: 100%; /* 2 */
+  -moz-tab-size: 4; /* 3 */
+  tab-size: 4; /* 3 */
+  font-family: 'Pretendard Variable', 'Pretendard', 'Pretendard FB Win', 'Pretendard FB Android', system-ui, sans-serif; /* 4 */
+  font-feature-settings: normal; /* 5 */
+  font-variation-settings: normal; /* 6 */
+  -webkit-tap-highlight-color: transparent; /* 7 */
+}
+
+/*
+1. Remove the margin in all browsers.
+2. Inherit line-height from `html` so users can set them as a class directly on the `html` element.
+*/
+
+body {
+  margin: 0; /* 1 */
+  line-height: inherit; /* 2 */
+}
+
+/*
+1. Add the correct height in Firefox.
+2. Correct the inheritance of border color in Firefox. (https://bugzilla.mozilla.org/show_bug.cgi?id=190655)
+3. Ensure horizontal rules are visible by default.
+*/
+
+hr {
+  height: 0; /* 1 */
+  color: inherit; /* 2 */
+  border-top-width: 1px; /* 3 */
+}
+
+/*
+Add the correct text decoration in Chrome, Edge, and Safari.
+*/
+
+abbr:where([title]) {
+  text-decoration: underline dotted;
+}
+
+/*
+Remove the default font size and weight for headings.
+*/
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/*
+Reset links to optimize for opt-in styling instead of opt-out.
+*/
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+/*
+Add the correct font weight in Edge and Safari.
+*/
+
+b,
+strong {
+  font-weight: bolder;
+}
+
+/*
+1. Use the user's configured `mono` font-family by default.
+2. Use the user's configured `mono` font-feature-settings by default.
+3. Use the user's configured `mono` font-variation-settings by default.
+4. Correct the odd `em` font sizing in all browsers.
+*/
+
+code,
+kbd,
+samp,
+pre {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; /* 1 */
+  font-feature-settings: normal; /* 2 */
+  font-variation-settings: normal; /* 3 */
+  font-size: 1em; /* 4 */
+}
+
+/*
+Add the correct font size in all browsers.
+*/
+
+small {
+  font-size: 80%;
+}
+
+/*
+Prevent `sub` and `sup` elements from affecting the line height in all browsers.
+*/
+
+sub,
+sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+sub {
+  bottom: -0.25em;
+}
+
+sup {
+  top: -0.5em;
+}
+
+/*
+1. Remove text indentation from table contents in Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=999088, https://bugs.webkit.org/show_bug.cgi?id=201297)
+2. Correct table border color inheritance in all Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=935729, https://bugs.webkit.org/show_bug.cgi?id=195016)
+3. Remove gaps between table borders by default.
+*/
+
+table {
+  text-indent: 0; /* 1 */
+  border-color: inherit; /* 2 */
+  border-collapse: collapse; /* 3 */
+}
+
+/*
+1. Change the font styles in all browsers.
+2. Remove the margin in Firefox and Safari.
+3. Remove default padding in all browsers.
+*/
+
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: inherit; /* 1 */
+  font-feature-settings: inherit; /* 1 */
+  font-variation-settings: inherit; /* 1 */
+  font-size: 100%; /* 1 */
+  font-weight: inherit; /* 1 */
+  line-height: inherit; /* 1 */
+  letter-spacing: inherit; /* 1 */
+  color: inherit; /* 1 */
+  margin: 0; /* 2 */
+  padding: 0; /* 3 */
+}
+
+/*
+Remove the inheritance of text transform in Edge and Firefox.
+*/
+
+button,
+select {
+  text-transform: none;
+}
+
+/*
+1. Correct the inability to style clickable types in iOS and Safari.
+2. Remove default button styles.
+*/
+
+button,
+input:where([type='button']),
+input:where([type='reset']),
+input:where([type='submit']) {
+  -webkit-appearance: button; /* 1 */
+  background-color: transparent; /* 2 */
+  background-image: none; /* 2 */
+}
+
+/*
+Use the modern Firefox focus style for all focusable elements.
+*/
+
+:-moz-focusring {
+  outline: auto;
+}
+
+/*
+Remove the additional `:invalid` styles in Firefox. (https://github.com/mozilla/gecko-dev/blob/2f9eacd9d3d995c937b4251a5557d95d494c9be1/layout/style/res/forms.css#L728-L737)
+*/
+
+:-moz-ui-invalid {
+  box-shadow: none;
+}
+
+/*
+Add the correct vertical alignment in Chrome and Firefox.
+*/
+
+progress {
+  vertical-align: baseline;
+}
+
+/*
+Correct the cursor style of increment and decrement buttons in Safari.
+*/
+
+::-webkit-inner-spin-button,
+::-webkit-outer-spin-button {
+  height: auto;
+}
+
+/*
+1. Correct the odd appearance in Chrome and Safari.
+2. Correct the outline style in Safari.
+*/
+
+[type='search'] {
+  -webkit-appearance: textfield; /* 1 */
+  outline-offset: -2px; /* 2 */
+}
+
+/*
+Remove the inner padding in Chrome and Safari on macOS.
+*/
+
+::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+
+/*
+1. Correct the inability to style clickable types in iOS and Safari.
+2. Change font properties to `inherit` in Safari.
+*/
+
+::-webkit-file-upload-button {
+  -webkit-appearance: button; /* 1 */
+  font: inherit; /* 2 */
+}
+
+/*
+Add the correct display in Chrome and Safari.
+*/
+
+summary {
+  display: list-item;
+}
+
+/*
+Removes the default spacing and border for appropriate elements.
+*/
+
+blockquote,
+dl,
+dd,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+hr,
+figure,
+p,
+pre {
+  margin: 0;
+}
+
+fieldset {
+  margin: 0;
+  padding: 0;
+}
+
+legend {
+  padding: 0;
+}
+
+ol,
+ul,
+menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+Reset default styling for dialogs.
+*/
+dialog {
+  padding: 0;
+}
+
+/*
+Prevent resizing textareas horizontally by default.
+*/
+
+textarea {
+  resize: vertical;
+}
+
+/*
+1. Reset the default placeholder opacity in Firefox. (https://github.com/tailwindlabs/tailwindcss/issues/3300)
+2. Set the default placeholder color to the user's configured gray 400 color.
+*/
+
+input::placeholder,
+textarea::placeholder {
+  opacity: 1; /* 1 */
+  color: #9ca3af; /* 2 */
+}
+
+/*
+Set the default cursor for buttons.
+*/
+
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+/*
+Make sure disabled buttons don't get the pointer cursor.
+*/
+:disabled {
+  cursor: default;
+}
+
+/*
+1. Make replaced elements `display: block` by default. (https://github.com/mozdevs/cssremedy/issues/14)
+2. Add `vertical-align: middle` to align replaced elements more sensibly by default. (https://github.com/jensimmons/cssremedy/issues/14#issuecomment-634934210)
+   This can trigger a poorly considered lint error in some tools but is included by design.
+*/
+
+img,
+svg,
+video,
+canvas,
+audio,
+iframe,
+embed,
+object {
+  display: block; /* 1 */
+  vertical-align: middle; /* 2 */
+}
+
+/*
+Constrain images and videos to the parent width and preserve their intrinsic aspect ratio. (https://github.com/mozdevs/cssremedy/issues/14)
+*/
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Make elements with the HTML hidden attribute stay hidden by default */
+[hidden]:where(:not([hidden="until-found"])) {
+  display: none;
+}
+
+
+/* ══ (구 @layer base) — 레이어 없이 이 자리(preflight 뒤·components 앞)에 둔다. v3 와 같은 순서·같은 특이도 싸움 ══ */
   /* ──────────────────────────────────────────────────────────────────────────
    * 테마 토큰 (CSS 변수)
-   * - tailwind.config.js 의 surface/ink/border 색상이 이 변수들을 rgb(var(--x))로 참조한다.
+   * - 이 파일 맨 위 @theme 의 surface/ink/border 색상(--color-*)이 이 변수들을 rgb(var(--x))로 참조한다.
    * - 기본값(:root)은 다크 테마. html.light 클래스가 붙으면 라이트 테마로 전환된다.
    * - 값은 "R G B" 공백 구분(알파 합성을 위해). gold/danger 등 브랜드 색은 고정.
    * ────────────────────────────────────────────────────────────────────────── */
@@ -236,19 +931,9 @@
         0 0 0 1px rgb(139 92 246 / 0.42), 0 0 26px rgb(139 92 246 / 0.36), 0 0 64px rgb(217 70 239 / 0.18),
         0 18px 36px -14px rgb(0 0 0 / 0.55);
     }
-    .card-aura.ring-aura-glow-vivid:hover {
-      box-shadow:
-        0 0 0 1px rgb(167 139 250 / 0.62), 0 0 32px rgb(139 92 246 / 0.52), 0 0 80px rgb(217 70 239 / 0.30),
-        0 18px 36px -14px rgb(0 0 0 / 0.55);
-    }
     html.light .card-aura.ring-aura-glow:hover {
       box-shadow:
         0 0 0 1px rgb(109 40 217 / 0.30), 0 0 24px rgb(139 92 246 / 0.20), 0 0 56px rgb(217 70 239 / 0.10),
-        0 16px 32px -14px rgb(11 18 32 / 0.25);
-    }
-    html.light .card-aura.ring-aura-glow-vivid:hover {
-      box-shadow:
-        0 0 0 1px rgb(109 40 217 / 0.45), 0 0 28px rgb(139 92 246 / 0.32), 0 0 68px rgb(217 70 239 / 0.16),
         0 16px 32px -14px rgb(11 18 32 / 0.25);
     }
   }
@@ -313,42 +998,7 @@
   @media (prefers-reduced-transparency: reduce) { [data-aura] { box-shadow: none; } }
   @media (prefers-contrast: more)               { [data-aura] { box-shadow: none; } }
   @media (forced-colors: active)                { [data-aura] { box-shadow: none; } }
-  /* 🔴 '지금' 신호 숫자에만 거는 글로우 (2026-09-18 오너 시안).
-     왜 box-shadow(=data-aura)가 아니라 text-shadow 인가: 홈 첫 줄은 `h-[26px] whitespace-nowrap` 으로
-     **높이가 고정**돼 있고 home-cls.spec 이 그 자리를 잰다. 배지(패딩·테두리)로 바꾸면 26px 을 넘겨
-     아래가 통째로 밀린다. text-shadow 는 레이아웃을 1px 도 바꾸지 않는다.
-     ⚠ 목록처럼 **반복되는 자리에는 쓰지 않는다** — 다 빛나면 아무것도 안 빛난다. 화면당 한두 곳. */
-  .stat-glow { text-shadow: 0 0 12px rgb(var(--aura-led-rgb, 139 92 246) / 0.55); }
-  html.light .stat-glow { text-shadow: 0 0 8px rgb(var(--aura-led-rgb, 139 92 246) / 0.22); }
-  @media (prefers-contrast: more)  { .stat-glow { text-shadow: none; } }
-  @media (forced-colors: active)   { .stat-glow { text-shadow: none; } }
-  /* 🔴 '오늘 대회 N개' 의 **알약 배지** (2026-09-18 오너 레퍼런스 code.html:108).
-     시안은 글자 그림자가 아니라 바탕+테두리+발광을 가진 알약이다.
-     ⚠ 이 span 은 **인라인**이라 세로 패딩·테두리가 줄 상자 높이를 바꾸지 않는다 —
-       홈 첫 줄의 `h-[26px]` 고정과 home-cls.spec 이 그대로 산다(레이아웃 이동 0).
-       대신 **가로 폭**은 늘어난다 — whitespace-nowrap 이라 320·360 에서 직접 재 본 값이
-       아니면 패딩을 늘리지 마라.
-     색은 호출부가 --aura-led-rgb 로 정한다(보라·에메랄드 한 벌로 끝난다). */
-  /* ⚠ 좀은 폭에서는 **글자 그림자만** 남긴다.
-     이 줄은 whitespace-nowrap 고정 한 줄이라 알약의 패딩·테두리가 가로로 더해지는데,
-     320px 에서 실측 252/290 으로 **38px 넘치다**(home-flow-fit '잘림 0' 이 15건 잡았다).
-     시안의 알약은 390 기준 디자인이므로 **390 이상에서만** 입힌다.
-     패딩·테두리를 px 로 두는 이유: rem 이면 글자 200% 확대에서 같이 불어 다시 넘친다. */
-  .stat-pill { text-shadow: 0 0 12px rgb(var(--aura-led-rgb, 139 92 246) / 0.70); }
-  @media (min-width: 390px) {
-    .stat-pill {
-      padding: 2px 5px; border-radius: 6px;
-      background-color: rgb(var(--aura-led-rgb, 139 92 246) / 0.14);
-      border: 1px solid rgb(var(--aura-led-rgb, 139 92 246) / 0.42);
-      box-shadow: 0 0 14px rgb(var(--aura-led-rgb, 139 92 246) / 0.30);
-    }
-  }
-  html.light .stat-pill { text-shadow: none; }
-  @media (min-width: 390px) {
-    html.light .stat-pill { background-color: rgb(var(--aura-led-rgb, 139 92 246) / 0.10); box-shadow: 0 0 10px rgb(var(--aura-led-rgb, 139 92 246) / 0.16); }
-  }
-  @media (prefers-contrast: more)  { .stat-pill { text-shadow: none; box-shadow: none; } }
-  @media (forced-colors: active)   { .stat-pill { text-shadow: none; box-shadow: none; } }
+  /* 홈 첫 줄 글로우 .stat-glow · 알약 배지 .stat-pill (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
 
   /* 네온 링/게이지 — 진행 스트로크에만(정적 필터, 애니메이트하지 않는다 §4) */
   .ring-glow { filter: drop-shadow(0 0 6px rgb(var(--aura-300) / 0.8)); }
@@ -752,7 +1402,9 @@
 
   /* 포커스 링 — 키보드 탐색 접근성 */
   :focus-visible {
-    @apply outline-none ring-2 ring-accent-300 ring-offset-2 ring-offset-surface-base;
+    /* v3 outline-none 과 같은 값(v4 의 outline-hidden 은 outline-style:none 이라 다르다) */
+    outline: 2px solid transparent; outline-offset: 2px;
+    @apply ring-2 ring-accent-300 ring-offset-2 ring-offset-surface-base;
   }
 
   /* 🔴 브라우저 기본 표면도 디자인이다 (2026-09-18).
@@ -769,19 +1421,15 @@
   input, textarea, [contenteditable] { caret-color: rgb(var(--accent-300)); }
   /* 밑줄이 글자에 붙어 있으면 한글 받침을 자른다. */
   a:hover, a:focus-visible { text-underline-offset: 0.2em; }
-}
 
-@layer components {
+/* ══ (구 @layer components) — 레이어 없이 이 자리(utilities 앞)에 둔다 ══ */
   /* ── 공통 카드 — 바이낸스식 플랫(그림자 제거, 보더+호버 배경) ── */
   .card {
     @apply bg-surface-low rounded-card border border-border-subtle
            transition-colors duration-150 ease-out;
   }
 
-  /* 인터랙티브 카드(포스터·매장 등): 호버 시 배경 강조(플랫 — 떠오름 제거) */
-  .card-interactive {
-    @apply card cursor-pointer hover:bg-surface-high hover:border-border-strong ;
-  }
+  /* 인터랙티브 카드 .card-interactive (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
 
   /* ── 아우라 구분선(UI-03, 2026-09-13) — **독서 경계** 전용 수평선(공지 메타→본문 · 게시글 작성자→본문 · 반응 줄 · 본문→댓글).
      .ring-aura 는 카드 외곽 마스크라 수평선으로 못 쓰고, .aura-bg/.card-aura/.subbar-aura 는 전부 배경이라 새로 둔다.
@@ -797,9 +1445,9 @@
   }
 
   /* ── 버튼 공통 — 바이낸스 밀도(높이 40px대, 패딩 압축. 터치 최소 40px 유지) ── */
-  .btn {
+  .btn, .btn-primary, .btn-ghost, .btn-danger {
     @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap
-           font-semibold text-sm leading-none
+           font-semibold
            rounded-[8px] px-3.5 py-2 min-h-[2.4rem] /* v6: aura-ui.com 실측 .aura-btn = 8px(rounded-aura-md). v4.1 의 12px 보다 한 단계 각지게 */
            /* §20.4 — 앱에서 가장 많이 쓰는 클래스라 여기 하나가 규약의 예외로 남아 있었다.
               transition-all 은 나중에 누가 height/padding 을 얹는 순간 자동 레이아웃 애니가 되고,
@@ -808,7 +1456,9 @@
               그것만 명시한다 — transform 은 어떤 파생도 쓰지 않는다(전수 확인). */
            transition-[background-color,border-color,color,opacity]
            duration-[var(--dur-fast)] [transition-timing-function:var(--ease)] active:opacity-80
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300;
+           focus-visible:ring-2 focus-visible:ring-accent-300;
+    font-size: 0.875rem; line-height: 1; /* v3 text-sm leading-none */
+    &:focus-visible { outline: 2px solid transparent; outline-offset: 2px; } /* v3 focus-visible:outline-none */
   }
 
   /* ══ 버튼 크기 사다리 §B1 (P1-A, 2026-09-12) ══════════════════════════════════
@@ -832,12 +1482,12 @@
      ⚠ 변형은 크기만 바꾼다. 색은 .btn-primary/.btn-ghost/.btn-danger 가 그대로 맡는다
        (`class="btn-primary btn-lg"` 처럼 **함께** 붙인다). utilities 레이어가 뒤라
        호출부의 개별 `text-*`·`h-*` 는 여전히 변형을 이긴다 — 이행 중 충돌이 나지 않는다.
-     ⚠ 선언 위치가 계약의 일부다 — `.btn-primary` 는 `@apply btn` 으로 `.btn` 의 선언을 **자기 안에
+     ⚠ 선언 위치가 계약의 일부다 — `.btn-primary` 는 `.btn` 의 선언을 **자기 것으로** 받는다(v4 이관 뒤로는 `.btn, .btn-primary, …` 묶음 선택자, 그 전엔 `@apply btn` 복사) —
        복사**한다(합성이 아니다). 그래서 크기 변형이 `.btn-primary` **뒤**에 와야 이긴다(둘 다 (0,1,0)).
        위로 옮기면 `class="btn-primary btn-lg"` 가 조용히 무시된다. 실제로 그렇게 썼다가 잡았다. */
 
   .btn-primary {
-    @apply btn bg-accent-300 text-white hover:bg-accent-400 active:bg-accent-500;
+    @apply bg-accent-300 text-white hover:bg-accent-400 active:bg-accent-500;
     /* 1급 CTA 필(OUTFLAME 문법, 2026-08-27) — 정적 그라데이션. bg-* 색은 폴백 겸 유지.
        그라데이션은 transition 불가 속성 → hover/active 는 한 단계 어두운 정적 스왑(모션 헌법 준수:
        새 이징·duration 없음, 애니메이트 없음). ⚠ 색 오버라이드 콜러(골드 등)는 !bg-none 으로
@@ -855,25 +1505,25 @@
   @media (prefers-reduced-motion: reduce) { .btn-primary:hover { transform: none; } }
 
   .btn-ghost {
-    @apply btn bg-transparent text-ink-secondary
+    @apply bg-transparent text-ink-secondary
            hover:bg-surface-high hover:text-ink-primary
            active:bg-surface-high
            border border-border-default;
   }
 
   .btn-danger {
-    @apply btn bg-danger text-white hover:bg-danger-dark;
+    @apply bg-danger text-white hover:bg-danger-dark;
   }
 
   /* §B1 크기 변형 — 위 색 변형들 **뒤에** 온다(이유는 .btn 주석 마지막 문단). */
-  .btn-sm { @apply text-xs leading-[1.0625rem] px-2.5 py-1 min-h-[2rem] gap-1; }
-  .btn-lg { @apply text-base leading-[1.375rem] px-5 py-2.5 min-h-[2.75rem] gap-2; }
+  .btn-sm { @apply px-2.5 py-1 min-h-8 gap-1; font-size: 0.75rem; line-height: 1.0625rem; }
+  .btn-lg { @apply px-5 py-2.5 min-h-11 gap-2; font-size: 1rem; line-height: 1.375rem; }
 
   /* 비활성 버튼 — §7-1 이 '비활성 버튼까지 각각 확인' 을 명시하는데 이 파일에 `:disabled`
      스타일이 **한 줄도 없었다**. 호출부는 `disabled:opacity-25/40/50/60` 을 제각기 붙이고
      (값 6가지) 상당수는 아무 표시도 없어 **누를 수 없는 버튼이 눌리는 버튼과 똑같이 보였다**.
      크기·레이아웃을 하나도 바꾸지 않는 상태 스타일이라 병렬 작업에 안전하다.
-     ⚠ `.btn-primary` 는 `.btn` 클래스를 실제로 갖지 않으므로(@apply 복사) 전부 나열해야 한다.
+     ⚠ `.btn-primary` 는 `.btn` 클래스를 실제로 갖지 않으므로(묶음 선택자로 선언만 받는다) 전부 나열해야 한다.
      호출부의 `disabled:opacity-*` 유틸은 utilities 레이어라 그대로 이긴다(기존 화면 무변경). */
   .btn:disabled, .btn-primary:disabled, .btn-ghost:disabled, .btn-danger:disabled,
   .btn-sm:disabled, .btn-lg:disabled { @apply cursor-not-allowed opacity-50; }
@@ -898,13 +1548,10 @@
   }
   html.light .ring-aura::before { background: linear-gradient(120deg, rgb(109 40 217 / 0.45), rgb(67 56 202 / 0.2) 45%, rgb(162 28 175 / 0.4)); }
   /* 링 글로우(v6.5, 오너 "테두리에 아우라 글로우") — 그라데이션 링 바깥으로 보라→푸시아 후광 2겹 + 착지 그림자. 정적(애니 없음).
-     soft = 기본(배너) · vivid = 강조가 필요할 때. 라이트는 후광 절반(흰 지면에선 얼룩이 빨리 온다). */
+     라이트는 후광 절반(흰 지면에선 얼룩이 빨리 온다). 강조판 .ring-aura-glow-vivid (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
   .ring-aura-glow { box-shadow: 0 0 0 1px rgb(139 92 246 / 0.30), 0 0 22px rgb(139 92 246 / 0.28), 0 0 56px rgb(217 70 239 / 0.14), 0 14px 32px -14px rgb(0 0 0 / 0.55); }
   .ring-aura-glow::before { background: linear-gradient(120deg, rgb(167 139 250 / 0.85), rgb(129 140 248 / 0.45) 45%, rgb(232 121 249 / 0.8)); }
   html.light .ring-aura-glow { box-shadow: 0 0 0 1px rgb(109 40 217 / 0.22), 0 0 20px rgb(139 92 246 / 0.16), 0 0 48px rgb(217 70 239 / 0.08), 0 12px 28px -14px rgb(11 18 32 / 0.25); }
-  .ring-aura-glow-vivid { box-shadow: 0 0 0 1px rgb(167 139 250 / 0.5), 0 0 28px rgb(139 92 246 / 0.45), 0 0 72px rgb(217 70 239 / 0.26), 0 14px 32px -14px rgb(0 0 0 / 0.55); }
-  .ring-aura-glow-vivid::before { background: linear-gradient(120deg, rgb(196 181 253 / 0.95), rgb(165 180 252 / 0.6) 45%, rgb(240 171 252 / 0.95)); }
-  html.light .ring-aura-glow-vivid { box-shadow: 0 0 0 1px rgb(109 40 217 / 0.35), 0 0 24px rgb(139 92 246 / 0.28), 0 0 60px rgb(217 70 239 / 0.14), 0 12px 28px -14px rgb(11 18 32 / 0.25); }
   /* 안쪽 후광 — 링만으론 '선', 이게 있어야 '빛나는 카드'. 합성 #16172F 위 ink-muted 4.62(.08 은 4.52 · .10 은 4.43 미달) */
   .ring-aura::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 28px rgb(139 92 246 / 0.06); }
   html.light .ring-aura::after { box-shadow: inset 0 0 28px rgb(109 40 217 / 0.05); }
@@ -926,10 +1573,7 @@
   /* 섹션 밴드(레퍼런스 bg-gray-50 교차 밴드) — PC 대시보드 KPI 밴드 1곳 한정. 모바일 피드에는 붙이지 않는다(3중 선). */
   .section-alt { background-color: rgb(var(--surface-low) / 0.5); border: 1px solid rgb(255 255 255 / 0.06); }
   html.light .section-alt { background-color: rgb(255 255 255 / 0.6); border-color: rgb(11 18 32 / 0.06); }
-  /* 네온 텍스트(v6, 오너 '글자 네온') — 그라데이션 구절 뒤에 같은 색의 부드러운 후광. 정적 filter(애니 없음), 짧은 span 에만. */
-  .text-grad-glow { filter: drop-shadow(0 0 10px rgb(139 92 246 / 0.45)) drop-shadow(0 0 22px rgb(217 70 239 / 0.22)); }
-  html.light .text-grad-glow { filter: drop-shadow(0 0 8px rgb(109 40 217 / 0.22)); }
-  @media (prefers-reduced-transparency: reduce) { .text-grad-glow { filter: none; } }
+  /* 네온 텍스트 .text-grad-glow (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
   /* 틴트 칩(v6, aura-ui.com 실측 배지): indigo-500/10 배경 · indigo-500/20 테두리 · indigo-300 글자. 선택형·바로가기 칩의 정본.
      활성은 .pill-active(채움+글로우), 비활성/바로가기는 이것 — 회색 칩은 아우라 문법이 아니다. */
   /* 통계 숫자 색(v6.2): emerald-400 은 라이트 흰 지면 위 1.79 — 테마별로 뒤집는다(다크 #34D399 6.9 · 라이트 #047857 5.1) */
@@ -950,7 +1594,6 @@
      점은 글자가 아니라 도형이라 3:1(비텍스트 대비) 기준을 쓴다. */
   .dot-like     { background-color: #E879F9; }  html.light .dot-like     { background-color: #A21CAF; }
   .dot-reserve  { background-color: #818CF8; }  html.light .dot-reserve  { background-color: #4338CA; }
-  .dot-buyin    { background-color: #22D3EE; }  html.light .dot-buyin    { background-color: #0E7490; }
   .dot-cash     { background-color: #FCD535; }  html.light .dot-cash     { background-color: #8D6A00; }
   .dot-bankroll { background-color: #34D399; }  html.light .dot-bankroll { background-color: #047857; }
   .stat-violet  { color: #A78BFA; }  html.light .stat-violet  { color: #6D28D9; }
@@ -1102,12 +1745,14 @@
 
   /* ── 입력 필드 ──────────────────────────────────────── */
   .input {
-    @apply w-full bg-surface-high text-ink-primary text-sm
+    @apply w-full bg-surface-high text-ink-primary
            rounded-input px-3 py-2 min-h-[2.4rem]
            border border-border-default
            placeholder:text-ink-muted
-           focus:outline-none focus:border-accent-300 focus:ring-1 focus:ring-accent-300
+           focus:border-accent-300 focus:ring-1 focus:ring-accent-300
            transition-colors duration-150;
+    font-size: 0.875rem; line-height: 1.25rem; /* v3 text-sm */
+    &:focus { outline: 2px solid transparent; outline-offset: 2px; } /* v3 focus:outline-none */
   }
   /* 비활성 입력칸 — 실측(2026-09-12): `disabled` 입력이 **활성 입력과 픽셀 단위로 같았다**
      (양 테마 모두 글자 대비·경계·opacity 전부 동일). 버튼과 같은 부류의 구멍이고,
@@ -1136,7 +1781,8 @@
   /* ── 뱃지 ───────────────────────────────────────────── */
   .badge {
     @apply inline-flex items-center justify-center
-           rounded-badge text-2xs font-bold leading-none tabular-nums;
+           rounded-badge font-bold tabular-nums;
+    font-size: 0.6875rem; line-height: 1; /* v3 text-2xs leading-none */
   }
 
   /* ══ 타이포 스케일 §T1 — 역할 → 크기·굵기·행간 (오너 #11 "글자 크기 규격화", 2026-08-29) ══
@@ -1187,10 +1833,7 @@
   /* ── 반응형 유동 타이포(clamp) — 큰 제목이 모바일에서 자동 축소(Apple·Stripe식 유동 스케일) ──
      모바일(min)~데스크톱(max)을 뷰포트 폭에 따라 매끄럽게 보간. 1rem=17px(html 기준). */
   .text-fluid-lg  { font-size: clamp(1rem, 0.86rem + 0.7vw, 1.25rem);  line-height: 1.3; }
-  .text-fluid-xl  { font-size: clamp(1.2rem, 0.95rem + 1.3vw, 1.875rem); line-height: 1.2;  letter-spacing: -0.01em; }
-  /* v7 §5-2: 한글 기본 자간은 0, **큰 제목만 약 -0.01em 범위**. -0.02em 은 한글 자모가 서로 붙어
-     읽히는 구간이라 절반으로 되돌린다(fluid-xl 은 이미 -0.01em 이라 그대로). */
-  .text-fluid-2xl { font-size: clamp(1.6rem, 1.05rem + 2.6vw, 3rem);     line-height: 1.12; letter-spacing: -0.01em; }
+  /* .text-fluid-xl · .text-fluid-2xl (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) */
 
   /* 숫자 정렬 일관화 — 숫자 입력 필드도 고정폭 숫자로(자릿수 흔들림 방지). 통계/금액/시간은 컴포넌트에서 tabular-nums 사용 */
   input[type="number"], input[type="date"], input[type="time"] { font-variant-numeric: tabular-nums; }
@@ -1205,15 +1848,74 @@
   /* MO-5: shimmer(background-position 무한 애니 = 매 프레임 페인트 폭탄)를 pulse(opacity 전용,
      컴포지터)로 교체 — 정적 셸·ScheduleSkeletonGrid 가 이미 pulse 라 시각 언어까지 통일(§20.5 #3). */
   .skeleton {
-    background: theme('colors.surface.high');
-    @apply animate-pulse rounded;
+    background: rgb(var(--surface-high) / 1);
+    @apply animate-pulse rounded-sm;
   }
 
-  /* ── 활동 점수 +N 팝업 ──────────────────────────────── */
-  .animate-point-pop {
-    animation: pointPop 0.9s ease-out forwards;
-  }
+  /* 활동 점수 +N 팝업 .animate-point-pop (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — @keyframes pointPop 은 전환 장치 목록(transitionDevices 계약)에 있어 남긴다 */
+
+/* ══ 유틸리티 — v3 의 @tailwind utilities 자리. source(none)+@source 로 v3 content 와 같은 파일만 훑는다
+   (v4 자동 감지는 저장소 전체 — docs·e2e 의 글자까지 클래스로 찍어, v3 에선 안 만들어지던 동적 클래스가 살아날 수 있다). */
+@source '../index.html';
+@source './**/*.{js,ts,jsx,tsx}';
+/* 주석 글자에서 잘못 찍히던 쓰레기 유틸(주석은 평문 스캔이라 클래스가 된다 — 예: '글자 150rem 줄간격'). 누구도 의도해서 쓸 수 없는 모양만 끈다.
+   2026-09-28 번들 정리 ⑤-3: 빌드 JS 에 리터럴 0 · CSS gz 91B. 흔한 유틸(ml-5 등)은 나중에 쓰는 순간 조용히 빠지는 함정이 되니 여기 넣지 않는다. */
+@source not inline('text-sm/600 text-xs/700 [perf:*] [perf:cls] top-[12px+safe] top-[calc(...)] min-h-[Npx] text-emerald-300/400 text-gold-300/400');
+@tailwind utilities source(none);
+
+/* v3 space-*·divide-* 그대로(맨 위 @source not inline 으로 v4 판을 끄고 여기 v3 판을 둔다) */
+.space-y-0\.5 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.125rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.125rem * var(--tw-space-y-reverse)); }
+.space-y-1 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.25rem * var(--tw-space-y-reverse)); }
+.space-y-1\.5 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.375rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.375rem * var(--tw-space-y-reverse)); }
+.space-y-2 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.5rem * var(--tw-space-y-reverse)); }
+.space-y-2\.5 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.625rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.625rem * var(--tw-space-y-reverse)); }
+.space-y-3 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.75rem * var(--tw-space-y-reverse)); }
+.space-y-3\.5 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.875rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.875rem * var(--tw-space-y-reverse)); }
+.space-y-4 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(1rem * var(--tw-space-y-reverse)); }
+.space-y-5 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(1.25rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(1.25rem * var(--tw-space-y-reverse)); }
+.space-y-\[0\.85em\] > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.85em * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.85em * var(--tw-space-y-reverse)); }
+.space-y-card-gap > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.75rem * var(--tw-space-y-reverse)); }
+.divide-x > :not([hidden]) ~ :not([hidden]) { --tw-divide-x-reverse: 0; border-right-width: calc(1px * var(--tw-divide-x-reverse)); border-left-width: calc(1px * calc(1 - var(--tw-divide-x-reverse))); }
+.divide-y > :not([hidden]) ~ :not([hidden]) { --tw-divide-y-reverse: 0; border-top-width: calc(1px * calc(1 - var(--tw-divide-y-reverse))); border-bottom-width: calc(1px * var(--tw-divide-y-reverse)); }
+.divide-border-subtle > :not([hidden]) ~ :not([hidden]) { --tw-divide-opacity: 1; border-color: rgb(var(--border-subtle) / var(--tw-divide-opacity, 1)); }
+@media not all and (min-width: 1024px) {
+  .max-lg\:space-y-0 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0px * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0px * var(--tw-space-y-reverse)); }
+  .max-lg\:space-y-2 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.5rem * var(--tw-space-y-reverse)); }
+  .max-lg\:divide-y > :not([hidden]) ~ :not([hidden]) { --tw-divide-y-reverse: 0; border-top-width: calc(1px * calc(1 - var(--tw-divide-y-reverse))); border-bottom-width: calc(1px * var(--tw-divide-y-reverse)); }
+  .max-lg\:divide-border-strong > :not([hidden]) ~ :not([hidden]) { --tw-divide-opacity: 1; border-color: rgb(var(--border-strong) / var(--tw-divide-opacity, 1)); }
 }
+@media not all and (min-width: 768px) {
+  .max-md\:space-y-1\.5 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.375rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.375rem * var(--tw-space-y-reverse)); }
+  .max-md\:space-y-2\.5 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.625rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.625rem * var(--tw-space-y-reverse)); }
+}
+@media (min-width: 640px) {
+  .sm\:divide-x > :not([hidden]) ~ :not([hidden]) { --tw-divide-x-reverse: 0; border-right-width: calc(1px * var(--tw-divide-x-reverse)); border-left-width: calc(1px * calc(1 - var(--tw-divide-x-reverse))); }
+  .sm\:divide-y-0 > :not([hidden]) ~ :not([hidden]) { --tw-divide-y-reverse: 0; border-top-width: calc(0px * calc(1 - var(--tw-divide-y-reverse))); border-bottom-width: calc(0px * var(--tw-divide-y-reverse)); }
+}
+@media (min-width: 1024px) {
+  .lg\:divide-y-0 > :not([hidden]) ~ :not([hidden]) { --tw-divide-y-reverse: 0; border-top-width: calc(0px * calc(1 - var(--tw-divide-y-reverse))); border-bottom-width: calc(0px * var(--tw-divide-y-reverse)); }
+}
+@media (min-width: 1280px) {
+  .xl\:space-y-0 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0px * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0px * var(--tw-space-y-reverse)); }
+}
+
+/* v3 는 일반 CSS 클래스(.ring-aura)에도 변형(max-lg:)을 붙여 줬다 — PostDetailModal 의 `max-lg:ring-aura`.
+   v4 는 @utility 로 만든 것에만 변형이 붙는다. v3 가 찍던 규칙을 그대로 둔다(아래 .ring-aura 원본과 같은 값). */
+@media not all and (min-width: 1024px) {
+  .max-lg\:ring-aura.card-aura, html.light .max-lg\:ring-aura.card-aura { border-color: transparent; }
+  .max-lg\:ring-aura { position: relative; }
+  .max-lg\:ring-aura::before {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+    background: linear-gradient(120deg, rgb(139 92 246 / 0.55), rgb(99 102 241 / 0.25) 45%, rgb(217 70 239 / 0.5));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+  }
+  html.light .max-lg\:ring-aura::before { background: linear-gradient(120deg, rgb(109 40 217 / 0.45), rgb(67 56 202 / 0.2) 45%, rgb(162 28 175 / 0.4)); }
+  .max-lg\:ring-aura::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 28px rgb(139 92 246 / 0.06); }
+  html.light .max-lg\:ring-aura::after { box-shadow: inset 0 0 28px rgb(109 40 217 / 0.05); }
+}
+
+
 
 @keyframes pointPop {
   0%   { opacity: 0; transform: translateY(4px) scale(0.8); }
@@ -1364,8 +2066,7 @@ body { overscroll-behavior-y: contain; }
 /* 카드/리스트 행 등 클릭 가능한 요소의 공통 탭 피드백(버튼 외 영역) */
 /* 바이낸스식 절제: 탭/라디오 스케일 모션 제거 — 색 전환만 */
 
-/* 승급 축하 컨페티 — 위에서 흩날리며 떨어지는 골드 조각 */
-.confetti { top: -3%; animation-name: confettiFall; animation-timing-function: linear; animation-iteration-count: infinite; }
+/* 승급 축하 컨페티 .confetti (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — @keyframes confettiFall 은 전환 장치 목록에 있어 남긴다 */
 /* ── 포스터 오토 캐러셀(APIS식) — 무한 루프 마퀴(모션 헌법 허용 예외 ①) ─────────
    transform 전용·컴포지터 상주. 트랙은 2배 복제 + -50% 이동으로 이음새 없이 순환.
    (각 카드 mr-3 이라 세트 경계 간격이 내부 간격과 동일 = -50% 지점이 정확히 맞물림)
@@ -1399,7 +2100,7 @@ body { overscroll-behavior-y: contain; }
   /* 진입/로딩 애니메이션은 아예 끔(0.01ms 단축이 아니라 none) — 모션 민감 사용자에게 깜빡임 0.
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
   .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out,
-  .skeleton, .confetti, .anim-pop, .poster-marquee { animation: none !important; }
+  .skeleton, .anim-pop, .poster-marquee { animation: none !important; }
   /* ::details-content 는 위 전역 * 셀렉터가 못 잡는다(의사 요소가 아니라 UA 생성 트리라 * 에 안 걸린다) —
      별도로 끈다. block-size 전환은 헌법 §4 의 grid-template-rows 0fr→1fr 예외와 성격이 같아
      구현은 그대로 두되, 모션 민감 사용자에게는 즉시 열리게 한다(2026-09-04 조사). */
@@ -1770,7 +2471,7 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
  * ⚠ **`.pane-reserve` 는 일부러 이 변수를 쓰지 않는다.** 저건 sticky 오프셋이 아니라 판의 최소 높이
  *   예약이라, 스크롤 중에 값이 바뀌면 그때마다 본문이 리플로우된다 — 고치는 것보다 나쁘다.
  *   '일관성' 을 이유로 나중에 바꾸지 마라. 저기서는 고정 토큰이 맞다. */
-:root { --header-now: theme(spacing.header-h); }
+:root { --header-now: 3.5rem; } /* = spacing.header-h */
 @media (max-width: 767px) {
   :root[data-header-shrunk='1'] { --header-now: 2.75rem; } /* h-11 = 46.75px */
 }
@@ -1872,7 +2573,7 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
    총 CLS 768px 에서 **1.86**(앱 안에서 탭을 누르면 0 — 그땐 프로필·권한이 이미 있다).
    세 구간이 같은 높이를 잡으면 이 세 번의 이동이 한 번으로 준다.
    ⚠ 이것으로 0 이 되지는 않는다 — 실제 판이 한 화면보다 길면 그 차이는 남는다. */
-.pane-reserve { min-height: calc(100svh - theme(spacing.header-h) - var(--tabbar-safe)); }
+.pane-reserve { min-height: calc(100svh - 3.5rem - var(--tabbar-safe)); } /* 3.5rem = spacing.header-h */
 @media (min-width: 1024px) {
   :root { --card-h-grid: 447px; }
   .cv-card-grid { content-visibility: auto; contain-intrinsic-size: auto var(--card-h-grid); }
@@ -1917,9 +2618,12 @@ button:not([data-no-press]), [role='button']:not([data-no-press]), a:not([data-n
 /* a 도 동일 — 전화·길찾기·카카오맵 앵커가 눌러도 무반응이라 '죽은 버튼'처럼 느껴졌다 */
 /* 눌림 = 스케일(물리감) + 미세 감광. 아이폰의 손맛은 '즉시 눌리고(60ms) 천천히 복귀(200ms)'다.
    자체 active:scale-* 유틸을 가진 요소(카드·날짜셀 등)는 그 값이 우선한다. */
+/* 🔴 2026-09-28 — scale(0.97) 한 값이면 가운데 정렬(top-1/2 -translate-y-1/2 등) 버튼이 누르는 동안 정렬 translate 를 잃고
+   반 높이만큼 떨어졌다가(비밀번호 보기 22px) 0.2s 복귀 동안 미끄러져 돌아왔다 — v3 때부터. transform 유틸과 같은 함수 목록으로
+   이동·회전은 그대로 두고 배율만 바꾼다(목록이 같아 복귀 보간도 제자리에서 크기만). 유틸이 없는 버튼은 변수 기본값이라 종전과 같다. */
 button:active:not(:disabled), [role='button']:active, a:active:not([data-no-press]) {
   opacity: 0.8;
-  transform: scale(0.97);
+  transform: translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(0.97) scaleY(0.97);
   transition-duration: 0.06s;
 }
 

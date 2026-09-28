@@ -35,7 +35,7 @@ export function ScenarioQuizCard({ sc, picked, onPick, badge, banner, footer }: 
   return (
     <>
       {/* 상황 */}
-      <div className="rounded-input border border-accent-400/25 bg-accent-300/[0.04] p-3 space-y-2">
+      <div className="rounded-input border border-accent-400/25 bg-accent-300/4 p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <p className="text-xs font-semibold text-ink-secondary">{sc.spot}</p>
           {badge}
@@ -86,7 +86,7 @@ export function ScenarioQuizCard({ sc, picked, onPick, badge, banner, footer }: 
         <div className="animate-fade-in space-y-2">
           {banner}
           <div className={['rounded-input border p-2.5 text-2xs leading-relaxed',
-            ok ? 'border-emerald-400/40 bg-emerald-400/[0.06] text-ink-secondary' : 'border-danger/40 bg-danger/[0.06] text-ink-secondary'].join(' ')}>
+            ok ? 'border-emerald-400/40 bg-emerald-400/6 text-ink-secondary' : 'border-danger/40 bg-danger/6 text-ink-secondary'].join(' ')}>
             <p className="flex items-center gap-1 font-bold mb-0.5">
               <Icon name={ok ? 'check-circle' : 'close'} size={13} className={['shrink-0', ok ? 'text-emerald-400' : 'text-danger-light'].join(' ')} />
               {ok ? '정답!' : `정답은 「${sc.answer}」${sc.alsoOk ? ` (「${sc.alsoOk}」도 인정)` : ''}`}

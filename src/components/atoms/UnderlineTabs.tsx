@@ -26,7 +26,7 @@ export default function UnderlineTabs<T extends string>({
             data-pill-active={on || undefined}
             onClick={() => onChange(it.key)}
             className={[
-              'relative flex-1 transition-colors focus:outline-none',
+              'relative flex-1 transition-colors focus:outline-hidden',
               // §T1 타이포 스케일: md=1단계 내비(t-nav) / sm=서브탭(t-tab)
               // sm: 34 → **46.75px 실제 상자**(py-2 → py-3.5, 2026-09-28). 위는 시트 머리가 덮어 확장이 안 잡히고(39.75),
               //   아래로 넓힌 확장부는 scrollHeight 넘침(글자 잘림 게이트)을 만들고, 밑줄(SlidingPill)은 버튼 상자 아래끝에 붙어

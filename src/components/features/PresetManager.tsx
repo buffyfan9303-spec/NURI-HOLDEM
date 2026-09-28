@@ -180,13 +180,13 @@ export default function PresetManager({ venueId }: { venueId: string }) {
       {/* PL3 생성 경로 역전 — 기본 경로는 '지난 게임에서 만들기'(내용이 채워진 채 열림, 이름만 지으면 끝).
           마감 장부 회차(운영 중 수정까지 반영된 스냅샷)가 최우선 후보, 포스터가 그다음. */}
       {(rounds.length > 0 || recent.length > 0) && (
-        <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-2.5">
+        <div className="rounded-card border border-accent-400/30 bg-accent-300/5 p-2.5">
           <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="zap" size={12} className="shrink-0" />지난 게임에서 프리셋 만들기</p>
           {rounds.length > 0 && (
             <div className="mb-1.5 flex flex-wrap gap-1.5">
               {rounds.map((r) => (
                 <button key={`${r.sessionDate}#${r.gameSeq}`} type="button" onClick={() => startFromRound(r)}
-                  className="rounded-input border border-emerald-500/40 bg-emerald-500/[0.08] px-2.5 py-1.5 text-2xs font-bold text-emerald-300 transition-colors hover:bg-emerald-500/[0.14]">
+                  className="rounded-input border border-emerald-500/40 bg-emerald-500/8 px-2.5 py-1.5 text-2xs font-bold text-emerald-300 transition-colors hover:bg-emerald-500/[0.14]">
                   {r.sessionDate.slice(5).replace('-', '/')} · {r.title || '제목 없음'}{r.gameSeq > 1 ? ` (사이드${r.gameSeq - 1})` : ''} · 장부
                 </button>
               ))}

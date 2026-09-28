@@ -6,6 +6,7 @@ import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 import Icon, { type IconName } from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
+import { businessDateOf, useBusinessDate } from '../../lib/businessDate';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, setInviteGrants } from '../../api/auth';
@@ -45,7 +46,7 @@ import SectionHeader from '../atoms/SectionHeader';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import SlidingPill from '../atoms/SlidingPill';
 import { getSchedules, canManageVenueSchedules, type Schedule } from '../../api/schedules';
-import { getLedgerBuyins, kstToday, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
+import { getLedgerBuyins, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 import { onColorInkClass } from '../../lib/color';
@@ -122,7 +123,7 @@ function SettingsTabBar({ tabs, active, onPick }: {
           사라지므로, 스크롤 칸은 투명하게 두고 `py-1.5 -my-1.5` 로 확장이 들어갈 자리를 주고(차지하는 높이는 그대로),
           트랙(테두리·배경)은 안쪽 판(w-max min-w-full)이 든다 — 스크롤하면 트랙도 함께 움직인다. */}
       <div ref={ref} role="tablist" aria-label="매장 설정 하위탭"
-        className="relative -my-1.5 overflow-x-auto py-1.5 [scrollbar-width:none]">
+        className="relative -my-1.5 overflow-x-auto py-1.5 scrollbar-none">
         <div className="relative flex w-max min-w-full items-center gap-0.5 rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
         <SlidingPill activeKey={active} className="rounded-[6px] pill-active" />
         {tabs.map((t) => {
@@ -130,7 +131,7 @@ function SettingsTabBar({ tabs, active, onPick }: {
           return (
             <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined} data-tab-id={t.id}
               onClick={() => onPick(t.id)}
-              className={['inline-flex h-[32px] shrink-0 items-center rounded-[6px] px-1 t-tab leading-none sm:px-3 transition-colors duration-[var(--dur-fast)] focus:outline-none', CHIP_HIT,
+              className={['inline-flex h-[32px] shrink-0 items-center rounded-[6px] px-1 t-tab leading-none sm:px-3 transition-colors duration-(--dur-fast) focus:outline-hidden', CHIP_HIT,
                 on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
               <span className="relative">{t.label}</span>
             </button>
@@ -141,10 +142,10 @@ function SettingsTabBar({ tabs, active, onPick }: {
       {/* 페이드는 트랙 안쪽에만 — 스크롤 칸의 -my-1.5 가 이 감싸개로 마진 상쇄되어 감싸개가 트랙보다 6.375px 씩 크다.
           inset-y-2(8.5) = 6.375(히트 자리) + 2.125(종전 inset-y-0.5). */}
       {(edge === 'right' || edge === 'both') && (
-        <div aria-hidden className="pointer-events-none absolute inset-y-2 right-0.5 w-9 rounded-r-input bg-gradient-to-l from-surface-high via-surface-high/70 to-transparent" />
+        <div aria-hidden className="pointer-events-none absolute inset-y-2 right-0.5 w-9 rounded-r-input bg-linear-to-l/srgb from-surface-high via-surface-high/70 to-transparent" />
       )}
       {(edge === 'left' || edge === 'both') && (
-        <div aria-hidden className="pointer-events-none absolute inset-y-2 left-0.5 w-9 rounded-l-input bg-gradient-to-r from-surface-high via-surface-high/70 to-transparent" />
+        <div aria-hidden className="pointer-events-none absolute inset-y-2 left-0.5 w-9 rounded-l-input bg-linear-to-r/srgb from-surface-high via-surface-high/70 to-transparent" />
       )}
     </div>
   );
@@ -212,7 +213,7 @@ const VenueEventRequestPanelM = memo(lazyWithReload(() => import('./VenueEventRe
 const CalendarPanelM = memo(lazyWithReload(() => import('./CalendarPanel')));
 
 export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, onOpenVenue, deepSection, onConsumeDeepSection, tabActive = true, homeNonce = 0, resVersion, onVenue }: {
-  schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
+  schedules: Schedule[]; onCreatePoster: (venueId?: string | null) => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
   /** '내 캘린더' 행·포스터 행 '손님화면'·장부 '대회 …' → 손님이 보는 대회 상세. 없으면 행이 클릭되지 않을 뿐 화면은 그대로 뜬다 */
   onOpenSchedule?: (s: Schedule) => void;
   /** 매장 설정 › 매장 페이지 '손님 화면' → 손님이 보는 매장 페이지(App 의 openVenueId). 없으면 버튼이 렌더되지 않는다 */
@@ -252,6 +253,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 운영자는 선택한 매장, 그 외는 고른 소속 매장 → 없으면 프로필 매장 → 없으면 소속 목록의 첫 매장(공동운영 매장만 있는 사람)
   const venueId: string | null = isAdmin ? adminVenueId
     : (memberVenueId ?? user?.venueId ?? memberVenues[0]?.id ?? null);
+  // 2026-09-28 — 새 포스터는 **지금 고른 매장**으로 등록한다(App.handleCreatePosterFromStore 가 이 id 를 받는다).
+  const createPosterHere = useCallback(() => onCreatePoster(venueId), [onCreatePoster, venueId]);
   const [section, setSection] = useState<Section | null>(null);
   // IA2: 게임 진행 스텝 — 마지막 사용 스텝을 기억해 착지(대시보드 '지금 할 일' CTA 는 정확한 스텝을 직접 지정)
   const [gameStep, setGameStep] = useState<GameStep>(() => {
@@ -600,7 +603,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       // bare gotoSection 은 시드를 지워 장부가 목록 모드로 열렸고, 폰 알림을 누른 사장님이 대기 중
       // 바인 요청을 보려면 목록에서 오늘을 다시 골라야 했다. 단계 바 '장부'(아래 onPick)와 같은 식으로
       // 오늘(KST — 장부·서버와 같은 달력) 보드에 앉힌다. 게임은 메인(알림은 게임을 싣지 않는다).
-      onGotoStore({ section: 'ledger', date: kstToday() });
+      onGotoStore({ section: 'ledger', date: businessDateOf(venueId) });   // B1 — 영업일(자정 넘긴 토너면 어제)
     } else {
       gotoSection(target as Section | GameStep | SettingsTab);
     }
@@ -702,16 +705,18 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // L4: 권한을 부여받은 직후 창에 다시 포커스되면 권한 재조회 → 재진입/새로고침 없이 탭 갱신
   useEffect(() => {
     if (!venueId || isAdmin) return;
+    // E(2026-09-28) — 매장 전환 가드: A 매장에서 포커스 재조회가 나간 뒤 B 로 바꾸면, A 의 권한이 B 화면 메뉴를 덮었다.
+    let alive = true;
     const recheck = () => {
       Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId),
                    canManageVenueStaff(venueId).catch(() => false),              // 보조 판정 — 위와 같은 이유로 격리
                    canManageVenueSchedules(venueId).catch(() => null),           // 같은 이유
                    canManageSchedule(venueId).catch(() => false)])                // 같은 이유
-        .then(([l, m, vv, st, sc, ro]) => { setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); setScheduleOk(sc); setSchedOk(ro); })
+        .then(([l, m, vv, st, sc, ro]) => { if (!alive) return; setLedgerOk(l); setManageOk(m); setVoucherView(vv); setStaffOk(st); setScheduleOk(sc); setSchedOk(ro); })
         .catch(() => { /* keep current */ });
     };
     window.addEventListener('focus', recheck);
-    return () => window.removeEventListener('focus', recheck);
+    return () => { alive = false; window.removeEventListener('focus', recheck); };
   }, [venueId, isAdmin]);
 
   // 섹션 노출 규칙(IA1 — 14개 평면 형제 → 사용 빈도 3그룹, 컴포넌트 마운트 이동 0):
@@ -818,7 +823,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           ⚠ 2026-09-15 오너 지시: '운영자 전체 접근' **표기**를 없앤다. 일반 업주에게는 원래 이 칸 자체가
             안 보이지만, 문구가 남아 있으면 관리자 화면에서 권한 등급이 그대로 읽힌다. 남기는 것은 '관리할 매장 선택' 하나. */}
       {(isAdmin || memberVenues.length > 1) && (
-        <div className="space-y-2 rounded-card border border-accent-400/40 bg-accent-300/[0.06] p-3">
+        <div className="space-y-2 rounded-card border border-accent-400/40 bg-accent-300/6 p-3">
           <label htmlFor="mystore-venue-pick" className="block text-2xs font-bold text-accent-300">관리할 매장 선택</label>
           {isAdmin ? (
             <select id="mystore-venue-pick" value={venueId ?? ''} onChange={(e) => setAdminVenueId(e.target.value || null)} className="input text-sm">
@@ -1022,7 +1027,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                        **하루 전 장부**를 열었고 실제로 CI(UTC) 에서 정산 판이 '이 날짜에 연 장부가 없습니다' 로 떴다.
                        (대시보드도 이제 kstToday 를 쓴다 — 여기는 그 우회의 흔적이 아니라 같은 기준의 명시다.)
                        지금 보고 있는 장부(ledgerSeed)가 있으면 그것이 우선이다. */
-                  if (st === 'settle') { setSettleDate(ledgerSeed?.date ?? kstToday()); return gotoSection('settle'); }
+                  if (st === 'settle') { setSettleDate(ledgerSeed?.date ?? businessDateOf(venueId)); return gotoSection('settle'); }
                   /* 🔴 2026-09-20 — 종전엔 `if (fromDash)` 하나였다. 대시보드 목적지가 **날짜 없는**
                      장부(`{ section:'ledger', date: undefined }`)여도 객체라서 truthy 였고, 그래서
                      바로 아래 2026-09-07 폴백(`ledgerSeed?.date ?? kstToday()`)을 **건너뛰었다**.
@@ -1034,7 +1039,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     return onGotoStore(fromDash);
                   }
                   return st === 'ledger'
-                    ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? kstToday(), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame })
+                    ? onGotoStore({ section: 'ledger', date: ledgerSeed?.date ?? businessDateOf(venueId), gameSeq: ledgerSeed?.gameSeq ?? clockSeedGame })
                     : gotoSection(st);
                 }} />
               </div>
@@ -1048,7 +1053,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   읽는 순서는 '단계(어디로) → 대상(무엇을) → 작업'이 된다 — 내비게이션이 문맥보다 위인 통상 배치다. */}
             {renderSection === 'game' && !dItem?.locked && (
               <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
-                canPosters={canPosters} onPick={onPickGame} onNewGame={onCreatePoster}
+                canPosters={canPosters} onPick={onPickGame} onNewGame={createPosterHere}
                 venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} />
             )}
             {/* IA3c 매장 설정 하위탭 — 프리셋·페이지·POS·이용권·위험구역(권한별 노출) */}
@@ -1076,7 +1081,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   : renderSection === 'settings' ? SECTION_ICON[renderSettingsTab]
                   : renderSection ? SECTION_ICON[renderSection] : undefined}
                 action={renderSection === 'game' && renderGameStep === 'posters' && canPosters
-                  ? <button type="button" onClick={onCreatePoster} className="btn-primary">+ 새 게임</button>
+                  ? <button type="button" onClick={createPosterHere} className="btn-primary">+ 새 게임</button>
                   : undefined}
               />
               </div>
@@ -1100,7 +1105,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   {/* 승인 대기 업주(role=venue_owner · profiles.approved≠true)는 서버가 운영 판정을 전부 거짓으로 준다(20260926c·e).
                       그러면 StoreDashboard 가 '운영 권한 없는 직원' 화면(업주에게 요청하세요)을 그렸다 — 본인이 매장 주인인데. */}
                   {isOwner && user.approved !== true ? <OwnerPendingCard /> : (
-                  <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={onCreatePoster} onProgress={setStepInfo}
+                  <StoreDashboardM venueId={venueId} venueName={venueName} schedules={schedules} onGoto={onGotoStore} onCreatePoster={createPosterHere} onProgress={setStepInfo}
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />)}
                   {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
@@ -1115,7 +1120,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       resVersion={resVersion} onVenue={onVenue}
                       active={tabActive && renderSection === 'calendar'} />
                   </Suspense>)}
-                {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
+                {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} venueId={venueId} onCreate={createPosterHere} onEdit={onEditPoster} onDelete={onDeletePoster}
                   active={tabActive && renderSection === 'game' && renderGameStep === 'posters'}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenSchedule={onOpenSchedule}
@@ -1255,6 +1260,8 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
   const [clocks, setClocks] = useState<ClockState[]>([]);
   const [pending, setPending] = useState(0);
   const [, setTick] = useState(0);
+  // B1 — 대기 요청은 서버가 **영업일**에 적는다(request_buyin → ledger_business_date). 달력 오늘로 세면 자정 뒤 0건이 된다.
+  const biz = useBusinessDate(venueId, active);
   // 🔴 2026-09-20 (R1-2) — 두 조회가 `.catch(() => {})` 로 실패를 **완전히 삼켰다.** 조회가 죽으면
   //   바가 조용히 사라져(아래 `if (!main && pending === 0) return null`) 업주는 '진행 중인 게임이 없다'
   //   고 읽는다. 게다가 매장 A→B 로 옮기면 A 로 나간 응답이 늦게 도착해 **B 바에 A 의 클락**이 그려졌다.
@@ -1266,9 +1273,9 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
     const stale = () => isStaleResponse(stamp, stampRef.current);
     getVenueClocks(venueId).then((v) => { if (!stale()) setClocks(v); })
       .catch(() => { if (!stale()) setClocks([]); });
-    getPendingBuyinRequests(venueId, kstToday()).then((r) => { if (!stale()) setPending(r.length); })
+    getPendingBuyinRequests(venueId, biz).then((r) => { if (!stale()) setPending(r.length); })
       .catch(() => { if (!stale()) setPending(0); });
-  }, [venueId]);
+  }, [venueId, biz]);
   // 매장이 바뀌면 이전 매장 데이터를 **즉시** 비운다 — 새 응답이 올 때까지 A 의 클락이 남으면 안 된다.
   useEffect(() => {
     stampRef.current = { seq: stampRef.current.seq + 1, owner: venueId };
@@ -1321,12 +1328,12 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
         </button>
       )}
       {/* 🔴 2026-09-20 — 맨 문자열 `onGoto('ledger')` 라 **오늘 장부 목록**으로만 갔다. 이 배지가 세는
-          대기 건수는 `getPendingBuyinRequests(venueId, kstToday())` 의 **오늘치**이므로 그 날짜로 데려간다
+          대기 건수는 `getPendingBuyinRequests(venueId, 영업일)` 의 **그날치**이므로 그 날짜로 데려간다
           (대시보드의 '장부에서 전체 관리 →' 와 같은 조리법). '대기 N건' 을 눌렀는데 목록이 뜨면
           업주는 그 N 건을 다시 찾아야 한다.
           ⚠ 주석을 `{pending > 0 && (` **안**에 두면 JSX 가 형제 둘로 읽혀 빌드가 깨진다 — 밖에 둔다. */}
       {pending > 0 && (
-        <button type="button" onClick={() => onGoto({ section: 'ledger', date: kstToday() })}
+        <button type="button" onClick={() => onGoto({ section: 'ledger', date: biz })}
           className="flex min-h-[44px] shrink-0 items-center gap-2 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
           바인 대기 <b className="tabular-nums">{pending}</b>건 →
         </button>
@@ -1354,7 +1361,15 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
   ctxGame?: string;
 }) {
   const [games, setGames] = useState<LedgerGame[]>([]);
-  const reload = useCallback(() => { getLedgerGames(venueId, kstToday()).then(setGames).catch(() => {}); }, [venueId]);
+  // B1 — 칩은 **영업일**의 게임이다(자정 넘긴 토너의 어제 장부). 장부 판 followGame 도 같은 날짜로 간다.
+  const biz = useBusinessDate(venueId, active);
+  // E(2026-09-28) — 매장·영업일 스탬프: A 매장 칩 응답이 B 로 바꾼 뒤 도착해도 B 칩 바를 덮지 않는다.
+  const chipOwner = useRef('');
+  chipOwner.current = `${venueId}|${biz}`;
+  const reload = useCallback(() => {
+    const owner = `${venueId}|${biz}`;
+    getLedgerGames(venueId, biz).then((g) => { if (chipOwner.current === owner) setGames(g); }).catch(() => {});
+  }, [venueId, biz]);
   // step 은 갱신 트리거 — 장부에서 사이드를 새로 열고 다른 단계로 넘어오면 칩이 따라잡는다
   useEffect(() => { if (active) reload(); }, [active, step, reload]);
   useEffect(() => {
@@ -1367,7 +1382,7 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
   // 날짜: 셸이 이 스텝에 대상을 건넸으면 그 날짜, 아니면 오늘(= 칩·클락 시드·순위 초기값이 모두 쓰는 날짜).
   // 게임: 셸이 아는 이름(포스터 제목/순위 이벤트) → 없으면 오늘 장부 게임 라벨(메인/사이드N + 제목).
   //   장부가 하나도 없는 날에도 '미개설' 같은 단정을 하지 않는다 — 선택된 게임 라벨만 말한다.
-  const today = kstToday();
+  const today = biz;
   const d = ctxDate ?? today;
   const dt = new Date(`${d}T00:00:00`);
   const dLabel = Number.isNaN(dt.getTime()) ? d
@@ -1384,12 +1399,12 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
         <Icon name="store" size={12} className="shrink-0 text-ink-muted" />
         {/* ⚠ 2026-09-14 실측(375, 긴 매장명): 매장명이 폭을 **먼저** 다 먹어 게임명이 17px `메…` 로 소실됐다
             — 이 줄의 존재 이유("지금 어느 게임인가")가 사라지는 정보 소실이다.
-            ⚠ 루트 폰트가 17px 라 max-w-[14rem] = 238px 다(Tailwind rem 유틸이 6.25% 크다).
+            ⚠ 루트 폰트가 17px 라 max-w-56 = 238px 다(Tailwind rem 유틸이 6.25% 크다).
             그래서 우선순위를 뒤집는다: 매장명은 flex-1(basis 0)로 **남는 폭만** 먹고 먼저 줄어들며,
             게임명은 shrink-0 으로 제 폭을 지키되 max-w-[50%] 로 긴 이름일 때만 잘린다.
-            max-w-[14rem] 은 남겨 둬 PC 에서 매장명이 줄을 독점하지 않게 한다(1440·1280 렌더 불변). */}
+            max-w-56 은 남겨 둬 PC 에서 매장명이 줄을 독점하지 않게 한다(1440·1280 렌더 불변). */}
         {venueName && (<>
-          <span className="min-w-0 max-w-[14rem] flex-1 truncate font-bold text-ink-primary">{venueName}</span>
+          <span className="min-w-0 max-w-56 flex-1 truncate font-bold text-ink-primary">{venueName}</span>
           {sep}
         </>)}
         <span className="shrink-0 tabular-nums text-ink-secondary">{dLabel}</span>
@@ -1411,7 +1426,7 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
                     '+ 새 게임' 버튼이 컨테이너 밖으로 나갔다(오버레이 스크롤바 환경에선 더 있다는 단서가 없다).
                     ⚠ 루트 폰트 17px 라 8rem = 136px 다 — 6rem(102px)으로 줄여 칩을 좁힌다.
                     opacity-80 도 라이트에서 4.01 이라 경계값이었다 → opacity 를 빼고 토큰 계열로 둔다. */}
-                {g.title && <span className="max-w-[6rem] truncate font-semibold">· {g.title}</span>}
+                {g.title && <span className="max-w-24 truncate font-semibold">· {g.title}</span>}
                 {/* 2026-09-14 라이트 실측: opacity-70 이 3.24:1 이었다. '마감'은 그 게임에 더 못 넣는다는
                     운영 상태라 흐리면 안 된다 — 투명도 대신 의미가 있는 토큰으로. */}
                 {g.closed && <span className="text-2xs font-semibold text-ink-secondary">마감</span>}
@@ -1508,7 +1523,7 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
   //   `max-md:py-1.5 max-md:-my-1.5`(6.375px) 로 확장이 들어갈 자리를 줘서 푼다 — 잘려도 32+6.375×2 = 44.75px.
   //   레일 배경은 그 패딩까지 칠하면 32 칸 위아래에 띠가 생기므로 모바일에서는 ::before 트랙(inset-y-1.5)으로 칸 높이만 칠한다.
   //   md 이상은 종전 h-[44px]·레일 그대로다(CHIP_HIT 는 ::before 뿐이라 칸 rect 를 바꾸지 않는다).
-  const chip = (on: boolean) => ['inline-flex h-[44px] max-md:h-[32px] min-w-max flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-[var(--dur-fast)] focus:outline-none sm:px-3 lg:text-sm',
+  const chip = (on: boolean) => ['inline-flex h-[44px] max-md:h-[32px] min-w-max flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-[6px] px-1 t-desc transition-colors duration-(--dur-fast) focus:outline-hidden sm:px-3 lg:text-sm',
     on ? 'font-bold text-white' : 'font-semibold text-ink-muted hover:text-ink-secondary', CHIP_HIT].join(' ');
   return (
     <div ref={ref} data-mystore-rail=""
@@ -1532,18 +1547,18 @@ function GameStepBar({ steps, active, onPick, onHome, progress, showVoucher, onV
       <button type="button" role="tab" aria-selected={active === 'dashboard'} data-pill-active={active === 'dashboard' || undefined}
         onClick={onHome} title="매장 대시보드(요약)"
         /* 🔴 S1(오너 2026-09-24 "알약이 칸마다 폭이 달라 이동할 때마다 크기가 바뀐다") — 원인은 이 칸만의
-           `!px-2`(8.5px)였다. `flex-1 basis-0` 은 **패딩을 뺀 나머지**를 균등 분배하므로 패딩이 큰 칸이
+           `px-2!`(8.5px)였다. `flex-1 basis-0` 은 **패딩을 뺀 나머지**를 균등 분배하므로 패딩이 큰 칸이
            정확히 그만큼 넓어진다(실측 360: 요약 51.14 · 나머지 42.64 = 차 8.5). 알약이 요약↔단계를 오갈 때
-           43→51px 로 늘었다 줄었다 한 것이 이것이다. 다른 칸과 같은 `px-1` 을 쓰고, sm 이상은 종전 `!px-3`
+           43→51px 로 늘었다 줄었다 한 것이 이것이다. 다른 칸과 같은 `px-1` 을 쓰고, sm 이상은 종전 `px-3!`
            그대로(다른 칸도 sm:px-3 이라 PC 폭은 원래도 같았다). */
-        className={[chip(active === 'dashboard'), 'lg:min-w-0 lg:flex-1 lg:basis-0 sm:!px-3'].join(' ')}>
+        className={[chip(active === 'dashboard'), 'lg:min-w-0 lg:flex-1 lg:basis-0 sm:px-3!'].join(' ')}>
         <span className="relative">요약</span>
       </button>
       {steps.map((st, i) => {
         const on = active === st.id;
         return (
           // 🔴 2026-09-22 — lg 에서도 **다른 칸과 완전히 같은 계약**을 쓴다(요약·이용권 포함).
-          //   옛 `lg:max-w-[9rem]` 상한은 폐기했다: 상한이 있으면 칸이 적을 때 단계만 153px 에 걸리고
+          //   옛 `lg:max-w-36` 상한은 폐기했다: 상한이 있으면 칸이 적을 때 단계만 153px 에 걸리고
           //   요약·이용권은 계속 늘어 **폭이 어긋난다**(음성 대조 실측: [163.88,153,153,153,153,153]).
           //   '한 칸이 바 전체로 늘어난다' 던 옛 위험은 모든 칸이 같은 flex 계약을 쓰면 생기지 않는다.
           <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
@@ -1625,7 +1640,7 @@ function SectionBtn({ active, onClick, icon, children, locked, ...rest }: {
     <button type="button" onClick={onClick} ref={ref} {...rest}
       // 모바일=인라인 칩(아이콘+라벨 한 줄, 1행 가로 스크롤) / PC=세로 리스트.
       // §T1: PC 만 13px(사다리 밖)이라 모바일 12.75 와 어긋나 있었다 → t-tab 한 값으로 고정(-0.25px).
-      className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2 t-tab transition-colors duration-[var(--dur-fast)] focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:py-2',
+      className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2 t-tab transition-colors duration-(--dur-fast) focus:outline-hidden touch-manipulation lg:w-full lg:shrink lg:justify-start lg:py-2',
         active ? 'font-bold text-white' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       {active && <span aria-hidden className="absolute inset-0 rounded-[7px] pill-active animate-fade-in" />}
       <span className="relative shrink-0" aria-hidden>{icon}</span>
@@ -1649,7 +1664,9 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   gameSel?: GameSel | null;
 }) {
   const toast = useToast();
-  const today = new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
+  // B1(2026-09-28) — '오늘'은 매장 영업일(서버 ledger_business_date). 게임 칩이 고른 게임(영업일 장부)과 같은 날짜여야
+  //   자정 넘긴 토너의 순위가 달력 오늘(빈 날)로 저장되지 않는다. 예전엔 기기 로컬 날짜였다(해외·시계 오설정 기기에서 하루 어긋남).
+  const today = businessDateOf(venueId);
   const [date, setDate] = useState(draft?.date ?? today);
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
   // 같은 날 여러 게임(메인+사이드) — 게임(이벤트)별로 순위를 따로 저장. ''=기본 게임
@@ -1672,12 +1689,16 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   // 진짜 gameSeq 를 찾는 데 쓴다(아래 currentGameSeq). dayGames 는 이름만 갖고 있어 번호를 못 준다.
   const [dayLedgerGames, setDayLedgerGames] = useState<LedgerGame[]>([]);
   useEffect(() => {
+    // E(2026-09-28) — 매장·날짜 전환 가드: 앞 매장(또는 앞 날짜) 게임 칩이 늦게 도착해 지금 칩을 덮으면
+    //   B 매장 순위가 A 매장 게임 이름으로 저장될 수 있었다.
+    let alive = true;
     Promise.all([
       getSchedules().then((all: Schedule[]) => all.filter((sc) => sc.venueId === venueId && new Date(sc.date).toLocaleDateString('en-CA') === date)).catch(() => [] as Schedule[]),
       // 그날 **모든** 게임(메인+사이드) — 메인 장부 하나만 읽으면 사이드 장부 게임이 칩에 안 떠서
       // 사이드 순위가 '기타'로 밀리거나 메인 칸에 섞여 저장됐다(F02)
       getLedgerGames(venueId, date).catch(() => [] as LedgerGame[]),
     ]).then(([posters, ledgerGames]) => {
+      if (!alive) return;
       setDayLedgerGames(ledgerGames);
       const opts: GameOpt[] = [];
       // 포스터 1장 = 메인 게임(제목) + 사이드 게임 여러 개(sideEvents[])
@@ -1698,6 +1719,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       const seen = new Set<string>();
       setDayGames(opts.filter((o) => (seen.has(o.name) ? false : (seen.add(o.name), true))));
     });
+    return () => { alive = false; };
   }, [venueId, date]);
   // 지금 고른 게임(eventName)의 실제 gameSeq — 장부 조회(getLedgerBuyins)가 게임 번호 없이
   // 항상 메인만 보던 결함의 근본 수정(F04, 2026-09-26). 판정 규칙은 lib/rankingGame.ts 에 한 번만 둔다.
@@ -1768,7 +1790,12 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   };
   // 등수→점수 매핑(매장 꾸미기에서 설정) — 입력 시 점수 미리보기에 사용
   const [cfg, setCfg] = useState<VenuePageConfig | null>(null);
-  useEffect(() => { getVenuePageConfig(venueId).then(setCfg).catch(() => {}); }, [venueId]);
+  useEffect(() => {
+    let alive = true;   // E(2026-09-28) — 앞 매장 점수 매핑이 늦게 와서 지금 매장 미리보기를 덮지 않게
+    setCfg(null);
+    getVenuePageConfig(venueId).then((c) => { if (alive) setCfg(c); }).catch(() => {});
+    return () => { alive = false; };
+  }, [venueId]);
 
   // 장부에서 넘어온 초안: 해당 날짜로 이동 + 그 게임(메인/사이드) 제목으로 게임칩 자동 선택
   useEffect(() => {
@@ -2092,7 +2119,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         );
 
         return (
-          <div className="space-y-3 rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
+          <div className="space-y-3 rounded-card border border-accent-400/30 bg-accent-300/5 p-3">
             <div className="flex items-center gap-2">
               <span className="inline-flex shrink-0 items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name="target" size={12} className="shrink-0" />입력 중인 게임</span>
               <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-accent-300 dark:text-accent-200">{eventName || '메인 게임(기본)'}</span>
@@ -2132,7 +2159,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       })()}
 
       {/* 그날 장부 명단 — 펼쳐서 참고하며 순위 입력(장부↔순위 직접 연동) */}
-      <div className="rounded-card border border-emerald-500/25 bg-emerald-500/[0.04] overflow-hidden">
+      <div className="rounded-card border border-emerald-500/25 bg-emerald-500/4 overflow-hidden">
         <button type="button" onClick={() => setLedgerPanelOpen((v) => !v)}
           className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left">
           <span className="inline-flex items-center gap-1 text-2xs font-bold text-emerald-300"><Icon name="notebook" size={12} className="shrink-0" />그날 장부 명단 {ledgerPlayers.length > 0 ? <span className="text-ink-secondary">({ledgerPlayers.length}명)</span> : <span className="font-normal text-ink-muted">연결된 장부 없음</span>}</span>
@@ -2183,7 +2210,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
 
       {/* 저장 전 입력분 안내 — 초안은 자동 보관되지만, 상태를 보여주지 않으면 사장님이 오탭을 눈치채지 못한다 */}
       {(drafted || restorable) && (
-        <div className="flex items-center gap-2 rounded-input border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2">
+        <div className="flex items-center gap-2 rounded-input border border-amber-500/30 bg-amber-500/6 px-3 py-2">
           {restorable ? (
             <>
               <span className="min-w-0 flex-1 text-2xs text-amber-200">저장하지 않고 나갔던 입력분이 있어요({restorable.length}줄). 지금 화면은 <b>저장된 순위</b>입니다.</span>
@@ -2926,7 +2953,7 @@ function StaffManager({ venueId }: { venueId: string }) {
 /** 승인 대기 업주의 대시보드 자리(2026-09-26 전체 디버깅 #7) — 서버 20260926c·e 와 같은 말: 운영 기능은 관리자 승인 뒤에 열린다. */
 function OwnerPendingCard() {
   return (
-    <div data-testid="owner-pending-card" className="space-y-2 rounded-card border border-amber-500/40 bg-amber-500/[0.06] p-5">
+    <div data-testid="owner-pending-card" className="space-y-2 rounded-card border border-amber-500/40 bg-amber-500/6 p-5">
       <p className="text-sm font-bold text-ink-primary">관리자 승인 후 운영 기능이 열립니다</p>
       <p className="t-desc break-keep text-ink-secondary">
         업주 인증을 관리자가 확인하고 있어요. 승인되면 이 화면에서 포스터·장부·클락·순위·이용권을 바로 쓸 수 있습니다.

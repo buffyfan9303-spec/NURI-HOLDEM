@@ -92,19 +92,19 @@ export function NoticeRow({ notice, onSelect, reserveMarker }: {
            글자를 2배로 키운 화면에서 '한 줄'을 지키는 유일한 방법은 글자를 지우는 것뿐이고,
            그건 요구를 지킨 게 아니라 기능을 없앤 것이다). */}
       <span title={notice.title}
-        className="min-w-[4rem] flex-1 break-words text-sm font-semibold text-ink-primary line-clamp-1">
+        className="min-w-16 flex-1 wrap-break-word text-sm font-semibold text-ink-primary line-clamp-1">
         {notice.title}
       </span>
       <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{when}</span>
     </>
   );
-  const cls = 'flex w-full min-h-[var(--row-h-sm)] flex-wrap items-center gap-2.5 rounded-input px-2.5 py-2 text-left transition-colors';
+  const cls = 'flex w-full min-h-(--row-h-sm) flex-wrap items-center gap-2.5 rounded-input px-2.5 py-2 text-left transition-colors';
   return (
     <li>
       {onSelect ? (
         // aria-label: 시각적으로 잘린 제목과 무관하게 접근성 이름은 항상 전체 제목 + 시각이다.
         <button type="button" onClick={() => onSelect(notice)} aria-label={`${notice.title} · ${when}`}
-          className={`${cls} hover:bg-surface-high/50 focus-visible:bg-surface-high/50 focus:outline-none`}>
+          className={`${cls} hover:bg-surface-high/50 focus-visible:bg-surface-high/50 focus:outline-hidden`}>
           {body}
         </button>
       ) : (
@@ -168,14 +168,14 @@ export default function NoticeSection({
         <div className="p-2"><LoadErrorCard what="공지" error={error} onRetry={onRetry} compact /></div>
       ) : !top ? (
         // 공지 없음 — 큰 빈 상자를 만들지 않는다. 관리자 작성 진입만 한 줄에.
-        <div className="flex min-h-[var(--row-h-sm)] items-center gap-2 px-2.5">
+        <div className="flex min-h-(--row-h-sm) items-center gap-2 px-2.5">
           <span className="text-2xs font-bold text-ink-secondary">공지</span>
           <span className="min-w-0 flex-1 text-2xs text-ink-muted">{emptyText}</span>
           {writeBtn}
         </div>
       ) : (
         <>
-          <div className="flex min-h-[var(--row-h-sm)] items-center gap-1 pl-2.5 pr-1">
+          <div className="flex min-h-(--row-h-sm) items-center gap-1 pl-2.5 pr-1">
             <span className="inline-flex shrink-0 items-center gap-1 text-2xs font-bold text-ink-secondary" aria-hidden>
               <Icon name="megaphone" size={12} className="shrink-0" />공지
             </span>

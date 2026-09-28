@@ -70,7 +70,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     // ── 섹션/탭 단위 컴팩트 폴백 ──
     if (this.props.inline) {
       return (
-        <div className="rounded-card border border-danger/40 bg-danger/[0.06] p-5 text-center space-y-2 my-4 animate-fade-in">
+        <div className="rounded-card border border-danger/40 bg-danger/6 p-5 text-center space-y-2 my-4 animate-fade-in">
           <p className="text-sm font-bold text-ink-primary">{this.props.label ?? '이 영역을 불러오지 못했습니다'}</p>
           <p className="text-2xs text-ink-muted">잠시 후 다시 시도해 주세요.</p>
           <div className="flex items-center justify-center gap-2 pt-1">

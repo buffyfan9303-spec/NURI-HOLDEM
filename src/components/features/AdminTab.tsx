@@ -123,7 +123,7 @@ function BoostContactCard() {
     }
   };
   return (
-    <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3 space-y-2">
+    <section className="rounded-card border border-accent-400/30 bg-accent-300/5 p-3 space-y-2">
       <p className="flex items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="zap" size={15} className="shrink-0" />부스트 문의 연락처</p>
       <p className="text-xs text-ink-muted">업주가 내 매장 → '포스터 상단 고정' 카드에서 보게 될 메일·전화입니다. 비워두면 "준비 중"으로 표시됩니다.</p>
       {loadErr != null && (
@@ -164,7 +164,7 @@ function VenueOwnerRequestsCard() {
   // 운영자는 '이런 대기열이 있다'는 것조차 모른 채 업주 권한 요청을 묻어버린다.
   if (err == null && reqs.length === 0) return null;
   return (
-    <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
+    <section className="rounded-card border border-accent-400/30 bg-accent-300/4 p-3 space-y-2">
       <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="briefcase" size={15} className="shrink-0" />공동 업주(사장님) 초대 승인 <span className="text-2xs font-normal text-ink-muted">· 승인 시 공동 업주 활성</span></h3>
       {err != null ? <LoadErrorCard error={err} what="공동 업주 초대 승인 대기열" onRetry={load} compact /> : (
       <ul className="space-y-1.5">
@@ -220,7 +220,7 @@ function VoucherQuotaAdminCard() {
   //   요청이 '검토 중'에서 영원히 멈추는 막다른 길이었다. 요청을 받는 화면과 처리하는 화면은
   //   **반드시 같은 작업에서** 만들어야 한다.
   return (
-    <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
+    <section className="rounded-card border border-accent-400/30 bg-accent-300/4 p-3 space-y-2">
       <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="ticket" size={15} className="shrink-0" />이용권 발행 한도 증액 요청 <span className="text-2xs font-normal text-ink-muted">· 비용 없음 · 승인하면 즉시 반영</span></h3>
       {err != null ? <LoadErrorCard error={err} what="한도 증액 요청" onRetry={load} compact /> : (
       <ul className="space-y-1.5">
@@ -321,7 +321,7 @@ function RankVerifyAdminCard() {
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, true)} className="btn-primary px-2.5 py-1 text-2xs disabled:opacity-50">승인</button>
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, false)} className="rounded-input border border-danger/40 px-2.5 py-1 font-bold text-danger-light hover:bg-danger/10 disabled:opacity-50">반려</button>
               {openCheck === v.id && (
-                <div className="w-full rounded-input border border-sky-500/30 bg-sky-500/[0.05] p-2">
+                <div className="w-full rounded-input border border-sky-500/30 bg-sky-500/5 p-2">
                   <p className="text-[11px] font-bold text-ink-primary">승인 전 눈으로 대조할 것</p>
                   <ul className="mt-1 space-y-0.5">
                     {VERIFY_CHECKS.map((c) => (
@@ -438,10 +438,10 @@ function MissionsAdminCard() {
         ))}
       </ul>
       {/* 새 미션 추가 */}
-      <div className={['flex flex-wrap items-center gap-1.5 rounded-input border border-dashed p-2', editRow ? 'border-accent-400/60 bg-accent-300/[0.05]' : 'border-border-strong'].join(' ')}>
+      <div className={['flex flex-wrap items-center gap-1.5 rounded-input border border-dashed p-2', editRow ? 'border-accent-400/60 bg-accent-300/5' : 'border-border-strong'].join(' ')}>
         {editRow && <span className="flex w-full items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="edit" size={12} className="shrink-0" />‘{editRow.title}’ 수정 중 — 저장하면 덮어씁니다</span>}
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={30}
-          placeholder="미션 이름 (예: 이번 주 3회 출석 도전)" className="input min-w-[11rem] flex-1 text-sm" />
+          placeholder="미션 이름 (예: 이번 주 3회 출석 도전)" className="input min-w-44 flex-1 text-sm" />
         <select value={goalType} onChange={(e) => setGoalType(e.target.value as MissionGoalType)} className="input w-auto text-sm">
           {GOAL_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -558,10 +558,10 @@ function HallOfFameAdminCard() {
             </span>
             <input value={draft[rank]?.nickname ?? ''} maxLength={30}
               onChange={(e) => setDraft((d) => ({ ...d, [rank]: { ...d[rank], nickname: e.target.value } }))}
-              placeholder={`${rank}위 닉네임`} className="input min-w-[8rem] flex-1 text-sm" />
+              placeholder={`${rank}위 닉네임`} className="input min-w-32 flex-1 text-sm" />
             <input value={draft[rank]?.note ?? ''} maxLength={60}
               onChange={(e) => setDraft((d) => ({ ...d, [rank]: { ...d[rank], note: e.target.value } }))}
-              placeholder="한 줄 소개 (예: ○○ 인비테이셔널 우승)" className="input min-w-[12rem] flex-[2] text-sm" />
+              placeholder="한 줄 소개 (예: ○○ 인비테이셔널 우승)" className="input min-w-48 flex-2 text-sm" />
             <button type="button" onClick={() => saveRank(rank)} disabled={busy}
               className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
           </div>
@@ -867,9 +867,9 @@ function NoticesAdminPanel({ onChanged }: { onChanged?: () => void }) {
             <li key={n.id} className="flex items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
               <span className="flex shrink-0 gap-0.5">
                 <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || busy} aria-label="위로 이동"
-                  className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▲</button>
+                  className="min-h-8 min-w-8 rounded-sm border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▲</button>
                 <button type="button" onClick={() => move(i, 1)} disabled={i === (rows ?? []).length - 1 || busy} aria-label="아래로 이동"
-                  className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▼</button>
+                  className="min-h-8 min-w-8 rounded-sm border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▼</button>
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-bold text-ink-primary">{n.title}</span>
@@ -932,7 +932,7 @@ function SupportInquiriesPanel() {
               <p className="mt-1 text-sm font-bold text-ink-primary">{q.title}</p>
               <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-secondary">{q.content}</p>
               {q.answer && (
-                <div className="mt-2 rounded-input border border-emerald-500/25 bg-emerald-500/[0.05] p-2">
+                <div className="mt-2 rounded-input border border-emerald-500/25 bg-emerald-500/5 p-2">
                   <p className="text-2xs font-bold text-emerald-300">등록된 답변</p>
                   <p className="mt-0.5 whitespace-pre-wrap text-2xs text-ink-primary">{q.answer}</p>
                 </div>
@@ -1133,7 +1133,7 @@ function AdminNavBtn({ active, onClick, icon, badge, children }: { active: boole
        **옛 메뉴가 켜진 채**로 남아 첫 클릭이 안 먹은 것처럼 보인다(오너 2026-09-08 "이중클릭돼").
        커뮤니티 서브탭에서 같은 방법으로 확인한 조리법이다. */
     <button type="button" onClick={onClick} data-admin-active={active || undefined}
-      className={['flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[6px] px-3 py-2 text-xs font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:justify-start',
+      className={['flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[6px] px-3 py-2 text-xs font-semibold transition-colors focus:outline-hidden touch-manipulation lg:w-full lg:justify-start',
         active ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       <span className="shrink-0" aria-hidden>{icon}</span>
       <span className="flex-1 lg:text-left">{children}</span>
@@ -1374,7 +1374,7 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
 
   return (
     <div className="space-y-3">
-      <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2">
+      <section className="rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/5 to-transparent p-3 space-y-2">
         <h3 className="text-sm font-bold text-accent-300">홀덤펍 생성 + 관리 업주 임명</h3>
         <div className="grid grid-cols-2 gap-2">
           <label className="block">
@@ -1707,8 +1707,8 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
           그 토큰을 바꾸면 여기도 같이 바꿔야 한다. */
     <div data-scroll-lock role="dialog" aria-modal="true" aria-label={`${venueName} 장부/통계`}
       style={{ '--header-now': '3.5rem' } as CSSProperties}
-      className={`fixed inset-0 z-[60] bg-surface-base overflow-y-auto ${PAGE_ENTER}`}>
-      <header className="sticky top-0 z-10 h-[calc(theme(spacing.header-h)+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
+      className={`fixed inset-0 z-60 bg-surface-base overflow-y-auto ${PAGE_ENTER}`}>
+      <header className="sticky top-0 z-10 h-[calc(var(--spacing-header-h)+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
         <button type="button" onClick={onClose} className="text-sm font-semibold text-ink-secondary hover:text-ink-primary">← 닫기</button>
         <span className="text-sm font-bold text-ink-primary truncate">{venueName} · 장부/통계</span>
         {/* 오너 지시 2026-09-15 #10: "'운영자 전체 접근' 이건 없어야 해" — 배지만 지운다.
@@ -1835,7 +1835,7 @@ function StaffRow({ staff, onChanged }: { staff: VenueStaff; onChanged: () => vo
         onChange={(e) => setPosition(e.target.value)}
         maxLength={20}
         placeholder="직책"
-        className="input w-16 shrink-0 text-xs !py-1"
+        className="input w-16 shrink-0 text-xs py-1!"
       />
       {dirty && (
         <button type="button" onClick={save} disabled={busy} className="shrink-0 text-2xs font-bold text-accent-300 disabled:opacity-50">저장</button>
@@ -1976,7 +1976,7 @@ function SubPill({ active, onClick, children }: { active: boolean; onClick: () =
       type="button"
       onClick={onClick}
       className={[
-        'flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-[6px] transition-colors focus:outline-none',
+        'flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-[6px] transition-colors focus:outline-hidden',
         active ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >

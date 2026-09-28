@@ -1,7 +1,9 @@
 // src/api/clock.ts — 토너먼트 클락(블라인드 타이머) API
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { mustAffect } from './_mustAffect';
-import { earlyTypeOf, ledgerCounts, type EarlyType, type LedgerBuyin } from './ledger';
+import { serverNow } from '../lib/serverTime';   // D1 — 클락 시각은 서버 기준(lib/serverTime)
+import { resubscribeStatus } from '../lib/realtimeResync';
+import { earlyTypeOf, ledgerCounts, markTournamentStart, type EarlyType, type LedgerBuyin } from './ledger';
 
 /** 얼리 판정에 필요한 세션 정보 */
 export interface EarlyWindow { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null }
@@ -133,7 +135,7 @@ export function levelNoAtMinutes(levels: ClockLevel[], mins: number): number {
  *  왜 여기 있나: 장부(바인 시점 얼리·할인 확정)와 클락이 같은 레벨 번호를 봐야 한다.
  *  각자 인라인으로 세면 브레이크 한 칸 차이로 얼리가 갈린다. */
 export function currentLevelNo(
-  s: Pick<ClockState, 'config' | 'running' | 'currentIndex' | 'endsAt' | 'remainingMs'>, nowMs = Date.now(),
+  s: Pick<ClockState, 'config' | 'running' | 'currentIndex' | 'endsAt' | 'remainingMs'>, nowMs = serverNow(),
 ): number {
   const lv = s.config?.levels ?? [];
   if (!lv.length) return 0;
@@ -237,7 +239,7 @@ export function levelSnapshot(s: Pick<ClockState, 'currentIndex' | 'remainingMs'
  *  왜 null 을 반환하나: 기존 코드는 clamp 만 해서 첫 레벨에서 －, 마지막 레벨에서 ＋ 를 누르면
  *  레벨은 그대로인 채 현재 레벨 타이머만 통째로 리셋됐다 — 레벨 번호가 안 바뀌어 사고를 인지조차 못 한다. */
 export function levelMovePatch(
-  s: Pick<ClockState, 'config' | 'running'>, fromIndex: number, delta: number, nowMs = Date.now(),
+  s: Pick<ClockState, 'config' | 'running'>, fromIndex: number, delta: number, nowMs = serverNow(),
 ): Partial<ClockState> | null {
   const lv = s.config?.levels ?? [];
   if (!lv.length) return null;
@@ -313,7 +315,7 @@ export async function saveClockLevel(
 // 저장은 기존 clock_states.config 한 칸이다(스키마 변경 없음). TV·리모컨·장부 리모컨·라이브 탭은 realtime/재조회로 새 config 를 읽는다.
 
 /** 진행 중 구조 편집에서 **잠긴 앞부분의 길이** — 이 인덱스 미만은 지난 레벨(수정 불가). finished 면 전 레벨 길이. */
-export function liveLockedCount(s: Pick<ClockState, 'config' | 'running' | 'currentIndex' | 'endsAt' | 'remainingMs'>, nowMs = Date.now()): { passed: number; current: number | null } {
+export function liveLockedCount(s: Pick<ClockState, 'config' | 'running' | 'currentIndex' | 'endsAt' | 'remainingMs'>, nowMs = serverNow()): { passed: number; current: number | null } {
   const lv = s.config?.levels ?? [];
   const phase = clockPhase(s, nowMs);
   if (phase === 'finished') return { passed: lv.length, current: null };
@@ -329,7 +331,7 @@ export type LiveStructureResult = { ok: true; patch: Partial<ClockState>; resume
 
 /** 진행 중 클락에 새 블라인드 구조를 적용하는 **패치**(쓰기는 호출부의 바뀐 칸 저장기가 한다). 규칙 위반이면 이유를 돌려준다. */
 export function liveStructurePatch(
-  s: ClockState, levels: ClockLevel[], nowMs = Date.now(),
+  s: ClockState, levels: ClockLevel[], nowMs = serverNow(),
 ): LiveStructureResult {
   const old = s.config?.levels ?? [];
   const { passed, current } = liveLockedCount(s, nowMs);
@@ -373,7 +375,7 @@ export function liveStructurePatch(
 export function sideGameDate(
   cur: { sessionDate: string | null } | null | undefined,
   main: { sessionDate: string | null } | null | undefined,
-  nowMs = Date.now(),
+  nowMs = serverNow(),
 ): string {
   return cur?.sessionDate ?? main?.sessionDate ?? kstToday(nowMs);
 }
@@ -397,7 +399,7 @@ export interface ClockCatchUp { patch: Partial<ClockState>; advanced: number; to
  *    now 기준으로 타이머를 다시 채우면 쓰는 시점마다 값이 달라져 서로를 덮어쓰고 진행 시간이 늘어난다.
  *    (기존 advance() 가 바로 그 방식이라, 재진입할 때마다 밀린 시간이 통째로 증발했다.) */
 export function levelCatchUp(
-  s: Pick<ClockState, 'config' | 'running' | 'currentIndex' | 'endsAt' | 'remainingMs'>, nowMs = Date.now(),
+  s: Pick<ClockState, 'config' | 'running' | 'currentIndex' | 'endsAt' | 'remainingMs'>, nowMs = serverNow(),
 ): ClockCatchUp | null {
   const lv = s.config?.levels ?? [];
   if (!s.running || !lv.length) return null;
@@ -475,7 +477,7 @@ export async function getRunningClocks(): Promise<ClockState[]> {
   // C3(2026-09-25): running=true 여도 마지막 레벨까지 소진한 클락은 **끝난 대회**다 — 라이브 목록·홈 레일·배지에서 뺀다.
   //   종료를 쓰는 주체가 없으면 running 이 영영 true 로 남는다(실측: 9/17 부터 running 인 더미 클락이 '진행 중 1게임').
   //   판정은 clockPhase 와 같은 clockExhausted 하나다 — 목록과 배지가 다른 규칙을 쓰면 숫자가 갈린다.
-  const now = Date.now();
+  const now = serverNow();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => rowToState(r)).filter((s) => !clockExhausted(s, now));
 }
@@ -502,6 +504,13 @@ export async function saveClockState(s: ClockState): Promise<void> {
     updated_at: new Date().toISOString(),
   }, { onConflict: 'venue_id,game_seq' });
   if (error) throw error;
+  if (s.running) noteTournamentStart(s);
+}
+
+/** B2 — 연동 클락이 **돌기 시작한** 저장 뒤, 장부의 대회 시작 시각이 비어 있으면 서버 기준 지금으로 채운다(베스트에포트). */
+function noteTournamentStart(s: Pick<ClockState, 'venueId' | 'gameSeq' | 'sessionDate'>): void {
+  if (!s.sessionDate) return;
+  void markTournamentStart(s.venueId, s.sessionDate, s.gameSeq ?? 1, new Date(serverNow()).toISOString()).catch(() => {});
 }
 
 /** 통계 전용 부분 업데이트 — `live_stats` 컬럼만 쓴다(제어 필드는 절대 건드리지 않는다).
@@ -547,14 +556,42 @@ export function clockPatchRow(base: ClockState, next: ClockState): Record<string
   return row;
 }
 
+/** 다른 기기가 먼저 클락을 바꿔서 이 조작을 적용하지 않았다(D2 CAS 0행). 호출부는 되돌리고 다시 읽는다. */
+export const CLOCK_STALE_TEXT = '다른 기기에서 클락을 먼저 바꿨습니다 — 최신 상태로 다시 불러옵니다';
+
+/** 제어 칸(시작·정지·남은 시간·레벨)을 바꾸는 조작인가 — 이때만 CAS 를 건다. ±카운트·통계는 칸이 달라 경합이 아니다. */
+export function clockPatchTouchesControl(row: Record<string, unknown>): boolean {
+  return 'running' in row || 'ends_at' in row || 'remaining_ms' in row || 'current_index' in row;
+}
+
 /** 진행 중 클락의 **바뀐 칸만** UPDATE — 조작(±·시작/정지·레벨) 전용. 행을 새로 만들지 않는다(시작은 saveClockState).
- *  0행(다른 기기가 종료했거나 권한 없음)은 성공이 아니다 — 호출부가 화면을 되돌린다. */
+ *  0행(다른 기기가 종료했거나 권한 없음)은 성공이 아니다 — 호출부가 화면을 되돌린다.
+ *
+ *  🔴 D2(2026-09-28) — 제어 칸을 바꿀 때는 **'내가 보고 누른 상태가 아직 서버에 그대로일 때만'** 쓴다(CAS).
+ *    폰이 잠든 사이 PC 가 정지했는데, 깨어난 폰(여전히 '진행 중' 화면)이 STOP 을 누르면 옛 ends_at 으로 계산한
+ *    remaining_ms 가 조건 없이 들어가 **정지해 있던 시간이 사라졌다**(반대로 옛 폰의 START 는 PC 의 재개를 덮었다).
+ *    base = 이 기기가 서버에서 받은(또는 서버가 받아 준) 값. 진행 중이면 ends_at·레벨, 정지 중이면 remaining_ms·레벨을 조건으로 건다.
+ *    0행이면 CLOCK_STALE_TEXT 로 던진다 — 저장기(createCoalescingSaver)가 되돌리고 idle 에서 다시 읽는다. */
 export async function saveClockPatch(base: ClockState, next: ClockState): Promise<void> {
   if (IS_MOCK) return;
   const row = clockPatchRow(base, next);
   if (Object.keys(row).length === 0) return;
+  const payload = { ...row, updated_at: new Date().toISOString() };
+  if (clockPatchTouchesControl(row)) {
+    // 진행 중: 레벨 + ends_at 이 그대로일 때만 / 정지 중: 레벨 + ends_at 없음 + remaining_ms 가 그대로일 때만.
+    await mustAffect(
+      supabase.from('clock_states').update(payload)
+        .eq('venue_id', next.venueId).eq('game_seq', next.gameSeq ?? 1)
+        .eq('running', base.running).eq('current_index', base.currentIndex)
+        .filter('ends_at', base.endsAt ? 'eq' : 'is', base.endsAt ?? null)
+        .match(base.endsAt ? {} : { remaining_ms: base.remainingMs }),
+      CLOCK_STALE_TEXT,
+    );
+    if (next.running && !base.running) noteTournamentStart(next);
+    return;
+  }
   await mustAffect(
-    supabase.from('clock_states').update({ ...row, updated_at: new Date().toISOString() })
+    supabase.from('clock_states').update(payload)
       .eq('venue_id', next.venueId).eq('game_seq', next.gameSeq ?? 1),
     '클락을 찾지 못했습니다. 이미 종료됐거나 권한이 없습니다',
   );
@@ -625,7 +662,14 @@ export function subscribeClock(venueId: string, onChange: () => void): () => voi
   if (IS_MOCK) return () => {};
   const ch = supabase.channel(`clock:${venueId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'clock_states', filter: `venue_id=eq.${venueId}` }, () => onChange())
-    .subscribe();
+    // F(2026-09-28) — filter 를 건 구독은 DELETE 를 못 받는다(Supabase: "Delete events are not filterable").
+    //   그래서 PC 가 [클락 종료](clearClockState)를 해도 폰 리모컨·장부 클락 바에는 계속 도는 클락이 남았다.
+    //   clock_states 의 기본키는 (venue_id, game_seq) 라 DELETE 의 old 에 venue_id 가 실린다 — 필터 없이 듣고 매장으로 거른다.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'clock_states' }, (p: any) => {
+      if (p?.old?.venue_id === venueId) onChange();
+    })
+    .subscribe(resubscribeStatus(onChange));   // 소켓이 끊겼다 다시 붙으면 그 사이 변경을 한 번 다시 읽는다
   return () => { supabase.removeChannel(ch); };
 }
 

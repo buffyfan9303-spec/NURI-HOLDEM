@@ -90,7 +90,7 @@ export function AggroChart() {
           약속해 놓고 실제로는 배지가 없었다. 출처는 결과 바로 옆(RangeGuide.tsx 와 같은 자리). */}
       <div className="flex justify-center"><SourceBadge kind="chart" note="100bb" /></div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[26rem] text-center text-xs">
+        <table className="w-full min-w-104 text-center text-xs">
           <thead>
             <tr className="text-2xs text-ink-muted">
               <th className="py-1.5 px-2 text-left font-semibold">포지션</th>
@@ -258,13 +258,13 @@ export function RangeMatrix() {
             <span className="font-bold text-ink-secondary">상대 {(100 - eq).toFixed(1)}%</span>
           </div>
           <div className="mt-1 flex h-2.5 overflow-hidden rounded-full bg-surface-high">
-            <div className="h-full bg-accent-300 transition-[width] duration-[var(--dur-panel)]" style={{ width: `${eq}%` }} />
+            <div className="h-full bg-accent-300 transition-[width] duration-(--dur-panel)" style={{ width: `${eq}%` }} />
           </div>
         </div>
       )}
       {/* 전체 매트릭스 — 미계산 셀은 백그라운드 순차 계산 후 채워짐 */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[30rem] text-center text-2xs">
+        <table className="w-full min-w-120 text-center text-2xs">
           <thead>
             <tr>
               <th className="py-1 px-1.5 text-left text-ink-muted font-semibold">내 \ 상대</th>

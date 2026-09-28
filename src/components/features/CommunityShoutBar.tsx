@@ -97,7 +97,7 @@ const SLOT_MS = SHOUT_SLOT_SECONDS * 1000;
  *  · ⚠ **길이 상한이 곧 레이아웃 계약이다: 한 줄 26자 이내.**
  *    실측(412px 첫 스크린샷)에서 40자짜리 문구가 3줄로 감겨, 20초마다 카드 높이가 한 줄씩
  *    들썩였다 — 오너가 가장 싫어하는 '주르륵 밀리는' 움직임이 정확히 그것이다.
- *    26자면 좁은 기기(320px)에서도 두 줄 안에 들어온다. 아래 min-h-[2.5rem] 로 두 줄을
+ *    26자면 좁은 기기(320px)에서도 두 줄 안에 들어온다. 아래 min-h-10 로 두 줄을
  *    미리 잡아 두므로 한 줄짜리 문구와 두 줄짜리 문구가 같은 높이를 차지한다(회전 중 CLS 0).
  *    자르지(line-clamp) 않는 이유: 자르면 글자가 조용히 사라진다. 상한을 넘기면 눈에 보이게
  *    카드가 커지는 편이 낫다 — 그래야 다음 사람이 고칠 수 있다.
@@ -114,15 +114,15 @@ const IDLE_LINES: readonly string[] = [
 // ── 등급별 겉모습 ───────────────────────────────────────────────────────────
 // 값(가격)은 전부 서버(shop_skus)에서 오고, 여기 있는 건 **색뿐이다.**
 // gold 계열은 이미 명예의 전당·시즌 우승 배지가 쓰는 조합을 그대로 재사용한다
-// (border-gold-400/40 + bg-gold-300/[0.06] + text-gold-300) — 새 색 규칙을 만들지 않기 위해서.
+// (border-gold-400/40 + bg-gold-300/6 + text-gold-300) — 새 색 규칙을 만들지 않기 위해서.
 // 'board' 는 판매 중지지만 **과거 외침이 이 스킨으로 계속 렌더돼야 하므로 남긴다.**
 const TIER_SKIN: Record<ShoutTier, { box: string; icon: string; text: string }> = {
   basic: {
-    box:  'border-accent-400/50 bg-gradient-to-r from-accent-300/[0.12] to-transparent',
+    box:  'border-accent-400/50 bg-linear-to-r/srgb from-accent-300/12 to-transparent',
     icon: 'text-accent-300', text: 'text-sm',
   },
   gold: {
-    box:  'border-gold-400/50 bg-gradient-to-r from-gold-300/[0.10] to-transparent',
+    box:  'border-gold-400/50 bg-linear-to-r/srgb from-gold-300/10 to-transparent',
     icon: 'text-gold-300', text: 'text-sm',
   },
   // 2026-08-30(20260830n) 상위 티어 2종.
@@ -130,15 +130,15 @@ const TIER_SKIN: Record<ShoutTier, { box: string; icon: string; text: string }> 
   //   겉모습의 기본값은 basic 과 같게 두고, 색은 아래 TIER_VAR 의 **등급 토큰으로 인라인 덮어쓰기**한다
   //   — 하이라이트의 색 선택이 쓰는 것과 정확히 같은 경로다(colorBoxStyle/colorIconStyle).
   long: {
-    box:  'border-accent-400/50 bg-gradient-to-r from-accent-300/[0.12] to-transparent',
+    box:  'border-accent-400/50 bg-linear-to-r/srgb from-accent-300/12 to-transparent',
     icon: 'text-accent-300', text: 'text-sm',
   },
   reserve: {
-    box:  'border-accent-400/50 bg-gradient-to-r from-accent-300/[0.12] to-transparent',
+    box:  'border-accent-400/50 bg-linear-to-r/srgb from-accent-300/12 to-transparent',
     icon: 'text-accent-300', text: 'text-sm',
   },
   board: {
-    box:  'border-gold-400 bg-gradient-to-r from-gold-300/[0.16] via-accent-300/[0.06] to-transparent',
+    box:  'border-gold-400 bg-linear-to-r/srgb from-gold-300/16 via-accent-300/6 to-transparent',
     icon: 'text-gold-300', text: 'text-base',
   },
 };
@@ -282,7 +282,7 @@ function ColorPicker({ value, onChange }: { value: ShoutColor; onChange: (c: Sho
               key={c} type="button" role="radio" aria-checked={on} aria-label={COLOR_LABEL[c]}
               onClick={() => onChange(c)}
               className={['flex items-center gap-1.5 rounded-badge border px-2 py-1 text-2xs font-bold transition-colors',
-                on ? 'border-accent-300 bg-accent-300/[0.10] text-ink-primary'
+                on ? 'border-accent-300 bg-accent-300/10 text-ink-primary'
                    : 'border-border-subtle bg-surface-high text-ink-secondary hover:border-accent-400/50'].join(' ')}
             >
               <span aria-hidden className="h-3 w-3 shrink-0 rounded-full"
@@ -452,7 +452,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
                   key={s.key} type="button" onClick={() => setTier(k)}
                   aria-pressed={on}
                   className={['rounded-aura border px-2 py-2 text-center transition-colors',
-                    on ? 'border-accent-300 bg-accent-300/[0.10]' : 'border-border-subtle bg-surface-high hover:border-accent-400/50'].join(' ')}
+                    on ? 'border-accent-300 bg-accent-300/10' : 'border-border-subtle bg-surface-high hover:border-accent-400/50'].join(' ')}
                 >
                   <span className={['block text-xs font-bold', on ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{s.label}</span>
                   <span className="mt-0.5 block text-2xs font-extrabold tabular-nums text-ink-secondary">{s.price.toLocaleString()}점</span>
@@ -523,7 +523,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
              style={colorBoxStyle(tier, tier === 'gold' ? color : null)}>
           <p className={['text-2xs font-bold', tierSkin(tier).icon].join(' ')}
              style={colorIconStyle(tier, tier === 'gold' ? color : null)}>미리보기</p>
-          <p className={['mt-0.5 break-words font-bold leading-snug text-ink-primary', tierSkin(tier).text].join(' ')}>
+          <p className={['mt-0.5 wrap-break-word font-bold leading-snug text-ink-primary', tierSkin(tier).text].join(' ')}>
             <Icon name="megaphone" size={15} className={['mr-1 inline-block align-[-2px] shrink-0', tierSkin(tier).icon].join(' ')}
                   style={colorIconStyle(tier, tier === 'gold' ? color : null)} />{trimmed || '여기에 외칠 내용이 표시됩니다'}
           </p>
@@ -692,7 +692,7 @@ export default function CommunityShoutBar({ className }: { className?: string })
     // min-h 로 자리를 미리 잡는다 — 로딩→도착에서 아래 콘텐츠가 밀리지 않게(CLS 0)
     // 57px = py-2.5(20) + 테두리(2) + h-8 버튼 줄(32)+3. 등급이 바뀌어도 높이를 버튼이 지배하므로 고정이다.
     // 예전 3.25rem(52px)은 **덜 잡고 있었다** — 카드가 실측 57px 이라 도착할 때 5px 만큼 아래가 밀렸다.
-    <div ref={rootRef} className={['min-h-[3.5625rem]', className ?? ''].join(' ')}>
+    <div ref={rootRef} className={['min-h-14.25', className ?? ''].join(' ')}>
       {/* 카드는 **하나뿐이다.** 방송 중 ↔ 기본 문구가 같은 DOM 을 갈아 끼우므로 전환에서 리마운트도,
           높이 점프도 없다. 20초 슬롯 순환은 페이드로만 갈아 끼운다(캐러셀 슬라이드 아님).
           ⚠ 2026-09-05 오너 지시로 **가로 전광판**을 도입했다: 한 줄이 칸을 넘칠 때만 MarqueeText 가
@@ -703,7 +703,7 @@ export default function CommunityShoutBar({ className }: { className?: string })
           빈 자리·만료·로딩은 Aura 0: 이 컴포넌트는 오류를 빈 배열로 삼키므로(api/community.ts)
           idle 에 빛을 주면 서버가 죽은 상태를 '강조'하게 된다.
           색은 이 외침이 이미 쓰는 등급/선택 색 토큰 그대로(새 팔레트 없음).
-          레이아웃 영향 0 — box-shadow 라 래퍼의 min-h-[3.5625rem] 계약을 건드리지 않는다. */}
+          레이아웃 영향 0 — box-shadow 라 래퍼의 min-h-14.25 계약을 건드리지 않는다. */}
       <div
         data-testid={drawShout ? 'shout-live' : 'shout-idle'}
         data-aura={drawShout ? '' : undefined}
@@ -720,7 +720,7 @@ export default function CommunityShoutBar({ className }: { className?: string })
           {/* 한 줄 전광판. min-h 로 자리를 미리 잡는다 — 20초마다 문구가 갈릴 때 카드가 들썩이지
               않게 **공간을 예약**한다(CLS 는 진입 애니가 아니라 공간 예약으로 푼다). 1.75rem 은
               board 등급의 text-base(leading-snug 22px)까지 덮는 값이라 등급이 섞여도 높이가 고정된다. */}
-          <div className="flex min-h-[1.75rem] min-w-0 flex-1 items-center"
+          <div className="flex min-h-7 min-w-0 flex-1 items-center"
                style={{ transition: 'opacity var(--dur-base) var(--ease)', opacity: vis ? 1 : 0 }}>
             {drawShout && skin ? (
               <MarqueeText className="w-full" text={`${drawShout.nickname} · ${drawShout.message} · 방송 중`}>
@@ -755,7 +755,7 @@ export default function CommunityShoutBar({ className }: { className?: string })
             경로가 통째로 없어진다. 기능을 없애지 않기 위해 본인 것만 여기로 옮긴다
             (운영자용 사후 통제는 관리자 설정 → 외침 관리에 그대로 있다). */}
         {mine && (
-          <div data-testid="shout-mine" className="mt-1.5 flex items-center gap-2 rounded-input bg-accent-300/[0.10] px-2 py-1">
+          <div data-testid="shout-mine" className="mt-1.5 flex items-center gap-2 rounded-input bg-accent-300/10 px-2 py-1">
             <span className="min-w-0 flex-1 text-2xs font-bold text-accent-300">
               내 외침은 {airLabel(mine.playsAt)} · 대기 {mineIdx + 1}번째
             </span>

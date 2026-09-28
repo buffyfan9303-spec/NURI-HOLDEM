@@ -7,7 +7,7 @@
 //   장터 매물 상세 뒤에 깔려 안 보였다(CTA 히트 0/46, e2e/login-gate-layer.spec.ts).
 //
 // 왜 소스 계약인가
-//   e2e 는 장터 경로 하나를 잰다. 누군가 AuthModal 의 `layer` 를 지우거나 Modal 의 'gate' 매핑을 z-[60] 으로
+//   e2e 는 장터 경로 하나를 잰다. 누군가 AuthModal 의 `layer` 를 지우거나 Modal 의 'gate' 매핑을 z-60 으로
 //   되돌리면 다른 sheet 소비처(공지·문의·내 장터…)에서 같은 결함이 조용히 돌아온다 — 배선 자체를 여기서 잠근다.
 //   ⚠ 층 숫자의 상하 관계(60 < 65 < 70 확인창 < 120 토스트)도 같이 단언한다 — 65 를 70 으로 올리면 확인창과 겹친다.
 import { describe, expect, it } from 'vitest';
@@ -25,15 +25,15 @@ const toast = src('components', 'atoms', 'Toast.tsx');
 const zOf = (s: string, re: RegExp) => Number(re.exec(s)?.[1]);
 
 describe('게이트 시트 쌓임 층(Modal layer="gate")', () => {
-  it("Modal 원자: layer='gate' 는 기본 z-[60] 보다 높고 확인창 z-[70]·토스트보다 낮은 z-[65] 다", () => {
-    const line = modal.split('\n').find((l) => l.includes("layer === 'gate'") && l.includes('z-['));
+  it("Modal 원자: layer='gate' 는 기본 z-60 보다 높고 확인창 z-[70]·토스트보다 낮은 z-65 다", () => {
+    const line = modal.split('\n').find((l) => l.includes("layer === 'gate'") && /'z-\d+'/.test(l));
     expect(line, "Modal.tsx 에 layer === 'gate' → z 클래스 분기가 없다").toBeDefined();
-    const gate = zOf(line!, /layer === 'gate' \? 'z-\[(\d+)\]'/);
-    const base = zOf(line!, /: 'z-\[(\d+)\]'/);
+    const gate = zOf(line!, /layer === 'gate' \? 'z-(\d+)'/);
+    const base = zOf(line!, /: 'z-(\d+)'/);
     expect(base).toBe(60);
     expect(gate).toBeGreaterThan(base);
     expect(gate).toBeLessThan(70); // 확인창(VoucherWallet·CustomerDashboardPage 등 z-[70])은 게이트 위에 남는다
-    const toastZ = zOf(toast, /z-\[(\d+)\]/);
+    const toastZ = zOf(toast, /\bz-(\d+)\b/);
     expect(gate).toBeLessThan(toastZ); // 시트 위 토스트 계약
   });
 
@@ -49,7 +49,20 @@ describe('게이트 시트 쌓임 층(Modal layer="gate")', () => {
     expect(line).toContain('layer="gate"');
   });
 
-  it("양성 대조: 'gate' 문자열 리터럴이 소스에 있어 Tailwind content 스캔이 z-[65] 를 만든다", () => {
-    expect(modal).toMatch(/'z-\[65\]'/);
+  it('위치 동의 시트의 otherGateOpen 은 Modal 게이트 층과 **같은 z 클래스**로 게이트 시트를 찾는다', () => {
+    // 2026-09-28 Tailwind v4 이관: 변환 도구가 Modal 의 z-[65] 를 z-65 로 바꿨는데 lib/locationConsent.ts 의
+    // 선택자는 '.z-\\[65\\]' 로 남아 게이트 시트를 **못 찾았다** — 동의 시트가 로그인 시트 위에 겹치는 2026-09-26 결함이 조용히 돌아온다.
+    // 클래스 이름으로 요소를 찾는 코드는 이것 하나다 — 클래스 이름이 바뀌면 여기서 멈춘다.
+    const gateZ = /layer === 'gate' \? '(z-[^']+)'/.exec(modal)?.[1];
+    expect(gateZ, "Modal.tsx 에서 layer === 'gate' 의 z 클래스를 못 읽었다").toBeDefined();
+    const lc = src('lib', 'locationConsent.ts');
+    const sel = /querySelectorAll\('\[data-scroll-lock\]\.([^']+)'\)/.exec(lc)?.[1];
+    expect(sel, 'otherGateOpen 의 [data-scroll-lock].<z> 선택자를 못 찾았다').toBeDefined();
+    // CSS 선택자 이스케이프(\\[ \\])를 풀어 클래스 이름으로 비교한다
+    expect(sel!.replace(/\\\\/g, '')).toBe(gateZ);
+  });
+
+  it("양성 대조: 'gate' 문자열 리터럴이 소스에 있어 Tailwind content 스캔이 z-65 를 만든다", () => {
+    expect(modal).toMatch(/'z-65'/);
   });
 });

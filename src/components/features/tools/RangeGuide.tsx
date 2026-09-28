@@ -39,7 +39,7 @@ const VS_CAPTION: Record<RangeScenario['group'], string> = {
 //   `space-y-3`(특이도 0,3,0 — 자식 margin 을 덮어쓴다) 직계라 래퍼 div 로 한 겹 감싼다(마진 상쇄로 12.75px 유지).
 //   e2e/gto-tab-verify.spec.ts '상황 그룹 칩 44px 유효 표적' 이 elementFromPoint 로 오버행까지 잰다.
 const chipCls = (on: boolean) =>
-  [CHIP_HIT, 'h-[32px] shrink-0 rounded-input px-2.5 text-2xs font-bold leading-none border transition-colors focus:outline-none',
+  [CHIP_HIT, 'h-[32px] shrink-0 rounded-input px-2.5 text-2xs font-bold leading-none border transition-colors focus:outline-hidden',
     on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ');
 
 const firstOfGroup = (g: RangeScenario['group']) => RANGE_SCENARIOS.find((s) => s.group === g)!;
@@ -144,7 +144,7 @@ export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
       <RangeMatrix13 actions={actions} initialSel={highlight} />
 
       {scen.note && (
-        <p className="text-2xs leading-relaxed text-accent-200 rounded-input bg-accent-300/[0.06] border border-accent-400/20 px-2 py-1.5"><Icon name="target" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />{scen.note}</p>
+        <p className="text-2xs leading-relaxed text-accent-200 rounded-input bg-accent-300/6 border border-accent-400/20 px-2 py-1.5"><Icon name="target" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />{scen.note}</p>
       )}
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
         ※ 100bb 기준 자체 제작 표준 차트(학습용). %는 1326콤보 가중 — 실제 참여율 감각과 일치합니다.

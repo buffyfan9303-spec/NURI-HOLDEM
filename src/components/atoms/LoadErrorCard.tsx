@@ -41,7 +41,7 @@ export default function LoadErrorCard({ error, onRetry, what = '정보', compact
     <div
       role="alert"
       className={[
-        'flex flex-col items-center justify-center gap-2 rounded-card border border-danger/30 bg-danger/[0.06] text-center',
+        'flex flex-col items-center justify-center gap-2 rounded-card border border-danger/30 bg-danger/6 text-center',
         compact ? 'px-3 py-4' : 'px-4 py-10',
       ].join(' ')}
     >

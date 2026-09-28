@@ -37,12 +37,14 @@ import { relativeTime } from '../../lib/relativeTime';
 // 언마운트하지 않는다(VenueManageTab 는 key 없이 재사용한다) — 데이터·오류·로딩·'HH:MM 기준'을
 // 한 세대로 묶지 않으면 A 매장 응답이 B 화면에 숫자/오류 배너/시각으로 남는다.
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
+import { useBusinessDate } from '../../lib/businessDate';
+import { serverNow } from '../../lib/serverTime';
+import { useResyncOnWake } from '../../lib/realtimeResync';
 
 // '오늘'·'최근 N일'은 전부 **KST** — 장부·서버(ledger_business_date · kstToday)와 같은 달력이어야 한다.
 // 예전엔 브라우저 로컬 TZ(toLocaleDateString)라, KST 보다 뒤진 기기(해외 로밍·시계 오설정·UTC 러너)에서
 // 한국 자정~오전 9시 사이엔 **어제** 장부를 '오늘'로 읽어 '미시작' 배지와 [장부 시작하기]가 떴다.
 // 정산 단계만 VenueManageTab 에서 kstToday 로 우회하고 있었다 — 근원을 한 곳으로 맞춘다.
-const localToday = kstToday;
 const kstDaysAgo = (n: number) => kstToday(Date.now() - n * 86_400_000);
 const lastN = (n: number) => Array.from({ length: n }, (_, i) => kstDaysAgo(n - 1 - i));
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -110,7 +112,9 @@ const fmtT = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits:
 
 export default function StoreDashboard({ venueId, venueName: venueNameProp, schedules, onGoto, onCreatePoster, caps, active = true, onProgress }: Props) {
   const toast = useToast();
-  const d = localToday();
+  // B1(2026-09-28) — '오늘'은 매장 **영업일**이다(서버 ledger_business_date 와 같은 값). 자정을 넘긴 토너에서
+  //   달력 오늘을 쓰면 00:30 에 '미시작'이 뜨고 손님 바인 요청(날짜=어제 영업일)이 대기열에서 사라졌다.
+  const d = useBusinessDate(venueId, active);
   const days = last7();
   const d14 = last14();
   const mr = monthRange();
@@ -366,9 +370,21 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     prevActiveRef.current = active;
   }, [active, reload]);
   // ⚡ 실시간 구독은 대시보드를 실제로 보고 있을 때만(active) — 숨은 탭이 채널을 물고 있지 않게.
-  useEffect(() => { if (active) return subscribeLedger(venueId, reload); }, [venueId, reload, active]);
+  // F(2026-09-28) — 다른 접수대의 바인 취소·플레이어 삭제(DELETE)와 손님 요청 취소·만료(DELETE)도 받는다.
+  //   filter 구독은 DELETE 를 못 받아 대시보드 매출·바인·대기열이 취소 전 숫자로 남았다. 지금 화면에 있는 행 id 만 고른다.
+  const ownIdsRef = useRef<{ b: Set<string>; p: Set<string>; r: Set<string> }>({ b: new Set(), p: new Set(), r: new Set() });
+  ownIdsRef.current = {
+    b: new Set([...buyins.map((x) => x.id), ...range.buyins.map((x) => x.id)]),
+    p: new Set(players.map((x) => x.id)),
+    r: new Set(pendingReqs.map((x) => x.id)),
+  };
+  const ownsRow = useCallback((t: 'ledger_buyins' | 'ledger_players', id: string) => (t === 'ledger_buyins' ? ownIdsRef.current.b : ownIdsRef.current.p).has(id), []);
+  const ownsReq = useCallback((id: string) => ownIdsRef.current.r.has(id), []);
+  useEffect(() => { if (active) return subscribeLedger(venueId, reload, { ownsRow }); }, [venueId, reload, active, ownsRow]);
   useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);
-  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload); }, [venueId, reload, active]);
+  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload, { ownsId: ownsReq }); }, [venueId, reload, active, ownsReq]);
+  // 창 복귀·네트워크 복귀 때 다시 읽는다(realtime 은 끊긴 동안의 변경을 다시 보내 주지 않는다 — lib/realtimeResync).
+  useResyncOnWake(reload, active);
   // 예약은 내 매장의 다가오는 포스터만 서버 필터로 수신(전 매장 예약 수신 방지)
   const upcomingIds = useMemo(
     () => schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id),
@@ -431,7 +447,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   const wLvl = wClock?.config.levels[wClock.currentIndex];
   const wLevelNo = wClock ? wClock.config.levels.slice(0, wClock.currentIndex + 1).filter((l) => l.kind === 'level').length : 0;
   const clockRemainMs = wActive && wClock
-    ? (wClock.running && wClock.endsAt ? Math.max(0, new Date(wClock.endsAt).getTime() - Date.now()) : Math.max(0, wClock.remainingMs))
+    ? (wClock.running && wClock.endsAt ? Math.max(0, new Date(wClock.endsAt).getTime() - serverNow()) : Math.max(0, wClock.remainingMs))
     : 0;
   // 생존: 클락 liveStats 우선 → 없으면 **인원 − 탈락**.
   // ⚠ 폴백의 기준은 금액 엔트리도 바이인 횟수도 아니라 **사람 수**다(2026-09-07 장부에서 고친 것과 같은 결함).
@@ -456,13 +472,27 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     return rows.map((sx) => {
       const bs = range.buyins.filter((b) => b.sessionDate === d && b.gameSeq === sx.gameSeq);
       const c = ledgerCounts(bs);
-      let value = 0, unpaid = 0;
-      for (const b of bs) { const f = buyinFinance(b, sx); value += f.value; unpaid += f.unpaid; }
+      let value = 0, unpaid = 0, paid = 0, entry = 0, ticket = 0;
+      for (const b of bs) {
+        const f = buyinFinance(b, sx);
+        value += f.value; unpaid += f.unpaid; paid += f.paid; entry += f.entry; ticket += f.ticketPaid;
+      }
       const ck = venueClocks.find((x) => x.gameSeq === sx.gameSeq) ?? null;
       const ckLive = !!ck && (ck.running || ck.currentIndex > 0 || ck.endsAt != null);
-      return { sx, c, value, unpaid, ck, ckLive };
+      return { sx, c, value, unpaid, paid, entry, ticket, ck, ckLive };
     });
   }, [range, d, venueClocks]);
+  // B4(2026-09-28) — '오늘 장부' KPI 는 **그날 전 게임 합산**이다(정산 하루 합계·주간 리포트와 같은 범위).
+  //   예전엔 메인 한 판(getLedgerBuyins 기본 game 1)만 세서 사이드가 있는 날 매출·바인·미수가 정산보다 작게 나왔고,
+  //   그렇다는 표시도 없었다. 합산 재료는 이미 받은 14일 range(todayGames)라 새 조회 0건.
+  //   range 가 아직 없거나 실패하면(rows 0) 메인 한 판 값으로 떨어진다 — 조회 실패가 0원으로 위장되지 않게.
+  const day = todayGames.length > 0
+    ? todayGames.reduce((a, g) => ({
+        paid: a.paid + g.paid, unpaid: a.unpaid + g.unpaid, entry: a.entry + g.entry, ticket: a.ticket + g.ticket,
+        totalBuyins: a.totalBuyins + g.c.totalBuyins, games: a.games + 1,
+      }), { paid: 0, unpaid: 0, entry: 0, ticket: 0, totalBuyins: 0, games: 0 })
+    : { ...fin, totalBuyins: cnt.totalBuyins, games: started ? 1 : 0 };
+  const dayStarted = started || todayGames.some((g) => !!g.sx.openedAt);
   /* 오늘 파이프라인 5단계(포스터 → 장부 → 클락 → 순위 → 정산).
      예전엔 이 값으로 대시보드 안에 숫자 스트립을 그렸다. 지금은 **위의 알약 탭바 하나**가 그 역할을
      겸한다(오너 2026-09-08: "두 개를 2번으로 통일해서 한 페이지에서 왔다갔다") — 같은 파이프라인을
@@ -645,7 +675,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   // ── 위젯 미니 추세: 오늘 엔트리 vs 같은 요일 평소(최근 4주 동일 요일 평균 — dowStats 별도 로드) ──
   const todayDow = new Date(d + 'T00:00:00').getDay();
   const sameDowAvg = dowStats.avg;
-  const todayEntries = cnt.totalBuyins;   // 같은 요일 비교 — 횟수 기준(위 weeks 와 같은 척도)
+  const todayEntries = day.totalBuyins;   // 같은 요일 비교 — 횟수 기준(위 weeks 와 같은 척도 = 그날 전 게임 바인 횟수)
   const dowDelta = sameDowAvg && sameDowAvg > 0 ? Math.round(((todayEntries - sameDowAvg) / sameDowAvg) * 100) : null;
 
   // ── 전주 대비(직전 7일) ──
@@ -845,35 +875,36 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             <span className="text-2xs font-bold text-ink-muted">오늘 장부</span>
             <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>
           </span>
-          {loading ? <div className="mt-2"><Skeleton /></div> : !started ? null : (
+          {!loading && day.games > 1 && <span data-testid="dash-kpi-games" className="mt-1 block text-2xs text-ink-muted">게임 {day.games}개 합산</span>}
+          {loading ? <div className="mt-2"><Skeleton /></div> : !dayStarted ? null : (
             /* 2026-09-11 PC 개편: flex-wrap 이면 1360px 에서 숫자 넷이 왼쪽 700px 에 몰리고 오른쪽이 통째로 빈다.
                고정 4열 그리드로 폭을 실제로 쓴다. 모바일은 2×2 — 360px 에서도 숫자와 단위가 겹치지 않는다. */
             <span className="mt-2 grid grid-cols-2 items-end gap-x-5 gap-y-3 lg:grid-cols-4">
               <span className="block">
                 <span className="block text-2xs text-ink-muted">완납 매출</span>
                 <span className="mt-1 block whitespace-nowrap text-2xl font-extrabold leading-none tabular-nums text-gold-300">
-                  {wonToMan(fin.paid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
+                  {wonToMan(day.paid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
                 </span>
               </span>
               <span className="block">
                 <span data-testid="dash-kpi-buyins" className="block text-2xs text-ink-muted">총 바인</span>
                 <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-indigo">
-                  <CountUp value={cnt.totalBuyins} /><span className="ml-1 text-sm font-semibold text-ink-muted">회</span>
+                  <CountUp value={day.totalBuyins} /><span className="ml-1 text-sm font-semibold text-ink-muted">회</span>
                   {/* 엔트리는 금액 기준이라 소수가 된다 — CountUp 은 정수 애니라 옆에 그대로 적는다. */}
-                  <span className="ml-1.5 text-2xs font-semibold text-ink-muted">엔트리 {fin.entry.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+                  <span className="ml-1.5 text-2xs font-semibold text-ink-muted">엔트리 {day.entry.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
                 </span>
               </span>
               <span className="block">
                 <span className="block text-2xs text-ink-muted">미수금</span>
-                <span className={`mt-1 block text-2xl font-extrabold leading-none tabular-nums ${fin.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary'}`}>
-                  {wonToMan(fin.unpaid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
+                <span className={`mt-1 block text-2xl font-extrabold leading-none tabular-nums ${day.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary'}`}>
+                  {wonToMan(day.unpaid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
                 </span>
               </span>
               <span className="block">
                 <span className="block text-2xs text-ink-muted">회수 이용권</span>
                 {/* 2026-09-11: '장' 은 통계·정산의 'T' 와 같은 수를 다른 이름으로 불러 헷갈렸다 — 단위를 T 로 통일. */}
                 <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-fuchsia">
-                  {fmtT(fin.ticket)}<span className="ml-1 text-sm font-semibold text-ink-muted">T</span>
+                  {fmtT(day.ticket)}<span className="ml-1 text-sm font-semibold text-ink-muted">T</span>
                 </span>
               </span>
             </span>
@@ -892,7 +923,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           · 이 카드가 뜨는 동안 아래 '지금 할 일' CTA 는 보라 후광을 내려놓는다(그 카드 주석 참조) —
             안 그러면 같은 화면에 바이올렛 후광이 둘이 되어 '어느 쪽이 지금인가'가 사라진다. */}
       {!loading && liveWidget && (
-        <section className="overflow-hidden rounded-card border border-accent-400/20 ring-aura ring-aura-glow bg-gradient-to-br from-accent-300/[0.07] to-transparent">
+        <section className="overflow-hidden rounded-card border border-accent-400/20 ring-aura ring-aura-glow bg-linear-to-br/srgb from-accent-300/[0.07] to-transparent">
           <div className="flex items-center justify-between gap-2 border-b border-border-subtle px-3 py-2">
             <span className="flex items-center gap-2 text-sm font-bold text-ink-primary">
               <span className="relative flex h-2 w-2" aria-hidden>
@@ -919,7 +950,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           )}
           <div className="grid grid-cols-1 divide-y divide-border-subtle sm:grid-cols-2 sm:divide-x sm:divide-y-0">
             {/* 진행 클락(선택 게임) */}
-            <button type="button" onClick={() => onGoto('clock')} className="flex items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-white/[0.02]">
+            <button type="button" onClick={() => onGoto('clock')} className="flex items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-white/2">
               <div className="min-w-0">
                 <p className="mb-1 text-2xs text-ink-muted">{activeClocks.length >= 2 ? (widgetGame <= 1 ? '메인' : `사이드${widgetGame - 1}`) + ' 클락' : '대회 클락'}{wActive ? (wClock?.running ? ' · 진행' : ' · 일시정지') : ''}</p>
                 {wActive && wLvl ? (
@@ -967,9 +998,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                           onPointerDown={() => startLP(r)} onPointerUp={cancelLP} onPointerLeave={cancelLP} onPointerCancel={cancelLP}
                           onClick={() => { if (lpFired.current) { lpFired.current = false; return; } quickApprove(r); }}
                           title="탭: 승인(게임 추가) · 길게: 결제수단 선택해 바인 기록" aria-label="승인"
-                          className="shrink-0 -my-2 ml-0.5 flex h-10 min-w-[2.5rem] items-center justify-center rounded-input bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 active:scale-95 disabled:opacity-40"><Icon name="check" size={15} strokeWidth={2.6} /></button>
+                          className="shrink-0 -my-2 ml-0.5 flex h-10 min-w-10 items-center justify-center rounded-input bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 active:scale-95 disabled:opacity-40"><Icon name="check" size={15} strokeWidth={2.6} /></button>
                         <button type="button" disabled={reqBusy === r.id} onClick={() => quickReject(r)} title="거절" aria-label="거절"
-                          className="shrink-0 -my-2 ml-2 flex h-10 min-w-[2.5rem] items-center justify-center rounded-input bg-danger/15 text-danger-light hover:bg-danger/25 active:scale-95 disabled:opacity-40"><Icon name="close" size={15} strokeWidth={2.6} /></button>
+                          className="shrink-0 -my-2 ml-2 flex h-10 min-w-10 items-center justify-center rounded-input bg-danger/15 text-danger-light hover:bg-danger/25 active:scale-95 disabled:opacity-40"><Icon name="close" size={15} strokeWidth={2.6} /></button>
                         {payFor === r.id && (
                           <div className="absolute right-0 top-full z-30 mt-1 w-52 space-y-2 rounded-input border border-border-default bg-surface-float p-2 shadow-dialog">
                             {/* 바인 금액 직접 수정(리바인·할인) */}
@@ -1030,7 +1061,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           {/* 미니 추세 — 오늘 vs 같은 요일 평소(4주 평균). 탭하면 주차별 막대 드릴다운 */}
           {(clockActive || activeClocks.length > 0) && sameDowAvg != null && (
             <div className="border-t border-border-subtle">
-              <button type="button" onClick={() => setDowOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-2xs transition-colors hover:bg-white/[0.02]">
+              <button type="button" onClick={() => setDowOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-2xs transition-colors hover:bg-white/2">
                 <span className="text-ink-muted">오늘 vs 평소 <b className="text-ink-secondary">{DOW[todayDow]}요일</b></span>
                 <span className="tabular-nums text-ink-secondary">
                   오늘 <b className="text-ink-primary">{todayEntries}</b> · 평소 <b className="text-ink-primary">{sameDowAvg}</b>
@@ -1057,7 +1088,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                           const isToday = i === bars.length - 1;
                           return (
                             <div key={i} className="flex h-full flex-1 flex-col items-center justify-end">
-                              <div className={['w-full max-w-[26px] rounded-sm', isToday ? 'bg-accent-300' : 'bg-accent-300/40'].join(' ')} style={{ height: `${Math.max(4, (b.entries / max) * 100)}%` }} />
+                              <div className={['w-full max-w-[26px] rounded-xs', isToday ? 'bg-accent-300' : 'bg-accent-300/40'].join(' ')} style={{ height: `${Math.max(4, (b.entries / max) * 100)}%` }} />
                             </div>
                           );
                         })}
@@ -1133,7 +1164,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           `grid-column: span 8` 은 여전히 12열 중 8열이라 **좌측이 626px 에 갇히고 321.7px 이 빈 채 남았다**
           (실측: 패널 948px · 우측 empty 시 좌 626.3 / 공백 321.7). flex 로 바꾸면 이웃이 사라질 때 남은 쪽이 948 을 다 쓴다. */}
       <div className="space-y-3 xl:flex xl:items-start xl:gap-4 xl:space-y-0">
-      <div className="space-y-3 empty:hidden xl:min-w-0 xl:flex-[2]">
+      <div className="space-y-3 empty:hidden xl:min-w-0 xl:flex-2">
       {/* 지금 할 일 — 시간대·운영 상태 인지형 다음 행동 카드(대시보드 = 행동 안내판) */}
       {(() => {
         // ⚠ 이 카드의 모든 분기가 session/started 를 근거로 삼는다. 못 불러왔으면 침묵한다 —
@@ -1161,8 +1192,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요. 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto({ section: 'ranking', date: d, gameSeq: session?.gameSeq, title: session?.title }), tone: 'warn' };
         } else if (caps.ledger && started && !session?.closed) {
           todo = clockActive
-            ? { icon: 'cards', title: `게임 진행 중 · 바인 ${cnt.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
-            : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `바인 ${cnt.totalBuyins}회 · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
+            ? { icon: 'cards', title: `게임 진행 중 · 바인 ${day.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
+            : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `바인 ${day.totalBuyins}회 · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
         } else if (caps.ledger && !started && todayPoster) {
           todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto({ section: 'ledger', date: d }), tone: 'gold' }; // 🔴 2026-09-20 (E2-A): 맨 문자열이라 '포스터 정보 그대로' 문구와 달리 오늘 장부 **목록**으로만 갔다 — 날짜 시드를 실어 보낸다
         } else if (caps.ledger && !started && !todayPoster && lastRound) {
@@ -1181,8 +1212,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         }
         if (!todo) return null;
         const toneCls = todo.tone === 'warn'
-          ? 'border-gold-400/50 bg-gold-400/[0.08]'
-          : todo.tone === 'ok' ? 'border-emerald-500/40 bg-emerald-500/[0.06]' : 'border-accent-400/40 bg-accent-300/[0.06]';
+          ? 'border-gold-400/50 bg-gold-400/8'
+          : todo.tone === 'ok' ? 'border-emerald-500/40 bg-emerald-500/6' : 'border-accent-400/40 bg-accent-300/6';
         const iconCls = todo.tone === 'warn' ? 'text-gold-300' : todo.tone === 'ok' ? 'text-emerald-400' : 'text-ink-secondary';
         return (
           <div className={`flex items-center gap-3 rounded-card border p-3 ${toneCls}`}>
@@ -1199,7 +1230,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 골드 채움은 그대로 두고 **그림자만** 뺀다 — 위계를 낮추지 않으면서 색 경쟁만 없앤다. */}
             <button type="button" onClick={todo.onClick} data-testid="todo-cta"
               className={todo.tone === 'warn'
-                ? `btn-primary shrink-0 px-4 py-2 text-xs !bg-none !bg-gold-400 !text-ink-inverse hover:!bg-gold-500${liveWidget ? ' !shadow-none' : ''}`
+                ? `btn-primary shrink-0 px-4 py-2 text-xs bg-none! bg-gold-400! text-ink-inverse! hover:bg-gold-500!${liveWidget ? ' shadow-none!' : ''}`
                 : liveWidget ? 'btn-ghost shrink-0 px-4 py-2 text-xs' : 'btn-primary shrink-0 px-4 py-2 text-xs'}>
               {todo.cta}
             </button>
@@ -1222,7 +1253,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           const p = pendingRanks[0];
           return (
             <button type="button" onClick={() => go(p)}
-              className="flex w-full items-center gap-3 rounded-card border border-gold-400/40 bg-gold-400/[0.06] p-3 text-left transition-colors hover:bg-gold-400/[0.1]">
+              className="flex w-full items-center gap-3 rounded-card border border-gold-400/40 bg-gold-400/6 p-3 text-left transition-colors hover:bg-gold-400/10">
               <Icon name="trophy" size={20} className="shrink-0 text-gold-300" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-ink-primary">순위 미입력 · {labelOf(p)}</p>
@@ -1234,7 +1265,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         }
         const shown = pendingRanks.slice(0, 4);
         return (
-          <section className="rounded-card border border-gold-400/40 bg-gold-400/[0.06] p-3" aria-label="순위 미입력 대회">
+          <section className="rounded-card border border-gold-400/40 bg-gold-400/6 p-3" aria-label="순위 미입력 대회">
             <p className="flex items-center gap-2 text-sm font-bold text-ink-primary">
               <Icon name="trophy" size={18} className="shrink-0 text-gold-300" />순위 미입력 대회 {pendingRanks.length}개
             </p>
@@ -1258,11 +1289,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       })()}
 
       {/* 미수·리스크 알림 (장부 권한) */}
-      {caps.ledger && started && fin.unpaid > 0 && (
+      {caps.ledger && dayStarted && day.unpaid > 0 && (
         <button type="button" onClick={gotoTodayLedger} data-testid="unpaid-cta"
-          className="flex w-full items-center gap-2 rounded-card border border-danger/40 bg-danger/[0.08] p-3 text-left hover:bg-danger/[0.12] transition-colors">
+          className="flex w-full items-center gap-2 rounded-card border border-danger/40 bg-danger/8 p-3 text-left hover:bg-danger/12 transition-colors">
           <Icon name="alert" size={18} className="shrink-0 text-danger-light" />
-          <span className="text-xs text-danger-light">오늘 <b className="tabular-nums">{wonToMan(fin.unpaid)}만원</b> 미수금이 있습니다. 장부에서 확인하세요.</span>
+          <span className="text-xs text-danger-light">오늘 <b className="tabular-nums">{wonToMan(day.unpaid)}만원</b> 미수금이 있습니다. 장부에서 확인하세요.</span>
         </button>
       )}
 
@@ -1322,7 +1353,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
               <div className="mb-2 flex h-14 items-end justify-between gap-1">
                 {perDay.map((x) => (
                   <div key={x.day} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-                    <div className="w-full max-w-[18px] rounded-sm bg-accent-300/80" style={{ height: `${Math.max(4, (x.entry / maxEntry) * 100)}%` }} title={`${x.dow} ${x.entry}회`} />
+                    <div className="w-full max-w-[18px] rounded-xs bg-accent-300/80" style={{ height: `${Math.max(4, (x.entry / maxEntry) * 100)}%` }} title={`${x.dow} ${x.entry}회`} />
                     <span className={`text-2xs ${x.day === d ? 'text-ink-primary font-bold' : 'text-ink-muted'}`}>{x.dow}</span>
                   </div>
                 ))}
@@ -1365,7 +1396,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           ) : (
             <ul className="space-y-1">
               {!!resCountsErr && (
-                <li className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-2 py-1.5 text-2xs font-semibold text-ink-secondary">
+                <li className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/8 px-2 py-1.5 text-2xs font-semibold text-ink-secondary">
                   예약 인원을 불러오지 못했어요 — 0명과는 달라요.
                   <button type="button" onClick={(e) => { e.stopPropagation(); reloadReservations(); }}
                     className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-0.5 text-2xs font-bold text-ink-primary">다시 시도</button>
@@ -1544,7 +1575,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           {!!rangeErr && <div className="mb-2"><LoadFailRow what="오늘 게임" onRetry={reloadRange} /></div>}
           {todayGames.length > 0 && (
           <div className="overflow-x-auto scrollbar-none">
-            <table className="w-full min-w-[34rem] text-left text-xs">
+            <table className="w-full min-w-136 text-left text-xs">
               <thead>
                 <tr className="border-b border-border-subtle text-2xs text-ink-muted">
                   <th scope="col" className="py-1.5 pr-2 font-semibold">게임</th>
@@ -1568,7 +1599,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                     : { t: '진행중', c: 'text-accent-300 bg-accent-300/10 border-accent-400/30' };
                   return (
                     <tr key={sx.gameSeq} className="border-b border-border-subtle/60 last:border-0 transition-colors hover:bg-surface-float/40">
-                      <th scope="row" className="max-w-[9rem] truncate py-2 pr-2 text-left font-semibold text-ink-primary">{label}</th>
+                      <th scope="row" className="max-w-36 truncate py-2 pr-2 text-left font-semibold text-ink-primary">{label}</th>
                       <td className="py-2 px-2">
                         <span className={['inline-flex w-[4.4rem] justify-center rounded-badge border px-1.5 py-0.5 text-2xs font-bold', st.c].join(' ')}>{st.t}</span>
                       </td>
@@ -1585,7 +1616,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                       <td className="py-2 pl-2 text-right">
                         <button type="button"
                           onClick={() => onGoto({ section: 'ledger', date: d, gameSeq: sx.gameSeq })}
-                          className="rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-300">
+                          className="rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-accent-300">
                           장부
                         </button>
                       </td>
@@ -1651,7 +1682,7 @@ function DashCard({ title, badge, onClick, children, show = true, center = false
  *  진짜 <button> 을 쓸 수 있지만, 카드 전체 onClick 으로 새는 것은 stopPropagation 으로 막는다. */
 function LoadFailRow({ what, onRetry }: { what: string; onRetry: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-2 py-1.5 text-2xs font-semibold text-ink-secondary">
+    <div className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/8 px-2 py-1.5 text-2xs font-semibold text-ink-secondary">
       <span className="break-keep">{what}을(를) 불러오지 못했어요 — 0 과는 달라요.</span>
       <button type="button" onClick={(e) => { e.stopPropagation(); onRetry(); }}
         className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-0.5 text-2xs font-bold text-ink-primary">다시 시도</button>
@@ -1707,7 +1738,7 @@ function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => vo
   return (
     <Modal open={open} onClose={onClose} title="포스터 상단 고정(부스트)" maxWidth="sm" variant="sheet">
       <div className="space-y-3 p-4">
-        <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.06] p-3 space-y-2">
+        <div className="rounded-card border border-accent-400/30 bg-accent-300/6 p-3 space-y-2">
           <p className="text-sm font-bold text-accent-300">이런 효과가 있어요</p>
           <ul className="space-y-1 text-sm leading-relaxed text-ink-secondary">
             <li>· 같은 시간대 일정 중에서 <b className="text-ink-primary">맨 앞</b>에 표시됩니다</li>

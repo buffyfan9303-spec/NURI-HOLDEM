@@ -325,7 +325,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
           {/* N07(2026-09-12): 글 본문은 이미 저장됐고 핸드·투표만 실패한 상태 — '실패'가 아니라
               '부분 성공'임을 분명히 알린다. 무엇이 실패했는지 구분해서 보여준다. */}
           {pendingPostId && (
-            <div data-testid="post-form-partial-fail" className="rounded-input border border-danger/40 bg-danger/[0.06] px-3 py-2.5 text-xs text-danger">
+            <div data-testid="post-form-partial-fail" className="rounded-input border border-danger/40 bg-danger/6 px-3 py-2.5 text-xs text-danger">
               <p className="font-bold">
                 글은 저장됐지만 {failedAttach.hand && failedAttach.poll ? '핸드 카드·투표' : failedAttach.hand ? '핸드 카드' : '투표'}는 저장하지 못했어요
               </p>
@@ -346,7 +346,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                   aria-pressed={category === o.id}
                   onClick={() => setCategory(o.id)}
                   className={[
-                    'min-h-[44px] shrink-0 inline-flex items-center px-3 rounded-badge text-2xs font-bold leading-none transition-colors focus:outline-none',
+                    'min-h-[44px] shrink-0 inline-flex items-center px-3 rounded-badge text-2xs font-bold leading-none transition-colors focus:outline-hidden',
                     category === o.id
                       ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45 shadow-glow'
                       : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70',
@@ -493,7 +493,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                       >
                         <button type="button" aria-pressed={handTarget === t} onClick={() => setHandTarget(t)}
                           className="block text-xs text-ink-muted mb-1">{label}</button>
-                        <div className="flex flex-wrap gap-1 min-h-[1.75rem] items-center">
+                        <div className="flex flex-wrap gap-1 min-h-7 items-center">
                           {cards.length === 0 ? (
                             <span className="text-xs text-ink-muted">카드 선택</span>
                           ) : (

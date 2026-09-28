@@ -401,7 +401,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
               (오너 2026-09-27: "대시보드 프로필 위 배경을 프로필 설정에서도 똑같이 보이고 거기서 바꿀 수 있게"). 아바타는 대시보드처럼 밴드에 걸친다. */}
           <div className="flex flex-col items-center gap-3">
             <ProfileCoverBand cover={cover} tierColor={ringColor} />
-            <div className="relative -mt-[3.75rem]">
+            <div className="relative -mt-15">
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
@@ -441,7 +441,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                   style={{ position: 'absolute' }}
                   className="hit -top-1 -right-1 w-7 h-7 rounded-full
                              bg-danger text-white flex items-center justify-center
-                             hover:bg-danger-dark transition-colors focus:outline-none"
+                             hover:bg-danger-dark transition-colors focus:outline-hidden"
                   aria-label="사진 제거"
                 >
                   <Icon name="close" size={12} />
@@ -473,7 +473,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                     aria-pressed={cover === k}
                     title={COVER_LABEL[k]}
                     className={[
-                      'w-6 h-6 rounded-full transition-transform hover:scale-110 focus:outline-none border-2 bg-surface-high',
+                      'w-6 h-6 rounded-full transition-transform hover:scale-110 focus:outline-hidden border-2 bg-surface-high',
                       cover === k ? 'border-white scale-110' : 'border-transparent',
                     ].join(' ')}
                     style={{ backgroundImage: coverImage(k, ringColor) }}
@@ -493,7 +493,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                     onClick={() => setColor(c)}
                     aria-label={`색상 ${c}`}
                     className={[
-                      'w-6 h-6 rounded-full transition-transform hover:scale-110 focus:outline-none border-2',
+                      'w-6 h-6 rounded-full transition-transform hover:scale-110 focus:outline-hidden border-2',
                       selectedColor === c ? 'border-white scale-110' : 'border-transparent',
                     ].join(' ')}
                     style={{ background: c }}
@@ -566,7 +566,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                     onClick={() => saveNamePref(k)}
                     className={['rounded-input border px-2 py-2 text-2xs font-bold disabled:opacity-60',
                       rankDisp.namePref === k
-                        ? 'border-accent-400/60 bg-accent-300/[0.12] text-accent-200'
+                        ? 'border-accent-400/60 bg-accent-300/12 text-accent-200'
                         : 'border-border-default bg-surface-float text-ink-secondary'].join(' ')}>
                     {label}
                     <span className="block font-normal text-ink-muted">{hint}</span>
@@ -615,7 +615,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             "인증했는데 왜 아무것도 안 되지" 라는 질문만 남는다. 데이터(ci_hash)는 그대로 보존된다. */}
         {idOn && <div className="px-4 pt-4">
           {user?.verified ? (
-            <div className="flex items-center gap-2 rounded-aura border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2.5">
+            <div className="flex items-center gap-2 rounded-aura border border-emerald-500/30 bg-emerald-500/6 px-3 py-2.5">
               <Icon name="check-circle" size={18} className="shrink-0 text-emerald-400" />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-emerald-300">본인인증 완료</p>
@@ -623,7 +623,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
               </div>
             </div>
           ) : (
-            <div className="space-y-1.5 rounded-aura border border-accent-400/30 bg-accent-300/[0.06] p-3">
+            <div className="space-y-1.5 rounded-aura border border-accent-400/30 bg-accent-300/6 p-3">
               <p className="text-sm font-semibold text-accent-300">휴대폰 본인인증</p>
               <p className="text-2xs text-ink-muted leading-relaxed">안전한 거래와 1인 1계정을 위해 휴대폰 실명인증이 필요합니다. 매장이용권 등 일부 기능에 사용됩니다.</p>
               <IdentityVerificationButton onVerified={() => { refreshProfile().catch(() => {}); }} />
@@ -861,7 +861,7 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, cov
       <ProfileCoverBand cover={cover ?? 'tier'} tierColor={ringColor} />
       {/* 오버랩 아바타 — 등급색 그라데이션 링(샘플 문법 ①) */}
       <div
-        className="relative -mt-[3.75rem] h-[6.5rem] w-[6.5rem] rounded-full p-1"
+        className="relative -mt-15 h-26 w-26 rounded-full p-1"
         style={{ background: `conic-gradient(from 210deg, ${ringColor}, ${tierCss(ringVar, 0.267)} 40%, ${tierCss(ringVar, 0.8)} 65%, ${ringColor})` }}
       >
         <div className="h-full w-full overflow-hidden rounded-full border-[3px] border-surface-base">
@@ -1146,12 +1146,12 @@ function WithdrawAccountSection() {
       <h3 className="mb-2 text-xs font-semibold text-ink-secondary">회원 탈퇴</h3>
       {!open ? (
         <button type="button" onClick={start}
-          className="w-full rounded-aura border border-danger/30 bg-danger/[0.04] px-3 py-2.5 text-left">
+          className="w-full rounded-aura border border-danger/30 bg-danger/4 px-3 py-2.5 text-left">
           <p className="text-sm font-bold text-danger">회원 탈퇴하기</p>
           <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">계정을 폐쇄하고 개인정보(실명·연락처·본인인증 정보 등)를 파기합니다. 되돌릴 수 없습니다.</p>
         </button>
       ) : (
-        <div className="space-y-2.5 rounded-aura border border-danger/40 bg-danger/[0.05] p-3">
+        <div className="space-y-2.5 rounded-aura border border-danger/40 bg-danger/5 p-3">
           <p className="text-2xs leading-relaxed text-ink-secondary">
             탈퇴 시 <b className="text-danger">실명·전화번호·본인인증 정보·생년월일 등 개인정보가 즉시 파기</b>되고 계정이 폐쇄되며, <b className="text-ink-primary">다시 로그인할 수 없습니다.</b> 보유 중인 매장이용권 등은 함께 사라집니다.
             <br />매장 대표는 매장을 먼저 정리(삭제/양도)한 뒤 탈퇴할 수 있습니다.
@@ -1159,7 +1159,7 @@ function WithdrawAccountSection() {
           {/* 탈퇴 시 함께 사라지는 데이터 안내(실수 방지).
               ⚠ 실패 분기가 '값 있음'보다 **먼저** 와야 한다 — 순서가 뒤집히면 실패가 다시 '없음'으로 위장된다. */}
           {sumFailed ? (
-            <div className="flex items-center gap-2 rounded-input border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-2xs text-amber-200">
+            <div className="flex items-center gap-2 rounded-input border border-amber-500/30 bg-amber-500/6 px-3 py-2 text-2xs text-amber-200">
               <span className="flex-1 leading-relaxed">보유 이용권·작성 글 수를 <b className="text-amber-200">확인하지 못했습니다</b> — 이용권·작성 글이 있을 수 있습니다. 탈퇴하면 그 연결이 사라지거나 익명 처리됩니다.</span>
               <button type="button" onClick={loadSummary}
                 className="shrink-0 rounded-input border border-amber-500/40 px-2 py-1 text-2xs font-bold text-amber-200 active:opacity-80">
@@ -1167,7 +1167,7 @@ function WithdrawAccountSection() {
               </button>
             </div>
           ) : summary && (summary.vouchers > 0 || summary.posts > 0) ? (
-            <div className="rounded-input border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-2xs text-amber-200">
+            <div className="rounded-input border border-amber-500/30 bg-amber-500/6 px-3 py-2 text-2xs text-amber-200">
               탈퇴하면 <b className="text-amber-200">보유 이용권 {summary.vouchers}개</b> · <b className="text-amber-200">작성 글 {summary.posts}개</b>의 연결이 사라지거나 익명 처리됩니다. 신중히 결정해 주세요.
             </div>
           ) : null}
@@ -1220,7 +1220,7 @@ function PwField({ label, value, onChange, show, onToggle, placeholder, autoComp
         <button
           type="button"
           onClick={onToggle}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-secondary transition-colors focus:outline-none"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-secondary transition-colors focus:outline-hidden"
           aria-label={show ? '비밀번호 숨기기' : '비밀번호 보기'}
         >
           {show ? <EyeOffIcon /> : <EyeIcon />}
@@ -1259,7 +1259,7 @@ function PasswordStrength({ password }: { password: string }) {
           <div
             key={i}
             className={[
-              'flex-1 h-1 rounded-full transition-[width,background-color] duration-[var(--dur-panel)]',
+              'flex-1 h-1 rounded-full transition-[width,background-color] duration-(--dur-panel)',
               i <= score ? level.bar : 'bg-surface-float',
             ].join(' ')}
           />

@@ -23,6 +23,15 @@ import { join, resolve } from 'node:path';
 
 const ROOT = process.cwd();
 const read = (p: string) => readFileSync(resolve(ROOT, p), 'utf-8');
+/** src/index.css 의 `@theme inline { … }` 블록 범위(중괄호 짝) — Tailwind v4 테마 keyframes 가 여기 산다. */
+const themeRange = (): [number, number] => {
+  const css = read('src/index.css'); const start = css.indexOf('@theme inline {');
+  if (start < 0) throw new Error('src/index.css 에 @theme inline { 이 없다 — 파서를 고쳐라');
+  let depth = 0; for (let i = css.indexOf('{', start); i < css.length; i++) { if (css[i] === '{') depth++; else if (css[i] === '}' && --depth === 0) return [start, i + 1]; }
+  throw new Error('@theme 블록이 닫히지 않는다');
+};
+const themeBlock = () => { const [a, b] = themeRange(); return read('src/index.css').slice(a, b); };
+const cssOutsideTheme = () => { const [a, b] = themeRange(); const css = read('src/index.css'); return css.slice(0, a) + css.slice(b); };
 /** 주석을 지운 코드(줄 수는 유지) — 역사 기록 주석에 남은 이름은 세지 않는다. */
 const codeOnly = (s: string) => s
   .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
@@ -116,7 +125,7 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
     'tab-in-r': '⚠ 실제 규칙 0(2026-09-18 삭제) — index.css 주석의 삭제 기록 문구가 이 정규식에 잡힌다',
     'vt-fade-out': '⚠ 실제 규칙 0(2026-09-18 삭제) — index.css 주석의 삭제 기록 문구가 이 정규식에 잡힌다',
   };
-  /** tailwind.config.js keyframes — 오버레이·시트의 진입/퇴장 한 벌. */
+  /** Tailwind 테마 keyframes(src/index.css 의 `@theme inline { … }` — 2026-09-28 v4 이관 전 tailwind.config.js) — 오버레이·시트의 진입/퇴장 한 벌. */
   const TW_KEYFRAMES: Record<string, string> = {
     'fade-in': '전면 판 열기 한 벌(atoms/pageMotion PAGE_ENTER — (e))·알림 스크림·라이트박스',
     'fade-out': '전면 판·모달 퇴장 한 벌(PAGE_LEAVE — (e))',
@@ -133,14 +142,12 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
     'src/lib/tabCover.ts': '떠나는 판 퇴장 페이드 — 메인 탭·하위 탭 공용(판 교체 규칙의 유일한 모션, fadeAfterFirstFrame 한 곳)',
   };
   it('index.css 의 @keyframes 는 목록에 있는 것뿐이다', () => {
-    const names = [...read('src/index.css').matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]);
+    const names = [...cssOutsideTheme().matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]);
     expect(names.length).toBeGreaterThan(10);
     expect(names.filter((n) => !(n in CSS_KEYFRAMES)), '새 키프레임 — 목록에 이유와 함께 올리거나 기존 장치를 써라').toEqual([]);
   });
-  it('tailwind.config.js 의 keyframes 는 목록에 있는 것뿐이다', () => {
-    const tw = read('tailwind.config.js');
-    const block = tw.slice(tw.indexOf('keyframes:'), tw.indexOf('animation:', tw.indexOf('keyframes:')));
-    const names = [...block.matchAll(/^\s{6,8}'([\w-]+)':\s*\{/gm)].map((m) => m[1]);
+  it('Tailwind 테마(@theme)의 keyframes 는 목록에 있는 것뿐이다', () => {
+    const names = [...themeBlock().matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]);
     expect(names.length, 'tailwind keyframes 를 못 읽었다(형식이 바뀌면 이 파서를 고쳐라)').toBeGreaterThan(3);
     expect(names.filter((n) => !(n in TW_KEYFRAMES)), '새 tailwind 키프레임 — 목록에 이유와 함께 올려라').toEqual([]);
   });

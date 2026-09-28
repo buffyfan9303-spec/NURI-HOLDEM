@@ -31,7 +31,7 @@ describe('배너 제어 — 별도 줄이 아니라 프레임 안', () => {
     expect(ctrl).toMatch(/data-testid="home-banner-counter" role="img" aria-label=\{`배너 \$\{n\}장 중 \$\{idx \+ 1\}번째`\}/);
     expect(ctrl).toMatch(/\{idx \+ 1\}<span className="mx-\[3px\] font-medium text-white\/90">\/<\/span><span className="font-medium text-white\/90">\{n\}<\/span>/);
     // 알약 배경이 숫자 칩 **자신**이다(형제 레이어면 대비 검사가 지면색과 비교한다) · 불투명도 0.6 초과
-    expect(ctrl).toMatch(/data-testid="home-banner-counter"[^>]*\n\s*className="pointer-events-none relative -mx-\[34px\] flex h-\[24px\] items-center rounded-full bg-black\/65 px-\[34px\]/);
+    expect(ctrl).toMatch(/data-testid="home-banner-counter"[^>]*\n\s*className="pointer-events-none relative mx-\[-34px\] flex h-\[24px\] items-center rounded-full bg-black\/65 px-\[34px\]/);
     // 화살표를 알약 밖으로 오버행(-my)시키지 않는다 — 행 높이 = 화살표 높이
     expect(ctrl).not.toMatch(/-my-\[10px\]/);
   });
@@ -58,7 +58,7 @@ describe('빈 상태 이벤트 슬라이드가 첫 장을 먹지 않는다(2026-
 
 describe('일정 목록 스켈레톤 — 실제와 같은 높이', () => {
   it('행 높이를 토큰으로 고정한다(min-h 면 안쪽 막대가 토큰을 넘어 행마다 +8px)', () => {
-    expect(HOME).toMatch(/className="flex h-\[var\(--card-h-list\)\] items-center gap-3 overflow-hidden px-3 py-1\.5"/);
+    expect(HOME).toMatch(/className="flex h-\(--card-h-list\) items-center gap-3 overflow-hidden px-3 py-1\.5"/);
   });
   it('끝의 "전체 일정 보기"(44px) 자리를 예약한다', () => {
     const skel = HOME.slice(HOME.indexOf('aria-busy="true"'), HOME.indexOf(') : failed ? ('));
@@ -86,7 +86,7 @@ describe('홈 일정 카드 — [로고][본문][우측 열] 시간표형', () =
   //   세로선 x 동일)는 e2e/schedule-card-fit 'SCHEDULE-ROW-E' 가 브라우저에서 잰다. 여기서는 조리법만 잠근다.
   it('오른쪽 금액 칸은 고정 폭 + 왼쪽 세로선 — 가운데가 1fr 이라 세로선 x 가 줄마다 같다 · md~ 본문 17rem 상한', () => {
     expect(TT).toMatch(/grid-cols-\[auto_minmax\(0,1fr\)_auto\] md:grid-cols-\[auto_minmax\(0,17rem\)_auto\] md:justify-start/);
-    expect(TT).toMatch(/data-testid="schedule-money"[\s\S]{0,300}className="flex w-\[5\.125rem\] min-w-0 flex-col[^"]*border-l border-border-subtle/);
+    expect(TT).toMatch(/data-testid="schedule-money"[\s\S]{0,300}className="flex w-20\.5 min-w-0 flex-col[^"]*border-l border-border-subtle/);
   });
   it('로고 56px · 가운데 세 줄 순서 = 제목 → 매장·지역 → 시작·레지', () => {
     expect(TT).toMatch(/className="h-\[56px\] w-\[56px\] shrink-0/);
@@ -103,7 +103,7 @@ describe('홈 일정 카드 — [로고][본문][우측 열] 시간표형', () =
   it('글자를 말줄임으로 숨기지 않는다 — 제목에 line-clamp·truncate 가 없다', () => {
     const h3 = TT.slice(TT.indexOf('<h3'), TT.indexOf('</h3>'));
     expect(h3).not.toMatch(/line-clamp|truncate/);
-    expect(h3).toMatch(/\[overflow-wrap:anywhere\]/);
+    expect(h3).toMatch(/(^| )wrap-anywhere( |$)/);
   });
   it('오른쪽 끝에 떨어진 꺾쇠가 없다 · 게임 형식(format)·등급 배지를 그리지 않는다(오너 E안)', () => {
     expect(TT).not.toMatch(/chevron-right/);
@@ -152,7 +152,7 @@ describe('홈 일정 카드 — [로고][본문][우측 열] 시간표형', () =
 
 describe('PC 일정 목록 2열 · 머리 줄', () => {
   it('목록·스켈레톤·지금 등록 가능이 같은 lg~ 2열 격자다(폴백 갈래는 한 열 · md 는 지표가 접혀 제외 — 근거는 HomeTab 주석)', () => {
-    expect(HOME).toMatch(/const HOME_LIST_GRID = 'lg:grid lg:grid-cols-2 lg:divide-y-0 lg:\[&>\*\]:shadow-\[0_0_0_0\.5px_rgb\(var\(--border-subtle\)\)\] lg:\[&>article:nth-of-type\(odd\):last-of-type\]:col-span-2'/);
+    expect(HOME).toMatch(/const HOME_LIST_GRID = 'lg:grid lg:grid-cols-2 lg:divide-y-0 lg:\*:shadow-\[0_0_0_0\.5px_rgb\(var\(--border-subtle\)\)\] lg:\[&>article:nth-of-type\(odd\):last-of-type\]:col-span-2'/);
     expect(HOME.match(/card-aura \$\{HOME_LIST_GRID\}`\}/g)?.length, '지금 등록 가능(목록·스켈레톤)과 일정 스켈레톤').toBe(3);
     expect(HOME).toMatch(/card-aura \$\{HOME_LIST_GRID\}`\} aria-busy="true"/);
     expect(HOME).toMatch(/card-aura \$\{useFallback \? '' : HOME_LIST_GRID\}`\}/);
@@ -160,7 +160,7 @@ describe('PC 일정 목록 2열 · 머리 줄', () => {
   });
   it('일정 탐색(browse) 목록·스켈레톤도 PC 2열 · 날짜 머리말은 두 칸 전체', () => {
     const APP = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
-    expect(APP.match(/lg:grid lg:grid-cols-2 lg:divide-y-0 lg:\[&>\*\]:shadow-\[0_0_0_0\.5px_rgb\(var\(--border-subtle\)\)\]/g)?.length).toBe(2);
+    expect(APP.match(/lg:grid lg:grid-cols-2 lg:divide-y-0 lg:\*:shadow-\[0_0_0_0\.5px_rgb\(var\(--border-subtle\)\)\]/g)?.length).toBe(2);
     expect(APP).toMatch(/text-ink-secondary lg:col-span-2">\{h\}<\/p>/);
   });
   it('건수가 제목 바로 뒤에 붙는다(양끝 정렬 금지)', () => {
@@ -174,8 +174,8 @@ describe('날짜 스트립', () => {
   it('9주 스트립 · 한 화면 7칸(칩 = 1/7, 최소 44px · md~ 3.25rem×7) · 스냅 가로 스크롤', () => {
     expect(HOME).toMatch(/const STRIP_DAYS = 64;/);
     expect(HOME).toMatch(/const STRIP_PAST = 3;/);   // 첫 화면에서 오늘이 7칸의 가운데
-    expect(rail).toMatch(/data-testid="home-date-strip"[\s\S]{0,300}snap-x snap-mandatory overflow-x-auto[^"]*md:w-\[22\.75rem\] md:flex-none/);
-    expect(rail).toMatch(/min-h-\[44px\] w-\[calc\(100%\/7\)\] min-w-\[44px\] shrink-0 snap-center[^']*md:w-\[3\.25rem\]/);
+    expect(rail).toMatch(/data-testid="home-date-strip"[\s\S]{0,300}snap-x snap-mandatory overflow-x-auto[^"]*md:w-91 md:flex-none/);
+    expect(rail).toMatch(/min-h-\[44px\] w-\[calc\(100%\/7\)\] min-w-\[44px\] shrink-0 snap-center[^']*md:w-13/);
   });
   it('PC 에서만 화살표 · 달력 버튼과 네이티브 날짜 선택은 없다(2차 오너 지시로 제거)', () => {
     expect(rail).toMatch(/data-testid="home-date-prev"[\s\S]{0,300}hidden[^"]*md:grid/);
@@ -209,7 +209,7 @@ describe('날짜 스트립', () => {
 describe('배너 가로폭', () => {
   it('모바일(≤767) 풀블리드 — 좌우 여백·좌우 테두리·둥근 모서리를 뺀다, md~ 종전 카드', () => {
     // 2026-09-25 — 모바일은 위아래 헤어라인·그림자도 뺀다(border-0 · shadow-none, 154 → 152)
-    expect(PC).toMatch(/poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none \[mask-image:linear-gradient\(to_bottom,transparent,#000_8px,#000_calc\(100%-8px\),transparent\)\] md:mx-page-x md:rounded-aura lg:mx-0/);
+    expect(PC).toMatch(/poster-frame relative overflow-hidden border card-aura max-md:rounded-none max-md:border-0 max-md:shadow-none mask-\[linear-gradient\(to_bottom,transparent,#000_8px,#000_calc\(100%-8px\),transparent\)\] md:mx-page-x md:rounded-aura lg:mx-0/);
     expect(PC).toMatch(/'relative min-h-\[152px\] w-full/);   // 2026-09-24 오너 지시 116 → 132 → 152(2차)
   });
   it('정적 셸 배너 예약이 같은 모양이다(첫 페인트 CLS)', () => {

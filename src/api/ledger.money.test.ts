@@ -6,7 +6,8 @@
 //
 // 실행: npx vitest run src/api/ledger.money.test.ts
 import { describe, it, expect } from 'vitest';
-import { buyinFinance, discountSummary, isBuyinExcluded, nonSplitSnapshot, splitMismatch, SNAPSHOT_SINCE, cardUnit, wonToMan, type LedgerBuyin , ledgerCounts} from './ledger';
+import { buyinFinance, discountSummary, isBuyinExcluded, nonSplitSnapshot, splitMismatch, SNAPSHOT_SINCE, cardUnit, wonToMan, type LedgerBuyin , ledgerCounts, rowToBuyin } from './ledger';
+import { settlementReport } from '../lib/ledgerSettlement';
 
 // 10만원 게임 · 카드 11만원(수수료 반영) · 할인 이벤트 2종(5만/3만)
 const SESSION = {
@@ -516,5 +517,64 @@ describe('스냅샷 센티널(SNAPSHOT_SINCE) — 100% 할인 0원이 되살아�
   it('SNAPSHOT_SINCE 이후 buyinAt 이면 저장값 0 이 그대로 0 이다', () => {
     const b = buyin({ paymentMethod: 'cash', cashAmount: 0, buyinAt: `${SNAPSHOT_SINCE}T00:00:00Z` });
     expect(buyinFinance(b, SESSION).paid).toBe(0);
+  });
+});
+
+// ── 애드온(2026-09-28 오너: "장부에 애드온 행 추가 — 현금 완납/현금 미수") ─────────────────
+// 불변식: 애드온은 바이인 횟수·엔트리·얼리·총 칩에 **절대** 들어가지 않는다(메모 '장부의 세 수').
+//   완납 애드온 → 애드온 매출(따로), 미수 애드온 → 미수금·미수자, 티켓 애드온 → 티켓 회수.
+// 행은 DB 모양(rowToBuyin)으로 만든다 — 매핑이 새 칸을 떨어뜨려도 여기서 잡힌다.
+
+describe('애드온 — 바인과 분리된 돈', () => {
+  const DAY = '2026-09-28';
+  const ADDON_SESSION = {
+    venueId: 'v', sessionDate: DAY, gameSeq: 1, buyinAmount: 100_000, cardAmount: null,
+    gameType: 'gtd' as const, targetEntries: 0, maxEntries: 0, isAddon: true, addonStack: 30_000, addonAmount: 30_000,
+    regClosed: false, closed: false, discounts: [], earlyDoubleMin: 0, earlySingleMin: 0,
+  };
+  const row = (over: Record<string, unknown> = {}) => rowToBuyin({
+    id: 'r1', venue_id: 'v', session_date: DAY, game_seq: 1, player_name: '김', entry_no: 1,
+    payment_method: 'cash', is_unpaid: false, buyin_at: `${DAY}T12:00:00Z`, is_split: false,
+    cash_amount: 100_000, card_amount: 0, transfer_amount: 0, ticket_count: 0, unpaid_amount: 0,
+    discount_level: 0, discount_index: 0, early_override: null, ...over,
+  });
+  const report = (rows: LedgerBuyin[]) => settlementReport(DAY, [ADDON_SESSION], rows, []);
+
+  it('애드온 현금 완납 — 엔트리·바인 횟수 불변, 애드온 매출 +3만', () => {
+    const b = row({ addon_method: 'cash', addon_unpaid: false, addon_amount: 30_000 });
+    const f = buyinFinance(b, ADDON_SESSION);
+    expect(f).toMatchObject({ entry: 1, value: 100_000, paid: 100_000, unpaid: 0 });
+    expect(ledgerCounts([b]).totalBuyins).toBe(1);
+    const r = report([b]);
+    expect(r.total.entries).toBe(1);
+    expect(r.total.buyinCount).toBe(1);
+    expect(r.total.revenue).toBe(100_000);                  // 바인 매출은 그대로
+    expect(r.total.addon).toMatchObject({ count: 1, revenue: 30_000, unpaid: 0, ticketWon: 0 });
+    expect(r.total.revenue + r.total.addon.revenue).toBe(130_000);
+    expect(r.players[0]).toMatchObject({ buyins: 1, paid: 130_000, unpaid: 0 });
+  });
+
+  it('애드온 현금 미수 — 미수금·미수자 +3만, 매출은 늘지 않는다', () => {
+    const b = row({ addon_method: 'cash', addon_unpaid: true, addon_amount: 30_000 });
+    const r = report([b]);
+    expect(r.total.entries).toBe(1);
+    expect(r.total.addon).toMatchObject({ count: 1, revenue: 0, unpaid: 30_000 });
+    expect(r.unpaidPlayers.map((p) => [p.name, p.unpaid])).toEqual([['김', 30_000]]);
+  });
+
+  it('애드온 티켓 완납 — 티켓 회수로 간다(현금성 매출 아님)', () => {
+    const r = report([row({ addon_method: 'ticket', addon_unpaid: false, addon_amount: 30_000 })]);
+    expect(r.total.addon).toMatchObject({ count: 1, revenue: 0, unpaid: 0, ticketWon: 30_000 });
+  });
+
+  it('음성 대조 — 애드온 없는 행은 결과가 한 글자도 안 바뀐다(스냅샷 금액만 남은 행 포함)', () => {
+    const plain = row();
+    const stale = row({ addon_method: null, addon_unpaid: false, addon_amount: 30_000 });
+    for (const b of [plain, stale]) {
+      const r = report([b]);
+      expect(r.total).toMatchObject({ revenue: 100_000, unpaid: 0, entries: 1, buyinCount: 1, value: 100_000 });
+      expect(r.total.addon).toMatchObject({ count: 0, revenue: 0, unpaid: 0, ticketWon: 0 });
+      expect(r.players[0]).toMatchObject({ paid: 100_000, unpaid: 0, moneyIn: 100_000 });
+    }
   });
 });

@@ -97,7 +97,7 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
                   <p className="mt-1 text-sm font-bold text-ink-primary">{q.title}</p>
                   <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-secondary">{q.content}</p>
                   {q.answer && (
-                    <div className="mt-2 rounded-input border border-accent-400/30 bg-accent-300/[0.05] p-2.5">
+                    <div className="mt-2 rounded-input border border-accent-400/30 bg-accent-300/5 p-2.5">
                       <p className="text-2xs font-bold text-accent-300">운영자 답변 {q.answeredAt ? `· ${q.answeredAt.slice(0, 10)}` : ''}</p>
                       <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-primary">{q.answer}</p>
                     </div>

@@ -190,8 +190,8 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
           {/* P2(2026-09-21): 모바일 게시글 상세(postDetailMobile)에서만 14.9→14px. 다른 호출자는
               text-sm 그대로 — 값을 두 갈래로 완전히 나눠 max-lg: 유틸로 매장 Q&A 등을 건드리지 않는다. */}
           <p className={postDetailMobile
-            ? 'text-[14px] text-ink-primary leading-relaxed whitespace-pre-wrap break-words lg:text-sm'
-            : 'text-sm text-ink-primary leading-relaxed whitespace-pre-wrap break-words'}>
+            ? 'text-[14px] text-ink-primary leading-relaxed whitespace-pre-wrap wrap-break-word lg:text-sm lg:leading-5'
+            : 'text-sm text-ink-primary leading-relaxed whitespace-pre-wrap wrap-break-word'}>
             {mention && <span className="font-semibold text-accent-200">@{mention} </span>}
             {comment.content}
           </p>

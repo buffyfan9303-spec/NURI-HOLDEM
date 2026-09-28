@@ -4,6 +4,7 @@ import { TICKET_WON } from '../lib/units';
 import { hasRankingForGame, rankingEventOf } from '../lib/rankingGame'; // 순위 완료 판정은 (날짜, 게임) 단위 — F02
 import { currentUser } from './_session';
 import { mustAffect } from './_mustAffect';
+import { resubscribeStatus } from '../lib/realtimeResync';
 import { msgOf } from '../lib/dbError';
 import type { ClockConfig as ClockConfigT } from './clock'; // 타입 전용 — 런타임 순환 없음
 
@@ -46,7 +47,16 @@ export interface LedgerBuyin {
   discountLevel: number;
   discountIndex: number;        // 적용 할인 프리셋(0=없음, 1~5)
   earlyOverride: EarlyType | null; // 얼리 수기지정(null=시각 기준 자동판정)
+  /** 애드온(2026-09-28) — 이 바인 행에 붙은 애드온 1회. null = 애드온 없음.
+   *  ⚠ 애드온은 **바이인 횟수·엔트리·얼리·총 칩에 들어가지 않는다** — buyinFinance 는 이 칸을 읽지 않는다.
+   *  돈은 {@link addonFinance} 가 따로 센다(완납=애드온 매출, 미수=미수금, 티켓=티켓 회수). */
+  addonMethod?: AddonMethod | null;
+  addonUnpaid?: boolean;
+  /** 기록 시점 애드온 금액 스냅샷(원) — 나중에 세션 애드온 가격을 고쳐도 소급되지 않는다. */
+  addonAmount?: number;
 }
+
+export type AddonMethod = 'cash' | 'card' | 'transfer' | 'ticket';
 
 /** C2: 마감 시 저장하는 클락 최종 보정 수치(통계 보조 표기용). 장부 바인과 별개 기준. */
 export interface ClockSnapshot { entries: number; alive: number; eliminations: number; rebuys: number; earlies: number; addons: number }
@@ -72,6 +82,7 @@ export interface LedgerSession {
   maxEntries: number;           // 맥스 엔트리(엔트리 게임용, 0=무제한/미설정)
   isAddon: boolean;             // 애드온 게임 여부
   addonStack: number;           // 애드온 스택(애드온 게임일 때만)
+  addonAmount?: number;         // 애드온 1회 가격(원, 2026-09-28) — 포스터 애드온 비용을 상속한다
   title?: string;               // 금일 게임 내용
   eventMemo?: string;           // 이벤트 등 비고
   dealers?: string;             // 금일 딜러 명단(줄바꿈 구분, 선택)
@@ -292,6 +303,31 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
   return seal(b.isUnpaid
     ? { ...z, unpaid: value, value, tender: t }
     : { ...z, paid: value, value, tender: t });
+}
+
+/** 애드온 1건의 돈(원). 바인 가치(value)·엔트리와 **섞지 않는다** — 대차 항등식 gross − disc === value 는 바인만의 것이다. */
+export interface AddonFinance { count: number; revenue: number; unpaid: number; ticketWon: number; tender: Tender }
+export const ZERO_ADDON: AddonFinance = { count: 0, revenue: 0, unpaid: 0, ticketWon: 0, tender: ZERO_TENDER };
+export function addonFinance(b: Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' | 'addonAmount'>): AddonFinance {
+  const m = b.addonMethod;
+  if (m !== 'cash' && m !== 'card' && m !== 'transfer' && m !== 'ticket') return ZERO_ADDON;
+  const amt = Math.max(0, Math.round(b.addonAmount ?? 0));
+  const tender: Tender = { ...ZERO_TENDER };
+  if (b.addonUnpaid) { tender.unpaid = amt; return { count: 1, revenue: 0, unpaid: amt, ticketWon: 0, tender }; }
+  tender[m] = amt;
+  return m === 'ticket'
+    ? { count: 1, revenue: 0, unpaid: 0, ticketWon: amt, tender }
+    : { count: 1, revenue: amt, unpaid: 0, ticketWon: 0, tender };
+}
+/** 애드온 합계 — 여러 행을 더한다. 화면·정산이 같은 함수를 쓴다. */
+export function addonTotals(buyins: readonly Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' | 'addonAmount'>[]): AddonFinance {
+  const t: AddonFinance = { ...ZERO_ADDON, tender: { ...ZERO_TENDER } };
+  for (const b of buyins) {
+    const a = addonFinance(b);
+    t.count += a.count; t.revenue += a.revenue; t.unpaid += a.unpaid; t.ticketWon += a.ticketWon;
+    for (const k of Object.keys(t.tender) as (keyof Tender)[]) t.tender[k] += a.tender[k];
+  }
+  return t;
 }
 
 /**
@@ -614,7 +650,8 @@ export function ledgerLossSummary(
   const names = new Set<string>(players.map((p) => p.name));
   for (const b of buyins) {
     const f = buyinFinance(b, s);
-    revenue += f.paid; unpaid += f.unpaid;
+    const a = addonFinance(b);
+    revenue += f.paid + a.revenue; unpaid += f.unpaid + a.unpaid;
     names.add(b.playerName);
   }
   return { buyins: buyins.length, people: names.size, revenue, unpaid };
@@ -647,9 +684,10 @@ export function customerLedgerTotals(
   const t: CustomerLedgerTotals = { paid: 0, unpaid: 0, ticket: 0, support: 0 };
   for (const b of buyins) {
     const f = buyinFinance(b, byKey.get(`${b.sessionDate}#${b.gameSeq}`) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
-    t.paid += f.paid;
-    t.unpaid += f.unpaid;
-    t.ticket += f.ticketPaid;
+    const a = addonFinance(b);
+    t.paid += f.paid + a.revenue;
+    t.unpaid += f.unpaid + a.unpaid;
+    t.ticket += f.ticketPaid + a.ticketWon / TICKET_WON;
     t.support += f.support;
   }
   return t;
@@ -667,6 +705,9 @@ export const rowToBuyin = (r: any): LedgerBuyin => ({
   ticketCount: r.ticket_count ?? 0, unpaidAmount: r.unpaid_amount ?? 0, discountLevel: r.discount_level ?? 0,
   discountIndex: r.discount_index ?? 0,
   earlyOverride: (r.early_override ?? null) as EarlyType | null,
+  addonMethod: (r.addon_method ?? null) as AddonMethod | null,
+  addonUnpaid: !!r.addon_unpaid,
+  addonAmount: r.addon_amount ?? 0,
 });
 
 /** 바인 1건의 얼리 유형 — 수기지정 우선, 없으면 (바인시각 − 스타트) 경과분으로 자동판정 */
@@ -705,6 +746,7 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
   maxEntries: d?.max_entries ?? 0,
   isAddon: !!d?.is_addon,
   addonStack: d?.addon_stack ?? 0,
+  addonAmount: d?.addon_amount ?? 0,
   title: d?.title ?? undefined,
   eventMemo: d?.event_memo ?? undefined,
   dealers: d?.dealers ?? undefined,
@@ -1028,6 +1070,8 @@ export async function saveLedgerSession(s: LedgerSession): Promise<void> {
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
     target_entries: s.targetEntries, title: s.title ?? null,
     game_type: s.gameType ?? 'gtd', max_entries: s.maxEntries ?? 0, is_addon: !!s.isAddon, addon_stack: s.addonStack ?? 0,
+    // 애드온 가격 칸(20260928g) — 애드온 게임일 때만 싣는다. 마이그레이션 전 배포에서도 일반 게임 저장이 깨지지 않게.
+    ...(s.isAddon ? { addon_amount: Math.max(0, Math.round(s.addonAmount ?? 0)) } : {}),
     operators: (s.operators ?? []) as unknown as object,
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     discounts: (s.discounts ?? []) as unknown as object,
@@ -1056,6 +1100,8 @@ export async function openLedgerSession(s: LedgerSession, operatorId?: string | 
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
     target_entries: s.targetEntries, title: s.title ?? null,
     game_type: s.gameType ?? 'gtd', max_entries: s.maxEntries ?? 0, is_addon: !!s.isAddon, addon_stack: s.addonStack ?? 0,
+    // 애드온 가격 칸(20260928g) — 애드온 게임일 때만 싣는다. 마이그레이션 전 배포에서도 일반 게임 저장이 깨지지 않게.
+    ...(s.isAddon ? { addon_amount: Math.max(0, Math.round(s.addonAmount ?? 0)) } : {}),
     operators: (s.operators ?? []) as unknown as object,
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     discounts: (s.discounts ?? []) as unknown as object,
@@ -1078,6 +1124,25 @@ export async function openLedgerSession(s: LedgerSession, operatorId?: string | 
     .select('opened_at');
   if (upd.error) throw upd.error;
   if (!upd.data || upd.data.length === 0) throw new Error(LEDGER_ALREADY_OPEN);
+}
+
+/**
+ * B2(2026-09-28) — 대회 시작 시각을 **클락이 처음 돈 순간**으로 채운다(비어 있을 때만 · 마감 전 장부만).
+ *
+ * 왜: 얼리 자동 판정(earlyTypeOf)의 기준은 `tournamentStart ?? openedAt` 이다. 시작 시각을 따로 안 적으면
+ *   '장부를 연 시각'이 기준이 돼, 17:30 에 장부를 열고 19:00 에 클락을 시작하면 19:05 첫 바인이 더블얼리가 아니라 '없음'이 됐다
+ *   (scratch store-audit/early.test.ts 실측). 폼 안내문은 "클락 연동 시 스타트 시각으로 자동 분류" 라고 약속하고 있었다.
+ * 업주가 폼에 직접 적은 시각은 덮지 않는다(`is null`). 0행은 정상이다(이미 적혀 있음·마감됨·연동 장부 없음) —
+ * 호출부(클락 저장)는 이 결과로 성공/실패를 말하지 않는다.
+ */
+export async function markTournamentStart(venueId: string, date: string, gameSeq: number, atIso: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('ledger_sessions')
+    .update({ tournament_start: atIso, updated_at: new Date().toISOString() })
+    .eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq)
+    .is('tournament_start', null).eq('closed', false)
+    .select('venue_id');
+  if (error) throw error;
 }
 
 /** 레지(레지스트리) 마감 — 신규 등록/엔트리 중단(정산 마감과 별개) */
@@ -1118,7 +1183,9 @@ export async function closeLedgerSession(venueId: string, date: string, memo: st
 export async function reopenLedgerSession(venueId: string, date: string, gameSeq = MAIN_GAME_SEQ): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('reopen_ledger_session', { p_venue_id: venueId, p_date: date, p_game_seq: gameSeq });
-  if (error) throw new Error(error.message);
+  // B7(2026-09-28) — 원본 오류를 그대로 던진다. `new Error(message)` 로 감싸면 code(42501 등)가 사라져
+  //   ledgerErrorText·msgOf 가 권한 거부를 가려내지 못하고 원문(SQL·제약 이름)을 화면에 그렸다.
+  if (error) throw error;
 }
 
 /** 장부(세션) 통째 삭제 — 바인·명단·세션 일괄 제거. POS 관리 권한 필요(SECURITY DEFINER RPC).
@@ -1320,6 +1387,21 @@ export async function setBuyinEarly(buyinId: string, override: EarlyType | null)
   await mustAffect(supabase.from('ledger_buyins').update({ early_override: override }).eq('id', buyinId));
 }
 
+/** 이미 기록된 바인 행의 애드온만 바꾼다(2026-09-28). null = 애드온 지움.
+ *  바인 금액 칸(BuyinFields)과 **따로** 쓴다 — 감액 비밀번호 RPC(update_ledger_buyin_reduce)는 애드온 칸을 모른다.
+ *  금액은 서버 트리거(20260928g)가 세션 애드온 가격으로 다시 맞춘다 — 여기서 보내는 값은 초안일 뿐이다. */
+export async function setBuyinAddon(buyinId: string, addon: { method: AddonMethod; unpaid: boolean; amount: number } | null): Promise<void> {
+  if (IS_MOCK) return;
+  const fields = addon
+    ? { addon_method: addon.method, addon_unpaid: addon.unpaid, addon_amount: Math.max(0, Math.round(addon.amount)) }
+    : { addon_method: null, addon_unpaid: false, addon_amount: 0 };
+  try {
+    await mustAffect(supabase.from('ledger_buyins').update(fields).eq('id', buyinId));
+  } catch (e) {
+    throw buyinWriteError(e as { code?: string; hint?: unknown; message?: string });
+  }
+}
+
 /** 분납/할인 상세 입력 — 현금/카드/이체 금액 + 미수금액 + 티켓장수 + 레벨할인 */
 export async function upsertBuyinSplit(input: {
   venueId: string; sessionDate: string; gameSeq?: number; playerName: string; entryNo: number;
@@ -1421,7 +1503,7 @@ export function subscribeLedger(venueId: string, onChange: () => void, opts?: { 
       });
     }
   }
-  ch.subscribe();
+  ch.subscribe(resubscribeStatus(onChange));   // 2026-09-28 — 소켓 재연결(SUBSCRIBED 재진입) 때 놓친 변경을 한 번 다시 읽는다
   return () => { supabase.removeChannel(ch); };
 }
 
@@ -1552,11 +1634,21 @@ export async function getBuyinRequestStats(venueId: string, from: string, to: st
   return { total: data.length, approved, rejected, pending, approveRate: resolved ? Math.round((approved / resolved) * 100) : 0, avgWaitMin: waitN ? Math.round(waitSum / waitN / 60000) : null };
 }
 /** 바인 요청 실시간 구독(매장별). */
-export function subscribeBuyinRequests(venueId: string, cb: () => void): () => void {
+export function subscribeBuyinRequests(venueId: string, cb: () => void, opts?: { ownsId?: (id: string) => boolean }): () => void {
   if (IS_MOCK) return () => {};
+  const owns = opts?.ownsId;
   const ch = supabase.channel(`buyin_req:${venueId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger_buyin_requests', filter: `venue_id=eq.${venueId}` }, () => cb())
-    .subscribe();
+    // F(2026-09-28) — 손님의 요청 취소(cancel_buyin_request)·자동 만료(expire_old_buyin_requests)는 **DELETE** 다.
+    //   filter 를 건 구독은 DELETE 를 못 받아 이미 없어진 요청이 업주 PC 대기열에 남았다(승인하면 '요청을 찾을 수 없습니다').
+    //   DELETE 의 old 에는 기본키(id)만 실린다 — 화면이 들고 있는 요청이면(ownsId) 다시 읽는다.
+    //   ownsId 가 없는 호출부(건수만 세는 바)는 어떤 삭제든 다시 센다 — 요청 삭제는 드물다.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ledger_buyin_requests' }, (p: any) => {
+      const id = p?.old?.id;
+      if (!owns || (typeof id === 'string' && owns(id))) cb();
+    })
+    .subscribe(resubscribeStatus(cb));
   return () => { supabase.removeChannel(ch); };
 }
 /** 손님 본인 바인요청 실시간 구독 — 운영자 승인/거절 즉시 반영(홈 배너). */

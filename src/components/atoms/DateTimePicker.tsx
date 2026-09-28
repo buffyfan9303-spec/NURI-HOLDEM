@@ -97,7 +97,7 @@ export default function DateTimePicker({
               <div className="h-32 overflow-y-auto rounded-input border border-border-subtle bg-surface-base grid grid-cols-3 gap-0.5 p-1 scrollbar-none">
                 {hours.map((h) => (
                   <button key={h} type="button" onClick={() => setHh(h)}
-                    className={['py-1.5 rounded text-xs font-bold tabular-nums transition-colors', hh === h ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>{pad(h)}</button>
+                    className={['py-1.5 rounded-sm text-xs font-bold tabular-nums transition-colors', hh === h ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>{pad(h)}</button>
                 ))}
               </div>
             </div>
@@ -106,7 +106,7 @@ export default function DateTimePicker({
               <div className="h-32 overflow-y-auto rounded-input border border-border-subtle bg-surface-base grid grid-cols-2 gap-0.5 p-1 scrollbar-none">
                 {minutes.map((m) => (
                   <button key={m} type="button" onClick={() => setMm(m)}
-                    className={['py-1.5 rounded text-xs font-bold tabular-nums transition-colors', mm === m ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>{pad(m)}</button>
+                    className={['py-1.5 rounded-sm text-xs font-bold tabular-nums transition-colors', mm === m ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>{pad(m)}</button>
                 ))}
               </div>
             </div>

@@ -53,7 +53,7 @@ export default function CardGridPicker({ usedIds, onPick }: Props) {
                     //   깨졌다 — 세 화면(HandBoardPicker·GtoDeepPanel·PostFormModal)이 공유하는 계약이라
                     //   이 커밋 범위를 넘는다. **되돌리고 세로만 고쳤다.** 가로는 미해결로 남긴다.
                     'h-[44px] rounded-[4px] text-2xs font-bold tabular-nums select-none touch-manipulation transition-transform',
-                    'active:scale-[0.9] focus:outline-none',
+                    'active:scale-[0.9] focus:outline-hidden',
                     used
                       ? 'bg-surface-low opacity-25 cursor-not-allowed'
                       : ['bg-surface-high border border-border-default active:bg-surface-float', SUIT_COLOR[suit]].join(' '),

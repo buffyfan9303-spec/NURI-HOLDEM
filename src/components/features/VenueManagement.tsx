@@ -224,7 +224,7 @@ function RowContent({ venue: v, order, handlers, dragHandle }: {
     <>
       <div className="flex items-center gap-1.5 flex-wrap">
         {dragHandle}
-        <span className="shrink-0 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-badge bg-surface-high border border-border-default text-2xs font-bold text-ink-secondary tabular-nums">{order}</span>
+        <span className="shrink-0 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-badge bg-surface-high border border-border-default text-2xs font-bold text-ink-secondary tabular-nums">{order}</span>
         <span className="text-sm font-semibold text-ink-primary truncate">{v.name}</span>
         <span className={['text-2xs px-1.5 py-0.5 rounded-badge border font-semibold', st.cls].join(' ')}>{st.label}</span>
         {v.isPaidAd && <span className="inline-flex items-center gap-0.5 text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300 text-white font-bold"><Icon name="star-fill" size={10} className="shrink-0" />프리미엄</span>}

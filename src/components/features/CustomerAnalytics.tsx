@@ -91,7 +91,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
             return (
               <button key={id} type="button" data-pill-active={on || undefined}
                 onClick={() => goSubTab('crm-range', RANGE_ORDER, range, id, () => setRange(id))}
-                className={['relative rounded-[6px] px-2.5 py-1 t-tab transition-colors duration-[var(--dur-fast)] focus:outline-none',
+                className={['relative rounded-[6px] px-2.5 py-1 t-tab transition-colors duration-(--dur-fast) focus:outline-hidden',
                   on ? 'font-bold text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 <span className="relative">{label}</span>
               </button>
@@ -116,7 +116,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-2xs text-ink-muted">{query ? '검색 결과가 없습니다.' : '이 기간의 장부 기록이 없습니다.'}</p>
       ) : (
-        <ul className="max-h-[28rem] space-y-1.5 overflow-y-auto pr-1">
+        <ul className="max-h-112 space-y-1.5 overflow-y-auto pr-1">
           {filtered.slice(0, 200).map((r) => (
             <li key={r.name} className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-2">
               <div className="flex items-center justify-between gap-2">

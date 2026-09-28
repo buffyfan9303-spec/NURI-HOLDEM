@@ -95,8 +95,8 @@ export default function AvailabilityField({
         required
         className={[
           'input', inputClassName ?? '',
-          status === 'taken' || status === 'invalid' ? '!border-danger/60' :
-          status === 'available' ? '!border-emerald-500/60' : '',
+          status === 'taken' || status === 'invalid' ? 'border-danger/60!' :
+          status === 'available' ? 'border-emerald-500/60!' : '',
         ].filter(Boolean).join(' ')}
       />
       {h && <p className={`mt-1 text-2xs ${h.cls}`} aria-live="polite">{h.text}</p>}

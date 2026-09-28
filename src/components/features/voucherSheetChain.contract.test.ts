@@ -51,8 +51,8 @@ describe('FINAL-UX#SHEET — 손님 이용권 시트를 끌어 닫는다', () =>
     expect(marked.length, '지갑의 풀스크린 오버레이 2곳(사용 시트·완료 화면)에 옵트아웃이 붙어야 한다')
       .toBe(2);
     // 붙은 자리가 실제로 그 두 오버레이인지 — 아무 div 에나 붙여서 개수만 맞추지 못하게.
-    expect(WALLET, '사용 시트(z-[70]) 루트에 안 붙었다').toMatch(/data-no-drag-close className=\{\['fixed inset-0 z-\[70\]/);
-    expect(WALLET, '완료 오버레이(z-[80]) 에 안 붙었다').toMatch(/role="status" data-no-drag-close className="fixed inset-0 z-\[80\]/);
+    expect(WALLET, '사용 시트(z-[70]) 루트에 안 붙었다').toMatch(/data-no-drag-close className=\{\['fixed inset-0 z-70/);
+    expect(WALLET, '완료 오버레이(z-[80]) 에 안 붙었다').toMatch(/role="status" data-no-drag-close className="fixed inset-0 z-80/);
   });
 });
 

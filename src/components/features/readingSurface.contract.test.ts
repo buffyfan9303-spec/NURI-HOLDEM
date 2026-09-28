@@ -32,7 +32,7 @@ describe('UI-01 · 공지 본문 구조화', () => {
   it('🔴 parseNoticeBody 로 그리고, 단일 pre-wrap <p> 덩어리·HTML 주입이 없다', () => {
     expect(NOTICE).toMatch(/import \{ parseNoticeBody \} from '\.\.\/\.\.\/lib\/noticeBody';/);
     expect(NOTICE).toMatch(/parseNoticeBody\(notice\.body\)/);
-    expect(NOTICE).not.toMatch(/<p className="whitespace-pre-wrap break-words text-base leading-\[1\.75\] text-ink-primary">\s*\{notice\.body\}/);
+    expect(NOTICE).not.toMatch(/<p className="whitespace-pre-wrap wrap-break-word text-base leading-\[1\.75\] text-ink-primary">\s*\{notice\.body\}/);
     expect(NOTICE).not.toMatch(/dangerouslySetInnerHTML/);
     // 줄 높이는 그대로 1.75 — 키우지 않는다(§8.1)
     expect(NOTICE).toMatch(/data-notice-body[^>]*leading-\[1\.75\]/);
@@ -130,7 +130,7 @@ describe('UI-03 · 아우라 구분선', () => {
     expect((POST.match(/acts\.push\(/g) ?? []).length, '관리 동작은 신고·차단·삭제 셋').toBe(3);
     expect(POST).toMatch(/aria-label="게시글 메뉴"/);
   });
-  it('입력창·표·focus ring 은 손대지 않는다 — .input 정의는 그대로다', () => {
+  it('입력창·표·focus ring-3 은 손대지 않는다 — .input 정의는 그대로다', () => {
     expect(CSS).toMatch(/\.input\s*\{/);
     expect((CSS.match(/divider-aura/g) ?? []).length, 'CSS 안 divider-aura 는 정의 2곳(기본·라이트)뿐').toBeLessThanOrEqual(4);
   });
@@ -161,7 +161,7 @@ describe('UI-Aura(2026-09-14) · Modal page 셸 — compact(게시글 상세)만
   // "단색 검정 한 장"이 된다 — density를 받으면서도 셸 색은 분기가 없던 것이 근본 원인(오너 2026-09-14 스크린샷).
   // 음성 대조: 아래 삼항연산자를 `'bg-surface-base'` 상수 하나로 되돌리면 이 두 단언이 즉시 실패한다(직접 확인함).
   it('🔴 page 전체화면 셸: compact 는 surface-mid, 그 외 5곳(캘린더/매장 도구·GTO·일정)은 surface-base 그대로', () => {
-    expect(MODAL).toMatch(/className=\{\['fixed inset-0 z-\[55\] flex flex-col pt-\[env\(safe-area-inset-top\)\]',\s*\n\s*compact \? 'bg-surface-mid' : 'bg-surface-base',/);
+    expect(MODAL).toMatch(/className=\{\['fixed inset-0 z-55 flex flex-col pt-\[env\(safe-area-inset-top\)\]',\s*\n\s*compact \? 'bg-surface-mid' : 'bg-surface-base',/);
     // 옛 무조건 surface-base(분기 없음) 패턴이 되돌아오지 않았는지 — 같은 class 문자열 안에 bg-surface-base 가 고정으로 붙어 있으면 실패
     expect(MODAL).not.toMatch(/\['fixed inset-0 z-\[55\] bg-surface-base /);
   });

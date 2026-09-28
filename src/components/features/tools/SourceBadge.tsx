@@ -23,32 +23,32 @@ const META: Record<SourceKind, { label: string; hint: string; icon: IconName; cl
   chart: {
     label: '자체 제작 학습 차트',
     hint: '100bb 기준 통설 합의 수치로 직접 만든 표입니다. 빈도(100/50/25%)는 혼합전략을 학습용으로 단순화했습니다. 상용 솔버 표를 복제하지 않았습니다.',
-    icon: 'table', cls: 'border-accent-400/40 bg-accent-300/[0.08] text-accent-200',
+    icon: 'table', cls: 'border-accent-400/40 bg-accent-300/8 text-accent-200',
   },
   nash: {
     label: '자체 Nash 모델',
     hint: '첫 진입(first-in) 올인 · 단일 콜러 근사 · 2~20bb · BB앤티 옵션. fictitious play 로 수렴시킨 자체 산출값이고, 에퀴티는 몬테카를로입니다(SB·BTN 빅앤티 열은 전수·3인 에퀴티로 푼 균형). 빈도는 0~8 단계로 양자화돼 있습니다.',
-    icon: 'arrow-up-from-line', cls: 'border-emerald-500/40 bg-emerald-500/[0.08] text-emerald-300',
+    icon: 'arrow-up-from-line', cls: 'border-emerald-500/40 bg-emerald-500/8 text-emerald-300',
   },
   mc: {
     label: '몬테카를로 에퀴티',
     hint: '무작위 시행으로 승률을 추정합니다. 시행 횟수만큼의 오차가 있고, 돌릴 때마다 소수점이 조금씩 달라질 수 있습니다.',
-    icon: 'dice', cls: 'border-sky-500/40 bg-sky-500/[0.08] text-sky-300',
+    icon: 'dice', cls: 'border-sky-500/40 bg-sky-500/8 text-sky-300',
   },
   quiz: {
     label: '편집 개념 퀴즈',
     hint: '사람이 쓴 학습용 문항입니다. 해설은 개념 설명이고 솔버 계산이 아닙니다.',
-    icon: 'brain', cls: 'border-fuchsia-500/40 bg-fuchsia-500/[0.08] text-fuchsia-300',
+    icon: 'brain', cls: 'border-fuchsia-500/40 bg-fuchsia-500/8 text-fuchsia-300',
   },
   heuristic: {
     label: '휴리스틱 참고',
     hint: '에퀴티·팟오즈 임계값으로 뽑은 간이 기준입니다. GTO 최적 행동이 아니고 EV 손실도 계산하지 않습니다.',
-    icon: 'scale', cls: 'border-amber-500/40 bg-amber-500/[0.08] text-amber-200',
+    icon: 'scale', cls: 'border-amber-500/40 bg-amber-500/8 text-amber-200',
   },
   solver: {
     label: '실제 solver 데이터',
     hint: '외부 솔버가 계산한 값입니다.',
-    icon: 'microscope', cls: 'border-violet-500/40 bg-violet-500/[0.08] text-violet-300',
+    icon: 'microscope', cls: 'border-violet-500/40 bg-violet-500/8 text-violet-300',
   },
 };
 

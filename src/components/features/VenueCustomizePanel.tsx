@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import Icon from '../atoms/Icon';
 import { DEFAULT_RANK_METRICS,
@@ -279,7 +279,7 @@ function SlugEditor({ venueId, onOpenVenue }: { venueId: string; onOpenVenue?: (
           onChange={(e) => { setSlug(normalize(e.target.value)); setCheck('idle'); }}
           placeholder="예: roti-arena" maxLength={20}
           // 2026-09-25 #14 — min-w-0 이면 flex-wrap 이 줄을 안 바꿔 390 에서 글자공간 48.5px(자리글 85.8 → −37.3)로 눌렸다.
-          className="input min-w-[9rem] flex-1 text-sm lowercase" />
+          className="input min-w-36 flex-1 text-sm lowercase" />
         <button type="button" onClick={doCheck} disabled={!slug}
           className="btn-ghost shrink-0 px-3 text-xs disabled:opacity-50">중복 확인</button>
         <button type="button" onClick={save} disabled={busy || (slug !== '' && check !== 'ok') || slug === (saved ?? '')}
@@ -417,7 +417,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
               return (
                 <button key={m} type="button" onClick={() => toggleMetric(m)}
                   className={['rounded-input border p-2.5 text-left transition-colors',
-                    on ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-default bg-surface-high hover:border-accent-400/40'].join(' ')}>
+                    on ? 'border-accent-400/60 bg-accent-300/8' : 'border-border-default bg-surface-high hover:border-accent-400/40'].join(' ')}>
                   <span className="flex items-center gap-1.5">
                     <span className={['h-3.5 w-3.5 rounded-full border flex items-center justify-center', on ? 'border-accent-300 bg-accent-300' : 'border-ink-muted'].join(' ')}>
                       {on && <Icon name="check" size={10} className="text-ink-inverse" />}
@@ -434,7 +434,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
         </section>
 
         {/* ② 커스텀 보드 만들기 — 목록에 없는 랭킹을 직접 */}
-        <section className="rounded-aura border border-violet-500/30 bg-violet-500/[0.04] p-3 space-y-2">
+        <section className="rounded-aura border border-violet-500/30 bg-violet-500/4 p-3 space-y-2">
           <h3 className="text-sm font-bold text-ink-primary">커스텀 보드 만들기 <span className="text-2xs font-normal text-ink-muted">(최대 {MAX_CUSTOM_BOARDS}개)</span></h3>
           <p className="text-2xs text-ink-muted">명단·점수는 아래 「포인트 지급 · 차감」에서 보드를 골라 입력하세요.</p>
           {customBoards.length > 0 && (
@@ -461,7 +461,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
           {customBoards.length < MAX_CUSTOM_BOARDS && (
             <div className="flex flex-wrap gap-1.5">
               {/* 2026-09-25 #14 — 390 에서 글자공간 64.5px(자리글 161.1 → −96.6). 실제 최소폭을 줘서 단위·기간 칸을 다음 줄로 내린다. */}
-              <input value={nbName} onChange={(e) => setNbName(e.target.value)} maxLength={16} placeholder="보드 이름 (예: 월요 토너 킹)" className="input min-w-[12rem] flex-1 text-sm" />
+              <input value={nbName} onChange={(e) => setNbName(e.target.value)} maxLength={16} placeholder="보드 이름 (예: 월요 토너 킹)" className="input min-w-48 flex-1 text-sm" />
               <input value={nbUnit} onChange={(e) => setNbUnit(e.target.value)} maxLength={4} placeholder="단위(점)" className="input w-20 text-sm" />
               <select value={nbPeriod} onChange={(e) => setNbPeriod(e.target.value as 'all' | 'month' | 'season')} className="input w-auto shrink-0 text-sm" aria-label="집계 기간">
                 <option value="all">누적</option>
@@ -511,7 +511,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
             ))}
             {points.length < MAX_PLACEMENT_ROWS && (
               <button type="button" onClick={addPlacement} aria-label="등수 추가"
-                className="mt-[1.05rem] inline-flex h-9 items-center justify-center gap-1 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] text-2xs font-bold text-accent-200 transition-colors hover:bg-accent-300/10">
+                className="mt-[1.05rem] inline-flex h-9 items-center justify-center gap-1 rounded-input border border-dashed border-accent-400/40 bg-accent-300/6 text-2xs font-bold text-accent-200 transition-colors hover:bg-accent-300/10">
                 <Icon name="plus" size={13} />{points.length + 1}등
               </button>
             )}
@@ -571,8 +571,11 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
   const [suggest, setSuggest] = useState<RegisteredPlayer[]>([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
 
-  const reload = () => { getScoreEntries(venueId).then(setRows).catch(() => {}); };
-  useEffect(reload, [venueId]);
+  // E(2026-09-28) — 매장 전환 가드: 앞 매장 점수 기록이 늦게 와서 지금 매장 목록을 덮지 않게.
+  const rowsOwner = useRef(venueId);
+  rowsOwner.current = venueId;
+  const reload = () => { const v = venueId; getScoreEntries(v).then((r) => { if (rowsOwner.current === v) setRows(r); }).catch(() => {}); };
+  useEffect(() => { setRows([]); reload(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 입력 디바운스 검색(300ms) — 실명·닉네임·이 매장 방문횟수
   useEffect(() => {
@@ -614,13 +617,13 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
         <p className="text-2xs text-ink-muted mt-0.5">커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다. <span className="font-semibold text-accent-300">사유는 필수</span>입니다.</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
-        <select value={board} onChange={(e) => setBoard(e.target.value)} className="input w-full text-sm sm:w-auto sm:min-w-[10rem]">
+        <select value={board} onChange={(e) => setBoard(e.target.value)} className="input w-full text-sm sm:w-auto sm:min-w-40">
           <option value="">매장 포인트(기본)</option>
           {customBoards.map((b) => <option key={b.key} value={b.key}>{b.name} (커스텀)</option>)}
         </select>
         <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || today)}
           className="input w-auto shrink-0 text-sm tabular-nums" aria-label="기록 날짜" />
-        <div className="relative min-w-[9rem] flex-1">
+        <div className="relative min-w-36 flex-1">
           <input value={name}
             onChange={(e) => { setName(e.target.value); setSuggestOpen(true); }}
             onFocus={() => setSuggestOpen(true)}
@@ -650,7 +653,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
         {/* 사유 메뉴 — 고르면 아래 칸이 채워지고, 그 위에 상세를 덧붙일 수 있다 */}
         <select value={reasonPreset} aria-label="사유 선택"
           onChange={(e) => { const v = e.target.value; setReasonPreset(v); setReason(v); }}
-          className="input w-full text-sm sm:w-auto sm:min-w-[9rem]">
+          className="input w-full text-sm sm:w-auto sm:min-w-36">
           <option value="">사유 선택…</option>
           <optgroup label="지급">
             {GRANT_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -660,7 +663,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
           </optgroup>
         </select>
         <input value={reason} onChange={(e) => { setReason(e.target.value); setReasonPreset(''); }}
-          placeholder="사유(필수 · 기록에 남습니다)" maxLength={60} className="input min-w-[10rem] flex-1 text-sm" />
+          placeholder="사유(필수 · 기록에 남습니다)" maxLength={60} className="input min-w-40 flex-1 text-sm" />
         <button type="button" disabled={busy} onClick={() => add(1)} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">지급</button>
         <button type="button" disabled={busy} onClick={() => add(-1)} className="shrink-0 rounded-input border border-danger/40 px-3 text-xs font-semibold text-danger-light hover:bg-danger/10 disabled:opacity-50">차감</button>
       </div>
@@ -674,7 +677,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
                 <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{r.entryDate.slice(5)}</span>
                 <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[9px] font-bold', r.boardKey ? 'bg-violet-500/15 text-violet-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>{boardName(r.boardKey)}</span>
                 <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{r.name}</span>
-                {r.reason && <span className="hidden min-w-0 max-w-[9rem] truncate text-2xs text-ink-muted sm:block">{r.reason}</span>}
+                {r.reason && <span className="hidden min-w-0 max-w-36 truncate text-2xs text-ink-muted sm:block">{r.reason}</span>}
                 <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-accent-300' : 'text-danger-light'].join(' ')}>
                   {r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}
                 </span>
@@ -697,8 +700,11 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
   const [entries, setEntries] = useState<ScoreEntry[]>([]);
   const [sel, setSel] = useState<string | null>(new Date().toLocaleDateString('en-CA'));
 
-  const reload = () => { getScoreEntries(venueId, 500).then(setEntries).catch(() => {}); };
-  useEffect(reload, [venueId]);
+  // E(2026-09-28) — 매장 전환 가드(위와 같은 이유).
+  const entriesOwner = useRef(venueId);
+  entriesOwner.current = venueId;
+  const reload = () => { const v = venueId; getScoreEntries(v, 500).then((r) => { if (entriesOwner.current === v) setEntries(r); }).catch(() => {}); };
+  useEffect(() => { setEntries([]); reload(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const boardName = (key: string | null) => key ? (customBoards.find((b) => b.key === key)?.name ?? '커스텀') : '매장 포인트';
 
@@ -755,9 +761,9 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
           const isSel = sel === iso;
           return (
             <button key={iso} type="button" onClick={() => setSel(iso)}
-              className={['flex min-h-[3rem] flex-col items-center justify-start rounded-input border px-0.5 pt-1 transition-colors',
-                isSel ? 'border-accent-300 bg-accent-300/[0.1]'
-                : list.length ? 'border-accent-400/35 bg-accent-300/[0.04] hover:bg-accent-300/[0.08]'
+              className={['flex min-h-12 flex-col items-center justify-start rounded-input border px-0.5 pt-1 transition-colors',
+                isSel ? 'border-accent-300 bg-accent-300/10'
+                : list.length ? 'border-accent-400/35 bg-accent-300/4 hover:bg-accent-300/8'
                 : 'border-border-subtle bg-surface-high/40 hover:bg-surface-high'].join(' ')}>
               <span className={['text-2xs font-bold tabular-nums leading-none', iso === todayIso ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{day}</span>
               {list.length > 0 && (<>
@@ -781,7 +787,7 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
                 <li key={r.id} className="flex items-center gap-2 rounded-input bg-surface-base/60 px-2 py-1.5">
                   <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[9px] font-bold', r.boardKey ? 'bg-violet-500/15 text-violet-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>{boardName(r.boardKey)}</span>
                   <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{r.name}</span>
-                  {r.reason && <span className="hidden max-w-[8rem] truncate text-2xs text-ink-muted sm:block">{r.reason}</span>}
+                  {r.reason && <span className="hidden max-w-32 truncate text-2xs text-ink-muted sm:block">{r.reason}</span>}
                   <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-accent-300' : 'text-danger-light'].join(' ')}>{r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}</span>
                   {/* 스윕③ — 같은 이유(위 removeBoard 주석 참고)로 실제 44px 박스 */}
                   <button type="button" onClick={() => del(r.id)} aria-label="삭제" className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
@@ -867,7 +873,7 @@ function RankBoardPreview({ venueId, cfg }: { venueId: string; cfg: VenuePageCon
   const unit = boardUnit(metric, cfg);
 
   return (
-    <section className="rounded-aura border border-accent-400/25 bg-accent-300/[0.04] p-3 space-y-2">
+    <section className="rounded-aura border border-accent-400/25 bg-accent-300/4 p-3 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="min-w-0 flex-1 text-sm font-bold text-accent-300">보드 미리보기 (TOP 10)</h3>
         <select value={metric} onChange={(e) => setMetric(e.target.value)} className="input w-auto shrink-0 text-2xs py-1.5">

@@ -2,32 +2,88 @@ name: CI
 
 # push(main) · PR 마다 빌드 + Playwright 스모크 자동 실행 → 깨진 배포 차단용 게이트.
 # 배포를 "하드 차단"하려면: GitHub → Settings → Branches → main 브랜치 보호 규칙에
-#   "Require status checks to pass" 에 이 워크플로(build-and-e2e)를 지정 + Vercel 은
+#   "Require status checks to pass" 에 이 워크플로의 집계 체크(build-and-e2e)를 지정 + Vercel 은
 #   Settings → Git → "Wait for CI before deploy" 를 켜면 됩니다(아래 README 참고).
 on:
   push:
     branches: [main]
   pull_request:
 
-# 같은 ref 의 이전 실행은 취소(최신 커밋만 검사)
+# 같은 ref 의 이전 실행 처리 — 2026-09-28 오너 승인으로 main 과 PR 을 나눈다.
+#   · PR: 새 푸시가 오면 이전 실행 취소(최신 커밋만 검사) — 예전과 같다.
+#   · main push: **취소하지 않고 줄 세운다.** 예전엔 main 도 취소돼서 CI 도중 푸시한 커밋이
+#     영영 배포되지 않았다(09-18 두 번 · 09-20 두 번 · 09-21 한 번). GitHub 동시성은
+#     "실행 중 1개 + 대기 1개" 라서, 도는 것은 끝까지 가서 배포되고 그 사이 쌓인 푸시 중 최신 하나만 다음에 돈다.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build-and-e2e:
+  # ── 2026-09-28 — 한 잡(build-and-e2e, 36~44분 / 한도 45분)을 나눴다 ─────────────────
+  #   checks(린트·단위·빌드·번들예산) ∥ e2e 4조각 + boot 1조각 → 집계 잡 `build-and-e2e`.
+  #   ⚠ 집계 잡의 **표시 이름을 예전 체크 이름 `build-and-e2e` 로 유지**한다 — Vercel 이 이 이름의
+  #     체크 통과를 기다려 승격하므로(09-27 실측: CI 완료 2초 뒤 승격), 이름을 바꾸면 Vercel 설정도 바꿔야 한다.
+  #   검사 범위는 그대로다 — 같은 스펙 전부가 같은 retries·같은 워커 수(러너당 2)로 돈다. 나눠서 동시에 돌릴 뿐이다.
+  checks:
     runs-on: ubuntu-latest
-    # ⚠ 15 분은 **부족했다** — 2026-09-17 실측으로 확인.
-    #   연속 3회 전부 같은 자리에서 잘렸다: 15.3분 / 14.0분 / 15.3분 → 전부 cancelled.
-    #   앞 단계(설치·린트·단위테스트·빌드·번들예산·폰트·플레이라이트 설치)는 **전부 success** 였고,
-    #   E2E 자체도 멈춘 게 아니라 정상으로 통과하는 중이었다(로그에 알약·정산·라이브 측정값이
-    #   마지막 초까지 찍힌다). 그냥 **예산이 모자랐다** — 앞 단계 ≈4.5분 + E2E 11분에도 미완.
-    # 🔴 이것이 단순한 CI 빨간불이 아니라 **배포가 유저에게 안 닿는** 원인이었다:
-    #   Vercel 이 체크 통과를 기다려 승격하므로, CI 가 끝나지 않으면 빌드가 READY 여도
-    #   프로덕션 도메인은 이전 배포에 머무른다(2026-09-17 실측: nuriholdem.com 이 749a835 에 멈춤).
-    # 통과를 위해 게이트를 느슨하게 푸는 것이 아니다 — 검사 범위는 그대로 두고 **시간만** 준다.
-    # 2026-09-24: 807 테스트·2 워커로 28~30분에 닿아 e1ea47e8 이 30분에 취소됐다(실패 0, 재시도 몇 건). 45분으로.
-    timeout-minutes: 45
+    timeout-minutes: 15
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      TZ: Asia/Seoul
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # node 24 — 근거는 e2e 잡의 setup-node 주석.
+          node-version: 24
+          cache: npm
+      - name: Install deps
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # 금액 계산 단위 테스트 — 매출·미수·엔트리·할인이 조합별로 정확한지 값으로 고정.
+      # (2026-07 '레벨 할인' 사건: 빌드·린트·E2E 다 통과하는데 돈 계산만 조용히 틀렸던 유형 방지)
+      - name: 단위 테스트 (장부 금액 계산)
+        run: npm test
+
+      - name: Build (타입체크 + 번들 + sitemap 생성)
+        run: npm run build
+
+      # 번들 예산 — 이 프로젝트가 실제로 밟은 함정 3개를 규칙으로 박은 것(scripts/bundle-budget.mjs 주석 참고).
+      #   ① 구글 폰트 CSS 가 임계 경로로 돌아오는 것(실측 422→637ms 로 걷어냈던 그것)
+      #   ② 낡은 dist 를 재고 "포함됐다"고 오판하는 것
+      #   ③ 청크가 조용히 불어나는 것
+      # 의도한 증가면 `npm run bundle:budget:update` 로 올리고 **왜 올렸는지 커밋에 남긴다.**
+      - name: 번들 예산
+        run: npm run bundle:budget
+
+  e2e:
+    runs-on: ubuntu-latest
+    # 조각 하나 ≈ 전체의 1/4. 넉넉히 30분.
+    # ⚠ 한 잡 시절의 역사: 15분은 부족했다(2026-09-17 연속 3회 15분에 잘려 cancelled — E2E 는 정상 진행 중이었다).
+    #   2026-09-24: 807 테스트·2 워커로 28~30분 → 30분 취소 → 45분으로 올렸고, 09-27 에 36~44분까지 찼다. 그래서 나눴다.
+    # 🔴 CI 가 끝나지 않으면 Vercel 이 승격하지 않는다 → 배포가 유저에게 안 닿는다(2026-09-17 nuriholdem.com 이 749a835 에 멈춤).
+    # 통과를 위해 게이트를 느슨하게 푸는 것이 아니다 — 검사 범위는 그대로 두고 동시에 돌린다.
+    timeout-minutes: 30
+    strategy:
+      # 한 조각이 빨개도 나머지는 끝까지 돈다 — 실패 목록을 한 번에 보려고. 판정은 집계 잡이 한다.
+      fail-fast: false
+      matrix:
+        include:
+          # ① main — 병렬. 기능·회귀 전반. Playwright 가 테스트 단위로 4등분한다(fullyParallel: true).
+          #    = package.json `test:e2e:main` 과 같은 인자 + --shard.
+          - { id: '1', args: '--grep-invert @boot --shard=1/4' }
+          - { id: '2', args: '--grep-invert @boot --shard=2/4' }
+          - { id: '3', args: '--grep-invert @boot --shard=3/4' }
+          - { id: '4', args: '--grep-invert @boot --shard=4/4' }
+          # ② boot(@boot) — 단일 워커. '무엇이 먼저 출발했는가' 를 재는 부팅 경쟁 테스트라
+          #    워커가 CPU 를 다투면 측정 대상 자체가 왜곡된다. 끄지 않고 자기 러너에서 따로 돌린다.
+          #    = package.json `test:e2e:boot` 과 같은 인자.
+          - { id: 'boot', args: '--grep @boot --workers=1' }
+    name: e2e (${{ matrix.id }})
     # Supabase 시크릿이 있으면 실데이터로, 없으면 자동으로 Mock 모드로 스모크가 돈다(둘 다 통과해야 정상)
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -67,49 +123,99 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
-
-      # 금액 계산 단위 테스트 — 매출·미수·엔트리·할인이 조합별로 정확한지 값으로 고정.
-      # (2026-07 '레벨 할인' 사건: 빌드·린트·E2E 다 통과하는데 돈 계산만 조용히 틀렸던 유형 방지)
-      - name: 단위 테스트 (장부 금액 계산)
-        run: npm test
-
-      - name: Build (타입체크 + 번들 + sitemap 생성)
-        run: npm run build
-
-      # 번들 예산 — 이 프로젝트가 실제로 밟은 함정 3개를 규칙으로 박은 것(scripts/bundle-budget.mjs 주석 참고).
-      #   ① 구글 폰트 CSS 가 임계 경로로 돌아오는 것(실측 422→637ms 로 걷어냈던 그것)
-      #   ② 낡은 dist 를 재고 "포함됐다"고 오판하는 것
-      #   ③ 청크가 조용히 불어나는 것
-      # 의도한 증가면 `npm run bundle:budget:update` 로 올리고 **왜 올렸는지 커밋에 남긴다.**
-      - name: 번들 예산
-        run: npm run bundle:budget
-
       # 러너에 컬러 이모지·CJK 폰트가 없어 emoji-glyphs / font-coverage 게이트가 환경 때문에 빨갛던 것(2026-08-30~) — 폰트를 깐다
       - name: Fonts (color emoji · CJK)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji fonts-noto-cjk
       - name: Install Playwright (chromium)
         run: npx playwright install --with-deps chromium
 
-      # E2E 는 두 단계다(package.json 참고).
-      #   ① main — 병렬. 기능·회귀 전반.
-      #   ② boot(@boot) — 단일 워커. '무엇이 먼저 출발했는가' 를 재는 부팅 경쟁 테스트라
-      #      워커가 CPU 를 다투면 측정 대상 자체가 왜곡된다. 끄지 않고 분리해서 돌린다.
+      # 빌드 산출물을 나눠 받지 않는다 — 조각마다 `playwright.config.ts` 의 webServer(npm run build → vite preview)가
+      #   직접 빌드한다. 빌드는 32초(09-27 실측)라 아티팩트 업·다운로드와 비슷하고, '테스트한 것 = 나가는 것'
+      #   계약(webServer 주석)을 그대로 지키며, 공개 저장소에 dist 아티팩트를 올리지 않아도 된다.
+      # 리포터: 조각별 github 주석 + blob(병합용). flaky 집계(JSON)는 병합 잡이 합친 결과로 낸다.
       # 자격증명이 있으면 인증 스모크·클락 워치독까지 실제로 돈다(없으면 그 스펙만 skip).
-      - name: E2E 스모크 (기능 + 부팅 예산)
-        run: npm run test:e2e
+      - name: E2E (${{ matrix.id }})
+        run: npx playwright test ${{ matrix.args }} --reporter=github,blob
         env:
           E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
           E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
 
-      - name: 리포트 업로드(실패 시 추적)
+      # 병합용 blob — 트레이스·스크린샷(운영 읽기 응답이 섞일 수 있다)이 들어가므로 **하루만** 보관한다(공개 저장소).
+      - name: blob 업로드(병합용)
         if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: blob-${{ matrix.id }}
+          path: blob-report/
+          retention-days: 1
+
+  # 조각 결과 병합 — 판정은 하지 않는다(판정은 집계 잡). 합친 요약을 로그에 남기고, 실패했을 때만 HTML 리포트를 올린다.
+  merge-reports:
+    if: ${{ !cancelled() }}
+    needs: [e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - uses: actions/download-artifact@v7
+        with:
+          path: all-blob-reports
+          pattern: blob-*
+          merge-multiple: true
+      - name: 병합 리포트 (요약 + HTML + flaky JSON)
+        run: npx playwright merge-reports --reporter=line,html,json ./all-blob-reports
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+          PLAYWRIGHT_JSON_OUTPUT_NAME: flaky-report.json
+      - name: flaky 집계
+        run: node -e "const s=require('./flaky-report.json').stats; console.log('expected', s.expected, '/ flaky', s.flaky, '/ unexpected', s.unexpected, '/ skipped', s.skipped)"
+      # 공개 저장소 아티팩트는 로그인한 누구나 받는다 — 실패 때만, 짧게.
+      - name: 리포트 업로드(실패 시 추적)
+        if: ${{ failure() || needs.e2e.result == 'failure' }}
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/
-          retention-days: 7
+          retention-days: 3
+
+  # ── 집계 잡: 표시 이름이 예전 체크 이름 `build-and-e2e` 다(Vercel 이 이 이름을 기다린다) ─────────
+  #   ⚠ `needs:` 로 묶지 않는다. needs 로 묶으면 이 체크는 앞 잡이 **끝난 뒤에야 생긴다**
+  #     (2026-09-28 시험 실측: 조각이 도는 동안 커밋 체크 목록에 build-and-e2e 가 없었다).
+  #     예전 한 잡 시절엔 이 이름이 실행 시작부터 '진행 중' 으로 있었고 Vercel 은 그걸 기다렸다.
+  #     "없는 체크" 를 Vercel 이 어떻게 치는지 확인할 수 없으므로(대시보드 설정), 예전과 똑같이
+  #     **처음부터 떠 있다가** 다른 잡이 다 끝나면 판정하도록 폴링한다.
+  #   판정: checks + e2e 조각 전부 success 여야 통과. 실패·취소·skipped 하나라도 있으면 실패.
+  #   (skipped 를 통과로 치면 E2E 가 빨개도 배포가 나간다.)
+  # ponytail: 잡 이름(checks · "e2e (…)")으로 고른다 — 잡을 더하거나 이름을 바꾸면 아래 select 와 최소 개수를 같이 고쳐라.
+  ci-ok:
+    name: build-and-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+    steps:
+      - name: 모든 조각 결과 확인
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs?filter=latest&per_page=100
+        run: |
+          while :; do
+            jobs=$(gh api "$URL" --jq '[.jobs[] | select(.name == "checks" or (.name | startswith("e2e (")))]')
+            total=$(jq length <<<"$jobs")
+            open=$(jq '[.[] | select(.status != "completed")] | length' <<<"$jobs")
+            # checks 1 + e2e 5(1/4..4/4 · boot) = 6
+            if [ "$total" -ge 6 ] && [ "$open" -eq 0 ]; then break; fi
+            sleep 20
+          done
+          jq -r '.[] | "\(.name) = \(.conclusion)"' <<<"$jobs"
+          bad=$(jq '[.[] | select(.conclusion != "success")] | length' <<<"$jobs")
+          test "$bad" -eq 0
 
   # ── 보안 게이트(2026-09-02) — 빌드 잡과 병렬. 실패 = 배포 차단 ─────────────────
   #   ① gitleaks: 커밋 이력 전체의 비밀 유출(공개 저장소라 한 번 새면 즉시 공개)
@@ -129,7 +235,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-node@v7
         with:
-          # 2026-09-20 — node 22→24. 근거는 위 build-and-e2e 잡의 setup-node 주석과
+          # 2026-09-20 — node 22→24. 근거는 위 e2e 잡의 setup-node 주석과
           #   동일(중복 생략). 이 잡에서는 추가로: node 24 는 npm 11.x 를 번들한다
           #   (nodejs.org/dist/index.json 실측, 2026-09-20 — v24.21.0→npm 11.19.0 ·
           #   v22.23.2→npm 10.9.8). 아래 npm audit 스텝이 npm 10 전용 폐기 엔드포인트

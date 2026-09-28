@@ -195,6 +195,7 @@ export function applyToLedger(d: GamePresetData): Partial<LedgerSession> & { tou
   if (buyWon) p.buyinAmount = buyWon;
   if (d.prizeType) p.gameType = d.prizeType === 'GTD' ? 'gtd' : 'entry';
   if (d.addonStack) { p.isAddon = true; p.addonStack = d.addonStack; }
+  if (d.addonCost) { p.isAddon = true; p.addonAmount = d.addonCost; }   // 애드온 가격(원) — 장부 애드온 행 금액(2026-09-28)
   const ns = d.ledger ?? {};
   if (ns.cardAmountWon != null) p.cardAmount = ns.cardAmountWon;
   if (ns.targetEntries) p.targetEntries = ns.targetEntries;
@@ -316,6 +317,7 @@ export function presetFromRound(sess: LedgerSession, clockCfg?: ClockConfig | nu
     }),
   };
   if (sess.isAddon && sess.addonStack) out.addonStack = sess.addonStack;
+  if (sess.isAddon && sess.addonAmount) out.addonCost = sess.addonAmount;
   if (clockCfg) {
     // 운영 중 고친 클락 값이 최종본 — 스택·블라인드·클락 네임스페이스는 클락 설정이 이긴다
     const fromClock = presetFromClockConfig(clockCfg);

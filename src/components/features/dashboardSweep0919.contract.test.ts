@@ -74,7 +74,7 @@ describe('C · 닫는 모션 — render/closing + 지연 unmount 4곳', () => {
     expect(VW).toMatch(/closing \? 'animate-slide-down' : 'animate-sheet-up'/);
     // 2026-09-19 회귀 — NotificationPanel 과 같은 부류: 전면 오버레이(배경 버튼 포함)가 닫히는 동안
     // 뒤 화면 클릭을 계속 가로챌 수 있다.
-    expect(VW, 'RedeemSheet 루트에 closing→pointer-events-none 분기가 없다').toMatch(/z-\[70\] flex items-end justify-center sm:items-center', closing \? 'pointer-events-none' : ''/);
+    expect(VW, 'RedeemSheet 루트에 closing→pointer-events-none 분기가 없다').toMatch(/z-70 flex items-end justify-center sm:items-center', closing \? 'pointer-events-none' : ''/);
   });
   it('🔴 CoachMark — [확인] 이 fade-out 없이 즉시 사라지지 않는다', () => {
     expect(COACH).toMatch(/closeTimer\.current = window\.setTimeout\(\(\) => setVisible\(false\), 180\);/);

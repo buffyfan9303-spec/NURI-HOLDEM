@@ -352,7 +352,7 @@ function CommunityTab({
           실측 후: 바 53.5px  = pt-1(4.25) + 버튼 h-[44px] + pb-1(4.25) + 테두리(1).
           히트 영역은 44px 를 그대로 지킨다(WCAG 2.5.5) — 줄인 것은 트레이 여백과 **시각 알약**뿐이다.
           ⚠ 2026-09-06 의 '알약 40px / 트레이 44px' 지시를 이 지시가 대체한다(같은 오너, 더 최신). */}
-      <div data-community-secbar="" className="sticky top-[calc(var(--header-now)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x subbar-aura border-b border-border-subtle pt-1 pb-1 lg:pt-1 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4">
+      <div data-community-secbar="" className="sticky top-[calc(var(--header-now)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(var(--spacing-header-h)+(var(--spacing-tab-h))-0.5rem)] z-30 -mx-page-x px-page-x subbar-aura border-b border-border-subtle pt-1 pb-1 lg:pt-1 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4">
         {/* ⚠ 트랙(bg-surface-high) 없이 배경 위에 그대로 띄운다(오너 2회 지적, 2026-09-07).
             세그먼트 트랙이 있으면 그 자체가 '네모칸'으로 읽힌다 — 띠 색을 지면에 맞춰도 박스는 남는다.
             활성 표시는 미끄러지는 알약(pill-active)이 이미 하고 있어 트랙 없이도 어느 탭인지 분명하고,
@@ -423,7 +423,7 @@ function CommunityTab({
           {/* 좌측: 목록(압축) — 19rem(304px)은 PostRow 고정 메타(작성자+칭호+시간+조회 ≈368px)보다
               좁아 제목이 0px로 뭉개지고 조회수가 행 밖으로 잘렸다(PC 1280·1536 점검 2026-08-28).
               lg 24rem / xl 30rem: 1280 기준 우측 상세는 692px 확보(max-w-3xl 읽기폭과 근접). */}
-          <div className="min-w-0 lg:w-[24rem] lg:shrink-0 xl:w-[30rem]">
+          <div className="min-w-0 lg:w-[24rem] lg:shrink-0 xl:w-120">
             <FeedSectionM
               posts={boardPosts}
               postsErr={postsErr}
@@ -438,7 +438,7 @@ function CommunityTab({
             />
           </div>
           {/* 우측: 게시글 상세(크게) */}
-          <aside className="hidden lg:sticky lg:top-[8.5rem] lg:block lg:min-w-0 lg:flex-1">
+          <aside className="hidden lg:sticky lg:top-34 lg:block lg:min-w-0 lg:flex-1">
             {boardSelected ? (
               <PostDetailModal
                 inline open
@@ -530,7 +530,7 @@ function SectionTab({ id, active, label, onClick }: { id: string; active: boolea
         'flex-none inline-flex h-[44px] items-center justify-center t-tab whitespace-nowrap',
         'min-w-[calc((100%-(var(--tab-cols)-1)*0.25rem)/var(--tab-cols))] lg:min-w-0 lg:flex-[1_0_auto]',
         'transition-colors',
-        'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
+        'focus:outline-hidden focus-visible:ring-0 focus-visible:ring-offset-0',
         // 채움 알약(--grad-cta) 위에서는 흰 글자여야 읽힌다 — ink-primary 는 라이트에서 약 2.4:1
         active ? 'text-white font-bold' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
@@ -913,7 +913,7 @@ function FeedSection({
           · 그렇다고 조용히 삼키면 운영자는 '게재했는데 왜 안 보이지'를 영원히 모른다 —
             종전 구현(.catch(() => {}))이 정확히 그 상태였다. 실패와 '광고 0개'를 여기서 가른다. */}
       {enableCategory && adsErr != null && user?.role === 'admin' && (
-        <p className="rounded-input border border-amber-500/40 bg-amber-500/[0.06] px-2.5 py-1.5 text-2xs text-amber-200">
+        <p className="rounded-input border border-amber-500/40 bg-amber-500/6 px-2.5 py-1.5 text-2xs text-amber-200">
           광고를 불러오지 못했습니다 — 게시글 목록은 정상입니다. 관리자 → 노출 관리 → 광고에서 확인해 주세요.
         </p>
       )}
@@ -1093,7 +1093,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
 
   return (
     <div data-main-enter data-main-enter-ready className="rounded-aura border card-aura">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="w-full flex items-center gap-2.5 rounded-aura px-3 py-2.5 text-left transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="w-full flex items-center gap-2.5 rounded-aura px-3 py-2.5 text-left transition-colors duration-(--dur-fast) hover:bg-surface-high/50">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
         </span>
@@ -1101,7 +1101,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
           <span className="block text-sm font-bold text-ink-primary leading-tight">내 커뮤니티 관리</span>
           <span className="block text-2xs text-ink-muted">내가 운영 {owned.length} · 가입한 그룹 {joined.length}</span>
         </span>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={['shrink-0 text-ink-muted transition-transform duration-[var(--dur-base)]', open ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={['shrink-0 text-ink-muted transition-transform duration-(--dur-base)', open ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && (
         <div className="px-3 pb-3 space-y-3">
@@ -1278,7 +1278,7 @@ function VenuesSection({
                 data-testid="venue-card"
                 onClick={() => onSelectVenue(venue.id)}
                 className={[
-                  'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-aura border transition-colors duration-[var(--dur-fast)] cursor-pointer active:bg-surface-high',
+                  'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-aura border transition-colors duration-(--dur-fast) cursor-pointer active:bg-surface-high',
                   venue.isPaidAd
                     ? 'bg-surface-low border-accent-400/50 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] hover:border-accent-400'
                     : 'card-aura',
@@ -1427,7 +1427,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             {([[true, '승인제', '내가 수락해야 가입'], [false, '자동 가입', '누구나 바로 가입']] as const).map(([v, label, desc]) => (
               <button key={String(v)} type="button" onClick={() => setJoinApproval(v)}
                 aria-pressed={joinApproval === v}
-                className={['rounded-input border px-3 py-2 text-left transition-colors duration-[var(--dur-fast)]',
+                className={['rounded-input border px-3 py-2 text-left transition-colors duration-(--dur-fast)',
                   joinApproval === v ? 'border-accent-400/45 bg-accent-300/15' : 'chip-aura'].join(' ')}>
                 <span className={['block text-xs font-bold', joinApproval === v ? 'text-accent-200' : 'text-ink-primary'].join(' ')}>{label}</span>
                 <span className="block text-2xs text-ink-muted">{desc}</span>
@@ -1541,8 +1541,8 @@ function LiveWallSection({ visible }: { visible: boolean }) {
               <div className="skeleton h-6 w-6 shrink-0 rounded-full" />
               {/* [DS] MO-6: 실제 행의 줄 높이를 복제(이름행 16px + 본문행 18px) — 교체 시 높이 유지 */}
               <div className="min-w-0 flex-1">
-                <div className="skeleton h-4 rounded" style={{ width: `${[42, 55, 48, 60, 44, 52][i]}%` }} />
-                <div className="skeleton mt-0.5 h-[18px] rounded" style={{ width: `${[88, 72, 92, 66, 80, 76][i]}%` }} />
+                <div className="skeleton h-4 rounded-sm" style={{ width: `${[42, 55, 48, 60, 44, 52][i]}%` }} />
+                <div className="skeleton mt-0.5 h-[18px] rounded-sm" style={{ width: `${[88, 72, 92, 66, 80, 76][i]}%` }} />
               </div>
             </li>
           ))}
@@ -1574,7 +1574,7 @@ function LiveWallSection({ visible }: { visible: boolean }) {
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words">{m.content}</p>
+                <p className="text-xs text-ink-primary leading-snug mt-0.5 wrap-break-word">{m.content}</p>
               </div>
             </li>
           ))}

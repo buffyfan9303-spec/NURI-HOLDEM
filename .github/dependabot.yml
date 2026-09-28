@@ -16,11 +16,12 @@ updates:
         applies-to: version-updates
         update-types: ["minor", "patch"]
     ignore:
-      # 20-ⓐ 오너 결정(2026-09-21) — Tailwind 는 3.4 에 고정한다.
-      #   v4 는 PostCSS 진입점(tailwindcss → @tailwindcss/postcss)과 설정 형식이 바뀌어
-      #   순수 버전 범프로는 적용되지 않고, 이 저장소는 색을 CSS 변수 토큰으로 받아 쓰므로
-      #   (tailwind.config.js 의 rgb(var(--surface-*) / <alpha-value>)) 색 회귀 위험이 크다.
-      #   필요해지면 별도 브랜치에서 e2e/design-tokens 전후 대조를 붙여 연다.
+      # 2026-09-28 정정 — 이 주석이 "Tailwind 3.4 고정"이라고 적혀 있었지만, 저장소는 이미
+      #   tailwindcss ^4.3.3 + @tailwindcss/vite 로 이관했다(package.json 실측). 규칙 자체(semver-major 차단)는
+      #   그대로 둔다 — 막는 대상이 v3→v4 가 아니라 이제 v4→v5 로 바뀌었을 뿐이다. v5 도 설정/PostCSS
+      #   진입점이 바뀔 수 있고 이 저장소는 색을 CSS 변수 토큰으로 받아 쓰므로(tailwind.config.js 의
+      #   rgb(var(--surface-*) / <alpha-value>)) 색 회귀 위험이 같이 크다. 필요해지면 별도 브랜치에서
+      #   e2e/design-tokens 전후 대조를 붙여 연다(minor/patch 는 그룹 PR 로 계속 받는다).
       - dependency-name: "tailwindcss"
         update-types: ["version-update:semver-major"]
     commit-message:

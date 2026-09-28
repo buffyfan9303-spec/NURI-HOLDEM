@@ -15,6 +15,7 @@ import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
+  setBuyinAddon, addonFinance, addonTotals, type AddonMethod, type AddonFinance,
   splitMismatch,
   
   discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary, ZERO_TENDER, type Tender,
@@ -36,7 +37,7 @@ import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyTo
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
 import { resolveDiscountIndex } from '../../api/discountIndex';
-import { getClockState, clockHasProgress, saveClockState, saveClockPatch, createCoalescingSaver, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, effectiveLevel, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
+import { getClockState, clockHasProgress, saveClockState, saveClockPatch, saveClockLiveStats, createCoalescingSaver, saveClockLevel, subscribeClock, defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, earlyAutoOf, clampAdjEarlies, withDerivedEarly, effectiveLevel, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
 import { clockPhase } from '../../lib/clockLevel';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import Modal from '../atoms/Modal';
@@ -49,6 +50,9 @@ import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import { SkeletonList } from '../atoms/Skeleton';
 import { kstToday } from '../../lib/kst';
+import { businessDateOf, useBusinessDate } from '../../lib/businessDate';
+import { serverNow } from '../../lib/serverTime';   // D1 — 장부 클락 바도 서버 기준 시각
+import { useResyncOnWake } from '../../lib/realtimeResync';
 import { createBackoff } from '../../lib/retryBackoff';
 
 // 🔴 2026-09-20 (E2-C/F5) — 여기만 **기기 로컬 날짜**를 썼다. 서버 RPC(request_buyin·check_in)와
@@ -60,7 +64,8 @@ const shiftDays = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'
 // 얼리 설정용 숫자 입력(라벨 + 접미사)
 function EarlyNum({ label, value, onChange, suffix, disabled }: { label: string; value: number; onChange: (n: number) => void; suffix: string; disabled?: boolean }) {
   return (
-    <div>
+    // 2026-09-28 — 라벨과 입력을 잇는다(<label>). 예전 <div>+<span> 은 스크린리더·getByLabel 이 칸 이름을 못 읽었다.
+    <label className="block">
       <span className="block text-2xs text-ink-muted mb-0.5">{label}</span>
       <div className="relative">
         <input type="number" inputMode="numeric" value={value || ''} disabled={disabled}
@@ -68,7 +73,7 @@ function EarlyNum({ label, value, onChange, suffix, disabled }: { label: string;
           className="input w-full text-sm pr-8 tabular-nums disabled:opacity-50" />
         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">{suffix}</span>
       </div>
-    </div>
+    </label>
   );
 }
 
@@ -130,7 +135,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const operatorOk = isAdmin || !!user?.approved; // 담당직원: 승인된 계정만 운영
   const operatorName = user?.name ?? user?.nickname ?? '담당직원';
 
-  const [date, setDate]       = useState(today);
+  // B1(2026-09-28) — 처음 여는 날짜는 **영업일**(서버 ledger_business_date — 자정 넘긴 토너면 어제 장부).
+  //   달력 오늘로 열면 00:30 에 빈 시작 화면이 뜨고 손님 바인 요청(날짜=영업일)이 대기열에서 안 보였다.
+  const [date, setDate]       = useState(() => businessDateOf(venueId));
+  const biz = useBusinessDate(venueId, active);
   const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), gameSeq: 1, buyinAmount: 0, cardAmount: null, gameType: 'gtd', targetEntries: 0, maxEntries: 0, isAddon: false, addonStack: 0, regClosed: false, closed: false, discounts: [], earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null });
   const [buyins, setBuyins]   = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
@@ -144,7 +152,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // 내부 GameSwitcher·과거 날짜 탐색은 그대로 자유(신호 없는 동안 이 컴포넌트가 정본).
   useEffect(() => {
     if (!followGame) return;
-    setDate(today());
+    setDate(businessDateOf(venueId));   // B1 — 칩 바는 영업일의 게임을 보여 준다(GameChipBar 와 같은 날짜)
     setGameSeq(followGame.seq);
     setSelected(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -185,13 +193,21 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const [venueSchedules, setVenueSchedules] = useState<Schedule[]>([]);
 
   useEffect(() => {
-    getSchedules().then((all) => setVenueSchedules(all.filter((s) => s.venueId === venueId))).catch(() => {});
-    getLedgerPresets(venueId, 50).then(setPresets).catch(() => {});
+    // B8(2026-09-28) — 매장 전환 가드: A 매장 포스터·프리셋이 B 로 바꾼 뒤 도착해 B 장부의 '포스터 불러오기' 목록을 덮지 않게.
+    let alive = true;
+    setVenueSchedules([]); setPresets([]);
+    getSchedules().then((all) => { if (alive) setVenueSchedules(all.filter((s) => s.venueId === venueId)); }).catch(() => {});
+    getLedgerPresets(venueId, 50).then((p) => { if (alive) setPresets(p); }).catch(() => {});
+    return () => { alive = false; };
   }, [venueId]);
 
   // 금일(세션 날짜) 출근자 — 세션 딜러 명단 자동 채움용
   const [scheduledNames, setScheduledNames] = useState<string[]>([]);
-  useEffect(() => { getStaffSchedule(venueId, date, date).then((ss) => setScheduledNames([...new Set(ss.map((s) => s.name))])).catch(() => {}); }, [venueId, date]);
+  useEffect(() => {
+    let alive = true;   // B8 — 앞 매장·앞 날짜 출근자가 늦게 와서 지금 장부 딜러 칩을 덮지 않게
+    getStaffSchedule(venueId, date, date).then((ss) => { if (alive) setScheduledNames([...new Set(ss.map((s) => s.name))]); }).catch(() => {});
+    return () => { alive = false; };
+  }, [venueId, date]);
   // 세션 딜러 명단 → 출근 스케줄에 등록(추가형)
   const syncDealersToSchedule = useCallback(async (d: string, dealersText?: string) => {
     if (!dealersText) return;
@@ -248,7 +264,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const reloadAccessIds = useCallback(() => setAccessTick((t) => t + 1), []);
   const operatorOptionsError = accessLoad.status === 'error' ? accessLoad.error : staffLoadError;
   // 현재 사용자가 이 매장 업주/운영자인지(전체 접근). 아니면 장부권한 직원(담당 지정 장부만).
-  const fullAccess = isAdmin || (user?.role === 'venue_owner' && user?.venueId === venueId);
+  // 2026-09-28 — 서버 판정(can_manage_pos: 승인 업주·승인 공동운영자·관리자)을 그대로 쓴다. 예전엔 '프로필 매장 == 이 매장인
+  //   venue_owner' 만 전체 접근이라, 서버는 허용하는 **공동운영자**(또는 전환기로 다른 소속 매장을 연 업주)가
+  //   담당 지정 안 된 장부를 못 열고 담당자 후보도 '일부'로 표시됐다.
+  const fullAccess = isAdmin || canManage;
   // 담당직원 후보 = 업주/운영자(나) + 장부 접근 권한 직원만(최대 10은 폼에서 제한)
   const operatorOptions = useMemo(() => {
     const accessIds = accessLoad.status === 'ready' ? accessLoad.ids : [];
@@ -407,6 +426,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     setLoading(true);
     setLoadError(null);
     bumpSessionReq();   // D2 — 앞 장부로 날아가던 reloadSession 응답을 무효로
+    // B3(2026-09-28) — 바인·명단 재조회(reload)도 같은 순간 무효로 한다. 예전엔 reloadSeq 를 안 올려,
+    //   전환 직전에 realtime·online 으로 나간 앞 매장·날짜·게임의 reload 응답이 전환 뒤 도착해 buyins/players 를 덮었다
+    //   (그 칸을 누르면 남의 장부 행을 id 로 고치거나 취소한다).
+    ++reloadSeq.current;
     // D3 — 비밀번호 조회 실패는 장부를 막지 않되 '없음'으로도 바꾸지 않는다(null = 모름 → 직전 값 유지).
     Promise.all([getLedgerSession(venueId, date, gameSeq), getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq), posHasPassword(venueId).catch(() => null), getLedgerGames(venueId, date)])
       .then(([s, b, p, pw, gs]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); if (pw !== null) setHasPw(pw); setGames(gs); })
@@ -461,17 +484,19 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       .catch(() => {});
   }, [venueId, date]);
   // ⚡ 위와 같은 이유로 active 게이트 — 다시 보일 때(active 상승) loadPending 이 재실행돼 놓친 대기열을 메운다.
+  // F(2026-09-28) — 손님 취소·자동 만료(DELETE)도 받는다: 지금 대기열에 있는 요청 id 만 골라 다시 읽는다.
+  const pendingIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => { pendingIdsRef.current = new Set(pendingReqs.map((r) => r.id)); }, [pendingReqs]);
+  const ownsPending = useCallback((id: string) => pendingIdsRef.current.has(id), []);
   useEffect(() => {
     if (!active) return;
     loadPending();
-    return subscribeBuyinRequests(venueId, loadPending);
-  }, [venueId, loadPending, active]);
-  // 지하 매장 재연결 — 단절 중 놓친 바인·세션·대기요청을 복귀 즉시 일괄 재검증
-  useEffect(() => {
-    const onOn = () => { reload(); reloadSession(); loadPending(); };
-    window.addEventListener('online', onOn);
-    return () => window.removeEventListener('online', onOn);
-  }, [reload, reloadSession, loadPending]);
+    return subscribeBuyinRequests(venueId, loadPending, { ownsId: ownsPending });
+  }, [venueId, loadPending, active, ownsPending]);
+  // 지하 매장 재연결·화면 복귀 — 단절(또는 폰 화면 꺼짐) 중 놓친 바인·세션·대기요청을 복귀 즉시 일괄 재검증.
+  //   2026-09-28: 'online' 만 듣던 것을 공용 장치(lib/realtimeResync)로 — 창 복귀(visibilitychange)도 같이 메운다.
+  //   (소켓만 끊겼다 붙는 경우는 subscribeLedger·subscribeBuyinRequests 가 SUBSCRIBED 재진입으로 메운다.)
+  useResyncOnWake(() => { reload(); reloadSession(); loadPending(); }, active);
   // (C1) 낙관적 업데이트 — 승인 즉시 대기열에서 제거하고 백그라운드 동기화. 실패 시 loadPending 으로 서버 기준 복원.
   const gLabel = (seq: number) => (seq === MAIN_GAME_SEQ ? '메인' : `사이드${seq - 1}`);
   // 그날 실제로 **받을 수 있는** 게임 — 마감된 세션은 뺀다(2026-09-07).
@@ -664,6 +689,38 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     clockSaver.push(next, cur);
   }, [clock, buyins, session, clockSaver]);
 
+  // D4(2026-09-28) — 장부가 바뀌면(바인·취소·얼리 구간·단가) 연동 클락의 라이브 통계(TV 엔트리·생존·평균 스택)를 여기서도 갱신한다.
+  //   예전엔 업주 PC 의 **클락 화면이 열려 있을 때만** 갱신됐다(TournamentClock 400ms 타이머) — 폰 장부로 바인만 받으면
+  //   TV 인원이 그대로 멈췄다. 계산은 클락 화면·리모컨·마감 스냅샷과 같은 computeLiveStats 하나이고, 쓰기는 live_stats 한 칸뿐이라
+  //   (saveClockLiveStats) 제어 칸(시작·정지·탈락)을 덮지 않는다. 결과가 이미 같으면 쓰지 않는다(클락 화면과 이중 쓰기 방지).
+  const clockLatest = useRef(clock);
+  useEffect(() => { clockLatest.current = clock; });
+  const statsKeyOf = (): string | null => {
+    if (!clockLinked || !clock) return null;
+    const d = deriveClockCounts(buyins, {
+      earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin,
+      tournamentStart: session.tournamentStart, openedAt: session.openedAt,
+    });
+    return `${d.entries}/${d.rebuys}/${d.earlies}/${d.doubleEarlies}/${session.buyinAmount ?? ''}`;
+  };
+  const statsKey = statsKeyOf();
+  useEffect(() => {
+    if (!active || !statsKey) return;
+    const t = setTimeout(() => {
+      const c = clockLatest.current;
+      if (!c || c.venueId !== venueId || c.sessionDate !== date || c.gameSeq !== gameSeq) return;
+      const derived = deriveClockCounts(buyins, {
+        earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin,
+        tournamentStart: session.tournamentStart, openedAt: session.openedAt,
+      });
+      const ls = { ...computeLiveStats(c, derived, c.config), buyInAmount: session.buyinAmount ?? null };
+      if (JSON.stringify(ls) === JSON.stringify(c.liveStats ?? null)) return;
+      saveClockLiveStats(c.venueId, c.gameSeq, ls).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statsKey, active]);
+
   /** D2 — 기록 직전: 들고 있는 세션이 지금 화면의 장부(매장·날짜·게임) 것인가. 아니면 저장하지 않고 다시 읽는다. */
   const sessionFitsBoard = (): boolean => {
     if (ledgerSessionMatches(session, venueId, date, gameSeq)) return true;
@@ -689,6 +746,18 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   };
 
   const closed = session.closed;
+
+  // B1 — 영업일을 **따라가던** 화면만 새 영업일로 옮긴다. 첫 렌더는 캐시가 없어 달력 오늘로 열리고,
+  //   서버 답(어제 영업일)이 오면 그리로 옮겨 앉는다. 사용자가 다른 날짜를 골랐으면(date ≠ 직전 영업일) 건드리지 않고,
+  //   방금 마감한 장부(closed)도 붙잡아 둔다 — 마감 직후 순위 입력으로 이어지는 화면이 빈 오늘로 튀면 안 된다.
+  const prevBiz = useRef(biz);
+  useEffect(() => {
+    const was = prevBiz.current;
+    prevBiz.current = biz;
+    if (was === biz || date !== was || closed) return;
+    setDate(biz); setGameSeq(MAIN_GAME_SEQ); setSelected(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [biz]);
 
   // ── '정산으로' 신호 처리 ─────────────────────────────────────────────────────
   // 정산바는 fixed 라 '이동'할 대상이 아니다. 대신 마감 버튼을 **지목**한다: 키보드 포커스 + 짧은 링.
@@ -973,8 +1042,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       value: all.value - kept.value,
       revenue: all.revenue - kept.revenue,
     };
+    // 애드온(2026-09-28) — 바인 대차와 따로 센다. 표시에서 '완납 매출'·'미수'에만 더한다.
+    const addon = addonTotals(buyins.filter((b) => !isExcluded(b)));
     // 밖에서 쓰는 이름은 '제외 적용' 값이다 — 오너가 그 숫자로 정산하기 때문이다.
-    return { ...kept, discount, all, removed };
+    return { ...kept, discount, all, removed, addon };
   }, [buyins, session, isExcluded]);
 
   // 플레이어별 총 바이인/미수(금액) — 행마다 buyins 전체를 훑던 것(O(행×바인))을
@@ -983,8 +1054,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     const m = new Map<string, { paid: number; unpaid: number; value: number }>();
     for (const b of buyins) {
       const f = buyinFinance(b, session);
+      const a = addonFinance(b);
       const cur = m.get(b.playerName) ?? { paid: 0, unpaid: 0, value: 0 };
-      cur.paid += f.paid; cur.unpaid += f.unpaid;
+      cur.paid += f.paid + a.revenue; cur.unpaid += f.unpaid + a.unpaid;   // 애드온 미수도 미수자 명단에 오른다
       // '총바인' 열에 쓰는 바인 **가치** — 티켓은 단가 전액, 지원은 단가−할인(BuyinFinance.value 주석).
       // 정산 제외된 행은 여기서도 빠진다 → **행 합계의 합이 언제나 총계와 맞는다.**
       if (!isExcluded(b)) cur.value += f.value;
@@ -1065,8 +1137,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       //   정산 제외를 걸고 마감하면 모달과 토스트가 서로 다른 매출·할인을 말했다(2026-09-05 감사).
       const kept = buyins.filter((b) => !isExcluded(b));
       const fins = kept.map((b) => buyinFinance(b, session));
-      const rev = fins.reduce((s, f) => s + f.paid, 0);
-      const unpaidCnt = fins.filter((f) => f.unpaid > 0 || f.ticketUnpaid > 0).length;
+      const rev = fins.reduce((s, f) => s + f.paid, 0) + addonTotals(kept).revenue;
+      const unpaidCnt = kept.filter((b, i) => fins[i].unpaid > 0 || fins[i].ticketUnpaid > 0 || addonFinance(b).unpaid > 0).length;
       // #20: 할인은 '덜 받은 돈'이라 마감 한 줄에도 같이 선다 — 매출만 보면 왜 덜 들어왔는지 알 수 없다.
       const dsum = discountSummary(kept, session);
       let closeMsg = `마감 완료.${exNote ? ` (${exNote})` : ''} 오늘 바인 ${kept.length} · 매출 ${wonToMan(rev)}만${dsum.count ?` · 할인 ${dsum.count}건 현금 −${wonToMan(dsum.cashTotal)}만` : ''}${unpaidCnt ? ` · 미수 ${unpaidCnt}건` : ' · 미수 없음'}`;
@@ -1318,7 +1390,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   if (loadError && !hasBoardData) {
     return (
       <div className="space-y-3">
-        <DateBar date={date} setDate={setDate} onBack={() => setMode('list')} />
+        <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} />
         <LoadErrorCard error={loadError} what="장부" onRetry={() => { setLoadError(null); reloadSession(); reload(); }} />
       </div>
     );
@@ -1328,7 +1400,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   if (showSetup) {
     return (
       <div className="space-y-3">
-        <DateBar date={date} setDate={setDate} onBack={() => setMode('list')} />
+        <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} />
         {(games.length > 0 || gameSeq > MAIN_GAME_SEQ) && (
           <GameSwitcher games={games} gameSeq={gameSeq} onSelect={(g) => { setGameSeq(g); setSelected(null); }} onAddSide={addSide} canAdd={operatorOk} />
         )}
@@ -1354,11 +1426,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // ── 보드 ────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-3 pb-48 lg:pb-28">
-      <DateBar date={date} setDate={setDate} onBack={() => setMode('list')} />
+      <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} />
       {/* C05 보완 — 재조회 실패(다른 접수대의 마감·단가·할인 변경을 못 받아옴)를 조용히 감추지 않는다.
           hasBoardData 라 전면 카드로 안 덮었을 뿐, 지금 보이는 값이 낡았을 수 있다는 사실은 알려야 한다. */}
       {!!loadError && hasBoardData && (
-        <div role="alert" className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2">
+        <div role="alert" className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/8 px-3 py-2">
           <p className="text-2xs font-semibold text-ink-secondary">방금 장부를 새로 불러오지 못했어요. 아래는 마지막으로 확인된 내용이라 단가·할인이 바뀌었을 수 있어요.</p>
           <button type="button" onClick={() => { reloadSession(); reload(); }}
             className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-1 text-2xs font-bold text-ink-primary">다시 시도</button>
@@ -1393,9 +1465,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
         <div role="button" tabIndex={0} title="탭하면 정산 마감 버튼으로"
           onClick={pointAtSettle}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pointAtSettle(); } }}
-          className="sticky top-[var(--header-now)] z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur cursor-pointer sm:grid-cols-4">
+          className="sticky top-(--header-now) z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-xs backdrop-blur-sm cursor-pointer sm:grid-cols-4">
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
-          <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
+          <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />
           {(() => {
             // 생존 상시 표시 — 클락 연동 시 실집계(alive), 미연동/집계전이면 추정(인원−아웃)
             // ⚠ 추정치의 기준은 '엔트리'가 아니라 **인원**이다(2026-09-07). stats.entries 는 리바인을 포함한
@@ -1408,13 +1480,13 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             const alive = live != null ? live : est;
             return <Metric label={live != null ? '생존' : '생존(추정)'} value={`${alive}`} />;
           })()}
-          <Metric label="미수" value={`${wonToMan(stats.unpaid)}만`} tone={stats.unpaid > 0 ? 'danger' : undefined} />
+          <Metric label="미수" value={`${wonToMan(stats.unpaid + stats.addon.unpaid)}만`} tone={stats.unpaid + stats.addon.unpaid > 0 ? 'danger' : undefined} />
         </div>
       )}
 
       {/* 손님 자가 바인 요청(QR) — 운영자 원탭 승인 → 현재 게임 명단 추가 */}
       {!closed && pendingReqs.length > 0 && (
-        <div className="rounded-card border border-sky-500/40 bg-sky-500/[0.06] p-2.5 space-y-2">
+        <div className="rounded-card border border-sky-500/40 bg-sky-500/6 p-2.5 space-y-2">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="inline-flex items-center gap-1 text-2xs font-bold text-sky-300"><Icon name="hand" size={12} className="shrink-0" />손님 바인 요청 {pendingReqs.length}건</span>
             {/* 게임별 건수·안내문은 sm 미만에서 **자기 줄**(basis-full·order-last)로 내린다 — 종전엔 [전체 승인](ml-auto)이
@@ -1428,7 +1500,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             })()}
             <span className="text-2xs text-ink-muted">· 승인 시 각자 원한 게임에 추가(미지정은 현재 {gLabel(gameSeq)})</span>
             </span>
-            {pendingReqs.length > 1 && <button type="button" onClick={bulkApprove} className="ml-auto shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1.5 min-h-[2.25rem] text-2xs font-bold text-ink-inverse hover:bg-emerald-500">전체 승인</button>}
+            {pendingReqs.length > 1 && <button type="button" onClick={bulkApprove} className="ml-auto shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1.5 min-h-9 text-2xs font-bold text-ink-inverse hover:bg-emerald-500">전체 승인</button>}
           </div>
           <ul className="space-y-1.5">
             {pendingReqs.map((r) => (
@@ -1447,7 +1519,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                     <button type="button" onClick={() => setPayPick(payPick === r.id ? null : r.id)} title="승인 + 바인 1건 기록(결제수단 선택)" className={['shrink-0 inline-flex h-10 items-center rounded-input px-2.5 text-2xs font-bold', payPick === r.id ? 'bg-emerald-600 text-ink-inverse' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500', 'gap-0.5'].join(' ')}>✓+<Icon name="banknote" size={13} className="shrink-0" /></button>
                   )}
                   <button type="button" onClick={() => approveReq(r)} title={r.voucherId ? '승인(이용권 1장 → 티켓 바인 자동 기록)' : '승인만(명단 추가)'} className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/10">{r.voucherId ? '✓ 승인·티켓' : '승인'}</button>
-                  <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-input border px-2.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-secondary hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
+                  <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 inline-flex h-10 min-w-10 items-center justify-center rounded-input border px-2.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-secondary hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
                 </div>
                 {payPick === r.id && (
                   <div className="mt-1.5 border-t border-border-subtle pt-1.5 space-y-1.5">
@@ -1524,8 +1596,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                 같은 마감 메모('정산 제외: 관계자') 옆에 제외 전 숫자가 선다. 조건은 마감 모달의 제외 배너와 같다. */}
             {stats.removed.count > 0 ? <span className="text-danger-light">제외 적용 · </span>
               : session.closeMemo?.includes('정산 제외') ? <span className="text-ink-muted">제외 전 전체 기록 · </span> : null}
-            바인 <b className="text-ink-primary">{stats.totalBuyins}</b> · 매출 <b className="text-ink-primary">{wonToMan(stats.revenue)}만</b>
-            {stats.unpaid > 0 ? <> · 미수 <b className="text-danger-light">{wonToMan(stats.unpaid)}만</b></> : ' · 미수 없음'}
+            바인 <b className="text-ink-primary">{stats.totalBuyins}</b> · 매출 <b className="text-ink-primary">{wonToMan(stats.revenue + stats.addon.revenue)}만</b>
+            {stats.addon.count > 0 ? <> · 애드온 <b className="text-ink-primary">{stats.addon.count}</b></> : null}
+            {stats.unpaid + stats.addon.unpaid > 0 ? <> · 미수 <b className="text-danger-light">{wonToMan(stats.unpaid + stats.addon.unpaid)}만</b></> : ' · 미수 없음'}
             {session.clockSnapshot && (() => {
               const lp = new Set(buyins.map((b) => b.playerName)).size;
               const d = (session.clockSnapshot.entries ?? 0) - lp;
@@ -1667,14 +1740,14 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                 <span className="text-2xs text-ink-muted">유형(선택):</span>
                 {VISITOR_OPTS.map((t) => (
                   <button key={t.code} type="button" onClick={() => setNewType((cur) => (cur === t.code ? null : t.code))}
-                    className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
+                    className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-8 rounded-badge border transition-colors',
                       newType === t.code ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
                     {t.label}
                   </button>
                 ))}
                 <button type="button"
                   onClick={() => { const v = window.prompt('유형 직접입력'); if (v && v.trim()) setNewType(v.trim()); }}
-                  className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
+                  className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-8 rounded-badge border transition-colors',
                     newType && !VISITOR_OPTS.some((o) => o.code === newType) ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-secondary border-border-default'].join(' ')}>
                   {newType && !VISITOR_OPTS.some((o) => o.code === newType) ? newType : '직접입력'}
                 </button>
@@ -1717,15 +1790,15 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               {/* 헤더는 세로 스크롤에도 고정(sticky top) — 100명 명단에서도 바인 번호가 항상 보임 */}
               <tr className="bg-surface-high">
                 <th className="sticky left-0 top-0 z-40 bg-surface-high w-9 px-1 py-2 text-xs text-ink-muted border-b border-border-default">No</th>
-                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-[6rem] max-w-[9rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">플레이어</th>
+                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-24 max-w-36 px-2 py-2 text-xs text-ink-muted border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">플레이어</th>
                 {Array.from({ length: binCols }, (_, i) => (
                   <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-default">{i + 1}바인</th>
                 ))}
-                <th className="sticky top-0 z-30 bg-surface-high min-w-[4rem] max-w-[10rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
+                <th className="sticky top-0 z-30 bg-surface-high min-w-16 max-w-40 px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
                 {/* #6(2026-09-25, 390 실측) — 왼쪽 No·플레이어(≈150px) + 오른쪽 총바인·미수(2×68px)가 모두 붙박이라 바인 칸이 **반 칸**(≈30px)만 보였다.
                     sm 미만은 오른쪽 두 열을 가로로 함께 흐르게 둔다(머리행의 세로 고정 top-0 은 유지). sm 이상은 종전 그대로. */}
-                <th className="sticky right-[4rem] top-0 z-40 bg-surface-high w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
-                <th className="sticky right-0 top-0 z-40 bg-surface-high w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default max-sm:right-auto">미수</th>
+                <th className="sticky right-16 top-0 z-40 bg-surface-high w-16 min-w-16 max-w-16 px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
+                <th className="sticky right-0 top-0 z-40 bg-surface-high w-16 min-w-16 max-w-16 px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default max-sm:right-auto">미수</th>
               </tr>
             </thead>
             <tbody>
@@ -1739,7 +1812,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                   return (
                     <tr key={`${r.name}-${chunk}`}>
                       <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-2xs text-ink-muted border-b border-border-default tabular-nums">{first ? ri + 1 : <span className="opacity-40">↳</span>}</td>
-                      <td className="sticky left-9 z-10 bg-surface-low min-w-[6rem] max-w-[9rem] px-2 py-1 border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">
+                      <td className="sticky left-9 z-10 bg-surface-low min-w-24 max-w-36 px-2 py-1 border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">
                         {first ? (
                           <button type="button" disabled={!r.player || closed} onClick={() => r.player && setEditPlayer(r.player)} className="w-full text-left disabled:cursor-default">
                             <div className="flex items-center gap-1">
@@ -1750,7 +1823,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                               {r.player?.visitorType
                                 ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40">{visitorLabel(r.player.visitorType)}</span>
                                 : r.player ? <span className="text-[10px] text-ink-muted">{closed ? '' : '유형/비고 +'}</span> : <span className="text-[10px] text-ink-muted">—</span>}
-                              {r.player?.note && <span className="text-[10px] text-ink-secondary truncate max-w-[4rem]">· {r.player.note}</span>}
+                              {r.player?.note && <span className="text-[10px] text-ink-secondary truncate max-w-16">· {r.player.note}</span>}
                             </div>
                           </button>
                         ) : <span className="block text-2xs text-ink-muted/50 truncate">{r.name}</span>}
@@ -1802,17 +1875,17 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                         return <td key={e} className={cls}><div className="w-full h-full rounded-input bg-surface-base/30" /></td>;
                       })}
 
-                      <td className="min-w-[4rem] max-w-[10rem] px-1 py-1 border-b border-l border-border-default text-left">
+                      <td className="min-w-16 max-w-40 px-1 py-1 border-b border-l border-border-default text-left">
                         {/* 2026-09-25 감사: '비고 +' 버튼이 160×15.9 — 행(h-12 ≈ 51px) 안에서 44px 히트 영역을 준다(행 높이는 그대로). */}
                         {first && r.player ? (
                           <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)} className="flex min-h-[44px] w-full items-center text-left text-2xs disabled:cursor-default">
                             {r.player.note
-                              ? <span className="text-ink-secondary line-clamp-2 whitespace-pre-wrap break-words">{r.player.note}</span>
+                              ? <span className="text-ink-secondary line-clamp-2 whitespace-pre-wrap wrap-break-word">{r.player.note}</span>
                               : <span className="text-accent-200 font-semibold">{closed ? '—' : '비고 +'}</span>}
                           </button>
                         ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
                       </td>
-                      <td className="sticky right-[4rem] z-10 bg-surface-low w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-1 border-b border-l border-border-default border-l-border-strong text-2xs tabular-nums text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:static max-sm:shadow-none">
+                      <td className="sticky right-16 z-10 bg-surface-low w-16 min-w-16 max-w-16 px-1 py-1 border-b border-l border-border-default border-l-border-strong text-2xs tabular-nums text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:static max-sm:shadow-none">
                         {first && r.player ? (
                           // 리바인 원탭 — 다음 '+' 셀은 가로 스크롤 밖(6~9열)에 있기 일쑤. 항상 보이는
                           // sticky 셀에서 바로 다음 회차 결제 모달을 연다('직전과 동일'과 짝)
@@ -1832,7 +1905,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                           </span>
                         ) : ''}
                       </td>
-                      <td className="sticky right-0 z-10 bg-surface-low w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-1 border-b border-l border-border-default text-2xs tabular-nums text-left text-danger-light max-sm:static">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
+                      <td className="sticky right-0 z-10 bg-surface-low w-16 min-w-16 max-w-16 px-1 py-1 border-b border-l border-border-default text-2xs tabular-nums text-left text-danger-light max-sm:static">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
                     </tr>
                   );
                 });
@@ -1847,7 +1920,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       {/* 좌우 경계를 변수로 뽑는다 — 기본값은 예전 그대로(0/0 · max-w-6xl)라 일반 화면은 변화 없다.
           전체화면(LedgerWorkspace)에서는 그 변수를 **장부 칸** 기준으로 덮어 바가 칸에 맞는다.
           예전엔 뷰포트 기준 1152px 중앙이라 전체화면에서 좌우가 어긋났다(오너 2026-09-08 "길이가 안맞아"). */}
-      <div ref={settleBarRef} className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-[var(--ledger-bar-left,0px)] right-[var(--ledger-bar-right,0px)] z-30 mx-auto max-w-[var(--ledger-bar-max,72rem)] bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
+      <div ref={settleBarRef} className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-(--ledger-bar-left,0px) right-(--ledger-bar-right,0px) z-30 mx-auto max-w-(--ledger-bar-max,72rem) bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
         {/* 정산 제외 — 오너 지시: "관계자·신규처럼 빼고 정산", "티켓·현금·카드도 뺄 수 있게".
             정산바 **안** 최상단에 둔다. 바는 bottom 고정이라 펼치면 위로 자라 숫자를 가리지 않는다. */}
         <SettleFilter
@@ -1867,8 +1940,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
             {/* 1T = 1만원이라 'NT' 와 'X만' 은 같은 수 — 한 번만 적는다. 미수 티켓은 아래 줄이 따로 보여준다. */}
             <Metric label="티켓" value={`${stats.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} />
-            <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
-            <Metric label="미수금" value={`${wonToMan(stats.unpaid)}만`} tone="danger" />
+            <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />
+            <Metric label="미수금" value={`${wonToMan(stats.unpaid + stats.addon.unpaid)}만`} tone="danger" />
           </div>
           <div className="flex flex-col gap-1 shrink-0">
             {!closed ? (
@@ -1989,6 +2062,20 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
             catch (e) { notePwFromError(e); toast.show(ledgerErrorText(e, '취소 실패'), 'error', { durationMs: 7000 }); }
             finally { setPayBusy(false); }
           }}
+          onSetAddon={async (addon) => {
+            if (!selected.buyin) return;
+            setPayBusy(true);
+            try {
+              const amount = session.addonAmount ?? 0;
+              await setBuyinAddon(selected.buyin.id, addon ? { ...addon, amount } : null);
+              toast.show(addon ? '애드온을 기록했습니다' : '애드온을 지웠습니다', 'success');
+              setSelected((cur) => cur && cur.buyin ? { ...cur, buyin: { ...cur.buyin,
+                addonMethod: addon?.method ?? null, addonUnpaid: !!addon?.unpaid, addonAmount: addon ? amount : 0 } } : cur);
+              reload();
+            }
+            catch (e) { toast.show(ledgerErrorText(e, '애드온 저장 실패'), 'error', { durationMs: 7000 }); }
+            finally { setPayBusy(false); }
+          }}
           onSetEarly={async (override) => {
             if (!selected.buyin) return;
             try {
@@ -2074,7 +2161,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
       const c = remoteRef.current;
       if (!c.running || !c.endsAt) return;
       if (backoffRef.current.blocked()) return;
-      if (Date.now() - new Date(c.endsAt).getTime() < 3000) return; // 클락 화면이 먼저 쓸 시간을 준다
+      if (serverNow() - new Date(c.endsAt).getTime() < 3000) return; // 클락 화면이 먼저 쓸 시간을 준다
       if (wroteForRef.current === c.endsAt) return;                 // 이 경계는 이미 우리가 썼다(realtime 대기 중)
       const cu = levelCatchUp(c);
       if (!cu) return;
@@ -2102,7 +2189,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
   const lv = clock.config.levels;
   // 실효 레벨 — running인데 endsAt이 지났으면(클락 화면 미오픈으로 전진 못 함) 경과분만큼 전진해 표시/제어
   let idx = Math.max(0, Math.min(clock.currentIndex, Math.max(0, lv.length - 1)));
-  let rem = clock.running && clock.endsAt ? new Date(clock.endsAt).getTime() - Date.now() : clock.remainingMs;
+  let rem = clock.running && clock.endsAt ? new Date(clock.endsAt).getTime() - serverNow() : clock.remainingMs;
   while (clock.running && rem < 0 && idx < lv.length - 1) { idx++; rem += (lv[idx].minutes || 0) * 60_000; }
   rem = Math.max(0, rem);
   const cur = lv[idx];
@@ -2133,12 +2220,12 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
   const toggle = () => {
     if (finished) return;
     // 🔴 C5(2026-09-25) — 누른 순간의 실효 레벨·잔여로 커밋한다(렌더는 1초 틱이라 최대 1초 낡았다).
-    const at = effectiveLevel(clock, Date.now());
+    const at = effectiveLevel(clock, serverNow());
     if (clock.running) {
       onPatch({ currentIndex: at.index, running: false, remainingMs: Math.max(0, at.remainingMs), endsAt: null });
     } else {
       const ms = at.remainingMs > 0 ? at.remainingMs : (lv[at.index].minutes || 0) * 60_000;
-      onPatch({ currentIndex: at.index, running: true, remainingMs: ms, endsAt: new Date(Date.now() + ms).toISOString() });
+      onPatch({ currentIndex: at.index, running: true, remainingMs: ms, endsAt: new Date(serverNow() + ms).toISOString() });
     }
   };
   const ctl = 'w-10 h-10 shrink-0 rounded-input border text-base font-extrabold flex items-center justify-center transition-colors';
@@ -2161,7 +2248,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
   const stepBtn = 'h-10 w-10 shrink-0 rounded-input border border-border-default text-ink-secondary text-base font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-35';
 
   return (
-    <div className="rounded-card border border-accent-400/30 bg-gradient-to-r from-accent-300/[0.07] to-transparent px-2.5 py-2 space-y-2">
+    <div className="rounded-card border border-accent-400/30 bg-linear-to-r/srgb from-accent-300/[0.07] to-transparent px-2.5 py-2 space-y-2">
       {/* 1행: 레벨/시간 제어 */}
       <div className="flex items-center gap-2">
         <button type="button" onClick={onOpenClock} disabled={!onOpenClock} className="min-w-0 flex-1 text-left disabled:cursor-default">
@@ -2191,7 +2278,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
       {/* 레벨 오조작 복구(6초) — 이동 전 레벨·남은 시간으로 되돌린다. TV 송출 화면도 함께 복원됨 */}
       {levelUndo && (
         <button type="button" onClick={undoGo} aria-label="레벨 이동 되돌리기"
-          className="flex w-full items-center justify-center gap-1.5 rounded-input border border-amber-400/60 bg-amber-400/12 py-2 text-2xs font-extrabold text-amber-300 active:bg-amber-400/20">
+          className="flex w-full items-center justify-center gap-1.5 rounded-input border border-amber-400/60 py-2 text-2xs font-extrabold text-amber-300 active:bg-amber-400/20">
           <Icon name="undo" size={13} className="shrink-0" />레벨 이동 되돌리기 <span className="font-normal text-amber-300">남은 시간까지 복원</span>
         </button>
       )}
@@ -2206,7 +2293,7 @@ function ClockRemoteBar({ clock, onPatch, onReload, onOpenClock, active = true }
         <button type="button" onClick={() => out(-1)} disabled={clock.eliminations <= 0} aria-label="아웃 1명 되돌리기"
           className="h-10 w-10 shrink-0 rounded-input border border-border-default text-ink-secondary text-lg font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-30">↺</button>
         <button type="button" onClick={() => out(1)}
-          className="h-10 shrink-0 rounded-input border border-danger/50 bg-danger/12 px-4 text-sm font-extrabold text-danger-light flex items-center gap-1.5 active:bg-danger/20">
+          className="h-10 shrink-0 rounded-input border border-danger/50 px-4 text-sm font-extrabold text-danger-light flex items-center gap-1.5 active:bg-danger/20">
           <span className="text-base leading-none">✕</span> 아웃 처리
         </button>
       </div>
@@ -2281,16 +2368,16 @@ function PlayerEditModal({ player, recordCount, hasPw, canManage = false, onClos
         ) : !delMode ? (
           <button type="button" onClick={() => setDelMode(true)} className="w-full rounded-input border border-danger/40 py-2 text-xs font-semibold text-danger-light transition-colors hover:bg-danger/10">플레이어 삭제 (바인 {recordCount}건 포함)</button>
         ) : (
-          <div className="space-y-1.5 rounded-input border border-danger/40 bg-danger/[0.06] p-2">
+          <div className="space-y-1.5 rounded-input border border-danger/40 bg-danger/6 p-2">
             <p className="text-2xs text-danger-light">
               바인 {recordCount}건이 함께 삭제됩니다. {hasPw ? '취소 비밀번호를 입력하세요.' : canManage ? '취소 비밀번호가 설정되지 않은 매장이라 비밀번호 없이 삭제됩니다.' : '취소 비밀번호가 설정되지 않은 매장은 업주·공동운영자만 삭제할 수 있습니다.'}
             </p>
             <div className="flex gap-1.5">
               {!hasPw && canManage
-                ? <button type="button" onClick={() => onDelete('')} className="btn-danger !bg-rose-700 hover:!bg-rose-800 min-w-0 flex-1 px-3 text-xs">삭제 확정</button>
+                ? <button type="button" onClick={() => onDelete('')} className="btn-danger bg-rose-700! hover:bg-rose-800! min-w-0 flex-1 px-3 text-xs">삭제 확정</button>
                 : <>
                   <input type="password" inputMode="numeric" value={delPw} onChange={(e) => setDelPw(e.target.value)} placeholder={hasPw ? '취소 비밀번호' : '비밀번호 미설정'} disabled={!hasPw} className="input min-w-0 flex-1 text-sm" autoFocus />
-                  <button type="button" onClick={() => onDelete(delPw)} disabled={!hasPw || !delPw} className="btn-danger !bg-rose-700 hover:!bg-rose-800 shrink-0 px-3 text-xs disabled:opacity-50">삭제 확정</button>
+                  <button type="button" onClick={() => onDelete(delPw)} disabled={!hasPw || !delPw} className="btn-danger bg-rose-700! hover:bg-rose-800! shrink-0 px-3 text-xs disabled:opacity-50">삭제 확정</button>
                 </>}
               <button type="button" onClick={() => { setDelMode(false); setDelPw(''); }} className="btn-ghost shrink-0 px-2 text-xs">취소</button>
             </div>
@@ -2317,7 +2404,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 }
 
 // ── 날짜 바 ───────────────────────────────────────────────────────────────────
-function DateBar({ date, setDate, onBack }: { date: string; setDate: (d: string) => void; onBack?: () => void }) {
+function DateBar({ date, setDate, biz, onBack }: { date: string; setDate: (d: string) => void; biz: string; onBack?: () => void }) {
   return (
     <div className="flex items-center gap-2">
       {/* 크기 사다리 .btn-sm(34px) 을 쓴다 — text-xs(12.75px) 라벨인데 .btn 기본 하한(min-h 2.4rem=40.8px)을
@@ -2330,7 +2417,7 @@ function DateBar({ date, setDate, onBack }: { date: string; setDate: (d: string)
       )}
       {/* data-testid: '어느 날짜 장부에 착지했는가' 를 재는 유일한 안정 지점(clk-timer 와 같은 규약). */}
       <input data-testid="ledger-date" aria-label="장부 날짜" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input flex-1 text-sm" />
-      {date !== today() && <button type="button" onClick={() => setDate(today())} className="btn-ghost text-xs px-3 shrink-0">오늘</button>}
+      {date !== biz && <button type="button" onClick={() => setDate(biz)} className="btn-ghost text-xs px-3 shrink-0">오늘</button>}
     </div>
   );
 }
@@ -2414,6 +2501,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [maxEntries, setMaxEntries] = useState<number>(base.maxEntries || 0);
   const [isAddon, setIsAddon] = useState<boolean>(!!base.isAddon);
   const [addonStack, setAddonStack] = useState<number>(base.addonStack || 0);
+  const [addonAmount, setAddonAmount] = useState<number>(base.addonAmount || 0);   // 애드온 1회 가격(원)
   const [voucherIssued, setVoucherIssued] = useState<number>(base.voucherIssued ?? 0);
   // W2-2 VCH-1b: 자동적립 입력 UI 는 제거됐지만 값은 보존해 write — 지우면 저장 경로가 전 매장 설정을 0 으로 덮는다(§18.4)
   const [accrualPerBin] = useState<number>(base.voucherAccrualPerBin ?? 0);
@@ -2449,6 +2537,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   // PL1a: 포스터 상속을 3필드(제목·바인·유형) → 전체(스택·애드온, 제출 시 클락 구조·레지레벨·상금)로 확대.
   // 스택 setter 는 아래 '연동 클락 얼리 설정' 블록에서 선언되므로 ref 로 지연 배선한다.
   const applySchedInheritRef = useRef<(sc: Schedule) => void>(() => {});
+  const posterStackRef = useRef(false);   // A1 — 포스터가 스택을 채웠는가(늦게 온 클락 설정 조회가 덮지 않게)
   const [todayPick, setTodayPick] = useState<Schedule[]>([]); // 당일 포스터 2개+ — 침묵 대신 선택 칩(§13-B)
   // 당일 포스터 자동 연동 — 새 장부 시작 시 그 날짜 포스터가 1개면 즉시 프리필(수정 가능).
   // 포스터→장부→클락 재입력 반복을 제거(사장님 요청: 더 간단하게).
@@ -2483,8 +2572,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       setDoubleEarlyBonus(c.doubleEarlyBonus ?? 0);
       setEarlyDoubleLevel(c.earlyDoubleLevel ?? 1);
       setEarlySingleLevel(c.earlySingleLevel ?? 4);
-      setStartStack(c.startStack ?? 50000);
-      setRebuyStack(c.rebuyStack ?? 70000);
+      // A1 — 포스터 상속이 이미 스택을 채웠으면 늦게 온 클락 설정이 덮지 않는다(자동 연동·수동 선택·seed 가 이 조회보다 먼저 끝날 수 있다).
+      if (!posterStackRef.current) {
+        setStartStack(c.startStack ?? 50000);
+        setRebuyStack(c.rebuyStack ?? 70000);
+      }
     }).catch(() => {});
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2492,6 +2584,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 
   // PL1a: 포스터 → 폼 상속(무금액 포함 전체) — 자동연동·선택 칩·(향후 수동 선택)이 공유하는 단일 적용점
   applySchedInheritRef.current = (sc: Schedule) => {
+    posterStackRef.current = !!(sc.buyIn?.startStack ?? sc.structure?.startingChips ?? sc.buyIn?.rebuyStack ?? sc.structure?.rebuyStack);
     setSchedId(sc.id);
     setTitle(sc.title);
     if (sc.buyIn?.amount) setCash(sc.buyIn.amount);
@@ -2501,7 +2594,22 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     const rebuy = sc.buyIn?.rebuyStack ?? sc.structure?.rebuyStack;
     if (rebuy) setRebuyStack(rebuy);
     if (sc.buyIn?.addonStack) { setIsAddon(true); setAddonStack(sc.buyIn.addonStack); }
+    if (sc.buyIn?.addon) { setIsAddon(true); setAddonAmount(sc.buyIn.addon); }   // 포스터 애드온 비용 → 장부 애드온 가격
+    // B2(2026-09-28) — 포스터의 시작 시간을 장부의 '대회 시작 시각'으로 잇는다. 얼리 자동 판정의 기준이 이 값이고,
+    //   비어 있으면 '장부를 연 시각'이 기준이 돼 개설 17:30·스타트 19:00 대회의 19:05 첫 바인이 얼리가 아니게 됐다.
+    //   (포스터에 시간이 없으면 클락이 처음 돌 때 서버 기준 시각으로 채운다 — api/clock noteTournamentStart.)
+    if (sc.startTime) { const iso = isoAt(base.sessionDate, sc.startTime); if (iso) setStartISO(iso); }
   };
+  // A1(2026-09-28) — 게임관리 '이 포스터로 새 장부'(seed)로 들어온 경우도 같은 상속을 한 번 적용한다.
+  //   예전엔 seed 가 제목·단가·유형만 실어 와서, 제출 때 폼의 스택(기본 50,000)이 포스터 스택을 덮었다(:병합 순서 cfg).
+  const seedInherited = useRef(false);
+  useEffect(() => {
+    if (mode !== 'open' || !prefilled || !base.scheduleId || seedInherited.current) return;
+    const sc = schedules.find((s) => s.id === base.scheduleId);
+    if (!sc) return;
+    seedInherited.current = true;
+    applySchedInheritRef.current(sc);
+  }, [mode, prefilled, base.scheduleId, schedules]);
 
   const setDisc = (i: number, patch: Partial<DiscountPreset>) =>
     setDiscs((arr) => arr.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
@@ -2555,6 +2663,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     setMaxEntries(copyMain.maxEntries || 0);
     setIsAddon(!!copyMain.isAddon);
     setAddonStack(copyMain.addonStack || 0);
+    setAddonAmount(copyMain.addonAmount || 0);
     setDealers(copyMain.dealers ?? '');
     setEvent(copyMain.eventMemo ?? '');
     setDiscs(copyMain.discounts ?? []);
@@ -2589,6 +2698,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     setMaxEntries(s.maxEntries || 0);
     setIsAddon(!!s.isAddon);
     setAddonStack(s.addonStack || 0);
+    setAddonAmount(s.addonAmount || 0);
     setDealers(s.dealers ?? '');
     setEvent(s.eventMemo ?? '');
     setDiscs(s.discounts ?? []);
@@ -2621,6 +2731,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     if (d.maxEntries !== undefined) setMaxEntries(d.maxEntries);
     if (d.isAddon !== undefined) setIsAddon(d.isAddon);
     if (d.addonStack !== undefined) setAddonStack(d.addonStack);
+    if (d.addonAmount !== undefined) setAddonAmount(d.addonAmount);
     if (d.dealers !== undefined) setDealers(d.dealers ?? '');
     if (d.eventMemo !== undefined) setEvent(d.eventMemo ?? '');
     if (d.discounts !== undefined) setDiscs(d.discounts);
@@ -2706,7 +2817,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       ...base, title: title.trim() || undefined,
       buyinAmount: cash, cardAmount: card > 0 ? card : null,
       gameType, targetEntries: gameType === 'gtd' ? target : 0, maxEntries: gameType === 'entry' ? maxEntries : 0,
-      isAddon, addonStack: isAddon ? addonStack : 0, voucherIssued, voucherAccrualPerBin: accrualPerBin,
+      isAddon, addonStack: isAddon ? addonStack : 0, addonAmount: isAddon ? addonAmount : 0, voucherIssued, voucherAccrualPerBin: accrualPerBin,
       eventMemo: event.trim() || undefined, dealers: dealers.trim() || undefined,
       scheduleId: schedId || null, openedBy: operIds[0] ?? null, operators: operIds,
       // ⚠ 압축 금지 — 바인은 discountIndex(1-based 자리번호)로 할인을 참조한다.
@@ -2722,7 +2833,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   //   2026-09-25 오너 실기기에서 바 자체가 스크롤 내내 칸·칩·카드를 덮는다고 다시 지적 → 모바일은 바를 고정하지 않는다
   //   (아래 실행 버튼 주석). 덮을 바가 없으니 포커스 보정도 필요 없어 지웠다.
   return (
-    <div className={embedded ? 'space-y-3' : 'rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2.5'}>
+    <div className={embedded ? 'space-y-3' : 'rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/5 to-transparent p-3 space-y-2.5'}>
       {mode === 'open' && (
         <div>
           <h3 className="text-sm font-bold text-accent-300">장부 시작 설정</h3>
@@ -2754,7 +2865,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       {/* PL3①: 스냅샷이 최우선 후보 — 마지막 마감 회차를 1탭으로 그대로(§13-B 생성 경로 역전) */}
       {mode === 'open' && lastRound && (
         <button type="button" onClick={() => applyLastRound(lastRound)} data-testid="open-last-round"
-          className="flex w-full items-center gap-2 rounded-input border border-emerald-500/40 bg-emerald-500/[0.08] px-3 py-2.5 text-left transition-colors hover:bg-emerald-500/[0.14]">
+          className="flex w-full items-center gap-2 rounded-input border border-emerald-500/40 bg-emerald-500/8 px-3 py-2.5 text-left transition-colors hover:bg-emerald-500/[0.14]">
           <Icon name="refresh" size={16} className="shrink-0 text-emerald-400" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-bold text-emerald-300">
@@ -2768,7 +2879,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       )}
       {mode === 'open' && copyMain && (base.gameSeq ?? 1) > 1 && (
         <button type="button" onClick={applyCopyMain}
-          className="w-full flex items-center justify-center gap-1.5 rounded-input border border-accent-400/50 bg-accent-300/12 px-3 py-2.5 text-sm font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
+          className="w-full flex items-center justify-center gap-1.5 rounded-input border border-accent-400/50 px-3 py-2.5 text-sm font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
           <Icon name="clipboard" size={16} className="shrink-0" />메인 게임 설정 그대로 복사 (단가·할인·딜러·유형)
         </button>
       )}
@@ -2784,7 +2895,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <span className="text-sm">{presetOpen ? '▲' : '▼'}</span>
           </button>
           {presetOpen && (
-            <div className="mt-1 max-h-[13rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
+            <div className="mt-1 max-h-52 overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
               {presets.map((p, i) => (
                 <button key={i} type="button" onClick={() => { applyPreset(p); setPresetOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-surface-high transition-colors">
@@ -2809,12 +2920,9 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             onChange={(e) => {
               const id = e.target.value; setSchedId(id);
               const sc = schedules.find((s) => s.id === id);
-              if (sc) {
-                // 포스터 정보 불러오기 — 게임명·바인 단가·게임유형 프리필
-                setTitle(sc.title);
-                if (sc.buyIn?.amount) setCash(sc.buyIn.amount);
-                setGameType(sc.guaranteed ? 'gtd' : 'entry');
-              }
+              // A1(2026-09-28) — 수동 선택도 자동 연동과 **같은 상속**(제목·단가·유형 + 스택·리바인·애드온·시작 시각).
+              //   예전엔 앞의 세 칸만 채워, 제출 때 폼 스택(기본 50,000)이 포스터 스택을 덮어 TV 평균 스택이 틀렸다.
+              if (sc) applySchedInheritRef.current(sc);
             }}
             className="input w-full text-sm">
             <option value="">연결 안 함 / 직접 입력</option>
@@ -2903,7 +3011,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               <span className="w-9 shrink-0 text-2xs font-bold text-accent-300">할인{i + 1}</span>
               <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input min-w-0 grow basis-[calc(100%-3rem)] text-sm sm:basis-0" />
               {/* #11(2026-09-25) — w-20 에 '23.4567' 이 글자 공간 45px 에 57px 로 잘렸다(끝자리가 안 보여 금액을 잘못 읽는다) → w-24. */}
-              <div className="relative w-24 shrink-0 max-sm:ml-[2.625rem]">
+              <div className="relative w-24 shrink-0 max-sm:ml-10.5">
                 <input type="number" inputMode="decimal" step="0.1" min="0" max={minUnit > 0 ? minUnit / WON_PER_MAN : undefined} value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="금액" aria-invalid={badDisc === i}
                   className={['input w-full pr-6 text-sm tabular-nums', badDisc === i ? 'border-danger text-danger-light' : ''].join(' ')} />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
@@ -2913,7 +3021,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
                   w-16(68px) − pl-3(12.75) − pr-6(25.5) = 글자 공간 **29.75px** 인데 placeholder '자동' 이
                   text-sm(14.875px)×2 = **29.75px** 로 정확히 경계라 한 글자에서 잘렸다. 여유를 준다.
                   줄이려면 placeholder 를 먼저 줄여라 — 폭만 줄이면 같은 자리로 돌아온다. */}
-              <div className="relative w-[4.75rem] shrink-0">
+              <div className="relative w-19 shrink-0">
                 <input type="number" inputMode="numeric" min="0" max="60" value={d.level || ''} onChange={(e) => setDisc(i, { level: Math.max(0, Math.min(60, parseInt(e.target.value, 10) || 0)) })} placeholder="자동" className="input w-full pr-6 text-sm tabular-nums" />
                 <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">LV</span>
               </div>
@@ -2994,20 +3102,27 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       )}
 
       <Field label="애드온 게임 여부">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setIsAddon((v) => !v)}
             className={['px-3 py-2 rounded-input border text-sm font-bold transition-colors shrink-0',
               isAddon ? 'bg-accent-300/15 text-accent-300 border-accent-400/50' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
             {isAddon ? '✓ 애드온 게임' : '애드온 없음'}
           </button>
           {isAddon ? (
-            <div className="relative w-40 shrink-0">
-              <input type="number" inputMode="numeric" value={addonStack || ''} onChange={(e) => setAddonStack(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                placeholder="스택" className="input w-full text-sm pr-7 tabular-nums" />
-              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">칩</span>
-            </div>
+            <>
+              <div className="relative w-40 shrink-0">
+                <input type="number" inputMode="numeric" value={addonStack || ''} onChange={(e) => setAddonStack(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  placeholder="스택" aria-label="애드온 스택" className="input w-full text-sm pr-7 tabular-nums" />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">칩</span>
+              </div>
+              <div className="relative w-40 shrink-0">
+                <input type="number" inputMode="numeric" min={0} step={1000} value={addonAmount || ''} onChange={(e) => setAddonAmount(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  placeholder="가격" aria-label="애드온 가격(원)" data-testid="ledger-addon-price" className="input w-full text-sm pr-7 tabular-nums" />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
+              </div>
+            </>
           ) : (
-            <span className="text-2xs text-ink-muted leading-snug">애드온이 있으면 켜서 스택을 입력하세요.</span>
+            <span className="text-2xs text-ink-muted leading-snug">애드온이 있으면 켜서 스택과 가격을 입력하세요.</span>
           )}
         </div>
       </Field>
@@ -3068,7 +3183,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           390 도 동일. 탭바가 스크롤로 자동숨김된 동안에만 보였다 = 매일 쓰는 실행 버튼이 안 눌린다.
           `--tabbar-safe` 는 이 저장소의 **탭바 회피 단일 소스**다(index.css) — 임의 상수를 새로 만들지 않는다.
           PC(lg+)에는 하단 탭바가 없으므로 종전대로 bottom-0. */}
-      {/* ⚠ `pr-12` — 스크롤 뒤 나타나는 '맨 위로' FAB(`.scroll-top-fab`, `bottom-[var(--tabbar-float)] right-4`)가
+      {/* ⚠ `pr-12` — 스크롤 뒤 나타나는 '맨 위로' FAB(`.scroll-top-fab`, `bottom-(--tabbar-float) right-4`)가
           같은 기준선에 서서 실행 버튼 오른쪽 끝을 덮었다(실측 360: 겹침 28×41 ≈ 1,173px²).
           글자는 가운데라 안 가려지고 탭도 됐지만 그림이 겹친다 — FAB 폭(42.5)+여백만큼 비켜 준다. */}
       {/* 🔴 2026-09-25 오너 실기기(412 · 삼성 인터넷/크롬): 모바일에서 이 막대가 **본문 중간에 떠서** 담당 직원 칩·입력칸을
@@ -3077,7 +3192,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           모바일 화면 높이에서 '탭바 위 고정'은 바닥 105px + 막대 50px 를 입력칸 위에 영구히 얹는다 — 가리지 않는 고정은 없다.
           → 하단 탭바가 있는 폭(<lg)은 **폼 끝의 일반 버튼**(흐름 배치). 끝까지 내리면 탭바 위로 올라온다(푸터 예약).
           PC(lg+)는 종전 sticky bottom-0 그대로. */}
-      <div className={['lg:sticky lg:bottom-0 -mx-1 flex gap-2 px-1 pb-1 pr-12 pt-2 backdrop-blur-sm lg:pr-1', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
+      <div className={['lg:sticky lg:bottom-0 -mx-1 flex gap-2 px-1 pb-1 pr-12 pt-2 backdrop-blur-xs lg:pr-1', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
         {onCancel && <button type="button" onClick={onCancel} className="btn-ghost text-sm flex-1">취소</button>}
         <button type="button" onClick={submit} disabled={cash <= 0 || submitting} className="btn-primary text-sm flex-1 disabled:opacity-50">
           {submitting ? '저장 중…' : mode === 'open' ? '장부 시작' : '저장'}
@@ -3115,8 +3230,10 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 // ── 2-Tap 결제 입력 모달 ──────────────────────────────────────────────────────
 interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountIndex: number; }
 
-function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick, busy = false, levelNo = 0, autoDiscIdx = 0, autoFromLevel = true, autoEarly = null, reduceAsk = false, onReduceConfirm }: {
+function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, onSetAddon, lastPick, busy = false, levelNo = 0, autoDiscIdx = 0, autoFromLevel = true, autoEarly = null, reduceAsk = false, onReduceConfirm }: {
   cell: SelectedCell; hasPw: boolean; session: LedgerSession;
+  /** 애드온 행(2026-09-28) — 기록된 바인에 애드온을 붙이거나 뗀다. null = 없음 */
+  onSetAddon?: (addon: { method: AddonMethod; unpaid: boolean } | null) => void;
   /** 방금 누른 수정이 매출을 줄여 취소 비밀번호가 필요하다(LEDGER-REDUCE-PASSWORD) */
   reduceAsk?: boolean;
   onReduceConfirm?: (pw: string) => void;
@@ -3253,7 +3370,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                 const active = (cell.buyin!.earlyOverride ?? null) === v;
                 return (
                   <button key={String(v)} type="button" onClick={() => onSetEarly(v)}
-                    className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
+                    className={['tap-y-44 text-2xs font-bold px-2 py-1.5 min-h-8 rounded-badge border transition-colors',
                       active ? 'bg-amber-400/20 text-amber-300 border-amber-400/50' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>{label}</button>
                 );
               })}
@@ -3363,6 +3480,10 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                 className="w-full h-11 rounded-input border border-accent-400/40 text-accent-300 font-semibold text-sm hover:bg-accent-300/10 transition-colors">
                 분납 / 할인 상세 입력
               </button>
+
+              {session.isAddon && onSetAddon && (
+                <AddonRow buyin={cell.buyin} amount={session.addonAmount ?? 0} busy={busy} onSet={onSetAddon} />
+              )}
             </>
           ) : (
             <div className="space-y-2">
@@ -3458,6 +3579,50 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
   );
 }
 
+/** 애드온 한 줄(2026-09-28 오너) — 결제 칸 **맨 아래**. 기록된 바인에만 붙는다(애드온은 앉은 자리에 얹는 것).
+ *  ⚠ 애드온은 바인 횟수·엔트리·얼리·총 칩에 들어가지 않는다 — 돈만 따로 센다(ledger.ts addonFinance). */
+const ADDON_OTHER: { key: string; method: AddonMethod; unpaid: boolean; label: string }[] = [
+  { key: 'card', method: 'card', unpaid: false, label: '카드 완납' }, { key: 'card-u', method: 'card', unpaid: true, label: '카드 미수' },
+  { key: 'transfer', method: 'transfer', unpaid: false, label: '이체 완납' }, { key: 'transfer-u', method: 'transfer', unpaid: true, label: '이체 미수' },
+  { key: 'ticket', method: 'ticket', unpaid: false, label: '티켓 완납' }, { key: 'ticket-u', method: 'ticket', unpaid: true, label: '티켓 미수' },
+];
+function AddonRow({ buyin, amount, busy, onSet }: {
+  buyin: LedgerBuyin | null | undefined; amount: number; busy: boolean;
+  onSet: (addon: { method: AddonMethod; unpaid: boolean } | null) => void;
+}) {
+  const m = buyin?.addonMethod ?? null;
+  const u = !!buyin?.addonUnpaid;
+  const canPick = !!buyin && amount > 0 && !busy;
+  const cur = m ? `${m}${u ? '-u' : ''}` : '';
+  const other = ADDON_OTHER.find((o) => o.key === cur);
+  const seg = (on: boolean, tone: 'none' | 'ok' | 'due') => ['h-11 min-w-0 whitespace-nowrap rounded-input border px-2 text-xs font-bold transition-colors disabled:opacity-50 disabled:pointer-events-none',
+    !on ? 'border-border-default text-ink-secondary hover:text-ink-primary'
+      : tone === 'due' ? 'border-danger/50 bg-danger/15 text-danger-light'
+      : tone === 'ok' ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+      : 'border-border-strong bg-surface-float text-ink-primary'].join(' ');
+  return (
+    <div data-testid="ledger-addon-row" className="space-y-1.5 border-t border-border-subtle pt-2">
+      <p className="flex items-center justify-between gap-2 whitespace-nowrap text-2xs">
+        <span className="font-bold text-ink-secondary">애드온</span>
+        <span className="tabular-nums text-ink-muted">{amount > 0 ? `${wonToMan(amount)}만 · 바인·엔트리에 안 들어감` : '가격 미설정'}</span>
+      </p>
+      <div className="grid grid-cols-3 gap-1.5">
+        <button type="button" disabled={!canPick} aria-pressed={!m} onClick={() => onSet(null)} className={seg(!m, 'none')}>없음</button>
+        <button type="button" disabled={!canPick} aria-pressed={m === 'cash' && !u} onClick={() => onSet({ method: 'cash', unpaid: false })} className={seg(m === 'cash' && !u, 'ok')}>현금 완납</button>
+        <button type="button" disabled={!canPick} aria-pressed={m === 'cash' && u} onClick={() => onSet({ method: 'cash', unpaid: true })} className={seg(m === 'cash' && u, 'due')}>현금 미수</button>
+      </div>
+      <select value={other?.key ?? ''} disabled={!canPick} aria-label="애드온 다른 수단"
+        onChange={(e) => { const o = ADDON_OTHER.find((x) => x.key === e.target.value); if (o) onSet({ method: o.method, unpaid: o.unpaid }); }}
+        className="input h-11 w-full text-xs disabled:opacity-50">
+        <option value="">다른 수단 (카드·이체·티켓)</option>
+        {ADDON_OTHER.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+      </select>
+      {!buyin && <p className="whitespace-nowrap text-2xs text-ink-muted">바인을 먼저 기록하면 애드온을 붙일 수 있어요.</p>}
+      {buyin && amount <= 0 && <p className="text-2xs text-ink-muted">‘세션 정보 수정’에서 애드온 가격을 넣어 주세요.</p>}
+    </div>
+  );
+}
+
 /** 업주 취소 비밀번호 한 줄 — 바인 취소(삭제)와 감액 수정이 같이 쓴다 */
 // 오너 결정 2026-09-25 ②: 비밀번호 **미설정** 매장에서는 업주·공동운영자(ownerNoPw = can_manage_pos)가 비밀번호 없이 확정한다.
 //   직원은 여전히 막힌다. 최종 판정은 서버(cancel_ledger_buyin, 20260925e)가 다시 한다.
@@ -3465,14 +3630,14 @@ function PwConfirm({ hasPw, ownerNoPw = false, label, busy = false, onConfirm }:
   const [pw, setPw] = useState('');
   if (!hasPw && ownerNoPw) {
     return (
-      <button type="button" onClick={() => onConfirm('')} disabled={busy} className="btn-danger !bg-rose-700 hover:!bg-rose-800 w-full text-xs px-3 disabled:opacity-50">{label}</button>
+      <button type="button" onClick={() => onConfirm('')} disabled={busy} className="btn-danger bg-rose-700! hover:bg-rose-800! w-full text-xs px-3 disabled:opacity-50">{label}</button>
     );
   }
   return (
     <div className="flex gap-1.5">
       <input type="password" inputMode="numeric" value={pw} onChange={(e) => setPw(e.target.value)} aria-label="취소 비밀번호"
         placeholder={hasPw ? '취소 비밀번호' : '비밀번호 미설정'} disabled={!hasPw} className="input flex-1 text-sm" autoFocus />
-      <button type="button" onClick={() => onConfirm(pw)} disabled={!hasPw || !pw || busy} className="btn-danger !bg-rose-700 hover:!bg-rose-800 text-xs px-3 shrink-0 disabled:opacity-50">{label}</button>
+      <button type="button" onClick={() => onConfirm(pw)} disabled={!hasPw || !pw || busy} className="btn-danger bg-rose-700! hover:bg-rose-800! text-xs px-3 shrink-0 disabled:opacity-50">{label}</button>
     </div>
   );
 }
@@ -3500,6 +3665,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
     value: number; gross: number; disc: number; tender: Tender;
     all: { totalBuyins: number; entries: number; revenue: number; unpaid: number; value: number };
     removed: { count: number; entries: number; value: number; revenue: number };
+    addon: AddonFinance;
   };
   unpaidPlayers: { name: string; unpaid: number }[];
   /** '정산 제외: 관계자·가게지원' — 메모에 미리 채워 감사 흔적을 남긴다(수정 가능) */
@@ -3558,10 +3724,21 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
           </p>
         </div>
 
+        {stats.addon.count > 0 && (
+          <div data-testid="close-addon" className="rounded-input border border-border-default bg-surface-low/60 p-2.5 text-xs">
+            <p className="mb-1.5 text-2xs font-bold text-ink-secondary">애드온 {stats.addon.count}건 — 바인·엔트리와 따로 셉니다</p>
+            <dl className="space-y-0.5 tabular-nums">
+              <div className="flex justify-between"><dt className="text-ink-muted">완납(현금·카드·이체)</dt><dd className="text-emerald-300">{wonToMan(stats.addon.revenue)}만원</dd></div>
+              <div className="flex justify-between"><dt className="text-ink-muted">티켓</dt><dd className="text-accent-200">{wonToMan(stats.addon.ticketWon)}만원</dd></div>
+              <div className="flex justify-between"><dt className="text-ink-muted">미수</dt><dd className="text-danger-light">{wonToMan(stats.addon.unpaid)}만원</dd></div>
+            </dl>
+          </div>
+        )}
+
         {/* 제외를 걸었으면 **위 숫자가 무엇을 뺀 결과인지**와 제외 전 원본을 나란히 세운다.
             둘 중 하나만 보여 주면 나중에 "그날 진짜 몇 엔트리였지?"에 답할 수 없다. */}
         {stats.removed.count > 0 && (
-          <div className="rounded-input border border-danger/30 bg-danger/[0.06] p-2.5">
+          <div className="rounded-input border border-danger/30 bg-danger/6 p-2.5">
             <p className="mb-1 flex items-center gap-1 text-2xs font-bold text-danger-light">
               <Icon name="filter" size={12} className="shrink-0" />{exNote || '정산 제외'}
             </p>
@@ -3582,7 +3759,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
         {/* #20: 할인은 '덜 받은 돈'이라 매출 옆에 같이 서야 한다.
             예전엔 마감정산 어디에도 없어서, 5만 할인 20건(=100만)이 그냥 매출 미달로만 보였다.
             할인 엔트리 수와 총 할인액을 같이 세워야 '왜 덜 들어왔는가'가 그 자리에서 끝난다. */}
-        <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2.5">
+        <div className="rounded-input border border-accent-400/30 bg-accent-300/6 p-2.5">
           <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-accent-300">
             <Icon name="gift" size={12} className="shrink-0" />금일 할인
           </p>
@@ -3618,7 +3795,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
         )}
 
         {/* 미수자 리스트 */}
-        <div className="rounded-input border border-danger/30 bg-danger/[0.05] p-2.5">
+        <div className="rounded-input border border-danger/30 bg-danger/5 p-2.5">
           <p className="mb-1 text-2xs font-bold text-danger-light">미수자 {unpaidPlayers.length}명</p>
           {unpaidPlayers.length === 0 ? (
             <p className="py-1 text-center text-2xs text-ink-muted">미수자가 없습니다</p>
@@ -3683,7 +3860,7 @@ function DeleteSessionModal({ label, loss, lossErr, busy, hasPw, pw, onPw, onClo
             <SummaryStat label="미수금 기록" value={`${wonToMan(loss.unpaid)}만원`} tone="danger" />
           </div>
         ) : lossErr ? (
-          <p className="rounded-input border border-danger/30 bg-danger/[0.05] p-2.5 text-2xs text-danger-light">
+          <p className="rounded-input border border-danger/30 bg-danger/5 p-2.5 text-2xs text-danger-light">
             잃는 기록의 양을 불러오지 못했습니다(네트워크). 수치를 확인하지 못한 채로도 삭제는 가능하지만, 확인 후 진행을 권합니다.
           </p>
         ) : (
@@ -3703,7 +3880,7 @@ function DeleteSessionModal({ label, loss, lossErr, busy, hasPw, pw, onPw, onClo
           <button type="button" onClick={onClose} disabled={busy} className="btn-ghost text-sm flex-1 disabled:opacity-50">취소</button>
           {/* #8(2026-09-25) — btn-danger 기본색(246,70,93) 위 흰 글자 3.5:1. 되돌릴 수 없는 버튼이라 글자가 확실히 읽혀야 한다 → 한 단계 진한 빨강. */}
           <HoldToConfirmButton onConfirm={onConfirm} disabled={busy || (!loss && !lossErr) || (pwRequired && !pw)}
-            className="btn-danger !bg-rose-700 hover:!bg-rose-800 text-sm flex-1 disabled:opacity-50">
+            className="btn-danger bg-rose-700! hover:bg-rose-800! text-sm flex-1 disabled:opacity-50">
             {busy ? '삭제 중…' : '꾹 눌러 영구 삭제'}
           </HoldToConfirmButton>
         </div>

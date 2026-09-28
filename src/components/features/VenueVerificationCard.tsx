@@ -15,7 +15,7 @@ export default function VenueVerificationCard() {
 
   if (status === 'verified') {
     return (
-      <div className="flex items-center gap-2 rounded-card border-2 border-accent-300 bg-accent-300/[0.08] px-3 py-2.5">
+      <div className="flex items-center gap-2 rounded-card border-2 border-accent-300 bg-accent-300/8 px-3 py-2.5">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-300 text-white">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
         </span>
@@ -29,7 +29,7 @@ export default function VenueVerificationCard() {
 
   if (status === 'pending') {
     return (
-      <div className="rounded-card border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2.5">
+      <div className="rounded-card border border-amber-500/40 bg-amber-500/8 px-3 py-2.5">
         <p className="text-sm font-bold text-amber-400">인증 심사 중</p>
         <p className="mt-0.5 text-2xs text-ink-muted">운영자가 인증을 검토하고 있습니다.</p>
       </div>

@@ -11,6 +11,10 @@
 // 모바일 실측 근거: 이 앱의 체감은 CPU 가 아니라 **내려보내는 바이트**가 지배한다
 //   (1.6Mbps LCP 3,612ms vs 무제한망 672ms — 5.4배).
 
+// D1(2026-09-28) — 기본 '지금'은 **서버 기준**(serverNow = 기기 시계 + 서버 오프셋)이다. ends_at 은 절대 시각이라
+//   기기 시계가 5분 틀린 폰·TV·PC 가 같은 행을 서로 다른 남은 시간으로 읽었다. 오프셋 측정 전·실패 시는 기기 시계와 같다.
+import { serverNow } from './serverTime';
+
 /** 레벨 하나에서 이 계산이 실제로 쓰는 것은 길이(분)뿐이다. */
 export interface LevelDuration { minutes?: number }
 
@@ -34,7 +38,7 @@ export interface ClockEffective { index: number; remainingMs: number; drifted: b
  * 업주가 장부 섹션으로 옮기면 클락 섹션이 display:none 이 되어 재렌더가 멈추고 전진도 멈춘다 —
  * 손님이 보는 TV·홈 라이브 카드가 00:00 에 얼어붙던 원인이다.
  */
-export function effectiveLevel(s: ClockLevelInput, nowMs = Date.now()): ClockEffective {
+export function effectiveLevel(s: ClockLevelInput, nowMs = serverNow()): ClockEffective {
   const lv = s.config?.levels ?? [];
   const last = Math.max(0, lv.length - 1);
   const from = Math.max(0, Math.min(s.currentIndex, last));
@@ -99,7 +103,7 @@ export interface ClockPhaseInput extends ClockLevelInput {
   config?: { levels?: (LevelDuration & { kind?: 'level' | 'break' })[] } | null;
 }
 
-export function clockPhase(s: ClockPhaseInput, nowMs = Date.now()): ClockPhase {
+export function clockPhase(s: ClockPhaseInput, nowMs = serverNow()): ClockPhase {
   const lv = s.config?.levels ?? [];
   // 레벨이 없는 설정(아직 블라인드를 안 만든 클락)은 '끝났다'고 말할 근거가 없다.
   if (lv.length === 0) return s.running ? 'running' : 'idle';
@@ -127,7 +131,7 @@ export function clockPhase(s: ClockPhaseInput, nowMs = Date.now()): ClockPhase {
  * effectiveLevel 은 잔여를 0 으로 클램프해 '마지막 레벨 00:00' 과 '이미 지남'을 못 가르므로 누적을 따로 잰다.
  * 정지 행은 대상이 아니다(정지 종료는 clockPhase 의 remainingMs<=0 규칙이 본다).
  */
-export function clockExhausted(s: ClockLevelInput, nowMs = Date.now()): boolean {
+export function clockExhausted(s: ClockLevelInput, nowMs = serverNow()): boolean {
   const lv = s.config?.levels ?? [];
   if (!s.running || lv.length === 0) return false;
   const last = lv.length - 1;
@@ -158,7 +162,7 @@ export const CLOCK_PHASE_ACTION: Record<ClockPhase, string> = {
  * 예전엔 `running || currentIndex > 0 || endsAt != null` 를 5곳이 복붙했는데,
  * 그 식은 **1레벨에서 일시정지한 진행 중 대회를 '미실행'** 이라고 말했다(currentIndex 가 0이라서).
  */
-export const clockIsLive = (s: ClockPhaseInput, nowMs = Date.now()): boolean => clockPhase(s, nowMs) !== 'idle';
+export const clockIsLive = (s: ClockPhaseInput, nowMs = serverNow()): boolean => clockPhase(s, nowMs) !== 'idle';
 
 /** 게임 라벨 — 메인/사이드N. 클락 보드와 TV 게임 전환 버튼이 같은 문구를 써야 해서 여기 둔다. */
 export const gameLabel = (g: { gameSeq: number }) => (g.gameSeq > 1 ? `사이드${g.gameSeq - 1}` : '메인');

@@ -41,7 +41,7 @@ function BanList({ items }: { items: { label: string; detail: string }[] }) {
   return (
     <ul className="space-y-2 mt-1">
       {items.map(({ label, detail }, i) => (
-        <li key={i} className="flex gap-3 p-2.5 rounded-input bg-danger/[0.06] border border-danger/20">
+        <li key={i} className="flex gap-3 p-2.5 rounded-input bg-danger/6 border border-danger/20">
           <span className="shrink-0 text-danger mt-0.5">✕</span>
           <span>
             <span className="font-semibold text-danger-light">{label}</span>

@@ -52,7 +52,7 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
       data-promoted-post-id={promoted ? post.id : undefined}
       data-ad-slot={promoted ? adSlot : undefined}
       className={[
-        'cv-row-sm min-h-[var(--row-h-sm)] flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 focus:outline-none focus-visible:bg-surface-high/60',
+        'cv-row-sm min-h-(--row-h-sm) flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 focus:outline-hidden focus-visible:bg-surface-high/60',
         selected ? 'bg-accent-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
       ].join(' ')}
     >
@@ -101,7 +101,7 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
       </span>
       {/* max-w+truncate: 작성자가 shrink-0 무제한이면 좁은 2-pane 목록·긴 닉네임에서
           flex-1 제목이 0px까지 뭉개진다 — 닉네임이 대신 말줄임(제목 우선, 에펨식 위계) */}
-      <span className="shrink-0 max-w-[7rem] truncate text-xs text-ink-muted">{mark}{post.userName}</span>
+      <span className="shrink-0 max-w-28 truncate text-xs text-ink-muted">{mark}{post.userName}</span>
       {/* 칭호 칩 미노출(2026-09-18 오너) — 아래 PostCard 주석 참고. 한 줄 행은 폭이 더 빠듯하다. */}
       <span className="hidden shrink-0 text-xs tabular-nums text-ink-muted sm:inline">{relativeTime(post.createdAt)}</span>
     </li>
@@ -141,7 +141,7 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
       // card-elev 는 background-image 라 hover 의 background-color 변화와 충돌하지 않는다.
       className={[
         // v2 아우라 카드(2026-09-02): card-elev+단색 → card-aura(반투명 면·6% 헤어라인·상단 하이라이트). 선택 상태는 바이올렛 틴트가 덮는다.
-        'cv-row-lg min-h-[var(--row-h-lg)] card-aura py-2.5 px-3 rounded-aura border cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300/60',
+        'cv-row-lg min-h-(--row-h-lg) card-aura py-2.5 px-3 rounded-aura border cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300/60',
         selected
           ? 'border-accent-300/60 bg-accent-300/[0.07]'
           : 'hover:border-border-strong hover:bg-surface-high/50 active:bg-surface-high',
@@ -197,7 +197,7 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
           )}
           {/* 본문 발췌 — 2줄 클램프 */}
           {/* §T1: 13px 은 사다리 밖 — 본문 미리보기 = t-desc(12.75/19.13). */}
-          <p className="t-desc text-ink-secondary line-clamp-2 mt-1 break-words">
+          <p className="t-desc text-ink-secondary line-clamp-2 mt-1 wrap-break-word">
             {(att.hand || att.replay) && (
               <span className="mr-1 inline-flex items-center gap-0.5 rounded-badge bg-accent-300/15 px-1 align-middle font-bold leading-none text-accent-300">
                 <Icon name={att.replay ? 'cards' : 'spade'} size={10} className="shrink-0" />

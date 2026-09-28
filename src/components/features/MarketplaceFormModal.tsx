@@ -152,7 +152,7 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
               <button
                 key={o.id} type="button" onClick={() => setCategory(o.id)}
                 className={[
-                  'min-h-[44px] px-1 inline-flex items-center justify-center text-xs font-semibold rounded-input border transition-colors focus:outline-none',
+                  'min-h-[44px] px-1 inline-flex items-center justify-center text-xs font-semibold rounded-input border transition-colors focus:outline-hidden',
                   category === o.id
                     ? 'bg-accent-300/20 border-accent-300 text-accent-300'
                     : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',

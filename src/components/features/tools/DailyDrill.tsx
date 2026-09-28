@@ -158,7 +158,7 @@ function ReasonBadge({ text, step, total }: { text: string; step: number; total:
 /** 같은 정보를 프리플랍 문제 위에 한 줄로(프리플랍 카드는 뱃지 자리가 없다) */
 function ReasonRow({ text, step, total }: { text: string; step: number; total: number }) {
   return (
-    <p className="flex items-center justify-between gap-2 rounded-input border border-accent-400/25 bg-accent-300/[0.04] px-2.5 py-1.5 text-2xs font-semibold text-accent-200">
+    <p className="flex items-center justify-between gap-2 rounded-input border border-accent-400/25 bg-accent-300/4 px-2.5 py-1.5 text-2xs font-semibold text-accent-200">
       <span className="truncate">{text}</span>
       <span className="shrink-0 tabular-nums text-ink-muted">{step}/{total}</span>
     </p>

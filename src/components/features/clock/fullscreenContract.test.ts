@@ -78,9 +78,9 @@ describe('전체화면은 조작 콘솔을 렌더하지 않는다', () => {
   });
 
   it('전체화면 stage 는 16:9 를 유지한다(정사각형으로 줄지 않는다)', () => {
-    expect(code).toContain('aspect-[16/9]');
+    expect(code).toContain('aspect-video');
     expect(code).toContain('max-w-[177.78vh]');   // 세로가 짧은 화면에서 폭을 제한 → 레터박스
-    expect(code).toContain('[container-type:size]'); // cqw/cqh 가 stage 기준으로 동작
+    expect(code).toContain('@container-size'); // cqw/cqh 가 stage 기준으로 동작
   });
 });
 
@@ -97,11 +97,11 @@ describe('운영자 미리보기는 TV 와 같은 얼굴을 쓴다', () => {
   });
 
   it('미리보기도 16:9 + container-type:size 를 갖는다(정사각형 압축 방지)', () => {
-    const i = code.indexOf('container-type:size');
+    const i = code.indexOf('@container-size'); // v4: [container-type:size] = @container-size
     expect(i, 'container-type:size 가 없다 — cq 단위가 미리보기에서 죽는다').toBeGreaterThan(-1);
     // 같은 className 배열 안(앞뒤 400자)에 비전체화면용 16:9 가 함께 있어야 한다
     const near = code.slice(Math.max(0, i - 400), i + 400);
-    expect(near, '비전체화면 분기에 aspect-[16/9] 가 없다 — 내용 높이대로 흘러 눌린다').toContain('aspect-[16/9]');
+    expect(near, '비전체화면 분기에 aspect-video 가 없다 — 내용 높이대로 흘러 눌린다').toContain('aspect-video');
   });
 
   it('🔴 크기 체계가 한 벌이다 — `fs ? cq단위 : 고정px` 이중 관리가 남지 않았다', () => {

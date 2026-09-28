@@ -96,13 +96,13 @@ function MixBar({ action }: { action: Required<ActionFrequency> }) {
     <div className="space-y-1.5">
       <div className="flex h-7 w-full overflow-hidden rounded-input bg-surface-high">
         {segs.map((s) => (s.v > 0 ? (
-          <div key={s.key} style={{ width: `${s.v * 100}%`, background: s.color }} className="transition-[width] duration-[var(--dur-panel)]" />
+          <div key={s.key} style={{ width: `${s.v * 100}%`, background: s.color }} className="transition-[width] duration-(--dur-panel)" />
         ) : null))}
       </div>
       <div className="flex items-center justify-between">
         {segs.map((s) => (
           <div key={s.key} className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: s.color }} />
+            <span className="h-2.5 w-2.5 rounded-xs" style={{ background: s.color }} />
             <span className="text-2xs text-ink-secondary">{s.label}</span>
             <span className="text-2xs font-bold tabular-nums text-ink-primary">{Math.round(s.v * 100)}%</span>
           </div>
@@ -284,11 +284,11 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
               7rem = 119px ≥ 라벨만 든 select 필요폭 116px. 11rem 상자는 특정 핸드에서 카드가 왼쪽에 붙어 윗줄 중심이
               −29~−53px 치우쳤고 320 에선 select 가 139px 로 줄어 옵션이 잘렸다(design-reviewer 실측).
               좁은 폭에선 Hero 상자만 줄어든다(최소 = 카드 두 장 폭) — select 는 줄지 않아 잘리지 않는다. */}
-          <div className="flex w-[7rem] shrink justify-end">
+          <div className="flex w-28 shrink justify-end">
             <Section title="Hero" target="hero" cards={deep.hero} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
           </div>
           <span className="pb-4 text-2xs font-bold text-ink-muted">vs</span>
-          <div className="w-[7rem] shrink-0">
+          <div className="w-28 shrink-0">
           {deep.villainMode === 'hand' ? (
             <Section title="Villain" target="villain" cards={deep.villain} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
           ) : (
@@ -385,7 +385,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
             ) : (
               <>
                 <div className="flex h-5 overflow-hidden rounded-input bg-surface-high">
-                  <div style={{ width: `${deep.equity.hero * 100}%` }} className="bg-accent-300 transition-[width] duration-[var(--dur-panel)]" />
+                  <div style={{ width: `${deep.equity.hero * 100}%` }} className="bg-accent-300 transition-[width] duration-(--dur-panel)" />
                 </div>
                 <div className="mt-1 flex justify-between text-2xs">
                   <span className="font-bold text-accent-300">Hero {Math.round(deep.equity.hero * 100)}%</span>

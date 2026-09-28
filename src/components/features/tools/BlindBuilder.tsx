@@ -34,7 +34,7 @@ export default function BlindBuilder() {
           <div className="flex gap-1.5">
             {([{ id: 'none', label: '없음' }, { id: 'bb', label: 'BB앤티' }] as const).map((a) => (
               <button key={a.id} type="button" onClick={() => setAnteMode(a.id)}
-                className={[CHIP_HIT, 'flex-1 h-[32px] rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
+                className={[CHIP_HIT, 'flex-1 h-[32px] rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-hidden',
                   anteMode === a.id ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
                 {a.label}
               </button>
@@ -61,7 +61,7 @@ export default function BlindBuilder() {
             {levels.map((l, i) => {
               if (l.kind === 'break') {
                 return (
-                  <tr key={i} className="border-t border-border-subtle bg-accent-300/[0.06]">
+                  <tr key={i} className="border-t border-border-subtle bg-accent-300/6">
                     <td colSpan={4} className="py-1.5 px-2 text-center font-bold text-accent-300">BREAK · {l.minutes}분</td>
                   </tr>
                 );
@@ -69,7 +69,7 @@ export default function BlindBuilder() {
               no += 1;
               const isRc = no === rc;
               return (
-                <tr key={i} className={`border-t border-border-subtle ${isRc ? 'bg-amber-500/[0.08]' : ''}`}>
+                <tr key={i} className={`border-t border-border-subtle ${isRc ? 'bg-amber-500/8' : ''}`}>
                   <td className="py-1.5 px-2 text-left font-bold text-ink-secondary">
                     {no}{isRc && <span className="ml-1 text-[9px] font-bold text-amber-400">레지마감</span>}
                   </td>

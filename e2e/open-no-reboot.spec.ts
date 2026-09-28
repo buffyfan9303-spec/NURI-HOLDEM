@@ -158,7 +158,7 @@ const RECORDER = () => {
   W.__OS = { seq: [], fb: 0, raf: 0 };
   const name = () => {
     // OverlayFallback = fixed inset-0 z-[45] aria-busy + 스피너. 클래스 이스케이프를 피해 속성 셀렉터로.
-    if (document.querySelector('[class*="z-[45]"][aria-busy="true"]')) { W.__OS.fb++; return '폴백'; }
+    if (document.querySelector('[class~="z-45"][aria-busy="true"]')) { W.__OS.fb++; return '폴백'; }
     const dlgs = Array.from(document.querySelectorAll('[role="dialog"]'))
       .filter((el) => (el as HTMLElement).offsetParent !== null || getComputedStyle(el).position === 'fixed');
     if (dlgs.length) {

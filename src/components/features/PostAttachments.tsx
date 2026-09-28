@@ -64,7 +64,7 @@ function PlayingCard({ card, style }: { card: Card; style?: CSSProperties }) {
       viewBox={`0 0 ${CARD_W} ${CARD_H}`}
       width={CARD_W}
       height={CARD_H}
-      className="absolute bottom-1 left-1/2 drop-shadow"
+      className="absolute bottom-1 left-1/2 drop-shadow-sm"
       style={style}
       aria-hidden
       focusable="false"
@@ -174,14 +174,14 @@ function HandResult({ hand }: { hand: HandAttachment }) {
         <div className="relative flex items-center gap-3">
           {/* 좌측 텍스트 — cards 없으면 전폭 */}
           <div className="min-w-0 flex-1 space-y-1.5">
-            <p className={`text-base font-bold leading-snug break-words ${tone.headline}`}>{hand.headline}</p>
+            <p className={`text-base font-bold leading-snug wrap-break-word ${tone.headline}`}>{hand.headline}</p>
             {hand.delta != null && hand.delta !== '' && (
               <span className={`inline-flex items-center rounded-badge border px-2 py-0.5 text-xs font-bold tabular-nums ${tone.chip}`}>
                 {hand.delta}
               </span>
             )}
             {hand.meta != null && hand.meta !== '' && (
-              <p className="text-2xs text-ink-muted break-words">{hand.meta}</p>
+              <p className="text-2xs text-ink-muted wrap-break-word">{hand.meta}</p>
             )}
           </div>
           {hasCards && <CardFan cards={cards} />}
@@ -250,7 +250,7 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
     <div className="card-sink rounded-card border border-border-default bg-surface-high p-3 space-y-2">
       <div className="flex items-start gap-1.5">
         <span className="mt-0.5 shrink-0 text-accent-200"><Icon name="chart" size={14} /></span>
-        <p className="min-w-0 flex-1 text-sm font-semibold text-ink-primary break-words">{poll.question}</p>
+        <p className="min-w-0 flex-1 text-sm font-semibold text-ink-primary wrap-break-word">{poll.question}</p>
         {closed && (
           <span className="shrink-0 rounded-badge bg-surface-low px-2 py-0.5 text-2xs font-bold text-ink-muted">마감됨</span>
         )}
@@ -292,7 +292,7 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
                   className={[
                     'absolute inset-y-0 left-0',
                     mine ? 'bg-accent-300/20' : 'bg-accent-300/10',
-                    'motion-safe:transition-[width] motion-safe:[transition-duration:var(--dur-panel)] motion-safe:[transition-timing-function:var(--ease)]',
+                    'motion-safe:transition-[width] motion-safe:duration-(--dur-panel) motion-safe:ease-(--ease)',
                   ].join(' ')}
                   style={{ width: `${pct}%` }}
                 />

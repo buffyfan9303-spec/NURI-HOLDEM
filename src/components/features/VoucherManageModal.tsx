@@ -517,7 +517,7 @@ ${cards}
 
       {/* 1) 매장이용권 발급 — 접기 */}
       {canIssue ? (
-        <div data-testid="voucher-issue" className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
+        <div data-testid="voucher-issue" className="rounded-input border border-accent-400/30 bg-accent-300/5">
           <h3 data-testid="voucher-issue-head" className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
             <span className="text-xs font-bold text-accent-300">매장이용권 발급 {/* 오너 2026-09-24: 제목 옆 '업주·공동운영자' 라벨은 PC 에서도 뺀다(모바일은 이미 없었다). 발급 권한 범위는
                   펼친 안의 안내 박스(data-testid=voucher-issue-scope)가 그대로 말한다 — e2e 가 그 박스를 본다. */}{/* 스윕②(2026-09-19): 이 배지는 '개', 바로 아래 한도 증액 패널(QuotaRequestPanel)은 '장' — 같은
@@ -531,7 +531,7 @@ ${cards}
                각 묶음은 '라벨 → 조작' 같은 문법(간격 6px). md 이상은 클래스가 전부 `max-md:`/`md:hidden` 이라 **무변경**. */
             <div className="space-y-1.5 px-2.5 pb-2.5 max-md:space-y-2.5">
               {!isAdmin && approvedErr == null && !approved && (
-                <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/[0.08] px-2 py-1.5 text-2xs text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 운영자 승인 후 발급할 수 있습니다.</p>
+                <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/8 px-2 py-1.5 text-2xs text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 운영자 승인 후 발급할 수 있습니다.</p>
               )}
               {!isAdmin && approvedErr != null && (
                 <LoadErrorCard what="발급 승인 상태" error={approvedErr} onRetry={reload} compact hint="승인 상태를 확인하기 전에는 발급할 수 없습니다." />
@@ -627,7 +627,7 @@ ${cards}
               {recvUserId ? (
                 <div className="max-md:space-y-1.5">
                   <p className="text-2xs font-semibold text-ink-secondary md:hidden">받는 손님 <span className="text-danger-light">필수</span></p>
-                  <div className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1.5 max-md:h-[44px]">
+                  <div className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/6 px-2.5 py-1.5 max-md:h-[44px]">
                     <span className="min-w-0 flex-1 truncate text-xs text-ink-primary">받는 손님: <b className="text-accent-300">{recvDisplay}</b></span>
                     <button type="button" onClick={() => { setRecvUserId(null); setRecvDisplay(''); }} className="shrink-0 text-2xs text-ink-muted max-md:-my-1.5 max-md:h-[44px] max-md:px-2">변경</button>
                   </div>
@@ -641,7 +641,7 @@ ${cards}
                       <span className="self-center text-2xs text-ink-muted">최근:</span>
                       {recentRecipients.map((r) => (
                         <button key={r.id} type="button" onClick={() => pickRecv(r)}
-                          className="inline-flex items-center gap-1 rounded-full border border-accent-400/30 bg-accent-300/[0.06] px-2 py-0.5 text-[11px] text-ink-secondary hover:border-accent-400/60 hover:text-accent-300">
+                          className="inline-flex items-center gap-1 rounded-full border border-accent-400/30 bg-accent-300/6 px-2 py-0.5 text-[11px] text-ink-secondary hover:border-accent-400/60 hover:text-accent-300">
                           <Icon name="user" size={11} /> {r.display}
                         </button>
                       ))}
@@ -674,7 +674,7 @@ ${cards}
                               <Icon name="user" size={12} className="shrink-0 text-ink-muted" />
                               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{c.label ?? c.display}</span>
                               {c.phoneMasked ? <span data-testid="cand-phone" className="shrink-0 text-2xs tabular-nums text-ink-muted">{c.phoneMasked}</span> : null}
-                              {unverified && <span className="shrink-0 rounded bg-danger/15 px-1.5 py-0.5 text-2xs font-bold text-danger-light">미인증 · 발급 불가</span>}
+                              {unverified && <span className="shrink-0 rounded-sm bg-danger/15 px-1.5 py-0.5 text-2xs font-bold text-danger-light">미인증 · 발급 불가</span>}
                             </button>
                           </li>
                         );
@@ -699,7 +699,7 @@ ${cards}
                       <span className="self-center text-2xs text-ink-muted">최근:</span>
                       {recentRecipients.map((r) => (
                         <button key={r.id} type="button" onClick={() => pickRecv(r)}
-                          className="inline-flex items-center gap-1 rounded-full border border-accent-400/30 bg-accent-300/[0.06] px-2 py-0.5 text-[11px] text-ink-secondary hover:border-accent-400/60 hover:text-accent-300">
+                          className="inline-flex items-center gap-1 rounded-full border border-accent-400/30 bg-accent-300/6 px-2 py-0.5 text-[11px] text-ink-secondary hover:border-accent-400/60 hover:text-accent-300">
                           <Icon name="user" size={11} /> {r.display}
                         </button>
                       ))}
@@ -714,7 +714,7 @@ ${cards}
               {/* Q2(2026-09-20) — 실행 전 매장/받는 회원/장수/사유/만료 최종 확인. 위 effect 가 내용이
                   바뀌거나(count/reason/expiry/recvUserId) 매장이 바뀌면 이 단계를 즉시 취소한다. */}
               {confirmOpen ? (
-                <div className="space-y-1.5 rounded-input border border-accent-400/50 bg-accent-300/[0.08] p-2.5 text-2xs">
+                <div className="space-y-1.5 rounded-input border border-accent-400/50 bg-accent-300/8 p-2.5 text-2xs">
                   <p className="font-bold text-accent-300">발급 확인</p>
                   <p>매장: <b className="text-ink-primary">{venueName ?? '우리 매장'}</b></p>
                   <p>받는 회원: <b className="text-ink-primary">{recvDisplay || '회원'}</b>{recvUserId && <span className="text-ink-muted"> · ID …{recvUserId.slice(-6)}</span>}</p>
@@ -766,7 +766,7 @@ ${cards}
 
       {/* 2) QR 코드 — 접기 */}
       {canIssue && qr && (
-        <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
+        <div className="rounded-input border border-accent-400/30 bg-accent-300/5">
           <button type="button" onClick={() => setQrOpen((v) => !v)} aria-expanded={qrOpen} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
             <span className="text-xs font-bold text-accent-300">매장 QR <span className="font-normal text-ink-secondary">· 이용권 · 출석 · 회원가입</span></span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', qrOpen ? 'rotate-180' : ''].join(' ')} />
@@ -780,27 +780,27 @@ ${cards}
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">이용권 사용 QR</p>
                   {srcOf(qr)
-                    ? <img src={srcOf(qr)} alt="매장 이용권 QR" width={130} height={130} className="rounded bg-white p-1.5" />
-                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
+                    ? <img src={srcOf(qr)} alt="매장 이용권 QR" width={130} height={130} className="rounded-sm bg-white p-1.5" />
+                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
                   <p className="text-center text-2xs leading-snug text-ink-secondary">손님이 스캔해 사용 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">출석 QR</p>
                   {srcOf(checkinQr)
-                    ? <img src={srcOf(checkinQr)} alt="출석 QR" width={130} height={130} className="rounded bg-white p-1.5" />
-                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
+                    ? <img src={srcOf(checkinQr)} alt="출석 QR" width={130} height={130} className="rounded-sm bg-white p-1.5" />
+                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
                   <p className="text-center text-2xs leading-snug text-ink-secondary">손님 스캔 → 출석 · 출석왕 집계 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">회원가입 QR</p>
-                  {signupQr && <img src={signupQr} alt="회원가입 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
+                  {signupQr && <img src={signupQr} alt="회원가입 QR" width={130} height={130} className="rounded-sm bg-white p-1.5" />}
                   <p className="text-center text-2xs leading-snug text-ink-secondary">스캔 시 회원가입 페이지로 이동</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">바인 요청 QR</p>
                   {srcOf(buyinQr)
-                    ? <img src={srcOf(buyinQr)} alt="바인 요청 QR" width={130} height={130} className="rounded bg-white p-1.5" />
-                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
+                    ? <img src={srcOf(buyinQr)} alt="바인 요청 QR" width={130} height={130} className="rounded-sm bg-white p-1.5" />
+                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
                   <p className="text-center text-2xs leading-snug text-ink-secondary">손님 스캔 → 참가 요청 → 장부에서 승인</p>
                 </div>
               </div>
@@ -836,7 +836,7 @@ ${cards}
       )}
       {canIssue && ownerOpen && statsErr != null && <LoadErrorCard what="보유자 통계" error={statsErr} onRetry={reload} compact />}
       {canIssue && ownerOpen && statsErr == null && stats && (
-        <div className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.07] via-surface-low to-surface-low p-3 space-y-2.5">
+        <div className="rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/[0.07] via-surface-low to-surface-low p-3 space-y-2.5">
           {/* V2(2026-09-24) — 타일은 유형별 통계의 **전체 기간 합계**로 다시 센다(B2). 옛 voucher_holder_stats 의 active_count 는
               만료분을 포함해 '잔여' 가 지갑·보유자 목록보다 컸다. 보유 회원 수만은 유형별로 더할 수 없어(한 사람이 여러 유형) 옛 값을 쓴다.
               유형별 조회가 실패하면(권한 42501 포함) 타일도 그리지 않는다 — 거짓 '0' 대신 오류 카드. */}
@@ -867,7 +867,7 @@ ${cards}
                       <span className="font-bold tabular-nums text-accent-300">{pct}%</span>
                     </div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-high">
-                      <div className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-300 transition-[width] duration-[var(--dur-panel)]"
+                      <div className="h-full rounded-full bg-linear-to-r/srgb from-accent-400 to-accent-300 transition-[width] duration-(--dur-panel)"
                         style={{ width: `${pct}%` }} />
                     </div>
                   </div>
@@ -979,7 +979,7 @@ ${cards}
                             </p>
                             <button type="button" disabled={busy || g.active.length === 0}
                               onClick={() => revokeGroup({ name: holderLabel(g), ids: g.active.map((v) => v.id) })}
-                              className="inline-flex h-11 shrink-0 items-center rounded-input border border-danger/40 bg-danger/[0.08] px-3.5 text-2xs font-bold text-danger-deep transition-colors hover:bg-danger/15 disabled:opacity-40 dark:text-danger-light">
+                              className="inline-flex h-11 shrink-0 items-center rounded-input border border-danger/40 bg-danger/8 px-3.5 text-2xs font-bold text-danger-deep transition-colors hover:bg-danger/15 disabled:opacity-40 dark:text-danger-light">
                               회수
                             </button>
                           </div>
@@ -1124,7 +1124,7 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
                     <span className={`shrink-0 rounded-badge px-1.5 py-0.5 font-bold ${b.cls}`}>{b.label}</span>
                     <span className="font-bold tabular-nums text-ink-secondary">{r.amount.toLocaleString()}장</span>
                     <span className="tabular-nums text-ink-muted">{r.createdAt.slice(0, 10)}</span>
-                    {r.adminNote && <span className="w-full break-words text-ink-muted">운영자: {r.adminNote}</span>}
+                    {r.adminNote && <span className="w-full wrap-break-word text-ink-muted">운영자: {r.adminNote}</span>}
                   </li>
                 );
               })}
