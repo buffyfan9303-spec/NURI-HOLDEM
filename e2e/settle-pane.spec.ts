@@ -67,6 +67,7 @@ async function openSettle(page: Page) {
   await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill(json({
     id: UID, name: '업주', nickname: '업주', role: 'venue_owner', approved: true, status: 'active',
     venue_id: VENUE, activity_points: 0, created_at: FAKE.user.created_at,
+    agreed_to_terms: true, consented_legal_version: 2,
   })));
   await page.route(/\/rest\/v1\/venues\?/, (r) => r.fulfill(json([{
     id: VENUE, name: '테스트 홀덤펍', region: '서울', address: '서울 강남구 1', owner_id: UID,

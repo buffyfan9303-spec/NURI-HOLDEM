@@ -43,7 +43,7 @@ async function open(page: Page, theme: 'dark' | 'light', login = false) {
   }, { t: theme, l: login, key: KEY, fake: FAKE });
   if (login) {
     await page.route(/\/auth\/v1\/user/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FAKE.user) }));
-    await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: UID, name: 'HDR', nickname: 'hdr', role: 'user', verified: false }) }));
+    await page.route(/\/rest\/v1\/profiles\?/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: UID, name: 'HDR', nickname: 'hdr', role: 'user', verified: false, agreed_to_terms: true, consented_legal_version: 2 }) }));
   }
   await stabilizeBackstack(page);
   await page.goto('/?tab=community');
