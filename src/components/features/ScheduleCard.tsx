@@ -9,6 +9,7 @@ import type { Schedule } from '../../api/schedules';
 import type { ViewMode } from '../atoms/ViewModeToggle';
 import { TICKET_WON } from '../../lib/units';
 import { posterFallbackBg } from '../../lib/posterFallbackBg';
+import { gameTypeLabel } from '../../lib/gameTypeLabel';
 
 // ── 유틸 ─────────────────────────────────────────────────────────────────────
 
@@ -389,8 +390,9 @@ function Metric({ label, value, tone, title }: { label: string; value: string; t
   title?: string }) {
   return (
     <div className="min-w-0 sm:min-w-18" title={title}>
-      <div className="text-[8.5px] font-bold uppercase leading-tight text-ink-muted wrap-anywhere min-[360px]:text-[9px]">{label}</div>
-      <div className={`text-[11px] font-extrabold leading-tight tracking-tight tabular-nums wrap-anywhere min-[360px]:text-xs min-[360px]:leading-4 ${tone ?? 'text-ink-primary'}`}>{value}</div>
+      {/* D6(2026-09-29): px → rem(`calc(Nrem/17)` = 루트 17px 에서 정확히 N px — 디자인 크기 불변, 루트 글자 크기를 따른다). */}
+      <div className="text-[calc(8.5rem/17)] font-bold uppercase leading-tight text-ink-muted wrap-anywhere min-[360px]:text-[calc(9rem/17)]">{label}</div>
+      <div className={`text-[calc(11rem/17)] font-extrabold leading-tight tracking-tight tabular-nums wrap-anywhere min-[360px]:text-xs min-[360px]:leading-4 ${tone ?? 'text-ink-primary'}`}>{value}</div>
     </div>
   );
 }
@@ -676,7 +678,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
   /** 클락 실측이 없어 '시작 시각 지남' 으로 떨어진 경우 — 추론이므로 경고색(빨강)을 쓰지 않는다. */
   const inferred = !regInfo;
   const sub = prizeText(schedule);
-  const meta = [schedule.format, schedule.duration, schedule.buyIn?.gameType].filter(Boolean).join(' · ');
+  const meta = [schedule.format, schedule.duration, gameTypeLabel(schedule.buyIn?.gameType)].filter(Boolean).join(' · ');
 
   return (
     <article
@@ -853,7 +855,14 @@ function TimetableCard({
     : regInfo ? (regInfo.onBreak ? '휴식' : regInfo.levelNo ? `L${regInfo.levelNo}` : '진행 중')
     : null;
   const dot = <span aria-hidden className="px-1 text-ink-muted">·</span>;
+  const venueId = schedule.venueId;
   return (
+    // 🔴 D2(2026-09-29 모바일 점검): 카드 기하 중심(390 에서 195,y)이 **매장명 버튼 글자 위**(x 93~227)에 떨어져
+    //   카드 가운데를 누르면 매장 페이지가 열렸다. 게다가 role=button 카드 안에 button 이 들어 있었다(nested-interactive).
+    //   → 매장 이동은 **로고(56×56) 자리의 형제 버튼**으로 옮긴다. 카드(article) 안에는 누를 수 있는 요소가 하나도 없고,
+    //     매장명 줄은 글자다(카드 탭 = 대회 상세). 매장 이동 기능은 로고 탭 + 상세 안 매장명 링크로 그대로 남는다.
+    //   ⚠ 이 래퍼(`data-card-cell`)가 목록의 격자 칸이다 — HomeTab HOME_LIST_GRID 의 홀수 끝 칸 선택자가 이것을 본다.
+    <div data-card-cell="" className="relative">
     <article
       onClick={() => onSelect(schedule)}
       data-date={schedule.date}
@@ -904,13 +913,12 @@ function TimetableCard({
           {titleWithoutGtd(schedule.title, !!gtd)}
         </h3>
         <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0 py-[3.25px]">
+          {/* 글자만 — 누름은 카드(상세)가 받는다. 매장 이동은 아래 로고 버튼(D2). */}
           <VenueLink
             pubName={schedule.pubName}
             region={schedule.region}
             wrap
             sizeCls="text-[0.6875rem]"
-            hitCls="relative z-10 mt-[-3.25px] pt-[3.25px] mb-[-4.25px] pb-[4.25px]"
-            onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
           />
           {schedule.isPremium && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-[10px] font-extrabold leading-none text-accent-200">TOP</span>}
           {rating && rating.count > 0 && (
@@ -964,6 +972,15 @@ function TimetableCard({
         </span>
       </div>
     </article>
+    {venueId && (
+      // 로고(PosterArea 56×56 · px-3 · 세로 가운데) 바로 위에 겹쳐 서는 매장 이동 버튼 — 카드의 **형제**라 중첩이 아니다.
+      //   누름면 56×56(≥ 44) · 카드 가운데(내용 칸)와는 x 로 떨어져 있다(로고 오른쪽 끝 ≈ 70px, 카드 중심 ≈ 195px @390).
+      <button type="button" data-testid="schedule-venue-link"
+        aria-label={`${schedule.pubName} 매장 페이지`}
+        onClick={() => onVenueClick(venueId)}
+        className="absolute left-3 top-1/2 h-[56px] w-[56px] -translate-y-1/2 rounded-[12px] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300" />
+    )}
+    </div>
   );
 }
 

@@ -8,6 +8,9 @@
 import { describe, it, expect } from 'vitest';
 import { buyinFinance, discountSummary, isBuyinExcluded, nonSplitSnapshot, splitMismatch, SNAPSHOT_SINCE, cardUnit, wonToMan, type LedgerBuyin , ledgerCounts, rowToBuyin } from './ledger';
 import { settlementReport } from '../lib/ledgerSettlement';
+import { ledgerMoney } from './ledger';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // 10만원 게임 · 카드 11만원(수수료 반영) · 할인 이벤트 2종(5만/3만)
 const SESSION = {
@@ -576,5 +579,39 @@ describe('애드온 — 바인과 분리된 돈', () => {
       expect(r.total.addon).toMatchObject({ count: 0, revenue: 0, unpaid: 0, ticketWon: 0 });
       expect(r.players[0]).toMatchObject({ paid: 100_000, unpaid: 0, moneyIn: 100_000 });
     }
+  });
+
+  // F1(2026-09-29) — 대시보드 '오늘 장부' KPI·미수 배너(ledgerMoney)는 정산 KPI 와 **같은 돈**을 말해야 한다.
+  it('ledgerMoney = 정산 KPI(완납 revenue + addon.revenue · 미수 unpaid + addon.unpaid)', () => {
+    const rows = [
+      row({ id: 'a', addon_method: 'cash', addon_unpaid: false, addon_amount: 30_000 }),
+      row({ id: 'b', player_name: '이', addon_method: 'card', addon_unpaid: true, addon_amount: 30_000 }),
+      row({ id: 'c', player_name: '박', is_unpaid: true }),
+      row({ id: 'd', player_name: '최', addon_method: 'ticket', addon_unpaid: false, addon_amount: 30_000 }),
+    ];
+    const m = ledgerMoney(rows, ADDON_SESSION);
+    const t = report(rows).total;
+    expect(m.paid).toBe(t.revenue + t.addon.revenue);
+    expect(m.unpaid).toBe(t.unpaid + t.addon.unpaid);
+    expect(m).toMatchObject({ paid: 330_000, unpaid: 130_000, entry: 4 }); // 애드온은 엔트리에 안 들어간다
+  });
+
+  it('애드온 미수만 있는 날 — 미수가 0 이 아니다(대시보드 미수 배너 조건 day.unpaid > 0)', () => {
+    const m = ledgerMoney([row({ addon_method: 'cash', addon_unpaid: true, addon_amount: 30_000 })], ADDON_SESSION);
+    expect(m.unpaid).toBe(30_000);
+    expect(m.paid).toBe(100_000);
+  });
+});
+
+// F1 배선 — 대시보드의 KPI(day)·배너가 ledgerMoney 를 거친다. 두 벌 합산식을 다시 만들면 여기서 막힌다.
+describe('대시보드 돈 배선(F1)', () => {
+  const src = readFileSync(join(process.cwd(), 'src/components/features/StoreDashboard.tsx'), 'utf8');
+  it('fin·todayGames 모두 ledgerMoney, 바인만 도는 금액 루프는 없다', () => {
+    expect(src).toMatch(/const fin = session \? ledgerMoney\(buyins, session\)/);
+    expect(src).toMatch(/= ledgerMoney\(bs, sx\)/);
+    expect(src).not.toMatch(/unpaid \+= f\.unpaid/);
+  });
+  it('미수 배너는 애드온 포함 day.unpaid 로 뜬다', () => {
+    expect(src).toMatch(/dayStarted && day\.unpaid > 0 && \(\s*<button[^>]*data-testid="unpaid-cta"/);
   });
 });

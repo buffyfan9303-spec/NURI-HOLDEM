@@ -111,9 +111,9 @@ test.describe('일정 줄의 세 갈래 클릭', () => {
 
   test('🔴 매장명을 누르면 **매장 페이지**로 간다 (포스터가 열리면 안 된다)', async ({ page }) => {
     const card = await openBrowse(page, false);
-    // 매장 줄의 첫 버튼이 VenueLink 다(TOP 배지는 span, 즐겨찾기는 그 뒤).
-    const venueBtn = card.locator('button').first();
-    await expect(venueBtn, '매장 링크 버튼을 못 찾았다').toContainText('누리 테스트 홀덤펍');
+    // D2(2026-09-29): 매장 버튼은 카드(article)의 형제 — 로고 자리. 카드 칸(부모)에서 접근 이름으로 **대상을 확인**하고 누른다.
+    const venueBtn = card.locator('xpath=..').getByRole('button', { name: /누리 테스트 홀덤펍 매장 페이지/ });
+    await expect(venueBtn, '매장 링크 버튼을 못 찾았다').toHaveCount(1);
     await venueBtn.click();
     await expect(
       page.getByRole('dialog', { name: /매장 페이지/ }),

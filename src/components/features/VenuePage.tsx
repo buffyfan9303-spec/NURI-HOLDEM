@@ -535,7 +535,7 @@ export default function VenuePage({
                   role="tab"
                   className={[
                     // §T1: 모바일 13px 는 사다리 밖 → text-xs(12.75). PC 는 페이지 주 탭이라 text-sm 유지.
-                    'lg:flex-1 whitespace-nowrap px-0.5 lg:px-2 py-3 text-xs lg:text-sm transition-colors text-center relative',
+                    'lg:flex-1 min-h-[44px] whitespace-nowrap px-0.5 lg:px-2 py-3 text-xs lg:text-sm transition-colors text-center relative',
                     // §T1 탭 굵기 규격: 비활성 600 / 활성 700. 굵기는 한쪽만 준다(semibold+bold 동시 지정 시 semibold 가 이긴다).
                     // 활성 색 accent-300 → accent-200: 다크에서 4.0:1(AA 미달)이던 것이 6.94:1 로 올라간다(실측).
                     active ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-secondary',

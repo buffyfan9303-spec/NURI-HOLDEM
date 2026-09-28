@@ -264,7 +264,9 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   if (!user) {
     return (
       // 비로그인 화면은 이 블록 하나가 곧 cohort 다 — 표식과 준비 신호를 같은 요소에 둔다.
-      <div data-main-enter data-main-enter-ready className="px-page-x py-section">
+      // D1(2026-09-29 · `?tab=calendar` 직접 진입 CLS 0.270): 폴백(.pane-reserve = 한 화면)이 이 짧은 카드로 바뀌며
+      //   사업자 푸터가 401px 위로 올라왔다. 같은 자리 예약을 여기서도 이어 받는다 — 폴백과 높이가 같아 푸터가 움직이지 않는다.
+      <div data-main-enter data-main-enter-ready className="pane-reserve px-page-x py-section">
         <section className="rounded-aura border card-aura p-6 text-center">
           <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-input tile-grad" aria-hidden>
             <Icon name="calendar" size={20} />
@@ -275,7 +277,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
           </p>
           {/* 막다른 길 금지 — 비로그인 모바일에서 이 화면이 5번째 칸이라 여기서 로그인으로 갈 수 있어야 한다 */}
           {onLogin && (
-            <button type="button" onClick={onLogin} className="btn-primary mt-4 w-full max-w-[220px] py-2.5 text-sm">
+            <button type="button" onClick={onLogin} className="btn-primary mt-4 min-h-[44px] w-full max-w-[220px] py-2.5 text-sm">
               로그인하기
             </button>
           )}

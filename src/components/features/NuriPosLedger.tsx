@@ -1460,12 +1460,14 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       </div>
 
       {/* 게임 요약 띠 — 현재 게임 핵심 지표 상단 고정(스크롤해도 보임, 모바일 라이브 운영용).
-          탭하면 정산바의 '정산 마감' 을 지목한다(정산바는 fixed 라 이미 화면에 있다 — 스크롤이 아니다). */}
+          탭하면 정산바의 '정산 마감' 을 지목한다(정산바는 fixed 라 이미 화면에 있다 — 스크롤이 아니다).
+          F4(2026-09-29): PC(lg+)는 헤더 밑에 상단 메뉴줄(GNB)이 하나 더 있어 --header-now 에 붙으면 띠가 통째로 가려졌다
+          (1280·1440 실측 y60~107, 5점 모두 GNB). 내 매장 사이드바·대시보드 바와 같은 --stack-top(헤더+GNB 실측)에 붙인다. */}
       {!closed && (
         <div role="button" tabIndex={0} title="탭하면 정산 마감 버튼으로"
           onClick={pointAtSettle}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pointAtSettle(); } }}
-          className="sticky top-(--header-now) z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-xs backdrop-blur-sm cursor-pointer sm:grid-cols-4">
+          className="sticky top-(--header-now) lg:top-[var(--stack-top,6.0625rem)] z-10 grid grid-cols-2 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-xs backdrop-blur-sm cursor-pointer sm:grid-cols-4">
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />
           {(() => {
@@ -3109,18 +3111,18 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             {isAddon ? '✓ 애드온 게임' : '애드온 없음'}
           </button>
           {isAddon ? (
-            <>
-              <div className="relative w-40 shrink-0">
+            <div className="flex min-w-64 max-w-88 flex-1 gap-2">
+              <div className="relative min-w-0 flex-1">
                 <input type="number" inputMode="numeric" value={addonStack || ''} onChange={(e) => setAddonStack(Math.max(0, parseInt(e.target.value, 10) || 0))}
                   placeholder="스택" aria-label="애드온 스택" className="input w-full text-sm pr-7 tabular-nums" />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">칩</span>
               </div>
-              <div className="relative w-40 shrink-0">
+              <div className="relative min-w-0 flex-1">
                 <input type="number" inputMode="numeric" min={0} step={1000} value={addonAmount || ''} onChange={(e) => setAddonAmount(Math.max(0, parseInt(e.target.value, 10) || 0))}
                   placeholder="가격" aria-label="애드온 가격(원)" data-testid="ledger-addon-price" className="input w-full text-sm pr-7 tabular-nums" />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
               </div>
-            </>
+            </div>
           ) : (
             <span className="text-2xs text-ink-muted leading-snug">애드온이 있으면 켜서 스택과 가격을 입력하세요.</span>
           )}
@@ -3314,8 +3316,9 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
   const submitSplit = () => onPickSplit({ cashAmount: cash, cardAmount: card, transferAmount: transfer, ticketCount: tkt, unpaidAmount: unpaidAmt, discountIndex: discIdx });
 
   // 셸은 Modal 원자(MODAL-03) — 뒤로가기·ESC(최상단 한 겹)·포커스 트랩·복원을 원자가 준다. 개별 ESC 리스너 금지.
+  // F2(2026-09-29): sm(408px)에선 할인 프리셋 3개가 세 줄로 접혀 애드온 줄이 1280×800 첫 화면 밖으로 밀렸다 — md 로 넓힌다(폰은 어차피 화면 폭).
   return (
-    <Modal open onClose={onClose} title={`${cell.entryNo}바인 · ${cell.playerName}`} variant="center" maxWidth="sm">
+    <Modal open onClose={onClose} title={`${cell.entryNo}바인 · ${cell.playerName}`} variant="center" maxWidth="md">
         <div className="p-3 space-y-2">
           {/* LEDGER-REDUCE-PASSWORD — 금액 축소·0원·가게지원·미수 전환처럼 매출이 줄어드는 수정은 취소 비밀번호로만 저장된다 */}
           {reduceAsk && onReduceConfirm && (
@@ -3465,6 +3468,13 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                 })}
               </div>
 
+              {/* 애드온 — 오너 원문(2026-09-28) "현금 완납/현금 미수 고르는 칸 맨 아래에". 수단 격자 **바로 밑**이다.
+                  F2(2026-09-29): 예전엔 가게지원·분납 버튼 밑(모달 맨 끝)이라 할인 프리셋 게임의 1280×800 첫 화면에서
+                  13.6/131.7px 만 보였다(스크롤 단서 없음). */}
+              {session.isAddon && onSetAddon && (
+                <AddonRow buyin={cell.buyin} amount={session.addonAmount ?? 0} busy={busy} onSet={onSetAddon} />
+              )}
+
               {/* 가게지원 — 수납이 없으므로 완납/미수 축 밖에 둔다.
                   ⚠ 할인은 다른 수단과 **같은 규칙**으로 받는다. 예전엔 여기만 0 을 강제해,
                      ledger.ts 의 support 분기(value = 단가−disc)가 도달 불가능한 죽은 코드였고
@@ -3481,9 +3491,6 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
                 분납 / 할인 상세 입력
               </button>
 
-              {session.isAddon && onSetAddon && (
-                <AddonRow buyin={cell.buyin} amount={session.addonAmount ?? 0} busy={busy} onSet={onSetAddon} />
-              )}
             </>
           ) : (
             <div className="space-y-2">
@@ -3579,7 +3586,7 @@ function PaymentModal({ cell, hasPw, canManage = false, session, onClose, onPick
   );
 }
 
-/** 애드온 한 줄(2026-09-28 오너) — 결제 칸 **맨 아래**. 기록된 바인에만 붙는다(애드온은 앉은 자리에 얹는 것).
+/** 애드온 한 줄(2026-09-28 오너) — 완납/미수 수단 격자 **바로 밑**. 기록된 바인에만 붙는다(애드온은 앉은 자리에 얹는 것).
  *  ⚠ 애드온은 바인 횟수·엔트리·얼리·총 칩에 들어가지 않는다 — 돈만 따로 센다(ledger.ts addonFinance). */
 const ADDON_OTHER: { key: string; method: AddonMethod; unpaid: boolean; label: string }[] = [
   { key: 'card', method: 'card', unpaid: false, label: '카드 완납' }, { key: 'card-u', method: 'card', unpaid: true, label: '카드 미수' },

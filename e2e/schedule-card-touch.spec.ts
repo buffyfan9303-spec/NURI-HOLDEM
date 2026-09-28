@@ -80,18 +80,33 @@ for (const width of [390, 360]) {
       });
     }
 
-    test(`🟢 ${width} ${where} 매장명 터치 → 매장 페이지 · 히트 박스 ≥ 24px (AA)`, async ({ page }) => {
+    // 🔴 D2(2026-09-29 모바일 점검) — 카드 **기하 중심**을 누르면 대회 상세다. 종전엔 중심이 매장명 버튼 글자(x 93~227 @390) 위라
+    //   매장 페이지가 열렸다(수정 전 빌드에서 이 테스트가 FAIL — 음성 대조). 카드 안에 누를 수 있는 요소가 없어야 한다(중첩 0).
+    test(`🔴 ${width} ${where} 카드 가운데 터치 → 일정 상세 · 카드 안 중첩 버튼 0`, async ({ page }) => {
       const card = await open(page, where, width);
-      const venue = card.getByTestId('schedule-venue-link');
-      await expect(venue, '매장 링크가 없다(venue_id 픽스처 확인)').toHaveCount(1);
+      expect(await card.locator('button, a[href], select, input').count(), 'role=button 카드 안에 또 누를 수 있는 요소가 있다(nested-interactive)').toBe(0);
+      const box = await card.boundingBox();
+      expect(box).not.toBeNull();
+      await finger(page, box!.x + box!.width / 2, box!.y + box!.height / 2, 8);
+      await page.waitForTimeout(1500);
+      await expect(venueDialog(page), '카드 가운데를 눌렀는데 매장 페이지가 열렸다').toHaveCount(0);
+      await expect(detail(page), '카드 가운데를 눌렀는데 일정 상세가 안 열렸다').toBeVisible({ timeout: 10_000 });
+    });
+
+    test(`🟢 ${width} ${where} 로고(매장 버튼) 터치 → 매장 페이지 · 누름면 ≥ 44px`, async ({ page }) => {
+      const card = await open(page, where, width);
+      // 매장 버튼은 카드(article)의 **형제**다(중첩 금지 — D2). 카드 칸(data-card-cell) 안에서 찾는다.
+      const venue = card.locator('xpath=..').getByTestId('schedule-venue-link');
+      await expect(venue, '매장 버튼이 없다(venue_id 픽스처 확인)').toHaveCount(1);
+      await expect(venue).toHaveAccessibleName(/누리 터치 홀덤펍 매장 페이지/);
       const box = await venue.boundingBox();
       expect(box).not.toBeNull();
-      // 실제 박스(의사요소 아님) — 제목·③줄과 겹치지 않으면서 WCAG 2.2 SC 2.5.8 AA 24px
-      expect(box!.height, `매장 링크 히트 박스 ${box!.height.toFixed(2)}px < 24`).toBeGreaterThanOrEqual(24);
-      await finger(page, box!.x + Math.min(box!.width / 2, 40), box!.y + box!.height / 2, 8);
-      await expect(venueDialog(page), '매장명을 터치했는데 매장 페이지가 안 열렸다').toBeVisible({ timeout: 10_000 });
+      expect(box!.height, `매장 버튼 누름면 ${box!.height.toFixed(2)}px < 44`).toBeGreaterThanOrEqual(44);
+      expect(box!.width, `매장 버튼 누름면 ${box!.width.toFixed(2)}px < 44`).toBeGreaterThanOrEqual(44);
+      await finger(page, box!.x + box!.width / 2, box!.y + box!.height / 2, 8);
+      await expect(venueDialog(page), '로고(매장 버튼)를 터치했는데 매장 페이지가 안 열렸다').toBeVisible({ timeout: 10_000 });
       await page.waitForTimeout(1200);
-      await expect(detail(page), '매장명을 터치했는데 일정 상세까지 열렸다').toHaveCount(0);
+      await expect(detail(page), '로고(매장 버튼)를 터치했는데 일정 상세까지 열렸다').toHaveCount(0);
     });
   }
 }

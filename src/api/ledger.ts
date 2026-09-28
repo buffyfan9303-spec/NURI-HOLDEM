@@ -329,6 +329,20 @@ export function addonTotals(buyins: readonly Pick<LedgerBuyin, 'addonMethod' | '
   }
   return t;
 }
+/** 한 게임(같은 세션의 바인들)의 화면용 돈 합계 — 대시보드 '오늘 장부' KPI·미수 배너가 쓴다.
+ *  paid·unpaid 는 **애드온 포함**이다(정산 '완납 매출 = revenue + addon.revenue' 와 같은 정의, ledgerSettlement.ts).
+ *  entry·ticket 은 바인만 — 애드온은 엔트리·T 에 안 들어간다. 2026-09-29 F1: 대시보드만 애드온을 빼고 세서
+ *  정산과 금액이 갈렸고, 애드온 미수만 있는 날엔 미수 배너가 아예 안 떴다. */
+export function ledgerMoney(buyins: readonly LedgerBuyin[], s: Parameters<typeof buyinFinance>[1]): { paid: number; unpaid: number; value: number; entry: number; ticket: number } {
+  const m = { paid: 0, unpaid: 0, value: 0, entry: 0, ticket: 0 };
+  for (const b of buyins) {
+    const f = buyinFinance(b, s);
+    m.paid += f.paid; m.unpaid += f.unpaid; m.value += f.value; m.entry += f.entry; m.ticket += f.ticketPaid;
+  }
+  const a = addonTotals(buyins);
+  m.paid += a.revenue; m.unpaid += a.unpaid;
+  return m;
+}
 
 /**
  * 분납 입력 검증 — 각 수단 합계가 **할인 적용금액과 일치**해야 저장할 수 있다.

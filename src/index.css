@@ -1843,6 +1843,15 @@ video {
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
   }
+  /* 왼쪽·양쪽 — 가로 레일을 밀어 앞쪽 칸이 잘렸을 때의 단서(D5 2026-09-29 · 순위 하위 탭이 스크롤 위치에 따라 붙인다) */
+  .scroll-fade-l {
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 1.75rem), transparent);
+    mask-image: linear-gradient(to left, #000 calc(100% - 1.75rem), transparent);
+  }
+  .scroll-fade-x {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 1.75rem, #000 calc(100% - 1.75rem), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 1.75rem, #000 calc(100% - 1.75rem), transparent);
+  }
 
   /* ── 스켈레톤 로더 ──────────────────────────────────── */
   /* MO-5: shimmer(background-position 무한 애니 = 매 프레임 페인트 폭탄)를 pulse(opacity 전용,

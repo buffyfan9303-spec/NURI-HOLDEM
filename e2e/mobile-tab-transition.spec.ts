@@ -624,10 +624,9 @@ test('🔴 R2 — 모바일은 공용 helper 가 스냅샷을 막고, 데스크�
   await dismissOverlays(page);
   const card = page.locator('article.cv-card-list').first();
   await expect(card, '일정 카드가 없어 매장 링크에 도달할 수 없다').toBeVisible({ timeout: 20_000 });
-  // 카드 안 첫 버튼이 매장명 링크다(`e2e/schedule-card-clicks.spec.ts` 와 같은 관례).
-  // 텍스트로 **대상을 확인**한 뒤 누른다 — 엉뚱한 버튼을 눌러 놓고 초록이 되는 것을 막는다.
-  const venueLink = card.locator('button').first();
-  await expect(venueLink, '카드 안 매장명 링크를 찾지 못했다').toContainText(VENUE_NAME);
+  // D2(2026-09-29): 매장 버튼은 카드의 형제(로고 자리)다 — 카드 칸(부모)에서 접근 이름으로 **대상을 확인**한 뒤 누른다.
+  const venueLink = card.locator('xpath=..').getByRole('button', { name: new RegExp(`${VENUE_NAME} 매장 페이지`) });
+  await expect(venueLink, '카드 칸의 매장 버튼을 찾지 못했다').toHaveCount(1);
   const beforeVenue = await page.evaluate(() => (window as unknown as { __vt: { n: number } }).__vt.n);
   await venueLink.click();
   await expect(page.locator('[data-venue-page], [role="dialog"]').first(),
@@ -646,8 +645,8 @@ test('🔴 R2 — 모바일은 공용 helper 가 스냅샷을 막고, 데스크�
   await dismissOverlays(page);
   const cardPc = page.locator('article.cv-card-list').first();
   await expect(cardPc).toBeVisible({ timeout: 20_000 });
-  const venueLinkPc = cardPc.locator('button').first();
-  await expect(venueLinkPc).toContainText(VENUE_NAME);
+  const venueLinkPc = cardPc.locator('xpath=..').getByRole('button', { name: new RegExp(`${VENUE_NAME} 매장 페이지`) });
+  await expect(venueLinkPc).toHaveCount(1);
   const beforeDesktop = await page.evaluate(() => (window as unknown as { __vt: { n: number } }).__vt.n);
   await venueLinkPc.click();
   await expect(page.locator('[data-venue-page], [role="dialog"]').first()).toBeVisible({ timeout: 15_000 });

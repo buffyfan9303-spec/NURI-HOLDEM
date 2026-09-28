@@ -6,7 +6,7 @@ import { getVenueWeeklyFunnel, type WeeklyFunnel } from '../../api/schedules';
 import { getMyStaffWage, type MyWage } from '../../api/staffSchedule';
 import type { Schedule } from '../../api/schedules';
 import { listStaleOpenSessions,
-  getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
+  getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, ledgerMoney, addonFinance, wonToMan, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
   getLastClosedRound, MAIN_GAME_SEQ, kstToday, type LastClosedRound, type PosterOpsSummary,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, ledgerCounts,} from '../../api/ledger';
@@ -398,21 +398,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   // ── 오늘 장부 집계 ──
   // fin.entry 는 **금액 엔트리**(소수), cnt 는 **횟수·인원**. 라벨과 반드시 짝을 맞춘다(오너 규칙 2026-09-11).
   const cnt = ledgerCounts(buyins);
-  const fin = buyins.reduce(
-    (a, b) => {
-      if (!session) return a;
-      const f = buyinFinance(b, session);
-      // 🔴 2026-09-20 오너 결정으로 **T 합계**로 돌린다.
-      //   오너 원문: "티켓 바인 건수면 티켓으로 바이인한 횟수인데 예를 들어 10만원짜리 3건이면 30T 잖아. T로 표기해."
-      //   종전(2026-09-05 감사)은 '발행 N장' 과 척도를 맞추려고 `ticketPaid > 0 ? 1 : 0` 로 **건수**를 셌다.
-      //   그래서 20T 짜리 바인 1건이 화면에 `1T` 로 나왔다 — 라벨은 T 인데 값은 건수였다.
-      //   ⚠ 아래 `weekTicket`(:641 부근)도 **같이** 바꿔야 한다. 한쪽만 바꾸면 같은 화면의 '오늘 회수'와
-      //     '7일 회수'가 서로 다른 척도가 되어 2026-09-18 에 고쳤던 '같은 라벨 다른 척도' 버그가 되돌아온다.
-      a.paid += f.paid; a.unpaid += f.unpaid; a.entry += f.entry; a.ticket += f.ticketPaid;
-      return a;
-    },
-    { paid: 0, unpaid: 0, entry: 0, ticket: 0 },
-  );
+  // F1(2026-09-29) — 돈은 ledgerMoney(바인 + 애드온)로 센다. 정산 KPI 와 같은 정의다.
+  const fin = session ? ledgerMoney(buyins, session) : { paid: 0, unpaid: 0, value: 0, entry: 0, ticket: 0 };
+  // 🔴 fin.ticket 은 **T 합계**다(2026-09-20 오너: "10만원짜리 3건이면 30T 잖아. T로 표기해.") —
+  //   ledgerMoney 가 ticketPaid 를 그대로 더한다. 건수(`ticketPaid > 0 ? 1 : 0`)로 되돌리지 마라.
+  //   ⚠ 아래 `weekTicket` 도 같은 척도여야 한다 — 한쪽만 바꾸면 '같은 라벨 다른 척도' 버그가 되돌아온다.
   const started = !!session?.openedAt;
   // PL3①: 마지막 마감 회차 — '지난 게임 그대로 열기' 1탭(오늘 장부 미시작일 때 지금 할 일 후보)
   const [lastRound, setLastRound] = useState<LastClosedRound | null>(null);
@@ -464,7 +454,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
 
   // ── 오늘 게임별 운영 표(§5 다섯 번째 행) ─────────────────────────────────────
   //   새 조회를 만들지 않는다 — range 는 이미 14일치 전 게임을 담고 있고, venueClocks 도 이미 있다.
-  //   ⚠ 집계는 반드시 정본 함수로: 횟수·인원은 ledgerCounts, 금액은 buyinFinance.
+  //   ⚠ 집계는 반드시 정본 함수로: 횟수·인원은 ledgerCounts, 금액은 ledgerMoney(buyinFinance + addonTotals).
   //     표시용으로 여기서 합산식을 새로 만들면 장부·정산과 숫자가 갈린다(오너 규칙 2026-09-11).
   //   ⚠ 이 값은 아래 stepInfo 5번(정산) 칩의 판정에도 쓰이므로 stepInfo **앞**에 있어야 한다(TDZ).
   const todayGames = useMemo(() => {
@@ -472,11 +462,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     return rows.map((sx) => {
       const bs = range.buyins.filter((b) => b.sessionDate === d && b.gameSeq === sx.gameSeq);
       const c = ledgerCounts(bs);
-      let value = 0, unpaid = 0, paid = 0, entry = 0, ticket = 0;
-      for (const b of bs) {
-        const f = buyinFinance(b, sx);
-        value += f.value; unpaid += f.unpaid; paid += f.paid; entry += f.entry; ticket += f.ticketPaid;
-      }
+      const { value, unpaid, paid, entry, ticket } = ledgerMoney(bs, sx); // 애드온 포함(F1)
       const ck = venueClocks.find((x) => x.gameSeq === sx.gameSeq) ?? null;
       const ckLive = !!ck && (ck.running || ck.currentIndex > 0 || ck.endsAt != null);
       return { sx, c, value, unpaid, paid, entry, ticket, ck, ckLive };
@@ -661,7 +647,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       const s = sessByGame.get(`${b.sessionDate}#${b.gameSeq}`);
       if (!s) continue;
       const f = buyinFinance(b, s);
-      entry += 1; paid += f.paid;   // entry 는 여기서 **횟수**다(막대·객단가용)
+      entry += 1; paid += f.paid + addonFinance(b).revenue;   // entry 는 여기서 **횟수**다(막대·객단가용). 매출은 애드온 포함(통계 완납액과 같은 정의)
     }
     return { day, dow: DOW[new Date(day + 'T00:00:00').getDay()], entry: Math.round(entry), paid };
   });
@@ -689,7 +675,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     if (!prevSet.has(b.sessionDate)) continue;
     const s = sessByGame.get(`${b.sessionDate}#${b.gameSeq}`);
     if (!s) continue;
-    prevBuyins += 1; prevPaid += buyinFinance(b, s).paid;
+    prevBuyins += 1; prevPaid += buyinFinance(b, s).paid + addonFinance(b).revenue; // 이번 주(perDay)와 같은 척도 — 애드온 포함
   }
   const entryDelta = prevBuyins > 0 ? Math.round(((weekEntry - prevBuyins) / prevBuyins) * 100) : null;
   const paidDelta = prevPaid > 0 ? Math.round(((weekPaid - prevPaid) / prevPaid) * 100) : null;

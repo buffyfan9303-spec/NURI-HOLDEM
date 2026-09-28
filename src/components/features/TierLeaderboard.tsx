@@ -359,6 +359,25 @@ export default function TierLeaderboard() {
   useEffect(() => {
     centerInRail(railRef.current?.querySelector<HTMLElement>('[data-pill-active]'), railRef.current);
   }, [board]);
+  // D5(2026-09-29 모바일 점검): 390·360 에서 6칸 중 '순위 인증'이 반쯤('순위'까지만)·'상점'이 통째로 가려졌는데
+  //   스크롤 단서가 없어 반쪽 라벨이 다른 탭 이름처럼 읽혔다. 오른쪽에 가려진 칸이 **남아 있을 때만** 끝을 흐린다
+  //   (.scroll-fade-r — 일정 탐색 칩 레일과 같은 문법). 끝까지 밀면 흐림이 걷혀 마지막 칸이 온전히 보인다.
+  //   반대로 밀어 둔 상태면 왼쪽에 잘린 칸('입상' → '상')이 생기므로 왼쪽도 같은 규칙으로 흐린다.
+  //   ResizeObserver: keep-alive 로 숨은 채(폭 0) 마운트됐다가 보이게 될 때도 다시 잰다.
+  const [railMore, setRailMore] = useState<'' | 'scroll-fade-r' | 'scroll-fade-l' | 'scroll-fade-x'>('');
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el) return;
+    const upd = () => {
+      const l = el.scrollLeft > 1, r = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setRailMore(l && r ? 'scroll-fade-x' : r ? 'scroll-fade-r' : l ? 'scroll-fade-l' : '');
+    };
+    upd();
+    el.addEventListener('scroll', upd, { passive: true });
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(upd);
+    ro?.observe(el);
+    return () => { el.removeEventListener('scroll', upd); ro?.disconnect(); };
+  }, []);
   // 순위표 행의 닉네임 색 — rows 가 바뀔 때만 일괄 조회한다(행마다 부르지 않는다).
   const [rowNickTokens, setRowNickTokens] = useState<Record<string, string>>({});
   // 충성도 허브 — 주간 리그/업적/미션/명예의 전당(보드 진입 시 1회 로드)
@@ -948,7 +967,7 @@ export default function TierLeaderboard() {
 
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
-        <div ref={railRef} data-rank-tabbar className="relative flex items-center gap-1 bg-surface-high rounded-input px-0.5 mb-1.5 overflow-x-auto scrollbar-none">
+        <div ref={railRef} data-rank-tabbar className={['relative flex items-center gap-1 bg-surface-high rounded-input px-0.5 mb-1.5 overflow-x-auto scrollbar-none', railMore].join(' ')}>
           {/* 오너 지시(2026-08-28): 구 pill(그라데이션 배경) 제거 — 커뮤니티 서브탭과 같은
               밑줄(underline) 문법. 활성은 미끄러지는 2px 밑줄 + 잉크색·굵기. */}
           {/* 44px 터치 타깃(#15): overflow-x 레일이라 .hit/.tap-y-44 의 바깥 확장은 세로 오버플로가 된다 —
