@@ -51,6 +51,8 @@ import MarqueeText from '../atoms/MarqueeText';
 import { useToast } from '../atoms/Toast';
 import { tierCss } from '../atoms/TierBadge';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBlocks } from '../../contexts/BlockContext';
+import { isAuthorShown } from '../../lib/postVisible';
 import { promptLogin } from '../../lib/requireLogin';
 import { filterContent } from '../../lib/content-filter';
 import {
@@ -599,7 +601,9 @@ export default function CommunityShoutBar({ className }: { className?: string })
     setOpen(true);
   };
 
-  const list = useMemo(() => shouts ?? [], [shouts]);
+  // 차단한 사람의 외침은 송출하지 않는다(그 20초는 기본 문구로 내려간다). 내 외침은 가리지 않는다 — lib/postVisible 한 벌
+  const { isBlocked } = useBlocks();
+  const list = useMemo(() => (shouts ?? []).filter((s) => isAuthorShown(s.userId, isBlocked, user?.id)), [shouts, isBlocked, user?.id]);
   const now = useShoutClock(list);
 
   // 아직 방송이 끝나지 않은 것들 = 지금 화면이 책임지는 대기열(서버가 plays_at 오름차순으로 준다).

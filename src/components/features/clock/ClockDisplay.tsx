@@ -30,11 +30,15 @@ import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, type ClockTheme } from './clockTheme';
 import Icon from '../../atoms/Icon';
+import { useServerTimeReady } from '../../../lib/useServerTimeReady';
 
 export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose }: {
   venueId: string; gameSeq?: number; venueName?: string; onClose: () => void;
 }) {
   const [clocks, setClocks] = useState<ClockState[] | null>(null);
+  // K8(2026-09-29 실측) — 서버 시각 첫 측정이 끝나기 전엔 보드를 그리지 않는다. +5분 TV 가 첫 1,002ms 동안
+  //   기기 시계로 'LEVEL 2 17:59' 를 그렸다가 'LEVEL 1 02:58' 로 바뀌었다(측정이 실패해도 풀린다 — 화면이 비지 않는다).
+  const timeReady = useServerTimeReady();
   const [sel, setSel] = useState(gameSeq);
 
   // 클락 테마 — page_config.clockTheme → 루트 CSS 변수(기본 = 아우라).
@@ -201,11 +205,11 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
       style={{ ...clkVars, background: 'var(--clk-bg, #06080F)' }}>
       {/* 보드는 ClockStage 한 벌 — 운영자 화면(TournamentClock)과 **같은 마크업**이다.
           여기서 하는 일은 데이터(구독·폴링·테마·QR·광고)와 TV 전용 조작(게임 전환·전체화면·닫기)뿐이다. */}
-      {clocks === null || !g ? (
+      {clocks === null || !g || !timeReady ? (
         <>
           {/* 클락이 없어도 머리말은 그린다 — 위 tvControls 주석의 이유. */}
           <header className="flex h-[8cqmin] shrink-0 items-center justify-end gap-[1.6cqmin] px-[3cqmin]">{tvControls}</header>
-          {clocks === null ? (
+          {clocks === null || !timeReady ? (
             <div className="flex flex-1 items-center justify-center text-[3cqmin]" style={{ color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' }}>불러오는 중…</div>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-[2cqmin] text-center">

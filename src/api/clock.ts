@@ -3,7 +3,7 @@ import { supabase, IS_MOCK } from '../lib/supabase';
 import { mustAffect } from './_mustAffect';
 import { serverNow } from '../lib/serverTime';   // D1 — 클락 시각은 서버 기준(lib/serverTime)
 import { resubscribeStatus } from '../lib/realtimeResync';
-import { earlyTypeOf, ledgerCounts, markTournamentStart, type EarlyType, type LedgerBuyin } from './ledger';
+import { earlyTypeOf, ledgerCounts, markTournamentStart, getLedgerBuyins, getLedgerSession, type EarlyType, type LedgerBuyin } from './ledger';
 
 /** 얼리 판정에 필요한 세션 정보 */
 export interface EarlyWindow { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null }
@@ -50,9 +50,21 @@ export interface ClockLiveStats {
   alive: number; eliminations: number; totalStack: number; avgStack: number;
   buyInAmount?: number | null; // 바인 금액(원) — 연동 장부 세션값. 라이브 보드 표시용(공개).
   /** 클램프 전 얼리 카운트(장부 몫 + adjEarlies). 표시는 언제나 `earlies`(0 하한)를 쓴다.
-   *  리모컨 delta 합성(applyRemoteStatDelta)이 `Math.max(0, …)` 에서 잃어버린 정보를 되찾기 위한 기준값.
+   *  보정 하한(earlyAutoOf)이 `Math.max(0, …)` 에서 잃어버린 정보를 되찾기 위한 기준값.
    *  낡은 스냅샷에는 없을 수 있어 optional 이다(없으면 `earlies` 로 떨어진다 = 예전 동작). */
   earliesRaw?: number;
+  /** 🔴 K1·K3(2026-09-29) — **장부에서 온 몫만**. 저장된 live_stats 에서 믿는 것은 이것과 buyInAmount 뿐이다.
+   *  생존·엔트리·총칩·평균은 읽는 쪽이 이 몫 + 행의 열(adj_*·eliminations)로 composeLiveStats 한 벌에서 합성한다.
+   *  예전엔 화면이 계산한 스냅샷 **전체**를 조건 없이 써서, 낡은 사본 하나가 남의 탈락·엔트리를 지웠다(동시 탈락 2→1, TV 9/10 고착).
+   *  없으면(이 필드 이전의 낡은 스냅샷) 스냅샷을 그대로 쓴다 = 예전 동작. */
+  ledger?: ClockLedgerPart;
+}
+
+/** 장부 파생분 — deriveClockCounts 결과 + 그 시점 설정으로 환산한 얼리 단위(서버 하한 계산용). */
+export interface ClockLedgerPart {
+  entries: number; rebuys: number; earlies: number; doubleEarlies: number; totalBuyins: number;
+  /** earlyUnitTotal(파생, 설정) — 서버 RPC clock_adjust_counts 가 얼리 보정 하한(−자동 몫)에 쓴다. */
+  earlyUnits: number;
 }
 
 export interface ClockState {
@@ -419,7 +431,7 @@ export function levelCatchUp(
 
 // ── 매퍼 ──────────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function rowToState(r: any): ClockState {
+function rowToStateRaw(r: any): ClockState {
   return {
     venueId: r.venue_id, gameSeq: r.game_seq ?? 1, sessionDate: r.session_date ?? null,
     title: r.title ?? '', config: (r.config ?? {}) as ClockConfig,
@@ -428,8 +440,15 @@ function rowToState(r: any): ClockState {
     adjEntries: r.adj_entries ?? 0, adjRebuys: r.adj_rebuys ?? 0,
     adjEarlies: r.adj_earlies ?? 0, adjAddons: r.adj_addons ?? 0,
     eliminations: r.eliminations ?? 0,
-    liveStats: (r.live_stats ?? null) as ClockLiveStats | null,
+    liveStats: null,
   };
+}
+// 🔴 K1(2026-09-29) — 읽는 즉시 합성한다. 그래서 TV·라이브 탭·홈 카드·대시보드·일정 카드처럼 `liveStats` 를 읽기만 하는
+//   소비처는 한 줄도 안 고쳐도 '장부 몫 + 행의 열' 로 계산된 값을 본다(저장된 전체 스냅샷을 믿지 않는다).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToState(r: any): ClockState {
+  const s = rowToStateRaw(r);
+  return { ...s, liveStats: composeLiveStats({ ...s, liveStats: (r.live_stats ?? null) as ClockLiveStats | null }) };
 }
 
 // ── 프리셋 ────────────────────────────────────────────────────────────────────
@@ -536,7 +555,10 @@ export async function saveClockLiveStats(venueId: string, gameSeq: number, liveS
  *  왜 전 행 upsert 를 버리나: saveClockState 는 이 기기가 들고 있는 사본 **전체**를 다시 쓴다. 리모컨·장부 리모컨 바·PC 가
  *  같은 행을 쓰는데, 한쪽의 [아웃] 이 다른 쪽의 낡은 사본(탈락 0·옛 레벨·옛 ends_at)으로 되돌아갔다.
  *  base(서버가 마지막으로 받아 준 값) 대비 달라진 칸만 보내면 남이 바꾼 칸은 건드리지 않는다.
- *  ⚠ 같은 칸을 두 기기가 동시에 ±1 하면 여전히 마지막 writer 가 이긴다(절대값 쓰기) — 원자 증감은 서버 RPC 몫이다. */
+ *
+ *  🔴 K1(2026-09-29 실측) — 카운트 열(탈락·보정)과 live_stats 는 **여기서 쓰지 않는다.**
+ *    절대값 쓰기라 두 리모컨의 동시 [탈락] 이 1건으로 합쳐졌고(2A: 2→1), 잠든 폰의 [탈락] 한 번이 그 사이 3건을 지웠다(2C: 4→1).
+ *    카운트는 clockCountDeltas → 서버 원자 RPC(clock_adjust_counts, `x = x + d`) 로, live_stats 는 장부 파생 작성기(writeLedgerStats) 하나로만 간다. */
 export function clockPatchRow(base: ClockState, next: ClockState): Record<string, unknown> {
   const row: Record<string, unknown> = {};
   const put = (col: string, a: unknown, b: unknown) => { if (JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)) row[col] = b ?? null; };
@@ -547,14 +569,29 @@ export function clockPatchRow(base: ClockState, next: ClockState): Record<string
   put('running', base.running, next.running);
   put('ends_at', base.endsAt, next.endsAt);
   put('remaining_ms', base.remainingMs, next.remainingMs);
-  put('adj_entries', base.adjEntries, next.adjEntries);
-  put('adj_rebuys', base.adjRebuys, next.adjRebuys);
-  put('adj_earlies', base.adjEarlies, next.adjEarlies);
-  put('adj_addons', base.adjAddons, next.adjAddons);
-  put('eliminations', base.eliminations, next.eliminations);
-  put('live_stats', base.liveStats, next.liveStats);
   return row;
 }
+
+/** 카운트 열 — ClockState 키 ↔ RPC 인자. */
+const COUNT_FIELDS = [
+  ['eliminations', 'p_d_elim'], ['adjEntries', 'p_d_entries'], ['adjRebuys', 'p_d_rebuys'],
+  ['adjEarlies', 'p_d_earlies'], ['adjAddons', 'p_d_addons'],
+] as const;
+
+/** 이 기기가 누른 카운트 **차분**(next − base). 없으면 null. 차분이라 다른 기기의 변경과 더해진다(덮지 않는다). */
+export function clockCountDeltas(base: ClockState, next: ClockState): Record<string, number> | null {
+  const out: Record<string, number> = {};
+  let any = false;
+  for (const [k, p] of COUNT_FIELDS) {
+    const d = (next[k] ?? 0) - (base[k] ?? 0);
+    out[p] = d;
+    if (d !== 0) any = true;
+  }
+  return any ? out : null;
+}
+
+/** 서버 원자 증감이 아직 배포되지 않았다(42883/PGRST202). 예전 절대값 쓰기로 떨어지지 않는다 — 떨어지면 K1 이 되살아난다. */
+export const CLOCK_COUNT_RPC_MISSING_TEXT = '서버에 인원 조정 기능(clock_adjust_counts)이 아직 적용되지 않아 저장하지 못했습니다 — 관리자에게 알려 주세요';
 
 /** 다른 기기가 먼저 클락을 바꿔서 이 조작을 적용하지 않았다(D2 CAS 0행). 호출부는 되돌리고 다시 읽는다. */
 export const CLOCK_STALE_TEXT = '다른 기기에서 클락을 먼저 바꿨습니다 — 최신 상태로 다시 불러옵니다';
@@ -574,6 +611,17 @@ export function clockPatchTouchesControl(row: Record<string, unknown>): boolean 
  *    0행이면 CLOCK_STALE_TEXT 로 던진다 — 저장기(createCoalescingSaver)가 되돌리고 idle 에서 다시 읽는다. */
 export async function saveClockPatch(base: ClockState, next: ClockState): Promise<void> {
   if (IS_MOCK) return;
+  // 카운트 먼저 — 원자 증감은 순서와 무관하게 더해지므로 제어 CAS 가 막혀도 누른 인원은 잃지 않는다.
+  //   (제어가 실패해 화면이 되돌아가도, 다음 탭은 '지금 화면 대비 차분' 이라 같은 탭이 두 번 더해지지 않는다.)
+  const deltas = clockCountDeltas(base, next);
+  if (deltas) {
+    const { error } = await supabase.rpc('clock_adjust_counts', { p_venue_id: next.venueId, p_game_seq: next.gameSeq ?? 1, ...deltas });
+    if (error) {
+      const code = (error as { code?: string }).code;
+      if (code === '42883' || code === 'PGRST202') throw new Error(CLOCK_COUNT_RPC_MISSING_TEXT);
+      throw error;
+    }
+  }
   const row = clockPatchRow(base, next);
   if (Object.keys(row).length === 0) return;
   const payload = { ...row, updated_at: new Date().toISOString() };
@@ -748,7 +796,7 @@ export function earlyUnitTotal(
  *    adjEarlies 를 음수로 크게 내리면 '자동'이 통째로 `|adjEarlies|` 로 고정됐다(자동 0 일 때도 5).
  *    클램프 전 값(earliesRaw)에서 빼야 정확히 `earlyUnitTotal` 이 복원된다.
  *  ⚠ `?? ls.earlies` 는 earliesRaw 가 없던 **낡은 스냅샷**용 폴백이다 — 그 경로에서는 구 동작과 같다
- *    (applyRemoteStatDelta 의 같은 폴백과 동일한 취급). */
+ *    (낡은 스냅샷은 composeLiveStats 도 그대로 쓴다). */
 export function earlyAutoOf(
   ls: Pick<ClockLiveStats, 'earlies' | 'earliesRaw'> | null | undefined,
   adjEarlies: number | null | undefined,
@@ -801,15 +849,15 @@ export function clampAdjCount(auto: number, currentAdj: number | null | undefine
 /** 라이브 통계 스냅샷 계산(클락 디스플레이 + 라이브 보드 공통). */
 export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: ClockConfig): ClockLiveStats {
   // ⚠ 여기서 Math.max(0, …) 로 자르지 **않는다**(2026-09-17 시도 후 철회).
-  //   applyRemoteStatDelta 는 이 스냅샷(canon)에 차분을 엹는다 — 여기서 잘라 버리면
-  //   차분의 기준점이 사라져 리모컨과 PC 값이 갈라진다(얼리가 earliesRaw 를
+  //   earlyAutoOf 는 이 값(earliesRaw)에서 보정을 되뺀다 — 여기서 잘라 버리면
+  //   자동 몫을 되찾을 기준이 사라진다(얼리가 earliesRaw 를
   //   따로 들고 다니는 이유다). 음수는 **쓰기 쪽 하한**(clampAdjCount)으로 막는다 —
   //   그러면 버튼으로 도달 가능한 상태에서 이 값이 애초에 음수가 되지 않는다.
   //   (라이브 실측 2026-09-17: clock_states 1행 · 음수 보정 0건 — 난한 난 행이 없다.)
   const entries = derived.entries + st.adjEntries;
   const rebuys = derived.rebuys + st.adjRebuys;
   // ⚠ 얼리는 인원이 아니라 기준칩 배수의 합(#21). 수기 보정은 그대로 '단위' 가산이다.
-  // 클램프 전 값을 함께 남긴다 — 리모컨이 이 스냅샷에 차분을 얹을 때 기준이 된다(아래 applyRemoteStatDelta).
+  // 클램프 전 값을 함께 남긴다 — 보정 하한(earlyAutoOf)의 기준이 된다.
   const earlyAuto = earlyUnitTotal(derived, cfg);
   const earliesRaw = earlyAuto + st.adjEarlies;
   const earlies = Math.max(0, earliesRaw);
@@ -831,46 +879,79 @@ export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: Cl
   return { entries, rebuys, earlies, earliesRaw, addons, alive, eliminations: st.eliminations, totalStack, avgStack };
 }
 
-/** 리모컨 전용 — 정본 스냅샷에 '상태에서만 오는' 변화분(adj*·eliminations)만 얹는다.
- *
- *  왜 필요한가(2026-09-13 재현): C02 로 리모컨이 장부 연동 클락의 liveStats 를 아예 손대지 않게 했더니,
- *  리모컨으로 누른 탈락·보정이 TV 보드에 **영원히** 반영되지 않았다. ClockDisplay 는 liveStats.alive 를
- *  그대로 읽고(ClockDisplay.tsx: `g?.liveStats ?? ...` — 스냅샷이 있으면 폴백 계산을 쓰지 않는다),
- *  남은 유일한 쓰기 경로인 TournamentClock 의 디바운스 effect 는 deps 가 derivedKey(장부 카운트+바인단가)
- *  뿐이라 eliminations/adj* 변화로는 발사되지 않는다 — PC 를 열어 둬도 갱신되지 않고, 무인 운영이면
- *  PC 자체가 없다(리모컨의 존재 이유가 무인 조작이다).
- *
- *  C02 를 어떻게 지키나: 장부 파생분(entries/rebuys/earlies 의 장부 몫·buyInAmount·totalStack 의 장부 몫)은
- *  정본 값을 **그대로** 두고, prev→next 의 adj*·eliminations **차이만** computeLiveStats 와 같은 식으로
- *  더한다. 차이만 쓰므로 리모컨이 진입 시 1회 읽은 낡은 buyins 는 결과에 전혀 들어가지 않는다.
- *  canon 이 없으면(null) 아직 정본 스냅샷이 없는 것이므로 그대로 null — 없는 기준에 delta 를 얹지 않는다. */
-export function applyRemoteStatDelta(
-  canon: ClockLiveStats | null | undefined,
-  prev: Pick<ClockState, 'adjEntries' | 'adjRebuys' | 'adjEarlies' | 'adjAddons'>,
-  next: Pick<ClockState, 'adjEntries' | 'adjRebuys' | 'adjEarlies' | 'adjAddons' | 'eliminations'>,
-  cfg: ClockConfig,
-): ClockLiveStats | null {
-  if (!canon) return null;
-  const dEntries = next.adjEntries - prev.adjEntries;
-  const dRebuys = next.adjRebuys - prev.adjRebuys;
-  const dEarlies = next.adjEarlies - prev.adjEarlies;
-  const dAddons = next.adjAddons - prev.adjAddons;
-  const entries = canon.entries + dEntries;
-  const rebuys = canon.rebuys + dRebuys;
-  // ⚠ canon.earlies 는 **이미 클램프된** 값이라 여기에 차분을 얹으면 식이 갈린다(2026-09-13 재현):
-  //    장부 얼리 0 · adjEarlies −5 → −3 이면 canon.earlies=0, 차분 +2 → 2. 직접 계산은 max(0, 0−3)=0.
-  //    리모컨의 [얼리 −] 는 `Math.max(-9999, …)` 까지 내려가므로 실제로 도달한다.
-  //    그래서 클램프 전 값(earliesRaw)을 기준으로 삼는다. 없는 낡은 스냅샷은 예전 동작으로 떨어진다.
-  const earliesRaw = (canon.earliesRaw ?? canon.earlies) + dEarlies;
-  const earlies = Math.max(0, earliesRaw);
-  const addons = canon.addons + dAddons;
-  const eliminations = next.eliminations;
-  const alive = Math.max(0, entries - eliminations);
-  // ⚠ 얼리 보정의 칩 환산은 computeLiveStats 의 adjChips 와 같은 식이어야 한다(단위 → 칩).
-  //   #11: 그쪽과 같이 **클램프된** 카운트 차분(earlies − canon.earlies)를 쓴다 — dEarlies 를 그대로
-  //   곱하면 0 에서 한 번 더 누른 [얼리 −] 가 카운트를 안 움직이면서 칩만 −5,000 씩 깎았다.
-  const totalStack = canon.totalStack + dEntries * cfg.startStack + dRebuys * cfg.rebuyStack
-    + dAddons * cfg.addonStack + (earlies - canon.earlies) * (earlyUnitChips(cfg) || cfg.earlyBonus);
-  const avgStack = alive > 0 ? Math.round(totalStack / alive) : 0;
-  return { ...canon, entries, rebuys, earlies, earliesRaw, addons, alive, eliminations, totalStack, avgStack };
+// ── 라이브 통계 합성·작성 — 단일 정본 (K1·K3·K4·K5, 2026-09-29) ─────────────────────────
+// 재발 7회 부류의 공통 원인은 하나였다: **화면이 공유 행의 파생값을 계산해 통째로 썼다.** 열 값(eliminations·adj_*)과
+// 그 파생 캐시(live_stats)를 기기마다 따로 계산해 쓰고, 쓰는 주체가 '지금 열린 화면' 이었다.
+//   · 카운트 열 → 서버 원자 증감(saveClockPatch → clock_adjust_counts)만.
+//   · live_stats → **장부 몫(ledger)** 만 믿는다. 작성은 writeLedgerStats 한 벌(장부·클락·리모컨·대시보드가 같은 함수를 부른다).
+//     장부 몫은 장부 행·세션·설정만으로 정해져 누가 먼저 쓰든 같다(멱등) — 작성자가 여럿이어도 서로를 덮지 않는다.
+//   · 표시(생존·엔트리·총칩·평균) → composeLiveStats 한 벌. rowToState 가 읽는 즉시 부른다.
+
+/** K4 — 얼리 판정 창 단일 정본. **장부 세션(대회 시작 시각 기준)** 이 있으면 그것만 쓰고, 세션이 없을 때만 클락 설정.
+ *  예전엔 클락 화면은 `설정 || 세션`, 장부는 `세션`, 리모컨은 `설정 || 세션` 이라 같은 바인에 얼리 8 / 0 을 번갈아 썼다(4D). */
+export function earlyWindowOf(
+  cfg: Pick<ClockConfig, 'earlyDoubleMin' | 'earlySingleMin'> | null | undefined,
+  session: EarlyWindow | null | undefined,
+): EarlyWindow {
+  if (session) {
+    return {
+      earlyDoubleMin: session.earlyDoubleMin ?? 0, earlySingleMin: session.earlySingleMin ?? 0,
+      tournamentStart: session.tournamentStart ?? null, openedAt: session.openedAt ?? null,
+    };
+  }
+  return { earlyDoubleMin: cfg?.earlyDoubleMin ?? 0, earlySingleMin: cfg?.earlySingleMin ?? 0, tournamentStart: null, openedAt: null };
+}
+
+const ZERO_LEDGER: DerivedCounts = { entries: 0, rebuys: 0, earlies: 0, doubleEarlies: 0, totalBuyins: 0 };
+
+/** 표시용 통계 합성 — **모든 화면**(TV·리모컨·대시보드·장부 바·라이브 탭·홈)이 이 한 벌을 쓴다.
+ *  · 장부 몫(ledger)이 있으면: 장부 몫 + 행의 열(adj_*·eliminations)로 다시 계산한다(저장된 alive·entries 는 안 믿는다).
+ *  · 장부 미연동(standalone): 열이 곧 전부다 — 한 번도 안 눌렀으면 null(시작 전 '0 / 0' 은 틀린 정보).
+ *  · 장부 몫이 없는 낡은 스냅샷: 그대로(예전 동작). 새 판의 장부·클락·리모컨·대시보드가 열리면 장부 몫이 채워진다. */
+export function composeLiveStats(g: Pick<ClockState, 'sessionDate' | 'config' | 'liveStats' | 'adjEntries' | 'adjRebuys' | 'adjEarlies' | 'adjAddons' | 'eliminations'>): ClockLiveStats | null {
+  const ls = g.liveStats ?? null;
+  const cfg = g.config;
+  if (!cfg || !Array.isArray(cfg.levels)) return ls;
+  const st = g as ClockState;
+  if (ls?.ledger) return { ...computeLiveStats(st, ls.ledger, cfg), buyInAmount: ls.buyInAmount ?? null, ledger: ls.ledger };
+  if (!g.sessionDate) {
+    const touched = !!ls || g.adjEntries !== 0 || g.adjRebuys !== 0 || g.adjEarlies !== 0 || g.adjAddons !== 0 || g.eliminations !== 0;
+    return touched ? { ...computeLiveStats(st, ZERO_LEDGER, cfg), buyInAmount: null } : null;
+  }
+  return ls;
+}
+
+/** 장부 몫으로 만든 **저장용** 스냅샷. 옛 필드(alive 등)도 같이 싣는 것은 아직 새로고침 안 한 옛 화면(TV 등)을 위한 것이다. */
+export function ledgerLiveStats(
+  s: ClockState, buyins: LedgerBuyin[], session: (EarlyWindow & { buyinAmount?: number | null }) | null,
+): ClockLiveStats {
+  const d = deriveClockCounts(buyins, earlyWindowOf(s.config, session));
+  const ledger: ClockLedgerPart = { ...d, earlyUnits: earlyUnitTotal(d, s.config) };
+  return { ...computeLiveStats(s, d, s.config), buyInAmount: session?.buyinAmount ?? null, ledger };
+}
+
+/** 두 스냅샷의 장부 몫이 같은가 — 같으면 쓰지 않는다(작성자가 여럿이어도 쓰기는 한 번). */
+export function sameLedgerPart(a: ClockLiveStats | null | undefined, b: ClockLiveStats | null | undefined): boolean {
+  return JSON.stringify([a?.ledger ?? null, a?.buyInAmount ?? null]) === JSON.stringify([b?.ledger ?? null, b?.buyInAmount ?? null]);
+}
+
+/** 장부 몫 작성기 — live_stats 를 쓰는 **유일한** 자리(시작 upsert 제외). 이미 같으면 쓰지 않고 false. */
+export async function writeLedgerStats(
+  s: ClockState, buyins: LedgerBuyin[], session: (EarlyWindow & { buyinAmount?: number | null }) | null,
+): Promise<boolean> {
+  if (!s.sessionDate) return false;
+  const next = ledgerLiveStats(s, buyins, session);
+  if (sameLedgerPart(next, s.liveStats)) return false;
+  await saveClockLiveStats(s.venueId, s.gameSeq, next);
+  return true;
+}
+
+/** 장부를 들고 있지 않은 화면(대시보드·리모컨)용 — 장부를 읽어 작성기에 넘긴다. 장부 미연동 클락은 아무것도 안 한다. */
+export async function syncClockLedgerStats(s: ClockState): Promise<boolean> {
+  if (IS_MOCK || !s.sessionDate) return false;
+  const [buyins, session] = await Promise.all([
+    getLedgerBuyins(s.venueId, s.sessionDate, s.gameSeq),
+    getLedgerSession(s.venueId, s.sessionDate, s.gameSeq),
+  ]);
+  return writeLedgerStats(s, buyins, session);
 }

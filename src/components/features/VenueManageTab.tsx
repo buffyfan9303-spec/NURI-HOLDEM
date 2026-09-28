@@ -48,6 +48,7 @@ import SlidingPill from '../atoms/SlidingPill';
 import { getSchedules, canManageVenueSchedules, type Schedule } from '../../api/schedules';
 import { getLedgerBuyins, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
+import { formatCountdown } from '../../lib/clockLevel';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 import { onColorInkClass } from '../../lib/color';
 import LedgerWorkspace from './LedgerWorkspace';
@@ -1317,7 +1318,7 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
   const eff = main ? effectiveLevel(main) : null;
   const lv = main && eff ? main.config.levels[eff.index] : undefined;
   const levelNo = main && eff ? main.config.levels.slice(0, eff.index + 1).filter((l) => l.kind === 'level').length : 0;
-  const mmss = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  const mmss = formatCountdown;   // K9 — 시간 글자 한 벌(lib/clockLevel, 올림)
   const alive = main?.liveStats?.alive;
   return (
     /* Aura LED(2026-09-10 §8-B) — '지금 이 매장이 돌고 있다'는 상태를 뒤에서 밝힌다.

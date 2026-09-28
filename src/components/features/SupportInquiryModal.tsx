@@ -60,7 +60,7 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="고객센터 · 1:1 문의" maxWidth="md" variant="sheet">
+    <Modal open={open} onClose={onClose} title="고객센터 · 1:1 문의" maxWidth="md" variant="sheet" fillHeight>
       <div className="space-y-4 p-4">
         {/* 접수 폼 */}
         <section className="space-y-2 rounded-aura border card-aura p-3">

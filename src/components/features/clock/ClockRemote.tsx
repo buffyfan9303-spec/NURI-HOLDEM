@@ -2,36 +2,30 @@
 //
 // 왜 따로인가: 운영자 클락(TournamentClock)은 PC 조작대 문법이라 스테퍼가 작고 촘촘하다. 플로어에 서서 폰으로
 // 누르는 리모컨은 **큰 버튼 몇 개**여야 한다 — START/STOP · 레벨 이전/다음 · ±1분 · 엔트리/리바이/얼리/애드온 · 탈락.
-// 저장 경로는 운영자 클락과 **같은 saveClockState** 이다. 쓰기 권한은 RLS(can_access_ledger)가 가른다 —
+// 저장 경로는 운영자 클락과 **같은 saveClockPatch** 이다. 쓰기 권한은 서버(can_access_ledger)가 가른다 —
 // 권한이 없으면 저장이 거절되고 화면은 읽기전용으로 남는다(여기서 권한을 새로 만들지 않는다).
-// (C02, 2026-09-12) liveStats 는 여기서 장부까지 **다시 계산해** 저장하지 않는다 — 장부 연동 클락은
-// buyins/session 을 진입 시 1회만 읽고 재구독이 없어서, 그 stale 값으로 계산한 통계가 정본(TournamentClock 이
-// 최신 장부로 갱신한 값)을 덮어썼다. 장부 미연동(standalone) 클락만 예외다 — 그 경우 derived 는 늘 빈 값(0)이라
-// stale 위험이 없고, 리모컨만으로 운영되는 클락의 라이브 보드 표시를 지키려면 여기서 계산해 붙여야 한다.
-// (2026-09-13 보정) 그런데 정본을 '그대로 흘리기'만 했더니 리모컨으로 누른 탈락·보정이 TV 보드에 아예
-// 반영되지 않았다(TV 는 liveStats.alive 를 읽고, 다른 쓰기 경로는 장부가 움직여야만 발사된다 — 무인이면
-// 갱신자가 아예 없다). 그래서 장부 파생분은 정본 그대로 두고 **state 에서만 오는 adj*·eliminations 의
-// 변화분만** 얹는다(api/clock.ts applyRemoteStatDelta). 낡은 buyins 는 결과에 들어가지 않는다.
+// 🔴 K1·K5(2026-09-29 실측) — 통계는 여기서 계산해 저장하지 않는다.
+//   · ± 는 카운트 열의 **차분**만 서버 원자 RPC 로 간다(saveClockPatch). 동시·잠든 기기의 탈락이 사라지지 않는다.
+//   · 표시는 TV 와 같은 composeLiveStats(장부 몫 + 행의 열) — 예전엔 진입 때 한 번 읽은 장부로 계산해 새 바인을 몰랐다(4C: 서버 6/6, 리모컨 5/5).
+//   · 장부 몫 스냅샷은 이 화면도 작성자 중 하나다(writeLedgerStats 한 벌 · 멱등) — 무인 운영에서 장부가 움직이면 TV 가 따라간다.
 // 진입: ?remote=<venueId>&g=<gameSeq> (TV 화면 하단 QR · 내 매장 클락 '휴대폰 리모컨' 버튼).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  getClockState, saveClockPatch, createCoalescingSaver, subscribeClock, effectiveLevel, levelMovePatch, computeLiveStats, deriveClockCounts,
-  applyRemoteStatDelta, clampAdjEarlies, clampAdjCount,
+  getClockState, saveClockPatch, createCoalescingSaver, subscribeClock, effectiveLevel, levelMovePatch, composeLiveStats,
+  syncClockLedgerStats, clampAdjEarlies, clampAdjCount,
   type ClockState,
 } from '../../../api/clock';
-import { clockPhase, CLOCK_PHASE_LABEL, levelNumberAt } from '../../../lib/clockLevel';
-import { getLedgerBuyins, getLedgerSession, type LedgerBuyin, type LedgerSession } from '../../../api/ledger';
+import { clockPhase, CLOCK_PHASE_LABEL, levelNumberAt, formatCountdown } from '../../../lib/clockLevel';
+import { subscribeLedger } from '../../../api/ledger';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../atoms/Toast';
 import Icon from '../../atoms/Icon';
 import { serverNow } from '../../../lib/serverTime';
 import { useResyncOnWake } from '../../../lib/realtimeResync';
+import { useClockSecond } from '../../../lib/clockTick';
+import { useServerTimeReady } from '../../../lib/useServerTimeReady';
 
-/** 리모컨 딥링크 — TV 화면 QR·내 매장 버튼이 같은 URL 을 쓴다 */
-const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
-const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
-// levelNumberAt 은 src/lib/clockLevel.ts 하나뿐이다 — 이 파일의 로컬 복제본이 msToRegClose 와
-// 같은 부류(2026-09-13)라 통합했다.
+// levelNumberAt · formatCountdown 은 src/lib/clockLevel.ts 하나뿐이다.
 
 export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, onLogin }: {
   venueId: string; gameSeq?: number; venueName?: string; onClose: () => void; onLogin?: () => void;
@@ -39,15 +33,13 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
   const { user } = useAuth();
   const toast = useToast();
   const [state, setState] = useState<ClockState | null | undefined>(undefined); // undefined=로딩 · null=클락 없음
-  const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
-  const [session, setSession] = useState<LedgerSession | null>(null);
   const [readOnly, setReadOnly] = useState(false); // 저장이 거절되면 켠다(권한 없음)
-  const [, setTick] = useState(0);
+  // K8 — 서버 시각 첫 측정 전엔 그리지 않는다(기기 시계로 레벨까지 틀린 첫 프레임). 버튼도 이때까지 안 보이므로 측정 전 쓰기가 없다.
+  const timeReady = useServerTimeReady();
+  useClockSecond(state, !!state);
 
-  // 🔴 CLOCK-TAP-LAG(오너 2026-09-24) — 예전엔 저장 중(busyRef) 탭을 **버렸다**: 왕복 300ms 안의 연타가 사라졌다.
-  //   그리고 자기 저장의 realtime 에코가 부른 재조회가 앞선 탭까지만 반영된 값으로 화면을 되돌렸다.
-  //   운영자 클락과 같은 저장기(api/clock.ts createCoalescingSaver)를 쓴다 — 연타 합치기·순서 보장·바뀐 칸만 UPDATE,
-  //   저장 대기 중 재조회는 버리고 연타가 끝나면 한 번 다시 읽는다.
+  // 🔴 CLOCK-TAP-LAG(오너 2026-09-24) — 운영자 클락과 같은 저장기(api/clock.ts createCoalescingSaver)를 쓴다 —
+  //   연타 합치기·순서 보장·바뀐 칸만, 저장 대기 중 재조회는 버리고 연타가 끝나면 한 번 다시 읽는다.
   const loadSeqRef = useRef(0);
   const reloadAfterSaveRef = useRef(false);
   const loadRef = useRef<() => void>(() => {});
@@ -84,43 +76,36 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
   // D2(2026-09-28) — 잠든 폰이 깨어났을 때 옛 화면에서 STOP/START 를 누르지 않게: 창 복귀·온라인 복귀·30초마다 다시 읽는다.
   //   (그래도 옛 화면에서 누르면 saveClockPatch 의 CAS 가 0행으로 막고 다시 읽는다.)
   useResyncOnWake(load, true, 30_000);
-  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
 
-  // 장부 연동 클락이면 라이브 통계 계산에 장부 바인·세션이 필요하다(운영자 클락과 같은 재료)
+  // 장부 연동 클락 — 장부가 움직이면 장부 몫 스냅샷을 다시 쓴다(K3·K5). 권한이 없으면 조용히 실패한다(표시는 TV 와 같은 값).
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; });
   const sessionDate = state?.sessionDate ?? null;
   useEffect(() => {
-    if (!sessionDate) { setBuyins([]); setSession(null); return; }
-    let alive = true;
-    getLedgerBuyins(venueId, sessionDate, gameSeq).then((b) => { if (alive) setBuyins(b); }).catch(() => {});
-    getLedgerSession(venueId, sessionDate, gameSeq).then((s) => { if (alive) setSession(s); }).catch(() => {});
-    return () => { alive = false; };
-  }, [venueId, sessionDate, gameSeq]);
+    if (!sessionDate || !user) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const run = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => { const s = stateRef.current; if (s?.sessionDate) void syncClockLedgerStats(s).catch(() => {}); }, 400);
+    };
+    run();
+    const off = subscribeLedger(venueId, run);
+    return () => { off(); if (t) clearTimeout(t); };
+  }, [venueId, sessionDate, gameSeq, user]);
 
   const cfg = state?.config;
-  const derived = useMemo(() => deriveClockCounts(buyins, {
-    earlyDoubleMin: cfg?.earlyDoubleMin || session?.earlyDoubleMin || 0,
-    earlySingleMin: cfg?.earlySingleMin || session?.earlySingleMin || 0,
-    tournamentStart: session?.tournamentStart ?? null,
-    openedAt: session?.openedAt ?? null,
-  }), [buyins, session, cfg?.earlyDoubleMin, cfg?.earlySingleMin]);
 
   // 낙관적 반영 + 같은 저장기. 거절(RLS)되면 읽기전용으로 전환하고 서버가 받아 준 값으로 되돌린다(saver.error).
+  // 표시 통계는 composeLiveStats 로 다시 합성한다(저장하지 않는다 — 카운트는 차분 RPC, 통계는 읽는 쪽이 합성).
   const persist = useCallback((patch: Partial<ClockState>) => {
     if (!state || !cfg) return;
     const moved = { ...state, ...patch };
-    // 장부 연동 클락은 정본 스냅샷을 기준으로 두고(장부 재계산 금지, C02) 이번 조작이 바꾼
-    // adj*·eliminations 차이만 얹는다 — 안 얹으면 리모컨 조작이 TV 보드에 영영 반영되지 않는다.
-    // 미연동(standalone) 클락은 derived 가 항상 빈 값이라 여기서 계산해도 stale 하지 않다.
-    // ⚠ 얹은 스냅샷을 **낙관 상태에도** 싣는다 — 안 실으면 다음 탭이 옛 스냅샷에 차분을 얹어 앞 탭 몫이 빠진다.
-    const liveStats = state.sessionDate
-      ? applyRemoteStatDelta(state.liveStats, state, moved, cfg)
-      : { ...computeLiveStats(moved, derived, cfg), buyInAmount: session?.buyinAmount ?? null };
-    const next = { ...moved, liveStats };
+    const next = { ...moved, liveStats: composeLiveStats(moved) };
     loadSeqRef.current++;               // 날아가던 조회 응답이 낙관값을 덮지 않게
     reloadAfterSaveRef.current = true;  // 연타가 끝나면 한 번 다시 읽어 다른 기기 변경과 맞춘다
     setState(next);
     saver.push(next, state);
-  }, [state, cfg, derived, session, saver]);
+  }, [state, cfg, saver]);
 
   if (!user) {
     return (
@@ -134,7 +119,7 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
       </Shell>
     );
   }
-  if (state === undefined) {
+  if (state === undefined || !timeReady) {
     return <Shell venueName={venueName} onClose={onClose}><p className="flex flex-1 items-center justify-center text-sm text-ink-muted">불러오는 중…</p></Shell>;
   }
   if (!state || !cfg) {
@@ -175,12 +160,14 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
     if (state.running && state.endsAt) persist({ endsAt: new Date(Math.max(nowMs(), new Date(state.endsAt).getTime() + deltaMs)).toISOString() });
     else persist({ remainingMs: Math.max(0, state.remainingMs + deltaMs) });
   };
-  const stats = computeLiveStats(state, derived, cfg);
+  // 표시는 TV 와 같은 합성 한 벌(K5). 장부 연동인데 아직 장부 몫이 없으면 0 으로 보인다(TV 는 '—').
+  const stats = composeLiveStats(state) ?? { entries: 0, rebuys: 0, earlies: 0, addons: 0, alive: 0, eliminations: state.eliminations, totalStack: 0, avgStack: 0 };
+  const led = state.liveStats?.ledger;
   // 하한은 얼리와 같은 규칙이다 — 실효 카운트(장부 자동 몫 + 보정)가 0 밑으로 내려가면
   // 카운트는 max(0,…) 로 멈추고 칩만 음수로 떨어진다(#11, 오너 보고 2026-09-15 · TV '총 칩' −5,000).
   // 2026-09-17: 예전엔 여기만 `Math.max(-9999, …)` 라 엔트리·리바이·애드온에 같은 증상이 남아 있었다.
   const adj = (key: 'adjEntries' | 'adjRebuys' | 'adjAddons', d: number) => {
-    const auto = key === 'adjEntries' ? derived.entries : key === 'adjRebuys' ? derived.rebuys : 0;
+    const auto = key === 'adjEntries' ? (led?.entries ?? 0) : key === 'adjRebuys' ? (led?.rebuys ?? 0) : 0;
     persist({ [key]: clampAdjCount(auto, state[key], d) } as Partial<ClockState>);
   };
   const adjEarly = (d: number) => persist({ adjEarlies: clampAdjEarlies(stats, state.adjEarlies, d) });
@@ -193,7 +180,7 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
       <section className="rounded-aura border card-aura ring-aura px-4 py-4 text-center">
         <p className="t-micro">{isBreak ? '휴식' : `레벨 ${levelNo}`}</p>
         <p className={`mt-1 font-black leading-none tabular-nums ${state.running ? 'text-ink-primary' : 'text-amber-400'}`} style={{ fontSize: 'clamp(56px, 18vw, 96px)', letterSpacing: '-0.02em' }}>
-          {mmss(remaining)}
+          {formatCountdown(remaining)}
         </p>
         <p className="mt-2 text-lg font-extrabold tabular-nums text-aura-300">
           {isBreak ? '휴식' : lv ? `${lv.sb.toLocaleString()} / ${lv.bb.toLocaleString()}${lv.ante > 0 ? `  ·  ANTE ${lv.ante.toLocaleString()}` : ''}` : '-'}
@@ -205,13 +192,13 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
 
       {/* 1행: START/STOP 크게 + 레벨 이전/다음 */}
       <div className="grid grid-cols-[1fr_2fr_1fr] gap-2">
-        <Big label="이전 레벨" icon="chevron-left" onClick={() => moveLevel(-1)} disabled={disabled || state.currentIndex <= 0} />
+        <Big label="이전 레벨" icon="chevron-left" onClick={() => moveLevel(-1)} disabled={disabled || eff.index <= 0} />
         <button type="button" onClick={toggleRun} disabled={disabled || finished}
           className={['flex h-20 flex-col items-center justify-center gap-1 rounded-aura text-base font-extrabold text-ink-inverse transition-transform active:scale-[0.97] disabled:opacity-40',
             finished ? 'bg-surface-high text-ink-muted' : state.running ? 'bg-amber-400' : 'bg-emerald-400'].join(' ')}>
           <Icon name={finished ? 'check' : state.running ? 'pause' : 'play'} size={26} />{finished ? '대회 종료' : state.running ? 'STOP' : 'START'}
         </button>
-        <Big label="다음 레벨" icon="chevron-right" onClick={() => moveLevel(1)} disabled={disabled || state.currentIndex >= lvls.length - 1} />
+        <Big label="다음 레벨" icon="chevron-right" onClick={() => moveLevel(1)} disabled={disabled || eff.index >= lvls.length - 1} />
       </div>
 
       {/* 2행: 시간 보정 */}

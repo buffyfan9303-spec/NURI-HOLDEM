@@ -23,7 +23,8 @@ describe('🔴 F3 — 홈의 레지 판정이 memo 평가 시점에 얼어붙지
   });
 
   it('🔴 그 now 가 실제로 갱신된다 — 상태로 들고 있지 않으면 memo 는 재실행될 이유가 없다', () => {
-    expect(APP).toMatch(/const \[regNow, setRegNow\] = useState\(\(\) => Date\.now\(\)\);/);
+    // K10(2026-09-29) — 기준은 서버 시각(serverNow). 기기 시계(Date.now)로 되돌리면 5분 빠른 폰에서 마감이 5분 일찍 뜬다.
+    expect(APP).toMatch(/const \[regNow, setRegNow\] = useState\(\(\) => serverNow\(\)\);/);
   });
 
   // 틱 본문을 통째로 못박는다(§5-B 가 배운 것: '게이트 문장이 있는가' 로는 순서를 못 본다).

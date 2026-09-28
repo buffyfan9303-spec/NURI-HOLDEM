@@ -1,6 +1,7 @@
 // src/api/reports.ts — 신고(reports) API
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
+import { gateError } from './_gateError';
 
 export type ReportTargetType = 'post' | 'comment' | 'listing' | 'live' | 'user';
 
@@ -26,7 +27,7 @@ export async function submitReport(input: ReportInput): Promise<void> {
     target_summary:  input.targetSummary ?? null,
     reason:          input.reason,
   });
-  if (error) throw error;
+  if (error) throw gateError(error, '신고 접수에 실패했습니다');
 }
 
 export interface ReportEntry {

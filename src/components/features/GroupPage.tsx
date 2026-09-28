@@ -5,8 +5,10 @@
 //  - 매니저: 가입 승인/거절, 멤버 추방, 이미지·공지 관리, 팀 프로필(소개·전화·카톡) 설정
 // 오너 #16: 매장 커뮤니티에 있는 것(소개·순위·전화·카카오톡)을 일반 커뮤니티에도.
 //   포스터·진행정보는 오너가 명시적으로 제외 — 그룹은 대회를 열지 않는다.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBlocks } from '../../contexts/BlockContext';
+import { isAuthorShown } from '../../lib/postVisible';
 import { useToast } from '../atoms/Toast';
 import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
@@ -411,6 +413,9 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
   // null = 아직 안 불러옴. 같은 파일 GroupRanking 이 이미 이 문법을 쓴다 — 채팅·게시판만 빠져 있어
   // 대화가 쌓인 그룹에서도 열 때마다 '첫 메시지를 남겨보세요'가 먼저 떴다(2026-09-05 전수 조사).
   const [messages, setMessages] = useState<GroupMessage[] | null>(null);
+  // 차단한 사람의 채팅은 렌더 직전에 거른다(본인 줄은 가리지 않는다) — lib/postVisible 한 벌
+  const { isBlocked } = useBlocks();
+  const shownMessages = useMemo(() => messages && messages.filter((m) => isAuthorShown(m.userId, isBlocked, user?.id)), [messages, isBlocked, user?.id]);
   // 조회 실패 — null 로 두면 '불러오는 중…'이 영원히 남는다. 실패는 실패라고 말하고 다시 시도할 길을 준다.
   const [err, setErr] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -444,7 +449,7 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
     <div className="space-y-2">
       <ul className="space-y-1.5 max-h-[55vh] overflow-y-auto">
         {err ? <LoadErrorCard error={err} what="채팅" onRetry={() => setReloadKey((k) => k + 1)} compact />
-          : messages === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p> : messages.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">첫 메시지를 남겨보세요</p> : messages.map((m) => (
+          : shownMessages === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p> : shownMessages.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">첫 메시지를 남겨보세요</p> : shownMessages.map((m) => (
           <li key={m.id} className="flex items-start gap-2">
             <Avatar name={m.userName} color={m.userColor} size={24} className="mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -474,7 +479,9 @@ function GroupBoard({ groupId, canManage }: { groupId: string; canManage: boolea
   const { user } = useAuth();
   const toast = useToast();
   // 채팅과 같은 이유로 미로드를 가른다
-  const [posts, setPosts] = useState<GroupPost[] | null>(null);
+  const [rawPosts, setPosts] = useState<GroupPost[] | null>(null);
+  const { isBlocked } = useBlocks();
+  const posts = useMemo(() => rawPosts && rawPosts.filter((p) => isAuthorShown(p.authorId, isBlocked, user?.id)), [rawPosts, isBlocked, user?.id]);
   const [err, setErr] = useState<unknown>(null); // 채팅과 같은 이유 — 실패를 무한 로딩으로 두지 않는다
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');

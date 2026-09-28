@@ -197,3 +197,15 @@ export function msToNextBreak(s: { config?: { levels?: ClockLevelKind[] } | null
   }
   return null;
 }
+
+// ── 시간 글자 — 한 벌 (K9, 2026-09-29 실측) ─────────────────────────────────────────
+// 예전엔 TV·리모컨은 round, 장부 바·대시보드·매장 탭·운영자 화면은 floor 였다 — 같은 순간 화면마다 1초가 달랐고,
+// round 인 TV 는 레벨 경계에서 '00:00' 을 1초 보이고 '20:00' 을 건너뛰었다. 카운트다운은 **올림(ceil)** 이 관례다:
+// 남은 0.4초는 '00:01', 새 레벨의 첫 순간은 '20:00'. 흐른 시간(총 진행 시간)은 내림이다.
+const p2 = (n: number) => String(Math.floor(n)).padStart(2, '0');
+const hmsOf = (s: number, hours: boolean) =>
+  (hours && s >= 3600 ? `${p2(s / 3600)}:${p2((s % 3600) / 60)}:${p2(s % 60)}` : `${p2(s / 60)}:${p2(s % 60)}`);
+/** 남은 시간 mm:ss(hours=true 면 1시간 이상은 hh:mm:ss) — 올림. */
+export const formatCountdown = (ms: number, hours = false): string => hmsOf(Math.max(0, Math.ceil(ms / 1000)), hours);
+/** 흐른 시간 — 내림. */
+export const formatElapsed = (ms: number, hours = true): string => hmsOf(Math.max(0, Math.floor(ms / 1000)), hours);

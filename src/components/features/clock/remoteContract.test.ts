@@ -31,29 +31,23 @@ describe('C03 · STOP·레벨 이동은 raw currentIndex 가 아니라 effective
   });
 });
 
-// (2026-09-13 수정) 이 describe 는 원래 "참 분기는 `next.liveStats` 를 그대로 흘린다" 까지 고정하려던
-// 자리였다. 그 동작은 **틀렸다** — 리모컨으로 누른 탈락(eliminations)·보정(adj*)이 TV 보드에 영원히
-// 반영되지 않는다(ClockDisplay 는 liveStats.alive 를 읽고, 남은 쓰기 경로인 TournamentClock 의 디바운스
-// effect 는 deps 가 derivedKey(장부 카운트+바인단가)뿐이라 이 변화로 발사되지 않는다. 무인이면 PC 자체가 없다).
-// 그래서 계약을 "장부를 재계산하지 않는다"(C02 의 진짜 요지)로 좁히고, 갱신 책임은
-// applyRemoteStatDelta 에 넘긴다 — 동작 검증은 src/api/clock.remoteStats.test.ts 가 한다.
-describe('C02 · 리모컨은 장부 연동 클락의 통계를 "장부에서" 재계산해 저장하지 않는다', () => {
-  it('persist 가 장부 연동(state.sessionDate) 분기에서 computeLiveStats·derived 를 쓰지 않는다', () => {
-    const m = code.match(/const persist = useCallback\((?:async )?\(patch: Partial<ClockState>\) => \{[\s\S]*?\n {2}\}, \[/);
-    expect(m, 'persist 정의를 찾지 못했다').not.toBeNull();
-    const body = m![0];
-    // 삼항의 sessionDate 쪽(참 분기, `?` 와 `:` 사이)에 장부 재계산이 있으면 안 된다.
-    const ternary = body.match(/const liveStats = state\.sessionDate\s*\?\s*([\s\S]*?)\s*:\s*([\s\S]*?);/);
-    expect(ternary, 'liveStats 삼항 분기를 찾지 못했다').not.toBeNull();
-    const truthyBranch = ternary![1];
-    expect(truthyBranch).not.toContain('computeLiveStats');
-    expect(truthyBranch, '리모컨의 1회성 buyins(derived)가 장부 연동 분기에 들어갔다 — C02 회귀').not.toContain('derived');
+// K1·K5(2026-09-29 실측) — 리모컨은 통계를 **저장하지 않는다**. 표시는 TV 와 같은 합성(composeLiveStats) 한 벌이고,
+// ± 는 saveClockPatch 가 카운트 차분만 서버 원자 RPC 로 보낸다. 장부 몫 스냅샷은 작성기 한 벌(syncClockLedgerStats)로만 쓴다.
+// (예전 계약 — 'applyRemoteStatDelta 로 정본에 차분을 얹어 저장' — 은 낡은 사본이 남의 탈락을 지우는 원인이라 뒤집었다.
+//  동작 검증: src/api/clock.remoteStats.test.ts · src/api/clock.cas.test.ts)
+describe('K1·K5 · 리모컨은 통계를 계산해 저장하지 않는다(표시 = TV 와 같은 합성)', () => {
+  const persist = code.match(/const persist = useCallback\((?:async )?\(patch: Partial<ClockState>\) => \{[\s\S]*?\n {2}\}, \[/)?.[0] ?? '';
+  it('persist 는 composeLiveStats 로 화면만 다시 합성한다 — computeLiveStats·derived·applyRemoteStatDelta 없음', () => {
+    expect(persist, 'persist 정의를 찾지 못했다').not.toBe('');
+    expect(persist).toContain('composeLiveStats(moved)');
+    expect(persist).not.toMatch(/computeLiveStats|derived|applyRemoteStatDelta/);
   });
-
-  it('참 분기는 정본 스냅샷에 state 변화분만 얹는다(그대로 흘리면 TV 가 멈춘다)', () => {
-    const body = code.match(/const persist = useCallback\((?:async )?\(patch: Partial<ClockState>\) => \{[\s\S]*?\n {2}\}, \[/)![0];
-    const truthyBranch = body.match(/const liveStats = state\.sessionDate\s*\?\s*([\s\S]*?)\s*:\s*/)![1];
-    expect(truthyBranch).toContain('applyRemoteStatDelta');
-    expect(truthyBranch, 'next.liveStats 를 그대로 흘리면 리모컨 조작이 TV 에 반영되지 않는다').not.toMatch(/^next\.liveStats/);
+  it('🔴 화면 표시 stats 도 같은 합성이다(진입 때 한 번 읽은 장부로 계산하지 않는다 — 4C)', () => {
+    expect(code).toMatch(/const stats = composeLiveStats\(state\)/);
+    expect(code).not.toMatch(/getLedgerBuyins|deriveClockCounts/);
+  });
+  it('장부 몫은 작성기 한 벌(syncClockLedgerStats)로만 쓴다', () => {
+    expect(code).toContain('syncClockLedgerStats(');
+    expect(code).not.toMatch(/saveClockLiveStats|saveClockState\(/);
   });
 });

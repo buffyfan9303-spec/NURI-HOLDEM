@@ -1,17 +1,17 @@
-// 리모컨 통계 delta — 재현/고정 (2026-09-13).
+// 라이브 통계 합성 — composeLiveStats 단일 정본 (K1·K5, 2026-09-29 실측으로 applyRemoteStatDelta 를 대체).
 //
-// 두 개의 사고를 **동시에** 잠근다.
-//  (1) 기능 소실: C02(2026-09-12)로 리모컨이 장부 연동 클락의 liveStats 를 손대지 않게 했더니,
-//      리모컨의 탈락·보정이 TV 보드(ClockDisplay 는 liveStats.alive 를 읽는다)에 영원히 반영되지 않았다.
-//      → applyRemoteStatDelta 가 state 파생 필드를 갱신한다. (되돌려 `next.liveStats` 를 그대로 흘리면
-//        아래 '탈락' 테스트가 실패한다 — 음성 대조.)
-//  (2) C02 회귀: 리모컨이 진입 시 1회 읽은 낡은 buyins 로 장부 파생 필드를 덮어쓰면 안 된다.
-//      → '장부 파생 필드는 리모컨이 덮어쓰지 않는다' 테스트가 그 경로를 막는다.
+// 왜 바꿨나: 리모컨이 '정본 스냅샷에 차분을 얹어' live_stats 를 **통째로** 쓰던 구조는 낡은 사본 하나가 남의 변경을 지웠다
+//   (하네스 2B: 리모컨A 엔트리+ · 200ms 뒤 리모컨B 탈락 → 열 값 10/11 인데 TV 9/10 이 35초 뒤에도 그대로).
+//   이제 live_stats 에서 믿는 것은 **장부 몫(ledger)** 뿐이고, 생존·엔트리·총칩은 읽는 쪽이 행의 열과 합성한다.
+//   예전 두 사고는 이 합성이 그대로 막는다:
+//  (1) 기능 소실(C02 뒤): 리모컨 탈락·보정이 TV 에 안 나갔다 → 합성이 열을 직접 읽으므로 쓰기가 필요 없다.
+//  (2) C02: 리모컨의 낡은 장부로 장부 몫을 덮으면 안 된다 → 합성은 **저장된** 장부 몫만 쓴다.
+// 음성 대조: composeLiveStats 가 `ls?.ledger` 분기에서 저장된 `ls` 를 그대로 돌려주게 하면 '탈락'·'2B' 단언이 빨개진다.
 // 실행: npx vitest run src/api/clock.remoteStats.test.ts
 import { describe, it, expect } from 'vitest';
 import {
-  applyRemoteStatDelta, computeLiveStats,
-  type ClockConfig, type ClockState, type DerivedCounts,
+  composeLiveStats, computeLiveStats, ledgerLiveStats, earlyUnitTotal,
+  type ClockConfig, type ClockState, type DerivedCounts, type ClockLiveStats,
 } from './clock';
 
 const cfg: ClockConfig = {
@@ -27,140 +27,58 @@ const st = (o: Partial<ClockState> = {}): ClockState => ({
   adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0, eliminations: 4, ...o,
 });
 
-/** 정본(PC·장부가 최신 장부로 계산해 둔 스냅샷) — 장부에 20명이 들어와 있는 상태 */
-const LEDGER_NOW: DerivedCounts = { entries: 20, rebuys: 5, earlies: 6, doubleEarlies: 2, totalBuyins: 25 };
-/** 리모컨이 진입 시 1회 읽고 그대로 굳어 버린 낡은 장부(그 뒤 8명이 더 들어왔다) */
-const LEDGER_STALE: DerivedCounts = { entries: 12, rebuys: 1, earlies: 2, doubleEarlies: 0, totalBuyins: 13 };
-
-const canonOf = (s: ClockState) => ({ ...computeLiveStats(s, LEDGER_NOW, cfg), buyInAmount: 60_000 });
-
-describe('applyRemoteStatDelta · 리모컨 조작이 TV 보드에 반영된다', () => {
-  it('탈락(eliminations)을 누르면 alive 가 줄어든다 — 정본을 그대로 흘리면 그대로다', () => {
-    const prev = st({ eliminations: 4 });
-    const canon = canonOf(prev);
-    expect(canon.alive).toBe(16);
-
-    const next = st({ eliminations: 5 }); // 리모컨 [탈락 −]
-    const out = applyRemoteStatDelta(canon, prev, next, cfg)!;
-    expect(out.eliminations).toBe(5);
-    expect(out.alive).toBe(15); // ← C02 이전 동작(`next.liveStats` 그대로)이면 16 이라 여기서 실패한다
-    expect(out.avgStack).toBe(Math.round(canon.totalStack / 15));
-  });
-
-  it('생존 +(탈락 취소)도 반영된다', () => {
-    const prev = st({ eliminations: 4 });
-    const next = st({ eliminations: 3 });
-    expect(applyRemoteStatDelta(canonOf(prev), prev, next, cfg)!.alive).toBe(17);
-  });
-
-  it('보정(adj*)이 카운트와 총칩에 반영된다', () => {
-    const prev = st();
-    const canon = canonOf(prev);
-    const next = st({ adjEntries: 1, adjRebuys: 2, adjAddons: 3, adjEarlies: 1 });
-    const out = applyRemoteStatDelta(canon, prev, next, cfg)!;
-    expect(out.entries).toBe(canon.entries + 1);
-    expect(out.rebuys).toBe(canon.rebuys + 2);
-    expect(out.addons).toBe(canon.addons + 3);
-    expect(out.earlies).toBe(canon.earlies + 1);
-    expect(out.totalStack).toBe(canon.totalStack + 30000 + 2 * 30000 + 3 * 20000 + 5000);
-  });
-
-  it('computeLiveStats 와 같은 식이다 — 같은 장부면 결과가 완전히 일치한다', () => {
-    const prev = st({ adjEntries: 2, adjRebuys: 1, adjEarlies: 1, adjAddons: 0, eliminations: 4 });
-    const next = st({ adjEntries: 3, adjRebuys: 1, adjEarlies: 2, adjAddons: 4, eliminations: 7 });
-    const viaDelta = applyRemoteStatDelta(computeLiveStats(prev, LEDGER_NOW, cfg), prev, next, cfg)!;
-    const direct = computeLiveStats(next, LEDGER_NOW, cfg);
-    const rest = { ...viaDelta };
-    delete rest.buyInAmount; // 장부 세션값 — computeLiveStats 는 이 키를 만들지 않는다
-    expect(rest).toEqual(direct);
-  });
+const LEDGER: DerivedCounts = { entries: 20, rebuys: 5, earlies: 6, doubleEarlies: 2, totalBuyins: 25 };
+/** 어떤 기기가 그 순간의 **자기 사본**(adj·탈락)으로 계산해 저장한 스냅샷 — 옛 필드는 그 사본 기준이다 */
+const saved = (writer: ClockState): ClockLiveStats => ({
+  ...computeLiveStats(writer, LEDGER, cfg), buyInAmount: 60_000, ledger: { ...LEDGER, earlyUnits: earlyUnitTotal(LEDGER, cfg) },
 });
 
-// ── 클램프가 실제로 걸리는 입력까지 항등식을 넓힌다 (N4, 2026-09-13) ───────────────
-//
-// 왜: 위 항등식 테스트는 adjEarlies 가 **양수**인 경우만 봤다. computeLiveStats 의
-//     `earlies = Math.max(0, 장부몫 + adjEarlies)` 는 음수 보정에서 클램프가 걸리는데,
-//     delta 합성은 이미 클램프된 canon.earlies 를 기준으로 삼았기 때문에 그 구간에서
-//     두 식이 갈렸다 — "같은 식이다" 라는 약속을 통과하던 이유가 "그 경우를 안 봐서" 였다.
-// 재현(검증자 N4): 장부 얼리 0 · adjEarlies −5 → −3 이면 canon.earlies=0, 차분 +2 → 2.
-//     직접 계산은 max(0, 0−3)=0. 리모컨은 `Math.max(-9999, …)` 까지 내려갈 수 있으므로 도달 가능하다.
-const LEDGER_NO_EARLY: DerivedCounts = { entries: 20, rebuys: 5, earlies: 0, doubleEarlies: 0, totalBuyins: 25 };
-
-describe('클램프 구간에서도 computeLiveStats 와 같은 식이다', () => {
-  it('장부 얼리 0 · 보정 −5 → −3 은 2 가 아니라 0 이다', () => {
-    const prev = st({ adjEarlies: -5 });
-    const next = st({ adjEarlies: -3 });
-    const canon = computeLiveStats(prev, LEDGER_NO_EARLY, cfg);
-    expect(canon.earlies).toBe(0); // 이미 클램프된 값이 canon 이다
-    const out = applyRemoteStatDelta(canon, prev, next, cfg)!;
-    expect(out.earlies).toBe(0);
-    expect(out.earlies).toBe(computeLiveStats(next, LEDGER_NO_EARLY, cfg).earlies);
+describe('composeLiveStats · 표시는 장부 몫 + 행의 열', () => {
+  it('🔴 탈락이 늘면 생존이 준다 — 저장된 alive(옛 사본)를 믿지 않는다', () => {
+    const row = st({ eliminations: 5, liveStats: saved(st({ eliminations: 4 })) });
+    expect(row.liveStats!.alive).toBe(16);            // 저장값(옛 사본) — 여기에 멈추면 TV 가 굳는다
+    expect(composeLiveStats(row)!.alive).toBe(15);
   });
 
-  // 전 필드 × 클램프 경계 전수 — earlies 만이 아니라 entries/rebuys/addons/alive/totalStack/avgStack 도
-  // 같은 종류의 합성 문제가 없는지 본다(alive 도 max(0,…) 클램프가 걸린다).
-  it('모든 보정·탈락 조합에서 delta 합성 = 직접 계산 (클램프 경계 전수)', () => {
-    const LEDGERS: Array<[string, DerivedCounts]> = [
-      ['장부 얼리 0', LEDGER_NO_EARLY],
-      ['장부 얼리 있음', LEDGER_NOW],
-    ];
-    const ADJ = [-9999, -8, -5, -3, -1, 0, 1, 4];
-    const ELIM = [0, 4, 6, 20, 25, 9999]; // 20/25 = entries 경계(생존 0 클램프)
-    let checked = 0;
-    for (const [name, ledger] of LEDGERS) {
-      for (const a of ADJ) {
-        for (const b of ADJ) {
-          for (const e0 of ELIM) {
-            for (const e1 of ELIM) {
-              const prev = st({ adjEarlies: a, adjEntries: a, adjRebuys: b, adjAddons: a, eliminations: e0 });
-              const next = st({ adjEarlies: b, adjEntries: b, adjRebuys: a, adjAddons: b, eliminations: e1 });
-              const viaDelta = applyRemoteStatDelta(computeLiveStats(prev, ledger, cfg), prev, next, cfg)!;
-              const direct = computeLiveStats(next, ledger, cfg);
-              const rest = { ...viaDelta };
-              delete rest.buyInAmount;
-              expect(rest, `${name} · adj ${a}→${b} · elim ${e0}→${e1}`).toEqual(direct);
-              checked++;
-            }
-          }
-        }
-      }
-    }
-    expect(checked).toBe(2 * 8 * 8 * 6 * 6);
-  });
-});
-
-describe('C02 회귀 방지 · 장부 파생 필드는 리모컨이 덮어쓰지 않는다', () => {
-  it('리모컨의 낡은 장부(buyins)는 결과에 전혀 들어가지 않는다', () => {
-    const prev = st({ eliminations: 4 });
-    const canon = canonOf(prev);
-    const next = st({ eliminations: 5 });
-
-    const out = applyRemoteStatDelta(canon, prev, next, cfg)!;
-    // 정본 장부 몫(20명·5리바이)이 그대로 살아 있어야 한다
-    expect(out.entries).toBe(canon.entries);
-    expect(out.rebuys).toBe(canon.rebuys);
-    expect(out.earlies).toBe(canon.earlies);
-    expect(out.buyInAmount).toBe(60_000); // 장부 세션값 — 리모컨이 건드리지 않는다
-
-    // 리모컨이 자기 낡은 장부로 재계산했다면 이 값이 나왔을 것이다(= 정본을 8명 깎아 덮어쓴다)
-    const ifRecomputed = computeLiveStats(next, LEDGER_STALE, cfg);
-    expect(ifRecomputed.entries).toBe(12);
-    expect(out.entries).not.toBe(ifRecomputed.entries);
-    expect(out.totalStack).not.toBe(ifRecomputed.totalStack);
+  it('🔴 2B — 한 기기의 엔트리+ 와 다른 기기의 탈락이 겹쳐도 열 값 그대로(10/11)', () => {
+    const L0: DerivedCounts = { entries: 0, rebuys: 0, earlies: 0, doubleEarlies: 0, totalBuyins: 0 };
+    // 리모컨B 가 엔트리+ 를 모르는 사본(adj 10 · 탈락 1)으로 쓴 스냅샷 = 9/10
+    const stale = { ...computeLiveStats(st({ adjEntries: 10, eliminations: 1 }), L0, cfg), ledger: { ...L0, earlyUnits: 0 } };
+    const row = st({ adjEntries: 11, eliminations: 1, liveStats: stale });
+    const c = composeLiveStats(row)!;
+    expect(`${c.alive}/${c.entries}`).toBe('10/11');
   });
 
-  it('정본 스냅샷이 아직 없으면(null) 없는 기준에 delta 를 얹지 않는다', () => {
-    expect(applyRemoteStatDelta(null, st(), st({ eliminations: 9 }), cfg)).toBeNull();
-    expect(applyRemoteStatDelta(undefined, st(), st(), cfg)).toBeNull();
+  it('computeLiveStats 와 완전히 같은 식이다(장부 몫이 같으면)', () => {
+    const row = st({ adjEntries: 2, adjRebuys: -1, adjEarlies: 3, adjAddons: 4, eliminations: 7, liveStats: saved(st()) });
+    const { buyInAmount, ledger, ...rest } = composeLiveStats(row)!;
+    expect(rest).toEqual(computeLiveStats(row, LEDGER, cfg));
+    expect(buyInAmount).toBe(60_000);
+    expect(ledger).toEqual({ ...LEDGER, earlyUnits: earlyUnitTotal(LEDGER, cfg) });
   });
 
-  it('alive·earlies 는 음수로 내려가지 않는다', () => {
-    const prev = st({ eliminations: 0, adjEarlies: 0 });
-    const canon = canonOf(prev);
-    const next = st({ eliminations: 999, adjEarlies: -999 });
-    const out = applyRemoteStatDelta(canon, prev, next, cfg)!;
-    expect(out.alive).toBe(0);
-    expect(out.earlies).toBe(0);
-    expect(out.avgStack).toBe(0);
+  it('C02 — 장부 몫은 저장된 것만 쓴다(어느 화면의 낡은 장부도 합성에 안 들어간다)', () => {
+    const row = st({ liveStats: saved(st()) });
+    expect(composeLiveStats(row)!.entries).toBe(20);
+  });
+
+  it('장부 미연동 — 한 번도 안 눌렀으면 null(시작 전 0/0 금지), 누르면 열이 곧 전부', () => {
+    const idle = st({ sessionDate: null, eliminations: 0, liveStats: null });
+    expect(composeLiveStats(idle)).toBeNull();
+    const c = composeLiveStats(st({ sessionDate: null, adjEntries: 9, eliminations: 2, liveStats: null }))!;
+    expect(`${c.alive}/${c.entries}`).toBe('7/9');
+    expect(c.totalStack).toBe(9 * cfg.startStack);
+  });
+
+  it('장부 몫이 없는 낡은 스냅샷은 그대로(예전 동작) — 새 판 작성기가 장부 몫을 채우면 합성으로 넘어간다', () => {
+    const legacy = { ...computeLiveStats(st(), LEDGER, cfg), buyInAmount: 1 };
+    expect(composeLiveStats(st({ eliminations: 9, liveStats: legacy }))).toBe(legacy);
+  });
+
+  it('ledgerLiveStats(저장용)의 장부 몫은 세션 얼리 창으로 센다(K4) — 합성과 이어진다', () => {
+    const s = st({ eliminations: 0, liveStats: null });
+    const out = ledgerLiveStats(s, [], { earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null, openedAt: null, buyinAmount: 5 });
+    expect(out.ledger).toEqual({ entries: 0, rebuys: 0, earlies: 0, doubleEarlies: 0, totalBuyins: 0, earlyUnits: 0 });
+    expect(composeLiveStats({ ...s, adjEntries: 3, liveStats: out })!.alive).toBe(3);
   });
 });
