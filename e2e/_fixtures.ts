@@ -58,7 +58,45 @@ export function isAllowedRequest(method: string, url: string, writesAllowed = WR
   return writesAllowed && ref !== PROD_REF;
 }
 
+/** 목 profiles 응답에 consented_legal_version 키가 **아예 없으면** 현재 버전(2)을 채운다. 명시한 null 은 그대로 둔다. */
+function withLegalConsent(body: string): string {
+  try {
+    const add = (o: unknown) => {
+      if (o && typeof o === 'object' && !Array.isArray(o) && 'id' in o && !('consented_legal_version' in o)) {
+        (o as Record<string, unknown>).consented_legal_version = 2;
+      }
+    };
+    const v = JSON.parse(body);
+    if (Array.isArray(v)) v.forEach(add); else add(v);
+    return JSON.stringify(v);
+  } catch { return body; }
+}
+
 export const test = base.extend({
+  // 🔴 2026-09-29 개정 약관 시행일(src/lib/legalVersion.ts LEGAL_EFFECTIVE_ISO)이 지나자, 스펙마다 따로 쓴 가짜
+  //   profiles 목 중 consented_legal_version 을 빠뜨린 곳에서 '개정 약관 동의' 차단 게이트가 떠 탭 클릭이
+  //   시간 초과했다(코드 변경 0, 날짜만 지나 수십 건). 스펙마다 고치면 새 스펙에서 또 빠진다 — 경계 한 곳에서 채운다.
+  //   재동의 게이트 자체를 검사하는 스펙은 null 을 **명시**하므로 영향이 없다.
+  page: async ({ page }, run) => {
+    const route = page.route.bind(page);
+    page.route = ((url: Parameters<typeof page.route>[0], handler: Parameters<typeof page.route>[1], opts?: Parameters<typeof page.route>[2]) =>
+      route(url, (r, req) => {
+        if (!/\/rest\/v1\/profiles\?/.test(req.url())) return handler(r, req);
+        const fulfill = r.fulfill.bind(r);
+        const proxied = new Proxy(r, {
+          get(t, p) {
+            if (p === 'fulfill') {
+              return (o: Parameters<typeof r.fulfill>[0] = {}) =>
+                fulfill(typeof o.body === 'string' ? { ...o, body: withLegalConsent(o.body) } : o);
+            }
+            const val = Reflect.get(t, p);
+            return typeof val === 'function' ? val.bind(t) : val;
+          },
+        });
+        return handler(proxied, req);
+      }, opts)) as typeof page.route;
+    await run(page);
+  },
   context: async ({ context }, run, testInfo) => {
     const blocked: string[] = [];
     await context.route(SUPABASE_API, (route) => {
