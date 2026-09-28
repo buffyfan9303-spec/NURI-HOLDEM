@@ -287,7 +287,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
       <p className="mt-3 flex items-center gap-1.5 text-xs font-bold text-ink-primary">
         <Icon name="layers" size={14} className="shrink-0 text-ink-muted" />홈 캐러셀 구성
       </p>
-      <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">
+      <p data-testid="home-carousel-explain" className="mt-0.5 text-2xs leading-relaxed text-ink-muted">
         손님 홈에는 위에서 켠 등록 배너에 이벤트 슬라이드·브랜드 슬라이드가 이어 붙습니다. 아래 목록이 홈과 같은 계산으로 만든 실제 순서입니다.
       </p>
       <div className="mt-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-2">

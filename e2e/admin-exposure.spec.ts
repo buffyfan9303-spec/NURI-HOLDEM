@@ -113,7 +113,7 @@ test.describe('관리자 → 노출 관리', () => {
     // '대신합니다' 는 거짓 — PosterCarousel 은 [...posters, ...brands, ...dyn] 로 앞에 붙일 뿐이다
     await expect(page.getByText(/이 목록이 홈 캐러셀을 대신/),
       '등록 배너가 브랜드 슬라이드를 대체한다고 잘못 말한다').toHaveCount(0);
-    await expect(page.getByText(/브랜드 슬라이드/),
+    await expect(adminPane(page).getByTestId('home-carousel-explain').filter({ hasText: '브랜드 슬라이드' }),
       '지금 무엇이 도는지(브랜드 슬라이드) 를 말하지 않는다').toBeVisible();
   });
 
