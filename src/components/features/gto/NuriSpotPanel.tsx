@@ -291,7 +291,7 @@ function SpadeMark() {
       {/* LED 는 토큰([data-aura] hero)으로 — 인라인 rgb 는 라이트·고대비·강제색에서 못 껐다(2026-09-18) */}
       <span data-aura data-aura-level="hero" data-aura-variant="violet" className="pointer-events-none absolute inset-0 rounded-full" />
       <span
-        className="grid h-10 w-10 place-items-center rounded-full border"
+        className="grid h-10 w-10 place-items-center rounded-full border border-white/12"
         style={{ background: 'radial-gradient(120% 120% at 50% 0%, #242B48 0%, #141930 58%, #0A0D1B 100%)' }}
       >
         <img src="/brand/nuri-holdem-symbol.svg" alt="" width={22} height={22} draggable={false} />

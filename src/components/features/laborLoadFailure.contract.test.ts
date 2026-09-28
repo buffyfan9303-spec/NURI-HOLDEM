@@ -33,7 +33,8 @@ describe('F3 · 출근 기록 조회 실패는 "기록 없음" 이 아니다', (
       const c = component(SP, name);
       expect(c).toMatch(/const \[shiftErr, setShiftErr\] = useState<string \| null>\(null\);/);
       expect(c, '빈 catch 가 남아 있다').not.toMatch(/\.catch\(\(\) => \{\}\)/);
-      expect(c).toMatch(/getStaffSchedule\(venueId, (?:from|loadFrom), to\)\s*\.then\([\s\S]*?setShiftErr\(null\);[\s\S]*?\)\s*\.catch\(\(e\) => setShiftErr\(msgOf\(e, '출근 기록을 불러오지 못했습니다'\)\)\)/);
+      // 2026-09-28 — 매장 전환 가드(`if (alive)`)를 두른 형태도 같은 계약이다(실패는 여전히 shiftErr 문장으로 남는다).
+      expect(c).toMatch(/getStaffSchedule\(venueId, (?:from|loadFrom), to\)\s*\.then\([\s\S]*?setShiftErr\(null\);[\s\S]*?\)\s*\.catch\(\(e\) => (?:\{ if \(alive\) )?setShiftErr\(msgOf\(e, '출근 기록을 불러오지 못했습니다'\)\)(?:; \})?\)/);
       // 재시도 틱이 effect deps 에 있어야 '다시 시도' 가 실제로 조회를 다시 낸다.
       expect(c).toMatch(/const \[shiftTick, setShiftTick\] = useState\(0\);/);
       expect(c).toMatch(/\}, \[venueId, (?:from|loadFrom), to, shiftTick(, user)?(, active)?\]\);/); // active = 숨은 판은 채널을 놓는다(MYSTORE-PC-TAB-JANK)
@@ -81,7 +82,7 @@ describe('F6 · 딜러 근무 조회 실패를 호출부가 든다(throw 만 하
     const c = component(SP, 'StaffSettlement');
     expect(c).toMatch(/const \[dealerErr, setDealerErr\] = useState<string \| null>\(null\);/);
     expect(c).not.toMatch(/\.catch\(\(\) => setDealers\(\[\]\)\)/);
-    expect(c).toMatch(/getDealerShifts\(venueId, (?:from|loadFrom), to\)\s*\.then\(\(ds\) => \{ setDealers\(ds\); setDealerErr\(null\); \}\)\s*\.catch\(\(e\) => setDealerErr\(msgOf\(e, '딜러 근무 기록을 불러오지 못했습니다'\)\)\)/);
+    expect(c).toMatch(/getDealerShifts\(venueId, (?:from|loadFrom), to\)\s*\.then\(\(ds\) => \{ (?:if \(alive\) \{ )?setDealers\(ds\); setDealerErr\(null\); (?:\} )?\}\)\s*\.catch\(\(e\) => (?:\{ if \(alive\) )?setDealerErr\(msgOf\(e, '딜러 근무 기록을 불러오지 못했습니다'\)\)(?:; \})?\)/);
   });
 
   // 독립 검증(2026-09-13) B: 출근(getStaffSchedule) 실패는 그대로 삼켜져 딜러 인건비만의 값이 '총 인건비 N만원' 으로 떴다.

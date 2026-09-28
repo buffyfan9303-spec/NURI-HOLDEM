@@ -24,6 +24,8 @@ import { getLedgerBuyins, getLedgerSession, type LedgerBuyin, type LedgerSession
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../atoms/Toast';
 import Icon from '../../atoms/Icon';
+import { serverNow } from '../../../lib/serverTime';
+import { useResyncOnWake } from '../../../lib/realtimeResync';
 
 /** 리모컨 딥링크 — TV 화면 QR·내 매장 버튼이 같은 URL 을 쓴다 */
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
@@ -79,6 +81,9 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
   useEffect(() => { loadRef.current = load; }, [load]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => subscribeClock(venueId, load), [venueId, load]);
+  // D2(2026-09-28) — 잠든 폰이 깨어났을 때 옛 화면에서 STOP/START 를 누르지 않게: 창 복귀·온라인 복귀·30초마다 다시 읽는다.
+  //   (그래도 옛 화면에서 누르면 saveClockPatch 의 CAS 가 0행으로 막고 다시 읽는다.)
+  useResyncOnWake(load, true, 30_000);
   useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
 
   // 장부 연동 클락이면 라이브 통계 계산에 장부 바인·세션이 필요하다(운영자 클락과 같은 재료)
@@ -149,7 +154,7 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
   const levelNo = levelNumberAt(lvls, eff.index);
   const isBreak = lv?.kind === 'break';
   const remaining = eff.remainingMs;
-  const nowMs = () => Date.now();
+  const nowMs = () => serverNow();   // D1 — 5분 빠른 폰이 START 를 눌러도 ends_at 은 서버 기준
 
   // (C03, 2026-09-12) 표시는 effectiveLevel(state) 인데 STOP 이 remainingMs 만 패치하고
   // currentIndex 는 그대로 두면, 드리프트(endsAt 경과) 상태에서 정지할 때 '옛 레벨 번호 + 새 레벨의 남은 시간'

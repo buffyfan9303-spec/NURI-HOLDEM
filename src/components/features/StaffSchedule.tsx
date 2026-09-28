@@ -1,6 +1,6 @@
 // src/components/features/StaffSchedule.tsx
 // 딜러/직원 월별 출근 스케줄 — 직원 등록 → 월 캘린더 배정(출근/퇴근 시각) → 출근/휴무·근무시간 집계.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import {
   getStaffSchedule, addStaffShift, removeStaffShift, setShiftTimes, confirmSchedule, notifyVenueStaff, subscribeStaffSchedule,
@@ -49,7 +49,16 @@ export default function StaffSchedule({ venueId, active = true }: { venueId: str
   const days = useMemo(() => monthDays(month), [month]);
   const from = days[0], to = days[days.length - 1];
 
-  const reload = () => { getStaffSchedule(venueId, from, to).then(setShifts).catch(() => {}).finally(() => setLoading(false)); };
+  // E(2026-09-28) — 매장·달 전환 가드: 앞 매장(앞 달) 스케줄이 늦게 와서 지금 달력을 덮지 않게.
+  const keyRef = useRef('');
+  keyRef.current = `${venueId}|${from}|${to}`;
+  const reload = () => {
+    const k = `${venueId}|${from}|${to}`;
+    getStaffSchedule(venueId, from, to)
+      .then((s) => { if (keyRef.current === k) setShifts(s); })
+      .catch(() => {})
+      .finally(() => { if (keyRef.current === k) setLoading(false); });
+  };
   useEffect(() => { setLoading(true); setSelDay(null); }, [venueId, from, to]);
   // 조회 + 실시간(직원 셀프 출퇴근/배정 변경 자동 반영). 숨은 판(내 매장 keep-alive)은 채널을 놓는다 —
   // 다시 보이면 이 효과만 다시 돌며 조용히 한 번 읽는다(로딩 표시·선택한 날은 그대로).

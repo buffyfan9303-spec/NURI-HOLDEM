@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import Icon from '../atoms/Icon';
 import { DEFAULT_RANK_METRICS,
@@ -571,8 +571,11 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
   const [suggest, setSuggest] = useState<RegisteredPlayer[]>([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
 
-  const reload = () => { getScoreEntries(venueId).then(setRows).catch(() => {}); };
-  useEffect(reload, [venueId]);
+  // E(2026-09-28) — 매장 전환 가드: 앞 매장 점수 기록이 늦게 와서 지금 매장 목록을 덮지 않게.
+  const rowsOwner = useRef(venueId);
+  rowsOwner.current = venueId;
+  const reload = () => { const v = venueId; getScoreEntries(v).then((r) => { if (rowsOwner.current === v) setRows(r); }).catch(() => {}); };
+  useEffect(() => { setRows([]); reload(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 입력 디바운스 검색(300ms) — 실명·닉네임·이 매장 방문횟수
   useEffect(() => {
@@ -697,8 +700,11 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
   const [entries, setEntries] = useState<ScoreEntry[]>([]);
   const [sel, setSel] = useState<string | null>(new Date().toLocaleDateString('en-CA'));
 
-  const reload = () => { getScoreEntries(venueId, 500).then(setEntries).catch(() => {}); };
-  useEffect(reload, [venueId]);
+  // E(2026-09-28) — 매장 전환 가드(위와 같은 이유).
+  const entriesOwner = useRef(venueId);
+  entriesOwner.current = venueId;
+  const reload = () => { const v = venueId; getScoreEntries(v, 500).then((r) => { if (entriesOwner.current === v) setEntries(r); }).catch(() => {}); };
+  useEffect(() => { setEntries([]); reload(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const boardName = (key: string | null) => key ? (customBoards.find((b) => b.key === key)?.name ?? '커스텀') : '매장 포인트';
 

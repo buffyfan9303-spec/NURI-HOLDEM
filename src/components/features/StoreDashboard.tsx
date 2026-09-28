@@ -37,12 +37,14 @@ import { relativeTime } from '../../lib/relativeTime';
 // 언마운트하지 않는다(VenueManageTab 는 key 없이 재사용한다) — 데이터·오류·로딩·'HH:MM 기준'을
 // 한 세대로 묶지 않으면 A 매장 응답이 B 화면에 숫자/오류 배너/시각으로 남는다.
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
+import { useBusinessDate } from '../../lib/businessDate';
+import { serverNow } from '../../lib/serverTime';
+import { useResyncOnWake } from '../../lib/realtimeResync';
 
 // '오늘'·'최근 N일'은 전부 **KST** — 장부·서버(ledger_business_date · kstToday)와 같은 달력이어야 한다.
 // 예전엔 브라우저 로컬 TZ(toLocaleDateString)라, KST 보다 뒤진 기기(해외 로밍·시계 오설정·UTC 러너)에서
 // 한국 자정~오전 9시 사이엔 **어제** 장부를 '오늘'로 읽어 '미시작' 배지와 [장부 시작하기]가 떴다.
 // 정산 단계만 VenueManageTab 에서 kstToday 로 우회하고 있었다 — 근원을 한 곳으로 맞춘다.
-const localToday = kstToday;
 const kstDaysAgo = (n: number) => kstToday(Date.now() - n * 86_400_000);
 const lastN = (n: number) => Array.from({ length: n }, (_, i) => kstDaysAgo(n - 1 - i));
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -110,7 +112,9 @@ const fmtT = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits:
 
 export default function StoreDashboard({ venueId, venueName: venueNameProp, schedules, onGoto, onCreatePoster, caps, active = true, onProgress }: Props) {
   const toast = useToast();
-  const d = localToday();
+  // B1(2026-09-28) — '오늘'은 매장 **영업일**이다(서버 ledger_business_date 와 같은 값). 자정을 넘긴 토너에서
+  //   달력 오늘을 쓰면 00:30 에 '미시작'이 뜨고 손님 바인 요청(날짜=어제 영업일)이 대기열에서 사라졌다.
+  const d = useBusinessDate(venueId, active);
   const days = last7();
   const d14 = last14();
   const mr = monthRange();
@@ -366,9 +370,21 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     prevActiveRef.current = active;
   }, [active, reload]);
   // ⚡ 실시간 구독은 대시보드를 실제로 보고 있을 때만(active) — 숨은 탭이 채널을 물고 있지 않게.
-  useEffect(() => { if (active) return subscribeLedger(venueId, reload); }, [venueId, reload, active]);
+  // F(2026-09-28) — 다른 접수대의 바인 취소·플레이어 삭제(DELETE)와 손님 요청 취소·만료(DELETE)도 받는다.
+  //   filter 구독은 DELETE 를 못 받아 대시보드 매출·바인·대기열이 취소 전 숫자로 남았다. 지금 화면에 있는 행 id 만 고른다.
+  const ownIdsRef = useRef<{ b: Set<string>; p: Set<string>; r: Set<string> }>({ b: new Set(), p: new Set(), r: new Set() });
+  ownIdsRef.current = {
+    b: new Set([...buyins.map((x) => x.id), ...range.buyins.map((x) => x.id)]),
+    p: new Set(players.map((x) => x.id)),
+    r: new Set(pendingReqs.map((x) => x.id)),
+  };
+  const ownsRow = useCallback((t: 'ledger_buyins' | 'ledger_players', id: string) => (t === 'ledger_buyins' ? ownIdsRef.current.b : ownIdsRef.current.p).has(id), []);
+  const ownsReq = useCallback((id: string) => ownIdsRef.current.r.has(id), []);
+  useEffect(() => { if (active) return subscribeLedger(venueId, reload, { ownsRow }); }, [venueId, reload, active, ownsRow]);
   useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);
-  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload); }, [venueId, reload, active]);
+  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload, { ownsId: ownsReq }); }, [venueId, reload, active, ownsReq]);
+  // 창 복귀·네트워크 복귀 때 다시 읽는다(realtime 은 끊긴 동안의 변경을 다시 보내 주지 않는다 — lib/realtimeResync).
+  useResyncOnWake(reload, active);
   // 예약은 내 매장의 다가오는 포스터만 서버 필터로 수신(전 매장 예약 수신 방지)
   const upcomingIds = useMemo(
     () => schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id),
@@ -431,7 +447,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   const wLvl = wClock?.config.levels[wClock.currentIndex];
   const wLevelNo = wClock ? wClock.config.levels.slice(0, wClock.currentIndex + 1).filter((l) => l.kind === 'level').length : 0;
   const clockRemainMs = wActive && wClock
-    ? (wClock.running && wClock.endsAt ? Math.max(0, new Date(wClock.endsAt).getTime() - Date.now()) : Math.max(0, wClock.remainingMs))
+    ? (wClock.running && wClock.endsAt ? Math.max(0, new Date(wClock.endsAt).getTime() - serverNow()) : Math.max(0, wClock.remainingMs))
     : 0;
   // 생존: 클락 liveStats 우선 → 없으면 **인원 − 탈락**.
   // ⚠ 폴백의 기준은 금액 엔트리도 바이인 횟수도 아니라 **사람 수**다(2026-09-07 장부에서 고친 것과 같은 결함).
@@ -456,13 +472,27 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     return rows.map((sx) => {
       const bs = range.buyins.filter((b) => b.sessionDate === d && b.gameSeq === sx.gameSeq);
       const c = ledgerCounts(bs);
-      let value = 0, unpaid = 0;
-      for (const b of bs) { const f = buyinFinance(b, sx); value += f.value; unpaid += f.unpaid; }
+      let value = 0, unpaid = 0, paid = 0, entry = 0, ticket = 0;
+      for (const b of bs) {
+        const f = buyinFinance(b, sx);
+        value += f.value; unpaid += f.unpaid; paid += f.paid; entry += f.entry; ticket += f.ticketPaid;
+      }
       const ck = venueClocks.find((x) => x.gameSeq === sx.gameSeq) ?? null;
       const ckLive = !!ck && (ck.running || ck.currentIndex > 0 || ck.endsAt != null);
-      return { sx, c, value, unpaid, ck, ckLive };
+      return { sx, c, value, unpaid, paid, entry, ticket, ck, ckLive };
     });
   }, [range, d, venueClocks]);
+  // B4(2026-09-28) — '오늘 장부' KPI 는 **그날 전 게임 합산**이다(정산 하루 합계·주간 리포트와 같은 범위).
+  //   예전엔 메인 한 판(getLedgerBuyins 기본 game 1)만 세서 사이드가 있는 날 매출·바인·미수가 정산보다 작게 나왔고,
+  //   그렇다는 표시도 없었다. 합산 재료는 이미 받은 14일 range(todayGames)라 새 조회 0건.
+  //   range 가 아직 없거나 실패하면(rows 0) 메인 한 판 값으로 떨어진다 — 조회 실패가 0원으로 위장되지 않게.
+  const day = todayGames.length > 0
+    ? todayGames.reduce((a, g) => ({
+        paid: a.paid + g.paid, unpaid: a.unpaid + g.unpaid, entry: a.entry + g.entry, ticket: a.ticket + g.ticket,
+        totalBuyins: a.totalBuyins + g.c.totalBuyins, games: a.games + 1,
+      }), { paid: 0, unpaid: 0, entry: 0, ticket: 0, totalBuyins: 0, games: 0 })
+    : { ...fin, totalBuyins: cnt.totalBuyins, games: started ? 1 : 0 };
+  const dayStarted = started || todayGames.some((g) => !!g.sx.openedAt);
   /* 오늘 파이프라인 5단계(포스터 → 장부 → 클락 → 순위 → 정산).
      예전엔 이 값으로 대시보드 안에 숫자 스트립을 그렸다. 지금은 **위의 알약 탭바 하나**가 그 역할을
      겸한다(오너 2026-09-08: "두 개를 2번으로 통일해서 한 페이지에서 왔다갔다") — 같은 파이프라인을
@@ -645,7 +675,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   // ── 위젯 미니 추세: 오늘 엔트리 vs 같은 요일 평소(최근 4주 동일 요일 평균 — dowStats 별도 로드) ──
   const todayDow = new Date(d + 'T00:00:00').getDay();
   const sameDowAvg = dowStats.avg;
-  const todayEntries = cnt.totalBuyins;   // 같은 요일 비교 — 횟수 기준(위 weeks 와 같은 척도)
+  const todayEntries = day.totalBuyins;   // 같은 요일 비교 — 횟수 기준(위 weeks 와 같은 척도 = 그날 전 게임 바인 횟수)
   const dowDelta = sameDowAvg && sameDowAvg > 0 ? Math.round(((todayEntries - sameDowAvg) / sameDowAvg) * 100) : null;
 
   // ── 전주 대비(직전 7일) ──
@@ -845,35 +875,36 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             <span className="text-2xs font-bold text-ink-muted">오늘 장부</span>
             <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>
           </span>
-          {loading ? <div className="mt-2"><Skeleton /></div> : !started ? null : (
+          {!loading && day.games > 1 && <span data-testid="dash-kpi-games" className="mt-1 block text-2xs text-ink-muted">게임 {day.games}개 합산</span>}
+          {loading ? <div className="mt-2"><Skeleton /></div> : !dayStarted ? null : (
             /* 2026-09-11 PC 개편: flex-wrap 이면 1360px 에서 숫자 넷이 왼쪽 700px 에 몰리고 오른쪽이 통째로 빈다.
                고정 4열 그리드로 폭을 실제로 쓴다. 모바일은 2×2 — 360px 에서도 숫자와 단위가 겹치지 않는다. */
             <span className="mt-2 grid grid-cols-2 items-end gap-x-5 gap-y-3 lg:grid-cols-4">
               <span className="block">
                 <span className="block text-2xs text-ink-muted">완납 매출</span>
                 <span className="mt-1 block whitespace-nowrap text-2xl font-extrabold leading-none tabular-nums text-gold-300">
-                  {wonToMan(fin.paid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
+                  {wonToMan(day.paid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
                 </span>
               </span>
               <span className="block">
                 <span data-testid="dash-kpi-buyins" className="block text-2xs text-ink-muted">총 바인</span>
                 <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-indigo">
-                  <CountUp value={cnt.totalBuyins} /><span className="ml-1 text-sm font-semibold text-ink-muted">회</span>
+                  <CountUp value={day.totalBuyins} /><span className="ml-1 text-sm font-semibold text-ink-muted">회</span>
                   {/* 엔트리는 금액 기준이라 소수가 된다 — CountUp 은 정수 애니라 옆에 그대로 적는다. */}
-                  <span className="ml-1.5 text-2xs font-semibold text-ink-muted">엔트리 {fin.entry.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+                  <span className="ml-1.5 text-2xs font-semibold text-ink-muted">엔트리 {day.entry.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
                 </span>
               </span>
               <span className="block">
                 <span className="block text-2xs text-ink-muted">미수금</span>
-                <span className={`mt-1 block text-2xl font-extrabold leading-none tabular-nums ${fin.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary'}`}>
-                  {wonToMan(fin.unpaid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
+                <span className={`mt-1 block text-2xl font-extrabold leading-none tabular-nums ${day.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary'}`}>
+                  {wonToMan(day.unpaid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
                 </span>
               </span>
               <span className="block">
                 <span className="block text-2xs text-ink-muted">회수 이용권</span>
                 {/* 2026-09-11: '장' 은 통계·정산의 'T' 와 같은 수를 다른 이름으로 불러 헷갈렸다 — 단위를 T 로 통일. */}
                 <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-fuchsia">
-                  {fmtT(fin.ticket)}<span className="ml-1 text-sm font-semibold text-ink-muted">T</span>
+                  {fmtT(day.ticket)}<span className="ml-1 text-sm font-semibold text-ink-muted">T</span>
                 </span>
               </span>
             </span>
@@ -1161,8 +1192,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요. 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto({ section: 'ranking', date: d, gameSeq: session?.gameSeq, title: session?.title }), tone: 'warn' };
         } else if (caps.ledger && started && !session?.closed) {
           todo = clockActive
-            ? { icon: 'cards', title: `게임 진행 중 · 바인 ${cnt.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
-            : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `바인 ${cnt.totalBuyins}회 · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
+            ? { icon: 'cards', title: `게임 진행 중 · 바인 ${day.totalBuyins}회`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: gotoTodayLedger, tone: 'gold' }
+            : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `바인 ${day.totalBuyins}회 · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
         } else if (caps.ledger && !started && todayPoster) {
           todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto({ section: 'ledger', date: d }), tone: 'gold' }; // 🔴 2026-09-20 (E2-A): 맨 문자열이라 '포스터 정보 그대로' 문구와 달리 오늘 장부 **목록**으로만 갔다 — 날짜 시드를 실어 보낸다
         } else if (caps.ledger && !started && !todayPoster && lastRound) {
@@ -1258,11 +1289,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       })()}
 
       {/* 미수·리스크 알림 (장부 권한) */}
-      {caps.ledger && started && fin.unpaid > 0 && (
+      {caps.ledger && dayStarted && day.unpaid > 0 && (
         <button type="button" onClick={gotoTodayLedger} data-testid="unpaid-cta"
           className="flex w-full items-center gap-2 rounded-card border border-danger/40 bg-danger/8 p-3 text-left hover:bg-danger/12 transition-colors">
           <Icon name="alert" size={18} className="shrink-0 text-danger-light" />
-          <span className="text-xs text-danger-light">오늘 <b className="tabular-nums">{wonToMan(fin.unpaid)}만원</b> 미수금이 있습니다. 장부에서 확인하세요.</span>
+          <span className="text-xs text-danger-light">오늘 <b className="tabular-nums">{wonToMan(day.unpaid)}만원</b> 미수금이 있습니다. 장부에서 확인하세요.</span>
         </button>
       )}
 

@@ -14,7 +14,7 @@ import {
   countLevels, withDerivedEarly, generateBlinds, clampAdjEarlies, clampAdjCount,
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
-  getClockState, saveClockState, saveClockLiveStats, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
+  getClockState, saveClockState, saveClockLiveStats, clearClockState, subscribeClock, getVenueClocks,
   saveClockPatch, createCoalescingSaver, saveClockLevel, sideGameDate, liveStructurePatch,
 } from '../../../api/clock';
 import LiveLevelsEditor, { LEVEL_NUM, LEVEL_ROW } from './LiveLevelsEditor';
@@ -42,8 +42,11 @@ import QRCode from 'qrcode';
 import Icon from '../../atoms/Icon';
 import ClockThemePanel from './ClockThemePanel';
 import ClockStage from './ClockStage';
+import { serverNow } from '../../../lib/serverTime';
+import { useResyncOnWake } from '../../../lib/realtimeResync';
 
-const now = () => Date.now();
+// D1(2026-09-28) — 클락의 '지금'은 서버 기준이다(기기 시계가 틀려도 모든 기기가 같은 ends_at 을 쓰고 읽는다).
+const now = () => serverNow();
 /** 멀티클락 개요 카드의 mm:ss — 보드 포매터는 ClockStage 로 갔고 여기 남은 유일한 표시용 헬퍼다. */
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const computeRemaining = (s: ClockState): number =>
@@ -114,13 +117,21 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
   const reloadPresets = useCallback(() => getClockPresets(venueId).then(setPresets).catch(() => {}), [venueId]);
 
   useEffect(() => {
+    // 🔴 D3(2026-09-28) — 매장 전환은 이 컴포넌트를 다시 마운트하지 않는다(VenueManageTab 이 같은 자리에서 venueId 만 바꾼다).
+    //   예전엔 이 첫 로드에 가드가 없어, A 매장 응답이 B 로 바꾼 뒤 도착하면 B 머리글 아래 A 클락이 그려졌고
+    //   그 상태에서 누른 STOP·± 가 **A 매장 클락**에 저장됐다(저장은 next.venueId 를 쓴다).
+    //   alive 로 이 로드를 막고, 날아가던 재조회(reloadState)도 순번을 올려 무효로 만든다.
+    let alive = true;
     setLoading(true);
+    setState(null);
     curGameSeqRef.current = seedGameSeq;
+    bumpClockReq(seedGameSeq);
     setLoadError(null);
     Promise.all([getClockState(venueId, seedGameSeq), getClockPresets(venueId), getLedgerSessionList(venueId, 60).catch(() => [])])
-      .then(([s, p, ls]) => { setState(s); setPresets(p); setSessions(ls); setView(seedSessionDate ? 'settings' : (s ? 'live' : 'settings')); })
-      .catch((e) => setLoadError(e)) // 실패를 삼키면 '클락 없음'으로 위장된다
-      .finally(() => setLoading(false));
+      .then(([s, p, ls]) => { if (!alive) return; setState(s); setPresets(p); setSessions(ls); setView(seedSessionDate ? 'settings' : (s ? 'live' : 'settings')); })
+      .catch((e) => { if (alive) setLoadError(e); }) // 실패를 삼키면 '클락 없음'으로 위장된다
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, [venueId, seedGameSeq]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 장부에서 넘어옴: 해당 세션을 불러와 게임명·얼리 구간을 클락 설정에 시드
@@ -139,6 +150,9 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
     reloadState();
     return subscribeClock(venueId, reloadState);
   }, [venueId, reloadState, active]);
+  // D2(2026-09-28) — 창 복귀·네트워크 복귀·30초마다 다시 읽는다. realtime 은 끊긴 동안의 정지·재개를 다시 보내 주지 않는다
+  //   (소켓 재연결은 subscribeClock 이 SUBSCRIBED 재진입으로 메운다 — lib/realtimeResync).
+  useResyncOnWake(reloadState, active, 30_000);
   useEffect(() => { if (state) curGameSeqRef.current = state.gameSeq; }, [state]);
 
   const seededInitial = useMemo<ClockConfig>(() => {
@@ -306,14 +320,22 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
   const [clocks, setClocks] = useState<ClockState[]>([]);
   const [games, setGames] = useState<{ gameSeq: number; title?: string }[]>([]);
   const [, setTick] = useState(0);
+  // 매장이 바뀌면 앞 매장 슬롯을 즉시 비운다(숨김↔보임 전환에서는 비우지 않는다 — 깜빡임 방지).
+  useEffect(() => { setClocks([]); setGames([]); }, [venueId]);
   useEffect(() => {
+    // E(2026-09-28) — 매장 전환 가드: A 매장으로 나간 응답이 B 로 바꾼 뒤 도착해 B 의 게임 슬롯을 덮지 않게(alive).
+    //   구독도 **이 매장** 클락만 듣는다 — 전 매장(subscribeRunningClocks)을 들으면 남의 매장 레벨 전환마다 여기가 다시 읽혔다.
+    let alive = true;
     const load = () => {
-      getVenueClocks(venueId).then(setClocks).catch(() => {});
-      getLedgerGames(venueId, sessionDate || undefined).then((gs) => setGames(gs.map((g) => ({ gameSeq: g.gameSeq, title: g.title })))).catch(() => setGames([]));
+      getVenueClocks(venueId).then((c) => { if (alive) setClocks(c); }).catch(() => {});
+      getLedgerGames(venueId, sessionDate || undefined)
+        .then((gs) => { if (alive) setGames(gs.map((g) => ({ gameSeq: g.gameSeq, title: g.title }))); })
+        .catch(() => { if (alive) setGames([]); });
     };
-    if (!active) return;   // 안 보이는 동안은 전 매장 clock_states 구독을 붙들지 않는다(위와 같은 이유)
+    if (!active) return () => { alive = false; };   // 안 보이는 동안은 구독을 붙들지 않는다(위와 같은 이유)
     load();
-    return subscribeRunningClocks(load);
+    const off = subscribeClock(venueId, load);
+    return () => { alive = false; off(); };
   }, [venueId, sessionDate, active]);
   useEffect(() => { if (!active) return; const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, [active]);
   // 게임 슬롯 = 클락 존재 게임 ∪ 그날 장부 게임
@@ -555,7 +577,10 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
     if (!canManage || !state.sessionDate) return;
     if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
     snapTimerRef.current = setTimeout(() => {
-      saveClockLiveStats(state.venueId, state.gameSeq, { ...computeLiveStats(state, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null }).catch(() => {});
+      // D5(2026-09-28) — 400ms 뒤의 **최신** 상태로 계산한다. 렌더 때 잡은 state 를 쓰면 그 사이 리모컨의 아웃이
+      //   반영되기 전 값(생존·탈락)으로 통계를 써서 TV 가 다음 쓰기 전까지 옛 인원을 보였다.
+      const s = stateRef.current;
+      saveClockLiveStats(s.venueId, s.gameSeq, { ...computeLiveStats(s, derived, s.config), buyInAmount: linkedSession?.buyinAmount ?? null }).catch(() => {});
     }, 400);
     return () => { if (snapTimerRef.current) clearTimeout(snapTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps

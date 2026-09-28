@@ -47,6 +47,8 @@ const ALLOW: Record<string, string> = {
     '백업 전진자. "행이 없으면 아무 일도 안 하는 것도 의도다(백업은 새 클락을 만들지 않는다)" — 코드 주석.',
   'src/api/clock.ts::saveClockLiveStats::update:clock_states':
     '부가 통계 · fire-and-forget(.catch(() => {})). 다른 기기가 클락을 끝냈으면 0행이 정상이고 사용자에게 성공을 말하지 않는다.',
+  'src/api/ledger.ts::markTournamentStart::update:ledger_sessions':
+    '비어 있을 때만 채우는 대회 시작 시각(B2). 이미 적혀 있거나 마감·연동 장부 없음이면 0행이 정상이고, 클락 저장의 부수 동작이라 성공을 말하지 않는다.',
   'src/api/messages.ts::markThreadRead::update:user_messages':
     '읽음 스탬프. 미읽음이 없으면 0행이 정상이고, 화면은 성공을 말하지 않는다(뱃지만 갱신).',
   'src/api/notifications.ts::markNotificationsRead::update:notifications':

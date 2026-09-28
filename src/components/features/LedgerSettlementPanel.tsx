@@ -16,12 +16,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Icon, { type IconName } from '../atoms/Icon';
 import { EmptyState } from '../atoms/Skeleton';
 import {
-  getLedgerRange, getLedgerPlayers, kstToday, visitorLabel, wonToMan,
+  getLedgerRange, getLedgerPlayers, visitorLabel, wonToMan,
   type LedgerBuyin, type LedgerPlayer, type LedgerSession,
 } from '../../api/ledger';
 // T 환산은 반드시 TICKET_WON 을 쓴다 — 만원 환산 상수(WON_PER_MAN)와 값이 같다고 섞어 쓰면
 // 둘 중 하나가 바뀌는 순간 T 표시가 조용히 틀어진다(1T = 1만원 정책은 units.ts 가 단일 소스).
 import { TICKET_WON } from '../../lib/units';
+import { businessDateOf } from '../../lib/businessDate';
 import { settlementReport, type SettlePlayer, type SettlementReport } from '../../lib/ledgerSettlement';
 
 const man = (won: number) => `${wonToMan(won)}만`;
@@ -34,7 +35,7 @@ export default function LedgerSettlementPanel({ venueId, date, active = true }: 
   date?: string | null;
   active?: boolean;
 }) {
-  const [day, setDay] = useState<string>(date ?? kstToday());
+  const [day, setDay] = useState<string>(date ?? businessDateOf(venueId));   // B1 — 기본은 영업일
   // 부모(단계 바)가 다른 날짜를 실어 보내면 따라간다 — 사용자가 여기서 바꾼 날짜는 그대로 둔다.
   useEffect(() => { if (date) setDay(date); }, [date]);
 
@@ -78,7 +79,7 @@ export default function LedgerSettlementPanel({ venueId, date, active = true }: 
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-2">
           <span className="text-2xs font-semibold text-ink-muted">정산일</span>
-          <input type="date" value={day} onChange={(e) => setDay(e.target.value || kstToday())}
+          <input type="date" value={day} onChange={(e) => setDay(e.target.value || businessDateOf(venueId))}
             className="input h-10 text-sm tabular-nums" aria-label="정산할 날짜" />
         </label>
         <button type="button" onClick={load} className="btn-ghost h-10 px-3 text-xs">새로고침</button>
@@ -127,8 +128,11 @@ function Report({ r }: { r: SettlementReport }) {
     <div className="space-y-4">
       {/* ── ① 오늘의 숫자 넷 ── */}
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <Kpi label="완납 매출" value={man(t.revenue)} tone="emerald" hint="현금 + 카드 + 이체" />
-        <Kpi label="미수금" value={man(t.unpaid)} tone={t.unpaid > 0 ? 'danger' : 'muted'} hint="아직 못 받은 참가비" />
+        {/* 애드온(2026-09-28)은 바인과 따로 세고 여기서만 더한다 — 엔트리·바인 횟수에는 들어가지 않는다. */}
+        <Kpi testId="kpi-revenue" label="완납 매출" value={man(t.revenue + t.addon.revenue)} tone="emerald"
+          hint={t.addon.count > 0 ? `바인 ${man(t.revenue)} + 애드온 ${man(t.addon.revenue)}` : '현금 + 카드 + 이체'} />
+        <Kpi testId="kpi-unpaid" label="미수금" value={man(t.unpaid + t.addon.unpaid)} tone={t.unpaid + t.addon.unpaid > 0 ? 'danger' : 'muted'}
+          hint={t.addon.unpaid > 0 ? `바인 ${man(t.unpaid)} + 애드온 ${man(t.addon.unpaid)}` : '아직 못 받은 참가비'} />
         <Kpi testId="kpi-buyins" label="총 바인" value={`${t.buyinCount.toLocaleString()}회`} tone="accent"
           hint={`첫 바인 ${t.firstBuyins} · 리바인 ${t.rebuys} · 엔트리 ${ent(t.entries)}`} />
         <Kpi label="참여 인원" value={`${r.people}명`} tone="accent"
@@ -189,6 +193,16 @@ function Report({ r }: { r: SettlementReport }) {
           <Row label="현금성 수납" value={man(t.revenue)} sub="현금 + 카드 + 이체" />
           <Row label="할인이 없었다면 현금성 매출" value={man(t.revenue + t.discount.cashTotal)} />
         </dl>
+        {t.addon.count > 0 && (
+          <div data-testid="settle-addon">
+            <p className="mb-1.5 mt-3 text-2xs font-semibold text-ink-secondary">애드온 {t.addon.count}건 · 바인·엔트리와 따로 셉니다</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Tile label="애드온 매출" value={man(t.addon.revenue)} sub="현금 + 카드 + 이체" />
+              <Tile label="애드온 이용권" value={man(t.addon.ticketWon)} sub={`${Math.round(t.addon.ticketWon / TICKET_WON)}T`} />
+              <Tile label="애드온 미수" value={man(t.addon.unpaid)} tone={t.addon.unpaid > 0 ? 'danger' : undefined} />
+            </div>
+          </div>
+        )}
         {t.removed.count > 0 && (
           <p className="mt-3 rounded-input border border-amber-500/40 bg-amber-500/8 px-3 py-2 text-2xs text-ink-secondary">
             정산에서 제외된 행 <b className="tabular-nums">{t.removed.count}건</b>
@@ -247,8 +261,8 @@ function Report({ r }: { r: SettlementReport }) {
                     <td className="py-2 px-2 text-right tabular-nums text-ink-secondary">{g.buyinCount.toLocaleString()}회</td>
                     <td className="py-2 px-2 text-right tabular-nums text-ink-secondary">{ent(g.entries)}</td>
                     <td className="py-2 px-2 text-right text-ink-muted">{g.targetEntries > 0 ? g.targetEntries : '—'}</td>
-                    <td className="py-2 px-2 text-right font-bold text-emerald-700 dark:text-emerald-300">{man(g.revenue)}</td>
-                    <td className={`py-2 px-2 text-right ${g.unpaid > 0 ? 'font-bold text-danger-light' : 'text-ink-muted'}`}>{man(g.unpaid)}</td>
+                    <td className="py-2 px-2 text-right font-bold text-emerald-700 dark:text-emerald-300">{man(g.revenue + g.addon.revenue)}</td>
+                    <td className={`py-2 px-2 text-right ${g.unpaid + g.addon.unpaid > 0 ? 'font-bold text-danger-light' : 'text-ink-muted'}`}>{man(g.unpaid + g.addon.unpaid)}</td>
                     <td className="py-2 pl-2 text-right text-2xs">
                       {/* ⚠ 2026-09-14 라이트 실측: text-amber-500 '진행' 2.15 · text-emerald-600 '마감' 3.30(11.7px) 으로 AA 미달.
                           두 색 다 라이트 보정 목록에 없던 유틸이라, 보정이 들어 있는 stat-* 토큰으로 바꾼다. */}

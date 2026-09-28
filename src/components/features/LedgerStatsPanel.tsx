@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
-  wonToMan, buyinFinance, discountAmountOf, ledgerCounts, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
+  wonToMan, buyinFinance, addonFinance, addonTotals, discountAmountOf, ledgerCounts, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
   posHasPassword, setPosCancelPassword, subscribeLedger,
 } from '../../api/ledger';
 import Icon from '../atoms/Icon';
+import { TICKET_WON } from '../../lib/units';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { Skeleton } from '../atoms/Skeleton';
 import { getMyVenueNotifyMute, setMyVenueNotifyMute } from '../../api/auth';
@@ -90,6 +91,8 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
   }, [tabPeriod, date, dowRange, reportDays]);
 
   const hasLoaded = useRef(false);
+  const statIdsRef = useRef<{ b: Set<string>; p: Set<string> }>({ b: new Set(), p: new Set() });
+  useEffect(() => { statIdsRef.current = { b: new Set(buyins.map((x) => x.id)), p: new Set(players.map((x) => x.id)) }; }, [buyins, players]);
   useEffect(() => {
     // ⚠ 늦게 도착한 이전 기간 응답이 최신 결과를 덮지 않게 한다(2026-09-07 감사).
     //   기간 탭에 디바운스·disabled 가 없어 연타가 가능한데, '총괄'(from 2000-01-01)은 느리고 '당일'은 빠르다 →
@@ -126,7 +129,10 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
   useEffect(() => {
     if (tabPeriod !== 'day') return;
     if (!active) return;
-    return subscribeLedger(venueId, () => setLiveTick((t) => t + 1));
+    // F(2026-09-28) — 바인 취소·플레이어 삭제(DELETE)도 받는다: 지금 통계에 들어 있는 행 id 면 다시 센다.
+    return subscribeLedger(venueId, () => setLiveTick((t) => t + 1), {
+      ownsRow: (t, id) => (t === 'ledger_buyins' ? statIdsRef.current.b : statIdsRef.current.p).has(id),
+    });
   }, [venueId, tabPeriod, active]);
 
   // 숨은 동안(구독 꺼짐) 놓친 변경을 다시 보일 때(active 상승) 한 번 재검증 — StoreDashboard·MyPostersTab 과 같은 배선.
@@ -175,7 +181,9 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
     const dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; target: number; dates: Set<string>; players: Set<string>; sideE: number; sideRev: number }> = {};
     const unpaidByPlayer: Record<string, number> = {};
     for (const b of src) {
-      const f = fin(b);
+      // 애드온(2026-09-28)은 **돈에만** 더한다 — 엔트리·바인 횟수·얼리에는 절대 안 들어간다(ledger.ts addonFinance).
+      const bf = fin(b), a = addonFinance(b);
+      const f = { ...bf, paid: bf.paid + a.revenue, unpaid: bf.unpaid + a.unpaid, ticketPaid: bf.ticketPaid + a.ticketWon / TICKET_WON };
       revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
       if (b.gameSeq > 1) { sideBuyins += 1; sideRev += f.paid; sideGames.add(bkey(b)); }
       else { mainBuyins += 1; mainRev += f.paid; }
@@ -218,7 +226,8 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
     const grossPerEntry = cnt.totalBuyins > 0 ? (revenue + unpaid) / cnt.totalBuyins : 0;
     return {
       total: src.length, entries, buyinCount: cnt.totalBuyins, firstBuyins: cnt.firstBuyins, rebuys: cnt.rebuys, grossSum, discSum, players: playerSet.size, revenue, unpaid, support, ticket, ticketUnpaid,
-      unpaid_cnt: src.filter((b) => fin(b).unpaid > 0).length,
+      unpaid_cnt: src.filter((b) => fin(b).unpaid > 0 || addonFinance(b).unpaid > 0).length,
+      addon: addonTotals(src),
       byMethod, ranking: Object.entries(byPlayer).sort((a, b) => b[1] - a[1]),
       unpaidRanking: Object.entries(unpaidByPlayer).sort((a, b) => b[1] - a[1]),
       // 기준 엔트리(GTD 목표) 대비는 **금액 엔트리**가 분자다 — 반값 손님은 목표를 0.5 명분만 채운다.
@@ -365,8 +374,8 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
             <StatCard label="할인 바인" value={`${m.discountCnt}건`} sub={`바인 중 ${m.discountRatio.toFixed(1)}%`} icon="down" />
             <StatCard label="총 할인액" value={`${m.discountWon.toLocaleString()} 원`} sub={m.grossSum > 0 ? `정상가 ${wonToMan(m.grossSum)}만원` : '할인 없음'} icon="percent" gold />
             {/* 2026-09-14: 3열 타일 폭 55px 에서 이 라벨만 `완납`/`매출액` 두 줄이었다(옆 타일은 1줄). */}
-            <StatCard label="완납액" value={`${m.revenue.toLocaleString()} 원`} icon="wallet" emerald />
-            <StatCard label="미수 금액" value={`${m.unpaid.toLocaleString()} 원`} icon="alert" danger={m.unpaid > 0} />
+            <StatCard label="완납액" value={`${m.revenue.toLocaleString()} 원`} icon="wallet" emerald sub={m.addon.count > 0 ? `애드온 ${wonToMan(m.addon.revenue)}만 포함` : undefined} />
+            <StatCard label="미수 금액" value={`${m.unpaid.toLocaleString()} 원`} icon="alert" danger={m.unpaid > 0} sub={m.addon.unpaid > 0 ? `애드온 ${wonToMan(m.addon.unpaid)}만 포함` : undefined} />
             <StatCard label="회수 티켓" value={`${m.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} icon="ticket" gold sub={m.ticketUnpaid > 0 ? `미수 ${m.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : '1T = 1만원'} />
           </div>
 
@@ -1081,8 +1090,10 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
   const [owners, setOwners] = useState<VenueOwner[]>([]);
   const [nick, setNick] = useState('');
   const [busy, setBusy] = useState(false);
-  const load = () => { listVenueOwners(venueId).then(setOwners).catch(() => {}); };
-  useEffect(load, [venueId]);
+  // E(2026-09-28) — 매장 전환 가드: A 매장 공동 사장 목록이 B 로 바꾼 뒤 도착해 B 카드에 남지 않게.
+  const ownerOf = useRef(venueId);
+  const load = () => { const v = venueId; listVenueOwners(v).then((o) => { if (ownerOf.current === v) setOwners(o); }).catch(() => {}); };
+  useEffect(() => { ownerOf.current = venueId; setOwners([]); load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   const add = async () => {
     if (!nick.trim()) return;
     setBusy(true);

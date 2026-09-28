@@ -3529,7 +3529,11 @@ export default function App() {
   }, [posterDeleteQ]);
 
   // 내 매장 keep-alive(memo) 전용 — 인라인 클로저면 App 재렌더마다 새 참조라 memo 가 무력화된다
-  const handleCreatePosterFromStore = useCallback(() => {
+  // store-team 2026-09-28 — 내 매장 전환기에서 **고른 매장**으로 포스터를 등록한다(예전엔 늘 프로필 매장 user.venueId).
+  //   두 매장 소속 계정이 B 를 보고 [+ 새 게임]을 눌러도 A 매장 포스터로 저장됐다. 권한은 서버(schedules RLS)가 다시 본다.
+  const storePosterVenueRef = useRef<string | null>(null);
+  const handleCreatePosterFromStore = useCallback((venueId?: string | null) => {
+    storePosterVenueRef.current = venueId ?? null;
     // 승인 전 업주는 포스터 등록 차단(서버 RLS와 이중 방어 + 명확한 안내)
     if (user?.role === 'venue_owner' && !user.approved) {
       toast.show('매장 승인 완료 후 포스터를 등록할 수 있습니다', 'error');
@@ -3644,10 +3648,10 @@ export default function App() {
     if (!user) { toast.show('로그인이 풀렸습니다. 다시 로그인해 주세요.', 'error'); return { ok: false, saved: 0, total: 1 }; }
     const adminPosting = user.role === 'admin';
     // 관리자: 선택/직접입력한 홀덤펍 사용, 즉시 승인. 업주: 본인 매장, 승인 대기.
-    const venueIdToUse = adminPosting ? (data.venueId || '') : (user.venueId ?? '');
+    const venueIdToUse = adminPosting ? (data.venueId || '') : (storePosterVenueRef.current ?? user.venueId ?? '');
     const pubNameToUse = adminPosting
       ? (venues.find((v) => v.id === data.venueId)?.name ?? data.pubName ?? '미지정')
-      : (venues.find((v) => v.id === user.venueId)?.name ?? user.name);
+      : (venues.find((v) => v.id === venueIdToUse)?.name ?? user.name);
     const addDays = (iso: string, n: number) => { const dd = new Date(iso + 'T00:00:00'); dd.setDate(dd.getDate() + n); return dd.toLocaleDateString('en-CA'); };
     const mkPayload = (dateStr: string) => ({
       title:          data.title,
@@ -4898,6 +4902,7 @@ export default function App() {
         onSubmit={handleSubmitPoster}
         venues={venues.map((v) => ({ id: v.id, name: v.name, region: v.region }))}
         pastPosters={schedules}
+        storeVenueId={storePosterVenueRef.current}
       />
       )}
 

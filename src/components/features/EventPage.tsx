@@ -470,7 +470,7 @@ function TearSheet({ card, phase, result, busy, voucherTitle, onOpen, onClose }:
   const face = (
     <>
       <BackArt v={card.idx % BACKS.length} ink={b.ink} />
-      <span className="absolute inset-2.5 rounded-[10px] border" />
+      <span className="absolute inset-2.5 rounded-[10px] border border-white/12" />
       <span className="absolute inset-x-0 top-3 text-center text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">NURI</span>
       <span className="absolute inset-0 flex items-center justify-center text-3xl font-extrabold tabular-nums text-white/85">{card.idx}</span>
     </>

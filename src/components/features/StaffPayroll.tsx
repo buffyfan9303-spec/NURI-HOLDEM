@@ -210,25 +210,32 @@ export function StaffSettlement({ venueId, active = true }: { venueId: string; a
   const [from, to] = monthRange(month);
   // 주 40h·주휴는 주 단위라 첫 주 월요일부터 읽는다(그 앞날 금액은 staffPay 가 이 달에 넣지 않는다).
   const loadFrom = weekStartOf(from);
+  // E(2026-09-28) — 매장 전환 가드: 앞 매장 출근 기록이 늦게 와서 지금 매장 급여표를 덮지 않게(alive).
   useEffect(() => {
+    let alive = true;
     const reload = () => getStaffSchedule(venueId, loadFrom, to)
-      .then((ss) => { setShifts(ss); setShiftErr(null); })
-      .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
+      .then((ss) => { if (alive) { setShifts(ss); setShiftErr(null); } })
+      .catch((e) => { if (alive) setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')); });
     // 숨은 판(내 매장 keep-alive)은 채널을 놓는다 — 다시 보이면(active) 이 효과가 다시 돌며 조용히 한 번 읽는다(로딩 표시 없음).
-    if (!active) return;
+    if (!active) return () => { alive = false; };
     reload();
-    return subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
+    const off = subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
+    return () => { alive = false; off(); };
   }, [venueId, loadFrom, to, shiftTick, active]);
   useEffect(() => {
+    let alive = true;
     getDealerShifts(venueId, loadFrom, to)
-      .then((ds) => { setDealers(ds); setDealerErr(null); })
-      .catch((e) => setDealerErr(msgOf(e, '딜러 근무 기록을 불러오지 못했습니다')));
+      .then((ds) => { if (alive) { setDealers(ds); setDealerErr(null); } })
+      .catch((e) => { if (alive) setDealerErr(msgOf(e, '딜러 근무 기록을 불러오지 못했습니다')); });
+    return () => { alive = false; };
   }, [venueId, loadFrom, to, shiftTick]);
   useEffect(() => {
+    let alive = true;
     setWageErr(null);
     getStaffWages(venueId)
-      .then((ws) => { const m: Record<string, number> = {}; ws.forEach((w) => (m[w.name] = w.hourlyWage)); setWages(m); })
-      .catch((e) => { setWages({}); setWageErr(msgOf(e, '시급을 불러오지 못했습니다')); });
+      .then((ws) => { if (!alive) return; const m: Record<string, number> = {}; ws.forEach((w) => (m[w.name] = w.hourlyWage)); setWages(m); })
+      .catch((e) => { if (alive) { setWages({}); setWageErr(msgOf(e, '시급을 불러오지 못했습니다')); } });
+    return () => { alive = false; };
   }, [venueId]);
 
   /** 직원·딜러 모두 staffPay.laborSummary 한 식으로 센다 — 대시보드 인건비 요약도 같은 함수다. */
@@ -379,14 +386,17 @@ export function StaffWorkLog({ venueId, active = true }: { venueId: string; acti
   const [shiftErr, setShiftErr] = useState<string | null>(null);
   const [shiftTick, setShiftTick] = useState(0);
   const [from, to] = monthRange(month);
+  // E(2026-09-28) — 매장 전환 가드: 앞 매장 출근 기록이 늦게 와서 지금 매장 급여표를 덮지 않게(alive).
   useEffect(() => {
+    let alive = true;
     const reload = () => getStaffSchedule(venueId, from, to)
-      .then((ss) => { setShifts(ss); setShiftErr(null); })
-      .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
+      .then((ss) => { if (alive) { setShifts(ss); setShiftErr(null); } })
+      .catch((e) => { if (alive) setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')); });
     // 숨은 판(내 매장 keep-alive)은 채널을 놓는다 — 다시 보이면(active) 이 효과가 다시 돌며 조용히 한 번 읽는다(로딩 표시 없음).
-    if (!active) return;
+    if (!active) return () => { alive = false; };
     reload();
-    return subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
+    const off = subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
+    return () => { alive = false; off(); };
   }, [venueId, from, to, shiftTick, active]);
   const sorted = useMemo(() => [...shifts].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.name.localeCompare(b.name))), [shifts]);
   return (
@@ -438,13 +448,16 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
   const yesterday = kstToday(Date.now() - 86_400_000);
   const canSelfEdit = (d: string) => !readOnly && (d === today || d === yesterday);
   const nowHm = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  // E(2026-09-28) — 매장 전환 가드: 앞 매장 출근 기록이 늦게 와서 지금 매장 급여표를 덮지 않게(alive).
   useEffect(() => {
+    let alive = true;
     const reload = () => getStaffSchedule(venueId, from, to)
-      .then((ss) => { setShifts(ss.filter((s) => myNames.includes(s.name))); setShiftErr(null); })
-      .catch((e) => setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')));
-    if (!active) return; // 숨은 판은 채널을 놓는다 — 다시 보이면 조용히 한 번 읽는다
+      .then((ss) => { if (alive) { setShifts(ss.filter((s) => myNames.includes(s.name))); setShiftErr(null); } })
+      .catch((e) => { if (alive) setShiftErr(msgOf(e, '출근 기록을 불러오지 못했습니다')); });
+    if (!active) return () => { alive = false; }; // 숨은 판은 채널을 놓는다 — 다시 보이면 조용히 한 번 읽는다
     reload();
-    return subscribeStaffSchedule(venueId, reload); // 실시간 동기화
+    const off = subscribeStaffSchedule(venueId, reload); // 실시간 동기화
+    return () => { alive = false; off(); };
     /* eslint-disable-next-line */
   }, [venueId, from, to, shiftTick, user, active]);
   const setT = async (s: StaffShift, field: 'checkIn' | 'checkOut', val: string) => {

@@ -12,6 +12,7 @@
 //   화면은 발급 매장(venueName)만 말한다. 필드 자체는 스키마 보존을 위해 남겨 둔다.
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
+import { resubscribeStatus } from '../lib/realtimeResync';
 import { makeSearchCache } from '../lib/searchCache';
 import { identityEnabled } from '../lib/identityFlag';
 
@@ -110,7 +111,10 @@ export function subscribeVenueVouchers(venueId: string, onChange: () => void): (
   const ch = supabase
     .channel(`store_vouchers_${venueId}_${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'store_vouchers', filter: `venue_id=eq.${venueId}` }, () => onChange())
-    .subscribe();
+    // F(2026-09-28) — 이용권 삭제(delete_voucher·일괄 삭제)는 DELETE 라 filter 구독에 안 온다(old 에는 id 만 실린다).
+    //   삭제는 드문 업주 조작이라 매장 구분 없이 한 번 다시 읽는다 — 지운 이용권이 다른 기기 레일·관리 모달에 남는 것보다 싸다.
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'store_vouchers' }, () => onChange())
+    .subscribe(resubscribeStatus(onChange));
   return () => { supabase.removeChannel(ch); };
 }
 
@@ -127,7 +131,7 @@ export function subscribeMyVouchers(onChange: () => void): () => void {
     ch = supabase
       .channel(`my_vouchers_${u.id}_${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'store_vouchers', filter: `holder_user_id=eq.${u.id}` }, () => onChange())
-      .subscribe();
+      .subscribe(resubscribeStatus(onChange));   // 2026-09-28 — 소켓 재연결 때 놓친 복원·사용을 한 번 다시 읽는다
   });
   return () => { cancelled = true; if (ch) supabase.removeChannel(ch); };
 }

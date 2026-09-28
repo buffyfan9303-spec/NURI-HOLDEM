@@ -192,9 +192,13 @@
     50% { transform: scale(1.15); opacity: 0.85; }
   }
   /* 🔴 blur 제거(2026-09-24) — blur 가 섞이면 합성 스레드로 못 가 compositeFailed=4096. 이동·투명도는 그대로. */
+  /* 🔴 2026-09-28 — transform 을 통째로 바꾸면 요소 자신의 정렬 translate(left-1/2 -translate-x-1/2 등)가 0.32s 동안 빠진다
+     (설치 배너가 반 폭 189.5px 오른쪽에서 나타나 제자리로 튀었다 — v3 때부터). 아래 transform 유틸 에뮬레이션과 같은 합성식을
+     뒤에 붙여 요소가 원래 서 있던 변환 위에 넛지만 더한다(to = 제 자리 그대로 → 끝나는 프레임에 튐 0). 유틸이 없으면 변수 기본값(0·1)이라 종전과 같다.
+     ⚠ calc(var(--tw-translate-y) + 8px) 로 합치지 마라 — 기본값이 단위 없는 0 이라 calc 가 무효가 된다. */
   @keyframes slide-up {
-    from { transform: translateY(8px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+    from { transform: translateY(8px) translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(var(--tw-v3-scale-x)) scaleY(var(--tw-v3-scale-y)); opacity: 0; }
+    to { transform: translateY(0) translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(var(--tw-v3-scale-x)) scaleY(var(--tw-v3-scale-y)); opacity: 1; }
   }
   /* 시트(하단 모달) 열기: 화면 아래에서 실제로 올라온다. ⚠ slide-up(8px 넛지)을 쓰면 시트가 반투명하게 번쩍 나타난다. */
   @keyframes sheet-up {
@@ -2614,9 +2618,12 @@ button:not([data-no-press]), [role='button']:not([data-no-press]), a:not([data-n
 /* a 도 동일 — 전화·길찾기·카카오맵 앵커가 눌러도 무반응이라 '죽은 버튼'처럼 느껴졌다 */
 /* 눌림 = 스케일(물리감) + 미세 감광. 아이폰의 손맛은 '즉시 눌리고(60ms) 천천히 복귀(200ms)'다.
    자체 active:scale-* 유틸을 가진 요소(카드·날짜셀 등)는 그 값이 우선한다. */
+/* 🔴 2026-09-28 — scale(0.97) 한 값이면 가운데 정렬(top-1/2 -translate-y-1/2 등) 버튼이 누르는 동안 정렬 translate 를 잃고
+   반 높이만큼 떨어졌다가(비밀번호 보기 22px) 0.2s 복귀 동안 미끄러져 돌아왔다 — v3 때부터. transform 유틸과 같은 함수 목록으로
+   이동·회전은 그대로 두고 배율만 바꾼다(목록이 같아 복귀 보간도 제자리에서 크기만). 유틸이 없는 버튼은 변수 기본값이라 종전과 같다. */
 button:active:not(:disabled), [role='button']:active, a:active:not([data-no-press]) {
   opacity: 0.8;
-  transform: scale(0.97);
+  transform: translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)) rotate(var(--tw-v3-rotate)) scaleX(0.97) scaleY(0.97);
   transition-duration: 0.06s;
 }
 

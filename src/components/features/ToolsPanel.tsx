@@ -672,7 +672,7 @@ function SpotHeroCard({ onOpen }: { onOpen: (k: ToolKey, opts?: OpenIntent) => v
             읽힌다고 봤다). 오너가 화면을 보고 아니라고 했으니 배너는 원래대로 간다.
             ⚠ **도구 카탈로그 타일(이 파일 위쪽 TOOLS 의 `icon: 'cards'`)은 건드리지 마라** —
               그게 "gto 내에 있는 아이콘" 이고 지금 그대로 유지가 지시다. 둘을 같이 맞추려 들지 마라. */}
-        <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border"
+        <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12"
           style={{ background: 'radial-gradient(120% 120% at 50% 0%, #242B48 0%, #141930 58%, #0A0D1B 100%)' }} aria-hidden>
           <img src="/brand/nuri-holdem-symbol.svg" alt="" width={20} height={20} draggable={false} />
         </span>
