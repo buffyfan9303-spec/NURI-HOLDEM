@@ -6,6 +6,7 @@ import Modal from '../atoms/Modal';
 import { SkeletonList } from '../atoms/Skeleton';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
+import { isAuthorShown } from '../../lib/postVisible';
 import { useToast } from '../atoms/Toast';
 import type { CommunityPost, ReactionType, Comment } from '../../api/community';
 import type { UserRole } from '../../api/auth';
@@ -200,9 +201,11 @@ export default function PostDetailModal({
   currentPostIdRef.current = post?.id ?? null;
   const { user } = useAuth();
   // ── UI-04 이전/다음 글 — 훅은 `if (!post) return null` **위**(컴포넌트 최상단)에 둔다(훅 규칙).
+  // 이웃 판정에도 목록과 같은 차단 규칙을 건다 — 안 그러면 차단한 사람의 글로 이전/다음 이동이 열린다(2026-09-29)
+  const { block, isBlocked } = useBlocks();
   const neighbors = useMemo(
-    () => neighborsOf(nav ?? null, post?.id ?? '', (p) => isPostHidden(p, user)),
-    [nav, post?.id, user],
+    () => neighborsOf(nav ?? null, post?.id ?? '', (p) => isPostHidden(p, user) || !isAuthorShown(p.userId, isBlocked, user?.id)),
+    [nav, post?.id, user, isBlocked],
   );
   const [navBusy, setNavBusy] = useState(false);
   const [navErr, setNavErr] = useState<unknown>(null);
@@ -241,7 +244,7 @@ export default function PostDetailModal({
       const page = await searchPosts({ q: nav.q || undefined, category: nav.category, order: nav.order, cursor: nav.cursor });
       if (currentPostIdRef.current !== startId) return;   // 그 사이 다른 글로 갔으면 이 응답은 버린다
       const grown = appendPage(nav, page);
-      const n2 = neighborsOf(grown, startId, (p) => isPostHidden(p, user));
+      const n2 = neighborsOf(grown, startId, (p) => isPostHidden(p, user) || !isAuthorShown(p.userId, isBlocked, user?.id));
       if (n2.next.post) onNavigate(n2.next.post, grown);
       else onNavigate(post, grown);   // 받았는데도 이웃이 없다(전부 숨김·끝) — 늘어난 ctx 만 올려 상태 문구가 갱신되게
     } catch (e) {
@@ -250,7 +253,6 @@ export default function PostDetailModal({
       if (currentPostIdRef.current === startId) setNavBusy(false);
     }
   };
-  const { block } = useBlocks();
   // 더블탭 좋아요(인스타) — 본문을 빠르게 두 번 탭하면 좋아요 + 하트 팝
   const [heartKey, setHeartKey] = useState(0);
   const [authorMark, setAuthorMark] = useState('');
@@ -258,12 +260,14 @@ export default function PostDetailModal({
   const [authorNickToken, setAuthorNickToken] = useState<string | null>(null);
   const titlePts = useTitlePoints([post?.userId]); // 작성자 칭호(활동점수)
   useEffect(() => {
+    let active = true;   // PC 2단에서 글을 빨리 갈아타면 A 작성자의 늦은 응답이 B 작성자에게 칠해졌다(2026-09-29 실측: 닉네임 색)
     setAuthorMark('');
     setAuthorNickToken(null);
     if (post?.userId) {
-      getEquippedMarks([post.userId]).then((m) => setAuthorMark(m[post.userId] ?? '')).catch(() => {});
-      getNickColors([post.userId]).then((m) => setAuthorNickToken(m[post.userId] ?? null)).catch(() => {});
+      getEquippedMarks([post.userId]).then((m) => { if (active) setAuthorMark(m[post.userId] ?? ''); }).catch(() => {});
+      getNickColors([post.userId]).then((m) => { if (active) setAuthorNickToken(m[post.userId] ?? null); }).catch(() => {});
     }
+    return () => { active = false; };
   }, [post?.userId]);
   const doubleLike = () => {
     if (!user || !post) return;

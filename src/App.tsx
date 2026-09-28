@@ -3381,8 +3381,14 @@ export default function App() {
     setListings((prev) => [saved, ...prev]);
   }, [user]);
 
+  // C-5(2026-09-29): toggle_post_like 는 비멱등이라 연타하면 늦게 온 옛 응답이 최신 화면을 덮고(화면 true/2 · 서버 false/1),
+  //   실패 시 flip 이 '현재'를 뒤집어 엇갈렸다. 글마다 비행 중 1건만 보낸다 — 응답이 오기 전 누름은 무시한다.
+  //   ponytail: 비행 중 누름은 버린다(연타 취소 의도 유실). 필요하면 '원하는 최종 상태'를 모아 응답 뒤 한 번 더 보내는 방식으로.
+  const likeInFlight = useRef(new Set<string>());
   const handleLikePost = useCallback((postId: string) => {
     if (!userRefForGate.current) { promptLogin(); return; } // 비로그인: flip→서버실패→롤백 소음 대신 바로 유도
+    if (likeInFlight.current.has(postId)) return;
+    likeInFlight.current.add(postId);
     // 낙관적 토글(1인 1회) → 서버 권위값 보정, 실패 시 롤백. 피드(posts)와 상세(openPost) 동시 반영.
     const flip = (p: CommunityPost) => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
     const apply = (fn: (p: CommunityPost) => CommunityPost) => {
@@ -3392,7 +3398,8 @@ export default function App() {
     apply(flip);
     togglePostLike(postId)
       .then(({ liked, count }) => apply((p) => ({ ...p, liked, likeCount: count })))
-      .catch((e) => { apply(flip); toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'); }); // 되돌리기
+      .catch((e) => { apply(flip); toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'); }) // 되돌리기(비행 중 1건이라 flip 한 번 = 누르기 전 상태)
+      .finally(() => { likeInFlight.current.delete(postId); });
   }, [toast]);
 
   // 관리자: 회원 업데이트 (승인/정지/해제) — 서버 반영

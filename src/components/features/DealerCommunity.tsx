@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBlocks } from '../../contexts/BlockContext';
+import { isAuthorShown } from '../../lib/postVisible';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { useToast } from '../atoms/Toast';
 import {
   getDealerPosts, createDealerPost, deleteDealerPost,
@@ -33,11 +36,16 @@ const KIND_STYLE: Record<DealerPostKind, string> = {
 /** 딜러 게시판 — 구인/구직/일반. 누구나 열람, 로그인 시 작성/지원. */
 export default function DealerCommunity() {
   const { user } = useAuth();
+  const { isBlocked } = useBlocks();
   const toast = useToast();
   const isAdmin = user?.role === 'admin';
   const canPost = !!user;
 
-  const [posts, setPosts]   = useState<DealerPost[]>([]);
+  const [rawPosts, setPosts] = useState<DealerPost[]>([]);
+  // 차단한 사람의 구인·구직 글은 렌더 직전에 거른다(본인 글은 가리지 않는다) — 게시판·댓글과 같은 판정(lib/postVisible)
+  const posts = useMemo(() => rawPosts.filter((p) => isAuthorShown(p.authorId, isBlocked, user?.id)), [rawPosts, isBlocked, user?.id]);
+  // 조회 실패를 '아직 글이 없습니다' 로 위장하지 않는다 — 오류 카드 + 다시 시도(공지의 noticesErr 와 같은 모양)
+  const [postsErr, setPostsErr] = useState<unknown>(null);
   const [filterKind, setFilterKind] = useState<DealerPostKind | 'all'>('all'); // 구인/구직/일반 분리 보기
   const [loading, setLoading] = useState(true);
   const [tick, setTick]     = useState(0);
@@ -71,8 +79,13 @@ export default function DealerCommunity() {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
+    let alive = true;   // 재조회가 겹쳐도 마지막 요청의 응답만 반영
     setLoading(true);
-    getDealerPosts().then(setPosts).catch(() => {}).finally(() => setLoading(false));
+    getDealerPosts()
+      .then((p) => { if (alive) { setPosts(p); setPostsErr(null); } })
+      .catch((e: unknown) => { if (alive) setPostsErr(e); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, [tick]);
   const reload = () => setTick((t) => t + 1);
 
@@ -211,6 +224,8 @@ export default function DealerCommunity() {
       {(() => { const shown = filterKind === 'all' ? posts : posts.filter((x) => x.kind === filterKind); return (
       loading ? (
         <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
+      ) : postsErr != null && rawPosts.length === 0 ? (
+        <LoadErrorCard error={postsErr} what="딜러 글" onRetry={reload} compact />
       ) : shown.length === 0 ? (
         <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="briefcase" />} title={filterKind === 'all' ? '아직 글이 없습니다. 첫 구인·구직 글을 남겨보세요.' : `${filterKind === 'hiring' ? '구인' : filterKind === 'seeking' ? '구직' : '일반'} 글이 아직 없습니다.`} /></div>
       ) : (

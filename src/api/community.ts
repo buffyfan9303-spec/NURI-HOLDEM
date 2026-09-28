@@ -2,6 +2,7 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 import { idempotentOff, mustAffect } from './_mustAffect';
+import { gateError } from './_gateError';
 import type { UserRole } from './auth';
 import { dedupe } from '../lib/inflight';
 
@@ -458,10 +459,10 @@ export async function addPost(
   // 1차: 신규 컬럼 포함 insert. 컬럼 미존재(42703) 등이면 content-only로 폴백.
   const first = await supabase.from('community_posts').insert(extended).select().single();
   if (!first.error) return rowToPost(first.data);
-  if (first.error.code !== '42703') throw first.error;
+  if (first.error.code !== '42703') throw gateError(first.error, '게시글 등록에 실패했습니다');
 
   const fallback = await supabase.from('community_posts').insert(base).select().single();
-  if (fallback.error) throw fallback.error;
+  if (fallback.error) throw gateError(fallback.error, '게시글 등록에 실패했습니다');
   // 클라이언트 표시용으로 입력값을 합쳐 반환(DB엔 미저장이지만 UI 일관성 유지)
   return { ...rowToPost(fallback.data), category: payload.category, title: payload.title, images: payload.images };
 }
@@ -470,7 +471,7 @@ export async function addPost(
 export async function togglePostLike(postId: string): Promise<{ liked: boolean; count: number }> {
   if (IS_MOCK) return { liked: true, count: 1 };
   const { data, error } = await supabase.rpc('toggle_post_like', { p_post_id: postId });
-  if (error) throw new Error(error.message);
+  if (error) throw gateError(error, '좋아요 처리에 실패했습니다');   // 원문(error.message) 그대로 토스트되던 것 — 보안표준 6
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d = (data ?? {}) as any;
   return { liked: d.liked === true, count: Number(d.count ?? 0) };
@@ -528,7 +529,7 @@ export async function addLiveMessage(
     user_color: payload.userColor ?? null,
     content:    payload.content,
   }).select().single();
-  if (error) throw error;
+  if (error) throw gateError(error, '전송에 실패했습니다');
   return rowToLiveMessage(data);
 }
 
@@ -901,7 +902,7 @@ export async function createDealerPost(input: {
     work_period: hiring ? (input.workPeriod?.trim() || null) : null,
     content: content.slice(0, 2000),
   });
-  if (error) throw error;
+  if (error) throw gateError(error, '등록에 실패했습니다');
 }
 export async function deleteDealerPost(id: string): Promise<void> {
   if (IS_MOCK) return;
@@ -1034,7 +1035,7 @@ export async function sendGroupMessage(groupId: string, input: { userName: strin
   const body = input.content.trim();
   if (!body) throw new Error('내용을 입력해 주세요');
   const { data, error } = await supabase.from('group_messages').insert({ group_id: groupId, user_id: user.id, user_name: input.userName, user_color: input.userColor ?? null, content: body.slice(0, 500) }).select('*').single();
-  if (error) throw error;
+  if (error) throw gateError(error, '전송에 실패했습니다');
   return { id: data.id, groupId: data.group_id, userId: data.user_id, userName: data.user_name, userColor: data.user_color ?? undefined, content: data.content, createdAt: data.created_at };
 }
 export async function deleteGroupMessage(id: string): Promise<void> {
@@ -1068,7 +1069,7 @@ export async function sendVenueMessage(venueId: string, input: { userName: strin
   const body = input.content.trim();
   if (!body) throw new Error('내용을 입력해 주세요');
   const { data, error } = await supabase.from('venue_messages').insert({ venue_id: venueId, user_id: user.id, user_name: input.userName, user_color: input.userColor ?? null, content: body.slice(0, 500) }).select('*').single();
-  if (error) throw error;
+  if (error) throw gateError(error, '전송에 실패했습니다');
   return { id: data.id, venueId: data.venue_id, userId: data.user_id, userName: data.user_name, userColor: data.user_color ?? undefined, content: data.content, createdAt: data.created_at };
 }
 export async function deleteVenueMessage(id: string): Promise<void> {
@@ -1100,7 +1101,7 @@ export async function createGroupPost(groupId: string, input: { authorName: stri
   const body = input.content.trim();
   if (!body) throw new Error('내용을 입력해 주세요');
   const { error } = await supabase.from('group_posts').insert({ group_id: groupId, author_id: user.id, author_name: input.authorName, author_color: input.authorColor ?? null, title: input.title?.trim().slice(0, 80) || null, content: body.slice(0, 4000) });
-  if (error) throw error;
+  if (error) throw gateError(error, '등록에 실패했습니다');
 }
 export async function deleteGroupPost(id: string): Promise<void> {
   if (IS_MOCK) return;

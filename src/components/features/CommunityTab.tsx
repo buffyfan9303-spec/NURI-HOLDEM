@@ -6,6 +6,8 @@ import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { getActivePromotedPosts, type PromotedPost } from '../../api/ads';
 import { getEquippedMarks, getNickColors, isBumped, searchPosts, type PostCursor } from '../../api/community';
 import { isStaleResponse } from '../../lib/staleResponse';
+import { isAuthorShown, isPostVisible } from '../../lib/postVisible';
+import { mergeLiveMessages } from '../../lib/mergeLiveMessages';
 import type { PostNavCtx } from '../../lib/postNav';
 import { getAppSetting, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../api/settings';
 import { hotFirst, pinnedFirst, usableAdCount } from '../../lib/pinnedFirst';
@@ -114,7 +116,7 @@ function CommunityTab({
   const { isBlocked } = useBlocks();
   const { user: meForFeed } = useAuth();
   const posts = useMemo(
-    () => rawPosts.filter((p) => !isBlocked(p.userId) && (!p.blinded || isAdmin || p.userId === meForFeed?.id)),
+    () => rawPosts.filter((p) => isPostVisible(p, { isBlocked, isAdmin, meId: meForFeed?.id })),
     [rawPosts, isBlocked, isAdmin, meForFeed],
   );
   const [section, setSectionState] = useState<Section>(() => {
@@ -367,8 +369,9 @@ function CommunityTab({
           실측 전: 바 64.75px = pt-2(8.5) + 버튼 h-11(46.75) + pb-2(8.5) + 테두리(1).
           실측 후: 바 53.5px  = pt-1(4.25) + 버튼 h-[44px] + pb-1(4.25) + 테두리(1).
           히트 영역은 44px 를 그대로 지킨다(WCAG 2.5.5) — 줄인 것은 트레이 여백과 **시각 알약**뿐이다.
-          ⚠ 2026-09-06 의 '알약 40px / 트레이 44px' 지시를 이 지시가 대체한다(같은 오너, 더 최신). */}
-      <div data-community-secbar="" className="sticky top-[calc(var(--header-now)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(var(--spacing-header-h)+(var(--spacing-tab-h))-0.5rem)] z-30 -mx-page-x px-page-x subbar-aura border-b border-border-subtle pt-1 pb-1 lg:pt-1 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4">
+          ⚠ 2026-09-06 의 '알약 40px / 트레이 44px' 지시를 이 지시가 대체한다(같은 오너, 더 최신).
+          C-9(2026-09-29): 붙는 위치 = 헤더 − pt-1 + 헤더 밑줄 1px — 버튼 윗변이 헤더 밑변에 정확히 닿는다(−0.5rem 일 때 접힌 헤더가 위 5px 를 덮어 39/44px). */}
+      <div data-community-secbar="" className="sticky top-[calc(var(--header-now)+env(safe-area-inset-top)-0.25rem+1px)] lg:top-[calc(var(--spacing-header-h)+(var(--spacing-tab-h))-0.25rem)] z-30 -mx-page-x px-page-x subbar-aura border-b border-border-subtle pt-1 pb-1 lg:pt-1 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4">
         {/* ⚠ 트랙(bg-surface-high) 없이 배경 위에 그대로 띄운다(오너 2회 지적, 2026-09-07).
             세그먼트 트랙이 있으면 그 자체가 '네모칸'으로 읽힌다 — 띠 색을 지면에 맞춰도 박스는 남는다.
             활성 표시는 미끄러지는 알약(pill-active)이 이미 하고 있어 트랙 없이도 어느 탭인지 분명하고,
@@ -519,6 +522,7 @@ function SectionTab({ id, active, label, onClick }: { id: string; active: boolea
     <button
       type="button"
       data-testid={`sec-tab-${id}`}
+      aria-pressed={active}
       onClick={onClick}
       className={[
         // flex-[1_0_auto]: 자리가 남으면 균등 분배, 좁으면 내용 폭(일정한 px-2)을 지키고 바가 가로 스크롤
@@ -543,7 +547,7 @@ function SectionTab({ id, active, label, onClick }: { id: string; active: boolea
         //     같은 규칙을 PC 에 걸면 1440 에서 칸이 200px 가 돼 7탭이 넘치고, 넓은 화면에서
         //     굳이 가로 스크롤을 만들게 된다(커뮤니티는 유저 화면이라 모바일이 기준이지만,
         //     업주가 PC 로 볼 때 멀쩡하던 것을 깨뜨릴 이유는 없다).
-        'flex-none inline-flex h-[44px] items-center justify-center t-tab whitespace-nowrap',
+        'group flex-none inline-flex h-[44px] items-center justify-center t-tab whitespace-nowrap',
         'min-w-[calc((100%-(var(--tab-cols)-1)*0.25rem)/var(--tab-cols))] lg:min-w-0 lg:flex-[1_0_auto]',
         'transition-colors',
         'focus:outline-hidden focus-visible:ring-0 focus-visible:ring-offset-0',
@@ -554,7 +558,7 @@ function SectionTab({ id, active, label, onClick }: { id: string; active: boolea
       {/* 활성 배경은 부모의 공용 SlidingPill 이 미끄러지며 그린다 — 탭별 개별 팝인 제거 */}
       <span
         data-pill-active={active || undefined}
-        className="relative inline-flex h-[32px] lg:h-[36px] w-full items-center justify-center px-1 rounded-[9px]"
+        className="relative inline-flex h-[32px] lg:h-[36px] w-full items-center justify-center px-1 rounded-[9px] group-focus-visible:ring-2 group-focus-visible:ring-accent-300"
       >
         {label}
       </span>
@@ -586,6 +590,7 @@ function FeedSection({
   enableCategory?: boolean;
 }) {
   const { user } = useAuth();
+  const { isBlocked } = useBlocks();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<PostCategory | 'all'>('all');
   // 정렬(Phase 14, pokergosu 추천/인기 축) — 별도 게시판 신설 대신 정렬 칩으로.
@@ -729,12 +734,16 @@ function FeedSection({
 
   // 서버에서 이어받은 초과분 — 로컬 목록(고정→HOT→끌올→최신) **뒤**에 이어 붙인다.
   // id 중복은 로컬(고정·광고 포함)과 겹치지 않게 걸러낸다 — 같은 글이 두 번 보이면 안 된다.
+  // ⚠ 서버에서 이어받은 글에도 **첫 페이지와 같은 차단·숨김 판정**(isPostVisible)을 건다 — 로컬 rawPosts 만 거르면
+  //   차단한 사람의 글이 목록 끝·검색 결과에 다시 나오고, 상세 이전/다음으로 그 글에 들어갈 수 있다(2026-09-29 실측).
+  const isAdminView = user?.role === 'admin';
   const listSource = useMemo(() => {
     if (serverExtra.length === 0) return listSourceLocal;
     const seen = new Set(listSourceLocal.map((p) => p.id));
-    const extra = serverExtra.filter((p) => !seen.has(p.id) && !adPostIds.has(p.id));
+    const extra = serverExtra.filter((p) => !seen.has(p.id) && !adPostIds.has(p.id)
+      && isPostVisible(p, { isBlocked, isAdmin: isAdminView, meId: user?.id }));
     return extra.length ? [...listSourceLocal, ...extra] : listSourceLocal;
-  }, [listSourceLocal, serverExtra, adPostIds]);
+  }, [listSourceLocal, serverExtra, adPostIds, isBlocked, isAdminView, user?.id]);
   const shown = listSource.slice(0, visible);
   // UI-04: 글을 열 때 **이 화면의 실제 순서**(고정→HOT→끌올→최신 / 인기, 광고 제외·중복 제거·서버 이어받기 포함)를 스냅샷으로 넘긴다.
   //   광고로 승격된 글은 listSource 에 없어 이웃 없음(no-context)으로 정직하게 떨어진다. 커서·done 은 상세가 '다음 글' 을 이어받는 데 쓴다.
@@ -1043,7 +1052,9 @@ function InfiniteSentinel({ onMore, remain }: { onMore: () => void; remain: numb
     const ob = new IntersectionObserver((es) => { if (es[0]?.isIntersecting) onMore(); }, { rootMargin: '200px' });
     ob.observe(el);
     return () => ob.disconnect();
-  }, [onMore]);
+    // remain 이 의존성이어야 한다: 더 불러온 뒤에도 센티넬이 rootMargin 안에 남으면 '교차 시작' 이벤트가 다시 오지 않아
+    // 30건에서 멈췄다(2026-09-29 실측). 관찰자를 새로 만들면 첫 콜백이 현재 교차 상태로 한 번 오므로 연쇄로 이어 받는다.
+  }, [onMore, remain]);
   return (
     <button ref={ref} type="button" onClick={onMore}
       className="w-full min-h-[44px] rounded-input bg-surface-high py-2.5 text-xs font-semibold text-ink-muted transition-colors hover:text-ink-primary">
@@ -1472,21 +1483,50 @@ function LiveWallSection({ visible }: { visible: boolean }) {
   const [loading,  setLoading]  = useState(true);
   const showSkel = useSkeletonGate(loading); // MO-6C: 200ms 내 도착하면 스켈레톤 생략
   const [sending,  setSending]  = useState(false);
+  const { isBlocked } = useBlocks();
+  // 조회 실패를 '첫 한 줄을 남겨보세요'(빈 상태)로 위장하지 않는다 — 처음 받는 데 실패했을 때만 오류 카드+재시도.
+  const [err, setErr] = useState<unknown>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const seqRef = useRef(0);                              // 늦게 온 옛 조회 응답이 새 응답을 덮지 않게(마지막 요청만 반영)
+  const arrivedRef = useRef<Set<string>>(new Set());     // 조회 중 실시간으로 받은·내가 보낸 줄 — 응답이 덮어쓰지 않게 살린다
+  const loadedAtRef = useRef(0);
+  const hasDataRef = useRef(false);
 
-  useEffect(() => {
-    let active = true;
+  const fetchLive = useCallback(() => {
+    const seq = ++seqRef.current;
+    arrivedRef.current = new Set();
+    loadedAtRef.current = Date.now();
     getLiveMessages(50)
-      .then((m) => { if (active) setMessages(m); })
-      .catch(() => { /* 조회 실패 시 빈 목록 유지 */ })
-      .finally(() => { if (active) setLoading(false); });
-    // 실시간 수신 — 새 메시지 prepend(id 중복 방지) + 타인 삭제 전파(#19)
-    // 실시간 채널은 **보일 때만** 연다 — 조회 1회는 프리마운트에서 해 두어 재방문이 즉시 뜬다.
-    const unsub = visible ? subscribeLiveWall(
-      (msg) => setMessages((prev) => (prev.some((x) => x.id === msg.id) ? prev : [msg, ...prev])),
+      .then((m) => {
+        if (seq !== seqRef.current) return;
+        hasDataRef.current = true;
+        setMessages((prev) => mergeLiveMessages(prev, m, arrivedRef.current));
+        setErr(null);
+      })
+      .catch((e) => { if (seq === seqRef.current && !hasDataRef.current) setErr(e); })   // 이미 목록이 있으면 그대로 둔다
+      .finally(() => { if (seq === seqRef.current) setLoading(false); });
+  }, []);
+
+  // 조회는 마운트(프리마운트 포함)에 1회 — 섹션을 오갈 때마다 다시 받지 않는다(2026-09-29: 왕복 1번에 조회 2번이 나갔다).
+  useEffect(() => { fetchLive(); }, [fetchLive, reloadKey]);
+  const retry = () => { setErr(null); setLoading(true); setReloadKey((k) => k + 1); };
+
+  // 실시간 수신 — 새 메시지 prepend(id 중복 방지) + 타인 삭제 전파(#19)
+  // 실시간 채널은 **보일 때만** 연다. 채널을 닫아 둔 사이 놓친 줄은 다시 보일 때(마지막 조회가 5초보다 옛일 때만) 받아 병합한다.
+  useEffect(() => {
+    if (!visible) return;
+    if (Date.now() - loadedAtRef.current > 5000) fetchLive();
+    return subscribeLiveWall(
+      (msg) => { arrivedRef.current.add(msg.id); setMessages((prev) => (prev.some((x) => x.id === msg.id) ? prev : [msg, ...prev])); },
       (id) => setMessages((prev) => prev.filter((x) => x.id !== id)),
-    ) : null;
-    return () => { active = false; unsub?.(); };
-  }, [visible]);
+    );
+  }, [visible, fetchLive]);
+
+  // 차단한 사람의 줄은 렌더 직전에 거른다(본인 줄은 가리지 않는다) — 게시판·댓글·장터와 같은 판정(lib/postVisible)
+  const shownMessages = useMemo(
+    () => messages.filter((m) => isAuthorShown(m.userId, isBlocked, user?.id)),
+    [messages, isBlocked, user?.id],
+  );
 
   const canDelete = (m: LiveMessage) => !!user && (user.id === m.userId || user.role === 'admin');
   const remove = async (m: LiveMessage) => {
@@ -1511,6 +1551,7 @@ function LiveWallSection({ visible }: { visible: boolean }) {
         userColor: user.avatarColor,
         content:   body,
       });
+      arrivedRef.current.add(msg.id);
       setMessages((prev) => (prev.some((x) => x.id === msg.id) ? prev : [msg, ...prev]));
       setDraft('');
     } catch (err) {
@@ -1563,11 +1604,13 @@ function LiveWallSection({ visible }: { visible: boolean }) {
             </li>
           ))}
         </ul>
-      ) : messages.length === 0 ? (
+      ) : err != null && messages.length === 0 ? (
+        <LoadErrorCard error={err} what="실시간 한 줄" onRetry={retry} compact />
+      ) : shownMessages.length === 0 ? (
         <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="comment" />} title="첫 한 줄을 남겨보세요" /></div>
       ) : (
         <ul className="space-y-1">
-          {messages.map((m) => (
+          {shownMessages.map((m) => (
             <li key={m.id} className="flex items-start gap-2 px-2.5 py-1.5 rounded-input border card-aura">
               <Avatar name={m.userName} src={m.userAvatar} color={m.userColor} size={24} className="mt-0.5" />
               <div className="flex-1 min-w-0">

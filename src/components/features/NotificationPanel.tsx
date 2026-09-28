@@ -224,7 +224,8 @@ export default function NotificationPanel({
       const raw = e instanceof Error ? e.message : '';
       toast.show(
         /row-level security/i.test(raw)
-          ? '쪽지를 보낼 수 없어요. 본인인증을 완료했는지, 차단 관계가 아닌지 확인해 주세요'
+          // 서버 _can_message 는 본인인증을 보지 않는다(오너 2026-09-29 · 8241385d) — 실제 거절 사유만 말한다
+          ? '쪽지를 보낼 수 없어요. 상대가 탈퇴·정지 상태이거나 서로 차단한 관계일 수 있어요'
           : raw || '쪽지를 보내지 못했어요',
         'error',
       );
