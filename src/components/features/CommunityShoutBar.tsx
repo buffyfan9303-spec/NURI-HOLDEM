@@ -51,6 +51,8 @@ import MarqueeText from '../atoms/MarqueeText';
 import { useToast } from '../atoms/Toast';
 import { tierCss } from '../atoms/TierBadge';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBlocks } from '../../contexts/BlockContext';
+import { isAuthorShown } from '../../lib/postVisible';
 import { promptLogin } from '../../lib/requireLogin';
 import { filterContent } from '../../lib/content-filter';
 import {
@@ -305,7 +307,8 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
   const [rules, setRules] = useState<ShoutRules>(DEFAULT_RULES);
   const [balance, setBalance] = useState<PointBalance | null>(null);
   // 등급 목록·가격은 서버 shop_skus 가 단일 출처다. 화면은 읽어서 보여주기만 한다.
-  const [tiers, setTiers] = useState<ShopSku[]>([]);
+  // null = 아직 못 받음 — 그동안 같은 크기의 자리표시를 그려 시트 윗변이 도착 뒤 솟지 않게 한다(A1, 2026-09-29 실측 95.5px).
+  const [tiers, setTiers] = useState<ShopSku[] | null>(null);
   const [tier, setTier] = useState<ShoutTier>('basic');
   const [color, setColor] = useState<ShoutColor>('gold');
   // 지금 사면 언제 나가는가 — **서버가 계산한 다음 빈 자리**다(null = 아직 못 받음).
@@ -330,7 +333,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
       // 전광판(shout_board)은 판매 중지다. 서버가 active=false 로 이미 빼 주지만,
       // 화면에서도 한 번 더 막는다 — 누가 다시 active 를 켜도 '판매 중지'가 화면 규약으로 남게.
       .then((all) => setTiers(all.filter((s) => s.kind === 'shout' && s.key !== 'shout_board').sort((a, b) => a.sort - b.sort)))
-      .catch(() => {});
+      .catch(() => setTiers((t) => t ?? []));   // 실패 — 자리표시를 걷고 기본 등급(shout_rules)으로 버틴다(종전 동작)
   }, [open]);
   // 대기열 길이 — '내 차례가 언제인지'를 **사기 전에** 보여주기 위해서다.
   // ⚠ 실패를 0('대기열 비었음')으로 뭉개면 화면이 '지금 바로 방송'이라고 거짓 약속을 한다.
@@ -347,7 +350,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
     if (open) { setText(''); setTier('basic'); setColor('gold'); setReserveAt(''); }
   }, [open]);
 
-  const sel = tiers.find((s) => tierOfSku(s.key) === tier);
+  const sel = tiers?.find((s) => tierOfSku(s.key) === tier);
   // 서버 목록이 아직 없으면 기본 등급은 shout_rules() 값으로 버틴다(가격이 '—'로 비지 않게).
   const cost = sel?.price ?? (tier === 'basic' ? rules.cost : 0);
   const slotSec = sel?.durationSeconds || SHOUT_SLOT_SECONDS;
@@ -442,7 +445,22 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
 
         {/* 등급 — 가격은 서버 가격표(shop_skus)에서 그대로 읽어 보여준다.
             전광판이 빠져 두 칸이므로 칸 수를 목록 길이에서 뽑는다(빈 칸이 남지 않게). */}
-        {tiers.length > 0 && (
+        {tiers === null && (
+          // 자리표시 — 운영 가격표(외치기 4등급 → 2열 2줄)와 같은 칸·같은 글자 줄 수. 설명 한 줄 자리도 함께 잡는다.
+          <div aria-hidden="true">
+            <div className="grid grid-cols-2 gap-1.5">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="rounded-aura border border-border-subtle bg-surface-high px-2 py-2 text-center">
+                  <span className="invisible block text-xs font-bold">외치기</span>
+                  <span className="invisible mt-0.5 block text-2xs font-extrabold">0점</span>
+                  <span className="invisible block text-2xs">20초 1회</span>
+                </div>
+              ))}
+            </div>
+            <p className="invisible mt-3 text-2xs leading-relaxed">자리</p>
+          </div>
+        )}
+        {tiers && tiers.length > 0 && (
           <div className={['grid gap-1.5', tiers.length === 3 ? 'grid-cols-3' : 'grid-cols-2'].join(' ')}>
             {tiers.map((s) => {
               const k = tierOfSku(s.key);
@@ -599,7 +617,9 @@ export default function CommunityShoutBar({ className }: { className?: string })
     setOpen(true);
   };
 
-  const list = useMemo(() => shouts ?? [], [shouts]);
+  // 차단한 사람의 외침은 송출하지 않는다(그 20초는 기본 문구로 내려간다). 내 외침은 가리지 않는다 — lib/postVisible 한 벌
+  const { isBlocked } = useBlocks();
+  const list = useMemo(() => (shouts ?? []).filter((s) => isAuthorShown(s.userId, isBlocked, user?.id)), [shouts, isBlocked, user?.id]);
   const now = useShoutClock(list);
 
   // 아직 방송이 끝나지 않은 것들 = 지금 화면이 책임지는 대기열(서버가 plays_at 오름차순으로 준다).

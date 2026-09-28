@@ -6,6 +6,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const state = { rows: [] as Record<string, unknown>[], error: null as unknown, ops: [] as string[] };
 
+// .env 가 없는 체크아웃(워크트리)에서는 searchPosts 가 목 분기로 빠져 5건이 실패한다 — 이웃 테스트(getPostById)와 같게 고정.
+vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
+vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon');
+
 vi.mock('../lib/supabase', () => ({
   IS_MOCK: false,
   supabase: {
