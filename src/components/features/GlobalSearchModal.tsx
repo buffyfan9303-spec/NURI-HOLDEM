@@ -6,6 +6,9 @@ import type { Venue, CommunityPost } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 import type { MarketplaceListing, MarketplaceNotice } from '../../api/marketplace';
 import Icon from '../atoms/Icon';
+import { useAuth } from '../../contexts/AuthContext';
+import { useBlocks } from '../../contexts/BlockContext';
+import { isPostVisible } from '../../lib/postVisible';
 
 interface Props {
   open: boolean;
@@ -48,6 +51,9 @@ export default function GlobalSearchModal({ open, onClose, venues, schedules, po
   const openAnd = (fn: () => void) => { saveRecent(q); fn(); };
 
   const query = q.trim().toLowerCase();
+  // 2026-09-29 (C-1 같은 부류) — 게시판·검색과 같은 차단·숨김 판정을 통합검색에도. 판매글은 MarketplaceTab 과 같은 차단 판매자 제외.
+  const { user } = useAuth();
+  const { isBlocked } = useBlocks();
   const res = useMemo(() => {
     if (!query) return { v: [] as Venue[], s: [] as Schedule[], p: [] as CommunityPost[], l: [] as MarketplaceListing[], n: [] as MarketplaceNotice[] };
     const has = (t?: string | null) => (t ?? '').toLowerCase().includes(query);
@@ -60,11 +66,11 @@ export default function GlobalSearchModal({ open, onClose, venues, schedules, po
       //   ⚠ 관리자 대기열과 업주 '내 포스터' 는 별도 화면이라 이 필터의 영향을 받지 않는다.
       s: schedules.filter((x) => x.approved && (has(x.title) || has(x.pubName) || has(x.region))).slice(0, 8),
       v: venues.filter((x) => has(x.name) || has(x.region)).slice(0, 6),
-      p: posts.filter((x) => has(x.title) || has(x.content)).slice(0, 8),
-      l: listings.filter((x) => has(x.title) || has(x.description) || has(x.sellerName)).slice(0, 6),
+      p: posts.filter((x) => isPostVisible(x, { isBlocked, isAdmin: user?.role === 'admin', meId: user?.id }) && (has(x.title) || has(x.content))).slice(0, 8),
+      l: listings.filter((x) => !isBlocked(x.sellerId) && (has(x.title) || has(x.description) || has(x.sellerName))).slice(0, 6),
       n: notices.filter((x) => has(x.title) || has(x.body)).slice(0, 4),
     };
-  }, [query, venues, schedules, posts, listings, notices]);
+  }, [query, venues, schedules, posts, listings, notices, isBlocked, user?.role, user?.id]);
 
   const empty = !!query && !res.v.length && !res.s.length && !res.p.length && !res.l.length && !res.n.length;
 
