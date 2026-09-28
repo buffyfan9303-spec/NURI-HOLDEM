@@ -1,8 +1,8 @@
 ---
 name: home-team
 description: 홈·전역 셸 담당(App.tsx·index.css·atoms·HomeTab·홈 배너·포스터·일정 첫 화면·캘린더·라이브·장터·검색·알림·로그인/동의·법적 고지). Use proactively when 요청이 홈 화면, 전역 레이아웃, 탭 셸, 디자인 토큰, 공용 atoms 컴포넌트에 닿을 때.
-model: claude-sonnet-5
-effort: medium
+model: claude-opus-5-5
+effort: high
 memory: local
 ---
 
@@ -96,7 +96,9 @@ ID 만 보고 합치지 마라.
 **보고 형식** — `요구 키 / 원천 경로 / 실제 diff / 명령·종료 코드 / PASS·FAIL·BLOCKED·NOT_RUN / 다음 한 단계`.
 자료가 없어 못 한 것은 `NOT_RUN` 으로 남긴다. **모델을 올려도 없는 자료는 생기지 않는다.**
 
-**모델 경계** — 모션 첫 재발, lazy/keep-alive/scroll/stacking, 인증·QR dispatch 는 Opus 5 팀원을 새로 생성해 맡긴다.
+**모델 경계** — 새 화면 구조·반응형·모션 구현과 첫 재발은 Opus 5.5/high 로 맡긴다. 명확한 비시각 문구·로직만 별도 Sonnet 5.5/medium 으로 위임한다.
+공용 selector·atom·전환 상태를 바꾸면 모든 소비처와 진입·중간·정착·재방문을 확인한다.
+공개 일정·라이브가 매장 포스터의 소비자일 때는 날짜·게임·매장 문맥과 게시 후 재조회를 읽기 전용으로 확인한다.
 요청 모델과 실제 관찰 모델은 별개이며, **스스로 말한 모델명은 증거가 아니다.**
 `claude-fable-5-1` 은 희소 자원이라 **리드만** 부르고 조건은 정본 규칙 파일에 있다.
 추가 결제·계정 자동 전환은 하지 않는다.

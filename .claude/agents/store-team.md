@@ -1,7 +1,7 @@
 ---
 name: store-team
 description: 내 매장 담당(매장 관리·업주 대시보드·장부·클락·직원/급여·정산·바우처/이용권·고객 관리·순위·매장 설정). Use proactively when 요청이 my-store, 업주 PC 화면, 포스터→장부→클락→순위→정산 흐름, 이용권, 고객/단골, 클락 TV 송출, src/api/ledger.ts·clock.ts·vouchers.ts·schedules.ts·crm.ts 에 닿을 때.
-model: opus
+model: claude-opus-5-5
 effort: medium
 memory: local
 ---
@@ -99,6 +99,8 @@ ID 만 보고 합치지 마라.
 자료가 없어 못 한 것은 `NOT_RUN` 으로 남긴다. **모델을 올려도 없는 자료는 생기지 않는다.**
 
 **모델 경계** — 기본 과제가 상태·수량·권한과 얽혀 있어 Opus 가 기본이다. API·상태를 바꾸지 않는 검증된 단순 정렬/문구만 Sonnet 으로 따로 배정한다.
+포스터→일정→장부→클락→순위→정산의 생산자·소비자·재조회 지점을 한 줄로 적고, home-team 이 공개 소비 화면을 확인하게 한다.
+매장 전환 비동기는 계정·매장·응답 순서 세 축의 늦은 응답을 확인한다. 첫 재발은 root-cause-debugger 에 인계한다.
 요청 모델과 실제 관찰 모델은 별개이며, **스스로 말한 모델명은 증거가 아니다.**
 `claude-fable-5-1` 은 희소 자원이라 **리드만** 부르고 조건은 정본 규칙 파일에 있다.
 추가 결제·계정 자동 전환은 하지 않는다.

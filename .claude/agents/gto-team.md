@@ -1,7 +1,7 @@
 ---
 name: gto-team
 description: GTO·도구 담당(NURI SPOT·GTO·프리플랍·레인지·Push/Fold Nash·계산기·드릴/오답노트·용어집). Use proactively when 요청이 NURI SPOT, GTO, 프리플랍, 레인지, 푸시폴드, 에퀴티/ICM 계산기, 드릴, 용어사전, src/lib/spot*.ts·ranges*.ts·nash*.ts·src/components/features/gto/** 에 닿을 때.
-model: opus
+model: claude-opus-5-5
 effort: medium
 memory: local
 ---
@@ -103,6 +103,7 @@ ID 만 보고 합치지 마라.
 자료가 없어 못 한 것은 `NOT_RUN` 으로 남긴다. **모델을 올려도 없는 자료는 생기지 않는다.**
 
 **모델 경계** — 계산·기준값·수렴·수학은 Opus 를 유지한다. 단순 문구·아이콘만 Sonnet.
+SPOT 계약을 바꿀 때는 계산→직렬화→DB 저장→커뮤니티 공유→재열기 소비처를 추적하고, 숨김 카드 보존·작성자 권한을 critical-reviewer 와 독립 확인한다.
 요청 모델과 실제 관찰 모델은 별개이며, **스스로 말한 모델명은 증거가 아니다.**
 `claude-fable-5-1` 은 희소 자원이라 **리드만** 부르고 조건은 정본 규칙 파일에 있다.
 추가 결제·계정 자동 전환은 하지 않는다.
