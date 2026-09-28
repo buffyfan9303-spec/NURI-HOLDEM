@@ -133,17 +133,14 @@ describe('🔴 §11 — 홈은 조회 실패를 "없어요" 로 위장하지 않
       .toMatch(/data-testid="home-upcoming-fallback"/);
   });
 
-  it('🔴 실패했을 때 "오늘 대회 0개" 라고 말하지 않는다', () => {
-    expect(HOME).toMatch(/failed\s*\n?\s*\? <>오늘 대회 정보를 불러오지 못했어요<\/>/);
-    // 2026-09-18: 오너 지시로 홈 첫 줄에서 '오늘 대회 N개 · 지금 등록 가능 M개' 를 뺐다
-    //   ("초반에는 매장이 많이 없을 예정이라 0개를 보이는 것보다 GTO 를 강조하자").
-    //   그 줄이 사라졌으니 '실패 중에 그 숫자를 적지 마라' 는 게이트도 같이 빠진다.
-    //   대신 **대체 문구가 라이브 수치가 아니어야 한다**는 것을 잠근다 — GTO 도구 개수는
-    //   조회 결과가 아니라 정적 사실이라 실패 여부와 무관하게 말해도 거짓이 아니다.
-    //   (그 숫자 자체의 사실성은 src/lib/gtoToolCount.contract.test.ts 가 따로 지킨다.)
-    expect(HOME, '대체 문구가 라이브 조회 수치면 실패 중에도 거짓말을 하게 된다')
-      .toMatch(/무료 GTO 도구 <span[^>]*>\{GTO_TOOL_COUNT\}개<\/span>/);
-    // 2026-09-17: 그 사람 문장(personal)도 같은 게이트 뒤에서만 만들어진다 — 실패·미도착에 이력 문장을 쓰면 같은 거짓말이다.
-    expect(HOME).toMatch(/const personal = loaded && !failed\s*\n?\s*\? todayLine\(/);
+  it('🔴 첫 줄은 조회 상태와 무관하게 항상 GTO 진입이다 — 라이브 수치를 적지 않는다', () => {
+    // 🔴 2026-09-29 오너: 개인화 문장(personal·todayLine)·로딩·실패 문구 분기를 없애고 **모든 유저에게 항상** GTO 진입 후킹 문구.
+    //   종전 게이트('실패했을 때 오늘 대회 0개 라고 말하지 않는다')의 목적 — 조회 결과가 아닌 것을 사실처럼 말하지 않는다 — 는
+    //   '첫 줄에 조회 결과가 아예 없다'로 더 강하게 지켜진다. GTO 도구 개수는 정적 사실이다(사실성은 gtoToolCount.contract.test.ts).
+    expect(HOME).toMatch(/프로처럼 치는<\/span> <span[^>]*>무료 GTO \{GTO_TOOL_COUNT\}개<\/span>/);
+    const i = HOME.indexOf('data-testid="home-today-line"');
+    const line = HOME.slice(i, HOME.indexOf('</section>', i));
+    expect(line, '첫 줄 안에 로딩·실패·개인화 분기가 남았다').not.toMatch(/!loaded|failed|personal|todayLine|불러오는 중|불러오지 못/);
+    expect(HOME, '개인화 문장 계산이 되살아났다').not.toMatch(/const personal\b|todayLine\(/);
   });
 });

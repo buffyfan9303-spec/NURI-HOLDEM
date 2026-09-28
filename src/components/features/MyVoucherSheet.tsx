@@ -150,7 +150,10 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
             · VoucherWallet 의 사용 시트(RedeemSheet)·완료 오버레이는 **자식 컴포넌트 내부 상태**라 여기서
               prop 으로 끌 길이 없다 → 그쪽은 Modal 이 이미 가진 `[data-no-drag-close]` 옵트아웃을 쓴다
               (Modal.tsx:56 EDITABLE_SEL). 같은 표면을 두 수단으로 겹쳐 막지 않는다. */}
-      <Modal open={open} onClose={onClose} title="이용권 · 출석" dragToClose={!scanOpen && !plan}>
+      {/* fillHeight(2026-09-29) — 두 칸(자주 가는 매장 이용권/내 매장이용권)이 스켈레톤→빈 상태로
+          줄어들며 시트 윗변이 떨어지는 것(최대 106.7px)을 막는다. 시트를 항상 88vh 로 고정해
+          내용 높이 변화가 스크롤 본문 안에서만 일어나게 한다(root-cause-debugger 2026-09-29 실측). */}
+      <Modal open={open} onClose={onClose} title="이용권 · 출석" dragToClose={!scanOpen && !plan} fillHeight>
         {/* Modal 본문(flex-1 overflow-y-auto)은 패딩을 주지 않는다 — 소비자가 넣는 규약이다.
             이 파일만 빠뜨려 카드가 시트 모서리에 붙어 있었다(2026-09-05 검증). */}
         <div className="space-y-3 p-4">

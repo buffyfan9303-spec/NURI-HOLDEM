@@ -48,8 +48,12 @@ describe('본인인증 게이트 범위 (오너 2026-09-16)', () => {
     ).toBeGreaterThanOrEqual(3);
   });
 
-  it('🔴 이용권·참가가 걸린 두 곳은 본인인증이 그대로 살아 있다(양성 대조)', () => {
+  it('🔴 이벤트 참여는 본인인증이 그대로 살아 있다(양성 대조 · 오너 2026-09-29 "무조건 본인인증")', () => {
     expect(code(EVENT), '이벤트 참여에서 본인인증 가드가 사라졌다').toMatch(/ensureVerified\s*\(/);
-    expect(code(SCHEDULE), '대회 예약에서 본인인증 가드가 사라졌다').toMatch(/ensureVerified\s*\(/);
+  });
+
+  it('🔴 대회 예약은 로그인만 요구하고 본인인증은 묻지 않는다(오너 2026-09-29 · 서버 20260929a)', () => {
+    expect(code(SCHEDULE), '대회 예약에 본인인증 가드가 다시 생겼다').not.toMatch(/ensureVerified\s*\(/);
+    expect(code(SCHEDULE), '대회 예약의 로그인 가드가 사라졌다').toMatch(/ensureLogin\s*\(\s*user\s*\)/);
   });
 });

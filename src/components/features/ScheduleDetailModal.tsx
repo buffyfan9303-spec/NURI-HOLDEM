@@ -20,7 +20,7 @@ import {
   type ClockState, type ClockLevel,
 } from '../../api/clock';
 import { promotionView } from '../../lib/promotionLabel';
-import { promptLogin, openPostForm, ensureVerified } from '../../lib/requireLogin';
+import { promptLogin, openPostForm, ensureLogin } from '../../lib/requireLogin';
 import { enablePush, pushSupported } from '../../api/push';
 import QRCode from 'qrcode';
 import { requestBuyin, buyinRequestUrl, kstToday } from '../../api/ledger';
@@ -1182,7 +1182,8 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
       toast.show('종료된 대회는 예약할 수 없습니다', 'error');
       throw new Error('ended');
     }
-    if (!ensureVerified(user, '대회 예약')) throw new Error('verify'); // 로그인 + 본인인증 회원만 예약
+    // 오너 결정(2026-09-29): 대회 예약은 로그인만 — 본인인증은 이용권 수령·사용·이벤트 참여에만(서버 20260929a 와 같다).
+    if (!ensureLogin(user)) throw new Error('login');
     const _u = user!;
     const n = (name.trim() || _u.name || '예약자');
     try {

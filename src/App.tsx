@@ -274,8 +274,10 @@ interface TabDef { id: TabId; label: string; }
 
 const AppHeader = memo(function AppHeader({
   unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenMe,
-  onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange, onOpenVoucher, onInternalLink,
+  onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange, onOpenVoucher, onInternalLink, hasStore = false,
 }: {
+  /** 내 매장 탭이 있는가 — App 의 tabs(업주·직원·관리자)와 같은 판정. 계정 메뉴의 '내 매장' 입구를 가른다. */
+  hasStore?: boolean;
   /** 알림의 쿼리·해시형 링크를 앱 안에서 여는 App.openInternalLink(연결 감사 D) */
   onInternalLink?: (u: URL) => boolean;
   /** [이용권 · 출석] 버튼 — 시트 자체는 **App 루트**에서 렌더한다(헤더 안이면 하단 탭바에 덮인다) */
@@ -564,6 +566,13 @@ const AppHeader = memo(function AppHeader({
                       <Icon name="wrench" size={14} />
                       도구
                     </button>
+                    {hasStore && (
+                      <button type="button" onClick={() => leaveMenuTo(() => onGotoTab?.('my-store'))}
+                        className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                        <Icon name="store" size={14} />
+                        내 매장 <span className="text-ink-muted">(직원 관리·장부·클락)</span>
+                      </button>
+                    )}
                     {user.role === 'admin' && (
                       <button type="button" onClick={() => leaveMenuTo(() => onGotoTab?.('admin'))}
                         className="w-full text-left flex min-h-[44px] items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
@@ -915,8 +924,8 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, count,
           return (
             <button
               key={key} type="button"
-              // 같은 탭 재탭 = 맨 위로(iOS 관례). 다른 탭 이동은 changeTab 의 스크롤 저장/복원이 맡는다 —
-              // 예전엔 무조건 맨 위로 튕겨서, 목록을 한참 내려 보다 다른 탭을 잠깐 다녀오면 위치를 전부 잃었다.
+              // 같은 탭 재탭 = 맨 위로(iOS 관례). 다른 탭으로 이동해도 **항상 맨 위로** 간다(오너 결정 2026-09-29).
+              // 떠난 자리 복원은 **뒤로가기로 돌아올 때만** 한다(changeTab 의 tabScrollRef 저장 → 아래 layout effect).
               // ⚠ 재탭 판정은 **실제 탭(active)** 으로 한다. shown 은 표시용으로 접은 값이라
               //   browse 에서 shown='home' 이 되고, 그러면 홈 버튼이 '재탭'으로 잘못 잡혀
               //   맨 위로 스크롤만 하고 홈에 영영 못 간다(2026-09-05 전수 조사). 모바일에는
@@ -3987,6 +3996,7 @@ export default function App() {
         title={activeTab === 'browse' ? undefined : tabs.find((t) => t.id === activeTab)?.label}
         activeTab={activeTab}
         onGotoTab={changeTab}
+        hasStore={hasStoreTabs}
         unreadCount={unreadNotifs + unreadMsgs}
         notifications={notifications}
         onMarkRead={handleMarkRead}

@@ -42,10 +42,8 @@ import type { EventState } from '../../lib/eventState';
 //   첫 페인트 **뒤**의 이벤트 보드 조회 하나뿐이라 늦춰도 되는 것을 늦췄다(lib/eventState 와 같은 조리법).
 import type { EventBoard } from '../../api/events';
 // slug 판정만 담은 순수 모듈(런타임 의존 0) — 중복 제거가 **어느 캠페인인지** 보게 하려고 여기서만 정적으로 받는다.
-import { bannerCoversEvent } from '../../lib/eventSlug';
+import { homeCarouselPlan, eventStateOf, remainCardsOf } from '../../lib/homeCarousel';
 import { readSnap, writeSnap } from '../../lib/snapshot';
-// 상단 '오늘 안내' 한 줄(순수 함수). 왜 이 문장인지는 lib/homeRail.ts 머리말.
-import { todayLine } from '../../lib/homeRail';
 import { GTO_TOOL_COUNT } from '../../lib/gtoToolCount';
 import type { ClockState } from '../../api/clock';
 import type { VisitedVenue } from '../../api/vouchers';
@@ -94,23 +92,8 @@ const EVENT_SEEN = 'nuri:event-banner-seen';
  *  ⚠ 모듈을 못 받아도 **진입은 막히지 않는다**(아래 eventShown 이 'menu' 로 떨어진다). */
 type EventStateMod = typeof import('../../lib/eventState');
 
-/** 아직 안 열린 카드 수.
- *  ⚠ `b.cards` 가 배열이 아닐 수 있다 — `getEventBoard` 는 RPC 응답을 **검증 없이** `EventBoard` 로
- *    단언한다(`data as EventBoard | null`). RPC 가 `[]` 를 돌려주면 truthy 라 null 폴백도 안 걸리고,
- *    `b.cards.length` 가 그대로 터져 **홈 전체가 오류 화면**이 된다(실측 2026-09-13, 목 응답으로 재현).
- *    부가 기능 하나의 응답 모양 때문에 첫 화면이 죽으면 안 된다. */
-const remainCardsOf = (b: EventBoard): number | null =>
-  (Array.isArray(b.cards) ? b.cards.filter((c) => !c.opened).length : null);
-const totalCardsOf = (b: EventBoard): number | null => (Array.isArray(b.cards) ? b.cards.length : null);
-
-/** 이벤트 보드 → 단일 판정 함수 입력. `hiddenAt` 은 EventBoard 에 없다(= 서버가 모름 = 공개로 본다). */
-const eventStateOf = (m: EventStateMod, b: EventBoard): EventState => m.evaluateEvent({
-  status: b.status,
-  startsAt: b.startsAt,
-  endsAt: b.endsAt,
-  totalCards: totalCardsOf(b),
-  remainCards: remainCardsOf(b),
-}, m.eventNow()).state;
+// remainCardsOf(카드 배열 무검증 방어 — 2026-09-13 홈 전체 오류 사고)·eventStateOf 는 lib/homeCarousel 로 옮겼다 —
+// 관리자 캐러셀 미리보기(HomeBannersCard)가 같은 판정으로 이벤트 슬라이드 자리를 정해야 하기 때문이다(2026-09-29).
 
 const EVENT_SNAP_KEY = 'event-board';
 const EVENT_SNAP_MAX_AGE_MS = 30 * 60 * 1000;
@@ -152,16 +135,10 @@ const H3_CLS = 'font-display text-[15px] font-bold leading-[22px] tracking-tight
 const HOME_LIST_GRID = 'lg:grid lg:grid-cols-2 lg:divide-y-0 lg:*:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))] lg:[&>[data-card-cell]:nth-of-type(odd):last-of-type]:col-span-2';
 const MORE_CLS = 'flex items-center gap-0.5 py-2 -my-2 t-desc font-semibold text-ink-muted hover:text-ink-secondary';
 
-/** 문장 속 숫자만 강조색 — 종전 '오늘 대회 <N>개' 의 색 계약을 문자열 한 줄에도 그대로 적용한다. */
-const Nums = ({ text }: { text: string }) => (
-  <>{text.split(/(\d+)/).map((t, i) => (i % 2 ? <span key={i} className="tabular-nums text-accent-300">{t}</span> : t))}</>
-);
-
-
 export default function HomeTab({
   schedules, loaded, schedulesError, onRetrySchedules, clocksLoaded, regInfoBySchedule,
   onTools, onSelect, onVenue, onExplore, onLive, onEvent, banners = [], showEventSlide = true, showBrandSlides = true, eventMenuVisible = true, onInternalLink,
-  visitedVenues = [], myTodayRes = [], venueById, onOpenVoucher,
+  venueById, onOpenVoucher,
 }: {
   /** 매장 대표 이미지·테마색 조회용 — 목록 줄 왼쪽 **매장 로고** 자리가 쓴다(2026-09-18).
    *  App 이 이미 들고 있는 `venueById` 를 그대로 받는다(새 조회 0). 없으면 이니셜만 보인다. */
@@ -404,23 +381,9 @@ export default function HomeTab({
   // 2026-09-18: 홈 첫 줄이 '오늘 대회 N개' 를 안 말하게 되면서 이 수치의 유일한 소비자가 없어졌다.
   //   다시 필요해지면 같은 조리법으로 되살리면 된다(승인된 것 · 오늘 · 끝나지 않은 것).
 
-  /** 가 본 매장 → 방문 횟수. 상단 '오늘 안내' 문장(todayLine)이 '내가 가 본 매장에 오늘 대회가 있나'를
-   *  판정하는 데 쓴다. (2026-09-18 추천 대회 레일을 지우면서 레일 전용 필드는 같이 없앴다 —
-   *  reservedIds·live·isEnded 는 rankRail·railFact 말고 소비처가 없었다.) */
-  const visitsByVenue = useMemo(
-    () => new Map(visitedVenues.map((v) => [v.venueId, v.visits])), [visitedVenues]);
-
-  // 오늘 안내 — 이력이 있으면 **그 사람** 문장(lib/homeRail.todayLine), 없으면 '' 라 아래 JSX 가 종전 문구로 떨어진다.
-  // 조회 전·실패는 문장을 만들지 않는다(§11 — 없는 숫자로 문장을 쓰지 않는다).
-  const personal = loaded && !failed
-    ? todayLine({
-      visitedCount: visitedVenues.length,
-      todayAtVisited: schedules.filter((s) => s.approved && s.date === today && visitsByVenue.has(s.venueId)
-        && scheduleStatus(s.date, s.startTime) !== 'ended').length,
-      reservedToday: myTodayRes.length,
-      openNow: clocksLoaded ? openAll.length : null,
-    })
-    : '';
+  // 🔴 2026-09-29 오너: 첫 줄 개인화 문장('내가 가 본 매장 1곳…' = todayLine)을 뺐다 — 첫 줄은 **모든 유저에게 항상 GTO 진입**이다.
+  //   그 문장의 입력(visitedVenues·myTodayRes)은 이 화면에서 더 안 쓴다(App 이 아직 넘기는 props 는 타입에만 남아 무시된다).
+  //   lib/homeRail.todayLine 자체는 남아 있다(자체 단위 테스트) — 되살릴 때는 여기서 다시 배선하면 된다.
 
   // 캐시 퍼스트(Phase 6 · e2e cache-first 회귀 2026-09-13): 이벤트 슬라이드만 스냅샷이 없어 재방문에도 '불러오는 중…'(aria-busy)으로
   //   시작했다. 다른 6개 키(schedules·venues·…)와 같이 마지막 보드를 스냅샷으로 두고 재검증한다.
@@ -483,12 +446,14 @@ export default function HomeTab({
   //   마우스 이벤트 객체가 slug 자리로 넘어가 목록이 안 열린다.
   //   EventSlide.onClick 의 타입이 `() => void` 라 **tsc 가 조용히 통과시켰다**(퀴액션 버튼은 잡혔다).
   //   e2e 8건이 이것 하나로 빨개졌다(2026-09-18).
+  /** 캐러셀에 뜨는 장과 순서 — 관리자 미리보기와 **같은 함수**(lib/homeCarousel). 이벤트 스위치(home_slide_event)·
+   *  중복 제거(같은 캠페인 배너, bannerCoversEvent)·live 자리 판정이 전부 그 안에 있다.
+   *  ⚠ 퀵액션 '제휴 혜택' 칸은 이 스위치와 무관하다(진입 경로를 통째로 잠그는 것은 event_menu_visible 쪽이다). */
+  const carouselPlan = useMemo(() => homeCarouselPlan({
+    banners, showEvent: showEventSlide, showBrand: showBrandSlides,
+    event: { slug: event?.slug, pending: eventShown === 'pending', live: eventShown === 'banner' && !!event },
+  }), [banners, showEventSlide, showBrandSlides, event, eventShown]);
   const eventSlide = useMemo<EventSlide | null>(() => {
-    // 관리자 스위치(app_settings.home_slide_event)로 끈 경우 — 캐러셀에서만 빼고 이벤트 기능 자체는 그대로다.
-    // ⚠ 퀵액션 '제휴 혜택' 칸은 이 스위치와 무관하다(진입 경로를 통째로 잠그는 것은 event_menu_visible 쪽이다).
-    if (!showEventSlide) return null;
-    // ⚠ '이벤트 링크가 있으면' 이 아니라 '**같은 캠페인**으로 가면' 이다 — 판정 근거는 bannerCoversEvent 주석.
-    if (bannerCoversEvent(banners.map((b) => b.linkUrl), event?.slug, eventShown === 'pending')) return null;
     if (eventShown === 'pending') return { title: '이벤트', sub: '불러오는 중…', alt: '이벤트 — 불러오는 중', testId: 'home-event-menu', live: false, pending: true, onClick: () => onEvent() };
     if (eventShown === 'banner' && event) {
       const sub = event.myTickets > 0 ? `참여권 ${event.myTickets}장 · 남은 카드 ${eventRemain}장` : `매장 출석하면 참여권 1장 · 남은 카드 ${eventRemain}장`;
@@ -500,7 +465,7 @@ export default function HomeTab({
     }
     const sub = eventMenuSubtitle(eventLoaded, eventFailed, event, eventState);
     return { title: '매장 이벤트', sub, alt: `매장 이벤트 · ${sub}`, testId: 'home-event-menu', live: false, onClick: () => onEvent() };
-  }, [showEventSlide, banners, eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
+  }, [eventShown, event, eventRemain, eventLoaded, eventFailed, eventState, onEvent]);
 
   /** 🔴 2026-09-24 오너: "빠른 카드 두 개의 세부 설명 줄은 삭제하고 세로 폭을 살짝 줄여라" — 설명 줄(종전 quickEventDesc)이 빠졌다.
    *  그 줄이 말하던 사실 중 **사라지면 안 되는 것**의 새 자리:
@@ -562,51 +527,29 @@ export default function HomeTab({
               GTO 줄의 모바일 음수 여백(-5px)은 그 링크 줄과 겹치려던 것이라 함께 뺐다 — 헤더→GTO 글자 = 4.25 + 9(44px 칸 안 여백)
               ≈ 다른 섹션 위 여백(pt-3·pt-3.5)과 같은 간격. */}
           <section data-testid="home-today" className="px-page-x pt-1 md:pt-1.5 lg:col-span-4 lg:col-start-1 lg:row-start-1 lg:self-center lg:pt-0">
-            {/* §5 역할표: 홈 짧은 제목 18/26(PC 22/30). 수치는 **도착한 것만** 적는다 —
-                일정이 안 왔으면 대회 수를, 클락이 안 왔으면 등록 가능 수를 쓰지 않는다. */}
-            {/* 한 줄 고정(h-[26px] + nowrap): 방문·예약 응답은 일정보다 늦게 오는데, 그때 문장이 바뀌며 두 줄이 되거나
-                높이가 흔들리면 아래 전부가 밀린다(home-cls.spec 이 재는 바로 그 자리). 문장은 todayLine 이 3조각으로
-                제한해 375px 에서 한 줄임을 실측했다 — 길어지면 자르는 게 아니라 **말을 줄인다**. */}
-            {/* 🔴 2026-09-24 오너 H2: "'무료 GTO 도구 22개' 줄 전체를 누르면 GTO 탭으로" — 그 문구일 때 줄 전체가 버튼(onTools = 탭바와 같은 경로,
-                전체 리로드 없음). 터치 44px 를 위해 줄 높이를 26 → **44px 고정**으로 올렸다(문구가 바뀌어도 높이는 같다 — CLS 0).
-                개인화 문장·로딩·실패 문구는 종전처럼 글자만이다(목적지가 없다). */}
-            <p data-testid="home-today-line" className="flex h-[44px] items-center whitespace-nowrap text-[18px] font-bold leading-[26px] text-ink-primary md:text-[22px] md:leading-[30px] lg:h-auto lg:min-h-[44px] lg:whitespace-normal lg:break-keep">
-              {/* ⚠ 여기서 '오늘 대회 0개' 라고 적으면 그것은 **조회 실패를 사실로 위장**하는 것이다(§11).
-                  수치는 '도착한 것만' 적는다는 이 줄의 원래 규칙에, 실패도 '미도착' 이라는 사실을 더한다. */}
-              {/* 🔴 2026-09-18 오너: "초반에는 매장이 많이 없을 예정이라 '지금 등록 가능 0개' 는 빼도 좋겠다.
-                  '오늘 대회 1개' 도 빼고 GTO 쪽을 강조해볼까? 무료 GTO 도구 20개 이런 식으로"
-
-                  숫자 나열을 GTO 가치 제안으로 바꾼다. 다만 **개인화 문장(personal)은 그대로 살린다** —
-                  그건 '내가 가 본 매장에 오늘 대회가 있다' 같은 그 사람만의 사실이라 광고 문구보다 세다.
-                  매장이 적은 초반에는 personal 이 대개 비어 GTO 줄이 뜨고, 이력이 쌓이면 그 사람 문장이 뜬다.
-                  ⚠ 숫자는 하드코딩이 아니다 — lib/gtoToolCount.ts + 계약 테스트가 ToolsPanel 원문을 세어
-                    이 값이 거짓이 되는 순간 빨개진다(화면 수치는 사실이어야 한다, §6-1).
-                  🔴 2026-09-24 오너 H2 로 **뒤집혔다**: 이 줄이 GTO 진입이다(home-gto-entry 1곳). home-flow-fit 계약을 '홈에 정확히 1곳'으로 갱신했다. */}
-              {!loaded
-                ? <>오늘의 대회를 불러오는 중</>
-                : failed
-                  ? <>오늘 대회 정보를 불러오지 못했어요</>
-                  : personal
-                    ? <Nums text={personal} />
-                    : (
-                      <button type="button" onClick={onTools} data-testid="home-gto-entry"
-                        aria-label={`무료 GTO 도구 ${GTO_TOOL_COUNT}개 — GTO 탭으로 이동`}
-                        className="-mx-1 inline-flex h-[44px] items-center gap-1 rounded-[8px] px-1 text-left transition-colors hover:text-accent-200">
-                        {/* 2026-09-24 오너 H2: 글로우 **박스**(테두리·배경 = stat-pill)를 빼고 **글씨만 네온**. 라이트는 번짐을 약하게(대비 AA 는 글자색이 진다).
-                            ⚠ '무료 GTO 도구 <span…>{GTO_TOOL_COUNT}개' 는 한 줄로 붙여 둔다 — homeLiveFreshness 계약이 그 모양을 본다. */}
-                        무료 GTO 도구 <span className="font-extrabold tabular-nums text-accent-200 [text-shadow:0_0_4px_rgb(var(--accent-300)/0.3)] dark:[text-shadow:0_0_6px_rgb(var(--accent-300)/0.6)]">{GTO_TOOL_COUNT}개</span>
-                        <Icon name="chevron-right" size={16} className="shrink-0 text-ink-muted" />
-                      </button>
-                    )}
+            {/* 🔴 2026-09-29 오너: "맨 위 'GTO 도구 22개' 문구를 후킹 문구로 바꾸고 모든 유저에게 나오게 — 내가 가 본 매장 1곳 같은 건 빼고 강조".
+                이 줄은 **항상** GTO 진입 버튼이다(로딩·실패·개인화 분기 없음 — 조회 결과와 무관한 정적 사실이라 미도착 중에도 거짓이 아니다).
+                한 줄 고정(h-[44px] + nowrap)이라 로딩이 끝나도 높이가 안 변한다(CLS 0 — home-cls.spec 이 재는 자리). 줄 전체가 44px 히트 영역이고
+                onTools 는 탭바와 같은 경로(전체 리로드 없음, 오너 H2 2026-09-24).
+                ⚠ 숫자는 하드코딩이 아니다 — lib/gtoToolCount.ts + 계약 테스트가 ToolsPanel 원문을 세어 거짓이 되는 순간 빨개진다(§6-1).
+                ⚠ §28: 수익·환전·상금 계열 단어를 쓰지 않는다('프로처럼 치는' 은 실력 프레이밍이다). */}
+            <p data-testid="home-today-line" className="flex h-[44px] items-center whitespace-nowrap text-[18px] font-bold leading-[26px] text-ink-primary md:text-[22px] md:leading-[30px] lg:h-auto lg:min-h-[44px] lg:text-[20px]">
+              <button type="button" onClick={onTools} data-testid="home-gto-entry"
+                aria-label={`프로처럼 치는 무료 GTO ${GTO_TOOL_COUNT}개 — GTO 탭으로 이동`}
+                className="-mx-1 inline-flex h-[44px] items-center gap-1 rounded-[8px] px-1 text-left transition-colors hover:text-accent-200">
+                {/* 글로우 **박스**(stat-pill)는 없고 글씨만 네온(오너 H2). 앞 문구는 굵게(font-extrabold), 'GTO N개' 만 네온+한 단계 크게.
+                    ⚠ '프로처럼 치는 <span…>무료 GTO {GTO_TOOL_COUNT}개' 는 한 줄로 붙여 둔다 — homeLiveFreshness 계약이 그 모양을 본다. */}
+                <span className="font-extrabold">프로처럼 치는</span> <span className="text-[20px] font-extrabold tabular-nums text-accent-200 md:text-[24px] lg:text-[22px] [text-shadow:0_0_4px_rgb(var(--accent-300)/0.3)] dark:[text-shadow:0_0_6px_rgb(var(--accent-300)/0.6)]">무료 GTO {GTO_TOOL_COUNT}개</span>
+                <Icon name="chevron-right" size={16} className="shrink-0 text-ink-muted" />
+              </button>
             </p>
           </section>
 
           {/* 작은 실제 배너 — 하나의 메시지, 하나의 연결(§6-2) */}
           <div className="lg:col-span-8 lg:col-start-5 lg:row-span-2 lg:row-start-1">
             <PosterCarousel
-              banners={banners}
+              plan={carouselPlan}
               eventSlide={eventSlide}
-              showBrand={showBrandSlides}
               onBannerUrl={(url) => {
                 // 관리자가 넣은 링크. 외부는 새 탭(noopener — opener 를 통한 탭내빙 차단),
                 // 내부 경로는 같은 탭. javascript: 같은 스킴은 애초에 열지 않는다.
