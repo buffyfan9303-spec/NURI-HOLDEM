@@ -598,8 +598,9 @@ for (const w of [320, 360, 390, 412]) {
         // 하트: aria-label 에 '단골' 이 들어가는 버튼(옛 구현의 접근 이름)
         out.hearts += [...c.querySelectorAll('button')].filter((b) => /단골/.test(b.getAttribute('aria-label') || '')).length;
 
-        // 매장명 링크의 **실효 히트 높이** — 의사요소 확장은 rect 로 안 잡히므로 elementFromPoint 로 잰다.
-        const venue = [...c.querySelectorAll<HTMLElement>('button')].find((b) => b.dataset.testid === 'schedule-venue-link');
+        // 매장 버튼의 **실효 히트 높이** — 의사요소 확장은 rect 로 안 잡히므로 elementFromPoint 로 잰다.
+        //   D2(2026-09-29): 매장 버튼은 카드의 형제(로고 자리)다 — 카드 칸(부모)에서 찾는다.
+        const venue = c.parentElement?.querySelector<HTMLElement>(':scope > [data-testid="schedule-venue-link"]') ?? null;
         if (venue) {
           const vr = venue.getBoundingClientRect();
           const cx = vr.left + vr.width / 2, cy = vr.top + vr.height / 2;
@@ -607,12 +608,14 @@ for (const w of [320, 360, 390, 412]) {
           let up = 0, down = 0;
           for (let d = 1; d <= 40; d++) { if (owns(document.elementFromPoint(cx, cy - d))) up = d; else break; }
           for (let d = 1; d <= 40; d++) { if (owns(document.elementFromPoint(cx, cy + d))) down = d; else break; }
-          // 제목 중심을 매장명 링크가 가로채면 목적지가 뒤바뀐다(매장 페이지 ≠ 일정 상세).
+          // 제목 중심·카드 중심을 매장 버튼이 가로채면 목적지가 뒤바뀐다(매장 페이지 ≠ 일정 상세).
           let titleStealsHit = false;
           if (h3) {
             const tr = h3.getBoundingClientRect();
             titleStealsHit = owns(document.elementFromPoint(tr.left + tr.width / 2, tr.top + tr.height / 2));
           }
+          const cr = c.getBoundingClientRect();
+          if (owns(document.elementFromPoint(cr.left + cr.width / 2, cr.top + cr.height / 2))) titleStealsHit = true;
           out.venueHits.push({
             text: (venue.textContent || '').trim().slice(0, 14),
             box: +vr.height.toFixed(2), effective: up + down + 1, titleStealsHit,
@@ -646,8 +649,8 @@ for (const w of [320, 360, 390, 412]) {
     expect(r.dailies, '보장이 없는 행에 "데일리" 표시가 없다').toBeGreaterThan(0);
     // ③ 매장명 링크 AA 24px · 제목 침범 0
     for (const v of r.venueHits) {
-      expect(v.effective, `매장명 "${v.text}" 실효 히트 ${v.effective}px — WCAG 2.2 AA 24px 미달(박스 ${v.box}px)`).toBeGreaterThanOrEqual(24);
-      expect(v.titleStealsHit, `매장명 링크의 히트 영역이 제목을 덮었다 — 카드 탭이 매장 페이지로 샌다`).toBe(false);
+      expect(v.effective, `매장 버튼 실효 히트 ${v.effective}px — 44px 미달(박스 ${v.box}px)`).toBeGreaterThanOrEqual(44);
+      expect(v.titleStealsHit, `매장 버튼의 히트 영역이 제목·카드 가운데를 덮었다 — 카드 탭이 매장 페이지로 샌다`).toBe(false);
     }
   });
 }

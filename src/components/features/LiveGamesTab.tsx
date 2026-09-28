@@ -297,7 +297,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             action={
               // 빈 화면은 막다른 길이 아니라 다음 행동의 출발점(Phase 13-2)
               <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'browse' }))}
-                className="btn-primary inline-flex h-10 items-center gap-1.5 px-4 text-sm font-bold"><Icon name="calendar" size={15} className="shrink-0" />대회 일정 보기</button>
+                className="btn-primary inline-flex h-[44px] items-center gap-1.5 px-4 text-sm font-bold"><Icon name="calendar" size={15} className="shrink-0" />대회 일정 보기</button>
             }
           />
         ) : (

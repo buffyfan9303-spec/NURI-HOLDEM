@@ -72,8 +72,9 @@ test('🔴 H2 — 카드 안 매장명에서 Enter 는 매장 페이지를 연�
   await page.goto('/');
   const card = page.locator('#home-schedule article[role="button"]').filter({ hasText: '키보드 대회' }).first();
   await card.waitFor({ timeout: 20_000 });
-  const venueBtn = card.locator('button').filter({ hasText: '연결 감사 홀덤펍' }).first();
-  await expect(venueBtn, '카드 안 매장명 버튼을 못 찾았다 — 검사가 대상에 도달 못 했다').toBeVisible();
+  // D2(2026-09-29): 매장 버튼은 카드의 형제(로고 자리)다 — 카드 칸(부모)에서 접근 이름으로 찾는다.
+  const venueBtn = card.locator('xpath=..').getByRole('button', { name: /연결 감사 홀덤펍 매장 페이지/ });
+  await expect(venueBtn, '카드 칸의 매장 버튼을 못 찾았다 — 검사가 대상에 도달 못 했다').toBeVisible();
   await venueBtn.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog', { name: /매장 페이지/ }), 'Enter 가 매장 페이지를 열지 않았다').toBeVisible({ timeout: 10_000 });

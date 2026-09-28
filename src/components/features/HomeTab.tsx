@@ -149,7 +149,7 @@ const H3_CLS = 'font-display text-[15px] font-bold leading-[22px] tracking-tight
  *  칸 수가 홀수여도·사이에 두 칸짜리 줄이 끼어도 짝(nth-child)이 어긋나지 않는다.
  *  ⚠ 폴백 갈래(여러 날짜 + 날짜 머리말)는 한 열 그대로다 — 머리말이 두 칸에 흩어지면 어느 날 대회인지 읽을 수 없다.
  *  ⚠ 스켈레톤도 같은 격자다 — 한 열로 예약하면 데이터가 오는 순간 목록 높이가 절반으로 줄어 아래가 끌려 올라간다(CLS). */
-const HOME_LIST_GRID = 'lg:grid lg:grid-cols-2 lg:divide-y-0 lg:*:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))] lg:[&>article:nth-of-type(odd):last-of-type]:col-span-2';
+const HOME_LIST_GRID = 'lg:grid lg:grid-cols-2 lg:divide-y-0 lg:*:shadow-[0_0_0_0.5px_rgb(var(--border-subtle))] lg:[&>[data-card-cell]:nth-of-type(odd):last-of-type]:col-span-2';
 const MORE_CLS = 'flex items-center gap-0.5 py-2 -my-2 t-desc font-semibold text-ink-muted hover:text-ink-secondary';
 
 /** 문장 속 숫자만 강조색 — 종전 '오늘 대회 <N>개' 의 색 계약을 문자열 한 줄에도 그대로 적용한다. */
@@ -842,9 +842,11 @@ export default function HomeTab({
                         : 'border border-transparent text-ink-secondary hover:bg-surface-high',
                     ].join(' ')}>
                     {/* 안쪽 얼굴 — 휠 피커 효과(투명도·블러·크기)는 여기에만 건다(위 효과 주석). 첫 자식이어야 한다. */}
+                    {/* D6(2026-09-29): 글자 크기는 **rem** 으로 — `calc(Nrem/17)` 은 지금 루트(17px)에서 정확히 N px 이다(디자인 크기 불변).
+                        절대 px 는 루트 글자 크기를 따라가지 않는다. 루트가 사용자 설정을 따르게 되면 이 칸도 같이 커진다. */}
                     <span data-pill-face className="flex flex-col items-center">
-                      <span className="text-[11px] font-bold tabular-nums md:text-[13px]">{mm}.{dd}</span>
-                      <span className={`text-[9px] md:text-[11px] ${isToday ? 'font-bold text-accent-200' : on ? 'text-ink-secondary' : 'text-ink-muted'}`}>{isToday ? '오늘' : `(${dow})`}</span>
+                      <span className="text-[calc(11rem/17)] font-bold tabular-nums md:text-[calc(13rem/17)]">{mm}.{dd}</span>
+                      <span className={`text-[calc(9rem/17)] md:text-[calc(11rem/17)] ${isToday ? 'font-bold text-accent-200' : on ? 'text-ink-secondary' : 'text-ink-muted'}`}>{isToday ? '오늘' : `(${dow})`}</span>
                       {/* 대회 있는 날 점 — 없는 날도 **같은 자리**를 비워 둔다(칩 높이가 날마다 달라지지 않게). */}
                       <span aria-hidden className={`mt-0.5 h-1 w-1 rounded-full ${has ? 'bg-accent-300' : 'bg-transparent'}`} />
                     </span>

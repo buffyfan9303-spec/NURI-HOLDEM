@@ -219,9 +219,25 @@ function CommunityTab({
       //   '프로그램 스크롤 창' 안의 브라우저 이벤트를 무시하면 아예 못 봤다).
       //   같은 프레임에 헤더 상태가 확정돼야 복원 위치가 헤더 높이 변화로 밀리지 않는다.
       notifyScrollNow(window.scrollY);
-    } else if (pending.keep > maxScroll) {
-      // 첫 방문인데 새 섹션이 짧다 — 스크롤은 부르지 않는다. 브라우저가 maxScroll 로 클램프한 점프만 손짓이 아님을 알린다.
-      markProgrammaticScroll();
+    } else {
+      if (pending.keep > maxScroll) {
+        // 첫 방문인데 새 섹션이 짧다 — 브라우저가 maxScroll 로 클램프한 점프가 손짓이 아님을 알린다.
+        markProgrammaticScroll();
+      }
+      // 🔴 D8(2026-09-29 모바일 점검): 첫 방문은 위치를 그대로 둬서(UI-06), 스크롤된 채 누르면 새 판 윗부분이
+      //   레일 밑에 가려졌다(390 · y=221 에서 판 윗변 -34 vs 레일 밑변 87 = **121px** 가림). 다른 하위 탭(alignSubTabPanel)과
+      //   같은 규칙으로 판 윗변이 레일 밑으로 말려 올라가 있을 때만 **레일 바로 밑**까지 올린다 — 0 으로 튕기지 않으므로
+      //   UI-06 이 막으려던 '맨 위로 튐·헤더 히스테리시스 풀림'은 생기지 않는다. 판이 이미 레일 밑이면 아무것도 안 한다.
+      const bar = secBarRef.current?.closest<HTMLElement>('[data-community-secbar]');
+      const panel = bar?.parentElement?.querySelector<HTMLElement>('[data-community-secpanel]');
+      if (bar && panel && bar.getClientRects().length) {
+        const d = panel.getBoundingClientRect().top - bar.getBoundingClientRect().bottom;
+        if (d < -1) {
+          markProgrammaticScroll();
+          window.scrollTo({ top: Math.max(0, window.scrollY + d), behavior: 'instant' as ScrollBehavior });
+          notifyScrollNow(window.scrollY);
+        }
+      }
     }
   }, [section]);
   // 이미 마운트된 상태(keep-alive)에서 외부가 섹션을 지정할 때 — 예: 대시보드 '내 장터 거래'

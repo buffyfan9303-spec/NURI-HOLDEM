@@ -504,7 +504,7 @@ export default function ToolsPanel() {
         <Icon name="search" size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden />
         {/* type=search: 네이티브 지우기(×) 버튼 + 모바일 '검색' 키(enterKeyHint). .input[type=search] 가 12px 라운드·pl-10 을 준다 */}
         <input type="search" enterKeyHint="search" autoComplete="off" value={q} onChange={(e) => setQ(e.target.value)} placeholder="도구 검색 · 이름·기능"
-          className="input w-full text-sm" aria-label="도구 검색" />
+          className="input min-h-[44px] w-full text-sm" aria-label="도구 검색" />
       </div>
 
       {/* 레인 필터 칩 — 보이는 높이 32px, 누르는 높이 44px(CHIP_HIT · gto/chip.ts, 2026-09-24 오너 G3 칩 기준), aria-pressed 토글.
@@ -527,7 +527,7 @@ export default function ToolsPanel() {
               //   게이트가 조용히 꺼진다 — subtab-motion 의 tools-lane 계측이 실제로 그렇게 죽어 있었다.
               <button key={l.id} type="button" aria-pressed={on} data-lane={l.id}
                 onClick={() => { const next = on && l.id !== 'all' ? 'all' : l.id; goSubTab('tools-lane', LANE_ORDER, lane, next, () => setLane(next)); }}
-                className={[CHIP_HIT, 'inline-flex h-[32px] items-center justify-center rounded-badge border px-2 text-2xs font-semibold transition-colors',
+                className={[CHIP_HIT, 'inline-flex h-[32px] min-w-[44px] items-center justify-center rounded-badge border px-2 text-2xs font-semibold transition-colors',
                   on ? 'border-accent-300 bg-accent-300 text-white' : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {l.label}
               </button>

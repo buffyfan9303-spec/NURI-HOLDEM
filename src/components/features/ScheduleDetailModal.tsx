@@ -28,6 +28,7 @@ import SlidingPill from '../atoms/SlidingPill';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { msgOf } from '../../lib/dbError';
 import { goSubTab } from '../../lib/subTabTransition';
+import { gameTypeLabel } from '../../lib/gameTypeLabel';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -1038,7 +1039,8 @@ function CalendarShareRow({ schedule, onLikeChange }: { schedule: Schedule; onLi
     <div className="grid grid-cols-2 gap-2">
       {/* 찜 = 앱 내 캘린더에 담기. 파이프라인상 '예약' 앞 단계(관심 표시)라 예약 CTA 와 나란히 두지 않는다. */}
       <button type="button" onClick={toggleLike} disabled={likeBusy} aria-pressed={liked}
-        className={['flex items-center justify-center gap-1.5 rounded-input border py-2 text-xs font-bold transition-colors disabled:opacity-60',
+        // D3(2026-09-29): 보이는 높이 36 → 누름 44(min-h). 두 칸 격자라 옆 칸도 같이 44 로 선다.
+        className={['flex min-h-[44px] items-center justify-center gap-1.5 rounded-input border py-2 text-xs font-bold transition-colors disabled:opacity-60',
           // .chip-aura 가 border:1px solid 를 자체 공급한다 — border-transparent 를 같이 주면 다크에서만
           // 그 테두리를 덮어 라이트와 모양이 갈리고, hover 때 없던 인디고 선이 튀어나온다(3fd2c47 과 같은 계열).
           liked ? 'chip-aura' : 'border-border-default bg-surface-high text-ink-secondary hover:border-accent-400/50 hover:text-accent-300'].join(' ')}>
@@ -1054,7 +1056,7 @@ function CalendarShareRow({ schedule, onLikeChange }: { schedule: Schedule; onLi
             toast.show('공유 링크를 복사했습니다. 붙여넣으면 이 대회로 바로 열려요', 'success');
           } catch { toast.show('복사에 실패했습니다', 'error'); }
         }}
-        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2 text-xs font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
+        className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2 text-xs font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
         <Icon name="link" size={14} className="shrink-0" />공유 링크
       </button>
     </div>
@@ -1094,7 +1096,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
         {/* 오발신이 곧 운영자 장부 오염 + 업주 푸시 알림이라, 스치는 탭으로는 나가지 않게 꾹 누르기
             (예약 취소와 동일 패턴 — 확인 팝업보다 빠르면서 오작동엔 더 안전) */}
         <HoldToConfirmButton onConfirm={send} disabled={sending} holdingLabel="계속 누르세요…"
-          className="btn-primary mt-1.5 px-3 py-1.5 text-xs disabled:opacity-50">
+          className="btn-primary mt-1.5 min-h-[44px] px-3 py-1.5 text-xs disabled:opacity-50">
           {sending ? '전송 중…' : <span className="inline-flex items-center gap-1.5"><Icon name="hand" size={13} className="shrink-0" />꾹 눌러 참가 신청</span>}
         </HoldToConfirmButton>
       </div>
@@ -1540,7 +1542,8 @@ function buyinDetailText(s: Schedule): string {
   const parts: string[] = [];
   // 미입력 0은 가격 정보가 아니다 — 세그먼트 생략(카드·표의 '—' 문법과 동일 판정, 2026-08-28)
   if (b.amount > 0) parts.push(b.amount.toLocaleString());
-  if (b.gameType) parts.push(b.gameType);
+  // 장부 코드값(gtd·entry)이 그대로 들어온 행이 있다 — 사람 말로(자유 입력은 그대로 · lib/gameTypeLabel)
+  if (b.gameType?.trim()) parts.push(gameTypeLabel(b.gameType));
   if (b.rebuy !== undefined) parts.push(`리바이 ${b.rebuy.toLocaleString()}${b.rebuyLimit ? `×${b.rebuyLimit}` : ' 무제한'}`);
   if (b.addon || b.addonStack) parts.push(`애드온${b.addon ? ` ${b.addon.toLocaleString()}원` : ''}${b.addonStack ? ` (${b.addonStack.toLocaleString()}칩)` : ''}`);
   // 프리즈아웃 추론은 기존 의미 보존: '금액만 있고 리바이 정보가 없다'일 때만

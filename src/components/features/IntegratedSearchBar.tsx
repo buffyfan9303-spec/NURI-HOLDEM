@@ -89,6 +89,9 @@ const CHIP_BASE = 'inline-flex h-9 shrink-0 items-center rounded-chip border bor
 const CHIP_ON = 'bg-accent-300/15 text-accent-300';
 // P1-5(오너 진단 '선 노이즈'): 1px 테두리 대신 배경보다 한 톤 밝은 면으로 그룹화
 const CHIP_OFF = 'bg-surface-high text-ink-secondary hover:bg-surface-float/70';
+/** D4(2026-09-29): 보이는 칩(38.25px)은 그대로, 누름면만 세로 44px — 위로만 넓힌다(`.tap-44`, index.css).
+ *  칩 레일은 가로 스크롤 상자라 넘침이 잘리지만, 확장분(≤ 7.75px)은 레일의 위 안쪽 여백(pt-2 = 8.5px) 안에 들어간다. */
+const CHIP_HIT = 'tap-44';
 
 // 단일선택 축(지역/등급/예산)용 드롭다운 칩 — 닫힌 칩은 짧은 라벨('지역')을, 값이 있으면
 // 값 라벨('서울')을 보여준다. 실제 입력은 투명 오버레이 <select> — 안드로이드/iOS 네이티브
@@ -114,7 +117,8 @@ function FilterSelectChip({ ariaLabel, value, onChange, placeholder, options }: 
         aria-label={ariaLabel}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        // 누름면은 select 자신이 넓힌다(D4) — 칩(div)에 의사요소를 달면 그 확장부를 눌러도 select 가 안 열린다.
+        className="absolute inset-x-0 bottom-0 top-[min(0px,calc(100%-44px))] w-full cursor-pointer opacity-0"
       >
         {options.map(([v, l]) => <option key={v || 'all'} value={v}>{l}</option>)}
       </select>
@@ -479,7 +483,9 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           aria-label={searchOpen ? '검색 닫기' : '검색 열기'}
           aria-expanded={searchOpen}
           onClick={() => setSearchOpen((v) => !v)}
-          className={['w-9 justify-center px-0', CHIP_BASE, searchOpen || rawQuery ? CHIP_ON : CHIP_OFF].join(' ')}
+          // 가로도 44: 레일 첫 칸이라 왼쪽 안쪽 여백(px-page-x)으로 넓힌다(보이는 원형 칩 38.25 그대로).
+          //   6.75 = 5.75 + 테두리 1px — 의사요소의 left 는 padding 상자 기준이라 테두리만큼 덜 나간다(실측 43 → 44).
+          className={['w-9 justify-center px-0', CHIP_BASE, CHIP_HIT, 'before:-left-[6.75px]', searchOpen || rawQuery ? CHIP_ON : CHIP_OFF].join(' ')}
         >
           <SearchIcon className="h-4 w-4" />
         </button>
@@ -500,7 +506,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
               type="button"
               aria-pressed={active}
               onClick={() => setTour(active ? 'all' : id)}
-              className={[CHIP_BASE, 'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300', active ? CHIP_ON : CHIP_OFF].join(' ')}
+              className={[CHIP_BASE, CHIP_HIT, 'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-300', active ? CHIP_ON : CHIP_OFF].join(' ')}
             >
               {label}
             </button>

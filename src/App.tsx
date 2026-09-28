@@ -406,7 +406,9 @@ const AppHeader = memo(function AppHeader({
         </button>
         {/* 모바일: 로고 │ 현재 위치(지금 보고 있는 탭) — 로고 클릭=홈 복귀 */}
         <div className="lg:hidden flex min-w-0 items-center gap-2">
-          <button type="button" onClick={onHome} aria-label="홈으로" className="press-spring flex shrink-0 items-center gap-1.5">
+          {/* D4(2026-09-29): 누름 높이 30 → 44(min-h). 헤더 줄(59.5px) 안이라 흐름이 안 바뀐다.
+              ⚠ 가로 확장은 리드 결정(2026-09-29)으로 하지 않는다 — 높이만 44. */}
+          <button type="button" onClick={onHome} aria-label="홈으로" className="press-spring flex min-h-[44px] shrink-0 items-center gap-1.5">
             <NuriMark uid="m" className="h-6 w-6 shrink-0" />
             {/* ⚠ U01: 320px 에서는 워드마크를 접는다.
                 실측(2026-09-12) — 320 − 좌우 여백 17×2 − 우측 버튼 클러스터 137 = 149px 이 헤더 잔량인데,
@@ -432,6 +434,8 @@ const AppHeader = memo(function AppHeader({
         </div>
 
         {/* RIGHT: 테마 토글 + 알림 + 로그인/아바타 — 동일 36px 원형 버튼 클러스터 */}
+        {/* D4(2026-09-29) 리드 결정: 원형 버튼의 누름 **가로** 44 확장은 하지 않는다(높이 44 는 tap-44 로 유지).
+            가로를 넓히면 로그인 클러스터가 +4.5px 넓어져 375px 로그인 상태에서 워드마크가 접힌다(실측 hf/m/hdrsweep2.cjs). */}
         <div className="flex items-center gap-0.5">
           {/* 통합 검색 버튼은 오너 지시(2026-08-27)로 제거 — 검색은 '전체 일정' 레일 돋보기가 담당.
               GlobalSearchModal 자체는 유지(추후 재진입점 대비). */}
@@ -4255,11 +4259,16 @@ export default function App() {
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
 
           {/* 서피스 깊이·오로라 확장(2026-08-27): browse 상단 오로라 워시 — 정적 1회 페인트 */}
-          <div className="hero-aurora px-page-x pt-3 pb-section lg:pt-4">
-            {/* P2-8 섹션 헤더 패턴: 제목+개수 좌측(콘텐츠 캡션 — 삭제된 '총 N개' 띠의 대체) */}
-            {schedulesLoaded && visibleSchedules.length > 0 && (
-              <p className="flex items-baseline gap-1.5 pb-2 font-display text-lg font-bold tracking-tight text-ink-primary text-grad-violet">
-                대회 <span className="text-sm font-bold tabular-nums text-accent-300 text-grad-keep">{visibleSchedules.length}</span>
+          {/* 🔴 D1(2026-09-29 · `?tab=browse` 직접 진입 CLS 0.768): 로딩 중엔 스켈레톤이 한 화면보다 짧아 사업자 푸터가
+              y776 에 보였다가 데이터 도착 때 화면 밖으로 밀려났다(푸터 이동이 CLS 의 거의 전부). pane-reserve 로 이 판이
+              늘 한 화면 이상을 잡아 푸터가 첫 화면에 못 올라오게 한다(LazyFallback 과 같은 정의 · index.css). */}
+          <div className="hero-aurora pane-reserve px-page-x pt-3 pb-section lg:pt-4">
+            {/* P2-8 섹션 헤더 패턴: 제목+개수 좌측(콘텐츠 캡션 — 삭제된 '총 N개' 띠의 대체)
+                D1: 로딩 중에도 같은 줄을 invisible 로 세워 자리(38px)를 잡는다 — 도착 때 아래 목록이 +38px 밀리던 자리. */}
+            {(!schedulesLoaded || visibleSchedules.length > 0) && (
+              <p aria-hidden={!schedulesLoaded || undefined}
+                className={['flex items-baseline gap-1.5 pb-2 font-display text-lg font-bold tracking-tight text-ink-primary text-grad-violet', schedulesLoaded ? '' : 'invisible'].join(' ')}>
+                대회 <span className="text-sm font-bold tabular-nums text-accent-300 text-grad-keep">{schedulesLoaded ? visibleSchedules.length : 0}</span>
               </p>
             )}
             {/* PC 3컬럼: 중앙 콘텐츠 + 우측 위젯 레일(xl 이상) — 바이낸스식 정보 밀도 */}
@@ -4285,14 +4294,14 @@ export default function App() {
                         이 카드만 좌우 17px 씩 안으로 들어가(1rem=17px) 바로 위 '지난 대회' 카드와
                         **모서리가 어긋난다**(375px 실측 x=34/307 vs 형제 x=17/341). */}
                     <section className="rounded-aura border card-aura overflow-hidden">
-                      <header className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
+                      {/* D4(2026-09-29): 헤더 줄을 44px 로 — 종전엔 py-2 를 음수 마진으로 되먹여 누름면이 33px 였다.
+                          카드 안(overflow-hidden)이라 의사요소 확장은 잘린다 — 줄 자체가 44 여야 한다(카드가 10px 길어진다). */}
+                      <header className="flex min-h-[44px] items-center justify-between px-3 border-b border-border-subtle">
                         <button
                           type="button"
                           onClick={() => setNoticesOpen((v) => !v)}
                           aria-expanded={noticesOpen}
-                          // 글자 높이 그대로면 17px 다. 헤더의 py-2 를 음수 마진으로 되먹여
-                          // 헤더 높이는 유지한 채 손가락이 닿는 영역만 33px 로 넓힌다.
-                          className="-my-2 py-2 -ml-1 pl-1 pr-2 flex items-center gap-1.5 text-xs font-bold text-accent-300 focus:outline-hidden"
+                          className="min-h-[44px] -ml-1 pl-1 pr-2 flex items-center gap-1.5 text-xs font-bold text-accent-300 focus:outline-hidden"
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
@@ -4302,7 +4311,7 @@ export default function App() {
                           공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
                         </button>
                         {isAdmin && (
-                          <button type="button" onClick={handleWriteNotice} className="-my-2 py-2 pl-2 text-2xs text-accent-300 hover:text-accent-200 font-semibold">
+                          <button type="button" onClick={handleWriteNotice} className="min-h-[44px] pl-2 text-2xs text-accent-300 hover:text-accent-200 font-semibold">
                             + 공지 작성
                           </button>
                         )}

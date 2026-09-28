@@ -58,7 +58,7 @@ const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: {
             <li key={s.id} className="border-b border-border-subtle last:border-b-0">
               <button type="button"
                 onClick={() => (entries ? setOpenId(opened ? null : s.id) : onSelect(s))}
-                className={['flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-surface-high/70', opened ? 'bg-surface-high/50' : ''].join(' ')}>
+                className={['flex min-h-[44px] w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-surface-high/70', opened ? 'bg-surface-high/50' : ''].join(' ')}>
                 <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-ink-muted">
                   {s.date.slice(5).replace('-', '/')}({day(s.date)})
                 </span>
