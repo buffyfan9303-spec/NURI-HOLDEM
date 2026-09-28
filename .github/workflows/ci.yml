@@ -185,23 +185,37 @@ jobs:
           retention-days: 3
 
   # ── 집계 잡: 표시 이름이 예전 체크 이름 `build-and-e2e` 다(Vercel 이 이 이름을 기다린다) ─────────
-  #   `if: always()` 가 핵심이다 — 앞 잡이 실패하면 이 잡이 **skipped** 가 되는데, skipped 체크는
-  #   통과처럼 취급될 수 있다. 그러면 E2E 가 빨개도 배포가 나간다. 그래서 항상 돌고, 하나라도 success 가 아니면 실패한다.
+  #   ⚠ `needs:` 로 묶지 않는다. needs 로 묶으면 이 체크는 앞 잡이 **끝난 뒤에야 생긴다**
+  #     (2026-09-28 시험 실측: 조각이 도는 동안 커밋 체크 목록에 build-and-e2e 가 없었다).
+  #     예전 한 잡 시절엔 이 이름이 실행 시작부터 '진행 중' 으로 있었고 Vercel 은 그걸 기다렸다.
+  #     "없는 체크" 를 Vercel 이 어떻게 치는지 확인할 수 없으므로(대시보드 설정), 예전과 똑같이
+  #     **처음부터 떠 있다가** 다른 잡이 다 끝나면 판정하도록 폴링한다.
+  #   판정: checks + e2e 조각 전부 success 여야 통과. 실패·취소·skipped 하나라도 있으면 실패.
+  #   (skipped 를 통과로 치면 E2E 가 빨개도 배포가 나간다.)
+  # ponytail: 잡 이름(checks · "e2e (…)")으로 고른다 — 잡을 더하거나 이름을 바꾸면 아래 select 와 최소 개수를 같이 고쳐라.
   ci-ok:
     name: build-and-e2e
-    if: ${{ always() }}
-    needs: [checks, e2e]
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 45
+    permissions:
+      actions: read
     steps:
       - name: 모든 조각 결과 확인
         env:
-          CHECKS: ${{ needs.checks.result }}
-          E2E: ${{ needs.e2e.result }}
+          GH_TOKEN: ${{ github.token }}
+          URL: repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs?filter=latest&per_page=100
         run: |
-          echo "checks=$CHECKS e2e=$E2E"
-          test "$CHECKS" = success
-          test "$E2E" = success
+          while :; do
+            jobs=$(gh api "$URL" --jq '[.jobs[] | select(.name == "checks" or (.name | startswith("e2e (")))]')
+            total=$(jq length <<<"$jobs")
+            open=$(jq '[.[] | select(.status != "completed")] | length' <<<"$jobs")
+            # checks 1 + e2e 5(1/4..4/4 · boot) = 6
+            if [ "$total" -ge 6 ] && [ "$open" -eq 0 ]; then break; fi
+            sleep 20
+          done
+          jq -r '.[] | "\(.name) = \(.conclusion)"' <<<"$jobs"
+          bad=$(jq '[.[] | select(.conclusion != "success")] | length' <<<"$jobs")
+          test "$bad" -eq 0
 
   # ── 보안 게이트(2026-09-02) — 빌드 잡과 병렬. 실패 = 배포 차단 ─────────────────
   #   ① gitleaks: 커밋 이력 전체의 비밀 유출(공개 저장소라 한 번 새면 즉시 공개)
