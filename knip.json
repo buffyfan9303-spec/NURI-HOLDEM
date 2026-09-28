@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "api/*.js",
+    "scripts/**/*.mjs",
+    "scripts/legal-ssr-entry.tsx",
+    "public/sw.js"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "api/**/*.js",
+    "scripts/**/*.{mjs,js,tsx}"
+  ],
+  "ignoreDependencies": [
+    "pretendard"
+  ]
+}

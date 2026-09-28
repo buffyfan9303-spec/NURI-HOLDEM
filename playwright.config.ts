@@ -30,7 +30,12 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0, // 2026-09-03: 러너 부하 플레이크(subtab-motion root 이동·clock-catchup·shout-queue)가 1회 재시도로는 안 걷힘
-  reporter: process.env.CI ? 'github' : 'list',
+  // 2026-09-28 도구 도입 — JSON reporter 를 추가로 얹어 flaky 집계만 남긴다(실패시키지 않음).
+  //   CI 의 retries:2 로 재시도 끝에 통과한 테스트는 화면상 초록이지만 flaky 다 — 그 수를 보이게 한다.
+  //   기존 reporter(github/list)는 그대로 두고 옆에 하나 더 붙일 뿐, 판정 방식은 바꾸지 않는다.
+  reporter: process.env.CI
+    ? [['github'], ['json', { outputFile: 'flaky-report.json' }]]
+    : [['list'], ['json', { outputFile: 'flaky-report.json' }]],
   use: {
     baseURL: BASE,
     trace: 'on-first-retry',

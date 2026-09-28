@@ -37,6 +37,7 @@ dist-ssr
 # Playwright
 /test-results/
 /playwright-report/
+flaky-report.json
 /blob-report/
 /playwright/.cache/
 
