@@ -1,4 +1,9 @@
--- ⏸ 초안 — 리드가 리허설 후 적용 (community-team 작성 2026-09-29, 라이브 쓰기 0회 · SELECT 조회만 함)
+-- ✅ 2026-09-29 라이브 적용 완료(nuri-lead, MCP execute_sql). 실측:
+--    critical-reviewer 리허설(1차) → gmsg_read 관리자 회귀 발견 → 수정(ad53a3e9) → 리드 재리허설(DO + 끝 RAISE 전량 롤백, 합성 행·임시 차단 A→B·ADM→B·B→C·C→C):
+--    A: B 의 글·댓글·외치기·딜러·그룹·매장채팅 1→0, 자기 댓글·C 글·작성자 NULL 채팅 유지 · B 본인: 가려진 글 포함 2 유지, B 가 차단한 C 글 1→0 ·
+--    C(차단당함·자기 차단): 불변 · 관리자: 그룹채팅 포함 전부 불변 · 비로그인: 불변 · A 해제 후: 전부 원래대로. 롤백 확인 fn 0·ub 0·pol 0·합성 0.
+--    적용: 자가검사 통과(정책 6/6·secdef·search_path·비로그인 빈 배열) · anon 실행 가능(정책 평가용 — 본인 차단 목록만) ·
+--    적용 직후 운영 조회: 공개 글 4 = 비로그인 4 = 일반 회원 4(fail-closed 없음).
 --
 -- 요구: 오너 결정 #15 "차단: 서버에서도 막는다(글·댓글 조회)"
 --   (.claude/agent-memory-local/nuri-lead/project_owner_decisions_0929.md:11 ·
