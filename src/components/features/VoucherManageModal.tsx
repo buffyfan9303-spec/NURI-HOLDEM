@@ -769,7 +769,7 @@ ${cards}
           )}
         </div>
       ) : (
-        <p className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">전송·전송 취소·삭제는 <b className="text-ink-secondary">업주</b> 전용. 직원은 열람·사용 처리만.</p>
+        <p data-testid="voucher-issue-owner-badge" className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">전송·전송 취소·삭제는 <b className="text-ink-secondary">업주</b> 전용. 직원은 열람·사용 처리만.</p>
       )}
 
       {/* 2) QR 코드 — 접기 */}
@@ -997,7 +997,7 @@ ${cards}
                           <p className="mb-0.5 text-2xs font-bold text-ink-muted">미사용 이용권</p>
                           <ul data-testid="holder-unused" className="mb-1.5 space-y-0.5">
                             {g.active.map((v) => (
-                              <li key={v.id} className="flex items-center justify-between gap-2 text-[11px]">
+                              <li key={v.id} data-reason={voucherReasonKey(v)} className="flex items-center justify-between gap-2 text-[11px]">
                                 <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.title}<span className="ml-1 text-ink-muted">· {voucherReasonLabel(voucherReasonKey(v))}</span></span>
                                 <span className="shrink-0 tabular-nums text-ink-muted">{v.expiresAt ? `${fmtDateTime(v.expiresAt)}까지` : '무기한'}</span>
                               </li>

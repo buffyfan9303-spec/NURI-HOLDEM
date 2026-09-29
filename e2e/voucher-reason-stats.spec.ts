@@ -124,9 +124,10 @@ test.describe('이용권 유형별 전송 표(V2)', () => {
       await expect(tile('잔여 이용권'), '타일은 기간과 무관한 현재 현황이다').toHaveText('3');
       // B3 — 보유자별 목록 미사용분에도 유형 라벨
       await page.getByRole('button', { name: '관리', exact: true }).first().evaluate((b) => (b as HTMLElement).click());
+      // 라벨 문구가 아니라 서버 reason_key 로 겨눈다(문구가 바뀌어도 안 깨지게, 2026-09-29 용어 통일 후속).
       const unused = page.getByTestId('holder-unused');
-      await expect(unused.getByText(/이벤트 카드 당첨/)).toBeVisible();
-      await expect(unused.getByText(/이용권 지급/)).toBeVisible();
+      await expect(unused.locator('[data-reason="event_card"]')).toBeVisible();
+      await expect(unused.locator('[data-reason="grant"]')).toBeVisible();
       if (SHOT) await page.screenshot({ path: `${SHOT}/${W}-${SHOT_TAG()}-range-holder.png` });
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), '문서가 가로로 넘친다').toBeLessThanOrEqual(0);
     });
