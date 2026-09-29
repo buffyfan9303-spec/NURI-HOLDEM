@@ -93,7 +93,11 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
           {BIZ_REQUIRED.map(([k, v]) => (
             <div key={k} className="flex items-start gap-1">
               <dt className="shrink-0 whitespace-nowrap">{k}</dt>
-              <dd className="text-ink-secondary">{v}</dd>
+              {/* 하이픈이 든 덩어리(166-46, · 207-본244호 · 전화번호)는 하이픈에서 줄바꿈되지 않게 묶는다 —
+                  2026-09-29 실측: 320px 에서 '166-' / '46', 390px 에서 '207-' / '본244호' 로 끊겼다. 글자는 바꾸지 않는다. */}
+              <dd className="text-ink-secondary">
+                {v.split(/(\s+)/).map((t, i) => (t.includes('-') ? <span key={i} className="whitespace-nowrap">{t}</span> : t))}
+              </dd>
             </div>
           ))}
         </dl>
