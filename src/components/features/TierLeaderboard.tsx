@@ -21,7 +21,7 @@ import {
   FALLBACK_COSMETICS, type Cosmetic,
 } from '../../lib/cosmetics';
 import { drawProfileCard, downloadProfileCard, frameLabel, DEFAULT_FRAME } from '../../lib/profileCard';
-import { getGlobalRankingTotals, CAREER_PERIOD_LABEL, type GlobalRankingTotal, type CareerPeriod } from '../../api/rankings';
+import { getGlobalRankingTotals, CAREER_PERIOD_LABEL, onRankingNamePrefChange, type GlobalRankingTotal, type CareerPeriod } from '../../api/rankings';
 import { onColorInkClass } from '../../lib/color';
 import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
@@ -286,7 +286,7 @@ function CareerBoard({ myNick, nickStyle, markPrefix, period, setPeriod, rows, l
                 <li key={r.nickname} className={['flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0', isMe ? 'bg-accent-300/8' : ''].join(' ')}>
                   <RankNum n={i + 1} />
                   <div className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-ink-primary" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}{isMe && <span className="ml-1 text-2xs font-semibold text-accent-300">(나)</span>}</span>
+                    <span className="block truncate text-sm font-semibold text-ink-primary" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}{r.realName ? <span className="text-2xs font-normal text-ink-muted"> ({r.realName})</span> : null}{isMe && <span className="ml-1 text-2xs font-semibold text-accent-300">(나)</span>}</span>
                     <span className="block truncate text-2xs tabular-nums text-ink-muted">우승 {r.wins} · TOP3 {r.top3} · 최고 {r.bestPosition}위 · 매장 {r.venues}곳</span>
                   </div>
                   <span className="shrink-0 text-right">
@@ -652,6 +652,8 @@ export default function TierLeaderboard() {
   // 머니인(대회 입상 경력) — 기간별 캐시. CareerBoard 의 local state 였던 것을 올렸다(D-moneyin, 위 CareerBoard 주석).
   const [careerPeriod, setCareerPeriod] = useState<CareerPeriod>('all');
   const [career, setCareer] = useState<Partial<Record<CareerPeriod, GlobalRankingTotal[]>>>({});
+  // 본인이 실명 공개를 켜고/끄면 기간별 캐시를 비운다 → 보고 있는 기간은 아래 효과가 바로 다시 읽는다.
+  useEffect(() => onRankingNamePrefChange(() => setCareer({})), []);
   // ── 공개 보드 예열(2026-09-18, 오너 "하단 메뉴 이동할 때 깜빡이면서 화면전환 — 처음 한 번만") ──────────
   //   원인은 전환이 아니라 **첫 방문 보드의 스켈레톤 섬광**이었다. 보드 데이터는 그 보드가 처음 켜질 때 비로소 조회되고,
   //   응답이 올 때까지(운영 실측 50~240ms · 명예의 전당은 조회 2회 직렬) pulse 스켈레톤을 그렸다가 콘텐츠로 갈아 끼운다.

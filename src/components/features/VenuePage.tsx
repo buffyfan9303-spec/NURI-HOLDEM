@@ -31,7 +31,7 @@ import { scheduleStatus } from '../../lib/scheduleStatus';
 import { thumbUrl } from '../../lib/imageUrl';
 import CoachMark from '../atoms/CoachMark';
 import {
-  getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay, getVenueRealNameOptIns,
+  getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay, getVenueRealNameOptIns, onRankingNamePrefChange,
   getVenuePageConfig, getScoreEntries, getVenuePlayerCounts, redactForCache,
   boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart,
   DEFAULT_RANK_METRICS, RANK_METRIC_LABEL,
@@ -1034,9 +1034,13 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
   const [optIns, setOptIns] = useState<ReadonlySet<string>>(() => new Set<string>());
   useEffect(() => {
     let alive = true;
-    getVenuesSeasonLeaders([venueId]).then((m) => { if (alive) setLeader(m[venueId] ?? null); }).catch(() => {});
-    getVenueRealNameOptIns(venueId).then((s) => { if (alive) setOptIns(s); }).catch(() => {});
-    return () => { alive = false; };
+    const load = () => {
+      getVenuesSeasonLeaders([venueId]).then((m) => { if (alive) setLeader(m[venueId] ?? null); }).catch(() => {});
+      getVenueRealNameOptIns(venueId).then((s) => { if (alive) setOptIns(s); }).catch(() => {});
+    };
+    load();
+    const off = onRankingNamePrefChange(load); // 본인이 실명 공개를 켜고/끄면 바로 다시 읽는다
+    return () => { alive = false; off(); };
   }, [venueId]);
   if (!leader) return null;
   return (

@@ -5,15 +5,25 @@ import { mustAffect } from './_mustAffect';
 import { currentUser } from './_session';
 import { makeSearchCache } from '../lib/searchCache';
 import { splitLedgerName } from '../lib/rankingGame';
+import { RANKING_NAME_PREF_EVENT } from './rankingDisplay';
 
-/** 매장 순위 변경 실시간 구독 — 순위 입력/수정 시 공개 표시에 자동 반영 */
+/** 순위표 표시 이름(닉네임/실명)을 본인이 바꿨을 때 — 열린 순위 화면이 다시 읽는 신호. 해제 함수를 돌려준다. */
+export function onRankingNamePrefChange(cb: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener(RANKING_NAME_PREF_EVENT, cb);
+  return () => window.removeEventListener(RANKING_NAME_PREF_EVENT, cb);
+}
+
+/** 매장 순위 변경 실시간 구독 — 순위 입력/수정 시 공개 표시에 자동 반영.
+ *  본인이 실명 공개를 켜고/끄는 것도 같은 '다시 읽기'로 받는다 — 이 구독을 쓰는 순위 화면이 전부 바로 따라온다. */
 export function subscribeRankings(venueId: string, onChange: () => void): () => void {
   if (IS_MOCK) return () => {};
+  const offPref = onRankingNamePrefChange(onChange);
   const ch = supabase
     .channel(`rankings:${venueId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'venue_rankings', filter: `venue_id=eq.${venueId}` }, () => onChange())
     .subscribe();
-  return () => { supabase.removeChannel(ch); };
+  return () => { offPref(); supabase.removeChannel(ch); };
 }
 
 export interface RankingEntry {
@@ -48,14 +58,18 @@ const wantsRealName = (nickname: string, optIns?: RealNameOptIns): boolean =>
   !!optIns && optIns.has(nickname.trim().toLowerCase());
 
 // 표시 분리: 메인(닉네임 — 실명 선택자만 실명) + 서브(실명 선택자의 마스킹 닉네임).
-// 닉네임이 비어 있는 과거 행(실명만 입력)은 실명을 마스킹해 쓴다 — 빈 칸으로 두면 누구인지 사라진다.
+// 닉네임이 비어 있는 과거 행(업주가 실명만 적은 행)은 **'참가자'** 로 쓴다(오너 2026-09-30).
+//   예전엔 실명을 마스킹해('홍*동') 보여 줬다 — 성·끝 글자는 본인이 고르지 않은 실명 일부다.
+//   닉네임이 없으면 실명 공개를 켤 방법 자체가 없으므로(옵트인은 닉네임으로 잇는다) 이 행은 늘 비동의다.
+//   공개 화면에서 이 행의 실명은 서버가 이미 NULL 로 준다(20260930c) — 여기는 빈 이름 대신 쓸 말만 정한다.
+export const NAMELESS_RANK_LABEL = '참가자';
 export function rankDisplay(
   e: { nickname: string; realName?: string },
   optIns?: RealNameOptIns,
 ): { main: string; sub: string } {
   const nick = (e.nickname ?? '').trim();
   const rn = (e.realName ?? '').trim();
-  if (!nick) return { main: rn ? maskRealName(rn) : '', sub: '' };
+  if (!nick) return { main: NAMELESS_RANK_LABEL, sub: '' };
   if (rn && wantsRealName(nick, optIns)) return { main: rn, sub: maskRealName(nick) };
   return { main: nick, sub: '' };
 }
@@ -84,7 +98,11 @@ async function rawVenueRealNameOptIns(venueId: string): Promise<string[]> {
 }
 // 한 매장 페이지 안에서 순위 패널과 시즌 선두 배너가 같은 답을 필요로 한다 → in-flight 합치기 + 60s LRU.
 // (자동완성 캐시와 같은 도구를 쓴다 — 캐시 규칙이 두 개면 언젠가 한쪽만 고쳐진다.)
-const cachedVenueRealNameOptIns = makeSearchCache(rawVenueRealNameOptIns, (s) => s.trim().toLowerCase(), { ttlMs: 60_000, max: 10 });
+// 키에 세대(optInGen)를 섞는다 — 본인이 실명 공개를 켜고/끄면 세대가 올라 옛 답(최대 60초)을 버린다.
+//   이 리스너는 모듈 로드 때 먼저 걸리므로, 같은 신호로 다시 읽는 화면(subscribeRankings)보다 **먼저** 돈다.
+let optInGen = 0;
+onRankingNamePrefChange(() => { optInGen += 1; });
+const cachedVenueRealNameOptIns = makeSearchCache(rawVenueRealNameOptIns, (s) => `${optInGen}|${s.trim().toLowerCase()}`, { ttlMs: 60_000, max: 10 });
 
 export async function getVenueRealNameOptIns(venueId: string): Promise<Set<string>> {
   return new Set(await cachedVenueRealNameOptIns(venueId));
@@ -446,6 +464,8 @@ export async function getVenuePlayerCounts(venueId: string): Promise<PlayerCount
  */
 export interface GlobalRankingTotal {
   nickname: string; moneyinCount: number; wins: number; top3: number; bestPosition: number; venues: number; lastDate: string | null;
+  /** 본인이 실명 공개를 켠 사람만 서버가 싣는다(본인인증 실명 · 20260930c). 그 밖은 ''. */
+  realName?: string;
 }
 export type CareerPeriod = 'all' | 'year' | '90d';
 export const CAREER_PERIOD_LABEL: Record<CareerPeriod, string> = { all: '전체', year: '올해', '90d': '최근 90일' };
@@ -468,6 +488,7 @@ export async function getGlobalRankingTotals(period: CareerPeriod = 'all'): Prom
   return ((data ?? []) as any[]).map((r) => ({
     nickname: String(r.nickname ?? ''), moneyinCount: Number(r.moneyin_count) || 0, wins: Number(r.wins) || 0, top3: Number(r.top3) || 0,
     bestPosition: Number(r.best_position) || 0, venues: Number(r.venues) || 0, lastDate: r.last_date ? String(r.last_date) : null,
+    realName: r.real_name ? String(r.real_name) : '', // 마이그레이션 적용 전 서버는 열이 없다 → '' (닉네임만)
   })).sort(careerCompare);
 }
 
