@@ -90,13 +90,15 @@ test.describe('이용권 발급 권한 — 서버 can_manage_pos 와 같은 선'
     const opened = await openVoucherPane(page);
     expect(opened).toBe(true);
     // 종전 '업주 전용' 배지는 서버(공동운영자 포함)와 어긋난 문구였다.
-    await expect(page.getByText('발급 · 업주 전용', { exact: false }),
+    // ⚠ 2026-09-29 용어 통일(발급→전송)로 '발급 · 업주 전용' 문자열은 애초에 안 나온다 — 이름을 바꾸면
+    //   저절로 통과하는 빈 검사가 된다. '업주 전용'만으로 좁혀서 배지 자체의 부재를 본다.
+    await expect(page.getByText('업주 전용', { exact: false }),
       "'업주 전용' 배지가 남아 있다 — 서버는 승인 공동운영자도 허용한다").toHaveCount(0);
     // 오너 2026-09-24: 제목 옆 '업주·공동운영자' 라벨은 PC 에서도 뺐다 — 범위 고지는 펼친 안의 안내 박스가 맡는다.
     const hdr = page.getByTestId('voucher-issue-head');
     await expect(hdr).toBeVisible({ timeout: 15_000 });
     await expect(hdr.getByText(/업주\s*·\s*공동운영자/), '제목 옆 라벨이 PC 에 남아 있다').toHaveCount(0);
-    await expect(page.getByTestId('voucher-issue-scope'), '발급 범위를 말하는 안내가 없다').toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('voucher-issue-scope'), '전송 범위를 말하는 안내가 없다').toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('voucher-issue-scope'), '안내가 서버 범위(승인 공동운영자 포함)를 말하지 않는다').toHaveText(/업주\s*·\s*공동운영자/);
   });
 });

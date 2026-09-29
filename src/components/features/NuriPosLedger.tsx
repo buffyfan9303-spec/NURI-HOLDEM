@@ -3157,7 +3157,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         </div>
       </Field>
 
-      <Field label="매장이용권 발행/시상 · 선택 (당일 발급 장수)">
+      <Field label="매장이용권 전송/시상 · 선택 (당일 전송 장수)">
         <div className="relative w-40">
           <input type="number" inputMode="numeric" value={voucherIssued || ''} onChange={(e) => setVoucherIssued(Math.max(0, parseInt(e.target.value, 10) || 0))}
             placeholder="0" className="input w-full text-sm pr-7 tabular-nums" />
@@ -3826,7 +3826,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
         </div>
 
         {stats.ticketUnpaid > 0 && (
-          <p className="text-2xs font-semibold text-danger-light">티켓 미수 {stats.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T — 회수 티켓 집계에서 빠져 있습니다.</p>
+          <p className="text-2xs font-semibold text-danger-light">티켓 미수 {stats.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T — 사용 이용권 집계에서 빠져 있습니다.</p>
         )}
 
         {/* 미수자 리스트 */}

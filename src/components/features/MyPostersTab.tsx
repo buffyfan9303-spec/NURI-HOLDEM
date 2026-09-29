@@ -554,7 +554,7 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
               <Cell label="완납 누적" value={`${act.amount.toLocaleString()}`} gold />
               <Cell label="객단가" value={act.buyins ? `${Math.round(act.amount / act.buyins).toLocaleString()}` : '-'} />
               <Cell label="미수" value={`${act.unpaid.toLocaleString()}`} />
-              <Cell label="회수 이용권" value={`${Math.round(act.ticket * 10) / 10}T`} />
+              <Cell label="사용 이용권" value={`${Math.round(act.ticket * 10) / 10}T`} />
               <Cell label="가게지원" value={`${act.support}회`} />
             </div>
           )}

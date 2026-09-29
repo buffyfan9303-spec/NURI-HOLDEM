@@ -195,7 +195,7 @@ test('🔴 KPI 숫자 넷이 360px 에서 서로 겹치지 않는다', async ({ 
   await openDashboard(page);
 
   const store = page.locator('[data-tab="my-store"]');
-  const labels = ['완납 매출', '[data-testid="dash-kpi-buyins"]', '미수금', '회수 이용권'];
+  const labels = ['완납 매출', '[data-testid="dash-kpi-buyins"]', '미수금', '[data-testid="dash-kpi-ticket"]'];
   const boxes: { name: string; r: { x: number; y: number; w: number; h: number } }[] = [];
   for (const name of labels) {
     const el = (name.startsWith('[') ? store.locator(name) : store.getByText(name, { exact: true })).first();
@@ -273,7 +273,7 @@ test('🔴 라이트 테마 — 레이아웃이 무너지지 않고 본문 대�
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForTimeout(200);
   const bad: string[] = [];
-  for (const t of ['완납 매출', '[data-testid="dash-kpi-buyins"]', '미수금', '회수 이용권', '오늘 장부']) {
+  for (const t of ['완납 매출', '[data-testid="dash-kpi-buyins"]', '미수금', '[data-testid="dash-kpi-ticket"]', '오늘 장부']) {
     const c = await contrastOf(page, t);
     if (c.ratio < 0) { bad.push(`'${t}' 를 찾지 못했다`); continue; }
     if (c.ratio < 4.5) bad.push(`'${t}' 대비 ${c.ratio.toFixed(2)}:1 (글자 ${c.fg} / 지면 ${c.bg})`);
