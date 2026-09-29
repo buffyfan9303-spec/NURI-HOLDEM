@@ -556,7 +556,9 @@ for (const width of [390, 1023]) {
           // 프레임 타임스탬프 — 이번 이동에 든 구간만 싣는다(frameTs[i] = i 번째 프레임).
           const frameTs = (w.__frameTs as number[]);
           const base = Math.max(1, Math.min(frameTs.length - 1, ...leave.map((l) => l.fOn)));
-          return { waapi, css, scrollDriven, leave, stuck, base, ts: frameTs.slice(base) };
+          // tabCover notePaneLeaving 의 skip 조건 — 떠나는 판 기록이 0건일 때 '정당한 생략' 인지 가르는 진단값.
+          const skipState = `hidden=${document.hidden} overlay=${document.documentElement.hasAttribute('data-overlay')} reduce=${matchMedia('(prefers-reduced-motion: reduce)').matches}`;
+          return { waapi, css, scrollDriven, leave, stuck, base, ts: frameTs.slice(base), skipState };
         }, [LOCAL_DATA_ANIMATIONS, SCROLL_DRIVEN] as [string[], string]);
 
         // 🔵 2026-09-26 PANE-HANDOFF — 허용되는 것은 **출발 판 자신의 opacity 퇴장 1건**뿐이다(목적지·다른 판·판 안 요소는 그대로 0건).
@@ -578,6 +580,13 @@ for (const width of [390, 1023]) {
           for (let f = after + 1; f < before; f += 1) if (tsAt(f) >= deadline) n += 1;
           return n;
         };
+        // 🔴 빈 수집 방지(2026-09-29 verifier) — 아래 for 는 기록이 0건이면 한 번도 돌지 않아 **아무것도 안 재고 통과**했다.
+        //   이 경로(한 번에 한 이동 · 500ms+ 정착 대기 · 보이는 문서 · 오버레이 없음 · 동작 줄이기 끔)에는
+        //   tabCover.ts notePaneLeaving 의 skip 조건(rapid·hidden·data-overlay·reduce)에 드는 이동이 없다 —
+        //   격리 빌드 CPU×1/4/6 600이동 실측에서 전부 1건씩 기록됐다. 그래서 **이동마다 정확히 1건**을 요구한다.
+        if (res.leave.length !== 1) {
+          findings.push(`pass${pass} ${m.label}(${from}→${m.tab}) 떠나는 판 기록이 ${res.leave.length}건이다 — 1건이어야 한다(0건이면 수명 판정이 비어 통과한다 · ${res.skipState})`);
+        }
         for (const l of res.leave) {
           const tag = `pass${pass} ${m.label}(${from}→${m.tab})`;
           if (l.tab !== from) { findings.push(`${tag} 출발 판이 아닌 판이 떠나는 판으로 섰다: ${JSON.stringify(l)}`); continue; }
