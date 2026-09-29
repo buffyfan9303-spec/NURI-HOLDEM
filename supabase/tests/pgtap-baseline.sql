@@ -52,7 +52,8 @@ insert into _internal_auth_allow values
  ('_can_manage_reservation_schedule(uuid)'),          -- schedule_reservations 정책 sr_select/update/delete
  ('_actor_not_sanctioned()'),                         -- schedules 정책 *_not_sanctioned_*
  ('_ledger_buyin_tiers(ledger_buyins,numeric,jsonb)'), -- 장부 트리거 헬퍼(호출자 권한)
- ('_ledger_buyin_apply_amount_rule(ledger_buyins)');
+ ('_ledger_buyin_apply_amount_rule(ledger_buyins)'),
+ ('_can_message(uuid)');                              -- user_messages INSERT 정책(20260929a) — RLS 에서 호출자 권한으로 불린다
 
 -- A1
 insert into _tap(line)
