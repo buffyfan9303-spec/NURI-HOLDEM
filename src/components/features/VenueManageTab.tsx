@@ -20,6 +20,7 @@ import { canManageSchedule } from '../../api/staffSchedule';
 import { listMyMemberVenues, type MemberVenue } from '../../api/myVenues';
 import { splitLedgerName } from '../../lib/rankingGame';
 import { uploadPoster } from '../../lib/storage';
+import { Skeleton, SkeletonList } from '../atoms/Skeleton';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
 import { type StoreStepMap,resolveDest, type StoreDest, type StoreGoto } from '../../lib/storeDestination'; // 이동 목적지 → 시드 패치(순수)
@@ -2535,6 +2536,14 @@ function StaffManager({ venueId }: { venueId: string }) {
   const [schedTick, setSchedTick] = useState(0);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<unknown>(null); // 구성원·초대 목록 조회 실패(0명과 구분)
+  // D6-1(2026-09-29, bounce-sweep) — 첫 방문 때 '불러오는 중…' 한 줄(57px) 자리에 구성원 행(115px)·초대 블록이 들어와
+  //   아래 접힌 카드들이 +730px 밀려났다(1280). 이 기기에서 마지막으로 본 구성원·초대 수만큼 뼈대를 그린다(처음이면 3명).
+  //   서버 값이 아니라 자리 예약용 추정이다 — 저장이 막힌 브라우저에서도 기본값으로 그린다.
+  const rowsKey = `nuri:staff-rows:${venueId}`;
+  const lastRows = useMemo(() => {
+    try { const v = localStorage.getItem(rowsKey); if (v) { const [s, i] = v.split('|').map(Number); if (s >= 0 && i >= 0) return { s, i }; } } catch { /* noop */ }
+    return { s: 3, i: 0 };
+  }, [rowsKey]);
   // 초대 입력 하나가 두 경로를 겸한다 — '@' 가 있으면 이메일(기존 경로 그대로),
   // 없으면 아이디(닉네임) 검색. 모드 토글을 두지 않는 이유: 업주는 상대가
   // '이메일로 가입했는지'를 모르고, 아는 건 화면에 보이는 아이디뿐이다.
@@ -2552,7 +2561,7 @@ function StaffManager({ venueId }: { venueId: string }) {
     setLoading(true);
     setListError(null);
     Promise.all([getMyVenueStaff(venueId), getMyVenueInvites(venueId)])
-      .then(([s, i]) => { if (!alive) return; setStaff(s); setInvites(i); })
+      .then(([s, i]) => { if (!alive) return; setStaff(s); setInvites(i); try { localStorage.setItem(rowsKey, `${s.length}|${i.length}`); } catch { /* noop */ } })
       .catch((e: unknown) => { if (alive) setListError(e); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -2817,7 +2826,15 @@ function StaffManager({ venueId }: { venueId: string }) {
       </form>
 
       {loading ? (
-        <p aria-busy="true" className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
+        // 행 높이는 1280 실측값(구성원 115px · 초대 101px · 머리글 17px) — 루트 17px 라 rem 유틸로 추정하지 않는다.
+        <div aria-busy="true" data-testid="staff-list-loading" className="space-y-4">
+          {lastRows.i > 0 && (
+            <div className="space-y-1.5"><Skeleton className="h-[17px] w-28" /><SkeletonList rows={Math.min(lastRows.i, 5)} rowClassName="h-[101px]" /></div>
+          )}
+          <div className="space-y-1.5"><Skeleton className="h-[17px] w-24" /><Skeleton className="h-4" />
+            {/* 구성원 목록(ul)은 space-y-2 라 SkeletonList(space-y-1.5)를 쓰지 않는다 — 행마다 2px 씩 모자랐다(5명 +7.9px 실측). */}
+            <div className="space-y-2">{Array.from({ length: Math.min(Math.max(lastRows.s, 1), 8) }, (_, k) => <Skeleton key={k} className="h-[115px]" />)}</div></div>
+        </div>
       ) : listError != null ? (
         <LoadErrorCard what="구성원 목록" error={listError} onRetry={reload} />
       ) : (

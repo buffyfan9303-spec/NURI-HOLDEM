@@ -311,10 +311,32 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
         })}
       </div>
 
+      {/* D6-2(2026-09-29, bounce-sweep) — 이 필터 카드는 데이터와 무관한 조작 UI 라 뼈대 분기 **밖**에 둔다.
+          안에 있을 땐 뼈대가 이 카드(74px)를 빼고 그려, 데이터가 오는 순간 KPI 가 +87px 밀렸다(1280 첫 방문).
+          조건은 그대로 period(그려진 기간) — 당일→주 전환 중에도 카드는 데이터와 같은 커밋에서 사라진다. */}
+      {period === 'day' && (
+        <div className="rounded-input border border-border-default bg-surface-high px-2.5 py-2">
+          <p className="text-xs font-semibold text-ink-secondary mb-1.5">바인 제외 · 손님 유형별 {excludeTypes.size > 0 && <span className="text-danger-light">({excludeTypes.size}개 제외 중)</span>}</p>
+          <div className="grid grid-cols-5 gap-1">
+            {([['new', '신규'], ['regular', '기존'], ['staff', '관계자'], ['other', '기타'], ['none', '미지정']] as const).map(([code, label]) => {
+              const on = excludeTypes.has(code);
+              return (
+                <button key={code} type="button" onClick={() => toggleExclude(code)}
+                  className={['py-1.5 text-xs font-bold rounded-[6px] border transition-colors',
+                    on ? 'bg-danger/15 text-danger-light border-danger/40' : 'bg-surface-base text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {loading ? (
         // 뼈대 높이를 실제 카드(StatCard min-h-21 · Mini ≈ 3.1rem)와 맞춘다 —
         // '불러오는 중…' 한 줄이던 자리에 수백 px 통계가 들어오면서 화면이 아래로 주르륵 밀렸다.
-        <div className="space-y-2" aria-busy="true">
+        // D6-2 ② — '당일' 첫 화면은 이 뼈대(267px)보다 늘 길다(1280 실측: 기록 있는 날 최소 571px · 빈 날 622px).
+        //   예약이 없으면 로딩 중 아래 '고객 분석'이 화면 안(y≈761)에 떴다가 데이터가 오면 밖으로 밀려났다. 가장 짧은 실제 배치만큼 바닥을 둔다.
+        <div className={tabPeriod === 'day' ? 'space-y-2 min-h-[571px]' : 'space-y-2'} aria-busy="true" data-testid="stats-loading">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-21" />)}</div>
           {/* 3.1rem(52.7px) 은 hint 없는 타일 기준이라 실제 첫 줄(객단가 hint 포함 71px)보다 18px 짧았다 —
               데이터가 들어오는 순간 그만큼 아래가 밀렸다. 880px 실측값으로 맞춘다. */}
@@ -336,24 +358,6 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
         </div>
       ) : (
         <>
-          {period === 'day' && (
-            <div className="rounded-input border border-border-default bg-surface-high px-2.5 py-2">
-              <p className="text-xs font-semibold text-ink-secondary mb-1.5">바인 제외 · 손님 유형별 {excludeTypes.size > 0 && <span className="text-danger-light">({excludeTypes.size}개 제외 중)</span>}</p>
-              <div className="grid grid-cols-5 gap-1">
-                {([['new', '신규'], ['regular', '기존'], ['staff', '관계자'], ['other', '기타'], ['none', '미지정']] as const).map(([code, label]) => {
-                  const on = excludeTypes.has(code);
-                  return (
-                    <button key={code} type="button" onClick={() => toggleExclude(code)}
-                      className={['py-1.5 text-xs font-bold rounded-[6px] border transition-colors',
-                        on ? 'bg-danger/15 text-danger-light border-danger/40' : 'bg-surface-base text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* '기록이 없어서 0' 과 '실제로 0원' 은 다른 상태다 — 숫자(0도 사실이다)는 그대로 두고 이유만 한 줄 덧붙인다.
               실패는 위쪽 LoadErrorCard 가 따로 말하므로, 여기서 셋이 서로 헷갈리지 않는다. */}
           {m.total === 0 && (
