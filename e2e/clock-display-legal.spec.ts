@@ -60,7 +60,9 @@ async function legal(page: Page) {
 }
 
 test.describe('관전 클락 — 법정 고지 한 줄(#18)', () => {
-  for (const [name, w, h] of [['폰 390x844', 390, 844], ['PC 1280x800', 1280, 800], ['TV 1920x1080(창)', 1920, 1080]] as [string, number, number][]) {
+  // 360x780(갤럭시 S 360dp 급): 하단 레일 왼칸(Buy-in QR 라벨 + '찍으면 … 바인 요청')이 3줄로 접혀 레일 높이(12cqmin)를 넘는 폭.
+  //   CI(리눅스 글꼴)에서는 390 에서도 라벨이 접혔다 — 윈도우에선 라벨 폭이 칸 폭과 같아(여유 0px) 한 줄로 남아 가려졌다.
+  for (const [name, w, h] of [['폰 360x780', 360, 780], ['폰 390x844', 390, 844], ['PC 1280x800', 1280, 800], ['TV 1920x1080(창)', 1920, 1080]] as [string, number, number][]) {
     test(`🔴 ${name} · 비전체화면 — 사업자 정보·19세·1336 한 줄이 보이고 보드와 겹치지 않는다`, async ({ page }) => {
       await page.setViewportSize({ width: w, height: h });
       await serveClock(page, ROW);
@@ -81,6 +83,34 @@ test.describe('관전 클락 — 법정 고지 한 줄(#18)', () => {
       expect(m.overlaps, '고지 줄이 보드 요소와 겹친다').toEqual([]);
     });
   }
+
+  // 하단 레일의 다른 칸도 같이 — 스폰서 광고(크게 = 9cqmin) · 휴식이 있는 구성(Next Break 칸).
+  test('🔴 폰 360x780 · 광고 크게 + 다음 휴식 — 하단 레일 어느 칸도 고지 줄과 겹치지 않는다', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    const ad = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="150"><rect width="600" height="150" fill="#888"/></svg>')}`;
+    await page.route(/\/rest\/v1\/app_settings\?/, (r) => {
+      const key = /key=eq\.([^&]+)/.exec(r.request().url())?.[1] ?? '';
+      const v = key === 'clock_ad_image' ? ad : key === 'clock_ad_size' ? 'lg' : null;
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(v == null ? null : { value: v }) });
+    });
+    await serveClock(page, {
+      ...ROW,
+      config: { ...ROW.config, levels: [...LEVELS, { kind: 'break', sb: 0, bb: 0, ante: 0, minutes: 10 }] },
+    });
+    await page.goto(`/?display=${VENUE}&g=1&auto=0`);
+    await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('img', { name: '스폰서' }), '광고 목이 안 붙었다(측정 전제 없음)').toBeVisible();
+    await expect(page.getByText('Next Break'), '휴식 칸이 없다(측정 전제 없음)').toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(500);
+    const m = await legal(page);
+    console.log('[clock-legal 360 ad+break]', JSON.stringify(m));
+    expect(m.line).toBe(true);
+    if (!m.line) return;
+    expect(m.bottom).toBeLessThanOrEqual(m.vh + 0.5);
+    expect(m.covered).toBe(0);
+    expect(m.overlaps, '고지 줄이 하단 레일(광고·휴식·QR 캡션)과 겹친다').toEqual([]);
+  });
 
   test('🔴 클락이 없는 매장(진행 중 없음)에서도 고지 줄이 있다', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
