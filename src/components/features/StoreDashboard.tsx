@@ -1,5 +1,6 @@
 import { resolveDiscountIndex } from '../../api/discountIndex';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazyWithReload } from '../../lib/lazyWithReload';
 import CountUp from '../atoms/CountUp';
 import Icon, { type IconName } from '../atoms/Icon';
 import { Fold, useReveal } from '../atoms/Fold';
@@ -22,8 +23,6 @@ import { ledgerGameLabel } from '../../lib/ledgerLink';
 import type { StoreGoto, StoreStepMap } from '../../lib/storeDestination'; // 이동 목적지 계약(날짜·게임·event·정산)
 import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
-import RegularsModal from './RegularsModal';
-import DealerShiftsModal from './DealerShiftsModal';
 // 딜러 급여는 dealer_shifts 에 **행마다 시급**이 붙어 있다(staff_wage 와 별개 시스템).
 // 합산하지 않으면 딜러를 로테이션으로만 굴리는 매장의 '총 인건비'가 통째로 0원이 된다.
 import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
@@ -31,7 +30,14 @@ import { usePayRules } from '../../api/payrollRules';
 import { laborSummary, weekStartOf } from '../../lib/staffPay';
 import VoucherManageModal from './VoucherManageModal';
 import { countVenueVouchersSent } from '../../api/vouchers';
+import RegularsModal from './RegularsModal';
 import CheckinModal from './CheckinModal';
+// 🔴 2026-09-29 M단계 — 대시보드 유틸 줄 '딜러 로테이션·급여' 에서만 여는 모달을 지연 청크로 뺐다. VenueManageTab 청크가
+//   상한(119KB gz) 경계 5B 앞이라 펼침 모션(Fold)이 들어갈 자리가 없었다. **상시 마운트**(open 은 prop)라 대시보드가 뜰 때
+//   청크를 받기 시작하고, 로드 전에 눌러도 폴백은 null(불투명 판 번쩍임 0 — 닫힌 모달은 원래 아무것도 안 그린다).
+//   셋(단골·딜러·출석)을 다 빼면 청크는 114KB 로 내려가지만 작은 청크 셋이 따로 압축돼 JS 합계가 +4.4KB 늘어 하나만 뺐다.
+//   이름을 그대로 둔 것은 이 파일을 읽는 계약 테스트(laborLoadFailure)의 JSX 문자열을 바꾸지 않기 위해서다.
+const DealerShiftsModal = lazyWithReload(() => import('./DealerShiftsModal'));
 import Modal from '../atoms/Modal';
 import { getAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
@@ -774,7 +780,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           모달을 겹치지 않고 교체한다: 시트 위 시트는 뒤로가기 스택이 꼬이고 반투명이 두 겹 쌓인다. */}
       <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]}
         onSendVoucher={caps.issueVoucher ? (name) => { setRegOpen(false); setVoucherPrefill(name); setVoucherOpen(true); } : undefined} />
+      <Suspense fallback={null}>
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
+      </Suspense>
       <VoucherManageModal open={voucherOpen} onClose={() => { setVoucherOpen(false); setVoucherPrefill(''); }} venueId={venueId} prefillReceiver={voucherPrefill} canIssue={caps.issueVoucher} />
       {/* canIssue: 출석 명단에서 바로 이용권을 보낼 수 있게 한다(오너 2026-09-18). 권한 최종 판정은 서버(issue_voucher).
           🔴 2026-09-20 — 종전엔 `caps.voucher`(**열람권 포함**)였다. 열람만 가진 직원에게 발급 버튼이 보이고

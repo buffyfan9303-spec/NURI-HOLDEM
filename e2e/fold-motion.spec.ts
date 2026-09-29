@@ -7,6 +7,7 @@
 //   ③ 버튼 위에 내용이 생김            → 내 매장 대시보드 '더 보기'(StoreDashboard, 1440) — 전 +400px
 //   ④ 바닥에서 닫으면 클램프          → 법정 푸터 '추가 정보'(BusinessFooter details) — 전 +44px
 //   ⑤ 한 번에 하나 열리는 아코디언      → 내 매장 직원 관리(StaffHub) — 위 항목이 닫혀 줄면 누른 항목이 끌려 올라갔다
+//   ⑦ 지연 청크로 뺀 모달               → 대시보드 '딜러 로테이션·급여'(DealerShiftsModal) — 눌러서 열리고 폴백 판이 안 보인다
 //   + 동작 줄이기 = 즉시, 탭 재방문 = 재생 0.
 //
 // 🔴 CLS 로 재지 않는다 — 누른 뒤 500ms 안의 이동은 hadRecentInput 이라 CLS 에서 빠져 '0' 이 저절로 참이 된다(감사 §0).
@@ -235,5 +236,30 @@ test.describe('Fold — 펼침/접힘은 부드럽고 누른 요소는 제자리
     console.log(`[fold ⑤ staff accordion 1440] ${JSON.stringify(s)}`);
     expect(await target.textContent(), '누른 항목이 안 열렸다').toContain('접기');
     expect(s.dCenter, `위 항목이 닫히며 누른 항목이 ${s.dCenter}px 끌려갔다`).toBeLessThanOrEqual(1);
+  });
+
+  test('⑦ 대시보드 딜러 로테이션 모달(지연 청크) — 누르면 열리고, 여는 동안 불투명 폴백 판이 없다', async ({ page }) => {
+    await bootOwner(page, { viewport: { width: 1440, height: 900 } });
+    await openMyStore(page);
+    const btn = page.locator('main[data-tab="my-store"] button').filter({ hasText: '딜러 로테이션·급여' });
+    await expect(btn).toBeVisible({ timeout: 20_000 });
+    await btn.evaluate((b) => b.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(500);
+    // 누른 뒤 대화상자가 뜰 때까지 매 프레임 — 대화상자 말고 화면을 덮는 판(Suspense 폴백 등)이 생기면 안 된다
+    const rec = page.evaluate(() => new Promise<{ covered: number; dialog: boolean }>((res) => {
+      let covered = 0; const t0 = performance.now();
+      const f = () => {
+        const top = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+        const dlg = document.querySelector('[role="dialog"]');
+        if (!dlg && top && top.closest('main[data-tab="my-store"]') === null && !top.closest('header,nav,footer')) covered++;
+        if (dlg || performance.now() - t0 > 3000) res({ covered, dialog: !!dlg }); else requestAnimationFrame(f);
+      };
+      requestAnimationFrame(f);
+    }));
+    await press(page, btn);
+    const r = await rec;
+    expect(r.dialog, '딜러 로테이션 모달이 안 열렸다').toBe(true);
+    expect(r.covered, '열기 전 프레임에 다른 판이 화면 가운데를 덮었다(폴백 번쩍임)').toBe(0);
+    await expect(page.getByRole('dialog')).toBeVisible();
   });
 });
