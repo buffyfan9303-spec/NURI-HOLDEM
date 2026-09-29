@@ -162,8 +162,8 @@
 
   /* ── 단일 물리(Phase 1): 기본 곡선 재정의 = 앱의 모든 transition-* 유틸이 한 곡선.
      ease-in/out/in-out 유틸도 같은 곡선(spring/ease-out-quart 는 사용처 0 — 같은 곡선으로 봉인).
-     ⚠ theme(inline) 이라 :root 의 --ease-out(퇴장 가속 곡선, 아래 :root) 과 이름이 같아도 부딪치지 않는다 —
-       유틸은 값이 박히고, var(--ease-out) 을 읽는 규칙은 아래 :root 값을 받는다. */
+     ⚠ theme(inline) 이라 여기 값은 유틸에 박힌다(:root 변수로 나가지 않는다). :root 의 퇴장 곡선 --ease-out 은
+       읽는 규칙이 0 이라 2026-09-29 삭제했다(CSS var()·빌드 JS 참조 0). */
   --default-transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-in: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
@@ -736,23 +736,15 @@ video {
      예외 2개뿐: 루프(스피너·펄스), shake(오류 진동 이펙트). 테마와 무관해 :root 단독. */
   :root {
     --ease: cubic-bezier(0.32, 0.72, 0, 1);
-    /* MO-2: 퇴장 전용 가속 곡선 — '화면 밖으로 사라지는 것'(VT push-out·시트 닫힘·토스트 퇴장)에만.
-       진입은 감속(--ease), 퇴장은 가속이어야 물리적으로 읽힌다(§20.4 §1). */
-    --ease-out: cubic-bezier(0.3, 0, 1, 1);
     /* 모션 헌법 v2(2026-09-02) 추가 2개 — Emil Kowalski 표준값(easing.dev). 손으로 만든 곡선 아님.
        --ease-out-ui: 작은 UI(드롭다운·툴팁·토스트·칩)의 등장/퇴장 — 내장 ease-out 보다 훨씬 강한 감속
        --ease-move:   화면 안에서 자리를 옮기는 것(SlidingPill FLIP·재정렬) — 양끝 감속 */
     --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
-    /* 스프링(언더댐핑) — linear() 로 근사한 iOS 스프링. 시트 복귀·미세 바운스에 사용 */
-    --spring: linear(0, 0.36 8%, 0.72 16%, 0.95 24%, 1.06 33%, 1.09 40%, 1.06 48%, 1.02 58%, 0.995 70%, 1);
+    /* (--spring·--dur-tab·--press·--press-icon 은 2026-09-29 삭제 — CSS var() 읽기·빌드 JS 참조 0. 프레스는 button:active 가 scale(.97) 을 직접 쓴다) */
     --dur-fast: 0.15s;   /* 색·배경·보더, 프레스 */
     --dur-base: 0.22s;   /* 요소 등장/퇴장, 칩 전환 */
     --dur-panel: 0.32s;  /* 시트·오버레이·풀스크린 */
-    --dur-tab: 0.3s;     /* 탭 전환(VT 방향성 푸시 — MO-8 소비). 오너 지시(2026-08-27):
-                            최신 폰 모션 감각으로 소폭 상향 — '휙휙' 대신 안착 */
-    --press: scale(0.97);  /* v2: Apple/Emil 표준 0.97 (0.985 는 '반응했나?' 싶을 만큼 미약했다) */
-    --press-icon: scale(0.88);
     /* ── 하단 탭바 회피 오프셋 단일 소스(W1-3 TB1a) — 8곳에 흩어졌던 5.5/5.75/6/4.75rem 통일.
        safe: 스크롤 콘텐츠의 하단 패딩 기준 / float: 탭바 위에 떠 있는 요소(토스트·배너·버튼) 기준.
        max(env, 12px): safe-area 없는 안드로이드에서도 최소 숨통 12px — 유일하게 의도된 값 변화.
@@ -1098,7 +1090,6 @@ video {
     --aura-200: 34 211 238;  /* #22D3EE 연한 틴트(비텍스트·글로우 하이라이트) */
     --aura-300: 6 182 212;   /* #06B6D4 primary — 라벨·링·데이터 강조 */
     --aura-400: 8 145 178;   /* #0891B2 딥 */
-    --aura-glow: 6 182 212;  /* 방사형 블룸 색(데이터 링·라벨 글로우 — 배경 블룸은 아래 --bloom-* 가 맡는다) */
     /* v6(2026-09-02 aura-ui.com 실측): 배경 블룸 = 500px 안팎의 blur-3xl 원 3개 — violet-500/20 · indigo-500/15 · fuchsia-500/10.
        우리는 filter:blur 대신 radial-gradient 로 같은 모양을 그린다(페인트 비용). 색은 실측값 그대로. */
     --bloom-1: 139 92 246;   /* violet-500  #8B5CF6 — 우상단 큰 블룸 */
@@ -1158,15 +1149,9 @@ video {
     --tier-admin-vivid:  255  77 109; /* #FF4D6D */
 
     /* 브랜드 그라데이션(어워드 레퍼런스 2026-08-27) — 전부 정적 배경. 애니메이션 금지(모션 헌법 §20.4).
-       aurora: DatawizzAI 문법 — 딥 플럼 위 바이올렛 빔 + 마젠타·블루 힌트. 전 레이어 투명 종단이라
-       surface 위 어디에 얹어도 안전(px 고정 크기 → 컨테이너 높이 무관). 피크 최악 겹침 #2D2445 실측:
-       ink-muted 4.66 · ink-primary 11.9 · accent-200 6.94.
+       (aurora 워시 --grad-aurora 는 v6.2 에서 .hero-aurora 가 해제된 뒤 읽는 곳 0 — 2026-09-29 삭제. 되살릴 때는 git 이력에서)
        cta: OUTFLAME 필 문법 — 사선(135deg) 딥→프라이머리. 흰 텍스트 실측 6.07(어두운끝)~4.60(밝은끝).
        hover/active 는 한 단계 어두운 정적 스왑(그라데이션은 transition 불가 속성). */
-    --grad-aurora:
-      radial-gradient(640px 320px at 12% -4%, rgb(var(--accent-300) / 0.11) 0%, transparent 62%),
-      radial-gradient(520px 260px at 88% -6%, rgba(224, 130, 255, 0.05) 0%, transparent 58%),
-      radial-gradient(480px 240px at 55% -8%, rgba(130, 177, 255, 0.03) 0%, transparent 60%);
     /* v6 aura-ui.com 실측 .aura-btn-primary: linear-gradient(to right, violet-700 #6D28D9, indigo-800 #3730A3) · 흰 글자 6.4 / 8.6 */
     --grad-cta:        linear-gradient(90deg, #6D28D9 0%, #3730A3 100%);
     --grad-cta-hover:  linear-gradient(90deg, #7C3AED 0%, #4338CA 100%);
@@ -1244,7 +1229,6 @@ video {
     --aura-200: 6 182 212;   /* #06B6D4 비텍스트 틴트 */
     --aura-300: 14 116 144;  /* #0E7490 primary(텍스트 AA) */
     --aura-400: 21 94 117;   /* #155E75 딥 */
-    --aura-glow: 14 116 144;
     --bloom-1: 139 92 246; --bloom-2: 99 102 241; --bloom-3: 217 70 239; /* 라이트도 같은 세 색(aura-ui 라이트 실측: 흰 지면 위 파스텔 워시) */
     /* v7(2026-09-12 §7·§4): 라이트에서 **옅은 보라를 화면 전체와 모든 박스에 반복하지 않는다.**
        이 알파는 두 곳에 동시에 작용한다 — ① .aura-bg 의 화면 전면 블룸 ② .subbar-aura 가
@@ -1289,11 +1273,7 @@ video {
     --tier-admin:        146   0  26; /* #92001A */
     --tier-admin-vivid:  222  76 102; /* #DE4C66 */
 
-    /* 브랜드 그라데이션(라이트) — 옅은 라벤더 워시(정적). 피크 #EFECF6 실측: ink-muted 4.55 ·
-       ink-primary 15.3. cta 흰 텍스트 실측 7.61(어두운끝)~6.34(밝은끝). */
-    --grad-aurora:
-      radial-gradient(640px 320px at 12% -4%, rgb(var(--accent-300) / 0.04) 0%, transparent 62%),
-      radial-gradient(520px 260px at 88% -6%, rgba(214, 130, 255, 0.025) 0%, transparent 58%);
+    /* 브랜드 그라데이션(라이트) — cta 흰 텍스트 실측 7.61(어두운끝)~6.34(밝은끝). */
     --grad-cta:        linear-gradient(135deg, rgb(var(--accent-400)) 0%, rgb(var(--accent-300)) 100%);
     --grad-cta-hover:  linear-gradient(135deg, rgb(var(--accent-500)) 0%, rgb(var(--accent-400)) 100%);
     --grad-cta-active: linear-gradient(135deg, rgb(var(--accent-600)) 0%, rgb(var(--accent-500)) 100%);
@@ -1737,7 +1717,7 @@ video {
   /* 그라데이션 헤드라인 안에서 제 색을 지켜야 하는 강조 스팬(예: 라이브 카운트 그린) */
   .text-grad-keep { -webkit-text-fill-color: currentColor; background: none; }
 
-  /* 홈·랜딩 히어로 오로라 워시 — --grad-aurora 사용처. 전 레이어 투명 종단 + px 고정 크기라
+  /* 홈·랜딩 히어로 오로라 워시(구 --grad-aurora — 2026-09-29 변수도 삭제). 전 레이어 투명 종단 + px 고정 크기라
      어떤 높이의 컨테이너에도 안전. 정적 1회 페인트(스크롤 리페인트 없음). */
   /* v6.2: 워시 해제 — body::before 인디고 블룸과 같은 좌상단에 겹쳐 ink-muted 가 3.68(AA 미달)이었다(워크플로 critic 실측).
      화면 워시는 .aura-bg/body::before 가 전담한다. 클래스는 5곳 DOM 에 남아 있어 no-op 으로 유지. */
