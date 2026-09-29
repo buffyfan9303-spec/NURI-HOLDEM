@@ -69,7 +69,7 @@ const reloadBody = () => {
   return m![1];
 };
 const reloadRangeBody = () => {
-  const m = code.match(/const reloadRange = useCallback\(\(\) => \{([\s\S]*?)\n {2}\}, \[venueId, d\]\);/);
+  const m = code.match(/const reloadRange = useCallback\(\(\) => \{([\s\S]*?)\n {2}\}, \[venueId, d, caps\.voucher\]\);/);
   expect(m, 'reloadRange 정의를 찾지 못했다').not.toBeNull();
   return m![1];
 };
@@ -104,11 +104,13 @@ describe('F14 ⑦ · 14일 장부 조회 실패를 "데이터 없음"·0장과 �
     }
   });
 
-  it('이용권 7일 두 칸은 실패 시 0장이 아니라 —(오늘 두 칸은 core 값이라 그대로)', () => {
-    expect(code).toMatch(/label="7일 발행" value=\{rangeErr \? '—' : `\$\{weekVoucher\}`\}/);
+  it('이용권 7일 두 칸은 실패 시 0장이 아니라 —(오늘 회수는 core 값이라 그대로)', () => {
+    // #6(2026-09-29) — 전송 수는 store_vouchers 개수 조회(sent)라 7일·오늘 **둘 다** 그 조회가 실패하면 — 다.
+    expect(code).toMatch(/label="7일 발행" value=\{sentBad \? '—' : `\$\{weekVoucher\}`\}/);
+    expect(code).toMatch(/const sentBad = !!sentErr \|\| sent === null;/);
     // 2026-09-25 #9 — T 는 소수라 fmtT(소수 1자리+천단위)로 감싼다. 계약의 핵심(실패 시 —)은 그대로다.
     expect(code).toMatch(/label="7일 회수" value=\{rangeErr \? '—' : fmtT\(weekTicket\)\}/);
-    expect(code).toMatch(/label="오늘 발행" value=\{`\$\{todayVoucher\}`\}/);
+    expect(code).toMatch(/label="오늘 발행" value=\{sentBad \? '—' : `\$\{todayVoucher\}`\}/);
   });
 
   it("'오늘 게임' 표가 실패 때 통째로 사라지지 않는다(섹션 게이트가 rangeErr 를 포함)", () => {
@@ -159,7 +161,7 @@ describe('N01 · 매장 전환 세대 보호가 데이터·오류·로딩·갱�
   it('reloadRange 도 자기 세대(rangeGenRef)로 낡은 응답을 버린다', () => {
     const body = reloadRangeBody();
     expect(body).toMatch(/rangeGenRef\.current = stamp\.seq;/);
-    expect((body.match(/if \(stale\(\)\) return true;/g) ?? []).length).toBe(2); // 성공·실패 **둘 다**
+    expect((body.match(/if \(stale\(\)\) return true;/g) ?? []).length).toBe(4); // 장부·전송 수 각각 성공·실패 **둘 다**
   });
 });
 

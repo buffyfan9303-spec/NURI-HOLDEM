@@ -105,6 +105,20 @@ export async function listVenueVouchers(venueId: string): Promise<Voucher[]> {
   return (data ?? []).map(mapRow);
 }
 
+/** #6(오너 결정 2026-09-29) — 대시보드 이용권 카드의 '전송' 수 = **실제로 보낸 장수**(store_vouchers 행).
+ *  예전엔 업주가 장부에 손으로 적는 ledger_sessions.voucher_issued 였다(실제 전송과 무관한 수).
+ *  세는 것: 이 매장이 보낸 이용권 중 **전송 취소(revoked)를 뺀** 것 — 사용됨·만료도 '보낸 것'이라 센다.
+ *  구간: KST 날짜 [fromDate, toDateExcl). 행을 받지 않고 개수만(head count) — 1000행 절단이 없다.
+ *  ⚠ 실패를 0 으로 위장하지 않는다(throw) — 화면은 '—' 로 보여 준다. */
+export async function countVenueVouchersSent(venueId: string, fromDate: string, toDateExcl: string): Promise<number> {
+  if (IS_MOCK) return 0;
+  const { count, error } = await supabase.from('store_vouchers').select('id', { count: 'exact', head: true })
+    .eq('venue_id', venueId).neq('status', 'revoked')
+    .gte('created_at', `${fromDate}T00:00:00+09:00`).lt('created_at', `${toDateExcl}T00:00:00+09:00`);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 /** 발행 매장 이용권 실시간 구독 — 사용/발급/회수 시 즉시 반영(RLS로 권한 자동 게이트). */
 export function subscribeVenueVouchers(venueId: string, onChange: () => void): () => void {
   if (IS_MOCK) return () => {};

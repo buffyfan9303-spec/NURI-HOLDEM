@@ -133,6 +133,10 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
   //   그 바는 단계 바보다 **위**에 있어서, 값이 우연히 0 이면 '바 위치 고정' 불변식이
   //   우연 위에 서게 된다. 명시로 0 을 준다.
   await page.route(/\/rest\/v1\/ledger_buyin_requests\?/, restGet([]));
+  // #6(2026-09-29) — 대시보드 이용권 카드 '전송' 수는 store_vouchers 개수(HEAD count)다. 목록(GET)은 스펙이 따로 정하도록 넘긴다.
+  await page.route(/\/rest\/v1\/store_vouchers\?/, (r) => (r.request().method() === 'HEAD'
+    ? r.fulfill({ status: 200, headers: { 'content-range': '*/0', 'access-control-expose-headers': 'content-range' }, body: '' })
+    : r.fallback()));
   await page.route(/\/rest\/v1\/game_presets\?/, restGet([]));
   // 서버 시각(읽기 RPC server_now = select now()). 안 걸면 _fixtures 가드가 POST 를 끊어 serverTimeKnown 이 거짓으로 남고
   //   PC 워치독·장부 백업 전진이 DB 에 레벨을 쓰지 않는다(2026-09-29 CI: C2·recheck2 #7).
