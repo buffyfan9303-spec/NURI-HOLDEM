@@ -140,6 +140,7 @@ describe('(c) 전환 장치 허용 목록 — 새 키프레임·WAAPI 는 이유
     'src/components/atoms/Modal.tsx': '시트 드래그 닫기 뒤 제자리 복귀',
     'src/lib/spring.ts': '시트 드래그 스프링',
     'src/lib/tabCover.ts': '떠나는 판 퇴장 페이드 — 메인 탭·하위 탭 공용(판 교체 규칙의 유일한 모션, fadeAfterFirstFrame 한 곳)',
+    'src/components/atoms/Fold.tsx': '본문 안 펼침/접힘 한 벌(높이 0↔실측 + 누른 요소 제자리) — 판 교체가 아니라 판 **안**의 조건부 렌더 ~40곳(2026-09-29 M단계)',
   };
   it('index.css 의 @keyframes 는 목록에 있는 것뿐이다', () => {
     const names = [...cssOutsideTheme().matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]);
