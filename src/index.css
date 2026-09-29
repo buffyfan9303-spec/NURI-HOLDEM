@@ -1360,7 +1360,7 @@ video {
      제목은 여러 줄의 길이를 고르게(balance) — "한 단어만 둘째 줄" 같은 들쭉날쭉 방지.
      본문은 마지막 줄에 단어 하나만 남는 고아(orphan)를 방지(pretty).
      미지원 브라우저는 속성을 자동 무시 → 안전. word-break:keep-all(어절)와 함께 한글 가독성 극대화. */
-  h1, h2, h3, h4, .text-balance { text-wrap: balance; }
+  h1, h2, h3, h4 { text-wrap: balance; }
   p, li, .text-pretty { text-wrap: pretty; }
 
   /* 터치 시 기본 하이라이트(탭 이동 등에서 보이는 깜빡임) 완전 제거 — body 상속이 안 먹는
@@ -2207,10 +2207,10 @@ html.light {
   --gto-txt-tie:      #566882; /* 5.02 */
 }
 /* 상태/경고용 파스텔 텍스트 — 흰 배경에서 대비가 무너지는 나머지 계열 전부 딥 톤 교정 */
-  html.light .text-indigo-300, html.light .text-indigo-400 { color: #4338CA; }
-html.light .text-amber-100, html.light .text-amber-200, html.light .text-amber-300 { color: #92600A; }
+  html.light .text-indigo-300 { color: #4338CA; }
+html.light .text-amber-200, html.light .text-amber-300 { color: #92600A; }
 html.light .text-sky-300 { color: #0369A1; }
-html.light .text-rose-200, html.light .text-rose-300 { color: #BE123C; }
+html.light .text-rose-300 { color: #BE123C; }
 html.light .text-violet-200, html.light .text-violet-300 { color: #6D28D9; }
 html.light .text-purple-300 { color: #7E22CE; }
 html.light .text-teal-300 { color: #0F766E; }
@@ -2230,7 +2230,6 @@ html.light .text-green-400  { color: #15803D; }
 html.light .text-orange-400 { color: #B45309; }
 html.light .text-emerald-200 { color: #0A8F5C; }
 html.light .text-accent-100 { color: #5C3BBF; }
-html.light .text-gold-500   { color: #8F6200; }
 html.light .text-pink-300 { color: #BE185D; }
 
 /* ── ⚠ 알파 변형(`text-x/60`)은 위 보정을 **하나도 받지 못한다** (2026-09-12 실측으로 발견) ──
@@ -2734,7 +2733,7 @@ img, svg { -webkit-touch-callout: none; -webkit-user-drag: none; user-select: no
   body { -webkit-user-select: none; user-select: none; }
   /* ⚠ input/textarea/contenteditable 이 빠져 있어 설치형 PWA 에서 '붙여넣기'가 통째로 막혀 있었다.
      카톡에서 복사한 닉네임·매장명을 장부·순위에 붙여넣지 못하는 건 현장에서 치명적이다. */
-  p, h1, h2, h3, h4, li, span.selectable, .select-text,
+  p, h1, h2, h3, h4, li,
   input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
 }
 
