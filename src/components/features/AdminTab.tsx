@@ -1,3 +1,4 @@
+import { Fold } from '../atoms/Fold';
 import { useState, useEffect, useCallback, type ReactNode, type CSSProperties } from 'react';
 import DraggableList from './DraggableList';
 import VenueManagement from './VenueManagement';
@@ -320,7 +321,7 @@ function RankVerifyAdminCard() {
               <button type="button" onClick={() => view(v.idCardPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">신분증</button>
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, true)} className="btn-primary px-2.5 py-1 text-2xs disabled:opacity-50">승인</button>
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, false)} className="rounded-input border border-danger/40 px-2.5 py-1 font-bold text-danger-light hover:bg-danger/10 disabled:opacity-50">반려</button>
-              {openCheck === v.id && (
+              <Fold open={openCheck === v.id} className="w-full">
                 <div className="w-full rounded-input border border-sky-500/30 bg-sky-500/5 p-2">
                   <p className="text-[11px] font-bold text-ink-primary">승인 전 눈으로 대조할 것</p>
                   <ul className="mt-1 space-y-0.5">
@@ -337,7 +338,7 @@ function RankVerifyAdminCard() {
                   </ul>
                   <p className="mt-1 text-[10px] text-ink-muted">체크는 운영자의 메모다 — 승인 버튼을 막지 않는다. 최종 판단은 운영자에게 있다.</p>
                 </div>
-              )}
+              </Fold>
             </li>
           ))}
         </ul>
@@ -1578,8 +1579,8 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
 
       {posOpen && <AdminVenuePos venueId={venue.id} venueName={venue.name} onClose={() => setPosOpen(false)} />}
 
-      {open && (
-        <div className="px-3 pb-3 pt-2 space-y-2 border-t border-border-subtle animate-slide-up">
+      <Fold open={open}>
+        <div className="px-3 pb-3 pt-2 space-y-2 border-t border-border-subtle">
           {/* 매장이용권 전송 한도 — 바로 위 '이용권전송 ✓/✗' 토글과 **같은 스위치의 나머지 반쪽**이다.
               승인만으로는 한도가 0 이라 업주가 한 장도 못 만든다. 두 레버를 같은 행에 둔다. */}
           <div className="rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
@@ -1663,7 +1664,7 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
             </button>
           </div>
         </div>
-      )}
+      </Fold>
     </li>
   );
 }

@@ -3,6 +3,7 @@
 // (select 2종·접이식 리스트·검색 리스트)를 이 하나로 통일한다.
 // 부분 프리셋은 숨기거나 막지 않는다 — 무엇이 채워져 있는지 요약을 보여주고 '있는 것만' 적용은
 // 어댑터(lib/gameInherit.applyTo*)가 보장한다(§13-B). 적용 자체는 소비처의 onApply 몫.
+import { Fold } from '../atoms/Fold';
 import { useEffect, useState } from 'react';
 import Icon from '../atoms/Icon';
 import { countLevels } from '../../api/clock';
@@ -71,7 +72,7 @@ export default function PresetPicker({ venueId, scope, onApply, note }: {
         </span>
         <Icon name={open ? 'chevron-up' : 'chevron-down'} size={15} className="shrink-0" />
       </button>
-      {open && (
+      <Fold open={open}>
         <div className="mt-1 space-y-1">
           {presets.length > 5 && (
             <div className="relative">
@@ -97,7 +98,7 @@ export default function PresetPicker({ venueId, scope, onApply, note }: {
           </div>
           <p className="text-2xs text-ink-muted">{note ?? `프리셋 1개로 ${SCOPE_LABEL[scope]} 폼이 채워집니다(수정 가능). 비어 있는 항목은 건드리지 않아요.`}</p>
         </div>
-      )}
+      </Fold>
     </div>
   );
 }
