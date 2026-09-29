@@ -2,7 +2,6 @@ import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, use
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
 import type { LikeQueue } from './lib/likeQueue';
-import { currentUser } from './api/_session';
 /** 좋아요 낙관적 뒤집기(1인 1회) — 큐 청크는 지연 로드라 이 한 줄만 여기 둔다 */
 const flipLike = (p: CommunityPost): CommunityPost => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
 import { flushSync } from 'react-dom';
@@ -131,7 +130,7 @@ import { listAllUsers, updateUserStatus, approveOwner, adminWithdrawUser } from 
 import { bumpScheduleView,
   getSchedules, getScheduleById, createSchedule, updateSchedule, deleteSchedule, rejectSchedule, subscribeSchedules, type SchedulePatch } from './api/schedules';
 import { getPostById,
-  getVenues, getComments, getPosts, addComment, addPost, togglePostLike, deletePost, subscribePosts, subscribeComments,
+  getVenues, getComments, getPosts, addComment, addPost, deletePost, subscribePosts, subscribeComments,
   updateVenueDescription, updateVenueImage, updateVenueImages, deleteComment, logActivity,
 } from './api/community';
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
@@ -3408,9 +3407,7 @@ export default function App() {
   const handleLikePost = useCallback((postId: string) => {
     if (!userRefForGate.current) { promptLogin(); return; } // 비로그인: flip→서버실패→롤백 소음 대신 바로 유도
     applyLike(postId, flipLike); // 낙관적 토글 — 피드(posts)와 상세(openPost) 동시 반영
-    const q = likeQueueRef.current ??= import('./lib/likeQueue').then((m) => m.createLikeQueue({
-      // 계정 전환 경합(verifier 메모 A): 보내기 직전 세션이 이 주기를 시작한 계정이 아니면 보내지 않는다.
-      send: async (id, owner) => ((await currentUser())?.id ?? null) === owner ? togglePostLike(id) : null,
+    const q = likeQueueRef.current ??= import('./lib/postLikeQueue').then((m) => m.createPostLikeQueue({
       settle: (id, { liked, count }) => applyLike(id, (p) => ({ ...p, liked, likeCount: count })),
       undo: (id) => applyLike(id, flipLike),
       fail: (e) => toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'),
