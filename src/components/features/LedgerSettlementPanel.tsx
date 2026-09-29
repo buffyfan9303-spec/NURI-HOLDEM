@@ -170,7 +170,7 @@ function Report({ r }: { r: SettlementReport }) {
 
       {/* ── ③ 수단 분해(대차표) ── */}
       <Card title="받은 방법" icon="wallet"
-        note="총 정상가 − 할인 = 수납 완료 + 미수 + 매장지원. 애드온도 포함한 합계이며, 행마다 성립하므로 합계도 성립합니다.">
+        note="총 정상가 − 할인 = 수납 완료 + 미수 + 매장지원(애드온 포함). 행마다 성립하므로 합계도 성립합니다.">
         {/* 2026-09-11: 매장지원·미수를 수납과 **같은 줄에 두지 않는다** — 지원은 매장이 부담한 것이고
             미수는 아직 못 받은 돈이라, 현금·카드·이체·이용권과 같은 위계로 서면 수납액처럼 읽힌다. */}
         <p className="mb-1.5 text-2xs font-semibold text-ink-secondary">수납 완료</p>
@@ -202,7 +202,7 @@ function Report({ r }: { r: SettlementReport }) {
         {t.addon.count > 0 && (
           <div data-testid="settle-addon">
             {/* #9 — 위 대차표에 이미 들어 있는 부분집합이다(더하면 이중 계상). 엔트리·바인 횟수에는 들어가지 않는다. */}
-            <p className="mb-1.5 mt-3 text-2xs font-semibold text-ink-secondary">그중 애드온 {t.addon.count}건 · 위 합계에 포함 · 엔트리·바인 횟수와는 따로 셉니다</p>
+            <p className="mb-1.5 mt-3 text-2xs font-semibold text-ink-secondary">그중 애드온 {t.addon.count}건 · 위 합계에 포함</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <Tile label="애드온 매출" value={man(t.addon.revenue)} sub="현금 + 카드 + 이체" />
               <Tile label="애드온 이용권" value={man(t.addon.ticketWon)} sub={`${Math.round(t.addon.ticketWon / TICKET_WON)}T`} />

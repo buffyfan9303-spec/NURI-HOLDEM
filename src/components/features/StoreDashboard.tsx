@@ -1019,7 +1019,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                             둘 사이 간격을 벌려 손가락 하나 안에서 갈리지 않게 한다. */}
                         {r.voucherId != null && gameIsAddon(r.requestedGameSeq) && (
                           <button type="button" data-testid="dash-approve-voucher-addon" disabled={reqBusy === r.id} onClick={() => quickApprove(r, 'addon')}
-                            title="이용권을 애드온으로 승인(이 손님의 최근 바인에 애드온 기록)"
+                            title="이용권 → 최근 바인에 애드온"
                             className="shrink-0 -my-2 flex h-10 items-center rounded-input bg-accent-300/15 px-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/25 disabled:opacity-40">애드온</button>
                         )}
                         <button type="button" disabled={reqBusy === r.id}
