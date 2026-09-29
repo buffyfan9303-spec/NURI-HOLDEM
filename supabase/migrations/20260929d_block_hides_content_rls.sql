@@ -53,7 +53,8 @@
 --   ① 본인 글은 항상 보인다: 각 정책에 `user_id = (select auth.uid())` 분기(user_blocks 에 자기 차단 금지 CHECK 가 없다 — 실측).
 --   ② 관리자는 차단과 무관: 기존에 admin 분기가 있던 정책(posts·shouts·dealer)은 admin 분기를 차단 조건 밖에 둔다.
 --      comments·venue_messages 는 원래 true 였으므로 admin 분기를 새로 둔다(관리자 모더레이션이 차단 때문에 막히지 않게).
---      group_messages 는 원래 admin 분기가 없다(그룹 멤버 전용) — 그대로 둔다(권한 확대 안 함).
+--      group_messages 는 정책에 admin 분기가 따로 없지만 is_group_manager() 첫 줄이 my_role()='admin' 이라 관리자가 원래 읽었다
+--      (critical-reviewer 리허설 2026-09-29 지적) → 차단 면제 괄호에 admin 을 넣어 그 경로를 보존한다(권한 확대 아님).
 --   ③ 비로그인: my_blocked_ids() = '{}' → 차단 조건은 항상 참 → 기존과 같은 행.
 --
 -- ── 클라이언트 영향 ─────────────────────────────────────────────────────────────────────────
@@ -138,11 +139,12 @@ alter policy dealer_posts_read on public.dealer_posts using (
   or (my_role() = 'admin'::user_role)
 );
 
--- 그룹 채팅 — 멤버십 조건은 그대로(관리자 분기는 원래 없다 · 권한 확대 안 함).
+-- 그룹 채팅 — 멤버십 조건은 그대로. 관리자는 is_group_manager() 로 원래 읽었으므로 차단 면제에 admin 을 둔다(회귀 방지).
 alter policy gmsg_read on public.group_messages using (
   (is_group_member(group_id) or is_group_manager(group_id))
   and (not coalesce(user_id = any (coalesce((select public.my_blocked_ids()), '{}'::uuid[])), false)
-       or user_id = (select auth.uid()))
+       or user_id = (select auth.uid())
+       or my_role() = 'admin'::user_role)
 );
 
 -- 매장 채팅 — 원래 true(공개 열람). user_id 는 NULL 허용 → coalesce 가 '차단 아님'으로 둔다.
