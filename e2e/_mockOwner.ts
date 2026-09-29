@@ -182,7 +182,7 @@ export function applyClockCounts(row: Record<string, unknown>, body: Record<stri
   step('adj_entries', 'p_d_entries', auto('entries'));
   step('adj_rebuys', 'p_d_rebuys', auto('rebuys'));
   step('adj_earlies', 'p_d_earlies', auto('earlyUnits'));
-  step('adj_addons', 'p_d_addons', 0);
+  step('adj_addons', 'p_d_addons', auto('addons'));   // #3 하한 = −(장부 애드온) — 20260929s
   row.updated_at = new Date().toISOString();
   const { eliminations, adj_entries, adj_rebuys, adj_earlies, adj_addons } = row;
   return { status: 200, body: [{ eliminations, adj_entries, adj_rebuys, adj_earlies, adj_addons }] };

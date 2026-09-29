@@ -830,9 +830,9 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   // 하한은 얼리와 같은 규칙이다 — 실효 카운트(장부 자동 몫 + 보정)가 0 밑으로 내려가면
   // 카운트는 max(0,…) 로 멈추고 칩만 음수로 떨어진다(#11, 오너 보고 2026-09-15 · TV '총 칩' −5,000).
   // 2026-09-17: 예전엔 여기만 `Math.max(-9999, …)` 라 엔트리·리바이·애드온에 같은 증상이 남아 있었다.
-  // 애드온은 장부 자동 몫이 없어 auto=0 → 하한 0.
+  // 애드온도 #3(2026-09-29)부터 장부 자동 몫이 있다 → 하한 = −(장부 애드온 수). 서버 clock_adjust_counts 와 같은 규칙.
   const adj = (key: 'adjEntries' | 'adjRebuys' | 'adjAddons', d: number) => {
-    const auto = key === 'adjEntries' ? derived.entries : key === 'adjRebuys' ? derived.rebuys : 0;
+    const auto = key === 'adjEntries' ? derived.entries : key === 'adjRebuys' ? derived.rebuys : (derived.addons ?? 0);
     persist({ [key]: clampAdjCount(auto, state[key], d) } as Partial<ClockState>);
   };
   const adjEarly = (d: number) => persist({ adjEarlies: clampAdjEarlies(liveStats, state.adjEarlies, d) });

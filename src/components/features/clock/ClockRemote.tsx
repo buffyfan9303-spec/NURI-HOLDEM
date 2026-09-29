@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getClockState, saveClockPatch, createCoalescingSaver, subscribeClock, effectiveLevel, levelMovePatch, composeLiveStats,
-  syncClockLedgerStats, clampAdjEarlies, clampAdjCount,
+  syncClockLedgerStats, clampAdjEarlies, clampAdjCount, addonAutoOf,
   type ClockState,
 } from '../../../api/clock';
 import { clockPhase, CLOCK_PHASE_LABEL, levelNumberAt, formatCountdown } from '../../../lib/clockLevel';
@@ -167,7 +167,7 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
   // 카운트는 max(0,…) 로 멈추고 칩만 음수로 떨어진다(#11, 오너 보고 2026-09-15 · TV '총 칩' −5,000).
   // 2026-09-17: 예전엔 여기만 `Math.max(-9999, …)` 라 엔트리·리바이·애드온에 같은 증상이 남아 있었다.
   const adj = (key: 'adjEntries' | 'adjRebuys' | 'adjAddons', d: number) => {
-    const auto = key === 'adjEntries' ? (led?.entries ?? 0) : key === 'adjRebuys' ? (led?.rebuys ?? 0) : 0;
+    const auto = key === 'adjEntries' ? (led?.entries ?? 0) : key === 'adjRebuys' ? (led?.rebuys ?? 0) : addonAutoOf(state.liveStats);
     persist({ [key]: clampAdjCount(auto, state[key], d) } as Partial<ClockState>);
   };
   const adjEarly = (d: number) => persist({ adjEarlies: clampAdjEarlies(stats, state.adjEarlies, d) });

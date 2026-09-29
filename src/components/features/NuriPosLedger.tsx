@@ -729,7 +729,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const statsKeyOf = (): string | null => {
     if (!clockLinked || !clock) return null;
     const d = deriveClockCounts(buyins, earlyWindowOf(clock.config, session));
-    return `${d.entries}/${d.rebuys}/${d.earlies}/${d.doubleEarlies}/${session.buyinAmount ?? ''}/${JSON.stringify(clock.liveStats?.ledger ?? null)}`;
+    return `${d.entries}/${d.rebuys}/${d.earlies}/${d.doubleEarlies}/${d.addons ?? 0}/${session.buyinAmount ?? ''}/${JSON.stringify(clock.liveStats?.ledger ?? null)}`;
   };
   const statsKey = statsKeyOf();
   useEffect(() => {
