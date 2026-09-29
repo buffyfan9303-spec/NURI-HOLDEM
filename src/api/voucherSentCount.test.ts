@@ -43,4 +43,10 @@ describe('countVenueVouchersSent — 실제 전송 장수', () => {
     expect(s).toMatch(/const weekVoucher = sent\?\.week \?\? 0;/);
     expect(s).toMatch(/const todayVoucher = sent\?\.today \?\? 0;/);
   });
+  it('첫 화면 예산 — App.tsx 는 vouchers.ts 를 값으로 정적 import 하지 않는다(type 만 · 값은 vouchersMod 동적 import)', () => {
+    // 2026-09-29 CI: App 의 myVisitedVenues 정적 import 가 vouchers.ts 전체(≈3.7KB gz)를 첫 화면 청크에 실어 267.1/267KB 로 넘쳤다.
+    const app = readFileSync(join(__dirname, '../App.tsx'), 'utf8');
+    expect(app).not.toMatch(/^import \{[^}]*\} from '\.\/api\/vouchers';/m);
+    expect(app).toMatch(/const vouchersMod = \(\) => import\('\.\/api\/vouchers'\);/);
+  });
 });

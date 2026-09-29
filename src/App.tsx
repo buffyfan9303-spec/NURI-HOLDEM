@@ -113,7 +113,9 @@ import type { ClockState } from './api/clock';
 const clockMod = () => import('./api/clock');
 import { buildRegInfoMap } from './lib/regStatus';
 import { serverNow } from './lib/serverTime';
-import { myVisitedVenues, type VisitedVenue } from './api/vouchers';
+import type { VisitedVenue } from './api/vouchers';
+// 이용권 API(vouchers.ts ≈ 3KB gz)는 내 매장·지갑 전용 — 첫 화면 청크에서 뺀다(2026-09-29 번들 예산). 홈은 '가 본 매장' 한 조회만 쓴다.
+const vouchersMod = () => import('./api/vouchers');
 import { haversineKm } from './lib/geo';
 import { compareByStartThenBoost, compareByDistanceThenStart } from './lib/scheduleSort';
 import { readSnap, writeSnap } from './lib/snapshot';
@@ -2415,7 +2417,7 @@ export default function App() {
   const recentVenue = visitedVenues[0] ?? null;
   useEffect(() => {
     if (!user) { setVisitedVenues([]); return; }
-    const load = () => { myVisitedVenues().then(setVisitedVenues).catch(() => {}); };
+    const load = () => { vouchersMod().then((m) => m.myVisitedVenues()).then(setVisitedVenues).catch(() => {}); };
     load();
     // 체크인 성공(QR 딥링크 2경로 · 매장 페이지 스캐너)마다 다시 읽는다 — 첫 방문 매장에서 찍어도
     // 홈 '이어서 하기'·추천 레일 '가 본 매장' 이 옛 값이던 것(연결 감사 E, 2026-09-17).

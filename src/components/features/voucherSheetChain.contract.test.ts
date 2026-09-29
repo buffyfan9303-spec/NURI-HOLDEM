@@ -128,8 +128,9 @@ describe('FINAL-QR#CHECKIN-REFRESH — 출석/이용권 사용 뒤 정본 재조
     const HOME = read('./HomeTab.tsx');
     // 무해한 invalidation 이라는 전제가 깨지면(예: 리스너가 check_in 을 부르면) 이용권 사용이
     // 출석을 **만들어 버린다**. 그 전제를 여기서 잠근다.
+    // 2026-09-29: vouchers.ts 를 첫 화면 청크에서 빼느라 동적 import(vouchersMod) 로 바뀌었다 — 재조회 자체는 같다.
     expect(APP, 'checkin-done 수신자가 myVisitedVenues 재조회가 아니다')
-      .toMatch(/const load = \(\) => \{ myVisitedVenues\(\)\.then\(setVisitedVenues\)[\s\S]{0,40}?\};[\s\S]{0,400}?addEventListener\('nuri:checkin-done', load\)/);
+      .toMatch(/const load = \(\) => \{ vouchersMod\(\)\.then\(\(m\) => m\.myVisitedVenues\(\)\)\.then\(setVisitedVenues\)[\s\S]{0,40}?\};[\s\S]{0,400}?addEventListener\('nuri:checkin-done', load\)/);
     expect(HOME, 'event-board-refresh 수신자가 getEventBoard 재조회가 아니다')
       .toMatch(/const loadEventBoard = useCallback\(\(\) => \{\s*import\('\.\.\/\.\.\/api\/events'\)\.then\(\(m\) => m\.getEventBoard\(\)\)/);
   });
