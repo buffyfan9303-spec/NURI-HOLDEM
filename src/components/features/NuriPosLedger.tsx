@@ -1798,7 +1798,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                 <th className="sticky top-0 z-30 bg-surface-high min-w-16 max-w-40 px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
                 {/* #6(2026-09-25, 390 실측) — 왼쪽 No·플레이어(≈150px) + 오른쪽 총바인·미수(2×68px)가 모두 붙박이라 바인 칸이 **반 칸**(≈30px)만 보였다.
                     sm 미만은 오른쪽 두 열을 가로로 함께 흐르게 둔다(머리행의 세로 고정 top-0 은 유지). sm 이상은 종전 그대로. */}
-                <th className="sticky right-16 top-0 z-40 bg-surface-high w-16 min-w-16 max-w-16 px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
+                <th className="sticky right-16 top-0 z-40 bg-surface-high w-16 min-w-16 whitespace-nowrap px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
                 <th className="sticky right-0 top-0 z-40 bg-surface-high w-16 min-w-16 max-w-16 px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default max-sm:right-auto">미수</th>
               </tr>
             </thead>
@@ -1887,7 +1887,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                           </button>
                         ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
                       </td>
-                      <td className="sticky right-16 z-10 bg-surface-low w-16 min-w-16 max-w-16 px-1 py-1 border-b border-l border-border-default border-l-border-strong text-2xs tabular-nums text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:static max-sm:shadow-none">
+                      {/* D5 후속(2026-09-29 CI) — 폭 상한(68px 고정)을 뺐다. 금액은 줄바꿈하지 않으니 글꼴이 넓으면(리눅스 폴백 실측 +3.4px)
+                          고정 폭을 넘어 옆 '미수' 칸을 덮었다. 이제 폭 68px(w-16)을 기본으로 두되 상한이 없어, 더 긴 금액이면 그만큼만 넓어진다. 오른쪽 고정 오프셋(right-16)은 미수 칸 폭이라 그대로다. */}
+                      <td className="sticky right-16 z-10 bg-surface-low w-16 min-w-16 px-1 py-1 border-b border-l border-border-default border-l-border-strong text-2xs tabular-nums text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:static max-sm:shadow-none">
                         {first && r.player ? (
                           // 리바인 원탭 — 다음 '+' 셀은 가로 스크롤 밖(6~9열)에 있기 일쑤. 항상 보이는
                           // sticky 셀에서 바로 다음 회차 결제 모달을 연다('직전과 동일'과 짝)
