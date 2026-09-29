@@ -34,7 +34,7 @@ const BIZ = {
   ceo: '김윤혜',
   bizNo: '525-20-02937',
   addr: '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호(주공아파트)',
-  phone: '010-7508-7689',
+  phone: '070-8098-1727',
   contact: 'ace@nuriholdem.com',
   email: 'ace@nuriholdem.com',
   privacyOfficer: '김윤혜(대표)',
