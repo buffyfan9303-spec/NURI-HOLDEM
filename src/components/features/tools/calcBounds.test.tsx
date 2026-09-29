@@ -9,7 +9,7 @@ import { createElement, type FC, type ReactElement } from 'react';
 const q = vi.hoisted(() => ({ queue: [] as unknown[] }));
 vi.mock('react', async (orig) => {
   const R = await orig<typeof import('react')>();
-  const useState = ((init: unknown) => (q.queue.length ? [q.queue.shift(), () => {}] : R.useState(init as never))) as typeof R.useState;
+  const useState = ((init: unknown) => (q.queue.length ? [q.queue.shift(), () => {}] : R.useState(init as never))) as unknown as typeof R.useState;
   return { ...R, default: { ...R, useState }, useState };
 });
 
