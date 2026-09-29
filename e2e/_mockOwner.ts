@@ -136,12 +136,14 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
   await page.route(/\/rest\/v1\/game_presets\?/, restGet([]));
   // 서버 시각(읽기 RPC server_now = select now()). 안 걸면 _fixtures 가드가 POST 를 끊어 serverTimeKnown 이 거짓으로 남고
   //   PC 워치독·장부 백업 전진이 DB 에 레벨을 쓰지 않는다(2026-09-29 CI: C2·recheck2 #7).
-  //   **이 페이지의 시계**로 답한다 = 서버와 기기 시계가 같은 매장(page.clock 을 건 스펙도 그대로 맞는다).
-  //   기기 시계가 틀린 경우를 재는 스펙은 extra 에서 자기 값으로 덮는다(mystore-linkage-0928 D1).
-  await page.route(/\/rest\/v1\/rpc\/server_now/, async (r) => {
-    const now = await page.evaluate(() => Date.now()).catch(() => Date.now());
-    return r.fulfill(json(new Date(now).toISOString()));
-  });
+  //   서버와 기기 시계가 같은 매장 = 오프셋 **정확히 0** 이어야 한다. 그래서 '함수 없음'(PGRST202)으로 답한다 —
+  //   serverTime.ts 는 이때 known=true · offset 0(기기 시계가 곧 기준)으로 확정한다.
+  //   🔴 예전엔 페이지 시계(page.evaluate(Date.now))로 성공 응답을 줬는데, 앱은 왕복 중간점으로 오프셋을 잰다 —
+  //   evaluate 가 왕복의 가운데에 오지 않으면(느린 CI·CPU 8x) 오프셋이 +50~+1000ms 로 새어,
+  //   serverNow 로 얼린 남은 시간이 기기 시계 기대값과 그만큼 어긋났다(CI run 36499346502 C5: −83/−198/−101ms).
+  //   측정 성공 경로·기기 시계 오차는 자기 값으로 덮는 스펙이 잰다(mystore-linkage-0928 D1 · clock-recheck2 #7b).
+  await page.route(/\/rest\/v1\/rpc\/server_now/, (r) =>
+    r.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'PGRST202', message: 'mock: server_now absent' }) }));
   // 클락 상태는 **항상** 라우트한다 — clock 을 안 준 스펙에서도.
   //   안 걸어 두면 그 조회만 운영 서버로 나가 가짜 토큰이 401 을 받고,
   //   콘솔 전체가 '클락을(를) 불러오지 못했습니다 / 로그인이 만료되었습니다' 로 떨어진다.
