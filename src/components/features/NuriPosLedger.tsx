@@ -117,6 +117,8 @@ export interface LedgerSeed {
  */
 function revealPastSticky(sc: HTMLElement, el: HTMLElement) {
   if (!el.closest('td') || el.closest('td.sticky')) return;
+  // 키보드 포커스만 — 마우스·터치로 칸을 누른 포커스에서 표를 옆으로 밀면 누른 자리가 도망가는 새 튐이 된다(verifier 2026-09-29).
+  if (!el.matches(':focus-visible')) return;
   requestAnimationFrame(() => {
     const ths = [...sc.querySelectorAll<HTMLElement>('thead th.sticky')];
     const box = sc.getBoundingClientRect();

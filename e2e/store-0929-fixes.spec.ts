@@ -296,6 +296,38 @@ for (const [w, h] of [[390, 844], [360, 780]] as const) {
   });
 }
 
+// D7 보정은 **키보드 포커스만**이다 — 마우스·터치로 고정 열 경계에 걸친 칸을 누르면 표가 옆으로 밀리면 안 된다(verifier 2026-09-29).
+for (const how of ['mouse', 'touch'] as const) {
+  test(`🔴 D7 390 ${how} 로 고정 열 경계에 걸친 바인 칸을 눌러도 표가 가로로 밀리지 않는다`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await openBoard(page, { vp: { width: 390, height: 844 }, board: { unit: 100_000, buyins: 8, name: LONG } });
+    const at = await page.evaluate(() => {
+      const t = ([...document.querySelectorAll('[data-tab="my-store"] table')] as HTMLElement[]).find((x) => x.offsetParent)!;
+      window.scrollBy(0, t.getBoundingClientRect().top - 120);
+      const sc = t.parentElement!;
+      const stickyR = Math.max(...([...t.querySelectorAll('thead th.sticky')] as HTMLElement[]).filter((h) => getComputedStyle(h).left !== 'auto').map((h) => h.getBoundingClientRect().right));
+      const cell = ([...t.querySelectorAll('tbody td:not(.sticky) button')] as HTMLElement[]).filter((x) => x.offsetParent)[4];
+      const c0 = cell.getBoundingClientRect();
+      sc.scrollLeft += c0.left - (stickyR - c0.width / 2);   // 칸 절반을 고정 열 밑에 걸친다
+      const c = cell.getBoundingClientRect();
+      return { x: stickyR + (c.right - stickyR) / 2, y: c.top + c.height / 2, left0: sc.scrollLeft, straddle: c.left < stickyR && c.right > stickyR };
+    });
+    expect(at.straddle, '경계에 걸친 칸을 만들지 못했다 — 잴 것이 없으면 통과가 아니다').toBe(true);
+    if (how === 'mouse') {
+      await page.mouse.move(at.x, at.y); await page.mouse.down(); await page.waitForTimeout(120); await page.mouse.up();
+    } else {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: at.x, y: at.y }] });
+      await page.waitForTimeout(120);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    }
+    await page.waitForTimeout(400);
+    const left1 = await page.evaluate(() => ([...document.querySelectorAll('[data-tab="my-store"] table')] as HTMLElement[]).find((x) => x.offsetParent)!.parentElement!.scrollLeft);
+    console.log(`[D7 ${how}] scrollLeft ${at.left0} → ${left1}`);
+    expect(Math.abs(left1 - at.left0), `${how} 누름에 표가 가로로 밀렸다`).toBeLessThanOrEqual(1);
+  });
+}
+
 // ── 딜러 시트 시급 칸 넘침(design-reviewer 2026-09-29: 390 69px · 360 99px) ─────────────────────
 for (const [w, h] of [[390, 844], [360, 780]] as const) {
   test(`🔴 딜러 시트 ${w} — 시간·시급 입력 줄이 시트 폭 안에 있다`, async ({ page }) => {
