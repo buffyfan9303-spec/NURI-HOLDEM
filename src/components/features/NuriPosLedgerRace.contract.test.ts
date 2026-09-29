@@ -135,6 +135,16 @@ describe('C05 보완 · 재조회 실패를 조용히 삼키지 않는다(낡은
     expect(m![1]).not.toMatch(/\.catch\(\(\) => \{\}\)/);
   });
 
+  // D8(2026-09-29, store-deep) — reload() 가 `.catch(() => {})` 로 바인·명단 재조회 실패를 삼켰다(세션만 실패를 올렸다).
+  // 음성 대조: reload 의 catch 를 `.catch(() => {})` 로 되돌리면 빨개진다.
+  it('🔴 reload() 실패는 rowsErr 에 남고(순번 가드) 인라인 배너가 그것도 본다', () => {
+    const m = code.match(/const reload = useCallback\(\(\) => \{([\s\S]*?)\}, \[venueId, date, gameSeq\]\);/);
+    expect(m, 'reload 정의를 찾지 못했다').not.toBeNull();
+    expect(m![1]).not.toMatch(/\.catch\(\(\) => \{\}\)/);
+    expect(m![1]).toMatch(/\.catch\(\(e\) => \{ if \(my === reloadSeq\.current\) setRowsErr\(e\); \}\)/);
+    expect(m![1]).toMatch(/setRowsErr\(null\)/);
+  });
+
   it('hasBoardData 가 있어야 전면 카드(초기 실패)와 인라인 배너(재조회 실패)를 가를 수 있다', () => {
     const m = code.match(/const hasBoardData = [^;]+;/);
     expect(m, 'hasBoardData 정의를 찾지 못했다').not.toBeNull();
@@ -148,7 +158,7 @@ describe('C05 보완 · 재조회 실패를 조용히 삼키지 않는다(낡은
   });
 
   it('보드 렌더에 hasBoardData 조건의 인라인 재조회-실패 배너가 있다(마지막 정상 값을 지우지 않는다)', () => {
-    const idx = code.indexOf('loadError && hasBoardData');
+    const idx = code.indexOf('!!(loadError || rowsErr) && hasBoardData');
     expect(idx, '인라인 배너 조건을 찾지 못했다').toBeGreaterThan(-1);
     const slice = code.slice(idx, idx + 400);
     expect(slice).toContain('reloadSession()');

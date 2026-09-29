@@ -65,7 +65,11 @@ describe('F6 · 딜러 근무 조회 실패를 호출부가 든다(throw 만 하
     const DM = strip(readFileSync(join(__dirname, 'DealerShiftsModal.tsx'), 'utf-8'));
     expect(DM).toMatch(/const \[loadErr, setLoadErr\] = useState<string \| null>\(null\);/);
     expect(DM).not.toMatch(/getDealerShifts\(venueId, (?:s|weekStartOf\(s\)), e\)\.then\(setList\)\.catch\(\(\) => \{\}\)/);
-    expect(DM).toMatch(/getDealerShifts\(venueId, (?:s|weekStartOf\(s\)), e\)\s*\.then\(\(l\) => \{ setList\(l\); setLoadErr\(null\); \}\)\s*\.catch\(\(err\) => setLoadErr\(msgOf\(err, '딜러 근무 기록을 불러오지 못했습니다'\)\)\)/);
+    // 2026-09-29(bounce-sweep A4): 달 이동 연타의 늦은 응답을 막는 순번 가드가 성공·실패 둘 다에 붙었다 — 관용구 자체는 같다.
+    expect(DM).toMatch(/getDealerShifts\(venueId, (?:s|weekStartOf\(s\)), e\)\s*\.then\(\(l\) => \{ if \(my === reqSeq\.current\) \{ setList\(l\); setLoadErr\(null\); \} \}\)\s*\.catch\(\(err\) => \{ if \(my === reqSeq\.current\) setLoadErr\(msgOf\(err, '딜러 근무 기록을 불러오지 못했습니다'\)\); \}\)/);
+    // 로딩(null)과 '이번 달 없음'([])을 가른다 — [] 로 시작하면 로딩 중에 빈 문구가 거짓으로 뜬다.
+    expect(DM).toMatch(/useState<DealerShift\[\] \| null>\(null\)/);
+    expect(DM).toMatch(/\) : list === null \? \(\s*<div data-testid="dealer-shifts-loading"[\s\S]*?\) : monthList\.length === 0 \?/);
     expect(DM).toMatch(/\{loadErr \? \(\s*<div role="alert"/);
     expect(DM).toMatch(/onClick=\{\(\) => reload\(month\)\}/);
     // 급여 명세 합계도 실패 중에는 그리지 않는다(부분 목록 합계가 '이번 달 합계' 로 읽힌다).

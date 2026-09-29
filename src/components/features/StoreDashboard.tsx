@@ -6,7 +6,7 @@ import { getVenueWeeklyFunnel, type WeeklyFunnel } from '../../api/schedules';
 import { getMyStaffWage, type MyWage } from '../../api/staffSchedule';
 import type { Schedule } from '../../api/schedules';
 import { listStaleOpenSessions,
-  getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, ledgerMoney, addonFinance, wonToMan, visitorLabel, subscribeLedger,
+  getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, ledgerMoney, addonFinance, ticketUsedT, wonToMan, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
   getLastClosedRound, MAIN_GAME_SEQ, kstToday, type LastClosedRound, type PosterOpsSummary,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, ledgerCounts,} from '../../api/ledger';
@@ -704,7 +704,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     if (!days.includes(b.sessionDate)) continue;
     // 분납 티켓도 buyinFinance가 ticketPaid에 포함해 반환한다(과거엔 대시보드만 누락)
     const s = sessByGame.get(`${b.sessionDate}#${b.gameSeq}`);
-    if (s) weekTicket += buyinFinance(b, s).ticketPaid; // T 합계 — 위 fin.ticket 과 **같은 척도**여야 한다(2026-09-20 오너 결정)
+    if (s) weekTicket += ticketUsedT(buyinFinance(b, s), addonFinance(b)); // T 합계(바인 + 애드온) — 위 fin.ticket 과 **같은 척도**여야 한다(2026-09-20 오너 결정)
   }
   // 매장이용권 발행/시상(세션 입력값) — 7일 / 오늘
   let weekVoucher = 0;
@@ -1507,10 +1507,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 {/* 2026-09-18: 위 KPI(:843)가 같은 수(fin.ticket)를 'T' 로 부르는데 여기만 '장' 이었다 —
                     한 화면에서 같은 숫자가 '8T' 와 '8장' 으로 두 번 보였다(PC 전수조사 2026-09-18). */}
                 <Stat label="7일 회수" value={rangeErr ? '—' : fmtT(weekTicket)} unit={rangeErr ? '' : 'T'} />
-                <Stat label="오늘 회수" value={fmtT(fin.ticket)} unit="T" />
+                {/* 3-B(2026-09-29) — 위 KPI '회수 이용권'과 같은 범위(오늘 **전 게임**, day). 예전엔 메인 게임만(fin)이라 한 화면에서 두 수가 갈렸다(store-deep D2). */}
+                <Stat label="오늘 회수" value={fmtT(day.ticket)} unit="T" />
               </div>
               {!!rangeErr && <div className="mt-2"><LoadFailRow what="최근 7일 이용권" onRetry={reloadRange} /></div>}
-              <p className="mt-2 t-desc break-keep text-ink-muted">발행 = 장부에 적은 발급·시상 장수 · 회수 = 티켓으로 낸 바인 금액(T)</p>
+              <p className="mt-2 t-desc break-keep text-ink-muted">발행 = 장부에 적은 발급·시상 장수 · 회수 = 티켓으로 낸 바인·애드온 금액(T)</p>
             </>
           )}
         </DashCard>

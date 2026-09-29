@@ -1,5 +1,5 @@
 // src/components/features/DealerShiftsModal.tsx — 딜러 로테이션 + 월 급여 명세.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { getDealerShifts, addDealerShift, removeDealerShift, type DealerShift } from '../../api/dealerShifts';
@@ -9,6 +9,7 @@ import { kstToday } from '../../lib/kst';
 import { wonToMan } from '../../api/ledger';
 import Icon from '../atoms/Icon';
 import { msgOf } from '../../lib/dbError';
+import { SkeletonList } from '../atoms/Skeleton';
 
 const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const monthRange = (key: string) => {
@@ -21,7 +22,9 @@ const monthRange = (key: string) => {
 export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: { open: boolean; onClose: () => void; venueId: string; monthKey: string }) {
   const toast = useToast();
   const [month, setMonth] = useState(monthKey);
-  const [list, setList] = useState<DealerShift[]>([]);
+  // null = 아직 모른다(로딩). [] 로 시작하면 로딩 중에 '이번 달 등록된 시프트가 없습니다'가 거짓으로 뜬다(bounce-sweep A4).
+  const [list, setList] = useState<DealerShift[] | null>(null);
+  const reqSeq = useRef(0);
   const [name, setName] = useState('');
   const [date, setDate] = useState('');
   const [start, setStart] = useState('');
@@ -35,13 +38,15 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
   const reload = (mk: string) => {
     const { start: s, end: e } = monthRange(mk);
     // 주 40h·주휴는 주 단위라 첫 주 월요일부터 읽는다 — 목록·금액은 이 달 것만(staffPay 가 가른다).
+    // 달을 빠르게 넘기면 늦게 온 앞 달 응답이 지금 달을 덮는다 — 마지막 요청만 반영한다.
+    const my = ++reqSeq.current;
     getDealerShifts(venueId, weekStartOf(s), e)
-      .then((l) => { setList(l); setLoadErr(null); })
-      .catch((err) => setLoadErr(msgOf(err, '딜러 근무 기록을 불러오지 못했습니다')));
+      .then((l) => { if (my === reqSeq.current) { setList(l); setLoadErr(null); } })
+      .catch((err) => { if (my === reqSeq.current) setLoadErr(msgOf(err, '딜러 근무 기록을 불러오지 못했습니다')); });
   };
-  useEffect(() => { if (open) { setMonth(monthKey); reload(monthKey); } }, [open, venueId, monthKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) { setMonth(monthKey); setList(null); reload(monthKey); } }, [open, venueId, monthKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const shiftMonth = (delta: number) => { const [y, m] = month.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); const mk = ym(d); setMonth(mk); reload(mk); };
+  const shiftMonth = (delta: number) => { const [y, m] = month.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); const mk = ym(d); setMonth(mk); setList(null); reload(mk); };
 
   // ⚠ 연타 가드. `dealer_shifts` 에는 (매장·딜러·날짜·시작시각) 유니크가 없고 급여는 **행 단위 합산**이라
   //   더블클릭 한 번이 그 시프트 급여(예: 8h × 15,000 = 12만)만큼 인건비를 부풀린다. 삭제는 한 줄씩이라
@@ -60,16 +65,16 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
 
   // 급여 명세: 딜러별 — 급여 정산 화면·대시보드와 **같은 식**(staffPay.laborSummary, 분 단위·합계 1회 반올림).
   const { start: mFrom, end: mTo } = monthRange(month);
-  const summary = useMemo(() => laborSummary({ from: mFrom, to: mTo, today: kstToday(), rules: pay.rules, staff: [], wages: {}, dealers: list }),
+  const summary = useMemo(() => laborSummary({ from: mFrom, to: mTo, today: kstToday(), rules: pay.rules, staff: [], wages: {}, dealers: list ?? [] }),
     [mFrom, mTo, pay.rules, list]);
   const payroll = summary.dealers;
   const totalPay = summary.dealerPay;
-  const monthList = list.filter((s) => s.shiftDate >= mFrom);
+  const monthList = (list ?? []).filter((s) => s.shiftDate >= mFrom);
   const minWage = belowMinWage(wage, kstToday()); // 저장은 막지 않는다(수습 감액 등 예외)
   const hoursOf = (s: DealerShift) => Math.round(workedMinutes(dealerWageShift(s)) / 6) / 10;
 
   return (
-    <Modal open={open} onClose={onClose} title="딜러 로테이션 · 급여" maxWidth="md" variant="sheet">
+    <Modal open={open} onClose={onClose} title="딜러 로테이션 · 급여" maxWidth="md" variant="sheet" fillHeight>
       <div className="space-y-3 p-4">
         {/* 월 이동 */}
         <div className="flex items-center justify-between">
@@ -85,8 +90,8 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input w-36 shrink-0 text-sm" />
           </div>
           <div className="flex gap-1.5">
-            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="input flex-1 text-sm" />
-            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="input flex-1 text-sm" />
+            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="input min-w-0 flex-1 text-sm" />
+            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="input min-w-0 flex-1 text-sm" />
             <div className="relative w-28 shrink-0">
               <input type="number" inputMode="numeric" value={wage || ''} onChange={(e) => setWage(parseInt(e.target.value, 10) || 0)} placeholder="시급" className="input w-full pr-7 text-sm tabular-nums" />
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
@@ -122,6 +127,8 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
             <button type="button" onClick={() => reload(month)}
               className="shrink-0 rounded-badge border border-danger/40 px-2.5 py-1 text-2xs font-bold text-danger-light hover:bg-danger/15 transition-colors">다시 시도</button>
           </div>
+        ) : list === null ? (
+          <div data-testid="dealer-shifts-loading" aria-busy="true"><SkeletonList rows={4} rowClassName="h-11" /></div>
         ) : monthList.length === 0 ? (
           <p className="py-6 text-center text-2xs text-ink-muted">이번 달 등록된 시프트가 없습니다.</p>
         ) : (

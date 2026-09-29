@@ -28,7 +28,7 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBu
   getPendingBuyinRequests, approveBuyinRequest, rejectBuyinRequest, subscribeBuyinRequests, type BuyinRequest,
   getLastClosedRound, type LastClosedRound,
   discountsAppendOnly, ledgerSessionMatches, cancelPwStateFromError, type LedgerRowOwner,
-  LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING, ledgerErrorText, LEDGER_ALREADY_OPEN,
+  LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING, ledgerErrorText, LEDGER_ALREADY_OPEN, ticketUsedT,
 } from '../../api/ledger';
 import { getStaffSchedule, addStaffShift, getStaffWages } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
@@ -110,6 +110,30 @@ export interface LedgerSeed {
   gtd?: boolean;
 }
 
+/**
+ * D7(2026-09-29 design-reviewer) — 키보드 포커스가 고정 열(sticky) **밑으로** 들어간 바인 칸을 그 폭만큼 가로로 밀어 보인다.
+ * 브라우저의 포커스 스크롤은 칸이 조금이라도 보이면 멈추고 scroll-padding 도 보지 않아(390·360 실측: 6번 중 1~2번 가림),
+ * 고정 열의 실제 끝(머리행 sticky th 의 좌우 경계)을 재서 보정한다. 모바일은 오른쪽 두 열이 고정이 아니라(right:auto) 왼쪽만 본다.
+ */
+function revealPastSticky(sc: HTMLElement, el: HTMLElement) {
+  if (!el.closest('td') || el.closest('td.sticky')) return;
+  // 키보드 포커스만 — 마우스·터치로 칸을 누른 포커스에서 표를 옆으로 밀면 누른 자리가 도망가는 새 튐이 된다(verifier 2026-09-29).
+  if (!el.matches(':focus-visible')) return;
+  requestAnimationFrame(() => {
+    const ths = [...sc.querySelectorAll<HTMLElement>('thead th.sticky')];
+    const box = sc.getBoundingClientRect();
+    let L = box.left, R = box.right;
+    for (const t of ths) {
+      const cs = getComputedStyle(t), rc = t.getBoundingClientRect();
+      if (cs.left !== 'auto') L = Math.max(L, rc.right);
+      else if (cs.right !== 'auto') R = Math.min(R, rc.left);
+    }
+    const r = el.getBoundingClientRect();
+    if (r.left < L) sc.scrollLeft -= L - r.left;
+    else if (r.right > R) sc.scrollLeft += r.right - R;
+  });
+}
+
 // venueName 은 엑셀 파일명에만 쓰였다(내보내기 제거로 미사용). 호출자(VenueManageTab·AdminTab)가 아직 넘기므로 타입만 남긴다.
 export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, onOpenSchedule, seed, followGame, settleSignal = 0, active = true }: {
   venueId: string; canManage: boolean; venueName?: string; active?: boolean;
@@ -162,6 +186,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const [loading, setLoading] = useState(true);
   // 조회 실패를 '빈 장부'와 구분하기 위한 세 번째 상태(로딩/빈값/실패)
   const [loadError, setLoadError] = useState<unknown>(null);
+  // D8(2026-09-29) — 바인·명단 재조회(reload) 실패. loadError 와 따로 둔다: 둘은 realtime·재접속에서 동시에 돌아,
+  //   같은 칸에 쓰면 곧 성공한 reloadSession 의 setLoadError(null) 이 바인 실패를 지운다(순서에 따라 결과가 달라진다).
+  const [rowsErr, setRowsErr] = useState<unknown>(null);
   const [hasPw, setHasPw]     = useState(false);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
   const [payBusy, setPayBusy] = useState(false); // 결제 저장 중 — 더블탭 이중 기록 방지
@@ -389,7 +416,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const reload = useCallback(() => {
     const my = ++reloadSeq.current;
     Promise.all([getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq)])
-      .then(([b, p]) => { if (my === reloadSeq.current) { setBuyins(b); setPlayers(p); } }).catch(() => {});
+      .then(([b, p]) => { if (my === reloadSeq.current) { setBuyins(b); setPlayers(p); setRowsErr(null); } })
+      .catch((e) => { if (my === reloadSeq.current) setRowsErr(e); });   // 마지막 정상 값은 유지하고 인라인 배너로 알린다
   }, [venueId, date, gameSeq]);
   // ⚠ 내부에서 실패를 삼키면 안 된다 — reloadSession 의 Promise.all 이 이 실패를 못 본다
   //   (이미 resolve 된 것으로 보여 아래 setLoadError(null) 이 방금 실패한 재조회를 '성공'으로 지운다).
@@ -426,6 +454,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     let alive = true;
     setLoading(true);
     setLoadError(null);
+    setRowsErr(null);
     bumpSessionReq();   // D2 — 앞 장부로 날아가던 reloadSession 응답을 무효로
     // B3(2026-09-28) — 바인·명단 재조회(reload)도 같은 순간 무효로 한다. 예전엔 reloadSeq 를 안 올려,
     //   전환 직전에 realtime·online 으로 나간 앞 매장·날짜·게임의 reload 응답이 전환 뒤 도착해 buyins/players 를 덮었다
@@ -1423,7 +1452,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} />
       {/* C05 보완 — 재조회 실패(다른 접수대의 마감·단가·할인 변경을 못 받아옴)를 조용히 감추지 않는다.
           hasBoardData 라 전면 카드로 안 덮었을 뿐, 지금 보이는 값이 낡았을 수 있다는 사실은 알려야 한다. */}
-      {!!loadError && hasBoardData && (
+      {!!(loadError || rowsErr) && hasBoardData && (
         <div role="alert" className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/8 px-3 py-2">
           <p className="text-2xs font-semibold text-ink-secondary">방금 장부를 새로 불러오지 못했어요. 아래는 마지막으로 확인된 내용이라 단가·할인이 바뀌었을 수 있어요.</p>
           <button type="button" onClick={() => { reloadSession(); reload(); }}
@@ -1778,7 +1807,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
           //   DOM 후순위인 바에 덮여 멀쩡했다 — 오너가 짚은 네 칸이 정확히 z-40 인 칸들이다.
           //   isolation 은 z-index 를 하나도 안 건드리고 표 안의 상대 순서를 그대로 보존한다.
           //   실측(격리 유무 대조, elementFromPoint): 없음 → TH 가 위 / isolate → 정산바가 위.
-          className="isolate overflow-auto max-h-[70vh] [-webkit-overflow-scrolling:touch] rounded-card border border-border-default bg-surface-low [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
+          // D7(2026-09-29 design-reviewer) — 고정 열(No 38px + 플레이어 ≤153px, 모바일 ≤119px) 폭만큼 scroll-padding 을 줘
+          //   키보드 포커스(Shift+Tab)로 끌려온 바인 칸이 고정 열 밑에 가려지지 않게 한다. sm 이상은 오른쪽 총바인·미수도 고정이다.
+          onFocusCapture={(e) => revealPastSticky(e.currentTarget, e.target as HTMLElement)}
+          className="isolate overflow-auto max-h-[70vh] scroll-pl-[192px] max-sm:scroll-pl-[158px] sm:scroll-pr-[152px] [-webkit-overflow-scrolling:touch] rounded-card border border-border-default bg-surface-low [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
         >
           {/* w-max: 칸을 압축하지 않고 고정폭 유지 → 모바일에서 가로 스크롤. min-w-full: 데스크톱은 꽉 채움 */}
           <table className="border-separate border-spacing-0 text-center w-max min-w-full">
@@ -1786,14 +1818,14 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               {/* 헤더는 세로 스크롤에도 고정(sticky top) — 100명 명단에서도 바인 번호가 항상 보임 */}
               <tr className="bg-surface-high">
                 <th className="sticky left-0 top-0 z-40 bg-surface-high w-9 px-1 py-2 text-xs text-ink-muted border-b border-border-default">No</th>
-                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-24 max-w-36 px-2 py-2 text-xs text-ink-muted border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">플레이어</th>
+                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-24 max-w-36 max-sm:max-w-28 px-2 py-2 text-xs text-ink-muted border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">플레이어</th>
                 {Array.from({ length: binCols }, (_, i) => (
                   <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-default">{i + 1}바인</th>
                 ))}
                 <th className="sticky top-0 z-30 bg-surface-high min-w-16 max-w-40 px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
                 {/* #6(2026-09-25, 390 실측) — 왼쪽 No·플레이어(≈150px) + 오른쪽 총바인·미수(2×68px)가 모두 붙박이라 바인 칸이 **반 칸**(≈30px)만 보였다.
                     sm 미만은 오른쪽 두 열을 가로로 함께 흐르게 둔다(머리행의 세로 고정 top-0 은 유지). sm 이상은 종전 그대로. */}
-                <th className="sticky right-16 top-0 z-40 bg-surface-high w-16 min-w-16 max-w-16 px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
+                <th className="sticky right-16 top-0 z-40 bg-surface-high w-16 min-w-16 whitespace-nowrap px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:right-auto max-sm:shadow-none">총바인</th>
                 <th className="sticky right-0 top-0 z-40 bg-surface-high w-16 min-w-16 max-w-16 px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default max-sm:right-auto">미수</th>
               </tr>
             </thead>
@@ -1808,7 +1840,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                   return (
                     <tr key={`${r.name}-${chunk}`}>
                       <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-2xs text-ink-muted border-b border-border-default tabular-nums">{first ? ri + 1 : <span className="opacity-40">↳</span>}</td>
-                      <td className="sticky left-9 z-10 bg-surface-low min-w-24 max-w-36 px-2 py-1 border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">
+                      <td className="sticky left-9 z-10 bg-surface-low min-w-24 max-w-36 max-sm:max-w-28 px-2 py-1 border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">
                         {first ? (
                           <button type="button" disabled={!r.player || closed} onClick={() => r.player && setEditPlayer(r.player)} className="w-full text-left disabled:cursor-default">
                             <div className="flex items-center gap-1">
@@ -1819,10 +1851,11 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                               {r.player?.visitorType
                                 ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40">{visitorLabel(r.player.visitorType)}</span>
                                 : r.player ? <span className="text-[10px] text-ink-muted">{closed ? '' : '유형/비고 +'}</span> : <span className="text-[10px] text-ink-muted">—</span>}
-                              {r.player?.note && <span className="text-[10px] text-ink-secondary truncate max-w-16">· {r.player.note}</span>}
+                              {/* D7(2026-09-29) — 390 에선 고정 열이 보이는 폭의 절반을 먹는다. 비고 전문은 비고 칸에 있으니 모바일에선 미리보기를 뺀다. */}
+                              {r.player?.note && <span className="text-[10px] text-ink-secondary truncate max-w-16 max-sm:hidden">· {r.player.note}</span>}
                             </div>
                           </button>
-                        ) : <span className="block text-2xs text-ink-muted/50 truncate">{r.name}</span>}
+                        ) : <span className="block text-2xs text-ink-muted/50 truncate" title={r.name}>{r.name}</span>}
                       </td>
 
                       {Array.from({ length: binCols }, (_, i) => {
@@ -1881,27 +1914,32 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                           </button>
                         ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
                       </td>
-                      <td className="sticky right-16 z-10 bg-surface-low w-16 min-w-16 max-w-16 px-1 py-1 border-b border-l border-border-default border-l-border-strong text-2xs tabular-nums text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:static max-sm:shadow-none">
+                      {/* D5 후속(2026-09-29 CI) — 폭 상한(68px 고정)을 뺐다. 금액은 줄바꿈하지 않으니 글꼴이 넓으면(리눅스 폴백 실측 +3.4px)
+                          고정 폭을 넘어 옆 '미수' 칸을 덮었다. 이제 폭 68px(w-16)을 기본으로 두되 상한이 없어, 더 긴 금액이면 그만큼만 넓어진다. 오른쪽 고정 오프셋(right-16)은 미수 칸 폭이라 그대로다. */}
+                      <td className="sticky right-16 z-10 bg-surface-low w-16 min-w-16 px-1 py-1 border-b border-l border-border-default border-l-border-strong text-2xs tabular-nums text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)] max-sm:static max-sm:shadow-none">
                         {first && r.player ? (
                           // 리바인 원탭 — 다음 '+' 셀은 가로 스크롤 밖(6~9열)에 있기 일쑤. 항상 보이는
                           // sticky 셀에서 바로 다음 회차 결제 모달을 연다('직전과 동일'과 짝)
                           <button type="button" disabled={closed}
                             onClick={() => setSelected({ playerName: (r.player as LedgerPlayer).name, entryNo: maxEntryOf((r.player as LedgerPlayer).name) + 1, buyin: null })}
                             title="+1 바인 · 결제수단 선택"
-                            className="tap-y-44 block w-full rounded-input px-0.5 py-0.5 text-left leading-tight transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
+                            className="tap-y-44 block w-full whitespace-nowrap rounded-input px-0.5 py-0.5 text-left leading-tight transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
                             <b className="text-accent-200">{cnt}회{closed ? '' : ' +'}</b>
                             {/* 회수와 같은 정의로 — 티켓·지원도 단가만큼. paid+unpaid 로 두면
                                 티켓 바인이 '1회 / 0만' 이 된다(오너 보고 2026-09-05). */}
                             <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
                           </button>
                         ) : first ? (
-                          <span className="leading-tight block text-left">
+                          <span className="leading-tight block whitespace-nowrap text-left">
                             <b className="text-accent-200">{cnt}회</b>
                             <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
                           </span>
                         ) : ''}
                       </td>
-                      <td className="sticky right-0 z-10 bg-surface-low w-16 min-w-16 max-w-16 px-1 py-1 border-b border-l border-border-default text-2xs tabular-nums text-left text-danger-light max-sm:static">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
+                      {/* D5 후속 — 미수 칸은 폭 상한(68px)을 **유지**한다. 왼쪽 총바인 칸의 고정 오프셋 right-16 이 곧 이 칸의 폭이라,
+                          이 칸이 넓어지면 총바인이 미수를 덮는다. 대신 금액을 줄바꿈 허용 + 어디서든 끊기(overflow-wrap:anywhere)로 칸 안에 가둔다
+                          (8,888.89만: Verdana·Courier 강제에서도 두 줄·칸 안 — nowrap 을 넣으면 넘친다, e2e store-0929-fixes 미수 칸). */}
+                      <td className="sticky right-0 z-10 bg-surface-low w-16 min-w-16 max-w-16 [overflow-wrap:anywhere] px-1 py-1 border-b border-l border-border-default text-2xs tabular-nums text-left text-danger-light max-sm:static">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
                     </tr>
                   );
                 });
@@ -1935,7 +1973,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               sub={`엔트리 ${stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}`} />
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
             {/* 1T = 1만원이라 'NT' 와 'X만' 은 같은 수 — 한 번만 적는다. 미수 티켓은 아래 줄이 따로 보여준다. */}
-            <Metric label="티켓" value={`${stats.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} />
+            {/* 3-B(2026-09-29) — 이용권 사용 T = 바인 + 애드온(ticketUsedT). stats.ticket 은 바인만이라 아래 대차표(tender.ticket)와 짝으로 둔다. */}
+            <Metric label="티켓" value={`${ticketUsedT({ ticketPaid: stats.ticket }, stats.addon).toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} />
             <Metric label="완납 매출" value={`${wonToMan(stats.revenue + stats.addon.revenue)}만`} tone="emerald" />
             <Metric label="미수금" value={`${wonToMan(stats.unpaid + stats.addon.unpaid)}만`} tone="danger" />
           </div>

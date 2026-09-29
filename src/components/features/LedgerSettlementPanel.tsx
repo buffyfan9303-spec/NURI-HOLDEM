@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Icon, { type IconName } from '../atoms/Icon';
 import { EmptyState } from '../atoms/Skeleton';
 import {
-  getLedgerRange, getLedgerPlayers, visitorLabel, wonToMan,
+  getLedgerRange, getLedgerPlayers, visitorLabel, wonToMan, ticketUsedT,
   type LedgerBuyin, type LedgerPlayer, type LedgerSession,
 } from '../../api/ledger';
 // T 환산은 반드시 TICKET_WON 을 쓴다 — 만원 환산 상수(WON_PER_MAN)와 값이 같다고 섞어 쓰면
@@ -176,7 +176,10 @@ function Report({ r }: { r: SettlementReport }) {
           <Tile label="현금" value={man(t.tender.cash)} />
           <Tile label="카드" value={man(t.tender.card)} />
           <Tile label="이체" value={man(t.tender.transfer)} />
-          <Tile label="매장이용권" value={man(t.tender.ticket)} sub={`${Math.round(t.tender.ticket / TICKET_WON)}T · 1T = 1만원`} />
+          {/* 3-B(2026-09-29) — 값(원)은 대차표라 바인만 그대로. 애드온을 이용권으로 받은 날은 '사용 T'(바인+애드온, ticketUsedT)를 같이 적는다. */}
+          <Tile label="매장이용권" value={man(t.tender.ticket)} sub={t.addon.ticketWon > 0
+            ? `${Math.round(t.tender.ticket / TICKET_WON)}T · 애드온 포함 사용 ${Math.round(ticketUsedT({ ticketPaid: t.tender.ticket / TICKET_WON }, t.addon))}T`
+            : `${Math.round(t.tender.ticket / TICKET_WON)}T · 1T = 1만원`} />
         </div>
         <p className="mb-1.5 mt-3 text-2xs font-semibold text-ink-secondary">수납이 아닌 것</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
