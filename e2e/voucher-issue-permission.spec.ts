@@ -89,14 +89,18 @@ test.describe('이용권 발급 권한 — 서버 can_manage_pos 와 같은 선'
     await bootOwner(page, { viewport: { width: 1440, height: 900 }, appSettings: IDENTITY_ON });
     const opened = await openVoucherPane(page);
     expect(opened).toBe(true);
-    // 종전 '업주 전용' 배지는 서버(공동운영자 포함)와 어긋난 문구였다.
-    await expect(page.getByText('발급 · 업주 전용', { exact: false }),
+    // 종전 '업주 전용' 배지는 서버(공동운영자 포함)와 어긋난 문구였다 — 전송 카드(voucher-issue)가
+    // 권한 없음(!canIssue) 분기에서만 그리는 그 배지를 겨눈다.
+    // ⚠ 2026-09-29 용어 통일(발급→전송) 뒤 화면에는 '업주 전용' 이 들어간 **정당한** 문구가 둘 더
+    //   생겼다(보유자 현황·통계 배지, 삭제·전송취소 안내) — 전역 텍스트로 재면 이 검사가 그 둘에 걸려
+    //   거짓 실패한다(2026-09-29 PR #44 CI 실측). testid 로 좁혀서 이 단언이 재는 배지 하나만 본다.
+    await expect(page.getByTestId('voucher-issue-owner-badge'),
       "'업주 전용' 배지가 남아 있다 — 서버는 승인 공동운영자도 허용한다").toHaveCount(0);
     // 오너 2026-09-24: 제목 옆 '업주·공동운영자' 라벨은 PC 에서도 뺐다 — 범위 고지는 펼친 안의 안내 박스가 맡는다.
     const hdr = page.getByTestId('voucher-issue-head');
     await expect(hdr).toBeVisible({ timeout: 15_000 });
     await expect(hdr.getByText(/업주\s*·\s*공동운영자/), '제목 옆 라벨이 PC 에 남아 있다').toHaveCount(0);
-    await expect(page.getByTestId('voucher-issue-scope'), '발급 범위를 말하는 안내가 없다').toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('voucher-issue-scope'), '전송 범위를 말하는 안내가 없다').toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('voucher-issue-scope'), '안내가 서버 범위(승인 공동운영자 포함)를 말하지 않는다').toHaveText(/업주\s*·\s*공동운영자/);
   });
 });

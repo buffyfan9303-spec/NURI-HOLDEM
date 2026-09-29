@@ -135,8 +135,8 @@ test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전�
   await page.locator('header').getByRole('button', { name: '이용권 · 출석', exact: true }).click();
 
 
-  const card = page.locator('section').filter({ hasText: '수동으로 보내기' }).first();
-  await expect(card, '수동 보내기 카드가 없다').toBeVisible({ timeout: 10_000 });
+  const card = page.getByTestId('voucher-manual-card');
+  await expect(card, '수동 사용 카드가 없다').toBeVisible({ timeout: 10_000 });
   // ① 보유 매장만 — 목록 행이 정확히 하나(보유한 매장 A)
   const rowBtns = card.getByRole('button');
   await expect(rowBtns).toHaveCount(1);
@@ -144,12 +144,12 @@ test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전�
   await expect(rowBtns.first()).toContainText('5');
 
   await rowBtns.first().click();
-  const sheet = page.getByRole('dialog', { name: '이용권 보내기' });
+  const sheet = page.getByTestId('voucher-send-sheet');
   await expect(sheet).toBeVisible();
 
   // ② 장수 — 3장으로
   await sheet.getByRole('button', { name: '3T', exact: true }).click();
-  await expect(sheet.getByLabel('보낼 수량')).toHaveValue('3');
+  await expect(sheet.getByLabel('사용할 수량')).toHaveValue('3');
   await sheet.getByRole('button', { name: '다음' }).click();
   const phone = sheet.getByLabel('업주 전화번호');
   await phone.click();
@@ -166,9 +166,9 @@ test('🔴 수동 보내기 — 보유 매장만 · 장수 선택 · 체크 전�
   // ③ 더블체크 — 체크 전에는 못 보낸다
   const send = sheet.getByTestId('voucher-send-confirm');
   await expect(send).toBeVisible({ timeout: 8_000 });
-  await expect(send, '체크도 안 했는데 보내기가 열려 있다').toBeDisabled();
+  await expect(send, '체크도 안 했는데 사용이 열려 있다').toBeDisabled();
   await expect(sheet).toContainText('3T');
-  await expect(sheet, '보낸 뒤 남는 장수를 말해야 한다').toContainText('2T');
+  await expect(sheet, '사용한 뒤 남는 장수를 말해야 한다').toContainText('2T');
   await sheet.locator('input[type="checkbox"]').check();
   await expect(send).toBeEnabled();
 

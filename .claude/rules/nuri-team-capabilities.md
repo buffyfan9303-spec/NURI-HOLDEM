@@ -1,26 +1,33 @@
-# NURI 팀·모델 라우팅 정본 — 2026-09-21 개편
+# NURI 팀·모델 라우팅 정본 — 2026-09-29 개편(Sonnet 5.5 편입)
 
-이 파일이 **모델 배정과 팀 운영의 단일 정본**이다. 다른 문서(`AGENTS.md`, `CLAUDE.md`,
-`.claude/skills/nuri-capability-gate/SKILL.md`)는 여기를 가리키기만 한다. 수치를 베껴 두지 마라 — 두 벌이 되면 어긋난다.
+> 2026-09-29 오너: "금일자로 Sonnet 5.5 가 생겼다 — 포함해서 팀을 새로 짜라. Fable 사용량과 나머지의 비율은 지금이 제일 좋다."
+> → **Sonnet 5 자리만 Sonnet 5.5 로 올렸다.** Opus 5.5 배정·Fable 조건(§3)·Haiku 수집 역할은 그대로다(비율 유지).
+> 실측: 하위 에이전트를 별칭 `sonnet` 으로 생성 → 세션 로그 `"model":"claude-sonnet-5-5"` (2026-09-29, 스스로 말한 이름이 아니라 로그 필드).
+> 정의에 `claude-sonnet-5` 를 **직접 적은 역할은 여전히 Sonnet 5** 로 돌았다 — 그래서 정의의 ID 를 바꿨다. 이전 판: 2026-09-23.
+
+이 파일이 **모델 배정과 팀 운영의 단일 정본**이다. `AGENTS.md`와
+`.claude/skills/nuri-capability-gate/SKILL.md`에는 아직 `Opus 5`라는 이전 요약이 남아 있다(2026-09-23 확인).
+충돌할 때는 이 정본을 따르고, 해당 파일의 정합성 수정은 그 파일의 편집 범위가 지정될 때 처리한다.
+수치를 베껴 두지 마라 — 두 벌이 되면 어긋난다.
 
 > 이전 정책 중 **폐기된 것**: 일괄 Fable 기본 배정(reviewer 3역할), "3회차에 Fable 승격".
 > 원문은 `docs/TEAM-KNOWLEDGE.md` 의 historical 표와 백업에 보존돼 있다. 되살리지 마라.
 
 ## 1. 역할과 기본 모델 (11개 — 이름은 바꾸지 않는다)
 
-| 역할 | 기본 모델 | 하는 일 | 더 높은 모델로 올리는 경계 |
+| 역할 | 기본 모델 | 하는 일 | 작업별 기준 |
 |---|---|---|---|
-| `nuri-lead` | `claude-opus-5` | 배정·편집권·연동 계약·최종 판정·구성 개편 | 상충 증거와 설계 결정만 effort 를 올린다 |
-| `Explore` | `haiku` | 파일·caller·정의 위치를 `file:line` 으로 반환 | 결론을 내리지 않는다. 담당에게 넘긴다 |
-| `capability-steward` | `haiku` | 파일·해시·기억 인벤토리, 도구 상태 구분 | 채택·보안·삭제 판단은 리드/critical |
-| `home-team` | `claude-sonnet-5` | 홈·셸·`App.tsx`·`index.css`·공용 atoms | 모션 첫 재발, lazy/keep-alive/scroll/stacking, 인증·QR dispatch → **Opus 5** |
-| `community-team` | `claude-sonnet-5` | 게시글·댓글·이벤트 진입·그룹·외치기 | 권한·제재·광고 과금·실시간 경합 → **Opus 5** |
-| `store-team` | `claude-opus-5` | 매장→포스터→장부→클락→순위→정산, 이용권·QR | 기본이 Opus. API·상태를 안 바꾸는 단순 정렬/문구만 Sonnet 으로 따로 |
-| `gto-team` | `claude-opus-5` | GTO/SPOT 계산 계약·레인지·Nash·훈련 | 계산·수렴·수학은 Opus 유지. 문구·아이콘만 Sonnet |
-| `design-reviewer` | `claude-opus-5` | 실화면·DOM·터치·첫/중간/정착 프레임 (읽기 전용) | 두 검토자 판정이 갈리면 리드에게 Fable 자문 요청 |
-| `root-cause-debugger` | `claude-opus-5` | 재발·경합·성능·브라우저 차이 (읽기 전용) | 독립 Opus 도 해소 못 한 관찰만 Fable |
-| `critical-reviewer` | `claude-opus-5` | 서버 권한·매장 경계·수량 불변식·GTO 독립 기준 (읽기 전용) | 영향 큰 미해결 결론에서 기준 충돌 시 **Fable 우선 사용처** |
-| `verifier` | `claude-sonnet-5` | diff·명령·종료 코드·산출물·음성 대조 확인 | 권한·금액·계산의 정오는 혼자 승인하지 않고 critical 에 넘긴다 |
+| `nuri-lead` | `claude-opus-5-5` | 배정·편집권·생산자→소비자 계약·최종 판정·구성 개편 | 상충 증거와 설계 결정만 effort 를 올린다 |
+| `Explore` | `claude-haiku-4-5-20251001` | 파일·caller·정의 위치를 `file:line` 으로 반환 | 결론을 내리지 않는다. 담당에게 넘긴다 |
+| `capability-steward` | `claude-haiku-4-5-20251001` | 파일·해시·기억 인벤토리, 도구 상태 구분 | 채택·보안·삭제 판단은 리드/critical |
+| `home-team` | `claude-opus-5-5` | 홈·셸·`App.tsx`·`index.css`·공용 atoms | 새 디자인·모션 구현과 재발은 `high`; 명확한 비시각 작업만 별도 Sonnet 5.5/medium |
+| `community-team` | `claude-opus-5-5` | 게시글·댓글·이벤트 진입·그룹·외치기 | 상세·그룹 UI·모션과 재발은 `high`; 명확한 비시각 작업만 별도 Sonnet 5.5/medium |
+| `store-team` | `claude-opus-5-5` | 매장→포스터→장부→클락→순위→정산, 이용권·QR | 기본이 Opus. API·상태를 안 바꾸는 단순 정렬/문구만 Sonnet 으로 따로 |
+| `gto-team` | `claude-opus-5-5` | GTO/SPOT 계산·직렬화·저장·공유 계약, 레인지·Nash | 계산·수렴·수학은 Opus 유지. 문구·아이콘만 Sonnet |
+| `design-reviewer` | `claude-opus-5-5` | 실화면·DOM·터치·첫/중간/정착 프레임 (읽기 전용) | 두 검토자 판정이 갈리면 리드에게 Fable 자문 요청 |
+| `root-cause-debugger` | `claude-opus-5-5` | 재발·경합·성능·브라우저 차이 (읽기 전용) | 독립 Opus 도 해소 못 한 관찰만 Fable |
+| `critical-reviewer` | `claude-opus-5-5` | 서버 권한·매장 경계·상태 불변식·GTO 독립 기준 (읽기 전용) | 영향 큰 미해결 결론에서 기준 충돌 시 Fable 자문 요청 |
+| `verifier` | `claude-sonnet-5-5` | diff·명령·종료 코드·산출물·연동·음성 대조 확인 | 권한·상태·계산의 정오는 혼자 승인하지 않고 critical 에 넘긴다 |
 
 `memory: local` — `Explore` 를 뺀 **10개 전부**. 경로는 `.claude/agent-memory-local/<역할>/`.
 정의의 `name` 을 바꾸면 기억 경로가 끊긴다. **이름은 고정이다.**
@@ -31,16 +38,28 @@
 
 | 이번에 맡길 일 | 모델 | 끝내는 조건 |
 |---|---|---|
-| 경로·호출부·기억 목록, 해시 비교, 도구 존재 확인 | `haiku` | 사실과 원천만 반환. 충돌의 채택 판단은 Opus 에 인계 |
-| 원인이 확정된 일반 구현, 단순 정렬·문구, 테스트 실행·결과 수집 | `claude-sonnet-5` | 기존 계약 유지하며 한정된 파일만. 새 권한·수량·수학·경합 판단이 생기면 **편집 전에** Opus 에 인계 |
-| 연동 설계, 모션·브라우저 재발, 서버 경계, 상태·계산 불변식, 중요한 디자인 판정 | `claude-opus-5` | 증거와 반례로 판정. 범위를 다시 쪼갤 수 있으면 이후 정형 구현은 Sonnet 에 넘긴다 |
+| 경로·호출부·기억 목록, 해시 비교, 도구 존재 확인 | `claude-haiku-4-5-20251001` | 사실과 원천만 반환. 충돌의 채택 판단은 Opus 에 인계 |
+| 원인이 확정된 일반 구현, 단순 정렬·문구, 테스트 실행·결과 수집 | `claude-sonnet-5-5` | 기존 계약 유지하며 한정된 파일만. 새 권한·수량·수학·경합 판단이 생기면 **편집 전에** Opus 에 인계 |
+| 새 시각 설계·모션 구현, 두 화면·도메인 이상의 연동, 모션·브라우저 재발, 서버 경계, 상태·계산 불변식 | `claude-opus-5-5` | 시각·모션은 구현도 `high`; 공용 소비처와 전환 상태를 확인한다. 범위가 확정된 비시각 구현만 Sonnet 에 넘긴다 |
 | §3 조건을 만족하는 **중대한 미해결 쟁점**의 추가 독립 검토 | `claude-fable-5-1` | 좁은 쟁점과 관측 증거로 결론. 광범위 탐색·일괄 구현·등록 시험에 쓰지 않는다 |
 
-예: 내 매장 글자 중앙정렬은 `store-team + Sonnet`, 이용권 수량·수신자·중복 지급 판정은 `store-team + Opus`.
-GTO 라벨 정리는 Sonnet, 계산 오라클 범위 판정은 Opus.
+예: 내 매장 글자 중앙정렬은 `store-team + Sonnet`, 무료 QR이라도 매장 A→B 전환 중 늦은 응답이 출석·장부에 남는 문제는 `store-team + Opus`다.
+GTO 라벨 정리는 Sonnet, 계산·저장·공유 간 불변식 판정은 Opus. **금액 단어만으로 Fable 을 배정하지 않는다.**
 
 **단순 구현까지 Opus 로 몰지 않는다.** 실행 중인 팀원의 모델이 작업 종류에 따라 자동으로 바뀐다고 가정하지 않는다 —
 바꾸려면 체크포인트를 받고 **다음 위임에서 새로 생성**한다.
+
+### 시각·모션은 구현과 검증을 함께 상향한다
+
+새 레이아웃·반응형·공용 컴포넌트·전환/제스처는 실제 편집자를 `claude-opus-5-5`/`high` 로 배정한다.
+`home-team`·`community-team` 의 subagent 기본값도 이 수준이다. `store-team`·`gto-team` 의 UI 작업은
+네이티브 teammate 의 적용 effort 를 `high` 로 확인하거나, `design-reviewer` 에 단독 편집권을 명시해 구현시킨다.
+후자의 독립 시각 검토는 **다른 Opus 세션**이 맡는다. 검토자가 구현까지 한 결과를 스스로 승인하지 않는다.
+
+편집 전 바뀌는 selector·atom·전환 상태의 **모든 소비 화면**을 찾고, 수정 화면과 다른 도메인 소비 화면의
+진입→중간→정착→뒤로/재방문을 실제 DOM·computed style·터치 조건으로 확인한다.
+첫 재발부터 `root-cause-debugger` 가 공통 원인과 이전 실패 입력을 찾는다. `design-reviewer` 는
+영향 화면을 독립 검토하고, 실행하지 않은 화면은 `NOT_RUN` 으로 적는다. 모델 상향만으로 PASS 를 선언하지 않는다.
 
 ## 3. `claude-fable-5-1` — 희소 자원이다. 리드만 부른다
 
@@ -49,7 +68,7 @@ Fable 은 총 한도를 공유하며 별도 무료 잔량이 아니다. 잔여�
 
 아래 셋 중 **하나라도 해당할 때만** 부른다. (독립 검증 자체는 늘 하고, Fable 만 조건부다.)
 
-1. 이용권·장부·권한·GTO 의 중요한 결론에 **독립 기준이 충돌**하고, 잘못 채택하면 데이터·권한 사고가 난다.
+1. 권한·수량·계산·교차 기능의 중요한 결론에 **독립 기준이 충돌**하고, 잘못 채택하면 데이터·권한·기능 사고가 난다.
 2. 같은 결함이 **재발**했고 Opus 의 재현·가설·대조 실험 뒤에도 **설명되지 않는 관찰**이 남았다.
 3. 중요한 시각 판정을 실제 화면과 측정으로도 **두 독립 검토자가 다르게** 판정했다.
 
@@ -60,9 +79,46 @@ Fable 응답은 실행 테스트·서버 검증·영상 증거를 **대신하지
 🔴 **자료가 없는 문제는 모델을 올려도 해결되지 않는다.** S26 실기기가 없거나 다인 Nash 의 독립 오라클이
 없으면 `NOT_RUN`/`BLOCKED` 를 유지하고 근거를 모은다.
 
-한도 부족이나 추가 크레딧 화면이 나오면 **유료 경로를 끝내고** 체크포인트를 Opus 5 로 넘긴다.
+한도 부족이나 추가 크레딧 화면이 나오면 **유료 경로를 끝내고** 체크포인트를 Opus 5.5 로 넘긴다.
 Opus 도 못 쓰면 상태를 보고하고 결과를 저장한다. **자동 계정 전환·크레딧 구매·반복 호출은 하지 않는다.**
 `ANTHROPIC_API_KEY` 는 값을 출력하지 말고 존재 여부만 확인한다(2026-09-21 실측: 미설정).
+
+Max 20x 는 무제한이 아니다. 세션 한도는 5시간마다 갱신되고, 모든 모델이 주간 한도를 공유한다.
+Fable 5.1 은 Max 주간 한도의 최대 50%까지 포함 사용 가능하지만 **추가 총량이 아니며** 더 빨리 소모한다.
+호출 전 실제 Usage 화면의 잔량을 확인한다. [Max 한도](https://support.claude.com/en/articles/11049741-what-is-the-max-plan) ·
+[Fable 한도](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan).
+로컬 CLI 는 공식 `claude update`로 2.1.270→2.1.280 갱신했고(`claude --version` 확인),
+그 직후 `claude auth status`가 `loggedIn=false`다. 업데이트 전에는 `claude.ai` Max 인증이었다.
+20x 세부 등급과 모델별 실호출 가능 여부는 미검증이다. 로그인 복구 전 팀 실행을 PASS 로 쓰지 않는다.
+
+### 노력 수준도 작업의 증거로 정한다
+
+Opus 5.5 의 공식 기본값은 `medium`이다. 높은 수준일수록 항상 정확하다고 가정하지 않는다.
+Anthropic 은 `max`에 수확 체감과 과잉 사고 가능성이 있다고 명시한다.
+`ultracode`는 모델 노력 단계가 아니라 **`xhigh` + 동적 워크플로 조정**이다.
+[Claude Code effort 설정](https://code.claude.com/docs/en/model-config) ·
+[Opus 5.5 발표](https://www.anthropic.com/claude-opus-5-5).
+
+| 수준 | 이 저장소의 사용 조건 | 종료·승격 신호 |
+|---|---|---|
+| `low` | 지원 모델의 짧고 범위가 확정된 기계 작업 | 판단이 필요하면 `medium`; Haiku 4.5 는 공식 지원 목록에 없어 `effort` 를 설정하지 않는다 |
+| `medium` | 일반 구현·정형 검증, Opus 5.5 리드의 기본 계획 | 권한·계산·두 경계 이상의 상태 연결 또는 첫 재발이면 `high` |
+| `high` | 새 디자인·모션의 실제 구현과 독립 시각 검토, 교차 화면/서버 계약, 재발의 첫 반증 실험 | 가설을 반증해도 관측이 남는 경합·대형 마이그레이션이면 `xhigh` |
+| `xhigh` | 원인 불명 race, 세 축(계정·대상·순서) 충돌, 다중 모듈 이관의 좁혀진 어려운 판단 | 한 쟁점·관측·중단 조건을 정하고 사용; 증거 부족이면 `NOT_RUN` |
+| `max` | `xhigh` 후에도 영향 큰 판정이 풀리지 않아 더 깊은 한 차례가 필요한 경우 | 세션 한정. 동일 자료 반복 호출 금지; 실측 개선이 없으면 중단 |
+| `ultracode` | 소유권·의존성·종료 조건을 선언한 장기 이관에서 동적 팀 조정이 실제로 필요한 경우 | 팀 사용량이 커지므로 평시 기본값 금지; 동일 checkout 단독 편집 유지 |
+
+역할 frontmatter 의 기본 effort 는 `nuri-lead`·`store-team`·`gto-team`·`verifier`는 `medium`,
+`home-team`·`community-team`·`design-reviewer`·`root-cause-debugger`·`critical-reviewer`는 `high`다. Haiku 역할은 effort 필드를 두지 않는다.
+`xhigh`/`max`/`ultracode`를 **상시 frontmatter 나 전역 환경변수에 박지 않는다**. 쟁점마다 `/effort` 또는
+`--effort` 로 세션 범위를 지정하고 화면의 적용 수준을 확인한다. `max`는 기본 설정 파일의 영구 값으로 저장되지 않는다.
+
+🔴 **subagent 와 네이티브 teammate 의 effort 적용은 다르다.** subagent frontmatter 의 `effort`는 세션 수준보다 우선하지만,
+네이티브 teammate 는 리드의 effort 를 물려받는다. 팀에서는 생성 후 각 팀원의 실제 수준을 확인하고,
+필요하면 해당 팀원을 보고 있는 상태에서 `/effort`를 조정한다. `/tasks`와 세션 헤더에 나타난 모델·effort를 기록한다.
+`CLAUDE_CODE_EFFORT_LEVEL`은 frontmatter보다 우선하므로 전역 강제 설정 여부를 먼저 확인한다.
+미지원 단계나 조직 상한은 낮은 단계로 조정될 수 있다. `ultrathink` 문구는 한 턴의 심화 요청일 뿐 API effort 값을 바꾸지 않는다.
+[Subagent effort](https://code.claude.com/docs/en/sub-agents) · [Agent team effort](https://code.claude.com/docs/en/agent-teams).
 
 ## 4. 팀 실행
 
@@ -73,15 +129,28 @@ Opus 도 못 쓰면 상태를 보고하고 결과를 저장한다. **자동 계�
 - 같은 checkout 의 편집은 **직렬**, 읽기 전용 조사만 병렬. 파일별 편집자는 정확히 한 명.
 - 정의를 고쳐도 **이미 실행 중인 팀원의 프롬프트·모델은 바뀌지 않는다.** 새로 생성해야 반영된다.
 
+### 교차 기능의 종료 계약
+
+리드는 매 요구에 `사용자 동작 → 작성자/서버 확정 → 이벤트·재조회 → 소비 화면 → 권한·매장 → 실패/재시도`를 한 줄로 적는다.
+해당 없는 칸은 이유와 함께 표시한다. 생산자와 소비자가 다른 도메인이면 소비자 담당이 **읽기 전용**으로 문맥·표시·새로고침 계약을 확인하고,
+한 명의 편집자만 수정한다. verifier 는 최종 화면 또는 데이터에서 역방향으로 검증한다.
+예: 포스터→일정→장부→클락, SPOT 저장→커뮤니티 피드→상세→재열기.
+
+같은 결함이 처음 재발하면 root-cause-debugger 가 공통 함수의 모든 caller·소비처와 이전 수정의 실패 이유를 찾는다.
+이전 실패 입력으로 **이전 상태 FAIL·수정 후 PASS**를 확인하기 전에는 완료하지 않는다.
+0개 수집·전부 skip·엉뚱한 요소 측정으로 거짓 PASS가 아닌지도 verifier 가 독립 확인한다.
+상세 실패 유형은 `docs/HANDOVER-2026-09-23.md` §3이 정본이다.
+
 ### 위임 프롬프트 뼈대
 
 ```text
 너는 <역할명>이다. 이번 요구 키는 <문서 경로#ID>다.
-요청 모델은 <모델 ID>, 이유는 <위험/작업 내용>다. 실제 모델은 리드가 실행 기록으로 확인한다.
+요청 모델·effort 는 <모델 ID/수준>, 이유는 <위험/연결·재발 내용>다. 실제 적용값은 리드가 실행 기록으로 확인한다.
 먼저 <절대경로의 자기 MEMORY.md>, docs/TEAM-KNOWLEDGE.md 의 <관련 교훈 ID>,
 docs/HANDOFF.md 의 <해당 절>, <요구 원문>, <필요 SKILL.md>를 읽어라.
 코드베이스에 다른 작업자가 있다. 소유 파일은 <목록>, 나머지는 보고만 하고 되돌리지 마라.
-소비자는 <역할>, 독립 검증자는 <역할>이다. 내 가설을 전제하지 말고 반증해라.
+생산자→서버→이벤트/재조회→소비 화면은 <경로>다. 소비자는 <역할>, 독립 검증자는 <역할>이다.
+내 가설을 전제하지 말고 이전 실패 입력과 연동 경계를 반증해라.
 완료 조건은 <관측 가능한 결과>, 필수 반례는 <한두 개>, 미검증 경계는 <실기기/서버 등>다.
 보고는 요구 키·원천 경로·실제 diff·명령/종료 코드·PASS/FAIL/NOT_RUN·다음 한 단계로 한다.
 새 교훈은 증거와 원문 링크를 붙여 자기 기억에 남기고, 정책 변경은 리드에게 제안한다.
@@ -98,9 +167,10 @@ docs/HANDOFF.md 의 <해당 절>, <요구 원문>, <필요 SKILL.md>를 읽어�
   · 2026-09-22 실측: `.codex/config.toml`(오너 미커밋 변경)에 `CLAUDE_CODE_SUBAGENT_MODEL = "sonnet"` 이 있고,
     `..._FORCE` 는 **미설정**이다. 그러므로 "모든 하위 에이전트가 Sonnet 으로 강등된다" 는 서술은 **사실이 아니다**.
   · 이 구분을 설정 이름만 보고 판단하지 마라 — 실제 모델은 세션 로그의 `model` 필드로 관찰한다.
-- 공급자 대체·사용 불가·추가 결제 요구는 **숨기거나 자동 동의하지 않는다.** 오너에게 알리고 Opus 5 로 계속한다.
-- 지원되지 않는 모델 ID·effort 를 만들어 내지 않는다. 확인된 ID:
-  `claude-opus-5` · `claude-sonnet-5` · `claude-fable-5-1` · `haiku`(Haiku 4.5).
+- 공급자 대체·사용 불가·추가 결제 요구는 **숨기거나 자동 동의하지 않는다.** 오너에게 알리고 Opus 5.5 로 계속한다.
+- 지원되지 않는 모델 ID·effort 를 만들어 내지 않는다. 공식 문서·실행 로그에서 확인한 ID:
+  `claude-opus-5-5` · `claude-sonnet-5-5`(2026-09-29 로그 관찰) · `claude-sonnet-5`(이전 판, 대체용) · `claude-fable-5-1` · `claude-haiku-4-5-20251001`.
+  계정별 제공 여부는 새 세션의 `/model`·`/tasks` 로 확인한다.
 
 ## 6. 역할이 하지 않는 것
 

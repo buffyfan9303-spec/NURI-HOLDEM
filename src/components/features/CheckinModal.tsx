@@ -122,7 +122,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
       } else {
         // Q2 — 요청 장수와 실제 발급 수량이 다르면 자동 재시도하지 않는다(이미 서버에서 발급이 일어난
         //   뒤일 수 있어, 다시 부르면 중복 발급이 된다). 목록을 다시 불러 실제 상태를 보여준다.
-        toast.show(`발급 결과 확인 필요 — 요청 ${count}장 · 실제 ${issued}장. 목록을 다시 확인하세요`, 'error');
+        toast.show(`전송 결과 확인 필요 — 요청 ${count}장 · 실제 ${issued}장. 목록을 다시 확인하세요`, 'error');
         reload();
       }
       setSendTo(null); setConfirm(null); setCustomCount('');
@@ -203,7 +203,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
                     확인 내용이 바뀌거나(다른 장수 재선택) 매장이 바뀌면(위 clear effect) 이 단계 자체가 사라진다. */}
                 {canIssue && confirm && confirm.c.id === c.id && (
                   <div className="mt-1.5 flex w-full flex-col gap-1 rounded-input border border-accent-400/40 bg-accent-300/6 p-2 text-2xs">
-                    <p className="font-bold text-ink-secondary">발급 확인</p>
+                    <p className="font-bold text-ink-secondary">전송 확인</p>
                     <p>매장: <b className="text-ink-primary">{venueName ?? '우리 매장'}</b></p>
                     <p>받는 회원: <b className="text-ink-primary">{c.displayName ?? '회원'}</b> · ID …{c.userId.slice(-6)}</p>
                     <p>장수: <b className="text-ink-primary">{confirm.count}장</b></p>
@@ -214,7 +214,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
                         className="min-h-[44px] flex-1 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary">취소</button>
                       <button type="button" disabled={sendBusy} onClick={() => send(c, confirm.count)}
                         className="min-h-[44px] flex-1 rounded-input bg-accent-300 text-2xs font-bold text-white disabled:opacity-50">
-                        {sendBusy ? '보내는 중…' : `${confirm.count}장 발급`}
+                        {sendBusy ? '전송 중…' : `${confirm.count}장 전송`}
                       </button>
                     </div>
                   </div>
@@ -232,7 +232,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
                   (pg_proc 직접 조회, 2026-09-20). 게다가 같은 함수가 `venues.voucher_issue_approved` 도 요구한다.
                   오너 결정(2026-09-20): "공동운영자에게 발급 줘. UI도 이에 맞춰서." → 문구를 서버에 맞춘다.
                   ⚠ 아래 '손님끼리 주고받을 수 없다 / 금전적 가치 없음' 은 **법적 고지라 지우지 마라.** */}
-              매장이용권 발급은 <b className="text-ink-secondary">운영자 승인을 받은 매장의 업주·공동운영자만 가능</b>합니다.
+              매장이용권 전송은 <b className="text-ink-secondary">운영자 승인을 받은 매장의 업주·공동운영자만 가능</b>합니다.
               손님끼리 주고받을 수 없고, <b className="text-ink-secondary">금전적 가치가 없습니다</b>.
             </p>
           )}

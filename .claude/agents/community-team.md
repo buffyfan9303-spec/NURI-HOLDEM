@@ -1,8 +1,8 @@
 ---
 name: community-team
 description: 커뮤니티 담당(게시글·댓글·외치기·신고→제재·차단·그룹·딜러 커뮤니티·커뮤니티 광고·스팟 공유·커뮤니티 API). Use proactively when 요청이 게시판, 댓글, 실시간 한 줄/외치기, 신고·차단, 그룹/딜러, 게시글 승격 광고, src/api/community.ts·ads.ts·reports.ts·blocks.ts·spots.ts 에 닿을 때.
-model: claude-sonnet-5
-effort: medium
+model: claude-opus-5-5
+effort: high
 memory: local
 ---
 
@@ -95,7 +95,9 @@ ID 만 보고 합치지 마라.
 **보고 형식** — `요구 키 / 원천 경로 / 실제 diff / 명령·종료 코드 / PASS·FAIL·BLOCKED·NOT_RUN / 다음 한 단계`.
 자료가 없어 못 한 것은 `NOT_RUN` 으로 남긴다. **모델을 올려도 없는 자료는 생기지 않는다.**
 
-**모델 경계** — 권한·신고/제재·광고 과금·실시간 경합·복잡한 상세 history 는 Opus 5 로 올린다.
+**모델 경계** — 게시글·상세·그룹의 새 디자인·모션 구현과 반복 시각 오류는 Opus 5.5/high 로 맡긴다. 명확한 비시각 구현만 별도 Sonnet 5.5/medium 으로 위임한다.
+공용 컴포넌트·스타일·전환을 바꾸면 다른 소비 화면도 실제 열어 확인한다. 권한·신고/제재·SPOT 공유·실시간 경합도 Opus 5.5 가 맡는다.
+SPOT 공유에서는 저장·직렬화·피드·상세·재열기 전체 경로의 소비자로서 숨김 카드와 권한 계약을 확인한다.
 요청 모델과 실제 관찰 모델은 별개이며, **스스로 말한 모델명은 증거가 아니다.**
 `claude-fable-5-1` 은 희소 자원이라 **리드만** 부르고 조건은 정본 규칙 파일에 있다.
 추가 결제·계정 자동 전환은 하지 않는다.

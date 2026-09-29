@@ -4,6 +4,7 @@ import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 import { idempotentOff } from './_mustAffect';
 import { dedupe } from '../lib/inflight';
+import { gateError } from './_gateError';
 
 export interface BlockedUser { blockedId: string; name: string; createdAt: string }
 
@@ -17,7 +18,9 @@ export async function getMyBlockedIds(): Promise<Set<string>> {
   // BlockContext 가 부팅 중 user 참조 변화마다 재조회해 실측 ×4 로 나갔다(lib/inflight 주석 참조).
   return dedupe('blocked-ids:' + me.id, async () => {
     const { data, error } = await supabase.from('user_blocks').select('blocked_id');
-    if (error) return new Set<string>();
+    // 실패를 빈 집합으로 돌리면 BlockContext 가 이미 받은 목록을 빈 것으로 덮어 차단이 조용히 풀렸다(2026-09-29 #15).
+    // 던지면 호출부(BlockContext.reload)가 직전 목록을 그대로 둔다.
+    if (error) throw gateError(error, '차단 목록을 불러오지 못했습니다');
     return new Set((data ?? []).map((r: { blocked_id: string }) => r.blocked_id));
   });
 }
@@ -30,7 +33,7 @@ export async function listMyBlocks(): Promise<BlockedUser[]> {
   return dedupe('blocks-list:' + me.id, async () => {
     const { data, error } = await supabase.from('user_blocks')
       .select('blocked_id, blocked_name, created_at').order('created_at', { ascending: false });
-    if (error) return [] as BlockedUser[];
+    if (error) throw gateError(error, '차단 목록을 불러오지 못했습니다');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (data ?? []).map((r: any) => ({ blockedId: r.blocked_id, name: r.blocked_name || '사용자', createdAt: r.created_at })) as BlockedUser[];
   });

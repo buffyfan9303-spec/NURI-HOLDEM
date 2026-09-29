@@ -924,7 +924,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                 </span>
               </span>
               <span className="block">
-                <span className="block text-2xs text-ink-muted">회수 이용권</span>
+                <span data-testid="dash-kpi-ticket" className="block text-2xs text-ink-muted">사용 이용권</span>
                 {/* 2026-09-11: '장' 은 통계·정산의 'T' 와 같은 수를 다른 이름으로 불러 헷갈렸다 — 단위를 T 로 통일. */}
                 <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-fuchsia">
                   {fmtT(day.ticket)}<span className="ml-1 text-sm font-semibold text-ink-muted">T</span>
@@ -1465,10 +1465,10 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                   {/* 🔴 2026-09-20 — 발급/열람 분리를 RegularsModal·CheckinModal 에는 적용했는데 **여기를 놓쳤다**.
                       열람권만 가진 직원에게 '보내기' 가 보이고, 눌러도 발급 폼이 없는 모달만 열린다. */}
                   {caps.issueVoucher && (
-                    <button type="button" title={`${r.name}님에게 매장이용권 보내기`}
+                    <button type="button" title={`${r.name}님에게 매장이용권 전송`}
                       onClick={() => { setVoucherPrefill(r.name); setVoucherOpen(true); }}
                       className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-accent-300/10 px-2 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 active:opacity-80"
-                    ><Icon name="gift" size={11} className="shrink-0" />보내기</button>
+                    ><Icon name="gift" size={11} className="shrink-0" />전송</button>
                   )}
                 </li>
               ))}
@@ -1516,9 +1516,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           )}
         </DashCard>
 
-        {/* 매장이용권(회수 티켓) */}
+        {/* 매장이용권(사용 이용권) */}
         <DashCard show={moreOpen && caps.voucher} title="매장이용권" onClick={() => setVoucherOpen(true)}
-          badge={<span className="text-2xs font-bold text-ink-muted">발급·관리 →</span>}>
+          badge={<span className="text-2xs font-bold text-ink-muted">전송·관리 →</span>}>
           {loading ? <Skeleton /> : (
             <>
               {/* 7일 두 칸만 14일 range 에서 온다 — 그 조회가 죽으면 '0장'이 아니라 '—'다(F14).
@@ -1528,16 +1528,16 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                     이 카드는 **업주 집계 화면**이라 통계·정산(`1T = 1만원`)과 같은 단위를 쓴다.
                     ⚠ 손님 지갑(MyVoucherSheet·EventPage)의 '장' 은 **그대로 둔다** —
                       "몇 장을 보낼까요?"·"한 장 줄이기" 처럼 세는 말이라 T 로 바꾸면 문장이 깨진다. */}
-                <Stat label="7일 발행" value={sentBad ? '—' : `${weekVoucher}`} unit={sentBad ? '' : 'T'} />
-                <Stat label="오늘 발행" value={sentBad ? '—' : `${todayVoucher}`} unit={sentBad ? '' : 'T'} />
+                <Stat label="7일 전송" value={sentBad ? '—' : `${weekVoucher}`} unit={sentBad ? '' : '장'} />
+                <Stat label="오늘 전송" value={sentBad ? '—' : `${todayVoucher}`} unit={sentBad ? '' : '장'} />
                 {/* 2026-09-18: 위 KPI(:843)가 같은 수(fin.ticket)를 'T' 로 부르는데 여기만 '장' 이었다 —
                     한 화면에서 같은 숫자가 '8T' 와 '8장' 으로 두 번 보였다(PC 전수조사 2026-09-18). */}
-                <Stat label="7일 회수" value={rangeErr ? '—' : fmtT(weekTicket)} unit={rangeErr ? '' : 'T'} />
-                {/* 3-B(2026-09-29) — 위 KPI '회수 이용권'과 같은 범위(오늘 **전 게임**, day). 예전엔 메인 게임만(fin)이라 한 화면에서 두 수가 갈렸다(store-deep D2). */}
-                <Stat label="오늘 회수" value={fmtT(day.ticket)} unit="T" />
+                <Stat label="7일 사용" value={rangeErr ? '—' : fmtT(weekTicket)} unit={rangeErr ? '' : 'T'} />
+                {/* 3-B(2026-09-29) — 위 KPI '사용 이용권'과 같은 범위(오늘 **전 게임**, day). 예전엔 메인 게임만(fin)이라 한 화면에서 두 수가 갈렸다(store-deep D2). */}
+                <Stat label="오늘 사용" value={fmtT(day.ticket)} unit="T" />
               </div>
               {(!!rangeErr || !!sentErr) && <div className="mt-2"><LoadFailRow what="최근 7일 이용권" onRetry={reloadRange} /></div>}
-              <p className="mt-2 t-desc break-keep text-ink-muted">발행 = 장부에 적은 발급·시상 장수 · 회수 = 티켓으로 낸 바인·애드온 금액(T)</p>
+              <p className="mt-2 t-desc break-keep text-ink-muted">전송 = 실제로 보낸 이용권 장수(전송 취소 제외) · 사용 = 이용권으로 낸 바인·애드온 금액(T)</p>
             </>
           )}
         </DashCard>

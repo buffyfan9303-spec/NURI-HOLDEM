@@ -38,7 +38,7 @@ describe('ticketUsedT — 이용권 사용 T 는 한 곳에서만 더한다', ()
     expect(count(L, /t\.ticket \+= ticketUsedT\(f, a\);/), 'customerLedgerTotals(CRM)').toBe(1);
     const D = code('components/features/StoreDashboard.tsx');
     expect(count(D, /weekTicket \+= ticketUsedT\(buyinFinance\(b, s\), addonFinance\(b\)\);/), '대시보드 7일').toBe(1);
-    expect(count(D, /label="오늘 회수" value=\{fmtT\(day\.ticket\)\}/), '대시보드 오늘 = KPI 와 같은 범위(day)').toBe(1);
+    expect(count(D, /label="오늘 사용" value=\{fmtT\(day\.ticket\)\}/), '대시보드 오늘 = KPI 와 같은 범위(day)').toBe(1);
     expect(count(code('components/features/LedgerStatsPanel.tsx'), /ticketPaid: ticketUsedT\(bf, a\) \}/), '통계').toBe(1);
     expect(count(code('components/features/NuriPosLedger.tsx'), /ticketUsedT\(\{ ticketPaid: stats\.ticket \}, stats\.addon\)/), '장부 요약').toBe(1);
     expect(count(code('components/features/LedgerSettlementPanel.tsx'), /ticketUsedT\(\{ ticketPaid: t\.tender\.ticket \/ TICKET_WON \}, t\.addon\)/), '정산 표시').toBe(1);

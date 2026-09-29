@@ -1,7 +1,7 @@
 ---
 name: capability-steward
 description: NURI 작업에 필요한 스킬·플러그인·MCP·커넥터의 설치 및 연결 상태와 실행 증거를 정리하는 팀원. 보안 판단이나 복잡한 결함 수정은 맡지 않는다.
-model: haiku
+model: claude-haiku-4-5-20251001
 memory: local
 tools: Read, Glob, Grep, Bash
 ---

@@ -185,7 +185,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
         </button>
         {onSendVoucher && (
           // 터치 영역 40px 확보(min-h-10) — 라벨은 아이콘만이 아니라 글자도 남긴다(색·아이콘만으로 뜻을 전하지 않는다).
-          <button type="button" onClick={() => onSendVoucher(r.name)} title={`${r.name}님에게 매장이용권 보내기`}
+          <button type="button" onClick={() => onSendVoucher(r.name)} title={`${r.name}님에게 매장이용권 전송`}
             className={`${VOUCHER_BTN_CLS} transition-colors hover:bg-accent-300/20`}>
             <Icon name="gift" size={11} className="shrink-0" />이용권
           </button>
@@ -211,7 +211,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
               <Cell label="완납 누적" v={`${wonToMan(act.amount)}만`} gold />
               <Cell label="완납 객단가" v={act.buyins ? `${wonToMan(Math.round(act.amount / act.buyins))}만` : '-'} />
               <Cell label="미수" v={`${wonToMan(act.unpaid)}만`} />
-              <Cell label="회수 이용권" v={`${Math.round(act.ticket * 10) / 10}T`} />
+              <Cell label="사용 이용권" v={`${Math.round(act.ticket * 10) / 10}T`} />
               <Cell label="가게지원" v={`${act.support}회`} />
             </div>
           )}

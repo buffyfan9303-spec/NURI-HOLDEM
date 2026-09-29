@@ -27,33 +27,35 @@ const src = raw.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
 const ledgerRaw = readFileSync(join(process.cwd(), 'src/api/ledger.ts'), 'utf8');
 const moneyFn = ledgerRaw.slice(ledgerRaw.indexOf('export function ledgerMoney('), ledgerRaw.indexOf('export function ledgerMoney(') + 900);
 const todaySums = () => /const \{ value, unpaid, paid, entry, ticket \} = ledgerMoney\(bs, sx\)/.test(src) && /m\.ticket\s*\+=\s*ticketUsedT\(f, addonFinance\(b\)\)\s*;/.test(moneyFn)
-  && /label="오늘 회수" value=\{fmtT\(day\.ticket\)\}/.test(src);
+  && /label="오늘 사용" value=\{fmtT\(day\.ticket\)\}/.test(src);
 const WEEK = /weekTicket\s*\+=\s*ticketUsedT\(buyinFinance\(b, s\), addonFinance\(b\)\)\s*;/;
 
-describe('회수 이용권 = 티켓으로 낸 바인·애드온 금액(T) 합계', () => {
-  it("'오늘 회수'(day.ticket)가 ticketUsedT 를 **합산**한다 — 건수가 아니다", () => {
-    expect(src, '회수가 다시 건수 세기로 돌아갔다 — 라벨은 T 인데 값이 건수가 된다')
+// 2026-09-29 용어 통일(오너 결정 — 손님→매장='사용', 매장→손님='전송') — 라벨 '회수'→'사용', '발행'→'전송'.
+// 값 표현(ticketUsedT 합산)은 이 커밋에서 바꾸지 않는다. 검사 내용은 그대로, 라벨 문자열만 옮겼다.
+describe('사용 이용권 = 티켓으로 낸 바인·애드온 금액(T) 합계', () => {
+  it("'오늘 사용'(day.ticket)가 ticketUsedT 를 **합산**한다 — 건수가 아니다", () => {
+    expect(src, '사용이 다시 건수 세기로 돌아갔다 — 라벨은 T 인데 값이 건수가 된다')
       .not.toMatch(/ticket\s*\+=\s*f\.ticketPaid\s*>\s*0/);
     expect(moneyFn, 'ledgerMoney 가 건수를 센다').not.toMatch(/ticket\s*\+=\s*f\.ticketPaid\s*>\s*0/);
-    expect(todaySums(), "'오늘 회수' 가 전 게임(day) ticketUsedT 합산(ledgerMoney)이 아니다").toBe(true);
-    expect(src, "'오늘 회수' 가 다시 메인 게임만(fin.ticket)을 본다 — 바로 위 KPI(day.ticket)와 갈린다").not.toMatch(/label="오늘 회수" value=\{fmtT\(fin\.ticket\)\}/);
+    expect(todaySums(), "'오늘 사용' 가 전 게임(day) ticketUsedT 합산(ledgerMoney)이 아니다").toBe(true);
+    expect(src, "'오늘 사용' 가 다시 메인 게임만(fin.ticket)을 본다 — 바로 위 KPI(day.ticket)와 갈린다").not.toMatch(/label="오늘 사용" value=\{fmtT\(fin\.ticket\)\}/);
   });
 
-  it("'7일 회수'(weekTicket)도 같은 척도다 — 한쪽만 바꾸면 화면에서 두 수가 갈린다", () => {
-    expect(src, '7일 회수가 건수 세기로 남아 있다 — 오늘 회수(T)와 척도가 갈린다')
+  it("'7일 사용'(weekTicket)도 같은 척도다 — 한쪽만 바꾸면 화면에서 두 수가 갈린다", () => {
+    expect(src, '7일 사용이 건수 세기로 남아 있다 — 오늘 사용(T)와 척도가 갈린다')
       .not.toMatch(/weekTicket\s*\+=\s*buyinFinance\([^)]*\)\.ticketPaid\s*>\s*0/);
-    expect(src, '7일 회수가 ticketUsedT(바인+애드온) 합산이 아니다').toMatch(WEEK);
+    expect(src, '7일 사용이 ticketUsedT(바인+애드온) 합산이 아니다').toMatch(WEEK);
   });
 
-  it('캡션이 발행·회수가 서로 다른 종류의 수라고 말한다', () => {
-    // '회수 = 티켓 바인 건수' 라는 옛 설명이 남아 있으면 화면이 거짓말을 한다.
-    expect(src, "캡션이 아직 '건수' 라고 말한다").not.toMatch(/회수\s*=\s*티켓 바인 건수/);
-    expect(src, '캡션이 회수의 단위·범위(바인·애드온)를 말하지 않는다').toMatch(/회수\s*=\s*티켓으로 낸 바인·애드온 금액\(T\)/);
+  it('캡션이 전송·사용이 서로 다른 종류의 수라고 말한다', () => {
+    // '사용 = 티켓 바인 건수' 라는 옛 설명이 남아 있으면 화면이 거짓말을 한다.
+    expect(src, "캡션이 아직 '건수' 라고 말한다").not.toMatch(/사용\s*=\s*티켓 바인 건수/);
+    expect(src, '캡션이 사용의 단위·범위(바인·애드온)를 말하지 않는다').toMatch(/사용\s*=\s*이용권으로 낸 바인·애드온 금액\(T\)/);
   });
 
   it('두 값이 같은 표현으로 계산된다 — 나중에 한쪽만 고치는 것을 막는다', () => {
     const today = todaySums();
     const week = WEEK.test(src);
-    expect(today && week, `오늘 회수=${today} · 7일 회수=${week} — 둘 다 T 합계여야 한다`).toBe(true);
+    expect(today && week, `오늘 사용=${today} · 7일 사용=${week} — 둘 다 T 합계여야 한다`).toBe(true);
   });
 });

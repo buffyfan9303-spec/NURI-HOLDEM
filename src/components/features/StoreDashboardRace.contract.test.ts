@@ -104,13 +104,14 @@ describe('F14 ⑦ · 14일 장부 조회 실패를 "데이터 없음"·0장과 �
     }
   });
 
-  it('이용권 7일 두 칸은 실패 시 0장이 아니라 —(오늘 회수는 core 값이라 그대로)', () => {
+  it('이용권 7일 두 칸은 실패 시 0장이 아니라 —(오늘 사용은 core 값이라 그대로)', () => {
     // #6(2026-09-29) — 전송 수는 store_vouchers 개수 조회(sent)라 7일·오늘 **둘 다** 그 조회가 실패하면 — 다.
-    expect(code).toMatch(/label="7일 발행" value=\{sentBad \? '—' : `\$\{weekVoucher\}`\}/);
+    // 2026-09-29 용어 통일(발행→전송 · 회수→사용) — 라벨만 바뀌었고 값 표현은 그대로다.
+    expect(code).toMatch(/label="7일 전송" value=\{sentBad \? '—' : `\$\{weekVoucher\}`\}/);
     expect(code).toMatch(/const sentBad = !!sentErr \|\| sent === null;/);
     // 2026-09-25 #9 — T 는 소수라 fmtT(소수 1자리+천단위)로 감싼다. 계약의 핵심(실패 시 —)은 그대로다.
-    expect(code).toMatch(/label="7일 회수" value=\{rangeErr \? '—' : fmtT\(weekTicket\)\}/);
-    expect(code).toMatch(/label="오늘 발행" value=\{sentBad \? '—' : `\$\{todayVoucher\}`\}/);
+    expect(code).toMatch(/label="7일 사용" value=\{rangeErr \? '—' : fmtT\(weekTicket\)\}/);
+    expect(code).toMatch(/label="오늘 전송" value=\{sentBad \? '—' : `\$\{todayVoucher\}`\}/);
   });
 
   it("'오늘 게임' 표가 실패 때 통째로 사라지지 않는다(섹션 게이트가 rangeErr 를 포함)", () => {

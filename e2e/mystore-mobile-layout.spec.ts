@@ -124,8 +124,8 @@ test.describe('내 매장 모바일 — S1·S2·V1·K1', () => {
       await expect(hdr.getByText(/업주\s*·\s*공동운영자/), '모바일 제목 옆 «업주·공동운영자» 가 남아 있다').toBeHidden();
       const panel = page.getByTestId('voucher-issue');
       await expect(panel.getByTestId('voucher-recv-by-name')).toBeVisible();
-      // 발급 근거·유효기간 칩 — 보이는 32 · 누름 44, 두 줄 근거 칩은 윗줄·아랫줄 누름 구간이 겹치지 않는다
-      for (const sel of ['[role=group][aria-label="발급 근거"] button', '[data-expiry-chips] button']) {
+      // 전송 근거·유효기간 칩 — 보이는 32 · 누름 44, 두 줄 근거 칩은 윗줄·아랫줄 누름 구간이 겹치지 않는다
+      for (const sel of ['[data-testid="voucher-reason-group"] button', '[data-expiry-chips] button']) {
         const cs = await hitSpans(page, sel);
         expect(cs.length, `${sel} 칩을 못 찾았다 — 빈 검사`).toBeGreaterThan(1);
         for (const c of cs) {

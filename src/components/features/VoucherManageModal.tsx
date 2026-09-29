@@ -30,11 +30,11 @@ import { msgOf } from '../../lib/dbError';
  *  — 값·라벨 조회 경로를 안 건드렸다. 소급 변환 없음, 새 값은 오늘 이후 발급분에만 붙는다). */
 const ISSUE_PICKS = VOUCHER_REASONS.filter((o) => o.value !== 'welcome' && o.value !== 'visit');
 
-/** V2 — 유형별 표의 기간 칩과 열. pc=true 는 모바일(md 미만)에서 숨긴다(발급·보유·사용 3열만). */
+/** V2 — 유형별 표의 기간 칩과 열. pc=true 는 모바일(md 미만)에서 숨긴다(전송·보유·사용 3열만). */
 const STAT_RANGES: [VoucherStatsRange, string][] = [['all', '전체'], ['month', '이번 달'], ['30d', '최근 30일']];
 const STAT_COLS: { k: 'issued' | 'held' | 'used' | 'expired' | 'revoked'; label: string; pc: boolean }[] = [
-  { k: 'issued', label: '발급', pc: false }, { k: 'held', label: '보유', pc: false }, { k: 'used', label: '사용', pc: false },
-  { k: 'expired', label: '만료', pc: true }, { k: 'revoked', label: '회수', pc: true },
+  { k: 'issued', label: '전송', pc: false }, { k: 'held', label: '보유', pc: false }, { k: 'used', label: '사용', pc: false },
+  { k: 'expired', label: '만료', pc: true }, { k: 'revoked', label: '전송 취소', pc: true },
 ];
 /** 이용 내역 로딩 뼈대 줄 수 — 20줄 창의 절반. ponytail: 도착 전엔 줄 수를 몰라 고정값; 정확히 맞추려면 매장별 직전 줄 수를 기억해야 한다. */
 const FEED_SKELETON_ROWS = 10;
@@ -257,7 +257,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
   const fmtFeed = (iso: string) => { const d = new Date(iso); const p2 = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
 
   const pickRecv = (t: TransferTarget) => {
-    if (t.verified === false) { toast.show('본인인증을 완료한 회원에게만 이용권을 발급할 수 있습니다', 'error'); return; }
+    if (t.verified === false) { toast.show('본인인증을 완료한 회원에게만 이용권을 전송할 수 있습니다', 'error'); return; }
     setRecvUserId(t.id); setRecvDisplay(t.display); setRecvMode('none'); setIdInput(''); setCands([]); setActiveIdx(-1);
   };
   // 최근 발급한 손님(단골) — 자주 주는 대상 빠른 선택. 이미 발급된 이력이라 본인인증 완료자로 간주(발급은 인증자만 가능).
@@ -381,7 +381,7 @@ ${cards}
     } catch (e) { w.close(); toast.show(e instanceof Error ? e.message : '인쇄 준비 실패', 'error'); }
   };
   const issue = async () => {
-    if (reason === 'other' && !reasonNote.trim()) { toast.show('기타 사유는 비고에 발급 이유를 적어 주세요', 'error'); return; }
+    if (reason === 'other' && !reasonNote.trim()) { toast.show('기타 사유는 비고에 전송 이유를 적어 주세요', 'error'); return; }
     // 오너 결정(2026-09-14): 손님 미지정 발급을 막는다 — 나중에 손님을 배정하는 기능이 없어 영원히 못 쓰는 표가 되고,
     // 서버도 보유자 없는 이용권의 사용 전이를 거절한다(20260914b). 버튼도 비활성화하지만 한 번 더 막는다.
     if (!recvUserId) { toast.show('받는 손님을 먼저 지정해 주세요', 'error'); return; }
@@ -389,16 +389,16 @@ ${cards}
     try {
       const issued = await issueVoucher(venueId, { title, count, holderUserId: recvUserId ?? undefined, holderName: recvDisplay || undefined, expiresAt: expiry ? `${expiry}T23:59:59+09:00` : null, reason, note: reason === 'other' ? reasonNote.trim() || undefined : undefined });
       if (issued === count) {
-        toast.show(`매장이용권 ${count}개를 ${recvDisplay ? recvDisplay + '님께 ' : ''}배포했습니다`, 'success');
+        toast.show(`매장이용권 ${count}개를 ${recvDisplay ? recvDisplay + '님께 ' : ''}전송했습니다`, 'success');
       } else {
         // Q2 — 요청 장수와 실제 발급 수량이 다르면 자동 재시도하지 않는다(이미 서버에서 발급이 일어난
         //   뒤일 수 있어, 다시 부르면 중복 발급이 된다). 바로 아래 reload/reloadQuota 가 실제 상태를 보여준다.
-        toast.show(`발급 결과 확인 필요 — 요청 ${count}개 · 실제 ${issued}개. 이용 내역에서 확인해 주세요`, 'error');
+        toast.show(`전송 결과 확인 필요 — 요청 ${count}개 · 실제 ${issued}개. 이용 내역에서 확인해 주세요`, 'error');
       }
       setTitle('매장이용권'); setCount(1); setExpiry(''); setRecvUserId(null); setRecvDisplay(''); setRecvMode('none'); setCands([]); setReasonNote('');
       reload(); reloadQuota();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '배포 실패';
+      const msg = e instanceof Error ? e.message : '전송 실패';
       toast.show(msg, 'error');
       setConfirmOpen(false); // 실패 시 확인 화면에 머무르지 않고 조건을 다시 고칠 수 있게 되돌린다
       reloadQuota();
@@ -441,19 +441,19 @@ ${cards}
     toast.show(`${r.ok}장 ${verb} · ${r.failed}장 실패 · ${r.reasons[0] ?? ''}`, 'error');
   };
 
-  // 회수 — 오너 지시(2026-08-28) 여정의 마지막 칸인데 화면에 아예 없었다.
+  // 전송 취소(구 회수) — 오너 지시(2026-08-28) 여정의 마지막 칸인데 화면에 아예 없었다.
   //   잘못 보낸 이용권을 되돌릴 수단이 없어 '삭제'(매장 보관분만 가능)로도 손댈 수 없었다.
-  // 왜 삭제가 아니라 회수인가: 삭제는 행을 지워 손님 지갑의 내역까지 없애지만,
-  //   회수는 status=revoked 로 남아 '언제 무엇을 회수했는지'가 양쪽에 남는다.
+  // 왜 삭제가 아니라 전송 취소인가: 삭제는 행을 지워 손님 지갑의 내역까지 없애지만,
+  //   전송 취소는 status=revoked 로 남아 '언제 무엇을 되돌렸는지'가 양쪽에 남는다.
   //   서버가 보유자에게 알림도 보낸다(지갑에서 소리 없이 사라지지 않게).
   const revokeGroup = async (g: { name: string; ids: string[] }) => {
     if (g.ids.length === 0) return;
-    if (!window.confirm(`${g.name}의 미사용 이용권 ${g.ids.length}장을 회수할까요?\n\n`
-      + '회수하면 손님 지갑에서 사용할 수 없게 되고, 손님에게 회수 알림이 갑니다.\n'
-      + '이미 사용된 이용권은 회수되지 않고 내역으로 남습니다.')) return;
+    if (!window.confirm(`${g.name}의 미사용 이용권 ${g.ids.length}장을 전송 취소할까요?\n\n`
+      + '전송을 취소하면 손님 지갑에서 사용할 수 없게 되고, 손님에게 전송 취소 알림이 갑니다.\n'
+      + '이미 사용된 이용권은 전송 취소되지 않고 내역으로 남습니다.')) return;
     setBusy(true);
     const r = await revokeVouchers(g.ids);
-    reportBulk('회수', r); setBusy(false); reload();
+    reportBulk('전송 취소', r); setBusy(false); reload();
   };
   // 삭제는 '미사용분'만 넘긴다 — 사용 완료분은 서버가 거절하고(손님 내역·장부 연동 보존),
   // 예전엔 used 까지 함께 넘겨 사용 기록이 통째로 증발했다(2026-08-29 실측).
@@ -474,7 +474,7 @@ ${cards}
         <Icon name="ticket" size={22} className="mx-auto text-ink-muted" />
         <p className="mt-2 text-sm font-bold text-ink-primary">매장이용권은 현재 비활성화되어 있습니다</p>
         <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
-          본인인증 준비가 끝나면 다시 열립니다. 발행·보유 기록은 그대로 보관되어 있으며 삭제되지 않았습니다.
+          본인인증 준비가 끝나면 다시 열립니다. 전송·보유 기록은 그대로 보관되어 있으며 삭제되지 않았습니다.
         </p>
       </div>
     );
@@ -501,7 +501,7 @@ ${cards}
           // 실패가 빈 상태보다 먼저. 이미 받아 둔 목록이 있으면(재조회 실패) 보던 내역은 그대로 둔다.
           <LoadErrorCard error={listErr} what="이용권 내역" onRetry={reload} compact />
         ) : feed.length === 0 ? (
-          <p className="py-3 text-center text-2xs text-ink-muted">아직 내역이 없습니다. 발급·사용되면 즉시 표시됩니다.</p>
+          <p className="py-3 text-center text-2xs text-ink-muted">아직 내역이 없습니다. 전송·사용되면 즉시 표시됩니다.</p>
         ) : (
           /* 20줄 창 = 줄 높이 h-7(1.75rem) × 20 + 줄 사이 space-y-1(0.25rem) × 19. 줄 높이를 고정해야 창이 정확히 20줄이다
              (글자 줄높이에 맡기면 폰트·배지에 따라 19.x 줄이 된다 — 실측 종전 28.69px/줄). */
@@ -510,7 +510,7 @@ ${cards}
               <li key={i} className="flex h-7 items-center gap-2 rounded-input bg-surface-base/50 px-2 py-1.5 text-2xs">
                 <span className={['shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
                   e.t === 'used' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>
-                  <Icon name={e.t === 'used' ? 'arrow-down-left' : 'arrow-up-right'} size={10} className="mr-0.5 inline-block align-[-1px] shrink-0" />{e.t === 'used' ? '사용(받음)' : '발급(보냄)'}
+                  <Icon name={e.t === 'used' ? 'arrow-down-left' : 'arrow-up-right'} size={10} className="mr-0.5 inline-block align-[-1px] shrink-0" />{e.t === 'used' ? '사용' : '전송'}
                 </span>
                 {/* ⚠ 회원명+이용권명이 길면 **몇 장을 발급/사용했는지**가 사라졌다 — 수량이 이 내역의 핵심이다. */}
                 <span className="flex min-w-0 flex-1 items-center gap-1 text-ink-secondary">
@@ -528,7 +528,7 @@ ${cards}
       {canIssue ? (
         <div data-testid="voucher-issue" className="rounded-input border border-accent-400/30 bg-accent-300/5">
           <h3 data-testid="voucher-issue-head" className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-xs font-bold text-accent-300">매장이용권 발급 {/* 오너 2026-09-24: 제목 옆 '업주·공동운영자' 라벨은 PC 에서도 뺀다(모바일은 이미 없었다). 발급 권한 범위는
+            <span className="text-xs font-bold text-accent-300">매장이용권 전송 {/* 오너 2026-09-24: 제목 옆 '업주·공동운영자' 라벨은 PC 에서도 뺀다(모바일은 이미 없었다). 전송 권한 범위는
                   펼친 안의 안내 박스(data-testid=voucher-issue-scope)가 그대로 말한다 — e2e 가 그 박스를 본다. */}{/* 스윕②(2026-09-19): 이 배지는 '개', 바로 아래 한도 증액 패널(QuotaRequestPanel)은 '장' — 같은
                   quota 값이 한 스크롤 안에서 단위만 바뀌었다. '장'으로 통일(이용권은 '장' 으로 세는 물건 —
                   발급 폼도 '개' 스테퍼가 아니라 옆에 '개'라고 적혀 있었을 뿐 실제 문구는 전부 장이다). */}
@@ -540,17 +540,17 @@ ${cards}
                각 묶음은 '라벨 → 조작' 같은 문법(간격 6px). md 이상은 클래스가 전부 `max-md:`/`md:hidden` 이라 **무변경**. */
             <div className="space-y-1.5 px-2.5 pb-2.5 max-md:space-y-2.5">
               {!isAdmin && approvedErr == null && !approved && (
-                <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/8 px-2 py-1.5 text-2xs text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 운영자 승인 후 발급할 수 있습니다.</p>
+                <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/8 px-2 py-1.5 text-2xs text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 운영자 승인 후 전송할 수 있습니다.</p>
               )}
               {!isAdmin && approvedErr != null && (
-                <LoadErrorCard what="발급 승인 상태" error={approvedErr} onRetry={reload} compact hint="승인 상태를 확인하기 전에는 발급할 수 없습니다." />
+                <LoadErrorCard what="전송 승인 상태" error={approvedErr} onRetry={reload} compact hint="승인 상태를 확인하기 전에는 전송할 수 없습니다." />
               )}
               <div className="flex gap-1.5 max-md:flex-col">
                 <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm max-md:h-[44px] max-md:flex-none" />
                 <div className="flex items-stretch gap-1 shrink-0 max-md:h-[44px] max-md:w-full">
                   <StepBtn label="−" onStep={() => setCount((c) => Math.max(1, c - 1))} />
                   <input type="number" inputMode="numeric" min={1} max={1000} value={count || ''} onChange={(e) => setCount(Math.min(1000, Math.max(1, parseInt(e.target.value, 10) || 1)))}
-                    className="input w-16 text-sm tabular-nums text-center max-md:h-auto max-md:min-w-0 max-md:flex-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" aria-label="발급 갯수" />
+                    className="input w-16 text-sm tabular-nums text-center max-md:h-auto max-md:min-w-0 max-md:flex-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" aria-label="전송 갯수" />
                   <StepBtn label="+" onStep={() => setCount((c) => Math.min(1000, c + 1))} />
                   <span className="self-center pl-0.5 text-2xs text-ink-muted">개</span>
                 </div>
@@ -566,11 +566,11 @@ ${cards}
                   신호가 된다 — 리드 지적). 라벨(특히 '기타(비고 필수)')은 그대로 둔다 — '(비고 필수)'는
                   "메모를 안 쓰면 발급이 안 된다"는 조건이라 줄이면 사용자가 왜 막히는지 모른다(§7). */}
               <div className="space-y-1.5">
-              <p aria-hidden className="text-2xs font-semibold text-ink-secondary md:hidden">발급 근거</p>
+              <p aria-hidden className="text-2xs font-semibold text-ink-secondary md:hidden">전송 근거</p>
               {/* 🔴 2026-09-24 리드 결정(알약 한 기준) — 모바일 칩은 보이는 44 가 아니라 **보이는 32 + CHIP_HIT(±8) = 누름 48**.
                   두 줄로 접히므로 줄 간격을 `gap-y-3.5`(14.875 ≥ 8+8 − 가장자리 여유)로 둬 윗줄·아랫줄 히트가 겹치지 않게 한다.
                   PC 는 종전 min-h-9 그대로(CHIP_HIT 는 ::before 뿐이라 rect 불변). */}
-              <div className="flex flex-wrap gap-1.5 max-md:grid max-md:grid-cols-2 max-md:gap-y-3.5" role="group" aria-label="발급 근거">
+              <div data-testid="voucher-reason-group" className="flex flex-wrap gap-1.5 max-md:grid max-md:grid-cols-2 max-md:gap-y-3.5" role="group" aria-label="전송 근거">
                 {ISSUE_PICKS.map((o) => (
                   <button key={o.value} type="button" onClick={() => setReason(o.value)} aria-pressed={reason === o.value} title={o.hint}
                     className={['min-h-9 shrink-0 whitespace-nowrap rounded-chip border px-2.5 text-2xs font-bold transition-colors max-md:min-h-[32px] max-md:px-1', CHIP_HIT,
@@ -581,9 +581,9 @@ ${cards}
               </div>
               </div>
               {reason === 'other' && (
-                <input value={reasonNote} onChange={(e) => setReasonNote(e.target.value)} maxLength={80} placeholder="기타 사유 — 발급 이유를 적어 주세요(필수)" className="input w-full text-sm" />
+                <input value={reasonNote} onChange={(e) => setReasonNote(e.target.value)} maxLength={80} placeholder="기타 사유 — 전송 이유를 적어 주세요(필수)" className="input w-full text-sm" />
               )}
-              <p className="text-2xs leading-relaxed text-ink-muted">대회 순위·입상을 근거로 한 이용권은 발급할 수 없습니다(2026-09-05). 발급 근거는 기록에 남습니다.</p>
+              <p className="text-2xs leading-relaxed text-ink-muted">대회 순위·입상을 근거로 한 이용권은 전송할 수 없습니다(2026-09-05). 전송 근거는 기록에 남습니다.</p>
               {/* 손님 화면 미리보기(오너 지시 #19) — 매장명은 **자동으로 붙는다**.
                   왜 필요한가: 라이브 데이터 101장 중 100장의 제목에 업주가 '로티아레나'를 손으로 타이핑해
                   두었다. 이제 그럴 필요가 없고, 그렇게 해도 중복은 표시 단계에서 걷힌다는 걸 여기서 보여 준다.
@@ -624,7 +624,7 @@ ${cards}
                 <p className="mt-1 text-ink-muted">
                   {expiry
                     ? <>선택한 기간의 마지막 날은 <b className="tabular-nums text-ink-secondary">{expiry}</b> 입니다 — 그날 <b className="text-ink-secondary">밤 11시 59분</b>까지 쓸 수 있습니다.</>
-                    : '무기한 — 만료일 없이 발급합니다.'}
+                    : '무기한 — 만료일 없이 전송합니다.'}
                 </p>
               </div>
               {/* 받는 손님 지정 — 닉네임·실명 또는 전화번호로 지정 */}
@@ -683,7 +683,7 @@ ${cards}
                               <Icon name="user" size={12} className="shrink-0 text-ink-muted" />
                               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{c.label ?? c.display}</span>
                               {c.phoneMasked ? <span data-testid="cand-phone" className="shrink-0 text-2xs tabular-nums text-ink-muted">{c.phoneMasked}</span> : null}
-                              {unverified && <span className="shrink-0 rounded-sm bg-danger/15 px-1.5 py-0.5 text-2xs font-bold text-danger-light">미인증 · 발급 불가</span>}
+                              {unverified && <span className="shrink-0 rounded-sm bg-danger/15 px-1.5 py-0.5 text-2xs font-bold text-danger-light">미인증 · 전송 불가</span>}
                             </button>
                           </li>
                         );
@@ -724,7 +724,7 @@ ${cards}
                   바뀌거나(count/reason/expiry/recvUserId) 매장이 바뀌면 이 단계를 즉시 취소한다. */}
               {confirmOpen ? (
                 <div className="space-y-1.5 rounded-input border border-accent-400/50 bg-accent-300/8 p-2.5 text-2xs">
-                  <p className="font-bold text-accent-300">발급 확인</p>
+                  <p className="font-bold text-accent-300">전송 확인</p>
                   <p>매장: <b className="text-ink-primary">{venueName ?? '우리 매장'}</b></p>
                   <p>받는 회원: <b className="text-ink-primary">{recvDisplay || '회원'}</b>{recvUserId && <span className="text-ink-muted"> · ID …{recvUserId.slice(-6)}</span>}</p>
                   <p>장수: <b className="text-ink-primary">{count}개</b></p>
@@ -732,13 +732,13 @@ ${cards}
                   <p>만료: <b className="text-ink-primary">{expiry || '무기한'}</b></p>
                   <div className="flex gap-1.5 pt-0.5">
                     <button type="button" onClick={() => setConfirmOpen(false)} className="min-h-[44px] flex-1 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary">취소</button>
-                    <button type="button" disabled={busy} onClick={issue} className="btn-primary min-h-[44px] flex-1 text-sm disabled:opacity-50">{busy ? '배포 중…' : `${count}개 발급 확정`}</button>
+                    <button type="button" disabled={busy} onClick={issue} className="btn-primary min-h-[44px] flex-1 text-sm disabled:opacity-50">{busy ? '전송 중…' : `${count}개 전송 확정`}</button>
                   </div>
                 </div>
               ) : (
                 <button type="button" disabled={busy || !recvUserId || (!isAdmin && (!approved || approvedErr != null))}
                   onClick={() => setConfirmOpen(true)} className="btn-primary min-h-[44px] w-full text-sm disabled:opacity-50">
-                  {recvUserId ? `+ ${count}개 발급 → ${recvDisplay}` : '받는 손님을 먼저 지정하세요'}
+                  {recvUserId ? `+ ${count}개 전송 → ${recvDisplay}` : '받는 손님을 먼저 지정하세요'}
                 </button>
               )}
               {/* 오너 결정(2026-09-14): 손님 미지정 발급은 나중에 배정할 방법이 없어 영원히 못 쓰는 표가 된다 —
@@ -755,22 +755,22 @@ ${cards}
                     (운영자 승인)를 본다 — pg_proc 직접 조회로 확인(2026-09-20).
                     오너 결정: "공동운영자에게 발급 줘. UI도 이에 맞춰서." → 실제 범위를 그대로 적는다.
                     ⚠ 위 주석대로 CheckinModal 의 같은 문구와 **갈리면 안 된다** — 둘 다 같이 고쳤다. */}
-                <b data-testid="voucher-issue-scope" className="text-ink-primary">매장이용권 발급은 운영자 승인을 받은 매장의 업주·공동운영자만 가능합니다.</b><br />
+                <b data-testid="voucher-issue-scope" className="text-ink-primary">매장이용권 전송은 운영자 승인을 받은 매장의 업주·공동운영자만 가능합니다.</b><br />
                 손님끼리 주고받을 수 없으며, <b className="text-ink-primary">금전적 가치가 없습니다</b>(매장 안에서 참가비로만 쓸 수 있고 다른 용도로 바꿀 수 없습니다).
               </p>
-              <p className="text-2xs leading-relaxed text-ink-secondary">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 발급됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">닉네임·실명 또는 전화번호</b>로 지정합니다(실명은 정확히 입력). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
+              <p className="text-2xs leading-relaxed text-ink-secondary">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 전송됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">닉네임·실명 또는 전화번호</b>로 지정합니다(실명은 정확히 입력). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
 
               {/* 🔴 2026-09-18 오너: "매장이용권 발행 한도 늘리는 요청(관리자에게)부터 시작해서 더 편하게",
                   "이용권 한도는 한도 증액 문구를 사용해서 전혀 금전적인게 없게".
                   종전엔 "운영자 문의 (유상 충전 종료)" 한 줄이 끝이었다 — 어디로 문의하는지도 없었다.
-                ⚠ 금전 낱말(충전·구매·결제·금액)을 **한 개도 쓰지 않는다.** 오가는 것은 발행 가능 '장수'뿐이다.
+                ⚠ 금전 낱말(충전·구매·결제·금액)을 **한 개도 쓰지 않는다.** 오가는 것은 전송 가능 '장수'뿐이다.
                   유상 충전 경로(request_voucher_credit)는 §12-A-2 로 봉쇄된 채 그대로 두고, 그 옆에 낸 다른 길이다. */}
               <QuotaRequestPanel venueId={venueId} quota={quota} onGranted={reloadQuota} />
             </div>
           )}
         </div>
       ) : (
-        <p className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">배포·회수·삭제는 <b className="text-ink-secondary">업주</b> 전용. 직원은 열람·사용 처리만.</p>
+        <p data-testid="voucher-issue-owner-badge" className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">전송·전송 취소·삭제는 <b className="text-ink-secondary">업주</b> 전용. 직원은 열람·사용 처리만.</p>
       )}
 
       {/* 2) QR 코드 — 접기 */}
@@ -859,7 +859,7 @@ ${cards}
                 <div className="grid grid-cols-3 gap-2">
                   {([
                     ['users', stats.holderCount, '보유 회원', 'text-ink-primary'],
-                    ['ticket', net, '발급', 'text-ink-primary'], // 회수분 제외 — 표 아래 안내문이 말한다(오너: 타일 라벨 줄바꿈 금지)
+                    ['ticket', net, '전송', 'text-ink-primary'], // 전송 취소분 제외 — 표 아래 안내문이 말한다(오너: 타일 라벨 줄바꿈 금지)
                     ['check-circle', all.held, '잔여 이용권', 'text-emerald-300'],
                   ] as const).map(([icon, val, label, cls]) => (
                     <div key={label} data-stat-tile className="rounded-input border border-border-subtle/60 bg-surface-base/60 p-2.5 text-center">
@@ -882,7 +882,7 @@ ${cards}
                   </div>
                 )}
                 <div>
-                  <p className="text-xs font-bold text-ink-secondary">유형별 발급</p>
+                  <p className="text-xs font-bold text-ink-secondary">유형별 전송</p>
                   <div role="group" aria-label="집계 기간" className="mt-1.5 flex flex-wrap items-center gap-1.5 max-md:grid max-md:grid-cols-3">
                     {STAT_RANGES.map(([k, label]) => {
                       const on = statRange === k;
@@ -910,7 +910,7 @@ ${cards}
                         <thead>
                           <tr className="text-2xs text-ink-muted">
                             <th scope="col" className="w-[40%] py-1 text-left font-medium md:w-[34%]">유형</th>
-                            {STAT_COLS.map((c) => <th key={c.k} scope="col" className={['py-1 text-right font-medium', c.pc ? 'hidden md:table-cell' : ''].join(' ')}>{c.label}</th>)}
+                            {STAT_COLS.map((c) => <th key={c.k} data-col={c.k} scope="col" className={['py-1 text-right font-medium', c.pc ? 'hidden md:table-cell' : ''].join(' ')}>{c.label}</th>)}
                           </tr>
                         </thead>
                         <tbody>
@@ -929,11 +929,11 @@ ${cards}
                         </tfoot>
                       </table>
                       {!rows.every(reasonStatBalanced) && (
-                        <p role="alert" className="mt-1 text-2xs text-danger-light">집계가 맞지 않는 유형이 있습니다(발급 ≠ 보유+사용+만료+회수). 새로고침해 주세요.</p>
+                        <p role="alert" className="mt-1 text-2xs text-danger-light">집계가 맞지 않는 유형이 있습니다(전송 ≠ 보유+사용+만료+전송 취소). 새로고침해 주세요.</p>
                       )}
                     </>);
                   })()}
-                  <p className="mt-1.5 text-2xs leading-relaxed text-ink-muted">삭제한 미사용 이용권은 집계되지 않습니다. 기간은 발급일(한국 시간) 기준입니다.<br />위 ‘발급’ 타일은 회수한 이용권을 뺀 수입니다.</p>
+                  <p className="mt-1.5 text-2xs leading-relaxed text-ink-muted">삭제한 미사용 이용권은 집계되지 않습니다. 기간은 전송일(한국 시간) 기준입니다.<br />위 ‘전송’ 타일은 전송 취소한 이용권을 뺀 수입니다.</p>
                 </div>
               </>);
             })()}
@@ -957,7 +957,7 @@ ${cards}
         )}
         {loading ? <p aria-busy="true" className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
           : listErr != null && list.length === 0 ? <LoadErrorCard error={listErr} what="보유자 현황" onRetry={reload} compact />
-          : holders.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">배포된 이용권이 없습니다.</p>
+          : holders.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">전송한 이용권이 없습니다.</p>
           : shownHolders.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">검색 결과가 없습니다.</p>
           : <ul className="space-y-1.5">
               {shownHolders.map((g) => {
@@ -978,18 +978,18 @@ ${cards}
                     </div>
                     {open && !g.isStore && (
                       <div className="border-t border-border-subtle px-3 py-1.5">
-                        {/* 회수 — 잘못 보낸 이용권을 되돌리는 유일한 수단(2026-08-29 신설).
+                        {/* 전송 취소(구 회수) — 잘못 보낸 이용권을 되돌리는 유일한 수단(2026-08-29 신설).
                             미사용분에만 걸리고, 사용 완료분은 아래 내역으로 그대로 남는다. */}
                         {canIssue && (
                           <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-border-subtle pb-1.5">
                             <p className="min-w-0 flex-1 text-2xs leading-relaxed text-ink-muted">
-                              잘못 보냈나요? <b className="text-ink-secondary">미사용 {g.active.length}장</b>을 회수할 수 있어요
+                              잘못 보냈나요? <b className="text-ink-secondary">미사용 {g.active.length}장</b>을 전송 취소할 수 있어요
                               {g.used.length > 0 && <> · 사용 완료 {g.used.length}장은 내역으로 보존</>}
                             </p>
                             <button type="button" disabled={busy || g.active.length === 0}
                               onClick={() => revokeGroup({ name: holderLabel(g), ids: g.active.map((v) => v.id) })}
                               className="inline-flex h-11 shrink-0 items-center rounded-input border border-danger/40 bg-danger/8 px-3.5 text-2xs font-bold text-danger-deep transition-colors hover:bg-danger/15 disabled:opacity-40 dark:text-danger-light">
-                              회수
+                              전송 취소
                             </button>
                           </div>
                         )}
@@ -998,7 +998,7 @@ ${cards}
                           <p className="mb-0.5 text-2xs font-bold text-ink-muted">미사용 이용권</p>
                           <ul data-testid="holder-unused" className="mb-1.5 space-y-0.5">
                             {g.active.map((v) => (
-                              <li key={v.id} className="flex items-center justify-between gap-2 text-[11px]">
+                              <li key={v.id} data-reason={voucherReasonKey(v)} className="flex items-center justify-between gap-2 text-[11px]">
                                 <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.title}<span className="ml-1 text-ink-muted">· {voucherReasonLabel(voucherReasonKey(v))}</span></span>
                                 <span className="shrink-0 tabular-nums text-ink-muted">{v.expiresAt ? `${fmtDateTime(v.expiresAt)}까지` : '무기한'}</span>
                               </li>
@@ -1120,7 +1120,7 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
           </button>
           {/* 🔴 비용이 없다는 사실을 **화면에** 적는다 — 업주가 '돈이 드나?' 로 읽으면 요청 자체를 안 한다. */}
           <p className="text-2xs leading-relaxed text-ink-muted">
-            <b className="text-ink-secondary">비용은 없습니다.</b> 운영자가 확인한 뒤 발행 가능 장수만 늘려 드립니다.
+            <b className="text-ink-secondary">비용은 없습니다.</b> 운영자가 확인한 뒤 전송 가능 장수만 늘려 드립니다.
             매장이용권은 금전적 가치가 없으며, 구매·충전 개념이 아닙니다.
           </p>
 

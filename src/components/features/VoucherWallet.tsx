@@ -76,7 +76,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
   // (예: 사용 직후 자동 새로고침이 순단으로 실패해도 방금 보던 장수가 사라지면 안 된다.)
   const [everLoaded, setEverLoaded] = useState(false);
   const [redeem, setRedeem] = useState<Stack | null>(null);
-  // 사용 요청 전송 확인 화면(Phase 15-1) — 3초 자동 닫힘.
+  // 사용 요청 확인 화면(Phase 15-1) — 3초 자동 닫힘.
   // ⚠ V07(2026-09-12) — 이름을 '완료'가 아니라 '요청'으로 둔다. 소비 트리거(voucher_redeem_to_ledger_request)
   //   는 서버 status 를 'used' 로 바꾸며 **승인 대기(pending) 바인 요청**을 만든다 — 운영자가 승인해야
   //   진짜 확정이고, 거절·취소·자동마감이면 지갑으로 돌아온다(_restore_voucher). remain 은 반드시
@@ -300,7 +300,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
         onDone={(used) => {
           setRedeem(null);
           // FINAL-QR#CHECKIN-REFRESH(2026-09-21) — 1장 사용은 **직접 출석이 아니다**. 화면에 '출석 완료'나
-          // 점수 증가를 단정하지 않는다(아래 redeemDone 문구는 '사용 요청 전송'이다).
+          // 점수 증가를 단정하지 않는다(아래 redeemDone 문구는 '사용 요청'이다).
           //
           // 🔴 라이브 트리거 `trg_voucher_used_checkin`(md5 6c2c4081…) 실측 — 출석 행은 **네 조건이 전부 참일 때만** 생긴다:
           //   status→'used' 전이 · 직전이 'used' 아님 · holder_user_id NOT NULL ·
@@ -323,7 +323,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
             setRedeemDone({ title: used.title, venueName: used.venueName, remain });
           });
         }} />}
-      {/* 사용 요청 전송 확인(Phase 15-1 후속, V07 수정) — 직원과 고객이 한 화면을 같이 확인하는 것이
+      {/* 사용 요청 확인(Phase 15-1 후속, V07 수정) — 직원과 고객이 한 화면을 같이 확인하는 것이
           실제 사용 장면이다. 큰 체크 + 수량 + 남은 잔량, 3초 뒤 자동 닫힘.
           ⚠ '사용 완료'라고 단정하지 않는다 — 운영자 승인 전까지는 대기 상태고, 거절되면 지갑으로 돌아온다. */}
       {redeemDone && (
@@ -333,7 +333,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
           <svg width="88" height="88" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="12" cy="12" r="10" opacity="0.35" /><path d="M7 12.5l3.2 3.2L17 9" />
           </svg>
-          <p className="text-2xl font-extrabold">이용권 사용 요청 전송</p>
+          <p className="text-2xl font-extrabold">이용권 사용 요청</p>
           <p className="text-sm font-semibold opacity-90">{voucherLineLabel(redeemDone.title, redeemDone.venueName)}</p>
           <p className="text-4xl font-extrabold tabular-nums">남은 이용권 {redeemDone.remain}T</p>
           <p className="mt-1 text-xs font-semibold opacity-90">매장 승인 후 확정돼요 · 거절되면 지갑으로 돌아와요</p>
@@ -385,7 +385,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
     const hit = parseQr(text, out);
     if (hit?.kind === 'checkin') { setNoticeMsg('출석 QR입니다. 이용권은 사용되지 않았어요'); setMode('notice'); return; }
     if (hit?.kind === 'voucher' && hit.venueId === stack.venueId) { setMode('confirmQr'); return; }
-    if (hit?.kind === 'voucher') { setNoticeMsg('다른 매장의 이용권 QR이에요 — 발급 매장 QR을 스캔해 주세요'); setMode('notice'); return; }
+    if (hit?.kind === 'voucher') { setNoticeMsg('다른 매장의 이용권 QR이에요 — 보낸 매장 QR을 스캔해 주세요'); setMode('notice'); return; }
     setNoticeMsg(out.reason ?? '매장 QR이 아니에요'); setMode('notice');
   };
   // 확정 화면에서 눌러야만 실제 RPC 를 호출한다(스캔 즉시 호출 금지, Q1). 취소/뒤로가기는 0회.
@@ -413,9 +413,9 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
       //   서버(redeem_my_voucher_by_phone)가 이미 입력 번호와 업주 번호 일치를 강제하므로,
       //   조회는 '되면 좋은 확인'으로 낮추고 안 되면 **매장명**으로 확인 카드를 세워 진행시킨다.
       const t = (await findUserByPhone(phone))[0] ?? null;
-      setPhoneTarget(t ?? { id: '', display: stack.venueName ?? '발급 매장' });
+      setPhoneTarget(t ?? { id: '', display: stack.venueName ?? '보낸 매장' });
       setBusy(false);
-    } catch { setPhoneTarget({ id: '', display: stack.venueName ?? '발급 매장' }); setBusy(false); }
+    } catch { setPhoneTarget({ id: '', display: stack.venueName ?? '보낸 매장' }); setBusy(false); }
   };
   const doPhone = async () => {
     setBusy(true);
@@ -448,9 +448,9 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
               남은 두 경로는 둘 다 현장 증빙이 있다: 벽에 붙은 매장 QR, 또는 업주가 알려 주는 전화번호.
               서버에서도 같은 커밋으로 redeem_my_voucher 실행 권한을 회수했다(20260907d) — UI 만 내리면
               콘솔에서 그대로 부를 수 있으므로 둘을 함께 막아야 한다. */}
-          <p className="text-2xs text-ink-muted">발급 매장(<b className="text-ink-secondary">{stack.venueName ?? '확인 중'}</b>)에서만 사용됩니다.</p>
+          <p className="text-2xs text-ink-muted">보낸 매장(<b className="text-ink-secondary">{stack.venueName ?? '확인 중'}</b>)에서만 사용됩니다.</p>
           <button type="button" onClick={startQr} className="btn-primary inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="qr" size={16} /> 매장 QR 스캔해서 사용</button>
-          <button type="button" onClick={() => setMode('phone')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="phone" size={16} /> 매장 업주 전화번호로 전송</button>
+          <button type="button" onClick={() => setMode('phone')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="phone" size={16} /> 매장 업주 전화번호로 사용</button>
         </>)}
         {mode === 'qr' && (
           <div className="space-y-2">
@@ -464,7 +464,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
         {mode === 'confirmQr' && (
           <div className="space-y-2">
             <div className="space-y-1 rounded-input border border-emerald-500/40 bg-emerald-500/8 px-3 py-2.5">
-              <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="store" size={14} className="shrink-0 text-emerald-400" /> {stack.venueName ?? '발급 매장'}</p>
+              <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="store" size={14} className="shrink-0 text-emerald-400" /> {stack.venueName ?? '보낸 매장'}</p>
               <p className="text-2xs text-ink-secondary">{stripVenuePrefix(stack.title, stack.venueName)}</p>
               <p className="text-2xs font-bold text-emerald-400">1장 사용 · 사용 후 남는 장수 {stack.ids.length - 1}장</p>
             </div>
@@ -483,7 +483,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
         )}
         {mode === 'phone' && (
           <div className="space-y-2">
-            <p className="text-2xs text-ink-muted">발급 매장 <b className="text-ink-secondary">업주 전화번호</b>를 입력하세요.</p>
+            <p className="text-2xs text-ink-muted">보낸 매장 <b className="text-ink-secondary">업주 전화번호</b>를 입력하세요.</p>
             <input value={phone} onChange={(e) => { setPhone(e.target.value); setPhoneTarget(null); }} inputMode="tel" autoComplete="tel" placeholder="010-0000-0000" className="input w-full text-sm" />
             {phoneTarget && (
               <div className="flex items-center gap-2 rounded-input border border-emerald-500/40 bg-emerald-500/8 px-3 py-2.5">

@@ -511,7 +511,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
           {idOn && (
             <div className="rounded-aura border card-aura p-3">
               <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="alert" size={15} className="shrink-0 text-danger-light" /> 매장이용권은 금전적 가치가 없습니다</p>
-              <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">현금·포인트가 아니며 환불·현금화·유저 간 거래가 불가합니다. 발급한 매장에서 사용(회수)만 가능합니다.</p>
+              <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">현금·포인트가 아니며 환불·현금화·유저 간 거래가 불가합니다. 보낸 매장에서만 사용할 수 있습니다.</p>
             </div>
           )}
 

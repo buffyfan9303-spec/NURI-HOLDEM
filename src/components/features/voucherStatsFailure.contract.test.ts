@@ -57,9 +57,9 @@ describe('N04-A · 매장 전환 경합 — staleResponse 계약 배선', () => 
     expect(VM).not.toMatch(/useEffect\(reloadQuota,/);
   });
 
-  it('🔴 승인 상태 조회 실패는 approvedErr 로 갈라 말하고 발급 버튼을 잠근다', () => {
+  it('🔴 승인 상태 조회 실패는 approvedErr 로 갈라 말하고 전송 버튼을 잠근다', () => {
     expect(VM).toMatch(/const \[approvedErr, setApprovedErr\] = useState<unknown>\(null\);/);
-    expect(VM).toMatch(/\{!isAdmin && approvedErr != null && \(\s*<LoadErrorCard what="발급 승인 상태" error=\{approvedErr\} onRetry=\{reload\} compact/);
+    expect(VM).toMatch(/\{!isAdmin && approvedErr != null && \(\s*<LoadErrorCard what="전송 승인 상태" error=\{approvedErr\} onRetry=\{reload\} compact/);
     expect(VM).toMatch(/disabled=\{busy \|\| !recvUserId \|\| \(!isAdmin && \(!approved \|\| approvedErr != null\)\)\}/);
   });
 
