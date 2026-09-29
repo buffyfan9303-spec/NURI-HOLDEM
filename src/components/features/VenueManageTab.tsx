@@ -4,6 +4,7 @@ import { goSubTab } from '../../lib/subTabTransition';
 import { waitSettled } from '../../lib/tabCover';
 import { isStaleResponse, type RequestStamp } from '../../lib/staleResponse';
 import Icon, { type IconName } from '../atoms/Icon';
+import { Fold, onSummaryClick, pinPressed } from '../atoms/Fold';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
 import { businessDateOf, useBusinessDate } from '../../lib/businessDate';
@@ -633,6 +634,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     try { if (venueId) localStorage.setItem(`nuri:nav-mode:${venueId}`, n ? 'all' : 'auto'); } catch { /* noop */ }
     return n;
   });
+  // '고급 기능 모두 보기' 는 누른 버튼 **위** 목록에 칸을 끼운다 — 그 프레임에 누른 버튼을 제자리로(sticky 사이드바는 스크롤로 못 붙잡아 건너뛴다).
+  useLayoutEffect(pinPressed, [navAll]);
   const [matured, setMatured] = useState<{ insights: boolean; team: boolean }>(() => {
     try { const v = localStorage.getItem('nuri:nav-matured'); if (v) return JSON.parse(v) as { insights: boolean; team: boolean }; } catch { /* noop */ }
     return { insights: false, team: false };
@@ -922,8 +925,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   {(navOpen || !railNav) && <span className="text-2xs text-ink-muted">{navOpen ? '닫기' : '메뉴'}</span>}
                   <Icon name="chevron-down" size={16} className={['shrink-0 text-ink-muted transition-transform', navOpen ? 'rotate-180' : ''].join(' ')} />
                 </button>
-                {navOpen && (
-                  <div className="mt-1 animate-slide-up space-y-2 rounded-card border border-border-subtle bg-surface-high p-2">
+                <Fold open={navOpen}>
+                  <div className="mt-1 space-y-2 rounded-card border border-border-subtle bg-surface-high p-2">
                     {NAV_GROUPS.map((grp) => {
                       const items = navItems.filter((a) => a.group === grp);
                       if (items.length === 0) return null;
@@ -957,7 +960,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       </button>
                     )}
                   </div>
-                )}
+                </Fold>
               </div>
               {/* PC: 세로 사이드바 — 그룹 헤더 3개 + 라이브 배지 자리(IA3 에서 공급), 폭 w-44→w-52 */}
               {/* data-mystore-secbar / -secpanel / -active: index.css 의 mystore-sec 블록이 잡는 표식.
@@ -2193,7 +2196,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
           <span className="inline-flex items-center gap-1 text-2xs font-bold text-emerald-300"><Icon name="notebook" size={12} className="shrink-0" />그날 장부 명단 {ledgerPlayers.length > 0 ? <span className="text-ink-secondary">({ledgerPlayers.length}명)</span> : <span className="font-normal text-ink-muted">연결된 장부 없음</span>}</span>
           <span className="text-2xs text-ink-muted">{ledgerPanelOpen ? '접기 ▲' : '펼치기 ▼'}</span>
         </button>
-        {ledgerPanelOpen && (
+        <Fold open={ledgerPanelOpen}>
           <div className="space-y-2 border-t border-emerald-500/20 p-3">
             {ledgerPlayers.length === 0 ? (
               <p className="t-desc break-keep py-2 text-center text-ink-muted">이 날짜에 연결된 장부 바인 명단이 없습니다. 장부에서 바인을 먼저 기록하면 여기에 손님 명단이 뜹니다.</p>
@@ -2222,12 +2225,12 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
               </>
             )}
           </div>
-        )}
+        </Fold>
       </div>
 
       {/* 오너 지시(2026-08-27): 안내가 쓸데없이 길다 — 핵심 1줄 + 나머지는 접힘 */}
       <details className="group/rkhelp t-desc break-keep text-ink-muted">
-        <summary className="cursor-pointer list-none">
+        <summary onClick={onSummaryClick} className="cursor-pointer list-none">
           <span className="text-accent-300 dark:text-accent-200 font-semibold">닉네임 필수</span> · 실명 선택 · 줄 순서가 곧 등수
           <span className="ml-1 text-ink-muted underline decoration-border-default underline-offset-2 group-open/rkhelp:hidden">자세히</span>
         </summary>
@@ -2509,7 +2512,7 @@ function StaffHub({ venueId, active = true, scheduleOnly = false }: { venueId: s
               <span className="text-sm font-bold text-ink-primary">{it.label}</span>
               <span className="text-accent-300 dark:text-accent-200 text-xs">{isOpen ? '▲ 접기' : '▼ 펼치기'}</span>
             </button>
-            {isOpen && <div className="px-3 pb-3 border-t border-border-subtle pt-3">{it.node}</div>}
+            <Fold open={isOpen}><div className="px-3 pb-3 border-t border-border-subtle pt-3">{it.node}</div></Fold>
           </div>
         );
       })}

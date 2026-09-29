@@ -1,6 +1,7 @@
 // src/components/features/VoucherManageModal.tsx
 // 매장이용권 관리 — 업주: 배포/회수/삭제, 인증직원: 사용 처리. 금전적 가치(금액) 없음.
 // VoucherManagePanel(인라인, 매장관리 메뉴) + VoucherManageModal(대시보드 카드용 모달).
+import { Fold } from '../atoms/Fold';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
@@ -780,7 +781,7 @@ ${cards}
             <span className="text-xs font-bold text-accent-300">매장 QR <span className="font-normal text-ink-secondary">· 이용권 · 출석 · 회원가입</span></span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', qrOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
-          {qrOpen && (
+          <Fold open={qrOpen}>
             <div className="px-3 pb-3">
               <div className="grid grid-cols-2 gap-3">
                 {/* 🔴 Q5 — `srcOf` 로 **지금 매장의 이미지만** 통과시킨다. 비면 빈칸으로 두지 않고
@@ -831,7 +832,7 @@ ${cards}
                 <button type="button" onClick={printQr} className="btn-ghost mt-2 inline-flex w-full items-center justify-center gap-1.5 px-3 text-2xs"><Icon name="printer" size={13} /> 선택한 QR 출력해 매장에 비치</button>
               </div>
             </div>
-          )}
+          </Fold>
         </div>
       )}
 
@@ -843,6 +844,8 @@ ${cards}
           <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', ownerOpen ? 'rotate-180' : ''].join(' ')} />
         </button>
       )}
+      {/* 통계·보유자 현황을 한 판으로 펼친다(부모 space-y-3 을 판 안에서도 그대로). 보유자 목록은 예전엔 hidden 으로 접혀 있었다. */}
+      <Fold open={canIssue && ownerOpen} className="space-y-3">{() => (<>
       {canIssue && ownerOpen && statsErr != null && <LoadErrorCard what="보유자 통계" error={statsErr} onRetry={reload} compact />}
       {canIssue && ownerOpen && statsErr == null && stats && (
         <div className="rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/[0.07] via-surface-low to-surface-low p-3 space-y-2.5">
@@ -947,7 +950,7 @@ ${cards}
           매장 간 사용이라는 없는 개념을 화면이 암시하던 유일한 자리였다.
           사용 건수 자체는 바로 위 '활성/잔여 이용권 + 사용률' 카드가 이미 보여 준다 — 정보 손실 0. */}
 
-      <div className={canIssue && ownerOpen ? '' : 'hidden'}>
+      <div>
         <div className="mb-1 flex items-center justify-between gap-2">
           <p className="text-xs font-bold text-ink-secondary">보유자 현황</p>
           <p className="text-2xs text-ink-muted">보유 인원 <b className="text-accent-300 tabular-nums">{holderCount}</b>명 · 보유 갯수 <b className="text-ink-primary tabular-nums">{active.length}</b>개</p>
@@ -976,7 +979,7 @@ ${cards}
                           버튼)을 덮지 않는다(확인함). */}
                       {(isAdmin || g.isStore) && canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup({ name: holderLabel(g), ids: g.active.map((v) => v.id), usedCount: g.used.length })} aria-label="삭제" className="hit flex h-9 w-9 shrink-0 items-center justify-center rounded-input text-ink-muted hover:text-danger-light disabled:opacity-50"><Icon name="trash" size={13} /></button>}
                     </div>
-                    {open && !g.isStore && (
+                    <Fold open={open && !g.isStore}>
                       <div className="border-t border-border-subtle px-3 py-1.5">
                         {/* 전송 취소(구 회수) — 잘못 보낸 이용권을 되돌리는 유일한 수단(2026-08-29 신설).
                             미사용분에만 걸리고, 사용 완료분은 아래 내역으로 그대로 남는다. */}
@@ -1016,12 +1019,13 @@ ${cards}
                               ))}
                             </ul>}
                       </div>
-                    )}
+                    </Fold>
                   </li>
                 );
               })}
             </ul>}
       </div>
+      </>)}</Fold>
     </div>
   );
 }
@@ -1091,7 +1095,7 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
         <Icon name="chevron-down" size={12} className={['shrink-0 text-ink-muted transition-transform', open ? 'rotate-180' : ''].join(' ')} />
       </button>
 
-      {open && (
+      <Fold open={open}>
         <div className="mt-2 space-y-2">
           {/* 오너 2026-09-19: 라벨과 픽을 한 줄에 우겨넣지 말고 픽은 아랫줄로. '3000장' 삭제,
               요청 상한은 5000장(서버 request_voucher_credit 은 100000까지 받아 — 이 5000은 클라 쪽
@@ -1140,7 +1144,7 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
             </ul>
           )}
         </div>
-      )}
+      </Fold>
     </div>
   );
 }

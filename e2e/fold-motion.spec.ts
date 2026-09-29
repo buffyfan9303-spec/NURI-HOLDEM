@@ -4,17 +4,20 @@
 // 감사(scratchpad motion-typo-audit.md §1)가 잰 결함 부류를 하나씩 대표로 잡는다:
 //   ① 조건부 렌더 = 한 프레임 점프      → 일정 탐색 '공지사항'(App.tsx) — 높이가 여러 프레임에 걸쳐 변하는가(≥5단)
 //   ② 옆 요소가 사라져 버튼이 올라감   → 대회 상세 '참가 예약 더보기'(ScheduleDetailModal) — 전 −9.76px
+//   ③ 버튼 위에 내용이 생김            → 내 매장 대시보드 '더 보기'(StoreDashboard, 1440) — 전 +400px
 //   ④ 바닥에서 닫으면 클램프          → 법정 푸터 '추가 정보'(BusinessFooter details) — 전 +44px
+//   ⑤ 한 번에 하나 열리는 아코디언      → 내 매장 직원 관리(StaffHub) — 위 항목이 닫혀 줄면 누른 항목이 끌려 올라갔다
 //   + 동작 줄이기 = 즉시, 탭 재방문 = 재생 0.
 //
 // 🔴 CLS 로 재지 않는다 — 누른 뒤 500ms 안의 이동은 hadRecentInput 이라 CLS 에서 빠져 '0' 이 저절로 참이 된다(감사 §0).
 //   **누른 요소의 중심 y** 를 매 rAF 기록한다. top 이 아니라 중심인 이유: 전역 프레스 물리 `button:active{scale(.97)}` 가
 //   top 을 ±0.66px 흔든다(중심은 그대로) — 레이아웃 이동과 누름 효과를 가르기 위해서다.
 // 🔴 누름은 CDP 터치 120ms 홀드 — Playwright click/tap 은 누름 0ms 라 :active·transform 부류를 못 만든다(CLAUDE.md).
-// 음성 대조(2026-09-29): 수정 전 빌드(HEAD cf99d1c3)에서 ①②④ 모두 실패한다 — scratchpad motion-M-report.md.
+// 음성 대조(2026-09-29): 수정 전 빌드(HEAD cf99d1c3)에서 ①②③④ 모두 실패한다 — scratchpad motion-M-report.md.
 import { test, expect } from './_fixtures';
 import type { Locator, Page } from '@playwright/test';
 import { kstDay } from './_schedules';
+import { bootOwner, openMyStore } from './_mockOwner';
 
 type Frame = { cy: number | null; sh: number; dt: number }; // sh = 펼침을 품은 상자 높이
 type Summary = { dCenter: number; steps: number; dSH: number; long: number[] };
@@ -176,6 +179,23 @@ test.describe('Fold — 펼침/접힘은 부드럽고 누른 요소는 제자리
     expect(close.steps).toBeGreaterThanOrEqual(5);
   });
 
+  test('③ 내 매장 대시보드 더 보기(1440) — 버튼 위에 칸이 생기고 사라져도 누른 버튼은 제자리', async ({ page }) => {
+    await bootOwner(page, { viewport: { width: 1440, height: 900 } });
+    await openMyStore(page);
+    const btn = page.locator('main[data-tab="my-store"] button[aria-expanded]').filter({ hasText: /간단히 보기|더 보기 · 클락/ });
+    await expect(btn, '대시보드 더 보기 토글이 없다').toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(1500); // 대시보드 데이터 파도가 가라앉을 때까지
+    await btn.evaluate((b) => b.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(500);
+    expect(await btn.getAttribute('aria-expanded'), 'PC 는 펴고 시작한다(StoreDashboard 주석)').toBe('true');
+    const close = await toggle(page, btn);
+    const open = await toggle(page, btn);
+    console.log(`[fold ③ dashboard 1440] close ${JSON.stringify(close)} open ${JSON.stringify(open)}`);
+    expect(Math.abs(open.dSH), '더 보기가 칸을 안 바꿨다 — 대상이 아니다').toBeGreaterThan(100);
+    expect(close.dCenter, `접을 때 누른 버튼이 ${close.dCenter}px 움직였다`).toBeLessThanOrEqual(1);
+    expect(open.dCenter, `펼칠 때 누른 버튼이 ${open.dCenter}px 움직였다(수정 전 +400)`).toBeLessThanOrEqual(1);
+  });
+
   test('④ 법정 푸터 추가 정보 — 맨 아래에서 닫아도 요약줄이 내려오지 않는다(클램프)', async ({ page }) => {
     await gotoBrowse(page);
     const summary = page.locator('footer summary').filter({ hasText: '추가 정보' }).first();
@@ -193,5 +213,25 @@ test.describe('Fold — 펼침/접힘은 부드럽고 누른 요소는 제자리
     expect(after.open, '닫히지 않았다').toBe(false);
     expect(before.h - after.h, '닫았는데 내용이 안 줄었다 — 클램프 조건이 아니다').toBeGreaterThan(20);
     expect(close.dCenter, `바닥에서 닫자 요약줄이 ${close.dCenter}px 움직였다(수정 전 +44)`).toBeLessThanOrEqual(1);
+  });
+
+  test('⑤ 한 번에 하나 여는 아코디언(직원 관리) — 위 항목이 닫혀 줄어도 누른 항목은 제자리', async ({ page }) => {
+    await bootOwner(page, { viewport: { width: 1440, height: 700 } });
+    await openMyStore(page);
+    await page.locator('[data-mystore-secbar] button').filter({ hasText: '직원 관리' }).first().click();
+    const target = page.getByRole('button', { name: /딜러 출근 스케줄/ });
+    await expect(target, '직원 관리 아코디언이 없다').toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: /구성원 목록/ })).toContainText('접기'); // 첫 항목이 열린 채 시작
+    await page.waitForTimeout(1500);
+    // 위 항목이 줄어드는 만큼 스크롤을 되돌릴 여유가 있어야 한다 — scrollTop 은 0 아래로 못 가서, 맨 위 근처에서는
+    //   원리적으로 남는 만큼 끌려간다(보고서 '한계'). 그래서 문서 맨 아래(여유 최대)에서 누른다.
+    await page.evaluate(() => window.scrollTo(0, 1e7));
+    await page.waitForTimeout(400);
+    const room = await target.evaluate((b) => ({ y: scrollY, top: b.getBoundingClientRect().top }));
+    expect(room.top, '누를 항목이 화면 밖이다').toBeGreaterThan(0);
+    const s = await toggle(page, target, 'div.space-y-3');
+    console.log(`[fold ⑤ staff accordion 1440] ${JSON.stringify(s)}`);
+    expect(await target.textContent(), '누른 항목이 안 열렸다').toContain('접기');
+    expect(s.dCenter, `위 항목이 닫히며 누른 항목이 ${s.dCenter}px 끌려갔다`).toBeLessThanOrEqual(1);
   });
 });
