@@ -111,14 +111,16 @@ test.describe('FULL-RECHECK-2/C 클락', () => {
         const col = t.parentElement!.parentElement!; // CenterPanel → 중앙 열
         const rails = document.querySelector<HTMLElement>('[data-testid="clk-rails"]')!;
         const tb = t.getBoundingClientRect(), cb = col.getBoundingClientRect(), rb = rails.getBoundingClientRect();
-        return { fs: parseFloat(getComputedStyle(t).fontSize), tl: tb.left, tr: tb.right, cl: cb.left, cr: cb.right, colSpill: col.scrollWidth - col.clientWidth, railsL: rb.width > 0 ? rb.left : null };
+        // cqmin 은 **스테이지(컨테이너)** 기준 — 창 모드에선 법정 고지 한 줄(#18)만큼 스테이지가 뷰포트보다 낮다(전체화면이면 같다).
+        const sb = t.closest<HTMLElement>('[style*="--clk-bg"]')!.getBoundingClientRect();
+        return { fs: parseFloat(getComputedStyle(t).fontSize), cq: Math.min(sb.width, sb.height), tl: tb.left, tr: tb.right, cl: cb.left, cr: cb.right, colSpill: col.scrollWidth - col.clientWidth, railsL: rb.width > 0 ? rb.left : null };
       });
       console.log(`[recheck2 #4 ${w}x${h}]`, JSON.stringify(g));
       expect(g.colSpill, '중앙 열이 가로로 넘친다').toBeLessThanOrEqual(0);
       expect(g.tl).toBeGreaterThanOrEqual(g.cl - 0.5);
       expect(g.tr).toBeLessThanOrEqual(g.cr + 0.5);
       if (g.railsL != null) expect(g.tr, '타이머가 우측 레일을 덮는다').toBeLessThanOrEqual(g.railsL);
-      if (w !== 1280) expect(Math.abs(g.fs - Math.min(w, h) * 0.26), '16:9·세로 TV 타이머 크기가 바뀌었다(픽셀 불변 계약)').toBeLessThanOrEqual(0.5);
+      if (w !== 1280) expect(Math.abs(g.fs - g.cq * 0.26),'16:9·세로 TV 타이머 크기가 바뀌었다(픽셀 불변 계약)').toBeLessThanOrEqual(0.5);
     });
   }
 
