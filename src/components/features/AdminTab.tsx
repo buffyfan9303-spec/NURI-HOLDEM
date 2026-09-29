@@ -908,7 +908,9 @@ function SupportInquiriesPanel() {
     // 답변은 이미 저장됐다 — 메일 실패가 저장을 되돌리거나 초안을 살리지 않는다. 결과는 따로 알린다.
     try {
       const r = await sendInquiryReplyEmail(id);
-      toast.show(r === 'already' ? '답변을 등록했습니다 · 이 답변은 이미 메일로 보냈습니다' : '답변을 등록하고 문의자에게 메일을 보냈습니다', 'success');
+      toast.show(r === 'already' ? '답변을 등록했습니다 · 이 답변은 이미 메일로 보냈습니다'
+        : r === 'skipped' ? '답변을 등록했습니다 · 이메일 인증을 하지 않은 회원이라 메일은 보내지 않았습니다'
+        : '답변을 등록하고 문의자에게 메일을 보냈습니다', 'success');
     } catch (e) {
       toast.show(`답변은 등록했지만 메일을 보내지 못했습니다 — ${e instanceof Error ? e.message : '알 수 없는 오류'}`, 'error');
     } finally { setBusy(null); }

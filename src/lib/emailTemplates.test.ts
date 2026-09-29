@@ -9,7 +9,7 @@ import { AGE_HELPLINE, BIZ_EXTRA, BIZ_REQUIRED } from '../components/features/Bu
 import * as BRAND from '../../supabase/functions/_shared/email/brand.gen.ts';
 import { C, LOGO_H, LOGO_URL, LOGO_W, SITE, SUPPORT_URL } from '../../supabase/functions/_shared/email/layout.ts';
 import { supportReplyEmail } from '../../supabase/functions/_shared/email/supportReply.ts';
-import { AUTH_TEMPLATES, REQUIRED_VARS } from '../../supabase/templates/auth/templates.ts';
+import { AUTH_TEMPLATES, OTP_EXPIRY_SEC, REQUIRED_VARS } from '../../supabase/templates/auth/templates.ts';
 
 const ROOT = join(__dirname, '..', '..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf-8').replace(/\r\n/g, '\n');
@@ -55,6 +55,17 @@ describe('③ Supabase Go 템플릿 변수', () => {
   });
 });
 
+describe('③ 유효시간 문구 = 운영 mailer_otp_exp', () => {
+  // 2026-09-30 리드 실측: 운영 mailer_otp_exp = 3600초. 설정이 바뀌면 이 숫자와 templates.ts 의 OTP_EXPIRY_SEC 를 같이 고친다.
+  const MAILER_OTP_EXP = 3600;
+  it('원본 상수가 운영 값과 같다', () => { expect(OTP_EXPIRY_SEC).toBe(MAILER_OTP_EXP); });
+  it.each(Object.keys(REQUIRED_VARS))('%s — 본문에 적힌 시간이 3600초다', (key) => {
+    const found = [...AUTH_TEMPLATES[key].html.matchAll(/>(\d+)(시간|분)<\/strong>/g)].map((m) => Number(m[1]) * (m[2] === '시간' ? 3600 : 60));
+    expect(found.length, '유효시간 문구를 못 찾았다 — 이 계약이 아무것도 안 보고 있다').toBeGreaterThan(0);
+    expect(found.every((s) => s === MAILER_OTP_EXP)).toBe(true);
+  });
+});
+
 describe('③ 자산·호환', () => {
   it('로고는 저장소의 public/email/logo.png(2x PNG) — 삭제된 /2.png 를 가리키지 않는다', () => {
     expect(LOGO_URL).toBe(`${SITE}/email/logo.png`);
@@ -63,6 +74,10 @@ describe('③ 자산·호환', () => {
     expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([LOGO_W * 2, LOGO_H * 2]);
     for (const [, html] of ALL) expect(html).not.toContain('/2.png');
     expect(existsSync(join(ROOT, 'public/2.png'))).toBe(false);
+    // 제재 안내 메일도 같은 로고 자산을 쓴다(예전 /2.png — 깨진 이미지)
+    const sanction = read('supabase/functions/notify-sanction/index.ts').replace(/^\s*\/\/.*$/gm, ''); // 주석(이력) 제외
+    expect(sanction).not.toContain('2.png');
+    expect(sanction).toContain("from '../_shared/email/layout.ts'");
   });
   it.each(ALL)('%s — 스크립트·외부 CSS·웹폰트 없음, 고정 폭 600 이하', (_k, html) => {
     expect(html).not.toMatch(/<script|<link\b|@import|@font-face|javascript:/i);

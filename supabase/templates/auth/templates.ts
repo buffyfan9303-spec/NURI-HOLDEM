@@ -5,11 +5,15 @@
 // 🔴 Go 템플릿 변수는 **원본(대시보드) 템플릿이 쓰던 것만** 쓴다 — 없는 변수를 쓰면 빈 문자열이 나간다.
 //   confirmation·magic_link: {{ .ConfirmationURL }} · email_change: {{ .ConfirmationURL }} {{ .NewEmail }}
 //   recovery·reauthentication: {{ .Token }} (앱이 코드 입력 흐름이다 — src/api/auth.ts verifyOtp('recovery') · reauthenticate())
-// 🔴 유효시간은 Supabase 설정 mailer_otp_exp(링크·코드 공용)를 **따라 적는** 값이다. 앱도 5분으로 가정한다
-//   (App.tsx 'nh_pw_otp' 5 * 60 * 1000). 설정을 바꾸면 여기와 그 두 곳을 같이 바꾼다.
+// 🔴 유효시간은 Supabase 설정 mailer_otp_exp(링크·코드 공용)를 **따라 적는** 값이다 — 2026-09-30 리드 실측 3600초.
+//   설정을 바꾸면 OTP_EXPIRY_SEC 하나만 고치고 재생성한다(src/lib/emailTemplates.test.ts 가 문구의 시간 = 이 값을 대조한다).
+//   (App.tsx 'nh_pw_otp' 의 5분은 메일 앱을 다녀온 뒤 코드 입력 화면을 다시 여는 창일 뿐, 만료 시간이 아니다.)
 import { button, codeBox, eyebrow, h1, layout, linkFallback, notice, p, small, strong } from '../../functions/_shared/email/layout.ts';
 
-export const OTP_EXPIRY_MIN = 5;
+export const OTP_EXPIRY_SEC = 3600;
+/** 문구용 — 1시간 단위면 'N시간', 아니면 'N분'. */
+export const expiryLabel = (sec: number) => (sec % 3600 === 0 ? `${sec / 3600}시간` : `${Math.round(sec / 60)}분`);
+const EXPIRY = expiryLabel(OTP_EXPIRY_SEC);
 
 const ignore = (what: string) => notice(`본인이 요청하지 않았다면 이 메일을 무시해 주세요. ${what}`);
 
@@ -34,7 +38,7 @@ export const AUTH_TEMPLATES: Record<string, AuthTemplate> = Object.fromEntries([
     h1('가입을 환영해요'),
     p('아래 버튼을 누르면 이메일 인증이 끝나고 NURI HOLDEM 을 바로 이용할 수 있어요.', 20),
     button('{{ .ConfirmationURL }}', '이메일 인증하기'),
-    small(`인증 링크는 ${strong(`${OTP_EXPIRY_MIN}분`)} 동안, 한 번만 쓸 수 있어요. 시간이 지났다면 앱에서 인증 메일을 다시 받아 주세요.`, 16),
+    small(`인증 링크는 ${strong(`${EXPIRY}`)} 동안, 한 번만 쓸 수 있어요. 시간이 지났다면 앱에서 인증 메일을 다시 받아 주세요.`, 16),
     linkFallback('{{ .ConfirmationURL }}'),
     ignore('가입은 완료되지 않습니다.'),
   ]),
@@ -43,7 +47,7 @@ export const AUTH_TEMPLATES: Record<string, AuthTemplate> = Object.fromEntries([
     h1('비밀번호 재설정 인증번호'),
     p('아래 인증번호를 앱의 비밀번호 찾기 화면에 입력하면 새 비밀번호를 정할 수 있어요.', 20),
     codeBox('{{ .Token }}'),
-    small(`인증번호는 ${strong(`${OTP_EXPIRY_MIN}분`)} 뒤에 만료돼요. 누구에게도 알려 주지 마세요 — 운영팀도 인증번호를 묻지 않습니다.`, 20),
+    small(`인증번호는 ${strong(`${EXPIRY}`)} 뒤에 만료돼요. 누구에게도 알려 주지 마세요 — 운영팀도 인증번호를 묻지 않습니다.`, 20),
     ignore('비밀번호는 바뀌지 않습니다.'),
   ]),
   t('magic_link', '[NURI HOLDEM] 로그인 링크', '버튼을 누르면 바로 로그인돼요.', [
@@ -51,7 +55,7 @@ export const AUTH_TEMPLATES: Record<string, AuthTemplate> = Object.fromEntries([
     h1('로그인 링크가 도착했어요'),
     p('아래 버튼을 누르면 NURI HOLDEM 에 로그인돼요.', 20),
     button('{{ .ConfirmationURL }}', '로그인하기'),
-    small(`링크는 ${strong(`${OTP_EXPIRY_MIN}분`)} 동안, 한 번만 쓸 수 있어요.`, 16),
+    small(`링크는 ${strong(`${EXPIRY}`)} 동안, 한 번만 쓸 수 있어요.`, 16),
     linkFallback('{{ .ConfirmationURL }}'),
     ignore('로그인되지 않습니다.'),
   ]),
@@ -60,7 +64,7 @@ export const AUTH_TEMPLATES: Record<string, AuthTemplate> = Object.fromEntries([
     h1('새 이메일 주소를 확인해 주세요'),
     p(`계정 이메일을 ${strong('{{ .NewEmail }}')} 로 바꾸려면 아래 버튼을 눌러 주세요.`, 20),
     button('{{ .ConfirmationURL }}', '이메일 변경 확인하기'),
-    small(`링크는 ${strong(`${OTP_EXPIRY_MIN}분`)} 동안, 한 번만 쓸 수 있어요.`, 16),
+    small(`링크는 ${strong(`${EXPIRY}`)} 동안, 한 번만 쓸 수 있어요.`, 16),
     linkFallback('{{ .ConfirmationURL }}'),
     ignore('이메일은 바뀌지 않습니다.'),
   ]),
@@ -69,7 +73,7 @@ export const AUTH_TEMPLATES: Record<string, AuthTemplate> = Object.fromEntries([
     h1('본인 확인 인증번호'),
     p('비밀번호를 바꾸려면 아래 인증번호를 앱 화면에 입력해 주세요.', 20),
     codeBox('{{ .Token }}'),
-    small(`인증번호는 ${strong(`${OTP_EXPIRY_MIN}분`)} 뒤에 만료돼요. 누구에게도 알려 주지 마세요 — 운영팀도 인증번호를 묻지 않습니다.`, 20),
+    small(`인증번호는 ${strong(`${EXPIRY}`)} 뒤에 만료돼요. 누구에게도 알려 주지 마세요 — 운영팀도 인증번호를 묻지 않습니다.`, 20),
     ignore('비밀번호는 바뀌지 않습니다.'),
   ]),
 ]);

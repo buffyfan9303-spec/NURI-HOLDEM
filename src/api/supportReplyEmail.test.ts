@@ -23,7 +23,8 @@ function world(over: Partial<InquiryRow> = {}) {
     getUserId: async (t) => ({ 'tok-admin': ADMIN, 'tok-user': USER, 'tok-other': OTHER } as Record<string, string>)[t] ?? null,
     getRole: async (uid) => (uid === ADMIN ? 'admin' : 'user'),
     getInquiry: async (id) => { calls.getInquiry++; return id === row.id ? { ...row } : null; },
-    getRecipient: async (uid) => (uid === OTHER ? 'owner@example.com' : uid === USER ? 'user@example.com' : null),
+    getRecipient: async (uid) => (uid === OTHER ? { email: 'owner@example.com', confirmed: true }
+      : uid === 'unconfirmed' ? { email: 'someone-else@example.com', confirmed: false } : { email: null, confirmed: false }),
     getResend: async () => ({ key: 're_test', from: 'NURI HOLDEM <noreply@nuriholdem.com>' }),
     // DB 의 CAS 를 흉내: answered_at 이 같고 answer_emailed_for 가 prev 일 때만 교환
     claim: async (id, at, prev) => {
@@ -98,6 +99,16 @@ describe('support-reply-email — 입력·받는 사람은 서버가 정한다',
   });
 });
 
+describe('support-reply-email — 미인증 주소(보안 검토 R2)', () => {
+  it('email_confirmed_at 이 없는 문의자에게는 보내지 않고 건너뛴다 — 선점도 남기지 않는다', async () => {
+    const w = world({ user_id: 'unconfirmed' });
+    const r = await run(w, 'tok-admin');
+    expect(r).toEqual({ status: 200, body: { sent: false, skipped: true, code: 'unconfirmed' } });
+    expect(w.sent).toHaveLength(0);
+    expect(w.row.answer_emailed_for).toBeNull();
+  });
+});
+
 describe('support-reply-email — 중복 발송 차단', () => {
   it('같은 답변은 두 번째 호출에서 409 already_sent 이고 메일은 한 통뿐이다', async () => {
     const w = world();
@@ -165,6 +176,8 @@ describe('배선 계약', () => {
     expect(idx.toLowerCase()).not.toContain('reply_to');
     expect(idx.toLowerCase()).not.toContain('reply-to');
     expect(idx).toContain("'Idempotency-Key': idempotencyKey");
+    // 보안 검토 R3: Resend 오류 본문은 수신 주소를 되풀이할 수 있다 — 상태 코드만 남긴다(logic 의 deps.log(status)).
+    expect(idx).not.toMatch(/\br\.(text|json)\(/);
   });
   it('관리자 답변 화면은 저장 성공 뒤에만 메일을 부르고, 메일 실패를 따로 알린다', () => {
     const src = code('src/components/features/AdminTab.tsx');
@@ -176,5 +189,6 @@ describe('배선 계약', () => {
   });
   it('클라이언트는 문의 id 하나만 보낸다', () => {
     expect(code('src/api/support.ts')).toContain("functions.invoke('support-reply-email', { body: { inquiryId: id } })");
+    expect(code('src/api/support.ts')).toContain("if (data?.skipped === true) return 'skipped';");
   });
 });

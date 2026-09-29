@@ -31,8 +31,8 @@ export interface Deps {
   getUserId(token: string): Promise<string | null>;
   getRole(uid: string): Promise<string | null>;
   getInquiry(id: string): Promise<InquiryRow | null>;
-  /** 문의자의 로그인 이메일(auth.users) */
-  getRecipient(userId: string): Promise<string | null>;
+  /** 문의자의 로그인 이메일(auth.users)과 인증 여부(email_confirmed_at) */
+  getRecipient(userId: string): Promise<{ email: string | null; confirmed: boolean }>;
   getResend(): Promise<{ key: string; from: string } | null>;
   /** answer_emailed_for: prev → answeredAt 비교-교환. 선점했으면 true */
   claim(id: string, answeredAt: string, prev: string | null): Promise<boolean>;
@@ -73,8 +73,12 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     if (q.status !== 'answered' || !q.answer?.trim() || !q.answered_at) return fail(409, 'not_answered', '답변이 등록되지 않은 문의입니다');
     if (q.answer_emailed_for === q.answered_at) return fail(409, 'already_sent', '이 답변은 이미 메일로 보냈습니다');
 
-    const to = await deps.getRecipient(q.user_id);
-    if (!to) return fail(404, 'no_email', '문의자의 이메일을 찾을 수 없습니다');
+    const rcpt = await deps.getRecipient(q.user_id);
+    if (!rcpt.email) return fail(404, 'no_email', '문의자의 이메일을 찾을 수 없습니다');
+    // 인증 안 된 주소로는 보내지 않는다 — 가입 인증이 꺼지면 남의 주소로 가입해 NURI 명의 메일을 보내게 만들 수 있다(보안 검토 R2).
+    //   오류가 아니라 '건너뜀' 이다(선점 전이라 표식도 남기지 않는다).
+    if (!rcpt.confirmed) return json({ sent: false, skipped: true, code: 'unconfirmed' });
+    const to = rcpt.email;
     const resend = await deps.getResend();
     if (!resend) return fail(503, 'not_configured', '메일 발송이 설정되지 않았습니다');
 

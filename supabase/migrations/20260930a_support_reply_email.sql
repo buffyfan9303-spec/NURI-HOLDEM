@@ -27,12 +27,33 @@ alter table public.support_inquiries
 comment on column public.support_inquiries.answer_emailed_for is
   '답변 메일로 보낸 판(그때의 answered_at). support-reply-email 엣지 함수가 CAS 로 선점한다. null = 아직 안 보냄.';
 
+-- R1(2026-09-30 critical-reviewer 보강) — 문의 **접수** 때 답변·발송 표식을 못 채우게 한다.
+--   authenticated 는 테이블 단위 INSERT 권한이라 새 컬럼도 자동으로 쓸 수 있고, 기존 WITH CHECK 는 작성자 본인만 봤다
+--   → 문의자가 '답변 완료' 행이나 answer_emailed_for 를 채운 행을 스스로 만들 수 있었다(본인에게만 보이는 기존 틈).
+--   기존 조건(라이브 pg_policy 실측 2026-09-30: `(user_id = ( SELECT auth.uid() AS uid))`, permissive, roles = PUBLIC)을 그대로 두고 덧붙인다.
+--   ALTER POLICY 는 역할·permissive·USING 을 건드리지 않고 WITH CHECK 만 바꾼다.
+--   유일한 접수 경로 src/api/support.ts submitInquiry 는 user_id·user_name·category·title·content 만 넣는다 → 기본값(status 'open', 나머지 null)으로 통과.
+alter policy support_insert on public.support_inquiries
+  with check (
+    user_id = (select auth.uid())
+    and status = 'open'
+    and answer is null
+    and answered_at is null
+    and answer_emailed_for is null
+  );
+
 -- 자가검사
 do $$
+declare chk text;
 begin
   if not exists (select 1 from information_schema.columns
                  where table_schema = 'public' and table_name = 'support_inquiries' and column_name = 'answer_emailed_for') then
     raise exception 'answer_emailed_for 컬럼이 없다';
+  end if;
+  select pg_get_expr(polwithcheck, polrelid) into chk from pg_policy
+   where polrelid = 'public.support_inquiries'::regclass and polname = 'support_insert';
+  if chk is null or chk not like '%auth.uid()%' or chk not like '%answer_emailed_for IS NULL%' or chk not like '%''open''%' then
+    raise exception 'support_insert WITH CHECK 가 기대와 다르다: %', chk;
   end if;
 end $$;
 
@@ -45,4 +66,10 @@ end $$;
 --       where s.id = t.id and s.answered_at = t.answered_at and s.answer_emailed_for is null returning s.id;  -- 1행
 --     (같은 문장 다시) -- 0행
 --     select count(*) from public.notifications where created_at > now() - interval '1 minute' and type='qna'; -- 0 (알림 트리거 무반응)
+--     -- R1: 일반 회원(역할 먼저 조회해서 고를 것)으로 set local role authenticated + request.jwt.claims sub=<uid>
+--     insert into public.support_inquiries(user_id, category, title, content) values (<uid>, '기타', 't', 'c');            -- 양성: 통과
+--     insert into public.support_inquiries(user_id, category, title, content, status, answer, answered_at)
+--       values (<uid>, '기타', 't', 'c', 'answered', 'x', now());                                                         -- 음성: RLS 위반
+--     insert into public.support_inquiries(user_id, category, title, content, answer_emailed_for) values (<uid>, '기타', 't', 'c', now()); -- 음성
+--     insert into public.support_inquiries(user_id, category, title, content) values (<다른 uid>, '기타', 't', 'c');         -- 음성(기존 조건 보존)
 --   rollback;

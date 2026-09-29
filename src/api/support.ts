@@ -73,11 +73,12 @@ export async function answerInquiry(id: string, answer: string): Promise<void> {
 /** 운영자: 답변 저장 **뒤** 문의자에게 답변 메일 발송(엣지 함수 support-reply-email).
  *  보내는 것은 문의 id 하나 — 받는 사람·본문은 서버가 DB 에서 조회한다. 같은 답변은 서버가 한 번만 보낸다('already').
  *  실패는 던진다(서버의 고정 문구) — 답변 저장은 이미 끝났으므로 호출자는 저장 성공과 따로 알린다. */
-export async function sendInquiryReplyEmail(id: string): Promise<'sent' | 'already'> {
+export async function sendInquiryReplyEmail(id: string): Promise<'sent' | 'already' | 'skipped'> {
   if (IS_MOCK) return 'sent';
   const { data, error } = await supabase.functions.invoke('support-reply-email', { body: { inquiryId: id } });
   if (!error) {
     if (data?.sent === true) return 'sent';
+    if (data?.skipped === true) return 'skipped'; // 이메일 미인증 회원 — 서버가 일부러 보내지 않았다
     throw new Error('답변 메일을 보내지 못했습니다');
   }
   // FunctionsHttpError: error.context 가 Response — 서버의 code·고정 문구를 꺼낸다(identity.ts 와 같은 조리법).

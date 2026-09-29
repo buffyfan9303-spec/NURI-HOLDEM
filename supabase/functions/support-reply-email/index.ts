@@ -26,7 +26,8 @@ Deno.serve((req) => handle(req, {
   },
   async getRecipient(userId) {
     const { data, error } = await admin.auth.admin.getUserById(userId);
-    return error ? null : data?.user?.email ?? null;
+    const u = error ? null : data?.user;
+    return { email: u?.email ?? null, confirmed: !!u?.email_confirmed_at };
   },
   async getResend() {
     // weekly-email-digest 와 같은 관행: secret_settings(service_role 전용) 우선, 없으면 함수 환경변수.
@@ -51,7 +52,6 @@ Deno.serve((req) => handle(req, {
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify({ from, to: [to], subject, html }),
     });
-    if (!r.ok) console.error('[support-reply-email] Resend body', await r.text().catch(() => ''));
     return { ok: r.ok, status: r.status };
   },
   log: (...a) => console.error(...a),
