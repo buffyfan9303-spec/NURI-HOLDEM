@@ -10,7 +10,8 @@
 // 이 파일이 보는 것
 //   1. 첫 방문 진입: 진입 전/rAF/+140ms/+1000ms 타임라인에서 scrollY·헤더 높이·서브탭 바 y 가 2 CSS px 이내로 유지된다.
 //   2. 재방문 복원: 랭킹에서 읽던 위치가 다른 섹션을 다녀와도 2px 이내로 돌아온다(13px 클램프 손실 회귀).
-//   3. 짧은 섹션(별도 케이스): 유지할 수 없으면 `min(이전 Y, 새 문서 최대)` 로 **물리 클램프**되고 그 뒤 더 움직이지 않는다.
+//   3. 짧은 섹션(별도 케이스, 고정 Y 두 개): Y=80 은 D8 이 안 도는 자리 — 유지할 수 없으면 `min(이전 Y, 새 문서 최대)` 로
+//      **물리 클램프**되고 그 뒤 더 움직이지 않는다. Y=200 은 D8 이 도는 자리 — 판 윗변이 서브탭 바 밑변에 ±2px 로 붙는다.
 //   4. 넓은 폭: 6개 슬롯 폭 동일(±1px) · 가용 폭 채움 · 라벨 중심 = 슬롯 중심(±1px) · 밑줄 중심 = 라벨 중심(±1px) · 가로 넘침 없음.
 //   5. 좁은 폭: 한 줄 스크롤 레일 — 첫/끝 메뉴가 잘리지 않고, 끝 탭을 누르면 레일(scrollLeft)만 움직여 활성 탭이 온전히 보이며
 //      문서 세로 스크롤은 움직이지 않는다.
@@ -20,6 +21,7 @@
 //   · 운영 DB 데이터 길이에 의존한다(게시판·랭킹 본문 높이). 전제 조건이 안 되면 skip 이 아니라 **실패**로 알린다.
 //
 // 음성 대조: CommunityTab.tsx 의 첫 방문 분기를 `?? 0` 으로 되돌리면 1 이 실패한다.
+//            D8 블록(`if (d < -1) {`)을 `if (false && d < -1) {` 로 끄면 3 의 Y=200 이 실패한다.
 //            TierLeaderboard.tsx 버튼의 `flex-1 basis-0 min-w-max` 를 `shrink-0` 으로 되돌리면 4 가,
 //            centerInRail 호출을 지우면 5 가 실패한다.
 // 실행: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/rank-scroll-slots.spec.ts
@@ -29,13 +31,14 @@ import { stabilizeBackstack, dismissOverlays } from './_session';
 
 const RANK_LABELS = ['활동 순위', '입상', '명예의 전당', '국내 순위', '순위 인증', '상점'];
 
-interface Probe { winY: number; docH: number; clientH: number; maxScroll: number; headerH: number; secbarY: number | null; railY: number | null }
+interface Probe { winY: number; docH: number; clientH: number; maxScroll: number; headerH: number; secbarY: number | null; secbarBottom: number | null; panelY: number | null; railY: number | null }
 
 function probe(page: Page): Promise<Probe> {
   return page.evaluate(() => {
     const doc = document.scrollingElement ?? document.documentElement;
     const y = (sel: string) => { const el = document.querySelector(sel); return el ? +el.getBoundingClientRect().y.toFixed(2) : null; };
     const header = document.querySelector('[data-stack-header]');
+    const bar = document.querySelector('[data-community-secbar]');
     return {
       winY: +window.scrollY.toFixed(2),
       docH: doc.scrollHeight,
@@ -43,6 +46,8 @@ function probe(page: Page): Promise<Probe> {
       maxScroll: Math.max(0, doc.scrollHeight - doc.clientHeight),
       headerH: header ? +header.getBoundingClientRect().height.toFixed(2) : 0,
       secbarY: y('[data-community-secbar]'),
+      secbarBottom: bar ? +bar.getBoundingClientRect().bottom.toFixed(2) : null,
+      panelY: y('[data-community-secpanel]'),
       railY: y('[data-rank-tabbar]'),
     };
   });
@@ -85,10 +90,16 @@ async function gotoBoardAt(page: Page, y: number): Promise<Probe> {
   const p0 = await probe(page);
   expect(p0.maxScroll, `전제 조건: 게시판 문서 최대 스크롤(${p0.maxScroll}px)이 ${y}px 보다 작다 — 이 데이터로는 유지 검사를 할 수 없다`).toBeGreaterThanOrEqual(y);
   await scrollWin(page, y);
-  return probe(page);
+  const p = await probe(page);
+  // 헤더 접힘(스크롤 앵커링)으로 정착값은 y 보다 최대 ~13px 작다 — 그보다 더 작으면 그 Y 에 못 간 것이다(조용히 다른 Y 를 재지 않는다).
+  expect(p.winY, `전제 조건: 게시판을 ${y}px 로 내렸는데 scrollY=${p.winY} — 문서가 짧아 그 Y 에 못 갔다`).toBeGreaterThanOrEqual(y - 20);
+  return p;
 }
 
-const fmt = (p: Probe) => `winY=${p.winY} headerH=${p.headerH} secbarY=${p.secbarY} railY=${p.railY} docH=${p.docH} max=${p.maxScroll}`;
+/** 판 윗변 − 서브탭 바 밑변. 음수면 판 윗부분이 바 밑에 가려져 있다(D8). */
+const panelGap = (p: Probe) => (p.panelY ?? 0) - (p.secbarBottom ?? 0);
+
+const fmt = (p: Probe) => `winY=${p.winY} headerH=${p.headerH} secbarY=${p.secbarY} panelGap=${panelGap(p).toFixed(2)} railY=${p.railY} docH=${p.docH} max=${p.maxScroll}`;
 
 test.describe('UI-06 랭킹 진입 — 문서·헤더가 움직이지 않는다 (390×844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
@@ -96,6 +107,8 @@ test.describe('UI-06 랭킹 진입 — 문서·헤더가 움직이지 않는다 
   test('🔴 첫 방문: 게시판 80px 에서 랭킹을 눌러도 scrollY·헤더·서브탭 바가 2px 이내', async ({ page }) => {
     await openCommunity(page);
     const before = await gotoBoardAt(page, 80);
+    // 전제: 판 윗변이 이미 바 밑이라 D8(아래 짧은 섹션 케이스)이 돌지 않는 자리 — 여기서 움직이면 그건 UI-06 회귀다.
+    expect(panelGap(before), `전제 조건: 80px 에서 판 윗변이 바에 가려져 있다(${fmt(before)}) — D8 이 도는 자리라 '유지' 검사가 성립하지 않는다`).toBeGreaterThanOrEqual(-1);
     const { raf, t140, t1000 } = await clickAndTimeline(page, 'rank');
     const log = `\n  진입 전 ${fmt(before)}\n  rAF     ${fmt(raf)}\n  +140ms  ${fmt(t140)}\n  +1000ms ${fmt(t1000)}`;
     for (const [name, p] of [['rAF', raf], ['+140ms', t140], ['+1000ms', t1000]] as const) {
@@ -129,16 +142,35 @@ test.describe('UI-06 랭킹 진입 — 문서·헤더가 움직이지 않는다 
     expect(Math.abs(back.t1000.winY - atRank.winY), `+1000ms 복원 오차 ${Math.abs(back.t1000.winY - atRank.winY)}px (복원 순간 문서 높이 클램프 회귀)${log}`).toBeLessThanOrEqual(2);
   });
 
-  test('짧은 섹션(별도 케이스): 유지할 수 없으면 새 문서 최대로 클램프되고 그 뒤 더 움직이지 않는다', async ({ page }) => {
-    await openCommunity(page);
-    const p0 = await probe(page);
-    const before = await gotoBoardAt(page, Math.min(300, p0.maxScroll > 300 ? 300 : 80));
-    const { t140, t1000 } = await clickAndTimeline(page, 'dealer'); // 첫 방문 · 길이는 데이터에 따라 다르다
-    const log = `\n  진입 전 ${fmt(before)}\n  +140ms  ${fmt(t140)}\n  +1000ms ${fmt(t1000)}`;
-    // 기대값은 '이전 Y' 가 아니라 '이전 Y 와 새 문서 최대 중 작은 쪽' — 짧으면 물리 클램프가 정답이고 그것을 숨기지 않는다.
-    expect(Math.abs(t1000.winY - Math.min(before.winY, t1000.maxScroll)), `클램프 기대값 ${Math.min(before.winY, t1000.maxScroll)} 과 다르다${log}`).toBeLessThanOrEqual(2);
-    expect(Math.abs(t1000.winY - t140.winY), `+140ms 뒤에도 문서가 더 움직였다(보정 타이머·반복 스크롤 의심)${log}`).toBeLessThanOrEqual(2);
-  });
+  // 두 분기를 **고정 Y** 로 둘 다 돈다(2026-09-30). 예전엔 목표 Y 를 '홀덤펍 섹션 최대 스크롤' 로 골라(게시판 길이가 아니다)
+  // 운영 매장이 3곳 늘자 80 → 300 으로 바뀌고 D8 분기가 갑자기 돌아 빨개졌다. 이제 Y 는 데이터와 무관하고, 문서가 짧아
+  // 그 Y 에 못 가면 gotoBoardAt 이 이유를 적어 **실패**한다(아무것도 안 재고 초록이 되는 길이 없다).
+  //   · Y=80  : 판 윗변이 이미 바 밑 → D8 이 안 돈다 → UI-06 계약(유지, 짧으면 물리 클램프).
+  //   · Y=200 : 판 윗변이 바 밑에 말려 있다 → D8(CommunityTab 첫 방문 else 분기, 오너 2026-09-29)이 판 윗변을 바 밑까지 올린다.
+  for (const c of [{ y: 80, d8: false }, { y: 200, d8: true }]) {
+    test(`짧은 섹션(별도 케이스) Y=${c.y}: ${c.d8 ? '판 윗변이 바 밑에 가려져 있으면 바 밑으로 정렬된다(D8)' : '유지할 수 없으면 새 문서 최대로 클램프되고 그 뒤 더 움직이지 않는다'}`, async ({ page }) => {
+      await openCommunity(page);
+      const before = await gotoBoardAt(page, c.y);
+      const gap0 = panelGap(before);
+      expect(c.d8 ? gap0 < -1 : gap0 >= -1, `전제 조건: Y=${c.y} 에서 판 윗변−바 밑변=${gap0.toFixed(2)} — ${c.d8 ? 'D8 이 도는 자리(≤ -1)여야 한다' : 'D8 이 안 도는 자리(≥ -1)여야 한다'}
+  진입 전 ${fmt(before)}`).toBe(true);
+      const { t140, t1000 } = await clickAndTimeline(page, 'dealer'); // 첫 방문 · 길이는 데이터에 따라 다르다
+      const log = `
+  진입 전 ${fmt(before)}
+  +140ms  ${fmt(t140)}
+  +1000ms ${fmt(t1000)}`;
+      // '이전 Y' 가 아니라 '이전 Y 와 새 문서 최대 중 작은 쪽' — 짧으면 물리 클램프가 정답이고 그것을 숨기지 않는다.
+      const keep = Math.min(before.winY, t1000.maxScroll);
+      // 줄어든 양. D8 케이스만 크게 줄고(정렬이 실제로 돌았다), 유지 케이스는 ±2px 이내여야 한다(짧으면 물리 클램프 = keep).
+      const moved = keep - t1000.winY;
+      expect(moved, `scrollY 가 기대(${keep})보다 ${moved.toFixed(2)}px ${moved > 0 ? '더 올라갔다' : '더 내려갔다'}(D8 ${c.d8 ? '정렬이 돌지 않았거나 과하게 돌았다' : '이 도는 자리가 아닌데 움직였다'})${log}`).toBeGreaterThanOrEqual(-2);
+      expect(moved > 2, `D8 정렬 ${c.d8 ? '이 돌지 않았다' : '이 안 도는 자리에서 돌았다'} — scrollY ${before.winY} → ${t1000.winY}(유지 기대 ${keep})${log}`).toBe(c.d8);
+      // 어느 쪽이든 판 윗부분이 바 밑에 가려지면 안 되고, D8 케이스는 바 밑변에 ±2px 로 붙어야 한다.
+      expect(panelGap(t1000), `판 윗변−바 밑변 ${panelGap(t1000).toFixed(2)}px — 판 윗부분이 바 밑에 가려졌다${log}`).toBeGreaterThanOrEqual(-2);
+      expect(!c.d8 || panelGap(t1000) <= 2, `판 윗변−바 밑변 ${panelGap(t1000).toFixed(2)}px — 바 밑에 붙지 않았다${log}`).toBe(true);
+      expect(Math.abs(t1000.winY - t140.winY), `+140ms 뒤에도 문서가 더 움직였다(보정 타이머·반복 스크롤 의심)${log}`).toBeLessThanOrEqual(2);
+    });
+  }
 });
 
 // ── UI-07 ─────────────────────────────────────────────────────────────────────
