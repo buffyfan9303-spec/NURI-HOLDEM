@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { getMyBlockedIds, listMyBlocks, blockUser, unblockUser, type BlockedUser } from '../api/blocks';
+import { createBlockLoader } from '../lib/blockLoader';
 
 interface BlockContextValue {
   blockedIds: Set<string>;
@@ -20,12 +21,14 @@ export function BlockProvider({ children }: { children: ReactNode }) {
   const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set());
   const [blocks, setBlocks] = useState<BlockedUser[]>([]);
 
-  const reload = useCallback(async () => {
-    if (!user) { setBlockedIds(new Set()); setBlocks([]); return; }
-    const [ids, list] = await Promise.all([getMyBlockedIds(), listMyBlocks()]);
-    setBlockedIds(ids);
-    setBlocks(list);
-  }, [user]);
+  // 계정이 바뀌면 조회 전에 비우고, 같은 계정 재조회 실패는 직전 목록 유지, 늦은 응답은 버린다(lib/blockLoader).
+  const [load] = useState(() => createBlockLoader({
+    fetch: () => Promise.all([getMyBlockedIds(), listMyBlocks()]),
+    apply: ([ids, list]) => { setBlockedIds(ids); setBlocks(list); },
+    clear: () => { setBlockedIds(new Set()); setBlocks([]); },
+  }));
+  const uid = user?.id ?? null;
+  const reload = useCallback(() => load(uid), [load, uid]);
 
   useEffect(() => { reload().catch(() => {}); }, [reload]);
 
