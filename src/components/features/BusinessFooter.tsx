@@ -25,20 +25,10 @@ export const BIZ_REQUIRED: [string, string][] = [
   ['사업장 주소', '경기도 남양주시 다산중앙로82번안길 166-46, 207-본244호'],
   ['전화번호', '070-8098-1727'],
 ];
-// 연령·도박문제 상담 고지 — 아래 푸터와 LegalNoticeLine(관전 클락) 두 곳이 같은 상수를 쓴다(문구 두 벌 금지).
-const AGE_NOTICE = '만 19세 미만은 이용할 수 없습니다';
-const HELPLINE_LABEL = '도박문제 상담';
-const HELPLINE = '1336(24시간·무료)';
-
-/** 법정 고지 한 줄 — 푸터를 둘 수 없는 전면 화면용(관전 클락 ClockDisplay, 2026-09-29 오너 결정 #18).
- *  사업자 정보는 요약(상호·사업자등록번호)만, 전체 5항목은 앱 푸터가 계속 싣는다. 폭이 좁으면 줄바꿈한다(잘라내지 않는다). */
-export function LegalNoticeLine({ className = '' }: { className?: string }) {
-  return (
-    <p className={className}>
-      {BIZ_REQUIRED.slice(0, 2).map(([k, v]) => `${k} ${v}`).join(' · ')} · {AGE_NOTICE} · {HELPLINE_LABEL} <span className="whitespace-nowrap">{HELPLINE}</span>
-    </p>
-  );
-}
+// 연령·도박문제 상담 고지 [연령, 상담 라벨, 번호] — 아래 푸터와 관전 클락(ClockDisplay) 한 줄이 같은 상수를 쓴다(문구 두 벌 금지).
+//   한 줄 컴포넌트는 관전 클락(지연 청크) 쪽에 둔다 — 첫 화면 번들 예산이 여유 0% 다.
+// eslint-disable-next-line react-refresh/only-export-components -- 법정 문구 단일 소스, 순수 상수라 HMR 무해
+export const AGE_HELPLINE = ['만 19세 미만은 이용할 수 없습니다', '도박문제 상담', '1336(24시간·무료)'] as const;
 
 const BIZ_EXTRA: [string, string][] = [
   ['고객센터', 'ace@nuriholdem.com'],
@@ -143,7 +133,7 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
                 안폭 322 를 23.84px 넘쳤다 — 문서 폭은 안 늘어 오른쪽 끝에 ')' 가 닿은 채 도달이 안 된다.
               → 문장은 끊기게 두고 **전화번호+괄호만** 묶는다. 둘을 동시에 푸는 유일한 지점이다
                 (마지막 줄에 번호만 남는 것도 막고, 전체 넘침도 막는다). 법정 고지라 도달이 우선이다. */}
-          <br />{AGE_NOTICE} · {HELPLINE_LABEL} <span className="whitespace-nowrap">{HELPLINE}</span>
+          <br />{AGE_HELPLINE[0]} · {AGE_HELPLINE[1]} <span className="whitespace-nowrap">{AGE_HELPLINE[2]}</span>
           {/* 약관 개정 사전 고지 — 비로그인 방문자에게도 보여야 '서비스 내 공지'가 성립한다. */}
           {/* ⚠ 날짜가 내부 공백에서 끊겨 '2026년 9월' / '29일' 로 갈라졌다(412 실측). 상수는 그대로 — textContent 불변이라 legalVersion 검사에 영향 없다. */}
           <br />약관·개인정보처리방침 개정 안내: <span className="whitespace-nowrap">{LEGAL_NOTICE_DATE}</span> 공지 · <span className="whitespace-nowrap">{LEGAL_EFFECTIVE_DATE}</span> 시행 (시행 전까지는 <span className="whitespace-nowrap">{LEGAL_PREV_EFFECTIVE_DATE}</span> 시행판 적용)

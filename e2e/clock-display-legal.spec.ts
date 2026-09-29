@@ -6,7 +6,7 @@
 //         보드(스테이지)의 어떤 요소와도 겹치지 않는다(사각형 교차 0). 클락이 없는 상태에서도 같다.
 //       ② 전체화면(⛶) — 한 줄이 없다. 해제하면 다시 나온다.
 // 판정은 새 testid 가 아니라 **문구(사업자번호·1336)** 로 잡는다 — 수정 전 빌드는 '재료 없음'이 곧 결함이다.
-// 음성 대조: ClockDisplay 의 `{!fs && <LegalNoticeLine …/>}` 에서 `!fs &&` 를 빼면 ② 가 실패한다.
+// 음성 대조: ClockDisplay 의 고지 줄 조건 `{!fs && (` 에서 `!fs &&` 를 빼면 ② 가 실패한다.
 // 실행: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/clock-display-legal.spec.ts
 import { test, expect } from './_fixtures';
 import type { Page } from '@playwright/test';
