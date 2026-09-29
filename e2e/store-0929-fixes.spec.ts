@@ -25,13 +25,13 @@ const session = (over: Record<string, unknown> = {}) => ({ venue_id: MOCK_VENUE,
   is_addon: false, addon_stack: 0, title: '데일리', discounts: [], early_double_min: 0, early_single_min: 0, reg_closed: false, closed: false,
   opened_at: `${MOCK_DAY}T09:00:00Z`, tournament_start: null, schedule_id: null, operators: [], ...over });
 
-type Opts = { vp: { width: number; height: number }; data?: boolean; biz?: string; board?: { unit: number; buyins: number; note?: string }; seedStaffRows?: string };
+type Opts = { vp: { width: number; height: number }; data?: boolean; biz?: string; board?: { unit: number; buyins: number; note?: string; unpaid?: boolean; name?: string }; seedStaffRows?: string };
 async function boot(page: Page, o: Opts) {
   const armed = { on: false, failBuyins: false };
   const late = async (r: Route, body: unknown) => { if (armed.on) await sleep(LAT); await r.fulfill(json(body)); };
   if (o.seedStaffRows) await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* 차단 */ } }, [`nuri:staff-rows:${MOCK_VENUE}`, o.seedStaffRows] as [string, string]);
   const boardSession = o.board ? session({ buyin_amount: o.board.unit }) : null;
-  const boardBuyins = o.board ? Array.from({ length: o.board.buyins }, (_, i) => ({ ...rangeBuyins[0], id: `bb${i}`, player_name: '김철수', entry_no: i + 1, payment_method: 'cash', is_unpaid: false, cash_amount: o.board!.unit })) : [];
+  const boardBuyins = o.board ? Array.from({ length: o.board.buyins }, (_, i) => ({ ...rangeBuyins[0], id: `bb${i}`, player_name: o.board!.name ?? '김철수', entry_no: i + 1, payment_method: 'cash', is_unpaid: !!o.board!.unpaid, cash_amount: o.board!.unit })) : [];
   await bootOwner(page, {
     viewport: o.vp,
     extra: async (p) => {
@@ -199,6 +199,35 @@ test('🔴 #4 D5 총바인 칸 — 긴 금액(8,888.89만)도 두 줄(회수·�
   expect(m!.lines, '금액이 줄바꿈됐다(행 높이가 4px 튄다)').toBe(2);
   expect(m!.textRight, '금액이 옆 미수 칸을 침범한다').toBeLessThanOrEqual(m!.tdRight);
 });
+
+// D5 후속(2026-09-29 CI) — 같은 표의 미수 칸도 68px 고정이다. 긴 미수 금액이 칸을 넘거나 왼쪽 총바인 고정 칸과 겹치면 안 된다.
+//   글꼴 폭이 기기마다 달라(CI 리눅스 +3.4px 실측) 기본 글꼴 통과만으로는 모자란다 — 여기 강도는 총바인과 같다.
+for (const [w, h] of [[1280, 900], [390, 844]] as const) {
+  test(`🔴 #4 D5 미수 칸 ${w} — 긴 미수 금액(8,888.89만)이 두 줄 이내·칸 안·총바인 칸과 겹치지 않는다`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await openBoard(page, { vp: { width: w, height: h }, board: { unit: 7_407_407, buyins: 12, unpaid: true } });
+    const m = await page.evaluate(() => {
+      const btn = ([...document.querySelectorAll('[data-tab="my-store"] tbody td button[title="+1 바인 · 결제수단 선택"]')] as HTMLElement[]).find((e) => e.offsetParent);
+      if (!btn) return null;
+      const tot = btn.closest('td')!;
+      const un = tot.nextElementSibling as HTMLElement;
+      un.scrollIntoView({ inline: 'center' });
+      const r = document.createRange(); r.selectNodeContents(un);
+      const rects = [...r.getClientRects()];
+      const tb = tot.getBoundingClientRect(), ub = un.getBoundingClientRect();
+      return { text: un.textContent, lines: new Set(rects.map((x) => Math.round(x.top))).size,
+        textLeft: Math.min(...rects.map((x) => x.left)), textRight: Math.max(...rects.map((x) => x.right)),
+        unLeft: ub.left, unRight: ub.right, totRight: tb.right, unW: ub.width };
+    });
+    console.log(`[D5 미수 ${w}] ${JSON.stringify(m)}`);
+    expect(m, '미수 칸을 못 찾았다').not.toBeNull();
+    expect(m!.text).toBe('8,888.89만');
+    expect(m!.lines, '미수 금액이 세 줄 이상으로 접혔다').toBeLessThanOrEqual(2);
+    expect(m!.textRight, '미수 금액이 칸 밖으로 넘친다').toBeLessThanOrEqual(m!.unRight);
+    expect(m!.textLeft, '미수 금액이 칸 왼쪽으로 넘친다').toBeGreaterThanOrEqual(m!.unLeft);
+    expect(m!.totRight, '총바인 고정 칸이 미수 칸을 덮는다').toBeLessThanOrEqual(m!.unLeft + 0.5);
+  });
+}
 
 for (const [w, h, hidden] of [[390, 844, true], [1280, 900, false]] as const) {
   test(`🔴 #4 D7 플레이어 칸 비고 미리보기 — ${w}px 에서 ${hidden ? '숨김(고정 열 폭 절약)' : '유지(PC 기능 보존)'}`, async ({ page }) => {

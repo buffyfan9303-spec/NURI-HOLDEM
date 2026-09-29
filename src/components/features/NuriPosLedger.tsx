@@ -1909,7 +1909,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                           </span>
                         ) : ''}
                       </td>
-                      <td className="sticky right-0 z-10 bg-surface-low w-16 min-w-16 max-w-16 px-1 py-1 border-b border-l border-border-default text-2xs tabular-nums text-left text-danger-light max-sm:static">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
+                      {/* D5 후속 — 미수 칸은 폭 상한(68px)을 **유지**한다. 왼쪽 총바인 칸의 고정 오프셋 right-16 이 곧 이 칸의 폭이라,
+                          이 칸이 넓어지면 총바인이 미수를 덮는다. 대신 금액을 줄바꿈 허용 + 어디서든 끊기(overflow-wrap:anywhere)로 칸 안에 가둔다
+                          (8,888.89만: Verdana·Courier 강제에서도 두 줄·칸 안 — nowrap 을 넣으면 넘친다, e2e store-0929-fixes 미수 칸). */}
+                      <td className="sticky right-0 z-10 bg-surface-low w-16 min-w-16 max-w-16 [overflow-wrap:anywhere] px-1 py-1 border-b border-l border-border-default text-2xs tabular-nums text-left text-danger-light max-sm:static">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
                     </tr>
                   );
                 });
