@@ -777,13 +777,13 @@ video {
   @media (prefers-reduced-motion: reduce) { .scroll-top-fab { transition: opacity var(--dur-fast) var(--ease); } }
 
   /* ══ 아우라 테마 유틸 (모션 헌법 v2 §5·§6 · 오너 참조 'Aura Health AI' 2026-09-02) ═══════════════
-     .glass / .glass-strong — 유리 크롬. 상시 fixed 요소(헤더·탭바)에 허용하되 조건 넷:
+     .glass-strong — 유리 크롬(맨 .glass 는 호출부 0 이라 2026-09-29 삭제). 상시 fixed 요소(헤더·탭바)에 허용하되 조건 넷:
        ① backdrop-filter 미지원·reduced-transparency 에선 **불투명 폴백**(아래) ② 유리 위에 유리를 겹치지 않는다
        ③ perf.spec 롱프레임 상한이 게이트 ④ backdrop-filter 자체는 애니메이트하지 않는다.
      .aura-bg — 정적 후광 한 겹. 흐르지 않는다(Apple §14 전정계). blur 가 아니라 radial-gradient(싸다).
      .card-aura — 시안의 카드: 반투명 어두운 면 + 6% 흰 헤어라인 + 위 모서리 하이라이트 + 큰 라운드.
      .t-micro — 시안의 대문자 마이크로 라벨("RECOVERY SCORE"): 틸 · 자간 넓게 · 굵게. */
-  .glass, .glass-strong {
+  .glass-strong {
     background-color: rgb(var(--surface-base) / 0.72);
     -webkit-backdrop-filter: blur(20px) saturate(160%);
     backdrop-filter: blur(20px) saturate(160%);
@@ -812,10 +812,10 @@ video {
       rgb(var(--bloom-1)) calc(var(--chrome-mix, 0.08) * 100%));
   }
   @supports not (backdrop-filter: blur(1px)) {
-    .glass, .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); }
+    .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); }
   }
   @media (prefers-reduced-transparency: reduce) {
-    .glass, .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); -webkit-backdrop-filter: none; backdrop-filter: none; }
     .aura-bg { display: none; }
   }
   /* 지면 그림 한 벌 — .aura-bg 블룸 · body::before 결/글로우 · 떠나는 판(PANE-HANDOFF, 아래 .tab-pane[data-pane-leaving])이
@@ -2080,7 +2080,7 @@ body { overscroll-behavior-y: contain; }
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
   /* .animate-sheet-up 이 빠져 있어 0.01ms 로만 줄었고, 첫 프레임이 from(translateY 100%)으로 그려져 딤만 있는 검은 한 프레임이 났다(2026-09-29 실측 휘도 −19.7~−23.3). */
   .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-sheet-up, .animate-slide-down, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out,
-  .skeleton, .anim-pop, .poster-marquee { animation: none !important; }
+  .skeleton, .anim-pop { animation: none !important; }
   /* ::details-content 는 위 전역 * 셀렉터가 못 잡는다(의사 요소가 아니라 UA 생성 트리라 * 에 안 걸린다) —
      별도로 끈다. block-size 전환은 헌법 §4 의 grid-template-rows 0fr→1fr 예외와 성격이 같아
      구현은 그대로 두되, 모션 민감 사용자에게는 즉시 열리게 한다(2026-09-04 조사). */
