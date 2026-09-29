@@ -162,8 +162,8 @@
 
   /* ── 단일 물리(Phase 1): 기본 곡선 재정의 = 앱의 모든 transition-* 유틸이 한 곡선.
      ease-in/out/in-out 유틸도 같은 곡선(spring/ease-out-quart 는 사용처 0 — 같은 곡선으로 봉인).
-     ⚠ theme(inline) 이라 :root 의 --ease-out(퇴장 가속 곡선, 아래 :root) 과 이름이 같아도 부딪치지 않는다 —
-       유틸은 값이 박히고, var(--ease-out) 을 읽는 규칙은 아래 :root 값을 받는다. */
+     ⚠ theme(inline) 이라 여기 값은 유틸에 박힌다(:root 변수로 나가지 않는다). :root 의 퇴장 곡선 --ease-out 은
+       읽는 규칙이 0 이라 2026-09-29 삭제했다(CSS var()·빌드 JS 참조 0). */
   --default-transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-in: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
@@ -736,23 +736,15 @@ video {
      예외 2개뿐: 루프(스피너·펄스), shake(오류 진동 이펙트). 테마와 무관해 :root 단독. */
   :root {
     --ease: cubic-bezier(0.32, 0.72, 0, 1);
-    /* MO-2: 퇴장 전용 가속 곡선 — '화면 밖으로 사라지는 것'(VT push-out·시트 닫힘·토스트 퇴장)에만.
-       진입은 감속(--ease), 퇴장은 가속이어야 물리적으로 읽힌다(§20.4 §1). */
-    --ease-out: cubic-bezier(0.3, 0, 1, 1);
     /* 모션 헌법 v2(2026-09-02) 추가 2개 — Emil Kowalski 표준값(easing.dev). 손으로 만든 곡선 아님.
        --ease-out-ui: 작은 UI(드롭다운·툴팁·토스트·칩)의 등장/퇴장 — 내장 ease-out 보다 훨씬 강한 감속
        --ease-move:   화면 안에서 자리를 옮기는 것(SlidingPill FLIP·재정렬) — 양끝 감속 */
     --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
-    /* 스프링(언더댐핑) — linear() 로 근사한 iOS 스프링. 시트 복귀·미세 바운스에 사용 */
-    --spring: linear(0, 0.36 8%, 0.72 16%, 0.95 24%, 1.06 33%, 1.09 40%, 1.06 48%, 1.02 58%, 0.995 70%, 1);
+    /* (--spring·--dur-tab·--press·--press-icon 은 2026-09-29 삭제 — CSS var() 읽기·빌드 JS 참조 0. 프레스는 button:active 가 scale(.97) 을 직접 쓴다) */
     --dur-fast: 0.15s;   /* 색·배경·보더, 프레스 */
     --dur-base: 0.22s;   /* 요소 등장/퇴장, 칩 전환 */
     --dur-panel: 0.32s;  /* 시트·오버레이·풀스크린 */
-    --dur-tab: 0.3s;     /* 탭 전환(VT 방향성 푸시 — MO-8 소비). 오너 지시(2026-08-27):
-                            최신 폰 모션 감각으로 소폭 상향 — '휙휙' 대신 안착 */
-    --press: scale(0.97);  /* v2: Apple/Emil 표준 0.97 (0.985 는 '반응했나?' 싶을 만큼 미약했다) */
-    --press-icon: scale(0.88);
     /* ── 하단 탭바 회피 오프셋 단일 소스(W1-3 TB1a) — 8곳에 흩어졌던 5.5/5.75/6/4.75rem 통일.
        safe: 스크롤 콘텐츠의 하단 패딩 기준 / float: 탭바 위에 떠 있는 요소(토스트·배너·버튼) 기준.
        max(env, 12px): safe-area 없는 안드로이드에서도 최소 숨통 12px — 유일하게 의도된 값 변화.
@@ -785,13 +777,13 @@ video {
   @media (prefers-reduced-motion: reduce) { .scroll-top-fab { transition: opacity var(--dur-fast) var(--ease); } }
 
   /* ══ 아우라 테마 유틸 (모션 헌법 v2 §5·§6 · 오너 참조 'Aura Health AI' 2026-09-02) ═══════════════
-     .glass / .glass-strong — 유리 크롬. 상시 fixed 요소(헤더·탭바)에 허용하되 조건 넷:
+     .glass-strong — 유리 크롬(맨 .glass 는 호출부 0 이라 2026-09-29 삭제). 상시 fixed 요소(헤더·탭바)에 허용하되 조건 넷:
        ① backdrop-filter 미지원·reduced-transparency 에선 **불투명 폴백**(아래) ② 유리 위에 유리를 겹치지 않는다
        ③ perf.spec 롱프레임 상한이 게이트 ④ backdrop-filter 자체는 애니메이트하지 않는다.
      .aura-bg — 정적 후광 한 겹. 흐르지 않는다(Apple §14 전정계). blur 가 아니라 radial-gradient(싸다).
      .card-aura — 시안의 카드: 반투명 어두운 면 + 6% 흰 헤어라인 + 위 모서리 하이라이트 + 큰 라운드.
      .t-micro — 시안의 대문자 마이크로 라벨("RECOVERY SCORE"): 틸 · 자간 넓게 · 굵게. */
-  .glass, .glass-strong {
+  .glass-strong {
     background-color: rgb(var(--surface-base) / 0.72);
     -webkit-backdrop-filter: blur(20px) saturate(160%);
     backdrop-filter: blur(20px) saturate(160%);
@@ -820,10 +812,10 @@ video {
       rgb(var(--bloom-1)) calc(var(--chrome-mix, 0.08) * 100%));
   }
   @supports not (backdrop-filter: blur(1px)) {
-    .glass, .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); }
+    .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); }
   }
   @media (prefers-reduced-transparency: reduce) {
-    .glass, .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); -webkit-backdrop-filter: none; backdrop-filter: none; }
     .aura-bg { display: none; }
   }
   /* 지면 그림 한 벌 — .aura-bg 블룸 · body::before 결/글로우 · 떠나는 판(PANE-HANDOFF, 아래 .tab-pane[data-pane-leaving])이
@@ -1098,7 +1090,6 @@ video {
     --aura-200: 34 211 238;  /* #22D3EE 연한 틴트(비텍스트·글로우 하이라이트) */
     --aura-300: 6 182 212;   /* #06B6D4 primary — 라벨·링·데이터 강조 */
     --aura-400: 8 145 178;   /* #0891B2 딥 */
-    --aura-glow: 6 182 212;  /* 방사형 블룸 색(데이터 링·라벨 글로우 — 배경 블룸은 아래 --bloom-* 가 맡는다) */
     /* v6(2026-09-02 aura-ui.com 실측): 배경 블룸 = 500px 안팎의 blur-3xl 원 3개 — violet-500/20 · indigo-500/15 · fuchsia-500/10.
        우리는 filter:blur 대신 radial-gradient 로 같은 모양을 그린다(페인트 비용). 색은 실측값 그대로. */
     --bloom-1: 139 92 246;   /* violet-500  #8B5CF6 — 우상단 큰 블룸 */
@@ -1158,15 +1149,9 @@ video {
     --tier-admin-vivid:  255  77 109; /* #FF4D6D */
 
     /* 브랜드 그라데이션(어워드 레퍼런스 2026-08-27) — 전부 정적 배경. 애니메이션 금지(모션 헌법 §20.4).
-       aurora: DatawizzAI 문법 — 딥 플럼 위 바이올렛 빔 + 마젠타·블루 힌트. 전 레이어 투명 종단이라
-       surface 위 어디에 얹어도 안전(px 고정 크기 → 컨테이너 높이 무관). 피크 최악 겹침 #2D2445 실측:
-       ink-muted 4.66 · ink-primary 11.9 · accent-200 6.94.
+       (aurora 워시 --grad-aurora 는 v6.2 에서 .hero-aurora 가 해제된 뒤 읽는 곳 0 — 2026-09-29 삭제. 되살릴 때는 git 이력에서)
        cta: OUTFLAME 필 문법 — 사선(135deg) 딥→프라이머리. 흰 텍스트 실측 6.07(어두운끝)~4.60(밝은끝).
        hover/active 는 한 단계 어두운 정적 스왑(그라데이션은 transition 불가 속성). */
-    --grad-aurora:
-      radial-gradient(640px 320px at 12% -4%, rgb(var(--accent-300) / 0.11) 0%, transparent 62%),
-      radial-gradient(520px 260px at 88% -6%, rgba(224, 130, 255, 0.05) 0%, transparent 58%),
-      radial-gradient(480px 240px at 55% -8%, rgba(130, 177, 255, 0.03) 0%, transparent 60%);
     /* v6 aura-ui.com 실측 .aura-btn-primary: linear-gradient(to right, violet-700 #6D28D9, indigo-800 #3730A3) · 흰 글자 6.4 / 8.6 */
     --grad-cta:        linear-gradient(90deg, #6D28D9 0%, #3730A3 100%);
     --grad-cta-hover:  linear-gradient(90deg, #7C3AED 0%, #4338CA 100%);
@@ -1244,7 +1229,6 @@ video {
     --aura-200: 6 182 212;   /* #06B6D4 비텍스트 틴트 */
     --aura-300: 14 116 144;  /* #0E7490 primary(텍스트 AA) */
     --aura-400: 21 94 117;   /* #155E75 딥 */
-    --aura-glow: 14 116 144;
     --bloom-1: 139 92 246; --bloom-2: 99 102 241; --bloom-3: 217 70 239; /* 라이트도 같은 세 색(aura-ui 라이트 실측: 흰 지면 위 파스텔 워시) */
     /* v7(2026-09-12 §7·§4): 라이트에서 **옅은 보라를 화면 전체와 모든 박스에 반복하지 않는다.**
        이 알파는 두 곳에 동시에 작용한다 — ① .aura-bg 의 화면 전면 블룸 ② .subbar-aura 가
@@ -1289,11 +1273,7 @@ video {
     --tier-admin:        146   0  26; /* #92001A */
     --tier-admin-vivid:  222  76 102; /* #DE4C66 */
 
-    /* 브랜드 그라데이션(라이트) — 옅은 라벤더 워시(정적). 피크 #EFECF6 실측: ink-muted 4.55 ·
-       ink-primary 15.3. cta 흰 텍스트 실측 7.61(어두운끝)~6.34(밝은끝). */
-    --grad-aurora:
-      radial-gradient(640px 320px at 12% -4%, rgb(var(--accent-300) / 0.04) 0%, transparent 62%),
-      radial-gradient(520px 260px at 88% -6%, rgba(214, 130, 255, 0.025) 0%, transparent 58%);
+    /* 브랜드 그라데이션(라이트) — cta 흰 텍스트 실측 7.61(어두운끝)~6.34(밝은끝). */
     --grad-cta:        linear-gradient(135deg, rgb(var(--accent-400)) 0%, rgb(var(--accent-300)) 100%);
     --grad-cta-hover:  linear-gradient(135deg, rgb(var(--accent-500)) 0%, rgb(var(--accent-400)) 100%);
     --grad-cta-active: linear-gradient(135deg, rgb(var(--accent-600)) 0%, rgb(var(--accent-500)) 100%);
@@ -1380,7 +1360,7 @@ video {
      제목은 여러 줄의 길이를 고르게(balance) — "한 단어만 둘째 줄" 같은 들쭉날쭉 방지.
      본문은 마지막 줄에 단어 하나만 남는 고아(orphan)를 방지(pretty).
      미지원 브라우저는 속성을 자동 무시 → 안전. word-break:keep-all(어절)와 함께 한글 가독성 극대화. */
-  h1, h2, h3, h4, .text-balance { text-wrap: balance; }
+  h1, h2, h3, h4 { text-wrap: balance; }
   p, li, .text-pretty { text-wrap: pretty; }
 
   /* 터치 시 기본 하이라이트(탭 이동 등에서 보이는 깜빡임) 완전 제거 — body 상속이 안 먹는
@@ -1737,7 +1717,7 @@ video {
   /* 그라데이션 헤드라인 안에서 제 색을 지켜야 하는 강조 스팬(예: 라이브 카운트 그린) */
   .text-grad-keep { -webkit-text-fill-color: currentColor; background: none; }
 
-  /* 홈·랜딩 히어로 오로라 워시 — --grad-aurora 사용처. 전 레이어 투명 종단 + px 고정 크기라
+  /* 홈·랜딩 히어로 오로라 워시(구 --grad-aurora — 2026-09-29 변수도 삭제). 전 레이어 투명 종단 + px 고정 크기라
      어떤 높이의 컨테이너에도 안전. 정적 1회 페인트(스크롤 리페인트 없음). */
   /* v6.2: 워시 해제 — body::before 인디고 블룸과 같은 좌상단에 겹쳐 ink-muted 가 3.68(AA 미달)이었다(워크플로 critic 실측).
      화면 워시는 .aura-bg/body::before 가 전담한다. 클래스는 5곳 DOM 에 남아 있어 no-op 으로 유지. */
@@ -1861,15 +1841,16 @@ video {
     @apply animate-pulse rounded-sm;
   }
 
-  /* 활동 점수 +N 팝업 .animate-point-pop (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — @keyframes pointPop 은 전환 장치 목록(transitionDevices 계약)에 있어 남긴다 */
+  /* 활동 점수 +N 팝업 .animate-point-pop (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — 키프레임 pointPop 도 2026-09-29 삭제(CSS animation·빌드 JS 참조 0) */
 
 /* ══ 유틸리티 — v3 의 @tailwind utilities 자리. source(none)+@source 로 v3 content 와 같은 파일만 훑는다
    (v4 자동 감지는 저장소 전체 — docs·e2e 의 글자까지 클래스로 찍어, v3 에선 안 만들어지던 동적 클래스가 살아날 수 있다). */
 @source '../index.html';
 @source './**/*.{js,ts,jsx,tsx}';
+@source not './**/*.test.{ts,tsx}';   /* 테스트 파일은 번들에 안 들어간다 — 설명문·정규식 속 클래스 글자가 유틸을 찍던 것을 끈다(2026-09-29: 테스트에만 있던 11개) */
 /* 주석 글자에서 잘못 찍히던 쓰레기 유틸(주석은 평문 스캔이라 클래스가 된다 — 예: '글자 150rem 줄간격'). 누구도 의도해서 쓸 수 없는 모양만 끈다.
    2026-09-28 번들 정리 ⑤-3: 빌드 JS 에 리터럴 0 · CSS gz 91B. 흔한 유틸(ml-5 등)은 나중에 쓰는 순간 조용히 빠지는 함정이 되니 여기 넣지 않는다. */
-@source not inline('text-sm/600 text-xs/700 [perf:*] [perf:cls] top-[12px+safe] top-[calc(...)] min-h-[Npx] text-emerald-300/400 text-gold-300/400');
+@source not inline('text-sm/600 text-xs/700 [perf:*] [perf:cls] top-[12px+safe] top-[calc(...)] min-h-[Npx] text-emerald-300/400 text-gold-300/400 w-[…]');
 @tailwind utilities source(none);
 
 /* v3 space-*·divide-* 그대로(맨 위 @source not inline 으로 v4 판을 끄고 여기 v3 판을 둔다) */
@@ -1925,12 +1906,6 @@ video {
 }
 
 
-
-@keyframes pointPop {
-  0%   { opacity: 0; transform: translateY(4px) scale(0.8); }
-  20%  { opacity: 1; transform: translateY(0) scale(1.05); }
-  100% { opacity: 0; transform: translateY(-24px) scale(1); }
-}
 
 /* 최상위 등급 아바타 테두리 — 은은한 명예 글로우(운영자 SS=레드 / AA·최상위=골드).
    ⚠ box-shadow 키프레임은 매 프레임 페인트를 강제해(합성 불가 속성) 상시 CPU 를 태웠다 —
@@ -2075,7 +2050,7 @@ body { overscroll-behavior-y: contain; }
 /* 카드/리스트 행 등 클릭 가능한 요소의 공통 탭 피드백(버튼 외 영역) */
 /* 바이낸스식 절제: 탭/라디오 스케일 모션 제거 — 색 전환만 */
 
-/* 승급 축하 컨페티 .confetti (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — @keyframes confettiFall 은 전환 장치 목록에 있어 남긴다 */
+/* 승급 축하 컨페티 .confetti (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — 키프레임 confettiFall 도 2026-09-29 삭제(CSS animation·빌드 JS 참조 0) */
 /* ── 포스터 오토 캐러셀(APIS식) — 무한 루프 마퀴(모션 헌법 허용 예외 ①) ─────────
    transform 전용·컴포지터 상주. 트랙은 2배 복제 + -50% 이동으로 이음새 없이 순환.
    (각 카드 mr-3 이라 세트 경계 간격이 내부 간격과 동일 = -50% 지점이 정확히 맞물림)
@@ -2093,11 +2068,6 @@ body { overscroll-behavior-y: contain; }
 
 /* (펠트 시그니처 .felt-hero 는 오너 지시로 캐러셀에서 제거 — 2026-08-27 '배너만, 검은 띠 제거') */
 
-@keyframes confettiFall {
-  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
-  100% { transform: translateY(108vh) rotate(540deg); opacity: 0.6; }
-}
-
 /* 모션 민감 사용자 배려 — OS '동작 줄이기' 설정 시 애니메이션/전환을 즉시화해 멀미·끊김 방지 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -2110,7 +2080,7 @@ body { overscroll-behavior-y: contain; }
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
   /* .animate-sheet-up 이 빠져 있어 0.01ms 로만 줄었고, 첫 프레임이 from(translateY 100%)으로 그려져 딤만 있는 검은 한 프레임이 났다(2026-09-29 실측 휘도 −19.7~−23.3). */
   .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-sheet-up, .animate-slide-down, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out,
-  .skeleton, .anim-pop, .poster-marquee { animation: none !important; }
+  .skeleton, .anim-pop { animation: none !important; }
   /* ::details-content 는 위 전역 * 셀렉터가 못 잡는다(의사 요소가 아니라 UA 생성 트리라 * 에 안 걸린다) —
      별도로 끈다. block-size 전환은 헌법 §4 의 grid-template-rows 0fr→1fr 예외와 성격이 같아
      구현은 그대로 두되, 모션 민감 사용자에게는 즉시 열리게 한다(2026-09-04 조사). */
@@ -2238,10 +2208,10 @@ html.light {
   --gto-txt-tie:      #566882; /* 5.02 */
 }
 /* 상태/경고용 파스텔 텍스트 — 흰 배경에서 대비가 무너지는 나머지 계열 전부 딥 톤 교정 */
-  html.light .text-indigo-300, html.light .text-indigo-400 { color: #4338CA; }
-html.light .text-amber-100, html.light .text-amber-200, html.light .text-amber-300 { color: #92600A; }
+  html.light .text-indigo-300 { color: #4338CA; }
+html.light .text-amber-200, html.light .text-amber-300 { color: #92600A; }
 html.light .text-sky-300 { color: #0369A1; }
-html.light .text-rose-200, html.light .text-rose-300 { color: #BE123C; }
+html.light .text-rose-300 { color: #BE123C; }
 html.light .text-violet-200, html.light .text-violet-300 { color: #6D28D9; }
 html.light .text-purple-300 { color: #7E22CE; }
 html.light .text-teal-300 { color: #0F766E; }
@@ -2261,7 +2231,6 @@ html.light .text-green-400  { color: #15803D; }
 html.light .text-orange-400 { color: #B45309; }
 html.light .text-emerald-200 { color: #0A8F5C; }
 html.light .text-accent-100 { color: #5C3BBF; }
-html.light .text-gold-500   { color: #8F6200; }
 html.light .text-pink-300 { color: #BE185D; }
 
 /* ── ⚠ 알파 변형(`text-x/60`)은 위 보정을 **하나도 받지 못한다** (2026-09-12 실측으로 발견) ──
@@ -2765,7 +2734,7 @@ img, svg { -webkit-touch-callout: none; -webkit-user-drag: none; user-select: no
   body { -webkit-user-select: none; user-select: none; }
   /* ⚠ input/textarea/contenteditable 이 빠져 있어 설치형 PWA 에서 '붙여넣기'가 통째로 막혀 있었다.
      카톡에서 복사한 닉네임·매장명을 장부·순위에 붙여넣지 못하는 건 현장에서 치명적이다. */
-  p, h1, h2, h3, h4, li, span.selectable, .select-text,
+  p, h1, h2, h3, h4, li,
   input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
 }
 
