@@ -280,7 +280,7 @@ interface IntegratedSearchBarProps {
   onChange: (state: SearchState) => void;
   placeholder?: string;
   className?: string;
-  /** 지정 시 검색창+날짜 부분만 이 top 값으로 sticky 고정(필터·칩은 스크롤). */
+  /** 지정 시 날짜 부분만 이 top 값으로 sticky 고정(검색 입력·필터 칩은 스크롤 — 2026-09-30 검색 입력을 칩 레일로 옮김). */
   stickyTop?: string;
   /** 승인된 대회가 있는 날짜(ISO) 집합 — 날짜 슬라이더에 점(·)으로 표시해 헛탭 방지 */
   eventDates?: ReadonlySet<string>;
@@ -369,8 +369,8 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
   const handleRegionToggle = useCallback((r: string) => setSelectedRegions((prev) => toggleInArray(prev, r)), []);
 
   // 토너먼트 필터는 칩 자체가 하이라이트라 카운트 뱃지에서 제외(중복 표시 제거)
-  // 칩 레일은 스크롤로 화면 밖으로 사라지므로, 스크롤 후에도 sticky 검색바 배지가
-  // '필터 걸려 있음'을 알려야 한다 — 유형/등급/예산도 카운트에 포함(리뷰 확정 반영)
+  // 검색 입력 안 배지가 '필터 걸려 있음'을 알린다 — 유형/등급/예산도 카운트에 포함(리뷰 확정 반영).
+  // ⚠ 2026-09-30 검색 입력이 sticky 띠에서 칩 레일로 옮겨져, 스크롤해 내려가면 배지도 레일과 함께 사라진다(오너 결정 (a)의 대가).
   const activeCount =
     (rawQuery.length > 0 ? 1 : 0) +
     selectedDates.length +
@@ -395,7 +395,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
 
   return (
     <div className={[stickyTop ? 'contents' : 'w-full', className].join(' ')}>
-      {/* 검색창 + 날짜만 sticky 고정(필터·칩은 스크롤되어 사라짐 → 고정 높이 최소화).
+      {/* 날짜만 sticky 고정(검색 입력·필터 칩은 레일과 함께 스크롤되어 사라짐 → 고정 높이 최소화. 2026-09-30 검색 입력을 레일로 옮김).
           불투명 배경 + 구분선 — 스크롤 시 뒤 컨텐츠가 비쳐 보이던 현상 제거(깔끔한 고정). */}
       <div
         ref={stickyRef}
@@ -404,21 +404,49 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
         className={stickyTop ? "relative sticky z-30 bg-surface-base border-b border-border-subtle transition-colors duration-(--dur-fast) before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-surface-base before:content-['']" : ''}
         style={stickyTop ? { top: stickyTop } : undefined}
       >
-      {/* ── 검색창 ─────────────────────────────────────────────────────── */}
-      <Fold open={(searchOpen || rawQuery.length > 0)}>
-      <div className="px-page-x pt-1.5 pb-1.5">
+      {/* ── 날짜 슬라이더 탭 (복수 선택) ─────────────────────────────────── */}
+      <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} onPick={handlePickDate} eventDates={eventDates} />
+      </div>{/* /sticky 날짜 */}
+
+      {/* ── 필터 칩 레일 — 균일 칩 '한 줄'(APIS·FotMob 문법, §20.1) ─────────────
+           예전엔 세그먼트 박스 3개 + 드롭다운이 flex-wrap 으로 4줄로 꺾여(각 박스가
+           내용 폭대로 제각각 끝남) 필터가 화면 2/3를 먹었다. 규칙:
+           · 모든 칩 h-9 · rounded-badge · 같은 서체/보더 — 시각 언어 하나
+           · 고빈도 이지선다(GTD/MTT/대회)는 즉시 토글 칩(탭 1회, 재탭 = 해제 → 전체)
+           · 저빈도 단일선택(지역/등급/예산)은 네이티브 select 칩(안드로이드 네이티브 피커
+             = APK 감각, 시트 구현 0줄) — 값 선택 시 칩이 값 라벨로 바뀌고 액센트 점등 */}
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-fade-r px-page-x pt-2 pb-1">
+        <button
+          type="button"
+          aria-label={searchOpen ? '검색 닫기' : '검색 열기'}
+          aria-expanded={searchOpen}
+          onClick={() => setSearchOpen((v) => !v)}
+          // 가로도 44: 레일 첫 칸이라 왼쪽 안쪽 여백(px-page-x)으로 넓힌다(보이는 원형 칩 38.25 그대로).
+          //   6.75 = 5.75 + 테두리 1px — 의사요소의 left 는 padding 상자 기준이라 테두리만큼 덜 나간다(실측 43 → 44).
+          //   🔴 px-0 을 **덧붙이지 않고 CHIP_BASE 에서 px-3.5 를 뺀다**(2026-09-29 D3). 둘 다 두면 빌드 CSS 순서상 px-3.5 가 이겨
+          //     내용 폭 6.5px 에 아이콘이 6.5×17 로 눌렸다 — 유틸 우열은 className 순서가 아니라 CSS 순서다(e2e/search-chip-icon).
+          className={['w-9 justify-center', CHIP_BASE.replace(' px-3.5', ''), CHIP_HIT, 'before:-left-[6.75px]', searchOpen || rawQuery ? CHIP_ON : CHIP_OFF].join(' ')}
+        >
+          <SearchIcon className="h-4 w-4" />
+        </button>
+        {/* ── 검색 입력 — 돋보기 칩 **옆에서 가로로** 펼친다(오너 결정 2026-09-30 (a)) ─────────────
+             예전엔 sticky 검색+날짜 띠 안, 레일 **위** 줄에 생겨 누른 칩과 레일·본문 전체가 55px 밀렸다(감사 #2).
+             sticky 띠 안이라 스크롤 보정으로도 못 붙잡는다 → 같은 줄(h-9, 칩과 같은 높이)에서 폭만 자라 위아래 이동 0.
+             나머지 칩은 레일 가로 스크롤로 그대로 닿는다. 폭: 390 이상 17rem, 좁은 폭은 화면에서 칩 한 칸+여백을 뺀 값.
+             돋보기는 옆 칩이 이미 보여 주므로 칸 안 아이콘은 뺐다(좁은 폭에서 글자 자리를 먼저 준다). */}
+        <Fold x open={(searchOpen || rawQuery.length > 0)} className="shrink-0">
         <form
           onSubmit={handleSubmit}
+          style={{ width: 'min(17rem, calc(100vw - 5.5rem))' }}
           className={[
             'flex items-center gap-2 px-3',
-            'bg-surface-high rounded-[12px] h-10', // v4.1: 알약 → 12px(오너: 알약은 안이 답답해 보인다)
+            'bg-surface-high rounded-chip h-9',
             'border transition-colors duration-(--dur-fast)',
             isFocused
               ? 'border-accent-300'
               : 'border-border-default',
           ].join(' ')}
         >
-          <SearchIcon className="shrink-0 text-ink-muted" />
 
           <input
             ref={inputRef}
@@ -464,34 +492,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
             </span>
           )}
         </form>
-      </div>
-      </Fold>
-
-      {/* ── 날짜 슬라이더 탭 (복수 선택) ─────────────────────────────────── */}
-      <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} onPick={handlePickDate} eventDates={eventDates} />
-      </div>{/* /sticky 검색+날짜 */}
-
-      {/* ── 필터 칩 레일 — 균일 칩 '한 줄'(APIS·FotMob 문법, §20.1) ─────────────
-           예전엔 세그먼트 박스 3개 + 드롭다운이 flex-wrap 으로 4줄로 꺾여(각 박스가
-           내용 폭대로 제각각 끝남) 필터가 화면 2/3를 먹었다. 규칙:
-           · 모든 칩 h-9 · rounded-badge · 같은 서체/보더 — 시각 언어 하나
-           · 고빈도 이지선다(GTD/MTT/대회)는 즉시 토글 칩(탭 1회, 재탭 = 해제 → 전체)
-           · 저빈도 단일선택(지역/등급/예산)은 네이티브 select 칩(안드로이드 네이티브 피커
-             = APK 감각, 시트 구현 0줄) — 값 선택 시 칩이 값 라벨로 바뀌고 액센트 점등 */}
-      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-fade-r px-page-x pt-2 pb-1">
-        <button
-          type="button"
-          aria-label={searchOpen ? '검색 닫기' : '검색 열기'}
-          aria-expanded={searchOpen}
-          onClick={() => setSearchOpen((v) => !v)}
-          // 가로도 44: 레일 첫 칸이라 왼쪽 안쪽 여백(px-page-x)으로 넓힌다(보이는 원형 칩 38.25 그대로).
-          //   6.75 = 5.75 + 테두리 1px — 의사요소의 left 는 padding 상자 기준이라 테두리만큼 덜 나간다(실측 43 → 44).
-          //   🔴 px-0 을 **덧붙이지 않고 CHIP_BASE 에서 px-3.5 를 뺀다**(2026-09-29 D3). 둘 다 두면 빌드 CSS 순서상 px-3.5 가 이겨
-          //     내용 폭 6.5px 에 아이콘이 6.5×17 로 눌렸다 — 유틸 우열은 className 순서가 아니라 CSS 순서다(e2e/search-chip-icon).
-          className={['w-9 justify-center', CHIP_BASE.replace(' px-3.5', ''), CHIP_HIT, 'before:-left-[6.75px]', searchOpen || rawQuery ? CHIP_ON : CHIP_OFF].join(' ')}
-        >
-          <SearchIcon className="h-4 w-4" />
-        </button>
+        </Fold>
         <FilterSelectChip
           ariaLabel="지역 선택"
           value={selectedRegions[0] ?? ''}

@@ -116,8 +116,10 @@ export function onSummaryClick(e: SyntheticEvent<HTMLElement>) {
   keepScroll(d, d.offsetHeight - s.offsetHeight - px(a.marginTop, a.marginBottom, b.paddingTop, b.paddingBottom, b.borderTopWidth, b.borderBottomWidth));
 }
 
-export function Fold({ open, children, className, id }: {
+export function Fold({ open, children, className, id, x }: {
   open: boolean;
+  /** 가로로 펼친다(폭 0↔실측) — 같은 줄 안에서 옆으로 자라 위아래 요소가 움직이지 않는 곳(일정 탐색 검색 입력). 누른 요소 보정·바닥 클램프는 세로 전용이라 끈다. */
+  x?: boolean;
   /** 닫혀 있을 때 계산하면 안 되는 내용(선택된 행 등)은 함수로 넘긴다 — 열려 있을 때만 부른다. */
   children: ReactNode | (() => ReactNode);
   className?: string;
@@ -137,18 +139,18 @@ export function Fold({ open, children, className, id }: {
     const el = ref.current;
     if (!mounted.current || !el) { mounted.current = true; return; }
     const running = stop.current;
-    const h0 = el.getBoundingClientRect().height;
+    const h0 = el.getBoundingClientRect()[x ? 'width' : 'height'];
     running?.();
     stop.current = null;
     el.inert = !open;
-    const p = press && press.el.isConnected && performance.now() - press.t < 1000 && !el.contains(press.el)
+    const p = !x && press && press.el.isConnected && performance.now() - press.t < 1000 && !el.contains(press.el)
       && el.getBoundingClientRect().bottom <= press.el.getBoundingClientRect().top + 1 && !stuck(el, scrollerOf(press.el)) ? press : null;
     const sc = p && scrollerOf(p.el);
     const pin = () => { if (p && sc) { const dy = p.el.getBoundingClientRect().top - p.top; if (dy) sc.scrollTop += dy; } };
     const s = el.style;
     s.display = 'flow-root';
     s.overflow = 'clip';
-    const full = el.scrollHeight;
+    const full = x ? el.scrollWidth : el.scrollHeight;
     const from = running ? h0 : open ? 0 : full;
     const to = open ? full : 0;
     const done = (a?: Animation) => {
@@ -156,7 +158,7 @@ export function Fold({ open, children, className, id }: {
       if (sc) sc.style.overflowAnchor = '';
       if (open) { s.display = s.overflow = ''; a?.cancel(); pin(); } else setShown(false);
     };
-    if (!open && !p) keepScroll(el, from);
+    if (!open && !p && !x) keepScroll(el, from);
     // 판 **안**의 것을 눌러 닫히면(메뉴에서 항목 고름·확인/취소) 즉시 닫는다 — 고른 뒤 220ms 동안 누를 수 없는 메뉴가
     //   남아 있으면 그 사이 판 교체(내 매장 섹션 이동)의 정렬·스냅샷이 줄어드는 메뉴를 재고, 다시 열기 탭도 헛돈다.
     //   머리 토글(판 밖)로 닫을 때만 부드럽게 접힌다.
@@ -167,7 +169,8 @@ export function Fold({ open, children, className, id }: {
       return done();
     }
     const dur = parseFloat(token(Math.max(from, to) > 400 ? '--dur-panel' : '--dur-base')) * 1000 || 220;
-    const anim = el.animate([{ height: `${from}px`, opacity: open ? 0.45 : 1 }, { height: `${to}px`, opacity: open ? 1 : 0.45 }],
+    const dim = x ? 'width' : 'height';
+    const anim = el.animate([{ [dim]: `${from}px`, opacity: open ? 0.45 : 1 }, { [dim]: `${to}px`, opacity: open ? 1 : 0.45 }],
       { duration: dur, easing: token('--ease') || 'ease', fill: 'both' });
     anim.pause();
     if (sc) sc.style.overflowAnchor = 'none';
@@ -183,7 +186,7 @@ export function Fold({ open, children, className, id }: {
     };
     tick();
     stop.current = () => { cancelAnimationFrame(raf); anim.cancel(); if (sc) sc.style.overflowAnchor = ''; };
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- 축(x)은 호출부 상수다
 
   useLayoutEffect(() => () => stop.current?.(), []);
 

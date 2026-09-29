@@ -7,6 +7,7 @@
 //   ③ 버튼 위에 내용이 생김            → 내 매장 대시보드 '더 보기'(StoreDashboard, 1440) — 전 +400px
 //   ④ 바닥에서 닫으면 클램프          → 법정 푸터 '추가 정보'(BusinessFooter details) — 전 +44px
 //   ⑤ 한 번에 하나 열리는 아코디언      → 내 매장 직원 관리(StaffHub) — 위 항목이 닫혀 줄면 누른 항목이 끌려 올라갔다
+//   ⑥ sticky 띠 안 위 삽입             → 일정 탐색 검색 입력(IntegratedSearchBar) — 칩 줄 안에서 가로로(오너 결정 (a)), 전 55.25px
 //   ⑦ 지연 청크로 뺀 모달               → 대시보드 '딜러 로테이션·급여'(DealerShiftsModal) — 눌러서 열리고 폴백 판이 안 보인다
 //   + 동작 줄이기 = 즉시, 탭 재방문 = 재생 0.
 //
@@ -236,6 +237,51 @@ test.describe('Fold — 펼침/접힘은 부드럽고 누른 요소는 제자리
     console.log(`[fold ⑤ staff accordion 1440] ${JSON.stringify(s)}`);
     expect(await target.textContent(), '누른 항목이 안 열렸다').toContain('접기');
     expect(s.dCenter, `위 항목이 닫히며 누른 항목이 ${s.dCenter}px 끌려갔다`).toBeLessThanOrEqual(1);
+  });
+
+  for (const w of [320, 390, 1440]) test(`⑥ 일정 탐색 검색 칩(${w}) — 입력이 칩 줄 안에서 가로로 자라 누른 칩·날짜 띠·레일·아래 목록이 안 움직인다`, async ({ page }) => {
+    await mockAll(page);
+    await page.setViewportSize({ width: w, height: 844 });
+    await page.goto('/?tab=browse');
+    // 라벨이 열면 '검색 닫기' 로 바뀐다 — 두 라벨 모두로 같은 칩을 잡는다
+    const chip = page.locator('main[data-tab="browse"] button[aria-label="검색 열기"], main[data-tab="browse"] button[aria-label="검색 닫기"]');
+    await expect(chip).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(800);
+    // 칩 · sticky 날짜 띠(레일 바로 위 형제) · 레일 · 레일 아래 첫 형제 · 입력 칸 폭을 매 프레임
+    const watch = () => chip.evaluate((c) => new Promise<{ top: number; band: number; rail: number; below: number; w: number }[]>((res) => {
+      const rail = c.parentElement!; const band = rail.previousElementSibling!; const below = rail.nextElementSibling;
+      const fr: { top: number; band: number; rail: number; below: number; w: number }[] = []; const t0 = performance.now();
+      const f = () => {
+        const input = rail.querySelector('input[type=search]');
+        fr.push({ top: c.getBoundingClientRect().top, band: band.getBoundingClientRect().height, rail: rail.getBoundingClientRect().height,
+          below: below ? below.getBoundingClientRect().top : 0, w: input ? input.closest('form')!.parentElement!.getBoundingClientRect().width : 0 });
+        if (performance.now() - t0 < 900) requestAnimationFrame(f); else res(fr);
+      };
+      requestAnimationFrame(f);
+    }));
+    const span = (fr: Record<string, number>[], k: string) => Math.max(...fr.map((x) => Math.abs(x[k] - fr[0][k])));
+    for (const ph of ['open', 'close'] as const) {
+      const rec = watch(); await page.waitForTimeout(30); await press(page, chip); const fr = await rec;
+      const ws = fr.map((x) => x.w); const steps = ws.filter((v, i) => i > 0 && v !== ws[i - 1]).length;
+      const r = { top: +span(fr, 'top').toFixed(2), band: span(fr, 'band'), rail: span(fr, 'rail'), below: span(fr, 'below'), steps, wEnd: ws[ws.length - 1] };
+      console.log(`[fold ⑥ search ${w} ${ph}] ${JSON.stringify(r)}`);
+      expect(r.top, `${ph}: 누른 칩이 ${r.top}px 움직였다(수정 전 55.25)`).toBeLessThanOrEqual(1);
+      expect(r.band, `${ph}: sticky 날짜 띠 높이가 바뀌었다`).toBe(0);
+      expect(r.rail, `${ph}: 칩 레일 높이가 바뀌었다`).toBe(0);
+      expect(r.below, `${ph}: 레일 아래 목록이 움직였다`).toBeLessThanOrEqual(1);
+      expect(r.steps, `${ph}: 입력 칸 폭이 ${r.steps}단 — 한 프레임에 생기거나 사라졌다`).toBeGreaterThanOrEqual(5);
+      if (ph === 'open') {
+        expect(r.wEnd, '검색 입력이 안 펼쳐졌다').toBeGreaterThan(150);
+        await expect(page.locator('main[data-tab="browse"] input[type="search"]'), '열면 입력에 초점').toBeFocused();
+        // 나머지 칩은 레일 가로 스크롤로 여전히 닿는다
+        const last = await chip.evaluate((c) => { const rail = c.parentElement!; rail.scrollLeft = 1e5; const l = rail.lastElementChild!.getBoundingClientRect(); const rr = rail.getBoundingClientRect(); const ok = l.right <= rr.right + 1 && l.left >= rr.left - 1; rail.scrollLeft = 0; return ok; });
+        expect(last, '입력을 펼치면 끝 칩에 닿지 못한다').toBe(true);
+        await page.waitForTimeout(300);
+      } else {
+        expect(r.wEnd, '닫았는데 입력이 남았다').toBe(0);
+      }
+      await page.waitForTimeout(300);
+    }
   });
 
   test('⑦ 대시보드 딜러 로테이션 모달(지연 청크) — 누르면 열리고, 여는 동안 불투명 폴백 판이 없다', async ({ page }) => {
