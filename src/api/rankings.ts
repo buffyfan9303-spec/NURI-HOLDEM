@@ -29,7 +29,10 @@ export function subscribeRankings(venueId: string, onChange: () => void): () => 
 export interface RankingEntry {
   position: number;
   nickname: string;
+  /** 순위 행의 real_name — 장부 권한자에겐 업주가 적은 **원문**(순위 편집기가 이 값을 다시 저장한다), 그 밖엔 옵트인 실명. */
   realName: string;
+  /** 본인이 실명 공개를 켠 사람의 본인인증 실명 — 누가 봐도 같은 값(20260930c optin_real_name). 표시 전용, 저장하지 않는다. */
+  optinRealName?: string;
   prize?: string;
   /** 같은 날 여러 게임(메인/사이드) 구분 — ''=기본. DB 마이그레이션 전 데이터는 항상 '' */
   eventName?: string;
@@ -48,14 +51,13 @@ export function maskRealName(name: string): string {
 //   매장이 순위를 입력할 때 적은 실명이 그대로 공개면에 떴다는 뜻이다.
 // 새 규칙: **기본은 닉네임**. 실명은 본인이 프로필에서 '실명'을 고른 경우에만 쓴다.
 //   개인정보보호법상 실명 공개는 사전·명시적 선택이어야 하므로 기본값이 실명일 수 없다.
-//   판정은 서버(profiles.ranking_name_pref)가 하고, 화면은 그 결과 집합만 받는다
-//   — 클라이언트가 '이 사람은 실명 써도 되겠지'를 추측하면 그게 곧 개인정보 유출이다.
-//
-// optIns: `getVenueRealNameOptIns()` 가 준 **소문자 닉네임 집합**. 넘기지 않으면(=아직 로딩 중,
-//   조회 실패, 비회원 목록) 전원 닉네임 — '모르면 덜 공개한다'가 안전한 기본값이다.
+//   판정은 **서버**(20260930c _ranking_optin_real_name — 본인 선택·본인인증·그 행 기록 시점의 닉네임 주인)가 하고,
+//   화면은 서버가 실어 준 이름만 쓴다 — 클라이언트가 '이 사람은 실명 써도 되겠지'를 추측하면 그게 곧 개인정보 유출이다.
+//   서버가 주는 값: realName = 장부 권한자에겐 업주가 적은 원문(편집기 저장값), 그 밖엔 옵트인 실명 /
+//   optinRealName = 누구에게나 옵트인 실명. 그래서 표시는 realName → optinRealName → 닉네임 순이다
+//   (리드 결정 2026-09-30: 업주가 공개 페이지를 보면 원문, 없으면 켠 사람의 인증 실명, 둘 다 없으면 닉네임).
+//   예전엔 여기서 '켠 닉네임 집합'으로 한 번 더 걸렀는데, 그 때문에 업주 화면에서 원문도 옵트인 실명도 가려졌다.
 export type RealNameOptIns = ReadonlySet<string>;
-const wantsRealName = (nickname: string, optIns?: RealNameOptIns): boolean =>
-  !!optIns && optIns.has(nickname.trim().toLowerCase());
 
 // 표시 분리: 메인(닉네임 — 실명 선택자만 실명) + 서브(실명 선택자의 마스킹 닉네임).
 // 닉네임이 비어 있는 과거 행(업주가 실명만 적은 행)은 **'참가자'** 로 쓴다(오너 2026-09-30).
@@ -63,20 +65,17 @@ const wantsRealName = (nickname: string, optIns?: RealNameOptIns): boolean =>
 //   닉네임이 없으면 실명 공개를 켤 방법 자체가 없으므로(옵트인은 닉네임으로 잇는다) 이 행은 늘 비동의다.
 //   공개 화면에서 이 행의 실명은 서버가 이미 NULL 로 준다(20260930c) — 여기는 빈 이름 대신 쓸 말만 정한다.
 export const NAMELESS_RANK_LABEL = '참가자';
-export function rankDisplay(
-  e: { nickname: string; realName?: string },
-  optIns?: RealNameOptIns,
-): { main: string; sub: string } {
+export function rankDisplay(e: { nickname: string; realName?: string | null; optinRealName?: string }): { main: string; sub: string } {
   const nick = (e.nickname ?? '').trim();
-  const rn = (e.realName ?? '').trim();
+  const rn = (e.realName ?? '').trim() || (e.optinRealName ?? '').trim();
   if (!nick) return { main: NAMELESS_RANK_LABEL, sub: '' };
-  if (rn && wantsRealName(nick, optIns)) return { main: rn, sub: maskRealName(nick) };
+  if (rn) return { main: rn, sub: maskRealName(nick) };
   return { main: nick, sub: '' };
 }
 
 // 공개 표시 문자열 — rankDisplay 와 같은 규칙을 한 줄 문자열로. 규칙을 두 번 쓰지 않는다.
-export function rankingLabel(e: RankingEntry, optIns?: RealNameOptIns): string {
-  const { main, sub } = rankDisplay(e, optIns);
+export function rankingLabel(e: RankingEntry): string {
+  const { main, sub } = rankDisplay(e);
   return sub ? `${main}(${sub})` : main;
 }
 
@@ -117,8 +116,8 @@ export async function getVenueRealNameOptIns(venueId: string): Promise<Set<strin
  *    getLatestRankingDate(ranking_date) · getMyRankingHistory(nickname ilike) · loyalty.getMyBadgeStats(nickname ilike) ·
  *    loyalty.getMonthlyHall(nickname, position). 이들은 컬럼 권한 회수 덕에 실명을 못 읽는다.
  *    닉네임으로 거르는 두 곳은 반드시 likeLiteral 을 거친다(아래 — `_`·`%` 가 와일드카드라 남의 행이 섞였다).
- *  rankDisplay 의 클라이언트 규칙은 그대로 둔다 — 서버와 같은 규칙이라 결과가 같고, 이중 안전망이다. */
-type RankRow = { id: string; venue_id: string; ranking_date: string; position: number; nickname: string; real_name: string | null; prize: string | null; event_name: string | null };
+ *  optin_real_name(20260930c)은 real_name 과 따로 온다 — real_name 은 편집기 저장값이라 표시값을 섞지 않는다. */
+type RankRow = { id: string; venue_id: string; ranking_date: string; position: number; nickname: string; real_name: string | null; prize: string | null; event_name: string | null; optin_real_name?: string | null };
 async function fetchRankingsPublic(venueIds: string[], dates?: string[]): Promise<RankRow[]> {
   const { data, error } = await supabase.rpc('venue_rankings_public', { p_venue_ids: venueIds, p_dates: dates ?? null });
   if (error) throw error;
@@ -127,7 +126,7 @@ async function fetchRankingsPublic(venueIds: string[], dates?: string[]): Promis
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToEntry(r: any): RankingEntry {
-  return { position: r.position, nickname: r.nickname, realName: r.real_name ?? '', prize: r.prize ?? undefined, eventName: r.event_name ?? '' };
+  return { position: r.position, nickname: r.nickname, realName: r.real_name ?? '', optinRealName: r.optin_real_name ?? '', prize: r.prize ?? undefined, eventName: r.event_name ?? '' };
 }
 
 export async function getLatestRankingDate(venueId: string): Promise<string | null> {
@@ -248,7 +247,9 @@ export async function getVenueRankingTotals(venueId: string, cfg?: VenuePageConf
     cur.appearances += 1;
     cur.bestPosition = Math.min(cur.bestPosition, r.position);
     const d = String(r.ranking_date ?? '');
-    if (r.real_name && d >= cur._lastDate) { cur.realName = r.real_name; cur._lastDate = d; }
+    // 표시 전용 합계 — 원문(장부 권한자)이 없으면 옵트인 실명(20260930c). 저장 경로가 아니라 섞어도 된다.
+    const rn = r.real_name || r.optin_real_name;
+    if (rn && d >= cur._lastDate) { cur.realName = rn; cur._lastDate = d; }
     map.set(key, cur);
   }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -439,7 +440,7 @@ export function redactForCache<T extends {
   return {
     ...e,
     totals: e.totals.map((t) => ({ ...t, realName: '' })),
-    latest: { date: e.latest.date, entries: e.latest.entries.map((x) => ({ ...x, realName: '' })) },
+    latest: { date: e.latest.date, entries: e.latest.entries.map((x) => ({ ...x, realName: '', optinRealName: '' })) }, // 옵트인 실명도 캐시하지 않는다 — 끈 뒤에 남는다
     manual: e.manual.map((m) => ({ ...m, reason: null })),
     checkinRows: [],
     playerCounts: [...pcMap.values()],

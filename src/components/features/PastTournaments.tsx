@@ -8,6 +8,11 @@ import type { RankingEntry } from '../../api/rankings';
 // 순위 조회는 여전히 동적 import — criticalPathGraph.contract 의 rankings 금지 목록(12.5:1)과 같은 이유.
 const rankingsMod = () => import('../../api/rankings');
 
+// 홈 '지난 대회' 이름(오너 2026-09-30): 실명 공개를 켠 사람은 실명, 켜지 않은(거부·미선택) 사람은 닉네임.
+//   판정은 서버 한 곳(20260930c _ranking_optin_real_name)이 optin_real_name 으로 실어 준다.
+//   realName 은 쓰지 않는다 — 장부 권한자(업주)에겐 업주가 적은 원문이 오는데, 홈에서는 업주가 봐도 켠 사람만 실명이다.
+const pastName = (e: RankingEntry) => e.optinRealName?.trim() || e.nickname;
+
 // ── 🏁 지난 대회 아카이브 — 일정탐색 하단(완료 대회, 최근 5개) ─────────────────
 // 순위가 입력된 대회면 행에 👑 우승자 표시 + 클릭 시 입상 순위 펼침(미입력이면 바로 상세).
 const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: { schedules: Schedule[]; onSelect: (s: Schedule) => void }) {
@@ -63,7 +68,7 @@ const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: {
                   {s.date.slice(5).replace('-', '/')}({day(s.date)})
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.title}</span>
-                {champ && <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-gold-300"><Icon name="trophy" size={12} />{champ.nickname}</span>}
+                {champ && <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-gold-300"><Icon name="trophy" size={12} />{pastName(champ)}</span>}
                 <span className="hidden shrink-0 text-xs text-ink-muted sm:inline">{s.pubName}</span>
                 <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
               </button>
@@ -75,7 +80,7 @@ const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: {
                         <span className="w-8 shrink-0 text-center text-xs font-bold tabular-nums text-ink-muted">
                           {medal(e.position) ?? `${e.position}위`}
                         </span>
-                        <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{e.nickname}</span>
+                        <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{pastName(e)}</span>
                         {/* 상금 표기는 2026-09-05 제거(법적위험완화 v3) — 지난 대회 결과는 등수·닉네임만 */}
                       </li>
                     ))}

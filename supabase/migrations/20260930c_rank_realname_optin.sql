@@ -7,6 +7,14 @@
 --   음성 3역할(비로그인·일반 회원·타매장 업주) × 비동의 실명 노출 0건 / 옵트인 실명 1건 보임 · 전국 순위 동일 ·
 --   양성(해당 매장 업주) 원문 실명 2/2 · 해제 후 실명 0건 · 제3자 불일치 0건.
 --   적용 전 대조(현 라이브): 같은 조건에서 anon 노출 0 · **옵트인 실명 보임 0** — 켜도 안 보이던 결함 ① 재현.
+-- 🧪 2026-09-30 오후 재리허설(PR #56 후속 + critical-reviewer 지적 1~3 반영판, 같은 방식) — `REHEARSAL_OK`:
+--   업주·원문 없음·켠 사람 → optin_real_name=인증 실명 1 · 저장값 real_name NULL 유지 / 업주·원문 있음 → 원문 1 · optin NULL /
+--   업주 시즌 표시 2/2(원문·인증 실명) / 지난 대회(optin_real_name): 음성 3역할 × 켠 사람 1 · 안 켠 사람 0 /
+--   미인증 set_my_ranking_name_pref('real_name') → 42501 거부 · 'nickname' 은 저장 /
+--   닉네임 재사용(A 비동의 기록 2000-01-05 → A 닉 변경 → B 가 그 닉+켬): venue_rankings_public 0 · 전국 0 · optins 0 · 시즌 0 ·
+--   선두 0 · 업주 분기 0 / B 본인 행(2000-01-06) real_name·optin 모두 인증 실명 1 · 전국(B 행만) 1 · 전국(A 행 섞임) 0.
+--   뒤이어 SELECT: 새 함수 0 · 반환형 원래대로 · 인덱스 0 · 임시 행/시즌/닉/이력 0 · 시험 계정 pref 원래대로 → 롤백 확인.
+--   음성 대조(라이브, 롤백): 판정에서 nickname_owner_at 줄을 빼면 재사용 행 노출 1건.
 --
 -- 오너 2026-09-30: "기존 가입자는 기본 실명 비공개. 실명 공개를 본인이 선택하게 만들 예정이니
 --   그 선택만 제대로 할 수 있게 해." (이름 숨기기 별도 옵션은 넣지 않는다 — 오너 결정)
@@ -34,12 +42,21 @@
 --   venues_season_leaders (2026-09-30 prosrc 전수). 다섯 곳 모두 아래에서 같은 식으로 바꾼다.
 --   비로그인(auth.uid() NULL): can_manage_pos 의 my_role()='admin' 은 coalesce(false), 나머지 exists 는 거짓 → 닫힘.
 --
--- ⚠ ACL: 다섯 공개 RPC·optins·_ranking_real_name_opted_in 은 CREATE OR REPLACE(ACL 보존)지만 관행대로 다시 적는다.
---   global_ranking_totals 는 반환 열이 늘어 **DROP 후 재생성** → ACL 초기화되므로 반드시 다시 적는다.
+-- ⚠ ACL: 시즌 RPC 넷·optins·_ranking_real_name_opted_in 은 CREATE OR REPLACE(ACL 보존)지만 관행대로 다시 적는다.
+--   global_ranking_totals·venue_rankings_public 은 반환 열이 늘어 **DROP 후 재생성** → ACL 초기화되므로 반드시 다시 적는다.
+
+-- ── 0. 닉네임으로 순위 행을 찾는 식에 맞춘 인덱스(행마다 전수 스캔 방지 — critical-reviewer 2026-09-30 지적 3) ──
+create index if not exists idx_vr_nickname_ci on public.venue_rankings (lower(btrim(nickname)));
 
 -- ── 1. 옵트인 실명 한 벌 ─────────────────────────────────────────────────────
--- 옵트인이면 본인인증 실명(trim), 아니면 NULL. 모든 공개 순위 RPC 가 이 함수 하나만 본다.
-create or replace function public._ranking_optin_real_name(p_nickname text)
+-- 판정은 **이 함수 하나**다. 다른 모든 곳(공개 순위 RPC 여섯·optins·아래 _span)은 이 함수만 부른다.
+-- 옵트인이면 본인인증 실명(trim), 아니면 NULL.
+-- p_at = 그 순위 행이 기록된 시각(venue_rankings.created_at). **그 시각의 닉네임 주인이 이 프로필일 때만** 연다
+--   (critical-reviewer 2026-09-30 지적 1 — 결함): 예전엔 닉네임 글자만으로 행을 이어서, 남이 버린 닉네임을 가져가
+--   실명 공개를 켜면 **남의 입상 기록에 내 본인인증 실명**이 공개로 붙었다(리허설 재현: nickname_owner_at='A' 인데 B 실명).
+--   시점 주인은 라이브 정본 nickname_owner_at(닉네임 변경 이력 기반) — my_ranking_history 도 같은 식(r.created_at)으로 잇는다.
+--   ponytail: 순위를 편집기로 다시 저장하면 created_at 이 저장 시각으로 바뀐다 — my_ranking_history 와 같은 한계.
+create or replace function public._ranking_optin_real_name(p_nickname text, p_at timestamptz)
 returns text
 language sql
 stable
@@ -50,6 +67,7 @@ as $$
     from public.profiles p
    where btrim(coalesce(p_nickname, '')) <> ''
      and lower(btrim(p.nickname)) = lower(btrim(p_nickname))   -- 닉네임은 대소문자·공백 무시 유일(uniq_profiles_nickname_ci)
+     and public.nickname_owner_at(p_nickname, p_at) = p.id      -- 그 행이 기록될 때도 이 사람의 닉네임이었다
      and coalesce(p.status::text, 'active') = 'active'
      and p.ranking_name_pref = 'real_name'
      and p.ci_hash is not null
@@ -63,10 +81,32 @@ as $$
      )
    limit 1;
 $$;
-revoke all on function public._ranking_optin_real_name(text) from public, anon, authenticated;
-grant execute on function public._ranking_optin_real_name(text) to service_role;
+revoke all on function public._ranking_optin_real_name(text, timestamptz) from public, anon, authenticated;
+grant execute on function public._ranking_optin_real_name(text, timestamptz) to service_role;
 
--- 옛 판정 함수는 같은 답을 내도록 한 벌에 묶어 둔다(외부 호출부 0 — 남겨 두는 것은 되돌리기 안전판).
+-- 여러 행을 한 줄로 합친 표(시즌·전국·optins)용 — 합쳐진 행 **전부**가 위 판정을 통과하고 같은 실명일 때만 연다.
+--   (한 행이라도 다른 주인 시절 기록이면 NULL — 남의 기록이 섞인 합계에 내 실명을 붙이지 않는다.)
+--   판정 자체는 하지 않는다. 행마다 _ranking_optin_real_name 을 부를 뿐이다.
+create or replace function public._ranking_optin_real_name_span(p_venue_id uuid, p_nickname text, p_from date, p_to date)
+returns text
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select case when count(*) > 0 and count(o.name) = count(*) and count(distinct o.name) = 1 then min(o.name) end
+    from public.venue_rankings r
+    cross join lateral (select public._ranking_optin_real_name(r.nickname, r.created_at) as name) o
+   where btrim(coalesce(p_nickname, '')) <> ''
+     and lower(btrim(r.nickname)) = lower(btrim(p_nickname))
+     and (p_venue_id is null or r.venue_id = p_venue_id)
+     and (p_from is null or r.ranking_date >= p_from)
+     and (p_to is null or r.ranking_date <= p_to);
+$$;
+revoke all on function public._ranking_optin_real_name_span(uuid, text, date, date) from public, anon, authenticated;
+grant execute on function public._ranking_optin_real_name_span(uuid, text, date, date) to service_role;
+
+-- 옛 판정 함수는 같은 판정에 묶어 둔다(이 파일 적용 뒤 호출부 0 — 남겨 두는 것은 되돌리기 안전판. 시점은 지금).
 create or replace function public._ranking_real_name_opted_in(p_nickname text)
 returns boolean
 language sql
@@ -74,10 +114,43 @@ stable
 security definer
 set search_path = public, pg_temp
 as $$
-  select public._ranking_optin_real_name(p_nickname) is not null;
+  select public._ranking_optin_real_name(p_nickname, now()) is not null;
 $$;
 revoke all on function public._ranking_real_name_opted_in(text) from public, anon, authenticated;
 grant execute on function public._ranking_real_name_opted_in(text) to service_role;
+
+-- ── 1-b. 실명 공개 선택은 본인인증 뒤에만(critical-reviewer 2026-09-30 지적 2) ──────────────
+-- 화면은 미인증에게 '실명'을 막아 두지만 RPC 는 받고 있었다. 서버도 같은 조건으로 거부한다.
+create or replace function public.set_my_ranking_name_pref(p_pref text)
+returns text
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_uid  uuid := auth.uid();
+  v_pref text := nullif(btrim(coalesce(p_pref, '')), '');
+begin
+  if v_uid is null then
+    raise exception '로그인이 필요합니다' using errcode = '42501';
+  end if;
+  if v_pref is not null and v_pref not in ('nickname', 'real_name') then
+    raise exception '표시 이름 값이 올바르지 않습니다' using errcode = '22023';
+  end if;
+  if v_pref = 'real_name' and not exists (
+       select 1 from public.profiles p
+        where p.id = v_uid and p.ci_hash is not null
+          and nullif(btrim(coalesce(p.real_name, '')), '') is not null) then
+    raise exception '본인인증을 마친 뒤에 실명 공개를 고를 수 있습니다' using errcode = '42501';
+  end if;
+  update public.profiles
+     set ranking_name_pref = v_pref
+   where id = v_uid;
+  return coalesce(v_pref, 'nickname');
+end;
+$$;
+revoke all on function public.set_my_ranking_name_pref(text) from public, anon;
+grant execute on function public.set_my_ranking_name_pref(text) to authenticated, service_role;
 
 -- ── 2. 이 매장 순위표에서 실명을 켠 닉네임 ─────────────────────────────────────
 create or replace function public.venue_ranking_real_name_optins(p_venue_id uuid)
@@ -94,14 +167,25 @@ as $$
        and btrim(coalesce(r.nickname, '')) <> ''
   )
   select n.key from nicks n
-   where public._ranking_optin_real_name(n.key) is not null;
+   where public._ranking_optin_real_name_span(p_venue_id, n.key, null, null) is not null;
 $$;
 revoke all on function public.venue_ranking_real_name_optins(uuid) from public;
 grant execute on function public.venue_ranking_real_name_optins(uuid) to anon, authenticated, service_role;
 
 -- ── 3. 공개 순위 RPC 다섯 곳 — 업무 경로는 원문, 그 밖은 옵트인 실명만 ──────────────
-create or replace function public.venue_rankings_public(p_venue_ids uuid[], p_dates date[] default null::date[])
-returns table(id uuid, venue_id uuid, ranking_date date, "position" integer, nickname text, real_name text, prize text, event_name text)
+-- 리드 결정(2026-09-30, PR #56 후속 ①): 업주(장부 권한자)가 **공개 매장 페이지**를 볼 때 이름은
+--   업주가 적은 원문 → 없으면 본인이 켠 사람의 본인인증 실명(일반 방문자와 같은 값) → 둘 다 없으면 닉네임.
+-- · venue_rankings_public 의 real_name 은 **저장값**이다 — 순위 편집기(VenueManageTab)가 이 값을 그대로 다시 저장한다.
+--   그래서 옵트인 실명은 real_name 에 섞지 않고 **별도 열 optin_real_name**(누가 불러도 같은 값)으로 준다.
+--   화면은 real_name → optin_real_name → 닉네임 순으로 고른다. 홈 '지난 대회'(오너 지시 ②)는 optin_real_name 만 쓴다
+--   — 업주가 홈을 봐도 켜지 않은 사람은 닉네임이다.
+--   반환 열이 늘어 **DROP 후 재생성**(ACL 초기화 → 아래 REVOKE/GRANT 필수).
+-- · 시즌 RPC 넷(current_season_standings·season_results·venue_hall_of_fame·venues_season_leaders)은 편집기가
+--   다시 저장하지 않는 표시 전용이라 업무 경로에서 원문 → 옵트인 실명 순으로 바로 합친다.
+-- · 업무 경로의 옵트인 분기도 같은 판정(시점 주인 포함)을 거친다.
+drop function if exists public.venue_rankings_public(uuid[], date[]);
+create function public.venue_rankings_public(p_venue_ids uuid[], p_dates date[] default null::date[])
+returns table(id uuid, venue_id uuid, ranking_date date, "position" integer, nickname text, real_name text, prize text, event_name text, optin_real_name text)
 language sql
 stable
 security definer
@@ -112,10 +196,12 @@ as $$
       from unnest(coalesce(p_venue_ids, '{}'::uuid[])) as x(vid)
   )
   select r.id, r.venue_id, r.ranking_date, r.position, r.nickname,
-         case when v.can_see then r.real_name else public._ranking_optin_real_name(r.nickname) end as real_name,
-         r.prize, r.event_name
+         case when v.can_see then r.real_name else o.name end as real_name,
+         r.prize, r.event_name,
+         o.name as optin_real_name
     from public.venue_rankings r
     join v on v.vid = r.venue_id
+    cross join lateral (select public._ranking_optin_real_name(r.nickname, r.created_at) as name) o
    where p_dates is null or r.ranking_date = any(p_dates)
    order by r.venue_id, r.ranking_date, r.position;
 $$;
@@ -130,10 +216,17 @@ security definer
 set search_path = public, pg_temp
 as $$
   select s.rank, s.nickname,
-         case when public._can_see_ranking_real_names(p_venue_id) then s.real_name
-              else public._ranking_optin_real_name(s.nickname) end,
+         case when public._can_see_ranking_real_names(p_venue_id)
+              then coalesce(nullif(btrim(s.real_name), ''), o.name)
+              else o.name end,
          s.points, s.prize_man, s.appearances, s.best_position
     from public._current_season_standings_raw(p_venue_id) s
+    left join lateral (
+      select public._ranking_optin_real_name_span(p_venue_id, s.nickname, ss.starts_on, ss.ends_on) as name
+        from public.venue_seasons ss
+       where ss.venue_id = p_venue_id and ss.status = 'active'
+       limit 1
+    ) o on true
    order by s.rank;
 $$;
 revoke all on function public.current_season_standings(uuid) from public;
@@ -147,8 +240,9 @@ security definer
 set search_path = public, pg_temp
 as $$
   select r.season_id, r.rank, r.nickname,
-         case when public._can_see_ranking_real_names(s.venue_id) then r.real_name
-              else public._ranking_optin_real_name(r.nickname) end,
+         case when public._can_see_ranking_real_names(s.venue_id)
+              then coalesce(nullif(btrim(r.real_name), ''), public._ranking_optin_real_name_span(s.venue_id, r.nickname, s.starts_on, s.ends_on))
+              else public._ranking_optin_real_name_span(s.venue_id, r.nickname, s.starts_on, s.ends_on) end,
          r.points, r.prize_man, r.appearances, r.best_position
     from public.venue_season_results r
     join public.venue_seasons s on s.id = r.season_id
@@ -166,8 +260,9 @@ security definer
 set search_path = public, pg_temp
 as $$
   select s.id, s.name, s.ends_on, r.nickname,
-         case when public._can_see_ranking_real_names(p_venue_id) then r.real_name
-              else public._ranking_optin_real_name(r.nickname) end,
+         case when public._can_see_ranking_real_names(p_venue_id)
+              then coalesce(nullif(btrim(r.real_name), ''), public._ranking_optin_real_name_span(p_venue_id, r.nickname, s.starts_on, s.ends_on))
+              else public._ranking_optin_real_name_span(p_venue_id, r.nickname, s.starts_on, s.ends_on) end,
          r.points
     from public.venue_seasons s
     join public.venue_season_results r on r.season_id = s.id and r.rank = 1
@@ -187,19 +282,20 @@ as $$
   with s as (
     select venue_id, name, starts_on, ends_on from public.venue_seasons where status = 'active' and venue_id = any(p_venue_ids)
   ), agg as (
-    select s.venue_id, s.name as season_name, vr.nickname, max(vr.real_name) as real_name,
+    select s.venue_id, s.name as season_name, s.starts_on, s.ends_on, vr.nickname, max(vr.real_name) as real_name,
            sum(public.placement_points(s.venue_id, vr.position))::int as points
       from s join public.venue_rankings vr
         on vr.venue_id = s.venue_id and vr.ranking_date >= s.starts_on and vr.ranking_date <= s.ends_on
        and coalesce(trim(vr.nickname), '') <> ''
-     group by s.venue_id, s.name, vr.nickname
+     group by s.venue_id, s.name, s.starts_on, s.ends_on, vr.nickname
   ), lead as (
-    select distinct on (venue_id) venue_id, season_name, nickname, real_name, points
+    select distinct on (venue_id) venue_id, season_name, starts_on, ends_on, nickname, real_name, points
       from agg order by venue_id, points desc, nickname
   )
   select l.venue_id, l.season_name, l.nickname,
-         case when public._can_see_ranking_real_names(l.venue_id) then l.real_name
-              else public._ranking_optin_real_name(l.nickname) end,
+         case when public._can_see_ranking_real_names(l.venue_id)
+              then coalesce(nullif(btrim(l.real_name), ''), public._ranking_optin_real_name_span(l.venue_id, l.nickname, l.starts_on, l.ends_on))
+              else public._ranking_optin_real_name_span(l.venue_id, l.nickname, l.starts_on, l.ends_on) end,
          l.points
     from lead l;
 $$;
@@ -222,7 +318,7 @@ as $$
          min(r.position)::integer                                   as best_position,
          count(distinct r.venue_id)::bigint                         as venues,
          max(r.ranking_date)::date                                  as last_date,
-         public._ranking_optin_real_name(r.nickname)                as real_name
+         public._ranking_optin_real_name_span(null, r.nickname, p_since, null) as real_name
   from public.venue_rankings r
   where coalesce(trim(r.nickname), '') <> ''
     and (p_since is null or r.ranking_date >= p_since)
@@ -237,11 +333,16 @@ do $check$
 declare
   f text;
 begin
-  foreach f in array array['public._ranking_optin_real_name(text)', 'public._ranking_real_name_opted_in(text)'] loop
+  foreach f in array array['public._ranking_optin_real_name(text,timestamptz)', 'public._ranking_optin_real_name_span(uuid,text,date,date)',
+                           'public._ranking_real_name_opted_in(text)'] loop
     if has_function_privilege('anon', f, 'execute') or has_function_privilege('authenticated', f, 'execute') then
       raise exception '20260930c: 내부 함수 % 가 anon/authenticated 에 열려 있다', f;
     end if;
   end loop;
+  if has_function_privilege('anon', 'public.set_my_ranking_name_pref(text)', 'execute')
+     or not has_function_privilege('authenticated', 'public.set_my_ranking_name_pref(text)', 'execute') then
+    raise exception '20260930c: set_my_ranking_name_pref ACL 이 틀렸다(anon 닫힘·authenticated 열림이어야 한다)';
+  end if;
   foreach f in array array['public.global_ranking_totals(date)', 'public.venue_rankings_public(uuid[],date[])',
                            'public.current_season_standings(uuid)', 'public.season_results(uuid)',
                            'public.venue_hall_of_fame(uuid)', 'public.venues_season_leaders(uuid[])',
@@ -249,6 +350,12 @@ begin
     if not has_function_privilege('anon', f, 'execute') then
       raise exception '20260930c: 공개 읽기 RPC % 를 anon 이 못 부른다(화면이 빈다)', f;
     end if;
+  end loop;
+  foreach f in array array['public.global_ranking_totals(date)', 'public.venue_rankings_public(uuid[],date[])',
+                           'public.current_season_standings(uuid)', 'public.season_results(uuid)',
+                           'public.venue_hall_of_fame(uuid)', 'public.venues_season_leaders(uuid[])',
+                           'public.venue_ranking_real_name_optins(uuid)', 'public._ranking_optin_real_name(text,timestamptz)',
+                           'public._ranking_optin_real_name_span(uuid,text,date,date)', 'public.set_my_ranking_name_pref(text)'] loop
     if not exists (select 1 from pg_proc where oid = f::regprocedure and prosecdef
                      and proconfig @> array['search_path=public, pg_temp']) then
       raise exception '20260930c: % search_path 고정 누락', f;
@@ -274,48 +381,113 @@ $check$;
 --   declare
 --     V uuid := 'f35b42d1-2d54-4905-95c1-1fda24e0f178';
 --     D date := '2000-01-01';
+--     OPTIN uuid := '47360d8e-fd0e-49f3-ab3f-22e1fc1e9e60';
+--     NOOPT uuid := 'fd14c2dc-d994-46e4-8f12-b6cf38104983';
 --     n_opt text; n_no text; rn_opt text;
---     who record; got int; leak int; pos int;
+--     who record; got int; leak int;
 --   begin
---     select nickname, btrim(real_name) into n_opt, rn_opt from profiles where id = '47360d8e-fd0e-49f3-ab3f-22e1fc1e9e60';
---     select nickname into n_no from profiles where id = 'fd14c2dc-d994-46e4-8f12-b6cf38104983';
---     update profiles set ranking_name_pref = 'real_name' where id = '47360d8e-fd0e-49f3-ab3f-22e1fc1e9e60';
+--     select nickname, btrim(real_name) into n_opt, rn_opt from profiles where id = OPTIN;
+--     select nickname into n_no from profiles where id = NOOPT;
+--     update profiles set ranking_name_pref = 'real_name' where id = OPTIN;
 --     insert into venue_rankings(venue_id, ranking_date, position, nickname, real_name) values
 --       (V, D, 1, n_opt, null), (V, D, 2, n_no, '리허설비동의실명'), (V, D, 3, '', '리허설옛행실명');
+--     insert into venue_seasons(venue_id, name, starts_on, ends_on, status) values (V, '리허설시즌', D, D, 'active');
 --
---     -- 음성: 비로그인 · 일반 회원 · 타매장 업주 — 비동의 실명(업주가 적은 것·옛 행) 0건, 옵트인 실명은 보인다
+--     -- 음성: 비로그인 · 일반 회원 · 타매장 업주
 --     for who in select * from (values (null::uuid), ('708de904-913e-4082-8803-8a2766b342f9'::uuid), ('1a8c5117-a4c7-42fe-abb6-021544adcd16'::uuid)) t(uid) loop
 --       perform set_config('request.jwt.claims', case when who.uid is null then '' else json_build_object('sub', who.uid, 'role', 'authenticated')::text end, true);
 --       select count(*) into leak from venue_rankings_public(array[V], array[D]) where real_name in ('리허설비동의실명', '리허설옛행실명');
 --       if leak <> 0 then raise exception 'FAIL 음성 %: 비동의 실명 % 건 노출', who.uid, leak; end if;
 --       select count(*) into got from venue_rankings_public(array[V], array[D]) where nickname = n_opt and real_name = rn_opt;
---       if got <> 1 then raise exception 'FAIL 양성(옵트인) %: 옵트인 실명이 안 보인다(%)', who.uid, got; end if;
+--       if got <> 1 then raise exception 'FAIL 양성(옵트인) %: %', who.uid, got; end if;
 --       select count(*) into leak from global_ranking_totals(D) where real_name is not null and nickname <> n_opt;
---       if leak <> 0 then raise exception 'FAIL 전국 %: 옵트인 아닌 실명 % 건', who.uid, leak; end if;
+--       if leak <> 0 then raise exception 'FAIL 전국 %: %', who.uid, leak; end if;
 --       select count(*) into got from global_ranking_totals(D) where nickname = n_opt and real_name = rn_opt;
 --       if got <> 1 then raise exception 'FAIL 전국 양성 %', who.uid; end if;
 --       select count(*) into got from venue_ranking_real_name_optins(V) where nickname_key = lower(btrim(n_opt));
 --       if got <> 1 then raise exception 'FAIL optins %', who.uid; end if;
 --       select count(*) into leak from venue_ranking_real_name_optins(V) where nickname_key = lower(btrim(n_no));
 --       if leak <> 0 then raise exception 'FAIL optins 비동의 %', who.uid; end if;
+--       -- ② 홈 '지난 대회'(optin_real_name): 켠 사람 실명 1 · 안 켠 사람(업주가 실명을 적었어도) 0
+--       select count(*) into got from venue_rankings_public(array[V], array[D]) where nickname = n_opt and optin_real_name = rn_opt;
+--       if got <> 1 then raise exception 'FAIL ② 지난 대회 켠 사람 %: %', who.uid, got; end if;
+--       select count(*) into leak from venue_rankings_public(array[V], array[D]) where nickname is distinct from n_opt and optin_real_name is not null;
+--       if leak <> 0 then raise exception 'FAIL ② 지난 대회 안 켠 사람 %: %', who.uid, leak; end if;
+--       -- 시즌 표시(방문자): 켠 사람만 실명
+--       select count(*) into got from current_season_standings(V) where nickname = n_opt and real_name = rn_opt;
+--       if got <> 1 then raise exception 'FAIL 시즌 방문자 켠 사람 %', who.uid; end if;
+--       select count(*) into leak from current_season_standings(V) where nickname = n_no and real_name is not null;
+--       if leak <> 0 then raise exception 'FAIL 시즌 방문자 원문 노출 %', who.uid; end if;
 --     end loop;
+--
+--     -- 지적 2: 미인증 회원은 서버에서도 '실명'을 못 고른다(708de904 = 미인증)
+--     perform set_config('request.jwt.claims', json_build_object('sub', '708de904-913e-4082-8803-8a2766b342f9', 'role', 'authenticated')::text, true);
+--     begin
+--       perform set_my_ranking_name_pref('real_name');
+--       raise exception 'FAIL 지적2: 미인증인데 real_name 저장됨';
+--     exception when insufficient_privilege then null;
+--     end;
+--     if (select set_my_ranking_name_pref('nickname')) <> 'nickname' then raise exception 'FAIL 지적2: nickname 저장 실패'; end if;
 --
 --     -- 양성(업무 경로): 해당 매장 업주는 업주가 적은 원문 실명을 그대로 받는다(순위 편집기 저장이 원문을 잃지 않게)
 --     perform set_config('request.jwt.claims', json_build_object('sub', '7e435684-2c8c-458d-985c-31b784a44893', 'role', 'authenticated')::text, true);
 --     select count(*) into got from venue_rankings_public(array[V], array[D]) where real_name in ('리허설비동의실명', '리허설옛행실명');
 --     if got <> 2 then raise exception 'FAIL 양성(업주): 원문 실명 %/2', got; end if;
+--     -- ① 업주가 공개 페이지를 볼 때: 원문 없음·켠 사람 → 인증 실명(optin_real_name) · 저장값 real_name 은 NULL 그대로
+--     select count(*) into got from venue_rankings_public(array[V], array[D]) where nickname = n_opt and real_name is null and optin_real_name = rn_opt;
+--     if got <> 1 then raise exception 'FAIL ① 업주·원문 없음·켠 사람: %', got; end if;
+--     --   원문 있음 → 원문(저장값) · 안 켠 사람이라 optin_real_name 은 NULL
+--     select count(*) into got from venue_rankings_public(array[V], array[D]) where nickname = n_no and real_name = '리허설비동의실명' and optin_real_name is null;
+--     if got <> 1 then raise exception 'FAIL ① 업주·원문 있음: %', got; end if;
+--     --   시즌 표시 전용 RPC 는 서버가 합친다: 켠 사람 → 인증 실명, 원문 있는 사람 → 원문
+--     select count(*) into got from current_season_standings(V) where (nickname = n_opt and real_name = rn_opt) or (nickname = n_no and real_name = '리허설비동의실명');
+--     if got <> 2 then raise exception 'FAIL ① 업주 시즌 표시 %/2', got; end if;
 --
---     -- 끄면 즉시 닉네임: 옵트인 해제 → 비로그인에게 옵트인 실명도 0
---     update profiles set ranking_name_pref = 'nickname' where id = '47360d8e-fd0e-49f3-ab3f-22e1fc1e9e60';
+--     -- 끄면 즉시 닉네임
+--     update profiles set ranking_name_pref = 'nickname' where id = OPTIN;
 --     perform set_config('request.jwt.claims', '', true);
---     select count(*) into leak from venue_rankings_public(array[V], array[D]) where real_name is not null;
+--     select count(*) into leak from venue_rankings_public(array[V], array[D]) where real_name is not null or optin_real_name is not null;
 --     if leak <> 0 then raise exception 'FAIL 해제 후에도 실명 % 건', leak; end if;
 --
---     -- 제3자 불일치(20260918b): 켠 사람 닉네임 행에 다른 실명이 적혀 있으면 닫힌다
---     update profiles set ranking_name_pref = 'real_name' where id = '47360d8e-fd0e-49f3-ab3f-22e1fc1e9e60';
+--     -- 제3자 불일치(20260918b)
+--     update profiles set ranking_name_pref = 'real_name' where id = OPTIN;
 --     update venue_rankings set real_name = '다른사람' where venue_id = V and ranking_date = D and position = 1;
---     select count(*) into leak from venue_rankings_public(array[V], array[D]) where real_name is not null;
+--     select count(*) into leak from venue_rankings_public(array[V], array[D]) where real_name is not null or optin_real_name is not null;
 --     if leak <> 0 then raise exception 'FAIL 제3자 불일치인데 % 건', leak; end if;
+--
+--     -- 지적 1: 닉네임 재사용 — A(비동의)가 'rh_reuse_0930' 로 1위(과거 기록) → A 가 닉 변경 → B(인증)가 그 닉 + 실명 공개
+--     --   → A 시절 행에는 B 실명이 붙지 않는다(모든 공개 RPC). B 가 그 닉으로 새로 입상한 행은 실명(양성).
+--     update profiles set nickname = 'rh_reuse_0930' where id = NOOPT;
+--     insert into venue_rankings(venue_id, ranking_date, position, nickname, real_name, created_at)
+--       values (V, '2000-01-05', 1, 'rh_reuse_0930', null, '2000-01-05 21:00+09');
+--     update profiles set nickname = 'rh_reuse_a_0930' where id = NOOPT;       -- nickname_history(A, old='rh_reuse_0930') 가 남는다
+--     update profiles set nickname = 'rh_reuse_0930', ranking_name_pref = 'real_name' where id = OPTIN;
+--     if public.nickname_owner_at('rh_reuse_0930', '2000-01-05 21:00+09') is distinct from NOOPT then raise exception 'FAIL 재사용 전제: 시점 주인이 A 가 아니다'; end if;
+--     select count(*) into leak from venue_rankings_public(array[V], array['2000-01-05'::date]) where real_name is not null or optin_real_name is not null;
+--     if leak <> 0 then raise exception 'FAIL 재사용 venue_rankings_public %', leak; end if;
+--     select count(*) into leak from global_ranking_totals('2000-01-05') where nickname = 'rh_reuse_0930' and real_name is not null;
+--     if leak <> 0 then raise exception 'FAIL 재사용 전국 %', leak; end if;
+--     select count(*) into leak from venue_ranking_real_name_optins(V) where nickname_key = 'rh_reuse_0930';
+--     if leak <> 0 then raise exception 'FAIL 재사용 optins %', leak; end if;
+--     update venue_seasons set starts_on = D, ends_on = '2000-01-06' where venue_id = V and name = '리허설시즌';
+--     select count(*) into leak from current_season_standings(V) where nickname = 'rh_reuse_0930' and real_name is not null;
+--     if leak <> 0 then raise exception 'FAIL 재사용 시즌 %', leak; end if;
+--     select count(*) into leak from venues_season_leaders(array[V]) where nickname = 'rh_reuse_0930' and real_name is not null;
+--     if leak <> 0 then raise exception 'FAIL 재사용 선두 %', leak; end if;
+--     --   업주 화면의 옵트인 분기도 같은 판정: 원문 없음 → NULL
+--     perform set_config('request.jwt.claims', json_build_object('sub', '7e435684-2c8c-458d-985c-31b784a44893', 'role', 'authenticated')::text, true);
+--     select count(*) into leak from venue_rankings_public(array[V], array['2000-01-05'::date]) where real_name is not null or optin_real_name is not null;
+--     if leak <> 0 then raise exception 'FAIL 재사용 업주 분기 %', leak; end if;
+--     --   B 본인 행(B 가 그 닉을 가진 뒤 기록) → 실명(양성)
+--     perform set_config('request.jwt.claims', '', true);
+--     insert into venue_rankings(venue_id, ranking_date, position, nickname, real_name) values (V, '2000-01-06', 1, 'rh_reuse_0930', null);
+--     select count(*) into got from venue_rankings_public(array[V], array['2000-01-06'::date]) where nickname = 'rh_reuse_0930' and real_name = rn_opt and optin_real_name = rn_opt;
+--     if got <> 1 then raise exception 'FAIL 재사용 B 본인 양성 %', got; end if;
+--     --   합계는 A 시절 행이 섞였으니 여전히 NULL, B 행만 있는 기간은 실명
+--     select count(*) into leak from global_ranking_totals('2000-01-05') where nickname = 'rh_reuse_0930' and real_name is not null;
+--     if leak <> 0 then raise exception 'FAIL 재사용 전국(섞임) %', leak; end if;
+--     select count(*) into got from global_ranking_totals('2000-01-06') where nickname = 'rh_reuse_0930' and real_name = rn_opt;
+--     if got <> 1 then raise exception 'FAIL 재사용 전국(B 만) %', got; end if;
 --
 --     raise exception 'REHEARSAL_OK';  -- 전부 통과하면 이 문구로 멈춘다(= rollback)
 --   end
