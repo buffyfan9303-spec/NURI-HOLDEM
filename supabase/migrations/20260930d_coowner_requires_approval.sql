@@ -41,9 +41,26 @@
 --                              호출: notify_venue_staff · notify_venue_match_response/decision · notify_league_invite/response.
 --   _notify_buyin_request     (리드 결정, 트리거 trg_buyin_request_notify@ledger_buyin_requests) 손님 바인 요청 알림 수신자를 같은 정본으로.
 --                              ledger_access 분기는 그대로(직원 — 이번 범위 밖, 아래 보고).
+--   ── 3차(critical 검토 PR #57 '조건부' → 리드 결정 2026-09-30, 원문 .claude/agent-memory-local/critical-reviewer/coowner_approval_review_2026-09-30.md)
+--   respond_staff_invite      부여 절 v_ok 가 초대자 owner_id / vo 'approved' 를 직접 봤다 → 승인 철회 업주가 철회 전에 보낸 초대를
+--                              수락하면 장부·이용권·일정 권한이 생겼다(critical 리허설 재현). → _venue_owner_ok(v,by) · _venue_coowner_ok(v,by).
+--                              '업주·관리자는 수락 금지' 절은 그대로(좁히면 풀린다).
+--   send_weekly_venue_reports  주간 매출·신규 손님 리포트를 승인 무관하게 v.owner_id 에게 → 루프에 _venue_owner_ok(id, owner_id).
+--   _notify_buyin_request     ledger_access 분기에 _is_active_venue_staff 추가(정지·거절 직원의 남은 부여 행). profiles 전수 대신
+--                              후보(owner_id ∪ venue_owners ∪ ledger_access)를 먼저 뽑아 정본으로 거른다. (알림 문구는 건수뿐 — 손님 이름 없음.)
+--   is_verified_owner()       owner_posts read/insert 정책이 쓴다 — approved 를 안 봤다 → _venue_owner_ok(v.id, p.id) 추가(인증 매장 조건 그대로).
+--   is_venue_or_group_owner(uuid) 새 공개 판정(정책용 — 정책은 호출자 권한으로 돌아 _ 내부 함수를 못 부른다).
+--                              매장(kind='venue')이면 _venue_owner_ok, **그룹이면 종전대로 owner_id = auth.uid()** —
+--                              GroupPage 공지(venue_notices)·댓글은 그룹 개설자 기능이라 그대로 둔다(20260926c 그룹 결정).
+--   정책 venue_notices_insert · venue_notices_delete · comments_delete(매장 분기) → is_venue_or_group_owner(venue_id).
+--        comments_delete 의 일정 작성자 분기(schedules.owner_id)는 그대로 — 업주 판정이 아니라 글쓴이 판정.
+--   정책 storage.objects posters_upload — `my_role() in (venue_owner, admin)` 선행 분기가 is_any_venue_manager 를 우회했다
+--        → `my_role() = 'admin' or is_any_venue_manager()`. (라이브 venue_owner 역할 2명 모두 승인 매장 소유 — 영향 0.)
 -- 바꾸지 않는 것(보고만):
 --   can_manage_venue          이미 approved·role 을 본다.
---   _notify_buyin_request 의 ledger_access 분기  _is_active_venue_staff 를 안 본다 — 퇴사 처리 전 직원 부여 행이 남으면 알림이 간다.
+--   venues_update 정책        20260926c 가 '심사 중 업주가 자기 신청 정보를 고치는 경로'로 의도적으로 남겼다(리드 결정 유지).
+--   set_kill_password         비밀번호만 설정 — kill_venue 자체가 이제 승인을 본다. 무해.
+--   댓글 is_owner 배지·notify_on_comment/notify_on_review  표시·알림 문구뿐, 권한·데이터 부여 없음. 무해.
 --   respond_staff_invite      venue_owners 를 '수락 금지' 조건으로 쓴다 — 좁히면 오히려 풀린다. 그대로.
 --   add/remove_venue_owner · list_venue_owners  can_manage_pos 를 부르므로 자동으로 따라온다.
 --
@@ -68,7 +85,10 @@ begin
       ('public._venue_owner_ok(uuid)',             '8234e8ed98cd26cf714054243081d65d'),
       ('public.kill_venue(uuid,text,text)',        '649231e5d02beacfa04db76a90147533'),
       ('public._venue_notify_recipients(uuid,boolean)', 'dfc8b7a10e490b5671df6a9809bde62f'),
-      ('public._notify_buyin_request()',           'bdec792307162e3ea51d804498b05025')) t(sig, want)
+      ('public._notify_buyin_request()',           'bdec792307162e3ea51d804498b05025'),
+      ('public.respond_staff_invite(uuid,boolean)', '72f32325cbd3597ecce142004cbb6666'),
+      ('public.send_weekly_venue_reports()',       '23c462b00584a429a4c8113fd55d27c5'),
+      ('public.is_verified_owner()',               '39bf4620b035f7b86ec0bb5a86925e9b')) t(sig, want)
   loop
     if md5(pg_get_functiondef(r.sig::regprocedure)) <> r.want
        and pg_get_functiondef(r.sig::regprocedure) not like '%20260930d%' then
@@ -77,6 +97,25 @@ begin
     end if;
   end loop;
 end $pre$;
+
+-- §0-b 정책 게이트 — md5(qual|with_check) 2026-09-30 라이브. 이미 적용된 정책(is_venue_or_group_owner·admin 단독 분기)이면 통과.
+do $prepol$
+declare r record; m text; body text;
+begin
+  for r in select * from (values
+      ('public',  'comments',      'comments_delete',      '4d5396ed010f08ee88bd1a5cc98dbd42'),
+      ('public',  'venue_notices', 'venue_notices_insert', '21a639e6d34481cca51b40555f98cf63'),
+      ('public',  'venue_notices', 'venue_notices_delete', '0cd3d8819150c9d314582da1e4d17df1'),
+      ('storage', 'objects',       'posters_upload',       '25d7b5824f59200b43fda637ecaac20a')) t(sch, tbl, pol, want)
+  loop
+    select md5(coalesce(qual,'')||'|'||coalesce(with_check,'')), coalesce(qual,'')||coalesce(with_check,'') into m, body
+      from pg_policies where schemaname = r.sch and tablename = r.tbl and policyname = r.pol;
+    if m is null then raise exception '20260930d: 정책 %.% 이 없습니다', r.tbl, r.pol; end if;
+    if m <> r.want and body not like '%is_venue_or_group_owner(%' and not (r.pol = 'posters_upload' and body not like '%venue_owner%') then
+      raise exception '20260930d: 정책 %.% 라이브 본문이 예상(%)과 다릅니다(%)', r.tbl, r.pol, r.want, m;
+    end if;
+  end loop;
+end $prepol$;
 
 -- §1 판정 정본(내부 함수 — 정의자 함수 안에서만 쓴다)
 create or replace function public._venue_coowner_ok(p_venue_id uuid, p_user_id uuid)
@@ -384,34 +423,219 @@ as $function$
     and not exists (select 1 from public.profiles m where m.id = s.u and coalesce(m.mute_venue_notify, false));
 $function$;
 
--- §10-d _notify_buyin_request — 손님 바인 요청 알림 수신자(업주·공동 운영자 분기)를 정본으로
+-- §10-d _notify_buyin_request — 후보를 먼저 뽑고 정본으로 거른다(업주·공동 운영자·활동 중 장부 직원)
 create or replace function public._notify_buyin_request()
  returns trigger
  language plpgsql
  security definer
  set search_path = public, pg_temp
 as $function$
-declare v_cnt int; v_msg text;
+declare v_cnt int; v_msg text; v_to uuid[];
 begin
-  -- 20260930d: 업주·공동 운영자 분기는 _venue_owner_ok(v,u)·_venue_coowner_ok(v,u).
+  -- 20260930d: 후보(owner_id ∪ venue_owners ∪ ledger_access) → 정본 판정. 장부 직원은 활동 중일 때만.
   select count(*) into v_cnt from ledger_buyin_requests where venue_id = NEW.venue_id and session_date = NEW.session_date and status = 'pending';
   v_msg := '🙋 손님 참가(바인) 요청 ' || v_cnt || '건 대기';
+  select coalesce(array_agg(c.u), '{}'::uuid[]) into v_to
+    from (
+      select v.owner_id as u from public.venues v where v.id = NEW.venue_id
+      union select vo.user_id from public.venue_owners vo where vo.venue_id = NEW.venue_id
+      union select la.user_id from public.ledger_access la where la.venue_id = NEW.venue_id
+    ) c
+    join public.profiles pr on pr.id = c.u
+   where coalesce(pr.mute_venue_notify, false) = false
+     and ( public._venue_owner_ok(NEW.venue_id, c.u)
+        or public._venue_coowner_ok(NEW.venue_id, c.u)
+        or ( exists (select 1 from public.ledger_access la where la.venue_id = NEW.venue_id and la.user_id = c.u)
+             and public._is_active_venue_staff(c.u, NEW.venue_id) ) );
   update notifications set message = v_msg, created_at = now()
    where link = '/my-store/ledger' and title = '🙋 손님 바인 요청' and read = false and created_at > now() - interval '30 minutes'
-     and user_id in (
-       select pr.id from profiles pr where coalesce(pr.mute_venue_notify, false) = false and (
-         public._venue_owner_ok(NEW.venue_id, pr.id)
-         or public._venue_coowner_ok(NEW.venue_id, pr.id)
-         or exists (select 1 from ledger_access la where la.venue_id = NEW.venue_id and la.user_id = pr.id)));
+     and user_id = any(v_to);
   insert into notifications (user_id, type, title, message, link, read)
-  select pr.id, 'system', '🙋 손님 바인 요청', v_msg, '/my-store/ledger', false
-  from profiles pr where coalesce(pr.mute_venue_notify, false) = false and (
-    public._venue_owner_ok(NEW.venue_id, pr.id)
-    or public._venue_coowner_ok(NEW.venue_id, pr.id)
-    or exists (select 1 from ledger_access la where la.venue_id = NEW.venue_id and la.user_id = pr.id))
-   and not exists (select 1 from notifications n where n.user_id = pr.id and n.link = '/my-store/ledger' and n.title = '🙋 손님 바인 요청' and n.read = false and n.created_at > now() - interval '30 minutes');
+  select u, 'system', '🙋 손님 바인 요청', v_msg, '/my-store/ledger', false
+    from unnest(v_to) as u
+   where not exists (select 1 from notifications n where n.user_id = u and n.link = '/my-store/ledger' and n.title = '🙋 손님 바인 요청' and n.read = false and n.created_at > now() - interval '30 minutes');
   return NEW;
 end; $function$;
+
+-- §10-e is_venue_or_group_owner — 정책용 공개 판정(호출자 본인에 대해서만 참/거짓)
+create or replace function public.is_venue_or_group_owner(p_venue_id uuid)
+ returns boolean
+ language sql
+ stable security definer
+ set search_path = public, pg_temp
+as $function$
+  -- 20260930d: 매장은 승인된 업주만(_venue_owner_ok), 그룹은 종전대로 개설자(owner_id).
+  select exists (
+    select 1 from public.venues v
+     where v.id = p_venue_id
+       and v.owner_id = auth.uid()
+       and (v.kind <> 'venue' or public._venue_owner_ok(v.id))
+  );
+$function$;
+
+-- §10-f respond_staff_invite — 부여 절만 정본으로(나머지 본문은 라이브 그대로)
+create or replace function public.respond_staff_invite(p_invite_id uuid, p_accept boolean)
+ returns void
+ language plpgsql
+ security definer
+ set search_path = public, pg_temp
+as $function$
+declare v_venue uuid; v_user uuid; v_by uuid;
+        v_gl boolean; v_gv boolean; v_gs boolean; v_title text; v_ok boolean;
+begin
+  select venue_id, user_id, invited_by, grant_ledger, grant_voucher, grant_schedule, staff_title
+    into v_venue, v_user, v_by, v_gl, v_gv, v_gs, v_title
+    from public.venue_staff_invites where id = p_invite_id and status = 'pending';
+  if v_user is null or v_user is distinct from auth.uid() then
+    raise exception '초대를 찾을 수 없습니다';
+  end if;
+  if p_accept then
+    if public.my_role() is not distinct from 'admin'::user_role
+       or exists (select 1 from public.venues v where v.owner_id = auth.uid())
+       or exists (select 1 from public.venue_owners vo where vo.user_id = auth.uid() and vo.status = 'approved') then
+      raise exception '업주·관리자 계정은 직원 초대를 수락할 수 없습니다 — 다른 계정으로 수락하거나 매장을 먼저 정리해 주세요' using errcode = '42501';
+    end if;
+    update public.profiles set role='venue_staff', venue_id=v_venue, approved=true where id=auth.uid();
+    if v_title is not null and btrim(v_title) <> '' then
+      update public.profiles set staff_title = left(btrim(v_title), 20) where id = auth.uid();
+    end if;
+    delete from public.ledger_access   where user_id = auth.uid() and venue_id is distinct from v_venue;
+    delete from public.voucher_access  where user_id = auth.uid() and venue_id is distinct from v_venue;
+    delete from public.schedule_access where user_id = auth.uid() and venue_id is distinct from v_venue;
+    -- 20260930d: 초대자가 지금도 승인된 업주·공동 운영자일 때만 권한을 준다(철회 전에 보낸 초대로 부여되지 않게).
+    select exists (select 1 from public.profiles p where p.id = v_by and p.role = 'admin')
+        or public._venue_owner_ok(v_venue, v_by)
+        or public._venue_coowner_ok(v_venue, v_by)
+      into v_ok;
+    if coalesce(v_ok,false) then
+      if v_gl then insert into public.ledger_access(venue_id,user_id)   values (v_venue, v_user) on conflict do nothing; end if;
+      if v_gv then insert into public.voucher_access(venue_id,user_id)  values (v_venue, v_user) on conflict do nothing; end if;
+      if v_gs then insert into public.schedule_access(venue_id,user_id) values (v_venue, v_user) on conflict do nothing; end if;
+    end if;
+    update public.venue_staff_invites set status='accepted' where id=p_invite_id;
+  else
+    update public.venue_staff_invites set status='declined' where id=p_invite_id;
+  end if;
+end; $function$;
+
+-- §10-g send_weekly_venue_reports — 수신자(업주)를 정본으로. 나머지 본문은 라이브 그대로
+create or replace function public.send_weekly_venue_reports()
+ returns void
+ language plpgsql
+ security definer
+ set search_path = public, pg_temp
+as $function$
+declare
+  v record;
+  v_start date; v_end date;
+  v_entries int; v_sales bigint; v_new int; v_total_players int;
+  v_worst_day text; v_worst_cnt int; v_best_cnt int; v_days int;
+  v_advice text;
+  v_side_entries int; v_side_sales bigint; v_side_line text;
+begin
+  v_start := (date_trunc('week', ((now() at time zone 'Asia/Seoul')::date - 7)::timestamp))::date;
+  v_end := v_start + 6;
+  for v in select id, name, owner_id from public.venues where owner_id is not null and public._venue_owner_ok(id, owner_id) loop
+    -- 20260930d: 승인 철회·승인 전 업주에게는 매출 리포트를 보내지 않는다(_venue_owner_ok).
+    -- 매출 = 실수령(현금+카드+이체). 20260927a: 정산 화면(buyinFinance.paid)과 같은 서버 정본 _ledger_buyin_tiers[1].
+    select count(*),
+           coalesce(sum((public._ledger_buyin_tiers(b, s.buyin_amount, s.discounts))[1]), 0)
+      into v_entries, v_sales
+      from public.ledger_buyins b
+      join public.ledger_sessions s on s.venue_id = b.venue_id and s.session_date = b.session_date and s.game_seq = b.game_seq
+     where b.venue_id = v.id and b.session_date between v_start and v_end;
+    if v_entries = 0 then continue; end if;
+
+    select count(*),
+           coalesce(sum((public._ledger_buyin_tiers(b, s.buyin_amount, s.discounts))[1]), 0)
+      into v_side_entries, v_side_sales
+      from public.ledger_buyins b
+      join public.ledger_sessions s on s.venue_id = b.venue_id and s.session_date = b.session_date and s.game_seq = b.game_seq
+     where b.venue_id = v.id and b.session_date between v_start and v_end and b.game_seq > 1;
+    if v_side_entries > 0 then
+      v_side_line := format(E'\n🎲 사이드 %s회 · 매출 %s만원', v_side_entries, (v_side_sales / 10000)::bigint);
+    else
+      v_side_line := '';
+    end if;
+
+    select count(distinct lp.name) into v_new
+      from public.ledger_players lp
+     where lp.venue_id = v.id and lp.session_date between v_start and v_end
+       and not exists (
+         select 1 from public.ledger_players p2
+          where p2.venue_id = v.id and p2.name = lp.name and p2.session_date < v_start);
+    select count(distinct lp.name) into v_total_players
+      from public.ledger_players lp
+     where lp.venue_id = v.id and lp.session_date between v_start and v_end;
+
+    select day_label, cnt, max_cnt, n_days into v_worst_day, v_worst_cnt, v_best_cnt, v_days
+      from (
+        select g.day_label, g.cnt,
+               max(g.cnt) over () as max_cnt,
+               count(*) over () as n_days
+          from (
+            select case extract(dow from b.session_date)
+                     when 0 then '일' when 1 then '월' when 2 then '화' when 3 then '수'
+                     when 4 then '목' when 5 then '금' else '토' end as day_label,
+                   count(*) as cnt
+              from public.ledger_buyins b
+             where b.venue_id = v.id and b.session_date between v_start and v_end
+             group by extract(dow from b.session_date)
+          ) g
+        order by g.cnt asc limit 1
+      ) t;
+
+    if v_days >= 2 and v_worst_cnt * 2 < v_best_cnt then
+      v_advice := format('%s요일이 약했어요(%s건) — %s요일 프리롤·이벤트로 끌어올려 보세요.', v_worst_day, v_worst_cnt, v_worst_day);
+    elsif v_total_players > 0 and v_new * 100 >= v_total_players * 30 then
+      v_advice := format('신규 손님이 %s명이나 왔어요 — 첫 방문 쿠폰으로 단골 전환을 노려보세요.', v_new);
+    else
+      v_advice := '이번 주도 꾸준했어요 — 단골 재방문 이벤트로 한 번 더 끌어올려 보세요.';
+    end if;
+
+    insert into public.notifications(user_id, type, title, message, avatar_text, avatar_color, link)
+    values (v.owner_id, 'system',
+      '📊 ' || v.name || ' 주간 리포트',
+      format('지난주(%s~%s) 바이인 %s회 · 매출 %s만원 · 신규 손님 %s명%s' || E'\n' || '💡 %s',
+             to_char(v_start, 'MM/DD'), to_char(v_end, 'MM/DD'), v_entries, (v_sales / 10000)::bigint, v_new, v_side_line, v_advice),
+      '📊', '#FFD100', '?tab=my-store');
+  end loop;
+end;
+$function$;
+
+-- §10-h is_verified_owner — 승인 업주만(인증 매장 조건 그대로)
+create or replace function public.is_verified_owner()
+ returns boolean
+ language sql
+ stable security definer
+ set search_path = public, pg_temp
+as $function$
+  -- 20260930d: owner_posts read/insert 정책의 업주 판정 — 프로필 승인(_venue_owner_ok)을 함께 본다.
+  select exists (
+    select 1
+    from public.profiles p
+    join public.venues v on v.owner_id = p.id
+    where p.id = auth.uid()
+      and p.role = 'venue_owner'
+      and coalesce(p.status, 'active') = 'active'
+      and v.verification_status = 'verified'
+      and public._venue_owner_ok(v.id, p.id)
+  );
+$function$;
+
+-- §10-i 정책 — 업주 분기를 정본으로
+alter policy venue_notices_insert on public.venue_notices
+  with check ((author_id = (select auth.uid())) and ((my_role() = 'admin'::user_role) or public.is_venue_or_group_owner(venue_id)));
+alter policy venue_notices_delete on public.venue_notices
+  using ((my_role() = 'admin'::user_role) or (author_id = (select auth.uid())) or public.is_venue_or_group_owner(venue_id));
+alter policy comments_delete on public.comments
+  using ((user_id = (select auth.uid())) or (my_role() = 'admin'::user_role)
+         or ((venue_id is not null) and public.is_venue_or_group_owner(venue_id))
+         or ((schedule_id is not null) and (exists (select 1 from public.schedules s
+                                                    where s.id = comments.schedule_id and s.owner_id = (select auth.uid())))));
+alter policy posters_upload on storage.objects
+  with check ((bucket_id = 'posters'::text) and ((storage.foldername(name))[1] = (auth.uid())::text)
+              and ((my_role() = 'admin'::user_role) or public.is_any_venue_manager()));
 
 -- §11 ACL — 2026-09-30 라이브 proacl 그대로 재기재(DROP 후 재적용되는 경우에도 같은 상태가 되게).
 --   can_manage_pos·can_manage_venue_staff 는 PUBLIC 실행이 원래 상태(roles {public} 정책이 anon 조회에서도 부른다 — 20260926c §9).
@@ -460,6 +684,20 @@ grant execute on function public._venue_notify_recipients(uuid, boolean) to serv
 revoke all on function public._notify_buyin_request() from public, anon, authenticated;
 grant execute on function public._notify_buyin_request() to service_role;
 
+-- 정책(roles {public})이 부르므로 anon 도 실행 가능해야 한다(anon 은 auth.uid() NULL → 거짓). can_manage_pos 와 같은 이유.
+revoke all on function public.is_venue_or_group_owner(uuid) from public, anon, authenticated;
+grant execute on function public.is_venue_or_group_owner(uuid) to public, authenticated, service_role;
+
+revoke all on function public.respond_staff_invite(uuid, boolean) from public, anon;
+grant execute on function public.respond_staff_invite(uuid, boolean) to authenticated, service_role;
+
+revoke all on function public.send_weekly_venue_reports() from public, anon, authenticated;
+grant execute on function public.send_weekly_venue_reports() to service_role;
+
+-- is_verified_owner 는 라이브 ACL 이 PUBLIC·anon·authenticated 실행(정책이 부른다) — 그대로 재기재.
+revoke all on function public.is_verified_owner() from public, anon, authenticated;
+grant execute on function public.is_verified_owner() to public, anon, authenticated, service_role;
+
 -- §12 자가검사
 do $check$
 declare r record; d text;
@@ -507,13 +745,46 @@ begin
       raise exception '20260930d 자가검사: % 수신자가 정본으로 걸러지지 않습니다', r.sig;
     end if;
   end loop;
+  -- 3차 대상
+  d := pg_get_functiondef('public.respond_staff_invite(uuid,boolean)'::regprocedure);
+  if d not like '%_venue_owner_ok(v_venue, v_by)%' or d not like '%_venue_coowner_ok(v_venue, v_by)%'
+     or d ~ 'v\.owner_id\s*=\s*v_by' or d ~ 'vo\.user_id\s*=\s*v_by' or d not like '%업주·관리자 계정은 직원 초대를 수락할 수 없습니다%' then
+    raise exception '20260930d 자가검사: respond_staff_invite 부여 절이 정본이 아니거나 수락 금지 절이 빠졌습니다';
+  end if;
+  if pg_get_functiondef('public.send_weekly_venue_reports()'::regprocedure) not like '%_venue_owner_ok(id, owner_id)%' then
+    raise exception '20260930d 자가검사: send_weekly_venue_reports 수신자가 정본이 아닙니다';
+  end if;
+  if pg_get_functiondef('public._notify_buyin_request()'::regprocedure) not like '%_is_active_venue_staff(c.u, NEW.venue_id)%'
+     or pg_get_functiondef('public._notify_buyin_request()'::regprocedure) ~ 'from profiles pr where' then
+    raise exception '20260930d 자가검사: _notify_buyin_request 가 직원 활동 검사·후보 방식이 아닙니다';
+  end if;
+  if pg_get_functiondef('public.is_verified_owner()'::regprocedure) not like '%_venue_owner_ok(v.id, p.id)%'
+     or pg_get_functiondef('public.is_verified_owner()'::regprocedure) not like '%verification_status = ''verified''%' then
+    raise exception '20260930d 자가검사: is_verified_owner 가 승인·인증을 함께 보지 않습니다';
+  end if;
+  if pg_get_functiondef('public.is_venue_or_group_owner(uuid)'::regprocedure) not like '%v.kind <> ''venue'' or public._venue_owner_ok(v.id)%' then
+    raise exception '20260930d 자가검사: is_venue_or_group_owner 조건이 어긋났습니다';
+  end if;
+  for r in select schemaname sch, tablename tbl, policyname pol, coalesce(qual,'')||'|'||coalesce(with_check,'') body from pg_policies
+            where (schemaname, tablename, policyname) in (('public','comments','comments_delete'),('public','venue_notices','venue_notices_insert'),
+                                                          ('public','venue_notices','venue_notices_delete'),('storage','objects','posters_upload'))
+  loop
+    if r.pol = 'posters_upload' then
+      if r.body like '%venue_owner%' or r.body not like '%is_any_venue_manager()%' then
+        raise exception '20260930d 자가검사: posters_upload 에 역할 선행 분기가 남았습니다';
+      end if;
+    elsif r.body not like '%is_venue_or_group_owner(%' or r.body ~ 'v\.owner_id = \( SELECT auth\.uid' then
+      raise exception '20260930d 자가검사: 정책 %.% 업주 분기가 정본이 아닙니다', r.tbl, r.pol;
+    end if;
+  end loop;
   -- search_path 고정
   for r in select p.oid::regprocedure::text sig, p.proconfig from pg_proc p
             where p.pronamespace = 'public'::regnamespace
               and p.proname in ('_venue_coowner_ok','can_manage_pos','can_manage_venue_staff','can_manage_venue_schedules',
                                 'is_any_venue_manager','_my_ledger_venue_ids','_ledger_can_operate','my_member_venues',
                                 'find_user_by_phone','transfer_venue_primary','_venue_owner_ok','kill_venue',
-                                '_venue_notify_recipients','_notify_buyin_request')
+                                '_venue_notify_recipients','_notify_buyin_request','is_venue_or_group_owner',
+                                'respond_staff_invite','send_weekly_venue_reports','is_verified_owner')
   loop
     if r.proconfig is null or not ('search_path=public, pg_temp' = any(r.proconfig)) then
       raise exception '20260930d 자가검사: % search_path 미고정(%)', r.sig, r.proconfig;
@@ -529,12 +800,15 @@ begin
      or has_function_privilege('anon', 'public._venue_owner_ok(uuid,uuid)', 'execute')
      or has_function_privilege('authenticated', 'public._venue_owner_ok(uuid)', 'execute')
      or has_function_privilege('authenticated', 'public._venue_notify_recipients(uuid,boolean)', 'execute')
-     or has_function_privilege('authenticated', 'public._notify_buyin_request()', 'execute') then
+     or has_function_privilege('authenticated', 'public._notify_buyin_request()', 'execute')
+     or has_function_privilege('authenticated', 'public.send_weekly_venue_reports()', 'execute')
+     or has_function_privilege('anon', 'public.send_weekly_venue_reports()', 'execute') then
     raise exception '20260930d 자가검사: 내부 함수가 열려 있습니다';
   end if;
   if has_function_privilege('anon', 'public.transfer_venue_primary(uuid,uuid)', 'execute')
      or has_function_privilege('anon', 'public.my_member_venues()', 'execute')
      or has_function_privilege('anon', 'public.kill_venue(uuid,text,text)', 'execute')
+     or has_function_privilege('anon', 'public.respond_staff_invite(uuid,boolean)', 'execute')
      or has_function_privilege('anon', 'public.find_user_by_phone(text)', 'execute')
      or has_function_privilege('anon', 'public.is_any_venue_manager()', 'execute')
      or has_function_privilege('anon', 'public.can_manage_venue_schedules(uuid)', 'execute') then
@@ -544,7 +818,12 @@ begin
      or not has_function_privilege('anon', 'public.can_manage_pos(uuid)', 'execute')
      or not has_function_privilege('authenticated', 'public.transfer_venue_primary(uuid,uuid)', 'execute')
      or not has_function_privilege('authenticated', 'public.my_member_venues()', 'execute')
-     or not has_function_privilege('authenticated', 'public.kill_venue(uuid,text,text)', 'execute') then
+     or not has_function_privilege('authenticated', 'public.kill_venue(uuid,text,text)', 'execute')
+     or not has_function_privilege('authenticated', 'public.respond_staff_invite(uuid,boolean)', 'execute')
+     or not has_function_privilege('anon', 'public.is_venue_or_group_owner(uuid)', 'execute')
+     or not has_function_privilege('authenticated', 'public.is_venue_or_group_owner(uuid)', 'execute')
+     or not has_function_privilege('anon', 'public.is_verified_owner()', 'execute')
+     or not has_function_privilege('authenticated', 'public.is_verified_owner()', 'execute') then
     raise exception '20260930d 자가검사: 필요한 실행 권한이 빠졌습니다';
   end if;
   -- 행동: 비로그인에서 fail-open 없음
@@ -558,10 +837,13 @@ begin
                 and exists (select 1 from public.profiles p where p.id = vo.user_id and p.role::text <> 'admin')) then
     raise exception '20260930d 자가검사: 지금 권한을 잃는 공동 운영자 행이 있습니다 — 리드 확인 전 적용 금지';
   end if;
-  -- 라이브 영향: 운영 중인 매장(kind=venue)의 관리자 아닌 소유자가 미승인이면 알림을 잃는다 — 0 이어야 한다
+  -- 라이브 영향(kind 무관): 소유자가 _venue_owner_ok 를 못 넘는 행 = 알림 수신·주간 리포트에서 빠지는 소유자.
+  --   수용된 차이는 '관리자 소유 그룹'뿐이다(그룹은 매장 운영 대상이 아니다 — 20260926c. 2026-09-30 라이브 1곳: dealer_team 로켓단).
+  --   그 밖의 행(매장 소유자 미승인·일반 회원 소유 그룹)이 하나라도 있으면 멈춘다.
   if exists (select 1 from public.venues v join public.profiles p on p.id = v.owner_id
-              where v.kind = 'venue' and p.role::text <> 'admin' and not public._venue_owner_ok(v.id, v.owner_id)) then
-    raise exception '20260930d 자가검사: 미승인 매장 소유자가 있습니다(알림 수신 제외 대상) — 리드 확인 전 적용 금지';
+              where not public._venue_owner_ok(v.id, v.owner_id)
+                and not (v.kind <> 'venue' and p.role::text = 'admin')) then
+    raise exception '20260930d 자가검사: 알림·리포트 수신에서 빠지는 소유자가 수용 범위(관리자 소유 그룹) 밖에 있습니다 — 리드 확인 전 적용 금지';
   end if;
 end $check$;
 
@@ -581,7 +863,23 @@ notify pgrst, 'reload schema';
 --   적용 후:
 --     음성 N1·N2·N3: 수신자 목록 0 · 바인 요청 알림 0 · 판정 7종 false · 쓰기 4종 42501 · 전화 조회 0.
 --       N1 kill_venue → '승인된 업주만 매장을 삭제할 수 있습니다' 거절, 매장 행 1(그대로).
---     양성 P1 로티 업주·P2 E2E 업주·P5 공동 운영자: 수신자 1 · 바인 요청 알림 1 · 판정 true. P3·P4 관리자: 수신자 0(소유자·공동 운영자 아님, 종전과 같음).
+--     양성 P1 로티 업주·P2 E2E 업주·P5 공동 운영자: 수신자 1 · 바인 요청 알림 1 · 판정 true. P3·P4 관리자: 시험한 매장(E2E·로티)에서 수신자 0(소유자·공동 운영자 아님).
+--       ⚠ 정정(critical 검토): '관리자 수신자 종전과 같음' 은 틀렸다 — 관리자 소유 **그룹**(dealer_team 9cf562bd)의 수신자에서 관리자 c8e3 가 빠진다.
+--         라이브 영향 0(그룹 운영 알림 없음), 수용(그룹은 매장 운영 대상이 아니다, 20260926c). §12 영향 검사가 이 차이를 kind 무관하게 잡는다.
 --     K 승인 복구 뒤 같은 대표의 kill_venue(실명·비밀번호) → 1, 매장 행 0·장부 0 — 기존 경로 그대로 동작.
 --     T1·T2 거절, 비로그인 can_manage_pos 참 0.
 --   롤백 확인: 새 함수 0 · 로티 매장 1·장부 1 · 킬스위치 0 · vo 1 · 시험 바인 요청 0 · kill_venue·_venue_owner_ok md5 원래 값.
+-- 리허설 3차(18개 함수·정책 4개 판 = 이 파일 전문, 2026-09-30, store-team, 라이브 begin…raise…rollback). §0·§0-b 게이트·§12 자가검사 통과.
+--   전수 대조 554칸(프로필 8+비로그인 × 매장 7 × 판정 8 + 사람별 4 + 매장별 수신자 2) 적용 전/후 차이 2칸뿐:
+--     dealer_team 9cf562bd 수신자(rcpt·rcptS)에서 관리자 c8e3 빠짐 — 수용된 차이(위 정정 참고). 나머지 552칸 동일.
+--   적용 전 → 후 (승인 철회 대표 7e43 = N, 같은 사람 승인 상태 = P):
+--     P 공지·업주 글·포스터 업로드 ok/ok/ok · 댓글 삭제 1 → 적용 후도 동일(양성 유지).
+--     N 공지 ok→42501 · 업주 글 ok→42501 · 포스터 업로드 ok→42501 · 매장 댓글 삭제 1→0.
+--     N 철회 대표가 철회 전에 보낸 초대 수락: la 1·va 1·장부 true → la 0·va 0·장부 false(수락 자체는 됨 — 직원 등록만).
+--     P 정상 업주(1a8c) 초대 수락: la 1·va 1·장부 true → 동일(양성).
+--     그룹 개설자(일반 회원으로 바꾼 로켓단) 공지: ok → ok(그룹 기능 유지).
+--     지난주 바인 1건을 심은 뒤 주간 리포트: 철회 대표에게 1 → 0.
+--   prosrc 대조: respond_staff_invite·send_weekly_venue_reports·is_verified_owner 는 20260930d 주석 줄과 바꾼 조각만 되돌리면
+--     라이브 원본 md5(prosrc)와 일치(true·true·true) — 옮겨 적다 흘린 곳 없음.
+--   롤백 확인: 새 함수 0 · posters_upload·comments_delete 정책 md5 원래 값 · 시험 댓글·초대·바인 0 · 그룹 소유자 원복 · 7e43 approved true.
+--   미검증: owner_posts 읽기(최근 24시간 글 0건이라 전후 모두 0 — 구분 안 됨).
