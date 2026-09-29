@@ -296,3 +296,24 @@ for (const [w, h] of [[390, 844], [360, 780]] as const) {
   });
 }
 
+// ── 딜러 시트 시급 칸 넘침(design-reviewer 2026-09-29: 390 69px · 360 99px) ─────────────────────
+for (const [w, h] of [[390, 844], [360, 780]] as const) {
+  test(`🔴 딜러 시트 ${w} — 시간·시급 입력 줄이 시트 폭 안에 있다`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await boot(page, { vp: { width: w, height: h } });
+    await page.getByRole('button', { name: '딜러 로테이션·급여' }).click();
+    const dlg = page.getByRole('dialog');
+    await expect(dlg.getByPlaceholder('시급')).toBeVisible();
+    const r = await dlg.evaluate((d) => {
+      const box = d.getBoundingClientRect();
+      const els = [...d.querySelectorAll('input')] as HTMLElement[];
+      const over = Math.max(0, ...els.map((e) => e.getBoundingClientRect().right - box.right));
+      const wage = (d.querySelector('input[placeholder="시급"]') as HTMLElement).parentElement!.getBoundingClientRect();
+      return { over: Math.round(over * 10) / 10, wageRight: wage.right, dlgRight: box.right, docW: document.documentElement.scrollWidth, vw: innerWidth };
+    });
+    console.log(`[딜러 입력 ${w}] ${JSON.stringify(r)}`);
+    expect(r.over, '입력칸이 시트 밖으로 삐져나간다').toBe(0);
+    expect(r.wageRight, '시급 칸이 시트 밖이다').toBeLessThanOrEqual(r.dlgRight);
+    expect(r.docW, '가로 스크롤이 생겼다').toBeLessThanOrEqual(r.vw);
+  });
+}

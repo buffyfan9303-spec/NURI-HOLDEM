@@ -90,8 +90,8 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input w-36 shrink-0 text-sm" />
           </div>
           <div className="flex gap-1.5">
-            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="input flex-1 text-sm" />
-            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="input flex-1 text-sm" />
+            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="input min-w-0 flex-1 text-sm" />
+            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="input min-w-0 flex-1 text-sm" />
             <div className="relative w-28 shrink-0">
               <input type="number" inputMode="numeric" value={wage || ''} onChange={(e) => setWage(parseInt(e.target.value, 10) || 0)} placeholder="시급" className="input w-full pr-7 text-sm tabular-nums" />
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
