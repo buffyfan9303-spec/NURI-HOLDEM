@@ -1,7 +1,9 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, Fragment, type ReactNode } from 'react';
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
-import { createLikeQueue, flipLike } from './lib/likeQueue';
+import type { LikeQueue } from './lib/likeQueue';
+/** 좋아요 낙관적 뒤집기(1인 1회) — 큐 청크는 지연 로드라 이 한 줄만 여기 둔다 */
+const flipLike = (p: CommunityPost): CommunityPost => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
 import { flushSync } from 'react-dom';
 /** 트레일 back 이 commitTab(t,'back') 으로 부르는 호출 모양만 남은 방향 표식 — 연출은 없다(2026-09-26 View Transition 전면 제거). */
 type VTDirection = 'forward' | 'back';
@@ -3399,17 +3401,24 @@ export default function App() {
     setPosts((prev) => prev.map((p) => p.id === postId ? fn(p) : p));
     setOpenPost((cur) => (cur && cur.id === postId ? fn(cur) : cur));
   }, []);
-  const likeQueue = useMemo(() => createLikeQueue({
-    send: togglePostLike,
-    settle: (id, { liked, count }) => applyLike(id, (p) => ({ ...p, liked, likeCount: count })),
-    undo: (id) => applyLike(id, flipLike),
-    fail: (e) => toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'),
-  }), [applyLike, toast]);
+  // 큐는 첫 누름 때 불러온다 — 이 파일은 첫 화면 임계 경로라 번들 예산(entryGzipKb) 여유가 0 이다.
+  //   누름 순서는 같은 프라미스의 then 순서(FIFO)로 지켜진다. 청크를 못 받으면 그 누름의 뒤집기를 되돌린다.
+  const likeQueueRef = useRef<Promise<LikeQueue> | null>(null);
   const handleLikePost = useCallback((postId: string) => {
     if (!userRefForGate.current) { promptLogin(); return; } // 비로그인: flip→서버실패→롤백 소음 대신 바로 유도
     applyLike(postId, flipLike); // 낙관적 토글 — 피드(posts)와 상세(openPost) 동시 반영
-    likeQueue.tap(postId);
-  }, [applyLike, likeQueue]);
+    const q = likeQueueRef.current ??= import('./lib/likeQueue').then((m) => m.createLikeQueue({
+      send: togglePostLike,
+      settle: (id, { liked, count }) => applyLike(id, (p) => ({ ...p, liked, likeCount: count })),
+      undo: (id) => applyLike(id, flipLike),
+      fail: (e) => toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'),
+    }));
+    q.then((lq) => lq.tap(postId), (e) => {
+      likeQueueRef.current = null;
+      applyLike(postId, flipLike);
+      toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error');
+    });
+  }, [applyLike, toast]);
 
   // 관리자: 회원 업데이트 (승인/정지/해제) — 서버 반영
   /**

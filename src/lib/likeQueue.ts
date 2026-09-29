@@ -6,10 +6,7 @@
 // 마지막 의도와 반대이므로 한 번 더 보낸다(직렬). 짝수면 끝 — 서버 권위값(liked·count)을 화면에 덮는다(화면 = 서버).
 // 실패하면 마지막으로 확인된 서버값으로, 확인된 값이 없으면 누른 만큼 되돌린다(홀수면 한 번 뒤집기).
 export interface LikeSnap { liked: boolean; count: number }
-
-/** 화면 낙관적 뒤집기(1인 1회) */
-export const flipLike = <T extends { liked?: boolean; likeCount: number }>(p: T): T =>
-  ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
+export type LikeQueue = ReturnType<typeof createLikeQueue>;
 
 export function createLikeQueue(o: {
   send: (id: string) => Promise<LikeSnap>;

@@ -1,7 +1,9 @@
 // #11(2026-09-29) 좋아요 빠르게 두 번 = 취소 · 화면 = 서버. 실행: npx vitest run src/lib/likeQueue.test.ts
 // 가짜 서버는 toggle_post_like 와 같은 토글이고, 응답을 테스트가 풀어 줄 때까지 붙잡는다(비행 중 상태).
 import { describe, it, expect } from 'vitest';
-import { createLikeQueue, flipLike, type LikeSnap } from './likeQueue';
+import { createLikeQueue, type LikeSnap } from './likeQueue';
+
+const flipLike = (p: { liked: boolean; likeCount: number }) => ({ liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
 
 function rig(start: LikeSnap = { liked: false, count: 3 }) {
   const server = { ...start };
