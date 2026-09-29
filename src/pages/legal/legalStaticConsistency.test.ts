@@ -72,7 +72,7 @@ describe('공개 약관 정적 발행 (LEGAL-2)', () => {
   it('사업자정보가 공개 페이지 4종에서도 TSX 와 동일값이다', () => {
     // gen-legal 은 LegalNotice 렌더 결과에서 값을 뽑아 쓴다 — 손으로 옮겨 적은 사본이 생기면 여기서 깨진다.
     const notice = read('src/pages/legal/LegalNotice.tsx');
-    for (const v of ['엔에이치홀딩스', '525-20-02937', '김윤혜', 'ace@nuriholdem.com', '010-7508-7689']) {
+    for (const v of ['엔에이치홀딩스', '525-20-02937', '김윤혜', 'ace@nuriholdem.com', '070-8098-1727']) {
       expect(notice, `LegalNotice 원문에 ${v} 없음`).toContain(v);
       for (const slug of SLUGS) expect(html(slug), `${slug} 푸터에 ${v} 없음`).toContain(v);
     }
