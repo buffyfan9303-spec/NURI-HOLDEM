@@ -28,12 +28,16 @@ describe('오버레이 모션 계약', () => {
     expect([...used].filter((c) => !listed.has(c))).toEqual([]);
   });
 
-  it('D4: 토스트 컨테이너 상자는 높이 0 으로 바닥에 고정되고 토스트는 줄어들지 않는다', () => {
+  // 2026-09-29 #13 겹쳐 쌓기로 배치가 바뀌었다 — 토스트는 흐름(flex)이 아니라 전부 같은 자리(absolute bottom-0)에 있고
+  //   쌓기·펼치기는 transform 으로만 한다. 흐름으로 되돌리면 뜨고 빠질 때 남의 토스트 레이아웃이 움직인다(e2e toast-pile ⑥).
+  it('D4: 토스트 컨테이너 상자는 높이 0 으로 바닥에 고정되고, 토스트는 같은 자리에서 transform 으로만 움직인다', () => {
     const toast = read('components', 'atoms', 'Toast.tsx');
     const box = toast.match(/aria-live="polite"\s+className="([^"]+)"/);
     expect(box, '토스트 컨테이너를 못 찾았다').toBeTruthy();
     const cls = box![1].split(/\s+/);
-    expect(cls).toEqual(expect.arrayContaining(['fixed', 'h-0', 'flex-col', 'justify-end']));
-    expect(toast).toMatch(/'inline-flex shrink-0 /);
+    expect(cls).toEqual(expect.arrayContaining(['fixed', 'h-0']));
+    expect(cls.filter((c) => c === 'flex' || c === 'grid'), '컨테이너가 흐름 배치(flex·grid)면 토스트가 뜨고 빠질 때 서로를 민다').toEqual([]);
+    expect(toast).toMatch(/'absolute bottom-0 /);
+    expect(toast).toMatch(/transform: `translateY\(/);
   });
 });
