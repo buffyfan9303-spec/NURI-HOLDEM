@@ -289,7 +289,9 @@ const humanize = (r: BulkResult): BulkResult => ({ ...r, reasons: r.reasons.map(
  * (단건 루프로 돌리면 3장 회수에 알림이 3건 갔다 — 2026-08-29 브라우저 관통 실측)
  * RPC 미배포 DB(구버전)에서는 단건 루프로 폴백한다 — saveVenueRankings 와 같은 방식.
  */
-export async function revokeVouchers(ids: string[]): Promise<BulkResult> {
+export async function revokeVouchers(rawIds: string[]): Promise<BulkResult> {
+  // D9(2026-09-29) — 같은 id 가 두 번 가면 서버는 {ok:1, failed:1, reasons:[]} 로 '사유 없는 실패 1건'을 돌려준다(리허설 실측).
+  const ids = [...new Set(rawIds)];
   if (IS_MOCK || ids.length === 0) return { ok: 0, failed: 0, reasons: [] };
   const { data, error } = await supabase.rpc('revoke_vouchers', { p_ids: ids });
   if (error) {

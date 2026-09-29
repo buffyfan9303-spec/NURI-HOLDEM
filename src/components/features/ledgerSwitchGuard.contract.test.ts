@@ -12,7 +12,7 @@ const src = readFileSync(join(__dirname, 'NuriPosLedger.tsx'), 'utf-8').replace(
 
 describe('NuriPosLedger 전환 가드', () => {
   it('reload() 는 순번이 지금 것일 때만 buyins/players 를 싣는다', () => {
-    expect(src).toMatch(/const my = \+\+reloadSeq\.current;[\s\S]{0,200}if \(my === reloadSeq\.current\) \{ setBuyins\(b\); setPlayers\(p\); \}/);
+    expect(src).toMatch(/const my = \+\+reloadSeq\.current;[\s\S]{0,200}if \(my === reloadSeq\.current\) \{ setBuyins\(b\); setPlayers\(p\);[^}]*\}/);
   });
 
   it('첫 로드 effect([venueId, date, gameSeq])가 날아가던 reload() 를 무효로 만든다(reloadSeq 증가)', () => {

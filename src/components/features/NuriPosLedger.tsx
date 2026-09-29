@@ -162,6 +162,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const [loading, setLoading] = useState(true);
   // 조회 실패를 '빈 장부'와 구분하기 위한 세 번째 상태(로딩/빈값/실패)
   const [loadError, setLoadError] = useState<unknown>(null);
+  // D8(2026-09-29) — 바인·명단 재조회(reload) 실패. loadError 와 따로 둔다: 둘은 realtime·재접속에서 동시에 돌아,
+  //   같은 칸에 쓰면 곧 성공한 reloadSession 의 setLoadError(null) 이 바인 실패를 지운다(순서에 따라 결과가 달라진다).
+  const [rowsErr, setRowsErr] = useState<unknown>(null);
   const [hasPw, setHasPw]     = useState(false);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
   const [payBusy, setPayBusy] = useState(false); // 결제 저장 중 — 더블탭 이중 기록 방지
@@ -389,7 +392,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const reload = useCallback(() => {
     const my = ++reloadSeq.current;
     Promise.all([getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq)])
-      .then(([b, p]) => { if (my === reloadSeq.current) { setBuyins(b); setPlayers(p); } }).catch(() => {});
+      .then(([b, p]) => { if (my === reloadSeq.current) { setBuyins(b); setPlayers(p); setRowsErr(null); } })
+      .catch((e) => { if (my === reloadSeq.current) setRowsErr(e); });   // 마지막 정상 값은 유지하고 인라인 배너로 알린다
   }, [venueId, date, gameSeq]);
   // ⚠ 내부에서 실패를 삼키면 안 된다 — reloadSession 의 Promise.all 이 이 실패를 못 본다
   //   (이미 resolve 된 것으로 보여 아래 setLoadError(null) 이 방금 실패한 재조회를 '성공'으로 지운다).
@@ -426,6 +430,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     let alive = true;
     setLoading(true);
     setLoadError(null);
+    setRowsErr(null);
     bumpSessionReq();   // D2 — 앞 장부로 날아가던 reloadSession 응답을 무효로
     // B3(2026-09-28) — 바인·명단 재조회(reload)도 같은 순간 무효로 한다. 예전엔 reloadSeq 를 안 올려,
     //   전환 직전에 realtime·online 으로 나간 앞 매장·날짜·게임의 reload 응답이 전환 뒤 도착해 buyins/players 를 덮었다
@@ -1423,7 +1428,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
       <DateBar date={date} setDate={setDate} biz={biz} onBack={() => setMode('list')} />
       {/* C05 보완 — 재조회 실패(다른 접수대의 마감·단가·할인 변경을 못 받아옴)를 조용히 감추지 않는다.
           hasBoardData 라 전면 카드로 안 덮었을 뿐, 지금 보이는 값이 낡았을 수 있다는 사실은 알려야 한다. */}
-      {!!loadError && hasBoardData && (
+      {!!(loadError || rowsErr) && hasBoardData && (
         <div role="alert" className="flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/8 px-3 py-2">
           <p className="text-2xs font-semibold text-ink-secondary">방금 장부를 새로 불러오지 못했어요. 아래는 마지막으로 확인된 내용이라 단가·할인이 바뀌었을 수 있어요.</p>
           <button type="button" onClick={() => { reloadSession(); reload(); }}
@@ -1819,7 +1824,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                               {r.player?.visitorType
                                 ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40">{visitorLabel(r.player.visitorType)}</span>
                                 : r.player ? <span className="text-[10px] text-ink-muted">{closed ? '' : '유형/비고 +'}</span> : <span className="text-[10px] text-ink-muted">—</span>}
-                              {r.player?.note && <span className="text-[10px] text-ink-secondary truncate max-w-16">· {r.player.note}</span>}
+                              {/* D7(2026-09-29) — 390 에선 고정 열이 보이는 폭의 절반을 먹는다. 비고 전문은 비고 칸에 있으니 모바일에선 미리보기를 뺀다. */}
+                              {r.player?.note && <span className="text-[10px] text-ink-secondary truncate max-w-16 max-sm:hidden">· {r.player.note}</span>}
                             </div>
                           </button>
                         ) : <span className="block text-2xs text-ink-muted/50 truncate">{r.name}</span>}
@@ -1888,14 +1894,14 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                           <button type="button" disabled={closed}
                             onClick={() => setSelected({ playerName: (r.player as LedgerPlayer).name, entryNo: maxEntryOf((r.player as LedgerPlayer).name) + 1, buyin: null })}
                             title="+1 바인 · 결제수단 선택"
-                            className="tap-y-44 block w-full rounded-input px-0.5 py-0.5 text-left leading-tight transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
+                            className="tap-y-44 block w-full whitespace-nowrap rounded-input px-0.5 py-0.5 text-left leading-tight transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
                             <b className="text-accent-200">{cnt}회{closed ? '' : ' +'}</b>
                             {/* 회수와 같은 정의로 — 티켓·지원도 단가만큼. paid+unpaid 로 두면
                                 티켓 바인이 '1회 / 0만' 이 된다(오너 보고 2026-09-05). */}
                             <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
                           </button>
                         ) : first ? (
-                          <span className="leading-tight block text-left">
+                          <span className="leading-tight block whitespace-nowrap text-left">
                             <b className="text-accent-200">{cnt}회</b>
                             <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
                           </span>

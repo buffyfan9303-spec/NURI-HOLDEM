@@ -17,8 +17,9 @@ import { listVenueOwners, addVenueOwner, removeVenueOwner, transferVenuePrimary,
 import CustomerAnalytics from './CustomerAnalytics';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import SlidingPill from '../atoms/SlidingPill';
+import { useBusinessDate } from '../../lib/businessDate';
+import { kstToday } from '../../lib/kst';
 
-const todayStr = () => new Date().toLocaleDateString('en-CA');
 const shift = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
 const METHOD_LABEL: Record<PaymentMethod, string> = { ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '지원' };
 const VISITOR_LABEL: Record<VisitorType, string> = { new: '신규방문', regular: '기존손님', staff: '관계자', other: '기타' };
@@ -58,7 +59,12 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
   //   데이터와 기간을 **같은 커밋에서** 바꾸면 튐은 한 번으로 줄고, 그 한 번은 사용자가 기다린 결과다.
   const [tabPeriod, setTabPeriod] = useState<Period>('day');
   const [period, setPeriod] = useState<Period>('day');
-  const [date, setDate] = useState(todayStr);
+  // D1(2026-09-29, store-deep) — '당일'은 매장 영업일이다(lib/businessDate 규칙: 화면이 '오늘 장부'를 말할 때는 전부 이 값).
+  //   예전엔 기기 달력 오늘이라 자정 넘긴 토너(00:30)에 대시보드·장부·정산은 어제, 통계만 오늘(거의 빈 날)을 셌다.
+  //   사장님이 날짜를 고르기 전에는 영업일을 따라가고(마감·자정으로 넘어가면 같이 넘어간다), 고른 날짜는 그대로 둔다.
+  const biz = useBusinessDate(venueId, active);
+  const [pickedDate, setPickedDate] = useState<string | null>(null);
+  const date = pickedDate ?? biz;
   const [dowRange, setDowRange] = useState<DowRange>('all'); // 요일별 분석 기간
   const [sessions, setSessions] = useState<LedgerSession[]>([]);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
@@ -77,7 +83,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
 
   const range = useMemo<{ from: string; to: string }>(() => {
     // 무엇을 **가져올지**는 방금 누른 탭이 정한다(period 는 이미 그려진 것의 기간이라 한 박자 늦다)
-    const t = todayStr();
+    const t = kstToday();
     if (tabPeriod === 'day')   return { from: date, to: date };
     if (tabPeriod === 'week') return { from: shift(t, -6), to: t };
     if (tabPeriod === 'ai') return { from: shift(t, -(reportDays - 1)), to: t };
@@ -278,7 +284,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
         <div className="flex items-center gap-1.5">
           {/* 날짜 입력은 데이터가 아니라 **조작**이다 — 방금 누른 탭을 따라간다(range 가 tabPeriod 기준).
               파일 반출(CSV) 버튼은 오너 지시(2026-09-09)로 뺐다 — 통계는 화면 안에서만 본다. */}
-          {tabPeriod === 'day' && <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value || todayStr())} className="input text-xs py-1 w-auto" />}
+          {tabPeriod === 'day' && <input type="date" value={date} max={kstToday()} onChange={(e) => setPickedDate(e.target.value || null)} className="input text-xs py-1 w-auto" />}
         </div>
       </div>
 
