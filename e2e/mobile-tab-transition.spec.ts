@@ -9,6 +9,9 @@
 import { test, expect } from './_fixtures';
 import { dismissOverlays, stabilizeBackstack, stubLogin } from './_session';
 import { mockSchedules, kstDay } from './_schedules';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { LEAVE_FADE_MS } from '../src/lib/tabCover';
 
 // 🔴 2026-09-21 실측 — 여기 있던 `test.use({ reducedMotion: 'no-preference' })` 를 지웠다.
 //   **런타임에 아무것도 하지 않는다**: `reducedMotion` 은 playwright-core 의 *브라우저 컨텍스트* 옵션이고
@@ -364,9 +367,25 @@ const LOCAL_DATA_ANIMATIONS = ['pulse', 'nuri-skeleton', 'marquee', 'spin'];
  */
 const SCROLL_DRIVEN = 'reveal-up';
 
+// 🔵 2026-09-29 R3 떠나는 판 수명 — **ms 합계가 아니라 프레임 수와 effect duration 으로 잰다.**
+//   종전 `off − on ≤ 320`(재방문) 은 rAF 2번 + 240ms + 종료 프레임의 합이라 러너 부하를 그대로 셌다
+//   (격리 빌드 CPU×6 실측 12/30 이 322~365ms — CI 문구 326~369 와 같은 대역, 제품은 매번 hold 2프레임·duration 240).
+//   거꾸로 hold 를 3프레임으로 늘린 결함 빌드는 x1 에서 4/4 **통과**시켰다 — 흔들리면서 결함도 못 잡는 게이트였다.
+//   수치는 제품과 **같은 출처**에서 읽는다: 페이드 길이는 export 된 상수, 첫 방문 대기 상한은 export 가 없어 소스에서 읽는다(제품 코드는 그대로).
+const FIRST_VISIT_HOLD_MAX_MS = Number(/const FIRST_VISIT_HOLD_MAX_MS = (\d+);/.exec(
+  readFileSync(fileURLToPath(new URL('../src/lib/tabCover.ts', import.meta.url)), 'utf8'))?.[1]);
+/** src/lib/tabCover.ts afterFirstFrame — 새 판 첫 프레임이 나간 **다음** 프레임에 페이드를 건다(rAF 2번). */
+const HOLD_FRAMES = 2;
+/** 첫 방문 준비 대기가 상한(FIRST_VISIT_HOLD_MAX_MS)을 넘긴 뒤 허용하는 프레임 수 — waitSettled 가 rAF 마다 상한을 보는 양자화. */
+const LATE_FRAMES = 2;
+/** 멈춤 감지용 안전선 — 판정 기준이 아니다(판정은 프레임 수·효과 시간). SWAP_GUARD_MS(1500)와 같은 크기. */
+const STALL_MS = 1500;
+
 for (const width of [390, 1023]) {
-  test(`🔴 R3 — ${width}px 메인 메뉴 전환에 목적지 본문 애니메이션이 0개다`, async ({ page }) => {
+  test(`🔴 R3 — ${width}px 메인 메뉴 전환에 목적지 본문 애니메이션이 0개이고, 떠나는 판은 새 판 첫 프레임 ${HOLD_FRAMES}번 뒤 ${LEAVE_FADE_MS}ms 페이드로 걷힌다(프레임 수로 잰다)`, async ({ page }) => {
     test.setTimeout(90_000);
+    expect(Number.isFinite(FIRST_VISIT_HOLD_MAX_MS) && FIRST_VISIT_HOLD_MAX_MS > 0,
+      'src/lib/tabCover.ts 에서 FIRST_VISIT_HOLD_MAX_MS 를 못 읽었다 — 첫 방문 대기 상한을 잴 기준이 없다').toBe(true);
     await stabilizeBackstack(page);
     await page.setViewportSize({ width, height: 844 });
     await mockSchedules(page);
@@ -382,15 +401,25 @@ for (const width of [390, 1023]) {
       w.__bodyAnims = rec;
       let vt = 0;
       w.__vtCalls = { get count() { return vt; } };
+      // 🔵 2026-09-29 프레임 시계 — rAF 마다 번호를 올리고 그 프레임의 타임스탬프를 적는다.
+      //   떠나는 판이 선 때·페이드를 건 때·걷힌 때를 **프레임 번호**로 남겨, 수명을 러너 부하와 무관한 프레임 수로 판정한다.
+      let frame = 0;
+      const frameTs: number[] = [];
+      w.__frameTs = frameTs;
+      const tick = (t: number) => { frame += 1; frameTs[frame] = t; requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
       // 🔵 2026-09-26 PANE-HANDOFF — **떠나는 판**이 제자리에 섰다가(data-pane-leaving) 걷히는 구간을 잰다(src/lib/tabCover.ts 6차 절).
-      const leave: Array<{ tab: string | null; on: number; off?: number }> = [];
+      const leave: Array<{ tab: string | null; on: number; fOn: number; off?: number; fOff?: number }> = [];
       w.__leave = leave;
       new MutationObserver((ms) => {
         for (const mu of ms) {
           const el = mu.target as Element;
           if (!el.classList?.contains('tab-pane')) continue;
-          if (el.hasAttribute('data-pane-leaving')) leave.push({ tab: el.getAttribute('data-tab'), on: performance.now() });
-          else { const open = leave.find((x) => x.tab === el.getAttribute('data-tab') && x.off === undefined); if (open) open.off = performance.now(); }
+          if (el.hasAttribute('data-pane-leaving')) leave.push({ tab: el.getAttribute('data-tab'), on: performance.now(), fOn: frame });
+          else {
+            const open = leave.find((x) => x.tab === el.getAttribute('data-tab') && x.off === undefined);
+            if (open) { open.off = performance.now(); open.fOff = frame; }
+          }
         }
       }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-pane-leaving'] });
       const nativeVT = document.startViewTransition?.bind(document);
@@ -399,19 +428,26 @@ for (const width of [390, 1023]) {
       }
       const nativeAnimate = Element.prototype.animate;
       Element.prototype.animate = function patched(this: Element, kf: unknown, opts: unknown) {
+        const anim = nativeAnimate.call(this, kf as Keyframe[], opts as KeyframeAnimationOptions);
         try {
           const pane = this.closest?.('.tab-pane');
           if (pane) {
-            rec.push({
+            const entry: Record<string, unknown> = {
               via: 'waapi',
               tab: pane.getAttribute('data-tab'),
               self: this === pane,
               cls: (this.getAttribute('class') ?? '').slice(0, 60),
               kf: JSON.stringify(kf).slice(0, 160),
-            });
+              dur: typeof opts === 'number' ? opts : (opts as KeyframeAnimationOptions | undefined)?.duration,
+              f: frame, // 페이드를 건 프레임
+            };
+            rec.push(entry);
+            // 효과의 실제 끝(지연·반복 포함)과, 페이드가 **끝난** 순간의 프레임. 이 then 은 제품의 finished.then(stop) 보다 먼저 걸린다.
+            entry.end = (anim.effect as KeyframeEffect | null)?.getComputedTiming().endTime;
+            anim.finished.then(() => { entry.fin = performance.now(); entry.fFin = frame; }, () => {});
           }
         } catch { /* 계측이 앱을 깨뜨리지 않는다 */ }
-        return nativeAnimate.call(this, kf as Keyframe[], opts as KeyframeAnimationOptions);
+        return anim;
       } as typeof Element.prototype.animate;
     });
     await page.goto('/');
@@ -515,22 +551,71 @@ for (const width of [390, 1023]) {
             if (!changed.length) continue;                        // 표현과 무관한 속성
             css.push(`css:${name || '(anon)'} on .${String(target.className ?? '').slice(0, 40)} [${[...new Set(changed)].join(',')}]`);
           }
-          const leave = (w.__leave as Array<{ tab: string | null; on: number; off?: number }>).slice();
+          const leave = (w.__leave as Array<{ tab: string | null; on: number; fOn: number; off?: number; fOff?: number }>).slice();
           const stuck = [...document.querySelectorAll('[data-pane-leaving]')].map((e) => e.getAttribute('data-tab') ?? e.tagName).join(',');
-          return { waapi, css, scrollDriven, leave, stuck };
+          // 프레임 타임스탬프 — 이번 이동에 든 구간만 싣는다(frameTs[i] = i 번째 프레임).
+          const frameTs = (w.__frameTs as number[]);
+          const base = Math.max(1, Math.min(frameTs.length - 1, ...leave.map((l) => l.fOn)));
+          // tabCover notePaneLeaving 의 skip 조건 — 떠나는 판 기록이 0건일 때 '정당한 생략' 인지 가르는 진단값.
+          const skipState = `hidden=${document.hidden} overlay=${document.documentElement.hasAttribute('data-overlay')} reduce=${matchMedia('(prefers-reduced-motion: reduce)').matches}`;
+          return { waapi, css, scrollDriven, leave, stuck, base, ts: frameTs.slice(base), skipState };
         }, [LOCAL_DATA_ANIMATIONS, SCROLL_DRIVEN] as [string[], string]);
 
         // 🔵 2026-09-26 PANE-HANDOFF — 허용되는 것은 **출발 판 자신의 opacity 퇴장 1건**뿐이다(목적지·다른 판·판 안 요소는 그대로 0건).
-        //   그 퇴장은 판을 320ms 안에 걷어야 한다(페이드 240ms + 첫 프레임 두 번 · 첫 방문은 준비 대기 상한 300ms 가 더해져 700ms).
-        //   음성 대조: 목적지(새 판)에 opacity 를 걸면 첫 줄에서, 퇴장이 판을 못 걷으면(stop 누락) 아래 leave 단언에서 빨개진다.
+        //   🔵 2026-09-29 그 퇴장의 수명은 **프레임 수와 effect duration** 으로 잰다(위 HOLD_FRAMES 절 — ms 합계는 러너 부하를 센다):
+        //     ① 페이드 길이 = LEAVE_FADE_MS(제품 상수 그대로)
+        //     ② 판이 선 뒤 페이드를 걸기까지(hold): 재방문은 **정확히** HOLD_FRAMES 프레임 · 첫 방문은 그 뒤 준비 대기 상한
+        //        FIRST_VISIT_HOLD_MAX_MS 를 넘긴 프레임이 LATE_FRAMES 개를 넘기 전(프레임 타임스탬프 기준)
+        //     ③ 효과 끝(endTime) = duration 이고, 판은 페이드 finished 와 **같은 프레임**에 걷힌다(타이머·지연 걷기 금지)
+        //   ms 는 멈춤 감지용 안전선(STALL_MS)만 둔다.
+        //   음성 대조: 목적지(새 판)에 opacity 를 걸면 첫 줄에서, afterFirstFrame 을 rAF 3번으로 늘리면 ②에서,
+        //     퇴장이 판을 못 걷으면(stop 누락) '걷히지 않았다' 에서 빨개진다.
         const origin = res.waapi.filter((a) => a.tab === from && a.self === true && /^\[\{"opacity":[\d.]+\},\{"opacity":0\}\]$/.test(String(a.kf)));
         for (const a of res.waapi) if (!origin.includes(a)) findings.push(`pass${pass} ${m.label} waapi ${JSON.stringify(a)}`);
         if (origin.length > 1) findings.push(`pass${pass} ${m.label} 출발 판 퇴장이 ${origin.length}번 걸렸다`);
-        const lim = pass === 1 ? 700 : 320;
+        const tsAt = (f: number) => res.ts[f - res.base];
+        /** (after, before) 사이 프레임 중 타임스탬프가 deadline 이상인 것의 수 — 명목 시각을 넘긴 뒤 지나간 프레임 수. */
+        const framesPast = (after: number, before: number, deadline: number) => {
+          let n = 0;
+          for (let f = after + 1; f < before; f += 1) if (tsAt(f) >= deadline) n += 1;
+          return n;
+        };
+        // 🔴 빈 수집 방지(2026-09-29 verifier) — 아래 for 는 기록이 0건이면 한 번도 돌지 않아 **아무것도 안 재고 통과**했다.
+        //   이 경로(한 번에 한 이동 · 500ms+ 정착 대기 · 보이는 문서 · 오버레이 없음 · 동작 줄이기 끔)에는
+        //   tabCover.ts notePaneLeaving 의 skip 조건(rapid·hidden·data-overlay·reduce)에 드는 이동이 없다 —
+        //   격리 빌드 CPU×1/4/6 600이동 실측에서 전부 1건씩 기록됐다. 그래서 **이동마다 정확히 1건**을 요구한다.
+        if (res.leave.length !== 1) {
+          findings.push(`pass${pass} ${m.label}(${from}→${m.tab}) 떠나는 판 기록이 ${res.leave.length}건이다 — 1건이어야 한다(0건이면 수명 판정이 비어 통과한다 · ${res.skipState})`);
+        }
         for (const l of res.leave) {
-          if (l.tab !== from) findings.push(`pass${pass} ${m.label} 출발 판이 아닌 판이 떠나는 판으로 섰다: ${JSON.stringify(l)}`);
-          else if (l.off === undefined) findings.push(`pass${pass} ${m.label} 떠나는 판이 걷히지 않았다(${l.tab})`);
-          else if (l.off - l.on > lim) findings.push(`pass${pass} ${m.label} 떠나는 판이 ${Math.round(l.off - l.on)}ms 남았다(상한 ${lim})`);
+          const tag = `pass${pass} ${m.label}(${from}→${m.tab})`;
+          if (l.tab !== from) { findings.push(`${tag} 출발 판이 아닌 판이 떠나는 판으로 섰다: ${JSON.stringify(l)}`); continue; }
+          if (l.off === undefined || l.fOff === undefined) { findings.push(`${tag} 떠나는 판이 걷히지 않았다(${l.tab})`); continue; }
+          if (l.off - l.on > STALL_MS) findings.push(`${tag} 떠나는 판이 ${Math.round(l.off - l.on)}ms 남았다 — 멈춤 안전선 ${STALL_MS}ms 초과`);
+          const a = origin[0];
+          if (!a) { findings.push(`${tag} 떠나는 판이 퇴장 페이드 없이 걷혔다(${Math.round(l.off - l.on)}ms)`); continue; }
+          if (a.dur !== LEAVE_FADE_MS) findings.push(`${tag} 떠나는 판 퇴장 duration 이 ${String(a.dur)}ms 다(제품 LEAVE_FADE_MS ${LEAVE_FADE_MS})`);
+          const aF = a.f as number;
+          const hold = aF - l.fOn;
+          const holdMs = Math.round(tsAt(aF) - tsAt(l.fOn));
+          if (pass === 2 && hold !== HOLD_FRAMES) {
+            findings.push(`${tag} 재방문인데 판이 선 뒤 ${hold}프레임(${holdMs}ms) 만에 페이드를 걸었다 — 새 판 첫 프레임 뒤 정확히 ${HOLD_FRAMES}프레임이어야 한다`);
+          }
+          if (pass === 1) {
+            if (hold < HOLD_FRAMES) findings.push(`${tag} 판이 선 뒤 ${hold}프레임 만에 페이드를 걸었다 — 새 판 첫 프레임(${HOLD_FRAMES}프레임)보다 이르다`);
+            const late = framesPast(l.fOn + HOLD_FRAMES, aF, tsAt(l.fOn + HOLD_FRAMES) + FIRST_VISIT_HOLD_MAX_MS);
+            if (late > LATE_FRAMES) findings.push(`${tag} 첫 방문 준비 대기가 상한 ${FIRST_VISIT_HOLD_MAX_MS}ms 를 넘긴 뒤 ${late}프레임을 더 붙잡았다(허용 ${LATE_FRAMES} · hold ${hold}프레임 ${holdMs}ms)`);
+          }
+          // ③ 걷힘은 **페이드가 끝난 그 순간**이어야 한다 — 효과 끝(endTime)이 duration 과 같고(지연·반복 없음),
+          //    finished 가 풀린 같은 프레임 안에서 판이 걷힌다. '끝 + N프레임' 으로 세지 않는 이유(2026-09-29 격리 빌드 실측):
+          //    Chromium 은 합성기 페이드의 끝을 프레임이 아니라 타이머로 깨워 알려서, 끝 뒤 지나간 프레임 수가 부하에 따라
+          //    0~3 으로 흔들렸다(CPU×6 에서 3 · 31ms). 끝을 얼마나 늦게 알리느냐는 브라우저 몫이고, 제품 계약은 '끝나면 바로 걷는다' 다.
+          if (a.end !== a.dur) findings.push(`${tag} 떠나는 판 퇴장 효과의 끝이 ${String(a.end)}ms 다 — duration ${String(a.dur)}ms 와 달라(지연·반복) 걷힘이 늦어진다`);
+          const fin = a.fin, fFin = a.fFin;
+          if (typeof fin !== 'number' || typeof fFin !== 'number') { findings.push(`${tag} 퇴장 페이드가 끝나기 전에 판이 걷혔다(${Math.round(l.off - l.on)}ms)`); continue; }
+          if (l.fOff !== fFin || l.off < fin) {
+            findings.push(`${tag} 판이 페이드 끝(프레임 ${fFin})이 아니라 프레임 ${l.fOff} 에 걷혔다(끝→걷힘 ${Math.round(l.off - fin)}ms) — 끝나면 같은 프레임에 걷어야 한다`);
+          }
         }
         if (res.stuck) findings.push(`pass${pass} ${m.label} 정착 뒤에도 떠나는 판/복제본이 남았다: ${res.stuck}`);
         for (const c of res.css) findings.push(`pass${pass} ${m.label} ${c}`);
