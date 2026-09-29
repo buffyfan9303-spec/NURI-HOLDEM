@@ -91,6 +91,33 @@ for (const vp of [{ width: 360, height: 800 }, { width: 1280, height: 800 }]) {
       await expectLegal(page, '홈');
     });
 
+    // 반례 — 법정 푸터는 **전체화면 판에만** 붙는다. 뒤 화면·문서 끝 푸터가 그대로 있는 작은 시트에 붙으면 기존 화면이 바뀐다.
+    //   (가운데 대화상자·2-pane 인라인은 src/components/atoms/modalLegalFooter.test.tsx 가 변형 분기로 잠근다.)
+    test('🔴 작은 시트 3종(로그인 · 약관 보기 · 약관 및 정책)에는 법정 푸터가 없다', async ({ page }) => {
+      const topHasFooter = () => page.evaluate((biz) => {
+        const ds = [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]')].filter((d) => d.getClientRects().length);
+        const top = ds[ds.length - 1];
+        return top ? [...top.querySelectorAll('footer')].some((f) => f.textContent?.includes(biz)) : null;
+      }, BIZ);
+      await stabilizeBackstack(page);
+      await page.goto('/');
+      await page.getByRole('button', { name: /로그인/ }).first().click({ timeout: 20_000 });
+      const login = page.getByRole('dialog').first();
+      await expect(login.getByRole('heading', { name: '다시 만나 반가워요' })).toBeVisible({ timeout: 15_000 });
+      expect(await topHasFooter(), '로그인 시트에 법정 푸터가 붙었다').toBe(false);
+      await login.getByRole('button', { name: '회원가입', exact: true }).click();
+      await login.getByRole('button', { name: '보기', exact: true }).first().click();
+      await expect(page.getByRole('dialog').filter({ hasText: '이용약관' }).last()).toBeVisible({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+      expect(await topHasFooter(), '가입 약관 보기 시트에 법정 푸터가 붙었다').toBe(false);
+      await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+      await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+      await page.locator('footer').filter({ hasText: BIZ }).getByRole('button', { name: '이용약관', exact: true }).click();
+      await expect(page.getByRole('heading', { name: '약관 및 정책' })).toBeVisible({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+      expect(await topHasFooter(), '약관 및 정책 시트에 법정 푸터가 붙었다').toBe(false);
+    });
+
     test('🔴 매장 페이지(?v= 딥링크 첫 화면)', async ({ page }) => {
       const vid = await anyId('venues?select=id&approved=eq.true&status=eq.active&kind=eq.venue&limit=1');
       test.skip(!vid, '공개 매장이 없어 판단 불가(데이터 부재)');
