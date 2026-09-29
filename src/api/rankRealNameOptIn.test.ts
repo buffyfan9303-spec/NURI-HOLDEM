@@ -7,7 +7,9 @@
 //   ④ 서버(20260930c): 공개 순위 RPC 가 옵트인 판정을 비켜 업주가 적은 원문 실명을 비동의자에게 내보내는 것
 //   ⑤ (PR #56 후속) 업주가 공개 페이지를 볼 때 원문 → 없으면 옵트인 실명 → 닉네임. 원문(저장값)과 옵트인 실명(표시값)은 다른 열
 //   ⑥ (PR #56 후속) 홈 '지난 대회'는 옵트인 실명만 — 업주 원문을 쓰지 않는다
-//   ⑦ (critical-reviewer 지적 1) 남이 버린 닉네임을 가져가 켜면 남의 입상에 내 실명이 붙던 것 — 행 기록 시점의 닉네임 주인만
+//   ⑦ (critical-reviewer 지적 1) 남이 버린 닉네임을 가져가 켜면 남의 입상에 내 실명이 붙던 것
+//   ⑧ (재검토 R1) 판정 시각을 created_at 으로 재면 재저장(delete+insert)·늦은 첫 입력 때 지금 주인으로 판정된다 → 대회 날짜(ranking_date)
+//   ⑨ (재검토 R2) 공용 nickname_owner_at 은 빈 틈·얻기 전 날짜를 지금 주인으로 돌린다 → 이 프로필 자신의 이력으로 그날 닉네임 확인
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -111,11 +113,18 @@ describe('20260930c — 서버가 판정한다(판정은 _ranking_optin_real_nam
     return code.slice(a, code.indexOf(`revoke all on function public.${name}(`, a));
   };
 
-  it('판정 함수: 본인 선택·본인인증·활성·제3자 불일치 + **그 행 기록 시점의 닉네임 주인**', () => {
+  it('판정 함수: 본인 선택·본인인증·활성·제3자 불일치 + **대회 날짜(KST)에 이 프로필이 실제로 그 닉네임이었는가**', () => {
     const body = fn('_ranking_optin_real_name');
+    expect(body).toContain('function public._ranking_optin_real_name(p_nickname text, p_date date)');
     for (const s of ["p.ranking_name_pref = 'real_name'", 'p.ci_hash is not null', "= 'active'",
-      'is distinct from lower(btrim(p.real_name))', 'public.nickname_owner_at(p_nickname, p_at) = p.id']) expect(body).toContain(s);
-    expect(code).toContain('revoke all on function public._ranking_optin_real_name(text, timestamptz) from public, anon, authenticated;');
+      'is distinct from lower(btrim(p.real_name))',
+      // R2: 그날 끝 시각의 **내** 닉네임 = 그 뒤 내 첫 변경의 old_nickname, 없으면(가입이 그날 끝 전일 때만) 지금 닉네임
+      'where h.user_id = p.id and h.changed_at >= q.day_end', 'case when p.joined_at < q.day_end then p.nickname end',
+      // R1: 그날 KST 하루 안에 이 닉네임을 누가 얻거나 놓았으면 닫는다
+      'h.changed_at >= q.day_start and h.changed_at < q.day_end',
+      "(p_date::timestamp at time zone 'Asia/Seoul')"]) expect(body).toContain(s);
+    expect(body).not.toMatch(/created_at|nickname_owner_at/); // 기록 시각·'놓은 기록만 보는' 공용 함수로 재지 않는다
+    expect(code).toContain('revoke all on function public._ranking_optin_real_name(text, date) from public, anon, authenticated;');
     expect(code).toContain('revoke all on function public._ranking_optin_real_name_span(uuid, text, date, date) from public, anon, authenticated;');
   });
 
@@ -123,14 +132,15 @@ describe('20260930c — 서버가 판정한다(판정은 _ranking_optin_real_nam
     const bodies = [...code.matchAll(/create (?:or replace )?function public\.(\w+)\(/g)].map((m) => m[1]);
     for (const name of bodies) {
       if (name === '_ranking_optin_real_name' || name === 'set_my_ranking_name_pref') continue;
-      expect(fn(name), name).not.toMatch(/ranking_name_pref|ci_hash|nickname_owner_at/);
+      expect(fn(name), name).not.toMatch(/ranking_name_pref|ci_hash|nickname_owner_at|nickname_history/);
     }
   });
 
-  it('행 단위 호출은 모두 그 행의 기록 시각(created_at)을 넘긴다', () => {
+  it('행 단위 호출은 모두 그 행의 대회 날짜(ranking_date)를 넘긴다 — 기록 시각(created_at)은 재저장 때 now() 가 된다', () => {
     const calls = [...code.matchAll(/public\._ranking_optin_real_name\(([^)]*)\)/g)].map((m) => m[1]).filter((x) => !x.includes('text')); // 정의·권한 문장 제외
     expect(calls.length).toBeGreaterThan(0);
-    for (const args of calls) expect(['r.nickname, r.created_at', 'p_nickname, now(']).toContain(args); // now() 는 괄호에서 잘린다
+    for (const args of calls) expect(['r.nickname, r.ranking_date', 'p_nickname, (now(']).toContain(args); // 괄호에서 잘린다
+    expect(code).not.toMatch(/_ranking_optin_real_name\([^)]*created_at/);
   });
 
   it('venue_rankings_public: real_name 은 저장값(장부 권한자=원문), optin_real_name 은 누구에게나 같은 옵트인 실명 · DROP 뒤 권한 재부여', () => {
@@ -138,7 +148,7 @@ describe('20260930c — 서버가 판정한다(판정은 _ranking_optin_real_nam
     expect(body).toContain('optin_real_name text)');
     expect(body).toContain('case when v.can_see then r.real_name else o.name end as real_name');
     expect(body).toContain('o.name as optin_real_name');
-    expect(body).toContain('public._ranking_optin_real_name(r.nickname, r.created_at) as name) o');
+    expect(body).toContain('public._ranking_optin_real_name(r.nickname, r.ranking_date) as name) o');
     expect(code).toMatch(/drop function if exists public\.venue_rankings_public\(uuid\[\], date\[\]\);[\s\S]*grant execute on function public\.venue_rankings_public\(uuid\[\], date\[\]\) to anon, authenticated, service_role;/);
   });
 

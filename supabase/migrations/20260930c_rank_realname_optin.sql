@@ -15,6 +15,14 @@
 --   선두 0 · 업주 분기 0 / B 본인 행(2000-01-06) real_name·optin 모두 인증 실명 1 · 전국(B 행만) 1 · 전국(A 행 섞임) 0.
 --   뒤이어 SELECT: 새 함수 0 · 반환형 원래대로 · 인덱스 0 · 임시 행/시즌/닉/이력 0 · 시험 계정 pref 원래대로 → 롤백 확인.
 --   음성 대조(라이브, 롤백): 판정에서 nickname_owner_at 줄을 빼면 재사용 행 노출 1건.
+-- 🧪 2026-09-30 저녁 재리허설(critical 재검토 R1·R2 반영판 — 판정 시각 = 대회 날짜(KST), 본인 이력으로 그날 닉네임 확인) — `REHEARSAL_OK`:
+--   위 모든 단언 유지 + R1 재저장: 업주가 save_venue_rankings 로 A 의 날(09-25)·B 의 날(09-29) 재저장(created_at=now() 2/2 확인) 뒤
+--   비로그인·업주 × (A 시절·늦은 첫 입력 09-25 · 빈 틈 09-27 · A 얻기 전 07-20 · A 얻은 당일 08-01 · A→C→A 순환 틈 08-15 ·
+--   A 본인 08-25(A 는 해제 상태)) venue_rankings_public 0 · 전국(섞임) 0 · optins 0 · 시즌 0 · 선두 0 /
+--   B 본인 09-29 옵트인 실명 1 · 전국(B 행만) 1 / 순환 중 A 가 켰을 때 A 본인 08-25 = 1, 틈·얻기 전·당일 = 0.
+--   가짜 시각은 이력 DELETE+INSERT 로 넣었다(이력 UPDATE 는 트리거가 막는다 — 트랜잭션 안, 롤백). B 의 시각은 라이브 merge(09-24 05:53 UTC) 뒤로.
+--   음성 대조(라이브, 롤백): 판정 날짜를 created_at(KST 날짜)으로 바꾸면 재저장 전 0 → 재저장 뒤 1(누출 재현).
+--   뒤이어 SELECT: 새 함수 0 · 반환형 원래대로 · 인덱스 0 · 임시 행/시즌/닉/이력 0(이력 3건 = 라이브 merge 그대로) · 시험 계정 pref 원래대로.
 --
 -- 오너 2026-09-30: "기존 가입자는 기본 실명 비공개. 실명 공개를 본인이 선택하게 만들 예정이니
 --   그 선택만 제대로 할 수 있게 해." (이름 숨기기 별도 옵션은 넣지 않는다 — 오너 결정)
@@ -51,38 +59,60 @@ create index if not exists idx_vr_nickname_ci on public.venue_rankings (lower(bt
 -- ── 1. 옵트인 실명 한 벌 ─────────────────────────────────────────────────────
 -- 판정은 **이 함수 하나**다. 다른 모든 곳(공개 순위 RPC 여섯·optins·아래 _span)은 이 함수만 부른다.
 -- 옵트인이면 본인인증 실명(trim), 아니면 NULL.
--- p_at = 그 순위 행이 기록된 시각(venue_rankings.created_at). **그 시각의 닉네임 주인이 이 프로필일 때만** 연다
+-- p_date = 그 순위 행의 대회 날짜(venue_rankings.ranking_date, KST 하루). 그날 **이 프로필이 실제로 그 닉네임을 가지고 있었을 때만** 연다.
 --   (critical-reviewer 2026-09-30 지적 1 — 결함): 예전엔 닉네임 글자만으로 행을 이어서, 남이 버린 닉네임을 가져가
---   실명 공개를 켜면 **남의 입상 기록에 내 본인인증 실명**이 공개로 붙었다(리허설 재현: nickname_owner_at='A' 인데 B 실명).
---   시점 주인은 라이브 정본 nickname_owner_at(닉네임 변경 이력 기반) — my_ranking_history 도 같은 식(r.created_at)으로 잇는다.
---   ponytail: 순위를 편집기로 다시 저장하면 created_at 이 저장 시각으로 바뀐다 — my_ranking_history 와 같은 한계.
-create or replace function public._ranking_optin_real_name(p_nickname text, p_at timestamptz)
+--   실명 공개를 켜면 **남의 입상 기록에 내 본인인증 실명**이 공개로 붙었다.
+--   (재검토 R1): 기록 시각(created_at)으로 재면 안 된다 — save_venue_rankings 는 delete+insert 라 재저장·늦은 첫 입력마다
+--   created_at 이 now() 가 되어 **지금 주인**으로 판정됐다. 그래서 대회 날짜로 잰다.
+--   (재검토 R2): 공용 nickname_owner_at 은 '놓은' 기록만 봐서, 아무도 안 쓰던 틈·지금 주인이 얻기 전 날짜가 지금 주인으로 떨어진다.
+--   그래서 이 프로필 **자신의** 이력으로 '그날 끝 시각의 내 닉네임'을 구한다(공용 함수는 다른 곳이 써서 건드리지 않는다):
+--     그날 끝 이후 내 첫 변경의 old_nickname — 없으면(그 뒤 안 바꿈) 지금 닉네임, 단 가입(joined_at)이 그날 끝 전일 때만.
+--   그리고 그날 KST 하루 안에 이 닉네임이 **누구에게서든** 바뀐(얻거나 놓은) 기록이 있으면 닫는다 — 그날 두 사람이 나눠 가졌을 수 있다.
+--   (그날 끝에 내가 가졌고 그날 이 닉네임 변경이 없으면, 그날 이 닉네임은 나만 가졌다 — 닉네임은 대소문자·공백 무시 유일.)
+create or replace function public._ranking_optin_real_name(p_nickname text, p_date date)
 returns text
 language sql
 stable
 security definer
 set search_path = public, pg_temp
 as $$
+  with q as (
+    select lower(btrim(coalesce(p_nickname, ''))) as k,
+           (p_date::timestamp at time zone 'Asia/Seoul')       as day_start,
+           ((p_date + 1)::timestamp at time zone 'Asia/Seoul') as day_end
+  )
   select btrim(p.real_name)
-    from public.profiles p
-   where btrim(coalesce(p_nickname, '')) <> ''
-     and lower(btrim(p.nickname)) = lower(btrim(p_nickname))   -- 닉네임은 대소문자·공백 무시 유일(uniq_profiles_nickname_ci)
-     and public.nickname_owner_at(p_nickname, p_at) = p.id      -- 그 행이 기록될 때도 이 사람의 닉네임이었다
+    from public.profiles p, q
+   where q.k <> '' and p_date is not null
+     and lower(btrim(p.nickname)) = q.k                        -- 닉네임은 대소문자·공백 무시 유일(uniq_profiles_nickname_ci)
      and coalesce(p.status::text, 'active') = 'active'
      and p.ranking_name_pref = 'real_name'
      and p.ci_hash is not null
      and nullif(btrim(coalesce(p.real_name, '')), '') is not null
+     -- 그날 끝 시각에 이 프로필의 닉네임이 바로 이것이었다(내 이력 기준 — 얻기 전·놓은 뒤·빈 틈은 NULL)
+     and lower(btrim(coalesce(
+           (select h.old_nickname from public.nickname_history h
+             where h.user_id = p.id and h.changed_at >= q.day_end
+             order by h.changed_at, h.id limit 1),
+           case when p.joined_at < q.day_end then p.nickname end,
+           ''))) = q.k
+     -- 그날 KST 하루 안에 이 닉네임을 누가 얻거나 놓은 기록이 없다
+     and not exists (
+       select 1 from public.nickname_history h
+        where h.changed_at >= q.day_start and h.changed_at < q.day_end
+          and (lower(btrim(h.old_nickname)) = q.k or lower(btrim(h.new_nickname)) = q.k)
+     )
      -- 20260918b: 그 닉네임으로 적힌 순위 행에 **다른** 실명이 하나라도 있으면(=워크인 손님이 섞였으면) 닫는다.
      and not exists (
        select 1 from public.venue_rankings r
-        where lower(btrim(r.nickname)) = lower(btrim(p_nickname))
+        where lower(btrim(r.nickname)) = q.k
           and nullif(btrim(coalesce(r.real_name, '')), '') is not null
           and lower(btrim(r.real_name)) is distinct from lower(btrim(p.real_name))
      )
    limit 1;
 $$;
-revoke all on function public._ranking_optin_real_name(text, timestamptz) from public, anon, authenticated;
-grant execute on function public._ranking_optin_real_name(text, timestamptz) to service_role;
+revoke all on function public._ranking_optin_real_name(text, date) from public, anon, authenticated;
+grant execute on function public._ranking_optin_real_name(text, date) to service_role;
 
 -- 여러 행을 한 줄로 합친 표(시즌·전국·optins)용 — 합쳐진 행 **전부**가 위 판정을 통과하고 같은 실명일 때만 연다.
 --   (한 행이라도 다른 주인 시절 기록이면 NULL — 남의 기록이 섞인 합계에 내 실명을 붙이지 않는다.)
@@ -96,7 +126,7 @@ set search_path = public, pg_temp
 as $$
   select case when count(*) > 0 and count(o.name) = count(*) and count(distinct o.name) = 1 then min(o.name) end
     from public.venue_rankings r
-    cross join lateral (select public._ranking_optin_real_name(r.nickname, r.created_at) as name) o
+    cross join lateral (select public._ranking_optin_real_name(r.nickname, r.ranking_date) as name) o
    where btrim(coalesce(p_nickname, '')) <> ''
      and lower(btrim(r.nickname)) = lower(btrim(p_nickname))
      and (p_venue_id is null or r.venue_id = p_venue_id)
@@ -106,7 +136,7 @@ $$;
 revoke all on function public._ranking_optin_real_name_span(uuid, text, date, date) from public, anon, authenticated;
 grant execute on function public._ranking_optin_real_name_span(uuid, text, date, date) to service_role;
 
--- 옛 판정 함수는 같은 판정에 묶어 둔다(이 파일 적용 뒤 호출부 0 — 남겨 두는 것은 되돌리기 안전판. 시점은 지금).
+-- 옛 판정 함수는 같은 판정에 묶어 둔다(이 파일 적용 뒤 호출부 0 — 남겨 두는 것은 되돌리기 안전판. 날짜는 오늘 KST).
 create or replace function public._ranking_real_name_opted_in(p_nickname text)
 returns boolean
 language sql
@@ -114,7 +144,7 @@ stable
 security definer
 set search_path = public, pg_temp
 as $$
-  select public._ranking_optin_real_name(p_nickname, now()) is not null;
+  select public._ranking_optin_real_name(p_nickname, (now() at time zone 'Asia/Seoul')::date) is not null;
 $$;
 revoke all on function public._ranking_real_name_opted_in(text) from public, anon, authenticated;
 grant execute on function public._ranking_real_name_opted_in(text) to service_role;
@@ -201,7 +231,7 @@ as $$
          o.name as optin_real_name
     from public.venue_rankings r
     join v on v.vid = r.venue_id
-    cross join lateral (select public._ranking_optin_real_name(r.nickname, r.created_at) as name) o
+    cross join lateral (select public._ranking_optin_real_name(r.nickname, r.ranking_date) as name) o
    where p_dates is null or r.ranking_date = any(p_dates)
    order by r.venue_id, r.ranking_date, r.position;
 $$;
@@ -333,7 +363,7 @@ do $check$
 declare
   f text;
 begin
-  foreach f in array array['public._ranking_optin_real_name(text,timestamptz)', 'public._ranking_optin_real_name_span(uuid,text,date,date)',
+  foreach f in array array['public._ranking_optin_real_name(text,date)', 'public._ranking_optin_real_name_span(uuid,text,date,date)',
                            'public._ranking_real_name_opted_in(text)'] loop
     if has_function_privilege('anon', f, 'execute') or has_function_privilege('authenticated', f, 'execute') then
       raise exception '20260930c: 내부 함수 % 가 anon/authenticated 에 열려 있다', f;
@@ -354,7 +384,7 @@ begin
   foreach f in array array['public.global_ranking_totals(date)', 'public.venue_rankings_public(uuid[],date[])',
                            'public.current_season_standings(uuid)', 'public.season_results(uuid)',
                            'public.venue_hall_of_fame(uuid)', 'public.venues_season_leaders(uuid[])',
-                           'public.venue_ranking_real_name_optins(uuid)', 'public._ranking_optin_real_name(text,timestamptz)',
+                           'public.venue_ranking_real_name_optins(uuid)', 'public._ranking_optin_real_name(text,date)',
                            'public._ranking_optin_real_name_span(uuid,text,date,date)', 'public.set_my_ranking_name_pref(text)'] loop
     if not exists (select 1 from pg_proc where oid = f::regprocedure and prosecdef
                      and proconfig @> array['search_path=public, pg_temp']) then
@@ -373,21 +403,24 @@ $check$;
 --     OPTIN  47360d8e-fd0e-49f3-ab3f-22e1fc1e9e60  user · 인증+실명 보유 · 순위 행 0 (트랜잭션 안에서 켠다)
 --     NOOPT  fd14c2dc-d994-46e4-8f12-b6cf38104983  user · 인증 · ranking_name_pref='nickname'
 --   ⚠ admin(c8e3…·f5d3…)은 전 매장 can_manage_pos 라 음성 대상으로 쓰지 않는다.
---   임시 순위 행 3개(매장 f35b, 날짜 2000-01-01): OPTIN 닉네임 · NOOPT 닉네임+업주가 적은 실명 · 닉네임 없는 옛 행+실명
+--   임시 순위 행 3개(매장 f35b, 날짜 2026-09-26): OPTIN 닉네임 · NOOPT 닉네임+업주가 적은 실명 · 닉네임 없는 옛 행+실명
+--   + 닉네임 시간축 반례 행(2026-07-20~09-29, 가짜 이력 시각) — 블록 안 주석 참고
 -- ────────────────────────────────────────────────────────────────────────────
 -- begin;
 --   <위 1~5 전문>
 --   do $rh$
 --   declare
 --     V uuid := 'f35b42d1-2d54-4905-95c1-1fda24e0f178';
---     D date := '2000-01-01';
+--     D date := '2026-09-26';   -- B 가입(09-18)·B merge 이력(09-24 05:53 UTC) 이후, 라이브 순위 행(09-03·09-10)과 겹치지 않는 날
 --     OPTIN uuid := '47360d8e-fd0e-49f3-ab3f-22e1fc1e9e60';
 --     NOOPT uuid := 'fd14c2dc-d994-46e4-8f12-b6cf38104983';
---     n_opt text; n_no text; rn_opt text;
+--     OWNER uuid := '7e435684-2c8c-458d-985c-31b784a44893';
+--     K text := 'rh_reuse_0930';
+--     n_opt text; n_no text; rn_opt text; rn_no text;
 --     who record; got int; leak int;
 --   begin
 --     select nickname, btrim(real_name) into n_opt, rn_opt from profiles where id = OPTIN;
---     select nickname into n_no from profiles where id = NOOPT;
+--     select nickname, btrim(real_name) into n_no, rn_no from profiles where id = NOOPT;
 --     update profiles set ranking_name_pref = 'real_name' where id = OPTIN;
 --     insert into venue_rankings(venue_id, ranking_date, position, nickname, real_name) values
 --       (V, D, 1, n_opt, null), (V, D, 2, n_no, '리허설비동의실명'), (V, D, 3, '', '리허설옛행실명');
@@ -430,7 +463,7 @@ $check$;
 --     if (select set_my_ranking_name_pref('nickname')) <> 'nickname' then raise exception 'FAIL 지적2: nickname 저장 실패'; end if;
 --
 --     -- 양성(업무 경로): 해당 매장 업주는 업주가 적은 원문 실명을 그대로 받는다(순위 편집기 저장이 원문을 잃지 않게)
---     perform set_config('request.jwt.claims', json_build_object('sub', '7e435684-2c8c-458d-985c-31b784a44893', 'role', 'authenticated')::text, true);
+--     perform set_config('request.jwt.claims', json_build_object('sub', OWNER, 'role', 'authenticated')::text, true);
 --     select count(*) into got from venue_rankings_public(array[V], array[D]) where real_name in ('리허설비동의실명', '리허설옛행실명');
 --     if got <> 2 then raise exception 'FAIL 양성(업주): 원문 실명 %/2', got; end if;
 --     -- ① 업주가 공개 페이지를 볼 때: 원문 없음·켠 사람 → 인증 실명(optin_real_name) · 저장값 real_name 은 NULL 그대로
@@ -454,40 +487,66 @@ $check$;
 --     update venue_rankings set real_name = '다른사람' where venue_id = V and ranking_date = D and position = 1;
 --     select count(*) into leak from venue_rankings_public(array[V], array[D]) where real_name is not null or optin_real_name is not null;
 --     if leak <> 0 then raise exception 'FAIL 제3자 불일치인데 % 건', leak; end if;
+--     update profiles set ranking_name_pref = 'nickname' where id = OPTIN;
 --
---     -- 지적 1: 닉네임 재사용 — A(비동의)가 'rh_reuse_0930' 로 1위(과거 기록) → A 가 닉 변경 → B(인증)가 그 닉 + 실명 공개
---     --   → A 시절 행에는 B 실명이 붙지 않는다(모든 공개 RPC). B 가 그 닉으로 새로 입상한 행은 실명(양성).
---     update profiles set nickname = 'rh_reuse_0930' where id = NOOPT;
---     insert into venue_rankings(venue_id, ranking_date, position, nickname, real_name, created_at)
---       values (V, '2000-01-05', 1, 'rh_reuse_0930', null, '2000-01-05 21:00+09');
---     update profiles set nickname = 'rh_reuse_a_0930' where id = NOOPT;       -- nickname_history(A, old='rh_reuse_0930') 가 남는다
---     update profiles set nickname = 'rh_reuse_0930', ranking_name_pref = 'real_name' where id = OPTIN;
---     if public.nickname_owner_at('rh_reuse_0930', '2000-01-05 21:00+09') is distinct from NOOPT then raise exception 'FAIL 재사용 전제: 시점 주인이 A 가 아니다'; end if;
---     select count(*) into leak from venue_rankings_public(array[V], array['2000-01-05'::date]) where real_name is not null or optin_real_name is not null;
---     if leak <> 0 then raise exception 'FAIL 재사용 venue_rankings_public %', leak; end if;
---     select count(*) into leak from global_ranking_totals('2000-01-05') where nickname = 'rh_reuse_0930' and real_name is not null;
---     if leak <> 0 then raise exception 'FAIL 재사용 전국 %', leak; end if;
---     select count(*) into leak from venue_ranking_real_name_optins(V) where nickname_key = 'rh_reuse_0930';
---     if leak <> 0 then raise exception 'FAIL 재사용 optins %', leak; end if;
---     update venue_seasons set starts_on = D, ends_on = '2000-01-06' where venue_id = V and name = '리허설시즌';
---     select count(*) into leak from current_season_standings(V) where nickname = 'rh_reuse_0930' and real_name is not null;
---     if leak <> 0 then raise exception 'FAIL 재사용 시즌 %', leak; end if;
---     select count(*) into leak from venues_season_leaders(array[V]) where nickname = 'rh_reuse_0930' and real_name is not null;
---     if leak <> 0 then raise exception 'FAIL 재사용 선두 %', leak; end if;
---     --   업주 화면의 옵트인 분기도 같은 판정: 원문 없음 → NULL
---     perform set_config('request.jwt.claims', json_build_object('sub', '7e435684-2c8c-458d-985c-31b784a44893', 'role', 'authenticated')::text, true);
---     select count(*) into leak from venue_rankings_public(array[V], array['2000-01-05'::date]) where real_name is not null or optin_real_name is not null;
---     if leak <> 0 then raise exception 'FAIL 재사용 업주 분기 %', leak; end if;
---     --   B 본인 행(B 가 그 닉을 가진 뒤 기록) → 실명(양성)
---     perform set_config('request.jwt.claims', '', true);
---     insert into venue_rankings(venue_id, ranking_date, position, nickname, real_name) values (V, '2000-01-06', 1, 'rh_reuse_0930', null);
---     select count(*) into got from venue_rankings_public(array[V], array['2000-01-06'::date]) where nickname = 'rh_reuse_0930' and real_name = rn_opt and optin_real_name = rn_opt;
---     if got <> 1 then raise exception 'FAIL 재사용 B 본인 양성 %', got; end if;
---     --   합계는 A 시절 행이 섞였으니 여전히 NULL, B 행만 있는 기간은 실명
---     select count(*) into leak from global_ranking_totals('2000-01-05') where nickname = 'rh_reuse_0930' and real_name is not null;
---     if leak <> 0 then raise exception 'FAIL 재사용 전국(섞임) %', leak; end if;
---     select count(*) into got from global_ranking_totals('2000-01-06') where nickname = 'rh_reuse_0930' and real_name = rn_opt;
---     if got <> 1 then raise exception 'FAIL 재사용 전국(B 만) %', got; end if;
+--     -- ── 닉네임 시간축 반례(지적 1·R1·R2) ── 닉네임 변경은 트리거가 now() 로 이력을 남긴다 → 곧바로 지우고 같은 내용을 가짜 과거 시각으로 다시 넣는다(이력 UPDATE 는 트리거가 막는다, DELETE 는 트랜잭션 안에서만·롤백).
+--     --   B(OPTIN) 의 라이브 merge 이력(2026-09-24 05:53 UTC)과 섞이지 않게 B 의 시각은 그 뒤(09-28)로 잡는다. A(NOOPT) 는 라이브 이력 0.
+--     -- A→C→A 순환: A 가 08-01 K 를 얻고 → 08-10 놓고(K→C) → 08-20 되찾는다
+--     update profiles set nickname = K where id = NOOPT;
+--     with d as (delete from nickname_history where user_id = NOOPT and changed_at = now() returning *) insert into nickname_history(user_id, old_nickname, new_nickname, changed_at, changed_by, source) select user_id, old_nickname, new_nickname, '2026-08-01 12:00+09', changed_by, source from d;
+--     update profiles set nickname = 'rh_c_0930' where id = NOOPT;
+--     with d as (delete from nickname_history where user_id = NOOPT and changed_at = now() returning *) insert into nickname_history(user_id, old_nickname, new_nickname, changed_at, changed_by, source) select user_id, old_nickname, new_nickname, '2026-08-10 12:00+09', changed_by, source from d;
+--     update profiles set nickname = K where id = NOOPT;
+--     with d as (delete from nickname_history where user_id = NOOPT and changed_at = now() returning *) insert into nickname_history(user_id, old_nickname, new_nickname, changed_at, changed_by, source) select user_id, old_nickname, new_nickname, '2026-08-20 12:00+09', changed_by, source from d;
+--     update profiles set ranking_name_pref = 'real_name' where id = NOOPT;   -- A 가 잠시 켠다(A 본인 양성·빈 틈 확인용)
+--     insert into venue_rankings(venue_id, ranking_date, position, nickname) values
+--       (V, '2026-07-20', 1, K),   -- A 가 얻기 전
+--       (V, '2026-08-01', 1, K),   -- 얻은 당일(그날 변경 기록)
+--       (V, '2026-08-15', 1, K),   -- 빈 틈(A 는 C 였다)
+--       (V, '2026-08-25', 1, K);   -- A 본인
+--     select count(*) into leak from venue_rankings_public(array[V], array['2026-07-20', '2026-08-01', '2026-08-15']::date[]) where real_name is not null or optin_real_name is not null;
+--     if leak <> 0 then raise exception 'FAIL R2 순환·얻기 전·당일 %', leak; end if;
+--     select count(*) into got from venue_rankings_public(array[V], array['2026-08-25'::date]) where optin_real_name = rn_no;
+--     if got <> 1 then raise exception 'FAIL R2 A 본인 양성 %', got; end if;
+--     update profiles set ranking_name_pref = 'nickname' where id = NOOPT;
+--
+--     -- A 가 09-25 1위(늦은 첫 입력: 행은 지금 들어간다) → 09-26 A 가 K 를 놓음 → 09-27 빈 틈 행 → 09-28 B 가 K 를 얻고 켬 → 09-29 B 1위
+--     insert into venue_rankings(venue_id, ranking_date, position, nickname) values (V, '2026-09-25', 1, K);
+--     update profiles set nickname = 'rh_a2_0930' where id = NOOPT;
+--     with d as (delete from nickname_history where user_id = NOOPT and changed_at = now() returning *) insert into nickname_history(user_id, old_nickname, new_nickname, changed_at, changed_by, source) select user_id, old_nickname, new_nickname, '2026-09-26 12:00+09', changed_by, source from d;
+--     insert into venue_rankings(venue_id, ranking_date, position, nickname) values (V, '2026-09-27', 1, K);
+--     update profiles set nickname = K, ranking_name_pref = 'real_name' where id = OPTIN;
+--     with d as (delete from nickname_history where user_id = OPTIN and changed_at = now() returning *) insert into nickname_history(user_id, old_nickname, new_nickname, changed_at, changed_by, source) select user_id, old_nickname, new_nickname, '2026-09-28 12:00+09', changed_by, source from d;
+--     insert into venue_rankings(venue_id, ranking_date, position, nickname) values (V, '2026-09-29', 1, K);
+--     update venue_seasons set starts_on = '2026-07-01', ends_on = '2026-09-29' where venue_id = V and name = '리허설시즌';
+--
+--     -- R1 재저장: 업주가 A 의 날(09-25)과 B 의 날(09-29)을 순위 편집기 그대로 다시 저장 → created_at 이 now() 로 바뀐다
+--     perform set_config('request.jwt.claims', json_build_object('sub', OWNER, 'role', 'authenticated')::text, true);
+--     perform save_venue_rankings(V, '2026-09-25', jsonb_build_array(jsonb_build_object('nickname', K)), '');
+--     perform save_venue_rankings(V, '2026-09-29', jsonb_build_array(jsonb_build_object('nickname', K)), '');
+--     select count(*) into got from venue_rankings where venue_id = V and nickname = K and ranking_date in ('2026-09-25', '2026-09-29') and created_at = now();
+--     if got <> 2 then raise exception 'FAIL R1 전제: 재저장 행 created_at=now() 가 %/2', got; end if;
+--
+--     for who in select * from (values (null::uuid), (OWNER)) t(uid) loop
+--       perform set_config('request.jwt.claims', case when who.uid is null then '' else json_build_object('sub', who.uid, 'role', 'authenticated')::text end, true);
+--       -- A 시절·빈 틈·얻기 전·재저장 행 → 모든 공개 경로 0
+--       select count(*) into leak from venue_rankings_public(array[V], array['2026-07-20', '2026-08-01', '2026-08-15', '2026-08-25', '2026-09-25', '2026-09-27']::date[])
+--         where real_name is not null or optin_real_name is not null;
+--       if leak <> 0 then raise exception 'FAIL 재사용 venue_rankings_public %: %', who.uid, leak; end if;
+--       select count(*) into leak from global_ranking_totals('2026-07-01') where nickname = K and real_name is not null;
+--       if leak <> 0 then raise exception 'FAIL 재사용 전국(섞임) %', who.uid; end if;
+--       select count(*) into leak from venue_ranking_real_name_optins(V) where nickname_key = K;
+--       if leak <> 0 then raise exception 'FAIL 재사용 optins %', who.uid; end if;
+--       select count(*) into leak from current_season_standings(V) where nickname = K and real_name is not null;
+--       if leak <> 0 then raise exception 'FAIL 재사용 시즌 %', who.uid; end if;
+--       select count(*) into leak from venues_season_leaders(array[V]) where nickname = K and real_name is not null;
+--       if leak <> 0 then raise exception 'FAIL 재사용 선두 %', who.uid; end if;
+--       -- B 본인 행(09-29, 재저장 뒤에도) → 인증 실명 1
+--       select count(*) into got from venue_rankings_public(array[V], array['2026-09-29'::date]) where nickname = K and optin_real_name = rn_opt;
+--       if got <> 1 then raise exception 'FAIL 재사용 B 본인 양성 %: %', who.uid, got; end if;
+--       select count(*) into got from global_ranking_totals('2026-09-29') where nickname = K and real_name = rn_opt;
+--       if got <> 1 then raise exception 'FAIL 재사용 전국(B 만) %: %', who.uid, got; end if;
+--     end loop;
 --
 --     raise exception 'REHEARSAL_OK';  -- 전부 통과하면 이 문구로 멈춘다(= rollback)
 --   end
