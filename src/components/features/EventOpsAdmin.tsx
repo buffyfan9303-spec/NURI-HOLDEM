@@ -316,8 +316,8 @@ function EventRow({ c, open, visibilityKnown, onToggle, onCopy, onChanged, onNex
   const phase = evaluateEvent(c, eventNow()).state;
   // 실제 조치가 필요한 것 — 목록에서 바로 보여야 한다(§6 목록).
   const alerts: string[] = [];
-  if (!c.venueApproved) alerts.push('매장 이용권 발급 미승인');
-  if (c.totalVouchers > c.venueQuota && phase !== 'ended') alerts.push(`발급 한도 부족 (필요 ${c.totalVouchers} / 남은 한도 ${c.venueQuota})`);
+  if (!c.venueApproved) alerts.push('매장 이용권 전송 미승인');
+  if (c.totalVouchers > c.venueQuota && phase !== 'ended') alerts.push(`전송 한도 부족 (필요 ${c.totalVouchers} / 남은 한도 ${c.venueQuota})`);
   if (phase === 'soldout') alerts.push('카드 소진 — 참여권 지급이 멈춰 있습니다');
   if (phase === 'draft' && c.totalCards === 0) alerts.push('카드판 미구성');
   if (phase === 'hidden') alerts.push('숨김 — 손님에게 보이지 않고 새 참여가 멈춰 있습니다 (이력은 보존)');
@@ -457,7 +457,7 @@ function EventDetail({ c, visibilityKnown, onChanged, onNextRound }: {
           <button
             type="button" disabled={busy}
             onClick={() => {
-              if (!window.confirm('이 초안을 삭제합니다. 참여권·개봉·발급 이력이 있으면 서버가 거절합니다.')) return;
+              if (!window.confirm('이 초안을 삭제합니다. 참여권·개봉·전송 이력이 있으면 서버가 거절합니다.')) return;
               void run('초안 삭제', () => adminDeleteEventDraft(c.id));
             }}
             className="rounded-input border border-border-default px-3 py-1.5 text-2xs text-ink-muted hover:text-danger-light"
@@ -500,7 +500,7 @@ function EventDetail({ c, visibilityKnown, onChanged, onNextRound }: {
 
       <p className="text-2xs leading-relaxed text-ink-muted">
         공개 이후에는 카드 배치·개봉 결과를 바꿀 수 없습니다. 다음 행사는 기존 판 초기화가 아니라 새 회차로 만듭니다.
-        종료해도 결과·발급된 이용권·감사 이력은 그대로 보존됩니다.
+        종료해도 결과·전송된 이용권·감사 이력은 그대로 보존됩니다.
       </p>
       <p className="text-2xs leading-relaxed text-ink-muted">
         <strong className="text-ink-secondary">숨기기</strong>는 이 행사만 손님에게 감추고 새 참여를 멈춥니다(관리자는 계속 보임, 이력 보존).
@@ -538,7 +538,7 @@ function CardComposer({ campaignId, current, onDone }: { campaignId: string; cur
   if (tiers.some((t) => !Number.isInteger(t.cards) || !Number.isInteger(t.vouchers) || t.cards < 0 || t.vouchers < 0)) {
     local.push('카드 수·이용권 장수는 0 이상의 정수여야 합니다');
   }
-  if (vouchers > current.venueQuota) local.push(`필요한 이용권 ${vouchers}장이 매장 발급 한도 ${current.venueQuota}장을 넘습니다`);
+  if (vouchers > current.venueQuota) local.push(`필요한 이용권 ${vouchers}장이 매장 전송 한도 ${current.venueQuota}장을 넘습니다`);
 
   const set = (i: number, k: 'cards' | 'vouchers', v: number) =>
     setTiers(tiers.map((t, j) => (j === i ? { ...t, [k]: v } : t)));
@@ -667,7 +667,7 @@ function DraftForm({ venues, seed, onCancel, onCreated }: {
       <h3 className="text-sm font-bold text-accent-300">새 이벤트 초안</h3>
       <p className="text-2xs text-ink-muted">초안은 손님에게 보이지 않고 참여권도 나가지 않습니다. 공개를 눌러야 시작됩니다.</p>
       <div className="grid gap-2 sm:grid-cols-2">
-        <label className="space-y-0.5"><span className="text-2xs text-ink-secondary">매장 (이용권을 발급할 곳)</span>
+        <label className="space-y-0.5"><span className="text-2xs text-ink-secondary">매장 (이용권을 전송할 곳)</span>
           <select value={venueId} onChange={(e) => setVenueId(e.target.value)} className={field}>
             <option value="">선택</option>
             {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
