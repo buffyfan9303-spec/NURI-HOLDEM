@@ -151,13 +151,15 @@ export function Fold({ open, children, className, id, x, keepMounted }: {
     running?.();
     stop.current = null;
     el.inert = !open;
+    const s = el.style;
+    s.display = 'flow-root';
+    s.overflow = 'clip';
+    // '누른 요소가 판 아래인가' 는 판을 보이게 한 **뒤에** 잰다 — keepMounted 판은 닫힘 끝의 inline display:none 이 남아 있어
+    //   그 상태로 재면 rect 가 0(bottom 0)이라 늘 '아래' 로 오판했고, 재열림마다 pin·앵커링 끄기가 켜져 scrollY 가 샜다(2026-09-30 검토 N1).
     const p = !x && press && press.el.isConnected && performance.now() - press.t < 1000 && !el.contains(press.el)
       && el.getBoundingClientRect().bottom <= press.el.getBoundingClientRect().top + 1 && !stuck(el, scrollerOf(press.el)) ? press : null;
     const sc = p && scrollerOf(p.el);
     const pin = () => { if (p && sc) { const dy = p.el.getBoundingClientRect().top - p.top; if (dy) sc.scrollTop += dy; } };
-    const s = el.style;
-    s.display = 'flow-root';
-    s.overflow = 'clip';
     const full = x ? el.scrollWidth : el.scrollHeight;
     const from = running ? h0 : open ? 0 : full;
     const to = open ? full : 0;
