@@ -23,6 +23,9 @@
 --   가짜 시각은 이력 DELETE+INSERT 로 넣었다(이력 UPDATE 는 트리거가 막는다 — 트랜잭션 안, 롤백). B 의 시각은 라이브 merge(09-24 05:53 UTC) 뒤로.
 --   음성 대조(라이브, 롤백): 판정 날짜를 created_at(KST 날짜)으로 바꾸면 재저장 전 0 → 재저장 뒤 1(누출 재현).
 --   뒤이어 SELECT: 새 함수 0 · 반환형 원래대로 · 인덱스 0 · 임시 행/시즌/닉/이력 0(이력 3건 = 라이브 merge 그대로) · 시험 계정 pref 원래대로.
+-- 🧪 2026-09-30 밤 재리허설(critical 3차 F1 반영판 — 계정 생성 시각은 auth.users.created_at, 가드에 joined_at 추가) — `REHEARSAL_OK`:
+--   R1·R2 단언 전부 유지 + F1: A 가 authenticated 로 자기 joined_at 변경 → 가드 예외(P0001)로 거부 /
+--   postgres 로 joined_at=2000-01-01 을 강제해도 A 계정 생성(06-03) 전 행(05-01) venue_rankings_public 0 · 전국 0, 생성 뒤 행(06-10) 1.
 --
 -- 오너 2026-09-30: "기존 가입자는 기본 실명 비공개. 실명 공개를 본인이 선택하게 만들 예정이니
 --   그 선택만 제대로 할 수 있게 해." (이름 숨기기 별도 옵션은 넣지 않는다 — 오너 결정)
@@ -66,7 +69,9 @@ create index if not exists idx_vr_nickname_ci on public.venue_rankings (lower(bt
 --   created_at 이 now() 가 되어 **지금 주인**으로 판정됐다. 그래서 대회 날짜로 잰다.
 --   (재검토 R2): 공용 nickname_owner_at 은 '놓은' 기록만 봐서, 아무도 안 쓰던 틈·지금 주인이 얻기 전 날짜가 지금 주인으로 떨어진다.
 --   그래서 이 프로필 **자신의** 이력으로 '그날 끝 시각의 내 닉네임'을 구한다(공용 함수는 다른 곳이 써서 건드리지 않는다):
---     그날 끝 이후 내 첫 변경의 old_nickname — 없으면(그 뒤 안 바꿈) 지금 닉네임, 단 가입(joined_at)이 그날 끝 전일 때만.
+--     그날 끝 이후 내 첫 변경의 old_nickname — 없으면(그 뒤 안 바꿈) 지금 닉네임, 단 계정 생성이 그날 끝 전일 때만.
+--     계정 생성 시각은 auth.users.created_at 이다 — profiles.joined_at 은 본인이 RLS 로 바꿀 수 있었다(critical 3차 F1:
+--     joined_at 을 2000-01-01 로 위조하면 가입 전 남의 기록 전부에 내 인증 실명이 붙었다). 정의자 함수 안에서만 읽는다.
 --   그리고 그날 KST 하루 안에 이 닉네임이 **누구에게서든** 바뀐(얻거나 놓은) 기록이 있으면 닫는다 — 그날 두 사람이 나눠 가졌을 수 있다.
 --   (그날 끝에 내가 가졌고 그날 이 닉네임 변경이 없으면, 그날 이 닉네임은 나만 가졌다 — 닉네임은 대소문자·공백 무시 유일.)
 create or replace function public._ranking_optin_real_name(p_nickname text, p_date date)
@@ -94,7 +99,7 @@ as $$
            (select h.old_nickname from public.nickname_history h
              where h.user_id = p.id and h.changed_at >= q.day_end
              order by h.changed_at, h.id limit 1),
-           case when p.joined_at < q.day_end then p.nickname end,
+           case when (select u.created_at from auth.users u where u.id = p.id) < q.day_end then p.nickname end,
            ''))) = q.k
      -- 그날 KST 하루 안에 이 닉네임을 누가 얻거나 놓은 기록이 없다
      and not exists (
@@ -181,6 +186,82 @@ end;
 $$;
 revoke all on function public.set_my_ranking_name_pref(text) from public, anon;
 grant execute on function public.set_my_ranking_name_pref(text) to authenticated, service_role;
+
+-- ── 1-c. profiles.joined_at 을 본인이 못 바꾸게(critical-reviewer 3차 F1 — 방어 한 겹) ──────────────
+-- joined_at 은 RLS 상 본인 행 UPDATE 로 바뀌었다(authenticated 실측 rows=1 · 이 가드 목록에 없음). 판정은 이제 auth.users.created_at 을
+--   보므로 위조해도 판정에는 안 먹지만, '가입일'을 믿는 다른 화면(프로필 '가입' 표기·관리자 목록 정렬)을 위해 같이 닫는다.
+--   클라이언트 쓰기 0곳(2026-09-30 src·supabase/functions·api 전수 grep — 읽기만), 서버 함수 쓰기 0곳(prosrc 'joined_at =' 0건).
+-- 라이브 본문 md5 게이트: 아래 본문은 2026-09-30 라이브(c7e07691e719bcc27b0feb312c8aac62)에 joined_at 한 줄만 더한 것이다.
+--   라이브가 그 사이 바뀌었으면 덮어쓰지 않고 멈춘다(이미 이 판이면 통과 — 재실행 안전).
+do $gate$
+declare
+  v_def text := pg_get_functiondef('public.guard_profile_privileged_cols()'::regprocedure);
+begin
+  if md5(v_def) <> 'c7e07691e719bcc27b0feb312c8aac62' and position('new.joined_at is distinct from old.joined_at' in v_def) = 0 then
+    raise exception '20260930c: guard_profile_privileged_cols 라이브 본문이 예상(md5 c7e07691…)과 다르다 — 다시 읽고 합쳐라';
+  end if;
+end
+$gate$;
+create or replace function public.guard_profile_privileged_cols()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $function$
+begin
+  if current_user in ('authenticated','anon') then
+    if new.activity_points is distinct from old.activity_points
+       or new.spent_points is distinct from old.spent_points
+    then
+      raise exception '활동점수는 직접 변경할 수 없습니다 (운영자는 admin_grant_points 를 쓰세요)';
+    end if;
+    if new.equipped_mark is distinct from old.equipped_mark then
+      raise exception '마크 장착은 set_equipped_mark 로만 할 수 있습니다';
+    end if;
+    if new.equipped_card_frame is distinct from old.equipped_card_frame
+       or new.equipped_nick_color is distinct from old.equipped_nick_color then
+      raise exception '코스메틱 장착은 set_equipped_cosmetic 으로만 할 수 있습니다';
+    end if;
+    if new.name_changed_at is distinct from old.name_changed_at
+       and new.name is not distinct from old.name then
+      raise exception '닉네임 변경 시각은 직접 바꿀 수 없습니다 (즉시 변경은 상점의 즉시 변경권을 쓰세요)';
+    end if;
+    if coalesce(public.my_role()::text, '') <> 'admin' then
+      if new.role is distinct from old.role
+         or new.verified_at is distinct from old.verified_at
+         or new.ci_hash is distinct from old.ci_hash
+         or new.identity_tombstoned is distinct from old.identity_tombstoned
+         or new.approved is distinct from old.approved
+         or new.badges is distinct from old.badges
+         or new.status is distinct from old.status
+         or new.suspended_until is distinct from old.suspended_until
+         or new.sanction_reason is distinct from old.sanction_reason
+         or new.nickname_locked is distinct from old.nickname_locked
+         or new.real_name is distinct from old.real_name
+         or new.phone is distinct from old.phone
+         or new.birth_date is distinct from old.birth_date
+         or new.gender is distinct from old.gender
+         or new.carrier is distinct from old.carrier
+         or new.shadowbanned is distinct from old.shadowbanned
+         or new.nickname is distinct from old.nickname
+         or new.email is distinct from old.email
+         or new.venue_id is distinct from old.venue_id
+         or new.post_points_today is distinct from old.post_points_today
+         or new.post_points_date is distinct from old.post_points_date
+         or new.comment_points_today is distinct from old.comment_points_today
+         or new.comment_points_date is distinct from old.comment_points_date
+         or new.last_login_point_at is distinct from old.last_login_point_at
+         or new.checkin_streak is distinct from old.checkin_streak
+         or new.last_checkin_date is distinct from old.last_checkin_date
+         or new.joined_at is distinct from old.joined_at
+      then
+        raise exception '보호된 프로필 항목(권한/본인인증/포인트 등)은 직접 변경할 수 없습니다';
+      end if;
+    end if;
+  end if;
+  return new;
+end $function$;
+revoke all on function public.guard_profile_privileged_cols() from public, anon, authenticated;
+grant execute on function public.guard_profile_privileged_cols() to service_role;
 
 -- ── 2. 이 매장 순위표에서 실명을 켠 닉네임 ─────────────────────────────────────
 create or replace function public.venue_ranking_real_name_optins(p_venue_id uuid)
@@ -373,6 +454,9 @@ begin
      or not has_function_privilege('authenticated', 'public.set_my_ranking_name_pref(text)', 'execute') then
     raise exception '20260930c: set_my_ranking_name_pref ACL 이 틀렸다(anon 닫힘·authenticated 열림이어야 한다)';
   end if;
+  if position('new.joined_at is distinct from old.joined_at' in pg_get_functiondef('public.guard_profile_privileged_cols()'::regprocedure)) = 0 then
+    raise exception '20260930c: guard_profile_privileged_cols 에 joined_at 보호가 없다';
+  end if;
   foreach f in array array['public.global_ranking_totals(date)', 'public.venue_rankings_public(uuid[],date[])',
                            'public.current_season_standings(uuid)', 'public.season_results(uuid)',
                            'public.venue_hall_of_fame(uuid)', 'public.venues_season_leaders(uuid[])',
@@ -488,6 +572,36 @@ $check$;
 --     select count(*) into leak from venue_rankings_public(array[V], array[D]) where real_name is not null or optin_real_name is not null;
 --     if leak <> 0 then raise exception 'FAIL 제3자 불일치인데 % 건', leak; end if;
 --     update profiles set ranking_name_pref = 'nickname' where id = OPTIN;
+--
+--     -- ── F1(critical 3차): 가입 시각 위조 ── A(NOOPT, 계정 생성 2026-06-03)가 남이 쓰던 닉네임 K2 로 '가입'한 것처럼 만든다(이력 없음).
+--     --   ① 본인이 joined_at 을 바꾸려 하면 가드가 막는다(authenticated 로 실행). ② 값이 바뀌어도 판정은 auth.users.created_at 을 본다.
+--     update profiles set nickname = 'rh_f1_0930' where id = NOOPT;
+--     delete from nickname_history where user_id = NOOPT and changed_at = now();
+--     update profiles set ranking_name_pref = 'real_name' where id = NOOPT;
+--     insert into venue_rankings(venue_id, ranking_date, position, nickname) values
+--       (V, '2026-05-01', 1, 'rh_f1_0930'),   -- A 계정이 생기기 전(남의 기록)
+--       (V, '2026-06-10', 1, 'rh_f1_0930');   -- A 계정 생성 뒤(A 본인)
+--     perform set_config('request.jwt.claims', json_build_object('sub', NOOPT, 'role', 'authenticated')::text, true);
+--     execute 'set local role authenticated';
+--     begin
+--       update profiles set joined_at = '2000-01-01' where id = auth.uid();
+--       get diagnostics got = row_count;
+--       execute 'reset role';
+--       raise exception 'FAIL F1 가드: 본인 joined_at 변경이 %행 통과', got;
+--     exception when raise_exception then
+--       if sqlerrm like 'FAIL F1%' then raise; end if;   -- 위의 FAIL 은 다시 던진다
+--     end;
+--     execute 'reset role';
+--     update profiles set joined_at = '2000-01-01' where id = NOOPT;   -- 설령 값이 바뀌어도(운영자·옛 데이터) 판정은 흔들리지 않아야 한다
+--     perform set_config('request.jwt.claims', '', true);
+--     select count(*) into leak from venue_rankings_public(array[V], array['2026-05-01'::date]) where real_name is not null or optin_real_name is not null;
+--     if leak <> 0 then raise exception 'FAIL F1 가입 전 행 %', leak; end if;
+--     select count(*) into leak from global_ranking_totals('2026-05-01') where nickname = 'rh_f1_0930' and real_name is not null;
+--     if leak <> 0 then raise exception 'FAIL F1 전국(가입 전 섞임) %', leak; end if;
+--     select count(*) into got from venue_rankings_public(array[V], array['2026-06-10'::date]) where optin_real_name = rn_no;
+--     if got <> 1 then raise exception 'FAIL F1 A 본인(가입 뒤) 양성 %', got; end if;
+--     update profiles set ranking_name_pref = 'nickname', nickname = n_no where id = NOOPT;
+--     delete from nickname_history where user_id = NOOPT and changed_at = now();
 --
 --     -- ── 닉네임 시간축 반례(지적 1·R1·R2) ── 닉네임 변경은 트리거가 now() 로 이력을 남긴다 → 곧바로 지우고 같은 내용을 가짜 과거 시각으로 다시 넣는다(이력 UPDATE 는 트리거가 막는다, DELETE 는 트랜잭션 안에서만·롤백).
 --     --   B(OPTIN) 의 라이브 merge 이력(2026-09-24 05:53 UTC)과 섞이지 않게 B 의 시각은 그 뒤(09-28)로 잡는다. A(NOOPT) 는 라이브 이력 0.

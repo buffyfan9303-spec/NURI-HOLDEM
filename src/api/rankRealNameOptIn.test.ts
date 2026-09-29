@@ -10,6 +10,7 @@
 //   ⑦ (critical-reviewer 지적 1) 남이 버린 닉네임을 가져가 켜면 남의 입상에 내 실명이 붙던 것
 //   ⑧ (재검토 R1) 판정 시각을 created_at 으로 재면 재저장(delete+insert)·늦은 첫 입력 때 지금 주인으로 판정된다 → 대회 날짜(ranking_date)
 //   ⑨ (재검토 R2) 공용 nickname_owner_at 은 빈 틈·얻기 전 날짜를 지금 주인으로 돌린다 → 이 프로필 자신의 이력으로 그날 닉네임 확인
+//   ⑩ (3차 F1) profiles.joined_at 은 본인이 바꿀 수 있었다 → 판정은 auth.users.created_at, 가드도 joined_at 을 막는다
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -119,11 +120,13 @@ describe('20260930c — 서버가 판정한다(판정은 _ranking_optin_real_nam
     for (const s of ["p.ranking_name_pref = 'real_name'", 'p.ci_hash is not null', "= 'active'",
       'is distinct from lower(btrim(p.real_name))',
       // R2: 그날 끝 시각의 **내** 닉네임 = 그 뒤 내 첫 변경의 old_nickname, 없으면(가입이 그날 끝 전일 때만) 지금 닉네임
-      'where h.user_id = p.id and h.changed_at >= q.day_end', 'case when p.joined_at < q.day_end then p.nickname end',
+      'where h.user_id = p.id and h.changed_at >= q.day_end',
+      // F1: 계정 생성 시각은 본인이 못 바꾸는 auth.users.created_at 에서
+      'case when (select u.created_at from auth.users u where u.id = p.id) < q.day_end then p.nickname end',
       // R1: 그날 KST 하루 안에 이 닉네임을 누가 얻거나 놓았으면 닫는다
       'h.changed_at >= q.day_start and h.changed_at < q.day_end',
       "(p_date::timestamp at time zone 'Asia/Seoul')"]) expect(body).toContain(s);
-    expect(body).not.toMatch(/created_at|nickname_owner_at/); // 기록 시각·'놓은 기록만 보는' 공용 함수로 재지 않는다
+    expect(body).not.toMatch(/r\.created_at|nickname_owner_at|joined_at/); // 기록 시각·'놓은 기록만 보는' 공용 함수·본인이 바꾸던 가입일로 재지 않는다
     expect(code).toContain('revoke all on function public._ranking_optin_real_name(text, date) from public, anon, authenticated;');
     expect(code).toContain('revoke all on function public._ranking_optin_real_name_span(uuid, text, date, date) from public, anon, authenticated;');
   });
@@ -131,7 +134,8 @@ describe('20260930c — 서버가 판정한다(판정은 _ranking_optin_real_nam
   it('판정을 복제하지 않는다 — 옵트인 조건(ranking_name_pref)은 판정 함수와 선택 저장 RPC 에만 있다', () => {
     const bodies = [...code.matchAll(/create (?:or replace )?function public\.(\w+)\(/g)].map((m) => m[1]);
     for (const name of bodies) {
-      if (name === '_ranking_optin_real_name' || name === 'set_my_ranking_name_pref') continue;
+      // 가드는 판정이 아니라 프로필 보호 목록(ci_hash 등)이라 제외
+      if (name === '_ranking_optin_real_name' || name === 'set_my_ranking_name_pref' || name === 'guard_profile_privileged_cols') continue;
       expect(fn(name), name).not.toMatch(/ranking_name_pref|ci_hash|nickname_owner_at|nickname_history/);
     }
   });
@@ -172,6 +176,13 @@ describe('20260930c — 서버가 판정한다(판정은 _ranking_optin_real_nam
     const body = fn('set_my_ranking_name_pref');
     expect(body).toMatch(/if v_pref = 'real_name' and not exists \([\s\S]*p\.ci_hash is not null[\s\S]*raise exception[\s\S]*update public\.profiles/);
     expect(code).toContain('revoke all on function public.set_my_ranking_name_pref(text) from public, anon;');
+  });
+
+  it('가드가 본인의 joined_at 변경을 막는다(3차 F1) — 라이브 본문 md5 게이트 뒤에 교체', () => {
+    const body = fn('guard_profile_privileged_cols');
+    expect(body).toContain('or new.joined_at is distinct from old.joined_at');
+    expect(code).toMatch(/md5\(v_def\) <> 'c7e07691e719bcc27b0feb312c8aac62'[\s\S]*create or replace function public\.guard_profile_privileged_cols\(\)/);
+    expect(code).toContain('revoke all on function public.guard_profile_privileged_cols() from public, anon, authenticated;');
   });
 
   it('닉네임 식 인덱스(지적 3)', () => {
