@@ -1,4 +1,9 @@
--- ⏸ 초안 — 리드가 리허설 후 적용(store-team, 묶음 terms, 2026-09-29). 라이브에 아직 적용하지 않았다.
+-- ✅ 2026-09-29 라이브 적용 완료(nuri-lead, MCP execute_sql). 실측:
+--    적용 전: 라이브 정의와 이 파일의 로직을 따옴표 문자열을 가리고 비교 → 동일(문구만 다름). ACL postgres/authenticated/service_role.
+--    리허설(DO + 끝 RAISE 로 롤백, E2E 시험 매장 이용권 1장): R3 다른 매장 업주 ok 0 · 사유 "권한이 없습니다 — 업주만 전송을 취소할 수 있습니다" ·
+--    R1 업주 ok 1 · 보유자 알림 "🎟 매장이용권 전송이 취소되었습니다" · R2 재호출 ok 0 "이미 전송이 취소된 이용권입니다" · R4 anon=f auth=t.
+--    롤백 후 store_vouchers md5 c0af7a72… · 알림 87건 불변. 적용 후 anon_exec=false · auth_exec=true · 옛 "회수되었습니다" 없음 · 이용권 md5 불변.
+--    GRANT 에 service_role 추가(라이브 ACL 과 일치 — 새로 만들어질 때 빠지지 않게).
 --
 -- 요구: docs/HANDOFF-2026-09-29-account-switch.md#7 §5 오너 결정 "이용권 용어" — 손님→매장='사용', 매장→손님='전송'.
 --   업주 되돌리기(revoke_vouchers) 버튼·배지·확인창·결과 화면 문구는 store-team 이 이번 커밋에서 '전송 취소'로 통일했다
@@ -96,4 +101,4 @@ begin
 end $function$;
 
 revoke all on function public.revoke_vouchers(uuid[]) from public, anon;
-grant execute on function public.revoke_vouchers(uuid[]) to authenticated;
+grant execute on function public.revoke_vouchers(uuid[]) to authenticated, service_role;
