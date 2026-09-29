@@ -7,9 +7,10 @@
 //   ③ 누른 요소는 제자리 — 눌린 요소가 이 판보다 **아래**에 있으면(한 번에 하나 열리는 아코디언·위에 생기는 내용)
 //      매 프레임 높이와 스크롤을 **같은 콜백에서** 함께 바꾼다. 다른 rAF 가 어느 순서로 읽어도 top 이 그대로다.
 //   ④ 바닥에서 닫기 — 문서가 짧아지면 브라우저가 scrollTop 을 깎아(클램프) 위에 있는 버튼이 내려온다.
-//      닫기 전에 모자라는 만큼 스크롤러에 임시 padding-bottom 을 걸고, 위로 스크롤하는 만큼 거둔다(keepScroll).
+//      닫기 전에 모자라는 만큼 스크롤러 끝에 임시 빈 칸을 끼우고, 위로 스크롤하는 만큼 거둔다(keepScroll).
 //   ⑤ 동작 줄이기면 즉시(전역 RM CSS 는 WAAPI 에 닿지 않아 JS 에서 본다). 도중에 다시 누르면 지금 높이에서 이어 간다.
 //   ⑥ 처음 마운트할 때는 재생하지 않는다 — 탭 keep-alive 재방문·뒤로가기로 다시 그려져도 모션 0.
+//   ⑦ 판 안의 것을 눌러 닫히면(메뉴 항목 고름·확인/취소) 즉시 닫는다. 판 밖 머리 토글로 닫을 때만 접힘 모션.
 /* eslint-disable react-refresh/only-export-components -- 판(Fold)과 같은 '누른 요소 제자리' 기록(press)을 공유하는 도우미 3개가 동거한다(모듈 상태 한 벌) */
 import { useLayoutEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 
@@ -156,7 +157,11 @@ export function Fold({ open, children, className, id }: {
       if (open) { s.display = s.overflow = ''; a?.cancel(); pin(); } else setShown(false);
     };
     if (!open && !p) keepScroll(el, from);
-    if (reduced() || from === to) {
+    // 판 **안**의 것을 눌러 닫히면(메뉴에서 항목 고름·확인/취소) 즉시 닫는다 — 고른 뒤 220ms 동안 누를 수 없는 메뉴가
+    //   남아 있으면 그 사이 판 교체(내 매장 섹션 이동)의 정렬·스냅샷이 줄어드는 메뉴를 재고, 다시 열기 탭도 헛돈다.
+    //   머리 토글(판 밖)로 닫을 때만 부드럽게 접힌다.
+    const picked = !open && press && performance.now() - press.t < 1000 && el.contains(press.el);
+    if (reduced() || from === to || picked) {
       if (!open) s.display = 'none';
       pin();
       return done();

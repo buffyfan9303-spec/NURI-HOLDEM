@@ -926,7 +926,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <Icon name="chevron-down" size={16} className={['shrink-0 text-ink-muted transition-transform', navOpen ? 'rotate-180' : ''].join(' ')} />
                 </button>
                 <Fold open={navOpen}>
-                  <div className="mt-1 space-y-2 rounded-card border border-border-subtle bg-surface-high p-2">
+                  <div className="mt-1 animate-slide-up space-y-2 rounded-card border border-border-subtle bg-surface-high p-2">
                     {NAV_GROUPS.map((grp) => {
                       const items = navItems.filter((a) => a.group === grp);
                       if (items.length === 0) return null;
