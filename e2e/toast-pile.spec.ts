@@ -135,5 +135,19 @@ for (const [name, w, h] of [['390x844', 390, 844], ['1440x900', 1440, 900]] as [
       await page.keyboard.press('Enter');
       await expect.poll(() => srv.row.running, { timeout: 5_000, message: 'Enter 로 실행취소가 실행되지 않았다' }).toBe(true);
     });
+
+    test('③ 마우스 클릭(누름 100ms)으로도 펼쳐지고 그 클릭은 아무것도 닫지·되돌리지 않는다', async ({ page }) => {
+      test.setTimeout(120_000);
+      const srv = await openClock(page, w, h);
+      await threeToasts(page, srv);
+      const g0 = await pileGeo(page);
+      const patches0 = srv.patches.length;
+      await page.mouse.click(g0.oldestTop!.x, g0.oldestTop!.y, { delay: 100 });
+      await page.waitForTimeout(450);
+      const g1 = await pileGeo(page);
+      expect(g1.n, '펼치는 클릭이 토스트를 닫았다').toBe(3);
+      expect(srv.patches.length, '펼치는 클릭이 되돌리기를 실행했다').toBe(patches0);
+      expect(g1.hits, '펼친 뒤에도 가려진 실행취소가 있다').toEqual([true, true, true]);
+    });
   });
 }
