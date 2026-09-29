@@ -51,7 +51,7 @@ async function boot(page: Page, o: Opts) {
         return r.fulfill(json(single ? null : []));
       });
       await p.route(/\/rest\/v1\/ledger_players\?/, (r) => (r.request().method() === 'GET'
-        ? r.fulfill(json(o.board ? [{ id: 'ffffffff-0000-4000-8000-000000000001', venue_id: MOCK_VENUE, session_date: MOCK_DAY, game_seq: 1, name: '김철수', visitor_type: 'regular', note: o.board.note ?? null, sort_order: 1 }] : []))
+        ? r.fulfill(json(o.board ? [{ id: 'ffffffff-0000-4000-8000-000000000001', venue_id: MOCK_VENUE, session_date: MOCK_DAY, game_seq: 1, name: o.board.name ?? '김철수', visitor_type: 'regular', note: o.board.note ?? null, sort_order: 1 }] : []))
         : r.fallback()));
       await p.route(/\/rest\/v1\/ledger_buyins\?/, (r) => {
         if (r.request().method() !== 'GET') return r.fallback();
@@ -244,3 +244,55 @@ for (const [w, h, hidden] of [[390, 844, true], [1280, 900, false]] as const) {
     expect(r.noteShown).toBe(!hidden);
   });
 }
+
+// ── D7 후속(design-reviewer 2026-09-29) — 긴 이름이면 비고 숨김과 무관하게 고정 열이 191px(390 의 54%)였다 ──────────
+const LONG = '홍길동닉네임아주긴플레이어이름';
+for (const [w, h, capped] of [[390, 844, true], [1280, 900, false]] as const) {
+  test(`🔴 D7 긴 이름 ${w} — ${capped ? '모바일 고정 열 ≤158px' : 'PC 는 종전 폭(이름 상한 153px)'} · 잘린 이름은 title 로 남는다`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await openBoard(page, { vp: { width: w, height: h }, board: { unit: 100_000, buyins: 3, name: LONG } });
+    const r = await page.evaluate((nm) => {
+      const ths = ([...document.querySelectorAll('[data-tab="my-store"] thead th')] as HTMLElement[]).filter((t) => t.offsetParent && getComputedStyle(t).position === 'sticky' && getComputedStyle(t).left !== 'auto');
+      const nameEl = ([...document.querySelectorAll('[data-tab="my-store"] tbody span[title]')] as HTMLElement[]).find((s) => s.offsetParent && s.getAttribute('title') === nm);
+      return { stickyW: ths.reduce((a, t) => a + t.getBoundingClientRect().width, 0), playerW: ths[1]?.getBoundingClientRect().width ?? 0, titled: !!nameEl, clipped: nameEl ? nameEl.scrollWidth > nameEl.clientWidth : null };
+    }, LONG);
+    console.log(`[D7 긴 이름 ${w}] ${JSON.stringify(r)}`);
+    expect(r.titled, '잘린 이름의 전체가 title 로 남아 있지 않다').toBe(true);
+    if (capped) expect(r.stickyW, '모바일 고정 열이 너무 넓다').toBeLessThanOrEqual(158);
+    else expect(r.playerW, 'PC 플레이어 열이 줄었다(모바일 상한이 PC 로 샜다)').toBeGreaterThan(150);
+  });
+}
+
+for (const [w, h] of [[390, 844], [360, 780]] as const) {
+  test(`🔴 D7 ${w} Shift+Tab 으로 왼쪽 바인 칸에 포커스가 가도 고정 열 밑에 가려지지 않는다`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await openBoard(page, { vp: { width: w, height: h }, board: { unit: 100_000, buyins: 8, name: LONG } });
+    await page.evaluate(() => {
+      const t = ([...document.querySelectorAll('[data-tab="my-store"] table')] as HTMLElement[]).find((x) => x.offsetParent)!;
+      window.scrollBy(0, t.getBoundingClientRect().top - 120);
+      const sc = t.parentElement!; sc.scrollLeft = sc.scrollWidth;
+    });
+    await page.locator('[data-tab="my-store"] tbody td button[title="+1 바인 · 결제수단 선택"]:visible').first().focus();
+    let hidden = 0; const seen: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press('Shift+Tab');
+      await page.waitForTimeout(450);   // 포커스 스크롤이 부드러운 스크롤이면 정착까지 기다린다
+      const v = await page.evaluate(() => {
+        const a = document.activeElement as HTMLElement | null;
+        if (!a || !a.closest('[data-tab="my-store"] tbody')) return null;
+        if (a.closest('td')?.classList.contains('sticky')) return { txt: a.textContent?.trim() ?? '', ok: true };
+        const b = a.getBoundingClientRect();
+        const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+        const by = hit ? `${hit.tagName}.${String((hit as HTMLElement).className).slice(0, 30)}` : 'none';
+        return { txt: `${a.textContent?.trim() ?? ''}@${Math.round(b.left)}${hit === a || a.contains(hit) ? '' : `<${by}[${hit ? Math.round((hit as HTMLElement).getBoundingClientRect().left) + '-' + Math.round((hit as HTMLElement).getBoundingClientRect().right) : ''}] w${Math.round(b.width)}`}`, ok: !!hit && (hit === a || a.contains(hit)) };
+      });
+      if (!v) break;
+      seen.push(`${v.txt}:${v.ok ? 'ok' : 'HIDDEN'}`);
+      if (!v.ok) hidden++;
+    }
+    console.log(`[D7 focus ${w}] ${seen.join(' | ')}`);
+    expect(seen.length, '포커스가 표 칸으로 가지 않았다 — 잴 것이 없으면 통과가 아니다').toBeGreaterThan(2);
+    expect(hidden, '포커스된 바인 칸이 고정 열 밑에 가려졌다').toBe(0);
+  });
+}
+

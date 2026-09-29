@@ -110,6 +110,28 @@ export interface LedgerSeed {
   gtd?: boolean;
 }
 
+/**
+ * D7(2026-09-29 design-reviewer) — 키보드 포커스가 고정 열(sticky) **밑으로** 들어간 바인 칸을 그 폭만큼 가로로 밀어 보인다.
+ * 브라우저의 포커스 스크롤은 칸이 조금이라도 보이면 멈추고 scroll-padding 도 보지 않아(390·360 실측: 6번 중 1~2번 가림),
+ * 고정 열의 실제 끝(머리행 sticky th 의 좌우 경계)을 재서 보정한다. 모바일은 오른쪽 두 열이 고정이 아니라(right:auto) 왼쪽만 본다.
+ */
+function revealPastSticky(sc: HTMLElement, el: HTMLElement) {
+  if (!el.closest('td') || el.closest('td.sticky')) return;
+  requestAnimationFrame(() => {
+    const ths = [...sc.querySelectorAll<HTMLElement>('thead th.sticky')];
+    const box = sc.getBoundingClientRect();
+    let L = box.left, R = box.right;
+    for (const t of ths) {
+      const cs = getComputedStyle(t), rc = t.getBoundingClientRect();
+      if (cs.left !== 'auto') L = Math.max(L, rc.right);
+      else if (cs.right !== 'auto') R = Math.min(R, rc.left);
+    }
+    const r = el.getBoundingClientRect();
+    if (r.left < L) sc.scrollLeft -= L - r.left;
+    else if (r.right > R) sc.scrollLeft += r.right - R;
+  });
+}
+
 // venueName 은 엑셀 파일명에만 쓰였다(내보내기 제거로 미사용). 호출자(VenueManageTab·AdminTab)가 아직 넘기므로 타입만 남긴다.
 export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, onOpenClock, onOpenStats, onOpenSchedule, seed, followGame, settleSignal = 0, active = true }: {
   venueId: string; canManage: boolean; venueName?: string; active?: boolean;
@@ -1783,7 +1805,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
           //   DOM 후순위인 바에 덮여 멀쩡했다 — 오너가 짚은 네 칸이 정확히 z-40 인 칸들이다.
           //   isolation 은 z-index 를 하나도 안 건드리고 표 안의 상대 순서를 그대로 보존한다.
           //   실측(격리 유무 대조, elementFromPoint): 없음 → TH 가 위 / isolate → 정산바가 위.
-          className="isolate overflow-auto max-h-[70vh] [-webkit-overflow-scrolling:touch] rounded-card border border-border-default bg-surface-low [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
+          // D7(2026-09-29 design-reviewer) — 고정 열(No 38px + 플레이어 ≤153px, 모바일 ≤119px) 폭만큼 scroll-padding 을 줘
+          //   키보드 포커스(Shift+Tab)로 끌려온 바인 칸이 고정 열 밑에 가려지지 않게 한다. sm 이상은 오른쪽 총바인·미수도 고정이다.
+          onFocusCapture={(e) => revealPastSticky(e.currentTarget, e.target as HTMLElement)}
+          className="isolate overflow-auto max-h-[70vh] scroll-pl-[192px] max-sm:scroll-pl-[158px] sm:scroll-pr-[152px] [-webkit-overflow-scrolling:touch] rounded-card border border-border-default bg-surface-low [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
         >
           {/* w-max: 칸을 압축하지 않고 고정폭 유지 → 모바일에서 가로 스크롤. min-w-full: 데스크톱은 꽉 채움 */}
           <table className="border-separate border-spacing-0 text-center w-max min-w-full">
@@ -1791,7 +1816,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               {/* 헤더는 세로 스크롤에도 고정(sticky top) — 100명 명단에서도 바인 번호가 항상 보임 */}
               <tr className="bg-surface-high">
                 <th className="sticky left-0 top-0 z-40 bg-surface-high w-9 px-1 py-2 text-xs text-ink-muted border-b border-border-default">No</th>
-                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-24 max-w-36 px-2 py-2 text-xs text-ink-muted border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">플레이어</th>
+                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-24 max-w-36 max-sm:max-w-28 px-2 py-2 text-xs text-ink-muted border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">플레이어</th>
                 {Array.from({ length: binCols }, (_, i) => (
                   <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-default">{i + 1}바인</th>
                 ))}
@@ -1813,7 +1838,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                   return (
                     <tr key={`${r.name}-${chunk}`}>
                       <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-2xs text-ink-muted border-b border-border-default tabular-nums">{first ? ri + 1 : <span className="opacity-40">↳</span>}</td>
-                      <td className="sticky left-9 z-10 bg-surface-low min-w-24 max-w-36 px-2 py-1 border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">
+                      <td className="sticky left-9 z-10 bg-surface-low min-w-24 max-w-36 max-sm:max-w-28 px-2 py-1 border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">
                         {first ? (
                           <button type="button" disabled={!r.player || closed} onClick={() => r.player && setEditPlayer(r.player)} className="w-full text-left disabled:cursor-default">
                             <div className="flex items-center gap-1">
@@ -1828,7 +1853,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                               {r.player?.note && <span className="text-[10px] text-ink-secondary truncate max-w-16 max-sm:hidden">· {r.player.note}</span>}
                             </div>
                           </button>
-                        ) : <span className="block text-2xs text-ink-muted/50 truncate">{r.name}</span>}
+                        ) : <span className="block text-2xs text-ink-muted/50 truncate" title={r.name}>{r.name}</span>}
                       </td>
 
                       {Array.from({ length: binCols }, (_, i) => {
