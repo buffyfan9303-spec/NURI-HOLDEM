@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, Fragment, type ReactNode } from 'react';
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
-import type { LikeQueue } from './lib/likeQueue';
 /** 좋아요 낙관적 뒤집기(1인 1회) — 큐 청크는 지연 로드라 이 한 줄만 여기 둔다 */
 const flipLike = (p: CommunityPost): CommunityPost => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
 import { flushSync } from 'react-dom';
@@ -3401,25 +3400,17 @@ export default function App() {
     setPosts((prev) => prev.map((p) => p.id === postId ? fn(p) : p));
     setOpenPost((cur) => (cur && cur.id === postId ? fn(cur) : cur));
   }, []);
-  // 큐는 첫 누름 때 불러온다 — 이 파일은 첫 화면 임계 경로라 번들 예산(entryGzipKb) 여유가 0 이다.
+  // 큐는 첫 누름 때 불러온다 — 이 파일은 첫 화면 임계 경로라 번들 예산(entryGzipKb) 여유가 0 이다(전송·반영 묶음은 lib/postLikeQueue).
   //   누름 순서는 같은 프라미스의 then 순서(FIFO)로 지켜진다. 청크를 못 받으면 그 누름의 뒤집기를 되돌린다.
-  const likeQueueRef = useRef<Promise<LikeQueue> | null>(null);
+  const likeTapRef = useRef<Promise<(id: string, uid: string | null) => void> | null>(null);
+  const likeFail = useCallback((e: unknown) => toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'), [toast]);
   const handleLikePost = useCallback((postId: string) => {
-    if (!userRefForGate.current) { promptLogin(); return; } // 비로그인: flip→서버실패→롤백 소음 대신 바로 유도
+    const uid = userRefForGate.current?.id;
+    if (!uid) { promptLogin(); return; } // 비로그인: flip→서버실패→롤백 소음 대신 바로 유도
     applyLike(postId, flipLike); // 낙관적 토글 — 피드(posts)와 상세(openPost) 동시 반영
-    const q = likeQueueRef.current ??= import('./lib/postLikeQueue').then((m) => m.createPostLikeQueue({
-      settle: (id, { liked, count }) => applyLike(id, (p) => ({ ...p, liked, likeCount: count })),
-      undo: (id) => applyLike(id, flipLike),
-      fail: (e) => toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'),
-      owner: () => userRefForGate.current?.id ?? null,
-    }));
-    const uid = userRefForGate.current?.id ?? null;
-    q.then((lq) => { if ((userRefForGate.current?.id ?? null) === uid) lq.tap(postId); }, (e) => {
-      likeQueueRef.current = null;
-      applyLike(postId, flipLike);
-      toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error');
-    });
-  }, [applyLike, toast]);
+    (likeTapRef.current ??= import('./lib/postLikeQueue').then((m) => m.createPostLikeQueue(applyLike, likeFail, () => userRefForGate.current?.id ?? null)))
+      .then((tap) => tap(postId, uid), (e) => { likeTapRef.current = null; applyLike(postId, flipLike); likeFail(e); });
+  }, [applyLike, likeFail]);
 
   // 관리자: 회원 업데이트 (승인/정지/해제) — 서버 반영
   /**
