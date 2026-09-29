@@ -2108,7 +2108,8 @@ body { overscroll-behavior-y: contain; }
   }
   /* 진입/로딩 애니메이션은 아예 끔(0.01ms 단축이 아니라 none) — 모션 민감 사용자에게 깜빡임 0.
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
-  .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out,
+  /* .animate-sheet-up 이 빠져 있어 0.01ms 로만 줄었고, 첫 프레임이 from(translateY 100%)으로 그려져 딤만 있는 검은 한 프레임이 났다(2026-09-29 실측 휘도 −19.7~−23.3). */
+  .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-sheet-up, .animate-slide-down, .animate-dim-in, .animate-dim-in-sheet, .animate-dim-out,
   .skeleton, .anim-pop, .poster-marquee { animation: none !important; }
   /* ::details-content 는 위 전역 * 셀렉터가 못 잡는다(의사 요소가 아니라 UA 생성 트리라 * 에 안 걸린다) —
      별도로 끈다. block-size 전환은 헌법 §4 의 grid-template-rows 0fr→1fr 예외와 성격이 같아

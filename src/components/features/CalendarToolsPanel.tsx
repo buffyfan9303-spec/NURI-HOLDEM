@@ -7,7 +7,7 @@
 //
 // 레지스트리·렌더러는 ToolsPanel 을 재사용한다(중복 정의 0). #tool= 딥링크 하위호환도 그쪽이 유지한다.
 // StoreToolsPanel 과 **같은 조리법**이다 — 두 이관이 다른 방식이면 다음 사람이 어느 쪽을 따를지 모른다.
-import { useState, Suspense } from 'react';
+import { useRef, useState, Suspense } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import { getCalendarTools, renderCalendarTool, type CalendarToolKey } from './ToolsPanel';
@@ -15,7 +15,11 @@ import { getCalendarTools, renderCalendarTool, type CalendarToolKey } from './To
 export default function CalendarToolsPanel() {
   const [active, setActive] = useState<CalendarToolKey | null>(null);
   const tools = getCalendarTools();
-  const activeTool = active ? tools.find((t) => t.key === active) : null;
+  // 닫힘 퇴장 동안 마지막 도구 유지 — ToolsPanel 과 같은 이유(빈 검은 판 한 프레임 방지).
+  const lastActive = useRef(active);
+  if (active) lastActive.current = active;
+  const shownKey = active ?? lastActive.current;
+  const activeTool = shownKey ? tools.find((t) => t.key === shownKey) : null;
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2">
@@ -35,10 +39,10 @@ export default function CalendarToolsPanel() {
       {/* ⚠ display:contents 래퍼 — 부모의 space-y margin 이 Modal(fixed inset-0)에 먹으면
           전체화면 상단이 내려앉아 뒤 화면이 비친다(ToolsPanel·StoreToolsPanel 과 같은 규격). */}
       <div className="contents">
-        <Modal open={!!activeTool} onClose={() => setActive(null)} variant="page" title={activeTool?.name} maxWidth="2xl">
+        <Modal open={!!active} onClose={() => setActive(null)} variant="page" title={activeTool?.name} maxWidth="2xl">
           <div className="px-page-x py-3 pb-8">
             <Suspense fallback={<div className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
-              {active ? renderCalendarTool(active) : null}
+              {shownKey ? renderCalendarTool(shownKey) : null}
             </Suspense>
           </div>
         </Modal>

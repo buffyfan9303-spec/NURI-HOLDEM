@@ -201,7 +201,9 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
             /* 실제 매장 카드와 같은 높이로 자리를 예약한다. 한 줄짜리 '불러오는 중…' 은
                목록이 도착하는 순간 아래를 밀어 올린다 — 이 지갑이 고치려던 그 CLS 다. */
             <div className="space-y-3" aria-busy="true">
-              {[0, 1].map((i) => <div key={i} className="skeleton h-[104px] rounded-aura" />)}
+              {/* 한 칸 — 0장 결과(EmptyState 실측 179px, 390·1280 동일 · 두 소비처 모두 boxed)에 맞춘다.
+                  104×2 였을 땐 도착 순간 아래가 67px 끌려 올라갔다(2026-09-29 실측). */}
+              <div className="skeleton h-[179px] rounded-aura" />
             </div>
           )
           : err && !everLoaded ? <LoadErrorCard error={err} what="이용권" onRetry={load} compact />

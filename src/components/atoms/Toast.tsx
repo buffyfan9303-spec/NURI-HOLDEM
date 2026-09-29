@@ -80,10 +80,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           ⚠ 예전 left-1/2 + -translate-x-1/2 는 fixed 요소의 shrink-to-fit 가용 폭을 뷰포트의
           '오른쪽 절반'(~50vw)으로 좁혀 버렸다 — 액션 버튼이 있는 토스트에서 텍스트 칸이
           몇 글자 폭으로 짜부라져 1자씩 세로로 꺾이던 원인. inset-x-0 + items-center 로
-          가용 폭을 온전히 주고 가운데 정렬한다(pointer-events-none 이라 클릭 방해 없음). */}
+          가용 폭을 온전히 주고 가운데 정렬한다(pointer-events-none 이라 클릭 방해 없음).
+          h-0 + justify-end: 컨테이너 상자는 높이 0 으로 바닥에 고정하고 토스트는 위로 넘쳐 쌓인다(보이는 자리는 같다).
+          높이를 내용에 맡기면 오래된 토스트가 빠질 때마다 상자 윗변이 내려와 입력과 무관한 layout-shift 가 났다
+          (2026-09-29 장부 연속 바인 실측 1280 0.0167·390 0.0338 매회 — 남은 토스트는 안 움직였는데 상자만 움직였다). */}
       <div
         aria-live="polite"
-        className="fixed bottom-(--tabbar-float) lg:bottom-4 inset-x-0 z-120 flex flex-col items-center gap-2 pointer-events-none"
+        className="fixed bottom-(--tabbar-float) lg:bottom-4 inset-x-0 z-120 flex h-0 flex-col items-center justify-end gap-2 pointer-events-none"
       >
         {toasts.map((t) => (
           <ToastItem key={t.id} {...t} onDismiss={() => dismiss(t.id)} />
@@ -107,7 +110,7 @@ function ToastItem({ message, variant, action, durationMs, onDismiss }: Toast & 
       title="탭하면 닫힘"
       className={[
         // max-w: 모바일은 화면의 92%, PC 는 읽기 좋은 28rem 상한(끝없이 옆으로 길어지는 것 방지)
-        'inline-flex items-center gap-2 px-4 py-2.5 rounded-input border shadow-dialog',
+        'inline-flex shrink-0 items-center gap-2 px-4 py-2.5 rounded-input border shadow-dialog',
         'text-sm font-medium pointer-events-auto max-w-[92vw] sm:max-w-md cursor-pointer select-none',
         'transition-[transform,opacity] duration-(--dur-panel)',
         COLOR[variant],

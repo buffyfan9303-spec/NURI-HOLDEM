@@ -115,7 +115,7 @@ test.describe('계정 전환 — 이전 계정 데이터 격리', () => {
     // ① A 의 수치가 실제로 그려진다 — 아래 단언이 '원래 안 그려지는 값' 덕에 통과하는 게 아니어야 한다
     await openMe('AAA 메뉴');
     await expect(visitStat).toHaveText('5회');
-    await expect(page.getByText('내 업적')).toBeVisible();
+    await expect(page.getByTestId('my-badges-card'), 'A 의 업적 카드가 실제로 그려져야 ③ 의 0개 단언이 의미가 있다').toBeVisible();
     await closeMe();
 
     // ② A 의 두 번째 조회를 붙잡아 '비행 중'으로 만든 채 계정을 바꾼다(재열림마다 reload 가 다시 나간다)
@@ -133,7 +133,9 @@ test.describe('계정 전환 — 이전 계정 데이터 격리', () => {
     // .first() 는 헤더의 PC 전용(lg+) 이름 span(모바일에선 display:none)을 잡는다 — 보이는 것만 고른다.
     await expect(page.getByText('BBB').filter({ visible: true }).first()).toBeVisible();
     await expect(visitStat, 'B 의 응답이 오기 전인데 A 의 방문 수가 보인다(keep-alive 잔존 state)').toHaveText('—');
-    await expect(page.getByText('내 업적'), 'A 의 업적 카드가 B 에게 남아 있다').toHaveCount(0);
+    await expect(page.getByTestId('my-badges-card'), 'A 의 업적 카드가 B 에게 남아 있다').toHaveCount(0);
+    // 2026-09-29 — 도착 전 자리 예약 카드(74px 밀림 방지)는 떠도 되지만 **숫자 없이** '—' 만 보여야 한다(A 의 수치가 새면 FAIL).
+    await expect(page.getByTestId('my-badges-pending'), '자리 예약 카드가 A 의 달성 수를 그린다').toContainText('—/');
 
     // ④ B 의 응답 → 0회
     gB.release();
