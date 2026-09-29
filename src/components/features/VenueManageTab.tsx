@@ -32,8 +32,7 @@ import AnnouncePanel from './AnnouncePanel';
 import SeasonPanel from './SeasonPanel';
 import PresetManager from './PresetManager';
 import KillSwitch from './KillSwitch';
-import StaffSchedule from './StaffSchedule';
-import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
+import StaffPunchBar from './StaffPunchBar';
 import StoreDashboard, { MyStaffCard } from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
 import { CHIP_HIT } from './gto/chip'; // 알약 한 기준: 보이는 32 · 누름 44(2026-09-24 리드 결정)
@@ -202,8 +201,21 @@ const VoucherManagePanelM = memo(VoucherManagePanel);
 const AnnouncePanelM = memo(AnnouncePanel);
 const VenueRankHubM = memo(VenueRankHub);
 const PosSettingsPanelM = memo(PosSettingsPanel);
-const StaffSelfAttendanceM = memo(StaffSelfAttendance);
+// 2026-09-30 — 인건비·정산·출근일지·출근 관리(StaffPayroll)를 지연 청크로 뺐다(청크 예산 여유 1.5KB+ — 리드 지시, 예산 불변).
+//   네 판 모두 첫 화면이 아니라 사이드바/아코디언을 눌러야 열린다. 한가할 때 미리 받아(아래 F6 효과) 받은 뒤에는 동기로 그린다.
+const staffPayroll = () => import('./StaffPayroll');
+const StaffWageManagerL = lazyWithReload(() => staffPayroll().then((m) => ({ default: m.StaffWageManager })));
+const StaffSettlementL = lazyWithReload(() => staffPayroll().then((m) => ({ default: m.StaffSettlement })));
+const StaffWorkLogL = lazyWithReload(() => staffPayroll().then((m) => ({ default: m.StaffWorkLog })));
+const StaffSelfAttendanceL = lazyWithReload(() => staffPayroll().then((m) => ({ default: m.StaffSelfAttendance })));
+const StaffSelfAttendanceM = memo(StaffSelfAttendanceL);
+const LazyBox = ({ children }: { children: ReactNode }) => (
+  <Suspense fallback={<p aria-busy="true" className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>{children}</Suspense>
+);
 const VenueMatchPanelL = lazyWithReload(() => import('./VenueMatchPanel'));
+// 2026-09-30 — 출근 스케줄(업주·스케줄 위임 직원만 여는 판)을 지연 청크로 뺐다. 직원 출근·퇴근 버튼(StaffPunchBar)이 이 청크에 더해지며
+//   청크별 상한(119KB gz)을 넘었는데, 예산을 올리지 않고 **모두가 받지 않아도 되는 판**을 뺀 것이다. 한가할 때 미리 받는다(아래 F6 효과).
+const StaffScheduleL = lazyWithReload(() => import('./StaffSchedule'));
 const VenueEventRequestPanelL = lazyWithReload(() => import('./VenueEventRequestPanel'));
 const VenueMatchPanelM = memo(VenueMatchPanelL);
 const VenueEventRequestPanelM = memo(VenueEventRequestPanelL);
@@ -734,13 +746,16 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     const run = () => {
       void CalendarPanelL.preload();
       if (manageOk) { void VenueMatchPanelL.preload(); void VenueEventRequestPanelL.preload(); }
+      if (staffOk || schedOk) void StaffScheduleL.preload();
+      void StaffSelfAttendanceL.preload(); // '출근 관리' 는 모든 구성원에게 있다
+      if (staffOk) { void StaffWageManagerL.preload(); void StaffSettlementL.preload(); void StaffWorkLogL.preload(); }
       if (ledgerOk) warmGameChips(venueId);
     };
     const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
     if (w.requestIdleCallback && w.cancelIdleCallback) { const id = w.requestIdleCallback(run, { timeout: 2000 }); return () => w.cancelIdleCallback!(id); }
     const t = window.setTimeout(run, 800);
     return () => window.clearTimeout(t);
-  }, [tabActive, venueId, manageOk, ledgerOk]);
+  }, [tabActive, venueId, manageOk, ledgerOk, staffOk, schedOk]);
 
   // 섹션 노출 규칙(IA1 — 14개 평면 형제 → 사용 빈도 3그룹, 컴포넌트 마운트 이동 0):
   //  · 직원이 부여받을 수 있는 권한(장부)은 권한 없어도 '잠금' 탭으로 노출 → 클릭 시 "권한 없음" 안내(휑한 화면 방지).
@@ -903,6 +918,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             `onGotoStore`(resolveDest 로 시드를 앉히는 쪽)를 넘겨야 한다 — 대시보드와 같은 경로다.
             ⚠ 이 주석을 `{venueId && (` **안**에 두면 JSX 형제가 둘이 되어 빌드가 깨진다.
               tsc 는 이걸 통과시키고 rolldown/eslint 만 잡는다(2026-09-20 실제로 당했다). */}
+        {/* 🔴 오너 2026-09-30(owner-2026-09-30#staff-punch): 직원 화면 **최상단**에 출근·퇴근 버튼 2개.
+            직원 = 이 매장의 직원 관리 권한이 없는 소속 구성원(서버 판정 staffOk=false · 관리자 제외). 권한 조회가 끝난 뒤에만 그려
+            업주 화면에 잠깐 떴다 사라지지 않게 한다. 기록 권한은 서버(punch_my_shift → is_my_shift_row)가 본인·소속 매장으로 강제한다. */}
+        {venueId && !isAdmin && !staffOk && (
+          <StaffPunchBar venueId={venueId} active={tabActive} onFix={() => startTransition(() => gotoSection('attendance'))} />
+        )}
         {venueId && (
           <StoreLiveBar venueId={venueId} active={tabActive} onGoto={onGotoStore} />
         )}
@@ -1190,7 +1211,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     </p>
                     <MyStaffCard venueId={venueId} preview />
                   </>}
-                  <StaffSelfAttendanceM venueId={venueId} readOnly={isAdmin} active={tabActive && renderSection === 'attendance'} />
+                  <LazyBox><StaffSelfAttendanceM venueId={venueId} readOnly={isAdmin} active={tabActive && renderSection === 'attendance'} /></LazyBox>
                 </div>)}
                 {visited.includes('staff') && (staffOk || schedOk) && box('staff', <StaffHub venueId={venueId} scheduleOnly={!staffOk} active={tabActive && renderSection === 'staff'} />)}
                 {visited.includes('partners') && manageOk && box('partners',
@@ -2490,13 +2511,18 @@ const TITLE_SUGGEST = ['매니저', '플로어', '딜러', '칩러너', '매장�
 function StaffHub({ venueId, active = true, scheduleOnly = false }: { venueId: string; active?: boolean; scheduleOnly?: boolean }) {
   const [open, setOpen] = useState<string>('members'); // 한 번에 하나(스크롤 절약)
   // 스케줄 위임 직원 — 아코디언 없이 스케줄 하나만(나머지 네 칸은 서버가 can_manage_pos 로 막는다)
-  if (scheduleOnly) return <StaffSchedule venueId={venueId} active={active} />;
+  const sched = (
+    <Suspense fallback={<p aria-busy="true" className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>}>
+      <StaffScheduleL venueId={venueId} active={active} />
+    </Suspense>
+  );
+  if (scheduleOnly) return sched;
   const items: { id: string; label: string; node: ReactNode }[] = [
     { id: 'members',  label: '구성원 목록',                 node: <StaffManager venueId={venueId} /> },
-    { id: 'schedule', label: '딜러 출근 스케줄',            node: <StaffSchedule venueId={venueId} active={active} /> },
-    { id: 'wage',     label: '인건비 관리 (시급·급여일·휴무)', node: <StaffWageManager venueId={venueId} /> },
-    { id: 'settle',   label: '인건비 정산 (월 급여·총 인건비)', node: <StaffSettlement venueId={venueId} active={active} /> },
-    { id: 'log',      label: '직원 출근일지',                node: <StaffWorkLog venueId={venueId} active={active} /> },
+    { id: 'schedule', label: '딜러 출근 스케줄',            node: sched },
+    { id: 'wage',     label: '인건비 관리 (시급·급여일·휴무)', node: <LazyBox><StaffWageManagerL venueId={venueId} /></LazyBox> },
+    { id: 'settle',   label: '인건비 정산 (월 급여·총 인건비)', node: <LazyBox><StaffSettlementL venueId={venueId} active={active} /></LazyBox> },
+    { id: 'log',      label: '직원 출근일지',                node: <LazyBox><StaffWorkLogL venueId={venueId} active={active} /></LazyBox> },
   ];
   return (
     <div className="space-y-3">
@@ -2504,7 +2530,8 @@ function StaffHub({ venueId, active = true, scheduleOnly = false }: { venueId: s
         const isOpen = open === it.id;
         return (
           <div key={it.id} className="rounded-aura border card-aura overflow-hidden">
-            <button type="button" onClick={() => setOpen(isOpen ? '' : it.id)}
+            {/* startTransition — 아직 안 받은 지연 판이면 폴백 대신 지금 화면을 유지한 채 받는다(Suspense 폴백 스로틀) */}
+            <button type="button" onClick={() => startTransition(() => setOpen(isOpen ? '' : it.id))}
               className="flex w-full items-center justify-between p-3 text-left transition-colors hover:bg-surface-high">
               <span className="text-sm font-bold text-ink-primary">{it.label}</span>
               <span className="text-accent-300 dark:text-accent-200 text-xs">{isOpen ? '▲ 접기' : '▼ 펼치기'}</span>

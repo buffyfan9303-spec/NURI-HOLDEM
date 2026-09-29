@@ -37,6 +37,8 @@ export const READ_ONLY_RPCS = new Set([
   'community_ads_public',
   // 2026-09-24 닉네임 이력(20260924k) — 내 입상 기록·이용권 받는 사람 검색. 둘 다 STABLE select 만.
   'my_ranking_history', 'my_nickname_aliases', 'search_voucher_recipients',
+  // 2026-09-30 직원 출근·퇴근 버튼(20260930b) — 오늘·어제 내 근무 읽기. STABLE select 만(쓰기는 punch_my_shift, 여기 없음).
+  'my_punch_state',
 ]);
 
 const SUPABASE_API = /^https:\/\/([a-z0-9]+)\.supabase\.co\/(rest|auth|storage|functions)\/v1\/(.*)$/;

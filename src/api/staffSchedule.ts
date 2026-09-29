@@ -146,6 +146,36 @@ export async function setMyShiftTime(venueId: string, date: string, field: 'chec
 }
 
 /**
+ * 직원 출근·퇴근 버튼(20260930b) — 오늘·어제(KST) 내 근무 상태와 한 번 누름.
+ *
+ * 왜 setMyShiftTime 으로 안 하나: 그 RPC 는 **보낸 시각으로 덮어쓴다** — 연타·동시 요청이면 두 번째가 첫 출근 시각을 덮는다.
+ *   punch_my_shift 는 서버 시각으로, **빈 칸일 때만** 쓴다(두 번째 요청은 applied=false 로 기존 값을 돌려준다).
+ *   되돌리기·시각 고치기는 종전대로 setMyShiftTime(오늘·어제) 경로를 쓴다.
+ * 'missing' = 마이그레이션 적용 전(PGRST202). 버튼 줄을 숨기고 아래 '출근 관리' 입력이 종전대로 일한다.
+ */
+export interface MyPunchRow { date: string; checkIn: string | null; checkOut: string | null }
+const isMissingFn = (e: unknown) => !!e && typeof e === 'object' && (e as { code?: unknown }).code === 'PGRST202';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const punchRowOf = (r: any): MyPunchRow => ({ date: r.work_date, checkIn: r.check_in ?? null, checkOut: r.check_out ?? null });
+
+export async function getMyPunchState(venueId: string): Promise<MyPunchRow[] | 'missing'> {
+  if (IS_MOCK) return 'missing';
+  const { data, error } = await supabase.rpc('my_punch_state', { p_venue_id: venueId });
+  if (error) { if (isMissingFn(error)) return 'missing'; throw error; }
+  return (data ?? []).map(punchRowOf);
+}
+
+export async function punchMyShift(venueId: string, kind: 'in' | 'out'): Promise<MyPunchRow & { applied: boolean }> {
+  if (IS_MOCK) throw new Error('목 모드에서는 출퇴근을 기록하지 않습니다');
+  const { data, error } = await supabase.rpc('punch_my_shift', { p_venue_id: venueId, p_kind: kind });
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = (data ?? [])[0] as any;
+  if (!r) throw new Error('출퇴근을 기록하지 못했습니다');
+  return { ...punchRowOf(r), applied: !!r.applied };
+}
+
+/**
  * 명부에 이름만 등록(배정 전) — 인건비 설정 행을 빈 값으로 만들어 둔다.
  *
  * 왜 이렇게 하나: '직원 등록' 버튼이 원래 React state 에만 이름을 넣어서, 시프트를 배정하기
