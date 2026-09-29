@@ -63,6 +63,10 @@ export function keepScroll(el: Element, shrink: number) {
   apply();
   box.appendChild(gap);
   target.addEventListener('scroll', onScroll, { passive: true });
+  // 줄어든 뒤 한 번 더 깎는다 — 판에 최소 높이가 걸린 화면(매장 페이지 1440)은 문서가 줄어든 높이만큼 다 줄지 않아
+  //   예상 여백(405)이 실제 필요(227)보다 커 끝에 빈 띠가 남았다. 전환(details 0.3s·Fold ≤0.32s)이 끝난 뒤에만 깎아야
+  //   도중에 줄였다가 다시 클램프가 나지 않는다.
+  setTimeout(onScroll, 400);
 }
 
 /** 방금 누른 요소(1초 안)가 바로 앞 DOM 변경으로 움직였으면 **같은 프레임에** 스크롤로 되돌린다 — 레이아웃 이펙트에서 부른다.
