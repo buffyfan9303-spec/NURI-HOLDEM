@@ -220,11 +220,14 @@ export default function PostDetailModal({
   //   전환(content-visibility 0.3s allow-discrete)이 닫힌 뒤에도 절대 배치 판을 317ms 보이고 눌리게 붙잡았다(2026-09-29 감사 #7).
   //   닫힘 = 그 즉시 invisible(보이지도 눌리지도 않음), 열림 = slide-up(기존 클래스, CSS 0B).
   const [menuOpen, setMenuOpen] = useState(false);
+  // 닫기는 open=false 와 **같은 이벤트에서** 표시도 끈다 — toggle 이벤트는 비동기라 그것만 기다리면 바깥 탭으로 닫은 뒤
+  //   메뉴가 100ms 동안 보이고 눌렸다(2026-09-30 검토 D2). 요약줄로 닫는 것만 브라우저 토글에 맡긴다(onToggle).
+  const closeMenu = () => { if (actionMenuRef.current) actionMenuRef.current.open = false; setMenuOpen(false); };
   useEffect(() => {
     if (!open) return;
     const closeOutside = (e: PointerEvent) => {
       const menu = actionMenuRef.current;
-      if (menu?.open && !menu.contains(e.target as Node)) menu.open = false;
+      if (menu?.open && !menu.contains(e.target as Node)) { menu.open = false; setMenuOpen(false); }
     };
     document.addEventListener('pointerdown', closeOutside);
     return () => document.removeEventListener('pointerdown', closeOutside);
@@ -674,12 +677,12 @@ export default function PostDetailModal({
             return (<>
               {!inline && (
                 <details ref={actionMenuRef} className="relative shrink-0 lg:hidden" onToggle={(e) => setMenuOpen(e.currentTarget.open)}
-                  onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}
+                  onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) closeMenu(); }}
                   onKeyDown={(e) => {
                     if (e.key !== 'Escape' || !actionMenuRef.current?.open) return;
                     // ⚠ Escape 를 여기서 멈추지 않으면 Modal 까지 올라가 **글 자체가 닫힌다**.
                     e.preventDefault(); e.stopPropagation();
-                    actionMenuRef.current.open = false;
+                    closeMenu();
                     actionMenuRef.current.querySelector('summary')?.focus();
                   }}>
                   <summary aria-label="게시글 메뉴"
@@ -690,7 +693,7 @@ export default function PostDetailModal({
                       스크롤러가 맨 위일 때만 시작되지만, 여기서도 시작점을 끊어 둔다. */}
                   <div data-drag-close="off"
                     className={['absolute right-0 top-full z-30 mt-2 min-w-32 rounded-input border border-border-strong bg-surface-high p-1 shadow-xl', menuOpen ? 'animate-slide-up' : 'invisible'].join(' ')}
-                    onClick={() => { if (actionMenuRef.current) actionMenuRef.current.open = false; }}>
+                    onClick={closeMenu}>
                     {acts.map((a) => (
                       <button key={a.key} type="button" onClick={a.onClick}
                         className={['flex min-h-11 w-full items-center rounded-input px-3 text-left text-xs transition-colors hover:text-danger-light',

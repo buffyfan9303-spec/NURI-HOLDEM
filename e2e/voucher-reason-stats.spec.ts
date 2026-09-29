@@ -133,6 +133,27 @@ test.describe('이용권 유형별 전송 표(V2)', () => {
     });
   }
 
+  // PR #51 verifier 참고 1(2026-09-30) — 보유자 목록은 예전엔 hidden 으로 접혀 **DOM 이 남았다**. Fold 로 바꾸며 닫을 때 언마운트돼
+  //   펼친 보유자 행·스크롤 등 DOM 상태가 사라졌다 → keepMounted. 같은 노드가 살아 있는지(표식)로 본다.
+  test('보유자 현황을 닫았다 다시 열어도 목록 DOM 이 그대로다(keepMounted)', async ({ page }) => {
+    test.setTimeout(120_000);
+    await open(page, 390, 844, 'ok');
+    await page.getByRole('button', { name: '관리', exact: true }).first().evaluate((b) => (b as HTMLElement).click());
+    const unused = page.getByTestId('holder-unused');
+    await expect(unused, '보유자를 펼치지 못했다').toBeVisible();
+    await unused.evaluate((u) => { (u as HTMLElement & { __keep?: number }).__keep = 1; });
+    const toggle = page.getByRole('button', { name: /보유자 현황·통계/ });
+    await toggle.evaluate((b) => (b as HTMLElement).click());
+    await expect(unused, '닫았는데 목록이 보인다').toBeHidden();
+    await page.waitForTimeout(600);
+    await toggle.evaluate((b) => (b as HTMLElement).click());
+    await expect(unused, '다시 열었는데 목록이 안 보인다').toBeVisible();
+    await page.waitForTimeout(600);
+    expect(await unused.evaluate((u) => (u as HTMLElement & { __keep?: number }).__keep ?? 0), '다시 열자 목록이 새로 그려졌다(언마운트됨)').toBe(1);
+    const h = await unused.evaluate((u) => u.closest('[hidden]') ? -1 : u.getBoundingClientRect().height);
+    expect(h, '다시 연 목록이 높이 0 에 갇혔다').toBeGreaterThan(0);
+  });
+
   test('권한 오류(42501)는 0 이 아니라 오류 카드', async ({ page }) => {
     test.setTimeout(120_000);
     await open(page, 1440, 900, 'denied');

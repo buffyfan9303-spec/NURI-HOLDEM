@@ -284,6 +284,42 @@ test.describe('Fold — 펼침/접힘은 부드럽고 누른 요소는 제자리
     }
   });
 
+  // D1(2026-09-30 검토) — 부모 space-y 가 판에 거는 margin(12.75px)이 여는 첫 프레임에 한 번에 생기고 닫는 끝 프레임(언마운트)에
+  //   한 번에 사라졌다. 판 아래 첫 요소(after)의 top 을 매 프레임 재서, 닫기 끝 단계와 열기 첫 단계의 margin 을 본다.
+  test('⑧ space-y 부모 안 판(딜러 ICM) — 부모 간격도 높이와 같이 자라고 줄어 한 프레임에 생기거나 사라지지 않는다', async ({ page }) => {
+    await mockAll(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/?tab=community');
+    await page.locator('[data-testid="sec-tab-dealer"]').click({ timeout: 20_000 });
+    const btn = page.locator('main[data-tab="community"] button').filter({ hasText: /ICM\s*계산기/ });
+    await expect(btn, '딜러 ICM 토글이 없다').toBeVisible({ timeout: 20_000 });
+    await btn.evaluate((b) => b.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(600);
+    const watch = () => btn.evaluate((b) => new Promise<{ gap: number; m: string }[]>((res) => {
+      // 판 아래 첫 요소는 **닫힌 상태에서 한 번** 정한다(열린 뒤 다시 고르면 판 자신을 고른다).
+      const grid = b.parentElement!; const w = window as unknown as { __foldAfter?: Element | null };
+      const after = w.__foldAfter ??= grid.nextElementSibling;
+      const fr: { gap: number; m: string }[] = []; const t0 = performance.now();
+      const f = () => {
+        const fold = grid.nextElementSibling !== after ? grid.nextElementSibling as HTMLElement | null : null;
+        fr.push({ gap: after ? +(after.getBoundingClientRect().top - grid.getBoundingClientRect().bottom).toFixed(2) : NaN, m: fold ? getComputedStyle(fold).marginTop : '-' });
+        if (performance.now() - t0 < 800) requestAnimationFrame(f); else res(fr);
+      };
+      requestAnimationFrame(f);
+    }));
+    const run = async () => { const rec = watch(); await page.waitForTimeout(30); await press(page, btn); return rec; };
+    const open = await run(); await page.waitForTimeout(300);
+    const close = await run();
+    const deltas = (fr: { gap: number }[]) => fr.slice(1).map((x, i) => +(x.gap - fr[i].gap).toFixed(2)).filter((d) => d !== 0);
+    const oD = deltas(open), cD = deltas(close);
+    const ms = [...new Set(open.map((x) => x.m).filter((m) => m !== '-'))];
+    console.log(`[fold ⑧ dealer icm 390] open ${JSON.stringify(oD)} margins ${JSON.stringify(ms)} close ${JSON.stringify(cD)}`);
+    expect(Number.isNaN(open[0].gap), '판 아래 요소가 없다 — 잴 수 없다').toBe(false);
+    expect(oD.reduce((a, b) => a + b, 0), '열었는데 안 자랐다 — 대상이 아니다').toBeGreaterThan(100);
+    expect(ms.length, `열기 동안 판 margin 이 ${JSON.stringify(ms)} 뿐 — 첫 프레임에 한 번에 생겼다`).toBeGreaterThanOrEqual(3);
+    expect(Math.abs(cD[cD.length - 1]), `닫기 끝 단계가 ${cD[cD.length - 1]}px — 부모 간격이 한 번에 사라졌다(수정 전 −13.46)`).toBeLessThanOrEqual(2);
+  });
+
   test('⑦ 대시보드 딜러 로테이션 모달(지연 청크) — 누르면 열리고, 여는 동안 불투명 폴백 판이 없다', async ({ page }) => {
     await bootOwner(page, { viewport: { width: 1440, height: 900 } });
     await openMyStore(page);

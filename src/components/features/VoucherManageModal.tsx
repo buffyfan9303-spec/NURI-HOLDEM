@@ -844,8 +844,9 @@ ${cards}
           <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', ownerOpen ? 'rotate-180' : ''].join(' ')} />
         </button>
       )}
-      {/* 통계·보유자 현황을 한 판으로 펼친다(부모 space-y-3 을 판 안에서도 그대로). 보유자 목록은 예전엔 hidden 으로 접혀 있었다. */}
-      <Fold open={canIssue && ownerOpen} className="space-y-3">{() => (<>
+      {/* 통계·보유자 현황을 한 판으로 펼친다(부모 space-y-3 을 판 안에서도 그대로). 보유자 목록은 예전엔 hidden 으로 접혀 있었다 —
+          keepMounted 로 닫아도 DOM 을 남겨 펼친 보유자·검색어·스크롤을 그대로 둔다. */}
+      <Fold open={canIssue && ownerOpen} className="space-y-3" keepMounted>{() => (<>
       {canIssue && ownerOpen && statsErr != null && <LoadErrorCard what="보유자 통계" error={statsErr} onRetry={reload} compact />}
       {canIssue && ownerOpen && statsErr == null && stats && (
         <div className="rounded-card border border-accent-400/30 bg-linear-to-br/srgb from-accent-300/[0.07] via-surface-low to-surface-low p-3 space-y-2.5">

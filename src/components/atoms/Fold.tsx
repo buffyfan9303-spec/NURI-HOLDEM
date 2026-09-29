@@ -116,8 +116,11 @@ export function onSummaryClick(e: SyntheticEvent<HTMLElement>) {
   keepScroll(d, d.offsetHeight - s.offsetHeight - px(a.marginTop, a.marginBottom, b.paddingTop, b.paddingBottom, b.borderTopWidth, b.borderBottomWidth));
 }
 
-export function Fold({ open, children, className, id, x }: {
+export function Fold({ open, children, className, id, x, keepMounted }: {
   open: boolean;
+  /** 닫힌 뒤에도 언마운트하지 않고 `hidden` 으로 숨긴다 — 예전에 `hidden` 클래스로 접던 판(이용권 보유자 목록)의
+   *  DOM·내부 상태(펼친 행·스크롤·입력)를 다시 열 때까지 보존한다. */
+  keepMounted?: boolean;
   /** 가로로 펼친다(폭 0↔실측) — 같은 줄 안에서 옆으로 자라 위아래 요소가 움직이지 않는 곳(일정 탐색 검색 입력). 누른 요소 보정·바닥 클램프는 세로 전용이라 끈다. */
   x?: boolean;
   /** 닫혀 있을 때 계산하면 안 되는 내용(선택된 행 등)은 함수로 넘긴다 — 열려 있을 때만 부른다. */
@@ -140,6 +143,11 @@ export function Fold({ open, children, className, id, x }: {
     if (!mounted.current || !el) { mounted.current = true; return; }
     const running = stop.current;
     const h0 = el.getBoundingClientRect()[x ? 'width' : 'height'];
+    // 부모 space-y 가 판에 거는 margin 도 높이와 같이 0↔값으로 민다 — 안 그러면 여는 첫 프레임에 한 번에 생기고
+    //   닫는 끝 프레임(언마운트)에 한 번에 사라졌다(딜러 ICM·글쓰기 12.75px, 클락 블라인드 8.5px — 2026-09-30 검토 D1).
+    const sides = x ? (['marginLeft', 'marginRight'] as const) : (['marginTop', 'marginBottom'] as const);
+    const cs = getComputedStyle(el);
+    const m0 = sides.map((k) => cs[k]); // 도중에 다시 누르면 지금(애니메이션 중) 값에서 이어 간다
     running?.();
     stop.current = null;
     el.inert = !open;
@@ -153,12 +161,26 @@ export function Fold({ open, children, className, id, x }: {
     const full = x ? el.scrollWidth : el.scrollHeight;
     const from = running ? h0 : open ? 0 : full;
     const to = open ? full : 0;
+    const mFrom: Keyframe = {}, mTo: Keyframe = {};
+    let mShrink = 0;
+    sides.forEach((k, i) => {
+      const rest = cs[k]; // 취소 뒤라 CSS 값
+      if (!parseFloat(rest) && !parseFloat(m0[i])) return;
+      mFrom[k] = running ? m0[i] : open ? '0px' : rest;
+      mTo[k] = open ? rest : '0px';
+      mShrink += parseFloat(mFrom[k] as string) || 0;
+    });
     const done = (a?: Animation) => {
       stop.current = null;
       if (sc) sc.style.overflowAnchor = '';
-      if (open) { s.display = s.overflow = ''; a?.cancel(); pin(); } else setShown(false);
+      if (open) { s.display = s.overflow = ''; a?.cancel(); pin(); return; }
+      // 닫힘: 같은 프레임에 숨기고 끝난 애니메이션(fill: both → 높이 0)을 걷는다 — keepMounted 로 남은 판을 다시 열 때
+      //   옛 닫힘 키프레임이 새 열림 위에 남아 높이 0 에 갇히지 않게.
+      s.display = 'none';
+      a?.cancel();
+      setShown(false);
     };
-    if (!open && !p && !x) keepScroll(el, from);
+    if (!open && !p && !x) keepScroll(el, from + mShrink);
     // 판 **안**의 것을 눌러 닫히면(메뉴에서 항목 고름·확인/취소) 즉시 닫는다 — 고른 뒤 220ms 동안 누를 수 없는 메뉴가
     //   남아 있으면 그 사이 판 교체(내 매장 섹션 이동)의 정렬·스냅샷이 줄어드는 메뉴를 재고, 다시 열기 탭도 헛돈다.
     //   머리 토글(판 밖)로 닫을 때만 부드럽게 접힌다.
@@ -170,7 +192,7 @@ export function Fold({ open, children, className, id, x }: {
     }
     const dur = parseFloat(token(Math.max(from, to) > 400 ? '--dur-panel' : '--dur-base')) * 1000 || 220;
     const dim = x ? 'width' : 'height';
-    const anim = el.animate([{ [dim]: `${from}px`, opacity: open ? 0.45 : 1 }, { [dim]: `${to}px`, opacity: open ? 1 : 0.45 }],
+    const anim = el.animate([{ ...mFrom, [dim]: `${from}px`, opacity: open ? 0.45 : 1 }, { ...mTo, [dim]: `${to}px`, opacity: open ? 1 : 0.45 }],
       { duration: dur, easing: token('--ease') || 'ease', fill: 'both' });
     anim.pause();
     if (sc) sc.style.overflowAnchor = 'none';
@@ -190,6 +212,6 @@ export function Fold({ open, children, className, id, x }: {
 
   useLayoutEffect(() => () => stop.current?.(), []);
 
-  if (!open && !shown) return null;
-  return <div ref={ref} id={id} className={className}>{content}</div>;
+  if (!open && !shown && !keepMounted) return null;
+  return <div ref={ref} id={id} className={className} hidden={!open && !shown}>{content}</div>;
 }
