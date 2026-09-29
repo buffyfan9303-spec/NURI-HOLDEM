@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { getMyBlockedIds, listMyBlocks, blockUser, unblockUser, type BlockedUser } from '../api/blocks';
+import { createBlockLoader } from '../lib/blockLoader';
 
 interface BlockContextValue {
   blockedIds: Set<string>;
@@ -20,12 +21,14 @@ export function BlockProvider({ children }: { children: ReactNode }) {
   const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set());
   const [blocks, setBlocks] = useState<BlockedUser[]>([]);
 
-  const reload = useCallback(async () => {
-    if (!user) { setBlockedIds(new Set()); setBlocks([]); return; }
-    const [ids, list] = await Promise.all([getMyBlockedIds(), listMyBlocks()]);
-    setBlockedIds(ids);
-    setBlocks(list);
-  }, [user]);
+  // 계정이 바뀌면 조회 전에 비우고, 같은 계정 재조회 실패는 직전 목록 유지, 늦은 응답은 버린다(lib/blockLoader).
+  const [load] = useState(() => createBlockLoader({
+    fetch: () => Promise.all([getMyBlockedIds(), listMyBlocks()]),
+    apply: ([ids, list]) => { setBlockedIds(ids); setBlocks(list); },
+    clear: () => { setBlockedIds(new Set()); setBlocks([]); },
+  }));
+  const uid = user?.id ?? null;
+  const reload = useCallback(() => load(uid), [load, uid]);
 
   useEffect(() => { reload().catch(() => {}); }, [reload]);
 
@@ -34,13 +37,16 @@ export function BlockProvider({ children }: { children: ReactNode }) {
   const block = useCallback(async (userId: string, name?: string) => {
     await blockUser(userId, name);
     setBlockedIds((s) => new Set(s).add(userId));
-    await reload();
+    // 차단은 이미 저장됐다 — 목록 재조회 실패를 '차단 실패'로 올리지 않는다(직전 목록 + 방금 추가분 유지).
+    await reload().catch(() => {});
   }, [reload]);
 
   const unblock = useCallback(async (userId: string) => {
     await unblockUser(userId);
     setBlockedIds((s) => { const n = new Set(s); n.delete(userId); return n; });
-    await reload();
+    await reload().catch(() => {});
+    // 서버 조회 RLS 가 차단한 사람의 글·댓글을 뺀다(20260929d) — 해제 뒤엔 다시 읽어야 화면에 돌아온다(App 이 듣는다).
+    window.dispatchEvent(new CustomEvent('nuri:blocks-changed'));
   }, [reload]);
 
   return (
