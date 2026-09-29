@@ -50,8 +50,11 @@ export function MzoneCalc() {
   const [bb, setBb] = useState(2000);
   const [ante, setAnte] = useState(2000);
   const [players, setPlayers] = useState(9);
+  // 2026-09-29 #14 오너: 국내는 대부분 BB 앤티(BB 한 명이 1BB 를 한 번) — 기본은 앤티 1회, 1인당(×인원)은 선택.
+  //   라이브 탭 내 토너 카드(LiveGamesTab)도 sb+bb+ante 로 같은 한 바퀴 비용을 쓴다.
+  const [anteMode, setAnteMode] = useState<'bb' | 'each'>('bb');
   // 2026-09-29 D3: 인원 0 을 1명으로 보거나(→레드) 비용 0 에 '데드'를 붙이지 않는다 — 계산 불가면 M·존 모두 '-'
-  const cost = sb + bb + ante * players;
+  const cost = sb + bb + (anteMode === 'each' ? ante * players : ante);
   const ready = players > 0 && cost > 0;
   const rawM = ready ? stack / cost : 0;
   // 🔴 2026-09-19 GTO 감사 [medium]: 20/10/6/1 경계는 Harrington 의 **Effective M**(=raw M × 인원/10)
@@ -71,8 +74,19 @@ export function MzoneCalc() {
         <Field label="인원"><NumIn value={players} onChange={setPlayers} suffix="명" /></Field>
         <Field label="SB"><NumIn value={sb} onChange={setSb} /></Field>
         <Field label="BB"><NumIn value={bb} onChange={setBb} /></Field>
-        <Field label="앤티(1인)"><NumIn value={ante} onChange={setAnte} /></Field>
+        <Field label={anteMode === 'each' ? '앤티(1인)' : '앤티(BB 1회)'}><NumIn value={ante} onChange={setAnte} /></Field>
       </div>
+      <Field label="앤티 방식">
+        <div className="flex gap-1.5">
+          {([{ id: 'bb', label: 'BB 앤티 · 1회' }, { id: 'each', label: '1인당 · ×인원' }] as const).map((a) => (
+            <button key={a.id} type="button" aria-pressed={anteMode === a.id} onClick={() => setAnteMode(a.id)}
+              className={[CHIP_HIT, 'flex-1 h-[32px] rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-hidden',
+                anteMode === a.id ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </Field>
       {/* 라벨을 'Effective M'으로 명시 — 보여주는 숫자가 raw M(=스택/한바퀴비용)이 아니라
           인원 보정을 거친 값이라는 걸 감춰서 되돌아가지 않게 한다(위 주석 참고). */}
       <Result label={`Effective M = ${ready ? m.toFixed(1) : '-'}`} value={zone.l} />
