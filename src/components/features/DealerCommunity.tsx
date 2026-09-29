@@ -155,7 +155,7 @@ export default function DealerCommunity() {
             className="flex min-h-[44px] items-center justify-center rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-2xs font-semibold text-accent-300 transition-colors hover:bg-surface-high/70">로그인 후 작성</button>
         )}
       </div>
-      {showIcm && <div><ICMCalculator /></div>}
+      {showIcm && <div><ICMCalculator variant="chop" /></div>}
 
       {canPost && open && (
         <form onSubmit={submit} className="space-y-2.5 rounded-card border border-border-default bg-surface-low p-3 animate-slide-up">
