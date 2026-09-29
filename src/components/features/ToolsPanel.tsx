@@ -468,7 +468,12 @@ export default function ToolsPanel() {
     </div>
   );
 
-  const activeTool = active ? TOOLS.find((t) => t.key === active) : null;
+  // 닫힘 퇴장 애니(Modal PAGE_LEAVE) 동안 판이 비지 않게 마지막 도구를 유지한다 — 안 그러면 제목·본문이 즉시 사라져
+  // 빈 검은 판이 한 프레임 퇴장한다(2026-09-29 실측 휘도 24.6→7.9). App.tsx lastListing 과 같은 조리법.
+  const lastActive = useRef(active);
+  if (active) lastActive.current = active;
+  const shownKey = active ?? lastActive.current;
+  const activeTool = shownKey ? TOOLS.find((t) => t.key === shownKey) : null;
 
 
   return (
@@ -606,9 +611,9 @@ export default function ToolsPanel() {
       <div className="contents">
       {/* 공유는 **창에 딸린 동작**이라 제목줄(닫기 옆)에 둔다 — 본문 위 전용 행에 두면
           내용과 상관없는 버튼이 위에 홀로 떠 보인다(오너 2026-09-06 스크린샷). */}
-      <Modal open={!!activeTool} onClose={close} variant="page" title={activeTool?.name} maxWidth="2xl"
-        headerAction={active ? (
-          <button type="button" onClick={() => share(active)}
+      <Modal open={!!active} onClose={close} variant="page" title={activeTool?.name} maxWidth="2xl"
+        headerAction={shownKey ? (
+          <button type="button" onClick={() => share(shownKey)}
             aria-label={`${activeTool?.name ?? '도구'} 링크 공유`}
             // tap-y-44: 보이는 박스(38.3px)는 그대로 두고 위아래 6px씩 눌림 영역만 확장(index.css:1005-1006).
             // 헤더 행에는 overflow-x-auto 조상이 없어(오버행이 안 잘림) 실측 확인됨(2026-09-20).
@@ -623,7 +628,7 @@ export default function ToolsPanel() {
         <div className="px-page-x py-3 pb-8" onClick={swapToolOnLinkClick}>
           <Suspense fallback={<div className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
             {/* #tool= 딥링크로 비로그인 진입해도 게이트가 유지되게 실행 지점에서 한 번 더 확인 */}
-            {active ? (user ? renderTool(active, intent) : (
+            {shownKey ? (user ? renderTool(shownKey, intent) : (
               <div className="flex flex-col items-center gap-3 py-14 text-center">
                 <p className="text-sm font-bold text-ink-primary">로그인하면 GTO 도구를 쓸 수 있어요</p>
                 <p className="text-2xs text-ink-muted">차트·트레이너·계산기 전부 무료입니다</p>

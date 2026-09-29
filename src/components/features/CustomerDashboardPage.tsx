@@ -375,6 +375,18 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               <div className="mt-2"><LoadErrorCard error={badgeErr} what="내 업적" onRetry={() => setBadgeTick((t) => t + 1)} compact /></div>
             </section>
           )}
+          {/* 도착 전 자리 예약 — 헤더 줄(기본 접힘, 57px)을 같은 높이로 먼저 그린다. 안 그리면 badgeStats 가 오는 순간
+              프로필 카드 위에 끼어들어 그 아래 전부가 74px 밀렸다(2026-09-29 실측 720~1044ms). 눌리는 것은 아니므로 button 이 아니다. */}
+          {!badgeStats && badgeErr == null && (
+            <section className="rounded-aura border card-aura p-3" aria-busy="true">
+              <div className="-my-2.5 flex w-full items-center gap-2 py-2.5">
+                <Tile icon="medal" tone="violet" />
+                <h2 className="text-sm font-bold text-ink-primary">내 업적</h2>
+                <span className="text-2xs font-semibold tabular-nums text-ink-muted">—/{BADGES.length} 달성</span>
+                <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-2xs invisible" aria-hidden>펼치기 <Icon name="chevron-down" size={12} /></span>
+              </div>
+            </section>
+          )}
           {badgeStats && (
             <section className="rounded-aura border card-aura p-3">
               <button type="button" onClick={() => setAchOpen((v) => !v)} aria-expanded={achOpen} className="-my-2.5 flex w-full items-center gap-2 py-2.5 text-left">

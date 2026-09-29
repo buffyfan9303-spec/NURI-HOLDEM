@@ -2,7 +2,7 @@
 // 운영 도구 5종(칩 분배기·구조 시뮬·블라인드 생성기·상금 분배·종료시간 예측) — §7 ⑥b:
 // GTO 탭(유저 학습 도구)에서 내 매장 '매장 설정 > 운영 도구'로 이관.
 // 레지스트리·렌더러는 ToolsPanel 을 재사용(중복 정의 0) — #tool= 딥링크 하위호환도 그쪽이 유지.
-import { useState, Suspense } from 'react';
+import { useRef, useState, Suspense } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import { getStoreTools, renderStoreTool, type StoreToolKey } from './ToolsPanel';
@@ -14,7 +14,11 @@ import { getStoreTools, renderStoreTool, type StoreToolKey } from './ToolsPanel'
 export default function StoreToolsPanel() {
   const [active, setActive] = useState<StoreToolKey | null>(null);
   const tools = getStoreTools();
-  const activeTool = active ? tools.find((t) => t.key === active) : null;
+  // 닫힘 퇴장 동안 마지막 도구 유지 — ToolsPanel 과 같은 이유(빈 검은 판 한 프레임 방지).
+  const lastActive = useRef(active);
+  if (active) lastActive.current = active;
+  const shownKey = active ?? lastActive.current;
+  const activeTool = shownKey ? tools.find((t) => t.key === shownKey) : null;
   return (
     <div className="space-y-3">
       {/* 칸 수는 GTO 탭과 같은 4단 유지 — 5칸으로 늘려 봤더니(1440 실측 칸폭 159px)
@@ -47,10 +51,10 @@ export default function StoreToolsPanel() {
       {/* ⚠ display:contents 래퍼 — GTO 탭과 동일 규격. 루트 space-y-3 의 margin-top 이
           Modal(fixed inset-0)에 적용되면 전체화면 상단이 0.5rem 내려앉아 뒤 화면이 비친다(ToolsPanel 참고). */}
       <div className="contents">
-      <Modal open={!!activeTool} onClose={() => setActive(null)} variant="page" title={activeTool?.name} maxWidth="2xl">
+      <Modal open={!!active} onClose={() => setActive(null)} variant="page" title={activeTool?.name} maxWidth="2xl">
         <div className="px-page-x py-3 pb-8">
           <Suspense fallback={<div aria-busy="true" className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
-            {active ? renderStoreTool(active) : null}
+            {shownKey ? renderStoreTool(shownKey) : null}
           </Suspense>
         </div>
       </Modal>

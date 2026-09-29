@@ -313,7 +313,8 @@ function VenueVoucherCounts({ rows: all, error, onRetry, onVenue }: {
         </div>
       ) : rows === null ? (
         <div className="mt-2 space-y-1.5" aria-busy="true">
-          {[0, 1].map((i) => <div key={i} className="skeleton h-11 rounded-input" />)}
+          {/* 한 줄 — 가장 흔한 결과(0장)의 빈 문구 높이(py-2 + 한 줄 ≈ 33px)에 맞춘다. 2줄(100px)이면 도착 순간 아래가 67px 끌려 올라갔다(2026-09-29 실측). */}
+          <div className="skeleton h-[33px] rounded-input" />
         </div>
       ) : rows.length === 0 ? (
         <p className="mt-2 py-2 text-center text-2xs text-ink-muted">보유한 매장이용권이 없어요</p>

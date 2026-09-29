@@ -1,11 +1,12 @@
 import { CHIP_HIT } from '../gto/chip';
-import { Suspense, useState } from 'react';
+import { useState } from 'react';
 import { CalcCard, Field, NumIn, Result } from './calcUi';
 import Icon from '../../atoms/Icon';
-import { lazyWithReload } from '../../../lib/lazyWithReload';
+import OutsFromCards from '../gto/OutsFromCards';
 
-// 카드 입력 모드는 에퀴티 엔진(전수계산)을 끌고 오므로 지연 로드 — 기본 도구 청크는 그대로 가볍게.
-const OutsFromCards = lazyWithReload(() => import('../gto/OutsFromCards'));
+// 정적 import — 예전엔 lazy 였다. 이 파일은 ToolsPanel(그 자체가 App 의 lazy 청크)에 정적으로 들어가고,
+// 에퀴티 엔진은 CardGridPicker 경로로 이미 ToolsPanel 그래프에 있어 새로 끌려오는 것은 이 화면 코드뿐이다(gzip +3.4KB 실측).
+// lazy 는 Suspense 폴백(py-10 한 줄)을 ~300ms 세워 두다가 실제 계산기로 바뀌며 아래 카드가 429px 튀었다(2026-09-29 실측).
 
 type Mode = 'cards' | 'manual';
 const MODE_KEY = 'nuri:outs-mode';
@@ -63,10 +64,10 @@ export default function OutsCalc() {
       </div>
 
       {mode === 'cards' ? (
-        <Suspense fallback={<p className="rounded-aura border card-aura py-10 text-center text-2xs text-ink-muted">카드 계산기 불러오는 중…</p>}>
+        <>
           {/* 앱이 센 아웃 개수를 직접 입력 모드에도 옮겨 담는다 — 모드를 바꿔도 그 핸드가 이어진다 */}
           <OutsFromCards onCounted={(n, s) => { setOuts(n); setStreet(s); }} />
-        </Suspense>
+        </>
       ) : (
         <CalcCard>
           <Field label="아웃츠 (남은 도움 카드 수)">
