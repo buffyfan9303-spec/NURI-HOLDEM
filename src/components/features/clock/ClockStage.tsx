@@ -237,7 +237,11 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
               2026-09-19 오너 지시 #2 "총칩·평균스택·다음휴식 모두 중앙정렬": 예전 flex + flex-1 은 QR 블록과 Powered by 의 폭 차이만큼
               중앙이 밀렸다(실측 1920×1080 TV −21px, 운영자 전체화면은 QR 이 없어 −107px). 좌우 칸을 minmax(0,1fr) 로 같게 두면
               중앙 칸은 내용 폭 그대로 정중앙에 선다. 좌우 칸은 min-w-0 이라 세로 TV 에서 QR 캡션이 두 줄로 접힐 뿐 넘치지 않는다. */}
-          <div className="grid h-[12cqmin] shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-[2cqmin] border-t border-white/[0.07] px-[3cqmin]">
+          {/* 12cqmin 은 **바닥**이지 고정 높이가 아니다(2026-09-29 #18 후속). 폰 폭(360·CI 390)에서 왼칸 'Buy-in QR' 라벨·캡션이
+              3줄로 접혀 칸 높이(38 → 52px)가 레일(12cqmin = 43~47px)을 넘으면, 고정 높이는 내용을 스테이지 밖으로 흘렸다 —
+              전체화면에선 화면 아래로 잘리고, 창 모드에선 보드 아래 법정 고지 줄을 덮었다. 넘칠 때만 레일이 자라고 본문(flex-1)이 그만큼 준다.
+              TV·PC 는 내용이 12cqmin 안이라 픽셀이 종전과 같다. 인라인인 이유는 CSS 예산(여유 0%). */}
+          <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-[2cqmin] border-t border-white/[0.07] px-[3cqmin]" style={{ minHeight: '12cqmin' }}>
             {qr ? (
               <div className="flex min-w-0 items-center gap-[1cqmin]">
                 <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[0.6cqmin] bg-white" style={{ width: 'clamp(34px, 5cqmin, 78px)', height: 'auto' }} />

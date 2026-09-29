@@ -34,6 +34,14 @@ describe('오버레이 모션 계약', () => {
     expect(box, '토스트 컨테이너를 못 찾았다').toBeTruthy();
     const cls = box![1].split(/\s+/);
     expect(cls).toEqual(expect.arrayContaining(['fixed', 'h-0', 'flex-col', 'justify-end']));
-    expect(toast).toMatch(/'inline-flex shrink-0 /);
+    // 토스트 그림은 2026-09-29 #13 부터 지연 청크 ToastView.tsx 에 있다(첫 화면 예산).
+    expect(read('components', 'atoms', 'ToastView.tsx')).toMatch(/'inline-flex shrink-0 /);
+  });
+
+  it('#13: 토스트 그림(ToastView)은 동적 import 로만 — 정적으로 물면 첫 화면 예산(여유 0%)을 넘는다', () => {
+    const toast = read('components', 'atoms', 'Toast.tsx');
+    expect(toast).toContain("import('./ToastView')");
+    // `import type` 은 번들에 안 남는다 — 값 import 만 막는다
+    expect(toast.match(/^import (?!type\b)[^\n]*['"]\.\/ToastView['"]/m), 'Toast.tsx 가 ToastView 를 정적으로 물었다').toBeNull();
   });
 });

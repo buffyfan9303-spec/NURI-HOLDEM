@@ -30,6 +30,7 @@ import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, type ClockTheme } from './clockTheme';
 import Icon from '../../atoms/Icon';
+import { BIZ_REQUIRED, AGE_HELPLINE } from '../BusinessFooter';
 import { useServerTimeReady } from '../../../lib/useServerTimeReady';
 
 export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose }: {
@@ -201,8 +202,11 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     //   즉 이게 없으면 TV 는 조건이 참이 될 길이 없어 1열로 굳고 프라이즈·지표 열이 통째로 사라진다.
     //   (2026-09-11 e008b02 가 md:landscape: → .clk-* 로 갈아타면서 TournamentClock 쪽만 확인하고
     //    이쪽 루트를 빠뜨렸다. 뷰포트가 곧 스테이지라 cq 경계값은 종전 md:landscape: 와 같다.)
-    <div ref={rootRef} className="fixed inset-0 z-80 flex flex-col text-white select-none @container-size"
-      style={{ ...clkVars, background: 'var(--clk-bg, #06080F)' }}>
+    //   법정 고지 한 줄(오너 결정 #18, 2026-09-29): 이 화면은 라이브 카드·일정 '관전 클락'·비로그인 ?display= 로
+    //   일반 이용자도 들어온다. 전체화면(TV 송출)이 **아닐 때만** 보드 아래 형제로 붙인다 — 보드 위에 겹치지 않고,
+    //   컨테이너(스테이지)가 그만큼 줄어 cq 크기가 스스로 맞춰진다. 전체화면이면 스테이지 = 화면 전체(종전과 같다).
+    <div ref={rootRef} className="fixed inset-0 z-80 flex flex-col text-white select-none" style={{ background: '#06080F' }}>
+    <div className="flex min-h-0 flex-1 flex-col @container-size" style={{ ...clkVars, background: 'var(--clk-bg, #06080F)' }}>
       {/* 보드는 ClockStage 한 벌 — 운영자 화면(TournamentClock)과 **같은 마크업**이다.
           여기서 하는 일은 데이터(구독·폴링·테마·QR·광고)와 TV 전용 조작(게임 전환·전체화면·닫기)뿐이다. */}
       {clocks === null || !g || !timeReady ? (
@@ -220,6 +224,14 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
         </>
       ) : (
         <ClockStage g={g} venueName={venueName} qr={qr} sponsor={sponsor} adSize={adSize} headerRight={tvControls} />
+      )}
+    </div>
+      {/* 사업자 정보는 요약(상호·사업자등록번호)만 — 5항목 전부는 앱 푸터가 싣는다. 좁으면 줄바꿈한다(잘라내지 않는다).
+          아래 여백은 홈 인디케이터(viewport-fit=cover) 몫까지 — 인라인인 이유는 CSS 예산(여유 0%). */}
+      {!fs && (
+        <p className="shrink-0 border-t border-white/10 px-4 pt-1.5 text-center t-desc text-white/60 break-keep" style={{ paddingBottom: 'max(0.375rem, env(safe-area-inset-bottom))' }}>
+          {BIZ_REQUIRED.slice(0, 2).map(([k, v]) => `${k} ${v}`).join(' · ')} · {AGE_HELPLINE[0]} · {AGE_HELPLINE[1]} <span className="whitespace-nowrap">{AGE_HELPLINE[2]}</span>
+        </p>
       )}
     </div>
   );

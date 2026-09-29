@@ -58,7 +58,8 @@ async function measure(page: Page, blockFonts: boolean, levels: Level[], w: numb
     return {
       cur, nxt, overlap: x(cur.box, nxt.box), clipL: Math.max(0, -cur.box.l), clipR: Math.max(0, nxt.box.r - innerWidth),
       intoPrizes: pz ? x(cur.box, rect(pz)) : 0, intoRails: rl ? x(nxt.box, rect(rl)) : 0,
-      cqmin: Math.min(innerWidth, innerHeight) / 100,
+      // 스테이지(컨테이너) 기준 — 창 모드에선 법정 고지 한 줄(#18)만큼 뷰포트보다 낮다(전체화면이면 같다).
+      cqmin: (() => { const s = document.querySelector('[data-testid="clk-timer"]')!.closest('[style*="--clk-bg"]')!.getBoundingClientRect(); return Math.min(s.width, s.height) / 100; })(),
     };
   });
 }

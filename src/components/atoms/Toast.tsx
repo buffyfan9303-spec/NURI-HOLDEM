@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback, useMemo, createContext, useContext } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, createContext, useContext } from 'react';
+import type { ComponentType, ReactNode } from 'react';
+import type { ToastViewProps } from './ToastView';
 
 // ── 토스트 타입 ─────────────────────────────────────────────────────────────
 
@@ -15,7 +16,7 @@ export interface ToastOptions {
   durationMs?: number;
 }
 
-interface Toast {
+export interface Toast {
   id: number;
   message: string;
   variant: ToastVariant;
@@ -38,12 +39,6 @@ export function useToast() {
 
 // ── Provider ────────────────────────────────────────────────────────────────
 
-const COLOR: Record<ToastVariant, string> = {
-  info:    'bg-surface-float text-ink-primary border-border-strong',
-  success: 'bg-emerald-700 text-white border-emerald-500',   // 대비 3.15 → 5.5:1
-  error:   'bg-danger-dark text-white border-danger',        // 라이트 모드에서 2.38 → 7:1
-};
-
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -51,12 +46,30 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  // 토스트 그림(ToastView — 겹쳐 쌓기·항목·아이콘)은 **지연 청크**다(2026-09-29 #13). 겹쳐 쌓기를 더하자 첫 화면 임계 경로가
+  //   예산(여유 0%)을 넘었다 — 올리지 않고 그림을 첫 화면 밖으로 뺐다. 부팅 직후 바로 받아 두므로 첫 조작 전에 와 있고,
+  //   받기 전에 뜬 토스트는 상태에 남아 있다가 도착하는 즉시 그려진다. 받기에 실패하면 다음 토스트 때 다시 받는다.
+  //   Suspense(lazy) 를 안 쓰는 이유: 캐시에 있어도 첫 렌더를 ~300ms 붙잡는다(CLAUDE.md 참고 메모).
+  //   aria-live 컨테이너는 여기(첫 화면)에 둔다 — 알림 영역이 내용보다 먼저 있어야 스크린리더가 읽는다.
+  const [View, setView] = useState<ComponentType<ToastViewProps> | null>(null);
+  const loading = useRef(false);
+  const load = useCallback(() => {
+    if (loading.current) return;
+    loading.current = true;
+    import('./ToastView').then((m) => setView(() => m.default), () => { loading.current = false; });
+  }, []);
+  useEffect(load, [load]);
+
   const show = useCallback((message: string, variant: ToastVariant = 'info', opts?: ToastOptions) => {
+    load();
     const id = Date.now() + Math.random();
     // 되돌리기 버튼이 있으면 읽고 누를 시간이 필요하다 — 2.4초로는 손이 못 따라간다.
     // 에러도 마찬가지 — '왜 실패했는지'를 읽기 전에 사라지면 같은 실수를 반복한다.
     const durationMs = opts?.durationMs ?? (opts?.action ? 6000 : variant === 'error' ? 4500 : 2400);
     setToasts((prev) => [...prev, { id, message, variant, action: opts?.action, durationMs }]);
+    // ⚠ 자동 닫힘은 진동 분기보다 **먼저** 건다 — 아래 활성화 전 `return` 이 예약을 건너뛰어,
+    //   첫 제스처 전(부팅 직후)에 뜬 토스트가 영영 안 닫히던 결함(2026-09-25 도입, 2026-09-29 수정).
+    setTimeout(() => { dismiss(id); }, durationMs);
     // 햅틱 피드백(모바일) — 성공 10ms 한 번, 에러는 짧게 두 번(네이티브 앱 감각)
     // ⚠ 첫 제스처 전(부팅 직후 자동 토스트)에는 Chromium 이 vibrate 를 막고 콘솔에 개입 경고를 남긴다
     //   ("Blocked call to navigator.vibrate because user hasn't tapped on the frame") — 활성화 전이면 부르지 않는다.
@@ -65,8 +78,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       if (variant === 'success') navigator.vibrate?.(10);
       else if (variant === 'error') navigator.vibrate?.([18, 40, 18]);
     } catch { /* 미지원 무시 */ }
-    setTimeout(() => { dismiss(id); }, durationMs);
-  }, [dismiss]);
+  }, [dismiss, load]);
 
   // ⚠ value 를 인라인 객체로 주면 toasts 가 바뀔 때마다(=토스트가 뜰 때마다) 새 참조가 되어
   //   useToast 를 쓰는 모든 컴포넌트가 재렌더된다. 장부처럼 무거운 화면에서 바로 체감된다.
@@ -88,77 +100,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-live="polite"
         className="fixed bottom-(--tabbar-float) lg:bottom-4 inset-x-0 z-120 flex h-0 flex-col items-center justify-end gap-2 pointer-events-none"
       >
-        {toasts.map((t) => (
-          <ToastItem key={t.id} {...t} onDismiss={() => dismiss(t.id)} />
-        ))}
+        {View && <View toasts={toasts} dismiss={dismiss} />}
       </div>
     </ToastContext.Provider>
-  );
-}
-
-function ToastItem({ message, variant, action, durationMs, onDismiss }: Toast & { onDismiss: () => void }) {
-  const [out, setOut] = useState(false);
-  useEffect(() => {
-    // 사라지기 300ms 전부터 페이드 — 컨테이너의 제거 타이밍과 맞춘다
-    const t = setTimeout(() => setOut(true), Math.max(0, durationMs - 300));
-    return () => clearTimeout(t);
-  }, [durationMs]);
-  return (
-    <div
-      role="status"
-      onClick={onDismiss}
-      title="탭하면 닫힘"
-      className={[
-        // max-w: 모바일은 화면의 92%, PC 는 읽기 좋은 28rem 상한(끝없이 옆으로 길어지는 것 방지)
-        'inline-flex shrink-0 items-center gap-2 px-4 py-2.5 rounded-input border shadow-dialog',
-        'text-sm font-medium pointer-events-auto max-w-[92vw] sm:max-w-md cursor-pointer select-none',
-        'transition-[transform,opacity] duration-(--dur-panel)',
-        COLOR[variant],
-        out ? 'opacity-0 translate-y-2' : 'opacity-100 animate-slide-up',
-      ].join(' ')}
-    >
-      <Icon variant={variant} />
-      {/* flex-1 min-w-0: 액션 버튼(shrink-0)과 공존할 때도 텍스트가 남은 폭을 온전히 차지.
-          break-keep: 한국어 어절 단위 줄바꿈(1자씩 꺾임 방지) + overflow-wrap 으로 긴 토큰만 예외 절단 */}
-      <span className="flex-1 min-w-0 whitespace-normal break-keep wrap-anywhere">{message}</span>
-      {action && (
-        // 되돌리기는 실수를 되돌리는 마지막 기회다 — 본문과 확실히 구분되고 손가락으로 짚을 크기여야 한다
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); action.onClick(); onDismiss(); }}
-          className="hit relative ml-1 shrink-0 -my-1 px-3 py-1.5 rounded-badge border border-white/40 bg-black/15 text-xs font-bold underline underline-offset-2 active:scale-95 transition"
-        >
-          {action.label}
-        </button>
-      )}
-    </div>
-  );
-}
-
-function Icon({ variant }: { variant: ToastVariant }) {
-  const common = 'w-4 h-4 shrink-0';
-  if (variant === 'success') {
-    return (
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={common} aria-hidden>
-        <circle cx="8" cy="8" r="6.5" />
-        <polyline points="5,8 7,10 11,6" />
-      </svg>
-    );
-  }
-  if (variant === 'error') {
-    return (
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={common} aria-hidden>
-        <circle cx="8" cy="8" r="6.5" />
-        <line x1="8" y1="5" x2="8" y2="9" />
-        <circle cx="8" cy="11.5" r="0.6" fill="currentColor" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={common} aria-hidden>
-      <circle cx="8" cy="8" r="6.5" />
-      <line x1="8" y1="7" x2="8" y2="11.5" />
-      <circle cx="8" cy="5" r="0.6" fill="currentColor" />
-    </svg>
   );
 }
