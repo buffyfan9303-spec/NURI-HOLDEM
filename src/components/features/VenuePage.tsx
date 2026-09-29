@@ -10,6 +10,7 @@ import CommentThread from './CommentThread';
 import BusinessFooter from './BusinessFooter';
 import RotiArenaLogo from '../atoms/RotiArenaLogo';
 import Icon from '../atoms/Icon';
+import { Fold, onSummaryClick } from '../atoms/Fold';
 import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import { useToast } from '../atoms/Toast';
 import type { Venue, Comment, VenueContact } from '../../api/community';
@@ -589,7 +590,7 @@ export default function VenuePage({
                 // `text=🙋 내 활동` 으로 **이모지에 결합**돼 있었다 — 아이콘으로 바꾸는 순간
                 // 항상 0건이 되어 게이트가 조용히 무력화된다. 같은 커밋에서 testid 로 교체(규약).
                 <details data-testid="venue-my-activity" className="reveal group rounded-aura border border-border-subtle overflow-hidden">
-                  <summary className="cursor-pointer list-none flex items-center justify-between gap-2 px-3 py-3 text-sm font-semibold text-ink-primary hover:bg-surface-high/50 transition-colors">
+                  <summary onClick={onSummaryClick} className="cursor-pointer list-none flex items-center justify-between gap-2 px-3 py-3 text-sm font-semibold text-ink-primary hover:bg-surface-high/50 transition-colors">
                     <span className="inline-flex items-center gap-1.5"><Icon name="hand" size={16} className="text-ink-muted" />내 활동</span>
                     <Icon name="chevron-down" size={16} className="shrink-0 text-ink-muted transition-transform group-open:rotate-180" />
                   </summary>
@@ -1487,7 +1488,7 @@ function AboutPanel({
             행동 예산(≤6, venue-ia)을 넘긴다 — 정보는 올리고 컨트롤은 계층 2에 두는 쪽이 맞다.
           손잡이(summary)는 44px 히트영역을 갖도록 py-1 → py-3. */}
       <details className="group/vinfo" open={editable || undefined}>
-        <summary className="cursor-pointer list-none flex items-center justify-between gap-2 py-3">
+        <summary onClick={onSummaryClick} className="cursor-pointer list-none flex items-center justify-between gap-2 py-3">
           <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-primary">
             <Icon name="map-pin" size={15} className="text-ink-muted" />위치 · 연락처 · 영업시간
           </h3>
@@ -1890,8 +1891,8 @@ function PostersPanel({
         </button>
 
         {/* 아코디언 본문 — 공지글 + 금일 포스터 */}
-        {open && (
-          <div className="px-3 py-3 space-y-3 border-t border-accent-400/20 animate-slide-up">
+        <Fold open={open}>
+          <div className="px-3 py-3 space-y-3 border-t border-accent-400/20">
             {/* 공지글 (있을 때만) */}
             {notices.length > 0 && (
               <div className="space-y-1.5">
@@ -1940,7 +1941,7 @@ function PostersPanel({
               </ul>
             )}
           </div>
-        )}
+        </Fold>
       </section>
 
       {/* ── 예정 포스터 ─────────────────────────────────────────── */}
@@ -2022,7 +2023,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
         )}
       </header>
 
-      {canManage && open && (
+      <Fold open={canManage && open}>
         <div className="p-2.5 border-b border-border-subtle space-y-2">
           <textarea
             value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={1000} rows={2}
@@ -2033,7 +2034,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
             <button type="button" onClick={submit} disabled={busy || !draft.trim()} className="btn-primary px-4 text-xs disabled:opacity-60">등록</button>
           </div>
         </div>
-      )}
+      </Fold>
 
       {notices.length === 0 ? (
         <p className="py-3 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>

@@ -2,6 +2,7 @@
 //
 // 목록 카드에는 강한 glow 를 반복하지 않는다 — 히어로와 리포트가 이미 빛나고 있고,
 // 여기까지 빛나면 무엇을 먼저 볼지 알 수 없어진다(오너 지시 7 의 광량 단계).
+import { Fold } from '../../atoms/Fold';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import { MiniCard } from '../../atoms/HandCards';
@@ -146,7 +147,7 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
               </button>
             )}
           </div>
-          {expandedId === r.id && (
+          <Fold open={expandedId === r.id}>
             <div id={`spot-detail-${r.id}`} className="mt-2 rounded-input bg-surface-high px-2.5 py-1.5">
               {/* 저장 당시 스냅샷을 **그대로** 보여 준다 — 지금 엔진으로 다시 계산해
                   저장할 때와 다른 값을 보여 주지 않는다(명세 §2.4). */}
@@ -176,7 +177,7 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
                 </button>
               </div>
             </div>
-          )}
+          </Fold>
         </li>
       ))}
     </ul>

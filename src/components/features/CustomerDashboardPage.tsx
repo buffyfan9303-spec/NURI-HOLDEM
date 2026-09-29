@@ -13,6 +13,7 @@ import { useDelayedUnmount } from '../../lib/useDelayedUnmount';
 import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
+import { Fold } from '../atoms/Fold';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 import { SectionHead as Head, SectionTile as Tile } from '../atoms/SectionHeader'; // 섹션 머리글·타일 정본(지갑과 공유)
 import EmptyState from '../atoms/EmptyState';
@@ -396,7 +397,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                 <span className="text-2xs font-semibold tabular-nums text-ink-muted">{BADGES.filter((b) => b.check(badgeStats)).length}/{BADGES.length} 달성</span>
                 <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-2xs text-ink-muted">{achOpen ? '접기' : '펼치기'} <Icon name={achOpen ? 'chevron-up' : 'chevron-down'} size={12} /></span>
               </button>
-              {achOpen && (
+              <Fold open={achOpen}>
                 <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
                   {BADGES.map((b) => {
                     const got = b.check(badgeStats);
@@ -410,7 +411,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                     );
                   })}
                 </div>
-              )}
+              </Fold>
             </section>
           )}
           {/* 내 계정 — 닉네임 · 본인인증(매장이용권 수령 조건).

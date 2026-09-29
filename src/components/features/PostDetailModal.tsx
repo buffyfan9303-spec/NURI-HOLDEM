@@ -216,6 +216,10 @@ export default function PostDetailModal({
    *  ⚠ `open` 일 때만 리스너를 다는 것이 아니라 **모달이 열려 있는 동안**만 단다 —
    *    닫힌 모달의 리스너가 살아 있으면 다른 화면의 클릭마다 이 콜백이 돈다. */
   const actionMenuRef = useRef<HTMLDetailsElement>(null);
+  // 메뉴 판의 표시는 details 의 open 이 아니라 이 상태를 따른다(toggle 이벤트로 동기화) — 전역 `::details-content`
+  //   전환(content-visibility 0.3s allow-discrete)이 닫힌 뒤에도 절대 배치 판을 317ms 보이고 눌리게 붙잡았다(2026-09-29 감사 #7).
+  //   닫힘 = 그 즉시 invisible(보이지도 눌리지도 않음), 열림 = slide-up(기존 클래스, CSS 0B).
+  const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
     const closeOutside = (e: PointerEvent) => {
@@ -669,7 +673,7 @@ export default function PostDetailModal({
             if (acts.length === 0) return null;
             return (<>
               {!inline && (
-                <details ref={actionMenuRef} className="relative shrink-0 lg:hidden"
+                <details ref={actionMenuRef} className="relative shrink-0 lg:hidden" onToggle={(e) => setMenuOpen(e.currentTarget.open)}
                   onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}
                   onKeyDown={(e) => {
                     if (e.key !== 'Escape' || !actionMenuRef.current?.open) return;
@@ -685,7 +689,7 @@ export default function PostDetailModal({
                   {/* 메뉴를 누르는 동작이 본문 스와이프로 오발동하지 않게 — Modal 의 드래그는
                       스크롤러가 맨 위일 때만 시작되지만, 여기서도 시작점을 끊어 둔다. */}
                   <div data-drag-close="off"
-                    className="absolute right-0 top-full z-30 mt-2 min-w-32 rounded-input border border-border-strong bg-surface-high p-1 shadow-xl"
+                    className={['absolute right-0 top-full z-30 mt-2 min-w-32 rounded-input border border-border-strong bg-surface-high p-1 shadow-xl', menuOpen ? 'animate-slide-up' : 'invisible'].join(' ')}
                     onClick={() => { if (actionMenuRef.current) actionMenuRef.current.open = false; }}>
                     {acts.map((a) => (
                       <button key={a.key} type="button" onClick={a.onClick}
