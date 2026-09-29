@@ -43,7 +43,7 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [], on
   const rows = searching ? ranked.filter(({ r }) => r.name.includes(q.trim())) : ranked;
 
   return (
-    <Modal open={open} onClose={onClose} title="단골 관리" maxWidth="md" variant="sheet">
+    <Modal open={open} onClose={onClose} title="단골 관리" maxWidth="md" variant="sheet" fillHeight>
       <div className="space-y-3 p-4">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="고객 이름 검색…" className="input w-full text-sm" />
         {loadError ? (
