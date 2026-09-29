@@ -34,13 +34,16 @@ export function BlockProvider({ children }: { children: ReactNode }) {
   const block = useCallback(async (userId: string, name?: string) => {
     await blockUser(userId, name);
     setBlockedIds((s) => new Set(s).add(userId));
-    await reload();
+    // 차단은 이미 저장됐다 — 목록 재조회 실패를 '차단 실패'로 올리지 않는다(직전 목록 + 방금 추가분 유지).
+    await reload().catch(() => {});
   }, [reload]);
 
   const unblock = useCallback(async (userId: string) => {
     await unblockUser(userId);
     setBlockedIds((s) => { const n = new Set(s); n.delete(userId); return n; });
-    await reload();
+    await reload().catch(() => {});
+    // 서버 조회 RLS 가 차단한 사람의 글·댓글을 뺀다(20260929d) — 해제 뒤엔 다시 읽어야 화면에 돌아온다(App 이 듣는다).
+    window.dispatchEvent(new CustomEvent('nuri:blocks-changed'));
   }, [reload]);
 
   return (

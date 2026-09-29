@@ -2508,6 +2508,12 @@ export default function App() {
   //    "지금 보고 있는 화면"에서만 구독한다. 커뮤니티/글상세를 볼 때만 연결하고 떠나면 즉시 해제.
   //    구독 해제 구간의 변경분은 탭 복귀 시 reload* 로 어차피 다시 불러오므로 사용자 체감은 동일.
   const wantCommunityRealtime = activeTab === 'community' || openPost !== null;
+  // 차단 해제(BlockContext) — 서버 조회 RLS 가 차단한 사람 글·댓글을 빼 두었으므로(20260929d) 해제 뒤 다시 읽어야 돌아온다.
+  useEffect(() => {
+    const h = () => { reloadPosts(); reloadComments(); };
+    window.addEventListener('nuri:blocks-changed', h);
+    return () => window.removeEventListener('nuri:blocks-changed', h);
+  }, [reloadPosts, reloadComments]);
   useEffect(() => {
     if (!wantCommunityRealtime) return;
     let t: ReturnType<typeof setTimeout> | null = null;
