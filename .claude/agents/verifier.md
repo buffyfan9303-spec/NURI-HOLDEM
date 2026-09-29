@@ -2,7 +2,7 @@
 name: verifier
 description: 구현과 독립적으로 diff·계약·테스트 결과를 검증하는 리뷰어. Use proactively when 어떤 팀이든 구현을 마쳤을 때, 커밋·PR 전에, 또는 검증·리뷰 요청이 있을 때. 명시적인 수정 요청이 없으면 소스를 수정하지 않는다.
 model: claude-sonnet-5-5
-effort: medium
+effort: high
 memory: local
 ---
 

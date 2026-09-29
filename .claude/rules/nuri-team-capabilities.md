@@ -2,8 +2,25 @@
 
 > 2026-09-29 오너: "금일자로 Sonnet 5.5 가 생겼다 — 포함해서 팀을 새로 짜라. Fable 사용량과 나머지의 비율은 지금이 제일 좋다."
 > → **Sonnet 5 자리만 Sonnet 5.5 로 올렸다.** Opus 5.5 배정·Fable 조건(§3)·Haiku 수집 역할은 그대로다(비율 유지).
-> 실측: 하위 에이전트를 별칭 `sonnet` 으로 생성 → 세션 로그 `"model":"claude-sonnet-5-5"` (2026-09-29, 스스로 말한 이름이 아니라 로그 필드).
-> 정의에 `claude-sonnet-5` 를 **직접 적은 역할은 여전히 Sonnet 5** 로 돌았다 — 그래서 정의의 ID 를 바꿨다. 이전 판: 2026-09-23.
+> 🔴 **정정(2026-09-29 오후 실측)**: 새 계정(CLI 2.1.280)에서는 별칭 `sonnet`(Agent 도구 `model: sonnet` 포함)이
+> 세션 로그 `"model":"claude-sonnet-5"` 로 **Sonnet 5 에 떨어졌다**(조사 에이전트 2개, 로그 필드 84건). 그래서
+> `~/.claude/settings.json` 의 `env.ANTHROPIC_DEFAULT_SONNET_MODEL = "claude-sonnet-5-5"` 로 별칭을 고정했고,
+> `claude -p --model sonnet` → `modelUsage` `claude-sonnet-5-5` 로 확인했다(새로 뜨는 세션부터 적용).
+> 정의에 ID 를 **직접** 적은 역할은 이 설정과 무관하게 적힌 ID 로 돈다. 이전 판: 2026-09-23.
+
+## 0. 실측 근거 (2026-09-29 — 모델·노력치 재설정의 근거)
+
+- **공식 자료**(출처 링크: `docs/research/model-perf-2026-09-29.md`): Opus 5.5 가 Anthropic 발표 7개 항목 전부에서 Fable 5.1 을 앞선다
+  (예: Terminal-Bench 4.0 66.4% vs 55.8%). API 단가는 Fable 이 Opus 5.5 의 2.5배. Sonnet 5.5 는 독립 종합점수 56 vs Opus 58,
+  Terminal-Bench 70.6% 로 코딩·에이전트는 대등 이상이고 1.5배 빠르며 절반 가격 — **단 차트·이미지 판독은 61.6% vs 89.0%로 크게 뒤진다.**
+  기본 effort: Opus 5.5 `medium`, Sonnet 5.5·Fable 5.1 `high`. Max 한도의 모델별 소모 배수는 **비공개**.
+- **직접 시험**(같은 문제 3개 × 8조합, 각 1회 — 표본이 작다): SQL 보안 결함 4개 찾기 · 매장 전환 경합 React 결함 찾기 · 장부 집계 계산.
+  · 계산: 전 조합 정답. · 보안: 전 조합 4/4, **단 Sonnet 5.5 `low` 3/4**(NULL fail-open 을 목록에서 뺐다).
+  · 경합: 전 조합 핵심 3개 발견. Sonnet 5.5 `low`·`medium` 은 답 중간에 스스로 정정하는 혼선이 있었고 Opus·Fable·Sonnet `high` 는 일관.
+  · Opus 5.5 `xhigh` 는 `high` 대비 시간 +50%·비용 +25% 에 정확도 이득 없음(이 문제 수준에서).
+  · 🔴 **Fable 5.1 `high` 가 정상적인 보안 검토 요청을 사이버 안전장치로 거부했다**(`[cyber]` 차단). 보안 쟁점을 Fable 에 올리면 답 자체를 못 받을 수 있다.
+  · API 환산 비용(문제당): Sonnet 5.5 ≈ Opus 5.5 의 0.8배, Fable ≈ Opus 의 2.5~3배. 속도 중앙값(실사용 로그): Sonnet 5.5 2.9s · Opus 5.5 3.8s · Fable 5.9s(90%값 32s).
+- 결론: **Sonnet 5.5 는 `high` 로만 쓴다**(`low`·`medium` 은 비용 차이가 거의 없는데 검증 누락·혼선이 나왔다). 시각 판정은 Opus 유지. Fable 은 §3 조건 유지 + 보안 쟁점 제외.
 
 이 파일이 **모델 배정과 팀 운영의 단일 정본**이다. `AGENTS.md`와
 `.claude/skills/nuri-capability-gate/SKILL.md`에는 아직 `Opus 5`라는 이전 요약이 남아 있다(2026-09-23 확인).
@@ -20,8 +37,8 @@
 | `nuri-lead` | `claude-opus-5-5` | 배정·편집권·생산자→소비자 계약·최종 판정·구성 개편 | 상충 증거와 설계 결정만 effort 를 올린다 |
 | `Explore` | `claude-haiku-4-5-20251001` | 파일·caller·정의 위치를 `file:line` 으로 반환 | 결론을 내리지 않는다. 담당에게 넘긴다 |
 | `capability-steward` | `claude-haiku-4-5-20251001` | 파일·해시·기억 인벤토리, 도구 상태 구분 | 채택·보안·삭제 판단은 리드/critical |
-| `home-team` | `claude-opus-5-5` | 홈·셸·`App.tsx`·`index.css`·공용 atoms | 새 디자인·모션 구현과 재발은 `high`; 명확한 비시각 작업만 별도 Sonnet 5.5/medium |
-| `community-team` | `claude-opus-5-5` | 게시글·댓글·이벤트 진입·그룹·외치기 | 상세·그룹 UI·모션과 재발은 `high`; 명확한 비시각 작업만 별도 Sonnet 5.5/medium |
+| `home-team` | `claude-opus-5-5` | 홈·셸·`App.tsx`·`index.css`·공용 atoms | 새 디자인·모션 구현과 재발은 `high`; 명확한 비시각 작업만 별도 Sonnet 5.5/high |
+| `community-team` | `claude-opus-5-5` | 게시글·댓글·이벤트 진입·그룹·외치기 | 상세·그룹 UI·모션과 재발은 `high`; 명확한 비시각 작업만 별도 Sonnet 5.5/high |
 | `store-team` | `claude-opus-5-5` | 매장→포스터→장부→클락→순위→정산, 이용권·QR | 기본이 Opus. API·상태를 안 바꾸는 단순 정렬/문구만 Sonnet 으로 따로 |
 | `gto-team` | `claude-opus-5-5` | GTO/SPOT 계산·직렬화·저장·공유 계약, 레인지·Nash | 계산·수렴·수학은 Opus 유지. 문구·아이콘만 Sonnet |
 | `design-reviewer` | `claude-opus-5-5` | 실화면·DOM·터치·첫/중간/정착 프레임 (읽기 전용) | 두 검토자 판정이 갈리면 리드에게 Fable 자문 요청 |
@@ -39,7 +56,7 @@
 | 이번에 맡길 일 | 모델 | 끝내는 조건 |
 |---|---|---|
 | 경로·호출부·기억 목록, 해시 비교, 도구 존재 확인 | `claude-haiku-4-5-20251001` | 사실과 원천만 반환. 충돌의 채택 판단은 Opus 에 인계 |
-| 원인이 확정된 일반 구현, 단순 정렬·문구, 테스트 실행·결과 수집 | `claude-sonnet-5-5` | 기존 계약 유지하며 한정된 파일만. 새 권한·수량·수학·경합 판단이 생기면 **편집 전에** Opus 에 인계 |
+| 원인이 확정된 일반 구현, 단순 정렬·문구, 테스트 실행·결과 수집 | `claude-sonnet-5-5` / `high` | 기존 계약 유지하며 한정된 파일만. 새 권한·수량·수학·경합 판단이 생기면 **편집 전에** Opus 에 인계 |
 | 새 시각 설계·모션 구현, 두 화면·도메인 이상의 연동, 모션·브라우저 재발, 서버 경계, 상태·계산 불변식 | `claude-opus-5-5` | 시각·모션은 구현도 `high`; 공용 소비처와 전환 상태를 확인한다. 범위가 확정된 비시각 구현만 Sonnet 에 넘긴다 |
 | §3 조건을 만족하는 **중대한 미해결 쟁점**의 추가 독립 검토 | `claude-fable-5-1` | 좁은 쟁점과 관측 증거로 결론. 광범위 탐색·일괄 구현·등록 시험에 쓰지 않는다 |
 
@@ -75,6 +92,8 @@ Fable 은 총 한도를 공유하며 별도 무료 잔량이 아니다. 잔여�
 보낼 때는 **한 번에 한 쟁점**만: 요구 키 · 해시/diff · 재현 조건 · 관련 원문 · 관측값 · 반증한 가설 ·
 판정할 불변식 · 아직 없는 증거. 같은 자료를 바꾸지 않고 재질문하지 않는다.
 Fable 응답은 실행 테스트·서버 검증·영상 증거를 **대신하지 못한다**.
+**보안·권한 공격 경로 쟁점은 Fable 에 올리지 않는다** — 2026-09-29 실측에서 Fable 5.1 이 정상 보안 검토를 `[cyber]` 안전장치로 거부했다(§0).
+그런 쟁점의 추가 독립 검토는 다른 Opus 5.5 세션을 `xhigh` 로 한 번 쓴다.
 
 🔴 **자료가 없는 문제는 모델을 올려도 해결되지 않는다.** S26 실기기가 없거나 다인 Nash 의 독립 오라클이
 없으면 `NOT_RUN`/`BLOCKED` 를 유지하고 근거를 모은다.
@@ -108,8 +127,9 @@ Anthropic 은 `max`에 수확 체감과 과잉 사고 가능성이 있다고 명
 | `max` | `xhigh` 후에도 영향 큰 판정이 풀리지 않아 더 깊은 한 차례가 필요한 경우 | 세션 한정. 동일 자료 반복 호출 금지; 실측 개선이 없으면 중단 |
 | `ultracode` | 소유권·의존성·종료 조건을 선언한 장기 이관에서 동적 팀 조정이 실제로 필요한 경우 | 팀 사용량이 커지므로 평시 기본값 금지; 동일 checkout 단독 편집 유지 |
 
-역할 frontmatter 의 기본 effort 는 `nuri-lead`·`store-team`·`gto-team`·`verifier`는 `medium`,
-`home-team`·`community-team`·`design-reviewer`·`root-cause-debugger`·`critical-reviewer`는 `high`다. Haiku 역할은 effort 필드를 두지 않는다.
+역할 frontmatter 의 기본 effort 는 `nuri-lead`·`store-team`·`gto-team`는 `medium`(Opus 5.5 공식 기본값),
+`home-team`·`community-team`·`design-reviewer`·`root-cause-debugger`·`critical-reviewer`·`verifier`는 `high`다
+(`verifier` 는 2026-09-29 §0 실측으로 `medium`→`high` — Sonnet 5.5 공식 기본값도 `high`). Haiku 역할은 effort 필드를 두지 않는다.
 `xhigh`/`max`/`ultracode`를 **상시 frontmatter 나 전역 환경변수에 박지 않는다**. 쟁점마다 `/effort` 또는
 `--effort` 로 세션 범위를 지정하고 화면의 적용 수준을 확인한다. `max`는 기본 설정 파일의 영구 값으로 저장되지 않는다.
 
