@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { punchView } from './staffPunch';
+import { kstMinutes, punchView } from './staffPunch';
 
 const T = '2026-09-30', Y = '2026-09-29';
 
@@ -27,5 +27,44 @@ describe('punchView — 출근·퇴근 버튼은 상태에 맞는 것만 열린�
     const after = punchView([rows[0], { date: T, checkIn: '09:00', checkOut: null }], T, Y);
     expect(after.outTarget?.date).toBe(T);
     expect(after.canIn).toBe(false);
+  });
+});
+
+// 오너 2026-09-30: 자정 넘어 오면 오전 2시(KST)까지 어제 출근으로 찍는다. 서버 punch_my_shift 와 같은 규칙.
+describe('punchView — KST 00:00~01:59 는 어제 근무에 출근', () => {
+  const emptyY = { date: Y, checkIn: null, checkOut: null }, emptyT = { date: T, checkIn: null, checkOut: null };
+  const at = (h: number, m: number) => h * 60 + m;
+  it('00:30 · 어제 빈 행 → 어제가 출근 대상(오늘 행보다 우선)', () => {
+    const v = punchView([emptyY, emptyT], T, Y, at(0, 30));
+    expect(v).toMatchObject({ canIn: true, inYesterday: true, phase: 'before' });
+    expect(v.inTarget?.date).toBe(Y);
+  });
+  it('01:59 는 아직 어제, 02:00 부터는 오늘 행', () => {
+    expect(punchView([emptyY, emptyT], T, Y, at(1, 59)).inYesterday).toBe(true);
+    const v = punchView([emptyY, emptyT], T, Y, at(2, 0));
+    expect(v).toMatchObject({ canIn: true, inYesterday: false });
+    expect(v.inTarget?.date).toBe(T);
+  });
+  it('02:00 이후 어제 빈 행만 있고 오늘 행이 없으면 출근 못 함', () => {
+    expect(punchView([emptyY], T, Y, at(2, 0))).toMatchObject({ canIn: false, phase: 'none' });
+  });
+  it('어제 행이 이미 출근된 상태(퇴근 전) → 재탭 막힘(출근 닫힘, 퇴근만)', () => {
+    const v = punchView([{ date: Y, checkIn: '01:10', checkOut: null }, emptyT], T, Y, at(1, 30));
+    expect(v).toMatchObject({ canIn: false, canOut: true, phase: 'on', inYesterday: false });
+  });
+  it('어제 행이 없으면 기존대로 오늘 행', () => {
+    const v = punchView([emptyT], T, Y, at(0, 30));
+    expect(v).toMatchObject({ canIn: true, inYesterday: false });
+    expect(v.inTarget?.date).toBe(T);
+  });
+  it('어제 근무가 이미 끝났으면(출근·퇴근 모두) 오늘 행', () => {
+    const v = punchView([{ date: Y, checkIn: '18:00', checkOut: '23:30' }, emptyT], T, Y, at(1, 0));
+    expect(v.inTarget?.date).toBe(T);
+    expect(v.inYesterday).toBe(false);
+  });
+  it('kstMinutes — 기기 시간대와 무관하게 KST 분', () => {
+    expect(kstMinutes(Date.parse('2026-09-30T01:30:00+09:00'))).toBe(90);
+    expect(kstMinutes(Date.parse('2026-09-29T16:59:00Z'))).toBe(119); // = 09-30 01:59 KST
+    expect(kstMinutes(Date.parse('2026-09-29T17:00:00Z'))).toBe(120); // = 02:00 KST
   });
 });

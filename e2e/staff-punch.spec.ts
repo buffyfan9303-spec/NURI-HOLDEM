@@ -23,7 +23,7 @@ function fakeServer() {
       s.punchCalls += 1;
       const b = r.request().postDataJSON() as { p_kind: 'in' | 'out' };
       await new Promise((res) => setTimeout(res, 400)); // 느린 망 — 이 사이의 두 번째 탭이 새 요청을 만들면 안 된다
-      const row = s.rows[0];
+      const row = (b.p_kind === 'in' && s.rows.find((x) => x.check_in == null)) || s.rows[0]; // 어제·오늘 빈 행이 함께 있으면 앞(어제)이 먼저 — 서버의 00:00~01:59 규칙과 같은 의미
       let applied = false;
       if (b.p_kind === 'in' && row.check_in == null) { row.check_in = '09:03'; applied = true; }
       if (b.p_kind === 'out' && row.check_in != null && row.check_out == null) { row.check_out = '18:07'; applied = true; }
@@ -194,4 +194,33 @@ test('직원 출근 관리 — 지연 판이 폴백 없이 열리고 맨 위 버
   await expect(pane.getByText('내 출근 관리', { exact: false })).toBeVisible({ timeout: 10_000 });
   await expect(pane.locator('input[type="time"]').first()).toHaveValue('09:03');
   expect(await page.evaluate(() => (window as unknown as { __fb: number }).__fb)).toBe(0);
+});
+
+// 오너 2026-09-30: 자정 넘어 오면 KST 02:00 까지 어제 근무로 출근. 시각은 page.clock 으로 KST 01:30 에 고정한다(가짜 서버는 어제 빈 행을 먼저 고른다 —
+//   서버 규칙 자체는 20260930b 리허설이 잰다). 여기서는 라벨·확인 줄·결과 문구가 '어제 근무'를 말하고, 320px 에서 버튼이 줄바꿈되지 않는지 잰다.
+test('자정 넘어 출근 — 01:30 에는 어제 근무로 출근 문구가 뜨고 320px 에서도 한 줄이다', async ({ page }) => {
+  const srv = fakeServer();
+  const yDay = new Date(Date.parse(`${MOCK_DAY}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  srv.s.rows = [
+    { work_date: yDay, staff_name: '김직원', start_hm: '22:00', check_in: null, check_out: null, confirmed: false },
+    { work_date: MOCK_DAY, staff_name: '김직원', start_hm: '14:00', check_in: null, check_out: null, confirmed: false },
+  ];
+  await page.clock.setFixedTime(new Date(`${MOCK_DAY}T01:30:00+09:00`));
+  const bar = await bootStaff(page, 320, srv);
+  const pin = bar.getByTestId('punch-in');
+  await expect(pin).toHaveText('어제 근무로 출근');
+  await expect(bar.getByTestId('punch-status')).toContainText('어제 근무');
+  const fit = await pin.evaluate((b: HTMLButtonElement) => {
+    const r = document.createRange(); r.selectNodeContents(b);
+    return { lines: new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size, over: b.scrollWidth - b.clientWidth };
+  });
+  expect(fit, `버튼 글자가 줄바꿈/잘림 ${JSON.stringify(fit)}`).toEqual({ lines: 1, over: 0 });
+  if (SHOT) await page.screenshot({ path: `${SHOT}/punch-320-yesterday.png` });
+  await pin.click();
+  await expect(bar.getByTestId('punch-confirm-row')).toContainText('어제 근무로 출근할까요?');
+  await bar.getByTestId('punch-confirm').click();
+  await expect(page.getByText(/어제 근무로 출근했어요/)).toBeVisible({ timeout: 10_000 });
+  expect(srv.s.rows[0].check_in, '어제 행에 찍혀야 한다').toBe('09:03');
+  expect(srv.s.rows[1].check_in, '오늘 행은 그대로여야 한다').toBeNull();
+  await expect(bar.getByTestId('punch-in')).toBeDisabled(); // 어제 행이 열린 채 — 재탭 막힘
 });

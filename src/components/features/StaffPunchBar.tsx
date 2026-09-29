@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { getMyPunchState, punchMyShift, setMyShiftTime, subscribeStaffSchedule, type MyPunchRow } from '../../api/staffSchedule';
-import { punchView, PUNCH_EVENT } from '../../lib/staffPunch';
+import { kstMinutes, punchView, PUNCH_EVENT } from '../../lib/staffPunch';
 import { msgOf } from '../../lib/dbError';
 import { kstToday } from '../../lib/kst';
 
@@ -55,7 +55,7 @@ export default function StaffPunchBar({ venueId, active = true, onFix }: { venue
   }, [arm]);
   if (rows === 'missing') return null; // 서버 함수 적용 전 — 아래 '출근 관리' 입력이 종전대로 일한다
   const today = kstToday();
-  const v = punchView(Array.isArray(rows) ? rows : [], today, kstToday(Date.now() - 86_400_000));
+  const v = punchView(Array.isArray(rows) ? rows : [], today, kstToday(Date.now() - 86_400_000), kstMinutes());
   const ready = Array.isArray(rows) && !err;
   const announce = () => window.dispatchEvent(new CustomEvent(PUNCH_EVENT, { detail: { venueId } }));
   const punch = async (kind: 'in' | 'out') => {
@@ -69,7 +69,9 @@ export default function StaffPunchBar({ venueId, active = true, onFix }: { venue
       announce();
       const label = kind === 'in' ? '출근' : '퇴근';
       const hm = kind === 'in' ? r.checkIn : r.checkOut;
-      if (r.applied) { setLast({ kind, date: r.date, venueId: vid }); toast.show(`${label} ${hm} 기록됨`, 'success'); }
+      // 결과 문구는 서버가 정한 근무일(r.date)이 기준이다 — 기기 시계가 달라도 어제 근무면 그렇게 알린다.
+      const yday = kind === 'in' && r.date < kstToday();
+      if (r.applied) { setLast({ kind, date: r.date, venueId: vid }); toast.show(yday ? `어제 근무로 출근했어요 (${hm})` : `${label} ${hm} 기록됨`, 'success'); }
       else toast.show(`이미 ${label}이 ${hm}(으)로 기록돼 있어요`, 'info');
     } catch (e) {
       toast.show(msgOf(e, '출퇴근 기록 실패'), 'error');
@@ -93,10 +95,10 @@ export default function StaffPunchBar({ venueId, active = true, onFix }: { venue
   const status = err ? err
     : !ready ? '불러오는 중…'
       : v.phase === 'none' ? '오늘 배정된 근무가 없어요 — 업주가 스케줄에 배정하면 버튼이 열립니다'
-        : v.phase === 'before' ? '출근 전'
+        : v.phase === 'before' ? (v.inYesterday ? '출근 전 · 어제 근무' : '출근 전')
           : v.phase === 'on' ? `근무 중 · ${v.outTarget?.checkIn} 출근${v.outTarget?.date !== today ? ' (어제)' : ''}`
             : `오늘 근무 끝 · ${t?.checkIn}~${t?.checkOut}`;
-  const btn = 'flex h-14 flex-1 items-center justify-center gap-2 rounded-card border text-base font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40';
+  const btn = 'flex h-14 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-card border text-base font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40';
   return (
     <section data-testid="staff-punch-bar" data-phase={ready ? v.phase : 'loading'} aria-label="출근·퇴근" className="rounded-aura border card-aura p-3 space-y-2.5 lg:flex lg:items-center lg:gap-4 lg:space-y-0">
       <div className="flex min-h-[28px] items-center gap-2 lg:min-w-0 lg:flex-1">
@@ -108,7 +110,7 @@ export default function StaffPunchBar({ venueId, active = true, onFix }: { venue
       <div className="flex gap-2 lg:w-96 lg:shrink-0">
         <button type="button" data-testid="punch-in" aria-pressed={arm === 'in'} disabled={!ready || !v.canIn || busy != null} onClick={() => setArm('in')}
           className={[btn, 'border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 enabled:hover:bg-emerald-500/25'].join(' ')}>
-          {busy === 'in' ? '기록 중…' : '출근'}
+          {busy === 'in' ? '기록 중…' : v.inYesterday ? '어제 근무로 출근' : '출근'}
         </button>
         <button type="button" data-testid="punch-out" aria-pressed={arm === 'out'} disabled={!ready || !v.canOut || busy != null} onClick={() => setArm('out')}
           className={[btn, 'border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-300 enabled:hover:bg-rose-500/25'].join(' ')}>
@@ -117,7 +119,7 @@ export default function StaffPunchBar({ venueId, active = true, onFix }: { venue
       </div>
       {arm && (
         <div role="alertdialog" aria-label={`${arm === 'in' ? '출근' : '퇴근'} 확인`} data-testid="punch-confirm-row" className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-card border border-accent-400/40 bg-surface-high px-3 py-2 lg:shrink-0">
-          <span className="min-w-0 flex-1 text-sm font-bold text-ink-primary">지금 {arm === 'in' ? '출근' : `퇴근${v.outTarget && v.outTarget.date !== today ? '(어제 근무)' : ''}`}으로 기록할까요?</span>
+          <span className="min-w-0 flex-1 text-sm font-bold text-ink-primary">{arm === 'in' && v.inYesterday ? '어제 근무로 출근할까요?' : `지금 ${arm === 'in' ? '출근' : `퇴근${v.outTarget && v.outTarget.date !== today ? '(어제 근무)' : ''}`}으로 기록할까요?`}</span>
           <button type="button" data-testid="punch-confirm" disabled={busy != null} onClick={() => punch(arm)} className="min-h-[44px] rounded-badge bg-accent-300 px-4 text-sm font-bold text-white disabled:opacity-40">{arm === 'in' ? '출근' : '퇴근'} 기록</button>
           <button type="button" data-testid="punch-cancel" onClick={() => setArm(null)} className="min-h-[44px] rounded-badge border border-border-subtle px-3 text-sm font-bold text-ink-secondary">취소</button>
         </div>

@@ -41,13 +41,20 @@ revoke all on function public.my_punch_state(uuid) from public, anon;
 grant execute on function public.my_punch_state(uuid) to authenticated, service_role;
 
 -- ═══ 2. 쓰기: 출근(in) / 퇴근(out) ═════════════════════════════════════════════════
+-- 자정 넘어 오는 야간 근무자(오너 2026-09-30): 서버 시각 KST 00:00~01:59 에 출근을 누르면 **어제** 내 근무 행 중
+--   check_in·check_out 이 모두 빈 행이 있을 때 그 행에 찍는다(오늘 행보다 우선). 없으면 기존대로 오늘 행. 02:00 이후는 기존 동작.
+--   같은 창에서 어제 행이 이미 '출근·퇴근 전'(방금 찍은 뒤의 재탭)이면 오늘 행으로 넘어가지 않고 그 어제 행을 applied=false 로 돌려준다.
+--   시각 판정은 v_now 한 곳이다(리허설에서 이 한 줄만 바꿔 01:30 을 만든다 — §4).
+--   ⚠ 결과: 어제 근무가 퇴근 없이 열린 채로 00:00~01:59 에 새 근무를 시작하려는 사람은 출근을 못 찍는다(재탭 방어의 대가) —
+--     직원 '시각 고치기'(set_my_shift_time)나 업주 근무표로 고친다.
 create or replace function public.punch_my_shift(p_venue_id uuid, p_kind text)
 returns table(work_date date, check_in text, check_out text, applied boolean)
 language plpgsql security definer set search_path = public, pg_temp as $$
 #variable_conflict use_column
 declare
-  v_today date := (now() at time zone 'Asia/Seoul')::date;
-  v_hm    text := to_char(now() at time zone 'Asia/Seoul', 'HH24:MI');
+  v_now   timestamptz := now();
+  v_today date := (v_now at time zone 'Asia/Seoul')::date;
+  v_hm    text := to_char(v_now at time zone 'Asia/Seoul', 'HH24:MI');
   v_id    uuid;
 begin
   if auth.uid() is null then raise exception '로그인이 필요합니다' using errcode = '42501'; end if;
@@ -56,11 +63,34 @@ begin
   end if;
 
   if p_kind = 'in' then
-    select s.id into v_id
-      from public.staff_schedule s
-     where s.venue_id = p_venue_id and s.work_date = v_today
-       and public.is_my_shift_row(s.venue_id, s.staff_name, s.user_id)
-     order by s.id limit 1;
+    if (v_now at time zone 'Asia/Seoul')::time < time '02:00' then
+      select s.id into v_id
+        from public.staff_schedule s
+       where s.venue_id = p_venue_id and s.work_date = v_today - 1
+         and s.check_in is null and s.check_out is null
+         and public.is_my_shift_row(s.venue_id, s.staff_name, s.user_id)
+       order by s.id limit 1;
+      if v_id is null then
+        -- 어제 근무가 이미 열려 있으면(출근 O·퇴근 X) 그 행을 그대로 돌려준다 — 오늘 행에 또 찍지 않는다.
+        select s.id into v_id
+          from public.staff_schedule s
+         where s.venue_id = p_venue_id and s.work_date = v_today - 1
+           and s.check_in is not null and s.check_out is null
+           and public.is_my_shift_row(s.venue_id, s.staff_name, s.user_id)
+         order by s.id limit 1;
+        if v_id is not null then
+          return query select s.work_date, s.check_in, s.check_out, false from public.staff_schedule s where s.id = v_id;
+          return;
+        end if;
+      end if;
+    end if;
+    if v_id is null then
+      select s.id into v_id
+        from public.staff_schedule s
+       where s.venue_id = p_venue_id and s.work_date = v_today
+         and public.is_my_shift_row(s.venue_id, s.staff_name, s.user_id)
+       order by s.id limit 1;
+    end if;
     if v_id is null then
       raise exception '오늘 배정된 본인 근무가 없습니다 — 업주에게 스케줄 배정을 요청해 주세요' using errcode = 'P0002';
     end if;
@@ -161,6 +191,15 @@ end $check$;
 --   savepoint d; select * from my_punch_state(:'V'); rollback to savepoint d;                      -- 기대: ERROR 42501
 -- rollback;
 --
+-- 1b) 01:30 시나리오(어제 야간 근무 출근) — now() 는 트랜잭션 시각이라 리허설에서 못 바꾼다. 그래서 판정을 v_now 한 줄로 모았다:
+--    begin; 안에서 §2 의 punch_my_shift 본문을 **`v_now timestamptz := now();` 한 줄만 `timestamptz '2026-09-30 01:30+09'` 로 바꾼 사본**
+--    (함수명 pg_temp.punch_my_shift_t, 나머지 동일)으로 만들고, 위 준비 블록에서 work_date 를 오늘 대신 (그 v_now 의 KST 날짜 - 1)
+--    빈 행 + 같은 날짜 빈 행 두 개로 넣은 뒤(rollback 으로 사라짐) 아래를 실행한다. 리허설 날짜는 v_now 와 맞춘다.
+--    · select * from pg_temp.punch_my_shift_t(:'V','in');  → work_date = 어제, check_in = 01:30, applied = true   (어제 행 우선)
+--    · 같은 호출 한 번 더                                     → work_date = 어제, applied = false, 오늘 행은 여전히 check_in null
+--    · 어제 행을 '18:00~23:30' 으로 채우고 다시 호출          → work_date = 오늘, applied = true                 (어제 끝남 → 오늘 행)
+--    · v_now 를 '02:00+09' 로 바꾼 사본                        → 어제 빈 행이 있어도 오늘 행에 찍힌다               (02:00 경계)
+--    필요하면 한 번에: 실제 00:00~01:59 KST 에 §4-0 의 절차로 돌려도 같다.
 -- 2) 동시 요청 1건(선택, 두 세션): 세션 A `begin; … punch_my_shift(V,'in');`(커밋 전) → 세션 B 같은 호출은 행 잠금에서 대기 →
 --    A commit 뒤 B 는 WHERE check_in is null 을 다시 평가해 0행 → applied=false. 운영에서는 A 도 rollback 으로 끝낸다.
 -- 3) 적용 뒤: 파일 머리를 "✅ 적용 완료 + 실측값" 으로 바꾸고, e2e/_fixtures.ts READ_ONLY_RPCS 에 my_punch_state 가 있는지 확인.
