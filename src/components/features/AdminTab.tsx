@@ -44,7 +44,7 @@ import { PAGE_ENTER } from '../atoms/pageMotion';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
 import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, EVENT_KIND_LABEL, type RankVerification } from '../../api/rankverify';
-import { getAllInquiries, answerInquiry, subscribeInquiries, type SupportInquiry } from '../../api/support';
+import { getAllInquiries, answerInquiry, sendInquiryReplyEmail, subscribeInquiries, type SupportInquiry } from '../../api/support';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { josa } from '../../lib/josa';
@@ -902,9 +902,16 @@ function SupportInquiriesPanel() {
     const text = (drafts[id] ?? '').trim();
     if (!text) { toast.show('답변 내용을 입력하세요', 'error'); return; }
     setBusy(id);
-    try { await answerInquiry(id, text); toast.show('답변을 등록했습니다', 'success'); setDrafts((d) => ({ ...d, [id]: '' })); load(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '답변 실패', 'error'); }
-    finally { setBusy(null); }
+    try { await answerInquiry(id, text); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '답변 실패', 'error'); setBusy(null); return; }
+    setDrafts((d) => ({ ...d, [id]: '' })); load();
+    // 답변은 이미 저장됐다 — 메일 실패가 저장을 되돌리거나 초안을 살리지 않는다. 결과는 따로 알린다.
+    try {
+      const r = await sendInquiryReplyEmail(id);
+      toast.show(r === 'already' ? '답변을 등록했습니다 · 이 답변은 이미 메일로 보냈습니다' : '답변을 등록하고 문의자에게 메일을 보냈습니다', 'success');
+    } catch (e) {
+      toast.show(`답변은 등록했지만 메일을 보내지 못했습니다 — ${e instanceof Error ? e.message : '알 수 없는 오류'}`, 'error');
+    } finally { setBusy(null); }
   };
 
   const list = (rows ?? []).filter((q) => !onlyOpen || q.status === 'open');

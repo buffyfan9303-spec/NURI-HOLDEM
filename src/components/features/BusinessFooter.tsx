@@ -30,7 +30,9 @@ export const BIZ_REQUIRED: [string, string][] = [
 // eslint-disable-next-line react-refresh/only-export-components -- 법정 문구 단일 소스, 순수 상수라 HMR 무해
 export const AGE_HELPLINE = ['만 19세 미만은 이용할 수 없습니다', '도박문제 상담', '1336(24시간·무료)'] as const;
 
-const BIZ_EXTRA: [string, string][] = [
+// 메일 하단(supabase/functions/_shared/email/brand.gen.ts)도 이 두 상수와 BIZ_REQUIRED·AGE_HELPLINE 에서 생성한다 — scripts/gen-email-templates.mjs.
+// eslint-disable-next-line react-refresh/only-export-components -- 사업자 부가 정보 단일 소스(메일 생성기 재사용), 순수 상수라 HMR 무해
+export const BIZ_EXTRA: [string, string][] = [
   ['고객센터', 'ace@nuriholdem.com'],
   // 전자상거래법 §10 표시사항 — 호스팅 서비스 제공자
   ['호스팅 제공자', 'Vercel Inc.'],
