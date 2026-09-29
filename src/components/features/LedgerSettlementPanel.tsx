@@ -23,7 +23,7 @@ import {
 // 둘 중 하나가 바뀌는 순간 T 표시가 조용히 틀어진다(1T = 1만원 정책은 units.ts 가 단일 소스).
 import { TICKET_WON } from '../../lib/units';
 import { businessDateOf } from '../../lib/businessDate';
-import { settlementReport, type SettlePlayer, type SettlementReport } from '../../lib/ledgerSettlement';
+import { settlementReport, settlementReceipt, type SettlePlayer, type SettlementReport } from '../../lib/ledgerSettlement';
 
 const man = (won: number) => `${wonToMan(won)}만`;
 /** 엔트리 표시 — 금액 기준이라 소수가 나온다(5만 할인 = 0.5). 정수면 정수로 보인다. */
@@ -123,6 +123,8 @@ function Report({ r }: { r: SettlementReport }) {
   // 달성률의 분자는 **금액 엔트리**다(횟수가 아니다) — 기준 엔트리가 GTD 목표라 반값 손님은 0.5 명분만 채운다.
   const entryRate = hasTarget ? Math.round((t.entries / t.targetEntries) * 100) : 0;
   const gapWon = t.revenue - t.targetRevenue;
+  // #9(2026-09-29) — '받은 방법' 대차표는 바인 + 애드온 한 벌(settlementReceipt 주석: 이용권 타일만 더하면 대차가 깨지고 이중 계상된다).
+  const rc = settlementReceipt(t);
 
   return (
     <div className="space-y-4">
@@ -168,38 +170,39 @@ function Report({ r }: { r: SettlementReport }) {
 
       {/* ── ③ 수단 분해(대차표) ── */}
       <Card title="받은 방법" icon="wallet"
-        note="총 정상가 − 할인 = 수납 완료 + 미수 + 매장지원. 행마다 성립하므로 합계도 성립합니다.">
+        note="총 정상가 − 할인 = 수납 완료 + 미수 + 매장지원. 애드온도 포함한 합계이며, 행마다 성립하므로 합계도 성립합니다.">
         {/* 2026-09-11: 매장지원·미수를 수납과 **같은 줄에 두지 않는다** — 지원은 매장이 부담한 것이고
             미수는 아직 못 받은 돈이라, 현금·카드·이체·이용권과 같은 위계로 서면 수납액처럼 읽힌다. */}
         <p className="mb-1.5 text-2xs font-semibold text-ink-secondary">수납 완료</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Tile label="현금" value={man(t.tender.cash)} />
-          <Tile label="카드" value={man(t.tender.card)} />
-          <Tile label="이체" value={man(t.tender.transfer)} />
-          {/* 3-B(2026-09-29) — 값(원)은 대차표라 바인만 그대로. 애드온을 이용권으로 받은 날은 '사용 T'(바인+애드온, ticketUsedT)를 같이 적는다. */}
-          <Tile label="매장이용권" value={man(t.tender.ticket)} sub={t.addon.ticketWon > 0
-            ? `${Math.round(t.tender.ticket / TICKET_WON)}T · 애드온 포함 사용 ${Math.round(ticketUsedT({ ticketPaid: t.tender.ticket / TICKET_WON }, t.addon))}T`
+          <Tile label="현금" value={man(rc.tender.cash)} />
+          <Tile label="카드" value={man(rc.tender.card)} />
+          <Tile label="이체" value={man(rc.tender.transfer)} />
+          {/* #9(2026-09-29) — 값에 애드온 이용권 포함(오너 결정). T 는 이용권 사용 T 정본(ticketUsedT, 바인+애드온). */}
+          <Tile label="매장이용권" value={man(rc.tender.ticket)} sub={t.addon.ticketWon > 0
+            ? `${Math.round(ticketUsedT({ ticketPaid: t.tender.ticket / TICKET_WON }, t.addon))}T · 바인 ${Math.round(t.tender.ticket / TICKET_WON)}T + 애드온 ${Math.round(t.addon.ticketWon / TICKET_WON)}T`
             : `${Math.round(t.tender.ticket / TICKET_WON)}T · 1T = 1만원`} />
         </div>
         <p className="mb-1.5 mt-3 text-2xs font-semibold text-ink-secondary">수납이 아닌 것</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Tile label="미수금" value={man(t.tender.unpaid)} tone={t.tender.unpaid > 0 ? 'danger' : undefined} />
+          <Tile label="미수금" value={man(rc.tender.unpaid)} tone={rc.tender.unpaid > 0 ? 'danger' : undefined} />
           <Tile label="매장지원" value={man(t.tender.support)} sub={t.support > 0 ? `${t.support}건 · 매장 부담` : undefined} />
         </div>
         <dl className="mt-3 grid gap-2 border-t border-border-subtle pt-3 sm:grid-cols-3">
-          <Row label="총 정상가" value={man(t.gross)} />
+          <Row label="총 정상가" value={man(rc.gross)} sub={rc.addonTotal > 0 ? `바인 ${man(t.gross)} + 애드온 ${man(rc.addonTotal)}` : undefined} />
           <Row label="할인" value={`${t.discount.count}건 · ${man(t.discount.total)}`}
             sub={t.discount.cashTotal > 0 ? `덜 받은 현금 ${man(t.discount.cashTotal)}` : undefined} />
-          <Row label="적용 후 금액" value={man(t.value)} />
-          <Row label="수납 완료" value={man(t.revenue + t.ticketWon)}
-            sub={`현금성 ${man(t.revenue)} + 이용권 ${man(t.ticketWon)}`} />
-          <Row label="현금성 수납" value={man(t.revenue)} sub="현금 + 카드 + 이체" />
-          <Row label="할인이 없었다면 현금성 매출" value={man(t.revenue + t.discount.cashTotal)} />
+          <Row label="적용 후 금액" value={man(rc.value)} />
+          <Row label="수납 완료" value={man(rc.received)}
+            sub={`현금성 ${man(rc.cashlike)} + 이용권 ${man(rc.tender.ticket)}`} />
+          <Row label="현금성 수납" value={man(rc.cashlike)} sub="현금 + 카드 + 이체" />
+          <Row label="할인이 없었다면 현금성 매출" value={man(rc.cashlike + t.discount.cashTotal)} />
         </dl>
         {/* F7(2026-09-29): 애드온 타일은 3장이다 — 4열이면 PC 오른쪽 25%(230px)가 비어 sm:grid-cols-3. */}
         {t.addon.count > 0 && (
           <div data-testid="settle-addon">
-            <p className="mb-1.5 mt-3 text-2xs font-semibold text-ink-secondary">애드온 {t.addon.count}건 · 바인·엔트리와 따로 셉니다</p>
+            {/* #9 — 위 대차표에 이미 들어 있는 부분집합이다(더하면 이중 계상). 엔트리·바인 횟수에는 들어가지 않는다. */}
+            <p className="mb-1.5 mt-3 text-2xs font-semibold text-ink-secondary">그중 애드온 {t.addon.count}건 · 위 합계에 포함 · 엔트리·바인 횟수와는 따로 셉니다</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <Tile label="애드온 매출" value={man(t.addon.revenue)} sub="현금 + 카드 + 이체" />
               <Tile label="애드온 이용권" value={man(t.addon.ticketWon)} sub={`${Math.round(t.addon.ticketWon / TICKET_WON)}T`} />
