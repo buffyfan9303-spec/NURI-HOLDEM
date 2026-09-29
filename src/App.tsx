@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, Fragment, type ReactNode } from 'react';
 import { useDelayedUnmount } from './lib/useDelayedUnmount';
 import { bootTabForNotifLink } from './lib/notifBootTab';
+import { createLikeQueue, flipLike } from './lib/likeQueue';
 import { flushSync } from 'react-dom';
 /** 트레일 back 이 commitTab(t,'back') 으로 부르는 호출 모양만 남은 방향 표식 — 연출은 없다(2026-09-26 View Transition 전면 제거). */
 type VTDirection = 'forward' | 'back';
@@ -3391,25 +3392,24 @@ export default function App() {
   }, [user]);
 
   // C-5(2026-09-29): toggle_post_like 는 비멱등이라 연타하면 늦게 온 옛 응답이 최신 화면을 덮고(화면 true/2 · 서버 false/1),
-  //   실패 시 flip 이 '현재'를 뒤집어 엇갈렸다. 글마다 비행 중 1건만 보낸다 — 응답이 오기 전 누름은 무시한다.
-  //   ponytail: 비행 중 누름은 버린다(연타 취소 의도 유실). 필요하면 '원하는 최종 상태'를 모아 응답 뒤 한 번 더 보내는 방식으로.
-  const likeInFlight = useRef(new Set<string>());
+  //   실패 시 flip 이 '현재'를 뒤집어 엇갈렸다. 글마다 비행 중 1건만 보낸다.
+  //   #11(2026-09-29): 비행 중 누름을 버리지 않는다 — 화면은 즉시 뒤집고, 응답 뒤 서버가 마지막 의도와 다르면 한 번 더 보낸다
+  //   (빠르게 두 번 = 취소). 끝나면 서버 권위값으로 덮어 화면 = 서버. 판정은 lib/likeQueue 한 벌.
+  const applyLike = useCallback((postId: string, fn: (p: CommunityPost) => CommunityPost) => {
+    setPosts((prev) => prev.map((p) => p.id === postId ? fn(p) : p));
+    setOpenPost((cur) => (cur && cur.id === postId ? fn(cur) : cur));
+  }, []);
+  const likeQueue = useMemo(() => createLikeQueue({
+    send: togglePostLike,
+    settle: (id, { liked, count }) => applyLike(id, (p) => ({ ...p, liked, likeCount: count })),
+    undo: (id) => applyLike(id, flipLike),
+    fail: (e) => toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'),
+  }), [applyLike, toast]);
   const handleLikePost = useCallback((postId: string) => {
     if (!userRefForGate.current) { promptLogin(); return; } // 비로그인: flip→서버실패→롤백 소음 대신 바로 유도
-    if (likeInFlight.current.has(postId)) return;
-    likeInFlight.current.add(postId);
-    // 낙관적 토글(1인 1회) → 서버 권위값 보정, 실패 시 롤백. 피드(posts)와 상세(openPost) 동시 반영.
-    const flip = (p: CommunityPost) => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
-    const apply = (fn: (p: CommunityPost) => CommunityPost) => {
-      setPosts((prev) => prev.map((p) => p.id === postId ? fn(p) : p));
-      setOpenPost((cur) => (cur && cur.id === postId ? fn(cur) : cur));
-    };
-    apply(flip);
-    togglePostLike(postId)
-      .then(({ liked, count }) => apply((p) => ({ ...p, liked, likeCount: count })))
-      .catch((e) => { apply(flip); toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'); }) // 되돌리기(비행 중 1건이라 flip 한 번 = 누르기 전 상태)
-      .finally(() => { likeInFlight.current.delete(postId); });
-  }, [toast]);
+    applyLike(postId, flipLike); // 낙관적 토글 — 피드(posts)와 상세(openPost) 동시 반영
+    likeQueue.tap(postId);
+  }, [applyLike, likeQueue]);
 
   // 관리자: 회원 업데이트 (승인/정지/해제) — 서버 반영
   /**
