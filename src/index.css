@@ -1841,7 +1841,7 @@ video {
     @apply animate-pulse rounded-sm;
   }
 
-  /* 활동 점수 +N 팝업 .animate-point-pop (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — @keyframes pointPop 은 전환 장치 목록(transitionDevices 계약)에 있어 남긴다 */
+  /* 활동 점수 +N 팝업 .animate-point-pop (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — 키프레임 pointPop 도 2026-09-29 삭제(CSS animation·빌드 JS 참조 0) */
 
 /* ══ 유틸리티 — v3 의 @tailwind utilities 자리. source(none)+@source 로 v3 content 와 같은 파일만 훑는다
    (v4 자동 감지는 저장소 전체 — docs·e2e 의 글자까지 클래스로 찍어, v3 에선 안 만들어지던 동적 클래스가 살아날 수 있다). */
@@ -1905,12 +1905,6 @@ video {
 }
 
 
-
-@keyframes pointPop {
-  0%   { opacity: 0; transform: translateY(4px) scale(0.8); }
-  20%  { opacity: 1; transform: translateY(0) scale(1.05); }
-  100% { opacity: 0; transform: translateY(-24px) scale(1); }
-}
 
 /* 최상위 등급 아바타 테두리 — 은은한 명예 글로우(운영자 SS=레드 / AA·최상위=골드).
    ⚠ box-shadow 키프레임은 매 프레임 페인트를 강제해(합성 불가 속성) 상시 CPU 를 태웠다 —
@@ -2055,7 +2049,7 @@ body { overscroll-behavior-y: contain; }
 /* 카드/리스트 행 등 클릭 가능한 요소의 공통 탭 피드백(버튼 외 영역) */
 /* 바이낸스식 절제: 탭/라디오 스케일 모션 제거 — 색 전환만 */
 
-/* 승급 축하 컨페티 .confetti (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — @keyframes confettiFall 은 전환 장치 목록에 있어 남긴다 */
+/* 승급 축하 컨페티 .confetti (2026-09-28 번들 정리: 호출부 0 — 빌드 JS 에 클래스 리터럴이 없어 삭제. 되살릴 때는 git 이력에서) — 키프레임 confettiFall 도 2026-09-29 삭제(CSS animation·빌드 JS 참조 0) */
 /* ── 포스터 오토 캐러셀(APIS식) — 무한 루프 마퀴(모션 헌법 허용 예외 ①) ─────────
    transform 전용·컴포지터 상주. 트랙은 2배 복제 + -50% 이동으로 이음새 없이 순환.
    (각 카드 mr-3 이라 세트 경계 간격이 내부 간격과 동일 = -50% 지점이 정확히 맞물림)
@@ -2072,11 +2066,6 @@ body { overscroll-behavior-y: contain; }
 .marquee-loop { animation: marquee-loop var(--marquee-dur, 12s) linear infinite; }
 
 /* (펠트 시그니처 .felt-hero 는 오너 지시로 캐러셀에서 제거 — 2026-08-27 '배너만, 검은 띠 제거') */
-
-@keyframes confettiFall {
-  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
-  100% { transform: translateY(108vh) rotate(540deg); opacity: 0.6; }
-}
 
 /* 모션 민감 사용자 배려 — OS '동작 줄이기' 설정 시 애니메이션/전환을 즉시화해 멀미·끊김 방지 */
 @media (prefers-reduced-motion: reduce) {
