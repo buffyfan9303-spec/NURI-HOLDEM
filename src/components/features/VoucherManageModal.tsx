@@ -36,6 +36,8 @@ const STAT_COLS: { k: 'issued' | 'held' | 'used' | 'expired' | 'revoked'; label:
   { k: 'issued', label: '발급', pc: false }, { k: 'held', label: '보유', pc: false }, { k: 'used', label: '사용', pc: false },
   { k: 'expired', label: '만료', pc: true }, { k: 'revoked', label: '회수', pc: true },
 ];
+/** 이용 내역 로딩 뼈대 줄 수 — 20줄 창의 절반. ponytail: 도착 전엔 줄 수를 몰라 고정값; 정확히 맞추려면 매장별 직전 줄 수를 기억해야 한다. */
+const FEED_SKELETON_ROWS = 10;
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '-';
   const d = new Date(iso);
@@ -488,7 +490,13 @@ ${cards}
             <Icon name="refresh" size={12} className={loading ? 'animate-spin' : ''} /> 새로고침
           </button>
         </div>
-        {listErr != null && list.length === 0 ? (
+        {loading && list.length === 0 ? (
+          /* P1-2(2026-09-29) — 불러오는 중엔 빈 문구를 먼저 보이지 않는다(:71 — 업주가 다시 발급한다). 결과 줄 수는 도착 전엔 모르므로
+             실제 줄(h-7 · space-y-1)과 같은 문법의 뼈대를 FEED_SKELETON_ROWS 줄 둔다 — 0장·20줄 창 어느 쪽으로 정착해도 밀림이 절반 이하. */
+          <ul data-testid="voucher-feed-loading" aria-busy="true" aria-label="이용 내역 불러오는 중" className="space-y-1">
+            {Array.from({ length: FEED_SKELETON_ROWS }, (_, i) => <li key={i} className="skeleton h-7 rounded-input" />)}
+          </ul>
+        ) : listErr != null && list.length === 0 ? (
           // 실패가 빈 상태보다 먼저. 이미 받아 둔 목록이 있으면(재조회 실패) 보던 내역은 그대로 둔다.
           <LoadErrorCard error={listErr} what="이용권 내역" onRetry={reload} compact />
         ) : feed.length === 0 ? (
