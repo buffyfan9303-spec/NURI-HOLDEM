@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const env = { session: 'A' as string | null };
 const held: (() => void)[] = [];
-const toggle = vi.fn((_id: string) => new Promise<{ liked: boolean; count: number }>((res) => {
-  held.push(() => res({ liked: toggle.mock.calls.length % 2 === 1, count: 1 }));
+const toggle = vi.fn((id: string) => new Promise<{ liked: boolean; count: number }>((res) => {
+  held.push(() => res({ liked: id !== '' && toggle.mock.calls.length % 2 === 1, count: 1 }));
 }));
 
 vi.mock('../api/_session', () => ({ currentUser: async () => (env.session ? { id: env.session } : null) }));
