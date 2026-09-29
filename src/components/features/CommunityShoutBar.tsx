@@ -309,6 +309,10 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
   // 등급 목록·가격은 서버 shop_skus 가 단일 출처다. 화면은 읽어서 보여주기만 한다.
   // null = 아직 못 받음 — 그동안 같은 크기의 자리표시를 그려 시트 윗변이 도착 뒤 솟지 않게 한다(A1, 2026-09-29 실측 95.5px).
   const [tiers, setTiers] = useState<ShopSku[] | null>(null);
+  // 가격표 조회 실패 — 자리표시와 **같은 자리·같은 높이**에 안내와 '다시 불러오기'를 둔다(#12, 2026-09-29).
+  //   예전엔 자리표시를 걷어 시트가 가격표 높이만큼 줄었다. 정상 경로(가격표 도착)의 시트 크기는 그대로다.
+  const [tiersErr, setTiersErr] = useState<unknown>(null);
+  const [skuNonce, setSkuNonce] = useState(0);
   const [tier, setTier] = useState<ShoutTier>('basic');
   const [color, setColor] = useState<ShoutColor>('gold');
   // 지금 사면 언제 나가는가 — **서버가 계산한 다음 빈 자리**다(null = 아직 못 받음).
@@ -329,12 +333,19 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
     if (!open) return;
     getShoutRules().then(setRules).catch(() => {});
     getMyPointBalance().then(setBalance).catch(() => {});
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    setTiersErr(null);
     getShopSkus()
       // 전광판(shout_board)은 판매 중지다. 서버가 active=false 로 이미 빼 주지만,
       // 화면에서도 한 번 더 막는다 — 누가 다시 active 를 켜도 '판매 중지'가 화면 규약으로 남게.
-      .then((all) => setTiers(all.filter((s) => s.kind === 'shout' && s.key !== 'shout_board').sort((a, b) => a.sort - b.sort)))
-      .catch(() => setTiers((t) => t ?? []));   // 실패 — 자리표시를 걷고 기본 등급(shout_rules)으로 버틴다(종전 동작)
-  }, [open]);
+      .then((all) => { if (live) setTiers(all.filter((s) => s.kind === 'shout' && s.key !== 'shout_board').sort((a, b) => a.sort - b.sort)); })
+      // 실패 — 이미 받은 목록이 있으면 그대로, 없으면 빈 목록 + 오류 안내(기본 등급은 shout_rules 값으로 버틴다)
+      .catch((e) => { if (live) { setTiers((t) => t ?? []); setTiersErr(e); } });
+    return () => { live = false; };
+  }, [open, skuNonce]);
   // 대기열 길이 — '내 차례가 언제인지'를 **사기 전에** 보여주기 위해서다.
   // ⚠ 실패를 0('대기열 비었음')으로 뭉개면 화면이 '지금 바로 방송'이라고 거짓 약속을 한다.
   useEffect(() => {
@@ -445,9 +456,11 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
 
         {/* 등급 — 가격은 서버 가격표(shop_skus)에서 그대로 읽어 보여준다.
             전광판이 빠져 두 칸이므로 칸 수를 목록 길이에서 뽑는다(빈 칸이 남지 않게). */}
-        {tiers === null && (
+        {(tiers === null || (tiers.length === 0 && tiersErr !== null)) && (
           // 자리표시 — 운영 가격표(외치기 4등급 → 2열 2줄)와 같은 칸·같은 글자 줄 수. 설명 한 줄 자리도 함께 잡는다.
-          <div aria-hidden="true">
+          // 조회 실패도 같은 틀을 쓴다 — 칸은 감추고 그 높이 위에 안내를 겹친다(시트 높이 불변, #12).
+          <div className="relative">
+          <div aria-hidden="true" className={tiers === null ? undefined : 'invisible'}>
             <div className="grid grid-cols-2 gap-1.5">
               {[0, 1, 2, 3].map((i) => (
                 <div key={i} className="rounded-aura border border-border-subtle bg-surface-high px-2 py-2 text-center">
@@ -458,6 +471,19 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
               ))}
             </div>
             <p className="invisible mt-3 text-2xs leading-relaxed">자리</p>
+          </div>
+          {tiers !== null && (
+            <div role="alert" data-testid="shout-tiers-error"
+                 className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-aura border border-border-subtle bg-surface-high px-3 text-center">
+              <p className="text-2xs leading-relaxed text-ink-secondary">
+                가격표를 불러오지 못했어요.<br />기본 외치기는 그대로 살 수 있어요.
+              </p>
+              <button type="button" onClick={() => { setTiers(null); setSkuNonce((n) => n + 1); }}
+                className="hit rounded-badge border border-border-subtle bg-surface-base px-3 py-1.5 text-2xs font-bold text-ink-secondary">
+                다시 불러오기
+              </button>
+            </div>
+          )}
           </div>
         )}
         {tiers && tiers.length > 0 && (
