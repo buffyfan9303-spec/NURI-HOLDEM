@@ -127,19 +127,21 @@ function CheckRow({
   doc?: LegalDoc;
   onView: (doc: LegalDoc) => void;
 }) {
+  // 🔴 2026-09-29 최종 점검 D4 — 예전엔 input 과 `<label onClick>` 이 **연결되지 않아**(htmlFor·감싸기 없음) 스크린리더가
+  //   "만 19세 이상" 같은 필수 동의를 이름 없는 '체크박스' 로만 읽었고, 누름 표적은 13×13 상자뿐이었다.
+  //   ConsentGateModal ConsentRow 와 같은 문법으로 label 이 input 을 감싼다(이름 = 문구, 토글은 브라우저 기본 동작 —
+  //   label onClick 으로 한 번 더 토글하면 두 번 바뀌어 제자리가 된다). py-3 = 한 줄 20.7 + 25.5 → 누름 46px(AA 44).
+  //   '보기' 는 label 밖 형제 — 누르면 약관만 열리고 체크는 그대로다(종전 동작). 이름('보기')은 e2e 가 잡고 있어 그대로 둔다.
   return (
     <div className="flex items-start gap-2">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 accent-accent-300 shrink-0"
-      />
-      <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
-        <label
-          onClick={() => onChange(!checked)}
-          className="text-xs text-ink-secondary cursor-pointer leading-relaxed select-none"
-        >
+      <label className="flex flex-1 min-w-0 cursor-pointer items-start gap-2 py-3 select-none">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="mt-0.5 accent-accent-300 shrink-0"
+        />
+        <span className="text-xs text-ink-secondary leading-relaxed">
           {required && (
             <span className="text-danger mr-1 font-bold">[필수]</span>
           )}
@@ -147,17 +149,17 @@ function CheckRow({
             <span className="text-ink-muted mr-1">[선택]</span>
           )}
           {label}
-        </label>
-        {doc && (
-          <button
-            type="button"
-            onClick={() => onView(doc)}
-            className="shrink-0 text-2xs text-accent-300 hover:text-accent-200 underline decoration-dotted underline-offset-2 transition-colors"
-          >
-            보기
-          </button>
-        )}
-      </div>
+        </span>
+      </label>
+      {doc && (
+        <button
+          type="button"
+          onClick={() => onView(doc)}
+          className="shrink-0 self-stretch flex min-w-[44px] items-start justify-end pt-3 text-2xs text-accent-300 hover:text-accent-200 underline decoration-dotted underline-offset-2 transition-colors"
+        >
+          보기
+        </button>
+      )}
     </div>
   );
 }
@@ -165,20 +167,18 @@ function CheckRow({
 function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectionProps) {
   return (
     <div className="space-y-2 pt-1 border-t border-border-subtle">
-      {/* 전체 동의 */}
-      <div className={[
-        'flex items-center gap-2 p-2.5 rounded-input border transition-colors cursor-pointer',
+      {/* 전체 동의 — label 이 감싼다(D4: 이름 = 문구, 누름 44px). 예전 div onClick + input stopPropagation 과 결과가 같다. */}
+      <label className={[
+        'flex min-h-[44px] items-center gap-2 p-2.5 rounded-input border transition-colors cursor-pointer',
         allChecked
           ? 'bg-accent-300/10 border-accent-400/40'
           : 'bg-surface-high border-border-default',
       ].join(' ')}
-        onClick={() => toggleAll(!allChecked)}
       >
         <input
           type="checkbox"
           checked={allChecked}
           onChange={(e) => toggleAll(e.target.checked)}
-          onClick={(e) => e.stopPropagation()}
           className="accent-accent-300 shrink-0"
         />
         <span className={[
@@ -187,10 +187,10 @@ function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectio
         ].join(' ')}>
           전체 동의 (필수 + 선택 포함)
         </span>
-      </div>
+      </label>
 
-      {/* 구분선 */}
-      <div className="pl-1 space-y-2">
+      {/* 구분선 — 행 사이 간격은 각 행의 누름 여백(py-3)이 대신한다 */}
+      <div className="pl-1">
         <CheckRow onView={onView}
           checked={c.age19} onChange={(v) => set('age19', v)}
           required label="본인은 만 19세 이상 성인입니다. (청소년보호법)"

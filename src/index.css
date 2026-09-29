@@ -2584,6 +2584,9 @@ html:not(.light) .text-accent-300\/90 { color: rgb(var(--accent-200) / 0.9); }
    세 구간이 같은 높이를 잡으면 이 세 번의 이동이 한 번으로 준다.
    ⚠ 이것으로 0 이 되지는 않는다 — 실제 판이 한 화면보다 길면 그 차이는 남는다. */
 .pane-reserve { min-height: calc(100svh - 3.5rem - var(--tabbar-safe)); } /* 3.5rem = spacing.header-h */
+/* 전면 오버레이 안의 법정 푸터(BusinessFooter overlay) 아래 여백 — 판 안에 하단 고정 바가 있는 도구만 그 높이를 비운다.
+   NURI SPOT 단계 이동 바(fixed bottom-0, 실측 약 62px)가 1024 이상에서 푸터 마지막 줄을 덮었다(2026-09-29 D1). */
+[data-scroll-lock]:has([data-spot-stepnav]) { --overlay-bar: 4rem; }
 @media (min-width: 1024px) {
   :root { --card-h-grid: 447px; }
   .cv-card-grid { content-visibility: auto; contain-intrinsic-size: auto var(--card-h-grid); }

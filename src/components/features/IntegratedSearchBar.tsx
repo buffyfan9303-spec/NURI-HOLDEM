@@ -485,7 +485,9 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           onClick={() => setSearchOpen((v) => !v)}
           // 가로도 44: 레일 첫 칸이라 왼쪽 안쪽 여백(px-page-x)으로 넓힌다(보이는 원형 칩 38.25 그대로).
           //   6.75 = 5.75 + 테두리 1px — 의사요소의 left 는 padding 상자 기준이라 테두리만큼 덜 나간다(실측 43 → 44).
-          className={['w-9 justify-center px-0', CHIP_BASE, CHIP_HIT, 'before:-left-[6.75px]', searchOpen || rawQuery ? CHIP_ON : CHIP_OFF].join(' ')}
+          //   🔴 px-0 을 **덧붙이지 않고 CHIP_BASE 에서 px-3.5 를 뺀다**(2026-09-29 D3). 둘 다 두면 빌드 CSS 순서상 px-3.5 가 이겨
+          //     내용 폭 6.5px 에 아이콘이 6.5×17 로 눌렸다 — 유틸 우열은 className 순서가 아니라 CSS 순서다(e2e/search-chip-icon).
+          className={['w-9 justify-center', CHIP_BASE.replace(' px-3.5', ''), CHIP_HIT, 'before:-left-[6.75px]', searchOpen || rawQuery ? CHIP_ON : CHIP_OFF].join(' ')}
         >
           <SearchIcon className="h-4 w-4" />
         </button>

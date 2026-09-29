@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import BusinessFooter from './BusinessFooter';
 import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -243,6 +244,9 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
           <Odds board={board} />
         </div>
       )}
+      {/* 법정 상시 고지 — 이 판(fixed inset-0 z-55)이 App 문서 끝 푸터를 덮는다(2026-09-29 D1).
+          로딩 중엔 그리지 않는다 — 보드가 오는 순간 푸터가 밀려 내려가는 이동(CLS)을 만들지 않게. */}
+      {!loading && <BusinessFooter overlay />}
 
       {pick && (
         <TearSheet card={pick} phase={phase} result={result} busy={busy}

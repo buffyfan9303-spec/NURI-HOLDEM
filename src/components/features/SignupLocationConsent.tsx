@@ -24,7 +24,8 @@ export default function SignupLocationConsent({ checked, onChange }: { checked: 
         <li>· 동의하지 않아도 가입·이용할 수 있어요. 내 정보 › 보안에서 언제든 바꿀 수 있어요</li>
       </ul>
       <div className="flex items-start justify-between gap-2">
-        <label className="flex items-start gap-2 cursor-pointer">
+        {/* py-3 -my-3: 누름 높이만 46px 로 넓히고 레이아웃은 그대로(2026-09-29 D4 — 가입 동의 행과 같은 44px). 위는 설명 글, 아래는 상자 여백이라 겹칠 조작이 없다. */}
+        <label className="flex items-start gap-2 cursor-pointer py-3 -my-3">
           <input type="checkbox" data-testid="signup-location-check" checked={checked} onChange={(e) => onChange(e.target.checked)}
             className="mt-0.5 accent-accent-300 shrink-0" />
           <span className="text-xs text-ink-secondary leading-relaxed select-none">
@@ -32,7 +33,7 @@ export default function SignupLocationConsent({ checked, onChange }: { checked: 
           </span>
         </label>
         <button type="button" data-testid="signup-location-terms" onClick={() => setTerms(true)}
-          className="shrink-0 text-2xs text-accent-300 hover:text-accent-200 underline decoration-dotted underline-offset-2 transition-colors">
+          className="shrink-0 py-3 -my-3 text-2xs text-accent-300 hover:text-accent-200 underline decoration-dotted underline-offset-2 transition-colors">
           전문 보기
         </button>
       </div>

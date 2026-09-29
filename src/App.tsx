@@ -136,7 +136,7 @@ import { rememberQrIntent, takeQrIntent, clearQrIntent } from './lib/pendingQrIn
 import { setCurrentView, takeViewIntent } from './lib/pendingViewIntent';
 import { currentViewFor, restoreActionFor } from './lib/viewIntentRestore';
 import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral, claimPendingReferralTickets } from './api/referrals';
-import BusinessFooter from './components/features/BusinessFooter';
+import BusinessFooter, { FooterActionsContext } from './components/features/BusinessFooter';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import type { LegalDoc } from './components/features/LegalDocsModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
@@ -2131,6 +2131,7 @@ export default function App() {
    *    고객센터 2프레임·184ms. `lazy(async …)` 는 청크가 캐시에 있어도 첫 렌더에 한 번 서스펜드한다. */
   const openLegal = useCallback((d: LegalDoc) => startTransition(() => setLegalDoc(d)), []);
   const openSupport = useCallback(() => startTransition(() => setSupportOpen(true)), []);
+  const footerActions = useMemo(() => ({ onOpenLegal: openLegal, onOpenSupport: openSupport }), [openLegal, openSupport]);
   const [voucherWalletOpen, setVoucherWalletOpen] = useState(false);
   const [voucherSheetOpen, setVoucherSheetOpen] = useState(false); // 헤더 [이용권·출석] 시트(루트 렌더)
   // 통합 '내 정보' 페이지(2026-09-04: 대시보드+프로필 관리 합침)의 진입 탭 — 열 때마다 이 값으로 리셋된다
@@ -3989,6 +3990,8 @@ export default function App() {
     //   그래서 예외를 지운다. 콘텐츠 폭은 전후가 같으므로 장부 표·입력칸이 새로 좁아지는 일이 없다.
     //   ⚠ 장부·클락을 **진짜로** 넓히려면 레버는 여기가 아니라 index.css 의 `main` 상한이다(별도 결정).
     <div className="relative z-1 min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
+      {/* 전면 오버레이 안의 사업자 푸터도 약관·문의를 열 수 있게 — 콜백 공급(BusinessFooter.tsx FooterActionsContext) */}
+      <FooterActionsContext.Provider value={footerActions}>
       {/* 아우라 후광(정적) — body 배경 위, 콘텐츠(z-1) 아래. 이 래퍼의 bg-surface-base 를 걷어낸 이유: 불투명이면 후광이 안 보인다 */}
       <div aria-hidden className="aura-bg" />
       {/* 오프라인 배너(Phase 17-5) — 토스트(z-100)와 층 분리, 헤더(z-50) 위 상시 고정.
@@ -5028,6 +5031,7 @@ export default function App() {
       )}
       </ErrorBoundary>
       </Suspense>
+      </FooterActionsContext.Provider>
     </div>
   );
 }

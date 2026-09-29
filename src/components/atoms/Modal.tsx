@@ -6,6 +6,7 @@ import { springTo, presentationY, project, rubberband, releaseVelocity, type Vel
 import Icon from './Icon';
 import { useDialogFocus } from './useDialogFocus';
 import { PAGE_ENTER, PAGE_LEAVE } from './pageMotion';
+import BusinessFooter from '../features/BusinessFooter';
 
 interface ModalProps {
   open: boolean;
@@ -410,7 +411,11 @@ export default function Modal({
         )}
         {/* 상단만 예약하고 하단을 비워 두면 마지막 요소가 홈 인디케이터 띠에 먹힌다(전면 변형 공통). */}
         <div className="flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
-          <div className={['mx-auto w-full', MAX_W[maxWidth]].join(' ')}>{children}</div>
+          <div className={['mx-auto w-full min-h-full', MAX_W[maxWidth]].join(' ')}>{children}</div>
+          {/* 법정 상시 고지 — 이 판은 불투명 전체화면이라 App 문서 끝 푸터를 덮는다(2026-09-29 D1). 같은 컴포넌트를 본문 끝에 둔다.
+              inline(2-pane) 은 위에서 먼저 반환된다 — 그땐 문서 끝 푸터가 그대로 보인다.
+              위 min-h-full = 앱의 .pane-reserve 와 같은 뜻: 푸터를 첫 화면 밖에서 시작시켜, 도구·상세가 늦게 그려져도 푸터가 밀려 내려가는 이동(CLS)이 없게 한다. */}
+          <BusinessFooter overlay />
         </div>
       </div>
     );
