@@ -54,9 +54,10 @@
 --                              GroupPage 공지(venue_notices)·댓글은 그룹 개설자 기능이라 그대로 둔다(20260926c 그룹 결정).
 --   정책 venue_notices_insert · venue_notices_delete · comments_delete(매장 분기) → is_venue_or_group_owner(venue_id).
 --        comments_delete 의 일정 작성자 분기(schedules.owner_id)는 그대로 — 업주 판정이 아니라 글쓴이 판정.
---   정책 storage.objects posters_upload — `my_role() in (venue_owner, admin)` 선행 분기가 is_any_venue_manager 를 우회했다
---        → `my_role() = 'admin' or is_any_venue_manager()`. (라이브 venue_owner 역할 2명 모두 승인 매장 소유 — 영향 0.)
 -- 바꾸지 않는 것(보고만):
+--   정책 storage.objects posters_upload  (critical 재검증 FAIL → 리드 결정으로 제외) 좁히면 매장이 아직 없는 업주의 첫 매장 생성이 깨진다 —
+--                              VenueManageTab.tsx 가 createMyVenue 전에 uploadPoster 를 부른다(승인·승인 대기 업주 ok→42501). 잔여 위험은
+--                              철회 업주가 자기 폴더에 이미지를 올리는 정도(데이터 권한 아님)라 원래 정책을 유지한다.
 --   can_manage_venue          이미 approved·role 을 본다.
 --   venues_update 정책        20260926c 가 '심사 중 업주가 자기 신청 정보를 고치는 경로'로 의도적으로 남겼다(리드 결정 유지).
 --   set_kill_password         비밀번호만 설정 — kill_venue 자체가 이제 승인을 본다. 무해.
@@ -105,13 +106,12 @@ begin
   for r in select * from (values
       ('public',  'comments',      'comments_delete',      '4d5396ed010f08ee88bd1a5cc98dbd42'),
       ('public',  'venue_notices', 'venue_notices_insert', '21a639e6d34481cca51b40555f98cf63'),
-      ('public',  'venue_notices', 'venue_notices_delete', '0cd3d8819150c9d314582da1e4d17df1'),
-      ('storage', 'objects',       'posters_upload',       '25d7b5824f59200b43fda637ecaac20a')) t(sch, tbl, pol, want)
+      ('public',  'venue_notices', 'venue_notices_delete', '0cd3d8819150c9d314582da1e4d17df1')) t(sch, tbl, pol, want)
   loop
     select md5(coalesce(qual,'')||'|'||coalesce(with_check,'')), coalesce(qual,'')||coalesce(with_check,'') into m, body
       from pg_policies where schemaname = r.sch and tablename = r.tbl and policyname = r.pol;
     if m is null then raise exception '20260930d: 정책 %.% 이 없습니다', r.tbl, r.pol; end if;
-    if m <> r.want and body not like '%is_venue_or_group_owner(%' and not (r.pol = 'posters_upload' and body not like '%venue_owner%') then
+    if m <> r.want and body not like '%is_venue_or_group_owner(%' then
       raise exception '20260930d: 정책 %.% 라이브 본문이 예상(%)과 다릅니다(%)', r.tbl, r.pol, r.want, m;
     end if;
   end loop;
@@ -633,9 +633,6 @@ alter policy comments_delete on public.comments
          or ((venue_id is not null) and public.is_venue_or_group_owner(venue_id))
          or ((schedule_id is not null) and (exists (select 1 from public.schedules s
                                                     where s.id = comments.schedule_id and s.owner_id = (select auth.uid())))));
-alter policy posters_upload on storage.objects
-  with check ((bucket_id = 'posters'::text) and ((storage.foldername(name))[1] = (auth.uid())::text)
-              and ((my_role() = 'admin'::user_role) or public.is_any_venue_manager()));
 
 -- §11 ACL — 2026-09-30 라이브 proacl 그대로 재기재(DROP 후 재적용되는 경우에도 같은 상태가 되게).
 --   can_manage_pos·can_manage_venue_staff 는 PUBLIC 실행이 원래 상태(roles {public} 정책이 anon 조회에서도 부른다 — 20260926c §9).
@@ -767,13 +764,9 @@ begin
   end if;
   for r in select schemaname sch, tablename tbl, policyname pol, coalesce(qual,'')||'|'||coalesce(with_check,'') body from pg_policies
             where (schemaname, tablename, policyname) in (('public','comments','comments_delete'),('public','venue_notices','venue_notices_insert'),
-                                                          ('public','venue_notices','venue_notices_delete'),('storage','objects','posters_upload'))
+                                                          ('public','venue_notices','venue_notices_delete'))
   loop
-    if r.pol = 'posters_upload' then
-      if r.body like '%venue_owner%' or r.body not like '%is_any_venue_manager()%' then
-        raise exception '20260930d 자가검사: posters_upload 에 역할 선행 분기가 남았습니다';
-      end if;
-    elsif r.body not like '%is_venue_or_group_owner(%' or r.body ~ 'v\.owner_id = \( SELECT auth\.uid' then
+    if r.body not like '%is_venue_or_group_owner(%' or r.body ~ 'v\.owner_id = \( SELECT auth\.uid' then
       raise exception '20260930d 자가검사: 정책 %.% 업주 분기가 정본이 아닙니다', r.tbl, r.pol;
     end if;
   end loop;
@@ -869,6 +862,7 @@ notify pgrst, 'reload schema';
 --     K 승인 복구 뒤 같은 대표의 kill_venue(실명·비밀번호) → 1, 매장 행 0·장부 0 — 기존 경로 그대로 동작.
 --     T1·T2 거절, 비로그인 can_manage_pos 참 0.
 --   롤백 확인: 새 함수 0 · 로티 매장 1·장부 1 · 킬스위치 0 · vo 1 · 시험 바인 요청 0 · kill_venue·_venue_owner_ok md5 원래 값.
+-- ⚠ 3차 리허설 이후 posters_upload 변경을 뺐다(critical 재검증 FAIL: 첫 매장 생성 업로드 42501). 아래 3차의 '포스터 업로드' 줄은 뺀 변경의 결과다.
 -- 리허설 3차(18개 함수·정책 4개 판 = 이 파일 전문, 2026-09-30, store-team, 라이브 begin…raise…rollback). §0·§0-b 게이트·§12 자가검사 통과.
 --   전수 대조 554칸(프로필 8+비로그인 × 매장 7 × 판정 8 + 사람별 4 + 매장별 수신자 2) 적용 전/후 차이 2칸뿐:
 --     dealer_team 9cf562bd 수신자(rcpt·rcptS)에서 관리자 c8e3 빠짐 — 수용된 차이(위 정정 참고). 나머지 552칸 동일.
