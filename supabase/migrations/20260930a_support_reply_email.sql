@@ -1,5 +1,7 @@
 -- 20260930a_support_reply_email.sql — 1:1 문의 답변 메일 중복 발송 방지 표식.
--- ⏳ 미적용 초안(2026-09-30, home-team). 적용은 리드 — nuri-migration 절차(MCP execute_sql → 파일 머리 '✅ 적용 완료 + 실측값').
+-- ✅ 적용 완료 2026-09-30 (리드, MCP execute_sql). 리허설(DO+RAISE 롤백): CAS 1회차 1행·2회차 0행, 알림 증가 0,
+--    R1 양성(기본 접수) 통과 · 음성 3건(답변 채움·표식 채움·타인 uid) 모두 42501, 일반 회원 UPDATE 0행. 롤백 후 컬럼 0·행 0 확인.
+--    적용 후 WITH CHECK 실측: ((user_id = ( SELECT auth.uid() AS uid)) AND (status = 'open'::text) AND (answer IS NULL) AND (answered_at IS NULL) AND (answer_emailed_for IS NULL))
 --
 -- 무엇: support_inquiries.answer_emailed_for — 메일로 보낸 답변의 판(= 그때의 answered_at).
 --   엣지 함수 support-reply-email 이 이 값을 비교-교환(CAS)으로 선점한 뒤 보낸다
