@@ -16,6 +16,7 @@ import { useDialogFocus } from '../atoms/useDialogFocus';
 import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import Avatar from '../atoms/Avatar';
 import UnderlineTabs from '../atoms/UnderlineTabs';
+import BusinessFooter from './BusinessFooter';
 import { relativeTime } from './MarketplaceTab';
 import {
   GROUP_KIND_LABEL, type Venue, type GroupMember, type GroupMessage, type GroupPost,
@@ -191,7 +192,8 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
           탭바 자리를 예약하지 않는다 — 라이브 375×812 실측 죽은 띠 104.83px.
           ⚠ 홈 인디케이터 띠는 남긴다(루트에 하단 inset 예약이 없다). */}
       <div className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
-        <div className="mx-auto w-full max-w-2xl">
+        {/* min-h-full: 끝의 법정 푸터를 첫 화면 밖에서 시작시킨다(VenuePage 와 같다). */}
+        <div className="mx-auto w-full max-w-2xl min-h-full">
           {/* 이미지 갤러리 */}
           <div className="relative w-full overflow-hidden h-40 sm:h-48 bg-surface-low">
             {images.length > 0 ? (
@@ -401,6 +403,8 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
             </>
           )}
         </div>
+        {/* 법정 상시 고지 — 이 판(fixed inset-0)이 App 문서 끝 푸터를 덮는다(2026-09-29 D1, VenuePage 와 같다). */}
+        <BusinessFooter overlay />
       </div>
     </div>
   );

@@ -1,9 +1,16 @@
 // src/components/features/BusinessFooter.tsx
 // 전 화면 하단 상시 노출 푸터 — 사업자 정보(전자상거래법 표시의무) + 약관/정책 링크 + 사행성 배제 고지.
-import { memo } from 'react';
+import { createContext, memo, useContext } from 'react';
 import type { LegalDoc } from './LegalDocsModal';
 // 약관 시행일은 src/lib/legalVersion.ts 단일 소스 — 푸터에 날짜를 박으면 개정 때 여기만 남는다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
+
+type FooterActions = { onOpenLegal?: (d: LegalDoc) => void; onOpenSupport?: () => void };
+// 🔴 전면 오버레이(매장·그룹·내 정보·이벤트·Modal page 변형) 안에도 **이 푸터를 그대로** 렌더한다(2026-09-29 최종 점검 D1).
+//   그 판들은 `fixed inset-0` 불투명이라 App 의 문서 끝 푸터를 완전히 덮어, 끝까지 스크롤해도 사업자 정보·19세·1336 이 없었다.
+//   문구를 두 벌 만들지 않으려고 컴포넌트를 재사용하고, 약관·문의 열기 콜백은 App 이 한 번 공급한다(props 가 이긴다).
+// eslint-disable-next-line react-refresh/only-export-components -- 푸터 콜백 공급용 컨텍스트, 컴포넌트와 한 몸이라 HMR 무해
+export const FooterActionsContext = createContext<FooterActions>({});
 
 // 사업자등록증(525-20-02937) 기준 — LegalDocsModal/LegalNotice 와 동일 값 유지.
 // PG(포트원/다날) 입점 심사 요건(2026-08-28 거절 사유 반영): 상호·사업자번호·대표자명·
@@ -32,12 +39,18 @@ const BIZ_EXTRA: [string, string][] = [
 //     나중에 누가 저걸 인라인 화살표(`onOpenLegal={(d) => ...}`)로 바꾸면 **에러 없이 조용히 무효가 된다.**
 //   같은 이유로 AppHeader·MobileTabBar 는 이미 memo 다(App.tsx:230, :617). 여기만 빠져 있었다.
 //   근거: docs/render-perf-checklist.md §5(무프롭 무거운 컴포넌트 → memo).
-function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenLegal?: (d: LegalDoc) => void; onOpenSupport?: () => void }) {
+function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
+  const ctx = useContext(FooterActionsContext);
+  const onOpenLegal = props.onOpenLegal ?? ctx.onOpenLegal;
+  const onOpenSupport = props.onOpenSupport ?? ctx.onOpenSupport;
   // 아래 여백 = max(기본 탭바 예약, --footer-reserve) — 정산바처럼 탭바보다 큰 하단 고정 바가
   // 떠 있는 화면은 그 화면이 --footer-reserve 를 실측으로 채워 이 상시 고지가 가려지지 않게 한다
   // (index.css :root 주석, NuriPosLedger.tsx 설정부 — 2026-09-27, 정산바가 이 예약보다 커서 가리던 결함).
+  // overlay: 전면 오버레이 안 — 그 판들은 탭바를 덮거나(z-55 이상) 탭바를 끈다(매장·그룹, App `suppressed`).
+  //   문서 끝 예약(--tabbar-safe, ~108px)을 그대로 두면 판 끝에 죽은 띠가 생긴다(GroupPage 주석: 375 실측 104.83px).
+  //   판 안에 하단 고정 바가 있는 도구만 --overlay-bar 로 비운다(index.css, NURI SPOT 단계 이동 바).
   return (
-    <footer className="mt-6 border-t border-border-subtle px-page-x pt-5 pb-[max(calc(var(--tabbar-safe)+0.5rem),var(--footer-reserve,0px))] lg:pb-[max(2rem,var(--footer-reserve,0px))]">
+    <footer data-testid="business-footer" className={['mt-6 border-t border-border-subtle px-page-x pt-5', props.overlay ? 'pb-[calc(1.5rem+var(--overlay-bar,0px))]' : 'pb-[max(calc(var(--tabbar-safe)+0.5rem),var(--footer-reserve,0px))] lg:pb-[max(2rem,var(--footer-reserve,0px))]'].join(' ')}>
       <div className="mx-auto w-full max-w-5xl space-y-3">
         {/* 약관·정책 링크 — §7 P0-C(2026-09-12 실측): 11.69px 로, 이미 t-desc(12.75px)로 올라간
             사업자 정보·법정 고지보다 1.06px 작았다. 같은 '법정 고지' 역할이라 같은 토큰으로 맞춘다. */}

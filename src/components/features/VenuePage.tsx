@@ -7,6 +7,7 @@ import {
   type NaverMapState,
 } from '../../lib/naverMap';
 import CommentThread from './CommentThread';
+import BusinessFooter from './BusinessFooter';
 import RotiArenaLogo from '../atoms/RotiArenaLogo';
 import Icon from '../atoms/Icon';
 import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
@@ -336,8 +337,9 @@ export default function VenuePage({
           ⚠ `pb-0` 으로 두면 안 된다: 루트가 pt-[env(safe-area-inset-top)] 만 갖고 하단 inset 예약이 없어
             아이폰에서 마지막 행이 홈 인디케이터 밑으로 들어간다. PC 하네스는 env 가 항상 0이라 영영 못 본다. */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
-        {/* PC 에서 전체 폭으로 퍼져 공백이 과해지지 않도록 중앙 컬럼(최대 768px)으로 제한 */}
-        <div className="mx-auto w-full max-w-3xl">
+        {/* PC 에서 전체 폭으로 퍼져 공백이 과해지지 않도록 중앙 컬럼(최대 768px)으로 제한.
+            min-h-full: 끝의 법정 푸터를 첫 화면 밖에서 시작시킨다(앱 .pane-reserve 와 같은 뜻 — 늦게 오는 탭 내용이 푸터를 밀어 내리는 이동 방지). */}
+        <div className="mx-auto w-full max-w-3xl min-h-full">
 
         {/* 히어로 (배경 이미지) */}
         <HeroSection
@@ -638,6 +640,8 @@ export default function VenuePage({
           )}
         </div>
         </div>
+        {/* 법정 상시 고지 — 이 판(fixed inset-0)이 App 문서 끝 푸터를 덮는다. `?venue=` 딥링크로 첫 화면이 되기도 한다(2026-09-29 D1). */}
+        <BusinessFooter overlay />
       </div>
     </div>
   );

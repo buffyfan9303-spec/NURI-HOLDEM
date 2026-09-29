@@ -22,6 +22,7 @@ import { SkeletonList } from '../atoms/Skeleton';
 import { readSeenCount, writeSeenCount } from '../../lib/seenCount'; // 지난 방문 실제 행 수를 기억해 스켈레톤 CLS 를 줄인다(홈과 같은 조리법)
 import { goSubTab } from '../../lib/subTabTransition';
 import type { LegalDoc } from './LegalDocsModal';
+import BusinessFooter from './BusinessFooter';
 import { myVisitedVenues, myPlayHistory, type VisitedVenue, type PlayHistory } from '../../api/vouchers';
 import { wonToMan } from '../../api/ledger';
 import { getMyReservations, getMyVisitStats, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
@@ -753,10 +754,13 @@ function MeTabs({ open, initialTab, goTabRef, dashboard, onClose, onOpenLegal, o
             밴드만 커졌다 작아져 '크기가 달라지고 지진나는 것처럼' 보였다.
             md 는 **모달** 폭 토큰이 페이지 래퍼에 따라붙은 것이다(같은 커밋의 LevelGuideModal 이 max-w-md).
             ⚠ 좁히는 쪽(대시보드를 476 으로)은 기각했다 — 정보를 476px 에 우겨넣게 되어 실질 손실이다. */}
-        <div hidden={tab === 'dashboard'} className="mx-auto w-full max-w-2xl">
+        {/* min-h-full(두 판 공통): 끝의 법정 푸터를 첫 화면 밖에서 시작시킨다 — 보안 탭 동의 이력처럼 늦게 오는 내용이 푸터를 밀어 내리지 않게. */}
+        <div hidden={tab === 'dashboard'} className="mx-auto w-full max-w-2xl min-h-full">
           <ProfilePanels open={open} tab={tab === 'dashboard' ? 'profile' : tab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
         </div>
-        <div hidden={tab !== 'dashboard'}>{dashboard}</div>
+        <div hidden={tab !== 'dashboard'} className="min-h-full">{dashboard}</div>
+        {/* 법정 상시 고지 — 이 판(fixed inset-0 z-60)이 App 문서 끝 푸터를 덮는다(2026-09-29 D1). 네 탭 공통으로 본문 끝에 둔다. */}
+        <BusinessFooter overlay onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
       </div>
     </>
   );
@@ -904,6 +908,8 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
             </button>
           </div>
         </div>
+        {/* 법정 상시 고지 — 비로그인 랜딩도 같은 전면 판이다(위 MeTabs 와 같다, 2026-09-29 D1). 약관·문의 콜백은 App 이 컨텍스트로 준다. */}
+        <BusinessFooter overlay />
       </div>
 
       {/* 업주 가입 모달 — z-60 동순위지만 DOM 후순위(이 랜딩 내부)라 위에 뜬다. 이메일 로그인(promptLogin)과 같은 문법.
