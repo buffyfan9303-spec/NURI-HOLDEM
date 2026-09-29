@@ -159,7 +159,7 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
           <Icon name="zap" size={12} className="shrink-0" />{boostLabel}
         </button>
         {boostOpen && (
-          <span className="absolute left-0 top-full z-20 mt-1 flex items-center gap-1 rounded-card border border-border-default bg-surface-float p-1.5 shadow-card">
+          <span className="absolute left-0 top-full z-20 mt-1 flex items-center gap-1 rounded-card border border-border-default bg-surface-float p-1.5 shadow-card animate-slide-up">
             {[{ d: 1, l: '24시간' }, { d: 3, l: '3일' }, { d: 7, l: '7일' }, { d: 14, l: '14일' }, { d: 30, l: '30일' }].map(({ d, l }) => (
               <button key={d} type="button"
                 onClick={() => { onBoost(item.id, d); setBoostOpen(false); }}

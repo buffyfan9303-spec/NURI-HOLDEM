@@ -1,4 +1,5 @@
 // src/components/features/TierLeaderboard.tsx
+import { Fold } from '../atoms/Fold';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { goSubTab } from '../../lib/subTabTransition';
 import { centerInRail } from '../../lib/railScroll';
@@ -936,8 +937,8 @@ export default function TierLeaderboard() {
             {showLadder ? '등급표 닫기' : '전체 등급표 보기'}
           </button>
 
-          {showLadder && (
-            <div className="mt-2 grid grid-cols-2 gap-1.5 animate-slide-up">
+          <Fold open={showLadder}>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
               {/* A — 점수가 아닌 상대평가(명예) 등급 */}
               <div className="col-span-2 flex items-center justify-between px-2 py-1.5 rounded-input border border-accent-400/60 bg-linear-to-r/srgb from-accent-300/15 to-transparent">
                 <span className="inline-flex items-center gap-1.5">
@@ -961,7 +962,7 @@ export default function TierLeaderboard() {
                 </div>
               ))}
             </div>
-          )}
+          </Fold>
         </section>
       )}
 

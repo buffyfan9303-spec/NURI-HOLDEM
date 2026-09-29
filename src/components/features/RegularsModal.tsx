@@ -1,6 +1,7 @@
 // src/components/features/RegularsModal.tsx
 // 단골 관리(CRM) — 매장 전체 고객을 장부 바인 기록 기준으로 나열 + 행 펼침 시 상세 활동(바인/방문/머니인/예약/누적/객단가).
 // 새 테이블 없이 기존 장부 데이터만 사용. 관계자(직원)는 제외.
+import { Fold } from '../atoms/Fold';
 import { useEffect, useMemo, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { getVenueRegulars, getCustomerActivity, type VenueRegular, type CustomerActivity } from '../../api/reservations';
@@ -191,7 +192,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
           </button>
         )}
       </div>
-      {open && (
+      <Fold open={open}>
         <div className="border-t border-border-subtle px-3 py-2">
           {actError ? (
             <LoadErrorCard error={actError} what="활동 내역" compact onRetry={loadAct} />
@@ -250,7 +251,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
             )}
           </div>
         </div>
-      )}
+      </Fold>
     </li>
   );
 }

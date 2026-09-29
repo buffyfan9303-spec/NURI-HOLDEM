@@ -1,3 +1,4 @@
+import { Fold } from '../atoms/Fold';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Comment } from '../../api/community';
 import { useAuth } from '../../contexts/AuthContext';
@@ -220,8 +221,8 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
       </div>
 
       {/* 답글 입력창 */}
-      {showReplyBox && (
-        <form onSubmit={submitReply} className="ml-10 flex gap-2 animate-slide-up">
+      <Fold open={showReplyBox}>
+        <form onSubmit={submitReply} className="ml-10 flex gap-2">
           <input
             type="text"
             autoFocus
@@ -232,7 +233,7 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
           />
           <button type="submit" className="btn-primary px-3 shrink-0" disabled={!replyContent.trim() || replyPending}>등록</button>
         </form>
-      )}
+      </Fold>
 
       {/* 답글 목록 — 루트 아래 전체 하위 트리 평탄 수집(3레벨+ 유실 방지, 검증 #05).
           스레드 선: border-subtle 2px 는 다크 1.11:1 · 라이트 1.23:1 로 **있으나 마나 한 선**이었다

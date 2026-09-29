@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { getStaffSchedule, getStaffWages, saveStaffWage, setMyShiftTime, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
+import { PUNCH_EVENT } from '../../lib/staffPunch';
 import { getMyVenueStaff } from '../../api/auth';
 // 급여 시스템이 두 벌이다 — 직원(staff_schedule × staff_wage)과 딜러 로테이션(dealer_shifts).
 // 딜러는 시급이 **시프트 행에 직접** 붙어 있어 staff_wage 와 무관하다. 합계는 둘을 더해야 맞다.
@@ -457,13 +458,16 @@ export function StaffSelfAttendance({ venueId, active = true, readOnly = false }
     if (!active) return () => { alive = false; }; // 숨은 판은 채널을 놓는다 — 다시 보이면 조용히 한 번 읽는다
     reload();
     const off = subscribeStaffSchedule(venueId, reload); // 실시간 동기화
-    return () => { alive = false; off(); };
+    // 맨 위 출근·퇴근 버튼(StaffPunchBar)이 찍으면 실시간 도착을 기다리지 않고 바로 다시 읽는다.
+    const onPunch = (e: Event) => { if ((e as CustomEvent<{ venueId: string }>).detail?.venueId === venueId) reload(); };
+    window.addEventListener(PUNCH_EVENT, onPunch);
+    return () => { alive = false; off(); window.removeEventListener(PUNCH_EVENT, onPunch); };
     /* eslint-disable-next-line */
   }, [venueId, from, to, shiftTick, user, active]);
   const setT = async (s: StaffShift, field: 'checkIn' | 'checkOut', val: string) => {
     const prev = s[field] ?? null;
     setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, [field]: val || null } : x)));
-    try { await setMyShiftTime(venueId, s.date, field, val || null); }
+    try { await setMyShiftTime(venueId, s.date, field, val || null); window.dispatchEvent(new CustomEvent(PUNCH_EVENT, { detail: { venueId } })); }
     catch (e) {
       setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, [field]: prev } : x)));
       toast.show(msgOf(e, '출퇴근 기록 저장 실패'), 'error');

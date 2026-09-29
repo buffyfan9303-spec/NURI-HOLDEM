@@ -63,6 +63,7 @@ import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import NuriMark from './components/atoms/NuriMark';
 import Icon from './components/atoms/Icon';
+import { Fold } from './components/atoms/Fold';
 import Avatar from './components/atoms/Avatar';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import { useTheme } from './contexts/ThemeContext';
@@ -4347,7 +4348,7 @@ export default function App() {
                           </button>
                         )}
                       </header>
-                      {noticesOpen && (browseNotices.length > 0 ? (
+                      <Fold open={noticesOpen}>{browseNotices.length > 0 ? (
                         // 행은 NoticeSection 의 NoticeRow 단일 출처 — 커뮤니티·장터·딜러와 마커·높이(44px)·타이포가 같다.
                         // 껍데기(접이식 헤더)만 여기 고유다: 첫 화면 밀도 우선이라 기본 접힘이어야 한다.
                         <ul className="p-2 pt-0 space-y-0.5">
@@ -4361,7 +4362,7 @@ export default function App() {
                         </ul>
                       ) : (
                         <p className="px-3 py-3 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>
-                      ))}
+                      )}</Fold>
                     </section>
                   </div>
                 )}

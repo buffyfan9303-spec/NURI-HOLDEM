@@ -1,0 +1,27 @@
+{
+  "confirmation": {
+    "subjectKey": "mailer_subjects_confirmation",
+    "contentKey": "mailer_templates_confirmation_content",
+    "subject": "[NURI HOLDEM] 이메일 인증을 완료해 주세요"
+  },
+  "recovery": {
+    "subjectKey": "mailer_subjects_recovery",
+    "contentKey": "mailer_templates_recovery_content",
+    "subject": "[NURI HOLDEM] 비밀번호 재설정 인증번호"
+  },
+  "magic_link": {
+    "subjectKey": "mailer_subjects_magic_link",
+    "contentKey": "mailer_templates_magic_link_content",
+    "subject": "[NURI HOLDEM] 로그인 링크"
+  },
+  "email_change": {
+    "subjectKey": "mailer_subjects_email_change",
+    "contentKey": "mailer_templates_email_change_content",
+    "subject": "[NURI HOLDEM] 새 이메일 주소를 확인해 주세요"
+  },
+  "reauthentication": {
+    "subjectKey": "mailer_subjects_reauthentication",
+    "contentKey": "mailer_templates_reauthentication_content",
+    "subject": "[NURI HOLDEM] 본인 확인 인증번호"
+  }
+}

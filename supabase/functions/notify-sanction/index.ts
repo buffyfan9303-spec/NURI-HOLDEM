@@ -4,7 +4,10 @@
 //   → Authorization 의 유저 JWT 를 검증하고 profiles.role = 'admin' 인 경우에만 진행(fail-closed 401/403).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const LOGO = 'https://nuriholdem.com/2.png';
+// 로고는 메일 디자인 체계와 같은 자산 — 예전 /2.png 는 2026-08-26 삭제돼 SPA HTML 을 돌려줘 깨진 이미지였다(2026-09-30 실측).
+//   배경색을 구운 PNG 라 로고 줄 배경도 그 색(LOGO_BG)으로 맞춘다.
+import { LOGO_URL as LOGO, LOGO_W, LOGO_H, C as EMAIL_C } from '../_shared/email/layout.ts';
+const LOGO_BG = EMAIL_C.page;
 const C = {
   bg: '#0A0C0F', band: '#101218', card: '#14171F', inner: '#0E1117',
   line: '#2C3140', gold: '#FFD100', text: '#F0F4FF', sub: '#8B95A8', faint: '#5A6175', red: '#FF6B6B',
@@ -16,8 +19,8 @@ function shell(inner) {
    <tr><td align="center" style="padding:32px 16px;">
     <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="width:100%;max-width:520px;font-family:'Apple SD Gothic Neo','Malgun Gothic',Roboto,Arial,sans-serif;">
       <tr><td style="height:4px;background:${C.gold};border-radius:14px 14px 0 0;font-size:0;line-height:0;">&nbsp;</td></tr>
-      <tr><td align="center" style="background:${C.band};padding:28px 24px 20px;border-left:1px solid ${C.line};border-right:1px solid ${C.line};">
-        <img src="${LOGO}" alt="NURI HOLDEM" width="140" style="width:140px;max-width:140px;height:auto;display:block;border:0;" />
+      <tr><td align="center" style="background:${LOGO_BG};padding:28px 24px 20px;border-left:1px solid ${C.line};border-right:1px solid ${C.line};">
+        <img src="${LOGO}" alt="NURI HOLDEM" width="${LOGO_W}" height="${LOGO_H}" style="width:${LOGO_W}px;height:${LOGO_H}px;display:block;border:0;color:${C.gold};font-size:18px;font-weight:800;" />
       </td></tr>
       <tr><td style="background:${C.card};padding:30px 26px;border-left:1px solid ${C.line};border-right:1px solid ${C.line};">
         ${inner}

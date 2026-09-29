@@ -26,6 +26,7 @@
 //   ③ 실패를 '기록 없음'으로 위장하지 않는다 — LoadErrorCard 로 드러내고 재시도를 준다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon, { type IconName } from '../atoms/Icon';
+import { onSummaryClick } from '../atoms/Fold';
 import { isStaleResponse } from '../../lib/staleResponse';
 import CalendarToolsPanel from './CalendarToolsPanel';
 import { useToast } from '../atoms/Toast';
@@ -852,7 +853,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
         {mode === 'bankroll' && (
           /* 개인 ROI 입력(선택) — 접어 둔다: +/- 만 적는 사람에게 칸 5개는 소음이다. 같은 6칸 그리드라 오른쪽 변이 맞는다. */
           <details className="col-span-6 rounded-input bg-surface-high/40 px-2 py-1.5" data-testid="roi-inputs">
-            <summary className="cursor-pointer select-none text-2xs font-semibold text-ink-secondary">참가비 · 매장 · 게임 적기 (선택)</summary>
+            <summary onClick={onSummaryClick} className="cursor-pointer select-none text-2xs font-semibold text-ink-secondary">참가비 · 매장 · 게임 적기 (선택)</summary>
             <p className="mt-1 text-2xs leading-relaxed text-ink-muted">금액은 참가비를 뺀 순결과로 적어요. 참가비를 적으면 ROI·ITM 이 계산돼요.</p>
             {/* 라벨을 눈에 보이게 단다(2026-09-10 §6) — placeholder 는 입력을 시작하는 순간 사라져서
                 '이 칸이 뭐였지'를 만든다. <label> 이 그리드 칸을 잡고 input 은 그 안에서 100% 를 쓴다.

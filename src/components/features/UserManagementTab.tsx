@@ -1,3 +1,4 @@
+import { Fold } from '../atoms/Fold';
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '../atoms/Toast';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -354,8 +355,8 @@ function UserRow({ user, onUpdate }: {
       </div>
 
       {/* 액션 메뉴 */}
-      {menuOpen && (
-        <div className="px-2.5 py-2 border-t border-border-subtle bg-surface-mid animate-slide-up">
+      <Fold open={menuOpen}>
+        <div className="px-2.5 py-2 border-t border-border-subtle bg-surface-mid">
           {pending ? (
             // ── 사유 입력 단계 ──
             <div className="space-y-2">
@@ -422,7 +423,7 @@ function UserRow({ user, onUpdate }: {
             </div>
           )}
         </div>
-      )}
+      </Fold>
 
       {/* 활동 내역 패널 */}
       {actOpen && (
@@ -461,7 +462,7 @@ function UserRow({ user, onUpdate }: {
       )}
 
       {/* 활동점수 패널 — 잔액 · 구매 내역(환불) · 지급 기록 */}
-      {ptOpen && <PointsPanel userId={user.id} userName={user.nickname ?? user.name} />}
+      <Fold open={ptOpen}><PointsPanel userId={user.id} userName={user.nickname ?? user.name} /></Fold>
     </li>
   );
 }

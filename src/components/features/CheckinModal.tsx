@@ -1,4 +1,5 @@
 // src/components/features/CheckinModal.tsx — 업주/직원용: 체크인 QR 표시 + 오늘 체크인 명단(실시간).
+import { Fold } from '../atoms/Fold';
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import Modal from '../atoms/Modal';
@@ -178,7 +179,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
                   </button>
                 )}
                 {/* Q2 — 1단계: 장수 선택(버튼은 선택만, 발급 RPC 를 부르지 않는다) 또는 직접 입력 */}
-                {canIssue && sendTo === c.id && !(confirm && confirm.c.id === c.id) && (
+                <Fold open={canIssue && sendTo === c.id && !(confirm && confirm.c.id === c.id)} className="w-full">
                   <span className="mt-1.5 flex w-full flex-wrap items-center gap-1.5 border-t border-border-subtle pt-1.5">
                     <span className="text-2xs text-ink-muted">몇 장 보낼까요?</span>
                     {[1, 2, 3, 5].map((n) => (
@@ -198,10 +199,10 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
                       </button>
                     </span>
                   </span>
-                )}
+                </Fold>
                 {/* Q2 — 2단계: 매장/받는 회원/장수/사유/만료 최종 확인. 실행 전 별도 확인, 취소 가능 —
                     확인 내용이 바뀌거나(다른 장수 재선택) 매장이 바뀌면(위 clear effect) 이 단계 자체가 사라진다. */}
-                {canIssue && confirm && confirm.c.id === c.id && (
+                <Fold open={!!(canIssue && confirm && confirm.c.id === c.id)} className="w-full">{() => confirm && (
                   <div className="mt-1.5 flex w-full flex-col gap-1 rounded-input border border-accent-400/40 bg-accent-300/6 p-2 text-2xs">
                     <p className="font-bold text-ink-secondary">전송 확인</p>
                     <p>매장: <b className="text-ink-primary">{venueName ?? '우리 매장'}</b></p>
@@ -217,8 +218,8 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
                         {sendBusy ? '전송 중…' : `${confirm.count}장 전송`}
                       </button>
                     </div>
-                  </div>
-                )}
+                  </div>)}
+                </Fold>
               </li>
             ))}</ul>}
           {/* 🔴 법적 고지 — 오너 지시로 **필수**다. 지우지 마라.

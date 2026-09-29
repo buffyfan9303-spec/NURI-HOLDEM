@@ -29,6 +29,7 @@ describe('숨은 keep-alive 판은 실시간 채널을 놓는다', () => {
   it('🔴 VenueManageTab: 두 호출부가 active 를 넘긴다', () => {
     const c = read('VenueManageTab.tsx');
     expect(c).toMatch(/<SeasonPanelM [^>]*active=\{tabActive && renderSection === 'settings' && renderSettingsTab === 'page'\}/);
-    expect(c).toMatch(/<StaffSchedule venueId=\{venueId\} active=\{active\} \/>/);
+    // 2026-09-30 — 출근 스케줄은 지연 청크(StaffScheduleL)로 옮겼다(청크 예산). 호출부 계약은 그대로다.
+    expect(c).toMatch(/<StaffScheduleL venueId=\{venueId\} active=\{active\} \/>/);
   });
 });

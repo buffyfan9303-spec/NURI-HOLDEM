@@ -5,7 +5,7 @@
 //   기간 칩이 KST 날짜를 서버로 보냄 · 보유자 미사용분 유형 라벨(B3) · 권한 오류(42501)는 '0' 이 아니라 오류 카드.
 // 실행: E2E_BASE_URL=http://localhost:4315 npx playwright test e2e/voucher-reason-stats.spec.ts --output=<scratch>
 import { test, expect } from './_fixtures';
-import type { Page } from '@playwright/test';
+import { devices, type Page } from '@playwright/test';
 import { bootOwner, openMyStore, MOCK_VENUE } from './_mockOwner';
 
 const SHOT = process.env.VSTAT_SHOT_DIR;
@@ -133,6 +133,27 @@ test.describe('이용권 유형별 전송 표(V2)', () => {
     });
   }
 
+  // PR #51 verifier 참고 1(2026-09-30) — 보유자 목록은 예전엔 hidden 으로 접혀 **DOM 이 남았다**. Fold 로 바꾸며 닫을 때 언마운트돼
+  //   펼친 보유자 행·스크롤 등 DOM 상태가 사라졌다 → keepMounted. 같은 노드가 살아 있는지(표식)로 본다.
+  test('보유자 현황을 닫았다 다시 열어도 목록 DOM 이 그대로다(keepMounted)', async ({ page }) => {
+    test.setTimeout(120_000);
+    await open(page, 390, 844, 'ok');
+    await page.getByRole('button', { name: '관리', exact: true }).first().evaluate((b) => (b as HTMLElement).click());
+    const unused = page.getByTestId('holder-unused');
+    await expect(unused, '보유자를 펼치지 못했다').toBeVisible();
+    await unused.evaluate((u) => { (u as HTMLElement & { __keep?: number }).__keep = 1; });
+    const toggle = page.getByRole('button', { name: /보유자 현황·통계/ });
+    await toggle.evaluate((b) => (b as HTMLElement).click());
+    await expect(unused, '닫았는데 목록이 보인다').toBeHidden();
+    await page.waitForTimeout(600);
+    await toggle.evaluate((b) => (b as HTMLElement).click());
+    await expect(unused, '다시 열었는데 목록이 안 보인다').toBeVisible();
+    await page.waitForTimeout(600);
+    expect(await unused.evaluate((u) => (u as HTMLElement & { __keep?: number }).__keep ?? 0), '다시 열자 목록이 새로 그려졌다(언마운트됨)').toBe(1);
+    const h = await unused.evaluate((u) => u.closest('[hidden]') ? -1 : u.getBoundingClientRect().height);
+    expect(h, '다시 연 목록이 높이 0 에 갇혔다').toBeGreaterThan(0);
+  });
+
   test('권한 오류(42501)는 0 이 아니라 오류 카드', async ({ page }) => {
     test.setTimeout(120_000);
     await open(page, 1440, 900, 'denied');
@@ -140,6 +161,38 @@ test.describe('이용권 유형별 전송 표(V2)', () => {
     await expect(page.getByText('유형별 통계 열람 권한이 없습니다')).toBeVisible();
     await expect(page.getByTestId('voucher-reason-stats'), '권한 오류인데 표(0장)가 그려졌다').toHaveCount(0);
     await expect(page.locator('[data-stat-tile]'), '권한 오류인데 타일(0)이 그려졌다').toHaveCount(0);
+  });
+});
+
+// PR #51 재검토 N1(2026-09-30) — keepMounted 판은 닫힘 끝에 inline display:none 이 남는다. 재열림 판정이 그 상태(rect 0)로
+//   '누른 요소가 판 아래인가' 를 재서 참이 됐고, pin 보정·overflowAnchor none 이 켜져 1440 에서 재열림마다 scrollY 가 −1 씩 샜다(449→448→447).
+//   판은 토글 **아래**에 있으므로 재열림에도 보정이 켜지면 안 된다 — 앵커링을 한 프레임이라도 끄는지와 scrollY 를 같이 본다.
+test.describe('보유자 현황 재열림 스크롤(1440 데스크톱)', () => {
+  test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false, deviceScaleFactor: 1, userAgent: devices['Desktop Chrome'].userAgent });
+  test('닫았다 다시 열기 3회 — scrollY 그대로, 앵커링 안 끔', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await open(page, 1440, 900, 'ok');
+    const toggle = page.getByRole('button', { name: /보유자 현황·통계/ });
+    await toggle.evaluate((b) => b.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(500);
+    await page.evaluate(() => {
+      const w = window as Window & { __anchorOff?: number };
+      w.__anchorOff = 0;
+      const f = () => { if ((document.scrollingElement as HTMLElement).style.overflowAnchor === 'none') w.__anchorOff!++; requestAnimationFrame(f); };
+      requestAnimationFrame(f);
+    });
+    const sy0 = await page.evaluate(() => scrollY);
+    const press = async () => {
+      const b = (await toggle.boundingBox())!;
+      await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2, { delay: 120 });
+      await page.waitForTimeout(700);
+    };
+    const ys: number[] = [];
+    for (let i = 0; i < 3; i++) { await press(); await press(); ys.push(await page.evaluate(() => scrollY)); }
+    await expect(page.getByTestId('voucher-reason-stats'), '다시 열었는데 표가 안 보인다').toBeVisible();
+    expect(ys, `재열림마다 scrollY 가 샌다(시작 ${sy0})`).toEqual([sy0, sy0, sy0]);
+    expect(await page.evaluate(() => (window as Window & { __anchorOff?: number }).__anchorOff), '토글 아래 판을 다시 여는데 스크롤 앵커링을 껐다(누른 요소가 판 아래라고 오판)').toBe(0);
   });
 });
 function SHOT_TAG() { return process.env.VSTAT_SHOT_TAG ?? 'after'; }
