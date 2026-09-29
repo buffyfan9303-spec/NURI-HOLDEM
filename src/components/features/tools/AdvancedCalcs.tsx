@@ -17,8 +17,9 @@ export function MdfCalc() {
   const [pot, setPot] = useState('100');
   const [bet, setBet] = useState('66');
 
-  const p = Math.max(0, Number(pot) || 0);
-  const b = Math.max(0, Number(bet) || 0);
+  // 2026-09-29 D2: '1e400' → Number 가 Infinity → MDF NaN%. NumIn 과 같은 경계(안전정수)로 자른다
+  const p = Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Number(pot) || 0));
+  const b = Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Number(bet) || 0));
   const ratio = p > 0 ? b / p : 0;
   // MDF = pot / (pot + bet) — 이만큼은 디펜드해야 상대의 임의 블러프가 이득을 못 봄
   const mdf = p + b > 0 ? (p / (p + b)) * 100 : 0;
