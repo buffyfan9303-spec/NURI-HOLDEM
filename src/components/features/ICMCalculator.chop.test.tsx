@@ -5,11 +5,19 @@ import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ICMCalculator from './ICMCalculator';
 
+/** 셀 안 태그를 글자만 남을 때까지 지운다(한 번만 지우면 겹친 태그가 남는다 — CodeQL js/incomplete-multi-character-sanitization). */
+function stripTags(html: string): string {
+  let prev: string;
+  let s = html;
+  do { prev = s; s = s.replace(/<[^>]*>/g, ''); } while (s !== prev);
+  return s;
+}
+
 /** 표의 n번째 열(0부터) 숫자를 tbody 행 순서대로 뽑는다 */
 function column(html: string, col: number): number[] {
   const tbody = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/)?.[1] ?? '';
   return [...tbody.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((r) => {
-    const cells = [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => c[1].replace(/<[^>]+>/g, ''));
+    const cells = [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => stripTags(c[1]));
     return Number(cells[col].replace(/,/g, ''));
   });
 }
