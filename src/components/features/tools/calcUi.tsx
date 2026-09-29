@@ -46,10 +46,12 @@ export function NumIn({ value, onChange, suffix, placeholder, decimal, max }: { 
           if (decimal) {
             if (!/^\d*\.?\d*$/.test(s)) return; // 숫자·소수점만 허용
             const n = parseFloat(s) || 0;
+            if (!(n <= Number.MAX_SAFE_INTEGER)) return; // 2026-09-29 D1: 400자리 입력 → Infinity → 계산기 NaN%. 비유한·안전정수 초과(합이 넘치는 값)는 경계에서 버린다
             setDraft({ raw: s, sent: n });
             onChange(n);
           } else {
             const n = parseInt(s, 10) || 0;
+            if (!(n <= Number.MAX_SAFE_INTEGER)) return; // 위와 같다(D1) — 이 입력을 쓰는 모든 도구가 여기서 보호된다
             onChange(Math.max(0, max !== undefined ? Math.min(max, n) : n));
           }
         }}

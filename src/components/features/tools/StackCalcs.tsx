@@ -50,13 +50,16 @@ export function MzoneCalc() {
   const [bb, setBb] = useState(2000);
   const [ante, setAnte] = useState(2000);
   const [players, setPlayers] = useState(9);
-  const cost = sb + bb + ante * Math.max(1, players);
-  const rawM = cost > 0 ? stack / cost : 0;
+  // 2026-09-29 D3: 인원 0 을 1명으로 보거나(→레드) 비용 0 에 '데드'를 붙이지 않는다 — 계산 불가면 M·존 모두 '-'
+  const cost = sb + bb + ante * players;
+  const ready = players > 0 && cost > 0;
+  const rawM = ready ? stack / cost : 0;
   // 🔴 2026-09-19 GTO 감사 [medium]: 20/10/6/1 경계는 Harrington 의 **Effective M**(=raw M × 인원/10)
   //   기준선이다 — raw M 을 그대로 대입하면 숏핸디드에서 위험도를 과소평가한다(실측: 인원 2명·raw M=11.8
   //   은 '옐로'로 뜨지만 Effective M=2.35 는 '레드'). 화면 숫자와 존 판정을 같은 값(effective)으로 맞춘다.
-  const m = rawM * (Math.max(1, players) / 10);
-  const zone = m >= 20 ? { l: '그린 · 여유', c: '#22C55E' }
+  const m = rawM * (players / 10);
+  const zone = !ready ? { l: '-', c: '#94A3B8' }
+    : m >= 20 ? { l: '그린 · 여유', c: '#22C55E' }
     : m >= 10 ? { l: '옐로 · 주의', c: '#EAB308' }
     : m >= 6 ? { l: '오렌지 · 압박', c: '#F97316' }
     : m >= 1 ? { l: '레드 · 위험(푸시/폴드)', c: '#EF4444' }
@@ -72,7 +75,7 @@ export function MzoneCalc() {
       </div>
       {/* 라벨을 'Effective M'으로 명시 — 보여주는 숫자가 raw M(=스택/한바퀴비용)이 아니라
           인원 보정을 거친 값이라는 걸 감춰서 되돌아가지 않게 한다(위 주석 참고). */}
-      <Result label={`Effective M = ${m ? m.toFixed(1) : '-'}`} value={zone.l} />
+      <Result label={`Effective M = ${ready ? m.toFixed(1) : '-'}`} value={zone.l} />
       <div className="h-1.5 w-full rounded-full" style={{ background: zone.c }} />
     </CalcCard>
   );
