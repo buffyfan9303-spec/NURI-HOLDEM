@@ -21,8 +21,8 @@ export const BIZ_REQUIRED: [string, string][] = [
   ['상호', '엔에이치홀딩스'],
   ['사업자등록번호', '525-20-02937'],
   ['대표자', '김윤혜'],
-  // ⚠ '201동 1403호' 의 공백은 **NBSP**다 — 일반 공백이면 360·390 에서 '1403호' 만 다음 줄에 혼자 떨어진다(2026-09-16 실측).
-  ['사업장 주소', '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호'],
+  // 2026-09-29 주소 이전(오너). 옛 주소의 '201동 1403호' 는 NBSP 로 묶었었다(360·390 에서 호수만 혼자 떨어짐, 2026-09-16 실측).
+  ['사업장 주소', '경기도 남양주시 다산중앙로82번안길 166-46, 207-본244호'],
   ['전화번호', '070-8098-1727'],
 ];
 const BIZ_EXTRA: [string, string][] = [
@@ -93,7 +93,11 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
           {BIZ_REQUIRED.map(([k, v]) => (
             <div key={k} className="flex items-start gap-1">
               <dt className="shrink-0 whitespace-nowrap">{k}</dt>
-              <dd className="text-ink-secondary">{v}</dd>
+              {/* 하이픈이 든 덩어리(166-46, · 207-본244호 · 전화번호)는 하이픈에서 줄바꿈되지 않게 묶는다 —
+                  2026-09-29 실측: 320px 에서 '166-' / '46', 390px 에서 '207-' / '본244호' 로 끊겼다. 글자는 바꾸지 않는다. */}
+              <dd className="text-ink-secondary">
+                {v.split(/(\s+)/).map((t, i) => (t.includes('-') ? <span key={i} className="whitespace-nowrap">{t}</span> : t))}
+              </dd>
             </div>
           ))}
         </dl>
