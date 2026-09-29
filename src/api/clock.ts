@@ -950,7 +950,11 @@ export function ledgerLiveStats(
 
 /** 두 스냅샷의 장부 몫이 같은가 — 같으면 쓰지 않는다(작성자가 여럿이어도 쓰기는 한 번). */
 export function sameLedgerPart(a: ClockLiveStats | null | undefined, b: ClockLiveStats | null | undefined): boolean {
-  return JSON.stringify([a?.ledger ?? null, a?.buyInAmount ?? null]) === JSON.stringify([b?.ledger ?? null, b?.buyInAmount ?? null]);
+  // K3(2026-09-29) — 서버 트리거(20260929t)가 쓴 jsonb 는 키 순서가 다르다(길이→사전순). 순서로 비교하면 서버 값을 늘 '다르다'고 보고
+  //   화면이 한 번씩 헛쓰기를 한다 → 키를 정렬한 문자열로 비교한다.
+  const key = (x: ClockLiveStats | null | undefined) =>
+    JSON.stringify([x?.ledger ? Object.entries(x.ledger).sort(([p], [q]) => (p < q ? -1 : 1)) : null, x?.buyInAmount ?? null]);
+  return key(a) === key(b);
 }
 
 /** 장부 몫 작성기 — live_stats 를 쓰는 **유일한** 자리(시작 upsert 제외). 이미 같으면 쓰지 않고 false. */
