@@ -78,7 +78,7 @@ describe('composeLiveStats · 표시는 장부 몫 + 행의 열', () => {
   it('ledgerLiveStats(저장용)의 장부 몫은 세션 얼리 창으로 센다(K4) — 합성과 이어진다', () => {
     const s = st({ eliminations: 0, liveStats: null });
     const out = ledgerLiveStats(s, [], { earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null, openedAt: null, buyinAmount: 5 });
-    expect(out.ledger).toEqual({ entries: 0, rebuys: 0, earlies: 0, doubleEarlies: 0, totalBuyins: 0, earlyUnits: 0 });
+    expect(out.ledger).toEqual({ entries: 0, rebuys: 0, earlies: 0, doubleEarlies: 0, totalBuyins: 0, addons: 0, earlyUnits: 0 });  // #3 애드온도 장부 몫
     expect(composeLiveStats({ ...s, adjEntries: 3, liveStats: out })!.alive).toBe(3);
   });
 });

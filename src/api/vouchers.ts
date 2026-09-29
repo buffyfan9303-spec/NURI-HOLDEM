@@ -32,6 +32,8 @@ export interface Voucher {
   issueReason: VoucherReason | null;
   /** 이벤트 카드 당첨으로 지급된 이용권이면 그 캠페인 id — issue_reason 은 수동 이벤트와 같은 'event' 라 이것으로 가른다(20260914b). */
   eventCampaignId: string | null;
+  /** #8(2026-09-29, 20260929u) 접수대 승인 때 고른 용도. null = 승인 전이거나 이 기능 이전 사용분(표시 없음). */
+  usedFor?: 'buyin' | 'addon' | null;
 }
 /**
  * '보유 중' 판정의 단일 정본 — 지갑(VoucherWallet)과 시트의 매장별 장수(MyVoucherSheet)가 같이 쓴다.
@@ -89,6 +91,7 @@ function mapRow(r: any): Voucher {
     expiresAt: r.expires_at ?? null,
     issueReason: (r.issue_reason as VoucherReason | null) ?? null,
     eventCampaignId: r.event_campaign_id ?? null,
+    usedFor: r.used_for === 'addon' || r.used_for === 'buyin' ? r.used_for : null,
   };
 }
 
@@ -103,6 +106,20 @@ export async function listVenueVouchers(venueId: string): Promise<Voucher[]> {
     .eq('venue_id', venueId).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapRow);
+}
+
+/** #6(오너 결정 2026-09-29) — 대시보드 이용권 카드의 '전송' 수 = **실제로 보낸 장수**(store_vouchers 행).
+ *  예전엔 업주가 장부에 손으로 적는 ledger_sessions.voucher_issued 였다(실제 전송과 무관한 수).
+ *  세는 것: 이 매장이 보낸 이용권 중 **전송 취소(revoked)를 뺀** 것 — 사용됨·만료도 '보낸 것'이라 센다.
+ *  구간: KST 날짜 [fromDate, toDateExcl). 행을 받지 않고 개수만(head count) — 1000행 절단이 없다.
+ *  ⚠ 실패를 0 으로 위장하지 않는다(throw) — 화면은 '—' 로 보여 준다. */
+export async function countVenueVouchersSent(venueId: string, fromDate: string, toDateExcl: string): Promise<number> {
+  if (IS_MOCK) return 0;
+  const { count, error } = await supabase.from('store_vouchers').select('id', { count: 'exact', head: true })
+    .eq('venue_id', venueId).neq('status', 'revoked')
+    .gte('created_at', `${fromDate}T00:00:00+09:00`).lt('created_at', `${toDateExcl}T00:00:00+09:00`);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 /** 발행 매장 이용권 실시간 구독 — 사용/발급/회수 시 즉시 반영(RLS로 권한 자동 게이트). */

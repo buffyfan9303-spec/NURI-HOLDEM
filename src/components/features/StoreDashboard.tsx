@@ -9,7 +9,7 @@ import { listStaleOpenSessions,
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, ledgerMoney, addonFinance, ticketUsedT, wonToMan, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
   getLastClosedRound, MAIN_GAME_SEQ, kstToday, type LastClosedRound, type PosterOpsSummary,
-  type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, ledgerCounts,} from '../../api/ledger';
+  type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, type VoucherUse, ledgerCounts,} from '../../api/ledger';
 import { useToast } from '../atoms/Toast';
 import { getClockState, getVenueClocks, subscribeClock, effectiveLevel, syncClockLedgerStats, type ClockState } from '../../api/clock';
 import { levelNumberAt, formatCountdown } from '../../lib/clockLevel';
@@ -29,6 +29,7 @@ import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
 import { usePayRules } from '../../api/payrollRules';
 import { laborSummary, weekStartOf } from '../../lib/staffPay';
 import VoucherManageModal from './VoucherManageModal';
+import { countVenueVouchersSent } from '../../api/vouchers';
 import CheckinModal from './CheckinModal';
 import Modal from '../atoms/Modal';
 import { getAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
@@ -48,6 +49,8 @@ import { useResyncOnWake } from '../../lib/realtimeResync';
 // 정산 단계만 VenueManageTab 에서 kstToday 로 우회하고 있었다 — 근원을 한 곳으로 맞춘다.
 const kstDaysAgo = (n: number) => kstToday(Date.now() - n * 86_400_000);
 const lastN = (n: number) => Array.from({ length: n }, (_, i) => kstDaysAgo(n - 1 - i));
+/** 'YYYY-MM-DD' 다음 날(달력 계산만 — 시간대 무관) */
+const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const last7 = () => lastN(7);
 const last14 = () => lastN(14);
@@ -162,6 +165,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   const payRules = usePayRules(venueId);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [range, setRange] = useState<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }>({ sessions: [], buyins: [] });
+  // #6(2026-09-29) — 이용권 카드 '전송' 수 = 실제로 보낸 장수(store_vouchers). null = 아직/실패(화면은 '—').
+  const [sent, setSent] = useState<{ week: number; today: number } | null>(null);
+  const [sentErr, setSentErr] = useState<unknown>(null);
   // ⚠ 14일 장부 조회 실패와 '장부가 없다'는 다르다 — 예전엔 catch(() => {}) 라 이 한 번의 실패가
   //   '최근 7일 장부 데이터가 없습니다' · '비교할 장부 데이터가 없습니다' · 이용권 7일 **0장** ·
   //   '오늘 게임' 표 통째 소실로 위장됐다(wageErr·resCountsErr 와 같은 모양으로 갈라놓는다).
@@ -289,12 +295,22 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     rangeGenRef.current = stamp.seq;
     const stale = () => isStaleResponse(stamp, { seq: rangeGenRef.current, owner: ownerRef.current });
     // d 는 KST 오늘 = 14일 창의 마지막 날(d14[13]).
-    return getLedgerRange(venueId, kstDaysAgo(13), d).then(
+    const ledger = getLedgerRange(venueId, kstDaysAgo(13), d).then(
       (r) => { if (stale()) return true; setRange(r); setRangeErr(null); return true; },
       // 낡은(다른 매장·이전 세대) 실패는 지금 화면의 실패가 아니다 — 배너도 띄우지 않고 시각도 막지 않는다.
       (e) => { if (stale()) return true; setRangeErr(e); return false; },
     );
-  }, [venueId, d]);
+    // #6 — 이용권 카드의 7일·오늘 전송 수. 이용권 카드를 못 보는 사람은 세지 않는다(RLS 0 을 '0장' 으로 보이지 않게).
+    const wk = last7();
+    const sentLoad = !caps.voucher ? Promise.resolve(true) : Promise.all([
+      countVenueVouchersSent(venueId, wk[0], nextDay(wk[wk.length - 1])),
+      countVenueVouchersSent(venueId, d, nextDay(d)),
+    ]).then(
+      ([week, today]) => { if (stale()) return true; setSent({ week, today }); setSentErr(null); return true; },
+      (e) => { if (stale()) return true; setSent(null); setSentErr(e); return false; },
+    );
+    return Promise.all([ledger, sentLoad]).then(([a, b]) => a && b);
+  }, [venueId, d, caps.voucher]);
 
   const reload = useCallback(() => {
     const stamp: RequestStamp<string> = { seq: genRef.current + 1, owner: `${venueId}#${d}` };
@@ -566,14 +582,19 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   const fmtClock = formatCountdown;   // K9 — 시간 글자 한 벌(올림)
   const gameLabel = (g: number | null) => g == null ? '미지정' : g <= 1 ? '메인' : `사이드${g - 1}`;
   // 위젯 인라인 승인/거절 — 장부로 안 넘어가고 즉시 처리(승인=요청 게임에 추가, 결제 기록은 장부에서 별도)
-  const quickApprove = async (r: BuyinRequest) => {
+  // #8(2026-09-29) — 이용권 요청은 접수대가 용도를 고른다(애드온 게임일 때만 '애드온' 버튼). 서버도 같은 조건으로 막는다.
+  const gameIsAddon = (seq: number | null) => {
+    const s = seq ?? MAIN_GAME_SEQ;
+    return !!todayGames.find((g) => g.sx.gameSeq === s)?.sx.isAddon || (session?.gameSeq === s && !!session?.isAddon);
+  };
+  const quickApprove = async (r: BuyinRequest, voucherUse: VoucherUse = 'buyin') => {
     setReqBusy(r.id);
     // ⚠ 이용권 요청이면 서버가 **티켓 바인을 자동 기록**한다(record_buyin=false 여도). 그때도 할인 자리번호가
     //   쓰이므로 여기서도 넘겨야 한다 — 안 넘기면 0(정가)으로 굳어 discountSummary 가 그 바인을 못 센다.
     try {
       const seq = r.requestedGameSeq ?? MAIN_GAME_SEQ;
-      await approveBuyinRequest(r.id, seq, false, 'cash', undefined, await resolveDiscountIndex(venueId, r.sessionDate, seq));
-      setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(`${r.playerName} 참가 승인`, 'success');
+      await approveBuyinRequest(r.id, seq, false, 'cash', undefined, await resolveDiscountIndex(venueId, r.sessionDate, seq), voucherUse);
+      setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(voucherUse === 'addon' ? `${r.playerName} 애드온 승인(이용권)` : `${r.playerName} 참가 승인`, 'success');
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); }
     finally { setReqBusy(null); }
@@ -706,10 +727,10 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
     const s = sessByGame.get(`${b.sessionDate}#${b.gameSeq}`);
     if (s) weekTicket += ticketUsedT(buyinFinance(b, s), addonFinance(b)); // T 합계(바인 + 애드온) — 위 fin.ticket 과 **같은 척도**여야 한다(2026-09-20 오너 결정)
   }
-  // 매장이용권 발행/시상(세션 입력값) — 7일 / 오늘
-  let weekVoucher = 0;
-  for (const s of range.sessions) { if (days.includes(s.sessionDate)) weekVoucher += s.voucherIssued ?? 0; }
-  const todayVoucher = session?.voucherIssued ?? 0;
+  // #6(2026-09-29) — 이용권 전송 수 7일 / 오늘 = 실제로 보낸 장수(store_vouchers, 전송 취소 제외). 장부 수기 칸(voucher_issued)이 아니다.
+  const weekVoucher = sent?.week ?? 0;
+  const todayVoucher = sent?.today ?? 0;
+  const sentBad = !!sentErr || sent === null;
 
   // ── 고객·단골 상위(바인·방문 횟수 기준, 관계자[직원] 제외) ──
   const staffNames = new Set(wages.map((w) => w.name.trim()));
@@ -996,6 +1017,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                             엉뚱한 사람이 명단에 들어간다 — 되돌리는 비용이 승인 1탭과 비대칭이다.
                             시각 크기는 유지하면서 히트영역만 40px 로 키우고(-my 로 줄 높이는 그대로),
                             둘 사이 간격을 벌려 손가락 하나 안에서 갈리지 않게 한다. */}
+                        {r.voucherId != null && gameIsAddon(r.requestedGameSeq) && (
+                          <button type="button" data-testid="dash-approve-voucher-addon" disabled={reqBusy === r.id} onClick={() => quickApprove(r, 'addon')}
+                            title="이용권 → 최근 바인에 애드온"
+                            className="shrink-0 -my-2 flex h-10 items-center rounded-input bg-accent-300/15 px-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/25 disabled:opacity-40">애드온</button>
+                        )}
                         <button type="button" disabled={reqBusy === r.id}
                           onPointerDown={() => startLP(r)} onPointerUp={cancelLP} onPointerLeave={cancelLP} onPointerCancel={cancelLP}
                           onClick={() => { if (lpFired.current) { lpFired.current = false; return; } quickApprove(r); }}
@@ -1502,16 +1528,16 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                     이 카드는 **업주 집계 화면**이라 통계·정산(`1T = 1만원`)과 같은 단위를 쓴다.
                     ⚠ 손님 지갑(MyVoucherSheet·EventPage)의 '장' 은 **그대로 둔다** —
                       "몇 장을 보낼까요?"·"한 장 줄이기" 처럼 세는 말이라 T 로 바꾸면 문장이 깨진다. */}
-                <Stat label="7일 전송" value={rangeErr ? '—' : `${weekVoucher}`} unit={rangeErr ? '' : 'T'} />
-                <Stat label="오늘 전송" value={`${todayVoucher}`} unit="T" />
+                <Stat label="7일 전송" value={sentBad ? '—' : `${weekVoucher}`} unit={sentBad ? '' : '장'} />
+                <Stat label="오늘 전송" value={sentBad ? '—' : `${todayVoucher}`} unit={sentBad ? '' : '장'} />
                 {/* 2026-09-18: 위 KPI(:843)가 같은 수(fin.ticket)를 'T' 로 부르는데 여기만 '장' 이었다 —
                     한 화면에서 같은 숫자가 '8T' 와 '8장' 으로 두 번 보였다(PC 전수조사 2026-09-18). */}
                 <Stat label="7일 사용" value={rangeErr ? '—' : fmtT(weekTicket)} unit={rangeErr ? '' : 'T'} />
                 {/* 3-B(2026-09-29) — 위 KPI '사용 이용권'과 같은 범위(오늘 **전 게임**, day). 예전엔 메인 게임만(fin)이라 한 화면에서 두 수가 갈렸다(store-deep D2). */}
                 <Stat label="오늘 사용" value={fmtT(day.ticket)} unit="T" />
               </div>
-              {!!rangeErr && <div className="mt-2"><LoadFailRow what="최근 7일 이용권" onRetry={reloadRange} /></div>}
-              <p className="mt-2 t-desc break-keep text-ink-muted">전송 = 장부에 적은 전송·시상 장수 · 사용 = 이용권으로 낸 바인·애드온 금액(T)</p>
+              {(!!rangeErr || !!sentErr) && <div className="mt-2"><LoadFailRow what="최근 7일 이용권" onRetry={reloadRange} /></div>}
+              <p className="mt-2 t-desc break-keep text-ink-muted">전송 = 실제로 보낸 이용권 장수(전송 취소 제외) · 사용 = 이용권으로 낸 바인·애드온 금액(T)</p>
             </>
           )}
         </DashCard>

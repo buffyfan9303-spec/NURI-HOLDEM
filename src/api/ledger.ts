@@ -863,11 +863,13 @@ export interface LedgerGame {
   regClosed: boolean;
   closed: boolean;
   scheduleId?: string | null;
+  /** 애드온 게임인가 — 이용권 요청을 '애드온'으로 승인하는 버튼을 이 게임에만 띄운다(#8). */
+  isAddon?: boolean;
 }
 export async function getLedgerGames(venueId: string, date = today()): Promise<LedgerGame[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('ledger_sessions')
-    .select('game_seq, title, buyin_amount, opened_at, reg_closed, closed, schedule_id')
+    .select('game_seq, title, buyin_amount, opened_at, reg_closed, closed, schedule_id, is_addon')
     .eq('venue_id', venueId).eq('session_date', date)
     .order('game_seq', { ascending: true });
   if (error) throw error;
@@ -875,6 +877,7 @@ export async function getLedgerGames(venueId: string, date = today()): Promise<L
   return (data ?? []).map((d: any) => ({
     gameSeq: d.game_seq ?? MAIN_GAME_SEQ, title: d.title ?? undefined, buyinAmount: d.buyin_amount ?? 0,
     openedAt: d.opened_at ?? null, regClosed: !!d.reg_closed, closed: !!d.closed, scheduleId: d.schedule_id ?? null,
+    isAddon: !!d.is_addon,
   }));
 }
 
@@ -1619,10 +1622,22 @@ export async function getPendingBuyinRequests(venueId: string, date: string): Pr
 /** 운영자: 요청 승인 → 해당 게임(gameSeq) 명단에 추가 + 요청 approved.
  *  discountIndex(1~5, 0=없음): 접수대 결제 모달과 같은 할인 자리번호. 서버(20260905d)가 정가−할인을
  *  스냅샷으로 저장하고 카드는 카드단가를 쓴다 — 예전엔 이 경로만 할인이 통째로 빠지고 카드도 현금단가였다. */
-export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }, discountIndex = 0): Promise<void> {
+export type VoucherUse = 'buyin' | 'addon';
+/** 서버에 #8(20260929u) 애드온 승인이 아직 없다 — 바인으로 조용히 떨어지지 않고 이 문장을 띄운다. */
+export const VOUCHER_ADDON_RPC_MISSING_TEXT = '서버에 이용권 애드온 승인 기능이 아직 적용되지 않았습니다 — 관리자에게 알려 주세요';
+/**
+ * voucherUse(#8, 오너 결정 2026-09-29): 이용권 사용 요청을 **접수대가 승인할 때 고르는 용도**.
+ *  · 'buyin'(기본) — 예전과 같다(서버가 티켓 바인 1행). 인자를 보내지 않는다 → 20260929u 적용 전 서버에서도 그대로 동작.
+ *  · 'addon' — 그 손님의 가장 최근 바인 행에 이용권 애드온을 붙인다(새 바인 없음). p_voucher_use 를 보낸다.
+ */
+export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }, discountIndex = 0, voucherUse: VoucherUse = 'buyin'): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq, p_record_buyin: recordBuyin, p_pay_method: payMethod, p_split: !!split, p_cash: split?.cash ?? 0, p_card: split?.card ?? 0, p_transfer: split?.transfer ?? 0, p_discount_index: discountIndex });
-  if (error) throw error;   // 래핑 금지 — 23514(금액 음수 CHECK) 같은 코드가 사라지면 화면이 쉬운 문장으로 못 바꾼다
+  const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq, p_record_buyin: recordBuyin, p_pay_method: payMethod, p_split: !!split, p_cash: split?.cash ?? 0, p_card: split?.card ?? 0, p_transfer: split?.transfer ?? 0, p_discount_index: discountIndex, ...(voucherUse === 'addon' ? { p_voucher_use: 'addon' } : {}) });
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (voucherUse === 'addon' && (code === 'PGRST202' || code === '42883')) throw new Error(VOUCHER_ADDON_RPC_MISSING_TEXT);
+    throw error;   // 래핑 금지 — 23514(금액 음수 CHECK) 같은 코드가 사라지면 화면이 쉬운 문장으로 못 바꾼다
+  }
 }
 /** 운영자: 요청 거절. */
 export async function rejectBuyinRequest(id: string, reason?: string): Promise<void> {

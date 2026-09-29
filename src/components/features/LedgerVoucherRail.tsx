@@ -165,7 +165,7 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
                       : r.expiredCount > 0 && <span className="ml-1.5 rounded-chip bg-surface-float px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">{r.expiredCount}장 만료</span>}
                   </p>
                   <p className="truncate text-[10px] text-ink-muted">
-                    {r.kind === 'issued' ? '전송' : '사용'} · {r.title}
+                    {r.kind === 'issued' ? '전송' : '사용'}{r.usedFor === 'addon' ? ' · 애드온' : ''} · {r.title}
                   </p>
                 </div>
                 <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{hhmm(r.at)}</span>

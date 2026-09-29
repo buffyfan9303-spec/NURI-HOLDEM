@@ -236,17 +236,18 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
       const label = voucherHolderLabel({ realName: p?.realName, nickname: p?.nickname, holderName: v.holderName });
       return label === '-' ? '' : label;
     };
-    const ev: { t: 'issued' | 'used'; at: string; title: string; who: string }[] = [];
+    // #8(2026-09-29) — addon: 접수대가 이 사용을 '애드온'으로 승인했다(store_vouchers.used_for). 줄 끝에 '애드온' 을 붙인다.
+    const ev: { t: 'issued' | 'used'; at: string; title: string; who: string; addon?: boolean }[] = [];
     for (const v of list) {
       if (v.createdAt) ev.push({ t: 'issued', at: v.createdAt, title: v.title, who: whoOf(v) || '매장 보관' });
-      if (v.usedAt) ev.push({ t: 'used', at: v.usedAt, title: v.title, who: whoOf(v) });
+      if (v.usedAt) ev.push({ t: 'used', at: v.usedAt, title: v.title, who: whoOf(v), addon: v.usedFor === 'addon' });
     }
     ev.sort((a, b) => b.at.localeCompare(a.at));
     // 같은 분(分)·종류·대상·제목은 한 줄로 묶고 ×N — 10장 발급이 10줄로 도배되지 않게
-    const grouped: { t: 'issued' | 'used'; at: string; title: string; who: string; n: number }[] = [];
+    const grouped: { t: 'issued' | 'used'; at: string; title: string; who: string; addon?: boolean; n: number }[] = [];
     for (const e of ev) {
       const last = grouped[grouped.length - 1];
-      if (last && last.t === e.t && last.title === e.title && last.who === e.who && last.at.slice(0, 16) === e.at.slice(0, 16)) last.n += 1;
+      if (last && last.t === e.t && last.title === e.title && last.who === e.who && !!last.addon === !!e.addon && last.at.slice(0, 16) === e.at.slice(0, 16)) last.n += 1;
       else grouped.push({ ...e, n: 1 });
     }
     // 🔴 2026-09-24 오너: 목록은 20줄 높이까지만 보이고 그 안에서 스크롤 — 종전 `slice(0, 30)` 은 31번째 줄부터 **화면에서 사라졌다**.
@@ -513,7 +514,7 @@ ${cards}
                 </span>
                 {/* ⚠ 회원명+이용권명이 길면 **몇 장을 발급/사용했는지**가 사라졌다 — 수량이 이 내역의 핵심이다. */}
                 <span className="flex min-w-0 flex-1 items-center gap-1 text-ink-secondary">
-                  <span className="min-w-0 truncate"><b className="text-ink-primary">{e.who || '회원'}</b> · {e.title}</span>
+                  <span className="min-w-0 truncate"><b className="text-ink-primary">{e.who || '회원'}</b> · {e.title}{e.addon ? ' · 애드온' : ''}</span>
                   {e.n > 1 && <b className="shrink-0 text-accent-300">×{e.n}</b>}
                 </span>
                 <span className="shrink-0 tabular-nums text-ink-muted">{fmtFeed(e.at)}</span>

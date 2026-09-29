@@ -122,6 +122,34 @@ const zeroGame = (): Omit<GameSettlement, 'gameSeq' | 'title' | 'closed'> => ({
   addon: { count: 0, revenue: 0, unpaid: 0, ticketWon: 0, tender: { ...ZERO_TENDER } },
 });
 
+/**
+ * #9(오너 결정 2026-09-29) — 정산 '받은 방법' 대차표는 **바인 + 애드온 한 벌**이다.
+ *
+ * 오너 결정은 "'매장이용권' 타일 값에 애드온 포함" 이다. 그 타일 하나만 애드온을 더하면 대차가 깨진다(critical 확인):
+ *   · 같은 '수납 완료' 줄의 현금·카드·이체 타일은 바인만이라, 타일 넷의 합 ≠ 아래 '수납 완료' 행(애드온 이용권만큼 차이).
+ *   · 아래 '애드온 이용권' 타일에 같은 돈이 한 번 더 보여 두 곳을 더하면 이중 계상이 된다.
+ * 그래서 대차표 전체(수단 타일·미수·총 정상가·적용 후·수납 완료·현금성)를 같은 모집단(바인 + 애드온)으로 옮기고,
+ * 애드온 칸은 '그중 애드온'(부분집합)으로 읽게 한다. 맨 위 KPI(완납 매출·미수금)는 이미 바인 + 애드온이다.
+ *
+ * 항등식(애드온은 할인이 없다 → 정상가 = 받은/받을 돈):
+ *   gross − disc = value = cash + card + transfer + ticket + support + unpaid,  received = cash + card + transfer + ticket
+ * ⚠ 엔트리·바인 횟수·기준 대비(entries·buyinCount·targetRevenue)에는 여전히 섞지 않는다 — 여기는 돈의 대차표만이다.
+ */
+export interface SettlementReceipt { tender: Tender; gross: number; value: number; received: number; cashlike: number; addonTotal: number }
+export function settlementReceipt(t: Pick<GameSettlement, 'tender' | 'gross' | 'value' | 'revenue' | 'ticketWon' | 'addon'>): SettlementReceipt {
+  const a = t.addon;
+  const addonTotal = a.revenue + a.unpaid + a.ticketWon;
+  const tender: Tender = { ...t.tender };
+  for (const k of Object.keys(tender) as (keyof Tender)[]) tender[k] += a.tender[k] ?? 0;
+  return {
+    tender, addonTotal,
+    gross: t.gross + addonTotal,
+    value: t.value + addonTotal,
+    received: t.revenue + t.ticketWon + a.revenue + a.ticketWon,
+    cashlike: t.revenue + a.revenue,
+  };
+}
+
 function addAddon(into: AddonFinance, a: AddonFinance): void {
   into.count += a.count; into.revenue += a.revenue; into.unpaid += a.unpaid; into.ticketWon += a.ticketWon;
   for (const k of Object.keys(into.tender) as (keyof Tender)[]) into.tender[k] += a.tender[k];

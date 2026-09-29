@@ -3,7 +3,7 @@ import { supabase, IS_MOCK } from '../lib/supabase';
 import { mustAffect } from './_mustAffect';
 import { serverNow } from '../lib/serverTime';   // D1 — 클락 시각은 서버 기준(lib/serverTime)
 import { resubscribeStatus } from '../lib/realtimeResync';
-import { earlyTypeOf, ledgerCounts, markTournamentStart, getLedgerBuyins, getLedgerSession, type EarlyType, type LedgerBuyin } from './ledger';
+import { earlyTypeOf, ledgerCounts, addonTotals, markTournamentStart, getLedgerBuyins, getLedgerSession, type EarlyType, type LedgerBuyin } from './ledger';
 
 /** 얼리 판정에 필요한 세션 정보 */
 export interface EarlyWindow { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null }
@@ -63,6 +63,8 @@ export interface ClockLiveStats {
 /** 장부 파생분 — deriveClockCounts 결과 + 그 시점 설정으로 환산한 얼리 단위(서버 하한 계산용). */
 export interface ClockLedgerPart {
   entries: number; rebuys: number; earlies: number; doubleEarlies: number; totalBuyins: number;
+  /** #3(2026-09-29) 장부 애드온 수. 서버 clock_adjust_counts 가 애드온 보정 하한(−장부 애드온)에 쓴다. 낡은 스냅샷엔 없다(= 0). */
+  addons?: number;
   /** earlyUnitTotal(파생, 설정) — 서버 RPC clock_adjust_counts 가 얼리 보정 하한(−자동 몫)에 쓴다. */
   earlyUnits: number;
 }
@@ -743,7 +745,10 @@ export function subscribeRunningClocks(onChange: () => void): () => void {
  *   클락 화면이 부르는 이름을 그대로 둔 것이라 헷갈리기 쉽다 — 총 바이인은 totalBuyins 다.
  *   `rebuys` 는 entryNo > 1 인 기록 수, `totalBuyins` 는 기록 수 전체.
  */
-export interface DerivedCounts { entries: number; rebuys: number; earlies: number; doubleEarlies: number; totalBuyins: number; }
+export interface DerivedCounts { entries: number; rebuys: number; earlies: number; doubleEarlies: number; totalBuyins: number;
+  /** 장부에 기록된 애드온 수(오너 결정 #3, 2026-09-29) — 클락·TV 애드온과 총칩이 이만큼 자동으로 오른다.
+   *  optional 인 이유: 이 필드 이전에 저장된 장부 몫(live_stats.ledger)에는 없다 — 없으면 0(= 예전 동작). */
+  addons?: number; }
 
 /** 장부 바인 기록에서 플레이어/리바인/얼리 자동 집계. 얼리는 세션 스타트·구간(또는 바인 수기지정)으로 판정.
  *
@@ -758,7 +763,7 @@ export function deriveClockCounts(buyins: LedgerBuyin[], early: EarlyWindow): De
     if (et === 'double') { earlies++; doubleEarlies++; }
     else if (et === 'single') earlies++;
   }
-  return { entries: c.players, rebuys: c.rebuys, earlies, doubleEarlies, totalBuyins: c.totalBuyins };
+  return { entries: c.players, rebuys: c.rebuys, earlies, doubleEarlies, totalBuyins: c.totalBuyins, addons: addonTotals(buyins).count };
 }
 
 // ── 얼리 '카운트' 산정(#21) ────────────────────────────────────────────────────
@@ -829,6 +834,11 @@ export function clampAdjEarlies(
   return clampAdjCount(earlyAutoOf(ls, currentAdj), currentAdj, delta);
 }
 
+/** 애드온 보정 하한의 기준 = 장부 몫의 애드온 수(#3). 장부 몫이 없으면(미연동·낡은 스냅샷) 0. */
+export function addonAutoOf(ls: Pick<ClockLiveStats, 'ledger'> | null | undefined): number {
+  return Math.max(0, ls?.ledger?.addons ?? 0);
+}
+
 /** 수기 보정의 하한 — **모든 카운트 보정에 쓰는 한 규칙**(#11 과 같은 부류).
  *
  *  `auto` 는 장부에서 자동으로 세어진 몫이다. 보정은 그 위에 얹는 값이라
@@ -844,7 +854,7 @@ export function clampAdjEarlies(
  *  2026-09-17: 얼리에만 있던 이 규칙을 엔트리·리바이·애드온으로 넓혔다.
  *    그쪽은 `Math.max(-9999, …)` 라 [−] 를 계속 누르면 엔트리가 음수가 되고
  *    `totalStack = entries × startStack + …` 이 음수로 떨어졌다 — #11 과 같은 증상, 다른 필드다.
- *    (애드온은 장부 자동 몫이 없어 auto=0 → 하한 0 이다.)
+ *    (애드온도 #3(2026-09-29)부터 장부 자동 몫이 있다 — auto = 장부 애드온 수. addonAutoOf.)
  */
 export function clampAdjCount(auto: number, currentAdj: number | null | undefined, delta: number): number {
   const cur = currentAdj ?? 0;
@@ -868,7 +878,8 @@ export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: Cl
   const earlyAuto = earlyUnitTotal(derived, cfg);
   const earliesRaw = earlyAuto + st.adjEarlies;
   const earlies = Math.max(0, earliesRaw);
-  const addons = st.adjAddons;
+  // #3(2026-09-29) — 애드온도 엔트리와 같은 구조: 장부 몫 + 수기 보정. 예전엔 보정 열만 봐서 장부 애드온 3건이 TV 에 0 이었다.
+  const addons = (derived.addons ?? 0) + st.adjAddons;
   const alive = Math.max(0, entries - st.eliminations);
   const dEarly = derived.doubleEarlies;
   const sEarly = Math.max(0, derived.earlies - derived.doubleEarlies);   // 인원만
@@ -909,7 +920,7 @@ export function earlyWindowOf(
   return { earlyDoubleMin: cfg?.earlyDoubleMin ?? 0, earlySingleMin: cfg?.earlySingleMin ?? 0, tournamentStart: null, openedAt: null };
 }
 
-const ZERO_LEDGER: DerivedCounts = { entries: 0, rebuys: 0, earlies: 0, doubleEarlies: 0, totalBuyins: 0 };
+const ZERO_LEDGER: DerivedCounts = { entries: 0, rebuys: 0, earlies: 0, doubleEarlies: 0, totalBuyins: 0, addons: 0 };
 
 /** 표시용 통계 합성 — **모든 화면**(TV·리모컨·대시보드·장부 바·라이브 탭·홈)이 이 한 벌을 쓴다.
  *  · 장부 몫(ledger)이 있으면: 장부 몫 + 행의 열(adj_*·eliminations)로 다시 계산한다(저장된 alive·entries 는 안 믿는다).
@@ -939,7 +950,11 @@ export function ledgerLiveStats(
 
 /** 두 스냅샷의 장부 몫이 같은가 — 같으면 쓰지 않는다(작성자가 여럿이어도 쓰기는 한 번). */
 export function sameLedgerPart(a: ClockLiveStats | null | undefined, b: ClockLiveStats | null | undefined): boolean {
-  return JSON.stringify([a?.ledger ?? null, a?.buyInAmount ?? null]) === JSON.stringify([b?.ledger ?? null, b?.buyInAmount ?? null]);
+  // K3(2026-09-29) — 서버 트리거(20260929t)가 쓴 jsonb 는 키 순서가 다르다(길이→사전순). 순서로 비교하면 서버 값을 늘 '다르다'고 보고
+  //   화면이 한 번씩 헛쓰기를 한다 → 키를 정렬한 문자열로 비교한다.
+  const key = (x: ClockLiveStats | null | undefined) =>
+    JSON.stringify([x?.ledger ? Object.entries(x.ledger).sort(([p], [q]) => (p < q ? -1 : 1)) : null, x?.buyInAmount ?? null]);
+  return key(a) === key(b);
 }
 
 /** 장부 몫 작성기 — live_stats 를 쓰는 **유일한** 자리(시작 upsert 제외). 이미 같으면 쓰지 않고 false. */

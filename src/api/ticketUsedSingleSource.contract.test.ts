@@ -55,9 +55,10 @@ describe('ticketUsedT — 이용권 사용 T 는 한 곳에서만 더한다', ()
     });
     expect(perFile(/\bticketWon\b/)).toEqual({
       'api/ledger.ts': 12,
-      'components/features/LedgerSettlementPanel.tsx': 5,
+      // #9(2026-09-29): 정산 대차표 한 벌(settlementReceipt)이 원 단위 합계를 lib 로 옮겼다 — T 합산이 아니라 돈(원)의 대차다.
+      'components/features/LedgerSettlementPanel.tsx': 4,
       'components/features/NuriPosLedger.tsx': 1,
-      'lib/ledgerSettlement.ts': 9,
+      'lib/ledgerSettlement.ts': 13,
     });
   });
 
