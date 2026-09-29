@@ -9,7 +9,7 @@ import { listStaleOpenSessions,
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, ledgerMoney, addonFinance, ticketUsedT, wonToMan, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
   getLastClosedRound, MAIN_GAME_SEQ, kstToday, type LastClosedRound, type PosterOpsSummary,
-  type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, ledgerCounts,} from '../../api/ledger';
+  type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, type VoucherUse, ledgerCounts,} from '../../api/ledger';
 import { useToast } from '../atoms/Toast';
 import { getClockState, getVenueClocks, subscribeClock, effectiveLevel, syncClockLedgerStats, type ClockState } from '../../api/clock';
 import { levelNumberAt, formatCountdown } from '../../lib/clockLevel';
@@ -582,14 +582,19 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   const fmtClock = formatCountdown;   // K9 — 시간 글자 한 벌(올림)
   const gameLabel = (g: number | null) => g == null ? '미지정' : g <= 1 ? '메인' : `사이드${g - 1}`;
   // 위젯 인라인 승인/거절 — 장부로 안 넘어가고 즉시 처리(승인=요청 게임에 추가, 결제 기록은 장부에서 별도)
-  const quickApprove = async (r: BuyinRequest) => {
+  // #8(2026-09-29) — 이용권 요청은 접수대가 용도를 고른다(애드온 게임일 때만 '애드온' 버튼). 서버도 같은 조건으로 막는다.
+  const gameIsAddon = (seq: number | null) => {
+    const s = seq ?? MAIN_GAME_SEQ;
+    return !!todayGames.find((g) => g.sx.gameSeq === s)?.sx.isAddon || (session?.gameSeq === s && !!session?.isAddon);
+  };
+  const quickApprove = async (r: BuyinRequest, voucherUse: VoucherUse = 'buyin') => {
     setReqBusy(r.id);
     // ⚠ 이용권 요청이면 서버가 **티켓 바인을 자동 기록**한다(record_buyin=false 여도). 그때도 할인 자리번호가
     //   쓰이므로 여기서도 넘겨야 한다 — 안 넘기면 0(정가)으로 굳어 discountSummary 가 그 바인을 못 센다.
     try {
       const seq = r.requestedGameSeq ?? MAIN_GAME_SEQ;
-      await approveBuyinRequest(r.id, seq, false, 'cash', undefined, await resolveDiscountIndex(venueId, r.sessionDate, seq));
-      setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(`${r.playerName} 참가 승인`, 'success');
+      await approveBuyinRequest(r.id, seq, false, 'cash', undefined, await resolveDiscountIndex(venueId, r.sessionDate, seq), voucherUse);
+      setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(voucherUse === 'addon' ? `${r.playerName} 애드온 승인(이용권)` : `${r.playerName} 참가 승인`, 'success');
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); }
     finally { setReqBusy(null); }
@@ -1012,6 +1017,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                             엉뚱한 사람이 명단에 들어간다 — 되돌리는 비용이 승인 1탭과 비대칭이다.
                             시각 크기는 유지하면서 히트영역만 40px 로 키우고(-my 로 줄 높이는 그대로),
                             둘 사이 간격을 벌려 손가락 하나 안에서 갈리지 않게 한다. */}
+                        {r.voucherId != null && gameIsAddon(r.requestedGameSeq) && (
+                          <button type="button" data-testid="dash-approve-voucher-addon" disabled={reqBusy === r.id} onClick={() => quickApprove(r, 'addon')}
+                            title="이용권을 애드온으로 승인(이 손님의 최근 바인에 애드온 기록)"
+                            className="shrink-0 -my-2 flex h-10 items-center rounded-input bg-accent-300/15 px-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/25 disabled:opacity-40">애드온</button>
+                        )}
                         <button type="button" disabled={reqBusy === r.id}
                           onPointerDown={() => startLP(r)} onPointerUp={cancelLP} onPointerLeave={cancelLP} onPointerCancel={cancelLP}
                           onClick={() => { if (lpFired.current) { lpFired.current = false; return; } quickApprove(r); }}

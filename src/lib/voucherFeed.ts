@@ -33,6 +33,8 @@ export interface FeedRow {
   revoked: boolean;
   /** 전량 만료 */
   expired: boolean;
+  /** #8 — 사용 줄의 용도(접수대 승인 때 고른 것). 'addon' 이면 레일이 '애드온' 을 붙인다. 발급 줄·승인 전은 null. */
+  usedFor: 'buyin' | 'addon' | null;
 }
 
 /** 묶음 키 — 받는 사람이 같고, 제목이 같고, 시각이 **완전히 같은** 것만 한 전송으로 본다. */
@@ -47,7 +49,9 @@ export function toFeedRows(vs: Voucher[], now = Date.now()): FeedRow[] {
   const groups = new Map<string, FeedRow>();
   const add = (kind: FeedKind, at: string, v: Voucher, name: string, flags: { revoked: boolean; expired: boolean }) => {
     const holder = v.holderUserId ?? `name:${name}`;
-    const k = batchKey(kind, holder, v.title, at);
+    const usedFor = kind === 'used' ? (v.usedFor ?? null) : null;
+    // 용도가 다르면 같은 순간이어도 다른 줄이다 — 애드온 사용이 바인 사용 묶음에 섞여 사라지면 안 된다.
+    const k = batchKey(kind, holder, v.title, at) + (usedFor ? `\u0000${usedFor}` : '');
     const g = groups.get(k);
     if (g) {
       g.count += 1;
@@ -64,6 +68,7 @@ export function toFeedRows(vs: Voucher[], now = Date.now()): FeedRow[] {
       revokedCount: flags.revoked ? 1 : 0,
       expiredCount: flags.expired ? 1 : 0,
       revoked: false, expired: false,
+      usedFor,
     });
   };
 

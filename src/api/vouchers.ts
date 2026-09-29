@@ -32,6 +32,8 @@ export interface Voucher {
   issueReason: VoucherReason | null;
   /** 이벤트 카드 당첨으로 지급된 이용권이면 그 캠페인 id — issue_reason 은 수동 이벤트와 같은 'event' 라 이것으로 가른다(20260914b). */
   eventCampaignId: string | null;
+  /** #8(2026-09-29, 20260929u) 접수대 승인 때 고른 용도. null = 승인 전이거나 이 기능 이전 사용분(표시 없음). */
+  usedFor?: 'buyin' | 'addon' | null;
 }
 /**
  * '보유 중' 판정의 단일 정본 — 지갑(VoucherWallet)과 시트의 매장별 장수(MyVoucherSheet)가 같이 쓴다.
@@ -89,6 +91,7 @@ function mapRow(r: any): Voucher {
     expiresAt: r.expires_at ?? null,
     issueReason: (r.issue_reason as VoucherReason | null) ?? null,
     eventCampaignId: r.event_campaign_id ?? null,
+    usedFor: r.used_for === 'addon' || r.used_for === 'buyin' ? r.used_for : null,
   };
 }
 

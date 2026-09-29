@@ -25,7 +25,7 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBu
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, renameLedgerPlayer,
   searchRegisteredPlayers, type RegisteredPlayer,
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
-  getPendingBuyinRequests, approveBuyinRequest, rejectBuyinRequest, subscribeBuyinRequests, type BuyinRequest,
+  getPendingBuyinRequests, approveBuyinRequest, rejectBuyinRequest, subscribeBuyinRequests, type BuyinRequest, type VoucherUse,
   getLastClosedRound, type LastClosedRound,
   discountsAppendOnly, ledgerSessionMatches, cancelPwStateFromError, type LedgerRowOwner,
   LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING, ledgerErrorText, LEDGER_ALREADY_OPEN, ticketUsedT,
@@ -542,7 +542,9 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // 분할 금액은 '들어갈 게임'의 단가로 프리필/검증해야 한다 — 서버가 분할은 입력값을 그대로 기록하므로
   // 현재 화면 단가를 쓰면 사이드 손님이 메인 단가로 찍힌다(재계산으로 구제 안 됨).
   const gameUnit = (seq: number) => (seq === gameSeq ? session.buyinAmount : (games.find((g) => g.gameSeq === seq)?.buyinAmount ?? session.buyinAmount));
-  const approveReq = (r: BuyinRequest, withBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }) => {
+  // #8(2026-09-29) — 이용권 요청을 애드온으로 받을 수 있는 게임인가(애드온 게임만). 서버도 같은 조건으로 한 번 더 막는다.
+  const gameIsAddon = (seq: number) => (seq === gameSeq ? !!session.isAddon : !!games.find((g) => g.gameSeq === seq)?.isAddon);
+  const approveReq = (r: BuyinRequest, withBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }, voucherUse: VoucherUse = 'buyin') => {
     const want = wantSeq(r);
     let target = want;
     // 요청한 게임이 아직 안 열렸으면 조용히 현재 게임에 넣지 않는다 — 한 번 묻고, 아니면 중단.
@@ -556,8 +558,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     // 예전엔 QR 승인 경로만 할인이 통째로 빠져, 같은 레벨인데 창구에 따라 금액이 갈렸다(2026-09-05 감사).
     // C06: target 이 지금 화면 게임과 다르면 그 게임 자신의 할인·레벨로 다시 계산한다.
     return discIdxFor(target)
-      .then((discIdx) => approveBuyinRequest(r.id, target, withBuyin, payMethod, split, discIdx))
-      .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? ' + 티켓 기록(이용권)' : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
+      .then((discIdx) => approveBuyinRequest(r.id, target, withBuyin, payMethod, split, discIdx, voucherUse))
+      .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? (voucherUse === 'addon' ? ' + 애드온 기록(이용권)' : ' + 티켓 기록(이용권)') : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
       .catch((e) => { toast.show(ledgerErrorText(e, '승인 실패'), 'error'); loadPending(); });
   };
   const doReject = (r: BuyinRequest, reason?: string) => {
@@ -1542,6 +1544,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                       승인해도 서버가 금액을 버리므로(20260623d #9) 숨겨서 '기록됐다고 믿는' 사고를 없앤다 */}
                   {r.voucherId == null && (
                     <button type="button" onClick={() => setPayPick(payPick === r.id ? null : r.id)} title="승인 + 바인 1건 기록(결제수단 선택)" className={['shrink-0 inline-flex h-10 items-center rounded-input px-2.5 text-2xs font-bold', payPick === r.id ? 'bg-emerald-600 text-ink-inverse' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500', 'gap-0.5'].join(' ')}>✓+<Icon name="banknote" size={13} className="shrink-0" /></button>
+                  )}
+                  {/* #8 — 이용권 요청은 접수대가 용도를 고른다: 바인(티켓 바인 1건) / 애드온(이 손님의 최근 바인에 이용권 애드온). 애드온 게임에만. */}
+                  {r.voucherId != null && gameIsAddon(wantSeq(r)) && (
+                    <button type="button" data-testid="approve-voucher-addon" onClick={() => approveReq(r, false, 'cash', undefined, 'addon')} title="승인(이용권 1장 → 이 손님의 최근 바인에 애드온 기록)" className="shrink-0 inline-flex h-10 items-center rounded-input border border-accent-400/50 px-3 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">✓ 애드온</button>
                   )}
                   <button type="button" onClick={() => approveReq(r)} title={r.voucherId ? '승인(이용권 1장 → 티켓 바인 자동 기록)' : '승인만(명단 추가)'} className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/10">{r.voucherId ? '✓ 승인·티켓' : '승인'}</button>
                   <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 inline-flex h-10 min-w-10 items-center justify-center rounded-input border px-2.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-secondary hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
