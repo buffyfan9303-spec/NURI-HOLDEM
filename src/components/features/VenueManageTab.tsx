@@ -48,6 +48,8 @@ import SlidingPill from '../atoms/SlidingPill';
 import { getSchedules, canManageVenueSchedules, type Schedule } from '../../api/schedules';
 import { getLedgerBuyins, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
+import { formatCountdown } from '../../lib/clockLevel';
+import { useClockSecond } from '../../lib/clockTick';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 import { onColorInkClass } from '../../lib/color';
 import LedgerWorkspace from './LedgerWorkspace';
@@ -1279,7 +1281,6 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
 }) {
   const [clocks, setClocks] = useState<ClockState[]>([]);
   const [pending, setPending] = useState(0);
-  const [, setTick] = useState(0);
   // B1 — 대기 요청은 서버가 **영업일**에 적는다(request_buyin → ledger_business_date). 달력 오늘로 세면 자정 뒤 0건이 된다.
   const biz = useBusinessDate(venueId, active);
   // 🔴 2026-09-20 (R1-2) — 두 조회가 `.catch(() => {})` 로 실패를 **완전히 삼켰다.** 조회가 죽으면
@@ -1307,17 +1308,14 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
   const live = clocks.filter((c) => c.running || c.currentIndex > 0 || c.endsAt != null).sort((a, b) => a.gameSeq - b.gameSeq);
   const main = live[0];
   const mainRunning = !!main?.running;
-  // 남은 시간 1초 틱 — 바가 보이고 클락이 실제로 돌 때만(리렌더 범위 = 이 바 하나)
-  useEffect(() => {
-    if (!active || !mainRunning) return;
-    const t = window.setInterval(() => setTick((n) => n + 1), 1000);
-    return () => window.clearInterval(t);
-  }, [active, mainRunning]);
+  // 남은 시간 초 틱 — 바가 보이고 클락이 실제로 돌 때만(리렌더 범위 = 이 바 하나).
+  //   K9 — 공용 틱(lib/clockTick): TV·보드와 같은 순간에 초가 넘어간다(자체 1초 인터벌은 마운트 시점마다 위상이 달랐다).
+  useClockSecond(main, active && mainRunning);
   if (!main && pending === 0) return null;
   const eff = main ? effectiveLevel(main) : null;
   const lv = main && eff ? main.config.levels[eff.index] : undefined;
   const levelNo = main && eff ? main.config.levels.slice(0, eff.index + 1).filter((l) => l.kind === 'level').length : 0;
-  const mmss = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  const mmss = formatCountdown;   // K9 — 시간 글자 한 벌(lib/clockLevel, 올림)
   const alive = main?.liveStats?.alive;
   return (
     /* Aura LED(2026-09-10 §8-B) — '지금 이 매장이 돌고 있다'는 상태를 뒤에서 밝힌다.

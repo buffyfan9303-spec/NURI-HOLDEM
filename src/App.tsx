@@ -110,6 +110,7 @@ import type { ClockState } from './api/clock';
 //   어느 쪽이든 **정적 import 는 아니다**: 여기 있어야 할 이유가 없는 것은 ledger 청크 쪽이다.
 const clockMod = () => import('./api/clock');
 import { buildRegInfoMap } from './lib/regStatus';
+import { serverNow } from './lib/serverTime';
 import { myVisitedVenues, type VisitedVenue } from './api/vouchers';
 import { haversineKm } from './lib/geo';
 import { compareByStartThenBoost, compareByDistanceThenStart } from './lib/scheduleSort';
@@ -2834,12 +2835,13 @@ export default function App() {
   //   ⚠ 숨은 탭에서는 돌지 않는다(§5-A 전면 게이트). 게이트만 넣으면 복귀 순간이 낡으므로 **재동기화가 한 쌍**이다 —
   //     여기서는 건너뛴 틱을 기억할 필요조차 없다: now 는 누적값이 아니라 '지금 몇 시냐' 하나뿐이라
   //     복귀 때 한 번 새로 읽으면 그것으로 완전히 최신이다.
-  const [regNow, setRegNow] = useState(() => Date.now());
+  // K10(2026-09-29) — '지금'은 서버 기준(serverNow). 5분 빠른 폰에서 '마감까지 N분'·레벨이 5분 일찍 뜨던 것.
+  const [regNow, setRegNow] = useState(() => serverNow());
   useEffect(() => {
     if (activeTab !== 'home') return;   // 홈에 **보이는 동안만** — 다른 탭은 복귀 재조회가 클락째로 갈아 끼운다
     // 같은 30초 칸 안이면 **state 를 건드리지 않는다**. 탭 진입·복귀가 겹치면 그때마다 새 Map 이 만들어져
     // 화면의 모든 카드가 재렌더되는데, 표시 단위가 분이라 그 렌더에는 바뀌는 글자가 하나도 없다.
-    const bump = () => setRegNow((prev) => (Math.floor(Date.now() / 30_000) === Math.floor(prev / 30_000) ? prev : Date.now()));
+    const bump = () => { const n = serverNow(); setRegNow((prev) => (Math.floor(n / 30_000) === Math.floor(prev / 30_000) ? prev : n)); };
     bump();                             // 진입 즉시 한 번(숨어 있던 동안 흐른 시간을 여기서 메운다)
     const t = setInterval(() => {
       if (document.hidden) return;

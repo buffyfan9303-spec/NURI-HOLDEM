@@ -74,7 +74,7 @@ describe('배선 — 소비처가 그 한 곳을 실제로 부른다(2026-09-13 
   // 왜 이 파일인가: 03cd8bb 이후 TV·운영자 보드의 **단일 마크업**이 ClockStage 다 — 레벨 번호·휴식까지 계산이 전부 여기서 그려진다.
   it('🔴 ClockStage.tsx: import 1회 · levelNumberAt(lvls, eff.index) ×1 · msToNextBreak(g, eff.index, eff.remainingMs) ×2(레일·미니 보드)', () => {
     // 2026-09-19: CLOCK_PHASE_TV 는 상태 알약과 함께 보드에서 빠졌다(오너 지시 #9) — clockPhase 는 일시정지 타이머 색에 남는다.
-    expect(count(stage, /^import \{ clockPhase, gameLabel, levelNumberAt, msToNextBreak \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
+    expect(count(stage, /^import \{ clockPhase, gameLabel, levelNumberAt, msToNextBreak, formatCountdown, formatElapsed \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
     expect(count(stage, /\blevelNumberAt\(lvls, eff\.index\)/)).toBe(1);
     // 2026-09-25 #1: 세로 보드의 '미니 보드'(HeaderTimes compact)를 지웠다 — Next Break 가 하단 레일과 두 번 나왔다. 하단 레일 한 곳뿐이다.
     expect(count(stage, /\bmsToNextBreak\(g, eff\.index, eff\.remainingMs\)/)).toBe(1);
@@ -90,7 +90,7 @@ describe('배선 — 소비처가 그 한 곳을 실제로 부른다(2026-09-13 
   });
 
   it('ClockRemote.tsx: import 1회 · levelNumberAt(lvls, eff.index)', () => {
-    expect(count(remote, /^import \{ clockPhase, CLOCK_PHASE_LABEL, levelNumberAt \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
+    expect(count(remote, /^import \{ clockPhase, CLOCK_PHASE_LABEL, levelNumberAt, formatCountdown \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
     expect(count(remote, /\blevelNumberAt\(lvls, eff\.index\)/)).toBeGreaterThanOrEqual(1);
   });
 
@@ -101,7 +101,7 @@ describe('배선 — 소비처가 그 한 곳을 실제로 부른다(2026-09-13 
 
   // 왜 이 파일인가: 운영자 클락은 보드 렌더를 ClockStage 에 넘겼고, 설정 폼·자동 보정·레벨 표에서만 levelNumberAt(cfg.levels, …) 를 쓴다.
   it('🔴 TournamentClock.tsx: import 1회(levelNumberAt 만) · cfg.levels 로 호출(로컬 cfg 시그니처가 되살아나면 여기서 걸린다)', () => {
-    expect(count(tv, /^import \{ clockPhase, CLOCK_PHASE_ACTION, levelNumberAt \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
+    expect(count(tv, /^import \{ clockPhase, CLOCK_PHASE_ACTION, levelNumberAt, formatCountdown \} from '\.\.\/\.\.\/\.\.\/lib\/clockLevel';$/m)).toBe(1);
     expect(count(tv, /\blevelNumberAt\(cfg\.levels, /)).toBeGreaterThanOrEqual(1);
     expect(count(tv, /\blevelNumberAt\(cfg, /), '옛 cfg 시그니처 호출이 남아 있다').toBe(0);
   });

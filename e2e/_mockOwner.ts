@@ -134,6 +134,16 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
   //   우연 위에 서게 된다. 명시로 0 을 준다.
   await page.route(/\/rest\/v1\/ledger_buyin_requests\?/, restGet([]));
   await page.route(/\/rest\/v1\/game_presets\?/, restGet([]));
+  // 서버 시각(읽기 RPC server_now = select now()). 안 걸면 _fixtures 가드가 POST 를 끊어 serverTimeKnown 이 거짓으로 남고
+  //   PC 워치독·장부 백업 전진이 DB 에 레벨을 쓰지 않는다(2026-09-29 CI: C2·recheck2 #7).
+  //   서버와 기기 시계가 같은 매장 = 오프셋 **정확히 0** 이어야 한다. 그래서 '함수 없음'(PGRST202)으로 답한다 —
+  //   serverTime.ts 는 이때 known=true · offset 0(기기 시계가 곧 기준)으로 확정한다.
+  //   🔴 예전엔 페이지 시계(page.evaluate(Date.now))로 성공 응답을 줬는데, 앱은 왕복 중간점으로 오프셋을 잰다 —
+  //   evaluate 가 왕복의 가운데에 오지 않으면(느린 CI·CPU 8x) 오프셋이 +50~+1000ms 로 새어,
+  //   serverNow 로 얼린 남은 시간이 기기 시계 기대값과 그만큼 어긋났다(CI run 36499346502 C5: −83/−198/−101ms).
+  //   측정 성공 경로·기기 시계 오차는 자기 값으로 덮는 스펙이 잰다(mystore-linkage-0928 D1 · clock-recheck2 #7b).
+  await page.route(/\/rest\/v1\/rpc\/server_now/, (r) =>
+    r.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'PGRST202', message: 'mock: server_now absent' }) }));
   // 클락 상태는 **항상** 라우트한다 — clock 을 안 준 스펙에서도.
   //   안 걸어 두면 그 조회만 운영 서버로 나가 가짜 토큰이 401 을 받고,
   //   콘솔 전체가 '클락을(를) 불러오지 못했습니다 / 로그인이 만료되었습니다' 로 떨어진다.
@@ -149,6 +159,33 @@ export async function bootOwner(page: Page, opts: MockOwnerOpts = {}) {
     await page.waitForLoadState('networkidle');
   }
   return { uid: MOCK_UID, venueId: MOCK_VENUE, day: MOCK_DAY };
+}
+
+/**
+ * 서버 RPC clock_adjust_counts(20260929b) 를 **같은 의미로** 가짜 행에 적용한다 — 상태 있는 가짜 clock_states 서버용.
+ *   x = x + d · 하한 = −(live_stats.ledger 자동 몫)(탈락·애드온은 0) · 이미 범위 밖이면 그 자리(greatest(least(cur, lo), cur + d))
+ *   · 차분 하나라도 |d| > 1000 이면 22023 거절. 권한은 목 범위(목킹 업주 = 통과)라 검사하지 않는다.
+ * 반환: PostgREST 응답(status·body). 행은 제자리에서 바뀐다.
+ */
+export function applyClockCounts(row: Record<string, unknown>, body: Record<string, unknown>): { status: number; body: unknown } {
+  const d = (k: string) => Number(body[k] ?? 0) || 0;
+  if (['p_d_elim', 'p_d_entries', 'p_d_rebuys', 'p_d_earlies', 'p_d_addons'].some((k) => Math.abs(d(k)) > 1000)) {
+    return { status: 400, body: { code: '22023', message: '한 번에 바꿀 수 있는 인원은 1000 이하입니다', details: null, hint: null } };
+  }
+  const led = ((row.live_stats as { ledger?: Record<string, unknown> } | null)?.ledger ?? {}) as Record<string, unknown>;
+  const auto = (k: string) => (typeof led[k] === 'number' ? Math.max(0, Math.floor(led[k] as number)) : 0);
+  const step = (col: string, dk: string, a: number) => {
+    const cur = Number(row[col] ?? 0);
+    row[col] = Math.max(Math.min(cur, -a), cur + d(dk));
+  };
+  step('eliminations', 'p_d_elim', 0);
+  step('adj_entries', 'p_d_entries', auto('entries'));
+  step('adj_rebuys', 'p_d_rebuys', auto('rebuys'));
+  step('adj_earlies', 'p_d_earlies', auto('earlyUnits'));
+  step('adj_addons', 'p_d_addons', 0);
+  row.updated_at = new Date().toISOString();
+  const { eliminations, adj_entries, adj_rebuys, adj_earlies, adj_addons } = row;
+  return { status: 200, body: [{ eliminations, adj_entries, adj_rebuys, adj_earlies, adj_addons }] };
 }
 
 /** '내 매장' 은 ≥lg 에서 role=tab, 모바일에서 button — 폭과 무관하게 보이는 button 으로 잡는다. */

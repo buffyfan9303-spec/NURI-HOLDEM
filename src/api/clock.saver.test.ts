@@ -6,7 +6,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../lib/supabase', () => ({ IS_MOCK: false, supabase: {} }));
-const { createCoalescingSaver, clockPatchRow, emptyClockState } = await import('./clock');
+const { createCoalescingSaver, clockPatchRow, clockCountDeltas, emptyClockState } = await import('./clock');
 
 type S = { k: string; v: number };
 function harness() {
@@ -76,12 +76,14 @@ describe('createCoalescingSaver', () => {
 
 describe('clockPatchRow — 바뀐 칸만', () => {
   const base = { ...emptyClockState('v1'), eliminations: 3, currentIndex: 2 };
-  it('엔트리 보정만 바꾸면 adj_entries 만 나간다(탈락·레벨은 다른 기기 몫이라 다시 쓰지 않는다)', () => {
-    expect(clockPatchRow(base, { ...base, adjEntries: 4 })).toEqual({ adj_entries: 4 });
-  });
-  it('통계 스냅샷이 바뀌면 live_stats 도 나간다', () => {
+  // K1(2026-09-29) — 카운트·통계는 이 조각에 싣지 않는다(카운트 = 차분 RPC, live_stats = 장부 몫 작성기 한 벌).
+  it('🔴 카운트 보정·통계 스냅샷은 절대값 행 조각에 실리지 않는다', () => {
     const ls = { entries: 5, rebuys: 0, earlies: 0, addons: 0, alive: 2, eliminations: 3, totalStack: 0, avgStack: 0 };
-    expect(Object.keys(clockPatchRow(base, { ...base, adjEntries: 1, liveStats: ls })).sort()).toEqual(['adj_entries', 'live_stats']);
+    expect(clockPatchRow(base, { ...base, adjEntries: 4, eliminations: 9, liveStats: ls })).toEqual({});
+  });
+  it('카운트는 차분으로 — 다른 기기의 변경에 더해진다', () => {
+    expect(clockCountDeltas(base, { ...base, eliminations: 5, adjEarlies: -1 })).toEqual({ p_d_elim: 2, p_d_entries: 0, p_d_rebuys: 0, p_d_earlies: -1, p_d_addons: 0 });
+    expect(clockCountDeltas(base, { ...base, currentIndex: 3 })).toBeNull();
   });
   it('시작/정지는 running·ends_at·remaining_ms 만', () => {
     const next = { ...base, running: true, endsAt: '2026-09-24T00:00:00.000Z', remainingMs: 0 };

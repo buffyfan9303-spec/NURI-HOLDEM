@@ -194,7 +194,9 @@ test.describe('매장 TV', () => {
 
   test('C6 — 재조회 두 번이 역순으로 도착해도 최신 값이 남는다', async ({ page }) => {
     test.setTimeout(120_000);
-    const mk = (alive: number) => ({ ...baseRow({ venue_id: TV, running: false, ends_at: null, remaining_ms: 600_000 }),
+    // K1(2026-09-29) — TV 는 저장된 live_stats.alive 가 아니라 행의 열(adj_entries − eliminations)로 생존을 합성한다(composeLiveStats).
+    //   그래서 '서로 다른 응답' 은 열이 달라야 한다 — 열과 옛 필드를 같은 값으로 맞춘다(옛 필드만 바꾸면 세 응답이 전부 9 로 같아 순서를 못 잰다).
+    const mk = (alive: number) => ({ ...baseRow({ venue_id: TV, running: false, ends_at: null, remaining_ms: 600_000, adj_entries: 10, eliminations: 10 - alive }),
       live_stats: { entries: 10, rebuys: 0, earlies: 0, addons: 0, alive, eliminations: 10 - alive, totalStack: 500000, avgStack: 0 } });
     let phase = 0;
     await page.route(/\/rest\/v1\/clock_states/, async (r) => {

@@ -12,7 +12,7 @@
 // 운영 DB 쓰기 0 — 모든 REST·WS 가 이 파일 안의 가짜 서버에서 끝난다.
 import { test, expect } from './_fixtures';
 import type { Page, Route, WebSocketRoute, CDPSession } from '@playwright/test';
-import { bootOwner, openMyStore, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
+import { bootOwner, openMyStore, applyClockCounts, MOCK_VENUE, MOCK_DAY } from './_mockOwner';
 
 const RTT = 300;
 // 사람 손 연타 간격(≈4탭/초). 40ms 처럼 왕복보다 훨씬 빠르면 재조회 스탬프가 우연히 합쳐 줘서 되돌림이 안 보인다(실측).
@@ -100,6 +100,20 @@ async function fakeServer(page: Page, init: Record<string, unknown> = clockRow()
     }
     return r.fallback();
   });
+  // K1(2026-09-29) — 카운트(±·탈락)는 PATCH 가 아니라 서버 원자 증감 RPC 로 간다. 서버와 같은 의미(x = x + d · 하한)로 받고 같은 에코를 보낸다.
+  await page.route(/\/rest\/v1\/rpc\/clock_adjust_counts/, async (r) => {
+    await wait(RTT / 2);
+    const body = r.request().postDataJSON() as Record<string, unknown>;
+    const res = applyClockCounts(srv.row, body);
+    if (res.status === 200) {
+      // 쓰기 기록은 **실제로 바꾼 열**(차분 ≠ 0)만 — '엔트리 연타가 다른 칸을 쓰지 않는다' 단언이 RPC 에도 그대로 선다.
+      const COL: Record<string, string> = { p_d_elim: 'eliminations', p_d_entries: 'adj_entries', p_d_rebuys: 'adj_rebuys', p_d_earlies: 'adj_earlies', p_d_addons: 'adj_addons' };
+      srv.writes.push({ method: 'RPC', ...Object.fromEntries(Object.entries(COL).filter(([p]) => Number(body[p] ?? 0) !== 0).map(([p, c]) => [c, body[p]])) });
+      setTimeout(() => push('clock_states'), 20);
+    }
+    await wait(RTT / 2);
+    return r.fulfill(json(res.body, res.status));
+  });
   await page.route(/\/rest\/v1\/ledger_sessions\?/, (r) => {
     if (r.request().method() !== 'GET') return r.fallback();
     return r.fulfill(json(isSingle(r) ? sessionRow() : [sessionRow()]));
@@ -124,6 +138,14 @@ async function openClock(page: Page, w: number, h: number) {
   await page.waitForTimeout(1500);
   return srv;
 }
+
+/** TV 가 서버 행에서 읽는 엔트리 — K1(2026-09-29) 뒤로 TV 는 저장된 live_stats.entries 가 아니라
+ *  **장부 몫(live_stats.ledger.entries) + 보정 열(adj_entries)** 로 합성한다(clock.ts composeLiveStats). 장부 몫이 없는 옛 행만 저장값 그대로.
+ *  (카운트는 원자 증감 RPC 가 열만 바꾸므로 저장된 옛 필드 entries 는 탭마다 갱신되지 않는다 — 그것을 재면 옛 설계를 재는 것이다.) */
+const tvEntries = (row: Record<string, unknown>) => {
+  const ls = row.live_stats as { entries?: number; ledger?: { entries?: number } } | null;
+  return ls?.ledger ? Number(ls.ledger.entries ?? 0) + Number(row.adj_entries ?? 0) : ls?.entries;
+};
 
 const statValue = (page: Page, label: string) => page.evaluate((l) => {
   const s = [...document.querySelectorAll<HTMLElement>('span')].find((x) => x.firstChild?.textContent?.trim() === l && x.querySelector('b'));
@@ -202,7 +224,8 @@ for (const [W, H] of [[1440, 900], [390, 844]] as const) {
     expect.soft(backs, `연타 중 숫자가 뒤로 갔다(에코 되돌림): ${vals.join('→')}`).toBe(0);
     expect.soft(await statValue(page, 'Entries'), '화면 최종값').toBe(before + 20);
     expect.soft(srv.row.adj_entries, '서버 최종 adj_entries').toBe(before + 20 - 2);
-    expect.soft((srv.row.live_stats as { entries?: number } | null)?.entries, '서버 live_stats.entries(TV 가 읽는 값)').toBe(before + 20);
+    expect.soft((srv.row.live_stats as { ledger?: { entries?: number } } | null)?.ledger?.entries, '서버 장부 몫(TV 합성의 한 축)').toBe(2);
+    expect.soft(tvEntries(srv.row), '서버 행에서 TV 가 읽는 엔트리(장부 몫 + 보정)').toBe(before + 20);
     // 보드(ClockStage)는 뒤따라 그리지만 **같은 값에 도착**해야 한다
     await expect.soft(page.getByTestId('clk-rails').first(), '운영자 미리보기 보드가 최종 엔트리에 도착하지 않았다').toContainText(`/ ${before + 20}`);
     // 바뀐 칸만 보낸다 — 엔트리 연타가 레벨·타이머·탈락 칸을 다시 쓰지 않는다(다른 기기 변경 보존)
@@ -240,7 +263,8 @@ test('🔴 1440px — 장부 바인 추가와 클락 엔트리 + 연타가 겹�
   console.log(`[concurrent] 화면 ${await statValue(page, 'Entries')} · adj ${srv.row.adj_entries} · live_stats.entries ${(srv.row.live_stats as { entries?: number }).entries}`);
   expect.soft(await statValue(page, 'Entries'), '화면 = 장부 3명 + 보정 10').toBe(13);
   expect.soft(srv.row.adj_entries, '보정 칸에 장부 몫이 섞이면 안 된다').toBe(10);
-  expect.soft((srv.row.live_stats as { entries?: number }).entries, 'TV 스냅샷 = 장부 + 보정').toBe(13);
+  expect.soft((srv.row.live_stats as { ledger?: { entries?: number } }).ledger?.entries, '서버 장부 몫 = 장부 3명').toBe(3);
+  expect.soft(tvEntries(srv.row), 'TV 가 읽는 엔트리 = 장부 + 보정').toBe(13);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
 });
 
@@ -272,6 +296,7 @@ test(`🔴 리모컨 — 지연 ${RTT}ms·CPU 4× 연타 20회가 하나도 버�
   expect.soft(backs, `리모컨 연타 중 숫자가 뒤로 갔다: ${vals.join('→')}`).toBe(0);
   expect.soft(await value(), '리모컨 화면 최종값(탭이 버려지면 모자란다)').toBe(22);
   expect.soft(srv.row.adj_entries, '서버 adj_entries').toBe(20);
-  expect.soft((srv.row.live_stats as { entries?: number }).entries, 'TV 가 읽는 live_stats.entries').toBe(22);
+  expect.soft((srv.row.live_stats as { ledger?: { entries?: number } }).ledger?.entries, '서버 장부 몫 = 장부 2명').toBe(2);
+  expect.soft(tvEntries(srv.row), 'TV 가 읽는 엔트리(장부 몫 + 보정)').toBe(22);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
 });

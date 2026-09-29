@@ -144,4 +144,28 @@ test.describe('FULL-RECHECK-2/C 클락', () => {
     console.log('[recheck2 #7] CAS PATCH in 10s', in10, JSON.stringify(cas.map((t) => t - t0)));
     expect(in10, '실패한 전진 쓰기를 1초마다 다시 보낸다').toBeLessThanOrEqual(5);
   });
+
+  // 🔴 2026-09-29(PR #30 CI) — 서버 시각 측정(server_now)이 **계속** 실패하는 매장에서 PC 워치독이 DB 레벨 전진을 영영 멈췄다
+  //   (serverTimeKnown 영구 false · 화면은 effectiveLevel 로 맞아 보인다). 연속 3회(≈30초) 실패 뒤 기기 시계로 전진을 재개해야 한다.
+  test('#7b 서버 시각 측정이 계속 실패해도 ≈30초 뒤 레벨 전진 쓰기가 재개된다', async ({ page }) => {
+    test.setTimeout(120_000);
+    const cas: number[] = [];
+    const past = new Date(Date.now() - 60_000).toISOString();
+    let t0 = 0;
+    await bootOwner(page, {
+      viewport: { width: 1440, height: 900 },
+      clock: clockRow({ current_index: 0, ends_at: past }),
+      extra: async (p) => {
+        await p.route(/\/rest\/v1\/rpc\/server_now/, (r) => { if (!t0) t0 = Date.now(); return r.abort('failed'); });
+        await p.route(/\/rest\/v1\/clock_states/, (r) => {
+          if (r.request().method() === 'PATCH' && r.request().url().includes('ends_at=eq.')) { cas.push(Date.now()); return r.abort('failed'); }
+          return r.fallback();
+        });
+      },
+    });
+    await openClock(page);
+    await expect.poll(() => cas.length, { timeout: 75_000, message: '측정 실패가 이어지자 DB 레벨 전진이 영구 정지했다' }).toBeGreaterThan(0);
+    console.log('[recheck2 #7b] 첫 전진 쓰기까지(첫 측정 시도 기준) ms', cas[0] - t0);
+    expect(cas[0] - t0, '측정 확정 전에 기기 시계로 전진했다(K2 게이트가 열렸다)').toBeGreaterThanOrEqual(25_000);
+  });
 });

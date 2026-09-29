@@ -10,11 +10,11 @@ import { getAppSetting, setAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '.
 import { uploadPoster } from '../../../lib/storage';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
-  defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, computeLiveStats,
+  defaultClockConfig, emptyClockState, clockHasProgress, deriveClockCounts, ledgerLiveStats, earlyWindowOf, writeLedgerStats,
   countLevels, withDerivedEarly, generateBlinds, clampAdjEarlies, clampAdjCount,
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, deleteClockPreset,
-  getClockState, saveClockState, saveClockLiveStats, clearClockState, subscribeClock, getVenueClocks,
+  getClockState, saveClockState, clearClockState, subscribeClock, getVenueClocks, effectiveLevel,
   saveClockPatch, createCoalescingSaver, saveClockLevel, sideGameDate, liveStructurePatch,
 } from '../../../api/clock';
 import LiveLevelsEditor, { LEVEL_NUM, LEVEL_ROW } from './LiveLevelsEditor';
@@ -22,7 +22,7 @@ import {
   getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames, openLedgerSession,
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
-import { clockPhase, CLOCK_PHASE_ACTION, levelNumberAt } from '../../../lib/clockLevel';
+import { clockPhase, CLOCK_PHASE_ACTION, levelNumberAt, formatCountdown } from '../../../lib/clockLevel';
 // msToRegClose 는 이 파일에서 더 쓰지 않는다 — 상류 03cd8bb 가 등록 마감 표시를 ClockStage 로 옮겼다.
 // (단일 출처는 src/lib/regStatus.ts 하나뿐이라는 계약은 그대로다 — regStatus.contract.test.ts 가 복제를 막는다.)
 import { listGamePresets, saveGamePreset, type GamePreset } from '../../../api/presets';
@@ -42,13 +42,12 @@ import QRCode from 'qrcode';
 import Icon from '../../atoms/Icon';
 import ClockThemePanel from './ClockThemePanel';
 import ClockStage from './ClockStage';
-import { serverNow } from '../../../lib/serverTime';
+import { serverNow, serverTimeKnown, serverTimeSettled, whenServerTimeSettled } from '../../../lib/serverTime';
+import { useClockSecond } from '../../../lib/clockTick';
 import { useResyncOnWake } from '../../../lib/realtimeResync';
 
 // D1(2026-09-28) — 클락의 '지금'은 서버 기준이다(기기 시계가 틀려도 모든 기기가 같은 ends_at 을 쓰고 읽는다).
 const now = () => serverNow();
-/** 멀티클락 개요 카드의 mm:ss — 보드 포매터는 ClockStage 로 갔고 여기 남은 유일한 표시용 헬퍼다. */
-const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const computeRemaining = (s: ClockState): number =>
   s.running && s.endsAt ? new Date(s.endsAt).getTime() - now() : s.remainingMs;
 
@@ -319,7 +318,6 @@ export default function TournamentClock({ venueId, canManage, venueName, seedSes
 function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = true, onSwitch, onAddSide, onQuickStart }: { venueId: string; sessionDate?: string | null; currentGameSeq: number; active?: boolean; onSwitch: (g: number) => void; onAddSide: (g: number) => void; onQuickStart: (g: number) => void }) {
   const [clocks, setClocks] = useState<ClockState[]>([]);
   const [games, setGames] = useState<{ gameSeq: number; title?: string }[]>([]);
-  const [, setTick] = useState(0);
   // 매장이 바뀌면 앞 매장 슬롯을 즉시 비운다(숨김↔보임 전환에서는 비우지 않는다 — 깜빡임 방지).
   useEffect(() => { setClocks([]); setGames([]); }, [venueId]);
   useEffect(() => {
@@ -337,7 +335,8 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
     const off = subscribeClock(venueId, load);
     return () => { alive = false; off(); };
   }, [venueId, sessionDate, active]);
-  useEffect(() => { if (!active) return; const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, [active]);
+  // K9 — 공용 초 틱(lib/clockTick). 지금 게임 카드가 바로 아래 보드·TV 와 같은 순간에 넘어간다(다른 게임 카드도 같이 다시 그린다).
+  useClockSecond(clocks.find((c) => c.gameSeq === currentGameSeq), active);
   // 게임 슬롯 = 클락 존재 게임 ∪ 그날 장부 게임
   const seqs = [...new Set([...clocks.map((c) => c.gameSeq), ...games.map((g) => g.gameSeq)])].sort((a, b) => a - b);
   if (seqs.length < 1) return null;
@@ -363,19 +362,16 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
             );
           }
           const lv = c.config?.levels ?? [];
-          let idx = Math.max(0, Math.min(c.currentIndex, Math.max(0, lv.length - 1)));
-          let rem = c.running && c.endsAt ? new Date(c.endsAt).getTime() - now() : c.remainingMs;
-          while (c.running && rem < 0 && idx < lv.length - 1) { idx++; rem += (lv[idx].minutes || 0) * 60_000; }
-          rem = Math.max(0, rem);
+          const { index: idx, remainingMs: rem } = effectiveLevel(c);   // 인라인 while 복제 대신 lib 한 벌
           const cur = lv[idx];
-          let no = 0; for (let i = 0; i <= idx && i < lv.length; i++) if (lv[i].kind === 'level') no++;
+          const no = levelNumberAt(lv, idx);
           return (
             <button key={g} type="button" onClick={() => onSwitch(g)} className={base}>
               <div className="flex items-center justify-between gap-1">
                 <span className="truncate text-2xs font-bold text-ink-primary">{label(g)}{on ? ' ●' : ''}</span>
                 <span className={['text-[9px] font-bold', c.running ? 'text-emerald-400' : 'text-accent-300'].join(' ')}>{c.running ? (cur?.kind === 'break' ? '브레이크' : 'L' + no) : '정지'}</span>
               </div>
-              <p className="mt-0.5 text-base font-extrabold leading-none tabular-nums text-ink-primary">{pad(rem / 60_000)}:{pad((rem % 60_000) / 1000)}</p>
+              <p className="mt-0.5 text-base font-extrabold leading-none tabular-nums text-ink-primary">{formatCountdown(rem)}</p>
               {cur && cur.kind === 'level' && <p className="truncate text-[9px] tabular-nums text-ink-secondary">{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}</p>}
             </button>
           );
@@ -539,14 +535,11 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
    *   브레이크 진입·레벨 드리프트가 즉시 반영된다(메모하면 state 가 안 바뀐 동안 낡은 phase 가 굳는다).
    */
   const phase = clockPhase(state);
-  const derived = useMemo(() => deriveClockCounts(buyins, {
-    // 클락(레벨→분 파생)이 우선, 없으면 장부 세션값으로 폴백. 스타트 시각은 장부 기준.
-    earlyDoubleMin: cfg.earlyDoubleMin || linkedSession?.earlyDoubleMin || 0,
-    earlySingleMin: cfg.earlySingleMin || linkedSession?.earlySingleMin || 0,
-    tournamentStart: linkedSession?.tournamentStart ?? null,
-    openedAt: linkedSession?.openedAt ?? null,
-  }), [buyins, linkedSession, cfg.earlyDoubleMin, cfg.earlySingleMin]);
-  const liveStats = useMemo(() => computeLiveStats(state, derived, cfg), [state, derived, cfg]);
+  // K4(2026-09-29) — 얼리 창은 earlyWindowOf 한 벌(장부 세션 기준 · 세션이 없을 때만 클락 설정). 예전엔 여기만 `설정 || 세션` 이라
+  //   같은 바인을 장부 화면과 다른 얼리·총칩으로 썼다(4D 실측: 8/240,000 vs 0/200,000, 나중 쓴 쪽이 이김).
+  const derived = useMemo(() => deriveClockCounts(buyins, earlyWindowOf(cfg, linkedSession)), [buyins, linkedSession, cfg]);
+  // 표시값 = 저장하는 스냅샷과 **같은 함수**(ledgerLiveStats). 장부 미연동이면 장부 몫 0.
+  const liveStats = useMemo(() => ledgerLiveStats(state, state.sessionDate ? buyins : [], linkedSession), [state, buyins, linkedSession]);
 
   // ⚠ 낙관적 반영에는 **롤백이 있어야 한다**(2026-09-17). 예전엔 실패해도 로컬 state 가 next 로 남아,
   //   예컨대 [일시정지] 저장이 실패하면 PC 만 '정지'로 보이고 서버·TV·장부는 계속 진행했다.
@@ -563,8 +556,9 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
     const next = { ...prev, ...patch };
     stateRef.current = next;
     onChange(next);
-    if (canManage) onSave({ ...next, liveStats: { ...computeLiveStats(next, derived, next.config), buyInAmount: linkedSession?.buyinAmount ?? null } }, prev);
-  }, [canManage, onChange, onSave, derived, linkedSession]);
+    // 통계는 싣지 않는다(K1) — 카운트는 차분 RPC, live_stats 는 아래 장부 몫 작성기 하나.
+    if (canManage) onSave(next, prev);
+  }, [canManage, onChange, onSave]);
 
   // 장부 변동(엔트리/리바인/얼리/바인단가) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
   // (A2) persist(수동 제어)와 이중 저장되며 경쟁하던 것을 디바운스(400ms) 단일 쓰기로 정리 + buyinAmount 키 포함.
@@ -572,15 +566,17 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   // 400ms 사이 사람이 STOP 을 눌러도 취소되지 않는다 — 그래서 saveClockState(전 행 upsert)를 쓰면
   // 낡은 running:true 로 방금 쓴 정지를 덮을 수 있었다. saveClockLiveStats 는 `live_stats` 컬럼만 쓰므로
   // 몇 번째로 도착하든 running·currentIndex·endsAt·eliminations 를 절대 건드리지 못한다.
-  const derivedKey = `${derived.entries}/${derived.rebuys}/${derived.earlies}/${derived.doubleEarlies}/${linkedSession?.buyinAmount ?? ''}`;
+  // K1·K3(2026-09-29) — 쓰는 것은 **장부 몫**뿐이고(writeLedgerStats 한 벌, 같으면 안 씀) 인원·생존은 읽는 쪽이 합성한다.
+  //   세션이 아직 안 왔으면 쓰지 않는다 — 세션 없이 계산하면 얼리 창이 클락 설정으로 떨어져 한 번 틀린 값을 쓴다.
+  const derivedKey = `${liveStats.ledger ? JSON.stringify(liveStats.ledger) : ''}/${linkedSession?.buyinAmount ?? ''}/${linkedSession ? 1 : 0}`;
   useEffect(() => {
-    if (!canManage || !state.sessionDate) return;
+    if (!canManage || !state.sessionDate || !linkedSession) return;
     if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
     snapTimerRef.current = setTimeout(() => {
       // D5(2026-09-28) — 400ms 뒤의 **최신** 상태로 계산한다. 렌더 때 잡은 state 를 쓰면 그 사이 리모컨의 아웃이
       //   반영되기 전 값(생존·탈락)으로 통계를 써서 TV 가 다음 쓰기 전까지 옛 인원을 보였다.
       const s = stateRef.current;
-      saveClockLiveStats(s.venueId, s.gameSeq, { ...computeLiveStats(s, derived, s.config), buyInAmount: linkedSession?.buyinAmount ?? null }).catch(() => {});
+      if (s.sessionDate) void writeLedgerStats(s, buyins, linkedSession).catch(() => {});
     }, 400);
     return () => { if (snapTimerRef.current) clearTimeout(snapTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -699,6 +695,9 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   const advanceBackoffRef = useRef(createBackoff());
   const advance = useCallback(() => {
     if (advancingRef.current || advanceBackoffRef.current.blocked()) return;
+    // 🔴 K2(2026-09-29 실측) — 서버 시각을 아직 모르면(측정 전·실패) 자동 전진을 쓰지 않는다.
+    //   +5분 PC 가 기기 시계로 계산해 실제로 150초 남은 레벨을 149초 일찍 넘겼다. 측정되면 다음 틱에 따라잡는다.
+    if (!serverTimeKnown()) return;
     const s = stateRef.current;
     const cu = levelCatchUp(s);
     if (!cu) return;
@@ -777,6 +776,8 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
   // 일시정지·재개는 손님 전원이 보는 화면을 그 자리에서 바꾼다(Phase 11-9 오조작 방지) —
   // 확인 다이얼로그는 정상 조작까지 느리게 하므로, 실행 직후 5초 [실행취소] 토스트를 택했다.
   const toggleRun = () => {
+    // K2 — 서버 시각 첫 측정 전이면 끝날 때까지 기다렸다가 누른다(기기 시계로 ends_at 을 쓰지 않게).
+    if (!serverTimeSettled()) { void whenServerTimeSettled().then(toggleRun); return; }
     const live = stateRef.current;
     // C7 — 끝난 대회는 주 버튼이 비활성이다(누르면 remainingMs 0 으로 재개돼 즉시 재종료됐다). 키보드·띠 버튼도 여기서 막는다.
     if (clockPhase(live) === 'finished') return;
@@ -813,7 +814,8 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
     toast.show('레벨 이동을 되돌렸습니다. 남은 시간까지 복원', 'info');
   };
   const setLevel = (delta: number) => {
-    const patch = levelMovePatch(state, state.currentIndex, delta);
+    // K12 — 기준은 **실효 레벨**(표시와 같은 것). raw currentIndex 는 워치독이 늦으면(백그라운드 탭) 한 칸 뒤처져 있다.
+    const patch = levelMovePatch(state, effectiveLevel(state).index, delta);
     if (!patch) return; // 첫/마지막 레벨: 레벨은 그대로인데 현재 레벨 타이머만 리셋되던 사고 차단
     armLevelUndo();
     persist(patch);
@@ -1019,7 +1021,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       {/* ② 레벨 — 시작 아래 자기 줄. 되돌리기는 이동 직후 6초만 옆에 뜬다. */}
       <div data-testid="clk-level-row" className="mt-2 flex items-end gap-2 max-md:contents">
         <Stepper label="Level" size="lg"
-          plusDisabled={state.currentIndex >= cfg.levels.length - 1} minusDisabled={state.currentIndex <= 0}
+          plusDisabled={effectiveLevel(state).index >= cfg.levels.length - 1} minusDisabled={effectiveLevel(state).index <= 0}
           onPlus={() => setLevel(1)} onMinus={() => setLevel(-1)} />
         {levelUndo && (
           <button type="button" onClick={undoLevel} title="방금 레벨 이동을 취소하고 남은 시간까지 되돌립니다(TV 포함)"
