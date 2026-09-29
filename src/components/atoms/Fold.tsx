@@ -45,19 +45,23 @@ export function keepScroll(el: Element, shrink: number) {
   const box = doc ? document.body : sc;
   let pad = sc.scrollTop + sc.clientHeight - (sc.scrollHeight - shrink);
   if (pad < 1 || box.dataset.keepScroll) return;
-  const inline = box.style.paddingBottom;
-  const base = parseFloat(getComputedStyle(box).paddingBottom) || 0;
+  // 여백은 padding 이 아니라 **새로 끼우는 빈 칸**으로 준다 — 동작 줄이기의 전역 `*{transition-duration:.01ms}` 가
+  //   padding 변경까지 0.01ms 전환으로 만들어, 그 프레임 레이아웃엔 옛 값이 들어가 클램프가 그대로 났다(2026-09-29 실측, RM 에서만 +44).
+  //   새로 생긴 요소의 첫 스타일은 전환하지 않는다.
+  const gap = document.createElement('div');
+  gap.setAttribute('aria-hidden', 'true');
   const target: HTMLElement | Window = doc ? window : sc;
-  const apply = () => { box.style.paddingBottom = `${base + pad}px`; };
+  const apply = () => { gap.style.height = `${pad}px`; };
   const onScroll = () => {
     pad = Math.min(pad, Math.max(0, sc.scrollTop + sc.clientHeight - (sc.scrollHeight - pad)));
     if (pad > 0) return apply();
-    box.style.paddingBottom = inline;
+    gap.remove();
     delete box.dataset.keepScroll;
     target.removeEventListener('scroll', onScroll);
   };
   box.dataset.keepScroll = '1';
   apply();
+  box.appendChild(gap);
   target.addEventListener('scroll', onScroll, { passive: true });
 }
 

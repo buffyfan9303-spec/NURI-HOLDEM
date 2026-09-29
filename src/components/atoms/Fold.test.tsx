@@ -26,40 +26,45 @@ describe('keepScroll — 바닥에서 닫을 때 scrollTop 클램프 막기', ()
   const saved = { document: g.document, window: g.window, getComputedStyle: g.getComputedStyle };
   afterEach(() => { Object.assign(g, saved); });
 
-  /** 문서 스크롤러 흉내 — scrollHeight 는 본문 높이 + body 의 인라인 padding-bottom. */
+  /** 문서 스크롤러 흉내 — scrollHeight 는 본문 높이 + body 끝에 끼운 빈 칸 높이. */
   function setup(content: number, clientHeight: number, scrollTop: number) {
-    const body = { style: { paddingBottom: '' } as Record<string, string>, dataset: {} as Record<string, string> };
+    const kids: { style: Record<string, string> }[] = [];
+    const gapH = () => kids.reduce((n, k) => n + (parseFloat(k.style.height) || 0), 0);
+    const body = { dataset: {} as Record<string, string>, appendChild: (k: { style: Record<string, string> }) => kids.push(k) };
     const sc = {
       clientHeight, scrollTop, parentElement: null,
-      get scrollHeight() { return content + (parseFloat(body.style.paddingBottom) || 0); },
+      get scrollHeight() { return content + gapH(); },
     };
     const listeners: L[] = [];
-    g.document = { scrollingElement: sc, body };
+    g.document = {
+      scrollingElement: sc, body,
+      createElement: () => { const k = { style: {} as Record<string, string>, setAttribute: () => {}, remove: () => kids.splice(kids.indexOf(k), 1) }; return k; },
+    };
     g.window = { addEventListener: (_: string, f: L) => listeners.push(f), removeEventListener: (_: string, f: L) => listeners.splice(listeners.indexOf(f), 1) };
-    g.getComputedStyle = () => ({ overflowY: 'visible', paddingBottom: '0px' });
+    g.getComputedStyle = () => ({ overflowY: 'visible' });
     const el = { parentElement: null };
-    return { sc, body, listeners, el, shrink: (px: number) => { content -= px; } };
+    return { sc, kids, gapH, listeners, el, shrink: (px: number) => { content -= px; } };
   }
 
   it('바닥에서 400px 줄어들면 모자라는 만큼 여백을 걸고, 위로 스크롤하는 만큼 거둔다', () => {
     const s = setup(2000, 800, 1200); // 맨 아래(2000 - 800)
     keepScroll(s.el as unknown as Element, 400);
-    expect(s.body.style.paddingBottom, '클램프 막기 여백이 없다').toBe('400px');
+    expect(s.gapH(), '클램프 막기 빈 칸이 없다').toBe(400);
     s.shrink(400); // 실제로 줄어든 뒤에도
     expect(s.sc.scrollHeight - s.sc.clientHeight, '줄어든 뒤 최대 scrollTop 이 지금 scrollTop 보다 작다 — 클램프').toBeGreaterThanOrEqual(1200);
     s.sc.scrollTop = 1000; s.listeners.forEach((f) => f());
-    expect(s.body.style.paddingBottom, '위로 200px 올리면 여백도 200 으로').toBe('200px');
+    expect(s.gapH(), '위로 200px 올리면 빈 칸도 200 으로').toBe(200);
     s.sc.scrollTop = 1100; s.listeners.forEach((f) => f());
-    expect(s.body.style.paddingBottom, '다시 내려가도 여백이 다시 늘면 안 된다').toBe('200px');
+    expect(s.gapH(), '다시 내려가도 빈 칸이 다시 늘면 안 된다').toBe(200);
     s.sc.scrollTop = 500; s.listeners.forEach((f) => f());
-    expect(s.body.style.paddingBottom, '충분히 올라오면 원래 값으로').toBe('');
+    expect(s.kids.length, '충분히 올라오면 빈 칸을 뺀다').toBe(0);
     expect(s.listeners.length, '다 거둔 뒤에도 스크롤 리스너가 남았다').toBe(0);
   });
 
   it('바닥이 아니면(줄어도 클램프 없음) 아무것도 걸지 않는다 — 음성 대조', () => {
     const s = setup(2000, 800, 300);
     keepScroll(s.el as unknown as Element, 400);
-    expect(s.body.style.paddingBottom).toBe('');
+    expect(s.kids.length).toBe(0);
     expect(s.listeners.length).toBe(0);
   });
 });

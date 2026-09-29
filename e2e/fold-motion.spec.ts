@@ -196,7 +196,9 @@ test.describe('Fold — 펼침/접힘은 부드럽고 누른 요소는 제자리
     expect(open.dCenter, `펼칠 때 누른 버튼이 ${open.dCenter}px 움직였다(수정 전 +400)`).toBeLessThanOrEqual(1);
   });
 
-  test('④ 법정 푸터 추가 정보 — 맨 아래에서 닫아도 요약줄이 내려오지 않는다(클램프)', async ({ page }) => {
+  for (const rm of [false, true]) test(`④ 법정 푸터 추가 정보 — 맨 아래에서 닫아도 요약줄이 내려오지 않는다(클램프)${rm ? ' · 동작 줄이기' : ''}`, async ({ page }) => {
+    // 동작 줄이기도 따로 잰다 — 전역 `*{transition-duration:.01ms}` 가 padding 변경을 한 프레임 늦춰 RM 에서만 +44 가 남았던 부류(2026-09-29).
+    if (rm) await page.emulateMedia({ reducedMotion: 'reduce' });
     await gotoBrowse(page);
     const summary = page.locator('footer summary').filter({ hasText: '추가 정보' }).first();
     await summary.evaluate((s) => s.scrollIntoView({ block: 'center' }));
@@ -209,7 +211,7 @@ test.describe('Fold — 펼침/접힘은 부드럽고 누른 요소는 제자리
     expect(before.bottom, '맨 아래가 아니다 — 클램프 조건을 못 만들었다').toBe(true);
     const close = await toggle(page, summary, 'details');
     const after = await summary.evaluate((s) => ({ open: (s.parentElement as HTMLDetailsElement).open, h: s.parentElement!.getBoundingClientRect().height }));
-    console.log(`[fold ④ footer@bottom 390] close ${JSON.stringify(close)} details ${before.h}→${after.h}`);
+    console.log(`[fold ④ footer@bottom 390${rm ? ' RM' : ''}] close ${JSON.stringify(close)} details ${before.h}→${after.h}`);
     expect(after.open, '닫히지 않았다').toBe(false);
     expect(before.h - after.h, '닫았는데 내용이 안 줄었다 — 클램프 조건이 아니다').toBeGreaterThan(20);
     expect(close.dCenter, `바닥에서 닫자 요약줄이 ${close.dCenter}px 움직였다(수정 전 +44)`).toBeLessThanOrEqual(1);
