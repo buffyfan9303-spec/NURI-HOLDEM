@@ -92,9 +92,21 @@ describe('#8 서버 초안 20260929u', () => {
     expect(iUse).toBeGreaterThan(iPerm);
     expect(sql).toMatch(/if v_use = 'addon' and r\.voucher_id is null then\s+raise exception/);
   });
-  it('애드온 = 가장 최근 애드온 없는 바인 행에 ticket 애드온(새 바인 없음) · 용도 기록', () => {
-    expect(sql).toMatch(/and b\.player_name = r\.player_name and b\.addon_method is null\s+order by b\.entry_no desc\s+limit 1\s+for update;/);
-    expect(sql).toMatch(/update ledger_buyins set addon_method = 'ticket', addon_unpaid = false where id = v_target;/);
+  it('🔴 RISK-A — 최신 바인 한 행만 잠그고, 이미 애드온이면 거절(옛 엔트리로 내려가지 않는다)', () => {
+    // 음성 대조: 선택 조건에 `and b.addon_method is null` 을 되살리면 이 단언이 빨개진다(리허설 반례 1:ticket,2:cash).
+    expect(sql).toMatch(/and b\.player_name = r\.player_name\s+order by b\.entry_no desc\s+limit 1\s+for update;/);
+    expect(sql).toMatch(/if v_target_addon is not null then\s+raise exception/);
+  });
+  it('🔴 RISK-B — 애드온 요청을 행에 연결하고, 삭제·애드온 제거·수단 변경 때 바인과 같은 함수로 이용권을 되돌린다', () => {
+    expect(sql).toMatch(/update ledger_buyins set addon_method = 'ticket', addon_unpaid = false, addon_request_id = r\.id where id = v_target;/);
+    expect(sql).toMatch(/perform public\._restore_voucher_for_request\(old\.addon_request_id\);/);
+    expect(sql).toMatch(/before update of addon_method, addon_request_id or delete on public\.ledger_buyins/);
+    expect(sql).toMatch(/before insert or update of addon_request_id on public\.ledger_buyins/);   // 화면이 연결을 못 만든다
+    for (const f of ['_ledger_buyins_addon_request_guard()', '_ledger_buyins_addon_voucher_restore()']) {
+      expect(sql).toContain(`revoke all on function public.${f} from public, anon, authenticated;`);
+    }
+  });
+  it('애드온 = 새 바인 없음 · 용도 기록', () => {
     expect(sql).toMatch(/update store_vouchers set used_for = v_use where id = r\.voucher_id;/);
     expect(sql).toMatch(/check \(used_for is null or used_for in \('buyin', 'addon'\)\)/);
   });

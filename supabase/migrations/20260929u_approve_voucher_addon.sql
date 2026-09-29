@@ -37,6 +37,15 @@
 --   R5 ACL — anon execute=false, authenticated=true, PUBLIC 미부여, 옛 9인자 서명 0개(pg_proc 에 approve_buyin_request 1개).
 --   R6 기존 행 불변 — store_vouchers·ledger_buyins md5(롤백 후) 동일. used_for 기존 행 전부 null.
 --   R7 어드바이저 보안 ERROR 0.
+--   R8 RISK-A(critical 2026-09-29) — 손님 1바인(애드온 없음)+2바인(애드온 현금)에 이용권 애드온 승인 → 거절(P0001), 행 1:-,2:cash 그대로,
+--      요청 pending·이용권 used 그대로. 최신 행이 애드온 없음이면 그 행에 붙는다(A 2바인).
+--   R9 RISK-B — 애드온 이용권이 붙은 행 삭제 → 이용권 active·used_for null·요청 voucher_id null /
+--      애드온만 제거(addon_method=null) → 이용권 active·연결 null / 화면(authenticated)이 addon_request_id 를 바꾸거나 지우면 42501 /
+--      바인 승인분(request_id) 복원 경로 불변(active).
+--   ▶ store-team 실측(2026-09-29, 라이브 DO 블록 + 끝 RAISE 로 전량 롤백, s·t 적용된 라이브 위):
+--      수정 전 u: A 반례 격리 실행 `1:ticket,2:cash`(옛 1바인에 붙음) · 행 삭제 뒤 이용권 used · 애드온 제거 뒤 used · 화면 연결 변경 42703(열 없음).
+--      수정 후 u: ACL anon=f auth=t 내부함수 auth=f · A1 거절 P0001 rows=1:-,2:cash req=pending v=used · A2 1:ticket,2:ticket ·
+--      B1 active/-/null · B2 active/null · B3 42501 · B3b 42501 · B4 바인분 active · B5 active. 생성기: scratchpad/lg/rh/(build-logic-rh.cjs + slim.sql).
 --
 -- 적용 전 실측(2026-09-29 SELECT 만): approve_buyin_request 1개(9인자) ACL {postgres,authenticated,service_role} ·
 --   ledger_buyin_requests 0행 · store_vouchers CHECK 는 issue_reason 뿐.
@@ -49,6 +58,64 @@ do $c$ begin
 end $c$;
 comment on column public.store_vouchers.used_for is
   '#8(2026-09-29) 접수대 승인 때 고른 용도(buyin|addon). approve_buyin_request 만 쓴다. null = 이 기능 이전 사용분 또는 아직 승인 전.';
+
+-- 🔴 RISK-B(critical 리허설 U7) — 애드온으로 승인된 이용권의 연결·복원. 바인 승인은 ledger_buyins.request_id 로 연결되고
+--   취소·삭제 RPC 4곳(cancel_ledger_buyin·cancel_my_recent_buyin·delete_ledger_player·delete_ledger_session)이
+--   `returning request_id` → _restore_voucher_for_request 로 되돌린다. 애드온은 기존 행에 붙으므로 request_id 칸을 쓸 수 없다
+--   (그 칸은 그 행의 바인 요청 몫). 그래서 같은 모양의 칸(addon_request_id)을 두고, 되돌리기는 **같은 함수**
+--   _restore_voucher_for_request 로 한다. 호출 자리는 RPC 4곳을 고치는 대신 행 트리거 하나 — 삭제 경로·애드온 제거·
+--   이용권 아닌 수단으로 바꾸기를 한 번에 덮는다. 기존 바인 복원 경로(request_id)는 한 줄도 바꾸지 않는다.
+alter table public.ledger_buyins add column if not exists addon_request_id uuid;
+comment on column public.ledger_buyins.addon_request_id is
+  '#8(2026-09-29) 이 행의 애드온을 이용권 요청으로 승인했을 때 그 요청 id. approve_buyin_request 만 쓴다. 행 삭제·애드온 제거 시 이용권 복원.';
+
+-- 화면이 연결을 만들거나 바꾸지 못하게(request_id 와 같은 규칙 — _ledger_buyins_client_guard 는 그대로 두고 옆에 둔다).
+create or replace function public._ledger_buyins_addon_request_guard()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if current_user in ('authenticated', 'anon')
+     and new.addon_request_id is distinct from (case when tg_op = 'UPDATE' then old.addon_request_id end) then
+    -- 지우기(null)도 막는다 — 화면이 연결만 끊으면 애드온은 남고 이용권만 되살아난다(공짜 애드온). 끊기는 복원 트리거만 한다.
+    raise exception '애드온 요청 연결은 서버만 설정할 수 있습니다' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+revoke all on function public._ledger_buyins_addon_request_guard() from public, anon, authenticated;
+drop trigger if exists ledger_buyins_addon_request_guard on public.ledger_buyins;
+create trigger ledger_buyins_addon_request_guard before insert or update of addon_request_id on public.ledger_buyins
+  for each row execute function public._ledger_buyins_addon_request_guard();
+
+-- 복원: 행이 지워지거나, 애드온이 빠지거나, 이용권이 아닌 수단으로 바뀌면 그 요청의 이용권을 되돌리고 연결을 끊는다.
+create or replace function public._ledger_buyins_addon_voucher_restore()
+returns trigger
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare v_voucher uuid;
+begin
+  if old.addon_request_id is null then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+  if tg_op = 'UPDATE' and new.addon_method is not distinct from 'ticket'
+     and new.addon_request_id is not distinct from old.addon_request_id then
+    return new;   -- 애드온 이용권이 그대로 붙어 있다
+  end if;
+  select voucher_id into v_voucher from public.ledger_buyin_requests where id = old.addon_request_id;
+  perform public._restore_voucher_for_request(old.addon_request_id);
+  if v_voucher is not null then
+    update public.store_vouchers set used_for = null where id = v_voucher and status = 'active';
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
+  new.addon_request_id := null;
+  return new;
+end $$;
+revoke all on function public._ledger_buyins_addon_voucher_restore() from public, anon, authenticated;
+drop trigger if exists trg_ledger_buyins_addon_voucher_restore on public.ledger_buyins;
+create trigger trg_ledger_buyins_addon_voucher_restore before update of addon_method, addon_request_id or delete on public.ledger_buyins
+  for each row execute function public._ledger_buyins_addon_voucher_restore();
 
 drop function if exists public.approve_buyin_request(uuid, smallint, boolean, text, boolean, integer, integer, integer, integer);
 
@@ -71,6 +138,7 @@ declare
   v_sum int;
   v_use text := lower(coalesce(p_voucher_use, 'buyin'));
   v_target uuid;
+  v_target_addon text;
 begin
   select * into r from ledger_buyin_requests where id = p_request_id for update;
   if not found then raise exception '요청을 찾을 수 없습니다'; end if;
@@ -128,19 +196,26 @@ begin
   if r.voucher_id is not null then
     p_record_buyin := false;
     if v_use = 'addon' then
-      -- #8 — 이용권으로 애드온: 그 손님의 애드온이 아직 없는 가장 최근 바인 행에 붙인다(새 바인·엔트리를 만들지 않는다).
+      -- #8 — 이용권으로 애드온: 그 손님의 **가장 최근 바인 한 행**에만 붙인다(새 바인·엔트리를 만들지 않는다).
+      --   🔴 RISK-A(critical 리허설 U6): '애드온 없는 가장 최근' 으로 고르면 2바인에 이미 애드온이 있을 때 옛 1바인으로
+      --   내려가 붙었다(1:ticket,2:cash). 최신 행이 이미 애드온이면 거절한다 — 요청은 pending, 이용권은 used 그대로.
       --   금액·애드온 게임·가격 검사는 BEFORE 트리거 _ledger_buyin_addon_rule 이 한다(여기서 두 번 쓰지 않는다).
-      select b.id into v_target
+      select b.id, b.addon_method into v_target, v_target_addon
         from ledger_buyins b
        where b.venue_id = r.venue_id and b.session_date = r.session_date and b.game_seq = p_game_seq
-         and b.player_name = r.player_name and b.addon_method is null
+         and b.player_name = r.player_name
        order by b.entry_no desc
        limit 1
        for update;
       if v_target is null then
         raise exception '이 손님의 바인 기록이 없어 애드온을 붙일 수 없습니다 — 먼저 바인을 기록하거나 바인으로 승인하세요';
       end if;
-      update ledger_buyins set addon_method = 'ticket', addon_unpaid = false where id = v_target;
+      if v_target_addon is not null then
+        raise exception '이 손님의 최근 바인에 이미 애드온이 있습니다 — 새 바인을 먼저 기록하세요';
+      end if;
+      -- 🔴 RISK-B — 바인 승인(request_id)과 같은 방식으로 요청을 행에 연결한다(addon_request_id).
+      --   이 행이 지워지거나 애드온이 빠지면 trg_ledger_buyins_addon_voucher_restore 가 이용권을 되돌린다.
+      update ledger_buyins set addon_method = 'ticket', addon_unpaid = false, addon_request_id = r.id where id = v_target;
     else
       select coalesce(max(entry_no), 0) + 1 into v_entry
         from ledger_buyins where venue_id = r.venue_id and session_date = r.session_date
