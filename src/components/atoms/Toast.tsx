@@ -67,6 +67,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     // 에러도 마찬가지 — '왜 실패했는지'를 읽기 전에 사라지면 같은 실수를 반복한다.
     const durationMs = opts?.durationMs ?? (opts?.action ? 6000 : variant === 'error' ? 4500 : 2400);
     setToasts((prev) => [...prev, { id, message, variant, action: opts?.action, durationMs }]);
+    // ⚠ 자동 닫힘은 진동 분기보다 **먼저** 건다 — 아래 활성화 전 `return` 이 예약을 건너뛰어,
+    //   첫 제스처 전(부팅 직후)에 뜬 토스트가 영영 안 닫히던 결함(2026-09-25 도입, 2026-09-29 수정).
+    setTimeout(() => { dismiss(id); }, durationMs);
     // 햅틱 피드백(모바일) — 성공 10ms 한 번, 에러는 짧게 두 번(네이티브 앱 감각)
     // ⚠ 첫 제스처 전(부팅 직후 자동 토스트)에는 Chromium 이 vibrate 를 막고 콘솔에 개입 경고를 남긴다
     //   ("Blocked call to navigator.vibrate because user hasn't tapped on the frame") — 활성화 전이면 부르지 않는다.
@@ -75,7 +78,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       if (variant === 'success') navigator.vibrate?.(10);
       else if (variant === 'error') navigator.vibrate?.([18, 40, 18]);
     } catch { /* 미지원 무시 */ }
-    setTimeout(() => { dismiss(id); }, durationMs);
   }, [dismiss, load]);
 
   // ⚠ value 를 인라인 객체로 주면 toasts 가 바뀔 때마다(=토스트가 뜰 때마다) 새 참조가 되어
