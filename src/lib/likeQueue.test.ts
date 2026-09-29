@@ -117,4 +117,16 @@ describe('좋아요 직렬 큐', () => {
     expect(r.sent).toBe(2);
     expect(r.settles).toBe(1);
   });
+
+  it('🔴 한 번 누름 → 비행 중 A→B → 응답 — A 의 응답이 B 화면을 덮지 않는다(live 계정 대조)', async () => {
+    const r = rig();
+    r.tap();                                // 재전송이 필요 없는 한 번 — send 쪽 세션 대조는 관여하지 않는다
+    r.who.ui = 'B'; r.who.session = 'B';
+    const uiAtSwitch = { ...r.ui };
+    r.held.shift()!.ok(); await r.tick();
+    expect(r.settles, 'A 의 응답으로 B 화면을 덮었다').toBe(0);
+    expect(r.ui).toEqual(uiAtSwitch);
+    expect(r.sent).toBe(1);
+    expect(r.errors.length).toBe(0);
+  });
 });
