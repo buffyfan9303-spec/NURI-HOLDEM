@@ -5,6 +5,10 @@
 //   딜 비교   : 위 입력 → ICM 딜(=기대 지분) 과 칩찹(스택 비례) 을 한 표에서 비교
 //     (2026-09-18 오너 "딜 메이킹과 ICM 계산기의 차이를 모르겠어 … ICM 계산기 쪽으로 합쳐" — 옛 tools/DealCalc.tsx 는
 //      같은 icmEquity 에 칩찹 열 하나를 더한 화면이었다. 그 표·스택 비율·안내문을 이 모드로 옮기고 파일은 지웠다.)
+//   찹 분배  : variant="chop" — 딜러 탭(DealerCommunity) 전용. 파이널테이블 찹(딜) 제안 때 ICM 분배액 하나만 본다
+//     (2026-09-30 오너 "딜러들이 찹 제안이 나오면 ICM 계산기를 돌려 상금을 ICM대로 분배 — 그 계산기만 남기고 다 빼줘").
+//     계산·반올림은 딜 비교 모드의 'ICM 딜' 열과 같은 값(equitiesShown). 모드 탭·콜 압박·칩찹·차이 열은 안 그린다.
+//     GTO 도구 탭(ToolsPanel 'icm'·'deal')은 variant 기본값('full')이라 그대로다.
 // 스택·상금 입력은 세 모드가 공유한다 — 같은 테이블을 두 번 입력시키지 않기 위해서다.
 // 계산(Malmuth-Harville · 리스크 프리미엄 · 칩찹)은 src/lib/icm.ts 단일 소스. 예전엔 이 파일과
 // tools/DealCalc.tsx 에 icmEquity 가 두 벌로 복제돼 있었다.
@@ -65,8 +69,9 @@ function SeatBtn({ on, tone, label, onClick }: { on: boolean; tone: 'hero' | 'vi
 }
 
 /** initialMode — `#tool=deal` 옛 딥링크가 딜 비교 모드로 바로 열리게(ToolsPanel renderTool). 기본은 기대 지분. */
-export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?: Mode } = {}) {
-  const [mode, setMode] = useState<Mode>(initialMode);
+export default function ICMCalculator({ initialMode = 'equity', variant = 'full' }: { initialMode?: Mode; variant?: 'full' | 'chop' } = {}) {
+  const chopOnly = variant === 'chop';
+  const [mode, setMode] = useState<Mode>(chopOnly ? 'deal' : initialMode);
   const [stacks, setStacks] = useState<number[]>([5000, 3000, 2000]);
   const [prizes, setPrizes] = useState<number[]>([40, 24, 15, 10, 7, 4]);
   // 압박 모드 입력 — 기본값은 '중간 스택이 칩리더의 올인을 받는' 대표적 버블 자리(결과 먼저 원칙)
@@ -144,7 +149,7 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
   const prizeBlock = ( // 상금 구조
   <div>
     <div className="flex items-center justify-between mb-1.5">
-      <span className="text-2xs font-semibold text-ink-secondary">상금 구조</span>
+      <span className="text-2xs font-semibold text-ink-secondary">{chopOnly ? '남은 상금 (1위부터)' : '상금 구조'}</span>
       <div className="inline-flex items-center gap-1.5">
         {/* 하한 1자리 — 옛 딜 계산기가 허용하던 '남은 상금 한 자리'(예: 헤즈업 우승 상금만 남음)를 잃지 않는다. 압박 모드도 1자리면 계산한다. */}
         {/* 🔴 G11(2026-09-20 모바일 실측) — 실제 누름 박스가 약 26×26px 였다(390px 기준).
@@ -226,7 +231,7 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
                 </>
               )}
             </span>
-          ) : mode === 'deal' ? (
+          ) : chopOnly ? null : mode === 'deal' ? (
             // 딜 비교: 스택 점유율(옛 딜 계산기의 행 오른쪽 %)
             <span className="w-14 shrink-0 text-right text-2xs tabular-nums text-ink-muted">
               {totalStack > 0 ? `${((v / totalStack) * 100).toFixed(1)}%` : '—'}
@@ -295,6 +300,38 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
     </>
   );
 
+  // 찹 분배 표 — 스택 | ICM 분배 + 합계. 값은 dealTable 의 'ICM 딜' 열과 같은 equitiesShown(최대잔여법 → 합계 = 분배 상금).
+  //   0칩·빈 칸이 있으면 G3 와 같은 이유로 금액을 내지 않는다(위 경고문만). 실제 돈을 나누는 표라 추정 금액을 그리지 않는다.
+  const chopTable = hasNonPositive ? null : (
+    <div className="overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60">
+      <table className="w-full text-xs tabular-nums" data-testid="icm-chop-table">
+        <thead>
+          <tr className="border-b border-border-subtle text-2xs text-ink-muted">
+            <th scope="col" className="px-2 py-1.5 text-left font-semibold">플레이어</th>
+            <th scope="col" className="px-2 py-1.5 text-right font-semibold">스택</th>
+            <th scope="col" className="px-2 py-1.5 text-right font-semibold">ICM 분배</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border-subtle">
+          {stacks.map((v, i) => (
+            <tr key={i}>
+              <td className="px-2 py-1.5 font-bold text-ink-secondary">P{i + 1}</td>
+              <td className="px-2 py-1.5 text-right text-ink-secondary">{fmt(v)}</td>
+              <td className="px-2 py-1.5 text-right text-sm font-extrabold text-accent-300">{money(equitiesShown[i] ?? 0)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-border-subtle">
+            <th scope="row" className="px-2 py-1.5 text-left text-2xs font-semibold text-ink-muted">합계</th>
+            <td className="px-2 py-1.5 text-right text-ink-muted">{fmt(totalStack)}</td>
+            <td className="px-2 py-1.5 text-right font-bold text-ink-primary">{money(equitiesShown.reduce((a, b) => a + b, 0))}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+
   // 압박 모드 전용 입력 — 스택·자리 바로 아래(결론에서 가장 가깝게)
   const pressureInputs = (
     <>
@@ -334,12 +371,15 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
 
   return (
     // 제목은 전체화면 헤더(도구 런처)가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
-    <CalcCard desc={mode === 'equity'
+    <CalcCard title={chopOnly ? '찹(딜) 분배 — ICM' : undefined} desc={chopOnly
+      ? '파이널테이블에서 찹 제안이 나오면 남은 스택과 남은 상금을 넣으세요. 각 플레이어의 ICM 기준 분배 금액을 계산합니다.'
+      : mode === 'equity'
       ? '스택과 상금을 입력하면 각 플레이어의 기대 상금(ICM)을 계산합니다.'
       : mode === 'deal'
         ? '남은 스택과 남은 상금을 입력하면 ICM 딜과 칩찹 분배액을 비교합니다.'
         : '상대가 올인했을 때, 콜하려면 칩 기준 승률이 몇 % 필요한지 계산합니다.'}>
       {/* flex-wrap: 320px 에서 탭(130px)+버블 버튼이 한 줄에 못 들어가 탭이 4px 잘렸다(실측) — 좁으면 버블 버튼이 다음 줄로 */}
+      {!chopOnly && (
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SegmentedTabs items={MODES} value={mode} onChange={setMode} />
         {/* 🔴 G11 — 실측 약 122×22px 였다. 2026-09-24 알약 통일: 보이는 32px(옆 모드 탭과 같은 높이) + CHIP_HIT 로 누르는 44px 이상. */}
@@ -348,6 +388,7 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
           버블: 4명 · 3자리 시상
         </button>
       </div>
+      )}
 
       {/* ── 결론 먼저 — 압박 모드의 큰 숫자 하나 ── */}
       {mode === 'pressure' && (
@@ -421,6 +462,7 @@ export default function ICMCalculator({ initialMode = 'equity' }: { initialMode?
 
       {/* 딜 비교는 옛 딜 계산기 순서(상금 → 스택 → 표)를 그대로 따른다 */}
       {mode === 'pressure' ? <>{stackBlock}{pressureInputs}{prizeBlock}</>
+        : chopOnly ? <>{stackBlock}{prizeBlock}{chopTable}</>
         : mode === 'deal' ? <>{prizeBlock}{stackBlock}{dealTable}</>
         : <>{prizeBlock}{stackBlock}</>}
 
