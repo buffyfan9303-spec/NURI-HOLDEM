@@ -67,12 +67,40 @@ describe('D3 — M존은 계산 불가 입력에 존 판정을 붙이지 않는�
     expect(t).toMatch(/Effective M = - - /);
     expect(t).not.toContain('레드');
   });
-  it('양성 대조: Harrington 예 10000·100/200·앤티25·9명 → 17.1 옐로', () => {
-    const h = text(MzoneCalc, [10000, 100, 200, 25, 9]);
+  it('양성 대조: Harrington 예 10000·100/200·앤티25·9명(1인당 앤티) → 17.1 옐로', () => {
+    const h = text(MzoneCalc, [10000, 100, 200, 25, 9, 'each']);
     expect(h).toContain('Effective M = 17.1'); expect(h).toContain('옐로');
   });
   it('(a2) 스택 0 → M 은 \'-\' 가 아니라 0.0 (존 \'데드\' 와 같은 값을 말한다)', () => {
     const s0 = text(MzoneCalc, [0, 100, 200, 25, 9]);
     expect(s0).toContain('Effective M = 0.0'); expect(s0).toContain('데드');
+  });
+});
+
+// #14 (2026-09-29 오너): 국내는 대부분 BB 앤티 — BB 한 명이 1BB 를 한 번 낸다. 한 바퀴 = SB + BB + 앤티(1회).
+// 손계산(식을 코드에서 베끼지 않는다): 스택 30000 = 15BB, 블라인드 1000/2000, 앤티 2000.
+//   BB 앤티:  30000 / (1000+2000+2000)        = 6.0  → ×9/10 = 5.4(레드) · ×10/10 = 6.0(오렌지)
+//   1인당:    30000 / (1000+2000+2000×9=21000) = 1.43 → ×9/10 = 1.3(레드)  ← 수정 전 기본 화면의 값
+describe('#14 — M존 기본은 BB 앤티(한 바퀴에 앤티 1회), 1인당 앤티는 선택', () => {
+  it('기본(방식 미지정) 15BB·9명 → raw M 6.0, Effective M 5.4 (1인당으로 곱한 1.3 이 아니다)', () => {
+    const t = text(MzoneCalc, [30000, 1000, 2000, 2000, 9]);
+    expect(t).toContain('Effective M = 5.4');
+    expect(t).not.toContain('Effective M = 1.3');
+  });
+  it('기본 15BB·10명 → Effective M 6.0 = raw M (인원 보정 1) · 오렌지', () => {
+    const t = text(MzoneCalc, [30000, 1000, 2000, 2000, 10]);
+    expect(t).toContain('Effective M = 6.0'); expect(t).toContain('오렌지');
+  });
+  it('1인당 모드는 기존 값 유지: 15BB·9명 → 1.3 레드', () => {
+    const t = text(MzoneCalc, [30000, 1000, 2000, 2000, 9, 'each']);
+    expect(t).toContain('Effective M = 1.3'); expect(t).toContain('레드');
+  });
+  it('BB 앤티 모드에서도 경계 유지: 인원 0 → \'-\' · 비용 0 → \'-\'', () => {
+    expect(text(MzoneCalc, [30000, 1000, 2000, 2000, 0, 'bb'])).toMatch(/Effective M = - - /);
+    expect(text(MzoneCalc, [30000, 0, 0, 0, 9, 'bb'])).toMatch(/Effective M = - - /);
+  });
+  it('화면이 계산 방식을 말한다: 기본 라벨은 BB 앤티, 1인당 라벨은 1인당', () => {
+    expect(text(MzoneCalc, [30000, 1000, 2000, 2000, 9])).toContain('앤티(BB 1회)');
+    expect(text(MzoneCalc, [30000, 1000, 2000, 2000, 9, 'each'])).toContain('앤티(1인)');
   });
 });
