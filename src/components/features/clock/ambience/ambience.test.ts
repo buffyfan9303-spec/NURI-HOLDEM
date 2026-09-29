@@ -5,9 +5,12 @@ import {
   ambienceCount, createAmbienceSim, fadeAt, insideZone, mulberry32, READ_ZONE, zoneFade,
 } from './ambienceEngine';
 import { AMBIENCE_EFFECTS, type AmbienceMotionId, fadeP, spotOutside } from './ambienceEffects';
-import { AMBIENCE_THEMES, ambienceVideoSrc } from './ambienceThemes';
-import { CLOCK_TEXTURE_DEFAULT_TINT, CLOCK_TEXTURES, clockTextureLayers, safeTint, withClockTexture } from './clockTexture';
-import { CLOCK_ACCENT_SWATCHES, CLOCK_THEME_PRESETS, CLOCK_TIMER_INK } from '../clockTheme';
+import { AMBIENCE_PRESETS } from './ambiencePresets';
+import { AMBIENCE_SCENES, ambienceSceneById } from './scenes/scenes';
+import {
+  CLOCK_ACCENT_SWATCHES, CLOCK_DEFAULTS, CLOCK_THEME_PRESETS, CLOCK_TIMER_INK,
+  clockAmbienceOf, clockThemeVars, makeClockTheme, sanitizeClockTheme,
+} from '../clockTheme';
 
 const W = 1920, H = 1080;
 /** 1920×1080 보드의 글자 묶음(시안 레이아웃 실측 근사) — 머리말 제목·시각, 시상 열, LEVEL·타이머·블라인드, 지표 열, 하단 지표. */
@@ -107,51 +110,89 @@ describe('효과 10종 — 20초 시뮬레이션', () => {
   });
 });
 
-describe('테마 14종', () => {
-  it('구성: 계절 4 · 날씨 5 · 동물 5, id 모양·중복·기존 프리셋 충돌 없음', () => {
-    const count = (g: string) => AMBIENCE_THEMES.filter((t) => t.group === g).length;
-    expect([count('season'), count('weather'), count('animal')]).toEqual([4, 5, 5]);
-    const ids = AMBIENCE_THEMES.map((t) => t.id);
+describe('모션 테마 15종 — 목록 계약(오너 승인 2026-09-30)', () => {
+  const BASE = CLOCK_THEME_PRESETS.filter((p) => !p.ambience);
+  it('구성: 일러스트 14 + 폭우 유리창(영상) 1, id 모양·중복 없음, 기존 10종과 충돌 없음(저장값 보존)', () => {
+    expect(AMBIENCE_PRESETS.filter((m) => m.kind === 'scene')).toHaveLength(14);
+    expect(AMBIENCE_PRESETS.filter((m) => m.kind === 'video').map((m) => m.id)).toEqual(['rain-glass']);
+    const ids = CLOCK_THEME_PRESETS.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const id of ids) {
-      expect(id).toMatch(/^[a-z0-9-]{1,40}$/);
-      expect(CLOCK_THEME_PRESETS.some((p) => p.id === id)).toBe(false);
+    for (const m of AMBIENCE_PRESETS) {
+      expect(m.id).toMatch(/^[a-z0-9-]{1,40}$/);
+      expect(BASE.some((p) => p.id === m.id)).toBe(false);
     }
+    // 이미 운영에 나가 있는 10종은 그대로 남는다(대리석 등 — 매장이 저장해 둔 값)
+    expect(BASE.map((p) => p.id)).toEqual(['nuri-signature', 'aura', 'aura-gold', 'deep-indigo', 'midnight-felt', 'royal-burgundy', 'carbon', 'neon-night', 'black-gold', 'black-marble-gold']);
   });
 
-  for (const t of AMBIENCE_THEMES) {
-    it(`${t.id}: 강조색 대비 ≥4.5(가장 밝은 stop 위), 스와치와 겹치지 않음, 타이머 잠금, 색은 마지막 레이어`, () => {
-      expect(contrast(t.accent, t.stops[0])).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(CLOCK_TIMER_INK, t.stops[0])).toBeGreaterThanOrEqual(7);
-      expect(CLOCK_ACCENT_SWATCHES.some((s) => s.value.toLowerCase() === t.accent.toLowerCase())).toBe(false);
-      expect(t.timer).toBe(CLOCK_TIMER_INK);
-      expect(t.bg.endsWith(`, ${t.stops[2]}`)).toBe(true);
-      expect(t.motion === null || t.motion in AMBIENCE_EFFECTS).toBe(true);
-      expect(t.video).toMatch(/^[a-z0-9-]+$/);
-      expect(ambienceVideoSrc(t).mp4).toBe(`/clock-ambience/${t.video}.mp4`);
+  it('장면 목록과 1:1 — 목록에 있는 일러스트는 장면이 있고, 장면은 목록에 있다(이름·강조색은 목록 한 곳에서)', () => {
+    for (const m of AMBIENCE_PRESETS.filter((x) => x.kind === 'scene')) {
+      const sc = ambienceSceneById(m.id);
+      expect(sc, m.id).not.toBeNull();
+      expect([sc?.label, sc?.accent, sc?.stops]).toEqual([m.label, m.accent, m.stops]);
+    }
+    for (const sc of AMBIENCE_SCENES) expect(AMBIENCE_PRESETS.some((m) => m.id === sc.id)).toBe(true);
+    expect('rain-glass' in AMBIENCE_EFFECTS).toBe(true);
+  });
+
+  for (const m of AMBIENCE_PRESETS) {
+    it(`${m.id}: 강조색 대비 ≥4.5·타이머 ≥7(가장 밝은 stop 위), 스와치와 겹치지 않음, 타이머 잠금, --clk-amb 로 전달`, () => {
+      expect(contrast(m.accent, m.stops[0])).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(CLOCK_TIMER_INK, m.stops[0])).toBeGreaterThanOrEqual(7);
+      expect(CLOCK_ACCENT_SWATCHES.some((s) => s.value.toLowerCase() === m.accent.toLowerCase())).toBe(false);
+      const v = clockThemeVars(sanitizeClockTheme(makeClockTheme(m.id)));
+      expect(v['--clk-timer']).toBe(CLOCK_TIMER_INK);
+      expect(v['--clk-accent']).toBe(m.accent);
+      expect(clockAmbienceOf(v)).toBe(m.id);
+      expect(v['--clk-bg'].endsWith(`, ${m.stops[2]}`)).toBe(true); // 색은 마지막 레이어
+    });
+  }
+
+  it('모르는 테마 id(다른 번들이 저장한 값)는 보존하되 기본 룩으로 그리고 장면을 깔지 않는다', () => {
+    const t = sanitizeClockTheme(makeClockTheme('future-motion-theme'));
+    expect(t?.palette?.preset).toBe('future-motion-theme');
+    const v = clockThemeVars(t);
+    expect(v['--clk-bg']).toBe(CLOCK_DEFAULTS.bg);
+    expect(clockAmbienceOf(v)).toBeNull();
+    for (const p of CLOCK_THEME_PRESETS.filter((x) => !x.ambience)) expect(clockAmbienceOf(clockThemeVars(makeClockTheme(p.id)))).toBeNull();
+  });
+});
+
+describe('장면 입자 — 20초 시뮬레이션(14종)', () => {
+  for (const sc of AMBIENCE_SCENES) {
+    it(`${sc.id}: 값이 유한하고, 입자 수 상한 이하·불변, 불투명도 0~maxAlpha, 글자 영역 안은 0`, () => {
+      const fx = sc.fx!;
+      expect(fx).toBeTruthy();
+      const sim = createAmbienceSim(fx, mulberry32(7));
+      sim.resize(W, H);
+      sim.setZones(BOARD);
+      const n = sim.particles.length;
+      expect(n).toBeGreaterThan(0);
+      expect(n).toBeLessThanOrEqual(AMBIENCE_MAX_PARTICLES);
+      let inZoneVisible = 0, seenInZone = 0, nonFinite = 0, badAlpha = 0, countDrift = 0;
+      for (let f = 0; f < 600; f++) {
+        sim.step(1 / 30);
+        if (sim.particles.length !== n) countDrift++;
+        for (const p of sim.particles) {
+          if (!(Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.s) && Number.isFinite(p.q ?? 0))) nonFinite++;
+          const a = fx.alpha(p, sim.env);
+          if (!(a >= 0 && a <= fx.maxAlpha + 1e-9)) badAlpha++;
+          if (insideZone(p.x, p.y, BOARD)) { seenInZone++; if (a * fadeP(p, sim.env) > 0) inZoneVisible++; }
+        }
+      }
+      expect({ countDrift, nonFinite, badAlpha, inZoneVisible }).toEqual({ countDrift: 0, nonFinite: 0, badAlpha: 0, inZoneVisible: 0 });
+      expect(seenInZone).toBeGreaterThan(0); // 거짓 통과 방지 — 입자가 실제로 글자 영역을 지나갔다
     });
   }
 });
 
-describe('배경 결 B3·B4·B5', () => {
-  it('기존 프리셋 전부에 붙는다 — 원래 bg 는 그대로 맨 뒤에 남는다(색은 마지막 레이어)', () => {
-    for (const p of CLOCK_THEME_PRESETS) for (const x of CLOCK_TEXTURES) {
-      const out = withClockTexture(p.bg, x.id, p.accent);
-      expect(out.endsWith(p.bg)).toBe(true);
-      expect(out.length).toBeGreaterThan(p.bg.length);
-    }
-  });
-
-  it('모르는 결·빈 값이면 bg 그대로', () => {
-    expect(withClockTexture('#000', null)).toBe('#000');
-    expect(withClockTexture('#000', 'nope' as never)).toBe('#000');
-  });
-
-  it('틴트는 #RRGGBB 만 — CSS 탈출 문자열은 기본 틴트로 바뀐다', () => {
-    expect(safeTint('#a1b2c3')).toBe('#A1B2C3');
-    for (const bad of ['red', '#fff', '#000000);background:url(x', '"#000000"', null, 12]) expect(safeTint(bad)).toBe(CLOCK_TEXTURE_DEFAULT_TINT);
-    const suit = clockTextureLayers('suit', '#000000")');
-    expect(suit.startsWith('url("data:image/svg+xml,')).toBe(true);
-    expect(suit.slice(5, suit.indexOf('") '))).not.toMatch(/["\s]/); // url("…") 안에 따옴표·공백이 없다(괄호는 따옴표 안이라 문자열을 못 끝낸다)
+// 장면 첫 그림 비용 — ctx.filter 는 그리기 호출마다 흐림을 한 번씩 돈다. 구름 덩어리·꽃잎을 도형마다 흐리던 때
+// 첫 그림이 1920 에서 0.7초·4K 1.7초, GPU 없는 브라우저에서 30초 넘게 메인 스레드를 막았다(2026-09-30 실측).
+// 여러 도형을 흐릴 때는 sceneKit 의 blurGroup(한 판에 모아 한 번 흐림)을 쓴다. 이 계약은 도형마다 흐리는 자리가 다시 늘어나는 것을 막는다.
+describe('장면 흐림 — 도형마다 흐리지 않는다', () => {
+  it('ctx.filter 흐림 대입은 알려진 자리뿐(scenes: 도형 한두 개짜리 3곳 · sceneKit: blurGroup 2 + blurred 1)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const count = (f: string) => (readFileSync(new URL(`./scenes/${f}`, import.meta.url), 'utf-8').match(/\.filter\s*=\s*`blur/g) ?? []).length;
+    expect({ scenes: count('scenes.ts'), sceneKit: count('sceneKit.ts') }).toEqual({ scenes: 3, sceneKit: 3 });
   });
 });

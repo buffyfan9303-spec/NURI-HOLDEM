@@ -1,7 +1,7 @@
 // src/components/features/clock/TournamentClock.tsx
 // 토너먼트 클락 — 설정/프리셋 + 라이브 디스플레이(블라인드 타이머) + 수기 컨트롤 + 일시정지.
 // 와홀덤/Roti 클락 구조를 따르되 NURI 테마로. 장부 연동 카운트 자동 산출 + 수기 보정.
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../../atoms/Toast';
 import { useBackClose } from '../../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../../lib/scrollLock';
@@ -33,14 +33,19 @@ import { rankingSaveTarget, finishEntriesFromRows } from '../../../lib/rankingGa
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
-import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, publishClockSignal, type ClockTheme } from './clockTheme';
+import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, publishClockSignal, clockAmbienceOf, type ClockTheme } from './clockTheme';
+import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { isStaleResponse, type RequestStamp } from '../../../lib/staleResponse';
 import { createBackoff } from '../../../lib/retryBackoff';
 import QRCode from 'qrcode';
 import Icon from '../../atoms/Icon';
-import ClockThemePanel from './ClockThemePanel';
+import { lazyWithReload } from '../../../lib/lazyWithReload';
+// 클락 화면 테마 패널 — 설정 폼 아래쪽에만 나오는 하위 패널이라 별도 청크로 뺀다(2026-09-30 모션 테마 15종 배선 때
+//   VenueManageTab 청크가 상한 119KB 를 0.2KB 넘었다 — 예산을 올리지 않고 이 패널을 뺐다). 폼이 뜨면 바로 preload 해서
+//   보통은 lazy 를 거치지 않고 동기로 그린다(lazyWithReload.preload). 폴백 = 패널 자신의 로딩 상자와 같은 높이(CLS 0).
+const ClockThemePanel = lazyWithReload(() => import('./ClockThemePanel'));
 import ClockStage from './ClockStage';
 import { serverNow, serverTimeKnown, serverTimeSettled, whenServerTimeSettled } from '../../../lib/serverTime';
 import { useClockSecond } from '../../../lib/clockTick';
@@ -1170,10 +1175,13 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
       <div className={['relative overflow-hidden border border-white/8 text-white shadow-[0_10px_50px_rgba(0,0,0,0.45)] @container-size',
         fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'flex flex-col rounded-card aspect-video',
         stageScale != null ? 'absolute left-0 top-0 origin-top-left' : ''].join(' ')}
-        style={{ ...clkVars, background: 'var(--clk-bg, #06080F)',
+        data-amb-root
+        style={{ ...clkVars, background: 'var(--clk-bg, #06080F)', isolation: 'isolate',
           ...(stageScale != null ? { width: STAGE_CANVAS_W, height: STAGE_CANVAS_W * 9 / 16, transform: `scale(${stageScale})` } : null) }}>
         {/* 2026-09-02 v3 'NURI 아우라'(오너 승인) — TV(ClockDisplay)와 같은 정보 위계·색 체계. 라벨은 2026-09-19 부터 영문 대문자,
             골드는 프라이즈 금액에만, 레벨/블라인드 인디고, 타이머 순백. 조작부(아래 컨트롤 행)는 그대로. */}
+        {/* 모션 테마(2026-09-30) — TV(ClockDisplay)와 같은 자리·같은 층. 테마가 아니면 아무것도 안 받는다(lazy). */}
+        <ClockAmbienceSlot id={clockAmbienceOf(clkVars)} />
         {fs && (
           <div data-testid="clk-fs-overlay"
             className={['absolute inset-x-0 bottom-0 z-10 flex h-[12cqmin] portrait:h-auto portrait:min-h-[12cqmin] portrait:py-[1.5cqmin] flex-wrap items-center justify-center gap-x-[1.2cqmin] gap-y-[0.6cqmin] border-t border-white/10 bg-black/70 px-[2cqmin] backdrop-blur-md transition-opacity duration-300',
@@ -1329,6 +1337,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   seedSessionDate?: string | null; seedGameSeq?: number; seededFromLedger?: boolean;
   onReloadPresets: () => void; onStart: (c: ClockConfig, linkDate: string | null, linkGameSeq?: number) => void; onBackToLive?: () => void;
 }) {
+  useEffect(() => { void ClockThemePanel.preload(); }, []);
   const toast = useToast();
   const [cfg, setCfg] = useState<ClockConfig>(initial);
   const [linkDate, setLinkDate] = useState<string | null>(seedSessionDate ?? null); // 연동할 장부(null=단독)
@@ -1647,7 +1656,9 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       </section>
 
       {/* TV 송출 화면 — 테마·배경 이미지(매장 단위 설정이라 즉시 저장 · 이 폼의 '시작'과 무관) */}
-      <ClockThemePanel venueId={venueId} />
+      <Suspense fallback={<section className="rounded-aura border card-aura p-3" style={{ minHeight: 300 }} aria-busy="true" />}>
+        <ClockThemePanel venueId={venueId} />
+      </Suspense>
 
       {/* 시작 — 위에서 고른 방식(단독/장부)으로 */}
       <div className="flex gap-2 pb-2">

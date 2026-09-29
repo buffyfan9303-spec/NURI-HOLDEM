@@ -37,6 +37,7 @@ export interface P {
   life: number; // 수명(s). Infinity = 화면을 벗어날 때까지
   c: number;    // 색 인덱스(또는 효과별 보조 값)
   z: number;    // 깊이 0(멀리)…1(가까이) — 크기·속도·불투명도·초점(흐림)을 함께 정한다
+  q?: number;   // 보조 위상(장면 효과: 꽃잎 뒤집힘 누적각 등)
 }
 
 /** 글자 금지 영역(캔버스 CSS px). 헤더 제목·시각, 시상·지표 열, 타이머·블라인드, 하단 지표 — 보드가 알려 준다. */
@@ -61,8 +62,9 @@ export interface AmbienceEffect {
   alpha(p: P, e: Env): number;
   /** 캔버스 그리기 — 한 효과의 입자를 한 번에 그린다(같은 스타일은 한 path 로 묶기 위해). */
   draw(ctx: CanvasRenderingContext2D, ps: P[], e: Env, sp: Sprites, dpr: number): void;
-  /** 미리 그려 두는 도안(입자마다 path 를 다시 만들지 않게). 마운트 때 한 번. */
-  sprites?(): Sprites;
+  /** 미리 그려 두는 도안(입자마다 path 를 다시 만들지 않게). 마운트·리사이즈 때 한 번.
+   *  scale = CSS px → 캔버스 px 배율(u × dpr) — 4K 에서도 도안을 확대하지 않고 그 해상도로 다시 그린다. */
+  sprites?(scale: number): Sprites;
 }
 
 // ── 예산 ─────────────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@
 // · 타이머 긴급(rose-400)·브레이크(sky-300) 상태색은 프리셋이 덮지 못한다 — 송출 안전 신호 잠금.
 
 import { readSnap, writeSnap } from '../../../lib/snapshot';
+import { AMBIENCE_PRESETS, ambienceBgCss } from './ambience/ambiencePresets';
 
 export interface ClockTheme {
   version: 1;
@@ -194,6 +195,8 @@ export interface ClockThemePreset {
   accent: string;
   /** 타이머 색 — 없으면 accent(구 동작). 아우라 골드는 순백 타이머 */
   timer?: string;
+  /** 모션 테마 id(ambience/ambiencePresets.ts) — 있으면 클락 화면이 그 장면·영상을 lazy 로 깐다. bg 는 그 전·실패 시 바탕 */
+  ambience?: string;
 }
 
 // 9종 — 전부 다크. aura(인디고)가 기본(2026-09-02 오너 승인), aura-gold(APIS풍)·deep-indigo(구 기본)는 프리셋으로 남긴다.
@@ -229,6 +232,11 @@ export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
   },
   // 검정 대리석 + 절제된 금 결. 타이머는 순백, 레벨·블라인드는 샴페인 골드(스와치 검증색 — #080706 위 약 9.5:1).
   { id: 'black-marble-gold', label: '블랙 마블 골드', kind: 'gradient', bg: BLACK_MARBLE_GOLD_BG, accent: '#E0A94E', timer: CLOCK_TIMER_INK },
+  // 모션 테마 15종(2026-09-30 오너 승인 "전부 넣어") — 코드로 그린 일러스트 14 + 폭우 유리창(영상). 목록은 ambiencePresets.ts 한 곳.
+  //   위 10종은 그대로 둔다(저장해 둔 매장의 값이 그대로 산다). 타이머는 여기서도 CLOCK_TIMER_INK 잠금.
+  ...AMBIENCE_PRESETS.map((m): ClockThemePreset => ({
+    id: m.id, label: m.label, kind: 'gradient', bg: ambienceBgCss(m.stops), accent: m.accent, timer: CLOCK_TIMER_INK, ambience: m.id,
+  })),
 ];
 
 export const DEFAULT_CLOCK_PRESET_ID = 'nuri-signature';
@@ -394,8 +402,14 @@ export function clockThemeVars(theme: ClockTheme | null | undefined): Record<str
     '--clk-ink': CLOCK_DEFAULTS.timer,                // 잠금 — 일반 핵심 숫자(총칩·평균스택·ANTE)는 흰색
     '--clk-ink-dim': img ? CLOCK_BG_INK.dim : CLOCK_DEFAULTS.inkDim,
     '--clk-ink-soft': img ? CLOCK_BG_INK.soft : CLOCK_DEFAULTS.inkSoft,
+    // 모션 테마 id — 클락 화면이 ClockAmbienceSlot 에 넘긴다(clockAmbienceOf). 모션 테마를 고르면 장면이 사진 위를 덮는다
+    //   (사진은 지우지 않는다 — 다른 테마로 돌아가면 다시 보인다. themeForPresetChange 가 사진을 이월한다).
+    ...(p?.ambience ? { '--clk-amb': p.ambience } : null),
   };
 }
+
+/** 테마 변수에서 모션 테마 id 만 꺼낸다 — 호출처가 CSS 변수 이름을 직접 알지 않게. */
+export const clockAmbienceOf = (vars: Record<string, string> | null | undefined): string | null => vars?.['--clk-amb'] ?? null;
 
 /** ClockDisplay 테마 스냅샷 키(lib/snapshot) — venue 별 keep-last 캐시 */
 export const clockThemeSnapKey = (venueId: string) => `clockTheme:${venueId}`;

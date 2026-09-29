@@ -13,8 +13,9 @@ import { getVenuePageConfig, setVenuePageConfig, type VenuePageConfig } from '..
 import {
   CLOCK_THEME_PRESETS, CLOCK_ACCENT_SWATCHES, DEFAULT_CLOCK_PRESET_ID,
   clockPresetById, makeClockTheme, themeForPresetChange, sanitizeClockTheme, clockThemeVars, clockBgImageOf,
-  publishClockTheme, type ClockTheme,
+  publishClockTheme, clockAmbienceOf, type ClockTheme, type ClockThemePreset,
 } from './clockTheme';
+import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
 import { uploadClockBg, deleteClockBg } from './clockBgImage';
 
 /**
@@ -27,8 +28,10 @@ import { uploadClockBg, deleteClockBg } from './clockBgImage';
  * 크기는 루트 font-size 하나로 조절한다 — 안쪽 치수가 전부 em 이라 같은 마크업이 두 크기에서 그대로 산다.
  * (프리뷰 전용 렌더러를 따로 만들지 않는다 — 이건 ClockDisplay 의 구조를 그대로 축소한 것이다.)
  */
-function ClockMiniFace({ vars, accent, em, cqw, className }: {
+function ClockMiniFace({ vars, accent, em, cqw, className, still }: {
   vars: React.CSSProperties; accent: string; em: number;
+  /** 모션 테마 썸네일 — 움직이지 않는 한 장만 그린다(목록에 15장이 한꺼번에 돌지 않게). 큰 미리보기는 움직인다. */
+  still?: boolean;
   /** 2026-09-14: 컨테이너 폭 대비 비율(%). 이 얼굴은 aspect-video 상자 안이 **전부 em 단위**라
    *  루트 폰트가 폭에 비례하지 않으면 좁은 폭에서 글자만 그대로 커서 넘친다
    *  (실측 375: 미리보기 314px 인데 em 44 고정 → "500/1,000" 이 두 줄, 타이머가 배지와 겹침).
@@ -39,8 +42,10 @@ function ClockMiniFace({ vars, accent, em, cqw, className }: {
   const RAIL = 16; // TV 는 24칸 — 축소판에서는 셀 수 있는 만큼만
   const filled = 6;
   return (
-    <div className={`relative flex aspect-video flex-col overflow-hidden text-white ${className ?? ''}`}
-      style={{ ...vars, fontSize: cqw ? `min(${em}px, ${cqw}cqw)` : `${em}px`, background: 'var(--clk-bg)' }} aria-hidden>
+    <div data-amb-root className={`relative flex aspect-video flex-col overflow-hidden text-white ${className ?? ''}`}
+      style={{ ...vars, fontSize: cqw ? `min(${em}px, ${cqw}cqw)` : `${em}px`, background: 'var(--clk-bg)', isolation: 'isolate' }} aria-hidden>
+      {/* 모션 테마 — TV 와 같은 장면을 이 크기로 그린다(해상도 무관). 테마가 아니면 아무것도 안 받는다. */}
+      <ClockAmbienceSlot id={clockAmbienceOf(vars as Record<string, string>)} still={still} />
       {/* 상단 — 매장명만. LEVEL 알약·RUNNING 알약은 2026-09-19 오너 지시 #9 로 보드에서 사라졌다(ClockStage LevelLine). */}
       <div className="flex shrink-0 items-center gap-[0.4em] px-[0.7em] pt-[0.5em]">
         <span className="h-[0.3em] w-[0.3em] rounded-full bg-emerald-400" />
@@ -51,8 +56,8 @@ function ClockMiniFace({ vars, accent, em, cqw, className }: {
       <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center">
         <span className="pointer-events-none absolute left-1/2 top-1/2 h-[3.4em] w-[6em] -translate-x-1/2 -translate-y-1/2"
           style={{ background: `radial-gradient(closest-side, color-mix(in srgb, ${accent} 22%, transparent), transparent)` }} />
-        <span className="relative text-[0.5em] font-black leading-none tracking-[0.18em]" style={{ color: accent }}>LEVEL 5</span>
-        <span className="relative mt-[0.12em] text-[1.75em] font-black leading-none tabular-nums" style={{ color: 'var(--clk-timer)' }}>12:34</span>
+        <span data-amb-avoid className="relative text-[0.5em] font-black leading-none tracking-[0.18em]" style={{ color: accent }}>LEVEL 5</span>
+        <span data-amb-avoid className="relative mt-[0.12em] text-[1.75em] font-black leading-none tabular-nums" style={{ color: 'var(--clk-timer)' }}>12:34</span>
         <span className="relative mt-[0.35em] flex w-[70%] gap-[0.08em]">
           {Array.from({ length: RAIL }, (_, i) => (
             <span key={i} className="h-[0.16em] flex-1 rounded-[0.05em]"
@@ -61,8 +66,8 @@ function ClockMiniFace({ vars, accent, em, cqw, className }: {
         </span>
       </div>
 
-      {/* CURRENT | NEXT */}
-      <div className="grid shrink-0 grid-cols-2 gap-[0.3em] px-[0.6em]">
+      {/* CURRENT | NEXT — data-amb-avoid: 모션 테마가 TV 처럼 글자 뒤를 흐린 유리·그늘로 누르는 자리(ClockStage 와 같은 표시) */}
+      <div data-amb-avoid className="grid shrink-0 grid-cols-2 gap-[0.3em] px-[0.6em]">
         <div className="rounded-[0.3em] bg-white/5 py-[0.25em] text-center">
           <p className="text-[0.36em] font-bold tracking-[0.2em]" style={{ color: 'var(--clk-ink-soft)' }}>CURRENT</p>
           <p className="text-[0.62em] font-extrabold leading-tight tabular-nums" style={{ color: accent }}>500/1,000</p>
@@ -74,7 +79,7 @@ function ClockMiniFace({ vars, accent, em, cqw, className }: {
       </div>
 
       {/* 하단 metrics rail */}
-      <div className="flex shrink-0 items-baseline gap-[0.8em] border-t border-white/[0.07] px-[0.7em] py-[0.3em]">
+      <div data-amb-avoid className="flex shrink-0 items-baseline gap-[0.8em] border-t border-white/[0.07] px-[0.7em] py-[0.3em]">
         <span className="text-[0.38em]" style={{ color: 'var(--clk-ink-dim)' }}>PLAYERS <b className="text-[1.3em] text-white">18</b>/42</span>
         <span className="text-[0.38em]" style={{ color: 'var(--clk-ink-dim)' }}>AVG <b className="text-[1.3em] text-white">84,000</b></span>
         <span className="ml-auto text-[0.38em] font-bold" style={{ color: 'var(--clk-prize, #F5C451)' }}>550</span>
@@ -221,9 +226,12 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
         </p>
       </div>
 
-      {/* 프리셋 9종 — 미리보기 사각형(배경 = 실제 CSS 값, 프리셋 상수라 인라인 hex 허용) */}
+      {/* 프리셋 — 기본 10종 · 모션 테마 15종(2026-09-30). 버튼은 같은 축소판이고, 모션 테마는 실제 장면을 정지 한 장으로 그린다. */}
+      {([['', CLOCK_THEME_PRESETS.filter((p) => !p.ambience)], ['모션 테마 — 움직이는 배경(TV 에서 천천히 흐릅니다)', CLOCK_THEME_PRESETS.filter((p) => p.ambience)]] as [string, ClockThemePreset[]][]).map(([title, list]) => (
+      <div key={title || 'base'}>
+      {title && <p className="mb-1 text-2xs font-semibold text-ink-secondary">{title}</p>}
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-        {CLOCK_THEME_PRESETS.map((p) => {
+        {list.map((p) => {
           const on = p.id === curPresetId && !!cur;
           const onDefault = p.id === DEFAULT_CLOCK_PRESET_ID && !cur; // 미설정 = 기본 프리셋 룩
           const active = on || onDefault;
@@ -238,13 +246,15 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
                   (활성 프리셋만 업주가 고른 색을 반영한다). */}
               <span className="block overflow-hidden rounded-input @container">
                 <ClockMiniFace vars={clockThemeVars(makeClockTheme(p.id, active ? curAccentSel : undefined, null))}
-                  accent={active && curAccentSel ? curAccentSel : p.accent} em={22} cqw={8.8} />
+                  accent={active && curAccentSel ? curAccentSel : p.accent} em={22} cqw={8.8} still />
               </span>
               <span className={['mt-1 block text-2xs font-semibold', active ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{p.label}</span>
             </button>
           );
         })}
       </div>
+      </div>
+      ))}
 
       {/* accent 스와치 — 안전 색 10종에서만 선택(임의 색 입력 없음) */}
       <div>

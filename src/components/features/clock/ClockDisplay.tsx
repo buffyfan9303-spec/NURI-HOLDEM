@@ -28,7 +28,8 @@ import { buyinRequestUrl } from '../../../api/ledger';
 import { getAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '../../../api/settings';
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
-import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, type ClockTheme } from './clockTheme';
+import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, clockAmbienceOf, type ClockTheme } from './clockTheme';
+import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
 import Icon from '../../atoms/Icon';
 import { BIZ_REQUIRED, AGE_HELPLINE } from '../BusinessFooter';
 import { useServerTimeReady } from '../../../lib/useServerTimeReady';
@@ -206,7 +207,9 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     //   일반 이용자도 들어온다. 전체화면(TV 송출)이 **아닐 때만** 보드 아래 형제로 붙인다 — 보드 위에 겹치지 않고,
     //   컨테이너(스테이지)가 그만큼 줄어 cq 크기가 스스로 맞춰진다. 전체화면이면 스테이지 = 화면 전체(종전과 같다).
     <div ref={rootRef} className="fixed inset-0 z-80 flex flex-col text-white select-none" style={{ background: '#06080F' }}>
-    <div className="flex min-h-0 flex-1 flex-col @container-size" style={{ ...clkVars, background: 'var(--clk-bg, #06080F)' }}>
+    <div data-amb-root className="flex min-h-0 flex-1 flex-col @container-size" style={{ ...clkVars, background: 'var(--clk-bg, #06080F)', position: 'relative', isolation: 'isolate' }}>
+      {/* 모션 테마(2026-09-30) — 첫 자식·z-index -1 이라 --clk-bg 위, 보드 아래. 테마가 아니면 아무것도 안 받는다(lazy). */}
+      <ClockAmbienceSlot id={clockAmbienceOf(clkVars)} />
       {/* 보드는 ClockStage 한 벌 — 운영자 화면(TournamentClock)과 **같은 마크업**이다.
           여기서 하는 일은 데이터(구독·폴링·테마·QR·광고)와 TV 전용 조작(게임 전환·전체화면·닫기)뿐이다. */}
       {clocks === null || !g || !timeReady ? (
