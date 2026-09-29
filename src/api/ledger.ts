@@ -329,15 +329,25 @@ export function addonTotals(buyins: readonly Pick<LedgerBuyin, 'addonMethod' | '
   }
   return t;
 }
+/**
+ * 이용권 사용량(T) — **바인 + 애드온**. 화면이 '이용권을 몇 T 썼나'를 말할 때는 전부 이 함수를 지난다.
+ * 오너 결정(docs/HANDOFF-2026-09-29-account-switch.md §5 "'오늘 사용' 숫자 한 벌 = 바인+애드온").
+ * 예전엔 6곳이 제각각 더해 대시보드·장부 요약은 바인만, 통계·CRM 은 애드온까지 세 같은 날 T 가 갈렸다(store-deep D3: 1,127.1T vs 1,142.1T).
+ * ⚠ 표시용 수량이다 — 정산 대차표(tender.ticket, 원)·addon.ticketWon 같은 돈 계산은 바꾸지 않는다.
+ */
+export function ticketUsedT(f: Pick<BuyinFinance, 'ticketPaid'>, a: Pick<AddonFinance, 'ticketWon'>): number {
+  return f.ticketPaid + a.ticketWon / TICKET_WON;
+}
+
 /** 한 게임(같은 세션의 바인들)의 화면용 돈 합계 — 대시보드 '오늘 장부' KPI·미수 배너가 쓴다.
  *  paid·unpaid 는 **애드온 포함**이다(정산 '완납 매출 = revenue + addon.revenue' 와 같은 정의, ledgerSettlement.ts).
- *  entry·ticket 은 바인만 — 애드온은 엔트리·T 에 안 들어간다. 2026-09-29 F1: 대시보드만 애드온을 빼고 세서
+ *  entry 는 바인만(애드온은 엔트리가 아니다). ticket 은 이용권 사용 T = 바인 + 애드온(ticketUsedT). 2026-09-29 F1: 대시보드만 애드온을 빼고 세서
  *  정산과 금액이 갈렸고, 애드온 미수만 있는 날엔 미수 배너가 아예 안 떴다. */
 export function ledgerMoney(buyins: readonly LedgerBuyin[], s: Parameters<typeof buyinFinance>[1]): { paid: number; unpaid: number; value: number; entry: number; ticket: number } {
   const m = { paid: 0, unpaid: 0, value: 0, entry: 0, ticket: 0 };
   for (const b of buyins) {
     const f = buyinFinance(b, s);
-    m.paid += f.paid; m.unpaid += f.unpaid; m.value += f.value; m.entry += f.entry; m.ticket += f.ticketPaid;
+    m.paid += f.paid; m.unpaid += f.unpaid; m.value += f.value; m.entry += f.entry; m.ticket += ticketUsedT(f, addonFinance(b));
   }
   const a = addonTotals(buyins);
   m.paid += a.revenue; m.unpaid += a.unpaid;
@@ -701,7 +711,7 @@ export function customerLedgerTotals(
     const a = addonFinance(b);
     t.paid += f.paid + a.revenue;
     t.unpaid += f.unpaid + a.unpaid;
-    t.ticket += f.ticketPaid + a.ticketWon / TICKET_WON;
+    t.ticket += ticketUsedT(f, a);
     t.support += f.support;
   }
   return t;

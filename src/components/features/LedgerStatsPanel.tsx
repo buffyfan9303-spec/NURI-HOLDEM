@@ -4,11 +4,10 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
-  wonToMan, buyinFinance, addonFinance, addonTotals, discountAmountOf, ledgerCounts, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
+  wonToMan, buyinFinance, addonFinance, addonTotals, ticketUsedT, discountAmountOf, ledgerCounts, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
   posHasPassword, setPosCancelPassword, subscribeLedger,
 } from '../../api/ledger';
 import Icon from '../atoms/Icon';
-import { TICKET_WON } from '../../lib/units';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { Skeleton } from '../atoms/Skeleton';
 import { getMyVenueNotifyMute, setMyVenueNotifyMute } from '../../api/auth';
@@ -189,7 +188,7 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
     for (const b of src) {
       // 애드온(2026-09-28)은 **돈에만** 더한다 — 엔트리·바인 횟수·얼리에는 절대 안 들어간다(ledger.ts addonFinance).
       const bf = fin(b), a = addonFinance(b);
-      const f = { ...bf, paid: bf.paid + a.revenue, unpaid: bf.unpaid + a.unpaid, ticketPaid: bf.ticketPaid + a.ticketWon / TICKET_WON };
+      const f = { ...bf, paid: bf.paid + a.revenue, unpaid: bf.unpaid + a.unpaid, ticketPaid: ticketUsedT(bf, a) };
       revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
       if (b.gameSeq > 1) { sideBuyins += 1; sideRev += f.paid; sideGames.add(bkey(b)); }
       else { mainBuyins += 1; mainRev += f.paid; }
