@@ -1,0 +1,197 @@
+// 본문 안 펼침/접힘 — "정적이지 말고 부드럽게, 누르면 화면이 위아래로 튀는 문제 0"(오너 2026-09-29) 회귀 게이트.
+//
+// 공용 atom `src/components/atoms/Fold.tsx`(높이 0↔실측 WAAPI) + `useReveal`(그리드 칸) + `onSummaryClick`(details 클램프).
+// 감사(scratchpad motion-typo-audit.md §1)가 잰 결함 부류를 하나씩 대표로 잡는다:
+//   ① 조건부 렌더 = 한 프레임 점프      → 일정 탐색 '공지사항'(App.tsx) — 높이가 여러 프레임에 걸쳐 변하는가(≥5단)
+//   ② 옆 요소가 사라져 버튼이 올라감   → 대회 상세 '참가 예약 더보기'(ScheduleDetailModal) — 전 −9.76px
+//   ④ 바닥에서 닫으면 클램프          → 법정 푸터 '추가 정보'(BusinessFooter details) — 전 +44px
+//   + 동작 줄이기 = 즉시, 탭 재방문 = 재생 0.
+//
+// 🔴 CLS 로 재지 않는다 — 누른 뒤 500ms 안의 이동은 hadRecentInput 이라 CLS 에서 빠져 '0' 이 저절로 참이 된다(감사 §0).
+//   **누른 요소의 중심 y** 를 매 rAF 기록한다. top 이 아니라 중심인 이유: 전역 프레스 물리 `button:active{scale(.97)}` 가
+//   top 을 ±0.66px 흔든다(중심은 그대로) — 레이아웃 이동과 누름 효과를 가르기 위해서다.
+// 🔴 누름은 CDP 터치 120ms 홀드 — Playwright click/tap 은 누름 0ms 라 :active·transform 부류를 못 만든다(CLAUDE.md).
+// 음성 대조(2026-09-29): 수정 전 빌드(HEAD cf99d1c3)에서 ①②④ 모두 실패한다 — scratchpad motion-M-report.md.
+import { test, expect } from './_fixtures';
+import type { Locator, Page } from '@playwright/test';
+import { kstDay } from './_schedules';
+
+type Frame = { cy: number | null; sh: number; dt: number }; // sh = 펼침을 품은 상자 높이
+type Summary = { dCenter: number; steps: number; dSH: number; long: number[] };
+
+/** 누른 요소 중심 y · 펼침을 품은 상자(box = closest 선택자, 없으면 부모) 높이 · 프레임 간격을 ms 동안 rAF 마다 기록한다.
+ *  ⚠ 문서 scrollHeight 로 재면 안 된다 — 판에 최소 높이 예약(.pane-reserve)이 걸린 화면은 내용이 자라도 문서 높이가 그대로다. */
+async function record(el: Locator, ms: number, box: string): Promise<Frame[]> {
+  return el.evaluate((node, [ms, box]) => new Promise<Frame[]>((res) => {
+    const wrap = (box ? node.closest(box as string) : null) ?? node.parentElement!;
+    const fr: Frame[] = []; const t0 = performance.now(); let last = t0;
+    const f = (now: number) => {
+      const r = node.isConnected ? node.getBoundingClientRect() : null;
+      fr.push({ cy: r ? (r.top + r.bottom) / 2 : null, sh: +wrap.getBoundingClientRect().height.toFixed(2), dt: now - last }); last = now;
+      if (now - t0 < (ms as number)) requestAnimationFrame(f); else res(fr);
+    };
+    requestAnimationFrame(f);
+  }), [ms, box] as const);
+}
+const summarize = (fr: Frame[]): Summary => {
+  const cys = fr.map((x) => x.cy).filter((x): x is number => x != null);
+  const sh = fr.map((x) => x.sh);
+  return {
+    dCenter: +Math.max(...cys.map((c) => Math.abs(c - cys[0]))).toFixed(2),
+    steps: sh.filter((v, i) => i > 0 && v !== sh[i - 1]).length,
+    dSH: sh[sh.length - 1] - sh[0],
+    long: fr.slice(1).filter((x) => x.dt > 50).map((x) => +x.dt.toFixed(1)),
+  };
+};
+/** CDP 터치 — touchStart → 120ms → touchEnd (실제 손가락 조건). */
+async function press(page: Page, el: Locator) {
+  const b = (await el.boundingBox())!;
+  const cdp = await page.context().newCDPSession(page);
+  const p = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [p] });
+  await page.waitForTimeout(120);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+}
+async function toggle(page: Page, el: Locator, box = '', ms = 900): Promise<Summary> {
+  const rec = record(el, ms, box);
+  await page.waitForTimeout(30);
+  await press(page, el);
+  const s = summarize(await rec);
+  await page.waitForTimeout(300);
+  return s;
+}
+/** 스크롤러를 맨 아래로(문서가 짧아질 때의 클램프 조건). */
+const toBottom = (el: Locator) => el.evaluate((node) => {
+  let sc: Element = document.scrollingElement!;
+  for (let a = node.parentElement; a; a = a.parentElement) {
+    if (/auto|scroll/.test(getComputedStyle(a).overflowY) && a.scrollHeight > a.clientHeight + 1) { sc = a; break; }
+  }
+  sc.scrollTop = 1e7;
+});
+
+// ── 운영 읽기 0 — 일정·공지는 고정 픽스처, 나머지 읽기는 빈 배열, 쓰기는 차단 ──
+const TITLE = 'FOLD 모션 회귀';
+const SCHED = {
+  id: 'fffffff0-0000-4000-8000-000000000001', title: TITLE, venue_id: null,
+  pub_name: '목킹 홀덤펍', region: '서울', address: '서울 어딘가 1',
+  date: kstDay(1), start_time: '19:00:00', duration: '6시간', // 내일 — 예약 박스는 ended=false 여야 뜬다
+  format: 'NLH', guaranteed: true, prize_pool: 1_000_000, prize_percent: null,
+  is_competition: false, grade: null, blinds: null, buy_in: { amount: 30_000 }, seats: null,
+  display_order: 0, is_premium: false, owner_id: 'e2e-mock-owner', approved: true,
+  unread_qna_count: 0, view_count: 0, premium_until: null, reg_close_time: null,
+  structure: null, description: null, side_events: null, ranking_prizes: null,
+  partners: null, promotions: null, payment_methods: null, rules: null,
+  poster_url: null, poster_color: null, rejected_at: null, reject_reason: null,
+};
+const NOTICES = [1, 2, 3].map((i) => ({
+  id: `fffffff1-0000-4000-8000-00000000000${i}`, type: 'pinned', title: `목킹 공지 ${i}`, body: '본문',
+  author_name: '운영', created_at: new Date(Date.now() - i * 3_600_000).toISOString(), board: 'all', sort_order: 10 - i,
+}));
+async function mockAll(page: Page) {
+  await page.route('**/*', async (route) => {
+    const url = route.request().url();
+    if (/^http:\/\/(localhost|127\.0\.0\.1)/.test(url) || url.startsWith('data:') || url.startsWith('blob:')) return route.continue();
+    const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (/\/rest\/v1\/schedules/.test(url)) return json([SCHED]);
+    if (/\/rest\/v1\/marketplace_notices/.test(url)) return json(NOTICES);
+    if (/\/rest\/v1\/rpc\/(create_reservation|request_buyin|cancel_my_reservation)/.test(url)) return json({ message: 'blocked' }, 500);
+    if (/\/rest\/v1\//.test(url)) return json([]);
+    if (/supabase\.co/.test(url)) return json({});
+    return route.abort('blockedbyclient');
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('nuri:install-dismissed', '1'); } catch { /* 차단 환경 */ } });
+}
+async function gotoBrowse(page: Page) {
+  await mockAll(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/?tab=browse');
+  const btn = page.locator('main[data-tab="browse"] button[aria-expanded]').filter({ hasText: '공지사항' });
+  await expect(btn, '일정 탐색 공지사항 토글이 없다').toBeVisible({ timeout: 20_000 });
+  await btn.evaluate((b) => b.scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(600);
+  return btn;
+}
+
+test.describe('Fold — 펼침/접힘은 부드럽고 누른 요소는 제자리', () => {
+  test('① 일정 탐색 공지사항 — 열기·닫기 모두 여러 프레임에 걸쳐 자라고 줄며, 누른 버튼은 1px 도 안 움직인다', async ({ page }) => {
+    const btn = await gotoBrowse(page);
+    const open = await toggle(page, btn, 'section');
+    const close = await toggle(page, btn, 'section');
+    console.log(`[fold ① notices 390] open ${JSON.stringify(open)} close ${JSON.stringify(close)}`);
+    expect(open.dSH, '열었는데 문서 높이가 안 늘었다 — 대상이 아니다').toBeGreaterThan(40);
+    expect(open.steps, `열기가 ${open.steps}단 — 한 프레임 점프`).toBeGreaterThanOrEqual(5);
+    expect(close.steps, `닫기가 ${close.steps}단 — 한 프레임 점프`).toBeGreaterThanOrEqual(5);
+    expect(open.dCenter, '열 때 누른 버튼이 움직였다').toBeLessThanOrEqual(1);
+    expect(close.dCenter, '닫을 때 누른 버튼이 움직였다').toBeLessThanOrEqual(1);
+  });
+
+  test('① 동작 줄이기 — 즉시 열리고 닫힌다(모션 0)', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const btn = await gotoBrowse(page);
+    const open = await toggle(page, btn, 'section');
+    const close = await toggle(page, btn, 'section');
+    console.log(`[fold ① notices 390 RM] open ${JSON.stringify(open)} close ${JSON.stringify(close)}`);
+    expect(open.dSH).toBeGreaterThan(40);
+    expect(open.steps, '동작 줄이기인데 높이가 여러 프레임에 걸쳐 변했다').toBeLessThanOrEqual(1);
+    expect(close.steps).toBeLessThanOrEqual(1);
+  });
+
+  test('① 탭 재방문 — 열어 둔 공지가 다시 재생되지 않는다(keep-alive)', async ({ page }) => {
+    const btn = await gotoBrowse(page);
+    await toggle(page, btn);
+    await expect(btn).toHaveAttribute('aria-expanded', 'true');
+    // 다른 탭으로 갔다가 뒤로가기로 돌아온다 — 일정 탐색 판은 keep-alive 라 display 토글로 다시 보인다.
+    await page.locator('nav[aria-label="하단 내비게이션"] button').filter({ hasText: '라이브' }).first().click();
+    await page.waitForTimeout(800);
+    await page.goBack();
+    await expect(btn, '뒤로가기로 일정 탐색에 돌아오지 못했다').toBeVisible();
+    await page.waitForTimeout(80);
+    const running = await page.evaluate(() => document.getAnimations()
+      .filter((a) => (a.effect as KeyframeEffect | null)?.getKeyframes().some((k) => 'height' in k)).length);
+    expect(running, '탭을 다시 열었더니 높이 애니메이션이 다시 돌았다').toBe(0);
+    await expect(btn).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('② 대회 상세 참가 예약 더보기 — 예약하기 CTA 가 자리를 지켜 누른 줄이 안 움직인다', async ({ page }) => {
+    await mockAll(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.getByRole('button', { name: '전체 일정', exact: false }).first().click({ timeout: 15_000 });
+    const card = page.locator('main[data-tab="browse"] article.cv-card-list').filter({ hasText: TITLE }).first();
+    await card.waitFor({ timeout: 20_000 });
+    await card.getByRole('heading').click();
+    const dialog = page.locator('[role="dialog"][data-scroll-lock]').filter({ hasText: TITLE });
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+    const btn = dialog.locator('button[aria-expanded]').filter({ hasText: '참가 예약' });
+    await btn.evaluate((b) => b.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(700);
+    const open = await toggle(page, btn, 'section');
+    const close = await toggle(page, btn, 'section');
+    console.log(`[fold ② reserve 390] open ${JSON.stringify(open)} close ${JSON.stringify(close)}`);
+    expect(open.dSH, '펼쳤는데 높이가 안 늘었다').toBeGreaterThan(100);
+    expect(open.dCenter, `열 때 '더보기' 줄이 ${open.dCenter}px 움직였다 — 예약하기 CTA 가 빠졌다`).toBeLessThanOrEqual(1);
+    expect(close.dCenter).toBeLessThanOrEqual(1);
+    expect(open.steps).toBeGreaterThanOrEqual(5);
+    expect(close.steps).toBeGreaterThanOrEqual(5);
+  });
+
+  test('④ 법정 푸터 추가 정보 — 맨 아래에서 닫아도 요약줄이 내려오지 않는다(클램프)', async ({ page }) => {
+    await gotoBrowse(page);
+    const summary = page.locator('footer summary').filter({ hasText: '추가 정보' }).first();
+    await summary.evaluate((s) => s.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(400);
+    await toggle(page, summary, 'details'); // 열기
+    await toBottom(summary);
+    await page.waitForTimeout(500);
+    await expect(summary, '맨 아래로 내렸더니 요약줄이 화면 밖이다').toBeInViewport();
+    const before = await summary.evaluate((s) => ({ h: s.parentElement!.getBoundingClientRect().height, bottom: innerHeight + scrollY >= document.documentElement.scrollHeight - 1 }));
+    expect(before.bottom, '맨 아래가 아니다 — 클램프 조건을 못 만들었다').toBe(true);
+    const close = await toggle(page, summary, 'details');
+    const after = await summary.evaluate((s) => ({ open: (s.parentElement as HTMLDetailsElement).open, h: s.parentElement!.getBoundingClientRect().height }));
+    console.log(`[fold ④ footer@bottom 390] close ${JSON.stringify(close)} details ${before.h}→${after.h}`);
+    expect(after.open, '닫히지 않았다').toBe(false);
+    expect(before.h - after.h, '닫았는데 내용이 안 줄었다 — 클램프 조건이 아니다').toBeGreaterThan(20);
+    expect(close.dCenter, `바닥에서 닫자 요약줄이 ${close.dCenter}px 움직였다(수정 전 +44)`).toBeLessThanOrEqual(1);
+  });
+});

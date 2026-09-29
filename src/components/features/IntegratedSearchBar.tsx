@@ -9,6 +9,7 @@
  *  4) SearchState 키({query,dates,regions,format,gtdOnly,competitionOnly,grade,budget})
  *     계약 불변 — 상위(App) 필터 로직 무변경.
  * ========================================================================== */
+import { Fold } from '../atoms/Fold';
 import {
   useState,
   useRef,
@@ -404,7 +405,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
         style={stickyTop ? { top: stickyTop } : undefined}
       >
       {/* ── 검색창 ─────────────────────────────────────────────────────── */}
-      {(searchOpen || rawQuery.length > 0) && (
+      <Fold open={(searchOpen || rawQuery.length > 0)}>
       <div className="px-page-x pt-1.5 pb-1.5">
         <form
           onSubmit={handleSubmit}
@@ -464,7 +465,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           )}
         </form>
       </div>
-      )}
+      </Fold>
 
       {/* ── 날짜 슬라이더 탭 (복수 선택) ─────────────────────────────────── */}
       <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} onPick={handlePickDate} eventDates={eventDates} />

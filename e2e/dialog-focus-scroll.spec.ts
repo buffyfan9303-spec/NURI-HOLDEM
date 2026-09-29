@@ -97,7 +97,9 @@ function scroller(dialog: Locator): Locator {
 async function scrollDownAndTap(dialog: Locator, page: Page, buttonText: string) {
   const sc = scroller(dialog);
   const pre = await sc.evaluate((el, text) => {
-    const btn = [...el.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === text);
+    // 보이는 버튼만 — 펼친 뒤 헤더 '예약하기' 는 자리만 남기고 invisible 로 감춘다(2026-09-29 M단계, 누른 버튼 제자리).
+    //   숨은 헤더 CTA 를 먼저 집으면 경로 B 가 안쪽 예약하기가 아니라 빈 자리를 누르고도 통과한다.
+    const btn = [...el.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === text && getComputedStyle(b).visibility !== 'hidden');
     if (!btn) return { top: el.scrollTop, x: 0, y: 0, found: false };
     el.scrollTop = Math.min(el.scrollHeight - el.clientHeight, 400);
     const r = btn.getBoundingClientRect();
