@@ -60,7 +60,7 @@ const visibleCells = (page: Page, label: string) => page.getByTestId('voucher-re
   .filter({ has: page.getByRole('rowheader', { name: label, exact: true }) }).first()
   .locator('th,td').evaluateAll((cs) => cs.filter((c) => getComputedStyle(c).display !== 'none').map((c) => c.textContent?.trim()));
 
-test.describe('이용권 유형별 발급 표(V2)', () => {
+test.describe('이용권 유형별 전송 표(V2)', () => {
   for (const [W, H] of [[360, 780], [390, 844], [1440, 900]] as const) {
     const narrow = W < 768;
     const pick = (a: string[]) => (narrow ? a.slice(0, 4) : a);
@@ -72,7 +72,7 @@ test.describe('이용권 유형별 발급 표(V2)', () => {
       const table = page.getByTestId('voucher-reason-stats');
       await expect(table, '유형별 표가 없다').toBeVisible();
       const heads = await table.locator('thead th').evaluateAll((ths) => ths.filter((t) => getComputedStyle(t).display !== 'none').map((t) => t.textContent?.trim()));
-      expect(heads).toEqual(pick(['유형', '발급', '보유', '사용', '만료', '회수']));
+      expect(heads).toEqual(pick(['유형', '전송', '보유', '사용', '만료', '전송 취소']));
       expect(await visibleCells(page, '이벤트 카드 당첨')).toEqual(pick(['이벤트 카드 당첨', '3', '1', '1', '1', '0']));
       expect(await visibleCells(page, '방문 감사'), '0 이 아닌 과거 유형은 보여야 한다').toEqual(pick(['방문 감사', '2', '0', '2', '0', '0']));
       expect(await visibleCells(page, '서비스 보상'), '현재 유형은 0 이어도 보여야 한다').toEqual(pick(['서비스 보상', '0', '0', '0', '0', '0']));
@@ -82,9 +82,9 @@ test.describe('이용권 유형별 발급 표(V2)', () => {
       await expect(page.getByText('삭제한 미사용 이용권은 집계되지 않습니다', { exact: false })).toBeVisible();
       // B2 — 타일은 합계에서 다시 센다(구 RPC 의 active 9 = 만료 포함 값을 쓰지 않는다)
       const tile = (label: string) => page.locator('[data-stat-tile]').filter({ has: page.locator(`[data-stat-label="${label}"]`) }).locator('[data-stat-val]');
-      await expect(tile('발급'), '발급 타일은 회수를 뺀 수(9)').toHaveText('9');
-      await expect(page.getByText('회수한 이용권을 뺀 수', { exact: false }), '회수 제외 설명이 안내문에 없다').toBeVisible();
-      await expect(page.getByText('발급(회수 제외)', { exact: true }), '두 줄로 접히던 옛 라벨이 남아 있다').toHaveCount(0);
+      await expect(tile('전송'), '전송 타일은 전송 취소를 뺀 수(9)').toHaveText('9');
+      await expect(page.getByText('전송 취소한 이용권을 뺀 수', { exact: false }), '전송 취소 제외 설명이 안내문에 없다').toBeVisible();
+      await expect(page.getByText('전송(전송 취소 제외)', { exact: true }), '두 줄로 접히던 옛 라벨이 남아 있다').toHaveCount(0);
       // 오너: 타일 라벨 줄바꿈 금지 — 세 타일 높이 같고, 라벨은 한 줄(글자 폭 ≤ 칸 폭, 여유 px 기록)
       const tm = await page.locator('[data-stat-tile]').evaluateAll((ts) => ts.map((t) => {
         const l = t.querySelector<HTMLElement>('[data-stat-label]')!;
@@ -124,9 +124,10 @@ test.describe('이용권 유형별 발급 표(V2)', () => {
       await expect(tile('잔여 이용권'), '타일은 기간과 무관한 현재 현황이다').toHaveText('3');
       // B3 — 보유자별 목록 미사용분에도 유형 라벨
       await page.getByRole('button', { name: '관리', exact: true }).first().evaluate((b) => (b as HTMLElement).click());
+      // 라벨 문구가 아니라 서버 reason_key 로 겨눈다(문구가 바뀌어도 안 깨지게, 2026-09-29 용어 통일 후속).
       const unused = page.getByTestId('holder-unused');
-      await expect(unused.getByText(/이벤트 카드 당첨/)).toBeVisible();
-      await expect(unused.getByText(/이용권 지급/)).toBeVisible();
+      await expect(unused.locator('[data-reason="event_card"]')).toBeVisible();
+      await expect(unused.locator('[data-reason="grant"]')).toBeVisible();
       if (SHOT) await page.screenshot({ path: `${SHOT}/${W}-${SHOT_TAG()}-range-holder.png` });
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), '문서가 가로로 넘친다').toBeLessThanOrEqual(0);
     });

@@ -202,13 +202,13 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
               ⚠ 목록은 **보유한 매장만** 나온다(오너 지시). 안 가진 매장을 고를 수 있으면
                 고른 뒤에 실패하는 길을 하나 만드는 것뿐이다. ── */}
           {byVenue.length > 0 && (
-            <section className="rounded-aura border card-aura p-3">
+            <section data-testid="voucher-manual-card" className="rounded-aura border card-aura p-3">
               <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-violet" aria-hidden>
                   <Icon name="send" size={14} />
                 </span>
                 <div className="flex min-w-0 flex-1 items-baseline gap-x-2">
-                  <h3 className="text-sm font-bold text-ink-primary">수동으로 보내기</h3>
+                  <h3 className="text-sm font-bold text-ink-primary">수동으로 사용</h3>
                   <span className="text-2xs text-ink-secondary">QR 없이 · 업주 번호</span>
                 </div>
               </div>
@@ -233,7 +233,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet, o
 
           {/* ── 매장이용권 지갑 — 대시보드와 같은 정본(킬스위치 OFF 면 스스로 아무것도 그리지 않는다) ──
               본인인증 CTA 는 시트 안에서 끝낼 수 없으니 내 정보로 넘긴다.
-              매장 머리글을 누르면 발급 매장으로 — 사슬 끝에서 막다른 길을 만들지 않는다. */}
+              매장 머리글을 누르면 보낸 매장으로 — 사슬 끝에서 막다른 길을 만들지 않는다. */}
           <VoucherWallet
             compact
             onNeedVerify={() => { onClose(); onOpenWallet(); }}
@@ -333,7 +333,7 @@ function VenueVoucherCounts({ rows: all, error, onRetry, onVenue }: {
         </ul>
       )}
       {!idOn && rows && rows.length > 0 && (
-        <p className="mt-2 text-2xs text-ink-muted">사용·전송은 본인인증 오픈 후 이 시트에서 바로 할 수 있어요.</p>
+        <p className="mt-2 text-2xs text-ink-muted">사용은 본인인증 오픈 후 이 시트에서 바로 할 수 있어요.</p>
       )}
     </section>
   );
@@ -398,7 +398,7 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
       : await redeemMyVouchersByPhone(ids, phone);
     setBusy(false);
     // 부분 성공을 전량 성공으로 말하지 않는다 — 그 한 문장이 장부에서 다툼이 된다.
-    if (r.ok === 0) { toast.show(r.reasons[0] || '보내지 못했어요', 'error'); return; }
+    if (r.ok === 0) { toast.show(r.reasons[0] || '사용하지 못했어요', 'error'); return; }
     // ⚠ 부분 실패는 **초록 토스트로 띄우지 않는다.** 종전엔 문구만 '…N장 실패(…)' 로 바꾸고
     //   색은 늘 success 였다 — 같은 날 같은 매장에 2장을 보내면 두 번째가 대기중 유니크 인덱스에
     //   걸려 정확히 이 경로로 떨어지는데, 손님 화면엔 초록 성공으로 떴다(2026-09-11 점검).
@@ -406,8 +406,8 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
     //     그래도 부분 실패는 남는다 — 만료·회수·다른 기기 사용. 색 규칙은 그래서 그대로 둔다.
     onDone(
       r.failed > 0
-        ? `${plan.venueName} ${r.ok}T 전송 · ${r.failed}T 실패(${r.reasons[0] ?? '사유 미상'})`
-        : `${plan.venueName} ${r.ok}T 전송 완료`,
+        ? `${plan.venueName} ${r.ok}T 사용 요청 · ${r.failed}T 실패(${r.reasons[0] ?? '사유 미상'})`
+        : `${plan.venueName} ${r.ok}T 사용 요청 완료`,
       r.failed === 0,
     );
   };
@@ -416,27 +416,27 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
     <div className="fixed inset-0 z-80 flex items-end justify-center sm:items-center">
       <button type="button" aria-label="닫기" onClick={onCancel} className="absolute inset-0 overscroll-contain bg-black/70" />
       {/* aria-modal: 스크린리더가 뒤의 이용권 지갑을 같은 화면으로 읽지 않게(MODAL-03). 포커스 되잡기는 부모 Modal 이 한다(위 주석). */}
-      <div role="dialog" aria-modal="true" aria-label="이용권 보내기"
+      <div role="dialog" aria-modal="true" aria-label="이용권 사용" data-testid="voucher-send-sheet"
         className="relative w-full max-w-md space-y-3 rounded-t-dialog border border-border-default bg-surface-mid p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-sheet-up sm:rounded-dialog sm:pb-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-ink-primary">{plan.venueName}</p>
             <p className="text-2xs text-ink-muted">
-              보유 {max}T · {plan.via === 'qr' ? '바인 QR 확인됨' : 'QR 없이 보내기'}
+              보유 {max}T · {plan.via === 'qr' ? '바인 QR 확인됨' : 'QR 없이 사용'}
             </p>
           </div>
           <button type="button" onClick={onCancel} aria-label="닫기" className="hit shrink-0 text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
 
         {step === 'count' && (<>
-          <p className="text-2xs text-ink-muted">몇 개를 보낼까요?</p>
+          <p className="text-2xs text-ink-muted">몇 개를 사용할까요?</p>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setCountSafe(count - 1)} disabled={count <= 1}
               aria-label="하나 줄이기"
               className="btn-ghost h-11 w-11 shrink-0 text-lg font-bold disabled:opacity-40">−</button>
             <input type="number" inputMode="numeric" min={1} max={max} value={count}
               onChange={(e) => setCountSafe(Number(e.target.value) || 1)}
-              aria-label="보낼 수량"
+              aria-label="사용할 수량"
               className="input h-11 min-w-0 flex-1 text-center text-lg font-extrabold tabular-nums" />
             <button type="button" onClick={() => setCountSafe(count + 1)} disabled={count >= max}
               aria-label="하나 늘리기"
@@ -465,7 +465,7 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
 
         {step === 'phone' && (
           <div className="space-y-2">
-            <p className="text-2xs text-ink-muted">발급 매장 <b className="text-ink-secondary">업주 전화번호</b>를 입력하세요.</p>
+            <p className="text-2xs text-ink-muted">보낸 매장 <b className="text-ink-secondary">업주 전화번호</b>를 입력하세요.</p>
             <input value={phone} onChange={(e) => { setPhone(e.target.value); setTarget(null); setAgreed(false); }}
               inputMode="tel" autoComplete="tel" placeholder="010-0000-0000" aria-label="업주 전화번호"
               className="input h-11 w-full text-sm" />
@@ -486,11 +486,11 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
                 <dd className="min-w-0 truncate text-sm font-bold text-ink-primary">{target?.display || plan.venueName}</dd>
               </div>
               <div className="flex items-baseline justify-between gap-2">
-                <dt className="shrink-0 text-2xs text-ink-muted">보낼 수량</dt>
+                <dt className="shrink-0 text-2xs text-ink-muted">사용할 수량</dt>
                 <dd className="text-base font-extrabold tabular-nums text-accent-200">{count}T</dd>
               </div>
               <div className="flex items-baseline justify-between gap-2">
-                <dt className="shrink-0 text-2xs text-ink-muted">보낸 뒤 남는 수량</dt>
+                <dt className="shrink-0 text-2xs text-ink-muted">사용한 뒤 남는 수량</dt>
                 <dd className="text-sm font-bold tabular-nums text-ink-secondary">{max - count}T</dd>
               </div>
             </dl>
@@ -503,14 +503,14 @@ function SendVouchersSheet({ plan, onCancel, onDone, onPlainBuyin }: {
             <label className="flex cursor-pointer items-start gap-2 rounded-input border border-border-default px-3 py-2.5">
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[rgb(var(--accent-400))]" />
               <span className="text-2xs font-semibold text-ink-secondary">
-                네, <b className="text-ink-primary">{target?.display || plan.venueName}</b>에 <b className="tabular-nums text-ink-primary">{count}T</b> 를 보냅니다.
+                네, <b className="text-ink-primary">{target?.display || plan.venueName}</b>에서 <b className="tabular-nums text-ink-primary">{count}T</b> 를 사용합니다.
               </span>
             </label>
             <div className="flex gap-2">
               <button type="button" onClick={() => setStep(plan.via === 'phone' ? 'phone' : 'count')} className="btn-ghost h-11 flex-1 text-sm">뒤로</button>
               <button type="button" disabled={!agreed || busy} onClick={send} data-testid="voucher-send-confirm"
                 className="btn-primary inline-flex h-11 flex-1 items-center justify-center gap-1 text-sm disabled:opacity-50">
-                {busy ? '보내는 중…' : <><Icon name="check" size={14} /> {count}T 보내기</>}
+                {busy ? '사용 중…' : <><Icon name="check" size={14} /> {count}T 사용</>}
               </button>
             </div>
           </div>

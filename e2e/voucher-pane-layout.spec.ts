@@ -73,7 +73,7 @@ test.describe('이용권 · QR 화면 — 메뉴 그룹 · 접힘 기본값 · �
       const issue = page.getByTestId('voucher-issue');
       await expect(issue, '발급 칸이 없다').toBeVisible({ timeout: 15_000 });
       // ② 발급은 펼친 채로 시작 · 접는 토글 없음 / 매장 QR 은 접힌 채로 시작
-      await expect(issue.getByRole('group', { name: '발급 근거' }), '발급 칸이 펼쳐져 있지 않다').toBeVisible();
+      await expect(issue.getByTestId('voucher-reason-group'), '발급 칸이 펼쳐져 있지 않다').toBeVisible();
       // 칸 제목이 접기 버튼이 아니다(안쪽의 다른 펼침 요소 — 한도 요청 등 — 는 별개)
       const head = page.getByTestId('voucher-issue-head');
       expect(await head.evaluate((h) => h.tagName), '발급 칸 제목이 버튼(접기 토글)이다').not.toBe('BUTTON');

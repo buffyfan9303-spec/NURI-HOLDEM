@@ -202,7 +202,7 @@ function VoucherQuotaAdminCard() {
       const left = await adminDecideVoucherQuota(r.id, approve);
       toast.show(
         approve
-          ? `${r.venueName} 발행 한도를 ${r.amount.toLocaleString()}장 늘렸습니다${left != null ? ` · 잔여 ${left.toLocaleString()}장` : ''}`
+          ? `${r.venueName} 전송 한도를 ${r.amount.toLocaleString()}장 늘렸습니다${left != null ? ` · 잔여 ${left.toLocaleString()}장` : ''}`
           : '요청을 반려했습니다',
         approve ? 'success' : 'info',
       );
@@ -221,7 +221,7 @@ function VoucherQuotaAdminCard() {
   //   **반드시 같은 작업에서** 만들어야 한다.
   return (
     <section className="rounded-card border border-accent-400/30 bg-accent-300/4 p-3 space-y-2">
-      <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="ticket" size={15} className="shrink-0" />이용권 발행 한도 증액 요청 <span className="text-2xs font-normal text-ink-muted">· 비용 없음 · 승인하면 즉시 반영</span></h3>
+      <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="ticket" size={15} className="shrink-0" />이용권 전송 한도 증액 요청 <span className="text-2xs font-normal text-ink-muted">· 비용 없음 · 승인하면 즉시 반영</span></h3>
       {err != null ? <LoadErrorCard error={err} what="한도 증액 요청" onRetry={load} compact /> : (
       <ul className="space-y-1.5">
         {reqs.map((r) => (
@@ -1490,7 +1490,7 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
       const left = await adminGrantVoucherQuota(venue.id, sign * n);
       setQuota(left);
       setQuotaAmt('');
-      toast.show(`발급 한도를 ${n}개 ${sign > 0 ? '충전' : '차감'}했습니다 · 잔여 ${left}개`, 'success');
+      toast.show(`전송 한도를 ${n}개 ${sign > 0 ? '충전' : '차감'}했습니다 · 잔여 ${left}개`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '한도 변경에 실패했습니다', 'error');
     } finally { setQuotaBusy(false); }
@@ -1498,12 +1498,12 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
 
   const toggleVIssue = async () => {
     if (vIssue == null) {
-      toast.show('현재 발급 승인 상태를 불러오지 못했습니다. 새로고침 후 다시 시도하세요', 'error');
+      toast.show('현재 전송 승인 상태를 불러오지 못했습니다. 새로고침 후 다시 시도하세요', 'error');
       return;
     }
     const next = !vIssue;
     setVIssue(next);
-    try { await setVoucherIssueApproval(venue.id, next); toast.show(next ? '매장이용권 발급을 승인했습니다' : '발급 승인을 해제했습니다', 'success'); }
+    try { await setVoucherIssueApproval(venue.id, next); toast.show(next ? '매장이용권 전송을 승인했습니다' : '전송 승인을 해제했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); setVIssue(!next); }
   };
 
@@ -1561,11 +1561,11 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
           type="button"
           onClick={toggleVIssue}
           disabled={vIssue == null}
-          title={vIssue == null ? '발급 승인 상태를 불러오지 못했습니다' : '매장이용권 발급 승인'}
+          title={vIssue == null ? '전송 승인 상태를 불러오지 못했습니다' : '매장이용권 전송 승인'}
           className={['shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
             vIssue ? 'border-accent-400/40 text-accent-300 bg-accent-300/10' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}
         >
-          이용권발급 {vIssue == null ? '…' : vIssue ? '✓' : '✗'}
+          이용권전송 {vIssue == null ? '…' : vIssue ? '✓' : '✗'}
         </button>
         <button
           type="button"
@@ -1580,11 +1580,11 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
 
       {open && (
         <div className="px-3 pb-3 pt-2 space-y-2 border-t border-border-subtle animate-slide-up">
-          {/* 매장이용권 발급 한도 — 바로 위 '이용권발급 ✓/✗' 토글과 **같은 스위치의 나머지 반쪽**이다.
+          {/* 매장이용권 전송 한도 — 바로 위 '이용권전송 ✓/✗' 토글과 **같은 스위치의 나머지 반쪽**이다.
               승인만으로는 한도가 0 이라 업주가 한 장도 못 만든다. 두 레버를 같은 행에 둔다. */}
           <div className="rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-2xs font-bold text-ink-secondary">이용권 발급 한도</span>
+              <span className="text-2xs font-bold text-ink-secondary">이용권 전송 한도</span>
               <span className="text-2xs font-bold tabular-nums text-ink-primary">
                 {quota == null ? '모름' : `잔여 ${quota}개`}
               </span>
@@ -1606,7 +1606,7 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
               </button>
             </div>
             {vIssue === false && (
-              <p className="mt-1.5 text-2xs text-amber-400">발급 승인이 꺼져 있습니다 — 한도를 채워도 업주는 발급할 수 없어요.</p>
+              <p className="mt-1.5 text-2xs text-amber-400">전송 승인이 꺼져 있습니다 — 한도를 채워도 업주는 전송할 수 없어요.</p>
             )}
           </div>
           <div className="grid grid-cols-2 gap-2">

@@ -124,7 +124,7 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
             {hit.issued === 0 ? (
               <span className="text-danger-light">보낸 기록이 없어요</span>
             ) : (
-              <>발급 <b className="text-ink-primary">{hit.issued}</b>장 · 사용 {hit.used}장 · 보유 <b className="text-accent-200">{hit.held}</b>장</>
+              <>전송 <b className="text-ink-primary">{hit.issued}</b>장 · 사용 {hit.used}장 · 보유 <b className="text-accent-200">{hit.held}</b>장</>
             )}
           </p>
         )}
@@ -157,9 +157,9 @@ export default function LedgerVoucherRail({ venueId, active = true, dense = fals
                         1장이면 숫자를 붙이지 않는다(대부분이 1장이라 숫자가 소음이 된다). */}
                     {r.count > 1 && <span className="ml-1 tabular-nums text-accent-300">{r.count}장</span>}
                     {r.revoked
-                      ? <span className="ml-1.5 rounded-chip bg-danger/15 px-1.5 py-0.5 text-[10px] font-semibold text-danger-light">회수</span>
-                      /* 일부만 회수된 묶음 — '회수' 라고만 하면 전량 회수로 읽힌다. 숫자로 말한다. */
-                      : r.revokedCount > 0 && <span className="ml-1.5 rounded-chip bg-danger/15 px-1.5 py-0.5 text-[10px] font-semibold text-danger-light">{r.revokedCount}장 회수</span>}
+                      ? <span className="ml-1.5 rounded-chip bg-danger/15 px-1.5 py-0.5 text-[10px] font-semibold text-danger-light">전송 취소</span>
+                      /* 일부만 되돌린 묶음 — '전송 취소' 라고만 하면 전량으로 읽힌다. 숫자로 말한다. */
+                      : r.revokedCount > 0 && <span className="ml-1.5 rounded-chip bg-danger/15 px-1.5 py-0.5 text-[10px] font-semibold text-danger-light">{r.revokedCount}장 전송 취소</span>}
                     {r.expired
                       ? <span className="ml-1.5 rounded-chip bg-surface-float px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">만료</span>
                       : r.expiredCount > 0 && <span className="ml-1.5 rounded-chip bg-surface-float px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">{r.expiredCount}장 만료</span>}

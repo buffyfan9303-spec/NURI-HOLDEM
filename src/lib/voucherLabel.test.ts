@@ -36,8 +36,8 @@ describe('voucherGroupLabel', () => {
     expect(voucherGroupLabel('로티아레나')).toBe('로티아레나 매장이용권');
   });
   it('매장명을 모르면 억지 합성 대신 미확인으로 말한다', () => {
-    expect(voucherGroupLabel(null)).toBe('발급 매장 미확인');
-    expect(voucherGroupLabel('  ')).toBe('발급 매장 미확인');
+    expect(voucherGroupLabel(null)).toBe('보낸 매장 미확인');
+    expect(voucherGroupLabel('  ')).toBe('보낸 매장 미확인');
   });
 });
 

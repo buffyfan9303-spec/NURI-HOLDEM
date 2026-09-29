@@ -19,7 +19,7 @@ const CASES: [string, string, string][] = [
   ['VenuePage.tsx',            '출석하면 점수 적립 · 전적 인정 · 방문 후기가 열려요', '하루 한 번이면 충분해요'],
   ['VenuePage.tsx',            '오늘 진행되는 포스터가 없습니다',                  '아래 예정 포스터를 확인해 보세요'],
   ['MyVoucherSheet.tsx',       '매장 비치 출석 QR',                             '하루 한 번이면 충분해요'],
-  ['MyVoucherSheet.tsx',       '수동으로 보내기',                                 '장수를 정하고 한 번 더 확인한 뒤 보냅니다'],
+  ['MyVoucherSheet.tsx',       '수동으로 사용',                                   '장수를 정하고 한 번 더 확인한 뒤 보냅니다'],
   ['MyVoucherSheet.tsx',       '업주 전화번호</b>를 입력하세요',                   '번호가 맞아야 서버가 보내 줍니다'],
   ['MyVoucherSheet.tsx',       '승인하면 확정됩니다',                              '매장 장부에 사용 요청으로 올라가고'],
   ['VoucherWallet.tsx',        '에서만 사용됩니다',                                '아래 방법 중 하나로 사용해 주세요'],

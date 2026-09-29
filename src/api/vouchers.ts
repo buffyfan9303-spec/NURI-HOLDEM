@@ -47,12 +47,12 @@ export const isHeldVoucher = (v: Pick<Voucher, 'status' | 'expiresAt'>, now = Da
  *  새 값을 추가했다. 오너가 "첫 PILL"이라고 했으니 이 배열 순서상 맨 앞에 둔다(픽 화면이 이 순서를 그대로 쓴다). */
 export type VoucherReason = 'welcome' | 'visit' | 'event' | 'service' | 'other' | 'grant';
 export const VOUCHER_REASONS: { value: VoucherReason; label: string; hint: string }[] = [
-  { value: 'grant', label: '이용권 지급', hint: '특정 사유 없이 지급' },
+  { value: 'grant', label: '이용권 전송', hint: '특정 사유 없이 전송' },
   { value: 'visit', label: '방문 감사', hint: '재방문·단골 감사' },
   { value: 'welcome', label: '첫 방문 환영', hint: '신규 손님 환영' },
   { value: 'event', label: '이벤트·프로모션', hint: '참가 인원 무관 이벤트' },
   { value: 'service', label: '서비스 보상', hint: '불편 사과·서비스 차원' },
-  { value: 'other', label: '기타(비고 필수)', hint: '비고에 이유를 적어야 발급됩니다' },
+  { value: 'other', label: '기타(비고 필수)', hint: '비고에 이유를 적어야 전송됩니다' },
 ];
 /** 통계·표시 전용 유형 키(V2, 서버 venue_voucher_reason_stats 가 만든다) — 발급 사유 목록(VOUCHER_REASONS)에는 넣지 않는다:
  *  서버 CHECK 값이 아니라 발급 화면에 픽으로 나오면 안 된다(vouchers.reason.test.ts 가 목록 일치를 본다). */
