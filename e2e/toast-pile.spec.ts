@@ -1,6 +1,6 @@
 // 토스트 겹쳐 쌓기 — 오너 결정 #13(2026-09-29, 판단 위임): 되돌리기 토스트 3장이 390 화면 아래를 덮던 것.
 //
-// 채택안: 2장 이상이면 최신 토스트만 앞에, 나머지는 뒤에 겹친다(src/components/atoms/Toast.tsx '겹쳐 쌓기').
+// 채택안: 2장 이상이면 최신 토스트만 앞에, 나머지는 뒤에 겹친다(src/components/atoms/ToastView.tsx '겹쳐 쌓기').
 //   장수 제한·합치기를 버린 이유는 앞 토스트의 되돌리기가 사라지거나(제한) 무엇을 되돌리는지 흐려지기(합치기) 때문이다.
 // 계약(되돌리기 기능 보존이 핵심):
 //   ① 3장이 떠도 더미 높이 ≤ 최신 1장 + 비침 2줄(작은 여유) — 종전은 3장 + 틈 2개
@@ -11,8 +11,8 @@
 //   ⑤ 키보드 포커스(:focus-visible)만으로도 펼쳐져 오래된 되돌리기가 화면에 드러나고 Enter 로 실행된다
 //   ⑥ 뜨고 빠지고 펼치는 동안 입력 제외 layout-shift 0 (D4 유지)
 // 토스트 생산자는 클락 운영자의 일시정지/재개(각각 '실행취소' 5초) — 계정 없이 목킹 업주 + 상태 있는 가짜 clock_states.
-// 음성 대조: Toast.tsx 의 `collapsed={pile && !expanded}` 를 `collapsed={false}` 로, place 계산의 접힌 분기를 펼친 분기로 바꾸면 ① 이 실패한다.
-//   `justOpened()` 가드를 빼면 ③ 이 실패한다.
+// 음성 대조(2026-09-29 실행): ToastView.tsx 의 `k={collapsed ? … : 0}` 를 `k={0}` 으로 → ① FAIL · 항목 onClick 의 `justOpened()` 가드를
+//   빼면 → ③ FAIL('펼치는 탭이 토스트를 닫았다') · onFocus 의 setFocusIn(true) 를 빼면 → ⑤ FAIL.
 // 실행: E2E_BASE_URL=http://localhost:4173 npx playwright test e2e/toast-pile.spec.ts
 import { test, expect } from './_fixtures';
 import type { Page, Route, CDPSession } from '@playwright/test';
