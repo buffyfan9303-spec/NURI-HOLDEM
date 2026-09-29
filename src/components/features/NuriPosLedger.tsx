@@ -1,4 +1,5 @@
 // src/components/features/NuriPosLedger.tsx
+import { Fold } from '../atoms/Fold';
 import { TICKET_WON } from '../../lib/units'; // 티켓 T 단위(1T=1만원) — 분납 합계 환산
 import { useIsDesktop } from '../../lib/responsive';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
@@ -1342,7 +1343,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                       <span className="flex-1" />
                       <span className="text-2xs font-bold text-ink-muted">{open ? '접기 ▲' : '펼치기 ▼'}</span>
                     </button>
-                    {open ? (
+                    {/* 펼친 목록 ↔ 접힌 한 줄 요약 — 둘 다 판으로 들고 나서 높이가 한 프레임에 바뀌지 않는다 */}
+                    <Fold open={open}>
                       <ul className="border-t border-border-subtle divide-y divide-border-subtle">
                         {items.map((s) => {
                           const canOpen = fullAccess || s.operators.length === 0 || (!!user && s.operators.includes(user.id));
@@ -1375,9 +1377,10 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                           </li>
                         );})}
                       </ul>
-                    ) : (
+                    </Fold>
+                    <Fold open={!open}>
                       <div className="border-t border-border-subtle px-3 py-1.5 text-2xs text-ink-muted truncate">{items.map((x) => gl(x.gameSeq)).join(' · ')}</div>
-                    )}
+                    </Fold>
                   </div>
                 );
               });
@@ -1741,7 +1744,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
               : <button type="button" onClick={() => { if (!addOpen && query.trim()) setNewName(query.trim()); setAddOpen((v) => !v); }} className="btn-primary text-xs px-3 shrink-0 max-sm:ml-auto">+ 유저 추가</button>}
           </div>
 
-          {addOpen && !regClosed && (
+          <Fold open={addOpen && !regClosed}>
             <div className="rounded-input border border-border-default bg-surface-low p-2 space-y-2">
               <input value={newName} onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 로 이름이 두 번 들어가던 문제 */ if (e.key === 'Enter') { e.preventDefault(); addPlayer(); } }}
@@ -1786,7 +1789,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                 <button type="button" onClick={addPlayer} disabled={!newName.trim()} className="btn-primary text-xs px-4 disabled:opacity-50">추가</button>
               </div>
             </div>
-          )}
+          </Fold>
         </div>
       )}
 
@@ -2930,7 +2933,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <span className="inline-flex items-center gap-1.5"><Icon name="clipboard" size={16} className="shrink-0" />{presetOpen ? '최근 게임 닫기' : `최근 게임에서 불러오기 (${presets.length})`}</span>
             <span className="text-sm">{presetOpen ? '▲' : '▼'}</span>
           </button>
-          {presetOpen && (
+          <Fold open={presetOpen}>
             <div className="mt-1 max-h-52 overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
               {presets.map((p, i) => (
                 <button key={i} type="button" onClick={() => { applyPreset(p); setPresetOpen(false); }}
@@ -2941,7 +2944,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
                 </button>
               ))}
             </div>
-          )}
+          </Fold>
           <p className="text-xs text-ink-muted mt-1">담당 직원은 아래에서 따로 선택하세요.</p>
         </Field>
       )}
@@ -4005,7 +4008,7 @@ function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
             )}
         </button>
 
-        {open && (
+        <Fold open={open}>
           <div className="mt-1.5 space-y-1.5 border-t border-border-subtle pt-1.5">
             <div className="flex flex-wrap items-center gap-1">
               <span className="w-14 shrink-0 text-2xs text-ink-muted">방문 유형</span>
@@ -4026,7 +4029,7 @@ function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
                 className="text-2xs font-semibold text-accent-300 hover:text-accent-200">전부 포함으로 되돌리기</button>
             )}
           </div>
-        )}
+        </Fold>
       </div>
     </div>
   );

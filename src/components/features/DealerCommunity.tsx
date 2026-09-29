@@ -17,6 +17,7 @@ import { getNotices, type MarketplaceNotice } from '../../api/marketplace';
 import NoticeSection from './NoticeSection';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import Icon from '../atoms/Icon';
+import { Fold } from '../atoms/Fold';
 import EmptyState from '../atoms/EmptyState';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
@@ -155,10 +156,10 @@ export default function DealerCommunity() {
             className="flex min-h-[44px] items-center justify-center rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-2xs font-semibold text-accent-300 transition-colors hover:bg-surface-high/70">로그인 후 작성</button>
         )}
       </div>
-      {showIcm && <div><ICMCalculator /></div>}
+      <Fold open={showIcm}><ICMCalculator /></Fold>
 
-      {canPost && open && (
-        <form onSubmit={submit} className="space-y-2.5 rounded-card border border-border-default bg-surface-low p-3 animate-slide-up">
+      <Fold open={canPost && open}>
+        <form onSubmit={submit} className="space-y-2.5 rounded-card border border-border-default bg-surface-low p-3">
           <SegmentedTabs
             items={(['hiring', 'seeking', 'general'] as DealerPostKind[]).map((k) => ({ key: k, label: KIND_LABEL[k] }))}
             value={kind} onChange={setKind} />
@@ -201,7 +202,7 @@ export default function DealerCommunity() {
             <button type="submit" disabled={sending || !content.trim()} className="btn-primary px-4 disabled:opacity-60">등록</button>
           </div>
         </form>
-      )}
+      </Fold>
 
       {/* 카테고리 분리 필터 — 구인/구직/일반 각각 따로 보기.
           pill 세그먼트 → 텍스트 필터(오너 확정 문법 — 커뮤니티 홀덤펍·장터와 동일) */}

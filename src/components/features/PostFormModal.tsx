@@ -10,6 +10,7 @@
  *    프리뷰는 grid-cols-4 정사각 썸네일 → 줄바꿈/넘침 없음.
  *  - 로그인 필요: 비로그인 시 호출부에서 진입을 막지만, 방어적으로 user 없으면 제출 차단.
  * ========================================================================== */
+import { Fold } from '../atoms/Fold';
 import { useState, useEffect, useRef, useId, Fragment } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
@@ -470,8 +471,8 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
               </button>
             </div>
 
-            {showHand && (
-              <div data-testid="post-form-hand" className="card-sink space-y-2 rounded-input border border-border-default bg-surface-high p-2.5 animate-slide-up">
+            <Fold open={showHand}>
+              <div data-testid="post-form-hand" className="card-sink space-y-2 rounded-input border border-border-default bg-surface-high p-2.5">
                 {/* 슬롯 (탭하면 채울 대상 전환, 카드 탭하면 제거) — 보드(3장 이상)까지 채우면 🎬 리플레이로 저장 */}
                 <div className="grid grid-cols-3 gap-2">
                   {(['hero', 'villain', 'board'] as const).map((t) => {
@@ -543,7 +544,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                   </div>
                 )}
               </div>
-            )}
+            </Fold>
           </div>
         </div>
 

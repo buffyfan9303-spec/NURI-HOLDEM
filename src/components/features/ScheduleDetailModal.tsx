@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, useEffect, useMemo, type ReactNode } from 'react';
 import Modal from '../atoms/Modal';
 import Icon, { type IconName } from '../atoms/Icon';
+import { Fold } from '../atoms/Fold';
 import ImageLightbox from '../atoms/ImageLightbox';
 import CommentThread from './CommentThread';
 import { useAuth } from '../../contexts/AuthContext';
@@ -1236,19 +1237,20 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
               className={['transition-transform', expanded ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
           </span>
         </button>
-        {/* 예약 CTA 는 접혀 있어도 숨기지 않는다 — 누르면 예약 UI(닉네임 입력)가 펼쳐진다 */}
-        {mine === null && !ended && !expanded && (
-          <button type="button" onClick={() => setExpanded(true)}
-            className="tap-44 btn-primary shrink-0 px-3 py-1.5 text-xs">
+        {/* 예약 CTA 는 접혀 있어도 숨기지 않는다 — 누르면 예약 UI(닉네임 입력)가 펼쳐진다.
+            펼친 뒤에는 **자리를 남긴 채** 감춘다(invisible) — 빼면 줄 높이가 줄어 누른 '더보기'가 9.76px 올라갔다(2026-09-29 감사 #3). */}
+        {mine === null && !ended && (
+          <button type="button" onClick={() => setExpanded(true)} tabIndex={expanded ? -1 : undefined} aria-hidden={expanded || undefined}
+            className={['tap-44 btn-primary shrink-0 px-3 py-1.5 text-xs', expanded ? 'invisible' : ''].join(' ')}>
             예약하기
           </button>
         )}
       </div>
 
-      {expanded && (
-      // data-no-drag-close: 이 안에서 시작한 손짓은 전체화면 시트의 '끓어 닫기' 로 해석하지 않는다 —
-      //   닉네임을 적다가 실수로 내려서 포스터 상세가 통째로 닫히면 입력이 통째로 사라진다(오너 필수 제외 조건).
-      <div data-no-drag-close className="space-y-2 border-t border-accent-400/20 px-3 pb-3 pt-2 animate-fade-in">
+      <Fold open={expanded}>
+      {/* data-no-drag-close: 이 안에서 시작한 손짓은 전체화면 시트의 '끓어 닫기' 로 해석하지 않는다 —
+          닉네임을 적다가 실수로 내려서 포스터 상세가 통째로 닫히면 입력이 통째로 사라진다(오너 필수 제외 조건). */}
+      <div data-no-drag-close className="space-y-2 border-t border-accent-400/20 px-3 pb-3 pt-2">
       {!user && !ended && (
         <p className="rounded-input bg-surface-base/50 px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
           예약엔 <b className="text-ink-secondary">로그인·본인인증</b>이 필요해요 — 노쇼 방지를 위한 자리 보장 장치예요.
@@ -1362,8 +1364,8 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           </button>
           {/* 실패 → 확인 중 → 빈 상태 → 목록. ⚠ 실패가 빈 상태보다 먼저다 —
               순서가 뒤집히면 조회 실패가 '예약이 없습니다'로 위장된다. */}
-          {resOpen && (
-            resErr !== null
+          <Fold open={resOpen}>
+          {resErr !== null
               ? <div className="mt-1.5"><LoadErrorCard error={resErr} onRetry={loadRes} what="예약 내역" compact /></div>
               : resList === undefined
               ? <div className="skeleton mt-1.5 h-14 w-full rounded-input" aria-busy="true" />
@@ -1390,20 +1392,18 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
                       <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{fmtRes(r.createdAt)}</span>
                     </li>
                   ))}
-                </ul>
-          )}
+                </ul>}
           {/* 받는 쪽에도 한 줄 — 개보법 §19(제공받은 자의 이용·제공 제한): 제공받은 개인정보는
               제공 목적 외로 이용하거나 제3자에게 다시 제공할 수 없다. 손님 화면의 고지와 짝을 이룬다. */}
-          {resOpen && (
             <p className="mt-1.5 text-2xs leading-relaxed text-ink-muted">
               예약자의 이름·닉네임은 <b className="text-ink-secondary">이 대회의 예약 운영</b>을 위해서만 이용할 수 있습니다.
               다른 목적으로 쓰거나 외부에 다시 제공하는 것은 「개인정보 보호법」 제19조 위반입니다.
             </p>
-          )}
+          </Fold>
         </div>
       )}
       </div>
-      )}
+      </Fold>
     </section>
   );
 }

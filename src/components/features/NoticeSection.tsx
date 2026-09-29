@@ -12,6 +12,7 @@
 //   글로우(.ring-aura-glow)는 쓰지 않는다 — 반복 카드이고, 화면당 1곳 규칙의 주인공이 아니다.
 import { useId, useMemo, useState } from 'react';
 import Icon, { type IconName } from '../atoms/Icon';
+import { Fold } from '../atoms/Fold';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import type { MarketplaceNotice, NoticeType } from '../../api/marketplace';
 import { relativeTime } from '../../lib/relativeTime';
@@ -199,13 +200,13 @@ export default function NoticeSection({
             {writeBtn}
           </div>
           {/* 펼친 목록 — 나머지 전부(대표 1건은 위 바에 이미 있다). id 는 펼치기 버튼의 aria-controls. */}
-          {open && rest.length > 0 && (
+          <Fold open={open && rest.length > 0}>
             <ul id={listId} className="space-y-0.5 border-t border-border-subtle px-1 py-1">
               {rest.map((n) => (
                 <NoticeRow key={n.id} notice={n} onSelect={onSelect} reserveMarker={reserveMarker} />
               ))}
             </ul>
-          )}
+          </Fold>
         </>
       )}
     </section>

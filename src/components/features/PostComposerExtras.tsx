@@ -8,6 +8,7 @@
  *    '카드지(흰)' 고정 — 실물 카드 은유라 의도적으로 테마를 타지 않는다.
  *  - §28: '수익·환전·현금' 계열 카피 금지, 금액 예시 placeholder 금지.
  * ========================================================================== */
+import { Fold } from '../atoms/Fold';
 import { useId, useState } from 'react';
 import type { Card, Rank, Suit, HandAttachment, PollAttachment, HandTone } from '../../api/postAttachments';
 
@@ -191,8 +192,8 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
         </button>
       </div>
 
-      {open && (
-        <div className="card-sink space-y-2.5 rounded-input border border-border-default bg-surface-high p-2.5 animate-slide-up">
+      <Fold open={open}>
+        <div className="card-sink space-y-2.5 rounded-input border border-border-default bg-surface-high p-2.5">
           {/* 한 줄 요약 */}
           <div>
             <label htmlFor={headlineId} className="block text-2xs font-bold text-ink-secondary mb-1">한 줄 요약</label>
@@ -342,7 +343,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
             )}
           </div>
         </div>
-      )}
+      </Fold>
     </div>
   );
 }

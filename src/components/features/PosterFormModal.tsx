@@ -1,4 +1,5 @@
 ﻿// src/components/features/PosterFormModal.tsx
+import { Fold } from '../atoms/Fold';
 import { useState, useEffect, useRef, useId } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
@@ -509,7 +510,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
             <span>{(form.blindLevels?.length ?? 0) > 0 ? `맞춤 ${form.blindLevels!.filter((l) => !l.isBreak).length}레벨 저장됨` : '블라인드 표 편집 열기 (비우면 기본 표)'}</span>
             <span className="text-2xs text-accent-300">{blindOpen ? '▲' : '▼'}</span>
           </button>
-          {blindOpen && (
+          <Fold open={blindOpen}>
             <div className="mt-2 space-y-2 rounded-input border border-border-subtle bg-surface-base p-2.5">
               <div className="flex items-center gap-2">
                 <button type="button" onClick={fillBlinds} className="btn-ghost text-2xs px-2 text-accent-300">자동 생성(레지 {regLevel || '16'}LV·20분·25레벨)</button>
@@ -542,7 +543,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
                 <button type="button" onClick={() => addBlindRow(true)} className="btn-ghost flex-1 text-2xs px-2">+ 브레이크</button>
               </div>
             </div>
-          )}
+          </Fold>
         </FieldWrap>
 
         <FieldWrap label="레지마감 (레벨 또는 시간 중 하나 이상)" required>
