@@ -1,4 +1,8 @@
--- ⏸ 초안 — 리드가 리허설 후 적용 (store-team logic 묶음, 2026-09-29). 라이브 미적용.
+-- ✅ 2026-09-29 라이브 적용 완료(nuri-lead, MCP execute_sql — 줄 전체 주석·빈 줄만 뺀 본문, 의미 동일).
+--    critical-reviewer 1차 리허설: RISK-A(애드온이 옛 바인에) · RISK-B(애드온 이용권 복원 안 됨) → 8e660314 수정 →
+--    2차 리허설: 이용권마다 복원 최대 1회(바인+애드온 요청이 한 행에 붙은 경우 포함) · 화면의 연결 조작 3종 42501 · 업주·직원·관리자 경로 정상 ·
+--    DROP 후 REVOKE 전 anon=t(fail-open 창 음성 대조) → 파일 ACL 두 줄로 라이브와 동일. 22P02 는 리허설 스크립트 배열 캐스트 버그(제품 무관).
+--    적용 후: approve_buyin_request ACL postgres/authenticated/service_role · 오버로드 1 · anon=false · ledger_buyins 트리거 5 · 복원 함수 authenticated=false.
 --    적용 순서: 20260929s·t 다음(독립적이지만 t 가 있으면 애드온 승인 즉시 TV 애드온·총칩이 따라간다).
 --    🔴 클라이언트 배포보다 **먼저** 적용한다 — 새 화면의 [애드온] 승인은 p_voucher_use 인자를 보낸다.
 --       함수가 없으면 PGRST202 → 화면이 '서버에 애드온 승인 기능이 아직 적용되지 않았습니다' 를 띄운다(바인으로 조용히 떨어지지 않는다).

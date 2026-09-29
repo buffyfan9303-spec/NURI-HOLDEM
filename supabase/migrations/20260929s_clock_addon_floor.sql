@@ -1,4 +1,6 @@
--- ⏸ 초안 — 리드가 리허설 후 적용 (store-team logic 묶음, 2026-09-29). 라이브 미적용.
+-- ✅ 2026-09-29 라이브 적용 완료(nuri-lead, MCP execute_sql — 줄 전체 주석·빈 줄만 뺀 본문, 의미 동일).
+--    critical-reviewer 리허설(s→t→u 한 블록·전량 롤백): 하한 −5→−1 · −1→−1 · +1→0, 미연동 클락 −1→0, 비로그인·다른 매장 42501. 본문 md5 일치.
+--    적용 후: anon_exec=false · a_addons 하한 반영 · clock_states md5 806665… 불변(장부 애드온 값이 없으면 하한 0 = 기존과 동일).
 --
 -- 요구: 오너 결정 #3(docs/HANDOFF-2026-09-29-results.md §4) — "장부에 애드온이 등록되면 클락·TV 의 애드온 수가 그만큼 올라가고
 --   총칩도 애드온 칩만큼 올라간다(자동)". 클라이언트는 장부 몫(live_stats.ledger)에 addons 를 싣고(clock.ts deriveClockCounts),

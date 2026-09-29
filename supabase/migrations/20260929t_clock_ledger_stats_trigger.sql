@@ -1,4 +1,7 @@
--- ⏸ 초안 — 리드가 리허설 후 적용 (store-team logic 묶음, 2026-09-29). 라이브 미적용.
+-- ✅ 2026-09-29 라이브 적용 완료(nuri-lead, MCP execute_sql — 줄 전체 주석·빈 줄만 뺀 본문, 의미 동일. 라이브 prosrc md5 는 파일과 다르다).
+--    critical-reviewer 리허설: 업주 장부 2행 → ledger entries 2/addons 1/earlyUnits 4 · 화면이 999 를 써도 서버 값으로 덮임 · 다른 매장·미연동 클락 md5 불변 ·
+--    재귀 없음 · 잠금 순서 장부→클락(역순 경로 0) · JS 식 동치 9/9(구현자). RISK(저): 행 단위라 대량 삭제 시 클락 갱신 N회 — 필요 시 문장 단위로.
+--    적용 후: 트리거 3 · 함수 실행 권한 anon/authenticated 모두 false · clock_states md5 불변(다음 쓰기부터 작동).
 --    적용 순서: 20260929s(애드온 하한) 다음. 이 파일은 live_stats.ledger.addons 를 서버가 채우므로 s 의 하한이 서버 값으로 선다.
 --
 -- 요구: 오너 결정 클락 #2(K3, docs/HANDOFF-2026-09-29-results.md §4 #2) — "업주가 아무 화면도 안 열어도 장부가 바뀌면
