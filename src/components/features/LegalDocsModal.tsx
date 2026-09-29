@@ -33,7 +33,7 @@ const BIZ = {
   company: '엔에이치홀딩스',
   ceo: '김윤혜',
   bizNo: '525-20-02937',
-  addr: '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호(주공아파트)',
+  addr: '경기도 남양주시 다산중앙로82번안길 166-46, 207-본244호(다산동, 파인듀파크빌딩)',
   phone: '070-8098-1727',
   contact: 'ace@nuriholdem.com',
   email: 'ace@nuriholdem.com',
