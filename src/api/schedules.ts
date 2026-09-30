@@ -296,23 +296,18 @@ export async function deleteSchedule(id: string): Promise<void> {
 // approved 도 함께 내린다: 대기열 기준이 approved 이고, 이미 승인된 포스터를 사유와 함께 내리는
 // 경우까지 한 문장으로 끝난다(BEFORE 트리거는 approved=true 인 행의 반려를 무효로 만든다).
 // rejected_at 을 세우면 trg_notify_schedule_rejected 가 업주에게 알림(+푸시)을 보낸다.
-// ⚠ CI 에 supabase db push 가 없어 **앱이 먼저, DB 가 나중** 배포된다. 그 창에서 컬럼이 없으면
-//   PGRST204(스키마 캐시)·42703(서버)이 나는데, 반려 자체가 막히면 관리자가 큐를 못 비운다 →
-//   종전 동작(하드 삭제)으로 폴백하고 'deleted' 를 돌려 호출측이 사실대로 안내하게 한다.
-export async function rejectSchedule(id: string, reason: string): Promise<'rejected' | 'deleted'> {
-  if (IS_MOCK) return 'rejected';
+// ⚠ 옛 '컬럼 부재(PGRST204/42703) → 하드 삭제 폴백'은 없앴다(2026-10-01, 점검 A-12).
+//   컬럼은 20260911o 로 이미 라이브에 있다. 폴백이 남으면 트리거·스키마 오류가 나는 날 반려가
+//   **포스터 삭제**(예약·문의 연쇄 삭제)로 둔갑한다 — 오류는 그대로 던져 화면이 실패를 말하게 한다.
+export async function rejectSchedule(id: string, reason: string): Promise<void> {
+  if (IS_MOCK) return;
   const now = new Date().toISOString();
   const { data, error } = await supabase.from('schedules').update({
     approved: false, rejected_at: now, reject_reason: reason.trim() || null, updated_at: now,
   }).eq('id', id).select();
-  if (!error) {
-    // RLS 거부는 error 없는 0행이다 — '반려되었습니다' 를 띄우고 낙관적으로 내린 화면이 새로고침 때 되살아난다.
-    if (!data || data.length === 0) throw new NoRowsAffectedError();
-    return 'rejected';
-  }
-  if (error.code !== 'PGRST204' && error.code !== '42703') throw error;
-  await deleteSchedule(id);
-  return 'deleted';
+  if (error) throw error;
+  // RLS 거부는 error 없는 0행이다 — '반려되었습니다' 를 띄우고 낙관적으로 내린 화면이 새로고침 때 되살아난다.
+  if (!data || data.length === 0) throw new NoRowsAffectedError();
 }
 
 // ── 관리자: 노출 순서 일괄 변경 ───────────────────────────────────────────────
