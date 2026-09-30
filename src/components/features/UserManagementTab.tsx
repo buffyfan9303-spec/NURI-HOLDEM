@@ -46,6 +46,8 @@ interface UserManagementTabProps {
   postsErr?: unknown;
   /** ⚠ postsErr 과 반드시 같이 내린다 — 없으면 빠져나갈 수단 없는 막다른 오류 카드가 된다. */
   onRetryPosts?: () => void;
+  /** 검색창 초기값 — 신고 큐의 '작성자 제재'가 대상 닉네임을 넣어 이 화면으로 보낸다(점검 A-07). 마운트 때만 읽는다. */
+  initialQuery?: string;
 }
 
 type RoleFilter   = 'all' | 'user' | 'venue_owner' | 'admin';
@@ -64,12 +66,12 @@ const STATUS_LABEL: Record<UserStatus, { label: string; cls: string }> = {
 
 
 export default function UserManagementTab({
-  users, posts, onUpdateUser, onDeletePost, usersErr, onRetryUsers, postsErr, onRetryPosts,
+  users, posts, onUpdateUser, onDeletePost, usersErr, onRetryUsers, postsErr, onRetryPosts, initialQuery,
 }: UserManagementTabProps) {
   const [section, setSection]       = useState<'users' | 'posts'>('users');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [statusFilter, setStatusF]  = useState<StatusFilter>('all');
-  const [query, setQuery]           = useState('');
+  const [query, setQuery]           = useState(initialQuery ?? '');
 
   const filtered = useMemo(() => {
     return users.filter((u) => {

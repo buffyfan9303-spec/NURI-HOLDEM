@@ -1263,6 +1263,8 @@ export default function AdminTab({
   schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues, onReloadNotices, onReloadBanners, usersErr, onRetryUsers, postsErr, onRetryPosts, tabActive = true,
 }: AdminTabProps) {
   const [section, setSection] = useState<Section>('analytics');
+  /** 신고 큐 '작성자 제재' → 회원 관리 검색창에 미리 넣을 닉네임(점검 A-07). 일반 메뉴 이동은 비운다. */
+  const [userSearch, setUserSearch] = useState('');
   // 뒤로가기 — 비기본 섹션에선 먼저 기본(운영분석)으로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
   // ⚠ `tabActive &&` 가 핵심이다 — 숨은 pane 이 뒤로가기를 먹지 않게(위 tabActive 주석).
   useBackClose(tabActive && section !== 'analytics', () => setSection('analytics'));
@@ -1284,7 +1286,7 @@ export default function AdminTab({
       <div className="lg:flex lg:gap-4">
         <nav data-admin-secbar="" className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
           {ADMIN_SECTIONS.map((a) => (
-            <AdminNavBtn key={a.id} icon={a.icon} active={section === a.id} onClick={() => goSubTab('admin-sec', ADMIN_ORDER, section, a.id, () => setSection(a.id))} badge={a.id === 'pending' && pending.length > 0 ? pending.length : undefined}>{a.label}</AdminNavBtn>
+            <AdminNavBtn key={a.id} icon={a.icon} active={section === a.id} onClick={() => goSubTab('admin-sec', ADMIN_ORDER, section, a.id, () => { setUserSearch(''); setSection(a.id); })} badge={a.id === 'pending' && pending.length > 0 ? pending.length : undefined}>{a.label}</AdminNavBtn>
           ))}
         </nav>
 
@@ -1359,10 +1361,20 @@ export default function AdminTab({
               onRetryUsers={onRetryUsers}
               postsErr={postsErr}
               onRetryPosts={onRetryPosts}
+              initialQuery={userSearch}
             />
           )}
           {section === 'events' && <EventOpsAdmin venues={venues} />}
-          {section === 'reports' && <ReportQueue />}
+          {section === 'reports' && (
+            <ReportQueue
+              users={users}
+              onSanction={(uid) => {
+                const u = users.find((x) => x.id === uid);
+                setUserSearch(u ? (u.nickname ?? u.name) : '');
+                goSubTab('admin-sec', ADMIN_ORDER, section, 'users', () => setSection('users'));
+              }}
+            />
+          )}
           {section === 'support' && <SupportInquiriesPanel />}
           {section === 'errors' && <ErrorLogPanel />}
         </div>
