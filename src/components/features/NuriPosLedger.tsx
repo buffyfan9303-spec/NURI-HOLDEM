@@ -27,6 +27,7 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, REDUCE_NEEDS_PW, cancelMyRecentBu
   searchRegisteredPlayers, type RegisteredPlayer,
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
   getPendingBuyinRequests, approveBuyinRequest, rejectBuyinRequest, subscribeBuyinRequests, type BuyinRequest, type VoucherUse,
+  voucherShortOf, type VoucherShort, type ShortPayMethod,
   getLastClosedRound, type LastClosedRound,
   discountsAppendOnly, ledgerSessionMatches, cancelPwStateFromError, type LedgerRowOwner,
   LEDGER_SPLIT_MISMATCH, LEDGER_SESSION_MISSING, ledgerErrorText, LEDGER_ALREADY_OPEN, ticketUsedT,
@@ -172,6 +173,8 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   const [pendingReqs, setPendingReqs] = useState<BuyinRequest[]>([]); // 손님 자가 바인요청(대기)
   const [payPick, setPayPick] = useState<string | null>(null); // 승인+바인 결제수단 선택 중인 요청 id
   const [splitFor, setSplitFor] = useState<string | null>(null); // 분할 결제 입력 중인 요청 id
+  // 20260930i — 이용권이 모자라 서버가 돌려준 숫자(k장·남은 금액). 카드 아래에 '남은 금액 결제 방법' 을 연다.
+  const [shortFor, setShortFor] = useState<{ id: string; target: number; use: VoucherUse; s: VoucherShort } | null>(null);
   const [splitAmts, setSplitAmts] = useState<{ cash: number; card: number; transfer: number }>({ cash: 0, card: 0, transfer: 0 });
   const [rejectFor, setRejectFor] = useState<string | null>(null); // 거절 사유 선택 중인 요청 id
   const [gameSeq, setGameSeq] = useState(MAIN_GAME_SEQ);   // 현재 보고있는 게임(1=메인, 2+=사이드)
@@ -562,6 +565,21 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
     return discIdxFor(target)
       .then((discIdx) => approveBuyinRequest(r.id, target, withBuyin, payMethod, split, discIdx, voucherUse))
       .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? (voucherUse === 'addon' ? ' + 애드온 기록(이용권)' : ' + 티켓 기록(이용권)') : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
+      .catch((e) => {
+        const s = voucherShortOf(e);
+        if (s) { setShortFor({ id: r.id, target, use: voucherUse, s }); toast.show(ledgerErrorText(e, '승인 실패'), 'info'); loadPending(); return; }
+        toast.show(ledgerErrorText(e, '승인 실패'), 'error'); loadPending();
+      });
+  };
+  // 20260930i — 이용권 k장 + 남은 금액을 고른 방법으로 받아 승인. 금액은 서버가 다시 정한다(화면 숫자는 안내용).
+  const approveShort = (r: BuyinRequest, method: ShortPayMethod) => {
+    const sf = shortFor;
+    if (!sf || sf.id !== r.id) return Promise.resolve();
+    setShortFor(null);
+    setPendingReqs((prev) => prev.filter((x) => x.id !== r.id));
+    return discIdxFor(sf.target)
+      .then((discIdx) => approveBuyinRequest(r.id, sf.target, true, method, undefined, discIdx, sf.use))
+      .then(() => { toast.show(`${r.playerName} 승인 · 이용권 ${sf.s.have}장 + 남은 ${sf.s.remainder.toLocaleString()}원 ${method === 'unpaid' ? '미수' : method === 'card' ? '카드' : method === 'transfer' ? '계좌' : '현금'}`, 'success'); loadPending(); })
       .catch((e) => { toast.show(ledgerErrorText(e, '승인 실패'), 'error'); loadPending(); });
   };
   const doReject = (r: BuyinRequest, reason?: string) => {
@@ -1543,6 +1561,13 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                       {r.requestedGameSeq != null && <span className="ml-1.5 text-2xs font-semibold text-sky-800 dark:text-sky-300">원함: {r.requestedGameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (r.requestedGameSeq - 1)}</span>}
                     </p>
                     {r.note && <p className="text-2xs text-ink-secondary truncate">{r.note}</p>}
+                    {/* 20260930i — 받는 장수는 서버가 정한다(참가 1회 N장 · 할인 바인은 할인만큼 덜 · 애드온은 금액 ÷ 1만).
+                        여기서는 이 손님이 지금 낸 장수만 보여 준다 — 모자라면 승인 때 서버가 필요한 장수를 알려 준다. */}
+                    {r.voucherId != null && (
+                      <p data-testid="voucher-pending-count" className="text-2xs text-ink-secondary">
+                        이용권 {pendingReqs.filter((x) => x.voucherId != null && (r.userId != null ? x.userId === r.userId : x.id === r.id)).length}장 사용 대기 · 할인 바인은 할인만큼 덜 · 모자라면 남은 금액 분납
+                      </p>
+                    )}
                   </div>
                   {/* 이용권 요청은 서버가 '티켓 완납' 바인을 자동 기록(무료입장 정합) — 💵 유료 패널은
                       승인해도 서버가 금액을 버리므로(20260623d #9) 숨겨서 '기록됐다고 믿는' 사고를 없앤다 */}
@@ -1551,11 +1576,24 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
                   )}
                   {/* #8 — 이용권 요청은 접수대가 용도를 고른다: 바인(티켓 바인 1건) / 애드온(이 손님의 최근 바인에 이용권 애드온). 애드온 게임에만. */}
                   {r.voucherId != null && gameIsAddon(wantSeq(r)) && (
-                    <button type="button" data-testid="approve-voucher-addon" onClick={() => approveReq(r, false, 'cash', undefined, 'addon')} title="이용권 → 최근 바인에 애드온" className="shrink-0 inline-flex h-10 items-center rounded-input border border-accent-400/50 px-3 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">✓ 애드온</button>
+                    <button type="button" data-testid="approve-voucher-addon" onClick={() => approveReq(r, false, 'cash', undefined, 'addon')} title="이용권 → 최근 바인에 애드온(애드온 금액 ÷ 1만 장)" className="shrink-0 inline-flex h-10 items-center rounded-input border border-accent-400/50 px-3 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">✓ 애드온</button>
                   )}
-                  <button type="button" onClick={() => approveReq(r)} title={r.voucherId ? '승인(이용권 1장 → 티켓 바인 자동 기록)' : '승인만(명단 추가)'} className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/10">{r.voucherId ? '✓ 승인·티켓' : '승인'}</button>
+                  <button type="button" onClick={() => approveReq(r)} title={r.voucherId ? '승인(참가 1회 장수만큼 묶어 티켓 바인 1회 기록 · 할인 바인은 할인만큼 덜 받음 · 모자라면 남은 금액을 다른 결제로)' : '승인만(명단 추가)'} className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/10">{r.voucherId ? '✓ 승인·티켓' : '승인'}</button>
                   <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 inline-flex h-10 min-w-10 items-center justify-center rounded-input border px-2.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-secondary hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
                 </div>
+                {shortFor?.id === r.id && (
+                  <div data-testid="voucher-short-pay" className="mt-1.5 border-t border-border-subtle pt-1.5 space-y-1.5">
+                    <p className="text-2xs text-ink-secondary">
+                      {shortFor.s.use === 'addon' ? '애드온' : '바인'} 이용권 {shortFor.s.need}장 중 {shortFor.s.have}장({(shortFor.s.have * TICKET_WON).toLocaleString()}원) · 남은 <b className="text-ink-primary tabular-nums">{shortFor.s.remainder.toLocaleString()}원</b> 받을 방법
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      {([['cash', '현금'], ['card', '카드'], ['transfer', '계좌'], ['unpaid', '미수']] as const).map(([mth, lbl]) => (
+                        <button key={mth} type="button" data-testid={`voucher-short-${mth}`} onClick={() => approveShort(r, mth)} className="flex-1 inline-flex h-10 items-center justify-center rounded-input border border-emerald-500/50 px-2 text-2xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/15">{lbl}</button>
+                      ))}
+                      <button type="button" onClick={() => setShortFor(null)} aria-label="남은 금액 결제 닫기" className="shrink-0 inline-flex h-10 min-w-10 items-center justify-center rounded-input border border-border-default px-2.5 text-2xs font-bold text-ink-secondary">✕</button>
+                    </div>
+                  </div>
+                )}
                 {payPick === r.id && (
                   <div className="mt-1.5 border-t border-border-subtle pt-1.5 space-y-1.5">
                     {splitFor !== r.id ? (
@@ -3678,6 +3716,12 @@ function AddonRow({ buyin, amount, busy, onSet }: {
         <span className="font-bold text-ink-secondary">애드온</span>
         <span className="tabular-nums text-ink-muted">{amount > 0 ? `${wonToMan(amount)}만 · 바인·엔트리에 안 들어감` : '가격 미설정'}</span>
       </p>
+      {/* 20260930i — 이용권 분납 애드온: 이용권 몫은 서버가 적는다(화면은 남은 금액의 수단만 바꾼다). */}
+      {m && m !== 'ticket' && (buyin?.addonTicketCount ?? 0) > 0 && (
+        <p data-testid="ledger-addon-ticket-part" className="whitespace-nowrap text-2xs text-ink-secondary">
+          이용권 {buyin?.addonTicketCount}T 받음 · 남은 {wonToMan(Math.max(0, (buyin?.addonAmount ?? amount) - (buyin?.addonTicketCount ?? 0) * TICKET_WON))}만은 아래 수단
+        </p>
+      )}
       <div className="grid grid-cols-3 gap-1.5">
         <button type="button" disabled={!canPick} aria-pressed={!m} onClick={() => onSet(null)} className={seg(!m, 'none')}>없음</button>
         <button type="button" disabled={!canPick} aria-pressed={m === 'cash' && !u} onClick={() => onSet({ method: 'cash', unpaid: false })} className={seg(m === 'cash' && !u, 'ok')}>현금 완납</button>
