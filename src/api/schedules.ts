@@ -86,7 +86,7 @@ export interface Schedule {
   grade?: 'daily' | 'satellite' | 'series' | null;
   blinds?: string;         // 블라인드 구조(선택) — 직접 입력
   buyIn: BuyInInfo; seats?: SeatVoucher[];
-  structure?: { startingChips?: number; rebuyStack?: number; blindLevelMinutes?: number; lateRegLevels?: number; levels?: { sb: number; bb: number; ante: number; minutes: number; isBreak?: boolean }[] };
+  structure?: { startingChips?: number; rebuyStack?: number; blindLevelMinutes?: number; lateRegLevels?: number; levels?: { sb: number; bb: number; ante: number; minutes: number; isBreak?: boolean; /** 브레이크 원문(예: 'DINNER BREAK 20MIN') — 서버는 저장한다(W-15) */ label?: string }[] };
   description?: string;
   sideEvents?: SideEvent[]; rankingPrizes?: RankingPrize[];
   partners?: string[]; promotions?: Promotion[]; paymentMethods?: string[]; rules?: string[];
