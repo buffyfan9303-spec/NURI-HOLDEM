@@ -21,7 +21,8 @@
 --      남은 금액 수단(미수→현금)은 그대로 바꿀 수 있다. 나머지 본문은 라이브(20260925g)와 같다.
 --   §1 approve_buyin_request(같은 10인자 서명 · create or replace → ACL 보존, REVOKE/GRANT 재기재)
 --      · 바인: 티켓 행을 먼저 넣고 트리거가 확정한 discount_index 를 RETURNING 으로 읽는다(할인 종류 규칙 = kind_guard 한 곳).
---        N > 1 게임이면 금액 = 참가비 − 할인, 필요 장수 = floor(금액 / 1만)(만원 단위, 금액 우선 — 할인 0·참가비 = N×1만 이면 곧 N).
+--        N > 1 게임이면 금액 = 참가비 − 할인, 필요 장수 = min(N, floor(금액 / 1만))(만원 단위 · 포스터 약속 N장 = 참가 1회가 상한).
+--        N장을 다 받으면 남은 금액 없이 참가 1회(12만·N=10 → 10장 = 1회, critical N7). 모자라면 남은 금액 = 금액 − k × 1만.
 --        N ≤ 1(미설정)은 예전처럼 1장.
 --      · 애드온: 금액 = 트리거가 스냅샷한 addon_amount(RETURNING, 클라 값 불신), 포스터 N ≥ 2 게임만 필요 장수 = floor(금액 / 1만).
 --        N 미설정·N=1 명시는 예전처럼 1장(리드 결정 2026-09-30: N=1 = 미설정과 같다 — v_n_set 은 N ≥ 2 일 때만 참).
@@ -46,7 +47,7 @@
 --
 -- 리허설(라이브 한 방 트랜잭션 + 끝 RAISE 로 전량 롤백, 2026-09-30 store-team · 하네스 scratchpad kw1i/common.sql·scen2.sql·scen3.sql).
 --   계정: 업주 = 키키홀덤펍 소유자(admin) · 손님 = 본인인증 일반 회원 · 음성 = 다른 매장(E2E) 업주. 참가비 10만 · 포스터 N=10(트랜잭션 안에서만).
---   PRE = 라이브 함수, POST = 이 파일 본문(§A~§2). POST 는 세 번(기존 반례 / 새 반례 / N=1 대조) — 매번 함수 md5 가 파일과 일치.
+--   PRE = 라이브 함수, POST = 이 파일 본문(§A~§2). POST 는 네 번(기존 반례 / 새 반례 / N=1 대조 / N7 포스터 상한) — 매번 함수 md5 가 파일과 일치.
 --   | 시나리오                                   | PRE(라이브)                             | POST(이 파일)                                                          |
 --   | A 첫 리바인 50%, 5장                         | 23514 · 0행                     FAIL    | 2행 [d0, d1] · 5장 used/buyin · 취소 → 5장 active                PASS |
 --   | B 50% 리바인 4장                             | 23514                                   | 23514 VOUCHER_SHORT '5장까지 · 받은 4장 · 남은 1만'                    |
@@ -65,6 +66,9 @@
 --   | N4 분납 바인을 화면이 3장·현금 7만 / 분납 해제   | ok                              FAIL    | 42501 둘 다 · 행 tk=7 cash=3만 그대로                            PASS |
 --   | N5 양성: 7장 + 미수 → 화면이 미수를 현금 수납    | (분납 불가)                              | ok · tk=7 cash=3만 · tiers {3만,10만,10만}                       PASS |
 --   | N6 금액 5천(9.5만 할인) 바인 1장                | 23514(10장 필요)                         | 23514 '1만 원보다 작아 이용권으로 받을 수 없습니다' · 요청 대기  PASS |
+--   | N7 12만·N=10 · 10장(포스터 약속 우선)         | 1행 ticket · 10장 묶음                      | 1행 ticket · 분납 없음 · tiers {0,12만,12만} (직전 초안은 '남은 2만' 분납 요구 = FAIL) PASS |
+--   | N7b 12만·N=10 · 7장 + 현금                    | 23514                           FAIL    | split tk=7 cash=5만 · tiers {5만,12만,12만}                      PASS |
+--   | N7 회귀: A 50% 5장 · N1 6.5만 7장 + 현금 · N2 8만 9장 · S1 7장 + 현금 | 위 표와 같음                   | 위 표와 같음(각 2행 d1 5T · tk6 cash 5천 1장 대기 · 8장 1장 대기 · tk7 cash 3만) PASS |
 --   | P1 양성: 포스터 N=1 명시 · 애드온 5만 · 3장  | 1장(애드온 ticket/5만) · 2장 대기           | 동일 — N=1 은 미설정과 같다(v_n_set = N ≥ 2, 리드 결정)    PASS |
 --   | P2 대조: 포스터 N=10 · 애드온 5만 · 5장       | 1장만 씀 · 4장 대기             FAIL    | 5장 묶음 · 대기 0                                                PASS |
 --   | F 양성: N 미설정 + 할인 2장                    | 2행 d1,d1                                | 동일                                                                   |
@@ -72,7 +76,7 @@
 --   | H 음성: 다른 매장 업주 · 비로그인               | 권한 없음 · 42501                          | 동일                                                                   |
 --   | 정산 합계(게임 15~19, _ledger_buyin_tiers 합)    | 15 {0,10만,10만} 17 {0,10만,10만}         | 15 {5천,16.5만,16.5만} 16 {0,8만,8만} 17 {0,10만,10만} 18 {3만,10만,10만} 19 {3만,10만,10만} |
 --   | §2 자가검사(ACL·트리거 3·client_guard authenticated=f) | —                                  | 통과                                                                   |
---   적용 직후 md5(prosrc) — 파일 본문과 일치: approve 6689c561302f26b7163cd7abdb0e7022 · guard fad4fc8e9e673805e310855d87f1a2e4 ·
+--   적용 직후 md5(prosrc) — 파일 본문과 일치: approve de5cd99da0c1aadb34e5535bcb7705da · guard fad4fc8e9e673805e310855d87f1a2e4 ·
 --     rule 35e7504abaae6d7c62ce93f3eaebdfde · restore f1d77776be662d4deeef8c357dca3f12 · client_guard eee44d4d0c9c53e9fda390227d5f30c2.
 --   롤백 확인: 프로브 없음 · addon_ticket_count 칸 0 · 다섯 함수 md5 적용 전 값 그대로 · 포스터 buy_in md5 348ae304…(그대로) · 리허설 이용권 0.
 --   NOT_RUN: 두 접수대 동시 승인(deadlock) · 바인 분납의 p_split 금액 나눔(화면은 단일 수단만 보냄 — 합계 검사는 기존 함수).
@@ -387,10 +391,11 @@ begin
         v_row_disc := least(v_amt, greatest(0, round(coalesce((v_discounts -> (v_row_idx - 1) ->> 'amount')::numeric, 0))))::int;
       end if;
       -- ③ 이용권은 **만원 단위로만** 받는다(리드 결정 2026-09-30): 필요 장수 = floor((참가비 − 할인) / 1만), 만원 미만 나머지는 분납.
-      --    N 과 금액이 다르면 금액이 우선. 할인 0·참가비 = N×1만 이면 floor 가 곧 N 이다. N ≤ 1(미설정)은 예전처럼 1장(결정 ②).
+      --    단 포스터 약속 'N장 = 참가 1회' 가 상한이다(critical N7, 리드 결정): 필요 장수 = min(N, floor(금액 / 1만)) —
+      --    12만·N=10 게임은 10장이면 분납 없이 바인 1회(장부는 기존 정의대로 참가비 기준). N ≤ 1(미설정·N=1)은 예전처럼 1장(결정 ②).
       if v_n > 1 and v_amt > 0 then
         v_val := greatest(0, v_amt - v_row_disc);
-        v_need := greatest(1, floor(v_val / 10000.0))::int;
+        v_need := greatest(1, least(v_n, floor(v_val / 10000.0)::int));
       else
         v_need := v_n;
       end if;
@@ -418,7 +423,9 @@ begin
     end if;
     v_k := v_got + 1;
     -- 남은 금액 = 금액 − k × 1만(금액 기준 게임에서만). 모자란 장수든 만원 미만 나머지든 같은 분납 경로로 받는다.
-    v_rem := case when v_val is null then 0 else v_val - v_k * 10000 end;
+    v_rem := case when v_val is null then 0
+                  when v_use = 'buyin' and v_k >= v_n then 0   -- 포스터 약속: N장을 다 받으면 참가 1회(남은 금액 없음)
+                  else v_val - v_k * 10000 end;
     if v_rem > 0 then
       if not v_pm_short then
         raise exception '남은 금액이 있습니다 — 이 %은 이용권 %장까지 받습니다(만원 단위). 받은 사용 요청 %장(%원) · 남은 %원을 현금·카드·계좌·미수로 받아 승인하세요',

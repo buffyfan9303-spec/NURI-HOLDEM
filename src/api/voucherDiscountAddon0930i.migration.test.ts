@@ -1,7 +1,7 @@
 // 20260930i — ③ 할인 바인은 이용권을 할인만큼 덜 받는다 · ④ 애드온 = 금액 ÷ 1만 장(포스터 N 설정 게임만) · ⑤ 모자라면 분납.
 // 실행 검증은 라이브 begin…rollback 리허설(파일 머리 표)이 맡는다. 이 파일은 계산이 **서버 값**(트리거가 확정한 행)에서 나오는지,
 // 분납이 기존 칸·기존 금액 규칙 함수를 쓰는지, 화면이 이용권 몫을 못 바꾸는지를 SQL 문장으로 잠근다.
-// 음성 대조: §1 바인 쪽 `v_need := greatest(1, floor(v_val / 10000.0))::int;` 를 `v_need := v_n;` 으로 바꾸면 '③' 이,
+// 음성 대조: §1 바인 쪽 `v_need := greatest(1, least(v_n, floor(v_val / 10000.0)::int));` 를 `v_need := v_n;` 으로 바꾸면 '③' 이,
 //   `if v_n_set then` 을 `if true then` 으로 바꾸면 '④' 가, §E 의 이용권 장수 잠금 블록을 지우면 '⑥' 이 빨개진다.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -22,7 +22,7 @@ const approve = between('-- §1 ', '-- §2 ');
 describe('20260930i — 할인 바인·애드온 이용권 장수', () => {
   it('③ 이용권은 만원 단위로만 — 필요 장수 = floor((참가비 − 할인) / 1만), 할인은 트리거가 확정한 행의 discount_index', () => {
     expect(approve).toContain('returning id, discount_index into v_bid, v_row_idx;');
-    expect(approve).toMatch(/if v_n > 1 and v_amt > 0 then\s+v_val := greatest\(0, v_amt - v_row_disc\);\s+v_need := greatest\(1, floor\(v_val \/ 10000\.0\)\)::int;\s+else\s+v_need := v_n;/);
+    expect(approve).toMatch(/if v_n > 1 and v_amt > 0 then\s+v_val := greatest\(0, v_amt - v_row_disc\);\s+v_need := greatest\(1, least\(v_n, floor\(v_val \/ 10000\.0\)::int\)\);\s+else\s+v_need := v_n;/);
     expect(approve).toContain("v_row_disc := least(v_amt, greatest(0, round(coalesce((v_discounts -> (v_row_idx - 1) ->> 'amount')::numeric, 0))))::int;");
     expect(approve).not.toMatch(/ceil\(/);   // 올림으로 더 받지 않는다(critical 2026-09-30: 3.5만 할인 → 7장=7만인데 장부 6.5만)
   });
@@ -48,7 +48,7 @@ describe('20260930i ⑤ — 모자라면 분납(거절 대신)', () => {
     expect(approve).toContain("detail = json_build_object('need', v_need, 'have', v_k, 'ticketWon', v_k * 10000, 'remainder', v_rem, 'use', v_use)::text;");
   });
   it('남은 금액은 서버가 정한다 — 금액 − k × 1만(만원 미만 나머지도 같은 분납 경로) · 필요한 장수까지만 묶는다', () => {
-    expect(approve).toContain('v_rem := case when v_val is null then 0 else v_val - v_k * 10000 end;');
+    expect(approve).toMatch(/v_rem := case when v_val is null then 0\s+when v_use = 'buyin' and v_k >= v_n then 0[^\n]*\n\s+else v_val - v_k \* 10000 end;/);   // N7: N장 = 참가 1회
     expect(approve).toMatch(/if v_rem > 0 then\s+if not v_pm_short then/);
     expect(approve).toContain("if v_pm not in ('cash', 'card', 'transfer', 'unpaid') then");
     // 막다른 길 제거(critical): '이미 금액 이상' 거절은 없다 — 필요 장수만 잠그고 나머지 장은 대기로 둔다.
