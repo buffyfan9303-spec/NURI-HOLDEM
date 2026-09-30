@@ -1,4 +1,4 @@
--- ⏳ 미적용 초안 (store-team 작성, 2026-09-30). 적용은 리드가 MCP execute_sql 로. 적용 전 아래 "적용 전 확인" 을 먼저 돈다.
+-- ✅ 적용 완료(2026-09-30, nuri-lead · MCP execute_sql — 기록: 인수인계서 §3). 2026-10-01 라이브 재확인: ledger_sessions.addon_entry·early_tiers 칸 2 · 트리거 ledger_buyins_discount_kind_guard·trg_ledger_sessions_touch_clock 2. (원래 머리: '⏳ 미적용 초안' — 적용 뒤 표기만 누락됐었다)
 -- 20260930e — W단계 1차 계산·데이터 계층(KW-1a): 얼리 단계(W-04·W-05)·반열림 경계(W-27)·계단 리엔트리 스택(W-10)·
 --             애드온 엔트리(W-06)·할인 적용 조건(W-28). 요구 원문: store-team W-defects.md(2026-09-29) + 오너 결정 2026-09-30.
 --
