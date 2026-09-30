@@ -2,6 +2,8 @@
 // 특히 format=webp 누락은 이 리포에서 실제로 겪은 함정이라(빼면 JPEG 로 변환돼 원본보다 커진다)
 // 회귀하면 조용히 Egress 만 잡아먹는다 — 눈에 안 보이는 종류의 손해라 테스트로 못 박는다.
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { thumbUrl, thumbSrcSet } from './imageUrl';
 
 // 게시글 첨부 사진이 실제로 저장되는 형태의 공개 URL
@@ -19,6 +21,19 @@ describe('thumbUrl', () => {
     // 왜: 빼면 Supabase 가 JPEG 로 변환해 원본 webp 보다 커진다(159KB → 88KB vs 60KB).
     expect(thumbUrl(PUBLIC, 88)).toContain('format=webp');
     expect(thumbSrcSet(PUBLIC, 88)!.split(',').every((s) => s.includes('format=webp'))).toBe(true);
+  });
+
+  it("🔴 fit:'contain' — 폭만 주는 cover 는 원본 높이의 가운데 세로 띠를 돌려준다(2026-09-30 실측). 기본값은 종전 그대로", () => {
+    expect(thumbUrl(PUBLIC, 400)).toContain('resize=cover');
+    expect(thumbUrl(PUBLIC, 400, { fit: 'contain' })).toContain('resize=contain');
+    const s = thumbSrcSet(PUBLIC, 400, { fit: 'contain' })!;
+    expect(s.split(',').every((x) => x.includes('resize=contain') && !x.includes('resize=cover'))).toBe(true);
+  });
+
+  it('포스터 카드(PosterArea)는 contain 으로 받는다 — 빠지면 카드에 포스터 가운데 36% 만 보인다', () => {
+    const src = readFileSync(join(process.cwd(), 'src', 'components', 'features', 'ScheduleCard.tsx'), 'utf8');
+    expect(src).toContain("src={thumbUrl(posterUrl, thumbWidth, { fit: 'contain' })}");
+    expect(src).toContain("srcSet={thumbSrcSet(posterUrl, thumbWidth, { fit: 'contain' })}");
   });
 
   it('스토리지가 아닌 URL·빈 값은 변환하지 않는다', () => {
