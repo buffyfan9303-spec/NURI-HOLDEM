@@ -1,4 +1,5 @@
 import type { Schedule } from '../api/schedules';
+import { posterChipRules } from './gameInherit';
 
 /** 일정 상세의 스타팅·리엔트리 표시 정본(KW-3, 2026-09-30).
  *
@@ -14,8 +15,11 @@ export function startChips(s: S): number | undefined {
   return s.buyIn?.startStack ?? s.structure?.startingChips;
 }
 
-/** 리엔트리 스택(회차 순). 계단 스택 배열 필드가 buy_in 에 들어오면 **여기서만** 읽는다. */
+/** 리엔트리 스택(회차 순). 계단 배열(buy_in.rebuyStacks)은 비어 있지 않으면 단일값보다 우선 —
+ *  읽기는 gameInherit.posterChipRules 정본. 같은 값이 이어지면 한 번만(70,000 → 70,000 → 80,000 = 70,000 → 80,000). */
 export function reentryStacks(s: S): number[] {
+  const steps = posterChipRules(s).rebuyStacks;
+  if (steps?.length) return steps.filter((n, i) => n !== steps[i - 1]);
   const one = s.buyIn?.rebuyStack ?? s.structure?.rebuyStack;
   return one ? [one] : [];
 }
