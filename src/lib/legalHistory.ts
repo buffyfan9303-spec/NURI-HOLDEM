@@ -26,6 +26,7 @@ export const LEGAL_HISTORY: Record<LegalDocKey, LegalRevision[]> = {
         '제1조부터 제7조까지는 취지와 조문 번호를 그대로 두고 문언만 보강했습니다.',
         '제14조(손해배상 및 책임의 제한)와 제15조(위반에 대한 제재 및 회사의 손해배상청구)는 회원에게 불리한 변경에 해당하므로 적용일 30일 전에 공지했습니다.',
         '약관 전문을 공개 주소(/legal/terms.html)에서도 열람할 수 있도록 게시했습니다.',
+        '제6조제1항의 탈퇴 방법을 실제 서비스 화면의 경로(내 정보 → 보안 → 회원 탈퇴하기)와 고객센터로 바로잡았습니다(2026-09-30 정정). 사실과 다르게 적힌 문구를 고친 것으로 회원에게 불리한 내용이 없어 고친 날부터 바로 적용합니다.',
       ],
     },
     { version: 1, effective: LEGAL_PREV_EFFECTIVE_DATE, notice: LEGAL_PREV_EFFECTIVE_DATE, changes: ['제정(제1조~제7조).'] },
