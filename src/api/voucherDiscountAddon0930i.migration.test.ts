@@ -30,7 +30,7 @@ describe('20260930i — 할인 바인·애드온 이용권 장수', () => {
   it('④ 애드온 장수 = 트리거가 스냅샷한 addon_amount ÷ 1만 — 같은 매장 포스터에 N 이 있을 때만(없으면 1장)', () => {
     expect(approve).toContain('returning addon_amount into v_addon_amt;');
     expect(approve).toMatch(/if v_n_set then\s+v_val := greatest\(0, coalesce\(v_addon_amt, 0\)\);\s+v_need := greatest\(1, floor\(v_val \/ 10000\.0\)\)::int;\s+end if;/);
-    expect(approve).toContain("then (sc.buy_in ->> 'voucherPerEntry')::numeric >= 1 else false end");
+    expect(approve).toContain("then (sc.buy_in ->> 'voucherPerEntry')::numeric >= 2 else false end");
     expect(approve).toContain('from schedules sc where sc.id = v_sched and sc.venue_id = r.venue_id;');
     expect(approve).toContain("p_discount_index integer default 0, p_voucher_use text default 'buyin'::text)");   // 서명 불변
   });

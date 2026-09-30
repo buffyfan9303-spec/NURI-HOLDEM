@@ -23,7 +23,8 @@
 --      · 바인: 티켓 행을 먼저 넣고 트리거가 확정한 discount_index 를 RETURNING 으로 읽는다(할인 종류 규칙 = kind_guard 한 곳).
 --        N > 1 게임이면 금액 = 참가비 − 할인, 필요 장수 = floor(금액 / 1만)(만원 단위, 금액 우선 — 할인 0·참가비 = N×1만 이면 곧 N).
 --        N ≤ 1(미설정)은 예전처럼 1장.
---      · 애드온: 금액 = 트리거가 스냅샷한 addon_amount(RETURNING, 클라 값 불신), N 설정 게임만 필요 장수 = floor(금액 / 1만). 아니면 1장.
+--      · 애드온: 금액 = 트리거가 스냅샷한 addon_amount(RETURNING, 클라 값 불신), 포스터 N ≥ 2 게임만 필요 장수 = floor(금액 / 1만).
+--        N 미설정·N=1 명시는 예전처럼 1장(리드 결정 2026-09-30: N=1 = 미설정과 같다 — v_n_set 은 N ≥ 2 일 때만 참).
 --      · 금액이 1만 미만이면 이용권으로 받지 않는다(23514 — 요청 그대로).
 --      · 묶음: 같은 손님·영업일·매장의 대기 이용권 요청을 오래된 순 **필요−1 개까지만** 잠금(나머지 장은 대기로 남는다) → bundle_request_id.
 --      · 받은 k장 × 1만 < 금액이면(장수 모자람이든 만원 미만 나머지든) 남은 금액 = 금액 − k × 1만(서버 계산):
@@ -45,7 +46,7 @@
 --
 -- 리허설(라이브 한 방 트랜잭션 + 끝 RAISE 로 전량 롤백, 2026-09-30 store-team · 하네스 scratchpad kw1i/common.sql·scen2.sql·scen3.sql).
 --   계정: 업주 = 키키홀덤펍 소유자(admin) · 손님 = 본인인증 일반 회원 · 음성 = 다른 매장(E2E) 업주. 참가비 10만 · 포스터 N=10(트랜잭션 안에서만).
---   PRE = 라이브 함수, POST = 이 파일 본문(§A~§2). POST 는 두 번(기존 반례 / 새 반례) — 둘 다 네 함수 md5 가 파일과 일치.
+--   PRE = 라이브 함수, POST = 이 파일 본문(§A~§2). POST 는 세 번(기존 반례 / 새 반례 / N=1 대조) — 매번 함수 md5 가 파일과 일치.
 --   | 시나리오                                   | PRE(라이브)                             | POST(이 파일)                                                          |
 --   | A 첫 리바인 50%, 5장                         | 23514 · 0행                     FAIL    | 2행 [d0, d1] · 5장 used/buyin · 취소 → 5장 active                PASS |
 --   | B 50% 리바인 4장                             | 23514                                   | 23514 VOUCHER_SHORT '5장까지 · 받은 4장 · 남은 1만'                    |
@@ -64,16 +65,17 @@
 --   | N4 분납 바인을 화면이 3장·현금 7만 / 분납 해제   | ok                              FAIL    | 42501 둘 다 · 행 tk=7 cash=3만 그대로                            PASS |
 --   | N5 양성: 7장 + 미수 → 화면이 미수를 현금 수납    | (분납 불가)                              | ok · tk=7 cash=3만 · tiers {3만,10만,10만}                       PASS |
 --   | N6 금액 5천(9.5만 할인) 바인 1장                | 23514(10장 필요)                         | 23514 '1만 원보다 작아 이용권으로 받을 수 없습니다' · 요청 대기  PASS |
+--   | P1 양성: 포스터 N=1 명시 · 애드온 5만 · 3장  | 1장(애드온 ticket/5만) · 2장 대기           | 동일 — N=1 은 미설정과 같다(v_n_set = N ≥ 2, 리드 결정)    PASS |
+--   | P2 대조: 포스터 N=10 · 애드온 5만 · 5장       | 1장만 씀 · 4장 대기             FAIL    | 5장 묶음 · 대기 0                                                PASS |
 --   | F 양성: N 미설정 + 할인 2장                    | 2행 d1,d1                                | 동일                                                                   |
 --   | G 양성: 현금 바인 할인(N=10 게임)               | cash 5만 d1                              | 동일                                                                   |
 --   | H 음성: 다른 매장 업주 · 비로그인               | 권한 없음 · 42501                          | 동일                                                                   |
 --   | 정산 합계(게임 15~19, _ledger_buyin_tiers 합)    | 15 {0,10만,10만} 17 {0,10만,10만}         | 15 {5천,16.5만,16.5만} 16 {0,8만,8만} 17 {0,10만,10만} 18 {3만,10만,10만} 19 {3만,10만,10만} |
 --   | §2 자가검사(ACL·트리거 3·client_guard authenticated=f) | —                                  | 통과                                                                   |
---   적용 직후 md5(prosrc) — 파일 본문과 일치: approve 0ad50eb63b99e610281bc5ff9586db2b · guard fad4fc8e9e673805e310855d87f1a2e4 ·
+--   적용 직후 md5(prosrc) — 파일 본문과 일치: approve 6689c561302f26b7163cd7abdb0e7022 · guard fad4fc8e9e673805e310855d87f1a2e4 ·
 --     rule 35e7504abaae6d7c62ce93f3eaebdfde · restore f1d77776be662d4deeef8c357dca3f12 · client_guard eee44d4d0c9c53e9fda390227d5f30c2.
 --   롤백 확인: 프로브 없음 · addon_ticket_count 칸 0 · 다섯 함수 md5 적용 전 값 그대로 · 포스터 buy_in md5 348ae304…(그대로) · 리허설 이용권 0.
---   NOT_RUN: 두 접수대 동시 승인(deadlock) · 바인 분납의 p_split 금액 나눔(화면은 단일 수단만 보냄 — 합계 검사는 기존 함수) ·
---            N=1 로 명시한 포스터의 애드온(N 설정이라 금액 규칙이 켜진다 — 바인은 1장 그대로).
+--   NOT_RUN: 두 접수대 동시 승인(deadlock) · 바인 분납의 p_split 금액 나눔(화면은 단일 수단만 보냄 — 합계 검사는 기존 함수).
 --   남은 틈(범위 밖, 기존): 전액 이용권 바인 행(ticket_count 0)을 화면이 현금으로 바꾸는 것(§E 는 분납 행만 잠근다) ·
 --            update_ledger_buyin_reduce(비밀번호 RPC, definer)는 client_guard 를 건너뛴다 · 취소로 복원된 이용권의 used_for 잔존.
 -- 적용 후 기대 md5(prosrc): 위 다섯 값(파일 본문 그대로 적용했을 때).
@@ -314,11 +316,11 @@ begin
   end if;
 
   -- W-01 — 참가 1회 = 이용권 N장. 서버가 같은 매장의 연결 포스터에서 읽는다(화면 값 불신). 음 아닌 정수면 1~100, 그 밖은 1.
-  --   v_n_set = 포스터에 N 이 적혀 있다(1 이상 정수) — ④ 애드온 규칙은 이 게임에서만 켠다.
+  --   v_n_set = 포스터 N ≥ 2(리드 결정: N=1 명시는 미설정과 같다 — 1장 = 참가 1회 가치) — ④ 애드온 금액 규칙은 이 게임에서만 켠다.
   if r.voucher_id is not null and v_sched is not null then
     select case when (sc.buy_in ->> 'voucherPerEntry') ~ '^[0-9]+$'
                 then least(100, greatest(1, (sc.buy_in ->> 'voucherPerEntry')::numeric))::int else 1 end,
-           case when (sc.buy_in ->> 'voucherPerEntry') ~ '^[0-9]+$' then (sc.buy_in ->> 'voucherPerEntry')::numeric >= 1 else false end
+           case when (sc.buy_in ->> 'voucherPerEntry') ~ '^[0-9]+$' then (sc.buy_in ->> 'voucherPerEntry')::numeric >= 2 else false end
       into v_n, v_n_set
       from schedules sc where sc.id = v_sched and sc.venue_id = r.venue_id;
     v_n := coalesce(v_n, 1); v_n_set := coalesce(v_n_set, false);
@@ -367,7 +369,7 @@ begin
       update ledger_buyins set addon_method = 'ticket', addon_unpaid = false, addon_request_id = r.id where id = v_target
         returning addon_amount into v_addon_amt;
       -- ④ 애드온 이용권 = 애드온 금액(트리거가 세션 가격으로 스냅샷한 값)의 **만원 단위**만(floor). 만원 미만 나머지는 분납.
-      --    포스터에 N 이 설정된 게임에서만. N 미설정 게임은 예전처럼 1장(결정 ②).
+      --    포스터 N ≥ 2 인 게임에서만(리드 결정: N=1 명시는 미설정과 같다 — 1장 = 참가 1회 가치). 그 밖은 예전처럼 1장(결정 ②).
       if v_n_set then
         v_val := greatest(0, coalesce(v_addon_amt, 0));
         v_need := greatest(1, floor(v_val / 10000.0))::int;
