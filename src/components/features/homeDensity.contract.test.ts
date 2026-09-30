@@ -188,8 +188,9 @@ describe('날짜 스트립', () => {
     expect(HOME).not.toMatch(/maskImage: stripMask|stripEdge/);
     expect(HOME).toMatch(/Math\.abs\(p\.offsetLeft \+ p\.offsetWidth \/ 2 - mid\) \/ half/);
     expect(HOME).toMatch(/if \(p\.getAttribute\('aria-pressed'\) === 'true'\) t = 0;/);
-    // 강도(오너 3차 2026-09-24 "조금만 덜 흐리게"): 투명도 최소 0.6 · 블러 최대 0.8px · 크기 최소 0.94 · 오늘 투명도 최소 0.8
-    expect(HOME).toMatch(/const op = 1 - \(today \? 0\.2 : 0\.4\) \* t;/);
+    // 강도(오너 3차 2026-09-24 "조금만 덜 흐리게"): 블러 최대 0.8px · 크기 최소 0.94
+    // 투명도(2026-10-01 오너 선택 M-10 — 흐림 세기 절반): 최소 0.8 · 오늘 최소 0.9. 근거: 디자인개선안_1001 M_items.md#M-10
+    expect(HOME).toMatch(/const op = 1 - \(today \? 0\.1 : 0\.2\) \* t;/);
     expect(HOME).toMatch(/const blur = today \? 0 : Math\.round\(8 \* t\) \/ 10;/);
     expect(HOME).toMatch(/scale\(\$\{\(1 - 0\.06 \* t\)\.toFixed\(3\)\}\)/);
     expect(HOME).toMatch(/requestAnimationFrame\(paint\)/);
