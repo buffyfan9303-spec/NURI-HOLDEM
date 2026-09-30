@@ -46,7 +46,7 @@ export default function AccountDeletion() {
 
       <Part title="1. 앱에서 직접 삭제하기 (즉시 처리)">
         <List items={[
-          'NURI HOLDEM 앱 또는 nuriholdem.com 에 로그인합니다.',
+          'NURI HOLDEM 앱 또는 nuriholdem.com에 로그인합니다.',
           '화면 오른쪽 위의 프로필(내 이름) 버튼을 누르고 「내 정보」를 엽니다.',
           '「보안」 탭 아래쪽의 「회원 탈퇴하기」를 누릅니다.',
           '이메일로 가입한 계정은 현재 비밀번호를, Google 등 소셜 로그인 계정은 ‘영구 삭제’를 입력한 뒤 「탈퇴하기」를 누르면 즉시 삭제됩니다.',

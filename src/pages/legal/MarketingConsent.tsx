@@ -156,7 +156,7 @@ export default function MarketingConsent() {
       <Article n={10} title="문의">
         <p>
           광고성 정보 수신과 관련한 문의·정정·삭제 요청은 개인정보 보호책임자
-          김윤혜(대표) / <span className="text-accent-300">ace@nuriholdem.com</span> 으로 접수해 주시기 바랍니다.
+          김윤혜(대표) / <span className="text-accent-300">ace@nuriholdem.com</span>으로 접수해 주시기 바랍니다.
           개인정보의 처리 전반에 관한 사항은 개인정보처리방침을 따릅니다.
         </p>
       </Article>

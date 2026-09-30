@@ -62,7 +62,7 @@ export default function RefundPolicy() {
 
       <Article n={1} title="적용 대상">
         <Items items={[
-          <>본 정책은 회사가 유료로 제공하는 서비스에 적용됩니다. 유료 서비스는 <strong className="text-ink-primary">매장 업주 대상 광고·노출 상품</strong>(포스터 상단 고정·노출 강화, 커뮤니티 광고 등)과 <strong className="text-ink-primary">매장 운영 도구 이용료</strong>입니다.</>,
+          <>본 정책은 회사가 유료로 제공하는 서비스에 적용됩니다. 유료 서비스는 <strong className="text-ink-primary">매장 대상 광고·노출 상품</strong>(포스터 상단 고정·노출 강화, 커뮤니티 광고 등)과 <strong className="text-ink-primary">매장 운영 도구 이용료</strong>입니다.</>,
           <>매장이용권은 매장이 손님에게 무상으로 발행하는 비(非)금전 포인트로서 현금 가치가 없으며, 환불·환전의 대상이 아닙니다.</>,
           <>대회 참가비는 각 매장이 현장에서 직접 받으며 회사를 거치지 않습니다. 참가비의 취소·환불은 해당 매장의 안내를 따릅니다.</>,
         ]} />
