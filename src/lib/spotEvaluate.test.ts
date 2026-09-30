@@ -666,6 +666,8 @@ describe('앤티는 BB 한 명이 내는 총액이다', () => {
     expect(c.kind).toBe('chart_nash');
     expect(c.sourceLabel).toMatch(/· 9BB ·/);
     expect(c.differences).toEqual([]);
+    // 누가 짧은지 모르는 가정을 숨기지 않는다(셔버가 더 짧으면 10BB 표가 맞다 — critical 2026-09-30).
+    expect(c.sourceLabel).toMatch(/앤티 뺀 스택/);
   });
 
   it('앤티 없으면 입력 스택 표 그대로 — 10BB 는 10BB 표', () => {

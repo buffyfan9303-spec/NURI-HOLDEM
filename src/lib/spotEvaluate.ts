@@ -565,7 +565,9 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
     diffs.push(`이 표는 BB앤티 1BB 기준인데 입력 앤티는 ${s.anteBb}BB 입니다.`);
   }
   return {
-    sourceLabel: `푸시·폴드 차트 · ${stack}BB · 뒤 ${k}명${s.anteBb > 0 ? ' · BB앤티' : ''}`,
+    // 2026-09-30 critical: 입력은 '짧은 쪽' 한 숫자라 누가 짧은지 모른다. 앤티를 뺀 표는 BB 가 짧거나 같을 때가 정확하고,
+    //   내가(셔버) 더 짧으면 한 칸 위 표가 맞다. 오너 "1bb 까지는 신경 쓸 필요 없어" — 판정은 두되 어떤 기준인지 라벨에 드러낸다.
+    sourceLabel: `푸시·폴드 차트 · ${stack}BB · 뒤 ${k}명${s.anteBb > 0 ? (stack < s.effectiveBb ? ' · BB앤티(앤티 뺀 스택)' : ' · BB앤티') : ''}`,
     // 올인은 레이즈 갈래로 표시한다 — 이 차트에 콜 갈래는 없다(첫 진입 셔브/폴드 두 갈래).
     // 첫 진입이라 콜할 대상 자체가 없으므로 잔여는 폴드로 **확정**된다 → absent 없음.
     mix: { raise: shove, call: 0, fold: clamp01(1 - shove) },
