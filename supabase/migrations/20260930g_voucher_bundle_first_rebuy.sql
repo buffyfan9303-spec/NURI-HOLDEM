@@ -13,7 +13,8 @@
 --   §3 _ledger_buyin_discount_kind_guard — kind 'firstRebuy'(첫 리바인 = 그 손님의 2번째 바인에만) 추가. 기존 rebuy·firstBuyin 규칙 불변.
 --   §4 approve_buyin_request(같은 10인자 서명 · create or replace → ACL 보존, 아래 REVOKE/GRANT 재기재)
 --      · 참가 1회 장수 N 은 **서버가** 정한다 — 그 게임 장부 세션의 연결 포스터(ledger_sessions.schedule_id → schedules.buy_in.voucherPerEntry).
---        정수 1~100 이 아니거나 포스터 연결이 없으면 N = 1(= 예전 동작). 화면이 보낸 값은 쓰지 않는다.
+--        포스터가 **같은 매장**이어야 한다(다른 매장 포스터 = 1). 음 아닌 정수면 100 으로 자르고, 정수가 아니거나 연결이 없으면 N = 1(= 예전 동작).
+--        화면이 보낸 값은 쓰지 않는다.
 --      · 이용권 요청을 '바인' 으로 승인할 때 N > 1 이면 같은 손님(user_id)·같은 영업일·같은 매장의 **대기 중 이용권 요청** 중
 --        오래된 순 N−1 개를 함께 잠가(for update) 묶는다 → 티켓 바인 **1행**(request_id = 이 요청) + 묶인 요청들 approved·bundle_request_id.
 --        모자라면 거절(23514, 요청·이용권 그대로) — "이 게임은 이용권 N장이 참가 1회입니다 — 지금 받은 사용 요청은 k장".
@@ -47,6 +48,14 @@
 --                      e) 대조: 포스터 연결 없는 게임(N=1) 2장 → 2행·엔트리 1,2(예전 동작)
 --                      f) firstRebuy = 1:d0:10만 2:d1:5만 3:d0:10만 · ACL approve anon=f auth=t · 복원 함수 auth=f
 --   롤백 확인: 프로브 테이블 0 · bundle_request_id 칸 0 · approve md5 619e033c…(그대로) · 포스터 buy_in 원래 값.
+--   2차(critical 반영 — 매장 결속 `sc.venue_id = r.venue_id` · 정규식 `^[0-9]+$` + numeric + least 100, 같은 하네스 · 이 파일 §1~§5 본문 그대로):
+--      적용 직후 approve md5 = 458be576a8c8bb25de6563d5e989935c(= 이 파일 §4 본문 md5, 붙여 넣은 본문과 파일이 같다는 증거) ·
+--      5장 → 23514 거절 · 10장 → ok=10 · **1행·엔트리 1** · 묶임 9 ·
+--      다른 매장(퀸) 포스터(N=10)에 키키 세션 연결 → N=1: 2장 = 2행·엔트리 1,2 ·
+--      N=1000 → 1장 요청 '이 게임은 이용권 **100장**이 참가 1회…' 거절 · N=99999999999999999999 → 같은 100장(넘침 오류 없음) ·
+--      firstRebuy 1:d0:10만 2:d1:5만 3:d0:10만 · ACL anon=f auth=t. 롤백 확인: 프로브 0 · 칸 0 · approve md5 619e033c… · voucherPerEntry 있는 포스터 0.
+--   적용 후 기대 md5(prosrc): approve_buyin_request 458be576a8c8bb25de6563d5e989935c · _restore_voucher_for_request 2cbd9085609819e822f43cda2ee36881 ·
+--      _ledger_buyin_discount_kind_guard 73eafcc4d5bb18dafbdab86c1a7420ad (파일 본문 그대로 적용했을 때 — 줄 주석을 빼고 넣으면 달라진다).
 --   NOT_RUN: 애드온 용도 재리허설(분기 본문 불변 — voucherAddonApprove.test.ts 가 SQL 을 잠근다) · 두 접수대 동시 승인(deadlock) 실측.
 
 -- §1 ── 칸 ─────────────────────────────────────────────────────────────────────────────
@@ -177,12 +186,14 @@ begin
     raise exception '참가비가 0원입니다 — 장부에서 참가비를 먼저 입력하세요';
   end if;
 
-  -- W-01 — 참가 1회 = 이용권 N장. 서버가 연결 포스터에서 읽는다(화면 값 불신). 정수 1~100 이 아니면 1(예전 동작).
+  -- W-01 — 참가 1회 = 이용권 N장. 서버가 연결 포스터에서 읽는다(화면 값 불신). 음 아닌 정수면 1~100 으로 자르고 그 밖은 1(예전 동작).
   if r.voucher_id is not null and v_use = 'buyin' and v_sched is not null then
-    select case when (sc.buy_in ->> 'voucherPerEntry') ~ '^[0-9]{1,3}$'
-                then least(100, greatest(1, (sc.buy_in ->> 'voucherPerEntry')::int)) else 1 end
+    -- 매장 결속(critical 2026-09-30): 다른 매장 포스터에 세션을 이어도 그 포스터의 N 을 쓰지 않는다(N = 1).
+    -- 숫자 길이 제한 없이 읽고 100 으로 자른다 — {1,3} 이면 1000 이 조용히 1 이 됐다. 너무 긴 수는 numeric 으로 받아 넘침 없음.
+    select case when (sc.buy_in ->> 'voucherPerEntry') ~ '^[0-9]+$'
+                then least(100, greatest(1, (sc.buy_in ->> 'voucherPerEntry')::numeric))::int else 1 end
       into v_need
-      from schedules sc where sc.id = v_sched;
+      from schedules sc where sc.id = v_sched and sc.venue_id = r.venue_id;
     v_need := coalesce(v_need, 1);
   end if;
   if v_need > 1 then

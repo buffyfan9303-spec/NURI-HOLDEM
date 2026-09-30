@@ -11,7 +11,7 @@ import type { Schedule, Promotion } from '../../api/schedules';
 import { SCHEDULE_TITLE_MAX } from '../../api/schedules';
 import { DISCOUNT_TYPES, retypePromotion, type DiscountType } from '../../lib/promotionLabel';
 import { ledgerLabelOf } from '../../lib/posterDiscounts';
-import { wonToMan, manToWon } from '../../lib/units';
+import { wonToMan, manToWon, TICKET_WON } from '../../lib/units';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import { generateBlinds } from '../../api/clock';
 import { applyToPoster, presetFromPosterForm } from '../../lib/gameInherit';
@@ -20,7 +20,7 @@ import PresetPicker from './PresetPicker';
 import Icon from '../atoms/Icon';
 import { regCloseLevelFromText } from '../../lib/regClose';
 import { posterFormFromSchedule, posterSaveParts, sameJson, type PosterLevel, type PosterSaveForm, type PosterSaveParts } from '../../lib/posterPayload';
-import { MAX_EARLY_TIERS } from '../../lib/chipRules';
+import { MAX_EARLY_TIERS, MAX_VOUCHER_PER_ENTRY, voucherPerEntryMismatch } from '../../lib/chipRules';
 
 /** 포스터 저장의 **실제 결과**. 반복 등록이 있어 '성공/실패' 두 값으로는 부족하다 —
  *  3주 중 2주만 나간 경우를 사용자가 구별할 수 있어야 한다(App 이 이미 그렇게 판정하고 있었다). */
@@ -177,6 +177,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   // 세부 규칙 접힘 — 무언가 입력돼 있으면 머리에 개수를 보여 준다(접힌 채로도 '비어 있지 않음'을 안다)
   const [moreOpen, setMoreOpen] = useState(false);
   const prizeListed = form.rankingPrizes.some((r) => r.amount > 0) || form.prizes.length > 0;
+  // KW-1b — 이용권 1장 = 1T = 1만원(오너 결정). N장 × 1만원이 참가비와 다르면 경고만(저장은 허용).
+  const voucherMismatch = voucherPerEntryMismatch(form.voucherPerEntry, form.buyIn, TICKET_WON);
   const moreCount = [form.rebuyPrice > 0, form.rebuyLimit > 0, form.addonEntry > 0, form.voucherPerEntry > 0,
     form.rebuyStacks.length > 0, form.earlyTiers !== undefined, form.sideEvents.length > 0,
     form.rules.some((r) => r.trim()), form.description.trim() !== ''].filter(Boolean).length;
@@ -277,6 +279,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     }
     if (!form.region.trim())    return failAt(regionId, '지역을 선택해 주세요');
     if (form.buyIn <= 0)        return failAt(buyInId, '참가비 금액을 입력해 주세요');
+    // KW-1b — 서버도 100 으로 자르지만(20260930g) 조용히 바뀌지 않게 여기서 먼저 알린다.
+    if (form.voucherPerEntry > MAX_VOUCHER_PER_ENTRY) { setMoreOpen(true); return failAt(voucherPerEntryId, `참가 1회 이용권은 ${MAX_VOUCHER_PER_ENTRY}장까지 적을 수 있습니다`); }
     if (form.prizeType === 'GTD'   && form.prizeAmount <= 0)  return failAt(prizeAmountId, '보장 상금 금액을 입력해 주세요');
     // 비율 없이 순위별 시상(대회초대권·이용권)만 거는 엔트리 게임이 있다(키키) — 시상표가 있으면 비율을 비워도 된다.
     if (form.prizeType === 'ENTRY' && form.prizePercent <= 0 && !prizeListed) return failAt(prizePercentId, '상금 비율(%) 또는 순위별 상금을 입력해 주세요');
@@ -678,8 +682,15 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
                     onChange={(e) => update('addonEntry', Math.max(0, parseFloat(e.target.value) || 0))} placeholder="예: 0.5" className="input" />
                 </FieldWrap>
                 <FieldWrap label="참가 1회 = 이용권" suffix="장" htmlFor={voucherPerEntryId}>
-                  <input id={voucherPerEntryId} type="number" inputMode="numeric" min={0} value={form.voucherPerEntry || ''}
-                    onChange={(e) => update('voucherPerEntry', parseInt(e.target.value, 10) || 0)} placeholder="예: 10" className="input" />
+                  <input id={voucherPerEntryId} type="number" inputMode="numeric" min={0} max={MAX_VOUCHER_PER_ENTRY} step={1} value={form.voucherPerEntry || ''}
+                    onChange={(e) => update('voucherPerEntry', Math.max(0, parseInt(e.target.value, 10) || 0))} placeholder="예: 10" className="input"
+                    aria-describedby={voucherMismatch ? `${voucherPerEntryId}-warn` : undefined} />
+                  {voucherMismatch && (
+                    // 저장은 막지 않는다(오너 결정 대기) — 장부는 참가비 기준 T 로 기록된다는 사실만 알린다.
+                    <p id={`${voucherPerEntryId}-warn`} data-testid="voucher-per-entry-warn" className="mt-1 text-2xs font-bold text-amber-400">
+                      {form.voucherPerEntry}장 = {(form.voucherPerEntry * TICKET_WON).toLocaleString()}원 환산인데 참가비는 {form.buyIn.toLocaleString()}원입니다. 장부에는 참가비 기준으로 기록됩니다
+                    </p>
+                  )}
                 </FieldWrap>
               </div>
               <FieldWrap label="회차별 리엔트리 스택 (마지막 값 반복)" suffix="칩" htmlFor={rebuyStacksId}>

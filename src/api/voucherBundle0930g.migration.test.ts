@@ -21,8 +21,11 @@ describe('20260930g — 이용권 N장 = 참가 1회 · 첫 리바인', () => {
 
   it('W-01 N 은 서버가 연결 포스터에서 읽는다 — 화면 인자가 아니다(인자 목록 불변)', () => {
     expect(approve).toContain("select coalesce(buyin_amount, 0), coalesce(discounts, '[]'::jsonb), schedule_id");
-    expect(approve).toContain("(sc.buy_in ->> 'voucherPerEntry') ~ '^[0-9]{1,3}$'");
-    expect(approve).toContain('from schedules sc where sc.id = v_sched');
+    // 길이 제한 없는 정수 → 100 으로 자름(critical: {1,3} 이면 1000 이 조용히 1).
+    expect(approve).toContain("(sc.buy_in ->> 'voucherPerEntry') ~ '^[0-9]+$'");
+    expect(approve).toContain("least(100, greatest(1, (sc.buy_in ->> 'voucherPerEntry')::numeric))::int");
+    // 매장 결속(critical): 다른 매장 포스터에 세션을 이어도 그 N 을 쓰지 않는다.
+    expect(approve).toContain('from schedules sc where sc.id = v_sched and sc.venue_id = r.venue_id;');
     expect(approve).toContain("p_discount_index integer default 0, p_voucher_use text default 'buyin'::text)");
   });
 

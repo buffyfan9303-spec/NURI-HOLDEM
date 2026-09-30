@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   windowEndMinute, earlyTierWindows, earlyTierIndexAt, normalizeEarlyTiers, rebuyStackAt, rebuyChipsOf,
-  msToRegCloseAt, prizePlaceCount, targetEntriesOf,
+  msToRegCloseAt, prizePlaceCount, targetEntriesOf, voucherPerEntryMismatch, MAX_VOUCHER_PER_ENTRY,
 } from './chipRules';
 import { computeLiveStats, deriveClockCounts, emptyClockState, defaultClockConfig, withDerivedEarly, applyEarlyEdit, clockIsLeftover, type ClockConfig, type ClockLevel, type ClockState } from '../api/clock';
 import { discountAllowed, autoDiscountIndex, earlyTypeOf, type LedgerBuyin, type LedgerSession } from '../api/ledger';
@@ -192,5 +192,17 @@ describe('W-14 · 지난 날 멈춘 채 남은 클락만 새로 채운다', () =
   it('흔적 없는 행 = update · 행 없음 = new', () => {
     expect(clockStartAction(st({}), '2026-09-30')).toBe('update');
     expect(clockStartAction(null, '2026-09-30')).toBe('new');
+  });
+});
+
+describe('KW-1b · 참가 1회 이용권 장수', () => {
+  it('N장 × 1만원이 참가비와 다를 때만 경고 — 없음(0)·일치는 조용하다', () => {
+    expect(voucherPerEntryMismatch(10, 100_000, 10_000)).toBe(false);
+    expect(voucherPerEntryMismatch(5, 100_000, 10_000)).toBe(true);
+    expect(voucherPerEntryMismatch(0, 100_000, 10_000)).toBe(false);
+    expect(voucherPerEntryMismatch(3, 0, 10_000)).toBe(false);
+  });
+  it('상한은 서버(20260930g least(100, …))와 같은 100', () => {
+    expect(MAX_VOUCHER_PER_ENTRY).toBe(100);
   });
 });
