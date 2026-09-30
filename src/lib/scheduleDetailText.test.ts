@@ -21,7 +21,7 @@ describe('리엔트리 = 스택(오너 2026-09-30) · W-23 미입력 단정 금�
   it('계단 + 한도', () => expect(reentryText(s({ rebuyStacks: [70000, 80000], rebuyLimit: 2 }))).toBe('70,000 → 80,000 · 최대 2회'));
   it('빈 배열이면 단일값으로', () => expect(reentryText(s({ rebuyStack: 60000, rebuyStacks: [] }))).toBe('60,000'));
   it('빈 배열 + 단일값 없음 → 현장 안내', () => expect(reentryText(s({ rebuyStacks: [] }))).toBe('현장 안내'));
-  it('루나(리바이 표기 없음) → 현장 안내, 프리즈아웃 아님', () => expect(reentryText(s({ amount: 30000 }))).toBe('현장 안내'));
+  it('루나(리바인 표기 없음) → 현장 안내, 프리즈아웃 아님', () => expect(reentryText(s({ amount: 30000 }))).toBe('현장 안내'));
   it('업주가 게임 종류에 프리즈아웃이라 적었을 때만 프리즈아웃', () =>
     expect(reentryText(s({ amount: 30000, gameType: '프리즈아웃' }))).toBe('프리즈아웃'));
   it('어떤 입력에도 무제한을 지어내지 않는다', () => {

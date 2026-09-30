@@ -92,7 +92,7 @@ export const GLOSSARY_TERMS: GlossaryEntry[] = [
   { term: '칩찹', en: 'Chip Chop', cat: '토너먼트', desc: '남은 상금을 각자의 칩 비율 그대로 나누는 단순 딜 방식. 빅스택에게 ICM 딜보다 유리한 경향이 있다.' },
   { term: 'GTD', en: 'Guaranteed', cat: '토너먼트', desc: '참가 인원과 무관하게 주최 측이 보장하는 최소 프라이즈풀. "1000만 GTD"처럼 표기한다.' },
   { term: '새틀라이트', en: 'Satellite', cat: '토너먼트', desc: '더 큰 토너먼트의 참가권을 상품으로 거는 예선 토너먼트. 적은 참가비로 본선 시트를 노린다.' },
-  { term: '프리즈아웃', en: 'Freezeout', cat: '토너먼트', desc: '리엔트리·리바이 없이 탈락하면 끝나는 형식. 한 번의 스택으로만 승부한다.' },
+  { term: '프리즈아웃', en: 'Freezeout', cat: '토너먼트', desc: '리엔트리·리바인 없이 탈락하면 끝나는 형식. 한 번의 스택으로만 승부한다.' },
   { term: '칩리더', en: 'Chip Leader', cat: '토너먼트', desc: '현재 가장 많은 칩을 가진 플레이어. 버블 구간에서 압박을 가장 자유롭게 넣을 수 있다.' },
   // ── 전략 ──
   { term: 'GTO', en: 'Game Theory Optimal', cat: '전략', desc: '상대가 어떤 전략을 쓰든 착취당하지 않는 균형 전략. 솔버가 계산한 빈도·사이즈가 기준점이 된다.' },

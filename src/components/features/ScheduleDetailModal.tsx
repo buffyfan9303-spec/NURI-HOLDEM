@@ -487,7 +487,7 @@ export default function ScheduleDetailModal({
         <CalendarShareRow schedule={schedule} onLikeChange={onLikeChange} />
 
         {/* ── 게임 정보 (APIS 하단 2열 정의 리스트) — 게임명·날짜·시작 시간·유형·바이인·
-            스타팅 칩·리바이 칩·블라인드 타임. 값이 없는 선택 항목은 행 자체를 생략하고,
+            스타팅 칩·리바인 칩·블라인드 타임. 값이 없는 선택 항목은 행 자체를 생략하고,
             원래 폴백 문구('현장 안내'·'미정'·'메인 토너먼트')를 갖고 있던 행은 그 문구가 곧 답이라 유지한다.
             긴 값은 줄바꿈 대신 가로 마퀴 루프(MarqueeText)로 옆으로 흐른다(기존 문법 유지). */}
         <section>
@@ -1574,7 +1574,7 @@ function buyinDetailText(s: Schedule): string {
   const re = reentryPriceWon(s);
   if (re) parts.push(`리엔트리 ${re.toLocaleString()}`);
   if (b.addon || b.addonStack) parts.push(`애드온${b.addon ? ` ${b.addon.toLocaleString()}원` : ''}${b.addonStack ? ` (${b.addonStack.toLocaleString()}칩)` : ''}`);
-  // W-23: 리바이 정보가 없다고 '프리즈아웃'을 붙이지 않는다(미입력 ≠ 프리즈아웃).
+  // W-23: 리바인 정보가 없다고 '프리즈아웃'을 붙이지 않는다(미입력 ≠ 프리즈아웃).
   // 조각 안은 줄바꿈 없는 공백 — '(50,000칩)' 만 다음 줄로 떨어지는 고아를 막는다(줄은 ' · ' 에서만 접힌다).
   return parts.length > 0 ? parts.map((x) => x.replace(/ /g, '\u00a0')).join(' · ') : '—';
 }
