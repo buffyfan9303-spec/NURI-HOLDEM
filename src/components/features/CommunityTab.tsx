@@ -830,7 +830,7 @@ function FeedSection({
       ) : (
         <button type="button" onClick={() => promptLogin()}
           className="w-full min-h-[44px] rounded-input bg-surface-high p-2 text-center text-2xs text-ink-secondary transition-colors hover:bg-surface-high/70 hover:text-accent-300">
-          로그인하면 게시글을 작성할 수 있어요 — <b className="text-accent-300">로그인하기 →</b>
+          로그인하면 게시글을 작성할 수 있습니다 — <b className="text-accent-300">로그인하기 →</b>
         </button>
       )}
 
@@ -1399,7 +1399,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
     setSending(true);
     try {
       await createGroup({ name, kind, region, description, joinApproval, purpose });
-      toast.show('그룹 개설을 신청했습니다. 운영자 승인 후 공개됩니다.', 'success');
+      toast.show('그룹 개설을 신청했습니다. 관리자 승인 후 공개됩니다.', 'success');
       onCreated();
     } catch (err) { toast.show(err instanceof Error ? err.message : '개설 실패', 'error'); }
     finally { setSending(false); }
@@ -1439,10 +1439,10 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
         <label className="block">
           <span className="block text-2xs text-ink-secondary mb-1">
             개설 목적 <span className="text-danger">*</span>
-            <span className="ml-1 text-ink-muted">운영자만 봅니다 · 공개되지 않아요</span>
+            <span className="ml-1 text-ink-muted">관리자만 봅니다 · 공개되지 않습니다</span>
           </span>
           <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} maxLength={300} rows={3}
-            placeholder="어떤 사람들이 무엇을 하려고 모이는 그룹인지 적어 주세요. 운영자가 이 내용으로 승인 여부를 판단합니다."
+            placeholder="어떤 사람들이 무엇을 하려고 모이는 그룹인지 적어 주세요. 관리자가 이 내용으로 승인 여부를 판단합니다."
             className="input w-full resize-none text-sm" />
           <span className="mt-0.5 block text-right text-2xs tabular-nums text-ink-muted">{purpose.trim().length}/300</span>
         </label>
@@ -1464,7 +1464,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
           </div>
         </div>
 
-        <p className="text-2xs text-ink-muted">개설하면 내가 매니저가 되며, 운영자 승인 후 목록에 공개됩니다.</p>
+        <p className="text-2xs text-ink-muted">개설하면 내가 매니저가 되며, 관리자 승인 후 목록에 공개됩니다.</p>
         <button type="submit" disabled={sending || !name.trim() || purpose.trim().length < 10} className="btn-primary w-full disabled:opacity-60">{sending ? '신청 중…' : '개설 신청'}</button>
       </form>
     </Modal>
@@ -1585,7 +1585,7 @@ function LiveWallSection({ visible }: { visible: boolean }) {
       ) : (
         <button type="button" onClick={() => promptLogin()}
           className="w-full min-h-[44px] rounded-input bg-surface-high p-2 text-center text-2xs text-ink-secondary transition-colors hover:bg-surface-high/70 hover:text-accent-300">
-          로그인하면 실시간 댓글을 남길 수 있어요 — <b className="text-accent-300">로그인하기 →</b>
+          로그인하면 실시간 댓글을 남길 수 있습니다 — <b className="text-accent-300">로그인하기 →</b>
         </button>
       )}
 
@@ -1621,7 +1621,7 @@ function LiveWallSection({ visible }: { visible: boolean }) {
                     <span className="font-bold text-accent-300 bg-accent-300/15 px-1 rounded-badge leading-none">매장</span>
                   )}
                   {m.userRole === 'admin' && (
-                    <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">운영자</span>
+                    <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">관리자</span>
                   )}
                   <span className="text-ink-muted ml-auto shrink-0">{relativeTime(m.createdAt)}</span>
                   {/* ⚠ 삭제 버튼에 `hit`(::after 44px 확장)을 쓰면 안 된다 — 확장된 히트박스가 **본문 첫 줄 위를 덮어**

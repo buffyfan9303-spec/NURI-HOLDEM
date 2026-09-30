@@ -106,11 +106,11 @@ const SLOT_MS = SHOUT_SLOT_SECONDS * 1000;
  */
 const IDLE_LINES: readonly string[] = [
   '홈 탭 일정 탐색에서 참가비로 대회를 골라보세요',
-  '라이브 탭에서 진행 중인 게임을 볼 수 있어요',
+  '라이브 탭에서 진행 중인 게임을 볼 수 있습니다',
   '매장에 도착하면 출석 QR을 찍어보세요',
-  'GTO 탭에서 프리플랍 레인지를 볼 수 있어요',
-  '활동점수는 접속·글쓰기·댓글로 쌓여요',
-  '외치기로 내 한마디를 20초 동안 방송해요',
+  'GTO 탭에서 프리플랍 레인지를 볼 수 있습니다',
+  '활동점수는 접속·글쓰기·댓글로 쌓입니다',
+  '외치기로 내 한마디를 20초 동안 방송합니다',
 ];
 
 // ── 등급별 겉모습 ───────────────────────────────────────────────────────────
@@ -221,7 +221,7 @@ function waitLabel(remainMs: number): string {
 /** 구매 결과·대기열 안내에 쓰는 한 문장 */
 function airLabel(playsAt: string): string {
   const left = ms(playsAt) - Date.now();
-  return left <= 1000 ? '지금 바로 방송돼요' : `${waitLabel(left)} 방송돼요`;
+  return left <= 1000 ? '지금 바로 방송됩니다' : `${waitLabel(left)} 방송됩니다`;
 }
 
 /**
@@ -405,7 +405,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
     // 클라이언트 선검사 — 기존 금칙어 필터를 그대로 재사용(최종 판정은 서버)
     const f = filterContent(trimmed);
     if (f.blocked) { toast.show(f.reason ?? '게시할 수 없는 표현입니다', 'error'); return; }
-    if (hasLink) { toast.show('외침에는 링크를 넣을 수 없어요', 'error'); return; }
+    if (hasLink) { toast.show('외침에는 링크를 넣을 수 없습니다', 'error'); return; }
     setBusy(true);
     try {
       // ⚠ 색은 하이라이트에서만 보낸다. 기본에 색을 실어 보내면 서버가 거절한다(조용히 무시하지 않는다).
@@ -437,9 +437,9 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
           {/* ⚠ '지금 바로'는 **확인된 뒤에만** 말한다. 대기열을 모르는 동안 그렇게 약속하면
               사용자는 즉시 송출을 기대하고 활동점수를 쓰지만 실제로는 앞선 대기열 뒤에 붙는다. */}
           {isReserve
-            ? <> 예약은 <b className="text-accent-300">고른 시각</b>에 그 자리를 미리 잡아 둡니다. 대기열을 기다리지 않아요.</>
+            ? <> 예약은 <b className="text-accent-300">고른 시각</b>에 그 자리를 미리 잡아 둡니다. 대기열을 기다리지 않습니다.</>
             : queueLen === undefined
-              ? <> 대기열을 {queueErr !== null ? '불러오지 못했어요' : '확인하는 중이에요'}. 앞선 대기가 있으면 <b className="text-ink-secondary">그 뒤 순서로</b> 방송됩니다.
+              ? <> 대기열을 {queueErr !== null ? '불러오지 못했습니다' : '확인하는 중입니다'}. 앞선 대기가 있으면 <b className="text-ink-secondary">그 뒤 순서로</b> 방송됩니다.
                   {queueErr !== null && (
                     <button type="button" onClick={() => setQueueNonce((n) => n + 1)}
                       className="ml-1 rounded-badge border border-border-subtle bg-surface-high px-2 py-0.5 text-2xs font-bold text-ink-secondary">
@@ -448,10 +448,10 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
                   )}</>
               : queueLen > 0
                 ? <> 지금 앞에 <b className="text-ink-secondary">{queueLen}개</b>가 있어 {myTurnLabel
-                    ? <><b className="text-accent-300">{myTurnLabel}</b> 내 차례예요.</>
-                    : <>그 뒤 순서로 방송돼요.</>}</>
-                : <> 대기열이 비어 있어 <b className="text-accent-300">지금 바로</b> 방송돼요.</>}
-          {' '}활동점수 <b className="text-accent-300">{cost.toLocaleString()}점</b>이 사용되며, 등급 점수(누적)는 줄지 않아요.
+                    ? <><b className="text-accent-300">{myTurnLabel}</b> 내 차례입니다.</>
+                    : <>그 뒤 순서로 방송됩니다.</>}</>
+                : <> 대기열이 비어 있어 <b className="text-accent-300">지금 바로</b> 방송됩니다.</>}
+          {' '}활동점수 <b className="text-accent-300">{cost.toLocaleString()}점</b>이 사용되며, 등급 점수(누적)는 줄지 않습니다.
         </p>
 
         {/* 등급 — 가격은 서버 가격표(shop_skus)에서 그대로 읽어 보여준다.
@@ -476,7 +476,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
             <div role="alert" data-testid="shout-tiers-error"
                  className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-aura border border-border-subtle bg-surface-high px-3 text-center">
               <p className="text-2xs leading-relaxed text-ink-secondary">
-                가격표를 불러오지 못했어요.<br />기본 외치기는 그대로 살 수 있어요.
+                가격표를 불러오지 못했습니다.<br />기본 외치기는 그대로 구매할 수 있습니다.
               </p>
               <button type="button" onClick={() => { setTiers(null); setSkuNonce((n) => n + 1); }}
                 className="hit rounded-badge border border-border-subtle bg-surface-base px-3 py-1.5 text-2xs font-bold text-ink-secondary">
@@ -553,7 +553,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
             {/* ⚠ 하루 상한은 shout_rules().daily_cap(구 3회 잔재)이 아니라 서버가 실제로 세는
                 daily_purchase_count 상한 10회다 — 상품 종류를 가리지 않고 합산된다. */}
             <span className={hasLink ? 'font-bold text-danger-light' : 'text-ink-muted'}>
-              {hasLink ? '링크는 넣을 수 없어요' : `하루 ${DAILY_PURCHASE_CAP}번(구매 합산) · ${rules.cooldownMinutes}분에 한 번`}
+              {hasLink ? '링크는 넣을 수 없습니다' : `하루 ${DAILY_PURCHASE_CAP}번(구매 합산) · ${rules.cooldownMinutes}분에 한 번`}
             </span>
             <span className={['tabular-nums', tooLong ? 'font-bold text-danger-light' : 'text-ink-muted'].join(' ')}>
               {trimmed.length}/{rules.maxLen}
@@ -580,7 +580,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
 
         {poor && (
           <p className="rounded-input border border-danger/30 bg-danger/10 px-3 py-2 text-2xs font-semibold text-danger-light">
-            사용 가능 점수가 {cost.toLocaleString()}점보다 적어요 — 접속·글쓰기·댓글·주간 미션으로 모아보세요.
+            사용 가능 점수가 {cost.toLocaleString()}점보다 적습니다 — 접속·글쓰기·댓글·주간 미션으로 모아 보세요.
           </p>
         )}
 

@@ -112,7 +112,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
     const next = m.role === 'manager' ? 'member' : 'manager';
     try {
       await setGroupMemberRole(m.id, next);
-      toast.show(next === 'manager' ? `${m.name} 님을 운영진으로 지정했어요` : `${m.name} 님의 운영진을 해제했어요`, 'success');
+      toast.show(next === 'manager' ? `${m.name} 님을 운영진으로 지정했습니다` : `${m.name} 님의 운영진 지정을 해제했습니다`, 'success');
       reloadMembers();
     } catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
   };
@@ -123,7 +123,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
     try {
       await setGroupJoinApproval(group.id, value);
       setJoinPolicy(value);
-      toast.show(value ? '이제 운영진이 승인해야 가입됩니다' : '이제 누구나 바로 가입할 수 있어요', 'success');
+      toast.show(value ? '이제 운영진이 승인해야 가입됩니다' : '이제 누구나 바로 가입할 수 있습니다', 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
   };
   const pendingMembers = members.filter((m) => m.status === 'pending');
@@ -141,7 +141,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
   };
   const doKick = async (m: GroupMember, label: string) => {
-    if (!confirm(`${m.name} 님을 ${label}하시겠습니까?`)) return;
+    if (!confirm(m.userId === user?.id ? '그룹에서 탈퇴하시겠습니까?' : `${m.name} 님을 ${label}하시겠습니까?`)) return;
     try { await removeMember(m.id); toast.show(`${label} 완료`, 'info'); reloadMembers(); if (m.userId === user?.id) reloadMembership(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
   };
@@ -231,7 +231,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
               ) : membership?.status === 'approved' ? (
                 <button type="button" onClick={leave} className="rounded-input border border-border-default px-3 py-1.5 text-xs font-semibold text-ink-secondary hover:text-danger-light">가입됨 · 탈퇴</button>
               ) : membership?.status === 'pending' ? (
-                <span className="inline-block rounded-input bg-surface-high px-3 py-1.5 text-xs font-semibold text-ink-muted">가입 승인 대기중…</span>
+                <span className="inline-block rounded-input bg-surface-high px-3 py-1.5 text-xs font-semibold text-ink-muted">가입 승인 대기 중…</span>
               ) : (
                 <button type="button" onClick={doJoin} className="btn-primary text-sm px-5">{group.joinApproval ? '가입 신청' : '가입하기'}</button>
               )}
@@ -624,7 +624,7 @@ function GroupRanking({ groupId }: { groupId: string }) {
   if (loading) return <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>;
   if (err) return <LoadErrorCard error={err} what="활동 순위" onRetry={() => setReloadKey((k) => k + 1)} compact />;
   if (rows.length === 0) {
-    return <EmptyState title="아직 활동 기록이 없어요" hint="채팅과 게시판에 글이 쌓이면 활동 순위가 자동으로 집계됩니다." />;
+    return <EmptyState title="아직 활동 기록이 없습니다" hint="채팅과 게시판에 글이 쌓이면 활동 순위가 자동으로 집계됩니다." />;
   }
 
   return (
@@ -641,7 +641,7 @@ function GroupRanking({ groupId }: { groupId: string }) {
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1">
                 <span className="truncate text-xs font-semibold text-ink-primary">{r.name}</span>
-                {r.role === 'manager' && <span className="shrink-0 text-2xs font-bold text-accent-200">매니저</span>}
+                {r.role === 'manager' && <span className="shrink-0 text-2xs font-bold text-accent-200">운영진</span>}
               </span>
               <span className="block text-2xs text-ink-muted tabular-nums">글 {r.posts} · 채팅 {r.messages}</span>
             </span>

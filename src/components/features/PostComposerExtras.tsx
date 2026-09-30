@@ -282,13 +282,13 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
             )}
 
             {full ? (
-              <p className="text-2xs text-ink-muted">최대 {MAX_CARDS}장 — 카드를 빼면 다시 고를 수 있어요</p>
+              <p className="text-2xs text-ink-muted">최대 {MAX_CARDS}장 — 카드를 빼면 다시 고를 수 있습니다</p>
             ) : (
               <>
                 {/* 1단계 — 랭크 */}
                 <p className="text-2xs text-ink-muted mb-1">
                   {pendingRank
-                    ? <>랭크 <b className="text-accent-200">{pendingRank}</b>아래에서 무늬를 고르세요</>
+                    ? <>랭크 <b className="text-accent-200">{pendingRank}</b> 선택 — 아래에서 무늬를 고르세요</>
                     : '먼저 랭크를 고르세요'}
                 </p>
                 <div className="grid gap-1 mb-1.5" style={{ gridTemplateColumns: 'repeat(13, minmax(0, 1fr))' }}>
@@ -444,7 +444,7 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
               )}
             </div>
             {lockOptions && (
-              <p className="text-2xs text-ink-muted mb-1.5">이미 받은 표가 있어 보기는 수정할 수 없어요</p>
+              <p className="text-2xs text-ink-muted mb-1.5">이미 받은 표가 있어 보기는 수정할 수 없습니다</p>
             )}
             <div className="space-y-1.5">
               {value.options.map((label, i) => (

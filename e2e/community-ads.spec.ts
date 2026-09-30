@@ -471,7 +471,7 @@ test.describe('운영자 → 노출 관리 → 광고', () => {
     expect(adWrites[adWrites.length - 1], '쓴 글이 그 슬롯에 연결되지 않았다')
       .toMatchObject({ slot: 2, post_id: NEW_ID, active: true });
     await expect(form, '등록 뒤에도 글쓰기 창이 닫히지 않았다').toBeHidden({ timeout: 10_000 });
-    await expect(page.locator('[data-ad-admin-slot="2"]').getByText('게재중')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-ad-admin-slot="2"]').getByText('게재 중')).toBeVisible({ timeout: 10_000 });
 
     // ④ 손님 화면 — 서버 RPC 가 그 글을 광고로 내려주면 게시판 광고 칸에 그 글이 선다
     liveAds = [adRow(2, NEW_ID, '가을 정기 대회 안내', { user_name: '운영자', category: 'info' })];
