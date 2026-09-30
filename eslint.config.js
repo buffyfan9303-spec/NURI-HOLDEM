@@ -6,6 +6,7 @@ import tseslint from 'typescript-eslint'
 import security from 'eslint-plugin-security'
 import playwright from 'eslint-plugin-playwright'
 import betterTailwindcss from 'eslint-plugin-better-tailwindcss'
+import youMightNotNeedAnEffect from 'eslint-plugin-react-you-might-not-need-an-effect'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
@@ -66,6 +67,15 @@ export default defineConfig([
       'better-tailwindcss/no-unknown-classes': 'warn',
       'better-tailwindcss/no-conflicting-classes': 'warn',
     },
+  },
+  // 2026-10-01 도구 도입 — 불필요한 useEffect(파생 상태·이벤트 핸들러로 옮길 수 있는 것) 탐지.
+  //   🔴 경고 전용(scripts/lint.mjs 는 경고를 실패로 세지 않는다). 발견 건수는 점진 정리 대상이지 게이트가 아니다.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ...youMightNotNeedAnEffect.configs.recommended,
+    rules: Object.fromEntries(
+      Object.entries(youMightNotNeedAnEffect.configs.recommended.rules ?? {}).map(([k]) => [k, 'warn']),
+    ),
   },
   // 🔴 e2e 전용 — **거짓 통과하는 테스트**를 잡는 룰만 골랐다(2026-09-18).
   //   이 저장소가 실제로 겪었던 자리다: 부분일치 셀렉터가 엉뚱한 것을 잡아 toBeVisible 이 통과했고,

@@ -9,6 +9,8 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'api/**/*.test.js'],
     exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
     environment: 'node',
+    // 커버리지는 보고만 한다(임계값 없음). `npm run test:coverage` → coverage/ (gitignore).
+    coverage: { provider: 'v8', reporter: ['text-summary', 'html'], reportsDirectory: 'coverage' },
     expect: {
       // 🔴 단언이 **0개**인 테스트를 실패로 만든다(2026-09-17 신설).
       //
