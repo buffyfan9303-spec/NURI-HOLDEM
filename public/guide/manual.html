@@ -9,13 +9,13 @@
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   :root { --bg:#08090a; --card:#111214; --card2:#16181c; --accent:#5e6ad2; --accent-soft:rgba(94,106,210,0.13);
-    --ink:#f4f5f6; --ink2:#9a9fa8; --ink3:#6a6e75; --line:#24262b; --green:#36b37e; --amber:#d99a30; --rose:#e5658a;
+    --ink:#f4f5f6; --ink2:#9a9fa8; --ink3:#8293ad; --line:#24262b; --green:#36b37e; --amber:#d99a30; --rose:#e5658a;
     /* 2026-09-11 가독성: 읽는 글자(--body)를 캡션용 회색(--ink2)에서 떼어낸다.
        예전엔 p·li·td 가 전부 #9a9fa8 이라 본문 전체가 흐렸다 — 긴 문서에서 가장 피로한 조합이다.
        #d6dae1 은 #08090a 위에서 대비 약 14:1 로 WCAG AAA 를 넘기면서 순백처럼 눈부시지 않다. */
     --body:#d6dae1; }
   html { scroll-behavior:smooth; }
-  body { background:var(--bg); color:var(--ink); font-family:'Pretendard','Malgun Gothic','맑은 고딕',sans-serif;
+  body { background:var(--bg); color:var(--ink); font-family:'Pretendard Variable','Pretendard','Pretendard FB Win','Pretendard FB Android','Malgun Gothic',sans-serif;
     line-height:1.75; -webkit-text-size-adjust:100%; }
   .wrap { max-width:780px; margin:0 auto; padding:26px 18px 90px; }
   a { color:#aab2f0; text-decoration:none; } a:hover { text-decoration:underline; }
@@ -31,11 +31,11 @@
   .toc a { display:flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--line);
     border-radius:9px; padding:10px 11px; font-size:13px; font-weight:700; color:var(--ink); line-height:1.35; }
   .toc a:hover { border-color:rgba(94,106,210,0.5); text-decoration:none; background:var(--card2); }
-  .toc .n { color:var(--accent); font-size:10.5px; font-weight:900; flex:none; }
+  .toc .n { color:#aab2f0; font-size:10.5px; font-weight:900; flex:none; }
   section { margin-bottom:44px; scroll-margin-top:64px; }
   h2 { font-size:19px; font-weight:900; letter-spacing:-0.01em; padding-bottom:8px; margin-bottom:12px;
     border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:8px; }
-  h2 .n { color:var(--accent); font-size:13px; flex:none; }
+  h2 .n { color:#aab2f0; font-size:13px; flex:none; }
   h3 { font-size:16.5px; font-weight:800; margin:24px 0 8px; color:var(--ink); scroll-margin-top:64px; }
   /* h3 끼리 붙어 있을 때 첫 h3 만 위 여백을 줄인다 — 제목이 연달아 나오면 사이가 벌어져 보인다 */
   h2 + h3 { margin-top:12px; }
@@ -102,9 +102,9 @@
   <div class="badge">📖 업주 완전 사용설명서 · 42개 섹션</div>
   <h1>NURI HOLDEM<br>홀덤펍 사장님을 위한 모든 것</h1>
   <p>회원가입·본인인증부터 매장 개설, 포스터·예약·QR·장부·클락·순위·시즌·통계·이용권·직원·리뷰까지 —<br>실제 화면 메뉴 이름 그대로, 모든 기능을 빠짐없이 안내합니다.</p>
-  <p style="margin-top:6px;font-size:12.5px">💡 팁: 화면과 함께 보고 싶다면 상단의 <b>요약 슬라이드(10장)</b>를 참고하세요.</p>
+  <p style="margin-top:6px;font-size:12.5px">💡 팁: 흐름을 실제 화면과 함께 먼저 보고 싶다면 <b>한눈에 보는 가이드</b>를 참고하세요.</p>
   <div class="links">
-    <a href="/guide/owner.html" target="_blank" rel="noopener">🖼 요약 슬라이드(10장)</a>
+    <a href="/guide/owner.html" target="_blank" rel="noopener">🖼 한눈에 보는 가이드(6단계)</a>
     <a href="/guide/owner.pdf" download>📄 PDF 내려받기</a>
     <a href="mailto:ace@nuriholdem.com">💬 고객센터 문의</a>
   </div>
@@ -193,7 +193,7 @@
 <section id="dashboard-live-command">
   <h2><span class="n">7</span>🔴 대시보드 상단 — 가이드 바·라이브 운영 현황</h2>
   
-  <h3>대시보드는 무엇인가요</h3><p><span class="path">내 매장 <span class="s">›</span> 대시보드</span>는 오늘 장부·클락·예약·출근·주간 추세를 한 화면에 모은 요약판입니다. 모든 카드는 누르면 해당 운영 화면으로 바로 이동합니다. 직원 계정은 부여받은 권한의 카드만 보이며, <b>권한이 하나도 없으면</b> 카드 대신 "아직 부여된 권한이 없습니다" 안내만 표시됩니다(업주에게 장부·순위 또는 이용권 내역 권한을 요청하라는 문구).</p><h3>맨 위 가이드 바 (📖 운영 가이드)</h3><ul><li><b>사용설명서</b> — 지금 보고 계신 이 설명서가 새 탭으로 열립니다.</li><li><b>슬라이드</b> — 포스터→장부→클락→순위→정산 흐름을 담은 업주용 슬라이드가 새 탭으로 열립니다.</li><li><b>PDF</b> — 같은 가이드를 "NURI-HOLDEM-업주가이드.pdf" 파일로 내려받습니다.</li></ul><h3>라이브 운영 현황 (운영 중에만 뜨는 카드)</h3><p>장부·순위 권한이 있고, <b>클락이 진행 중이거나 손님의 바인(참가) 요청이 대기 중일 때만</b> 나타나는 실시간 카드입니다. 평상시에는 보이지 않는 게 정상입니다.</p><table><tr><th>구역</th><th>내용</th></tr><tr><td>왼쪽 (클락)</td><td>현재 블라인드(SB/BB)·레벨 번호·앤티, 휴식 중이면 BREAK. 오른쪽에 남은 시간이 1초 단위로 흐르며 <b>초록=진행 중, 노랑=일시정지</b>. 아래에 남은 인원(장부 엔트리+클락 인원 보정−탈락으로 자동 계산). 클락이 꺼져 있으면 "클락 꺼짐 — 눌러서 켜기"가 뜨고, 누르면 클락 화면으로 이동.</td></tr><tr><td>게임 탭</td><td>메인+사이드 게임이 <b>2개 이상 동시 진행</b>이면 카드 위에 게임 전환 탭이 생깁니다. 일시정지된 게임은 ⏸ 표시. 보고 있던 게임이 끝나면 진행 중인 첫 게임으로 자동 전환됩니다.</td></tr><tr><td>오른쪽 (바인 요청)</td><td>손님이 앱에서 보낸 참가 요청이 <b>최대 3건</b> 표시 — 이름·경과 시간(방금/몇 분 전)·요청 게임(메인/사이드). 3건이 넘으면 "외 N건 · 장부에서 전체 관리 →"로 이동.</td></tr></table><p>대기 요청은 장부로 넘어가지 않고 이 카드에서 바로 처리할 수 있습니다.</p><ol><li><b>✓ 짧게 탭</b> — 결제 기록 없이 승인만(손님이 게임에 추가됨). 결제는 나중에 장부에서 따로 기록.</li><li><b>✓ 길게 누르기(약 0.5초)</b> — 결제까지 한 번에. 작은 창이 열리고 그 게임의 바인 금액(원)이 자동 입력됩니다(리바인·할인 시 직접 수정 가능). <b>현금/카드/이체</b> 중 하나를 탭하면 전액 그 수단으로 기록되며 승인 완료. 자주 쓰는 결제수단이 맨 앞 초록 버튼으로 자동 정렬됩니다(사용할수록 이 기기에서 학습).</li><li><b>분할</b> 버튼 — 현금/카드/이체 금액을 나눠 입력. 합계가 바인 금액과 일치하면 초록으로 표시되어 확인이 쉽습니다.</li><li><b>✕</b> — 요청 거절.</li></ol><div class="warn">⚠ 결제 입력 합계가 0원이면 "금액을 입력하세요"가 뜨고 승인되지 않습니다. 또 승인·거절 처리 중에는 버튼이 잠깐 비활성화되어 중복 처리를 막습니다.</div><h3>미니 추세 — 오늘 vs 평소</h3><p>클락이 진행 중이고 최근 4주간 같은 요일 장부 데이터가 있으면 카드 하단에 <b>오늘 엔트리 vs 같은 요일 4주 평균</b>이 ▲▼%와 함께 표시됩니다. 이 줄을 탭하면 주차별 막대그래프(평균 점선 포함)로 펼쳐지고, "통계에서 자세히 →"로 통계 화면에 갈 수 있습니다.</p><div class="tip">✅ 영업 중엔 이 카드 하나로 "블라인드 얼마 남았나 + 지금 손님 몇 명 + 새 참가 요청"을 다 볼 수 있어, 홀에서 폰만 봐도 운영이 됩니다.</div>
+  <h3>대시보드는 무엇인가요</h3><p><span class="path">내 매장 <span class="s">›</span> 대시보드</span>는 오늘 장부·클락·예약·출근·주간 추세를 한 화면에 모은 요약판입니다. 모든 카드는 누르면 해당 운영 화면으로 바로 이동합니다. 직원 계정은 부여받은 권한의 카드만 보이며, <b>권한이 하나도 없으면</b> 카드 대신 "아직 부여된 권한이 없습니다" 안내만 표시됩니다(업주에게 장부·순위 또는 이용권 내역 권한을 요청하라는 문구).</p><h3>맨 위 가이드 바 (📖 운영 가이드)</h3><ul><li><b>사용설명서</b> — 지금 보고 계신 이 설명서가 새 탭으로 열립니다.</li><li><b>슬라이드</b> — 포스터→장부→클락→순위→정산 흐름을 실제 화면과 함께 한 장에 담은 업주 가이드가 새 탭으로 열립니다.</li><li><b>PDF</b> — 업주 가이드 인쇄용(슬라이드판)을"NURI-HOLDEM-업주가이드.pdf" 파일로 내려받습니다.</li></ul><h3>라이브 운영 현황 (운영 중에만 뜨는 카드)</h3><p>장부·순위 권한이 있고, <b>클락이 진행 중이거나 손님의 바인(참가) 요청이 대기 중일 때만</b> 나타나는 실시간 카드입니다. 평상시에는 보이지 않는 게 정상입니다.</p><table><tr><th>구역</th><th>내용</th></tr><tr><td>왼쪽 (클락)</td><td>현재 블라인드(SB/BB)·레벨 번호·앤티, 휴식 중이면 BREAK. 오른쪽에 남은 시간이 1초 단위로 흐르며 <b>초록=진행 중, 노랑=일시정지</b>. 아래에 남은 인원(장부 엔트리+클락 인원 보정−탈락으로 자동 계산). 클락이 꺼져 있으면 "클락 꺼짐 — 눌러서 켜기"가 뜨고, 누르면 클락 화면으로 이동.</td></tr><tr><td>게임 탭</td><td>메인+사이드 게임이 <b>2개 이상 동시 진행</b>이면 카드 위에 게임 전환 탭이 생깁니다. 일시정지된 게임은 ⏸ 표시. 보고 있던 게임이 끝나면 진행 중인 첫 게임으로 자동 전환됩니다.</td></tr><tr><td>오른쪽 (바인 요청)</td><td>손님이 앱에서 보낸 참가 요청이 <b>최대 3건</b> 표시 — 이름·경과 시간(방금/몇 분 전)·요청 게임(메인/사이드). 3건이 넘으면 "외 N건 · 장부에서 전체 관리 →"로 이동.</td></tr></table><p>대기 요청은 장부로 넘어가지 않고 이 카드에서 바로 처리할 수 있습니다.</p><ol><li><b>✓ 짧게 탭</b> — 결제 기록 없이 승인만(손님이 게임에 추가됨). 결제는 나중에 장부에서 따로 기록.</li><li><b>✓ 길게 누르기(약 0.5초)</b> — 결제까지 한 번에. 작은 창이 열리고 그 게임의 바인 금액(원)이 자동 입력됩니다(리바인·할인 시 직접 수정 가능). <b>현금/카드/이체</b> 중 하나를 탭하면 전액 그 수단으로 기록되며 승인 완료. 자주 쓰는 결제수단이 맨 앞 초록 버튼으로 자동 정렬됩니다(사용할수록 이 기기에서 학습).</li><li><b>분할</b> 버튼 — 현금/카드/이체 금액을 나눠 입력. 합계가 바인 금액과 일치하면 초록으로 표시되어 확인이 쉽습니다.</li><li><b>✕</b> — 요청 거절.</li></ol><div class="warn">⚠ 결제 입력 합계가 0원이면 "금액을 입력하세요"가 뜨고 승인되지 않습니다. 또 승인·거절 처리 중에는 버튼이 잠깐 비활성화되어 중복 처리를 막습니다.</div><h3>미니 추세 — 오늘 vs 평소</h3><p>클락이 진행 중이고 최근 4주간 같은 요일 장부 데이터가 있으면 카드 하단에 <b>오늘 엔트리 vs 같은 요일 4주 평균</b>이 ▲▼%와 함께 표시됩니다. 이 줄을 탭하면 주차별 막대그래프(평균 점선 포함)로 펼쳐지고, "통계에서 자세히 →"로 통계 화면에 갈 수 있습니다.</p><div class="tip">✅ 영업 중엔 이 카드 하나로 "블라인드 얼마 남았나 + 지금 손님 몇 명 + 새 참가 요청"을 다 볼 수 있어, 홀에서 폰만 봐도 운영이 됩니다.</div>
 </section>
 
 <section id="dashboard-todo-status">
