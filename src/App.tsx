@@ -138,7 +138,7 @@ import { getPostById,
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
 import { enablePush, isPushSubscribed, pushSupported } from './api/push';
 import { rememberQrIntent, takeQrIntent, clearQrIntent } from './lib/pendingQrIntent';
-import { setCurrentView, takeViewIntent } from './lib/pendingViewIntent';
+import { noteIntendedView, setCurrentView, takeViewIntent } from './lib/pendingViewIntent';
 import { currentViewFor, restoreActionFor } from './lib/viewIntentRestore';
 import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral, claimPendingReferralTickets } from './api/referrals';
 import BusinessFooter, { FooterActionsContext } from './components/features/BusinessFooter';
@@ -1058,7 +1058,14 @@ export default function App() {
    *    전부 **실제 문자열 인자**를 들고 이 함수를 지나므로 종전대로 보드 직행이다 — 이미 뿌려진 QR·공유
    *    링크가 그 약속을 믿고 있다. */
   const openEvent = useCallback((slug?: string) => {
-    if (slug === undefined) { startTransition(() => setEventListOpen(true)); return; }
+    // R-01(2026-10-01) — 배포 스큐로 이 청크가 깨지면 새로고침이 **여기로** 돌아오게 적는다(pendingViewIntent).
+    //   'list' 는 목록 판의 부팅 딥링크(`?event=list`)다 — 캠페인 slug 가 아니다.
+    if (slug === undefined || slug === 'list') {
+      noteIntendedView({ kind: 'event', id: 'list' });
+      startTransition(() => setEventListOpen(true));
+      return;
+    }
+    noteIntendedView({ kind: 'event', id: slug });
     // '1'·'true' 는 캠페인이 하나뿐이던 시절의 딥링크·복원 토큰이다(이미 뿌려진 QR·공유 링크에 남아 있다).
     //   그때의 '그 하나' = 지금의 '그 하나' 이므로 **지금 열려 있는 캠페인**으로 읽는다.
     //   ⚠ 승격 규칙은 여기 한 곳에만 둔다 — 딥링크·배너 링크·로그인 복원이 전부 이 함수를 지난다.
@@ -1178,6 +1185,8 @@ export default function App() {
     //   (VT 는 전환 중 히트테스트가 <html> 로 떨어져 rescue 가 필요했다.)
     //   `_dir` 은 뒤로가기 경로(commitTab(t,'back'))의 호출 모양을 지키려고 남긴다 — 방향 연출은 없다.
     void _dir;
+    // R-01(2026-10-01) — 누른 탭을 커밋 **전에** 적는다. 첫 방문 청크가 배포 스큐로 깨지면 lazyWithReload 가 이 탭으로 새로고침한다.
+    noteIntendedView({ kind: 'tab', id: t });
     // 6차 PANE-HANDOFF(2026-09-26) — 떠나는 판의 화면 자리를 커밋 **전에** 적고 스왑 프레임 전환을 끈다(src/lib/tabCover.ts 6차 절).
     //   커밋 뒤 layout effect 의 handOffPane 이 그 판을 제자리에 세웠다가 새 판 첫 프레임 뒤 걷는다.
     notePaneLeaving(activeTabRef.current, t, !seenTabs.has(t));
@@ -1682,6 +1691,14 @@ export default function App() {
     if (!v) return;
     // '1'·'true' 승격은 openEvent 안에 있다(여기·배너 링크·로그인 복원이 같은 규칙을 쓰게).
     openEvent(v);
+    // `?event=list`(청크 복구 새로고침의 목록 목적지 — R-01)는 `?tab=` 처럼 1회성이다. 목록은 주소를 가진 화면이 아니다.
+    if (v === 'list') {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('event');
+        window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+      } catch { /* noop */ }
+    }
   }, [openEvent]);
 
   // 열려 있는 동안 주소에 남긴다 — 새로고침·공유가 **같은 대상**으로 간다.
@@ -2054,6 +2071,7 @@ export default function App() {
   const [postNav, setPostNav]           = useState<PostNavCtx | null>(null);
   const openPostWithNav = useCallback((p: CommunityPost, nav?: PostNavCtx) => {
     setPostNav(nav ?? null);
+    noteIntendedView({ kind: 'post', id: p.id }); // R-01 — 청크 복구 새로고침의 목적지
     startTransition(() => setOpenPost(p)); // 폴백 스로틀 회피 — 위 openLogin 주석 참고
   }, []);
   // '내 정보' 에서 연 게시글은 닫을 때 '내 정보' 로 — 대회(meReturnRef)에는 있던 복귀가 게시글에는 빠져 있었다(연결 감사 C).
@@ -3058,6 +3076,7 @@ export default function App() {
     //   (design-reviewer flick 1280 실측, 두 빌드 공통). 닫기(closeSchedule)도 같은 날 모핑을 걷었다.
     //   `lazyWithReload` 는 청크가 캐시에 있어도 첫 렌더에 한 번 서스펜드한다 — 트랜지션이면 폴백을 커밋하지 않고 목록을 유지한다
     //   (같은 조리법: openLogin · openMeCb · openEvent).
+    noteIntendedView({ kind: 'schedule', id: s.id }); // R-01 — 청크 복구 새로고침의 목적지
     startTransition(() => setOpenSchedule(s));
   }, []);
   // [F09] '내 정보'(예약 내역·알림 미리보기)에서 연 상세는 닫을 때 **내 정보로 돌아온다**.

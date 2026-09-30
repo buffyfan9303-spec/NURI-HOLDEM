@@ -69,6 +69,49 @@ export function getCurrentView(): ViewIntent | null {
   return currentView;
 }
 
+// ── 방금 누른 화면(청크 새로고침 복구용) ───────────────────────────────────────
+// R-01(2026-10-01): 배포 뒤 옛 청크 import 가 실패하면 lazyWithReload 가 문서를 다시 받는다.
+//   그때 `location.reload()` 는 부팅 기본 탭(홈)으로 떨어뜨려 **사용자가 누른 곳이 사라졌다**
+//   (GTO·캘린더·일정 상세·이벤트 4경로 전부 홈 도착 — audit-regress-1001 R-01).
+//   누른 순간의 목적지는 아직 커밋 전(트랜지션이 서스펜드 중)이라 위 currentView 에 없다 → 여는 쪽이 따로 적는다.
+let intended: { v: ViewIntent; at: number } | null = null;
+let intendedTab: string | null = null;
+/** 이 시간 안에 누른 것만 '방금 누른 곳' 이다 — 오래된 것은 이미 닫혔을 수 있어 지금 떠 있는 화면(currentView)을 쓴다. */
+const INTENT_FRESH_MS = 10_000;
+
+/** 탭·오버레이를 **여는 순간** 부른다(커밋 전). */
+export function noteIntendedView(v: ViewIntent): void {
+  if (!isViewIntent(v)) return;
+  if (v.kind === 'tab') intendedTab = v.id;
+  intended = { v: { kind: v.kind, id: v.id }, at: Date.now() };
+}
+
+/** 부팅 딥링크 문법(App.tsx 가 이미 읽는 파라미터)만 쓴다 — 새 부팅 경로를 만들지 않는다. */
+const BOOT_PARAM: Record<ViewKind, string> = { tab: 'tab', event: 'event', schedule: 's', post: 'post', venue: 'venue' };
+
+/**
+ * 청크 복구 새로고침이 돌아갈 주소(경로+쿼리). 방금(10초 안) 누른 화면 → 없으면 지금 떠 있는 화면.
+ * 오버레이면 그 밑의 탭도 같이 싣는다(닫았을 때 홈이 아니라 원래 탭).
+ * ⚠ 해시는 싣지 않는다 — 같은 주소 + 해시로의 이동은 '조각 이동'이라 문서를 다시 받지 않는다.
+ * ⚠ id 는 isSafeIntentId(허용 목록)를 통과한 값뿐이고 경로는 현재 경로 그대로다 — 주소를 만들 여지가 없다.
+ */
+export function reloadUrlForIntent(loc: { pathname: string; search: string } = window.location, now = Date.now()): string {
+  const v = intended && now - intended.at < INTENT_FRESH_MS ? intended.v : currentView;
+  const sp = new URLSearchParams(loc.search);
+  for (const p of Object.values(BOOT_PARAM)) sp.delete(p);
+  const tab = v?.kind === 'tab' ? v.id : intendedTab;
+  if (tab && tab !== 'home') sp.set('tab', tab);
+  if (v && v.kind !== 'tab') sp.set(BOOT_PARAM[v.kind], v.id);
+  const q = sp.toString();
+  return loc.pathname + (q ? `?${q}` : '');
+}
+
+/** 테스트용. */
+export function resetIntendedView(): void {
+  intended = null;
+  intendedTab = null;
+}
+
 /** **로그인으로 페이지를 떠나기 직전**에 부른다. 열린 대상이 없으면 아무것도 남기지 않는다. */
 export function rememberCurrentView(): void {
   if (!currentView) { clearViewIntent(); return; }

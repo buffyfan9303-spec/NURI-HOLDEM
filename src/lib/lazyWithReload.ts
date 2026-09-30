@@ -10,6 +10,7 @@
 //   받기 전에는 지금과 똑같이 lazy + Suspense 폴백이 안전망이다(호출부 동작 불변).
 import { createElement, lazy, useState } from 'react';
 import type { ComponentProps, ComponentType } from 'react';
+import { reloadUrlForIntent } from './pendingViewIntent';
 
 const KEY = 'nuri_chunk_reload_at';
 
@@ -31,7 +32,8 @@ export function lazyWithReload<T extends ComponentType<any>>(factory: () => Prom
       // 최근 10초 내 이미 새로고침했다면(여전히 실패) 루프 방지 → ErrorBoundary 로 위임
       if (now - last > 10000) {
         sessionStorage.setItem(KEY, String(now));
-        window.location.reload();
+        // R-01(2026-10-01) — `reload()` 는 부팅 기본 탭(홈)으로 떨어뜨려 누른 곳을 잃었다. 누른 목적지를 부팅 딥링크로 싣는다.
+        window.location.replace(reloadUrlForIntent());
         // reload 가 진행되는 동안 컴포넌트가 마운트되지 않도록 영원히 대기
         return await new Promise<{ default: T }>(() => {});
       }
