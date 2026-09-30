@@ -49,6 +49,7 @@ import { getAllInquiries, answerInquiry, sendInquiryReplyEmail, subscribeInquiri
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { josa } from '../../lib/josa';
+import { ownerDisplayName, ownerChoices } from '../../lib/adminVenueOwner';
 
 // 1·2·3위 색 — 이모지 👑🥈🥉는 OS마다 금/은/동 색조가 달라 순위 서열이 뒤집혀 보였다.
 // 아이콘 + 토큰 색으로 옮겨 서열을 앱이 통제한다(App.tsx 시상대와 같은 규약).
@@ -1478,7 +1479,7 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
         ) : (
           <ul className="space-y-1.5">
             {manageable.map((v) => (
-              <VenueAdminRow key={v.id} venue={v} candidates={candidates} onChanged={changed} />
+              <VenueAdminRow key={v.id} venue={v} candidates={candidates} allUsers={users} onChanged={changed} />
             ))}
           </ul>
         )}
@@ -1488,7 +1489,7 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
 }
 
 // ── 매장 1건 관리(수정/업주 변경/인증/삭제) ──────────────────────────────────
-function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candidates: User[]; onChanged: () => void }) {
+function VenueAdminRow({ venue, candidates, allUsers, onChanged }: { venue: Venue; candidates: User[]; allUsers: User[]; onChanged: () => void }) {
   const toast = useToast();
   const [open, setOpen]       = useState(false);
   const [name, setName]       = useState(venue.name);
@@ -1508,7 +1509,9 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
   const [quotaAmt, setQuotaAmt] = useState('');
   const [quotaBusy, setQuotaBusy] = useState(false);
 
-  const owner = candidates.find((u) => u.id === venue.ownerId);
+  // 업주 '표시'와 선택 목록은 관리자 업주를 포함해야 한다(점검 A-08 — 후보 목록은 관리자를 빼서 '미지정'으로 보였다).
+  const ownerName = ownerDisplayName(venue.ownerId, allUsers);
+  const ownerOptions = ownerChoices(candidates, allUsers, venue.ownerId);
 
   // ⚠ 조회가 실패하면 vIssue 는 null 로 남는다. 예전에는 그 상태에서 눌러도 `!null === true` 가 되어
   //   **현재 승인 상태를 모르는 채로 '승인 ON' 을 서버에 썼다**(이용권 발급은 돈이 걸린 스위치다).
@@ -1596,7 +1599,7 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
       <div className="flex items-center gap-2 px-3 py-2">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-ink-primary truncate">{venue.name}</p>
-          <p className="text-2xs text-ink-muted truncate">{venue.region} · 업주: {owner ? (owner.nickname ?? owner.name) : '미지정'}</p>
+          <p className="text-2xs text-ink-muted truncate">{venue.region} · 업주: {ownerName}</p>
         </div>
         {venue.verificationStatus === 'verified' && (
           <span className="shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">인증</span>
@@ -1682,8 +1685,8 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
             <span className="block text-2xs text-ink-secondary mb-1">관리 업주</span>
             <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="input w-full text-sm">
               <option value="">미지정</option>
-              {candidates.map((u) => (
-                <option key={u.id} value={u.id}>{u.nickname ?? u.name} · {u.email}</option>
+              {ownerOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
               ))}
             </select>
             <span className="block text-2xs text-ink-muted mt-1">변경 시 새 업주가 인증 업주로 전환되어 이 매장을 관리합니다. <b className="text-amber-400">이전 업주</b>는 이 매장에서 제외됩니다 — 사장님(공동 업주)·장부·이용권 권한이 함께 회수됩니다.</span>
