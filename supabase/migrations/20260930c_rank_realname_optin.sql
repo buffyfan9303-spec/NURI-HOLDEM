@@ -1,6 +1,6 @@
 -- 20260930c — 순위표 실명은 **본인이 켠 경우에만, 본인인증 실명으로** 보인다.
 --
--- ⏳ 미적용 — 적용은 nuri-lead 가 MCP execute_sql 로 한다(파일 하단 '리허설' 먼저).
+-- ✅ 적용 완료(2026-09-30, nuri-lead · MCP execute_sql — 기록: 인수인계서 §3). 2026-10-01 라이브 재확인: _ranking_optin_real_name·_span·_real_name_opted_in 3개 · idx_vr_nickname_ci 존재. (원래 머리: '⏳ 미적용 초안' — 적용 뒤 표기만 누락됐었다)
 -- 🧪 2026-09-30 라이브 리허설(begin … rollback, PG 17.6) — 전문 + 자가검사 + 아래 리허설 블록:
 --   결과 `REHEARSAL_OK`(모든 단언 통과 후 의도적으로 멈춤). 뒤이어 확인: _ranking_optin_real_name 0개 ·
 --   global_ranking_totals 반환형 원래대로(real_name 없음) · 임시 행 0 · 시험 계정 pref NULL 그대로 → 롤백 확인.
