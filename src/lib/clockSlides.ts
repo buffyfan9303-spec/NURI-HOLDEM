@@ -62,7 +62,7 @@ export function visibleExtraPages(pages: readonly ClockExtraPage[] | null | unde
   // 서버를 거치지 않은(또는 트리거 이전의) 행이 스칼라·null 이어도 TV 가 깨지지 않게 문자열로 정규화한다(critical-reviewer P3).
   return list.slice(0, EXTRA_PAGES_MAX)
     .filter((p): p is ClockExtraPage => !!p && typeof p === 'object' && Array.isArray(p.rows))
-    .map((p) => ({ ...p, title: str(p.title), rows: p.rows.filter((r) => !!r && typeof r === 'object').map((r) => ({ label: str(r.label), content: str(r.content), ...(r.note ? { note: str(r.note) } : {}) })) }))
+    .map((p) => ({ ...p, title: str(p.title), rows: p.rows.filter((r) => !!r && typeof r === 'object').slice(0, EXTRA_ROWS_MAX).map((r) => ({ label: str(r.label), content: str(r.content), ...(r.note ? { note: str(r.note) } : {}) })) }))
     .filter((p) => p.rows.some((r) => r.label.trim() || r.content.trim()));
 }
 const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));

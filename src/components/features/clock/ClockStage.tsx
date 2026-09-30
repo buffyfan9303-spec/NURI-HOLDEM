@@ -455,7 +455,7 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
           {ad && (() => {
             const at = sheetNo++;
             return (
-              <div key="ad" data-ad-sheet aria-hidden={at !== cur ? true : undefined} className="flex w-full shrink-0 justify-center">
+              <div key="ad" data-ad-sheet aria-hidden={at !== cur ? true : undefined} className="flex w-full shrink-0 items-start justify-center">
                 {/* 840×1120(3:4) — 칸 폭과 52cqmin 중 작은 쪽에 맞춘다(비율 유지). */}
                 <img src={ad} alt="광고" className="block h-auto max-h-[52cqmin] w-auto max-w-full rounded-[1cqmin] object-contain"
                   onError={() => setFailedAds((s) => (s.has(ad) ? s : new Set(s).add(ad)))} />
