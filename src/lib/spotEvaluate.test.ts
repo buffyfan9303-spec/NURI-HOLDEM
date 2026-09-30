@@ -661,6 +661,18 @@ describe('앤티는 BB 한 명이 내는 총액이다', () => {
     expect(c.sourceLabel).toMatch(/BB앤티/);
   });
 
+  it('S28 — 포스팅 전 10BB·BB앤티 1BB 는 앤티 뺀 9BB 표를 본다(Nash S = 앤티 낸 뒤·블라인드 전)', () => {
+    const c = chart(evaluateSpot(base({ tableSize: 9, heroPos: 'SB', villainPos: 'BB', effectiveBb: 10, anteBb: 1 })));
+    expect(c.kind).toBe('chart_nash');
+    expect(c.sourceLabel).toMatch(/· 9BB ·/);
+    expect(c.differences).toEqual([]);
+  });
+
+  it('앤티 없으면 입력 스택 표 그대로 — 10BB 는 10BB 표', () => {
+    const c = chart(evaluateSpot(base({ tableSize: 9, heroPos: 'SB', villainPos: 'BB', effectiveBb: 10, anteBb: 0 })));
+    expect(c.sourceLabel).toMatch(/· 10BB ·/);
+  });
+
   it('BB앤티 0.5BB 는 1BB 표를 참조하되 그 차이를 반드시 적는다 — 없는 0.5BB 표를 있는 척하지 않는다', () => {
     const c = chart(evaluateSpot(base({ tableSize: 9, heroPos: 'CO', villainPos: 'BB', effectiveBb: 20, anteBb: 0.5 })));
     expect(c.kind).toBe('normalized_reference');
