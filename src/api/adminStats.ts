@@ -16,7 +16,9 @@ export interface PlanUsageRow { metric: string; used: number; limitVal: number; 
 export async function getFreePlanUsage(): Promise<PlanUsageRow[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('free_plan_usage');
-  if (error || !data) return [];
+  // 🔴 점검 A-10: 실패를 [] 로 돌려주면 호출 카드가 '데이터 없음'처럼 통째로 사라진다 — 던져서 카드가 실패를 말하게 한다.
+  if (error) throw new Error(error.message);
+  if (!data) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data as any[]).map((r) => ({
     metric: String(r.metric), used: +r.used || 0, limitVal: +r.limit_val || 0,
@@ -27,9 +29,12 @@ export async function getFreePlanUsage(): Promise<PlanUsageRow[]> {
 export async function getAdminPlatformStats(): Promise<PlatformStats | null> {
   if (IS_MOCK) return null;
   const { data, error } = await supabase.rpc('admin_platform_stats');
+  // 🔴 점검 A-10: 오류·빈 응답을 null 로 삼키면 '지표 없음'과 '못 읽음'이 구분되지 않고 재시도도 없다.
+  //   서버는 관리자가 아니면 raise 한다 — 그 문구를 그대로 올려 화면이 이유를 말하게 한다.
+  if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const r = (data as any)?.[0];
-  if (error || !r) return null;
+  if (!r) throw new Error('운영 지표가 비어 있습니다');
   return {
     users: +r.users || 0, newUsers7d: +r.new_users_7d || 0, newUsers30d: +r.new_users_30d || 0,
     venues: +r.venues || 0, activeVenues: +r.active_venues || 0,

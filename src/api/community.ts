@@ -1436,6 +1436,9 @@ export async function getAdminStats(): Promise<AdminStats> {
     cnt('schedules', (q) => q.eq('approved', false).is('rejected_at', null)),
     cnt('profiles', (q) => q.gt('joined_at', since)),
   ]);
+  // 🔴 점검 A-10: RLS 가 막은 count 는 오류가 아니라 **0** 으로 온다(권한 없는 세션에서 '전체 회원 0 · 업주 0' 이 그려졌다).
+  //   로그인한 관리자의 profiles 는 최소 본인 1행이라 0 일 수 없다 — 0 이면 '없음'이 아니라 '못 읽음'이다.
+  if (users === 0) throw new Error('운영 지표를 읽을 수 없습니다 — 열람 권한이 없거나 회원 목록이 비어 내려왔습니다');
   return { users, owners, pendingOwners, suspended, posts, listings, schedules, pendingSchedules, signups7d };
 }
 

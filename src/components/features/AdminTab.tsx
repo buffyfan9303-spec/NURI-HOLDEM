@@ -478,12 +478,17 @@ function HallOfFameAdminCard() {
   const toast = useToast();
   const last = lastMonthPeriod();
   const [rows, setRows] = useState<HallOfFameRow[]>([]);
+  // 점검 A-10: 목록을 못 읽은 채 빈 폼이 '비어 있는 것'처럼 보이면 기존 등록을 덮어쓰게 된다 — 못 읽으면 저장을 막는다.
+  const [rowsErr, setRowsErr] = useState<unknown>(null);
+  const [rowsLoaded, setRowsLoaded] = useState(false);
   const [period, setPeriod] = useState(last);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Record<number, { nickname: string; note: string }>>({
     1: { nickname: '', note: '' }, 2: { nickname: '', note: '' }, 3: { nickname: '', note: '' },
   });
-  const reload = useCallback(() => { adminListHallOfFame().then(setRows).catch(() => {}); }, []);
+  const reload = useCallback(() => {
+    adminListHallOfFame().then((r) => { setRowsErr(null); setRows(r); setRowsLoaded(true); }).catch((e) => { setRowsErr(e); });
+  }, []);
   useEffect(() => { reload(); }, [reload]);
   // 기간을 바꾸면 그 기간에 이미 등록된 값을 폼에 싣는다(없으면 빈칸)
   useEffect(() => {
@@ -512,6 +517,7 @@ function HallOfFameAdminCard() {
 
   const saveRank = async (rank: number) => {
     const d = draft[rank];
+    if (!rowsLoaded) { toast.show('등록된 명예의 전당을 읽지 못했습니다 — 다시 불러온 뒤 저장해 주세요', 'error'); return; }
     if (!d?.nickname.trim()) { toast.show('닉네임을 입력해 주세요', 'error'); return; }
     setBusy(true);
     try {
@@ -545,6 +551,10 @@ function HallOfFameAdminCard() {
         아무것도 등록하지 않으면 지금처럼 <b className="text-ink-secondary">입상 기록 자동 집계</b>가 그대로 표시됩니다.
       </p>
 
+      {rowsErr != null && (
+        <LoadErrorCard error={rowsErr} what="등록된 명예의 전당" onRetry={reload} compact
+          hint="지금 저장하면 이미 등록된 순위를 덮어쓸 수 있어 저장을 막았습니다 — 다시 불러온 뒤 수정해 주세요." />
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         <label className="flex items-center gap-1 text-xs text-ink-muted">기간
           <select value={period} onChange={(e) => setPeriod(e.target.value)} className="input w-auto text-sm">
@@ -569,7 +579,7 @@ function HallOfFameAdminCard() {
             <input value={draft[rank]?.note ?? ''} maxLength={60}
               onChange={(e) => setDraft((d) => ({ ...d, [rank]: { ...d[rank], note: e.target.value } }))}
               placeholder="한 줄 소개 (예: ○○ 인비테이셔널 우승)" className="input min-w-48 flex-2 text-sm" />
-            <button type="button" onClick={() => saveRank(rank)} disabled={busy}
+            <button type="button" onClick={() => saveRank(rank)} disabled={busy || !rowsLoaded}
               className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
           </div>
         ))}
@@ -1187,8 +1197,15 @@ function AdminNavBtn({ active, onClick, icon, badge, children }: { active: boole
 function PlatformStatsCard() {
   const [s, setS] = useState<PlatformStats | null>(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => { getAdminPlatformStats().then(setS).catch(() => {}).finally(() => setLoading(false)); }, []);
+  const [err, setErr] = useState<unknown>(null);
+  const load = useCallback(() => {
+    setLoading(true);
+    getAdminPlatformStats().then((x) => { setErr(null); setS(x); }).catch((e) => { setErr(e); setS(null); }).finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load]);
   if (loading) return <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>;
+  // 점검 A-10: 오류를 삼키던 자리 — 이유와 재시도를 준다
+  if (err != null) return <LoadErrorCard error={err} what="운영 지표" onRetry={load} compact />;
   if (!s) return <p className="py-8 text-center text-2xs text-ink-muted">지표를 불러올 수 없습니다 (관리자 전용).</p>;
   const cells: { label: string; value: string; sub?: string; accent?: boolean }[] = [
     { label: '총 회원', value: s.users.toLocaleString(), sub: `+${s.newUsers7d} (7일)`, accent: true },
@@ -1226,7 +1243,11 @@ function PlatformStatsCard() {
  *      지금은 화면 문구만 고치고 이 사실을 여기 적어 둔다. */
 function PlanUsageCard() {
   const [rows, setRows] = useState<PlanUsageRow[]>([]);
-  useEffect(() => { getFreePlanUsage().then(setRows).catch(() => {}); }, []);
+  const [err, setErr] = useState<unknown>(null);
+  const load = useCallback(() => { getFreePlanUsage().then((r) => { setErr(null); setRows(r); }).catch((e) => { setErr(e); setRows([]); }); }, []);
+  useEffect(() => { load(); }, [load]);
+  // 점검 A-10: 실패하면 카드가 사라져 '사용량 여유'와 구분이 안 됐다 — 실패 카드를 남긴다
+  if (err != null) return <LoadErrorCard error={err} what="Supabase 사용량" onRetry={load} compact />;
   if (rows.length === 0) return null;
   const worst = Math.max(...rows.map((r) => r.pct));
   return (
@@ -1797,6 +1818,7 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
   const toast = useToast();
   const [staff, setStaff]     = useState<VenueStaff[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState<unknown>(null);   // 점검 A-10: 실패를 '직원 없음'으로 그리지 않는다
   const [login, setLogin]     = useState('');
   const [position, setPosition] = useState('');
   const [busy, setBusy]       = useState(false);
@@ -1804,7 +1826,7 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
   const load = useCallback(() => {
     setLoading(true);
     // 실패를 삼키면 '등록된 직원이 없습니다'(빈 상태)로 위장돼 이미 있는 딜러를 다시 추가하게 만든다
-    getVenueStaff(venueId).then(setStaff).catch(() => toast.show('직원 목록을 불러오지 못했습니다', 'error')).finally(() => setLoading(false));
+    getVenueStaff(venueId).then((s) => { setLoadErr(null); setStaff(s); }).catch((e) => { setLoadErr(e); setStaff([]); }).finally(() => setLoading(false));
   }, [venueId, toast]);
   useEffect(() => { load(); }, [load]);
 
@@ -1841,6 +1863,8 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
       {/* 직원 목록 */}
       {loading ? (
         <p className="text-center py-2 text-2xs text-ink-muted">불러오는 중…</p>
+      ) : loadErr != null ? (
+        <LoadErrorCard error={loadErr} what="직원 목록" onRetry={load} compact />
       ) : staff.length === 0 ? (
         <p className="text-center py-2 text-2xs text-ink-muted">등록된 직원이 없습니다. 위에서 닉네임 또는 이메일로 추가하세요.</p>
       ) : (
