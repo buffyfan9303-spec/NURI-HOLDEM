@@ -123,7 +123,7 @@ export default function LedgerWorkspace({ venueId, active, canViewVouchers, chil
     // 그 줄 오른쪽 끝에 겹쳐 올린다(혼자 차지하던 한 줄 41px 회수). 날짜 칸은 내용 폭(w-52)이라 겹치지 않는다.
     // 세션 목록('← 목록')·전체화면 등 날짜 줄이 없는 화면은 종전처럼 자기 줄에 남는다(:has 조건).
     <div ref={hostRef} className="group/lw lg:has-[[data-ledger-daterow]]:relative">
-      <div className="mb-2 flex items-center justify-end gap-2 lg:group-has-[[data-ledger-daterow]]/lw:absolute lg:group-has-[[data-ledger-daterow]]/lw:right-0 lg:group-has-[[data-ledger-daterow]]/lw:top-[5px] lg:group-has-[[data-ledger-daterow]]/lw:z-1 lg:group-has-[[data-ledger-daterow]]/lw:mb-0">
+      <div className="mb-2 flex items-center justify-end gap-2 lg:group-has-[[data-ledger-daterow]]/lw:absolute lg:group-has-[[data-ledger-daterow]]/lw:[inset:5px_0_auto_auto]">
         {/* 권한 없는 직원은 레일이 없으니 바로가기도 없다(아래 레일과 같은 게이트) */}
         {canViewVouchers && (
           <button type="button" onClick={jumpToRail} data-testid="ledger-voucher-jump"
