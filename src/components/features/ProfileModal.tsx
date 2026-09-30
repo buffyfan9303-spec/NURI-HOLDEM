@@ -118,6 +118,33 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
       toast.show(e instanceof Error ? e.message : '설정 저장 실패', 'error');
     } finally { setRankDispBusy(false); }
   };
+  // 실명 공개는 **본인인증 실명**을 보여 준다(서버 20260930c) — 인증 전에는 보여 줄 실명이 없어 고를 수 없게 한다.
+  //   예전엔 미인증 회원도 '실명'을 누를 수 있었고, 저장은 되는데 어떤 순위표에도 아무것도 안 바뀌었다(라이브 미인증 4명).
+  const canRealName = !!user?.verified && !!user?.realName;
+  const realNamePublic = canRealName && rankDisp?.namePref === 'real_name';
+  // 같은 선택지를 두 곳에 그린다(내 정보 탭 · 본인인증 직후 보안 탭) — 상태·저장은 한 벌이다.
+  const namePrefPicker = rankDisp && (
+    <div data-testid="ranking-name-pref">
+      <p className="mt-2 block text-2xs font-medium text-ink-secondary">순위표 표시 이름</p>
+      <div className="mt-1 grid grid-cols-2 gap-1.5" role="group" aria-label="순위표 표시 이름">
+        {([['nickname', '닉네임', '기본값 · 권장'], ['real_name', '실명', canRealName ? '본인인증 실명이 공개됩니다' : '본인인증 후 고를 수 있어요']] as const).map(([k, label, hint]) => (
+          <button key={k} type="button" disabled={rankDispBusy || (k === 'real_name' && !canRealName)}
+            aria-pressed={k === 'real_name' ? realNamePublic : !realNamePublic}
+            onClick={() => saveNamePref(k)}
+            className={['min-h-[44px] rounded-input border px-2 py-2 text-2xs font-bold disabled:opacity-60',
+              (k === 'real_name' ? realNamePublic : !realNamePublic)
+                ? 'border-accent-400/60 bg-accent-300/12 text-accent-200'
+                : 'border-border-default bg-surface-float text-ink-secondary'].join(' ')}>
+            {label}
+            <span className="block font-normal text-ink-muted">{hint}</span>
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
+        실명은 <b className="text-ink-secondary">기본적으로 공개되지 않습니다</b>. ‘실명’을 직접 고른 경우에만 매장 순위·시즌·전국 순위에 실명이 붙고, 언제든 닉네임으로 되돌릴 수 있어요.
+      </p>
+    </div>
+  );
   const saveRankConsent = async (on: boolean) => {
     if (rankDispBusy || !rankDisp) return;
     const prev = rankDisp;
@@ -544,9 +571,11 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
               <span className={['min-w-0 truncate text-sm', user.realName ? 'text-ink-secondary' : 'text-ink-muted'].join(' ')}>
                 {user.realName ?? (idOn ? '본인인증을 하면 표시돼요' : '—')}
               </span>
-              <span className="inline-flex shrink-0 items-center gap-1 text-2xs text-ink-muted"><Icon name="lock" size={11} /> 비공개</span>
+              {realNamePublic
+                ? <span data-testid="real-name-state" className="inline-flex shrink-0 items-center gap-1 text-2xs font-semibold text-accent-300"><Icon name="trophy" size={11} /> 순위표에 공개</span>
+                : <span data-testid="real-name-state" className="inline-flex shrink-0 items-center gap-1 text-2xs text-ink-muted"><Icon name="lock" size={11} /> 비공개</span>}
             </div>
-            <p className="mt-1 text-2xs leading-relaxed text-ink-muted">본인인증으로만 바뀌어요 · 기본은 비공개 · 매장이 이용권 받는 사람을 확인할 때 쓰여요</p>
+            <p className="mt-1 text-2xs leading-relaxed text-ink-muted">본인인증으로만 바뀌어요 · 기본은 비공개(아래 ‘순위표 표시 이름’에서 바꿔요) · 매장이 이용권 받는 사람을 확인할 때 쓰여요</p>
           </div>
 
           {/* ── 랭킹 공개 설정(오너 #14) ─────────────────────────────────
@@ -558,24 +587,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                 <Icon name="trophy" size={13} className="shrink-0 text-accent-300" />순위 공개 설정
               </p>
 
-              <label className="mt-2 block text-2xs font-medium text-ink-secondary">순위표 표시 이름</label>
-              <div className="mt-1 grid grid-cols-2 gap-1.5">
-                {([['nickname', '닉네임', '기본값 · 권장'], ['real_name', '실명', '본명이 공개됩니다']] as const).map(([k, label, hint]) => (
-                  <button key={k} type="button" disabled={rankDispBusy}
-                    aria-pressed={rankDisp.namePref === k}
-                    onClick={() => saveNamePref(k)}
-                    className={['rounded-input border px-2 py-2 text-2xs font-bold disabled:opacity-60',
-                      rankDisp.namePref === k
-                        ? 'border-accent-400/60 bg-accent-300/12 text-accent-200'
-                        : 'border-border-default bg-surface-float text-ink-secondary'].join(' ')}>
-                    {label}
-                    <span className="block font-normal text-ink-muted">{hint}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
-                매장이 순위를 입력할 때 적은 실명은 <b className="text-ink-secondary">기본적으로 공개되지 않습니다</b>. ‘실명’을 직접 고른 경우에만 순위표에 실명이 뜹니다.
-              </p>
+              {namePrefPicker}
 
               <label className="mt-3 flex items-center justify-between gap-2 rounded-input border border-border-default px-3 py-2 text-2xs">
                 <span className="min-w-0 text-ink-secondary">
@@ -622,7 +634,12 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                 <p className="text-2xs text-ink-muted">{user.realName ? `실명 ${user.realName} · ` : ''}1인 1계정 인증됨</p>
               </div>
             </div>
-          ) : (
+          ) : null}
+          {/* 본인인증을 마친 바로 그 자리에서 실명 공개 여부를 고를 수 있게 — 기본은 닉네임(선택하지 않으면 그대로). */}
+          {user?.verified && namePrefPicker ? (
+            <div className="mt-2 rounded-aura border border-border-default bg-surface-high/60 px-3 pb-3">{namePrefPicker}</div>
+          ) : null}
+          {user?.verified ? null : (
             <div className="space-y-1.5 rounded-aura border border-accent-400/30 bg-accent-300/6 p-3">
               <p className="text-sm font-semibold text-accent-300">휴대폰 본인인증</p>
               <p className="text-2xs text-ink-muted leading-relaxed">안전한 거래와 1인 1계정을 위해 휴대폰 실명인증이 필요합니다. 매장이용권 등 일부 기능에 사용됩니다.</p>

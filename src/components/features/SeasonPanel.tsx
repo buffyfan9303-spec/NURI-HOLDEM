@@ -9,7 +9,7 @@ import {
   listVenueSeasons, getCurrentSeasonStandings, getSeasonResults, getVenueHallOfFame,
   createVenueSeason, endVenueSeason, type VenueSeason, type SeasonStanding, type HallOfFameEntry,
 } from '../../api/seasons';
-import { subscribeRankings, getVenueRealNameOptIns } from '../../api/rankings';
+import { subscribeRankings } from '../../api/rankings';
 import Icon from '../atoms/Icon';
 
 const today = () => new Date().toLocaleDateString('en-CA');
@@ -38,11 +38,8 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
   const [startsOn, setStartsOn] = useState(today());
   const [endsOn, setEndsOn] = useState(addDays(today(), 90));
 
-  // 오너 #14 — 시즌 리그·역대 챔피언도 순위표다. 실명은 본인이 '실명'을 고른 경우에만 붙인다.
-  //   기본값은 빈 집합(=전원 닉네임)이라 응답 전에도, 조회가 실패해도 실명이 새지 않는다.
-  //   조회는 매장 페이지의 순위 패널과 같은 캐시를 타므로 요청이 늘지 않는다.
-  const [realNameOptIns, setRealNameOptIns] = useState<ReadonlySet<string>>(() => new Set<string>());
-  const showsRealName = (nickname: string) => realNameOptIns.has(nickname.trim().toLowerCase());
+  // 오너 #14 — 시즌 리그·역대 챔피언도 순위표다. 실명은 서버(20260930c)가 실어 준 경우에만 붙는다:
+  //   방문자에겐 본인이 켠 사람의 인증 실명, 장부 권한자에겐 원문 → 없으면 인증 실명(리드 결정 2026-09-30).
 
   // E(2026-09-28) — 매장 전환 가드. A 매장 응답이 B 로 바꾼 뒤 도착하면 A 시즌·챔피언이 B 화면에 남았고,
   //   특히 A 의 **실명 공개 동의 목록**이 B 순위표에 적용될 수 있었다(동의 안 한 사람의 실명 노출 위험).
@@ -54,10 +51,9 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
     listVenueSeasons(v).then(mine(setSeasons)).catch(() => { if (venueRef.current === v) setSeasons([]); });
     getCurrentSeasonStandings(v).then(mine(setStandings)).catch(() => {});
     getVenueHallOfFame(v).then(mine(setHof)).catch(() => {});
-    getVenueRealNameOptIns(v).then(mine(setRealNameOptIns)).catch(() => {});
   };
   // 매장이 바뀌면 앞 매장 표를 즉시 비운다(실명 동의 목록은 빈 집합 = 전원 닉네임이 안전한 기본값).
-  useEffect(() => { setSeasons(null); setStandings([]); setHof([]); setArchiveId(null); setArchiveRows([]); setRealNameOptIns(new Set<string>()); }, [venueId]);
+  useEffect(() => { setSeasons(null); setStandings([]); setHof([]); setArchiveId(null); setArchiveRows([]); }, [venueId]);
   // 순위 입력(venue_rankings 변경) 시 시즌 standings·HOF 즉시 갱신(실시간). 퍼블리케이션 등록 완료.
   // 숨은 판(내 매장 keep-alive)은 채널을 놓는다 — 다시 보이면 이 효과가 다시 돌며 조용히 한 번 읽는다.
   useEffect(() => { if (!paneActive) return; load(); return subscribeRankings(venueId, load); }, [venueId, paneActive]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -88,7 +84,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
   const Row = ({ s }: { s: SeasonStanding }) => (
     <li className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
       <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums', medal(s.rank)].join(' ')}>{s.rank}</span>
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.nickname}{s.realName && showsRealName(s.nickname) ? <span className="text-2xs font-normal text-ink-muted"> ({s.realName})</span> : null}</span>
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.nickname}{s.realName ? <span className="text-2xs font-normal text-ink-muted"> ({s.realName})</span> : null}</span>
       <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{s.appearances}회 · 최고 {s.bestPosition}위</span>
       <span className="shrink-0 text-xs font-bold tabular-nums text-accent-200">{s.points}점</span>
     </li>
@@ -149,7 +145,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName, act
               <li key={h.seasonId} className="flex items-center gap-2.5 rounded-input border border-accent-400/20 bg-surface-low px-3 py-2">
                 <Icon name="crown" size={17} className="shrink-0 text-gold-300" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-ink-primary">{h.nickname}{h.realName && showsRealName(h.nickname) ? <span className="text-2xs font-normal text-ink-muted"> ({h.realName})</span> : null}</p>
+                  <p className="truncate text-sm font-bold text-ink-primary">{h.nickname}{h.realName ? <span className="text-2xs font-normal text-ink-muted"> ({h.realName})</span> : null}</p>
                   <p className="truncate text-2xs text-ink-muted">{h.seasonName} · {h.endsOn}</p>
                 </div>
                 <span className="shrink-0 text-xs font-bold tabular-nums text-accent-200">{h.points}점</span>
