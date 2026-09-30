@@ -17,7 +17,7 @@ const ROOT = join(__dirname, '..');
 /** 실행되는 인라인 스크립트 본문(src 없음 · JSON-LD 같은 데이터 블록 제외). */
 function inlineScripts(html: string): string[] {
   const out: string[] = [];
-  for (const m of html.replace(/\r\n/g, '\n').matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi)) {
+  for (const m of html.replace(/\r\n/g, '\n').matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script\s*>/gi)) {
     const attrs = m[1] ?? '';
     if (/\bsrc\s*=/i.test(attrs)) continue;
     const type = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(attrs)?.[1]?.toLowerCase();
