@@ -813,7 +813,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
             h-[44px]/min-h-[44px] 로 올린다. ✕ 는 히트 상자만 키우고 첫 줄 압축은 유지해야 해서
             -my-2 → -my-3 으로 다시 맞췄다(44 − 2×12.75 ≈ 18.5px, 종전 21.25px 캡션 자리와 비슷하다).
           · P-09(2026-10-01) — PC(lg+)는 상자를 걷고 세 버튼을 밑줄 링크(보이는 32px)로. 누름은 before 로 위아래 7px 씩 보태 44 이상
-            (6px 이면 이웃에 가려 실효 42 였다 — 리드 10-01 조건). ✕ 는 my-[-6px] 로 줄 높이를 34px 로 접는다. */}
+            (6px 이면 이웃에 가려 실효 42 였다 — 리드 10-01 조건). ✕ 는 세로 여백 −6px 로 줄 높이를 34px 로 접는다. */}
       {!guideHidden && (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 lg:border-transparent lg:bg-transparent lg:p-0">
         <span className="order-1 flex min-w-0 flex-1 items-center gap-2 text-xs text-ink-secondary">
