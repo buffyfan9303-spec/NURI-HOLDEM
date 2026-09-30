@@ -28,8 +28,18 @@ const localVariant = (url: string, width: number): string | undefined => {
   return url.replace(/\.webp$/i, `-${w}.webp`);
 };
 
+/** 서버 변환 방식. 폭만 넘기므로 차이는 이렇다(2026-09-30 실측, render/image):
+ *  · 'cover'(종전 기본) — 원본 높이를 **그대로 두고 가운데 폭만 잘라** 세로 띠를 준다.
+ *     715×1440 포스터 width=400 → 400×1440 · 256×151 사진 width=96 → 96×151.
+ *     그 띠를 화면의 object-cover 틀이 또 잘라, 3:4 포스터 카드는 포스터 **가운데 36%** 만 보였다.
+ *  · 'contain' — 비율 그대로 폭에 맞춰 줄인다(400×806). 자르기는 호출부 CSS 가 원본 기준으로 한다.
+ *  🔴 기본값 = contain(오너 결정 2026-09-30). 소비처 7곳이 전부 폭만 넘기고 틀 맞춤 자르기는 CSS(object-cover/contain)에
+ *  맡긴다 — 서버 cover 가 필요한 곳은 0곳이었다. 높이까지 넘겨 서버에서 잘라야 하는 곳이 생기면 그때 { fit: 'cover' } 를 붙인다. */
+export type ThumbFit = 'cover' | 'contain';
+interface ThumbOpts { quality?: number; fit?: ThumbFit }
+
 /** Storage 공개 URL을 지정 폭의 webp 썸네일 URL로 변환. 대상이 아니면 원본 그대로. */
-export function thumbUrl(url: string | undefined | null, width: number, quality = 70): string | undefined {
+export function thumbUrl(url: string | undefined | null, width: number, { quality = 70, fit = 'contain' }: ThumbOpts = {}): string | undefined {
   if (!url) return undefined;
   const local = localVariant(url, width);
   if (local) return local;
@@ -37,11 +47,11 @@ export function thumbUrl(url: string | undefined | null, width: number, quality 
   if (!url.includes('/storage/v1/object/public/')) return url;
   const base = url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
   const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}width=${width}&quality=${quality}&format=webp&resize=cover`;
+  return `${base}${sep}width=${width}&quality=${quality}&format=webp&resize=${fit}`;
 }
 
 /** 레티나 대응 srcset(1x/2x) — 폭이 확정된 목록 썸네일에 사용 */
-export function thumbSrcSet(url: string | undefined | null, width: number, quality = 70): string | undefined {
+export function thumbSrcSet(url: string | undefined | null, width: number, opts: ThumbOpts = {}): string | undefined {
   if (!url) return undefined;
   // 로컬 배너: 1x/2x 변형본이 **둘 다 있을 때만** srcset 을 낸다(한쪽만 있으면 브라우저가 404 를 고를 수 있다).
   if (localVariant(url, width)) {
@@ -49,5 +59,5 @@ export function thumbSrcSet(url: string | undefined | null, width: number, quali
     return two ? `${localVariant(url, width)} 1x, ${two} 2x` : undefined;
   }
   if (!url.includes('/storage/v1/object/public/')) return undefined;
-  return `${thumbUrl(url, width, quality)} 1x, ${thumbUrl(url, width * 2, quality)} 2x`;
+  return `${thumbUrl(url, width, opts)} 1x, ${thumbUrl(url, width * 2, opts)} 2x`;
 }

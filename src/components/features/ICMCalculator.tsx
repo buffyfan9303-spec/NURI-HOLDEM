@@ -421,7 +421,7 @@ export default function ICMCalculator({ initialMode = 'equity', variant = 'full'
                           ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/50 dark:bg-emerald-400/10 dark:text-emerald-300'
                           : 'border-border-subtle bg-surface-low text-ink-muted',
                       ].join(' ')}>
-                      {e.hand}<span className="ml-1 font-normal opacity-70">{e.eq.toFixed(0)}</span>
+                      {e.hand}<span className="ml-1 font-normal opacity-70">{e.eq.toFixed(1)}</span>
                     </span>
                   ))}
                 </div>

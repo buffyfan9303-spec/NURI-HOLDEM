@@ -118,7 +118,8 @@ describe('20260911f — 시즌 뱃지 기간 판정 3곳이 KST 다', () => {
 });
 
 describe('만 19세 게이트를 한국 달력으로 센다', () => {
-  const EDGE = lf(readFileSync(join(root, 'supabase', 'functions', 'verify-identity', 'index.ts'), 'utf-8'));
+  // 2026-09-30 판정부가 logic.ts 로 분리됐다(index.ts 는 배선만).
+  const EDGE = lf(readFileSync(join(root, 'supabase', 'functions', 'verify-identity', 'logic.ts'), 'utf-8'));
 
   it('🔴 나이를 KST 로 센다 — 생일 당일 새벽에 만 19세가 18세로 거절되던 것', () => {
     expect(EDGE).toContain('function kstNow()');

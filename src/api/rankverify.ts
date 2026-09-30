@@ -95,7 +95,7 @@ export async function myRankVerifications(): Promise<RankVerification[]> {
  * 오너 #11 이후 일반 펍은 애초에 승인될 수 없으므로 이 목록에는 대회만 남는다.
  */
 export interface DomesticRow {
-  nickname: string; points: number; totalWon: number; wins: number; overseas: number;
+  nickname: string; points: number; wins: number; overseas: number;
 }
 export async function getDomesticRankings(limit = 30): Promise<DomesticRow[]> {
   if (IS_MOCK) return [];
@@ -103,7 +103,7 @@ export async function getDomesticRankings(limit = 30): Promise<DomesticRow[]> {
   if (error) throw error; // 실패를 '0건'으로 위장하면 화면이 '아직 없어요'로 굳는다(2026-09-05 점검 #20)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
-    nickname: r.nickname, points: Number(r.points ?? 0), totalWon: Number(r.total_won ?? 0),
+    nickname: r.nickname, points: Number(r.points ?? 0),
     wins: Number(r.wins ?? 0), overseas: Number(r.overseas ?? 0),
   }));
 }

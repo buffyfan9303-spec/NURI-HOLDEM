@@ -18,6 +18,7 @@ import Icon from '../../atoms/Icon';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { equityAsync, outsAsync } from './equityClient';
 import type { OutsResult, Standing } from './equityEngine';
+import { outsHeadline } from './outsHeadline';
 import HandBoardPicker from './HandBoardPicker';
 import { useHandBoard, type HandBoardInit } from './useHandBoard';
 import { cardId } from './useDeepGto';
@@ -156,14 +157,9 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
             goodNews ? 'border-emerald-500/25 bg-emerald-500/6' : 'border-danger/25 bg-danger/6'].join(' ')}>
             <p className={['flex items-center gap-1 text-2xs font-bold', goodNews ? 'text-emerald-700 dark:text-emerald-300' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
               <Icon name={goodNews ? 'target' : 'alert'} size={12} className="shrink-0" />
-              {mine
-                /* 🔴 G2 — 이 카드 목록은 `computeOuts` 의 정의상 **"뜨면 리버까지 승률이 50%를 넘는"**
-                   카드다. "뜨면 그 순간 앞선다" 가 아니다 — 둘은 플랍에서 다르다(아래 즉시 역전 줄 참고).
-                   종전 문구가 그 둘을 한 문장으로 합쳐 뜻이 어긋났다. */
-                ? (o === 0
-                  ? (standing === 'tied' ? '비긴 상태이고, 다음 카드로 유리해지는 카드가 없습니다' : '역전 카드가 없습니다. 드로잉 데드입니다')
-                  : '이 카드가 뜨면 리버까지 승률이 50%를 넘습니다')
-                : (o === 0 ? '이미 앞서 있고, 다음 카드로는 뒤집히지 않습니다' : '이미 내가 앞서 있습니다. 이 카드가 뜨면 상대 승률이 50%를 넘습니다')}
+              {/* 🔴 G2 — 이 카드 목록은 `computeOuts` 의 정의상 **"뜨면 리버까지 승률이 50%를 넘는"** 카드다.
+                  드로잉 데드는 아웃 0 이 아니라 승률 0 일 때만(2026-09-30 감사) — outsHeadline.ts */}
+              {outsHeadline(mine, o, standing, heroEquity ?? 0, outs.next)}
             </p>
             {o > 0 && (
               <div className="flex flex-wrap gap-1">

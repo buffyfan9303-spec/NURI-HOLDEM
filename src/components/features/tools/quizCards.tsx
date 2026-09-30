@@ -7,7 +7,7 @@
 import { type ReactNode } from 'react';
 import Icon from '../../atoms/Icon';
 import { isScenarioCorrect, type Action, type Scenario } from './postflop.data';
-import { FOLD, foldFreq, verdictOf, type Quiz } from '../../../lib/preflopQuiz';
+import { foldFreq, passOf, verdictOf, type Quiz } from '../../../lib/preflopQuiz';
 
 const suitColor = (s: string) => (s.includes('♥') || s.includes('♦') ? 'text-red-400' : 'text-ink-primary');
 
@@ -134,8 +134,8 @@ export function PreflopQuizCard({ quiz, result, onAnswer, banner, footer }: {
       {/* 답 / 피드백 */}
       {!result ? (
         <div className={['grid gap-2', quiz.acts.length > 1 ? 'grid-cols-3' : 'grid-cols-2'].join(' ')} data-testid="preflop-quiz-answers">
-          <button type="button" onClick={() => onAnswer(FOLD)}
-            className="rounded-card border border-border-default bg-surface-high py-3.5 text-sm font-extrabold text-ink-secondary hover:text-ink-primary hover:border-ink-muted/50 transition-colors active:scale-[0.98]">{FOLD}</button>
+          <button type="button" onClick={() => onAnswer(passOf(quiz))}
+            className="rounded-card border border-border-default bg-surface-high py-3.5 text-sm font-extrabold text-ink-secondary hover:text-ink-primary hover:border-ink-muted/50 transition-colors active:scale-[0.98]">{passOf(quiz)}</button>
           {quiz.acts.map((a) => (
             <button key={a.label} type="button" onClick={() => onAnswer(a.label)}
               className="rounded-card border border-accent-400/50 bg-accent-300/15 py-3.5 text-sm font-extrabold text-accent-200 hover:bg-accent-300/25 transition-colors active:scale-[0.98]">{a.label}</button>

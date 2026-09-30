@@ -101,9 +101,9 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
       <div className="space-y-1" data-testid="pushfold-stack-picker">
         <div className="flex items-baseline justify-between">
           {/* 🔴 G5(2026-09-20) — **언제 기준의 스택인가**를 결과 가까이에 못박는다.
-              푸시·폴드 표는 '앤티·블라인드를 낸 뒤 남은 스택' 기준이라, 그것을 안 적으면 사용자가
-              내기 전 스택으로 읽어 한 칸 위 표를 본다(같은 핸드가 셔브/폴드로 갈리는 경계에서 결과가 뒤집힌다). */}
-          <p className="text-2xs font-bold text-ink-secondary">내 스택 <span className="font-normal text-ink-muted">(앤티·블라인드를 낸 뒤 남은 빅블라인드 개수)</span></p>
+              푸시·폴드 표의 S 는 '앤티만 낸 뒤, 블라인드는 아직 안 낸 스택' 이다(scripts/gen-nash/hu-exact.mjs 게임 정의 · HRC 동일).
+              2026-09-30 감사: 종전 라벨 '앤티·블라인드를 낸 뒤' 는 블라인드까지 빼게 해 한 칸 아래 표를 보게 했다. */}
+          <p className="text-2xs font-bold text-ink-secondary">내 스택 <span className="font-normal text-ink-muted">(앤티 낸 뒤 · 블라인드 내기 전)</span></p>
           <p className="text-sm font-bold tabular-nums text-ink-primary" aria-live="polite">{stack}<span className="text-2xs text-ink-muted"> bb</span></p>
         </div>
         <input type="range" min={0} max={NASH_STACKS.length - 1} step={1} value={stackIdx}

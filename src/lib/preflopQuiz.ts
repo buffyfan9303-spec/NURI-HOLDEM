@@ -59,7 +59,14 @@ export interface Quiz {
   /** 상대(오픈·3벳·올인한 사람) — RFI·푸시폴드처럼 상대가 없으면 생략. bb 는 상대 액션 크기(AI 해설 문맥용) */
   vs?: { label: string; bb: number };
   acts: QuizAct[]; // 버튼 순서. 폴드 빈도 = 1 − Σacts
+  /** 폴드 버튼 자리의 선택지 — 없으면 '폴드'. 콜 갈래가 없는 표(threebet 23 · SB 얼리 수비 3)는 '3벳 안 함'.
+   *  🔴 2026-09-30 감사: 그런 표의 잔여(1 − 3벳)는 콜인지 폴드인지 표가 말하지 않는다(spotEvaluate.mixOf 의 absent 와 같은 규칙).
+   *  예전엔 잔여를 '폴드' 로 채점해 SB vs BTN A9s 폴드가 3벳 모드에선 정답·수비 모드(콜 0.5)에선 오답이었다.
+   *  표가 실제로 말하는 것은 '3벳을 안 하는 빈도' 뿐이라 그 이름으로 묻고 채점한다 — 폴드 자체는 채점하지 않는다. */
+  pass?: string;
 }
+/** 폴드 자리 선택지 라벨(채점 토큰) — `Quiz.pass` 참조 */
+export const passOf = (q: Quiz): string => q.pass ?? FOLD;
 
 // 경계 집중 샘플링 — 혼합 셀 3배, 경계 인접 폴드 1.5배, 깊은 폴드 0.15배
 function weightedPick(freqMap: FreqMap): string {
@@ -103,11 +110,14 @@ function vsOf(scen: RangeScenario): Quiz['vs'] {
 }
 
 function chartQuiz(mode: Mode, scen: RangeScenario, hand: string): Quiz {
+  const acts = chartFreqs(scen).acts.map((a) => ({ label: a.label, freq: a.freq.get(hand) ?? 0 }));
+  // 첫 진입(rfi)은 콜할 대상이 없어 잔여 = 폴드 확정. 그 밖에서 콜 갈래가 없으면 잔여는 표 밖이다(Quiz.pass).
+  const residualUnknown = mode !== 'rfi' && !scen.actions.some((a) => a.key === 'call');
   return {
     mode, key: `${KEY_PREFIX[mode]}|${scen.id}|${hand}`, posLabel: scen.label,
     situ: mode === 'rfi' ? '100bb · 첫 진입' : scen.desc,
     hand, cards: labelToCards(hand), stackBb: 100, vs: vsOf(scen),
-    acts: chartFreqs(scen).acts.map((a) => ({ label: a.label, freq: a.freq.get(hand) ?? 0 })),
+    acts, ...(residualUnknown ? { pass: `${acts[0].label} 안 함` } : {}),
   };
 }
 function pushQuiz(k: number, stack: number, hand: string): Quiz | null {
@@ -177,7 +187,7 @@ export function makeQuiz(mode: Mode, retryKey?: string): Quiz {
 }
 
 export const foldFreq = (q: Quiz): number => Math.max(0, 1 - q.acts.reduce((s, a) => s + a.freq, 0));
-const freqOf = (q: Quiz, chose: string): number => (chose === FOLD ? foldFreq(q) : q.acts.find((a) => a.label === chose)?.freq ?? 0);
+const freqOf = (q: Quiz, chose: string): number => (chose === passOf(q) ? foldFreq(q) : q.acts.find((a) => a.label === chose)?.freq ?? 0);
 
 /** '주된 선택'으로 볼 빈도 하한. 이 아래여도 **혼합에 들어 있으면 오답이 아니다**(아래 참조). */
 export const MAIN_ACTION_FREQ = 0.25;
@@ -210,7 +220,7 @@ export const gradePreflop = (q: Quiz, chose: string): boolean => gradeDetail(q, 
 export function verdictOf(q: Quiz): string {
   const main = q.acts.find((a) => a.freq >= 0.75);
   if (main) return main.label;
-  if (foldFreq(q) > 0.75) return FOLD; // 폴드 정확히 75%(액션 25%)는 둘 다 정답인 혼합 구간 — 기존 규칙과 동일
+  if (foldFreq(q) > 0.75) return passOf(q); // 폴드 정확히 75%(액션 25%)는 둘 다 정답인 혼합 구간 — 기존 규칙과 동일
   return `혼합 (${q.acts.filter((a) => a.freq > 0).map((a) => `${a.label} ${Math.round(a.freq * 100)}%`).join(' · ')})`;
 }
 
@@ -224,7 +234,7 @@ export function verdictOf(q: Quiz): string {
  *   어긋나면 **정답으로 센 선택이 오답노트에 '내 답' 으로 찍힌다.**
  */
 export function wrongPickOf(q: Quiz): string | null {
-  const wrong = [...q.acts, { label: FOLD, freq: foldFreq(q) }].filter((c) => c.freq <= 0);
+  const wrong = [...q.acts, { label: passOf(q), freq: foldFreq(q) }].filter((c) => c.freq <= 0);
   return wrong.length === 1 ? wrong[0].label : null;
 }
 
