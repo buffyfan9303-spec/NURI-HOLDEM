@@ -50,6 +50,7 @@ import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { josa } from '../../lib/josa';
 import { ownerDisplayName, ownerChoices } from '../../lib/adminVenueOwner';
+import { usePendingCounts, sumKnown, type PendingKey, type PendingCounts } from './adminPendingCounts';
 
 // 1·2·3위 색 — 이모지 👑🥈🥉는 OS마다 금/은/동 색조가 달라 순위 서열이 뒤집혀 보였다.
 // 아이콘 + 토큰 색으로 옮겨 서열을 앱이 통제한다(App.tsx 시상대와 같은 규약).
@@ -146,7 +147,7 @@ function BoostContactCard() {
 }
 
 // ── 순위 인증 승인(운영자) — 외부 대회 입상 증빙 검토. 승인/거절 시 신분증 즉시 삭제 ──
-function VenueOwnerRequestsCard() {
+function VenueOwnerRequestsCard({ onChanged }: { onChanged?: () => void }) {
   const toast = useToast();
   const [reqs, setReqs] = useState<OwnerRequest[]>([]);
   const [err, setErr] = useState<unknown>(null);
@@ -158,7 +159,7 @@ function VenueOwnerRequestsCard() {
     try {
       await adminDecideVenueOwner(r.venueId, r.userId, approve);
       toast.show(approve ? `${r.nickname} 사장님을 ${r.venueName} 공동 업주로 승인했습니다` : '요청을 거절했습니다', approve ? 'success' : 'info');
-      load();
+      load(); onChanged?.();
     } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
     setBusy(null);
   };
@@ -186,7 +187,7 @@ function VenueOwnerRequestsCard() {
   );
 }
 
-function VoucherQuotaAdminCard() {
+function VoucherQuotaAdminCard({ onChanged }: { onChanged?: () => void }) {
   const toast = useToast();
   const [reqs, setReqs] = useState<AdminCreditRequest[]>([]);
   const [err, setErr] = useState<unknown>(null);
@@ -208,7 +209,7 @@ function VoucherQuotaAdminCard() {
           : '요청을 반려했습니다',
         approve ? 'success' : 'info',
       );
-      load();
+      load(); onChanged?.();
     } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
     setBusy(null);
   };
@@ -256,7 +257,7 @@ const VERIFY_CHECKS: { key: string; label: string }[] = [
   { key: 'edit', label: '편집 흔적이 없는가(글꼴 불일치·경계 부자연·해상도 차이)' },
 ];
 
-function RankVerifyAdminCard() {
+function RankVerifyAdminCard({ onChanged }: { onChanged?: () => void }) {
   const toast = useToast();
   const [list, setList] = useState<RankVerification[]>([]);
   const [err, setErr] = useState<unknown>(null);
@@ -292,7 +293,7 @@ function RankVerifyAdminCard() {
     try {
       await adminDecideRankVerification(v, ok, { note });
       toast.show(ok ? '대회로 승인했습니다. 국내 순위에 합산됩니다' : '반려했습니다', 'success');
-      reload();
+      reload(); onChanged?.();
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
     finally { setBusy(null); }
@@ -1079,7 +1080,7 @@ function PendingGroupsPanel({ users, onChanged }: { users: User[]; onChanged: ()
     try {
       await rejectGroup(g.id);
       await logActivity({ action: 'reject', targetType: 'venue', targetId: g.id, targetOwnerId: g.ownerId, targetSummary: `${isVenue(g) ? '매장 입점' : '그룹 개설'} 반려 · ${g.name}` });
-      toast.show('반려했습니다', 'info'); reload();
+      toast.show('반려했습니다', 'info'); reload(); onChanged();
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
     finally { setBusy(null); }
@@ -1135,12 +1136,12 @@ const aic = (children: ReactNode) => (
 // 섹션 설명 — 공용 SectionHeader(내 매장과 동일 규격)
 const ADMIN_DESC: Record<Section, string> = {
   analytics: '플랫폼 핵심 지표 · 회원·매장·대회·출석·추천·푸시 한눈에',
-  pending: '업주가 등록한 포스터 검수. 승인하면 일정 탐색에 노출됩니다',
-  reorder: '포스터 노출 순서 · 부스트 연락처 · 공동 업주 승인 · 이용권 충전 요청 · 순위 인증 심사 · 주간 미션 · 명예의 전당',
+  pending: '처리할 승인 대기 전부 — 포스터 · 입점·그룹 개설 · 공동 업주 · 이용권 한도 · 이벤트 신청 · 순위 인증',
+  reorder: '포스터 노출 순서 · 부스트 연락처 · 주간 미션 · 명예의 전당 · 매장 노출 순서',
   exposure: '커뮤니티 광고 노출·순서 · 외치기 대기열 · 게시물 고정·블라인드 · 공지 순서',
   switches: '재배포 없이 켜고 끄는 기능 스위치 · 전 매장 공통 설정',
   users: '회원 검색 · 제재 · 섀도우밴 · 닉네임 변경 · 활동점수(구매 환불 · 지급)',
-  venues: '매장 생성 · 인증 · 입점·그룹 개설 승인',
+  venues: '매장 생성 · 인증 · 매장별 관리(입점·그룹 개설 승인은 승인 대기)',
   events: '제휴 이벤트 캠페인 · 카드판 구성(서버 셔플) · 검증 · 공개/종료 · 경품 이용권 집계',
   reports: '신고 접수 처리',
   support: '고객센터 1:1 문의 답변',
@@ -1149,7 +1150,7 @@ const ADMIN_DESC: Record<Section, string> = {
 
 const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'analytics', label: '운영 분석', icon: aic(<><path d="M3 3v18h18" /><path d="m7 14 4-4 3 3 5-6" /></>) },
-  { id: 'pending', label: '포스터 승인', icon: aic(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></>) },
+  { id: 'pending', label: '승인 대기', icon: aic(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></>) },
   { id: 'reorder', label: '게시글 관리', icon: aic(<><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></>) },
   // lucide eye 경로(Icon.tsx LUCIDE 와 같은 글리프)
   { id: 'exposure', label: '노출 관리', icon: aic(<><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></>) },
@@ -1275,6 +1276,10 @@ export default function AdminTab({
   // 반려된 포스터는 대기열에서 뺀다 — 반려는 삭제가 아니라 상태다(20260911o).
   // 마이그레이션 전 서버에서는 rejectedAt 이 전부 null 이라 종전(미승인=대기)과 똑같이 동작한다.
   const pending = schedules.filter((s) => !s.approved && !s.rejectedAt);
+  // 승인 대기 합계(점검 A-09) — 포스터 + 입점·그룹 + 공동 업주 + 이용권 한도 + 이벤트 신청 + 순위 인증.
+  //   섹션을 옮길 때마다 다시 센다. 조회 실패한 대기열은 0 이 아니라 '—'(모름)다.
+  const { counts: pendingCounts, reload: reloadPendingCounts } = usePendingCounts(section);
+  const pendingTotal = sumKnown(pendingCounts, pending.length);
 
   /* ⚠ 폭은 다른 탭과 같아야 한다(오너 2026-09-15 "내 매장 들어가는 순간 전체가 넓어져 이질감").
      관리자만 max-w-5xl(1088px) 단독이라 다른 탭 본문(1188px)보다 100px 좁았다.
@@ -1287,7 +1292,7 @@ export default function AdminTab({
       <div className="lg:flex lg:gap-4">
         <nav data-admin-secbar="" className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
           {ADMIN_SECTIONS.map((a) => (
-            <AdminNavBtn key={a.id} icon={a.icon} active={section === a.id} onClick={() => goSubTab('admin-sec', ADMIN_ORDER, section, a.id, () => { setUserSearch(''); setSection(a.id); })} badge={a.id === 'pending' && pending.length > 0 ? pending.length : undefined}>{a.label}</AdminNavBtn>
+            <AdminNavBtn key={a.id} icon={a.icon} active={section === a.id} onClick={() => goSubTab('admin-sec', ADMIN_ORDER, section, a.id, () => { setUserSearch(''); setSection(a.id); })} badge={a.id === 'pending' && pendingTotal > 0 ? pendingTotal : undefined}>{a.label}</AdminNavBtn>
           ))}
         </nav>
 
@@ -1302,13 +1307,23 @@ export default function AdminTab({
           {section === 'analytics' && <PlatformStatsCard />}
           {section === 'venues' && (
             <div className="space-y-3">
-              <PendingGroupsPanel users={users} onChanged={() => onReloadVenues?.()} />
               <VenueCreateCard venues={venues} users={users} onCreated={() => onReloadVenues?.()} />
             </div>
           )}
 
           {section === 'pending' && (
-            <PendingApprovalSection pending={pending} onApprove={onApproveSchedule} onReject={onRejectSchedule} />
+            <div className="space-y-3" data-testid="admin-pending-section">
+              <PendingSummary posters={pending.length} counts={pendingCounts} />
+              <PendingGroupsPanel users={users} onChanged={() => { onReloadVenues?.(); reloadPendingCounts(); }} />
+              <PendingApprovalSection pending={pending} onApprove={onApproveSchedule} onReject={onRejectSchedule} />
+              <VenueOwnerRequestsCard onChanged={reloadPendingCounts} />
+              <VoucherQuotaAdminCard onChanged={reloadPendingCounts} />
+              {/* 🔴 매장 이벤트 신청·제안 대기열(2026-09-18).
+                  업주 쪽 신청 화면(VenueEventRequestPanel)과 **같은 커밋**에 넣는다 —
+                  오늘 한도 증액에서 요청 화면만 만들어 막다른 길을 낸 실수를 반복하지 않는다. */}
+              <VenueEventAdminCard onChanged={reloadPendingCounts} />
+              <RankVerifyAdminCard onChanged={reloadPendingCounts} />
+            </div>
           )}
           {section === 'reorder' && (
             <div className="space-y-3">
@@ -1320,13 +1335,6 @@ export default function AdminTab({
                 ? (
                   <>
                     <BoostContactCard />
-                    <VenueOwnerRequestsCard />
-                    <VoucherQuotaAdminCard />
-                    {/* 🔴 매장 이벤트 신청·제안 대기열(2026-09-18).
-                        업주 쪽 신청 화면(VenueEventRequestPanel)과 **같은 커밋**에 넣는다 —
-                        오늘 한도 증액에서 요청 화면만 만들어 막다른 길을 낸 실수를 반복하지 않는다. */}
-                    <VenueEventAdminCard />
-                    <RankVerifyAdminCard />
                     <MissionsAdminCard />
                     <HallOfFameAdminCard />
                     <DraggableList initialItems={schedules.filter((s) => s.approved)} />
@@ -1937,19 +1945,45 @@ function PendingApprovalSection({
 }) {
   if (pending.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-2 text-ink-muted">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-30" aria-hidden><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        <p className="text-sm">승인 대기 중인 포스터가 없습니다</p>
-        <p className="text-2xs">업주가 등록한 포스터가 여기에서 검토됩니다</p>
-      </div>
+      <section className="rounded-card border border-border-subtle bg-surface-low p-3">
+        <h3 className="text-sm font-bold text-ink-primary">포스터 승인</h3>
+        <p className="mt-1 text-2xs text-ink-muted">승인 대기 중인 포스터가 없습니다 · 업주가 등록한 포스터가 여기에서 검토됩니다</p>
+      </section>
     );
   }
 
   return (
+    <section className="space-y-2">
+      <h3 className="text-sm font-bold text-amber-400">포스터 승인 ({pending.length})</h3>
     <ul className="space-y-2">
       {pending.map((s) => (
         <PendingRow key={s.id} schedule={s} onApprove={() => onApprove(s.id)} onReject={() => onReject(s.id)} />
       ))}
+    </ul>
+    </section>
+  );
+}
+
+// 승인 대기 요약 — 대기열 6종의 개수를 **0 까지 포함해** 한 줄에 보인다(비면 카드가 접혀 사라지기 때문).
+// 모름(조회 실패)은 '—' 다. 0 은 '없다'는 단정이라 쓰지 않는다.
+const PENDING_SUMMARY_LABEL: { key: PendingKey | 'posters'; label: string }[] = [
+  { key: 'posters', label: '포스터' }, { key: 'listings', label: '입점·그룹' }, { key: 'owners', label: '공동 업주' },
+  { key: 'quota', label: '이용권 한도' }, { key: 'events', label: '이벤트 신청' }, { key: 'rank', label: '순위 인증' },
+];
+function PendingSummary({ posters, counts }: { posters: number; counts: PendingCounts }) {
+  const val = (k: PendingKey | 'posters') => (k === 'posters' ? posters : counts[k]);
+  return (
+    <ul data-testid="admin-pending-summary" className="flex flex-wrap gap-1.5">
+      {PENDING_SUMMARY_LABEL.map(({ key, label }) => {
+        const n = val(key);
+        return (
+          <li key={key} data-pending-key={key}
+            className={['rounded-badge border px-2 py-1 text-2xs font-semibold tabular-nums',
+              n ? 'border-amber-500/40 bg-amber-500/10 text-amber-400' : 'border-border-subtle bg-surface-low text-ink-muted'].join(' ')}>
+            {label} <b>{n == null ? '—' : n}</b>
+          </li>
+        );
+      })}
     </ul>
   );
 }
