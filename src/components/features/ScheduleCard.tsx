@@ -319,6 +319,11 @@ export function titleWithoutGtd(title: string, hasGtdColumn: boolean): string {
     // "… GTD 1000만"
     .replace(/[\s·,|/-]*(?:GTD|gtd|Gtd)\s*\d[\d,]*\s*(?:억|만)?\s*$/u, '')
     .trim();
+  // W-24(2026-09-30): 떼고 남은 것이 제목 구실을 못 하면 원문을 쓴다 — '퀸 2,410만 GTD'→'퀸',
+  //   '3만에 1200GTD'→'3만에' 처럼 뜻이 끊겼다. 한 글자뿐이거나 조사(에·의·로·와·과·도)로 끝나면
+  //   GTD 가 문장의 일부였다는 뜻이다.
+  // ponytail: 글자 수·조사 휴리스틱 — 매장명만 남는 2글자 이상('로티')은 못 잡는다. 필요하면 pubName 비교를 더한다.
+  if (cut.replace(/\s/g, '').length < 2 || /(?:에|의|로|와|과|도)$/u.test(cut)) return title;
   return cut || title;
 }
 
