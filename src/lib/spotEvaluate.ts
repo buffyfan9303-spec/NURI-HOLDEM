@@ -528,15 +528,22 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   const idx = HAND_ORDER.indexOf(combo);
   if (idx < 0) return null;
 
-  const exact = NASH_STACKS.find((v) => Math.abs(v - s.effectiveBb) < 0.01);
+  // 🔴 2026-09-30 — Nash 표의 S 는 "앤티 낸 뒤·블라인드 내기 전" 스택이다(scripts/gen-nash/hu-exact.mjs:6-7,38-39).
+  //   입력 effectiveBb 는 원장 계약상 **포스팅 전** 스택(spot.ts:305)이라 BB앤티만큼 빼야 같은 뜻이 된다
+  //   (9인 SB·BB 10bb·앤티 1 → 9bb 표. 감사 S28 + Fable 교차 판정 일치).
+  //   오너 2026-09-30: "1bb 까지는 신경 쓸 필요 없어, 20bb 표를 정확하게" — S 에 맞는 표가 없으면
+  //   입력 스택의 표를 **정확 일치**로 본다(20bb·앤티 1 → S 19 표 없음 → 20bb 표, 차이 문구 없음).
+  const S = Math.round((s.effectiveBb - (s.anteBb > 0 ? s.anteBb : 0)) * 100) / 100;
+  const exact = NASH_STACKS.find((v) => Math.abs(v - S) < 0.01)
+    ?? NASH_STACKS.find((v) => Math.abs(v - s.effectiveBb) < 0.01);
   // 🔴 G4(2026-09-20) — `find` 는 **배열 순서상 처음** 조건을 만족하는 값을 준다. `NASH_STACKS` 가
   //   오름차순이라 9.8BB 는 |9−9.8|=0.8 ≤1 인 **9BB** 표를 골랐다. 10BB(|10−9.8|=0.2)가 더 가깝다.
   //   ±1BB 허용 범위와 "보간하지 않는다" 는 원칙은 그대로 두고, 그 안에서 **가장 가까운** 표를 고른다.
   //   동률(정확히 중간, 예 9.5BB)은 **작은 쪽**으로 고정한다 — 규칙이 없으면 배열 순서에 따라
-  //   조용히 바뀌고, 낮은 스택 표가 더 보수적(셔브 빈도가 낮다)이라 안전한 쪽이다.
+  //   조용히 바뀐다. (낮은 스택 표가 보수적인 것은 아니다 — 9BB 셔브 73.91% > 10BB 71.04%. 작은 쪽은 결정성을 위해서다.)
   const near = NASH_STACKS
-    .filter((v) => Math.abs(v - s.effectiveBb) <= 1)
-    .sort((a, b) => Math.abs(a - s.effectiveBb) - Math.abs(b - s.effectiveBb) || a - b)[0];
+    .filter((v) => Math.abs(v - S) <= 1)
+    .sort((a, b) => Math.abs(a - S) - Math.abs(b - S) || a - b)[0];
   const stack = exact ?? near;
   if (stack === undefined) return null;
 
@@ -552,13 +559,15 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   const shove = clamp01(arr[idx]);
 
   const diffs: string[] = [];
-  if (exact === undefined) diffs.push(`이 표는 ${stack}BB 기준인데 입력은 ${s.effectiveBb}BB 입니다.`);
+  if (exact === undefined) diffs.push(`이 표는 ${stack}BB 기준인데 입력은 ${s.effectiveBb}BB${S !== s.effectiveBb ? `(앤티 뺀 ${S}BB)` : ''} 입니다.`);
   // nash.data 의 앤티 표는 **BB앤티 1BB** 한 벌뿐이다. 0.5BB 처럼 다른 총액이면 그 표를 참조하되 차이로 남긴다.
   if (s.anteBb > 0 && Math.abs(s.anteBb - 1) > 0.01) {
     diffs.push(`이 표는 BB앤티 1BB 기준인데 입력 앤티는 ${s.anteBb}BB 입니다.`);
   }
   return {
-    sourceLabel: `푸시·폴드 차트 · ${stack}BB · 뒤 ${k}명${s.anteBb > 0 ? ' · BB앤티' : ''}`,
+    // 2026-09-30 critical: 입력은 '짧은 쪽' 한 숫자라 누가 짧은지 모른다. 앤티를 뺀 표는 BB 가 짧거나 같을 때가 정확하고,
+    //   내가(셔버) 더 짧으면 한 칸 위 표가 맞다. 오너 "1bb 까지는 신경 쓸 필요 없어" — 판정은 두되 어떤 기준인지 라벨에 드러낸다.
+    sourceLabel: `푸시·폴드 차트 · ${stack}BB · 뒤 ${k}명${s.anteBb > 0 ? (stack < s.effectiveBb ? ' · BB앤티(앤티 뺀 스택)' : ' · BB앤티') : ''}`,
     // 올인은 레이즈 갈래로 표시한다 — 이 차트에 콜 갈래는 없다(첫 진입 셔브/폴드 두 갈래).
     // 첫 진입이라 콜할 대상 자체가 없으므로 잔여는 폴드로 **확정**된다 → absent 없음.
     mix: { raise: shove, call: 0, fold: clamp01(1 - shove) },

@@ -1,7 +1,7 @@
 // preflopQuiz — 오답 노트가 기대는 두 계약: ① 키로 문제가 그대로 복원된다 ② 저장돼 있지 않은 '내 답'은 권장의 반대로 파생된다.
 // 모드 확장(2026-09-03): 6모드 문제 생성 · 채점 경계(0.25) · 키 왕복.
 import { describe, it, expect } from 'vitest';
-import { FOLD, MODES, gradePreflop, gradeDetail, makeQuiz, modeOfKey, verdictOf, wrongPickOf, type Quiz, type QuizAct } from './preflopQuiz';
+import { FOLD, MODES, gradePreflop, gradeDetail, makeQuiz, modeOfKey, passOf, verdictOf, wrongPickOf, type Quiz, type QuizAct } from './preflopQuiz';
 import { RANGE_SCENARIOS } from './ranges.data';
 
 // ── 콜 문제는 **격리**를 본다 (2026-09-19 재산출: 빅앤티 k≥2 는 2~10bb 전부 격리, 12bb+ 만 게시 →
@@ -165,5 +165,32 @@ describe('makeQuiz(mode, key) · 오답 키 복원', () => {
     expect(makeQuiz('rfi', 'rfi|no_such_spot|AKs').key).not.toBe('rfi|no_such_spot|AKs');
     expect(makeQuiz('defend', 'def|rfi_co|AKs').key).not.toBe('def|rfi_co|AKs'); // rfi 스팟을 def 접두로 — 그룹이 달라 복원 거부
     expect(modeOfKey('xyz|a|b')).toBeNull();
+  });
+});
+
+// 🔴 2026-09-30 감사 반례 — SB 가 BTN 오픈을 받은 A9s. 짝 표 두 개(sb_3bet_btn: 3벳 0.5 / sb_vs_btn: 3벳 0.5 + 콜 0.5).
+//   예전엔 3벳 표의 잔여 0.5 를 '폴드' 로 채점해 폴드가 3벳 모드 정답·수비 모드 오답이었다(같은 결정, 반대 판정).
+describe('콜 갈래 없는 표의 잔여는 폴드로 채점하지 않는다(spotEvaluate.mixOf absent 와 같은 규칙)', () => {
+  const tb = makeQuiz('threebet', '3b|sb_3bet_btn|A9s');
+  const df = makeQuiz('defend', 'def|sb_vs_btn|A9s');
+  it('두 표가 복원되고 3벳 빈도가 같다', () => {
+    expect(tb.key).toBe('3b|sb_3bet_btn|A9s');
+    expect(df.key).toBe('def|sb_vs_btn|A9s');
+    expect(tb.acts.find((a) => a.label === '3벳')?.freq).toBe(0.5);
+    expect(df.acts.find((a) => a.label === '3벳')?.freq).toBe(0.5);
+  });
+  it('3벳 모드에는 폴드 선택지가 없고 "3벳 안 함" 으로 묻는다 — 폴드를 정답으로 세지 않는다', () => {
+    expect(passOf(tb)).toBe('3벳 안 함');
+    expect(gradeDetail(tb, FOLD)).not.toBe('best');
+    expect(passOf(df)).toBe(FOLD);
+  });
+  it('두 모드 채점 일치 — 3벳은 둘 다 정답, 3벳을 안 하는 쪽(3벳 안 함 / 콜)도 둘 다 정답', () => {
+    expect(gradeDetail(tb, '3벳')).toBe(gradeDetail(df, '3벳'));
+    expect(gradeDetail(tb, passOf(tb))).toBe('best');
+    expect(gradeDetail(df, '콜')).toBe('best');
+    expect(gradeDetail(df, FOLD)).toBe('wrong'); // 콜 갈래가 있는 표는 잔여 0 = 폴드 0 을 그대로 말한다
+  });
+  it('오픈(첫 진입)은 잔여 = 폴드 확정이라 폴드로 묻는다', () => {
+    expect(passOf(makeQuiz('rfi'))).toBe(FOLD);
   });
 });
