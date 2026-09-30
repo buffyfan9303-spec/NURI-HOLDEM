@@ -15,6 +15,8 @@ describe('디자인 개선안 1001 모바일', () => {
     expect(code('components/features/ScheduleDetailModal.tsx')).toMatch(/<div data-on-dark="" className="absolute top-3 left-3 /);
     for (const [c, v] of [['blue', '93C5FD'], ['purple', 'D8B4FE'], ['teal', '5EEAD4'], ['amber', 'FCD34D'], ['pink', 'F9A8D4'], ['emerald', '6EE7B7']])
       expect(css).toMatch(new RegExp(`html\\.light \\[data-on-dark\\] \\.text-${c}-300\\s*\\{ color: #${v}; \\}`));
+    // 보완(오너 10-01): 칩 면을 테마 무관으로 어둡게 — M-08 과 합쳐져 레터박스 위에 걸린 배지 대비(2.31)
+    expect(css).toMatch(/\n\[data-on-dark\] > span\[class\*="-500\/30"\] \{ background-color: rgb\(15 23 42 \/ \.72\); \}/);
   });
   it('M-02 날짜 레일 주말 요일에 알파가 없다', () => {
     expect(code('components/features/IntegratedSearchBar.tsx')).toMatch(/slot\.isSun \? 'text-danger-light' : slot\.isSat \? 'text-sky-400' : 'text-ink-muted'/);
