@@ -67,6 +67,10 @@ export interface LedgerBuyin {
   addonUnpaid?: boolean;
   /** 기록 시점 애드온 금액 스냅샷(원) — 나중에 세션 애드온 가격을 고쳐도 소급되지 않는다. */
   addonAmount?: number;
+  /** 20260930i — 애드온을 이용권 k장 + 남은 금액으로 받았을 때 k(T). 서버(approve_buyin_request)만 쓴다. */
+  addonTicketCount?: number;
+  /** 접수대 승인으로 생긴 행이면 그 요청 id(서버만 쓴다). 이용권 분납의 '이용권 몫'이 실제로 받은 것인지 가른다. */
+  requestId?: string | null;
 }
 
 export type AddonMethod = 'cash' | 'card' | 'transfer' | 'ticket';
@@ -271,7 +275,8 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
     const ticketWon = b.ticketCount * TICKET_WON;
     const value = cashy + b.unpaidAmount + ticketWon;
     // 티켓만으로 참가했는데 미수인 경우 — 회수 티켓을 '받은 것'으로 세면 안 된다.
-    const isTicketUnpaid = b.unpaidAmount > 0 && cashy === 0 && b.ticketCount > 0;
+    //   단 접수대 이용권 승인 행(requestId)은 이용권을 **이미 받았다** — '이용권 k장 + 남은 금액 미수' 분납(20260930i)이라 티켓 미수가 아니다.
+    const isTicketUnpaid = b.unpaidAmount > 0 && cashy === 0 && b.ticketCount > 0 && !b.requestId;
     return seal({
       ...z,
       paid: cashy,
@@ -326,16 +331,21 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
 /** 애드온 1건의 돈(원). 바인 가치(value)·엔트리와 **섞지 않는다** — 대차 항등식 gross − disc === value 는 바인만의 것이다. */
 export interface AddonFinance { count: number; revenue: number; unpaid: number; ticketWon: number; tender: Tender }
 export const ZERO_ADDON: AddonFinance = { count: 0, revenue: 0, unpaid: 0, ticketWon: 0, tender: ZERO_TENDER };
-export function addonFinance(b: Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' | 'addonAmount'>): AddonFinance {
+export function addonFinance(b: Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' | 'addonAmount'> & { addonTicketCount?: number }): AddonFinance {
   const m = b.addonMethod;
   if (m !== 'cash' && m !== 'card' && m !== 'transfer' && m !== 'ticket') return ZERO_ADDON;
   const amt = Math.max(0, Math.round(b.addonAmount ?? 0));
   const tender: Tender = { ...ZERO_TENDER };
-  if (b.addonUnpaid) { tender.unpaid = amt; return { count: 1, revenue: 0, unpaid: amt, ticketWon: 0, tender }; }
-  tender[m] = amt;
-  return m === 'ticket'
-    ? { count: 1, revenue: 0, unpaid: 0, ticketWon: amt, tender }
-    : { count: 1, revenue: amt, unpaid: 0, ticketWon: 0, tender };
+  // 20260930i — 이용권 분납 애드온: 이용권 k장(k × 1만)은 이미 받았고, 남은 금액만 addon_method(또는 미수)다.
+  //   수단과 무관하게 이용권 몫을 먼저 뗀다(Fable·critical 2026-09-30) — 전액 이용권(ticket 완납)만 금액 전부가 이용권이다.
+  //   서버는 몫 > 0 인 애드온을 'ticket' 으로 못 바꾸게 막고(20260930i §C) 몫 × 1만 < 금액을 보장한다.
+  const tk = Math.min(amt, Math.max(0, Math.round(b.addonTicketCount ?? 0)) * TICKET_WON);
+  const rest = amt - tk;
+  tender.ticket = tk;
+  if (b.addonUnpaid) { tender.unpaid = rest; return { count: 1, revenue: 0, unpaid: rest, ticketWon: tk, tender }; }
+  if (m === 'ticket') { tender.ticket = amt; return { count: 1, revenue: 0, unpaid: 0, ticketWon: amt, tender }; }
+  tender[m] = rest;
+  return { count: 1, revenue: rest, unpaid: 0, ticketWon: tk, tender };
 }
 /** W-06 — 이 행의 애드온이 정산 엔트리에 더하는 값 = 애드온 횟수 × 게임별 애드온 엔트리(기본 0 = 예전 동작).
  *  바인 엔트리(buyinFinance.entry)와는 따로 더한다 — 그쪽 항등식 entry × 단가 = value 는 바인만의 것이다. */
@@ -344,7 +354,7 @@ export function addonEntryOf(b: Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' 
   return v > 0 ? addonFinance(b).count * v : 0;
 }
 /** 애드온 합계 — 여러 행을 더한다. 화면·정산이 같은 함수를 쓴다. */
-export function addonTotals(buyins: readonly Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' | 'addonAmount'>[]): AddonFinance {
+export function addonTotals(buyins: readonly (Pick<LedgerBuyin, 'addonMethod' | 'addonUnpaid' | 'addonAmount'> & { addonTicketCount?: number })[]): AddonFinance {
   const t: AddonFinance = { ...ZERO_ADDON, tender: { ...ZERO_TENDER } };
   for (const b of buyins) {
     const a = addonFinance(b);
@@ -757,6 +767,8 @@ export const rowToBuyin = (r: any): LedgerBuyin => ({
   addonMethod: (r.addon_method ?? null) as AddonMethod | null,
   addonUnpaid: !!r.addon_unpaid,
   addonAmount: r.addon_amount ?? 0,
+  addonTicketCount: r.addon_ticket_count ?? 0,
+  requestId: r.request_id ?? null,
 });
 
 /** 얼리 판정 창 — 두 칸(분) 또는 단계(earlyTiers). */
@@ -1678,7 +1690,23 @@ export const VOUCHER_ADDON_RPC_MISSING_TEXT = '서버에 이용권 애드온 승
  *  · 'buyin'(기본) — 예전과 같다(서버가 티켓 바인 1행). 인자를 보내지 않는다 → 20260929u 적용 전 서버에서도 그대로 동작.
  *  · 'addon' — 그 손님의 가장 최근 바인 행에 이용권 애드온을 붙인다(새 바인 없음). p_voucher_use 를 보낸다.
  */
-export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }, discountIndex = 0, voucherUse: VoucherUse = 'buyin'): Promise<void> {
+/** 20260930i — 이용권이 모자라 서버가 거절했을 때(hint VOUCHER_SHORT) 서버가 계산해 실어 준 숫자. 아니면 null.
+ *  화면은 이 숫자로 '이용권 k장(k만) + 남은 금액 결제 방법' 을 묻고, 고른 방법으로 recordBuyin=true 재승인한다(금액은 서버가 다시 정한다). */
+export interface VoucherShort { need: number; have: number; remainder: number; use: VoucherUse }
+export function voucherShortOf(e: unknown): VoucherShort | null {
+  if (ledgerHintOf(e) !== 'VOUCHER_SHORT') return null;
+  const raw = (e && typeof e === 'object') ? (e as { details?: unknown }).details : null;
+  try {
+    const d = JSON.parse(typeof raw === 'string' ? raw : '') as Partial<VoucherShort>;
+    const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : NaN);
+    const s = { need: n(d.need), have: n(d.have), remainder: n(d.remainder) };
+    if (Object.values(s).some(Number.isNaN) || s.remainder <= 0) return null;
+    return { ...s, use: d.use === 'addon' ? 'addon' : 'buyin' };
+  } catch { return null; }
+}
+/** 이용권 요청에서 recordBuyin=true 는 '모자라면 남은 금액을 payMethod 로 받는다'(20260930i). 'unpaid' = 남은 금액 미수. */
+export type ShortPayMethod = 'cash' | 'card' | 'transfer' | 'unpaid';
+export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false, payMethod: ShortPayMethod = 'cash', split?: { cash: number; card: number; transfer: number }, discountIndex = 0, voucherUse: VoucherUse = 'buyin'): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq, p_record_buyin: recordBuyin, p_pay_method: payMethod, p_split: !!split, p_cash: split?.cash ?? 0, p_card: split?.card ?? 0, p_transfer: split?.transfer ?? 0, p_discount_index: discountIndex, ...(voucherUse === 'addon' ? { p_voucher_use: 'addon' } : {}) });
   if (error) {

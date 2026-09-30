@@ -197,7 +197,7 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
   const [{ data: bs }, sess, { data: rk }, resCounts] = await Promise.all([
     // buyinFinance 가 보는 필드 전부 — 분납 분해·티켓 T·미수액·할인 프리셋 index·기록 시점 스냅샷(cash/card/transfer)·buyin_at.
     supabase.from('ledger_buyins')
-      .select('id, venue_id, session_date, game_seq, player_name, entry_no, payment_method, is_unpaid, is_split, cash_amount, card_amount, transfer_amount, ticket_count, unpaid_amount, discount_index, buyin_at')
+      .select('id, venue_id, session_date, game_seq, player_name, entry_no, payment_method, is_unpaid, is_split, cash_amount, card_amount, transfer_amount, ticket_count, unpaid_amount, discount_index, buyin_at, request_id')
       .eq('venue_id', venueId).eq('player_name', name),
     // 현금단가만으론 부족하다 — 카드단가(card_amount)·할인 프리셋(discounts)까지 있어야 통계·CSV 와 같은 값이 나온다.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -9,7 +9,7 @@ import { getMyStaffWage, type MyWage } from '../../api/staffSchedule';
 import type { Schedule } from '../../api/schedules';
 import { listStaleOpenSessions,
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, ledgerMoney, addonFinance, ticketUsedT, wonToMan, visitorLabel, subscribeLedger,
-  getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
+  getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest, voucherShortOf,
   getLastClosedRound, MAIN_GAME_SEQ, kstToday, type LastClosedRound, type PosterOpsSummary,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest, type VoucherUse, ledgerCounts,} from '../../api/ledger';
 import { useToast } from '../atoms/Toast';
@@ -605,7 +605,11 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       await approveBuyinRequest(r.id, seq, false, 'cash', undefined, await resolveDiscountIndex(venueId, r.sessionDate, seq), voucherUse);
       setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(voucherUse === 'addon' ? `${r.playerName} 애드온 승인(이용권)` : `${r.playerName} 참가 승인`, 'success');
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); }
+    catch (e) {
+      // 20260930i — 이용권이 모자라면 서버가 숫자를 실어 준다. 남은 금액 결제 선택은 장부 접수대 카드에 있다.
+      const s = voucherShortOf(e);
+      toast.show(s ? `이용권이 모자랍니다 — ${s.have}장 + 남은 ${s.remainder.toLocaleString()}원은 장부 접수대에서 결제 방법을 골라 승인하세요` : (e instanceof Error ? e.message : '승인 실패'), 'error');
+    }
     finally { setReqBusy(null); }
   };
   const quickReject = async (r: BuyinRequest) => {
@@ -1030,7 +1034,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                             둘 사이 간격을 벌려 손가락 하나 안에서 갈리지 않게 한다. */}
                         {r.voucherId != null && gameIsAddon(r.requestedGameSeq) && (
                           <button type="button" data-testid="dash-approve-voucher-addon" disabled={reqBusy === r.id} onClick={() => quickApprove(r, 'addon')}
-                            title="이용권 → 최근 바인에 애드온"
+                            title="이용권 → 최근 바인에 애드온(애드온 금액 ÷ 1만 장)"
                             className="shrink-0 -my-2 flex h-10 items-center rounded-input bg-accent-300/15 px-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/25 disabled:opacity-40">애드온</button>
                         )}
                         <button type="button" disabled={reqBusy === r.id}
