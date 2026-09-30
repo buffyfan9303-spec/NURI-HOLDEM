@@ -1145,7 +1145,8 @@ export async function getGroupActivityRanking(groupId: string): Promise<GroupRan
 // ── 운영자: 그룹 개설 승인 ────────────────────────────────────────────────────
 export async function getPendingGroups(): Promise<Venue[]> {
   if (IS_MOCK) return [];
-  const { data, error } = await supabase.from('venues').select('*').neq('kind', 'venue').eq('approved', false).order('created_at', { ascending: true });
+  // 반려된 신청은 status='hidden' 으로 남는다(삭제 아님 — 점검 A-14). 대기열에서는 뺀다.
+  const { data, error } = await supabase.from('venues').select('*').neq('kind', 'venue').eq('approved', false).neq('status', 'hidden').order('created_at', { ascending: true });
   if (error) throw error;
   return (data ?? []).map(rowToVenue);
 }
@@ -1167,6 +1168,14 @@ export async function setGroupMemberRole(memberId: string, role: 'manager' | 'me
 export async function approveGroup(groupId: string): Promise<void> {
   if (IS_MOCK) return;
   await mustAffect(supabase.from('venues').update({ approved: true }).eq('id', groupId));
+}
+/** 개설 신청 반려 — **삭제가 아니라 '숨김' 상태로 내린다**(점검 A-14). 행·그 밑의 데이터는 남고 대기열에서만 빠진다.
+ *  이미 승인된 곳은 건드리지 않는다(`approved=false` 조건 — 다른 운영자가 먼저 승인했다면 0행으로 드러난다). */
+export async function rejectGroup(groupId: string): Promise<void> {
+  if (IS_MOCK) return;
+  await mustAffect(supabase.from('venues')
+    .update({ status: 'hidden', updated_at: new Date().toISOString() })
+    .eq('id', groupId).eq('approved', false));
 }
 
 // ── 내 커뮤니티 관리 ──────────────────────────────────────────────────────────

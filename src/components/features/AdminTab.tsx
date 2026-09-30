@@ -13,7 +13,7 @@ import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueSt
 import {
   getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue, getAllVenues,
   getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
-  getPendingGroups, approveGroup, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest,
+  getPendingGroups, approveGroup, rejectGroup, logActivity, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest,
   adminListShouts, hideShout, adminShoutRefunds, adminRefundPurchase, adminShoutBump,
   adminSetPostBlinded, adminSetPostPinned, type Shout, type PostCategory } from '../../api/community';
 import { getNotices, deleteNotice, setNoticeOrder, type MarketplaceNotice } from '../../api/marketplace';
@@ -1046,19 +1046,35 @@ function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
   const [groups, setGroups] = useState<Venue[]>([]);
   const [err, setErr] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
+  // 처리 중 잠금(점검 A-14) — 연타가 같은 신청을 두 번 처리하지 않게 한다. 한 번에 한 건만 처리한다.
+  const [busy, setBusy] = useState<string | null>(null);
   const reload = () => {
     setLoading(true);
     getPendingGroups().then((g) => { setErr(null); setGroups(g); }).catch((e) => { setErr(e); setGroups([]); }).finally(() => setLoading(false));
   };
   useEffect(() => { reload(); }, []);
   const approve = async (g: Venue) => {
-    try { await approveGroup(g.id); toast.show(`'${g.name}' 그룹을 승인했습니다`, 'success'); reload(); onChanged(); }
+    if (busy) return;
+    setBusy(g.id);
+    try {
+      await approveGroup(g.id);
+      await logActivity({ action: 'approve', targetType: 'venue', targetId: g.id, targetOwnerId: g.ownerId, targetSummary: `그룹 개설 승인 · ${g.name}` });
+      toast.show(`'${g.name}' 그룹을 승인했습니다`, 'success'); reload(); onChanged();
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    finally { setBusy(null); }
   };
   const reject = async (g: Venue) => {
-    if (!confirm(`'${g.name}' 개설 신청을 거절(삭제)하시겠습니까?`)) return;
-    try { await deleteVenue(g.id); toast.show('거절했습니다', 'info'); reload(); }
+    if (busy) return;
+    if (!confirm(`'${g.name}' 개설 신청을 반려하시겠습니까? 신청은 삭제되지 않고 '숨김'으로 남습니다.`)) return;
+    setBusy(g.id);
+    try {
+      await rejectGroup(g.id);
+      await logActivity({ action: 'reject', targetType: 'venue', targetId: g.id, targetOwnerId: g.ownerId, targetSummary: `그룹 개설 반려 · ${g.name}` });
+      toast.show('반려했습니다', 'info'); reload();
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    finally { setBusy(null); }
   };
   if (loading) return <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>;
   return (
@@ -1092,8 +1108,8 @@ function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
               </p>
               {g.description && <p className="mt-1 text-2xs text-ink-muted line-clamp-2">소개 · {g.description}</p>}
               <div className="mt-1.5 flex gap-1.5">
-                <button type="button" onClick={() => approve(g)} className="btn-primary text-2xs px-3 py-1">승인</button>
-                <button type="button" onClick={() => reject(g)} className="rounded-input border border-border-default px-3 py-1 text-2xs text-ink-muted hover:text-danger-light">거절</button>
+                <button type="button" disabled={busy != null} onClick={() => approve(g)} className="btn-primary text-2xs px-3 py-1 disabled:opacity-50">{busy === g.id ? '처리 중…' : '승인'}</button>
+                <button type="button" disabled={busy != null} onClick={() => reject(g)} className="rounded-input border border-border-default px-3 py-1 text-2xs text-ink-muted hover:text-danger-light disabled:opacity-50">반려</button>
               </div>
             </li>
           ))}
