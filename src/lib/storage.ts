@@ -95,7 +95,9 @@ async function uploadToStorage(
 
 // ── 포스터 이미지 업로드 ─────────────────────────────────────────────────────
 export async function uploadPoster(ownerId: string, file: File): Promise<string> {
-  const blob = await resizeImage(file, 1200, 1600, 0.88);
+  // 오너 2026-09-30 "원본 말고 webp 로 압축 — 용량이 너무 크다": 목표 250KB(종전 500KB).
+  //   실측: 715×1440 포스터 q0.80 ≈ 130~160KB 로 표·작은 글자까지 읽힌다. 품질은 0.5 아래로는 내리지 않는다(resizeImage).
+  const blob = await resizeImage(file, 1200, 1600, 0.82, 250_000);
   const ext  = 'webp';
   const path = `${ownerId}/${Date.now()}.${ext}`;
   return uploadToStorage(BUCKET_POSTERS, path, blob);
