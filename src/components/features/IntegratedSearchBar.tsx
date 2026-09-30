@@ -169,8 +169,9 @@ function DateTab({ slot, selected, hasEvents, onClick }: DateTabProps) {
     rail.scrollTo({ left: rail.scrollLeft + (t.left - r.left) - (r.width - t.width) / 2, behavior: 'smooth' });
   }, [selected]);
 
-  // P1: 주말 표시는 유지하되 채도를 낮춰 액센트와 경쟁하지 않게(오너 진단 — 색 분산)
-  const dowColor = slot.isSun ? 'text-danger-light/70' : slot.isSat ? 'text-sky-400/60' : 'text-ink-muted';
+  // 주말 표시 — 불투명도(60%·70%)는 걷었다(M-02, 2026-10-01): 다크에서 토 3.88:1 로 AA 미달이었다.
+  //   라이트는 index.css 보정값이 알파 유무와 같아(토 #0369A1 · 일 #B82640) 변화 없다.
+  const dowColor = slot.isSun ? 'text-danger-light' : slot.isSat ? 'text-sky-400' : 'text-ink-muted';
 
   return (
     <button
