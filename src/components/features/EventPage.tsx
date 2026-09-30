@@ -119,7 +119,7 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
       tearTimer.current = window.setTimeout(() => setPhase('result'), 320); // --dur-panel 과 맞춤
       load(); // 참여권·남은 경품·다른 사람 개봉을 뒤에서 갱신
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '카드를 열지 못했어요', 'error');
+      toast.show(e instanceof Error ? e.message : '카드를 열지 못했습니다', 'error');
       closeSheet();
       load(); // '이미 열린 카드' 였다면 내 보드가 낡은 것이다
     } finally { setBusy(false); }
@@ -221,7 +221,7 @@ export default function EventPage({ open, onClose, onLogin, slug = null, onSlug 
         <div className="px-page-x py-4"><LoadErrorCard error={err} what="이벤트" onRetry={() => { setLoading(true); load(); }} /></div>
       ) : !board ? (
         <div className="px-page-x py-16 text-center">
-          <p className="text-sm text-ink-muted">진행 중인 이벤트가 없어요.</p>
+          <p data-testid="event-empty" className="text-sm text-ink-muted">진행 중인 이벤트가 없습니다.</p>
         </div>
       ) : (
         <div className="px-page-x pb-24 pt-3">
@@ -325,7 +325,7 @@ function Hero({ board, left, total, user, onLogin, av }: {
               <p className="mt-0.5 whitespace-nowrap text-base font-extrabold leading-none tabular-nums text-ink-primary">
                 {l}<span className="ml-0.5 text-[10px] font-semibold text-ink-muted">장</span>
               </p>
-              <p className="truncate text-[10px] leading-tight text-ink-muted">이용권 {v}T</p>
+              <p className="truncate text-[10px] leading-tight text-ink-muted">이용권 {v}장</p>
             </div>
           );
         })}
@@ -333,9 +333,9 @@ function Hero({ board, left, total, user, onLogin, av }: {
 
       {/* 안내·CTA 는 **필요할 때만** 자리를 차지한다. 평소에는 카드판이 바로 이어진다. */}
       {soldOut ? (
-        <p className="relative mt-2.5 flex items-start gap-1.5 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs font-semibold leading-relaxed text-ink-secondary">
+        <p data-testid="event-soldout" className="relative mt-2.5 flex items-start gap-1.5 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs font-semibold leading-relaxed text-ink-secondary">
           <Icon name="check-circle" size={12} className="mt-px shrink-0 text-emerald-400" />
-          <span>카드 {total}장이 모두 열렸어요 — 이벤트가 끝났습니다.</span>
+          <span>카드 {total}장이 모두 열려 이벤트가 끝났습니다.</span>
         </p>
       ) : av.canJoin ? null : av.state === 'live' && !user ? (
         /* ⚠ 이 이름은 `e2e/event-entry.spec.ts:86` 이 getByRole('button', { name: … }) 로 잡는다.
@@ -347,7 +347,7 @@ function Hero({ board, left, total, user, onLogin, av }: {
         </button>
       ) : av.state === 'live' ? (
         <p data-testid="event-no-ticket" className="relative mt-2.5 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs leading-relaxed text-ink-secondary">
-          참여권이 없어요 — 매장에서 <b className="text-ink-primary">출석 QR</b>을 찍으면 1장이 바로 쌓여요.
+          참여권이 없습니다 — 매장에서 <b className="text-ink-primary">출석 QR</b>을 찍으면 1장이 바로 쌓여요.
         </p>
       ) : (
         /* 종료·기간 만료·시작 전·숨김·초안·판정 불가 — 예전에는 이 자리에 **아무것도 없었다**.
@@ -382,9 +382,9 @@ function EventVerifyNotice({ idOn, live, loggedIn, verified }: {
       <section data-testid="event-killswitch-notice" className="mt-3 rounded-aura border border-border-default bg-surface-high px-3 py-2.5 text-2xs leading-relaxed text-ink-secondary">
         <p className="flex items-start gap-1.5 font-bold text-ink-primary">
           <Icon name="alert" size={13} className="mt-px shrink-0" />
-          매장이용권이 현재 비활성화되어 있어 카드를 열 수 없어요
+          매장이용권이 현재 비활성화되어 있어 카드를 열 수 없습니다
         </p>
-        <p className="mt-1">쌓인 참여권은 그대로 남아 있어요 — 준비되면 다시 열립니다.</p>
+        <p className="mt-1">쌓인 참여권은 그대로 남아 있습니다. 준비되면 다시 열립니다.</p>
       </section>
     );
   }
@@ -393,10 +393,10 @@ function EventVerifyNotice({ idOn, live, loggedIn, verified }: {
       <section data-testid="event-verify-notice" className="mt-3 rounded-aura border border-danger/40 bg-danger/8 px-3 py-2.5">
         <p className="flex items-start gap-1.5 text-2xs font-bold text-danger-deep dark:text-danger-light">
           <Icon name="alert" size={13} className="mt-px shrink-0" />
-          본인인증을 완료해야 카드를 열 수 있어요
+          본인인증을 완료해야 카드를 열 수 있습니다
         </p>
         <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
-          쌓인 참여권은 그대로 남아 있어요 — 인증만 마치면 바로 열 수 있습니다.
+          쌓인 참여권은 그대로 남아 있습니다. 인증만 마치면 바로 열 수 있습니다.
         </p>
         <button type="button" onClick={() => ensureVerified({ verified }, '이벤트 참여')}
           className="btn-primary mt-2 h-9 w-full text-xs">프로필에서 본인인증하기</button>
@@ -430,7 +430,7 @@ function CardTile({ card, onPick, disabled }: { card: EventCard; onPick: () => v
   if (card.opened) {
     const m = card.tier ? TIER_META[card.tier] : null;
     return (
-      <div title={card.by ? `${card.by} 님이 열었어요` : undefined}
+      <div title={card.by ? `${card.by} 님이 열었습니다` : undefined}
         className={['relative flex aspect-square flex-col items-center justify-center rounded-input border text-center',
           m ? [m.ring, m.bg].join(' ') : 'border-border-subtle bg-surface-low/50'].join(' ')}>
         {m ? (
@@ -498,12 +498,12 @@ function TearSheet({ card, phase, result, busy, voucherTitle, onOpen, onClose }:
                     <span className={['anim-prize-pop text-4xl font-extrabold leading-none', m.text].join(' ')}>{m.label}</span>
                     <span className="mt-2 px-3 text-xs font-bold text-ink-primary break-keep">{voucherTitle}</span>
                     <span className={['mt-1 text-3xl font-extrabold leading-none tabular-nums', m.text].join(' ')}>{result!.voucherCount}<span className="ml-0.5 text-sm">장</span></span>
-                    <span className="mt-2 flex items-center gap-1 text-2xs text-ink-muted"><Icon name="check-circle" size={11} className="shrink-0" />지갑에 바로 들어갔어요</span>
+                    <span className="mt-2 flex items-center gap-1 text-2xs text-ink-muted"><Icon name="check-circle" size={11} className="shrink-0" />지갑에 바로 들어갔습니다</span>
                   </>
                 ) : (
                   <>
                     <span className="text-3xl font-bold text-ink-muted/80">꽝</span>
-                    <span className="mt-2 px-4 text-2xs leading-relaxed text-ink-muted">아쉬워요. 다음 출석에 참여권이 또 쌓여요</span>
+                    <span className="mt-2 px-4 text-2xs leading-relaxed text-ink-muted">아쉽습니다. 다음 출석 때 참여권이 또 쌓입니다</span>
                   </>
                 )}
               </div>
@@ -538,8 +538,8 @@ function TearSheet({ card, phase, result, busy, voucherTitle, onOpen, onClose }:
 
         {phase === 'confirm' && (
           <div className="mt-4 text-center">
-            <p className="text-sm font-bold text-ink-primary">{card.idx}번 카드를 열까요?</p>
-            <p className="mt-1 text-2xs text-ink-muted">참여권 1장을 사용해요. 한 번 연 카드는 되돌릴 수 없어요.</p>
+            <p className="text-sm font-bold text-ink-primary">{card.idx}번 카드를 여시겠습니까?</p>
+            <p className="mt-1 text-2xs text-ink-muted">참여권 1장을 사용합니다. 한 번 연 카드는 되돌릴 수 없습니다.</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button type="button" onClick={onClose} className="btn-ghost min-h-[44px] text-sm">다른 카드</button>
               <button type="button" onClick={onOpen} disabled={busy} className="btn-primary min-h-[44px] text-sm disabled:opacity-60">
@@ -572,7 +572,7 @@ function Odds({ board }: { board: EventBoard }) {
         <h3 className="text-sm font-bold text-ink-primary">당첨 확률 공개</h3>
         <span className="ml-auto text-2xs font-semibold tabular-nums text-accent-200">전체 당첨 {pct}%</span>
       </div>
-      <p className="mt-2 text-2xs text-ink-secondary break-keep">경품은 <b className="text-ink-primary">{board.voucherTitle}</b> 입니다.</p>
+      <p className="mt-2 text-2xs text-ink-secondary break-keep">경품은 <b className="text-ink-primary">{board.voucherTitle}</b>입니다.</p>
 
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-2xs">

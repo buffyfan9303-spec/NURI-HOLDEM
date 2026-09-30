@@ -21,7 +21,7 @@ export default function VenueVerificationCard() {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-accent-300">인증 매장</p>
-          <p className="text-2xs text-ink-secondary">포스터(요강)가 운영자 승인 없이 즉시 게시됩니다.</p>
+          <p className="text-2xs text-ink-secondary">포스터(요강)가 관리자 승인 없이 즉시 게시됩니다.</p>
         </div>
       </div>
     );
@@ -31,7 +31,7 @@ export default function VenueVerificationCard() {
     return (
       <div className="rounded-card border border-amber-500/40 bg-amber-500/8 px-3 py-2.5">
         <p className="text-sm font-bold text-amber-400">인증 심사 중</p>
-        <p className="mt-0.5 text-2xs text-ink-muted">운영자가 인증을 검토하고 있습니다.</p>
+        <p className="mt-0.5 text-2xs text-ink-muted">관리자가 인증을 검토하고 있습니다.</p>
       </div>
     );
   }
@@ -42,7 +42,7 @@ export default function VenueVerificationCard() {
       {/* 12.75px 설명문의 행간 정본은 t-desc(19.13 = 1.5배) 하나다 — leading-relaxed 는 20.72 라
           같은 크기 설명문이 두 리듬으로 갈렸다(SectionHeader 가 이미 같은 이유로 t-desc 로 통일돼 있다). */}
       <p className="t-desc break-keep text-ink-secondary">
-        인증받으면 포스터 즉시 게시 · 목록 상단 우선 노출. (운영자 검토 후 부여)
+        인증받으면 포스터 즉시 게시 · 목록 상단 우선 노출. (관리자 검토 후 부여)
       </p>
     </div>
   );

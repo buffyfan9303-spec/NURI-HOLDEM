@@ -177,7 +177,7 @@ export function MyListingsModal({ open, onClose, onOpenListing, onChanged }: {
     catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
   };
   const del = async (l: MarketplaceListing) => {
-    if (!confirm(`"${l.title}" 판매글을 삭제할까요?`)) return;
+    if (!confirm(`"${l.title}" 판매글을 삭제하시겠습니까?`)) return;
     try { await deleteListing(l.id); setItems((arr) => arr.filter((x) => x.id !== l.id)); onChanged?.(); toast.show('삭제했습니다', 'info'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
   };
@@ -185,7 +185,7 @@ export function MyListingsModal({ open, onClose, onOpenListing, onChanged }: {
   return (
     <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet" dragToClose>
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
-        <p className="flex-1 text-sm font-bold text-ink-primary">내 판매목록 {items.length > 0 && <span className="text-ink-muted font-normal">({items.length})</span>}</p>
+        <p className="flex-1 text-sm font-bold text-ink-primary">내 판매 목록 {items.length > 0 && <span className="text-ink-muted font-normal">({items.length})</span>}</p>
         <button type="button" onClick={onClose} aria-label="닫기" className="hit w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
         </button>

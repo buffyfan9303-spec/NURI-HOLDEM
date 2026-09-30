@@ -318,7 +318,7 @@ export function boardLabel(id: RankBoardId, cfg?: VenuePageConfig | null): strin
 export function boardDesc(id: RankBoardId, cfg?: VenuePageConfig | null): string {
   if (isCustomBoard(id)) {
     const b = cfg?.customBoards?.find((x) => x.key === customKeyOf(id));
-    return `업주가 직접 입력하는 순위${b?.unit ? ` (단위: ${b.unit})` : ''}`;
+    return `매장이 직접 입력하는 순위${b?.unit ? ` (단위: ${b.unit})` : ''}`;
   }
   return RANK_METRIC_DESC[id as RankMetric] ?? '';
 }

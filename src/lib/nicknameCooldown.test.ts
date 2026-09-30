@@ -35,9 +35,9 @@ describe('kstMonthDay — 로컬이 아니라 KST 날짜', () => {
 describe('cooldownNotice — 오너 문구', () => {
   it('막힘: 다음 변경 가능 날짜를 붙인다', () => {
     expect(cooldownNotice('닉네임은', Date.parse('2026-10-24T03:00:00Z')))
-      .toBe('닉네임은 30일에 한 번 변경할 수 있어요 · 다음 변경 가능: 10월 24일');
+      .toBe('닉네임은 30일에 한 번 변경할 수 있습니다 · 다음 변경 가능: 10월 24일');
   });
   it('가능: 규칙만', () => {
-    expect(cooldownNotice('닉네임은', null)).toBe('닉네임은 30일에 한 번 변경할 수 있어요');
+    expect(cooldownNotice('닉네임은', null)).toBe('닉네임은 30일에 한 번 변경할 수 있습니다');
   });
 });

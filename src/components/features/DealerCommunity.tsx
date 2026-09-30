@@ -376,7 +376,7 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
             <span className="block text-2xs font-medium text-ink-secondary mb-1">자기소개 · 경력 (선택)</span>
             <textarea value={msg} onChange={(e) => setMsg(e.target.value)} maxLength={1000} rows={3} placeholder="경력, 가능 시간, 희망 조건 등을 적어주세요" className="input w-full resize-none text-sm" />
           </label>
-          <p className="text-2xs text-ink-muted">지원 정보(이름·연락처)는 이 글 작성자와 운영자에게만 전달됩니다.</p>
+          <p className="text-2xs text-ink-muted">지원 정보(이름·연락처)는 이 글 작성자와 관리자에게만 전달됩니다.</p>
           <button type="submit" disabled={sending} className="btn-primary w-full text-sm disabled:opacity-60">{sending ? '지원 중…' : '지원서 제출'}</button>
         </form>
       ) : null}

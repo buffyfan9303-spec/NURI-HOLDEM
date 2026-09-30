@@ -62,9 +62,9 @@ test('🔴 ① 캠페인 0: 캐러셀 안 menu 슬라이드 1개 · "진행 중"
   expect(await menu.evaluate((el) => !!el.closest('[data-testid="home-banner-viewport"]')), '이벤트 진입이 캐러셀 밖에 있다').toBe(true);
   await expect(page.getByTestId('home-event-banner')).toHaveCount(0);
   const text = (await menu.textContent()) ?? '';
-  // '지금 진행 중인 이벤트가 없어요' 는 사실을 말하는 문장이다 — 그 밖의 "진행 중"(참여 가능처럼 읽히는 표현)만 금지한다
-  expect(text.replace('진행 중인 이벤트가 없어요', ''), '허위 "진행 중" 문구').not.toMatch(/진행 중/);
-  expect(text).toContain('진행 중인 이벤트가 없어요');
+  // '지금 진행 중인 이벤트가 없습니다' 는 사실을 말하는 문장이다 — 그 밖의 "진행 중"(참여 가능처럼 읽히는 표현)만 금지한다
+  expect(text.replace('진행 중인 이벤트가 없습니다', ''), '허위 "진행 중" 문구').not.toMatch(/진행 중/);
+  expect(text).toContain('진행 중인 이벤트가 없습니다');
   await expect(menu).toHaveAttribute('aria-label', /매장 이벤트/);
   // 캐러셀 밖(section 들)에 EVENT 칩·card-aura 이벤트 행이 없다
   const outside = await page.evaluate(() => Array.from(document.querySelectorAll('button')).filter((b) => /EVENT/.test(b.textContent ?? '') && !b.closest('[data-testid="home-banner-viewport"]')).length);
@@ -78,13 +78,13 @@ test('🔴 ① 캠페인 0: 캐러셀 안 menu 슬라이드 1개 · "진행 중"
   await expect(page.locator(DIALOG), '목록에서 캠페인을 골랐는데 보드가 안 열린다').toBeVisible({ timeout: 15_000 });
 });
 
-test('🔴 ② 조회 실패는 "없음" 이 아니다 — 불러오지 못했어요 + 눌러서 다시', async ({ page }) => {
+test('🔴 ② 조회 실패는 "없음" 이 아니다 — 불러오지 못했습니다 + 눌러서 다시', async ({ page }) => {
   await openHome(page, { board: 'fail' });
   await page.waitForTimeout(1500);
   const menu = page.getByTestId('home-event-menu');
   await expect(menu).toHaveCount(1);
-  await expect(menu).toContainText('불러오지 못했어요');
-  await expect(menu).not.toContainText('진행 중인 이벤트가 없어요');
+  await expect(menu).toContainText('불러오지 못했습니다');
+  await expect(menu).not.toContainText('진행 중인 이벤트가 없습니다');
 });
 
 test('🔴 ③ 참여 가능(live): banner 슬라이드 제목·남은 카드 2장 · 누르면 목록 → 보드 · soldout/ended 는 menu', async ({ page }) => {
@@ -112,13 +112,13 @@ test('🔴 ③ 참여 가능(live): banner 슬라이드 제목·남은 카드 2�
   await page.route(EVENT_RPC, (r) => j(r, liveBoard({ cards: [{ idx: 0, opened: true }, { idx: 1, opened: true }] })));
   await page.evaluate(() => window.dispatchEvent(new Event('nuri:event-board-refresh')));
   await expect(page.getByTestId('home-event-menu')).toHaveCount(1, { timeout: 10_000 });
-  await expect(page.getByTestId('home-event-menu')).toContainText('카드가 모두 열렸어요');
+  await expect(page.getByTestId('home-event-menu')).toContainText('카드가 모두 열렸습니다');
   await expect(page.getByTestId('home-event-banner')).toHaveCount(0);
   // ended
   await page.unroute(EVENT_RPC);
   await page.route(EVENT_RPC, (r) => j(r, liveBoard({ status: 'ended' })));
   await page.evaluate(() => window.dispatchEvent(new Event('nuri:event-board-refresh')));
-  await expect(page.getByTestId('home-event-menu')).toContainText('끝났어요', { timeout: 10_000 });
+  await expect(page.getByTestId('home-event-menu')).toContainText('끝났습니다', { timeout: 10_000 });
 });
 
 test('🔴 ④ 늦은 응답으로 슬라이드가 바뀌어도 프레임 높이가 튀지 않고 점 수·aria-current 가 유효하다', async ({ page }) => {

@@ -63,12 +63,12 @@ export default function PresetManager({ venueId }: { venueId: string }) {
     if (!editing || busy) return;
     if (!editing.name.trim()) { toast.show('프리셋 이름을 입력하세요', 'error'); return; }
     setBusy(true);
-    try { await saveGamePreset(venueId, editing.name, editing.data, editing.id); toast.show('프리셋을 저장했어요', 'success'); setEditing(null); load(); }
+    try { await saveGamePreset(venueId, editing.name, editing.data, editing.id); toast.show('프리셋을 저장했습니다', 'success'); setEditing(null); load(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); } finally { setBusy(false); }
   };
   const remove = async (p: GamePreset) => {
-    if (!window.confirm(`'${p.name}' 프리셋을 삭제할까요?`)) return;
-    try { await deleteGamePreset(p.id); toast.show('삭제했어요', 'info'); load(); }
+    if (!window.confirm(`'${p.name}' 프리셋을 삭제하시겠습니까?`)) return;
+    try { await deleteGamePreset(p.id); toast.show('삭제했습니다', 'info'); load(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
   };
 
@@ -154,7 +154,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
         {(presetFilledCount(d.poster) + presetFilledCount(d.ledger) + presetFilledCount(d.clock)) > 0 && (
           <p className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5 text-2xs text-ink-muted">
             단계 전용 항목 포함 — 포스터 {presetFilledCount(d.poster)} · 장부 {presetFilledCount(d.ledger)} · 클락 {presetFilledCount(d.clock)}
-            <span className="block text-[10px]">지난 게임의 시각·할인·딜러·레지레벨·얼리. 불러올 때 그대로 적용.</span>
+            <span className="block text-[10px]">지난 게임의 시각·할인·딜러·레지 레벨·얼리. 불러올 때 그대로 적용.</span>
           </p>
         )}
         <Field label="메모"><textarea value={d.memo ?? ''} onChange={(e) => set({ memo: e.target.value })} rows={2} placeholder="기타 메모" className="input w-full resize-none text-sm" /></Field>

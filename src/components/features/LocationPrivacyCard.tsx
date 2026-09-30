@@ -36,9 +36,9 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
       const next = await saveLocationConsent(granted);
       setS(next);
       if (!granted) setLog(null); // 서버가 이용 내역을 지웠다 — 화면의 옛 목록도 걷는다
-      setMsg(granted ? '동의했어요. 출석할 때 위치로 매장 안인지 확인해요' : '철회했어요. 위치 이용 내역도 삭제했어요');
+      setMsg(granted ? '동의했습니다. 출석할 때 위치로 매장 안인지 확인합니다' : '철회했습니다. 위치 이용 내역도 삭제했습니다');
     } catch {
-      setMsg('저장하지 못했어요. 잠시 후 다시 시도해 주세요');
+      setMsg('저장하지 못했습니다. 잠시 후 다시 시도해 주세요');
     } finally { setBusy(false); }
   };
 
@@ -51,7 +51,7 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
   return (
     <div data-testid="location-privacy-card">
       <p className="mb-1.5 text-sm font-semibold text-ink-primary">위치정보 이용 동의(선택)</p>
-      <p className="mb-2 text-2xs leading-relaxed text-ink-muted">출석할 때 매장 안인지 위치로 확인하는 데만 써요. 좌표는 저장하지 않아요.</p>
+      <p className="mb-2 text-2xs leading-relaxed text-ink-muted">출석할 때 매장 안인지 위치로 확인하는 데만 씁니다. 좌표는 저장하지 않습니다.</p>
       {s === null && err == null ? (
         <p aria-busy="true" className="rounded-aura border card-aura p-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
       ) : err != null ? (
@@ -72,7 +72,7 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
               <button type="button" onClick={() => onOpenLegal('location')} className="btn-ghost btn-sm min-h-[44px]">약관 보기</button>
             )}
           </div>
-          {granted && <p className="text-2xs text-ink-muted">철회하면 위치 이용 내역이 바로 삭제되고, 출석은 위치 없이 계속할 수 있어요.</p>}
+          {granted && <p className="text-2xs text-ink-muted">철회하면 위치 이용 내역이 바로 삭제되고, 출석은 위치 없이 계속할 수 있습니다.</p>}
           {msg && <p role="status" data-testid="location-consent-msg" className="text-2xs text-ink-secondary">{msg}</p>}
         </div>
       )}
@@ -81,7 +81,7 @@ export default function LocationPrivacyCard({ onOpenLegal }: { onOpenLegal?: (do
       ) : log !== null ? (
         <ul data-testid="location-log-list" className="mt-2 space-y-1.5">
           {log.length === 0 ? (
-            <li className="rounded-aura border card-aura p-3 text-center text-2xs text-ink-muted">이용 내역이 없어요.</li>
+            <li className="rounded-aura border card-aura p-3 text-center text-2xs text-ink-muted">이용 내역이 없습니다.</li>
           ) : log.map((r, i) => (
             <li key={`${r.usedAt}-${i}`} className="rounded-input border border-border-subtle bg-surface-low px-3 py-2">
               <div className="flex items-center justify-between gap-2">

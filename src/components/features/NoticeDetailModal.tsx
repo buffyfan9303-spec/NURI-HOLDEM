@@ -81,7 +81,7 @@ export default function NoticeDetailModal({ notice, open, onClose, isAdmin, onEd
           {isAdmin && (onEdit || onDelete) && (
             <div className="flex gap-2">
               {onEdit && <button type="button" onClick={onEdit} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1.5 text-accent-300"><Icon name="edit" size={14} className="shrink-0" />수정</button>}
-              {onDelete && <button type="button" onClick={() => { if (window.confirm('이 공지사항을 삭제할까요?')) onDelete(); }} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1.5 hover:text-danger-light"><Icon name="trash" size={14} className="shrink-0" />삭제</button>}
+              {onDelete && <button type="button" onClick={() => { if (window.confirm('이 공지사항을 삭제하시겠습니까?')) onDelete(); }} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1.5 hover:text-danger-light"><Icon name="trash" size={14} className="shrink-0" />삭제</button>}
             </div>
           )}
           <button type="button" onClick={onClose} className="btn-primary w-full">

@@ -73,7 +73,7 @@ export const STACKS: { bb: StackBB; label: string; hint: string; openLabel: stri
   { bb: 20, label: '20bb', openLabel: '오픈(미니레이즈)', threeBetLabel: '3벳(올인)',
     hint: '숏스택. 레이즈/폴드 단순화. 3벳은 대부분 올인이라 한 단계 타이트하게.' },
   { bb: 40, label: '40bb', openLabel: '오픈', threeBetLabel: '3벳',
-    hint: '미들스택. 표준에 가깝지만 스택오프 기준이 낮아 도미네이트 당하는 콜 주의.' },
+    hint: '미들스택. 표준에 가깝지만 스택오프 기준이 낮아 도미네이트당하는 콜 주의.' },
   { bb: 100, label: '100bb', openLabel: '오픈', threeBetLabel: '3벳',
     hint: '딥스택. 표준 레인지. 수딧 커넥터·작은 페어의 임플라이드 가치가 올라간다.' },
 ];

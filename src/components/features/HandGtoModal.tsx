@@ -52,7 +52,7 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
   return (
     <Modal open onClose={onClose} title="프리플랍 오픈 기준" maxWidth="sm" dragToClose>
       {!label ? (
-        <p className="p-6 text-center text-sm text-ink-muted">내 홀카드 2장이 있어야 조회할 수 있어요.<br />핸드를 첨부한 글에서 사용하세요.</p>
+        <p className="p-6 text-center text-sm text-ink-muted">내 홀카드 2장이 있어야 조회할 수 있습니다.<br />핸드를 첨부한 글에서 사용하세요.</p>
       ) : (
         <div className="space-y-3 p-4">
           {/* 핸드 + 강도 */}
@@ -100,7 +100,7 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
                 </div>
               </div>
               <p className="text-2xs leading-relaxed text-ink-muted">
-                ※ GTO 탭의 <b className="text-accent-300">프리플랍 레인지 차트</b>와 **같은 표**를 읽습니다(둘이 다른 답을 내지 않습니다).
+                ※ GTO 탭의 <b className="text-accent-300">프리플랍 레인지 차트</b>와 같은 표를 읽습니다(둘이 다른 답을 내지 않습니다).
                 멀티웨이·림프 상황은 이 표가 다루지 않습니다.
               </p>
             </>

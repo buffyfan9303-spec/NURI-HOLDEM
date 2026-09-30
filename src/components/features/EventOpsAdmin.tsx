@@ -61,7 +61,7 @@ function RpcMissingCard({ onRetry }: { onRetry: () => void }) {
         <Icon name="alert" size={15} className="shrink-0" />이벤트 관리 기능이 서버에 아직 없습니다
       </h3>
       <p className="text-2xs leading-relaxed text-ink-secondary">
-        마이그레이션 <code className="rounded-sm bg-surface-high px-1">20260912c_admin_event_ops.sql</code> 이 운영 DB 에 적용되지 않았습니다.
+        마이그레이션 <code className="rounded-sm bg-surface-high px-1">20260912c_admin_event_ops.sql</code>이 운영 DB에 적용되지 않았습니다.
         <strong className="text-ink-primary"> 이벤트가 0건이라는 뜻이 아닙니다</strong> — 목록을 읽을 방법이 아직 없다는 뜻입니다.
         적용 전에는 만들기·공개·종료가 모두 거절되며, 이미 진행 중인 이벤트에는 아무 영향이 없습니다.
       </p>
@@ -432,7 +432,7 @@ function EventDetail({ c, visibilityKnown, onChanged, onNextRound }: {
             onClick={() => {
               if (hidden) { void run('다시 공개', () => adminSetEventCampaignHidden(c.id, false)); return; }
               const reason = window.prompt(
-                `‘${c.title}’(${c.venueName ?? '매장 미상'})을 손님에게 숨깁니다.\n\n`
+                `‘${c.title}’(${c.venueName ?? '매장 미상'}) 이벤트를 손님에게 숨깁니다.\n\n`
                 + '· 손님 화면과 공유 링크에서 보이지 않습니다\n'
                 + '· 새 참여가 멈춥니다 (카드 열기·참여권 지급 중단)\n'
                 + '· 관리자는 계속 볼 수 있고, 이미 받은 이용권·당첨·이력은 그대로 남습니다\n'
@@ -473,7 +473,7 @@ function EventDetail({ c, visibilityKnown, onChanged, onNextRound }: {
         <section data-testid="event-ops-end-confirm" className="rounded-input border border-danger-light/40 bg-danger-light/6 p-2.5 space-y-2">
           <h4 className="text-2xs font-bold text-danger-light">행사 종료 — 되돌릴 수 없습니다</h4>
           <p className="text-2xs leading-relaxed text-ink-secondary wrap-break-word">
-            <strong className="text-ink-primary">{c.venueName ?? '매장 미상'}</strong> 의{' '}
+            <strong className="text-ink-primary">{c.venueName ?? '매장 미상'}</strong>의{' '}
             <strong className="text-ink-primary">‘{c.title}’</strong> 행사를 종료합니다.
           </p>
           <ul className="space-y-0.5 text-2xs leading-relaxed text-ink-muted">
@@ -631,7 +631,7 @@ function DraftForm({ venues, seed, onCancel, onCreated }: {
 
   const problems: string[] = [];
   if (!venueId) problems.push('매장을 선택해 주세요');
-  if (!isEventSlug(slug)) problems.push('링크 주소는 영문·숫자로 시작하고 영문·숫자·-·_ 만 쓸 수 있습니다');
+  if (!isEventSlug(slug)) problems.push('링크 주소는 영문·숫자로 시작하고 영문·숫자·하이픈(-)·밑줄(_)만 쓸 수 있습니다');
   else if (slug !== slug.toLowerCase()) problems.push('링크 주소는 소문자로 입력해 주세요');
   if (!title.trim()) problems.push('이벤트 제목을 입력해 주세요');
   if (!voucherTitle.trim()) problems.push('경품 이용권 이름을 입력해 주세요');

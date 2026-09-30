@@ -126,7 +126,7 @@ test('🔴 ③ 이전/다음 = 목록 순서 · 첫/마지막 비활성 · 이�
   await openBoard(page);
   await openFromList(page, '셋째 글 제목');   // 목록 첫 글
   await expect(navBtn(page, 'prev')).toBeDisabled();
-  await expect(navBtn(page, 'prev')).toContainText('첫 글이에요');
+  await expect(navBtn(page, 'prev')).toHaveAttribute('data-pd-nav-edge', 'first');
   await expect(navBtn(page, 'next')).toContainText('둘째 글 제목');
   // 아래로 스크롤해 둔 뒤 이동 → 내부 스크롤 0
   await dialog(page).locator('.overflow-y-auto').first().evaluate((el) => { el.scrollTop = 300; });
@@ -137,7 +137,7 @@ test('🔴 ③ 이전/다음 = 목록 순서 · 첫/마지막 비활성 · 이�
   await navBtn(page, 'next').click();
   await expect(dialog(page).locator('[data-pd-title]').first()).toHaveText('첫째 글 제목');
   await expect(navBtn(page, 'next')).toBeDisabled();
-  await expect(navBtn(page, 'next')).toContainText('마지막 글이에요');
+  await expect(navBtn(page, 'next')).toHaveAttribute('data-pd-nav-edge', 'end');
   // 두 번 이동했지만 히스토리는 한 겹 — 뒤로가기 한 번에 닫힌다
   await page.goBack();
   await expect(dialog(page)).toBeHidden({ timeout: 5_000 });
@@ -267,7 +267,7 @@ test('🔴 ⑧ 목록 이어받기가 비행 중일 때 연 마지막 글 — "�
   await navBtn(page, 'next').click();          // 상세가 자기 커서로 이어받는다(2번째 커서 호출) → [] → done
   await expect(navBtn(page, 'next')).toHaveAttribute('data-pd-nav-edge', 'end', { timeout: 10_000 });
   await expect(navBtn(page, 'next')).toBeDisabled();
-  await expect(navBtn(page, 'next')).toContainText('마지막 글이에요');
+  await expect(navBtn(page, 'next')).toHaveAttribute('data-pd-nav-edge', 'end');
   await expect(dialog(page).locator('[data-pd-title]').first()).toHaveText('서버 15번 글');
   expect(cursorCalls, '상세가 실제로 서버를 이어받았다').toBeGreaterThanOrEqual(2);
   release();

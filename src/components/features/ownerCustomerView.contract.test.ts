@@ -29,7 +29,7 @@ describe('A. 업주 → 자기 포스터의 손님 화면', () => {
   it('포스터 행: PC 액션 줄과 모바일 바 양쪽에 손님화면 버튼이 있고 한 줄로 고정된다', () => {
     const src = code(read('MyPostersTab.tsx'));
     expect(src).toMatch(/onOpenSchedule\?:\s*\(s:\s*Schedule\)\s*=>\s*void/);
-    const buttons = src.match(/<button[^>]*onClick=\{onOpenSchedule\}[^>]*>손님화면<\/button>/g) ?? [];
+    const buttons = src.match(/<button[^>]*onClick=\{onOpenSchedule\}[^>]*>손님 화면<\/button>/g) ?? [];
     expect(buttons.length, 'PC 줄 + 모바일 바 = 2곳이어야 합니다').toBe(2);
     for (const b of buttons) expect(b, '라벨이 두 줄로 접힐 수 있습니다').toMatch(/whitespace-nowrap/);
     // 행에 실제로 내려준다(정의만 있고 안 넘기면 버튼은 영원히 안 뜬다)

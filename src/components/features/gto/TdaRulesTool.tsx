@@ -73,8 +73,8 @@ export default function TdaRulesTool() {
     if (!t || !data) return;
     setAsked(t); setAnswer(''); setAiErr(null);
     const found = searchTda(data.rules, t, 6);
-    if (found.length === 0) { setAiErr('관련 규칙을 찾지 못했어요. 다른 말로 물어봐 주세요.'); return; }
-    if (!user) { setAiErr('AI 답변은 로그인 후 이용할 수 있어요. 아래 규칙 원문은 그대로 보실 수 있습니다.'); return; }
+    if (found.length === 0) { setAiErr('관련 규칙을 찾지 못했습니다. 다른 말로 물어봐 주세요.'); return; }
+    if (!user) { setAiErr('AI 답변은 로그인 후 이용할 수 있습니다. 아래 규칙 원문은 그대로 보실 수 있습니다.'); return; }
     setBusy(true);
     try {
       // 서버에는 **키만** 간다 — 원문 조립은 tda-assist 가 자기 rules.json 으로 한다.
@@ -82,7 +82,7 @@ export default function TdaRulesTool() {
       setAnswer(out);
     } catch (e) {
       // AI 가 실패해도 규칙은 아래에 그대로 있다 — '아무것도 못 얻는 실패'로 끝내지 않는다.
-      setAiErr(e instanceof Error ? e.message : 'AI 답변을 받지 못했어요. 아래 규칙 원문을 확인해 주세요.');
+      setAiErr(e instanceof Error ? e.message : 'AI 답변을 받지 못했습니다. 아래 규칙 원문을 확인해 주세요.');
     } finally { setBusy(false); }
   }, [data, user]);
 

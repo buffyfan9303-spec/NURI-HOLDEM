@@ -72,7 +72,7 @@ export default function IdentityVerificationButton({ onVerified, label = '휴대
 
   // 결과를 화면에 알린다 — 창 방식(프로미스)과 리다이렉트 복귀(모듈 보관분)가 같은 문장을 쓴다.
   const settle = (p: Promise<{ name: string | null }>) => p.then(
-    ({ name }) => { toast.show(`${name ? name + '님 ' : ''}본인인증이 완료되었습니다.`, 'success'); onVerified?.(name); },
+    ({ name }) => { toast.show(`${name ? name + ' 님, ' : ''}본인인증이 완료되었습니다.`, 'success'); onVerified?.(name); },
     (e: unknown) => {
       // 🔴 2026-09-17 — 여기서 **서버 검증 실패가 통째로 사라졌다.**
       //   아래 run() 의 catch 는 PortOne SDK 오류만 잡는다 — `await settle(verifyIdentity(…))` 는

@@ -30,11 +30,11 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
   const send = async () => {
     if (busy) return;
     if (!title.trim() || !message.trim()) { toast.show('제목과 내용을 입력하세요', 'error'); return; }
-    if (!window.confirm(`팔로워 ${status.followers}명에게 알림을 보낼까요?`)) return;
+    if (!window.confirm(`팔로워 ${status.followers}명에게 알림을 보내시겠습니까?`)) return;
     setBusy(true);
     try {
       const n = await sendVenueAnnouncement(venueId, title.trim(), message.trim());
-      toast.show(`${n}명에게 발송했어요`, 'success');
+      toast.show(`${n}명에게 발송했습니다`, 'success');
       setTitle(''); setMessage(''); load();
     } catch (e) { toast.show(e instanceof Error ? e.message : '발송 실패', 'error'); }
     finally { setBusy(false); }
@@ -53,8 +53,8 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} maxLength={200} rows={2} placeholder="내용 (예: 마감 임박! 지금 예약하세요)" className="input w-full resize-none text-sm" />
       <button type="button" onClick={loadError ? load : send} disabled={busy || (!loadError && (remaining === 0 || status.followers === 0))}
         className="btn-primary w-full text-sm disabled:opacity-50">
-        {loadError ? '불러오지 못했어요 · 다시 시도'
-          : status.followers === 0 ? '아직 팔로워가 없어요' : remaining === 0 ? '오늘 발송 한도 소진(3/3)' : busy ? '발송 중…'
+        {loadError ? '불러오지 못했습니다 · 다시 시도'
+          : status.followers === 0 ? '아직 팔로워가 없습니다' : remaining === 0 ? '오늘 발송 한도 소진(3/3)' : busy ? '발송 중…'
           : <span className="inline-flex items-center gap-1.5"><Icon name="send" size={15} className="shrink-0" />{`${status.followers}명에게 발송 · ${remaining}회 남음`}</span>}
       </button>
     </section>

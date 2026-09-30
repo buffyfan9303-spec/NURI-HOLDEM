@@ -400,7 +400,7 @@ export default function PostDetailModal({
     const url = `${window.location.origin}/?post=${post.id}`;
     try {
       await navigator.clipboard.writeText(url);
-      toast.show('게시물 링크를 복사했습니다', 'success');
+      toast.show('게시글 링크를 복사했습니다', 'success');
     } catch {
       // 클립보드 권한 거부 등 — 프롬프트로 폴백
       window.prompt('아래 링크를 복사해 공유하세요', url);
@@ -441,7 +441,7 @@ export default function PostDetailModal({
       const r = await bumpPost(post.id);
       if (currentPostIdRef.current !== startId) return;
       setBumpUntil(r.untilAt);
-      toast.show(`끌올했어요. ${bumpSku?.hours ?? 3}시간 동안 목록 맨 위에 올라갑니다`, 'success');
+      toast.show(`끌올했습니다. ${bumpSku?.hours ?? 3}시간 동안 목록 맨 위에 올라갑니다`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '끌올에 실패했습니다', 'error');
     } finally { if (currentPostIdRef.current === startId) setBumpBusy(false); }
@@ -630,7 +630,7 @@ export default function PostDetailModal({
             <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
               {(post.userRole === 'venue_owner' || post.userRole === 'admin') && (
                 <span className="shrink-0 rounded-badge border border-border-strong px-1.5 py-0.5 text-2xs font-semibold leading-none text-ink-secondary">
-                  {post.userRole === 'venue_owner' ? '업주' : '운영자'}
+                  {post.userRole === 'venue_owner' ? '매장' : '관리자'}
                 </span>
               )}
               {/* ⚠ 색은 ink-muted 가 아니라 ink-secondary 다 — 다크 surface-mid 위 ink-muted 는 실측 4.46:1 로
@@ -660,7 +660,7 @@ export default function PostDetailModal({
             if (user && user.id !== post.userId) {
               acts.push({ key: 'report', label: '신고', onClick: () => setReportOpen(true) });
               acts.push({ key: 'block', label: '차단', onClick: async () => {
-                if (!confirm(`'${post.userName}'님을 차단할까요?\n이 사용자의 글·댓글이 보이지 않게 됩니다.`)) return;
+                if (!confirm(`'${post.userName}' 님을 차단하시겠습니까?\n이 사용자의 글·댓글이 보이지 않게 됩니다.`)) return;
                 try { await block(post.userId, post.userName); toast.show('차단했습니다. 이 사용자의 글이 숨겨집니다', 'info'); onClose(); }
                 catch (e) { toast.show(e instanceof Error ? e.message : '차단 실패', 'error'); }
               } });
@@ -772,7 +772,7 @@ export default function PostDetailModal({
                         // 실패 타일 — 자리(비율)는 그대로 두어 레이아웃이 튀지 않게 하고, 무슨 일인지 글로 말한다.
                         <div className={`flex flex-col items-center justify-center gap-1 rounded-card border border-dashed border-border-default bg-surface-high px-2 text-center text-2xs text-ink-muted dark:bg-surface-low ${images.length === 1 ? 'aspect-4/3' : 'aspect-square'}`}>
                           <Icon name="image" size={18} strokeWidth={1.6} className="shrink-0" />
-                          <span>사진을 불러오지 못했어요</span>
+                          <span>사진을 불러오지 못했습니다</span>
                           <button type="button"
                             onClick={() => setImgErr((prev) => { const n = { ...prev }; delete n[url]; return n; })}
                             className="hit rounded-input border border-border-default px-2 py-1 font-semibold text-ink-secondary hover:text-accent-200">
@@ -1056,12 +1056,12 @@ export default function PostDetailModal({
             const isMore = dir === 'next' && side.edge === 'more';
             const enabled = !!side.post || isMore;
             const label = dir === 'prev' ? '이전 글' : '다음 글';
-            const reason = side.edge === 'no-context' ? '목록에서 열면 이동할 수 있어요'
-              : side.edge === 'first' ? '첫 글이에요'
-              : side.edge === 'end' ? '마지막 글이에요'
-              : side.edge === 'loaded-end' ? '불러온 범위의 끝이에요 · 목록으로'
-              : side.edge === 'skipped' ? `숨긴 글 ${side.skipped}개가 이어져 건너뛸 수 없어요 · 목록으로`
-              : isMore ? (navBusy ? '다음 글을 불러오는 중…' : navErr ? '불러오지 못했어요 · 다시 시도' : '다음 글 불러오기')
+            const reason = side.edge === 'no-context' ? '목록에서 열면 이동할 수 있습니다'
+              : side.edge === 'first' ? '첫 글입니다'
+              : side.edge === 'end' ? '마지막 글입니다'
+              : side.edge === 'loaded-end' ? '불러온 범위의 끝입니다 · 목록으로'
+              : side.edge === 'skipped' ? `숨긴 글 ${side.skipped}개가 이어져 건너뛸 수 없습니다 · 목록으로`
+              : isMore ? (navBusy ? '다음 글을 불러오는 중…' : navErr ? '불러오지 못했습니다 · 다시 시도' : '다음 글 불러오기')
               : side.post ? (side.post.title || side.post.content.slice(0, 40)) : '';
             return (
               <button key={dir} type="button" disabled={!enabled || navBusy}

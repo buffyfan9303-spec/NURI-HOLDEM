@@ -122,7 +122,7 @@ test('배정 없는 날 — 두 버튼 모두 잠기고 이유를 말한다', as
   await expect(bar).toHaveAttribute('data-phase', 'none');
   await expect(bar.getByTestId('punch-in')).toBeDisabled();
   await expect(bar.getByTestId('punch-out')).toBeDisabled();
-  await expect(bar.getByTestId('punch-status')).toContainText('배정된 근무가 없어요');
+  await expect(bar.getByTestId('punch-status')).toContainText('배정된 근무가 없습니다');
 });
 
 test('업주에게는 출퇴근 줄이 없다 · 직원이 찍은 기록이 업주 출근일지에 보인다', async ({ page }) => {
@@ -217,9 +217,9 @@ test('자정 넘어 출근 — 01:30 에는 어제 근무로 출근 문구가 �
   expect(fit, `버튼 글자가 줄바꿈/잘림 ${JSON.stringify(fit)}`).toEqual({ lines: 1, over: 0 });
   if (SHOT) await page.screenshot({ path: `${SHOT}/punch-320-yesterday.png` });
   await pin.click();
-  await expect(bar.getByTestId('punch-confirm-row')).toContainText('어제 근무로 출근할까요?');
+  await expect(bar.getByTestId('punch-confirm-row')).toContainText('어제 근무로 출근합니다');
   await bar.getByTestId('punch-confirm').click();
-  await expect(page.getByText(/어제 근무로 출근했어요/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/어제 근무로 출근했습니다/)).toBeVisible({ timeout: 10_000 });
   expect(srv.s.rows[0].check_in, '어제 행에 찍혀야 한다').toBe('09:03');
   expect(srv.s.rows[1].check_in, '오늘 행은 그대로여야 한다').toBeNull();
   await expect(bar.getByTestId('punch-in')).toBeDisabled(); // 어제 행이 열린 채 — 재탭 막힘

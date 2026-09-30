@@ -272,7 +272,7 @@ export default function VenuePage({
       //   후자는 눌러도 토스트조차 없어 '죽은 버튼' 으로 보인다(2026-09-18 연동성 크롤이 이 자리를 짚었다).
       //   취소(AbortError)만 조용히 넘기고, 나머지는 주소를 직접 보여 준다 — 복사가 막혀도 공유는 되게.
       if (e instanceof Error && e.name === 'AbortError') return;   // 사용자가 공유 시트를 닫았다
-      toast.show(`링크 복사가 막혔어요 · ${url}`, 'error');
+      toast.show(`링크를 복사하지 못했습니다 · ${url}`, 'error');
     }
   };
 
@@ -512,7 +512,7 @@ export default function VenuePage({
             <KakaoActionButton kakao={kakao} />
             </div>
           </div>
-          <CoachMark id="venue-checkin">출석하면 점수 적립 · 전적 인정 · 방문 후기가 열려요</CoachMark>
+          <CoachMark id="venue-checkin">출석하면 점수 적립 · 전적 인정 · 방문 후기가 열립니다</CoachMark>
           {user && myAct && (myAct.streak > 0 || myAct.visits > 0) && (
             <p className="flex items-center gap-1 text-2xs text-ink-muted tabular-nums">
               {myAct.streak > 0 && <><Icon name="flame" size={13} className="shrink-0" />연속 출석 <b className="text-ink-secondary">{myAct.streak}일</b></>}
@@ -988,7 +988,7 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
       </ul>
       <form onSubmit={send} className="flex items-center gap-2">
         <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={500}
-          placeholder={user ? '메시지 입력…' : '로그인 후 채팅할 수 있어요'} className="input flex-1" />
+          placeholder={user ? '메시지 입력…' : '로그인 후 채팅할 수 있습니다'} className="input flex-1" />
         <button type="submit" disabled={sending || !draft.trim()} className="btn-primary px-4 shrink-0 disabled:opacity-50">전송</button>
       </form>
     </div>
@@ -1199,7 +1199,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
 
   if (loading) return <SkeletonList rows={6} rowClassName="h-14" />;
   if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0) {
-    return <EmptyState title="아직 등록된 순위가 없어요" hint="매장에서 순위를 등록하면 누적 순위가 자동으로 집계됩니다." />;
+    return <EmptyState title="아직 등록된 순위가 없습니다" hint="매장에서 순위를 등록하면 누적 순위가 자동으로 집계됩니다." />;
   }
 
   const unit = boardUnit(cur, cfg);
@@ -1339,7 +1339,7 @@ function useVenueFollow(venueId: string | undefined, baseCount: number) {
     setBusy(true);
     try {
       if (next) await followVenue(venueId); else await unfollowVenue(venueId);
-      toast.show(next ? '팔로우 완료. 새 대회 포스터가 올라오면 알려드려요' : '팔로우를 해제했습니다', next ? 'success' : 'info');
+      toast.show(next ? '팔로우 완료. 새 대회 포스터가 올라오면 알려드립니다' : '팔로우를 해제했습니다', next ? 'success' : 'info');
     } catch (e) {
       setView(before);                // 실패 원복 — 버튼과 팔로워 수를 함께 되돌린다
       toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
@@ -1806,7 +1806,7 @@ function NaverVenueMap({
     <MapShell address={address}>
       {state === 'auth-failed' ? (
         <MapNotice icon="alert" title="지도 인증에 실패했습니다"
-          desc="지도 서비스 키 또는 도메인 설정을 확인해 주세요. 아래 링크로 위치를 볼 수 있어요." />
+          desc="지도 서비스 키 또는 도메인 설정을 확인해 주세요. 아래 링크로 위치를 볼 수 있습니다." />
       ) : state === 'error' ? (
         <MapNotice icon="alert" title="지도를 불러올 수 없습니다"
           desc="네트워크 상태를 확인한 뒤 다시 시도해 주세요." />
@@ -1833,7 +1833,7 @@ function VenueLocationMap({
   return (
     <MapShell address={address}>
       <MapNotice icon="map-pin" title="위치 정보 준비 중"
-        desc="지도를 준비하고 있어요. 아래 링크에서 위치와 길찾기를 볼 수 있어요." />
+        desc="지도를 준비하고 있습니다. 아래 링크에서 위치와 길찾기를 볼 수 있습니다." />
     </MapShell>
   );
 }
@@ -1944,7 +1944,7 @@ function PostersPanel({
         {/* 빈 상태를 회색 한 줄에서 공용 EmptyState 로 — 카피는 보존하고 '그래서 뭘 하면 되는지'를 덧댄다.
             (순위 탭은 이미 EmptyState 를 쓰고 있었다 — 탭마다 빈 화면의 문법이 달랐던 것을 맞춘다) */}
         {upcoming.length === 0 ? (
-          <EmptyState title="예정된 대회가 없습니다." hint="매장을 팔로우하면 새 대회가 올라올 때 알려드려요." />
+          <EmptyState title="예정된 대회가 없습니다." hint="매장을 팔로우하면 새 대회가 올라올 때 알려드립니다." />
         ) : (
           <ul className="space-y-2">
             {upcoming.map((s) => {
@@ -2053,7 +2053,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
 
 function SchedulesPanel({ schedules, onSelect }: { schedules: Schedule[]; onSelect?: (s: Schedule) => void }) {
   if (schedules.length === 0) {
-    return <EmptyState title="예정된 대회가 없습니다." hint="매장을 팔로우하면 새 일정이 등록될 때 알려드려요." />;
+    return <EmptyState title="예정된 대회가 없습니다." hint="매장을 팔로우하면 새 일정이 등록될 때 알려드립니다." />;
   }
   const dows = ['일','월','화','수','목','금','토'];
   return (

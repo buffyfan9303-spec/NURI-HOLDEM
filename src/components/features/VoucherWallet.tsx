@@ -185,10 +185,10 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
           <div className="mb-2 rounded-aura border border-danger/40 bg-danger/8 p-3">
             <p className="flex items-start gap-1.5 text-xs font-bold text-danger-deep dark:text-danger-light">
               <Icon name="alert" size={14} className="mt-0.5 shrink-0" />
-              본인인증을 완료해야 이용권을 사용할 수 있어요
+              본인인증을 완료해야 이용권을 사용할 수 있습니다
             </p>
             <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
-              보유하신 {active.length}T 는 그대로 남아 있습니다 — 인증만 마치면 바로 사용할 수 있어요.
+              보유하신 {active.length}장은 그대로 남아 있습니다 — 인증만 마치면 바로 사용할 수 있습니다.
               매장에 도착하기 전에 <b className="text-ink-primary">프로필 &gt; 본인인증</b>을 먼저 끝내 주세요.
             </p>
             {onNeedVerify && (
@@ -212,7 +212,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
                 LoadErrorCard 로 통째로 바꾸면 방금 보던(정상 조회된) 장수까지 사라진 것처럼 보인다. */}
             {err && (
               <div role="alert" className="mb-2 flex items-center justify-between gap-2 rounded-input border border-amber-500/40 bg-amber-500/8 px-3 py-2">
-                <p className="text-2xs font-semibold text-ink-secondary">방금 목록을 새로 불러오지 못했어요. 아래는 마지막으로 확인된 내용입니다.</p>
+                <p className="text-2xs font-semibold text-ink-secondary">방금 목록을 새로 불러오지 못했습니다. 아래는 마지막으로 확인된 내용입니다.</p>
                 <button type="button" onClick={load} className="hit shrink-0 rounded-input border border-amber-500/40 px-2 py-1 text-2xs font-bold text-ink-primary">다시 시도</button>
               </div>
             )}
@@ -261,7 +261,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
                       </span>
                       {/* 미인증이면 열지 않는다 — 열어 봐야 '되돌릴 수 없습니다' 확인 뒤 서버에서 막힌다 */}
                       <button type="button" disabled={!user?.verified} onClick={() => setRedeem(s)}
-                        title={user?.verified ? undefined : '본인인증 후 사용할 수 있어요. 프로필에서 인증을 완료해 주세요'}
+                        title={user?.verified ? undefined : '본인인증 후 사용할 수 있습니다. 프로필에서 인증을 완료해 주세요'}
                         className="btn-primary h-9 shrink-0 px-3 text-2xs disabled:cursor-not-allowed disabled:opacity-40">
                         {user?.verified ? '사용하기' : '인증 필요'}
                       </button>
@@ -335,8 +335,8 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false, 
           </svg>
           <p className="text-2xl font-extrabold">이용권 사용 요청</p>
           <p className="text-sm font-semibold opacity-90">{voucherLineLabel(redeemDone.title, redeemDone.venueName)}</p>
-          <p className="text-4xl font-extrabold tabular-nums">남은 이용권 {redeemDone.remain}T</p>
-          <p className="mt-1 text-xs font-semibold opacity-90">매장 승인 후 확정돼요 · 거절되면 지갑으로 돌아와요</p>
+          <p className="text-4xl font-extrabold tabular-nums">남은 이용권 {redeemDone.remain}장</p>
+          <p className="mt-1 text-xs font-semibold opacity-90">매장 승인 후 확정됩니다 · 거절되면 지갑으로 돌아옵니다</p>
           <p className="mt-2 text-xs opacity-75">화면을 탭하면 닫힙니다</p>
         </div>
       )}
@@ -383,10 +383,10 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
     qrDoneRef.current = true;
     const out: { reason?: string } = {};
     const hit = parseQr(text, out);
-    if (hit?.kind === 'checkin') { setNoticeMsg('출석 QR입니다. 이용권은 사용되지 않았어요'); setMode('notice'); return; }
+    if (hit?.kind === 'checkin') { setNoticeMsg('출석 QR입니다. 이용권은 사용되지 않았습니다'); setMode('notice'); return; }
     if (hit?.kind === 'voucher' && hit.venueId === stack.venueId) { setMode('confirmQr'); return; }
-    if (hit?.kind === 'voucher') { setNoticeMsg('다른 매장의 이용권 QR이에요 — 보낸 매장 QR을 스캔해 주세요'); setMode('notice'); return; }
-    setNoticeMsg(out.reason ?? '매장 QR이 아니에요'); setMode('notice');
+    if (hit?.kind === 'voucher') { setNoticeMsg('다른 매장의 이용권 QR입니다 — 보낸 매장 QR을 스캔해 주세요'); setMode('notice'); return; }
+    setNoticeMsg(out.reason ?? '매장 QR이 아닙니다'); setMode('notice');
   };
   // 확정 화면에서 눌러야만 실제 RPC 를 호출한다(스캔 즉시 호출 금지, Q1). 취소/뒤로가기는 0회.
   const confirmRedeem = async () => {
@@ -450,7 +450,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
               콘솔에서 그대로 부를 수 있으므로 둘을 함께 막아야 한다. */}
           <p className="text-2xs text-ink-muted">보낸 매장(<b className="text-ink-secondary">{stack.venueName ?? '확인 중'}</b>)에서만 사용됩니다.</p>
           <button type="button" onClick={startQr} className="btn-primary inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="qr" size={16} /> 매장 QR 스캔해서 사용</button>
-          <button type="button" onClick={() => setMode('phone')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="phone" size={16} /> 매장 업주 전화번호로 사용</button>
+          <button type="button" onClick={() => setMode('phone')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="phone" size={16} /> 매장 운영자 전화번호로 사용</button>
         </>)}
         {mode === 'qr' && (
           <div className="space-y-2">
@@ -483,7 +483,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
         )}
         {mode === 'phone' && (
           <div className="space-y-2">
-            <p className="text-2xs text-ink-muted">보낸 매장 <b className="text-ink-secondary">업주 전화번호</b>를 입력하세요.</p>
+            <p className="text-2xs text-ink-muted">보낸 매장의 <b className="text-ink-secondary">운영자 전화번호</b>를 입력하세요.</p>
             <input value={phone} onChange={(e) => { setPhone(e.target.value); setPhoneTarget(null); }} inputMode="tel" autoComplete="tel" placeholder="010-0000-0000" className="input w-full text-sm" />
             {phoneTarget && (
               <div className="flex items-center gap-2 rounded-input border border-emerald-500/40 bg-emerald-500/8 px-3 py-2.5">

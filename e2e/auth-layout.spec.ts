@@ -48,7 +48,7 @@ test.describe('로그인 창 — 한 화면 한 목적', () => {
     await expect(dialog.getByRole('button', { name: '일반 가입' }), '삭제한 상단 탭이 돌아왔다').toHaveCount(0);
     await expect(dialog.getByRole('button', { name: '업주 가입' }), '삭제한 상단 탭이 돌아왔다').toHaveCount(0);
     await expect(dialog.getByTestId('auth-spade'), '브랜드 오브젝트가 하나가 아니다').toHaveCount(1);
-    await expect(dialog.getByRole('heading', { name: '다시 만나 반가워요' })).toBeVisible();
+    await expect(dialog.getByTestId('auth-title-login')).toBeVisible();
   });
 
   test('🔴 소셜 CTA 는 Google 하나 — Apple·Kakao 는 없다', async ({ page }) => {
@@ -102,7 +102,7 @@ test.describe('로그인 창 — 한 화면 한 목적', () => {
     await expect(dialog.getByRole('heading', { name: '누리홀덤 시작하기' })).toBeVisible({ timeout: 10_000 });
     await expect(dialog.getByRole('button', { name: '일반 회원' })).toHaveAttribute('aria-pressed', 'true');
 
-    await dialog.getByRole('button', { name: '매장 업주' }).click();
+    await dialog.getByTestId('auth-segment-signup-owner').click();
     await expect(dialog.getByRole('heading', { name: '매장 운영 시작하기' })).toBeVisible({ timeout: 10_000 });
     // 업주 폼의 기존 3개 구역이 그대로 있다
     await expect(dialog.getByText('계정 정보', { exact: true })).toBeVisible();
@@ -110,7 +110,7 @@ test.describe('로그인 창 — 한 화면 한 목적', () => {
     await expect(dialog.getByText('전체 동의 (필수 + 선택 포함)')).toBeVisible();
 
     await dialog.getByRole('button', { name: '로그인', exact: true }).click();
-    await expect(dialog.getByRole('heading', { name: '다시 만나 반가워요' })).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByTestId('auth-title-login')).toBeVisible({ timeout: 10_000 });
   });
 
   test('🔴 비밀번호 찾기 진입과 로그인 복귀', async ({ page }) => {
@@ -120,7 +120,7 @@ test.describe('로그인 창 — 한 화면 한 목적', () => {
     await expect(dialog.getByRole('button', { name: '인증번호 받기' })).toBeVisible();
 
     await dialog.getByRole('button', { name: '로그인으로 돌아가기' }).click();
-    await expect(dialog.getByRole('heading', { name: '다시 만나 반가워요' })).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByTestId('auth-title-login')).toBeVisible({ timeout: 10_000 });
   });
 
   test('🔴 필수 약관 전에는 가입 버튼이 잠기고, 선택 약관 없이도 열린다', async ({ page }) => {
@@ -152,7 +152,7 @@ test.describe('로그인 창 — 한 화면 한 목적', () => {
     await entry.click();
     const dialog = page.getByRole('dialog').filter({ hasText: '매장 운영 시작하기' }).first();
     await expect(dialog, 'signup-owner 직접 진입이 업주 화면으로 앉지 않았다').toBeVisible({ timeout: 15_000 });
-    await expect(dialog.getByRole('button', { name: '매장 업주' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(dialog.getByTestId('auth-segment-signup-owner')).toHaveAttribute('aria-pressed', 'true');
   });
 });
 
@@ -166,7 +166,7 @@ test.describe('로그인 창 — 반응형', () => {
       expect(over.doc, `문서가 ${over.doc}px 가로로 넘친다`).toBeLessThanOrEqual(1);
       expect(over.body, `body 가 ${over.body}px 가로로 넘친다`).toBeLessThanOrEqual(1);
 
-      await expect(dialog.getByRole('heading', { name: '다시 만나 반가워요' })).toBeVisible();
+      await expect(dialog.getByTestId('auth-title-login')).toBeVisible();
       await expect(dialog.getByRole('button', { name: /Google로/ })).toBeVisible();
 
       // 입력은 46px 이상 · 모바일 자동확대 방지를 위해 실제 글자 16px 이상
@@ -187,10 +187,10 @@ test.describe('로그인 창 — 반응형', () => {
     await page.setViewportSize({ width: 360, height: 800 });
     const dialog = await openLogin(page);
     await dialog.getByRole('button', { name: '회원가입', exact: true }).click();
-    await dialog.getByRole('button', { name: '매장 업주' }).click();
+    await dialog.getByTestId('auth-segment-signup-owner').click();
     await expect(dialog.getByRole('heading', { name: '매장 운영 시작하기' })).toBeVisible({ timeout: 10_000 });
 
-    const submit = dialog.getByRole('button', { name: '업주 가입 신청' });
+    const submit = dialog.getByTestId('auth-owner-submit');
     await submit.scrollIntoViewIfNeeded();
     await expect(submit, '가입 버튼까지 스크롤이 닿지 않는다').toBeInViewport();
 

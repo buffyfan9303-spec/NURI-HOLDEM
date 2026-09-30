@@ -286,7 +286,7 @@ function RankVerifyAdminCard() {
       // 반려는 사유 없이는 재신청만 부른다 — 신청자 화면(TierLeaderboard 내 인증 이력)에 그대로 보인다.
       const note = ok ? undefined : (window.prompt('반려 사유 (신청자에게 그대로 보입니다)')?.trim() || undefined);
       await adminDecideRankVerification(v, ok, { note });
-      toast.show(ok ? '대회로 승인. 국내 순위에 합산됩니다' : '반려했습니다', 'success');
+      toast.show(ok ? '대회로 승인했습니다. 국내 순위에 합산됩니다' : '반려했습니다', 'success');
       reload();
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
@@ -294,7 +294,7 @@ function RankVerifyAdminCard() {
   };
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— <b className="text-ink-secondary">대회 입상만 승인</b>합니다. 일반 펍 정기 게임 증빙은 <b className="text-ink-secondary">반려</b>하세요 · 승인/거절 시 신분증 즉시 삭제 · 승인분은 100만원(100T)당 1점으로 국내 순위 합산</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— <b className="text-ink-secondary">대회 입상만 승인</b>합니다. 일반 펍 정기 게임 증빙은 <b className="text-ink-secondary">반려</b>하세요 · 승인/거절 시 신분증 즉시 삭제 · 승인분은 100만당 1점으로 국내 순위 합산</span></p>
       {/* 실패를 '대기 중인 신청이 없습니다'로 단언하면 인증 요청이 조용히 묻힌다 — 실패 분기가 먼저 온다 */}
       {err != null ? <LoadErrorCard error={err} what="순위 인증 신청" onRetry={reload} compact />
         : list.length === 0 ? <p className="py-2 text-center text-2xs text-ink-muted">대기 중인 신청이 없습니다.</p> : (
@@ -336,7 +336,7 @@ function RankVerifyAdminCard() {
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-1 text-[10px] text-ink-muted">체크는 운영자의 메모다 — 승인 버튼을 막지 않는다. 최종 판단은 운영자에게 있다.</p>
+                  <p className="mt-1 text-[10px] text-ink-muted">체크는 관리자용 메모입니다 — 승인 버튼을 막지 않습니다. 최종 판단은 관리자가 합니다.</p>
                 </div>
               </Fold>
             </li>
@@ -395,7 +395,7 @@ function MissionsAdminCard() {
     } finally { setBusy(false); }
   };
   const remove = async (m: CustomMissionRow) => {
-    if (!window.confirm(`'${m.title}' 미션을 삭제할까요? (이미 받은 점수는 유지됩니다)`)) return;
+    if (!window.confirm(`'${m.title}' 미션을 삭제하시겠습니까? (이미 받은 점수는 유지됩니다)`)) return;
     setBusy(true);
     try {
       await adminDeleteCustomMission(m.id);
@@ -421,7 +421,7 @@ function MissionsAdminCard() {
         {rows.map((m) => (
           <li key={m.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
             <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold', m.active ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
-              {m.active ? '진행중' : '중단'}
+              {m.active ? '진행 중' : '중단'}
             </span>
             <span className="font-bold text-ink-primary">{m.title}</span>
             <span className="text-ink-muted">{GOAL_TYPE_OPTIONS.find((o) => o.value === m.goal_type)?.label.replace('N', String(m.goal)) ?? '종료된 유형(대회 순위 기반 · 2026-09-05)'}</span>
@@ -517,7 +517,7 @@ function HallOfFameAdminCard() {
   };
 
   const removeRow = async (r: HallOfFameRow) => {
-    if (!window.confirm(`${r.period} ${r.rank}위 '${r.nickname}' 등록을 지울까요? (지우면 그 달은 자동 집계로 돌아갑니다)`)) return;
+    if (!window.confirm(`${r.period} ${r.rank}위 '${r.nickname}' 등록을 지우시겠습니까? (지우면 그 달은 자동 집계로 돌아갑니다)`)) return;
     setBusy(true);
     try {
       await adminDeleteHallEntry(r.id);
@@ -536,7 +536,7 @@ function HallOfFameAdminCard() {
       <p className="text-xs leading-relaxed text-ink-muted">
         노출 기준은 <b className="text-ink-secondary">직전 달</b>입니다(현재 <b className="text-ink-secondary">{last}</b>).
         이번 달({thisMonthPeriod()}) 자리에 미리 채워두면 다음 달에 자동으로 올라갑니다.
-        아무 것도 등록하지 않으면 지금처럼 <b className="text-ink-secondary">입상 기록 자동 집계</b>가 그대로 표시됩니다.
+        아무것도 등록하지 않으면 지금처럼 <b className="text-ink-secondary">입상 기록 자동 집계</b>가 그대로 표시됩니다.
       </p>
 
       <div className="flex flex-wrap items-center gap-1.5">
@@ -571,7 +571,7 @@ function HallOfFameAdminCard() {
 
       {rows.length > 0 && (
         <>
-          <p className="pt-1 text-xs font-bold text-ink-secondary">등록된 전당</p>
+          <p className="pt-1 text-xs font-bold text-ink-secondary">등록된 명예의 전당</p>
           <ul className="space-y-1">
             {rows.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
@@ -763,7 +763,7 @@ function PostsAdminPanel({ posts, postsErr, onRetryPosts }: {
   };
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="pin" size={15} className="shrink-0" />게시물 노출 <span className="text-xs font-normal text-ink-muted">최근 50개. 고정 = 게시판 맨 위 · 블라인드 = 작성자·운영자만 열람</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="pin" size={15} className="shrink-0" />게시글 노출 <span className="text-xs font-normal text-ink-muted">최근 50개. 고정 = 게시판 맨 위 · 블라인드 = 작성자·관리자만 열람</span></p>
       <div className="flex gap-1 overflow-x-auto scrollbar-none">
         {BOARD_FILTER_CATEGORIES.map((c) => (
           <button key={c.id} type="button" onClick={() => setCat(c.id)} aria-pressed={cat === c.id}
@@ -774,7 +774,7 @@ function PostsAdminPanel({ posts, postsErr, onRetryPosts }: {
         ))}
       </div>
       {postsErr != null ? (
-        <LoadErrorCard error={postsErr} what="게시물 목록" onRetry={onRetryPosts} compact />
+        <LoadErrorCard error={postsErr} what="게시글 목록" onRetry={onRetryPosts} compact />
       ) : list.length === 0 ? (
         <p className="py-3 text-center text-xs text-ink-muted">해당 글이 없습니다</p>
       ) : (
@@ -843,7 +843,7 @@ function NoticesAdminPanel({ onChanged }: { onChanged?: () => void }) {
     finally { setBusy(false); }
   };
   const remove = async (n: MarketplaceNotice) => {
-    if (!window.confirm(`공지 "${n.title}" 를 삭제할까요?`)) return;
+    if (!window.confirm(`"${n.title}" 공지를 삭제하시겠습니까?`)) return;
     setBusy(true);
     try {
       await deleteNotice(n.id);
@@ -936,7 +936,7 @@ function SupportInquiriesPanel() {
             <li key={q.id} className="rounded-aura border card-aura p-3">
               <div className="flex items-center gap-2">
                 <span className="rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">{q.category}</span>
-                <span className={['rounded-badge px-1.5 py-0.5 text-[9px] font-bold', q.status === 'answered' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'].join(' ')}>{q.status === 'answered' ? '답변완료' : '답변대기'}</span>
+                <span className={['rounded-badge px-1.5 py-0.5 text-[9px] font-bold', q.status === 'answered' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'].join(' ')}>{q.status === 'answered' ? '답변 완료' : '답변대기'}</span>
                 <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">{q.userName} · {q.createdAt.slice(0, 16).replace('T', ' ')}</span>
               </div>
               <p className="mt-1 text-sm font-bold text-ink-primary">{q.title}</p>
@@ -983,7 +983,7 @@ function ErrorLogPanel() {
   useEffect(() => { reload(); }, [reload]);
 
   const clearAll = async () => {
-    if (!confirm('오류 로그를 전부 비울까요?')) return;
+    if (!confirm('오류 로그를 전부 비우시겠습니까?')) return;
     // ⚠ 이 버튼은 rows.length > 0 일 때만 렌더된다 — 0행은 '이미 비어 있다' 가 아니라 **권한이 없다** 는 뜻이다.
     //   mustAffect 를 쓰지 않는 이유: clearAll 에 try/catch 가 없어 throw 가 조용히 삼켜진다.
     //   .select('id') — 무인자 .select() 는 message·stack 을 통째로 되받는다(민감 컬럼).
@@ -1120,7 +1120,7 @@ const ADMIN_DESC: Record<Section, string> = {
 const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'analytics', label: '운영 분석', icon: aic(<><path d="M3 3v18h18" /><path d="m7 14 4-4 3 3 5-6" /></>) },
   { id: 'pending', label: '포스터 승인', icon: aic(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></>) },
-  { id: 'reorder', label: '게시물 관리', icon: aic(<><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></>) },
+  { id: 'reorder', label: '게시글 관리', icon: aic(<><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></>) },
   // lucide eye 경로(Icon.tsx LUCIDE 와 같은 글리프)
   { id: 'exposure', label: '노출 관리', icon: aic(<><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></>) },
   { id: 'switches', label: '기능 스위치', icon: aic(<><path d="M16 3H8a5 5 0 0 0 0 10h8a5 5 0 0 0 0-10Z" /><circle cx="16" cy="8" r="2" /><path d="M8 21h8a5 5 0 0 0 0-10H8a5 5 0 0 0 0 10Z" /><circle cx="8" cy="16" r="2" /></>) },
@@ -1223,8 +1223,8 @@ function PlanUsageCard() {
         ))}
       </ul>
       <p className="mt-2 text-2xs leading-relaxed text-ink-muted">
-        70% 도달 시 운영자 알림이 하루 1회 발송됩니다. 한도는 각 항목에 적힌 현재 요금제 기준이고,
-        Egress·MAU 의 정확한 과금 값은 Supabase 대시보드에서 확인하세요.
+        70% 도달 시 관리자 알림이 하루 1회 발송됩니다. 한도는 각 항목에 적힌 현재 요금제 기준이고,
+        Egress·MAU의 정확한 과금 값은 Supabase 대시보드에서 확인하세요.
       </p>
     </section>
   );
@@ -1306,11 +1306,11 @@ export default function AdminTab({
           {section === 'exposure' && (
             <div className="space-y-3">
               <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-                <SubPill active={exposureTarget === 'banners'} onClick={() => setExposureTarget('banners')}>배너</SubPill>
-                <SubPill active={exposureTarget === 'ads'} onClick={() => setExposureTarget('ads')}>광고</SubPill>
-                <SubPill active={exposureTarget === 'shouts'} onClick={() => setExposureTarget('shouts')}>외치기</SubPill>
-                <SubPill active={exposureTarget === 'posts'} onClick={() => setExposureTarget('posts')}>게시물</SubPill>
-                <SubPill active={exposureTarget === 'notices'} onClick={() => setExposureTarget('notices')}>공지</SubPill>
+                <SubPill testId="exposure-sub-banners" active={exposureTarget === 'banners'} onClick={() => setExposureTarget('banners')}>배너</SubPill>
+                <SubPill testId="exposure-sub-ads" active={exposureTarget === 'ads'} onClick={() => setExposureTarget('ads')}>광고</SubPill>
+                <SubPill testId="exposure-sub-shouts" active={exposureTarget === 'shouts'} onClick={() => setExposureTarget('shouts')}>외치기</SubPill>
+                <SubPill testId="exposure-sub-posts" active={exposureTarget === 'posts'} onClick={() => setExposureTarget('posts')}>게시글</SubPill>
+                <SubPill testId="exposure-sub-notices" active={exposureTarget === 'notices'} onClick={() => setExposureTarget('notices')}>공지</SubPill>
               </div>
               {exposureTarget === 'banners' && <HomeBannersCard onChanged={onReloadBanners} />}
               {exposureTarget === 'ads' && <AdSlotsAdmin posts={posts} />}
@@ -1575,7 +1575,7 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
           className={['shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
             vIssue ? 'border-accent-400/40 text-accent-300 bg-accent-300/10' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}
         >
-          이용권전송 {vIssue == null ? '…' : vIssue ? '✓' : '✗'}
+          이용권 전송 {vIssue == null ? '…' : vIssue ? '✓' : '✗'}
         </button>
         <button
           type="button"
@@ -1616,7 +1616,7 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
               </button>
             </div>
             {vIssue === false && (
-              <p className="mt-1.5 text-2xs text-amber-400">전송 승인이 꺼져 있습니다 — 한도를 채워도 업주는 전송할 수 없어요.</p>
+              <p className="mt-1.5 text-2xs text-amber-400">전송 승인이 꺼져 있습니다 — 한도를 채워도 매장은 전송할 수 없습니다.</p>
             )}
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -1835,7 +1835,7 @@ function StaffRow({ staff, onChanged }: { staff: VenueStaff; onChanged: () => vo
         <p className="flex items-center gap-1 text-xs font-semibold text-ink-primary">
           <span className="min-w-0 truncate">{staff.name || staff.login}</span>
           {staff.userId
-            ? <span className="shrink-0 text-2xs font-normal text-emerald-400">계정연결</span>
+            ? <span className="shrink-0 text-2xs font-normal text-emerald-400">계정 연결</span>
             : <span className="shrink-0 text-2xs font-normal text-ink-muted">미가입</span>}
         </p>
         <p className="text-2xs text-ink-muted truncate">닉네임/이메일: {staff.login}</p>
@@ -1866,9 +1866,9 @@ function StatsPanel() {
   if (err != null) return <LoadErrorCard error={err} what="운영 지표" onRetry={load} compact />;
   if (!s) return null;
   const cards = [
-    { label: '전체 회원', v: s.users },        { label: '업주', v: s.owners },            { label: '승인대기 업주', v: s.pendingOwners },
+    { label: '전체 회원', v: s.users },        { label: '업주', v: s.owners },            { label: '승인 대기 업주', v: s.pendingOwners },
     { label: '제재 회원', v: s.suspended },     { label: '게시글', v: s.posts },           { label: '매물', v: s.listings },
-    { label: '포스터', v: s.schedules },        { label: '승인대기 포스터', v: s.pendingSchedules }, { label: '7일 신규가입', v: s.signups7d },
+    { label: '포스터', v: s.schedules },        { label: '승인 대기 포스터', v: s.pendingSchedules }, { label: '7일 신규 가입', v: s.signups7d },
   ];
   return (
     <div className="grid grid-cols-3 gap-2">
@@ -1933,7 +1933,7 @@ function PendingRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1 mb-0.5">
           <span className="rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">
-            승인대기
+            승인 대기
           </span>
           <span className="rounded-badge bg-surface-high text-ink-secondary border border-border-default px-1 py-0.5 text-2xs font-semibold leading-none">
             {schedule.format}
@@ -1980,10 +1980,11 @@ function PendingRow({
 }
 
 // 노출 순서 하위 탭(포스터/매장)용 작은 토글 버튼
-function SubPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function SubPill({ active, onClick, children, testId }: { active: boolean; onClick: () => void; children: React.ReactNode; testId?: string }) {
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       className={[
         'flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-[6px] transition-colors focus:outline-hidden',

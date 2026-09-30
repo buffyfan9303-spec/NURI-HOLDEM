@@ -143,7 +143,7 @@ export function evaluateEvent(
     return make('draft', '아직 공개되지 않은 이벤트입니다', { publiclyVisible: false, adminPreviewOnly: true });
   }
   if (status === 'ended') {
-    return make('ended', '종료된 행사입니다. 받으신 이용권과 사용 이력은 그대로 남아 있습니다');
+    return make('ended', '종료된 이벤트입니다. 받으신 이용권과 사용 이력은 그대로 남아 있습니다');
   }
 
   // 숨김은 lifecycle 과 **별도 축**이다 — 저장 상태는 'live' 그대로고 공개 여부만 닫혀 있다.

@@ -174,7 +174,7 @@ export default function PushFoldChart({ initialK, initialStack, initialView, hig
                 <p className="mt-1 text-2xs leading-relaxed text-ink-secondary break-keep">
                   가까운 깊이로 대체하지 않습니다. 눈금에서 점선으로 표시된 깊이(
                   {NASH_STACKS.filter((s) => !hasNashRange(effView, k, s, NASH_BIG_ANTE, true)).join('·')}bb)가 그 구간이고,
-                  <b> SB(뒤 1명)</b>와 <b>{NASH_STACKS.find((s) => hasNashRange(effView, k, s, NASH_BIG_ANTE, true)) ?? 7}bb 이상</b>은 그대로 쓰실 수 있어요. 표를 다시 만들면 돌아옵니다.
+                  <b> SB(뒤 1명)</b>와 <b>{NASH_STACKS.find((s) => hasNashRange(effView, k, s, NASH_BIG_ANTE, true)) ?? 7}bb 이상</b>은 그대로 쓰실 수 있습니다. 표를 다시 만들면 돌아옵니다.
                 </p>
               </>
             ) : (

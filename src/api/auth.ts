@@ -525,7 +525,7 @@ export async function adminWithdrawUser(userId: string, reason: string): Promise
   const { data: owned } = await supabase.from('venues').select('id').eq('owner_id', userId).limit(1);
   if ((owned?.length ?? 0) > 0) throw new Error('매장 대표 계정입니다. 대표 이전 또는 매장 정리를 먼저 끝낸 뒤 다시 시도해 주세요');
   const { data: target } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
-  if ((target as { role?: string } | null)?.role === 'admin') throw new Error('운영자 계정은 강제 탈퇴할 수 없습니다. 권한을 먼저 일반 회원으로 내려 주세요');
+  if ((target as { role?: string } | null)?.role === 'admin') throw new Error('관리자 계정은 강제 탈퇴할 수 없습니다. 권한을 먼저 일반 회원으로 내려 주세요');
 
   try {
     const { data } = await supabase.functions.invoke('notify-sanction', {

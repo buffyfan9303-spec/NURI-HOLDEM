@@ -33,9 +33,9 @@ export function canToggleAccess(view: AccessView): boolean {
 }
 
 /** 실패 상태에서 눌렀을 때의 안내 — 쉬운 말 + 다음 행동(실행문 J절). */
-export const ACCESS_LOAD_FAILED_MSG = '권한을 불러오지 못했어요. 다시 시도해 주세요.';
+export const ACCESS_LOAD_FAILED_MSG = '권한을 불러오지 못했습니다. 다시 시도해 주세요.';
 /** 서버가 42501/403 을 준 경우 — '다시 시도' 가 답이 아니다(nuri-async-guard 부류 2). 처방이 다르니 문장도 다르다. */
-export const ACCESS_LOAD_DENIED_MSG = '권한 설정을 볼 수 있는 계정이 아니에요. 매장 업주 계정으로 다시 로그인해 주세요.';
+export const ACCESS_LOAD_DENIED_MSG = '권한 설정을 볼 수 있는 계정이 아닙니다. 매장 운영자 계정으로 다시 로그인해 주세요.';
 /** 실패 사유별 안내 — 권한 거부(isDenied)·세션 만료(PGRST301)·그 밖의 실패(네트워크·구버전 서버 PGRST202)를 갈라 말한다.
  *  ⚠ 20260915a 부터 두 RPC(get_ledger_access_user_ids·get_voucher_access_user_ids)는 비인가 호출자에게 0행이 아니라 **42501** 을 준다
  *    (그전엔 인가가 WHERE 절이라 200+0행 = '아무도 없음' 으로 위장됐다). 42501 은 '다시 시도' 가 답이 아니라 계정 안내다.
@@ -51,12 +51,12 @@ export type AccessKind = 'ledger' | 'voucher' | 'schedule';
 
 /** 버튼 글귀. 부여/미부여 글귀는 종전 화면 그대로(기능 보존) — 나머지 세 상태만 새로 말한다. */
 export function accessLabel(kind: AccessKind, view: AccessView): string {
-  const name = kind === 'ledger' ? '장부·순위' : kind === 'voucher' ? '이용권내역' : '스케줄 편성';
+  const name = kind === 'ledger' ? '장부·순위' : kind === 'voucher' ? '이용권 내역' : '스케줄 편성';
   switch (view) {
     case 'checking': return `${name} 확인 중…`;
     case 'failed': return `${name} 확인 실패 · 다시 시도`;
     case 'changing': return `${name} 변경 중…`;
-    case 'granted': return kind === 'ledger' ? '장부·순위 권한 ✓' : kind === 'voucher' ? '이용권내역 ✓' : '스케줄 편성 ✓';
-    case 'ungranted': return kind === 'ledger' ? '장부·순위 권한 없음' : kind === 'voucher' ? '이용권내역 ✗' : '스케줄 편성 ✗';
+    case 'granted': return kind === 'ledger' ? '장부·순위 권한 ✓' : kind === 'voucher' ? '이용권 내역 ✓' : '스케줄 편성 ✓';
+    case 'ungranted': return kind === 'ledger' ? '장부·순위 권한 없음' : kind === 'voucher' ? '이용권 내역 ✗' : '스케줄 편성 ✗';
   }
 }

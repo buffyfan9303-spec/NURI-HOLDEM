@@ -184,7 +184,7 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
               <span className="shrink-0 rounded-badge border border-accent-300/50 px-1.5 py-0.5 text-2xs font-semibold leading-none text-accent-200">매장 답글</span>
             )}
             {comment.userRole === 'admin' && (
-              <span className="shrink-0 rounded-badge border border-border-strong px-1.5 py-0.5 text-2xs font-semibold leading-none text-ink-secondary">운영자</span>
+              <span className="shrink-0 rounded-badge border border-border-strong px-1.5 py-0.5 text-2xs font-semibold leading-none text-ink-secondary">관리자</span>
             )}
             <span className="text-2xs text-ink-muted">· {relativeTime(comment.createdAt)}</span>
           </div>
@@ -228,7 +228,7 @@ function CommentItem({ marks = {}, nickTokens = {}, titleOf,
             autoFocus
             value={replyContent}
             onChange={(e) => setReplyContent(e.target.value)}
-            placeholder={`@${comment.userName} 에게 답글…`}
+            placeholder={`@${comment.userName}님에게 답글…`}
             className="input flex-1"
           />
           <button type="submit" className="btn-primary px-3 shrink-0" disabled={!replyContent.trim() || replyPending}>등록</button>
@@ -343,7 +343,7 @@ export default function CommentThread({
         <button type="button" onClick={() => promptLogin()}
           className={['w-full rounded-input border border-border-strong bg-surface-high p-3 text-center text-xs text-ink-secondary transition-colors hover:border-accent-300/60 hover:text-ink-primary',
             postDetailMobile ? 'max-lg:bg-surface-mid max-lg:dark:bg-surface-high' : ''].join(' ')}>
-          로그인하면 댓글을 작성할 수 있어요 — <b className="text-accent-200">로그인하기 →</b>
+          로그인하면 댓글을 작성할 수 있습니다 — <b className="text-accent-200">로그인하기 →</b>
         </button>
       )}
 

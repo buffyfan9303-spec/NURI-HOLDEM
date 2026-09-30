@@ -58,9 +58,9 @@ export function MdfCalc() {
         ))}
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <Result label="MDF (최소 수비 빈도)" value={fmtPct(mdf)} desc={`상대가 ${ratio > 0 ? `${Math.round(ratio * 100)}% 팟` : ''} 벳 시 레인지의 ${fmtPct(mdf)}는 콜/레이즈로 막아야 착취당하지 않아요.`} accent />
+        <Result label="MDF (최소 수비 빈도)" value={fmtPct(mdf)} desc={`상대가 ${ratio > 0 ? `${Math.round(ratio * 100)}% 팟` : ''} 벳 시 레인지의 ${fmtPct(mdf)}는 콜/레이즈로 막아야 착취당하지 않습니다.`} accent />
         <Result label="콜에 필요한 승률" value={fmtPct(callEq)} desc="이 승률보다 핸드 에퀴티가 높으면 수학적으로 콜이 이득입니다." />
-        <Result label="내 벳의 적정 블러프 비율" value={fmtPct(bluffRatio)} desc={`리버 기준 밸류 ${fmtPct(100 - bluffRatio)} : 블러프 ${fmtPct(bluffRatio)}로 섞으면 상대가 콜/폴드 어느 쪽도 착취 못 해요.`} />
+        <Result label="내 벳의 적정 블러프 비율" value={fmtPct(bluffRatio)} desc={`리버 기준 밸류 ${fmtPct(100 - bluffRatio)} : 블러프 ${fmtPct(bluffRatio)}로 섞으면 상대가 콜/폴드 어느 쪽도 착취하지 못합니다.`} />
       </div>
       <p className="text-2xs text-ink-muted">{'※ 벳 크기에서 바로 나오는 산술값입니다(솔버 출력이 아닙니다). 상대가 과도하게 폴드/콜하면 그에 맞춰 블러프를 늘리거나 줄이세요.'}</p>
       {/* 중복 인지 제거 — '콜에 필요한 승률'은 팟 오즈 계산기와 같은 개념(딥링크, 계산 로직 불변) */}
@@ -86,7 +86,7 @@ const AGGRO_ROWS: { pos: string; open: number; threeBet: number; coldCall: numbe
 export function AggroChart() {
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
-    <CalcCard desc="6인 · 100bb 기준 포지션별 권장 빈도(근사). 내 성향이 이 범위에서 크게 벗어나면 누수일 수 있어요.">
+    <CalcCard desc="6인 · 100bb 기준 포지션별 권장 빈도(근사). 내 성향이 이 범위에서 크게 벗어나면 누수일 수 있습니다.">
       {/* 🔴 2026-09-19 GTO 감사 [medium]: 70~71행 주석이 스스로 "자체 제작 학습 차트로 표시한다"고
           약속해 놓고 실제로는 배지가 없었다. 출처는 결과 바로 옆(RangeGuide.tsx 와 같은 자리). */}
       <div className="flex justify-center"><SourceBadge kind="chart" note="100bb" /></div>

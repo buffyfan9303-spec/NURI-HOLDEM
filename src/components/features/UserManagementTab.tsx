@@ -52,14 +52,14 @@ type RoleFilter   = 'all' | 'user' | 'venue_owner' | 'admin';
 type StatusFilter = 'all' | UserStatus;
 
 const ROLE_LABEL: Record<string, string> = {
-  user: '일반', venue_owner: '업주', admin: '운영자',
+  user: '일반', venue_owner: '업주', admin: '관리자',
 };
 const STATUS_LABEL: Record<UserStatus, { label: string; cls: string }> = {
   active:    { label: '활성',     cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
-  pending:   { label: '승인대기',  cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
-  suspended: { label: '정지중',   cls: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
-  banned:    { label: '영구정지', cls: 'bg-danger/15 text-danger-light border-danger/30' },
-  withdrawn: { label: '강제탈퇴', cls: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/40' },
+  pending:   { label: '승인 대기',  cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  suspended: { label: '정지 중',   cls: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
+  banned:    { label: '영구 정지', cls: 'bg-danger/15 text-danger-light border-danger/30' },
+  withdrawn: { label: '강제 탈퇴', cls: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/40' },
 };
 
 
@@ -109,9 +109,9 @@ export default function UserManagementTab({
         <>
           {/* 요약 카운트 */}
           <div className="grid grid-cols-3 gap-2 text-center">
-            <SummaryCard label="승인대기" count={counts.pending}   cls="text-amber-400 border-amber-500/30" />
-            <SummaryCard label="정지중"   count={counts.suspended} cls="text-orange-400 border-orange-500/30" />
-            <SummaryCard label="영구정지" count={counts.banned}    cls="text-danger-light border-danger/30" />
+            <SummaryCard label="승인 대기" count={counts.pending}   cls="text-amber-400 border-amber-500/30" />
+            <SummaryCard label="정지 중"   count={counts.suspended} cls="text-orange-400 border-orange-500/30" />
+            <SummaryCard label="영구 정지" count={counts.banned}    cls="text-danger-light border-danger/30" />
           </div>
 
           {/* 검색 */}
@@ -128,7 +128,7 @@ export default function UserManagementTab({
             <FilterPill active={roleFilter === 'all'}         onClick={() => setRoleFilter('all')}         label="전체" />
             <FilterPill active={roleFilter === 'user'}        onClick={() => setRoleFilter('user')}        label="일반" />
             <FilterPill active={roleFilter === 'venue_owner'} onClick={() => setRoleFilter('venue_owner')} label="업주" />
-            <FilterPill active={roleFilter === 'admin'}       onClick={() => setRoleFilter('admin')}       label="운영자" />
+            <FilterPill active={roleFilter === 'admin'}       onClick={() => setRoleFilter('admin')}       label="관리자" />
           </div>
 
           {/* 상태 필터 */}
@@ -335,14 +335,14 @@ function UserRow({ user, onUpdate }: {
             onClick={toggleActivity}
             className="btn-ghost text-xs px-2 py-1"
           >
-            {actOpen ? '활동닫기' : '활동'}
+            {actOpen ? '활동 닫기' : '활동'}
           </button>
           <button
             type="button"
             onClick={() => setPtOpen((v) => !v)}
             className="btn-ghost text-xs px-2 py-1"
           >
-            {ptOpen ? '포인트닫기' : '포인트'}
+            {ptOpen ? '포인트 닫기' : '포인트'}
           </button>
           <button
             type="button"

@@ -67,7 +67,7 @@ const BLOCKED_PATTERNS: FilterPattern[] = [
   // C. 불법 환전 관련 계좌
   {
     id: 'account_number',
-    label: '계좌번호 패턴',
+    label: '계좌번호',
     // 숫자-숫자-숫자 형태 (은행 계좌) — 간단한 휴리스틱
     pattern: /\d{3,6}-\d{2,6}-\d{4,8}/,
   },
@@ -77,7 +77,7 @@ const BLOCKED_PATTERNS: FilterPattern[] = [
 const WARN_PATTERNS: FilterPattern[] = [
   {
     id: 'gp_trade_hint',
-    label: 'GP 거래 암시',
+    label: 'GP 거래',
     pattern: /gp\s*팝니다|gp\s*삽니다|gp\s*구해요|gp\s*구합니다/i,
   },
   {

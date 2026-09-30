@@ -73,7 +73,7 @@ describe('adminWithdrawUser — 확인 → 메일 → RPC, 그리고 실패는 �
 
   it('운영자 계정: 메일도 RPC 도 나가지 않는다', async () => {
     targetRole = 'admin';
-    await expect(adminWithdrawUser('u-1', '사유')).rejects.toThrow(/운영자 계정/);
+    await expect(adminWithdrawUser('u-1', '사유')).rejects.toThrow(/관리자 계정/);
     expect(calls).not.toContain('fn:notify-sanction');
     expect(calls.some((c) => c.startsWith('rpc:'))).toBe(false);
   });

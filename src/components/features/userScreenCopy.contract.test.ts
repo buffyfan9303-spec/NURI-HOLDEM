@@ -14,9 +14,9 @@ const CASES: [string, string, string][] = [
   //   이 빈 상태까지 오는 것은 이제 '오늘·내일이 없다' 가 아니라 **'앞으로 아무것도 없다'** 라는 뜻이다.
   //   옛 문구를 그대로 두면 앞으로 대회가 하나도 없는데 "오늘·내일은 없어요" 라고 말해 거짓이 된다.
   //   (폴백 갈래의 안내 문구는 `e2e/home-upcoming-fallback.spec.ts` 가 화면으로 잠근다.)
-  ['HomeTab.tsx',              '예정된 대회가 없어요',                            '다음 날짜에는 열려 있을 수 있어요'],
+  ['HomeTab.tsx',              '예정된 대회가 없습니다',                            '다음 날짜에는 열려 있을 수 있어요'],
   ['ScheduleDetailModal.tsx',  '참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요', '다른 플레이어에게 큰 도움이 됩니다'],
-  ['VenuePage.tsx',            '출석하면 점수 적립 · 전적 인정 · 방문 후기가 열려요', '하루 한 번이면 충분해요'],
+  ['VenuePage.tsx',            '출석하면 점수 적립 · 전적 인정 · 방문 후기가 열립니다', '하루 한 번이면 충분해요'],
   ['VenuePage.tsx',            '오늘 진행되는 포스터가 없습니다',                  '아래 예정 포스터를 확인해 보세요'],
   ['MyVoucherSheet.tsx',       '매장 비치 출석 QR',                             '하루 한 번이면 충분해요'],
   ['MyVoucherSheet.tsx',       '수동으로 사용',                                   '장수를 정하고 한 번 더 확인한 뒤 보냅니다'],
@@ -38,7 +38,7 @@ describe('유저 화면 부연설명 제거 계약', () => {
   }
 
   it('법적 고지·경고는 그대로다 — 부연 제거가 여기까지 번지면 안 된다', () => {
-    expect(read('EventPage.tsx')).toContain('한 번 연 카드는 되돌릴 수 없어요');       // 되돌릴 수 없음 경고
+    expect(read('EventPage.tsx')).toContain('한 번 연 카드는 되돌릴 수 없습니다');       // 되돌릴 수 없음 경고
     expect(read('ScheduleDetailModal.tsx')).toContain('휴대전화번호는 매장에 전달되지 않습니다'); // 개인정보 고지
     expect(read('MyVoucherSheet.tsx')).toContain('지갑으로 돌아옵니다');               // 승인 전 취소 결과
   });

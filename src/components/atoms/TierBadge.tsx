@@ -207,7 +207,7 @@ export default function TierBadge({ points, showLabel = false, size = 14, admin 
       className="inline-flex items-center gap-1 align-middle"
       title={
         admin
-          ? '운영자 · SS 등급'
+          ? '관리자 · SS 등급'
           : ace
           ? `AA 등급 · 전체 상위 ${ACE_TOP_RANK}위 (활동 ${points}점)`
           : `활동 ${points}점 · ${t.label} 등급`

@@ -23,5 +23,5 @@ export function kstMonthDay(ms: number): string {
 
 /** 입력칸 아래 공지 한 줄. subject 는 조사까지(예: '닉네임은'). */
 export function cooldownNotice(subject: string, next: number | null): string {
-  return `${subject} ${NICK_COOLDOWN_DAYS}일에 한 번 변경할 수 있어요${next ? ` · 다음 변경 가능: ${kstMonthDay(next)}` : ''}`;
+  return `${subject} ${NICK_COOLDOWN_DAYS}일에 한 번 변경할 수 있습니다${next ? ` · 다음 변경 가능: ${kstMonthDay(next)}` : ''}`;
 }

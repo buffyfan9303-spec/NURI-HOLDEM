@@ -103,7 +103,7 @@ for (const vp of [{ width: 360, height: 800 }, { width: 1280, height: 800 }]) {
       await page.goto('/');
       await page.getByRole('button', { name: /로그인/ }).first().click({ timeout: 20_000 });
       const login = page.getByRole('dialog').first();
-      await expect(login.getByRole('heading', { name: '다시 만나 반가워요' })).toBeVisible({ timeout: 15_000 });
+      await expect(login.getByTestId('auth-title-login')).toBeVisible({ timeout: 15_000 });
       expect(await topHasFooter(), '로그인 시트에 법정 푸터가 붙었다').toBe(false);
       await login.getByRole('button', { name: '회원가입', exact: true }).click();
       await login.getByRole('button', { name: '보기', exact: true }).first().click();

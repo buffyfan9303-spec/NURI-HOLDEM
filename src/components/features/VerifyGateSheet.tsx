@@ -39,10 +39,10 @@ export default function VerifyGateSheet({ onStart }: { onStart: () => void }) {
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-300/12 text-accent-300"><Icon name="lock" size={26} /></div>
           <div>
             <p className="text-sm font-bold text-ink-primary">
-              {reason ? `'${reason}'${josa(reason, '은')} 본인인증이 필요해요` : '본인인증이 필요한 기능이에요'}
+              {reason ? `'${reason}'${josa(reason, '은')} 본인인증이 필요합니다` : '본인인증이 필요한 기능입니다'}
             </p>
             <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
-              명의 도용·중복가입·노쇼 방지를 위한 1회 절차예요.
+              명의 도용·중복가입·노쇼 방지를 위한 1회 절차입니다.
             </p>
           </div>
         </div>
@@ -61,7 +61,7 @@ export default function VerifyGateSheet({ onStart }: { onStart: () => void }) {
 
         <div className="space-y-2">
           <button type="button" onClick={start} className="btn-primary w-full py-3 text-sm">휴대폰 본인인증 하기</button>
-          <button type="button" onClick={() => setOpen(false)} className="btn-ghost w-full py-2.5 text-xs">나중에 할게요</button>
+          <button type="button" onClick={() => setOpen(false)} className="btn-ghost w-full py-2.5 text-xs">나중에 하기</button>
         </div>
         <p className="text-center text-2xs text-ink-muted">인증 정보는 본인 확인 용도로만 사용되며 안전하게 보호됩니다.</p>
         {/* PG(다날) 심사 요건: 본인인증을 진행하는 페이지에도 하단 사업자정보 고정 노출 */}

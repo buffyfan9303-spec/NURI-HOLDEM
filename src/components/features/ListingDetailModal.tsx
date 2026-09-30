@@ -88,7 +88,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
     try {
       await updateListingStatus(listing.id, next);
       onStatusChanged?.(listing.id, next);
-      toast.show(next === 'sold' ? '거래완료로 변경. 목록에서 판매중 표시가 내려갑니다' : next === 'reserved' ? '예약중으로 변경했습니다' : '판매중으로 변경했습니다', 'success');
+      toast.show(next === 'sold' ? '거래완료로 변경했습니다. 목록에서 판매중 표시가 사라집니다' : next === 'reserved' ? '예약중으로 변경했습니다' : '판매중으로 변경했습니다', 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '상태 변경 실패', 'error'); }
     finally { setStatusBusy(false); }
   };
@@ -165,7 +165,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
                   className="inline-flex h-[44px] min-w-[44px] items-center justify-center whitespace-nowrap px-2 text-xs text-ink-muted hover:text-danger-light transition-colors">신고</button>
                 <button type="button"
                   onClick={async () => {
-                    if (!confirm(`'${listing.sellerName}'님을 차단할까요?\n이 판매자의 매물·글이 보이지 않게 됩니다.`)) return;
+                    if (!confirm(`'${listing.sellerName}' 님을 차단하시겠습니까?\n이 판매자의 매물·글이 보이지 않게 됩니다.`)) return;
                     try { await block(listing.sellerId, listing.sellerName); toast.show('차단했습니다. 이 판매자의 매물이 숨겨집니다', 'info'); onClose(); }
                     catch (e) { toast.show(e instanceof Error ? e.message : '차단 실패', 'error'); }
                   }}
@@ -215,7 +215,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
               <div className="flex items-center gap-1">
                 <span className="text-sm font-semibold text-ink-primary truncate">{listing.sellerName}</span>
                 {listing.sellerVerified && (
-                  <span title="본인 인증 완료" className="text-emerald-400">✓</span>
+                  <span title="본인인증 완료" className="text-emerald-400">✓</span>
                 )}
                 {/* '거래 0회' 고정 표기는 갱신이 없는 죽은 스냅샷이라 오히려 불신을 만든다 — 0이면 숨김 */}
                 {listing.sellerTradeCount > 0 && (
@@ -240,7 +240,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
         <section id="listing-comments" data-mk-card="inquiry" {...DETAIL_CARD_AURA} className={[MK_CARD, 'dark:bg-surface-low text-center'].join(' ')}>
           <p className="text-xs font-bold text-ink-primary">궁금한 점이 있으신가요?</p>
           <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
-            가격 협상·상태 문의는 아래 <b className="text-accent-300">판매자에게 연락</b> 버튼으로<br />1:1 채팅에서 바로 대화할 수 있어요.
+            가격 협상·상태 문의는 아래 <b className="text-accent-300">판매자에게 연락</b> 버튼으로<br />1:1 채팅에서 바로 대화할 수 있습니다.
           </p>
           <p className="mt-2 rounded-input bg-amber-500/8 px-2 py-1.5 text-2xs leading-relaxed text-amber-300">
             <Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />안전거래: 선입금 요구는 거절하세요 — 직거래·대면 확인을 권장하고, 의심되면 신고해 주세요.

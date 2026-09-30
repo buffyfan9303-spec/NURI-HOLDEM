@@ -574,7 +574,7 @@ export default function ToolsPanel() {
       <div data-main-enter data-tools-lanepanel="" className="space-y-4">
       {hits ? (
         hits.length === 0
-          ? <p className="py-8 text-center text-2xs text-ink-muted">'{q.trim()}' 에 맞는 도구가 없습니다</p>
+          ? <p className="py-8 text-center text-2xs text-ink-muted">'{q.trim()}'에 맞는 도구가 없습니다</p>
           : grid(hits)
       ) : (
         // 4갈래 흐름 — 비접이 소제목 섹션(필터 칩이 보이는 갈래를 고른다)
@@ -630,7 +630,7 @@ export default function ToolsPanel() {
             {/* #tool= 딥링크로 비로그인 진입해도 게이트가 유지되게 실행 지점에서 한 번 더 확인 */}
             {shownKey ? (user ? renderTool(shownKey, intent) : (
               <div className="flex flex-col items-center gap-3 py-14 text-center">
-                <p className="text-sm font-bold text-ink-primary">로그인하면 GTO 도구를 쓸 수 있어요</p>
+                <p className="text-sm font-bold text-ink-primary">로그인하면 GTO 도구를 쓸 수 있습니다</p>
                 <p className="text-2xs text-ink-muted">차트·트레이너·계산기 전부 무료입니다</p>
                 <button type="button" onClick={() => promptLogin()} className="btn-primary h-10 px-5 text-sm font-bold">로그인하기</button>
               </div>

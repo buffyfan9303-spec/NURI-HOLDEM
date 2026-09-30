@@ -116,14 +116,14 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
   const statusOf = (s: AdSlot): { label: string; tone: 'on' | 'warn' | 'off' } => {
     if (!s.postId) {
       // 옛 문구형 광고 — 내용은 보존돼 있지만 새 방식에서는 노출 경로가 없다.
-      return s.legacyTitle.trim() ? { label: '게시글 연결 필요', tone: 'warn' } : { label: '비어있음', tone: 'off' };
+      return s.legacyTitle.trim() ? { label: '게시글 연결 필요', tone: 'warn' } : { label: '비어 있음', tone: 'off' };
     }
     const post = postById.get(s.postId);
     if (post?.blinded) return { label: '블라인드된 글', tone: 'warn' };
     if (!s.active) return { label: '꺼짐', tone: 'off' };
     if (s.expiresAt && s.expiresAt < today) return { label: '만료', tone: 'off' };
     if (s.startsAt && s.startsAt > today) return { label: '예약 ' + s.startsAt, tone: 'warn' };
-    return { label: '게재중', tone: 'on' };
+    return { label: '게재 중', tone: 'on' };
   };
 
   const noop = () => {};
@@ -132,7 +132,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
     <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary">
         <Icon name="megaphone" size={15} className="shrink-0" />커뮤니티 광고 5칸
-        <span className="text-xs font-normal text-ink-muted">게시판 글을 골라 광고로 올립니다. 손님 화면에선 평소 글 모습 그대로 서고, 누르면 그 글의 상세가 열립니다.</span>
+        <span className="text-xs font-normal text-ink-muted">게시판 글을 골라 광고로 올립니다. 손님 화면에선 평소 글과 같은 모습으로 보이고, 누르면 그 글의 상세가 열립니다.</span>
       </p>
 
       <div className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5 text-xs">
@@ -249,7 +249,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
             const s = slots.find((x) => x.slot === picking);
             if (!s) return;
             setPicking(null);
-            void save({ ...s, postId: post.id, active: true }, (post.title || '글') + ' 을 광고 ' + s.slot + '번에 올렸습니다');
+            void save({ ...s, postId: post.id, active: true }, '‘' + (post.title || '글') + '’ 글을 광고 ' + s.slot + '번에 올렸습니다');
           }}
         />
       )}
@@ -279,7 +279,7 @@ export default function AdSlotsAdmin({ posts }: { posts: CommunityPost[] }) {
             } catch (e) {
               toast.show(
                 '글은 등록됐지만 광고 ' + s.slot + '번 연결에 실패했습니다 ('
-                + (e instanceof Error ? e.message : '원인 불명') + ') — 아래 게시글 연결에서 “' + draft.title + '” 을 골라 주세요',
+                + (e instanceof Error ? e.message : '원인 불명') + ') — 아래 게시글 연결에서 “' + draft.title + '” 글을 골라 주세요',
                 'error',
               );
               reload();
@@ -449,7 +449,7 @@ function AdPostComposer({ slot, onClose, onSubmit }: {
     <Modal open onClose={onClose} title={'광고 ' + slot + '번에 올릴 글 쓰기'} variant="sheet" maxWidth="md">
       <div className="space-y-2.5 px-4 py-3" data-testid="ad-post-composer">
         <fieldset className="space-y-1.5">
-          <legend className="text-2xs font-bold text-ink-secondary">어느 게시판에 올릴까요? (필수)</legend>
+          <legend className="text-2xs font-bold text-ink-secondary">올릴 게시판 (필수)</legend>
           <div className="flex flex-wrap gap-1">
             {POST_CATEGORIES.map((c) => (
               <button key={c.id} type="button" aria-pressed={category === c.id}
@@ -462,7 +462,7 @@ function AdPostComposer({ slot, onClose, onSubmit }: {
           </div>
           <p className="text-2xs text-ink-muted">
             {category
-              ? '광고로 걸려 있는 동안에는 게시판 목록에서 빠지고 광고 칸에만 섭니다. 광고를 끄거나 기간이 끝나면 ‘'
+              ? '광고로 걸려 있는 동안에는 게시판 목록에서 빠지고 광고 칸에만 보입니다. 광고를 끄거나 기간이 끝나면 ‘'
                 + (POST_CATEGORIES.find((c) => c.id === category)?.label ?? '') + '’ 게시판의 일반 글로 남습니다.'
               : '고르지 않으면 저장할 수 없습니다 — 광고가 내려간 뒤 이 글이 어디에 남을지를 정하는 선택입니다.'}
           </p>

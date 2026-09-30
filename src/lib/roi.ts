@@ -79,8 +79,8 @@ export function roiStats(rows: RoiRow[]): RoiStats {
 
 /** 데이터 부족 안내 — 정직하게. 충분하면 null. */
 export function roiNotice(s: Pick<RoiStats, 'events'>): string | null {
-  if (s.events === 0) return '참가비를 적으면 ROI·ITM 이 계산돼요';
-  if (s.events < ROI_MIN_EVENTS) return `기록 ${ROI_MIN_EVENTS}건부터 ROI 를 보여드려요 (지금 ${s.events}건)`;
+  if (s.events === 0) return '참가비를 적으면 ROI·ITM이 계산됩니다';
+  if (s.events < ROI_MIN_EVENTS) return `기록 ${ROI_MIN_EVENTS}건부터 ROI를 보여 드립니다 (지금 ${s.events}건)`;
   return null;
 }
 

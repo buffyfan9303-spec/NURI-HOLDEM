@@ -163,7 +163,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
           <ConsentRow checked={terms}     onChange={setTerms}     required label="서비스 이용약관에 동의합니다." />
           <ConsentRow checked={privacy}   onChange={setPrivacy}   required label="개인정보 수집·이용에 동의합니다. (개인정보보호법 §15)" />
           <ConsentRow checked={anti}      onChange={setAnti}      required label="불법 환전·사행성 행위 금지 서약에 동의합니다. (게임산업법)" />
-          <ConsentRow checked={marketing} onChange={setMarketing}          label="마케팅 정보 수신에 동의합니다. (이벤트·할인·푸시알림)" />
+          <ConsentRow checked={marketing} onChange={setMarketing}          label="마케팅 정보 수신에 동의합니다. (이벤트·할인·푸시 알림)" />
           {/* 오너 #12 — 순위표의 '자주 가는 매장' 표기 동의(선택). 미동의여도 순위·닉네임은 그대로. */}
           <ConsentRow checked={pubRank}   onChange={(v) => { setPubRank(v); setPubRankTouched(true); }}
                       label="랭킹 프로필 공개에 동의합니다. (순위표에 닉네임·자주 가는 매장 표시 · 미동의 시 매장은 표시하지 않습니다)" />

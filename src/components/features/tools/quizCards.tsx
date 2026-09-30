@@ -146,7 +146,7 @@ export function PreflopQuizCard({ quiz, result, onAnswer, banner, footer }: {
           {banner}
           <div className={['rounded-card border p-3 text-center', result.correct ? 'border-emerald-400/50 bg-emerald-500/10' : 'border-danger/50 bg-danger/10'].join(' ')}>
             <p className={['flex items-center justify-center gap-1.5 text-base font-extrabold', result.correct ? 'text-emerald-300' : 'text-danger-light'].join(' ')}>
-              <Icon name={result.correct ? 'check-circle' : 'close'} size={17} className="shrink-0" />{result.correct ? '정답!' : '아쉬워요'}
+              <Icon name={result.correct ? 'check-circle' : 'close'} size={17} className="shrink-0" />{result.correct ? '정답!' : '아쉽습니다'}
             </p>
             <p className="mt-1 text-xs text-ink-secondary">
               {quiz.posLabel} <b className="text-ink-primary">{quiz.hand}</b> 권장:{' '}

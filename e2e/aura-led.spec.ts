@@ -246,7 +246,8 @@ test('🔴 뱅크롤 전체 누계 — 기록이 없으면 Aura 0 이고 0원으
   const pane = page.locator('[data-tab="calendar"]');
   await expect(pane.locator('p:text-is("전체 누계")')).toBeVisible();
   await expect(pane.locator('[data-aura-level="hero"]'), '기록이 없는데 LED 가 켜졌다').toHaveCount(0);
-  await expect(pane.getByText('아직 기록이 없어요'), "기록 없음을 '0원'으로 위장했다").toBeVisible();
+  await expect(pane.getByTestId('bankroll-hero-note'), "기록 없음을 '0원'으로 위장했다").toHaveAttribute('data-note-state', 'empty');
+  await expect(pane.getByTestId('bankroll-hero-note')).toBeVisible();
 });
 
 test('🔴 뱅크롤 전체 누계 — 조회 실패면 Aura 0 이고 실패라고 말한다 (AURA-07)', async ({ page }) => {

@@ -184,7 +184,7 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
                     프로필 등 밀도가 낮은 자리에서 다시 쓸 수 있고, 지우면 그 대비 근거도 같이 사라진다.
                     장착 마크(mark)와 닉네임 색은 그대로다 — 오너가 "이모티콘은 보여도 됨" 이라고 했다. */}
                 {post.userRole === 'venue_owner' && <span className="shrink-0">· 매장</span>}
-                {post.userRole === 'admin' && <span className="shrink-0">· 운영자</span>}
+                {post.userRole === 'admin' && <span className="shrink-0">· 관리자</span>}
               </p>
             </div>
             {/* 카테고리 pill — CATEGORY_TINTS 고정 팔레트 */}

@@ -56,14 +56,14 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
     const s = await getVenueCheckinSpot(id);
     if (venueRef.current !== id) return;
     setSpot(s);
-    if (s.lat == null || s.lng == null) setMsg({ tone: 'err', text: '저장 결과를 확인하지 못했어요. 새로고침 후 다시 확인해 주세요' });
-    else setMsg({ tone: 'ok', text: `${how} 출석 위치를 등록했어요` });
+    if (s.lat == null || s.lng == null) setMsg({ tone: 'err', text: '저장 결과를 확인하지 못했습니다. 새로고침 후 다시 확인해 주세요' });
+    else setMsg({ tone: 'ok', text: `${how} 출석 위치를 등록했습니다` });
   };
 
   const fail = (id: string, e: unknown, fallback: string) => {
     if (venueRef.current !== id) return;
     setMsg({ tone: 'err', text: e instanceof CheckinGeoError && e.code === 'denied'
-      ? '위치 권한을 허용해야 지금 위치로 등록할 수 있어요. 브라우저 설정에서 이 사이트의 위치 권한을 켜 주세요'
+      ? '위치 권한을 허용해야 지금 위치로 등록할 수 있습니다. 브라우저 설정에서 이 사이트의 위치 권한을 켜 주세요'
       : e instanceof Error && e.message ? e.message : fallback });
   };
 
@@ -75,11 +75,11 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
       const pos = await getCheckinPosition();
       if (venueRef.current !== id) return;
       if (isLowAccuracy(pos.accuracy)
-        && !window.confirm(`위치 오차가 약 ${Math.round(pos.accuracy)}m 로 커요. 매장 안 창가 쪽에서 다시 시도하는 게 좋아요.\n그래도 이 위치로 등록할까요?`)) {
+        && !window.confirm(`위치 오차가 약 ${Math.round(pos.accuracy)}m로 큽니다. 매장 안 창가 쪽에서 다시 시도하는 것이 좋습니다.\n그래도 이 위치로 등록하시겠습니까?`)) {
         return;
       }
       await saveAndVerify(id, pos.lat, pos.lng, '지금 위치로');
-    } catch (e) { fail(id, e, '위치 등록에 실패했어요'); }
+    } catch (e) { fail(id, e, '위치 등록에 실패했습니다'); }
     finally { if (venueRef.current === id) setBusy(null); }
   };
 
@@ -91,13 +91,13 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
       // 주소는 서버에서 다시 읽는다 — 위 「위치 · 연락처」에서 방금 저장한 주소가 마운트 때 값보다 새롭다.
       const address = (await getVenueCheckinSpot(id)).address.trim();
       if (venueRef.current !== id) return;
-      if (!address) throw new Error('매장 주소가 없어요. 위 「위치 · 연락처」에서 주소를 먼저 저장해 주세요');
-      if (!(await naverReady())) throw new Error('지도 서비스를 불러오지 못해 주소로 등록할 수 없어요. 「지금 위치로 등록」을 써 주세요');
+      if (!address) throw new Error('매장 주소가 없습니다. 위 「위치 · 연락처」에서 주소를 먼저 저장해 주세요');
+      if (!(await naverReady())) throw new Error('지도 서비스를 불러오지 못해 주소로 등록할 수 없습니다. 「지금 위치로 등록」을 써 주세요');
       const c = await geocodeAddress(address);
       if (venueRef.current !== id) return;
-      if (!c) throw new Error('주소로 위치를 찾지 못했어요. 주소를 확인하거나 「지금 위치로 등록」을 써 주세요');
+      if (!c) throw new Error('주소로 위치를 찾지 못했습니다. 주소를 확인하거나 「지금 위치로 등록」을 써 주세요');
       await saveAndVerify(id, c.lat, c.lng, '주소로');
-    } catch (e) { fail(id, e, '주소 등록에 실패했어요'); }
+    } catch (e) { fail(id, e, '주소 등록에 실패했습니다'); }
     finally { if (venueRef.current === id) setBusy(null); }
   };
 
@@ -106,10 +106,10 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
     <section data-testid="checkin-location" className="rounded-aura border card-aura p-3 space-y-3">
       <div className="space-y-1">
         <h3 className="text-sm font-bold text-ink-primary">출석 위치</h3>
-        <p className="text-2xs text-ink-muted">손님은 이 위치 <span className="font-semibold text-accent-300">300m 안</span>에서만 출석 QR 로 출석할 수 있어요{geoOn ? '' : ' (위치 확인이 켜진 뒤부터)'}.</p>
+        <p className="text-2xs text-ink-muted">손님은 이 위치 <span className="font-semibold text-accent-300">300m 안</span>에서만 출석 QR로 출석할 수 있습니다{geoOn ? '' : ' (위치 확인이 켜진 뒤부터)'}.</p>
       </div>
       {loadErr ? (
-        <p role="alert" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">출석 위치를 불러오지 못했어요. 잠시 후 다시 열어 주세요.</p>
+        <p role="alert" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs text-danger-light">출석 위치를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.</p>
       ) : spot == null ? (
         <p aria-busy="true" className="py-2 text-2xs text-ink-muted">불러오는 중…</p>
       ) : has ? (
@@ -119,7 +119,7 @@ export default function CheckinLocationSection({ venueId }: { venueId: string })
         </p>
       ) : (
         <p role="alert" data-testid="checkin-location-state" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-2xs font-semibold text-danger-light">
-          {geoOn ? '출석 위치가 등록되지 않아 손님이 출석할 수 없어요' : '출석 위치 확인을 켜기 전에 출석 위치를 등록해 주세요'}
+          {geoOn ? '출석 위치가 등록되지 않아 손님이 출석할 수 없습니다' : '출석 위치 확인을 켜기 전에 출석 위치를 등록해 주세요'}
         </p>
       )}
       <div className="grid grid-cols-2 gap-2">

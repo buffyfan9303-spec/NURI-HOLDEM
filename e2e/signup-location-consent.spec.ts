@@ -67,7 +67,7 @@ test.describe('SIGNUP-LOCATION — 가입 때 위치정보 이용 동의(선택)
     await expect(box, '가입 화면에 위치정보 안내·동의 칸이 없다').toBeVisible({ timeout: 15_000 });
     await expect(box).toContainText('주변 매장을 찾으려면 위치정보가 필요합니다');
     await expect(box).toContainText('[선택]');
-    await expect(box).toContainText('저장·전송하지 않아요'); // 라이브 '가까운 순' 안내와 같은 말
+    await expect(box).toContainText('저장·전송하지 않습니다'); // 라이브 '가까운 순' 안내와 같은 말
     await box.scrollIntoViewIfNeeded();
     if (process.env.SLC_SHOT) await page.screenshot({ path: `${process.env.SLC_SHOT}/signup-390-dark.png` });
     // 약관 전문 보기 → 위치기반서비스 약관이 열린다

@@ -201,7 +201,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             <h2 className="text-fluid-lg font-bold text-ink-primary text-grad-violet">진행 중 대회 {games ? <span className="text-accent-200 text-grad-keep">{games.length}</span> : null}</h2>
             {/* 2026-09-18 오너 지시로 설명줄 제거 — 제목 '진행 중 대회'가 이미 화면의 정체를 말하고, '블라인드·레지마감을 한눈에'는 바로 아래 카드 목록에 */}
             {/* LOCATION-READY(2026-09-26): 가까운 순은 기기 안에서만 계산한다(위치정보지원센터 FAQ 9 — 서버 미전송) — 그 사실을 고른 사람에게만 한 줄로 알린다 */}
-            {sortBy === 'distance' && geo && <p data-testid="live-distance-local-note" className="mt-0.5 text-2xs text-ink-muted">위치는 이 기기에서 거리 계산에만 쓰고 저장·전송하지 않아요</p>}
+            {sortBy === 'distance' && geo && <p data-testid="live-distance-local-note" className="mt-0.5 text-2xs text-ink-muted">위치는 이 기기에서 거리 계산에만 쓰고 저장·전송하지 않습니다</p>}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {games && games.length > 1 && (
@@ -236,7 +236,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                   <Icon name={refresh === 'done' ? 'check' : 'close'} size={12} className="shrink-0" />{refresh === 'done' ? '완료' : '실패'}
                 </span>
               )}
-              <span className="sr-only" aria-live="polite">{refresh === 'done' ? '목록을 새로 불러왔어요' : refresh === 'fail' ? '목록을 불러오지 못했어요' : ''}</span>
+              <span className="sr-only" aria-live="polite">{refresh === 'done' ? '목록을 새로 불러왔습니다' : refresh === 'fail' ? '목록을 불러오지 못했습니다' : ''}</span>
             </button>
           </div>
         </div>
@@ -614,7 +614,7 @@ function MyTournamentCard({ g, venueName, onDisplay, onPoster, onVenue, hero = f
       // hero: 링 헤어라인이 테두리를 대신하므로 accent 테두리는 절반으로(3중선 방지)
       hero ? 'border-accent-300/30 ring-aura ring-aura-glow' : 'border-accent-300/60'].join(' ')}>
       <div className="flex items-center justify-between gap-2">
-        <p className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="target" size={14} className="shrink-0" /><span className="truncate">내 토너 · <span className="text-ink-primary">{venueName}</span></span></p>
+        <p className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="target" size={14} className="shrink-0" /><span className="truncate">내 대회 · <span className="text-ink-primary">{venueName}</span></span></p>
         {/* 일반 라이브 카드는 포스터·매장·관전 세 길을 다 갖는데 이 카드는 관전뿐이었다(연결 감사 G).
             헤더 폭은 매장명이 truncate 로 흡수하므로 짧은 라벨 셋이 한 줄에 선다(375·320 실측은 계약 파일 머리 참조). */}
         <div className="flex shrink-0 items-center gap-1">
@@ -660,7 +660,7 @@ function MyTournamentCard({ g, venueName, onDisplay, onPoster, onVenue, hero = f
           <Icon name="chevron-right" size={14} className="shrink-0" />
         </button>
       ) : (
-        <p className="mt-2 flex h-7 items-center px-2 text-2xs text-ink-muted" data-testid="live-stack-hint">스택을 입력하면 구간별 차트를 추천해요</p>
+        <p className="mt-2 flex h-7 items-center px-2 text-2xs text-ink-muted" data-testid="live-stack-hint">스택을 입력하면 구간별 차트를 추천합니다</p>
       )}
     </section>
   );

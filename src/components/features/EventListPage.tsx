@@ -225,11 +225,11 @@ export default function EventListPage({ open, onClose, onSelect }: {
           err
             // 지난 목록이 비어 있었고 새로 받기도 실패 — '없어요'로 위장하지 않는다(K-03).
             ? <LoadErrorCard error={err} what="이벤트 목록" onRetry={load} />
-            : <EmptyState title="진행 중인 이벤트가 없어요" hint="새 이벤트가 열리면 여기서 볼 수 있어요" icon={<Icon name="gift" />} />
+            : <div data-testid="event-list-empty"><EmptyState title="진행 중인 이벤트가 없습니다" hint="새 이벤트가 열리면 여기서 볼 수 있습니다" icon={<Icon name="gift" />} /></div>
         ) : (
           <>
           {/* 캐시로 그린 목록을 새로 받다 실패 — 목록은 두고(지우면 멀쩡한 정보가 사라진다) 낡았을 수 있다고 알린다(K-03). */}
-          {err != null && <div className="mb-2"><LoadErrorCard compact error={err} what="최신 이벤트 목록" hint="아래는 마지막으로 불러온 목록이에요." onRetry={load} /></div>}
+          {err != null && <div className="mb-2"><LoadErrorCard compact error={err} what="최신 이벤트 목록" hint="아래는 마지막으로 불러온 목록입니다." onRetry={load} /></div>}
           <ul className="space-y-2">
             {items.map((ev) => {
               const b = badgeOf(ev.state);

@@ -61,7 +61,7 @@ test('🔴 L1 거절 — 동의 안 함을 저장하고, 좌표 없이 출석이
   const calls = await setup(page, { state: 'unset' });
   const sheet = await openSheet(page);
   expect(calls.checkIn, '동의를 묻기 전에 check_in 이 나갔다').toEqual([]);
-  await expect(sheet).toContainText('동의하지 않아도 출석할 수 있어요');
+  await expect(sheet).toContainText('동의하지 않아도 출석할 수 있습니다');
   if (SHOT) await page.screenshot({ path: `${SHOT}/after-consent-sheet.png` });
   await page.getByTestId('location-consent-decline').click();
   await expect.poll(() => calls.checkIn.length, { timeout: 10_000 }).toBe(1);

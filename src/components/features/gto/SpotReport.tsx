@@ -191,7 +191,7 @@ export default function SpotReport({ spot, evaluation, blocked, user, toast, sha
         </button>
       </div>
       {blocked && (
-        <p className="mt-1.5 text-2xs text-ink-muted">입력을 고치면 저장·공유할 수 있어요. 적어 둔 내용은 그대로 있습니다.</p>
+        <p className="mt-1.5 text-2xs text-ink-muted">입력을 고치면 저장·공유할 수 있습니다. 적어 둔 내용은 그대로 있습니다.</p>
       )}
 
       <SpotAiCoach spot={spot} evaluation={evaluation} blocked={blocked} user={user} toast={toast}
@@ -264,7 +264,7 @@ function ShareConfirmSheet({
             onChange={(e) => onNote(e.target.value)}
             rows={4}
             maxLength={1000}
-            placeholder="비워 두면 '이 자리에서 어떻게 하시겠어요?' 만 올라갑니다"
+            placeholder="비워 두면 '이 자리에서 어떻게 하시겠어요?'만 올라갑니다"
             className="mt-1 w-full resize-y rounded-input border border-border-default bg-surface-high px-2.5 py-2 text-xs leading-relaxed text-ink-primary placeholder:text-ink-muted"
           />
         </label>
@@ -375,14 +375,14 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
       </button>
       {!complete.ok && (
         <p className="text-2xs text-ink-muted break-keep" data-testid="spot-ai-missing">
-          {complete.missing.join(' · ')}을(를) 채우면 AI 코칭을 받을 수 있어요.
+          {complete.missing.join(' · ')} 항목을 채우면 AI 코칭을 받을 수 있습니다.
         </p>
       )}
       {complete.ok && outOfDay && <p className="text-2xs text-ink-muted">{spotAiMessage('DAILY_LIMIT')}</p>}
       {shown && (
         <section data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트"
           className="rounded-input border border-border-default bg-surface-high px-2.5 py-2">
-          <h4 className="text-2xs font-bold text-ink-secondary">AI 아쉬운 포인트 <span className="font-normal text-ink-muted">(나만 보여요 · 게시판에 올라가지 않아요)</span></h4>
+          <h4 className="text-2xs font-bold text-ink-secondary">AI 아쉬운 포인트 <span className="font-normal text-ink-muted">(나만 볼 수 있으며 게시판에 올라가지 않습니다)</span></h4>
           <p className="mt-1 whitespace-pre-wrap break-keep text-xs leading-relaxed text-ink-primary">{shown}</p>
         </section>
       )}
@@ -391,12 +391,12 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
         <div className="space-y-3 p-4" data-spot-ai-confirm>
           <ul className="space-y-1.5">
             {[
-              `활동 포인트 ${status.price}P 가 차감됩니다 (사용 가능 ${status.available}P → ${left}P). 같은 스팟을 다시 보면 무료예요.`,
+              `활동 포인트 ${status.price}P가 차감됩니다 (사용 가능 ${status.available}P → ${left}P). 같은 스팟을 다시 보면 무료입니다.`,
               `오늘 ${status.usedToday}/${status.limit}회 사용 — 하루 최대 ${status.limit}회입니다.`,
-              'AI 가 답을 주지 못하면 포인트를 돌려드려요.',
-              savedId ? '저장된 이 스팟으로 요청합니다.' : "아직 저장하지 않은 스팟이라 '내 스팟' 에 먼저 저장한 뒤 요청합니다.",
-              '보내는 내용: 스팟(자리·스택·카드·액션·내 선택)과 메모(앞 300자). 닉네임·이름 같은 계정 정보는 보내지 않아요.',
-              '외부 AI(Google Gemini)가 만든 참고용 정성 코칭이며, 결과는 나만 볼 수 있어요.',
+              'AI 가 답을 주지 못하면 포인트를 돌려드립니다.',
+              savedId ? '저장된 이 스팟으로 요청합니다.' : "아직 저장하지 않은 스팟이라 '내 스팟'에 먼저 저장한 뒤 요청합니다.",
+              '보내는 내용: 스팟(자리·스택·카드·액션·내 선택)과 메모(앞 300자). 닉네임·이름 같은 계정 정보는 보내지 않습니다.',
+              '외부 AI(Google Gemini)가 만든 참고용 정성 코칭이며, 결과는 나만 볼 수 있습니다.',
             ].map((t) => (
               <li key={t} className="flex items-start gap-1.5 text-2xs leading-relaxed text-ink-secondary break-keep">
                 <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-muted" aria-hidden />
@@ -414,7 +414,7 @@ function SpotAiCoach({ spot, evaluation, blocked, user, toast, savedId, onSaved,
               className="btn-ghost min-h-[44px] whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">취소</button>
             <button type="button" onClick={run} disabled={busy} data-testid="spot-ai-confirm"
               className="btn-primary min-h-[44px] whitespace-normal px-2 text-xs leading-tight disabled:opacity-50">
-              {busy ? '코칭 받는 중…' : `${status.price}P 로 코칭 받기`}
+              {busy ? '코칭 받는 중…' : `${status.price}P로 코칭 받기`}
             </button>
           </div>
         </div>

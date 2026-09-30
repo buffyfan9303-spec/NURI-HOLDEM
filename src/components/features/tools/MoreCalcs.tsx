@@ -11,8 +11,8 @@ import { PAYOUT_MAX_ENTRIES, computePayout, type PayoutStyle } from '../../../li
 // 계산은 src/lib/payout.ts(computePayout) — 인원 상한(PAYOUT_MAX_ENTRIES)·잔액 보정·역전 가드를 거기서 검사한다.
 const PAYOUT_STYLES: { id: PayoutStyle; label: string; desc: string }[] = [
   { id: 'topheavy', label: '탑헤비', desc: '상위에 집중(가파른 곡선)' },
-  { id: 'flat', label: '뱅크롤 관리', desc: '완만·다수 시상(플레이어 친화)' },
-  { id: 'satellite', label: '세틀라이트', desc: '상위 동일 금액(시트)' },
+  { id: 'flat', label: '플랫', desc: '완만·다수 시상(플레이어 친화)' },
+  { id: 'satellite', label: '새틀라이트', desc: '상위 동일 금액(시트)' },
 ];
 
 // 표준 분배 프리셋 — 자주 쓰는 고정 %표. 클릭 시 인원·시상 수를 맞추고 %표 그대로 분배.
@@ -113,7 +113,7 @@ export function EndTimeCalc() {
   const overnight = startH * 60 + startM + totalMin >= 24 * 60;
 
   return (
-    <CalcCard title="종료시간 예측" desc="레벨·브레이크로 총 소요시간과 예상 종료 시각">
+    <CalcCard title="종료 시간 예측" desc="레벨·브레이크로 총 소요시간과 예상 종료 시각">
       <div className="grid grid-cols-2 gap-2">
         <Field label="시작 시"><NumIn value={startH} onChange={setStartH} suffix="시" /></Field>
         <Field label="시작 분"><NumIn value={startM} onChange={setStartM} suffix="분" /></Field>

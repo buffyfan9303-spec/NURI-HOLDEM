@@ -80,7 +80,7 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
     const lines = MATCH_FIELDS
       .map((f) => [f.label, cond[f.key].trim()] as const)
       .filter(([, v]) => v)
-      .map(([label, v]) => `ㆍ${label}: ${v}`);
+      .map(([label, v]) => `·${label}: ${v}`);
     const extra = note.trim();
     if (extra) lines.push(extra);
     return lines.join('\n').slice(0, 500);
@@ -107,7 +107,7 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
               단위가 달라 상대 매장이 비교를 못 했다.
             ⚠ 저장은 여전히 `venue_match_posts.note`(text 1~500) 한 칸이다 — 컬럼을 쪼개려면
               마이그레이션이 필요하고 라이브 DB 변경은 오너 승인 사항이라, 지금은 **입력만** 항목별로 받고
-              서버로 보낼 때 'ㆍ참가비: …' 줄로 조립한다. 읽는 쪽(공개 게시판·내 게시)은 whitespace-pre-wrap
+              서버로 보낼 때 '·참가비: …' 줄로 조립한다. 읽는 쪽(공개 게시판·내 게시)은 whitespace-pre-wrap
               이라 줄바꿈이 그대로 보인다.
             ⚠ 이 방식의 한계는 숨기지 않는다: 항목별 **검색·정렬·집계는 안 된다**(문자열이라서).
               그게 필요해지면 컬럼 분리 마이그레이션이 정답이다. */}
@@ -158,7 +158,7 @@ export default function VenueMatchPanel({ venueId, canConfigure }: { venueId: st
                 {canConfigure && (
                   <span className="ml-auto flex gap-1.5">
                     {p.status === 'open' && <button type="button" disabled={busy} onClick={() => run(() => closeMatchPost(p.id), '마감했습니다', '마감 실패')} className={BTN_MUTE}>마감하기</button>}
-                    <button type="button" disabled={busy} onClick={() => { if (window.confirm('이 게시를 삭제할까요?')) run(() => deleteMatchPost(p.id), '삭제했습니다', '삭제 실패'); }} className={BTN_NO}>삭제하기</button>
+                    <button type="button" disabled={busy} onClick={() => { if (window.confirm('이 게시를 삭제하시겠습니까?')) run(() => deleteMatchPost(p.id), '삭제했습니다', '삭제 실패'); }} className={BTN_NO}>삭제하기</button>
                   </span>
                 )}
               </div>

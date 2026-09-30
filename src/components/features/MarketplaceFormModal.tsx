@@ -196,7 +196,7 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
 
         {/* 지역 + 거래방법 */}
         <div>
-          <label className="block text-xs font-medium text-ink-secondary mb-1.5">지역 / 거래방법</label>
+          <label className="block text-xs font-medium text-ink-secondary mb-1.5">지역 / 거래 방법</label>
           <div className="flex gap-2">
             <select value={region} onChange={(e) => setRegion(e.target.value)} className="input flex-1 min-h-[44px]">
               {REGION_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -252,7 +252,7 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
           ) : (
             <button type="button" onClick={() => fileRef.current?.click()}
               className="w-full py-6 rounded-input border border-dashed border-border-default text-2xs text-ink-muted hover:border-accent-400/50 hover:text-ink-secondary transition-colors">
-              사진을 첨부하려면 클릭하세요 (최대 {MAX_IMAGES}장 · 5MB)
+              사진을 첨부하려면 누르세요 (최대 {MAX_IMAGES}장 · 5MB)
             </button>
           )}
         </div>

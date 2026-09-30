@@ -225,7 +225,7 @@ describe('F3 — 환불이 확인될 때만 "돌려드렸어요"', () => {
   });
   it('클라이언트: 코드 없는 502 를 "돌려드렸어요" 로 말하지 않는다', () => {
     expect(API).toContain("status === 502 ? 'REFUND_PENDING'");
-    expect(API).toMatch(/case 'REFUND_PENDING': return '[^']*5분 안에 자동으로 돌려드려요/);
+    expect(API).toMatch(/case 'REFUND_PENDING': return '[^']*5분 안에 자동으로 돌려 드립니다/);
   });
 });
 

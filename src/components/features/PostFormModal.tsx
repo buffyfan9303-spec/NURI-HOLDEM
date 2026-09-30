@@ -141,7 +141,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
       setActs({ pre: r?.actions.pre ?? '', flop: r?.actions.flop ?? '', turn: r?.actions.turn ?? '', river: r?.actions.river ?? '' });
       setHandDraft(emptyHand()); setPollDraft(emptyPoll());
       setPendingPostId(null); setFailedAttach({ hand: false, poll: false });
-      if (r) toast.show('핸드를 첨부한 글쓰기를 열었어요', 'success');
+      if (r) toast.show('핸드를 첨부한 글쓰기를 열었습니다', 'success');
     }
   }, [open, defaultCategory, defaultContent, defaultReplay, toast]);
 
@@ -224,7 +224,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
         onClose();
       } else {
         setFailedAttach({ hand: outcome.handFailed, poll: outcome.pollFailed });
-        toast.show('아직 저장하지 못한 첨부가 있어요. 다시 시도해 주세요', 'error');
+        toast.show('아직 저장하지 못한 첨부가 있습니다. 다시 시도해 주세요', 'error');
       }
     } finally {
       setSaving(false);
@@ -306,9 +306,9 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
       setPendingPostId(postId);
       setFailedAttach({ hand: outcome.handFailed, poll: outcome.pollFailed });
       toast.show(
-        outcome.handFailed && outcome.pollFailed ? '글은 저장됐지만 핸드·투표는 저장하지 못했어요'
-          : outcome.handFailed ? '글은 저장됐지만 핸드 카드는 저장하지 못했어요'
-          : '글은 저장됐지만 투표는 저장하지 못했어요',
+        outcome.handFailed && outcome.pollFailed ? '글은 저장됐지만 핸드·투표는 저장하지 못했습니다'
+          : outcome.handFailed ? '글은 저장됐지만 핸드 카드는 저장하지 못했습니다'
+          : '글은 저장됐지만 투표는 저장하지 못했습니다',
         'error',
       );
     } catch (err) {
@@ -328,7 +328,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
           {pendingPostId && (
             <div data-testid="post-form-partial-fail" className="rounded-input border border-danger/40 bg-danger/6 px-3 py-2.5 text-xs text-danger">
               <p className="font-bold">
-                글은 저장됐지만 {failedAttach.hand && failedAttach.poll ? '핸드 카드·투표' : failedAttach.hand ? '핸드 카드' : '투표'}는 저장하지 못했어요
+                글은 저장됐지만 {failedAttach.hand && failedAttach.poll ? '핸드 카드·투표' : failedAttach.hand ? '핸드 카드' : '투표'}는 저장하지 못했습니다
               </p>
               <p className="mt-0.5 text-ink-secondary">아래 내용을 확인하고 '다시 시도'를 눌러 주세요. 본문은 다시 등록되지 않습니다.</p>
             </div>
@@ -402,9 +402,9 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
           {/* 핸드 카드 · 투표 어태치먼트 (PostComposerExtras — 오너 패키지 이식) */}
           {/* 표시부는 게시글당 어태치먼트 1개(핸드 우선) — 동시 첨부하면 투표가 안 보이므로 상호 배타 */}
           <CardPicker value={handDraft} onChange={setHandDraft}
-            blockedBy={pollDraft.enabled ? '투표를 켠 글에는 핸드 카드를 함께 첨부할 수 없어요. 투표를 끄면 다시 열립니다' : undefined} />
+            blockedBy={pollDraft.enabled ? '투표를 켠 글에는 핸드 카드를 함께 첨부할 수 없습니다. 투표를 끄면 다시 열립니다' : undefined} />
           <PollBuilder value={pollDraft} onChange={setPollDraft}
-            blockedBy={normalizeHand(handDraft) !== null ? '핸드 카드를 첨부한 글에는 투표를 함께 만들 수 없어요. 카드·요약을 지우면 다시 열립니다' : undefined} />
+            blockedBy={normalizeHand(handDraft) !== null ? '핸드 카드를 첨부한 글에는 투표를 함께 만들 수 없습니다. 카드·요약을 지우면 다시 열립니다' : undefined} />
 
           {/* 이미지 첨부 */}
           <div>
@@ -451,7 +451,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                 onClick={() => fileRef.current?.click()}
                 className="w-full py-3.5 rounded-input border border-dashed border-border-strong text-2xs text-ink-muted hover:border-accent-400/50 hover:text-ink-secondary transition-colors"
               >
-                사진을 첨부하려면 클릭하세요 (최대 {MAX_IMAGES}장 · 5MB)
+                사진을 첨부하려면 누르세요 (최대 {MAX_IMAGES}장 · 5MB)
               </button>
             )}
           </div>

@@ -322,7 +322,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver, canIssue: canIssu
     { id: 'voucher', title: '매장이용권 사용', data: () => QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 1024, margin: 2 }), desc: '대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’' },
     { id: 'checkin', title: '출석', data: () => QRCode.toDataURL(checkinUrl(venueId), { width: 1024, margin: 2 }), desc: 'QR 스캔 → 오늘 출석(매장 점수 적립 · 출석왕 집계)' },
     { id: 'signup', title: '회원가입', data: () => QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 1024, margin: 2 }), desc: 'QR 스캔 → 바로 회원가입' },
-    { id: 'buyin', title: '바인(참가) 요청', data: () => QRCode.toDataURL(buyinRequestUrl(venueId), { width: 1024, margin: 2 }), desc: '손님 스캔 → 참가 요청(게임 선택) → 운영자가 장부에서 원탭 승인' },
+    { id: 'buyin', title: '바인(참가) 요청', data: () => QRCode.toDataURL(buyinRequestUrl(venueId), { width: 1024, margin: 2 }), desc: '손님 스캔 → 참가 요청(게임 선택) → 매장이 장부에서 원탭 승인' },
     { id: 'buyinG1', title: '바인 요청 · 메인', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 1), { width: 1024, margin: 2 }), desc: '메인 테이블 비치 · 스캔 시 메인 게임 바로 요청' },
     { id: 'buyinG2', title: '바인 요청 · 사이드1', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 2), { width: 1024, margin: 2 }), desc: '사이드1 테이블 비치 · 스캔 시 사이드1 바로 요청' },
     { id: 'buyinG3', title: '바인 요청 · 사이드2', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 3), { width: 1024, margin: 2 }), desc: '사이드2 테이블 비치 · 스캔 시 사이드2 바로 요청' },
@@ -449,7 +449,7 @@ ${cards}
   //   서버가 보유자에게 알림도 보낸다(지갑에서 소리 없이 사라지지 않게).
   const revokeGroup = async (g: { name: string; ids: string[] }) => {
     if (g.ids.length === 0) return;
-    if (!window.confirm(`${g.name}의 미사용 이용권 ${g.ids.length}장을 전송 취소할까요?\n\n`
+    if (!window.confirm(`${g.name}의 미사용 이용권 ${g.ids.length}장을 전송 취소하시겠습니까?\n\n`
       + '전송을 취소하면 손님 지갑에서 사용할 수 없게 되고, 손님에게 전송 취소 알림이 갑니다.\n'
       + '이미 사용된 이용권은 전송 취소되지 않고 내역으로 남습니다.')) return;
     setBusy(true);
@@ -460,7 +460,7 @@ ${cards}
   // 예전엔 used 까지 함께 넘겨 사용 기록이 통째로 증발했다(2026-08-29 실측).
   const deleteGroup = async (g: { name: string; ids: string[]; usedCount: number }) => {
     if (g.ids.length === 0) { toast.show('삭제할 미사용 이용권이 없습니다. 사용 완료분은 내역으로 보존됩니다', 'info'); return; }
-    if (!window.confirm(`${g.name}의 미사용 이용권 ${g.ids.length}장을 완전히 삭제할까요? 되돌릴 수 없습니다.`
+    if (!window.confirm(`${g.name}의 미사용 이용권 ${g.ids.length}장을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`
       + (g.usedCount > 0 ? `\n\n사용 완료 ${g.usedCount}장은 이용 내역이라 삭제되지 않습니다.` : ''))) return;
     setBusy(true);
     const r = await deleteVouchers(g.ids);
@@ -541,17 +541,17 @@ ${cards}
                각 묶음은 '라벨 → 조작' 같은 문법(간격 6px). md 이상은 클래스가 전부 `max-md:`/`md:hidden` 이라 **무변경**. */
             <div className="space-y-1.5 px-2.5 pb-2.5 max-md:space-y-2.5">
               {!isAdmin && approvedErr == null && !approved && (
-                <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/8 px-2 py-1.5 text-2xs text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 운영자 승인 후 전송할 수 있습니다.</p>
+                <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/8 px-2 py-1.5 text-2xs text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 관리자 승인 후 전송할 수 있습니다.</p>
               )}
               {!isAdmin && approvedErr != null && (
                 <LoadErrorCard what="전송 승인 상태" error={approvedErr} onRetry={reload} compact hint="승인 상태를 확인하기 전에는 전송할 수 없습니다." />
               )}
               <div className="flex gap-1.5 max-md:flex-col">
-                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm max-md:h-[44px] max-md:flex-none" />
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 이용권)" className="input min-w-0 flex-1 text-sm max-md:h-[44px] max-md:flex-none" />
                 <div className="flex items-stretch gap-1 shrink-0 max-md:h-[44px] max-md:w-full">
                   <StepBtn label="−" onStep={() => setCount((c) => Math.max(1, c - 1))} />
                   <input type="number" inputMode="numeric" min={1} max={1000} value={count || ''} onChange={(e) => setCount(Math.min(1000, Math.max(1, parseInt(e.target.value, 10) || 1)))}
-                    className="input w-16 text-sm tabular-nums text-center max-md:h-auto max-md:min-w-0 max-md:flex-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" aria-label="전송 갯수" />
+                    className="input w-16 text-sm tabular-nums text-center max-md:h-auto max-md:min-w-0 max-md:flex-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" aria-label="전송 개수" />
                   <StepBtn label="+" onStep={() => setCount((c) => Math.min(1000, c + 1))} />
                   <span className="self-center pl-0.5 text-2xs text-ink-muted">개</span>
                 </div>
@@ -592,7 +592,7 @@ ${cards}
               {venueName && (
                 <p className="flex items-start gap-1.5 rounded-input bg-surface-high px-2 py-1.5 text-2xs leading-relaxed text-ink-muted">
                   <Icon name="eye" size={12} className="mt-0.5 shrink-0 text-accent-300" />
-                  <span className="min-w-0 break-keep">손님 지갑에는 <b className="text-ink-primary">{voucherGroupLabel(venueName)}</b> 묶음 안에 <b className="text-ink-primary">{stripVenuePrefix(title, venueName)}</b> 로 보입니다. 이름에 매장명을 다시 넣지 않아도 됩니다.</span>
+                  <span className="min-w-0 break-keep">손님 지갑에는 <b className="text-ink-primary">{voucherGroupLabel(venueName)}</b> 묶음 안에 <b className="text-ink-primary">{stripVenuePrefix(title, venueName)}</b>로 보입니다. 이름에 매장명을 다시 넣지 않아도 됩니다.</span>
                 </p>
               )}
               {/* 유효기간 — 만료 이용권은 사용 RPC 가 서버에서 거부하고 손님 지갑에서도 자동 제외된다(2026-08-17).
@@ -624,7 +624,7 @@ ${cards}
                 </div>
                 <p className="mt-1 text-ink-muted">
                   {expiry
-                    ? <>선택한 기간의 마지막 날은 <b className="tabular-nums text-ink-secondary">{expiry}</b> 입니다 — 그날 <b className="text-ink-secondary">밤 11시 59분</b>까지 쓸 수 있습니다.</>
+                    ? <>선택한 기간의 마지막 날은 <b className="tabular-nums text-ink-secondary">{expiry}</b>입니다 — 그날 <b className="text-ink-secondary">밤 11시 59분</b>까지 쓸 수 있습니다.</>
                     : '무기한 — 만료일 없이 전송합니다.'}
                 </p>
               </div>
@@ -756,7 +756,7 @@ ${cards}
                     (운영자 승인)를 본다 — pg_proc 직접 조회로 확인(2026-09-20).
                     오너 결정: "공동운영자에게 발급 줘. UI도 이에 맞춰서." → 실제 범위를 그대로 적는다.
                     ⚠ 위 주석대로 CheckinModal 의 같은 문구와 **갈리면 안 된다** — 둘 다 같이 고쳤다. */}
-                <b data-testid="voucher-issue-scope" className="text-ink-primary">매장이용권 전송은 운영자 승인을 받은 매장의 업주·공동운영자만 가능합니다.</b><br />
+                <b data-testid="voucher-issue-scope" className="text-ink-primary">매장이용권 전송은 이 매장의 업주·공동운영자 중 관리자 승인을 받은 계정만 할 수 있습니다.</b><br />
                 손님끼리 주고받을 수 없으며, <b className="text-ink-primary">금전적 가치가 없습니다</b>(매장 안에서 참가비로만 쓸 수 있고 다른 용도로 바꿀 수 없습니다).
               </p>
               <p className="text-2xs leading-relaxed text-ink-secondary">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 전송됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">닉네임·실명 또는 전화번호</b>로 지정합니다(실명은 정확히 입력). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
@@ -791,14 +791,14 @@ ${cards}
                   <p className="text-center text-2xs font-bold text-ink-secondary">이용권 사용 QR</p>
                   {srcOf(qr)
                     ? <img src={srcOf(qr)} alt="매장 이용권 QR" width={130} height={130} className="rounded-sm bg-white p-1.5" />
-                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
+                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했습니다' : '만드는 중…'}</div>}
                   <p className="text-center text-2xs leading-snug text-ink-secondary">손님이 스캔해 사용 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">출석 QR</p>
                   {srcOf(checkinQr)
                     ? <img src={srcOf(checkinQr)} alt="출석 QR" width={130} height={130} className="rounded-sm bg-white p-1.5" />
-                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
+                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했습니다' : '만드는 중…'}</div>}
                   <p className="text-center text-2xs leading-snug text-ink-secondary">손님 스캔 → 출석 · 출석왕 집계 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
@@ -810,7 +810,7 @@ ${cards}
                   <p className="text-center text-2xs font-bold text-ink-secondary">바인 요청 QR</p>
                   {srcOf(buyinQr)
                     ? <img src={srcOf(buyinQr)} alt="바인 요청 QR" width={130} height={130} className="rounded-sm bg-white p-1.5" />
-                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했어요' : '만드는 중…'}</div>}
+                    : <div className="flex h-[130px] w-[130px] items-center justify-center rounded-sm border border-border-subtle bg-surface-low text-2xs text-ink-muted">{qrFailed ? '만들지 못했습니다' : '만드는 중…'}</div>}
                   <p className="text-center text-2xs leading-snug text-ink-secondary">손님 스캔 → 참가 요청 → 장부에서 승인</p>
                 </div>
               </div>
@@ -954,7 +954,7 @@ ${cards}
       <div>
         <div className="mb-1 flex items-center justify-between gap-2">
           <p className="text-xs font-bold text-ink-secondary">보유자 현황</p>
-          <p className="text-2xs text-ink-muted">보유 인원 <b className="text-accent-300 tabular-nums">{holderCount}</b>명 · 보유 갯수 <b className="text-ink-primary tabular-nums">{active.length}</b>개</p>
+          <p className="text-2xs text-ink-muted">보유 인원 <b className="text-accent-300 tabular-nums">{holderCount}</b>명 · 보유 개수 <b className="text-ink-primary tabular-nums">{active.length}</b>개</p>
         </div>
         {holders.length > 0 && (
           <input value={holderQuery} onChange={(e) => setHolderQuery(e.target.value)} placeholder="보유자 검색 (실명·닉네임)" className="input mb-1.5 w-full text-sm" />
@@ -987,7 +987,7 @@ ${cards}
                         {canIssue && (
                           <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-border-subtle pb-1.5">
                             <p className="min-w-0 flex-1 text-2xs leading-relaxed text-ink-muted">
-                              잘못 보냈나요? <b className="text-ink-secondary">미사용 {g.active.length}장</b>을 전송 취소할 수 있어요
+                              잘못 보냈나요? <b className="text-ink-secondary">미사용 {g.active.length}장</b>을 전송 취소할 수 있습니다
                               {g.used.length > 0 && <> · 사용 완료 {g.used.length}장은 내역으로 보존</>}
                             </p>
                             <button type="button" disabled={busy || g.active.length === 0}
@@ -1070,7 +1070,7 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
         toast.show('한도 증액 요청 기능을 준비 중입니다 — 잠시 뒤 다시 시도해 주세요', 'error');
         return;
       }
-      toast.show(`${amount.toLocaleString()}장 증액을 요청했습니다 — 운영자 확인 후 반영됩니다`, 'success');
+      toast.show(`${amount.toLocaleString()}장 증액을 요청했습니다 — 관리자 확인 후 반영됩니다`, 'success');
       setReason('');
       load();
       onGranted();
@@ -1125,7 +1125,7 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
           </button>
           {/* 🔴 비용이 없다는 사실을 **화면에** 적는다 — 업주가 '돈이 드나?' 로 읽으면 요청 자체를 안 한다. */}
           <p className="text-2xs leading-relaxed text-ink-muted">
-            <b className="text-ink-secondary">비용은 없습니다.</b> 운영자가 확인한 뒤 전송 가능 장수만 늘려 드립니다.
+            <b className="text-ink-secondary">비용은 없습니다.</b> 관리자가 확인한 뒤 전송 가능 장수만 늘려 드립니다.
             매장이용권은 금전적 가치가 없으며, 구매·충전 개념이 아닙니다.
           </p>
 
@@ -1138,7 +1138,7 @@ function QuotaRequestPanel({ venueId, quota, onGranted }: { venueId: string; quo
                     <span className={`shrink-0 rounded-badge px-1.5 py-0.5 font-bold ${b.cls}`}>{b.label}</span>
                     <span className="font-bold tabular-nums text-ink-secondary">{r.amount.toLocaleString()}장</span>
                     <span className="tabular-nums text-ink-muted">{r.createdAt.slice(0, 10)}</span>
-                    {r.adminNote && <span className="w-full wrap-break-word text-ink-muted">운영자: {r.adminNote}</span>}
+                    {r.adminNote && <span className="w-full wrap-break-word text-ink-muted">관리자: {r.adminNote}</span>}
                   </li>
                 );
               })}

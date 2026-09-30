@@ -55,18 +55,18 @@ export class SpotAiError extends Error {
 export function spotAiMessage(code: SpotAiCode, extra?: { available?: number; price?: number }): string {
   switch (code) {
     case 'INSUFFICIENT':
-      return `포인트가 부족해요${extra?.available !== undefined && extra?.price !== undefined ? ` (사용 가능 ${extra.available}P · 필요 ${extra.price}P)` : ''}. 포인트는 차감되지 않았습니다.`;
-    case 'DAILY_LIMIT': return '오늘 AI 코칭 3회를 모두 썼어요. 내일(자정 기준) 다시 이용해 주세요.';
-    case 'DISABLED': return '지금은 AI 코칭을 이용할 수 없어요.';
-    case 'NOT_OWNER': return '내가 저장한 스팟만 AI 코칭을 받을 수 있어요.';
-    case 'SANCTIONED': return '이용이 제한된 계정이에요.';
-    case 'PENDING': return '이 스팟의 코칭을 만드는 중이에요. 잠시 후 다시 열어 주세요.';
+      return `포인트가 부족합니다${extra?.available !== undefined && extra?.price !== undefined ? ` (사용 가능 ${extra.available}P · 필요 ${extra.price}P)` : ''}. 포인트는 차감되지 않았습니다.`;
+    case 'DAILY_LIMIT': return '오늘 AI 코칭 3회를 모두 사용했습니다. 내일(자정 기준) 다시 이용해 주세요.';
+    case 'DISABLED': return '지금은 AI 코칭을 이용할 수 없습니다.';
+    case 'NOT_OWNER': return '내가 저장한 스팟만 AI 코칭을 받을 수 있습니다.';
+    case 'SANCTIONED': return '이용이 제한된 계정입니다.';
+    case 'PENDING': return '이 스팟의 코칭을 만드는 중입니다. 잠시 후 다시 열어 주세요.';
     // 'AI_FAILED' 는 서버가 환불 RPC 의 true 를 확인했을 때만 온다(F3). 확인 못 하면 REFUND_PENDING.
-    case 'AI_FAILED': return 'AI 답변을 받지 못했어요. 포인트를 돌려드렸어요.';
-    case 'REFUND_PENDING': return 'AI 답변을 받지 못했어요. 포인트는 5분 안에 자동으로 돌려드려요. 결과가 저장됐다면 내 스팟에서 확인할 수 있어요.';
-    case 'ATTEMPT_LIMIT': return '오늘 AI 코칭 요청이 너무 많아요. 내일 다시 이용해 주세요.';
+    case 'AI_FAILED': return 'AI 답변을 받지 못했습니다. 포인트를 돌려 드렸습니다.';
+    case 'REFUND_PENDING': return 'AI 답변을 받지 못했습니다. 포인트는 5분 안에 자동으로 돌려 드립니다. 결과가 저장되었다면 내 스팟에서 확인할 수 있습니다.';
+    case 'ATTEMPT_LIMIT': return '오늘 AI 코칭 요청이 너무 많습니다. 내일 다시 이용해 주세요.';
     case 'LOGIN': return '로그인이 필요합니다.';
-    default: return 'AI 코칭을 받지 못했어요. 잠시 후 다시 시도해 주세요.';
+    default: return 'AI 코칭을 받지 못했습니다. 잠시 후 다시 시도해 주세요.';
   }
 }
 

@@ -59,7 +59,7 @@ async function probeTool(page: import('@playwright/test').Page, key: string) {
     const body = dlg.querySelector<HTMLElement>('.px-page-x') ?? dlg;
     const text = (body.textContent ?? '').trim();
     return {
-      로그인유도: /로그인하면 GTO 도구를 쓸 수 있어요/.test(text),
+      로그인유도: /로그인하면 GTO 도구를 쓸 수 있습니다/.test(text),
       로딩중: /불러오는 중…/.test(text),
       글자수: text.length,
       조작요소: body.querySelectorAll('button, input, select, textarea, a[href]').length,

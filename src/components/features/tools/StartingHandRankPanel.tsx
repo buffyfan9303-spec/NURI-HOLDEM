@@ -21,7 +21,7 @@ interface Row {
   topPct: number;
 }
 
-const kindOf = (h: string) => (h.length === 2 ? '페어' : h.endsWith('s') ? '수딧' : '오프수트');
+const kindOf = (h: string) => (h.length === 2 ? '페어' : h.endsWith('s') ? '수티드' : '오프수트');
 
 const ROWS: Row[] = (() => {
   let cum = 0;
@@ -161,7 +161,7 @@ export default function StartingHandRankPanel() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="핸드 검색 · AK · 77 · 수딧"
+            placeholder="핸드 검색 · AK · 77 · 수티드"
             className="input w-full pl-9 text-sm"
             aria-label="핸드 검색"
             autoCapitalize="characters"

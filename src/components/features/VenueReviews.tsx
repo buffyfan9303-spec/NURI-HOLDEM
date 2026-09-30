@@ -104,7 +104,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
     }
   };
   const remove = async (r: VenueReview) => {
-    if (!window.confirm('이 후기를 삭제할까요?')) return;
+    if (!window.confirm('이 후기를 삭제하시겠습니까?')) return;
     try {
       await deleteVenueReview(r.id);
       setReviews((prev) => prev?.filter((x) => x.id !== r.id) ?? prev);
@@ -140,7 +140,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
       </div>
       {/* 자격 안내 — 체크인 인증제(가짜 후기 차단) */}
       {userId && !eligible && !mine && (
-        <p className="text-2xs text-ink-muted">매장 QR 출석을 한 회원만 후기를 쓸 수 있어요(방문 인증제).</p>
+        <p className="text-2xs text-ink-muted">매장 QR 출석을 한 회원만 후기를 쓸 수 있습니다(방문 인증제).</p>
       )}
 
       {writing && (
@@ -152,7 +152,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
           </div>
           <textarea
             value={content} onChange={(e) => setContent(e.target.value)} maxLength={300} rows={3}
-            placeholder="매장 분위기, 운영, 토너 구성은 어땠나요? (선택, 300자)"
+            placeholder="매장 분위기, 운영, 대회 구성은 어땠나요? (선택, 300자)"
             className="input w-full resize-none text-sm leading-relaxed"
           />
           <div className="flex justify-end gap-1.5">
@@ -167,7 +167,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
       {reviews === null ? (
         <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
       ) : reviews.length === 0 ? (
-        <p className="py-3 text-center text-2xs text-ink-muted">아직 후기가 없어요. 출석하고 첫 후기를 남겨보세요!</p>
+        <p className="py-3 text-center text-2xs text-ink-muted">아직 후기가 없습니다. 출석하고 첫 후기를 남겨 보세요!</p>
       ) : (
         <ul className="space-y-1.5">
           {reviews.map((r) => (

@@ -57,9 +57,9 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
       if (actionable && hit?.venueId && (!venueId || hit.venueId === venueId)) { onMatchRef.current(hit.venueId, hit); return true; }
       setWarn(actionable ? '이 매장의 QR이 아닙니다'
         : hit && elsewhereMsg(hit.kind) ? elsewhereMsg(hit.kind)!
-        : hit?.kind === 'buyin' ? '바인 요청 QR이에요. 출석은 매장 비치 출석 QR을 비춰 주세요'
-        : accept === 'both' ? '매장 QR이 아니에요. 테이블·카운터에 비치된 출석 또는 바인 요청 QR을 비춰 주세요'
-        : '출석 QR이 아니에요. 매장에 비치된 출석 QR을 비춰 주세요');
+        : hit?.kind === 'buyin' ? '바인 요청 QR입니다. 출석은 매장 비치 출석 QR을 비춰 주세요'
+        : accept === 'both' ? '매장 QR이 아닙니다. 테이블·카운터에 비치된 출석 또는 바인 요청 QR을 비춰 주세요'
+        : '출석 QR이 아닙니다. 매장에 비치된 출석 QR을 비춰 주세요');
       return false;
     };
 
@@ -99,7 +99,7 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
           <div className="flex flex-col items-center gap-3 rounded-aura border card-aura px-4 py-8 text-center">
             <Icon name="qr" size={28} className="text-ink-muted" />
             <p className="text-sm font-semibold text-ink-primary">
-              {phase === 'denied' ? '카메라를 사용할 수 없어요' : '이 브라우저는 카메라 스캔을 지원하지 않아요'}
+              {phase === 'denied' ? '카메라를 사용할 수 없습니다' : '이 브라우저는 카메라 스캔을 지원하지 않습니다'}
             </p>
             <p className="text-2xs leading-relaxed text-ink-muted">
               기기 카메라 앱으로 {venueName ?? '매장'}에 비치된 QR을 스캔해 주세요 — 링크가 열리면

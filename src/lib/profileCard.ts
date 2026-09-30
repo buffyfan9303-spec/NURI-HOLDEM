@@ -222,7 +222,7 @@ export function drawProfileCard(c: HTMLCanvasElement, input: ProfileCardInput): 
   // ── 인증 항목표 — 등급·활동점수·머니인. 라벨 왼쪽 / 값 오른쪽 + 아래 얇은 괘선.
   //   등급색은 등급의 것이라 프레임을 따라가지 않는다. 다만 등급색은 **다크 기준 토큰**이라
   //   크림 위에서 AA 를 보장할 수 없다 → 값 글자는 잉크로 쓰고, 등급색은 **왼쪽 표식 막대**로만 쓴다.
-  const rows: [string, string][] = [['등 급', `${input.tierLabel} 등급`], ['활동 점수', `${input.points.toLocaleString()} 점`]];
+  const rows: [string, string][] = [['등 급', `${input.tierLabel} 등급`], ['활동점수', `${input.points.toLocaleString()} 점`]];
   if (input.moneyinCount !== undefined) rows.push(['머니인(입상)', `${input.moneyinCount} 회`]);
   let ry = 418;
   for (const [k, v] of rows) {

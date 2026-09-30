@@ -84,7 +84,7 @@ export function KakaoChatRow({ kakao, canEdit, onEdit }: { kakao?: string; canEd
       )}
       {canEdit && (
         <button type="button" onClick={onEdit} className="text-2xs text-ink-muted hover:text-accent-200">
-          {url ? '카톡링크 수정' : '+ 카톡링크 등록'}
+          {url ? '카톡 링크 수정' : '+ 카톡 링크 등록'}
         </button>
       )}
     </div>

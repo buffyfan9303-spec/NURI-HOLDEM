@@ -22,7 +22,7 @@ export const isKakaoInApp = (ua: string) => /KAKAOTALK/i.test(ua);
 export function checkinGeoRetryCopy(code: CheckinGeoErrorCode, ua: string): { reason: string; hint: string | null } {
   const reason = CHECKIN_GEO_MESSAGE[code];
   if (isKakaoInApp(ua)) {
-    return { reason, hint: '카카오톡 안에서는 위치 확인이 막힐 수 있어요. 오른쪽 아래(또는 위) 메뉴에서 ‘다른 브라우저로 열기’를 누른 뒤 다시 출석해 주세요' };
+    return { reason, hint: '카카오톡 안에서는 위치 확인이 막힐 수 있습니다. 오른쪽 아래(또는 위) 메뉴에서 ‘다른 브라우저로 열기’를 누른 뒤 다시 출석해 주세요' };
   }
   if (code === 'denied') {
     return { reason, hint: '주소창 왼쪽 자물쇠(또는 ⓘ) → 권한 → 위치를 ‘허용’으로 바꾼 뒤 아래 버튼을 눌러 주세요' };

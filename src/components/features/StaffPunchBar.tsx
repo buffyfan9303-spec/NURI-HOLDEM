@@ -71,8 +71,8 @@ export default function StaffPunchBar({ venueId, active = true, onFix }: { venue
       const hm = kind === 'in' ? r.checkIn : r.checkOut;
       // 결과 문구는 서버가 정한 근무일(r.date)이 기준이다 — 기기 시계가 달라도 어제 근무면 그렇게 알린다.
       const yday = kind === 'in' && r.date < kstToday();
-      if (r.applied) { setLast({ kind, date: r.date, venueId: vid }); toast.show(yday ? `어제 근무로 출근했어요 (${hm})` : `${label} ${hm} 기록됨`, 'success'); }
-      else toast.show(`이미 ${label}이 ${hm}(으)로 기록돼 있어요`, 'info');
+      if (r.applied) { setLast({ kind, date: r.date, venueId: vid }); toast.show(yday ? `어제 근무로 출근했습니다 (${hm})` : `${label} ${hm} 기록됨`, 'success'); }
+      else toast.show(`이미 ${label}이 ${hm}(으)로 기록돼 있습니다`, 'info');
     } catch (e) {
       toast.show(msgOf(e, '출퇴근 기록 실패'), 'error');
       setTick((t) => t + 1);
@@ -85,7 +85,7 @@ export default function StaffPunchBar({ venueId, active = true, onFix }: { venue
     try {
       await setMyShiftTime(u.venueId, u.date, u.kind === 'in' ? 'checkIn' : 'checkOut', null);
       setLast(null);
-      toast.show(`${u.kind === 'in' ? '출근' : '퇴근'} 기록을 되돌렸어요`, 'info');
+      toast.show(`${u.kind === 'in' ? '출근' : '퇴근'} 기록을 되돌렸습니다`, 'info');
       announce();
       setTick((t) => t + 1);
     } catch (e) { toast.show(msgOf(e, '되돌리지 못했습니다'), 'error'); }
@@ -94,7 +94,7 @@ export default function StaffPunchBar({ venueId, active = true, onFix }: { venue
   const t = v.today;
   const status = err ? err
     : !ready ? '불러오는 중…'
-      : v.phase === 'none' ? '오늘 배정된 근무가 없어요 — 업주가 스케줄에 배정하면 버튼이 열립니다'
+      : v.phase === 'none' ? '오늘 배정된 근무가 없습니다 — 매장 운영자가 스케줄에 배정하면 버튼이 열립니다'
         : v.phase === 'before' ? (v.inYesterday ? '출근 전 · 어제 근무' : '출근 전')
           : v.phase === 'on' ? `근무 중 · ${v.outTarget?.checkIn} 출근${v.outTarget?.date !== today ? ' (어제)' : ''}`
             : `오늘 근무 끝 · ${t?.checkIn}~${t?.checkOut}`;
@@ -119,7 +119,7 @@ export default function StaffPunchBar({ venueId, active = true, onFix }: { venue
       </div>
       {arm && (
         <div role="alertdialog" aria-label={`${arm === 'in' ? '출근' : '퇴근'} 확인`} data-testid="punch-confirm-row" className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-card border border-accent-400/40 bg-surface-high px-3 py-2 lg:shrink-0">
-          <span className="min-w-0 flex-1 text-sm font-bold text-ink-primary">{arm === 'in' && v.inYesterday ? '어제 근무로 출근할까요?' : `지금 ${arm === 'in' ? '출근' : `퇴근${v.outTarget && v.outTarget.date !== today ? '(어제 근무)' : ''}`}으로 기록할까요?`}</span>
+          <span className="min-w-0 flex-1 text-sm font-bold text-ink-primary">{arm === 'in' && v.inYesterday ? '어제 근무로 출근합니다' : `지금 ${arm === 'in' ? '출근' : `퇴근${v.outTarget && v.outTarget.date !== today ? '(어제 근무)' : ''}`}으로 기록됩니다`}</span>
           <button type="button" data-testid="punch-confirm" disabled={busy != null} onClick={() => punch(arm)} className="min-h-[44px] rounded-badge bg-accent-300 px-4 text-sm font-bold text-white disabled:opacity-40">{arm === 'in' ? '출근' : '퇴근'} 기록</button>
           <button type="button" data-testid="punch-cancel" onClick={() => setArm(null)} className="min-h-[44px] rounded-badge border border-border-subtle px-3 text-sm font-bold text-ink-secondary">취소</button>
         </div>

@@ -13,8 +13,8 @@ import type { Schedule } from '../api/schedules';
 import type { Venue } from '../api/community';
 
 const SITE = 'https://nuriholdem.com';
-const DEFAULT_TITLE = 'NURI HOLDEM | 홀덤 대회 일정 · 커뮤니티 · GTO · 매장관리';
-const DEFAULT_DESC = '전국 홀덤 대회 일정과 홀덤펍 커뮤니티, GTO 학습 도구, 매장관리를 한 곳에서. NURI HOLDEM.';
+const DEFAULT_TITLE = 'NURI HOLDEM | 홀덤 대회 일정 · 커뮤니티 · GTO · 매장 관리';
+const DEFAULT_DESC = '전국 홀덤 대회 일정과 홀덤펍 커뮤니티, GTO 학습 도구, 매장 관리를 한 곳에서. NURI HOLDEM.';
 const DEFAULT_IMAGE = `${SITE}/nuri-logo.png`;
 const JSONLD_ID = 'nuri-jsonld';
 
@@ -94,7 +94,7 @@ export function applyScheduleSeo(s: Schedule): void {
   const title = `${titleBits} | NURI HOLDEM 홀덤 대회`;
   const descBits = [
     where, `${s.date} ${s.startTime}`.trim(), s.format,
-    buyMan ? `바이인 ${buyMan.toLocaleString()}만원` : '',
+    buyMan ? `참가비 ${buyMan.toLocaleString()}만원` : '',
     gtd.replace(' · ', ''), s.region,
   ].filter(Boolean).join(' · ');
   const desc = clip(s.description ? `${descBits} — ${s.description}` : descBits, 155) || DEFAULT_DESC;

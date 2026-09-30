@@ -95,7 +95,7 @@ export default function VenueEventAdminCard() {
                 <p className="text-2xs text-ink-muted">신청 {r.requester || '(알 수 없음)'}</p>
 
                 <input value={note[r.id] ?? ''} onChange={(e) => setNote((n) => ({ ...n, [r.id]: e.target.value }))}
-                  maxLength={200} placeholder="업주에게 남길 말 (선택)" aria-label="운영자 메모"
+                  maxLength={200} placeholder="업주에게 남길 말 (선택)" aria-label="관리자 메모"
                   className="input w-full text-sm" />
 
                 <div className="flex flex-wrap items-center gap-1.5">

@@ -443,12 +443,12 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
               )}
             </div>
             {idOn && !user?.verified && (
-              <p className="mt-2 flex items-start gap-1.5 text-2xs leading-relaxed text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 본인인증을 완료해야 매장이용권을 받을 수 있어요. 프로필에서 인증을 진행하세요.</p>
+              <p className="mt-2 flex items-start gap-1.5 text-2xs leading-relaxed text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 본인인증을 완료해야 매장이용권을 받을 수 있습니다. 프로필에서 인증을 진행하세요.</p>
             )}
             {(idOn ? user?.verified : true) && !user?.nickname && (
               <p className="mt-2 flex items-start gap-1.5 text-2xs leading-relaxed text-ink-secondary"><Icon name="info" size={12} className="mt-0.5 shrink-0" /> {idOn
-                ? '닉네임을 설정하면 업주가 더 쉽게 이용권을 보낼 수 있어요. 프로필에서 설정하세요.'
-                : '닉네임을 설정하면 매장에서 등록한 순위·전적이 자동으로 연결돼요. 프로필에서 설정하세요.'}</p>
+                ? '닉네임을 설정하면 매장에서 더 쉽게 이용권을 보낼 수 있습니다. 프로필에서 설정하세요.'
+                : '닉네임을 설정하면 매장에서 등록한 순위·전적이 자동으로 연결됩니다. 프로필에서 설정하세요.'}</p>
             )}
           </section>
 
@@ -651,7 +651,7 @@ function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification,
                   );
                 })}</ul>}
             {resv.some((r) => r.date >= new Date().toLocaleDateString('en-CA')) && (
-              <p className="mt-1 text-2xs text-ink-muted">예정 예약은 왼쪽으로 밀면(PC는 마우스 올리면) 취소할 수 있어요.</p>
+              <p className="mt-1 text-2xs text-ink-muted">예정 예약은 왼쪽으로 밀면(PC는 마우스 올리면) 취소할 수 있습니다.</p>
             )}
             </div>
           </section>
@@ -786,7 +786,7 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
   const goFortune = () => { window.open('https://www.nurimind.co.kr', '_blank', 'noopener'); };
 
   const installApp = async () => {
-    try { if (window.matchMedia('(display-mode: standalone)').matches) { toast.show('이미 앱으로 사용 중이에요', 'info'); return; } } catch { /* noop */ }
+    try { if (window.matchMedia('(display-mode: standalone)').matches) { toast.show('이미 앱으로 사용 중입니다', 'info'); return; } } catch { /* noop */ }
     if (deferredInstall) {
       const ev = deferredInstall;
       deferredInstall = null; // 왜: 브라우저가 이벤트당 prompt 1회만 허용 — 재클릭 시 안내 문구로 넘어가게 비운다
@@ -903,7 +903,7 @@ function LoginLanding({ onClose, hidden = false, closing = false }: { onClose: (
               <Icon name="felt-table" size={17} className="shrink-0 text-ink-secondary" />
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold text-ink-primary">매장 회원가입</span>
-                <span className="block text-2xs text-ink-muted">업주 가입 신청 · 운영자 승인 후 활성화</span>
+                <span className="block text-2xs text-ink-muted">매장 운영자 가입 신청 · 관리자 승인 후 활성화</span>
               </span>
               <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
             </button>
@@ -1017,17 +1017,17 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
     setBusy(true);
     try {
       const res = await shareRecordCard(cardData());
-      toast.show(res === 'shared' ? '전적 카드를 공유했어요' : '전적 카드 이미지를 저장했어요', 'success');
-    } catch { toast.show('카드 생성에 실패했어요', 'error'); } finally { setBusy(false); }
+      toast.show(res === 'shared' ? '전적 카드를 공유했습니다' : '전적 카드 이미지를 저장했습니다', 'success');
+    } catch { toast.show('카드 생성에 실패했습니다', 'error'); } finally { setBusy(false); }
   };
   const doKakao = async () => {
     if (busy) return;
     setBusy(true);
     try {
       const ok = await shareRecordCardKakao(cardData());
-      if (ok) toast.show('카카오톡으로 공유했어요', 'success');
-      else { const res = await shareRecordCard(cardData()); toast.show(res === 'shared' ? '공유했어요' : '카카오 공유가 미설정이라 이미지를 저장했어요', 'info'); }
-    } catch { toast.show('공유에 실패했어요', 'error'); } finally { setBusy(false); }
+      if (ok) toast.show('카카오톡으로 공유했습니다', 'success');
+      else { const res = await shareRecordCard(cardData()); toast.show(res === 'shared' ? '공유했습니다' : '카카오 공유가 설정되지 않아 이미지를 저장했습니다', 'info'); }
+    } catch { toast.show('공유에 실패했습니다', 'error'); } finally { setBusy(false); }
   };
 
   return (
@@ -1176,7 +1176,7 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
           {/* 친구 초대는 2026-09-15 오너 지시로 활동점수(+500/+300) → 이벤트 참여권으로 바뀌었다.
               '점수 올리는 법' 목록에 남겨 두면 점수가 오를 것처럼 읽혀 거짓말이 된다 — 목록 밖에서 따로 말한다. */}
           <span className="mt-1.5 block text-ink-muted">
-            친구 초대는 점수가 아니라 <b className="text-ink-secondary">이벤트 참여권 1장</b>씩이에요(본인인증 완료 시 둘 다).
+            친구 초대는 점수가 아니라 <b className="text-ink-secondary">이벤트 참여권 1장</b>씩입니다(본인인증 완료 시 두 사람 모두).
             {!idOn && ' 본인인증 준비 중이라 잠시 중단'}
           </span>
         </div>
@@ -1247,17 +1247,17 @@ function InviteSection({ nickname, stats, tickets, idOn }: {
       </section>
     );
   }
-  const copy = async () => { try { await navigator.clipboard.writeText(url); toast.show('초대 링크를 복사했어요', 'success'); } catch { toast.show('복사 실패', 'error'); } };
+  const copy = async () => { try { await navigator.clipboard.writeText(url); toast.show('초대 링크를 복사했습니다', 'success'); } catch { toast.show('복사 실패', 'error'); } };
   const share = async () => {
     const text = idOn
-      ? 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 본인인증하면 둘 다 이벤트 참여권 1장씩 받아요'
-      : 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 함께 대회 일정·전적을 챙겨요';
+      ? 'NURI HOLDEM에 함께 가입하세요! 내 링크로 가입하고 본인인증하면 두 사람 모두 이벤트 참여권을 1장씩 받습니다'
+      : 'NURI HOLDEM에 함께 가입하세요! 내 링크로 가입하고 대회 일정·전적을 함께 챙기세요';
     if (navigator.share) { try { await navigator.share({ title: 'NURI HOLDEM 초대', text, url }); return; } catch { return; } }
     copy();
   };
   const kakao = async () => {
-    const ok = await kakaoShareLink({ title: 'NURI HOLDEM 초대 🎁', description: idOn ? '내 링크로 가입하고 본인인증하면 둘 다 이벤트 참여권 1장씩 받아요!' : '내 링크로 가입하고 함께 대회 일정·전적을 챙겨요!', link: url });
-    if (!ok) { toast.show('카카오 공유가 미설정이라 링크를 복사했어요', 'info'); copy(); }
+    const ok = await kakaoShareLink({ title: 'NURI HOLDEM 초대 🎁', description: idOn ? '내 링크로 가입하고 본인인증하면 두 사람 모두 이벤트 참여권을 1장씩 받습니다!' : '내 링크로 가입하고 대회 일정·전적을 함께 챙기세요!', link: url });
+    if (!ok) { toast.show('카카오 공유가 설정되지 않아 링크를 복사했습니다', 'info'); copy(); }
   };
   return (
     <section className="rounded-aura border card-aura p-3">
@@ -1268,7 +1268,7 @@ function InviteSection({ nickname, stats, tickets, idOn }: {
       </div>
       <p className="mt-1.5 text-2xs leading-relaxed text-ink-secondary">{idOn
         ? <>친구가 내 링크로 가입하고 <b className="text-ink-primary">본인인증</b>까지 마치면 <b className="text-accent-300">둘 다 이벤트 참여권 1장</b>씩!</>
-        : <>초대 기록은 계속 쌓입니다. <b className="text-accent-300">이벤트 참여권 1장</b>씩은 본인인증이 다시 열리면 지급돼요.</>}</p>
+        : <>초대 기록은 계속 쌓입니다. <b className="text-accent-300">이벤트 참여권 1장</b>씩은 본인인증이 다시 열리면 지급됩니다.</>}</p>
       {/* 🔴 대기 안내 — 오너 조건: 조용히 사라지면 안 된다.
           진행 중인 이벤트가 없는 동안 확정된 보상은 여기서만 보인다. 이벤트가 다시 안 열리면 대기는
           영원히 안 풀릴 수 있으므로 **상시 노출**한다(닫을 수 있는 배너로 만들지 않는다).
@@ -1278,7 +1278,7 @@ function InviteSection({ nickname, stats, tickets, idOn }: {
           <Icon name="clock" size={13} className="mt-px shrink-0 text-accent-300" />
           <span>
             <b className="text-accent-300 tabular-nums">이벤트 참여권 {tickets.pending}장</b> 대기 중 —
-            지금 진행 중인 이벤트가 없어요. <b className="text-ink-primary">다음 이벤트가 열리면 지급</b>됩니다.
+            지금 진행 중인 이벤트가 없습니다. <b className="text-ink-primary">다음 이벤트가 열리면 지급</b>됩니다.
           </span>
         </p>
       )}

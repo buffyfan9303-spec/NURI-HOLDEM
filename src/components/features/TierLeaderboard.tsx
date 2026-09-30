@@ -64,14 +64,14 @@ const BOARD_LABEL: Record<Board, string> = {
   badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
-  domestic: '대회 입상만 인정. 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(100T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
-  verify: '대회 입상 증빙 2장(입상 증빙·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(100T)당 1점입니다.',
-  shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
-  activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
+  domestic: '대회 입상만 인정. 해외 대회도 포함하며, 관리자가 승인한 건에 한해 100만당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
+  verify: '대회 입상 증빙 2장(입상 증빙·신분증)을 올려 관리자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만당 1점입니다.',
+  shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 배지·외치기·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
+  activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받습니다.',
   moneyin: '전국 대회 입상 경력 순위. 매장이 등록한 대회 순위 기록만 세며 상금·금액은 보지 않습니다 — 입상 횟수 → 우승 → TOP3 → 최고 등수 순.',
   badges: '',
-  missions: '이번 주 미션. 달성하면 활동점수 보상을 바로 받아요. 월요일 리셋.',
-  hall: '지난달 가장 빛난 플레이어 TOP3. 운영자가 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
+  missions: '이번 주 미션. 달성하면 활동점수 보상을 바로 받습니다. 월요일 리셋.',
+  hall: '지난달 가장 빛난 플레이어 TOP3. 누리홀덤이 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
 };
 
 /**
@@ -230,7 +230,7 @@ function CareerBoard({ myNick, nickStyle, markPrefix, period, setPeriod, rows, l
   const fmtDate = (d: string | null) => (d ? d.slice(2).replace(/-/g, '.') : '');
   const careerEmpty = (
     <EmptyState
-      title={period === 'all' ? '아직 집계된 대회 입상이 없어요' : '이 기간의 대회 입상이 없어요'}
+      title={period === 'all' ? '아직 집계된 대회 입상이 없습니다' : '이 기간의 대회 입상이 없습니다'}
       hint="매장이 대회 순위를 올리면 입상 경력이 이 표에 자동으로 오릅니다"
       icon={<Icon name="trophy" />}
     />
@@ -278,7 +278,7 @@ function CareerBoard({ myNick, nickStyle, markPrefix, period, setPeriod, rows, l
               </p>
             </div>
           ) : (
-            <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-2 text-center text-2xs text-ink-muted">아직 내 대회 입상 기록이 없어요 — 매장이 대회 순위를 올리면 자동으로 오릅니다</p>
+            <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-2 text-center text-2xs text-ink-muted">아직 내 대회 입상 기록이 없습니다 — 매장이 대회 순위를 올리면 자동으로 오릅니다</p>
           ))}
           <ul className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
             {rows.slice(0, 50).map((r, i) => {
@@ -531,7 +531,7 @@ export default function TierLeaderboard() {
       // 방금 접수한 신청이 화면에서 사라져 회원이 신분증을 다시 올려 중복 신청한다.
       setMyVerifs(null); clearErr('verifs');
       scopedLoad(scopeRef, myRankVerifications(), setMyVerifs, (e) => { fail('verifs')(e); toast.show('신청 이력을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요', 'error'); });
-      toast.show('인증 요청을 접수했어요. 운영자 확인 후 국내 순위에 합산됩니다', 'success');
+      toast.show('인증 요청을 접수했습니다. 관리자 확인 후 국내 순위에 합산됩니다', 'success');
     } catch (e) {
       // 실패 시 입력은 유지 — 던지는 쪽(rankverify·storage)이 한국어 메시지를 주므로 그대로 보여 준다
       toast.show(e instanceof Error && e.message ? e.message : '인증 요청에 실패했습니다. 다시 시도해 주세요', 'error');
@@ -550,7 +550,7 @@ export default function TierLeaderboard() {
       reloadBalance();
       refreshDisplay();                     // 순위표 내 행의 마크 글리프까지 바꿔 준다(오너 #8)
       await refreshProfile?.();
-      toast.show(`${markOf(key)?.name ?? '마크'} 소장! ${markSku.price.toLocaleString()}점 사용. 이제 계속 쓸 수 있어요`, 'success');
+      toast.show(`${markOf(key)?.name ?? '마크'} 소장! ${markSku.price.toLocaleString()}점 사용. 이제 계속 쓸 수 있습니다`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
     } finally { setBuying(null); }
@@ -589,7 +589,7 @@ export default function TierLeaderboard() {
       ]);
       reloadBalance();
       refreshDisplay();                     // 순위표 내 행의 닉네임 색까지 바꿔 준다(오너 #8)
-      toast.show(`${c.label} 소장! ${sku.price.toLocaleString()}점 사용. 바로 적용됐어요`, 'success');
+      toast.show(`${c.label} 소장! ${sku.price.toLocaleString()}점 사용. 바로 적용됐습니다`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
     } finally { setBuying(null); }
@@ -616,7 +616,7 @@ export default function TierLeaderboard() {
       setSeasonBuyable((prev) => (prev ?? []).filter((x) => x.seasonId !== r.seasonId));
       scopedLoad(scopeRef, getMySeasonBadges(), setSeasonOwned, fail('season'));
       reloadBalance();
-      toast.show(`${r.venueName} ${r.seasonName} 뱃지를 받았어요. ${seasonSku.price.toLocaleString()}점 사용`, 'success');
+      toast.show(`${r.venueName} ${r.seasonName} 배지를 받았습니다. ${seasonSku.price.toLocaleString()}점 사용`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
     } finally { setBuying(null); }
@@ -631,7 +631,7 @@ export default function TierLeaderboard() {
       await buyNicknameReset();
       reloadBalance();
       await refreshProfile?.();
-      toast.show('이제 설정 탭에서 닉네임을 바로 바꿀 수 있어요', 'success');
+      toast.show('이제 설정 탭에서 닉네임을 바로 바꿀 수 있습니다', 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
     } finally { setNickResetBusy(false); }
@@ -890,7 +890,7 @@ export default function TierLeaderboard() {
 
           {/* 다음 등급 진행률 (운영자는 SS 고정) */}
           {isAdmin ? (
-            <p className="mt-3 text-2xs font-bold text-danger-light">운영자 전용 SS 등급 · 순위 집계 제외</p>
+            <p className="mt-3 text-2xs font-bold text-danger-light">관리자 전용 SS 등급 · 순위 집계 제외</p>
           ) : myProg.next ? (
             <div className="mt-3">
               <div className="flex items-center justify-between text-2xs text-ink-muted mb-1">
@@ -1021,7 +1021,7 @@ export default function TierLeaderboard() {
           : domestic === null ? <RowSkeleton rows={lastDomesticRowCount} />
           : domestic.length === 0 ? (
             <EmptyState
-              title="아직 인증된 입상이 없어요"
+              title="아직 인증된 입상이 없습니다"
               hint="'순위 인증' 탭에서 대회 입상 증빙을 올리면 이 순위에 합산됩니다"
               icon={<Icon name="trophy" />}
               action={<button type="button" onClick={() => goBoard('verify')} className="btn-primary px-4 py-2 text-xs">순위 인증하러 가기</button>}
@@ -1074,12 +1074,12 @@ export default function TierLeaderboard() {
                   <span><b className="text-accent-200">대회 입상만 인증됩니다.</b> 매장 정기 게임(일반 펍) 기록은 순위 인증 대상이 아니며, 제출해도 반려됩니다.</span>
                 </p>
                 <label className="flex items-center justify-between gap-2 rounded-input border border-border-default px-3 py-2 text-2xs">
-                  <span className="text-ink-secondary">해외 대회입니다 <span className="text-ink-muted">해외도 정식 대회면 인정돼요</span></span>
+                  <span className="text-ink-secondary">해외 대회입니다 <span className="text-ink-muted">해외도 정식 대회면 인정됩니다</span></span>
                   <input type="checkbox" checked={vForm.overseas} className="h-4 w-4 shrink-0 accent-current text-accent-300"
                     onChange={(e) => setVForm((f) => ({ ...f, overseas: e.target.checked }))} />
                 </label>
                 <label className="flex items-center justify-between gap-2 rounded-input border border-dashed border-border-default px-3 py-2 text-2xs">
-                  <span className={vProof ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>1. 입상 증빙 {vProof ? '✓ 첨부됨' : '이름·순위·금액이 보여야 해요'}</span>
+                  <span className={vProof ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>1. 입상 증빙 {vProof ? '✓ 첨부됨' : '이름·순위·금액이 보여야 합니다'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setVProof(e.target.files?.[0] ?? null)} />
                   <span className="shrink-0 rounded-input bg-surface-float px-2 py-1 font-bold text-ink-secondary">선택</span>
                 </label>
@@ -1092,7 +1092,7 @@ export default function TierLeaderboard() {
                   onClick={submitVerify}
                   className="btn-primary w-full disabled:opacity-50">{vBusy ? '제출 중…' : '인증 요청'}</button>
                 <p className="text-2xs leading-relaxed text-ink-muted">
-                  운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 국내 순위에 합산되며, <b className="text-ink-secondary">100만원(100T)당 1점</b>입니다(임계 미만은 점수 없음). 대회 여부는 증빙을 보고 운영자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
+                  운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 국내 순위에 합산되며, <b className="text-ink-secondary">100만당 1점</b>입니다(임계 미만은 점수 없음). 대회 여부는 증빙을 보고 관리자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
                 </p>
               </div>
               {/* 신청 이력 조회 실패 — '이력 없음' 으로 위장하면 신분증을 다시 올려 중복 신청한다(UI-08-3·4) */}
@@ -1207,7 +1207,7 @@ export default function TierLeaderboard() {
                             className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                             {buying === mk.key ? '구매 중…'
                               : !markSku ? '판매 준비 중'
-                                : buyLabel(balance, price, '영구소장')}
+                                : buyLabel(balance, price, '영구 소장')}
                           </button>
                         )}
                       </div>
@@ -1230,7 +1230,7 @@ export default function TierLeaderboard() {
                 )}
                 <p className="mt-1.5 text-2xs leading-relaxed text-ink-muted">
                   기간권(1일·7일·30일)은 판매를 종료했습니다 — <b className="text-ink-secondary">이미 구매한 기간은 그대로 유지</b>되고,
-                  끝나도 소장한 마크는 사라지지 않아요. 소장한 마크는 언제든 바꿔 달 수 있고,
+                  끝나도 소장한 마크는 사라지지 않습니다. 소장한 마크는 언제든 바꿔 달 수 있고,
                   무엇을 사도 <b className="text-ink-secondary">누적 점수·등급은 그대로</b>입니다.
                 </p>
               </div>
@@ -1270,7 +1270,7 @@ export default function TierLeaderboard() {
                       </div>
                       <p className="text-2xs leading-relaxed text-ink-muted">
                         인스타·카톡에 올릴 수 있는 이미지로 저장합니다. 프레임을 사면 바로 적용되고,
-                        소장한 프레임은 언제든 바꿔 달 수 있어요.
+                        소장한 프레임은 언제든 바꿔 달 수 있습니다.
                       </p>
                       <button type="button" onClick={handleSaveCard}
                         className="btn-primary w-full py-2 text-xs">
@@ -1303,7 +1303,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleBuyCosmetic(c)}
                               className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                               {buying === c.key ? '구매 중…'
-                                : buyLabel(balance, frameSku.price, '영구소장')}
+                                : buyLabel(balance, frameSku.price, '영구 소장')}
                             </button>
                           )}
                         </div>
@@ -1358,7 +1358,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleBuyCosmetic(c)}
                               className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                               {buying === c.key ? '구매 중…'
-                                : buyLabel(balance, nickSku.price, '영구소장')}
+                                : buyLabel(balance, nickSku.price, '영구 소장')}
                             </button>
                           )}
                         </div>
@@ -1400,7 +1400,7 @@ export default function TierLeaderboard() {
                     <div className="skeleton mt-2 h-9 rounded-input" aria-hidden />
                   ) : seasonBuyable.length === 0 ? (
                     <p className="mt-2 text-2xs leading-relaxed text-ink-muted">
-                      지금 살 수 있는 시즌 뱃지가 없어요 — 매장을 <b className="text-ink-secondary">단골(팔로우)</b>로 담고,
+                      지금 살 수 있는 시즌 배지가 없습니다 — 매장을 <b className="text-ink-secondary">단골(팔로우)</b>로 담고,
                       그 매장이 시즌을 진행 중일 때 이 자리에 나타납니다.
                     </p>
                   ) : (
@@ -1438,8 +1438,8 @@ export default function TierLeaderboard() {
                     <span className="block text-xs font-bold text-ink-primary">{nickChangeSku.label}</span>
                     <span className="block text-2xs leading-relaxed text-ink-muted">
                       {nickLocked
-                        ? <>지금은 <b className="text-ink-secondary">{nickFreeAt}</b>부터 바꿀 수 있어요. 기다리지 않고 바로 바꿉니다</>
-                        : '지금은 기다리지 않고 바로 바꿀 수 있어요 · 변경은 원래 무료예요'}
+                        ? <>지금은 <b className="text-ink-secondary">{nickFreeAt}</b>부터 바꿀 수 있습니다. 구매하면 기다리지 않고 바로 바꿉니다</>
+                        : '지금은 기다리지 않고 바로 바꿀 수 있습니다 · 변경은 원래 무료입니다'}
                     </span>
                   </span>
                   {nickLocked ? (
@@ -1496,7 +1496,7 @@ export default function TierLeaderboard() {
               <div className="flex items-center gap-1.5 pt-2">
                 <Icon name="medal" size={13} className="shrink-0 text-emerald-300" />
                 <p className="shrink-0 text-2xs font-extrabold text-emerald-300">활동으로 얻는 것</p>
-                <p className="shrink-0 text-2xs text-ink-muted">점수가 쌓이면 자동으로 열려요 · 구매 불가</p>
+                <p className="shrink-0 text-2xs text-ink-muted">점수가 쌓이면 자동으로 열립니다 · 구매 불가</p>
                 <span className="h-px flex-1 bg-border-subtle" />
               </div>
               <p className="text-2xs font-bold text-ink-secondary">모으는 마크 <span className="font-normal text-ink-muted">점수에 도달하면 영구 해금(차감 없음)</span></p>
@@ -1541,7 +1541,7 @@ export default function TierLeaderboard() {
           )
           : hall.rows.length === 0 ? (
             <EmptyState
-              title="아직 전당에 오른 사람이 없어요"
+              title="아직 명예의 전당에 오른 사람이 없습니다"
               hint="지난달 입상 기록이 없습니다. 대회에 참가해 이번 달의 주인공이 되어보세요"
               icon={<Icon name="trophy" />}
             />
@@ -1564,7 +1564,7 @@ export default function TierLeaderboard() {
                 </div>
               ))}
               <p className="pt-0.5 text-center text-2xs text-ink-muted">
-                {hall.label} 명예의 전당{hall.source === 'manual' ? ' · 운영자 선정' : ' · 지난달 입상 자동 집계'}
+                {hall.label} 명예의 전당{hall.source === 'manual' ? ' · 누리홀덤 선정' : ' · 지난달 입상 자동 집계'}
               </p>
             </div>
           )
@@ -1576,7 +1576,7 @@ export default function TierLeaderboard() {
           <ActivityBoardSkeleton reserveMyRow={!!user && !isAdmin} />
         ) : rows.length === 0 ? (
           boardErr.activity != null ? <LoadErrorCard error={boardErr.activity} what="활동 순위" onRetry={() => { clearErr('activity'); setActivityTick((t) => t + 1); }} />
-          : <EmptyState title="아직 순위가 없어요" hint="접속·글쓰기·댓글로 활동 점수를 모으면 이 자리에 이름이 올라갑니다" />
+          : <EmptyState title="아직 순위가 없습니다" hint="접속·글쓰기·댓글로 활동 점수를 모으면 이 자리에 이름이 올라갑니다" />
         ) : (
           <>
           {/* 상단 고정 '내 순위' 요약 1행 — 스크롤 없이 내 위치부터(TOP30 밖은 기존 하단 카드 유지) */}

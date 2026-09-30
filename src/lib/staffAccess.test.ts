@@ -41,8 +41,8 @@ describe('accessLabel — 글귀', () => {
   it('부여/미부여 글귀는 종전 화면 그대로(기능·e2e 셀렉터 보존)', () => {
     expect(accessLabel('ledger', 'granted')).toBe('장부·순위 권한 ✓');
     expect(accessLabel('ledger', 'ungranted')).toBe('장부·순위 권한 없음');
-    expect(accessLabel('voucher', 'granted')).toBe('이용권내역 ✓');
-    expect(accessLabel('voucher', 'ungranted')).toBe('이용권내역 ✗');
+    expect(accessLabel('voucher', 'granted')).toBe('이용권 내역 ✓');
+    expect(accessLabel('voucher', 'ungranted')).toBe('이용권 내역 ✗');
   });
   it('확인 실패 글귀는 "없음"·"✗" 을 쓰지 않고 다음 행동을 말한다', () => {
     for (const k of ['ledger', 'voucher'] as const) {
@@ -52,7 +52,7 @@ describe('accessLabel — 글귀', () => {
       expect(accessLabel(k, 'checking')).toMatch(/확인 중/);
       expect(accessLabel(k, 'changing')).toMatch(/변경 중/);
     }
-    expect(ACCESS_LOAD_FAILED_MSG).toBe('권한을 불러오지 못했어요. 다시 시도해 주세요.');
+    expect(ACCESS_LOAD_FAILED_MSG).toBe('권한을 불러오지 못했습니다. 다시 시도해 주세요.');
   });
   it('🔴 42501/403 은 "다시 시도" 가 아니라 계정 안내다 — 그 밖의 실패는 재시도 안내(nuri-async-guard 부류 2)', () => {
     expect(accessLoadFailedMsg({ code: '42501', message: 'permission denied' })).toBe(ACCESS_LOAD_DENIED_MSG);
