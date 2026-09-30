@@ -405,7 +405,7 @@ export default function ICMCalculator({ initialMode = 'equity', variant = 'full'
                 </p>
                 <p className="mt-1.5 text-2xs text-ink-secondary">
                   칩만 보면 <span className="font-bold tabular-nums text-ink-secondary">{(press.reqChip * 100).toFixed(1)}%</span>
-                  {' '}— 탈락 위험이 <span className="font-extrabold tabular-nums text-danger-deep dark:text-danger-light">+{(press.riskPremium * 100).toFixed(1)}%p</span> 더 요구합니다
+                  {' '}— 탈락 위험 때문에 <span className="font-extrabold tabular-nums text-danger-deep dark:text-danger-light">+{(press.riskPremium * 100).toFixed(1)}%p</span> 더 필요합니다
                 </p>
               </div>
 
@@ -471,7 +471,7 @@ export default function ICMCalculator({ initialMode = 'equity', variant = 'full'
       </p>
       <p className="text-2xs text-ink-muted">
         Malmuth-Harville 모델 기준 추정치입니다. 실제 딜·체급에 따라 차이가 있을 수 있습니다.
-        {mode === 'pressure' && ' 판정 예시는 학습용 기준선. 상대 레인지 추정이 틀리면 결론도 달라집니다.'}
+        {mode === 'pressure' && ' 판정 예시는 학습용 기준선입니다. 상대 레인지 추정이 틀리면 결론도 달라집니다.'}
       </p>
     </CalcCard>
   );

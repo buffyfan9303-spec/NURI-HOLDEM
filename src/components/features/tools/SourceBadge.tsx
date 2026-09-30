@@ -46,7 +46,7 @@ const META: Record<SourceKind, { label: string; hint: string; icon: IconName; cl
     icon: 'scale', cls: 'border-amber-500/40 bg-amber-500/8 text-amber-200',
   },
   solver: {
-    label: '실제 solver 데이터',
+    label: '실제 솔버 데이터',
     hint: '외부 솔버가 계산한 값입니다.',
     icon: 'microscope', cls: 'border-violet-500/40 bg-violet-500/8 text-violet-300',
   },

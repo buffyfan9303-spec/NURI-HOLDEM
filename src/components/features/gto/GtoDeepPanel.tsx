@@ -120,7 +120,7 @@ function preflopRec(eq: number): StreetRec {
   const p = Math.round(eq * 100);
   if (eq >= 0.60) return { label: '레이즈 (밸류)', color: EQUITY_BANDS.dominant, textColor: EQUITY_BAND_TEXT.dominant, note: `에퀴티 ${p}%. 가치 레이즈로 밸류를 키웁니다.` };
   if (eq >= 0.52) return { label: '레이즈/콜 혼합', color: EQUITY_BANDS.strong, textColor: EQUITY_BAND_TEXT.strong, note: `에퀴티 ${p}%. 레이즈와 콜을 섞어 균형을 잡습니다.` };
-  if (eq >= 0.44) return { label: '콜', color: EQUITY_BANDS.playable, textColor: EQUITY_BAND_TEXT.playable, note: `에퀴티 ${p}%. 콜로 포트에 참여할 만합니다.` };
+  if (eq >= 0.44) return { label: '콜', color: EQUITY_BANDS.playable, textColor: EQUITY_BAND_TEXT.playable, note: `에퀴티 ${p}%. 콜로 팟에 참여할 만합니다.` };
   if (eq >= 0.36) return { label: '콜/폴드 경계', color: EQUITY_BANDS.marginal, textColor: EQUITY_BAND_TEXT.marginal, note: `에퀴티 ${p}%. 포지션·오즈가 좋을 때만 콜.` };
   return { label: '폴드', color: EQUITY_BANDS.weak, textColor: EQUITY_BAND_TEXT.weak, note: `에퀴티 ${p}%. 폴드가 정석입니다.` };
 }
@@ -128,7 +128,7 @@ function postRec(eq: number): StreetRec {
   const p = Math.round(eq * 100);
   if (eq >= 0.62) return { label: '벳/레이즈 (밸류)', color: EQUITY_BANDS.dominant, textColor: EQUITY_BAND_TEXT.dominant, note: `에퀴티 ${p}%. 밸류 벳으로 강하게 압박합니다.` };
   if (eq >= 0.50) return { label: '벳 또는 체크-콜', color: EQUITY_BANDS.strong, textColor: EQUITY_BAND_TEXT.strong, note: `에퀴티 ${p}%. 상황에 따라 벳/체크-콜.` };
-  if (eq >= 0.40) return { label: '체크-콜', color: EQUITY_BANDS.playable, textColor: EQUITY_BAND_TEXT.playable, note: `에퀴티 ${p}%. 포트 컨트롤 위주로 콜.` };
+  if (eq >= 0.40) return { label: '체크-콜', color: EQUITY_BANDS.playable, textColor: EQUITY_BAND_TEXT.playable, note: `에퀴티 ${p}%. 팟 컨트롤 위주로 콜.` };
   if (eq >= 0.30) return { label: '체크 (회피)', color: EQUITY_BANDS.marginal, textColor: EQUITY_BAND_TEXT.marginal, note: `에퀴티 ${p}%. 큰 베팅엔 폴드를 고려.` };
   return { label: '체크-폴드', color: EQUITY_BANDS.weak, textColor: EQUITY_BAND_TEXT.weak, note: `에퀴티 ${p}%. 공격받으면 포기합니다.` };
 }
@@ -161,7 +161,7 @@ function DeepActionSheet({
     Promise.all([eqAt(0), eqAt(3), eqAt(4), eqAt(5)]).then(([e0, e3, e4, e5]) => {
       if (!alive) return;
       setRows([
-        { key: '비포 (프리플랍) 액션', eq: e0, rec: preflopRec },
+        { key: '프리플랍 액션', eq: e0, rec: preflopRec },
         { key: '플랍 액션',            eq: e3, rec: postRec },
         { key: '턴 액션',             eq: e4, rec: postRec },
         { key: '리버 액션',           eq: e5, rec: postRec },
@@ -194,7 +194,7 @@ function DeepActionSheet({
                     )}
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-ink-secondary">
-                    {r ? r.note : '해당 스트릿 보드 카드를 입력하면 권장 액션이 표시됩니다.'}
+                    {r ? r.note : '해당 스트리트 보드 카드를 입력하면 권장 액션이 표시됩니다.'}
                   </p>
                 </div>
               );

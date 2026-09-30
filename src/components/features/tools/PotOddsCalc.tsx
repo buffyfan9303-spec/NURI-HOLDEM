@@ -19,7 +19,7 @@ export default function PotOddsCalc() {
       {/* CalcCard 의 desc 프롭과 같은 위치·같은 클래스로 직접 렌더한다 —
           '에쿼티'에 용어 툴팁을 붙이려면 문자열 프롭이 아니라 JSX 여야 하기 때문(카피·레이아웃 무변경). */}
       <p className="text-2xs text-ink-muted">
-        {'팟·콜 금액으로 콜에 필요한 승률('}<Term name="에퀴티">에쿼티</Term>{'). 콜 오즈를 계산합니다.'}
+        {'팟·콜 금액으로 콜에 필요한 승률('}<Term name="에퀴티">에퀴티</Term>{'). 콜 오즈를 계산합니다.'}
       </p>
       <div className="grid grid-cols-2 gap-2">
         {/* 🔴 라벨이 전제를 품어야 한다(2026-09-20). 식이 `call/(pot+call)` 이므로 이 '팟' 은 **상대 벳이 들어간 뒤**다.
@@ -29,7 +29,7 @@ export default function PotOddsCalc() {
         <Field label="콜 금액"><NumIn value={call} onChange={setCall} placeholder="50000" /></Field>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <Result label="필요 에쿼티" value={`${need.toFixed(1)}%`} accent />
+        <Result label="필요 에퀴티" value={`${need.toFixed(1)}%`} accent />
         <Result label="팟 오즈" value={ratio > 0 ? `${ratio.toFixed(2)} : 1` : '–'} />
       </div>
       <div className="rounded-input border border-border-default bg-surface-high p-2.5 space-y-2">

@@ -151,7 +151,7 @@ test.describe('AI 아쉬운 포인트', () => {
     await expect(open).toBeEnabled();
     await open.click();
     const sheet = page.locator('[data-spot-ai-confirm]');
-    await expect(sheet).toContainText('30P 가 차감됩니다');
+    await expect(sheet).toContainText('30P가 차감됩니다');
     await sheet.getByTestId('spot-ai-confirm').click();
     await expect(dlg.getByTestId('spot-ai-result')).toContainText('드라이 보드');
     expect(sent).toEqual({ spotId: SPOT_ID });

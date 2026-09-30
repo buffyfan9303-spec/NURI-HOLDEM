@@ -113,7 +113,7 @@ test.describe('도구 탭 — 전체화면 실행', () => {
 
     await dialog.getByRole('button', { name: '폴드', exact: true }).click();
     // 피드백(정답/아쉬워요 + 빈도 %) — '정답률' 통계와의 부분일치를 피해 느낌표 포함 매치
-    await expect(dialog.locator('text=/정답!|아쉬워요/')).toBeVisible();
+    await expect(dialog.locator('text=/정답!|아쉽습니다/')).toBeVisible();
     await expect(dialog.locator('text=/%/').first()).toBeVisible();
     // 기록 영속
     const saved = await page.evaluate(() => localStorage.getItem('nuri:trainer:preflop:v2'));
@@ -136,7 +136,7 @@ test.describe('도구 탭 — 전체화면 실행', () => {
     await expect(answers.getByRole('button', { name: '콜', exact: true })).toBeVisible();
 
     await answers.getByRole('button', { name: '콜', exact: true }).click();
-    await expect(dialog.locator('text=/정답!|아쉬워요/')).toBeVisible();
+    await expect(dialog.locator('text=/정답!|아쉽습니다/')).toBeVisible();
     // 액션별 게이지 2줄(4벳·콜)
     const gauges = dialog.getByTestId('preflop-quiz-gauge');
     await expect(gauges).toHaveCount(2);

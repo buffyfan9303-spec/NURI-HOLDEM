@@ -164,7 +164,7 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
               {ai.has(r.id) && (
                 // 결과는 나만 본다 — 게시판 공유(onShare → 확인 시트)의 본문에는 실리지 않는다.
                 <section data-testid="spot-ai-result" aria-label="AI 아쉬운 포인트" className="mt-2 border-t border-border-subtle pt-2">
-                  <h4 className="text-2xs font-bold text-ink-secondary">AI 아쉬운 포인트 <span className="font-normal text-ink-muted">(나만 보여요)</span></h4>
+                  <h4 className="text-2xs font-bold text-ink-secondary">AI 아쉬운 포인트 <span className="font-normal text-ink-muted">(나만 볼 수 있습니다)</span></h4>
                   <p className="mt-1 whitespace-pre-wrap break-keep text-xs leading-relaxed text-ink-primary">{ai.get(r.id)}</p>
                 </section>
               )}
@@ -185,8 +185,8 @@ export default function MySpotList({ onOpen, onShare, onNew, active = true }: {
 
   if (!user) {
     return (
-      <Empty icon="lock" title="로그인하면 스팟을 저장할 수 있어요"
-        desc="저장한 스팟은 나만 볼 수 있습니다. '게시판에 공유'를 누르기 전까지 올라가지 않아요." />
+      <Empty icon="lock" title="로그인하면 스팟을 저장할 수 있습니다"
+        desc="저장한 스팟은 나만 볼 수 있습니다. '게시판에 공유'를 누르기 전까지 올라가지 않습니다." />
     );
   }
   // 스켈레톤 높이를 실제 카드와 맞춘다 — 값이 들어올 때 목록이 내려앉지 않게.
