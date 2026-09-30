@@ -153,10 +153,9 @@ function PosterArea({
         {/* ⚡ 첫 화면 상단 카드(priority)는 lazy 를 쓰지 않는다 — lazy 이미지는 프리로드 스캐너가 미리
             받지 못해 LCP(가장 큰 콘텐츠 표시)가 1왕복 늦어진다. 상위 몇 장만 eager+high 로 당긴다. */}
         <img
-          // fit:'contain' — 서버가 가운데 세로 띠로 잘라 보내지 않게(카드에 포스터 가운데 36% 만 보이던 결함, lib/imageUrl).
-          //   틀 맞춤 자르기는 아래 object-cover 가 원본 비율 기준으로 한다.
-          src={thumbUrl(posterUrl, thumbWidth, { fit: 'contain' })}
-          srcSet={thumbSrcSet(posterUrl, thumbWidth, { fit: 'contain' })}
+          // 썸네일은 원본 비율(lib/imageUrl 기본 contain) — 틀 맞춤 자르기는 아래 object-cover 가 한다.
+          src={thumbUrl(posterUrl, thumbWidth)}
+          srcSet={thumbSrcSet(posterUrl, thumbWidth)}
           alt={`${title} 포스터`}
           className="w-full h-full object-cover"
           loading={priority ? 'eager' : 'lazy'}

@@ -33,13 +33,13 @@ const localVariant = (url: string, width: number): string | undefined => {
  *     715×1440 포스터 width=400 → 400×1440 · 256×151 사진 width=96 → 96×151.
  *     그 띠를 화면의 object-cover 틀이 또 잘라, 3:4 포스터 카드는 포스터 **가운데 36%** 만 보였다.
  *  · 'contain' — 비율 그대로 폭에 맞춰 줄인다(400×806). 자르기는 호출부 CSS 가 원본 기준으로 한다.
- *  포스터처럼 **원본 전체가 정보**인 자리에서 contain 을 쓴다. 기본값을 바꾸지 않은 이유: 소비처 7곳 중
- *  나머지는 다른 팀 화면이라 소비처별 캡처 없이 한꺼번에 바꾸지 않는다(리드 결정 2026-09-30). */
+ *  🔴 기본값 = contain(오너 결정 2026-09-30). 소비처 7곳이 전부 폭만 넘기고 틀 맞춤 자르기는 CSS(object-cover/contain)에
+ *  맡긴다 — 서버 cover 가 필요한 곳은 0곳이었다. 높이까지 넘겨 서버에서 잘라야 하는 곳이 생기면 그때 { fit: 'cover' } 를 붙인다. */
 export type ThumbFit = 'cover' | 'contain';
 interface ThumbOpts { quality?: number; fit?: ThumbFit }
 
 /** Storage 공개 URL을 지정 폭의 webp 썸네일 URL로 변환. 대상이 아니면 원본 그대로. */
-export function thumbUrl(url: string | undefined | null, width: number, { quality = 70, fit = 'cover' }: ThumbOpts = {}): string | undefined {
+export function thumbUrl(url: string | undefined | null, width: number, { quality = 70, fit = 'contain' }: ThumbOpts = {}): string | undefined {
   if (!url) return undefined;
   const local = localVariant(url, width);
   if (local) return local;

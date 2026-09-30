@@ -23,17 +23,37 @@ describe('thumbUrl', () => {
     expect(thumbSrcSet(PUBLIC, 88)!.split(',').every((s) => s.includes('format=webp'))).toBe(true);
   });
 
-  it("🔴 fit:'contain' — 폭만 주는 cover 는 원본 높이의 가운데 세로 띠를 돌려준다(2026-09-30 실측). 기본값은 종전 그대로", () => {
-    expect(thumbUrl(PUBLIC, 400)).toContain('resize=cover');
-    expect(thumbUrl(PUBLIC, 400, { fit: 'contain' })).toContain('resize=contain');
-    const s = thumbSrcSet(PUBLIC, 400, { fit: 'contain' })!;
-    expect(s.split(',').every((x) => x.includes('resize=contain') && !x.includes('resize=cover'))).toBe(true);
+  it("🔴 기본값 = resize=contain(오너 결정 2026-09-30) — 폭만 주는 cover 는 원본 높이의 가운데 세로 띠를 돌려준다", () => {
+    // 실측: 715×1440 포스터 width=400 → cover 400×1440(띠) · contain 400×806(비율 유지)
+    expect(thumbUrl(PUBLIC, 400)).toContain('resize=contain');
+    expect(thumbSrcSet(PUBLIC, 400)!.split(',').every((x) => x.includes('resize=contain') && !x.includes('resize=cover'))).toBe(true);
+    expect(thumbUrl(PUBLIC, 400, { fit: 'cover' })).toContain('resize=cover');
   });
 
-  it('포스터 카드(PosterArea)는 contain 으로 받는다 — 빠지면 카드에 포스터 가운데 36% 만 보인다', () => {
-    const src = readFileSync(join(process.cwd(), 'src', 'components', 'features', 'ScheduleCard.tsx'), 'utf8');
-    expect(src).toContain("src={thumbUrl(posterUrl, thumbWidth, { fit: 'contain' })}");
-    expect(src).toContain("srcSet={thumbSrcSet(posterUrl, thumbWidth, { fit: 'contain' })}");
+  // 소비처 URL 스냅샷 — 소비처가 실제로 넘기는 폭 그대로. 기본값이 바뀌면 여기서 한꺼번에 빨개진다.
+  const R = 'https://idsxiqspecrucvfvtgbw.supabase.co/storage/v1/render/image/public/community_images/community/u1/1700000000000-0.webp';
+  it.each([
+    ['ScheduleCard PosterArea(포스터 카드)', 400],
+    ['ScheduleCard PosterArea(목록 로고)', 128],
+    ['MyPostersTab 내 포스터', 200],
+    ['PostRowCard 글 목록 첨부', 96],
+    ['PostDetailModal 첨부', 480],
+    ['MyMarketModal 장터', 160],
+    ['VenueThumb 매장 사진(lg)', 128],
+    ['VenuePage 매장 프로필', 144],
+  ])('%s — width=%i 원본 비율 URL', (_name, w) => {
+    expect(thumbUrl(PUBLIC, w)).toBe(`${R}?width=${w}&quality=70&format=webp&resize=contain`);
+    expect(thumbSrcSet(PUBLIC, w)).toBe(`${R}?width=${w}&quality=70&format=webp&resize=contain 1x, ${R}?width=${w * 2}&quality=70&format=webp&resize=contain 2x`);
+  });
+
+  it("소비처는 fit 을 따로 넘기지 않는다 — 누가 cover 를 붙이면 그 화면만 다시 띠가 된다(필요하면 이 목록에 사유와 함께 올린다)", () => {
+    const files = ['components/features/ScheduleCard.tsx', 'components/features/MyPostersTab.tsx', 'components/features/community/PostRowCard.tsx',
+      'components/features/PostDetailModal.tsx', 'components/features/MyMarketModal.tsx', 'components/atoms/VenueThumb.tsx', 'components/features/VenuePage.tsx'];
+    for (const f of files) {
+      const src = readFileSync(join(process.cwd(), 'src', f), 'utf8');
+      expect(src, f).toMatch(/thumbUrl\(/);
+      expect(src, f).not.toMatch(/fit:\s*'cover'/);
+    }
   });
 
   it('스토리지가 아닌 URL·빈 값은 변환하지 않는다', () => {
