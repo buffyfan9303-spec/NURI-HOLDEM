@@ -830,7 +830,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           </button>
           <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
             className="min-h-[44px] flex-1 rounded-input border border-border-default px-3 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary sm:flex-none">
-            슬라이드
+            가이드
           </button>
           <a href="/guide/owner.pdf" download="NURI-HOLDEM-업주가이드.pdf"
             className="grid min-h-[44px] flex-1 place-items-center rounded-input border border-border-default px-3 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary sm:flex-none">
