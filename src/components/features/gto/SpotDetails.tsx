@@ -13,7 +13,7 @@
 //   표시만 한다. 그래서 props 도 `SpotReview` 하나와 모드뿐이다.
 import { memo } from 'react';
 import type { SpotReview } from '../../../lib/spot';
-import { actionLabel, streetLabel } from '../../../lib/spot';
+import { actionLabel, hasStackPair, streetLabel } from '../../../lib/spot';
 
 /** 카드 한 장 — 무늬로 색을 준다. 값이 없으면 자리를 만들지 않는다(빈 카드 = 모른다). */
 function Cards({ codes, empty = '—' }: { codes: string[]; empty?: string }) {
@@ -84,7 +84,11 @@ function SpotDetailsBase({ spot, mode = 'owner', revealed = false }: {
         {' · 상대 '}
         {villains.map((v) => `${v.label}(${v.pos})`).join(', ')}
       </Row>
-      <Row label="유효 스택"><span className="tabular-nums">{spot.effectiveBb}BB</span></Row>
+      <Row label="유효 스택">
+        <span className="tabular-nums">{spot.effectiveBb}BB</span>
+        {/* 2026-09-30 두 스택을 따로 받은 스팟만 — 옛 스팟은 한 수뿐이라 지어내지 않는다 */}
+        {hasStackPair(spot) && <span className="tabular-nums text-ink-muted"> (나 {spot.heroStackBb}BB · 상대 {spot.villainStackBb}BB)</span>}
+      </Row>
       {/* ③ 카드 */}
       <Row label="내 카드"><Cards codes={spot.hero} empty="적지 않음" /></Row>
       <Row label="상대 카드">

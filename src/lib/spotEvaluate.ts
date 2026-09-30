@@ -27,7 +27,7 @@ import { KEY_PREFIX, PUSH_POS, PUSH_STACKS, type Mode } from './preflopQuiz';
 import { buildFreq } from './ranges';
 import { nashRange, NASH_STACKS, HAND_ORDER, isNashQuarantined } from './nash.data';
 import {
-  potBb, heroComboId, validateSpot, hasBlocker, positionsFor, actorPos,
+  potBb, heroComboId, validateSpot, hasBlocker, positionsFor, actorPos, hasStackPair,
   type SpotReview, type SpotAction, type SpotActionType, type SpotIssue, type SpotPosition,
 } from './spot';
 
@@ -533,7 +533,14 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   //   (9인 SB·BB 10bb·앤티 1 → 9bb 표. 감사 S28 + Fable 교차 판정 일치).
   //   오너 2026-09-30: "1bb 까지는 신경 쓸 필요 없어, 20bb 표를 정확하게" — S 에 맞는 표가 없으면
   //   입력 스택의 표를 **정확 일치**로 본다(20bb·앤티 1 → S 19 표 없음 → 20bb 표, 차이 문구 없음).
-  const S = Math.round((s.effectiveBb - (s.anteBb > 0 ? s.anteBb : 0)) * 100) / 100;
+  // 2026-09-30 오너 "두 사람 스택 따로 입력" — S = min(내 스택 − 내가 BB면 A, 상대 스택 − 상대가 BB면 A).
+  //   앤티는 BB 가 낸다(BB앤티). 두 스택이 없는 옛 스팟은 둘 다 effectiveBb 로 본다.
+  //   ⚠ 옛 스팟은 상대가 BB 가 아니어도 뺀다(f6d9598e 판정 그대로) — 한 수로는 앤티 내는 BB 의 스택을 따로 모른다.
+  const A = s.anteBb > 0 ? s.anteBb : 0;
+  const paired = hasStackPair(s);
+  const heroS = (paired ? s.heroStackBb as number : s.effectiveBb) - (s.heroPos === 'BB' ? A : 0);
+  const vilS = (paired ? s.villainStackBb as number : s.effectiveBb) - (!paired || s.villainPos === 'BB' ? A : 0);
+  const S = Math.round(Math.min(heroS, vilS) * 100) / 100;
   const exact = NASH_STACKS.find((v) => Math.abs(v - S) < 0.01)
     ?? NASH_STACKS.find((v) => Math.abs(v - s.effectiveBb) < 0.01);
   // 🔴 G4(2026-09-20) — `find` 는 **배열 순서상 처음** 조건을 만족하는 값을 준다. `NASH_STACKS` 가
@@ -567,7 +574,8 @@ function lookupNash(s: SpotReview, combo: string): ChartHit | null {
   return {
     // 2026-09-30 critical: 입력은 '짧은 쪽' 한 숫자라 누가 짧은지 모른다. 앤티를 뺀 표는 BB 가 짧거나 같을 때가 정확하고,
     //   내가(셔버) 더 짧으면 한 칸 위 표가 맞다. 오너 "1bb 까지는 신경 쓸 필요 없어" — 판정은 두되 어떤 기준인지 라벨에 드러낸다.
-    sourceLabel: `푸시·폴드 차트 · ${stack}BB · 뒤 ${k}명${s.anteBb > 0 ? (stack < s.effectiveBb ? ' · BB앤티(앤티 뺀 스택)' : ' · BB앤티') : ''}`,
+    //   두 스택을 따로 받은 스팟은 누가 짧은지 알므로 이 가정 표시가 필요 없다.
+    sourceLabel: `푸시·폴드 차트 · ${stack}BB · 뒤 ${k}명${s.anteBb > 0 ? (!paired && stack < s.effectiveBb ? ' · BB앤티(앤티 뺀 스택)' : ' · BB앤티') : ''}`,
     // 올인은 레이즈 갈래로 표시한다 — 이 차트에 콜 갈래는 없다(첫 진입 셔브/폴드 두 갈래).
     // 첫 진입이라 콜할 대상 자체가 없으므로 잔여는 폴드로 **확정**된다 → absent 없음.
     mix: { raise: shove, call: 0, fold: clamp01(1 - shove) },

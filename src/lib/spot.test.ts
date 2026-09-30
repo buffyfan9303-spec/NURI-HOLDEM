@@ -392,3 +392,36 @@ describe('v3 — 빌런 B~E · 스포일러 경계', () => {
     expect(villainsLabel(base())).toBe('BB');
   });
 });
+
+// ── 두 사람 스택 (오너 2026-09-30) — 저장·공유·재열기 하위 호환 ──────────────────
+describe('두 스택 직렬화', () => {
+  it('짝으로 왕복한다 · 유효 스택은 min 으로 다시 맞춘다', () => {
+    const s = { ...emptySpot(), heroStackBb: 10, villainStackBb: 30, effectiveBb: 10 };
+    const o = toJSON(s);
+    expect(o.heroStackBb).toBe(10);
+    expect(o.villainStackBb).toBe(30);
+    expect(fromJSON(o)).toEqual(s);
+    // 저장된 effectiveBb 가 어긋나도 두 스택의 min 이 이긴다
+    expect(fromJSON({ ...o, effectiveBb: 99 })!.effectiveBb).toBe(10);
+  });
+
+  it('옛 스팟(effectiveBb 한 수)은 그대로 읽히고 두 스택 키를 만들지 않는다', () => {
+    const s = fromJSON({ v: 3, effectiveBb: 25, tableSize: 9, anteBb: 1 })!;
+    expect(s.effectiveBb).toBe(25);
+    expect(s.heroStackBb).toBeUndefined();
+    expect('heroStackBb' in toJSON(s)).toBe(false);
+  });
+
+  it('한쪽만 있거나 0 이하면 짝으로 받지 않는다', () => {
+    expect(fromJSON({ effectiveBb: 20, heroStackBb: 10 })!.heroStackBb).toBeUndefined();
+    expect(fromJSON({ effectiveBb: 20, heroStackBb: 0, villainStackBb: 30 })!.effectiveBb).toBe(20);
+  });
+
+  it('canonical key — 옛 스팟 key 는 그대로, 누가 짧은지가 다르면 다른 key', () => {
+    const old = emptySpot();
+    expect(canonicalSpotKey(old)).not.toMatch(/\|st/);
+    const a = canonicalSpotKey({ ...old, effectiveBb: 10, heroStackBb: 10, villainStackBb: 30 });
+    const b = canonicalSpotKey({ ...old, effectiveBb: 10, heroStackBb: 30, villainStackBb: 10 });
+    expect(a).not.toBe(b);
+  });
+});
