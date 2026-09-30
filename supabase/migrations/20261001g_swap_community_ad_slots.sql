@@ -91,10 +91,12 @@ begin
 
   perform set_config('request.jwt.claims', '', true);
   begin perform public.swap_community_ad_slots(1, 3); raise exception 'FAIL: 비로그인 교환 통과';
-  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%운영자만 가능합니다%' then raise exception 'FAIL: 엉뚱한 오류(기대: 운영자만 가능합니다): %', sqlerrm; end if; end;
   perform set_config('request.jwt.claims', json_build_object('sub', c_owner, 'role', 'authenticated')::text, true);
   begin perform public.swap_community_ad_slots(1, 3); raise exception 'FAIL: 업주 교환 통과';
-  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%운영자만 가능합니다%' then raise exception 'FAIL: 엉뚱한 오류(기대: 운영자만 가능합니다): %', sqlerrm; end if; end;
 
   perform set_config('request.jwt.claims', json_build_object('sub', c_admin, 'role', 'authenticated')::text, true);
   -- 양성 1: 1↔3 맞바뀌고 둘 다 활성 유지, 날짜도 따라간다
@@ -114,9 +116,11 @@ begin
   end if;
   -- 음성: 잘못된 슬롯 → raise, 기존 행 불변
   begin perform public.swap_community_ad_slots(3, 9); raise exception 'FAIL: 범위 밖 슬롯 통과';
-  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%교환할 두 슬롯%' then raise exception 'FAIL: 엉뚱한 오류(기대: 교환할 두 슬롯): %', sqlerrm; end if; end;
   begin perform public.swap_community_ad_slots(3, 3); raise exception 'FAIL: 같은 슬롯 통과';
-  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%교환할 두 슬롯%' then raise exception 'FAIL: 엉뚱한 오류(기대: 교환할 두 슬롯): %', sqlerrm; end if; end;
   select * into r3 from public.community_ads where slot = 3;
   if r3.post_id is distinct from p1 or not r3.active then raise exception 'FAIL: 실패한 교환이 행을 바꿨다'; end if;
 

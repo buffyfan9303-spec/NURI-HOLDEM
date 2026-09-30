@@ -13,6 +13,8 @@
 --   ③ admin_set_post_blinded: 숨길 때 'admin', 풀 때 null.
 --   ④ admin_dismiss_report(p_report_id) 신설: open 신고만 기각(없으면 raise) → 같은 대상의 다른 신고가 전부 기각이고
 --      숨김 출처가 'auto' 일 때만 블라인드를 푼다. 관리자 숨김·처리 완료(resolved) 신고가 남은 글은 그대로 둔다. audit_log 기록.
+--   검토 반영(review-admin-srv-1001 e): ⑤ 기각 RPC 는 대상 글 행을 먼저 잠근다(동시 기각 경합) ⑥ 칸 추가 앞 lock_timeout 3s
+--      ⑦ anon·authenticated 의 표 단위 INSERT/UPDATE 를 칸 단위로 바꿔 blinded_source 만 빼고 다시 준다(클라이언트 쓰기 차단).
 
 -- 적용 전 게이트
 do $$
@@ -22,6 +24,10 @@ begin
   end if;
   if md5(pg_get_functiondef('public.admin_set_post_blinded(uuid,boolean)'::regprocedure)) is distinct from 'abd1721335010f134da3a22dfcff9b71' then
     raise exception '20261001e 게이트: admin_set_post_blinded 가 초안 작성 때와 다르다';
+  end if;
+  if (select relacl::text from pg_class where oid = 'public.community_posts'::regclass)
+       is distinct from '{postgres=arwdDxtm/postgres,anon=arwdm/postgres,authenticated=arwdm/postgres,service_role=arwdDxtm/postgres}' then
+    raise exception '20261001e 게이트: community_posts 표 권한이 초안 작성 때와 다르다 — 칸 권한 전환을 다시 설계해라';
   end if;
   if exists (select 1 from pg_proc where proname = 'admin_dismiss_report' and pronamespace = 'public'::regnamespace) then
     raise exception '20261001e 게이트: admin_dismiss_report 가 이미 있다';
@@ -34,13 +40,30 @@ begin
   end if;
 end $$;
 
--- ① 숨김 출처 칸
+-- ① 숨김 출처 칸 (검토 반영: 잠금 대기가 길어지면 전체 읽기를 막지 않도록 3초에 포기)
+set local lock_timeout = '3s';
 alter table public.community_posts add column if not exists blinded_source text;
 update public.community_posts set blinded_source = 'admin' where blinded and blinded_source is null;
 update public.community_posts set blinded_source = null where not blinded and blinded_source is not null;
 alter table public.community_posts drop constraint if exists community_posts_blinded_source_chk;
 alter table public.community_posts add constraint community_posts_blinded_source_chk
   check (blinded_source is null or (blinded and blinded_source in ('auto', 'admin')));
+
+-- ①-2 클라이언트가 새 칸을 못 쓰게(검토 반영). anon·authenticated 는 표 단위 INSERT/UPDATE 를 갖고 있어
+--      칸 하나만 REVOKE 해도 효과가 없다 → 표 단위 INSERT/UPDATE 를 거두고, blinded_source 를 뺀 **기존 칸 전부**에
+--      칸 단위로 다시 준다(다른 칸의 쓰기 권한은 적용 전과 같다). ⚠ 앞으로 이 표에 새 칸을 만들면 클라이언트 쓰기가
+--      자동으로 열리지 않는다 — 필요한 칸만 GRANT insert(col)/update(col) 해야 한다.
+do $$
+declare v_cols text; r text;
+begin
+  select string_agg(quote_ident(column_name), ', ' order by ordinal_position) into v_cols
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'community_posts' and column_name <> 'blinded_source';
+  foreach r in array array['anon', 'authenticated'] loop
+    execute format('revoke insert, update on public.community_posts from %I', r);
+    execute format('grant insert (%s), update (%s) on public.community_posts to %I', v_cols, v_cols, r);
+  end loop;
+end $$;
 
 -- ② 자동 블라인드: 기각된 신고는 세지 않고, 출처를 남긴다
 create or replace function public.auto_blind_reported_post()
@@ -99,6 +122,12 @@ begin
   if public.my_role() is distinct from 'admin'::user_role then
     raise exception '운영자만 가능합니다';
   end if;
+  -- 검토 반영: 대상 글 행을 먼저 잠근다 — 두 관리자가 같은 글의 마지막 두 신고를 동시에 기각하면
+  -- 서로의 미확정 기각을 open 으로 보고 둘 다 안 푸는 경합을 막는다(두 번째는 첫 번째 커밋 뒤에 센다).
+  select target_type, target_id into v_type, v_target from public.reports where id = p_report_id;
+  if v_type = 'post' and v_target is not null then
+    perform 1 from public.community_posts where id = v_target for update;
+  end if;
   update public.reports set status = 'dismissed'
    where id = p_report_id and status = 'open'
   returning target_type, target_id into v_type, v_target;
@@ -145,6 +174,22 @@ begin
   if not has_function_privilege('authenticated', 'public.admin_dismiss_report(uuid)', 'execute') then
     raise exception '20261001e: 기각 RPC 가 authenticated 에 닫혔다';
   end if;
+  if has_column_privilege('anon', 'public.community_posts', 'blinded_source', 'insert')
+     or has_column_privilege('anon', 'public.community_posts', 'blinded_source', 'update')
+     or has_column_privilege('authenticated', 'public.community_posts', 'blinded_source', 'insert')
+     or has_column_privilege('authenticated', 'public.community_posts', 'blinded_source', 'update') then
+    raise exception '20261001e: 클라이언트가 blinded_source 를 쓸 수 있다';
+  end if;
+  if not has_column_privilege('authenticated', 'public.community_posts', 'content', 'insert')
+     or not has_column_privilege('authenticated', 'public.community_posts', 'content', 'update')
+     or not has_column_privilege('anon', 'public.community_posts', 'content', 'insert')
+     or not has_table_privilege('authenticated', 'public.community_posts', 'select')
+     or not has_table_privilege('authenticated', 'public.community_posts', 'delete') then
+    raise exception '20261001e: 기존 칸 권한이 줄었다(글쓰기 기능 소실)';
+  end if;
+  if position('for update' in pg_get_functiondef('public.admin_dismiss_report(uuid)'::regprocedure)) = 0 then
+    raise exception '20261001e: 기각 RPC 가 글 행을 잠그지 않는다';
+  end if;
   if has_function_privilege('authenticated', 'public.auto_blind_reported_post()', 'execute') then
     raise exception '20261001e: 트리거 함수가 클라이언트에 열려 있다';
   end if;
@@ -172,10 +217,12 @@ begin
   -- 비로그인·비관리자 거절
   perform set_config('request.jwt.claims', '', true);
   begin perform public.admin_dismiss_report(r1); raise exception 'FAIL: 비로그인 기각 통과';
-  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%운영자만 가능합니다%' then raise exception 'FAIL: 엉뚱한 오류(기대: 운영자만 가능합니다): %', sqlerrm; end if; end;
   perform set_config('request.jwt.claims', json_build_object('sub', c_owner, 'role', 'authenticated')::text, true);
   begin perform public.admin_dismiss_report(r1); raise exception 'FAIL: 업주 기각 통과';
-  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%운영자만 가능합니다%' then raise exception 'FAIL: 엉뚱한 오류(기대: 운영자만 가능합니다): %', sqlerrm; end if; end;
 
   perform set_config('request.jwt.claims', json_build_object('sub', c_admin, 'role', 'authenticated')::text, true);
   -- 음성 1: 첫 건 기각 → 다른 open 신고 2건이 남아 계속 숨김
@@ -184,7 +231,8 @@ begin
   if not v_b or (j->>'unblinded')::boolean then raise exception 'FAIL: 다른 신고가 남았는데 풀림 %', j; end if;
   -- 음성 2: 같은 신고 두 번 기각 → raise
   begin perform public.admin_dismiss_report(r1); raise exception 'FAIL: 중복 기각 통과';
-  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%이미 처리되었거나 없는 신고%' then raise exception 'FAIL: 엉뚱한 오류(기대: 이미 처리되었거나 없는 신고): %', sqlerrm; end if; end;
   -- 양성 1: 나머지를 다 기각하면 자동 숨김이 풀린다
   perform public.admin_dismiss_report(r2);
   j := public.admin_dismiss_report(r3);
@@ -209,6 +257,22 @@ begin
   if v_b or v_src is not null then raise exception 'FAIL: 관리자 해제 실패'; end if;
   if not exists (select 1 from public.audit_log where action = 'report_dismiss' and target = rq::text and actor_id = c_admin) then
     raise exception 'FAIL: 기각 감사 없음';
+  end if;
+
+  -- 칸 권한(검토 반영): 일반 회원 글쓰기는 그대로 되고, blinded_source 를 실으면 권한 오류
+  perform set_config('request.jwt.claims', json_build_object('sub', 'fd14c2dc-d994-46e4-8f12-b6cf38104983', 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  insert into public.community_posts (user_id, user_name, content)
+  values ('fd14c2dc-d994-46e4-8f12-b6cf38104983', 'x', '리허설 글쓰기 양성 대조');
+  begin
+    insert into public.community_posts (user_id, user_name, content, blinded_source)
+    values ('fd14c2dc-d994-46e4-8f12-b6cf38104983', 'x', '리허설', 'auto');
+    raise exception 'FAIL: 클라이언트가 blinded_source 를 썼다';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%permission denied%' then raise exception 'FAIL: 엉뚱한 오류(기대: permission denied): %', sqlerrm; end if; end;
+  execute 'reset role';
+  if not exists (select 1 from public.community_posts where content = '리허설 글쓰기 양성 대조') then
+    raise exception 'FAIL: 일반 글쓰기 양성 대조 실패';
   end if;
 
   raise exception 'REHEARSAL_OK 20261001e';

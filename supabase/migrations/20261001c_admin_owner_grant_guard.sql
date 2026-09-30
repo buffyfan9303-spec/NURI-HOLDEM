@@ -220,16 +220,19 @@ begin
   -- 비로그인(jwt 빈 값): 거절
   perform set_config('request.jwt.claims', '', true);
   begin perform public.admin_decide_venue_owner(c_v, c_user, true); raise exception 'FAIL: 비로그인 승인 통과';
-  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%운영자만 가능합니다%' then raise exception 'FAIL: 엉뚱한 오류(기대: 운영자만 가능합니다): %', sqlerrm; end if; end;
   -- 일반 업주: 거절
   perform set_config('request.jwt.claims', json_build_object('sub', c_owner, 'role', 'authenticated')::text, true);
   begin perform public.admin_decide_venue_owner(c_v, c_user, true); raise exception 'FAIL: 업주가 승인 통과';
-  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%운영자만 가능합니다%' then raise exception 'FAIL: 엉뚱한 오류(기대: 운영자만 가능합니다): %', sqlerrm; end if; end;
 
   perform set_config('request.jwt.claims', json_build_object('sub', c_admin, 'role', 'authenticated')::text, true);
   -- 음성 1: 요청 행 없이 승인 → raise, USER 역할 불변
   begin perform public.admin_decide_venue_owner(c_v, c_user, true); raise exception 'FAIL: 요청 없는 승인 통과';
-  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%이미 처리되었거나 취소된 요청%' then raise exception 'FAIL: 엉뚱한 오류(기대: 이미 처리되었거나 취소된 요청): %', sqlerrm; end if; end;
   select role::text into v_role from public.profiles where id = c_user;
   if v_role <> 'user' then raise exception 'FAIL: 요청 없는 승인 뒤 역할 %', v_role; end if;
 
@@ -241,7 +244,8 @@ begin
   if v_st <> 'approved' or v_role <> 'venue_owner' then raise exception 'FAIL: 정상 승인 실패 % %', v_st, v_role; end if;
   -- 음성 2: 같은 요청 두 번째 승인 → raise
   begin perform public.admin_decide_venue_owner(c_v, c_user, true); raise exception 'FAIL: 중복 승인 통과';
-  exception when others then if sqlerrm like 'FAIL:%' then raise; end if; end;
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+    if sqlerrm not like '%이미 처리되었거나 취소된 요청%' then raise exception 'FAIL: 엉뚱한 오류(기대: 이미 처리되었거나 취소된 요청): %', sqlerrm; end if; end;
 
   -- 관리자 대상 승인 → admin 유지
   insert into public.venue_owners(venue_id, user_id, added_by, status) values (c_v, c_admin, c_owner, 'pending');
