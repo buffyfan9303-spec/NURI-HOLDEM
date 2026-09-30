@@ -208,8 +208,10 @@ export default function ScheduleDetailModal({
                   decoding="async"
                   // 로드 전 높이 예약 — 이미지가 뜨는 순간 아래 제목/배지가 통째로 밀리는 점프(CLS) 방지.
                   // 포스터는 세로형(1200x1600)이라 로드 후 실제 높이가 이 최소값을 항상 넘어 시각 영향 없음.
+                  // 최대 높이 42svh(M-08, 2026-10-01): 65vh 였을 때 390×844 에서 참가비 라벨이 첫 화면 90% 지점까지 밀렸다.
+                  //   포스터는 잘리지 않고 작아질 뿐이다(탭하면 라이트박스 확대). svh = 주소창이 펼쳐진 작은 뷰포트 기준.
                   style={{ minHeight: 'min(40vh, 320px)' }}
-                  className="block h-auto w-full max-h-[65vh] object-contain lg:max-h-screen"
+                  className="block h-auto w-full max-h-[42svh] object-contain lg:max-h-screen"
                 />
               </button>
             ) : (
