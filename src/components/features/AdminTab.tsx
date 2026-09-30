@@ -44,7 +44,7 @@ import SectionHeader from '../atoms/SectionHeader';
 import { PAGE_ENTER } from '../atoms/pageMotion';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
-import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, EVENT_KIND_LABEL, type RankVerification } from '../../api/rankverify';
+import { adminListRankVerifications, adminDecideRankVerification, askRankDecision, signedVerifyUrl, EVENT_KIND_LABEL, type RankVerification } from '../../api/rankverify';
 import { getAllInquiries, answerInquiry, sendInquiryReplyEmail, subscribeInquiries, type SupportInquiry } from '../../api/support';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -281,10 +281,14 @@ function RankVerifyAdminCard() {
     catch { toast.show('이미지 열람 실패', 'error'); }
   };
   const decide = async (v: RankVerification, ok: boolean) => {
+    // 🔴 점검 A-05(2026-10-01): 예전엔 사유 창에서 '취소'(null)를 눌러도 undefined 로 바뀌어 **그대로 반려**됐고,
+    //   그 함수는 신분증을 먼저 지운다 — 되돌릴 수 없다. 취소는 '아무것도 안 함'이다.
+    //   승인도 신분증이 즉시 삭제되므로 확인을 한 번 받는다. 창은 busy 잠금 **전에** 띄운다(취소 시 잠금이 남지 않게).
+    const ask = askRankDecision(ok, window);
+    if (!ask.go) return;
+    const note = ask.note;
     setBusy(v.id);
     try {
-      // 반려는 사유 없이는 재신청만 부른다 — 신청자 화면(TierLeaderboard 내 인증 이력)에 그대로 보인다.
-      const note = ok ? undefined : (window.prompt('반려 사유 (신청자에게 그대로 보입니다)')?.trim() || undefined);
       await adminDecideRankVerification(v, ok, { note });
       toast.show(ok ? '대회로 승인했습니다. 국내 순위에 합산됩니다' : '반려했습니다', 'success');
       reload();
