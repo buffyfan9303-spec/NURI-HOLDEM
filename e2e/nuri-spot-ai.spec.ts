@@ -163,8 +163,8 @@ test.describe('AI 아쉬운 포인트', () => {
   });
 
   for (const [code, status, text] of [
-    ['DAILY_LIMIT', 409, '3회를 모두 썼어요'],
-    ['AI_FAILED', 502, '포인트를 돌려드렸어요'],
+    ['DAILY_LIMIT', 409, '3회를 모두 사용했습니다'],
+    ['AI_FAILED', 502, '포인트를 돌려 드렸습니다'],
   ] as const) {
     test(`🔴 ${code} 안내`, async ({ page }) => {
       const dlg = await openSpot(page, ON, (r) =>
