@@ -1456,9 +1456,10 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
             ⚠ 루트 폰트가 17px 라 max-w-56 = 238px 다(Tailwind rem 유틸이 6.25% 크다).
             그래서 우선순위를 뒤집는다: 매장명은 flex-1(basis 0)로 **남는 폭만** 먹고 먼저 줄어들며,
             게임명은 shrink-0 으로 제 폭을 지키되 max-w-[50%] 로 긴 이름일 때만 잘린다.
-            max-w-56 은 남겨 둬 PC 에서 매장명이 줄을 독점하지 않게 한다(1440·1280 렌더 불변). */}
+            max-w-56 은 남겨 둬 PC 에서 매장명이 줄을 독점하지 않게 한다(1440·1280 렌더 불변).
+            P-05(2026-10-01) — PC(lg+)는 flex-initial(내용 폭): flex-1 이 매장명 뒤에 179px 빈 칸을 만들었다. 상한은 max-w-56 그대로. */}
         {venueName && (<>
-          <span className="min-w-0 max-w-56 flex-1 truncate font-bold text-ink-primary">{venueName}</span>
+          <span className="min-w-0 max-w-56 flex-1 lg:flex-initial truncate font-bold text-ink-primary">{venueName}</span>
           {sep}
         </>)}
         <span className="shrink-0 tabular-nums text-ink-secondary">{dLabel}</span>
