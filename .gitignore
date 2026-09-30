@@ -34,6 +34,10 @@ dist-ssr
 누리홀덤_사업계획서_상세본.md
 사업계획_자료_누리홀덤.md
 
+# 커버리지·Lighthouse 산출물(수동 실행 결과)
+/coverage/
+/lighthouse-reports/
+
 # Playwright
 /test-results/
 /playwright-report/
