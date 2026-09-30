@@ -187,6 +187,16 @@ function colorBoxStyle(tier?: ShoutTier | null, color?: ShoutColor | null): CSSP
     backgroundImage: `linear-gradient(90deg, ${tierCss(v, 0.14)}, transparent)`,
   };
 }
+/** 전광판 양 끝 페이드(MarqueeText .marquee-fade, M-12)의 지면색 — 방송 중 상자는 카드가 아니라
+ *  페이지(surface-base) 위의 가로 그라데이션이다. 전광판 왼쪽 끝은 상자 폭의 약 10% 지점이라 틴트가 약 90% 남고,
+ *  오른쪽 끝은 거의 0 이다. ponytail: 폭 비례 근사(틴트 오차 1~2%p) — 상자 배경 문법이 바뀌면 같이 고친다. */
+function shoutFadeVars(tier?: ShoutTier | null, color?: ShoutColor | null): CSSProperties {
+  const v = shoutVar(tier, color);
+  const [tint, pct] = v ? [tierCss(v), 12.6]
+    : tier === 'gold' ? ['#FCD535', 9] : tier === 'board' ? ['#FCD535', 13] : ['rgb(var(--accent-300))', 10.8];
+  const base = 'rgb(var(--surface-base))';
+  return { '--marquee-fade': base, '--marquee-fade-l': `color-mix(in srgb, ${tint} ${pct}%, ${base})` } as CSSProperties;
+}
 /** 닉네임은 **글자**라 4.5:1 이 필요하다. 라이트에서 --tier-*-vivid 는 장식급(#3381DF)이고
  *  텍스트급 짝은 -vivid 를 뗀 것(#0059C4)이다 — TitleChip 이 쓰는 colorVar/vividVar 규약과 같다. */
 function colorTextStyle(tier?: ShoutTier | null, color?: ShoutColor | null): CSSProperties | undefined {
@@ -767,7 +777,7 @@ export default function CommunityShoutBar({ className }: { className?: string })
               않게 **공간을 예약**한다(CLS 는 진입 애니가 아니라 공간 예약으로 푼다). 1.75rem 은
               board 등급의 text-base(leading-snug 22px)까지 덮는 값이라 등급이 섞여도 높이가 고정된다. */}
           <div className="flex min-h-7 min-w-0 flex-1 items-center"
-               style={{ transition: 'opacity var(--dur-base) var(--ease)', opacity: vis ? 1 : 0 }}>
+               style={{ transition: 'opacity var(--dur-base) var(--ease)', opacity: vis ? 1 : 0, ...(drawShout ? shoutFadeVars(drawShout.tier, drawShout.color) : null) }}>
             {drawShout && skin ? (
               <MarqueeText className="w-full" text={`${drawShout.nickname} · ${drawShout.message} · 방송 중`}>
                 <span className="text-2xs font-bold" style={colorTextStyle(drawShout.tier, drawShout.color)}>{drawShout.nickname}</span>

@@ -37,8 +37,10 @@ export default function MarqueeText({ text, children, className = '', testId }: 
   const body = children ?? text;
   const GAP = 32; // 복제본 사이 간격(px) — pr-8 과 일치해야 -50% 지점이 정확히 맞물린다
   // 흐를 때만 좌우 14px 를 서서히 사라지게 한다(M-12, 2026-10-01) — 칸 경계에서 반쪽 글자가 잘려 보이던 것.
-  //   motion-safe 한정: 동작 줄이기에서는 index.css 가 정적 말줄임으로 되돌리므로 첫 글자가 흐려지면 안 된다.
-  const edgeFade = loopW > 0 ? ' motion-safe:[mask-image:linear-gradient(90deg,transparent,#000_14px,#000_calc(100%-14px),transparent)]' : '';
+  //   index.css `.marquee-fade` 의 양 끝 오버레이(지면색 → 투명)다. motion-safe 한정(동작 줄이기에서는 정적 말줄임).
+  //   🔴 mask-image 로 만들면 줄마다 마스크 합성면이 생겨 하위 탭 전환 첫 프레임에 새 판 타일이 비었다
+  //   (e2e tab-handoff-gate ④ — base 통과·마스크판 실패, verifier 10-01). 지면색은 소비처가 --marquee-fade(-l) 로 맞춘다.
+  const edgeFade = loopW > 0 ? ' marquee-fade' : '';
   return (
     <span ref={viewportRef} data-testid={testId} className={`relative block min-w-0 overflow-hidden${edgeFade} ${className}`}>
       {/* 측정 전용(불가시) 상주 — 마퀴 전환 뒤에도 '더는 안 넘침' 복귀 판정이 가능하다 */}

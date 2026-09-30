@@ -51,9 +51,16 @@ describe('디자인 개선안 1001 모바일', () => {
     expect(c).not.toMatch(/TitleChip/);
     expect(c).toMatch(/Lv \{prog\.current\.level\} · <b[^>]*>\{prog\.current\.title\}<\/b>/);
   });
-  it('M-12 전광판은 흐를 때만, 동작 허용일 때만 좌우 14px 페이드', () => {
+  it('M-12 전광판은 흐를 때만, 동작 허용일 때만 좌우 14px 페이드 — 마스크가 아니라 지면색 오버레이', () => {
     const c = code('components/atoms/MarqueeText.tsx');
-    expect(c).toMatch(/const edgeFade = loopW > 0 \? ' motion-safe:\[mask-image:linear-gradient\(90deg,transparent,#000_14px,#000_calc\(100%-14px\),transparent\)\]' : '';/);
+    expect(c).toMatch(/const edgeFade = loopW > 0 \? ' marquee-fade' : '';/);
     expect(c).toMatch(/overflow-hidden\$\{edgeFade\} /);
+    // mask 는 줄마다 합성면을 만들어 e2e tab-handoff-gate ④ 를 깨뜨렸다 — 되살리지 않는다
+    expect(c).not.toMatch(/mask-image/);
+    const block = /@media \(prefers-reduced-motion: no-preference\) \{\s*\.marquee-fade::before[\s\S]*?\n\}/.exec(css)?.[0] ?? '';
+    expect(block).toMatch(/\.marquee-fade::before \{ left: 0; background: linear-gradient\(90deg, var\(--marquee-fade-l, var\(--marquee-fade, rgb\(var\(--surface-low\)\)\)\), transparent\); \}/);
+    expect(block).toMatch(/\.marquee-fade::after \{ right: 0; background: linear-gradient\(270deg, var\(--marquee-fade, rgb\(var\(--surface-low\)\)\), transparent\); \}/);
+    expect(block).toMatch(/width: 14px; pointer-events: none;/);
+    expect(block).not.toMatch(/mask|filter|will-change|transform/);
   });
 });

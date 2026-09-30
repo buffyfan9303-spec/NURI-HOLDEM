@@ -54,6 +54,10 @@ export const PostRow = memo(function PostRow({ post, onClick, hot = false, selec
       className={[
         'cv-row-sm min-h-(--row-h-sm) flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 focus:outline-hidden focus-visible:bg-surface-high/60',
         selected ? 'bg-accent-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
+        // 제목 전광판 양 끝 페이드(MarqueeText .marquee-fade)의 지면색 — 행 배경이 바뀌는 상태마다 같은 합성색을 준다(M-12).
+        //   행은 card-aura(surface-low) 목록 안에 있다.
+        selected ? '[--marquee-fade:color-mix(in_srgb,rgb(var(--accent-300))_10%,rgb(var(--surface-low)))]'
+          : 'hover:[--marquee-fade:color-mix(in_srgb,rgb(var(--surface-high))_60%,rgb(var(--surface-low)))] active:[--marquee-fade:rgb(var(--surface-high))]',
       ].join(' ')}
     >
       {/* 끌올(100점)은 카테고리 자리를 뺏지 않는다 — 앞에 한 칸을 더 쓴다.
@@ -145,6 +149,9 @@ export const PostCard = memo(function PostCard({ post, onLike, onClick, hot = fa
         selected
           ? 'border-accent-300/60 bg-accent-300/[0.07]'
           : 'hover:border-border-strong hover:bg-surface-high/50 active:bg-surface-high',
+        // 제목 전광판 양 끝 페이드의 지면색(M-12) — 상태 배경은 card-aura 의 surface-low 를 **대체**하고 페이지(surface-base) 위에 얹힌다.
+        selected ? '[--marquee-fade:color-mix(in_srgb,rgb(var(--accent-300))_7%,rgb(var(--surface-base)))]'
+          : 'hover:[--marquee-fade:color-mix(in_srgb,rgb(var(--surface-high))_50%,rgb(var(--surface-base)))] active:[--marquee-fade:rgb(var(--surface-high))]',
       ].join(' ')}
     >
       <div className="flex items-start gap-2">
