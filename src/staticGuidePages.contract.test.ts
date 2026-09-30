@@ -20,16 +20,29 @@ const stripComments = (s: string) => s.replace(/<!--[\s\S]*?-->/g, '').replace(/
 /** 서브셋 CSS 가 정의하는 family — 이름이 다르면 face 가 하나도 안 붙는다. */
 const FAMILY = /font-family:\s*'([^']+)'/.exec(read('fonts/pretendard/pretendardvariable-dynamic-subset.css'))![1];
 
+/** ① 의 본체 — 가이드 3장과 법정 문서(gen-legal·gen-licenses 생성본)가 같이 쓴다.
+ *  link 는 동기여야 한다: manual 이 media="print" onload 로 비동기 로드하던 동안 첫 페인트에 크기 맞춘 폴백 face 까지 빠져
+ *  글꼴이 붙는 순간 목차가 밀렸다(390 첫 방문 CLS 0.251 → 동기 link 0, 2026-10-01 느린 4G 실측). */
+function fontContract(html: string) {
+  const link = /<link[^>]+href="\/fonts\/pretendard\/pretendardvariable-dynamic-subset\.css"[^>]*>/.exec(html)?.[0];
+  expect(link, '폰트 CSS link 가 없다').toBeTruthy();
+  expect(link, '비동기(media) 로드 금지 — 첫 페인트에 폴백 face 가 빠진다').not.toMatch(/\smedia=/);
+  const body = /(?:^|[\s}])body\s*\{[^}]*font-family:\s*'([^']+)'/.exec(html);
+  expect(body?.[1], 'body 에 font-family 가 없다').toBe(FAMILY);
+}
+
 /** 페이지별 본문 이미지 수 — 0장이 돼도 조용히 통과하지 않게 수로 고정한다(사용설명서는 텍스트판 — 2026-07 오너 요청). */
 const PAGES: [string, number][] = [['about.html', 4], ['guide/owner.html', 6], ['guide/manual.html', 0]];
 
 describe.each(PAGES)('%s', (page, imgCount) => {
   const html = stripComments(read(page));
 
-  it('① 폰트 CSS 를 불러오고, body 글꼴 스택의 첫 항목이 그 CSS 의 family 다', () => {
-    expect(html).toMatch(/<link[^>]+href="\/fonts\/pretendard\/pretendardvariable-dynamic-subset\.css"/);
-    const body = /body\s*\{[^}]*font-family:\s*'([^']+)'/.exec(html);
-    expect(body?.[1], 'body 에 font-family 가 없다').toBe(FAMILY);
+  it('① 폰트 CSS 를 불러오고, body 글꼴 스택의 첫 항목이 그 CSS 의 family 다', () => fontContract(html));
+
+  it('④ 부드러운 스크롤은 움직임 줄이기 설정을 따른다', () => {
+    // 2026-10-01 §2-9 — html{scroll-behavior:smooth} 를 무조건 걸면 '동작 줄이기'를 켠 사용자에게도 목차 이동이 미끄러진다.
+    const bare = html.replace(/@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{[^{}]*\{[^}]*\}\s*\}/g, '');
+    expect(bare).not.toMatch(/scroll-behavior:\s*smooth/);
   });
 
   it('② 이미지는 width·height·alt 를 갖고, 가리키는 파일이 존재한다', () => {
@@ -45,11 +58,28 @@ describe.each(PAGES)('%s', (page, imgCount) => {
   });
 });
 
-describe.each(['about.html', 'guide/owner.html'])('%s — 법정 고지', (page) => {
-  const text = read(page).replace(/<[^>]+>/g, '');
-  it('③ 사업자 5항목 · 만 19세 · 1336 이 페이지 안에 있다', () => {
-    for (const s of ['엔에이치홀딩스', '525-20-02937', '김윤혜', '다산중앙로82번안길', '070-8098-1727', '만 19세 미만', '1336']) {
+// ③ 값은 앱 BusinessFooter(BIZ_REQUIRED·BIZ_EXTRA·AGE_HELPLINE)와 같아야 한다 — 문자열을 여기 베끼지 않고 소스에서 읽는다.
+const FOOTER_SRC = readFileSync(resolve(__dirname, 'components/features/BusinessFooter.tsx'), 'utf-8');
+const BIZ_VALUES = [...FOOTER_SRC.matchAll(/\['(?:상호|사업자등록번호|대표자|사업장 주소|전화번호|고객센터)', '([^']+)'\]/g)].map((m) => m[1]);
+
+describe.each(['about.html', 'guide/owner.html', 'guide/manual.html'])('%s — 법정 고지', (page) => {
+  const text = read(page).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
+  it('③ 사업자 정보(앱 푸터와 같은 값) · 만 19세 · 1336 이 페이지 안에 있다', () => {
+    expect(BIZ_VALUES, 'BusinessFooter 에서 사업자 값 6개를 읽지 못했다').toHaveLength(6);
+    for (const s of [...BIZ_VALUES, '만 19세 미만은 이용할 수 없습니다', '도박문제 상담', '1336(24시간·무료)']) {
       expect(text, s).toContain(s);
     }
+    // 개인 메일(2026-07 구판 PDF)은 공식 창구가 아니다
+    expect(text).not.toMatch(/@gmail\.com/);
   });
+  it('⑤ 개인정보처리방침 링크는 실제 문서로 간다', () => {
+    const a = /<a[^>]+href="([^"]+)"[^>]*>개인정보처리방침<\/a>/.exec(read(page));
+    expect(a?.[1]).toBe('/legal/privacy.html');
+    expect(existsSync(resolve(PUB, 'legal/privacy.html'))).toBe(true);
+  });
+});
+
+// 법정 문서(생성본)도 같은 글꼴 결함이 있었다 — 2026-09-30 기록, 10-01 생성기(scripts/gen-legal.mjs·gen-licenses.mjs) 수정.
+describe.each(['terms', 'privacy', 'anti-gambling', 'marketing', 'refund', 'delete-account', 'licenses'])('legal/%s.html', (slug) => {
+  it('① 폰트 CSS 를 불러오고, body 글꼴 스택의 첫 항목이 그 CSS 의 family 다', () => fontContract(read(`legal/${slug}.html`)));
 });
