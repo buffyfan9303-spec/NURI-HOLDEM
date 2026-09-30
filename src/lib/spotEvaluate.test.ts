@@ -1089,3 +1089,39 @@ describe('vs3벳 — 내 오픈 크기 검증', () => {
     expect(evaluateSpot(vs3bet(10)).kind).toBe('math_only');
   });
 });
+
+// ── 두 사람 스택 따로 입력 (오너 2026-09-30) ─────────────────────────────────
+// S = min(내 스택 − 내가 BB면 앤티, 상대 스택 − 상대가 BB면 앤티). 한 수(effectiveBb)로는 누가 짧은지 모른다.
+describe('BB앤티 Nash — 두 스택이 있으면 누가 짧은지로 S 를 정한다', () => {
+  const two = (hero: number, vil: number, over: Partial<SpotReview> = {}) => base({
+    tableSize: 9, heroPos: 'SB', villainPos: 'BB', anteBb: 1,
+    heroStackBb: hero, villainStackBb: vil, effectiveBb: Math.min(hero, vil), ...over,
+  });
+
+  it('S28 — 둘 다 10 이면 BB 가 앤티를 내 9BB 표(가정 표시 없음)', () => {
+    const c = chart(evaluateSpot(two(10, 10)));
+    expect(c.kind).toBe('chart_nash');
+    expect(c.sourceLabel).toMatch(/· 9BB ·/);
+    expect(c.sourceLabel).not.toMatch(/앤티 뺀 스택/);
+    expect(c.differences).toEqual([]);
+  });
+
+  it('내가 10·BB 30 이면 짧은 쪽은 나(앤티 안 냄) → 10BB 표', () => {
+    const c = chart(evaluateSpot(two(10, 30)));
+    expect(c.sourceLabel).toMatch(/· 10BB ·/);
+    expect(c.differences).toEqual([]);
+  });
+
+  it('내가 30·BB 10 이면 BB 가 짧고 앤티를 내므로 9BB 표', () => {
+    expect(chart(evaluateSpot(two(30, 10))).sourceLabel).toMatch(/· 9BB ·/);
+  });
+
+  it('상대가 BB 가 아니면 상대 스택에서 앤티를 빼지 않는다 — 9인 BTN 10 vs SB 10 은 10BB 표', () => {
+    const c = chart(evaluateSpot(two(10, 10, { heroPos: 'BTN', villainPos: 'SB' })));
+    expect(c.sourceLabel).toMatch(/· 10BB ·/);
+  });
+
+  it('앤티 없으면 두 스택의 min 그대로', () => {
+    expect(chart(evaluateSpot(two(12, 30, { anteBb: 0 }))).sourceLabel).toMatch(/· 12BB ·/);
+  });
+});

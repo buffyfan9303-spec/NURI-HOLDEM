@@ -153,8 +153,9 @@ describe('20260922a — 공유 스팟 서버 가림 계약', () => {
     const SPOILER = ['villain', 'result', 'heroAction', 'heroActionSizeBb'];
     // 공개돼도 되는 키. 왜 괜찮은지는 20260922a 머리말과 검토 기록에 있다
     // (note 는 공유 시트에서 사용자가 편집한 값으로 갈아끼운다, actions 는 결정 지점 **이전** 액션,
-    //  potBbInput 은 선택 액션을 포함하지 않아 역산 불가, extraPos 는 자리 문자열뿐).
-    const PUBLIC = ['v', 'game', 'format', 'tableSize', 'sbBb', 'anteBb', 'effectiveBb',
+    //  potBbInput 은 선택 액션을 포함하지 않아 역산 불가, extraPos 는 자리 문자열뿐,
+    //  heroStackBb·villainStackBb(2026-09-30)는 판이 시작될 때 테이블에 보이는 스택 — 이미 공개인 effectiveBb 의 두 성분이고 결과·선택을 담지 않는다).
+    const PUBLIC = ['v', 'game', 'format', 'tableSize', 'sbBb', 'anteBb', 'effectiveBb', 'heroStackBb', 'villainStackBb',
       'heroPos', 'villainPos', 'hero', 'board', 'street', 'actions', 'extraPos', 'potBbInput', 'note'];
 
     const classified = new Set([...SPOILER, ...PUBLIC]);

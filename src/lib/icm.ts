@@ -231,8 +231,11 @@ export interface LadderEntry { hand: BenchHand; eq: number; call: boolean }
 /** 필요 승률(0..1) 기준으로 대표 핸드 콜/폴드 판정 — 승률 높은 순 */
 export function handLadder(reqIcm: number, rangeId: ShoveRangeId): LadderEntry[] {
   const table = BENCH_EQUITY[rangeId];
+  // 표 값은 소수 1자리, 화면의 필요 승률도 toFixed(1)(ICMCalculator) — 같은 자리수로 비교해야
+  // 화면에 49.9 vs 49.9 로 보이는 칸이 폴드 색이 되지 않는다(실제 49.949 였던 경우, critical 2026-09-30).
+  const req = Number((reqIcm * 100).toFixed(1));
   return BENCH_HANDS
-    .map((hand, i) => ({ hand, eq: table[i], call: table[i] / 100 >= reqIcm }))
+    .map((hand, i) => ({ hand, eq: table[i], call: table[i] >= req }))
     .sort((a, b) => b.eq - a.eq);
 }
 

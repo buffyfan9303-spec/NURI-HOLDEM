@@ -232,3 +232,14 @@ describe('경계값 가드 — 정확히 0·정확히 n', () => {
     }
   });
 });
+
+describe('사다리 색 경계는 화면 자리수(소수 1자리)로 판정한다', () => {
+  it('필요 승률 49.949%(화면 49.9%) 에서 표 49.9% 인 99 는 콜 — 같은 숫자가 폴드 색이면 안 된다', () => {
+    const e = handLadder(0.49949, 'tight').find((x) => x.hand === '99')!;
+    expect(e.eq).toBe(49.9);
+    expect(e.call).toBe(true);
+  });
+  it('화면 50.0% 이면 49.9 는 폴드', () => {
+    expect(handLadder(0.49951, 'tight').find((x) => x.hand === '99')!.call).toBe(false);
+  });
+});

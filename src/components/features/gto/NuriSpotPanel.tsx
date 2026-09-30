@@ -563,6 +563,9 @@ function SeatStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
     if (!pos) return;
     patch({ extra: [...spot.extra, { pos, cards: [] }] });
   };
+  const heroStack = spot.heroStackBb ?? spot.effectiveBb;
+  const vilStack = spot.villainStackBb ?? spot.effectiveBb;
+  const setStacks = (h: number, v: number) => patch({ heroStackBb: h, villainStackBb: v, effectiveBb: Math.min(h, v) });
   const removeVillain = (i: number) => {
     const gone = spot.extra[i]?.pos;
     patch({
@@ -596,15 +599,26 @@ function SeatStep({ spot, patch }: { spot: SpotReview; patch: (p: Partial<SpotRe
           <Icon name="plus" size={13} className="mr-1 inline-block align-[-2px]" aria-hidden />상대 추가 (빌런 {EXTRA_LETTERS[spot.extra.length]})
         </button>
       )}
-      {/* 유효 스택은 직접 입력만(오너 2026-09-19 "10BB·20BB 프리셋 말고 직접 입력으로만"). 같은 patch 경로다. */}
-      <Row label="유효 스택">
+      {/* 스택은 직접 입력만(오너 2026-09-19 "10BB·20BB 프리셋 말고 직접 입력으로만").
+          2026-09-30 오너 "두 사람 스택 따로 입력" — 유효 스택은 두 수의 min 으로 따라간다(BB앤티 Nash 는 누가 짧은지가 필요하다).
+          옛 스팟(두 스택 없음)은 두 칸 모두 유효 스택으로 채워 보여 준다 — 한 칸을 고치는 순간 짝으로 저장된다. */}
+      <Row label="내 스택">
         <input
-          type="number" inputMode="decimal" min={1} step={0.5} value={spot.effectiveBb}
-          onChange={(e) => patch({ effectiveBb: Number(e.target.value) })}
-          className="input min-h-[44px] w-28 text-right" aria-label="유효 스택 BB 직접 입력"
+          type="number" inputMode="decimal" min={1} step={0.5} value={heroStack}
+          onChange={(e) => setStacks(Number(e.target.value), vilStack)}
+          className="input min-h-[44px] w-28 text-right" aria-label="내 스택 BB 직접 입력"
         />
         <span className="text-2xs text-ink-muted">BB</span>
       </Row>
+      <Row label={spot.extra.length > 0 ? '상대 A 스택' : '상대 스택'}>
+        <input
+          type="number" inputMode="decimal" min={1} step={0.5} value={vilStack}
+          onChange={(e) => setStacks(heroStack, Number(e.target.value))}
+          className="input min-h-[44px] w-28 text-right" aria-label="상대 스택 BB 직접 입력"
+        />
+        <span className="text-2xs text-ink-muted">BB</span>
+      </Row>
+      <p className="text-2xs tabular-nums text-ink-muted">유효 스택 {spot.effectiveBb}BB · 둘 중 짧은 쪽</p>
     </div>
   );
 }

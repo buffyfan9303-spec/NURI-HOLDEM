@@ -205,7 +205,9 @@ test.describe('NURI SPOT — 분석 흐름', () => {
     expect(await sel.locator('option').allTextContents()).toEqual(['2인', '3인', '4인', '5인', '6인', '7인', '8인', '9인', '10인']);
     // ④ 유효 스택은 직접 입력만 — 프리셋 칩(10BB·20BB…)이 없다
     await bar.getByRole('button', { name: /게임·자리/ }).click();
-    await expect(dlg.getByLabel('유효 스택 BB 직접 입력')).toBeVisible();
+    // 2026-09-30 오너: 두 사람 스택을 따로 입력(유효 스택 = 둘 중 짧은 쪽, 앤티 표 정확 선택)
+    await expect(dlg.getByLabel('내 스택 BB 직접 입력')).toBeVisible();
+    await expect(dlg.getByLabel('상대 스택 BB 직접 입력')).toBeVisible();
     await expect(dlg.getByRole('button', { name: /^(10|20|40|60|100)BB$/ })).toHaveCount(0);
     // ⑤ 빌런 B~E 추가 — 자리 목록에 '상대 B 자리' 행이 생기고 카드 단계에 슬롯이 선다
     await dlg.getByRole('button', { name: /상대 추가/ }).click();

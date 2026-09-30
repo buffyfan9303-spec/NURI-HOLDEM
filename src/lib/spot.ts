@@ -101,8 +101,15 @@ export interface SpotReview {
    * ⚠ 2026-09-14 오너 확정으로 의미가 바뀌었다(v1 은 '1인당'). 옛 값은 fromJSON 의 v1→v2 변환이 받는다.
    */
   anteBb: number;
-  /** 유효 스택(BB) — 둘 중 짧은 쪽 */
+  /** 유효 스택(BB) — 둘 중 짧은 쪽. 아래 두 스택이 있으면 **항상 그 min** 이다(fromJSON·입력 화면이 맞춘다) */
   effectiveBb: number;
+  /**
+   * 2026-09-30 오너 "두 사람 스택 따로 입력" — 포스팅 전 내 스택 · 상대(빌런 A) 스택(BB).
+   * **둘 다 있거나 둘 다 없다.** 없으면 옛 스팟이다 — 둘 다 effectiveBb 로 본다(누가 짧은지 모른다).
+   * BB앤티 Nash 의 S = min(내 − 내가 BB면 앤티, 상대 − 상대가 BB면 앤티) 가 이 두 수를 쓴다(spotEvaluate.lookupNash).
+   */
+  heroStackBb?: number;
+  villainStackBb?: number;
   heroPos: SpotPosition;
   /** 빌런 A 의 자리 */
   villainPos: SpotPosition;
@@ -402,6 +409,8 @@ export function canonicalSpotKey(s: SpotReview): string {
   return [
     `v${s.v}`, s.game, s.format,
     `t${s.tableSize}`, `sb${round2(s.sbBb)}`, `an${round2(s.anteBb)}`, `ef${round2(s.effectiveBb)}`,
+    // 두 스택은 있을 때만 — 옛 스팟의 key 는 그대로다. 같은 유효 스택이라도 누가 짧은지에 따라 Nash 표가 달라진다.
+    ...(hasStackPair(s) ? [`st${round2(s.heroStackBb as number)}/${round2(s.villainStackBb as number)}`] : []),
     `${s.heroPos}v${s.villainPos}${extra}`, s.street,
     `h:${heroPart}`, `b:${board.join('')}`,
     `a:${acts}`, `x:${hero}`,
@@ -410,6 +419,11 @@ export function canonicalSpotKey(s: SpotReview): string {
 
 // ── 직렬화 ────────────────────────────────────────────────────────────────────
 // DB(jsonb)에는 객체 그대로 넣는다. URL 공유(#spot=)만 압축이 필요하다.
+
+/** 두 스택이 짝으로 들어 있는가 — 옛 스팟(effectiveBb 한 수)과 가르는 유일한 판정 */
+export function hasStackPair(s: SpotReview): boolean {
+  return finite(s.heroStackBb) && finite(s.villainStackBb);
+}
 
 /** 저장·전송용 평문 객체 — 불필요한 undefined 를 떨어뜨려 jsonb 크기를 줄인다. */
 export function toJSON(s: SpotReview): Record<string, unknown> {
@@ -432,6 +446,7 @@ export function toJSON(s: SpotReview): Record<string, unknown> {
     heroAction: s.heroAction,
   };
   if (s.extra.length) o.extraPos = s.extra.map((v) => v.pos);   // 자리만 — 카드는 위 villain 안
+  if (hasStackPair(s)) { o.heroStackBb = s.heroStackBb; o.villainStackBb = s.villainStackBb; }
   if (s.heroActionSizeBb !== undefined) o.heroActionSizeBb = s.heroActionSizeBb;
   if (s.potBbInput !== undefined) o.potBbInput = s.potBbInput;
   if (s.note) o.note = s.note;
@@ -510,6 +525,13 @@ export function fromJSON(raw: unknown): SpotReview | null {
     actions,
     heroAction,
   };
+  // 두 스택은 짝으로만 받는다 — 한쪽만 있거나 0 이하면 옛 스팟처럼 effectiveBb 만 쓴다.
+  //   짝이 있으면 effectiveBb 는 그 min 으로 **다시 맞춘다**(저장된 값이 어긋나도 한 벌만 믿는다).
+  if (finite(o.heroStackBb) && finite(o.villainStackBb) && (o.heroStackBb as number) > 0 && (o.villainStackBb as number) > 0) {
+    s.heroStackBb = o.heroStackBb as number;
+    s.villainStackBb = o.villainStackBb as number;
+    s.effectiveBb = Math.min(s.heroStackBb, s.villainStackBb);
+  }
   if (finite(o.heroActionSizeBb)) s.heroActionSizeBb = o.heroActionSizeBb as number;
   if (finite(o.potBbInput)) s.potBbInput = o.potBbInput as number;
   if (typeof o.note === 'string' && o.note) s.note = o.note;

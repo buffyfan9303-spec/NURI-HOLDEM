@@ -122,7 +122,7 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
         {mine ? '내' : '상대'} 아웃츠 {o}장
       </b>
       {' · '}다음 {outs.next === 'river' ? '리버' : '턴'} {mine ? '' : '역전 '}{(oneCard * 100).toFixed(1)}%
-      {' · '}내 승률 {Math.round((heroEquity ?? 0) * 100)}%
+      {' · '}내 승률 {((heroEquity ?? 0) * 100).toFixed(1)}%
     </span>
   ) : null;
 
@@ -146,7 +146,7 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
       ) : outs ? (
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
-            <Result label={`${outs.next === 'river' ? '리버' : '턴+리버'}까지 내 승률`} value={`${Math.round((heroEquity ?? 0) * 100)}%`} accent />
+            <Result label={`${outs.next === 'river' ? '리버' : '턴+리버'}까지 내 승률`} value={`${((heroEquity ?? 0) * 100).toFixed(1)}%`} accent />
             <Result label={`${mine ? '내' : '상대'} 아웃츠`} value={`${o}장`} good={goodNews} bad={!goodNews} />
           </div>
 

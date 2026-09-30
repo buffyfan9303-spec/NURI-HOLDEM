@@ -108,7 +108,7 @@ export function ScenarioQuizCard({ sc, picked, onPick, badge, banner, footer }: 
 export function PreflopQuizCard({ quiz, result, onAnswer, banner, footer }: {
   quiz: Quiz;
   result: { correct: boolean } | null;
-  /** chose = 버튼 라벨('폴드' 또는 quiz.acts[].label) */
+  /** chose = 버튼 라벨(passOf(quiz) — '폴드' 또는 콜 갈래 없는 3벳 표의 '3벳 안 함' — 또는 quiz.acts[].label) */
   onAnswer: (chose: string) => void;
   banner?: ReactNode;
   footer?: ReactNode;
