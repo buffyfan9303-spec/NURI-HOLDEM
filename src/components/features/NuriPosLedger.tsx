@@ -1426,7 +1426,7 @@ export default function NuriPosLedger({ venueId, canManage, onMakeRankingDraft, 
   // 클래스를 그대로 쓴 1행 rect.height=51px, h-10=42.5px). 같은 h-12 클래스를 그대로 재사용해 맞춘다.
   if (loading) return (
     <div className="space-y-3">
-      <div className="h-9 animate-pulse rounded-input bg-surface-high" />
+      <div data-ledger-daterow className="h-9 animate-pulse rounded-input bg-surface-high lg:w-[276px]" />
       <SkeletonList rows={6} rowClassName="h-12" />
     </div>
   );
@@ -2488,7 +2488,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 // ── 날짜 바 ───────────────────────────────────────────────────────────────────
 function DateBar({ date, setDate, biz, onBack }: { date: string; setDate: (d: string) => void; biz: string; onBack?: () => void }) {
   return (
-    <div className="flex items-center gap-2">
+    <div data-ledger-daterow className="flex items-center gap-2">
       {/* 크기 사다리 .btn-sm(34px) 을 쓴다 — text-xs(12.75px) 라벨인데 .btn 기본 하한(min-h 2.4rem=40.8px)을
           그대로 받아 필요보다 6.8px 컸다(오너: "글씨에 비해 버튼이 쓸데없이 커져"). 실측 55.8×40.8 → 34px.
           ⚠ 색 변형 뒤에 크기 변형이 와야 한다(index.css §B1 선언 순서).
@@ -2498,7 +2498,7 @@ function DateBar({ date, setDate, biz, onBack }: { date: string; setDate: (d: st
         <button type="button" onClick={onBack} className="btn-ghost btn-sm px-2 shrink-0" aria-label="목록으로">← 목록</button>
       )}
       {/* data-testid: '어느 날짜 장부에 착지했는가' 를 재는 유일한 안정 지점(clk-timer 와 같은 규약). */}
-      <input data-testid="ledger-date" aria-label="장부 날짜" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input flex-1 text-sm" />
+      <input data-testid="ledger-date" aria-label="장부 날짜" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input flex-1 text-sm lg:w-52 lg:flex-none" />
       {date !== biz && <button type="button" onClick={() => setDate(biz)} className="btn-ghost text-xs px-3 shrink-0">오늘</button>}
     </div>
   );
