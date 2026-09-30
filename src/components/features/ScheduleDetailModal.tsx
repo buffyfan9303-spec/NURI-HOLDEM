@@ -30,7 +30,7 @@ import LoadErrorCard from '../atoms/LoadErrorCard';
 import { msgOf } from '../../lib/dbError';
 import { goSubTab } from '../../lib/subTabTransition';
 import { gameTypeLabel } from '../../lib/gameTypeLabel';
-import { startChips, reentryText, reentryPriceWon, breakText } from '../../lib/scheduleDetailText';
+import { startChips, reentryText, reentrySummary, reentryPriceWon, breakText } from '../../lib/scheduleDetailText';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -457,7 +457,7 @@ export default function ScheduleDetailModal({
             <SummaryCell label="시작" value={`${d.getMonth() + 1}/${d.getDate()} (${dow}) ${schedule.startTime}`} />
             <SummaryCell label="등록 마감" value={schedule.regCloseTime ? schedule.regCloseTime : '현장 안내'} />
             <SummaryCell label="스타팅 칩" value={startChips(schedule)?.toLocaleString() ?? '현장 안내'} testId="sched-sum-start" />
-            <SummaryCell label="리엔트리" value={reentryText(schedule)} testId="sched-sum-reentry" />
+            <SummaryCell label="리엔트리" {...reentrySummary(schedule)} nowrap testId="sched-sum-reentry" />
           </div>
           {schedule.guaranteed && (
             <p className="border-t border-border-subtle px-3 py-1.5 text-2xs text-ink-muted">
@@ -1538,15 +1538,16 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 //   ① 고정 높이는 '55,000원'처럼 조금만 길어도 값을 상자 밖으로 밀거나 마퀴로 흘려보냈다.
 //   ② 마퀴는 참가비·등록 마감을 **읽으려면 기다려야 하는** 값으로 만든다.
 //   지금은 min-h(=종전 h-14 와 같은 3.5rem)로 행 리듬만 지키고, 넘치면 자연 줄바꿈으로 늘어난다.
-function SummaryCell({ label, value, badge, accent = false, sub, testId }: {
+function SummaryCell({ label, value, badge, accent = false, sub, nowrap = false, testId }: {
   label: string; value: string; badge?: React.ReactNode; accent?: boolean;
+  /** 값을 접지 않고 한 줄로(리엔트리 계단 — 오너: 칸 문구 줄바꿈은 결함) */ nowrap?: boolean;
   /** 값 아래 보조 한 줄(예: 참가비 칸의 '리엔트리 10T') */ sub?: string; testId?: string;
 }) {
   return (
     <div data-testid={testId} className="flex min-h-14 min-w-0 flex-col justify-center gap-0.5 px-3 py-2">
       <span className="text-2xs leading-none text-ink-muted">{label}</span>
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className={`min-w-0 flex-1 break-keep wrap-anywhere text-sm font-bold leading-snug tabular-nums ${accent ? 'text-gold-300' : 'text-ink-primary'}`}>
+        <span className={`min-w-0 flex-1 ${nowrap ? 'whitespace-nowrap text-xs min-[360px]:text-sm' : 'break-keep wrap-anywhere text-sm'} font-bold leading-snug tabular-nums ${accent ? 'text-gold-300' : 'text-ink-primary'}`}>
           {value}
         </span>
         {badge}

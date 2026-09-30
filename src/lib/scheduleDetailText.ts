@@ -34,6 +34,19 @@ export function reentryText(s: S): string {
   return `${stacks.map((n) => n.toLocaleString()).join(' → ')}${limit ? ` · 최대 ${limit}회` : ''}`;
 }
 
+/** 상세 요약 칸(390·360·320 에서 **한 줄**)용 — 값은 한 줄에 들어가는 길이만, 나머지는 보조 줄.
+ *  · 단계 2개 이하: `70,000 → 80,000` · 3개 이상: `70,000 → 100,000`(첫 값 → 마지막 값) + 보조 줄에 `4단계`.
+ *  · 한도(`최대 N회`)는 값이 아니라 항상 보조 줄로 — 폭이 좁아지는 320 에서도 값이 접히지 않게.
+ *  · 전체 계단은 reentryText(게임 정보 행 — 여러 줄 허용)가 그대로 보인다. */
+export function reentrySummary(s: S): { value: string; sub?: string } {
+  const stacks = reentryStacks(s);
+  if (stacks.length === 0) return { value: reentryText(s) };
+  const fmt = (n: number) => n.toLocaleString();
+  const limit = s.buyIn?.rebuyLimit;
+  const sub = [stacks.length >= 3 ? `${stacks.length}단계` : '', limit ? `최대 ${limit}회` : ''].filter(Boolean).join(' · ');
+  return { value: stacks.length >= 3 ? `${fmt(stacks[0])} → ${fmt(stacks[stacks.length - 1])}` : stacks.map(fmt).join(' → '), sub: sub || undefined };
+}
+
 /** 리엔트리 가격 — 참가비와 **다를 때만** 값(같으면 참가비가 이미 말한다). */
 export function reentryPriceWon(s: S): number | null {
   const r = s.buyIn?.rebuy;
