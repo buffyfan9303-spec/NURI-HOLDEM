@@ -60,4 +60,10 @@ export async function setMyRankingNamePref(pref: RankingNamePref): Promise<void>
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('set_my_ranking_name_pref', { p_pref: pref });
   if (error) throw new Error(error.message);
+  // 켜고 끈 결과가 **바로** 순위 화면에 보이게 — 열려 있는(keep-alive) 순위 화면은 이 신호로 다시 읽고,
+  //   rankings.ts 의 '실명 켠 닉네임' 60초 캐시도 이 신호로 버린다(끈 뒤 옛 답이 60초 남던 자리).
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(RANKING_NAME_PREF_EVENT));
 }
+
+/** 순위표 표시 이름이 바뀌었다는 앱 안 신호. 구독은 rankings.onRankingNamePrefChange 로 한다. */
+export const RANKING_NAME_PREF_EVENT = 'nuri:ranking-name-pref';

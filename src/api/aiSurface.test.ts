@@ -41,8 +41,9 @@ describe('외부 생성형 AI 표면 — TDA 규칙 질의와 SPOT 코칭 둘만
       const code = stripComments(readFileSync(p, 'utf-8'));
       for (const m of code.matchAll(/functions\.invoke\(\s*['"]([^'"]+)['"]/g)) {
         const fn = m[1];
-        // AI 가 아닌 엣지 함수(본인인증·푸시·제재 안내)는 이 계약의 대상이 아니다.
-        if (['verify-identity', 'send-push', 'notify-sanction'].includes(fn)) continue;
+        // AI 가 아닌 엣지 함수(본인인증·푸시·제재 안내·문의 답변 메일)는 이 계약의 대상이 아니다.
+        //   support-reply-email(2026-09-30)은 Resend 메일 발송만 한다 — 모델 호출이 없다(같은 파일 아래 서버 측 검사가 본다).
+        if (['verify-identity', 'send-push', 'notify-sanction', 'support-reply-email'].includes(fn)) continue;
         if ((AI_FUNCTIONS as readonly string[]).includes(fn)) continue;
         offenders.push(`${rel(p)} → ${fn}`);
       }

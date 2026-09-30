@@ -1,7 +1,9 @@
 import { resolveDiscountIndex } from '../../api/discountIndex';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazyWithReload } from '../../lib/lazyWithReload';
 import CountUp from '../atoms/CountUp';
 import Icon, { type IconName } from '../atoms/Icon';
+import { Fold, useReveal } from '../atoms/Fold';
 import { getVenueWeeklyFunnel, type WeeklyFunnel } from '../../api/schedules';
 import { getMyStaffWage, type MyWage } from '../../api/staffSchedule';
 import type { Schedule } from '../../api/schedules';
@@ -21,8 +23,6 @@ import { ledgerGameLabel } from '../../lib/ledgerLink';
 import type { StoreGoto, StoreStepMap } from '../../lib/storeDestination'; // 이동 목적지 계약(날짜·게임·event·정산)
 import { Skeleton } from '../atoms/Skeleton';
 import LoadErrorCard from '../atoms/LoadErrorCard';
-import RegularsModal from './RegularsModal';
-import DealerShiftsModal from './DealerShiftsModal';
 // 딜러 급여는 dealer_shifts 에 **행마다 시급**이 붙어 있다(staff_wage 와 별개 시스템).
 // 합산하지 않으면 딜러를 로테이션으로만 굴리는 매장의 '총 인건비'가 통째로 0원이 된다.
 import { getDealerShifts, type DealerShift } from '../../api/dealerShifts';
@@ -30,7 +30,14 @@ import { usePayRules } from '../../api/payrollRules';
 import { laborSummary, weekStartOf } from '../../lib/staffPay';
 import VoucherManageModal from './VoucherManageModal';
 import { countVenueVouchersSent } from '../../api/vouchers';
+import RegularsModal from './RegularsModal';
 import CheckinModal from './CheckinModal';
+// 🔴 2026-09-29 M단계 — 대시보드 유틸 줄 '딜러 로테이션·급여' 에서만 여는 모달을 지연 청크로 뺐다. VenueManageTab 청크가
+//   상한(119KB gz) 경계 5B 앞이라 펼침 모션(Fold)이 들어갈 자리가 없었다. **상시 마운트**(open 은 prop)라 대시보드가 뜰 때
+//   청크를 받기 시작하고, 로드 전에 눌러도 폴백은 null(불투명 판 번쩍임 0 — 닫힌 모달은 원래 아무것도 안 그린다).
+//   셋(단골·딜러·출석)을 다 빼면 청크는 114KB 로 내려가지만 작은 청크 셋이 따로 압축돼 JS 합계가 +4.4KB 늘어 하나만 뺐다.
+//   이름을 그대로 둔 것은 이 파일을 읽는 계약 테스트(laborLoadFailure)의 JSX 문자열을 바꾸지 않기 위해서다.
+const DealerShiftsModal = lazyWithReload(() => import('./DealerShiftsModal'));
 import Modal from '../atoms/Modal';
 import { getAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
@@ -190,6 +197,8 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   //   접기는 토글로 되고 매 리사이즈마다 펴고 접는 쪽이 더 놀랍다.
   const [moreOpen, setMoreOpen] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)')?.matches === true);
+  // 펼침 칸은 토글 **위** 그리드에 끼어든다 — 누른 토글은 제자리(스크롤 보정), 칸은 투명도로 들고 난다(2026-09-29 감사 #1: 열면 +400px 밀렸다).
+  const moreShown = useReveal(moreOpen);
   // 운영 가이드 배너 — 베테랑 매장에도 영구 노출되던 것을 닫기 가능으로(닫으면 기억)
   const [guideHidden, setGuideHidden] = useState(() => {
     try { return localStorage.getItem('nuri:guide-banner-dismissed') === '1'; } catch { return false; }
@@ -771,7 +780,9 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
           모달을 겹치지 않고 교체한다: 시트 위 시트는 뒤로가기 스택이 꼬이고 반투명이 두 겹 쌓인다. */}
       <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]}
         onSendVoucher={caps.issueVoucher ? (name) => { setRegOpen(false); setVoucherPrefill(name); setVoucherOpen(true); } : undefined} />
+      <Suspense fallback={null}>
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
+      </Suspense>
       <VoucherManageModal open={voucherOpen} onClose={() => { setVoucherOpen(false); setVoucherPrefill(''); }} venueId={venueId} prefillReceiver={voucherPrefill} canIssue={caps.issueVoucher} />
       {/* canIssue: 출석 명단에서 바로 이용권을 보낼 수 있게 한다(오너 2026-09-18). 권한 최종 판정은 서버(issue_voucher).
           🔴 2026-09-20 — 종전엔 `caps.voucher`(**열람권 포함**)였다. 열람만 가진 직원에게 발급 버튼이 보이고
@@ -1097,7 +1108,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                   <span className="ml-1 text-ink-muted">{dowOpen ? '▲' : '▼'}</span>
                 </span>
               </button>
-              {dowOpen && (() => {
+              <Fold open={dowOpen}>{() => {
                 const bars = [...dowStats.weeks, { label: '오늘', entries: todayEntries }];
                 const max = Math.max(1, ...bars.map((b) => b.entries));
                 return (
@@ -1131,7 +1142,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
                     <button type="button" onClick={() => onGoto('stats')} className="mt-2 text-2xs font-bold text-accent-300 hover:text-accent-200">통계에서 자세히 →</button>
                   </div>
                 );
-              })()}
+              }}</Fold>
             </div>
           )}
         </section>
@@ -1341,7 +1352,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {/* 오늘 장부 카드는 ③ KPI 헤드라인으로 격상(내용 동일 — 총 바이인·완납 매출·미수금·회수 이용권) */}
         {/* 클락 — 라이브 위젯이 클락을 표시 중(clockActive)이면 중복 방지 위해 숨김 */}
-        <DashCard show={moreOpen && caps.ledger && !clockActive} title="대회 클락" onClick={() => onGoto('clock')}
+        <DashCard more show={moreShown && caps.ledger && !clockActive} title="대회 클락" onClick={() => onGoto('clock')}
           badge={clockActive
             ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gold-400/15 text-gold-300'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
             : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-muted">미실행</span>}>
@@ -1401,7 +1412,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         {/* 전주 대비(주간 비교) — 오너 2026-09-19 "칸이 많이 남잖아 절반을 기준으로 하던 해서 상하 XY축
             줄간격 및 좌우 간격 조정": center(위 DashCard 참고)로 남는 높이를 받아 두 줄을 세로 중앙에 두고,
             CompareRow 내부 간격도 늘렸다(space-y-2→-4, gap-2→-3). */}
-        <DashCard show={moreOpen && caps.manage} title="전주 대비" onClick={() => onGoto('stats')} center
+        <DashCard more show={moreShown && caps.manage} title="전주 대비" onClick={() => onGoto('stats')} center
           badge={<span className="text-2xs font-bold text-ink-muted">주간 비교</span>}>
           {loading ? <Skeleton /> : rangeErr ? (
             <LoadFailRow what="비교할 14일 장부" onRetry={reloadRange} />
@@ -1477,7 +1488,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         </DashCard>
 
         {/* 오늘 출근 */}
-        <DashCard show={moreOpen && caps.staff} title="오늘 출근" onClick={() => onGoto('staff')}
+        <DashCard more show={moreShown && caps.staff} title="오늘 출근" onClick={() => onGoto('staff')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">{workedStaff.length}/{shifts.length} 출근</span>}>
           {loading ? <Skeleton /> : shiftErr ? (
             <p className="py-3 text-center text-2xs text-danger-light">출근 기록을 불러오지 못했습니다.</p>
@@ -1495,7 +1506,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         </DashCard>
 
         {/* 인건비 요약(이번 달) */}
-        <DashCard show={moreOpen && caps.staff} title="인건비 요약" onClick={() => onGoto('staff')}
+        <DashCard more show={moreShown && caps.staff} title="인건비 요약" onClick={() => onGoto('staff')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">{mr.label}</span>}>
           {loading ? <Skeleton /> : (laborHours === 0 && !laborErr) ? (
             <p className="py-3 text-center text-2xs text-ink-muted">이번 달 출퇴근 기록이 없습니다.</p>
@@ -1517,7 +1528,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         </DashCard>
 
         {/* 매장이용권(사용 이용권) */}
-        <DashCard show={moreOpen && caps.voucher} title="매장이용권" onClick={() => setVoucherOpen(true)}
+        <DashCard more show={moreShown && caps.voucher} title="매장이용권" onClick={() => setVoucherOpen(true)}
           badge={<span className="text-2xs font-bold text-ink-muted">전송·관리 →</span>}>
           {loading ? <Skeleton /> : (
             <>
@@ -1543,7 +1554,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         </DashCard>
 
         {/* 🎂 생일 단골(7일 내) — 고객·단골의 고객정보에서 생일 등록 시 자동 표시 */}
-        <DashCard show={moreOpen && caps.manage} title="생일 단골" onClick={() => setRegOpen(true)}
+        <DashCard more show={moreShown && caps.manage} title="생일 단골" onClick={() => setRegOpen(true)}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">7일 내 {bdays.length}명</span>}>
           {bdays.length === 0 ? (
             <p className="t-desc break-keep py-3 text-center text-ink-muted">7일 내 생일인 단골이 없습니다.<br />생일은 고객·단골 → 고객정보에서 등록해요.</p>
@@ -1564,7 +1575,7 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
         </DashCard>
 
         {/* 손님 유형 비중(오늘) */}
-        <DashCard show={moreOpen && caps.manage} title="손님 유형" onClick={() => onGoto('stats')}
+        <DashCard more show={moreShown && caps.manage} title="손님 유형" onClick={() => onGoto('stats')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">{playerTotal}명</span>}>
           {loading ? <Skeleton /> : playerTotal === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">오늘 명단이 없습니다.</p>
@@ -1681,8 +1692,10 @@ export default function StoreDashboard({ venueId, venueName: venueNameProp, sche
   );
 }
 
-function DashCard({ title, badge, onClick, children, show = true, center = false }: {
+function DashCard({ title, badge, onClick, children, show = true, more, center = false }: {
   title: string; badge?: ReactNode; onClick: () => void; children: ReactNode; show?: boolean;
+  /** '더 보기' 칸 — useReveal 이 이 표시로 들고 나는 칸을 찾는다 */
+  more?: boolean;
   /** S3(2026-09-19, 스윕): 이 카드의 콘텐츠가 형제 카드보다 짧으면(grid align-items:stretch 기본값이
    *  행 높이를 가장 큰 형제에 맞춰 늘린다) 아래에 빈 칸만 남는다("전주 대비"가 "최근 7일 추세" 옆에서
    *  이랬다). true 면 타이틀은 위에 고정, 본문은 남는 높이를 flex-1 로 받아 세로 중앙 정렬한다.
@@ -1693,7 +1706,7 @@ function DashCard({ title, badge, onClick, children, show = true, center = false
 }) {
   if (!show) return null;
   return (
-    <section className={['rounded-aura border card-aura p-3', center && 'flex flex-col'].filter(Boolean).join(' ')}>
+    <section data-reveal={more} className={['rounded-aura border card-aura p-3', center && 'flex flex-col'].filter(Boolean).join(' ')}>
       <button type="button" onClick={onClick} className={['flex w-full items-center justify-between gap-2 mb-2 group', center && 'shrink-0'].filter(Boolean).join(' ')}>
         <span className="flex items-center gap-2 text-sm font-bold text-ink-primary">{title}</span>
         <span className="flex items-center gap-1">

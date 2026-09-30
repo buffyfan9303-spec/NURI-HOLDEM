@@ -1,6 +1,7 @@
 // src/components/features/clock/TournamentClock.tsx
 // 토너먼트 클락 — 설정/프리셋 + 라이브 디스플레이(블라인드 타이머) + 수기 컨트롤 + 일시정지.
 // 와홀덤/Roti 클락 구조를 따르되 NURI 테마로. 장부 연동 카운트 자동 산출 + 수기 보정.
+import { Fold } from '../../atoms/Fold';
 import { Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../../atoms/Toast';
 import { useBackClose } from '../../../lib/backstack';
@@ -1573,7 +1574,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <span className="text-2xs font-bold text-accent-300">{bldOpen ? '접기 ▲' : '펼치기 ▼'}</span>
         </button>
 
-        {bldOpen && (<>
+        <Fold open={bldOpen} className="space-y-2">{() => (<>
         {/* 듀레이션 일괄 설정 */}
         <div className="rounded-input bg-surface-high border border-border-subtle p-2 space-y-1.5">
           <p className="text-2xs text-ink-muted">듀레이션 일괄 설정 · 레벨 길이(브레이크 제외)</p>
@@ -1622,7 +1623,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <button type="button" onClick={addLevel} className="flex-1 py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 레벨</button>
           <button type="button" onClick={addBreak} className="flex-1 py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 브레이크</button>
         </div>
-        </>)}
+        </>)}</Fold>
       </section>
 
       {/* 프라이즈 */}

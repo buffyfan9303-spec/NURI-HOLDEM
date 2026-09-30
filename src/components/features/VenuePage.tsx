@@ -10,6 +10,7 @@ import CommentThread from './CommentThread';
 import BusinessFooter from './BusinessFooter';
 import RotiArenaLogo from '../atoms/RotiArenaLogo';
 import Icon from '../atoms/Icon';
+import { Fold, onSummaryClick } from '../atoms/Fold';
 import { PAGE_ENTER, PAGE_LEAVE } from '../atoms/pageMotion';
 import { useToast } from '../atoms/Toast';
 import type { Venue, Comment, VenueContact } from '../../api/community';
@@ -31,7 +32,7 @@ import { scheduleStatus } from '../../lib/scheduleStatus';
 import { thumbUrl } from '../../lib/imageUrl';
 import CoachMark from '../atoms/CoachMark';
 import {
-  getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay, getVenueRealNameOptIns,
+  getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay, onRankingNamePrefChange,
   getVenuePageConfig, getScoreEntries, getVenuePlayerCounts, redactForCache,
   boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart,
   DEFAULT_RANK_METRICS, RANK_METRIC_LABEL,
@@ -589,7 +590,7 @@ export default function VenuePage({
                 // `text=🙋 내 활동` 으로 **이모지에 결합**돼 있었다 — 아이콘으로 바꾸는 순간
                 // 항상 0건이 되어 게이트가 조용히 무력화된다. 같은 커밋에서 testid 로 교체(규약).
                 <details data-testid="venue-my-activity" className="reveal group rounded-aura border border-border-subtle overflow-hidden">
-                  <summary className="cursor-pointer list-none flex items-center justify-between gap-2 px-3 py-3 text-sm font-semibold text-ink-primary hover:bg-surface-high/50 transition-colors">
+                  <summary onClick={onSummaryClick} className="cursor-pointer list-none flex items-center justify-between gap-2 px-3 py-3 text-sm font-semibold text-ink-primary hover:bg-surface-high/50 transition-colors">
                     <span className="inline-flex items-center gap-1.5"><Icon name="hand" size={16} className="text-ink-muted" />내 활동</span>
                     <Icon name="chevron-down" size={16} className="shrink-0 text-ink-muted transition-transform group-open:rotate-180" />
                   </summary>
@@ -1028,15 +1029,16 @@ function writeRankCache(venueId: string, e: RankPanelCache) {
 /** 현 시즌 선두 위젯 — 매장 페이지 상단. 진행 시즌의 1위(닉네임·점수). 탭하면 시즌 랭킹으로. */
 function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking: () => void }) {
   const [leader, setLeader] = useState<SeasonLeader | null>(null);
-  // 오너 #14 — 여기도 순위표다. 실명은 본인이 '실명'을 고른 경우에만 붙인다(기본은 닉네임).
-  //   빈 Set 으로 시작하는 게 안전한 기본값이다: 응답 전에는 실명이 아예 그려지지 않는다.
-  //   조회는 순위 패널과 같은 캐시를 타므로 매장 페이지당 요청은 1건이다.
-  const [optIns, setOptIns] = useState<ReadonlySet<string>>(() => new Set<string>());
+  // 오너 #14 — 여기도 순위표다. 실명은 서버(20260930c)가 실어 준 경우에만 붙는다:
+  //   방문자에겐 본인이 켠 사람의 인증 실명, 장부 권한자에겐 원문 → 없으면 인증 실명(리드 결정 2026-09-30).
   useEffect(() => {
     let alive = true;
-    getVenuesSeasonLeaders([venueId]).then((m) => { if (alive) setLeader(m[venueId] ?? null); }).catch(() => {});
-    getVenueRealNameOptIns(venueId).then((s) => { if (alive) setOptIns(s); }).catch(() => {});
-    return () => { alive = false; };
+    const load = () => {
+      getVenuesSeasonLeaders([venueId]).then((m) => { if (alive) setLeader(m[venueId] ?? null); }).catch(() => {});
+    };
+    load();
+    const off = onRankingNamePrefChange(load); // 본인이 실명 공개를 켜고/끄면 바로 다시 읽는다
+    return () => { alive = false; off(); };
   }, [venueId]);
   if (!leader) return null;
   return (
@@ -1051,7 +1053,7 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
       <Icon name="crown" size={20} className="shrink-0 text-gold-300" />
       <div className="min-w-0 flex-1">
         <p className="text-2xs font-bold text-gold-300">현 시즌 선두 · {leader.seasonName}</p>
-        <p className="truncate text-sm font-bold text-ink-primary">{leader.nickname}{leader.realName && optIns.has(leader.nickname.trim().toLowerCase()) ? <span className="text-2xs font-normal text-ink-muted"> ({leader.realName})</span> : null}</p>
+        <p className="truncate text-sm font-bold text-ink-primary">{leader.nickname}{leader.realName ? <span className="text-2xs font-normal text-ink-muted"> ({leader.realName})</span> : null}</p>
       </div>
       <span className="shrink-0 text-sm font-bold tabular-nums text-accent-200">{leader.points}점</span>
       <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
@@ -1070,11 +1072,6 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
   const [latest, setLatest] = useState<{ date: string | null; entries: RankingEntry[] }>(cached0?.latest ?? { date: null, entries: [] });
   const [loading, setLoading] = useState(!cached0); // 캐시 있으면 스켈레톤 없이 바로 표시(깜빡임 제거)
 
-  // 오너 #14 — 이 매장 순위표에서 '실명 표시'를 본인이 고른 닉네임(소문자 키).
-  //   RankPanelCache 에 넣지 않는다: Set 은 JSON 직렬화가 안 되고, 무엇보다 **캐시된 동의는 위험하다** —
-  //   유저가 실명 공개를 껐는데 localStorage 가 옛 답을 들고 있으면 끈 뒤에도 실명이 계속 뜬다.
-  //   매번 새로 받고, 받기 전/실패 시에는 빈 집합 = 전원 닉네임(덜 공개하는 쪽이 안전한 기본값).
-  const [realNameOptIns, setRealNameOptIns] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [playerCounts, setPlayerCounts] = useState<PlayerCounts[]>(cached0?.playerCounts ?? []);
   const [checkinRows, setCheckinRows] = useState<{ name: string; count: number }[]>(cached0?.checkinRows ?? []); // QR 출석 집계
   useEffect(() => {
@@ -1084,12 +1081,11 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         const c = await getVenuePageConfig(venueId).catch(() => null);
         const ms = c?.rankMetrics ?? [];
         const wantsCounts = ms.includes('moneyin_rate') || ms.includes('buyin_count') || ms.includes('visit_count');
-        const [t, d, m, optIns] = await Promise.all([
+        const [t, d, m] = await Promise.all([
           getVenueRankingTotals(venueId, c),
           getVenueRankings(venueId),
           // 공개 화면 — 업주 사유(reason)는 받지 않는다(F5 · rankings.getScoreEntries 주석).
           getScoreEntries(venueId, 300, { withReason: false }).catch(() => [] as ScoreEntry[]),
-          getVenueRealNameOptIns(venueId).catch(() => new Set<string>()),
         ]);
         const pc: PlayerCounts[] = wantsCounts ? await getVenuePlayerCounts(venueId).catch(() => []) : [];
         const bc: Record<string, number> = {};
@@ -1111,7 +1107,6 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         }
         if (!active) return;
         setCfg(c); setTotals(t); setLatest(d); setManual(m); setBuyinCounts(bc); setPlayerCounts(pc); setCheckinRows(ck);
-        setRealNameOptIns(optIns);
         setMetric((cur) => cur ?? (c?.rankMetrics?.[0] ?? 'score'));
         writeRankCache(venueId, { cfg: c, totals: t, manual: m, buyinCounts: bc, latest: d, playerCounts: pc, checkinRows: ck, metric: rankPanelCache.get(venueId)?.metric ?? (c?.rankMetrics?.[0] ?? 'score') });
       } catch { /* noop */ }
@@ -1239,7 +1234,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
           {[podium[1], podium[0], podium[2]].map((e, slot) => {
             if (!e) return <div key={slot} className="flex-1" />;
             const rank = slot === 1 ? 1 : slot === 0 ? 2 : 3;
-            const { main: rMain, sub: rSub } = rankDisplay(e, realNameOptIns);
+            const { main: rMain, sub: rSub } = rankDisplay(e);
             const big = rank === 1;
             const ring = rank === 1 ? 'border-accent-300/80 bg-linear-to-b/srgb from-accent-300/[0.14] to-transparent'
               : rank === 2 ? 'border-slate-300/50 bg-linear-to-b/srgb from-slate-300/8 to-transparent'
@@ -1264,7 +1259,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       {/* 4등~ 리스트 — 바이낸스 표 문법(구분선·행 40px대·숫자 우측 tabular) */}
       <ol className="reveal overflow-hidden rounded-input border border-border-subtle bg-surface-high divide-y divide-border-subtle">
         {rest.map((e, i) => {
-          const { main: rMain, sub: rSub } = rankDisplay(e, realNameOptIns);
+          const { main: rMain, sub: rSub } = rankDisplay(e);
           return (
             <li key={e.nickname} className="flex items-center gap-2.5 px-2.5 py-2 transition-colors hover:bg-surface-float/50">
               <span className="w-6 shrink-0 text-center text-xs font-bold tabular-nums text-ink-muted">{i + 4}</span>
@@ -1291,7 +1286,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
                 {multi && <p className="text-2xs font-bold text-accent-200 mb-1">{ev || '메인'}</p>}
                 <div className="flex flex-wrap gap-1.5">
                   {group.map((e) => {
-                    const { main: rMain, sub: rSub } = rankDisplay(e, realNameOptIns);
+                    const { main: rMain, sub: rSub } = rankDisplay(e);
                     return (
                       <span key={`${ev}-${e.position}`} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
                         {e.position}. {rMain}{rSub ? `(${rSub})` : ''}
@@ -1487,7 +1482,7 @@ function AboutPanel({
             행동 예산(≤6, venue-ia)을 넘긴다 — 정보는 올리고 컨트롤은 계층 2에 두는 쪽이 맞다.
           손잡이(summary)는 44px 히트영역을 갖도록 py-1 → py-3. */}
       <details className="group/vinfo" open={editable || undefined}>
-        <summary className="cursor-pointer list-none flex items-center justify-between gap-2 py-3">
+        <summary onClick={onSummaryClick} className="cursor-pointer list-none flex items-center justify-between gap-2 py-3">
           <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-primary">
             <Icon name="map-pin" size={15} className="text-ink-muted" />위치 · 연락처 · 영업시간
           </h3>
@@ -1890,8 +1885,8 @@ function PostersPanel({
         </button>
 
         {/* 아코디언 본문 — 공지글 + 금일 포스터 */}
-        {open && (
-          <div className="px-3 py-3 space-y-3 border-t border-accent-400/20 animate-slide-up">
+        <Fold open={open}>
+          <div className="px-3 py-3 space-y-3 border-t border-accent-400/20">
             {/* 공지글 (있을 때만) */}
             {notices.length > 0 && (
               <div className="space-y-1.5">
@@ -1940,7 +1935,7 @@ function PostersPanel({
               </ul>
             )}
           </div>
-        )}
+        </Fold>
       </section>
 
       {/* ── 예정 포스터 ─────────────────────────────────────────── */}
@@ -2022,7 +2017,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
         )}
       </header>
 
-      {canManage && open && (
+      <Fold open={canManage && open}>
         <div className="p-2.5 border-b border-border-subtle space-y-2">
           <textarea
             value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={1000} rows={2}
@@ -2033,7 +2028,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
             <button type="button" onClick={submit} disabled={busy || !draft.trim()} className="btn-primary px-4 text-xs disabled:opacity-60">등록</button>
           </div>
         </div>
-      )}
+      </Fold>
 
       {notices.length === 0 ? (
         <p className="py-3 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>

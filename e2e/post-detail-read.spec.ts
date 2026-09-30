@@ -649,6 +649,41 @@ test.describe('게시글 상세 — 읽는 화면(§5)', () => {
     await expect(page.locator('[data-pd-root]'), 'Escape 가 메뉴를 넘어 글까지 닫았다').toBeVisible();
   });
 
+  // D2(2026-09-30 검토) — 바깥을 눌러 닫으면 **그 이벤트에서** 메뉴가 안 보이고 안 눌려야 한다.
+  //   예전엔 details.open=false 뒤 비동기 toggle 을 기다려 100ms(6프레임) 동안 보이고 눌렸다.
+  //   touchStart 만 보내고(pointerdown) 잰 뒤 touchCancel — 클릭이 생기지 않아 다른 것을 누르지 않는다.
+  test('🔴 C1 모바일 — `…` 메뉴를 바깥 터치로 닫으면 같은 프레임에 보이지도 눌리지도 않는다', async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await install(page, baseURL!, { loggedIn: true });
+    await openPost(page);
+    await page.locator('summary[aria-label="게시글 메뉴"]').click();
+    await expect(page.getByRole('button', { name: '신고', exact: true }).filter({ visible: true }), '메뉴가 안 열렸다').toHaveCount(1);
+    const rec = page.evaluate(() => new Promise<{ lag: number; hitAfterClose: boolean }>((res) => {
+      const d = document.querySelector('summary[aria-label="게시글 메뉴"]')!.parentElement as HTMLDetailsElement;
+      const panel = d.querySelector<HTMLElement>('summary + *')!;
+      const item = panel.querySelector('button')!;
+      let t0 = 0; let hit = false; const start = performance.now();
+      const f = (now: number) => {
+        if (!d.open && !t0) t0 = now;
+        const r = item.getBoundingClientRect();
+        if (t0 && panel.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2))) hit = true;
+        if (t0 && getComputedStyle(panel).visibility === 'hidden') return res({ lag: now - t0, hitAfterClose: hit });
+        if (now - start > 1500) return res({ lag: t0 ? 9999 : -1, hitAfterClose: hit });
+        requestAnimationFrame(f);
+      };
+      requestAnimationFrame(f);
+    }));
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 60, y: 420 }] });
+    const r = await rec;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+    await cdp.detach();
+    console.log(`[menu outside-close 390] ${JSON.stringify(r)}`);
+    expect(r.lag, '바깥 터치가 메뉴를 닫지 않았다 — 대상이 아니다').not.toBe(-1);
+    expect(r.lag, `닫힌 뒤 메뉴가 ${r.lag}ms 동안 보였다(수정 전 100)`).toBeLessThanOrEqual(0);
+    expect(r.hitAfterClose, '닫힌 뒤 메뉴 항목이 눌렸다').toBe(false);
+  });
+
   test('🔴 C1 — 비로그인·삭제 불가에서는 `…` 메뉴도 PC 묶음도 아예 없다(빈 메뉴를 만들지 않는다)', async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await install(page, baseURL!);

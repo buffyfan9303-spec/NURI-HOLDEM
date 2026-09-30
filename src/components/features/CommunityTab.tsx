@@ -1,3 +1,4 @@
+import { Fold } from '../atoms/Fold';
 import { memo, useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, useTransition, startTransition, type ReactNode, type CSSProperties } from 'react';
 import { goSubTab } from '../../lib/subTabTransition';
 import { centerInRail } from '../../lib/railScroll';
@@ -1130,7 +1131,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
         </span>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={['shrink-0 text-ink-muted transition-transform duration-(--dur-base)', open ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
       </button>
-      {open && (
+      <Fold open={open}>
         <div className="px-3 pb-3 space-y-3">
           <div>
             <p className="text-2xs font-bold text-ink-secondary mb-1">내가 운영 ({owned.length})</p>
@@ -1193,7 +1194,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
             )
           )}
         </div>
-      )}
+      </Fold>
     </div>
   );
 }

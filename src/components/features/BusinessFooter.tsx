@@ -1,6 +1,7 @@
 // src/components/features/BusinessFooter.tsx
 // 전 화면 하단 상시 노출 푸터 — 사업자 정보(전자상거래법 표시의무) + 약관/정책 링크 + 사행성 배제 고지.
 import { createContext, memo, useContext } from 'react';
+import { onSummaryClick } from '../atoms/Fold';
 import type { LegalDoc } from './LegalDocsModal';
 // 약관 시행일은 src/lib/legalVersion.ts 단일 소스 — 푸터에 날짜를 박으면 개정 때 여기만 남는다.
 import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
@@ -30,7 +31,9 @@ export const BIZ_REQUIRED: [string, string][] = [
 // eslint-disable-next-line react-refresh/only-export-components -- 법정 문구 단일 소스, 순수 상수라 HMR 무해
 export const AGE_HELPLINE = ['만 19세 미만은 이용할 수 없습니다', '도박문제 상담', '1336(24시간·무료)'] as const;
 
-const BIZ_EXTRA: [string, string][] = [
+// 메일 하단(supabase/functions/_shared/email/brand.gen.ts)도 이 두 상수와 BIZ_REQUIRED·AGE_HELPLINE 에서 생성한다 — scripts/gen-email-templates.mjs.
+// eslint-disable-next-line react-refresh/only-export-components -- 사업자 부가 정보 단일 소스(메일 생성기 재사용), 순수 상수라 HMR 무해
+export const BIZ_EXTRA: [string, string][] = [
   ['고객센터', 'ace@nuriholdem.com'],
   // 전자상거래법 §10 표시사항 — 호스팅 서비스 제공자
   ['호스팅 제공자', 'Vercel Inc.'],
@@ -109,7 +112,7 @@ function BusinessFooter(props: FooterActions & { overlay?: boolean }) {
         <details className="group/biz t-desc text-ink-muted">
           {/* ⚠ 히트영역 — 실측 19.1px 로 이 저장소가 쓰는 WCAG 2.5.8 AA(24px) 에도 못 미쳤다(2026-09-16).
               py-1.5 -my-1.5 로 **레이아웃은 그대로** 두고 세로 타깃만 31.9px 로 넓힌다(위 링크들과 같은 관용구). */}
-          <summary className="inline-flex cursor-pointer list-none items-center gap-0.5 py-1.5 -my-1.5 text-ink-muted underline decoration-border-default underline-offset-2">
+          <summary onClick={onSummaryClick} className="inline-flex cursor-pointer list-none items-center gap-0.5 py-1.5 -my-1.5 text-ink-muted underline decoration-border-default underline-offset-2">
             추가 정보<span aria-hidden className="transition-transform group-open/biz:rotate-180">▾</span>
           </summary>
           <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">

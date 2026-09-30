@@ -24,7 +24,7 @@ describe('redactForCache — 캐시에는 속도용 숫자만 남고 사람 식�
     const out = redactForCache({
       cfg: { rankMetrics: ['score', 'visit_count'] },
       totals: [{ nickname: 'kim', realName: '김철수', moneyPoints: 10, appearances: 1, bestPosition: 1 }],
-      latest: { date: '2026-09-01', entries: [{ position: 1, nickname: 'kim', realName: '김철수', prize: '트로피' }] },
+      latest: { date: '2026-09-01', entries: [{ position: 1, nickname: 'kim', realName: '김철수', optinRealName: '김철수', prize: '트로피' }] }, // optinRealName = 20260930c 옵트인 실명
       manual: [{ id: 'm1', name: 'kim', points: 5, reason: '단골이라 보너스', entryDate: '2026-09-01', boardKey: null }],
       checkinRows: [{ name: '김철수', count: 3 }],
       buyinCounts: { kim: 2 },
@@ -32,7 +32,7 @@ describe('redactForCache — 캐시에는 속도용 숫자만 남고 사람 식�
       metric: 'score',
     });
     expect(out.totals).toEqual([{ nickname: 'kim', realName: '', moneyPoints: 10, appearances: 1, bestPosition: 1 }]);
-    expect(out.latest).toEqual({ date: '2026-09-01', entries: [{ position: 1, nickname: 'kim', realName: '', prize: '트로피' }] });
+    expect(out.latest).toEqual({ date: '2026-09-01', entries: [{ position: 1, nickname: 'kim', realName: '', optinRealName: '', prize: '트로피' }] });
     expect(out.manual).toEqual([{ id: 'm1', name: 'kim', points: 5, reason: null, entryDate: '2026-09-01', boardKey: null }]);
     expect(out.checkinRows).toEqual([]);
     expect(out.buyinCounts).toEqual({ kim: 2 });

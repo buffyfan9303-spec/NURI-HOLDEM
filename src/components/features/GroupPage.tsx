@@ -5,6 +5,7 @@
 //  - 매니저: 가입 승인/거절, 멤버 추방, 이미지·공지 관리, 팀 프로필(소개·전화·카톡) 설정
 // 오너 #16: 매장 커뮤니티에 있는 것(소개·순위·전화·카카오톡)을 일반 커뮤니티에도.
 //   포스터·진행정보는 오너가 명시적으로 제외 — 그룹은 대회를 열지 않는다.
+import { Fold } from '../atoms/Fold';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
@@ -309,8 +310,8 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                 <span>멤버 관리 {pendingMembers.length > 0 && <span className="ml-1 text-accent-200">· 신청 {pendingMembers.length}</span>}</span>
                 <span className="text-2xs text-ink-muted">{managePanel ? '닫기' : '열기'}</span>
               </button>
-              {managePanel && (
-                <div className="mt-2 space-y-2 animate-slide-up">
+              <Fold open={managePanel}>
+                <div className="mt-2 space-y-2">
                   {/* 가입 방식 — 개설 때 한 번 정하면 끝이었다(오너 지적). 여기서 언제든 바꾼다.
                       개설 폼과 **같은 2지선다 문법**을 쓴다: 같은 결정을 두 곳에서 다르게 물으면 헷갈린다. */}
                   <div>
@@ -374,7 +375,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                     </ul>
                   </div>
                 </div>
-              )}
+              </Fold>
             </div>
           )}
 
@@ -516,13 +517,13 @@ function GroupBoard({ groupId, canManage }: { groupId: string; canManage: boolea
       <div className="flex justify-end">
         <button type="button" onClick={() => setOpen((v) => !v)} className="btn-primary text-xs px-4">{open ? '닫기' : '+ 글쓰기'}</button>
       </div>
-      {open && (
-        <form onSubmit={submit} className="space-y-2 rounded-card border border-border-default bg-surface-low p-3 animate-slide-up">
+      <Fold open={open}>
+        <form onSubmit={submit} className="space-y-2 rounded-card border border-border-default bg-surface-low p-3">
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} placeholder="제목(선택)" className="input w-full text-sm" />
           <textarea value={content} onChange={(e) => setContent(e.target.value)} maxLength={4000} rows={4} placeholder="내용" className="input w-full resize-none text-sm" />
           <div className="flex justify-end"><button type="submit" disabled={sending || !content.trim()} className="btn-primary px-4 disabled:opacity-60">등록</button></div>
         </form>
-      )}
+      </Fold>
       {err ? <LoadErrorCard error={err} what="게시판" onRetry={reload} compact />
         : posts === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p> : posts.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">첫 글을 남겨보세요</p> : (
         <ul className="space-y-2">

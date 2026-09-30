@@ -1,3 +1,4 @@
+import { Fold } from '../atoms/Fold';
 import { useState, useEffect, useCallback, type ReactNode, type CSSProperties } from 'react';
 import DraggableList from './DraggableList';
 import VenueManagement from './VenueManagement';
@@ -44,7 +45,7 @@ import { PAGE_ENTER } from '../atoms/pageMotion';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
 import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, EVENT_KIND_LABEL, type RankVerification } from '../../api/rankverify';
-import { getAllInquiries, answerInquiry, subscribeInquiries, type SupportInquiry } from '../../api/support';
+import { getAllInquiries, answerInquiry, sendInquiryReplyEmail, subscribeInquiries, type SupportInquiry } from '../../api/support';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import { josa } from '../../lib/josa';
@@ -320,7 +321,7 @@ function RankVerifyAdminCard() {
               <button type="button" onClick={() => view(v.idCardPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">신분증</button>
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, true)} className="btn-primary px-2.5 py-1 text-2xs disabled:opacity-50">승인</button>
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, false)} className="rounded-input border border-danger/40 px-2.5 py-1 font-bold text-danger-light hover:bg-danger/10 disabled:opacity-50">반려</button>
-              {openCheck === v.id && (
+              <Fold open={openCheck === v.id} className="w-full">
                 <div className="w-full rounded-input border border-sky-500/30 bg-sky-500/5 p-2">
                   <p className="text-[11px] font-bold text-ink-primary">승인 전 눈으로 대조할 것</p>
                   <ul className="mt-1 space-y-0.5">
@@ -337,7 +338,7 @@ function RankVerifyAdminCard() {
                   </ul>
                   <p className="mt-1 text-[10px] text-ink-muted">체크는 운영자의 메모다 — 승인 버튼을 막지 않는다. 최종 판단은 운영자에게 있다.</p>
                 </div>
-              )}
+              </Fold>
             </li>
           ))}
         </ul>
@@ -902,9 +903,18 @@ function SupportInquiriesPanel() {
     const text = (drafts[id] ?? '').trim();
     if (!text) { toast.show('답변 내용을 입력하세요', 'error'); return; }
     setBusy(id);
-    try { await answerInquiry(id, text); toast.show('답변을 등록했습니다', 'success'); setDrafts((d) => ({ ...d, [id]: '' })); load(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '답변 실패', 'error'); }
-    finally { setBusy(null); }
+    try { await answerInquiry(id, text); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '답변 실패', 'error'); setBusy(null); return; }
+    setDrafts((d) => ({ ...d, [id]: '' })); load();
+    // 답변은 이미 저장됐다 — 메일 실패가 저장을 되돌리거나 초안을 살리지 않는다. 결과는 따로 알린다.
+    try {
+      const r = await sendInquiryReplyEmail(id);
+      toast.show(r === 'already' ? '답변을 등록했습니다 · 이 답변은 이미 메일로 보냈습니다'
+        : r === 'skipped' ? '답변을 등록했습니다 · 이메일 인증을 하지 않은 회원이라 메일은 보내지 않았습니다'
+        : '답변을 등록하고 문의자에게 메일을 보냈습니다', 'success');
+    } catch (e) {
+      toast.show(`답변은 등록했지만 메일을 보내지 못했습니다 — ${e instanceof Error ? e.message : '알 수 없는 오류'}`, 'error');
+    } finally { setBusy(null); }
   };
 
   const list = (rows ?? []).filter((q) => !onlyOpen || q.status === 'open');
@@ -1578,8 +1588,8 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
 
       {posOpen && <AdminVenuePos venueId={venue.id} venueName={venue.name} onClose={() => setPosOpen(false)} />}
 
-      {open && (
-        <div className="px-3 pb-3 pt-2 space-y-2 border-t border-border-subtle animate-slide-up">
+      <Fold open={open}>
+        <div className="px-3 pb-3 pt-2 space-y-2 border-t border-border-subtle">
           {/* 매장이용권 전송 한도 — 바로 위 '이용권전송 ✓/✗' 토글과 **같은 스위치의 나머지 반쪽**이다.
               승인만으로는 한도가 0 이라 업주가 한 장도 못 만든다. 두 레버를 같은 행에 둔다. */}
           <div className="rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
@@ -1663,7 +1673,7 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
             </button>
           </div>
         </div>
-      )}
+      </Fold>
     </li>
   );
 }

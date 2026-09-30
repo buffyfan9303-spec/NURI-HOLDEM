@@ -1,3 +1,4 @@
+import { Fold } from '../atoms/Fold';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Schedule } from '../../api/schedules';
 import { useAuth } from '../../contexts/AuthContext';
@@ -431,14 +432,14 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
       </div>
 
       {/* 연결 장부 리스트(펼침) — 최신순, 클릭=그 날짜 장부 열기 */}
-      {ledgersOpen && onLedgerAt && (
+      <Fold open={ledgersOpen && !!onLedgerAt}>
         <div className="border-t border-border-subtle bg-surface-base/40 p-2 space-y-1">
           {ledgers === null ? (
             <p className="text-2xs text-ink-muted text-center py-1.5">불러오는 중…</p>
           ) : (
             <>
               {ledgers.map((l) => (
-                <button key={`${l.date}#${l.gameSeq}`} type="button" onClick={() => onLedgerAt({ date: l.date, gameSeq: l.gameSeq })}
+                <button key={`${l.date}#${l.gameSeq}`} type="button" onClick={() => onLedgerAt?.({ date: l.date, gameSeq: l.gameSeq })}
                   className="w-full flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2 text-left active:opacity-80">
                   <span className="text-xs font-bold text-ink-primary tabular-nums">{l.date}</span>
                   <span className="shrink-0 rounded-chip bg-surface-high px-1.5 py-0.5 text-2xs font-semibold text-ink-secondary">{ledgerGameLabel(l.gameSeq)}</span>
@@ -446,14 +447,14 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
                   <span className={['text-2xs font-bold shrink-0', l.closed ? 'text-ink-muted' : 'text-emerald-400'].join(' ')}>{l.closed ? '마감' : '진행중'}</span>
                 </button>
               ))}
-              <button type="button" onClick={() => onLedgerAt(null)}
+              <button type="button" onClick={() => onLedgerAt?.(null)}
                 className="w-full rounded-input border border-dashed border-border-default px-2.5 py-2 text-2xs font-semibold text-accent-300 active:opacity-80">
                 + 이 포스터로 새 장부 (다른 날짜는 장부에서 날짜 변경)
               </button>
             </>
           )}
         </div>
-      )}
+      </Fold>
 
       {/* 예약 리스트(펼침) */}
       {open && (
@@ -535,13 +536,13 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
           className={['text-2xs px-1', ask ? 'text-danger-light' : 'text-ink-muted hover:text-danger-light'].join(' ')}>{ask ? '닫기' : '삭제'}</button>
       </div>
       {/* 예약자 삭제 확인 — 버튼과 다른 줄(다른 좌표)에 펼친다. 삭제해도 손님에게 알림이 가지 않으므로 그 사실을 적는다. */}
-      {ask && (
+      <Fold open={ask}>
         <div className="flex items-center gap-2 border-t border-danger/30 bg-danger/10 px-2.5 py-2">
           <p className="flex-1 min-w-0 text-2xs leading-relaxed text-ink-secondary"><b className="text-danger-light">{res.displayName}</b> 님의 예약을 삭제합니다. 손님에게 알림은 가지 않습니다</p>
           <button type="button" onClick={() => setAsk(false)} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-semibold text-ink-secondary active:opacity-80">취소</button>
           <button type="button" onClick={() => { setAsk(false); onDelete(); }} className="shrink-0 rounded-input border border-danger/50 bg-danger/20 px-2 py-1 text-2xs font-bold text-danger-light active:opacity-80">삭제</button>
         </div>
-      )}
+      </Fold>
       {showCustomer && (
         <div className="border-t border-border-subtle px-2.5 py-2">
           {!act ? <p className="text-2xs text-ink-muted text-center py-1">불러오는 중…</p> : (

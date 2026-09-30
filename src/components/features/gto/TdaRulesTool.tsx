@@ -17,6 +17,7 @@
 import { CHIP_HIT } from './chip';
 import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '../../atoms/Icon';
+import { Fold } from '../../atoms/Fold';
 import { Skeleton } from '../../atoms/Skeleton';
 import { useAuth } from '../../../contexts/AuthContext';
 import { askTdaAssist, TDA_QUESTION_MAX } from '../../../api/tdaAssist';
@@ -230,12 +231,12 @@ function RuleCard({ rule, open, defaultOpen, onToggle }: {
         <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink-primary">{rule.title}</span>
         <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={14} className="shrink-0 text-ink-muted" />
       </button>
-      {isOpen && (
+      <Fold open={isOpen}>
         <div className="border-t border-border-subtle px-2.5 py-2">
           <p className="whitespace-pre-wrap text-xs leading-relaxed text-ink-secondary break-keep">{rule.body}</p>
           <p className="mt-1.5 text-[10px] text-ink-muted">{rule.section} · {rule.page}쪽</p>
         </div>
-      )}
+      </Fold>
     </li>
   );
 }
