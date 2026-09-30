@@ -172,6 +172,13 @@ describe('20260927b — 제재·위조 가드는 호출자 권한(invoker)으로
       .filter((f) => /(create or replace function|alter function) public\.require_active_author\(/i
         .test(code(lf(readFileSync(join(dir, f), 'utf-8')))));
     const last = touching[touching.length - 1];
-    expect(last, `마지막으로 require_active_author 를 정의·변경한 파일: ${last}`).toBe('20260927b_community_guards.sql');
+    // 20260930f 가 조건(auth.uid() 도 본다)을 고치며 다시 정의했다 — 그 파일도 security invoker 를 명시해야 한다.
+    expect(['20260927b_community_guards.sql', '20260930f_server_guards_sanction_verify.sql'], `마지막으로 require_active_author 를 정의·변경한 파일: ${last}`).toContain(last);
+    const body = fnBody(code(lf(readFileSync(join(dir, last), 'utf-8'))).replace(/\$function\$/g, '$f$'), 'require_active_author');
+    if (last !== '20260927b_community_guards.sql') {
+      expect(body, `${last} 에 require_active_author 정의가 없다`).not.toBe('');
+      expect(body).toMatch(/security\s+invoker/i);
+      expect(body).not.toMatch(/security\s+definer/i);
+    }
   });
 });
