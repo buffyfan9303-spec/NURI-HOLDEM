@@ -87,7 +87,7 @@ function IdentityVoucherSwitch() {
       </p>
       <p className="text-xs leading-relaxed text-ink-muted">
         둘은 <b className="text-ink-secondary">한 스위치</b>입니다. 인증이 꺼진 채 이용권만 켜면 서버는 인증을 요구하는데
-        인증 화면이 없어 손님이 넘어갈 수 없습니다. 끄면 기능이 <b className="text-ink-secondary">삭제가 아니라 숨김</b>이라 언제든 되돌립니다.
+        인증 화면이 없어 손님이 넘어갈 수 없습니다. 끄면 기능이 <b className="text-ink-secondary">삭제가 아니라 숨김</b>이라 언제든 되돌릴 수 있습니다.
       </p>
 
       {loadErr != null && <LoadErrorCard error={loadErr} what="스위치 상태" onRetry={load} compact />}
@@ -127,7 +127,7 @@ function IdentityVoucherSwitch() {
       )}
       {drift && (
         <p className="text-2xs text-danger-light">
-          서버 값과 화면이 다릅니다 — 저장 권한이 없거나 반영이 되지 않았습니다. 운영자 계정인지 확인해 주세요.
+          서버 값과 화면이 다릅니다 — 저장 권한이 없거나 반영이 되지 않았습니다. 관리자 계정인지 확인해 주세요.
         </p>
       )}
 
@@ -192,7 +192,7 @@ function ClockAdCard() {
   };
 
   const remove = async () => {
-    if (!confirm('클락 광고를 삭제할까요? 전 매장 클락에서 사라집니다.')) return;
+    if (!confirm('클락 광고를 삭제하시겠습니까? 전 매장 클락에서 사라집니다.')) return;
     setBusy(true);
     try {
       await setAppSetting(CLOCK_AD_KEY, '');
@@ -211,7 +211,7 @@ function ClockAdCard() {
       </p>
       <p className="text-xs leading-relaxed text-ink-muted">
         대회 클락 송출 화면 하단에 뜹니다. <b className="text-ink-secondary">모든 매장에 같이 적용</b>되는 값이라 여기서 관리합니다.
-        송출 중인 클락은 최대 30초 안에 따라옵니다.
+        송출 중인 클락에는 최대 30초 안에 반영됩니다.
       </p>
 
       {loadErr != null && <LoadErrorCard error={loadErr} what="클락 광고 설정" onRetry={load} compact />}

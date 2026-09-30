@@ -136,7 +136,7 @@ test.describe('관리자 → 노출 관리', () => {
     await expect(admin.getByText('등록된 배너가 없습니다'), '배너가 있는데 없다고 말한다').toHaveCount(0);
     await expect(admin.getByText('테스트 배너').filter({ visible: true }).first(),
       '등록된 배너가 관리 목록에 없다').toBeVisible({ timeout: 10_000 });
-    await expect(admin.getByText('게재중').filter({ visible: true }).first(),
+    await expect(admin.getByText('게재 중').filter({ visible: true }).first(),
       '오늘 시작·활성인데 게재중 배지가 없다').toBeVisible();
   });
 

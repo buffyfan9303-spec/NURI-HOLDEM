@@ -86,7 +86,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
     if (b.startsAt && b.startsAt > today) return { label: '예약', on: false };
     if (b.endsAt && b.endsAt < today) return { label: '만료', on: false };
     if (!b.active) return { label: '꺼짐', on: false };
-    return { label: '게재중', on: true };
+    return { label: '게재 중', on: true };
   };
 
   const pickImage = async (file: File | undefined) => {
@@ -132,7 +132,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
   };
 
   const remove = async (b: HomeBanner) => {
-    if (!window.confirm(`'${b.title || '제목 없음'}' 배너를 삭제할까요?`)) return;
+    if (!window.confirm(`'${b.title || '제목 없음'}' 배너를 삭제하시겠습니까?`)) return;
     setBusy(b.id);
     try { await deleteHomeBanner(b.id); toast.show('삭제했습니다', 'success'); changed(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
@@ -162,7 +162,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
   };
 
   const purge = async () => {
-    if (!window.confirm('만료 후 7일이 지난 배너를 정리할까요? (되돌릴 수 없습니다)')) return;
+    if (!window.confirm('만료 후 7일이 지난 배너를 정리하시겠습니까? (되돌릴 수 없습니다)')) return;
     setBusy('purge');
     try {
       const n = await purgeExpiredHomeBanners();
@@ -178,7 +178,7 @@ export default function HomeBannersCard({ onChanged }: { onChanged?: () => void 
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary">
         <Icon name="image" size={15} className="shrink-0" />홈 상단 배너
         <span className="text-xs font-normal text-ink-muted">
-          이미지·링크·기간을 지정하면 홈 캐러셀에 뜹니다. 종료일이 지나면 자동으로 내려갑니다(행 삭제는 7일 뒤 정리 버튼)
+          이미지·링크·기간을 지정하면 홈 캐러셀에 뜹니다. 종료일이 지나면 자동으로 내려갑니다. 목록에서 지우려면 7일 뒤 정리 버튼을 누르세요.
         </span>
       </p>
 
