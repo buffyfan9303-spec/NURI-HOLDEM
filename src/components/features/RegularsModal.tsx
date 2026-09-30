@@ -138,7 +138,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
   // 손님 정보 삭제(오너 2026-09-25 DATA-RETENTION) — 실제 DELETE. 장부·쿠폰은 매장 기록이라 남는다(확인창에 그대로 말한다).
   const removeProfile = async () => {
     if (deleting) return;
-    if (!window.confirm(`${r.name}님의 손님 정보(생일·연락처·메모·방문 집계)를 삭제할까요?\n장부·쿠폰 기록은 남습니다. 삭제하면 되돌릴 수 없습니다.`)) return;
+    if (!window.confirm(`${r.name}님의 손님 정보(생일·연락처·메모·방문 집계)를 삭제하시겠습니까?\n장부·쿠폰 기록은 남습니다. 삭제하면 되돌릴 수 없습니다.`)) return;
     setDeleting(true);
     try { await deleteCustomerProfile(venueId, r.name); setBday(''); setHasProfile(false); toast.show('손님 정보를 삭제했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '손님 정보 삭제에 실패했습니다', 'error'); }
@@ -151,7 +151,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
   };
   const addCoupon = async () => {
     if (couponBusy) return;
-    const t = window.prompt('쿠폰 내용 (예: 5만 바인권 / 첫방문 50%)');
+    const t = window.prompt('쿠폰 내용 (예: 5만 바인권 / 첫 방문 50%)');
     if (!t) return;
     setCouponBusy(true);
     try { await issueCoupon(venueId, r.name, t); }
@@ -186,7 +186,7 @@ function RegularRow({ idx, r, venueId, onSendVoucher }: { idx: number; r: VenueR
         </button>
         {onSendVoucher && (
           // 터치 영역 40px 확보(min-h-10) — 라벨은 아이콘만이 아니라 글자도 남긴다(색·아이콘만으로 뜻을 전하지 않는다).
-          <button type="button" onClick={() => onSendVoucher(r.name)} title={`${r.name}님에게 매장이용권 전송`}
+          <button type="button" onClick={() => onSendVoucher(r.name)} title={`${r.name}님에게 매장 이용권 전송`}
             className={`${VOUCHER_BTN_CLS} transition-colors hover:bg-accent-300/20`}>
             <Icon name="gift" size={11} className="shrink-0" />이용권
           </button>

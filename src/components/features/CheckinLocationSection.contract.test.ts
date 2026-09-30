@@ -34,11 +34,11 @@ describe('CheckinLocationSection', () => {
     expect(fn).toMatch(/s\.lat == null \|\| s\.lng == null/);
   });
   it('좌표 없음 경고 문구 — 스위치 꺼짐이면 "출석할 수 없어요"라고 말하지 않는다', () => {
-    expect(body).toMatch(/geoOn \? '출석 위치가 등록되지 않아 손님이 출석할 수 없어요' : '출석 위치 확인을 켜기 전에/);
+    expect(body).toMatch(/geoOn \? '출석 위치가 등록되지 않아 손님이 출석할 수 없습니다' : '출석 위치 확인을 켜기 전에/);
   });
   it('출석 QR 안내의 위치 권한 문구는 스위치가 켜졌을 때만', () => {
     const modal = readFileSync(fileURLToPath(new URL('./CheckinModal.tsx', import.meta.url)), 'utf8');
-    expect(modal).toMatch(/\{geoOn && <>[^}]*위치 확인에 동의한 손님은 매장 안에서만 출석돼요/);
-    expect(modal.match(/위치 확인에 동의한 손님은 매장 안에서만 출석돼요/g)).toHaveLength(1);
+    expect(modal).toMatch(/\{geoOn && <>[^}]*위치 확인에 동의한 손님은 매장 안에서만 출석됩니다/);
+    expect(modal.match(/위치 확인에 동의한 손님은 매장 안에서만 출석됩니다/g)).toHaveLength(1);
   });
 });

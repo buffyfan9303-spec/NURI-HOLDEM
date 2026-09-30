@@ -72,7 +72,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
     try {
       await setKillPassword(venueId, setupPw);
       setPwIsSet(true); reset();
-      toast.show('킬스위치 비밀번호를 설정했어요. 한 번 만든 비밀번호는 변경할 수 없습니다.', 'success');
+      toast.show('킬스위치 비밀번호를 설정했습니다. 한 번 만든 비밀번호는 변경할 수 없습니다.', 'success');
       setOpen(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '설정에 실패했습니다.');
@@ -113,7 +113,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
           <h3 className="text-sm font-bold text-danger-light">위험 구역 · 매장 전체 초기화(킬스위치)</h3>
           <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">
             내 매장의 <b className="text-ink-secondary">모든 데이터(장부·순위·이용권·직원·클락·로그 전부)</b>를 영구 삭제합니다.
-            <b className="text-danger-light"> 복구할 수 없습니다.</b> 업주 본인 확인 → 킬스위치 비밀번호 → 최종 확인 3단계를 거칩니다.
+            <b className="text-danger-light"> 복구할 수 없습니다.</b> 본인 확인 → 킬스위치 비밀번호 → 최종 확인 3단계를 거칩니다.
           </p>
           {/* 안내 문구는 '설정 여부를 아는 동안'에만. 모르면 아무 약속도 하지 않는다. */}
           {pwIsSet === false && (
@@ -189,16 +189,16 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
               {step === 1 && (
                 <>
                   <div className="rounded-card border border-danger/30 bg-danger/5 p-3">
-                    <p className="text-2xs font-bold text-danger-light">1단계 · 업주 본인 확인</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">본인인증된 <b className="text-ink-secondary">업주 본인의 실명</b>을 입력하세요.</p>
+                    <p className="text-2xs font-bold text-danger-light">1단계 · 본인 확인</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">본인인증된 <b className="text-ink-secondary">본인의 실명</b>을 입력하세요.</p>
                   </div>
-                  <Lbl label="업주 실명">
+                  <Lbl label="실명">
                     <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} className="input w-full text-sm" placeholder="실명 입력" autoFocus />
                   </Lbl>
                   {err && <p role="alert" className="text-2xs font-semibold text-danger-light">{err}</p>}
                   <div className="flex gap-2 pt-1">
                     <button type="button" onClick={close} className="btn-ghost flex-1 text-sm">취소</button>
-                    <button type="button" onClick={() => { if (!ownerName.trim()) { setErr('업주 실명을 입력하세요.'); return; } setErr(''); setStep(2); }} className="flex-1 rounded-input bg-danger py-2 text-sm font-bold text-white">다음</button>
+                    <button type="button" onClick={() => { if (!ownerName.trim()) { setErr('실명을 입력하세요.'); return; } setErr(''); setStep(2); }} className="flex-1 rounded-input bg-danger py-2 text-sm font-bold text-white">다음</button>
                   </div>
                 </>
               )}

@@ -5,7 +5,7 @@
 import { MAX_VENUE_CONTACTS, type VenueContact } from '../api/community';
 
 /** 라벨 빠른 입력 — 매장이 실제로 쓰는 용도 4종. 직접 타이핑도 그대로 가능하다. */
-export const CONTACT_LABEL_PRESETS = ['대표', '예약', '담당자', '단체문의'] as const;
+export const CONTACT_LABEL_PRESETS = ['대표', '예약', '담당자', '단체 문의'] as const;
 
 /** 카카오톡 링크 정규화 — '' 비움(삭제) · http(s) URL 이면 trim 값 · 그 외 null(형식 오류). */
 export function normalizeKakaoUrl(raw: string): string | null {

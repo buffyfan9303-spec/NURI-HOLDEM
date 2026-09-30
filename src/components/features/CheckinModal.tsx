@@ -151,9 +151,9 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
           {qrSrc
             ? <img src={qrSrc} alt="출석 QR" width={200} height={200} className="rounded-lg bg-white p-2" />
             : qrFailed
-              ? <div className="flex h-[200px] w-[200px] items-center justify-center rounded-lg border border-border-subtle bg-surface-low text-2xs text-ink-muted">QR 을 만들지 못했어요</div>
+              ? <div className="flex h-[200px] w-[200px] items-center justify-center rounded-lg border border-border-subtle bg-surface-low text-2xs text-ink-muted">QR을 만들지 못했습니다</div>
               : <div className="h-[200px] w-[200px] animate-pulse rounded-lg bg-ink-primary/10" aria-label="QR 생성 중" />}
-          <p className="text-center text-2xs text-ink-muted"><b className="text-accent-300">고정 QR</b> · 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 출석 처리됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.{geoOn && <><br /><b data-testid="checkin-geo-hint" className="text-ink-secondary">위치 확인에 동의한 손님은 매장 안에서만 출석돼요</b></>}</p>
+          <p className="text-center text-2xs text-ink-muted"><b className="text-accent-300">고정 QR</b> · 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 출석 처리됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.{geoOn && <><br /><b data-testid="checkin-geo-hint" className="text-ink-secondary">위치 확인에 동의한 손님은 매장 안에서만 출석됩니다</b></>}</p>
           <button type="button" onClick={copy} className="btn-ghost px-3 text-2xs">출석 링크 복사</button>
         </div>
         <div>
@@ -181,7 +181,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
                 {/* Q2 — 1단계: 장수 선택(버튼은 선택만, 발급 RPC 를 부르지 않는다) 또는 직접 입력 */}
                 <Fold open={canIssue && sendTo === c.id && !(confirm && confirm.c.id === c.id)} className="w-full">
                   <span className="mt-1.5 flex w-full flex-wrap items-center gap-1.5 border-t border-border-subtle pt-1.5">
-                    <span className="text-2xs text-ink-muted">몇 장 보낼까요?</span>
+                    <span className="text-2xs text-ink-muted">보낼 장수</span>
                     {[1, 2, 3, 5].map((n) => (
                       <button key={n} type="button" onClick={() => setConfirm({ c, count: n })}
                         className="min-h-[44px] rounded-input border border-border-default bg-surface-high px-2.5 text-2xs font-bold text-ink-secondary hover:bg-surface-float/60">
@@ -233,7 +233,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName, canIss
                   (pg_proc 직접 조회, 2026-09-20). 게다가 같은 함수가 `venues.voucher_issue_approved` 도 요구한다.
                   오너 결정(2026-09-20): "공동운영자에게 발급 줘. UI도 이에 맞춰서." → 문구를 서버에 맞춘다.
                   ⚠ 아래 '손님끼리 주고받을 수 없다 / 금전적 가치 없음' 은 **법적 고지라 지우지 마라.** */}
-              매장이용권 전송은 <b className="text-ink-secondary">운영자 승인을 받은 매장의 업주·공동운영자만 가능</b>합니다.
+              매장이용권 전송은 <b className="text-ink-secondary">관리자 승인을 받은 매장의 업주·공동운영자만 가능</b>합니다.
               손님끼리 주고받을 수 없고, <b className="text-ink-secondary">금전적 가치가 없습니다</b>.
             </p>
           )}

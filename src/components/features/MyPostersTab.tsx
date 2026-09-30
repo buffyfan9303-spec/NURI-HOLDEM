@@ -109,7 +109,7 @@ export default function MyPostersTab({ schedules, venueId: venueIdProp = null, o
       {myPosters.length === 0 ? (
         <EmptyState
           title="등록된 게임이 없습니다"
-          hint="포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요"
+          hint="포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있습니다"
           action={<button type="button" onClick={onCreate} className="btn-primary px-4 py-2 text-xs">+ 첫 게임 등록하기</button>}
         />
       ) : (() => {
@@ -160,10 +160,10 @@ function PendingApprovalView() {
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400" aria-hidden><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
       </div>
       <div>
-        <h2 className="text-base font-bold text-amber-400">운영자 승인 대기 중</h2>
-        <p className="text-xs text-ink-muted mt-1 leading-relaxed">매장 업주 가입 신청이 접수되었습니다.<br />영업일 기준 1~2일 내 승인 결과를 알려드립니다.</p>
+        <h2 className="text-base font-bold text-amber-400">관리자 승인 대기 중</h2>
+        <p className="text-xs text-ink-muted mt-1 leading-relaxed">매장 가입 신청이 접수되었습니다.<br />영업일 기준 1~2일 내 승인 결과를 알려드립니다.</p>
       </div>
-      <div className="text-2xs text-ink-muted px-4 py-2 rounded-input bg-surface-high">승인 후 게임 업로드 권한이 활성화됩니다</div>
+      <div className="text-2xs text-ink-muted px-4 py-2 rounded-input bg-surface-high">승인되면 게임을 등록할 수 있습니다</div>
     </div>
   );
 }
@@ -297,7 +297,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
             {schedule.isPremium && <span className="rounded-badge bg-accent-300 px-1 py-0.5 text-2xs font-bold text-white leading-none">TOP</span>}
             {!schedule.approved && (schedule.rejectedAt
               ? <span className="rounded-badge bg-rose-500/15 text-rose-400 border border-rose-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">반려</span>
-              : <span className="rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">승인대기</span>)}
+              : <span className="rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">승인 대기</span>)}
             <span className="rounded-badge bg-surface-high text-ink-secondary border border-border-default px-1 py-0.5 text-2xs font-semibold leading-none">{schedule.format}</span>
           </div>
           <p className="text-sm font-medium text-ink-primary truncate">{schedule.title}</p>
@@ -332,7 +332,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
         </div>
         {/* PC: 우측 인라인 액션(기존). 모바일은 아래 하단 바로 분리 — 줄바꿈/세로 쌓임 방지 */}
         <div className="hidden sm:flex items-center gap-1 shrink-0">
-          <button type="button" onClick={toggle} className="btn-ghost text-xs px-2 text-accent-300">예약관리{reservations ? `(${reservations.length})` : ''} {open ? '▲' : '▼'}</button>
+          <button type="button" onClick={toggle} className="btn-ghost text-xs px-2 text-accent-300">예약 관리{reservations ? `(${reservations.length})` : ''} {open ? '▲' : '▼'}</button>
           {onLedgerAt && (
             <button type="button" onClick={toggleLedgers}
               title={ledgerDate ? '연결된 장부 목록 보기' : '이 게임으로 장부 등록'}
@@ -342,14 +342,14 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
           )}
           {ops?.closed && !ops.hasRankings && onRanking && (
             <button type="button" onClick={() => onRanking(ops.date, ops.rankingEvent)}
-              title={`${ledgerGameLabel(ops.gameSeq)} 장부는 마감됐는데 순위가 아직 없어요. 입력하면 순위표·아카이브에 바로 반영됩니다`}
+              title={`${ledgerGameLabel(ops.gameSeq)} 장부는 마감됐는데 순위가 아직 없습니다. 입력하면 순위표·아카이브에 바로 반영됩니다`}
               className="rounded-badge border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-2xs font-bold text-amber-400 active:opacity-80">
               순위 미입력
             </button>
           )}
           {onOpenSchedule && (
             <button type="button" onClick={onOpenSchedule} title="손님이 보는 대회 상세 열기"
-              className="btn-ghost text-xs px-2 whitespace-nowrap text-ink-secondary">손님화면</button>
+              className="btn-ghost text-xs px-2 whitespace-nowrap text-ink-secondary">손님 화면</button>
           )}
           <button type="button" onClick={onEdit} className="btn-ghost text-xs px-2 text-accent-300">수정</button>
           {/* 확인 단계를 이 자리에 겹치지 않는 이유: 예전엔 같은 좌표에 라벨까지 같은 '삭제'가 나타나
@@ -419,7 +419,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
             </button>
           )}
           {onOpenSchedule && (
-            <button type="button" onClick={onOpenSchedule} className="flex-1 py-2.5 text-xs font-semibold whitespace-nowrap text-ink-secondary active:bg-surface-high/60">손님화면</button>
+            <button type="button" onClick={onOpenSchedule} className="flex-1 py-2.5 text-xs font-semibold whitespace-nowrap text-ink-secondary active:bg-surface-high/60">손님 화면</button>
           )}
           <button type="button" onClick={onEdit} className="flex-1 py-2.5 text-xs font-semibold text-accent-300 active:bg-surface-high/60">수정</button>
           {/* 칸 수가 4개 그대로라 마지막 칸의 좌표가 픽셀 단위로 같았다 — 더블탭 1회로 확인이 통과됐다.
@@ -444,7 +444,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
                   <span className="text-xs font-bold text-ink-primary tabular-nums">{l.date}</span>
                   <span className="shrink-0 rounded-chip bg-surface-high px-1.5 py-0.5 text-2xs font-semibold text-ink-secondary">{ledgerGameLabel(l.gameSeq)}</span>
                   <span className="flex-1 min-w-0 text-2xs text-ink-secondary truncate">{l.title || schedule.title}</span>
-                  <span className={['text-2xs font-bold shrink-0', l.closed ? 'text-ink-muted' : 'text-emerald-400'].join(' ')}>{l.closed ? '마감' : '진행중'}</span>
+                  <span className={['text-2xs font-bold shrink-0', l.closed ? 'text-ink-muted' : 'text-emerald-400'].join(' ')}>{l.closed ? '마감' : '진행 중'}</span>
                 </button>
               ))}
               <button type="button" onClick={() => onLedgerAt?.(null)}

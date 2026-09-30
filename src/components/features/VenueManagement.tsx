@@ -92,7 +92,7 @@ export default function VenueManagement() {
   };
 
   const remove = async (v: Venue) => {
-    if (!confirm(`'${v.name}' 매장을 완전히 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    if (!confirm(`'${v.name}' 매장을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
     try {
       await deleteVenue(v.id);
       await logActivity({
@@ -139,7 +139,7 @@ export default function VenueManagement() {
       />
       {!query && venues.length > 1 && (
         <p className="text-2xs text-ink-muted px-0.5">
-          왼쪽 <b className="text-ink-secondary">손잡이</b>를 꾹 눌러 <b className="text-ink-secondary">드래그</b>하면 노출 순서를 바꿀 수 있어요. (앞 번호 순서대로 노출 · 검색 중에는 순서 변경 불가)
+          왼쪽 <b className="text-ink-secondary">손잡이</b>를 꾹 눌러 <b className="text-ink-secondary">드래그</b>하면 노출 순서를 바꿀 수 있습니다. (앞 번호 순서대로 노출 · 검색 중에는 순서 변경 불가)
         </p>
       )}
       {err != null ? (
@@ -229,7 +229,7 @@ function RowContent({ venue: v, order, handlers, dragHandle }: {
         <span className={['text-2xs px-1.5 py-0.5 rounded-badge border font-semibold', st.cls].join(' ')}>{st.label}</span>
         {v.isPaidAd && <span className="inline-flex items-center gap-0.5 text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300 text-white font-bold"><Icon name="star-fill" size={10} className="shrink-0" />프리미엄</span>}
         {v.verificationStatus === 'verified' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40 font-bold">인증</span>}
-        {v.verificationStatus === 'pending' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">인증 심사중</span>}
+        {v.verificationStatus === 'pending' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">인증 심사 중</span>}
         {(v.kind ?? 'venue') !== 'venue' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-surface-high text-ink-secondary border border-border-default font-semibold">그룹</span>}
         {!v.approved && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">미승인 · 승인은 매장 섹션</span>}
         <span className="text-2xs text-ink-muted ml-auto truncate">{v.region}</span>

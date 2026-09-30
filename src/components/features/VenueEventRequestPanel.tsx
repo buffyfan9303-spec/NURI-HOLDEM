@@ -111,7 +111,7 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
       </div>
       <p className="text-2xs leading-relaxed text-ink-muted">
         {kind === 'campaign'
-          ? <>매장이용권을 경품으로 걸고 여는 이벤트입니다. 승인되면 운영자가 <b className="text-ink-secondary">7일 이내</b>에 열어 드립니다.</>
+          ? <>매장이용권을 경품으로 걸고 여는 이벤트입니다. 승인되면 누리홀덤이 <b className="text-ink-secondary">7일 이내</b>에 열어 드립니다.</>
           : <>규모·날짜가 아직 없어도 됩니다. 하고 싶은 이벤트를 자유롭게 적어 주세요.</>}
       </p>
 
@@ -229,10 +229,10 @@ export default function VenueEventRequestPanel({ venueId }: { venueId: string })
                 )}
                 {r.status === 'approved' && (
                   <p className="mt-0.5 text-2xs leading-relaxed text-emerald-300">
-                    승인됐습니다 — 운영자가 7일 이내에 이벤트를 엽니다.
+                    승인됐습니다 — 누리홀덤이 7일 이내에 이벤트를 엽니다.
                   </p>
                 )}
-                {r.adminNote && <p className="mt-0.5 wrap-break-word text-2xs leading-relaxed text-ink-muted">운영자: {r.adminNote}</p>}
+                {r.adminNote && <p className="mt-0.5 wrap-break-word text-2xs leading-relaxed text-ink-muted">관리자: {r.adminNote}</p>}
               </li>
             );
           })}
