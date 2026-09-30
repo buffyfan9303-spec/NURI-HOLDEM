@@ -1,4 +1,5 @@
--- ⏳ 미적용 초안 (store-team 작성, 2026-09-30). 적용은 리드가 MCP execute_sql 로(적용 전 critical 재검토). 리허설 결과는 맨 아래.
+-- ✅ 2026-09-30 라이브 적용 완료(리드, MCP execute_sql 1회 — §0·§0-b 게이트·§14 자가검사 통과). 실측: reserve_schedule md5 a4a8e96c…, get_domestic_rankings 반환 TABLE(nickname,points,wins,overseas), 보안 어드바이저 ERROR 0. 적용 파일 md5(LF) b62c6cb6… @ dcbea41b
+-- (초안 작성: store-team · critical 2회 재검토)
 -- 20260930f — 화면만 막던 가드를 서버로 (오너 2026-09-30 보안 점검 D-2 ← critical-reviewer D-1)
 -- 🔴 §0 게이트는 이 파일을 **한 번에** 적용할 때만 전체를 지킨다 — 나눠 적용 금지(앞부분만 적용되면 뒤 함수의 md5 대조가 빠진다).
 --
