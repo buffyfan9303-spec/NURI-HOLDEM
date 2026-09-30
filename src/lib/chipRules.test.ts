@@ -144,6 +144,12 @@ describe('W-28 · 할인 유형 = 적용 조건', () => {
     expect([discountAllowed(discs[0], 1), discountAllowed(discs[0], 2), discountAllowed(discs[1], 1), discountAllowed(discs[1], 2), discountAllowed({}, 1)])
       .toEqual([false, true, true, false, true]);
   });
+  it('KW-1b 첫 리바인 할인(firstRebuy)은 2번째 바인에만 — 첫 바인·3번째 리바인에는 안 된다(퀸 「첫 리바인 50%」)', () => {
+    const fr = { kind: 'firstRebuy' as const };
+    expect([1, 2, 3, 4].map((n) => discountAllowed(fr, n))).toEqual([false, true, false, false]);
+    expect(autoDiscountIndex([{ label: '첫 리바인', amount: 50_000, level: 20, kind: 'firstRebuy' }], 1, 3)).toBe(0);
+    expect(autoDiscountIndex([{ label: '첫 리바인', amount: 50_000, level: 20, kind: 'firstRebuy' }], 1, 2)).toBe(1);
+  });
   it('자동 선택도 같은 조건 — 첫 바인은 3레벨 리바인 할인 대신 첫 바인 할인(2번)', () => {
     expect(autoDiscountIndex(discs, 1, 1)).toBe(2);
     expect(autoDiscountIndex(discs, 1, 2)).toBe(1);

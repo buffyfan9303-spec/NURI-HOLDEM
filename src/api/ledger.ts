@@ -16,14 +16,16 @@ export type EarlyType = 'double' | 'single' | 'none'; // 더블얼리 / 1얼리 
  *  예) 「1레벨 5만 할인」 = { label:'1레벨', amount:50_000, level:1 } — 1레벨 안에 바인하면 자동 선택.
  *  ⚠ jsonb 컬럼이라 필드 추가에 마이그레이션이 필요 없다. 기존 행은 level 없음 = 수기 선택(구 동작). */
 export interface DiscountPreset { label: string; amount: number; level?: number;
-  /** W-28(2026-09-30) — 적용 조건. 'rebuy' = 리엔트리(2번째 이후 바인)에만 · 'firstBuyin' = 첫 바인에만 · 없음 = 아무 바인.
-   *  포스터 할인 유형(discountType)에서 온다. 서버 트리거(20260930e _ledger_buyin_discount_kind_guard)가 같은 규칙으로 막는다. */
+  /** W-28(2026-09-30) — 적용 조건. 'rebuy' = 리엔트리(2번째 이후 바인)에만 · 'firstBuyin' = 첫 바인에만 ·
+   *  'firstRebuy' = 첫 리바인(2번째 바인)에만(KW-1b — 퀸 '첫 리바인 50%') · 없음 = 아무 바인.
+   *  포스터 할인 유형(discountType)에서 온다. 서버 트리거(20260930g _ledger_buyin_discount_kind_guard)가 같은 규칙으로 막는다. */
   kind?: DiscountKind }
-export type DiscountKind = 'rebuy' | 'firstBuyin';
+export type DiscountKind = 'rebuy' | 'firstBuyin' | 'firstRebuy';
 /** 이 할인을 이 바인(entryNo = 그 손님의 몇 번째 바인)에 쓸 수 있는가 — W-28 의 단일 규칙. */
 export function discountAllowed(d: Pick<DiscountPreset, 'kind'> | null | undefined, entryNo: number): boolean {
   if (d?.kind === 'rebuy') return entryNo > 1;
   if (d?.kind === 'firstBuyin') return entryNo === 1;
+  if (d?.kind === 'firstRebuy') return entryNo === 2;
   return true;
 }
 /** 고정 유형 코드 + 그 외(기타/직접입력)는 자유 텍스트로 저장 */
