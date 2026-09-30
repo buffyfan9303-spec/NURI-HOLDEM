@@ -384,10 +384,11 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <StatCard testId="stat-total-buyins" label="총 바인" value={`${m.buyinCount.toLocaleString()}회`} sub={`첫 ${m.firstBuyins} · 리바인 ${m.rebuys}`} icon="users" />
             <StatCard label="할인 바인" value={`${m.discountCnt}건`} sub={`바인 중 ${m.discountRatio.toFixed(1)}%`} icon="down" />
-            <StatCard label="총 할인액" value={`${m.discountWon.toLocaleString()} 원`} sub={m.grossSum > 0 ? `정상가 ${wonToMan(m.grossSum)}만원` : '할인 없음'} icon="percent" gold />
-            {/* 2026-09-14: 3열 타일 폭 55px 에서 이 라벨만 `완납`/`매출액` 두 줄이었다(옆 타일은 1줄). */}
-            <StatCard label="완납액" value={`${m.revenue.toLocaleString()} 원`} icon="wallet" emerald sub={m.addon.count > 0 ? `애드온 ${wonToMan(m.addon.revenue)}만 포함` : undefined} />
-            <StatCard label="미수 금액" value={`${m.unpaid.toLocaleString()} 원`} icon="alert" danger={m.unpaid > 0} sub={m.addon.unpaid > 0 ? `애드온 ${wonToMan(m.addon.unpaid)}만 포함` : undefined} />
+            <StatCard label="총 할인액" value={wonToMan(m.discountWon)} unit="만" valueTitle={`${m.discountWon.toLocaleString()}원`} sub={m.grossSum > 0 ? `정상가 ${wonToMan(m.grossSum)}만원` : '할인 없음'} icon="percent" gold />
+            {/* P-08(2026-10-01) — 금액 KPI 는 대시보드·장부·정산과 같은 '만' 표기(wonToMan, 숫자 크게·단위 작게 — 단위는 값과 같은 색, After 이미지 그대로). 원 단위 원값은 title 로 남긴다. 계산 불변. */}
+          {/* 2026-09-14: 3열 타일 폭 55px 에서 이 라벨만 `완납`/`매출액` 두 줄이었다(옆 타일은 1줄). */}
+            <StatCard label="완납액" value={wonToMan(m.revenue)} unit="만" valueTitle={`${m.revenue.toLocaleString()}원`} icon="wallet" emerald sub={m.addon.count > 0 ? `애드온 ${wonToMan(m.addon.revenue)}만 포함` : undefined} />
+            <StatCard label="미수 금액" value={wonToMan(m.unpaid)} unit="만" valueTitle={`${m.unpaid.toLocaleString()}원`} icon="alert" danger={m.unpaid > 0} sub={m.addon.unpaid > 0 ? `애드온 ${wonToMan(m.addon.unpaid)}만 포함` : undefined} />
             <StatCard label="사용 이용권" value={`${m.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} icon="ticket" gold sub={m.ticketUnpaid > 0 ? `미수 ${m.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : '1T = 1만원'} />
           </div>
 
@@ -736,7 +737,7 @@ function StatIcon({ name, className = '' }: { name: IconName; className?: string
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>{ICON_PATHS[name]}</svg>;
 }
 
-function StatCard({ label, value, sub, icon, danger, emerald, gold, testId }: { label: string; value: string; sub?: string; icon: IconName; danger?: boolean; emerald?: boolean; gold?: boolean; testId?: string }) {
+function StatCard({ label, value, unit, valueTitle, sub, icon, danger, emerald, gold, testId }: { label: string; value: string; unit?: string; valueTitle?: string; sub?: string; icon: IconName; danger?: boolean; emerald?: boolean; gold?: boolean; testId?: string }) {
   const c = danger ? 'text-danger-light' : emerald ? 'text-emerald-400' : gold ? 'text-accent-300' : 'text-ink-primary';
   return (
     <div className="flex min-h-21 flex-col rounded-aura border card-aura p-2.5">
@@ -749,7 +750,7 @@ function StatCard({ label, value, sub, icon, danger, emerald, gold, testId }: { 
       {/* data-testid: e2e 가 이 값을 **클래스가 아니라 이름으로** 찾게 한다.
           종전엔 `p.text-lg` 로 찾았는데, 좁은 폭 대응으로 `text-base sm:text-lg` 가 되자
           모바일 하네스에서 0개가 됐다(게이트가 거짓 실패). 글자 크기는 앞으로도 바뀐다. */}
-      <p data-testid="stat-card-value" className={['mt-auto whitespace-nowrap pt-2 text-base font-extrabold leading-none tabular-nums sm:text-lg sm:leading-7', c].join(' ')}>{value}</p>
+      <p data-testid="stat-card-value" className={['mt-auto whitespace-nowrap pt-2 text-base font-extrabold leading-none tabular-nums sm:text-lg sm:leading-7', c].join(' ')} title={valueTitle}>{value}{unit && <span className="ml-[3px] text-[0.72em] font-bold leading-none">{unit}</span>}</p>
       {/* ⚠ 보조 줄은 **반드시 한 줄**이어야 한다. 자리만 예약하고 줄 수를 안 묶으면, 실제 폭
           (412px 3칸 = 카드 111px)에서 '전체 바인 중 0.0%' 가 두 줄로 접혀 그 카드만 값이 14px 올라간다
           — 로그인 화면 실측에서 잡았다(2026-09-06). 넓은 하네스에서는 안 접혀 안 보이던 결함이다.
