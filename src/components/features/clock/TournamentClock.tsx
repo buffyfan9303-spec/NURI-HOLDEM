@@ -36,6 +36,7 @@ import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
 import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, subscribeClockTheme, subscribeClockAd, publishClockSignal, clockAmbienceOf, type ClockTheme } from './clockTheme';
 import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
+import { ambIsolation } from './ambience/ambiencePresets';
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { isStaleResponse, type RequestStamp } from '../../../lib/staleResponse';
@@ -1177,7 +1178,7 @@ function ClockLive({ state, canManage, venueName, onChange, onSave, onReload, on
         fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'flex flex-col rounded-card aspect-video',
         stageScale != null ? 'absolute left-0 top-0 origin-top-left' : ''].join(' ')}
         data-amb-root
-        style={{ ...clkVars, background: 'var(--clk-bg, #06080F)', isolation: 'isolate',
+        style={{ ...clkVars, background: 'var(--clk-bg, #06080F)', ...ambIsolation(clockAmbienceOf(clkVars)),
           ...(stageScale != null ? { width: STAGE_CANVAS_W, height: STAGE_CANVAS_W * 9 / 16, transform: `scale(${stageScale})` } : null) }}>
         {/* 2026-09-02 v3 'NURI 아우라'(오너 승인) — TV(ClockDisplay)와 같은 정보 위계·색 체계. 라벨은 2026-09-19 부터 영문 대문자,
             골드는 프라이즈 금액에만, 레벨/블라인드 인디고, 타이머 순백. 조작부(아래 컨트롤 행)는 그대로. */}

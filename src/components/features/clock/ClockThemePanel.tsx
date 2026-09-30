@@ -16,6 +16,7 @@ import {
   publishClockTheme, clockAmbienceOf, type ClockTheme, type ClockThemePreset,
 } from './clockTheme';
 import ClockAmbienceSlot from './ambience/ClockAmbienceSlot';
+import { ambIsolation } from './ambience/ambiencePresets';
 import { uploadClockBg, deleteClockBg } from './clockBgImage';
 
 /**
@@ -43,7 +44,7 @@ function ClockMiniFace({ vars, accent, em, cqw, className, still }: {
   const filled = 6;
   return (
     <div data-amb-root className={`relative flex aspect-video flex-col overflow-hidden text-white ${className ?? ''}`}
-      style={{ ...vars, fontSize: cqw ? `min(${em}px, ${cqw}cqw)` : `${em}px`, background: 'var(--clk-bg)', isolation: 'isolate' }} aria-hidden>
+      style={{ ...vars, fontSize: cqw ? `min(${em}px, ${cqw}cqw)` : `${em}px`, background: 'var(--clk-bg)', ...ambIsolation(clockAmbienceOf(vars as Record<string, string>)) }} aria-hidden>
       {/* 모션 테마 — TV 와 같은 장면을 이 크기로 그린다(해상도 무관). 테마가 아니면 아무것도 안 받는다. */}
       <ClockAmbienceSlot id={clockAmbienceOf(vars as Record<string, string>)} still={still} />
       {/* 상단 — 매장명만. LEVEL 알약·RUNNING 알약은 2026-09-19 오너 지시 #9 로 보드에서 사라졌다(ClockStage LevelLine). */}

@@ -45,3 +45,9 @@ export const ambienceBgCss = ([top, mid, base]: [string, string, string]) =>
 
 /** 폭우 유리창 영상(사이트 정적 파일 · Mixkit 무료 라이선스 — ASSETS.md). */
 export const RAIN_GLASS_VIDEO = { mp4: '/clock-ambience/rain-window.mp4', poster: '/clock-ambience/rain-window.jpg' } as const;
+
+/** 스테이지 루트의 쌓임 맥락 — **모션 테마일 때만** 만든다.
+ *  🔴 기존 테마에 걸면 안 된다: ClockStage 의 타이머 bloom(-z-10)이 지금은 루트 배경 **밑**에 깔려 안 보이는데,
+ *  루트가 isolation 을 가지면 bloom 이 루트 배경 위로 올라와 기존 10종 전부 타이머 뒤가 밝아진다
+ *  (PR #58 검토 2026-09-30 실측: 1920 기본 테마 d>16 픽셀 38,718). 모션 테마는 층이 bloom 위를 덮어 차이가 없다. */
+export const ambIsolation = (id: string | null | undefined) => (id ? { isolation: 'isolate' as const } : null);

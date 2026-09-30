@@ -38,12 +38,34 @@ export interface ClockAmbienceProps {
 
 const FILL: CSSProperties = { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' };
 
+// 정지 썸네일은 한 장씩, 브라우저가 쉴 때 그린다 — 테마 패널이 15장을 한 프레임에 그려 클락 탭을 열 때
+// 긴 프레임 중앙값 817ms 였다(PR #58 검토 2026-09-30, base 69ms). 큰 미리보기·TV(움직이는 장면)는 줄을 서지 않는다.
+const stillQueue: (() => void)[] = [];
+let stillPumping = false;
+const whenIdle = (f: () => void) => { if (typeof requestIdleCallback === 'function') requestIdleCallback(f, { timeout: 300 }); else setTimeout(f, 16); };
+function pumpStill() {
+  if (stillPumping) return;
+  stillPumping = true;
+  whenIdle(() => {
+    stillPumping = false;
+    stillQueue.shift()?.();
+    if (stillQueue.length) pumpStill();
+  });
+}
+/** 줄에 넣고, 빼는 함수를 돌려준다(언마운트·다시 줄 서기). */
+function enqueueStill(job: () => void): () => void {
+  stillQueue.push(job);
+  pumpStill();
+  return () => { const i = stillQueue.indexOf(job); if (i >= 0) stillQueue.splice(i, 1); };
+}
+
 export default function ClockAmbience({ motion, scene, video, dim = 0.3, avoidSelector = AMBIENCE_AVOID_DEFAULT, seed, still = false, onFrame }: ClockAmbienceProps) {
   const cvRef = useRef<HTMLCanvasElement>(null);
   const bgRef = useRef<HTMLCanvasElement>(null);
   const midRef = useRef<HTMLCanvasElement>(null);
   const shadeRef = useRef<HTMLCanvasElement>(null);
   const vRef = useRef<HTMLVideoElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const onFrameRef = useRef(onFrame);
   onFrameRef.current = onFrame;
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
@@ -77,7 +99,11 @@ export default function ClockAmbience({ motion, scene, video, dim = 0.3, avoidSe
   useEffect(() => {
     const cv = cvRef.current;
     const fx = scene ? scene.fx ?? null : motion ? AMBIENCE_EFFECTS[motion] : null;
-    if (!cv || (!fx && !scene)) return;
+    // 첫 그림이 나오면 층을 서서히 보인다 — 그 전에는 루트의 CSS 대체 바탕(--clk-bg)이 보이고, 장면이 0.3초 뒤 툭 바뀌지 않게 겹쳐 넘긴다.
+    //   ⚠ 마운트한 그 작업 안에서 1 로 바꾸면 브라우저가 0 인 상태를 한 번도 계산하지 않아 전환 없이 바로 1 이 된다(실측: 한 프레임에 툭).
+    //   그래서 0 을 먼저 계산시키고(getComputedStyle 읽기) 1 로 바꾼다.
+    const reveal = () => { const el = boxRef.current; if (!el || el.style.opacity === '1') return; void getComputedStyle(el).opacity; el.style.opacity = '1'; };
+    if (!cv || (!fx && !scene)) { reveal(); return; }
 
     const r = createAmbienceRenderer(
       { fx: cv, bg: bgRef.current, mid: midRef.current, shade: shadeRef.current },
@@ -119,13 +145,21 @@ export default function ClockAmbience({ motion, scene, video, dim = 0.3, avoidSe
     };
     const stop = () => { if (raf) cancelAnimationFrame(raf); raf = 0; };
 
-    const resize = () => {
-      const w = cv.clientWidth, h = cv.clientHeight;
+    // 같은 크기면 다시 그리지 않는다 — 마운트 때 직접 부른 resize 와 ResizeObserver 첫 콜백이 장면을 두 번 그렸다.
+    let sizeKey = '';
+    const paint = () => {
+      const w = cv.clientWidth, h = cv.clientHeight, d = window.devicePixelRatio || 1;
       if (!(w > 0 && h > 0)) return;
-      r.resize(w, h, window.devicePixelRatio || 1);
+      const key = `${w}x${h}@${d}`;
+      if (key === sizeKey) return;
+      sizeKey = key;
+      r.resize(w, h, d);
       measureZones();
       if (!raf) r.render(); // 멈춘 상태(reduced-motion·숨김)에서도 새 크기의 정지 프레임은 그린다
+      reveal();
     };
+    let dequeue: (() => void) | null = null;
+    const resize = still ? () => { dequeue?.(); dequeue = enqueueStill(() => { dequeue = null; paint(); }); } : paint;
 
     const onVis = () => (document.hidden ? stop() : start());
     const onMotionPref = () => { if (mq?.matches || still) { stop(); r.render(); } else start(); };
@@ -141,6 +175,7 @@ export default function ClockAmbience({ motion, scene, video, dim = 0.3, avoidSe
 
     return () => {
       stop();
+      dequeue?.();
       ro?.disconnect();
       window.clearInterval(zoneTimer);
       window.removeEventListener('resize', resize);
@@ -149,8 +184,10 @@ export default function ClockAmbience({ motion, scene, video, dim = 0.3, avoidSe
     };
   }, [motion, scene, seed, avoidSelector, still]);
 
+  const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   return (
-    <div aria-hidden data-testid="clk-ambience" data-motion={scene?.id ?? motion ?? ''} style={{ ...FILL, pointerEvents: 'none', overflow: 'hidden' }}>
+    <div ref={boxRef} aria-hidden data-testid="clk-ambience" data-motion={scene?.id ?? motion ?? ''}
+      style={{ ...FILL, pointerEvents: 'none', overflow: 'hidden', opacity: 0, transition: reduce ? undefined : 'opacity 450ms ease-out' }}>
       {still && video?.poster && (
         <img src={video.poster} alt="" style={{ ...FILL, objectFit: 'cover' }} />
       )}
