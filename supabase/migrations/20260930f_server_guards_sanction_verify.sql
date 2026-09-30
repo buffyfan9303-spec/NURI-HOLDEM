@@ -1,12 +1,12 @@
 -- ⏳ 미적용 초안 (store-team 작성, 2026-09-30). 적용은 리드가 MCP execute_sql 로(적용 전 critical 재검토). 리허설 결과는 맨 아래.
 -- 20260930f — 화면만 막던 가드를 서버로 (오너 2026-09-30 보안 점검 D-2 ← critical-reviewer D-1)
+-- 🔴 §0 게이트는 이 파일을 **한 번에** 적용할 때만 전체를 지킨다 — 나눠 적용 금지(앞부분만 적용되면 뒤 함수의 md5 대조가 빠진다).
 --
 -- 원천: .claude/agent-memory-local/critical-reviewer/security_d1_ai_webapp_review_2026-09-30.md · D-1 ⑥ 화면 가드 표(F1~F4) · P2-1/2/3/5.
 -- 전제(2026-09-30 라이브 실측): app_settings.identity_voucher_enabled = 'on' · PG 17.6 · 제재 계정 0명 · 미인증 일반 회원 2명.
 --
--- F1 [P1] reserve_schedule 에 본인인증(만 19세)·활성 계정 검사 — 화면(ScheduleDetailModal.tsx ensureVerified)만 막고 있었다.
---    · 판정은 기존 정본 그대로: identity_gate_on()('on' 일 때만 — 끄면 화면과 같이 로그인만) + is_ci_verified(ci_hash, verified_at)
---      (open_event_card·issue_voucher 와 같은 두 함수). 클라이언트 user.verified = !!ci_hash 와 같은 뜻.
+-- F1 [P1] reserve_schedule 에 활성 계정 검사(제재 차단). **본인인증 검사는 넣지 않는다** — 오너 결정 2026-09-29 "대회 예약은 로그인만"
+--    (20260929a_reservation_message_no_identity.sql 4–5행 · src/components/features/postGateContract.test.ts:56). critical 재검토(리드 결정)로 뺐다.
 --    · 직접 INSERT 경로를 닫는다: schedule_reservations 의 INSERT 를 authenticated·anon 에서 회수(예약은 RPC 로만).
 --      sr_update 는 with_check 가 없어 본인 행의 schedule_id 를 다른 대회로 바꾸는 '우회 예약'이 됐다 → UPDATE 는 display_name 열만.
 --      anon 은 정책상 아무것도 못 했지만 GRANT 가 남아 있었다 → 전부 회수. 화면 사용(src/api/reservations.ts): select·delete·update(display_name) 만.
@@ -25,9 +25,8 @@
 -- P2-1 get_domestic_rankings 의 total_won(상금 합 원화)을 반환에서 뺀다 — 화면 미사용(src 전수 grep: rankverify.ts 매핑뿐), §28.
 --    반환 타입이 바뀌므로 DROP + 재생성 → ACL 이 초기화된다 → REVOKE/GRANT 를 라이브 값(anon·authenticated·service_role)대로 다시 쓴다.
 --    정렬은 내부에서 그대로(points desc, 상금 합 desc).
--- P2-2 venue_player_counts 공개 분기(업주가 rankMetrics 를 켠 매장의 비로그인·일반 회원)는 이 매장 순위(venue_rankings)
---    닉네임과 맞는 이름만 돌려준다. 장부 player_name 원문(실명 입력분)이 공개로 나가던 경로. 관리 분기(장부 권한·매장 관리)는 그대로.
---    라이브 영향: rankMetrics 를 켠 매장 0.
+-- P2-2 venue_player_counts 공개 분기의 장부 이름 원문 노출 — **보류 — 별도 과제**(리드 결정 2026-09-30).
+--    순위 닉네임만 남기면 공개 바인왕·출석왕 보드가 통째로 비는 기능 축소라 이 파일에서 뺐다. 라이브 영향: rankMetrics 를 켠 매장 0.
 -- P2-3 poll_results · cast_poll_vote 가 게시글 RLS(posts_select: 블라인드·차단·본인·관리자)를 우회 → _poll_visible(내부) 로 같은 조건을 본다.
 --    ⚠ 조건은 posts_select 정책의 복제다 — §0-b 가 그 정책의 md5 를 고정해 둔다. 정책을 바꾸면 _poll_visible 도 같이 바꿔라.
 -- P2-5 정책 0개인데 GRANT 가 남은 테이블 4개 → anon·authenticated 권한 전부 회수. 참조 전수(2026-09-30): 정책·invoker 함수·뷰 0곳,
@@ -36,7 +35,7 @@
 -- ── F2 전수 표: 로그인 사용자가 부르는 정의자 쓰기 함수 중 제재 검사가 없던 것 (2026-09-30 라이브 pg_proc, admin_* 제외) ──
 --   | 함수 | 쓰는 곳 | 이번 조치 |
 --   | share_spot_post | community_posts·post_spots·post_polls | 함수 가드 + 트리거 근본 수정 |
---   | reserve_schedule | schedule_reservations | 함수 가드(활성·본인인증) + 직접 INSERT 회수 |
+--   | reserve_schedule | schedule_reservations | 함수 가드(활성) + 직접 INSERT 회수 (본인인증 없음 — 오너 결정 2026-09-29) |
 --   | check_in → _apply_checkin | checkins·profiles.activity_points·customer_profiles | check_in 가드(_apply_checkin 은 service_role 전용, 호출부 1) |
 --   | claim_daily_login_point | profiles.activity_points·last_seen_at | 비활성이면 null(적립·접속 갱신 없음) |
 --   | claim_mission | mission_claims·profiles.activity_points | 함수 가드 |
@@ -51,7 +50,7 @@
 --   | reveal_post_spot / record_referral / record_my_legal_consent / set_my_* / increment_*_view / bump_schedule_view | 자기 설정·조회수 | 범위 밖(무해·자기 데이터) |
 --   | bump_post · buy_shout · buy_cosmetic · buy_mark · buy_mark_rental · buy_nickname_reset · buy_season_badge | — | 이미 status 검사 있음 |
 --
--- 바뀌는 것: 함수 12개(같은 시그니처 create or replace 11 + DROP/재생성 1) + 내부 함수 1 + 정책 2 + 테이블 권한 5.
+-- 바뀌는 것: 함수 11개(같은 시그니처 create or replace 10 + DROP/재생성 1) + 내부 함수 1 + 정책 2 + 테이블 권한 5.
 -- 되돌리기: 각 함수를 §0 md5 가 가리키는 이전 본문으로 create or replace(get_domestic_rankings 는 DROP 후 옛 반환형으로 재생성 + ACL 재기재),
 --   정책 2개를 이전 식으로 alter policy, drop function public._poll_visible(uuid),
 --   grant insert, update on public.schedule_reservations to authenticated (anon 은 되돌리지 마라 — 쓰임 0).
@@ -71,7 +70,6 @@ begin
       ('public.toggle_post_like(uuid)',                   'bbe1d4c617b1e68c4b8ea498490909f2'),
       ('public.toggle_listing_like(uuid)',                'a79e575230fe85f8ec5cb9ff1d2bb546'),
       ('public.get_domestic_rankings(integer)',           '2d068f8a12d79c31b7a1dc24af4b22a5'),
-      ('public.venue_player_counts(uuid)',                '554054c1ffc12d97b86256d67685e072'),
       ('public.poll_results(uuid)',                       '6487b01eb00e2dd3b8e56b22158e33c0'),
       -- 아래 둘은 바꾸지 않는다 — 가드가 기대는 판정의 뜻을 고정한다.
       ('public.is_account_active()',                      'c7b56ae2fff4420cecedfce06bc9d395'),
@@ -102,17 +100,6 @@ begin
     end if;
   end loop;
 end $prepol$;
-
--- §0-c 판정 전제 — 본인인증 킬스위치 정본이 'on' 일 때만 켜짐인지(화면 identityFlag.ts 와 같은 뜻).
-do $prefn$
-begin
-  if pg_get_functiondef('public.identity_gate_on()'::regprocedure) not like '%identity_voucher_enabled%''on''%' then
-    raise exception '20260930f: identity_gate_on 본문이 예상과 다릅니다 — 본인인증 판정 전제를 다시 확인하세요';
-  end if;
-  if pg_get_functiondef('public.is_ci_verified(text,timestamp with time zone)'::regprocedure) not like '%p_ci is not null%' then
-    raise exception '20260930f: is_ci_verified 본문이 예상과 다릅니다 — 화면 verified(!!ci_hash)와 같은 뜻인지 다시 확인하세요';
-  end if;
-end $prefn$;
 
 -- §1 F2 근본 — 트리거 가드가 정의자 함수 안에서도 켜지게
 -- ⚠ security invoker 그대로(20260927b) — definer 로 만들면 current_user 판정이 다시 죽는다.
@@ -146,13 +133,6 @@ begin
   -- 20260930f: 제재 계정 차단(트리거 가드는 정의자 함수 안에서 꺼졌다).
   if not public.is_account_active() then
     raise exception '제재 중이거나 비활성화된 계정은 이용할 수 없습니다';
-  end if;
-  -- 20260930f: 본인인증(만 19세) — 화면(ensureVerified)과 같은 스위치·같은 판정. 스위치가 꺼지면 로그인만 본다.
-  if public.identity_gate_on() and not exists (
-    select 1 from public.profiles p
-     where p.id = v_uid and public.is_ci_verified(p.ci_hash, p.verified_at)
-  ) then
-    raise exception '본인인증을 완료해야 대회를 예약할 수 있습니다 — 내 정보 > 보안에서 인증을 마쳐 주세요';
   end if;
   -- 끝난 대회 차단 — 유령 예약(업주 명단 오염) + 오픈이벤트 첫예약 보너스 어뷰징 방지.
   -- 최종 게이트는 trg_block_ended_reservation 이고, 여기서도 같은 헬퍼를 써 판정이 갈리지 않게 한다.
@@ -611,36 +591,6 @@ $function$;
 revoke all on function public.get_domestic_rankings(integer) from public;
 grant execute on function public.get_domestic_rankings(integer) to anon, authenticated, service_role;
 
--- §11 P2-2 venue_player_counts — 공개 분기는 이 매장 순위 닉네임과 맞는 이름만
-create or replace function public.venue_player_counts(p_venue_id uuid)
- returns table(name text, buyin_count bigint, visit_count bigint)
- language sql
- stable security definer
- set search_path to 'public', 'pg_temp'
-as $function$
-  -- 20260930f: 공개 지표(rankMetrics)로 열린 조회는 장부 이름 원문(실명 입력분 포함)을 내보내지 않는다 —
-  --   이 매장 순위(venue_rankings)에 오른 닉네임과 같은 이름만 남기고 나머지는 뺀다. 관리 분기(장부·매장 관리)는 종전대로 전부.
-  with acc as (
-    select coalesce(public.can_access_ledger(p_venue_id) or public.can_manage_venue(p_venue_id), false) as mgr,
-           exists (select 1 from public.venues v where v.id = p_venue_id
-                     and (v.page_config->'rankMetrics') ?| array['moneyin_rate','buyin_count','visit_count']) as pub
-  ), b as (
-    select coalesce(nullif(case when btrim(b0.player_name) ~ '^[^(]+\(.*\)$'
-                                then btrim(substring(btrim(b0.player_name) from '^[^(]+\((.*)\)$'))
-                                else btrim(b0.player_name) end, ''), '회원') as nick,
-           b0.session_date
-      from public.ledger_buyins b0, acc
-     where b0.venue_id = p_venue_id
-       and (acc.mgr or acc.pub)
-  )
-  select b.nick, count(*)::bigint, count(distinct b.session_date)::bigint
-    from b, acc
-   where acc.mgr
-      or exists (select 1 from public.venue_rankings r
-                  where r.venue_id = p_venue_id and lower(btrim(r.nickname)) = lower(b.nick))
-   group by b.nick
-$function$;
-
 -- §12 P2-5 정책 0개 테이블의 남은 GRANT 회수(정의자 함수만 쓴다)
 revoke all on table public.venue_event_requests    from anon, authenticated;
 revoke all on table public.venue_owners            from anon, authenticated;
@@ -666,8 +616,6 @@ revoke all on function public.toggle_listing_like(uuid) from public, anon;
 grant execute on function public.toggle_listing_like(uuid) to authenticated, service_role;
 revoke all on function public.poll_results(uuid) from public;
 grant execute on function public.poll_results(uuid) to anon, authenticated, service_role;
-revoke all on function public.venue_player_counts(uuid) from public;
-grant execute on function public.venue_player_counts(uuid) to anon, authenticated, service_role;
 
 -- §14 자가검사
 do $check$
@@ -680,7 +628,7 @@ begin
       ('public.check_in(uuid,double precision,double precision,double precision)'),
       ('public.claim_daily_login_point()'), ('public.claim_mission(text)'), ('public.cast_poll_vote(uuid,uuid)'),
       ('public.toggle_post_like(uuid)'), ('public.toggle_listing_like(uuid)'), ('public.get_domestic_rankings(integer)'),
-      ('public.venue_player_counts(uuid)'), ('public.poll_results(uuid)'), ('public._poll_visible(uuid)')) t(sig)
+      ('public.poll_results(uuid)'), ('public._poll_visible(uuid)')) t(sig)
   loop
     if pg_get_functiondef(r.sig::regprocedure) not like '%20260930f%' then
       raise exception '20260930f 자가검사: % 본문이 바뀌지 않았습니다', r.sig;
@@ -711,8 +659,7 @@ begin
      or not has_function_privilege('authenticated', 'public.share_spot_post(text,jsonb,text,text,text,text,text,text,jsonb,boolean,boolean,boolean)', 'execute')
      or not has_function_privilege('anon', 'public.get_domestic_rankings(integer)', 'execute')
      or not has_function_privilege('authenticated', 'public.get_domestic_rankings(integer)', 'execute')
-     or not has_function_privilege('anon', 'public.poll_results(uuid)', 'execute')
-     or not has_function_privilege('anon', 'public.venue_player_counts(uuid)', 'execute') then
+     or not has_function_privilege('anon', 'public.poll_results(uuid)', 'execute') then
     raise exception '20260930f 자가검사: 필요한 실행 권한이 빠졌습니다';
   end if;
   -- 테이블 권한
@@ -761,3 +708,9 @@ notify pgrst, 'reload schema';
 -- 리허설 뒤 수정(1건): require_active_author 에 `security invoker` 를 명시하고 §14 에 prosecdef 검사를 더했다(20260927b 계약).
 --   재리허설(같은 날, 롤백): 새 정의 적용 후 prosecdef=f · ACL {postgres,service_role} 유지 · 정지 계정 share_spot_post 를
 --   **함수 가드 없이 트리거만으로** 거절(DENY '제재 중이거나…') — 근본 수정이 단독으로도 막는다는 대조.
+-- 2차 수정(2026-09-30, critical 재검토 → 리드 결정): F1 본인인증 분기·§0-c 삭제(오너 결정 '예약은 로그인만'), P2-2(§11) 제외(별도 과제).
+--   위 리허설 표의 'F1 미인증 예약 → 본인인증 문구'·'P2-2 공개 분기 → 0행' 줄은 이 판에 해당하지 않는다. 이 판의 재리허설은 아래.
+--   재리허설(2차 판, 라이브 롤백): §0·§0-b 게이트·§14 자가검사 통과. 적용 전 → 후:
+--     미인증 일반 회원 예약 ok → ok(양성) · 인증 회원 예약 ok → ok · 정지 계정 예약 ok → '제재 중…' 거절 ·
+--     미인증 직접 INSERT 1 → 42501 · venue_player_counts md5 554054c1… → 그대로(손대지 않음).
+--     ⚠ 이 재리허설은 함수 본문 안의 옛 설명 주석 일부를 줄여 붙였다(실행 문장은 파일과 같다).

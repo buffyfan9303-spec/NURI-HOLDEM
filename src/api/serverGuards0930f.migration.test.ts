@@ -18,13 +18,12 @@ const between = (from: string, to: string) => {
 const ACTIVE = 'if not public.is_account_active() then';
 
 describe('20260930f — 서버 가드(본인인증·제재·공개 반환)', () => {
-  it('F1 예약: 활성 계정 + 본인인증(화면과 같은 스위치·판정)', () => {
+  it('F1 예약: 활성 계정만 본다 — 본인인증은 없다(오너 결정 2026-09-29 "대회 예약은 로그인만")', () => {
     const fn = between('-- §2 ', '-- §2-b');
     expect(fn).toContain(ACTIVE);
-    expect(fn).toContain('public.identity_gate_on() and not exists');
-    expect(fn).toContain('public.is_ci_verified(p.ci_hash, p.verified_at)');
-    // 가드는 INSERT 보다 앞이다
-    expect(fn.indexOf('is_ci_verified')).toBeLessThan(fn.indexOf('insert into schedule_reservations'));
+    expect(fn.indexOf(ACTIVE)).toBeLessThan(fn.indexOf('insert into schedule_reservations'));
+    expect(fn).not.toContain('is_ci_verified');
+    expect(fn).not.toContain('identity_gate_on');
   });
 
   it('F1 예약: 직접 INSERT·열 전체 UPDATE 회수, 이름만 고칠 수 있다', () => {
@@ -59,7 +58,7 @@ describe('20260930f — 서버 가드(본인인증·제재·공개 반환)', () 
   });
 
   it('P2-1 순위: total_won 을 반환하지 않고, DROP 뒤 ACL 을 다시 쓴다', () => {
-    const fn = between('-- §10 ', '-- §11 ');
+    const fn = between('-- §10 ', '-- §12 ');
     expect(fn).toContain('returns table(nickname text, points bigint, wins integer, overseas integer)');
     expect(fn.slice(fn.indexOf('drop function'))).not.toContain('total_won'); // 섹션 제목(설명)은 빼고 코드만
     expect(fn).toContain('revoke all on function public.get_domestic_rankings(integer) from public;');
@@ -68,9 +67,8 @@ describe('20260930f — 서버 가드(본인인증·제재·공개 반환)', () 
     expect(readFileSync(join(__dirname, 'rankverify.ts'), 'utf-8')).not.toContain('total_won');
   });
 
-  it('P2-2 공개 분기는 순위 닉네임과 맞는 이름만', () => {
-    const fn = between('-- §11 ', '-- §12 ');
-    expect(fn).toMatch(/where acc\.mgr\s+or exists \(select 1 from public\.venue_rankings r/);
+  it('P2-2 는 이번 파일에서 빠졌다(별도 과제 — 공개 보드 기능 축소)', () => {
+    expect(SQL).not.toMatch(/create or replace function public\.venue_player_counts/);
   });
 
   it('P2-3 투표 결과·기표는 글 조회 가능 여부를 본다', () => {
