@@ -148,8 +148,9 @@ test.describe('관리자 → 노출 관리', () => {
     await section.click();
 
     const panel = adminPane(page);
-    for (const sub of ['배너', '광고', '외치기', '게시물', '공지']) {
-      const pill = page.getByRole('button', { name: sub, exact: true }).first();
+    // 라벨이 바뀌어도(2026-09-30 게시물→게시글) 이 검사가 빈손이 되지 않게 testid 로 잡는다.
+    for (const sub of ['banners', 'ads', 'shouts', 'posts', 'notices']) {
+      const pill = page.getByTestId(`exposure-sub-${sub}`);
       await expect(pill, `하위 탭 '${sub}' 이 없다`).toBeVisible({ timeout: 10_000 });
       await pill.click();
       await page.waitForTimeout(600);

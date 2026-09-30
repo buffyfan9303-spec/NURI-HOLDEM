@@ -1306,11 +1306,11 @@ export default function AdminTab({
           {section === 'exposure' && (
             <div className="space-y-3">
               <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-                <SubPill active={exposureTarget === 'banners'} onClick={() => setExposureTarget('banners')}>배너</SubPill>
-                <SubPill active={exposureTarget === 'ads'} onClick={() => setExposureTarget('ads')}>광고</SubPill>
-                <SubPill active={exposureTarget === 'shouts'} onClick={() => setExposureTarget('shouts')}>외치기</SubPill>
-                <SubPill active={exposureTarget === 'posts'} onClick={() => setExposureTarget('posts')}>게시글</SubPill>
-                <SubPill active={exposureTarget === 'notices'} onClick={() => setExposureTarget('notices')}>공지</SubPill>
+                <SubPill testId="exposure-sub-banners" active={exposureTarget === 'banners'} onClick={() => setExposureTarget('banners')}>배너</SubPill>
+                <SubPill testId="exposure-sub-ads" active={exposureTarget === 'ads'} onClick={() => setExposureTarget('ads')}>광고</SubPill>
+                <SubPill testId="exposure-sub-shouts" active={exposureTarget === 'shouts'} onClick={() => setExposureTarget('shouts')}>외치기</SubPill>
+                <SubPill testId="exposure-sub-posts" active={exposureTarget === 'posts'} onClick={() => setExposureTarget('posts')}>게시글</SubPill>
+                <SubPill testId="exposure-sub-notices" active={exposureTarget === 'notices'} onClick={() => setExposureTarget('notices')}>공지</SubPill>
               </div>
               {exposureTarget === 'banners' && <HomeBannersCard onChanged={onReloadBanners} />}
               {exposureTarget === 'ads' && <AdSlotsAdmin posts={posts} />}
@@ -1980,10 +1980,11 @@ function PendingRow({
 }
 
 // 노출 순서 하위 탭(포스터/매장)용 작은 토글 버튼
-function SubPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function SubPill({ active, onClick, children, testId }: { active: boolean; onClick: () => void; children: React.ReactNode; testId?: string }) {
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       className={[
         'flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-[6px] transition-colors focus:outline-hidden',

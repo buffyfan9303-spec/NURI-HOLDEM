@@ -756,7 +756,7 @@ ${cards}
                     (운영자 승인)를 본다 — pg_proc 직접 조회로 확인(2026-09-20).
                     오너 결정: "공동운영자에게 발급 줘. UI도 이에 맞춰서." → 실제 범위를 그대로 적는다.
                     ⚠ 위 주석대로 CheckinModal 의 같은 문구와 **갈리면 안 된다** — 둘 다 같이 고쳤다. */}
-                <b data-testid="voucher-issue-scope" className="text-ink-primary">매장이용권 전송은 관리자 승인을 받은 매장의 사장님·공동운영자만 전송할 수 있습니다.</b><br />
+                <b data-testid="voucher-issue-scope" className="text-ink-primary">매장이용권 전송은 이 매장의 업주·공동운영자 중 관리자 승인을 받은 계정만 할 수 있습니다.</b><br />
                 손님끼리 주고받을 수 없으며, <b className="text-ink-primary">금전적 가치가 없습니다</b>(매장 안에서 참가비로만 쓸 수 있고 다른 용도로 바꿀 수 없습니다).
               </p>
               <p className="text-2xs leading-relaxed text-ink-secondary">1회 최대 1000개 · 본인인증을 마친 회원 계정에만 전송됩니다(받는 손님 지정 필수). 받는 분은 <b className="text-ink-secondary">닉네임·실명 또는 전화번호</b>로 지정합니다(실명은 정확히 입력). 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다.</p>
@@ -771,7 +771,7 @@ ${cards}
           )}
         </div>
       ) : (
-        <p data-testid="voucher-issue-owner-badge" className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">전송·전송 취소·삭제는 <b className="text-ink-secondary">사장님</b> 전용. 직원은 열람·사용 처리만.</p>
+        <p data-testid="voucher-issue-owner-badge" className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">전송·전송 취소·삭제는 <b className="text-ink-secondary">업주</b> 전용. 직원은 열람·사용 처리만.</p>
       )}
 
       {/* 2) QR 코드 — 접기 */}
@@ -840,7 +840,7 @@ ${cards}
       {canIssue && (
         <button type="button" onClick={() => setOwnerOpen((v) => !v)} aria-expanded={ownerOpen}
           className="flex w-full items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
-          <span className="flex items-center gap-1.5 text-xs font-bold text-ink-secondary"><Icon name="chart" size={14} /> 보유자 현황·통계 <span className="font-normal text-ink-muted">· 사장님 전용</span></span>
+          <span className="flex items-center gap-1.5 text-xs font-bold text-ink-secondary"><Icon name="chart" size={14} /> 보유자 현황·통계 <span className="font-normal text-ink-muted">· 업주 전용</span></span>
           <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', ownerOpen ? 'rotate-180' : ''].join(' ')} />
         </button>
       )}
