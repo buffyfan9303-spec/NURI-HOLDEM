@@ -384,9 +384,10 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
                 className={[
                   'cal-day relative flex h-[50px] min-w-0 flex-col items-center justify-start gap-px rounded-input pt-1 md:h-[58px]',
                   isPicked ? 'chip-aura shadow-glow' : net && net > 0 ? 'bg-emerald-400/8 hover:bg-emerald-400/15' : net && net < 0 ? 'bg-danger/8 hover:bg-danger/15' : 'hover:bg-surface-high/50',
-                  outside ? 'opacity-35' : '',
                 ].join(' ')}>
-                <span className={['text-[13px] leading-4 tabular-nums md:text-[15px] md:leading-5', isToday ? 'font-extrabold text-accent-200' : 'font-semibold text-ink-primary'].join(' ')}>
+                {/* 다른 달 칸 — 칸 전체 opacity 0.35 를 걷고 날짜 숫자만 보조색으로(M-03, 2026-10-01).
+                    눌리는 버튼인데 라이트 2.27:1 로 읽히지 않았다(AA 미달 11/42 → 0/42). */}
+                <span className={['text-[13px] leading-4 tabular-nums md:text-[15px] md:leading-5', isToday ? 'font-extrabold text-accent-200' : outside ? 'font-semibold text-ink-muted' : 'font-semibold text-ink-primary'].join(' ')}>
                   {d.getDate()}
                 </span>
                 {/* 그날 +/− — 칸 폭(320: 39px)에 맞춘 짧은 금액. 없으면 같은 높이를 비워 둔다(칸 높이가 날마다 안 바뀐다). */}
