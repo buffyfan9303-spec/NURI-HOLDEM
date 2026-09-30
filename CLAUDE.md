@@ -48,10 +48,10 @@ PG(포트원·다날) 입점 심사와 카카오 비즈니스 심사가 모두 �
 
 ## 스택 (사실 정보 — 제약 아님)
 
-- Vite 8 + React 19 + TypeScript, Tailwind CSS v3.4 (`tailwind.config.js`)
+- Vite 8 + React 19 + TypeScript, **Tailwind CSS v4**(`tailwindcss` ^4.3 · `@tailwindcss/vite`, CSS-first — `tailwind.config.js` 없음). 클래스 이름은 v4 기준(v3 이름 `shadow-sm`·`rounded-sm`·`outline-none`·`bg-opacity-*` 등은 뜻이 바뀌었거나 없다).
 - 백엔드 Supabase, 에러추적 Sentry, 결제 PortOne, E2E Playwright (`npm run test:e2e`)
-- 디자인 토큰은 `src/index.css` 에 CSS 변수로, `tailwind.config.js` 가 `rgb(var(--surface-*) / <alpha-value>)`
-  문법으로 받는다. 아이콘 진입점은 `src/components/atoms/Icon.tsx`.
+- 디자인 토큰은 `src/index.css` 에 CSS 변수로 두고, 같은 파일 맨 위 `@theme inline` 이 `--color-*` 로 참조한다(2026-09-30 확인).
+  아이콘 진입점은 `src/components/atoms/Icon.tsx`.
 - 무엇을 쓰든 자유입니다. 다른 라이브러리·다른 문법·다른 구조로 갈아타도 됩니다.
   단 갈아탈 때 **화면이 깨지지 않게** 옮기세요(색 회귀·기능 소실은 위 3번에 걸립니다).
 
