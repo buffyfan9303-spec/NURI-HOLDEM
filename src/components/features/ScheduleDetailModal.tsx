@@ -228,8 +228,9 @@ export default function ScheduleDetailModal({
               style={{ background: 'linear-gradient(to bottom, rgba(10,12,15,0.7), transparent)' }}
             />
 
-            {/* 상단 배지 */}
-            <div className="absolute top-3 left-3 flex items-center gap-1 z-10">
+            {/* 상단 배지 — 포스터(어두운 면) 위라 라이트 테마에서도 밝은 글자를 쓴다.
+                data-on-dark: index.css 의 라이트 파스텔 보정(딥 톤)을 이 줄에서만 되돌린다(M-01, 2026-10-01). */}
+            <div data-on-dark="" className="absolute top-3 left-3 flex items-center gap-1 z-10">
               {status !== 'upcoming' && (
                 <span className={[
                   'rounded-badge px-2 py-0.5 text-xs font-bold leading-none',

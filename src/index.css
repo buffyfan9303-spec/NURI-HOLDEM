@@ -2232,6 +2232,15 @@ html.light .text-orange-400 { color: #B45309; }
 html.light .text-emerald-200 { color: #0A8F5C; }
 html.light .text-accent-100 { color: #5C3BBF; }
 html.light .text-pink-300 { color: #BE185D; }
+/* 어두운 포스터 위 배지(M-01, 2026-10-01) — 위 딥 톤 보정은 **밝은 지면**을 전제한다. 포스터·그라데이션 위에서는
+   딥 톤이 오히려 1.9:1 로 묻혔다(MTT 1.87 · GTD 1.96). 이미지 위 배지 줄에 data-on-dark 를 붙이면 그 줄만 밝은 파스텔을 유지한다.
+   값은 오너 확정 After 캡처의 주입값 그대로다(emerald 는 팔레트 토큰 #32D993 이 아니라 #6EE7B7). */
+html.light [data-on-dark] .text-blue-300    { color: #93C5FD; }
+html.light [data-on-dark] .text-purple-300  { color: #D8B4FE; }
+html.light [data-on-dark] .text-teal-300    { color: #5EEAD4; }
+html.light [data-on-dark] .text-amber-300   { color: #FCD34D; }
+html.light [data-on-dark] .text-pink-300    { color: #F9A8D4; }
+html.light [data-on-dark] .text-emerald-300 { color: #6EE7B7; }
 
 /* ── ⚠ 알파 변형(`text-x/60`)은 위 보정을 **하나도 받지 못한다** (2026-09-12 실측으로 발견) ──
    Tailwind 의 `text-sky-400/60` 은 `.text-sky-400` 이 아니라 `.text-sky-400\/60` 이라는
