@@ -71,7 +71,7 @@ export default function ActivityBadges({ points, visits, upcoming }: { points: n
 
       {/* 뱃지 진열장 */}
       <div>
-        <p className="mb-1.5 text-2xs text-ink-muted">획득 뱃지 <span className="font-semibold text-ink-secondary">{earnedCount}</span></p>
+        <p className="mb-1.5 text-2xs text-ink-muted">획득 배지 <span className="font-semibold text-ink-secondary">{earnedCount}</span></p>
         <div className="flex flex-wrap gap-1.5">
           {VISIT_BADGES.map((b) => <Chip key={`v${b.min}`} label={b.label} colorVar={b.colorVar} earned={visits >= b.min} />)}
           {RANK_BADGES.map((b) => <Chip key={`r${b.min}`} label={b.label} colorVar={b.colorVar} earned={points >= b.min} />)}

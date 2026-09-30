@@ -35,7 +35,7 @@ const LEGAL_TITLES: Record<LegalDoc, string> = {
 const MODE_LABEL: Record<Mode, string> = {
   'login':        '로그인',
   'signup-user':  '일반 회원가입',
-  'signup-owner': '매장 업주 회원가입',
+  'signup-owner': '매장 운영자 회원가입',
   'forgot':       '비밀번호 찾기',
 };
 
@@ -209,7 +209,7 @@ function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectio
         />
         <CheckRow onView={onView}
           checked={c.marketing} onChange={(v) => set('marketing', v)}
-          label="마케팅 정보 수신에 동의합니다. (이벤트·할인·푸시알림)" doc="marketing"
+          label="마케팅 정보 수신에 동의합니다. (이벤트·할인·푸시 알림)" doc="marketing"
         />
         {/* 오너 #12 — 순위표에 '자주 가는 매장'을 붙이려면 이동·방문 패턴 공개 동의가 필요하다.
             동의하지 않아도 순위·닉네임은 그대로 집계·표시된다(랭킹에서 빼면 순위가 왜곡된다). */}
@@ -291,10 +291,10 @@ function AuraSpade({ size }: { size: number }) {
 /** 모드별 제목 — `desc` 는 **있을 때만** 그린다(2026-09-18 오너 지시로 인트로 문장 3개를 뺐다).
  *  '비밀번호 찾기' 만 남겼다 — 인증번호가 **어디로** 가는지는 제목이 말하지 않는 판단 정보다. */
 const MODE_INTRO: Record<Mode, { title: string; desc?: string }> = {
-  'login':        { title: '다시 만나 반가워요',   },
+  'login':        { title: '다시 만나 반갑습니다',   },
   'signup-user':  { title: '누리홀덤 시작하기',     },
   'signup-owner': { title: '매장 운영 시작하기',    },
-  'forgot':       { title: '비밀번호를 잊으셨나요?', desc: '가입한 이메일로 인증번호를 보내드릴게요.' },
+  'forgot':       { title: '비밀번호를 잊으셨나요?', desc: '가입한 이메일로 인증번호를 보내 드립니다.' },
 };
 
 /** 오브젝트 + 제목 + 설명. 가입은 폼이 길어 오브젝트와 여백을 줄인다. */
@@ -305,7 +305,7 @@ function ModeIntro({ mode }: { mode: Mode }) {
     <div className={['flex flex-col items-center', compact ? 'gap-3 pb-4 pt-1' : 'gap-5 pb-7 pt-3'].join(' ')}>
       <AuraSpade size={compact ? 56 : 104} />
       <div className="text-center">
-        <h3 className={[
+        <h3 data-testid={`auth-title-${mode}`} className={[
           compact ? 'text-lg' : 'text-2xl',
           'font-extrabold leading-tight tracking-[-0.02em] text-ink-primary break-keep',
         ].join(' ')}>
@@ -334,7 +334,7 @@ function ModeSwitch({ question, action, onClick }: { question: string; action: s
 function SignupSegment({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
   const items: { m: Mode; label: string }[] = [
     { m: 'signup-user',  label: '일반 회원' },
-    { m: 'signup-owner', label: '매장 업주' },
+    { m: 'signup-owner', label: '매장 운영자' },
   ];
   return (
     <div className="mb-4 grid grid-cols-2 gap-1 rounded-input border border-white/6 bg-surface-base/70 p-1"
@@ -342,7 +342,7 @@ function SignupSegment({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => 
       {items.map(({ m, label }) => {
         const on = mode === m;
         return (
-          <button key={m} type="button" aria-pressed={on} onClick={() => onChange(m)}
+          <button key={m} type="button" data-testid={`auth-segment-${m}`} aria-pressed={on} onClick={() => onChange(m)}
             className={['min-h-[40px] rounded-[10px] text-xs font-bold transition-colors',
               on ? 'btn-primary min-h-[40px]! px-0! shadow-none!' : 'text-ink-muted hover:text-ink-primary'].join(' ')}>
             {label}
@@ -638,7 +638,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   return (
     <form onSubmit={reset} className="space-y-3">
       <p className="text-xs text-ink-secondary leading-relaxed">
-        <b className="text-ink-primary">{email}</b> 로 보낸 인증번호와 새 비밀번호를 입력해 주세요.
+        <b className="text-ink-primary">{email}</b> 주소로 보낸 인증번호와 새 비밀번호를 입력해 주세요.
       </p>
       <div>
         <label className="block text-xs font-medium text-ink-secondary mb-1.5">인증번호</label>
@@ -661,7 +661,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         {loading ? '재설정 중…' : '비밀번호 재설정'}
       </button>
       <div className="flex justify-between text-2xs">
-        <button type="button" onClick={() => setStep('email')} className="text-ink-muted hover:text-accent-300 transition-colors">코드 재전송</button>
+        <button type="button" onClick={() => setStep('email')} className="text-ink-muted hover:text-accent-300 transition-colors">인증번호 재전송</button>
         <button type="button" onClick={onBack} className="text-ink-muted hover:text-accent-300 transition-colors">로그인으로</button>
       </div>
     </form>
@@ -803,7 +803,7 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
         venueName, region, address, phone, businessNumber: bizNum,
       });
       if (locOk) await afterSignupLocation(mail.value);
-      toast.show('업주 가입 신청 완료. 로그인 후 휴대폰 본인인증·운영자 승인을 거쳐 포스터 업로드가 활성화됩니다.', 'success');
+      toast.show('매장 운영자 가입 신청이 완료되었습니다. 로그인 후 휴대폰 본인인증과 관리자 승인을 거치면 포스터를 올릴 수 있습니다.', 'success');
       onDone();
     } catch (err: unknown) {
       toast.show(err instanceof Error ? err.message : '가입 중 오류가 발생했습니다.', 'error');
@@ -822,7 +822,7 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
             <circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="9"/><circle cx="8" cy="11.5" r="0.5" fill="#FFD100"/>
           </svg>
           <p className="text-xs text-accent-300 leading-relaxed">
-            매장 업주는 <strong>운영자 승인</strong> 후 포스터 업로드 권한이 활성화됩니다.<br/>
+            매장 운영자는 <strong>관리자 승인</strong> 후 포스터를 올릴 수 있습니다.<br/>
             승인 처리는 영업일 기준 1~2일 소요됩니다.
           </p>
         </div>
@@ -866,8 +866,9 @@ function SignupOwnerForm({ mode, onMode, onDone }: { mode: Mode; onMode: (m: Mod
           type="submit"
           disabled={loading || !allRequired || nick.status !== 'available' || mail.status !== 'available' || !validatePassword(password).ok}
           className="btn-primary w-full mt-3 disabled:opacity-60"
+          data-testid="auth-owner-submit"
         >
-          {loading ? '처리 중…' : '업주 가입 신청'}
+          {loading ? '처리 중…' : '매장 가입 신청'}
         </button>
         <ModeSwitch question="이미 계정이 있으신가요?" action="로그인" onClick={onDone} />
       </form>
@@ -920,7 +921,7 @@ function PasswordHint({ value }: { value: string }) {
   if (!value) return <p className="mt-1 text-2xs text-ink-muted">{PASSWORD_RULE_HINT}</p>;
   return ok
     ? <p className="mt-1 text-2xs text-emerald-400" aria-live="polite">비밀번호 규칙을 모두 충족했습니다</p>
-    : <p className="mt-1 text-2xs text-danger" aria-live="polite">아직 부족해요: {reasons.join(' · ')}</p>;
+    : <p className="mt-1 text-2xs text-danger" aria-live="polite">아직 부족합니다: {reasons.join(' · ')}</p>;
 }
 
 // ── 폼 필드 헬퍼 ──────────────────────────────────────────────────────────────

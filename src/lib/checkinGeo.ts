@@ -45,10 +45,10 @@ export function useCheckinGeoEnabled(): boolean {
 export type CheckinGeoErrorCode = 'denied' | 'unavailable' | 'timeout' | 'unsupported';
 
 export const CHECKIN_GEO_MESSAGE: Record<CheckinGeoErrorCode, string> = {
-  denied: '위치 권한을 허용해야 출석할 수 있어요. 브라우저 설정에서 이 사이트의 위치 권한을 켜 주세요',
-  unavailable: '현재 위치를 확인할 수 없어요. 휴대폰 위치(GPS)를 켜고 매장 안에서 다시 시도해 주세요',
-  timeout: '위치 확인이 늦어지고 있어요. 매장 안에서 다시 시도해 주세요',
-  unsupported: '이 브라우저에서는 위치를 확인할 수 없어요. 다른 브라우저로 열어 주세요',
+  denied: '위치 권한을 허용해야 출석할 수 있습니다. 브라우저 설정에서 이 사이트의 위치 권한을 켜 주세요',
+  unavailable: '현재 위치를 확인할 수 없습니다. 휴대폰 위치(GPS)를 켜고 매장 안에서 다시 시도해 주세요',
+  timeout: '위치 확인이 늦어지고 있습니다. 매장 안에서 다시 시도해 주세요',
+  unsupported: '이 브라우저에서는 위치를 확인할 수 없습니다. 다른 브라우저로 열어 주세요',
 };
 
 /** 위치를 못 얻은 이유. home-team 재시도 시트가 `instanceof CheckinGeoError` + `.code` 로 분기한다. */

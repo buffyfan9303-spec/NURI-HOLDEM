@@ -60,7 +60,7 @@ test('🔴 ② 오늘·내일이 비면 가장 가까운 일정이 뜬다 — �
 
   await expect(page.locator(FALLBACK), '오늘·내일이 비었는데 폴백 안내가 없다 — 사용자는 9/21 대회를 오늘 것으로 읽는다')
     .toBeVisible();
-  await expect(page.locator(FALLBACK)).toContainText('오늘·내일은 예정 대회가 없어요');
+  await expect(page.locator(FALLBACK)).toContainText('오늘·내일은 예정 대회가 없습니다');
   await expect(page.getByText('가장 가까운 대회').first(), '다음 일정이 목록에 안 뜬다 — 칸이 여전히 비어 있다')
     .toBeVisible();
   // 옛 빈 상태 문구가 남아 있으면 폴백이 아니라 그냥 빈 칸이다.
@@ -69,7 +69,7 @@ test('🔴 ② 오늘·내일이 비면 가장 가까운 일정이 뜬다 — �
 
 test('🔴 ③ 앞으로 아무 일정도 없으면 빈 상태로 — 없는 것을 있다고 하지 않는다', async ({ page }) => {
   await openHomeWith(page, [row(kstPlus(-3), 's-past', '지난 대회')]);
-  await expect(page.getByText('예정된 대회가 없어요').first(), '일정이 하나도 없는데 빈 상태가 안 뜬다').toBeVisible();
+  await expect(page.getByTestId('home-schedule-empty'), '일정이 하나도 없는데 빈 상태가 안 뜬다').toBeVisible();
   await expect(page.locator(FALLBACK), '보여줄 다음 일정이 없는데 폴백 안내가 떴다').toHaveCount(0);
   await expect(page.getByText('지난 대회'), '지난 대회가 다음 일정으로 올라왔다').toHaveCount(0);
 });

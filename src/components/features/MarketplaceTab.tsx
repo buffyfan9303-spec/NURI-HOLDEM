@@ -131,7 +131,7 @@ function MarketplaceTab({
         <div className="flex gap-2">
           <button type="button" onClick={() => setMyListOpen(true)}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-input chip-aura text-xs font-semibold transition-colors">
-            <Icon name="package" size={14} className="shrink-0" />내 판매목록
+            <Icon name="package" size={14} className="shrink-0" />내 판매 목록
           </button>
           {/* 찜은 재방문 1순위 동선이라 판매목록·메시지함과 같은 높이에 둔다 */}
           <button type="button" onClick={() => setLikesOpen(true)}

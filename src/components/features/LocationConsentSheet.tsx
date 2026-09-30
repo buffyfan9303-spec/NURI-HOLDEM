@@ -13,11 +13,11 @@ import { BIZ_REQUIRED } from './BusinessFooter';
 import { otherGateOpen } from '../../lib/locationConsent';
 
 const POINTS: string[] = [
-  '출석 버튼을 누를 때 한 번, 휴대폰 위치(위도·경도·오차)를 받아요',
-  '매장 등록 위치에서 반경 안(300m, 오차 최대 200m 보정)인지만 판정해요',
-  '좌표는 저장하지 않고 판정 직후 버려요. 매장을 포함해 누구에게도 제공하지 않아요',
-  '이용 사실(일시·목적)만 기록해 6개월 보관 후 파기해요',
-  '동의하지 않아도 출석할 수 있어요. 내 정보 › 보안에서 언제든 철회하고 이용 내역을 볼 수 있어요',
+  '출석 버튼을 누를 때 한 번, 휴대폰 위치(위도·경도·오차)를 받습니다',
+  '매장 등록 위치에서 반경 안(300m, 오차 최대 200m 보정)인지만 판정합니다',
+  '좌표는 저장하지 않고 판정 직후 파기합니다. 매장을 포함해 누구에게도 제공하지 않습니다',
+  '이용 사실(일시·목적)만 기록해 6개월 보관 후 파기합니다',
+  '동의하지 않아도 출석할 수 있습니다. 내 정보 › 보안에서 언제든 철회하고 이용 내역을 볼 수 있습니다',
 ];
 
 export default function LocationConsentSheetView({ onChoose }: { onChoose: (v: boolean | null) => void }) {
@@ -40,7 +40,7 @@ export default function LocationConsentSheetView({ onChoose }: { onChoose: (v: b
         <div data-testid="location-consent-sheet" className="space-y-4 px-4 pb-5 pt-1">
           <div className="flex items-center gap-3 pt-1">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-300/12 text-accent-300"><Icon name="map-pin" size={22} /></div>
-            <p className="text-sm font-bold text-ink-primary">매장 안에 있는지 위치로 확인해 출석을 처리할까요?</p>
+            <p className="text-sm font-bold text-ink-primary">매장 안에 있는지 위치로 확인해 출석을 처리하시겠습니까?</p>
           </div>
           <ul className="space-y-1.5">
             {POINTS.map((t) => (

@@ -21,7 +21,7 @@ test('🔴 ?s=<없는 대회> — 안내 토스트가 뜨고 파라미터가 지
 
 test('🔴 ?v=<없는 매장> — /s/<코드> 와 같은 안내 토스트가 뜨고 파라미터가 지워진다', async ({ page }) => {
   await page.goto('/?v=zzzzzzzz');
-  await expect(page.getByText(/매장을 찾을 수 없어요/), '없는 매장 링크인데 아무 안내가 없다').toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/매장을 찾을 수 없습니다/), '없는 매장 링크인데 아무 안내가 없다').toBeVisible({ timeout: 20_000 });
   await noParam(page, 'v');
 });
 

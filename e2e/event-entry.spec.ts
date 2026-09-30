@@ -46,7 +46,7 @@ test('🔴 상시 진입 — 캠페인이 하나도 없어도 목록이 그 사�
   await menu.click();
   await expect(page.locator(LIST), '진입 칸을 눌렀는데 목록이 안 열린다').toBeVisible({ timeout: 15_000 });
   // 목록 자체가 빈 상태 답을 말한다 — 캠페인 0개는 보드가 아니라 여기서 갈린다(listEvents 는 board 를 거치지 않는다).
-  await expect(page.locator(LIST).getByText('진행 중인 이벤트가 없어요')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(LIST).getByTestId('event-list-empty')).toBeVisible({ timeout: 15_000 });
 });
 
 test('🔴 상시 진입 — 목록 조회 실패는 "없음" 과 다른 말을 한다', async ({ page }) => {
@@ -73,7 +73,7 @@ test('🔴 상시 진입 — 목록에서 고른 캠페인이 소진이어도 �
   await list.getByTestId('event-list-item').first().click();
   await expect(page.locator(DIALOG), '목록에서 캠페인을 골랐는데 보드가 안 열린다').toBeVisible({ timeout: 15_000 });
   // 판은 빈 화면이 아니라 **답**을 말한다(소진).
-  await expect(page.locator(DIALOG).getByText(/모두 열렸어요/).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(DIALOG).getByTestId('event-soldout')).toBeVisible({ timeout: 15_000 });
 });
 
 test('🔴 PC GNB — 이벤트 칸은 상태와 무관하게 늘 있다 · 누르면 목록 → 보드', async ({ page }) => {

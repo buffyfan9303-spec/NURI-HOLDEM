@@ -129,7 +129,7 @@ describe('🔴 §11 — 홈은 조회 실패를 "없어요" 로 위장하지 않
       .toMatch(/\(useFallback \? nextUp : dayVisible\)\.map\(/);
     // 🔴 건수는 **자르기 전 전체 수**여야 한다. 화면에 8개만 그려도 숫자는 사실이어야 한다(§6-1).
     expect(HOME, '건수가 자른 배열을 세고 있다 — 화면이 거짓 숫자를 말한다')
-      .toMatch(/총 \$\{daySchedules\.length\}개의 대회/);
+      .toMatch(/대회 \$\{daySchedules\.length\}개/);
     expect(HOME, '폴백일 때 그 사실을 말하지 않으면 사용자는 다음 일정을 오늘 것으로 읽는다')
       .toMatch(/data-testid="home-upcoming-fallback"/);
   });

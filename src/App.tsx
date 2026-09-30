@@ -1009,7 +1009,7 @@ function PendingApprovalBanner() {
   return (
     <div className="px-page-x py-2 bg-amber-500/10 border-b border-amber-500/30 text-center">
       <p className="text-xs text-amber-400">
-        매장 업주 승인 대기 중 — 승인 완료 후 포스터 업로드가 가능합니다
+        매장 승인 대기 중 — 승인이 끝나면 포스터를 올릴 수 있습니다
       </p>
     </div>
   );
@@ -1497,10 +1497,10 @@ export default function App() {
   const toggleNearSort = () => {
     if (nearSort) { setNearSort(false); return; }
     if (myPos) { setNearSort(true); return; }
-    if (!('geolocation' in navigator)) { toast.show('이 기기에서 위치를 사용할 수 없어요. 지역 필터를 이용해 주세요', 'error'); return; }
+    if (!('geolocation' in navigator)) { toast.show('이 기기에서는 위치를 사용할 수 없습니다. 지역 필터를 이용해 주세요', 'error'); return; }
     navigator.geolocation.getCurrentPosition(
       (pos) => { setMyPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setNearSort(true); },
-      () => toast.show('위치 권한이 거부되었어요. 지역 필터로 좁혀 보세요', 'error'),
+      () => toast.show('위치 권한이 거부되었습니다. 지역 필터로 좁혀 보세요', 'error'),
       { timeout: 8000, maximumAge: 300_000 },
     );
   };
@@ -1550,7 +1550,7 @@ export default function App() {
    *  ?buyin= 딥링크와 이용권 시트의 QR 스캔이 **같은 함수**를 쓴다(선택 모달이 두 벌이 되지 않게). */
   const startBuyinRequest = useCallback((venueId: string, gameSeq: number | null) => {
     const submit = (g: number | null) => ledgerMod().then((m) => m.requestBuyin(venueId, g))
-      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요. 운영자 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
+      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다. 매장 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
       .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'));
     if (gameSeq != null && gameSeq > 0) { submit(gameSeq); return; } // 테이블별 QR — 게임이 이미 정해져 있다
     (async () => {
@@ -1598,19 +1598,19 @@ export default function App() {
     if (!hit) {
       // 거부 — 출석·바인·가입·로그인 **모두 0회**, 설명은 **1회**.
       stripQr();
-      toast.show(out.reason ?? 'QR을 알아볼 수 없어요', 'error');
+      toast.show(out.reason ?? 'QR을 인식할 수 없습니다', 'error');
       return;
     }
     if (hit.kind === 'signup') {
       stripQr();
       if (!user) openLogin('signup-user');
-      else toast.show(elsewhereMsg('signup') ?? '이미 로그인되어 있어요', 'info');
+      else toast.show(elsewhereMsg('signup') ?? '이미 로그인되어 있습니다', 'info');
       return;
     }
     if (hit.kind === 'voucher' || !hit.venueId) {
       // URL 로는 오지 않는 종류다(이용권은 토큰 QR). 그래도 조용히 흘리지 않는다.
       stripQr();
-      toast.show(elsewhereMsg(hit.kind) ?? 'QR을 알아볼 수 없어요', 'error');
+      toast.show(elsewhereMsg(hit.kind) ?? 'QR을 인식할 수 없습니다', 'error');
       return;
     }
     // 여기부터 checkin·buyin — **변이 전에 URL 을 동기로 정리**한다.
@@ -1759,7 +1759,7 @@ export default function App() {
     const code = pendingRefCode();
     if (!code) return;
     refRecorded.current = true;
-    recordReferral(code).then((ok) => { if (ok) toast.show('추천 가입이 연결됐어요 · 본인인증하면 둘 다 이벤트 참여권 1장씩!', 'success'); clearRefCode(); }).catch(() => {});
+    recordReferral(code).then((ok) => { if (ok) toast.show('추천 가입이 연결되었습니다 · 본인인증하면 두 분 모두 이벤트 참여권을 1장씩 받습니다', 'success'); clearRefCode(); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -2080,9 +2080,9 @@ export default function App() {
       getPostById(missingId).then((fetched) => {
         if (fetched) setOpenPost(fetched);
         // 없는 글과 못 불러온 글은 다른 사건이다 — 같은 문구로 뭉뚱그리면 유저가 새로고침할지 포기할지 모른다.
-        else toast.show('삭제되었거나 찾을 수 없는 글이에요', 'info');
+        else toast.show('삭제되었거나 찾을 수 없는 게시글입니다', 'info');
       }).catch(() => {
-        toast.show('글을 불러오지 못했어요. 잠시 후 다시 시도해 주세요', 'error');
+        toast.show('게시글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요', 'error');
       });
     }
     setPendingPostId(null);
@@ -2896,7 +2896,7 @@ export default function App() {
     //   '빈 전면 오버레이 + 뒤로가기 겹' 이 된다. 막다른 골목을 고치다 다른 막다른 골목을 만들지 않는다(2026-09-17).
     //   deps 를 늘리지 않고 ref 로 본다 — 이 핸들러는 §5-B 안정 참조 계약(memo 자식들)에 묶여 있다.
     if (!venuesRef.current.some((v) => v.id === venueId)) {
-      toast.show(venuesRef.current.length === 0 ? '매장 목록을 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요' : '그 매장을 찾을 수 없어요. 문을 닫았거나 주소가 바뀌었을 수 있습니다', 'error');
+      toast.show(venuesRef.current.length === 0 ? '매장 목록을 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요' : '매장을 찾을 수 없습니다. 문을 닫았거나 주소가 바뀌었을 수 있습니다', 'error');
       return false;
     }
     document.documentElement.setAttribute('data-overlay', '');
@@ -2923,7 +2923,7 @@ export default function App() {
     deepLinked.current = true;
     if (target) startTransition(() => setOpenVenueId(target.id));
     // 목록에 없으면(문 닫음·주소 변경) 조용히 홈을 띄우지 않는다 — /s/<코드>(?vnf=) 와 같은 안내.
-    else toast.show('그 주소의 매장을 찾을 수 없어요. 링크가 바뀌었거나 문을 닫았을 수 있습니다', 'error');
+    else toast.show('해당 주소의 매장을 찾을 수 없습니다. 링크가 바뀌었거나 문을 닫았을 수 있습니다', 'error');
     // URL 에서 v/venue 파라미터 제거 → 매장을 닫고 앱을 둘러보다 새로고침해도
     // 다시 그 매장 페이지로 돌아가지 않도록 한다(공유 링크 1회성 진입).
     try {
@@ -2965,7 +2965,7 @@ export default function App() {
       const raw = decodeURIComponent(desc).replace(/\+/g, ' ');
       const known =
         /access_denied/i.test(err) ? '로그인이 취소되었거나 앱이 아직 승인되지 않았습니다'
-        : /bad_oauth_state|state/i.test(code) ? '로그인 세션이 만료됐어요. 다시 시도해 주세요'
+        : /bad_oauth_state|state/i.test(code) ? '로그인 세션이 만료되었습니다. 다시 시도해 주세요'
         : /redirect|uri/i.test(raw) ? '로그인 주소 설정이 맞지 않습니다(관리자 확인 필요)'
         : '';
       const detail = [code || err, raw].filter(Boolean).join(' · ').slice(0, 160);
@@ -2990,7 +2990,7 @@ export default function App() {
       const code = new URLSearchParams(window.location.search).get('vnf');
       if (!code) return;
       vnfShown.current = true;
-      toast.show('그 주소의 매장을 찾을 수 없어요. 링크가 바뀌었거나 문을 닫았을 수 있습니다', 'error');
+      toast.show('해당 주소의 매장을 찾을 수 없습니다. 링크가 바뀌었거나 문을 닫았을 수 있습니다', 'error');
       const url = new URL(window.location.href);
       url.searchParams.delete('vnf');
       window.history.replaceState(null, '', url.pathname + url.search + url.hash);
@@ -3120,10 +3120,10 @@ export default function App() {
         handleVenueClick(opts.fallbackVenueId);
         return;
       }
-      toast.show('대회 정보를 확인할 수 없습니다. 종료되었거나 내려갔을 수 있어요', 'info');
+      toast.show('대회 정보를 확인할 수 없습니다. 종료되었거나 삭제되었을 수 있습니다', 'info');
     }).catch(() => {
       // 조회 '실패' 를 '없음' 으로 위장하지 않는다 — 사용자는 다시 눌러 재시도할 수 있다.
-      toast.show('대회 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요', 'error');
+      toast.show('대회 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요', 'error');
     });
   }, [schedules, handleScheduleSelect, handleVenueClick, toast]);
 
@@ -3231,7 +3231,7 @@ export default function App() {
     if (cm) {
       const vid = cm[1];
       if (venuesLoaded && !venues.some((v) => v.id === vid)) {
-        toast.show('삭제되었거나 찾을 수 없는 매장이에요', 'info');
+        toast.show('삭제되었거나 찾을 수 없는 매장입니다', 'info');
       } else {
         startTransition(() => setOpenVenueId(vid));
       }
@@ -3247,7 +3247,7 @@ export default function App() {
         // 최근 50건 밖의 글(오래된 글에 달린 좋아요·댓글 알림)은 단건 조회로 연다
         else getPostById(pm[1]).then((fetched) => {
           if (fetched) setOpenPost(fetched);
-          else toast.show('삭제되었거나 찾을 수 없는 글이에요', 'info');
+          else toast.show('삭제되었거나 찾을 수 없는 게시글입니다', 'info');
         }).catch(() => toast.show('글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요', 'error')); // 조용히 삼키면 알림이 '무반응' 이 된다(SWEEP-A ⑥)
         return prev;
       });
@@ -3305,7 +3305,7 @@ export default function App() {
     // 대상이 삭제되면 link 가 빈다 — 이때 제목만 되풀이하면 '눌러도 아무 데도 안 가는' 것과 같은 무반응으로 보인다.
     // system·reminder 등 원래 대상이 없는 안내형은 제목 반복이 정상(링크 없이 만들어진다) — 이 둘을 타입으로 가른다.
     const linkedType = n.type === 'qna' || n.type === 'comment' || n.type === 'mention';
-    if (!link && linkedType) { toast.show('삭제되었거나 찾을 수 없는 게시글·매장이에요', 'info'); return; }
+    if (!link && linkedType) { toast.show('삭제되었거나 찾을 수 없는 게시글·매장입니다', 'info'); return; }
     if (n.title) toast.show(n.title, 'info'); // 푸시로 온 원문 링크(openNotifLink)는 제목이 없다 — 빈 토스트를 띄우지 않는다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openScheduleById, isAdmin, toast, user, hasStoreTabs, venues, venuesLoaded]);
@@ -4011,7 +4011,7 @@ export default function App() {
             헤더 위·오버레이 아래가 맞다 — 오버레이 안에서는 배너가 가려지지만 닫기가 막히는 것보다 낫고, 토스트(z-100)는 그대로 보인다. */}
       {offline && (
         <div role="status" className="sticky top-0 z-52 flex items-center justify-center gap-1.5 bg-amber-500/95 px-3 py-1.5 text-xs font-bold text-black">
-          <Icon name="wifi-off" size={14} className="shrink-0" /> 오프라인 — 저장된 정보를 보여드려요. 연결되면 자동으로 새로고침합니다.
+          <Icon name="wifi-off" size={14} className="shrink-0" /> 오프라인 — 저장된 정보를 보여 드립니다. 연결되면 자동으로 새로고침합니다.
         </div>
       )}
       <AppHeader
@@ -4042,7 +4042,7 @@ export default function App() {
       {updateReady && (
         <button type="button" onClick={() => location.reload()}
           className="sticky top-0 z-59 flex w-full items-center justify-center gap-2 bg-accent-300 px-3 py-2 text-xs font-bold text-white active:opacity-80">
-          <Icon name="refresh" size={14} className="mr-1 inline-block align-[-2px] shrink-0" />새 버전이 있어요 — 탭하여 새로고침
+          <Icon name="refresh" size={14} className="mr-1 inline-block align-[-2px] shrink-0" />새 버전이 있습니다 — 탭하여 새로고침
         </button>
       )}
       {/* 🔔 운영자 푸시 온보딩(설치형·1회) — 새 바인요청 폰 알림 */}
@@ -4051,7 +4051,7 @@ export default function App() {
           <span className="text-accent-300" aria-hidden><Icon name="bell" size={18} /></span>
           <p className="min-w-0 flex-1 text-2xs leading-snug text-ink-secondary">
             {(isOwner || isAdmin || user?.role === 'venue_staff')
-              ? <>새 <b className="text-accent-300">바인요청</b>을 폰 알림으로 받으세요. 게임 중에도 놓치지 않아요.</>
+              ? <>새 <b className="text-accent-300">바인 요청</b>을 폰 알림으로 받으세요. 게임 중에도 놓치지 않습니다.</>
               : <>예약한 대회 <b className="text-accent-300">1시간 전 리마인더</b>와 이용권 도착을 폰으로 받으세요.</>}
           </p>
           <button type="button" onClick={doEnablePush} className="btn-primary shrink-0 px-3 py-1.5 text-2xs">알림 켜기</button>
@@ -4375,7 +4375,7 @@ export default function App() {
                   // P0-2(오너 진단): 0건 빈 일러스트가 화면 중앙을 차지하던 것 → 슬림 안내 1줄 +
                   // '지금 진행 중' 콘텐츠 승격. 아래 지난 대회·공지가 그 자리로 올라온다.
                   <div className="space-y-2">
-                    <p data-testid="schedules-empty" className="px-1 py-3 text-sm text-ink-muted">예정된 대회가 아직 없어요. 아래에서 지난 대회 결과를 볼 수 있어요.</p>
+                    <p data-testid="schedules-empty" className="px-1 py-3 text-sm text-ink-muted">예정된 대회가 아직 없습니다. 아래에서 지난 대회 결과를 볼 수 있습니다.</p>
                     {liveClocks.length > 0 && (
                       <button type="button" onClick={() => changeTab('live')}
                         className="flex w-full items-center gap-2.5 rounded-aura bg-surface-high px-3 py-3 text-left transition-colors hover:bg-surface-float/70">
@@ -4545,14 +4545,14 @@ export default function App() {
                             <b className="min-w-0 truncate text-ink-primary">{r.venueName}</b>
                             <span className="shrink-0">
                               {(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? `· ${n === 1 ? '메인' : '사이드' + (n - 1)} ` : ''; })()}
-                              {r.status === 'approved' ? '참가 승인 · 입장하세요' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` · ${r.rejectReason}` : ''}` : r.usedVoucher ? '이용권 · 바인 요청 대기중' : '바인 요청 대기중'}
+                              {r.status === 'approved' ? '참가 승인 · 입장하세요' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` · ${r.rejectReason}` : ''}` : r.usedVoucher ? '이용권 · 바인 요청 대기 중' : '바인 요청 대기 중'}
                             </span>
                           </span>
                           {/* ⚠ 이 문장을 위 줄에 붙이면 안 된다 — 위 줄은 매장명만 줄이고 상태는 지키는 구조라
                               문장을 늘리면 좁은 화면에서 '거절 사유'가 먼저 밀려난다(위 주석). 아래 줄로 뺀다.
                               거절되면 서버가 이용권을 지갑으로 되돌린다(20260911b) — 손님에게 그 사실만 말한다. */}
                           {r.status === 'rejected' && r.usedVoucher && (
-                            <span className="text-2xs text-ink-muted">이용권은 지갑으로 돌아갔어요</span>
+                            <span className="text-2xs text-ink-muted">이용권은 지갑으로 돌아갔습니다</span>
                           )}
                         </span>
                         {/* 성공을 말하지 않으면 손님은 '눌렸나?' 를 모른다. 특히 **이용권으로 보낸 요청**은
@@ -4561,7 +4561,7 @@ export default function App() {
                         {r.status === 'pending' && <button type="button" onClick={() => ledgerMod()
                           .then((m) => m.cancelBuyinRequest(r.id)
                             .then(() => m.getMyBuyinRequestsToday().then(setMyBuyinReqs))
-                            .then(() => toast.show(r.usedVoucher ? '요청을 취소했어요 · 이용권은 지갑으로 돌아갔습니다' : '요청을 취소했어요', 'success')))
+                            .then(() => toast.show(r.usedVoucher ? '요청을 취소했습니다 · 이용권은 지갑으로 돌아갔습니다' : '요청을 취소했습니다', 'success')))
                           .catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
                       </div>
                     ))}
@@ -4755,13 +4755,13 @@ export default function App() {
       {buyinPick && (() => {
         const submit = (g: number | null) => {
           const v = buyinPick.venueId; setBuyinPick(null);
-          ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요`, 'success'); m.getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
+          ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈습니다`, 'success'); m.getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
         };
         return (
           <div className="fixed inset-0 z-80 flex items-center justify-center bg-black/60 p-4" onClick={() => setBuyinPick(null)}>
             <div className="w-full max-w-xs rounded-card border border-border-default bg-surface-high p-4 space-y-2" onClick={(e) => e.stopPropagation()}>
               <p className="text-sm font-bold text-ink-primary">참가(바인) 요청 · 게임 선택</p>
-              <p className="text-2xs text-ink-muted">참가할 게임을 고르면 운영자에게 요청이 전송됩니다.</p>
+              <p className="text-2xs text-ink-muted">참가할 게임을 고르면 매장에 요청이 전송됩니다.</p>
               <div className="space-y-1.5 pt-1">
                 {buyinPick.games.map((g) => (
                   <button key={g.gameSeq} type="button" onClick={() => submit(g.gameSeq)}
@@ -4770,7 +4770,7 @@ export default function App() {
                   </button>
                 ))}
                 <button type="button" onClick={() => submit(null)}
-                  className="w-full rounded-input border border-border-default px-3 py-2 text-xs text-ink-secondary hover:text-ink-primary">아무 게임이나 (운영자가 배정)</button>
+                  className="w-full rounded-input border border-border-default px-3 py-2 text-xs text-ink-secondary hover:text-ink-primary">아무 게임이나 (매장이 배정)</button>
               </div>
               <button type="button" onClick={() => setBuyinPick(null)} className="w-full pt-1 text-2xs text-ink-muted">취소</button>
             </div>
@@ -4782,7 +4782,7 @@ export default function App() {
       {geoRetry && geoRetry.uid === (user?.id ?? null) && (() => {
         const copy = checkinGeoRetryCopy(geoRetry.code, typeof navigator === 'undefined' ? '' : navigator.userAgent);
         return (
-          <Modal open={geoRetry.open} onClose={() => setGeoRetry((g) => g && { ...g, open: false })} title="위치 확인이 필요해요" variant="sheet" maxWidth="sm">
+          <Modal open={geoRetry.open} onClose={() => setGeoRetry((g) => g && { ...g, open: false })} title="위치 확인이 필요합니다" variant="sheet" maxWidth="sm">
             <div data-testid="checkin-geo-retry" className="space-y-2">
               <p className="text-sm text-ink-primary">{copy.reason}</p>
               {copy.hint && <p className="text-xs text-ink-secondary">{copy.hint}</p>}
@@ -5151,15 +5151,15 @@ function EmptyState({ filtered, onClearFilters, upcoming, filterSummary }: {
       </svg>
       {filtered ? (
         <>
-          <p className="text-sm">조건에 맞는 대회가 없어요</p>
-          {filterSummary && <p className="max-w-xs text-center text-2xs text-ink-muted">걸린 조건: <b className="text-ink-secondary">{filterSummary}</b>검색바에서 하나만 풀어도 달라져요</p>}
-          <p className="text-xs">{upcoming > 0 ? `조건을 풀면 예정 대회 ${upcoming}개를 볼 수 있어요` : '조건을 바꿔 다시 찾아보세요'}</p>
+          <p className="text-sm">조건에 맞는 대회가 없습니다</p>
+          {filterSummary && <p className="max-w-xs text-center text-2xs text-ink-muted">걸린 조건: <b className="text-ink-secondary">{filterSummary}</b> — 검색바에서 하나만 풀어도 결과가 달라집니다</p>}
+          <p className="text-xs">{upcoming > 0 ? `조건을 풀면 예정 대회 ${upcoming}개를 볼 수 있습니다` : '조건을 바꿔 다시 찾아보세요'}</p>
           <button type="button" onClick={onClearFilters} className="btn-primary px-4 py-2 text-xs">조건 초기화</button>
         </>
       ) : (
         <>
-          <p className="text-sm">예정된 대회가 없어요</p>
-          <p className="text-xs">아래 <b className="text-ink-secondary">지난 대회</b>에서 결과를 볼 수 있어요</p>
+          <p className="text-sm">예정된 대회가 없습니다</p>
+          <p className="text-xs">아래 <b className="text-ink-secondary">지난 대회</b>에서 결과를 볼 수 있습니다</p>
         </>
       )}
     </div>

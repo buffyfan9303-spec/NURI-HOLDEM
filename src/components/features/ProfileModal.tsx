@@ -49,9 +49,9 @@ export type ProfileTab = 'profile' | 'settings' | 'security';
 
 const ROLE_LABELS: Record<string, string> = {
   user:        '일반 회원',
-  venue_owner: '매장 업주',
-  venue_staff: '가게 직원',
-  admin:       '운영자',
+  venue_owner: '매장 운영자',
+  venue_staff: '매장 직원',
+  admin:       '관리자',
 };
 
 const COLOR_PALETTE = [
@@ -127,7 +127,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
     <div data-testid="ranking-name-pref">
       <p className="mt-2 block text-2xs font-medium text-ink-secondary">순위표 표시 이름</p>
       <div className="mt-1 grid grid-cols-2 gap-1.5" role="group" aria-label="순위표 표시 이름">
-        {([['nickname', '닉네임', '기본값 · 권장'], ['real_name', '실명', canRealName ? '본인인증 실명이 공개됩니다' : '본인인증 후 고를 수 있어요']] as const).map(([k, label, hint]) => (
+        {([['nickname', '닉네임', '기본값 · 권장'], ['real_name', '실명', canRealName ? '본인인증 실명이 공개됩니다' : '본인인증 후 고를 수 있습니다']] as const).map(([k, label, hint]) => (
           <button key={k} type="button" disabled={rankDispBusy || (k === 'real_name' && !canRealName)}
             aria-pressed={k === 'real_name' ? realNamePublic : !realNamePublic}
             onClick={() => saveNamePref(k)}
@@ -141,7 +141,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
         ))}
       </div>
       <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
-        실명은 <b className="text-ink-secondary">기본적으로 공개되지 않습니다</b>. ‘실명’을 직접 고른 경우에만 매장 순위·시즌·전국 순위에 실명이 붙고, 언제든 닉네임으로 되돌릴 수 있어요.
+        실명은 <b className="text-ink-secondary">기본적으로 공개되지 않습니다</b>. ‘실명’을 직접 고른 경우에만 매장 순위·시즌·전국 순위에 실명이 붙고, 언제든 닉네임으로 되돌릴 수 있습니다.
       </p>
     </div>
   );
@@ -224,9 +224,9 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
       await requestPasswordChangeCode();
       setCodeSent(true);
       sessionStorage.setItem('nh_pw_otp', String(Date.now()));
-      toast.show('이메일로 인증코드를 보냈습니다. 받은 편지함을 확인해 주세요.', 'success');
+      toast.show('이메일로 인증번호를 보냈습니다. 받은 편지함을 확인해 주세요.', 'success');
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '인증코드 발송 실패', 'error');
+      toast.show(err instanceof Error ? err.message : '인증번호 발송 실패', 'error');
     } finally {
       setSendingCode(false);
     }
@@ -484,19 +484,19 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
               onChange={handleAvatarChange}
             />
 
-            <p className="text-2xs text-ink-muted">클릭하여 사진 변경 · JPG / PNG / WEBP · 최대 5MB</p>
+            <p className="text-2xs text-ink-muted">눌러서 사진 변경 · JPG / PNG / WEBP · 최대 5MB</p>
 
             {/* 머리 배경 — 서버에 칸이 있을 때만(마이그레이션 전엔 undefined → 숨김). 고르면 위 밴드가 바로 바뀌고 '저장'으로 확정된다. */}
             {user.profileCover !== undefined && (
               <div data-testid="profile-cover-picker" className="flex items-center gap-2 flex-wrap justify-center">
-                <span className="text-2xs text-ink-muted">머리 배경</span>
+                <span className="text-2xs text-ink-muted">프로필 배경</span>
                 {PROFILE_COVERS.map((k) => (
                   <button
                     key={k}
                     type="button"
                     data-testid={`profile-cover-${k}`}
                     onClick={() => setCover(k)}
-                    aria-label={`머리 배경 ${COVER_LABEL[k]}`}
+                    aria-label={`프로필 배경 ${COVER_LABEL[k]}`}
                     aria-pressed={cover === k}
                     title={COVER_LABEL[k]}
                     className={[
@@ -552,7 +552,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             />
             {nameHint && <p className={`mt-1 text-2xs ${nameHint.cls}`} aria-live="polite">{nameHint.text}</p>}
             <div className="mt-1 flex items-start justify-between gap-2">
-              <p className="text-2xs leading-relaxed text-ink-muted">커뮤니티·순위·매장이용권에 쓰이는 공개 이름이에요 · 다른 사람과 겹칠 수 없어요</p>
+              <p className="text-2xs leading-relaxed text-ink-muted">커뮤니티·순위·매장 이용권에 쓰이는 공개 이름입니다 · 다른 사람과 겹칠 수 없습니다</p>
               <p className="text-2xs text-ink-muted shrink-0">{name.length} / 20</p>
             </div>
             {/* 잠긴 순간이 곧 '즉시 변경권'(상점 250점)이 필요한 순간이다 — 여기서 알려주지 않으면
@@ -569,13 +569,13 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
             <p className="mb-1.5 text-xs font-medium text-ink-secondary">실명</p>
             <div data-testid="real-name-row" className="flex h-10 items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-high px-3">
               <span className={['min-w-0 truncate text-sm', user.realName ? 'text-ink-secondary' : 'text-ink-muted'].join(' ')}>
-                {user.realName ?? (idOn ? '본인인증을 하면 표시돼요' : '—')}
+                {user.realName ?? (idOn ? '본인인증을 하면 표시됩니다' : '—')}
               </span>
               {realNamePublic
                 ? <span data-testid="real-name-state" className="inline-flex shrink-0 items-center gap-1 text-2xs font-semibold text-accent-300"><Icon name="trophy" size={11} /> 순위표에 공개</span>
                 : <span data-testid="real-name-state" className="inline-flex shrink-0 items-center gap-1 text-2xs text-ink-muted"><Icon name="lock" size={11} /> 비공개</span>}
             </div>
-            <p className="mt-1 text-2xs leading-relaxed text-ink-muted">본인인증으로만 바뀌어요 · 기본은 비공개(아래 ‘순위표 표시 이름’에서 바꿔요) · 매장이 이용권 받는 사람을 확인할 때 쓰여요</p>
+            <p className="mt-1 text-2xs leading-relaxed text-ink-muted">본인인증으로만 바뀝니다 · 기본은 비공개(아래 ‘순위표 표시 이름’에서 변경) · 매장이 이용권 받는 사람을 확인할 때 쓰입니다</p>
           </div>
 
           {/* ── 랭킹 공개 설정(오너 #14) ─────────────────────────────────
@@ -642,7 +642,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
           {user?.verified ? null : (
             <div className="space-y-1.5 rounded-aura border border-accent-400/30 bg-accent-300/6 p-3">
               <p className="text-sm font-semibold text-accent-300">휴대폰 본인인증</p>
-              <p className="text-2xs text-ink-muted leading-relaxed">안전한 거래와 1인 1계정을 위해 휴대폰 실명인증이 필요합니다. 매장이용권 등 일부 기능에 사용됩니다.</p>
+              <p className="text-2xs text-ink-muted leading-relaxed">안전한 거래와 1인 1계정을 위해 휴대폰 본인인증이 필요합니다. 매장 이용권 등 일부 기능에 사용됩니다.</p>
               <IdentityVerificationButton onVerified={() => { refreshProfile().catch(() => {}); }} />
             </div>
           )}
@@ -712,17 +712,17 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
               // btn-primary 뒤에 와야 이긴다(같은 특이도라 순서가 곧 우선순위, index.css 주석).
               className="btn-primary btn-lg w-full disabled:opacity-60"
             >
-              {sendingCode ? '인증코드 발송 중…' : '이메일로 인증코드 받기'}
+              {sendingCode ? '인증번호 발송 중…' : '이메일로 인증번호 받기'}
             </button>
           ) : (
             <div className="space-y-3">
               {!newPw && (
                 <p className="text-2xs text-amber-400 leading-relaxed bg-amber-500/10 border border-amber-500/30 rounded-input px-3 py-2">
-                  메일 확인 후 돌아오셨네요. 위에 새 비밀번호를 다시 입력한 뒤, 메일로 받은 인증번호로 변경을 완료하세요.
+                  메일을 확인하셨다면 위에 새 비밀번호를 다시 입력한 뒤, 메일로 받은 인증번호로 변경을 완료하세요.
                 </p>
               )}
               <div>
-                <label className="block text-xs font-medium text-ink-secondary mb-1.5">이메일 인증코드</label>
+                <label className="block text-xs font-medium text-ink-secondary mb-1.5">이메일 인증번호</label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -741,7 +741,7 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
                   disabled={sendingCode}
                   className="mt-1 text-2xs text-ink-muted hover:text-accent-300 transition-colors disabled:opacity-50"
                 >
-                  코드 재전송
+                  인증번호 재전송
                 </button>
               </div>
               <button
@@ -1170,8 +1170,8 @@ function WithdrawAccountSection() {
       ) : (
         <div className="space-y-2.5 rounded-aura border border-danger/40 bg-danger/5 p-3">
           <p className="text-2xs leading-relaxed text-ink-secondary">
-            탈퇴 시 <b className="text-danger">실명·전화번호·본인인증 정보·생년월일 등 개인정보가 즉시 파기</b>되고 계정이 폐쇄되며, <b className="text-ink-primary">다시 로그인할 수 없습니다.</b> 보유 중인 매장이용권 등은 함께 사라집니다.
-            <br />매장 대표는 매장을 먼저 정리(삭제/양도)한 뒤 탈퇴할 수 있습니다.
+            탈퇴 시 <b className="text-danger">실명·전화번호·본인인증 정보·생년월일 등 개인정보가 즉시 파기</b>되고 계정이 폐쇄되며, <b className="text-ink-primary">다시 로그인할 수 없습니다.</b> 보유 중인 매장 이용권 등은 함께 사라집니다.
+            <br />매장 운영자는 매장을 먼저 정리(삭제/양도)한 뒤 탈퇴할 수 있습니다.
           </p>
           {/* 탈퇴 시 함께 사라지는 데이터 안내(실수 방지).
               ⚠ 실패 분기가 '값 있음'보다 **먼저** 와야 한다 — 순서가 뒤집히면 실패가 다시 '없음'으로 위장된다. */}
@@ -1190,7 +1190,7 @@ function WithdrawAccountSection() {
           ) : null}
           <label className="block">
             <span className="mb-1 block text-2xs font-semibold text-ink-secondary">
-              {social ? "본인 확인 · '영구 삭제' 를 입력하세요 (소셜 계정은 비밀번호가 없어요)" : '본인 확인. 현재 비밀번호를 입력하세요'}
+              {social ? "본인 확인 · '영구 삭제'를 입력하세요 (소셜 계정은 비밀번호가 없습니다)" : '본인 확인. 현재 비밀번호를 입력하세요'}
             </span>
             <input type={social ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
               autoComplete={social ? 'off' : 'current-password'} placeholder={social ? '영구 삭제' : '현재 비밀번호'}

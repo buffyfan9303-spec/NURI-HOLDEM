@@ -170,7 +170,7 @@ test('옛 호출 그대로 — 새 필드를 비우면 payload 에 ROI 컬럼이
   const pane = page.locator('[data-tab="calendar"]');
   await pane.locator('input[aria-label="금액"]').fill('5000');
   await pane.getByRole('button', { name: '마이너스로 기록' }).click();
-  await expect(page.getByText('마이너스로 기록했어요')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('마이너스로 기록했습니다')).toBeVisible({ timeout: 10_000 });
   expect(posted).toHaveLength(1);
   expect(posted[0]).toMatchObject({ amount: -5000, memo: '' });
   for (const k of ['buy_in', 'rebuy', 'addon', 'venue_name', 'game_name']) expect(posted[0]).not.toHaveProperty(k);

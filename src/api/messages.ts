@@ -119,7 +119,7 @@ export async function sendMessage(recipientId: string, body: string): Promise<Di
   if (!me) throw new Error('로그인이 필요합니다');
   const trimmed = body.trim();
   if (!trimmed) throw new Error('내용을 입력해 주세요');
-  if (trimmed.length > 2000) throw new Error('쪽지는 2,000자까지 보낼 수 있어요');
+  if (trimmed.length > 2000) throw new Error('쪽지는 2,000자까지 보낼 수 있습니다');
   const { data, error } = await supabase
     .from('user_messages')
     .insert({ sender_id: me.id, recipient_id: recipientId, body: trimmed })

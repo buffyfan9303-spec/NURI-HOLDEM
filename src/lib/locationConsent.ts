@@ -25,7 +25,7 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ko-KR')
 /** 내 정보 화면의 상태 한 줄. */
 export function consentSummary(s: LocationConsentState): string {
   if (isConsentCurrent(s)) return `동의함 · 제${s.termsVersion}판${s.grantedAt ? ` · ${fmt(s.grantedAt)}` : ''}`;
-  if (s.state === 'granted') return `옛 약관(제${s.termsVersion ?? '?'}판) 동의 — 다음 출석 때 다시 여쭤요`;
+  if (s.state === 'granted') return `옛 약관(제${s.termsVersion ?? '?'}판) 동의 — 다음 출석 때 다시 여쭙겠습니다`;
   if (s.state === 'denied') return `동의하지 않음${s.revokedAt ? ` · 철회 ${fmt(s.revokedAt)}` : ''}`;
   return '아직 선택하지 않음 — 위치 확인 출석을 처음 쓸 때 여쭤요';
 }

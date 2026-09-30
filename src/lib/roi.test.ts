@@ -102,7 +102,7 @@ describe('filterRoiRows — 기간·매장·게임', () => {
 describe('roiNotice — 데이터 부족 안내', () => {
   it('0건 → 참가비 안내 · 3건 미만 → N건부터 · 충분하면 null', () => {
     expect(roiNotice({ events: 0 })).toMatch(/참가비/);
-    expect(roiNotice({ events: 1 })).toBe(`기록 ${ROI_MIN_EVENTS}건부터 ROI 를 보여드려요 (지금 1건)`);
+    expect(roiNotice({ events: 1 })).toBe(`기록 ${ROI_MIN_EVENTS}건부터 ROI를 보여 드립니다 (지금 1건)`);
     expect(roiNotice({ events: ROI_MIN_EVENTS })).toBeNull();
   });
 });

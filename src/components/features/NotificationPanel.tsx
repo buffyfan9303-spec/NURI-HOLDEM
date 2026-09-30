@@ -225,8 +225,8 @@ export default function NotificationPanel({
       toast.show(
         /row-level security/i.test(raw)
           // 서버 _can_message 는 본인인증을 보지 않는다(오너 2026-09-29 · 8241385d) — 실제 거절 사유만 말한다
-          ? '쪽지를 보낼 수 없어요. 상대가 탈퇴·정지 상태이거나 서로 차단한 관계일 수 있어요'
-          : raw || '쪽지를 보내지 못했어요',
+          ? '쪽지를 보낼 수 없습니다. 상대가 탈퇴·정지 상태이거나 서로 차단한 관계일 수 있습니다'
+          : raw || '쪽지를 보내지 못했습니다',
         'error',
       );
     } finally {
@@ -254,12 +254,12 @@ export default function NotificationPanel({
     if (!activeOther) return;
     try {
       await blockUser(activeOther.id, activeOther.name);
-      toast.show(`${activeOther.name}님을 차단했습니다. 이후 쪽지가 오지 않아요`, 'success');
+      toast.show(`${activeOther.name}님을 차단했습니다. 이후 쪽지가 오지 않습니다`, 'success');
       setMsgView('list');
       setActiveOther(null);
       reloadThreads();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '차단하지 못했어요', 'error');
+      toast.show(e instanceof Error ? e.message : '차단하지 못했습니다', 'error');
     }
   }, [activeOther, toast, reloadThreads]);
 
@@ -410,7 +410,7 @@ export default function NotificationPanel({
                     모두 읽음
                   </button>
                 )}
-                <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안읽음' }]} value={filter} hitUp
+                <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안 읽음' }]} value={filter} hitUp
                   onChange={(v) => goSubTab('notif-filter', NOTIF_FILTER_ORDER, filter, v, () => setFilter(v))} />
               </>
             )}
@@ -465,7 +465,7 @@ export default function NotificationPanel({
                 >
                   {/* 미읽음: 알림 행과 동일 문법 — 좌측 2px 액센트 바 */}
                   {t.unread > 0 && (
-                    <span className="absolute left-0 top-3 bottom-3 w-0.5 rounded-full bg-accent-300" aria-label="안읽음" />
+                    <span className="absolute left-0 top-3 bottom-3 w-0.5 rounded-full bg-accent-300" aria-label="안 읽음" />
                   )}
                   <div
                     className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${onColorInkClass(t.otherColor || AVATAR_FALLBACK)}`}
@@ -654,7 +654,7 @@ export default function NotificationPanel({
                 {!n.read && (
                   <span
                     className="absolute left-0 top-3 bottom-3 w-0.5 rounded-full bg-accent-300"
-                    aria-label="안읽음"
+                    aria-label="안 읽음"
                   />
                 )}
 

@@ -96,7 +96,7 @@ test('이벤트 페이지 — 확률 공개가 **최하단에** 있고 합이 10
   // ⚠ 다이얼로그가 보이는 시점은 아직 **로딩 스켈레톤**이다 — 그때 표를 세면 0 이라 조용히 skip 된다
   //   (이 테스트가 처음에 그렇게 자기 자신을 꺼 버렸다). 표나 '이벤트 없음' 중 하나가 나올 때까지 기다린다.
   const table = dlg.locator('table');
-  const none = dlg.getByText('진행 중인 이벤트가 없어요');
+  const none = dlg.getByTestId('event-empty');
   await expect(table.or(none).first()).toBeVisible({ timeout: 20_000 });
   if (await none.isVisible()) test.skip(true, '진행 중 이벤트가 없어 확률 표가 없다');
 

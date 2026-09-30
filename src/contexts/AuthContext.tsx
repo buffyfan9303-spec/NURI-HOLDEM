@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (p.status === 'suspended') {
       const until = p.suspendedUntil ? new Date(p.suspendedUntil) : null;
       return until && !Number.isNaN(until.getTime())
-        ? `이용이 일시 정지된 계정입니다. ${until.toLocaleDateString()}까지 로그인할 수 없어요. 문의는 고객센터로 부탁드립니다.`
+        ? `이용이 일시 정지된 계정입니다. ${until.toLocaleDateString()}까지 로그인할 수 없습니다. 문의는 고객센터로 부탁드립니다.`
         : '이용이 정지된 계정입니다. 고객센터로 문의해 주세요.';
     }
     return null;

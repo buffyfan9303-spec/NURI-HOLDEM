@@ -43,13 +43,13 @@ test('🔴 닉네임 30일 안 — 입력칸 비활성 + 다음 변경 가능 �
   await openSettings(page, { nickname_changed_at: new Date(changed).toISOString() });
   await expect(page.getByTestId('nickname-input')).toBeDisabled();
   await expect(page.getByTestId('name-cooldown-notice'))
-    .toContainText(`닉네임은 30일에 한 번 변경할 수 있어요 · 다음 변경 가능: ${kstMD(changed + 30 * DAY)}`);
+    .toContainText(`닉네임은 30일에 한 번 변경할 수 있습니다 · 다음 변경 가능: ${kstMD(changed + 30 * DAY)}`);
 });
 
 test('🔴 닉네임 첫 변경 — 열려 있고 날짜 없이 규칙만', async ({ page }) => {
   await openSettings(page, { nickname_changed_at: null });
   await expect(page.getByTestId('nickname-input')).toBeEnabled();
-  await expect(page.getByTestId('name-cooldown-notice')).toHaveText('닉네임은 30일에 한 번 변경할 수 있어요');
+  await expect(page.getByTestId('name-cooldown-notice')).toHaveText('닉네임은 30일에 한 번 변경할 수 있습니다');
 });
 
 test('🔴 30일 지남 — 다시 열린다', async ({ page }) => {
@@ -64,7 +64,7 @@ test('🔴 옛 서버 응답(nickname_changed_at 키 없음) — name_changed_at
 });
 
 for (const serverMsg of [
-  '닉네임은 30일에 한 번 변경할 수 있어요 (다음 변경 가능: 10월 24일)',
+  '닉네임은 30일에 한 번 변경할 수 있습니다 (다음 변경 가능: 10월 24일)',
   '사용할 수 없는 닉네임입니다',
 ]) {
   test(`🔴 서버 거절 문장을 그대로 보여 준다 — ${serverMsg.slice(0, 14)}`, async ({ page }) => {

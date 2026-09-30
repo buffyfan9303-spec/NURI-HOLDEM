@@ -427,7 +427,7 @@ describe('🔴 ⑨ F6 — 이벤트 상세의 참여 가능 판정이 기간·�
     // 문구를 blockedReason 으로 통째로 갈아끼우면 이 두 셀렉터가 조용히 죽는다.
     expect(EVENT_PAGE, "e2e 가 getByRole('button', { name: '로그인하고 참여하기' }) 로 잡는다")
       .toContain('로그인하고 참여하기');
-    expect(EVENT_PAGE, "e2e 가 /모두 열렸어요/ 로 잡는다").toContain('모두 열렸어요');
+    expect(EVENT_PAGE, "e2e 가 getByTestId('event-soldout') 로 잡는다").toContain('data-testid="event-soldout"');
     // 같은 커밋에서 data-testid 를 함께 달아 다음번엔 글자에 매달리지 않게 한다.
     expect(EVENT_PAGE).toContain('data-testid="event-login-cta"');
     expect(EVENT_PAGE).toContain('data-testid="event-blocked-reason"');

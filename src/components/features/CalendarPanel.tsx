@@ -272,9 +272,9 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
           <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-input tile-grad" aria-hidden>
             <Icon name="calendar" size={20} />
           </span>
-          <p className="text-sm font-bold text-ink-primary">로그인하면 내 캘린더가 열려요</p>
+          <p className="text-sm font-bold text-ink-primary">로그인하면 내 캘린더가 열립니다</p>
           <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
-            예약한 대회와 찜한 대회가 날짜별로 모이고,<br />뱅크롤과 일정을 직접 적어 둘 수 있어요.
+            예약한 대회와 찜한 대회가 날짜별로 모이고,<br />뱅크롤과 일정을 직접 적어 둘 수 있습니다.
           </p>
           {/* 막다른 길 금지 — 비로그인 모바일에서 이 화면이 5번째 칸이라 여기서 로그인으로 갈 수 있어야 한다 */}
           {onLogin && (
@@ -349,7 +349,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
           value={loaded ? compactWon(summary.bankrollSum) || '0' : '—'} tone={summary.bankrollSum > 0 ? 'emerald' : summary.bankrollSum < 0 ? 'danger' : 'muted'} />
         <SumCell testId="month-roi" label="이번 달 ROI"
           value={loaded && summary.roi != null ? `${summary.roi.toFixed(1)}%` : '—'}
-          hint={loaded && summary.roi == null ? `ROI 는 참가비를 적은 기록 ${ROI_MIN_EVENTS}건부터 계산해요(지금 ${summary.roiEvents}건)` : undefined}
+          hint={loaded && summary.roi == null ? `ROI는 참가비를 적은 기록 ${ROI_MIN_EVENTS}건부터 계산합니다(지금 ${summary.roiEvents}건)` : undefined}
           tone={summary.roi == null ? 'muted' : summary.roi >= 0 ? 'emerald' : 'danger'} />
         <SumCell testId="bankroll-total" label="뱅크롤 누계" full={summary.total}
           value={loaded ? compactWon(summary.total) || '0' : '—'} tone={summary.total > 0 ? 'emerald' : summary.total < 0 ? 'danger' : 'muted'} />
@@ -456,7 +456,7 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
           </ul>
         )}
         {loaded && dayItems.length === 0 && oldestLoaded && picked < oldestLoaded && (
-          <p className="mt-1 text-center text-xs text-ink-secondary">{oldestLoaded.replace(/-/g, '.')} 이전 기록은 아직 불러오지 않았어요</p>
+          <p className="mt-1 text-center text-xs text-ink-secondary">{oldestLoaded.replace(/-/g, '.')} 이전 기록은 아직 불러오지 않았습니다</p>
         )}
       </BankrollCard>
 
@@ -640,9 +640,9 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
   // Aura 는 '실제 상태를 말할 때만' 켠다: 로딩·오류·기록 없음은 전부 끈다(§6·§12).
   const heroVariant = net > 0 ? 'emerald' : net < 0 ? 'rose' : 'violet';
   const netText = heroReady ? `${net >= 0 ? '+' : ''}${won(net)}` : '—';
-  const heroNote = failed ? '불러오지 못했어요'
-    : !loaded ? '불러오는 중이에요'
-    : !hasBankroll ? '아직 기록이 없어요'
+  const heroNote = failed ? '불러오지 못했습니다'
+    : !loaded ? '불러오는 중입니다'
+    : !hasBankroll ? '아직 기록이 없습니다'
     : null;
 
   const save = async (sign: 1 | -1 | 0) => {
@@ -659,7 +659,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
       // 금액 0 이어도 참가비가 있으면 본전 기록이다
       if (!n && !invested) { toast.show('금액을 입력해 주세요', 'error'); return; }
       // 상한을 클라이언트에서 막는다 — 넘기면 서버가 영문 Postgres 오류를 그대로 토스트에 뱉는다
-      if (n > BANKROLL_MAX || invested > BANKROLL_MAX) { toast.show(`한 번에 ${won(BANKROLL_MAX)}원까지 기록할 수 있어요`, 'error'); return; }
+      if (n > BANKROLL_MAX || invested > BANKROLL_MAX) { toast.show(`한 번에 ${won(BANKROLL_MAX)}원까지 기록할 수 있습니다`, 'error'); return; }
     }
     setBusy(true);
     try {
@@ -667,7 +667,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
       setAmount(''); setMemo(''); setBuyIn(''); setRebuy(''); setAddon(''); setVenueName(''); setGameName('');
       // 마이그레이션 전 서버 — 참가비 등이 저장되지 않았다는 사실을 숨기지 않는다
       if (degraded) toast.show('서버 업데이트 중입니다 — 금액·메모만 먼저 기록됩니다', 'info');
-      else toast.show(sign === 0 ? '계획을 적었어요' : sign > 0 ? '플러스로 기록했어요' : '마이너스로 기록했어요', 'success');
+      else toast.show(sign === 0 ? '계획을 적었습니다' : sign > 0 ? '플러스로 기록했습니다' : '마이너스로 기록했습니다', 'success');
       onChanged();
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '기록 실패', 'error');
@@ -722,7 +722,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
         ].join(' ')}>{netText}</p>
         {/* 한 줄로 자리를 항상 지킨다 — 조건부로 빼면 도착할 때 아래가 밀린다(CLS) */}
         {/* 줄은 접히되 **숫자는 안 꺾인다** — 200% 확대에서 nowrap 이면 카드 밖으로 넘쳐 가로 스크롤이 생겼다(2026-09-10 실측). */}
-        <p className="mt-1.5 text-2xs tabular-nums text-ink-secondary">
+        <p data-testid="bankroll-hero-note" data-note-state={failed ? 'failed' : !loaded ? 'loading' : !hasBankroll ? 'empty' : 'ready'} className="mt-1.5 text-2xs tabular-nums text-ink-secondary">
           {heroNote ?? (<><span className="whitespace-nowrap">플러스 <b className="stat-emerald">+{won(plus)}</b></span> · <span className="whitespace-nowrap">마이너스 <b className="text-danger-deep dark:text-danger-light">{won(minus)}</b></span></>)}
         </p>
       </div>
@@ -820,7 +820,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
       )}
       {children}
       {loaded && dayRows.length === 0 && othersCount === 0 && (
-        <p className="py-3 text-center text-xs text-ink-muted">이 날은 기록이 없어요</p>
+        <p className="py-3 text-center text-xs text-ink-muted">이 날은 기록이 없습니다</p>
       )}
 
       {/* 무엇을 적는 중인지 먼저 고른다 — 예전엔 한 줄에 5개가 섞여 모드가 안 보였다 */}
@@ -854,7 +854,7 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
           /* 개인 ROI 입력(선택) — 접어 둔다: +/- 만 적는 사람에게 칸 5개는 소음이다. 같은 6칸 그리드라 오른쪽 변이 맞는다. */
           <details className="col-span-6 rounded-input bg-surface-high/40 px-2 py-1.5" data-testid="roi-inputs">
             <summary onClick={onSummaryClick} className="cursor-pointer select-none text-2xs font-semibold text-ink-secondary">참가비 · 매장 · 게임 적기 (선택)</summary>
-            <p className="mt-1 text-2xs leading-relaxed text-ink-muted">금액은 참가비를 뺀 순결과로 적어요. 참가비를 적으면 ROI·ITM 이 계산돼요.</p>
+            <p className="mt-1 text-2xs leading-relaxed text-ink-muted">금액은 참가비를 뺀 순결과로 적습니다. 참가비를 적으면 ROI·ITM이 계산됩니다.</p>
             {/* 라벨을 눈에 보이게 단다(2026-09-10 §6) — placeholder 는 입력을 시작하는 순간 사라져서
                 '이 칸이 뭐였지'를 만든다. <label> 이 그리드 칸을 잡고 input 은 그 안에서 100% 를 쓴다.
                 aria-label 은 그대로 둔다 — e2e 가 getByLabel 로 잡는 계약이다. */}
@@ -865,8 +865,8 @@ function BankrollCard({ part, title, othersCount = 0, children, date, monthPrefi
                   className="input min-h-[44px] w-full min-w-0 text-sm tabular-nums" />
               </label>
               <label className="col-span-2 min-w-0">
-                <span className="mb-0.5 block text-2xs text-ink-muted">재진입</span>
-                <input value={rebuy} onChange={(e) => setRebuy(e.target.value)} inputMode="numeric" placeholder="0" aria-label="재진입"
+                <span className="mb-0.5 block text-2xs text-ink-muted">리엔트리</span>
+                <input value={rebuy} onChange={(e) => setRebuy(e.target.value)} inputMode="numeric" placeholder="0" aria-label="리엔트리"
                   className="input min-h-[44px] w-full min-w-0 text-sm tabular-nums" />
               </label>
               <label className="col-span-2 min-w-0">

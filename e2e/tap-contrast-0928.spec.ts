@@ -153,7 +153,7 @@ test('라이브 새로고침 — 누르면 도는 표시 → 완료 표시 → �
   await expect(btn).toHaveAttribute('aria-busy', 'true');
   expect(await btn.evaluate((b) => b.getBoundingClientRect().width)).toBeCloseTo(w0, 1);
   await expect(btn).toHaveAttribute('data-state', 'done', { timeout: 5_000 });
-  await expect(btn.locator('[aria-live]')).toHaveText('목록을 새로 불러왔어요');
+  await expect(btn.locator('[aria-live]')).toHaveText('목록을 새로 불러왔습니다');
   await expect(btn).toHaveAttribute('data-state', 'idle', { timeout: 5_000 });
 });
 

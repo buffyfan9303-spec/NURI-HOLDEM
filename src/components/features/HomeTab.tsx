@@ -109,11 +109,11 @@ function readEventSnap(): EventSnap | null {
  *  기간·소진 판정은 evaluateEvent 가 한다(여기서 다시 날짜를 비교하지 않는다). */
 function eventMenuSubtitle(loaded: boolean, failed: boolean, b: EventBoard | null, state: EventState | null): string {
   if (!loaded) return '불러오는 중…';
-  if (failed) return '이벤트 정보를 불러오지 못했어요 · 눌러서 다시';
-  if (!b) return '지금 진행 중인 이벤트가 없어요';
-  if (state === 'scheduled') return '곧 시작해요 · 눌러서 미리 보기';
-  if (state === 'soldout') return '카드가 모두 열렸어요 · 결과 보기';
-  if (state === 'ended' || state === 'expired') return '이번 이벤트는 끝났어요 · 지난 결과 보기';
+  if (failed) return '이벤트 정보를 불러오지 못했습니다 · 눌러서 다시 시도';
+  if (!b) return '지금 진행 중인 이벤트가 없습니다';
+  if (state === 'scheduled') return '곧 시작합니다 · 눌러서 미리 보기';
+  if (state === 'soldout') return '카드가 모두 열렸습니다 · 결과 보기';
+  if (state === 'ended' || state === 'expired') return '이번 이벤트는 끝났습니다 · 지난 결과 보기';
   return b.title;
 }
 
@@ -657,7 +657,7 @@ export default function HomeTab({
               <span className="relative z-10 mt-1 flex flex-wrap items-center gap-x-1 border-t border-border-subtle pt-1 md:mt-0 md:border-l md:border-t-0 md:pl-3 md:pt-0 lg:mt-1 lg:border-l-0 lg:border-t lg:pl-0 lg:pt-1">
                 {/* 🔴 2026-09-25 오너 결정 — 진행 이벤트가 없는데 '이벤트 보기' 가 강조색으로 남아 있었다. 그 갈래(menu)에선
                     흐린 '진행 중 이벤트 없음' 으로 **사실을 말한다**. 진입은 그대로다(누르면 이벤트 판 — 지난 이벤트·시작 전 안내가 거기 있다).
-                    응답 전(pending)·참여 가능(banner)은 종전 '이벤트 보기'. 실패는 '불러오기 실패 · 다시' 가 먼저다. */}
+                    응답 전(pending)·참여 가능(banner)은 종전 '이벤트 보기'. 실패는 '불러오기 실패 · 다시 시도' 가 먼저다. */}
                 <span data-testid="home-quick-event-action" className={['min-w-0 text-2xs font-bold', eventShown === 'menu' && !quickEventFailed ? 'text-ink-muted' : 'text-gold-300'].join(' ')}>{quickEventFailed ? '불러오기 실패 · 다시' : eventShown === 'menu' ? '진행 중 이벤트 없음' : '이벤트 보기'}</span>
                 <Icon name="chevron-right" size={12} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" />
               </span>
@@ -813,7 +813,7 @@ export default function HomeTab({
               {selectedDate ? `${dayTitle(selectedDate)} 일정` : '일정'}
             </h3>
             <span data-testid="home-schedule-count" className="shrink-0 text-2xs text-ink-muted">
-              {useFallback ? '오늘·내일 예정 없음' : `총 ${daySchedules.length}개의 대회`}
+              {useFallback ? '오늘·내일 예정 없음' : `대회 ${daySchedules.length}개`}
             </span>
           </header>
           {!loaded ? (
@@ -854,7 +854,7 @@ export default function HomeTab({
               {/* 🔴 어느 날짜가 비었는지 **말한다.** 종전 문구는 '예정된 대회가 없어요' 라
                   날짜를 골라 둘러보는 화면에서는 '전체가 없다' 로 읽힌다. */}
               <p data-testid="home-schedule-empty" className="t-body text-ink-muted">
-                {selectedDate ? `${dayTitle(selectedDate)}에는 예정된 대회가 없어요` : '예정된 대회가 없어요'}
+                {selectedDate ? `${dayTitle(selectedDate)}에는 예정된 대회가 없습니다` : '예정된 대회가 없습니다'}
               </p>
               <button type="button" onClick={onExplore}
                 className="mt-2 inline-flex items-center gap-1 rounded-badge bg-surface-high px-3 py-2 t-desc font-bold text-ink-secondary transition-colors hover:bg-surface-float/70">
@@ -867,7 +867,7 @@ export default function HomeTab({
                   말 없이 9/21 대회만 놓으면 사용자는 그것을 오늘 대회로 읽는다(2026-09-19 오너 지시 반영). */}
               {useFallback && (
                 <p data-testid="home-upcoming-fallback" className="bg-surface-high/40 px-3 py-2 text-2xs leading-tight text-ink-muted">
-                  오늘·내일은 예정 대회가 없어요 · <b className="font-bold text-accent-200">가장 가까운 일정</b>
+                  오늘·내일은 예정 대회가 없습니다 · <b className="font-bold text-accent-200">가장 가까운 일정</b>
                 </p>
               )}
               {(useFallback ? nextUp : dayVisible).map((s, i) => (

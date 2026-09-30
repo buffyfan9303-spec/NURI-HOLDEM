@@ -19,9 +19,9 @@ export default function SignupLocationConsent({ checked, onChange }: { checked: 
         <Icon name="map-pin" size={14} className="shrink-0 text-accent-300" />주변 매장을 찾으려면 위치정보가 필요합니다
       </p>
       <ul className="space-y-1 text-2xs leading-relaxed text-ink-muted">
-        <li>· 가까운 순: 위치는 이 기기에서 거리 계산에만 쓰고 저장·전송하지 않아요</li>
-        <li>· 출석 위치 확인: 출석 버튼을 누를 때 한 번 매장 반경 안인지만 판정하고, 좌표는 저장하지 않아요</li>
-        <li>· 동의하지 않아도 가입·이용할 수 있어요. 내 정보 › 보안에서 언제든 바꿀 수 있어요</li>
+        <li>· 가까운 순: 위치는 이 기기에서 거리 계산에만 쓰고 저장·전송하지 않습니다</li>
+        <li>· 출석 위치 확인: 출석 버튼을 누를 때 한 번 매장 반경 안인지만 판정하고, 좌표는 저장하지 않습니다</li>
+        <li>· 동의하지 않아도 가입·이용할 수 있습니다. 내 정보 › 보안에서 언제든 바꿀 수 있습니다</li>
       </ul>
       <div className="flex items-start justify-between gap-2">
         {/* py-3 -my-3: 누름 높이만 46px 로 넓히고 레이아웃은 그대로(2026-09-29 D4 — 가입 동의 행과 같은 44px). 위는 설명 글, 아래는 상자 여백이라 겹칠 조작이 없다. */}

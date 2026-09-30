@@ -89,8 +89,8 @@ export async function addBankrollEntry(e: NewBankrollEntry): Promise<{ degraded:
   };
   // DB 제약(bankroll_entry_not_empty)과 같은 규칙: 금액이 있거나 참가비가 있거나 메모가 있거나.
   // amount 0 = 기타 스케줄(메모만) — 오너 지시 2026-09-04 로 허용됐다. 본전(amount 0·참가비 있음)도 참가 기록이다.
-  if (!Number.isFinite(e.amount)) throw new Error('금액이 올바르지 않아요');
-  if ([full.buyIn, full.rebuy, full.addon].some((v) => !Number.isFinite(v) || v < 0)) throw new Error('참가비는 0 이상이어야 해요');
+  if (!Number.isFinite(e.amount)) throw new Error('금액이 올바르지 않습니다');
+  if ([full.buyIn, full.rebuy, full.addon].some((v) => !Number.isFinite(v) || v < 0)) throw new Error('참가비는 0 이상이어야 합니다');
   if (e.amount === 0 && investedOf(full) === 0 && !e.memo.trim()) throw new Error('금액이나 내용 중 하나는 입력해 주세요');
   // 하위호환: 기본값 필드는 payload 에서 빠지고, 컬럼 부재(PGRST204)면 새 필드 없이 한 번 더 시도한다.
   const { error, degraded } = await insertWithRoiFallback(
@@ -102,7 +102,7 @@ export async function addBankrollEntry(e: NewBankrollEntry): Promise<{ degraded:
     // 영문 제약 오류 대신 무엇을 더 적으면 되는지 말한다 — 참가비만 있는 본전 기록은 서버가 새 컬럼을 알게 된 뒤에만 저장된다.
     const code = (error as { code?: string }).code;
     if (code === '23514' && e.amount === 0 && !e.memo.trim()) {
-      throw new Error('서버 업데이트 전에는 참가비만 있는 기록(본전)을 저장할 수 없어요. 금액이나 메모를 함께 적어 주세요');
+      throw new Error('서버 업데이트 전에는 참가비만 있는 기록(본전)을 저장할 수 없습니다. 금액이나 메모를 함께 적어 주세요');
     }
     throw new Error(error.message);
   }
