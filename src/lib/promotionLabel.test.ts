@@ -99,6 +99,8 @@ describe('discountTexts — 할인유형이 만드는 태그·내용·장부 라
       .toEqual({ badge: '3만', title: '리바인 3만 할인', ledger: '리바인' });
     expect(discountTexts({ title: '', discountType: 'advance', discountWon: 20_000 }))
       .toEqual({ badge: '2만', title: '사전예약 2만 할인', ledger: '사전예약' });
+    expect(discountTexts({ title: '', discountType: 'firstRebuy', discountWon: 50_000 }))
+      .toEqual({ badge: '5만', title: '첫 리바인 5만 할인', ledger: '첫 리바인' });
   });
 
   it('금액이 없으면 태그는 유형 약칭 · 내용은 금액 없는 문구', () => {

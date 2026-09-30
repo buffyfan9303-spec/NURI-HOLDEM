@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   windowEndMinute, earlyTierWindows, earlyTierIndexAt, normalizeEarlyTiers, rebuyStackAt, rebuyChipsOf,
-  msToRegCloseAt, prizePlaceCount, targetEntriesOf,
+  msToRegCloseAt, prizePlaceCount, targetEntriesOf, voucherPerEntryMismatch, MAX_VOUCHER_PER_ENTRY,
 } from './chipRules';
 import { computeLiveStats, deriveClockCounts, emptyClockState, defaultClockConfig, withDerivedEarly, applyEarlyEdit, clockIsLeftover, type ClockConfig, type ClockLevel, type ClockState } from '../api/clock';
 import { discountAllowed, autoDiscountIndex, earlyTypeOf, type LedgerBuyin, type LedgerSession } from '../api/ledger';
@@ -144,6 +144,12 @@ describe('W-28 · 할인 유형 = 적용 조건', () => {
     expect([discountAllowed(discs[0], 1), discountAllowed(discs[0], 2), discountAllowed(discs[1], 1), discountAllowed(discs[1], 2), discountAllowed({}, 1)])
       .toEqual([false, true, true, false, true]);
   });
+  it('KW-1b 첫 리바인 할인(firstRebuy)은 2번째 바인에만 — 첫 바인·3번째 리바인에는 안 된다(퀸 「첫 리바인 50%」)', () => {
+    const fr = { kind: 'firstRebuy' as const };
+    expect([1, 2, 3, 4].map((n) => discountAllowed(fr, n))).toEqual([false, true, false, false]);
+    expect(autoDiscountIndex([{ label: '첫 리바인', amount: 50_000, level: 20, kind: 'firstRebuy' }], 1, 3)).toBe(0);
+    expect(autoDiscountIndex([{ label: '첫 리바인', amount: 50_000, level: 20, kind: 'firstRebuy' }], 1, 2)).toBe(1);
+  });
   it('자동 선택도 같은 조건 — 첫 바인은 3레벨 리바인 할인 대신 첫 바인 할인(2번)', () => {
     expect(autoDiscountIndex(discs, 1, 1)).toBe(2);
     expect(autoDiscountIndex(discs, 1, 2)).toBe(1);
@@ -186,5 +192,17 @@ describe('W-14 · 지난 날 멈춘 채 남은 클락만 새로 채운다', () =
   it('흔적 없는 행 = update · 행 없음 = new', () => {
     expect(clockStartAction(st({}), '2026-09-30')).toBe('update');
     expect(clockStartAction(null, '2026-09-30')).toBe('new');
+  });
+});
+
+describe('KW-1b · 참가 1회 이용권 장수', () => {
+  it('N장 × 1만원이 참가비와 다를 때만 경고 — 없음(0)·일치는 조용하다', () => {
+    expect(voucherPerEntryMismatch(10, 100_000, 10_000)).toBe(false);
+    expect(voucherPerEntryMismatch(5, 100_000, 10_000)).toBe(true);
+    expect(voucherPerEntryMismatch(0, 100_000, 10_000)).toBe(false);
+    expect(voucherPerEntryMismatch(3, 0, 10_000)).toBe(false);
+  });
+  it('상한은 서버(20260930g least(100, …))와 같은 100', () => {
+    expect(MAX_VOUCHER_PER_ENTRY).toBe(100);
   });
 });

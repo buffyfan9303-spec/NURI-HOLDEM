@@ -17,6 +17,13 @@ export interface EarlyTierWindow { min: number; chips: number }
 
 export const MAX_EARLY_TIERS = 4;
 
+/** KW-1b — 참가 1회 이용권 상한. 서버 approve_buyin_request(20260930g)도 같은 값으로 자른다. */
+export const MAX_VOUCHER_PER_ENTRY = 100;
+/** 참가 1회 이용권 N장 × 1장 값(wonPerVoucher = units TICKET_WON, 1만원 — 오너 결정 W-01)이 참가비와 다른가. 폼은 경고만 한다(저장은 허용). */
+export function voucherPerEntryMismatch(perEntry: number, buyInWon: number, wonPerVoucher: number): boolean {
+  return perEntry > 0 && buyInWon > 0 && perEntry * wonPerVoucher !== buyInWon;
+}
+
 /** 포스터 buy_in(jsonb) 에 새로 얹는 칸 — 없으면 기존 동작이다(api/schedules BuyInInfo 를 넓히지 않고 여기서 읽는다). */
 export interface PosterChipRules {
   /** 얼리 단계. undefined = 포스터가 얼리를 말하지 않음(기존 동작: 클락 설정 그대로) · [] = 얼리 없음. */

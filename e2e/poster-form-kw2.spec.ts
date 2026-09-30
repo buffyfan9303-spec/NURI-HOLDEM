@@ -124,7 +124,12 @@ test.describe('KW-2 포스터 폼', () => {
     await d.getByPlaceholder(/단위/).first().fill('대회초대권');
     // 세부 규칙
     await d.getByRole('button', { name: /리엔트리 가격·한도/ }).click();
+    // KW-1b — N장 × 1만원 ≠ 참가비면 경고(저장은 막지 않음) · 100장 초과는 등록 전에 막는다(서버도 100 으로 자름).
+    const warn = d.getByTestId('voucher-per-entry-warn');
+    await f('참가 1회 = 이용권').fill('5');
+    await expect(warn).toBeVisible();
     await f('참가 1회 = 이용권').fill('10');
+    await expect(warn).toHaveCount(0);
     await f('회차별 리엔트리 스택').fill('80000, 80000, 90000');
     await f('얼리칩').selectOption('tiers');
     await d.getByLabel('얼리 1단 마지막 레벨').fill('1');
@@ -138,6 +143,13 @@ test.describe('KW-2 포스터 폼', () => {
     await d.getByLabel('사이드 이벤트 1 시작').fill('17LV 시작 전');
     // W-18
     await d.getByRole('button', { name: /첫 바인 3만 할인/ }).click();
+    await f('참가 1회 = 이용권').fill('101');
+    await d.getByRole('button', { name: '등록하기' }).click();
+    // 입력칸 max=100 이라 브라우저 검증이 제출 자체를 막는다(폼 코드의 100장 가드는 그 뒤 두 번째 벽).
+    expect(await f('참가 1회 = 이용권').evaluate((el) => (el as HTMLInputElement).validity.rangeOverflow)).toBe(true);
+    await page.waitForTimeout(500);
+    expect(writes.length, '100장 초과가 저장됐다').toBe(0);
+    await f('참가 1회 = 이용권').fill('10');
     await d.getByRole('button', { name: '등록하기' }).click();
     await expect.poll(() => writes.length, { timeout: 15_000 }).toBeGreaterThan(0);
     const b = writes[0].body;

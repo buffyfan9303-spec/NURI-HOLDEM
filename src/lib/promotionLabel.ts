@@ -87,7 +87,7 @@ export function promotionView(p: PromotionLike): PromotionView {
 //   태그·내용·장부 라벨 무엇도 만들지 않는다 — 어제까지의 동작 그대로 열리고 저장된다.
 
 /** 매장이 실제로 거는 참가비 할인의 종류. 'custom' = 유형 없이 손으로 쓰는 줄. */
-export type DiscountType = 'level' | 'firstBuyin' | 'firstVisit' | 'rebuy' | 'advance' | 'custom';
+export type DiscountType = 'level' | 'firstBuyin' | 'firstVisit' | 'rebuy' | 'firstRebuy' | 'advance' | 'custom';
 
 /** 선택 목록 — 배열 순서가 곧 화면 순서. '직접 입력'은 맨 끝(도피처지 기본값이 아니다). */
 export const DISCOUNT_TYPES: readonly { value: DiscountType; name: string }[] = [
@@ -95,6 +95,7 @@ export const DISCOUNT_TYPES: readonly { value: DiscountType; name: string }[] = 
   { value: 'firstBuyin', name: '첫 바인 할인' },
   { value: 'firstVisit', name: '첫 방문 할인' },
   { value: 'rebuy',      name: '리바인 할인' },
+  { value: 'firstRebuy', name: '첫 리바인 할인' },
   { value: 'advance',    name: '사전예약 할인' },
   { value: 'custom',     name: '직접 입력' },
 ];
@@ -106,12 +107,12 @@ const TITLE_MAX = 40;
 
 /** 금액이 태그에 못 들어갈 때 쓰는 유형 약칭(6자 이내). null = 자동으로 채우지 않는다. */
 const TYPE_BADGE: Record<DiscountType, string | null> = {
-  level: '레벨', firstBuyin: '첫바인', firstVisit: '첫방문', rebuy: '리바인', advance: '사전예약', custom: null,
+  level: '레벨', firstBuyin: '첫바인', firstVisit: '첫방문', rebuy: '리바인', firstRebuy: '첫리바인', advance: '사전예약', custom: null,
 };
 
 /** 장부 할인 라벨(칩에 그대로 실리므로 짧게). 레벨 할인만 레벨 번호로 갈린다. */
 const TYPE_LEDGER: Record<DiscountType, string | null> = {
-  level: '레벨 할인', firstBuyin: '첫 바인', firstVisit: '첫 방문', rebuy: '리바인', advance: '사전예약', custom: null,
+  level: '레벨 할인', firstBuyin: '첫 바인', firstVisit: '첫 방문', rebuy: '리바인', firstRebuy: '첫 리바인', advance: '사전예약', custom: null,
 };
 
 /** 포스터 상세에 보이는 한 줄. 금액이 있으면 문구에 넣는다(§28 — 참가비 할인액은 상품 가격 정보라 표시 대상). */
@@ -124,6 +125,7 @@ function titleOf(type: DiscountType, amount: string | null, level: number): stri
     case 'firstBuyin': return `첫 바인 ${amount ? `${amount} ` : ''}할인`;
     case 'firstVisit': return `첫 방문 ${amount ? `${amount} ` : ''}할인`;
     case 'rebuy':      return `리바인 ${amount ? `${amount} ` : ''}할인`;
+    case 'firstRebuy': return `첫 리바인 ${amount ? `${amount} ` : ''}할인`;
     case 'advance':    return `사전예약 ${amount ? `${amount} ` : ''}할인`;
     default:           return null; // custom — 사람이 쓴 것을 건드리지 않는다
   }

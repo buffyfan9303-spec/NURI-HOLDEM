@@ -54,6 +54,11 @@ describe('discountsFromPromotions', () => {
     expect(r.added).toBe(2);
   });
 
+  it('KW-1b — 유형 「첫 리바인」 도 장부 적용 조건(kind=firstRebuy)으로 실린다', () => {
+    const r = discountsFromPromotions([p({ discountType: 'firstRebuy', title: '첫 리바인 5만 할인', discountWon: 50_000 })]);
+    expect(r.discounts).toEqual([{ label: '첫 리바인', amount: 50_000, level: 0, kind: 'firstRebuy' }]);
+  });
+
   it('내용이 라벨 상한(20자)을 넘으면 유형 라벨로 내린다', () => {
     const r = discountsFromPromotions([
       p({ discountType: 'level', title: '1LV 바인 5만 할인 · 오픈채팅 사전예약자 한정', discountWon: 50_000, level: 1 }),
