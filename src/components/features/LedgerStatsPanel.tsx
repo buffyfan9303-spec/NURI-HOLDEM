@@ -312,19 +312,20 @@ function StatsView({ venueId, active }: { venueId: string; active: boolean }) {
         })}
       </div>
 
+      {/* P-07(2026-10-01) — PC(lg+)는 상자를 걷고 내용 폭 외곽선 칩 한 줄(32px, 끔 칩 외곽선 = 글자색 — 승인된 After 이미지 그대로). 기간 탭과 모양을 갈라 '필터' 로 읽히게. 켜짐(제외 중) 빨강 틴트·토글 동작 불변. */}
       {/* D6-2(2026-09-29, bounce-sweep) — 이 필터 카드는 데이터와 무관한 조작 UI 라 뼈대 분기 **밖**에 둔다.
           안에 있을 땐 뼈대가 이 카드(74px)를 빼고 그려, 데이터가 오는 순간 KPI 가 +87px 밀렸다(1280 첫 방문).
           조건은 그대로 period(그려진 기간) — 당일→주 전환 중에도 카드는 데이터와 같은 커밋에서 사라진다. */}
       {period === 'day' && (
-        <div className="rounded-input border border-border-default bg-surface-high px-2.5 py-2">
+        <div className="rounded-input border border-border-default bg-surface-high px-2.5 py-2 lg:border-transparent lg:bg-transparent lg:px-0">
           <p className="text-xs font-semibold text-ink-secondary mb-1.5">바인 제외 · 손님 유형별 {excludeTypes.size > 0 && <span className="text-danger-light">({excludeTypes.size}개 제외 중)</span>}</p>
-          <div className="grid grid-cols-5 gap-1">
+          <div className="grid grid-cols-5 gap-1 lg:flex lg:flex-wrap lg:gap-[6px]">
             {([['new', '신규'], ['regular', '기존'], ['staff', '관계자'], ['other', '기타'], ['none', '미지정']] as const).map(([code, label]) => {
               const on = excludeTypes.has(code);
               return (
                 <button key={code} type="button" onClick={() => toggleExclude(code)}
-                  className={['py-1.5 text-xs font-bold rounded-[6px] border transition-colors',
-                    on ? 'bg-danger/15 text-danger-light border-danger/40' : 'bg-surface-base text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+                  className={['py-1.5 text-xs font-bold rounded-[6px] border transition-colors lg:h-[32px] lg:px-[12px] lg:py-0',
+                    on ? 'bg-danger/15 text-danger-light border-danger/40' : 'bg-surface-base lg:bg-transparent text-ink-secondary border-border-default lg:border-current hover:text-ink-primary'].join(' ')}>
                   {label}
                 </button>
               );
