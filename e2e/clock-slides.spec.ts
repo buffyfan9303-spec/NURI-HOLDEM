@@ -134,3 +134,103 @@ test.describe('클락 TV — K단계 슬라이드', () => {
     await expect(page.getByTestId('clk-prize-track').locator('[data-extra-sheet],[data-ad-sheet]')).toHaveCount(0);
   });
 });
+
+// 리드 검토 반영(2026-09-30) — design-reviewer ①②③. 수정 전 빌드(5aa08f93)에서 셋 다 FAIL 이었다.
+test.describe('클락 TV — K단계 검토 반영', () => {
+  const AD2 = 'https://ads.e2e.invalid/ok2.png';
+  // 상한 꽉 채운 추가 페이지 — 제목 12 · 줄 8 · 이름표 14 · 내용 16 · 메모 20
+  const FULL = {
+    kind: 'notice', title: '가나다라마바사아자차카타',
+    rows: Array.from({ length: 8 }, (_, i) => ({ label: `이름표${i}가나다라마바사아자`.slice(0, 14), content: `내용${i}가나다라마바사아자차카타파`.slice(0, 16), note: `메모${i}가나다라마바사아자차카타파하거너`.slice(0, 20) })),
+  };
+
+  test('① 광고 2개 — 광고→시상으로 빠지는 동안 광고 장은 방금 보인 광고 그대로다', async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const T0 = Math.floor(Date.now() / 40_000) * 40_000 + 40_000 + 1_000;   // 시상 30 + 광고 10 = 40초 바퀴
+    await page.clock.install({ time: T0 });
+    await serveClock(page, row({}, T0 + 15 * 60_000));
+    await serveAds(page, [AD_OK]);
+    await page.route(AD2, (r) => r.fulfill({ status: 200, contentType: 'image/png', body: PNG_1PX }));
+    await page.route(/\/rest\/v1\/clock_ads/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([AD_OK, AD2].map((u, i) => ({ id: `a${i}`, image_url: u, starts_at: new Date(Date.now() - 86_400_000).toISOString(), ends_at: new Date(Date.now() + 86_400_000).toISOString(), venue_ids: null, sort_order: i }))) }));
+    await page.goto(`/?display=${VENUE}&g=1&auto=0`);
+    await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
+    const adImg = page.getByTestId('clk-prize-track').locator('[data-ad-sheet] img');
+    await page.clock.runFor(30_000);                       // 광고 칸
+    await expect(page.getByTestId('clk-prizes').locator('p').first()).toHaveText(/sponsor/i);
+    const shown = await adImg.getAttribute('src');
+    await page.clock.runFor(10_000);                       // 시상으로 — 빠지는 첫 프레임부터 같은 광고여야 한다
+    await expect(page.getByTestId('clk-prizes').locator('p').first()).toHaveText(/prize pool/i);
+    expect(await adImg.getAttribute('src'), '광고가 빠지는 동안 다음 광고로 바뀌었다(번쩍)').toBe(shown);
+    await page.clock.runFor(30_000);                       // 다음 바퀴 광고 칸에서만 다음 광고로
+    expect(await adImg.getAttribute('src')).not.toBe(shown);
+  });
+
+  for (const [vw, vh] of [[1920, 1080], [1280, 720]] as const) {
+    test(`②③ 상한 꽉 채운 추가 페이지 — 제목·줄·총액이 잘리지 않는다 ${vw}`, async ({ page }) => {
+      test.setTimeout(90_000);
+      await page.setViewportSize({ width: vw, height: vh });
+      const T0 = Math.floor(Date.now() / 60_000) * 60_000 + 60_000 + 31_000;   // 시상 30 + 추가 30 = 60초 바퀴 · 추가 칸 1초
+      await page.clock.install({ time: T0 });
+      await serveClock(page, row({ extraPages: [FULL] }, T0 + 15 * 60_000));
+      await serveAds(page, []);
+      await page.goto(`/?display=${VENUE}&g=1&auto=0`);
+      await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
+      const aside = page.getByTestId('clk-prizes');
+      await expect(aside.locator('p').first()).toHaveText(/notice/i);
+      await page.waitForTimeout(600);
+      const m = await aside.evaluate((el) => {
+        const cut = (e: Element) => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1;
+        const head = el.querySelectorAll(':scope > p')[1] as HTMLElement;
+        const sheet = el.querySelector('[data-extra-sheet="0"]')!;
+        const a = el.getBoundingClientRect();
+        // 마크업과 무관하게 글자를 가진 잎 요소를 잰다(수정 전 판은 span, 수정 후 판은 p).
+        const lines = [...sheet.querySelectorAll('*')].filter((e) => e.children.length === 0 && (e.textContent ?? '').trim());
+        return {
+          titleCut: cut(head), titleText: head.textContent,
+          linesCut: lines.filter(cut).map((p) => p.textContent),
+          outside: lines.filter((p) => { const r = p.getBoundingClientRect(); return r.bottom > a.bottom + 1 || r.bottom > innerHeight; }).length,
+          lines: lines.length,
+        };
+      });
+      expect(m.lines).toBe(24);
+      expect.soft(m.titleCut, `제목이 잘렸다: ${m.titleText}`).toBe(false);
+      expect.soft(m.linesCut, '줄이 잘렸다').toEqual([]);
+      expect.soft(m.outside, '줄이 칸 밖으로 나갔다').toBe(0);
+      // 시상 칸으로 돌아가도 총액이 눌리지 않는다
+      await page.clock.runFor(30_000);
+      await expect(aside.locator('p').first()).toHaveText(/prize pool/i);
+      const tot = page.getByTestId('clk-prize-total');
+      const t = await tot.evaluate((e) => ({ sh: e.scrollHeight, ch: e.clientHeight, sw: e.scrollWidth, cw: e.clientWidth }));
+      expect.soft(t.sh <= t.ch + 1 && t.sw <= t.cw + 1, `총액이 잘렸다 ${JSON.stringify(t)}`).toBe(true);
+      await page.screenshot({ path: `test-results/clock-shots/k-full-${vw}.png` });
+    });
+  }
+
+  test('② 상한 이전에 저장된 긴 글(40자 · 10줄 · 메모) — 칸 밖으로 넘치지 않고 총액이 눌리지 않는다', async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const T0 = Math.floor(Date.now() / 60_000) * 60_000 + 60_000 + 31_000;
+    await page.clock.install({ time: T0 });
+    const long = '가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초';
+    await serveClock(page, row({ extraPages: [{ kind: 'notice', title: long.slice(0, 30),
+      rows: Array.from({ length: 10 }, (_, i) => ({ label: `${i}${long}`.slice(0, 20), content: long.slice(0, 40), note: long.slice(0, 40) })) }] }, T0 + 15 * 60_000));
+    await serveAds(page, []);
+    await page.goto(`/?display=${VENUE}&g=1&auto=0`);
+    await expect(page.getByTestId('clk-timer')).toBeVisible({ timeout: 20_000 });
+    const aside = page.getByTestId('clk-prizes');
+    await expect(aside.locator('p').first()).toHaveText(/notice/i);
+    await page.waitForTimeout(600);
+    const out = await aside.evaluate((el) => {
+      const a = el.getBoundingClientRect();
+      const sheet = el.querySelector('[data-extra-sheet="0"]')!;
+      const leaves = [...sheet.querySelectorAll('*')].filter((e) => e.children.length === 0 && (e.textContent ?? '').trim());
+      return leaves.filter((e) => { const r = e.getBoundingClientRect(); return r.bottom > a.bottom + 1 || r.bottom > innerHeight; }).length;
+    });
+    expect.soft(out, `긴 글 ${out}줄이 칸 밖으로 나갔다`).toBe(0);
+    await page.clock.runFor(30_000);
+    await expect(aside.locator('p').first()).toHaveText(/prize pool/i);
+    const t = await page.getByTestId('clk-prize-total').evaluate((e) => ({ sh: e.scrollHeight, ch: e.clientHeight, h: e.getBoundingClientRect().height, fs: parseFloat(getComputedStyle(e).fontSize) }));
+    expect.soft(t.h >= t.fs * 0.99 && t.sh <= t.ch + 1, `총액이 눌려 잘렸다 ${JSON.stringify(t)}`).toBe(true);
+  });
+});

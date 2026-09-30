@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   slideSegments, slideAt, sheetCount, adIndexAt, teamStandings, parsePlaces, clampExtraPages, visibleExtraPages,
-  PAGE_MS, AD_MS, PRIZE_SHEET_MS, EXTRA_PAGES_MAX, EXTRA_ROWS_MAX,
+  PAGE_MS, AD_MS, PRIZE_SHEET_MS, EXTRA_PAGES_MAX, EXTRA_ROWS_MAX, EXTRA_TITLE_MAX, EXTRA_CONTENT_MAX, clockUserTexts,
 } from './clockSlides';
 
 describe('K단계 슬라이드 순서표 — 시상 → 추가 A → 추가 B → 광고', () => {
@@ -82,17 +82,41 @@ describe('W-11 팀 합산 점수 — 깐부(1st 14 … 12th 1)', () => {
 });
 
 describe('상한 — 서버 트리거와 같은 수', () => {
-  it('페이지 2장 · 줄 10개 · 글자 길이로 자른다 · 모르는 종류는 custom', () => {
+  it('페이지 2장 · 줄 상한 · 글자 길이로 자른다 · 모르는 종류는 custom', () => {
     const many = Array.from({ length: 4 }, () => ({ kind: 'weird' as never, title: 'x'.repeat(99), rows: Array.from({ length: 30 }, () => ({ label: 'l'.repeat(99), content: 'c'.repeat(99) })) }));
     const c = clampExtraPages(many);
     expect(c).toHaveLength(EXTRA_PAGES_MAX);
     expect(c[0].kind).toBe('custom');
     expect(c[0].rows).toHaveLength(EXTRA_ROWS_MAX);
-    expect(c[0].title.length).toBe(30);
-    expect(c[0].rows[0].content.length).toBe(40);
+    expect(c[0].title.length).toBe(EXTRA_TITLE_MAX);
+    expect(c[0].rows[0].content.length).toBe(EXTRA_CONTENT_MAX);
   });
   it('빈 페이지는 보이지 않는다', () => {
     expect(visibleExtraPages([{ kind: 'notice', title: 't', rows: [{ label: ' ', content: '' }] }])).toHaveLength(0);
     expect(visibleExtraPages(null)).toHaveLength(0);
+  });
+  it('스칼라·null 행과 숫자 이름표가 섞여도 TV 가 깨지지 않는다(critical P3)', () => {
+    const bad = [{ kind: 'notice', title: 7, rows: [null, 'x', { label: 12, content: null }, { label: 'ok', content: '내용' }] }] as never;
+    const v = visibleExtraPages(bad);
+    expect(v).toHaveLength(1);
+    expect(v[0].rows).toEqual([{ label: '12', content: '' }, { label: 'ok', content: '내용' }]);
+    expect(v[0].title).toBe('7');
+  });
+  it('§28 검사 대상 글자 — 시상 문구·메모 + 추가 페이지 제목·이름표·내용·메모', () => {
+    expect(clockUserTexts([{ text: 'a', note: 'b' }, {}], [{ kind: 'notice', title: 'c', rows: [{ label: 'd', content: 'e', note: 'f' }] }]))
+      .toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+  });
+});
+
+describe('상한 = TV 왼쪽 칸에 한 줄로 다 보이는 길이(design-reviewer 2026-09-30 ②③)', () => {
+  it('제목(최소 3.2cqmin)·내용(2.1)·이름표(1.7)·메모(1.3)·시상 문구(1등 2.5) 가 칸 폭 PRIZE_COL_CQ 안에 든다(한글 0.95em)', async () => {
+    const { PRIZE_COL_CQ } = await import('../components/features/clock/prizeFit');
+    const S = await import('./clockSlides');
+    const w = (chars: number, cq: number) => chars * 0.95 * cq;
+    expect(w(S.EXTRA_TITLE_MAX, 3.2)).toBeLessThanOrEqual(PRIZE_COL_CQ);
+    expect(w(S.EXTRA_CONTENT_MAX, 2.1)).toBeLessThanOrEqual(PRIZE_COL_CQ);
+    expect(w(S.EXTRA_LABEL_MAX + 4, 1.7)).toBeLessThanOrEqual(PRIZE_COL_CQ);   // 팀 '10. ' 포함
+    expect(w(S.EXTRA_NOTE_MAX, 1.3)).toBeLessThanOrEqual(PRIZE_COL_CQ);
+    expect(w(S.PRIZE_TEXT_MAX, 2.5) + 5).toBeLessThanOrEqual(PRIZE_COL_CQ);   // + 등수 칸
   });
 });

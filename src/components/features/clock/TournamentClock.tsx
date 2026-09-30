@@ -53,7 +53,7 @@ const ClockThemePanel = lazyWithReload(() => import('./ClockThemePanel'));
 import ClockStage from './ClockStage';
 import ClockPagesEditor from './ClockPagesEditor';
 import { useClockAds } from './useClockAds';
-import { clampExtraPages, type ClockExtraPage } from '../../../lib/clockSlides';
+import { clampExtraPages, clockPagesBlocked, type ClockExtraPage } from '../../../lib/clockSlides';
 const ClockAdsManager = lazyWithReload(() => import('./ClockAdsManager'));
 import { serverNow, serverTimeKnown, serverTimeSettled, whenServerTimeSettled } from '../../../lib/serverTime';
 import { useClockSecond } from '../../../lib/clockTick';
@@ -1447,6 +1447,12 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
   };
 
+  // §28 — 시상 문구·추가 페이지 글자에 금칙 표현이 있으면 시작 전에 막는다(서버 트리거가 같은 칸을 다시 막는다).
+  const guardStart = (c: ClockConfig, date: string | null, seq?: number) => {
+    const b = clockPagesBlocked(c.prizes, c.extraPages ?? []);
+    if (b) { toast.show(b, 'error'); return; }
+    onStart(c, date, seq);
+  };
   if (!canManage) {
     return <p className="py-16 text-center text-sm text-ink-muted">클락 설정은 업주/권한 직원만 가능합니다.</p>;
   }
@@ -1656,9 +1662,9 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       {/* 시작 — 위에서 고른 방식(단독/장부)으로 */}
       <div className="flex gap-2 pb-2">
         {linkDate
-          ? <button type="button" onClick={() => onStart(cfg, linkDate, linkGameSeq)} className="btn-primary inline-flex items-center justify-center gap-1.5 flex-1 text-sm"><Icon name="notebook" size={15} className="shrink-0" />장부({linkDate.slice(5)}{linkGameSeq > 1 ? ` 사이드${linkGameSeq - 1}` : ''}) 연동해 시작</button>
-          : <button type="button" onClick={() => onStart(cfg, null)} className="btn-primary inline-flex items-center justify-center gap-1.5 flex-1 text-sm"><Icon name="timer-poker" size={15} className="shrink-0" />{hasLive ? '이 설정으로 다시 시작' : '단독 클락 시작'}</button>}
-        {linkDate && <button type="button" onClick={() => onStart(cfg, null)} className="btn-ghost flex-1 text-sm">단독으로 시작</button>}
+          ? <button type="button" onClick={() => guardStart(cfg, linkDate, linkGameSeq)} className="btn-primary inline-flex items-center justify-center gap-1.5 flex-1 text-sm"><Icon name="notebook" size={15} className="shrink-0" />장부({linkDate.slice(5)}{linkGameSeq > 1 ? ` 사이드${linkGameSeq - 1}` : ''}) 연동해 시작</button>
+          : <button type="button" onClick={() => guardStart(cfg, null)} className="btn-primary inline-flex items-center justify-center gap-1.5 flex-1 text-sm"><Icon name="timer-poker" size={15} className="shrink-0" />{hasLive ? '이 설정으로 다시 시작' : '단독 클락 시작'}</button>}
+        {linkDate && <button type="button" onClick={() => guardStart(cfg, null)} className="btn-ghost flex-1 text-sm">단독으로 시작</button>}
       </div>
     </div>
   );
@@ -1668,14 +1674,16 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
 function LivePagesModal({ state, onClose, onApply }: { state: ClockState; onClose: () => void; onApply: (prizes: ClockPrizeRow[], extraPages: ClockExtraPage[]) => void }) {
   const [prizes, setPrizes] = useState<ClockPrizeRow[]>(() => (state.config?.prizes ?? []).map((p) => ({ ...p })));
   const [pages, setPages] = useState<ClockExtraPage[]>(() => clampExtraPages(state.config?.extraPages));
+  const blocked = clockPagesBlocked(prizes, pages);   // §28 — 서버 트리거와 같은 칸을 미리 거른다
   return (
     <Modal open onClose={onClose} title="TV 페이지 — 시상 · 추가 페이지" maxWidth="lg">
-      <div className="space-y-3 p-4">
+      <div className="p-4 pb-0">
         <ClockPagesEditor prizes={prizes} extraPages={pages} onChange={(p) => { if (p.prizes) setPrizes(p.prizes); if (p.extraPages) setPages(p.extraPages); }} />
-        <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="btn-ghost flex-1 text-sm">취소</button>
-          <button type="button" data-testid="clk-pages-apply" onClick={() => onApply(prizes, clampExtraPages(pages))} className="btn-primary flex-1 text-sm">TV 에 적용</button>
-        </div>
+      </div>
+      {/* 적용·취소는 모달 아래에 붙는다 — 줄이 많아 편집기가 길어져도 스크롤 없이 바로 누른다(design-reviewer ⑤). */}
+      <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border-subtle bg-surface-mid p-4">
+        <button type="button" onClick={onClose} className="btn-ghost min-h-[44px] flex-1 text-sm">취소</button>
+        <button type="button" data-testid="clk-pages-apply" disabled={!!blocked} onClick={() => onApply(prizes, clampExtraPages(pages))} className="btn-primary min-h-[44px] flex-1 text-sm disabled:opacity-50">TV 에 적용</button>
       </div>
     </Modal>
   );

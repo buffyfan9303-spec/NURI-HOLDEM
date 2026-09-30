@@ -12,6 +12,9 @@ import {
   type ClockExtraKind, type ClockExtraPage, type ClockExtraRow,
 } from '../../../lib/clockSlides';
 import { prizeTotalOf, prizeRowShown } from './prizeFit';
+import { clockPagesBlocked } from '../../../lib/clockSlides';
+/** 44px 누름 영역(업주 PC 라도 터치 모니터·리모컨 겸용 — design-reviewer ⑤). */
+const ADD_BTN = 'w-full min-h-[44px] rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300';
 
 /** 깐부 예시 점수표(1st 14 … 12th 1) — 팀 점수 페이지를 새로 만들 때 채워 둔다. 매장이 고친다. */
 const TEAM_POINTS_DEFAULT = [14, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
@@ -34,6 +37,7 @@ export default function ClockPagesEditor({ prizes, extraPages, onChange }: {
     setPage(pi, kind === 'team' ? { kind, points: extraPages[pi].points?.length ? extraPages[pi].points : TEAM_POINTS_DEFAULT } : { kind });
 
   const total = prizeTotalOf(prizes.filter(prizeRowShown));
+  const blocked = clockPagesBlocked(prizes, extraPages);
 
   return (
     <div className="space-y-3">
@@ -50,15 +54,17 @@ export default function ClockPagesEditor({ prizes, extraPages, onChange }: {
                 {/* 단위 표시가 없어 '50'(만원)과 '500000'(원)이 뒤섞였다 → 단위를 명시한다.
                     (이 표는 클락 화면 표시용이다 — 2026-09-05 부터 순위 저장으로 흐르지 않는다.) */}
                 <div className="relative flex-1 min-w-0">
-                  <input type="number" inputMode="numeric" value={p.amount || ''} onChange={(e) => setPrize(i, { amount: +e.target.value || 0 })}
-                    placeholder="500000" aria-label={`${i + 1}번째 줄 금액`} className="input w-full text-sm tabular-nums pr-8" />
+                  {/* 문구가 있으면 TV 는 문구만 보이고 합계에서도 빠진다 — 금액 칸을 비우고 잠가 '안 보이는 금액' 이 남지 않게 한다(design-reviewer ④). */}
+                  <input type="number" inputMode="numeric" value={p.text?.trim() ? '' : (p.amount || '')} disabled={!!p.text?.trim()}
+                    onChange={(e) => setPrize(i, { amount: +e.target.value || 0 })}
+                    placeholder={p.text?.trim() ? '문구 사용 중' : '500000'} aria-label={`${i + 1}번째 줄 금액`} className="input w-full text-sm tabular-nums pr-8 disabled:opacity-50" />
                   {/* W-25 — 포스터에서 온 T·GP·포인트 행은 그 단위를 그대로 보여 준다(원으로 환산하지 않는다). */}
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">{p.unit || '원'}{(p.count ?? 1) > 1 ? ` ×${p.count}` : ''}</span>
                 </div>
                 <button type="button" onClick={() => removePrize(i)} aria-label="상금 줄 삭제" className="hit grid h-8 w-11 shrink-0 place-items-center text-xs text-ink-muted hover:text-danger-light">✕</button>
               </div>
               <div className="flex items-center gap-1.5 pl-[5.375rem] pr-[3.125rem]">
-                <input value={p.text ?? ''} maxLength={PRIZE_TEXT_MAX} onChange={(e) => setPrize(i, { text: e.target.value || undefined })}
+                <input value={p.text ?? ''} maxLength={PRIZE_TEXT_MAX} onChange={(e) => setPrize(i, e.target.value.trim() ? { text: e.target.value, amount: 0 } : { text: undefined })}
                   placeholder="문구 (예: 시드권 + 트로피)" aria-label={`${i + 1}번째 줄 시상 문구`} className="input min-w-0 flex-1 text-xs" />
                 <input value={p.note ?? ''} maxLength={PRIZE_NOTE_MAX} onChange={(e) => setPrize(i, { note: e.target.value || undefined })}
                   placeholder="메모" aria-label={`${i + 1}번째 줄 메모`} className="input min-w-0 flex-1 text-xs" />
@@ -73,7 +79,7 @@ export default function ClockPagesEditor({ prizes, extraPages, onChange }: {
             {!total.unit && total.amount >= 10000 ? ` (${Math.round(total.amount / 10000).toLocaleString()}만원)` : ''}
           </p>
         )}
-        <button type="button" onClick={addPrize} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 상금</button>
+        <button type="button" onClick={addPrize} className={ADD_BTN}>+ 상금</button>
       </section>
 
       {/* 추가 페이지 */}
@@ -120,15 +126,16 @@ export default function ClockPagesEditor({ prizes, extraPages, onChange }: {
             )}
             {pg.rows.length < EXTRA_ROWS_MAX && (
               <button type="button" onClick={() => setPage(pi, { rows: [...pg.rows, { label: '', content: '' }] })}
-                className="w-full py-1 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 줄</button>
+                className={ADD_BTN}>+ 줄</button>
             )}
           </div>
         ))}
         {extraPages.length < EXTRA_PAGES_MAX && (
           <button type="button" data-testid="clk-extra-add" onClick={addPage}
-            className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 추가 페이지</button>
+            className={ADD_BTN}>+ 추가 페이지</button>
         )}
       </section>
+      {blocked && <p role="alert" data-testid="clk-pages-blocked" className="rounded-input border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger-light">{blocked}</p>}
     </div>
   );
 }

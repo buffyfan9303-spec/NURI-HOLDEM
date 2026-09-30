@@ -4,11 +4,7 @@
 --   클라이언트는 표가 없으면 빈 광고 목록으로 읽고(src/api/clockAds.ts isMissingTable), 추가 페이지·시상 문구는
 --   clock_states.config(jsonb) 에 그대로 실리므로 이 파일 없이도 동작한다. 이 파일이 더하는 것은 ① 광고 표·버킷 ② 서버 상한.
 --
--- 🧪 2026-09-30 라이브 리허설(begin … 끝에서 raise → 전부 롤백, 적용 0 확인: to_regclass null · 버킷 0 · 트리거 0) — PG 17.6:
---   existing_rows_ok=2(기존 clock_states 전 행 config 재저장 통과) · 3pages=rejected · longtext=rejected · valid(team)=accepted ·
---   admin_insert=ok · admin_update_rows=1 · user_insert=rejected(42501) · user_update_rows=0 · user_delete_rows=0 · user_read=1 ·
---   anon_read=1 · anon_insert=rejected · bad_period=rejected · 버킷 512000 / image/webp,image/jpeg,image/png.
---   (관리자 f5d305f2… · 일반 7e435684… — role 을 조회해 고른 계정. 저장소 객체 정책은 문장 실행까지만 확인, 업로드 행동 시험은 NOT_RUN.)
+-- 🧪 리허설 기록은 파일 끝 주석(REHEARSAL) — 리드 검토 반영판(design ②③·critical P3 ①②③) 기준으로 다시 돌렸다.
 --
 -- 요구 원문: .claude/handoff/specs-0930/PLAN-AB-exec.md §5-1
 --   · 광고 여러 개(기간·대상 매장·순번) · 840×1120 · 500KB 이하 · webp/jpg/png — 형식·크기는 버킷이 서버에서 강제한다.
@@ -77,8 +73,13 @@ drop policy if exists clock_ads_obj_admin_delete on storage.objects;
 create policy clock_ads_obj_admin_delete on storage.objects for delete to authenticated
   using (bucket_id = 'clock_ads' and coalesce(public.my_role() = 'admin'::public.user_role, false));
 
--- ── ③ 클락 config 상한 — 추가 페이지(최대 2 · 줄 10 · 글자 길이) · 시상 문구/메모 길이 ──────────
--- 수치: src/lib/clockSlides.ts EXTRA_*·TEAM_POINTS_MAX·PRIZE_TEXT_MAX·PRIZE_NOTE_MAX 와 같다.
+-- ── ③ 클락 config 상한 — 모양 · 줄/글자 수 · §28 금칙 표현 ──────────────────────────
+-- 수치: src/lib/clockSlides.ts 의 EXTRA_*·TEAM_POINTS_MAX·PRIZE_TEXT_MAX·PRIZE_NOTE_MAX·PRIZE_ROWS_MAX 와 같다(바꾸면 둘 다).
+--   상한은 TV 왼쪽 칸에 한 줄로 다 보이는 길이다(design-reviewer 2026-09-30 실측 — 제목 30자는 7~8자만 보였다).
+-- 모양(critical-reviewer P3): 줄이 객체가 아니거나(문자열·null) 글자 칸이 문자열이 아니면 거절한다 — 그런 줄은 길이 검사를
+--   건너뛰어 상한을 우회했고, TV 는 문자열을 기대한다. 시상 줄 수도 상한을 둔다.
+-- §28: 매장이 쓴 글자(시상 문구·메모, 추가 페이지 제목·이름표·내용·메모)에 기존 금칙 판정 contains_blocked_ugc(20260927d)를
+--   그대로 쓴다(새 금칙어 목록을 만들지 않는다). 편집기는 lib/content-filter filterContent 로 같은 칸을 미리 거른다.
 create or replace function public._clock_config_limits()
 returns trigger
 language plpgsql
@@ -88,6 +89,7 @@ declare
   c jsonb := new.config;
   pg jsonb;
   rw jsonb;
+  k text;
 begin
   if c is null or jsonb_typeof(c) <> 'object' then return new; end if;
 
@@ -98,26 +100,52 @@ begin
     for pg in select * from jsonb_array_elements(c->'extraPages') loop
       if jsonb_typeof(pg) <> 'object'
          or coalesce(pg->>'kind', '') not in ('bounty', 'event', 'notice', 'custom', 'team')
-         or char_length(coalesce(pg->>'title', '')) > 30
+         or (pg ? 'title' and jsonb_typeof(pg->'title') <> 'string')
+         or char_length(coalesce(pg->>'title', '')) > 12
          or jsonb_typeof(coalesce(pg->'rows', '[]'::jsonb)) <> 'array'
-         or jsonb_array_length(coalesce(pg->'rows', '[]'::jsonb)) > 10
+         or jsonb_array_length(coalesce(pg->'rows', '[]'::jsonb)) > 8
          or (pg ? 'points' and (jsonb_typeof(pg->'points') <> 'array' or jsonb_array_length(pg->'points') > 30)) then
-        raise exception '추가 페이지 형식이 올바르지 않습니다(줄 10개·제목 30자 이하)' using errcode = '22023';
+        raise exception '추가 페이지 형식이 올바르지 않습니다(줄 8개·제목 12자 이하)' using errcode = '22023';
+      end if;
+      if public.contains_blocked_ugc(pg->>'title') then
+        raise exception '게시할 수 없는 표현이 들어 있습니다' using errcode = '22023';
       end if;
       for rw in select * from jsonb_array_elements(coalesce(pg->'rows', '[]'::jsonb)) loop
-        if char_length(coalesce(rw->>'label', '')) > 20
-           or char_length(coalesce(rw->>'content', '')) > 40
-           or char_length(coalesce(rw->>'note', '')) > 40 then
-          raise exception '추가 페이지 글자가 너무 깁니다(이름표 20·내용 40·메모 40자)' using errcode = '22023';
+        if jsonb_typeof(rw) <> 'object' then
+          raise exception '추가 페이지 줄 형식이 올바르지 않습니다' using errcode = '22023';
+        end if;
+        foreach k in array array['label', 'content', 'note'] loop
+          if rw ? k and jsonb_typeof(rw->k) not in ('string', 'null') then
+            raise exception '추가 페이지 줄 형식이 올바르지 않습니다' using errcode = '22023';
+          end if;
+          if public.contains_blocked_ugc(rw->>k) then
+            raise exception '게시할 수 없는 표현이 들어 있습니다' using errcode = '22023';
+          end if;
+        end loop;
+        if char_length(coalesce(rw->>'label', '')) > 14
+           or char_length(coalesce(rw->>'content', '')) > 16
+           or char_length(coalesce(rw->>'note', '')) > 20 then
+          raise exception '추가 페이지 글자가 너무 깁니다(이름표 14·내용 16·메모 20자)' using errcode = '22023';
         end if;
       end loop;
     end loop;
   end if;
 
-  if jsonb_typeof(c->'prizes') = 'array' then
+  if c ? 'prizes' and c->'prizes' <> 'null'::jsonb then
+    if jsonb_typeof(c->'prizes') <> 'array' or jsonb_array_length(c->'prizes') > 200 then
+      raise exception '시상 줄은 200개까지입니다' using errcode = '22023';
+    end if;
     for rw in select * from jsonb_array_elements(c->'prizes') loop
-      if char_length(coalesce(rw->>'text', '')) > 24 or char_length(coalesce(rw->>'note', '')) > 30 then
-        raise exception '시상 문구는 24자, 메모는 30자까지입니다' using errcode = '22023';
+      if jsonb_typeof(rw) <> 'object'
+         or (rw ? 'text' and jsonb_typeof(rw->'text') not in ('string', 'null'))
+         or (rw ? 'note' and jsonb_typeof(rw->'note') not in ('string', 'null')) then
+        raise exception '시상 줄 형식이 올바르지 않습니다' using errcode = '22023';
+      end if;
+      if char_length(coalesce(rw->>'text', '')) > 12 or char_length(coalesce(rw->>'note', '')) > 20 then
+        raise exception '시상 문구는 12자, 메모는 20자까지입니다' using errcode = '22023';
+      end if;
+      if public.contains_blocked_ugc(rw->>'text') or public.contains_blocked_ugc(rw->>'note') then
+        raise exception '게시할 수 없는 표현이 들어 있습니다' using errcode = '22023';
       end if;
     end loop;
   end if;
@@ -136,3 +164,13 @@ drop trigger if exists clock_presets_config_limits on public.clock_presets;
 create trigger clock_presets_config_limits
   before insert or update of config on public.clock_presets
   for each row execute function public._clock_config_limits();
+
+-- REHEARSAL 2026-09-30(리드 검토 반영판) — 라이브 PG 17.6 · `begin; <이 파일 전문> -- @@END; do $t$ … raise $t$; rollback;`
+--   전사 확인: md5(current_query() 의 파일 부분) = 8a3fbee96a99aab7c88611c4f7fb1cc9 = 이 주석을 붙이기 전 파일의 LF 본문(끝 줄바꿈 제외) md5.
+--   결과: existing=2(기존 clock_states 전 행 재저장 통과) · owner_valid_rows=1(업주가 authenticated 로 12자 제목·14/16/20자 줄 저장 — contains_blocked_ugc 실행 가능)
+--   · owner_blocked(추가 페이지 '칩 환전 가능')=rejected · prize_note_blocked('현금 환전 해드림')=rejected · scalar_row·null_row·num_label=rejected
+--   · title13·rows9·prizes201·scalar_prize=rejected · prizes200=accepted
+--   · 광고: admin_insert=ok · user(708de904, role=user)_insert=rejected · user_update=0 · owner(7e435684, role=venue_owner — 첫 판 헤더의 '일반'은 오기)_insert=rejected
+--     · owner_delete=0 · anon_read=1 · anon_insert=rejected · 버킷 512000 / image/webp,image/jpeg,image/png
+--   적용 0 확인: clock_ads·버킷·트리거·함수 모두 없음, clock_states 에 extraPages 0행.
+--   NOT_RUN: storage.objects 정책의 실제 업로드·삭제 행동(삭제 시험은 storage.allow_delete_query 설정 필요 — critical-reviewer 기억 참고).

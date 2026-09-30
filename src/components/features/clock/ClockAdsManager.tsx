@@ -80,7 +80,7 @@ export default function ClockAdsManager({ venueId, venueName, onClose }: { venue
         <section className="space-y-2 rounded-aura border card-aura p-3">
           <p className="text-2xs font-semibold text-ink-secondary">새 광고</p>
           <input type="file" accept="image/webp,image/jpeg,image/png" aria-label="광고 이미지"
-            onChange={(e) => { setFile(e.target.files?.[0] ?? null); }} className="block w-full text-xs text-ink-secondary" />
+            onChange={(e) => { setFile(e.target.files?.[0] ?? null); }} className="block min-h-[44px] w-full text-xs text-ink-secondary" />
           <div className="grid grid-cols-2 gap-2">
             <label className="block"><span className="mb-1 block text-[11px] text-ink-secondary">시작 날짜</span>
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input w-full text-sm" /></label>
@@ -88,8 +88,8 @@ export default function ClockAdsManager({ venueId, venueName, onClose }: { venue
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input w-full text-sm" /></label>
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
-            <label className="flex min-h-8 cursor-pointer items-center gap-1.5"><input type="radio" checked={!onlyHere} onChange={() => setOnlyHere(false)} className="accent-accent-300" />전체 매장</label>
-            <label className="flex min-h-8 cursor-pointer items-center gap-1.5"><input type="radio" checked={onlyHere} onChange={() => setOnlyHere(true)} className="accent-accent-300" />이 매장만{venueName ? ` (${venueName})` : ''}</label>
+            <label className="flex min-h-[44px] cursor-pointer items-center gap-1.5 pr-2"><input type="radio" checked={!onlyHere} onChange={() => setOnlyHere(false)} className="accent-accent-300" />전체 매장</label>
+            <label className="flex min-h-[44px] cursor-pointer items-center gap-1.5 pr-2"><input type="radio" checked={onlyHere} onChange={() => setOnlyHere(true)} className="accent-accent-300" />이 매장만{venueName ? ` (${venueName})` : ''}</label>
           </div>
           <button type="button" onClick={add} disabled={busy || !file} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '처리 중…' : '등록'}</button>
         </section>

@@ -7,6 +7,8 @@
 //
 // 이 파일은 순수 함수만 둔다(화면·저장 0). ClockStage 가 그리고, 서버 상한(20260930h 초안)과 편집기가 같은 상수를 쓴다.
 
+import { filterContent } from './content-filter';
+
 /** 추가 페이지 종류. team = 깐부 팀 합산 점수(W-11). */
 export type ClockExtraKind = 'bounty' | 'event' | 'notice' | 'custom' | 'team';
 /** 추가 페이지 한 줄 — 이름표 · 내용 · 메모. team 에서는 이름표 = 팀 이름, 내용 = 팀원들의 등수("1, 7"), 메모 = 팀원 이름. */
@@ -15,15 +17,23 @@ export interface ClockExtraRow { label: string; content: string; note?: string }
 export interface ClockExtraPage { kind: ClockExtraKind; title: string; rows: ClockExtraRow[]; points?: number[] }
 
 // ── 상한 — 서버 트리거(supabase/migrations/20260930h_*.sql)가 같은 수로 막는다. 바꾸면 두 곳을 같이 바꾼다. ──
+// 🔴 2026-09-30 design-reviewer 실측(5aa08f93): 제목 30자는 TV 에서 7~8자만 보였고, 긴 내용은 두 줄로 감겨 8줄부터 칸을 넘쳐
+//   Prize Pool 총액까지 잘렸다. 상한은 **TV 왼쪽 칸(16:9 기준 폭 PRIZE_COL_CQ≈37cqmin)에 한 줄로 다 보이는 길이**다
+//   (한글 1자 ≈ 0.95em · 줄 구성은 ClockStage extraSheet: 이름표 1.7cqmin 한 줄 + 내용 2.1cqmin 한 줄 + 메모 1.3cqmin).
+//   · 내용 16자 × 2.1 × 0.95 ≈ 31.9cqmin · 이름표 14자(팀은 '10. ' 포함) × 1.7 ≈ 26.7 · 메모 20자 × 1.3 ≈ 24.7 · 시상 문구 12자 × 2.5(1등) ≈ 28.5 + 등수
+//   · 제목 12자 — 머리말은 글자 수에 맞춰 4.6→3.2cqmin 까지 줄인다(줄 높이는 고정).
+//   · 줄 8개 — 메모까지 있는 최악 8줄 ≈ 56cqmin 로 20줄 시상표(≈73cqmin)보다 낮다 → 칸 높이를 늘리지 않는다.
 export const EXTRA_PAGES_MAX = 2;
-export const EXTRA_ROWS_MAX = 10;
-export const EXTRA_TITLE_MAX = 30;
-export const EXTRA_LABEL_MAX = 20;
-export const EXTRA_CONTENT_MAX = 40;
-export const EXTRA_NOTE_MAX = 40;
+export const EXTRA_ROWS_MAX = 8;
+export const EXTRA_TITLE_MAX = 12;
+export const EXTRA_LABEL_MAX = 14;
+export const EXTRA_CONTENT_MAX = 16;
+export const EXTRA_NOTE_MAX = 20;
 export const TEAM_POINTS_MAX = 30;
-export const PRIZE_TEXT_MAX = 24;
-export const PRIZE_NOTE_MAX = 30;
+export const PRIZE_TEXT_MAX = 12;
+export const PRIZE_NOTE_MAX = 20;
+/** 시상 줄 수 상한(종전 표가 200등까지 쓴다 — 서버 트리거도 같은 수). */
+export const PRIZE_ROWS_MAX = 200;
 
 // ── 머무는 시간(설정 불가) ──
 /** 매장 페이지(시상·추가 페이지) 한 번에 머무는 시간. */
@@ -49,9 +59,13 @@ export type ClockSegment =
 /** 화면에 그릴 내용이 있는 추가 페이지만. 빈 페이지(줄 0)는 건너뛴다. */
 export function visibleExtraPages(pages: readonly ClockExtraPage[] | null | undefined): ClockExtraPage[] {
   const list: readonly ClockExtraPage[] = Array.isArray(pages) ? pages : [];
+  // 서버를 거치지 않은(또는 트리거 이전의) 행이 스칼라·null 이어도 TV 가 깨지지 않게 문자열로 정규화한다(critical-reviewer P3).
   return list.slice(0, EXTRA_PAGES_MAX)
-    .filter((p) => p && Array.isArray(p.rows) && p.rows.some((r) => (r.label ?? '').trim() || (r.content ?? '').trim()));
+    .filter((p): p is ClockExtraPage => !!p && typeof p === 'object' && Array.isArray(p.rows))
+    .map((p) => ({ ...p, title: str(p.title), rows: p.rows.filter((r) => !!r && typeof r === 'object').map((r) => ({ label: str(r.label), content: str(r.content), ...(r.note ? { note: str(r.note) } : {}) })) }))
+    .filter((p) => p.rows.some((r) => r.label.trim() || r.content.trim()));
 }
+const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
 /**
  * 한 바퀴 순서표 — 시상 → 추가 A → 추가 B → 광고.
@@ -141,6 +155,26 @@ export function teamStandings(points: readonly number[], rows: readonly ClockExt
     if (i === 0 || sorted[i - 1].total !== x.total) rank = i + 1;
     return { ...x, rank };
   });
+}
+
+/** §28 — 매장이 쓴 글자(시상 문구·메모 · 추가 페이지 제목·이름표·내용·메모)를 한 줄씩 모은다. 서버 트리거(contains_blocked_ugc)와 편집기 사전 검사가 같은 칸을 본다. */
+export function clockUserTexts(prizes: readonly { text?: string; note?: string }[] | null | undefined, pages: readonly ClockExtraPage[] | null | undefined): string[] {
+  const out: string[] = [];
+  for (const p of prizes ?? []) { if (p?.text) out.push(p.text); if (p?.note) out.push(p.note); }
+  for (const pg of pages ?? []) {
+    if (pg?.title) out.push(pg.title);
+    for (const r of pg?.rows ?? []) { if (r?.label) out.push(r.label); if (r?.content) out.push(r.content); if (r?.note) out.push(r.note); }
+  }
+  return out;
+}
+
+/** §28 — 매장이 쓴 글자 중 금칙 표현이 든 첫 칸의 안내(없으면 null). 서버 트리거(contains_blocked_ugc)가 같은 칸을 다시 막는다. */
+export function clockPagesBlocked(prizes: readonly { text?: string; note?: string }[] | null | undefined, pages: readonly ClockExtraPage[] | null | undefined): string | null {
+  for (const t of clockUserTexts(prizes, pages)) {
+    const r = filterContent(t);
+    if (r.blocked) return `「${t}」 — ${r.reason ?? '게시할 수 없는 표현입니다'}`;
+  }
+  return null;
 }
 
 /** 편집기·저장 전에 상한으로 자른다(서버도 같은 수로 거절한다 — 여기서 먼저 잘라 저장 실패를 막는다). */

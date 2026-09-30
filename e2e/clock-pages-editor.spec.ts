@@ -67,6 +67,27 @@ test('TV 페이지 — 팀 점수 페이지를 켜면 config 만 저장되고 �
   await page.getByLabel('페이지 1 2줄 내용').fill('1');
   await expect(page.getByText('팀 순위 미리보기 · 1위 A팀 16점 · 2위 B팀 14점')).toBeVisible();
   await page.screenshot({ path: 'test-results/clock-shots/k-editor-1440.png' });
+  // 44px 누름 영역 · 적용 버튼은 모달 아래에 붙어 스크롤 없이 보인다(design-reviewer ⑤)
+  for (const name of ['+ 줄', '+ 추가 페이지', '+ 상금']) {
+    const all = page.getByRole('button', { name, exact: true });
+    const n = await all.count();
+    for (let i = 0; i < n; i++) expect((await all.nth(i).boundingBox())!.height, `${name} 높이`).toBeGreaterThanOrEqual(44);
+  }
+  const apply = page.getByTestId('clk-pages-apply');
+  expect((await apply.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  const inView = await apply.evaluate((e) => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });
+  expect(inView, 'TV 에 적용 버튼이 화면 밖이다').toBe(true);
+  // ④ 문구를 넣으면 금액 칸이 비워지고 잠긴다 · §28 금칙 표현이면 적용이 막힌다
+  await page.getByRole('button', { name: '+ 상금', exact: true }).click();
+  await page.getByLabel('1번째 줄 금액').fill('500000');
+  await page.getByLabel('1번째 줄 시상 문구').fill('시드권');
+  await expect(page.getByLabel('1번째 줄 금액')).toBeDisabled();
+  await expect(page.getByLabel('1번째 줄 금액')).toHaveValue('');
+  await page.getByLabel('1번째 줄 메모').fill('칩 환전 가능');
+  await expect(page.getByTestId('clk-pages-blocked')).toBeVisible();
+  await expect(apply).toBeDisabled();
+  await page.getByLabel('1번째 줄 메모').fill('결승 직행');
+  await expect(apply).toBeEnabled();
   await page.getByTestId('clk-pages-apply').click();
 
   await expect.poll(() => writes.length).toBeGreaterThan(0);

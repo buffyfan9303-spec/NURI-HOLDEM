@@ -22,7 +22,7 @@ import { serverNow } from '../../../lib/serverTime';
 import { slideSegments, slideAt, sheetCount, adIndexAt, teamStandings, visibleExtraPages, EXTRA_KIND_BOARD, type ClockExtraPage } from '../../../lib/clockSlides';
 import { msToRegClose } from '../../../lib/regStatus';
 import {
-  PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, pickPrizeLayout, prizePlaceText, prizeAmountText, prizeTotalOf, prizeRowShown, type PrizeRow,
+  PRIZES_PER_PAGE, PRIZE_LEFT_ROWS, PRIZE_GUTTER_CQ, PRIZE_COL_CQ, pickPrizeLayout, prizePlaceText, prizeAmountText, prizeTotalOf, prizeRowShown, type PrizeRow,
 } from './prizeFit';
 
 // K9 — 시간 글자는 lib/clockLevel 한 벌(남은 시간 올림 · 흐른 시간 내림). 예전 round 는 경계에서 00:00 을 1초 보이고 20:00 을 건너뛰었다.
@@ -281,6 +281,8 @@ export default function ClockStage({ g, venueName, headerRight, qr, sponsor, adS
 /** 가로 전환 시간. 짧고 단호하게 — 글자가 흐르는 동안은 읽을 수 없으니 머무름(7초)에 비해 무시할 만해야 한다.
  *  (한 장 머무름 7초 · 매장 페이지 30초 · 광고 10초는 lib/clockSlides 상수 — 순서표와 한 벌이다.) */
 const PRIZE_SLIDE_MS = 400;
+/** 머리말 큰 줄(총액·추가 페이지 제목)의 기준 크기. */
+const BIG = 'clamp(22px, 4.6cqmin, 76px)';
 
 /**
  * PrizeColumn — 왼쪽 칸 슬라이드. 시상표 장(20줄씩) → 추가 페이지(최대 2) → 광고 1장을 **한 트랙**에 늘어놓고 translateX 로 민다.
@@ -338,7 +340,11 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
   const seg = segs[pos.seg];
   const cur = pos.sheet;
   const total = sheetCount(segs);
-  const ad = liveAds.length ? liveAds[adIndexAt(liveAds.length, pos.cycle)] : null;
+  // 🔴 design-reviewer 2026-09-30 ①: 바퀴 번호는 광고 칸이 **끝나는 순간** 올라간다. 그 번호로 고르면 광고→시상으로
+  //   밀려 나가는 첫 프레임에 광고 장이 **다음 광고로 바뀐 채** 빠진다(광고 2개 이상). 광고 칸이 아닐 때는 직전 바퀴의 광고를 그대로 둔다
+  //   — 다음 광고로 바뀌는 순간은 광고 칸에 들어서는 전환(밀려 들어오는 첫 프레임)이다. 이미지는 위에서 미리 불러 둔다.
+  const adCycle = seg?.kind === 'ad' ? pos.cycle : pos.cycle - 1;
+  const ad = liveAds.length ? liveAds[adIndexAt(liveAds.length, adCycle)] : null;
   const { spec, twoCol } = pickPrizeLayout(prizes);
   const sheets = Array.from({ length: prizePages }, (_, i) => prizes.slice(i * PRIZES_PER_PAGE, (i + 1) * PRIZES_PER_PAGE));
   const cq = (n: number) => `${n}cqmin`;
@@ -362,7 +368,8 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
               style={{ fontSize: cq(lead ? spec.leadAmount : spec.amount), color: 'var(--clk-prize, #F5C451)' }}>
               {prizeAmountText(p)}
             </span>
-            {p.note && <span className="w-full text-right leading-tight" style={{ fontSize: 'max(9px,1.3cqmin)', ...DIM }}>{p.note}</span>}
+            {/* 메모는 작은 글자라 DIM(.45)이면 black-marble-gold 에서 4.41:1 — SOFT 로 4.5 이상(design-reviewer ⑥). */}
+            {p.note && <span className="w-full text-right leading-tight" style={{ fontSize: 'max(9px,1.3cqmin)', ...SOFT }}>{p.note}</span>}
           </li>
         );
       })}
@@ -374,14 +381,17 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
     const rows = pg.kind === 'team'
       ? teamStandings(pg.points ?? [], pg.rows).map((t) => ({ label: `${t.rank}. ${t.team}`, content: `${t.total} PTS`, note: t.note }))
       : pg.rows.filter((r) => r.label.trim() || r.content.trim());
+    // 🔴 design-reviewer 2026-09-30 ②: 한 줄에 이름표·내용을 나란히 두니 긴 글이 두 줄로 감겨 8줄부터 칸을 넘치고 총액까지 눌렸다.
+    //   → 이름표 한 줄 · 내용 한 줄 · 메모 한 줄로 **쌓고 감지 않는다**. 글자 상한(lib/clockSlides)이 이 줄 구성에서 칸 폭 안에 들도록 정해져 있고,
+    //   truncate 는 상한 밖 옛 데이터를 위한 안전장치일 뿐이다.
+    const line = 'truncate leading-tight';
     return (
       <ul className="w-full">
         {rows.map((r, i) => (
-          <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-[1.2cqmin] leading-tight"
-            style={{ minHeight: cq(3.2), marginTop: i === 0 ? undefined : cq(0.6) }}>
-            <span className="shrink-0 font-bold" style={{ fontSize: cq(1.9), ...DIM }}>{r.label}</span>
-            <span className="min-w-0 break-keep text-right font-extrabold text-white" style={{ fontSize: cq(2.1) }}>{r.content}</span>
-            {r.note && <span className="w-full text-right leading-tight" style={{ fontSize: 'max(9px,1.3cqmin)', ...DIM }}>{r.note}</span>}
+          <li key={i} className="min-w-0" style={{ marginTop: i === 0 ? undefined : cq(0.9) }}>
+            {r.label.trim() && <p className={`${line} font-bold`} style={{ fontSize: cq(1.7), ...SOFT }}>{r.label}</p>}
+            {r.content.trim() && <p className={`${line} font-extrabold text-white`} style={{ fontSize: cq(2.1) }}>{r.content}</p>}
+            {r.note && <p className={line} style={{ fontSize: 'max(9px,1.3cqmin)', ...SOFT }}>{r.note}</p>}
           </li>
         ))}
       </ul>
@@ -398,17 +408,24 @@ function PrizeColumn({ prizes, totalPrize, mysteryBounty, extras, ads }: {
 
   return (
     <aside data-testid="clk-prizes" className="clk-col min-h-0 flex-col justify-center">
-      <p className={`${LABEL} text-[max(9px,1.5cqmin)]`} style={SOFT}>{head.label}</p>
+      {/* shrink-0 — 트랙이 길어져도 머리말(특히 Prize Pool 총액)이 눌려 잘리지 않는다(design-reviewer ②). */}
+      <p className={`${LABEL} shrink-0 text-[max(9px,1.5cqmin)]`} style={SOFT}>{head.label}</p>
       {(head.big || multi) && (
         <p data-testid={seg?.kind === 'prize' && head.big ? 'clk-prize-total' : undefined}
-          // 칸이 하나(종전)면 종전 클래스 그대로. 둘 이상이면 모든 칸이 같은 줄 높이(leading-tight · 한 줄 말줄임)라 장이 바뀌어도 높이가 같다.
-          className={`mt-[0.3cqmin] font-black tabular-nums ${multi ? 'truncate leading-tight' : 'leading-none'}${head.big ? '' : ' invisible'}`}
-          style={{ fontSize: 'clamp(22px, 4.6cqmin, 76px)', color: head.gold ? 'var(--clk-prize, #F5C451)' : '#FFFFFF' }}>
+          // 칸이 하나(종전)면 종전 클래스 그대로. 둘 이상이면 줄 높이를 고정해(총액 크기 기준) 장이 바뀌어도 높이가 같고,
+          //   추가 페이지 제목은 **글자 수에 맞춰** 칸 폭(PRIZE_COL_CQ) 안으로 줄인다 — 상한 12자에서 3.2cqmin(design-reviewer ③).
+          className={`mt-[0.3cqmin] shrink-0 font-black tabular-nums ${multi ? 'truncate' : 'leading-none'}${head.big ? '' : ' invisible'}`}
+          style={{
+            fontSize: head.gold || !head.big ? BIG : `min(${BIG}, ${(PRIZE_COL_CQ / (Math.max(1, head.big.length) * 0.95)).toFixed(2)}cqmin)`,
+            lineHeight: multi ? `calc(1.25 * ${BIG})` : undefined,
+            color: head.gold ? 'var(--clk-prize, #F5C451)' : '#FFFFFF',
+          }}>
           {head.big ?? ' '}
         </p>
       )}
-      {/* 가로 뷰포트 — 트랙이 여기서 잘린다. 세로는 자르지 않는다(잘리면 줄이 반만 보인다). */}
-      <div className="mt-[1.4cqmin] overflow-x-hidden border-t border-white/8 pt-[1.2cqmin]">
+      {/* 가로 뷰포트 — 트랙이 여기서 잘린다. 세로는 자르지 않는다(잘리면 줄이 반만 보인다).
+          overflow-x: hidden 은 세로를 auto 로 바꿔 긴 장에서 세로 스크롤 상자가 되고 줄이 잘렸다 → clip(세로는 visible 그대로). */}
+      <div className="mt-[1.4cqmin] border-t border-white/8 pt-[1.2cqmin]" style={{ overflowX: 'clip' }}>
         <div data-testid="clk-prize-track" className="flex transition-transform ease-out motion-reduce:transition-none"
           style={{ transform: `translateX(-${cur * 100}%)`, transitionDuration: `${PRIZE_SLIDE_MS}ms` }}>
           {sheets.map((rows, pi) => {
